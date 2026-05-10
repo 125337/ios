@@ -429,6 +429,35 @@ static void replaced_setDelegate(id self, SEL _cmd, id dg) {
     sbLog(@"[setDelegate] inject result=%d for %@", ok, name);
 }
 
+#pragma mark - Hook cell setEditing:animated:
+
+static void (*orig_cellSetEditing)(id, SEL, BOOL, BOOL) = NULL;
+
+static void replaced_cellSetEditing(id self, SEL _cmd, BOOL editing, BOOL animated) {
+    PluginConfig *cfg = [PluginConfig shared];
+    BOOL fe = cfg.quickPinEnabled || cfg.quickRemarkEnabled || cfg.quickMuteEnabled;
+    
+    sbLog(@"[cellSetEditing] editing=%d animated=%d class=%@ features=%d",
+          editing, animated, NSStringFromClass([self class]), fe);
+    
+    if (orig_cellSetEditing) {
+        orig_cellSetEditing(self, _cmd, editing, animated);
+    }
+}
+
+#pragma mark - Hook cell willTransitionToState:
+
+static void (*orig_cellWillTransition)(id, SEL, NSUInteger) = NULL;
+
+static void replaced_cellWillTransition(id self, SEL _cmd, NSUInteger state) {
+    sbLog(@"[cellWillTransition] state=%lu class=%@",
+          (unsigned long)state, NSStringFromClass([self class]));
+    
+    if (orig_cellWillTransition) {
+        orig_cellWillTransition(self, _cmd, state);
+    }
+}
+
 #pragma mark - 安装
 
 @implementation WPSessionBoxHook
@@ -437,7 +466,7 @@ static void replaced_setDelegate(id self, SEL _cmd, id dg) {
     g_hookedClasses = [NSMutableSet set];
     g_origIMPs = [NSMutableDictionary dictionary];
     
-    sbLog(@"[install] === START (setDataSource + setDelegate hook) ===");
+    sbLog(@"[install] === START (setDataSource + setDelegate + cellEditing hook) ===");
     
     Method setDS = class_getInstanceMethod([UITableView class], @selector(setDataSource:));
     if (setDS) {
@@ -451,6 +480,28 @@ static void replaced_setDelegate(id self, SEL _cmd, id dg) {
         orig_setDelegate = (void (*)(id, SEL, id))method_getImplementation(setDL);
         method_setImplementation(setDL, (IMP)replaced_setDelegate);
         sbLog(@"[install] ✓ hooked setDelegate: on UITableView");
+    }
+    
+    Class cellClass = objc_getClass("NewMainFrameCell");
+    if (!cellClass) cellClass = [UITableViewCell class];
+    
+    SEL editAnimSel = @selector(setEditing:animated:);
+    Method editAnimMethod = class_getInstanceMethod(cellClass, editAnimSel);
+    if (editAnimMethod) {
+        orig_cellSetEditing = (void (*)(id, SEL, BOOL, BOOL))method_getImplementation(editAnimMethod);
+        method_setImplementation(editAnimMethod, (IMP)replaced_cellSetEditing);
+        sbLog(@"[install] ✓ hooked setEditing:animated: on %@", NSStringFromClass(cellClass));
+    }
+    
+    SEL transSel = NSSelectorFromString(@"willTransitionToState:");
+    Method transMethod = class_getInstanceMethod(cellClass, transSel);
+    if (transMethod) {
+        orig_cellWillTransition = (void (*)(id, SEL, NSUInteger))method_getImplementation(transMethod);
+        method_setImplementation(transMethod, (IMP)replaced_cellWillTransition);
+        sbLog(@"[install] ✓ hooked willTransitionToState: on %@", NSStringFromClass(cellClass));
+    } else {
+        class_addMethod(cellClass, transSel, (IMP)replaced_cellWillTransition, "v32@0:8Q16");
+        sbLog(@"[install] ✓ added willTransitionToState: to %@", NSStringFromClass(cellClass));
     }
     
     sbLog(@"[install] === COMPLETE ===");
