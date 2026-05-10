@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=375, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>WeChatPlugin UI Preview</title>
+<style>
+:root {
+    --row-height: 44px;
+    --card-radius: 12px;
+    --card-padding: 18px;
+    --card-gap: 16px;
+    --section-gap: 6px;
+    --bg-color: #f2f2f7;
+    --card-bg: #ffffff;
+    --text-primary: #000000;
+    --text-secondary: #8e8e93;
+    --text-tertiary: #b8b8bf;
+    --switch-on: #57c74d;
+    --switch-off: #e9e9ea;
+    --separator-color: #c6c6c8;
+    --hero-name-color: #33c759;
+    --hero-version-color: #66cc73;
+    --avatar-bg: #d9d9db;
+    --shadow-color: rgba(0,0,0,0.04);
+    --nav-bar-bg: #f8f8fa;
+    --nav-bar-border: #e5e5e5;
+    --nav-bar-title: #000000;
+    --nav-bar-back: #007aff;
+    --font-section-header: 600 13px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-section-footer: 12px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-row-title: 15px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-row-subtitle: 12px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-input-title: 15px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-input-value: 14px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-hint: 12px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-color-hex: 12px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-hero-name: 700 22px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-hero-version: 13px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-nav-title: 600 17px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-arch-name: 500 15px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-arch-desc: 13px -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-arrow: 500 14px -apple-system, BlinkMacSystemFont, sans-serif;
+    --color-preview-border: rgba(0,0,0,0.085);
+    --color-preview-radius: 6px;
+    --expand-bg: rgba(0,0,0,0.02);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-color);
+    width: 100%; max-width: 375px;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.page { display: none; }
+.page.active { display: block; }
+
+.nav-bar {
+    position: sticky; top: 0; z-index: 100;
+    height: 44px;
+    background: var(--nav-bar-bg);
+    border-bottom: 0.5px solid var(--nav-bar-border);
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+.nav-bar .back-btn {
+    position: absolute; left: 8px; top: 0; bottom: 0;
+    display: flex; align-items: center; padding: 0 12px;
+    color: var(--nav-bar-back); font-size: 17px; cursor: pointer;
+    border: none; background: none;
+}
+.nav-bar .back-btn::before { content: "‹"; font-size: 28px; font-weight: 300; margin-right: 2px; }
+.nav-bar .nav-title {
+    font: var(--font-nav-title);
+    color: var(--nav-bar-title);
+}
+
+.scroll-content { padding-bottom: 40px; }
+
+.section-header {
+    font: var(--font-section-header);
+    color: var(--text-secondary);
+    padding: 8px calc(var(--card-padding) + 4px) 0;
+    margin-top: 8px;
+}
+
+.section-footer {
+    font: var(--font-section-footer);
+    color: var(--text-tertiary);
+    padding: 4px calc(var(--card-padding) + 4px) 0;
+    line-height: 1.4;
+    white-space: pre-line;
+}
+
+.card {
+    background: var(--card-bg);
+    border-radius: var(--card-radius);
+    margin: 8px var(--card-padding) 0;
+    box-shadow: 0 1px 3px var(--shadow-color);
+    overflow: hidden;
+}
+
+.table-group {
+    background: var(--card-bg);
+    margin: 0 16px;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.card-cell {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 10px 16px;
+}
+.card-cell + .card-cell {
+    border-top: 0.5px solid var(--separator-color);
+}
+
+.cell-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.cell-title {
+    font: 15px -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.cell-desc {
+    font: 12px -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    line-height: 1.3;
+}
+
+.row {
+    display: flex; align-items: center;
+    height: var(--row-height);
+    padding: 0 var(--card-padding);
+}
+
+.row-title {
+    font: var(--font-row-title);
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.row-arrow {
+    color: var(--text-tertiary);
+    font: var(--font-arrow);
+    flex-shrink: 0;
+}
+
+.row-tappable { cursor: pointer; }
+.row-tappable:active { background: rgba(0,0,0,0.05); }
+
+.switch-track {
+    width: 51px; height: 31px;
+    border-radius: 16px;
+    background: var(--switch-off);
+    position: relative;
+    cursor: pointer;
+    transition: background 0.25s;
+    flex-shrink: 0;
+}
+.switch-track.on { background: var(--switch-on); }
+.switch-thumb {
+    width: 27px; height: 27px;
+    border-radius: 50%;
+    background: #fff;
+    position: absolute;
+    top: 2px; left: 2px;
+    transition: transform 0.25s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.switch-track.on .switch-thumb { transform: translateX(20px); }
+
+.expand-section {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.expand-section.open {
+    max-height: 600px;
+}
+
+.expand-inner {
+    border-top: 0.5px solid var(--separator-color);
+    background: rgba(0,0,0,0.02);
+}
+
+.expand-switch-row {
+    display: flex; align-items: center;
+    height: var(--row-height);
+    padding: 0 var(--card-padding);
+    cursor: pointer;
+}
+.expand-switch-row:active { background: rgba(0,0,0,0.03); }
+
+.expand-label {
+    font: var(--font-row-title);
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.sub-row {
+    display: flex; align-items: center;
+    height: var(--row-height);
+    padding: 0 var(--card-padding);
+}
+.sub-row + .sub-row { border-top: 0.5px solid var(--separator-color); }
+
+.sub-row-title {
+    font: var(--font-row-title);
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.sub-cell {
+    display: flex; align-items: center;
+    min-height: 44px;
+    padding: 8px 16px;
+}
+.sub-cell + .sub-cell { border-top: 0.5px solid var(--separator-color); }
+
+.sub-cell-text { flex: 1; }
+
+.sub-cell-title {
+    font: 15px -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-primary);
+}
+
+.sub-cell-desc {
+    font: 12px -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-secondary);
+    margin-top: 1px;
+}
+
+.sub-section-header {
+    font: 600 12px -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-secondary);
+    padding: 8px var(--card-padding) 0 calc(var(--card-padding) + 4px);
+}
+
+.sub-hint-row {
+    padding: 0 var(--card-padding) 4px calc(var(--card-padding) + 4px);
+    font: var(--font-hint);
+    color: var(--text-tertiary);
+    height: 20px;
+    line-height: 20px;
+}
+
+.sub-input-row {
+    display: flex; align-items: center;
+    height: var(--row-height);
+    padding: 0 var(--card-padding);
+}
+.sub-input-row + .sub-input-row,
+.sub-input-row + .sub-hint-row,
+.sub-hint-row + .sub-input-row { border-top: 0.5px solid var(--separator-color); }
+
+.sub-input-title {
+    font: var(--font-input-title);
+    color: var(--text-primary);
+    width: 90px;
+    flex-shrink: 0;
+}
+
+.sub-input-field {
+    flex: 1;
+    font: var(--font-input-value);
+    color: var(--text-secondary);
+    text-align: right;
+    border: none; outline: none;
+    background: transparent;
+    padding: 0 0 0 8px;
+}
+.sub-input-field::placeholder { color: var(--text-tertiary); }
+
+.sub-color-row {
+    display: flex; align-items: center;
+    height: var(--row-height);
+    padding: 0 var(--card-padding);
+}
+.sub-color-row + .sub-color-row { border-top: 0.5px solid var(--separator-color); }
+
+.sub-color-title {
+    font: var(--font-input-title);
+    color: var(--text-primary);
+    width: 100px;
+    flex-shrink: 0;
+}
+
+.sub-color-hex-input {
+    width: 56px;
+    font: var(--font-color-hex);
+    color: var(--text-secondary);
+    text-align: center;
+    border: none; outline: none;
+    background: transparent;
+}
+
+.sub-color-preview {
+    width: 36px; height: 24px;
+    border-radius: var(--color-preview-radius);
+    border: 0.5px solid var(--color-preview-border);
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.hero-card { text-align: center; padding-top: 20px; }
+
+.avatar {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: var(--avatar-bg);
+    margin: 0 auto 8px;
+}
+
+.hero-name {
+    font: var(--font-hero-name);
+    color: var(--hero-name-color);
+    margin-bottom: 4px;
+}
+
+.hero-version {
+    font: var(--font-hero-version);
+    color: var(--hero-version-color);
+    margin-bottom: 6px;
+}
+
+.arch-row {
+    display: flex; align-items: center;
+    height: var(--row-height);
+    padding: 0 calc(var(--card-padding) + 10px);
+}
+.arch-row + .arch-row { border-top: 0.5px solid var(--separator-color); }
+
+.arch-name {
+    font: var(--font-arch-name);
+    color: var(--text-primary);
+    width: 140px;
+}
+
+.arch-desc {
+    font: var(--font-arch-desc);
+    color: var(--text-secondary);
+    text-align: right;
+    flex: 1;
+}
+
+.footer-text {
+    font: var(--font-section-footer);
+    color: var(--text-tertiary);
+    text-align: center;
+    padding: 12px var(--card-padding) 0;
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
+.placeholder-row {
+    display: flex; align-items: center; justify-content: center;
+    height: var(--row-height);
+    padding: 0 var(--card-padding);
+}
+.placeholder-text {
+    font: var(--font-hint);
+    color: var(--text-tertiary);
+}
+
+/* Design params panel */
+.params-panel {
+    position: fixed; right: 0; top: 0; bottom: 0;
+    width: 320px; background: #1e1e1e; color: #e0e0e0;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+    font-size: 12px;
+    padding: 16px;
+}
+.params-panel.open { transform: translateX(0); }
+
+.params-panel h3 {
+    color: #fff; font-size: 14px; margin: 16px 0 8px; padding-bottom: 4px;
+    border-bottom: 1px solid #333;
+}
+.params-panel h3:first-child { margin-top: 0; }
+
+.param-group { margin-bottom: 8px; }
+.param-label {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 2px; color: #aaa;
+}
+.param-label span:last-child { color: #7dcfff; font-family: monospace; }
+
+.param-input {
+    width: 100%; padding: 4px 8px;
+    background: #2a2a2a; border: 1px solid #444;
+    border-radius: 4px; color: #e0e0e0; font-size: 12px;
+    font-family: monospace;
+}
+.param-input:focus { border-color: #007aff; outline: none; }
+
+.param-color {
+    width: 100%; height: 28px; padding: 2px;
+    background: #2a2a2a; border: 1px solid #444;
+    border-radius: 4px; cursor: pointer;
+}
+
+.toggle-panel-btn {
+    position: fixed; right: 8px; bottom: 8px;
+    width: 44px; height: 44px;
+    border-radius: 50%; background: #007aff; color: #fff;
+    border: none; font-size: 20px; cursor: pointer;
+    z-index: 999; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    display: flex; align-items: center; justify-content: center;
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== Page: Main ==================== -->
+<div class="page active" id="page-main">
+    <div class="nav-bar">
+        <span class="nav-title">WeChatPlugin</span>
+    </div>
+    <div class="scroll-content">
+        <div class="card hero-card">
+            <div style="padding-top:20px">
+                <div class="avatar"></div>
+            </div>
+            <div class="hero-name">WeChatPlugin</div>
+            <div class="hero-version">Version: 7.0.0 (发现新版本)</div>
+        </div>
+
+        <div class="section-header">功能列表</div>
+        <div class="card">
+            <div class="row row-tappable" onclick="navigateTo('page-general')">
+                <span class="row-title">通用功能</span>
+                <span class="row-arrow">›</span>
+            </div>
+            <div style="border-top: 0.5px solid var(--separator-color)"></div>
+            <div class="row row-tappable" onclick="navigateTo('page-layout')">
+                <span class="row-title">界面布局</span>
+                <span class="row-arrow">›</span>
+            </div>
+            <div style="border-top: 0.5px solid var(--separator-color)"></div>
+            <div class="row row-tappable" onclick="navigateTo('page-assist')">
+                <span class="row-title">辅助功能</span>
+                <span class="row-arrow">›</span>
+            </div>
+            <div style="border-top: 0.5px solid var(--separator-color)"></div>
+            <div class="row row-tappable" onclick="navigateTo('page-beautify')">
+                <span class="row-title">界面美化</span>
+                <span class="row-arrow">›</span>
+            </div>
+            <div style="border-top: 0.5px solid var(--separator-color)"></div>
+            <div class="row row-tappable" onclick="navigateTo('page-about')">
+                <span class="row-title">关于</span>
+                <span class="row-arrow">›</span>
+            </div>
+        </div>
+
+        <div class="footer-text">WeChatPlugin © 2024 ~ 2026
+Developed with ❤️
+All Rights Reserved</div>
+    </div>
+</div>
+
+<!-- ==================== Page: General ==================== -->
+<div class="page" id="page-general">
+    <div class="nav-bar">
+        <button class="back-btn" onclick="goBack()"></button>
+        <span class="nav-title">通用功能</span>
+    </div>
+    <div class="scroll-content">
+        <div class="card">
+            <div class="card-cell" onclick="toggleExpand('revoke', this)">
+                <div class="cell-text">
+                    <div class="cell-title">启用防撤回</div>
+                </div>
+                <div class="switch-track on" onclick="event.stopPropagation(); toggleExpandSwitch('revoke', this)"><div class="switch-thumb"></div></div>
+            </div>
+            <div class="expand-section open" id="expand-revoke">
+                <div class="expand-inner">
+                    <div class="sub-cell">
+                        <div class="sub-cell-text">
+                            <div class="sub-cell-title">隐藏撤回内容</div>
+                        </div>
+                        <div class="switch-track" onclick="toggleSwitch(this)"><div class="switch-thumb"></div></div>
+                    </div>
+                    <div class="sub-cell">
+                        <div class="sub-cell-text">
+                            <div class="sub-cell-title">静默模式</div>
+                        </div>
+                        <div class="switch-track" onclick="toggleSwitch(this)"><div class="switch-thumb"></div></div>
+                    </div>
+                    <div class="sub-cell">
+                        <div class="sub-cell-text">
+                            <div class="sub-cell-title">提示在底部</div>
+                        </div>
+                        <div class="switch-track" onclick="toggleSwitch(this)"><div class="switch-thumb"></div></div>
+                    </div>
+                    <div class="sub-input-row">
+                        <span class="sub-input-title">格式模板</span>
+                        <input class="sub-input-field" type="text" value="{time}&#10;&quot;{name}&quot;撤回了一条消息&#10;{content}" placeholder='{time}\n"{name}"撤回了一条消息\n{content}'>
+                    </div>
+                    <div class="sub-hint-row">占位符: {time} {name} {content}</div>
+                    <div class="sub-input-row">
+                        <span class="sub-input-title">日期格式</span>
+                        <input class="sub-input-field" type="text" value="yyyy-MM-dd HH:mm:ss" placeholder="yyyy-MM-dd HH:mm:ss">
+                    </div>
+                    <div class="sub-input-row">
+                        <span class="sub-input-title">自定义文本</span>
+                        <input class="sub-input-field" type="text" value="" placeholder="(可选)">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-cell" onclick="toggleExpand('unread', this)">
+                <div class="cell-text">
+                    <div class="cell-title">一键清零</div>
+                </div>
+                <div class="switch-track on" onclick="event.stopPropagation(); toggleExpandSwitch('unread', this)"><div class="switch-thumb"></div></div>
+            </div>
+            <div class="expand-section open" id="expand-unread">
+                <div class="expand-inner">
+                    <div class="sub-cell">
+                        <div class="sub-cell-text">
+                            <div class="sub-cell-title">隐藏发现页红点</div>
+                        </div>
+                        <div class="switch-track" onclick="toggleSwitch(this)"><div class="switch-thumb"></div></div>
+                    </div>
+                    <div class="sub-cell">
+                        <div class="sub-cell-text">
+                            <div class="sub-cell-title">隐藏企业微信红点</div>
+                        </div>
+                        <div class="switch-track" onclick="toggleSwitch(this)"><div class="switch-thumb"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-cell" onclick="toggleExpand('notify-intercept', this)">
+                <div class="cell-text">
+                    <div class="cell-title">通知拦截</div>
+                </div>
+                <div class="switch-track" onclick="event.stopPropagation(); toggleExpandSwitch('notify-intercept', this)"><div class="switch-thumb"></div></div>
+            </div>
+            <div class="expand-section" id="expand-notify-intercept">
+                <div class="expand-inner">
+                    <div class="sub-input-row">
+                        <span class="sub-input-title">拦截模板</span>
+                        <input class="sub-input-field" type="text" value="[{name}]撤回了一条消息: {content}" placeholder="[{name}]撤回了一条消息: {content}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-cell" onclick="toggleExpand('notify-custom', this)">
+                <div class="cell-text">
+                    <div class="cell-title">自定义通知</div>
+                </div>
+                <div class="switch-track" onclick="event.stopPropagation(); toggleExpandSwitch('notify-custom', this)"><div class="switch-thumb"></div></div>
+            </div>
+            <div class="expand-section" id="expand-notify-custom">
+                <div class="expand-inner">
+                    <div class="sub-input-row">
+                        <span class="sub-input-title">通知格式</span>
+                        <input class="sub-input-field" type="text" value="[{name}]撤回了一条消息" placeholder="[{name}]撤回了一条消息">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="section-footer">静默模式开启后，撤回消息将被保留但不显示提示
+开启未读清零后聊天列表右上角会出现 ✓ 按钮</div>
+    </div>
+</div>
+
+<!-- ==================== Page: Layout ==================== -->
+<div class="page" id="page-layout">
+    <div class="nav-bar">
+        <button class="back-btn" onclick="goBack()"></button>
+        <span class="nav-title">界面布局</span>
+    </div>
+    <div class="scroll-content">
+        <div class="card">
+            <div class="expand-switch-row" onclick="toggleExpand('appearance', this)">
+                <span class="expand-label">外观</span>
+                <div class="switch-track" onclick="event.stopPropagation(); toggleExpandSwitch('appearance', this)"><div class="switch-thumb"></div></div>
+            </div>
+            <div class="expand-section" id="expand-appearance">
+                <div class="expand-inner">
+                    <div class="sub-section-header">浅色模式</div>
+                    <div class="sub-color-row">
+                        <span class="sub-color-title">名称颜色</span>
+                        <input class="sub-color-hex-input" type="text" value="#FA5151" oninput="updateColorPreview(this)">
+                        <div class="sub-color-preview" style="background:#FA5151"></div>
+                    </div>
+                    <div class="sub-color-row">
+                        <span class="sub-color-title">时间颜色</span>
+                        <input class="sub-color-hex-input" type="text" value="#FA5151" oninput="updateColorPreview(this)">
+                        <div class="sub-color-preview" style="background:#FA5151"></div>
+                    </div>
+                    <div class="sub-color-row">
+                        <span class="sub-color-title">内容颜色</span>
+                        <input class="sub-color-hex-input" type="text" value="#999999" oninput="updateColorPreview(this)">
+                        <div class="sub-color-preview" style="background:#999999"></div>
+                    </div>
+                    <div class="sub-section-header">深色模式</div>
+                    <div class="sub-color-row">
+                        <span class="sub-color-title">名称颜色</span>
+                        <input class="sub-color-hex-input" type="text" value="#FF6B6B" oninput="updateColorPreview(this)">
+                        <div class="sub-color-preview" style="background:#FF6B6B"></div>
+                    </div>
+                    <div class="sub-color-row">
+                        <span class="sub-color-title">时间颜色</span>
+                        <input class="sub-color-hex-input" type="text" value="#FF6B6B" oninput="updateColorPreview(this)">
+                        <div class="sub-color-preview" style="background:#FF6B6B"></div>
+                    </div>
+                    <div class="sub-color-row">
+                        <span class="sub-color-title">内容颜色</span>
+                        <input class="sub-color-hex-input" type="text" value="#BBBBBB" oninput="updateColorPreview(this)">
+                        <div class="sub-color-preview" style="background:#BBBBBB"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="section-footer">颜色值使用 Hex 格式，如 #FA5151</div>
+    </div>
+</div>
+
+<!-- ==================== Page: Assist ==================== -->
+<div class="page" id="page-assist">
+    <div class="nav-bar">
+        <button class="back-btn" onclick="goBack()"></button>
+        <span class="nav-title">辅助功能</span>
+    </div>
+    <div class="scroll-content">
+        <div class="card">
+            <div class="placeholder-row">
+                <span class="placeholder-text">朋友圈监控、红包助手、文本替换等功能正在开发中</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== Page: Beautify ==================== -->
+<div class="page" id="page-beautify">
+    <div class="nav-bar">
+        <button class="back-btn" onclick="goBack()"></button>
+        <span class="nav-title">界面美化</span>
+    </div>
+    <div class="scroll-content">
+        <div class="card">
+            <div class="placeholder-row">
+                <span class="placeholder-text">圆角美化、菜单定制、截图边框等功能正在开发中</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== Page: About ==================== -->
+<div class="page" id="page-about">
+    <div class="nav-bar">
+        <button class="back-btn" onclick="goBack()"></button>
+        <span class="nav-title">关于</span>
+    </div>
+    <div class="scroll-content">
+        <div class="card hero-card">
+            <div style="padding-top:24px">
+                <div class="hero-name">WeChatPlugin</div>
+                <div class="hero-version">v7.0.0</div>
+                <div style="font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:var(--text-tertiary);padding:0 20px 16px;line-height:1.4">模块化插件框架，支持防撤回、未读清零、外观自定义等功能</div>
+            </div>
+        </div>
+        <div class="section-header">架构</div>
+        <div class="card">
+            <div class="arch-row">
+                <span class="arch-name">RevokeHook</span>
+                <span class="arch-desc">防撤回</span>
+            </div>
+            <div class="arch-row">
+                <span class="arch-name">TintHook</span>
+                <span class="arch-desc">染色渲染</span>
+            </div>
+            <div class="arch-row">
+                <span class="arch-name">ClearUnreadHook</span>
+                <span class="arch-desc">未读清零</span>
+            </div>
+            <div class="arch-row">
+                <span class="arch-name">HookEngine</span>
+                <span class="arch-desc">Hook引擎</span>
+            </div>
+            <div class="arch-row">
+                <span class="arch-name">PluginConfig</span>
+                <span class="arch-desc">配置中心</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== Params Panel ==================== -->
+<button class="toggle-panel-btn" onclick="togglePanel()">⚙</button>
+<div class="params-panel" id="paramsPanel">
+    <h3>📐 布局参数</h3>
+    <div class="param-group">
+        <div class="param-label"><span>行高</span><span id="val-row-height">44px</span></div>
+        <input class="param-input" type="range" min="40" max="70" value="44" data-var="--row-height" data-unit="px" oninput="updateParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>卡片圆角</span><span id="val-card-radius">12px</span></div>
+        <input class="param-input" type="range" min="0" max="24" value="12" data-var="--card-radius" data-unit="px" oninput="updateParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>卡片内边距</span><span id="val-card-padding">18px</span></div>
+        <input class="param-input" type="range" min="8" max="28" value="18" data-var="--card-padding" data-unit="px" oninput="updateParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>卡片间距</span><span id="val-card-gap">16px</span></div>
+        <input class="param-input" type="range" min="4" max="32" value="16" data-var="--card-gap" data-unit="px" oninput="updateParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>Section间距</span><span id="val-section-gap">6px</span></div>
+        <input class="param-input" type="range" min="0" max="16" value="6" data-var="--section-gap" data-unit="px" oninput="updateParam(this)">
+    </div>
+
+    <h3>🎨 颜色参数</h3>
+    <div class="param-group">
+        <div class="param-label"><span>背景色</span><span id="val-bg-color">#f2f2f7</span></div>
+        <input class="param-color" type="color" value="#f2f2f7" data-var="--bg-color" oninput="updateColorParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>卡片背景</span><span id="val-card-bg">#ffffff</span></div>
+        <input class="param-color" type="color" value="#ffffff" data-var="--card-bg" oninput="updateColorParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>主文字</span><span id="val-text-primary">#000000</span></div>
+        <input class="param-color" type="color" value="#000000" data-var="--text-primary" oninput="updateColorParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>副文字</span><span id="val-text-secondary">#8e8e93</span></div>
+        <input class="param-color" type="color" value="#8e8e93" data-var="--text-secondary" oninput="updateColorParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>辅助文字</span><span id="val-text-tertiary">#b8b8bf</span></div>
+        <input class="param-color" type="color" value="#b8b8bf" data-var="--text-tertiary" oninput="updateColorParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>开关开启</span><span id="val-switch-on">#57c74d</span></div>
+        <input class="param-color" type="color" value="#57c74d" data-var="--switch-on" oninput="updateColorParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>分隔线</span><span id="val-separator-color">#c6c6c8</span></div>
+        <input class="param-color" type="color" value="#c6c6c8" data-var="--separator-color" oninput="updateColorParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>Hero名称</span><span id="val-hero-name-color">#33c759</span></div>
+        <input class="param-color" type="color" value="#33c759" data-var="--hero-name-color" oninput="updateColorParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>Hero版本</span><span id="val-hero-version-color">#66cc73</span></div>
+        <input class="param-color" type="color" value="#66cc73" data-var="--hero-version-color" oninput="updateColorParam(this)">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>头像背景</span><span id="val-avatar-bg">#d9d9db</span></div>
+        <input class="param-color" type="color" value="#d9d9db" data-var="--avatar-bg" oninput="updateColorParam(this)">
+    </div>
+
+    <h3>🔤 字体参数</h3>
+    <div class="param-group">
+        <div class="param-label"><span>行标题字号</span><span id="val-font-row-title">15px</span></div>
+        <input class="param-input" type="range" min="12" max="22" value="15" data-var="--font-row-title" data-unit="px" data-font="true" oninput="updateFontParam(this, 'font-row-title')">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>Section Header</span><span id="val-font-section-header">13px</span></div>
+        <input class="param-input" type="range" min="10" max="18" value="13" data-var="--font-section-header" data-unit="px" data-font="true" oninput="updateFontParam(this, 'font-section-header')">
+    </div>
+    <div class="param-group">
+        <div class="param-label"><span>Hero名称字号</span><span id="val-font-hero-name">22px</span></div>
+        <input class="param-input" type="range" min="16" max="32" value="22" data-var="--font-hero-name" data-unit="px" data-font="true" oninput="updateFontParam(this, 'font-hero-name')">
+    </div>
+
+    <h3>📤 导出参数</h3>
+    <button onclick="exportParams()" style="width:100%;padding:10px;background:#007aff;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;margin-top:4px;">复制 ObjC 常量代码</button>
+    <pre id="exportOutput" style="margin-top:8px;padding:8px;background:#2a2a2a;border-radius:6px;color:#7dcfff;font-size:11px;white-space:pre-wrap;word-break:break-all;display:none;"></pre>
+</div>
+
+<script>
+const navStack = ['page-main'];
+
+function navigateTo(pageId) {
+    const current = document.querySelector('.page.active');
+    if (current) current.classList.remove('active');
+    document.getElementById(pageId).classList.add('active');
+    navStack.push(pageId);
+    window.scrollTo(0, 0);
+}
+
+function goBack() {
+    if (navStack.length > 1) {
+        navStack.pop();
+        const prev = navStack[navStack.length - 1];
+        document.querySelector('.page.active').classList.remove('active');
+        document.getElementById(prev).classList.add('active');
+    }
+}
+
+function toggleSwitch(el) {
+    el.classList.toggle('on');
+}
+
+function toggleExpand(id, rowEl) {
+    const section = document.getElementById('expand-' + id);
+    const sw = rowEl.querySelector('.switch-track');
+    if (sw && sw.classList.contains('on')) {
+        section.classList.toggle('open');
+    }
+}
+
+function toggleExpandSwitch(id, swEl) {
+    swEl.classList.toggle('on');
+    const section = document.getElementById('expand-' + id);
+    if (swEl.classList.contains('on')) {
+        section.classList.add('open');
+    } else {
+        section.classList.remove('open');
+    }
+}
+
+function updateColorPreview(input) {
+    const preview = input.nextElementSibling;
+    if (preview && preview.classList.contains('sub-color-preview')) {
+        preview.style.background = input.value;
+    }
+}
+
+function togglePanel() {
+    document.getElementById('paramsPanel').classList.toggle('open');
+}
+
+function updateParam(input) {
+    const varName = input.dataset.var;
+    const unit = input.dataset.unit;
+    const val = input.value + unit;
+    document.documentElement.style.setProperty(varName, val);
+    const labelId = 'val-' + varName.replace('--', '');
+    const label = document.getElementById(labelId);
+    if (label) label.textContent = val;
+}
+
+function updateColorParam(input) {
+    const varName = input.dataset.var;
+    document.documentElement.style.setProperty(varName, input.value);
+    const labelId = 'val-' + varName.replace('--', '');
+    const label = document.getElementById(labelId);
+    if (label) label.textContent = input.value;
+}
+
+function updateFontParam(input, fontName) {
+    const size = input.value;
+    const varName = input.dataset.var;
+    let cssVal = size + 'px -apple-system, BlinkMacSystemFont, sans-serif';
+    if (fontName === 'font-section-header') cssVal = '600 ' + cssVal;
+    if (fontName === 'font-hero-name') cssVal = '700 ' + cssVal;
+    document.documentElement.style.setProperty(varName, cssVal);
+    const labelId = 'val-' + fontName;
+    const label = document.getElementById(labelId);
+    if (label) label.textContent = size + 'px';
+}
+
+function rgbToHex(rgb) {
+    if (rgb.startsWith('#')) return rgb;
+    const m = rgb.match(/(\d+)/g);
+    if (!m || m.length < 3) return rgb;
+    return '#' + m.slice(0,3).map(x => parseInt(x).toString(16).padStart(2,'0')).join('');
+}
+
+function hexToRGB(hex) {
+    hex = hex.replace('#', '');
+    const r = parseInt(hex.substring(0,2), 16) / 255;
+    const g = parseInt(hex.substring(2,4), 16) / 255;
+    const b = parseInt(hex.substring(4,6), 16) / 255;
+    return `${r.toFixed(3)} green:${g.toFixed(3)} blue:${b.toFixed(3)}`;
+}
+
+function exportParams() {
+    const s = getComputedStyle(document.documentElement);
+    const rowH = s.getPropertyValue('--row-height').trim();
+    const cardR = s.getPropertyValue('--card-radius').trim();
+    const cardP = s.getPropertyValue('--card-padding').trim();
+    const cardG = s.getPropertyValue('--card-gap').trim();
+    const secG = s.getPropertyValue('--section-gap').trim();
+    const bgC = rgbToHex(s.getPropertyValue('--bg-color').trim());
+    const cardBg = rgbToHex(s.getPropertyValue('--card-bg').trim());
+    const textP = rgbToHex(s.getPropertyValue('--text-primary').trim());
+    const textS = rgbToHex(s.getPropertyValue('--text-secondary').trim());
+    const textT = rgbToHex(s.getPropertyValue('--text-tertiary').trim());
+    const swOn = rgbToHex(s.getPropertyValue('--switch-on').trim());
+    const sepC = rgbToHex(s.getPropertyValue('--separator-color').trim());
+
+    const code = `static const CGFloat kRowH = ${parseFloat(rowH)};\nstatic const CGFloat kCardRadius = ${parseFloat(cardR)};\nstatic const CGFloat kCardPadding = ${parseFloat(cardP)};\nstatic const CGFloat kCardGap = ${parseFloat(cardG)};\nstatic const CGFloat kSectionGap = ${parseFloat(secG)};\n\n` +
+`static UIColor *bgColor() {\n    if (@available(iOS 13.0, *)) return [UIColor systemGroupedBackgroundColor];\n    return [UIColor colorWithRed:${hexToRGB(bgC)} alpha:1.0];\n}\n\n` +
+`static UIColor *cardBgColor() {\n    if (@available(iOS 13.0, *)) return [UIColor secondarySystemGroupedBackgroundColor];\n    return [UIColor colorWithRed:${hexToRGB(cardBg)} alpha:1.0];\n}\n\n` +
+`static UIColor *textPrimary() {\n    if (@available(iOS 13.0, *)) return [UIColor labelColor];\n    return [UIColor colorWithRed:${hexToRGB(textP)} alpha:1.0];\n}\n\n` +
+`static UIColor *textSecondary() {\n    if (@available(iOS 13.0, *)) return [UIColor secondaryLabelColor];\n    return [UIColor colorWithRed:${hexToRGB(textS)} alpha:1.0];\n}\n\n` +
+`static UIColor *textTertiary() {\n    if (@available(iOS 13.0, *)) return [UIColor tertiaryLabelColor];\n    return [UIColor colorWithRed:${hexToRGB(textT)} alpha:1.0];\n}\n\n` +
+`static UIColor *switchOnColor() {\n    return [UIColor colorWithRed:${hexToRGB(swOn)} alpha:1.0];\n}\n\n` +
+`static UIColor *separatorColor() {\n    if (@available(iOS 13.0, *)) return [UIColor separatorColor];\n    return [UIColor colorWithRed:${hexToRGB(sepC)} alpha:1.0];\n}`;
+
+    const out = document.getElementById('exportOutput');
+    out.style.display = 'block';
+    out.textContent = code;
+    navigator.clipboard.writeText(code).catch(() => {});
+}
+</script>
+</body>
+</html>

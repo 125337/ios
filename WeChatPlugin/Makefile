@@ -1,0 +1,67 @@
+ARCHS = arm64
+TARGET = iphone:latest:14.0
+
+THEOS_DEVICE_IP = localhost
+THEOS_DEVICE_PORT = 2222
+
+include $(THEOS)/makefiles/common.mk
+
+TWEAK_NAME = MioHelper
+
+MioHelper_FILES = Tweak.m \
+	Config/PluginConfig.m \
+	Core/HookEngine.m \
+	Core/WPAlert.m \
+	Registry/HookRegistry.m \
+	Registry/FeatureModuleRegistry.m \
+	Registry/FeatureRegistry.m \
+	Modules/Revoke/RevokeHandler.m \
+	Modules/Revoke/RevokeHook.m \
+	Modules/RedEnvelop/RedEnvelopHook.m \
+	Modules/RedEnvelop/WeChatRedEnvelopParam.m \
+	Modules/RedEnvelop/WeChatRedEnvelopOperation.m \
+	Modules/RedEnvelop/WeChatRedEnvelopTaskManager.m \
+	Modules/Layout/TintHook.m \
+	Modules/Unread/ClearUnreadHook.m \
+	Modules/AutoTransfer/AutoTransferHook.m \
+	Modules/SettingEntry/SettingEntryHook.m \
+	Modules/SettingEntry/WPOtherVC.m \
+	Modules/SettingEntry/WPAboutVC.m \
+	Modules/Joker/JokerHook.m \
+	Modules/GroupExit/GroupExitHook.m \
+	Modules/MessageTime/MessageTimeHook.m \
+	Modules/SessionBox/WPSessionBoxHook.m \
+	Settings/Common/WPBorderLayer.m \
+	Settings/Common/SettingCategoryController.m \
+	Settings/Controllers/SettingController.m \
+	Settings/Controllers/SettingGeneralFunctionController.m \
+	Settings/Controllers/SettingLayoutFunctionController.m \
+	Settings/Controllers/SettingAssistFunctionController.m \
+	Settings/Controllers/SettingUIBeautifyController.m \
+	Settings/Controllers/SettingRedEnvelopController.m \
+	Settings/Controllers/SettingSessionActionController.m \
+	Settings/Controllers/SettingAboutController.m \
+	Settings/Controllers/WeChatTweakGroupSelectsController.m
+MioHelper_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
+	-I. \
+	-I./Config \
+	-I./Core \
+	-I./Registry \
+	-I./Modules/Revoke \
+	-I./Modules/RedEnvelop \
+	-I./Modules/Layout \
+	-I./Modules/Unread \
+	-I./Modules/AutoTransfer \
+	-I./Modules/SettingEntry \
+	-I./Modules/Joker \
+	-I./Modules/GroupExit \
+	-I./Modules/MessageTime \
+	-I./Modules/SessionBox \
+	-I./Settings/Common \
+	-I./Settings/Controllers
+MioHelper_FRAMEWORKS = UIKit Foundation Security AVFoundation UserNotifications
+
+include $(THEOS_MAKE_PATH)/tweak.mk
+
+after-install::
+	install.exec "killall -9 WeChat"

@@ -1,0 +1,386 @@
+#import "PluginConfig.h"
+#import "../Modules/GroupExit/GroupExitHook.h"
+
+static void configLog(NSString *content) {
+    @try {
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
+        NSString *filePath = [folderPath stringByAppendingPathComponent:@"redenvelop.log"];
+        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
+        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
+        if (handle) {
+            [handle seekToEndOfFile];
+            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+            [handle closeFile];
+        } else {
+            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        }
+    } @catch (NSException *e) {}
+}
+
+@implementation PluginConfig
+
++ (instancetype)shared {
+    static PluginConfig *instance = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        instance = [[PluginConfig alloc] init];
+    });
+    return instance;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _notifyFormat = [kDefaultNotifyFormat copy];
+        _dateFormat = [kDefaultDateFormat copy];
+        _nameColorHex = [kDefaultNameColor copy];
+        _timeColorHex = [kDefaultTimeColor copy];
+        _contentColorHex = [kDefaultContentColor copy];
+        _darkNameColorHex = [kDefaultDarkNameColor copy];
+        _darkTimeColorHex = [kDefaultDarkTimeColor copy];
+        _darkContentColorHex = [kDefaultDarkContentColor copy];
+        _interceptNotifyTemplate = [kDefaultInterceptTemplate copy];
+        _customNotifyFormat = [kDefaultCustomNotifyFormat copy];
+        _sessionFormats = [NSMutableDictionary dictionary];
+        _userFormats = [NSMutableDictionary dictionary];
+        [self loadDefaults];
+    }
+    return self;
+}
+
+- (void)loadDefaults {
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+
+    if ([d objectForKey:@"WeChatPlugin_PreventRecall"] && ![d objectForKey:[kPluginPrefix stringByAppendingString:@"PreventRecall"]]) {
+        _preventRecall = [d boolForKey:@"WeChatPlugin_PreventRecall"];
+        [d setBool:_preventRecall forKey:[kPluginPrefix stringByAppendingString:@"PreventRecall"]];
+        [d removeObjectForKey:@"WeChatPlugin_PreventRecall"];
+        [d synchronize];
+    } else {
+        _preventRecall = [d boolForKey:[kPluginPrefix stringByAppendingString:@"PreventRecall"]];
+        if (![d objectForKey:[kPluginPrefix stringByAppendingString:@"PreventRecall"]]) {
+            _preventRecall = YES;
+            [d setBool:YES forKey:[kPluginPrefix stringByAppendingString:@"PreventRecall"]];
+            [d synchronize];
+        }
+    }
+
+    _debugLogging = [d boolForKey:[kPluginPrefix stringByAppendingString:@"DebugLogging"]];
+    _hideContent = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideContent"]];
+    _noTip = [d boolForKey:[kPluginPrefix stringByAppendingString:@"NoTip"]];
+    _bottomPosition = [d boolForKey:[kPluginPrefix stringByAppendingString:@"BottomPosition"]];
+    _sendInterceptedContent = [d boolForKey:[kPluginPrefix stringByAppendingString:@"SendInterceptedContent"]];
+    _interceptNotifyEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"InterceptNotifyEnabled"]];
+    _customNotifyEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CustomNotifyEnabled"]];
+    _clearUnreadEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ClearUnreadEnabled"]];
+    _hideDiscoverBadge = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideDiscoverBadge"]];
+    _hideEnterpriseBadge = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideEnterpriseBadge"]];
+    _enableJoker = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableJoker"]];
+    _enableGroupExitMonitor = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableGroupExitMonitor"]];
+    _customColorsEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CustomColorsEnabled"]];
+    _autoRedEnvelop = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AutoRedEnvelop"]];
+    _redEnvelopCatchMe = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopCatchMe"]];
+    _personalRedEnvelopEnable = [d boolForKey:[kPluginPrefix stringByAppendingString:@"PersonalRedEnvelopEnable"]];
+    _redEnvelopeDetail = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopeDetail"]];
+    _redEnvelopTextFilterEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopTextFilterEnabled"]];
+    _redEnvelopGroupFilterEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopGroupFilterEnabled"]];
+    _redEnvelopAutoReply = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReply"]];
+    _redEnvelopAutoReplyInGroup = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReplyInGroup"]];
+    configLog([NSString stringWithFormat:@"[LOAD] Loaded config from NSUserDefaults: auto=%d, catchMe=%d, personal=%d", 
+          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable]);
+    
+    NSInteger delayVal = [d integerForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopDelay"]];
+    _redEnvelopDelay = delayVal >= 0 ? (unsigned int)delayVal : 0;
+    
+    NSArray *blackList = [d arrayForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopBlackList"]];
+    if (blackList) {
+        _redEnvelopBlackList = blackList;
+    } else {
+        _redEnvelopBlackList = @[];
+    }
+
+    NSArray *groupFilterList = [d arrayForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopGroupFilterList"]];
+    if (groupFilterList) {
+        _redEnvelopGroupFilterList = groupFilterList;
+    } else {
+        _redEnvelopGroupFilterList = @[];
+    }
+
+    NSString *v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopTextFilter"]];
+    if (v.length > 0) _redEnvelopTextFilter = v;
+    else _redEnvelopTextFilter = @"";
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReplyStr"]];
+    if (v.length > 0) _redEnvelopAutoReplyStr = v;
+    else _redEnvelopAutoReplyStr = @"谢谢老板";
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"NotifyFormat"]];
+    if (v.length > 0) _notifyFormat = v;
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DateFormat"]];
+    if (v.length > 0) _dateFormat = v;
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CustomText"]];
+    if (v.length > 0) _customText = v;
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"InterceptNotifyTemplate"]];
+    if (v.length > 0) _interceptNotifyTemplate = v;
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CustomNotifyFormat"]];
+    if (v.length > 0) _customNotifyFormat = v;
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"NameColorHex"]];
+    if (v.length > 0) _nameColorHex = v;
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"TimeColorHex"]];
+    if (v.length > 0) _timeColorHex = v;
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ContentColorHex"]];
+    if (v.length > 0) _contentColorHex = v;
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DarkNameColorHex"]];
+    if (v.length > 0) _darkNameColorHex = v;
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DarkTimeColorHex"]];
+    if (v.length > 0) _darkTimeColorHex = v;
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DarkContentColorHex"]];
+    if (v.length > 0) _darkContentColorHex = v;
+
+    // 消息时间显示配置
+    _showMessageTime = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowMessageTime"]];
+    _messageTimeFontSize = [d floatForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFontSize"]];
+    if (_messageTimeFontSize == 0) _messageTimeFontSize = 7.0;
+    _messageTimeBoldFont = [d boolForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBoldFont"]];
+    
+    _messageTimeFormat = @"{HH}:{mm}:{ss}";
+    
+    _messageTimePosition = [d integerForKey:[kPluginPrefix stringByAppendingString:@"MessageTimePosition"]];
+    if (_messageTimePosition < 0 || _messageTimePosition > 7) _messageTimePosition = 1;
+    
+    _messageTimeOffsetX = [d floatForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeOffsetX"]];
+    _messageTimeOffsetY = [d floatForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeOffsetY"]];
+    
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeTextColor"]];
+    if (v.length > 0) _messageTimeTextColor = v;
+    else _messageTimeTextColor = @"#999999";
+    
+    _messageTimeBubbleExtWidth = [d floatForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBubbleExtWidth"]];
+    
+    _hideChatTime = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideChatTime"]];
+    
+    _showAddTimeSuffix = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
+    
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
+    if (v.length > 0) _addTimeSuffixFormat = v;
+    else _addTimeSuffixFormat = @"(yyyy-MM-dd)";
+
+    _quickPinEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"QuickPinEnabled"]];
+    _foldTopSessionEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"FoldTopSessionEnabled"]];
+    _brandTopEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"BrandTopEnabled"]];
+    _chatBoxTopEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ChatBoxTopEnabled"]];
+    _addChatBoxEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AddChatBoxEnabled"]];
+    _managerChatBoxEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ManagerChatBoxEnabled"]];
+    _sessionGestureEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"SessionGestureEnabled"]];
+    _quickRemarkEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"QuickRemarkEnabled"]];
+    _quickMuteEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"QuickMuteEnabled"]];
+    _addMuteMenuItemEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AddMuteMenuItemEnabled"]];
+    
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MuteAutoReplyMsg"]];
+    if (v.length > 0) _muteAutoReplyMsg = v;
+    else _muteAutoReplyMsg = @"";
+    
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MuteWorkingTime"]];
+    if (v.length > 0) _muteWorkingTime = v;
+    else _muteWorkingTime = @"";
+    
+    NSArray *muteList = [d arrayForKey:[kPluginPrefix stringByAppendingString:@"MuteContactList"]];
+    if (muteList) {
+        _muteContactList = [muteList mutableCopy];
+    } else {
+        _muteContactList = [NSMutableArray array];
+    }
+
+    @try {
+        NSData *data = [d dataForKey:[kPluginPrefix stringByAppendingString:@"SessionFormats"]];
+        if (data) {
+            id obj = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+            if ([obj isKindOfClass:[NSMutableDictionary class]]) _sessionFormats = obj;
+        }
+        data = [d dataForKey:[kPluginPrefix stringByAppendingString:@"UserFormats"]];
+        if (data) {
+            id obj = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+            if ([obj isKindOfClass:[NSMutableDictionary class]]) _userFormats = obj;
+        }
+    } @catch (NSException *e) {}
+}
+
+- (void)save {
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    configLog([NSString stringWithFormat:@"[SAVE] save() called: auto=%d, catchMe=%d, personal=%d", 
+          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable]);
+    [d setBool:_preventRecall forKey:[kPluginPrefix stringByAppendingString:@"PreventRecall"]];
+    [d setBool:_debugLogging forKey:[kPluginPrefix stringByAppendingString:@"DebugLogging"]];
+    [d setBool:_hideContent forKey:[kPluginPrefix stringByAppendingString:@"HideContent"]];
+    [d setBool:_noTip forKey:[kPluginPrefix stringByAppendingString:@"NoTip"]];
+    [d setBool:_bottomPosition forKey:[kPluginPrefix stringByAppendingString:@"BottomPosition"]];
+    [d setBool:_sendInterceptedContent forKey:[kPluginPrefix stringByAppendingString:@"SendInterceptedContent"]];
+    [d setBool:_interceptNotifyEnabled forKey:[kPluginPrefix stringByAppendingString:@"InterceptNotifyEnabled"]];
+    [d setBool:_customNotifyEnabled forKey:[kPluginPrefix stringByAppendingString:@"CustomNotifyEnabled"]];
+    [d setBool:_clearUnreadEnabled forKey:[kPluginPrefix stringByAppendingString:@"ClearUnreadEnabled"]];
+    [d setBool:_hideDiscoverBadge forKey:[kPluginPrefix stringByAppendingString:@"HideDiscoverBadge"]];
+    [d setBool:_hideEnterpriseBadge forKey:[kPluginPrefix stringByAppendingString:@"HideEnterpriseBadge"]];
+    [d setBool:_enableJoker forKey:[kPluginPrefix stringByAppendingString:@"EnableJoker"]];
+    [d setBool:_enableGroupExitMonitor forKey:[kPluginPrefix stringByAppendingString:@"EnableGroupExitMonitor"]];
+    [d setBool:_customColorsEnabled forKey:[kPluginPrefix stringByAppendingString:@"CustomColorsEnabled"]];
+    [d setBool:_autoRedEnvelop forKey:[kPluginPrefix stringByAppendingString:@"AutoRedEnvelop"]];
+    [d setBool:_redEnvelopCatchMe forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopCatchMe"]];
+    [d setBool:_personalRedEnvelopEnable forKey:[kPluginPrefix stringByAppendingString:@"PersonalRedEnvelopEnable"]];
+    [d setBool:_redEnvelopeDetail forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopeDetail"]];
+    [d setBool:_redEnvelopTextFilterEnabled forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopTextFilterEnabled"]];
+    [d setBool:_redEnvelopGroupFilterEnabled forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopGroupFilterEnabled"]];
+    [d setBool:_redEnvelopAutoReply forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReply"]];
+    [d setBool:_redEnvelopAutoReplyInGroup forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReplyInGroup"]];
+    [d setInteger:(NSInteger)_redEnvelopDelay forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopDelay"]];
+    if (_redEnvelopBlackList) {
+        [d setObject:_redEnvelopBlackList forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopBlackList"]];
+    }
+    if (_redEnvelopGroupFilterList) {
+        [d setObject:_redEnvelopGroupFilterList forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopGroupFilterList"]];
+    }
+    if (_redEnvelopTextFilter) {
+        [d setObject:_redEnvelopTextFilter forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopTextFilter"]];
+    }
+    if (_redEnvelopAutoReplyStr) {
+        [d setObject:_redEnvelopAutoReplyStr forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReplyStr"]];
+    }
+
+    if (_notifyFormat) [d setObject:_notifyFormat forKey:[kPluginPrefix stringByAppendingString:@"NotifyFormat"]];
+    if (_dateFormat) [d setObject:_dateFormat forKey:[kPluginPrefix stringByAppendingString:@"DateFormat"]];
+    if (_customText) [d setObject:_customText forKey:[kPluginPrefix stringByAppendingString:@"CustomText"]];
+    if (_interceptNotifyTemplate) [d setObject:_interceptNotifyTemplate forKey:[kPluginPrefix stringByAppendingString:@"InterceptNotifyTemplate"]];
+    if (_customNotifyFormat) [d setObject:_customNotifyFormat forKey:[kPluginPrefix stringByAppendingString:@"CustomNotifyFormat"]];
+
+    [d setObject:_nameColorHex forKey:[kPluginPrefix stringByAppendingString:@"NameColorHex"]];
+    [d setObject:_timeColorHex forKey:[kPluginPrefix stringByAppendingString:@"TimeColorHex"]];
+    [d setObject:_contentColorHex forKey:[kPluginPrefix stringByAppendingString:@"ContentColorHex"]];
+    [d setObject:_darkNameColorHex forKey:[kPluginPrefix stringByAppendingString:@"DarkNameColorHex"]];
+    [d setObject:_darkTimeColorHex forKey:[kPluginPrefix stringByAppendingString:@"DarkTimeColorHex"]];
+    [d setObject:_darkContentColorHex forKey:[kPluginPrefix stringByAppendingString:@"DarkContentColorHex"]];
+
+    [d setBool:_showMessageTime forKey:[kPluginPrefix stringByAppendingString:@"ShowMessageTime"]];
+    [d setFloat:_messageTimeFontSize forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFontSize"]];
+    [d setBool:_messageTimeBoldFont forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBoldFont"]];
+    [d setInteger:_messageTimePosition forKey:[kPluginPrefix stringByAppendingString:@"MessageTimePosition"]];
+    [d setFloat:_messageTimeOffsetX forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeOffsetX"]];
+    [d setFloat:_messageTimeOffsetY forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeOffsetY"]];
+    if (_messageTimeTextColor) {
+        [d setObject:_messageTimeTextColor forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeTextColor"]];
+    }
+    [d setFloat:_messageTimeBubbleExtWidth forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBubbleExtWidth"]];
+    [d setBool:_hideChatTime forKey:[kPluginPrefix stringByAppendingString:@"HideChatTime"]];
+    [d setBool:_showAddTimeSuffix forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
+    if (_addTimeSuffixFormat) {
+        [d setObject:_addTimeSuffixFormat forKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
+    }
+
+    [d setBool:_quickPinEnabled forKey:[kPluginPrefix stringByAppendingString:@"QuickPinEnabled"]];
+    [d setBool:_foldTopSessionEnabled forKey:[kPluginPrefix stringByAppendingString:@"FoldTopSessionEnabled"]];
+    [d setBool:_brandTopEnabled forKey:[kPluginPrefix stringByAppendingString:@"BrandTopEnabled"]];
+    [d setBool:_chatBoxTopEnabled forKey:[kPluginPrefix stringByAppendingString:@"ChatBoxTopEnabled"]];
+    [d setBool:_addChatBoxEnabled forKey:[kPluginPrefix stringByAppendingString:@"AddChatBoxEnabled"]];
+    [d setBool:_managerChatBoxEnabled forKey:[kPluginPrefix stringByAppendingString:@"ManagerChatBoxEnabled"]];
+    [d setBool:_sessionGestureEnabled forKey:[kPluginPrefix stringByAppendingString:@"SessionGestureEnabled"]];
+    [d setBool:_quickRemarkEnabled forKey:[kPluginPrefix stringByAppendingString:@"QuickRemarkEnabled"]];
+    [d setBool:_quickMuteEnabled forKey:[kPluginPrefix stringByAppendingString:@"QuickMuteEnabled"]];
+    [d setBool:_addMuteMenuItemEnabled forKey:[kPluginPrefix stringByAppendingString:@"AddMuteMenuItemEnabled"]];
+    
+    if (_muteAutoReplyMsg) {
+        [d setObject:_muteAutoReplyMsg forKey:[kPluginPrefix stringByAppendingString:@"MuteAutoReplyMsg"]];
+    }
+    if (_muteWorkingTime) {
+        [d setObject:_muteWorkingTime forKey:[kPluginPrefix stringByAppendingString:@"MuteWorkingTime"]];
+    }
+    if (_muteContactList) {
+        [d setObject:_muteContactList forKey:[kPluginPrefix stringByAppendingString:@"MuteContactList"]];
+    }
+
+    @try {
+        [d setObject:[NSKeyedArchiver archivedDataWithRootObject:_sessionFormats] forKey:[kPluginPrefix stringByAppendingString:@"SessionFormats"]];
+        [d setObject:[NSKeyedArchiver archivedDataWithRootObject:_userFormats] forKey:[kPluginPrefix stringByAppendingString:@"UserFormats"]];
+    } @catch (NSException *e) {}
+
+    [d synchronize];
+    configLog(@"[OK] save() completed - NSUserDefaults synchronized");
+}
+
+- (NSString *)notifyFormatForSession:(NSString *)session user:(NSString *)user {
+    if (user.length > 0) {
+        NSString *fmt = _userFormats[user];
+        if (fmt.length > 0) return fmt;
+    }
+    if (session.length > 0) {
+        NSString *fmt = _sessionFormats[session];
+        if (fmt.length > 0) return fmt;
+    }
+    return _notifyFormat;
+}
+
+- (UIColor *)colorFromHex:(NSString *)hex {
+    if (!hex.length) return nil;
+    NSString *clean = [hex stringByReplacingOccurrencesOfString:@"#" withString:@""];
+    if (clean.length < 6) return nil;
+    unsigned int r = 0, g = 0, b = 0;
+    [[NSScanner scannerWithString:[clean substringWithRange:NSMakeRange(0, 2)]] scanHexInt:&r];
+    [[NSScanner scannerWithString:[clean substringWithRange:NSMakeRange(2, 2)]] scanHexInt:&g];
+    [[NSScanner scannerWithString:[clean substringWithRange:NSMakeRange(4, 2)]] scanHexInt:&b];
+    return [UIColor colorWithRed:r / 255.0 green:g / 255.0 blue:b / 255.0 alpha:1.0];
+}
+
+- (BOOL)isDarkMode {
+    if (@available(iOS 13.0, *)) {
+        return UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    }
+    return NO;
+}
+
+- (UIColor *)nameColor {
+    if (!_customColorsEnabled) {
+        return [UIColor colorWithRed:250.0/255.0 green:81.0/255.0 blue:81.0/255.0 alpha:1.0];
+    }
+    return [self colorFromHex:[self isDarkMode] ? _darkNameColorHex : _nameColorHex]
+        ?: [UIColor colorWithRed:250.0/255.0 green:81.0/255.0 blue:81.0/255.0 alpha:1.0];
+}
+
+- (UIColor *)timeColor {
+    if (!_customColorsEnabled) {
+        return [UIColor colorWithRed:250.0/255.0 green:81.0/255.0 blue:81.0/255.0 alpha:1.0];
+    }
+    return [self colorFromHex:[self isDarkMode] ? _darkTimeColorHex : _timeColorHex]
+        ?: [UIColor colorWithRed:250.0/255.0 green:81.0/255.0 blue:81.0/255.0 alpha:1.0];
+}
+
+- (UIColor *)contentColor {
+    if (!_customColorsEnabled) {
+        return [UIColor colorWithRed:153.0/255.0 green:153.0/255.0 blue:153.0/255.0 alpha:1.0];
+    }
+    return [self colorFromHex:[self isDarkMode] ? _darkContentColorHex : _contentColorHex]
+        ?: [UIColor colorWithRed:153.0/255.0 green:153.0/255.0 blue:153.0/255.0 alpha:1.0];
+}
+
+- (NSString *)applyTemplate:(NSString *)tmpl time:(NSString *)time name:(NSString *)name content:(NSString *)content {
+    NSString *result = [tmpl copy];
+    result = [result stringByReplacingOccurrencesOfString:@"{time}" withString:time ?: @""];
+    result = [result stringByReplacingOccurrencesOfString:@"{name}" withString:name ?: @""];
+    result = [result stringByReplacingOccurrencesOfString:@"{content}" withString:content ?: @""];
+    return result;
+}
+
+- (void)setEnableGroupExitMonitor:(BOOL)enableGroupExitMonitor {
+    if (_enableGroupExitMonitor != enableGroupExitMonitor) {
+        _enableGroupExitMonitor = enableGroupExitMonitor;
+        
+        if (enableGroupExitMonitor) {
+            [GroupExitHook startMonitoring];
+        } else {
+            [GroupExitHook stopMonitoring];
+        }
+        
+        [self save];
+    }
+}
+
+@end
