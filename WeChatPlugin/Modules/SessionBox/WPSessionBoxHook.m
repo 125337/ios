@@ -255,12 +255,71 @@ static void sb_showEditRemark(NSString *userName) {
     });
 }
 
+#pragma mark - willBeginEditingRowAtIndexPath (调试)
+
+static void replaced_willBeginEditingRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
+    sbLog(@"[willBeginEditing] === ENTERING EDIT MODE === indexPath=%@", indexPath);
+    UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+    sbLog(@"[willBeginEditing] cell=%@ frame=%@ editing=%d",
+          NSStringFromClass([cell class]),
+          NSStringFromCGRect(cell.frame),
+          cell.isEditing);
+    
+    NSValue *impValue = g_origIMPs[@"willBeginEditingRowAtIndexPath:"];
+    if (impValue) {
+        IMP origIMP = [impValue pointerValue];
+        if (origIMP) {
+            ((void (*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+        }
+    }
+}
+
+static void replaced_didEndEditingRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
+    sbLog(@"[didEndEditing] === EXITING EDIT MODE === indexPath=%@", indexPath);
+    NSValue *impValue = g_origIMPs[@"didEndEditingRowAtIndexPath:"];
+    if (impValue) {
+        IMP origIMP = [impValue pointerValue];
+        if (origIMP) {
+            ((void (*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+        }
+    }
+}
+
+#pragma mark - editingStyleForRowAtIndexPath (调试)
+
+static UITableViewCellEditingStyle replaced_editingStyle(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
+    PluginConfig *config = [PluginConfig shared];
+    NSValue *impValue = g_origIMPs[@"editingStyle"];
+    UITableViewCellEditingStyle origStyle = UITableViewCellEditingStyleNone;
+    if (impValue) {
+        IMP origIMP = [impValue pointerValue];
+        if (origIMP) {
+            origStyle = ((UITableViewCellEditingStyle (*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+        }
+    }
+    sbLog(@"[editingStyle] indexPath=%@ origStyle=%ld", indexPath, (long)origStyle);
+    
+    if (config.quickPinEnabled || config.quickRemarkEnabled || config.quickMuteEnabled) {
+        if (origStyle == UITableViewCellEditingStyleNone) {
+            sbLog(@"[editingStyle] overriding .none → .delete for indexPath=%@", indexPath);
+            return UITableViewCellEditingStyleDelete;
+        }
+    }
+    return origStyle;
+}
+
 #pragma mark - Leading Swipe Actions (右滑菜单)
 
 static UISwipeActionsConfiguration *replaced_leadingSwipeActions(
     id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
     
     sbLog(@"[leadingSwipe] === CALLED === indexPath=%@", indexPath);
+    
+    UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+    sbLog(@"[leadingSwipe] cell=%@ editing=%d allowsMultipleSelection=%d",
+          NSStringFromClass([cell class]),
+          cell.isEditing,
+          tableView.allowsMultipleSelectionDuringEditing);
     
     UISwipeActionsConfiguration *origConfig = nil;
     NSValue *origIMPValue = g_origIMPs[@"leadingSwipe"];
@@ -433,6 +492,45 @@ static void replaced_setDataSource(id self, SEL _cmd, id dataSource) {
     } else {
         class_addMethod(dsClass, canEditSel, (IMP)replaced_canEditRow, "B32@0:8@16@24");
         sbLog(@"[setDataSource] ✓ ADDED canEditRowAtIndexPath: to %@", className);
+    }
+    
+    // Hook willBeginEditingRowAtIndexPath: (调试: 是否进入编辑状态)
+    SEL willBeginSel = NSSelectorFromString(@"tableView:willBeginEditingRowAtIndexPath:");
+    Method willBeginMethod = class_getInstanceMethod(dsClass, willBeginSel);
+    if (willBeginMethod) {
+        IMP origIMP = method_getImplementation(willBeginMethod);
+        g_origIMPs[@"willBeginEditingRowAtIndexPath:"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(willBeginMethod, (IMP)replaced_willBeginEditingRow);
+        sbLog(@"[setDataSource] ✓ HOOKED willBeginEditingRow on %@", className);
+    } else {
+        class_addMethod(dsClass, willBeginSel, (IMP)replaced_willBeginEditingRow, "v32@0:8@16@24");
+        sbLog(@"[setDataSource] ✓ ADDED willBeginEditingRow to %@", className);
+    }
+    
+    // Hook didEndEditingRowAtIndexPath: (调试: 是否退出编辑状态)
+    SEL didEndSel = NSSelectorFromString(@"tableView:didEndEditingRowAtIndexPath:");
+    Method didEndMethod = class_getInstanceMethod(dsClass, didEndSel);
+    if (didEndMethod) {
+        IMP origIMP = method_getImplementation(didEndMethod);
+        g_origIMPs[@"didEndEditingRowAtIndexPath:"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(didEndMethod, (IMP)replaced_didEndEditingRow);
+        sbLog(@"[setDataSource] ✓ HOOKED didEndEditingRow on %@", className);
+    } else {
+        class_addMethod(dsClass, didEndSel, (IMP)replaced_didEndEditingRow, "v32@0:8@16@24");
+        sbLog(@"[setDataSource] ✓ ADDED didEndEditingRow to %@", className);
+    }
+    
+    // Hook editingStyleForRowAtIndexPath: (调试: 检查原始编辑样式)
+    SEL editingStyleSel = NSSelectorFromString(@"tableView:editingStyleForRowAtIndexPath:");
+    Method editingStyleMethod = class_getInstanceMethod(dsClass, editingStyleSel);
+    if (editingStyleMethod) {
+        IMP origIMP = method_getImplementation(editingStyleMethod);
+        g_origIMPs[@"editingStyle"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(editingStyleMethod, (IMP)replaced_editingStyle);
+        sbLog(@"[setDataSource] ✓ HOOKED editingStyle on %@", className);
+    } else {
+        class_addMethod(dsClass, editingStyleSel, (IMP)replaced_editingStyle, "q32@0:8@16@24");
+        sbLog(@"[setDataSource] ✓ ADDED editingStyle to %@", className);
     }
     
     [g_hookedTableViewClasses addObject:className];
