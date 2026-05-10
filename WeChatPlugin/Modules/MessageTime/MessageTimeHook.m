@@ -572,7 +572,7 @@ static void hookCellForTime(NSString *className) {
         gOrigIMPs = [NSMutableDictionary dictionary];
     });
     
-    for (NSString *methodName in @[@"updateStatus", @"layoutContentView", @"layoutSubviews"]) {
+    for (NSString *methodName in @[@"updateStatus", @"layoutContentView", @"layoutSubviews", @"prepareForReuse"]) {
         SEL sel = NSSelectorFromString(methodName);
         Method m = class_getInstanceMethod(cls, sel);
         if (!m) continue;
@@ -590,6 +590,13 @@ static void hookCellForTime(NSString *className) {
                 IMP orig = [impValue pointerValue];
                 ((void (*)(id, SEL))orig)(self, sel);
             }
+            
+            if (sel == NSSelectorFromString(@"prepareForReuse")) {
+                [[self viewWithTag:999999] removeFromSuperview];
+                objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+                return;
+            }
+            
             addTimeLabelToCell(self);
         });
         

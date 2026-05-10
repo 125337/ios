@@ -220,6 +220,8 @@ static void sb_showEditRemark(NSString *userName) {
 static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
 static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
 static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
+static BOOL sb_gestureShouldBegin(id self, SEL _cmd, UIGestureRecognizer *gesture);
+static BOOL sb_shouldSimultaneously(id self, SEL _cmd, UIGestureRecognizer *a, UIGestureRecognizer *b);
 
 #pragma mark - 注入方法
 
