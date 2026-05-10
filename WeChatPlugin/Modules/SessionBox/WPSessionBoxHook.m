@@ -351,6 +351,124 @@ static BOOL replaced_canEditRow(id self, SEL _cmd, UITableView *tableView, NSInd
     return YES;
 }
 
+#pragma mark - editingStyleForRowAtIndexPath
+
+static NSInteger replaced_editingStyleForRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
+    sbHookLog(@"[editingStyle] indexPath=%@", indexPath);
+    
+    NSValue *impValue = g_origIMPs[@"editingStyleForRowAtIndexPath:"];
+    if (impValue) {
+        IMP origIMP = [impValue pointerValue];
+        if (origIMP) {
+            NSInteger result = ((NSInteger (*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+            sbHookLog(@"[editingStyle] original result=%ld", (long)result);
+            if (result != UITableViewCellEditingStyleNone) return result;
+        }
+    }
+    
+    if (indexPath.section > 0) {
+        sbHookLog(@"[editingStyle] returning UITableViewCellEditingStyleDelete");
+        return UITableViewCellEditingStyleDelete;
+    }
+    
+    return UITableViewCellEditingStyleNone;
+}
+
+#pragma mark - commitEditingStyle
+
+static void replaced_commitEditingStyle(id self, SEL _cmd, NSInteger editingStyle, NSIndexPath *indexPath) {
+    sbHookLog(@"[commitEditing] style=%ld indexPath=%@", (long)editingStyle, indexPath);
+    
+    if (editingStyle == UITableViewCellEditingStyleDelete) {
+        NSString *userName = sb_userNameFromIndexPath(self, indexPath);
+        sbHookLog(@"[commitEditing] userName=%@", userName ?: @"nil");
+        
+        if (userName.length > 0) {
+            PluginConfig *config = [PluginConfig shared];
+            
+            if (config.quickPinEnabled) {
+                BOOL isTop = sb_isSessionTop(userName);
+                sb_togglePin(userName, isTop);
+                sbHookLog(@"[commitEditing] executed togglePin");
+                return;
+            }
+        }
+    }
+    
+    NSValue *impValue = g_origIMPs[@"commitEditingStyle:forRowAtIndexPath:"];
+    if (impValue) {
+        IMP origIMP = [impValue pointerValue];
+        if (origIMP) {
+            ((void (*)(id, SEL, NSInteger, NSIndexPath *))origIMP)(self, _cmd, editingStyle, indexPath);
+        }
+    }
+}
+
+#pragma mark - editActionsForRowAtIndexPath (iOS 8-12)
+
+static NSArray *replaced_editActionsForRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
+    sbHookLog(@"[editActions] indexPath=%@", indexPath);
+    
+    NSMutableArray *actions = [NSMutableArray array];
+    
+    NSValue *impValue = g_origIMPs[@"editActionsForRowAtIndexPath:"];
+    if (impValue) {
+        IMP origIMP = [impValue pointerValue];
+        if (origIMP) {
+            NSArray *origActions = ((NSArray *(*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+            if (origActions) [actions addObjectsFromArray:origActions];
+        }
+    }
+    
+    NSString *userName = sb_userNameFromIndexPath(self, indexPath);
+    sbHookLog(@"[editActions] userName=%@", userName ?: @"nil");
+    
+    if (userName.length > 0 && indexPath.section > 0) {
+        PluginConfig *config = [PluginConfig shared];
+        
+        if (config.quickPinEnabled) {
+            BOOL isTop = sb_isSessionTop(userName);
+            UITableViewRowAction *pinAction = [UITableViewRowAction
+                rowActionWithStyle:UITableViewRowActionStyleNormal
+                             title:isTop ? @"取消置顶" : @"置顶"
+                           handler:^(UITableViewRowAction *action, NSIndexPath *indexPath) {
+                    sbHookLog(@"[editAction] togglePin: %@", userName);
+                    sb_togglePin(userName, isTop);
+                }];
+            pinAction.backgroundColor = [UIColor systemBlueColor];
+            [actions addObject:pinAction];
+        }
+        
+        if (config.quickRemarkEnabled) {
+            UITableViewRowAction *remarkAction = [UITableViewRowAction
+                rowActionWithStyle:UITableViewRowActionStyleNormal
+                             title:@"备注"
+                           handler:^(UITableViewRowAction *action, NSIndexPath *indexPath) {
+                    sbHookLog(@"[editAction] showEditRemark: %@", userName);
+                    sb_showEditRemark(userName);
+                }];
+            remarkAction.backgroundColor = [UIColor systemOrangeColor];
+            [actions addObject:remarkAction];
+        }
+        
+        if (config.quickMuteEnabled) {
+            BOOL isMuted = sb_isSessionMuted(userName);
+            UITableViewRowAction *muteAction = [UITableViewRowAction
+                rowActionWithStyle:UITableViewRowActionStyleNormal
+                             title:isMuted ? @"取消免打扰" : @"免打扰"
+                           handler:^(UITableViewRowAction *action, NSIndexPath *indexPath) {
+                    sbHookLog(@"[editAction] toggleMute: %@", userName);
+                    sb_toggleMute(userName, isMuted);
+                }];
+            muteAction.backgroundColor = [UIColor systemPurpleColor];
+            [actions addObject:muteAction];
+        }
+    }
+    
+    sbHookLog(@"[editActions] returning %lu actions", (unsigned long)actions.count);
+    return actions;
+}
+
 #pragma mark - didMoveToWindow Hook
 
 static void replaced_didMoveToWindow(id self, SEL _cmd) {
@@ -410,6 +528,45 @@ static void replaced_setDataSource(id self, SEL _cmd, id dataSource) {
     } else {
         class_addMethod(dsClass, canEditSel, (IMP)replaced_canEditRow, "B32@0:8@16@24");
         sbHookLog(@"[setDataSource] ADDED canEditRowAtIndexPath: to %@", className);
+    }
+
+    // Hook editingStyleForRowAtIndexPath:
+    SEL editingStyleSel = NSSelectorFromString(@"tableView:editingStyleForRowAtIndexPath:");
+    Method editingStyleMethod = class_getInstanceMethod(dsClass, editingStyleSel);
+    if (editingStyleMethod) {
+        IMP origIMP = method_getImplementation(editingStyleMethod);
+        g_origIMPs[@"editingStyleForRowAtIndexPath:"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(editingStyleMethod, (IMP)replaced_editingStyleForRow);
+        sbHookLog(@"[setDataSource] HOOKED editingStyleForRowAtIndexPath: on %@", className);
+    } else {
+        class_addMethod(dsClass, editingStyleSel, (IMP)replaced_editingStyleForRow, "q32@0:8@16@24");
+        sbHookLog(@"[setDataSource] ADDED editingStyleForRowAtIndexPath: to %@", className);
+    }
+
+    // Hook editActionsForRowAtIndexPath:
+    SEL editActionsSel = NSSelectorFromString(@"tableView:editActionsForRowAtIndexPath:");
+    Method editActionsMethod = class_getInstanceMethod(dsClass, editActionsSel);
+    if (editActionsMethod) {
+        IMP origIMP = method_getImplementation(editActionsMethod);
+        g_origIMPs[@"editActionsForRowAtIndexPath:"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(editActionsMethod, (IMP)replaced_editActionsForRow);
+        sbHookLog(@"[setDataSource] HOOKED editActionsForRowAtIndexPath: on %@", className);
+    } else {
+        class_addMethod(dsClass, editActionsSel, (IMP)replaced_editActionsForRow, "@32@0:8@16@24");
+        sbHookLog(@"[setDataSource] ADDED editActionsForRowAtIndexPath: to %@", className);
+    }
+
+    // Hook commitEditingStyle:forRowAtIndexPath:
+    SEL commitSel = NSSelectorFromString(@"tableView:commitEditingStyle:forRowAtIndexPath:");
+    Method commitMethod = class_getInstanceMethod(dsClass, commitSel);
+    if (commitMethod) {
+        IMP origIMP = method_getImplementation(commitMethod);
+        g_origIMPs[@"commitEditingStyle:forRowAtIndexPath:"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(commitMethod, (IMP)replaced_commitEditingStyle);
+        sbHookLog(@"[setDataSource] HOOKED commitEditingStyle:forRowAtIndexPath: on %@", className);
+    } else {
+        class_addMethod(dsClass, commitSel, (IMP)replaced_commitEditingStyle, "v40@0:8q16@24@32");
+        sbHookLog(@"[setDataSource] ADDED commitEditingStyle:forRowAtIndexPath: to %@", className);
     }
 
     [g_hookedTableViewClasses addObject:className];
