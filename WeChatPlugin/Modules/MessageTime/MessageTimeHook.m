@@ -5,6 +5,8 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 
+static NSMutableDictionary *gProcessedCreateTimes = nil;
+
 static void mtLog(NSString *content) {
     NSLog(@"[WeChatPlugin][MessageTime] %@", content);
     @try {
@@ -351,11 +353,20 @@ static void addTimeLabelToCell(id cell) {
         }
         objc_setAssociatedObject(cell, @"messageTimeLastIdentifier", identifier, OBJC_ASSOCIATION_COPY_NONATOMIC);
         
-        UIImageView *avatarView = getAvatarView(cell);
-        if (!avatarView) {
-            mtLog(@"No avatarView - skipping continuation cell");
+        static NSMutableDictionary *gProcessedCreateTimesLocal = nil;
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+            gProcessedCreateTimesLocal = [NSMutableDictionary dictionary];
+            gProcessedCreateTimes = gProcessedCreateTimesLocal;
+        });
+        NSNumber *existingCell = gProcessedCreateTimes[@(createTime)];
+        if (existingCell) {
+            mtLog([NSString stringWithFormat:@"createTime=%u already shown on another cell %p, skipping this cell %p", createTime, (void *)[existingCell longValue], (__bridge void *)cell]);
             return;
         }
+        gProcessedCreateTimes[@(createTime)] = @((long)(__bridge void *)cell);
+        
+        UIImageView *avatarView = getAvatarView(cell);
         
         NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
         NSString *timeString = formatMessageTime(messageDate, config.messageTimeFormat);
@@ -551,6 +562,7 @@ static void addTimeLabelToCell(id cell) {
         
         if (![timeLabel superview]) {
             [cell addSubview:timeLabel];
+            objc_setAssociatedObject(cell, @"messageTimeCreateTime", @(createTime), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             mtLog(@"Added timeLabel to cell");
         } else {
             mtLog(@"timeLabel already in cell, updated frame");
@@ -598,7 +610,12 @@ static void hookCellForTime(NSString *className) {
             
             if (sel == NSSelectorFromString(@"prepareForReuse")) {
                 [[self viewWithTag:999999] removeFromSuperview];
+                NSNumber *savedCreateTime = objc_getAssociatedObject(self, @"messageTimeCreateTime");
+                if (savedCreateTime && gProcessedCreateTimes[savedCreateTime]) {
+                    [gProcessedCreateTimes removeObjectForKey:savedCreateTime];
+                }
                 objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+                objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 return;
             }
             
