@@ -376,8 +376,14 @@ static void addTimeLabelToCell(id cell) {
         CGRect bubbleFrame = bubbleView ? bubbleView.frame : cellFrame;
         
         BOOL isSender = NO;
-        if (bubbleView) {
-            isSender = bubbleView.frame.origin.x > [cell frame].size.width / 2;
+        @try {
+            if ([cell respondsToSelector:NSSelectorFromString(@"isSenderFromMsgWrap:")]) {
+                isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, NSSelectorFromString(@"isSenderFromMsgWrap:"), wrap);
+            }
+        } @catch (NSException *e) {}
+        
+        if (!isSender && bubbleView) {
+            isSender = CGRectGetMidX(bubbleView.frame) > CGRectGetMidX([cell frame]);
         }
         
         mtLog([NSString stringWithFormat:@"avatarView: %@, bubbleFrame: %@, isSender: %d", avatarView ? @"YES" : @"NO", NSStringFromCGRect(bubbleFrame), isSender]);
