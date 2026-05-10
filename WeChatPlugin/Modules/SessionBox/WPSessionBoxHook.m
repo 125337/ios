@@ -31,6 +31,11 @@ static void sbLog(NSString *format, ...) {
     } @catch (NSException *e) {}
 }
 
+static BOOL sb_anyFeatureEnabled(void) {
+    PluginConfig *cfg = [PluginConfig shared];
+    return cfg.quickPinEnabled || cfg.quickRemarkEnabled || cfg.quickMuteEnabled;
+}
+
 #pragma mark - Service Helpers
 
 static id sb_getService(Class serviceClass) {
@@ -220,17 +225,14 @@ static void sb_showEditRemark(NSString *userName) {
 static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
 static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
 static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
-static BOOL sb_gestureShouldBegin(id self, SEL _cmd, UIGestureRecognizer *gesture);
-static BOOL sb_shouldSimultaneously(id self, SEL _cmd, UIGestureRecognizer *a, UIGestureRecognizer *b);
 
-#pragma mark - 注入方法
+#pragma mark - 注入方法 (仅 3 个 swipe 方法，不注入手势代理)
 
 static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
     if (!targetClass) return NO;
     NSString *name = NSStringFromClass(targetClass);
     if ([g_hookedClasses containsObject:name]) return NO;
     
-    // --- leadingSwipeActions ---
     SEL leadingSel = NSSelectorFromString(@"tableView:leadingSwipeActionsConfigurationForRowAtIndexPath:");
     Method lm = class_getInstanceMethod(targetClass, leadingSel);
     if (lm) {
@@ -243,7 +245,6 @@ static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
         sbLog(@"[inject] ✓ added leadingSwipe to %@", name);
     }
     
-    // --- canEditRow ---
     SEL canEditSel = NSSelectorFromString(@"tableView:canEditRowAtIndexPath:");
     Method cm = class_getInstanceMethod(targetClass, canEditSel);
     if (cm) {
@@ -256,7 +257,6 @@ static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
         sbLog(@"[inject] ✓ added canEditRow to %@", name);
     }
     
-    // --- editingStyle ---
     SEL editStyleSel = NSSelectorFromString(@"tableView:editingStyleForRowAtIndexPath:");
     Method em = class_getInstanceMethod(targetClass, editStyleSel);
     if (em) {
@@ -269,86 +269,19 @@ static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
         sbLog(@"[inject] ✓ added editingStyle to %@", name);
     }
     
-    // --- gestureRecognizerShouldBegin: (拦截手势代理) ---
-    SEL gsbSel = NSSelectorFromString(@"gestureRecognizerShouldBegin:");
-    Method gsbm = class_getInstanceMethod(targetClass, gsbSel);
-    if (gsbm) {
-        IMP orig = method_getImplementation(gsbm);
-        g_origIMPs[[name stringByAppendingString:@"_gestureShouldBegin"]] = [NSValue valueWithPointer:orig];
-        method_setImplementation(gsbm, (IMP)sb_gestureShouldBegin);
-        sbLog(@"[inject] ✓ hooked gestureRecognizerShouldBegin on %@", name);
-    } else {
-        class_addMethod(targetClass, gsbSel, (IMP)sb_gestureShouldBegin, "B@:@");
-        sbLog(@"[inject] ✓ added gestureRecognizerShouldBegin to %@", name);
-    }
-    
-    // --- gestureRecognizer:shouldRecognizeSimultaneouslyWithGestureRecognizer: ---
-    SEL simSel = NSSelectorFromString(@"gestureRecognizer:shouldRecognizeSimultaneouslyWithGestureRecognizer:");
-    Method simm = class_getInstanceMethod(targetClass, simSel);
-    if (simm) {
-        IMP orig = method_getImplementation(simm);
-        g_origIMPs[[name stringByAppendingString:@"_shouldSimultaneously"]] = [NSValue valueWithPointer:orig];
-        method_setImplementation(simm, (IMP)sb_shouldSimultaneously);
-        sbLog(@"[inject] ✓ hooked shouldRecognizeSimultaneously on %@", name);
-    } else {
-        class_addMethod(targetClass, simSel, (IMP)sb_shouldSimultaneously, "B@:@@");
-        sbLog(@"[inject] ✓ added shouldRecognizeSimultaneously to %@", name);
-    }
-    
     [g_hookedClasses addObject:name];
-    return YES;
-}
-
-#pragma mark - 手势代理方法
-
-static BOOL sb_gestureShouldBegin(id self, SEL _cmd, UIGestureRecognizer *gesture) {
-    PluginConfig *cfg = [PluginConfig shared];
-    BOOL fe = cfg.quickPinEnabled || cfg.quickRemarkEnabled || cfg.quickMuteEnabled;
-    
-    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_gestureShouldBegin"];
-    NSValue *v = g_origIMPs[key];
-    BOOL orig = YES;
-    if (v) {
-        IMP o = [v pointerValue];
-        orig = ((BOOL (*)(id, SEL, id))o)(self, _cmd, gesture);
-    }
-    
-    if (fe) {
-        sbLog(@"[gestureShouldBegin] class=%@ orig=%d → YES", NSStringFromClass([self class]), orig);
-        return YES;
-    }
-    
-    sbLog(@"[gestureShouldBegin] class=%@ orig=%d (features off)", NSStringFromClass([self class]), orig);
-    return orig;
-}
-
-static BOOL sb_shouldSimultaneously(id self, SEL _cmd, UIGestureRecognizer *a, UIGestureRecognizer *b) {
-    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_shouldSimultaneously"];
-    NSValue *v = g_origIMPs[key];
-    if (v) {
-        IMP o = [v pointerValue];
-        BOOL orig = ((BOOL (*)(id, SEL, id, id))o)(self, _cmd, a, b);
-        sbLog(@"[simultaneously] class=%@ orig=%d", NSStringFromClass([self class]), orig);
-        return orig;
-    }
     return YES;
 }
 
 #pragma mark - canEditRowAtIndexPath:
 
 static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
-    PluginConfig *cfg = [PluginConfig shared];
-    BOOL fe = cfg.quickPinEnabled || cfg.quickRemarkEnabled || cfg.quickMuteEnabled;
-    
-    if (fe) {
+    if (sb_anyFeatureEnabled()) {
         NSString *un = sb_userNameFromDataSource(self, ip);
         if (un.length > 0) {
-            sbLog(@"[canEdit] %@-%@ => YES (%@)", @(ip.section), @(ip.row), un);
             return YES;
         }
     }
-    
-    sbLog(@"[canEdit] %@-%@ => NO (class=%@ fe=%d)", @(ip.section), @(ip.row), NSStringFromClass([self class]), fe);
     
     NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_canEditRow"];
     NSValue *v = g_origIMPs[key];
@@ -362,9 +295,6 @@ static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
 #pragma mark - editingStyleForRowAtIndexPath:
 
 static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
-    PluginConfig *cfg = [PluginConfig shared];
-    BOOL fe = cfg.quickPinEnabled || cfg.quickRemarkEnabled || cfg.quickMuteEnabled;
-    
     NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_editingStyle"];
     NSValue *v = g_origIMPs[key];
     UITableViewCellEditingStyle orig = UITableViewCellEditingStyleNone;
@@ -373,24 +303,19 @@ static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableVie
         orig = ((UITableViewCellEditingStyle (*)(id, SEL, id, id))o)(self, _cmd, tv, ip);
     }
     
-    if (fe && orig == UITableViewCellEditingStyleNone) {
+    if (sb_anyFeatureEnabled() && orig == UITableViewCellEditingStyleNone) {
         NSString *un = sb_userNameFromDataSource(self, ip);
         if (un.length > 0) {
-            sbLog(@"[editStyle] %@-%@ override .none → .delete (%@)", @(ip.section), @(ip.row), un);
             return UITableViewCellEditingStyleDelete;
         }
     }
     
-    sbLog(@"[editStyle] %@-%@ orig=%ld (class=%@)", @(ip.section), @(ip.row), (long)orig, NSStringFromClass([self class]));
     return orig;
 }
 
 #pragma mark - leadingSwipeActionsConfigurationForRowAtIndexPath:
 
 static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
-    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_leadingSwipe"];
-    NSValue *v = g_origIMPs[key];
-    
     NSMutableArray<UIContextualAction *> *actions = [NSMutableArray array];
     NSString *un = sb_userNameFromDataSource(self, ip);
     
@@ -403,7 +328,6 @@ static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UI
                 contextualActionWithStyle:UIContextualActionStyleNormal
                                    title:top ? @"取消置顶" : @"置顶"
                                  handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) {
-                sbLog(@"[Action] togglePin: %@", un);
                 sb_togglePin(un, top);
                 done(YES);
             }];
@@ -416,7 +340,6 @@ static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UI
                 contextualActionWithStyle:UIContextualActionStyleNormal
                                    title:@"备注"
                                  handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) {
-                sbLog(@"[Action] showEditRemark: %@", un);
                 sb_showEditRemark(un);
                 done(YES);
             }];
@@ -430,7 +353,6 @@ static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UI
                 contextualActionWithStyle:UIContextualActionStyleNormal
                                    title:muted ? @"取消免打扰" : @"免打扰"
                                  handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) {
-                sbLog(@"[Action] toggleMute: %@", un);
                 sb_toggleMute(un, muted);
                 done(YES);
             }];
@@ -439,9 +361,7 @@ static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UI
         }
     }
     
-    sbLog(@"[leadingSwipe] %@-%@ un=%@ actions=%lu (class=%@)",
-          @(ip.section), @(ip.row), un ?: @"nil", (unsigned long)actions.count,
-          NSStringFromClass([self class]));
+    sbLog(@"[leadingSwipe] %@-%@ un=%@ actions=%lu", @(ip.section), @(ip.row), un ?: @"nil", (unsigned long)actions.count);
     
     if (actions.count > 0) {
         UISwipeActionsConfiguration *c = [UISwipeActionsConfiguration configurationWithActions:actions];
@@ -462,10 +382,7 @@ static void replaced_setDataSource(id self, SEL _cmd, id ds) {
     
     Class dc = object_getClass(ds);
     NSString *name = NSStringFromClass(dc);
-    sbLog(@"[setDataSource] %@", name);
-    
-    BOOL ok = sb_injectSwipeMethods(dc, name);
-    sbLog(@"[setDataSource] inject=%d for %@", ok, name);
+    sb_injectSwipeMethods(dc, name);
 }
 
 static void (*orig_setDelegate)(id, SEL, id) = NULL;
@@ -476,10 +393,52 @@ static void replaced_setDelegate(id self, SEL _cmd, id dg) {
     
     Class dc = object_getClass(dg);
     NSString *name = NSStringFromClass(dc);
-    sbLog(@"[setDelegate] %@", name);
+    sb_injectSwipeMethods(dc, name);
+}
+
+#pragma mark - Hook setAllowsMultipleSelection:
+
+static void (*orig_setAllowsMultipleSelection)(id, SEL, BOOL) = NULL;
+
+static void replaced_setAllowsMultipleSelection(id self, SEL _cmd, BOOL allows) {
+    if (sb_anyFeatureEnabled()) {
+        sbLog(@"[setAllowsMultipleSelection] blocking YES→NO (orig=%d)", allows);
+        if (orig_setAllowsMultipleSelection) orig_setAllowsMultipleSelection(self, _cmd, NO);
+        return;
+    }
+    if (orig_setAllowsMultipleSelection) orig_setAllowsMultipleSelection(self, _cmd, allows);
+}
+
+#pragma mark - Hook viewWillAppear: on NewMainFrameViewController
+
+static void (*orig_viewWillAppear)(id, SEL, BOOL) = NULL;
+
+static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
+    if (orig_viewWillAppear) orig_viewWillAppear(self, _cmd, animated);
     
-    BOOL ok = sb_injectSwipeMethods(dc, name);
-    sbLog(@"[setDelegate] inject=%d for %@", ok, name);
+    if (!sb_anyFeatureEnabled()) return;
+    
+    UITableView *tv = nil;
+    
+    SEL viewSel = NSSelectorFromString(@"tableView");
+    if ([self respondsToSelector:viewSel]) {
+        tv = ((id (*)(id, SEL))objc_msgSend)(self, viewSel);
+    }
+    if (!tv) {
+        tv = ((id (*)(id, SEL))objc_msgSend)(self, @selector(view));
+    }
+    if (![tv isKindOfClass:[UITableView class]]) {
+        for (UIView *sv in ((UIView *)((id (*)(id, SEL))objc_msgSend)(self, @selector(view))).subviews) {
+            if ([sv isKindOfClass:[UITableView class]]) { tv = (UITableView *)sv; break; }
+        }
+    }
+    
+    if (!tv) return;
+    
+    tv.panGestureRecognizer.enabled = YES;
+    tv.allowsMultipleSelectionDuringEditing = NO;
+    sbLog(@"[viewWillAppear] tv=%@ panGesture=%d allowsMultiSel=%d",
+          NSStringFromClass([tv class]), tv.panGestureRecognizer.isEnabled, tv.allowsMultipleSelectionDuringEditing);
 }
 
 #pragma mark - 安装
@@ -490,7 +449,7 @@ static void replaced_setDelegate(id self, SEL _cmd, id dg) {
     g_hookedClasses = [NSMutableSet set];
     g_origIMPs = [NSMutableDictionary dictionary];
     
-    sbLog(@"[install] === START (setDS+setDL+gestureDelegate) ===");
+    sbLog(@"[install] === START (setDS+setDL+allowsMultiSel+viewWillAppear) ===");
     
     Method setDS = class_getInstanceMethod([UITableView class], @selector(setDataSource:));
     if (setDS) {
@@ -504,6 +463,23 @@ static void replaced_setDelegate(id self, SEL _cmd, id dg) {
         orig_setDelegate = (void (*)(id, SEL, id))method_getImplementation(setDL);
         method_setImplementation(setDL, (IMP)replaced_setDelegate);
         sbLog(@"[install] ✓ hooked setDelegate:");
+    }
+    
+    Method setAMS = class_getInstanceMethod([UITableView class], @selector(setAllowsMultipleSelection:));
+    if (setAMS) {
+        orig_setAllowsMultipleSelection = (void (*)(id, SEL, BOOL))method_getImplementation(setAMS);
+        method_setImplementation(setAMS, (IMP)replaced_setAllowsMultipleSelection);
+        sbLog(@"[install] ✓ hooked setAllowsMultipleSelection:");
+    }
+    
+    Class nmvc = objc_getClass("NewMainFrameViewController");
+    if (nmvc) {
+        Method vwa = class_getInstanceMethod(nmvc, @selector(viewWillAppear:));
+        if (vwa) {
+            orig_viewWillAppear = (void (*)(id, SEL, BOOL))method_getImplementation(vwa);
+            method_setImplementation(vwa, (IMP)replaced_viewWillAppear);
+            sbLog(@"[install] ✓ hooked viewWillAppear: on NewMainFrameViewController");
+        }
     }
     
     sbLog(@"[install] === COMPLETE ===");

@@ -35,6 +35,15 @@ static IMP orig_onRevokeMsg_CMessageMgr = NULL;
 static IMP orig_onNewSyncNotAddDBMessage = NULL;
 static IMP orig_replaceRevokedMsg = NULL;
 static IMP orig_deleteLocalProcessRevokeMsgWithToast = NULL;
+static IMP orig_PostInsertParsedXmlSysMsg = NULL;
+static IMP orig_OnGetNewXmlMsg = NULL;
+
+static BOOL g_hookPostInsertVerified = NO;
+static BOOL g_hookOnGetNewXmlVerified = NO;
+static BOOL g_hookOnRevokeVerified = NO;
+static BOOL g_hookOnRevokeMgrVerified = NO;
+static BOOL g_hookReplaceVerified = NO;
+static BOOL g_hookDeleteVerified = NO;
 
 static id extractMsgWrap(id obj) {
     if (!obj) return nil;
@@ -60,6 +69,54 @@ static NSString *extractChatName(id obj) {
         } @catch (NSException *e) {}
     }
     return nil;
+}
+
+static id getService(Class serviceClass) {
+    Class MMServiceCenterClass = objc_getClass("MMServiceCenter");
+    if (!MMServiceCenterClass) return nil;
+    SEL dcSel = NSSelectorFromString(@"defaultCenter");
+    if (![MMServiceCenterClass respondsToSelector:dcSel]) return nil;
+    id center = ((id (*)(id, SEL))objc_msgSend)(MMServiceCenterClass, dcSel);
+    if (!center) return nil;
+    SEL gsSel = NSSelectorFromString(@"getService:");
+    if (![center respondsToSelector:gsSel]) return nil;
+    return ((id (*)(id, SEL, Class))objc_msgSend)(center, gsSel, serviceClass);
+}
+
+static void proactiveDeleteRevokeSysMsg(NSString *session, long long n64SvrID) {
+    if (!session.length || n64SvrID <= 0) return;
+    @try {
+        id messageMgr = getService(objc_getClass("CMessageMgr"));
+        if (!messageMgr) return;
+        
+        SEL getMsgSel = NSSelectorFromString(@"GetMsg:n64SvrID:");
+        if (![messageMgr respondsToSelector:getMsgSel]) return;
+        
+        id sysMsgWrap = ((id (*)(id, SEL, id, long long))objc_msgSend)(messageMgr, getMsgSel, session, n64SvrID);
+        if (!sysMsgWrap) return;
+        
+        SEL localIdSel = NSSelectorFromString(@"m_uiMesLocalID");
+        if (![sysMsgWrap respondsToSelector:localIdSel]) return;
+        unsigned int localId = ((unsigned int (*)(id, SEL))objc_msgSend)(sysMsgWrap, localIdSel);
+        if (localId == 0) return;
+        
+        NSArray *msgList = @[@(localId)];
+        
+        SEL delMsgSel = NSSelectorFromString(@"DelMsg:MsgList:");
+        if ([messageMgr respondsToSelector:delMsgSel]) {
+            ((void (*)(id, SEL, id, id))objc_msgSend)(messageMgr, delMsgSel, session, msgList);
+            hookLog(@"[WeChatPlugin][Revoke] proactively deleted revoke sysMsg, localId=%u", localId);
+            return;
+        }
+        
+        SEL delMsgDelAllSel = NSSelectorFromString(@"DelMsg:MsgList:DelAll:");
+        if ([messageMgr respondsToSelector:delMsgDelAllSel]) {
+            ((void (*)(id, SEL, id, id, BOOL))objc_msgSend)(messageMgr, delMsgDelAllSel, session, msgList, NO);
+            hookLog(@"[WeChatPlugin][Revoke] proactively deleted revoke sysMsg (DelAll), localId=%u", localId);
+        }
+    } @catch (NSException *e) {
+        hookLog(@"[WeChatPlugin][Revoke] proactiveDeleteRevokeSysMsg exception: %@", e);
+    }
 }
 
 static void replaced_onRevokeMsg(id self, SEL _cmd, id arg1) {
@@ -170,65 +227,294 @@ static void replaced_deleteLocalProcessRevokeMsgWithToast(id self, SEL _cmd, id 
     if (orig_deleteLocalProcessRevokeMsgWithToast) ((void (*)(id, SEL, id))orig_deleteLocalProcessRevokeMsgWithToast)(self, _cmd, arg1);
 }
 
+static void replaced_PostInsertParsedXmlSysMsg(id self, SEL _cmd, id parsedXml, id chatName) {
+    hookLog(@"[WeChatPlugin][Revoke] PostInsertParsedXmlSysMsg called, chatName=%@", chatName);
+    
+    if (![PluginConfig shared].preventRecall) {
+        if (orig_PostInsertParsedXmlSysMsg)
+            ((void (*)(id, SEL, id, id))orig_PostInsertParsedXmlSysMsg)(self, _cmd, parsedXml, chatName);
+        return;
+    }
+    
+    @try {
+        NSString *xmlStr = [parsedXml isKindOfClass:[NSString class]] ? parsedXml : nil;
+        NSString *cName = [chatName isKindOfClass:[NSString class]] ? chatName : nil;
+        
+        if (xmlStr && [xmlStr rangeOfString:@"<revokemsg>"].location != NSNotFound) {
+            hookLog(@"[WeChatPlugin][Revoke] *** detected revoke at PostInsertParsedXmlSysMsg (EARLIEST HOOK) *** blocking original flow");
+            
+            BOOL handled = [[RevokeHandler shared] handleRevokeFromXmlSysMsg:xmlStr chatName:cName];
+            if (handled) {
+                hookLog(@"[WeChatPlugin][Revoke] revoke BLOCKED at PostInsertParsedXmlSysMsg - message preserved!");
+                return;
+            }
+        }
+    } @catch (NSException *e) {
+        hookLog(@"[WeChatPlugin][Revoke] PostInsertParsedXmlSysMsg exception: %@", e);
+    }
+    
+    if (orig_PostInsertParsedXmlSysMsg)
+        ((void (*)(id, SEL, id, id))orig_PostInsertParsedXmlSysMsg)(self, _cmd, parsedXml, chatName);
+}
+
+static void replaced_OnGetNewXmlMsg(id self, SEL _cmd, id xmlMsg, id type, id msgWrap) {
+    hookLog(@"[WeChatPlugin][Revoke] OnGetNewXmlMsg called, type=%@", type);
+    
+    if (![PluginConfig shared].preventRecall) {
+        if (orig_OnGetNewXmlMsg)
+            ((void (*)(id, SEL, id, id, id))orig_OnGetNewXmlMsg)(self, _cmd, xmlMsg, type, msgWrap);
+        return;
+    }
+    
+    @try {
+        NSString *xmlStr = [xmlMsg isKindOfClass:[NSString class]] ? xmlMsg : nil;
+        
+        if (xmlStr && [xmlStr rangeOfString:@"<revokemsg>"].location != NSNotFound) {
+            hookLog(@"[WeChatPlugin][Revoke] *** detected revoke at OnGetNewXmlMsg (VC-level backup) ***");
+            
+            NSString *chatName = nil;
+            if (msgWrap) chatName = extractChatName(msgWrap);
+            
+            BOOL handled = [[RevokeHandler shared] handleRevokeFromVCXml:xmlStr chatName:chatName];
+            if (handled) {
+                hookLog(@"[WeChatPlugin][Revoke] revoke BLOCKED at OnGetNewXmlMsg (VC-level)");
+                return;
+            }
+            
+            long long revokedMsgId = 0;
+            NSRange range = [xmlStr rangeOfString:@"<newmsgid>"];
+            if (range.location != NSNotFound) {
+                NSUInteger start = range.location + range.length;
+                NSRange endRange = [xmlStr rangeOfString:@"</newmsgid>" options:0
+                                                    range:NSMakeRange(start, xmlStr.length - start)];
+                if (endRange.location != NSNotFound) {
+                    NSString *idStr = [xmlStr substringWithRange:NSMakeRange(start, endRange.location - start)];
+                    NSScanner *s = [NSScanner scannerWithString:idStr];
+                    [s scanLongLong:&revokedMsgId];
+                }
+            }
+            if (revokedMsgId <= 0) {
+                range = [xmlStr rangeOfString:@"<msgid>"];
+                if (range.location != NSNotFound) {
+                    NSUInteger start = range.location + range.length;
+                    NSRange endRange = [xmlStr rangeOfString:@"</msgid>" options:0
+                                                        range:NSMakeRange(start, xmlStr.length - start)];
+                    if (endRange.location != NSNotFound) {
+                        NSString *idStr = [xmlStr substringWithRange:NSMakeRange(start, endRange.location - start)];
+                        NSScanner *s = [NSScanner scannerWithString:idStr];
+                        [s scanLongLong:&revokedMsgId];
+                    }
+                }
+            }
+            
+            NSString *session = nil;
+            range = [xmlStr rangeOfString:@"<session>"];
+            if (range.location != NSNotFound) {
+                NSUInteger start = range.location + range.length;
+                NSRange endRange = [xmlStr rangeOfString:@"</session>" options:0
+                                                    range:NSMakeRange(start, xmlStr.length - start)];
+                if (endRange.location != NSNotFound) {
+                    session = [xmlStr substringWithRange:NSMakeRange(start, endRange.location - start)];
+                }
+            }
+            
+            proactiveDeleteRevokeSysMsg(session, revokedMsgId);
+        }
+    } @catch (NSException *e) {
+        hookLog(@"[WeChatPlugin][Revoke] OnGetNewXmlMsg exception: %@", e);
+    }
+    
+    if (orig_OnGetNewXmlMsg)
+        ((void (*)(id, SEL, id, id, id))orig_OnGetNewXmlMsg)(self, _cmd, xmlMsg, type, msgWrap);
+}
+
 @implementation RevokeHook
 
 + (void)install {
     hookLog(@"[WeChatPlugin][RevokeHook] install start");
     
-    Class cls = objc_getClass("MessageRevokeMgr");
-    if (!cls) {
+    Class msgMgrCls = objc_getClass("CMessageMgr");
+    if (!msgMgrCls) {
+        hookLog(@"[WeChatPlugin][RevokeHook] CMessageMgr class not found!");
+    } else {
+        hookLog(@"[WeChatPlugin][RevokeHook] CMessageMgr found: %@", msgMgrCls);
+        
+        IMP imp1 = [HookEngine swizzleMethod:NSSelectorFromString(@"onRevokeMsg:") inClass:msgMgrCls withIMP:(IMP)replaced_onRevokeMsg_CMessageMgr];
+        if (imp1) {
+            orig_onRevokeMsg_CMessageMgr = imp1;
+            hookLog(@"[WeChatPlugin][RevokeHook] ✓ onRevokeMsg: hooked (CMessageMgr)");
+        } else {
+            hookLog(@"[WeChatPlugin][RevokeHook] ✗ onRevokeMsg: hook failed (CMessageMgr)");
+        }
+        
+        IMP imp2 = [HookEngine swizzleMethod:NSSelectorFromString(@"onNewSyncNotAddDBMessage:") inClass:msgMgrCls withIMP:(IMP)replaced_onNewSyncNotAddDBMessage];
+        if (imp2) {
+            orig_onNewSyncNotAddDBMessage = imp2;
+            hookLog(@"[WeChatPlugin][RevokeHook] ✓ onNewSyncNotAddDBMessage: hooked (CMessageMgr)");
+        } else {
+            hookLog(@"[WeChatPlugin][RevokeHook] ✗ onNewSyncNotAddDBMessage: hook failed (CMessageMgr)");
+        }
+        
+        IMP imp3 = [HookEngine swizzleMethod:NSSelectorFromString(@"PostInsertParsedXmlSysMsg:ChatName:") inClass:msgMgrCls withIMP:(IMP)replaced_PostInsertParsedXmlSysMsg];
+        if (imp3) {
+            orig_PostInsertParsedXmlSysMsg = imp3;
+            hookLog(@"[WeChatPlugin][RevokeHook] ✓ PostInsertParsedXmlSysMsg:ChatName: hooked (CMessageMgr) ★ EARLIEST HOOK");
+        } else {
+            hookLog(@"[WeChatPlugin][RevokeHook] ✗ PostInsertParsedXmlSysMsg:ChatName: hook failed (method may not exist in this WeChat version)");
+        }
+    }
+    
+    Class revokeCls = objc_getClass("MessageRevokeMgr");
+    if (!revokeCls) {
         hookLog(@"[WeChatPlugin][RevokeHook] MessageRevokeMgr class not found!");
     } else {
-        hookLog(@"[WeChatPlugin][RevokeHook] MessageRevokeMgr found: %@", cls);
-
-        IMP imp1 = [HookEngine swizzleMethod:NSSelectorFromString(@"onRevokeMsg:") inClass:cls withIMP:(IMP)replaced_onRevokeMsg];
-        if (imp1) {
-            orig_onRevokeMsg = imp1;
+        hookLog(@"[WeChatPlugin][RevokeHook] MessageRevokeMgr found: %@", revokeCls);
+        
+        IMP imp4 = [HookEngine swizzleMethod:NSSelectorFromString(@"onRevokeMsg:") inClass:revokeCls withIMP:(IMP)replaced_onRevokeMsg];
+        if (imp4) {
+            orig_onRevokeMsg = imp4;
             hookLog(@"[WeChatPlugin][RevokeHook] ✓ onRevokeMsg: hooked (MessageRevokeMgr)");
         } else {
             hookLog(@"[WeChatPlugin][RevokeHook] ✗ onRevokeMsg: hook failed (MessageRevokeMgr)");
         }
-
-        IMP imp2 = [HookEngine swizzleMethod:NSSelectorFromString(@"replaceRevokedMsg:") inClass:cls withIMP:(IMP)replaced_replaceRevokedMsg];
-        if (imp2) {
-            orig_replaceRevokedMsg = imp2;
+        
+        IMP imp5 = [HookEngine swizzleMethod:NSSelectorFromString(@"replaceRevokedMsg:") inClass:revokeCls withIMP:(IMP)replaced_replaceRevokedMsg];
+        if (imp5) {
+            orig_replaceRevokedMsg = imp5;
             hookLog(@"[WeChatPlugin][RevokeHook] ✓ replaceRevokedMsg: hooked");
         } else {
             hookLog(@"[WeChatPlugin][RevokeHook] ✗ replaceRevokedMsg: hook failed");
         }
-
-        IMP imp3 = [HookEngine swizzleMethod:NSSelectorFromString(@"deleteLocalProcessRevokeMsgWithToast:") inClass:cls withIMP:(IMP)replaced_deleteLocalProcessRevokeMsgWithToast];
-        if (imp3) {
-            orig_deleteLocalProcessRevokeMsgWithToast = imp3;
+        
+        IMP imp6 = [HookEngine swizzleMethod:NSSelectorFromString(@"deleteLocalProcessRevokeMsgWithToast:") inClass:revokeCls withIMP:(IMP)replaced_deleteLocalProcessRevokeMsgWithToast];
+        if (imp6) {
+            orig_deleteLocalProcessRevokeMsgWithToast = imp6;
             hookLog(@"[WeChatPlugin][RevokeHook] ✓ deleteLocalProcessRevokeMsgWithToast: hooked");
         } else {
             hookLog(@"[WeChatPlugin][RevokeHook] ✗ deleteLocalProcessRevokeMsgWithToast: hook failed");
         }
     }
     
-    Class cmsgCls = objc_getClass("CMessageMgr");
-    if (cmsgCls) {
-        hookLog(@"[WeChatPlugin][RevokeHook] CMessageMgr found: %@", cmsgCls);
-        IMP imp4 = [HookEngine swizzleMethod:NSSelectorFromString(@"onRevokeMsg:") inClass:cmsgCls withIMP:(IMP)replaced_onRevokeMsg_CMessageMgr];
-        if (imp4) {
-            orig_onRevokeMsg_CMessageMgr = imp4;
-            hookLog(@"[WeChatPlugin][RevokeHook] ✓ onRevokeMsg: hooked (CMessageMgr)");
-        } else {
-            hookLog(@"[WeChatPlugin][RevokeHook] ✗ onRevokeMsg: hook failed (CMessageMgr)");
-        }
+    Class vcCls = objc_getClass("BaseMsgContentViewController");
+    if (!vcCls) vcCls = objc_getClass("MMMsgContentLogicController");
+    if (vcCls) {
+        hookLog(@"[WeChatPlugin][RevokeHook] BaseMsgContentViewController found: %@", vcCls);
         
-        IMP imp5 = [HookEngine swizzleMethod:NSSelectorFromString(@"onNewSyncNotAddDBMessage:") inClass:cmsgCls withIMP:(IMP)replaced_onNewSyncNotAddDBMessage];
-        if (imp5) {
-            orig_onNewSyncNotAddDBMessage = imp5;
-            hookLog(@"[WeChatPlugin][RevokeHook] ✓ onNewSyncNotAddDBMessage: hooked (CMessageMgr)");
+        IMP imp7 = [HookEngine swizzleMethod:NSSelectorFromString(@"OnGetNewXmlMsg:Type:MsgWrap:") inClass:vcCls withIMP:(IMP)replaced_OnGetNewXmlMsg];
+        if (imp7) {
+            orig_OnGetNewXmlMsg = imp7;
+            hookLog(@"[WeChatPlugin][RevokeHook] ✓ OnGetNewXmlMsg:Type:MsgWrap: hooked (VC-level backup)");
         } else {
-            hookLog(@"[WeChatPlugin][RevokeHook] ✗ onNewSyncNotAddDBMessage: hook failed (CMessageMgr)");
+            hookLog(@"[WeChatPlugin][RevokeHook] ✗ OnGetNewXmlMsg:Type:MsgWrap: hook failed (VC-level)");
         }
     } else {
-        hookLog(@"[WeChatPlugin][RevokeHook] CMessageMgr class not found!");
+        hookLog(@"[WeChatPlugin][RevokeHook] BaseMsgContentViewController / MMMsgContentLogicController not found");
     }
     
-    hookLog(@"[WeChatPlugin][RevokeHook] install complete");
+    [self markHookVerified];
+    hookLog(@"[WeChatPlugin][RevokeHook] install complete (8 hooks attempted)");
+}
+
++ (void)markHookVerified {
+    g_hookPostInsertVerified = (orig_PostInsertParsedXmlSysMsg != NULL);
+    g_hookOnGetNewXmlVerified = (orig_OnGetNewXmlMsg != NULL);
+    g_hookOnRevokeVerified = (orig_onRevokeMsg_CMessageMgr != NULL);
+    g_hookOnRevokeMgrVerified = (orig_onRevokeMsg != NULL);
+    g_hookReplaceVerified = (orig_replaceRevokedMsg != NULL);
+    g_hookDeleteVerified = (orig_deleteLocalProcessRevokeMsgWithToast != NULL);
+}
+
++ (BOOL)checkHookWithSeq:(int)seq {
+    BOOL allOK = YES;
+    
+    if (g_hookPostInsertVerified && orig_PostInsertParsedXmlSysMsg) {
+        Class cls = objc_getClass("CMessageMgr");
+        if (cls) {
+            Method m = class_getInstanceMethod(cls, NSSelectorFromString(@"PostInsertParsedXmlSysMsg:ChatName:"));
+            if (m) {
+                IMP currentIMP = method_getImplementation(m);
+                IMP ourIMP = (IMP)replaced_PostInsertParsedXmlSysMsg;
+                if (currentIMP != ourIMP) {
+                    hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ PostInsertParsedXmlSysMsg IMP changed! restoring...", seq);
+                    method_setImplementation(m, ourIMP);
+                    allOK = NO;
+                }
+            }
+        }
+    }
+    
+    if (g_hookOnGetNewXmlVerified && orig_OnGetNewXmlMsg) {
+        Class cls = objc_getClass("BaseMsgContentViewController");
+        if (!cls) cls = objc_getClass("MMMsgContentLogicController");
+        if (cls) {
+            Method m = class_getInstanceMethod(cls, NSSelectorFromString(@"OnGetNewXmlMsg:Type:MsgWrap:"));
+            if (m) {
+                IMP currentIMP = method_getImplementation(m);
+                if (currentIMP != (IMP)replaced_OnGetNewXmlMsg) {
+                    hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ OnGetNewXmlMsg IMP changed! restoring...", seq);
+                    method_setImplementation(m, (IMP)replaced_OnGetNewXmlMsg);
+                    allOK = NO;
+                }
+            }
+        }
+    }
+    
+    if (g_hookOnRevokeVerified && orig_onRevokeMsg_CMessageMgr) {
+        Class cls = objc_getClass("CMessageMgr");
+        if (cls) {
+            Method m = class_getInstanceMethod(cls, NSSelectorFromString(@"onRevokeMsg:"));
+            if (m && method_getImplementation(m) != (IMP)replaced_onRevokeMsg_CMessageMgr) {
+                hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ onRevokeMsg (CMessageMgr) IMP changed! restoring...", seq);
+                method_setImplementation(m, (IMP)replaced_onRevokeMsg_CMessageMgr);
+                allOK = NO;
+            }
+        }
+    }
+    
+    if (g_hookOnRevokeMgrVerified && orig_onRevokeMsg) {
+        Class cls = objc_getClass("MessageRevokeMgr");
+        if (cls) {
+            Method m = class_getInstanceMethod(cls, NSSelectorFromString(@"onRevokeMsg:"));
+            if (m && method_getImplementation(m) != (IMP)replaced_onRevokeMsg) {
+                hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ onRevokeMsg (MessageRevokeMgr) IMP changed! restoring...", seq);
+                method_setImplementation(m, (IMP)replaced_onRevokeMsg);
+                allOK = NO;
+            }
+        }
+    }
+    
+    if (g_hookReplaceVerified && orig_replaceRevokedMsg) {
+        Class cls = objc_getClass("MessageRevokeMgr");
+        if (cls) {
+            Method m = class_getInstanceMethod(cls, NSSelectorFromString(@"replaceRevokedMsg:"));
+            if (m && method_getImplementation(m) != (IMP)replaced_replaceRevokedMsg) {
+                hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ replaceRevokedMsg IMP changed! restoring...", seq);
+                method_setImplementation(m, (IMP)replaced_replaceRevokedMsg);
+                allOK = NO;
+            }
+        }
+    }
+    
+    if (g_hookDeleteVerified && orig_deleteLocalProcessRevokeMsgWithToast) {
+        Class cls = objc_getClass("MessageRevokeMgr");
+        if (cls) {
+            Method m = class_getInstanceMethod(cls, NSSelectorFromString(@"deleteLocalProcessRevokeMsgWithToast:"));
+            if (m && method_getImplementation(m) != (IMP)replaced_deleteLocalProcessRevokeMsgWithToast) {
+                hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ deleteLocalProcessRevokeMsgWithToast IMP changed! restoring...", seq);
+                method_setImplementation(m, (IMP)replaced_deleteLocalProcessRevokeMsgWithToast);
+                allOK = NO;
+            }
+        }
+    }
+    
+    if (allOK) {
+        hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✓ all hooks verified OK", seq);
+    }
+    return allOK;
+}
+
++ (BOOL)checkHook {
+    return [self checkHookWithSeq:0];
 }
 
 @end
