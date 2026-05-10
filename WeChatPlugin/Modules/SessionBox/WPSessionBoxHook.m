@@ -220,20 +220,56 @@ static void sb_showEditRemark(NSString *userName) {
 
 static void enableSwipeGestures(id tableView) {
     sbHookLog(@"[enableSwipe] tableView=%@", NSStringFromClass([tableView class]));
-
-    SEL forbidSel = NSSelectorFromString(@"setForbidDisplayMenuWithGestures:");
-    if ([tableView respondsToSelector:forbidSel]) {
-        ((void (*)(id, SEL, BOOL))objc_msgSend)(tableView, forbidSel, NO);
-        sbHookLog(@"[enableSwipe] set forbidDisplayMenuWithGestures = NO");
-    } else {
-        sbHookLog(@"[enableSwipe] forbidDisplayMenuWithGestures not found");
+    
+    // 尝试多种可能的属性名来启用左滑
+    struct {
+        const char *setter;
+        BOOL value;
+    } properties[] = {
+        {"setSwipeEnable:", YES},
+        {"setEnableSwipeLeft:", YES},
+        {"setEnableSwipeRight:", YES},
+        {"setForbidDisplayMenuWithGestures:", NO},
+        {"setForbidMenuItemShow:", NO},
+        {"setDisableMenuButton:", NO},
+        {"setDisableSwipeGesture:", NO},
+        {"setDisableGesture:", NO},
+        {"setCanSwipeWithGesture:", YES},
+        {"setContextMenuEnabled:", YES},
+    };
+    
+    for (int i = 0; i < 10; i++) {
+        SEL sel = NSSelectorFromString([NSString stringWithUTF8String:properties[i].setter]);
+        if ([tableView respondsToSelector:sel]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(tableView, sel, properties[i].value);
+            sbHookLog(@"[enableSwipe] ✓ set %s = %@", properties[i].setter, properties[i].value ? @"YES" : @"NO");
+        }
     }
-
-    SEL disableSel = NSSelectorFromString(@"setDisableSwipeGesture:");
-    if ([tableView respondsToSelector:disableSel]) {
-        ((void (*)(id, SEL, BOOL))objc_msgSend)(tableView, disableSel, NO);
-        sbHookLog(@"[enableSwipe] set disableSwipeGesture = NO");
+    
+    // 探测 tableView 的所有属性
+    unsigned int propCount = 0;
+    objc_property_t *props = class_copyPropertyList([tableView class], &propCount);
+    sbHookLog(@"[enableSwipe] tableView properties: %u", propCount);
+    for (unsigned int i = 0; i < propCount; i++) {
+        const char *name = property_getName(props[i]);
+        const char *attrs = property_getAttributes(props[i]);
+        NSString *nameStr = [NSString stringWithUTF8String:name];
+        if ([nameStr containsString:@"swipe"] || 
+            [nameStr containsString:@"Swipe"] ||
+            [nameStr containsString:@"menu"] || 
+            [nameStr containsString:@"Menu"] ||
+            [nameStr containsString:@"gesture"] ||
+            [nameStr containsString:@"Gesture"] ||
+            [nameStr containsString:@"enable"] ||
+            [nameStr containsString:@"Enable"] ||
+            [nameStr containsString:@"forbid"] ||
+            [nameStr containsString:@"Forbid"] ||
+            [nameStr containsString:@"disable"] ||
+            [nameStr containsString:@"Disable"]) {
+            sbHookLog(@"[enableSwipe]   prop: %s [%s]", name, attrs);
+        }
     }
+    free(props);
 }
 
 #pragma mark - Trailing Swipe Actions
