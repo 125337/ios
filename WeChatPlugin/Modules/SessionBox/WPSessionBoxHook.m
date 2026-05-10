@@ -217,6 +217,10 @@ static void sb_showEditRemark(NSString *userName) {
 
 #pragma mark - 注入方法（向任意类注入 swipe 方法）
 
+static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
+static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
+static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
+
 static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
     if (!targetClass) return NO;
     NSString *name = NSStringFromClass(targetClass);
