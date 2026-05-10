@@ -218,6 +218,12 @@ static void addTimeLabelToCell(id cell) {
         NSString *cellClass = NSStringFromClass([cell class]);
         mtLog([NSString stringWithFormat:@"addTimeLabelToCell called on: %@", cellClass]);
         
+        CGRect cellFrame = [cell frame];
+        if (CGRectEqualToRect(cellFrame, CGRectZero)) {
+            mtLog(@"cellFrame is CGRectZero, deferring");
+            return;
+        }
+        
         PluginConfig *config = [PluginConfig shared];
         mtLog([NSString stringWithFormat:@"showMessageTime: %d", config.showMessageTime]);
         if (!config.showMessageTime) return;
@@ -321,6 +327,13 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
+        NSString *identifier = [NSString stringWithFormat:@"%u_%u_%u", createTime, msgType, [[wrap description] hash]];
+        NSString *lastIdentifier = objc_getAssociatedObject(cell, @"messageTimeLastIdentifier");
+        if (lastIdentifier && [lastIdentifier isEqualToString:identifier]) {
+            return;
+        }
+        objc_setAssociatedObject(cell, @"messageTimeLastIdentifier", identifier, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        
         NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
         NSString *timeString = formatMessageTime(messageDate, config.messageTimeFormat);
         mtLog([NSString stringWithFormat:@"timeString: %@", timeString]);
@@ -353,7 +366,6 @@ static void addTimeLabelToCell(id cell) {
         timeLabel.minimumScaleFactor = 0.8;
         timeLabel.textAlignment = NSTextAlignmentCenter;
         
-        CGRect cellFrame = [cell frame];
         CGRect labelFrame = CGRectMake(0, 0, labelSize.width, labelSize.height);
         
         mtLog([NSString stringWithFormat:@"cellFrame: %@", NSStringFromCGRect(cellFrame)]);
@@ -383,7 +395,7 @@ static void addTimeLabelToCell(id cell) {
         } @catch (NSException *e) {}
         
         if (!isSender && bubbleView) {
-            isSender = CGRectGetMidX(bubbleView.frame) > CGRectGetMidX([cell frame]);
+            isSender = CGRectGetMidX(bubbleView.frame) > CGRectGetMidX(cellFrame);
         }
         
         mtLog([NSString stringWithFormat:@"avatarView: %@, bubbleFrame: %@, isSender: %d", avatarView ? @"YES" : @"NO", NSStringFromCGRect(bubbleFrame), isSender]);
@@ -476,30 +488,29 @@ static void addTimeLabelToCell(id cell) {
             BOOL isOnLeftSide = NO;
             switch (position) {
                 case 0: case 1:
-                    isOnLeftSide = !isSender; // 头像在接收方左侧
+                    isOnLeftSide = !isSender;
                     break;
                 case 2:
-                    isOnLeftSide = isSender; // 消息旁边远离头像
+                    isOnLeftSide = isSender;
                     break;
                 case 3: case 5:
-                    isOnLeftSide = isSender; // 远离头像侧
+                    isOnLeftSide = isSender;
                     break;
                 case 4: case 6:
-                    isOnLeftSide = !isSender; // 靠近头像侧
+                    isOnLeftSide = !isSender;
                     break;
                 case 7:
-                    isOnLeftSide = NO; // 内部不调整方向
+                    isOnLeftSide = NO;
                     break;
             }
             
             if (isOnLeftSide) {
-                labelFrame.origin.x -= offsetX; // 正值向左
+                labelFrame.origin.x -= offsetX;
             } else {
-                labelFrame.origin.x += offsetX; // 正值向右
+                labelFrame.origin.x += offsetX;
             }
         }
         
-        // 垂直偏移：正值向上，负值向下
         if (offsetY != 0) {
             labelFrame.origin.y -= offsetY;
         }
