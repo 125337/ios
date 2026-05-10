@@ -118,9 +118,7 @@ static NSString *sb_userNameFromDataSource(id dataSource, NSIndexPath *indexPath
                 }
             }
         }
-    } @catch (NSException *e) {
-        sbLog(@"[getUserName] exception: %@", e.reason);
-    }
+    } @catch (NSException *e) {}
     return nil;
 }
 
@@ -225,8 +223,10 @@ static void sb_showEditRemark(NSString *userName) {
 static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
 static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
 static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
+static void sb_willBeginEditing(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
+static void sb_didEndEditing(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
 
-#pragma mark - 注入方法 (仅 3 个 swipe 方法，不注入手势代理)
+#pragma mark - 注入方法
 
 static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
     if (!targetClass) return NO;
@@ -269,7 +269,41 @@ static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
         sbLog(@"[inject] ✓ added editingStyle to %@", name);
     }
     
+    SEL willBeginSel = NSSelectorFromString(@"tableView:willBeginEditingRowAtIndexPath:");
+    Method wm = class_getInstanceMethod(targetClass, willBeginSel);
+    if (wm) {
+        IMP orig = method_getImplementation(wm);
+        g_origIMPs[[name stringByAppendingString:@"_willBeginEditing"]] = [NSValue valueWithPointer:orig];
+        method_setImplementation(wm, (IMP)sb_willBeginEditing);
+        sbLog(@"[inject] ✓ hooked willBeginEditing on %@", name);
+    } else {
+        class_addMethod(targetClass, willBeginSel, (IMP)sb_willBeginEditing, "v32@0:8@16@24");
+        sbLog(@"[inject] ✓ added willBeginEditing to %@", name);
+    }
+    
+    SEL didEndSel = NSSelectorFromString(@"tableView:didEndEditingRowAtIndexPath:");
+    Method dm = class_getInstanceMethod(targetClass, didEndSel);
+    if (dm) {
+        IMP orig = method_getImplementation(dm);
+        g_origIMPs[[name stringByAppendingString:@"_didEndEditing"]] = [NSValue valueWithPointer:orig];
+        method_setImplementation(dm, (IMP)sb_didEndEditing);
+        sbLog(@"[inject] ✓ hooked didEndEditing on %@", name);
+    } else {
+        class_addMethod(targetClass, didEndSel, (IMP)sb_didEndEditing, "v32@0:8@16@24");
+        sbLog(@"[inject] ✓ added didEndEditing to %@", name);
+    }
+    
     [g_hookedClasses addObject:name];
+    return YES;
+}
+
+#pragma mark - checkTableViewEditingStyle (WCTableViewManager 专用)
+
+static BOOL (*orig_checkEditingStyle)(id, SEL) = NULL;
+
+static BOOL replaced_checkTableViewEditingStyle(id self, SEL _cmd) {
+    if (sb_anyFeatureEnabled()) return YES;
+    if (orig_checkEditingStyle) return orig_checkEditingStyle(self, _cmd);
     return YES;
 }
 
@@ -278,9 +312,7 @@ static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
 static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
     if (sb_anyFeatureEnabled()) {
         NSString *un = sb_userNameFromDataSource(self, ip);
-        if (un.length > 0) {
-            return YES;
-        }
+        if (un.length > 0) return YES;
     }
     
     NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_canEditRow"];
@@ -305,15 +337,13 @@ static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableVie
     
     if (sb_anyFeatureEnabled() && orig == UITableViewCellEditingStyleNone) {
         NSString *un = sb_userNameFromDataSource(self, ip);
-        if (un.length > 0) {
-            return UITableViewCellEditingStyleDelete;
-        }
+        if (un.length > 0) return UITableViewCellEditingStyleDelete;
     }
     
     return orig;
 }
 
-#pragma mark - leadingSwipeActionsConfigurationForRowAtIndexPath:
+#pragma mark - leadingSwipeActionsConfigurationForRowAtIndexPath: (热路径，不写文件)
 
 static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
     NSMutableArray<UIContextualAction *> *actions = [NSMutableArray array];
@@ -361,8 +391,6 @@ static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UI
         }
     }
     
-    sbLog(@"[leadingSwipe] %@-%@ un=%@ actions=%lu", @(ip.section), @(ip.row), un ?: @"nil", (unsigned long)actions.count);
-    
     if (actions.count > 0) {
         UISwipeActionsConfiguration *c = [UISwipeActionsConfiguration configurationWithActions:actions];
         c.performsFirstActionWithFullSwipe = NO;
@@ -372,6 +400,28 @@ static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UI
     return nil;
 }
 
+#pragma mark - willBeginEditingRowAtIndexPath:
+
+static void sb_willBeginEditing(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
+    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_willBeginEditing"];
+    NSValue *v = g_origIMPs[key];
+    if (v) {
+        IMP orig = [v pointerValue];
+        ((void (*)(id, SEL, id, id))orig)(self, _cmd, tv, ip);
+    }
+}
+
+#pragma mark - didEndEditingRowAtIndexPath:
+
+static void sb_didEndEditing(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
+    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_didEndEditing"];
+    NSValue *v = g_origIMPs[key];
+    if (v) {
+        IMP orig = [v pointerValue];
+        ((void (*)(id, SEL, id, id))orig)(self, _cmd, tv, ip);
+    }
+}
+
 #pragma mark - Hook setDataSource: / setDelegate:
 
 static void (*orig_setDataSource)(id, SEL, id) = NULL;
@@ -379,10 +429,8 @@ static void (*orig_setDataSource)(id, SEL, id) = NULL;
 static void replaced_setDataSource(id self, SEL _cmd, id ds) {
     if (orig_setDataSource) orig_setDataSource(self, _cmd, ds);
     if (!ds) return;
-    
     Class dc = object_getClass(ds);
-    NSString *name = NSStringFromClass(dc);
-    sb_injectSwipeMethods(dc, name);
+    sb_injectSwipeMethods(dc, nil);
 }
 
 static void (*orig_setDelegate)(id, SEL, id) = NULL;
@@ -390,10 +438,8 @@ static void (*orig_setDelegate)(id, SEL, id) = NULL;
 static void replaced_setDelegate(id self, SEL _cmd, id dg) {
     if (orig_setDelegate) orig_setDelegate(self, _cmd, dg);
     if (!dg) return;
-    
     Class dc = object_getClass(dg);
-    NSString *name = NSStringFromClass(dc);
-    sb_injectSwipeMethods(dc, name);
+    sb_injectSwipeMethods(dc, nil);
 }
 
 #pragma mark - Hook setAllowsMultipleSelection:
@@ -402,11 +448,34 @@ static void (*orig_setAllowsMultipleSelection)(id, SEL, BOOL) = NULL;
 
 static void replaced_setAllowsMultipleSelection(id self, SEL _cmd, BOOL allows) {
     if (sb_anyFeatureEnabled()) {
-        sbLog(@"[setAllowsMultipleSelection] blocking YES→NO (orig=%d)", allows);
         if (orig_setAllowsMultipleSelection) orig_setAllowsMultipleSelection(self, _cmd, NO);
         return;
     }
     if (orig_setAllowsMultipleSelection) orig_setAllowsMultipleSelection(self, _cmd, allows);
+}
+
+#pragma mark - Hook setTableViewManager: (NewMainFrameViewController)
+
+static void (*orig_setTableViewManager)(id, SEL, id) = NULL;
+
+static void replaced_setTableViewManager(id self, SEL _cmd, id mgr) {
+    if (orig_setTableViewManager) orig_setTableViewManager(self, _cmd, mgr);
+    if (!mgr || !sb_anyFeatureEnabled()) return;
+    
+    Class mc = object_getClass(mgr);
+    NSString *name = NSStringFromClass(mc);
+    if ([g_hookedClasses containsObject:name]) return;
+    
+    sbLog(@"[setTableViewManager] mgr=%@ class=%@", mgr, name);
+    
+    SEL checkSel = NSSelectorFromString(@"checkTableViewEditingStyle");
+    Method cm = class_getInstanceMethod(mc, checkSel);
+    if (cm) {
+        orig_checkEditingStyle = (BOOL (*)(id, SEL))method_getImplementation(cm);
+        method_setImplementation(cm, (IMP)replaced_checkTableViewEditingStyle);
+        [g_hookedClasses addObject:name];
+        sbLog(@"[setTableViewManager] ✓ hooked checkTableViewEditingStyle on %@", name);
+    }
 }
 
 #pragma mark - Hook viewWillAppear: on NewMainFrameViewController
@@ -419,7 +488,6 @@ static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     if (!sb_anyFeatureEnabled()) return;
     
     UITableView *tv = nil;
-    
     SEL viewSel = NSSelectorFromString(@"tableView");
     if ([self respondsToSelector:viewSel]) {
         tv = ((id (*)(id, SEL))objc_msgSend)(self, viewSel);
@@ -437,8 +505,6 @@ static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     
     tv.panGestureRecognizer.enabled = YES;
     tv.allowsMultipleSelectionDuringEditing = NO;
-    sbLog(@"[viewWillAppear] tv=%@ panGesture=%d allowsMultiSel=%d",
-          NSStringFromClass([tv class]), tv.panGestureRecognizer.isEnabled, tv.allowsMultipleSelectionDuringEditing);
 }
 
 #pragma mark - 安装
@@ -449,27 +515,24 @@ static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     g_hookedClasses = [NSMutableSet set];
     g_origIMPs = [NSMutableDictionary dictionary];
     
-    sbLog(@"[install] === START (setDS+setDL+allowsMultiSel+viewWillAppear) ===");
+    sbLog(@"[install] === START (v6: noLogHotPath + setTableViewManager + willBeginEditing) ===");
     
     Method setDS = class_getInstanceMethod([UITableView class], @selector(setDataSource:));
     if (setDS) {
         orig_setDataSource = (void (*)(id, SEL, id))method_getImplementation(setDS);
         method_setImplementation(setDS, (IMP)replaced_setDataSource);
-        sbLog(@"[install] ✓ hooked setDataSource:");
     }
     
     Method setDL = class_getInstanceMethod([UITableView class], @selector(setDelegate:));
     if (setDL) {
         orig_setDelegate = (void (*)(id, SEL, id))method_getImplementation(setDL);
         method_setImplementation(setDL, (IMP)replaced_setDelegate);
-        sbLog(@"[install] ✓ hooked setDelegate:");
     }
     
     Method setAMS = class_getInstanceMethod([UITableView class], @selector(setAllowsMultipleSelection:));
     if (setAMS) {
         orig_setAllowsMultipleSelection = (void (*)(id, SEL, BOOL))method_getImplementation(setAMS);
         method_setImplementation(setAMS, (IMP)replaced_setAllowsMultipleSelection);
-        sbLog(@"[install] ✓ hooked setAllowsMultipleSelection:");
     }
     
     Class nmvc = objc_getClass("NewMainFrameViewController");
@@ -478,7 +541,13 @@ static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
         if (vwa) {
             orig_viewWillAppear = (void (*)(id, SEL, BOOL))method_getImplementation(vwa);
             method_setImplementation(vwa, (IMP)replaced_viewWillAppear);
-            sbLog(@"[install] ✓ hooked viewWillAppear: on NewMainFrameViewController");
+        }
+        
+        Method stm = class_getInstanceMethod(nmvc, NSSelectorFromString(@"setTableViewManager:"));
+        if (stm) {
+            orig_setTableViewManager = (void (*)(id, SEL, id))method_getImplementation(stm);
+            method_setImplementation(stm, (IMP)replaced_setTableViewManager);
+            sbLog(@"[install] ✓ hooked setTableViewManager:");
         }
     }
     
