@@ -359,10 +359,17 @@ static void addTimeLabelToCell(id cell) {
             gProcessedCreateTimesLocal = [NSMutableDictionary dictionary];
             gProcessedCreateTimes = gProcessedCreateTimesLocal;
         });
-        NSNumber *existingCell = gProcessedCreateTimes[@(createTime)];
-        if (existingCell) {
-            mtLog([NSString stringWithFormat:@"createTime=%u already shown on another cell %p, skipping this cell %p", createTime, (void *)[existingCell longValue], (__bridge void *)cell]);
-            return;
+        NSNumber *existingCellNum = gProcessedCreateTimes[@(createTime)];
+        if (existingCellNum) {
+            UITableViewCell *existingCell = (__bridge UITableViewCell *)((void *)[existingCellNum longValue]);
+            UIView *existingLabel = [existingCell viewWithTag:999999];
+            if (existingLabel && existingLabel.superview) {
+                mtLog([NSString stringWithFormat:@"createTime=%u already visible on cell %p, skipping this cell %p", createTime, (void *)[existingCellNum longValue], (__bridge void *)cell]);
+                return;
+            } else {
+                mtLog([NSString stringWithFormat:@"createTime=%u registered cell %p has no visible label, allowing cell %p", createTime, (void *)[existingCellNum longValue], (__bridge void *)cell]);
+                [gProcessedCreateTimes removeObjectForKey:@(createTime)];
+            }
         }
         gProcessedCreateTimes[@(createTime)] = @((long)(__bridge void *)cell);
         
@@ -610,10 +617,6 @@ static void hookCellForTime(NSString *className) {
             
             if (sel == NSSelectorFromString(@"prepareForReuse")) {
                 [[self viewWithTag:999999] removeFromSuperview];
-                NSNumber *savedCreateTime = objc_getAssociatedObject(self, @"messageTimeCreateTime");
-                if (savedCreateTime && gProcessedCreateTimes[savedCreateTime]) {
-                    [gProcessedCreateTimes removeObjectForKey:savedCreateTime];
-                }
                 objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
                 objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 return;
