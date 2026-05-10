@@ -4,6 +4,9 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 
+static NSMutableSet *g_hookedClasses = nil;
+static NSMutableDictionary *g_origIMPs = nil;
+
 static void sbLog(NSString *format, ...) {
     va_list args;
     va_start(args, format);
@@ -28,12 +31,6 @@ static void sbLog(NSString *format, ...) {
     } @catch (NSException *e) {}
 }
 
-#pragma mark - 保存原始 IMP
-
-static IMP g_orig_canEditRow = NULL;
-static IMP g_orig_editingStyle = NULL;
-static IMP g_orig_editActions = NULL;
-
 #pragma mark - Service Helpers
 
 static id sb_getService(Class serviceClass) {
@@ -51,61 +48,54 @@ static id sb_getContactMgr() {
 }
 
 static id sb_getSessionMgr() {
-    const char *classNames[] = {
-        "MMNewSessionMgr", "CConversationMgr", "CSessionMgr",
-        "MMSessionMgr", "MainSessionMgr"
-    };
+    const char *names[] = {"MMNewSessionMgr", "CConversationMgr", "CSessionMgr", "MMSessionMgr", "MainSessionMgr"};
     for (int i = 0; i < 5; i++) {
-        Class cls = objc_getClass(classNames[i]);
-        if (cls) {
-            id svc = sb_getService(cls);
-            if (svc) return svc;
-        }
+        Class cls = objc_getClass(names[i]);
+        if (cls) { id svc = sb_getService(cls); if (svc) return svc; }
     }
     return nil;
 }
 
-#pragma mark - 获取 userName（从 dataSource / indexPath）
+#pragma mark - 获取 userName
 
 static NSString *sb_userNameFromDataSource(id dataSource, NSIndexPath *indexPath) {
     if (!dataSource || !indexPath) return nil;
-    
     @try {
         SEL sel1 = NSSelectorFromString(@"getSessionInfoAtIndexPath:");
         if ([dataSource respondsToSelector:sel1]) {
-            id sessionInfo = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, sel1, indexPath);
-            if (sessionInfo) {
-                SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
-                if ([sessionInfo respondsToSelector:userNameSel]) {
-                    id name = ((id (*)(id, SEL))objc_msgSend)(sessionInfo, userNameSel);
-                    if ([name isKindOfClass:[NSString class]] && [name length] > 0) return name;
+            id info = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, sel1, indexPath);
+            if (info) {
+                SEL s = NSSelectorFromString(@"m_nsUserName");
+                if ([info respondsToSelector:s]) {
+                    id n = ((id (*)(id, SEL))objc_msgSend)(info, s);
+                    if ([n isKindOfClass:[NSString class]] && [n length] > 0) return n;
                 }
             }
         }
         
-        SEL cellDataSel = NSSelectorFromString(@"getCellData:");
-        if ([dataSource respondsToSelector:cellDataSel]) {
-            id cellData = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, cellDataSel, indexPath);
-            if (cellData) {
-                SEL sessionInfoSel = NSSelectorFromString(@"m_sessionInfo");
-                if ([cellData respondsToSelector:sessionInfoSel]) {
-                    id sessionInfo = ((id (*)(id, SEL))objc_msgSend)(cellData, sessionInfoSel);
-                    if (sessionInfo) {
-                        SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
-                        if ([sessionInfo respondsToSelector:userNameSel]) {
-                            id name = ((id (*)(id, SEL))objc_msgSend)(sessionInfo, userNameSel);
-                            if ([name isKindOfClass:[NSString class]] && [name length] > 0) return name;
+        SEL cdSel = NSSelectorFromString(@"getCellData:");
+        if ([dataSource respondsToSelector:cdSel]) {
+            id cd = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, cdSel, indexPath);
+            if (cd) {
+                SEL siSel = NSSelectorFromString(@"m_sessionInfo");
+                if ([cd respondsToSelector:siSel]) {
+                    id si = ((id (*)(id, SEL))objc_msgSend)(cd, siSel);
+                    if (si) {
+                        SEL s = NSSelectorFromString(@"m_nsUserName");
+                        if ([si respondsToSelector:s]) {
+                            id n = ((id (*)(id, SEL))objc_msgSend)(si, s);
+                            if ([n isKindOfClass:[NSString class]] && [n length] > 0) return n;
                         }
                     }
                 }
-                SEL cellDataInfoSel = NSSelectorFromString(@"m_cellData");
-                if ([cellData respondsToSelector:cellDataInfoSel]) {
-                    id innerData = ((id (*)(id, SEL))objc_msgSend)(cellData, cellDataInfoSel);
-                    if (innerData) {
-                        SEL userNameSel2 = NSSelectorFromString(@"m_nsUserName");
-                        if ([innerData respondsToSelector:userNameSel2]) {
-                            id name = ((id (*)(id, SEL))objc_msgSend)(innerData, userNameSel2);
-                            if ([name isKindOfClass:[NSString class]] && [name length] > 0) return name;
+                SEL innerSel = NSSelectorFromString(@"m_cellData");
+                if ([cd respondsToSelector:innerSel]) {
+                    id inner = ((id (*)(id, SEL))objc_msgSend)(cd, innerSel);
+                    if (inner) {
+                        SEL s = NSSelectorFromString(@"m_nsUserName");
+                        if ([inner respondsToSelector:s]) {
+                            id n = ((id (*)(id, SEL))objc_msgSend)(inner, s);
+                            if ([n isKindOfClass:[NSString class]] && [n length] > 0) return n;
                         }
                     }
                 }
@@ -114,237 +104,325 @@ static NSString *sb_userNameFromDataSource(id dataSource, NSIndexPath *indexPath
         
         SEL sel2 = NSSelectorFromString(@"logicGetSessionAtIndexPath:");
         if ([dataSource respondsToSelector:sel2]) {
-            id sessionInfo = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, sel2, indexPath);
-            if (sessionInfo) {
-                SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
-                if ([sessionInfo respondsToSelector:userNameSel]) {
-                    id name = ((id (*)(id, SEL))objc_msgSend)(sessionInfo, userNameSel);
-                    if ([name isKindOfClass:[NSString class]] && [name length] > 0) return name;
+            id info = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, sel2, indexPath);
+            if (info) {
+                SEL s = NSSelectorFromString(@"m_nsUserName");
+                if ([info respondsToSelector:s]) {
+                    id n = ((id (*)(id, SEL))objc_msgSend)(info, s);
+                    if ([n isKindOfClass:[NSString class]] && [n length] > 0) return n;
                 }
             }
         }
     } @catch (NSException *e) {
         sbLog(@"[getUserName] exception: %@", e.reason);
     }
-    
     return nil;
 }
 
 #pragma mark - 状态检查
 
 static BOOL sb_isSessionTop(NSString *userName) {
-    id contactMgr = sb_getContactMgr();
-    if (!contactMgr) return NO;
-    SEL gcSel = NSSelectorFromString(@"getContactByName:");
-    if (![contactMgr respondsToSelector:gcSel]) gcSel = NSSelectorFromString(@"getContactByNameFromCache:");
-    if (![contactMgr respondsToSelector:gcSel]) return NO;
-    id contact = ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, gcSel, userName);
+    id mgr = sb_getContactMgr(); if (!mgr) return NO;
+    SEL s = NSSelectorFromString(@"getContactByName:");
+    if (![mgr respondsToSelector:s]) s = NSSelectorFromString(@"getContactByNameFromCache:");
+    if (![mgr respondsToSelector:s]) return NO;
+    id contact = ((id (*)(id, SEL, id))objc_msgSend)(mgr, s, userName);
     if (!contact) return NO;
-    SEL topSel = NSSelectorFromString(@"isContactSessionTop");
-    if (![contact respondsToSelector:topSel]) return NO;
-    return ((BOOL (*)(id, SEL))objc_msgSend)(contact, topSel);
+    SEL ts = NSSelectorFromString(@"isContactSessionTop");
+    if (![contact respondsToSelector:ts]) return NO;
+    return ((BOOL (*)(id, SEL))objc_msgSend)(contact, ts);
 }
 
 static BOOL sb_isSessionMuted(NSString *userName) {
-    id contactMgr = sb_getContactMgr();
-    if (!contactMgr) return NO;
-    SEL gcSel = NSSelectorFromString(@"getContactByName:");
-    if (![contactMgr respondsToSelector:gcSel]) gcSel = NSSelectorFromString(@"getContactByNameFromCache:");
-    if (![contactMgr respondsToSelector:gcSel]) return NO;
-    id contact = ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, gcSel, userName);
+    id mgr = sb_getContactMgr(); if (!mgr) return NO;
+    SEL s = NSSelectorFromString(@"getContactByName:");
+    if (![mgr respondsToSelector:s]) s = NSSelectorFromString(@"getContactByNameFromCache:");
+    if (![mgr respondsToSelector:s]) return NO;
+    id contact = ((id (*)(id, SEL, id))objc_msgSend)(mgr, s, userName);
     if (!contact) return NO;
-    SEL notifySel = NSSelectorFromString(@"isChatStatusNotifyOpen");
-    if (![contact respondsToSelector:notifySel]) return NO;
-    return !((BOOL (*)(id, SEL))objc_msgSend)(contact, notifySel);
+    SEL ns = NSSelectorFromString(@"isChatStatusNotifyOpen");
+    if (![contact respondsToSelector:ns]) return NO;
+    return !((BOOL (*)(id, SEL))objc_msgSend)(contact, ns);
 }
 
 #pragma mark - 操作函数
 
 static void sb_togglePin(NSString *userName, BOOL isTop) {
-    id sessionMgr = sb_getSessionMgr();
+    id mgr = sb_getSessionMgr();
     if (!isTop) {
-        if (sessionMgr && [sessionMgr respondsToSelector:NSSelectorFromString(@"TopSessionByName:")]) {
-            ((void (*)(id, SEL, id))objc_msgSend)(sessionMgr, NSSelectorFromString(@"TopSessionByName:"), userName);
-        }
+        if (mgr && [mgr respondsToSelector:NSSelectorFromString(@"TopSessionByName:")])
+            ((void (*)(id, SEL, id))objc_msgSend)(mgr, NSSelectorFromString(@"TopSessionByName:"), userName);
     } else {
-        if (sessionMgr && [sessionMgr respondsToSelector:NSSelectorFromString(@"UntopSessionByName:")]) {
-            ((void (*)(id, SEL, id))objc_msgSend)(sessionMgr, NSSelectorFromString(@"UntopSessionByName:"), userName);
-        }
+        if (mgr && [mgr respondsToSelector:NSSelectorFromString(@"UntopSessionByName:")])
+            ((void (*)(id, SEL, id))objc_msgSend)(mgr, NSSelectorFromString(@"UntopSessionByName:"), userName);
     }
-    if (sessionMgr && [sessionMgr respondsToSelector:NSSelectorFromString(@"resortSessions")]) {
-        ((void (*)(id, SEL))objc_msgSend)(sessionMgr, NSSelectorFromString(@"resortSessions"));
-    }
+    if (mgr && [mgr respondsToSelector:NSSelectorFromString(@"resortSessions")])
+        ((void (*)(id, SEL))objc_msgSend)(mgr, NSSelectorFromString(@"resortSessions"));
 }
 
 static void sb_toggleMute(NSString *userName, BOOL isMuted) {
-    id contactMgr = sb_getContactMgr();
-    if (!contactMgr) return;
-    NSInteger newStatus = isMuted ? 1 : 0;
-    if ([contactMgr respondsToSelector:NSSelectorFromString(@"ChangeNotifyStatus:withStatus:sync:")]) {
-        ((void (*)(id, SEL, id, NSInteger, BOOL))objc_msgSend)(contactMgr, NSSelectorFromString(@"ChangeNotifyStatus:withStatus:sync:"), userName, newStatus, YES);
-    }
+    id mgr = sb_getContactMgr(); if (!mgr) return;
+    NSInteger st = isMuted ? 1 : 0;
+    if ([mgr respondsToSelector:NSSelectorFromString(@"ChangeNotifyStatus:withStatus:sync:")])
+        ((void (*)(id, SEL, id, NSInteger, BOOL))objc_msgSend)(mgr, NSSelectorFromString(@"ChangeNotifyStatus:withStatus:sync:"), userName, st, YES);
 }
 
 static void sb_showEditRemark(NSString *userName) {
-    id contactMgr = sb_getContactMgr();
-    if (!contactMgr) return;
-    SEL gcSel = NSSelectorFromString(@"getContactByName:");
-    if (![contactMgr respondsToSelector:gcSel]) gcSel = NSSelectorFromString(@"getContactByNameFromCache:");
-    if (![contactMgr respondsToSelector:gcSel]) return;
-    id contact = ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, gcSel, userName);
+    id mgr = sb_getContactMgr(); if (!mgr) return;
+    SEL s = NSSelectorFromString(@"getContactByName:");
+    if (![mgr respondsToSelector:s]) s = NSSelectorFromString(@"getContactByNameFromCache:");
+    if (![mgr respondsToSelector:s]) return;
+    id contact = ((id (*)(id, SEL, id))objc_msgSend)(mgr, s, userName);
     if (!contact) return;
 
-    NSString *currentRemark = @"";
+    NSString *cur = @"";
     if ([contact respondsToSelector:NSSelectorFromString(@"m_nsRemark")]) {
         id r = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsRemark"));
-        if ([r isKindOfClass:[NSString class]]) currentRemark = r;
+        if ([r isKindOfClass:[NSString class]]) cur = r;
     }
-    NSString *nickName = @"";
+    NSString *nick = @"";
     if ([contact respondsToSelector:NSSelectorFromString(@"m_nsNickName")]) {
         id n = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsNickName"));
-        if ([n isKindOfClass:[NSString class]]) nickName = n;
+        if ([n isKindOfClass:[NSString class]]) nick = n;
     }
 
     dispatch_async(dispatch_get_main_queue(), ^{
         UIAlertController *alert = [UIAlertController
             alertControllerWithTitle:@"修改备注"
-                            message:[NSString stringWithFormat:@"当前昵称: %@", nickName]
+                            message:[NSString stringWithFormat:@"当前昵称: %@", nick]
                      preferredStyle:UIAlertControllerStyleAlert];
-        [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-            textField.text = currentRemark;
-            textField.placeholder = @"请输入备注名";
+        [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+            tf.text = cur; tf.placeholder = @"请输入备注名";
         }];
-        __weak UIAlertController *weakAlert = alert;
-        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-            NSString *newRemark = weakAlert.textFields.firstObject.text ?: @"";
-            if ([contact respondsToSelector:NSSelectorFromString(@"setM_nsRemark:")]) {
-                ((void (*)(id, SEL, id))objc_msgSend)(contact, NSSelectorFromString(@"setM_nsRemark:"), newRemark);
-            }
-            if ([contactMgr respondsToSelector:NSSelectorFromString(@"modifyDataItem:notify:")]) {
-                ((void (*)(id, SEL, id, BOOL))objc_msgSend)(contactMgr, NSSelectorFromString(@"modifyDataItem:notify:"), contact, YES);
-            }
-            id sessionMgr = sb_getSessionMgr();
-            if (sessionMgr && [sessionMgr respondsToSelector:NSSelectorFromString(@"updateMainSessionList")]) {
-                ((void (*)(id, SEL))objc_msgSend)(sessionMgr, NSSelectorFromString(@"updateMainSessionList"));
-            }
+        __weak UIAlertController *wa = alert;
+        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            NSString *nr = wa.textFields.firstObject.text ?: @"";
+            if ([contact respondsToSelector:NSSelectorFromString(@"setM_nsRemark:")])
+                ((void (*)(id, SEL, id))objc_msgSend)(contact, NSSelectorFromString(@"setM_nsRemark:"), nr);
+            if ([mgr respondsToSelector:NSSelectorFromString(@"modifyDataItem:notify:")])
+                ((void (*)(id, SEL, id, BOOL))objc_msgSend)(mgr, NSSelectorFromString(@"modifyDataItem:notify:"), contact, YES);
+            id sm = sb_getSessionMgr();
+            if (sm && [sm respondsToSelector:NSSelectorFromString(@"updateMainSessionList")])
+                ((void (*)(id, SEL))objc_msgSend)(sm, NSSelectorFromString(@"updateMainSessionList"));
         }]];
         [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
 
-        UIViewController *topVC = nil;
-        for (UIWindow *window in [UIApplication sharedApplication].windows) {
-            if (window.isKeyWindow) { topVC = window.rootViewController; break; }
-        }
-        while (topVC.presentedViewController) topVC = topVC.presentedViewController;
-        if (topVC) [topVC presentViewController:alert animated:YES completion:nil];
+        UIViewController *top = nil;
+        for (UIWindow *w in [UIApplication sharedApplication].windows)
+            if (w.isKeyWindow) { top = w.rootViewController; break; }
+        while (top.presentedViewController) top = top.presentedViewController;
+        if (top) [top presentViewController:alert animated:YES completion:nil];
     });
+}
+
+#pragma mark - 注入方法（向任意类注入 swipe 方法）
+
+static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
+    if (!targetClass) return NO;
+    NSString *name = NSStringFromClass(targetClass);
+    if ([g_hookedClasses containsObject:name]) return NO;
+    
+    SEL leadingSel = NSSelectorFromString(@"tableView:leadingSwipeActionsConfigurationForRowAtIndexPath:");
+    Method lm = class_getInstanceMethod(targetClass, leadingSel);
+    if (lm) {
+        IMP orig = method_getImplementation(lm);
+        g_origIMPs[[name stringByAppendingString:@"_leadingSwipe"]] = [NSValue valueWithPointer:orig];
+        method_setImplementation(lm, (IMP)sb_leadingSwipeActions);
+        sbLog(@"[inject] ✓ hooked leadingSwipe on %@", name);
+    } else {
+        class_addMethod(targetClass, leadingSel, (IMP)sb_leadingSwipeActions, "@32@0:8@16@24");
+        sbLog(@"[inject] ✓ added leadingSwipe to %@", name);
+    }
+    
+    SEL canEditSel = NSSelectorFromString(@"tableView:canEditRowAtIndexPath:");
+    Method cm = class_getInstanceMethod(targetClass, canEditSel);
+    if (cm) {
+        IMP orig = method_getImplementation(cm);
+        g_origIMPs[[name stringByAppendingString:@"_canEditRow"]] = [NSValue valueWithPointer:orig];
+        method_setImplementation(cm, (IMP)sb_canEditRow);
+        sbLog(@"[inject] ✓ hooked canEditRow on %@", name);
+    } else {
+        class_addMethod(targetClass, canEditSel, (IMP)sb_canEditRow, "B32@0:8@16@24");
+        sbLog(@"[inject] ✓ added canEditRow to %@", name);
+    }
+    
+    SEL editStyleSel = NSSelectorFromString(@"tableView:editingStyleForRowAtIndexPath:");
+    Method em = class_getInstanceMethod(targetClass, editStyleSel);
+    if (em) {
+        IMP orig = method_getImplementation(em);
+        g_origIMPs[[name stringByAppendingString:@"_editingStyle"]] = [NSValue valueWithPointer:orig];
+        method_setImplementation(em, (IMP)sb_editingStyle);
+        sbLog(@"[inject] ✓ hooked editingStyle on %@", name);
+    } else {
+        class_addMethod(targetClass, editStyleSel, (IMP)sb_editingStyle, "q32@0:8@16@24");
+        sbLog(@"[inject] ✓ added editingStyle to %@", name);
+    }
+    
+    [g_hookedClasses addObject:name];
+    return YES;
 }
 
 #pragma mark - canEditRowAtIndexPath:
 
-static BOOL replaced_canEditRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
-    PluginConfig *config = [PluginConfig shared];
-    BOOL featuresEnabled = config.quickPinEnabled || config.quickRemarkEnabled || config.quickMuteEnabled;
+static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
+    PluginConfig *cfg = [PluginConfig shared];
+    BOOL fe = cfg.quickPinEnabled || cfg.quickRemarkEnabled || cfg.quickMuteEnabled;
+    sbLog(@"[canEdit] %@-%@ class=%@ features=%d",
+          @(ip.section), @(ip.row), NSStringFromClass([self class]), fe);
     
-    if (featuresEnabled) {
-        NSString *userName = sb_userNameFromDataSource(self, indexPath);
-        if (userName.length > 0) return YES;
+    if (fe) {
+        NSString *un = sb_userNameFromDataSource(self, ip);
+        if (un.length > 0) { sbLog(@"[canEdit] => YES for %@", un); return YES; }
     }
     
-    if (g_orig_canEditRow) {
-        return ((BOOL (*)(id, SEL, UITableView *, NSIndexPath *))g_orig_canEditRow)(self, _cmd, tableView, indexPath);
+    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_canEditRow"];
+    NSValue *v = g_origIMPs[key];
+    if (v) {
+        IMP orig = [v pointerValue];
+        return ((BOOL (*)(id, SEL, id, id))orig)(self, _cmd, tv, ip);
     }
     return NO;
 }
 
 #pragma mark - editingStyleForRowAtIndexPath:
 
-static UITableViewCellEditingStyle replaced_editingStyle(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
-    PluginConfig *config = [PluginConfig shared];
-    BOOL featuresEnabled = config.quickPinEnabled || config.quickRemarkEnabled || config.quickMuteEnabled;
+static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
+    PluginConfig *cfg = [PluginConfig shared];
+    BOOL fe = cfg.quickPinEnabled || cfg.quickRemarkEnabled || cfg.quickMuteEnabled;
     
-    UITableViewCellEditingStyle origStyle = UITableViewCellEditingStyleNone;
-    if (g_orig_editingStyle) {
-        origStyle = ((UITableViewCellEditingStyle (*)(id, SEL, UITableView *, NSIndexPath *))g_orig_editingStyle)(self, _cmd, tableView, indexPath);
+    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_editingStyle"];
+    NSValue *v = g_origIMPs[key];
+    UITableViewCellEditingStyle orig = UITableViewCellEditingStyleNone;
+    if (v) {
+        IMP o = [v pointerValue];
+        orig = ((UITableViewCellEditingStyle (*)(id, SEL, id, id))o)(self, _cmd, tv, ip);
     }
     
-    sbLog(@"[editingStyle] %@-%@ orig=%ld features=%d",
-          @(indexPath.section), @(indexPath.row), (long)origStyle, featuresEnabled);
+    sbLog(@"[editStyle] %@-%@ class=%@ orig=%ld fe=%d",
+          @(ip.section), @(ip.row), NSStringFromClass([self class]), (long)orig, fe);
     
-    if (featuresEnabled && origStyle == UITableViewCellEditingStyleNone) {
-        NSString *userName = sb_userNameFromDataSource(self, indexPath);
-        if (userName.length > 0) {
-            sbLog(@"[editingStyle] override .none → .delete for %@-%@", @(indexPath.section), @(indexPath.row));
+    if (fe && orig == UITableViewCellEditingStyleNone) {
+        NSString *un = sb_userNameFromDataSource(self, ip);
+        if (un.length > 0) {
+            sbLog(@"[editStyle] override .none → .delete for %@-%@ (%@)",
+                  @(ip.section), @(ip.row), un);
             return UITableViewCellEditingStyleDelete;
         }
     }
-    
-    return origStyle;
+    return orig;
 }
 
 #pragma mark - leadingSwipeActionsConfigurationForRowAtIndexPath:
 
-static UISwipeActionsConfiguration *replaced_leadingSwipeActions(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
-    sbLog(@"[leadingSwipe] CALLED %@-%@", @(indexPath.section), @(indexPath.row));
+static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
+    sbLog(@"[leadingSwipe] CALLED %@-%@ class=%@", @(ip.section), @(ip.row), NSStringFromClass([self class]));
+    
+    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_leadingSwipe"];
+    NSValue *v = g_origIMPs[key];
+    UISwipeActionsConfiguration *origConfig = nil;
+    if (v) {
+        IMP o = [v pointerValue];
+        origConfig = ((UISwipeActionsConfiguration *(*)(id, SEL, id, id))o)(self, _cmd, tv, ip);
+    }
     
     NSMutableArray<UIContextualAction *> *actions = [NSMutableArray array];
-    NSString *userName = sb_userNameFromDataSource(self, indexPath);
+    NSString *un = sb_userNameFromDataSource(self, ip);
     
-    if (userName.length > 0) {
-        PluginConfig *config = [PluginConfig shared];
+    if (un.length > 0) {
+        PluginConfig *cfg = [PluginConfig shared];
         
-        if (config.quickPinEnabled) {
-            BOOL isTop = sb_isSessionTop(userName);
-            UIContextualAction *pinAction = [UIContextualAction
+        if (cfg.quickPinEnabled) {
+            BOOL top = sb_isSessionTop(un);
+            UIContextualAction *a = [UIContextualAction
                 contextualActionWithStyle:UIContextualActionStyleNormal
-                                   title:isTop ? @"取消置顶" : @"置顶"
-                                 handler:^(UIContextualAction *action, UIView *sourceView, void (^completion)(BOOL)) {
-                    sbLog(@"[Action] togglePin: %@", userName);
-                    sb_togglePin(userName, isTop);
-                    completion(YES);
-                }];
-            pinAction.backgroundColor = [UIColor colorWithRed:0.0 green:0.48 blue:1.0 alpha:1.0];
-            [actions addObject:pinAction];
+                                   title:top ? @"取消置顶" : @"置顶"
+                                 handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) {
+                sbLog(@"[Action] togglePin: %@", un);
+                sb_togglePin(un, top);
+                done(YES);
+            }];
+            a.backgroundColor = [UIColor colorWithRed:0.0 green:0.48 blue:1.0 alpha:1.0];
+            [actions addObject:a];
         }
         
-        if (config.quickRemarkEnabled) {
-            UIContextualAction *remarkAction = [UIContextualAction
+        if (cfg.quickRemarkEnabled) {
+            UIContextualAction *a = [UIContextualAction
                 contextualActionWithStyle:UIContextualActionStyleNormal
                                    title:@"备注"
-                                 handler:^(UIContextualAction *action, UIView *sourceView, void (^completion)(BOOL)) {
-                    sbLog(@"[Action] showEditRemark: %@", userName);
-                    sb_showEditRemark(userName);
-                    completion(YES);
-                }];
-            remarkAction.backgroundColor = [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0];
-            [actions addObject:remarkAction];
+                                 handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) {
+                sbLog(@"[Action] showEditRemark: %@", un);
+                sb_showEditRemark(un);
+                done(YES);
+            }];
+            a.backgroundColor = [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0];
+            [actions addObject:a];
         }
         
-        if (config.quickMuteEnabled) {
-            BOOL isMuted = sb_isSessionMuted(userName);
-            UIContextualAction *muteAction = [UIContextualAction
+        if (cfg.quickMuteEnabled) {
+            BOOL muted = sb_isSessionMuted(un);
+            UIContextualAction *a = [UIContextualAction
                 contextualActionWithStyle:UIContextualActionStyleNormal
-                                   title:isMuted ? @"取消免打扰" : @"免打扰"
-                                 handler:^(UIContextualAction *action, UIView *sourceView, void (^completion)(BOOL)) {
-                    sbLog(@"[Action] toggleMute: %@", userName);
-                    sb_toggleMute(userName, isMuted);
-                    completion(YES);
-                }];
-            muteAction.backgroundColor = [UIColor colorWithRed:0.55 green:0.0 blue:0.85 alpha:1.0];
-            [actions addObject:muteAction];
+                                   title:muted ? @"取消免打扰" : @"免打扰"
+                                 handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) {
+                sbLog(@"[Action] toggleMute: %@", un);
+                sb_toggleMute(un, muted);
+                done(YES);
+            }];
+            a.backgroundColor = [UIColor colorWithRed:0.55 green:0.0 blue:0.85 alpha:1.0];
+            [actions addObject:a];
         }
     }
     
-    sbLog(@"[leadingSwipe] %@-%@ userName=%@ actions=%lu",
-          @(indexPath.section), @(indexPath.row), userName ?: @"nil",
-          (unsigned long)actions.count);
+    sbLog(@"[leadingSwipe] %@-%@ un=%@ ourActions=%lu origActions=%lu",
+          @(ip.section), @(ip.row), un ?: @"nil",
+          (unsigned long)actions.count,
+          (unsigned long)(origConfig ? origConfig.actions.count : 0));
     
-    if (actions.count > 0) {
-        UISwipeActionsConfiguration *config = [UISwipeActionsConfiguration configurationWithActions:actions];
-        config.performsFirstActionWithFullSwipe = NO;
-        return config;
+    if (actions.count == 0) return origConfig;
+    
+    if (!origConfig || origConfig.actions.count == 0) {
+        UISwipeActionsConfiguration *c = [UISwipeActionsConfiguration configurationWithActions:actions];
+        c.performsFirstActionWithFullSwipe = NO;
+        return c;
     }
     
-    return nil;
+    NSMutableArray *all = [NSMutableArray arrayWithArray:actions];
+    [all addObjectsFromArray:origConfig.actions];
+    UISwipeActionsConfiguration *mg = [UISwipeActionsConfiguration configurationWithActions:all];
+    mg.performsFirstActionWithFullSwipe = NO;
+    return mg;
+}
+
+#pragma mark - Hook setDataSource: (注入 dataSource 方法)
+
+static void (*orig_setDataSource)(id, SEL, id) = NULL;
+
+static void replaced_setDataSource(id self, SEL _cmd, id ds) {
+    if (orig_setDataSource) orig_setDataSource(self, _cmd, ds);
+    if (!ds) return;
+    
+    Class dc = object_getClass(ds);
+    NSString *name = NSStringFromClass(dc);
+    sbLog(@"[setDataSource] %@ set as dataSource", name);
+    
+    BOOL ok = sb_injectSwipeMethods(dc, name);
+    sbLog(@"[setDataSource] inject result=%d for %@", ok, name);
+}
+
+#pragma mark - Hook setDelegate: (注入 delegate 方法)
+
+static void (*orig_setDelegate)(id, SEL, id) = NULL;
+
+static void replaced_setDelegate(id self, SEL _cmd, id dg) {
+    if (orig_setDelegate) orig_setDelegate(self, _cmd, dg);
+    if (!dg) return;
+    
+    Class dc = object_getClass(dg);
+    NSString *name = NSStringFromClass(dc);
+    sbLog(@"[setDelegate] %@ set as delegate", name);
+    
+    BOOL ok = sb_injectSwipeMethods(dc, name);
+    sbLog(@"[setDelegate] inject result=%d for %@", ok, name);
 }
 
 #pragma mark - 安装
@@ -352,43 +430,23 @@ static UISwipeActionsConfiguration *replaced_leadingSwipeActions(id self, SEL _c
 @implementation WPSessionBoxHook
 
 + (void)install {
-    sbLog(@"[install] === START (direct class hook) ===");
+    g_hookedClasses = [NSMutableSet set];
+    g_origIMPs = [NSMutableDictionary dictionary];
     
-    Class vcClass = objc_getClass("NewMainFrameViewController");
-    if (!vcClass) {
-        sbLog(@"[install] ✗ NewMainFrameViewController not found");
-        return;
+    sbLog(@"[install] === START (setDataSource + setDelegate hook) ===");
+    
+    Method setDS = class_getInstanceMethod([UITableView class], @selector(setDataSource:));
+    if (setDS) {
+        orig_setDataSource = (void (*)(id, SEL, id))method_getImplementation(setDS);
+        method_setImplementation(setDS, (IMP)replaced_setDataSource);
+        sbLog(@"[install] ✓ hooked setDataSource: on UITableView");
     }
     
-    SEL canEditSel = NSSelectorFromString(@"tableView:canEditRowAtIndexPath:");
-    Method canEditMethod = class_getInstanceMethod(vcClass, canEditSel);
-    if (canEditMethod) {
-        g_orig_canEditRow = method_getImplementation(canEditMethod);
-        method_setImplementation(canEditMethod, (IMP)replaced_canEditRow);
-        sbLog(@"[install] ✓ hooked canEditRow on %@", NSStringFromClass(vcClass));
-    } else {
-        sbLog(@"[install] ✗ canEditRow not found on %@", NSStringFromClass(vcClass));
-    }
-    
-    SEL editingStyleSel = NSSelectorFromString(@"tableView:editingStyleForRowAtIndexPath:");
-    Method editingStyleMethod = class_getInstanceMethod(vcClass, editingStyleSel);
-    if (editingStyleMethod) {
-        g_orig_editingStyle = method_getImplementation(editingStyleMethod);
-        method_setImplementation(editingStyleMethod, (IMP)replaced_editingStyle);
-        sbLog(@"[install] ✓ hooked editingStyle on %@", NSStringFromClass(vcClass));
-    } else {
-        class_addMethod(vcClass, editingStyleSel, (IMP)replaced_editingStyle, "q32@0:8@16@24");
-        sbLog(@"[install] ✓ added editingStyle to %@", NSStringFromClass(vcClass));
-    }
-    
-    SEL leadingSel = NSSelectorFromString(@"tableView:leadingSwipeActionsConfigurationForRowAtIndexPath:");
-    Method leadingMethod = class_getInstanceMethod(vcClass, leadingSel);
-    if (leadingMethod) {
-        sbLog(@"[install] leadingSwipeActions already exists on %@ — hooking", NSStringFromClass(vcClass));
-        method_setImplementation(leadingMethod, (IMP)replaced_leadingSwipeActions);
-    } else {
-        class_addMethod(vcClass, leadingSel, (IMP)replaced_leadingSwipeActions, "@32@0:8@16@24");
-        sbLog(@"[install] ✓ added leadingSwipeActions to %@", NSStringFromClass(vcClass));
+    Method setDL = class_getInstanceMethod([UITableView class], @selector(setDelegate:));
+    if (setDL) {
+        orig_setDelegate = (void (*)(id, SEL, id))method_getImplementation(setDL);
+        method_setImplementation(setDL, (IMP)replaced_setDelegate);
+        sbLog(@"[install] ✓ hooked setDelegate: on UITableView");
     }
     
     sbLog(@"[install] === COMPLETE ===");
