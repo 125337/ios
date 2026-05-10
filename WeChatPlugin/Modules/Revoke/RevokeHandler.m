@@ -541,8 +541,4 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
     return inserted;
 }
 
-- (BOOL)handleRevokeFromVCXml:(NSString *)xmlStr chatName:(NSString *)chatName {
-    return [self handleRevokeFromXmlSysMsg:xmlStr chatName:chatName];
-}
-
 @end

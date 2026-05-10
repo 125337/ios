@@ -220,206 +220,89 @@ static void sb_showEditRemark(NSString *userName) {
 
 #pragma mark - 前向声明
 
-static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
-static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
-static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
-static void sb_willBeginEditing(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
-static void sb_didEndEditing(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
+static NSArray *sb_editActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
 
-#pragma mark - 注入方法
+#pragma mark - 注入方法 (只注入 editActions + canEditRow)
 
 static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
     if (!targetClass) return NO;
     NSString *name = NSStringFromClass(targetClass);
     if ([g_hookedClasses containsObject:name]) return NO;
     
-    SEL leadingSel = NSSelectorFromString(@"tableView:leadingSwipeActionsConfigurationForRowAtIndexPath:");
-    Method lm = class_getInstanceMethod(targetClass, leadingSel);
-    if (lm) {
-        IMP orig = method_getImplementation(lm);
-        g_origIMPs[[name stringByAppendingString:@"_leadingSwipe"]] = [NSValue valueWithPointer:orig];
-        method_setImplementation(lm, (IMP)sb_leadingSwipeActions);
-        sbLog(@"[inject] ✓ hooked leadingSwipe on %@", name);
+    SEL editActSel = NSSelectorFromString(@"tableView:editActionsForRowAtIndexPath:");
+    Method eam = class_getInstanceMethod(targetClass, editActSel);
+    if (eam) {
+        IMP orig = method_getImplementation(eam);
+        g_origIMPs[[name stringByAppendingString:@"_editActions"]] = [NSValue valueWithPointer:orig];
+        method_setImplementation(eam, (IMP)sb_editActions);
+        sbLog(@"[inject] ✓ hooked editActionsForRow on %@", name);
     } else {
-        class_addMethod(targetClass, leadingSel, (IMP)sb_leadingSwipeActions, "@32@0:8@16@24");
-        sbLog(@"[inject] ✓ added leadingSwipe to %@", name);
-    }
-    
-    SEL canEditSel = NSSelectorFromString(@"tableView:canEditRowAtIndexPath:");
-    Method cm = class_getInstanceMethod(targetClass, canEditSel);
-    if (cm) {
-        IMP orig = method_getImplementation(cm);
-        g_origIMPs[[name stringByAppendingString:@"_canEditRow"]] = [NSValue valueWithPointer:orig];
-        method_setImplementation(cm, (IMP)sb_canEditRow);
-        sbLog(@"[inject] ✓ hooked canEditRow on %@", name);
-    } else {
-        class_addMethod(targetClass, canEditSel, (IMP)sb_canEditRow, "B32@0:8@16@24");
-        sbLog(@"[inject] ✓ added canEditRow to %@", name);
-    }
-    
-    SEL editStyleSel = NSSelectorFromString(@"tableView:editingStyleForRowAtIndexPath:");
-    Method em = class_getInstanceMethod(targetClass, editStyleSel);
-    if (em) {
-        IMP orig = method_getImplementation(em);
-        g_origIMPs[[name stringByAppendingString:@"_editingStyle"]] = [NSValue valueWithPointer:orig];
-        method_setImplementation(em, (IMP)sb_editingStyle);
-        sbLog(@"[inject] ✓ hooked editingStyle on %@", name);
-    } else {
-        class_addMethod(targetClass, editStyleSel, (IMP)sb_editingStyle, "q32@0:8@16@24");
-        sbLog(@"[inject] ✓ added editingStyle to %@", name);
-    }
-    
-    SEL willBeginSel = NSSelectorFromString(@"tableView:willBeginEditingRowAtIndexPath:");
-    Method wm = class_getInstanceMethod(targetClass, willBeginSel);
-    if (wm) {
-        IMP orig = method_getImplementation(wm);
-        g_origIMPs[[name stringByAppendingString:@"_willBeginEditing"]] = [NSValue valueWithPointer:orig];
-        method_setImplementation(wm, (IMP)sb_willBeginEditing);
-        sbLog(@"[inject] ✓ hooked willBeginEditing on %@", name);
-    } else {
-        class_addMethod(targetClass, willBeginSel, (IMP)sb_willBeginEditing, "v32@0:8@16@24");
-        sbLog(@"[inject] ✓ added willBeginEditing to %@", name);
-    }
-    
-    SEL didEndSel = NSSelectorFromString(@"tableView:didEndEditingRowAtIndexPath:");
-    Method dm = class_getInstanceMethod(targetClass, didEndSel);
-    if (dm) {
-        IMP orig = method_getImplementation(dm);
-        g_origIMPs[[name stringByAppendingString:@"_didEndEditing"]] = [NSValue valueWithPointer:orig];
-        method_setImplementation(dm, (IMP)sb_didEndEditing);
-        sbLog(@"[inject] ✓ hooked didEndEditing on %@", name);
-    } else {
-        class_addMethod(targetClass, didEndSel, (IMP)sb_didEndEditing, "v32@0:8@16@24");
-        sbLog(@"[inject] ✓ added didEndEditing to %@", name);
+        class_addMethod(targetClass, editActSel, (IMP)sb_editActions, "@32@0:8@16@24");
+        sbLog(@"[inject] ✓ added editActionsForRow to %@", name);
     }
     
     [g_hookedClasses addObject:name];
     return YES;
 }
 
-#pragma mark - checkTableViewEditingStyle (WCTableViewManager 专用)
+#pragma mark - editActionsForRowAtIndexPath:
 
-static BOOL (*orig_checkEditingStyle)(id, SEL) = NULL;
-
-static BOOL replaced_checkTableViewEditingStyle(id self, SEL _cmd) {
-    if (sb_anyFeatureEnabled()) return YES;
-    if (orig_checkEditingStyle) return orig_checkEditingStyle(self, _cmd);
-    return YES;
-}
-
-#pragma mark - canEditRowAtIndexPath:
-
-static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
-    if (sb_anyFeatureEnabled()) {
-        NSString *un = sb_userNameFromDataSource(self, ip);
-        if (un.length > 0) return YES;
-    }
-    
-    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_canEditRow"];
+static NSArray *sb_editActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
+    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_editActions"];
     NSValue *v = g_origIMPs[key];
+    NSArray *origActions = nil;
     if (v) {
         IMP orig = [v pointerValue];
-        return ((BOOL (*)(id, SEL, id, id))orig)(self, _cmd, tv, ip);
-    }
-    return NO;
-}
-
-#pragma mark - editingStyleForRowAtIndexPath:
-
-static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
-    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_editingStyle"];
-    NSValue *v = g_origIMPs[key];
-    UITableViewCellEditingStyle orig = UITableViewCellEditingStyleNone;
-    if (v) {
-        IMP o = [v pointerValue];
-        orig = ((UITableViewCellEditingStyle (*)(id, SEL, id, id))o)(self, _cmd, tv, ip);
+        origActions = ((NSArray *(*)(id, SEL, id, id))orig)(self, _cmd, tv, ip);
     }
     
-    if (sb_anyFeatureEnabled() && orig == UITableViewCellEditingStyleNone) {
-        NSString *un = sb_userNameFromDataSource(self, ip);
-        if (un.length > 0) return UITableViewCellEditingStyleDelete;
-    }
+    if (!sb_anyFeatureEnabled()) return origActions;
     
-    return orig;
-}
-
-#pragma mark - leadingSwipeActionsConfigurationForRowAtIndexPath: (热路径，不写文件)
-
-static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
-    NSMutableArray<UIContextualAction *> *actions = [NSMutableArray array];
     NSString *un = sb_userNameFromDataSource(self, ip);
+    if (un.length == 0) return origActions;
     
-    if (un.length > 0) {
-        PluginConfig *cfg = [PluginConfig shared];
-        
-        if (cfg.quickPinEnabled) {
-            BOOL top = sb_isSessionTop(un);
-            UIContextualAction *a = [UIContextualAction
-                contextualActionWithStyle:UIContextualActionStyleNormal
-                                   title:top ? @"取消置顶" : @"置顶"
-                                 handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) {
-                sb_togglePin(un, top);
-                done(YES);
-            }];
-            a.backgroundColor = [UIColor colorWithRed:0.0 green:0.48 blue:1.0 alpha:1.0];
-            [actions addObject:a];
-        }
-        
-        if (cfg.quickRemarkEnabled) {
-            UIContextualAction *a = [UIContextualAction
-                contextualActionWithStyle:UIContextualActionStyleNormal
-                                   title:@"备注"
-                                 handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) {
-                sb_showEditRemark(un);
-                done(YES);
-            }];
-            a.backgroundColor = [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0];
-            [actions addObject:a];
-        }
-        
-        if (cfg.quickMuteEnabled) {
-            BOOL muted = sb_isSessionMuted(un);
-            UIContextualAction *a = [UIContextualAction
-                contextualActionWithStyle:UIContextualActionStyleNormal
-                                   title:muted ? @"取消免打扰" : @"免打扰"
-                                 handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) {
-                sb_toggleMute(un, muted);
-                done(YES);
-            }];
-            a.backgroundColor = [UIColor colorWithRed:0.55 green:0.0 blue:0.85 alpha:1.0];
-            [actions addObject:a];
-        }
+    NSMutableArray *actions = [NSMutableArray array];
+    
+    PluginConfig *cfg = [PluginConfig shared];
+    
+    if (cfg.quickPinEnabled) {
+        BOOL top = sb_isSessionTop(un);
+        UITableViewRowAction *a = [UITableViewRowAction
+            rowActionWithStyle:UITableViewRowActionStyleNormal
+                         title:top ? @"取消置顶" : @"置顶"
+                       handler:^(UITableViewRowAction *act, NSIndexPath *idx) {
+            sb_togglePin(un, top);
+        }];
+        a.backgroundColor = [UIColor colorWithRed:0.0 green:0.48 blue:1.0 alpha:1.0];
+        [actions addObject:a];
     }
     
-    if (actions.count > 0) {
-        UISwipeActionsConfiguration *c = [UISwipeActionsConfiguration configurationWithActions:actions];
-        c.performsFirstActionWithFullSwipe = NO;
-        return c;
+    if (cfg.quickRemarkEnabled) {
+        UITableViewRowAction *a = [UITableViewRowAction
+            rowActionWithStyle:UITableViewRowActionStyleNormal
+                         title:@"备注"
+                       handler:^(UITableViewRowAction *act, NSIndexPath *idx) {
+            sb_showEditRemark(un);
+        }];
+        a.backgroundColor = [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0];
+        [actions addObject:a];
     }
     
-    return nil;
-}
-
-#pragma mark - willBeginEditingRowAtIndexPath:
-
-static void sb_willBeginEditing(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
-    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_willBeginEditing"];
-    NSValue *v = g_origIMPs[key];
-    if (v) {
-        IMP orig = [v pointerValue];
-        ((void (*)(id, SEL, id, id))orig)(self, _cmd, tv, ip);
+    if (cfg.quickMuteEnabled) {
+        BOOL muted = sb_isSessionMuted(un);
+        UITableViewRowAction *a = [UITableViewRowAction
+            rowActionWithStyle:UITableViewRowActionStyleNormal
+                         title:muted ? @"取消免打扰" : @"免打扰"
+                       handler:^(UITableViewRowAction *act, NSIndexPath *idx) {
+            sb_toggleMute(un, muted);
+        }];
+        a.backgroundColor = [UIColor colorWithRed:0.55 green:0.0 blue:0.85 alpha:1.0];
+        [actions addObject:a];
     }
-}
-
-#pragma mark - didEndEditingRowAtIndexPath:
-
-static void sb_didEndEditing(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
-    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_didEndEditing"];
-    NSValue *v = g_origIMPs[key];
-    if (v) {
-        IMP orig = [v pointerValue];
-        ((void (*)(id, SEL, id, id))orig)(self, _cmd, tv, ip);
-    }
+    
+    sbLog(@"[editActions] %@-%@ un=%@ count=%lu", @(ip.section), @(ip.row), un, (unsigned long)actions.count);
+    
+    return actions.count > 0 ? actions : origActions;
 }
 
 #pragma mark - Hook setDataSource: / setDelegate:
@@ -452,30 +335,6 @@ static void replaced_setAllowsMultipleSelection(id self, SEL _cmd, BOOL allows) 
         return;
     }
     if (orig_setAllowsMultipleSelection) orig_setAllowsMultipleSelection(self, _cmd, allows);
-}
-
-#pragma mark - Hook setTableViewManager: (NewMainFrameViewController)
-
-static void (*orig_setTableViewManager)(id, SEL, id) = NULL;
-
-static void replaced_setTableViewManager(id self, SEL _cmd, id mgr) {
-    if (orig_setTableViewManager) orig_setTableViewManager(self, _cmd, mgr);
-    if (!mgr || !sb_anyFeatureEnabled()) return;
-    
-    Class mc = object_getClass(mgr);
-    NSString *name = NSStringFromClass(mc);
-    if ([g_hookedClasses containsObject:name]) return;
-    
-    sbLog(@"[setTableViewManager] mgr=%@ class=%@", mgr, name);
-    
-    SEL checkSel = NSSelectorFromString(@"checkTableViewEditingStyle");
-    Method cm = class_getInstanceMethod(mc, checkSel);
-    if (cm) {
-        orig_checkEditingStyle = (BOOL (*)(id, SEL))method_getImplementation(cm);
-        method_setImplementation(cm, (IMP)replaced_checkTableViewEditingStyle);
-        [g_hookedClasses addObject:name];
-        sbLog(@"[setTableViewManager] ✓ hooked checkTableViewEditingStyle on %@", name);
-    }
 }
 
 #pragma mark - Hook viewWillAppear: on NewMainFrameViewController
@@ -515,7 +374,7 @@ static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     g_hookedClasses = [NSMutableSet set];
     g_origIMPs = [NSMutableDictionary dictionary];
     
-    sbLog(@"[install] === START (v6: noLogHotPath + setTableViewManager + willBeginEditing) ===");
+    sbLog(@"[install] === START (v7: editActionsForRow + UITableViewRowAction - 对齐微信原生) ===");
     
     Method setDS = class_getInstanceMethod([UITableView class], @selector(setDataSource:));
     if (setDS) {
@@ -541,13 +400,6 @@ static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
         if (vwa) {
             orig_viewWillAppear = (void (*)(id, SEL, BOOL))method_getImplementation(vwa);
             method_setImplementation(vwa, (IMP)replaced_viewWillAppear);
-        }
-        
-        Method stm = class_getInstanceMethod(nmvc, NSSelectorFromString(@"setTableViewManager:"));
-        if (stm) {
-            orig_setTableViewManager = (void (*)(id, SEL, id))method_getImplementation(stm);
-            method_setImplementation(stm, (IMP)replaced_setTableViewManager);
-            sbLog(@"[install] ✓ hooked setTableViewManager:");
         }
     }
     
