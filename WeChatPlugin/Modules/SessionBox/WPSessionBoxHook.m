@@ -5,11 +5,6 @@
 #import <UIKit/UIKit.h>
 
 static NSMutableDictionary *g_origIMPs = nil;
-static BOOL g_swipeCellHooked = NO;
-static BOOL g_probeDone = NO;
-
-static void tryHookSwipeCellClasses(void);
-static void hookSwipeCellClass(Class cellClass);
 
 static void sbHookLog(NSString *format, ...) {
     va_list args;
@@ -67,41 +62,24 @@ static id sb_getSessionMgr() {
     return nil;
 }
 
-static NSString *sb_userNameFromCell(id cell) {
-    if (!cell) return nil;
+static NSString *sb_userNameFromCellData(id cellData) {
+    if (!cellData) return nil;
 
-    @try {
-        SEL dataSel = NSSelectorFromString(@"sessionCellData");
-        if (![cell respondsToSelector:dataSel])
-            dataSel = NSSelectorFromString(@"cellData");
-        if (![cell respondsToSelector:dataSel])
-            dataSel = NSSelectorFromString(@"m_data");
-        if (![cell respondsToSelector:dataSel])
-            dataSel = NSSelectorFromString(@"data");
-
-        if ([cell respondsToSelector:dataSel]) {
-            id cellData = ((id (*)(id, SEL))objc_msgSend)(cell, dataSel);
-            if (cellData) {
-                SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
-                if ([cellData respondsToSelector:userNameSel]) {
-                    id name = ((id (*)(id, SEL))objc_msgSend)(cellData, userNameSel);
-                    if ([name isKindOfClass:[NSString class]]) return name;
-                }
-            }
-        }
-
-        if ([cell respondsToSelector:NSSelectorFromString(@"userName")]) {
-            id name = ((id (*)(id, SEL))objc_msgSend)(cell, NSSelectorFromString(@"userName"));
-            if ([name isKindOfClass:[NSString class]]) return name;
-        }
-
-        if ([cell respondsToSelector:NSSelectorFromString(@"m_nsUserName")]) {
-            id name = ((id (*)(id, SEL))objc_msgSend)(cell, NSSelectorFromString(@"m_nsUserName"));
-            if ([name isKindOfClass:[NSString class]]) return name;
-        }
-    } @catch (NSException *e) {
-        sbHookLog(@"[userNameFromCell] exception: %@", e.reason);
+    SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
+    if ([cellData respondsToSelector:userNameSel]) {
+        id name = ((id (*)(id, SEL))objc_msgSend)(cellData, userNameSel);
+        if ([name isKindOfClass:[NSString class]]) return name;
     }
+
+    SEL sessionInfoSel = NSSelectorFromString(@"m_sessionInfo");
+    if ([cellData respondsToSelector:sessionInfoSel]) {
+        id sessionInfo = ((id (*)(id, SEL))objc_msgSend)(cellData, sessionInfoSel);
+        if (sessionInfo && [sessionInfo respondsToSelector:userNameSel]) {
+            id name = ((id (*)(id, SEL))objc_msgSend)(sessionInfo, userNameSel);
+            if ([name isKindOfClass:[NSString class]]) return name;
+        }
+    }
+
     return nil;
 }
 
@@ -206,457 +184,175 @@ static void sb_showEditRemark(NSString *userName) {
     });
 }
 
-#pragma mark - Class Probe
+#pragma mark - Create Menu Item
 
-static void dumpClassInfo(Class cls, NSString *label) {
-    if (!cls) return;
-    sbHookLog(@"[probe] === %@ : %@ ===", label, NSStringFromClass(cls));
+static id sb_createMenuItem(NSString *title, NSUInteger actionType) {
+    sbHookLog(@"[createMenuItem] title=%@ actionType=%lu", title, (unsigned long)actionType);
 
-    unsigned int propCount = 0;
-    objc_property_t *props = class_copyPropertyList(cls, &propCount);
-    for (unsigned int i = 0; i < propCount; i++) {
-        const char *name = property_getName(props[i]);
-        sbHookLog(@"[probe]   prop: %s", name);
-    }
-    free(props);
-
-    unsigned int methodCount = 0;
-    Method *methods = class_copyMethodList(cls, &methodCount);
-    for (unsigned int i = 0; i < methodCount; i++) {
-        SEL sel = method_getName(methods[i]);
-        const char *name = sel_getName(sel);
-        NSString *nameStr = [NSString stringWithUTF8String:name];
-        if ([nameStr containsString:@"menu"] || [nameStr containsString:@"Menu"] ||
-            [nameStr containsString:@"action"] || [nameStr containsString:@"Action"] ||
-            [nameStr containsString:@"swipe"] || [nameStr containsString:@"Swipe"] ||
-            [nameStr containsString:@"edit"] || [nameStr containsString:@"Edit"] ||
-            [nameStr containsString:@"delete"] || [nameStr containsString:@"Delete"] ||
-            [nameStr containsString:@"pin"] || [nameStr containsString:@"Pin"] ||
-            [nameStr containsString:@"top"] || [nameStr containsString:@"Top"] ||
-            [nameStr containsString:@"mute"] || [nameStr containsString:@"Mute"] ||
-            [nameStr containsString:@"mark"] || [nameStr containsString:@"Mark"] ||
-            [nameStr containsString:@"confirm"] || [nameStr containsString:@"Confirm"]) {
-            sbHookLog(@"[probe]   method: %s", name);
-        }
-    }
-    free(methods);
-}
-
-static void probeAllClasses() {
-    if (g_probeDone) return;
-    g_probeDone = YES;
-
-    sbHookLog(@"[probe] === DUMPING ALL RELEVANT CLASSES ===");
-
-    unsigned int classCount = 0;
-    Class *classes = objc_copyClassList(&classCount);
-    sbHookLog(@"[probe] total classes loaded: %u", classCount);
-
-    for (unsigned int i = 0; i < classCount; i++) {
-        const char *name = class_getName(classes[i]);
-        NSString *nameStr = [NSString stringWithUTF8String:name];
-
-        if ([nameStr containsString:@"Swipe"] || [nameStr containsString:@"swipe"] ||
-            [nameStr containsString:@"SwipeCell"] || [nameStr containsString:@"SessionCell"] ||
-            [nameStr containsString:@"MainFrameCell"] || [nameStr containsString:@"ConversationCell"]) {
-            dumpClassInfo(classes[i], @"FOUND");
-        }
-    }
-    free(classes);
-
-    const char *specificClasses[] = {
-        "SwipeCell", "SwipeCellActionItem", "SwipeCellActionView", "SwipeCellStore",
-        "WCSwipeCell", "MMSwipeCell", "MMTableViewCell", "MainFrameTableViewCell",
-        "SessionCell", "ConversationCell", "NewSessionCell",
-        "MainFrameCellData", "SessionCellData", "ConversationCellData"
-    };
-    for (int i = 0; i < 13; i++) {
-        Class cls = objc_getClass(specificClasses[i]);
-        if (cls) {
-            dumpClassInfo(cls, @"SPECIFIC");
-        } else {
-            sbHookLog(@"[probe] class NOT found: %s", specificClasses[i]);
-        }
-    }
-
-    Class vcClass = objc_getClass("NewMainFrameViewController");
-    if (vcClass) {
-        unsigned int methodCount = 0;
-        Method *methods = class_copyMethodList(vcClass, &methodCount);
-        sbHookLog(@"[probe] NewMainFrameViewController methods: %u", methodCount);
-        for (unsigned int i = 0; i < methodCount; i++) {
-            SEL sel = method_getName(methods[i]);
-            const char *name = sel_getName(sel);
-            NSString *nameStr = [NSString stringWithUTF8String:name];
-            if ([nameStr containsString:@"menu"] || [nameStr containsString:@"Menu"] ||
-                [nameStr containsString:@"swipe"] || [nameStr containsString:@"Swipe"] ||
-                [nameStr containsString:@"edit"] || [nameStr containsString:@"Edit"] ||
-                [nameStr containsString:@"cell"] || [nameStr containsString:@"Cell"] ||
-                [nameStr containsString:@"action"] || [nameStr containsString:@"Action"] ||
-                [nameStr containsString:@"row"] || [nameStr containsString:@"Row"] ||
-                [nameStr containsString:@"delete"] || [nameStr containsString:@"Delete"] ||
-                [nameStr containsString:@"session"] || [nameStr containsString:@"Session"]) {
-                sbHookLog(@"[probe]   VC method: %s", name);
-            }
-        }
-        free(methods);
-    }
-
-    sbHookLog(@"[probe] === PROBE COMPLETE ===");
-}
-
-#pragma mark - Create SwipeCellActionItem
-
-static id createActionItem(NSString *title, NSUInteger actionType) {
     Class itemClass = objc_getClass("SwipeCellActionItem");
     if (!itemClass) {
-        sbHookLog(@"[createAction] SwipeCellActionItem class not found");
-        return nil;
+        itemClass = NSClassFromString(@"MMTableViewCellMenuItem");
     }
 
-    sbHookLog(@"[createAction] creating item: %@ type=%lu", title, (unsigned long)actionType);
+    if (itemClass) {
+        sbHookLog(@"[createMenuItem] using class: %@", NSStringFromClass(itemClass));
 
-    id item = nil;
-
-    SEL initSel = NSSelectorFromString(@"initWithTitle:action:target:");
-    if ([itemClass instancesRespondToSelector:initSel]) {
-        sbHookLog(@"[createAction] using initWithTitle:action:target:");
-        item = ((id (*)(id, SEL, id, NSUInteger, id))objc_msgSend)(
-            [[itemClass alloc] init], initSel, title, actionType, nil);
-        return item;
-    }
-
-    initSel = NSSelectorFromString(@"initWithTitle:action:");
-    if ([itemClass instancesRespondToSelector:initSel]) {
-        sbHookLog(@"[createAction] using initWithTitle:action:");
-        item = ((id (*)(id, SEL, id, NSUInteger))objc_msgSend)(
-            [[itemClass alloc] init], initSel, title, actionType);
-        return item;
-    }
-
-    initSel = NSSelectorFromString(@"initWithTitle:type:");
-    if ([itemClass instancesRespondToSelector:initSel]) {
-        sbHookLog(@"[createAction] using initWithTitle:type:");
-        item = ((id (*)(id, SEL, id, NSUInteger))objc_msgSend)(
-            [[itemClass alloc] init], initSel, title, actionType);
-        return item;
-    }
-
-    item = [[itemClass alloc] init];
-    if (item) {
-        SEL titleSel = NSSelectorFromString(@"setTitle:");
-        if ([item respondsToSelector:titleSel]) {
-            ((void (*)(id, SEL, id))objc_msgSend)(item, titleSel, title);
-        }
-        SEL actionSel = NSSelectorFromString(@"setAction:");
-        if ([item respondsToSelector:actionSel]) {
-            ((void (*)(id, SEL, NSUInteger))objc_msgSend)(item, actionSel, actionType);
-        }
-        SEL textSel = NSSelectorFromString(@"setText:");
-        if ([item respondsToSelector:textSel]) {
-            ((void (*)(id, SEL, id))objc_msgSend)(item, textSel, title);
-        }
-        sbHookLog(@"[createAction] created via init+setters");
-    }
-
-    return item;
-}
-
-#pragma mark - SwipeCell Hooks
-
-static NSArray *replaced_arrMenuItems(id self, SEL _cmd) {
-    sbHookLog(@"[arrMenuItems] === CALLED === self=%@", NSStringFromClass([self class]));
-
-    NSMutableArray *items = [NSMutableArray array];
-
-    NSValue *impValue = g_origIMPs[@"arrMenuItems"];
-    if (impValue) {
-        IMP origIMP = [impValue pointerValue];
-        if (origIMP) {
-            NSArray *origItems = ((NSArray *(*)(id, SEL))origIMP)(self, _cmd);
-            if (origItems) {
-                [items addObjectsFromArray:origItems];
-                sbHookLog(@"[arrMenuItems] original items: %lu", (unsigned long)origItems.count);
-                for (id item in origItems) {
-                    sbHookLog(@"[arrMenuItems]   orig item class=%@ description=%@",
-                              NSStringFromClass([item class]),
-                              [item respondsToSelector:NSSelectorFromString(@"description")] ?
-                              [item performSelector:NSSelectorFromString(@"description")] : @"?");
-                }
+        SEL initSel = NSSelectorFromString(@"initWithTitle:action:target:");
+        if ([itemClass instancesRespondToSelector:initSel]) {
+            id item = ((id (*)(id, SEL, id, NSUInteger, id))objc_msgSend)(
+                [[itemClass alloc] init], initSel, title, actionType, nil);
+            if (item) {
+                sbHookLog(@"[createMenuItem] created via initWithTitle:action:target:");
+                return item;
             }
         }
+
+        initSel = NSSelectorFromString(@"initWithTitle:action:");
+        if ([itemClass instancesRespondToSelector:initSel]) {
+            id item = ((id (*)(id, SEL, id, NSUInteger))objc_msgSend)(
+                [[itemClass alloc] init], initSel, title, actionType);
+            if (item) {
+                sbHookLog(@"[createMenuItem] created via initWithTitle:action:");
+                return item;
+            }
+        }
+
+        id item = [[itemClass alloc] init];
+        if (item) {
+            SEL titleSel = NSSelectorFromString(@"setTitle:");
+            if ([item respondsToSelector:titleSel]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(item, titleSel, title);
+            }
+            SEL textSel = NSSelectorFromString(@"setText:");
+            if ([item respondsToSelector:textSel]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(item, textSel, title);
+            }
+            SEL actionSel = NSSelectorFromString(@"setAction:");
+            if ([item respondsToSelector:actionSel]) {
+                ((void (*)(id, SEL, NSUInteger))objc_msgSend)(item, actionSel, actionType);
+            }
+            sbHookLog(@"[createMenuItem] created via init+setters");
+            return item;
+        }
     }
 
-    PluginConfig *config = [PluginConfig shared];
-    if (!config.quickPinEnabled && !config.quickRemarkEnabled && !config.quickMuteEnabled) {
-        sbHookLog(@"[arrMenuItems] all features disabled, returning original");
-        return items;
+    sbHookLog(@"[createMenuItem] no suitable class found, trying UITableViewRowAction");
+    return nil;
+}
+
+#pragma mark - Hook setArrMenuItems:
+
+static void replaced_setArrMenuItems(id self, SEL _cmd, NSArray *items) {
+    sbHookLog(@"[setArrMenuItems] === CALLED === on %@ with %lu items",
+              NSStringFromClass([self class]), (unsigned long)items.count);
+
+    for (id item in items) {
+        sbHookLog(@"[setArrMenuItems]   orig item class=%@",
+                  NSStringFromClass([item class]));
     }
 
-    NSString *userName = sb_userNameFromCell(self);
-    sbHookLog(@"[arrMenuItems] userName=%@", userName ?: @"nil");
+    NSMutableArray *newItems = [NSMutableArray arrayWithArray:items];
 
-    if (userName) {
+    id cellData = nil;
+    if ([self respondsToSelector:NSSelectorFromString(@"m_cellData")]) {
+        cellData = ((id (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"m_cellData"));
+    }
+
+    NSString *userName = sb_userNameFromCellData(cellData);
+    sbHookLog(@"[setArrMenuItems] userName=%@", userName ?: @"nil");
+
+    if (userName.length > 0) {
+        PluginConfig *config = [PluginConfig shared];
+
         if (config.quickPinEnabled) {
             BOOL isTop = sb_isSessionTop(userName);
-            id pinItem = createActionItem(isTop ? @"取消置顶" : @"置顶", 100);
+            id pinItem = sb_createMenuItem(isTop ? @"取消置顶" : @"置顶", 100);
             if (pinItem) {
-                [items addObject:pinItem];
-                sbHookLog(@"[arrMenuItems] added pin item");
+                [newItems addObject:pinItem];
+                sbHookLog(@"[setArrMenuItems] added pin item");
             }
         }
 
         if (config.quickRemarkEnabled) {
-            id remarkItem = createActionItem(@"备注", 101);
+            id remarkItem = sb_createMenuItem(@"备注", 101);
             if (remarkItem) {
-                [items addObject:remarkItem];
-                sbHookLog(@"[arrMenuItems] added remark item");
+                [newItems addObject:remarkItem];
+                sbHookLog(@"[setArrMenuItems] added remark item");
             }
         }
 
         if (config.quickMuteEnabled) {
             BOOL isMuted = sb_isSessionMuted(userName);
-            id muteItem = createActionItem(isMuted ? @"取消免打扰" : @"免打扰", 102);
+            id muteItem = sb_createMenuItem(isMuted ? @"取消免打扰" : @"免打扰", 102);
             if (muteItem) {
-                [items addObject:muteItem];
-                sbHookLog(@"[arrMenuItems] added mute item");
+                [newItems addObject:muteItem];
+                sbHookLog(@"[setArrMenuItems] added mute item");
             }
         }
     }
 
-    sbHookLog(@"[arrMenuItems] returning %lu items", (unsigned long)items.count);
-    return items;
-}
+    sbHookLog(@"[setArrMenuItems] calling original with %lu items", (unsigned long)newItems.count);
 
-static NSArray *replaced_filteredMenuItems(id self, SEL _cmd, NSArray *items) {
-    sbHookLog(@"[filteredMenuItems] === CALLED === self=%@ items=%lu",
-              NSStringFromClass([self class]), (unsigned long)items.count);
-
-    NSMutableArray *result = [NSMutableArray array];
-
-    NSValue *impValue = g_origIMPs[@"filteredMenuItems:"];
+    NSValue *impValue = g_origIMPs[@"setArrMenuItems:"];
     if (impValue) {
         IMP origIMP = [impValue pointerValue];
         if (origIMP) {
-            NSArray *filtered = ((NSArray *(*)(id, SEL, NSArray *))origIMP)(self, _cmd, items);
-            if (filtered) {
-                [result addObjectsFromArray:filtered];
-            }
-        }
-    } else {
-        [result addObjectsFromArray:items];
-    }
-
-    PluginConfig *config = [PluginConfig shared];
-    if (config.quickPinEnabled || config.quickRemarkEnabled || config.quickMuteEnabled) {
-        NSString *userName = sb_userNameFromCell(self);
-        if (userName) {
-            if (config.quickPinEnabled) {
-                BOOL isTop = sb_isSessionTop(userName);
-                id pinItem = createActionItem(isTop ? @"取消置顶" : @"置顶", 100);
-                if (pinItem) [result addObject:pinItem];
-            }
-            if (config.quickRemarkEnabled) {
-                id remarkItem = createActionItem(@"备注", 101);
-                if (remarkItem) [result addObject:remarkItem];
-            }
-            if (config.quickMuteEnabled) {
-                BOOL isMuted = sb_isSessionMuted(userName);
-                id muteItem = createActionItem(isMuted ? @"取消免打扰" : @"免打扰", 102);
-                if (muteItem) [result addObject:muteItem];
-            }
+            ((void (*)(id, SEL, NSArray *))origIMP)(self, _cmd, newItems);
         }
     }
-
-    sbHookLog(@"[filteredMenuItems] returning %lu items", (unsigned long)result.count);
-    return result;
 }
 
-#pragma mark - Menu Action Handler
+#pragma mark - Hook onMenuTransitionToConfirmState: (for action handling)
 
-static void replaced_onMenuTransitionToConfirmState(id self, SEL _cmd, id sessionCellData) {
-    sbHookLog(@"[onMenuTransition] === CALLED === self=%@ data=%@",
-              NSStringFromClass([self class]), sessionCellData);
+static void replaced_onMenuTransitionToConfirmState(id self, SEL _cmd, NSUInteger style) {
+    sbHookLog(@"[onMenuTransition] === CALLED === on %@ style=%lu",
+              NSStringFromClass([self class]), (unsigned long)style);
 
-    NSValue *impValue = g_origIMPs[@"onMenuTransitionToConfirmState:sessionCellData:"];
+    NSValue *impValue = g_origIMPs[@"onMenuTransitionToConfirmState:"];
     if (impValue) {
         IMP origIMP = [impValue pointerValue];
         if (origIMP) {
-            ((void (*)(id, SEL, id))origIMP)(self, _cmd, sessionCellData);
+            ((void (*)(id, SEL, NSUInteger))origIMP)(self, _cmd, style);
         }
     }
 }
 
-static void replaced_onMenuItemsAppear(id self, SEL _cmd, id sessionCellData) {
-    sbHookLog(@"[onMenuItemsAppear] === CALLED === self=%@ data=%@",
-              NSStringFromClass([self class]), sessionCellData);
+#pragma mark - Hook onCommitEditingWithStyle:tableView: (for action handling)
 
-    tryHookSwipeCellClasses();
+static void replaced_onCommitEditingWithStyle(id self, SEL _cmd, NSUInteger style, id tableView) {
+    sbHookLog(@"[onCommitEditing] === CALLED === on %@ style=%lu",
+              NSStringFromClass([self class]), (unsigned long)style);
 
-    NSValue *impValue = g_origIMPs[@"onMenuItemsAppearInSessionCellData:"];
+    id cellData = nil;
+    if ([self respondsToSelector:NSSelectorFromString(@"m_cellData")]) {
+        cellData = ((id (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"m_cellData"));
+    }
+    NSString *userName = sb_userNameFromCellData(cellData);
+    sbHookLog(@"[onCommitEditing] userName=%@ style=%lu", userName, (unsigned long)style);
+
+    if (style == 100 && userName) {
+        BOOL isTop = sb_isSessionTop(userName);
+        sb_togglePin(userName, isTop);
+        sbHookLog(@"[onCommitEditing] executed togglePin");
+        return;
+    } else if (style == 101 && userName) {
+        sb_showEditRemark(userName);
+        sbHookLog(@"[onCommitEditing] executed showEditRemark");
+        return;
+    } else if (style == 102 && userName) {
+        BOOL isMuted = sb_isSessionMuted(userName);
+        sb_toggleMute(userName, isMuted);
+        sbHookLog(@"[onCommitEditing] executed toggleMute");
+        return;
+    }
+
+    NSValue *impValue = g_origIMPs[@"onCommitEditingWithStyle:tableView:"];
     if (impValue) {
         IMP origIMP = [impValue pointerValue];
         if (origIMP) {
-            ((void (*)(id, SEL, id))origIMP)(self, _cmd, sessionCellData);
+            ((void (*)(id, SEL, NSUInteger, id))origIMP)(self, _cmd, style, tableView);
         }
     }
-}
-
-#pragma mark - Cell for Row Hook (to find cell class)
-
-static id replaced_cellForRowAtIndexPath(id self, SEL _cmd, NSIndexPath *indexPath) {
-    id cell = nil;
-    NSValue *impValue = g_origIMPs[@"cellForRowAtIndexPath:"];
-    if (impValue) {
-        IMP origIMP = [impValue pointerValue];
-        if (origIMP) {
-            cell = ((id (*)(id, SEL, id))origIMP)(self, _cmd, indexPath);
-        }
-    }
-
-    if (cell && !g_swipeCellHooked) {
-        Class cellClass = [cell class];
-        sbHookLog(@"[cellForRow] cell class=%@ indexPath=%@", NSStringFromClass(cellClass), indexPath);
-
-        if ([cell respondsToSelector:NSSelectorFromString(@"arrMenuItems")] ||
-            [cell respondsToSelector:NSSelectorFromString(@"filteredMenuItems:")]) {
-            sbHookLog(@"[cellForRow] cell responds to menu methods! Hooking...");
-            hookSwipeCellClass(cellClass);
-        }
-
-        Class superClass = cellClass;
-        int depth = 0;
-        while (superClass && depth < 5) {
-            superClass = [superClass superclass];
-            sbHookLog(@"[cellForRow] superclass(%d)=%@", depth, NSStringFromClass(superClass));
-            if ([superClass respondsToSelector:NSSelectorFromString(@"arrMenuItems")] ||
-                [superClass instancesRespondToSelector:NSSelectorFromString(@"arrMenuItems")]) {
-                sbHookLog(@"[cellForRow] superclass responds to arrMenuItems!");
-            }
-            depth++;
-        }
-    }
-
-    return cell;
-}
-
-#pragma mark - Hook SwipeCell Class
-
-static void hookSwipeCellClass(Class cellClass) {
-    if (g_swipeCellHooked) return;
-    if (!cellClass) return;
-
-    sbHookLog(@"[hookCell] hooking class=%@", NSStringFromClass(cellClass));
-
-    SEL arrMenuSel = NSSelectorFromString(@"arrMenuItems");
-    Method arrMenuMethod = class_getInstanceMethod(cellClass, arrMenuSel);
-    if (arrMenuMethod) {
-        IMP origIMP = method_getImplementation(arrMenuMethod);
-        g_origIMPs[@"arrMenuItems"] = [NSValue valueWithPointer:origIMP];
-        method_setImplementation(arrMenuMethod, (IMP)replaced_arrMenuItems);
-        sbHookLog(@"[hookCell] ✓ Hooked arrMenuItems on %@", NSStringFromClass(cellClass));
-        g_swipeCellHooked = YES;
-    } else {
-        sbHookLog(@"[hookCell] arrMenuItems method not found on %@", NSStringFromClass(cellClass));
-    }
-
-    SEL filteredSel = NSSelectorFromString(@"filteredMenuItems:");
-    Method filteredMethod = class_getInstanceMethod(cellClass, filteredSel);
-    if (filteredMethod) {
-        IMP origIMP = method_getImplementation(filteredMethod);
-        g_origIMPs[@"filteredMenuItems:"] = [NSValue valueWithPointer:origIMP];
-        method_setImplementation(filteredMethod, (IMP)replaced_filteredMenuItems);
-        sbHookLog(@"[hookCell] ✓ Hooked filteredMenuItems: on %@", NSStringFromClass(cellClass));
-    }
-
-    if (g_swipeCellHooked) {
-        dumpClassInfo(cellClass, @"HOOKED_CELL");
-    }
-}
-
-static void tryHookSwipeCellClasses() {
-    if (g_swipeCellHooked) return;
-
-    sbHookLog(@"[tryHook] searching for SwipeCell classes...");
-
-    const char *cellClassNames[] = {
-        "SwipeCell",
-        "WCSwipeCell",
-        "MMSwipeCell",
-        "SwipeableCell",
-        "MMTableViewCell",
-        "MainFrameTableViewCell",
-        "SessionTableViewCell",
-        "ConversationCell",
-        "NewMainFrameSessionCell",
-        "MainFrameSessionCell"
-    };
-
-    for (int i = 0; i < 10; i++) {
-        Class cls = objc_getClass(cellClassNames[i]);
-        if (cls) {
-            sbHookLog(@"[tryHook] found class: %s", cellClassNames[i]);
-            if ([cls instancesRespondToSelector:NSSelectorFromString(@"arrMenuItems")] ||
-                [cls instancesRespondToSelector:NSSelectorFromString(@"filteredMenuItems:")]) {
-                hookSwipeCellClass(cls);
-                if (g_swipeCellHooked) return;
-            }
-        }
-    }
-
-    unsigned int classCount = 0;
-    Class *classes = objc_copyClassList(&classCount);
-    for (unsigned int i = 0; i < classCount; i++) {
-        const char *name = class_getName(classes[i]);
-        NSString *nameStr = [NSString stringWithUTF8String:name];
-
-        if ([nameStr containsString:@"Swipe"] || [nameStr containsString:@"swipe"]) {
-            sbHookLog(@"[tryHook] found Swipe class via scan: %s", name);
-            Class cls = classes[i];
-            if ([cls instancesRespondToSelector:NSSelectorFromString(@"arrMenuItems")]) {
-                hookSwipeCellClass(cls);
-                if (g_swipeCellHooked) {
-                    free(classes);
-                    return;
-                }
-            }
-        }
-    }
-    free(classes);
-
-    sbHookLog(@"[tryHook] SwipeCell still not found, will retry later");
-}
-
-#pragma mark - View Lifecycle Hooks
-
-static IMP g_origViewDidLoad = NULL;
-static IMP g_origViewWillAppear = NULL;
-
-static void replaced_viewDidLoad(id self, SEL _cmd) {
-    sbHookLog(@"[viewDidLoad] === CALLED === self=%@", NSStringFromClass([self class]));
-
-    if (g_origViewDidLoad) {
-        ((void (*)(id, SEL))g_origViewDidLoad)(self, _cmd);
-    }
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        probeAllClasses();
-        tryHookSwipeCellClasses();
-    });
-}
-
-static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
-    sbHookLog(@"[viewWillAppear] === CALLED === self=%@", NSStringFromClass([self class]));
-
-    if (g_origViewWillAppear) {
-        ((void (*)(id, SEL, BOOL))g_origViewWillAppear)(self, _cmd, animated);
-    }
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (!g_swipeCellHooked) {
-            tryHookSwipeCellClasses();
-        }
-    });
 }
 
 #pragma mark - Install
@@ -664,56 +360,85 @@ static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
 @implementation WPSessionBoxHook
 
 + (void)install {
-    sbHookLog(@"[install] === START (SwipeCell Hook v2) ===");
+    sbHookLog(@"[install] === START (NewMainFrameCell Hook) ===");
 
     g_origIMPs = [NSMutableDictionary dictionary];
 
-    Class vcClass = objc_getClass("NewMainFrameViewController");
-    if (vcClass) {
-        sbHookLog(@"[install] Found NewMainFrameViewController");
+    Class cellClass = objc_getClass("NewMainFrameCell");
+    if (!cellClass) {
+        sbHookLog(@"[install] ✗ NewMainFrameCell not found, trying delayed hook");
 
-        SEL viewDidLoadSel = NSSelectorFromString(@"viewDidLoad");
-        Method viewDidLoadMethod = class_getInstanceMethod(vcClass, viewDidLoadSel);
-        if (viewDidLoadMethod) {
-            g_origViewDidLoad = method_getImplementation(viewDidLoadMethod);
-            method_setImplementation(viewDidLoadMethod, (IMP)replaced_viewDidLoad);
-            sbHookLog(@"[install] ✓ Hooked viewDidLoad");
+        Class vcClass = objc_getClass("NewMainFrameViewController");
+        if (vcClass) {
+            SEL viewDidLoadSel = NSSelectorFromString(@"viewDidLoad");
+            Method viewDidLoadMethod = class_getInstanceMethod(vcClass, viewDidLoadSel);
+            if (viewDidLoadMethod) {
+                IMP origIMP = method_getImplementation(viewDidLoadMethod);
+                g_origIMPs[@"viewDidLoad"] = [NSValue valueWithPointer:origIMP];
+                method_setImplementation(viewDidLoadMethod, (IMP)^(id self, SEL _cmd) {
+                    ((void (*)(id, SEL))origIMP)(self, _cmd);
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        [WPSessionBoxHook install];
+                    });
+                });
+                sbHookLog(@"[install] ✓ Hooked viewDidLoad for delayed retry");
+            }
         }
-
-        SEL viewWillAppearSel = NSSelectorFromString(@"viewWillAppear:");
-        Method viewWillAppearMethod = class_getInstanceMethod(vcClass, viewWillAppearSel);
-        if (viewWillAppearMethod) {
-            g_origViewWillAppear = method_getImplementation(viewWillAppearMethod);
-            method_setImplementation(viewWillAppearMethod, (IMP)replaced_viewWillAppear);
-            sbHookLog(@"[install] ✓ Hooked viewWillAppear:");
-        }
-
-        SEL onMenuSel = NSSelectorFromString(@"onMenuItemsAppearInSessionCellData:");
-        Method onMenuMethod = class_getInstanceMethod(vcClass, onMenuSel);
-        if (onMenuMethod) {
-            IMP origIMP = method_getImplementation(onMenuMethod);
-            g_origIMPs[@"onMenuItemsAppearInSessionCellData:"] = [NSValue valueWithPointer:origIMP];
-            method_setImplementation(onMenuMethod, (IMP)replaced_onMenuItemsAppear);
-            sbHookLog(@"[install] ✓ Hooked onMenuItemsAppearInSessionCellData:");
-        } else {
-            sbHookLog(@"[install] ✗ onMenuItemsAppearInSessionCellData: not found");
-        }
-
-        SEL confirmSel = NSSelectorFromString(@"onMenuTransitionToConfirmState:sessionCellData:");
-        Method confirmMethod = class_getInstanceMethod(vcClass, confirmSel);
-        if (confirmMethod) {
-            IMP origIMP = method_getImplementation(confirmMethod);
-            g_origIMPs[@"onMenuTransitionToConfirmState:sessionCellData:"] = [NSValue valueWithPointer:origIMP];
-            method_setImplementation(confirmMethod, (IMP)replaced_onMenuTransitionToConfirmState);
-            sbHookLog(@"[install] ✓ Hooked onMenuTransitionToConfirmState:sessionCellData:");
-        } else {
-            sbHookLog(@"[install] ✗ onMenuTransitionToConfirmState:sessionCellData: not found");
-        }
-    } else {
-        sbHookLog(@"[install] ✗ NewMainFrameViewController not found");
+        return;
     }
 
-    tryHookSwipeCellClasses();
+    sbHookLog(@"[install] Found NewMainFrameCell");
+
+    SEL setArrMenuSel = NSSelectorFromString(@"setArrMenuItems:");
+    Method setArrMenuMethod = class_getInstanceMethod(cellClass, setArrMenuSel);
+    if (setArrMenuMethod) {
+        IMP origIMP = method_getImplementation(setArrMenuMethod);
+        g_origIMPs[@"setArrMenuItems:"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(setArrMenuMethod, (IMP)replaced_setArrMenuItems);
+        sbHookLog(@"[install] ✓ Hooked setArrMenuItems:");
+    } else {
+        sbHookLog(@"[install] ✗ setArrMenuItems: not found");
+    }
+
+    SEL commitSel = NSSelectorFromString(@"onCommitEditingWithStyle:tableView:");
+    Method commitMethod = class_getInstanceMethod(cellClass, commitSel);
+    if (commitMethod) {
+        IMP origIMP = method_getImplementation(commitMethod);
+        g_origIMPs[@"onCommitEditingWithStyle:tableView:"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(commitMethod, (IMP)replaced_onCommitEditingWithStyle);
+        sbHookLog(@"[install] ✓ Hooked onCommitEditingWithStyle:tableView:");
+    } else {
+        sbHookLog(@"[install] ✗ onCommitEditingWithStyle:tableView: not found");
+    }
+
+    SEL transitionSel = NSSelectorFromString(@"onMenuTransitionToConfirmState:");
+    Method transitionMethod = class_getInstanceMethod(cellClass, transitionSel);
+    if (transitionMethod) {
+        IMP origIMP = method_getImplementation(transitionMethod);
+        g_origIMPs[@"onMenuTransitionToConfirmState:"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(transitionMethod, (IMP)replaced_onMenuTransitionToConfirmState);
+        sbHookLog(@"[install] ✓ Hooked onMenuTransitionToConfirmState:");
+    } else {
+        sbHookLog(@"[install] ✗ onMenuTransitionToConfirmState: not found");
+    }
+
+    unsigned int methodCount = 0;
+    Method *methods = class_copyMethodList(cellClass, &methodCount);
+    sbHookLog(@"[install] NewMainFrameCell total methods: %u", methodCount);
+    for (unsigned int i = 0; i < methodCount; i++) {
+        SEL sel = method_getName(methods[i]);
+        const char *name = sel_getName(sel);
+        NSString *nameStr = [NSString stringWithUTF8String:name];
+        if ([nameStr containsString:@"menu"] || [nameStr containsString:@"Menu"] ||
+            [nameStr containsString:@"action"] || [nameStr containsString:@"Action"] ||
+            [nameStr containsString:@"edit"] || [nameStr containsString:@"Edit"] ||
+            [nameStr containsString:@"swipe"] || [nameStr containsString:@"Swipe"] ||
+            [nameStr containsString:@"commit"] || [nameStr containsString:@"Commit"] ||
+            [nameStr containsString:@"delete"] || [nameStr containsString:@"Delete"]) {
+            sbHookLog(@"[install]   method: %s", name);
+        }
+    }
+    free(methods);
 
     sbHookLog(@"[install] === COMPLETE ===");
 }
