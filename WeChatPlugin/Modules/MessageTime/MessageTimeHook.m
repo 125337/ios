@@ -344,7 +344,7 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
-        NSString *identifier = [NSString stringWithFormat:@"%u_%u_%u", createTime, msgType, [[wrap description] hash]];
+        NSString *identifier = [NSString stringWithFormat:@"%u_%u_%p", createTime, msgType, (__bridge void *)wrap];
         NSString *lastIdentifier = objc_getAssociatedObject(cell, @"messageTimeLastIdentifier");
         if (lastIdentifier && [lastIdentifier isEqualToString:identifier]) {
             return;
@@ -536,6 +536,13 @@ static void addTimeLabelToCell(id cell) {
         mtLog([NSString stringWithFormat:@"Final labelFrame: %@", NSStringFromCGRect(labelFrame)]);
         
         timeLabel.frame = labelFrame;
+        
+        for (UIView *subview in [cell subviews]) {
+            if (subview.tag == 999999 && subview != timeLabel) {
+                mtLog(@"WARNING: Found stray timeLabel, removing to prevent duplicate");
+                [subview removeFromSuperview];
+            }
+        }
         
         if (![timeLabel superview]) {
             [cell addSubview:timeLabel];
