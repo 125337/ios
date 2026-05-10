@@ -351,6 +351,19 @@ static void addTimeLabelToCell(id cell) {
         }
         objc_setAssociatedObject(cell, @"messageTimeLastIdentifier", identifier, OBJC_ASSOCIATION_COPY_NONATOMIC);
         
+        static NSMutableDictionary *gLastProcessedTimes = nil;
+        static dispatch_once_t dedupToken;
+        dispatch_once(&dedupToken, ^{
+            gLastProcessedTimes = [NSMutableDictionary dictionary];
+        });
+        NSNumber *lastTime = gLastProcessedTimes[@(createTime)];
+        NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+        if (lastTime && (now - [lastTime doubleValue]) < 0.3) {
+            mtLog([NSString stringWithFormat:@"DEDUP: skipping createTime=%u within window (%.3fs ago)", createTime, now - [lastTime doubleValue]]);
+            return;
+        }
+        gLastProcessedTimes[@(createTime)] = @(now);
+        
         NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
         NSString *timeString = formatMessageTime(messageDate, config.messageTimeFormat);
         mtLog([NSString stringWithFormat:@"timeString: %@", timeString]);
