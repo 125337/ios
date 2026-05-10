@@ -21,7 +21,14 @@ static void sbLog(NSString *format, ...) {
         [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
         NSString *filePath = [folderPath stringByAppendingPathComponent:@"sessionbox.log"];
         NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
+        if (handle) {
+            [handle seekToEndOfFile];
+            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+            [handle closeFile];
+        } else {
+            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        }
     } @catch (NSException *e) {}
 }
 
@@ -58,42 +65,21 @@ static id sb_getSessionMgr() {
 
 #pragma mark - 获取 userName
 
-static NSString *sb_userNameFromIndexPath(id dataSource, NSIndexPath *indexPath) {
+static NSString *sb_userNameFromDataSource(id dataSource, NSIndexPath *indexPath) {
     if (!dataSource || !indexPath) return nil;
     
     @try {
-        id sessionMgr = sb_getSessionMgr();
-        if (!sessionMgr) return nil;
-        
-        SEL sessionListSel = NSSelectorFromString(@"sessionList");
-        if (![sessionMgr respondsToSelector:sessionListSel]) {
-            sessionListSel = NSSelectorFromString(@"m_arrSessionList");
-        }
-        if (![sessionMgr respondsToSelector:sessionListSel]) return nil;
-        
-        id sessionList = ((id (*)(id, SEL))objc_msgSend)(sessionMgr, sessionListSel);
-        if (![sessionList isKindOfClass:[NSArray class]]) return nil;
-        
-        NSInteger actualIndex = indexPath.row;
-        if (indexPath.section == 1) {
-            NSInteger topCount = 0;
-            for (id session in (NSArray *)sessionList) {
-                SEL topSel = NSSelectorFromString(@"isSessionTop");
-                if (![session respondsToSelector:topSel]) topSel = NSSelectorFromString(@"isTop");
-                if ([session respondsToSelector:topSel]) {
-                    if (((BOOL (*)(id, SEL))objc_msgSend)(session, topSel)) {
-                        topCount++;
-                    } else {
-                        break;
-                    }
-                }
-            }
-            actualIndex = indexPath.row + topCount;
+        SEL sel = NSSelectorFromString(@"getSessionInfoAtIndexPath:");
+        if (![dataSource respondsToSelector:sel])
+            sel = NSSelectorFromString(@"logicGetSessionAtIndexPath:");
+        if (![dataSource respondsToSelector:sel])
+            sel = NSSelectorFromString(@"sessionInfoForIndexPath:");
+        if (![dataSource respondsToSelector:sel]) {
+            sbLog(@"[getUserName] no sessionInfo method found on %@", NSStringFromClass([dataSource class]));
+            return nil;
         }
         
-        if (actualIndex < 0 || actualIndex >= [(NSArray *)sessionList count]) return nil;
-        
-        id sessionInfo = sessionList[actualIndex];
+        id sessionInfo = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, sel, indexPath);
         if (!sessionInfo) return nil;
         
         SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
@@ -201,6 +187,10 @@ static void sb_showEditRemark(NSString *userName) {
             if ([contactMgr respondsToSelector:NSSelectorFromString(@"modifyDataItem:notify:")]) {
                 ((void (*)(id, SEL, id, BOOL))objc_msgSend)(contactMgr, NSSelectorFromString(@"modifyDataItem:notify:"), contact, YES);
             }
+            id sessionMgr = sb_getSessionMgr();
+            if (sessionMgr && [sessionMgr respondsToSelector:NSSelectorFromString(@"updateMainSessionList")]) {
+                ((void (*)(id, SEL))objc_msgSend)(sessionMgr, NSSelectorFromString(@"updateMainSessionList"));
+            }
         }]];
         [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
 
@@ -213,7 +203,7 @@ static void sb_showEditRemark(NSString *userName) {
     });
 }
 
-#pragma mark - Leading Swipe Actions (右滑菜单，手指向右滑，菜单在左侧)
+#pragma mark - Leading Swipe Actions (右滑菜单)
 
 static UISwipeActionsConfiguration *replaced_leadingSwipeActions(
     id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
@@ -222,7 +212,7 @@ static UISwipeActionsConfiguration *replaced_leadingSwipeActions(
     
     NSMutableArray<UIContextualAction *> *actions = [NSMutableArray array];
     
-    NSString *userName = sb_userNameFromIndexPath(self, indexPath);
+    NSString *userName = sb_userNameFromDataSource(self, indexPath);
     sbLog(@"[leadingSwipe] userName=%@", userName ?: @"nil");
     
     if (userName.length > 0) {
@@ -274,6 +264,97 @@ static UISwipeActionsConfiguration *replaced_leadingSwipeActions(
     return [UISwipeActionsConfiguration configurationWithActions:actions];
 }
 
+#pragma mark - Trailing Swipe Actions (左滑菜单)
+
+static UISwipeActionsConfiguration *replaced_trailingSwipeActions(
+    id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
+
+    UISwipeActionsConfiguration *origConfig = nil;
+    NSValue *origIMPValue = g_origIMPs[@"trailingSwipe"];
+    if (origIMPValue) {
+        IMP origIMP = [origIMPValue pointerValue];
+        if (origIMP) {
+            origConfig = ((UISwipeActionsConfiguration *(*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+        }
+    }
+
+    NSMutableArray<UIContextualAction *> *actions = [NSMutableArray array];
+    NSString *userName = sb_userNameFromDataSource(self, indexPath);
+
+    if (userName.length > 0) {
+        PluginConfig *config = [PluginConfig shared];
+
+        if (config.quickPinEnabled) {
+            BOOL isTop = sb_isSessionTop(userName);
+            UIContextualAction *pinAction = [UIContextualAction
+                contextualActionWithStyle:UIContextualActionStyleNormal
+                                   title:isTop ? @"取消置顶" : @"置顶"
+                                 handler:^(UIContextualAction *action, UIView *sourceView, void (^completion)(BOOL)) {
+                    sb_togglePin(userName, isTop);
+                    completion(YES);
+                }];
+            pinAction.backgroundColor = [UIColor systemBlueColor];
+            [actions addObject:pinAction];
+        }
+
+        if (config.quickRemarkEnabled) {
+            UIContextualAction *remarkAction = [UIContextualAction
+                contextualActionWithStyle:UIContextualActionStyleNormal
+                                   title:@"备注"
+                                 handler:^(UIContextualAction *action, UIView *sourceView, void (^completion)(BOOL)) {
+                    sb_showEditRemark(userName);
+                    completion(YES);
+                }];
+            remarkAction.backgroundColor = [UIColor systemOrangeColor];
+            [actions addObject:remarkAction];
+        }
+
+        if (config.quickMuteEnabled) {
+            BOOL isMuted = sb_isSessionMuted(userName);
+            UIContextualAction *muteAction = [UIContextualAction
+                contextualActionWithStyle:UIContextualActionStyleNormal
+                                   title:isMuted ? @"取消免打扰" : @"免打扰"
+                                 handler:^(UIContextualAction *action, UIView *sourceView, void (^completion)(BOOL)) {
+                    sb_toggleMute(userName, isMuted);
+                    completion(YES);
+                }];
+            muteAction.backgroundColor = [UIColor systemPurpleColor];
+            [actions addObject:muteAction];
+        }
+    }
+
+    if (actions.count == 0) return origConfig;
+
+    if (!origConfig) {
+        return [UISwipeActionsConfiguration configurationWithActions:actions];
+    }
+
+    NSMutableArray *allActions = [NSMutableArray arrayWithArray:actions];
+    [allActions addObjectsFromArray:origConfig.actions];
+    UISwipeActionsConfiguration *merged = [UISwipeActionsConfiguration configurationWithActions:allActions];
+    merged.performsFirstActionWithFullSwipe = origConfig.performsFirstActionWithFullSwipe;
+    return merged;
+}
+
+#pragma mark - canEditRowAtIndexPath
+
+static BOOL replaced_canEditRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
+    PluginConfig *config = [PluginConfig shared];
+    if (config.quickPinEnabled || config.quickRemarkEnabled || config.quickMuteEnabled) {
+        return YES;
+    }
+    
+    NSValue *impValue = g_origIMPs[@"canEditRowAtIndexPath:"];
+    if (impValue) {
+        IMP origIMP = [impValue pointerValue];
+        if (origIMP) {
+            return ((BOOL (*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+        }
+    }
+    
+    return NO;
+}
+
 #pragma mark - setDataSource Hook
 
 static void replaced_setDataSource(id self, SEL _cmd, id dataSource) {
@@ -309,6 +390,34 @@ static void replaced_setDataSource(id self, SEL _cmd, id dataSource) {
         sbLog(@"[setDataSource] ✓ ADDED leadingSwipeActions to %@", className);
     }
     
+    // Hook trailingSwipeActionsConfigurationForRowAtIndexPath: (左滑菜单)
+    SEL trailingSel = NSSelectorFromString(@"tableView:trailingSwipeActionsConfigurationForRowAtIndexPath:");
+    Method trailingMethod = class_getInstanceMethod(dsClass, trailingSel);
+    
+    if (trailingMethod) {
+        IMP origIMP = method_getImplementation(trailingMethod);
+        g_origIMPs[@"trailingSwipe"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(trailingMethod, (IMP)replaced_trailingSwipeActions);
+        sbLog(@"[setDataSource] ✓ HOOKED trailingSwipeActions on %@", className);
+    } else {
+        class_addMethod(dsClass, trailingSel, (IMP)replaced_trailingSwipeActions, "@32@0:8@16@24");
+        sbLog(@"[setDataSource] ✓ ADDED trailingSwipeActions to %@", className);
+    }
+    
+    // Hook canEditRowAtIndexPath:
+    SEL canEditSel = NSSelectorFromString(@"tableView:canEditRowAtIndexPath:");
+    Method canEditMethod = class_getInstanceMethod(dsClass, canEditSel);
+    
+    if (canEditMethod) {
+        IMP origIMP = method_getImplementation(canEditMethod);
+        g_origIMPs[@"canEditRowAtIndexPath:"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(canEditMethod, (IMP)replaced_canEditRow);
+        sbLog(@"[setDataSource] ✓ HOOKED canEditRowAtIndexPath: on %@", className);
+    } else {
+        class_addMethod(dsClass, canEditSel, (IMP)replaced_canEditRow, "B32@0:8@16@24");
+        sbLog(@"[setDataSource] ✓ ADDED canEditRowAtIndexPath: to %@", className);
+    }
+    
     [g_hookedTableViewClasses addObject:className];
 }
 
@@ -317,7 +426,7 @@ static void replaced_setDataSource(id self, SEL _cmd, id dataSource) {
 @implementation WPSessionBoxHook
 
 + (void)install {
-    sbLog(@"[install] === START (Leading Swipe Hook) ===");
+    sbLog(@"[install] === START (Leading + Trailing Swipe + canEdit) ===");
     
     g_origIMPs = [NSMutableDictionary dictionary];
     g_hookedTableViewClasses = [NSMutableSet set];

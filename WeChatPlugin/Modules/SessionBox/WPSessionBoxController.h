@@ -30,8 +30,5 @@ API_AVAILABLE(ios(11.0))
 - (void)togglePin:(NSString *)userName isTop:(BOOL)isTop;
 - (void)toggleMute:(NSString *)userName isMuted:(BOOL)isMuted;
 - (void)showEditRemark:(NSString *)userName;
-- (UISwipeActionsConfiguration *)buildSwipeActionsForTableView:(UITableView *)tableView
-                                                     indexPath:(NSIndexPath *)indexPath
-                                                    dataSource:(id)dataSource API_AVAILABLE(ios(11.0));
 
 @end

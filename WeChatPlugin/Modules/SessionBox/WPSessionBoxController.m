@@ -1,7 +1,6 @@
 #import "WPSessionBoxController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Config/Constants.h"
-#import "../../Core/HookEngine.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
@@ -31,8 +30,6 @@ static void sbLog(NSString *format, ...) {
 }
 
 static NSString *const kCellReuseIdentifier = @"WPSessionBoxCell";
-static const void *kSwipedKey = &kSwipedKey;
-static const void *kOrigSwipeIMPKey = &kOrigSwipeIMPKey;
 
 static id getService(Class serviceClass) {
     Class scClass = objc_getClass("MMServiceCenter");
@@ -105,8 +102,6 @@ static id getContactMgr() {
             [self setupCollectionViewInViewController:vc];
         }
 
-        [self hookSwipeActionsForTableViewInVC:vc];
-
         sbLog(@"[attach] ✓ complete");
     } @catch (NSException *e) {
         sbLog(@"[attach] ✗ EXCEPTION: %@ - %@", e.name, e.reason);
@@ -124,144 +119,6 @@ static id getContactMgr() {
         self.hostViewController = nil;
     } @catch (NSException *e) {
         sbLog(@"[detach] ✗ EXCEPTION: %@", e.reason);
-    }
-}
-
-#pragma mark - Swipe Actions Hook
-
-- (void)hookSwipeActionsForTableViewInVC:(UIViewController *)vc {
-    @try {
-        UITableView *tableView = [self findTableViewInVC:vc];
-        if (!tableView) {
-            sbLog(@"[hookSwipe] ✗ tableView not found");
-            return;
-        }
-
-        id dataSource = tableView.dataSource;
-        if (!dataSource) {
-            sbLog(@"[hookSwipe] ✗ dataSource is nil");
-            return;
-        }
-
-        if (objc_getAssociatedObject(dataSource, kSwipedKey)) {
-            sbLog(@"[hookSwipe] already hooked, skip");
-            return;
-        }
-
-        if (@available(iOS 11.0, *)) {
-            Class dsClass = [dataSource class];
-            SEL swipeSel = NSSelectorFromString(@"tableView:trailingSwipeActionsConfigurationForRowAtIndexPath:");
-
-            IMP origIMP = [HookEngine swizzleMethod:swipeSel
-                                            inClass:dsClass
-                                            withIMP:(IMP)replaced_trailingSwipeActions];
-            if (origIMP) {
-                objc_setAssociatedObject(dataSource, kOrigSwipeIMPKey, [NSValue valueWithPointer:origIMP], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                sbLog(@"[hookSwipe] ✓ swizzled trailingSwipeActions on class %@, origIMP=%p", NSStringFromClass(dsClass), origIMP);
-            } else {
-                sbLog(@"[hookSwipe] ✓ added trailingSwipeActions (new method) on class %@", NSStringFromClass(dsClass));
-            }
-        }
-
-        objc_setAssociatedObject(dataSource, kSwipedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    } @catch (NSException *e) {
-        sbLog(@"[hookSwipe] ✗ EXCEPTION: %@", e.reason);
-    }
-}
-
-static UISwipeActionsConfiguration *replaced_trailingSwipeActions(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
-    @try {
-        UISwipeActionsConfiguration *origConfig = nil;
-
-        NSValue *origIMPValue = objc_getAssociatedObject(self, kOrigSwipeIMPKey);
-        if (origIMPValue) {
-            IMP origIMP = [origIMPValue pointerValue];
-            if (origIMP) {
-                origConfig = ((UISwipeActionsConfiguration *(*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
-            }
-        }
-
-        UISwipeActionsConfiguration *ourConfig = [[WPSessionBoxController shared]
-            buildSwipeActionsForTableView:tableView indexPath:indexPath dataSource:self];
-
-        if (!ourConfig) return origConfig;
-        if (!origConfig) return ourConfig;
-
-        NSMutableArray *allActions = [NSMutableArray arrayWithArray:ourConfig.actions];
-        [allActions addObjectsFromArray:origConfig.actions];
-
-        UISwipeActionsConfiguration *merged = [UISwipeActionsConfiguration configurationWithActions:allActions];
-        merged.performsFirstActionWithFullSwipe = origConfig.performsFirstActionWithFullSwipe;
-        return merged;
-    } @catch (NSException *e) {
-        sbLog(@"[replaced_trailingSwipeActions] ✗ EXCEPTION: %@", e.reason);
-        NSValue *origIMPValue = objc_getAssociatedObject(self, kOrigSwipeIMPKey);
-        if (origIMPValue) {
-            IMP origIMP = [origIMPValue pointerValue];
-            if (origIMP) {
-                return ((UISwipeActionsConfiguration *(*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
-            }
-        }
-        return nil;
-    }
-}
-
-- (UISwipeActionsConfiguration *)buildSwipeActionsForTableView:(UITableView *)tableView
-                                                     indexPath:(NSIndexPath *)indexPath
-                                                    dataSource:(id)dataSource API_AVAILABLE(ios(11.0)) {
-    @try {
-        NSString *userName = [self userNameAtIndexPath:indexPath inTableView:tableView dataSource:dataSource];
-        if (!userName.length) return nil;
-
-        PluginConfig *config = [PluginConfig shared];
-        NSMutableArray *actions = [NSMutableArray array];
-
-        if (config.quickPinEnabled) {
-            BOOL isTop = [self isSessionTop:userName];
-            UIContextualAction *pinAction = [UIContextualAction
-                contextualActionWithStyle:isTop ? UIContextualActionStyleNormal : UIContextualActionStyleNormal
-                title:isTop ? @"取消置顶" : @"置顶"
-                handler:^(UIContextualAction *action, UIView *sourceView, void (^completionHandler)(BOOL)) {
-                    [self togglePin:userName isTop:isTop];
-                    completionHandler(YES);
-                }];
-            pinAction.backgroundColor = [UIColor systemBlueColor];
-            [actions addObject:pinAction];
-        }
-
-        if (config.quickRemarkEnabled) {
-            UIContextualAction *remarkAction = [UIContextualAction
-                contextualActionWithStyle:UIContextualActionStyleNormal
-                title:@"备注"
-                handler:^(UIContextualAction *action, UIView *sourceView, void (^completionHandler)(BOOL)) {
-                    [self showEditRemark:userName];
-                    completionHandler(YES);
-                }];
-            remarkAction.backgroundColor = [UIColor systemOrangeColor];
-            [actions addObject:remarkAction];
-        }
-
-        if (config.quickMuteEnabled) {
-            BOOL isMuted = [self isSessionMuted:userName];
-            UIContextualAction *muteAction = [UIContextualAction
-                contextualActionWithStyle:UIContextualActionStyleNormal
-                title:isMuted ? @"取消免打扰" : @"免打扰"
-                handler:^(UIContextualAction *action, UIView *sourceView, void (^completionHandler)(BOOL)) {
-                    [self toggleMute:userName isMuted:isMuted];
-                    completionHandler(YES);
-                }];
-            muteAction.backgroundColor = [UIColor systemPurpleColor];
-            [actions addObject:muteAction];
-        }
-
-        if (actions.count == 0) return nil;
-
-        UISwipeActionsConfiguration *swipeConfig = [UISwipeActionsConfiguration configurationWithActions:actions];
-        swipeConfig.performsFirstActionWithFullSwipe = NO;
-        return swipeConfig;
-    } @catch (NSException *e) {
-        sbLog(@"[buildSwipe] ✗ EXCEPTION: %@", e.reason);
-        return nil;
     }
 }
 
@@ -537,6 +394,10 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
                             if ([contactMgr respondsToSelector:updateSel]) {
                                 ((void (*)(id, SEL, id))objc_msgSend)(contactMgr, updateSel, contact);
                             }
+                        }
+                        id sessionMgr = getSessionMgr();
+                        if (sessionMgr && [sessionMgr respondsToSelector:NSSelectorFromString(@"updateMainSessionList")]) {
+                            ((void (*)(id, SEL))objc_msgSend)(sessionMgr, NSSelectorFromString(@"updateMainSessionList"));
                         }
                     } @catch (NSException *e) {}
                 }]];
