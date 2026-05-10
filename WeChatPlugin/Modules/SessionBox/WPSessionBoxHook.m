@@ -8,6 +8,9 @@ static NSMutableDictionary *g_origIMPs = nil;
 static BOOL g_swipeCellHooked = NO;
 static BOOL g_probeDone = NO;
 
+static void tryHookSwipeCellClasses(void);
+static void hookSwipeCellClass(Class cellClass);
+
 static void sbHookLog(NSString *format, ...) {
     va_list args;
     va_start(args, format);
