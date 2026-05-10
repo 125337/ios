@@ -355,6 +355,17 @@ static void replaced_onCommitEditingWithStyle(id self, SEL _cmd, NSUInteger styl
     }
 }
 
+static IMP g_origViewDidLoad = NULL;
+
+static void replaced_viewDidLoad(id self, SEL _cmd) {
+    if (g_origViewDidLoad) {
+        ((void (*)(id, SEL))g_origViewDidLoad)(self, _cmd);
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [WPSessionBoxHook install];
+    });
+}
+
 #pragma mark - Install
 
 @implementation WPSessionBoxHook
@@ -373,14 +384,8 @@ static void replaced_onCommitEditingWithStyle(id self, SEL _cmd, NSUInteger styl
             SEL viewDidLoadSel = NSSelectorFromString(@"viewDidLoad");
             Method viewDidLoadMethod = class_getInstanceMethod(vcClass, viewDidLoadSel);
             if (viewDidLoadMethod) {
-                IMP origIMP = method_getImplementation(viewDidLoadMethod);
-                g_origIMPs[@"viewDidLoad"] = [NSValue valueWithPointer:origIMP];
-                method_setImplementation(viewDidLoadMethod, (IMP)^(id self, SEL _cmd) {
-                    ((void (*)(id, SEL))origIMP)(self, _cmd);
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        [WPSessionBoxHook install];
-                    });
-                });
+                g_origViewDidLoad = method_getImplementation(viewDidLoadMethod);
+                method_setImplementation(viewDidLoadMethod, (IMP)replaced_viewDidLoad);
                 sbHookLog(@"[install] ✓ Hooked viewDidLoad for delayed retry");
             }
         }
