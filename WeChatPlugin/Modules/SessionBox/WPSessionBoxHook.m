@@ -36,8 +36,6 @@ static BOOL sb_anyFeatureEnabled(void) {
     return cfg.quickPinEnabled || cfg.quickRemarkEnabled || cfg.quickMuteEnabled;
 }
 
-#pragma mark - Service Helpers
-
 static id sb_getService(Class serviceClass) {
     Class scClass = objc_getClass("MMServiceCenter");
     if (!scClass) return nil;
@@ -61,8 +59,6 @@ static id sb_getSessionMgr() {
     return nil;
 }
 
-#pragma mark - 获取 userName
-
 static NSString *sb_userNameFromDataSource(id dataSource, NSIndexPath *indexPath) {
     if (!dataSource || !indexPath) return nil;
     @try {
@@ -77,7 +73,6 @@ static NSString *sb_userNameFromDataSource(id dataSource, NSIndexPath *indexPath
                 }
             }
         }
-        
         SEL cdSel = NSSelectorFromString(@"getCellData:");
         if ([dataSource respondsToSelector:cdSel]) {
             id cd = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, cdSel, indexPath);
@@ -106,7 +101,6 @@ static NSString *sb_userNameFromDataSource(id dataSource, NSIndexPath *indexPath
                 }
             }
         }
-        
         SEL sel2 = NSSelectorFromString(@"logicGetSessionAtIndexPath:");
         if ([dataSource respondsToSelector:sel2]) {
             id info = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, sel2, indexPath);
@@ -121,8 +115,6 @@ static NSString *sb_userNameFromDataSource(id dataSource, NSIndexPath *indexPath
     } @catch (NSException *e) {}
     return nil;
 }
-
-#pragma mark - 状态检查
 
 static BOOL sb_isSessionTop(NSString *userName) {
     id mgr = sb_getContactMgr(); if (!mgr) return NO;
@@ -147,8 +139,6 @@ static BOOL sb_isSessionMuted(NSString *userName) {
     if (![contact respondsToSelector:ns]) return NO;
     return !((BOOL (*)(id, SEL))objc_msgSend)(contact, ns);
 }
-
-#pragma mark - 操作函数
 
 static void sb_togglePin(NSString *userName, BOOL isTop) {
     id mgr = sb_getSessionMgr();
@@ -177,7 +167,6 @@ static void sb_showEditRemark(NSString *userName) {
     if (![mgr respondsToSelector:s]) return;
     id contact = ((id (*)(id, SEL, id))objc_msgSend)(mgr, s, userName);
     if (!contact) return;
-
     NSString *cur = @"";
     if ([contact respondsToSelector:NSSelectorFromString(@"m_nsRemark")]) {
         id r = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsRemark"));
@@ -188,7 +177,6 @@ static void sb_showEditRemark(NSString *userName) {
         id n = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsNickName"));
         if ([n isKindOfClass:[NSString class]]) nick = n;
     }
-
     dispatch_async(dispatch_get_main_queue(), ^{
         UIAlertController *alert = [UIAlertController
             alertControllerWithTitle:@"修改备注"
@@ -209,7 +197,6 @@ static void sb_showEditRemark(NSString *userName) {
                 ((void (*)(id, SEL))objc_msgSend)(sm, NSSelectorFromString(@"updateMainSessionList"));
         }]];
         [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
         UIViewController *top = nil;
         for (UIWindow *w in [UIApplication sharedApplication].windows)
             if (w.isKeyWindow) { top = w.rootViewController; break; }
@@ -220,121 +207,164 @@ static void sb_showEditRemark(NSString *userName) {
 
 #pragma mark - 前向声明
 
-static NSArray *sb_editActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
+static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
+static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
+static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip);
 
-#pragma mark - 注入方法 (只注入 editActions + canEditRow)
+#pragma mark - 注入方法 (leadingSwipe + canEditRow + editingStyle)
 
 static BOOL sb_injectSwipeMethods(Class targetClass, NSString *className) {
     if (!targetClass) return NO;
     NSString *name = NSStringFromClass(targetClass);
     if ([g_hookedClasses containsObject:name]) return NO;
     
-    SEL editActSel = NSSelectorFromString(@"tableView:editActionsForRowAtIndexPath:");
-    Method eam = class_getInstanceMethod(targetClass, editActSel);
-    if (eam) {
-        IMP orig = method_getImplementation(eam);
-        g_origIMPs[[name stringByAppendingString:@"_editActions"]] = [NSValue valueWithPointer:orig];
-        method_setImplementation(eam, (IMP)sb_editActions);
-        sbLog(@"[inject] ✓ hooked editActionsForRow on %@", name);
+    SEL leadingSel = NSSelectorFromString(@"tableView:leadingSwipeActionsConfigurationForRowAtIndexPath:");
+    Method lm = class_getInstanceMethod(targetClass, leadingSel);
+    if (lm) {
+        g_origIMPs[[name stringByAppendingString:@"_leadingSwipe"]] = [NSValue valueWithPointer:method_getImplementation(lm)];
+        method_setImplementation(lm, (IMP)sb_leadingSwipeActions);
+        sbLog(@"[inject] ✓ hooked leadingSwipe on %@", name);
     } else {
-        class_addMethod(targetClass, editActSel, (IMP)sb_editActions, "@32@0:8@16@24");
-        sbLog(@"[inject] ✓ added editActionsForRow to %@", name);
+        class_addMethod(targetClass, leadingSel, (IMP)sb_leadingSwipeActions, "@32@0:8@16@24");
+        sbLog(@"[inject] ✓ added leadingSwipe to %@", name);
+    }
+    
+    SEL canEditSel = NSSelectorFromString(@"tableView:canEditRowAtIndexPath:");
+    Method cm = class_getInstanceMethod(targetClass, canEditSel);
+    if (cm) {
+        g_origIMPs[[name stringByAppendingString:@"_canEditRow"]] = [NSValue valueWithPointer:method_getImplementation(cm)];
+        method_setImplementation(cm, (IMP)sb_canEditRow);
+        sbLog(@"[inject] ✓ hooked canEditRow on %@", name);
+    } else {
+        class_addMethod(targetClass, canEditSel, (IMP)sb_canEditRow, "B32@0:8@16@24");
+        sbLog(@"[inject] ✓ added canEditRow to %@", name);
+    }
+    
+    SEL editStyleSel = NSSelectorFromString(@"tableView:editingStyleForRowAtIndexPath:");
+    Method em = class_getInstanceMethod(targetClass, editStyleSel);
+    if (em) {
+        g_origIMPs[[name stringByAppendingString:@"_editingStyle"]] = [NSValue valueWithPointer:method_getImplementation(em)];
+        method_setImplementation(em, (IMP)sb_editingStyle);
+        sbLog(@"[inject] ✓ hooked editingStyle on %@", name);
+    } else {
+        class_addMethod(targetClass, editStyleSel, (IMP)sb_editingStyle, "q32@0:8@16@24");
+        sbLog(@"[inject] ✓ added editingStyle to %@", name);
     }
     
     [g_hookedClasses addObject:name];
     return YES;
 }
 
-#pragma mark - editActionsForRowAtIndexPath:
+#pragma mark - canEditRowAtIndexPath:
 
-static NSArray *sb_editActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
-    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_editActions"];
+static BOOL sb_canEditRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
+    if (sb_anyFeatureEnabled()) {
+        NSString *un = sb_userNameFromDataSource(self, ip);
+        if (un.length > 0) return YES;
+    }
+    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_canEditRow"];
     NSValue *v = g_origIMPs[key];
-    NSArray *origActions = nil;
-    if (v) {
-        IMP orig = [v pointerValue];
-        origActions = ((NSArray *(*)(id, SEL, id, id))orig)(self, _cmd, tv, ip);
+    if (v) return ((BOOL (*)(id, SEL, id, id))[v pointerValue])(self, _cmd, tv, ip);
+    return NO;
+}
+
+#pragma mark - editingStyleForRowAtIndexPath:
+
+static UITableViewCellEditingStyle sb_editingStyle(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
+    NSString *key = [NSStringFromClass([self class]) stringByAppendingString:@"_editingStyle"];
+    NSValue *v = g_origIMPs[key];
+    UITableViewCellEditingStyle orig = UITableViewCellEditingStyleNone;
+    if (v) orig = ((UITableViewCellEditingStyle (*)(id, SEL, id, id))[v pointerValue])(self, _cmd, tv, ip);
+    if (sb_anyFeatureEnabled() && orig == UITableViewCellEditingStyleNone) {
+        NSString *un = sb_userNameFromDataSource(self, ip);
+        if (un.length > 0) return UITableViewCellEditingStyleDelete;
     }
-    
-    if (!sb_anyFeatureEnabled()) return origActions;
-    
+    return orig;
+}
+
+#pragma mark - leadingSwipeActionsConfigurationForRowAtIndexPath:
+
+static UISwipeActionsConfiguration *sb_leadingSwipeActions(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
+    NSMutableArray<UIContextualAction *> *actions = [NSMutableArray array];
     NSString *un = sb_userNameFromDataSource(self, ip);
-    if (un.length == 0) return origActions;
-    
-    NSMutableArray *actions = [NSMutableArray array];
-    
-    PluginConfig *cfg = [PluginConfig shared];
-    
-    if (cfg.quickPinEnabled) {
-        BOOL top = sb_isSessionTop(un);
-        UITableViewRowAction *a = [UITableViewRowAction
-            rowActionWithStyle:UITableViewRowActionStyleNormal
-                         title:top ? @"取消置顶" : @"置顶"
-                       handler:^(UITableViewRowAction *act, NSIndexPath *idx) {
-            sb_togglePin(un, top);
-        }];
-        a.backgroundColor = [UIColor colorWithRed:0.0 green:0.48 blue:1.0 alpha:1.0];
-        [actions addObject:a];
+    if (un.length > 0) {
+        PluginConfig *cfg = [PluginConfig shared];
+        if (cfg.quickPinEnabled) {
+            BOOL top = sb_isSessionTop(un);
+            UIContextualAction *a = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:top?@"取消置顶":@"置顶" handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) { sb_togglePin(un, top); done(YES); }];
+            a.backgroundColor = [UIColor colorWithRed:0.0 green:0.48 blue:1.0 alpha:1.0];
+            [actions addObject:a];
+        }
+        if (cfg.quickRemarkEnabled) {
+            UIContextualAction *a = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"备注" handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) { sb_showEditRemark(un); done(YES); }];
+            a.backgroundColor = [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0];
+            [actions addObject:a];
+        }
+        if (cfg.quickMuteEnabled) {
+            BOOL muted = sb_isSessionMuted(un);
+            UIContextualAction *a = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:muted?@"取消免打扰":@"免打扰" handler:^(UIContextualAction *act, UIView *sv, void (^done)(BOOL)) { sb_toggleMute(un, muted); done(YES); }];
+            a.backgroundColor = [UIColor colorWithRed:0.55 green:0.0 blue:0.85 alpha:1.0];
+            [actions addObject:a];
+        }
     }
-    
-    if (cfg.quickRemarkEnabled) {
-        UITableViewRowAction *a = [UITableViewRowAction
-            rowActionWithStyle:UITableViewRowActionStyleNormal
-                         title:@"备注"
-                       handler:^(UITableViewRowAction *act, NSIndexPath *idx) {
-            sb_showEditRemark(un);
-        }];
-        a.backgroundColor = [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0];
-        [actions addObject:a];
+    if (actions.count > 0) {
+        UISwipeActionsConfiguration *c = [UISwipeActionsConfiguration configurationWithActions:actions];
+        c.performsFirstActionWithFullSwipe = NO;
+        return c;
     }
-    
-    if (cfg.quickMuteEnabled) {
-        BOOL muted = sb_isSessionMuted(un);
-        UITableViewRowAction *a = [UITableViewRowAction
-            rowActionWithStyle:UITableViewRowActionStyleNormal
-                         title:muted ? @"取消免打扰" : @"免打扰"
-                       handler:^(UITableViewRowAction *act, NSIndexPath *idx) {
-            sb_toggleMute(un, muted);
-        }];
-        a.backgroundColor = [UIColor colorWithRed:0.55 green:0.0 blue:0.85 alpha:1.0];
-        [actions addObject:a];
-    }
-    
-    sbLog(@"[editActions] %@-%@ un=%@ count=%lu", @(ip.section), @(ip.row), un, (unsigned long)actions.count);
-    
-    return actions.count > 0 ? actions : origActions;
+    return nil;
 }
 
 #pragma mark - Hook setDataSource: / setDelegate:
 
 static void (*orig_setDataSource)(id, SEL, id) = NULL;
-
 static void replaced_setDataSource(id self, SEL _cmd, id ds) {
     if (orig_setDataSource) orig_setDataSource(self, _cmd, ds);
-    if (!ds) return;
-    Class dc = object_getClass(ds);
-    sb_injectSwipeMethods(dc, nil);
+    if (ds) sb_injectSwipeMethods(object_getClass(ds), nil);
 }
 
 static void (*orig_setDelegate)(id, SEL, id) = NULL;
-
 static void replaced_setDelegate(id self, SEL _cmd, id dg) {
     if (orig_setDelegate) orig_setDelegate(self, _cmd, dg);
-    if (!dg) return;
-    Class dc = object_getClass(dg);
-    sb_injectSwipeMethods(dc, nil);
+    if (dg) sb_injectSwipeMethods(object_getClass(dg), nil);
 }
 
 #pragma mark - Hook setAllowsMultipleSelection:
 
 static void (*orig_setAllowsMultipleSelection)(id, SEL, BOOL) = NULL;
-
 static void replaced_setAllowsMultipleSelection(id self, SEL _cmd, BOOL allows) {
     if (sb_anyFeatureEnabled()) {
         if (orig_setAllowsMultipleSelection) orig_setAllowsMultipleSelection(self, _cmd, NO);
         return;
     }
     if (orig_setAllowsMultipleSelection) orig_setAllowsMultipleSelection(self, _cmd, allows);
+}
+
+#pragma mark - Hook settingSessionGesture: / setMIsSessionGesture:
+
+static void (*orig_settingSessionGesture)(id, SEL) = NULL;
+
+static void replaced_settingSessionGesture(id self, SEL _cmd) {
+    sbLog(@"[settingSessionGesture] called");
+    if (orig_settingSessionGesture) orig_settingSessionGesture(self, _cmd);
+}
+
+static void (*orig_setMIsSessionGesture)(id, SEL, BOOL) = NULL;
+
+static void replaced_setMIsSessionGesture(id self, SEL _cmd, BOOL val) {
+    sbLog(@"[setMIsSessionGesture] val=%d before=%d", val,
+          ((BOOL (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"mIsSessionGesture")));
+    if (orig_setMIsSessionGesture) orig_setMIsSessionGesture(self, _cmd, val);
+}
+
+#pragma mark - Hook addGestureRecognizer: on UITableView
+
+static void (*orig_tableView_addGesture)(id, SEL, id) = NULL;
+
+static void replaced_tableView_addGesture(id self, SEL _cmd, id gesture) {
+    Class grc = object_getClass(gesture);
+    sbLog(@"[addGesture] tv=%@ class=%@", NSStringFromClass([self class]), NSStringFromClass(grc));
+    if (orig_tableView_addGesture) orig_tableView_addGesture(self, _cmd, gesture);
 }
 
 #pragma mark - Hook viewWillAppear: on NewMainFrameViewController
@@ -346,24 +376,38 @@ static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     
     if (!sb_anyFeatureEnabled()) return;
     
+    sbLog(@"[viewWillAppear] mIsSessionGesture=%d",
+          ((BOOL (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"mIsSessionGesture")));
+    
+    SEL settingSel = NSSelectorFromString(@"settingSessionGesture:");
+    if ([self respondsToSelector:settingSel]) {
+        ((void (*)(id, SEL))objc_msgSend)(self, settingSel);
+        sbLog(@"[viewWillAppear] ✓ called settingSessionGesture:");
+    } else {
+        sbLog(@"[viewWillAppear] ⚠ settingSessionGesture: not found, trying setMIsSessionGesture:");
+        SEL setter = NSSelectorFromString(@"setMIsSessionGesture:");
+        if ([self respondsToSelector:setter]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(self, setter, YES);
+            sbLog(@"[viewWillAppear] ✓ called setMIsSessionGesture:YES");
+        }
+    }
+    
     UITableView *tv = nil;
     SEL viewSel = NSSelectorFromString(@"tableView");
-    if ([self respondsToSelector:viewSel]) {
-        tv = ((id (*)(id, SEL))objc_msgSend)(self, viewSel);
-    }
-    if (!tv) {
-        tv = ((id (*)(id, SEL))objc_msgSend)(self, @selector(view));
-    }
-    if (![tv isKindOfClass:[UITableView class]]) {
+    if ([self respondsToSelector:viewSel]) tv = ((id (*)(id, SEL))objc_msgSend)(self, viewSel);
+    if (!tv || ![tv isKindOfClass:[UITableView class]]) {
         for (UIView *sv in ((UIView *)((id (*)(id, SEL))objc_msgSend)(self, @selector(view))).subviews) {
             if ([sv isKindOfClass:[UITableView class]]) { tv = (UITableView *)sv; break; }
         }
     }
-    
     if (!tv) return;
     
     tv.panGestureRecognizer.enabled = YES;
     tv.allowsMultipleSelectionDuringEditing = NO;
+    
+    sbLog(@"[viewWillAppear] tv=%@ panEnabled=%d multiSel=%d gestures=%lu",
+          NSStringFromClass([tv class]), tv.panGestureRecognizer.isEnabled,
+          tv.allowsMultipleSelectionDuringEditing, (unsigned long)tv.gestureRecognizers.count);
 }
 
 #pragma mark - 安装
@@ -374,32 +418,45 @@ static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     g_hookedClasses = [NSMutableSet set];
     g_origIMPs = [NSMutableDictionary dictionary];
     
-    sbLog(@"[install] === START (v7: editActionsForRow + UITableViewRowAction - 对齐微信原生) ===");
+    sbLog(@"[install] === START (v8: settingSessionGesture + addGesture hook) ===");
     
     Method setDS = class_getInstanceMethod([UITableView class], @selector(setDataSource:));
-    if (setDS) {
-        orig_setDataSource = (void (*)(id, SEL, id))method_getImplementation(setDS);
-        method_setImplementation(setDS, (IMP)replaced_setDataSource);
-    }
+    if (setDS) { orig_setDataSource = (void (*)(id, SEL, id))method_getImplementation(setDS); method_setImplementation(setDS, (IMP)replaced_setDataSource); }
     
     Method setDL = class_getInstanceMethod([UITableView class], @selector(setDelegate:));
-    if (setDL) {
-        orig_setDelegate = (void (*)(id, SEL, id))method_getImplementation(setDL);
-        method_setImplementation(setDL, (IMP)replaced_setDelegate);
-    }
+    if (setDL) { orig_setDelegate = (void (*)(id, SEL, id))method_getImplementation(setDL); method_setImplementation(setDL, (IMP)replaced_setDelegate); }
     
     Method setAMS = class_getInstanceMethod([UITableView class], @selector(setAllowsMultipleSelection:));
-    if (setAMS) {
-        orig_setAllowsMultipleSelection = (void (*)(id, SEL, BOOL))method_getImplementation(setAMS);
-        method_setImplementation(setAMS, (IMP)replaced_setAllowsMultipleSelection);
+    if (setAMS) { orig_setAllowsMultipleSelection = (void (*)(id, SEL, BOOL))method_getImplementation(setAMS); method_setImplementation(setAMS, (IMP)replaced_setAllowsMultipleSelection); }
+    
+    Method addGR = class_getInstanceMethod([UITableView class], @selector(addGestureRecognizer:));
+    if (addGR) {
+        orig_tableView_addGesture = (void (*)(id, SEL, id))method_getImplementation(addGR);
+        method_setImplementation(addGR, (IMP)replaced_tableView_addGesture);
+        sbLog(@"[install] ✓ hooked addGestureRecognizer: on UITableView");
     }
     
     Class nmvc = objc_getClass("NewMainFrameViewController");
     if (nmvc) {
         Method vwa = class_getInstanceMethod(nmvc, @selector(viewWillAppear:));
-        if (vwa) {
-            orig_viewWillAppear = (void (*)(id, SEL, BOOL))method_getImplementation(vwa);
-            method_setImplementation(vwa, (IMP)replaced_viewWillAppear);
+        if (vwa) { orig_viewWillAppear = (void (*)(id, SEL, BOOL))method_getImplementation(vwa); method_setImplementation(vwa, (IMP)replaced_viewWillAppear); }
+        
+        Method ssg = class_getInstanceMethod(nmvc, NSSelectorFromString(@"settingSessionGesture:"));
+        if (ssg) {
+            orig_settingSessionGesture = (void (*)(id, SEL))method_getImplementation(ssg);
+            method_setImplementation(ssg, (IMP)replaced_settingSessionGesture);
+            sbLog(@"[install] ✓ hooked settingSessionGesture:");
+        } else {
+            sbLog(@"[install] ⚠ settingSessionGesture: not found on NewMainFrameViewController");
+        }
+        
+        Method smsg = class_getInstanceMethod(nmvc, NSSelectorFromString(@"setMIsSessionGesture:"));
+        if (smsg) {
+            orig_setMIsSessionGesture = (void (*)(id, SEL, BOOL))method_getImplementation(smsg);
+            method_setImplementation(smsg, (IMP)replaced_setMIsSessionGesture);
+            sbLog(@"[install] ✓ hooked setMIsSessionGesture:");
+        } else {
+            sbLog(@"[install] ⚠ setMIsSessionGesture: not found on NewMainFrameViewController");
         }
     }
     
