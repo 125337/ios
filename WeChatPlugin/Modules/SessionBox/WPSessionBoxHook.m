@@ -7,6 +7,7 @@
 static NSMutableDictionary *g_origIMPs = nil;
 static NSMutableSet *g_hookedTableViewClasses = nil;
 static IMP g_origSetDataSource = NULL;
+static IMP g_origViewWillAppear = NULL;
 
 static void sbLog(NSString *format, ...) {
     va_list args;
@@ -69,23 +70,74 @@ static NSString *sb_userNameFromDataSource(id dataSource, NSIndexPath *indexPath
     if (!dataSource || !indexPath) return nil;
     
     @try {
-        SEL sel = NSSelectorFromString(@"getSessionInfoAtIndexPath:");
-        if (![dataSource respondsToSelector:sel])
-            sel = NSSelectorFromString(@"logicGetSessionAtIndexPath:");
-        if (![dataSource respondsToSelector:sel])
-            sel = NSSelectorFromString(@"sessionInfoForIndexPath:");
-        if (![dataSource respondsToSelector:sel]) {
-            sbLog(@"[getUserName] no sessionInfo method found on %@", NSStringFromClass([dataSource class]));
-            return nil;
+        // 方式 1: getSessionInfoAtIndexPath: → m_nsUserName
+        SEL sel1 = NSSelectorFromString(@"getSessionInfoAtIndexPath:");
+        if ([dataSource respondsToSelector:sel1]) {
+            id sessionInfo = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, sel1, indexPath);
+            if (sessionInfo) {
+                SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
+                if ([sessionInfo respondsToSelector:userNameSel]) {
+                    id name = ((id (*)(id, SEL))objc_msgSend)(sessionInfo, userNameSel);
+                    if ([name isKindOfClass:[NSString class]] && [name length] > 0) return name;
+                }
+            }
         }
         
-        id sessionInfo = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, sel, indexPath);
-        if (!sessionInfo) return nil;
+        // 方式 2: getCellData: → FakeMainFrameCellData → m_sessionInfo → m_nsUserName
+        SEL cellDataSel = NSSelectorFromString(@"getCellData:");
+        if ([dataSource respondsToSelector:cellDataSel]) {
+            id cellData = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, cellDataSel, indexPath);
+            if (cellData) {
+                SEL sessionInfoSel = NSSelectorFromString(@"m_sessionInfo");
+                if ([cellData respondsToSelector:sessionInfoSel]) {
+                    id sessionInfo = ((id (*)(id, SEL))objc_msgSend)(cellData, sessionInfoSel);
+                    if (sessionInfo) {
+                        SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
+                        if ([sessionInfo respondsToSelector:userNameSel]) {
+                            id name = ((id (*)(id, SEL))objc_msgSend)(sessionInfo, userNameSel);
+                            if ([name isKindOfClass:[NSString class]] && [name length] > 0) return name;
+                        }
+                    }
+                }
+                // 后备: FakeMainFrameCellData 直接有 m_cellData → m_nsUserName
+                SEL cellDataInfoSel = NSSelectorFromString(@"m_cellData");
+                if ([cellData respondsToSelector:cellDataInfoSel]) {
+                    id innerData = ((id (*)(id, SEL))objc_msgSend)(cellData, cellDataInfoSel);
+                    if (innerData) {
+                        SEL userNameSel2 = NSSelectorFromString(@"m_nsUserName");
+                        if ([innerData respondsToSelector:userNameSel2]) {
+                            id name = ((id (*)(id, SEL))objc_msgSend)(innerData, userNameSel2);
+                            if ([name isKindOfClass:[NSString class]] && [name length] > 0) return name;
+                        }
+                    }
+                }
+            }
+        }
         
-        SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
-        if ([sessionInfo respondsToSelector:userNameSel]) {
-            id name = ((id (*)(id, SEL))objc_msgSend)(sessionInfo, userNameSel);
-            if ([name isKindOfClass:[NSString class]]) return name;
+        // 方式 3: logicGetSessionAtIndexPath: → m_nsUserName
+        SEL sel2 = NSSelectorFromString(@"logicGetSessionAtIndexPath:");
+        if ([dataSource respondsToSelector:sel2]) {
+            id sessionInfo = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, sel2, indexPath);
+            if (sessionInfo) {
+                SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
+                if ([sessionInfo respondsToSelector:userNameSel]) {
+                    id name = ((id (*)(id, SEL))objc_msgSend)(sessionInfo, userNameSel);
+                    if ([name isKindOfClass:[NSString class]] && [name length] > 0) return name;
+                }
+            }
+        }
+        
+        // 方式 4: sessionInfoForIndexPath:
+        SEL sel3 = NSSelectorFromString(@"sessionInfoForIndexPath:");
+        if ([dataSource respondsToSelector:sel3]) {
+            id sessionInfo = ((id (*)(id, SEL, id))objc_msgSend)(dataSource, sel3, indexPath);
+            if (sessionInfo) {
+                SEL userNameSel = NSSelectorFromString(@"m_nsUserName");
+                if ([sessionInfo respondsToSelector:userNameSel]) {
+                    id name = ((id (*)(id, SEL))objc_msgSend)(sessionInfo, userNameSel);
+                    if ([name isKindOfClass:[NSString class]] && [name length] > 0) return name;
+                }
+            }
         }
     } @catch (NSException *e) {
         sbLog(@"[getUserName] exception: %@", e.reason);
@@ -210,8 +262,17 @@ static UISwipeActionsConfiguration *replaced_leadingSwipeActions(
     
     sbLog(@"[leadingSwipe] === CALLED === indexPath=%@", indexPath);
     
-    NSMutableArray<UIContextualAction *> *actions = [NSMutableArray array];
+    UISwipeActionsConfiguration *origConfig = nil;
+    NSValue *origIMPValue = g_origIMPs[@"leadingSwipe"];
+    if (origIMPValue) {
+        IMP origIMP = [origIMPValue pointerValue];
+        if (origIMP) {
+            origConfig = ((UISwipeActionsConfiguration *(*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+            sbLog(@"[leadingSwipe] orig actions count=%lu", (unsigned long)(origConfig ? origConfig.actions.count : 0));
+        }
+    }
     
+    NSMutableArray<UIContextualAction *> *actions = [NSMutableArray array];
     NSString *userName = sb_userNameFromDataSource(self, indexPath);
     sbLog(@"[leadingSwipe] userName=%@", userName ?: @"nil");
     
@@ -260,8 +321,21 @@ static UISwipeActionsConfiguration *replaced_leadingSwipeActions(
         }
     }
     
-    sbLog(@"[leadingSwipe] returning %lu actions", (unsigned long)actions.count);
-    return [UISwipeActionsConfiguration configurationWithActions:actions];
+    sbLog(@"[leadingSwipe] our actions count=%lu", (unsigned long)actions.count);
+    
+    if (actions.count == 0) return origConfig;
+    if (!origConfig) {
+        UISwipeActionsConfiguration *config = [UISwipeActionsConfiguration configurationWithActions:actions];
+        config.performsFirstActionWithFullSwipe = NO;
+        return config;
+    }
+    
+    NSMutableArray *allActions = [NSMutableArray arrayWithArray:actions];
+    [allActions addObjectsFromArray:origConfig.actions];
+    UISwipeActionsConfiguration *merged = [UISwipeActionsConfiguration configurationWithActions:allActions];
+    merged.performsFirstActionWithFullSwipe = origConfig.performsFirstActionWithFullSwipe;
+    sbLog(@"[leadingSwipe] merged actions count=%lu", (unsigned long)allActions.count);
+    return merged;
 }
 
 #pragma mark - Trailing Swipe Actions (左滑菜单)
@@ -341,6 +415,7 @@ static UISwipeActionsConfiguration *replaced_trailingSwipeActions(
 static BOOL replaced_canEditRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
     PluginConfig *config = [PluginConfig shared];
     if (config.quickPinEnabled || config.quickRemarkEnabled || config.quickMuteEnabled) {
+        sbLog(@"[canEditRow] indexPath=%@ → YES (features enabled)", indexPath);
         return YES;
     }
     
@@ -348,11 +423,58 @@ static BOOL replaced_canEditRow(id self, SEL _cmd, UITableView *tableView, NSInd
     if (impValue) {
         IMP origIMP = [impValue pointerValue];
         if (origIMP) {
-            return ((BOOL (*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+            BOOL result = ((BOOL (*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+            sbLog(@"[canEditRow] indexPath=%@ → original=%d", indexPath, result);
+            return result;
         }
     }
     
+    sbLog(@"[canEditRow] indexPath=%@ → NO (no orig IMP)", indexPath);
     return NO;
+}
+
+#pragma mark - editingStyleForRowAtIndexPath
+
+static NSInteger replaced_editingStyle(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
+    PluginConfig *config = [PluginConfig shared];
+    if (config.quickPinEnabled || config.quickRemarkEnabled || config.quickMuteEnabled) {
+        sbLog(@"[editingStyle] indexPath=%@ → Delete (features enabled)", indexPath);
+        return 1; // UITableViewCellEditingStyleDelete
+    }
+    
+    NSValue *impValue = g_origIMPs[@"editingStyle"];
+    if (impValue) {
+        IMP origIMP = [impValue pointerValue];
+        if (origIMP) {
+            return ((NSInteger (*)(id, SEL, UITableView *, NSIndexPath *))origIMP)(self, _cmd, tableView, indexPath);
+        }
+    }
+    
+    return 0; // UITableViewCellEditingStyleNone
+}
+
+#pragma mark - viewWillAppear Hook
+
+static void replaced_viewWillAppear(id self, SEL _cmd, BOOL animated) {
+    if (g_origViewWillAppear) {
+        ((void (*)(id, SEL, BOOL))g_origViewWillAppear)(self, _cmd, animated);
+    }
+    
+    PluginConfig *config = [PluginConfig shared];
+    if (!(config.quickPinEnabled || config.quickRemarkEnabled || config.quickMuteEnabled)) return;
+    
+    @try {
+        SEL tvSel = NSSelectorFromString(@"tableView");
+        if ([self respondsToSelector:tvSel]) {
+            UITableView *tableView = ((id (*)(id, SEL))objc_msgSend)(self, tvSel);
+            if (tableView && [tableView isKindOfClass:[UITableView class]]) {
+                // 确保 pan gesture 启用
+                tableView.panGestureRecognizer.enabled = YES;
+            }
+        }
+    } @catch (NSException *e) {
+        sbLog(@"[viewWillAppear] exception: %@", e.reason);
+    }
 }
 
 #pragma mark - setDataSource Hook
@@ -418,6 +540,20 @@ static void replaced_setDataSource(id self, SEL _cmd, id dataSource) {
         sbLog(@"[setDataSource] ✓ ADDED canEditRowAtIndexPath: to %@", className);
     }
     
+    // Hook editingStyleForRowAtIndexPath: (iOS 会双重检查此方法)
+    SEL editStyleSel = NSSelectorFromString(@"tableView:editingStyleForRowAtIndexPath:");
+    Method editStyleMethod = class_getInstanceMethod(dsClass, editStyleSel);
+    
+    if (editStyleMethod) {
+        IMP origIMP = method_getImplementation(editStyleMethod);
+        g_origIMPs[@"editingStyle"] = [NSValue valueWithPointer:origIMP];
+        method_setImplementation(editStyleMethod, (IMP)replaced_editingStyle);
+        sbLog(@"[setDataSource] ✓ HOOKED editingStyleForRowAtIndexPath: on %@", className);
+    } else {
+        class_addMethod(dsClass, editStyleSel, (IMP)replaced_editingStyle, "q32@0:8@16@24");
+        sbLog(@"[setDataSource] ✓ ADDED editingStyleForRowAtIndexPath: to %@", className);
+    }
+    
     [g_hookedTableViewClasses addObject:className];
 }
 
@@ -426,11 +562,12 @@ static void replaced_setDataSource(id self, SEL _cmd, id dataSource) {
 @implementation WPSessionBoxHook
 
 + (void)install {
-    sbLog(@"[install] === START (Leading + Trailing Swipe + canEdit) ===");
+    sbLog(@"[install] === START (Leading + Trailing Swipe + canEdit + editStyle + viewWillAppear) ===");
     
     g_origIMPs = [NSMutableDictionary dictionary];
     g_hookedTableViewClasses = [NSMutableSet set];
     
+    // 1. Hook UITableView 的 setDataSource:
     Class tableViewClass = [UITableView class];
     SEL setDataSourceSel = NSSelectorFromString(@"setDataSource:");
     Method setDataSourceMethod = class_getInstanceMethod(tableViewClass, setDataSourceSel);
@@ -439,6 +576,20 @@ static void replaced_setDataSource(id self, SEL _cmd, id dataSource) {
         g_origSetDataSource = method_getImplementation(setDataSourceMethod);
         method_setImplementation(setDataSourceMethod, (IMP)replaced_setDataSource);
         sbLog(@"[install] ✓ hooked setDataSource: on UITableView");
+    }
+    
+    // 2. Hook NewMainFrameViewController 的 viewWillAppear:
+    Class vcClass = objc_getClass("NewMainFrameViewController");
+    if (vcClass) {
+        SEL viewWillAppearSel = NSSelectorFromString(@"viewWillAppear:");
+        Method viewWillAppearMethod = class_getInstanceMethod(vcClass, viewWillAppearSel);
+        if (viewWillAppearMethod) {
+            g_origViewWillAppear = method_getImplementation(viewWillAppearMethod);
+            method_setImplementation(viewWillAppearMethod, (IMP)replaced_viewWillAppear);
+            sbLog(@"[install] ✓ hooked viewWillAppear: on NewMainFrameViewController");
+        }
+    } else {
+        sbLog(@"[install] ✗ NewMainFrameViewController not found");
     }
     
     sbLog(@"[install] === COMPLETE ===");
