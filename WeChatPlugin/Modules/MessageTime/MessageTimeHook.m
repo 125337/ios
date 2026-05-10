@@ -351,18 +351,11 @@ static void addTimeLabelToCell(id cell) {
         }
         objc_setAssociatedObject(cell, @"messageTimeLastIdentifier", identifier, OBJC_ASSOCIATION_COPY_NONATOMIC);
         
-        static NSMutableDictionary *gLastProcessedTimes = nil;
-        static dispatch_once_t dedupToken;
-        dispatch_once(&dedupToken, ^{
-            gLastProcessedTimes = [NSMutableDictionary dictionary];
-        });
-        NSNumber *lastTime = gLastProcessedTimes[@(createTime)];
-        NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-        if (lastTime && (now - [lastTime doubleValue]) < 0.3) {
-            mtLog([NSString stringWithFormat:@"DEDUP: skipping createTime=%u within window (%.3fs ago)", createTime, now - [lastTime doubleValue]]);
+        UIImageView *avatarView = getAvatarView(cell);
+        if (!avatarView) {
+            mtLog(@"No avatarView - skipping continuation cell");
             return;
         }
-        gLastProcessedTimes[@(createTime)] = @(now);
         
         NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
         NSString *timeString = formatMessageTime(messageDate, config.messageTimeFormat);
@@ -413,8 +406,7 @@ static void addTimeLabelToCell(id cell) {
             mtLog([NSString stringWithFormat:@"Extended bubble width by %.0f", config.messageTimeBubbleExtWidth]);
         }
         
-        UIImageView *avatarView = getAvatarView(cell);
-        CGRect avatarFrame = avatarView ? avatarView.frame : CGRectZero;
+        CGRect avatarFrame = avatarView.frame;
         CGRect bubbleFrame = bubbleView ? bubbleView.frame : cellFrame;
         
         BOOL isSender = NO;
