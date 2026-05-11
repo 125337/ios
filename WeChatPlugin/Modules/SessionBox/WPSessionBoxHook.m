@@ -265,6 +265,27 @@ static void replaced_setEESTC(id self, SEL _cmd, BOOL v){if(sb_anyFeatureEnabled
 static void(*orig_setCBTIL)(id, SEL, NSInteger) = NULL;
 static void replaced_setCBTIL(id self, SEL _cmd, NSInteger v){if(sb_anyFeatureEnabled()){if(orig_setCBTIL) orig_setCBTIL(self, _cmd, 0);return;}if(orig_setCBTIL) orig_setCBTIL(self, _cmd, v);}
 
+#pragma mark - hook helper
+static void sb_hookSel(Class cls, SEL sel, IMP newImp, IMP *origImp){
+    Method m = class_getInstanceMethod(cls, sel);
+    if(!m) return;
+    *origImp = method_getImplementation(m);
+    method_setImplementation(m, newImp);
+}
+
+static NSInteger(*orig_checkES)(id, SEL) = NULL;
+static NSInteger sb_checkEditingStyle(id self, SEL _cmd){
+    if(sb_anyFeatureEnabled()) return 1;
+    if(orig_checkES) return orig_checkES(self, _cmd);
+    return 0;
+}
+
+static void(*orig_onCommitES)(id, SEL, NSInteger, id) = NULL;
+static void sb_onCommitEditing(id self, SEL _cmd, NSInteger style, id tv){
+    if(sb_anyFeatureEnabled()) return;
+    if(orig_onCommitES) orig_onCommitES(self, _cmd, style, tv);
+}
+
 #pragma mark - setTableViewManager
 static void(*orig_setTVM)(id, SEL, id) = NULL;
 static void replaced_setTVM(id self, SEL _cmd, id mgr){
@@ -276,19 +297,6 @@ static void replaced_setTVM(id self, SEL _cmd, id mgr){
     SEL oc = NSSelectorFromString(@"onCommitEditingWithStyle:tableView:");
     Method m = class_getInstanceMethod(mgrClass, oc);
     if(m && !g_origIMPs[@"_tvm_oces"]){g_origIMPs[@"_tvm_oces"]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,(IMP)sb_onCommitEditing);sbLog(@"[hookTVM] ✓ onCommitEditingStyle on %@",NSStringFromClass(mgrClass));}
-}
-
-static NSInteger(*orig_checkES)(id, SEL) = NULL;
-static NSInteger sb_checkEditingStyle(id self, SEL _cmd){
-    if(sb_anyFeatureEnabled()) return 1; // UITableViewCellEditingStyleDelete
-    if(orig_checkES) return orig_checkES(self, _cmd);
-    return 0;
-}
-
-static void(*orig_onCommitES)(id, SEL, NSInteger, id) = NULL;
-static void sb_onCommitEditing(id self, SEL _cmd, NSInteger style, id tv){
-    if(sb_anyFeatureEnabled()) return;
-    if(orig_onCommitES) orig_onCommitES(self, _cmd, style, tv);
 }
 
 #pragma mark - scrollViewWillEndDragging (阻止 deceleration 关闭 editing 模式)
@@ -366,14 +374,6 @@ static void replaced_vwa(id self,SEL _cmd,BOOL animated){
     SEL cbtil=NSSelectorFromString(@"setChatBoxTopInList:");
     if([tv respondsToSelector:cbtil])((void(*)(id,SEL,NSInteger))objc_msgSend)(tv,cbtil,0);
     sbLog(@"[vwa] tv=%@",NSStringFromClass([tv class]));
-}
-
-#pragma mark - hook helper
-static void sb_hookSel(Class cls, SEL sel, IMP newImp, IMP *origImp){
-    Method m = class_getInstanceMethod(cls, sel);
-    if(!m) return;
-    *origImp = method_getImplementation(m);
-    method_setImplementation(m, newImp);
 }
 
 #pragma mark - install
