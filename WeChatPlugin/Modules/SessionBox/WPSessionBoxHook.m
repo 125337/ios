@@ -329,9 +329,12 @@ static void replaced_addGR(id self,SEL _cmd,id gesture){
 }
 
 #pragma mark - setDS/setDL/setAMS
-static void(*orig_setDS)(id,SEL,id)=NULL;static void replaced_setDS(id s,SEL c,id d){if(orig_setDS)orig_setDS(s,c,d);if(d)sb_injectSwipeMethods(object_getClass(d),nil);}
-static void(*orig_setDL)(id,SEL,id)=NULL;static void replaced_setDL(id s,SEL c,id d){if(orig_setDL)orig_setDL(s,c,d);if(d)sb_injectSwipeMethods(object_getClass(d),nil);}
-static void(*orig_setAMS)(id,SEL,BOOL)=NULL;static void replaced_setAMS(id s,SEL c,BOOL v){if(sb_anyFeatureEnabled()){if(orig_setAMS)orig_setAMS(s,c,NO);return;}if(orig_setAMS)orig_setAMS(s,c,v);}
+static BOOL sb_isMainFrameTable(id tableView){
+    return [NSStringFromClass(object_getClass(tableView)) containsString:@"MainFrameTableView"];
+}
+static void(*orig_setDS)(id,SEL,id)=NULL;static void replaced_setDS(id s,SEL c,id d){if(orig_setDS)orig_setDS(s,c,d);if(d&&sb_isMainFrameTable(s))sb_injectSwipeMethods(object_getClass(d),nil);}
+static void(*orig_setDL)(id,SEL,id)=NULL;static void replaced_setDL(id s,SEL c,id d){if(orig_setDL)orig_setDL(s,c,d);if(d&&sb_isMainFrameTable(s))sb_injectSwipeMethods(object_getClass(d),nil);}
+static void(*orig_setAMS)(id,SEL,BOOL)=NULL;static void replaced_setAMS(id s,SEL c,BOOL v){if(sb_anyFeatureEnabled()&&sb_isMainFrameTable(s)){if(orig_setAMS)orig_setAMS(s,c,NO);return;}if(orig_setAMS)orig_setAMS(s,c,v);}
 
 #pragma mark - viewWillAppear（NewMainFrameViewController）
 static void(*orig_vwa)(id,SEL,BOOL)=NULL;
@@ -357,7 +360,7 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
 + (void)install{
     if(g_installed)return;g_installed=YES;
     g_hookedClasses=[NSMutableSet set];g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] v28: no amplification + 7 delegates + 14 props + MainFrameTableView only");
+    sbLog(@"[install] v29: setDS/setDL/setAMS ALSO guarded by MainFrameTableView");
     Method m;
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
     if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
