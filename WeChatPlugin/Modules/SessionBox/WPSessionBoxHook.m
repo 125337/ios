@@ -225,17 +225,15 @@ static void replaced_addGR(id self, SEL _cmd, id gesture){
     Class gc = object_getClass(gesture);
     sb_patchSwipeGestureClass(gc);
     
-    gesture.delaysTouchesBegan = NO;
-    gesture.cancelsTouchesInView = NO;
+    UIGestureRecognizer *g = (UIGestureRecognizer *)gesture;
+    g.delaysTouchesBegan = NO;
+    g.cancelsTouchesInView = NO;
     
-    // 也尝试 settingSessionGesture: 如果存在
     SEL ssg = NSSelectorFromString(@"settingSessionGesture:");
     if([self respondsToSelector:ssg]){
         ((void(*)(id,SEL))objc_msgSend)(self, ssg);
-        sbLog(@"[addGR] called settingSessionGesture on %@", NSStringFromClass(object_getClass(self)));
     }
     
-    // hook tableView 的 gestureRecognizerShouldBegin:
     sb_hookGestureShouldBegin(object_getClass(self));
     
     sbLog(@"[addGR] swipe gesture on %@ patched", NSStringFromClass(object_getClass(self)));
