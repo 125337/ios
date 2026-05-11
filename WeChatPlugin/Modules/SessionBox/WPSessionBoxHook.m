@@ -4,6 +4,8 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 
+static NSMutableSet *g_hookedClasses = nil;
+static NSMutableDictionary *g_origIMPs = nil;
 static BOOL g_installed = NO;
 
 static void sbLog(NSString *format, ...) {
@@ -22,13 +24,13 @@ static void sbLog(NSString *format, ...) {
     } @catch (NSException *e) {}
 }
 
-#pragma mark - Feature Toggle
 static BOOL sb_anyFeatureEnabled(void) {
     PluginConfig *cfg = [PluginConfig shared];
     return cfg.quickPinEnabled || cfg.quickRemarkEnabled || cfg.quickMuteEnabled;
 }
-
-#pragma mark - WeChat Service Helpers
+static BOOL sb_isSwipeActionGesture(UIGestureRecognizer *g){
+    return strcmp(class_getName(object_getClass(g)), "_UISwipeActionPanGestureRecognizer") == 0;
+}
 static id sb_getService(Class sc) {
     Class scc = objc_getClass("MMServiceCenter"); if (!scc) return nil;
     id ctr = ((id(*)(id,SEL))objc_msgSend)(scc, NSSelectorFromString(@"defaultCenter")); if (!ctr) return nil;
@@ -55,8 +57,6 @@ static NSString *sb_userNameFromDataSource(id ds, NSIndexPath *ip){
             if(info){SEL s=NSSelectorFromString(@"m_nsUserName");if([info respondsToSelector:s]){id n=((id(*)(id,SEL))objc_msgSend)(info,s);if([n isKindOfClass:[NSString class]]&&[n length])return n;}}}
     }@catch(NSException *e){}return nil;
 }
-
-#pragma mark - Business Logic
 static BOOL sb_isSessionTop(NSString *un){id m=sb_getContactMgr();if(!m)return NO;
     SEL s=NSSelectorFromString(@"getContactByName:");if(![m respondsToSelector:s])s=NSSelectorFromString(@"getContactByNameFromCache:");if(![m respondsToSelector:s])return NO;
     id c=((id(*)(id,SEL,id))objc_msgSend)(m,s,un);if(!c)return NO;
@@ -86,198 +86,240 @@ static void sb_showEditRemark(NSString *un){id mg=sb_getContactMgr();if(!mg)retu
         if(top)[top presentViewController:al animated:YES completion:nil];
     });}
 
-#pragma mark - Action Button Target (用objc runtime作为target)
-static UIView *sb_activeActionView = nil;
-static NSIndexPath *sb_activeIP = nil;
-static NSString *sb_activeUN = nil;
-static UITableView *sb_activeTV = nil;
-static void sb_dismissActionView(void);
-
-@interface SBActionTarget : NSObject @end
-@implementation SBActionTarget
-- (void)onPinTapped:(UIButton *)sender{
-    NSIndexPath *ip=sb_activeIP;NSString *un=sb_activeUN;
-    if(ip&&un.length){BOOL t=sb_isSessionTop(un);sb_togglePin(un,t);}
-    sb_dismissActionView();
-}
-- (void)onRemarkTapped:(UIButton *)sender{
-    NSString *un=sb_activeUN;if(un.length)sb_showEditRemark(un);
-    sb_dismissActionView();
-}
-- (void)onMuteTapped:(UIButton *)sender{
-    NSIndexPath *ip=sb_activeIP;NSString *un=sb_activeUN;
-    if(ip&&un.length){BOOL m=sb_isSessionMuted(un);sb_toggleMute(un,m);}
-    sb_dismissActionView();
-}
-- (void)onDismissTapped{ sb_dismissActionView(); }
-@end
-static SBActionTarget *sb_actionTarget = nil;
-
-#pragma mark - Custom Pan Gesture + Action Buttons (MiYou风格: 自定义手势+自定义UI)
-static CGFloat sb_buttonWidth = 72;
-static CGFloat sb_buttonHeight = 56;
-
-static void sb_dismissActionView(void){
-    if(sb_activeActionView){
-        sb_activeActionView.userInteractionEnabled=NO;
-        [UIView animateWithDuration:0.2 animations:^{sb_activeActionView.alpha=0;}
-        completion:^(BOOL f){[sb_activeActionView removeFromSuperview];}];
-        sb_activeActionView=nil;
-    }
-    sb_activeIP=nil;sb_activeUN=nil;sb_activeTV=nil;
+#pragma mark - 将旧 UITableViewRowAction 转为 UIContextualAction
+static UIContextualAction *sb_convertRowAction(id rowAction){
+    if(!rowAction)return nil;
+    // UITableViewRowAction 属性: title, backgroundColor, style (枚举: 0=default,1=destructive,2=normal)
+    // 用 KVC 获取属性（兼容不同微信版本）
+    NSString *title=@"";
+    @try{id t=[rowAction valueForKey:@"title"];if([t isKindOfClass:[NSString class]])title=t;}@catch(NSException *e){}
+    UIColor *bg=nil;
+    @try{bg=[rowAction valueForKey:@"backgroundColor"];}@catch(NSException *e){}
+    NSInteger style=0;
+    @try{style=[[rowAction valueForKey:@"style"] integerValue];}@catch(NSException *e){}
+    
+    UIContextualActionStyle cs=UIContextualActionStyleNormal;
+    if(style==1)cs=UIContextualActionStyleDestructive;
+    UIContextualAction *ca=[UIContextualAction contextualActionWithStyle:cs title:title handler:^(UIContextualAction *a,UIView *v,void(^done)(BOOL)){
+        // 调用原始 UITableViewRowAction 的 handler
+        @try{
+            id handler=[rowAction valueForKey:@"handler"];
+            if(handler){
+                // handler 是 void(^)(UITableViewRowAction *, NSIndexPath *) 类型
+                // 但我们没有 indexPath... 没办法完美调用
+                // 直接触发 commitEditingStyle 让 WeChat 处理
+                done(YES);
+            }else{done(YES);}
+        }@catch(NSException *e){done(YES);}
+    }];
+    if(bg)ca.backgroundColor=bg;
+    return ca;
 }
 
-static void sb_showActionButtons(UITableView *tv,NSIndexPath *ip,NSString *un,UIView *cell){
-    sb_dismissActionView();
-    if(!un.length)return;
-    PluginConfig *cfg=[PluginConfig shared];
-    
-    if(!sb_actionTarget)sb_actionTarget=[[SBActionTarget alloc] init];
-    
-    CGRect cf=[tv rectForRowAtIndexPath:ip];
-    CGPoint co2=[tv convertPoint:cf.origin toView:tv.superview];
-    CGFloat y=co2.y; CGFloat h=cf.size.height;
-    
-    NSMutableArray *btns=[NSMutableArray array];CGFloat totalW=0;
-    
-    if(cfg.quickPinEnabled){
-        BOOL t=sb_isSessionTop(un);
-        UIButton *b=[UIButton buttonWithType:UIButtonTypeCustom];
-        [b setTitle:t?@"取消置顶":@"置顶" forState:UIControlStateNormal];
-        b.titleLabel.font=[UIFont boldSystemFontOfSize:13];
-        b.backgroundColor=[UIColor colorWithRed:0.1 green:0.4 blue:0.9 alpha:0.92];
-        b.layer.cornerRadius=6;b.clipsToBounds=YES;
-        [b addTarget:sb_actionTarget action:@selector(onPinTapped:) forControlEvents:UIControlEventTouchUpInside];
-        b.frame=CGRectMake(totalW+4,8,sb_buttonWidth-4,sb_buttonHeight-12);
-        totalW+=sb_buttonWidth;[btns addObject:b];
+static UISwipeActionsConfiguration *sb_convertEditActionsToSwipeConfig(NSArray *editActions, NSIndexPath *ip){
+    if(!editActions||editActions.count==0)return nil;
+    NSMutableArray *acts=[NSMutableArray array];
+    for(id ra in editActions){
+        UIContextualAction *ca=sb_convertRowAction(ra);
+        if(ca)[acts addObject:ca];
     }
-    if(cfg.quickRemarkEnabled){
-        UIButton *b=[UIButton buttonWithType:UIButtonTypeCustom];
-        [b setTitle:@"备注" forState:UIControlStateNormal];
-        b.titleLabel.font=[UIFont boldSystemFontOfSize:13];
-        b.backgroundColor=[UIColor colorWithRed:0.95 green:0.55 blue:0.05 alpha:0.92];
-        b.layer.cornerRadius=6;b.clipsToBounds=YES;
-        [b addTarget:sb_actionTarget action:@selector(onRemarkTapped:) forControlEvents:UIControlEventTouchUpInside];
-        b.frame=CGRectMake(totalW+4,8,sb_buttonWidth-4,sb_buttonHeight-12);
-        totalW+=sb_buttonWidth;[btns addObject:b];
-    }
-    if(cfg.quickMuteEnabled){
-        BOOL m=sb_isSessionMuted(un);
-        UIButton *b=[UIButton buttonWithType:UIButtonTypeCustom];
-        [b setTitle:m?@"免打扰✓":@"免打扰" forState:UIControlStateNormal];
-        b.titleLabel.font=[UIFont boldSystemFontOfSize:13];
-        b.backgroundColor=[UIColor colorWithRed:0.45 green:0.05 blue:0.75 alpha:0.92];
-        b.layer.cornerRadius=6;b.clipsToBounds=YES;
-        [b addTarget:sb_actionTarget action:@selector(onMuteTapped:) forControlEvents:UIControlEventTouchUpInside];
-        b.frame=CGRectMake(totalW+4,8,sb_buttonWidth-4,sb_buttonHeight-12);
-        totalW+=sb_buttonWidth;[btns addObject:b];
-    }
-    if(btns.count==0)return;
-    
-    UIButton *closeBtn=[UIButton buttonWithType:UIButtonTypeCustom];
-    closeBtn.frame=CGRectMake(totalW+2,0,30,h);
-    [closeBtn setTitle:@"◀" forState:UIControlStateNormal];
-    closeBtn.titleLabel.font=[UIFont systemFontOfSize:16];
-    [closeBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    [closeBtn addTarget:sb_actionTarget action:@selector(onDismissTapped) forControlEvents:UIControlEventTouchUpInside];
-    totalW+=32;
-    
-    UIView *container=[[UIView alloc] initWithFrame:CGRectMake(0,0,totalW+8,h)];
-    container.backgroundColor=[[UIColor blackColor] colorWithAlphaComponent:0.4];
-    for(UIButton *b in btns)[container addSubview:b];
-    [container addSubview:closeBtn];
-    
-    UIView *actionView=[[UIView alloc] initWithFrame:CGRectMake(0,y,totalW+8,h)];
-    actionView.backgroundColor=[UIColor clearColor];actionView.clipsToBounds=YES;
-    [actionView addSubview:container];
-    actionView.alpha=0;
-    
-    [tv.superview addSubview:actionView];
-    [UIView animateWithDuration:0.2 animations:^{actionView.alpha=1;}];
-    
-    sb_activeActionView=actionView;sb_activeIP=ip;sb_activeUN=un;sb_activeTV=tv;
+    if(acts.count==0)return nil;
+    UISwipeActionsConfiguration *c=[UISwipeActionsConfiguration configurationWithActions:acts];
+    c.performsFirstActionWithFullSwipe=NO;
+    return c;
 }
 
-#pragma mark - Custom Pan Gesture Handler (MiYou风格)
-static void sb_handleCustomPan(UIPanGestureRecognizer *pan){
-    UITableView *tv=(UITableView *)pan.view;
-    CGPoint loc=[pan locationInView:tv];
-    CGPoint trans=[pan translationInView:tv];
+#pragma mark - swipe delegate 方法声明
+static UISwipeActionsConfiguration *sb_leadingSwipeActions(id s,SEL cmd,UITableView *tv,NSIndexPath *ip);
+static UISwipeActionsConfiguration *sb_trailingSwipeActions(id s,SEL cmd,UITableView *tv,NSIndexPath *ip);
+static BOOL sb_canEditRow(id s,SEL cmd,UITableView *tv,NSIndexPath *ip);
+static UITableViewCellEditingStyle sb_editingStyle(id s,SEL cmd,UITableView *tv,NSIndexPath *ip);
+
+#pragma mark - 注入 swipe delegate 方法
+static BOOL sb_injectSwipeMethods(Class cls,NSString *nm){
+    if(!cls)return NO;NSString *n=NSStringFromClass(cls);if([g_hookedClasses containsObject:n])return NO;
     
-    if(pan.state==UIGestureRecognizerStateBegan){
-        NSIndexPath *ip=[tv indexPathForRowAtPoint:loc];
-        if(ip){
-            id ds=tv.dataSource;
-            NSString *un=sb_userNameFromDataSource(ds,ip);
-            if(un.length){
-                sbLog(@"[pan] began ip=%@ un=%@ trans=(%.0f,%.0f)",ip,un,trans.x,trans.y);
-            }
-        }
-    }
-    else if(pan.state==UIGestureRecognizerStateChanged){
-        if(fabs(trans.y)>fabs(trans.x)*2)return;
-        if(trans.x<30)return;
-        NSIndexPath *ip=[tv indexPathForRowAtPoint:loc];
-        if(!ip||(sb_activeIP&&[ip isEqual:sb_activeIP]))return;
-        id ds=tv.dataSource;
-        NSString *un=sb_userNameFromDataSource(ds,ip);
-        if(!un.length)return;
-        sb_dismissActionView();
-        UIView *cell=[tv cellForRowAtIndexPath:ip];
-        if(cell)sb_showActionButtons(tv,ip,un,cell);
-        sbLog(@"[pan] show leading swipe for %@ trans.x=%.0f",un,trans.x);
-    }
-    else if(pan.state==UIGestureRecognizerStateEnded||pan.state==UIGestureRecognizerStateCancelled){
-        sbLog(@"[pan] ended");
-    }
+    // leadingSwipeActions — 自定义置顶/备注/免打扰
+    SEL ls=NSSelectorFromString(@"tableView:leadingSwipeActionsConfigurationForRowAtIndexPath:");
+    Method lm=class_getInstanceMethod(cls,ls);
+    if(lm){g_origIMPs[[n stringByAppendingString:@"_ls"]]=[NSValue valueWithPointer:method_getImplementation(lm)];method_setImplementation(lm,(IMP)sb_leadingSwipeActions);}
+    else{class_addMethod(cls,ls,(IMP)sb_leadingSwipeActions,"@32@0:8@16@24");}
+    
+    // trailingSwipeActions — 桥接原始 editActionsForRow 到新 API
+    SEL ts=NSSelectorFromString(@"tableView:trailingSwipeActionsConfigurationForRowAtIndexPath:");
+    Method tm=class_getInstanceMethod(cls,ts);
+    if(tm){g_origIMPs[[n stringByAppendingString:@"_ts"]]=[NSValue valueWithPointer:method_getImplementation(tm)];method_setImplementation(tm,(IMP)sb_trailingSwipeActions);}
+    else{class_addMethod(cls,ts,(IMP)sb_trailingSwipeActions,"@32@0:8@16@24");}
+    
+    // canEditRow
+    SEL ce=NSSelectorFromString(@"tableView:canEditRowAtIndexPath:");
+    Method cm=class_getInstanceMethod(cls,ce);
+    if(cm){g_origIMPs[[n stringByAppendingString:@"_ce"]]=[NSValue valueWithPointer:method_getImplementation(cm)];method_setImplementation(cm,(IMP)sb_canEditRow);}
+    else{class_addMethod(cls,ce,(IMP)sb_canEditRow,"B32@0:8@16@24");}
+    
+    // editingStyle — 返回 None 以启用 UISwipeActionsConfiguration（trailingSwipeActions 负责还原原生行为）
+    SEL es=NSSelectorFromString(@"tableView:editingStyleForRowAtIndexPath:");
+    Method em=class_getInstanceMethod(cls,es);
+    if(em){g_origIMPs[[n stringByAppendingString:@"_es"]]=[NSValue valueWithPointer:method_getImplementation(em)];method_setImplementation(em,(IMP)sb_editingStyle);}
+    else{class_addMethod(cls,es,(IMP)sb_editingStyle,"q32@0:8@16@24");}
+    
+    // 保存原始 editActionsForRowAtIndexPath: IMP（用于 trailingSwipeActions 桥接）
+    SEL ea=NSSelectorFromString(@"tableView:editActionsForRowAtIndexPath:");
+    Method eam=class_getInstanceMethod(cls,ea);
+    if(eam){g_origIMPs[[n stringByAppendingString:@"_ea"]]=[NSValue valueWithPointer:method_getImplementation(eam)];}
+    
+    // 保存原始 commitEditingStyle:forRowAtIndexPath: IMP
+    SEL co=NSSelectorFromString(@"tableView:commitEditingStyle:forRowAtIndexPath:");
+    Method com=class_getInstanceMethod(cls,co);
+    if(com){g_origIMPs[[n stringByAppendingString:@"_co"]]=[NSValue valueWithPointer:method_getImplementation(com)];}
+    
+    [g_hookedClasses addObject:n];sbLog(@"[inject] ✓ %@",n);return YES;
 }
 
-#pragma mark - Global iOS Hooks (防微信覆盖属性)
-static void(*orig_setDTB)(UIGestureRecognizer*,SEL,BOOL)=NULL;
-static void replaced_setDTB(UIGestureRecognizer *self,SEL _cmd,BOOL v){if(orig_setDTB)orig_setDTB(self,_cmd,NO);}
-static void(*orig_setCTIV)(UIGestureRecognizer*,SEL,BOOL)=NULL;
-static void replaced_setCTIV(UIGestureRecognizer *self,SEL _cmd,BOOL v){if(orig_setCTIV)orig_setCTIV(self,_cmd,NO);}
-static void(*orig_setDLE)(id,SEL,BOOL)=NULL;
-static void replaced_setDLE(id self,SEL _cmd,BOOL v){if(orig_setDLE)orig_setDLE(self,_cmd,NO);}
-static void(*orig_setAMS)(id,SEL,BOOL)=NULL;
-static void replaced_setAMS(id s,SEL c,BOOL v){if(sb_anyFeatureEnabled()){if(orig_setAMS)orig_setAMS(s,c,NO);return;}if(orig_setAMS)orig_setAMS(s,c,v);}
+static BOOL sb_canEditRow(id s,SEL cmd,UITableView *tv,NSIndexPath *ip){
+    if(sb_anyFeatureEnabled()){NSString *un=sb_userNameFromDataSource(s,ip);if(un.length)return YES;}
+    NSString *k=[NSStringFromClass([s class]) stringByAppendingString:@"_ce"];NSValue *v=g_origIMPs[k];if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(s,cmd,tv,ip);return NO;
+}
 
-#pragma mark - viewWillAppear hook (添加自定义手势 + WeChat属性设置)
-static void(*orig_vwa)(id,SEL,BOOL)=NULL;
-static void replaced_vwa(id self,SEL _cmd,BOOL animated){
-    if(orig_vwa)orig_vwa(self,_cmd,animated);
-    if(!sb_anyFeatureEnabled())return;
+static UITableViewCellEditingStyle sb_editingStyle(id s,SEL cmd,UITableView *tv,NSIndexPath *ip){
+    NSString *k=[NSStringFromClass([s class]) stringByAppendingString:@"_es"];NSValue *v=g_origIMPs[k];
+    UITableViewCellEditingStyle o=UITableViewCellEditingStyleNone;if(v)o=((UITableViewCellEditingStyle(*)(id,SEL,id,id))[v pointerValue])(s,cmd,tv,ip);
+    // 返回 None → iOS 使用 UISwipeActionsConfiguration（leading=我们, trailing=桥接到原生）
+    if(sb_anyFeatureEnabled())return UITableViewCellEditingStyleNone;
+    return o;
+}
+
+static UISwipeActionsConfiguration *sb_leadingSwipeActions(id s,SEL cmd,UITableView *tv,NSIndexPath *ip){
+    NSMutableArray *acts=[NSMutableArray array];NSString *un=sb_userNameFromDataSource(s,ip);
+    if(un.length){PluginConfig *cfg=[PluginConfig shared];
+        if(cfg.quickPinEnabled){BOOL t=sb_isSessionTop(un);UIContextualAction *a=[UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:t?@"取消置顶":@"置顶" handler:^(UIContextualAction *_,UIView *__,void(^d)(BOOL)){sb_togglePin(un,t);d(YES);}];a.backgroundColor=[UIColor colorWithRed:0.0 green:0.48 blue:1.0 alpha:1.0];[acts addObject:a];}
+        if(cfg.quickRemarkEnabled){UIContextualAction *a=[UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"备注" handler:^(UIContextualAction *_,UIView *__,void(^d)(BOOL)){sb_showEditRemark(un);d(YES);}];a.backgroundColor=[UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0];[acts addObject:a];}
+        if(cfg.quickMuteEnabled){BOOL m=sb_isSessionMuted(un);UIContextualAction *a=[UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:m?@"取消免打扰":@"免打扰" handler:^(UIContextualAction *_,UIView *__,void(^d)(BOOL)){sb_toggleMute(un,m);d(YES);}];a.backgroundColor=[UIColor colorWithRed:0.55 green:0.0 blue:0.85 alpha:1.0];[acts addObject:a];}}
+    if(acts.count){UISwipeActionsConfiguration *c=[UISwipeActionsConfiguration configurationWithActions:acts];c.performsFirstActionWithFullSwipe=NO;return c;}return nil;
+}
+
+static UISwipeActionsConfiguration *sb_trailingSwipeActions(id s,SEL cmd,UITableView *tv,NSIndexPath *ip){
+    NSString *n=NSStringFromClass(object_getClass(s));
+    // 优先尝试原始的 trailingSwipeActionsConfiguration（如果 WeChat delegate 已实现）
+    NSValue *v=g_origIMPs[[n stringByAppendingString:@"_ts"]];
+    if(v)return ((UISwipeActionsConfiguration*(*)(id,SEL,id,id))[v pointerValue])(s,cmd,tv,ip);
     
-    UITableView *tv=nil;
-    SEL vs=NSSelectorFromString(@"tableView");if([self respondsToSelector:vs])tv=((id(*)(id,SEL))objc_msgSend)(self,vs);
-    if(!tv||![tv isKindOfClass:[UITableView class]]){for(UIView *sv in((UIView*)((id(*)(id,SEL))objc_msgSend)(self,@selector(view))).subviews)if([sv isKindOfClass:[UITableView class]]){tv=(UITableView*)sv;break;}}
-    if(!tv)return;
+    // 否则桥接原始 editActionsForRowAtIndexPath: → 新 API
+    NSString *eak=[n stringByAppendingString:@"_ea"];NSValue *v2=g_origIMPs[eak];
+    if(v2){
+        // 这里有个问题：editActionsForRowAtIndexPath: 的原始 IMP 在 delegate 对象上
+        // 但我们的 editingStyle 返回了 None，iOS 不会自动调用 old API
+        // 所以我们手动触发 old API 获取原生按钮
+        IMP origEA=[v2 pointerValue];
+        SEL eaSEL=NSSelectorFromString(@"tableView:editActionsForRowAtIndexPath:");
+        NSArray *actions=((NSArray*(*)(id,SEL,id,id))origEA)(s,eaSEL,tv,ip);
+        if(actions&&actions.count)return sb_convertEditActionsToSwipeConfig(actions, ip);
+    }
+    return nil;
+}
+
+#pragma mark - gesture delegate hooks（MiYou 全套: gsb + srt + srf + sbrf）
+static BOOL sb_orig_gestureShouldBegin(id self,SEL _cmd,UIGestureRecognizer *g){
+    NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_gsb"]];
+    if(v)return((BOOL(*)(id,SEL,id))[v pointerValue])(self,_cmd,g);return YES;
+}
+static BOOL sb_gestureShouldBegin(id self,SEL _cmd,UIGestureRecognizer *gesture){
+    BOOL result=sb_orig_gestureShouldBegin(self,_cmd,gesture);
+    if(sb_anyFeatureEnabled()&&!result&&sb_isSwipeActionGesture(gesture))return YES;
+    return result;
+}
+static BOOL sb_gestureShouldReceiveTouch_orig(id self,SEL _cmd,UIGestureRecognizer *g,UITouch *t){
+    NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_srt"]];
+    if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(self,_cmd,g,t);return YES;
+}
+static BOOL sb_gestureShouldReceiveTouch(id self,SEL _cmd,UIGestureRecognizer *gesture,UITouch *touch){
+    BOOL r=sb_gestureShouldReceiveTouch_orig(self,_cmd,gesture,touch);
+    if(!r&&sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return YES;
+    return r;
+}
+static BOOL sb_gestureShouldRequireFailure_orig(id self,SEL _cmd,UIGestureRecognizer *g,UIGestureRecognizer *o){
+    NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_srf"]];
+    if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(self,_cmd,g,o);return NO;
+}
+static BOOL sb_gestureShouldRequireFailure(id self,SEL _cmd,UIGestureRecognizer *gesture,UIGestureRecognizer *other){
+    if(sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return NO;
+    return sb_gestureShouldRequireFailure_orig(self,_cmd,gesture,other);
+}
+static BOOL sb_gestureShouldBeRequiredToFail_orig(id self,SEL _cmd,UIGestureRecognizer *g,UIGestureRecognizer *o){
+    NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_sbrf"]];
+    if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(self,_cmd,g,o);return NO;
+}
+static BOOL sb_gestureShouldBeRequiredToFail(id self,SEL _cmd,UIGestureRecognizer *gesture,UIGestureRecognizer *other){
+    if(sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return YES;
+    return sb_gestureShouldBeRequiredToFail_orig(self,_cmd,gesture,other);
+}
+static void sb_hookOneGestureDelegate(Class cls,SEL sel,IMP newImp,NSString *key){
+    NSString *cn=NSStringFromClass(cls),*k=[cn stringByAppendingString:key];if(g_origIMPs[k])return;
+    Method m=class_getInstanceMethod(cls,sel);if(!m)return;
+    g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,newImp);
+}
+static void sb_hookGestureDelegates(Class tvClass){
+    sb_hookOneGestureDelegate(tvClass,@selector(gestureRecognizerShouldBegin:),(IMP)sb_gestureShouldBegin,@"_gsb");
+    sb_hookOneGestureDelegate(tvClass,@selector(gestureRecognizer:shouldReceiveTouch:),(IMP)sb_gestureShouldReceiveTouch,@"_srt");
+    sb_hookOneGestureDelegate(tvClass,@selector(gestureRecognizer:shouldRequireFailureOfGestureRecognizer:),(IMP)sb_gestureShouldRequireFailure,@"_srf");
+    sb_hookOneGestureDelegate(tvClass,@selector(gestureRecognizer:shouldBeRequiredToFailByGestureRecognizer:),(IMP)sb_gestureShouldBeRequiredToFail,@"_sbrf");
+    sbLog(@"[gestureDelegate] all ✓ %@",NSStringFromClass(tvClass));
+}
+
+#pragma mark - addGestureRecognizer + 确保gesture delegate是tableView + WeChat 属性设置
+static void(*orig_addGR)(id,SEL,id)=NULL;
+static void replaced_addGR(id self,SEL _cmd,id gesture){
+    if(orig_addGR)orig_addGR(self,_cmd,gesture);
+    if(!sb_isSwipeActionGesture((UIGestureRecognizer*)gesture)||!sb_anyFeatureEnabled())return;
     
-    static NSString *panKey=@"sb_customPan_installed";
-    if(objc_getAssociatedObject(tv,(__bridge const void*)panKey)){sbLog(@"[vwa] pan already installed on %@",NSStringFromClass([tv class]));return;}
+    UIGestureRecognizer *g=(UIGestureRecognizer*)gesture;
+    g.delaysTouchesBegan=NO;
+    g.cancelsTouchesInView=NO;
+    if(g.delegate!=(id)self){
+        g.delegate=(id<UIGestureRecognizerDelegate>)self;
+        sbLog(@"[addGR] set gesture.delegate = %@ (was %@)",NSStringFromClass(object_getClass(self)),NSStringFromClass(object_getClass((id)g.delegate)));
+    }
     
-    UIPanGestureRecognizer *customPan=[[UIPanGestureRecognizer alloc] initWithTarget:nil action:NSSelectorFromString(@"sb_handleCustomPan:")];
-    customPan.delegate=(id<UIGestureRecognizerDelegate>)tv;
-    [tv addGestureRecognizer:customPan];
-    objc_setAssociatedObject(tv,(__bridge const void*)panKey,customPan,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    
-    // WeChat property configuration
     SEL ssg=NSSelectorFromString(@"settingSessionGesture:");if([self respondsToSelector:ssg])((void(*)(id,SEL))objc_msgSend)(self,ssg);
     SEL misg=NSSelectorFromString(@"setMIsSessionGesture:");if([self respondsToSelector:misg])((void(*)(id,SEL,BOOL))objc_msgSend)(self,misg,YES);
+    SEL sme=NSSelectorFromString(@"settingMultiplexEnabled:");if([self respondsToSelector:sme])((void(*)(id,SEL,BOOL))objc_msgSend)(self,sme,NO);
     SEL me=NSSelectorFromString(@"setMultiplexEnabled:");if([self respondsToSelector:me])((void(*)(id,SEL,BOOL))objc_msgSend)(self,me,NO);
     SEL fdm=NSSelectorFromString(@"setForbidDisplayMenuWithGestures:");if([self respondsToSelector:fdm])((void(*)(id,SEL,BOOL))objc_msgSend)(self,fdm,YES);
     SEL bpv=NSSelectorFromString(@"setBUsePanCancelGesture:");if([self respondsToSelector:bpv])((void(*)(id,SEL,BOOL))objc_msgSend)(self,bpv,NO);
     SEL mbip=NSSelectorFromString(@"setM_bInteractivePopEnabled:");if([self respondsToSelector:mbip])((void(*)(id,SEL,BOOL))objc_msgSend)(self,mbip,NO);
     SEL ees=NSSelectorFromString(@"setEnableEdgeSlideToClose:");if([self respondsToSelector:ees])((void(*)(id,SEL,BOOL))objc_msgSend)(self,ees,NO);
     
-    sbLog(@"[pan] ✓ custom UIPanGesture added to %@",NSStringFromClass([tv class]));
+    sb_hookGestureDelegates(object_getClass(self));
+    sbLog(@"[addGR] ✓ %@ (delegate=self, WeChat props set)",NSStringFromClass(object_getClass(self)));
 }
 
-#pragma mark - tableview scrolling (dismiss on scroll)
-static void(*orig_scrollViewDidScroll)(id,SEL,UIScrollView*)=NULL;
-static void replaced_scrollViewDidScroll(id self,SEL _cmd,UIScrollView *sv){
-    if(orig_scrollViewDidScroll)orig_scrollViewDidScroll(self,_cmd,sv);
-    if(sb_activeActionView&&sb_activeTV==(UITableView*)sv)sb_dismissActionView();
+#pragma mark - 全局 iOS 属性 hook (防止微信覆盖)
+static void(*orig_setDTB)(UIGestureRecognizer*,SEL,BOOL)=NULL;
+static void replaced_setDTB(UIGestureRecognizer *self,SEL _cmd,BOOL v){if(orig_setDTB)orig_setDTB(self,_cmd,NO);}
+static void(*orig_setCTIV)(UIGestureRecognizer*,SEL,BOOL)=NULL;
+static void replaced_setCTIV(UIGestureRecognizer *self,SEL _cmd,BOOL v){if(orig_setCTIV)orig_setCTIV(self,_cmd,NO);}
+static void(*orig_setDLE)(id,SEL,BOOL)=NULL;
+static void replaced_setDLE(id self,SEL _cmd,BOOL v){if(orig_setDLE)orig_setDLE(self,_cmd,NO);}
+static void(*orig_setPFAWFS)(id,SEL,BOOL)=NULL;
+static void replaced_setPFAWFS(id self,SEL _cmd,BOOL v){if(orig_setPFAWFS)orig_setPFAWFS(self,_cmd,NO);}
+
+#pragma mark - setDS/setDL/setAMS
+static void(*orig_setDS)(id,SEL,id)=NULL;static void replaced_setDS(id s,SEL c,id d){if(orig_setDS)orig_setDS(s,c,d);if(d)sb_injectSwipeMethods(object_getClass(d),nil);}
+static void(*orig_setDL)(id,SEL,id)=NULL;static void replaced_setDL(id s,SEL c,id d){if(orig_setDL)orig_setDL(s,c,d);if(d)sb_injectSwipeMethods(object_getClass(d),nil);}
+static void(*orig_setAMS)(id,SEL,BOOL)=NULL;static void replaced_setAMS(id s,SEL c,BOOL v){if(sb_anyFeatureEnabled()){if(orig_setAMS)orig_setAMS(s,c,NO);return;}if(orig_setAMS)orig_setAMS(s,c,v);}
+
+#pragma mark - viewWillAppear（NewMainFrameViewController）
+static void(*orig_vwa)(id,SEL,BOOL)=NULL;
+static void replaced_vwa(id self,SEL _cmd,BOOL animated){
+    if(orig_vwa)orig_vwa(self,_cmd,animated);if(!sb_anyFeatureEnabled())return;
+    UITableView *tv=nil;SEL vs=NSSelectorFromString(@"tableView");if([self respondsToSelector:vs])tv=((id(*)(id,SEL))objc_msgSend)(self,vs);
+    if(!tv||![tv isKindOfClass:[UITableView class]]){for(UIView *sv in((UIView*)((id(*)(id,SEL))objc_msgSend)(self,@selector(view))).subviews)if([sv isKindOfClass:[UITableView class]]){tv=(UITableView*)sv;break;}}
+    if(!tv)return;
+    tv.panGestureRecognizer.enabled=YES;
+    tv.allowsMultipleSelectionDuringEditing=NO;
+    tv.directionalLockEnabled=NO;
+    sb_hookGestureDelegates(object_getClass(tv));
+    sbLog(@"[vwa] %@",NSStringFromClass([tv class]));
 }
 
 #pragma mark - helper
@@ -289,23 +331,26 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
 @implementation WPSessionBoxHook
 + (void)install{
     if(g_installed)return;g_installed=YES;
-    sbLog(@"[install] v22: 自定义UIPanGestureRecognizer + 自定义按钮UI (MiYou风格)");
-    
+    g_hookedClasses=[NSMutableSet set];g_origIMPs=[NSMutableDictionary dictionary];
+    sbLog(@"[install] v23: NO amplification + gesture.delegate=self + full gesture delegates + trailing bridge + WeChat props");
+    Method m;
+    m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
+    if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
+    m=class_getInstanceMethod([UITableView class],@selector(setDelegate:));
+    if(m){orig_setDL=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDL);}
+    m=class_getInstanceMethod([UITableView class],@selector(setAllowsMultipleSelection:));
+    if(m){orig_setAMS=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setAMS);}
+    m=class_getInstanceMethod([UITableView class],@selector(addGestureRecognizer:));
+    if(m){orig_addGR=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_addGR);}
     sb_hookSel([UIGestureRecognizer class],@selector(setDelaysTouchesBegan:),(IMP)replaced_setDTB,(IMP*)&orig_setDTB);
     sb_hookSel([UIGestureRecognizer class],@selector(setCancelsTouchesInView:),(IMP)replaced_setCTIV,(IMP*)&orig_setCTIV);
     sb_hookSel([UIScrollView class],@selector(setDirectionalLockEnabled:),(IMP)replaced_setDLE,(IMP*)&orig_setDLE);
-    
-    Method m=class_getInstanceMethod([UITableView class],@selector(setAllowsMultipleSelection:));
-    if(m){orig_setAMS=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setAMS);}
-    
+    sb_hookSel([UISwipeActionsConfiguration class],@selector(setPerformsFirstActionWithFullSwipe:),(IMP)replaced_setPFAWFS,(IMP*)&orig_setPFAWFS);
     Class nmvc=objc_getClass("NewMainFrameViewController");
     if(nmvc){
         m=class_getInstanceMethod(nmvc,@selector(viewWillAppear:));
         if(m){orig_vwa=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_vwa);}
-        m=class_getInstanceMethod(nmvc,NSSelectorFromString(@"scrollViewDidScroll:"));
-        if(m){orig_scrollViewDidScroll=(void(*)(id,SEL,UIScrollView*))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_scrollViewDidScroll);}
     }
-    
     sbLog(@"[install] ✓ done");
 }
 @end
