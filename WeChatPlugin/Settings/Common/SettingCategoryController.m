@@ -71,17 +71,7 @@ static NSString *configPropertyForKey(NSString *key) {
             @"ShowMessageTime": @"showMessageTime",
             @"MessageTimeBoldFont": @"messageTimeBoldFont",
             @"MessageTimeTextColor": @"messageTimeTextColor",
-            @"HideChatTime": @"hideChatTime",
-            @"QuickPinEnabled": @"quickPinEnabled",
-            @"FoldTopSessionEnabled": @"foldTopSessionEnabled",
-            @"BrandTopEnabled": @"brandTopEnabled",
-            @"ChatBoxTopEnabled": @"chatBoxTopEnabled",
-            @"QuickRemarkEnabled": @"quickRemarkEnabled",
-            @"QuickMuteEnabled": @"quickMuteEnabled",
-            @"AddMuteMenuItemEnabled": @"addMuteMenuItemEnabled",
-            @"AddChatBoxEnabled": @"addChatBoxEnabled",
-            @"ManagerChatBoxEnabled": @"managerChatBoxEnabled",
-            @"SessionGestureEnabled": @"sessionGestureEnabled"
+            @"HideChatTime": @"hideChatTime"
         };
     });
     return mapping[key];
@@ -501,8 +491,7 @@ static NSString *configPropertyForKey(NSString *key) {
         else if ([key isEqualToString:@"MessageTimeOffsetY"]) config.messageTimeOffsetY = [value floatValue];
         else if ([key isEqualToString:@"MessageTimeTextColor"]) config.messageTimeTextColor = value ?: @"#999999";
         else if ([key isEqualToString:@"MessageTimeBubbleExtWidth"]) config.messageTimeBubbleExtWidth = [value floatValue];
-        else if ([key isEqualToString:@"MuteAutoReplyMsg"]) config.muteAutoReplyMsg = value ?: @"";
-        else if ([key isEqualToString:@"MuteWorkingTime"]) config.muteWorkingTime = value ?: @"";
+        
     } @catch (NSException *e) {
         return;
     }

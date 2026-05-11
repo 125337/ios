@@ -167,31 +167,6 @@ static void configLog(NSString *content) {
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
     if (v.length > 0) _addTimeSuffixFormat = v;
     else _addTimeSuffixFormat = @"(yyyy-MM-dd)";
-
-    _quickPinEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"QuickPinEnabled"]];
-    _foldTopSessionEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"FoldTopSessionEnabled"]];
-    _brandTopEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"BrandTopEnabled"]];
-    _chatBoxTopEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ChatBoxTopEnabled"]];
-    _addChatBoxEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AddChatBoxEnabled"]];
-    _managerChatBoxEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ManagerChatBoxEnabled"]];
-    _sessionGestureEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"SessionGestureEnabled"]];
-    _quickRemarkEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"QuickRemarkEnabled"]];
-    _quickMuteEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"QuickMuteEnabled"]];
-    _addMuteMenuItemEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AddMuteMenuItemEnabled"]];
-    
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MuteAutoReplyMsg"]];
-    if (v.length > 0) _muteAutoReplyMsg = v;
-    else _muteAutoReplyMsg = @"";
-    
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MuteWorkingTime"]];
-    if (v.length > 0) _muteWorkingTime = v;
-    else _muteWorkingTime = @"";
-    
-    NSArray *muteList = [d arrayForKey:[kPluginPrefix stringByAppendingString:@"MuteContactList"]];
-    if (muteList) {
-        _muteContactList = [muteList mutableCopy];
-    } else {
-        _muteContactList = [NSMutableArray array];
     }
 
     @try {
@@ -275,27 +250,6 @@ static void configLog(NSString *content) {
     [d setBool:_showAddTimeSuffix forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     if (_addTimeSuffixFormat) {
         [d setObject:_addTimeSuffixFormat forKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
-    }
-
-    [d setBool:_quickPinEnabled forKey:[kPluginPrefix stringByAppendingString:@"QuickPinEnabled"]];
-    [d setBool:_foldTopSessionEnabled forKey:[kPluginPrefix stringByAppendingString:@"FoldTopSessionEnabled"]];
-    [d setBool:_brandTopEnabled forKey:[kPluginPrefix stringByAppendingString:@"BrandTopEnabled"]];
-    [d setBool:_chatBoxTopEnabled forKey:[kPluginPrefix stringByAppendingString:@"ChatBoxTopEnabled"]];
-    [d setBool:_addChatBoxEnabled forKey:[kPluginPrefix stringByAppendingString:@"AddChatBoxEnabled"]];
-    [d setBool:_managerChatBoxEnabled forKey:[kPluginPrefix stringByAppendingString:@"ManagerChatBoxEnabled"]];
-    [d setBool:_sessionGestureEnabled forKey:[kPluginPrefix stringByAppendingString:@"SessionGestureEnabled"]];
-    [d setBool:_quickRemarkEnabled forKey:[kPluginPrefix stringByAppendingString:@"QuickRemarkEnabled"]];
-    [d setBool:_quickMuteEnabled forKey:[kPluginPrefix stringByAppendingString:@"QuickMuteEnabled"]];
-    [d setBool:_addMuteMenuItemEnabled forKey:[kPluginPrefix stringByAppendingString:@"AddMuteMenuItemEnabled"]];
-    
-    if (_muteAutoReplyMsg) {
-        [d setObject:_muteAutoReplyMsg forKey:[kPluginPrefix stringByAppendingString:@"MuteAutoReplyMsg"]];
-    }
-    if (_muteWorkingTime) {
-        [d setObject:_muteWorkingTime forKey:[kPluginPrefix stringByAppendingString:@"MuteWorkingTime"]];
-    }
-    if (_muteContactList) {
-        [d setObject:_muteContactList forKey:[kPluginPrefix stringByAppendingString:@"MuteContactList"]];
     }
 
     @try {

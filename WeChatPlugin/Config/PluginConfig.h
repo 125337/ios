@@ -56,28 +56,6 @@
 #pragma mark - 好友添加时间后缀
 @property (nonatomic, assign) BOOL showAddTimeSuffix;
 @property (nonatomic, copy) NSString *addTimeSuffixFormat;
-
-#pragma mark - 快速置顶
-@property (nonatomic, assign) BOOL quickPinEnabled;
-@property (nonatomic, assign) BOOL foldTopSessionEnabled;
-@property (nonatomic, assign) BOOL brandTopEnabled;
-@property (nonatomic, assign) BOOL chatBoxTopEnabled;
-
-#pragma mark - 会话盒子
-@property (nonatomic, assign) BOOL addChatBoxEnabled;
-@property (nonatomic, assign) BOOL managerChatBoxEnabled;
-@property (nonatomic, assign) BOOL sessionGestureEnabled;
-
-#pragma mark - 快速备注
-@property (nonatomic, assign) BOOL quickRemarkEnabled;
-
-#pragma mark - 免打扰
-@property (nonatomic, assign) BOOL quickMuteEnabled;
-@property (nonatomic, assign) BOOL addMuteMenuItemEnabled;
-@property (nonatomic, copy) NSString *muteAutoReplyMsg;
-@property (nonatomic, copy) NSString *muteWorkingTime;
-@property (nonatomic, strong) NSMutableArray *muteContactList;
-
 @property (nonatomic, copy) NSString *notifyFormat;
 @property (nonatomic, copy) NSString *dateFormat;
 @property (nonatomic, copy) NSString *customText;
