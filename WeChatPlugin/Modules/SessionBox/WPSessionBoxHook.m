@@ -299,28 +299,23 @@ static void replaced_setTVM(id self, SEL _cmd, id mgr){
     if(m && !g_origIMPs[@"_tvm_oces"]){g_origIMPs[@"_tvm_oces"]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,(IMP)sb_onCommitEditing);sbLog(@"[hookTVM] ✓ onCommitEditingStyle on %@",NSStringFromClass(mgrClass));}
 }
 
-#pragma mark - scrollViewWillEndDragging (阻止 deceleration 关闭 editing 模式)
-static void(*orig_svWED)(id, SEL, UIScrollView*, CGPoint, CGPoint*) = NULL;
-static void sb_svWillEndDragging(id self, SEL _cmd, UIScrollView *sv, CGPoint velocity, CGPoint *targetContentOffset){
-    if(sb_anyFeatureEnabled()){
-        *targetContentOffset = sv.contentOffset; // 阻止惯性滚动
-    }
-    if(orig_svWED) orig_svWED(self, _cmd, sv, velocity, targetContentOffset);
-}
-
-#pragma mark - handlelongGesture
+#pragma mark - handlelongGesture (pass-through, don't interfere)
 static void(*orig_handleLG)(id, SEL, id) = NULL;
 static void replaced_handleLG(id self, SEL _cmd, id gesture){
-    if(!sb_anyFeatureEnabled()){if(orig_handleLG) orig_handleLG(self, _cmd, gesture);}
+    if(orig_handleLG) orig_handleLG(self, _cmd, gesture);
 }
 
-#pragma mark - messageWasSwiped
+#pragma mark - messageWasSwiped (pass-through)
 static void(*orig_mws)(id, SEL, id) = NULL;
-static void replaced_mws(id self, SEL _cmd, id info){if(orig_mws) orig_mws(self, _cmd, info);}
+static void replaced_mws(id self, SEL _cmd, id info){
+    if(orig_mws) orig_mws(self, _cmd, info);
+}
 
-#pragma mark - onMultiplex
+#pragma mark - onMultiplex (pass-through, don't interfere)
 static void(*orig_onMultiplex)(id, SEL) = NULL;
-static void replaced_onMultiplex(id self, SEL _cmd){if(!sb_anyFeatureEnabled() && orig_onMultiplex) orig_onMultiplex(self, _cmd);}
+static void replaced_onMultiplex(id self, SEL _cmd){
+    if(orig_onMultiplex) orig_onMultiplex(self, _cmd);
+}
 
 #pragma mark - addGestureRecognizer
 static void (*orig_addGR)(id, SEL, id) = NULL;
@@ -382,7 +377,7 @@ static void replaced_vwa(id self,SEL _cmd,BOOL animated){
     if(g_installed) return;
     g_installed = YES;
     g_hookedClasses=[NSMutableSet set]; g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] === START (v17: all missing MiYou hooks) ===");
+    sbLog(@"[install] === START (v18: remove destructive hooks - preserve native behavior) ===");
     Method m;
     
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
@@ -413,9 +408,6 @@ static void replaced_vwa(id self,SEL _cmd,BOOL animated){
         sb_hookSel(nmvc, NSSelectorFromString(@"setEnableEdgeSlideToClose:"), (IMP)replaced_setEESTC, (IMP*)&orig_setEESTC);
         sb_hookSel(nmvc, NSSelectorFromString(@"setChatBoxTopInList:"), (IMP)replaced_setCBTIL, (IMP*)&orig_setCBTIL);
         sb_hookSel(nmvc, NSSelectorFromString(@"setTableViewManager:"), (IMP)replaced_setTVM, (IMP*)&orig_setTVM);
-        SEL svWED = @selector(scrollViewWillEndDragging:withVelocity:targetContentOffset:);
-        Method sm = class_getInstanceMethod(nmvc, svWED);
-        if(sm){orig_svWED=(void(*)(id,SEL,UIScrollView*,CGPoint,CGPoint*))method_getImplementation(sm);method_setImplementation(sm,(IMP)sb_svWillEndDragging);sbLog(@"[hookSV] ✓ scrollViewWillEndDragging on %@",NSStringFromClass(nmvc));}
         SEL hlgs = NSSelectorFromString(@"handlelongGesture:");
         m = class_getInstanceMethod(nmvc, hlgs);
         if(m){orig_handleLG=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_handleLG);sbLog(@"[hookLG] ✓ handlelongGesture on %@",NSStringFromClass(nmvc));}
