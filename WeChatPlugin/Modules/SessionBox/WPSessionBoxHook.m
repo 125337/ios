@@ -182,14 +182,16 @@ static UISwipeActionsConfiguration *sb_leadingSwipeActions(id s, SEL cmd, UITabl
 #pragma mark - gestureRecognizerShouldBegin: override (核心：解决灵敏度)
 
 static BOOL sb_tv_gestureShouldBegin(id s, SEL cmd, UIGestureRecognizer *g) {
+    NSString *key = [NSStringFromClass(object_getClass(s)) stringByAppendingString:@"_gsb"];
+    NSValue *v = g_origIMPs[key];
+    BOOL origResult = YES;
+    if (v) origResult = ((BOOL(*)(id,SEL,id))[v pointerValue])(s, cmd, g);
+    
     if (sb_anyFeatureEnabled()) {
         const char *cn = class_getName(object_getClass(g));
         if (strcmp(cn, "_UISwipeActionPanGestureRecognizer") == 0) return YES;
     }
-    NSString *key = [NSStringFromClass(object_getClass(s)) stringByAppendingString:@"_gsb"];
-    NSValue *v = g_origIMPs[key];
-    if (v) return ((BOOL(*)(id,SEL,id))[v pointerValue])(s, cmd, g);
-    return YES;
+    return origResult;
 }
 
 #pragma mark - addGestureRecognizer: (拦截_ swipe 手势的添加)
