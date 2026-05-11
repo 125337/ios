@@ -6,6 +6,7 @@
 
 static NSMutableSet *g_hookedClasses = nil;
 static NSMutableDictionary *g_origIMPs = nil;
+static BOOL g_swipeGesturePatched = NO;
 static BOOL g_installed = NO;
 
 static void sbLog(NSString *format, ...) {
@@ -253,6 +254,33 @@ static BOOL sb_gestureShouldBeRequiredToFail(id self,SEL _cmd,UIGestureRecognize
     if(sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return YES;
     return sb_gestureShouldBeRequiredToFail_orig(self,_cmd,gesture,other);
 }
+// shouldRecognizeSimultaneously — swipe+scrollPan 同时识别
+static BOOL sb_gestureShouldRecognizeSimultaneously_orig(id self,SEL _cmd,UIGestureRecognizer *g,UIGestureRecognizer *o){
+    NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_srs"]];
+    if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(self,_cmd,g,o);return NO;
+}
+static BOOL sb_gestureShouldRecognizeSimultaneously(id self,SEL _cmd,UIGestureRecognizer *gesture,UIGestureRecognizer *other){
+    if(sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return YES;
+    return sb_gestureShouldRecognizeSimultaneously_orig(self,_cmd,gesture,other);
+}
+// shouldReceiveEvent:
+static BOOL sb_gestureShouldReceiveEvent_orig(id self,SEL _cmd,UIGestureRecognizer *g,UIEvent *e){
+    NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_sre"]];
+    if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(self,_cmd,g,e);return YES;
+}
+static BOOL sb_gestureShouldReceiveEvent(id self,SEL _cmd,UIGestureRecognizer *gesture,UIEvent *event){
+    if(!sb_gestureShouldReceiveEvent_orig(self,_cmd,gesture,event)&&sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return YES;
+    return sb_gestureShouldReceiveEvent_orig(self,_cmd,gesture,event);
+}
+// shouldReceivePress:
+static BOOL sb_gestureShouldReceivePress_orig(id self,SEL _cmd,UIGestureRecognizer *g,UIPress *p){
+    NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_srp"]];
+    if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(self,_cmd,g,p);return YES;
+}
+static BOOL sb_gestureShouldReceivePress(id self,SEL _cmd,UIGestureRecognizer *gesture,UIPress *press){
+    if(!sb_gestureShouldReceivePress_orig(self,_cmd,gesture,press)&&sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return YES;
+    return sb_gestureShouldReceivePress_orig(self,_cmd,gesture,press);
+}
 static void sb_hookOneGestureDelegate(Class cls,SEL sel,IMP newImp,NSString *key){
     NSString *cn=NSStringFromClass(cls),*k=[cn stringByAppendingString:key];if(g_origIMPs[k])return;
     Method m=class_getInstanceMethod(cls,sel);if(!m)return;
@@ -263,22 +291,42 @@ static void sb_hookGestureDelegates(Class tvClass){
     sb_hookOneGestureDelegate(tvClass,@selector(gestureRecognizer:shouldReceiveTouch:),(IMP)sb_gestureShouldReceiveTouch,@"_srt");
     sb_hookOneGestureDelegate(tvClass,@selector(gestureRecognizer:shouldRequireFailureOfGestureRecognizer:),(IMP)sb_gestureShouldRequireFailure,@"_srf");
     sb_hookOneGestureDelegate(tvClass,@selector(gestureRecognizer:shouldBeRequiredToFailByGestureRecognizer:),(IMP)sb_gestureShouldBeRequiredToFail,@"_sbrf");
-    sbLog(@"[gestureDelegate] all ✓ %@",NSStringFromClass(tvClass));
+    sb_hookOneGestureDelegate(tvClass,@selector(gestureRecognizer:shouldRecognizeSimultaneouslyWithGestureRecognizer:),(IMP)sb_gestureShouldRecognizeSimultaneously,@"_srs");
+    sb_hookOneGestureDelegate(tvClass,@selector(gestureRecognizer:shouldReceiveEvent:),(IMP)sb_gestureShouldReceiveEvent,@"_sre");
+    sb_hookOneGestureDelegate(tvClass,@selector(gestureRecognizer:shouldReceivePress:),(IMP)sb_gestureShouldReceivePress,@"_srp");
+    sbLog(@"[gestureDelegate] all(7) ✓ %@",NSStringFromClass(tvClass));
 }
 
-#pragma mark - addGestureRecognizer + 确保gesture delegate是tableView + WeChat 属性设置
+#pragma mark - translationInView / velocityInView 8x 放大（MiYou 核心）
+static IMP g_origTranslationInView=NULL;
+static IMP g_origVelocityInView=NULL;
+static CGPoint sb_amplifiedTranslationInView(id self,SEL _cmd,UIView *view){
+    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origTranslationInView)(self,_cmd,view);pt.x*=8.0;return pt;
+}
+static CGPoint sb_amplifiedVelocityInView(id self,SEL _cmd,UIView *view){
+    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origVelocityInView)(self,_cmd,view);pt.x*=8.0;return pt;
+}
+static void sb_patchSwipeGestureClass(Class gc){
+    if(g_swipeGesturePatched)return;g_swipeGesturePatched=YES;
+    SEL tiv=@selector(translationInView:);Method m=class_getInstanceMethod(gc,tiv);
+    if(m){g_origTranslationInView=method_getImplementation(m);const char *t=method_getTypeEncoding(m);
+        if(!class_addMethod(gc,tiv,(IMP)sb_amplifiedTranslationInView,t))method_setImplementation(m,(IMP)sb_amplifiedTranslationInView);}
+    SEL viv=@selector(velocityInView:);m=class_getInstanceMethod(gc,viv);
+    if(m){g_origVelocityInView=method_getImplementation(m);const char *t=method_getTypeEncoding(m);
+        if(!class_addMethod(gc,viv,(IMP)sb_amplifiedVelocityInView,t))method_setImplementation(m,(IMP)sb_amplifiedVelocityInView);}
+    sbLog(@"[gestureClassPatch] ✓ _UISwipeActionPan 8x");
+}
+
+#pragma mark - addGestureRecognizer + gesture delegate 确保 + WeChat 属性设置
 static void(*orig_addGR)(id,SEL,id)=NULL;
 static void replaced_addGR(id self,SEL _cmd,id gesture){
     if(orig_addGR)orig_addGR(self,_cmd,gesture);
     if(!sb_isSwipeActionGesture((UIGestureRecognizer*)gesture)||!sb_anyFeatureEnabled())return;
-    
+    Class gc=object_getClass(gesture);sb_patchSwipeGestureClass(gc);
     UIGestureRecognizer *g=(UIGestureRecognizer*)gesture;
     g.delaysTouchesBegan=NO;
     g.cancelsTouchesInView=NO;
-    if(g.delegate!=(id)self){
-        g.delegate=(id<UIGestureRecognizerDelegate>)self;
-        sbLog(@"[addGR] set gesture.delegate = %@ (was %@)",NSStringFromClass(object_getClass(self)),NSStringFromClass(object_getClass((id)g.delegate)));
-    }
+    if(g.delegate!=(id)self)g.delegate=(id<UIGestureRecognizerDelegate>)self;
     
     SEL ssg=NSSelectorFromString(@"settingSessionGesture:");if([self respondsToSelector:ssg])((void(*)(id,SEL))objc_msgSend)(self,ssg);
     SEL misg=NSSelectorFromString(@"setMIsSessionGesture:");if([self respondsToSelector:misg])((void(*)(id,SEL,BOOL))objc_msgSend)(self,misg,YES);
@@ -288,6 +336,14 @@ static void replaced_addGR(id self,SEL _cmd,id gesture){
     SEL bpv=NSSelectorFromString(@"setBUsePanCancelGesture:");if([self respondsToSelector:bpv])((void(*)(id,SEL,BOOL))objc_msgSend)(self,bpv,NO);
     SEL mbip=NSSelectorFromString(@"setM_bInteractivePopEnabled:");if([self respondsToSelector:mbip])((void(*)(id,SEL,BOOL))objc_msgSend)(self,mbip,NO);
     SEL ees=NSSelectorFromString(@"setEnableEdgeSlideToClose:");if([self respondsToSelector:ees])((void(*)(id,SEL,BOOL))objc_msgSend)(self,ees,NO);
+    // MiYou 额外手势属性
+    SEL mgse=NSSelectorFromString(@"settingMsgGestureEnable:");if([self respondsToSelector:mgse])((void(*)(id,SEL))objc_msgSend)(self,mgse);
+    SEL mgsre=NSSelectorFromString(@"settingMsgGestureRightEnable:");if([self respondsToSelector:mgsre])((void(*)(id,SEL))objc_msgSend)(self,mgsre);
+    SEL msge=NSSelectorFromString(@"setMIsMsgGestureEnbale:");if([self respondsToSelector:msge])((void(*)(id,SEL,BOOL))objc_msgSend)(self,msge,YES);
+    SEL msgre=NSSelectorFromString(@"setMIsMsgGestureRightEnbale:");if([self respondsToSelector:msgre])((void(*)(id,SEL,BOOL))objc_msgSend)(self,msgre,YES);
+    SEL bge=NSSelectorFromString(@"settingBackEdgeGesture:");if([self respondsToSelector:bge])((void(*)(id,SEL))objc_msgSend)(self,bge);
+    SEL mibge=NSSelectorFromString(@"setMIsBackEdgeGesture:");if([self respondsToSelector:mibge])((void(*)(id,SEL,BOOL))objc_msgSend)(self,mibge,NO);
+    SEL iag=NSSelectorFromString(@"setIsAddGesture:");if([self respondsToSelector:iag])((void(*)(id,SEL,BOOL))objc_msgSend)(self,iag,NO);
     
     sb_hookGestureDelegates(object_getClass(self));
     sbLog(@"[addGR] ✓ %@ (delegate=self, WeChat props set)",NSStringFromClass(object_getClass(self)));
@@ -332,7 +388,7 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
 + (void)install{
     if(g_installed)return;g_installed=YES;
     g_hookedClasses=[NSMutableSet set];g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] v23: NO amplification + gesture.delegate=self + full gesture delegates + trailing bridge + WeChat props");
+    sbLog(@"[install] v24: 8x amplification + 7 gesture delegates + 7 WeChat props + trailing bridge");
     Method m;
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
     if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
