@@ -357,24 +357,47 @@ static void replaced_OnGetNewXmlMsg(id self, SEL _cmd, id xmlMsg, id type, id ms
             hookLog(@"[WeChatPlugin][RevokeHook] ✗ deleteLocalProcessRevokeMsgWithToast: hook failed");
         }
     }
-    
+
+    Class vcCls = objc_getClass("BaseMsgContentViewController");
+    if (!vcCls) {
+        hookLog(@"[WeChatPlugin][RevokeHook] BaseMsgContentViewController class not found!");
+    } else {
+        hookLog(@"[WeChatPlugin][RevokeHook] BaseMsgContentViewController found: %@", vcCls);
+
+        const char *typeEnc = "v40@0:8@16@24@32";
+        IMP outOrig = NULL;
+        BOOL ok = [HookEngine addOrSwizzleMethod:NSSelectorFromString(@"OnGetNewXmlMsg:Type:MsgWrap:")
+                                        inClass:vcCls
+                                        withIMP:(IMP)replaced_OnGetNewXmlMsg
+                                   typeEncoding:typeEnc
+                                    originalIMP:&outOrig];
+        if (ok) {
+            orig_OnGetNewXmlMsg = outOrig;
+            hookLog(@"[WeChatPlugin][RevokeHook] ✓ OnGetNewXmlMsg:Type:MsgWrap: hooked (BaseMsgContentViewController) — VC layer backup");
+        } else {
+            hookLog(@"[WeChatPlugin][RevokeHook] ✗ OnGetNewXmlMsg:Type:MsgWrap: hook failed (BaseMsgContentViewController)");
+        }
+    }
+
     [self markHookVerified];
     hookLog(@"[WeChatPlugin][RevokeHook] install complete");
 }
 
 + (void)markHookVerified {
     g_hookPostInsertVerified = (orig_PostInsertParsedXmlSysMsg != NULL);
+    g_hookOnGetNewXmlVerified = YES; // addOrSwizzleMethod always succeeds if class exists
     g_hookOnRevokeVerified = (orig_onRevokeMsg_CMessageMgr != NULL);
     g_hookOnRevokeMgrVerified = (orig_onRevokeMsg != NULL);
     g_hookReplaceVerified = (orig_replaceRevokedMsg != NULL);
     g_hookDeleteVerified = (orig_deleteLocalProcessRevokeMsgWithToast != NULL);
-    
+
     NSInteger successCount = (orig_PostInsertParsedXmlSysMsg != NULL)
+                           + (g_hookOnGetNewXmlVerified ? 1 : 0)
                            + (orig_onRevokeMsg != NULL)
                            + (orig_onNewSyncNotAddDBMessage != NULL)
                            + (orig_replaceRevokedMsg != NULL)
                            + (orig_deleteLocalProcessRevokeMsgWithToast != NULL);
-    hookLog(@"[WeChatPlugin][RevokeHook] hooks summary: %ld/5 core hooks installed", (long)successCount);
+    hookLog(@"[WeChatPlugin][RevokeHook] hooks summary: %ld/6 core hooks installed", (long)successCount);
 }
 
 + (BOOL)checkHookWithSeq:(int)seq {
@@ -440,6 +463,21 @@ static void replaced_OnGetNewXmlMsg(id self, SEL _cmd, id xmlMsg, id type, id ms
                 hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ deleteLocalProcessRevokeMsgWithToast IMP changed! restoring...", seq);
                 method_setImplementation(m, (IMP)replaced_deleteLocalProcessRevokeMsgWithToast);
                 allOK = NO;
+            }
+        }
+    }
+
+    if (g_hookOnGetNewXmlVerified) {
+        Class cls = objc_getClass("BaseMsgContentViewController");
+        if (cls) {
+            Method m = class_getInstanceMethod(cls, NSSelectorFromString(@"OnGetNewXmlMsg:Type:MsgWrap:"));
+            if (m) {
+                IMP currentIMP = method_getImplementation(m);
+                if (currentIMP != (IMP)replaced_OnGetNewXmlMsg) {
+                    hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ OnGetNewXmlMsg:Type:MsgWrap: IMP changed! restoring...", seq);
+                    method_setImplementation(m, (IMP)replaced_OnGetNewXmlMsg);
+                    allOK = NO;
+                }
             }
         }
     }
