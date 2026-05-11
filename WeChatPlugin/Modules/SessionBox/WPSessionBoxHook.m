@@ -305,6 +305,7 @@ static void replaced_addGR(id self,SEL _cmd,id gesture){
     UIGestureRecognizer *g=(UIGestureRecognizer*)gesture;
     g.delaysTouchesBegan=NO;
     g.cancelsTouchesInView=NO;
+    ((UITableView*)self).directionalLockEnabled=NO;
     if(g.delegate!=(id)self)g.delegate=(id<UIGestureRecognizerDelegate>)self;
     
     SEL ssg=NSSelectorFromString(@"settingSessionGesture:");if([self respondsToSelector:ssg])((void(*)(id,SEL))objc_msgSend)(self,ssg);
@@ -336,20 +337,6 @@ static void(*orig_setDS)(id,SEL,id)=NULL;static void replaced_setDS(id s,SEL c,i
 static void(*orig_setDL)(id,SEL,id)=NULL;static void replaced_setDL(id s,SEL c,id d){if(orig_setDL)orig_setDL(s,c,d);if(d&&sb_isMainFrameTable(s))sb_injectSwipeMethods(object_getClass(d),nil);}
 static void(*orig_setAMS)(id,SEL,BOOL)=NULL;static void replaced_setAMS(id s,SEL c,BOOL v){if(sb_anyFeatureEnabled()&&sb_isMainFrameTable(s)){if(orig_setAMS)orig_setAMS(s,c,NO);return;}if(orig_setAMS)orig_setAMS(s,c,v);}
 
-#pragma mark - viewWillAppear（NewMainFrameViewController）
-static void(*orig_vwa)(id,SEL,BOOL)=NULL;
-static void replaced_vwa(id self,SEL _cmd,BOOL animated){
-    if(orig_vwa)orig_vwa(self,_cmd,animated);if(!sb_anyFeatureEnabled())return;
-    UITableView *tv=nil;SEL vs=NSSelectorFromString(@"tableView");if([self respondsToSelector:vs])tv=((id(*)(id,SEL))objc_msgSend)(self,vs);
-    if(!tv||![tv isKindOfClass:[UITableView class]]){for(UIView *sv in((UIView*)((id(*)(id,SEL))objc_msgSend)(self,@selector(view))).subviews)if([sv isKindOfClass:[UITableView class]]){tv=(UITableView*)sv;break;}}
-    if(!tv)return;
-    tv.panGestureRecognizer.enabled=YES;
-    tv.allowsMultipleSelectionDuringEditing=NO;
-    tv.directionalLockEnabled=NO;
-    sb_hookGestureDelegates(object_getClass(tv));
-    sbLog(@"[vwa] %@",NSStringFromClass([tv class]));
-}
-
 #pragma mark - helper
 static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
     Method m=class_getInstanceMethod(cls,sel);if(!m)return;*origImp=method_getImplementation(m);method_setImplementation(m,newImp);
@@ -360,7 +347,7 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
 + (void)install{
     if(g_installed)return;g_installed=YES;
     g_hookedClasses=[NSMutableSet set];g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] v29: setDS/setDL/setAMS ALSO guarded by MainFrameTableView");
+    sbLog(@"[install] v30: removed viewWillAppear hook (caused nav crash), dirLock in addGR");
     Method m;
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
     if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
@@ -370,11 +357,6 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
     if(m){orig_setAMS=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setAMS);}
     m=class_getInstanceMethod([UITableView class],@selector(addGestureRecognizer:));
     if(m){orig_addGR=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_addGR);}
-    Class nmvc=objc_getClass("NewMainFrameViewController");
-    if(nmvc){
-        m=class_getInstanceMethod(nmvc,@selector(viewWillAppear:));
-        if(m){orig_vwa=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_vwa);}
-    }
     sbLog(@"[install] ✓ done");
 }
 @end
