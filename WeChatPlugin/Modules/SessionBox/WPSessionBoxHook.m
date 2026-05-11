@@ -146,15 +146,105 @@ static BOOL sb_gestureShouldBegin(id self, SEL _cmd, UIGestureRecognizer *gestur
     return result;
 }
 
-static void sb_hookGestureShouldBegin(Class tvClass){
+#pragma mark - UIGestureRecognizerDelegate methods (MiYou 完整覆盖)
+static BOOL sb_orig_shouldRecognizeSimultaneously(id self, SEL _cmd, UIGestureRecognizer *g1, UIGestureRecognizer *g2){
+    NSString *cn = NSStringFromClass(object_getClass(self));
+    NSValue *v = g_origIMPs[[cn stringByAppendingString:@"_srs"]];
+    if(v) return ((BOOL(*)(id,SEL,id,id))[v pointerValue])(self, _cmd, g1, g2);
+    return NO;
+}
+static BOOL sb_shouldRecognizeSimultaneously(id self, SEL _cmd, UIGestureRecognizer *g1, UIGestureRecognizer *g2){
+    if(sb_anyFeatureEnabled()){
+        if(sb_isSwipeActionGesture(g1) || sb_isSwipeActionGesture(g2)){
+            return YES;
+        }
+    }
+    return sb_orig_shouldRecognizeSimultaneously(self, _cmd, g1, g2);
+}
+
+static BOOL sb_orig_shouldRequireFailure(id self, SEL _cmd, UIGestureRecognizer *g){
+    NSString *cn = NSStringFromClass(object_getClass(self));
+    NSValue *v = g_origIMPs[[cn stringByAppendingString:@"_srf"]];
+    if(v) return ((BOOL(*)(id,SEL,id))[v pointerValue])(self, _cmd, g);
+    return NO;
+}
+static BOOL sb_shouldRequireFailure(id self, SEL _cmd, UIGestureRecognizer *g){
+    if(sb_anyFeatureEnabled() && sb_isSwipeActionGesture(g)){
+        return NO;
+    }
+    return sb_orig_shouldRequireFailure(self, _cmd, g);
+}
+
+static BOOL sb_orig_shouldBeRequiredToFail(id self, SEL _cmd, UIGestureRecognizer *g){
+    NSString *cn = NSStringFromClass(object_getClass(self));
+    NSValue *v = g_origIMPs[[cn stringByAppendingString:@"_sbrf"]];
+    if(v) return ((BOOL(*)(id,SEL,id))[v pointerValue])(self, _cmd, g);
+    return NO;
+}
+static BOOL sb_shouldBeRequiredToFail(id self, SEL _cmd, UIGestureRecognizer *g){
+    if(sb_anyFeatureEnabled() && sb_isSwipeActionGesture(g)){
+        return NO;
+    }
+    return sb_orig_shouldBeRequiredToFail(self, _cmd, g);
+}
+
+static BOOL sb_orig_shouldReceiveTouch(id self, SEL _cmd, UITouch *touch){
+    NSString *cn = NSStringFromClass(object_getClass(self));
+    NSValue *v = g_origIMPs[[cn stringByAppendingString:@"_srt"]];
+    if(v) return ((BOOL(*)(id,SEL,id))[v pointerValue])(self, _cmd, touch);
+    return YES;
+}
+static BOOL sb_shouldReceiveTouch(id self, SEL _cmd, UITouch *touch){
+    return sb_orig_shouldReceiveTouch(self, _cmd, touch);
+}
+
+static void sb_hookGestureDelegateMethods(Class tvClass){
     NSString *cn = NSStringFromClass(tvClass);
+    
     NSString *k = [cn stringByAppendingString:@"_gsb"];
-    if(g_origIMPs[k]) return;
-    Method m = class_getInstanceMethod(tvClass, @selector(gestureRecognizerShouldBegin:));
-    if(!m) return;
-    g_origIMPs[k] = [NSValue valueWithPointer:method_getImplementation(m)];
-    method_setImplementation(m, (IMP)sb_gestureShouldBegin);
-    sbLog(@"[hookGSB] ✓ gestureRecognizerShouldBegin: on %@", cn);
+    if(!g_origIMPs[k]){
+        Method m = class_getInstanceMethod(tvClass, @selector(gestureRecognizerShouldBegin:));
+        if(m){g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,(IMP)sb_gestureShouldBegin);
+            sbLog(@"[hookDelegate] ✓ gestureRecognizerShouldBegin: on %@", cn);}
+    }
+    
+    k = [cn stringByAppendingString:@"_srs"];
+    if(!g_origIMPs[k]){
+        SEL sel = @selector(gestureRecognizer:shouldRecognizeSimultaneouslyWithGestureRecognizer:);
+        Method m = class_getInstanceMethod(tvClass, sel);
+        if(m){g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,(IMP)sb_shouldRecognizeSimultaneously);
+            sbLog(@"[hookDelegate] ✓ shouldRecognizeSimultaneously on %@", cn);}
+        else{class_addMethod(tvClass, sel, (IMP)sb_shouldRecognizeSimultaneously, "B32@0:8@16@24");
+            sbLog(@"[hookDelegate] ✓ shouldRecognizeSimultaneously added on %@", cn);}
+    }
+    
+    k = [cn stringByAppendingString:@"_srf"];
+    if(!g_origIMPs[k]){
+        SEL sel = @selector(gestureRecognizer:shouldRequireFailureOfGestureRecognizer:);
+        Method m = class_getInstanceMethod(tvClass, sel);
+        if(m){g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,(IMP)sb_shouldRequireFailure);
+            sbLog(@"[hookDelegate] ✓ shouldRequireFailure on %@", cn);}
+        else{class_addMethod(tvClass, sel, (IMP)sb_shouldRequireFailure, "B32@0:8@16@24");
+            sbLog(@"[hookDelegate] ✓ shouldRequireFailure added on %@", cn);}
+    }
+    
+    k = [cn stringByAppendingString:@"_sbrf"];
+    if(!g_origIMPs[k]){
+        SEL sel = @selector(gestureRecognizer:shouldBeRequiredToFailByGestureRecognizer:);
+        Method m = class_getInstanceMethod(tvClass, sel);
+        if(m){g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,(IMP)sb_shouldBeRequiredToFail);
+            sbLog(@"[hookDelegate] ✓ shouldBeRequiredToFail on %@", cn);}
+        else{class_addMethod(tvClass, sel, (IMP)sb_shouldBeRequiredToFail, "B32@0:8@16@24");
+            sbLog(@"[hookDelegate] ✓ shouldBeRequiredToFail added on %@", cn);}
+    }
+    
+    k = [cn stringByAppendingString:@"_srt"];
+    if(!g_origIMPs[k]){
+        SEL sel = @selector(gestureRecognizer:shouldReceiveTouch:);
+        Method m = class_getInstanceMethod(tvClass, sel);
+        if(m){g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,(IMP)sb_shouldReceiveTouch);
+            sbLog(@"[hookDelegate] ✓ shouldReceiveTouch on %@", cn);}
+    }
 }
 
 #pragma mark - translationInView / velocityInView 放大
@@ -262,7 +352,7 @@ static void replaced_addGR(id self, SEL _cmd, id gesture){
     if([self respondsToSelector:ssg]) ((void(*)(id,SEL))objc_msgSend)(self, ssg);
     SEL smisg = NSSelectorFromString(@"setMIsSessionGesture:");
     if([self respondsToSelector:smisg]) ((void(*)(id,SEL,BOOL))objc_msgSend)(self, smisg, YES);
-    sb_hookGestureShouldBegin(object_getClass(self));
+    sb_hookGestureDelegateMethods(object_getClass(self));
     sbLog(@"[addGR] swipe gesture on %@ patched", NSStringFromClass(object_getClass(self)));
 }
 
@@ -308,7 +398,7 @@ static void sb_hookSel(Class cls, SEL sel, IMP newImp, IMP *origImp){
     if(g_installed) return;
     g_installed = YES;
     g_hookedClasses=[NSMutableSet set]; g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] === START (v15: translationInView 8x amplification) ===");
+    sbLog(@"[install] === START (v16: complete MiYou delegate coverage) ===");
     Method m;
     
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
