@@ -186,7 +186,8 @@ static BOOL sb_tv_gestureShouldBegin(id s, SEL cmd, UIGestureRecognizer *g) {
         const char *cn = class_getName(object_getClass(g));
         if (strcmp(cn, "_UISwipeActionPanGestureRecognizer") == 0) return YES;
     }
-    NSValue *v = g_origIMPs[@"_tv_gestureShouldBegin"];
+    NSString *key = [NSStringFromClass(object_getClass(s)) stringByAppendingString:@"_gsb"];
+    NSValue *v = g_origIMPs[key];
     if (v) return ((BOOL(*)(id,SEL,id))[v pointerValue])(s, cmd, g);
     return YES;
 }
@@ -210,7 +211,7 @@ static void replaced_addGR(id self, SEL _cmd, id gesture) {
     Method m = class_getInstanceMethod(tvCls, gsb);
     if (m) {
         IMP o = method_getImplementation(m);
-        g_origIMPs[@"_tv_gestureShouldBegin"] = [NSValue valueWithPointer:o];
+        g_origIMPs[[tvName stringByAppendingString:@"_gsb"]] = [NSValue valueWithPointer:o];
         method_setImplementation(m, (IMP)sb_tv_gestureShouldBegin);
         [g_gestureHooked addObject:tvName];
         sbLog(@"[addGR] ✓ hooked gestureRecognizerShouldBegin: on %@", tvName);
