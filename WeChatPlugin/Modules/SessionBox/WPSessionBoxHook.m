@@ -296,6 +296,18 @@ static void sb_hookGestureDelegates(Class tvClass){
 }
 
 #pragma mark - addGestureRecognizer + gesture delegate 确保 + WeChat 属性设置
+static void(*orig_gSetDelegate)(id,SEL,id)=NULL;
+static void replaced_gSetDelegate(id self,SEL _cmd,id delegate){
+    if(orig_gSetDelegate)orig_gSetDelegate(self,_cmd,delegate);
+    UIGestureRecognizer *g=(UIGestureRecognizer*)self;
+    if(sb_isSwipeActionGesture(g)&&sb_anyFeatureEnabled()){
+        UIView *v=g.view;
+        if(v&&[NSStringFromClass(object_getClass(v)) containsString:@"MainFrameTableView"]){
+            if(g.delegate!=(id<UIGestureRecognizerDelegate>)v&&orig_gSetDelegate)
+                orig_gSetDelegate(self,_cmd,v);
+        }
+    }
+}
 static void(*orig_addGR)(id,SEL,id)=NULL;
 static void replaced_addGR(id self,SEL _cmd,id gesture){
     if(orig_addGR)orig_addGR(self,_cmd,gesture);
@@ -306,7 +318,7 @@ static void replaced_addGR(id self,SEL _cmd,id gesture){
     g.delaysTouchesBegan=NO;
     g.cancelsTouchesInView=NO;
     ((UITableView*)self).directionalLockEnabled=NO;
-    if(g.delegate!=(id)self)g.delegate=(id<UIGestureRecognizerDelegate>)self;
+    g.delegate=(id<UIGestureRecognizerDelegate>)self;
     
     SEL ssg=NSSelectorFromString(@"settingSessionGesture:");if([self respondsToSelector:ssg])((void(*)(id,SEL))objc_msgSend)(self,ssg);
     SEL misg=NSSelectorFromString(@"setMIsSessionGesture:");if([self respondsToSelector:misg])((void(*)(id,SEL,BOOL))objc_msgSend)(self,misg,YES);
@@ -347,7 +359,7 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
 + (void)install{
     if(g_installed)return;g_installed=YES;
     g_hookedClasses=[NSMutableSet set];g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] v30: removed viewWillAppear hook (caused nav crash), dirLock in addGR");
+    sbLog(@"[install] v31: hook UIGestureRecognizer.setDelegate to protect swipe gesture delegate");
     Method m;
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
     if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
@@ -357,6 +369,8 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
     if(m){orig_setAMS=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setAMS);}
     m=class_getInstanceMethod([UITableView class],@selector(addGestureRecognizer:));
     if(m){orig_addGR=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_addGR);}
+    m=class_getInstanceMethod([UIGestureRecognizer class],@selector(setDelegate:));
+    if(m){orig_gSetDelegate=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_gSetDelegate);}
     sbLog(@"[install] ✓ done");
 }
 @end
