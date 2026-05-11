@@ -54,8 +54,6 @@ jobs:
           WeChatPlugin/Modules/GroupExit/GroupExitHook.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeHook.m \
           WeChatPlugin/Modules/AutoTransfer/AutoTransferHook.m \
-          WeChatPlugin/Modules/SessionBox/WPSessionBoxHook.m \
-          WeChatPlugin/Modules/SessionBox/WPSessionBoxController.m \
           WeChatPlugin/Settings/Common/SettingCategoryController.m \
           WeChatPlugin/Settings/Common/WPBorderLayer.m \
           WeChatPlugin/Settings/Controllers/SettingController.m \
@@ -64,7 +62,6 @@ jobs:
           WeChatPlugin/Settings/Controllers/SettingAssistFunctionController.m \
           WeChatPlugin/Settings/Controllers/SettingUIBeautifyController.m \
           WeChatPlugin/Settings/Controllers/SettingRedEnvelopController.m \
-          WeChatPlugin/Settings/Controllers/SettingSessionActionController.m \
           WeChatPlugin/Settings/Controllers/SettingAboutController.m \
           WeChatPlugin/Settings/Controllers/WeChatTweakGroupSelectsController.m; do
           BASENAME=$(basename "$f" .m)
@@ -90,7 +87,6 @@ jobs:
                 -IWeChatPlugin/Modules/GroupExit \
                 -IWeChatPlugin/Modules/MessageTime \
                 -IWeChatPlugin/Modules/AutoTransfer \
-                -IWeChatPlugin/Modules/SessionBox \
                 -IWeChatPlugin/Settings/Common \
                 -IWeChatPlugin/Settings/Controllers \
                 -o "$OBJ_FILE" \
