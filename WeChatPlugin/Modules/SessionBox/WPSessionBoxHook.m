@@ -220,6 +220,8 @@ static UISwipeActionsConfiguration *sb_trailingSwipeActions(id s,SEL cmd,UITable
 }
 
 #pragma mark - gesture delegate hooks（MiYou 全套）
+
+// gestureRecognizerShouldBegin:
 static BOOL sb_orig_gestureShouldBegin(id self,SEL _cmd,UIGestureRecognizer *g){
     NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_gsb"]];
     if(v)return((BOOL(*)(id,SEL,id))[v pointerValue])(self,_cmd,g);return YES;
@@ -229,35 +231,64 @@ static BOOL sb_gestureShouldBegin(id self,SEL _cmd,UIGestureRecognizer *gesture)
     if(sb_anyFeatureEnabled()&&!result&&sb_isSwipeActionGesture(gesture))return YES;
     return result;
 }
-static void sb_hookGSB(Class tvClass){
-    NSString *cn=NSStringFromClass(tvClass),*k=[cn stringByAppendingString:@"_gsb"];if(g_origIMPs[k])return;
-    Method m=class_getInstanceMethod(tvClass,@selector(gestureRecognizerShouldBegin:));if(!m)return;
-    g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,(IMP)sb_gestureShouldBegin);
-    sbLog(@"[gestureDelegate] gsb %@",cn);
+
+// gestureRecognizer:shouldReceiveTouch:
+static BOOL sb_orig_shouldReceiveTouch(id self,SEL _cmd,UIGestureRecognizer *g,UITouch *t){
+    NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_srt"]];
+    if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(self,_cmd,g,t);return YES;
+}
+static BOOL sb_shouldReceiveTouch(id self,SEL _cmd,UIGestureRecognizer *gesture,UITouch *touch){
+    BOOL r=sb_orig_shouldReceiveTouch(self,_cmd,gesture,touch);
+    if(!r&&sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return YES;
+    return r;
 }
 
-// shouldRecognizeSimultaneously — MiYou 有，但这里返回原值
-static void sb_hookSimultaneous(Class tvClass){
-    NSString *cn=NSStringFromClass(tvClass),*k=[cn stringByAppendingString:@"_srs"];if(g_origIMPs[k])return;
-    Method m=class_getInstanceMethod(tvClass,@selector(gestureRecognizer:shouldRecognizeSimultaneouslyWithGestureRecognizer:));if(!m)return;
-    g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];
-    // 不替换，只记录 IMP — MiYou 的 srs 可能只是保存引用
-    sbLog(@"[gestureDelegate] srs %@ (preserved)",cn);
+// gestureRecognizer:shouldRequireFailureOfGestureRecognizer:
+static BOOL sb_orig_shouldRequireFailure(id self,SEL _cmd,UIGestureRecognizer *g,UIGestureRecognizer *o){
+    NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_srf"]];
+    if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(self,_cmd,g,o);return NO;
+}
+static BOOL sb_shouldRequireFailure(id self,SEL _cmd,UIGestureRecognizer *gesture,UIGestureRecognizer *other){
+    if(sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return NO;
+    return sb_orig_shouldRequireFailure(self,_cmd,gesture,other);
+}
+
+// gestureRecognizer:shouldBeRequiredToFailByGestureRecognizer:
+static BOOL sb_orig_shouldBeRequiredToFail(id self,SEL _cmd,UIGestureRecognizer *g,UIGestureRecognizer *o){
+    NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_sbrf"]];
+    if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(self,_cmd,g,o);return NO;
+}
+static BOOL sb_shouldBeRequiredToFail(id self,SEL _cmd,UIGestureRecognizer *gesture,UIGestureRecognizer *other){
+    if(sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return YES;
+    return sb_orig_shouldBeRequiredToFail(self,_cmd,gesture,other);
+}
+
+static void sb_hookGestureDelegate(Class tvClass,SEL sel,IMP newImp,NSString *key){
+    NSString *cn=NSStringFromClass(tvClass),*k=[cn stringByAppendingString:key];if(g_origIMPs[k])return;
+    Method m=class_getInstanceMethod(tvClass,sel);if(!m)return;
+    g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,newImp);
 }
 
 static void sb_hookGestureDelegates(Class tvClass){
-    sb_hookGSB(tvClass);
-    sb_hookSimultaneous(tvClass);
+    sb_hookGestureDelegate(tvClass,@selector(gestureRecognizerShouldBegin:),(IMP)sb_gestureShouldBegin,@"_gsb");
+    sb_hookGestureDelegate(tvClass,@selector(gestureRecognizer:shouldReceiveTouch:),(IMP)sb_shouldReceiveTouch,@"_srt");
+    sb_hookGestureDelegate(tvClass,@selector(gestureRecognizer:shouldRequireFailureOfGestureRecognizer:),(IMP)sb_shouldRequireFailure,@"_srf");
+    sb_hookGestureDelegate(tvClass,@selector(gestureRecognizer:shouldBeRequiredToFailByGestureRecognizer:),(IMP)sb_shouldBeRequiredToFail,@"_sbrf");
+    sbLog(@"[gestureDelegate] all ✓ %@",NSStringFromClass(tvClass));
 }
 
-#pragma mark - translationInView / velocityInView 8x 放大（MiYou 核心）
+#pragma mark - translationInView / velocityInView / locationInView 16x 放大（MiYou 核心）
 static IMP g_origTranslationInView=NULL;
 static IMP g_origVelocityInView=NULL;
+static IMP g_origLocationInView=NULL;
 static CGPoint sb_amplifiedTranslationInView(id self,SEL _cmd,UIView *view){
-    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origTranslationInView)(self,_cmd,view);pt.x*=8.0;return pt;
+    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origTranslationInView)(self,_cmd,view);pt.x*=16.0;return pt;
 }
 static CGPoint sb_amplifiedVelocityInView(id self,SEL _cmd,UIView *view){
-    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origVelocityInView)(self,_cmd,view);pt.x*=8.0;return pt;
+    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origVelocityInView)(self,_cmd,view);pt.x*=16.0;return pt;
+}
+static CGPoint sb_amplifiedLocationInView(id self,SEL _cmd,UIView *view){
+    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origLocationInView)(self,_cmd,view);pt.x*=16.0;return pt;
 }
 static void sb_patchSwipeGestureClass(Class gc){
     if(g_swipeGesturePatched)return;g_swipeGesturePatched=YES;
@@ -267,12 +298,17 @@ static void sb_patchSwipeGestureClass(Class gc){
     SEL viv=@selector(velocityInView:);m=class_getInstanceMethod(gc,viv);
     if(m){g_origVelocityInView=method_getImplementation(m);const char *t=method_getTypeEncoding(m);
         if(!class_addMethod(gc,viv,(IMP)sb_amplifiedVelocityInView,t))method_setImplementation(m,(IMP)sb_amplifiedVelocityInView);}
-    sbLog(@"[gestureClassPatch] ✓ _UISwipeActionPan 8x");
+    SEL liv=@selector(locationInView:);m=class_getInstanceMethod(gc,liv);
+    if(m){g_origLocationInView=method_getImplementation(m);const char *t=method_getTypeEncoding(m);
+        if(!class_addMethod(gc,liv,(IMP)sb_amplifiedLocationInView,t))method_setImplementation(m,(IMP)sb_amplifiedLocationInView);}
+    sbLog(@"[gestureClassPatch] ✓ _UISwipeActionPan 16x");
 }
 
 #pragma mark - 全局 iOS 属性 hook
 static void(*orig_setDTB)(UIGestureRecognizer*,SEL,BOOL)=NULL;
 static void replaced_setDTB(UIGestureRecognizer *self,SEL _cmd,BOOL v){if(orig_setDTB)orig_setDTB(self,_cmd,NO);}
+static void(*orig_setCTIV)(UIGestureRecognizer*,SEL,BOOL)=NULL;
+static void replaced_setCTIV(UIGestureRecognizer *self,SEL _cmd,BOOL v){if(orig_setCTIV)orig_setCTIV(self,_cmd,NO);}
 static void(*orig_setDLE)(id,SEL,BOOL)=NULL;
 static void replaced_setDLE(id self,SEL _cmd,BOOL v){if(orig_setDLE)orig_setDLE(self,_cmd,NO);}
 static void(*orig_setPFAWFS)(id,SEL,BOOL)=NULL;
@@ -330,7 +366,7 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
 + (void)install{
     if(g_installed)return;g_installed=YES;
     g_hookedClasses=[NSMutableSet set];g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] v20: trailingSwipeActions bridge + MiYou WeChat props");
+    sbLog(@"[install] v21: locationInView+16x + full gesture delegates (srt/srf/sbrf) + cancelsTouches hook");
     Method m;
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
     if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
@@ -341,6 +377,7 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
     m=class_getInstanceMethod([UITableView class],@selector(addGestureRecognizer:));
     if(m){orig_addGR=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_addGR);}
     sb_hookSel([UIGestureRecognizer class],@selector(setDelaysTouchesBegan:),(IMP)replaced_setDTB,(IMP*)&orig_setDTB);
+    sb_hookSel([UIGestureRecognizer class],@selector(setCancelsTouchesInView:),(IMP)replaced_setCTIV,(IMP*)&orig_setCTIV);
     sb_hookSel([UIScrollView class],@selector(setDirectionalLockEnabled:),(IMP)replaced_setDLE,(IMP*)&orig_setDLE);
     sb_hookSel([UISwipeActionsConfiguration class],@selector(setPerformsFirstActionWithFullSwipe:),(IMP)replaced_setPFAWFS,(IMP*)&orig_setPFAWFS);
     Class nmvc=objc_getClass("NewMainFrameViewController");
