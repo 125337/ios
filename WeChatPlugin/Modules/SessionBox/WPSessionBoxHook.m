@@ -416,7 +416,6 @@ static void sb_hookSel(Class cls, SEL sel, IMP newImp, IMP *origImp){
         SEL svWED = @selector(scrollViewWillEndDragging:withVelocity:targetContentOffset:);
         Method sm = class_getInstanceMethod(nmvc, svWED);
         if(sm){orig_svWED=(void(*)(id,SEL,UIScrollView*,CGPoint,CGPoint*))method_getImplementation(sm);method_setImplementation(sm,(IMP)sb_svWillEndDragging);sbLog(@"[hookSV] ✓ scrollViewWillEndDragging on %@",NSStringFromClass(nmvc));}
-        else{class_addMethod(nmvc,svWED,(IMP)sb_svWillEndDragging,"v48@0:8@16{CGPoint=dd}24N^{CGPoint=dd}40");sbLog(@"[hookSV] ✓ scrollViewWillEndDragging added on %@",NSStringFromClass(nmvc));}
         SEL hlgs = NSSelectorFromString(@"handlelongGesture:");
         m = class_getInstanceMethod(nmvc, hlgs);
         if(m){orig_handleLG=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_handleLG);sbLog(@"[hookLG] ✓ handlelongGesture on %@",NSStringFromClass(nmvc));}
