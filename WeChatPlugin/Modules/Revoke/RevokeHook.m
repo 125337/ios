@@ -36,8 +36,10 @@ static IMP orig_onNewSyncNotAddDBMessage = NULL;
 static IMP orig_replaceRevokedMsg = NULL;
 static IMP orig_deleteLocalProcessRevokeMsgWithToast = NULL;
 static IMP orig_PostInsertParsedXmlSysMsg = NULL;
+static IMP orig_OnGetNewXmlMsg = NULL;
 
 static BOOL g_hookPostInsertVerified = NO;
+static BOOL g_hookOnGetNewXmlVerified = NO;
 static BOOL g_hookOnRevokeVerified = NO;
 static BOOL g_hookOnRevokeMgrVerified = NO;
 static BOOL g_hookReplaceVerified = NO;
@@ -253,6 +255,40 @@ static void replaced_PostInsertParsedXmlSysMsg(id self, SEL _cmd, id parsedXml, 
     
     if (orig_PostInsertParsedXmlSysMsg)
         ((void (*)(id, SEL, id, id))orig_PostInsertParsedXmlSysMsg)(self, _cmd, parsedXml, chatName);
+}
+
+static void replaced_OnGetNewXmlMsg(id self, SEL _cmd, id xmlMsg, id type, id msgWrap) {
+    if (![PluginConfig shared].preventRecall) {
+        if (orig_OnGetNewXmlMsg)
+            ((void (*)(id, SEL, id, id, id))orig_OnGetNewXmlMsg)(self, _cmd, xmlMsg, type, msgWrap);
+        return;
+    }
+
+    @try {
+        NSString *xmlStr = [xmlMsg isKindOfClass:[NSString class]] ? xmlMsg : nil;
+        if (xmlStr && [xmlStr rangeOfString:@"<revokemsg>"].location != NSNotFound) {
+            hookLog(@"[WeChatPlugin][Revoke] *** detected revoke at OnGetNewXmlMsg (VC layer) *** blocking original flow");
+
+            NSString *chatName = nil;
+            if (msgWrap) {
+                chatName = extractChatName(msgWrap);
+            }
+            if (!chatName.length && self) {
+                chatName = extractChatName(self);
+            }
+
+            BOOL handled = [[RevokeHandler shared] handleRevokeFromXmlSysMsg:xmlStr chatName:chatName];
+            if (handled) {
+                hookLog(@"[WeChatPlugin][Revoke] revoke BLOCKED at OnGetNewXmlMsg - message preserved!");
+                return;
+            }
+        }
+    } @catch (NSException *e) {
+        hookLog(@"[WeChatPlugin][Revoke] OnGetNewXmlMsg exception: %@", e);
+    }
+
+    if (orig_OnGetNewXmlMsg)
+        ((void (*)(id, SEL, id, id, id))orig_OnGetNewXmlMsg)(self, _cmd, xmlMsg, type, msgWrap);
 }
 
 @implementation RevokeHook

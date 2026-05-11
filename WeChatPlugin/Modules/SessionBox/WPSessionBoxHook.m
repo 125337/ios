@@ -296,14 +296,18 @@ static void sb_hookGestureDelegates(Class tvClass){
     sbLog(@"[gestureDelegate] all(7) ✓ %@",NSStringFromClass(tvClass));
 }
 
-#pragma mark - translationInView / velocityInView 4x 放大（安全倍率，避免内部状态崩溃）
+#pragma mark - translationInView / velocityInView / locationInView 4x 放大（MiYou: 三个必须一起放大，保持坐标一致性防止内部断言崩溃）
 static IMP g_origTranslationInView=NULL;
 static IMP g_origVelocityInView=NULL;
+static IMP g_origLocationInView=NULL;
 static CGPoint sb_amplifiedTranslationInView(id self,SEL _cmd,UIView *view){
     CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origTranslationInView)(self,_cmd,view);pt.x*=4.0;return pt;
 }
 static CGPoint sb_amplifiedVelocityInView(id self,SEL _cmd,UIView *view){
     CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origVelocityInView)(self,_cmd,view);pt.x*=4.0;return pt;
+}
+static CGPoint sb_amplifiedLocationInView(id self,SEL _cmd,UIView *view){
+    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origLocationInView)(self,_cmd,view);pt.x*=4.0;return pt;
 }
 static void sb_patchSwipeGestureClass(Class gc){
     if(g_swipeGesturePatched)return;g_swipeGesturePatched=YES;
@@ -313,7 +317,10 @@ static void sb_patchSwipeGestureClass(Class gc){
     SEL viv=@selector(velocityInView:);m=class_getInstanceMethod(gc,viv);
     if(m){g_origVelocityInView=method_getImplementation(m);const char *t=method_getTypeEncoding(m);
         if(!class_addMethod(gc,viv,(IMP)sb_amplifiedVelocityInView,t))method_setImplementation(m,(IMP)sb_amplifiedVelocityInView);}
-    sbLog(@"[gestureClassPatch] ✓ _UISwipeActionPan 4x");
+    SEL liv=@selector(locationInView:);m=class_getInstanceMethod(gc,liv);
+    if(m){g_origLocationInView=method_getImplementation(m);const char *t=method_getTypeEncoding(m);
+        if(!class_addMethod(gc,liv,(IMP)sb_amplifiedLocationInView,t))method_setImplementation(m,(IMP)sb_amplifiedLocationInView);}
+    sbLog(@"[gestureClassPatch] ✓ _UISwipeActionPan 4x (tiv+viv+liv)");
 }
 
 #pragma mark - addGestureRecognizer + gesture delegate 确保 + WeChat 属性设置
@@ -377,7 +384,7 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
 + (void)install{
     if(g_installed)return;g_installed=YES;
     g_hookedClasses=[NSMutableSet set];g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] v25: 4x amplification (safe) + 7 gesture delegates + WeChat props (no global hooks)");
+    sbLog(@"[install] v26: 4x amplification (tiv+viv+liv一致性) + 7 gesture delegates + WeChat props");
     Method m;
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
     if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
