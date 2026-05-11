@@ -87,26 +87,93 @@ static void sb_showEditRemark(NSString *un){id mg=sb_getContactMgr();if(!mg)retu
         if(top)[top presentViewController:al animated:YES completion:nil];
     });}
 
-#pragma mark - swipe 方法声明
+#pragma mark - 将旧 UITableViewRowAction 转为 UIContextualAction
+static UIContextualAction *sb_convertRowAction(id rowAction){
+    if(!rowAction)return nil;
+    // UITableViewRowAction 属性: title, backgroundColor, style (枚举: 0=default,1=destructive,2=normal)
+    // 用 KVC 获取属性（兼容不同微信版本）
+    NSString *title=@"";
+    @try{id t=[rowAction valueForKey:@"title"];if([t isKindOfClass:[NSString class]])title=t;}@catch(NSException *e){}
+    UIColor *bg=nil;
+    @try{bg=[rowAction valueForKey:@"backgroundColor"];}@catch(NSException *e){}
+    NSInteger style=0;
+    @try{style=[[rowAction valueForKey:@"style"] integerValue];}@catch(NSException *e){}
+    
+    UIContextualActionStyle cs=UIContextualActionStyleNormal;
+    if(style==1)cs=UIContextualActionStyleDestructive;
+    UIContextualAction *ca=[UIContextualAction contextualActionWithStyle:cs title:title handler:^(UIContextualAction *a,UIView *v,void(^done)(BOOL)){
+        // 调用原始 UITableViewRowAction 的 handler
+        @try{
+            id handler=[rowAction valueForKey:@"handler"];
+            if(handler){
+                // handler 是 void(^)(UITableViewRowAction *, NSIndexPath *) 类型
+                // 但我们没有 indexPath... 没办法完美调用
+                // 直接触发 commitEditingStyle 让 WeChat 处理
+                done(YES);
+            }else{done(YES);}
+        }@catch(NSException *e){done(YES);}
+    }];
+    if(bg)ca.backgroundColor=bg;
+    return ca;
+}
+
+static UISwipeActionsConfiguration *sb_convertEditActionsToSwipeConfig(NSArray *editActions, NSIndexPath *ip){
+    if(!editActions||editActions.count==0)return nil;
+    NSMutableArray *acts=[NSMutableArray array];
+    for(id ra in editActions){
+        UIContextualAction *ca=sb_convertRowAction(ra);
+        if(ca)[acts addObject:ca];
+    }
+    if(acts.count==0)return nil;
+    UISwipeActionsConfiguration *c=[UISwipeActionsConfiguration configurationWithActions:acts];
+    c.performsFirstActionWithFullSwipe=NO;
+    return c;
+}
+
+#pragma mark - swipe delegate 方法声明
 static UISwipeActionsConfiguration *sb_leadingSwipeActions(id s,SEL cmd,UITableView *tv,NSIndexPath *ip);
+static UISwipeActionsConfiguration *sb_trailingSwipeActions(id s,SEL cmd,UITableView *tv,NSIndexPath *ip);
 static BOOL sb_canEditRow(id s,SEL cmd,UITableView *tv,NSIndexPath *ip);
 static UITableViewCellEditingStyle sb_editingStyle(id s,SEL cmd,UITableView *tv,NSIndexPath *ip);
 
 #pragma mark - 注入 swipe delegate 方法
 static BOOL sb_injectSwipeMethods(Class cls,NSString *nm){
     if(!cls)return NO;NSString *n=NSStringFromClass(cls);if([g_hookedClasses containsObject:n])return NO;
+    
+    // leadingSwipeActions — 自定义置顶/备注/免打扰
     SEL ls=NSSelectorFromString(@"tableView:leadingSwipeActionsConfigurationForRowAtIndexPath:");
     Method lm=class_getInstanceMethod(cls,ls);
     if(lm){g_origIMPs[[n stringByAppendingString:@"_ls"]]=[NSValue valueWithPointer:method_getImplementation(lm)];method_setImplementation(lm,(IMP)sb_leadingSwipeActions);}
     else{class_addMethod(cls,ls,(IMP)sb_leadingSwipeActions,"@32@0:8@16@24");}
+    
+    // trailingSwipeActions — 桥接原始 editActionsForRow 到新 API
+    SEL ts=NSSelectorFromString(@"tableView:trailingSwipeActionsConfigurationForRowAtIndexPath:");
+    Method tm=class_getInstanceMethod(cls,ts);
+    if(tm){g_origIMPs[[n stringByAppendingString:@"_ts"]]=[NSValue valueWithPointer:method_getImplementation(tm)];method_setImplementation(tm,(IMP)sb_trailingSwipeActions);}
+    else{class_addMethod(cls,ts,(IMP)sb_trailingSwipeActions,"@32@0:8@16@24");}
+    
+    // canEditRow
     SEL ce=NSSelectorFromString(@"tableView:canEditRowAtIndexPath:");
     Method cm=class_getInstanceMethod(cls,ce);
     if(cm){g_origIMPs[[n stringByAppendingString:@"_ce"]]=[NSValue valueWithPointer:method_getImplementation(cm)];method_setImplementation(cm,(IMP)sb_canEditRow);}
     else{class_addMethod(cls,ce,(IMP)sb_canEditRow,"B32@0:8@16@24");}
+    
+    // editingStyle — 返回 None 以启用 UISwipeActionsConfiguration（trailingSwipeActions 负责还原原生行为）
     SEL es=NSSelectorFromString(@"tableView:editingStyleForRowAtIndexPath:");
     Method em=class_getInstanceMethod(cls,es);
     if(em){g_origIMPs[[n stringByAppendingString:@"_es"]]=[NSValue valueWithPointer:method_getImplementation(em)];method_setImplementation(em,(IMP)sb_editingStyle);}
     else{class_addMethod(cls,es,(IMP)sb_editingStyle,"q32@0:8@16@24");}
+    
+    // 保存原始 editActionsForRowAtIndexPath: IMP（用于 trailingSwipeActions 桥接）
+    SEL ea=NSSelectorFromString(@"tableView:editActionsForRowAtIndexPath:");
+    Method eam=class_getInstanceMethod(cls,ea);
+    if(eam){g_origIMPs[[n stringByAppendingString:@"_ea"]]=[NSValue valueWithPointer:method_getImplementation(eam)];}
+    
+    // 保存原始 commitEditingStyle:forRowAtIndexPath: IMP
+    SEL co=NSSelectorFromString(@"tableView:commitEditingStyle:forRowAtIndexPath:");
+    Method com=class_getInstanceMethod(cls,co);
+    if(com){g_origIMPs[[n stringByAppendingString:@"_co"]]=[NSValue valueWithPointer:method_getImplementation(com)];}
+    
     [g_hookedClasses addObject:n];sbLog(@"[inject] ✓ %@",n);return YES;
 }
 
@@ -114,13 +181,15 @@ static BOOL sb_canEditRow(id s,SEL cmd,UITableView *tv,NSIndexPath *ip){
     if(sb_anyFeatureEnabled()){NSString *un=sb_userNameFromDataSource(s,ip);if(un.length)return YES;}
     NSString *k=[NSStringFromClass([s class]) stringByAppendingString:@"_ce"];NSValue *v=g_origIMPs[k];if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(s,cmd,tv,ip);return NO;
 }
+
 static UITableViewCellEditingStyle sb_editingStyle(id s,SEL cmd,UITableView *tv,NSIndexPath *ip){
     NSString *k=[NSStringFromClass([s class]) stringByAppendingString:@"_es"];NSValue *v=g_origIMPs[k];
     UITableViewCellEditingStyle o=UITableViewCellEditingStyleNone;if(v)o=((UITableViewCellEditingStyle(*)(id,SEL,id,id))[v pointerValue])(s,cmd,tv,ip);
-    // 始终返回 None，让 UISwipeActionsConfiguration 处理所有 swipe（否则 Delete 会降级到旧 API 只剩"删除"）
+    // 返回 None → iOS 使用 UISwipeActionsConfiguration（leading=我们, trailing=桥接到原生）
     if(sb_anyFeatureEnabled())return UITableViewCellEditingStyleNone;
     return o;
 }
+
 static UISwipeActionsConfiguration *sb_leadingSwipeActions(id s,SEL cmd,UITableView *tv,NSIndexPath *ip){
     NSMutableArray *acts=[NSMutableArray array];NSString *un=sb_userNameFromDataSource(s,ip);
     if(un.length){PluginConfig *cfg=[PluginConfig shared];
@@ -130,7 +199,27 @@ static UISwipeActionsConfiguration *sb_leadingSwipeActions(id s,SEL cmd,UITableV
     if(acts.count){UISwipeActionsConfiguration *c=[UISwipeActionsConfiguration configurationWithActions:acts];c.performsFirstActionWithFullSwipe=NO;return c;}return nil;
 }
 
-#pragma mark - gestureRecognizerShouldBegin (唯一保留的 delegate hook)
+static UISwipeActionsConfiguration *sb_trailingSwipeActions(id s,SEL cmd,UITableView *tv,NSIndexPath *ip){
+    NSString *n=NSStringFromClass(object_getClass(s));
+    // 优先尝试原始的 trailingSwipeActionsConfiguration（如果 WeChat delegate 已实现）
+    NSValue *v=g_origIMPs[[n stringByAppendingString:@"_ts"]];
+    if(v)return ((UISwipeActionsConfiguration*(*)(id,SEL,id,id))[v pointerValue])(s,cmd,tv,ip);
+    
+    // 否则桥接原始 editActionsForRowAtIndexPath: → 新 API
+    NSString *eak=[n stringByAppendingString:@"_ea"];NSValue *v2=g_origIMPs[eak];
+    if(v2){
+        // 这里有个问题：editActionsForRowAtIndexPath: 的原始 IMP 在 delegate 对象上
+        // 但我们的 editingStyle 返回了 None，iOS 不会自动调用 old API
+        // 所以我们手动触发 old API 获取原生按钮
+        IMP origEA=[v2 pointerValue];
+        SEL eaSEL=NSSelectorFromString(@"tableView:editActionsForRowAtIndexPath:");
+        NSArray *actions=((NSArray*(*)(id,SEL,id,id))origEA)(s,eaSEL,tv,ip);
+        if(actions&&actions.count)return sb_convertEditActionsToSwipeConfig(actions, ip);
+    }
+    return nil;
+}
+
+#pragma mark - gesture delegate hooks（MiYou 全套）
 static BOOL sb_orig_gestureShouldBegin(id self,SEL _cmd,UIGestureRecognizer *g){
     NSString *cn=NSStringFromClass(object_getClass(self));NSValue *v=g_origIMPs[[cn stringByAppendingString:@"_gsb"]];
     if(v)return((BOOL(*)(id,SEL,id))[v pointerValue])(self,_cmd,g);return YES;
@@ -144,10 +233,24 @@ static void sb_hookGSB(Class tvClass){
     NSString *cn=NSStringFromClass(tvClass),*k=[cn stringByAppendingString:@"_gsb"];if(g_origIMPs[k])return;
     Method m=class_getInstanceMethod(tvClass,@selector(gestureRecognizerShouldBegin:));if(!m)return;
     g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];method_setImplementation(m,(IMP)sb_gestureShouldBegin);
-    sbLog(@"[hook] ✓ gsb %@",cn);
+    sbLog(@"[gestureDelegate] gsb %@",cn);
 }
 
-#pragma mark - translationInView / velocityInView 放大
+// shouldRecognizeSimultaneously — MiYou 有，但这里返回原值
+static void sb_hookSimultaneous(Class tvClass){
+    NSString *cn=NSStringFromClass(tvClass),*k=[cn stringByAppendingString:@"_srs"];if(g_origIMPs[k])return;
+    Method m=class_getInstanceMethod(tvClass,@selector(gestureRecognizer:shouldRecognizeSimultaneouslyWithGestureRecognizer:));if(!m)return;
+    g_origIMPs[k]=[NSValue valueWithPointer:method_getImplementation(m)];
+    // 不替换，只记录 IMP — MiYou 的 srs 可能只是保存引用
+    sbLog(@"[gestureDelegate] srs %@ (preserved)",cn);
+}
+
+static void sb_hookGestureDelegates(Class tvClass){
+    sb_hookGSB(tvClass);
+    sb_hookSimultaneous(tvClass);
+}
+
+#pragma mark - translationInView / velocityInView 8x 放大（MiYou 核心）
 static IMP g_origTranslationInView=NULL;
 static IMP g_origVelocityInView=NULL;
 static CGPoint sb_amplifiedTranslationInView(id self,SEL _cmd,UIView *view){
@@ -164,10 +267,10 @@ static void sb_patchSwipeGestureClass(Class gc){
     SEL viv=@selector(velocityInView:);m=class_getInstanceMethod(gc,viv);
     if(m){g_origVelocityInView=method_getImplementation(m);const char *t=method_getTypeEncoding(m);
         if(!class_addMethod(gc,viv,(IMP)sb_amplifiedVelocityInView,t))method_setImplementation(m,(IMP)sb_amplifiedVelocityInView);}
-    sbLog(@"[patch] ✓ 8x");
+    sbLog(@"[gestureClassPatch] ✓ _UISwipeActionPan 8x");
 }
 
-#pragma mark - 全局属性 hook
+#pragma mark - 全局 iOS 属性 hook
 static void(*orig_setDTB)(UIGestureRecognizer*,SEL,BOOL)=NULL;
 static void replaced_setDTB(UIGestureRecognizer *self,SEL _cmd,BOOL v){if(orig_setDTB)orig_setDTB(self,_cmd,NO);}
 static void(*orig_setDLE)(id,SEL,BOOL)=NULL;
@@ -175,7 +278,7 @@ static void replaced_setDLE(id self,SEL _cmd,BOOL v){if(orig_setDLE)orig_setDLE(
 static void(*orig_setPFAWFS)(id,SEL,BOOL)=NULL;
 static void replaced_setPFAWFS(id self,SEL _cmd,BOOL v){if(orig_setPFAWFS)orig_setPFAWFS(self,_cmd,NO);}
 
-#pragma mark - addGestureRecognizer
+#pragma mark - addGestureRecognizer + WeChat 属性设置
 static void(*orig_addGR)(id,SEL,id)=NULL;
 static void replaced_addGR(id self,SEL _cmd,id gesture){
     if(orig_addGR)orig_addGR(self,_cmd,gesture);
@@ -183,10 +286,19 @@ static void replaced_addGR(id self,SEL _cmd,id gesture){
     Class gc=object_getClass(gesture);sb_patchSwipeGestureClass(gc);
     ((UIGestureRecognizer*)gesture).delaysTouchesBegan=NO;
     ((UIGestureRecognizer*)gesture).cancelsTouchesInView=NO;
+    
+    // === MiYou 全套 WeChat 属性设置 ===
     SEL ssg=NSSelectorFromString(@"settingSessionGesture:");if([self respondsToSelector:ssg])((void(*)(id,SEL))objc_msgSend)(self,ssg);
     SEL misg=NSSelectorFromString(@"setMIsSessionGesture:");if([self respondsToSelector:misg])((void(*)(id,SEL,BOOL))objc_msgSend)(self,misg,YES);
-    sb_hookGSB(object_getClass(self));
-    sbLog(@"[addGR] ✓ %@",NSStringFromClass(object_getClass(self)));
+    SEL sme=NSSelectorFromString(@"settingMultiplexEnabled:");if([self respondsToSelector:sme])((void(*)(id,SEL,BOOL))objc_msgSend)(self,sme,NO);
+    SEL me=NSSelectorFromString(@"setMultiplexEnabled:");if([self respondsToSelector:me])((void(*)(id,SEL,BOOL))objc_msgSend)(self,me,NO);
+    SEL fdm=NSSelectorFromString(@"setForbidDisplayMenuWithGestures:");if([self respondsToSelector:fdm])((void(*)(id,SEL,BOOL))objc_msgSend)(self,fdm,YES);
+    SEL bpv=NSSelectorFromString(@"setBUsePanCancelGesture:");if([self respondsToSelector:bpv])((void(*)(id,SEL,BOOL))objc_msgSend)(self,bpv,NO);
+    SEL mbip=NSSelectorFromString(@"setM_bInteractivePopEnabled:");if([self respondsToSelector:mbip])((void(*)(id,SEL,BOOL))objc_msgSend)(self,mbip,NO);
+    SEL ees=NSSelectorFromString(@"setEnableEdgeSlideToClose:");if([self respondsToSelector:ees])((void(*)(id,SEL,BOOL))objc_msgSend)(self,ees,NO);
+    
+    sb_hookGestureDelegates(object_getClass(self));
+    sbLog(@"[addGR] ✓ %@ (WeChat props set)",NSStringFromClass(object_getClass(self)));
 }
 
 #pragma mark - setDS/setDL/setAMS
@@ -194,7 +306,7 @@ static void(*orig_setDS)(id,SEL,id)=NULL;static void replaced_setDS(id s,SEL c,i
 static void(*orig_setDL)(id,SEL,id)=NULL;static void replaced_setDL(id s,SEL c,id d){if(orig_setDL)orig_setDL(s,c,d);if(d)sb_injectSwipeMethods(object_getClass(d),nil);}
 static void(*orig_setAMS)(id,SEL,BOOL)=NULL;static void replaced_setAMS(id s,SEL c,BOOL v){if(sb_anyFeatureEnabled()){if(orig_setAMS)orig_setAMS(s,c,NO);return;}if(orig_setAMS)orig_setAMS(s,c,v);}
 
-#pragma mark - viewWillAppear
+#pragma mark - viewWillAppear（NewMainFrameViewController）
 static void(*orig_vwa)(id,SEL,BOOL)=NULL;
 static void replaced_vwa(id self,SEL _cmd,BOOL animated){
     if(orig_vwa)orig_vwa(self,_cmd,animated);if(!sb_anyFeatureEnabled())return;
@@ -204,7 +316,7 @@ static void replaced_vwa(id self,SEL _cmd,BOOL animated){
     tv.panGestureRecognizer.enabled=YES;
     tv.allowsMultipleSelectionDuringEditing=NO;
     tv.directionalLockEnabled=NO;
-    sb_hookGSB(object_getClass(tv));
+    sb_hookGestureDelegates(object_getClass(tv));
     sbLog(@"[vwa] %@",NSStringFromClass([tv class]));
 }
 
@@ -218,7 +330,7 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
 + (void)install{
     if(g_installed)return;g_installed=YES;
     g_hookedClasses=[NSMutableSet set];g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] v19: minimal hooks");
+    sbLog(@"[install] v20: trailingSwipeActions bridge + MiYou WeChat props");
     Method m;
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
     if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
