@@ -6,7 +6,6 @@
 
 static NSMutableSet *g_hookedClasses = nil;
 static NSMutableDictionary *g_origIMPs = nil;
-static BOOL g_swipeGesturePatched = NO;
 static BOOL g_installed = NO;
 
 static void sbLog(NSString *format, ...) {
@@ -296,32 +295,6 @@ static void sb_hookGestureDelegates(Class tvClass){
     sbLog(@"[gestureDelegate] all(7) ✓ %@",NSStringFromClass(tvClass));
 }
 
-#pragma mark - translationInView / velocityInView 3x 放大（仅MainFrameTableView）
-static IMP g_origTranslationInView=NULL;
-static IMP g_origVelocityInView=NULL;
-static CGPoint sb_amplifiedTranslationInView(id self,SEL _cmd,UIView *view){
-    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origTranslationInView)(self,_cmd,view);
-    UIView *gv=((UIGestureRecognizer*)self).view;
-    if(gv&&[NSStringFromClass(object_getClass(gv)) containsString:@"MainFrameTableView"])pt.x*=3.0;
-    return pt;
-}
-static CGPoint sb_amplifiedVelocityInView(id self,SEL _cmd,UIView *view){
-    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origVelocityInView)(self,_cmd,view);
-    UIView *gv=((UIGestureRecognizer*)self).view;
-    if(gv&&[NSStringFromClass(object_getClass(gv)) containsString:@"MainFrameTableView"])pt.x*=3.0;
-    return pt;
-}
-static void sb_patchSwipeGestureClass(Class gc){
-    if(g_swipeGesturePatched)return;g_swipeGesturePatched=YES;
-    SEL tiv=@selector(translationInView:);Method m=class_getInstanceMethod(gc,tiv);
-    if(m){g_origTranslationInView=method_getImplementation(m);const char *t=method_getTypeEncoding(m);
-        if(!class_addMethod(gc,tiv,(IMP)sb_amplifiedTranslationInView,t))method_setImplementation(m,(IMP)sb_amplifiedTranslationInView);}
-    SEL viv=@selector(velocityInView:);m=class_getInstanceMethod(gc,viv);
-    if(m){g_origVelocityInView=method_getImplementation(m);const char *t=method_getTypeEncoding(m);
-        if(!class_addMethod(gc,viv,(IMP)sb_amplifiedVelocityInView,t))method_setImplementation(m,(IMP)sb_amplifiedVelocityInView);}
-    sbLog(@"[gestureClassPatch] ✓ _UISwipeActionPan 3x (MainFrameTableView only)");
-}
-
 #pragma mark - addGestureRecognizer + gesture delegate 确保 + WeChat 属性设置
 static void(*orig_addGR)(id,SEL,id)=NULL;
 static void replaced_addGR(id self,SEL _cmd,id gesture){
@@ -329,7 +302,6 @@ static void replaced_addGR(id self,SEL _cmd,id gesture){
     if(!sb_isSwipeActionGesture((UIGestureRecognizer*)gesture)||!sb_anyFeatureEnabled())return;
     NSString *tvCls=NSStringFromClass(object_getClass(self));
     if(![tvCls containsString:@"MainFrameTableView"])return;
-    Class gc=object_getClass(gesture);sb_patchSwipeGestureClass(gc);
     UIGestureRecognizer *g=(UIGestureRecognizer*)gesture;
     g.delaysTouchesBegan=NO;
     g.cancelsTouchesInView=NO;
@@ -385,7 +357,7 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
 + (void)install{
     if(g_installed)return;g_installed=YES;
     g_hookedClasses=[NSMutableSet set];g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] v27: 3x amplification MainFrameTableView only + 7 gesture delegates + WeChat props");
+    sbLog(@"[install] v28: no amplification + 7 delegates + 14 props + MainFrameTableView only");
     Method m;
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
     if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
