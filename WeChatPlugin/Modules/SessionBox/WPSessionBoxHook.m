@@ -251,7 +251,6 @@ static BOOL sb_gestureShouldBeRequiredToFail_orig(id self,SEL _cmd,UIGestureReco
     if(v)return((BOOL(*)(id,SEL,id,id))[v pointerValue])(self,_cmd,g,o);return NO;
 }
 static BOOL sb_gestureShouldBeRequiredToFail(id self,SEL _cmd,UIGestureRecognizer *gesture,UIGestureRecognizer *other){
-    if(sb_isSwipeActionGesture(gesture)&&sb_anyFeatureEnabled())return YES;
     return sb_gestureShouldBeRequiredToFail_orig(self,_cmd,gesture,other);
 }
 // shouldRecognizeSimultaneously — swipe+scrollPan 同时识别
@@ -297,14 +296,14 @@ static void sb_hookGestureDelegates(Class tvClass){
     sbLog(@"[gestureDelegate] all(7) ✓ %@",NSStringFromClass(tvClass));
 }
 
-#pragma mark - translationInView / velocityInView 8x 放大（MiYou 核心）
+#pragma mark - translationInView / velocityInView 4x 放大（安全倍率，避免内部状态崩溃）
 static IMP g_origTranslationInView=NULL;
 static IMP g_origVelocityInView=NULL;
 static CGPoint sb_amplifiedTranslationInView(id self,SEL _cmd,UIView *view){
-    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origTranslationInView)(self,_cmd,view);pt.x*=8.0;return pt;
+    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origTranslationInView)(self,_cmd,view);pt.x*=4.0;return pt;
 }
 static CGPoint sb_amplifiedVelocityInView(id self,SEL _cmd,UIView *view){
-    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origVelocityInView)(self,_cmd,view);pt.x*=8.0;return pt;
+    CGPoint pt=((CGPoint(*)(id,SEL,UIView*))g_origVelocityInView)(self,_cmd,view);pt.x*=4.0;return pt;
 }
 static void sb_patchSwipeGestureClass(Class gc){
     if(g_swipeGesturePatched)return;g_swipeGesturePatched=YES;
@@ -314,7 +313,7 @@ static void sb_patchSwipeGestureClass(Class gc){
     SEL viv=@selector(velocityInView:);m=class_getInstanceMethod(gc,viv);
     if(m){g_origVelocityInView=method_getImplementation(m);const char *t=method_getTypeEncoding(m);
         if(!class_addMethod(gc,viv,(IMP)sb_amplifiedVelocityInView,t))method_setImplementation(m,(IMP)sb_amplifiedVelocityInView);}
-    sbLog(@"[gestureClassPatch] ✓ _UISwipeActionPan 8x");
+    sbLog(@"[gestureClassPatch] ✓ _UISwipeActionPan 4x");
 }
 
 #pragma mark - addGestureRecognizer + gesture delegate 确保 + WeChat 属性设置
@@ -349,16 +348,6 @@ static void replaced_addGR(id self,SEL _cmd,id gesture){
     sbLog(@"[addGR] ✓ %@ (delegate=self, WeChat props set)",NSStringFromClass(object_getClass(self)));
 }
 
-#pragma mark - 全局 iOS 属性 hook (防止微信覆盖)
-static void(*orig_setDTB)(UIGestureRecognizer*,SEL,BOOL)=NULL;
-static void replaced_setDTB(UIGestureRecognizer *self,SEL _cmd,BOOL v){if(orig_setDTB)orig_setDTB(self,_cmd,NO);}
-static void(*orig_setCTIV)(UIGestureRecognizer*,SEL,BOOL)=NULL;
-static void replaced_setCTIV(UIGestureRecognizer *self,SEL _cmd,BOOL v){if(orig_setCTIV)orig_setCTIV(self,_cmd,NO);}
-static void(*orig_setDLE)(id,SEL,BOOL)=NULL;
-static void replaced_setDLE(id self,SEL _cmd,BOOL v){if(orig_setDLE)orig_setDLE(self,_cmd,NO);}
-static void(*orig_setPFAWFS)(id,SEL,BOOL)=NULL;
-static void replaced_setPFAWFS(id self,SEL _cmd,BOOL v){if(orig_setPFAWFS)orig_setPFAWFS(self,_cmd,NO);}
-
 #pragma mark - setDS/setDL/setAMS
 static void(*orig_setDS)(id,SEL,id)=NULL;static void replaced_setDS(id s,SEL c,id d){if(orig_setDS)orig_setDS(s,c,d);if(d)sb_injectSwipeMethods(object_getClass(d),nil);}
 static void(*orig_setDL)(id,SEL,id)=NULL;static void replaced_setDL(id s,SEL c,id d){if(orig_setDL)orig_setDL(s,c,d);if(d)sb_injectSwipeMethods(object_getClass(d),nil);}
@@ -388,7 +377,7 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
 + (void)install{
     if(g_installed)return;g_installed=YES;
     g_hookedClasses=[NSMutableSet set];g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] v24: 8x amplification + 7 gesture delegates + 7 WeChat props + trailing bridge");
+    sbLog(@"[install] v25: 4x amplification (safe) + 7 gesture delegates + WeChat props (no global hooks)");
     Method m;
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
     if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
@@ -398,10 +387,6 @@ static void sb_hookSel(Class cls,SEL sel,IMP newImp,IMP *origImp){
     if(m){orig_setAMS=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setAMS);}
     m=class_getInstanceMethod([UITableView class],@selector(addGestureRecognizer:));
     if(m){orig_addGR=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_addGR);}
-    sb_hookSel([UIGestureRecognizer class],@selector(setDelaysTouchesBegan:),(IMP)replaced_setDTB,(IMP*)&orig_setDTB);
-    sb_hookSel([UIGestureRecognizer class],@selector(setCancelsTouchesInView:),(IMP)replaced_setCTIV,(IMP*)&orig_setCTIV);
-    sb_hookSel([UIScrollView class],@selector(setDirectionalLockEnabled:),(IMP)replaced_setDLE,(IMP*)&orig_setDLE);
-    sb_hookSel([UISwipeActionsConfiguration class],@selector(setPerformsFirstActionWithFullSwipe:),(IMP)replaced_setPFAWFS,(IMP*)&orig_setPFAWFS);
     Class nmvc=objc_getClass("NewMainFrameViewController");
     if(nmvc){
         m=class_getInstanceMethod(nmvc,@selector(viewWillAppear:));
