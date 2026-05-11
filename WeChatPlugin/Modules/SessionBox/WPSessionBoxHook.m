@@ -148,16 +148,11 @@ static BOOL sb_gestureShouldBegin(id self, SEL _cmd, UIGestureRecognizer *gestur
 
 static void sb_hookGestureShouldBegin(Class tvClass){
     NSString *cn = NSStringFromClass(tvClass);
-    // 检查是否已经 hook 了这个类（不会是 KVO 类）
     NSString *k = [cn stringByAppendingString:@"_gsb"];
     if(g_origIMPs[k]) return;
-    
-    // 获取 tableView 的 delegate 方法类
-    // tableView 的 delegate 协议方法直接从类查找
     SEL sel = @selector(gestureRecognizerShouldBegin:);
     Method m = class_getInstanceMethod(tvClass, sel);
     if(!m) return;
-    
     IMP orig = method_getImplementation(m);
     g_origIMPs[k] = [NSValue valueWithPointer:orig];
     method_setImplementation(m, (IMP)sb_gestureShouldBegin);
@@ -213,6 +208,104 @@ static void replaced_setDelaysTouchesBegan(UIGestureRecognizer *self, SEL _cmd, 
     if(orig_setDelaysTouchesBegan) orig_setDelaysTouchesBegan(self, _cmd, NO);
 }
 
+#pragma mark - setDirectionalLockEnabled hook
+static void(*orig_setDLE)(id, SEL, BOOL) = NULL;
+static void replaced_setDLE(id self, SEL _cmd, BOOL v){
+    if(orig_setDLE) orig_setDLE(self, _cmd, NO);
+}
+
+#pragma mark - setAllowsEditing hook
+static void(*orig_setAE)(id, SEL, BOOL) = NULL;
+static void replaced_setAE(id self, SEL _cmd, BOOL v){
+    if(sb_anyFeatureEnabled()){
+        if(orig_setAE) orig_setAE(self, _cmd, YES);
+        return;
+    }
+    if(orig_setAE) orig_setAE(self, _cmd, v);
+}
+
+#pragma mark - setEditing:animated: hook (UITableView)
+static void(*orig_setEditingAnim)(id, SEL, BOOL, BOOL) = NULL;
+static void replaced_setEditingAnim(id self, SEL _cmd, BOOL editing, BOOL animated){
+    if(sb_anyFeatureEnabled() && !editing){
+        UITableView *tv = (UITableView *)self;
+        if([tv isKindOfClass:[UITableView class]]){
+            NSString *cn = NSStringFromClass(object_getClass(tv));
+            if([cn containsString:@"MainFrame"] || [cn containsString:@"MMTable"]){
+                if(orig_setEditingAnim) orig_setEditingAnim(self, _cmd, YES, animated);
+                return;
+            }
+        }
+    }
+    if(orig_setEditingAnim) orig_setEditingAnim(self, _cmd, editing, animated);
+}
+
+#pragma mark - setNeedEditState hook
+static void(*orig_setNES)(id, SEL, BOOL) = NULL;
+static void replaced_setNES(id self, SEL _cmd, BOOL v){
+    if(sb_anyFeatureEnabled()){
+        if(orig_setNES) orig_setNES(self, _cmd, YES);
+        return;
+    }
+    if(orig_setNES) orig_setNES(self, _cmd, v);
+}
+
+#pragma mark - setForbidDisplayMenuWithGestures hook
+static void(*orig_setFDMWG)(id, SEL, BOOL) = NULL;
+static void replaced_setFDMWG(id self, SEL _cmd, BOOL v){
+    if(sb_anyFeatureEnabled()){
+        if(orig_setFDMWG) orig_setFDMWG(self, _cmd, NO);
+        return;
+    }
+    if(orig_setFDMWG) orig_setFDMWG(self, _cmd, v);
+}
+
+#pragma mark - setMultiplexEnabled hook
+static void(*orig_setME)(id, SEL, BOOL) = NULL;
+static void replaced_setME(id self, SEL _cmd, BOOL v){
+    if(sb_anyFeatureEnabled()){
+        if(orig_setME) orig_setME(self, _cmd, NO);
+        return;
+    }
+    if(orig_setME) orig_setME(self, _cmd, v);
+}
+
+#pragma mark - setIsAddGesture hook
+static void(*orig_setIAG)(id, SEL, BOOL) = NULL;
+static void replaced_setIAG(id self, SEL _cmd, BOOL v){
+    if(sb_anyFeatureEnabled()){
+        if(orig_setIAG) orig_setIAG(self, _cmd, YES);
+        return;
+    }
+    if(orig_setIAG) orig_setIAG(self, _cmd, v);
+}
+
+#pragma mark - setMIsSessionGesture hook
+static void(*orig_setMISG)(id, SEL, BOOL) = NULL;
+static void replaced_setMISG(id self, SEL _cmd, BOOL v){
+    if(sb_anyFeatureEnabled()){
+        if(orig_setMISG) orig_setMISG(self, _cmd, YES);
+        return;
+    }
+    if(orig_setMISG) orig_setMISG(self, _cmd, v);
+}
+
+#pragma mark - setM_bInteractivePopEnabled hook
+static void(*orig_setM_bIPE)(id, SEL, BOOL) = NULL;
+static void replaced_setM_bIPE(id self, SEL _cmd, BOOL v){
+    if(sb_anyFeatureEnabled()){
+        if(orig_setM_bIPE) orig_setM_bIPE(self, _cmd, NO);
+        return;
+    }
+    if(orig_setM_bIPE) orig_setM_bIPE(self, _cmd, v);
+}
+
+#pragma mark - setPerformsFirstActionWithFullSwipe hook
+static void(*orig_setPFAWFS)(id, SEL, BOOL) = NULL;
+static void replaced_setPFAWFS(id self, SEL _cmd, BOOL v){
+    if(orig_setPFAWFS) orig_setPFAWFS(self, _cmd, NO);
+}
+
 #pragma mark - addGestureRecognizer
 static void (*orig_addGR)(id, SEL, id) = NULL;
 static void replaced_addGR(id self, SEL _cmd, id gesture){
@@ -234,6 +327,11 @@ static void replaced_addGR(id self, SEL _cmd, id gesture){
         ((void(*)(id,SEL))objc_msgSend)(self, ssg);
     }
     
+    SEL smisg = NSSelectorFromString(@"setMIsSessionGesture:");
+    if([self respondsToSelector:smisg]){
+        ((void(*)(id,SEL,BOOL))objc_msgSend)(self, smisg, YES);
+    }
+    
     sb_hookGestureShouldBegin(object_getClass(self));
     
     sbLog(@"[addGR] swipe gesture on %@ patched", NSStringFromClass(object_getClass(self)));
@@ -250,16 +348,40 @@ static void replaced_vwa(id self,SEL _cmd,BOOL animated){
     if(orig_vwa)orig_vwa(self,_cmd,animated); if(!sb_anyFeatureEnabled())return;
     UITableView *tv=nil; SEL vs=NSSelectorFromString(@"tableView"); if([self respondsToSelector:vs])tv=((id(*)(id,SEL))objc_msgSend)(self,vs);
     if(!tv||![tv isKindOfClass:[UITableView class]]){for(UIView *sv in((UIView*)((id(*)(id,SEL))objc_msgSend)(self,@selector(view))).subviews)if([sv isKindOfClass:[UITableView class]]){tv=(UITableView*)sv;break;}}
-    if(!tv)return; tv.panGestureRecognizer.enabled=YES; tv.allowsMultipleSelectionDuringEditing=NO;
+    if(!tv)return;
+    tv.panGestureRecognizer.enabled=YES;
+    tv.allowsMultipleSelectionDuringEditing=NO;
+    tv.directionalLockEnabled=NO;
+    SEL ae=NSSelectorFromString(@"setAllowsEditing:");
+    if([tv respondsToSelector:ae])((void(*)(id,SEL,BOOL))objc_msgSend)(tv,ae,YES);
+    SEL nes=NSSelectorFromString(@"setNeedEditState:");
+    if([tv respondsToSelector:nes])((void(*)(id,SEL,BOOL))objc_msgSend)(tv,nes,YES);
+    SEL fdmwg=NSSelectorFromString(@"setForbidDisplayMenuWithGestures:");
+    if([tv respondsToSelector:fdmwg])((void(*)(id,SEL,BOOL))objc_msgSend)(tv,fdmwg,NO);
+    SEL me=NSSelectorFromString(@"setMultiplexEnabled:");
+    if([tv respondsToSelector:me])((void(*)(id,SEL,BOOL))objc_msgSend)(tv,me,NO);
+    SEL iag=NSSelectorFromString(@"setIsAddGesture:");
+    if([tv respondsToSelector:iag])((void(*)(id,SEL,BOOL))objc_msgSend)(tv,iag,YES);
+    SEL misg=NSSelectorFromString(@"setMIsSessionGesture:");
+    if([tv respondsToSelector:misg])((void(*)(id,SEL,BOOL))objc_msgSend)(tv,misg,YES);
     sbLog(@"[vwa] tv=%@ pan=%d ams=%d g=%lu",NSStringFromClass([tv class]),tv.panGestureRecognizer.isEnabled,tv.allowsMultipleSelectionDuringEditing,(unsigned long)tv.gestureRecognizers.count);
+}
+
+#pragma mark - hook helper
+static void sb_hookSel(Class cls, SEL sel, IMP newImp, IMP *origImp){
+    Method m = class_getInstanceMethod(cls, sel);
+    if(!m) return;
+    *origImp = method_getImplementation(m);
+    method_setImplementation(m, newImp);
 }
 
 #pragma mark - install
 @implementation WPSessionBoxHook
 + (void)install{
     g_hookedClasses=[NSMutableSet set]; g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] === START (v11: translationInView 4x + setDelaysTouchesBegan hook) ===");
+    sbLog(@"[install] === START (v12: full MiYou hook coverage) ===");
     Method m;
+    
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
     if(m){orig_setDS=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDS);}
     m=class_getInstanceMethod([UITableView class],@selector(setDelegate:));
@@ -268,11 +390,47 @@ static void replaced_vwa(id self,SEL _cmd,BOOL animated){
     if(m){orig_setAMS=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setAMS);}
     m=class_getInstanceMethod([UITableView class],@selector(addGestureRecognizer:));
     if(m){orig_addGR=(void(*)(id,SEL,id))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_addGR);}
-    // hook setDelaysTouchesBegan: on UIGestureRecognizer
-    m = class_getInstanceMethod([UIGestureRecognizer class], @selector(setDelaysTouchesBegan:));
-    if(m){orig_setDelaysTouchesBegan=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setDelaysTouchesBegan);}
+    m=class_getInstanceMethod([UITableView class],@selector(setEditing:animated:));
+    if(m){orig_setEditingAnim=(void(*)(id,SEL,BOOL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_setEditingAnim);}
+    
+    sb_hookSel([UIGestureRecognizer class], @selector(setDelaysTouchesBegan:), (IMP)replaced_setDelaysTouchesBegan, (IMP*)&orig_setDelaysTouchesBegan);
+    sb_hookSel([UIScrollView class], @selector(setDirectionalLockEnabled:), (IMP)replaced_setDLE, (IMP*)&orig_setDLE);
+    sb_hookSel([UISwipeActionsConfiguration class], @selector(setPerformsFirstActionWithFullSwipe:), (IMP)replaced_setPFAWFS, (IMP*)&orig_setPFAWFS);
+    
+    Class tvCls = [UITableView class];
+    sb_hookSel(tvCls, NSSelectorFromString(@"setAllowsEditing:"), (IMP)replaced_setAE, (IMP*)&orig_setAE);
+    
     Class nmvc=objc_getClass("NewMainFrameViewController");
-    if(nmvc){m=class_getInstanceMethod(nmvc,@selector(viewWillAppear:)); if(m){orig_vwa=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_vwa);}}
+    if(nmvc){
+        m=class_getInstanceMethod(nmvc,@selector(viewWillAppear:));
+        if(m){orig_vwa=(void(*)(id,SEL,BOOL))method_getImplementation(m);method_setImplementation(m,(IMP)replaced_vwa);}
+        
+        sb_hookSel(nmvc, NSSelectorFromString(@"setNeedEditState:"), (IMP)replaced_setNES, (IMP*)&orig_setNES);
+        sb_hookSel(nmvc, NSSelectorFromString(@"setForbidDisplayMenuWithGestures:"), (IMP)replaced_setFDMWG, (IMP*)&orig_setFDMWG);
+        sb_hookSel(nmvc, NSSelectorFromString(@"setMultiplexEnabled:"), (IMP)replaced_setME, (IMP*)&orig_setME);
+        sb_hookSel(nmvc, NSSelectorFromString(@"setIsAddGesture:"), (IMP)replaced_setIAG, (IMP*)&orig_setIAG);
+        sb_hookSel(nmvc, NSSelectorFromString(@"setMIsSessionGesture:"), (IMP)replaced_setMISG, (IMP*)&orig_setMISG);
+        sb_hookSel(nmvc, NSSelectorFromString(@"setM_bInteractivePopEnabled:"), (IMP)replaced_setM_bIPE, (IMP*)&orig_setM_bIPE);
+    }
+    
+    Class mftv = objc_getClass("MainFrameTableView");
+    if(mftv){
+        sb_hookSel(mftv, NSSelectorFromString(@"setNeedEditState:"), (IMP)replaced_setNES, (IMP*)&orig_setNES);
+        sb_hookSel(mftv, NSSelectorFromString(@"setForbidDisplayMenuWithGestures:"), (IMP)replaced_setFDMWG, (IMP*)&orig_setFDMWG);
+        sb_hookSel(mftv, NSSelectorFromString(@"setMultiplexEnabled:"), (IMP)replaced_setME, (IMP*)&orig_setME);
+        sb_hookSel(mftv, NSSelectorFromString(@"setIsAddGesture:"), (IMP)replaced_setIAG, (IMP*)&orig_setIAG);
+        sb_hookSel(mftv, NSSelectorFromString(@"setMIsSessionGesture:"), (IMP)replaced_setMISG, (IMP*)&orig_setMISG);
+    }
+    
+    Class mmtv = objc_getClass("MMTableView");
+    if(mmtv){
+        sb_hookSel(mmtv, NSSelectorFromString(@"setNeedEditState:"), (IMP)replaced_setNES, (IMP*)&orig_setNES);
+        sb_hookSel(mmtv, NSSelectorFromString(@"setForbidDisplayMenuWithGestures:"), (IMP)replaced_setFDMWG, (IMP*)&orig_setFDMWG);
+        sb_hookSel(mmtv, NSSelectorFromString(@"setMultiplexEnabled:"), (IMP)replaced_setME, (IMP*)&orig_setME);
+        sb_hookSel(mmtv, NSSelectorFromString(@"setIsAddGesture:"), (IMP)replaced_setIAG, (IMP*)&orig_setIAG);
+        sb_hookSel(mmtv, NSSelectorFromString(@"setMIsSessionGesture:"), (IMP)replaced_setMISG, (IMP*)&orig_setMISG);
+    }
+    
     sbLog(@"[install] === COMPLETE ===");
 }
 @end
