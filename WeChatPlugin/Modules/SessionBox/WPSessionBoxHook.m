@@ -163,12 +163,12 @@ static IMP g_origVelocityInView = NULL;
 
 static CGPoint sb_amplifiedTranslationInView(id self, SEL _cmd, UIView *view){
     CGPoint pt = ((CGPoint(*)(id,SEL,UIView*))g_origTranslationInView)(self, _cmd, view);
-    pt.x *= 4.0;
+    pt.x *= 8.0;
     return pt;
 }
 static CGPoint sb_amplifiedVelocityInView(id self, SEL _cmd, UIView *view){
     CGPoint pt = ((CGPoint(*)(id,SEL,UIView*))g_origVelocityInView)(self, _cmd, view);
-    pt.x *= 4.0;
+    pt.x *= 8.0;
     return pt;
 }
 
@@ -183,7 +183,7 @@ static void sb_patchSwipeGestureClass(Class gc){
     m = class_getInstanceMethod(gc, viv);
     if(m){g_origVelocityInView=method_getImplementation(m);const char *types=method_getTypeEncoding(m);
         if(!class_addMethod(gc,viv,(IMP)sb_amplifiedVelocityInView,types)){method_setImplementation(m,(IMP)sb_amplifiedVelocityInView);}}
-    sbLog(@"[patchGesture] _UISwipeActionPanGestureRecognizer: translationInView + velocityInView amplified 4x");
+    sbLog(@"[patchGesture] _UISwipeActionPanGestureRecognizer: translationInView + velocityInView amplified 8x");
 }
 
 #pragma mark - setDelaysTouchesBegan hook
@@ -308,7 +308,7 @@ static void sb_hookSel(Class cls, SEL sel, IMP newImp, IMP *origImp){
     if(g_installed) return;
     g_installed = YES;
     g_hookedClasses=[NSMutableSet set]; g_origIMPs=[NSMutableDictionary dictionary];
-    sbLog(@"[install] === START (v14: fix double-install crash + remove shouldRecognizeSimultaneously) ===");
+    sbLog(@"[install] === START (v15: translationInView 8x amplification) ===");
     Method m;
     
     m=class_getInstanceMethod([UITableView class],@selector(setDataSource:));
