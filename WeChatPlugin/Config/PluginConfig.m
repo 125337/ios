@@ -167,7 +167,6 @@ static void configLog(NSString *content) {
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
     if (v.length > 0) _addTimeSuffixFormat = v;
     else _addTimeSuffixFormat = @"(yyyy-MM-dd)";
-    }
 
     @try {
         NSData *data = [d dataForKey:[kPluginPrefix stringByAppendingString:@"SessionFormats"]];
