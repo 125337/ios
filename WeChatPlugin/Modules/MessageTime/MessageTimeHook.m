@@ -212,26 +212,26 @@ static UIView *getBubbleView(id cell) {
     id cellView = getCellView(cell);
     id target = cellView ? cellView : cell;
     
-    // 微信优化方案：优先通过 m_bgImageView（气泡背景图 ivar）获取
-    @try {
-        bubbleView = [target valueForKey:@"m_bgImageView"];
-    } @catch (NSException *e) {}
+    // 优先通过 bubbleView 属性获取气泡容器（frame 相对 cell 坐标）
+    SEL bubbleSelector = NSSelectorFromString(@"bubbleView");
+    if ([target respondsToSelector:bubbleSelector]) {
+        @try {
+            bubbleView = ((id (*)(id, SEL))objc_msgSend)(target, bubbleSelector);
+        } @catch (NSException *e) {}
+    }
     
-    // 回退 1：m_richTextView（富文本视图）
+    // 回退 1：m_bgImageView（气泡背景图，注意其 frame 是相对于气泡容器内部）
+    if (!bubbleView) {
+        @try {
+            bubbleView = [target valueForKey:@"m_bgImageView"];
+        } @catch (NSException *e) {}
+    }
+    
+    // 回退 2：m_richTextView（富文本视图）
     if (!bubbleView) {
         @try {
             bubbleView = [target valueForKey:@"m_richTextView"];
         } @catch (NSException *e) {}
-    }
-    
-    // 回退 2：bubbleView 属性 selector（部分新版 WeChat 有此属性）
-    if (!bubbleView) {
-        SEL bubbleSelector = NSSelectorFromString(@"bubbleView");
-        if ([target respondsToSelector:bubbleSelector]) {
-            @try {
-                bubbleView = ((id (*)(id, SEL))objc_msgSend)(target, bubbleSelector);
-            } @catch (NSException *e) {}
-        }
     }
     
     // 兜底：遍历 subviews 按类名匹配
