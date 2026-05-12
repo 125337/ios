@@ -884,7 +884,7 @@ static void hookCellForTime(NSString *className) {
                 UILabel *label = objc_getAssociatedObject(self, @"messageTimeLabel");
                 if (label && label.superview) {
                     // 已有标签，气泡此时已创建，重新计算位置
-                    [self mt_updateLabelFrame:label];
+                    mt_updateLabelFrame(self);
                 }
             }
         });
