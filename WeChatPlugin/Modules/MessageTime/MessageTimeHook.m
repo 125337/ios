@@ -162,9 +162,9 @@ static UIImageView *getAvatarView(id cell) {
         NSString *targetCls = NSStringFromClass([target class]);
         mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: searching on target=%@ (cell=%@)", targetCls, cellCls]);
         
-        // avatarView / avatarImageView / headImg
+        // headImgView（WeChat 8.0.60 中 ChatTableViewCell 上的 UIImageView 属性）
         if (!avatarView) {
-            for (NSString *key in @[@"avatarView", @"avatarImageView", @"headImg"]) {
+            for (NSString *key in @[@"headImgView", @"m_headImgView", @"avatarView", @"avatarImageView", @"headImg"]) {
                 @try {
                     id view = [target valueForKey:key];
                     if (view) {
