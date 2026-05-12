@@ -212,25 +212,29 @@ static UIView *getBubbleView(id cell) {
     id cellView = getCellView(cell);
     id target = cellView ? cellView : cell;
     
-    SEL bubbleSelector = NSSelectorFromString(@"bubbleView");
-    if ([target respondsToSelector:bubbleSelector]) {
-        @try {
-            bubbleView = ((id (*)(id, SEL))objc_msgSend)(target, bubbleSelector);
-        } @catch (NSException *e) {}
-    }
+    // 微信优化方案：优先通过 m_bgImageView（气泡背景图 ivar）获取
+    @try {
+        bubbleView = [target valueForKey:@"m_bgImageView"];
+    } @catch (NSException *e) {}
     
-    if (!bubbleView) {
-        @try {
-            bubbleView = [target valueForKey:@"m_bgImageView"];
-        } @catch (NSException *e) {}
-    }
-    
+    // 回退 1：m_richTextView（富文本视图）
     if (!bubbleView) {
         @try {
             bubbleView = [target valueForKey:@"m_richTextView"];
         } @catch (NSException *e) {}
     }
     
+    // 回退 2：bubbleView 属性 selector（部分新版 WeChat 有此属性）
+    if (!bubbleView) {
+        SEL bubbleSelector = NSSelectorFromString(@"bubbleView");
+        if ([target respondsToSelector:bubbleSelector]) {
+            @try {
+                bubbleView = ((id (*)(id, SEL))objc_msgSend)(target, bubbleSelector);
+            } @catch (NSException *e) {}
+        }
+    }
+    
+    // 兜底：遍历 subviews 按类名匹配
     if (!bubbleView) {
         for (UIView *subview in [target subviews]) {
             NSString *className = NSStringFromClass([subview class]);
@@ -245,6 +249,14 @@ static UIView *getBubbleView(id cell) {
     }
     
     return bubbleView;
+}
+
+// 微信优化方案：独立的气泡 frame 设置方法
+static void setFrameForBubbleView(id cell, CGRect frame) {
+    UIView *bubble = getBubbleView(cell);
+    if (bubble) {
+        bubble.frame = frame;
+    }
 }
 
 static void addTimeLabelToCell(id cell) {
