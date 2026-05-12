@@ -440,25 +440,34 @@ static void addTimeLabelToCell(id cell) {
         CGRect bubbleFrame = bubbleView ? bubbleView.frame : cellFrame;
         
         BOOL isSender = NO;
-        SEL senderSel = NSSelectorFromString(@"isSenderFromMsgWrap:");
-        
-        // 优先在 cellView 上调用 isSenderFromMsgWrap:（大部分 WeChat 版本中该方法在 cellView 上）
         id targetCellView = getCellView(cell);
         id senderTarget = targetCellView ?: cell;
-        if ([senderTarget respondsToSelector:senderSel]) {
-            @try {
-                isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(senderTarget, senderSel, wrap);
-            } @catch (NSException *e) {}
+        
+        // 1. isSender 属性（微信优化方案，最简单直接）
+        @try {
+            NSNumber *senderVal = [senderTarget valueForKey:@"isSender"];
+            if (senderVal) {
+                isSender = [senderVal boolValue];
+            }
+        } @catch (NSException *e) {}
+        
+        // 2. isSenderFromMsgWrap: 方法（需传入 wrap 参数）
+        if (!isSender) {
+            SEL senderSel = NSSelectorFromString(@"isSenderFromMsgWrap:");
+            if ([senderTarget respondsToSelector:senderSel]) {
+                @try {
+                    isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(senderTarget, senderSel, wrap);
+                } @catch (NSException *e) {}
+            }
+            // 如果 cellView 没有，尝试 cell 本身
+            if (!isSender && senderTarget != cell && [cell respondsToSelector:senderSel]) {
+                @try {
+                    isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, senderSel, wrap);
+                } @catch (NSException *e) {}
+            }
         }
         
-        // 如果 cellView 没有，尝试 cell 本身
-        if (!isSender && senderTarget != cell && [cell respondsToSelector:senderSel]) {
-            @try {
-                isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, senderSel, wrap);
-            } @catch (NSException *e) {}
-        }
-        
-        // 兜底：通过气泡位置判断
+        // 3. 兜底：通过气泡位置判断
         if (!isSender && bubbleView) {
             isSender = CGRectGetMidX(bubbleView.frame) > CGRectGetMidX(cellFrame);
         }
