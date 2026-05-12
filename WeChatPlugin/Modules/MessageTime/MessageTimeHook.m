@@ -147,9 +147,9 @@ static UIImageView *getAvatarView(id cell) {
     for (id target in @[cellView ?: [NSNull null], cell]) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
         
-        // 微信助手方案：优先使用正式属性（headImg / avatarImage / iconView）
+        // 优先使用 avatarView / avatarImageView（WeChat 8.0.60 中的实际属性名）
         if (!avatarView) {
-            for (NSString *key in @[@"headImg", @"avatarImage", @"iconView"]) {
+            for (NSString *key in @[@"avatarView", @"avatarImageView", @"headImg"]) {
                 @try {
                     id view = [target valueForKey:key];
                     if ([view isKindOfClass:[UIImageView class]]) {
@@ -209,7 +209,7 @@ static UIView *getBubbleView(id cell) {
     for (id target in @[cellView ?: [NSNull null], cell]) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
         
-        // bubbleView 属性
+        // bubbleView 属性（WeChat 8.0.60 中此属性存在）
         if (!bubbleView) {
             SEL bubbleSelector = NSSelectorFromString(@"bubbleView");
             if ([target respondsToSelector:bubbleSelector]) {
@@ -217,17 +217,12 @@ static UIView *getBubbleView(id cell) {
             }
         }
         
-        // m_bgImageView
+        // bgImageView（WeChat 8.0.60 中 CommonMessageCellView 上的 UIImageView 属性，不是 m_bgImageView）
         if (!bubbleView) {
-            @try { bubbleView = [target valueForKey:@"m_bgImageView"]; } @catch (...) {}
+            @try { bubbleView = [target valueForKey:@"bgImageView"]; } @catch (...) {}
         }
         
-        // m_richTextView
-        if (!bubbleView) {
-            @try { bubbleView = [target valueForKey:@"m_richTextView"]; } @catch (...) {}
-        }
-        
-        // 遍历 subviews
+        // 遍历 subviews 按类名匹配
         if (!bubbleView) {
             for (UIView *subview in [target subviews]) {
                 NSString *className = NSStringFromClass([subview class]);
