@@ -340,6 +340,123 @@ static void setFrameForBubbleView(id cell, CGRect frame) {
 
 static int g_callCount = 0;
 
+// 在 layoutSubviews 中更新已有标签的位置（此时气泡 bgImageView 已创建）
+static void mt_updateLabelFrame(id cell) {
+    @try {
+        UILabel *label = objc_getAssociatedObject(cell, @"messageTimeLabel");
+        if (!label || !label.superview) return;
+        
+        PluginConfig *config = [PluginConfig shared];
+        if (!config.showMessageTime) return;
+        
+        CGRect cellFrame = [(UIView *)cell frame];
+        if (CGRectEqualToRect(cellFrame, CGRectZero)) return;
+        
+        UIView *bubble = getBubbleView(cell);
+        UIImageView *avatar = getAvatarView(cell);
+        
+        CGRect bubbleFrame = bubble ? bubble.frame : cellFrame;
+        CGRect avatarFrame = avatar ? avatar.frame : CGRectZero;
+        
+        // 检查是否发送者
+        BOOL isSender = NO;
+        id cellView = getCellView(cell);
+        id target = cellView ?: cell;
+        SEL senderSel = NSSelectorFromString(@"isSenderFromMsgWrap:");
+        id wrap = nil;
+        @try {
+            if (cellView) {
+                id vm = nil;
+                @try { vm = [cellView valueForKey:@"m_viewModel"]; } @catch (...) {}
+                if (!vm) { @try { vm = [cellView valueForKey:@"viewModel"]; } @catch (...) {} }
+                if (vm) {
+                    @try { wrap = [vm valueForKey:@"messageWrap"]; } @catch (...) {}
+                    if (!wrap) { @try { wrap = [vm valueForKey:@"m_messageWrap"]; } @catch (...) {} }
+                }
+            }
+        } @catch (...) {}
+        if (!wrap && [target respondsToSelector:senderSel]) {
+            @try { isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(target, senderSel, nil); } @catch (...) {}
+        } else if (wrap && [target respondsToSelector:senderSel]) {
+            @try { isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(target, senderSel, wrap); } @catch (...) {}
+        }
+        if (!isSender && bubble) {
+            isSender = CGRectGetMidX(bubble.frame) > CGRectGetMidX(cellFrame);
+        }
+        
+        // 计算位置（与 addTimeLabelToCell 中的逻辑一致）
+        CGRect labelFrame = label.frame;
+        CGFloat offsetX = config.messageTimeOffsetX;
+        CGFloat offsetY = config.messageTimeOffsetY;
+        NSInteger position = config.messageTimePosition;
+        CGFloat farSideX, nearSideX;
+        if (isSender) {
+            farSideX = bubbleFrame.origin.x;
+            nearSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
+        } else {
+            farSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
+            nearSideX = bubbleFrame.origin.x;
+        }
+        
+        switch (position) {
+            case 0:
+                if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
+                    labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
+                    labelFrame.origin.y = avatarFrame.origin.y - labelFrame.size.height - offsetY;
+                } else {
+                    labelFrame.origin.x = nearSideX;
+                    labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
+                }
+                break;
+            case 1:
+                if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
+                    labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
+                    labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + offsetY;
+                } else {
+                    labelFrame.origin.x = nearSideX;
+                    labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY;
+                }
+                break;
+            case 2:
+                if (isSender) labelFrame.origin.x = bubbleFrame.origin.x - labelFrame.size.width - offsetX;
+                else labelFrame.origin.x = bubbleFrame.origin.x + bubbleFrame.size.width + offsetX;
+                labelFrame.origin.y = bubbleFrame.origin.y + (bubbleFrame.size.height - labelFrame.size.height) / 2;
+                break;
+            case 3: labelFrame.origin.x = farSideX; labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY; break;
+            case 4: labelFrame.origin.x = nearSideX; labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY; break;
+            case 5: labelFrame.origin.x = farSideX; labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY; break;
+            case 6: labelFrame.origin.x = nearSideX; labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY; break;
+            case 7:
+                labelFrame.origin.x = bubbleFrame.origin.x + (bubbleFrame.size.width - labelFrame.size.width) / 2;
+                labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height - labelFrame.size.height - 4;
+                break;
+            default:
+                labelFrame.origin.x = farSideX;
+                labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
+                break;
+        }
+        
+        // 方向感知偏移
+        if (offsetX != 0) {
+            BOOL leftSide = NO;
+            switch (position) {
+                case 0: case 1: leftSide = !isSender; break;
+                case 2: leftSide = isSender; break;
+                case 3: case 5: leftSide = isSender; break;
+                case 4: case 6: leftSide = !isSender; break;
+                default: leftSide = NO; break;
+            }
+            labelFrame.origin.x += leftSide ? -offsetX : offsetX;
+        }
+        if (offsetY != 0) labelFrame.origin.y -= offsetY;
+        
+        label.frame = labelFrame;
+        mtLog(@"[DBG] mt_updateLabelFrame: updated position");
+    } @catch (NSException *e) {
+        mtLog([NSString stringWithFormat:@"mt_updateLabelFrame error: %@", e]);
+    }
+}
+
 static void addTimeLabelToCell(id cell) {
     @try {
         if (!cell) {
@@ -760,8 +877,16 @@ static void hookCellForTime(NSString *className) {
                 return;
             }
             
-            // layoutSubviews：微信助手方案 — 只调原始实现，不创建/更新时间标签
-            // 全交给 willDisplayCell 处理，此时数据一定已就绪，避免时序问题
+            // layoutSubviews：气泡已创建，更新已有标签的位置
+            // willDisplayCell 时气泡还没 layout，bgImageView 是 nil
+            // 所以 layoutSubviews 里需要重新获取气泡 frame 更新位置
+            if (sel == NSSelectorFromString(@"layoutSubviews")) {
+                UILabel *label = objc_getAssociatedObject(self, @"messageTimeLabel");
+                if (label && label.superview) {
+                    // 已有标签，气泡此时已创建，重新计算位置
+                    [self mt_updateLabelFrame:label];
+                }
+            }
         });
         
         BOOL added = class_addMethod(cls, sel, newIMP, typeEncoding);
