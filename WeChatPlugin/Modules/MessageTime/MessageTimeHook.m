@@ -443,28 +443,17 @@ static void addTimeLabelToCell(id cell) {
         id targetCellView = getCellView(cell);
         id senderTarget = targetCellView ?: cell;
         
-        // 1. isSender 属性（微信优化方案，最简单直接）
-        @try {
-            NSNumber *senderVal = [senderTarget valueForKey:@"isSender"];
-            if (senderVal) {
-                isSender = [senderVal boolValue];
-            }
-        } @catch (NSException *e) {}
-        
-        // 2. isSenderFromMsgWrap: 方法（需传入 wrap 参数）
-        if (!isSender) {
-            SEL senderSel = NSSelectorFromString(@"isSenderFromMsgWrap:");
-            if ([senderTarget respondsToSelector:senderSel]) {
-                @try {
-                    isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(senderTarget, senderSel, wrap);
-                } @catch (NSException *e) {}
-            }
-            // 如果 cellView 没有，尝试 cell 本身
-            if (!isSender && senderTarget != cell && [cell respondsToSelector:senderSel]) {
-                @try {
-                    isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, senderSel, wrap);
-                } @catch (NSException *e) {}
-            }
+        // 仅通过 isSenderFromMsgWrap: 判断发送者（微信助手方案）
+        SEL senderSel = NSSelectorFromString(@"isSenderFromMsgWrap:");
+        if ([senderTarget respondsToSelector:senderSel]) {
+            @try {
+                isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(senderTarget, senderSel, wrap);
+            } @catch (NSException *e) {}
+        }
+        if (!isSender && senderTarget != cell && [cell respondsToSelector:senderSel]) {
+            @try {
+                isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, senderSel, wrap);
+            } @catch (NSException *e) {}
         }
         
         // 3. 兜底：通过气泡位置判断
@@ -663,8 +652,8 @@ static void hookCellForTime(NSString *className) {
                 return;
             }
             
-            // layoutSubviews：添加/更新时间标签
-            addTimeLabelToCell(self);
+            // layoutSubviews：微信助手方案 — 只调原始实现，不创建/更新时间标签
+            // 全交给 willDisplayCell 处理，此时数据一定已就绪，避免时序问题
         });
         
         BOOL added = class_addMethod(cls, sel, newIMP, typeEncoding);
