@@ -142,37 +142,16 @@ static UIImageView *getAvatarView(id cell) {
     UIImageView *avatarView = nil;
     
     id cellView = getCellView(cell);
-    id target = cellView ? cellView : cell;
     
-    // 微信助手方案：优先使用正式属性（headImg / avatarImage / iconView）
-    // 这些是 WeChat 公开的 UIImageView 属性，访问性能最好
-    for (NSString *key in @[@"headImg", @"avatarImage", @"iconView"]) {
-        @try {
-            id view = [target valueForKey:key];
-            if ([view isKindOfClass:[UIImageView class]]) {
-                avatarView = (UIImageView *)view;
-                break;
-            }
-        } @catch (NSException *e) {}
-    }
-    
-    // 回退 1：cellView 上的 avatarImage 属性
-    if (!avatarView && cellView) {
-        @try {
-            id view = [cellView valueForKey:@"avatarImage"];
-            if ([view isKindOfClass:[UIImageView class]]) {
-                avatarView = (UIImageView *)view;
-            }
-        } @catch (NSException *e) {}
-    }
-    
-    // 回退 2：leftAvatarView / rightAvatarView selector
-    if (!avatarView) {
-        for (NSString *selName in @[@"leftAvatarView", @"rightAvatarView"]) {
-            SEL sel = NSSelectorFromString(selName);
-            if ([target respondsToSelector:sel]) {
+    // 分别在 cellView 和 cell 上依次查找（头像可能在两者任意一个上）
+    for (id target in @[cellView ?: [NSNull null], cell]) {
+        if (!target || [target isKindOfClass:[NSNull class]]) continue;
+        
+        // 微信助手方案：优先使用正式属性（headImg / avatarImage / iconView）
+        if (!avatarView) {
+            for (NSString *key in @[@"headImg", @"avatarImage", @"iconView"]) {
                 @try {
-                    id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
+                    id view = [target valueForKey:key];
                     if ([view isKindOfClass:[UIImageView class]]) {
                         avatarView = (UIImageView *)view;
                         break;
@@ -180,27 +159,42 @@ static UIImageView *getAvatarView(id cell) {
                 } @catch (NSException *e) {}
             }
         }
-    }
-    
-    // 回退 3：KVC 旧属性名
-    if (!avatarView) {
-        @try { avatarView = [target valueForKey:@"m_headImageView"]; } @catch (NSException *e) {}
-    }
-    if (!avatarView && cellView) {
-        @try { avatarView = [cellView valueForKey:@"m_avatarImgView"]; } @catch (NSException *e) {}
-    }
-    
-    // 兜底：遍历 subviews 按类名匹配
-    if (!avatarView) {
-        for (UIView *subview in [target subviews]) {
-            if ([subview isKindOfClass:[UIImageView class]]) {
-                NSString *className = NSStringFromClass([subview class]);
-                if ([className containsString:@"Head"] || [className containsString:@"Avatar"]) {
-                    avatarView = (UIImageView *)subview;
-                    break;
+        
+        // leftAvatarView / rightAvatarView selector
+        if (!avatarView) {
+            for (NSString *selName in @[@"leftAvatarView", @"rightAvatarView"]) {
+                SEL sel = NSSelectorFromString(selName);
+                if ([target respondsToSelector:sel]) {
+                    @try {
+                        id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
+                        if ([view isKindOfClass:[UIImageView class]]) {
+                            avatarView = (UIImageView *)view;
+                            break;
+                        }
+                    } @catch (NSException *e) {}
                 }
             }
         }
+        
+        // KVC 旧属性名
+        if (!avatarView) {
+            @try { avatarView = [target valueForKey:@"m_headImageView"]; } @catch (NSException *e) {}
+        }
+        
+        // 遍历 subviews 按类名匹配
+        if (!avatarView) {
+            for (UIView *subview in [target subviews]) {
+                if ([subview isKindOfClass:[UIImageView class]]) {
+                    NSString *className = NSStringFromClass([subview class]);
+                    if ([className containsString:@"Head"] || [className containsString:@"Avatar"]) {
+                        avatarView = (UIImageView *)subview;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (avatarView) break;
     }
     
     return avatarView;
@@ -210,42 +204,44 @@ static UIView *getBubbleView(id cell) {
     UIView *bubbleView = nil;
     
     id cellView = getCellView(cell);
-    id target = cellView ? cellView : cell;
     
-    // 优先通过 bubbleView 属性获取气泡容器（frame 相对 cell 坐标）
-    SEL bubbleSelector = NSSelectorFromString(@"bubbleView");
-    if ([target respondsToSelector:bubbleSelector]) {
-        @try {
-            bubbleView = ((id (*)(id, SEL))objc_msgSend)(target, bubbleSelector);
-        } @catch (NSException *e) {}
-    }
-    
-    // 回退 1：m_bgImageView（气泡背景图，注意其 frame 是相对于气泡容器内部）
-    if (!bubbleView) {
-        @try {
-            bubbleView = [target valueForKey:@"m_bgImageView"];
-        } @catch (NSException *e) {}
-    }
-    
-    // 回退 2：m_richTextView（富文本视图）
-    if (!bubbleView) {
-        @try {
-            bubbleView = [target valueForKey:@"m_richTextView"];
-        } @catch (NSException *e) {}
-    }
-    
-    // 兜底：遍历 subviews 按类名匹配
-    if (!bubbleView) {
-        for (UIView *subview in [target subviews]) {
-            NSString *className = NSStringFromClass([subview class]);
-            if ([className containsString:@"RichTextView"] ||
-                [className containsString:@"BubbleView"] ||
-                [className containsString:@"MessageView"] ||
-                [className containsString:@"BgImageView"]) {
-                bubbleView = subview;
-                break;
+    // 先在 cellView 上查找，再到 cell 上查找（气泡可能在两者任意一个上）
+    for (id target in @[cellView ?: [NSNull null], cell]) {
+        if (!target || [target isKindOfClass:[NSNull class]]) continue;
+        
+        // bubbleView 属性
+        if (!bubbleView) {
+            SEL bubbleSelector = NSSelectorFromString(@"bubbleView");
+            if ([target respondsToSelector:bubbleSelector]) {
+                @try { bubbleView = ((id (*)(id, SEL))objc_msgSend)(target, bubbleSelector); } @catch (...) {}
             }
         }
+        
+        // m_bgImageView
+        if (!bubbleView) {
+            @try { bubbleView = [target valueForKey:@"m_bgImageView"]; } @catch (...) {}
+        }
+        
+        // m_richTextView
+        if (!bubbleView) {
+            @try { bubbleView = [target valueForKey:@"m_richTextView"]; } @catch (...) {}
+        }
+        
+        // 遍历 subviews
+        if (!bubbleView) {
+            for (UIView *subview in [target subviews]) {
+                NSString *className = NSStringFromClass([subview class]);
+                if ([className containsString:@"RichTextView"] ||
+                    [className containsString:@"BubbleView"] ||
+                    [className containsString:@"MessageView"] ||
+                    [className containsString:@"BgImageView"]) {
+                    bubbleView = subview;
+                    break;
+                }
+            }
+        }
+        
+        if (bubbleView) break;
     }
     
     return bubbleView;
