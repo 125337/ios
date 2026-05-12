@@ -144,33 +144,53 @@ static UIImageView *getAvatarView(id cell) {
     id cellView = getCellView(cell);
     id target = cellView ? cellView : cell;
     
-    SEL leftAvatarSelector = NSSelectorFromString(@"leftAvatarView");
-    SEL rightAvatarSelector = NSSelectorFromString(@"rightAvatarView");
-    
-    if ([target respondsToSelector:leftAvatarSelector]) {
+    // 微信助手方案：优先使用正式属性（headImg / avatarImage / iconView）
+    // 这些是 WeChat 公开的 UIImageView 属性，访问性能最好
+    for (NSString *key in @[@"headImg", @"avatarImage", @"iconView"]) {
         @try {
-            avatarView = ((id (*)(id, SEL))objc_msgSend)(target, leftAvatarSelector);
+            id view = [target valueForKey:key];
+            if ([view isKindOfClass:[UIImageView class]]) {
+                avatarView = (UIImageView *)view;
+                break;
+            }
         } @catch (NSException *e) {}
     }
     
-    if (!avatarView && [target respondsToSelector:rightAvatarSelector]) {
-        @try {
-            avatarView = ((id (*)(id, SEL))objc_msgSend)(target, rightAvatarSelector);
-        } @catch (NSException *e) {}
-    }
-    
-    if (!avatarView) {
-        @try {
-            avatarView = [target valueForKey:@"m_headImageView"];
-        } @catch (NSException *e) {}
-    }
-    
+    // 回退 1：cellView 上的 avatarImage 属性
     if (!avatarView && cellView) {
         @try {
-            avatarView = [cellView valueForKey:@"m_avatarImgView"];
+            id view = [cellView valueForKey:@"avatarImage"];
+            if ([view isKindOfClass:[UIImageView class]]) {
+                avatarView = (UIImageView *)view;
+            }
         } @catch (NSException *e) {}
     }
     
+    // 回退 2：leftAvatarView / rightAvatarView selector
+    if (!avatarView) {
+        for (NSString *selName in @[@"leftAvatarView", @"rightAvatarView"]) {
+            SEL sel = NSSelectorFromString(selName);
+            if ([target respondsToSelector:sel]) {
+                @try {
+                    id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
+                    if ([view isKindOfClass:[UIImageView class]]) {
+                        avatarView = (UIImageView *)view;
+                        break;
+                    }
+                } @catch (NSException *e) {}
+            }
+        }
+    }
+    
+    // 回退 3：KVC 旧属性名
+    if (!avatarView) {
+        @try { avatarView = [target valueForKey:@"m_headImageView"]; } @catch (NSException *e) {}
+    }
+    if (!avatarView && cellView) {
+        @try { avatarView = [cellView valueForKey:@"m_avatarImgView"]; } @catch (NSException *e) {}
+    }
+    
+    // 兜底：遍历 subviews 按类名匹配
     if (!avatarView) {
         for (UIView *subview in [target subviews]) {
             if ([subview isKindOfClass:[UIImageView class]]) {
