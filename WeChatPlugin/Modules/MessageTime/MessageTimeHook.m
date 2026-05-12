@@ -150,9 +150,14 @@ static UIImageView *getAvatarView(id cell) {
     UIImageView *avatarView = nil;
     
     id cellView = getCellView(cell);
+    // contentView 是单元格内容的实际容器，气泡和头像都在它里面
+    id contentView = nil;
+    @try { contentView = [cell valueForKey:@"contentView"]; } @catch (...) {}
+    if (!contentView) { @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {} }
+    
     NSString *cellCls = NSStringFromClass([cell class]);
     
-    for (id target in @[cellView ?: [NSNull null], cell]) {
+    for (id target in @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell]) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
         NSString *targetCls = NSStringFromClass([target class]);
         mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: searching on target=%@ (cell=%@)", targetCls, cellCls]);
@@ -235,9 +240,13 @@ static UIView *getBubbleView(id cell) {
     UIView *bubbleView = nil;
     
     id cellView = getCellView(cell);
+    id contentView = nil;
+    @try { contentView = [cell valueForKey:@"contentView"]; } @catch (...) {}
+    if (!contentView) { @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {} }
+    
     NSString *cellCls = NSStringFromClass([cell class]);
     
-    for (id target in @[cellView ?: [NSNull null], cell]) {
+    for (id target in @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell]) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
         NSString *targetCls = NSStringFromClass([target class]);
         mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: searching on target=%@ (cell=%@)", targetCls, cellCls]);
