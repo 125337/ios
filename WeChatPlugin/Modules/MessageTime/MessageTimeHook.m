@@ -327,8 +327,9 @@ static void addTimeLabelToCell(id cell) {
         mtLog([NSString stringWithFormat:@"=== addTimeLabelToCell #%d called on: %@ (from: %@) ===", g_callCount, cellClass, from]);
         
         // 打印 cell 的子视图结构
-        mtLog([NSString stringWithFormat:@"[DBG] cell.subviews count=%lu", (unsigned long)[cell.subviews count]]);
-        for (UIView *sv in cell.subviews) {
+        UIView *cellViewDbg = (UIView *)cell;
+        mtLog([NSString stringWithFormat:@"[DBG] cell.subviews count=%lu", (unsigned long)[cellViewDbg.subviews count]]);
+        for (UIView *sv in cellViewDbg.subviews) {
             mtLog([NSString stringWithFormat:@"[DBG] cell.subview: class=%@ tag=%ld frame=%@", NSStringFromClass([sv class]), (long)sv.tag, NSStringFromCGRect(sv.frame)]);
         }
         
