@@ -232,7 +232,29 @@ static UIImageView *getAvatarView(id cell) {
         if (avatarView) break;
     }
     
-    if (!avatarView) mtLog(@"[DBG] getAvatarView: FAILED - all paths returned nil");
+    if (!avatarView) {
+        // 终极兜底：遍历 contentView 所有子视图，找第一个 UIImageView
+        UIView *cvDbg = (UIView *)cell;
+        for (UIView *sv in cvDbg.subviews) {
+            for (UIView *sv2 in sv.subviews) {
+                if ([sv2 isKindOfClass:[UIImageView class]]) {
+                    mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: ULTIMATE fallback found UIImageView=%@ frame=%@", NSStringFromClass([sv2 class]), NSStringFromCGRect(sv2.frame)]);
+                    avatarView = (UIImageView *)sv2;
+                    break;
+                }
+                for (UIView *sv3 in sv2.subviews) {
+                    if ([sv3 isKindOfClass:[UIImageView class]]) {
+                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: ULTIMATE fallback found UIImageView=%@ frame=%@", NSStringFromClass([sv3 class]), NSStringFromCGRect(sv3.frame)]);
+                        avatarView = (UIImageView *)sv3;
+                        break;
+                    }
+                }
+                if (avatarView) break;
+            }
+            if (avatarView) break;
+        }
+        if (!avatarView) mtLog(@"[DBG] getAvatarView: ULTIMATE fallback STILL FAILED");
+    }
     return avatarView;
 }
 
@@ -301,7 +323,10 @@ static UIView *getBubbleView(id cell) {
         if (bubbleView) break;
     }
     
-    if (!bubbleView) mtLog(@"[DBG] getBubbleView: FAILED - all paths returned nil");
+    if (!bubbleView) {
+        mtLog(@"[DBG] getBubbleView: FAILED - all paths returned nil, using cellView as bubble fallback");
+        bubbleView = cellView; // WeChat 8.0.60 中 cellView 本身就是气泡容器
+    }
     return bubbleView;
 }
 
@@ -340,6 +365,17 @@ static void addTimeLabelToCell(id cell) {
         mtLog([NSString stringWithFormat:@"[DBG] cell.subviews count=%lu", (unsigned long)[cellViewDbg.subviews count]]);
         for (UIView *sv in cellViewDbg.subviews) {
             mtLog([NSString stringWithFormat:@"[DBG] cell.subview: class=%@ tag=%ld frame=%@", NSStringFromClass([sv class]), (long)sv.tag, NSStringFromCGRect(sv.frame)]);
+            // 递归打印 contentView 的子视图
+            if ([NSStringFromClass([sv class]) containsString:@"ContentView"]) {
+                mtLog([NSString stringWithFormat:@"[DBG]   -> contentView.subviews count=%lu", (unsigned long)[sv.subviews count]]);
+                for (UIView *sv2 in sv.subviews) {
+                    mtLog([NSString stringWithFormat:@"[DBG]   -> subview: class=%@ frame=%@", NSStringFromClass([sv2 class]), NSStringFromCGRect(sv2.frame)]);
+                    // 递归二级子视图
+                    for (UIView *sv3 in sv2.subviews) {
+                        mtLog([NSString stringWithFormat:@"[DBG]     -> sub-subview: class=%@ frame=%@", NSStringFromClass([sv3 class]), NSStringFromCGRect(sv3.frame)]);
+                    }
+                }
+            }
         }
         
         CGRect cellFrame = [cell frame];
