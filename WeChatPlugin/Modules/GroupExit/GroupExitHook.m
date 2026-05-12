@@ -168,6 +168,10 @@ static void checkMemberExit(id contact, NSString *newMemberList) {
     
     NSString *oldMemberList = groupMemberSnapshots[chatRoomName];
     
+    if (oldMemberList && [oldMemberList isEqualToString:newMemberList]) {
+        return;
+    }
+    
     groupExitLog([NSString stringWithFormat:@"[GroupExit] %@ setter called, old=%@, new=%lu", 
                   chatRoomName, 
                   oldMemberList ? [NSString stringWithFormat:@"%lu", (unsigned long)oldMemberList.length] : @"nil",

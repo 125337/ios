@@ -5,7 +5,7 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 
-static NSMutableDictionary *gProcessedCreateTimes = nil;
+
 
 static void mtLog(NSString *content) {
     NSLog(@"[WeChatPlugin][MessageTime] %@", content);
@@ -352,26 +352,6 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         objc_setAssociatedObject(cell, @"messageTimeLastIdentifier", identifier, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        
-        static NSMutableDictionary *gProcessedCreateTimesLocal = nil;
-        static dispatch_once_t onceToken;
-        dispatch_once(&onceToken, ^{
-            gProcessedCreateTimesLocal = [NSMutableDictionary dictionary];
-            gProcessedCreateTimes = gProcessedCreateTimesLocal;
-        });
-        NSNumber *existingCellNum = gProcessedCreateTimes[@(createTime)];
-        if (existingCellNum) {
-            UITableViewCell *existingCell = (__bridge UITableViewCell *)((void *)[existingCellNum longValue]);
-            UIView *existingLabel = [existingCell viewWithTag:999999];
-            if (existingLabel && existingLabel.superview) {
-                mtLog([NSString stringWithFormat:@"createTime=%u already visible on cell %p, skipping this cell %p", createTime, (void *)[existingCellNum longValue], (__bridge void *)cell]);
-                return;
-            } else {
-                mtLog([NSString stringWithFormat:@"createTime=%u registered cell %p has no visible label, allowing cell %p", createTime, (void *)[existingCellNum longValue], (__bridge void *)cell]);
-                [gProcessedCreateTimes removeObjectForKey:@(createTime)];
-            }
-        }
-        gProcessedCreateTimes[@(createTime)] = @((long)(__bridge void *)cell);
         
         UIImageView *avatarView = getAvatarView(cell);
         
