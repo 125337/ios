@@ -127,14 +127,22 @@ static NSString *formatMessageTime(NSDate *date, NSString *format) {
 
 static id getCellView(id cell) {
     id cellView = nil;
+    NSString *cellCls = NSStringFromClass([cell class]);
     @try {
         cellView = [cell valueForKey:@"m_cellView"];
-    } @catch (NSException *e) {}
+        if (cellView) mtLog([NSString stringWithFormat:@"[DBG] getCellView: found via m_cellView, class=%@", NSStringFromClass([cellView class])]);
+    } @catch (NSException *e) {
+        mtLog([NSString stringWithFormat:@"[DBG] getCellView: m_cellView threw: %@", e.reason]);
+    }
     if (!cellView) {
         @try {
             cellView = [cell valueForKey:@"cellView"];
-        } @catch (NSException *e) {}
+            if (cellView) mtLog([NSString stringWithFormat:@"[DBG] getCellView: found via cellView, class=%@", NSStringFromClass([cellView class])]);
+        } @catch (NSException *e) {
+            mtLog([NSString stringWithFormat:@"[DBG] getCellView: cellView threw: %@", e.reason]);
+        }
     }
+    if (!cellView) mtLog([NSString stringWithFormat:@"[DBG] getCellView: BOTH nil for cell=%@", cellCls]);
     return cellView;
 }
 
@@ -142,21 +150,30 @@ static UIImageView *getAvatarView(id cell) {
     UIImageView *avatarView = nil;
     
     id cellView = getCellView(cell);
+    NSString *cellCls = NSStringFromClass([cell class]);
     
-    // 分别在 cellView 和 cell 上依次查找（头像可能在两者任意一个上）
     for (id target in @[cellView ?: [NSNull null], cell]) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
+        NSString *targetCls = NSStringFromClass([target class]);
+        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: searching on target=%@ (cell=%@)", targetCls, cellCls]);
         
-        // 优先使用 avatarView / avatarImageView（WeChat 8.0.60 中的实际属性名）
+        // avatarView / avatarImageView / headImg
         if (!avatarView) {
             for (NSString *key in @[@"avatarView", @"avatarImageView", @"headImg"]) {
                 @try {
                     id view = [target valueForKey:key];
-                    if ([view isKindOfClass:[UIImageView class]]) {
-                        avatarView = (UIImageView *)view;
-                        break;
+                    if (view) {
+                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ found, class=%@, isImageView=%d", key, NSStringFromClass([view class]), [view isKindOfClass:[UIImageView class]]]);
+                        if ([view isKindOfClass:[UIImageView class]]) {
+                            avatarView = (UIImageView *)view;
+                            break;
+                        }
+                    } else {
+                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ returned nil on %@", key, targetCls]);
                     }
-                } @catch (NSException *e) {}
+                } @catch (NSException *e) {
+                    mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ threw on %@: %@", key, targetCls, e.reason]);
+                }
             }
         }
         
@@ -164,9 +181,12 @@ static UIImageView *getAvatarView(id cell) {
         if (!avatarView) {
             for (NSString *selName in @[@"leftAvatarView", @"rightAvatarView"]) {
                 SEL sel = NSSelectorFromString(selName);
-                if ([target respondsToSelector:sel]) {
+                BOOL responds = [target respondsToSelector:sel];
+                mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ responds=%@ on %@", selName, responds?@"YES":@"NO", targetCls]);
+                if (responds) {
                     @try {
                         id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
+                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ returned class=%@", selName, NSStringFromClass([view class])]);
                         if ([view isKindOfClass:[UIImageView class]]) {
                             avatarView = (UIImageView *)view;
                             break;
@@ -176,27 +196,38 @@ static UIImageView *getAvatarView(id cell) {
             }
         }
         
-        // KVC 旧属性名
+        // m_headImageView KVC
         if (!avatarView) {
-            @try { avatarView = [target valueForKey:@"m_headImageView"]; } @catch (NSException *e) {}
+            @try {
+                id view = [target valueForKey:@"m_headImageView"];
+                mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: m_headImageView found=%@", view?@"YES":@"NO"]);
+                if ([view isKindOfClass:[UIImageView class]]) avatarView = view;
+            } @catch (NSException *e) {
+                mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: m_headImageView threw: %@", e.reason]);
+            }
         }
         
-        // 遍历 subviews 按类名匹配
+        // subviews 遍历
         if (!avatarView) {
+            int subviewCount = (int)[[target subviews] count];
+            mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: scanning %d subviews on %@", subviewCount, targetCls]);
             for (UIView *subview in [target subviews]) {
                 if ([subview isKindOfClass:[UIImageView class]]) {
-                    NSString *className = NSStringFromClass([subview class]);
-                    if ([className containsString:@"Head"] || [className containsString:@"Avatar"]) {
+                    NSString *cn = NSStringFromClass([subview class]);
+                    if ([cn containsString:@"Head"] || [cn containsString:@"Avatar"]) {
+                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: subview match class=%@ frame=%@", cn, NSStringFromCGRect(subview.frame)]);
                         avatarView = (UIImageView *)subview;
                         break;
                     }
                 }
             }
+            if (!avatarView) mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: no subview match on %@", targetCls]);
         }
         
         if (avatarView) break;
     }
     
+    if (!avatarView) mtLog(@"[DBG] getAvatarView: FAILED - all paths returned nil");
     return avatarView;
 }
 
@@ -204,41 +235,64 @@ static UIView *getBubbleView(id cell) {
     UIView *bubbleView = nil;
     
     id cellView = getCellView(cell);
+    NSString *cellCls = NSStringFromClass([cell class]);
     
-    // 先在 cellView 上查找，再到 cell 上查找（气泡可能在两者任意一个上）
     for (id target in @[cellView ?: [NSNull null], cell]) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
+        NSString *targetCls = NSStringFromClass([target class]);
+        mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: searching on target=%@ (cell=%@)", targetCls, cellCls]);
         
-        // bubbleView 属性（WeChat 8.0.60 中此属性存在）
+        // bubbleView selector
         if (!bubbleView) {
-            SEL bubbleSelector = NSSelectorFromString(@"bubbleView");
-            if ([target respondsToSelector:bubbleSelector]) {
-                @try { bubbleView = ((id (*)(id, SEL))objc_msgSend)(target, bubbleSelector); } @catch (...) {}
+            SEL sel = NSSelectorFromString(@"bubbleView");
+            BOOL responds = [target respondsToSelector:sel];
+            mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bubbleView responds=%@ on %@", responds?@"YES":@"NO", targetCls]);
+            if (responds) {
+                @try {
+                    id v = ((id (*)(id, SEL))objc_msgSend)(target, sel);
+                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bubbleView returned class=%@", NSStringFromClass([v class])]);
+                    if (v) bubbleView = v;
+                } @catch (NSException *e) {
+                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bubbleView threw: %@", e.reason]);
+                }
             }
         }
         
-        // bgImageView（WeChat 8.0.60 中 CommonMessageCellView 上的 UIImageView 属性，不是 m_bgImageView）
+        // bgImageView KVC
         if (!bubbleView) {
-            @try { bubbleView = [target valueForKey:@"bgImageView"]; } @catch (...) {}
+            @try {
+                id v = [target valueForKey:@"bgImageView"];
+                if (v) {
+                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bgImageView found, class=%@ frame=%@", NSStringFromClass([v class]), NSStringFromCGRect([v frame])]);
+                    bubbleView = v;
+                } else {
+                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bgImageView returned nil on %@", targetCls]);
+                }
+            } @catch (NSException *e) {
+                mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bgImageView threw on %@: %@", targetCls, e.reason]);
+            }
         }
         
-        // 遍历 subviews 按类名匹配
+        // 遍历 subviews
         if (!bubbleView) {
-            for (UIView *subview in [target subviews]) {
-                NSString *className = NSStringFromClass([subview class]);
-                if ([className containsString:@"RichTextView"] ||
-                    [className containsString:@"BubbleView"] ||
-                    [className containsString:@"MessageView"] ||
-                    [className containsString:@"BgImageView"]) {
-                    bubbleView = subview;
+            int cnt = (int)[[target subviews] count];
+            mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: scanning %d subviews on %@", cnt, targetCls]);
+            for (UIView *sv in [target subviews]) {
+                NSString *cn = NSStringFromClass([sv class]);
+                if ([cn containsString:@"RichTextView"] || [cn containsString:@"BubbleView"] ||
+                    [cn containsString:@"MessageView"] || [cn containsString:@"BgImageView"]) {
+                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: subview match class=%@ frame=%@", cn, NSStringFromCGRect(sv.frame)]);
+                    bubbleView = sv;
                     break;
                 }
             }
+            if (!bubbleView) mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: no subview match on %@", targetCls]);
         }
         
         if (bubbleView) break;
     }
     
+    if (!bubbleView) mtLog(@"[DBG] getBubbleView: FAILED - all paths returned nil");
     return bubbleView;
 }
 
@@ -250,6 +304,8 @@ static void setFrameForBubbleView(id cell, CGRect frame) {
     }
 }
 
+static int g_callCount = 0;
+
 static void addTimeLabelToCell(id cell) {
     @try {
         if (!cell) {
@@ -257,8 +313,24 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
+        // 获取调用栈（判断是从 willDisplayCell 还是 layoutSubviews 来的）
+        NSArray *callStack = [NSThread callStackSymbols];
+        NSString *from = @"unknown";
+        if (callStack.count > 2) {
+            NSString *frame2 = callStack[2];
+            if ([frame2 containsString:@"willDisplayCell"]) from = @"willDisplayCell";
+            else if ([frame2 containsString:@"layoutSubviews"]) from = @"layoutSubviews";
+        }
+        
         NSString *cellClass = NSStringFromClass([cell class]);
-        mtLog([NSString stringWithFormat:@"addTimeLabelToCell called on: %@", cellClass]);
+        g_callCount++;
+        mtLog([NSString stringWithFormat:@"=== addTimeLabelToCell #%d called on: %@ (from: %@) ===", g_callCount, cellClass, from]);
+        
+        // 打印 cell 的子视图结构
+        mtLog([NSString stringWithFormat:@"[DBG] cell.subviews count=%lu", (unsigned long)[cell.subviews count]]);
+        for (UIView *sv in cell.subviews) {
+            mtLog([NSString stringWithFormat:@"[DBG] cell.subview: class=%@ tag=%ld frame=%@", NSStringFromClass([sv class]), (long)sv.tag, NSStringFromCGRect(sv.frame)]);
+        }
         
         CGRect cellFrame = [cell frame];
         if (CGRectEqualToRect(cellFrame, CGRectZero)) {
@@ -271,29 +343,28 @@ static void addTimeLabelToCell(id cell) {
         if (!config.showMessageTime) return;
         
         id wrap = nil;
+        NSString *cellClsDbg = NSStringFromClass([cell class]);
         
         // 路径1: cell → m_cellView → viewModel → messageWrap
         @try {
-            id cellView = [cell valueForKey:@"m_cellView"];
-            if (!cellView) cellView = [cell valueForKey:@"cellView"];
-            if (cellView) {
+            id cv = nil;
+            @try { cv = [cell valueForKey:@"m_cellView"]; if(cv) mtLog(@"[DBG] wrap: got cellView via m_cellView"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: m_cellView threw: %@", e.reason]); }
+            if (!cv) { @try { cv = [cell valueForKey:@"cellView"]; if(cv) mtLog(@"[DBG] wrap: got cellView via cellView"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: cellView threw: %@", e.reason]); } }
+            if (cv) {
+                mtLog([NSString stringWithFormat:@"[DBG] wrap: cellView class=%@", NSStringFromClass([cv class])]);
                 id viewModel = nil;
-                @try { viewModel = [cellView valueForKey:@"m_viewModel"]; } @catch (NSException *e) {}
-                if (!viewModel) {
-                    @try { viewModel = [cellView valueForKey:@"viewModel"]; } @catch (NSException *e) {}
-                }
+                @try { viewModel = [cv valueForKey:@"m_viewModel"]; if(viewModel) mtLog(@"[DBG] wrap: got viewModel via m_viewModel"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: m_viewModel threw: %@", e.reason]); }
+                if (!viewModel) { @try { viewModel = [cv valueForKey:@"viewModel"]; if(viewModel) mtLog(@"[DBG] wrap: got viewModel via viewModel"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: viewModel threw: %@", e.reason]); } }
                 if (viewModel) {
-                    @try { wrap = [viewModel valueForKey:@"messageWrap"]; } @catch (NSException *e) {}
-                    if (!wrap) {
-                        @try { wrap = [viewModel valueForKey:@"m_messageWrap"]; } @catch (NSException *e) {}
-                    }
-                    if (wrap) {
-                        mtLog(@"Got wrap from cell→cellView→viewModel→messageWrap");
-                    }
+                    mtLog([NSString stringWithFormat:@"[DBG] wrap: viewModel class=%@", NSStringFromClass([viewModel class])]);
+                    @try { wrap = [viewModel valueForKey:@"messageWrap"]; if(wrap) mtLog(@"[DBG] wrap: got via messageWrap"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: messageWrap threw: %@", e.reason]); }
+                    if (!wrap) { @try { wrap = [viewModel valueForKey:@"m_messageWrap"]; if(wrap) mtLog(@"[DBG] wrap: got via m_messageWrap"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: m_messageWrap threw: %@", e.reason]); } }
+                } else {
+                    mtLog(@"[DBG] wrap: viewModel is nil on this cellView");
                 }
             }
         } @catch (NSException *e) {
-            mtLog([NSString stringWithFormat:@"cellView path exception: %@", e]);
+            mtLog([NSString stringWithFormat:@"[DBG] wrap: cellView path exception: %@", e]);
         }
         
         // 路径2: cell → _viewModel → parentModel → m_messageWrap (旧版兼容)
