@@ -596,14 +596,14 @@ static void hookCellForTime(NSString *className) {
         gOrigIMPs = [NSMutableDictionary dictionary];
     });
     
-    // 仅保留 layoutSubviews 作为兜底。主入口改为 willDisplayCell（见 hookWillDisplayCell）
-    // willDisplayCell 只触发一次，天然防重复，不需要 updateStatus/layoutContentView/prepareForReuse
-    for (NSString *methodName in @[@"layoutSubviews"]) {
+    // layoutSubviews 作为兜底（willDisplayCell 可能因版本差异找不到）
+    // prepareForReuse 做清理：Cell 复用时移除旧标签和关联状态，防止残留导致重复
+    for (NSString *methodName in @[@"layoutSubviews", @"prepareForReuse"]) {
         SEL sel = NSSelectorFromString(methodName);
         Method m = class_getInstanceMethod(cls, sel);
         if (!m) continue;
         
-        mtLog([NSString stringWithFormat:@"Hooking %@ - %@ (fallback)", className, methodName]);
+        mtLog([NSString stringWithFormat:@"Hooking %@ - %@", className, methodName]);
         
         NSString *key = [NSString stringWithFormat:@"%@_%@", className, methodName];
         IMP origIMP = method_getImplementation(m);
@@ -616,6 +616,20 @@ static void hookCellForTime(NSString *className) {
                 IMP orig = [impValue pointerValue];
                 ((void (*)(id, SEL))orig)(self, sel);
             }
+            
+            // prepareForReuse：彻底清理时间标签，防止复用后残留
+            if (sel == NSSelectorFromString(@"prepareForReuse")) {
+                UIView *oldLabel = [self viewWithTag:999999];
+                if (oldLabel) {
+                    [oldLabel removeFromSuperview];
+                }
+                objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+                objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                return;
+            }
+            
+            // layoutSubviews：添加/更新时间标签
             addTimeLabelToCell(self);
         });
         
@@ -624,7 +638,7 @@ static void hookCellForTime(NSString *className) {
             method_setImplementation(m, newIMP);
         }
         
-        mtLog([NSString stringWithFormat:@"Hooked %@ - %@ (fallback)", className, methodName]);
+        mtLog([NSString stringWithFormat:@"Hooked %@ - %@", className, methodName]);
     }
 }
 
