@@ -261,17 +261,10 @@ static id getBubbleView(id cell) {
     }
     return bubbleView;
 }
-    
-    if (!bubbleView) {
-        mtLog(@"[DBG] getBubbleView: FAILED - all paths returned nil, using cellView as bubble fallback");
-        bubbleView = cellView; // WeChat 8.0.60 中 cellView 本身就是气泡容器
-    }
-    return bubbleView;
-}
 
 // 微信优化方案：独立的气泡 frame 设置方法
 static void setFrameForBubbleView(id cell, CGRect frame) {
-    id bubble = getBubbleView(cell);
+    UIView *bubble = (UIView *)getBubbleView(cell);
     if (bubble) {
         bubble.frame = frame;
     }
@@ -295,7 +288,7 @@ static void mt_updateLabelFrame(id cell) {
         id avatar = getAvatarView(cell);
         
         CGRect bubbleFrame = bubble ? bubble.frame : cellFrame;
-        CGRect avatarFrame = avatar ? avatar.frame : CGRectZero;
+        CGRect avatarFrame = avatar ? [(UIView *)avatar frame] : CGRectZero;
         
         // 检查是否发送者
         BOOL isSender = NO;
@@ -569,6 +562,27 @@ static void addTimeLabelToCell(id cell) {
         UIView *bubbleView = getBubbleView(cell);
         mtLog([NSString stringWithFormat:@"bubbleView: %@", bubbleView ? @"YES" : @"NO"]);
         
+        // 发送者检测（需要在配色之前）
+        BOOL isSender = NO;
+        {
+            id targetCellView = getCellView(cell);
+            id senderTarget = targetCellView ?: cell;
+            SEL senderSel = NSSelectorFromString(@"isSenderFromMsgWrap:");
+            if ([senderTarget respondsToSelector:senderSel]) {
+                @try {
+                    isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(senderTarget, senderSel, wrap);
+                } @catch (NSException *e) {}
+            }
+            if (!isSender && senderTarget != cell && [cell respondsToSelector:senderSel]) {
+                @try {
+                    isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, senderSel, wrap);
+                } @catch (NSException *e) {}
+            }
+            if (!isSender && bubbleView) {
+                isSender = CGRectGetMidX(bubbleView.frame) > CGRectGetMidX(cellFrame);
+            }
+        }
+        
         // 使用发送者/接收者独立配色
         UIColor *textColor = nil;
         UIColor *bgColor = nil;
@@ -628,30 +642,8 @@ static void addTimeLabelToCell(id cell) {
             mtLog([NSString stringWithFormat:@"Extended bubble width by %.0f", config.messageTimeBubbleExtWidth]);
         }
         
-        CGRect avatarFrame = avatarView.frame;
+        CGRect avatarFrame = [(UIView *)avatarView frame];
         CGRect bubbleFrame = bubbleView ? bubbleView.frame : cellFrame;
-        
-        BOOL isSender = NO;
-        id targetCellView = getCellView(cell);
-        id senderTarget = targetCellView ?: cell;
-        
-        // 仅通过 isSenderFromMsgWrap: 判断发送者（微信助手方案）
-        SEL senderSel = NSSelectorFromString(@"isSenderFromMsgWrap:");
-        if ([senderTarget respondsToSelector:senderSel]) {
-            @try {
-                isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(senderTarget, senderSel, wrap);
-            } @catch (NSException *e) {}
-        }
-        if (!isSender && senderTarget != cell && [cell respondsToSelector:senderSel]) {
-            @try {
-                isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, senderSel, wrap);
-            } @catch (NSException *e) {}
-        }
-        
-        // 3. 兜底：通过气泡位置判断
-        if (!isSender && bubbleView) {
-            isSender = CGRectGetMidX(bubbleView.frame) > CGRectGetMidX(cellFrame);
-        }
         
         mtLog([NSString stringWithFormat:@"avatarView: %@, bubbleFrame: %@, isSender: %d", avatarView ? @"YES" : @"NO", NSStringFromCGRect(bubbleFrame), isSender]);
         
