@@ -157,17 +157,19 @@ static id getAvatarView(id cell) {
     @try { contentView = [cell valueForKey:@"contentView"]; } @catch (...) {}
     if (!contentView) { @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {} }
     
-    for (id target in @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell]) {
+    NSArray *targets = @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell];
+    
+    for (id target in targets) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
-        NSString *targetCls = NSStringFromClass([target class]);
         
-        // 1. m_headImageView（WeChat 8.0.60 CommonMessageCellView 实际属性，MMHeadImageView*）
+        // 1. getHeadImageView 方法（WeChat 自身方法，Ghidra 确认存在 CommonMessageCellView 中）
         if (!avatarView) {
-            for (NSString *key in @[@"m_headImageView", @"headImgView", @"avatarView", @"avatarImageView", @"headImg"]) {
+            SEL sel = NSSelectorFromString(@"getHeadImageView");
+            if ([target respondsToSelector:sel]) {
                 @try {
-                    id view = [target valueForKey:key];
-                    if (view && [view respondsToSelector:@selector(image)]) {
-                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ found, class=%@", key, NSStringFromClass([view class])]);
+                    id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
+                    if (view) {
+                        mtLog(@"[DBG] getAvatarView: getHeadImageView found");
                         avatarView = view;
                         break;
                     }
@@ -175,7 +177,7 @@ static id getAvatarView(id cell) {
             }
         }
         
-        // 2. leftAvatarView / rightAvatarView selector（ChatTableViewCell 上的属性）
+        // 2. leftAvatarView / rightAvatarView（ChatTableViewCell 上的属性）
         if (!avatarView) {
             for (NSString *selName in @[@"leftAvatarView", @"rightAvatarView"]) {
                 SEL sel = NSSelectorFromString(selName);
@@ -183,7 +185,7 @@ static id getAvatarView(id cell) {
                     @try {
                         id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
                         if (view && [view respondsToSelector:@selector(image)]) {
-                            mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ found", selName]);
+                            mtLog(@"[DBG] getAvatarView: %@ found", selName);
                             avatarView = view;
                             break;
                         }
@@ -192,13 +194,27 @@ static id getAvatarView(id cell) {
             }
         }
         
-        // 3. subviews 遍历（最终兜底）
+        // 3. KVC fallback
+        if (!avatarView) {
+            for (NSString *key in @[@"m_headImageView", @"headImgView", @"avatarView", @"avatarImageView", @"headImg"]) {
+                @try {
+                    id view = [target valueForKey:key];
+                    if (view && [view respondsToSelector:@selector(image)]) {
+                        mtLog(@"[DBG] getAvatarView: KVC %@ found, class=%@", key, NSStringFromClass([view class]));
+                        avatarView = view;
+                        break;
+                    }
+                } @catch (NSException *e) {}
+            }
+        }
+        
+        // 4. subviews 遍历（兜底）
         if (!avatarView) {
             for (UIView *sv in [target subviews]) {
                 if ([sv respondsToSelector:@selector(image)]) {
                     NSString *cn = NSStringFromClass([sv class]);
                     if ([cn containsString:@"Head"] || [cn containsString:@"Avatar"]) {
-                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: subview match class=%@", cn]);
+                        mtLog(@"[DBG] getAvatarView: subview match class=%@", cn);
                         avatarView = sv;
                         break;
                     }
@@ -221,17 +237,19 @@ static id getBubbleView(id cell) {
     @try { contentView = [cell valueForKey:@"contentView"]; } @catch (...) {}
     if (!contentView) { @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {} }
     
-    for (id target in @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell]) {
+    NSArray *targets = @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell];
+    
+    for (id target in targets) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
-        NSString *targetCls = NSStringFromClass([target class]);
         
-        // 1. m_bgImageView（WeChat 8.0.60 CommonMessageCellView 实际属性，YYAsyncImageView*）
+        // 1. getBgImageView 方法（WeChat 自身方法，Ghidra 确认存在 CommonMessageCellView 中）
         if (!bubbleView) {
-            for (NSString *key in @[@"m_bgImageView", @"bgImageView"]) {
+            SEL sel = NSSelectorFromString(@"getBgImageView");
+            if ([target respondsToSelector:sel]) {
                 @try {
-                    id v = [target valueForKey:key];
+                    id v = ((id (*)(id, SEL))objc_msgSend)(target, sel);
                     if (v) {
-                        mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: %@ found, class=%@ frame=%@", key, NSStringFromClass([v class]), NSStringFromCGRect([v frame])]);
+                        mtLog(@"[DBG] getBubbleView: getBgImageView found");
                         bubbleView = v;
                         break;
                     }
@@ -239,13 +257,27 @@ static id getBubbleView(id cell) {
             }
         }
         
-        // 2. subviews 遍历（Final fallback）
+        // 2. KVC m_bgImageView
+        if (!bubbleView) {
+            for (NSString *key in @[@"m_bgImageView", @"bgImageView"]) {
+                @try {
+                    id v = [target valueForKey:key];
+                    if (v) {
+                        mtLog(@"[DBG] getBubbleView: KVC %@ found, class=%@", key, NSStringFromClass([v class]));
+                        bubbleView = v;
+                        break;
+                    }
+                } @catch (NSException *e) {}
+            }
+        }
+        
+        // 3. subviews 遍历（final fallback）
         if (!bubbleView) {
             for (UIView *sv in [target subviews]) {
                 NSString *cn = NSStringFromClass([sv class]);
                 if ([cn containsString:@"BgImage"] || [cn containsString:@"Bubble"] ||
                     [cn containsString:@"MessageView"] || [cn containsString:@"RichTextView"]) {
-                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: subview match class=%@", cn]);
+                    mtLog(@"[DBG] getBubbleView: subview match class=%@", cn);
                     bubbleView = sv;
                     break;
                 }
