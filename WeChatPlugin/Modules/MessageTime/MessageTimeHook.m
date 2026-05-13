@@ -416,6 +416,10 @@ static void mt_updateLabelFrame(id cell) {
         }
         if (offsetY != 0) labelFrame.origin.y -= offsetY;
         
+        CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
+        if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
+        if (labelFrame.origin.y < 2) labelFrame.origin.y = 2;
+        
         label.frame = labelFrame;
         mtLog(@"[DBG] mt_updateLabelFrame: updated position");
     } @catch (NSException *e) {
@@ -796,6 +800,11 @@ static void addTimeLabelToCell(id cell) {
         }
         
         
+        CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
+        if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
+        if (labelFrame.origin.y < 2) labelFrame.origin.y = 2;
+        
+        
         mtLog([NSString stringWithFormat:@"Final labelFrame: %@", NSStringFromCGRect(labelFrame)]);
         
         timeLabel.frame = labelFrame;
@@ -912,73 +921,7 @@ static void hookCellForTime(NSString *className) {
     }
 }
 
-static void hookWillDisplayCell(void) {
-    // Hook tableView:willDisplayCell:forRowAtIndexPath:
-    // 这是微信助手使用的 Hook 策略 — Cell 即将显示时才触发，只调用一次，天然避免重复
-    Class vcClass = objc_getClass("BaseMsgContentViewController");
-    if (!vcClass) {
-        mtLog(@"BaseMsgContentViewController not found, skipping willDisplayCell hooks");
-        return;
-    }
-    
-    // === tableView:willDisplayCell:forRowAtIndexPath: ===
-    SEL tvSel = @selector(tableView:willDisplayCell:forRowAtIndexPath:);
-    Method tvMethod = class_getInstanceMethod(vcClass, tvSel);
-    if (tvMethod) {
-        NSString *tvKey = @"BaseMsgContentViewController_tableView_willDisplayCell";
-        IMP origTVIMP = method_getImplementation(tvMethod);
-        const char *tvTypeEncoding = method_getTypeEncoding(tvMethod);
-        [gOrigIMPs setObject:[NSValue valueWithPointer:origTVIMP] forKey:tvKey];
-        
-        IMP newTVIMP = imp_implementationWithBlock(^void(id self, UITableView *tableView, UITableViewCell *cell, NSIndexPath *indexPath) {
-            // 先调用原始实现
-            NSValue *impValue = gOrigIMPs[tvKey];
-            if (impValue) {
-                IMP orig = [impValue pointerValue];
-                ((void (*)(id, SEL, id, id, id))orig)(self, tvSel, tableView, cell, indexPath);
-            }
-            // 添加时间标签
-            addTimeLabelToCell(cell);
-        });
-        
-        BOOL added = class_addMethod(vcClass, tvSel, newTVIMP, tvTypeEncoding);
-        if (!added) {
-            method_setImplementation(tvMethod, newTVIMP);
-        }
-        mtLog(@"Hooked BaseMsgContentViewController - tableView:willDisplayCell:forRowAtIndexPath:");
-    } else {
-        mtLog(@"tableView:willDisplayCell:forRowAtIndexPath: not found on BaseMsgContentViewController");
-    }
-    
-    // === collectionView:willDisplayCell:forItemAtIndexPath: ===
-    SEL cvSel = @selector(collectionView:willDisplayCell:forItemAtIndexPath:);
-    Method cvMethod = class_getInstanceMethod(vcClass, cvSel);
-    if (cvMethod) {
-        NSString *cvKey = @"BaseMsgContentViewController_collectionView_willDisplayCell";
-        IMP origCVIMP = method_getImplementation(cvMethod);
-        const char *cvTypeEncoding = method_getTypeEncoding(cvMethod);
-        [gOrigIMPs setObject:[NSValue valueWithPointer:origCVIMP] forKey:cvKey];
-        
-        IMP newCVIMP = imp_implementationWithBlock(^void(id self, UICollectionView *collectionView, UICollectionViewCell *cell, NSIndexPath *indexPath) {
-            // 先调用原始实现
-            NSValue *impValue = gOrigIMPs[cvKey];
-            if (impValue) {
-                IMP orig = [impValue pointerValue];
-                ((void (*)(id, SEL, id, id, id))orig)(self, cvSel, collectionView, cell, indexPath);
-            }
-            // 添加时间标签
-            addTimeLabelToCell((id)cell);
-        });
-        
-        BOOL added = class_addMethod(vcClass, cvSel, newCVIMP, cvTypeEncoding);
-        if (!added) {
-            method_setImplementation(cvMethod, newCVIMP);
-        }
-        mtLog(@"Hooked BaseMsgContentViewController - collectionView:willDisplayCell:forItemAtIndexPath:");
-    } else {
-        mtLog(@"collectionView:willDisplayCell:forItemAtIndexPath: not found on BaseMsgContentViewController");
-    }
-}
+
 
 @implementation MessageTimeHook
 
@@ -1028,8 +971,7 @@ static void hookWillDisplayCell(void) {
         }
     }
     
-    // 微信助手策略：willDisplayCell 作为主入口，只触发一次，天然防重复
-    hookWillDisplayCell();
+    
     
     Class chatTimeCellViewClass = objc_getClass("ChatTimeCellView");
     if (chatTimeCellViewClass) {
