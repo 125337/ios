@@ -24,11 +24,23 @@ jobs:
     - name: Build dylib (arm64)
       run: |
         set -o pipefail
-        mkdir -p build
-        
+        mkdir -p build build/CydiaSubstrate.framework
+
         SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
         echo "SDK_PATH: $SDK_PATH"
-        
+
+        echo "=== Step 0: Build CydiaSubstrate.framework ==="
+        clang -arch arm64 \
+              -isysroot "$SDK_PATH" \
+              -target arm64-apple-ios14.0 \
+              -dynamiclib \
+              -install_name @rpath/CydiaSubstrate.framework/CydiaSubstrate \
+              -o build/CydiaSubstrate.framework/CydiaSubstrate \
+              WeChatPlugin/libs/CydiaSubstrate.m
+
+        cp WeChatPlugin/libs/CydiaSubstrate.framework/Info.plist build/CydiaSubstrate.framework/
+        cp WeChatPlugin/libs/CydiaSubstrate.framework/Headers/CydiaSubstrate.h build/CydiaSubstrate.framework/
+
         echo "=== Step 1: Compile each .m file to .o ==="
         OBJ_FILES=""
         for f in \
@@ -89,6 +101,7 @@ jobs:
                 -IWeChatPlugin/Modules/AutoTransfer \
                 -IWeChatPlugin/Settings/Common \
                 -IWeChatPlugin/Settings/Controllers \
+                -IWeChatPlugin/libs/CydiaSubstrate.framework/Headers \
                 -o "$OBJ_FILE" \
                 "$f"
           OBJ_FILES="$OBJ_FILES $OBJ_FILE"
@@ -104,16 +117,21 @@ jobs:
               -framework Security \
               -framework AVFoundation \
               -framework UserNotifications \
+              -F build \
+              -framework CydiaSubstrate \
+              -Wl,-rpath,@loader_path \
               -Wl,-undefined,dynamic_lookup \
               -o build/Mio_arm64.dylib \
               $OBJ_FILES
         
         echo "=== Build successful ==="
         ls -la build/Mio_arm64.dylib
+        ls -la build/CydiaSubstrate.framework/CydiaSubstrate
         
     - name: Sign dylib
       run: |
         codesign -f -s - build/Mio_arm64.dylib
+        codesign -f -s - build/CydiaSubstrate.framework/CydiaSubstrate
         
     - name: Delete old artifacts
       uses: actions/github-script@v7
@@ -138,5 +156,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Mio.dylib
-        path: build/Mio_arm64.dylib
+        path: |
+          build/Mio_arm64.dylib
+          build/CydiaSubstrate.framework/CydiaSubstrate
         retention-days: 30
