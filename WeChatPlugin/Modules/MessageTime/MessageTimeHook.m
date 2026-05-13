@@ -430,13 +430,12 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
-        // 获取调用栈（判断是从 willDisplayCell 还是 layoutSubviews 来的）
+        // 获取调用栈（遍历所有帧，block 实现的 IMP 栈深度不确定）
         NSArray *callStack = [NSThread callStackSymbols];
         NSString *from = @"unknown";
-        if (callStack.count > 2) {
-            NSString *frame2 = callStack[2];
-            if ([frame2 containsString:@"willDisplayCell"]) from = @"willDisplayCell";
-            else if ([frame2 containsString:@"layoutSubviews"]) from = @"layoutSubviews";
+        for (NSString *frame in callStack) {
+            if ([frame containsString:@"willDisplayCell"]) { from = @"willDisplayCell"; break; }
+            if ([frame containsString:@"layoutSubviews"]) { from = @"layoutSubviews"; break; }
         }
         
         NSString *cellClass = NSStringFromClass([cell class]);
@@ -977,28 +976,37 @@ static void hookWillDisplayCell(void) {
     mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetX: %.2f", config.messageTimeOffsetX]);
     mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetY: %.2f", config.messageTimeOffsetY]);
     
+    // 主 Cell 类 — hook layoutSubviews 和 prepareForReuse
+    // ChatTableViewCell 可能没有自己的 layoutSubviews（父类实现），
+    // 所以同时 hook CommonMessageCellView（子视图容器，一定有 layoutSubviews）
     Class cellClass = objc_getClass("ChatTableViewCell");
     if (cellClass) {
         mtLog(@"Found ChatTableViewCell class");
         hookCellForTime(@"ChatTableViewCell");
         mtLog(@"Using ChatTableViewCell hook");
     } else {
-        mtLog(@"ChatTableViewCell not found, using fallback");
+        mtLog(@"ChatTableViewCell not found");
+    }
+    
+    // CommonMessageCellView 是 Cell 的内部子视图，负责内容布局
+    // 它一定有 layoutSubviews，气泡/头像在此过程中创建
+    Class cellViewClass = objc_getClass("CommonMessageCellView");
+    if (cellViewClass) {
+        mtLog(@"Found CommonMessageCellView class, hooking for layoutSubviews");
+        hookCellForTime(@"CommonMessageCellView");
+    } else {
+        mtLog(@"CommonMessageCellView not found, using fallback classes");
         NSArray *cellClasses = @[
             @"TextMessageCellView",
             @"ImageMessageCellView",
             @"VideoMessageCellView",
             @"VoiceMessageCellView",
             @"EmoticonMessageCellView",
-            @"LocationMessageCellView",
-            @"CommonMessageCellView",
             @"BaseMessageCellView"
         ];
-        
         for (NSString *className in cellClasses) {
             hookCellForTime(className);
         }
-        mtLog(@"Fallback to MessageCellView hooks");
     }
     
     // 微信助手策略：willDisplayCell 作为主入口，只触发一次，天然防重复
