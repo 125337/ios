@@ -321,6 +321,8 @@ static void mt_updateLabelFrame(id cell) {
         
         CGRect bubbleFrame = bubble ? bubble.frame : cellFrame;
         CGRect avatarFrame = avatar ? [(UIView *)avatar frame] : CGRectZero;
+        mtLog([NSString stringWithFormat:@"[mt_updateLabelFrame] bubble=%@ avatar=%@ isSender=0", 
+               NSStringFromCGRect(bubbleFrame), avatar ? @"YES" : @"NO"]);
         
         // 检查是否发送者
         BOOL isSender = NO;
@@ -868,14 +870,17 @@ static void hookCellForTime(NSString *className) {
                 return;
             }
             
-            // layoutSubviews：气泡已创建，更新已有标签的位置
-            // willDisplayCell 时气泡还没 layout，bgImageView 是 nil
-            // 所以 layoutSubviews 里需要重新获取气泡 frame 更新位置
+            // layoutSubviews：此时气泡/头像已创建（layoutInternal→initBgImageView 已执行）
+            // 如果 willDisplayCell 时视图未就绪，标签不存在，就在这里创建
             if (sel == NSSelectorFromString(@"layoutSubviews")) {
                 UILabel *label = objc_getAssociatedObject(self, @"messageTimeLabel");
                 if (label && label.superview) {
                     // 已有标签，气泡此时已创建，重新计算位置
                     mt_updateLabelFrame(self);
+                } else {
+                    // willDisplayCell 时 bgImageView/headImageView 未初始化，
+                    // 现在在 layoutSubviews 中创建标签（此时视图 frame 正确）
+                    addTimeLabelToCell(self);
                 }
             }
         });
