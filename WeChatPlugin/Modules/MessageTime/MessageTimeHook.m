@@ -697,17 +697,50 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
     UITableViewCell *cell = orig_BaseMsgContentVC_cellForRow(self, _cmd, tv, ip);
     if (![PluginConfig shared].showMessageTime || !cell) return cell;
 
+    NSString *cellCls = NSStringFromClass([cell class]);
+    id cellView = nil;
+    id wrap = nil;
+
     @try {
-        id cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"];
-        if (cellView) {
-            id wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
-            if (wrap && [wrap isKindOfClass:objc_getClass("CMessageWrap")]) {
-                objc_setAssociatedObject(cell, @"cachedMsgWrap", wrap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        cellView = [cell valueForKey:@"m_cellView"];
+        if (cellView) mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ got cellView via m_cellView class=%@", cellCls, NSStringFromClass([cellView class])]);
+    } @catch (NSException *e) {}
+    if (!cellView) {
+        @try {
+            cellView = [cell valueForKey:@"cellView"];
+            if (cellView) mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ got cellView via cellView class=%@", cellCls, NSStringFromClass([cellView class])]);
+        } @catch (NSException *e) {}
+    }
+    if (!cellView) {
+        for (UIView *sv in [(UIView *)cell subviews]) {
+            NSString *cn = NSStringFromClass([sv class]);
+            if ([cn containsString:@"CellView"]) {
+                cellView = sv;
+                mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ found cellView via subview class=%@", cellCls, cn]);
+                break;
             }
         }
-    } @catch (NSException *e) {
-        mtLog([NSString stringWithFormat:@"cellForRow cache error: %@", e]);
     }
+    if (!cellView) {
+        mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ FAILED to get cellView (KVC nil, no subview match)", cellCls]);
+        return cell;
+    }
+
+    @try {
+        wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
+    } @catch (NSException *e) {}
+
+    if (!wrap) {
+        mtLog([NSString stringWithFormat:@"[cellForRow] cellView=%@ messageWrap=nil", NSStringFromClass([cellView class])]);
+        return cell;
+    }
+    if (![wrap isKindOfClass:objc_getClass("CMessageWrap")]) {
+        mtLog([NSString stringWithFormat:@"[cellForRow] wrap class=%@ not CMessageWrap", NSStringFromClass([wrap class])]);
+        return cell;
+    }
+
+    objc_setAssociatedObject(cell, @"cachedMsgWrap", wrap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    mtLog([NSString stringWithFormat:@"[cellForRow] ✅ cachedMsgWrap for cell=%@", cellCls]);
     return cell;
 }
 
