@@ -885,17 +885,13 @@ static void hookCellForTime(NSString *className) {
             // layoutSubviews：此时气泡/头像已创建（layoutInternal→initBgImageView 已执行）
             // 如果 willDisplayCell 时视图未就绪，标签不存在，就在这里创建
             if (sel == NSSelectorFromString(@"layoutSubviews")) {
-                static char kLayoutBusyKey;
-                if ([objc_getAssociatedObject(self, &kLayoutBusyKey) boolValue]) return;
-                objc_setAssociatedObject(self, &kLayoutBusyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                
                 // 确定正确的 cell 对象
                 id targetCell = self;
                 NSString *selfCls = NSStringFromClass([self class]);
                 
                 // CommonMessageCellView 触发时，向上查找父级 ChatTableViewCell
                 if ([selfCls containsString:@"CommonMessageCell"] || [selfCls containsString:@"MessageCell"]) {
-                    UIView *v = [(UIView *)self superview]; // 从父视图开始，跳过自身
+                    UIView *v = [(UIView *)self superview];
                     while (v) {
                         NSString *cn = NSStringFromClass([v class]);
                         if ([cn containsString:@"ChatTable"] ||
@@ -909,12 +905,14 @@ static void hookCellForTime(NSString *className) {
                            selfCls, NSStringFromClass([targetCell class])]);
                 }
                 
+                static char kLayoutBusyKey;
+                if ([objc_getAssociatedObject(targetCell, &kLayoutBusyKey) boolValue]) return;
+                objc_setAssociatedObject(targetCell, &kLayoutBusyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                
                 UILabel *label = objc_getAssociatedObject(targetCell, @"messageTimeLabel");
                 if (label && label.superview) {
-                    // 已有标签：气泡此时已创建，更新位置
                     mt_updateLabelFrame(targetCell);
                 } else {
-                    // 标签不存在（willDisplayCell 时未创建），现在创建
                     addTimeLabelToCell(targetCell);
                 }
             }
