@@ -938,14 +938,40 @@ static void hookCellForTime(NSString *className) {
     mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetX: %.2f", config.messageTimeOffsetX]);
     mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetY: %.2f", config.messageTimeOffsetY]);
     
-    // 主 Cell 类 — hook layoutSubviews 和 prepareForReuse
-    // ChatTableViewCell 可能没有自己的 layoutSubviews（父类实现），
-    // 所以同时 hook CommonMessageCellView（子视图容器，一定有 layoutSubviews）
+    // ChatTableViewCell — 只 hook prepareForReuse 做清理
+    // layoutSubviews 由 CommonMessageCellView 处理（气泡/头像已布局完成）
     Class cellClass = objc_getClass("ChatTableViewCell");
     if (cellClass) {
         mtLog(@"Found ChatTableViewCell class");
-        hookCellForTime(@"ChatTableViewCell");
-        mtLog(@"Using ChatTableViewCell hook");
+        SEL reuseSel = @selector(prepareForReuse);
+        Method reuseMethod = class_getInstanceMethod(cellClass, reuseSel);
+        if (reuseMethod) {
+            NSString *key = @"ChatTableViewCell_prepareForReuse";
+            IMP origIMP = method_getImplementation(reuseMethod);
+            const char *typeEncoding = method_getTypeEncoding(reuseMethod);
+            [gOrigIMPs setObject:[NSValue valueWithPointer:origIMP] forKey:key];
+            
+            IMP newIMP = imp_implementationWithBlock(^void(id self) {
+                NSValue *impValue = gOrigIMPs[key];
+                if (impValue) {
+                    IMP orig = [impValue pointerValue];
+                    ((void (*)(id, SEL))orig)(self, reuseSel);
+                }
+                UIView *oldLabel = [self viewWithTag:999999];
+                if (oldLabel) {
+                    [oldLabel removeFromSuperview];
+                }
+                objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+                objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            });
+            
+            BOOL added = class_addMethod(cellClass, reuseSel, newIMP, typeEncoding);
+            if (!added) {
+                method_setImplementation(reuseMethod, newIMP);
+            }
+            mtLog(@"Hooked ChatTableViewCell - prepareForReuse");
+        }
     } else {
         mtLog(@"ChatTableViewCell not found");
     }
