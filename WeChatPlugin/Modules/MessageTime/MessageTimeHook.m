@@ -872,13 +872,16 @@ static void hookCellForTime(NSString *className) {
             // layoutSubviews：此时气泡/头像已创建（layoutInternal→initBgImageView 已执行）
             // 如果 willDisplayCell 时视图未就绪，标签不存在，就在这里创建
             if (sel == NSSelectorFromString(@"layoutSubviews")) {
-                // CommonMessageCellView 的 layoutSubviews 触发时，找到其父级 ChatTableViewCell
+                // 确定正确的 cell 对象
                 id targetCell = self;
-                if ([NSStringFromClass([self class]) containsString:@"CommonMessageCell"]) {
-                    UIView *v = (UIView *)self;
+                NSString *selfCls = NSStringFromClass([self class]);
+                
+                // CommonMessageCellView 触发时，向上查找父级 ChatTableViewCell
+                if ([selfCls containsString:@"CommonMessageCell"] || [selfCls containsString:@"MessageCell"]) {
+                    UIView *v = [(UIView *)self superview]; // 从父视图开始，跳过自身
                     while (v) {
                         NSString *cn = NSStringFromClass([v class]);
-                        if ([cn containsString:@"ChatTable"] || [cn containsString:@"CellView"] ||
+                        if ([cn containsString:@"ChatTable"] ||
                             [v isKindOfClass:objc_getClass("ChatTableViewCell")]) {
                             targetCell = v;
                             break;
@@ -886,13 +889,15 @@ static void hookCellForTime(NSString *className) {
                         v = v.superview;
                     }
                     mtLog([NSString stringWithFormat:@"[layoutSubviews] self=%@ targetCell=%@",
-                           NSStringFromClass([self class]), NSStringFromClass([targetCell class])]);
+                           selfCls, NSStringFromClass([targetCell class])]);
                 }
                 
                 UILabel *label = objc_getAssociatedObject(targetCell, @"messageTimeLabel");
                 if (label && label.superview) {
+                    // 已有标签：气泡此时已创建，更新位置
                     mt_updateLabelFrame(targetCell);
                 } else {
+                    // 标签不存在（willDisplayCell 时未创建），现在创建
                     addTimeLabelToCell(targetCell);
                 }
             }
