@@ -860,36 +860,10 @@ static void hookCellForTime(NSString *className) {
         [gOrigIMPs setObject:[NSValue valueWithPointer:origIMP] forKey:key];
         
         IMP newIMP = imp_implementationWithBlock(^void(id self) {
-            NSValue *impValue = gOrigIMPs[key];
-            if (impValue) {
-                IMP orig = [impValue pointerValue];
-                ((void (*)(id, SEL))orig)(self, sel);
-            }
-            
-            // prepareForReuse：彻底清理时间标签，防止复用后残留
-            if (sel == NSSelectorFromString(@"prepareForReuse")) {
-                UIView *oldLabel = [self viewWithTag:999999];
-                if (oldLabel) {
-                    [oldLabel removeFromSuperview];
-                }
-                objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
-                objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                static char kLayoutBusyFlag;
-                objc_setAssociatedObject(self, &kLayoutBusyFlag, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                static char kLayoutBusyKey;
-                objc_setAssociatedObject(self, &kLayoutBusyKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                return;
-            }
-            
-            // layoutSubviews：此时气泡/头像已创建（layoutInternal→initBgImageView 已执行）
-            // 如果 willDisplayCell 时视图未就绪，标签不存在，就在这里创建
             if (sel == NSSelectorFromString(@"layoutSubviews")) {
-                // 确定正确的 cell 对象
                 id targetCell = self;
                 NSString *selfCls = NSStringFromClass([self class]);
                 
-                // CommonMessageCellView 触发时，向上查找父级 ChatTableViewCell
                 if ([selfCls containsString:@"CommonMessageCell"] || [selfCls containsString:@"MessageCell"]) {
                     UIView *v = [(UIView *)self superview];
                     while (v) {
@@ -909,12 +883,39 @@ static void hookCellForTime(NSString *className) {
                 if ([objc_getAssociatedObject(targetCell, &kLayoutBusyKey) boolValue]) return;
                 objc_setAssociatedObject(targetCell, &kLayoutBusyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 
+                NSValue *impValue = gOrigIMPs[key];
+                if (impValue) {
+                    IMP orig = [impValue pointerValue];
+                    ((void (*)(id, SEL))orig)(self, sel);
+                }
+                
                 UILabel *label = objc_getAssociatedObject(targetCell, @"messageTimeLabel");
                 if (label && label.superview) {
                     mt_updateLabelFrame(targetCell);
                 } else {
                     addTimeLabelToCell(targetCell);
                 }
+                return;
+            }
+            
+            NSValue *impValue = gOrigIMPs[key];
+            if (impValue) {
+                IMP orig = [impValue pointerValue];
+                ((void (*)(id, SEL))orig)(self, sel);
+            }
+            
+            if (sel == NSSelectorFromString(@"prepareForReuse")) {
+                UIView *oldLabel = [self viewWithTag:999999];
+                if (oldLabel) {
+                    [oldLabel removeFromSuperview];
+                }
+                objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+                objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                static char kLayoutBusyFlag;
+                objc_setAssociatedObject(self, &kLayoutBusyFlag, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                static char kLayoutBusyKey;
+                objc_setAssociatedObject(self, &kLayoutBusyKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             }
         });
         
