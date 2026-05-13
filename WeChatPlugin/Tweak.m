@@ -3,7 +3,6 @@
 #import <objc/runtime.h>
 #import "Registry/HookRegistry.h"
 #import "Config/PluginConfig.h"
-#import "Core/HookInterceptor.h"
 
 __attribute__((constructor))
 static void WeChatPluginInitialize() {
@@ -12,9 +11,6 @@ static void WeChatPluginInitialize() {
     @try {
         @autoreleasepool {
             NSLog(@"[WeChatPlugin] entering constructor");
-
-            [HookInterceptor install];
-
             [HookRegistry installAllHooks];
             NSLog(@"[WeChatPlugin] all hooks installed");
         }
