@@ -875,12 +875,20 @@ static void hookCellForTime(NSString *className) {
                 objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
                 objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                static char kLayoutBusyFlag;
+                objc_setAssociatedObject(self, &kLayoutBusyFlag, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                static char kLayoutBusyKey;
+                objc_setAssociatedObject(self, &kLayoutBusyKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 return;
             }
             
             // layoutSubviews：此时气泡/头像已创建（layoutInternal→initBgImageView 已执行）
             // 如果 willDisplayCell 时视图未就绪，标签不存在，就在这里创建
             if (sel == NSSelectorFromString(@"layoutSubviews")) {
+                static char kLayoutBusyKey;
+                if ([objc_getAssociatedObject(self, &kLayoutBusyKey) boolValue]) return;
+                objc_setAssociatedObject(self, &kLayoutBusyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                
                 // 确定正确的 cell 对象
                 id targetCell = self;
                 NSString *selfCls = NSStringFromClass([self class]);
@@ -964,6 +972,8 @@ static void hookCellForTime(NSString *className) {
                 objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
                 objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                static char kLayoutBusyKey;
+                objc_setAssociatedObject(self, &kLayoutBusyKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             });
             
             BOOL added = class_addMethod(cellClass, reuseSel, newIMP, typeEncoding);
