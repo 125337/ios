@@ -1,14 +1,26 @@
 #import "MessageTimeHook.h"
 #import "../../Config/PluginConfig.h"
-#import "../../Core/HookEngine.h"
+#import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 
+// ============================================================
+// MARK: - Configuration Table Entry
+// ============================================================
 
+typedef struct {
+    const char *className;
+    const char *selName;
+    IMP replacement;
+    IMP *original;
+} MTHookEntry;
+
+// ============================================================
+// MARK: - Logging
+// ============================================================
 
 static void mtLog(NSString *content) {
-    // [DBG] 前缀的日志仅在 debugLogging 开启时记录
     if ([content hasPrefix:@"[DBG]"] && ![PluginConfig shared].debugLogging) return;
     
     NSLog(@"[WeChatPlugin][MessageTime] %@", content);
@@ -30,6 +42,10 @@ static void mtLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
+// ============================================================
+// MARK: - Label Management
+// ============================================================
+
 static UILabel *getTimeLabel(id cell) {
     UILabel *label = objc_getAssociatedObject(cell, @"messageTimeLabel");
     if (!label) {
@@ -50,6 +66,10 @@ static NSDateFormatter *getTimeFormatter() {
     });
     return formatter;
 }
+
+// ============================================================
+// MARK: - Color / Theme Helpers
+// ============================================================
 
 static BOOL isWeChatDarkMode() {
     @try {
@@ -82,6 +102,10 @@ static UIColor *autoDarkColor(UIColor *lightColor) {
 static UIColor *colorInLightMode(UIColor *lightColor, UIColor *darkColor) {
     return isWeChatDarkMode() ? (darkColor ?: autoDarkColor(lightColor)) : lightColor;
 }
+
+// ============================================================
+// MARK: - Time Formatting
+// ============================================================
 
 static NSString *formatMessageTime(NSDate *date, NSString *format) {
     if (!date || !format) return nil;
@@ -128,6 +152,10 @@ static NSString *formatMessageTime(NSDate *date, NSString *format) {
     return formatted;
 }
 
+// ============================================================
+// MARK: - View Hierarchy Accessors
+// ============================================================
+
 static id getCellView(id cell) {
     id cellView = nil;
     NSString *cellCls = NSStringFromClass([cell class]);
@@ -162,7 +190,6 @@ static id getAvatarView(id cell) {
     for (id target in targets) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
         
-        // 1. getHeadImageView 方法（WeChat 自身方法，Ghidra 确认存在 CommonMessageCellView 中）
         if (!avatarView) {
             SEL sel = NSSelectorFromString(@"getHeadImageView");
             if ([target respondsToSelector:sel]) {
@@ -177,7 +204,6 @@ static id getAvatarView(id cell) {
             }
         }
         
-        // 2. leftAvatarView / rightAvatarView（ChatTableViewCell 上的属性）
         if (!avatarView) {
             for (NSString *selName in @[@"leftAvatarView", @"rightAvatarView"]) {
                 SEL sel = NSSelectorFromString(selName);
@@ -194,7 +220,6 @@ static id getAvatarView(id cell) {
             }
         }
         
-        // 3. KVC fallback
         if (!avatarView) {
             for (NSString *key in @[@"m_headImageView", @"headImgView", @"avatarView", @"avatarImageView", @"headImg"]) {
                 @try {
@@ -208,7 +233,6 @@ static id getAvatarView(id cell) {
             }
         }
         
-        // 4. subviews 遍历（兜底）
         if (!avatarView) {
             for (UIView *sv in [target subviews]) {
                 if ([sv respondsToSelector:@selector(image)]) {
@@ -242,7 +266,6 @@ static id getBubbleView(id cell) {
     for (id target in targets) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
         
-        // 1. getBgImageView 方法（WeChat 自身方法，Ghidra 确认存在 CommonMessageCellView 中）
         if (!bubbleView) {
             SEL sel = NSSelectorFromString(@"getBgImageView");
             if ([target respondsToSelector:sel]) {
@@ -257,7 +280,6 @@ static id getBubbleView(id cell) {
             }
         }
         
-        // 2. KVC m_bgImageView
         if (!bubbleView) {
             for (NSString *key in @[@"m_bgImageView", @"bgImageView"]) {
                 @try {
@@ -271,7 +293,6 @@ static id getBubbleView(id cell) {
             }
         }
         
-        // 3. subviews 遍历（final fallback）
         if (!bubbleView) {
             for (UIView *sv in [target subviews]) {
                 NSString *cn = NSStringFromClass([sv class]);
@@ -294,17 +315,12 @@ static id getBubbleView(id cell) {
     return bubbleView;
 }
 
-// 微信优化方案：独立的气泡 frame 设置方法
-static void setFrameForBubbleView(id cell, CGRect frame) {
-    UIView *bubble = (UIView *)getBubbleView(cell);
-    if (bubble) {
-        bubble.frame = frame;
-    }
-}
+// ============================================================
+// MARK: - Label Frame Calculation
+// ============================================================
 
 static int g_callCount = 0;
 
-// 在 layoutSubviews 中更新已有标签的位置（此时气泡 bgImageView 已创建）
 static void mt_updateLabelFrame(id cell) {
     @try {
         UILabel *label = objc_getAssociatedObject(cell, @"messageTimeLabel");
@@ -321,10 +337,9 @@ static void mt_updateLabelFrame(id cell) {
         
         CGRect bubbleFrame = bubble ? bubble.frame : cellFrame;
         CGRect avatarFrame = avatar ? [(UIView *)avatar frame] : CGRectZero;
-        mtLog([NSString stringWithFormat:@"[mt_updateLabelFrame] bubble=%@ avatar=%@ isSender=0", 
+        mtLog([NSString stringWithFormat:@"[mt_updateLabelFrame] bubble=%@ avatar=%@ isSender=0",
                NSStringFromCGRect(bubbleFrame), avatar ? @"YES" : @"NO"]);
         
-        // 检查是否发送者
         BOOL isSender = NO;
         id cellView = getCellView(cell);
         id target = cellView ?: cell;
@@ -350,7 +365,6 @@ static void mt_updateLabelFrame(id cell) {
             isSender = CGRectGetMidX(bubble.frame) > CGRectGetMidX(cellFrame);
         }
         
-        // 计算位置（与 addTimeLabelToCell 中的逻辑一致）
         CGRect labelFrame = label.frame;
         CGFloat offsetX = config.messageTimeOffsetX;
         CGFloat offsetY = config.messageTimeOffsetY;
@@ -402,7 +416,6 @@ static void mt_updateLabelFrame(id cell) {
                 break;
         }
         
-        // 方向感知偏移
         if (offsetX != 0) {
             BOOL leftSide = NO;
             switch (position) {
@@ -434,7 +447,6 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
-        // 获取调用栈（遍历所有帧，block 实现的 IMP 栈深度不确定）
         NSArray *callStack = [NSThread callStackSymbols];
         NSString *from = @"unknown";
         for (NSString *frame in callStack) {
@@ -446,17 +458,14 @@ static void addTimeLabelToCell(id cell) {
         g_callCount++;
         mtLog([NSString stringWithFormat:@"=== addTimeLabelToCell #%d called on: %@ (from: %@) ===", g_callCount, cellClass, from]);
         
-        // 打印 cell 的子视图结构
         UIView *cellViewDbg = (UIView *)cell;
         mtLog([NSString stringWithFormat:@"[DBG] cell.subviews count=%lu", (unsigned long)[cellViewDbg.subviews count]]);
         for (UIView *sv in cellViewDbg.subviews) {
             mtLog([NSString stringWithFormat:@"[DBG] cell.subview: class=%@ tag=%ld frame=%@", NSStringFromClass([sv class]), (long)sv.tag, NSStringFromCGRect(sv.frame)]);
-            // 递归打印 contentView 的子视图
             if ([NSStringFromClass([sv class]) containsString:@"ContentView"]) {
                 mtLog([NSString stringWithFormat:@"[DBG]   -> contentView.subviews count=%lu", (unsigned long)[sv.subviews count]]);
                 for (UIView *sv2 in sv.subviews) {
                     mtLog([NSString stringWithFormat:@"[DBG]   -> subview: class=%@ frame=%@", NSStringFromClass([sv2 class]), NSStringFromCGRect(sv2.frame)]);
-                    // 递归二级子视图
                     for (UIView *sv3 in sv2.subviews) {
                         mtLog([NSString stringWithFormat:@"[DBG]     -> sub-subview: class=%@ frame=%@", NSStringFromClass([sv3 class]), NSStringFromCGRect(sv3.frame)]);
                     }
@@ -477,7 +486,6 @@ static void addTimeLabelToCell(id cell) {
         id wrap = nil;
         NSString *cellClsDbg = NSStringFromClass([cell class]);
         
-        // 路径1: cell → m_cellView → viewModel → messageWrap
         @try {
             id cv = nil;
             @try { cv = [cell valueForKey:@"m_cellView"]; if(cv) mtLog(@"[DBG] wrap: got cellView via m_cellView"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: m_cellView threw: %@", e.reason]); }
@@ -499,7 +507,6 @@ static void addTimeLabelToCell(id cell) {
             mtLog([NSString stringWithFormat:@"[DBG] wrap: cellView path exception: %@", e]);
         }
         
-        // 路径2: cell → _viewModel → parentModel → m_messageWrap (旧版兼容)
         if (!wrap) {
             mtLog(@"Trying _viewModel path for wrap");
             @try {
@@ -510,7 +517,7 @@ static void addTimeLabelToCell(id cell) {
                     if (parentModel) {
                         wrap = [parentModel valueForKey:@"m_messageWrap"];
                         if (!wrap) wrap = [parentModel valueForKey:@"messageWrap"];
-                        if (wrap) mtLog(@"Got wrap from _viewModel→parentModel");
+                        if (wrap) mtLog(@"Got wrap from _viewModel->parentModel");
                     }
                 }
             } @catch (NSException *e) {
@@ -518,7 +525,6 @@ static void addTimeLabelToCell(id cell) {
             }
         }
         
-        // 路径3: 直接在 cellView 上查找 getCurrentMessageWrap / messageWrap
         if (!wrap) {
             mtLog(@"Trying direct selector on cellView");
             @try {
@@ -599,7 +605,6 @@ static void addTimeLabelToCell(id cell) {
         UIView *bubbleView = getBubbleView(cell);
         mtLog([NSString stringWithFormat:@"bubbleView: %@", bubbleView ? @"YES" : @"NO"]);
         
-        // 发送者检测（需要在配色之前）
         BOOL isSender = NO;
         {
             id targetCellView = getCellView(cell);
@@ -620,7 +625,6 @@ static void addTimeLabelToCell(id cell) {
             }
         }
         
-        // 使用发送者/接收者独立配色
         UIColor *textColor = nil;
         UIColor *bgColor = nil;
         if (isSender) {
@@ -640,7 +644,6 @@ static void addTimeLabelToCell(id cell) {
         timeLabel.textColor = colorInLightMode(textColor, autoDarkColor(textColor));
         timeLabel.backgroundColor = bgColor ?: [UIColor clearColor];
         
-        // 圆角
         if (config.messageTimeCornerRadius > 0) {
             timeLabel.layer.cornerRadius = config.messageTimeCornerRadius;
             timeLabel.layer.masksToBounds = YES;
@@ -694,7 +697,7 @@ static void addTimeLabelToCell(id cell) {
         }
         
         switch (position) {
-            case 0: // 头像上方
+            case 0:
                 if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
                     labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
                     labelFrame.origin.y = avatarFrame.origin.y - labelFrame.size.height - offsetY;
@@ -704,7 +707,7 @@ static void addTimeLabelToCell(id cell) {
                 }
                 break;
                 
-            case 1: // 头像下方
+            case 1:
                 if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
                     labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
                     labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + offsetY;
@@ -714,7 +717,7 @@ static void addTimeLabelToCell(id cell) {
                 }
                 break;
                 
-            case 2: // 消息旁边(远离头像)
+            case 2:
                 if (isSender) {
                     labelFrame.origin.x = bubbleFrame.origin.x - labelFrame.size.width - offsetX;
                 } else {
@@ -723,27 +726,27 @@ static void addTimeLabelToCell(id cell) {
                 labelFrame.origin.y = bubbleFrame.origin.y + (bubbleFrame.size.height - labelFrame.size.height) / 2;
                 break;
                 
-            case 3: // 消息下方(远离头像)
+            case 3:
                 labelFrame.origin.x = farSideX;
                 labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY;
                 break;
                 
-            case 4: // 消息下方(靠近头像)
+            case 4:
                 labelFrame.origin.x = nearSideX;
                 labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY;
                 break;
                 
-            case 5: // 消息上方(远离头像)
+            case 5:
                 labelFrame.origin.x = farSideX;
                 labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
                 break;
                 
-            case 6: // 消息上方(靠近头像)
+            case 6:
                 labelFrame.origin.x = nearSideX;
                 labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
                 break;
                 
-            case 7: // 消息内部(仅文本信息生效)
+            case 7:
             {
                 labelFrame.origin.x = bubbleFrame.origin.x + (bubbleFrame.size.width - labelFrame.size.width) / 2;
                 labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height - labelFrame.size.height - 4;
@@ -767,7 +770,6 @@ static void addTimeLabelToCell(id cell) {
                 break;
         }
         
-        // 方向感知偏移：左侧正值向左，右侧正值向右
         if (offsetX != 0) {
             BOOL isOnLeftSide = NO;
             switch (position) {
@@ -799,11 +801,9 @@ static void addTimeLabelToCell(id cell) {
             labelFrame.origin.y -= offsetY;
         }
         
-        
         CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
         if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
         if (labelFrame.origin.y < 2) labelFrame.origin.y = 2;
-        
         
         mtLog([NSString stringWithFormat:@"Final labelFrame: %@", NSStringFromCGRect(labelFrame)]);
         
@@ -831,112 +831,152 @@ static void addTimeLabelToCell(id cell) {
     }
 }
 
-static NSMutableDictionary<NSString *, NSValue *> *gOrigIMPs = nil;
+// ============================================================
+// MARK: - Original Function Pointers (one per hook target)
+// ============================================================
 
-static void hookCellForTime(NSString *className) {
-    Class cls = objc_getClass(className.UTF8String);
-    if (!cls) {
-        mtLog([NSString stringWithFormat:@"Class not found: %@", className]);
-        return;
-    }
-    
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        gOrigIMPs = [NSMutableDictionary dictionary];
-    });
-    
-    // layoutSubviews 作为兜底（willDisplayCell 可能因版本差异找不到）
-    // prepareForReuse 做清理：Cell 复用时移除旧标签和关联状态，防止残留导致重复
-    for (NSString *methodName in @[@"layoutSubviews", @"prepareForReuse"]) {
-        SEL sel = NSSelectorFromString(methodName);
-        Method m = class_getInstanceMethod(cls, sel);
-        if (!m) continue;
-        
-        mtLog([NSString stringWithFormat:@"Hooking %@ - %@", className, methodName]);
-        
-        NSString *key = [NSString stringWithFormat:@"%@_%@", className, methodName];
-        IMP origIMP = method_getImplementation(m);
-        const char *typeEncoding = method_getTypeEncoding(m);
-        [gOrigIMPs setObject:[NSValue valueWithPointer:origIMP] forKey:key];
-        
-        IMP newIMP = imp_implementationWithBlock(^void(id self) {
-            if (sel == NSSelectorFromString(@"layoutSubviews")) {
-                id targetCell = self;
-                NSString *selfCls = NSStringFromClass([self class]);
-                
-                if ([selfCls containsString:@"CommonMessageCell"] || [selfCls containsString:@"MessageCell"]) {
-                    UIView *v = [(UIView *)self superview];
-                    while (v) {
-                        NSString *cn = NSStringFromClass([v class]);
-                        if ([cn containsString:@"ChatTable"] ||
-                            [v isKindOfClass:objc_getClass("ChatTableViewCell")]) {
-                            targetCell = v;
-                            break;
-                        }
-                        v = v.superview;
-                    }
-                    mtLog([NSString stringWithFormat:@"[layoutSubviews] self=%@ targetCell=%@",
-                           selfCls, NSStringFromClass([targetCell class])]);
-                }
-                
-                static char kLayoutBusyKey;
-                if ([objc_getAssociatedObject(targetCell, &kLayoutBusyKey) boolValue]) return;
-                objc_setAssociatedObject(targetCell, &kLayoutBusyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                
-                NSValue *impValue = gOrigIMPs[key];
-                if (impValue) {
-                    IMP orig = [impValue pointerValue];
-                    ((void (*)(id, SEL))orig)(self, sel);
-                }
-                
-                UILabel *label = objc_getAssociatedObject(targetCell, @"messageTimeLabel");
-                if (label && label.superview) {
-                    mt_updateLabelFrame(targetCell);
-                } else {
-                    addTimeLabelToCell(targetCell);
-                }
-                return;
+static void (*orig_CommonMessageCellView_layoutSubviews)(id, SEL);
+static void (*orig_ChatTableViewCell_prepareForReuse)(id, SEL);
+static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
+static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
+static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
+
+// ============================================================
+// MARK: - Replacement Functions
+// ============================================================
+
+static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
+    id targetCell = self;
+    NSString *selfCls = NSStringFromClass([self class]);
+
+    if ([selfCls containsString:@"CommonMessageCell"] || [selfCls containsString:@"MessageCell"]) {
+        UIView *v = [(UIView *)self superview];
+        while (v) {
+            NSString *cn = NSStringFromClass([v class]);
+            if ([cn containsString:@"ChatTable"] ||
+                [v isKindOfClass:objc_getClass("ChatTableViewCell")]) {
+                targetCell = v;
+                break;
             }
-            
-            NSValue *impValue = gOrigIMPs[key];
-            if (impValue) {
-                IMP orig = [impValue pointerValue];
-                ((void (*)(id, SEL))orig)(self, sel);
-            }
-            
-            if (sel == NSSelectorFromString(@"prepareForReuse")) {
-                UIView *oldLabel = [self viewWithTag:999999];
-                if (oldLabel) {
-                    [oldLabel removeFromSuperview];
-                }
-                objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
-                objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                static char kLayoutBusyFlag;
-                objc_setAssociatedObject(self, &kLayoutBusyFlag, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                static char kLayoutBusyKey;
-                objc_setAssociatedObject(self, &kLayoutBusyKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
-        });
-        
-        BOOL added = class_addMethod(cls, sel, newIMP, typeEncoding);
-        if (!added) {
-            method_setImplementation(m, newIMP);
+            v = v.superview;
         }
-        
-        mtLog([NSString stringWithFormat:@"Hooked %@ - %@", className, methodName]);
+        mtLog([NSString stringWithFormat:@"[layoutSubviews] self=%@ targetCell=%@",
+               selfCls, NSStringFromClass([targetCell class])]);
+    }
+
+    static char kLayoutBusyKey;
+    if ([objc_getAssociatedObject(targetCell, &kLayoutBusyKey) boolValue]) return;
+    objc_setAssociatedObject(targetCell, &kLayoutBusyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    if (orig_CommonMessageCellView_layoutSubviews) {
+        orig_CommonMessageCellView_layoutSubviews(self, _cmd);
+    }
+
+    UILabel *label = objc_getAssociatedObject(targetCell, @"messageTimeLabel");
+    if (label && label.superview) {
+        mt_updateLabelFrame(targetCell);
+    } else {
+        addTimeLabelToCell(targetCell);
     }
 }
 
+static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
+    if (orig_ChatTableViewCell_prepareForReuse) {
+        orig_ChatTableViewCell_prepareForReuse(self, _cmd);
+    }
 
+    UIView *oldLabel = [self viewWithTag:999999];
+    if (oldLabel) {
+        [oldLabel removeFromSuperview];
+    }
+    objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    static char kLayoutBusyKey;
+    objc_setAssociatedObject(self, &kLayoutBusyKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static void repl_ChatTimeCellView_layoutSubviews(id self, SEL _cmd) {
+    if (orig_ChatTimeCellView_layoutSubviews) {
+        orig_ChatTimeCellView_layoutSubviews(self, _cmd);
+    }
+    if ([PluginConfig shared].hideChatTime) {
+        [self setHidden:YES];
+    }
+}
+
+static CGFloat repl_ChatTimeViewModel_cellHeight(id self, SEL _cmd) {
+    CGFloat h = 0;
+    if (orig_ChatTimeViewModel_cellHeight) {
+        h = orig_ChatTimeViewModel_cellHeight(self, _cmd);
+    }
+    if ([PluginConfig shared].hideChatTime) {
+        return 0.001;
+    }
+    return h;
+}
+
+static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
+    NSString *origName = nil;
+    if (orig_CContact_m_nsNickName) {
+        origName = orig_CContact_m_nsNickName(self, _cmd);
+    }
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.showAddTimeSuffix || !origName) return origName;
+
+    unsigned int addTime = 0;
+    @try {
+        addTime = [[self valueForKey:@"m_uiAddCreateTime"] unsignedIntValue];
+    } @catch (NSException *e) {}
+
+    if (addTime == 0) return origName;
+
+    NSDate *addDate = [NSDate dateWithTimeIntervalSince1970:addTime];
+    NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+    fmt.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+    fmt.dateFormat = config.addTimeSuffixFormat;
+    NSString *suffix = [fmt stringFromDate:addDate];
+
+    return [NSString stringWithFormat:@"%@ %@", origName, suffix];
+}
+
+// ============================================================
+// MARK: - Hook Configuration Table
+// ============================================================
+
+static MTHookEntry g_hookTable[] = {
+    {"ChatTableViewCell",     "prepareForReuse", (IMP)repl_ChatTableViewCell_prepareForReuse,     (IMP*)&orig_ChatTableViewCell_prepareForReuse},
+    {"ChatTimeCellView",      "layoutSubviews",  (IMP)repl_ChatTimeCellView_layoutSubviews,       (IMP*)&orig_ChatTimeCellView_layoutSubviews},
+    {"ChatTimeViewModel",     "cellHeight",      (IMP)repl_ChatTimeViewModel_cellHeight,          (IMP*)&orig_ChatTimeViewModel_cellHeight},
+    {"CContact",              "m_nsNickName",    (IMP)repl_CContact_m_nsNickName,                 (IMP*)&orig_CContact_m_nsNickName},
+};
+
+static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0]);
+
+static const char *g_cellViewFallbacks[] = {
+    "CommonMessageCellView",
+    "TextMessageCellView",
+    "ImageMessageCellView",
+    "VideoMessageCellView",
+    "VoiceMessageCellView",
+    "EmoticonMessageCellView",
+    "BaseMessageCellView"
+};
+
+static const int g_cellViewFallbackCount = sizeof(g_cellViewFallbacks) / sizeof(g_cellViewFallbacks[0]);
+
+// ============================================================
+// MARK: - Installation
+// ============================================================
 
 @implementation MessageTimeHook
 
 + (void)install {
     mtLog(@"========================================");
-    mtLog(@"MessageTimeHook install - full version");
+    mtLog(@"MessageTimeHook install - Substrate + ConfigTable");
     mtLog(@"========================================");
-    
+
     PluginConfig *config = [PluginConfig shared];
     mtLog([NSString stringWithFormat:@"Config - showMessageTime: %d", config.showMessageTime]);
     mtLog([NSString stringWithFormat:@"Config - messageTimePosition: %ld", (long)config.messageTimePosition]);
@@ -944,172 +984,53 @@ static void hookCellForTime(NSString *className) {
     mtLog([NSString stringWithFormat:@"Config - messageTimeFormat: %@", config.messageTimeFormat]);
     mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetX: %.2f", config.messageTimeOffsetX]);
     mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetY: %.2f", config.messageTimeOffsetY]);
-    
-    // ChatTableViewCell — 只 hook prepareForReuse 做清理
-    // layoutSubviews 由 CommonMessageCellView 处理（气泡/头像已布局完成）
-    Class cellClass = objc_getClass("ChatTableViewCell");
-    if (cellClass) {
-        mtLog(@"Found ChatTableViewCell class");
-        SEL reuseSel = @selector(prepareForReuse);
-        Method reuseMethod = class_getInstanceMethod(cellClass, reuseSel);
-        if (reuseMethod) {
-            NSString *key = @"ChatTableViewCell_prepareForReuse";
-            IMP origIMP = method_getImplementation(reuseMethod);
-            const char *typeEncoding = method_getTypeEncoding(reuseMethod);
-            [gOrigIMPs setObject:[NSValue valueWithPointer:origIMP] forKey:key];
-            
-            IMP newIMP = imp_implementationWithBlock(^void(id self) {
-                NSValue *impValue = gOrigIMPs[key];
-                if (impValue) {
-                    IMP orig = [impValue pointerValue];
-                    ((void (*)(id, SEL))orig)(self, reuseSel);
-                }
-                UIView *oldLabel = [self viewWithTag:999999];
-                if (oldLabel) {
-                    [oldLabel removeFromSuperview];
-                }
-                objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
-                objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                static char kLayoutBusyKey;
-                objc_setAssociatedObject(self, &kLayoutBusyKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            });
-            
-            BOOL added = class_addMethod(cellClass, reuseSel, newIMP, typeEncoding);
-            if (!added) {
-                method_setImplementation(reuseMethod, newIMP);
-            }
-            mtLog(@"Hooked ChatTableViewCell - prepareForReuse");
+
+    int hookedCount = 0;
+
+    for (int i = 0; i < g_hookTableCount; i++) {
+        MTHookEntry *entry = &g_hookTable[i];
+
+        Class cls = objc_getClass(entry->className);
+        if (!cls) {
+            mtLog([NSString stringWithFormat:@"Class not found: %s, skipping", entry->className]);
+            continue;
         }
-    } else {
-        mtLog(@"ChatTableViewCell not found");
-    }
-    
-    // CommonMessageCellView 是 Cell 的内部子视图，负责内容布局
-    // 它一定有 layoutSubviews，气泡/头像在此过程中创建
-    Class cellViewClass = objc_getClass("CommonMessageCellView");
-    if (cellViewClass) {
-        mtLog(@"Found CommonMessageCellView class, hooking for layoutSubviews");
-        hookCellForTime(@"CommonMessageCellView");
-    } else {
-        mtLog(@"CommonMessageCellView not found, using fallback classes");
-        NSArray *cellClasses = @[
-            @"TextMessageCellView",
-            @"ImageMessageCellView",
-            @"VideoMessageCellView",
-            @"VoiceMessageCellView",
-            @"EmoticonMessageCellView",
-            @"BaseMessageCellView"
-        ];
-        for (NSString *className in cellClasses) {
-            hookCellForTime(className);
+
+        SEL sel = sel_registerName(entry->selName);
+        Method m = class_getInstanceMethod(cls, sel);
+        if (!m) {
+            mtLog([NSString stringWithFormat:@"Method not found: %s - %s, skipping", entry->className, entry->selName]);
+            continue;
         }
+
+        MSHookMessageEx(cls, sel, entry->replacement, entry->original);
+
+        mtLog([NSString stringWithFormat:@"Hooked %s - %s ✓", entry->className, entry->selName]);
+        hookedCount++;
     }
-    
-    
-    
-    Class chatTimeCellViewClass = objc_getClass("ChatTimeCellView");
-    if (chatTimeCellViewClass) {
-        SEL layoutSel = @selector(layoutSubviews);
-        Method layoutMethod = class_getInstanceMethod(chatTimeCellViewClass, layoutSel);
-        if (layoutMethod) {
-            NSString *key = @"ChatTimeCellView_layoutSubviews";
-            IMP origLayoutIMP = method_getImplementation(layoutMethod);
-            const char *layoutTypeEncoding = method_getTypeEncoding(layoutMethod);
-            [gOrigIMPs setObject:[NSValue valueWithPointer:origLayoutIMP] forKey:key];
-            
-            IMP newLayoutIMP = imp_implementationWithBlock(^void(id self) {
-                NSValue *impValue = gOrigIMPs[key];
-                if (impValue) {
-                    IMP orig = [impValue pointerValue];
-                    ((void (*)(id, SEL))orig)(self, layoutSel);
-                }
-                if ([PluginConfig shared].hideChatTime) {
-                    [self setHidden:YES];
-                }
-            });
-            BOOL layoutAdded = class_addMethod(chatTimeCellViewClass, layoutSel, newLayoutIMP, layoutTypeEncoding);
-            if (!layoutAdded) {
-                method_setImplementation(layoutMethod, newLayoutIMP);
-            }
-            mtLog(@"Hooked ChatTimeCellView - layoutSubviews");
-        }
+
+    BOOL cellViewHooked = NO;
+    for (int i = 0; i < g_cellViewFallbackCount; i++) {
+        const char *cn = g_cellViewFallbacks[i];
+        Class cls = objc_getClass(cn);
+        if (!cls) continue;
+
+        SEL sel = sel_registerName("layoutSubviews");
+        Method m = class_getInstanceMethod(cls, sel);
+        if (!m) continue;
+
+        MSHookMessageEx(cls, sel, (IMP)repl_CommonMessageCellView_layoutSubviews, (IMP*)&orig_CommonMessageCellView_layoutSubviews);
+
+        mtLog([NSString stringWithFormat:@"Hooked cell view: %s - layoutSubviews ✓", cn]);
+        cellViewHooked = YES;
+        break;
     }
-    
-    Class chatTimeViewModelClass = objc_getClass("ChatTimeViewModel");
-    if (chatTimeViewModelClass) {
-        SEL heightSel = NSSelectorFromString(@"cellHeight");
-        Method heightMethod = class_getInstanceMethod(chatTimeViewModelClass, heightSel);
-        if (heightMethod) {
-            NSString *key = @"ChatTimeViewModel_cellHeight";
-            IMP origHeightIMP = method_getImplementation(heightMethod);
-            const char *heightTypeEncoding = method_getTypeEncoding(heightMethod);
-            [gOrigIMPs setObject:[NSValue valueWithPointer:origHeightIMP] forKey:key];
-            
-            IMP newHeightIMP = imp_implementationWithBlock(^double(id self) {
-                NSValue *impValue = gOrigIMPs[key];
-                double origHeight = 0;
-                if (impValue) {
-                    IMP orig = [impValue pointerValue];
-                    origHeight = ((double (*)(id, SEL))orig)(self, heightSel);
-                }
-                if ([PluginConfig shared].hideChatTime) {
-                    return 0.001;
-                }
-                return origHeight;
-            });
-            BOOL heightAdded = class_addMethod(chatTimeViewModelClass, heightSel, newHeightIMP, heightTypeEncoding);
-            if (!heightAdded) {
-                method_setImplementation(heightMethod, newHeightIMP);
-            }
-            mtLog(@"Hooked ChatTimeViewModel - cellHeight");
-        }
+
+    if (!cellViewHooked) {
+        mtLog(@"WARNING: No cell view class found for layoutSubviews hook");
     }
-    
-    Class cContactClass = objc_getClass("CContact");
-    if (cContactClass) {
-        SEL nickSel = NSSelectorFromString(@"m_nsNickName");
-        Method nickMethod = class_getInstanceMethod(cContactClass, nickSel);
-        if (nickMethod) {
-            NSString *key = @"CContact_m_nsNickName";
-            IMP origNickIMP = method_getImplementation(nickMethod);
-            const char *nickTypeEncoding = method_getTypeEncoding(nickMethod);
-            [gOrigIMPs setObject:[NSValue valueWithPointer:origNickIMP] forKey:key];
-            
-            IMP newNickIMP = imp_implementationWithBlock(^NSString *(id self) {
-                NSString *origName = nil;
-                NSValue *impValue = gOrigIMPs[key];
-                if (impValue) {
-                    IMP orig = [impValue pointerValue];
-                    origName = ((NSString *(*)(id, SEL))orig)(self, nickSel);
-                }
-                
-                PluginConfig *config = [PluginConfig shared];
-                if (!config.showAddTimeSuffix || !origName) return origName;
-                
-                unsigned int addTime = 0;
-                @try {
-                    addTime = [[self valueForKey:@"m_uiAddCreateTime"] unsignedIntValue];
-                } @catch (NSException *e) {}
-                
-                if (addTime == 0) return origName;
-                
-                NSDate *addDate = [NSDate dateWithTimeIntervalSince1970:addTime];
-                NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
-                fmt.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
-                fmt.dateFormat = config.addTimeSuffixFormat;
-                NSString *suffix = [fmt stringFromDate:addDate];
-                
-                return [NSString stringWithFormat:@"%@ %@", origName, suffix];
-            });
-            BOOL nickAdded = class_addMethod(cContactClass, nickSel, newNickIMP, nickTypeEncoding);
-            if (!nickAdded) {
-                method_setImplementation(nickMethod, newNickIMP);
-            }
-            mtLog(@"Hooked CContact - m_nsNickName");
-        }
-    }
-    
+
+    mtLog([NSString stringWithFormat:@"Hook table complete: %d/%d + cellView=%d", hookedCount, g_hookTableCount, cellViewHooked]);
     mtLog(@"========================================");
     mtLog(@"MessageTimeHook install complete");
     mtLog(@"========================================");
