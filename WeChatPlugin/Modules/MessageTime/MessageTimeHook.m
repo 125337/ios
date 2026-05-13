@@ -1,9 +1,48 @@
 #import "MessageTimeHook.h"
 #import "../../Config/PluginConfig.h"
-#import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
+#import <dlfcn.h>
+
+// ============================================================
+// MARK: - Dynamic Hook Engine (Substrate dlsym + Runtime fallback)
+// ============================================================
+
+typedef void (*MTHookMessageExFunc)(Class _class, SEL sel, IMP replacement, IMP *original);
+
+static MTHookMessageExFunc g_hookFunc = NULL;
+
+static BOOL mt_resolveHookEngine(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        void *sym = dlsym(RTLD_DEFAULT, "MSHookMessageEx");
+        if (!sym) sym = dlsym(RTLD_DEFAULT, "_MSHookMessageEx");
+        if (sym) {
+            g_hookFunc = (MTHookMessageExFunc)sym;
+            mtLog(@"[Engine] MSHookMessageEx resolved via dlsym");
+        } else {
+            g_hookFunc = NULL;
+            mtLog(@"[Engine] Substrate not available, using Runtime fallback");
+        }
+    });
+    return (g_hookFunc != NULL);
+}
+
+static void mt_hookMessage(Class cls, SEL sel, IMP replacement, IMP *original) {
+    if (!cls || !sel || !replacement || !original) return;
+
+    if (mt_resolveHookEngine()) {
+        g_hookFunc(cls, sel, replacement, original);
+        return;
+    }
+
+    Method m = class_getInstanceMethod(cls, sel);
+    if (!m) return;
+
+    *original = method_getImplementation(m);
+    method_setImplementation(m, replacement);
+}
 
 // ============================================================
 // MARK: - Configuration Table Entry
@@ -974,7 +1013,7 @@ static const int g_cellViewFallbackCount = sizeof(g_cellViewFallbacks) / sizeof(
 
 + (void)install {
     mtLog(@"========================================");
-    mtLog(@"MessageTimeHook install - Substrate + ConfigTable");
+    mtLog(@"MessageTimeHook install - dlsym + ConfigTable");
     mtLog(@"========================================");
 
     PluginConfig *config = [PluginConfig shared];
@@ -1003,7 +1042,7 @@ static const int g_cellViewFallbackCount = sizeof(g_cellViewFallbacks) / sizeof(
             continue;
         }
 
-        MSHookMessageEx(cls, sel, entry->replacement, entry->original);
+        mt_hookMessage(cls, sel, entry->replacement, entry->original);
 
         mtLog([NSString stringWithFormat:@"Hooked %s - %s ✓", entry->className, entry->selName]);
         hookedCount++;
@@ -1019,7 +1058,7 @@ static const int g_cellViewFallbackCount = sizeof(g_cellViewFallbacks) / sizeof(
         Method m = class_getInstanceMethod(cls, sel);
         if (!m) continue;
 
-        MSHookMessageEx(cls, sel, (IMP)repl_CommonMessageCellView_layoutSubviews, (IMP*)&orig_CommonMessageCellView_layoutSubviews);
+        mt_hookMessage(cls, sel, (IMP)repl_CommonMessageCellView_layoutSubviews, (IMP*)&orig_CommonMessageCellView_layoutSubviews);
 
         mtLog([NSString stringWithFormat:@"Hooked cell view: %s - layoutSubviews ✓", cn]);
         cellViewHooked = YES;
