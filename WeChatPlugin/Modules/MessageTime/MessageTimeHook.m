@@ -8,6 +8,9 @@
 
 
 static void mtLog(NSString *content) {
+    // [DBG] 前缀的日志仅在 debugLogging 开启时记录
+    if ([content hasPrefix:@"[DBG]"] && ![PluginConfig shared].debugLogging) return;
+    
     NSLog(@"[WeChatPlugin][MessageTime] %@", content);
     @try {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
@@ -146,54 +149,42 @@ static id getCellView(id cell) {
     return cellView;
 }
 
-static UIImageView *getAvatarView(id cell) {
-    UIImageView *avatarView = nil;
+static id getAvatarView(id cell) {
+    id avatarView = nil;
     
     id cellView = getCellView(cell);
-    // contentView 是单元格内容的实际容器，气泡和头像都在它里面
     id contentView = nil;
     @try { contentView = [cell valueForKey:@"contentView"]; } @catch (...) {}
     if (!contentView) { @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {} }
     
-    NSString *cellCls = NSStringFromClass([cell class]);
-    
     for (id target in @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell]) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
         NSString *targetCls = NSStringFromClass([target class]);
-        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: searching on target=%@ (cell=%@)", targetCls, cellCls]);
         
-        // headImgView（WeChat 8.0.60 中 ChatTableViewCell 上的 UIImageView 属性）
+        // 1. m_headImageView（WeChat 8.0.60 CommonMessageCellView 实际属性，MMHeadImageView*）
         if (!avatarView) {
-            for (NSString *key in @[@"headImgView", @"m_headImgView", @"avatarView", @"avatarImageView", @"headImg"]) {
+            for (NSString *key in @[@"m_headImageView", @"headImgView", @"avatarView", @"avatarImageView", @"headImg"]) {
                 @try {
                     id view = [target valueForKey:key];
-                    if (view) {
-                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ found, class=%@, isImageView=%d", key, NSStringFromClass([view class]), [view isKindOfClass:[UIImageView class]]]);
-                        if ([view isKindOfClass:[UIImageView class]]) {
-                            avatarView = (UIImageView *)view;
-                            break;
-                        }
-                    } else {
-                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ returned nil on %@", key, targetCls]);
+                    if (view && [view respondsToSelector:@selector(image)]) {
+                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ found, class=%@", key, NSStringFromClass([view class])]);
+                        avatarView = view;
+                        break;
                     }
-                } @catch (NSException *e) {
-                    mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ threw on %@: %@", key, targetCls, e.reason]);
-                }
+                } @catch (NSException *e) {}
             }
         }
         
-        // leftAvatarView / rightAvatarView selector
+        // 2. leftAvatarView / rightAvatarView selector（ChatTableViewCell 上的属性）
         if (!avatarView) {
             for (NSString *selName in @[@"leftAvatarView", @"rightAvatarView"]) {
                 SEL sel = NSSelectorFromString(selName);
-                BOOL responds = [target respondsToSelector:sel];
-                mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ responds=%@ on %@", selName, responds?@"YES":@"NO", targetCls]);
-                if (responds) {
+                if ([target respondsToSelector:sel]) {
                     @try {
                         id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
-                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ returned class=%@", selName, NSStringFromClass([view class])]);
-                        if ([view isKindOfClass:[UIImageView class]]) {
-                            avatarView = (UIImageView *)view;
+                        if (view && [view respondsToSelector:@selector(image)]) {
+                            mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ found", selName]);
+                            avatarView = view;
                             break;
                         }
                     } @catch (NSException *e) {}
@@ -201,127 +192,75 @@ static UIImageView *getAvatarView(id cell) {
             }
         }
         
-        // m_headImageView KVC
+        // 3. subviews 遍历（最终兜底）
         if (!avatarView) {
-            @try {
-                id view = [target valueForKey:@"m_headImageView"];
-                mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: m_headImageView found=%@", view?@"YES":@"NO"]);
-                if ([view isKindOfClass:[UIImageView class]]) avatarView = view;
-            } @catch (NSException *e) {
-                mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: m_headImageView threw: %@", e.reason]);
-            }
-        }
-        
-        // subviews 遍历
-        if (!avatarView) {
-            int subviewCount = (int)[[target subviews] count];
-            mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: scanning %d subviews on %@", subviewCount, targetCls]);
-            for (UIView *subview in [target subviews]) {
-                if ([subview isKindOfClass:[UIImageView class]]) {
-                    NSString *cn = NSStringFromClass([subview class]);
+            for (UIView *sv in [target subviews]) {
+                if ([sv respondsToSelector:@selector(image)]) {
+                    NSString *cn = NSStringFromClass([sv class]);
                     if ([cn containsString:@"Head"] || [cn containsString:@"Avatar"]) {
-                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: subview match class=%@ frame=%@", cn, NSStringFromCGRect(subview.frame)]);
-                        avatarView = (UIImageView *)subview;
+                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: subview match class=%@", cn]);
+                        avatarView = sv;
                         break;
                     }
                 }
             }
-            if (!avatarView) mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: no subview match on %@", targetCls]);
         }
         
         if (avatarView) break;
     }
     
-    if (!avatarView) {
-        // 终极兜底：遍历 contentView 所有子视图，找第一个 UIImageView
-        UIView *cvDbg = (UIView *)cell;
-        for (UIView *sv in cvDbg.subviews) {
-            for (UIView *sv2 in sv.subviews) {
-                if ([sv2 isKindOfClass:[UIImageView class]]) {
-                    mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: ULTIMATE fallback found UIImageView=%@ frame=%@", NSStringFromClass([sv2 class]), NSStringFromCGRect(sv2.frame)]);
-                    avatarView = (UIImageView *)sv2;
-                    break;
-                }
-                for (UIView *sv3 in sv2.subviews) {
-                    if ([sv3 isKindOfClass:[UIImageView class]]) {
-                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: ULTIMATE fallback found UIImageView=%@ frame=%@", NSStringFromClass([sv3 class]), NSStringFromCGRect(sv3.frame)]);
-                        avatarView = (UIImageView *)sv3;
-                        break;
-                    }
-                }
-                if (avatarView) break;
-            }
-            if (avatarView) break;
-        }
-        if (!avatarView) mtLog(@"[DBG] getAvatarView: ULTIMATE fallback STILL FAILED");
-    }
+    if (!avatarView) mtLog(@"[DBG] getAvatarView: FAILED - all paths returned nil");
     return avatarView;
 }
 
-static UIView *getBubbleView(id cell) {
-    UIView *bubbleView = nil;
+static id getBubbleView(id cell) {
+    id bubbleView = nil;
     
     id cellView = getCellView(cell);
     id contentView = nil;
     @try { contentView = [cell valueForKey:@"contentView"]; } @catch (...) {}
     if (!contentView) { @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {} }
     
-    NSString *cellCls = NSStringFromClass([cell class]);
-    
     for (id target in @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell]) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
         NSString *targetCls = NSStringFromClass([target class]);
-        mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: searching on target=%@ (cell=%@)", targetCls, cellCls]);
         
-        // bubbleView selector
+        // 1. m_bgImageView（WeChat 8.0.60 CommonMessageCellView 实际属性，YYAsyncImageView*）
         if (!bubbleView) {
-            SEL sel = NSSelectorFromString(@"bubbleView");
-            BOOL responds = [target respondsToSelector:sel];
-            mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bubbleView responds=%@ on %@", responds?@"YES":@"NO", targetCls]);
-            if (responds) {
+            for (NSString *key in @[@"m_bgImageView", @"bgImageView"]) {
                 @try {
-                    id v = ((id (*)(id, SEL))objc_msgSend)(target, sel);
-                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bubbleView returned class=%@", NSStringFromClass([v class])]);
-                    if (v) bubbleView = v;
-                } @catch (NSException *e) {
-                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bubbleView threw: %@", e.reason]);
-                }
+                    id v = [target valueForKey:key];
+                    if (v) {
+                        mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: %@ found, class=%@ frame=%@", key, NSStringFromClass([v class]), NSStringFromCGRect([v frame])]);
+                        bubbleView = v;
+                        break;
+                    }
+                } @catch (NSException *e) {}
             }
         }
         
-        // bgImageView KVC
+        // 2. subviews 遍历（Final fallback）
         if (!bubbleView) {
-            @try {
-                id v = [target valueForKey:@"bgImageView"];
-                if (v) {
-                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bgImageView found, class=%@ frame=%@", NSStringFromClass([v class]), NSStringFromCGRect([v frame])]);
-                    bubbleView = v;
-                } else {
-                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bgImageView returned nil on %@", targetCls]);
-                }
-            } @catch (NSException *e) {
-                mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: bgImageView threw on %@: %@", targetCls, e.reason]);
-            }
-        }
-        
-        // 遍历 subviews
-        if (!bubbleView) {
-            int cnt = (int)[[target subviews] count];
-            mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: scanning %d subviews on %@", cnt, targetCls]);
             for (UIView *sv in [target subviews]) {
                 NSString *cn = NSStringFromClass([sv class]);
-                if ([cn containsString:@"RichTextView"] || [cn containsString:@"BubbleView"] ||
-                    [cn containsString:@"MessageView"] || [cn containsString:@"BgImageView"]) {
-                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: subview match class=%@ frame=%@", cn, NSStringFromCGRect(sv.frame)]);
+                if ([cn containsString:@"BgImage"] || [cn containsString:@"Bubble"] ||
+                    [cn containsString:@"MessageView"] || [cn containsString:@"RichTextView"]) {
+                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: subview match class=%@", cn]);
                     bubbleView = sv;
                     break;
                 }
             }
-            if (!bubbleView) mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: no subview match on %@", targetCls]);
         }
         
         if (bubbleView) break;
     }
+    
+    if (!bubbleView) {
+        mtLog(@"[DBG] getBubbleView: FAILED - using cellView as fallback");
+        bubbleView = cellView;
+    }
+    return bubbleView;
+}
     
     if (!bubbleView) {
         mtLog(@"[DBG] getBubbleView: FAILED - all paths returned nil, using cellView as bubble fallback");
@@ -332,7 +271,7 @@ static UIView *getBubbleView(id cell) {
 
 // 微信优化方案：独立的气泡 frame 设置方法
 static void setFrameForBubbleView(id cell, CGRect frame) {
-    UIView *bubble = getBubbleView(cell);
+    id bubble = getBubbleView(cell);
     if (bubble) {
         bubble.frame = frame;
     }
@@ -353,7 +292,7 @@ static void mt_updateLabelFrame(id cell) {
         if (CGRectEqualToRect(cellFrame, CGRectZero)) return;
         
         UIView *bubble = getBubbleView(cell);
-        UIImageView *avatar = getAvatarView(cell);
+        id avatar = getAvatarView(cell);
         
         CGRect bubbleFrame = bubble ? bubble.frame : cellFrame;
         CGRect avatarFrame = avatar ? avatar.frame : CGRectZero;
@@ -610,7 +549,7 @@ static void addTimeLabelToCell(id cell) {
         }
         objc_setAssociatedObject(cell, @"messageTimeLastIdentifier", identifier, OBJC_ASSOCIATION_COPY_NONATOMIC);
         
-        UIImageView *avatarView = getAvatarView(cell);
+        id avatarView = getAvatarView(cell);
         
         NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
         NSString *timeString = formatMessageTime(messageDate, config.messageTimeFormat);
@@ -630,18 +569,46 @@ static void addTimeLabelToCell(id cell) {
         UIView *bubbleView = getBubbleView(cell);
         mtLog([NSString stringWithFormat:@"bubbleView: %@", bubbleView ? @"YES" : @"NO"]);
         
-        UIColor *textColor = [config colorFromHex:config.messageTimeTextColor] ?: [UIColor colorWithWhite:0.5 alpha:1.0];
+        // 使用发送者/接收者独立配色
+        UIColor *textColor = nil;
+        UIColor *bgColor = nil;
+        if (isSender) {
+            textColor = [config colorFromHex:config.senderTextColorHex] ?: [UIColor colorWithWhite:0.5 alpha:1.0];
+            NSString *bgHex = config.senderBackgroundColorHex;
+            if (bgHex.length > 0 && ![bgHex isEqualToString:@"#00000000"]) {
+                bgColor = [config colorFromHex:bgHex];
+            }
+        } else {
+            textColor = [config colorFromHex:config.receiverTextColorHex] ?: [UIColor colorWithWhite:0.5 alpha:1.0];
+            NSString *bgHex = config.receiverBackgroundColorHex;
+            if (bgHex.length > 0 && ![bgHex isEqualToString:@"#00000000"]) {
+                bgColor = [config colorFromHex:bgHex];
+            }
+        }
         
         timeLabel.textColor = colorInLightMode(textColor, autoDarkColor(textColor));
-        timeLabel.backgroundColor = [UIColor clearColor];
+        timeLabel.backgroundColor = bgColor ?: [UIColor clearColor];
+        
+        // 圆角
+        if (config.messageTimeCornerRadius > 0) {
+            timeLabel.layer.cornerRadius = config.messageTimeCornerRadius;
+            timeLabel.layer.masksToBounds = YES;
+        } else {
+            timeLabel.layer.cornerRadius = 0;
+            timeLabel.layer.masksToBounds = NO;
+        }
         
         CGSize textSize = [timeString sizeWithAttributes:@{NSFontAttributeName: timeLabel.font}];
         CGSize labelSize = CGSizeMake(textSize.width, textSize.height);
         
         mtLog([NSString stringWithFormat:@"labelSize: %@", NSStringFromCGSize(labelSize)]);
         
-        timeLabel.adjustsFontSizeToFitWidth = YES;
-        timeLabel.minimumScaleFactor = 0.8;
+        if (!config.disableLabelWidthAdjustment) {
+            timeLabel.adjustsFontSizeToFitWidth = YES;
+            timeLabel.minimumScaleFactor = 0.8;
+        } else {
+            timeLabel.adjustsFontSizeToFitWidth = NO;
+        }
         timeLabel.textAlignment = NSTextAlignmentCenter;
         
         CGRect labelFrame = CGRectMake(0, 0, labelSize.width, labelSize.height);

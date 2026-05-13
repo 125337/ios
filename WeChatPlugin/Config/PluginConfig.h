@@ -49,6 +49,18 @@
 @property (nonatomic, assign) CGFloat messageTimeOffsetY;
 @property (nonatomic, copy) NSString *messageTimeTextColor;
 @property (nonatomic, assign) CGFloat messageTimeBubbleExtWidth;
+@property (nonatomic, assign) CGFloat messageTimeCornerRadius;
+@property (nonatomic, assign) BOOL disableLabelWidthAdjustment;
+// 发送者配色
+@property (nonatomic, copy) NSString *senderTextColorHex;
+@property (nonatomic, copy) NSString *senderTextColorDarkHex;
+@property (nonatomic, copy) NSString *senderBackgroundColorHex;
+@property (nonatomic, copy) NSString *senderBackgroundColorDarkHex;
+// 接收者配色
+@property (nonatomic, copy) NSString *receiverTextColorHex;
+@property (nonatomic, copy) NSString *receiverTextColorDarkHex;
+@property (nonatomic, copy) NSString *receiverBackgroundColorHex;
+@property (nonatomic, copy) NSString *receiverBackgroundColorDarkHex;
 
 #pragma mark - 隐藏聊天时间分隔线
 @property (nonatomic, assign) BOOL hideChatTime;
