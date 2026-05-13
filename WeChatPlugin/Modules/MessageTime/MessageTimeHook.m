@@ -6,6 +6,12 @@
 #import <dlfcn.h>
 
 // ============================================================
+// MARK: - Logging
+// ============================================================
+
+static void mtLog(NSString *content);
+
+// ============================================================
 // MARK: - Dynamic Hook Engine (Substrate dlsym + Runtime fallback)
 // ============================================================
 
@@ -56,7 +62,7 @@ typedef struct {
 } MTHookEntry;
 
 // ============================================================
-// MARK: - Logging
+// MARK: - Logging Implementation
 // ============================================================
 
 static void mtLog(NSString *content) {
