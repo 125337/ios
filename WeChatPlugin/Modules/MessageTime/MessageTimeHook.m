@@ -872,14 +872,28 @@ static void hookCellForTime(NSString *className) {
             // layoutSubviews：此时气泡/头像已创建（layoutInternal→initBgImageView 已执行）
             // 如果 willDisplayCell 时视图未就绪，标签不存在，就在这里创建
             if (sel == NSSelectorFromString(@"layoutSubviews")) {
-                UILabel *label = objc_getAssociatedObject(self, @"messageTimeLabel");
+                // CommonMessageCellView 的 layoutSubviews 触发时，找到其父级 ChatTableViewCell
+                id targetCell = self;
+                if ([NSStringFromClass([self class]) containsString:@"CommonMessageCell"]) {
+                    UIView *v = (UIView *)self;
+                    while (v) {
+                        NSString *cn = NSStringFromClass([v class]);
+                        if ([cn containsString:@"ChatTable"] || [cn containsString:@"CellView"] ||
+                            [v isKindOfClass:objc_getClass("ChatTableViewCell")]) {
+                            targetCell = v;
+                            break;
+                        }
+                        v = v.superview;
+                    }
+                    mtLog([NSString stringWithFormat:@"[layoutSubviews] self=%@ targetCell=%@",
+                           NSStringFromClass([self class]), NSStringFromClass([targetCell class])]);
+                }
+                
+                UILabel *label = objc_getAssociatedObject(targetCell, @"messageTimeLabel");
                 if (label && label.superview) {
-                    // 已有标签，气泡此时已创建，重新计算位置
-                    mt_updateLabelFrame(self);
+                    mt_updateLabelFrame(targetCell);
                 } else {
-                    // willDisplayCell 时 bgImageView/headImageView 未初始化，
-                    // 现在在 layoutSubviews 中创建标签（此时视图 frame 正确）
-                    addTimeLabelToCell(self);
+                    addTimeLabelToCell(targetCell);
                 }
             }
         });
