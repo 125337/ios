@@ -185,7 +185,7 @@ static id getAvatarView(id cell) {
                     @try {
                         id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
                         if (view && [view respondsToSelector:@selector(image)]) {
-                            mtLog(@"[DBG] getAvatarView: %@ found", selName);
+                            mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ found", selName]);
                             avatarView = view;
                             break;
                         }
@@ -200,7 +200,7 @@ static id getAvatarView(id cell) {
                 @try {
                     id view = [target valueForKey:key];
                     if (view && [view respondsToSelector:@selector(image)]) {
-                        mtLog(@"[DBG] getAvatarView: KVC %@ found, class=%@", key, NSStringFromClass([view class]));
+                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: KVC %@ found, class=%@", key, NSStringFromClass([view class])]);
                         avatarView = view;
                         break;
                     }
@@ -214,7 +214,7 @@ static id getAvatarView(id cell) {
                 if ([sv respondsToSelector:@selector(image)]) {
                     NSString *cn = NSStringFromClass([sv class]);
                     if ([cn containsString:@"Head"] || [cn containsString:@"Avatar"]) {
-                        mtLog(@"[DBG] getAvatarView: subview match class=%@", cn);
+                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: subview match class=%@", cn]);
                         avatarView = sv;
                         break;
                     }
@@ -263,7 +263,7 @@ static id getBubbleView(id cell) {
                 @try {
                     id v = [target valueForKey:key];
                     if (v) {
-                        mtLog(@"[DBG] getBubbleView: KVC %@ found, class=%@", key, NSStringFromClass([v class]));
+                        mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: KVC %@ found, class=%@", key, NSStringFromClass([v class])]);
                         bubbleView = v;
                         break;
                     }
@@ -277,7 +277,7 @@ static id getBubbleView(id cell) {
                 NSString *cn = NSStringFromClass([sv class]);
                 if ([cn containsString:@"BgImage"] || [cn containsString:@"Bubble"] ||
                     [cn containsString:@"MessageView"] || [cn containsString:@"RichTextView"]) {
-                    mtLog(@"[DBG] getBubbleView: subview match class=%@", cn);
+                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: subview match class=%@", cn]);
                     bubbleView = sv;
                     break;
                 }
