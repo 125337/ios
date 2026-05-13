@@ -12,7 +12,6 @@ MioHelper_FILES = Tweak.m \
 	Config/PluginConfig.m \
 	Core/HookEngine.m \
 	Core/WPAlert.m \
-	Core/fishhook.c \
 	Core/HookInterceptor.m \
 	Registry/HookRegistry.m \
 	Registry/FeatureModuleRegistry.m \
