@@ -906,12 +906,8 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
             v = v.superview;
         }
         mtLog([NSString stringWithFormat:@"[layoutSubviews] self=%@ targetCell=%@",
-               selfCls, NSStringFromClass([targetCell class])]);
+           selfCls, NSStringFromClass([targetCell class])]);
     }
-
-    static char kLayoutBusyKey;
-    if ([objc_getAssociatedObject(targetCell, &kLayoutBusyKey) boolValue]) return;
-    objc_setAssociatedObject(targetCell, &kLayoutBusyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     if (orig_CommonMessageCellView_layoutSubviews) {
         orig_CommonMessageCellView_layoutSubviews(self, _cmd);
@@ -937,8 +933,6 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
     objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
     objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    static char kLayoutBusyKey;
-    objc_setAssociatedObject(self, &kLayoutBusyKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 static void repl_ChatTimeCellView_layoutSubviews(id self, SEL _cmd) {
