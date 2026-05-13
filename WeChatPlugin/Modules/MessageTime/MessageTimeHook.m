@@ -316,129 +316,8 @@ static id getBubbleView(id cell) {
 }
 
 // ============================================================
-// MARK: - Label Frame Calculation
+// MARK: - Label Creation
 // ============================================================
-
-static int g_callCount = 0;
-
-static void mt_updateLabelFrame(id cell) {
-    @try {
-        UILabel *label = objc_getAssociatedObject(cell, @"messageTimeLabel");
-        if (!label || !label.superview) return;
-        
-        PluginConfig *config = [PluginConfig shared];
-        if (!config.showMessageTime) return;
-        
-        CGRect cellFrame = [(UIView *)cell frame];
-        if (CGRectEqualToRect(cellFrame, CGRectZero)) return;
-        
-        UIView *bubble = getBubbleView(cell);
-        id avatar = getAvatarView(cell);
-        
-        CGRect bubbleFrame = bubble ? bubble.frame : cellFrame;
-        CGRect avatarFrame = avatar ? [(UIView *)avatar frame] : CGRectZero;
-        mtLog([NSString stringWithFormat:@"[mt_updateLabelFrame] bubble=%@ avatar=%@ isSender=0",
-               NSStringFromCGRect(bubbleFrame), avatar ? @"YES" : @"NO"]);
-        
-        BOOL isSender = NO;
-        id cellView = getCellView(cell);
-        id target = cellView ?: cell;
-        SEL senderSel = NSSelectorFromString(@"isSenderFromMsgWrap:");
-        id wrap = nil;
-        @try {
-            if (cellView) {
-                id vm = nil;
-                @try { vm = [cellView valueForKey:@"m_viewModel"]; } @catch (...) {}
-                if (!vm) { @try { vm = [cellView valueForKey:@"viewModel"]; } @catch (...) {} }
-                if (vm) {
-                    @try { wrap = [vm valueForKey:@"messageWrap"]; } @catch (...) {}
-                    if (!wrap) { @try { wrap = [vm valueForKey:@"m_messageWrap"]; } @catch (...) {} }
-                }
-            }
-        } @catch (...) {}
-        if (!wrap && [target respondsToSelector:senderSel]) {
-            @try { isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(target, senderSel, nil); } @catch (...) {}
-        } else if (wrap && [target respondsToSelector:senderSel]) {
-            @try { isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(target, senderSel, wrap); } @catch (...) {}
-        }
-        if (!isSender && bubble) {
-            isSender = CGRectGetMidX(bubble.frame) > CGRectGetMidX(cellFrame);
-        }
-        
-        CGRect labelFrame = label.frame;
-        CGFloat offsetX = config.messageTimeOffsetX;
-        CGFloat offsetY = config.messageTimeOffsetY;
-        NSInteger position = config.messageTimePosition;
-        CGFloat farSideX, nearSideX;
-        if (isSender) {
-            farSideX = bubbleFrame.origin.x;
-            nearSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
-        } else {
-            farSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
-            nearSideX = bubbleFrame.origin.x;
-        }
-        
-        switch (position) {
-            case 0:
-                if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                    labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
-                    labelFrame.origin.y = avatarFrame.origin.y - labelFrame.size.height - offsetY;
-                } else {
-                    labelFrame.origin.x = nearSideX;
-                    labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
-                }
-                break;
-            case 1:
-                if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                    labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
-                    labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + offsetY;
-                } else {
-                    labelFrame.origin.x = nearSideX;
-                    labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY;
-                }
-                break;
-            case 2:
-                if (isSender) labelFrame.origin.x = bubbleFrame.origin.x - labelFrame.size.width - offsetX;
-                else labelFrame.origin.x = bubbleFrame.origin.x + bubbleFrame.size.width + offsetX;
-                labelFrame.origin.y = bubbleFrame.origin.y + (bubbleFrame.size.height - labelFrame.size.height) / 2;
-                break;
-            case 3: labelFrame.origin.x = farSideX; labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY; break;
-            case 4: labelFrame.origin.x = nearSideX; labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY; break;
-            case 5: labelFrame.origin.x = farSideX; labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY; break;
-            case 6: labelFrame.origin.x = nearSideX; labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY; break;
-            case 7:
-                labelFrame.origin.x = bubbleFrame.origin.x + (bubbleFrame.size.width - labelFrame.size.width) / 2;
-                labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height - labelFrame.size.height - 4;
-                break;
-            default:
-                labelFrame.origin.x = farSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
-                break;
-        }
-        
-        if (offsetX != 0) {
-            BOOL leftSide = NO;
-            switch (position) {
-                case 0: case 1: leftSide = !isSender; break;
-                case 2: leftSide = isSender; break;
-                case 3: case 5: leftSide = isSender; break;
-                case 4: case 6: leftSide = !isSender; break;
-                default: leftSide = NO; break;
-            }
-            labelFrame.origin.x += leftSide ? -offsetX : offsetX;
-        }
-        if (offsetY != 0) labelFrame.origin.y -= offsetY;
-        
-        CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
-        if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
-        if (labelFrame.origin.y < 2) labelFrame.origin.y = 2;
-        
-        label.frame = labelFrame;
-        mtLog(@"[DBG] mt_updateLabelFrame: updated position");
-    } @catch (NSException *e) {
-        mtLog([NSString stringWithFormat:@"mt_updateLabelFrame error: %@", e]);
-    }
-}
 
 static void addTimeLabelToCell(id cell) {
     @try {
@@ -455,8 +334,7 @@ static void addTimeLabelToCell(id cell) {
         }
         
         NSString *cellClass = NSStringFromClass([cell class]);
-        g_callCount++;
-        mtLog([NSString stringWithFormat:@"=== addTimeLabelToCell #%d called on: %@ (from: %@) ===", g_callCount, cellClass, from]);
+        mtLog([NSString stringWithFormat:@"=== addTimeLabelToCell called on: %@ (from: %@) ===", cellClass, from]);
         
         UIView *cellViewDbg = (UIView *)cell;
         mtLog([NSString stringWithFormat:@"[DBG] cell.subviews count=%lu", (unsigned long)[cellViewDbg.subviews count]]);
@@ -483,63 +361,32 @@ static void addTimeLabelToCell(id cell) {
         mtLog([NSString stringWithFormat:@"showMessageTime: %d", config.showMessageTime]);
         if (!config.showMessageTime) return;
         
-        id wrap = nil;
-        NSString *cellClsDbg = NSStringFromClass([cell class]);
-        
-        @try {
-            id cv = nil;
-            @try { cv = [cell valueForKey:@"m_cellView"]; if(cv) mtLog(@"[DBG] wrap: got cellView via m_cellView"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: m_cellView threw: %@", e.reason]); }
-            if (!cv) { @try { cv = [cell valueForKey:@"cellView"]; if(cv) mtLog(@"[DBG] wrap: got cellView via cellView"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: cellView threw: %@", e.reason]); } }
-            if (cv) {
-                mtLog([NSString stringWithFormat:@"[DBG] wrap: cellView class=%@", NSStringFromClass([cv class])]);
-                id viewModel = nil;
-                @try { viewModel = [cv valueForKey:@"m_viewModel"]; if(viewModel) mtLog(@"[DBG] wrap: got viewModel via m_viewModel"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: m_viewModel threw: %@", e.reason]); }
-                if (!viewModel) { @try { viewModel = [cv valueForKey:@"viewModel"]; if(viewModel) mtLog(@"[DBG] wrap: got viewModel via viewModel"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: viewModel threw: %@", e.reason]); } }
-                if (viewModel) {
-                    mtLog([NSString stringWithFormat:@"[DBG] wrap: viewModel class=%@", NSStringFromClass([viewModel class])]);
-                    @try { wrap = [viewModel valueForKey:@"messageWrap"]; if(wrap) mtLog(@"[DBG] wrap: got via messageWrap"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: messageWrap threw: %@", e.reason]); }
-                    if (!wrap) { @try { wrap = [viewModel valueForKey:@"m_messageWrap"]; if(wrap) mtLog(@"[DBG] wrap: got via m_messageWrap"); } @catch(NSException *e) { mtLog([NSString stringWithFormat:@"[DBG] wrap: m_messageWrap threw: %@", e.reason]); } }
-                } else {
-                    mtLog(@"[DBG] wrap: viewModel is nil on this cellView");
-                }
-            }
-        } @catch (NSException *e) {
-            mtLog([NSString stringWithFormat:@"[DBG] wrap: cellView path exception: %@", e]);
+        id wrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
+        if (wrap) {
+            mtLog(@"[DBG] wrap: got from cachedMsgWrap");
         }
         
         if (!wrap) {
-            mtLog(@"Trying _viewModel path for wrap");
             @try {
-                id viewModel = [cell valueForKey:@"_viewModel"];
-                if (!viewModel) viewModel = [cell valueForKey:@"m_viewModel"];
+                id cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"];
+                if (cellView) {
+                    wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
+                    if (wrap) mtLog(@"[DBG] wrap: got via cellView.messageWrap at addTimeLabelToCell time");
+                }
+            } @catch (NSException *e) {
+                mtLog([NSString stringWithFormat:@"[DBG] wrap: cellView path exception: %@", e]);
+            }
+        }
+        
+        if (!wrap) {
+            mtLog(@"Trying _viewModel->parentModel fallback");
+            @try {
+                id viewModel = [cell valueForKey:@"_viewModel"] ?: [cell valueForKey:@"m_viewModel"];
                 if (viewModel) {
                     id parentModel = [viewModel valueForKey:@"parentModel"];
                     if (parentModel) {
-                        wrap = [parentModel valueForKey:@"m_messageWrap"];
-                        if (!wrap) wrap = [parentModel valueForKey:@"messageWrap"];
-                        if (wrap) mtLog(@"Got wrap from _viewModel->parentModel");
-                    }
-                }
-            } @catch (NSException *e) {
-                mtLog([NSString stringWithFormat:@"_viewModel path exception: %@", e]);
-            }
-        }
-        
-        if (!wrap) {
-            mtLog(@"Trying direct selector on cellView");
-            @try {
-                id cellView = [cell valueForKey:@"m_cellView"];
-                if (!cellView) cellView = [cell valueForKey:@"cellView"];
-                if (cellView) {
-                    for (NSString *sel in @[@"getCurrentMessageWrap", @"messageWrap"]) {
-                        SEL s = NSSelectorFromString(sel);
-                        if ([cellView respondsToSelector:s]) {
-                            wrap = ((id (*)(id, SEL))objc_msgSend)(cellView, s);
-                            if (wrap) {
-                                mtLog([NSString stringWithFormat:@"Got wrap from cellView selector: %@", sel]);
-                                break;
-                            }
-                        }
+                        wrap = [parentModel valueForKey:@"m_messageWrap"] ?: [parentModel valueForKey:@"messageWrap"];
+                        if (wrap) mtLog(@"Got wrap from _viewModel->parentModel fallback");
                     }
                 }
             } @catch (NSException *e) {}
@@ -835,7 +682,8 @@ static void addTimeLabelToCell(id cell) {
 // MARK: - Original Function Pointers (one per hook target)
 // ============================================================
 
-static void (*orig_CommonMessageCellView_layoutSubviews)(id, SEL);
+static UITableViewCell* (*orig_BaseMsgContentVC_cellForRow)(id, SEL, id, NSIndexPath*);
+static void (*orig_BaseMsgContentVC_willDisplayCell)(id, SEL, id, id, NSIndexPath*);
 static void (*orig_ChatTableViewCell_prepareForReuse)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
 static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
@@ -845,35 +693,29 @@ static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
 // MARK: - Replacement Functions
 // ============================================================
 
-static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
-    id targetCell = self;
-    NSString *selfCls = NSStringFromClass([self class]);
+static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *ip) {
+    UITableViewCell *cell = orig_BaseMsgContentVC_cellForRow(self, _cmd, tv, ip);
+    if (![PluginConfig shared].showMessageTime || !cell) return cell;
 
-    if ([selfCls containsString:@"CommonMessageCell"] || [selfCls containsString:@"MessageCell"]) {
-        UIView *v = [(UIView *)self superview];
-        while (v) {
-            NSString *cn = NSStringFromClass([v class]);
-            if ([cn containsString:@"ChatTable"] ||
-                [v isKindOfClass:objc_getClass("ChatTableViewCell")]) {
-                targetCell = v;
-                break;
+    @try {
+        id cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"];
+        if (cellView) {
+            id wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
+            if (wrap && [wrap isKindOfClass:objc_getClass("CMessageWrap")]) {
+                objc_setAssociatedObject(cell, @"cachedMsgWrap", wrap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             }
-            v = v.superview;
         }
-        mtLog([NSString stringWithFormat:@"[layoutSubviews] self=%@ targetCell=%@",
-           selfCls, NSStringFromClass([targetCell class])]);
+    } @catch (NSException *e) {
+        mtLog([NSString stringWithFormat:@"cellForRow cache error: %@", e]);
     }
+    return cell;
+}
 
-    if (orig_CommonMessageCellView_layoutSubviews) {
-        orig_CommonMessageCellView_layoutSubviews(self, _cmd);
+static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath *ip) {
+    if (orig_BaseMsgContentVC_willDisplayCell) {
+        orig_BaseMsgContentVC_willDisplayCell(self, _cmd, tv, cell, ip);
     }
-
-    UILabel *label = objc_getAssociatedObject(targetCell, @"messageTimeLabel");
-    if (label && label.superview) {
-        mt_updateLabelFrame(targetCell);
-    } else {
-        addTimeLabelToCell(targetCell);
-    }
+    addTimeLabelToCell(cell);
 }
 
 static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
@@ -888,6 +730,7 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
     objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
     objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, @"cachedMsgWrap", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 static void repl_ChatTimeCellView_layoutSubviews(id self, SEL _cmd) {
@@ -940,25 +783,15 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
 // ============================================================
 
 static MTHookEntry g_hookTable[] = {
-    {"ChatTableViewCell",     "prepareForReuse", (IMP)repl_ChatTableViewCell_prepareForReuse,     (IMP*)&orig_ChatTableViewCell_prepareForReuse},
-    {"ChatTimeCellView",      "layoutSubviews",  (IMP)repl_ChatTimeCellView_layoutSubviews,       (IMP*)&orig_ChatTimeCellView_layoutSubviews},
-    {"ChatTimeViewModel",     "cellHeight",      (IMP)repl_ChatTimeViewModel_cellHeight,          (IMP*)&orig_ChatTimeViewModel_cellHeight},
-    {"CContact",              "m_nsNickName",    (IMP)repl_CContact_m_nsNickName,                 (IMP*)&orig_CContact_m_nsNickName},
+    {"BaseMsgContentViewController", "tableView:cellForRowAtIndexPath:",              (IMP)repl_cellForRow,                         (IMP*)&orig_BaseMsgContentVC_cellForRow},
+    {"BaseMsgContentViewController", "tableView:willDisplayCell:forRowAtIndexPath:",  (IMP)repl_willDisplayCell,                    (IMP*)&orig_BaseMsgContentVC_willDisplayCell},
+    {"ChatTableViewCell",            "prepareForReuse",                               (IMP)repl_ChatTableViewCell_prepareForReuse,  (IMP*)&orig_ChatTableViewCell_prepareForReuse},
+    {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
+    {"ChatTimeViewModel",            "cellHeight",                                    (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
+    {"CContact",                     "m_nsNickName",                                  (IMP)repl_CContact_m_nsNickName,              (IMP*)&orig_CContact_m_nsNickName},
 };
 
 static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0]);
-
-static const char *g_cellViewFallbacks[] = {
-    "CommonMessageCellView",
-    "TextMessageCellView",
-    "ImageMessageCellView",
-    "VideoMessageCellView",
-    "VoiceMessageCellView",
-    "EmoticonMessageCellView",
-    "BaseMessageCellView"
-};
-
-static const int g_cellViewFallbackCount = sizeof(g_cellViewFallbacks) / sizeof(g_cellViewFallbacks[0]);
 
 // ============================================================
 // MARK: - Installation
@@ -968,7 +801,7 @@ static const int g_cellViewFallbackCount = sizeof(g_cellViewFallbacks) / sizeof(
 
 + (void)install {
     mtLog(@"========================================");
-    mtLog(@"MessageTimeHook install - Substrate + ConfigTable");
+    mtLog(@"MessageTimeHook install - cellForRow + willDisplayCell");
     mtLog(@"========================================");
 
     PluginConfig *config = [PluginConfig shared];
@@ -1003,28 +836,7 @@ static const int g_cellViewFallbackCount = sizeof(g_cellViewFallbacks) / sizeof(
         hookedCount++;
     }
 
-    BOOL cellViewHooked = NO;
-    for (int i = 0; i < g_cellViewFallbackCount; i++) {
-        const char *cn = g_cellViewFallbacks[i];
-        Class cls = objc_getClass(cn);
-        if (!cls) continue;
-
-        SEL sel = sel_registerName("layoutSubviews");
-        Method m = class_getInstanceMethod(cls, sel);
-        if (!m) continue;
-
-        MSHookMessageEx(cls, sel, (IMP)repl_CommonMessageCellView_layoutSubviews, (IMP*)&orig_CommonMessageCellView_layoutSubviews);
-
-        mtLog([NSString stringWithFormat:@"Hooked cell view: %s - layoutSubviews ✓", cn]);
-        cellViewHooked = YES;
-        break;
-    }
-
-    if (!cellViewHooked) {
-        mtLog(@"WARNING: No cell view class found for layoutSubviews hook");
-    }
-
-    mtLog([NSString stringWithFormat:@"Hook table complete: %d/%d + cellView=%d", hookedCount, g_hookTableCount, cellViewHooked]);
+    mtLog([NSString stringWithFormat:@"Hook table complete: %d/%d", hookedCount, g_hookTableCount]);
     mtLog(@"========================================");
     mtLog(@"MessageTimeHook install complete");
     mtLog(@"========================================");
