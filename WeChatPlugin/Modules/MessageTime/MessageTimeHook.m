@@ -827,12 +827,6 @@ static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath 
     if (orig_BaseMsgContentVC_willDisplayCell) {
         orig_BaseMsgContentVC_willDisplayCell(self, _cmd, tv, cell, ip);
     }
-    // 触发 layoutSubviews，让 g_msgLabels 有机会处理（预渲染 cell 之前 cell.window 为 nil 跳过了）
-    UIView *cv = nil;
-    @try { cv = [cell valueForKey:@"m_cellView"]; } @catch (...) {}
-    if (cv && !objc_getAssociatedObject(cv, @"msgTimeLabel")) {
-        [cv setNeedsLayout];
-    }
 }
 
 static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
