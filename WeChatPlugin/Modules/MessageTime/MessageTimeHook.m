@@ -607,20 +607,8 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
-        // 全局单标签：同一 wrap 只允许一个可见标签（NSMapTable weak 自清理）
-        static dispatch_once_t once;
-        dispatch_once(&once, ^{
-            g_msgLabels = [NSMapTable mapTableWithKeyOptions:NSMapTableCopyIn
-                                               valueOptions:NSMapTableWeakMemory];
-        });
+        // 全局单标签：存储到 g_msgLabels（weak，tag 释放后自动清除）
         NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
-        UILabel *existingLabel = [g_msgLabels objectForKey:wp];
-        if (existingLabel && [existingLabel superview] && [existingLabel superview] != cellView) {
-            // 旧标签在另一个 cellView 上，移除它让当前 cellView 创建
-            UIView *oldOwner = [existingLabel superview];
-            [existingLabel removeFromSuperview];
-            objc_setAssociatedObject(oldOwner, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
         
         id avatarView = getAvatarView(cell);
         
@@ -845,19 +833,32 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
     UIView *cell = (UIView *)self;
     if (!cell.window) return;
     
-    id cellView = self;
-    UILabel *existingLabel = objc_getAssociatedObject(cellView, @"msgTimeLabel");
-    
     // 找父 ChatTableViewCell
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
     if (!cell) return;
     
-    if (existingLabel) {
-        // 轻量级帧更新：长消息多行布局后重定位（无日志，无 wrap 链）
+    id cellView = self;
+    UILabel *existingOnCellView = objc_getAssociatedObject(cellView, @"msgTimeLabel");
+    if (existingOnCellView) {
+        // 同一 cellView 的重复 layoutSubviews（长消息多行布局后重定位）
         quickRelocateTimeLabel(cell, cellView, [cell frame]);
         return;
+    }
+    
+    // 全局去重：检查此消息是否已有标签在其他 cellView 上（wrapPtr 稳定，不受 cellView 重建影响）
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        g_msgLabels = [NSMapTable mapTableWithKeyOptions:NSMapTableCopyIn
+                                           valueOptions:NSMapTableWeakMemory];
+    });
+    id wrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
+    if (wrap) {
+        NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
+        if ([g_msgLabels objectForKey:wp]) {
+            return; // 已有标签在其他 cellView 上，跳过
+        }
     }
     
     addTimeLabelToCell(cell);
