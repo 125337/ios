@@ -605,6 +605,7 @@ static void addTimeLabelToCell(id cell) {
 static UITableViewCell* (*orig_BaseMsgContentVC_cellForRow)(id, SEL, id, NSIndexPath*);
 static void (*orig_BaseMsgContentVC_willDisplayCell)(id, SEL, id, id, NSIndexPath*);
 static void (*orig_ChatTableViewCell_prepareForReuse)(id, SEL);
+static void (*orig_CommonMessageCellView_layoutSubviews)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
 static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
 static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
@@ -683,6 +684,23 @@ static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath 
     addTimeLabelToCell(cell);
 }
 
+static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
+    if (orig_CommonMessageCellView_layoutSubviews) {
+        orig_CommonMessageCellView_layoutSubviews(self, _cmd);
+    }
+
+    // 子视图布局完成，重新定位时间标签（此时头像/气泡已创建完毕）
+    UIView *cell = (UIView *)self;
+    while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
+        cell = [cell superview];
+    }
+    if (cell) {
+        // 清除 identifier 强制重新定位
+        objc_setAssociatedObject(cell, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        addTimeLabelToCell(cell);
+    }
+}
+
 static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
     if (orig_ChatTableViewCell_prepareForReuse) {
         orig_ChatTableViewCell_prepareForReuse(self, _cmd);
@@ -750,6 +768,7 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
 static MTHookEntry g_hookTable[] = {
     {"BaseMsgContentViewController", "tableView:cellForRowAtIndexPath:",              (IMP)repl_cellForRow,                         (IMP*)&orig_BaseMsgContentVC_cellForRow},
     {"BaseMsgContentViewController", "tableView:willDisplayCell:forRowAtIndexPath:",  (IMP)repl_willDisplayCell,                    (IMP*)&orig_BaseMsgContentVC_willDisplayCell},
+    {"CommonMessageCellView",        "layoutSubviews",                                (IMP)repl_CommonMessageCellView_layoutSubviews, (IMP*)&orig_CommonMessageCellView_layoutSubviews},
     {"ChatTableViewCell",            "prepareForReuse",                               (IMP)repl_ChatTableViewCell_prepareForReuse,  (IMP*)&orig_ChatTableViewCell_prepareForReuse},
     {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
     {"ChatTimeViewModel",            "cellHeight",                                    (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
