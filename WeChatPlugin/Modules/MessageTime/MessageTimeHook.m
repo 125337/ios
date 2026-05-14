@@ -579,139 +579,29 @@ static void addTimeLabelToCell(id cell) {
         CGFloat offsetX = config.messageTimeOffsetX;
         CGFloat offsetY = config.messageTimeOffsetY;
         
-        NSInteger position = config.messageTimePosition;
-        mtLog([NSString stringWithFormat:@"position: %ld, offsetX: %.2f, offsetY: %.2f", (long)position, offsetX, offsetY]);
+        mtLog([NSString stringWithFormat:@"offsetX: %.2f, offsetY: %.2f", offsetX, offsetY]);
         
-        if ((position == 6 || position == 7) && bubbleView && config.messageTimeBubbleExtWidth > 0) {
-            CGRect bubbleFrame = bubbleView.frame;
-            bubbleFrame.size.width += config.messageTimeBubbleExtWidth;
-            bubbleView.frame = bubbleFrame;
-            mtLog([NSString stringWithFormat:@"Extended bubble width by %.0f", config.messageTimeBubbleExtWidth]);
-        }
-        
+        // 固定位置模式：头像下方（position = 1）
         CGRect avatarFrame = [(UIView *)avatarView frame];
-        CGRect bubbleFrame = bubbleView ? bubbleView.frame : cellFrame;
-        if (CGRectEqualToRect(bubbleFrame, CGRectZero)) {
-            mtLog(@"bubbleFrame is zero, using cellFrame as fallback");
-            bubbleFrame = cellFrame;
-        }
-        
-        mtLog([NSString stringWithFormat:@"avatarView: %@, bubbleFrame: %@, isSender: %d", avatarView ? @"YES" : @"NO", NSStringFromCGRect(bubbleFrame), isSender]);
-        
-        CGFloat farSideX, nearSideX;
-        if (isSender) {
-            farSideX = bubbleFrame.origin.x;
-            nearSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
+        if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
+            // 有头像：居中于头像下方
+            labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
+            labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + offsetY;
         } else {
-            farSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
-            nearSideX = bubbleFrame.origin.x;
+            // 无头像：放在 cell 底部左侧
+            labelFrame.origin.x = 4;
+            labelFrame.origin.y = cellFrame.size.height - labelFrame.size.height - 2;
         }
         
-        switch (position) {
-            case 0:
-                if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                    labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
-                    labelFrame.origin.y = avatarFrame.origin.y - labelFrame.size.height - offsetY;
-                } else {
-                    labelFrame.origin.x = nearSideX;
-                    labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
-                }
-                break;
-                
-            case 1:
-                if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                    labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
-                    labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + offsetY;
-                } else {
-                    labelFrame.origin.x = nearSideX;
-                    labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY;
-                }
-                break;
-                
-            case 2:
-                if (isSender) {
-                    labelFrame.origin.x = bubbleFrame.origin.x - labelFrame.size.width - offsetX;
-                } else {
-                    labelFrame.origin.x = bubbleFrame.origin.x + bubbleFrame.size.width + offsetX;
-                }
-                labelFrame.origin.y = bubbleFrame.origin.y + (bubbleFrame.size.height - labelFrame.size.height) / 2;
-                break;
-                
-            case 3:
-                labelFrame.origin.x = farSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY;
-                break;
-                
-            case 4:
-                labelFrame.origin.x = nearSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height + offsetY;
-                break;
-                
-            case 5:
-                labelFrame.origin.x = farSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
-                break;
-                
-            case 6:
-                labelFrame.origin.x = nearSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
-                break;
-                
-            case 7:
-            {
-                labelFrame.origin.x = bubbleFrame.origin.x + (bubbleFrame.size.width - labelFrame.size.width) / 2;
-                labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height - labelFrame.size.height - 4;
-                
-                BOOL isTextMessage = NO;
-                @try {
-                    NSString *className = NSStringFromClass([cell class]);
-                    isTextMessage = [className containsString:@"TextMessage"];
-                } @catch (NSException *e) {}
-                
-                if (!isTextMessage) {
-                    labelFrame.origin.x = farSideX;
-                    labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
-                }
-                break;
-            }
-                
-            default:
-                labelFrame.origin.x = farSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height - offsetY;
-                break;
-        }
-        
+        // X 偏移方向：接收方头像在左侧←，发送方头像在右侧→
         if (offsetX != 0) {
-            BOOL isOnLeftSide = NO;
-            switch (position) {
-                case 0: case 1:
-                    isOnLeftSide = !isSender;
-                    break;
-                case 2:
-                    isOnLeftSide = isSender;
-                    break;
-                case 3: case 5:
-                    isOnLeftSide = isSender;
-                    break;
-                case 4: case 6:
-                    isOnLeftSide = !isSender;
-                    break;
-                case 7:
-                    isOnLeftSide = NO;
-                    break;
-            }
-            
-            if (isOnLeftSide) {
-                labelFrame.origin.x -= offsetX;
-            } else {
-                labelFrame.origin.x += offsetX;
-            }
+            labelFrame.origin.x += isSender ? offsetX : -offsetX;
         }
         
-        if (offsetY != 0) {
-            labelFrame.origin.y -= offsetY;
-        }
+        mtLog([NSString stringWithFormat:@"avatarView: %@, isSender: %d, Final labelFrame: %@",
+               avatarView ? @"YES" : @"NO", isSender, NSStringFromCGRect(labelFrame)]);
         
+        // Y 轴边界钳制
         CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
         if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
         if (labelFrame.origin.y < 2) labelFrame.origin.y = 2;
@@ -915,7 +805,6 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
 
     PluginConfig *config = [PluginConfig shared];
     mtLog([NSString stringWithFormat:@"Config - showMessageTime: %d", config.showMessageTime]);
-    mtLog([NSString stringWithFormat:@"Config - messageTimePosition: %ld", (long)config.messageTimePosition]);
     mtLog([NSString stringWithFormat:@"Config - messageTimeFontSize: %.1f", config.messageTimeFontSize]);
     mtLog([NSString stringWithFormat:@"Config - messageTimeFormat: %@", config.messageTimeFormat]);
     mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetX: %.2f", config.messageTimeOffsetX]);
