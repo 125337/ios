@@ -47,12 +47,12 @@ static void mtLog(NSString *content) {
 // ============================================================
 
 static UILabel *initTimeLabel(id cell) {
-    UILabel *label = objc_getAssociatedObject(cell, @"messageTimeLabel");
+    UILabel *label = objc_getAssociatedObject(cell, @"msgTimeLabel");
     if (!label) {
         label = [[UILabel alloc] init];
         label.userInteractionEnabled = NO;
         label.textAlignment = NSTextAlignmentCenter;
-        objc_setAssociatedObject(cell, @"messageTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cell, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     return label;
 }
@@ -111,45 +111,8 @@ static NSString *formatMessageTime(NSDate *date, NSString *format) {
     if (!date || !format) return nil;
     
     NSDateFormatter *formatter = getTimeFormatter();
-    
-    NSString *result = format;
-    BOOL hasB = [result containsString:@"{b}"];
-    result = [result stringByReplacingOccurrencesOfString:@"{b}" withString:@""];
-    
-    BOOL hasFakeRead = [result containsString:@"{伪已读}"];
-    result = [result stringByReplacingOccurrencesOfString:@"{伪已读}" withString:@""];
-    
-    result = [result stringByReplacingOccurrencesOfString:@"{yyyy}" withString:@"yyyy"];
-    result = [result stringByReplacingOccurrencesOfString:@"{yy}" withString:@"yy"];
-    result = [result stringByReplacingOccurrencesOfString:@"{MM}" withString:@"MM"];
-    result = [result stringByReplacingOccurrencesOfString:@"{dd}" withString:@"dd"];
-    result = [result stringByReplacingOccurrencesOfString:@"{HH}" withString:@"HH"];
-    result = [result stringByReplacingOccurrencesOfString:@"{hh}" withString:@"hh"];
-    result = [result stringByReplacingOccurrencesOfString:@"{mm}" withString:@"mm"];
-    result = [result stringByReplacingOccurrencesOfString:@"{ss}" withString:@"ss"];
-    result = [result stringByReplacingOccurrencesOfString:@"{EEEE}" withString:@"EEEE"];
-    result = [result stringByReplacingOccurrencesOfString:@"{EE}" withString:@"EE"];
-    result = [result stringByReplacingOccurrencesOfString:@"{a}" withString:@"a"];
-    
-    formatter.dateFormat = result;
-    NSString *formatted = [formatter stringFromDate:date];
-    
-    if (hasB) {
-        NSCalendar *cal = [NSCalendar currentCalendar];
-        NSInteger hour = [cal component:NSCalendarUnitHour fromDate:date];
-        NSString *period = @"";
-        if (hour == 12) period = @"noon";
-        else if (hour == 0) period = @"midnight";
-        if (period.length > 0) {
-            formatted = [formatted stringByAppendingFormat:@" %@", period];
-        }
-    }
-    
-    if (hasFakeRead) {
-        formatted = [formatted stringByAppendingString:@" 已读"];
-    }
-    
-    return formatted;
+    formatter.dateFormat = format;
+    return [formatter stringFromDate:date];
 }
 
 // ============================================================
@@ -824,11 +787,11 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
         orig_ChatTableViewCell_prepareForReuse(self, _cmd);
     }
 
-    UILabel *oldLabel = objc_getAssociatedObject(self, @"messageTimeLabel");
+    UILabel *oldLabel = objc_getAssociatedObject(self, @"msgTimeLabel");
     if (oldLabel) {
         [oldLabel removeFromSuperview];
     }
-    objc_setAssociatedObject(self, @"messageTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
     objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, @"cachedMsgWrap", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);

@@ -485,7 +485,7 @@ static NSString *configPropertyForKey(NSString *key) {
         else if ([key isEqualToString:@"DarkTimeColorHex"]) config.darkTimeColorHex = value ?: kDefaultDarkTimeColor;
         else if ([key isEqualToString:@"DarkContentColorHex"]) config.darkContentColorHex = value ?: kDefaultDarkContentColor;
         else if ([key isEqualToString:@"MessageTimeFontSize"]) config.messageTimeFontSize = [value floatValue] > 0 ? [value floatValue] : 11.0;
-        else if ([key isEqualToString:@"MessageTimeFormat"]) config.messageTimeFormat = value ?: @"{HH}:{mm}";
+        else if ([key isEqualToString:@"MessageTimeFormat"]) config.messageTimeFormat = value ?: @"HH:mm";
         else if ([key isEqualToString:@"MessageTimePosition"]) config.messageTimePosition = [value integerValue];
         else if ([key isEqualToString:@"MessageTimeOffsetX"]) config.messageTimeOffsetX = [value floatValue];
         else if ([key isEqualToString:@"MessageTimeOffsetY"]) config.messageTimeOffsetY = [value floatValue];

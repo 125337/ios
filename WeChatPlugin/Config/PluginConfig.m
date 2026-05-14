@@ -148,7 +148,7 @@ static void configLog(NSString *content) {
     
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFormat"]];
     if (v.length > 0) _messageTimeFormat = v;
-    else _messageTimeFormat = @"{HH}:{mm}:{ss}";
+    else _messageTimeFormat = @"HH:mm:ss";
     
     _messageTimePosition = [d integerForKey:[kPluginPrefix stringByAppendingString:@"MessageTimePosition"]];
     if (_messageTimePosition < 0 || _messageTimePosition > 7) _messageTimePosition = 1;
