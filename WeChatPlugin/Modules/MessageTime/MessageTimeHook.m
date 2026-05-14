@@ -829,11 +829,8 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
         orig_CommonMessageCellView_layoutSubviews(self, _cmd);
     }
 
-    // 只对可见 cell 操作（跳过预渲染）
-    UIView *cell = (UIView *)self;
-    if (!cell.window) return;
-    
     // 找父 ChatTableViewCell
+    UIView *cell = (UIView *)self;
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
