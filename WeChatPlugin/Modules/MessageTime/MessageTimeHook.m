@@ -433,198 +433,99 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
 
 static void addTimeLabelToCell(id cell) {
     @try {
-        if (!cell) {
-            mtLog(@"addTimeLabelToCell: cell is nil");
-            return;
-        }
+        if (!cell) return;
         
-        // 获取 cellView（CommonMessageCellView），标签添加到此视图上
         id cellView = nil;
         @try { cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"]; } @catch (...) {}
-        if (!cellView) {
-            mtLog(@"addTimeLabelToCell: cellView is nil");
-            return;
-        }
+        if (!cellView) return;
         
-        // 每个 cellView 只创建一次标签（微信优化同款策略）
         if (objc_getAssociatedObject(cellView, @"msgTimeLabel")) {
             return;
         }
         
-        NSArray *callStack = [NSThread callStackSymbols];
-        NSString *from = @"unknown";
-        for (NSString *frame in callStack) {
-            if ([frame containsString:@"willDisplayCell"]) { from = @"willDisplayCell"; break; }
-            if ([frame containsString:@"layoutSubviews"]) { from = @"layoutSubviews"; break; }
-        }
-        
-        NSString *cellClass = NSStringFromClass([cell class]);
-        mtLog([NSString stringWithFormat:@"=== addTimeLabelToCell called on: %@ (from: %@) ===", cellClass, from]);
-        
-        UIView *cellViewDbg = (UIView *)cell;
-        mtLog([NSString stringWithFormat:@"[DBG] cell.subviews count=%lu", (unsigned long)[cellViewDbg.subviews count]]);
-        for (UIView *sv in cellViewDbg.subviews) {
-            mtLog([NSString stringWithFormat:@"[DBG] cell.subview: class=%@ tag=%ld frame=%@", NSStringFromClass([sv class]), (long)sv.tag, NSStringFromCGRect(sv.frame)]);
-            if ([NSStringFromClass([sv class]) containsString:@"ContentView"]) {
-                mtLog([NSString stringWithFormat:@"[DBG]   -> contentView.subviews count=%lu", (unsigned long)[sv.subviews count]]);
-                for (UIView *sv2 in sv.subviews) {
-                    mtLog([NSString stringWithFormat:@"[DBG]   -> subview: class=%@ frame=%@", NSStringFromClass([sv2 class]), NSStringFromCGRect(sv2.frame)]);
-                    for (UIView *sv3 in sv2.subviews) {
-                        mtLog([NSString stringWithFormat:@"[DBG]     -> sub-subview: class=%@ frame=%@", NSStringFromClass([sv3 class]), NSStringFromCGRect(sv3.frame)]);
-                    }
-                }
-            }
-        }
-        
         CGRect cellFrame = [cell frame];
-        if (CGRectEqualToRect(cellFrame, CGRectZero)) {
-            mtLog(@"cellFrame is CGRectZero, deferring");
-            return;
-        }
+        if (CGRectEqualToRect(cellFrame, CGRectZero)) return;
         
-        // 确保 cellView 上没有残留旧标签
         UIView *staleLabel = [(UIView *)cellView viewWithTag:999999];
-        if (staleLabel) {
-            mtLog(@"Removed stale timeLabel before creating new one");
-            [staleLabel removeFromSuperview];
-        }
+        if (staleLabel) [staleLabel removeFromSuperview];
         
         PluginConfig *config = [PluginConfig shared];
-        mtLog([NSString stringWithFormat:@"showMessageTime: %d", config.showMessageTime]);
         if (!config.showMessageTime) return;
         
         id wrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
-        if (wrap) {
-            mtLog(@"[DBG] wrap: got from cachedMsgWrap");
-        }
         
         if (!wrap) {
             @try {
-                id cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"];
-                if (cellView) {
-                    wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
-                    if (wrap) mtLog(@"[DBG] wrap: got via cellView.messageWrap at addTimeLabelToCell time");
-                }
-            } @catch (NSException *e) {
-                mtLog([NSString stringWithFormat:@"[DBG] wrap: cellView path exception: %@", e]);
-            }
+                id cv = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"];
+                if (cv) wrap = [cv valueForKey:@"messageWrap"] ?: [cv valueForKey:@"m_messageWrap"];
+            } @catch (NSException *e) {}
         }
         
         if (!wrap) {
-            mtLog(@"Trying _viewModel->parentModel fallback");
             @try {
                 id viewModel = [cell valueForKey:@"_viewModel"] ?: [cell valueForKey:@"m_viewModel"];
                 if (viewModel) {
                     id parentModel = [viewModel valueForKey:@"parentModel"];
-                    if (parentModel) {
-                        wrap = [parentModel valueForKey:@"m_messageWrap"] ?: [parentModel valueForKey:@"messageWrap"];
-                        if (wrap) mtLog(@"Got wrap from _viewModel->parentModel fallback");
-                    }
+                    if (parentModel) wrap = [parentModel valueForKey:@"m_messageWrap"] ?: [parentModel valueForKey:@"messageWrap"];
                 }
             } @catch (NSException *e) {}
         }
         
         if (!wrap) {
-            mtLog(@"Trying viewModel->messageWrap directly");
             @try {
                 id viewModel = [cell valueForKey:@"_viewModel"] ?: [cell valueForKey:@"m_viewModel"];
                 if (viewModel) {
                     wrap = [viewModel valueForKey:@"m_messageWrap"] ?: [viewModel valueForKey:@"messageWrap"];
                     if (!wrap) wrap = [viewModel valueForKey:@"m_msgWrap"] ?: [viewModel valueForKey:@"msgWrap"];
-                    if (wrap) mtLog(@"Got wrap from viewModel->messageWrap directly");
                 }
             } @catch (NSException *e) {}
         }
         
         if (!wrap) {
-            mtLog(@"Trying getMessageWrapInVisibleCellWithMesLocalID:");
             @try {
                 unsigned int mesLocalID = 0;
-                @try {
-                    id vid = [cell valueForKey:@"mesLocalID"];
-                    if (vid) mesLocalID = [vid unsignedIntValue];
-                } @catch (NSException *e) {}
+                @try { id vid = [cell valueForKey:@"mesLocalID"]; if (vid) mesLocalID = [vid unsignedIntValue]; } @catch (NSException *e) {}
+                if (!mesLocalID) { @try { id vid = [cell valueForKey:@"m_mesLocalID"]; if (vid) mesLocalID = [vid unsignedIntValue]; } @catch (NSException *e) {} }
                 if (!mesLocalID) {
-                    @try {
-                        id vid = [cell valueForKey:@"m_mesLocalID"];
-                        if (vid) mesLocalID = [vid unsignedIntValue];
-                    } @catch (NSException *e) {}
-                }
-                if (!mesLocalID) {
-                    id cellView = getCellView(cell);
-                    if (cellView) {
-                        @try { id vid = [cellView valueForKey:@"mesLocalID"]; if (vid) mesLocalID = [vid unsignedIntValue]; } @catch (NSException *e) {}
-                    }
+                    id cv = getCellView(cell);
+                    if (cv) { @try { id vid = [cv valueForKey:@"mesLocalID"]; if (vid) mesLocalID = [vid unsignedIntValue]; } @catch (NSException *e) {} }
                 }
                 if (mesLocalID > 0) {
                     SEL sel = NSSelectorFromString(@"getMessageWrapInVisibleCellWithMesLocalID:");
                     id responder = cell;
                     while ((responder = [responder nextResponder])) {
                         if ([responder respondsToSelector:sel]) {
-                            @try {
-                                id result = ((id (*)(id, SEL, unsigned int))objc_msgSend)(responder, sel, mesLocalID);
-                                if (result) {
-                                    wrap = result;
-                                    mtLog([NSString stringWithFormat:@"Got wrap from getMessageWrapInVisibleCellWithMesLocalID: localID=%u", mesLocalID]);
-                                }
-                            } @catch (NSException *e) {
-                                mtLog([NSString stringWithFormat:@"getMessageWrapInVisibleCell threw: %@", e.reason]);
-                            }
+                            @try { wrap = ((id (*)(id, SEL, unsigned int))objc_msgSend)(responder, sel, mesLocalID); } @catch (NSException *e) {}
                             break;
                         }
                     }
-                    if (!wrap) mtLog([NSString stringWithFormat:@"getMessageWrapInVisibleCell: no responder found for mesLocalID=%u", mesLocalID]);
-                } else {
-                    mtLog(@"getMessageWrapInVisibleCell: mesLocalID is 0, skipping");
                 }
             } @catch (NSException *e) {}
         }
         
         Class CMessageWrapClass = objc_getClass("CMessageWrap");
-        if (!wrap) {
-            mtLog(@"wrap is nil");
-            return;
-        }
-        if (CMessageWrapClass && ![wrap isKindOfClass:CMessageWrapClass]) {
-            mtLog([NSString stringWithFormat:@"wrap is not CMessageWrap: %@", NSStringFromClass([wrap class])]);
-            return;
-        }
+        if (!wrap) return;
+        if (CMessageWrapClass && ![wrap isKindOfClass:CMessageWrapClass]) return;
         
         unsigned int msgType = 0;
         if ([wrap respondsToSelector:@selector(m_uiMessageType)]) {
             msgType = ((unsigned int (*)(id, SEL))objc_msgSend)(wrap, @selector(m_uiMessageType));
         }
-        
-        if (msgType == 10000) {
-            mtLog(@"Skipping system message (msgType = 10000)");
-            return;
-        }
+        if (msgType == 10000) return;
         
         unsigned int createTime = 0;
         if ([wrap respondsToSelector:@selector(m_uiCreateTime)]) {
             createTime = ((unsigned int (*)(id, SEL))objc_msgSend)(wrap, @selector(m_uiCreateTime));
-            mtLog([NSString stringWithFormat:@"createTime: %u", createTime]);
-        } else {
-            mtLog(@"wrap doesn't respond to m_uiCreateTime");
         }
+        if (createTime == 0) return;
         
-        if (createTime == 0) {
-            mtLog(@"createTime is 0");
-            return;
-        }
-        
-        // 全局单标签：存储到 g_msgLabels（strong，标签在 cellView 间迁移）
         NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
         
         id avatarView = getAvatarView(cell);
         
         NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
         NSString *timeString = formatMessageTime(messageDate, config.messageTimeFormat);
-        mtLog([NSString stringWithFormat:@"timeString: %@", timeString]);
-        if (!timeString) {
-            mtLog(@"timeString is nil");
-            return;
-        }
+        if (!timeString) return;
         
         UILabel *timeLabel = initTimeLabel((UIView *)cellView);
         [g_msgLabels setObject:timeLabel forKey:wp];
@@ -635,7 +536,6 @@ static void addTimeLabelToCell(id cell) {
         timeLabel.font = font;
         
         UIView *bubbleView = getBubbleView(cell);
-        mtLog([NSString stringWithFormat:@"bubbleView: %@", bubbleView ? @"YES" : @"NO"]);
         
         BOOL isSender = NO;
         {
@@ -643,14 +543,10 @@ static void addTimeLabelToCell(id cell) {
             id senderTarget = targetCellView ?: cell;
             SEL senderSel = NSSelectorFromString(@"isSenderFromMsgWrap:");
             if ([senderTarget respondsToSelector:senderSel]) {
-                @try {
-                    isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(senderTarget, senderSel, wrap);
-                } @catch (NSException *e) {}
+                @try { isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(senderTarget, senderSel, wrap); } @catch (NSException *e) {}
             }
             if (!isSender && senderTarget != cell && [cell respondsToSelector:senderSel]) {
-                @try {
-                    isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, senderSel, wrap);
-                } @catch (NSException *e) {}
+                @try { isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, senderSel, wrap); } @catch (NSException *e) {}
             }
             if (!isSender && bubbleView) {
                 UIView *bv = (UIView *)bubbleView;
@@ -664,15 +560,11 @@ static void addTimeLabelToCell(id cell) {
         if (isSender) {
             textColor = [config colorFromHex:config.senderTextColorHex] ?: [UIColor colorWithWhite:0.5 alpha:1.0];
             NSString *bgHex = config.senderBackgroundColorHex;
-            if (bgHex.length > 0 && ![bgHex isEqualToString:@"#00000000"]) {
-                bgColor = [config colorFromHex:bgHex];
-            }
+            if (bgHex.length > 0 && ![bgHex isEqualToString:@"#00000000"]) bgColor = [config colorFromHex:bgHex];
         } else {
             textColor = [config colorFromHex:config.receiverTextColorHex] ?: [UIColor colorWithWhite:0.5 alpha:1.0];
             NSString *bgHex = config.receiverBackgroundColorHex;
-            if (bgHex.length > 0 && ![bgHex isEqualToString:@"#00000000"]) {
-                bgColor = [config colorFromHex:bgHex];
-            }
+            if (bgHex.length > 0 && ![bgHex isEqualToString:@"#00000000"]) bgColor = [config colorFromHex:bgHex];
         }
         
         timeLabel.textColor = colorInLightMode(textColor, autoDarkColor(textColor));
@@ -689,23 +581,16 @@ static void addTimeLabelToCell(id cell) {
         CGSize textSize = [timeString sizeWithAttributes:@{NSFontAttributeName: timeLabel.font}];
         CGSize labelSize = CGSizeMake(textSize.width, textSize.height);
         
-        mtLog([NSString stringWithFormat:@"labelSize: %@", NSStringFromCGSize(labelSize)]);
-        
         CGRect labelFrame = CGRectMake(0, 0, labelSize.width, labelSize.height);
-        
-        mtLog([NSString stringWithFormat:@"cellFrame: %@", NSStringFromCGRect(cellFrame)]);
         
         CGFloat offsetX = config.messageTimeOffsetX;
         CGFloat offsetY = config.messageTimeOffsetY;
         NSInteger position = config.messageTimePosition;
         
-        mtLog([NSString stringWithFormat:@"position: %ld, offsetX: %.2f, offsetY: %.2f", (long)position, offsetX, offsetY]);
-        
         if ((position == 6 || position == 7) && bubbleView && config.messageTimeBubbleExtWidth > 0) {
-            CGRect bubbleFrame = bubbleView.frame;
-            bubbleFrame.size.width += config.messageTimeBubbleExtWidth;
-            bubbleView.frame = bubbleFrame;
-            mtLog([NSString stringWithFormat:@"Extended bubble width by %.0f", config.messageTimeBubbleExtWidth]);
+            CGRect bf = bubbleView.frame;
+            bf.size.width += config.messageTimeBubbleExtWidth;
+            bubbleView.frame = bf;
         }
         
         CGRect avatarFrame = [(UIView *)avatarView frame];
@@ -718,12 +603,9 @@ static void addTimeLabelToCell(id cell) {
             bubbleFrame.origin = CGPointZero;
         }
         if (CGRectEqualToRect(bubbleFrame, CGRectZero)) {
-            mtLog(@"bubbleFrame is zero, using cellFrame as fallback");
             bubbleFrame = cellFrame;
             bubbleFrame.origin = CGPointZero;
         }
-        
-        mtLog([NSString stringWithFormat:@"avatarView: %@, bubbleFrame: %@, isSender: %d", avatarView ? @"YES" : @"NO", NSStringFromCGRect(bubbleFrame), isSender]);
         
         labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, bubbleFrame, avatarFrame);
         
@@ -732,16 +614,9 @@ static void addTimeLabelToCell(id cell) {
         if (![timeLabel superview]) {
             [cellView addSubview:timeLabel];
             objc_setAssociatedObject(cell, @"messageTimeCreateTime", @(createTime), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            mtLog(@"Added timeLabel to cell");
-        } else {
-            mtLog(@"timeLabel already in cell, updated frame");
         }
         
-        mtLog(@"=== addTimeLabelToCell completed successfully ===");
-        
-    } @catch (NSException *e) {
-        mtLog([NSString stringWithFormat:@"ERROR: %@", e]);
-    }
+    } @catch (NSException *e) {}
 }
 
 // ============================================================
@@ -764,62 +639,33 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
     UITableViewCell *cell = orig_BaseMsgContentVC_cellForRow(self, _cmd, tv, ip);
     if (![PluginConfig shared].showMessageTime || !cell) return cell;
 
-    NSString *cellCls = NSStringFromClass([cell class]);
     id cellView = nil;
     id wrap = nil;
 
-    @try {
-        cellView = [cell valueForKey:@"m_cellView"];
-        if (cellView) mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ got cellView via m_cellView class=%@", cellCls, NSStringFromClass([cellView class])]);
-    } @catch (NSException *e) {}
-    if (!cellView) {
-        @try {
-            cellView = [cell valueForKey:@"cellView"];
-            if (cellView) mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ got cellView via cellView class=%@", cellCls, NSStringFromClass([cellView class])]);
-        } @catch (NSException *e) {}
-    }
+    @try { cellView = [cell valueForKey:@"m_cellView"]; } @catch (NSException *e) {}
+    if (!cellView) { @try { cellView = [cell valueForKey:@"cellView"]; } @catch (NSException *e) {} }
     if (!cellView) {
         for (UIView *sv in [(UIView *)cell subviews]) {
-            NSString *cn = NSStringFromClass([sv class]);
-            if ([cn containsString:@"CellView"]) {
+            if ([NSStringFromClass([sv class]) containsString:@"CellView"]) {
                 cellView = sv;
-                mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ found cellView via subview class=%@", cellCls, cn]);
                 break;
             }
         }
     }
-    if (!cellView) {
-        mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ FAILED to get cellView (KVC nil, no subview match)", cellCls]);
-        return cell;
-    }
+    if (!cellView) return cell;
 
     @try {
         id viewModel = [cellView valueForKey:@"m_viewModel"] ?: [cellView valueForKey:@"viewModel"];
-        if (viewModel) {
-            wrap = [viewModel valueForKey:@"messageWrap"] ?: [viewModel valueForKey:@"m_messageWrap"];
-            if (wrap) {
-                mtLog([NSString stringWithFormat:@"[cellForRow] got wrap via viewModel class=%@", NSStringFromClass([viewModel class])]);
-            }
-        }
+        if (viewModel) wrap = [viewModel valueForKey:@"messageWrap"] ?: [viewModel valueForKey:@"m_messageWrap"];
     } @catch (NSException *e) {}
     if (!wrap) {
-        @try {
-            wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
-            if (wrap) mtLog(@"[cellForRow] got wrap directly from cellView");
-        } @catch (NSException *e) {}
+        @try { wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"]; } @catch (NSException *e) {}
     }
 
-    if (!wrap) {
-        mtLog([NSString stringWithFormat:@"[cellForRow] cellView=%@ messageWrap=nil", NSStringFromClass([cellView class])]);
-        return cell;
-    }
-    if (![wrap isKindOfClass:objc_getClass("CMessageWrap")]) {
-        mtLog([NSString stringWithFormat:@"[cellForRow] wrap class=%@ not CMessageWrap", NSStringFromClass([wrap class])]);
-        return cell;
-    }
+    if (!wrap) return cell;
+    if (![wrap isKindOfClass:objc_getClass("CMessageWrap")]) return cell;
 
     objc_setAssociatedObject(cell, @"cachedMsgWrap", wrap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    mtLog([NSString stringWithFormat:@"[cellForRow] ✅ cachedMsgWrap for cell=%@", cellCls]);
     return cell;
 }
 
