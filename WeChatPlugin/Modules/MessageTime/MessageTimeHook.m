@@ -6,7 +6,7 @@
 
 #import <UIKit/UIKit.h>
 
-// 全局消息标签跟踪：wrapPtr→UILabel（weak），自动清理已释放的标签
+// 全局消息标签跟踪：wrapPtr→UILabel（strong），标签在 cellView 间迁移，不被重复创建
 static NSMapTable *g_msgLabels = nil;
 
 // ============================================================
@@ -607,7 +607,7 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
-        // 全局单标签：存储到 g_msgLabels（weak，tag 释放后自动清除）
+        // 全局单标签：存储到 g_msgLabels（strong，标签在 cellView 间迁移）
         NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
         
         id avatarView = getAvatarView(cell);
@@ -844,17 +844,29 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
         return;
     }
     
-    // 全局去重：检查此消息是否已有标签在其他 cellView 上（wrapPtr 稳定，不受 cellView 重建影响）
+    // 全局去重：检查此消息是否已有标签
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         g_msgLabels = [NSMapTable mapTableWithKeyOptions:NSMapTableCopyIn
-                                           valueOptions:NSMapTableWeakMemory];
+                                           valueOptions:NSMapTableStrongMemory];
     });
     id wrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
     if (wrap) {
         NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
-        if ([g_msgLabels objectForKey:wp]) {
-            return; // 已有标签在其他 cellView 上，跳过
+        UILabel *existingLabel = [g_msgLabels objectForKey:wp];
+        if (existingLabel) {
+            // 已有标签 → 迁移到当前 cellView（而非重建）
+            UIView *oldOwner = (UIView *)[existingLabel superview];
+            if (oldOwner && oldOwner != self) {
+                [existingLabel removeFromSuperview];
+                objc_setAssociatedObject(oldOwner, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+            if (!oldOwner || oldOwner != self) {
+                [(UIView *)self addSubview:existingLabel];
+                objc_setAssociatedObject(self, @"msgTimeLabel", existingLabel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                quickRelocateTimeLabel(cell, self, [cell frame]);
+            }
+            return; // 已有标签，跳过创建
         }
     }
     
