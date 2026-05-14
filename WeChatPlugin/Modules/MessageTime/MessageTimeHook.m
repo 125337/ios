@@ -50,6 +50,7 @@ static UILabel *initTimeLabel(id cell) {
     UILabel *label = objc_getAssociatedObject(cell, @"msgTimeLabel");
     if (!label) {
         label = [[UILabel alloc] init];
+        label.tag = 999999;
         label.userInteractionEnabled = NO;
         label.textAlignment = NSTextAlignmentCenter;
         objc_setAssociatedObject(cell, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -305,6 +306,13 @@ static void addTimeLabelToCell(id cell) {
         if (CGRectEqualToRect(cellFrame, CGRectZero)) {
             mtLog(@"cellFrame is CGRectZero, deferring");
             return;
+        }
+        
+        // 确保没有残留旧标签（prepareForReuse 可能没清干净）
+        UIView *staleLabel = [cell viewWithTag:999999];
+        if (staleLabel) {
+            mtLog(@"Removed stale timeLabel before creating new one");
+            [staleLabel removeFromSuperview];
         }
         
         PluginConfig *config = [PluginConfig shared];
@@ -785,9 +793,14 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
         orig_ChatTableViewCell_prepareForReuse(self, _cmd);
     }
 
+    // 双重清理：关联对象 + tag 兜底
     UILabel *oldLabel = objc_getAssociatedObject(self, @"msgTimeLabel");
     if (oldLabel) {
         [oldLabel removeFromSuperview];
+    }
+    UIView *tagLabel = [self viewWithTag:999999];
+    if (tagLabel && tagLabel != oldLabel) {
+        [tagLabel removeFromSuperview];
     }
     objc_setAssociatedObject(self, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
