@@ -4,8 +4,6 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 
-// 全局消息去重 key = createTime_wrapPtr（同一条消息在不同 cell 中 wrap 对象相同）
-static NSMutableSet *g_labeledWraps = nil;
 #import <UIKit/UIKit.h>
 
 // ============================================================
@@ -49,14 +47,14 @@ static void mtLog(NSString *content) {
 // MARK: - Label Management
 // ============================================================
 
-static UILabel *initTimeLabel(id cell) {
-    UILabel *label = objc_getAssociatedObject(cell, @"msgTimeLabel");
+static UILabel *initTimeLabel(UIView *targetView) {
+    UILabel *label = objc_getAssociatedObject(targetView, @"msgTimeLabel");
     if (!label) {
         label = [[UILabel alloc] init];
         label.tag = 999999;
         label.userInteractionEnabled = NO;
         label.textAlignment = NSTextAlignmentCenter;
-        objc_setAssociatedObject(cell, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(targetView, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     return label;
 }
@@ -280,6 +278,19 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
+        // 获取 cellView（CommonMessageCellView），标签添加到此视图上
+        id cellView = nil;
+        @try { cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"]; } @catch (...) {}
+        if (!cellView) {
+            mtLog(@"addTimeLabelToCell: cellView is nil");
+            return;
+        }
+        
+        // 每个 cellView 只创建一次标签（微信优化同款策略）
+        if (objc_getAssociatedObject(cellView, @"msgTimeLabel")) {
+            return;
+        }
+        
         NSArray *callStack = [NSThread callStackSymbols];
         NSString *from = @"unknown";
         for (NSString *frame in callStack) {
@@ -311,8 +322,8 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
-        // 确保没有残留旧标签（prepareForReuse 可能没清干净）
-        UIView *staleLabel = [cell viewWithTag:999999];
+        // 确保 cellView 上没有残留旧标签
+        UIView *staleLabel = [(UIView *)cellView viewWithTag:999999];
         if (staleLabel) {
             mtLog(@"Removed stale timeLabel before creating new one");
             [staleLabel removeFromSuperview];
@@ -442,15 +453,6 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
-        // 全局去重：同一 wrap 指针只创建一次标签（防同一消息被渲染到多个 cell）
-        NSString *wrapKey = [NSString stringWithFormat:@"%u_%p", createTime, (__bridge void *)wrap];
-        static dispatch_once_t once;
-        dispatch_once(&once, ^{ g_labeledWraps = [NSMutableSet set]; });
-        if ([g_labeledWraps containsObject:wrapKey]) {
-            return;
-        }
-        [g_labeledWraps addObject:wrapKey];
-        
         NSString *identifier = [NSString stringWithFormat:@"%u_%u_%p", createTime, msgType, (__bridge void *)wrap];
         NSString *lastIdentifier = objc_getAssociatedObject(cell, @"messageTimeLastIdentifier");
         if (lastIdentifier && [lastIdentifier isEqualToString:identifier]) {
@@ -468,9 +470,9 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
-        UILabel *timeLabel = initTimeLabel(cell);
+        UILabel *timeLabel = initTimeLabel((UIView *)cellView);
         timeLabel.text = timeString;
-        
+
         CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
         UIFont *font = config.messageTimeBoldFont ? [UIFont boldSystemFontOfSize:fontSize] : [UIFont systemFontOfSize:fontSize];
         timeLabel.font = font;
@@ -685,7 +687,7 @@ static void addTimeLabelToCell(id cell) {
         timeLabel.frame = labelFrame;
         
         if (![timeLabel superview]) {
-            [cell addSubview:timeLabel];
+            [cellView addSubview:timeLabel];
             objc_setAssociatedObject(cell, @"messageTimeCreateTime", @(createTime), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             mtLog(@"Added timeLabel to cell");
         } else {
@@ -790,12 +792,14 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
         orig_CommonMessageCellView_layoutSubviews(self, _cmd);
     }
 
-    // 只在标签未创建时执行一次（此时 cellView 子视图已布局完毕）
+    // 微信优化同款：标签加到 CommonMessageCellView 上，cellView 级别的 msgTimeLabel 防重
+    id cellView = self;
+    if (objc_getAssociatedObject(cellView, @"msgTimeLabel")) return;
     UIView *cell = (UIView *)self;
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
-    if (cell && !objc_getAssociatedObject(cell, @"msgTimeLabel")) {
+    if (cell) {
         addTimeLabelToCell(cell);
     }
 }
@@ -805,16 +809,21 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
         orig_ChatTableViewCell_prepareForReuse(self, _cmd);
     }
 
-    // 双重清理：关联对象 + tag 兜底
-    UILabel *oldLabel = objc_getAssociatedObject(self, @"msgTimeLabel");
-    if (oldLabel) {
-        [oldLabel removeFromSuperview];
+    // 清理 cellView 上的标签（标签存储在 cellView 的关联对象上）
+    id cellView = nil;
+    @try { cellView = [self valueForKey:@"m_cellView"] ?: [self valueForKey:@"cellView"]; } @catch (...) {}
+    if (cellView) {
+        UILabel *oldLabel = objc_getAssociatedObject(cellView, @"msgTimeLabel");
+        if (oldLabel) {
+            [oldLabel removeFromSuperview];
+        }
+        UIView *tagLabel = [(UIView *)cellView viewWithTag:999999];
+        if (tagLabel && tagLabel != oldLabel) {
+            [tagLabel removeFromSuperview];
+        }
+        objc_setAssociatedObject(cellView, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    UIView *tagLabel = [self viewWithTag:999999];
-    if (tagLabel && tagLabel != oldLabel) {
-        [tagLabel removeFromSuperview];
-    }
-    objc_setAssociatedObject(self, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
     objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
     objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, @"cachedMsgWrap", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
