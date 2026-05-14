@@ -308,9 +308,13 @@ static id getBubbleView(id cell) {
         if (bubbleView) break;
     }
     
+    if (bubbleView && CGRectEqualToRect([(UIView *)bubbleView frame], CGRectZero)) {
+        mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: found class=%@ but frame is zero, treating as nil", NSStringFromClass([(UIView *)bubbleView class])]);
+        bubbleView = nil;
+    }
+    
     if (!bubbleView) {
-        mtLog(@"[DBG] getBubbleView: FAILED - using cellView as fallback");
-        bubbleView = cellView;
+        mtLog(@"[DBG] getBubbleView: FAILED - no valid bubble view found, returning nil");
     }
     return bubbleView;
 }
@@ -587,6 +591,10 @@ static void addTimeLabelToCell(id cell) {
         
         CGRect avatarFrame = [(UIView *)avatarView frame];
         CGRect bubbleFrame = bubbleView ? bubbleView.frame : cellFrame;
+        if (CGRectEqualToRect(bubbleFrame, CGRectZero)) {
+            mtLog(@"bubbleFrame is zero, using cellFrame as fallback");
+            bubbleFrame = cellFrame;
+        }
         
         mtLog([NSString stringWithFormat:@"avatarView: %@, bubbleFrame: %@, isSender: %d", avatarView ? @"YES" : @"NO", NSStringFromCGRect(bubbleFrame), isSender]);
         
