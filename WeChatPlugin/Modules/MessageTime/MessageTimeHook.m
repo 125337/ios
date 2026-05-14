@@ -6,6 +6,9 @@
 
 #import <UIKit/UIKit.h>
 
+// 全局消息标签跟踪：wrapPtr→UILabel（weak），自动清理已释放的标签
+static NSMapTable *g_msgLabels = nil;
+
 // ============================================================
 // MARK: - Configuration Table Entry
 // ============================================================
@@ -453,6 +456,18 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
+        // 全局单标签：同一 wrap 只允许一个可见标签（NSMapTable weak 自清理）
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            g_msgLabels = [NSMapTable mapTableWithKeyOptions:NSMapTableCopyIn
+                                               valueOptions:NSMapTableWeakMemory];
+        });
+        NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
+        UILabel *existingLabel = [g_msgLabels objectForKey:wp];
+        if (existingLabel && [existingLabel superview]) {
+            return;
+        }
+        
         NSString *identifier = [NSString stringWithFormat:@"%u_%u_%p", createTime, msgType, (__bridge void *)wrap];
         NSString *lastIdentifier = objc_getAssociatedObject(cell, @"messageTimeLastIdentifier");
         if (lastIdentifier && [lastIdentifier isEqualToString:identifier]) {
@@ -471,6 +486,7 @@ static void addTimeLabelToCell(id cell) {
         }
         
         UILabel *timeLabel = initTimeLabel((UIView *)cellView);
+        [g_msgLabels setObject:timeLabel forKey:wp];
         timeLabel.text = timeString;
 
         CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
