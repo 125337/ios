@@ -948,11 +948,14 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
 
     if (addTime == 0) return origName;
 
-    NSDate *addDate = [NSDate dateWithTimeIntervalSince1970:addTime];
-    NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
-    fmt.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
-    fmt.dateFormat = config.addTimeSuffixFormat;
-    NSString *suffix = [fmt stringFromDate:addDate];
+    static NSDateFormatter *suffixFormatter = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        suffixFormatter = [[NSDateFormatter alloc] init];
+        suffixFormatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+    });
+    suffixFormatter.dateFormat = config.addTimeSuffixFormat;
+    NSString *suffix = [suffixFormatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:addTime]];
 
     return [NSString stringWithFormat:@"%@ %@", origName, suffix];
 }
