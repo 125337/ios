@@ -727,8 +727,20 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
     }
 
     @try {
-        wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
+        id viewModel = [cellView valueForKey:@"m_viewModel"] ?: [cellView valueForKey:@"viewModel"];
+        if (viewModel) {
+            wrap = [viewModel valueForKey:@"messageWrap"] ?: [viewModel valueForKey:@"m_messageWrap"];
+            if (wrap) {
+                mtLog([NSString stringWithFormat:@"[cellForRow] got wrap via viewModel class=%@", NSStringFromClass([viewModel class])]);
+            }
+        }
     } @catch (NSException *e) {}
+    if (!wrap) {
+        @try {
+            wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
+            if (wrap) mtLog(@"[cellForRow] got wrap directly from cellView");
+        } @catch (NSException *e) {}
+    }
 
     if (!wrap) {
         mtLog([NSString stringWithFormat:@"[cellForRow] cellView=%@ messageWrap=nil", NSStringFromClass([cellView class])]);
