@@ -762,7 +762,7 @@ static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath 
     if (orig_BaseMsgContentVC_willDisplayCell) {
         orig_BaseMsgContentVC_willDisplayCell(self, _cmd, tv, cell, ip);
     }
-    addTimeLabelToCell(cell);
+    // willDisplayCell 不做 UI 操作，等 layoutSubviews 时视图就绪再创建
 }
 
 static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
@@ -770,14 +770,12 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
         orig_CommonMessageCellView_layoutSubviews(self, _cmd);
     }
 
-    // 子视图布局完成，重新定位时间标签（此时头像/气泡已创建完毕）
+    // 只在标签未创建时执行一次（此时 cellView 子视图已布局完毕）
     UIView *cell = (UIView *)self;
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
-    if (cell) {
-        // 清除 identifier 强制重新定位
-        objc_setAssociatedObject(cell, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    if (cell && !objc_getAssociatedObject(cell, @"msgTimeLabel")) {
         addTimeLabelToCell(cell);
     }
 }
