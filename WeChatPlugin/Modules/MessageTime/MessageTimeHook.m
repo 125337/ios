@@ -821,7 +821,12 @@ static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath 
     if (orig_BaseMsgContentVC_willDisplayCell) {
         orig_BaseMsgContentVC_willDisplayCell(self, _cmd, tv, cell, ip);
     }
-    // willDisplayCell 不做 UI 操作，等 layoutSubviews 时视图就绪再创建
+    // 触发 layoutSubviews，让 g_msgLabels 有机会处理（预渲染 cell 之前 cell.window 为 nil 跳过了）
+    UIView *cv = nil;
+    @try { cv = [cell valueForKey:@"m_cellView"]; } @catch (...) {}
+    if (cv && !objc_getAssociatedObject(cv, @"msgTimeLabel")) {
+        [cv setNeedsLayout];
+    }
 }
 
 static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
@@ -829,8 +834,12 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
         orig_CommonMessageCellView_layoutSubviews(self, _cmd);
     }
 
-    // 找父 ChatTableViewCell
+    // 只对可见 cell 操作（cell.window == nil 时 layoutSubviews 也会触发，
+    // 但预渲染 cell 不应创建标签，避免大规模 addTimeLabelToCell 并发导致卡死）
     UIView *cell = (UIView *)self;
+    if (!cell.window) return;
+    
+    // 找父 ChatTableViewCell
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
