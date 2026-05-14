@@ -392,6 +392,62 @@ static void addTimeLabelToCell(id cell) {
             } @catch (NSException *e) {}
         }
         
+        if (!wrap) {
+            mtLog(@"Trying viewModel->messageWrap directly");
+            @try {
+                id viewModel = [cell valueForKey:@"_viewModel"] ?: [cell valueForKey:@"m_viewModel"];
+                if (viewModel) {
+                    wrap = [viewModel valueForKey:@"m_messageWrap"] ?: [viewModel valueForKey:@"messageWrap"];
+                    if (!wrap) wrap = [viewModel valueForKey:@"m_msgWrap"] ?: [viewModel valueForKey:@"msgWrap"];
+                    if (wrap) mtLog(@"Got wrap from viewModel->messageWrap directly");
+                }
+            } @catch (NSException *e) {}
+        }
+        
+        if (!wrap) {
+            mtLog(@"Trying getMessageWrapInVisibleCellWithMesLocalID:");
+            @try {
+                unsigned int mesLocalID = 0;
+                @try {
+                    id vid = [cell valueForKey:@"mesLocalID"];
+                    if (vid) mesLocalID = [vid unsignedIntValue];
+                } @catch (NSException *e) {}
+                if (!mesLocalID) {
+                    @try {
+                        id vid = [cell valueForKey:@"m_mesLocalID"];
+                        if (vid) mesLocalID = [vid unsignedIntValue];
+                    } @catch (NSException *e) {}
+                }
+                if (!mesLocalID) {
+                    id cellView = getCellView(cell);
+                    if (cellView) {
+                        @try { id vid = [cellView valueForKey:@"mesLocalID"]; if (vid) mesLocalID = [vid unsignedIntValue]; } @catch (NSException *e) {}
+                    }
+                }
+                if (mesLocalID > 0) {
+                    SEL sel = NSSelectorFromString(@"getMessageWrapInVisibleCellWithMesLocalID:");
+                    id responder = cell;
+                    while ((responder = [responder nextResponder])) {
+                        if ([responder respondsToSelector:sel]) {
+                            @try {
+                                id result = ((id (*)(id, SEL, unsigned int))objc_msgSend)(responder, sel, mesLocalID);
+                                if (result) {
+                                    wrap = result;
+                                    mtLog([NSString stringWithFormat:@"Got wrap from getMessageWrapInVisibleCellWithMesLocalID: localID=%u", mesLocalID]);
+                                }
+                            } @catch (NSException *e) {
+                                mtLog([NSString stringWithFormat:@"getMessageWrapInVisibleCell threw: %@", e.reason]);
+                            }
+                            break;
+                        }
+                    }
+                    if (!wrap) mtLog([NSString stringWithFormat:@"getMessageWrapInVisibleCell: no responder found for mesLocalID=%u", mesLocalID]);
+                } else {
+                    mtLog(@"getMessageWrapInVisibleCell: mesLocalID is 0, skipping");
+                }
+            } @catch (NSException *e) {}
+        }
+        
         Class CMessageWrapClass = objc_getClass("CMessageWrap");
         if (!wrap) {
             mtLog(@"wrap is nil");
