@@ -471,13 +471,6 @@ static void addTimeLabelToCell(id cell) {
             objc_setAssociatedObject(oldOwner, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
         
-        NSString *identifier = [NSString stringWithFormat:@"%u_%u_%p", createTime, msgType, (__bridge void *)wrap];
-        NSString *lastIdentifier = objc_getAssociatedObject(cell, @"messageTimeLastIdentifier");
-        if (lastIdentifier && [lastIdentifier isEqualToString:identifier]) {
-            return;
-        }
-        objc_setAssociatedObject(cell, @"messageTimeLastIdentifier", identifier, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        
         id avatarView = getAvatarView(cell);
         
         NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
@@ -813,11 +806,10 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
         orig_CommonMessageCellView_layoutSubviews(self, _cmd);
     }
 
-    // 只在 cell 在屏幕上可见时创建标签（pre-render 的 cell 没有 window，跳过）
+    // 创建/更新标签（g_msgLabels 全局去重 + cellView 关联对象防自身重复）
+    // 不跳过已有标签的 cellView，以便长消息多行布局后更新位置
     UIView *cell = (UIView *)self;
     if (!cell.window) return;
-    id cellView = self;
-    if (objc_getAssociatedObject(cellView, @"msgTimeLabel")) return;
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
@@ -846,7 +838,6 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
         objc_setAssociatedObject(cellView, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
-    objc_setAssociatedObject(self, @"messageTimeLastIdentifier", nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
     objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, @"cachedMsgWrap", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
