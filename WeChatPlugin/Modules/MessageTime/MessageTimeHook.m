@@ -980,6 +980,8 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
 @implementation MessageTimeHook
 
 + (void)install {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
     mtLog(@"========================================");
     mtLog(@"MessageTimeHook install - cellForRow + willDisplayCell");
     mtLog(@"========================================");
@@ -1020,6 +1022,7 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
     mtLog(@"========================================");
     mtLog(@"MessageTimeHook install complete");
     mtLog(@"========================================");
+    }); // dispatch_once
 }
 
 @end
