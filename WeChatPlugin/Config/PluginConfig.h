@@ -90,4 +90,5 @@
 - (NSString *)applyTemplate:(NSString *)tmpl time:(NSString *)time name:(NSString *)name content:(NSString *)content;
 - (void)save;
 - (void)loadDefaults;
+- (void)resetAllConfig;
 @end

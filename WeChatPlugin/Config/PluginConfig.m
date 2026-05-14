@@ -295,6 +295,21 @@ static void configLog(NSString *content) {
     configLog(@"[OK] save() completed - NSUserDefaults synchronized");
 }
 
+- (void)resetAllConfig {
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    NSDictionary *all = [d dictionaryRepresentation];
+    for (NSString *key in all) {
+        if ([key hasPrefix:kPluginPrefix]) {
+            [d removeObjectForKey:key];
+        }
+    }
+    [d synchronize];
+    
+    // 重新加载默认值
+    [self loadDefaults];
+    configLog(@"[RESET] All plugin configs wiped, defaults reloaded");
+}
+
 - (NSString *)notifyFormatForSession:(NSString *)session user:(NSString *)user {
     if (user.length > 0) {
         NSString *fmt = _userFormats[user];

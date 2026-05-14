@@ -27,6 +27,7 @@ MioHelper_FILES = Tweak.m \
 	Modules/SettingEntry/SettingEntryHook.m \
 	Modules/SettingEntry/WPOtherVC.m \
 	Modules/SettingEntry/WPAboutVC.m \
+	Modules/SettingEntry/WPBackupVC.m \
 	Modules/Joker/JokerHook.m \
 	Modules/GroupExit/GroupExitHook.m \
 	Modules/MessageTime/MessageTimeHook.m \

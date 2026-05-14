@@ -110,12 +110,8 @@ static UIColor *colorInLightMode(UIColor *lightColor, UIColor *darkColor) {
 static NSString *formatMessageTime(NSDate *date, NSString *format) {
     if (!date || !format) return nil;
     
-    // 兼容旧版 {HH}:{mm} 模板格式，去除大括号
-    NSString *cleaned = [format stringByReplacingOccurrencesOfString:@"{" withString:@""];
-    cleaned = [cleaned stringByReplacingOccurrencesOfString:@"}" withString:@""];
-    
     NSDateFormatter *formatter = getTimeFormatter();
-    formatter.dateFormat = cleaned;
+    formatter.dateFormat = format;
     return [formatter stringFromDate:date];
 }
 
