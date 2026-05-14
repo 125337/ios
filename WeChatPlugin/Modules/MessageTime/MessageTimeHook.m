@@ -46,12 +46,12 @@ static void mtLog(NSString *content) {
 // MARK: - Label Management
 // ============================================================
 
-static UILabel *getTimeLabel(id cell) {
+static UILabel *initTimeLabel(id cell) {
     UILabel *label = objc_getAssociatedObject(cell, @"messageTimeLabel");
     if (!label) {
         label = [[UILabel alloc] init];
-        label.tag = 999999;
         label.userInteractionEnabled = NO;
+        label.textAlignment = NSTextAlignmentCenter;
         objc_setAssociatedObject(cell, @"messageTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     return label;
@@ -485,7 +485,7 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
-        UILabel *timeLabel = getTimeLabel(cell);
+        UILabel *timeLabel = initTimeLabel(cell);
         timeLabel.text = timeString;
         
         CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
@@ -547,14 +547,6 @@ static void addTimeLabelToCell(id cell) {
         
         mtLog([NSString stringWithFormat:@"labelSize: %@", NSStringFromCGSize(labelSize)]);
         
-        if (!config.disableLabelWidthAdjustment) {
-            timeLabel.adjustsFontSizeToFitWidth = YES;
-            timeLabel.minimumScaleFactor = 0.8;
-        } else {
-            timeLabel.adjustsFontSizeToFitWidth = NO;
-        }
-        timeLabel.textAlignment = NSTextAlignmentCenter;
-        
         CGRect labelFrame = CGRectMake(0, 0, labelSize.width, labelSize.height);
         
         mtLog([NSString stringWithFormat:@"cellFrame: %@", NSStringFromCGRect(cellFrame)]);
@@ -589,16 +581,7 @@ static void addTimeLabelToCell(id cell) {
         if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
         if (labelFrame.origin.y < 2) labelFrame.origin.y = 2;
         
-        mtLog([NSString stringWithFormat:@"Final labelFrame: %@", NSStringFromCGRect(labelFrame)]);
-        
         timeLabel.frame = labelFrame;
-        
-        for (UIView *subview in [cell subviews]) {
-            if (subview.tag == 999999 && subview != timeLabel) {
-                mtLog(@"WARNING: Found stray timeLabel, removing to prevent duplicate");
-                [subview removeFromSuperview];
-            }
-        }
         
         if (![timeLabel superview]) {
             [cell addSubview:timeLabel];
@@ -705,7 +688,7 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
         orig_ChatTableViewCell_prepareForReuse(self, _cmd);
     }
 
-    UIView *oldLabel = [self viewWithTag:999999];
+    UILabel *oldLabel = objc_getAssociatedObject(self, @"messageTimeLabel");
     if (oldLabel) {
         [oldLabel removeFromSuperview];
     }
