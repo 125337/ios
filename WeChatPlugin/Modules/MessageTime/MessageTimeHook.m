@@ -446,7 +446,7 @@ static void addTimeLabelToCell(id cell) {
         static dispatch_once_t once;
         dispatch_once(&once, ^{ g_labeledMessages = [NSMutableSet set]; });
         if ([g_labeledMessages containsObject:globalKey]) {
-            mtLog(@"Global dedup: skipping %@", globalKey);
+            mtLog([NSString stringWithFormat:@"Global dedup: skipping %@", globalKey]);
             return;
         }
         [g_labeledMessages addObject:globalKey];
