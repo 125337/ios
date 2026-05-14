@@ -3,6 +3,9 @@
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+
+// 全局去重：同一 createTime+msgType 只创建一次标签，防止 WeChat 多个 cell 渲染同一条消息
+static NSMutableSet *g_labeledMessages = nil;
 #import <UIKit/UIKit.h>
 
 // ============================================================
@@ -438,6 +441,15 @@ static void addTimeLabelToCell(id cell) {
             mtLog(@"createTime is 0");
             return;
         }
+        
+        NSString *globalKey = [NSString stringWithFormat:@"%u_%u", createTime, msgType];
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ g_labeledMessages = [NSMutableSet set]; });
+        if ([g_labeledMessages containsObject:globalKey]) {
+            mtLog(@"Global dedup: skipping %@", globalKey);
+            return;
+        }
+        [g_labeledMessages addObject:globalKey];
         
         NSString *identifier = [NSString stringWithFormat:@"%u_%u_%p", createTime, msgType, (__bridge void *)wrap];
         NSString *lastIdentifier = objc_getAssociatedObject(cell, @"messageTimeLastIdentifier");
