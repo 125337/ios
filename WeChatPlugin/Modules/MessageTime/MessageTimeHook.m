@@ -464,8 +464,11 @@ static void addTimeLabelToCell(id cell) {
         });
         NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
         UILabel *existingLabel = [g_msgLabels objectForKey:wp];
-        if (existingLabel && [existingLabel superview]) {
-            return;
+        if (existingLabel && [existingLabel superview] && [existingLabel superview] != cellView) {
+            // 旧标签在另一个 cellView 上，移除它让当前 cellView 创建
+            UIView *oldOwner = [existingLabel superview];
+            [existingLabel removeFromSuperview];
+            objc_setAssociatedObject(oldOwner, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
         
         NSString *identifier = [NSString stringWithFormat:@"%u_%u_%p", createTime, msgType, (__bridge void *)wrap];
