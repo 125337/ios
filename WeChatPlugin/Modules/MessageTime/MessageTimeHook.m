@@ -271,6 +271,157 @@ static id getBubbleView(id cell) {
 }
 
 // ============================================================
+// MARK: - Label Positioning (shared between create and update)
+// ============================================================
+
+static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger position,
+                                 CGFloat offsetX, CGFloat offsetY, BOOL isSender,
+                                 CGRect bubbleFrame, CGRect avatarFrame) {
+    CGRect labelFrame = CGRectMake(0, 0, labelSize.width, labelSize.height);
+    
+    CGFloat farSideX, nearSideX;
+    if (isSender) {
+        farSideX = bubbleFrame.origin.x;
+        nearSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
+    } else {
+        farSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
+        nearSideX = bubbleFrame.origin.x;
+    }
+    
+    switch (position) {
+        case 0:
+            if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
+                labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
+                labelFrame.origin.y = avatarFrame.origin.y - labelFrame.size.height;
+            } else {
+                labelFrame.origin.x = nearSideX;
+                labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
+            }
+            break;
+        case 1:
+            if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
+                labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
+                labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height;
+            } else {
+                labelFrame.origin.x = nearSideX;
+                labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height;
+            }
+            break;
+        case 2:
+            if (isSender) {
+                labelFrame.origin.x = bubbleFrame.origin.x - labelFrame.size.width;
+            } else {
+                labelFrame.origin.x = bubbleFrame.origin.x + bubbleFrame.size.width;
+            }
+            labelFrame.origin.y = bubbleFrame.origin.y + (bubbleFrame.size.height - labelFrame.size.height) / 2;
+            break;
+        case 3:
+            labelFrame.origin.x = farSideX;
+            labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height;
+            break;
+        case 4:
+            labelFrame.origin.x = nearSideX;
+            labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height;
+            break;
+        case 5:
+            labelFrame.origin.x = farSideX;
+            labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
+            break;
+        case 6:
+            labelFrame.origin.x = nearSideX;
+            labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
+            break;
+        case 7:
+        {
+            labelFrame.origin.x = bubbleFrame.origin.x + (bubbleFrame.size.width - labelFrame.size.width) / 2;
+            labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height - labelFrame.size.height - 4;
+            break;
+        }
+        default:
+            labelFrame.origin.x = farSideX;
+            labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
+            break;
+    }
+    
+    // offsetX direction
+    if (offsetX != 0) {
+        BOOL isOnLeftSide = NO;
+        switch (position) {
+            case 0: case 1:
+                isOnLeftSide = !isSender;
+                break;
+            case 2:
+                isOnLeftSide = isSender;
+                break;
+            case 3: case 5:
+                isOnLeftSide = isSender;
+                break;
+            case 4: case 6:
+                isOnLeftSide = !isSender;
+                break;
+            case 7:
+                isOnLeftSide = NO;
+                break;
+        }
+        if (isOnLeftSide) {
+            labelFrame.origin.x -= offsetX;
+        } else {
+            labelFrame.origin.x += offsetX;
+        }
+    }
+    
+    if (offsetY != 0) {
+        labelFrame.origin.y -= offsetY;
+    }
+    
+    // Y clamp
+    CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
+    if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
+    if (labelFrame.origin.y < 2) labelFrame.origin.y = 2;
+    
+    return labelFrame;
+}
+
+// Lightweight frame update for long messages (no logging, no wrap replay)
+static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.showMessageTime) return;
+    
+    UILabel *label = objc_getAssociatedObject(cellView, @"msgTimeLabel");
+    if (!label) return;
+    
+    CGFloat offsetX = config.messageTimeOffsetX;
+    CGFloat offsetY = config.messageTimeOffsetY;
+    NSInteger position = config.messageTimePosition;
+    
+    id avatarView = getAvatarView(cell);
+    CGRect avatarFrame = avatarView ? [(UIView *)avatarView frame] : CGRectZero;
+    
+    UIView *bubbleView = getBubbleView(cell);
+    CGRect bubbleFrame;
+    if (bubbleView) {
+        bubbleFrame = [cell convertRect:bubbleView.frame fromView:bubbleView.superview];
+    } else {
+        bubbleFrame = cellFrame;
+        bubbleFrame.origin = CGPointZero;
+    }
+    if (CGRectEqualToRect(bubbleFrame, CGRectZero)) {
+        bubbleFrame = cellFrame;
+        bubbleFrame.origin = CGPointZero;
+    }
+    
+    // Quick sender detection (no wrap)
+    BOOL isSender = NO;
+    if (bubbleView) {
+        CGRect bfCell = [cell convertRect:bubbleView.frame fromView:bubbleView.superview];
+        isSender = CGRectGetMidX(bfCell) > cellFrame.size.width / 2;
+    }
+    
+    CGSize labelSize = label.frame.size;
+    label.frame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, bubbleFrame, avatarFrame);
+}
+
+// ============================================================
 // MARK: - Label Creation
 // ============================================================
 
@@ -580,123 +731,7 @@ static void addTimeLabelToCell(id cell) {
         
         mtLog([NSString stringWithFormat:@"avatarView: %@, bubbleFrame: %@, isSender: %d", avatarView ? @"YES" : @"NO", NSStringFromCGRect(bubbleFrame), isSender]);
         
-        CGFloat farSideX, nearSideX;
-        if (isSender) {
-            farSideX = bubbleFrame.origin.x;
-            nearSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
-        } else {
-            farSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
-            nearSideX = bubbleFrame.origin.x;
-        }
-        
-        switch (position) {
-            case 0:
-                if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                    labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
-                    labelFrame.origin.y = avatarFrame.origin.y - labelFrame.size.height;
-                } else {
-                    labelFrame.origin.x = nearSideX;
-                    labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
-                }
-                break;
-                
-            case 1:
-                if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                    labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
-                    labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height;
-                } else {
-                    labelFrame.origin.x = nearSideX;
-                    labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height;
-                }
-                break;
-                
-            case 2:
-                if (isSender) {
-                    labelFrame.origin.x = bubbleFrame.origin.x - labelFrame.size.width;
-                } else {
-                    labelFrame.origin.x = bubbleFrame.origin.x + bubbleFrame.size.width;
-                }
-                labelFrame.origin.y = bubbleFrame.origin.y + (bubbleFrame.size.height - labelFrame.size.height) / 2;
-                break;
-                
-            case 3:
-                labelFrame.origin.x = farSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height;
-                break;
-                
-            case 4:
-                labelFrame.origin.x = nearSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height;
-                break;
-                
-            case 5:
-                labelFrame.origin.x = farSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
-                break;
-                
-            case 6:
-                labelFrame.origin.x = nearSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
-                break;
-                
-            case 7:
-            {
-                labelFrame.origin.x = bubbleFrame.origin.x + (bubbleFrame.size.width - labelFrame.size.width) / 2;
-                labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height - labelFrame.size.height - 4;
-                
-                BOOL isTextMessage = NO;
-                @try {
-                    NSString *className = NSStringFromClass([cell class]);
-                    isTextMessage = [className containsString:@"TextMessage"];
-                } @catch (NSException *e) {}
-                
-                if (!isTextMessage) {
-                    labelFrame.origin.x = farSideX;
-                    labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
-                }
-                break;
-            }
-                
-            default:
-                labelFrame.origin.x = farSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
-                break;
-        }
-        
-        if (offsetX != 0) {
-            BOOL isOnLeftSide = NO;
-            switch (position) {
-                case 0: case 1:
-                    isOnLeftSide = !isSender;
-                    break;
-                case 2:
-                    isOnLeftSide = isSender;
-                    break;
-                case 3: case 5:
-                    isOnLeftSide = isSender;
-                    break;
-                case 4: case 6:
-                    isOnLeftSide = !isSender;
-                    break;
-                case 7:
-                    isOnLeftSide = NO;
-                    break;
-            }
-            
-            if (isOnLeftSide) {
-                labelFrame.origin.x -= offsetX;
-            } else {
-                labelFrame.origin.x += offsetX;
-            }
-        }
-        
-        if (offsetY != 0) {
-            labelFrame.origin.y -= offsetY;
-        }
-        
-        CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
-        if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
-        if (labelFrame.origin.y < 2) labelFrame.origin.y = 2;
+        labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, bubbleFrame, avatarFrame);
         
         timeLabel.frame = labelFrame;
         
@@ -806,16 +841,26 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
         orig_CommonMessageCellView_layoutSubviews(self, _cmd);
     }
 
-    // 创建/更新标签（g_msgLabels 全局去重 + cellView 关联对象防自身重复）
-    // 不跳过已有标签的 cellView，以便长消息多行布局后更新位置
+    // 只对可见 cell 操作（跳过预渲染）
     UIView *cell = (UIView *)self;
     if (!cell.window) return;
+    
+    id cellView = self;
+    UILabel *existingLabel = objc_getAssociatedObject(cellView, @"msgTimeLabel");
+    
+    // 找父 ChatTableViewCell
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
-    if (cell) {
-        addTimeLabelToCell(cell);
+    if (!cell) return;
+    
+    if (existingLabel) {
+        // 轻量级帧更新：长消息多行布局后重定位（无日志，无 wrap 链）
+        quickRelocateTimeLabel(cell, cellView, [cell frame]);
+        return;
     }
+    
+    addTimeLabelToCell(cell);
 }
 
 static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
