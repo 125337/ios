@@ -555,6 +555,7 @@ static void addTimeLabelToCell(id cell) {
         CGFloat offsetY = config.messageTimeOffsetY;
         
         mtLog([NSString stringWithFormat:@"offsetX: %.2f, offsetY: %.2f", offsetX, offsetY]);
+        mtLog(@"position: 1 (头像下方, fixed)");
         
         // 固定位置模式：头像下方（position = 1）
         CGRect avatarFrame = [(UIView *)avatarView frame];
