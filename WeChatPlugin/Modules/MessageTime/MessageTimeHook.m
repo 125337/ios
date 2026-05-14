@@ -6,10 +6,6 @@
 
 #import <UIKit/UIKit.h>
 
-// 消息级去重：createTime → 持有标签的 cellView（weak）
-// 同一消息被 WeChat 渲染到多个 cellView 时只保留一个标签
-static NSMapTable *g_msgOwners = nil;
-
 // ============================================================
 // MARK: - Configuration Table Entry
 // ============================================================
@@ -456,24 +452,6 @@ static void addTimeLabelToCell(id cell) {
             mtLog(@"createTime is 0");
             return;
         }
-        
-        // 消息级去重：同一 createTime 只保留一个标签
-        static dispatch_once_t once;
-        dispatch_once(&once, ^{
-            g_msgOwners = [NSMapTable mapTableWithKeyOptions:NSMapTableCopyIn
-                                               valueOptions:NSMapTableWeakMemory];
-        });
-        NSString *timeKey = [NSString stringWithFormat:@"%u", createTime];
-        UIView *oldOwner = (UIView *)[g_msgOwners objectForKey:timeKey];
-        if (oldOwner && oldOwner != cellView) {
-            // 另一个 cellView 已有此消息的标签，移除它
-            UIView *oldLabel = objc_getAssociatedObject(oldOwner, @"msgTimeLabel");
-            if (oldLabel && [oldLabel superview]) {
-                [oldLabel removeFromSuperview];
-                objc_setAssociatedObject(oldOwner, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
-        }
-        [g_msgOwners setObject:cellView forKey:timeKey];
         
         NSString *identifier = [NSString stringWithFormat:@"%u_%u_%p", createTime, msgType, (__bridge void *)wrap];
         NSString *lastIdentifier = objc_getAssociatedObject(cell, @"messageTimeLastIdentifier");
