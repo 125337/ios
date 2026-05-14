@@ -794,10 +794,11 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
         orig_CommonMessageCellView_layoutSubviews(self, _cmd);
     }
 
-    // 微信优化同款：标签加到 CommonMessageCellView 上，cellView 级别的 msgTimeLabel 防重
+    // 只在 cell 在屏幕上可见时创建标签（pre-render 的 cell 没有 window，跳过）
+    UIView *cell = (UIView *)self;
+    if (!cell.window) return;
     id cellView = self;
     if (objc_getAssociatedObject(cellView, @"msgTimeLabel")) return;
-    UIView *cell = (UIView *)self;
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
