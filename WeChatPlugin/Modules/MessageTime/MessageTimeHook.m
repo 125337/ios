@@ -186,10 +186,12 @@ static id getAvatarView(id cell) {
     if (!contentView) { @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {} }
     
     NSArray *targets = @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell];
+    Class MMHeadImageViewClass = objc_getClass("MMHeadImageView");
     
     for (id target in targets) {
         if (!target || [target isKindOfClass:[NSNull class]]) continue;
         
+        // Level 1: getHeadImageView method
         if (!avatarView) {
             SEL sel = NSSelectorFromString(@"getHeadImageView");
             if ([target respondsToSelector:sel]) {
@@ -204,44 +206,25 @@ static id getAvatarView(id cell) {
             }
         }
         
+        // Level 2: KVC headImageView
         if (!avatarView) {
-            for (NSString *selName in @[@"leftAvatarView", @"rightAvatarView"]) {
-                SEL sel = NSSelectorFromString(selName);
-                if ([target respondsToSelector:sel]) {
-                    @try {
-                        id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
-                        if (view && [view respondsToSelector:@selector(image)]) {
-                            mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: %@ found", selName]);
-                            avatarView = view;
-                            break;
-                        }
-                    } @catch (NSException *e) {}
+            @try {
+                id view = [target valueForKey:@"headImageView"];
+                if (view && [view respondsToSelector:@selector(image)]) {
+                    mtLog(@"[DBG] getAvatarView: KVC headImageView found");
+                    avatarView = view;
+                    break;
                 }
-            }
+            } @catch (NSException *e) {}
         }
         
-        if (!avatarView) {
-            for (NSString *key in @[@"m_headImageView", @"headImgView", @"avatarView", @"avatarImageView", @"headImg"]) {
-                @try {
-                    id view = [target valueForKey:key];
-                    if (view && [view respondsToSelector:@selector(image)]) {
-                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: KVC %@ found, class=%@", key, NSStringFromClass([view class])]);
-                        avatarView = view;
-                        break;
-                    }
-                } @catch (NSException *e) {}
-            }
-        }
-        
-        if (!avatarView) {
+        // Level 3: MMHeadImageView subview
+        if (!avatarView && MMHeadImageViewClass) {
             for (UIView *sv in [target subviews]) {
-                if ([sv respondsToSelector:@selector(image)]) {
-                    NSString *cn = NSStringFromClass([sv class]);
-                    if ([cn containsString:@"Head"] || [cn containsString:@"Avatar"]) {
-                        mtLog([NSString stringWithFormat:@"[DBG] getAvatarView: subview match class=%@", cn]);
-                        avatarView = sv;
-                        break;
-                    }
+                if ([sv isKindOfClass:MMHeadImageViewClass]) {
+                    mtLog(@"[DBG] getAvatarView: MMHeadImageView subview found");
+                    avatarView = sv;
+                    break;
                 }
             }
         }
