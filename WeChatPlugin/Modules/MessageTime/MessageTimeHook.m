@@ -3,6 +3,9 @@
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+
+// 全局消息去重 key = createTime_wrapPtr（同一条消息在不同 cell 中 wrap 对象相同）
+static NSMutableSet *g_labeledWraps = nil;
 #import <UIKit/UIKit.h>
 
 // ============================================================
@@ -438,6 +441,15 @@ static void addTimeLabelToCell(id cell) {
             mtLog(@"createTime is 0");
             return;
         }
+        
+        // 全局去重：同一 wrap 指针只创建一次标签（防同一消息被渲染到多个 cell）
+        NSString *wrapKey = [NSString stringWithFormat:@"%u_%p", createTime, (__bridge void *)wrap];
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ g_labeledWraps = [NSMutableSet set]; });
+        if ([g_labeledWraps containsObject:wrapKey]) {
+            return;
+        }
+        [g_labeledWraps addObject:wrapKey];
         
         NSString *identifier = [NSString stringWithFormat:@"%u_%u_%p", createTime, msgType, (__bridge void *)wrap];
         NSString *lastIdentifier = objc_getAssociatedObject(cell, @"messageTimeLastIdentifier");
