@@ -6,9 +6,6 @@
 
 #import <UIKit/UIKit.h>
 
-// 全局消息标签跟踪：wrapPtr→UILabel（strong），标签在 cellView 间迁移，不被重复创建
-static NSMapTable *g_msgLabels = nil;
-
 // ============================================================
 // MARK: - Configuration Table Entry
 // ============================================================
@@ -126,148 +123,65 @@ static NSString *formatMessageTime(NSDate *date, NSString *format) {
 
 static id getCellView(id cell) {
     id cellView = nil;
-    NSString *cellCls = NSStringFromClass([cell class]);
     @try {
         cellView = [cell valueForKey:@"m_cellView"];
-        if (cellView) mtLog([NSString stringWithFormat:@"[DBG] getCellView: found via m_cellView, class=%@", NSStringFromClass([cellView class])]);
-    } @catch (NSException *e) {
-        mtLog([NSString stringWithFormat:@"[DBG] getCellView: m_cellView threw: %@", e.reason]);
-    }
+    } @catch (NSException *e) {}
     if (!cellView) {
         @try {
             cellView = [cell valueForKey:@"cellView"];
-            if (cellView) mtLog([NSString stringWithFormat:@"[DBG] getCellView: found via cellView, class=%@", NSStringFromClass([cellView class])]);
-        } @catch (NSException *e) {
-            mtLog([NSString stringWithFormat:@"[DBG] getCellView: cellView threw: %@", e.reason]);
-        }
+        } @catch (NSException *e) {}
     }
-    if (!cellView) mtLog([NSString stringWithFormat:@"[DBG] getCellView: BOTH nil for cell=%@", cellCls]);
     return cellView;
 }
 
 static id getAvatarView(id cell) {
-    id avatarView = nil;
-    
     id cellView = getCellView(cell);
-    id contentView = nil;
-    @try { contentView = [cell valueForKey:@"contentView"]; } @catch (...) {}
-    if (!contentView) { @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {} }
+    if (!cellView) return nil;
     
-    NSArray *targets = @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell];
-    Class MMHeadImageViewClass = objc_getClass("MMHeadImageView");
-    
-    for (id target in targets) {
-        if (!target || [target isKindOfClass:[NSNull class]]) continue;
-        
-        // Level 1: getHeadImageView method
-        if (!avatarView) {
-            SEL sel = NSSelectorFromString(@"getHeadImageView");
-            if ([target respondsToSelector:sel]) {
-                @try {
-                    id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
-                    if (view) {
-                        mtLog(@"[DBG] getAvatarView: getHeadImageView found");
-                        avatarView = view;
-                        break;
-                    }
-                } @catch (NSException *e) {}
-            }
-        }
-        
-        // Level 2: KVC headImageView
-        if (!avatarView) {
-            @try {
-                id view = [target valueForKey:@"headImageView"];
-                if (view && [view respondsToSelector:@selector(image)]) {
-                    mtLog(@"[DBG] getAvatarView: KVC headImageView found");
-                    avatarView = view;
-                    break;
-                }
-            } @catch (NSException *e) {}
-        }
-        
-        // Level 3: MMHeadImageView subview
-        if (!avatarView && MMHeadImageViewClass) {
-            for (UIView *sv in [target subviews]) {
-                if ([sv isKindOfClass:MMHeadImageViewClass]) {
-                    mtLog(@"[DBG] getAvatarView: MMHeadImageView subview found");
-                    avatarView = sv;
-                    break;
-                }
-            }
-        }
-        
-        if (avatarView) break;
+    SEL sel = NSSelectorFromString(@"getHeadImageView");
+    if ([cellView respondsToSelector:sel]) {
+        @try {
+            id view = ((id (*)(id, SEL))objc_msgSend)(cellView, sel);
+            if (view) return view;
+        } @catch (NSException *e) {}
     }
     
-    if (!avatarView) mtLog(@"[DBG] getAvatarView: FAILED - all paths returned nil");
-    return avatarView;
+    @try {
+        id view = [cellView valueForKey:@"m_headImageView"];
+        if (view) return view;
+    } @catch (NSException *e) {}
+    
+    @try {
+        id view = [cellView valueForKey:@"headImageView"];
+        if (view) return view;
+    } @catch (NSException *e) {}
+    
+    return nil;
 }
 
 static id getBubbleView(id cell) {
-    id bubbleView = nil;
-    
     id cellView = getCellView(cell);
-    id contentView = nil;
-    @try { contentView = [cell valueForKey:@"contentView"]; } @catch (...) {}
-    if (!contentView) { @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {} }
+    if (!cellView) return nil;
     
-    NSArray *targets = @[cellView ?: [NSNull null], contentView ?: [NSNull null], cell];
-    
-    for (id target in targets) {
-        if (!target || [target isKindOfClass:[NSNull class]]) continue;
-        
-        if (!bubbleView) {
-            SEL sel = NSSelectorFromString(@"getBgImageView");
-            if ([target respondsToSelector:sel]) {
-                @try {
-                    id v = ((id (*)(id, SEL))objc_msgSend)(target, sel);
-                    if (v) {
-                        mtLog(@"[DBG] getBubbleView: getBgImageView found");
-                        bubbleView = v;
-                        break;
-                    }
-                } @catch (NSException *e) {}
-            }
-        }
-        
-        if (!bubbleView) {
-            for (NSString *key in @[@"m_bgImageView", @"bgImageView"]) {
-                @try {
-                    id v = [target valueForKey:key];
-                    if (v) {
-                        mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: KVC %@ found, class=%@", key, NSStringFromClass([v class])]);
-                        bubbleView = v;
-                        break;
-                    }
-                } @catch (NSException *e) {}
-            }
-        }
-        
-        if (!bubbleView) {
-            for (UIView *sv in [target subviews]) {
-                NSString *cn = NSStringFromClass([sv class]);
-                if ([cn containsString:@"BgImage"] || [cn containsString:@"Bubble"] ||
-                    [cn containsString:@"MessageView"] || [cn containsString:@"RichTextView"]) {
-                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: subview match class=%@", cn]);
-                    bubbleView = sv;
-                    break;
-                }
-            }
-        }
-        
-        if (bubbleView) break;
+    SEL sel = NSSelectorFromString(@"getBgImageView");
+    if ([cellView respondsToSelector:sel]) {
+        @try {
+            id v = ((id (*)(id, SEL))objc_msgSend)(cellView, sel);
+            if (v) return v;
+        } @catch (NSException *e) {}
     }
     
-    if (bubbleView && CGRectEqualToRect([(UIView *)bubbleView frame], CGRectZero)) {
-        mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: found class=%@ but frame is zero, treating as nil", NSStringFromClass([(UIView *)bubbleView class])]);
-        bubbleView = nil;
-    }
+    @try {
+        id v = [cellView valueForKey:@"m_bgImageView"];
+        if (v) return v;
+    } @catch (NSException *e) {}
     
-    if (!bubbleView) {
-        mtLog(@"[DBG] getBubbleView: FAILED - no valid bubble view found, returning nil");
-    }
-    return bubbleView;
+    @try {
+        id v = [cellView valueForKey:@"bgImageView"];
+        if (v) return v;
+    } @catch (NSException *e) {}
+    
+    return nil;
 }
 
 // ============================================================
@@ -388,45 +302,6 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
     return labelFrame;
 }
 
-// Lightweight frame update for long messages (no logging, no wrap replay)
-static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
-    PluginConfig *config = [PluginConfig shared];
-    if (!config.showMessageTime) return;
-    
-    UILabel *label = objc_getAssociatedObject(cellView, @"msgTimeLabel");
-    if (!label) return;
-    
-    CGFloat offsetX = config.messageTimeOffsetX;
-    CGFloat offsetY = config.messageTimeOffsetY;
-    NSInteger position = config.messageTimePosition;
-    
-    id avatarView = getAvatarView(cell);
-    CGRect avatarFrame = avatarView ? [(UIView *)avatarView frame] : CGRectZero;
-    
-    UIView *bubbleView = getBubbleView(cell);
-    CGRect bubbleFrame;
-    if (bubbleView) {
-        bubbleFrame = [cell convertRect:bubbleView.frame fromView:bubbleView.superview];
-    } else {
-        bubbleFrame = cellFrame;
-        bubbleFrame.origin = CGPointZero;
-    }
-    if (CGRectEqualToRect(bubbleFrame, CGRectZero)) {
-        bubbleFrame = cellFrame;
-        bubbleFrame.origin = CGPointZero;
-    }
-    
-    // Quick sender detection (no wrap)
-    BOOL isSender = NO;
-    if (bubbleView) {
-        CGRect bfCell = [cell convertRect:bubbleView.frame fromView:bubbleView.superview];
-        isSender = CGRectGetMidX(bfCell) > cellFrame.size.width / 2;
-    }
-    
-    CGSize labelSize = label.frame.size;
-    label.frame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, bubbleFrame, avatarFrame);
-}
-
 // ============================================================
 // MARK: - Label Creation
 // ============================================================
@@ -519,8 +394,6 @@ static void addTimeLabelToCell(id cell) {
         }
         if (createTime == 0) return;
         
-        NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
-        
         id avatarView = getAvatarView(cell);
         
         NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
@@ -528,7 +401,6 @@ static void addTimeLabelToCell(id cell) {
         if (!timeString) return;
         
         UILabel *timeLabel = initTimeLabel((UIView *)cellView);
-        [g_msgLabels setObject:timeLabel forKey:wp];
         timeLabel.text = timeString;
 
         CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
@@ -625,8 +497,8 @@ static void addTimeLabelToCell(id cell) {
 
 static UITableViewCell* (*orig_BaseMsgContentVC_cellForRow)(id, SEL, id, NSIndexPath*);
 static void (*orig_BaseMsgContentVC_willDisplayCell)(id, SEL, id, id, NSIndexPath*);
+static void (*orig_BaseMsgContentVC_addMessageNode)(id, SEL, id, id, BOOL, BOOL);
 static void (*orig_ChatTableViewCell_prepareForReuse)(id, SEL);
-static void (*orig_CommonMessageCellView_layoutSubviews)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
 static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
 static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
@@ -673,61 +545,24 @@ static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath 
     if (orig_BaseMsgContentVC_willDisplayCell) {
         orig_BaseMsgContentVC_willDisplayCell(self, _cmd, tv, cell, ip);
     }
-}
-
-static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
-    if (orig_CommonMessageCellView_layoutSubviews) {
-        orig_CommonMessageCellView_layoutSubviews(self, _cmd);
-    }
-
-    UIView *cell = (UIView *)self;
-    if (!cell.window) return;
     
-    while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
-        cell = [cell superview];
-    }
+    if (![PluginConfig shared].showMessageTime) return;
     if (!cell) return;
     
-    id cellView = self;
-    UILabel *existingOnCellView = objc_getAssociatedObject(cellView, @"msgTimeLabel");
-    if (existingOnCellView) {
-        NSNumber *lastHeight = objc_getAssociatedObject(cell, @"msgTimeLastCellHeight");
-        CGFloat currentHeight = [cell frame].size.height;
-        if (lastHeight && fabs([lastHeight floatValue] - currentHeight) < 1.0) {
-            return;
-        }
-        objc_setAssociatedObject(cell, @"msgTimeLastCellHeight", @(currentHeight), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        quickRelocateTimeLabel(cell, cellView, [cell frame]);
-        return;
-    }
-    
-    // 全局去重：检查此消息是否已有标签
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        g_msgLabels = [NSMapTable mapTableWithKeyOptions:NSMapTableCopyIn
-                                           valueOptions:NSMapTableStrongMemory];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        addTimeLabelToCell(cell);
     });
-    id wrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
-    if (wrap) {
-        NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
-        UILabel *existingLabel = [g_msgLabels objectForKey:wp];
-        if (existingLabel) {
-            // 已有标签 → 迁移到当前 cellView（而非重建）
-            UIView *oldOwner = (UIView *)[existingLabel superview];
-            if (oldOwner && oldOwner != self) {
-                [existingLabel removeFromSuperview];
-                objc_setAssociatedObject(oldOwner, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
-            if (!oldOwner || oldOwner != self) {
-                [(UIView *)self addSubview:existingLabel];
-                objc_setAssociatedObject(self, @"msgTimeLabel", existingLabel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                quickRelocateTimeLabel(cell, self, [cell frame]);
-            }
-            return; // 已有标签，跳过创建
-        }
+}
+
+static void repl_addMessageNode(id self, SEL _cmd, id node, id layout, BOOL addMoreMsg, BOOL addNewMsg) {
+    if (orig_BaseMsgContentVC_addMessageNode) {
+        orig_BaseMsgContentVC_addMessageNode(self, _cmd, node, layout, addMoreMsg, addNewMsg);
     }
     
-    addTimeLabelToCell(cell);
+    if (![PluginConfig shared].showMessageTime) return;
+    if (!node) return;
+    
+    addTimeLabelToCell(node);
 }
 
 static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
@@ -752,7 +587,6 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
 
     objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, @"cachedMsgWrap", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(self, @"msgTimeLastCellHeight", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 static void repl_ChatTimeCellView_layoutSubviews(id self, SEL _cmd) {
@@ -810,7 +644,7 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
 static MTHookEntry g_hookTable[] = {
     {"BaseMsgContentViewController", "tableView:cellForRowAtIndexPath:",              (IMP)repl_cellForRow,                         (IMP*)&orig_BaseMsgContentVC_cellForRow},
     {"BaseMsgContentViewController", "tableView:willDisplayCell:forRowAtIndexPath:",  (IMP)repl_willDisplayCell,                    (IMP*)&orig_BaseMsgContentVC_willDisplayCell},
-    {"CommonMessageCellView",        "layoutSubviews",                                (IMP)repl_CommonMessageCellView_layoutSubviews, (IMP*)&orig_CommonMessageCellView_layoutSubviews},
+    {"BaseMsgContentViewController", "addMessageNode:layout:addMoreMsg:addNewMsg:",   (IMP)repl_addMessageNode,                     (IMP*)&orig_BaseMsgContentVC_addMessageNode},
     {"ChatTableViewCell",            "prepareForReuse",                               (IMP)repl_ChatTableViewCell_prepareForReuse,  (IMP*)&orig_ChatTableViewCell_prepareForReuse},
     {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
     {"ChatTimeViewModel",            "cellHeight",                                    (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
@@ -829,7 +663,7 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
     mtLog(@"========================================");
-    mtLog(@"MessageTimeHook install - cellForRow + willDisplayCell");
+    mtLog(@"MessageTimeHook install - cellForRow + willDisplayCell + addMessageNode");
     mtLog(@"========================================");
 
     PluginConfig *config = [PluginConfig shared];
