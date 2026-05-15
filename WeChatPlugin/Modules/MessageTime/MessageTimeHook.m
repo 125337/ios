@@ -374,7 +374,20 @@ static void addTimeLabelToCell(id cell) {
         
         PluginConfig *config = [PluginConfig shared];
         if (!config.showMessageTime) return;
-        
+
+        @try {
+            id vm = [cellView valueForKey:@"m_viewModel"] ?: [cellView valueForKey:@"viewModel"];
+            if (vm) {
+                id pm = [vm valueForKey:@"parentModel"];
+                if (pm) {
+                    NSArray *subVMs = [pm valueForKey:@"m_subViewModels"] ?: [pm valueForKey:@"subViewModels"];
+                    if (subVMs && [subVMs count] > 1 && vm != [subVMs firstObject]) {
+                        return;
+                    }
+                }
+            }
+        } @catch (NSException *e) {}
+
         id wrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
         
         if (!wrap) {
