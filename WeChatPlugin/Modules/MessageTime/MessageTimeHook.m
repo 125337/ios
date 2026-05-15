@@ -636,10 +636,6 @@ static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
 // ============================================================
 
 static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *ip) {
-    static int cellForRowCount = 0;
-    if (++cellForRowCount % 10 == 1) {
-        mtLog([NSString stringWithFormat:@"[TRACE] cellForRow #%d row=%ld", cellForRowCount, (long)ip.row]);
-    }
     UITableViewCell *cell = orig_BaseMsgContentVC_cellForRow(self, _cmd, tv, ip);
     if (![PluginConfig shared].showMessageTime || !cell) return cell;
 
@@ -680,20 +676,13 @@ static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath 
 }
 
 static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
-    static int layoutCount = 0;
-    if (++layoutCount % 10 == 1) {
-        mtLog([NSString stringWithFormat:@"[TRACE] layoutSubviews #%d", layoutCount]);
-    }
     if (orig_CommonMessageCellView_layoutSubviews) {
         orig_CommonMessageCellView_layoutSubviews(self, _cmd);
     }
 
-    // 只对可见 cell 操作（cell.window == nil 时 layoutSubviews 也会触发，
-    // 但预渲染 cell 不应创建标签，避免大规模 addTimeLabelToCell 并发导致卡死）
     UIView *cell = (UIView *)self;
     if (!cell.window) return;
     
-    // 找父 ChatTableViewCell
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
@@ -702,7 +691,12 @@ static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
     id cellView = self;
     UILabel *existingOnCellView = objc_getAssociatedObject(cellView, @"msgTimeLabel");
     if (existingOnCellView) {
-        // 同一 cellView 的重复 layoutSubviews（长消息多行布局后重定位）
+        NSNumber *lastHeight = objc_getAssociatedObject(cell, @"msgTimeLastCellHeight");
+        CGFloat currentHeight = [cell frame].size.height;
+        if (lastHeight && fabs([lastHeight floatValue] - currentHeight) < 1.0) {
+            return;
+        }
+        objc_setAssociatedObject(cell, @"msgTimeLastCellHeight", @(currentHeight), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         quickRelocateTimeLabel(cell, cellView, [cell frame]);
         return;
     }
@@ -758,6 +752,7 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
 
     objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, @"cachedMsgWrap", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, @"msgTimeLastCellHeight", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 static void repl_ChatTimeCellView_layoutSubviews(id self, SEL _cmd) {
@@ -781,10 +776,6 @@ static CGFloat repl_ChatTimeViewModel_cellHeight(id self, SEL _cmd) {
 }
 
 static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
-    static int ccontactCallCount = 0;
-    if (++ccontactCallCount % 50 == 1) {
-        mtLog([NSString stringWithFormat:@"[TRACE] CContact::m_nsNickName #%d", ccontactCallCount]);
-    }
     NSString *origName = nil;
     if (orig_CContact_m_nsNickName) {
         origName = orig_CContact_m_nsNickName(self, _cmd);
