@@ -303,6 +303,54 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
 }
 
 // ============================================================
+// MARK: - Lightweight Frame Refresh (for layoutSubviews callback)
+// ============================================================
+
+static void refreshLabelFrameInCellView(id cellView) {
+    UILabel *label = objc_getAssociatedObject(cellView, @"msgTimeLabel");
+    if (!label) return;
+
+    NSNumber *isSenderNum = objc_getAssociatedObject(cellView, @"msgTimeIsSender");
+    if (!isSenderNum) return;
+    BOOL isSender = [isSenderNum boolValue];
+
+    id bubbleView = nil;
+    SEL bSel = NSSelectorFromString(@"getBgImageView");
+    if ([cellView respondsToSelector:bSel]) {
+        @try { bubbleView = ((id (*)(id, SEL))objc_msgSend)(cellView, bSel); } @catch (NSException *e) {}
+    }
+    if (!bubbleView) {
+        @try { bubbleView = [cellView valueForKey:@"m_bgImageView"] ?: [cellView valueForKey:@"bgImageView"]; } @catch (NSException *e) {}
+    }
+
+    id avatarView = nil;
+    SEL aSel = NSSelectorFromString(@"getHeadImageView");
+    if ([cellView respondsToSelector:aSel]) {
+        @try { avatarView = ((id (*)(id, SEL))objc_msgSend)(cellView, aSel); } @catch (NSException *e) {}
+    }
+    if (!avatarView) {
+        @try { avatarView = [cellView valueForKey:@"m_headImageView"] ?: [cellView valueForKey:@"headImageView"]; } @catch (NSException *e) {}
+    }
+
+    CGRect cellFrame = [(UIView *)cellView bounds];
+    CGRect bubbleFrame = bubbleView ? [(UIView *)bubbleView frame] : cellFrame;
+    CGRect avatarFrame = avatarView ? [(UIView *)avatarView frame] : CGRectZero;
+
+    CGSize labelSize = label.frame.size;
+    if (labelSize.width == 0 || labelSize.height == 0) return;
+
+    PluginConfig *config = [PluginConfig shared];
+
+    CGRect newFrame = computeLabelFrame(cellFrame, labelSize, config.messageTimePosition,
+                                         config.messageTimeOffsetX, config.messageTimeOffsetY,
+                                         isSender, bubbleFrame, avatarFrame);
+
+    if (!CGRectEqualToRect(label.frame, newFrame)) {
+        label.frame = newFrame;
+    }
+}
+
+// ============================================================
 // MARK: - Label Creation
 // ============================================================
 
@@ -486,6 +534,7 @@ static void addTimeLabelToCell(id cell) {
         if (![timeLabel superview]) {
             [cellView addSubview:timeLabel];
             objc_setAssociatedObject(cell, @"messageTimeCreateTime", @(createTime), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(cellView, @"msgTimeIsSender", @(isSender), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
         
     } @catch (NSException *e) {}
@@ -498,7 +547,9 @@ static void addTimeLabelToCell(id cell) {
 static UITableViewCell* (*orig_BaseMsgContentVC_cellForRow)(id, SEL, id, NSIndexPath*);
 static void (*orig_BaseMsgContentVC_willDisplayCell)(id, SEL, id, id, NSIndexPath*);
 static void (*orig_BaseMsgContentVC_addMessageNode)(id, SEL, id, id, BOOL, BOOL);
-static void (*orig_ChatTableViewCell_prepareForReuse)(id, SEL);
+static void (*orig_BaseMsgContentVC_viewDidLayoutSubviews)(id, SEL);
+static void (*orig_CommonMsgCellView_layoutSubviews)(id, SEL);
+static void (*orig_CommonMsgCellView_prepareForReuse)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
 static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
 static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
@@ -565,28 +616,61 @@ static void repl_addMessageNode(id self, SEL _cmd, id node, id layout, BOOL addM
     addTimeLabelToCell(node);
 }
 
-static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
-    if (orig_ChatTableViewCell_prepareForReuse) {
-        orig_ChatTableViewCell_prepareForReuse(self, _cmd);
+static void repl_CommonMsgCellView_layoutSubviews(id self, SEL _cmd) {
+    if (orig_CommonMsgCellView_layoutSubviews) {
+        orig_CommonMsgCellView_layoutSubviews(self, _cmd);
     }
 
-    // 清理 cellView 上的标签（标签存储在 cellView 的关联对象上）
-    id cellView = nil;
-    @try { cellView = [self valueForKey:@"m_cellView"] ?: [self valueForKey:@"cellView"]; } @catch (...) {}
-    if (cellView) {
-        UILabel *oldLabel = objc_getAssociatedObject(cellView, @"msgTimeLabel");
-        if (oldLabel) {
-            [oldLabel removeFromSuperview];
-        }
-        UIView *tagLabel = [(UIView *)cellView viewWithTag:999999];
-        if (tagLabel && tagLabel != oldLabel) {
-            [tagLabel removeFromSuperview];
-        }
-        objc_setAssociatedObject(cellView, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (![PluginConfig shared].showMessageTime) return;
+
+    id cell = [self superview];
+    while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
+        cell = [cell superview];
+    }
+    if (!cell) return;
+
+    id wrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
+    if (!wrap) return;
+
+    refreshLabelFrameInCellView(self);
+}
+
+static void repl_CommonMsgCellView_prepareForReuse(id self, SEL _cmd) {
+    if (orig_CommonMsgCellView_prepareForReuse) {
+        orig_CommonMsgCellView_prepareForReuse(self, _cmd);
     }
 
-    objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(self, @"cachedMsgWrap", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    UILabel *oldLabel = objc_getAssociatedObject(self, @"msgTimeLabel");
+    if (oldLabel) {
+        [oldLabel removeFromSuperview];
+    }
+    UIView *tagLabel = [(UIView *)self viewWithTag:999999];
+    if (tagLabel && tagLabel != oldLabel) {
+        [tagLabel removeFromSuperview];
+    }
+    objc_setAssociatedObject(self, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, @"msgTimeIsSender", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static void repl_BaseMsgContentVC_viewDidLayoutSubviews(id self, SEL _cmd) {
+    if (orig_BaseMsgContentVC_viewDidLayoutSubviews) {
+        orig_BaseMsgContentVC_viewDidLayoutSubviews(self, _cmd);
+    }
+
+    if (![PluginConfig shared].showMessageTime) return;
+
+    id tableView = nil;
+    @try { tableView = [self valueForKey:@"m_tableView"] ?: [self valueForKey:@"tableView"]; } @catch (NSException *e) {}
+    if (!tableView) return;
+
+    NSArray *visibleCells = [tableView visibleCells];
+    for (id cell in visibleCells) {
+        id cellView = nil;
+        @try { cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"]; } @catch (NSException *e) {}
+        if (cellView) {
+            refreshLabelFrameInCellView(cellView);
+        }
+    }
 }
 
 static void repl_ChatTimeCellView_layoutSubviews(id self, SEL _cmd) {
@@ -642,13 +726,15 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
 // ============================================================
 
 static MTHookEntry g_hookTable[] = {
-    {"BaseMsgContentViewController", "tableView:cellForRowAtIndexPath:",              (IMP)repl_cellForRow,                         (IMP*)&orig_BaseMsgContentVC_cellForRow},
-    {"BaseMsgContentViewController", "tableView:willDisplayCell:forRowAtIndexPath:",  (IMP)repl_willDisplayCell,                    (IMP*)&orig_BaseMsgContentVC_willDisplayCell},
-    {"BaseMsgContentViewController", "addMessageNode:layout:addMoreMsg:addNewMsg:",   (IMP)repl_addMessageNode,                     (IMP*)&orig_BaseMsgContentVC_addMessageNode},
-    {"ChatTableViewCell",            "prepareForReuse",                               (IMP)repl_ChatTableViewCell_prepareForReuse,  (IMP*)&orig_ChatTableViewCell_prepareForReuse},
-    {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
-    {"ChatTimeViewModel",            "cellHeight",                                    (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
-    {"CContact",                     "m_nsNickName",                                  (IMP)repl_CContact_m_nsNickName,              (IMP*)&orig_CContact_m_nsNickName},
+    {"BaseMsgContentViewController", "tableView:cellForRowAtIndexPath:",              (IMP)repl_cellForRow,                                  (IMP*)&orig_BaseMsgContentVC_cellForRow},
+    {"BaseMsgContentViewController", "tableView:willDisplayCell:forRowAtIndexPath:",  (IMP)repl_willDisplayCell,                             (IMP*)&orig_BaseMsgContentVC_willDisplayCell},
+    {"BaseMsgContentViewController", "addMessageNode:layout:addMoreMsg:addNewMsg:",   (IMP)repl_addMessageNode,                              (IMP*)&orig_BaseMsgContentVC_addMessageNode},
+    {"BaseMsgContentViewController", "viewDidLayoutSubviews",                         (IMP)repl_BaseMsgContentVC_viewDidLayoutSubviews,       (IMP*)&orig_BaseMsgContentVC_viewDidLayoutSubviews},
+    {"CommonMessageCellView",        "layoutSubviews",                                (IMP)repl_CommonMsgCellView_layoutSubviews,            (IMP*)&orig_CommonMsgCellView_layoutSubviews},
+    {"CommonMessageCellView",        "prepareForReuse",                               (IMP)repl_CommonMsgCellView_prepareForReuse,           (IMP*)&orig_CommonMsgCellView_prepareForReuse},
+    {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,             (IMP*)&orig_ChatTimeCellView_layoutSubviews},
+    {"ChatTimeViewModel",            "cellHeight",                                    (IMP)repl_ChatTimeViewModel_cellHeight,                 (IMP*)&orig_ChatTimeViewModel_cellHeight},
+    {"CContact",                     "m_nsNickName",                                  (IMP)repl_CContact_m_nsNickName,                       (IMP*)&orig_CContact_m_nsNickName},
 };
 
 static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0]);
