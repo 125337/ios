@@ -636,6 +636,10 @@ static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
 // ============================================================
 
 static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *ip) {
+    static int cellForRowCount = 0;
+    if (++cellForRowCount % 10 == 1) {
+        mtLog([NSString stringWithFormat:@"[TRACE] cellForRow #%d row=%ld", cellForRowCount, (long)ip.row]);
+    }
     UITableViewCell *cell = orig_BaseMsgContentVC_cellForRow(self, _cmd, tv, ip);
     if (![PluginConfig shared].showMessageTime || !cell) return cell;
 
@@ -676,6 +680,10 @@ static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath 
 }
 
 static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
+    static int layoutCount = 0;
+    if (++layoutCount % 10 == 1) {
+        mtLog([NSString stringWithFormat:@"[TRACE] layoutSubviews #%d", layoutCount]);
+    }
     if (orig_CommonMessageCellView_layoutSubviews) {
         orig_CommonMessageCellView_layoutSubviews(self, _cmd);
     }
@@ -773,6 +781,10 @@ static CGFloat repl_ChatTimeViewModel_cellHeight(id self, SEL _cmd) {
 }
 
 static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
+    static int ccontactCallCount = 0;
+    if (++ccontactCallCount % 50 == 1) {
+        mtLog([NSString stringWithFormat:@"[TRACE] CContact::m_nsNickName #%d", ccontactCallCount]);
+    }
     NSString *origName = nil;
     if (orig_CContact_m_nsNickName) {
         origName = orig_CContact_m_nsNickName(self, _cmd);
