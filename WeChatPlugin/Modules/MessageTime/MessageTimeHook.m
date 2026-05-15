@@ -366,7 +366,7 @@ static void addTimeLabelToCell(id cell) {
             return;
         }
         
-        CGRect cellFrame = [cell frame];
+        CGRect cellFrame = [(UIView *)cellView bounds];
         if (CGRectEqualToRect(cellFrame, CGRectZero)) return;
         
         UIView *staleLabel = [(UIView *)cellView viewWithTag:999999];
@@ -529,8 +529,7 @@ static void addTimeLabelToCell(id cell) {
         CGRect avatarFrame = [(UIView *)avatarView frame];
         CGRect bubbleFrame;
         if (bubbleView) {
-            UIView *bv = (UIView *)bubbleView;
-            bubbleFrame = [cell convertRect:bv.frame fromView:bv.superview];
+            bubbleFrame = [(UIView *)bubbleView frame];
         } else {
             bubbleFrame = cellFrame;
             bubbleFrame.origin = CGPointZero;
