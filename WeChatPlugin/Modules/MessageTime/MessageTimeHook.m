@@ -216,12 +216,6 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
                 labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
                 labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height;
-                // 长消息回退：气泡比头像高时，标签跟随气泡底部（仿微信优化 _CGRectGetMaxY 做法）
-                CGFloat bubbleBottom = CGRectGetMaxY(bubbleFrame);
-                CGFloat avatarBottom = CGRectGetMaxY(avatarFrame);
-                if (bubbleBottom > avatarBottom) {
-                    labelFrame.origin.y = bubbleBottom;
-                }
             } else {
                 labelFrame.origin.x = nearSideX;
                 labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height;
