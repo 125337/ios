@@ -6,6 +6,25 @@
 
 #import <UIKit/UIKit.h>
 
+static SEL sel_msgTimeLabel = NULL;
+static SEL sel_setMsgTimeLabel = NULL;
+
+static id msgTimeLabel_getter(id self, SEL _cmd) {
+    return objc_getAssociatedObject(self, sel_msgTimeLabel);
+}
+
+static void msgTimeLabel_setter(id self, SEL _cmd, id label) {
+    objc_setAssociatedObject(self, sel_msgTimeLabel, label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static inline id call_msgTimeLabel_getter(id target) {
+    return ((id (*)(id, SEL))objc_msgSend)(target, sel_msgTimeLabel);
+}
+
+static inline void call_msgTimeLabel_setter(id target, id label) {
+    ((void (*)(id, SEL, id))objc_msgSend)(target, sel_setMsgTimeLabel, label);
+}
+
 // ============================================================
 // MARK: - Configuration Table Entry
 // ============================================================
@@ -48,13 +67,13 @@ static void mtLog(NSString *content) {
 // ============================================================
 
 static UILabel *initTimeLabel(UIView *targetView) {
-    UILabel *label = objc_getAssociatedObject(targetView, @"msgTimeLabel");
+    UILabel *label = call_msgTimeLabel_getter(targetView);
     if (!label) {
         label = [[UILabel alloc] init];
         label.tag = 999999;
         label.userInteractionEnabled = NO;
         label.textAlignment = NSTextAlignmentCenter;
-        objc_setAssociatedObject(targetView, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        call_msgTimeLabel_setter(targetView, label);
     }
     return label;
 }
@@ -301,7 +320,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
 // ============================================================
 
 static void refreshLabelFrameInCellView(id cellView) {
-    UILabel *label = objc_getAssociatedObject(cellView, @"msgTimeLabel");
+    UILabel *label = call_msgTimeLabel_getter(cellView);
     if (!label) return;
 
     NSNumber *isSenderNum = objc_getAssociatedObject(cellView, @"msgTimeIsSender");
@@ -356,7 +375,7 @@ static void addTimeLabelToCell(id cell) {
         @try { cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"]; } @catch (...) {}
         if (!cellView) return;
         
-        if (objc_getAssociatedObject(cellView, @"msgTimeLabel")) {
+        if (call_msgTimeLabel_getter(cellView)) {
             return;
         }
         
@@ -646,7 +665,7 @@ static void repl_CommonMsgCellView_prepareForReuse(id self, SEL _cmd) {
         orig_CommonMsgCellView_prepareForReuse(self, _cmd);
     }
 
-    UILabel *oldLabel = objc_getAssociatedObject(self, @"msgTimeLabel");
+    UILabel *oldLabel = call_msgTimeLabel_getter(self);
     if (oldLabel) {
         [oldLabel removeFromSuperview];
     }
@@ -654,7 +673,7 @@ static void repl_CommonMsgCellView_prepareForReuse(id self, SEL _cmd) {
     if (tagLabel && tagLabel != oldLabel) {
         [tagLabel removeFromSuperview];
     }
-    objc_setAssociatedObject(self, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    call_msgTimeLabel_setter(self, nil);
     objc_setAssociatedObject(self, @"msgTimeIsSender", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
@@ -765,6 +784,18 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
     mtLog([NSString stringWithFormat:@"Config - messageTimeFormat: %@", config.messageTimeFormat]);
     mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetX: %.2f", config.messageTimeOffsetX]);
     mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetY: %.2f", config.messageTimeOffsetY]);
+
+    sel_msgTimeLabel = sel_registerName("msgTimeLabel");
+    sel_setMsgTimeLabel = sel_registerName("setMsgTimeLabel:");
+
+    Class cellViewClass = objc_getClass("CommonMessageCellView");
+    if (cellViewClass) {
+        class_addMethod(cellViewClass, sel_msgTimeLabel, (IMP)msgTimeLabel_getter, "@@:");
+        class_addMethod(cellViewClass, sel_setMsgTimeLabel, (IMP)msgTimeLabel_setter, "v@:@");
+        mtLog(@"Injected msgTimeLabel getter/setter on CommonMessageCellView ✓");
+    } else {
+        mtLog(@"CommonMessageCellView not found, using fallback associated objects");
+    }
 
     int hookedCount = 0;
 
