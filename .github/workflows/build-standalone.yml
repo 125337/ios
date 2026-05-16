@@ -54,6 +54,7 @@ jobs:
           WeChatPlugin/Modules/SettingEntry/WPBackupVC.m \
           WeChatPlugin/Modules/Joker/JokerHook.m \
           WeChatPlugin/Modules/GroupExit/GroupExitHook.m \
+          WeChatPlugin/Modules/FriendDetection/FriendDetectionHook.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeHook.m \
           WeChatPlugin/Modules/AutoTransfer/AutoTransferHook.m \
           WeChatPlugin/Settings/Common/SettingCategoryController.m \
@@ -89,6 +90,7 @@ jobs:
                 -IWeChatPlugin/Modules/Joker \
                 -IWeChatPlugin/Modules/GroupExit \
                 -IWeChatPlugin/Modules/MessageTime \
+                -IWeChatPlugin/Modules/FriendDetection \
                 -IWeChatPlugin/Modules/AutoTransfer \
                 -IWeChatPlugin/Settings/Common \
                 -IWeChatPlugin/Settings/Controllers \

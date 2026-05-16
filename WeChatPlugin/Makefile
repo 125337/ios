@@ -30,6 +30,7 @@ MioHelper_FILES = Tweak.m \
 	Modules/SettingEntry/WPBackupVC.m \
 	Modules/Joker/JokerHook.m \
 	Modules/GroupExit/GroupExitHook.m \
+	Modules/FriendDetection/FriendDetectionHook.m \
 	Modules/MessageTime/MessageTimeHook.m \
 	Settings/Common/WPBorderLayer.m \
 	Settings/Common/SettingCategoryController.m \

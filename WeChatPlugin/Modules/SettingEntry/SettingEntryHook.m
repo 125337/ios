@@ -89,7 +89,7 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     UIView *listCard = WPMakeCard(y, w);
     CGFloat cy = 0;
 
-    NSArray *navItems = @[@[@"常用功能", @"openCommon:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
+    NSArray *navItems = @[@[@"常用功能", @"openCommon:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"好友检测", @"openFriendDetection:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
     CGFloat scale = [UIScreen mainScreen].scale;
     for (NSUInteger i = 0; i < navItems.count; i++) {
         if (i > 0) {
@@ -202,6 +202,20 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         reLog(@"[Nav] pushed WPOtherVC");
     } else {
         reLog(@"[Nav] WPOtherVCHelper makeVC returned nil");
+    }
+}
+
+- (void)openFriendDetection:(id)sender {
+    UIViewController *vc = [self currentVCFrom:sender];
+    if (!vc) { reLog(@"[Nav] openFriendDetection: currentVC nil"); return; }
+    Class helperClass = objc_getClass("WPFriendDetectionVCHelper");
+    if (!helperClass) { reLog(@"[Nav] WPFriendDetectionVCHelper not found"); return; }
+    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        reLog(@"[Nav] pushed WPFriendDetectionVC");
+    } else {
+        reLog(@"[Nav] WPFriendDetectionVCHelper makeVC returned nil");
     }
 }
 
