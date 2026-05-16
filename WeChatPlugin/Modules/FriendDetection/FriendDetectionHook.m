@@ -210,104 +210,77 @@ static void fdLog(NSString *content) {
 
 #pragma mark - 主入口
 
-static BOOL startFriendDetection(void) {
-    fdLog(@"========================================");
-    fdLog(@"=== Friend Detection Start ===");
-    fdLog(@"========================================");
+static NSArray *runNativeDetection(void) {
+    for (NSString *cls in @[@"FriendDetector", @"WeChatFriendDetector"]) {
+        Class c = objc_getClass([cls UTF8String]);
+        if (!c) continue;
+        SEL s = NSSelectorFromString(@"checkFriendsWithCompletion:");
+        if (![c respondsToSelector:s]) continue;
+        fdLog([NSString stringWithFormat:@"[Native] Found %@, calling checkFriendsWithCompletion:...", cls]);
 
-    // 直接调用微信优化插件的 FriendDetector.checkFriendsWithCompletion:
-    // 此法已在当前 WeChat 版本验证可用
-    Class fdCls = objc_getClass("FriendDetector");
-    if (!fdCls) { fdLog(@"[Main] FriendDetector class not found"); return NO; }
-    fdLog(@"[Main] FriendDetector class found");
+        __block NSArray *result = nil;
+        __block BOOL done = NO;
+        void (^block)(NSArray *) = ^(NSArray *r) { result = r; done = YES; };
 
-    SEL sel = NSSelectorFromString(@"checkFriendsWithCompletion:");
-    if (![fdCls respondsToSelector:sel]) {
-        fdLog(@"[Main] checkFriendsWithCompletion: not found on FriendDetector");
-        return NO;
+        @try {
+            if ([NSThread isMainThread])
+                ((void (*)(Class, SEL, id))objc_msgSend)(c, s, block);
+            else
+                dispatch_sync(dispatch_get_main_queue(), ^{
+                    ((void (*)(Class, SEL, id))objc_msgSend)(c, s, block);
+                });
+        } @catch (NSException *e) { fdLog([NSString stringWithFormat:@"[Native] Exception: %@", e]); continue; }
+
+        int w = 0;
+        while (!done && w < 120) { [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:1.0]]; w++; }
+        if (result && result.count > 0) { fdLog([NSString stringWithFormat:@"[Native] Got %lu results", (unsigned long)result.count]); return result; }
     }
-    fdLog(@"[Main] checkFriendsWithCompletion: found, invoking...");
-
-    __block NSArray *detectResults = nil;
-    __block BOOL done = NO;
-    __block void (^block)(NSArray *) = ^(NSArray *results) {
-        fdLog([NSString stringWithFormat:@"[Main] Completion: %lu results", (unsigned long)results.count]);
-        detectResults = results;
-        done = YES;
-    };
-
-    @try {
-        // 从主线程调用（微信优化也是这么调用的）
-        if ([NSThread isMainThread]) {
-            ((void (*)(Class, SEL, id))objc_msgSend)(fdCls, sel, block);
-        } else {
-            dispatch_sync(dispatch_get_main_queue(), ^{
-                ((void (*)(Class, SEL, id))objc_msgSend)(fdCls, sel, block);
-            });
-        }
-    } @catch (NSException *e) {
-        fdLog([NSString stringWithFormat:@"[Main] Exception: %@", e]);
-        return NO;
-    }
-
-    int waitCount = 0;
-    while (!done && waitCount < 180) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:1.0]];
-        waitCount++;
-        if (waitCount % 30 == 0)
-            fdLog([NSString stringWithFormat:@"[Main] Waiting... %d seconds", waitCount]);
-    }
-    fdLog([NSString stringWithFormat:@"[Main] Wait finished after %d seconds, done=%d", waitCount, done]);
-
-    if (!detectResults) { fdLog(@"[Main] Detection returned nil"); return NO; }
-    fdLog([NSString stringWithFormat:@"[Main] Detection returned %lu results", (unsigned long)detectResults.count]);
-
-    // Process results - accept ANY object type (FriendDetectResult, MioFriendDetectResult, or NSDictionary)
-    NSMutableArray *deletedFriends = [NSMutableArray array];
-    int totalValid = 0;
-
-    for (id r in detectResults) {
-        BOOL isDeleted = NO;
-        BOOL isInvalid = NO;
-        id contact = nil;
-
-        // Try FriendDetectResult interface
-        if ([r respondsToSelector:@selector(isDeleted)]) {
-            @try { isDeleted = [[r valueForKey:@"isDeleted"] boolValue]; } @catch (...) {}
-            @try { isInvalid = [[r valueForKey:@"isInvalid"] boolValue]; } @catch (...) {}
-            @try { contact = [r valueForKey:@"contact"]; } @catch (...) {}
-        }
-
-        if (isDeleted || isInvalid) {
-            NSString *wxID = @"", *nick = @"";
-            if (contact) {
-                @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
-                @try { nick = [contact performSelector:@selector(m_nsNickName)] ?: wxID; } @catch (...) {}
-            }
-            [deletedFriends addObject:@{@"wxID": wxID, @"nick": nick, @"status": isInvalid ? @"invalid" : @"deleted"}];
-        } else {
-            totalValid++;
-        }
-    }
-
-    fdLog([NSString stringWithFormat:@"[Main] Processing: %lu deleted, %d valid", (unsigned long)deletedFriends.count, totalValid]);
-
-    if (deletedFriends.count > 0 || totalValid > 0) {
-        NSDictionary *saveData = @{
-            @"timestamp": @([[NSDate date] timeIntervalSince1970]),
-            @"total": @(totalValid + (int)deletedFriends.count),
-            @"deleted": [deletedFriends copy]
-        };
-        [[NSUserDefaults standardUserDefaults] setObject:saveData forKey:@"com.mio.wechat.plugin.FriendDetection.results"];
-        [[NSUserDefaults standardUserDefaults] synchronize];
-        fdLog(@"[Main] Results saved");
-        return YES;
-    }
-    fdLog(@"[Main] No results");
-    return NO;
+    return nil;
 }
 
-#pragma mark - ViewController
+static NSArray *runLocalDetection(void) {
+    MioFriendDetector *d = [[MioFriendDetector alloc] init];
+    __block NSArray *r = nil;
+    __block BOOL done = NO;
+    [d checkFriendsWithCompletion:^(NSArray *res) { r = res; done = YES; }];
+    int w = 0;
+    while (!done && w < 120) { [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:1.0]]; w++; }
+    return r;
+}
+
+static void saveResults(NSArray *results) {
+    if (!results) return;
+    NSMutableArray *deleted = [NSMutableArray array];
+    int valid = 0;
+    for (id r in results) {
+        BOOL isDel = NO, isInv = NO; id contact = nil;
+        @try { isDel = [[r valueForKey:@"isDeleted"] boolValue]; } @catch (...) {}
+        @try { isInv = [[r valueForKey:@"isInvalid"] boolValue]; } @catch (...) {}
+        @try { contact = [r valueForKey:@"contact"]; } @catch (...) {}
+        if (isDel || isInv) {
+            NSString *wx = @"", *nk = @"";
+            if (contact) { @try { wx = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
+                          @try { nk = [contact performSelector:@selector(m_nsNickName)] ?: wx; } @catch (...) {} }
+            [deleted addObject:@{@"wxID": wx, @"nick": nk, @"status": isInv ? @"invalid" : @"deleted"}];
+        } else { valid++; }
+    }
+    fdLog([NSString stringWithFormat:@"[Save] %lu deleted, %d valid", (unsigned long)deleted.count, valid]);
+    NSDictionary *data = @{@"timestamp": @([[NSDate date] timeIntervalSince1970]), @"total": @(valid + (int)deleted.count), @"deleted": [deleted copy]};
+    [[NSUserDefaults standardUserDefaults] setObject:data forKey:@"com.mio.wechat.plugin.FriendDetection.results"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
+static BOOL startFriendDetection(void) {
+    fdLog(@"=== Friend Detection Start ===");
+    NSArray *results = runNativeDetection();
+    if (!results) {
+        fdLog(@"[Main] Native failed, trying local detection...");
+        results = runLocalDetection();
+    }
+    if (!results || results.count == 0) { fdLog(@"[Main] All detection methods failed"); return NO; }
+    saveResults(results);
+    return YES;
+}#pragma mark - ViewController
 
 @interface WPFriendDetectionVCHelper : NSObject
 + (UIViewController *)makeVC;
