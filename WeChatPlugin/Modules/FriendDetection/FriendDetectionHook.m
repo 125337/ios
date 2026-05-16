@@ -135,36 +135,90 @@ static void fdLog(NSString *content) {
         NSMutableArray *results = [NSMutableArray array];
         Class cContactCls = objc_getClass("CContact");
 
-        for (NSString *wxID in wxIDs) {
-            @autoreleasepool {
-                // 通过 CContactMgr 获取联系人最新信息
-                id contactMgr = nil;
-                Class mmSvc = objc_getClass("MMServiceCenter");
-                if (mmSvc) {
-                    id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
-                    if (center) {
-                        contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), objc_getClass("CContactMgr"));
-                    }
+        // 先尝试调用原生 WeChat 的 FriendDetector/WeChatFriendDetector
+        __block BOOL didNativeCheck = NO;
+        for (NSString *nativeCls in @[@"FriendDetector", @"WeChatFriendDetector"]) {
+            Class wcDetector = objc_getClass([nativeCls UTF8String]);
+            if (!wcDetector) continue;
+            SEL wcSel = NSSelectorFromString(@"checkSpecificFriends:completion:");
+            if (![wcDetector respondsToSelector:wcSel]) {
+                wcSel = NSSelectorFromString(@"checkFriendsWithCompletion:");
+                if (![wcDetector respondsToSelector:wcSel]) {
+                    wcSel = NSSelectorFromString(@"checkSpecificFriends:");
+                    if (![wcDetector respondsToSelector:wcSel]) continue;
                 }
-
-                id contact = nil;
-                if (contactMgr) {
-                    SEL getSel = sel_registerName("getContactByName:");
-                    if ([contactMgr respondsToSelector:getSel]) {
-                        contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, getSel, wxID);
-                    }
-                }
-
-                if (!contact || ![contact isKindOfClass:cContactCls]) {
-                    // 获取不到联系人信息 → 可能被删
-                    MioFriendDetectResult *r = [MioFriendDetectResult infoWithContact:nil isDeleted:YES isInvalid:NO];
-                    [results addObject:r];
-                    continue;
-                }
-
-                MioFriendDetectResult *r = [self checkOneFriend:contact];
-                [results addObject:r];
             }
+            fdLog([NSString stringWithFormat:@"[NATIVE] Found %@ with check method, trying...", nativeCls]);
+            @try {
+                __block NSArray *nativeResults = nil;
+                __block BOOL nativeDone = NO;
+                void (^nativeBlock)(id) = ^(id r) {
+                    if ([r isKindOfClass:[NSArray class]]) nativeResults = r;
+                    nativeDone = YES;
+                };
+                if ([wcDetector respondsToSelector:NSSelectorFromString(@"checkSpecificFriends:completion:")]) {
+                    ((void (*)(id, SEL, NSArray *, id))objc_msgSend)(wcDetector, NSSelectorFromString(@"checkSpecificFriends:completion:"), wxIDs, nativeBlock);
+                } else if ([wcDetector respondsToSelector:NSSelectorFromString(@"checkFriendsWithCompletion:")]) {
+                    ((void (*)(id, SEL, id))objc_msgSend)(wcDetector, NSSelectorFromString(@"checkFriendsWithCompletion:"), nativeBlock);
+                } else {
+                    ((void (*)(id, SEL, NSArray *))objc_msgSend)(wcDetector, NSSelectorFromString(@"checkSpecificFriends:"), wxIDs);
+                    nativeDone = YES;
+                }
+                int wait = 0;
+                while (!nativeDone && wait < 90) { [NSThread sleepForTimeInterval:1.0]; wait++; }
+                if (nativeResults && nativeResults.count > 0) {
+                    fdLog([NSString stringWithFormat:@"[NATIVE] Got %lu results from %@", (unsigned long)nativeResults.count, nativeCls]);
+                    if (completion) completion(nativeResults);
+                    didNativeCheck = YES;
+                    return;
+                }
+            } @catch (NSException *e) {
+                fdLog([NSString stringWithFormat:@"[NATIVE] Exception: %@", e]);
+            }
+        }
+
+        // 原生检测不可用，使用本地属性检测
+        if (!didNativeCheck) {
+            fdLog(@"[NATIVE] No native FriendDetector available, using local CContact property check");
+            id contactMgr = nil;
+            Class mmSvc = objc_getClass("MMServiceCenter");
+            if (mmSvc) {
+                id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
+                if (center) {
+                    contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), objc_getClass("CContactMgr"));
+                }
+            }
+
+            for (NSString *wxID in wxIDs) {
+                @autoreleasepool {
+                    id contact = nil;
+                    // 先尝试 getContactInfo:（服务端获取）
+                    if (contactMgr) {
+                        SEL infoSel = sel_registerName("getContactInfo:");
+                        if ([contactMgr respondsToSelector:infoSel]) {
+                            contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, infoSel, wxID);
+                        }
+                    }
+                    // 回退到 getContactByName:
+                    if (!contact || ![contact isKindOfClass:cContactCls]) {
+                        SEL getSel = sel_registerName("getContactByName:");
+                        if (contactMgr && [contactMgr respondsToSelector:getSel]) {
+                            contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, getSel, wxID);
+                        }
+                    }
+
+                    if (!contact || ![contact isKindOfClass:cContactCls]) {
+                        MioFriendDetectResult *r = [MioFriendDetectResult infoWithContact:nil isDeleted:YES isInvalid:NO];
+                        [results addObject:r];
+                        continue;
+                    }
+
+                    MioFriendDetectResult *r = [self checkOneFriend:contact];
+                    [results addObject:r];
+                }
+            }
+
+            if (completion) completion([results copy]);
         }
 
         if (completion) completion([results copy]);
