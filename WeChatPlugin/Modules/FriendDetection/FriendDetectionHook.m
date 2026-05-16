@@ -212,7 +212,7 @@ static void fdLog(NSString *content) {
 
 static NSArray *runNativeDetection(void) {
     fdLog(@"[Native] === Native detection start ===");
-    fdLog(@"[Native] Current thread: main=%d", [NSThread isMainThread] ? 1 : 0);
+    fdLog([NSString stringWithFormat:@"[Native] Current thread: main=%d", [NSThread isMainThread] ? 1 : 0]);
     
     for (NSString *cls in @[@"FriendDetector", @"WeChatFriendDetector"]) {
         const char *cname = [cls UTF8String];
@@ -354,7 +354,7 @@ static BOOL startFriendDetection(void) {
     fdLog(@"[Main] ****************************************");
     fdLog(@"[Main] * Friend Detection Start");
     fdLog(@"[Main] ****************************************");
-    fdLog(@"[Main] Thread: main=%d", [NSThread isMainThread] ? 1 : 0);
+    fdLog([NSString stringWithFormat:@"[Main] Thread: main=%d", [NSThread isMainThread] ? 1 : 0]);
 
     // Phase 1: Try native (WE plugin)
     NSArray *results = runNativeDetection();
@@ -377,7 +377,9 @@ static BOOL startFriendDetection(void) {
     saveResults(results);
     fdLog(@"[Main] Friend Detection Complete - SUCCESS");
     return YES;
-}#pragma mark - ViewController
+}
+
+#pragma mark - ViewController
 
 @interface WPFriendDetectionVCHelper : NSObject
 + (UIViewController *)makeVC;
