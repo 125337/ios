@@ -361,7 +361,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             if (isSender) {
                 labelFrame.origin.x = cvRight - w * 0.5;
             } else {
-                labelFrame.origin.x = cvLeft + w * 0.5;
+                labelFrame.origin.x = cvRight - w * 0.5;
             }
             labelFrame.origin.y = cvBottom + h * 0.5;
             break;
@@ -369,7 +369,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             if (isSender) {
                 labelFrame.origin.x = cvLeft + w * 0.5;
             } else {
-                labelFrame.origin.x = cvRight - w * 0.5;
+                labelFrame.origin.x = cvLeft + w * 0.5;
             }
             labelFrame.origin.y = cvBottom + h * 0.5;
             break;
@@ -377,7 +377,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             if (isSender) {
                 labelFrame.origin.x = cvRight - w * 0.5;
             } else {
-                labelFrame.origin.x = cvLeft + w * 0.5;
+                labelFrame.origin.x = cvRight - w * 0.5;
             }
             labelFrame.origin.y = cvTop - h * 0.5;
             break;
@@ -385,24 +385,24 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             if (isSender) {
                 labelFrame.origin.x = cvLeft + w * 0.5;
             } else {
-                labelFrame.origin.x = cvRight - w * 0.5;
+                labelFrame.origin.x = cvLeft + w * 0.5;
             }
             labelFrame.origin.y = cvTop - h * 0.5;
             break;
         case 7:
             if (isSender) {
-                labelFrame.origin.x = cvRight + w * 0.5;
-            } else {
                 labelFrame.origin.x = cvLeft - w * 0.5;
+            } else {
+                labelFrame.origin.x = cvRight + w * 0.5;
             }
             labelFrame.origin.y = cvBottom - h * 0.5;
             break;
         case 2:
         default:
             if (isSender) {
-                labelFrame.origin.x = cvRight + w * 0.5;
-            } else {
                 labelFrame.origin.x = cvLeft - w * 0.5;
+            } else {
+                labelFrame.origin.x = cvRight + w * 0.5;
             }
             labelFrame.origin.y = cvBottom - h * 0.5;
             break;
