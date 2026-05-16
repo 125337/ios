@@ -384,100 +384,172 @@ static void scanAllServices(void) {
     else fdLog([NSString stringWithFormat:@"[Scan]   找到 %d 个相关类", related]);
 }
 
-#pragma mark - 策略G: 转账预检测（安全版 - 带方法签名诊断）
+#pragma mark - 策略G: 转账预检测法（主动检测）
 
-static NSArray *tryTransferDetection(NSArray *wxIDs) {
-    fdLog(@"[T] === 转账预检测开始 ===");
+/**
+ * 微信助手使用的主动检测方案:
+ *   调用 WCPayLogicMgr.GetTransferPrepayRequest: 发起转账预检
+ *   服务端验证好友关系后返回结果
+ *   - 好友正常 → 可以转账
+ *   - 被删除/拉黑 → 返回错误
+ *
+ * 转账预检只查询是否可以转账，不实际扣钱，不通知对方。
+ *
+ * WeChat 方法:
+ *   [WCPayLogicMgr GetTransferPrepayRequest:]  
+ *   [WCPayTransferMoneyControlLogic OnGetTransferPrepayRequest:Error:]
+ */
 
-    // 获取 WCPayLogicMgr
-    Class mmSvc = objc_getClass("MMServiceCenter");
-    if (!mmSvc) return nil;
-    id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
-    if (!center) return nil;
+// 转账预检结果缓存
+static NSMutableDictionary *g_transferResults = nil;
 
-    Class payCls = objc_getClass("WCPayLogicMgr");
-    if (!payCls) { fdLog(@"[T] WCPayLogicMgr 不存在"); return nil; }
-    id payMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), payCls);
-    if (!payMgr) { fdLog(@"[T] WCPayLogicMgr service 不存在"); return nil; }
+// Hook 转账预检响应
+static void (*orig_OnGetTransferPrepayRequest)(id, SEL, id, id) = NULL;
 
-    SEL sel = sel_registerName("GetTransferPrepayRequest:");
-    if (![payMgr respondsToSelector:sel]) { fdLog(@"[T] 方法不存在"); return nil; }
+static void hooked_OnGetTransferPrepayRequest(id self, SEL _cmd, id response, id error) {
+    fdLog(@"[Transfer] === 收到转账预检响应 ===");
+    @try {
+        id errorCode = [error valueForKey:@"code"];
+        fdLog([NSString stringWithFormat:@"[Transfer] error=%@ errorCode=%@", error, errorCode]);
 
-    // 关键: 获取方法签名确认参数类型!
-    NSMethodSignature *sig = [payMgr methodSignatureForSelector:sel];
-    if (!sig) { fdLog(@"[T] 无法获取方法签名"); return nil; }
-
-    // 记录方法签名
-    fdLog([NSString stringWithFormat:@"[T] 方法签名: return=%s args=%lu",
-           sig.methodReturnType, (unsigned long)sig.numberOfArguments]);
-    for (NSUInteger i = 0; i < sig.numberOfArguments; i++) {
-        const char *argType = [sig getArgumentTypeAtIndex:i];
-        fdLog([NSString stringWithFormat:@"[T]   参数[%lu]: %s", (unsigned long)i, argType]);
+        // 从 contact 查找对应的 wxID
+        // 错误码分析:
+        //   nil/0 = 转账正常 → 好友
+        //   其他错误码 = 非好友关系
+        if (error && errorCode) {
+            int code = [errorCode intValue];
+            fdLog([NSString stringWithFormat:@"[Transfer] *** 错误码 %d - 可能被删除! ***", code]);
+        } else {
+            fdLog(@"[Transfer] 无错误 - 好友关系正常");
+        }
+    } @catch (NSException *e) {
+        fdLog([NSString stringWithFormat:@"[Transfer] 异常: %@", e.reason]);
     }
 
-    // 创建转账预检响应 Hook
-    static dispatch_once_t hookOnce;
-    dispatch_once(&hookOnce, ^{
-        Class respCls = objc_getClass("WCPayTransferMoneyControlLogic");
-        if (respCls) {
-            SEL respSel = sel_registerName("OnGetTransferPrepayRequest:Error:");
-            Method method = class_getInstanceMethod(respCls, respSel);
-            if (method) {
-                IMP origIMP = method_getImplementation(method);
-                const char *type = method_getTypeEncoding(method);
-                fdLog([NSString stringWithFormat:@"[T] OnGetTransferPrepayRequest:Error: type=%s", type]);
+    if (orig_OnGetTransferPrepayRequest)
+        orig_OnGetTransferPrepayRequest(self, _cmd, response, error);
+}
+
+/**
+ * 转账预检测: 逐个好友发起转账预检请求
+ * 不实际扣钱，不通知对方
+ */
+static NSArray *tryTransferDetection(NSArray *wxIDs) {
+    fdLog(@"[Transfer] === 转账预检测开始 ===");
+
+    // 获取 WCPayLogicMgr
+    Class mmSvcCls = objc_getClass("MMServiceCenter");
+    if (!mmSvcCls) { fdLog(@"[Transfer] MMServiceCenter 不存在"); return nil; }
+    id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvcCls, sel_registerName("defaultCenter"));
+    if (!center) { fdLog(@"[Transfer] defaultCenter nil"); return nil; }
+
+    // 检查 WCPayLogicMgr
+    Class payMgrCls = objc_getClass("WCPayLogicMgr");
+    if (!payMgrCls) {
+        fdLog(@"[Transfer] WCPayLogicMgr 不存在");
+        // 也尝试其他可能的类名
+        payMgrCls = objc_getClass("WCPayPayMgr");
+        if (payMgrCls) fdLog(@"[Transfer] 使用 WCPayPayMgr");
+    }
+    if (!payMgrCls) { fdLog(@"[Transfer] 未能找到支付管理类"); return nil; }
+
+    id payMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), payMgrCls);
+    if (!payMgr) {
+        fdLog(@"[Transfer] WCPayLogicMgr service nil, 尝试直接创建实例");
+        @try { payMgr = [[payMgrCls alloc] init]; } @catch (...) {}
+    }
+    if (!payMgr) { fdLog(@"[Transfer] 无法获取 WCPayLogicMgr"); return nil; }
+
+    // 检查 GetTransferPrepayRequest: 方法
+    SEL prepaySel = sel_registerName("GetTransferPrepayRequest:");
+    BOOL hasPrepay = [payMgr respondsToSelector:prepaySel];
+    if (!hasPrepay) {
+        // 也检查 WCPayTransferMoneyControlLogic
+        Class transferLogicCls = objc_getClass("WCPayTransferMoneyControlLogic");
+        if (transferLogicCls) {
+            id transferLogic = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), transferLogicCls);
+            if (!transferLogic) @try { transferLogic = [[transferLogicCls alloc] init]; } @catch (...) {}
+            if (transferLogic && [transferLogic respondsToSelector:prepaySel]) {
+                payMgr = transferLogic;
+                hasPrepay = YES;
+                fdLog(@"[Transfer] 使用 WCPayTransferMoneyControlLogic");
             }
         }
-    });
+    }
+    fdLog([NSString stringWithFormat:@"[Transfer] GetTransferPrepayRequest: available=%d", hasPrepay]);
 
-    // hook 成功后再逐个调用
-    Class cmCls = objc_getClass("CContactMgr");
-    id cm = cmCls ? ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), cmCls) : nil;
+    if (!hasPrepay) {
+        fdLog(@"[Transfer] GetTransferPrepayRequest: 方法不可用");
+        return nil;
+    }
+
+    // 获取联系人管理器和好友列表
+    Class contactMgrCls = objc_getClass("CContactMgr");
+    id contactMgr = nil;
+    if (contactMgrCls)
+        contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), contactMgrCls);
 
     NSMutableArray *results = [NSMutableArray array];
-    int total = (int)MIN(wxIDs.count, 5); // 先只测5个
-    int delCount = 0;
+    int total = (int)wxIDs.count, delCount = 0;
 
+    // 逐个好友发起转账预检
     for (int i = 0; i < total; i++) {
         @autoreleasepool {
             NSString *wxID = wxIDs[i];
+
+            // 获取好友的 CContact 对象
             id contact = nil;
-            if (cm) @try { contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(cm, sel_registerName("getContactByName:"), wxID); } @catch (...) {}
+            if (contactMgr) {
+                @try {
+                    contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactByName:"), wxID);
+                } @catch (...) {}
+            }
 
             if (!contact) {
+                // 无法获取联系人信息 → 可能已删除
                 [results addObject:[MioFriendDetectResult infoWithContact:nil isDeleted:YES isInvalid:NO]];
                 delCount++;
                 continue;
             }
 
-            fdLog([NSString stringWithFormat:@"[T] 准备检测 %@...", wxID]);
+            // 发起转账预检
+            __block BOOL done = NO;
+            __block BOOL isDeleted = NO;
 
-            // 使用 NSInvocation 安全调用（自动适配参数类型）
-            NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
-            inv.target = payMgr;
-            inv.selector = sel;
-
-            // 根据实际签名设置参数
-            if (sig.numberOfArguments > 2) {
-                const char *argType = [sig getArgumentTypeAtIndex:2];
-                if (argType[0] == '@') {
-                    [inv setArgument:&contact atIndex:2];
-                } else if (argType[0] == ':') {
-                    // selector type
+            // Hook 响应处理（如未安装）
+            static dispatch_once_t hookOnce;
+            dispatch_once(&hookOnce, ^{
+                Class transferLogicCls = objc_getClass("WCPayTransferMoneyControlLogic");
+                if (!transferLogicCls) transferLogicCls = objc_getClass("WCPayLogicMgr");
+                if (transferLogicCls) {
+                    SEL respSel = sel_registerName("OnGetTransferPrepayRequest:Error:");
+                    Method method = class_getInstanceMethod(transferLogicCls, respSel);
+                    if (method) {
+                        orig_OnGetTransferPrepayRequest = (void (*)(id, SEL, id, id))method_getImplementation(method);
+                        method_setImplementation(method, (IMP)hooked_OnGetTransferPrepayRequest);
+                        fdLog(@"[Transfer] Hook OnGetTransferPrepayRequest:Error: 成功");
+                    }
                 }
-            }
+            });
 
             @try {
-                [inv invoke];
-                fdLog([NSString stringWithFormat:@"[T] 检测完成: %@", wxID]);
-                [results addObject:[MioFriendDetectResult infoWithContact:contact isDeleted:NO isInvalid:NO]];
+                // 调用转账预检
+                ((void (*)(id, SEL, id))objc_msgSend)(payMgr, prepaySel, contact);
+                fdLog([NSString stringWithFormat:@"[Transfer] 已对 %@ 发起转账预检", wxID]);
             } @catch (NSException *e) {
-                fdLog([NSString stringWithFormat:@"[T] 异常(%@): %@", wxID, e.reason]);
+                fdLog([NSString stringWithFormat:@"[Transfer] 转账预检异常(%@): %@", wxID, e.reason]);
                 [results addObject:[MioFriendDetectResult infoWithContact:contact isDeleted:NO isInvalid:YES]];
             }
+
+            // 等待一小段时间
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+
+            if ((i + 1) % 100 == 0)
+                fdLog([NSString stringWithFormat:@"[Transfer] 进度: %d/%d", i+1, total]);
         }
     }
 
+    fdLog([NSString stringWithFormat:@"[Transfer] 完成: 发起 %d 个转账预检", total]);
     return results;
 }
 
@@ -678,13 +750,17 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
     }
     if (!mmServiceCenter) { fdLog(@"[Main] MMServiceCenter 不可用"); return nil; }
 
-    // 第三步: 转账预检测 - 带方法签名诊断
-    fdLog(@"[Main] === 尝试转账预检测(诊断模式) ===");
-    tryTransferDetection(wxIDs);
+    // 第三步: 转账预检测（主动检测，与微信助手方案一致）
+    fdLog(@"[Main] === 尝试转账预检测 ===");
+    NSArray *transferResults = tryTransferDetection(wxIDs);
+    if (transferResults && transferResults.count > 0) {
+        fdLog([NSString stringWithFormat:@"[Main] 转账预检测完成: %lu 结果", (unsigned long)transferResults.count]);
+        return transferResults;
+    }
 
-    // 第四步: 本地检测
+    // 第四步: 回退到本地检测
     NSMutableArray *results = [NSMutableArray array];
-    fdLog(@"[Main] === 转账预检完成诊断，回退到 CContactMgr 本地检测 ===");
+    fdLog(@"[Main] === 转账预检不可用，回退到 CContactMgr 本地检测 ===");
     Class cContactCls = objc_getClass("CContact");
     id contactMgr = nil;
     if (mmServiceCenter) {
