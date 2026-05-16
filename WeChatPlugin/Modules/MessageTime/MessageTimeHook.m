@@ -359,9 +359,9 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             break;
         case 3:
             if (isSender) {
-                labelFrame.origin.x = cvRight - w * 0.5 - 13;
+                labelFrame.origin.x = cvRight - w * 0.5 - 11;
             } else {
-                labelFrame.origin.x = cvLeft + w * 0.5 - 12;
+                labelFrame.origin.x = cvLeft + w * 0.5 - 13;
             }
             labelFrame.origin.y = cvBottom + h * 0.5;
             break;
