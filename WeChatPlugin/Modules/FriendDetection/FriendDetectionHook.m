@@ -261,7 +261,7 @@ static void scanAllServices(void) {
         @"Protocol", @"protocol",
         nil];
 
-    // 要扫描的服务类名列表
+    // 要扫描的服务类名列表（扩展了网络/CGI 相关）
     NSArray *serviceNames = @[
         @"CNetworkMgr",
         @"CRequestMgr",
@@ -293,6 +293,24 @@ static void scanAllServices(void) {
         @"ContactBlockMgr",
         @"ContactChatRoomMgr",
         @"ContactEnterpriseMgr",
+        @"CNewNetworkMgr",
+        @"CUploadMgr",
+        @"CDownloadMgr",
+        @"CNetworkDispatcher",
+        @"CProtobufMgr",
+        @"CBizMgr",
+        @"CFriendMgr",
+        @"CContactSyncMgr",
+        @"CContactLoginMgr",
+        @"CContactStatusMgr",
+        // WeChat 新的网络层命名模式
+        @"MMNetworkKit",
+        @"MMNetworkManager",
+        @"MMTNetCenter",
+        @"MMCGIWrapMgr",
+        @"MMCGIRequest",
+        @"MMCGIProxy",
+        @"WCContactVerifyMgr",
     ];
 
     int totalServices = 0, totalMethods = 0;
@@ -380,15 +398,14 @@ static void findAndCallAgreeDutyService(id mmServiceCenter, NSArray *wxIDs, NSMu
     //   1. CNetworkMgr.sendRequest:xxx（通用请求发送）
     //   2. CContactMgr 的某个特定方法
     //   3. 一个专门的 ContactAgreeDutyMgr 类
+    //   4. 已发现的 CGI 模式: WCPayGetPayUserDutyCgi → 类似会有 GetContactAgreeDutyCgi
 
-    // 先尝试几个已知的可能方法签名
+    // 候选: 已知的服务类 + 可能的方法名
     NSArray *candidates = @[
-        @{@"class": @"CNetworkMgr",
+        @{@"class": @"CNewNetworkMgr",
           @"methods": @[
-              @"checkAgreeDutyForContact:",
-              @"queryAgreeDuty:",
-              @"agreeDutyForUser:",
-              @"checkContactRelation:"
+              @"checkContactRelation:",
+              @"queryRelation:",
           ]},
         @{@"class": @"CContactMgr",
           @"methods": @[
@@ -398,6 +415,11 @@ static void findAndCallAgreeDutyService(id mmServiceCenter, NSArray *wxIDs, NSMu
               @"queryRelation:completion:",
               @"checkContactDeleted:",
               @"checkFriendRelation:",
+          ]},
+        @{@"class": @"CContactMgr",
+          @"methods": @[
+              @"getContactsFromServer:",
+              @"getContactsFromServer:chatContact:",
           ]},
     ];
 
@@ -437,9 +459,49 @@ static void findAndCallAgreeDutyService(id mmServiceCenter, NSArray *wxIDs, NSMu
     }
 }
 
+#pragma mark - 策略F: CGI 类绑定
+
 /**
- * 策略D: Hook 网络请求层 - 拦截 agreeDuty 请求/响应
+ * WeChat 使用 CGI 模式处理网络请求（Request → CGI类 → 服务端 → Response）
+ * 例如: WCPayGetPayUserDutyCgi / GetPayUserDutyReq / GetPayUserDutyResp
  *
+ * 如果有 "GetContactAgreeDutyCgi" 或类似类，我们可以直接调用它。
+ * 这里扫描所有含 "Cgi" 或 "CGI" 的类，并尝试找到联系相关 CGI。
+ */
+static void scanCGIClasses(void) {
+    int numClasses = objc_getClassList(NULL, 0);
+    Class *classes = (Class *)malloc(sizeof(Class) * numClasses);
+    numClasses = objc_getClassList(classes, numClasses);
+
+    fdLog(@"[CGI] === 扫描所有 CGI 类 ===");
+    int cgiCount = 0;
+    for (int i = 0; i < numClasses; i++) {
+        NSString *cn = NSStringFromClass(classes[i]);
+        // 找包含 Cgi/CGI 且与联系/好友相关的类
+        if ([cn rangeOfString:@"Cgi" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+            [cn rangeOfString:@"CGI" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+            // 过滤: 只关注与联系/好友相关的
+            if ([cn rangeOfString:@"Contact" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                [cn rangeOfString:@"Friend" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                [cn rangeOfString:@"Relation" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                fdLog([NSString stringWithFormat:@"[CGI]   %@", cn]);
+                cgiCount++;
+            }
+            // 也关注含 Duty/agree 的 CGI
+            if ([cn rangeOfString:@"Duty" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                fdLog([NSString stringWithFormat:@"[CGI]   %@ (Duty related)", cn]);
+                cgiCount++;
+            }
+        }
+    }
+    free(classes);
+    if (cgiCount == 0) fdLog(@"[CGI]   没有找到相关的 CGI 类");
+    else fdLog([NSString stringWithFormat:@"[CGI]   找到 %d 个相关 CGI 类", cgiCount]);
+}
+
+#pragma mark - 策略D: Hook 网络请求层 - 拦截 agreeDuty 请求/响应
+
+/**
  * WeChat 网络请求通常通过以下路径:
  *   MMServiceCenter → CNetworkMgr → sendRequest: → 服务端 → 响应回调
  *
@@ -581,6 +643,7 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         scanAllServices();
+        scanCGIClasses();
         installNetworkHook();
         installContactSyncHook();
     });
@@ -603,7 +666,7 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
         return results;
     }
 
-    // 第四步: 如果没有找到 agreeDuty 服务，尝试用 CContactMgr 的 getContactInfo 批量触发服务端同步
+    // 第四步: 如果没有找到 agreeDuty 服务，尝试用 CContactMgr 批量触发服务端同步
     fdLog(@"[Main] === agreeDuty 绑定未找到，尝试 CContactMgr 服务端同步 ===");
     Class cContactCls = objc_getClass("CContact");
     id contactMgr = nil;
@@ -612,41 +675,60 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
     }
 
     if (contactMgr) {
-        // 检查 CContactMgr 是否有 sync 相关方法
+        // 检查 CContactMgr 可用方法
         BOOL hasSync = [contactMgr respondsToSelector:sel_registerName("syncContact:")];
         BOOL hasForce = [contactMgr respondsToSelector:sel_registerName("forceSyncContact:")];
         BOOL hasGetInfo = [contactMgr respondsToSelector:sel_registerName("getContactInfo:")];
         BOOL hasGetByName = [contactMgr respondsToSelector:sel_registerName("getContactByName:")];
-        fdLog([NSString stringWithFormat:@"[Main] CContactMgr: sync=%d forceSync=%d getContactInfo=%d getContactByName=%d",
-               hasSync, hasForce, hasGetInfo, hasGetByName]);
+        BOOL hasGetFromSvr = [contactMgr respondsToSelector:sel_registerName("getContactsFromServer:")];
+        BOOL hasGetFromSvrChat = [contactMgr respondsToSelector:sel_registerName("getContactsFromServer:chatContact:")];
+        fdLog([NSString stringWithFormat:@"[Main] CContactMgr: sync=%d forceSync=%d getContactInfo=%d getContactByName=%d getFromSvr=%d getFromSvrChat=%d",
+               hasSync, hasForce, hasGetInfo, hasGetByName, hasGetFromSvr, hasGetFromSvrChat]);
 
-        // 逐个尝试服务端获取
+        // 如果有 getContactsFromServer:，先批量触发一次服务端同步
+        if (hasGetFromSvr) {
+            fdLog(@"[Main] 尝试 getContactsFromServer: 触发服务端同步...");
+            @try {
+                BOOL svrResult = ((BOOL (*)(id, SEL, id))objc_msgSend)(contactMgr, sel_registerName("getContactsFromServer:"), wxIDs);
+                fdLog([NSString stringWithFormat:@"[Main] getContactsFromServer: 返回 %d", svrResult]);
+            } @catch (NSException *e) {
+                fdLog([NSString stringWithFormat:@"[Main] getContactsFromServer: 异常: %@", e.reason]);
+            }
+        }
+
+        // 逐个检测: getContactByName: 获取最新数据
+        // 注意: getContactInfo: 在此 WeChat 版本不存在
+        // 所以改为用 getContactByName: 获取，并检查属性
         int total = (int)wxIDs.count, delCount = 0;
         for (int i = 0; i < total; i++) {
             @autoreleasepool {
                 NSString *wxID = wxIDs[i];
                 id contact = nil;
 
-                // 优先 getContactInfo:（可能触发服务端获取）
-                if (hasGetInfo) {
+                // getContactByName: 获取本地/缓存数据
+                if (hasGetByName) {
                     @try {
-                        contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactInfo:"), wxID);
-                        if (contact) {
-                            fdLog([NSString stringWithFormat:@"[Main] getContactInfo(%@) 返回了 contact: %@", wxID, NSStringFromClass([contact class])]);
-                        }
+                        contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactByName:"), wxID);
                     } @catch (NSException *e) {
-                        fdLog([NSString stringWithFormat:@"[Main] getContactInfo 异常(%@): %@", wxID, e.reason]);
+                        fdLog([NSString stringWithFormat:@"[Main] getContactByName 异常(%@): %@", wxID, e.reason]);
                     }
                 }
 
-                // 如果 getContactInfo 返回了 CContact，说明服务端还有这个好友
+                // 如果 getContactByName 返回 nil → 本地无记录（可能被删）
                 BOOL isDeleted = !(contact && [contact isKindOfClass:cContactCls]);
 
                 // 即使 contact 存在，也检查属性
                 if (!isDeleted) {
                     unsigned int vf = 0;
                     @try { vf = [[contact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
-                    isDeleted = (vf > 0);
+                    if (vf > 0) {
+                        isDeleted = YES;
+                    } else {
+                        // 再检查 m_uiStatus 或 m_uiFriendAttr
+                        unsigned int status = 0;
+                        @try { status = [[contact valueForKey:@"m_uiStatus"] unsignedIntValue]; } @catch (...) {}
+                        if (status > 0) isDeleted = YES;
+                    }
                 }
 
                 MioFriendDetectResult *res = [MioFriendDetectResult infoWithContact:contact isDeleted:isDeleted isInvalid:NO];
