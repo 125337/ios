@@ -135,51 +135,7 @@ static void fdLog(NSString *content) {
         NSMutableArray *results = [NSMutableArray array];
         Class cContactCls = objc_getClass("CContact");
 
-        // 先尝试调用原生 WeChat 的 FriendDetector/WeChatFriendDetector
-        __block BOOL didNativeCheck = NO;
-        for (NSString *nativeCls in @[@"FriendDetector", @"WeChatFriendDetector"]) {
-            Class wcDetector = objc_getClass([nativeCls UTF8String]);
-            if (!wcDetector) continue;
-            SEL wcSel = NSSelectorFromString(@"checkSpecificFriends:completion:");
-            if (![wcDetector respondsToSelector:wcSel]) {
-                wcSel = NSSelectorFromString(@"checkFriendsWithCompletion:");
-                if (![wcDetector respondsToSelector:wcSel]) {
-                    wcSel = NSSelectorFromString(@"checkSpecificFriends:");
-                    if (![wcDetector respondsToSelector:wcSel]) continue;
-                }
-            }
-            fdLog([NSString stringWithFormat:@"[NATIVE] Found %@ with check method, trying...", nativeCls]);
-            @try {
-                __block NSArray *nativeResults = nil;
-                __block BOOL nativeDone = NO;
-                void (^nativeBlock)(id) = ^(id r) {
-                    if ([r isKindOfClass:[NSArray class]]) nativeResults = r;
-                    nativeDone = YES;
-                };
-                if ([wcDetector respondsToSelector:NSSelectorFromString(@"checkSpecificFriends:completion:")]) {
-                    ((void (*)(id, SEL, NSArray *, id))objc_msgSend)(wcDetector, NSSelectorFromString(@"checkSpecificFriends:completion:"), wxIDs, nativeBlock);
-                } else if ([wcDetector respondsToSelector:NSSelectorFromString(@"checkFriendsWithCompletion:")]) {
-                    ((void (*)(id, SEL, id))objc_msgSend)(wcDetector, NSSelectorFromString(@"checkFriendsWithCompletion:"), nativeBlock);
-                } else {
-                    ((void (*)(id, SEL, NSArray *))objc_msgSend)(wcDetector, NSSelectorFromString(@"checkSpecificFriends:"), wxIDs);
-                    nativeDone = YES;
-                }
-                int wait = 0;
-                while (!nativeDone && wait < 90) { [NSThread sleepForTimeInterval:1.0]; wait++; }
-                if (nativeResults && nativeResults.count > 0) {
-                    fdLog([NSString stringWithFormat:@"[NATIVE] Got %lu results from %@", (unsigned long)nativeResults.count, nativeCls]);
-                    if (completion) completion(nativeResults);
-                    didNativeCheck = YES;
-                    return;
-                }
-            } @catch (NSException *e) {
-                fdLog([NSString stringWithFormat:@"[NATIVE] Exception: %@", e]);
-            }
-        }
-
-        // 原生检测不可用，使用本地属性检测
-        if (!didNativeCheck) {
-            fdLog(@"[NATIVE] No native FriendDetector available, using local CContact property check");
+                // 使用本地 CContact 属性检测
             id contactMgr = nil;
             Class mmSvc = objc_getClass("MMServiceCenter");
             if (mmSvc) {
