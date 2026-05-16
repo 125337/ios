@@ -22,18 +22,18 @@ static void fdLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-#pragma mark - FriendDetectResult (一对一复刻微信优化)
+#pragma mark - MioFriendDetectResult (一对一复刻微信优化)
 
-@interface FriendDetectResult : NSObject
+@interface MioFriendDetectResult : NSObject
 @property (nonatomic, strong) id contact;
 @property (nonatomic, assign) BOOL isDeleted;
 @property (nonatomic, assign) BOOL isInvalid;
 + (instancetype)infoWithContact:(id)contact isDeleted:(BOOL)isDeleted isInvalid:(BOOL)isInvalid;
 @end
 
-@implementation FriendDetectResult
+@implementation MioFriendDetectResult
 + (instancetype)infoWithContact:(id)contact isDeleted:(BOOL)isDeleted isInvalid:(BOOL)isInvalid {
-    FriendDetectResult *r = [[self alloc] init];
+    MioFriendDetectResult *r = [[self alloc] init];
     r.contact = contact;
     r.isDeleted = isDeleted;
     r.isInvalid = isInvalid;
@@ -41,9 +41,9 @@ static void fdLog(NSString *content) {
 }
 @end
 
-#pragma mark - FriendDetector (一对一复刻微信优化)
+#pragma mark - MioFriendDetector (一对一复刻微信优化)
 
-@interface FriendDetector : NSObject
+@interface MioFriendDetector : NSObject
 @property (nonatomic, strong) NSArray *checkedFriendWxIDs;
 @property (nonatomic, assign) BOOL checkFriendsEnd;
 @property (nonatomic, strong) NSObject *friendCheckSem;
@@ -54,31 +54,40 @@ static void fdLog(NSString *content) {
 - (void)checkSpecificFriends:(NSArray *)wxIDs completion:(void(^)(NSArray *results))completion;
 @end
 
-@implementation FriendDetector {
+@implementation MioFriendDetector {
     dispatch_semaphore_t _sem;
 }
 
 // allFriends: 通过 MMServiceCenter → CContactMgr 获取所有好友
 - (NSArray *)allFriends {
+    fdLog(@"[allFriends] Starting...");
     Class mmSvc = objc_getClass("MMServiceCenter");
-    if (!mmSvc) return @[];
+    if (!mmSvc) { fdLog(@"[allFriends] MMServiceCenter not found"); return @[]; }
     id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
-    if (!center) return @[];
+    if (!center) { fdLog(@"[allFriends] defaultCenter nil"); return @[]; }
     Class mgrCls = objc_getClass("CContactMgr");
-    if (!mgrCls) return @[];
+    if (!mgrCls) { fdLog(@"[allFriends] CContactMgr not found"); return @[]; }
     id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), mgrCls);
-    if (!contactMgr) return @[];
+    if (!contactMgr) { fdLog(@"[allFriends] CContactMgr service nil"); return @[]; }
 
     SEL sel = sel_registerName("getContactList:contactType:");
-    if (![contactMgr respondsToSelector:sel]) return @[];
+    if (![contactMgr respondsToSelector:sel]) { fdLog(@"[allFriends] getContactList:contactType: not found"); return @[]; }
 
     NSArray *contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 8);
-    if (!contacts)
+    fdLog([NSString stringWithFormat:@"[allFriends] getContactList:0,8 returned %lu", (unsigned long)contacts.count]);
+    if (!contacts || contacts.count == 0) {
         contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 0);
-    if (!contacts)
+        fdLog([NSString stringWithFormat:@"[allFriends] getContactList:0,0 returned %lu", (unsigned long)contacts.count]);
+    }
+    if (!contacts || contacts.count == 0) {
         contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 1, 0);
+        fdLog([NSString stringWithFormat:@"[allFriends] getContactList:1,0 returned %lu", (unsigned long)contacts.count]);
+    }
+    if (!contacts || contacts.count == 0) {
+        fdLog(@"[allFriends] All contact types returned nil");
+        return @[];
+    }
 
-    // 过滤出好友
     NSMutableArray *friends = [NSMutableArray array];
     for (id contact in contacts) {
         NSString *wxID = @"";
@@ -87,11 +96,12 @@ static void fdLog(NSString *content) {
             [friends addObject:contact];
         }
     }
+    fdLog([NSString stringWithFormat:@"[allFriends] Filtered to %lu real friends", (unsigned long)friends.count]);
     return [friends copy];
 }
 
 // 检测单个好友：用 CContact 属性判断删除状态
-- (FriendDetectResult *)checkOneFriend:(id)contact {
+- (MioFriendDetectResult *)checkOneFriend:(id)contact {
     NSString *wxID = @"";
     @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
     NSString *nick = @"";
@@ -104,7 +114,7 @@ static void fdLog(NSString *content) {
     BOOL isDeleted = (verifyFlag > 0 || nickAbnormal);
     BOOL isInvalid = (verifyFlag > 1);
 
-    return [FriendDetectResult infoWithContact:contact isDeleted:isDeleted isInvalid:isInvalid];
+    return [MioFriendDetectResult infoWithContact:contact isDeleted:isDeleted isInvalid:isInvalid];
 }
 
 // checkSpecificFriends:completion: 检测指定好友
@@ -135,12 +145,12 @@ static void fdLog(NSString *content) {
 
                 if (!contact || ![contact isKindOfClass:cContactCls]) {
                     // 获取不到联系人信息 → 可能被删
-                    FriendDetectResult *r = [FriendDetectResult infoWithContact:nil isDeleted:YES isInvalid:NO];
+                    MioFriendDetectResult *r = [MioFriendDetectResult infoWithContact:nil isDeleted:YES isInvalid:NO];
                     [results addObject:r];
                     continue;
                 }
 
-                FriendDetectResult *r = [self checkOneFriend:contact];
+                MioFriendDetectResult *r = [self checkOneFriend:contact];
                 [results addObject:r];
             }
         }
@@ -175,7 +185,7 @@ static void fdLog(NSString *content) {
 static BOOL startFriendDetection(void) {
     fdLog(@"=== Friend Detection Start ===");
 
-    FriendDetector *detector = [[FriendDetector alloc] init];
+    MioFriendDetector *detector = [[MioFriendDetector alloc] init];
 
     // Step 1: 获取所有好友
     NSArray *friends = [detector allFriends];
@@ -212,7 +222,7 @@ static BOOL startFriendDetection(void) {
 
     // Step 4: 处理结果
     NSMutableArray *deletedFriends = [NSMutableArray array];
-    for (FriendDetectResult *r in detectResults) {
+    for (MioFriendDetectResult *r in detectResults) {
         NSString *wxID = @"";
         NSString *nick = @"";
         if (r.contact) {
