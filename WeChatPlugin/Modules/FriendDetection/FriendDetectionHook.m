@@ -401,6 +401,7 @@ static void findAndCallAgreeDutyService(id mmServiceCenter, NSArray *wxIDs, NSMu
     //   4. 已发现的 CGI 模式: WCPayGetPayUserDutyCgi → 类似会有 GetContactAgreeDutyCgi
 
     // 候选: 已知的服务类 + 可能的方法名
+    // 注意: 只放返回值为 id/NSObject 的方法! BOOL 方法用 BOOL (*)() 调用。
     NSArray *candidates = @[
         @{@"class": @"CNewNetworkMgr",
           @"methods": @[
@@ -415,11 +416,6 @@ static void findAndCallAgreeDutyService(id mmServiceCenter, NSArray *wxIDs, NSMu
               @"queryRelation:completion:",
               @"checkContactDeleted:",
               @"checkFriendRelation:",
-          ]},
-        @{@"class": @"CContactMgr",
-          @"methods": @[
-              @"getContactsFromServer:",
-              @"getContactsFromServer:chatContact:",
           ]},
     ];
 
@@ -444,13 +440,53 @@ static void findAndCallAgreeDutyService(id mmServiceCenter, NSArray *wxIDs, NSMu
             }
             fdLog([NSString stringWithFormat:@"[Bind] *** 找到了! %@.%@ 可用 ***", clsName, methodName]);
 
-            // 尝试调用
-            // 方法签名未知，用 @try 包裹逐个尝试
+            // 使用 NSInvocation 安全调用（自动适配返回值类型）
+            NSMethodSignature *sig = [svc methodSignatureForSelector:sel];
+            if (!sig) {
+                fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 无方法签名", clsName, methodName]);
+                continue;
+            }
+
+            NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+            inv.target = svc;
+            inv.selector = sel;
+
+            // 设置参数: 假设第一个参数是 NSString* (wxID)
+            if (sig.numberOfArguments > 2) {
+                // 第0=self, 第1=_cmd, 第2=第一个参数
+                id firstWxID = wxIDs.firstObject ?: @"";
+                [inv setArgument:&firstWxID atIndex:2];
+            }
+
             @try {
-                id result = ((id (*)(id, SEL, NSString *))objc_msgSend)(svc, sel, wxIDs.firstObject);
-                fdLog([NSString stringWithFormat:@"[Bind]   %@.%@(%@) = %@", clsName, methodName, wxIDs.firstObject, result]);
-                if (result) {
-                    fdLog([NSString stringWithFormat:@"[Bind]   result class: %@", NSStringFromClass([result class])]);
+                [inv invoke];
+                const char *retType = sig.methodReturnType;
+                fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 调用完成, returnType=%s", clsName, methodName, retType]);
+
+                // 根据返回值类型提取结果
+                if (retType[0] == '@') {
+                    id retVal = nil;
+                    [inv getReturnValue:&retVal];
+                    fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ = %@ (class: %@)",
+                           clsName, methodName, retVal, retVal ? NSStringFromClass([retVal class]) : @"nil"]);
+                    if (retVal) {
+                        // 如果返回值是 NSArray，可能是检测结果
+                        if ([retVal isKindOfClass:[NSArray class]]) {
+                            fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 返回 NSArray, count=%lu",
+                                   clsName, methodName, (unsigned long)[retVal count]]);
+                            [results addObjectsFromArray:retVal];
+                        }
+                    }
+                } else if (retType[0] == 'B' || retType[0] == 'c') {
+                    BOOL retVal = NO;
+                    [inv getReturnValue:&retVal];
+                    fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ = %d (BOOL)", clsName, methodName, retVal]);
+                } else if (retType[0] == 'I' || retType[0] == 'i') {
+                    int retVal = 0;
+                    [inv getReturnValue:&retVal];
+                    fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ = %d (int)", clsName, methodName, retVal]);
+                } else {
+                    fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 返回类型 %s, 跳过", clsName, methodName, retType]);
                 }
             } @catch (NSException *e) {
                 fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 调用异常: %@", clsName, methodName, e.reason]);
