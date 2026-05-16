@@ -210,77 +210,115 @@ static void fdLog(NSString *content) {
 
 #pragma mark - 主入口
 
-static NSArray *runNativeDetection(void) {
-    fdLog(@"[Native] === Native detection start ===");
-    fdLog([NSString stringWithFormat:@"[Native] Current thread: main=%d", [NSThread isMainThread] ? 1 : 0]);
+static NSArray *checkWithFriendDetector(void) {
+    // 用 WeChat 原生 FriendDetector（不依赖微信优化插件）
+    Class fdCls = objc_getClass("FriendDetector");
+    if (!fdCls) { fdLog(@"[FD] FriendDetector class not found"); return nil; }
+    fdLog(@"[FD] FriendDetector found, checking selectors...");
     
-    for (NSString *cls in @[@"FriendDetector", @"WeChatFriendDetector"]) {
-        const char *cname = [cls UTF8String];
-        fdLog([NSString stringWithFormat:@"[Native] Looking up class: %s", cname]);
-        
-        Class c = objc_getClass(cname);
-        if (!c) { fdLog([NSString stringWithFormat:@"[Native] %s NOT FOUND in runtime", cname]); continue; }
-        fdLog([NSString stringWithFormat:@"[Native] %s class=%@", cname, c]);
-        
-        // Check all possible selectors
-        NSArray *selsToCheck = @[@"checkFriendsWithCompletion:", @"checkSpecificFriends:completion:", @"checkFriendsWithOptions:completion:", @"allFriends"];
-        for (NSString *sname in selsToCheck) {
-            SEL sel = NSSelectorFromString(sname);
-            BOOL responds = [c respondsToSelector:sel];
-            BOOL instanceResponds = NO;
-            id instance = [[c alloc] init];
-            if (instance) instanceResponds = [instance respondsToSelector:sel];
-            fdLog([NSString stringWithFormat:@"[Native]   %@ -> class=%d instance=%d", sname, responds, instanceResponds]);
-        }
-
-        SEL s = NSSelectorFromString(@"checkFriendsWithCompletion:");
-        if (![c respondsToSelector:s]) {
-            fdLog(@"[Native] checkFriendsWithCompletion: NOT found, trying next class");
-            continue;
-        }
-        fdLog(@"[Native] checkFriendsWithCompletion: FOUND, calling...");
-
-        __block NSArray *result = nil;
-        __block BOOL done = NO;
-        void (^block)(NSArray *) = ^(NSArray *r) {
-            fdLog([NSString stringWithFormat:@"[Native] Completion fired: %lu items", (unsigned long)r.count]);
-            result = r;
-            done = YES;
-        };
-
-        @try {
-            if ([NSThread isMainThread]) {
-                fdLog(@"[Native] Already on main thread, calling directly");
-                ((void (*)(Class, SEL, id))objc_msgSend)(c, s, block);
-            } else {
-                fdLog(@"[Native] Dispatching to main thread via dispatch_sync");
-                dispatch_sync(dispatch_get_main_queue(), ^{
-                    fdLog(@"[Native] Inside dispatch_sync block, calling objc_msgSend...");
-                    ((void (*)(Class, SEL, id))objc_msgSend)(c, s, block);
-                    fdLog(@"[Native] objc_msgSend returned");
-                });
-                fdLog(@"[Native] dispatch_sync completed");
-            }
-        } @catch (NSException *e) {
-            fdLog([NSString stringWithFormat:@"[Native] EXCEPTION: name=%@ reason=%@", e.name, e.reason]);
-            continue;
-        }
-
-        fdLog(@"[Native] Waiting for completion block...");
-        int w = 0;
-        while (!done && w < 120) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:1.0]];
-            w++;
-            if (w % 10 == 0) fdLog([NSString stringWithFormat:@"[Native] Waited %d seconds, done=%d, result=%@", w, done, result ? [NSString stringWithFormat:@"%lu items", (unsigned long)result.count] : @"nil"]);
-        }
-        if (done) fdLog([NSString stringWithFormat:@"[Native] Done after %d seconds, result count=%lu", w, (unsigned long)result.count]);
-        else fdLog(@"[Native] TIMEOUT after 120 seconds");
-        
-        if (result && result.count > 0) { fdLog(@"[Native] Returning native results"); return result; }
-        fdLog(@"[Native] Native result is nil or empty, trying next class");
+    // 检查所有可能的检测方法
+    NSArray *methods = @[
+        @{@"sel": @"checkFriendsWithCompletion:", @"type": @"class", @"desc": @"class method, 1 param(block)"},
+        @{@"sel": @"checkSpecificFriends:completion:", @"type": @"class", @"desc": @"class method, 2 params(ids,block)"},
+        @{@"sel": @"allFriends", @"type": @"class", @"desc": @"class method, 0 params"},
+    ];
+    
+    for (NSDictionary *m in methods) {
+        NSString *sname = m[@"sel"];
+        SEL sel = NSSelectorFromString(sname);
+        BOOL found = [fdCls respondsToSelector:sel];
+        id instance = [[fdCls alloc] init];
+        BOOL foundInst = instance && [instance respondsToSelector:sel];
+        fdLog([NSString stringWithFormat:@"[FD] %@: class=%d instance=%d", sname, found, foundInst]);
     }
-    fdLog(@"[Native] === Native detection complete - no results ===");
-    return nil;
+
+    // 先试 getContactList 拿到好友后，用 CContactMgr 逐人检查
+    // 这是最可靠的方式：调 WeChat 内部 contact 同步，获取最新状态
+    id contactMgr = nil;
+    Class mmSvc = objc_getClass("MMServiceCenter");
+    if (mmSvc) {
+        id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
+        if (center)
+            contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), objc_getClass("CContactMgr"));
+    }
+    if (!contactMgr) { fdLog(@"[FD] Cannot get CContactMgr"); return nil; }
+    
+    // 获取所有好友
+    SEL listSel = sel_registerName("getContactList:contactType:");
+    NSArray *contacts = nil;
+    contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, listSel, 1, 0);
+    fdLog([NSString stringWithFormat:@"[FD] Got %lu contacts", (unsigned long)contacts.count]);
+    
+    // 对每个好友，通过 getContactByName: 重新获取（触发 WeChat 内部同步）
+    fdLog(@"[FD] Checking each contact...");
+    NSMutableArray *results = [NSMutableArray array];
+    int deletedCount = 0, validCount = 0, errCount = 0;
+    Class contactCls = objc_getClass("CContact");
+    SEL getSel = sel_registerName("getContactByName:");
+    
+    for (id contact in contacts) {
+        @autoreleasepool {
+            NSString *wxID = @"";
+            @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
+            if (wxID.length == 0 || [wxID hasPrefix:@"@chatroom"] || [wxID hasPrefix:@"gh_"]) continue;
+
+            BOOL isDeleted = NO;
+            id freshContact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, getSel, wxID);
+            
+            if (!freshContact || ![freshContact isKindOfClass:contactCls]) {
+                // getContactByName 返回 nil → 好友可能已删除
+                isDeleted = YES;
+                errCount++;
+            } else {
+                // 检查属性
+                unsigned int vf = 0;
+                @try { vf = [[freshContact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
+                NSString *nick = @"";
+                @try { nick = [freshContact performSelector:@selector(m_nsNickName)] ?: @""; } @catch (...) {}
+                
+                if (vf > 0 || nick.length == 0 || [nick isEqualToString:wxID]) {
+                    isDeleted = YES;
+                }
+                validCount++;
+            }
+            
+            // 尝试用 FriendDetector 实例方法检测
+            if (!isDeleted && fdCls) {
+                @try {
+                    id detector = [[fdCls alloc] init];
+                    SEL detectSel = NSSelectorFromString(@"checkSpecificFriends:completion:");
+                    if (detector && [detector respondsToSelector:detectSel]) {
+                        // 逐人检测
+                        __block BOOL dDone = NO;
+                        __block BOOL dResult = NO;
+                        void (^dB)(NSArray *) = ^(NSArray *r) {
+                            if (r && r.count > 0) {
+                                @try { dResult = [[r[0] valueForKey:@"isDeleted"] boolValue]; } @catch (...) {}
+                            }
+                            dDone = YES;
+                        };
+                        ((void (*)(id, SEL, NSArray *, id))objc_msgSend)(detector, detectSel, @[wxID], dB);
+                        int dw = 0;
+                        while (!dDone && dw < 10) { [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.2]]; dw++; }
+                        if (dResult) isDeleted = YES;
+                    }
+                } @catch (NSException *e) {
+                    fdLog([NSString stringWithFormat:@"[FD] Instance detect exception: %@", e.reason]);
+                }
+            }
+            
+            MioFriendDetectResult *res = [MioFriendDetectResult infoWithContact:freshContact ?: contact isDeleted:isDeleted isInvalid:NO];
+            [results addObject:res];
+            if (isDeleted) deletedCount++;
+            
+            if (results.count % 500 == 0)
+                fdLog([NSString stringWithFormat:@"[FD] Progress: %lu checked, %d deleted", (unsigned long)results.count, deletedCount]);
+        }
+    }
+    
+    fdLog([NSString stringWithFormat:@"[FD] Complete: %lu total, %d deleted, %d valid, %d getContactByName nil",
+           (unsigned long)results.count, deletedCount, validCount, errCount]);
+    return results;
 }
 
 static NSArray *runLocalDetection(void) {
@@ -354,28 +392,22 @@ static BOOL startFriendDetection(void) {
     fdLog(@"[Main] ****************************************");
     fdLog(@"[Main] * Friend Detection Start");
     fdLog(@"[Main] ****************************************");
-    fdLog([NSString stringWithFormat:@"[Main] Thread: main=%d", [NSThread isMainThread] ? 1 : 0]);
 
-    // Phase 1: Try native (WE plugin)
-    NSArray *results = runNativeDetection();
+    NSArray *results = checkWithFriendDetector();
     
-    // Phase 2: Fallback to local
     if (!results || results.count == 0) {
-        fdLog(@"[Main] Native detection returned nil/empty, falling back to local");
+        fdLog(@"[Main] Detection returned nil, trying local fallback");
         results = runLocalDetection();
-    } else {
-        fdLog([NSString stringWithFormat:@"[Main] Native detection succeeded: %lu results", (unsigned long)results.count]);
     }
-
-    // Phase 3: Save/fail
+    
     if (!results || results.count == 0) {
-        fdLog(@"[Main] ALL DETECTION METHODS FAILED");
+        fdLog(@"[Main] ALL METHODS FAILED");
         return NO;
     }
     
     fdLog([NSString stringWithFormat:@"[Main] Saving %lu results...", (unsigned long)results.count]);
     saveResults(results);
-    fdLog(@"[Main] Friend Detection Complete - SUCCESS");
+    fdLog(@"[Main] Complete - SUCCESS");
     return YES;
 }
 
