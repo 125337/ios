@@ -711,30 +711,13 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
     }
 
     if (contactMgr) {
-        // 检查 CContactMgr 可用方法
-        BOOL hasSync = [contactMgr respondsToSelector:sel_registerName("syncContact:")];
-        BOOL hasForce = [contactMgr respondsToSelector:sel_registerName("forceSyncContact:")];
-        BOOL hasGetInfo = [contactMgr respondsToSelector:sel_registerName("getContactInfo:")];
+        // 检查 CContactMgr 可用方法（仅查询日志，不调用危险方法）
         BOOL hasGetByName = [contactMgr respondsToSelector:sel_registerName("getContactByName:")];
-        BOOL hasGetFromSvr = [contactMgr respondsToSelector:sel_registerName("getContactsFromServer:")];
-        BOOL hasGetFromSvrChat = [contactMgr respondsToSelector:sel_registerName("getContactsFromServer:chatContact:")];
-        fdLog([NSString stringWithFormat:@"[Main] CContactMgr: sync=%d forceSync=%d getContactInfo=%d getContactByName=%d getFromSvr=%d getFromSvrChat=%d",
-               hasSync, hasForce, hasGetInfo, hasGetByName, hasGetFromSvr, hasGetFromSvrChat]);
+        fdLog([NSString stringWithFormat:@"[Main] CContactMgr: getContactByName=%d", hasGetByName]);
 
-        // 如果有 getContactsFromServer:，先批量触发一次服务端同步
-        if (hasGetFromSvr) {
-            fdLog(@"[Main] 尝试 getContactsFromServer: 触发服务端同步...");
-            @try {
-                BOOL svrResult = ((BOOL (*)(id, SEL, id))objc_msgSend)(contactMgr, sel_registerName("getContactsFromServer:"), wxIDs);
-                fdLog([NSString stringWithFormat:@"[Main] getContactsFromServer: 返回 %d", svrResult]);
-            } @catch (NSException *e) {
-                fdLog([NSString stringWithFormat:@"[Main] getContactsFromServer: 异常: %@", e.reason]);
-            }
-        }
-
-        // 逐个检测: getContactByName: 获取最新数据
-        // 注意: getContactInfo: 在此 WeChat 版本不存在
-        // 所以改为用 getContactByName: 获取，并检查属性
+        // 逐个用 getContactByName: 获取联系人
+        // 注意: 这里只读本地缓存，不调 getContactsFromServer: 等带内
+        // 部状态的方法（传错参数会导致 WeChat 内部状态损坏 crash）
         int total = (int)wxIDs.count, delCount = 0;
         for (int i = 0; i < total; i++) {
             @autoreleasepool {
@@ -760,7 +743,7 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
                     if (vf > 0) {
                         isDeleted = YES;
                     } else {
-                        // 再检查 m_uiStatus 或 m_uiFriendAttr
+                        // 再检查 m_uiStatus
                         unsigned int status = 0;
                         @try { status = [[contact valueForKey:@"m_uiStatus"] unsignedIntValue]; } @catch (...) {}
                         if (status > 0) isDeleted = YES;
