@@ -71,98 +71,52 @@ static NSArray *getAllFriends(void) {
     return nil;
 }
 
-// 用 FriendDetector 检测指定好友
-static NSArray *checkFriendsWithDetector(NSArray *wxIDs) {
-    Class detectorCls = objc_getClass("FriendDetector");
-    if (!detectorCls) { detectorCls = objc_getClass("WeChatFriendDetector"); }
-    if (!detectorCls) { fdLog(@"[ERR] FriendDetector not found"); return nil; }
-
-    id detector = [[detectorCls alloc] init];
-    if (!detector) { fdLog(@"[ERR] Failed to init FriendDetector"); return nil; }
-
-    SEL checkSel = NSSelectorFromString(@"checkSpecificFriends:completion:");
-    if (![detector respondsToSelector:checkSel]) {
-        // Try checkFriendsWithCompletion:
-        checkSel = NSSelectorFromString(@"checkFriendsWithCompletion:");
-        if (![detector respondsToSelector:checkSel]) { fdLog(@"[ERR] No check method found on FriendDetector"); return nil; }
-        // checkFriendsWithCompletion: takes a block, returns results via block
-        __block NSArray *resultArray = nil;
-        __block BOOL done = NO;
-        void (^completion)(NSArray *) = ^(NSArray *results) {
-            resultArray = results;
-            done = YES;
-        };
-        ((void (*)(id, SEL, id))objc_msgSend)(detector, checkSel, completion);
-        int waitCount = 0;
-        while (!done && waitCount < 60) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
-            waitCount++;
-        }
-        return resultArray;
-    }
-
-    __block NSArray *resultArray = nil;
-    __block BOOL done = NO;
-    void (^completion)(NSArray *) = ^(NSArray *results) {
-        resultArray = results;
-        done = YES;
-    };
-    ((void (*)(id, SEL, NSArray *, id))objc_msgSend)(detector, checkSel, wxIDs, completion);
-    int waitCount = 0;
-    while (!done && waitCount < 120) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:1.0]];
-        waitCount++;
-    }
-    return resultArray;
-}
-
-// 处理检测结果
-static NSDictionary *processResults(NSArray *results) {
-    if (!results || results.count == 0) {
-        fdLog(@"[ERR] No detection results");
-        return nil;
-    }
-    fdLog([NSString stringWithFormat:@"Got %lu detection results", (unsigned long)results.count]);
-
+// 直接用 CContact 属性检测好友（不依赖 FriendDetector，跨版本兼容）
+static NSDictionary *checkAllFriends(NSArray *contacts) {
+    if (!contacts || contacts.count == 0) { fdLog(@"[ERR] checkAllFriends: no contacts"); return nil; }
+    fdLog([NSString stringWithFormat:@"Checking %lu contacts...", (unsigned long)contacts.count]);
 
     NSMutableArray *deletedFriends = [NSMutableArray array];
-    Class resultCls = objc_getClass("FriendDetectResult");
-    
-    for (id result in results) {
-        if (resultCls && ![result isKindOfClass:resultCls]) continue;
-        
-        id contact = nil;
-        @try { contact = [result performSelector:@selector(contact)]; } @catch (...) {}
-        if (!contact) continue;
-        
-        BOOL isDeleted = NO;
-        @try { isDeleted = [[result valueForKey:@"isDeleted"] boolValue]; } @catch (...) {}
-        BOOL isInvalid = NO;
-        @try { isInvalid = [[result valueForKey:@"isInvalid"] boolValue]; } @catch (...) {}
+    NSMutableArray *validFriends = [NSMutableArray array];
+    int totalChecked = 0;
 
-        NSString *wxID = @"";
-        @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
-        NSString *nick = @"";
-        @try { nick = [contact performSelector:@selector(m_nsNickName)] ?: wxID ?: @"unknown"; } @catch (...) {}
-        if ([nick isEqualToString:@""]) nick = wxID;
+    for (id contact in contacts) {
+        @autoreleasepool {
+            NSString *wxID = @"";
+            @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
+            if (wxID.length == 0) continue;
+            NSString *nick = @"";
+            @try { nick = [contact performSelector:@selector(m_nsNickName)] ?: wxID; } @catch (...) {}
 
-        NSString *status = isInvalid ? @"invalid" : (isDeleted ? @"deleted" : @"valid");
-        NSMutableDictionary *entry = [NSMutableDictionary dictionary];
-        entry[@"wxID"] = wxID;
-        entry[@"nick"] = nick;
-        entry[@"status"] = status;
-        [deletedFriends addObject:entry];
+            unsigned int verifyFlag = 0;
+            @try { verifyFlag = [[contact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
+
+            BOOL nickAbnormal = (nick.length == 0 || [nick isEqualToString:wxID]);
+            BOOL hasValidName = (wxID.length > 0 && ![wxID hasPrefix:@"@chatroom"] && ![wxID hasPrefix:@"gh_"]);
+            BOOL isDeleted = hasValidName && (verifyFlag > 0 || nickAbnormal);
+
+            totalChecked++;
+            NSDictionary *entry = @{@"wxID": wxID, @"nick": nick, @"status": isDeleted ? @"deleted" : @"valid"};
+            if (isDeleted) {
+                [deletedFriends addObject:entry];
+            } else {
+                [validFriends addObject:entry];
+            }
+        }
     }
 
-    fdLog([NSString stringWithFormat:@"Processed: %lu friends checked, %lu results",
-           (unsigned long)results.count, (unsigned long)deletedFriends.count]);
-    
+    fdLog([NSString stringWithFormat:@"Checked %d contacts: %lu deleted, %lu valid",
+           totalChecked, (unsigned long)deletedFriends.count, (unsigned long)validFriends.count]);
+    if (totalChecked == 0) return nil;
+
     return @{
         @"timestamp": @([[NSDate date] timeIntervalSince1970]),
-        @"total": @(results.count),
-        @"checked": @(deletedFriends.count),
-        @"deleted": deletedFriends
+        @"total": @(totalChecked),
+        @"deleted": [deletedFriends copy],
+        @"valid": [validFriends copy]
     };
+}
+
 }
 
 static BOOL startFriendDetection(void) {
@@ -190,14 +144,12 @@ static BOOL startFriendDetection(void) {
     if (wxIDs.count == 0) return NO;
 
     // Step 3: Run detection
-    NSArray *detectResults = checkFriendsWithDetector(wxIDs);
-    if (!detectResults || detectResults.count == 0) {
-        fdLog(@"[ERR] Step 3 failed: detection returned nil");
+    // Step 3: Check all friends using CContact properties
+    NSDictionary *saveData = checkAllFriends(contacts);
+    if (!saveData) {
+        fdLog(@"[ERR] Step 3 failed: checkAllFriends returned nil");
         return NO;
     }
-
-    // Step 4: Process and save results
-    NSDictionary *saveData = processResults(detectResults);
     if (saveData) {
         [[NSUserDefaults standardUserDefaults] setObject:saveData forKey:@"com.mio.wechat.plugin.FriendDetection.results"];
         [[NSUserDefaults standardUserDefaults] synchronize];
