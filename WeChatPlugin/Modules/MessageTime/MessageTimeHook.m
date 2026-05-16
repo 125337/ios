@@ -359,33 +359,33 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             break;
         case 3:
             if (isSender) {
-                labelFrame.origin.x = cvRight - w;
+                labelFrame.origin.x = cvRight - w - 2;
             } else {
-                labelFrame.origin.x = cvLeft;
+                labelFrame.origin.x = cvLeft + 2;
             }
             labelFrame.origin.y = cvBottom;
             break;
         case 4:
             if (isSender) {
-                labelFrame.origin.x = cvLeft;
+                labelFrame.origin.x = cvLeft + 2;
             } else {
-                labelFrame.origin.x = cvRight - w;
+                labelFrame.origin.x = cvRight - w - 2;
             }
             labelFrame.origin.y = cvBottom;
             break;
         case 5:
             if (isSender) {
-                labelFrame.origin.x = cvRight - w;
+                labelFrame.origin.x = cvRight - w - 5;
             } else {
-                labelFrame.origin.x = cvLeft;
+                labelFrame.origin.x = cvLeft + 5;
             }
-            labelFrame.origin.y = cvTop - h;
+            labelFrame.origin.y = cvTop - h + 3;
             break;
         case 6:
             if (isSender) {
-                labelFrame.origin.x = cvLeft;
+                labelFrame.origin.x = cvLeft + 2;
             } else {
-                labelFrame.origin.x = cvRight - w;
+                labelFrame.origin.x = cvRight - w - 2;
             }
             labelFrame.origin.y = cvTop - h;
             break;
@@ -418,7 +418,6 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
 
     CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
     if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
-    if (labelFrame.origin.y < 0) labelFrame.origin.y = 0;
 
     return labelFrame;
 }
