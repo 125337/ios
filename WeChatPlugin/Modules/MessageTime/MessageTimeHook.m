@@ -272,27 +272,44 @@ static id getBubbleView(id cell) {
 
 static id getContentView(id cell) {
     id contentView = nil;
-    @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {}
-    if (!contentView) {
-        id cellView = getCellView(cell);
+
+    id cellView = getCellView(cell);
+    if (cellView) {
         @try { contentView = [cellView valueForKey:@"m_contentView"]; } @catch (...) {}
+        if (contentView) {
+            mtLog([NSString stringWithFormat:@"[DBG] getContentView: cellView.m_contentView class=%@ frame=%@",
+                   NSStringFromClass([contentView class]), NSStringFromCGRect([(UIView *)contentView frame])]);
+        }
     }
+
     if (!contentView) {
-        for (UIView *sv in [(UIView *)cell subviews]) {
+        @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {}
+        if (contentView) {
+            mtLog([NSString stringWithFormat:@"[DBG] getContentView: cell.m_contentView class=%@ frame=%@",
+                   NSStringFromClass([contentView class]), NSStringFromCGRect([(UIView *)contentView frame])]);
+        }
+    }
+
+    if (!contentView) {
+        id targetView = cellView ?: cell;
+        for (UIView *sv in [(UIView *)targetView subviews]) {
             NSString *cn = NSStringFromClass([sv class]);
+            if ([cn isEqualToString:@"UITableViewCellContentView"]) continue;
             if ([cn containsString:@"ContentView"] || [cn containsString:@"MessageView"]) {
                 contentView = sv;
+                mtLog([NSString stringWithFormat:@"[DBG] getContentView: subview fallback class=%@ frame=%@", cn, NSStringFromCGRect(sv.frame)]);
                 break;
             }
         }
     }
-    if (!contentView) {
-        id cv = nil;
-        @try { cv = [cell valueForKey:@"contentView"]; } @catch (...) {}
-        if (cv && [cv isKindOfClass:[UIView class]] && ![[(UIView *)cv subviews] containsObject:(UIView *)cell]) {
-            contentView = cv;
+
+    if (contentView) {
+        if (CGRectEqualToRect([(UIView *)contentView frame], CGRectZero) || [(UIView *)contentView frame].size.width < 5) {
+            mtLog([NSString stringWithFormat:@"[DBG] getContentView: class=%@ has zero/tiny frame, treating as nil", NSStringFromClass([contentView class])]);
+            contentView = nil;
         }
     }
+
     if (!contentView) mtLog(@"[DBG] getContentView: FAILED - returning nil");
     return contentView;
 }
@@ -424,7 +441,13 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     id contentView = getContentView(cell);
     CGRect contentFrame;
     if (contentView) {
-        contentFrame = [cell convertRect:[(UIView *)contentView frame] fromView:[(UIView *)contentView superview]];
+        // label 添加到 cellView → 使用 cellView 坐标系
+        UIView *cvSuper = [(UIView *)contentView superview];
+        if (cvSuper == (UIView *)cellView) {
+            contentFrame = [(UIView *)contentView frame];
+        } else {
+            contentFrame = [(UIView *)cellView convertRect:[(UIView *)contentView frame] fromView:cvSuper];
+        }
     } else {
         contentFrame = cellFrame;
         contentFrame.origin = CGPointZero;
@@ -436,8 +459,14 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     
     BOOL isSender = NO;
     if (contentView) {
-        CGRect cfc = [cell convertRect:[(UIView *)contentView frame] fromView:[(UIView *)contentView superview]];
-        isSender = CGRectGetMidX(cfc) > cellFrame.size.width / 2;
+        UIView *cvSuper = [(UIView *)contentView superview];
+        CGRect cfc;
+        if (cvSuper == (UIView *)cellView) {
+            cfc = [(UIView *)contentView frame];
+        } else {
+            cfc = [(UIView *)cellView convertRect:[(UIView *)contentView frame] fromView:cvSuper];
+        }
+        isSender = CGRectGetMidX(cfc) > [(UIView *)cellView frame].size.width / 2;
     }
     
     CGSize labelSize = label.frame.size;
@@ -672,8 +701,16 @@ static void addTimeLabelToCell(id cell) {
             if (!isSender) {
                 id cv = getContentView(cell);
                 if (cv) {
-                    CGRect cfc = [cell convertRect:[(UIView *)cv frame] fromView:[(UIView *)cv superview]];
-                    isSender = CGRectGetMidX(cfc) > cellFrame.size.width / 2;
+                    // cellView 坐标系（label 的父视图，与 contentFrame 计算保持一致）
+                    UIView *refView = cellView ?: (UIView *)cell;
+                    UIView *cvSuper = [(UIView *)cv superview];
+                    CGRect cfc;
+                    if (cvSuper == refView) {
+                        cfc = [(UIView *)cv frame];
+                    } else {
+                        cfc = [refView convertRect:[(UIView *)cv frame] fromView:cvSuper];
+                    }
+                    isSender = CGRectGetMidX(cfc) > refView.frame.size.width / 2;
                 }
             }
         }
@@ -730,10 +767,23 @@ static void addTimeLabelToCell(id cell) {
         CGRect avatarFrame = [(UIView *)avatarView frame];
         
         id contentView = getContentView(cell);
-        if (contentView) mtLog([NSString stringWithFormat:@"[DBG] contentView: class=%@ frame=%@", NSStringFromClass([contentView class]), NSStringFromCGRect([(UIView *)contentView frame])]);
+        if (contentView) mtLog([NSString stringWithFormat:@"[DBG] contentView: class=%@ frame=%@ superview=%@",
+                                 NSStringFromClass([contentView class]),
+                                 NSStringFromCGRect([(UIView *)contentView frame]),
+                                 NSStringFromClass([[(UIView *)contentView superview] class])]);
         CGRect contentFrame;
         if (contentView) {
-            contentFrame = [cell convertRect:[(UIView *)contentView frame] fromView:[(UIView *)contentView superview]];
+            // label 添加到 cellView → 使用 cellView 坐标系
+            id labelParent = cellView;
+            UIView *cvSuper = [(UIView *)contentView superview];
+            if (cvSuper == labelParent) {
+                // contentView 和 label 共享同一父视图，直接使用 frame
+                contentFrame = [(UIView *)contentView frame];
+            } else if (labelParent) {
+                contentFrame = [(UIView *)labelParent convertRect:[(UIView *)contentView frame] fromView:cvSuper];
+            } else {
+                contentFrame = [(UIView *)contentView frame];
+            }
         } else {
             contentFrame = cellFrame;
             contentFrame.origin = CGPointZero;
@@ -850,6 +900,14 @@ static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath 
     }
 
     if (![PluginConfig shared].showMessageTime) return;
+
+    id cellView = getCellView(cell);
+    if (!cellView) return;
+
+    if (objc_getAssociatedObject(cellView, @"msgTimeLabel")) return;
+
+    id cachedWrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
+    if (!cachedWrap) return;
 
     dispatch_async(dispatch_get_main_queue(), ^{
         addTimeLabelToCell(cell);
