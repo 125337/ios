@@ -361,7 +361,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             if (isSender) {
                 labelFrame.origin.x = cvRight - w * 0.5;
             } else {
-                labelFrame.origin.x = cvLeft + w * 0.5;
+                labelFrame.origin.x = cvLeft - w * 0.5;
             }
             labelFrame.origin.y = cvBottom + h * 0.5;
             break;
@@ -377,7 +377,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             if (isSender) {
                 labelFrame.origin.x = cvRight - w * 0.5;
             } else {
-                labelFrame.origin.x = cvLeft + w * 0.5;
+                labelFrame.origin.x = cvLeft - w * 0.5;
             }
             labelFrame.origin.y = cvTop - h * 0.5;
             break;
@@ -418,7 +418,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
 
     CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
     if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
-    if (labelFrame.origin.y < 2) labelFrame.origin.y = 2;
+    if (labelFrame.origin.y < 0) labelFrame.origin.y = 0;
 
     return labelFrame;
 }
