@@ -103,48 +103,49 @@ static void fdLog(NSString *content) {
 
 #pragma mark - 检测策略
 
-// 策略A: 通过 WeChat 原生/微信优化插件方法检测好友
+// 策略A: 调 FriendDetector 的 checkFriendsWithCompletion:（微信优化插件的方法，已验证兼容）
 - (NSArray *)tryNativeDetection:(NSArray *)wxIDs {
     for (NSString *clsName in @[@"FriendDetector", @"WeChatFriendDetector"]) {
         Class wcCls = objc_getClass([clsName UTF8String]);
-        if (!wcCls) { fdLog([NSString stringWithFormat:@"[Native] %@ class not found", clsName]); continue; }
+        if (!wcCls) { fdLog([NSString stringWithFormat:@"[Native] %@ not found", clsName]); continue; }
 
-        SEL sel = NSSelectorFromString(@"checkSpecificFriends:completion:");
+        // 先检查 checkFriendsWithCompletion:（微信优化插件提供的类方法，内部会调 allFriends + checkSpecificFriends）
+        SEL sel = NSSelectorFromString(@"checkFriendsWithCompletion:");
         if (![wcCls respondsToSelector:sel]) {
-            fdLog([NSString stringWithFormat:@"[Native] %@ has no checkSpecificFriends:completion:", clsName]);
+            fdLog([NSString stringWithFormat:@"[Native] %@ no checkFriendsWithCompletion:", clsName]);
             continue;
         }
-        fdLog([NSString stringWithFormat:@"[Native] Calling %@.checkSpecificFriends:completion: with %lu WX IDs...", clsName, (unsigned long)wxIDs.count]);
+        fdLog([NSString stringWithFormat:@"[Native] Calling %@.checkFriendsWithCompletion:...", clsName]);
 
         __block NSArray *nativeResults = nil;
         __block BOOL done = NO;
-        void (^block)(NSArray *) = ^(NSArray *results) {
-            fdLog([NSString stringWithFormat:@"[Native] Completion called with %lu results", (unsigned long)results.count]);
-            nativeResults = results;
+        void (^block)(NSArray *) = ^(NSArray *r) {
+            nativeResults = r;
             done = YES;
         };
 
         @try {
-            // 微信优化也这样调用: [FriendDetector checkSpecificFriends:wxIDs completion:block]
-            ((void (*)(Class, SEL, NSArray *, id))objc_msgSend)(wcCls, sel, wxIDs, block);
+            // performSelector:withObject: 比 objc_msgSend 更安全，ARC 正确处理 block
+            [wcCls performSelector:sel withObject:block];
         } @catch (NSException *e) {
             fdLog([NSString stringWithFormat:@"[Native] Exception: %@", e]);
             continue;
         }
 
         int waitCount = 0;
-        while (!done && waitCount < 90) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:1.0]];
+        while (!done && waitCount < 120) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
             waitCount++;
             if (waitCount % 20 == 0)
-                fdLog([NSString stringWithFormat:@"[Native] Waiting... %d/90", waitCount]);
+                fdLog([NSString stringWithFormat:@"[Native] Waiting... %d/120", waitCount]);
         }
-        fdLog([NSString stringWithFormat:@"[Native] Wait complete: done=%d, results=%s", done, nativeResults ? [[NSString stringWithFormat:@"%lu items", (unsigned long)nativeResults.count] UTF8String] : "nil"]);
+        fdLog([NSString stringWithFormat:@"[Native] done=%d results=%s", done,
+               nativeResults ? [[NSString stringWithFormat:@"%lu items", (unsigned long)nativeResults.count] UTF8String] : "nil"]);
 
         if (nativeResults && nativeResults.count > 0)
             return nativeResults;
     }
-    fdLog(@"[Native] All native attempts failed");
+    fdLog(@"[Native] All failed");
     return nil;
 }
 
