@@ -130,6 +130,9 @@ static UIColor *colorInLightMode(UIColor *lightColor, UIColor *darkColor) {
 // MARK: - Coordinate Helpers
 // ============================================================
 
+static id getCellView(id cell);
+static id getContentView(id cell);
+
 static CGRect contentFrameInCellView(id contentView, id cellView) {
     if (!contentView) return CGRectZero;
     UIView *cv = (UIView *)contentView;
