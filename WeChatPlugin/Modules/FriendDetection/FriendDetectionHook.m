@@ -22,7 +22,7 @@ static void fdLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-#pragma mark - MioFriendDetectResult (一对一复刻微信优化)
+#pragma mark - FriendDetectResult (一比一复刻微信优化)
 
 @interface MioFriendDetectResult : NSObject
 @property (nonatomic, strong) id contact;
@@ -41,24 +41,20 @@ static void fdLog(NSString *content) {
 }
 @end
 
-#pragma mark - MioFriendDetector (一对一复刻微信优化)
+#pragma mark - FriendDetector (一比一复刻微信优化)
 
 @interface MioFriendDetector : NSObject
 @property (nonatomic, strong) NSArray *checkedFriendWxIDs;
 @property (nonatomic, assign) BOOL checkFriendsEnd;
 @property (nonatomic, strong) NSObject *friendCheckSem;
-
 - (NSArray *)allFriends;
 - (void)checkFriendsWithCompletion:(void(^)(NSArray *results))completion;
 - (void)checkSpecificFriends:(NSArray *)wxIDs;
 - (void)checkSpecificFriends:(NSArray *)wxIDs completion:(void(^)(NSArray *results))completion;
 @end
 
-@implementation MioFriendDetector {
-    dispatch_semaphore_t _sem;
-}
+@implementation MioFriendDetector
 
-// allFriends: 通过 MMServiceCenter → CContactMgr 获取所有好友
 - (NSArray *)allFriends {
     fdLog(@"[allFriends] Starting...");
     Class mmSvc = objc_getClass("MMServiceCenter");
@@ -73,202 +69,298 @@ static void fdLog(NSString *content) {
     SEL sel = sel_registerName("getContactList:contactType:");
     if (![contactMgr respondsToSelector:sel]) { fdLog(@"[allFriends] getContactList:contactType: not found"); return @[]; }
 
-    NSArray *contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 8);
-    fdLog([NSString stringWithFormat:@"[allFriends] getContactList:0,8 returned %lu", (unsigned long)contacts.count]);
+    NSArray *contacts = nil;
+    contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 8);
+    fdLog([NSString stringWithFormat:@"[allFriends] getContactList:0,8 = %@", contacts ? [NSString stringWithFormat:@"%lu contacts", (unsigned long)contacts.count] : @"nil"]);
     if (!contacts || contacts.count == 0) {
         contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 0);
-        fdLog([NSString stringWithFormat:@"[allFriends] getContactList:0,0 returned %lu", (unsigned long)contacts.count]);
+        fdLog([NSString stringWithFormat:@"[allFriends] getContactList:0,0 = %@", contacts ? [NSString stringWithFormat:@"%lu contacts", (unsigned long)contacts.count] : @"nil"]);
     }
     if (!contacts || contacts.count == 0) {
         contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 1, 0);
-        fdLog([NSString stringWithFormat:@"[allFriends] getContactList:1,0 returned %lu", (unsigned long)contacts.count]);
+        fdLog([NSString stringWithFormat:@"[allFriends] getContactList:1,0 = %@", contacts ? [NSString stringWithFormat:@"%lu contacts", (unsigned long)contacts.count] : @"nil"]);
     }
     if (!contacts || contacts.count == 0) {
-        fdLog(@"[allFriends] All contact types returned nil");
+        fdLog(@"[allFriends] ALL METHODS RETURNED NIL");
         return @[];
     }
 
     NSMutableArray *friends = [NSMutableArray array];
+    int skipped = 0, added = 0;
     for (id contact in contacts) {
         NSString *wxID = @"";
         @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
         if (wxID.length > 0 && ![wxID hasPrefix:@"@chatroom"] && ![wxID hasPrefix:@"gh_"]) {
             [friends addObject:contact];
+            added++;
+        } else {
+            skipped++;
         }
     }
-    fdLog([NSString stringWithFormat:@"[allFriends] Filtered to %lu real friends", (unsigned long)friends.count]);
+    fdLog([NSString stringWithFormat:@"[allFriends] Filtered: %d added, %d skipped (chatrooms/gh)", added, skipped]);
     return [friends copy];
 }
 
-// 检测单个好友：用 CContact 属性判断删除状态
-- (MioFriendDetectResult *)checkOneFriend:(id)contact {
-    NSString *wxID = @"";
-    @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
-    NSString *nick = @"";
-    @try { nick = [contact performSelector:@selector(m_nsNickName)] ?: wxID; } @catch (...) {}
+#pragma mark - 检测策略
 
-    unsigned int verifyFlag = 0;
-    @try { verifyFlag = [[contact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
-    unsigned int uiStatus = 0;
-    @try { uiStatus = [[contact valueForKey:@"m_uiStatus"] unsignedIntValue]; } @catch (...) {}
-    id personalCard = nil;
-    @try { personalCard = [contact valueForKey:@"m_uiPersonalCard"]; } @catch (...) {}
+// 策略A: 通过 WeChat 原生 FriendDetector/WeChatFriendDetector 服务端检测
+- (NSArray *)tryNativeDetection:(NSArray *)wxIDs {
+    for (NSString *clsName in @[@"FriendDetector", @"WeChatFriendDetector"]) {
+        Class wcCls = objc_getClass([clsName UTF8String]);
+        if (!wcCls) { fdLog([NSString stringWithFormat:@"[Native] %@ class not found", clsName]); continue; }
+        fdLog([NSString stringWithFormat:@"[Native] %@ FOUND, checking methods...", clsName]);
 
-    // Debug: log first 5 contacts' raw values
-    static int debugCount = 0;
-    if (debugCount < 5) {
-        debugCount++;
-        fdLog([NSString stringWithFormat:@"[DEBUG] wxID=%@ nick=%@ verifyFlag=%u status=%u personalCard=%@",
-               wxID, nick, verifyFlag, uiStatus, personalCard]);
+        // 尝试作为类方法调用
+        SEL sels[] = {
+            NSSelectorFromString(@"checkSpecificFriends:completion:"),
+            NSSelectorFromString(@"checkFriendsWithCompletion:"),
+            NSSelectorFromString(@"checkFriendsWithOptions:completion:"),
+            NSSelectorFromString(@"allFriends")
+        };
+        const char *selNames[] = {
+            "checkSpecificFriends:completion:",
+            "checkFriendsWithCompletion:",
+            "checkFriendsWithOptions:completion:",
+            "allFriends"
+        };
+
+        for (int i = 0; i < 4; i++) {
+            if (![wcCls respondsToSelector:sels[i]]) {
+                fdLog([NSString stringWithFormat:@"[Native] Class method '%s' NOT found", selNames[i]]);
+                // 也检查实例方法
+                id instance = [[wcCls alloc] init];
+                if (instance && [instance respondsToSelector:sels[i]]) {
+                    fdLog([NSString stringWithFormat:@"[Native] Instance method '%s' FOUND", selNames[i]]);
+                }
+                continue;
+            }
+            fdLog([NSString stringWithFormat:@"[Native] Class method '%s' FOUND, invoking...", selNames[i]]);
+
+            @try {
+                if (sels[i] == NSSelectorFromString(@"checkSpecificFriends:completion:")) {
+                    __block NSArray *nativeResults = nil;
+                    __block BOOL done = NO;
+                    void (^block)(NSArray *) = ^(NSArray *r) { nativeResults = r; done = YES; };
+                    // Use NSInvocation for safer calling
+                    NSMethodSignature *sig = [wcCls methodSignatureForSelector:sels[i]];
+                    if (!sig) { fdLog(@"[Native] No method signature"); continue; }
+                    NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+                    [inv setTarget:wcCls];
+                    [inv setSelector:sels[i]];
+                    [inv setArgument:&wxIDs atIndex:2];
+                    [inv setArgument:&block atIndex:3];
+                    [inv invoke];
+
+                    int waitCount = 0;
+                    while (!done && waitCount < 60) { [NSThread sleepForTimeInterval:1.0]; waitCount++; }
+                    if (nativeResults && nativeResults.count > 0) {
+                        fdLog([NSString stringWithFormat:@"[Native] checkSpecificFriends returned %lu results", (unsigned long)nativeResults.count]);
+                        Class resultCls = objc_getClass("FriendDetectResult");
+                        // 不需要检查 FriendDetectResult 类，直接用结果
+                        return nativeResults;
+                    }
+                    fdLog(@"[Native] checkSpecificFriends returned nil/empty");
+                }
+                else if (sels[i] == NSSelectorFromString(@"checkFriendsWithCompletion:")) {
+                    __block NSArray *nativeResults = nil;
+                    __block BOOL done = NO;
+                    void (^block)(NSArray *) = ^(NSArray *r) { nativeResults = r; done = YES; };
+                    NSMethodSignature *sig = [wcCls methodSignatureForSelector:sels[i]];
+                    if (!sig) { fdLog(@"[Native] No method signature"); continue; }
+                    NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+                    [inv setTarget:wcCls];
+                    [inv setSelector:sels[i]];
+                    [inv setArgument:&block atIndex:2];
+                    [inv invoke];
+
+                    int waitCount = 0;
+                    while (!done && waitCount < 60) { [NSThread sleepForTimeInterval:1.0]; waitCount++; }
+                    if (nativeResults && nativeResults.count > 0) {
+                        fdLog([NSString stringWithFormat:@"[Native] checkFriendsWithCompletion returned %lu results", (unsigned long)nativeResults.count]);
+                        return nativeResults;
+                    }
+                    fdLog(@"[Native] checkFriendsWithCompletion returned nil/empty");
+                }
+            } @catch (NSException *e) {
+                fdLog([NSString stringWithFormat:@"[Native] Exception: %@", e]);
+            }
+        }
     }
-
-    BOOL nickAbnormal = (nick.length == 0 || [nick isEqualToString:wxID]);
-    BOOL isDeleted = (verifyFlag > 0 || nickAbnormal);
-    BOOL isInvalid = (verifyFlag > 1);
-
-    return [MioFriendDetectResult infoWithContact:contact isDeleted:isDeleted isInvalid:isInvalid];
+    fdLog(@"[Native] ALL NATIVE METHODS FAILED");
+    return nil;
 }
 
-// checkSpecificFriends:completion: 检测指定好友
+// 策略B: CContactMgr 服务端获取 + 本地属性检测
+- (NSArray *)tryLocalDetection:(NSArray *)wxIDs {
+    fdLog(@"[Local] Starting local property detection...");
+    NSMutableArray *results = [NSMutableArray array];
+    Class cContactCls = objc_getClass("CContact");
+
+    id contactMgr = nil;
+    Class mmSvc = objc_getClass("MMServiceCenter");
+    if (mmSvc) {
+        id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
+        if (center)
+            contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), objc_getClass("CContactMgr"));
+    }
+    if (!contactMgr) { fdLog(@"[Local] CContactMgr nil, aborting"); return nil; }
+
+    // 先尝试 getContactByName: 批量获取完整信息（可能触发服务端同步）
+    BOOL hasBatch = [contactMgr respondsToSelector:sel_registerName("getContactByName:")];
+    BOOL hasInfo = [contactMgr respondsToSelector:sel_registerName("getContactInfo:")];
+    fdLog([NSString stringWithFormat:@"[Local] CContactMgr methods: getContactByName=%d getContactInfo=%d", hasBatch, hasInfo]);
+
+    int count = 0, deletedCount = 0;
+    for (NSString *wxID in wxIDs) {
+        @autoreleasepool {
+            id contact = nil;
+            // 优先 getContactInfo: 可能服务端获取
+            if (hasInfo) {
+                @try { contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactInfo:"), wxID); } @catch (...) {}
+            }
+            if (!contact || ![contact isKindOfClass:cContactCls]) {
+                if (hasBatch)
+                    @try { contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactByName:"), wxID); } @catch (...) {}
+            }
+
+            if (!contact || ![contact isKindOfClass:cContactCls]) {
+                [results addObject:[MioFriendDetectResult infoWithContact:nil isDeleted:YES isInvalid:NO]];
+                deletedCount++;
+            } else {
+                // 检测各属性
+                NSString *nick = @""; unsigned int vf = 0;
+                @try { nick = [contact performSelector:@selector(m_nsNickName)] ?: @""; } @catch (...) {}
+                @try { vf = [[contact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
+                BOOL isDel = (vf > 0 || nick.length == 0 || [nick isEqualToString:wxID]);
+                if (isDel) deletedCount++;
+                [results addObject:[MioFriendDetectResult infoWithContact:contact isDeleted:isDel isInvalid:(vf > 1)]];
+            }
+            count++;
+            if (count % 500 == 0)
+                fdLog([NSString stringWithFormat:@"[Local] Progress: %d/%lu, deleted=%d", count, (unsigned long)wxIDs.count, deletedCount]);
+        }
+    }
+    fdLog([NSString stringWithFormat:@"[Local] Complete: %d total, %d deleted", count, deletedCount]);
+    return [results copy];
+}
+
+#pragma mark - 主检测方法
+
 - (void)checkSpecificFriends:(NSArray *)wxIDs completion:(void(^)(NSArray *))completion {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSMutableArray *results = [NSMutableArray array];
-        Class cContactCls = objc_getClass("CContact");
+        fdLog([NSString stringWithFormat:@"[checkSpecificFriends] Starting with %lu wxIDs", (unsigned long)wxIDs.count]);
 
-                // 使用本地 CContact 属性检测
-            id contactMgr = nil;
-            Class mmSvc = objc_getClass("MMServiceCenter");
-            if (mmSvc) {
-                id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
-                if (center) {
-                    contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), objc_getClass("CContactMgr"));
-                }
-            }
+        // 策略A: 原生检测
+        fdLog(@"[checkSpecificFriends] === TRYING NATIVE DETECTION ===");
+        NSArray *nativeResults = [self tryNativeDetection:wxIDs];
+        if (nativeResults && nativeResults.count > 0) {
+            fdLog([NSString stringWithFormat:@"[checkSpecificFriends] Native detection SUCCESS: %lu results", (unsigned long)nativeResults.count]);
+            if (completion) completion(nativeResults);
+            return;
+        }
+        fdLog(@"[checkSpecificFriends] Native detection FAILED, falling back to local detection");
 
-            for (NSString *wxID in wxIDs) {
-                @autoreleasepool {
-                    id contact = nil;
-                    // 先尝试 getContactInfo:（服务端获取）
-                    if (contactMgr) {
-                        SEL infoSel = sel_registerName("getContactInfo:");
-                        if ([contactMgr respondsToSelector:infoSel]) {
-                            contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, infoSel, wxID);
-                        }
-                    }
-                    // 回退到 getContactByName:
-                    if (!contact || ![contact isKindOfClass:cContactCls]) {
-                        SEL getSel = sel_registerName("getContactByName:");
-                        if (contactMgr && [contactMgr respondsToSelector:getSel]) {
-                            contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, getSel, wxID);
-                        }
-                    }
-
-                    if (!contact || ![contact isKindOfClass:cContactCls]) {
-                        MioFriendDetectResult *r = [MioFriendDetectResult infoWithContact:nil isDeleted:YES isInvalid:NO];
-                        [results addObject:r];
-                        continue;
-                    }
-
-                    MioFriendDetectResult *r = [self checkOneFriend:contact];
-                    [results addObject:r];
-                }
-            }
-
-            if (completion) completion([results copy]);
+        // 策略B: 本地检测
+        fdLog(@"[checkSpecificFriends] === TRYING LOCAL DETECTION ===");
+        NSArray *localResults = [self tryLocalDetection:wxIDs];
+        if (localResults && localResults.count > 0) {
+            fdLog([NSString stringWithFormat:@"[checkSpecificFriends] Local detection SUCCESS: %lu results", (unsigned long)localResults.count]);
+            if (completion) completion(localResults);
+            return;
+        }
+        fdLog(@"[checkSpecificFriends] ALL DETECTION METHODS FAILED");
+        if (completion) completion(@[]);
     });
 }
 
-// checkSpecificFriends: 不带 completion
 - (void)checkSpecificFriends:(NSArray *)wxIDs {
     [self checkSpecificFriends:wxIDs completion:nil];
 }
 
-// checkFriendsWithCompletion: 检测全部好友
 - (void)checkFriendsWithCompletion:(void(^)(NSArray *))completion {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        fdLog(@"[checkFriendsWithCompletion] Starting...");
         NSArray *friends = [self allFriends];
+        if (!friends || friends.count == 0) { fdLog(@"[checkFriendsWithCompletion] No friends"); if (completion) completion(@[]); return; }
+
         NSMutableArray *wxIDs = [NSMutableArray array];
         for (id contact in friends) {
             NSString *wxID = @"";
             @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
             if (wxID.length > 0) [wxIDs addObject:wxID];
         }
+        fdLog([NSString stringWithFormat:@"[checkFriendsWithCompletion] Got %lu WX IDs, calling checkSpecificFriends...", (unsigned long)wxIDs.count]);
         [self checkSpecificFriends:wxIDs completion:completion];
     });
 }
 
 @end
 
-#pragma mark - Detection Entry Point
+#pragma mark - 主入口
 
 static BOOL startFriendDetection(void) {
+    fdLog(@"========================================");
     fdLog(@"=== Friend Detection Start ===");
+    fdLog(@"========================================");
 
     MioFriendDetector *detector = [[MioFriendDetector alloc] init];
+    fdLog(@"[Main] MioFriendDetector initialized");
 
-    // Step 1: 获取所有好友
-    NSArray *friends = [detector allFriends];
-    if (!friends || friends.count == 0) { fdLog(@"[ERR] No friends found"); return NO; }
-    fdLog([NSString stringWithFormat:@"Got %lu friends", (unsigned long)friends.count]);
-
-    // Step 2: 提取 WX ID
-    NSMutableArray *wxIDs = [NSMutableArray array];
-    for (id contact in friends) {
-        NSString *wxID = @"";
-        @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
-        if (wxID.length > 0) [wxIDs addObject:wxID];
-    }
-    fdLog([NSString stringWithFormat:@"Extracted %lu WX IDs", (unsigned long)wxIDs.count]);
-    if (wxIDs.count == 0) return NO;
-
-    // Step 3: 开始检测
     __block NSArray *detectResults = nil;
     __block BOOL done = NO;
 
-    [detector checkSpecificFriends:wxIDs completion:^(NSArray *results) {
+    fdLog(@"[Main] Calling checkFriendsWithCompletion...");
+    [detector checkFriendsWithCompletion:^(NSArray *results) {
         detectResults = results;
         done = YES;
+        fdLog([NSString stringWithFormat:@"[Main] Completion block called with %lu results", (unsigned long)results.count]);
     }];
 
     int waitCount = 0;
-    while (!done && waitCount < 120) {
+    while (!done && waitCount < 180) {
         [NSThread sleepForTimeInterval:1.0];
         waitCount++;
+        if (waitCount % 30 == 0)
+            fdLog([NSString stringWithFormat:@"[Main] Waiting... %d seconds", waitCount]);
     }
+    fdLog([NSString stringWithFormat:@"[Main] Wait finished after %d seconds, done=%d", waitCount, done]);
 
-    if (!detectResults || detectResults.count == 0) { fdLog(@"[ERR] Detection returned no results"); return NO; }
-    fdLog([NSString stringWithFormat:@"Detection returned %lu results", (unsigned long)detectResults.count]);
+    if (!detectResults) { fdLog(@"[Main] Detection returned nil"); return NO; }
+    fdLog([NSString stringWithFormat:@"[Main] Detection returned %lu results", (unsigned long)detectResults.count]);
 
-    // Step 4: 处理结果
+    // 处理结果
     NSMutableArray *deletedFriends = [NSMutableArray array];
-    for (MioFriendDetectResult *r in detectResults) {
-        NSString *wxID = @"";
-        NSString *nick = @"";
-        if (r.contact) {
-            @try { wxID = [r.contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
-            @try { nick = [r.contact performSelector:@selector(m_nsNickName)] ?: wxID; } @catch (...) {}
+    int totalValid = 0;
+    for (id r in detectResults) {
+        if (![r isKindOfClass:[MioFriendDetectResult class]]) continue;
+        MioFriendDetectResult *result = (MioFriendDetectResult *)r;
+        if (result.isDeleted || result.isInvalid) {
+            NSString *wxID = @"", *nick = @"";
+            if (result.contact) {
+                @try { wxID = [result.contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
+                @try { nick = [result.contact performSelector:@selector(m_nsNickName)] ?: wxID; } @catch (...) {}
+            }
+            [deletedFriends addObject:@{@"wxID": wxID, @"nick": nick, @"status": result.isInvalid ? @"invalid" : @"deleted"}];
         } else {
-            wxID = @"unknown";
-            nick = @"unknown";
-        }
-
-        NSString *status = r.isInvalid ? @"invalid" : (r.isDeleted ? @"deleted" : @"valid");
-        if (r.isDeleted || r.isInvalid) {
-            [deletedFriends addObject:@{@"wxID": wxID, @"nick": nick, @"status": status}];
+            totalValid++;
         }
     }
 
-    fdLog([NSString stringWithFormat:@"Deleted friends: %lu", (unsigned long)deletedFriends.count]);
+    fdLog([NSString stringWithFormat:@"[Main] Processing complete: %lu deleted, %d valid", (unsigned long)deletedFriends.count, totalValid]);
 
-    NSDictionary *saveData = @{
-        @"timestamp": @([[NSDate date] timeIntervalSince1970]),
-        @"total": @(wxIDs.count),
-        @"deleted": [deletedFriends copy]
-    };
-    [[NSUserDefaults standardUserDefaults] setObject:saveData forKey:@"com.mio.wechat.plugin.FriendDetection.results"];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-
-    return YES;
+    if (deletedFriends.count > 0 || totalValid > 0) {
+        NSDictionary *saveData = @{
+            @"timestamp": @([[NSDate date] timeIntervalSince1970]),
+            @"total": @(totalValid + (int)deletedFriends.count),
+            @"deleted": [deletedFriends copy]
+        };
+        [[NSUserDefaults standardUserDefaults] setObject:saveData forKey:@"com.mio.wechat.plugin.FriendDetection.results"];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+        fdLog(@"[Main] Results saved");
+        return YES;
+    }
+    fdLog(@"[Main] No meaningful results to save");
+    return NO;
 }
 
 #pragma mark - ViewController
@@ -285,7 +377,6 @@ static void FDViewDidLoad(id self, SEL _cmd) {
     UIViewController *vc = (UIViewController *)self;
     vc.title = @"好友检测";
     vc.view.backgroundColor = [UIColor colorWithRed:0.96 green:0.96 blue:0.96 alpha:1.0];
-
     CGFloat w = vc.view.bounds.size.width;
 
     UILabel *infoLabel = [[UILabel alloc] initWithFrame:CGRectMake(16, 100, w - 32, 60)];
@@ -315,26 +406,23 @@ static void FDViewDidLoad(id self, SEL _cmd) {
                 btn.enabled = YES;
                 UIViewController *strongVC = weakVC;
                 if (!strongVC) return;
-
                 if (!success) {
                     [btn setTitle:@"开始检测" forState:UIControlStateNormal];
                     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"检测失败"
-                                                                                   message:@"请查看日志了解详情"
-                                                                            preferredStyle:UIAlertControllerStyleAlert];
+                                                   message:@"请查看日志了解详情"
+                                            preferredStyle:UIAlertControllerStyleAlert];
                     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:nil]];
                     [strongVC presentViewController:alert animated:YES completion:nil];
                     return;
                 }
-
                 [btn setTitle:@"检测完成" forState:UIControlStateNormal];
                 NSDictionary *results = [[NSUserDefaults standardUserDefaults] objectForKey:@"com.mio.wechat.plugin.FriendDetection.results"];
                 NSArray *deleted = results[@"deleted"];
-                NSString *msg = deleted && deleted.count > 0
+                NSString *msg = (deleted && deleted.count > 0)
                     ? [NSString stringWithFormat:@"发现 %lu 个好友已将你删除", (unsigned long)deleted.count]
                     : @"未发现已将你删除的好友";
-                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"检测结果"
-                                                                               message:msg
-                                                                        preferredStyle:UIAlertControllerStyleAlert];
+                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"检测结果" message:msg
+                                            preferredStyle:UIAlertControllerStyleAlert];
                 [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:nil]];
                 [strongVC presentViewController:alert animated:YES completion:nil];
             });
@@ -354,9 +442,8 @@ static void FDViewDidLoad(id self, SEL _cmd) {
         if (!strongVC) return;
         NSDictionary *results = [[NSUserDefaults standardUserDefaults] objectForKey:@"com.mio.wechat.plugin.FriendDetection.results"];
         if (!results) {
-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"提示"
-                                                                           message:@"暂无检测记录"
-                                                                    preferredStyle:UIAlertControllerStyleAlert];
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"提示" message:@"暂无检测记录"
+                                        preferredStyle:UIAlertControllerStyleAlert];
             [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:nil]];
             [strongVC presentViewController:alert animated:YES completion:nil];
             return;
@@ -364,19 +451,15 @@ static void FDViewDidLoad(id self, SEL _cmd) {
         NSArray *deleted = results[@"deleted"];
         NSString *total = results[@"total"] ? [results[@"total"] stringValue] : @"0";
         NSString *msg = [NSString stringWithFormat:@"上次检测: 共 %@ 个好友", total];
-        if (deleted && deleted.count > 0) {
+        if (deleted && deleted.count > 0)
             msg = [msg stringByAppendingFormat:@"\n%lu 个已将你删除", (unsigned long)deleted.count];
-        }
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"上次检测结果"
-                                                                       message:msg
-                                                                preferredStyle:UIAlertControllerStyleAlert];
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"上次检测结果" message:msg
+                                        preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:nil]];
         [strongVC presentViewController:alert animated:YES completion:nil];
     }] forControlEvents:UIControlEventTouchUpInside];
     [vc.view addSubview:resultsBtn];
 }
-
-#pragma mark - Helper
 
 @implementation WPFriendDetectionVCHelper
 + (UIViewController *)makeVC {
@@ -385,17 +468,12 @@ static void FDViewDidLoad(id self, SEL _cmd) {
         class_addMethod(vcCls, @selector(viewDidLoad), (IMP)FDViewDidLoad, "v@:");
         objc_registerClassPair(vcCls);
     }
-    UIViewController *vc = [[vcCls alloc] init];
-    return vc;
+    return [[vcCls alloc] init];
 }
 @end
 
-#pragma mark - Hook Entry
-
 @implementation FriendDetectionHook
-
 + (void)install {
     fdLog(@"FriendDetectionHook installed");
 }
-
 @end
