@@ -499,14 +499,6 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     
     CGSize labelSize = label.frame.size;
     label.frame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
-    mtLog([NSString stringWithFormat:@"[POS-QR] pos=%ld sender=%d cellFrame=%@ contentFrame=%@ labelFrame=%@ cvLR=(%.0f,%.0f) cvTB=(%.0f,%.0f) labelW=%.1f labelH=%.1f offset=(%.0f,%.0f)",
-           (long)position, isSender,
-           NSStringFromCGRect(cellFrame), NSStringFromCGRect(contentFrame),
-           NSStringFromCGRect(label.frame),
-           contentFrame.origin.x, contentFrame.origin.x + contentFrame.size.width,
-           contentFrame.origin.y, contentFrame.origin.y + contentFrame.size.height,
-           labelSize.width, labelSize.height,
-           offsetX, offsetY]);
 }
 
 // ============================================================
@@ -572,7 +564,6 @@ static void addTimeLabelToCell(id cell) {
         }
         
         PluginConfig *config = [PluginConfig shared];
-        mtLog([NSString stringWithFormat:@"showMessageTime: %d", config.showMessageTime]);
         if (!config.showMessageTime) return;
         
         id wrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
@@ -593,33 +584,28 @@ static void addTimeLabelToCell(id cell) {
         }
         
         if (!wrap) {
-            mtLog(@"Trying _viewModel->parentModel fallback");
             @try {
                 id viewModel = [cell valueForKey:@"_viewModel"] ?: [cell valueForKey:@"m_viewModel"];
                 if (viewModel) {
                     id parentModel = [viewModel valueForKey:@"parentModel"];
                     if (parentModel) {
                         wrap = [parentModel valueForKey:@"m_messageWrap"] ?: [parentModel valueForKey:@"messageWrap"];
-                        if (wrap) mtLog(@"Got wrap from _viewModel->parentModel fallback");
                     }
                 }
             } @catch (NSException *e) {}
         }
         
         if (!wrap) {
-            mtLog(@"Trying viewModel->messageWrap directly");
             @try {
                 id viewModel = [cell valueForKey:@"_viewModel"] ?: [cell valueForKey:@"m_viewModel"];
                 if (viewModel) {
                     wrap = [viewModel valueForKey:@"m_messageWrap"] ?: [viewModel valueForKey:@"messageWrap"];
                     if (!wrap) wrap = [viewModel valueForKey:@"m_msgWrap"] ?: [viewModel valueForKey:@"msgWrap"];
-                    if (wrap) mtLog(@"Got wrap from viewModel->messageWrap directly");
                 }
             } @catch (NSException *e) {}
         }
         
         if (!wrap) {
-            mtLog(@"Trying getMessageWrapInVisibleCellWithMesLocalID:");
             @try {
                 unsigned int mesLocalID = 0;
                 @try {
@@ -647,7 +633,6 @@ static void addTimeLabelToCell(id cell) {
                                 id result = ((id (*)(id, SEL, unsigned int))objc_msgSend)(responder, sel, mesLocalID);
                                 if (result) {
                                     wrap = result;
-                                    mtLog([NSString stringWithFormat:@"Got wrap from getMessageWrapInVisibleCellWithMesLocalID: localID=%u", mesLocalID]);
                                 }
                             } @catch (NSException *e) {
                                 mtLog([NSString stringWithFormat:@"getMessageWrapInVisibleCell threw: %@", e.reason]);
@@ -655,10 +640,10 @@ static void addTimeLabelToCell(id cell) {
                             break;
                         }
                     }
-                    if (!wrap) mtLog([NSString stringWithFormat:@"getMessageWrapInVisibleCell: no responder found for mesLocalID=%u", mesLocalID]);
+                    if (!wrap) {
+                    }
                 } else {
-                    mtLog(@"getMessageWrapInVisibleCell: mesLocalID is 0, skipping");
-                }
+                    }
             } @catch (NSException *e) {}
         }
         
@@ -686,7 +671,6 @@ static void addTimeLabelToCell(id cell) {
         unsigned int createTime = 0;
         if ([wrap respondsToSelector:@selector(m_uiCreateTime)]) {
             createTime = ((unsigned int (*)(id, SEL))objc_msgSend)(wrap, @selector(m_uiCreateTime));
-            mtLog([NSString stringWithFormat:@"createTime: %u", createTime]);
         } else {
             mtLog(@"wrap doesn't respond to m_uiCreateTime");
         }
@@ -703,7 +687,6 @@ static void addTimeLabelToCell(id cell) {
         
         NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
         NSString *timeString = formatMessageTime(messageDate, config.messageTimeFormat);
-        mtLog([NSString stringWithFormat:@"timeString: %@", timeString]);
         if (!timeString) {
             mtLog(@"timeString is nil");
             return;
@@ -755,23 +738,16 @@ static void addTimeLabelToCell(id cell) {
         CGSize textSize = [timeString sizeWithAttributes:@{NSFontAttributeName: timeLabel.font}];
         CGSize labelSize = CGSizeMake(textSize.width, textSize.height);
         
-        mtLog([NSString stringWithFormat:@"labelSize: %@", NSStringFromCGSize(labelSize)]);
-        
         CGRect labelFrame = CGRectMake(0, 0, labelSize.width, labelSize.height);
-        
-        mtLog([NSString stringWithFormat:@"cellFrame: %@", NSStringFromCGRect(cellFrame)]);
         
         CGFloat offsetX = config.messageTimeOffsetX;
         CGFloat offsetY = config.messageTimeOffsetY;
         NSInteger position = config.messageTimePosition;
         
-        mtLog([NSString stringWithFormat:@"position: %ld, offsetX: %.2f, offsetY: %.2f", (long)position, offsetX, offsetY]);
-        
         if ((position == 6 || position == 7) && bubbleView && config.messageTimeBubbleExtWidth > 0) {
             CGRect bubbleFrame = bubbleView.frame;
             bubbleFrame.size.width += config.messageTimeBubbleExtWidth;
             bubbleView.frame = bubbleFrame;
-            mtLog([NSString stringWithFormat:@"Extended bubble width by %.0f", config.messageTimeBubbleExtWidth]);
         }
         
         CGRect avatarFrame = [(UIView *)avatarView frame];
@@ -783,23 +759,11 @@ static void addTimeLabelToCell(id cell) {
                                  NSStringFromClass([[(UIView *)contentView superview] class])]);
         CGRect contentFrame = contentFrameInCellView(contentView, cellView);
         if (CGRectEqualToRect(contentFrame, CGRectZero)) {
-            mtLog(@"contentFrame is zero, using cellFrame as fallback");
             contentFrame = cellFrame;
             contentFrame.origin = CGPointZero;
         }
         
-        mtLog([NSString stringWithFormat:@"avatarView: %@, contentFrame: %@, isSender: %d", avatarView ? @"YES" : @"NO", NSStringFromCGRect(contentFrame), isSender]);
-        
         labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
-        
-        mtLog([NSString stringWithFormat:@"[POS] pos=%ld sender=%d cellFrame=%@ contentFrame=%@ labelFrame=%@ cvLR=(%.0f,%.0f) cvTB=(%.0f,%.0f) labelW=%.1f labelH=%.1f offset=(%.0f,%.0f)",
-               (long)position, isSender,
-               NSStringFromCGRect(cellFrame), NSStringFromCGRect(contentFrame),
-               NSStringFromCGRect(labelFrame),
-               contentFrame.origin.x, contentFrame.origin.x + contentFrame.size.width,
-               contentFrame.origin.y, contentFrame.origin.y + contentFrame.size.height,
-               labelSize.width, labelSize.height,
-               offsetX, offsetY]);
         
         timeLabel.frame = labelFrame;
         
@@ -807,8 +771,6 @@ static void addTimeLabelToCell(id cell) {
             [cellView addSubview:timeLabel];
             objc_setAssociatedObject(cell, @"messageTimeCreateTime", @(createTime), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             mtLog(@"Added timeLabel to cell");
-        } else {
-            mtLog(@"timeLabel already in cell, updated frame");
         }
         
         mtLog(@"=== addTimeLabelToCell completed successfully ===");
@@ -844,12 +806,10 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
 
     @try {
         cellView = [cell valueForKey:@"m_cellView"];
-        if (cellView) mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ got cellView via m_cellView class=%@", cellCls, NSStringFromClass([cellView class])]);
     } @catch (NSException *e) {}
     if (!cellView) {
         @try {
             cellView = [cell valueForKey:@"cellView"];
-            if (cellView) mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ got cellView via cellView class=%@", cellCls, NSStringFromClass([cellView class])]);
         } @catch (NSException *e) {}
     }
     if (!cellView) {
@@ -857,7 +817,6 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
             NSString *cn = NSStringFromClass([sv class]);
             if ([cn containsString:@"CellView"]) {
                 cellView = sv;
-                mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ found cellView via subview class=%@", cellCls, cn]);
                 break;
             }
         }
@@ -871,15 +830,11 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
         id viewModel = [cellView valueForKey:@"m_viewModel"] ?: [cellView valueForKey:@"viewModel"];
         if (viewModel) {
             wrap = [viewModel valueForKey:@"messageWrap"] ?: [viewModel valueForKey:@"m_messageWrap"];
-            if (wrap) {
-                mtLog([NSString stringWithFormat:@"[cellForRow] got wrap via viewModel class=%@", NSStringFromClass([viewModel class])]);
-            }
         }
     } @catch (NSException *e) {}
     if (!wrap) {
         @try {
             wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
-            if (wrap) mtLog(@"[cellForRow] got wrap directly from cellView");
         } @catch (NSException *e) {}
     }
 
@@ -893,7 +848,6 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
     }
 
     objc_setAssociatedObject(cell, @"cachedMsgWrap", wrap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    mtLog([NSString stringWithFormat:@"[cellForRow] ✅ cachedMsgWrap for cell=%@", cellCls]);
     return cell;
 }
 
