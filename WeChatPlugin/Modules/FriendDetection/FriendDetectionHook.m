@@ -26,20 +26,20 @@ static void fdLog(NSString *content) {
 
 static void startFriendDetection(void) {
     @autoreleasepool {
-        // Get MMServiceCenter
-        Class mmSvcCenter = objc_getClass("MMServiceCenter");
-        if (!mmSvcCenter) { fdLog(@"[ERR] MMServiceCenter not found"); return; }
-        id svcCenter = [mmSvcCenter performSelector:@selector(defaultCenter)];
-        if (!svcCenter) { fdLog(@"[ERR] MMServiceCenter defaultCenter nil"); return; }
+        // Use FriendDetector class to get all friends and check them
+        Class detectorCls = objc_getClass("FriendDetector");
+        if (!detectorCls) {
+            detectorCls = objc_getClass("WeChatFriendDetector");
+        }
+        if (!detectorCls) { fdLog(@"[ERR] FriendDetector not found"); return; }
 
-        // Get CContactMgr
-        Class contactMgrCls = objc_getClass("CContactMgr");
-        if (!contactMgrCls) { fdLog(@"[ERR] CContactMgr class not found"); return; }
-        id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(svcCenter, sel_registerName("getService:"), contactMgrCls);
-        if (!contactMgr) { fdLog(@"[ERR] CContactMgr service nil"); return; }
+        id detector = [[detectorCls alloc] init];
+        if (!detector) { fdLog(@"[ERR] Failed to init FriendDetector"); return; }
 
-        // Get all friends (contactType = 8 means friends)
-        NSArray *contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel_registerName("getContactList:contactType:"), 0, 8);
+        // allFriends is a property/method on FriendDetector
+        SEL allFriendsSel = NSSelectorFromString(@"allFriends");
+        if (![detector respondsToSelector:allFriendsSel]) { fdLog(@"[ERR] allFriends not found"); return; }
+        NSArray *contacts = ((NSArray *(*)(id, SEL))objc_msgSend)(detector, allFriendsSel);
         if (!contacts || contacts.count == 0) { fdLog(@"[ERR] No contacts found"); return; }
         fdLog([NSString stringWithFormat:@"Got %lu contacts", (unsigned long)contacts.count]);
 
@@ -61,16 +61,7 @@ static void startFriendDetection(void) {
         fdLog([NSString stringWithFormat:@"Filtered to %lu friend WX IDs", (unsigned long)wxIDs.count]);
         if (wxIDs.count == 0) return;
 
-        // Use FriendDetector to check friends
-        Class detectorCls = objc_getClass("FriendDetector");
-        if (!detectorCls) {
-            detectorCls = objc_getClass("WeChatFriendDetector");
-        }
-        if (!detectorCls) { fdLog(@"[ERR] FriendDetector not found"); return; }
-
-        id detector = [[detectorCls alloc] init];
-        if (!detector) { fdLog(@"[ERR] Failed to init FriendDetector"); return; }
-
+        // Check specific friends
         SEL checkSel = NSSelectorFromString(@"checkSpecificFriends:completion:");
         if (![detector respondsToSelector:checkSel]) { fdLog(@"[ERR] checkSpecificFriends:completion: not found"); return; }
 
