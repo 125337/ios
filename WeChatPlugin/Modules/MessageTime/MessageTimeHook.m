@@ -16,7 +16,7 @@ static const CGFloat kTimeLabelMaxYInset       = 2.0;
 static const CGFloat kStraddleFactor           = 0.5;
 
 // 位置微调偏移（详见 消息时间功能对比分析.md §5.2.4）
-static const CGFloat kPos3_X_ExtraOffset       = -13.0;  // 消息下方靠近头像：straddle + 偏左微调
+static const CGFloat kPos3_X_ExtraOffset       = -12.5;  // 消息下方靠近头像：straddle + 偏左微调
 static const CGFloat kPos4_X_Padding           = 2.0;    // 消息下方远离头像：边缘对齐 padding
 static const CGFloat kPos5_X_Padding           = 5.0;    // 消息上方靠近头像：边缘对齐 padding
 static const CGFloat kPos5_Y_Overlap           = 3.0;    // 消息上方靠近头像：底部入气泡 3pt
