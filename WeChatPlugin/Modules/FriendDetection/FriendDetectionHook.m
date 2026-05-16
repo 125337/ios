@@ -175,9 +175,6 @@ static void fdLog(NSString *content) {
             }
 
             if (completion) completion([results copy]);
-        }
-
-        if (completion) completion([results copy]);
     });
 }
 
