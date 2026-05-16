@@ -49,22 +49,22 @@ static NSArray *getAllFriends(void) {
     // Type 0,8 - 好友
     if ([contactMgr respondsToSelector:sel]) {
         contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 8);
-        if (contacts && contacts.count > 0) { fdLog(@"[OK] getContactList:0,8 returned %lu", (unsigned long)contacts.count); return contacts; }
+        if (contacts && contacts.count > 0) { fdLog([NSString stringWithFormat:@"[OK] getContactList:0,8 returned %lu", (unsigned long)contacts.count]); return contacts; }
         
         // Type 0,0 - 全部联系人
         contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 0);
-        if (contacts && contacts.count > 0) { fdLog(@"[OK] getContactList:0,0 returned %lu", (unsigned long)contacts.count); return contacts; }
+        if (contacts && contacts.count > 0) { fdLog([NSString stringWithFormat:@"[OK] getContactList:0,0 returned %lu", (unsigned long)contacts.count]); return contacts; }
         
         // Type 1,0
         contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 1, 0);
-        if (contacts && contacts.count > 0) { fdLog(@"[OK] getContactList:1,0 returned %lu", (unsigned long)contacts.count); return contacts; }
+        if (contacts && contacts.count > 0) { fdLog([NSString stringWithFormat:@"[OK] getContactList:1,0 returned %lu", (unsigned long)contacts.count]); return contacts; }
     }
     
     // 尝试 GetContact 方法
     SEL getSel = sel_registerName("GetContact");
     if ([contactMgr respondsToSelector:getSel]) {
         contacts = ((NSArray *(*)(id, SEL))objc_msgSend)(contactMgr, getSel);
-        if (contacts && contacts.count > 0) { fdLog(@"[OK] GetContact returned %lu", (unsigned long)contacts.count); return contacts; }
+        if (contacts && contacts.count > 0) { fdLog([NSString stringWithFormat:@"[OK] GetContact returned %lu", (unsigned long)contacts.count]); return contacts; }
     }
 
     fdLog(@"[ERR] All methods to get contacts failed");
@@ -123,6 +123,7 @@ static NSDictionary *processResults(NSArray *results) {
         return nil;
     }
     fdLog([NSString stringWithFormat:@"Got %lu detection results", (unsigned long)results.count]);
+
 
     NSMutableArray *deletedFriends = [NSMutableArray array];
     Class resultCls = objc_getClass("FriendDetectResult");
