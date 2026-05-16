@@ -562,7 +562,6 @@ static void addTimeLabelToCell(id cell) {
 
 static UITableViewCell* (*orig_BaseMsgContentVC_cellForRow)(id, SEL, id, NSIndexPath*);
 static void (*orig_BaseMsgContentVC_willDisplayCell)(id, SEL, id, id, NSIndexPath*);
-static void (*orig_BaseMsgContentVC_addMessageNode)(id, SEL, id, id, BOOL, BOOL);
 static void (*orig_BaseMsgContentVC_viewDidLayoutSubviews)(id, SEL);
 static void (*orig_CommonMsgCellView_layoutSubviews)(id, SEL);
 static void (*orig_CommonMsgCellView_prepareForReuse)(id, SEL);
@@ -619,17 +618,6 @@ static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath 
     dispatch_async(dispatch_get_main_queue(), ^{
         addTimeLabelToCell(cell);
     });
-}
-
-static void repl_addMessageNode(id self, SEL _cmd, id node, id layout, BOOL addMoreMsg, BOOL addNewMsg) {
-    if (orig_BaseMsgContentVC_addMessageNode) {
-        orig_BaseMsgContentVC_addMessageNode(self, _cmd, node, layout, addMoreMsg, addNewMsg);
-    }
-    
-    if (![PluginConfig shared].showMessageTime) return;
-    if (!node) return;
-    
-    addTimeLabelToCell(node);
 }
 
 static void repl_CommonMsgCellView_layoutSubviews(id self, SEL _cmd) {
@@ -744,8 +732,7 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
 static MTHookEntry g_hookTable[] = {
     {"BaseMsgContentViewController", "tableView:cellForRowAtIndexPath:",              (IMP)repl_cellForRow,                                  (IMP*)&orig_BaseMsgContentVC_cellForRow},
     {"BaseMsgContentViewController", "tableView:willDisplayCell:forRowAtIndexPath:",  (IMP)repl_willDisplayCell,                             (IMP*)&orig_BaseMsgContentVC_willDisplayCell},
-    {"BaseMsgContentViewController", "addMessageNode:layout:addMoreMsg:addNewMsg:",   (IMP)repl_addMessageNode,                              (IMP*)&orig_BaseMsgContentVC_addMessageNode},
-    {"BaseMsgContentViewController", "viewDidLayoutSubviews",                         (IMP)repl_BaseMsgContentVC_viewDidLayoutSubviews,       (IMP*)&orig_BaseMsgContentVC_viewDidLayoutSubviews},
+    {"BaseMsgContentViewController", "viewDidLayoutSubviews",                 (IMP)repl_BaseMsgContentVC_viewDidLayoutSubviews,       (IMP*)&orig_BaseMsgContentVC_viewDidLayoutSubviews},
     {"CommonMessageCellView",        "layoutSubviews",                                (IMP)repl_CommonMsgCellView_layoutSubviews,            (IMP*)&orig_CommonMsgCellView_layoutSubviews},
     {"CommonMessageCellView",        "prepareForReuse",                               (IMP)repl_CommonMsgCellView_prepareForReuse,           (IMP*)&orig_CommonMsgCellView_prepareForReuse},
     {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,             (IMP*)&orig_ChatTimeCellView_layoutSubviews},
@@ -765,7 +752,7 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
     mtLog(@"========================================");
-    mtLog(@"MessageTimeHook install - cellForRow + willDisplayCell + addMessageNode");
+    mtLog(@"MessageTimeHook install - cellForRow + willDisplayCell");
     mtLog(@"========================================");
 
     PluginConfig *config = [PluginConfig shared];
