@@ -15,13 +15,6 @@ static const CGFloat kMinContentViewWidth      = 5.0;
 static const CGFloat kTimeLabelMaxYInset       = 2.0;
 static const CGFloat kStraddleFactor           = 0.5;
 
-// 位置微调偏移（详见 消息时间功能对比分析.md §5.2.4）
-static const CGFloat kPos3_X_ExtraOffset       = -12.5;  // 消息下方靠近头像：straddle + 偏左微调
-static const CGFloat kPos4_X_Padding           = 2.0;    // 消息下方远离头像：边缘对齐 padding
-static const CGFloat kPos5_X_Padding           = 5.0;    // 消息上方靠近头像：边缘对齐 padding
-static const CGFloat kPos5_Y_Overlap           = 3.0;    // 消息上方靠近头像：底部入气泡 3pt
-static const CGFloat kPos6_X_Padding           = 2.0;    // 消息上方远离头像：边缘对齐 padding
-
 static Class s_CMessageWrapClass; // install 时初始化
 
 // 全局消息标签跟踪：wrapPtr→UILabel（strong），标签在 cellView 间迁移，不被重复创建
@@ -415,35 +408,35 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
                 labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             }
             break;
-        case 3: // 消息下方(靠近头像)：微信优化 straddle，Y 完全一致，X 偏左微调
+        case 3: // 消息下方(靠近头像)：微信优化 straddle，X 偏左 -12.5
             if (isSender) {
-                labelFrame.origin.x = cvRight - w * kStraddleFactor + kPos3_X_ExtraOffset;
+                labelFrame.origin.x = cvRight - w * kStraddleFactor - 12.5;
             } else {
-                labelFrame.origin.x = cvLeft + w * kStraddleFactor + kPos3_X_ExtraOffset;
+                labelFrame.origin.x = cvLeft + w * kStraddleFactor - 12.5;
             }
             labelFrame.origin.y = cvBottom + h * kStraddleFactor;
             break;
         case 4: // 消息下方(远离头像)：边缘对齐，标签紧贴气泡底部外侧
             if (isSender) {
-                labelFrame.origin.x = cvLeft + kPos4_X_Padding;
+                labelFrame.origin.x = cvLeft + 2;
             } else {
-                labelFrame.origin.x = cvRight - w - kPos4_X_Padding;
+                labelFrame.origin.x = cvRight - w - 2;
             }
             labelFrame.origin.y = cvBottom;
             break;
         case 5: // 消息上方(靠近头像)：边缘对齐 + 底部入气泡 3pt
             if (isSender) {
-                labelFrame.origin.x = cvRight - w - kPos5_X_Padding;
+                labelFrame.origin.x = cvRight - w - 5;
             } else {
-                labelFrame.origin.x = cvLeft + kPos5_X_Padding;
+                labelFrame.origin.x = cvLeft + 5;
             }
-            labelFrame.origin.y = cvTop - h + kPos5_Y_Overlap;
+            labelFrame.origin.y = cvTop - h + 3;
             break;
         case 6: // 消息上方(远离头像)：边缘对齐，标签在气泡正上方
             if (isSender) {
-                labelFrame.origin.x = cvLeft + kPos6_X_Padding;
+                labelFrame.origin.x = cvLeft + 2;
             } else {
-                labelFrame.origin.x = cvRight - w - kPos6_X_Padding;
+                labelFrame.origin.x = cvRight - w - 2;
             }
             labelFrame.origin.y = cvTop - h;
             break;
