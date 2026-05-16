@@ -401,21 +401,19 @@ static void findAndCallAgreeDutyService(id mmServiceCenter, NSArray *wxIDs, NSMu
     //   4. 已发现的 CGI 模式: WCPayGetPayUserDutyCgi → 类似会有 GetContactAgreeDutyCgi
 
     // 候选: 已知的服务类 + 可能的方法名
-    // 注意: 只放返回值为 id/NSObject 的方法! BOOL 方法用 BOOL (*)() 调用。
+    // 从 WeChat 二进制 strings 分析确认的方法:
+    //   ✅ getContactInfo:callback:              - 单个异步获取
+    //   ✅ getContactInfoBatchUserNames:completion:  - 批量获取！
+    //   ✅ getContactInfoOrSyncUsername:completion: - 同步版本
+    //   ✅ batchGetContact                       - 批量获取（底层）
+    //   ❌ checkAgreeDuty: etc.                  - 这些在 WeChat 中不存在
     NSArray *candidates = @[
-        @{@"class": @"CNewNetworkMgr",
-          @"methods": @[
-              @"checkContactRelation:",
-              @"queryRelation:",
-          ]},
         @{@"class": @"CContactMgr",
           @"methods": @[
-              @"checkAgreeDuty:",
-              @"verifyContact:",
-              @"checkContact:agreeDuty:",
-              @"queryRelation:completion:",
-              @"checkContactDeleted:",
-              @"checkFriendRelation:",
+              @"getContactInfo:callback:",
+              @"getContactInfoBatchUserNames:completion:",
+              @"getContactInfoOrSyncUsername:completion:",
+              @"batchGetContact",
           ]},
     ];
 
