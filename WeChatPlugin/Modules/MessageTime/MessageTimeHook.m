@@ -6,6 +6,7 @@
 
 #import <UIKit/UIKit.h>
 
+static BOOL g_msgTimeLabelInjected = NO;
 static SEL sel_msgTimeLabel = NULL;
 static SEL sel_setMsgTimeLabel = NULL;
 
@@ -18,11 +19,18 @@ static void msgTimeLabel_setter(id self, SEL _cmd, id label) {
 }
 
 static inline id call_msgTimeLabel_getter(id target) {
-    return ((id (*)(id, SEL))objc_msgSend)(target, sel_msgTimeLabel);
+    if (g_msgTimeLabelInjected && [target respondsToSelector:sel_msgTimeLabel]) {
+        return ((id (*)(id, SEL))objc_msgSend)(target, sel_msgTimeLabel);
+    }
+    return objc_getAssociatedObject(target, sel_msgTimeLabel);
 }
 
 static inline void call_msgTimeLabel_setter(id target, id label) {
-    ((void (*)(id, SEL, id))objc_msgSend)(target, sel_setMsgTimeLabel, label);
+    if (g_msgTimeLabelInjected && [target respondsToSelector:sel_setMsgTimeLabel]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(target, sel_setMsgTimeLabel, label);
+    } else {
+        objc_setAssociatedObject(target, sel_msgTimeLabel, label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
 }
 
 // ============================================================
@@ -792,9 +800,10 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
     if (cellViewClass) {
         class_addMethod(cellViewClass, sel_msgTimeLabel, (IMP)msgTimeLabel_getter, "@@:");
         class_addMethod(cellViewClass, sel_setMsgTimeLabel, (IMP)msgTimeLabel_setter, "v@:@");
+        g_msgTimeLabelInjected = YES;
         mtLog(@"Injected msgTimeLabel getter/setter on CommonMessageCellView ✓");
     } else {
-        mtLog(@"CommonMessageCellView not found, using fallback associated objects");
+        mtLog(@"CommonMessageCellView not found, fallback: using direct objc_getAssociatedObject");
     }
 
     int hookedCount = 0;
