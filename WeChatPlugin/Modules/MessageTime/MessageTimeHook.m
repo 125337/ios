@@ -410,9 +410,9 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             break;
         case 3: // 消息下方(靠近头像)：微信优化 straddle，X 偏左 -12.5
             if (isSender) {
-                labelFrame.origin.x = cvRight - w * kStraddleFactor - 12.5;
+                labelFrame.origin.x = cvRight - w * kStraddleFactor - 13.5;
             } else {
-                labelFrame.origin.x = cvLeft + w * kStraddleFactor - 12.5;
+                labelFrame.origin.x = cvLeft + w * kStraddleFactor - 13;
             }
             labelFrame.origin.y = cvBottom + h * kStraddleFactor;
             break;
