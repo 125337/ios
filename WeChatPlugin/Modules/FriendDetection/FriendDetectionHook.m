@@ -567,6 +567,7 @@ static void installGroupDetectionHooks(void) {
             fdLog(@"[Hook] AddMemLogic.OnAddGroupMember hook 成功");
         }
     }
+}
 
 #pragma mark - 策略F: CGI 类绑定
 
