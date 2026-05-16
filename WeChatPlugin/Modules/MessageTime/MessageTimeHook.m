@@ -207,6 +207,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
     BOOL hasAvatar = !CGRectEqualToRect(avatarFrame, CGRectZero);
     
     CGFloat x = 0, y = 0;
+    CGRect labelFrame = CGRectZero;
     
     switch (position) {
         case 0:
