@@ -103,9 +103,48 @@ static void fdLog(NSString *content) {
 
 #pragma mark - 检测策略
 
-// 策略A: 跳过 - FriendDetector 的方法来自微信优化插件（旧版 WeChat API），调用即 crash
+// 策略A: 通过 WeChat 原生/微信优化插件方法检测好友
 - (NSArray *)tryNativeDetection:(NSArray *)wxIDs {
-    fdLog(@"[Native] SKIPPED: FriendDetector methods are from WeChat Enhancement plugin (old WeChat SDK), invoking them crashes on current WeChat version");
+    for (NSString *clsName in @[@"FriendDetector", @"WeChatFriendDetector"]) {
+        Class wcCls = objc_getClass([clsName UTF8String]);
+        if (!wcCls) { fdLog([NSString stringWithFormat:@"[Native] %@ class not found", clsName]); continue; }
+
+        SEL sel = NSSelectorFromString(@"checkSpecificFriends:completion:");
+        if (![wcCls respondsToSelector:sel]) {
+            fdLog([NSString stringWithFormat:@"[Native] %@ has no checkSpecificFriends:completion:", clsName]);
+            continue;
+        }
+        fdLog([NSString stringWithFormat:@"[Native] Calling %@.checkSpecificFriends:completion: with %lu WX IDs...", clsName, (unsigned long)wxIDs.count]);
+
+        __block NSArray *nativeResults = nil;
+        __block BOOL done = NO;
+        void (^block)(NSArray *) = ^(NSArray *results) {
+            fdLog([NSString stringWithFormat:@"[Native] Completion called with %lu results", (unsigned long)results.count]);
+            nativeResults = results;
+            done = YES;
+        };
+
+        @try {
+            // 微信优化也这样调用: [FriendDetector checkSpecificFriends:wxIDs completion:block]
+            ((void (*)(Class, SEL, NSArray *, id))objc_msgSend)(wcCls, sel, wxIDs, block);
+        } @catch (NSException *e) {
+            fdLog([NSString stringWithFormat:@"[Native] Exception: %@", e]);
+            continue;
+        }
+
+        int waitCount = 0;
+        while (!done && waitCount < 90) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:1.0]];
+            waitCount++;
+            if (waitCount % 20 == 0)
+                fdLog([NSString stringWithFormat:@"[Native] Waiting... %d/90", waitCount]);
+        }
+        fdLog([NSString stringWithFormat:@"[Native] Wait complete: done=%d, results=%s", done, nativeResults ? [[NSString stringWithFormat:@"%lu items", (unsigned long)nativeResults.count] UTF8String] : "nil"]);
+
+        if (nativeResults && nativeResults.count > 0)
+            return nativeResults;
+    }
+    fdLog(@"[Native] All native attempts failed");
     return nil;
 }
 
