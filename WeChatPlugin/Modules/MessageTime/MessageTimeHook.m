@@ -201,111 +201,73 @@ static id getBubbleView(id cell) {
 static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger position,
                                  CGFloat offsetX, CGFloat offsetY, BOOL isSender,
                                  CGRect bubbleFrame, CGRect avatarFrame) {
-    CGRect labelFrame = CGRectMake(0, 0, labelSize.width, labelSize.height);
+    // 微信优化同款公式：以 contentView.bounds 为定位基准，不依赖气泡（position 7 除外）
+    CGFloat cw = cellFrame.size.width, ch = cellFrame.size.height;
+    CGFloat lw = labelSize.width, lh = labelSize.height;
+    BOOL hasAvatar = !CGRectEqualToRect(avatarFrame, CGRectZero);
     
-    CGFloat farSideX, nearSideX;
-    if (isSender) {
-        farSideX = bubbleFrame.origin.x;
-        nearSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
-    } else {
-        farSideX = bubbleFrame.origin.x + bubbleFrame.size.width - labelFrame.size.width;
-        nearSideX = bubbleFrame.origin.x;
-    }
+    CGFloat x = 0, y = 0;
     
     switch (position) {
         case 0:
-            if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
-                labelFrame.origin.y = avatarFrame.origin.y - labelFrame.size.height;
+            if (hasAvatar) {
+                x = avatarFrame.origin.x + (avatarFrame.size.width - lw) / 2;
+                y = avatarFrame.origin.y - lh;
             } else {
-                labelFrame.origin.x = nearSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
+                x = isSender ? 0 : cw - lw;
+                y = ch - lh;
             }
             break;
         case 1:
-            if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - labelFrame.size.width) / 2;
-                labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height;
+            if (hasAvatar) {
+                x = avatarFrame.origin.x + (avatarFrame.size.width - lw) / 2;
+                y = avatarFrame.origin.y + avatarFrame.size.height;
             } else {
-                labelFrame.origin.x = nearSideX;
-                labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height;
+                x = isSender ? 0 : cw - lw;
+                y = ch - lh;
             }
             break;
         case 2:
-            if (isSender) {
-                labelFrame.origin.x = bubbleFrame.origin.x - labelFrame.size.width;
-            } else {
-                labelFrame.origin.x = bubbleFrame.origin.x + bubbleFrame.size.width;
-            }
-            labelFrame.origin.y = bubbleFrame.origin.y + (bubbleFrame.size.height - labelFrame.size.height) / 2;
+            x = isSender ? cw - lw : 0;
+            y = (ch - lh) / 2;
             break;
         case 3:
-            labelFrame.origin.x = farSideX;
-            labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height;
+            x = isSender ? cw - lw : 0;
+            y = ch - lh;
             break;
         case 4:
-            labelFrame.origin.x = nearSideX;
-            labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height;
+            x = isSender ? 0 : cw - lw;
+            y = ch - lh;
             break;
         case 5:
-            labelFrame.origin.x = farSideX;
-            labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
+            x = isSender ? cw - lw : 0;
+            y = 0;
             break;
         case 6:
-            labelFrame.origin.x = nearSideX;
-            labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
+            x = isSender ? 0 : cw - lw;
+            y = 0;
             break;
         case 7:
-        {
-            labelFrame.origin.x = bubbleFrame.origin.x + (bubbleFrame.size.width - labelFrame.size.width) / 2;
-            labelFrame.origin.y = bubbleFrame.origin.y + bubbleFrame.size.height - labelFrame.size.height - 4;
+            x = bubbleFrame.origin.x + (bubbleFrame.size.width - lw) / 2;
+            y = bubbleFrame.origin.y + bubbleFrame.size.height - lh - 4;
             break;
-        }
         default:
-            labelFrame.origin.x = farSideX;
-            labelFrame.origin.y = bubbleFrame.origin.y - labelFrame.size.height;
+            x = isSender ? cw - lw : 0;
+            y = ch - lh;
             break;
     }
     
-    // offsetX direction
-    if (offsetX != 0) {
-        BOOL isOnLeftSide = NO;
-        switch (position) {
-            case 0: case 1:
-                isOnLeftSide = !isSender;
-                break;
-            case 2:
-                isOnLeftSide = isSender;
-                break;
-            case 3: case 5:
-                isOnLeftSide = isSender;
-                break;
-            case 4: case 6:
-                isOnLeftSide = !isSender;
-                break;
-            case 7:
-                isOnLeftSide = NO;
-                break;
-        }
-        if (isOnLeftSide) {
-            labelFrame.origin.x -= offsetX;
-        } else {
-            labelFrame.origin.x += offsetX;
-        }
-    }
+    if (offsetX != 0) x += isSender ? offsetX : -offsetX;
+    if (offsetY != 0) y -= offsetY;
     
-    if (offsetY != 0) {
-        labelFrame.origin.y -= offsetY;
-    }
+    CGFloat maxY = ch - lh - 2;
+    if (y > maxY) y = maxY;
+    if (y < 2) y = 2;
     
-    // Y clamp
-    CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
-    if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
-    if (labelFrame.origin.y < 2) labelFrame.origin.y = 2;
-    
+    labelFrame.origin.x = x;
+    labelFrame.origin.y = y;
     return labelFrame;
 }
-
 // ============================================================
 // MARK: - Lightweight Frame Refresh (for layoutSubviews callback)
 // ============================================================
