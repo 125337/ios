@@ -6,31 +6,14 @@
 
 #import <UIKit/UIKit.h>
 
-static BOOL g_msgTimeLabelInjected = NO;
 static SEL sel_msgTimeLabel = NULL;
-static SEL sel_setMsgTimeLabel = NULL;
-
-static id msgTimeLabel_getter(id self, SEL _cmd) {
-    return objc_getAssociatedObject(self, sel_msgTimeLabel);
-}
-
-static void msgTimeLabel_setter(id self, SEL _cmd, id label) {
-    objc_setAssociatedObject(self, sel_msgTimeLabel, label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
 
 static inline id call_msgTimeLabel_getter(id target) {
-    if (g_msgTimeLabelInjected && [target respondsToSelector:sel_msgTimeLabel]) {
-        return ((id (*)(id, SEL))objc_msgSend)(target, sel_msgTimeLabel);
-    }
     return objc_getAssociatedObject(target, sel_msgTimeLabel);
 }
 
 static inline void call_msgTimeLabel_setter(id target, id label) {
-    if (g_msgTimeLabelInjected && [target respondsToSelector:sel_setMsgTimeLabel]) {
-        ((void (*)(id, SEL, id))objc_msgSend)(target, sel_setMsgTimeLabel, label);
-    } else {
-        objc_setAssociatedObject(target, sel_msgTimeLabel, label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
+    objc_setAssociatedObject(target, sel_msgTimeLabel, label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 // ============================================================
@@ -794,17 +777,6 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
     mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetY: %.2f", config.messageTimeOffsetY]);
 
     sel_msgTimeLabel = sel_registerName("msgTimeLabel");
-    sel_setMsgTimeLabel = sel_registerName("setMsgTimeLabel:");
-
-    Class cellViewClass = objc_getClass("CommonMessageCellView");
-    if (cellViewClass) {
-        class_addMethod(cellViewClass, sel_msgTimeLabel, (IMP)msgTimeLabel_getter, "@@:");
-        class_addMethod(cellViewClass, sel_setMsgTimeLabel, (IMP)msgTimeLabel_setter, "v@:@");
-        g_msgTimeLabelInjected = YES;
-        mtLog(@"Injected msgTimeLabel getter/setter on CommonMessageCellView ✓");
-    } else {
-        mtLog(@"CommonMessageCellView not found, fallback: using direct objc_getAssociatedObject");
-    }
 
     int hookedCount = 0;
 
