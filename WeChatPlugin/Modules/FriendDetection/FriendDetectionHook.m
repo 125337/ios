@@ -109,6 +109,18 @@ static void fdLog(NSString *content) {
 
     unsigned int verifyFlag = 0;
     @try { verifyFlag = [[contact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
+    unsigned int uiStatus = 0;
+    @try { uiStatus = [[contact valueForKey:@"m_uiStatus"] unsignedIntValue]; } @catch (...) {}
+    id personalCard = nil;
+    @try { personalCard = [contact valueForKey:@"m_uiPersonalCard"]; } @catch (...) {}
+
+    // Debug: log first 5 contacts' raw values
+    static int debugCount = 0;
+    if (debugCount < 5) {
+        debugCount++;
+        fdLog([NSString stringWithFormat:@"[DEBUG] wxID=%@ nick=%@ verifyFlag=%u status=%u personalCard=%@",
+               wxID, nick, verifyFlag, uiStatus, personalCard]);
+    }
 
     BOOL nickAbnormal = (nick.length == 0 || [nick isEqualToString:wxID]);
     BOOL isDeleted = (verifyFlag > 0 || nickAbnormal);
