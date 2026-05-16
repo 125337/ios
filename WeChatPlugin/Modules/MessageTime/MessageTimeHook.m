@@ -471,6 +471,14 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     
     CGSize labelSize = label.frame.size;
     label.frame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
+    mtLog([NSString stringWithFormat:@"[POS-QR] pos=%ld sender=%d cellFrame=%@ contentFrame=%@ labelFrame=%@ cvLR=(%.0f,%.0f) cvTB=(%.0f,%.0f) labelW=%.1f labelH=%.1f offset=(%.0f,%.0f)",
+           (long)position, isSender,
+           NSStringFromCGRect(cellFrame), NSStringFromCGRect(contentFrame),
+           NSStringFromCGRect(label.frame),
+           contentFrame.origin.x, contentFrame.origin.x + contentFrame.size.width,
+           contentFrame.origin.y, contentFrame.origin.y + contentFrame.size.height,
+           labelSize.width, labelSize.height,
+           offsetX, offsetY]);
 }
 
 // ============================================================
@@ -797,6 +805,15 @@ static void addTimeLabelToCell(id cell) {
         mtLog([NSString stringWithFormat:@"avatarView: %@, contentFrame: %@, isSender: %d", avatarView ? @"YES" : @"NO", NSStringFromCGRect(contentFrame), isSender]);
         
         labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
+        
+        mtLog([NSString stringWithFormat:@"[POS] pos=%ld sender=%d cellFrame=%@ contentFrame=%@ labelFrame=%@ cvLR=(%.0f,%.0f) cvTB=(%.0f,%.0f) labelW=%.1f labelH=%.1f offset=(%.0f,%.0f)",
+               (long)position, isSender,
+               NSStringFromCGRect(cellFrame), NSStringFromCGRect(contentFrame),
+               NSStringFromCGRect(labelFrame),
+               contentFrame.origin.x, contentFrame.origin.x + contentFrame.size.width,
+               contentFrame.origin.y, contentFrame.origin.y + contentFrame.size.height,
+               labelSize.width, labelSize.height,
+               offsetX, offsetY]);
         
         timeLabel.frame = labelFrame;
         
