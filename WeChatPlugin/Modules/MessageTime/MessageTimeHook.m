@@ -359,35 +359,35 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             break;
         case 3:
             if (isSender) {
-                labelFrame.origin.x = cvRight - w * 0.5;
+                labelFrame.origin.x = cvRight - w;
             } else {
-                labelFrame.origin.x = cvLeft - w * 0.5;
+                labelFrame.origin.x = cvLeft;
             }
-            labelFrame.origin.y = cvBottom + h * 0.5;
+            labelFrame.origin.y = cvBottom;
             break;
         case 4:
             if (isSender) {
-                labelFrame.origin.x = cvLeft + w * 0.5;
+                labelFrame.origin.x = cvLeft;
             } else {
-                labelFrame.origin.x = cvRight - w * 0.5;
+                labelFrame.origin.x = cvRight - w;
             }
-            labelFrame.origin.y = cvBottom + h * 0.5;
+            labelFrame.origin.y = cvBottom;
             break;
         case 5:
             if (isSender) {
-                labelFrame.origin.x = cvRight - w * 0.5;
+                labelFrame.origin.x = cvRight - w;
             } else {
-                labelFrame.origin.x = cvLeft - w * 0.5;
+                labelFrame.origin.x = cvLeft;
             }
-            labelFrame.origin.y = cvTop - h * 0.5;
+            labelFrame.origin.y = cvTop - h;
             break;
         case 6:
             if (isSender) {
-                labelFrame.origin.x = cvLeft + w * 0.5;
+                labelFrame.origin.x = cvLeft;
             } else {
-                labelFrame.origin.x = cvRight - w * 0.5;
+                labelFrame.origin.x = cvRight - w;
             }
-            labelFrame.origin.y = cvTop - h * 0.5;
+            labelFrame.origin.y = cvTop - h;
             break;
         case 7:
             if (isSender) {
