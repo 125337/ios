@@ -6,6 +6,24 @@
 
 #import <UIKit/UIKit.h>
 
+// ============================================================
+// MARK: - Constants
+// ============================================================
+static const NSInteger kTimeLabelTag           = 999999;
+static const unsigned int kSystemMessageType   = 10000;
+static const CGFloat kMinContentViewWidth      = 5.0;
+static const CGFloat kTimeLabelMaxYInset       = 2.0;
+static const CGFloat kStraddleFactor           = 0.5;
+
+// 位置微调偏移（详见 消息时间功能对比分析.md §5.2.4）
+static const CGFloat kPos3_X_ExtraOffset       = -13.0;  // 消息下方靠近头像：straddle + 偏左微调
+static const CGFloat kPos4_X_Padding           = 2.0;    // 消息下方远离头像：边缘对齐 padding
+static const CGFloat kPos5_X_Padding           = 5.0;    // 消息上方靠近头像：边缘对齐 padding
+static const CGFloat kPos5_Y_Overlap           = 3.0;    // 消息上方靠近头像：底部入气泡 3pt
+static const CGFloat kPos6_X_Padding           = 2.0;    // 消息上方远离头像：边缘对齐 padding
+
+static Class s_CMessageWrapClass; // install 时初始化
+
 // 全局消息标签跟踪：wrapPtr→UILabel（strong），标签在 cellView 间迁移，不被重复创建
 static NSMapTable *g_msgLabels = nil;
 
@@ -54,7 +72,7 @@ static UILabel *initTimeLabel(UIView *targetView) {
     UILabel *label = objc_getAssociatedObject(targetView, @"msgTimeLabel");
     if (!label) {
         label = [[UILabel alloc] init];
-        label.tag = 999999;
+        label.tag = kTimeLabelTag;
         label.userInteractionEnabled = NO;
         label.textAlignment = NSTextAlignmentCenter;
         objc_setAssociatedObject(targetView, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -106,6 +124,41 @@ static UIColor *autoDarkColor(UIColor *lightColor) {
 
 static UIColor *colorInLightMode(UIColor *lightColor, UIColor *darkColor) {
     return isWeChatDarkMode() ? (darkColor ?: autoDarkColor(lightColor)) : lightColor;
+}
+
+// ============================================================
+// MARK: - Coordinate Helpers
+// ============================================================
+
+static CGRect contentFrameInCellView(id contentView, id cellView) {
+    if (!contentView) return CGRectZero;
+    UIView *cv = (UIView *)contentView;
+    UIView *cvSuper = cv.superview;
+    if (cvSuper == (UIView *)cellView) return cv.frame;
+    if (cellView) return [(UIView *)cellView convertRect:cv.frame fromView:cvSuper];
+    return cv.frame;
+}
+
+static BOOL detectIsSender(id cell, id cellView, id contentView, id wrap) {
+    if (wrap) {
+        id target = getCellView(cell) ?: cell;
+        SEL sel = NSSelectorFromString(@"isSenderFromMsgWrap:");
+        if ([target respondsToSelector:sel]) {
+            @try {
+                return ((BOOL (*)(id, SEL, id))objc_msgSend)(target, sel, wrap);
+            } @catch (NSException *e) {}
+        }
+        if (target != cell && [cell respondsToSelector:sel]) {
+            @try {
+                return ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, sel, wrap);
+            } @catch (NSException *e) {}
+        }
+    }
+    if (contentView && cellView) {
+        CGRect cfc = contentFrameInCellView(contentView, cellView);
+        return CGRectGetMidX(cfc) > [(UIView *)cellView frame].size.width / 2;
+    }
+    return NO;
 }
 
 // ============================================================
@@ -304,7 +357,7 @@ static id getContentView(id cell) {
     }
 
     if (contentView) {
-        if (CGRectEqualToRect([(UIView *)contentView frame], CGRectZero) || [(UIView *)contentView frame].size.width < 5) {
+        if (CGRectEqualToRect([(UIView *)contentView frame], CGRectZero) || [(UIView *)contentView frame].size.width < kMinContentViewWidth) {
             mtLog([NSString stringWithFormat:@"[DBG] getContentView: class=%@ has zero/tiny frame, treating as nil", NSStringFromClass([contentView class])]);
             contentView = nil;
         }
@@ -331,80 +384,82 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
     CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
 
     switch (position) {
-        case 0:
+        case 0: // 头像上方：标签居中于头像正上方，骑跨头像顶部
             if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
                 labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = avatarFrame.origin.y - h * 0.5;
+                labelFrame.origin.y = avatarFrame.origin.y - h * kStraddleFactor;
             } else {
+                // 无头像 fallback：气泡外远离侧，垂直居中
                 if (isSender) {
-                    labelFrame.origin.x = cvRight + w * 0.5;
+                    labelFrame.origin.x = cvRight + w * kStraddleFactor;
                 } else {
-                    labelFrame.origin.x = cvLeft - w * 0.5;
+                    labelFrame.origin.x = cvLeft - w * kStraddleFactor;
                 }
-                labelFrame.origin.y = cvBottom - h * 0.5;
+                labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             }
             break;
-        case 1:
+        case 1: // 头像下方：标签居中于头像正下方，骑跨头像底部
             if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
                 labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + h * 0.5;
+                labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + h * kStraddleFactor;
             } else {
+                // 无头像 fallback：同位置0
                 if (isSender) {
-                    labelFrame.origin.x = cvRight + w * 0.5;
+                    labelFrame.origin.x = cvRight + w * kStraddleFactor;
                 } else {
-                    labelFrame.origin.x = cvLeft - w * 0.5;
+                    labelFrame.origin.x = cvLeft - w * kStraddleFactor;
                 }
-                labelFrame.origin.y = cvBottom - h * 0.5;
+                labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             }
             break;
-        case 3:
+        case 3: // 消息下方(靠近头像)：微信优化 straddle，Y 完全一致，X 偏左微调
             if (isSender) {
-                labelFrame.origin.x = cvRight - w * 0.5 - 13;
+                labelFrame.origin.x = cvRight - w * kStraddleFactor + kPos3_X_ExtraOffset;
             } else {
-                labelFrame.origin.x = cvLeft + w * 0.5 - 13;
+                labelFrame.origin.x = cvLeft + w * kStraddleFactor + kPos3_X_ExtraOffset;
             }
-            labelFrame.origin.y = cvBottom + h * 0.5;
+            labelFrame.origin.y = cvBottom + h * kStraddleFactor;
             break;
-        case 4:
+        case 4: // 消息下方(远离头像)：边缘对齐，标签紧贴气泡底部外侧
             if (isSender) {
-                labelFrame.origin.x = cvLeft + 2;
+                labelFrame.origin.x = cvLeft + kPos4_X_Padding;
             } else {
-                labelFrame.origin.x = cvRight - w - 2;
+                labelFrame.origin.x = cvRight - w - kPos4_X_Padding;
             }
             labelFrame.origin.y = cvBottom;
             break;
-        case 5:
+        case 5: // 消息上方(靠近头像)：边缘对齐 + 底部入气泡 3pt
             if (isSender) {
-                labelFrame.origin.x = cvRight - w - 5;
+                labelFrame.origin.x = cvRight - w - kPos5_X_Padding;
             } else {
-                labelFrame.origin.x = cvLeft + 5;
+                labelFrame.origin.x = cvLeft + kPos5_X_Padding;
             }
-            labelFrame.origin.y = cvTop - h + 3;
+            labelFrame.origin.y = cvTop - h + kPos5_Y_Overlap;
             break;
-        case 6:
+        case 6: // 消息上方(远离头像)：边缘对齐，标签在气泡正上方
             if (isSender) {
-                labelFrame.origin.x = cvLeft + 2;
+                labelFrame.origin.x = cvLeft + kPos6_X_Padding;
             } else {
-                labelFrame.origin.x = cvRight - w - 2;
+                labelFrame.origin.x = cvRight - w - kPos6_X_Padding;
             }
             labelFrame.origin.y = cvTop - h;
             break;
-        case 7:
+        case 7: // 消息旁边(=气泡外)：同位置2，气泡外侧 straddle
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w * 0.5;
+                labelFrame.origin.x = cvLeft - w * kStraddleFactor;
             } else {
-                labelFrame.origin.x = cvRight + w * 0.5;
+                labelFrame.origin.x = cvRight + w * kStraddleFactor;
             }
-            labelFrame.origin.y = cvBottom - h * 0.5;
+            labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             break;
-        case 2:
+        case 2: // 消息旁边(远离头像)：气泡外侧 straddle，垂直居中
         default:
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w * 0.5;
+                labelFrame.origin.x = cvLeft - w * kStraddleFactor;
             } else {
-                labelFrame.origin.x = cvRight + w * 0.5;
+                labelFrame.origin.x = cvRight + w * kStraddleFactor;
             }
-            labelFrame.origin.y = cvBottom - h * 0.5;
+            labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             break;
     }
 
@@ -416,7 +471,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
         labelFrame.origin.y -= offsetY;
     }
 
-    CGFloat maxY = cellFrame.size.height - labelFrame.size.height - 2;
+    CGFloat maxY = cellFrame.size.height - labelFrame.size.height - kTimeLabelMaxYInset;
     if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
 
     return labelFrame;
@@ -438,35 +493,13 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     CGRect avatarFrame = avatarView ? [(UIView *)avatarView frame] : CGRectZero;
     
     id contentView = getContentView(cell);
-    CGRect contentFrame;
-    if (contentView) {
-        // label 添加到 cellView → 使用 cellView 坐标系
-        UIView *cvSuper = [(UIView *)contentView superview];
-        if (cvSuper == (UIView *)cellView) {
-            contentFrame = [(UIView *)contentView frame];
-        } else {
-            contentFrame = [(UIView *)cellView convertRect:[(UIView *)contentView frame] fromView:cvSuper];
-        }
-    } else {
-        contentFrame = cellFrame;
-        contentFrame.origin = CGPointZero;
-    }
+    CGRect contentFrame = contentFrameInCellView(contentView, cellView);
     if (CGRectEqualToRect(contentFrame, CGRectZero)) {
         contentFrame = cellFrame;
         contentFrame.origin = CGPointZero;
     }
     
-    BOOL isSender = NO;
-    if (contentView) {
-        UIView *cvSuper = [(UIView *)contentView superview];
-        CGRect cfc;
-        if (cvSuper == (UIView *)cellView) {
-            cfc = [(UIView *)contentView frame];
-        } else {
-            cfc = [(UIView *)cellView convertRect:[(UIView *)contentView frame] fromView:cvSuper];
-        }
-        isSender = CGRectGetMidX(cfc) > [(UIView *)cellView frame].size.width / 2;
-    }
+    BOOL isSender = detectIsSender(cell, cellView, contentView, nil);
     
     CGSize labelSize = label.frame.size;
     label.frame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
@@ -536,7 +569,7 @@ static void addTimeLabelToCell(id cell) {
         }
         
         // 确保 cellView 上没有残留旧标签
-        UIView *staleLabel = [(UIView *)cellView viewWithTag:999999];
+        UIView *staleLabel = [(UIView *)cellView viewWithTag:kTimeLabelTag];
         if (staleLabel) {
             mtLog(@"Removed stale timeLabel before creating new one");
             [staleLabel removeFromSuperview];
@@ -634,11 +667,12 @@ static void addTimeLabelToCell(id cell) {
         }
         
         Class CMessageWrapClass = objc_getClass("CMessageWrap");
+    if (!s_CMessageWrapClass) s_CMessageWrapClass = CMessageWrapClass;
         if (!wrap) {
             mtLog(@"wrap is nil");
             return;
         }
-        if (CMessageWrapClass && ![wrap isKindOfClass:CMessageWrapClass]) {
+        if (s_CMessageWrapClass && ![wrap isKindOfClass:s_CMessageWrapClass]) {
             mtLog([NSString stringWithFormat:@"wrap is not CMessageWrap: %@", NSStringFromClass([wrap class])]);
             return;
         }
@@ -648,7 +682,7 @@ static void addTimeLabelToCell(id cell) {
             msgType = ((unsigned int (*)(id, SEL))objc_msgSend)(wrap, @selector(m_uiMessageType));
         }
         
-        if (msgType == 10000) {
+        if (msgType == kSystemMessageType) {
             mtLog(@"Skipping system message (msgType = 10000)");
             return;
         }
@@ -692,34 +726,7 @@ static void addTimeLabelToCell(id cell) {
         
         BOOL isSender = NO;
         {
-            id targetCellView = getCellView(cell);
-            id senderTarget = targetCellView ?: cell;
-            SEL senderSel = NSSelectorFromString(@"isSenderFromMsgWrap:");
-            if ([senderTarget respondsToSelector:senderSel]) {
-                @try {
-                    isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(senderTarget, senderSel, wrap);
-                } @catch (NSException *e) {}
-            }
-            if (!isSender && senderTarget != cell && [cell respondsToSelector:senderSel]) {
-                @try {
-                    isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(cell, senderSel, wrap);
-                } @catch (NSException *e) {}
-            }
-            if (!isSender) {
-                id cv = getContentView(cell);
-                if (cv) {
-                    // cellView 坐标系（label 的父视图，与 contentFrame 计算保持一致）
-                    UIView *refView = cellView ?: (UIView *)cell;
-                    UIView *cvSuper = [(UIView *)cv superview];
-                    CGRect cfc;
-                    if (cvSuper == refView) {
-                        cfc = [(UIView *)cv frame];
-                    } else {
-                        cfc = [refView convertRect:[(UIView *)cv frame] fromView:cvSuper];
-                    }
-                    isSender = CGRectGetMidX(cfc) > refView.frame.size.width / 2;
-                }
-            }
+            isSender = detectIsSender(cell, cellView, getContentView(cell), wrap);
         }
         
         UIColor *textColor = nil;
@@ -778,23 +785,7 @@ static void addTimeLabelToCell(id cell) {
                                  NSStringFromClass([contentView class]),
                                  NSStringFromCGRect([(UIView *)contentView frame]),
                                  NSStringFromClass([[(UIView *)contentView superview] class])]);
-        CGRect contentFrame;
-        if (contentView) {
-            // label 添加到 cellView → 使用 cellView 坐标系
-            id labelParent = cellView;
-            UIView *cvSuper = [(UIView *)contentView superview];
-            if (cvSuper == labelParent) {
-                // contentView 和 label 共享同一父视图，直接使用 frame
-                contentFrame = [(UIView *)contentView frame];
-            } else if (labelParent) {
-                contentFrame = [(UIView *)labelParent convertRect:[(UIView *)contentView frame] fromView:cvSuper];
-            } else {
-                contentFrame = [(UIView *)contentView frame];
-            }
-        } else {
-            contentFrame = cellFrame;
-            contentFrame.origin = CGPointZero;
-        }
+        CGRect contentFrame = contentFrameInCellView(contentView, cellView);
         if (CGRectEqualToRect(contentFrame, CGRectZero)) {
             mtLog(@"contentFrame is zero, using cellFrame as fallback");
             contentFrame = cellFrame;
@@ -992,7 +983,7 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
         if (oldLabel) {
             [oldLabel removeFromSuperview];
         }
-        UIView *tagLabel = [(UIView *)cellView viewWithTag:999999];
+        UIView *tagLabel = [(UIView *)cellView viewWithTag:kTimeLabelTag];
         if (tagLabel && tagLabel != oldLabel) {
             [tagLabel removeFromSuperview];
         }
