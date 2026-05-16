@@ -384,187 +384,102 @@ static void scanAllServices(void) {
     else fdLog([NSString stringWithFormat:@"[Scan]   找到 %d 个相关类", related]);
 }
 
-#pragma mark - 策略G: 群邀请检测法（基于微信助手实现）
+#pragma mark - 策略G: 系统消息 Hook 检测法（基于微信助手方案）
 
 /**
- * 微信助手使用群邀请检测好友关系:
- *   CGroupMgr → AddGroupMember:withMemberList: → 响应判断 → 清理
+ * 微信助手实际上使用的是系统消息 Hook 方案:
+ *    Hook PostInsertParsedXmlSysMsg:ChatName:
+ *    当微信收到"对方已删除你"等系统消息时，自动捕获并记录
  *
- * 原理: 创建一个临时群聊并尝试添加好友，
- * 如果对方已删除你，添加操作会失败（特定错误码）。
- * 检测后立即清除群成员，不会打扰好友。
- *
- * WeChat 内部方法:
- *   - [CGroupMgr AddGroupMember:withMemberList:]
- *   - [CGroupMgr DeleteGroupMember:withMemberList:scene:]
- *   - [CGroupMgr p_CreateGroup:withMemberList:]
+ * 同时也会主动发一个无声 AppMessage 来触发服务端响应，
+ * 通过 AsyncOnAddMsg 拦截响应来判断好友关系。
  */
 
-// 保存原始 IMP 用于 hook
-static void (*orig_CGroupMgr_OnAddGroupMember)(id, SEL, id, int, id, id, int, id, id) = NULL;
-static id (*orig_CGroupMgr_CreateGroup)(id, SEL, id, id) = NULL;
+// 保存原始 IMP
+static void (*orig_PostInsertParsedXmlSysMsg)(id, SEL, id, id) = NULL;
+static void (*orig_AsyncOnAddMsg)(id, SEL, id, id) = NULL;
+static void (*orig_OnGetNewXmlMsg)(id, SEL, id, int, id) = NULL;
 
-// 临时存储检测结果
-static NSMutableDictionary *g_groupDetectionResults = nil;
-static dispatch_once_t g_groupDetectionOnce;
+// Hook: 系统 XML 消息处理（被动检测）
+static void hooked_PostInsertParsedXmlSysMsg(id self, SEL _cmd, id xmlMsg, id chatName) {
+    fdLog(@"[SysMsg] 收到系统消息");
+    @try {
+        NSString *xml = [xmlMsg description];
+        NSString *chat = [chatName description];
+        fdLog([NSString stringWithFormat:@"[SysMsg] chat=%@ xml=%@",
+               chat, [xml substringToIndex:MIN(200, xml.length)]]);
 
-/**
- * 群邀请检测: 创建临时群 + 邀请好友 + 检查结果 + 清理
- * 这是微信助手使用的方案
- */
-static NSArray *tryGroupDetection(NSArray *wxIDs) {
-    fdLog(@"[Group] === 群邀请检测开始 ===");
-
-    // 获取 CGroupMgr
-    Class mmSvcCls = objc_getClass("MMServiceCenter");
-    if (!mmSvcCls) { fdLog(@"[Group] MMServiceCenter 不存在"); return nil; }
-    id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvcCls, sel_registerName("defaultCenter"));
-    if (!center) { fdLog(@"[Group] defaultCenter nil"); return nil; }
-
-    Class groupMgrCls = objc_getClass("CGroupMgr");
-    if (!groupMgrCls) { fdLog(@"[Group] CGroupMgr 不存在"); return nil; }
-    id groupMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), groupMgrCls);
-    if (!groupMgr) { fdLog(@"[Group] CGroupMgr service 不存在"); return nil; }
-
-    // 检查方法可用性
-    SEL addSel = sel_registerName("AddGroupMember:withMemberList:");
-    SEL delSel = sel_registerName("DeleteGroupMember:withMemberList:scene:");
-    SEL createSel = sel_registerName("p_CreateGroup:withMemberList:");
-    BOOL hasAdd = [groupMgr respondsToSelector:addSel];
-    BOOL hasCreate = [groupMgr respondsToSelector:createSel];
-    BOOL hasDel = [groupMgr respondsToSelector:delSel];
-    fdLog([NSString stringWithFormat:@"[Group] CGroupMgr: AddGroupMember=%d CreateGroup=%d DeleteGroupMember=%d",
-           hasAdd, hasCreate, hasDel]);
-
-    // 检查 AddMemLogic response handler
-    Class addMemLogicCls = objc_getClass("AddMemLogic");
-    SEL onAddSel = sel_registerName("OnAddGroupMember:withStatus:memberList:inviteList:Error:tipContent:historyInfo:");
-    BOOL hasHandler = addMemLogicCls && [addMemLogicCls instancesRespondToSelector:onAddSel];
-    fdLog([NSString stringWithFormat:@"[Group] AddMemLogic.OnAddGroupMember exists=%d", hasHandler]);
-
-    // 方法1: 尝试 AddGroupMember:withMemberList:
-    if (hasAdd) {
-        fdLog(@"[Group] *** CGroupMgr.AddGroupMember:withMemberList: 可用! ***");
-
-        // 需要先获取或创建一个群
-        // 尝试用自己创建一个临时群
-        id selfContact = nil;
-        Class contactMgrCls = objc_getClass("CContactMgr");
-        if (contactMgrCls) {
-            id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), contactMgrCls);
-            if (contactMgr && [contactMgr respondsToSelector:sel_registerName("getSelfContact")]) {
-                selfContact = ((id (*)(id, SEL))objc_msgSend)(contactMgr, sel_registerName("getSelfContact"));
-                fdLog([NSString stringWithFormat:@"[Group] selfContact=%@", selfContact]);
-            }
+        // 检查是否包含"被删除"相关的系统消息
+        if ([xml rangeOfString:@"del" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+            [xml rangeOfString:@"delete" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+            [xml rangeOfString:@"not friend" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+            [xml rangeOfString:@"verified" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+            fdLog(@"[SysMsg] *** 可能的删除/关系变更事件! ***");
         }
-
-        if (!selfContact) {
-            fdLog(@"[Group] 无法获取自己的联系人，跳过");
-            return nil;
-        }
-
-        // 每次检测2个好友，看谁进群成功/失败
-        // 每个好友单独创建群来检测（更准确）
-        NSMutableArray *results = [NSMutableArray array];
-        int batchSize = 2;
-        int total = (int)wxIDs.count, delCount = 0;
-        NSUInteger processed = 0;
-
-        for (int i = 0; i < total; i += batchSize) {
-            @autoreleasepool {
-                int end = MIN(i + batchSize, total);
-                NSArray *batch = [wxIDs subarrayWithRange:NSMakeRange(i, end - i)];
-
-                @try {
-                    // 创建临时群并添加好友
-                    BOOL createOK = ((BOOL (*)(id, SEL, id, id))objc_msgSend)(groupMgr, createSel, batch.firstObject, batch);
-
-                    if (!createOK) {
-                        // 创建失败 → 好友可能已删除
-                        fdLog([NSString stringWithFormat:@"[Group] 批 %d-%d 创建失败", i, end-1]);
-                        for (NSString *wxID in batch) {
-                            [results addObject:[MioFriendDetectResult infoWithContact:nil
-                                                                            isDeleted:YES isInvalid:NO]];
-                            delCount++;
-                        }
-                    } else {
-                        // 创建成功，尝试添加更多好友到群
-                        for (int j = 1; j < (int)batch.count; j++) {
-                            NSArray *singles = @[batch[j]];
-                            BOOL addOK = ((BOOL (*)(id, SEL, id, id))objc_msgSend)(groupMgr, addSel, batch[0], singles);
-                            BOOL isDeleted = !addOK;
-                            [results addObject:[MioFriendDetectResult infoWithContact:nil
-                                                                            isDeleted:isDeleted
-                                                                            isInvalid:NO]];
-                            if (isDeleted) delCount++;
-                        }
-
-                        // 第一个好友已成功创建群，标记
-                        [results addObject:[MioFriendDetectResult infoWithContact:nil
-                                                                        isDeleted:NO isInvalid:NO]];
-
-                        // 清理: 删除群成员
-                        if (hasDel) {
-                            @try {
-                                ((BOOL (*)(id, SEL, id, id, unsigned long long))objc_msgSend)(groupMgr, delSel, batch[0], batch, 0);
-                            } @catch (...) {}
-                        }
-                    }
-                } @catch (NSException *e) {
-                    fdLog([NSString stringWithFormat:@"[Group] 异常 %d-%d: %@", i, end-1, e.reason]);
-                    for (NSString *wxID in batch) {
-                        [results addObject:[MioFriendDetectResult infoWithContact:nil
-                                                                        isDeleted:NO isInvalid:YES]];
-                    }
-                }
-                processed += batch.count;
-                if (processed % 500 == 0)
-                    fdLog([NSString stringWithFormat:@"[Group] 进度: %lu/%d", (unsigned long)processed, total]);
-            }
-        }
-
-        fdLog([NSString stringWithFormat:@"[Group] 完成: %lu 结果, %d 删除", (unsigned long)results.count, delCount]);
-        return results;
+    } @catch (NSException *e) {
+        fdLog([NSString stringWithFormat:@"[SysMsg] 异常: %@", e.reason]);
     }
 
-    fdLog(@"[Group] CGroupMgr 没有可用方法");
-    return nil;
+    if (orig_PostInsertParsedXmlSysMsg)
+        orig_PostInsertParsedXmlSysMsg(self, _cmd, xmlMsg, chatName);
 }
 
-/**
- * Hook AddMemLogic.OnAddGroupMember:withStatus:memberList:inviteList:Error:tipContent:historyInfo:
- * 拦截群添加响应，获取好友关系状态
- */
-static void hooked_OnAddGroupMember(id self, SEL _cmd, id groupContact, int status,
-                                     id memberList, id inviteList, int error,
-                                     id tipContent, id historyInfo) {
-    fdLog(@"[Hook] OnAddGroupMember: 收到响应");
-    fdLog([NSString stringWithFormat:@"[Hook]   status=%d error=%d", status, error]);
-    fdLog([NSString stringWithFormat:@"[Hook]   groupContact=%@ memberList=%@", groupContact, memberList]);
+// Hook: 异步消息响应（主动检测响应）
+static void hooked_AsyncOnAddMsg(id self, SEL _cmd, id msgWrap, id contact) {
+    @try {
+        id msgType = [msgWrap valueForKey:@"m_uiMessageType"];
+        id msgStatus = [msgWrap valueForKey:@"m_uiStatus"];
+        NSString *content = @"";
+        @try { content = [msgWrap performSelector:@selector(m_nsContent)] ?: @""; } @catch (...) {}
+        fdLog([NSString stringWithFormat:@"[AsyncMsg] type=%@ status=%@ content=%@",
+               msgType, msgStatus, [content substringToIndex:MIN(100, content.length)]]);
+    } @catch (...) {}
 
-    // status 和 error 可以判断好友关系
-    // 常见的: status=0 成功, error=0 无错误
-    // status=1/error>0 可能表示好友已删除
-
-    if (orig_CGroupMgr_OnAddGroupMember) {
-        orig_CGroupMgr_OnAddGroupMember(self, _cmd, groupContact, status,
-                                         memberList, inviteList, error,
-                                         tipContent, historyInfo);
-    }
+    if (orig_AsyncOnAddMsg)
+        orig_AsyncOnAddMsg(self, _cmd, msgWrap, contact);
 }
 
-static void installGroupDetectionHooks(void) {
-    fdLog(@"[Hook] 安装群检测 hook...");
+// Hook: XML 新消息
+static void hooked_OnGetNewXmlMsg(id self, SEL _cmd, id msgWrap, int type, id contact) {
+    @try {
+        NSString *content = @"";
+        @try { content = [msgWrap performSelector:@selector(m_nsContent)] ?: @""; } @catch (...) {}
+        fdLog([NSString stringWithFormat:@"[XmlMsg] type=%d contact=%@ content=%@",
+               type, contact, [content substringToIndex:MIN(100, content.length)]]);
+    } @catch (...) {}
 
-    // Hook AddMemLogic.OnAddGroupMember response handler
-    Class addMemCls = objc_getClass("AddMemLogic");
-    if (addMemCls) {
-        SEL sel = sel_registerName("OnAddGroupMember:withStatus:memberList:inviteList:Error:tipContent:historyInfo:");
-        Method method = class_getInstanceMethod(addMemCls, sel);
+    if (orig_OnGetNewXmlMsg)
+        orig_OnGetNewXmlMsg(self, _cmd, msgWrap, type, contact);
+}
+
+static void installSysMsgHooks(void) {
+    fdLog(@"[Hook] 安装系统消息 hook...");
+
+    // Hook CMessageMgr.PostInsertParsedXmlSysMsg:ChatName:
+    Class msgMgrCls = objc_getClass("CMessageMgr");
+    if (msgMgrCls) {
+        SEL sel = sel_registerName("PostInsertParsedXmlSysMsg:ChatName:");
+        Method method = class_getInstanceMethod(msgMgrCls, sel);
         if (method) {
-            orig_CGroupMgr_OnAddGroupMember = (void (*)(id, SEL, id, int, id, id, int, id, id))method_getImplementation(method);
-            method_setImplementation(method, (IMP)hooked_OnAddGroupMember);
-            fdLog(@"[Hook] AddMemLogic.OnAddGroupMember hook 成功");
+            orig_PostInsertParsedXmlSysMsg = (void (*)(id, SEL, id, id))method_getImplementation(method);
+            method_setImplementation(method, (IMP)hooked_PostInsertParsedXmlSysMsg);
+            fdLog(@"[Hook] PostInsertParsedXmlSysMsg:ChatName: hook 成功");
+        }
+
+        SEL sel2 = sel_registerName("AsyncOnAddMsg:MsgWrap:");
+        Method method2 = class_getInstanceMethod(msgMgrCls, sel2);
+        if (method2) {
+            orig_AsyncOnAddMsg = (void (*)(id, SEL, id, id))method_getImplementation(method2);
+            method_setImplementation(method2, (IMP)hooked_AsyncOnAddMsg);
+            fdLog(@"[Hook] AsyncOnAddMsg:MsgWrap: hook 成功");
+        }
+
+        SEL sel3 = sel_registerName("OnGetNewXmlMsg:Type:MsgWrap:");
+        Method method3 = class_getInstanceMethod(msgMgrCls, sel3);
+        if (method3) {
+            orig_OnGetNewXmlMsg = (void (*)(id, SEL, id, int, id))method_getImplementation(method3);
+            method_setImplementation(method3, (IMP)hooked_OnGetNewXmlMsg);
+            fdLog(@"[Hook] OnGetNewXmlMsg:Type:MsgWrap: hook 成功");
         }
     }
 }
@@ -756,7 +671,7 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
         scanCGIClasses();
         installNetworkHook();
         installContactSyncHook();
-        installGroupDetectionHooks();
+        installSysMsgHooks();
     });
 
     // 第二步: 建立 MMServiceCenter
@@ -767,17 +682,10 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
     }
     if (!mmServiceCenter) { fdLog(@"[Main] MMServiceCenter 不可用"); return nil; }
 
-    // 第三步: 尝试群邀请检测（基于微信助手方案）
-    fdLog(@"[Main] === 尝试群邀请检测 ===");
-    NSArray *groupResults = tryGroupDetection(wxIDs);
-    if (groupResults && groupResults.count > 0) {
-        fdLog([NSString stringWithFormat:@"[Main] 群邀请检测成功: %lu 个结果", (unsigned long)groupResults.count]);
-        return groupResults;
-    }
-
-    // 第四步: 回退到本地检测
+    // 第三步: 回退到本地检测（消息 hook 已安装，被动等待触发）
     NSMutableArray *results = [NSMutableArray array];
-    fdLog(@"[Main] === 绑定和群检测均失败，回退到 CContactMgr 本地 ===");
+    fdLog(@"[Main] === 系统消息 hook 已安装，等待删除事件 ===");
+    fdLog(@"[Main] === 回退到 CContactMgr 本地检测 ===");
     Class cContactCls = objc_getClass("CContact");
     id contactMgr = nil;
     if (mmServiceCenter) {
