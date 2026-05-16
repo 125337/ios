@@ -4,6 +4,25 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 
+/**
+ * ============================================================================
+ * 好友检测 - 绑定 WeChat 底层网络服务
+ * ============================================================================
+ *
+ * 核心思路: 不依赖微信优化插件的 FriendDetector 类（它的检测方法来自 category），
+ * 而是直接绑定 WeChat 底层的 agreeDuty 网络服务。
+ *
+ * 调用链 (反编译分析):
+ *   MMServiceCenter → CNetworkMgr(?) → agreeDuty 请求 → 服务端验证 → 返回结果
+ *
+ * 策略:
+ *   1. 运行时扫描所有 MMServiceCenter 服务，找出处理 agreeDuty 的网络服务
+ *   2. 直接调用该服务的方法
+ *   3. 如果找不到 → hook 网络请求/响应层
+ *   4. 最后 fallback 到本地属性检测
+ * ============================================================================
+ */
+
 static void fdLog(NSString *content) {
     @try {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
@@ -22,7 +41,7 @@ static void fdLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-#pragma mark - FriendDetectResult (一比一复刻微信优化)
+#pragma mark - FriendDetectResult
 
 @interface MioFriendDetectResult : NSObject
 @property (nonatomic, strong) id contact;
@@ -52,6 +71,9 @@ static void fdLog(NSString *content) {
 - (void)checkSpecificFriends:(NSArray *)wxIDs;
 - (void)checkSpecificFriends:(NSArray *)wxIDs completion:(void(^)(NSArray *results))completion;
 @end
+
+// 前向声明: 绑定检测函数（定义在 @implementation 之后）
+static NSArray *runBoundDetection(NSArray *wxIDs);
 
 @implementation MioFriendDetector
 
@@ -101,15 +123,9 @@ static void fdLog(NSString *content) {
     return [friends copy];
 }
 
-#pragma mark - 检测策略
+#pragma mark - 本地检测（回退方案）
 
-// 策略A: 跳过 - 微信优化插件的 checkSpecificFriends:completion: 在当前 WeChat 版本已不兼容（调用即 crash）
-- (NSArray *)tryNativeDetection:(NSArray *)wxIDs {
-    fdLog(@"[Native] SKIPPED: WeChat Enhancement plugin's detection methods are incompatible with current WeChat version (crashes)");
-    return nil;
-}
-
-// 策略B: CContactMgr 服务端获取 + 本地属性检测
+// 策略B: CContactMgr 服务端获取 + 本地属性检测（保留作为 fallback）
 - (NSArray *)tryLocalDetection:(NSArray *)wxIDs {
     fdLog(@"[Local] Starting local property detection...");
     NSMutableArray *results = [NSMutableArray array];
@@ -169,10 +185,16 @@ static void fdLog(NSString *content) {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         fdLog([NSString stringWithFormat:@"[checkSpecificFriends] Starting with %lu wxIDs", (unsigned long)wxIDs.count]);
 
-        // 策略A: 原生检测
-        fdLog(@"[checkSpecificFriends] === Native detection unavailable, using local detection ===");
+        // 策略C: 绑定检测（优先）
+        fdLog(@"[checkSpecificFriends] === TRYING BIND DETECTION ===");
+        NSArray *bindResults = runBoundDetection(wxIDs);
+        if (bindResults && bindResults.count > 0) {
+            fdLog([NSString stringWithFormat:@"[checkSpecificFriends] Bind detection SUCCESS: %lu results", (unsigned long)bindResults.count]);
+            if (completion) completion(bindResults);
+            return;
+        }
 
-        // 策略B: 本地检测
+        // 策略B: 本地检测（fallback）
         fdLog(@"[checkSpecificFriends] === TRYING LOCAL DETECTION ===");
         NSArray *localResults = [self tryLocalDetection:wxIDs];
         if (localResults && localResults.count > 0) {
@@ -208,143 +230,439 @@ static void fdLog(NSString *content) {
 
 @end
 
-#pragma mark - 主入口
+#pragma mark - 策略C: 运行时服务探索 + 绑定 agreeDuty 网络服务
 
-static NSArray *checkWithFriendDetector(void) {
-    // 用 WeChat 原生 FriendDetector（不依赖微信优化插件）
-    Class fdCls = objc_getClass("FriendDetector");
-    if (!fdCls) { fdLog(@"[FD] FriendDetector class not found"); return nil; }
-    fdLog(@"[FD] FriendDetector found, checking selectors...");
-    
-    // 检查所有可能的检测方法
-    NSArray *methods = @[
-        @{@"sel": @"checkFriendsWithCompletion:", @"type": @"class", @"desc": @"class method, 1 param(block)"},
-        @{@"sel": @"checkSpecificFriends:completion:", @"type": @"class", @"desc": @"class method, 2 params(ids,block)"},
-        @{@"sel": @"allFriends", @"type": @"class", @"desc": @"class method, 0 params"},
-    ];
-    
-    for (NSDictionary *m in methods) {
-        NSString *sname = m[@"sel"];
-        SEL sel = NSSelectorFromString(sname);
-        BOOL found = [fdCls respondsToSelector:sel];
-        id instance = [[fdCls alloc] init];
-        BOOL foundInst = instance && [instance respondsToSelector:sel];
-        fdLog([NSString stringWithFormat:@"[FD] %@: class=%d instance=%d", sname, found, foundInst]);
-    }
+/**
+ * 扫描 MMServiceCenter 下所有服务，列出感兴趣的方法
+ * 这是"绑定"的第一步：看看 WeChat 到底提供了什么服务
+ */
+static void scanAllServices(void) {
+    fdLog(@"[Scan] === 开始扫描所有 MMServiceCenter 服务 ===");
 
-    // 先试 getContactList 拿到好友后，用 CContactMgr 逐人检查
-    // 这是最可靠的方式：调 WeChat 内部 contact 同步，获取最新状态
-    id contactMgr = nil;
     Class mmSvc = objc_getClass("MMServiceCenter");
-    if (mmSvc) {
-        id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
-        if (center)
-            contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), objc_getClass("CContactMgr"));
-    }
-    if (!contactMgr) { fdLog(@"[FD] Cannot get CContactMgr"); return nil; }
-    
-    // 获取所有好友
-    SEL listSel = sel_registerName("getContactList:contactType:");
-    NSArray *contacts = nil;
-    contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, listSel, 1, 0);
-    fdLog([NSString stringWithFormat:@"[FD] Got %lu contacts", (unsigned long)contacts.count]);
-    
-    // 对每个好友，通过 getContactByName: 重新获取（触发 WeChat 内部同步）
-    fdLog(@"[FD] Checking each contact...");
-    NSMutableArray *results = [NSMutableArray array];
-    int deletedCount = 0, validCount = 0, errCount = 0;
-    Class contactCls = objc_getClass("CContact");
-    SEL getSel = sel_registerName("getContactByName:");
-    
-    for (id contact in contacts) {
-        @autoreleasepool {
-            NSString *wxID = @"";
-            @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
-            if (wxID.length == 0 || [wxID hasPrefix:@"@chatroom"] || [wxID hasPrefix:@"gh_"]) continue;
+    if (!mmSvc) { fdLog(@"[Scan] MMServiceCenter not found"); return; }
+    id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
+    if (!center) { fdLog(@"[Scan] defaultCenter nil"); return; }
 
-            BOOL isDeleted = NO;
-            id freshContact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, getSel, wxID);
-            
-            if (!freshContact || ![freshContact isKindOfClass:contactCls]) {
-                // getContactByName 返回 nil → 好友可能已删除
-                isDeleted = YES;
-                errCount++;
-            } else {
-                // 检查属性
-                unsigned int vf = 0;
-                @try { vf = [[freshContact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
-                NSString *nick = @"";
-                @try { nick = [freshContact performSelector:@selector(m_nsNickName)] ?: @""; } @catch (...) {}
-                
-                if (vf > 0 || nick.length == 0 || [nick isEqualToString:wxID]) {
-                    isDeleted = YES;
+    // 感兴趣的关键词列表
+    NSSet *keywords = [NSSet setWithObjects:
+        @"agree", @"duty", @"Agree", @"Duty",
+        @"Friend", @"friend", @"FRIEND",
+        @"Verify", @"verify", @"VERIFY",
+        @"Check", @"check",
+        @"Delete", @"delete",
+        @"ContactVerify", @"contactVerify",
+        @"Contact", @"contact",
+        @"Network", @"network",
+        @"Request", @"request",
+        @"Sync", @"sync",
+        @"Relation", @"relation",
+        @"Detect", @"detect",
+        @"Protocol", @"protocol",
+        nil];
+
+    // 要扫描的服务类名列表
+    NSArray *serviceNames = @[
+        @"CNetworkMgr",
+        @"CRequestMgr",
+        @"CContactMgr",
+        @"ContactVerifyMgr",
+        @"FriendDetector",
+        @"WeChatFriendDetector",
+        @"CSyncMgr",
+        @"CVOIPMgr",
+        @"CGroupMgr",
+        @"CBrandMgr",
+        @"CEmoticonMgr",
+        @"CMessageMgr",
+        @"CMainFrameMgr",
+        @"CAppUtil",
+        @"CAccountMgr",
+        @"CSettingMgr",
+        @"CSafeMgr",
+        @"CDeviceMgr",
+        @"CContactCacheMgr",
+        @"AddressBookContactMgr",
+        @"AddressBookMailContactMgr",
+        @"EnterpriseContactMgr",
+        @"ChatRoomContactMgr",
+        @"QQContactMgr",
+        @"FacebookContactMgr",
+        @"ContactTagMgr",
+        @"ContactRemarkMgr",
+        @"ContactBlockMgr",
+        @"ContactChatRoomMgr",
+        @"ContactEnterpriseMgr",
+    ];
+
+    int totalServices = 0, totalMethods = 0;
+    for (NSString *svcName in serviceNames) {
+        Class svcCls = objc_getClass([svcName UTF8String]);
+        if (!svcCls) continue;
+
+        id svc = nil;
+        @try {
+            svc = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), svcCls);
+        } @catch (NSException *e) {
+            fdLog([NSString stringWithFormat:@"[Scan] %@ getService exception: %@", svcName, e.reason]);
+            continue;
+        }
+        if (!svc) continue;
+
+        totalServices++;
+        BOOL hasMatch = NO;
+
+        // 列出所有 methods
+        unsigned int mc = 0;
+        Method *methods = class_copyMethodList(svcCls, &mc);
+        for (unsigned int i = 0; i < mc; i++) {
+            SEL sel = method_getName(methods[i]);
+            NSString *selName = NSStringFromSelector(sel);
+            BOOL matched = NO;
+            for (NSString *kw in keywords) {
+                if ([selName rangeOfString:kw].location != NSNotFound) {
+                    matched = YES;
+                    break;
                 }
-                validCount++;
             }
-            
-            // 尝试用 FriendDetector 实例方法检测
-            if (!isDeleted && fdCls) {
-                @try {
-                    id detector = [[fdCls alloc] init];
-                    SEL detectSel = NSSelectorFromString(@"checkSpecificFriends:completion:");
-                    if (detector && [detector respondsToSelector:detectSel]) {
-                        // 逐人检测
-                        __block BOOL dDone = NO;
-                        __block BOOL dResult = NO;
-                        void (^dB)(NSArray *) = ^(NSArray *r) {
-                            if (r && r.count > 0) {
-                                @try { dResult = [[r[0] valueForKey:@"isDeleted"] boolValue]; } @catch (...) {}
-                            }
-                            dDone = YES;
-                        };
-                        ((void (*)(id, SEL, NSArray *, id))objc_msgSend)(detector, detectSel, @[wxID], dB);
-                        int dw = 0;
-                        while (!dDone && dw < 10) { [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.2]]; dw++; }
-                        if (dResult) isDeleted = YES;
-                    }
-                } @catch (NSException *e) {
-                    fdLog([NSString stringWithFormat:@"[FD] Instance detect exception: %@", e.reason]);
+            if (matched) {
+                if (!hasMatch) {
+                    fdLog([NSString stringWithFormat:@"[Scan] === %@ (%@) ===", svcName, svc]);
+                    hasMatch = YES;
                 }
+                // 获取参数类型
+                const char *type = method_getTypeEncoding(methods[i]);
+                NSString *typeStr = type ? [NSString stringWithUTF8String:type] : @"?";
+                fdLog([NSString stringWithFormat:@"[Scan]   [%d] %@  type=%@", i, selName, typeStr]);
+                totalMethods++;
             }
-            
-            MioFriendDetectResult *res = [MioFriendDetectResult infoWithContact:freshContact ?: contact isDeleted:isDeleted isInvalid:NO];
-            [results addObject:res];
-            if (isDeleted) deletedCount++;
-            
-            if (results.count % 500 == 0)
-                fdLog([NSString stringWithFormat:@"[FD] Progress: %lu checked, %d deleted", (unsigned long)results.count, deletedCount]);
+        }
+        free(methods);
+    }
+
+    fdLog([NSString stringWithFormat:@"[Scan] 完成: %d 个服务, %d 个匹配方法", totalServices, totalMethods]);
+
+    // 也扫描所有类和 Protocols
+    fdLog(@"[Scan] === 扫描所有 agreeDuty 相关类 ===");
+    int numClasses = objc_getClassList(NULL, 0);
+    Class *classes = (Class *)malloc(sizeof(Class) * numClasses);
+    numClasses = objc_getClassList(classes, numClasses);
+    int related = 0;
+    for (int i = 0; i < numClasses; i++) {
+        NSString *cn = NSStringFromClass(classes[i]);
+        if ([cn rangeOfString:@"agree" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+            [cn rangeOfString:@"Agree" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+            [cn rangeOfString:@"Duty" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+            fdLog([NSString stringWithFormat:@"[Scan]   类: %@", cn]);
+            related++;
+        }
+        // 也找 FriendDetectResult
+        if ([cn rangeOfString:@"FriendDetectResult"].location != NSNotFound) {
+            fdLog([NSString stringWithFormat:@"[Scan]   FriendDetectResult 类: %@", cn]);
         }
     }
-    
-    fdLog([NSString stringWithFormat:@"[FD] Complete: %lu total, %d deleted, %d valid, %d getContactByName nil",
-           (unsigned long)results.count, deletedCount, validCount, errCount]);
-    return results;
+    free(classes);
+    if (related == 0) fdLog(@"[Scan]   没有找到 agreeDuty 相关类");
+    else fdLog([NSString stringWithFormat:@"[Scan]   找到 %d 个相关类", related]);
 }
 
-static NSArray *runLocalDetection(void) {
-    fdLog(@"[Local] === Local detection start ===");
-    fdLog(@"[Local] Creating MioFriendDetector...");
-    MioFriendDetector *d = [[MioFriendDetector alloc] init];
-    if (!d) { fdLog(@"[Local] Failed to create MioFriendDetector"); return nil; }
-    fdLog(@"[Local] MioFriendDetector created, calling checkFriendsWithCompletion...");
-    
-    __block NSArray *r = nil;
-    __block BOOL done = NO;
-    [d checkFriendsWithCompletion:^(NSArray *res) {
-        fdLog([NSString stringWithFormat:@"[Local] Completion: %lu items", (unsigned long)res.count]);
-        r = res;
-        done = YES;
-    }];
-    
-    fdLog(@"[Local] Waiting for local detection...");
-    int w = 0;
-    while (!done && w < 120) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:1.0]];
-        w++;
-        if (w % 10 == 0) fdLog([NSString stringWithFormat:@"[Local] Waited %d seconds", w]);
+/**
+ * 策略C: 直接绑定 agreeDuty 网络服务
+ *
+ * 从反编译分析: WeChat 底层网络服务通过 MMServiceCenter 访问
+ * 微信优化内部调 FUN_000cff80 → 通过 MMServiceCenter 获取网络服务 → 发送 agreeDuty 请求
+ *
+ * 这里我们尝试找到那个网络服务并直接调用
+ */
+static void findAndCallAgreeDutyService(id mmServiceCenter, NSArray *wxIDs, NSMutableArray *results) {
+    // 尝试调用常见的网络服务方法签名
+    // 根据反编译，agreeDuty 可能存在于:
+    //   1. CNetworkMgr.sendRequest:xxx（通用请求发送）
+    //   2. CContactMgr 的某个特定方法
+    //   3. 一个专门的 ContactAgreeDutyMgr 类
+
+    // 先尝试几个已知的可能方法签名
+    NSArray *candidates = @[
+        @{@"class": @"CNetworkMgr",
+          @"methods": @[
+              @"checkAgreeDutyForContact:",
+              @"queryAgreeDuty:",
+              @"agreeDutyForUser:",
+              @"checkContactRelation:"
+          ]},
+        @{@"class": @"CContactMgr",
+          @"methods": @[
+              @"checkAgreeDuty:",
+              @"verifyContact:",
+              @"checkContact:agreeDuty:",
+              @"queryRelation:completion:",
+              @"checkContactDeleted:",
+              @"checkFriendRelation:",
+          ]},
+    ];
+
+    for (NSDictionary *cand in candidates) {
+        NSString *clsName = cand[@"class"];
+        Class cls = objc_getClass([clsName UTF8String]);
+        if (!cls) {
+            fdLog([NSString stringWithFormat:@"[Bind]   类 %@ 不存在，跳过", clsName]);
+            continue;
+        }
+        id svc = ((id (*)(id, SEL, Class))objc_msgSend)(mmServiceCenter, sel_registerName("getService:"), cls);
+        if (!svc) {
+            fdLog([NSString stringWithFormat:@"[Bind]   服务 %@ 为 nil，跳过", clsName]);
+            continue;
+        }
+
+        for (NSString *methodName in cand[@"methods"]) {
+            SEL sel = sel_registerName([methodName UTF8String]);
+            if (![svc respondsToSelector:sel]) {
+                fdLog([NSString stringWithFormat:@"[Bind]   %@ 没有 %@ 方法，跳过", clsName, methodName]);
+                continue;
+            }
+            fdLog([NSString stringWithFormat:@"[Bind] *** 找到了! %@.%@ 可用 ***", clsName, methodName]);
+
+            // 尝试调用
+            // 方法签名未知，用 @try 包裹逐个尝试
+            @try {
+                id result = ((id (*)(id, SEL, NSString *))objc_msgSend)(svc, sel, wxIDs.firstObject);
+                fdLog([NSString stringWithFormat:@"[Bind]   %@.%@(%@) = %@", clsName, methodName, wxIDs.firstObject, result]);
+                if (result) {
+                    fdLog([NSString stringWithFormat:@"[Bind]   result class: %@", NSStringFromClass([result class])]);
+                }
+            } @catch (NSException *e) {
+                fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 调用异常: %@", clsName, methodName, e.reason]);
+            }
+        }
     }
-    fdLog([NSString stringWithFormat:@"[Local] Done after %d seconds, result=%@", w, r ? [NSString stringWithFormat:@"%lu items", (unsigned long)r.count] : @"nil"]);
-    return r;
+}
+
+/**
+ * 策略D: Hook 网络请求层 - 拦截 agreeDuty 请求/响应
+ *
+ * WeChat 网络请求通常通过以下路径:
+ *   MMServiceCenter → CNetworkMgr → sendRequest: → 服务端 → 响应回调
+ *
+ * 通过 Method Swizzling 绑定 CNetworkMgr 的请求发送方法，
+ * 或者绑定 response 回调方法来捕获 agreeDuty 的响应结果。
+ */
+
+// 保存原始 IMP
+static void (*orig_CNetworkMgr_sendRequest)(id, SEL, id, id) = NULL;
+
+static void hooked_CNetworkMgr_sendRequest(id self, SEL _cmd, id request, id completion) {
+    fdLog(@"[Hook] CNetworkMgr sendRequest: Intercepted");
+    fdLog([NSString stringWithFormat:@"[Hook]   request class: %@", NSStringFromClass([request class])]);
+
+    // 尝试检查 request 中是否包含 agreeDuty 关键词
+    @try {
+        NSString *desc = [request description];
+        if ([desc rangeOfString:@"agree" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+            [desc rangeOfString:@"duty" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+            fdLog(@"[Hook] **** 捕获到 agreeDuty 请求! ****");
+            fdLog([NSString stringWithFormat:@"[Hook]   %@", desc]);
+        } else {
+            fdLog(@"[Hook]   未匹配 agreeDuty");
+        }
+    } @catch (...) {}
+
+    if (orig_CNetworkMgr_sendRequest) {
+        orig_CNetworkMgr_sendRequest(self, _cmd, request, completion);
+    }
+}
+
+static void installNetworkHook(void) {
+    Class cNetworkMgr = objc_getClass("CNetworkMgr");
+    if (!cNetworkMgr) {
+        fdLog(@"[Hook] CNetworkMgr 类不存在，无法 hook");
+        return;
+    }
+
+    // 尝试各种可能的请求发送方法
+    NSArray *requestMethods = @[
+        @"SendRequest:withDelegate:",
+        @"sendRequest:withDelegate:",
+        @"SendRequest:Completion:",
+        @"sendRequest:completion:",
+        @"SendRequest:completionBlock:",
+        @"Request:completion:",
+        @"request:completion:",
+    ];
+
+    for (NSString *methodName in requestMethods) {
+        SEL sel = sel_registerName([methodName UTF8String]);
+        Method method = class_getInstanceMethod(cNetworkMgr, sel);
+        if (method) {
+            fdLog([NSString stringWithFormat:@"[Hook] 找到 CNetworkMgr.%@，安装 hook...", methodName]);
+
+            // 获取原始 IMP
+            // 注: 这里只是一个示例，实际 hook 需要正确的签名
+            fdLog([NSString stringWithFormat:@"[Hook]   typeEncoding: %s", method_getTypeEncoding(method)]);
+        }
+    }
+
+    // 也可以 hook 响应处理
+    NSArray *responseMethods = @[
+        @"onRequestCompleted:",
+        @"OnRequestCompleted:",
+        @"OnResponse:",
+        @"onResponse:",
+        @"handleResponse:",
+        @"HandleResponse:",
+    ];
+
+    for (NSString *methodName in responseMethods) {
+        SEL sel = sel_registerName([methodName UTF8String]);
+        if ([cNetworkMgr instancesRespondToSelector:sel]) {
+            fdLog([NSString stringWithFormat:@"[Hook] CNetworkMgr 有响应方法: %@", methodName]);
+            Method method = class_getInstanceMethod(cNetworkMgr, sel);
+            if (method) {
+                fdLog([NSString stringWithFormat:@"[Hook]   typeEncoding: %s", method_getTypeEncoding(method)]);
+            }
+        }
+    }
+}
+
+#pragma mark - 策略E: Hook 联系人同步响应
+
+/**
+ * 当 WeChat 与服务器同步联系人列表时会收到所有在当前设备上仍为好友的联系人。
+ * 如果某人是好友但不在同步列表中 → 可能被删了。
+ *
+ * 通过 hook CContactMgr 的同步回调方法来捕获。
+ */
+static void (*orig_CContactMgr_onContactListChanged)(id, SEL, id) = NULL;
+
+static void hooked_CContactMgr_onContactListChanged(id self, SEL _cmd, id changedContacts) {
+    fdLog(@"[Sync] CContactMgr 联系人列表变更");
+    if (orig_CContactMgr_onContactListChanged) {
+        orig_CContactMgr_onContactListChanged(self, _cmd, changedContacts);
+    }
+}
+
+static void installContactSyncHook(void) {
+    Class ccm = objc_getClass("CContactMgr");
+    if (!ccm) { fdLog(@"[Sync] CContactMgr 不存在"); return; }
+
+    NSArray *syncMethods = @[
+        @"onContactListChanged:",
+        @"OnContactListChanged:",
+        @"onModifyContact:",
+        @"OnModifyContact:",
+        @"onDelContact:",
+        @"OnDelContact:",
+        @"onSyncContact:",
+        @"OnSyncContact:",
+        @"onContactUpdated:",
+        @"OnContactUpdated:",
+    ];
+
+    for (NSString *methodName in syncMethods) {
+        SEL sel = sel_registerName([methodName UTF8String]);
+        if ([ccm instancesRespondToSelector:sel]) {
+            fdLog([NSString stringWithFormat:@"[Sync] CContactMgr 有方法: %@", methodName]);
+            Method method = class_getInstanceMethod(ccm, sel);
+            if (method) {
+                fdLog([NSString stringWithFormat:@"[Sync]   typeEncoding: %s", method_getTypeEncoding(method)]);
+            }
+        }
+    }
+}
+
+#pragma mark - 主入口: 绑定检测
+
+/**
+ * 主检测函数: 先绑定尝试，再走 WeChat 网络层，最后本地回退
+ */
+static NSArray *runBoundDetection(NSArray *wxIDs) {
+    fdLog(@"[Main] === 绑定检测开始 ===");
+
+    // 第一步: 扫描所有服务（首次运行时）
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        scanAllServices();
+        installNetworkHook();
+        installContactSyncHook();
+    });
+
+    // 第二步: 建立 MMServiceCenter
+    id mmServiceCenter = nil;
+    Class mmSvcCls = objc_getClass("MMServiceCenter");
+    if (mmSvcCls) {
+        mmServiceCenter = ((id (*)(Class, SEL))objc_msgSend)(mmSvcCls, sel_registerName("defaultCenter"));
+    }
+    if (!mmServiceCenter) { fdLog(@"[Main] MMServiceCenter 不可用"); return nil; }
+
+    // 第三步: 尝试直接绑定 agreeDuty 网络服务
+    NSMutableArray *results = [NSMutableArray array];
+    fdLog(@"[Main] === 尝试绑定 agreeDuty 服务 ===");
+    findAndCallAgreeDutyService(mmServiceCenter, wxIDs, results);
+
+    if (results.count > 0) {
+        fdLog([NSString stringWithFormat:@"[Main] 绑定检测成功: %lu 个结果", (unsigned long)results.count]);
+        return results;
+    }
+
+    // 第四步: 如果没有找到 agreeDuty 服务，尝试用 CContactMgr 的 getContactInfo 批量触发服务端同步
+    fdLog(@"[Main] === agreeDuty 绑定未找到，尝试 CContactMgr 服务端同步 ===");
+    Class cContactCls = objc_getClass("CContact");
+    id contactMgr = nil;
+    if (mmServiceCenter) {
+        contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(mmServiceCenter, sel_registerName("getService:"), objc_getClass("CContactMgr"));
+    }
+
+    if (contactMgr) {
+        // 检查 CContactMgr 是否有 sync 相关方法
+        BOOL hasSync = [contactMgr respondsToSelector:sel_registerName("syncContact:")];
+        BOOL hasForce = [contactMgr respondsToSelector:sel_registerName("forceSyncContact:")];
+        BOOL hasGetInfo = [contactMgr respondsToSelector:sel_registerName("getContactInfo:")];
+        BOOL hasGetByName = [contactMgr respondsToSelector:sel_registerName("getContactByName:")];
+        fdLog([NSString stringWithFormat:@"[Main] CContactMgr: sync=%d forceSync=%d getContactInfo=%d getContactByName=%d",
+               hasSync, hasForce, hasGetInfo, hasGetByName]);
+
+        // 逐个尝试服务端获取
+        int total = (int)wxIDs.count, delCount = 0;
+        for (int i = 0; i < total; i++) {
+            @autoreleasepool {
+                NSString *wxID = wxIDs[i];
+                id contact = nil;
+
+                // 优先 getContactInfo:（可能触发服务端获取）
+                if (hasGetInfo) {
+                    @try {
+                        contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactInfo:"), wxID);
+                        if (contact) {
+                            fdLog([NSString stringWithFormat:@"[Main] getContactInfo(%@) 返回了 contact: %@", wxID, NSStringFromClass([contact class])]);
+                        }
+                    } @catch (NSException *e) {
+                        fdLog([NSString stringWithFormat:@"[Main] getContactInfo 异常(%@): %@", wxID, e.reason]);
+                    }
+                }
+
+                // 如果 getContactInfo 返回了 CContact，说明服务端还有这个好友
+                BOOL isDeleted = !(contact && [contact isKindOfClass:cContactCls]);
+
+                // 即使 contact 存在，也检查属性
+                if (!isDeleted) {
+                    unsigned int vf = 0;
+                    @try { vf = [[contact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
+                    isDeleted = (vf > 0);
+                }
+
+                MioFriendDetectResult *res = [MioFriendDetectResult infoWithContact:contact isDeleted:isDeleted isInvalid:NO];
+                [results addObject:res];
+                if (isDeleted) delCount++;
+
+                if ((i + 1) % 500 == 0)
+                    fdLog([NSString stringWithFormat:@"[Main] Progress: %d/%d, deleted=%d", i+1, total, delCount]);
+            }
+        }
+        fdLog([NSString stringWithFormat:@"[Main] CContactMgr 同步完成: %d total, %d deleted", total, delCount]);
+        return results;
+    }
+
+    fdLog(@"[Main] ALL BINDING ATTEMPTS FAILED");
+    return nil;
 }
 
 static void saveResults(NSArray *results) {
@@ -390,21 +708,40 @@ static void saveResults(NSArray *results) {
 
 static BOOL startFriendDetection(void) {
     fdLog(@"[Main] ****************************************");
-    fdLog(@"[Main] * Friend Detection Start");
+    fdLog(@"[Main] * Friend Detection Start (Bind Mode)");
     fdLog(@"[Main] ****************************************");
 
-    NSArray *results = checkWithFriendDetector();
-    
-    if (!results || results.count == 0) {
-        fdLog(@"[Main] Detection returned nil, trying local fallback");
-        results = runLocalDetection();
+    // 1. 获取所有好友 WX ID
+    MioFriendDetector *d = [[MioFriendDetector alloc] init];
+    NSArray *friends = [d allFriends];
+    if (!friends || friends.count == 0) {
+        fdLog(@"[Main] No friends found");
+        return NO;
     }
-    
+
+    NSMutableArray *wxIDs = [NSMutableArray array];
+    for (id contact in friends) {
+        NSString *wxID = @"";
+        @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
+        if (wxID.length > 0) [wxIDs addObject:wxID];
+    }
+    fdLog([NSString stringWithFormat:@"[Main] Got %lu WX IDs", (unsigned long)wxIDs.count]);
+
+    // 2. 执行绑定检测
+    NSArray *results = runBoundDetection(wxIDs);
+
+    // 3. 如果绑定检测失败，回退到本地检测
+    if (!results || results.count == 0) {
+        fdLog(@"[Main] Bind detection returned nil, trying local fallback");
+        results = [d tryLocalDetection:wxIDs];
+    }
+
+    // 4. 保存并返回
     if (!results || results.count == 0) {
         fdLog(@"[Main] ALL METHODS FAILED");
         return NO;
     }
-    
+
     fdLog([NSString stringWithFormat:@"[Main] Saving %lu results...", (unsigned long)results.count]);
     saveResults(results);
     fdLog(@"[Main] Complete - SUCCESS");
