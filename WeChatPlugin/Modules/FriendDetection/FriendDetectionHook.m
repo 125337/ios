@@ -103,49 +103,9 @@ static void fdLog(NSString *content) {
 
 #pragma mark - 检测策略
 
-// 策略A: 调 FriendDetector 的 checkFriendsWithCompletion:（微信优化插件的方法，已验证兼容）
+// 策略A: 跳过 - 微信优化插件的 checkSpecificFriends:completion: 在当前 WeChat 版本已不兼容（调用即 crash）
 - (NSArray *)tryNativeDetection:(NSArray *)wxIDs {
-    for (NSString *clsName in @[@"FriendDetector", @"WeChatFriendDetector"]) {
-        Class wcCls = objc_getClass([clsName UTF8String]);
-        if (!wcCls) { fdLog([NSString stringWithFormat:@"[Native] %@ not found", clsName]); continue; }
-
-        // 先检查 checkFriendsWithCompletion:（微信优化插件提供的类方法，内部会调 allFriends + checkSpecificFriends）
-        SEL sel = NSSelectorFromString(@"checkFriendsWithCompletion:");
-        if (![wcCls respondsToSelector:sel]) {
-            fdLog([NSString stringWithFormat:@"[Native] %@ no checkFriendsWithCompletion:", clsName]);
-            continue;
-        }
-        fdLog([NSString stringWithFormat:@"[Native] Calling %@.checkFriendsWithCompletion:...", clsName]);
-
-        __block NSArray *nativeResults = nil;
-        __block BOOL done = NO;
-        void (^block)(NSArray *) = ^(NSArray *r) {
-            nativeResults = r;
-            done = YES;
-        };
-
-        @try {
-            // performSelector:withObject: 比 objc_msgSend 更安全，ARC 正确处理 block
-            [wcCls performSelector:sel withObject:block];
-        } @catch (NSException *e) {
-            fdLog([NSString stringWithFormat:@"[Native] Exception: %@", e]);
-            continue;
-        }
-
-        int waitCount = 0;
-        while (!done && waitCount < 120) {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
-            waitCount++;
-            if (waitCount % 20 == 0)
-                fdLog([NSString stringWithFormat:@"[Native] Waiting... %d/120", waitCount]);
-        }
-        fdLog([NSString stringWithFormat:@"[Native] done=%d results=%s", done,
-               nativeResults ? [[NSString stringWithFormat:@"%lu items", (unsigned long)nativeResults.count] UTF8String] : "nil"]);
-
-        if (nativeResults && nativeResults.count > 0)
-            return nativeResults;
-    }
-    fdLog(@"[Native] All failed");
+    fdLog(@"[Native] SKIPPED: WeChat Enhancement plugin's detection methods are incompatible with current WeChat version (crashes)");
     return nil;
 }
 
@@ -210,14 +170,7 @@ static void fdLog(NSString *content) {
         fdLog([NSString stringWithFormat:@"[checkSpecificFriends] Starting with %lu wxIDs", (unsigned long)wxIDs.count]);
 
         // 策略A: 原生检测
-        fdLog(@"[checkSpecificFriends] === TRYING NATIVE DETECTION ===");
-        NSArray *nativeResults = [self tryNativeDetection:wxIDs];
-        if (nativeResults && nativeResults.count > 0) {
-            fdLog([NSString stringWithFormat:@"[checkSpecificFriends] Native detection SUCCESS: %lu results", (unsigned long)nativeResults.count]);
-            if (completion) completion(nativeResults);
-            return;
-        }
-        fdLog(@"[checkSpecificFriends] Native detection FAILED, falling back to local detection");
+        fdLog(@"[checkSpecificFriends] === Native detection unavailable, using local detection ===");
 
         // 策略B: 本地检测
         fdLog(@"[checkSpecificFriends] === TRYING LOCAL DETECTION ===");
