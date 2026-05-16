@@ -393,104 +393,46 @@ static void scanAllServices(void) {
  * 这里我们尝试找到那个网络服务并直接调用
  */
 static void findAndCallAgreeDutyService(id mmServiceCenter, NSArray *wxIDs, NSMutableArray *results) {
-    // 尝试调用常见的网络服务方法签名
-    // 根据反编译，agreeDuty 可能存在于:
-    //   1. CNetworkMgr.sendRequest:xxx（通用请求发送）
-    //   2. CContactMgr 的某个特定方法
-    //   3. 一个专门的 ContactAgreeDutyMgr 类
-    //   4. 已发现的 CGI 模式: WCPayGetPayUserDutyCgi → 类似会有 GetContactAgreeDutyCgi
+    // 运行时扫描所有类，找出哪些类有 getContactInfo:callback: 等方法
+    // 因为我们从 strings 确认这些 selector 存在但不在 CContactMgr 上
+    fdLog(@"[Bind] === 运行时扫描 getContactInfo:callback: 归属类 ===");
 
-    // 候选: 已知的服务类 + 可能的方法名
-    // 从 WeChat 二进制 strings 分析确认的方法:
-    //   ✅ getContactInfo:callback:              - 单个异步获取
-    //   ✅ getContactInfoBatchUserNames:completion:  - 批量获取！
-    //   ✅ getContactInfoOrSyncUsername:completion: - 同步版本
-    //   ✅ batchGetContact                       - 批量获取（底层）
-    //   ❌ checkAgreeDuty: etc.                  - 这些在 WeChat 中不存在
-    NSArray *candidates = @[
-        @{@"class": @"CContactMgr",
-          @"methods": @[
-              @"getContactInfo:callback:",
-              @"getContactInfoBatchUserNames:completion:",
-              @"getContactInfoOrSyncUsername:completion:",
-              @"batchGetContact",
-          ]},
-    ];
+    SEL sels[] = {
+        sel_registerName("getContactInfo:callback:"),
+        sel_registerName("getContactInfoBatchUserNames:completion:"),
+        sel_registerName("batchGetContact"),
+    };
+    const char *selNames[] = {
+        "getContactInfo:callback:",
+        "getContactInfoBatchUserNames:completion:",
+        "batchGetContact",
+    };
 
-    for (NSDictionary *cand in candidates) {
-        NSString *clsName = cand[@"class"];
-        Class cls = objc_getClass([clsName UTF8String]);
-        if (!cls) {
-            fdLog([NSString stringWithFormat:@"[Bind]   类 %@ 不存在，跳过", clsName]);
-            continue;
-        }
-        id svc = ((id (*)(id, SEL, Class))objc_msgSend)(mmServiceCenter, sel_registerName("getService:"), cls);
-        if (!svc) {
-            fdLog([NSString stringWithFormat:@"[Bind]   服务 %@ 为 nil，跳过", clsName]);
-            continue;
-        }
+    int numClasses = objc_getClassList(NULL, 0);
+    Class *classes = (Class *)malloc(sizeof(Class) * numClasses);
+    numClasses = objc_getClassList(classes, numClasses);
 
-        for (NSString *methodName in cand[@"methods"]) {
-            SEL sel = sel_registerName([methodName UTF8String]);
-            if (![svc respondsToSelector:sel]) {
-                fdLog([NSString stringWithFormat:@"[Bind]   %@ 没有 %@ 方法，跳过", clsName, methodName]);
-                continue;
-            }
-            fdLog([NSString stringWithFormat:@"[Bind] *** 找到了! %@.%@ 可用 ***", clsName, methodName]);
+    for (int si = 0; si < 3; si++) {
+        SEL targetSel = sels[si];
+        for (int i = 0; i < numClasses; i++) {
+            Class cls = classes[i];
+            if (class_isMetaClass(cls)) continue;
+            NSString *cn = NSStringFromClass(cls);
+            // 跳过系统类提高性能
+            if ([cn hasPrefix:@"_"] || [cn hasPrefix:@"NS"] || [cn hasPrefix:@"UI"] ||
+                [cn hasPrefix:@"CA"] || [cn hasPrefix:@"__"] || [cn hasPrefix:@"OS_"] ||
+                [cn hasPrefix:@"WK"] || [cn hasPrefix:@"AV"] || [cn hasPrefix:@"MK"]) continue;
 
-            // 使用 NSInvocation 安全调用（自动适配返回值类型）
-            NSMethodSignature *sig = [svc methodSignatureForSelector:sel];
-            if (!sig) {
-                fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 无方法签名", clsName, methodName]);
-                continue;
-            }
-
-            NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
-            inv.target = svc;
-            inv.selector = sel;
-
-            // 设置参数: 假设第一个参数是 NSString* (wxID)
-            if (sig.numberOfArguments > 2) {
-                // 第0=self, 第1=_cmd, 第2=第一个参数
-                id firstWxID = wxIDs.firstObject ?: @"";
-                [inv setArgument:&firstWxID atIndex:2];
-            }
-
-            @try {
-                [inv invoke];
-                const char *retType = sig.methodReturnType;
-                fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 调用完成, returnType=%s", clsName, methodName, retType]);
-
-                // 根据返回值类型提取结果
-                if (retType[0] == '@') {
-                    id retVal = nil;
-                    [inv getReturnValue:&retVal];
-                    fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ = %@ (class: %@)",
-                           clsName, methodName, retVal, retVal ? NSStringFromClass([retVal class]) : @"nil"]);
-                    if (retVal) {
-                        // 如果返回值是 NSArray，可能是检测结果
-                        if ([retVal isKindOfClass:[NSArray class]]) {
-                            fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 返回 NSArray, count=%lu",
-                                   clsName, methodName, (unsigned long)[retVal count]]);
-                            [results addObjectsFromArray:retVal];
-                        }
-                    }
-                } else if (retType[0] == 'B' || retType[0] == 'c') {
-                    BOOL retVal = NO;
-                    [inv getReturnValue:&retVal];
-                    fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ = %d (BOOL)", clsName, methodName, retVal]);
-                } else if (retType[0] == 'I' || retType[0] == 'i') {
-                    int retVal = 0;
-                    [inv getReturnValue:&retVal];
-                    fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ = %d (int)", clsName, methodName, retVal]);
-                } else {
-                    fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 返回类型 %s, 跳过", clsName, methodName, retType]);
-                }
-            } @catch (NSException *e) {
-                fdLog([NSString stringWithFormat:@"[Bind]   %@.%@ 调用异常: %@", clsName, methodName, e.reason]);
+            BOOL hasIt = NO;
+            @try { hasIt = [cls instancesRespondToSelector:targetSel]; } @catch (...) {}
+            if (hasIt) {
+                fdLog([NSString stringWithFormat:@"[Bind] *** %@ 有实例方法 %s ***", cn, selNames[si]]);
             }
         }
     }
+    free(classes);
+
+    fdLog(@"[Bind] 运行时扫描完成，未找到匹配类则说明这些是 C 函数或动态方法");
 }
 
 #pragma mark - 策略F: CGI 类绑定
