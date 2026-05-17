@@ -451,11 +451,11 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
         case 7: // 消息旁边(=气泡外)：同位置2，气泡外侧 straddle，左偏5pt
         case 2: // 消息旁边(远离头像)：气泡外侧 straddle，垂直居中，左偏5pt
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 16.5;
+                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 16.55;
             } else {
                 labelFrame.origin.x = cvRight + w * kStraddleFactor - 13.4;
             }
-            labelFrame.origin.y = cvBottom - h * kStraddleFactor - 4;
+            labelFrame.origin.y = cvBottom - h * kStraddleFactor - 4.1;
             break;
     }
 
@@ -784,11 +784,15 @@ static void addTimeLabelToCell(id cell) {
 
         labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
 
-        mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelFrame=(%.0f,%.0f,%.0f,%.0f)",
+        mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelFrame=(%.0f,%.0f,%.0f,%.0f)",
                (long)position, isSender,
                contentFrame.origin.x, contentFrame.origin.y,
                contentFrame.origin.x + contentFrame.size.width,
                contentFrame.origin.y + contentFrame.size.height,
+               bubbleView ? bubbleView.frame.origin.x : 0.0,
+               bubbleView ? bubbleView.frame.origin.y : 0.0,
+               bubbleView ? bubbleView.frame.size.width : 0.0,
+               bubbleView ? bubbleView.frame.size.height : 0.0,
                labelSize.width, labelSize.height,
                cellFrame.size.height,
                offsetX, offsetY,
