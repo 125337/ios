@@ -424,29 +424,29 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             }
             labelFrame.origin.y = cvBottom + h * kStraddleFactor;
             break;
-        case 4: // 消息下方(远离头像)：边缘对齐，标签紧贴气泡底部外侧
+        case 4: // 消息下方(远离头像)：微信优化 sender=GetMaxX+cvRight, receiver=GetMinX+cvLeft
             if (isSender) {
-                labelFrame.origin.x = cvLeft + 2;
+                labelFrame.origin.x = cvRight - w * kStraddleFactor;
             } else {
-                labelFrame.origin.x = cvRight - w - 2;
+                labelFrame.origin.x = cvLeft + w * kStraddleFactor;
             }
-            labelFrame.origin.y = cvBottom;
+            labelFrame.origin.y = cvBottom + h * kStraddleFactor;
             break;
-        case 5: // 消息上方(靠近头像)：边缘对齐 + 底部入气泡 3pt
+        case 5: // 消息上方(靠近头像)：微信优化 sender=GetMinX+cvLeft, receiver=GetMaxX+cvRight
             if (isSender) {
-                labelFrame.origin.x = cvRight - w - 5;
+                labelFrame.origin.x = cvLeft + w * kStraddleFactor;
             } else {
-                labelFrame.origin.x = cvLeft + 5;
+                labelFrame.origin.x = cvRight - w * kStraddleFactor;
             }
-            labelFrame.origin.y = cvTop - h + 3;
+            labelFrame.origin.y = cvTop - h * kStraddleFactor;
             break;
-        case 6: // 消息上方(远离头像)：边缘对齐，标签在气泡正上方
+        case 6: // 消息上方(远离头像)：微信优化 sender=GetMaxX+cvRight, receiver=GetMinX+cvLeft
             if (isSender) {
-                labelFrame.origin.x = cvLeft + 2;
+                labelFrame.origin.x = cvRight - w * kStraddleFactor;
             } else {
-                labelFrame.origin.x = cvRight - w - 2;
+                labelFrame.origin.x = cvLeft + w * kStraddleFactor;
             }
-            labelFrame.origin.y = cvTop - h;
+            labelFrame.origin.y = cvTop - h * kStraddleFactor;
             break;
         case 7: // 消息旁边(=气泡外)
         case 2: // 消息旁边(远离头像)
