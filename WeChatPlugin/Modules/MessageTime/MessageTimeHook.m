@@ -388,12 +388,11 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
     CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
 
     switch (position) {
-        case 0: // 头像上方：标签居中于头像正上方，骑跨头像顶部
+        case 0: // 头像上方：X居中于头像，Y=contentView顶部半入
             if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
                 labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = avatarFrame.origin.y - h * kStraddleFactor;
+                labelFrame.origin.y = cvTop + h * kStraddleFactor;
             } else {
-                // 无头像 fallback：气泡外远离侧，垂直居中
                 if (isSender) {
                     labelFrame.origin.x = cvRight + w * kStraddleFactor;
                 } else {
@@ -402,12 +401,11 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
                 labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             }
             break;
-        case 1: // 头像下方：标签居中于头像正下方，骑跨头像底部
+        case 1: // 头像下方：X居中于头像，Y=contentView底部半出
             if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
                 labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + h * kStraddleFactor;
+                labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             } else {
-                // 无头像 fallback：同位置0
                 if (isSender) {
                     labelFrame.origin.x = cvRight + w * kStraddleFactor;
                 } else {
