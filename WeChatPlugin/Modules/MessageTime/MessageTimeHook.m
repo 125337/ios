@@ -39,22 +39,24 @@ static void mtLog(NSString *content) {
     if ([content hasPrefix:@"[DBG]"] && ![PluginConfig shared].debugLogging) return;
     
     NSLog(@"[WeChatPlugin][MessageTime] %@", content);
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"messagetime.log"];
-        NSString *timestamp = [[NSDate date] description];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", timestamp, content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+        @try {
+            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+            NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
+            [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
+            NSString *filePath = [folderPath stringByAppendingPathComponent:@"messagetime.log"];
+            NSString *timestamp = [[NSDate date] description];
+            NSString *line = [NSString stringWithFormat:@"[%@] %@\n", timestamp, content];
+            NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
+            if (handle) {
+                [handle seekToEndOfFile];
+                [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+                [handle closeFile];
+            } else {
+                [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            }
+        } @catch (NSException *e) {}
+    });
 }
 
 // ============================================================
