@@ -416,15 +416,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
                 labelFrame.origin.y = cvBottom - h;
             }
             break;
-        case 3: // 消息下方(靠近头像)：微信优化 sender=GetMinX+cvLeft, receiver=GetMaxX+cvRight
-            if (isSender) {
-                labelFrame.origin.x = cvLeft + w * kStraddleFactor;
-            } else {
-                labelFrame.origin.x = cvRight - w * kStraddleFactor;
-            }
-            labelFrame.origin.y = cvBottom + h * kStraddleFactor;
-            break;
-        case 4: // 消息下方(远离头像)：微信优化 sender=GetMaxX+cvRight, receiver=GetMinX+cvLeft
+        case 3: // 消息下方(靠近头像)=微信优化pos4: sender=GetMaxX+cvRight, receiver=GetMinX+cvLeft
             if (isSender) {
                 labelFrame.origin.x = cvRight - w * kStraddleFactor;
             } else {
@@ -432,19 +424,27 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             }
             labelFrame.origin.y = cvBottom + h * kStraddleFactor;
             break;
-        case 5: // 消息上方(靠近头像)：微信优化 sender=GetMinX+cvLeft, receiver=GetMaxX+cvRight
+        case 4: // 消息下方(远离头像)=微信优化pos3: sender=GetMinX+cvLeft, receiver=GetMaxX+cvRight
             if (isSender) {
                 labelFrame.origin.x = cvLeft + w * kStraddleFactor;
             } else {
                 labelFrame.origin.x = cvRight - w * kStraddleFactor;
+            }
+            labelFrame.origin.y = cvBottom + h * kStraddleFactor;
+            break;
+        case 5: // 消息上方(靠近头像)=微信优化pos6: sender=GetMaxX+cvRight, receiver=GetMinX+cvLeft
+            if (isSender) {
+                labelFrame.origin.x = cvRight - w * kStraddleFactor;
+            } else {
+                labelFrame.origin.x = cvLeft + w * kStraddleFactor;
             }
             labelFrame.origin.y = cvTop - h * kStraddleFactor;
             break;
-        case 6: // 消息上方(远离头像)：微信优化 sender=GetMaxX+cvRight, receiver=GetMinX+cvLeft
+        case 6: // 消息上方(远离头像)=微信优化pos5: sender=GetMinX+cvLeft, receiver=GetMaxX+cvRight
             if (isSender) {
-                labelFrame.origin.x = cvRight - w * kStraddleFactor;
-            } else {
                 labelFrame.origin.x = cvLeft + w * kStraddleFactor;
+            } else {
+                labelFrame.origin.x = cvRight - w * kStraddleFactor;
             }
             labelFrame.origin.y = cvTop - h * kStraddleFactor;
             break;
