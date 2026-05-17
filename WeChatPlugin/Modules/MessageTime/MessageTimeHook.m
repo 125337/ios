@@ -473,13 +473,21 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
     return labelFrame;
 }
 
-// Lightweight frame update for long messages (no logging, no wrap replay)
+// Lightweight frame update (no logging)
 static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     PluginConfig *config = [PluginConfig shared];
     if (!config.showMessageTime) return;
     
     UILabel *label = objc_getAssociatedObject(cellView, @"msgTimeLabel");
     if (!label) return;
+    
+    NSValue *lastFrame = objc_getAssociatedObject(cellView, @"msgTimeLabelLastCellFrame");
+    if (lastFrame && CGRectEqualToRect([lastFrame CGRectValue], cellFrame)) {
+        return;
+    }
+    objc_setAssociatedObject(cellView, @"msgTimeLabelLastCellFrame",
+                             [NSValue valueWithCGRect:cellFrame],
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     
     CGFloat offsetX = config.messageTimeOffsetX;
     CGFloat offsetY = config.messageTimeOffsetY;
@@ -498,7 +506,10 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     BOOL isSender = detectIsSender(cell, cellView, contentView, nil);
     
     CGSize labelSize = label.frame.size;
-    label.frame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
+    CGRect newFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
+    if (!CGRectEqualToRect(label.frame, newFrame)) {
+        label.frame = newFrame;
+    }
 }
 
 // ============================================================
