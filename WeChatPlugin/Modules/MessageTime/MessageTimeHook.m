@@ -451,11 +451,11 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
         case 7: // 消息旁边(=气泡外)：同位置2，气泡外侧 straddle，左偏5pt
         case 2: // 消息旁边(远离头像)：气泡外侧 straddle，垂直居中，左偏5pt
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 16.4;
+                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 16.5;
             } else {
-                labelFrame.origin.x = cvRight + w * kStraddleFactor - 13.5;
+                labelFrame.origin.x = cvRight + w * kStraddleFactor - 13.4;
             }
-            labelFrame.origin.y = cvBottom - h * kStraddleFactor - 4.2;
+            labelFrame.origin.y = cvBottom - h * kStraddleFactor - 4;
             break;
     }
 
@@ -776,19 +776,24 @@ static void addTimeLabelToCell(id cell) {
             @try { cvFromCell = [cell valueForKey:@"m_contentView"]; } @catch (...) {}
             if (cvFromCell && cvFromCell != contentView) {
                 CGRect fromCellFrame = contentFrameInCellView(cvFromCell, cellView);
-                mtLog([NSString stringWithFormat:@"[POS-DIFF] cell.m_contentView=(%f,%f,%f,%f) cellView.m_contentView=(%f,%f,%f,%f)",
+                mtLog([NSString stringWithFormat:@"[POS] cell.m_contentView=(%f,%f,%f,%f) cellView.m_contentView=(%f,%f,%f,%f)",
                        fromCellFrame.origin.x, fromCellFrame.origin.y, fromCellFrame.size.width, fromCellFrame.size.height,
-                       contentFrame.origin.x, contentFrame.origin.y, contentFrame.size.width, contentFrame.size.height]);
-            } else if (cvFromCell == contentView) {
-                mtLog([NSString stringWithFormat:@"[POS-OK] cell.m_contentView == cellView.m_contentView, frame=(%f,%f,%f,%f)",
-                       contentFrame.origin.x, contentFrame.origin.y, contentFrame.size.width, contentFrame.size.height]);
-            } else {
-                mtLog([NSString stringWithFormat:@"[POS-OK] cell.m_contentView is nil, using cellView.m_contentView frame=(%f,%f,%f,%f)",
                        contentFrame.origin.x, contentFrame.origin.y, contentFrame.size.width, contentFrame.size.height]);
             }
         }
 
         labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
+
+        mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelFrame=(%.0f,%.0f,%.0f,%.0f)",
+               (long)position, isSender,
+               contentFrame.origin.x, contentFrame.origin.y,
+               contentFrame.origin.x + contentFrame.size.width,
+               contentFrame.origin.y + contentFrame.size.height,
+               labelSize.width, labelSize.height,
+               cellFrame.size.height,
+               offsetX, offsetY,
+               labelFrame.origin.x, labelFrame.origin.y,
+               labelFrame.size.width, labelFrame.size.height]);
         
         timeLabel.frame = labelFrame;
         
