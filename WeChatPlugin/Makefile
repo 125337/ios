@@ -27,10 +27,11 @@ MioHelper_FILES = Tweak.m \
 	Modules/SettingEntry/SettingEntryHook.m \
 	Modules/SettingEntry/WPOtherVC.m \
 	Modules/SettingEntry/WPAboutVC.m \
+	Modules/SettingEntry/WPBackupVC.m \
 	Modules/Joker/JokerHook.m \
 	Modules/GroupExit/GroupExitHook.m \
+	Modules/FriendDetection/FriendDetectionHook.m \
 	Modules/MessageTime/MessageTimeHook.m \
-	Modules/SessionBox/WPSessionBoxHook.m \
 	Settings/Common/WPBorderLayer.m \
 	Settings/Common/SettingCategoryController.m \
 	Settings/Controllers/SettingController.m \
@@ -39,10 +40,9 @@ MioHelper_FILES = Tweak.m \
 	Settings/Controllers/SettingAssistFunctionController.m \
 	Settings/Controllers/SettingUIBeautifyController.m \
 	Settings/Controllers/SettingRedEnvelopController.m \
-	Settings/Controllers/SettingSessionActionController.m \
 	Settings/Controllers/SettingAboutController.m \
 	Settings/Controllers/WeChatTweakGroupSelectsController.m
-MioHelper_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
+MioHelper_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-function -Wno-unused-variable \
 	-I. \
 	-I./Config \
 	-I./Core \
@@ -56,7 +56,6 @@ MioHelper_CFLAGS = -fobjc-arc -Wno-deprecated-declarations \
 	-I./Modules/Joker \
 	-I./Modules/GroupExit \
 	-I./Modules/MessageTime \
-	-I./Modules/SessionBox \
 	-I./Settings/Common \
 	-I./Settings/Controllers
 MioHelper_FRAMEWORKS = UIKit Foundation Security AVFoundation UserNotifications

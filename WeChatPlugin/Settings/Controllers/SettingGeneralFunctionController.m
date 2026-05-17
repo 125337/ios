@@ -109,68 +109,6 @@
 
     y = [self finishGroup:timeGroup atY:y height:timeY];
 
-    UIView *sessionGroup = [self addTableGroupAtY:y width:w];
-    CGFloat sessionY = 0;
-
-    sessionY = [self addMasterSwitchRowInGroup:sessionGroup
-                                          title:@"会话盒子"
-                                            key:@"AddChatBoxEnabled"
-                                           isOn:config.addChatBoxEnabled
-                                     subBuilder:^(UIView *expand, CGFloat *ecy) {
-        *ecy = [self addSwitchRowInGroup:expand title:@"会话盒子置顶" desc:@"会话盒子显示在列表顶部" key:@"ChatBoxTopEnabled" isOn:config.chatBoxTopEnabled cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSwitchRowInGroup:expand title:@"管理会话盒子" desc:@"可添加/移除会话盒子中的会话" key:@"ManagerChatBoxEnabled" isOn:config.managerChatBoxEnabled cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSwitchRowInGroup:expand title:@"会话手势操作" desc:@"长按会话弹出操作菜单" key:@"SessionGestureEnabled" isOn:config.sessionGestureEnabled cy:*ecy width:w];
-    } cy:sessionY width:w];
-
-    y = [self finishGroup:sessionGroup atY:y height:sessionY];
-
-    UIView *pinGroup = [self addTableGroupAtY:y width:w];
-    CGFloat pinY = 0;
-
-    pinY = [self addMasterSwitchRowInGroup:pinGroup
-                                      title:@"快速置顶"
-                                        key:@"QuickPinEnabled"
-                                       isOn:config.quickPinEnabled
-                                 subBuilder:^(UIView *expand, CGFloat *ecy) {
-        *ecy = [self addSwitchRowInGroup:expand title:@"置顶折叠" desc:@"折叠显示置顶会话" key:@"FoldTopSessionEnabled" isOn:config.foldTopSessionEnabled cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSwitchRowInGroup:expand title:@"品牌号置顶" desc:@"支持品牌号会话置顶" key:@"BrandTopEnabled" isOn:config.brandTopEnabled cy:*ecy width:w];
-    } cy:pinY width:w];
-
-    y = [self finishGroup:pinGroup atY:y height:pinY];
-
-    UIView *remarkGroup = [self addTableGroupAtY:y width:w];
-    CGFloat remarkY = 0;
-
-    remarkY = [self addSwitchRowInGroup:remarkGroup
-                                   title:@"快速备注"
-                                    desc:@"长按会话可快速修改备注"
-                                     key:@"QuickRemarkEnabled"
-                                    isOn:config.quickRemarkEnabled
-                                      cy:remarkY
-                                   width:w];
-
-    y = [self finishGroup:remarkGroup atY:y height:remarkY];
-
-    UIView *muteGroup = [self addTableGroupAtY:y width:w];
-    CGFloat muteY = 0;
-
-    muteY = [self addMasterSwitchRowInGroup:muteGroup
-                                      title:@"免打扰"
-                                       key:@"QuickMuteEnabled"
-                                      isOn:config.quickMuteEnabled
-                                subBuilder:^(UIView *expand, CGFloat *ecy) {
-        *ecy = [self addSwitchRowInGroup:expand title:@"菜单添加免打扰" desc:@"在长按菜单中添加免打扰选项" key:@"AddMuteMenuItemEnabled" isOn:config.addMuteMenuItemEnabled cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"自动回复" key:@"MuteAutoReplyMsg" value:config.muteAutoReplyMsg hint:@"留空则不自动回复" cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"工作时间" key:@"MuteWorkingTime" value:config.muteWorkingTime hint:@"如 09:00-18:00" cy:*ecy width:w];
-    } cy:muteY width:w];
-
-    y = [self finishGroup:muteGroup atY:y height:muteY];
-
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
@@ -178,9 +116,9 @@
 - (NSString *)positionName:(NSInteger)position {
     NSArray *names = @[
         @"头像上方", @"头像下方",
-        @"消息旁边(远离头像)", @"消息下方(远离头像)",
-        @"消息下方(靠近头像)", @"消息上方(远离头像)",
-        @"消息上方(靠近头像)", @"消息内部(仅文本信息生效)"
+        @"消息旁边(远离头像)", @"消息下方(靠近头像)",
+        @"消息下方(远离头像)", @"消息上方(靠近头像)",
+        @"消息上方(远离头像)", @"消息旁边(=气泡外)"
     ];
     if (position >= 0 && position < (NSInteger)names.count) {
         return names[position];
@@ -191,9 +129,9 @@
 - (void)onMessageTimePositionTap {
     NSArray *positionNames = @[
         @"头像上方", @"头像下方",
-        @"消息旁边(远离头像)", @"消息下方(远离头像)",
-        @"消息下方(靠近头像)", @"消息上方(远离头像)",
-        @"消息上方(靠近头像)", @"消息内部(仅文本信息生效)"
+        @"消息旁边(远离头像)", @"消息下方(靠近头像)",
+        @"消息下方(远离头像)", @"消息上方(靠近头像)",
+        @"消息上方(远离头像)", @"消息旁边(=气泡外)"
     ];
 
     PluginConfig *config = [PluginConfig shared];
