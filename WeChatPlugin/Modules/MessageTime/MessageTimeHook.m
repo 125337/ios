@@ -17,9 +17,6 @@ static const CGFloat kStraddleFactor           = 0.5;
 
 static Class s_CMessageWrapClass; // install 时初始化
 
-// 全局消息标签跟踪：wrapPtr→UILabel（strong），标签在 cellView 间迁移，不被重复创建
-static NSMapTable *g_msgLabels = nil;
-
 // ============================================================
 // MARK: - Configuration Table Entry
 // ============================================================
@@ -702,10 +699,7 @@ static void addTimeLabelToCell(id cell) {
             mtLog(@"createTime is 0");
             return;
         }
-        
-        // 全局单标签：存储到 g_msgLabels（strong，标签在 cellView 间迁移）
-        NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
-        
+
         id avatarView = getAvatarView(cell);
         
         NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
@@ -716,7 +710,6 @@ static void addTimeLabelToCell(id cell) {
         }
         
         UILabel *timeLabel = initTimeLabel((UIView *)cellView);
-        [g_msgLabels setObject:timeLabel forKey:wp];
         timeLabel.text = timeString;
 
         CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
@@ -810,7 +803,8 @@ static void addTimeLabelToCell(id cell) {
 static UITableViewCell* (*orig_BaseMsgContentVC_cellForRow)(id, SEL, id, NSIndexPath*);
 static void (*orig_BaseMsgContentVC_willDisplayCell)(id, SEL, id, id, NSIndexPath*);
 static void (*orig_ChatTableViewCell_prepareForReuse)(id, SEL);
-static void (*orig_CommonMessageCellView_layoutSubviews)(id, SEL);
+static void (*orig_CommonMessageCellView_updateNodeStatus)(id, SEL);
+static void (*orig_CommonMessageCellView_didMoveToWindow)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
 static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
 static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
@@ -894,53 +888,50 @@ static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath 
     });
 }
 
-static void repl_CommonMessageCellView_layoutSubviews(id self, SEL _cmd) {
-    if (orig_CommonMessageCellView_layoutSubviews) {
-        orig_CommonMessageCellView_layoutSubviews(self, _cmd);
+static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
+    if (orig_CommonMessageCellView_updateNodeStatus) {
+        orig_CommonMessageCellView_updateNodeStatus(self, _cmd);
     }
 
-    // 找父 ChatTableViewCell
-    UIView *cell = (UIView *)self;
+    if (![PluginConfig shared].showMessageTime) return;
+
+    UIView *cellView = (UIView *)self;
+    UIView *cell = cellView;
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
     if (!cell) return;
-    
-    id cellView = self;
-    UILabel *existingOnCellView = objc_getAssociatedObject(cellView, @"msgTimeLabel");
-    if (existingOnCellView) {
-        // 同一 cellView 的重复 layoutSubviews（长消息多行布局后重定位）
+
+    UILabel *label = objc_getAssociatedObject(cellView, @"msgTimeLabel");
+    if (label) {
         quickRelocateTimeLabel(cell, cellView, [cell frame]);
         return;
     }
-    
-    // 全局去重：检查此消息是否已有标签
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        g_msgLabels = [NSMapTable mapTableWithKeyOptions:NSMapTableCopyIn
-                                           valueOptions:NSMapTableStrongMemory];
-    });
-    id wrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
-    if (wrap) {
-        NSString *wp = [NSString stringWithFormat:@"%p", (__bridge void *)wrap];
-        UILabel *existingLabel = [g_msgLabels objectForKey:wp];
-        if (existingLabel) {
-            // 已有标签 → 迁移到当前 cellView（而非重建）
-            UIView *oldOwner = (UIView *)[existingLabel superview];
-            if (oldOwner && oldOwner != self) {
-                [existingLabel removeFromSuperview];
-                objc_setAssociatedObject(oldOwner, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
-            if (!oldOwner || oldOwner != self) {
-                [(UIView *)self addSubview:existingLabel];
-                objc_setAssociatedObject(self, @"msgTimeLabel", existingLabel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                quickRelocateTimeLabel(cell, self, [cell frame]);
-            }
-            return; // 已有标签，跳过创建
-        }
-    }
-    
+
     addTimeLabelToCell(cell);
+}
+
+static void repl_CommonMessageCellView_didMoveToWindow(id self, SEL _cmd) {
+    if (orig_CommonMessageCellView_didMoveToWindow) {
+        orig_CommonMessageCellView_didMoveToWindow(self, _cmd);
+    }
+
+    if (![PluginConfig shared].showMessageTime) return;
+
+    UIView *cv = (UIView *)self;
+    if (!cv.window) return;
+
+    if (objc_getAssociatedObject(cv, @"msgTimeLabel")) return;
+
+    UIView *cell = cv;
+    while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
+        cell = [cell superview];
+    }
+    if (!cell) return;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        addTimeLabelToCell(cell);
+    });
 }
 
 static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
@@ -1019,7 +1010,8 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
 static MTHookEntry g_hookTable[] = {
     {"BaseMsgContentViewController", "tableView:cellForRowAtIndexPath:",              (IMP)repl_cellForRow,                         (IMP*)&orig_BaseMsgContentVC_cellForRow},
     {"BaseMsgContentViewController", "tableView:willDisplayCell:forRowAtIndexPath:",  (IMP)repl_willDisplayCell,                    (IMP*)&orig_BaseMsgContentVC_willDisplayCell},
-    {"CommonMessageCellView",        "layoutSubviews",                                (IMP)repl_CommonMessageCellView_layoutSubviews, (IMP*)&orig_CommonMessageCellView_layoutSubviews},
+    {"CommonMessageCellView",        "updateNodeStatus",                              (IMP)repl_CommonMessageCellView_updateNodeStatus, (IMP*)&orig_CommonMessageCellView_updateNodeStatus},
+    {"CommonMessageCellView",        "didMoveToWindow",                               (IMP)repl_CommonMessageCellView_didMoveToWindow,  (IMP*)&orig_CommonMessageCellView_didMoveToWindow},
     {"ChatTableViewCell",            "prepareForReuse",                               (IMP)repl_ChatTableViewCell_prepareForReuse,  (IMP*)&orig_ChatTableViewCell_prepareForReuse},
     {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
     {"ChatTimeViewModel",            "cellHeight",                                    (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
@@ -1036,7 +1028,8 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
 
 + (void)install {
     mtLog(@"========================================");
-    mtLog(@"MessageTimeHook install - willDisplayCell(dispatch_async) + layoutSubviews(relocate/create)");
+    mtLog(@"MessageTimeHook install - willDisplayCell(dispatch_async) + updateNodeStatus(model-driven) + didMoveToWindow(supplement)");
+    mtLog(@"Architecture: ViewModel驱动（复刻微信优化1.6.5）—— 0% layoutSubviews热路径参与");
     mtLog(@"========================================");
 
     PluginConfig *config = [PluginConfig shared];
