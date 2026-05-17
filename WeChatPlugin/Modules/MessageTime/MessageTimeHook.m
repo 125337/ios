@@ -449,13 +449,16 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             labelFrame.origin.y = cvTop - h;
             break;
         case 7: // 消息旁边(=气泡外)
-        case 2: // 消息旁边(远离头像)：X/Y 均 straddle 半入半出，匹配微信优化
+        case 2: // 消息旁边(远离头像)
+            // 微信优化用 setCenter(w/2 偏移)，我们等价转换为 setFrame：
+            // centerX=cvLeft-w/2 → originX=cvLeft-w（右边缘贴cvLeft，全在外）
+            // centerY=cvBottom-h/2 → originY=cvBottom-h（底部贴cvBottom）
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w * kStraddleFactor;
+                labelFrame.origin.x = cvLeft - w;
             } else {
-                labelFrame.origin.x = cvRight + w * kStraddleFactor;
+                labelFrame.origin.x = cvRight;
             }
-            labelFrame.origin.y = cvBottom - h * kStraddleFactor;
+            labelFrame.origin.y = cvBottom - h;
             break;
     }
 
