@@ -388,31 +388,21 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
     CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
 
     switch (position) {
-        case 0: // 头像上方：X居中于头像，Y=contentView顶部半入
-            if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = cvTop + h * kStraddleFactor;
+        case 0: // 头像上方：标签在内容区外侧边缘，半入内容顶部（微信优化：X=cv边缘±4，Y=cvTop+h/2）
+            if (isSender) {
+                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 4;
             } else {
-                if (isSender) {
-                    labelFrame.origin.x = cvRight + w * kStraddleFactor;
-                } else {
-                    labelFrame.origin.x = cvLeft - w * kStraddleFactor;
-                }
-                labelFrame.origin.y = cvBottom - h * kStraddleFactor;
+                labelFrame.origin.x = cvRight + w * kStraddleFactor + 4;
             }
+            labelFrame.origin.y = cvTop + h * kStraddleFactor;
             break;
-        case 1: // 头像下方：X居中于头像，Y=contentView底部半出
-            if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = cvBottom - h * kStraddleFactor;
+        case 1: // 头像下方：标签在内容区外侧边缘，半出内容底部（微信优化：X=cv边缘±4，Y=cvBottom-h/2）
+            if (isSender) {
+                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 4;
             } else {
-                if (isSender) {
-                    labelFrame.origin.x = cvRight + w * kStraddleFactor;
-                } else {
-                    labelFrame.origin.x = cvLeft - w * kStraddleFactor;
-                }
-                labelFrame.origin.y = cvBottom - h * kStraddleFactor;
+                labelFrame.origin.x = cvRight + w * kStraddleFactor + 4;
             }
+            labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             break;
         case 3: // 消息下方(靠近头像)：微信优化 straddle，X 偏左 -12.5
             if (isSender) {
