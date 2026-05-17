@@ -451,11 +451,11 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
         case 7: // 消息旁边(=气泡外)：同位置2，气泡外侧 straddle，左偏5pt
         case 2: // 消息旁边(远离头像)：气泡外侧 straddle，垂直居中，左偏5pt
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 16;
+                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 15.5;
             } else {
-                labelFrame.origin.x = cvRight + w * kStraddleFactor - 14;
+                labelFrame.origin.x = cvRight + w * kStraddleFactor - 13.5;
             }
-            labelFrame.origin.y = cvBottom - h * kStraddleFactor - 4;
+            labelFrame.origin.y = cvBottom - h * kStraddleFactor - 5;
             break;
     }
 
