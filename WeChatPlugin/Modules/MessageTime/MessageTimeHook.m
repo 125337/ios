@@ -388,19 +388,19 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
     CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
 
     switch (position) {
-        case 0: // 头像上方：标签在内容区外侧边缘，半入内容顶部（微信优化：X=cv边缘±4，Y=cvTop+h/2）
+        case 0: // 头像上方：标签在头像侧边缘，半入内容顶部（sender=右 cvRight，receiver=左 cvLeft）
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 4;
+                labelFrame.origin.x = cvRight - w * kStraddleFactor - 4;
             } else {
-                labelFrame.origin.x = cvRight + w * kStraddleFactor + 4;
+                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 4;
             }
             labelFrame.origin.y = cvTop + h * kStraddleFactor;
             break;
-        case 1: // 头像下方：标签在内容区外侧边缘，半出内容底部（微信优化：X=cv边缘±4，Y=cvBottom-h/2）
+        case 1: // 头像下方：标签在头像侧边缘，半出内容底部
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 4;
+                labelFrame.origin.x = cvRight - w * kStraddleFactor - 4;
             } else {
-                labelFrame.origin.x = cvRight + w * kStraddleFactor + 4;
+                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 4;
             }
             labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             break;
