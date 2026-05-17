@@ -35,11 +35,20 @@ typedef struct {
 // MARK: - Logging
 // ============================================================
 
+static dispatch_queue_t _logQueue(void) {
+    static dispatch_queue_t q;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        q = dispatch_queue_create("com.mio.messagetime.log", DISPATCH_QUEUE_SERIAL);
+    });
+    return q;
+}
+
 static void mtLog(NSString *content) {
     if ([content hasPrefix:@"[DBG]"] && ![PluginConfig shared].debugLogging) return;
     
     NSLog(@"[WeChatPlugin][MessageTime] %@", content);
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+    dispatch_async(_logQueue(), ^{
         @try {
             NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
             NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
@@ -483,12 +492,13 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     UILabel *label = objc_getAssociatedObject(cellView, @"msgTimeLabel");
     if (!label) return;
     
-    NSValue *lastFrame = objc_getAssociatedObject(cellView, @"msgTimeLabelLastCellFrame");
-    if (lastFrame && CGRectEqualToRect([lastFrame CGRectValue], cellFrame)) {
+    NSValue *lastSize = objc_getAssociatedObject(cellView, @"msgTimeLabelLastCellSize");
+    CGSize currentSize = cellFrame.size;
+    if (lastSize && CGSizeEqualToSize([lastSize CGSizeValue], currentSize)) {
         return;
     }
-    objc_setAssociatedObject(cellView, @"msgTimeLabelLastCellFrame",
-                             [NSValue valueWithCGRect:cellFrame],
+    objc_setAssociatedObject(cellView, @"msgTimeLabelLastCellSize",
+                             [NSValue valueWithCGSize:currentSize],
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     
     CGFloat offsetX = config.messageTimeOffsetX;
