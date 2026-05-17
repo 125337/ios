@@ -1,5 +1,5 @@
 #import <Foundation/Foundation.h>
 
-@interface FriendDetectionHook : NSObject
+@interface WPSessionBoxHook : NSObject
 + (void)install;
 @end

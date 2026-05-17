@@ -49,18 +49,6 @@
 @property (nonatomic, assign) CGFloat messageTimeOffsetY;
 @property (nonatomic, copy) NSString *messageTimeTextColor;
 @property (nonatomic, assign) CGFloat messageTimeBubbleExtWidth;
-@property (nonatomic, assign) CGFloat messageTimeCornerRadius;
-@property (nonatomic, assign) BOOL disableLabelWidthAdjustment;
-// 发送者配色
-@property (nonatomic, copy) NSString *senderTextColorHex;
-@property (nonatomic, copy) NSString *senderTextColorDarkHex;
-@property (nonatomic, copy) NSString *senderBackgroundColorHex;
-@property (nonatomic, copy) NSString *senderBackgroundColorDarkHex;
-// 接收者配色
-@property (nonatomic, copy) NSString *receiverTextColorHex;
-@property (nonatomic, copy) NSString *receiverTextColorDarkHex;
-@property (nonatomic, copy) NSString *receiverBackgroundColorHex;
-@property (nonatomic, copy) NSString *receiverBackgroundColorDarkHex;
 
 #pragma mark - 隐藏聊天时间分隔线
 @property (nonatomic, assign) BOOL hideChatTime;
@@ -68,6 +56,28 @@
 #pragma mark - 好友添加时间后缀
 @property (nonatomic, assign) BOOL showAddTimeSuffix;
 @property (nonatomic, copy) NSString *addTimeSuffixFormat;
+
+#pragma mark - 快速置顶
+@property (nonatomic, assign) BOOL quickPinEnabled;
+@property (nonatomic, assign) BOOL foldTopSessionEnabled;
+@property (nonatomic, assign) BOOL brandTopEnabled;
+@property (nonatomic, assign) BOOL chatBoxTopEnabled;
+
+#pragma mark - 会话盒子
+@property (nonatomic, assign) BOOL addChatBoxEnabled;
+@property (nonatomic, assign) BOOL managerChatBoxEnabled;
+@property (nonatomic, assign) BOOL sessionGestureEnabled;
+
+#pragma mark - 快速备注
+@property (nonatomic, assign) BOOL quickRemarkEnabled;
+
+#pragma mark - 免打扰
+@property (nonatomic, assign) BOOL quickMuteEnabled;
+@property (nonatomic, assign) BOOL addMuteMenuItemEnabled;
+@property (nonatomic, copy) NSString *muteAutoReplyMsg;
+@property (nonatomic, copy) NSString *muteWorkingTime;
+@property (nonatomic, strong) NSMutableArray *muteContactList;
+
 @property (nonatomic, copy) NSString *notifyFormat;
 @property (nonatomic, copy) NSString *dateFormat;
 @property (nonatomic, copy) NSString *customText;
@@ -90,5 +100,4 @@
 - (NSString *)applyTemplate:(NSString *)tmpl time:(NSString *)time name:(NSString *)name content:(NSString *)content;
 - (void)save;
 - (void)loadDefaults;
-- (void)resetAllConfig;
 @end
