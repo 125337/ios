@@ -770,7 +770,24 @@ static void addTimeLabelToCell(id cell) {
             contentFrame = cellFrame;
             contentFrame.origin = CGPointZero;
         }
-        
+
+        {
+            id cvFromCell = nil;
+            @try { cvFromCell = [cell valueForKey:@"m_contentView"]; } @catch (...) {}
+            if (cvFromCell && cvFromCell != contentView) {
+                CGRect fromCellFrame = contentFrameInCellView(cvFromCell, cellView);
+                mtLog([NSString stringWithFormat:@"[POS-DIFF] cell.m_contentView=(%f,%f,%f,%f) cellView.m_contentView=(%f,%f,%f,%f)",
+                       fromCellFrame.origin.x, fromCellFrame.origin.y, fromCellFrame.size.width, fromCellFrame.size.height,
+                       contentFrame.origin.x, contentFrame.origin.y, contentFrame.size.width, contentFrame.size.height]);
+            } else if (cvFromCell == contentView) {
+                mtLog([NSString stringWithFormat:@"[POS-OK] cell.m_contentView == cellView.m_contentView, frame=(%f,%f,%f,%f)",
+                       contentFrame.origin.x, contentFrame.origin.y, contentFrame.size.width, contentFrame.size.height]);
+            } else {
+                mtLog([NSString stringWithFormat:@"[POS-OK] cell.m_contentView is nil, using cellView.m_contentView frame=(%f,%f,%f,%f)",
+                       contentFrame.origin.x, contentFrame.origin.y, contentFrame.size.width, contentFrame.size.height]);
+            }
+        }
+
         labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
         
         timeLabel.frame = labelFrame;
