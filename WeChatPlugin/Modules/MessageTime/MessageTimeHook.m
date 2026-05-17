@@ -75,7 +75,7 @@ static UILabel *initTimeLabel(UIView *targetView) {
         label = [[UILabel alloc] init];
         label.tag = kTimeLabelTag;
         label.userInteractionEnabled = NO;
-        label.textAlignment = NSTextAlignmentCenter;
+        label.textAlignment = NSTextAlignmentNatural;
         objc_setAssociatedObject(targetView, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     return label;
@@ -448,14 +448,14 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             }
             labelFrame.origin.y = cvTop - h;
             break;
-        case 7: // 消息旁边(=气泡外)：同位置2，气泡外侧 straddle，左偏5pt
-        case 2: // 消息旁边(远离头像)：气泡外侧 straddle，垂直居中，左偏5pt
+        case 7: // 消息旁边(=气泡外)
+        case 2: // 消息旁边(远离头像)：气泡外侧 straddle
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 16.55;
+                labelFrame.origin.x = cvLeft - w * kStraddleFactor;
             } else {
-                labelFrame.origin.x = cvRight + w * kStraddleFactor - 13.4;
+                labelFrame.origin.x = cvRight + w * kStraddleFactor;
             }
-            labelFrame.origin.y = cvBottom - h * kStraddleFactor - 4.1;
+            labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             break;
     }
 
