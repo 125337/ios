@@ -388,21 +388,33 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
     CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
 
     switch (position) {
-        case 0: // 头像上方：标签在头像侧边缘，半入内容顶部（sender=右 cvRight，receiver=左 cvLeft）
-            if (isSender) {
-                labelFrame.origin.x = cvRight - w * kStraddleFactor - 4;
+        case 0: // 头像上方：X 居中于头像，Y 紧贴 contentView 顶部外侧
+            if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
+                labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
+                labelFrame.origin.y = cvTop - h;
             } else {
-                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 4;
+                // 无头像 fallback：气泡外远离侧，垂直居中
+                if (isSender) {
+                    labelFrame.origin.x = cvRight + w * kStraddleFactor;
+                } else {
+                    labelFrame.origin.x = cvLeft - w;
+                }
+                labelFrame.origin.y = cvBottom - h;
             }
-            labelFrame.origin.y = cvTop + h * kStraddleFactor;
             break;
-        case 1: // 头像下方：标签在头像侧边缘，半出内容底部
-            if (isSender) {
-                labelFrame.origin.x = cvRight - w * kStraddleFactor - 4;
+        case 1: // 头像下方：标签居中于头像正下方，骑跨头像底部
+            if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
+                labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
+                labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + h * kStraddleFactor;
             } else {
-                labelFrame.origin.x = cvLeft - w * kStraddleFactor - 4;
+                // 无头像 fallback：同位置0
+                if (isSender) {
+                    labelFrame.origin.x = cvRight + w * kStraddleFactor;
+                } else {
+                    labelFrame.origin.x = cvLeft - w;
+                }
+                labelFrame.origin.y = cvBottom - h;
             }
-            labelFrame.origin.y = cvBottom - h * kStraddleFactor;
             break;
         case 3: // 消息下方(靠近头像)：微信优化 straddle，X 偏左 -12.5
             if (isSender) {
@@ -437,13 +449,13 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             labelFrame.origin.y = cvTop - h;
             break;
         case 7: // 消息旁边(=气泡外)
-        case 2: // 消息旁边(远离头像)：气泡外侧 straddle
+        case 2: // 消息旁边(远离头像)：完全在气泡外侧
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w * kStraddleFactor;
+                labelFrame.origin.x = cvLeft - w;
             } else {
                 labelFrame.origin.x = cvRight + w * kStraddleFactor;
             }
-            labelFrame.origin.y = cvBottom - h * kStraddleFactor;
+            labelFrame.origin.y = cvBottom - h;
             break;
     }
 
