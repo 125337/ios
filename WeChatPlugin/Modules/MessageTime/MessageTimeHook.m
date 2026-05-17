@@ -391,7 +391,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
         case 0: // 头像上方：X 居中于头像，Y 在头像顶部上方4pt
             if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
                 labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = avatarFrame.origin.y - h - 4;
+                labelFrame.origin.y = avatarFrame.origin.y - h - 2;
             } else {
                 // 无头像 fallback：气泡外远离侧，垂直居中
                 if (isSender) {
