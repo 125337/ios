@@ -9,8 +9,6 @@
 #import "../Modules/Joker/JokerHook.h"
 #import "../Modules/GroupExit/GroupExitHook.h"
 #import "../Modules/MessageTime/MessageTimeHook.h"
-#import "../Modules/SessionBox/WPSessionBoxHook.h"
-#import "../Settings/Controllers/SettingSessionActionController.h"
 
 @implementation FeatureModuleDescriptor
 
@@ -63,12 +61,6 @@
                                              sectionTitle:@"通用"
                                           controllerClass:[SettingAssistFunctionController class]
                                      hookInstallerClasses:@[]],
-            [FeatureModuleDescriptor moduleWithIdentifier:@"sessionaction"
-                                                    title:@"会话增强"
-                                                 subtitle:@"会话盒子/置顶/备注/免打扰"
-                                             sectionTitle:@"通用"
-                                          controllerClass:[SettingSessionActionController class]
-                                     hookInstallerClasses:@[[WPSessionBoxHook class]]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"beautify"
                                                     title:@"界面美化"
                                                  subtitle:@"即将推出"

@@ -146,7 +146,9 @@ static void configLog(NSString *content) {
     if (_messageTimeFontSize == 0) _messageTimeFontSize = 7.0;
     _messageTimeBoldFont = [d boolForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBoldFont"]];
     
-    _messageTimeFormat = @"{HH}:{mm}:{ss}";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFormat"]];
+    if (v.length > 0) _messageTimeFormat = v;
+    else _messageTimeFormat = @"HH:mm:ss";
     
     _messageTimePosition = [d integerForKey:[kPluginPrefix stringByAppendingString:@"MessageTimePosition"]];
     if (_messageTimePosition < 0 || _messageTimePosition > 7) _messageTimePosition = 1;
@@ -160,6 +162,26 @@ static void configLog(NSString *content) {
     
     _messageTimeBubbleExtWidth = [d floatForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBubbleExtWidth"]];
     
+    _messageTimeCornerRadius = [d floatForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeCornerRadius"]];
+    _disableLabelWidthAdjustment = [d boolForKey:[kPluginPrefix stringByAppendingString:@"DisableLabelWidthAdjustment"]];
+    
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderTextColorHex"]];
+    if (v.length > 0) _senderTextColorHex = v; else _senderTextColorHex = @"#808080";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderTextColorDarkHex"]];
+    if (v.length > 0) _senderTextColorDarkHex = v; else _senderTextColorDarkHex = @"#A0A0A0";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderBackgroundColorHex"]];
+    if (v.length > 0) _senderBackgroundColorHex = v; else _senderBackgroundColorHex = @"#00000000";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderBackgroundColorDarkHex"]];
+    if (v.length > 0) _senderBackgroundColorDarkHex = v; else _senderBackgroundColorDarkHex = @"#00000000";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverTextColorHex"]];
+    if (v.length > 0) _receiverTextColorHex = v; else _receiverTextColorHex = @"#808080";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverTextColorDarkHex"]];
+    if (v.length > 0) _receiverTextColorDarkHex = v; else _receiverTextColorDarkHex = @"#A0A0A0";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorHex"]];
+    if (v.length > 0) _receiverBackgroundColorHex = v; else _receiverBackgroundColorHex = @"#00000000";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorDarkHex"]];
+    if (v.length > 0) _receiverBackgroundColorDarkHex = v; else _receiverBackgroundColorDarkHex = @"#00000000";
+    
     _hideChatTime = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideChatTime"]];
     
     _showAddTimeSuffix = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
@@ -167,32 +189,6 @@ static void configLog(NSString *content) {
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
     if (v.length > 0) _addTimeSuffixFormat = v;
     else _addTimeSuffixFormat = @"(yyyy-MM-dd)";
-
-    _quickPinEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"QuickPinEnabled"]];
-    _foldTopSessionEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"FoldTopSessionEnabled"]];
-    _brandTopEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"BrandTopEnabled"]];
-    _chatBoxTopEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ChatBoxTopEnabled"]];
-    _addChatBoxEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AddChatBoxEnabled"]];
-    _managerChatBoxEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ManagerChatBoxEnabled"]];
-    _sessionGestureEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"SessionGestureEnabled"]];
-    _quickRemarkEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"QuickRemarkEnabled"]];
-    _quickMuteEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"QuickMuteEnabled"]];
-    _addMuteMenuItemEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AddMuteMenuItemEnabled"]];
-    
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MuteAutoReplyMsg"]];
-    if (v.length > 0) _muteAutoReplyMsg = v;
-    else _muteAutoReplyMsg = @"";
-    
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MuteWorkingTime"]];
-    if (v.length > 0) _muteWorkingTime = v;
-    else _muteWorkingTime = @"";
-    
-    NSArray *muteList = [d arrayForKey:[kPluginPrefix stringByAppendingString:@"MuteContactList"]];
-    if (muteList) {
-        _muteContactList = [muteList mutableCopy];
-    } else {
-        _muteContactList = [NSMutableArray array];
-    }
 
     @try {
         NSData *data = [d dataForKey:[kPluginPrefix stringByAppendingString:@"SessionFormats"]];
@@ -264,6 +260,9 @@ static void configLog(NSString *content) {
     [d setBool:_showMessageTime forKey:[kPluginPrefix stringByAppendingString:@"ShowMessageTime"]];
     [d setFloat:_messageTimeFontSize forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFontSize"]];
     [d setBool:_messageTimeBoldFont forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBoldFont"]];
+    if (_messageTimeFormat) {
+        [d setObject:_messageTimeFormat forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFormat"]];
+    }
     [d setInteger:_messageTimePosition forKey:[kPluginPrefix stringByAppendingString:@"MessageTimePosition"]];
     [d setFloat:_messageTimeOffsetX forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeOffsetX"]];
     [d setFloat:_messageTimeOffsetY forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeOffsetY"]];
@@ -271,31 +270,20 @@ static void configLog(NSString *content) {
         [d setObject:_messageTimeTextColor forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeTextColor"]];
     }
     [d setFloat:_messageTimeBubbleExtWidth forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBubbleExtWidth"]];
+    [d setFloat:_messageTimeCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeCornerRadius"]];
+    [d setBool:_disableLabelWidthAdjustment forKey:[kPluginPrefix stringByAppendingString:@"DisableLabelWidthAdjustment"]];
+    if (_senderTextColorHex) [d setObject:_senderTextColorHex forKey:[kPluginPrefix stringByAppendingString:@"SenderTextColorHex"]];
+    if (_senderTextColorDarkHex) [d setObject:_senderTextColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"SenderTextColorDarkHex"]];
+    if (_senderBackgroundColorHex) [d setObject:_senderBackgroundColorHex forKey:[kPluginPrefix stringByAppendingString:@"SenderBackgroundColorHex"]];
+    if (_senderBackgroundColorDarkHex) [d setObject:_senderBackgroundColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"SenderBackgroundColorDarkHex"]];
+    if (_receiverTextColorHex) [d setObject:_receiverTextColorHex forKey:[kPluginPrefix stringByAppendingString:@"ReceiverTextColorHex"]];
+    if (_receiverTextColorDarkHex) [d setObject:_receiverTextColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"ReceiverTextColorDarkHex"]];
+    if (_receiverBackgroundColorHex) [d setObject:_receiverBackgroundColorHex forKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorHex"]];
+    if (_receiverBackgroundColorDarkHex) [d setObject:_receiverBackgroundColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorDarkHex"]];
     [d setBool:_hideChatTime forKey:[kPluginPrefix stringByAppendingString:@"HideChatTime"]];
     [d setBool:_showAddTimeSuffix forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     if (_addTimeSuffixFormat) {
         [d setObject:_addTimeSuffixFormat forKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
-    }
-
-    [d setBool:_quickPinEnabled forKey:[kPluginPrefix stringByAppendingString:@"QuickPinEnabled"]];
-    [d setBool:_foldTopSessionEnabled forKey:[kPluginPrefix stringByAppendingString:@"FoldTopSessionEnabled"]];
-    [d setBool:_brandTopEnabled forKey:[kPluginPrefix stringByAppendingString:@"BrandTopEnabled"]];
-    [d setBool:_chatBoxTopEnabled forKey:[kPluginPrefix stringByAppendingString:@"ChatBoxTopEnabled"]];
-    [d setBool:_addChatBoxEnabled forKey:[kPluginPrefix stringByAppendingString:@"AddChatBoxEnabled"]];
-    [d setBool:_managerChatBoxEnabled forKey:[kPluginPrefix stringByAppendingString:@"ManagerChatBoxEnabled"]];
-    [d setBool:_sessionGestureEnabled forKey:[kPluginPrefix stringByAppendingString:@"SessionGestureEnabled"]];
-    [d setBool:_quickRemarkEnabled forKey:[kPluginPrefix stringByAppendingString:@"QuickRemarkEnabled"]];
-    [d setBool:_quickMuteEnabled forKey:[kPluginPrefix stringByAppendingString:@"QuickMuteEnabled"]];
-    [d setBool:_addMuteMenuItemEnabled forKey:[kPluginPrefix stringByAppendingString:@"AddMuteMenuItemEnabled"]];
-    
-    if (_muteAutoReplyMsg) {
-        [d setObject:_muteAutoReplyMsg forKey:[kPluginPrefix stringByAppendingString:@"MuteAutoReplyMsg"]];
-    }
-    if (_muteWorkingTime) {
-        [d setObject:_muteWorkingTime forKey:[kPluginPrefix stringByAppendingString:@"MuteWorkingTime"]];
-    }
-    if (_muteContactList) {
-        [d setObject:_muteContactList forKey:[kPluginPrefix stringByAppendingString:@"MuteContactList"]];
     }
 
     @try {
@@ -305,6 +293,21 @@ static void configLog(NSString *content) {
 
     [d synchronize];
     configLog(@"[OK] save() completed - NSUserDefaults synchronized");
+}
+
+- (void)resetAllConfig {
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    NSDictionary *all = [d dictionaryRepresentation];
+    for (NSString *key in all) {
+        if ([key hasPrefix:kPluginPrefix]) {
+            [d removeObjectForKey:key];
+        }
+    }
+    [d synchronize];
+    
+    // 重新加载默认值
+    [self loadDefaults];
+    configLog(@"[RESET] All plugin configs wiped, defaults reloaded");
 }
 
 - (NSString *)notifyFormatForSession:(NSString *)session user:(NSString *)user {
