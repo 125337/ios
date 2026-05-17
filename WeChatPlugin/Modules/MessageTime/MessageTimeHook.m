@@ -416,11 +416,11 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
                 labelFrame.origin.y = cvBottom - h;
             }
             break;
-        case 3: // 消息下方(靠近头像)：微信优化 straddle，X 偏左 -12.5
+        case 3: // 消息下方(靠近头像)：微信优化 sender=GetMinX+cvLeft, receiver=GetMaxX+cvRight
             if (isSender) {
-                labelFrame.origin.x = cvRight - w * kStraddleFactor - 14.5;
+                labelFrame.origin.x = cvLeft + w * kStraddleFactor;
             } else {
-                labelFrame.origin.x = cvLeft + w * kStraddleFactor - 13;
+                labelFrame.origin.x = cvRight - w * kStraddleFactor;
             }
             labelFrame.origin.y = cvBottom + h * kStraddleFactor;
             break;
