@@ -14,6 +14,7 @@ static const unsigned int kSystemMessageType   = 10000;
 static const CGFloat kMinContentViewWidth      = 5.0;
 static const CGFloat kTimeLabelMaxYInset       = 2.0;
 static const CGFloat kStraddleFactor           = 0.5;
+static const CGFloat kMessageTimeBaseSpacing   = 4.0;
 
 static Class s_CMessageWrapClass; // install 时初始化
 
@@ -418,39 +419,41 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             break;
         case 3: // 消息下方(靠近头像)=微信优化pos4: sender=GetMaxX(cvRight-w/2), receiver=GetMinX(cvLeft+w/2)
             // setCenter→setFrame: cvRight-w/2 → cvRight-w,  cvLeft+w/2 → cvLeft
+            // 第二段setCenter: sender:中心+s8, receiver:中心-s8, Y:中心-s9 → 间隙
             if (isSender) {
-                labelFrame.origin.x = cvRight - w;
+                labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
             } else {
-                labelFrame.origin.x = cvLeft;
+                labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
             }
-            labelFrame.origin.y = cvBottom;
+            labelFrame.origin.y = cvBottom - kMessageTimeBaseSpacing;
             break;
         case 4: // 消息下方(远离头像)=微信优化pos3: sender=GetMinX(cvLeft+w/2), receiver=GetMaxX(cvRight-w/2)
             // setCenter→setFrame: cvLeft+w/2 → cvLeft,  cvRight-w/2 → cvRight-w
+            // 第二段setCenter: s8=-spacing → sender左移spacing, receiver右移spacing
             if (isSender) {
-                labelFrame.origin.x = cvLeft;
+                labelFrame.origin.x = cvLeft - kMessageTimeBaseSpacing;
             } else {
-                labelFrame.origin.x = cvRight - w;
+                labelFrame.origin.x = cvRight - w + kMessageTimeBaseSpacing;
             }
-            labelFrame.origin.y = cvBottom;
+            labelFrame.origin.y = cvBottom - kMessageTimeBaseSpacing;
             break;
         case 5: // 消息上方(靠近头像)=微信优化pos6: sender=GetMaxX(cvRight-w/2), receiver=GetMinX(cvLeft+w/2)
-            // setCenter→setFrame: cvRight-w/2 → cvRight-w,  cvLeft+w/2 → cvLeft
+            // 同pos3 X逻辑，Y=cvTop-h-spacing
             if (isSender) {
-                labelFrame.origin.x = cvRight - w;
+                labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
             } else {
-                labelFrame.origin.x = cvLeft;
+                labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
             }
-            labelFrame.origin.y = cvTop - h;
+            labelFrame.origin.y = cvTop - h - kMessageTimeBaseSpacing;
             break;
         case 6: // 消息上方(远离头像)=微信优化pos5: sender=GetMinX(cvLeft+w/2), receiver=GetMaxX(cvRight-w/2)
-            // setCenter→setFrame: cvLeft+w/2 → cvLeft,  cvRight-w/2 → cvRight-w
+            // 同pos4 X逻辑，Y=cvTop-h-spacing
             if (isSender) {
-                labelFrame.origin.x = cvLeft;
+                labelFrame.origin.x = cvLeft - kMessageTimeBaseSpacing;
             } else {
-                labelFrame.origin.x = cvRight - w;
+                labelFrame.origin.x = cvRight - w + kMessageTimeBaseSpacing;
             }
-            labelFrame.origin.y = cvTop - h;
+            labelFrame.origin.y = cvTop - h - kMessageTimeBaseSpacing;
             break;
         case 7: // 消息旁边(=气泡外)
         case 2: // 消息旁边(远离头像)
