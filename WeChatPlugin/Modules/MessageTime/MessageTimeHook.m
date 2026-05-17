@@ -402,10 +402,10 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
                 labelFrame.origin.y = cvBottom - h;
             }
             break;
-        case 1: // 头像下方：X 居中于头像，Y 在 contentView 底部下方2pt
+        case 1: // 头像下方：X 居中于头像，Y 在头像底部下方2pt
             if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
                 labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = cvBottom + 2;
+                labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + 2;
             } else {
                 // 无头像 fallback：同位置0
                 if (isSender) {
