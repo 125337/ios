@@ -450,15 +450,14 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             break;
         case 7: // 消息旁边(=气泡外)
         case 2: // 消息旁边(远离头像)
-            // 微信优化用 setCenter(w/2 偏移)，我们等价转换为 setFrame：
-            // centerX=cvLeft-w/2 → originX=cvLeft-w（右边缘贴cvLeft，全在外）
-            // centerY=cvBottom-h/2 → originY=cvBottom-h（底部贴cvBottom）
+            // 微信优化 setCenter(cvLeft-(w+4)/2, cvBottom-(h+4)/2)
+            // 等价 setFrame origin = cvLeft-w-4, cvBottom-h-4（4pt间隔）
             if (isSender) {
-                labelFrame.origin.x = cvLeft - w;
+                labelFrame.origin.x = cvLeft - w - 4;
             } else {
-                labelFrame.origin.x = cvRight;
+                labelFrame.origin.x = cvRight + 4;
             }
-            labelFrame.origin.y = cvBottom - h;
+            labelFrame.origin.y = cvBottom - h - 4;
             break;
     }
 
