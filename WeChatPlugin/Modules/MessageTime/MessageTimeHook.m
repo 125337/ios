@@ -455,7 +455,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             } else {
                 labelFrame.origin.x = cvRight + w * kStraddleFactor - 13;
             }
-            labelFrame.origin.y = cvBottom - h * kStraddleFactor - 1
+            labelFrame.origin.y = cvBottom - h * kStraddleFactor - 1;
             break;
     }
 
