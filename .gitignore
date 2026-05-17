@@ -11,6 +11,8 @@ packages/
 *~
 temp_*
 wechat_analysis/
+wechat_860_analysis/
+WeChat_tweak/
 别人的开源/
 插件/
 *.log
