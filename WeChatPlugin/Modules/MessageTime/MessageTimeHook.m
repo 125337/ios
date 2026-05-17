@@ -388,10 +388,10 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
     CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
 
     switch (position) {
-        case 0: // 头像上方：X 居中于头像，Y 紧贴 contentView 顶部外侧
+        case 0: // 头像上方：X 居中于头像，Y 在头像顶部上方4pt
             if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
                 labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = cvTop - h;
+                labelFrame.origin.y = avatarFrame.origin.y - h - 4;
             } else {
                 // 无头像 fallback：气泡外远离侧，垂直居中
                 if (isSender) {
@@ -784,7 +784,7 @@ static void addTimeLabelToCell(id cell) {
 
         labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
 
-        mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelFrame=(%.0f,%.0f,%.0f,%.0f)",
+        mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) av=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelFrame=(%.0f,%.0f,%.0f,%.0f)",
                (long)position, isSender,
                contentFrame.origin.x, contentFrame.origin.y,
                contentFrame.origin.x + contentFrame.size.width,
@@ -793,6 +793,8 @@ static void addTimeLabelToCell(id cell) {
                bubbleView ? bubbleView.frame.origin.y : 0.0,
                bubbleView ? bubbleView.frame.size.width : 0.0,
                bubbleView ? bubbleView.frame.size.height : 0.0,
+               avatarFrame.origin.x, avatarFrame.origin.y,
+               avatarFrame.size.width, avatarFrame.size.height,
                labelSize.width, labelSize.height,
                cellFrame.size.height,
                offsetX, offsetY,
