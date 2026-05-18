@@ -833,29 +833,31 @@ static void addTimeLabelToCell(id cell) {
         CGFloat cvMidX   = (cvLeft + cvRight) / 2;
         CGFloat w = labelSize.width;
         CGFloat h = labelSize.height;
+        static const CGFloat kLabelPaddingHalf = 2;
+
         CGFloat cx = 0, cy = 0;
 
         switch (position) {
             case 2:
             case 7: // 消息旁边(=气泡外)
-                cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
-                cy = cvBottom - h / 2;
+                cx = isSender ? (cvLeft - w / 2 - kLabelPaddingHalf) : (cvRight + w / 2 + kLabelPaddingHalf);
+                cy = cvBottom - h / 2 - kLabelPaddingHalf;
                 break;
             case 3: // 消息下方(远离头像)
-                cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
-                cy = cvBottom + h / 2;
+                cx = isSender ? (cvLeft + w / 2 + kLabelPaddingHalf) : (cvRight - w / 2 - kLabelPaddingHalf);
+                cy = cvBottom + h / 2 + kLabelPaddingHalf;
                 break;
             case 4: // 消息下方(靠近头像)
-                cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
-                cy = cvBottom + h / 2;
+                cx = isSender ? (cvRight - w / 2 - kLabelPaddingHalf) : (cvLeft + w / 2 + kLabelPaddingHalf);
+                cy = cvBottom + h / 2 + kLabelPaddingHalf;
                 break;
             case 5: // 消息上方(远离头像)
-                cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
-                cy = cvTop - h / 2;
+                cx = isSender ? (cvLeft + w / 2 + kLabelPaddingHalf) : (cvRight - w / 2 - kLabelPaddingHalf);
+                cy = cvTop - h / 2 - kLabelPaddingHalf;
                 break;
             case 6: // 消息上方(靠近头像)
-                cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
-                cy = cvTop - h / 2;
+                cx = isSender ? (cvRight - w / 2 - kLabelPaddingHalf) : (cvLeft + w / 2 + kLabelPaddingHalf);
+                cy = cvTop - h / 2 - kLabelPaddingHalf;
                 break;
             default: {
                 labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
