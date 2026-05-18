@@ -1104,19 +1104,18 @@ static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGRect frame) {
     if (config.showMessageTime && config.messageTimePosition == 7) {
         CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
 
-        UIView *cv = (UIView *)self;
-        UIView *cell = cv;
-        while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
-            cell = [cell superview];
+        id bgImageView = nil;
+        @try { bgImageView = [self valueForKey:@"m_bgImageView"]; } @catch (...) {}
+
+        BOOL isSender = NO;
+        if (bgImageView && [bgImageView respondsToSelector:@selector(isSender)]) {
+            isSender = ((BOOL (*)(id, SEL))objc_msgSend)(bgImageView, @selector(isSender));
         }
 
-        if (cell) {
-            BOOL isSender = detectIsSender(cell, cv, nil, nil);
-            if (isSender) {
-                frame.origin.x -= extWidth;
-            }
-            frame.size.width += extWidth;
+        if (isSender) {
+            frame.origin.x -= extWidth;
         }
+        frame.size.width += extWidth;
     }
 
     if (orig_TextMsgCell_setFrameBgImg) {
