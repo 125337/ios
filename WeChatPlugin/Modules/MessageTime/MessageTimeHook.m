@@ -863,6 +863,7 @@ static void addTimeLabelToCell(id cell) {
                 cy = cvTop - ph / 2;
                 break;
             default: {
+                timeLabel.textAlignment = NSTextAlignmentNatural;
                 labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
                 mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) av=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelFrame=(%.0f,%.0f,%.0f,%.0f)",
                        (long)position, isSender,
@@ -906,6 +907,7 @@ static void addTimeLabelToCell(id cell) {
                finalCenter.x, finalCenter.y,
                equivalentFrame.origin.x, equivalentFrame.origin.y,
                equivalentFrame.size.width, equivalentFrame.size.height]);
+        timeLabel.textAlignment = NSTextAlignmentCenter;
         timeLabel.bounds = CGRectMake(0, 0, pw, ph);
         timeLabel.center = finalCenter;
 
