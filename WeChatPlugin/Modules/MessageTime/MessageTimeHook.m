@@ -171,6 +171,10 @@ static void extendBubbleForPosition7(UIView *cellView, UIView *bubbleView, BOOL 
     if (!bubbleView) return;
     if (![NSStringFromClass([cellView class]) containsString:@"TextMessage"]) return;
 
+    NSNumber *alreadyExtended = objc_getAssociatedObject(cellView, @"mtBubbleExtended");
+    if ([alreadyExtended boolValue]) return;
+    objc_setAssociatedObject(cellView, @"mtBubbleExtended", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
     CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
     CGRect frame = bubbleView.frame;
     if (isSender) {
@@ -1135,6 +1139,7 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
             [tagLabel removeFromSuperview];
         }
         objc_setAssociatedObject(cellView, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, @"mtBubbleExtended", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
     objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
