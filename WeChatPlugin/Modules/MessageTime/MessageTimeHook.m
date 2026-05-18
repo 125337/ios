@@ -1103,31 +1103,33 @@ static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGFloat x, CGFloat
     mtLog([NSString stringWithFormat:@"[BUBBLE-HOOK] called! x=%.0f y=%.0f w=%.0f h=%.0f class=%@",
            x, y, w, h, NSStringFromClass([self class])]);
 
-    PluginConfig *config = [PluginConfig shared];
-    if (config.showMessageTime && config.messageTimePosition == 7) {
-        CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
+    @try {
+        PluginConfig *config = [PluginConfig shared];
+        if (config.showMessageTime && config.messageTimePosition == 7) {
+            CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
 
-        id viewModel = nil;
-        @try { viewModel = [self valueForKey:@"viewModel"]; } @catch (...) {}
+            id viewModel = [self valueForKey:@"viewModel"];
+            BOOL isSender = NO;
+            if (viewModel && [viewModel respondsToSelector:@selector(isSender)]) {
+                isSender = ((BOOL (*)(id, SEL))objc_msgSend)(viewModel, @selector(isSender));
+            }
 
-        BOOL isSender = NO;
-        if (viewModel) {
-            isSender = ((BOOL (*)(id, SEL))objc_msgSend)(viewModel, @selector(isSender));
+            CGFloat newX = x;
+            if (isSender) {
+                newX = x - extWidth;
+            }
+            CGFloat newW = w + extWidth;
+
+            mtLog([NSString stringWithFormat:@"[BUBBLE-EXT] isSender=%d extWidth=%.0f orig=(%.0f,%.0f,%.0f,%.0f) new=(%.0f,%.0f,%.0f,%.0f)",
+                   isSender, extWidth, x, y, w, h, newX, y, newW, h]);
+
+            if (orig_TextMsgCell_setFrameBgImg) {
+                orig_TextMsgCell_setFrameBgImg(self, _cmd, newX, y, newW, h);
+            }
+            return;
         }
-
-        CGFloat newX = x;
-        if (isSender) {
-            newX = x - extWidth;
-        }
-        CGFloat newW = w + extWidth;
-
-        mtLog([NSString stringWithFormat:@"[BUBBLE-EXT] isSender=%d extWidth=%.0f orig=(%.0f,%.0f,%.0f,%.0f) new=(%.0f,%.0f,%.0f,%.0f)",
-               isSender, extWidth, x, y, w, h, newX, y, newW, h]);
-
-        if (orig_TextMsgCell_setFrameBgImg) {
-            orig_TextMsgCell_setFrameBgImg(self, _cmd, newX, y, newW, h);
-        }
-        return;
+    } @catch (NSException *e) {
+        mtLog([NSString stringWithFormat:@"[BUBBLE-HOOK] exception: %@", e]);
     }
 
     if (orig_TextMsgCell_setFrameBgImg) {
