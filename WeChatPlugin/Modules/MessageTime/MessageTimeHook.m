@@ -14,7 +14,7 @@ static const unsigned int kSystemMessageType   = 10000;
 static const CGFloat kMinContentViewWidth      = 5.0;
 static const CGFloat kTimeLabelMaxYInset       = 2.0;
 static const CGFloat kStraddleFactor           = 0.5;
-static const CGFloat kMessageTimeBaseSpacing   = 4.0;
+static const CGFloat kMessageTimeBaseSpacing   = 3.5;
 
 static Class s_CMessageWrapClass; // install 时初始化
 
