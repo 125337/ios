@@ -540,7 +540,7 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
         case 4: // 消息下方(远离头像)
             cx = isSender ? (cvLeft + w / 2 + kWeChatPadX) : (cvRight - w / 2 + kWeChatPadX);
             cy = cvBottom + h / 2 + kWeChatPadY;
-            mtLog(@"[POS-PAD] pos=4 padX=%.1f padY=%.1f", kWeChatPadX, kWeChatPadY);
+            mtLog([NSString stringWithFormat:@"[POS-PAD] pos=4 padX=%.1f padY=%.1f", kWeChatPadX, kWeChatPadY]);
             break;
         case 5: // 消息上方(靠近头像)
             cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
