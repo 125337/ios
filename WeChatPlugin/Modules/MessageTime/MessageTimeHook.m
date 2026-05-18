@@ -833,31 +833,34 @@ static void addTimeLabelToCell(id cell) {
         CGFloat cvMidX   = (cvLeft + cvRight) / 2;
         CGFloat w = labelSize.width;
         CGFloat h = labelSize.height;
-        static const CGFloat kLabelPaddingHalf = 2;
+        static const CGFloat kLabelPadding = 4;
+        static const CGFloat kLabelPaddingHalf = kLabelPadding / 2;
+        CGFloat pw = w + kLabelPadding;
+        CGFloat ph = h + kLabelPadding;
 
         CGFloat cx = 0, cy = 0;
 
         switch (position) {
             case 2:
             case 7: // 消息旁边(=气泡外)
-                cx = isSender ? (cvLeft - w / 2 - kLabelPaddingHalf) : (cvRight + w / 2 + kLabelPaddingHalf);
-                cy = cvBottom - h / 2 - kLabelPaddingHalf;
+                cx = isSender ? (cvLeft - pw / 2) : (cvRight + pw / 2);
+                cy = cvBottom - ph / 2;
                 break;
             case 3: // 消息下方(远离头像)
-                cx = isSender ? (cvLeft + w / 2 + kLabelPaddingHalf) : (cvRight - w / 2 - kLabelPaddingHalf);
-                cy = cvBottom + h / 2 + kLabelPaddingHalf;
+                cx = isSender ? (cvLeft + pw / 2) : (cvRight - pw / 2);
+                cy = cvBottom + ph / 2;
                 break;
             case 4: // 消息下方(靠近头像)
-                cx = isSender ? (cvRight - w / 2 - kLabelPaddingHalf) : (cvLeft + w / 2 + kLabelPaddingHalf);
-                cy = cvBottom + h / 2 + kLabelPaddingHalf;
+                cx = isSender ? (cvRight - pw / 2) : (cvLeft + pw / 2);
+                cy = cvBottom + ph / 2;
                 break;
             case 5: // 消息上方(远离头像)
-                cx = isSender ? (cvLeft + w / 2 + kLabelPaddingHalf) : (cvRight - w / 2 - kLabelPaddingHalf);
-                cy = cvTop - h / 2 - kLabelPaddingHalf;
+                cx = isSender ? (cvLeft + pw / 2) : (cvRight - pw / 2);
+                cy = cvTop - ph / 2;
                 break;
             case 6: // 消息上方(靠近头像)
-                cx = isSender ? (cvRight - w / 2 - kLabelPaddingHalf) : (cvLeft + w / 2 + kLabelPaddingHalf);
-                cy = cvTop - h / 2 - kLabelPaddingHalf;
+                cx = isSender ? (cvRight - pw / 2) : (cvLeft + pw / 2);
+                cy = cvTop - ph / 2;
                 break;
             default: {
                 labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
@@ -884,8 +887,6 @@ static void addTimeLabelToCell(id cell) {
 
         CGFloat finalX = cx + (isSender ? -offsetX : offsetX);
         CGFloat finalY = cy - offsetY;
-        CGFloat maxY = cellFrame.size.height - h - kTimeLabelMaxYInset;
-        if (finalY > maxY) finalY = maxY;
         CGPoint finalCenter = CGPointMake(finalX, finalY);
         CGRect equivalentFrame = CGRectMake(finalX - w / 2, finalY - h / 2, w, h);
         mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) av=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelCenter=(%.0f,%.0f) labelFrame=(%.0f,%.0f,%.0f,%.0f)",
@@ -905,7 +906,7 @@ static void addTimeLabelToCell(id cell) {
                finalCenter.x, finalCenter.y,
                equivalentFrame.origin.x, equivalentFrame.origin.y,
                equivalentFrame.size.width, equivalentFrame.size.height]);
-        timeLabel.bounds = CGRectMake(0, 0, w, h);
+        timeLabel.bounds = CGRectMake(0, 0, pw, ph);
         timeLabel.center = finalCenter;
 
     setLabelDone:
