@@ -1104,18 +1104,24 @@ static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGRect frame) {
     if (config.showMessageTime && config.messageTimePosition == 7) {
         CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
 
-        id bgImageView = nil;
-        @try { bgImageView = [self valueForKey:@"m_bgImageView"]; } @catch (...) {}
+        id viewModel = nil;
+        @try { viewModel = [self valueForKey:@"viewModel"]; } @catch (...) {}
 
         BOOL isSender = NO;
-        if (bgImageView && [bgImageView respondsToSelector:@selector(isSender)]) {
-            isSender = ((BOOL (*)(id, SEL))objc_msgSend)(bgImageView, @selector(isSender));
+        if (viewModel) {
+            isSender = ((BOOL (*)(id, SEL))objc_msgSend)(viewModel, @selector(isSender));
         }
 
+        CGRect origFrame = frame;
         if (isSender) {
             frame.origin.x -= extWidth;
         }
         frame.size.width += extWidth;
+
+        mtLog([NSString stringWithFormat:@"[BUBBLE-EXT] isSender=%d extWidth=%.0f orig=%@ new=%@",
+               isSender, extWidth,
+               NSStringFromCGRect(origFrame),
+               NSStringFromCGRect(frame)]);
     }
 
     if (orig_TextMsgCell_setFrameBgImg) {
