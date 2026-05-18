@@ -166,6 +166,20 @@ static BOOL detectIsSender(id cell, id cellView, id contentView, id wrap) {
     return NO;
 }
 
+static void extendBubbleForPosition7(UIView *cellView, UIView *bubbleView, BOOL isSender, NSInteger position, PluginConfig *config) {
+    if (position != 7) return;
+    if (!bubbleView) return;
+    if (![NSStringFromClass([cellView class]) containsString:@"TextMessage"]) return;
+
+    CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
+    CGRect frame = bubbleView.frame;
+    if (isSender) {
+        frame.origin.x -= extWidth;
+    }
+    frame.size.width += extWidth;
+    bubbleView.frame = frame;
+}
+
 // ============================================================
 // MARK: - Time Formatting
 // ============================================================
@@ -506,7 +520,10 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     }
     
     BOOL isSender = detectIsSender(cell, cellView, contentView, nil);
-    
+
+    UIView *bubbleView = getBubbleView(cell);
+    extendBubbleForPosition7(cellView, bubbleView, isSender, position, config);
+
     CGSize labelSize = label.frame.size;
     CGFloat cvLeft   = contentFrame.origin.x;
     CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
@@ -815,13 +832,9 @@ static void addTimeLabelToCell(id cell) {
         CGFloat offsetX = config.messageTimeOffsetX;
         CGFloat offsetY = config.messageTimeOffsetY;
         NSInteger position = config.messageTimePosition;
-        
-        if ((position == 6 || position == 7) && bubbleView && config.messageTimeBubbleExtWidth > 0) {
-            CGRect bubbleFrame = bubbleView.frame;
-            bubbleFrame.size.width += config.messageTimeBubbleExtWidth;
-            bubbleView.frame = bubbleFrame;
-        }
-        
+
+        extendBubbleForPosition7(cellView, bubbleView, isSender, position, config);
+
         CGRect avatarFrame = [(UIView *)avatarView frame];
         
         id contentView = getContentView(cell);
