@@ -514,25 +514,56 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     BOOL isSender = detectIsSender(cell, cellView, contentView, nil);
     
     CGSize labelSize = label.frame.size;
-    if (position == 2 || position == 7) {
-        CGFloat cvLeft   = contentFrame.origin.x;
-        CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
-        CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
-        CGFloat w = labelSize.width;
-        CGFloat h = labelSize.height;
-        CGFloat cx = isSender ? (cvRight + w / 2) : (cvLeft - w / 2);
-        CGFloat cy = cvBottom - h / 2;
-        if (offsetX != 0) cx += isSender ? -offsetX : offsetX;
-        if (offsetY != 0) cy -= offsetY;
-        CGPoint newCenter = CGPointMake(cx, cy);
-        if (!CGPointEqualToPoint(label.center, newCenter)) {
-            label.center = newCenter;
+    CGFloat cvLeft   = contentFrame.origin.x;
+    CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
+    CGFloat cvTop    = contentFrame.origin.y;
+    CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
+    CGFloat cvMidX   = (cvLeft + cvRight) / 2;
+    CGFloat w = labelSize.width;
+    CGFloat h = labelSize.height;
+    CGFloat cx = 0, cy = 0;
+
+    switch (position) {
+        case 2:
+        case 7: // 消息旁边(=气泡外)
+            cx = isSender ? (cvRight + w / 2) : (cvLeft - w / 2);
+            cy = cvBottom - h / 2;
+            break;
+        case 3: // 消息下方(靠近头像)
+            cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
+            cy = cvBottom + h / 2;
+            break;
+        case 4: // 消息下方(远离头像)
+            cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
+            cy = cvBottom + h / 2;
+            break;
+        case 5: // 消息上方(靠近头像)
+            if (isSender) {
+                cx = cvRight - w / 2;
+                cy = cvTop - h / 2;
+            } else {
+                cx = cvLeft + w / 2;
+                cy = cvBottom + h / 2;
+            }
+            break;
+        case 6: // 消息上方(远离头像)
+            cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
+            cy = cvTop - h / 2;
+            break;
+        default: {
+            CGRect newFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
+            if (!CGRectEqualToRect(label.frame, newFrame)) {
+                label.frame = newFrame;
+            }
+            return;
         }
-    } else {
-        CGRect newFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
-        if (!CGRectEqualToRect(label.frame, newFrame)) {
-            label.frame = newFrame;
-        }
+    }
+
+    if (offsetX != 0) cx += isSender ? -offsetX : offsetX;
+    if (offsetY != 0) cy -= offsetY;
+    CGPoint newCenter = CGPointMake(cx, cy);
+    if (!CGPointEqualToPoint(label.center, newCenter)) {
+        label.center = newCenter;
     }
 }
 
@@ -805,58 +836,91 @@ static void addTimeLabelToCell(id cell) {
             }
         }
 
-        if (position == 2 || position == 7) {
-            CGFloat cvLeft   = contentFrame.origin.x;
-            CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
-            CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
-            CGFloat w = labelSize.width;
-            CGFloat h = labelSize.height;
-            CGFloat cx = isSender ? (cvRight + w / 2) : (cvLeft - w / 2);
-            CGFloat cy = cvBottom - h / 2;
-            CGFloat finalX = cx + (isSender ? -offsetX : offsetX);
-            CGFloat finalY = cy - offsetY;
-            CGPoint finalCenter = CGPointMake(finalX, finalY);
-            CGRect equivalentFrame = CGRectMake(finalX - w / 2, finalY - h / 2, w, h);
-            mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) av=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelCenter=(%.0f,%.0f) labelFrame=(%.0f,%.0f,%.0f,%.0f)",
-                   (long)position, isSender,
-                   contentFrame.origin.x, contentFrame.origin.y,
-                   contentFrame.origin.x + contentFrame.size.width,
-                   contentFrame.origin.y + contentFrame.size.height,
-                   bubbleView ? bubbleView.frame.origin.x : 0.0,
-                   bubbleView ? bubbleView.frame.origin.y : 0.0,
-                   bubbleView ? bubbleView.frame.size.width : 0.0,
-                   bubbleView ? bubbleView.frame.size.height : 0.0,
-                   avatarFrame.origin.x, avatarFrame.origin.y,
-                   avatarFrame.size.width, avatarFrame.size.height,
-                   w, h,
-                   cellFrame.size.height,
-                   offsetX, offsetY,
-                   finalCenter.x, finalCenter.y,
-                   equivalentFrame.origin.x, equivalentFrame.origin.y,
-                   equivalentFrame.size.width, equivalentFrame.size.height]);
-            timeLabel.center = finalCenter;
-        } else {
-            labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
+        CGFloat cvLeft   = contentFrame.origin.x;
+        CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
+        CGFloat cvTop    = contentFrame.origin.y;
+        CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
+        CGFloat cvMidX   = (cvLeft + cvRight) / 2;
+        CGFloat w = labelSize.width;
+        CGFloat h = labelSize.height;
+        CGFloat cx = 0, cy = 0;
 
-            mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) av=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelFrame=(%.0f,%.0f,%.0f,%.0f)",
-                   (long)position, isSender,
-                   contentFrame.origin.x, contentFrame.origin.y,
-                   contentFrame.origin.x + contentFrame.size.width,
-                   contentFrame.origin.y + contentFrame.size.height,
-                   bubbleView ? bubbleView.frame.origin.x : 0.0,
-                   bubbleView ? bubbleView.frame.origin.y : 0.0,
-                   bubbleView ? bubbleView.frame.size.width : 0.0,
-                   bubbleView ? bubbleView.frame.size.height : 0.0,
-                   avatarFrame.origin.x, avatarFrame.origin.y,
-                   avatarFrame.size.width, avatarFrame.size.height,
-                   labelSize.width, labelSize.height,
-                   cellFrame.size.height,
-                   offsetX, offsetY,
-                   labelFrame.origin.x, labelFrame.origin.y,
-                   labelFrame.size.width, labelFrame.size.height]);
-
-            timeLabel.frame = labelFrame;
+        switch (position) {
+            case 2:
+            case 7: // 消息旁边(=气泡外)
+                cx = isSender ? (cvRight + w / 2) : (cvLeft - w / 2);
+                cy = cvBottom - h / 2;
+                break;
+            case 3: // 消息下方(靠近头像)
+                cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
+                cy = cvBottom + h / 2;
+                break;
+            case 4: // 消息下方(远离头像)
+                cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
+                cy = cvBottom + h / 2;
+                break;
+            case 5: // 消息上方(靠近头像)
+                if (isSender) {
+                    cx = cvRight - w / 2;
+                    cy = cvTop - h / 2;
+                } else {
+                    cx = cvLeft + w / 2;
+                    cy = cvBottom + h / 2;
+                }
+                break;
+            case 6: // 消息上方(远离头像)
+                cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
+                cy = cvTop - h / 2;
+                break;
+            default: {
+                labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
+                mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) av=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelFrame=(%.0f,%.0f,%.0f,%.0f)",
+                       (long)position, isSender,
+                       contentFrame.origin.x, contentFrame.origin.y,
+                       contentFrame.origin.x + contentFrame.size.width,
+                       contentFrame.origin.y + contentFrame.size.height,
+                       bubbleView ? bubbleView.frame.origin.x : 0.0,
+                       bubbleView ? bubbleView.frame.origin.y : 0.0,
+                       bubbleView ? bubbleView.frame.size.width : 0.0,
+                       bubbleView ? bubbleView.frame.size.height : 0.0,
+                       avatarFrame.origin.x, avatarFrame.origin.y,
+                       avatarFrame.size.width, avatarFrame.size.height,
+                       labelSize.width, labelSize.height,
+                       cellFrame.size.height,
+                       offsetX, offsetY,
+                       labelFrame.origin.x, labelFrame.origin.y,
+                       labelFrame.size.width, labelFrame.size.height]);
+                timeLabel.frame = labelFrame;
+                goto setLabelDone;
+            }
         }
+
+        CGFloat finalX = cx + (isSender ? -offsetX : offsetX);
+        CGFloat finalY = cy - offsetY;
+        CGFloat maxY = cellFrame.size.height - h - kTimeLabelMaxYInset;
+        if (finalY > maxY) finalY = maxY;
+        CGPoint finalCenter = CGPointMake(finalX, finalY);
+        CGRect equivalentFrame = CGRectMake(finalX - w / 2, finalY - h / 2, w, h);
+        mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) av=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelCenter=(%.0f,%.0f) labelFrame=(%.0f,%.0f,%.0f,%.0f)",
+               (long)position, isSender,
+               contentFrame.origin.x, contentFrame.origin.y,
+               contentFrame.origin.x + contentFrame.size.width,
+               contentFrame.origin.y + contentFrame.size.height,
+               bubbleView ? bubbleView.frame.origin.x : 0.0,
+               bubbleView ? bubbleView.frame.origin.y : 0.0,
+               bubbleView ? bubbleView.frame.size.width : 0.0,
+               bubbleView ? bubbleView.frame.size.height : 0.0,
+               avatarFrame.origin.x, avatarFrame.origin.y,
+               avatarFrame.size.width, avatarFrame.size.height,
+               w, h,
+               cellFrame.size.height,
+               offsetX, offsetY,
+               finalCenter.x, finalCenter.y,
+               equivalentFrame.origin.x, equivalentFrame.origin.y,
+               equivalentFrame.size.width, equivalentFrame.size.height]);
+        timeLabel.center = finalCenter;
+
+    setLabelDone:
         
         if (![timeLabel superview]) {
             [cellView addSubview:timeLabel];
