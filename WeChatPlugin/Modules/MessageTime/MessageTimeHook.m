@@ -417,19 +417,7 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
                 labelFrame.origin.y = cvBottom - h;
             }
             break;
-        case 3: // 消息下方(靠近头像)=微信优化pos4: sender=GetMaxX(cvRight-w/2), receiver=GetMinX(cvLeft+w/2)
-            // setCenter→setFrame: cvRight-w/2 → cvRight-w,  cvLeft+w/2 → cvLeft
-            // 第二段setCenter: sender:中心+s8, receiver:中心-s8, Y:中心-s9 → 间隙
-            if (isSender) {
-                labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
-            } else {
-                labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
-            }
-            labelFrame.origin.y = cvBottom - kMessageTimeBaseSpacing;
-            break;
-        case 4: // 消息下方(远离头像)=微信优化pos3: sender=GetMinX(cvLeft+w/2), receiver=GetMaxX(cvRight-w/2)
-            // setCenter→setFrame: cvLeft+w/2 → cvLeft,  cvRight-w/2 → cvRight-w
-            // 第二段setCenter: s8=-spacing → sender左移spacing, receiver右移spacing
+        case 3: // 消息下方(远离头像)=微信优化pos3: sender=GetMinX(cvLeft+w/2), receiver=GetMaxX(cvRight-w/2)
             if (isSender) {
                 labelFrame.origin.x = cvLeft - kMessageTimeBaseSpacing;
             } else {
@@ -437,21 +425,27 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             }
             labelFrame.origin.y = cvBottom - kMessageTimeBaseSpacing;
             break;
-        case 5: // 消息上方(靠近头像)=微信优化pos6: sender=GetMaxX(cvRight-w/2), receiver=GetMinX(cvLeft+w/2)
-            // 同pos3 X逻辑，Y=cvTop-h-spacing
+        case 4: // 消息下方(靠近头像)=微信优化pos4: sender=GetMaxX(cvRight-w/2), receiver=GetMinX(cvLeft+w/2)
             if (isSender) {
                 labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
             } else {
                 labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
+            }
+            labelFrame.origin.y = cvBottom - kMessageTimeBaseSpacing;
+            break;
+        case 5: // 消息上方(远离头像)=微信优化pos5: sender=GetMinX(cvLeft+w/2), receiver=GetMaxX(cvRight-w/2)
+            if (isSender) {
+                labelFrame.origin.x = cvLeft - kMessageTimeBaseSpacing;
+            } else {
+                labelFrame.origin.x = cvRight - w + kMessageTimeBaseSpacing;
             }
             labelFrame.origin.y = cvTop - h - kMessageTimeBaseSpacing;
             break;
-        case 6: // 消息上方(远离头像)=微信优化pos5: sender=GetMinX(cvLeft+w/2), receiver=GetMaxX(cvRight-w/2)
-            // 同pos4 X逻辑，Y=cvTop-h-spacing
+        case 6: // 消息上方(靠近头像)=微信优化pos6: sender=GetMaxX(cvRight-w/2), receiver=GetMinX(cvLeft+w/2)
             if (isSender) {
-                labelFrame.origin.x = cvLeft - kMessageTimeBaseSpacing;
+                labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
             } else {
-                labelFrame.origin.x = cvRight - w + kMessageTimeBaseSpacing;
+                labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
             }
             labelFrame.origin.y = cvTop - h - kMessageTimeBaseSpacing;
             break;
@@ -529,20 +523,20 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
             cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
             cy = cvBottom - h / 2;
             break;
-        case 3: // 消息下方(靠近头像)
+        case 3: // 消息下方(远离头像)
+            cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
+            cy = cvBottom + h / 2;
+            break;
+        case 4: // 消息下方(靠近头像)
             cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
             cy = cvBottom + h / 2;
             break;
-        case 4: // 消息下方(远离头像)
-            cx = isSender ? (cvLeft + w) : (cvRight - w);
-            cy = cvBottom + h;
-            break;
-        case 5: // 消息上方(靠近头像)
-            cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
+        case 5: // 消息上方(远离头像)
+            cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
             cy = cvTop - h / 2;
             break;
-        case 6: // 消息上方(远离头像)
-            cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
+        case 6: // 消息上方(靠近头像)
+            cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
             cy = cvTop - h / 2;
             break;
         default: {
@@ -847,20 +841,20 @@ static void addTimeLabelToCell(id cell) {
                 cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
                 cy = cvBottom - h / 2;
                 break;
-            case 3: // 消息下方(靠近头像)
+            case 3: // 消息下方(远离头像)
+                cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
+                cy = cvBottom + h / 2;
+                break;
+            case 4: // 消息下方(靠近头像)
                 cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
                 cy = cvBottom + h / 2;
                 break;
-            case 4: // 消息下方(远离头像)
-                cx = isSender ? (cvLeft + w) : (cvRight - w);
-                cy = cvBottom + h;
-                break;
-            case 5: // 消息上方(靠近头像)
-                cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
+            case 5: // 消息上方(远离头像)
+                cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
                 cy = cvTop - h / 2;
                 break;
-            case 6: // 消息上方(远离头像)
-                cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
+            case 6: // 消息上方(靠近头像)
+                cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
                 cy = cvTop - h / 2;
                 break;
             default: {
