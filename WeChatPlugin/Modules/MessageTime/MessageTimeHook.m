@@ -1102,25 +1102,20 @@ static void repl_CommonMessageCellView_didMoveToWindow(id self, SEL _cmd) {
 static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGRect frame) {
     PluginConfig *config = [PluginConfig shared];
     if (config.showMessageTime && config.messageTimePosition == 7) {
-        NSNumber *extended = objc_getAssociatedObject(self, @"mtBgImgExtended");
-        if (![extended boolValue]) {
-            objc_setAssociatedObject(self, @"mtBgImgExtended", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
 
-            CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
+        UIView *cv = (UIView *)self;
+        UIView *cell = cv;
+        while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
+            cell = [cell superview];
+        }
 
-            UIView *cv = (UIView *)self;
-            UIView *cell = cv;
-            while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
-                cell = [cell superview];
+        if (cell) {
+            BOOL isSender = detectIsSender(cell, cv, nil, nil);
+            if (isSender) {
+                frame.origin.x -= extWidth;
             }
-
-            if (cell) {
-                BOOL isSender = detectIsSender(cell, cv, nil, nil);
-                if (isSender) {
-                    frame.origin.x -= extWidth;
-                }
-                frame.size.width += extWidth;
-            }
+            frame.size.width += extWidth;
         }
     }
 
@@ -1147,7 +1142,6 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
             [tagLabel removeFromSuperview];
         }
         objc_setAssociatedObject(cellView, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(cellView, @"mtBgImgExtended", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
     objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
