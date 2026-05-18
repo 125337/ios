@@ -526,25 +526,20 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     switch (position) {
         case 2:
         case 7: // 消息旁边(=气泡外)
-            cx = isSender ? (cvRight + w / 2) : (cvLeft - w / 2);
+            cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
             cy = cvBottom - h / 2;
             break;
         case 3: // 消息下方(靠近头像)
-            cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
-            cy = cvBottom + h / 2;
-            break;
-        case 4: // 消息下方(远离头像)
             cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
             cy = cvBottom + h / 2;
             break;
+        case 4: // 消息下方(远离头像)
+            cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
+            cy = cvBottom + h / 2;
+            break;
         case 5: // 消息上方(靠近头像)
-            if (isSender) {
-                cx = cvRight - w / 2;
-                cy = cvTop - h / 2;
-            } else {
-                cx = cvLeft + w / 2;
-                cy = cvBottom + h / 2;
-            }
+            cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
+            cy = cvTop - h / 2;
             break;
         case 6: // 消息上方(远离头像)
             cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
@@ -848,25 +843,20 @@ static void addTimeLabelToCell(id cell) {
         switch (position) {
             case 2:
             case 7: // 消息旁边(=气泡外)
-                cx = isSender ? (cvRight + w / 2) : (cvLeft - w / 2);
+                cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
                 cy = cvBottom - h / 2;
                 break;
             case 3: // 消息下方(靠近头像)
-                cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
-                cy = cvBottom + h / 2;
-                break;
-            case 4: // 消息下方(远离头像)
                 cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
                 cy = cvBottom + h / 2;
                 break;
+            case 4: // 消息下方(远离头像)
+                cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
+                cy = cvBottom + h / 2;
+                break;
             case 5: // 消息上方(靠近头像)
-                if (isSender) {
-                    cx = cvRight - w / 2;
-                    cy = cvTop - h / 2;
-                } else {
-                    cx = cvLeft + w / 2;
-                    cy = cvBottom + h / 2;
-                }
+                cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
+                cy = cvTop - h / 2;
                 break;
             case 6: // 消息上方(远离头像)
                 cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
