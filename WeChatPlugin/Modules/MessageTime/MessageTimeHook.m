@@ -419,11 +419,11 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             break;
         case 3: // 消息下方(远离头像)=微信优化pos3: sender=GetMinX(cvLeft+w/2), receiver=GetMaxX(cvRight-w/2)
             if (isSender) {
-                labelFrame.origin.x = cvLeft - kMessageTimeBaseSpacing;
+                labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
             } else {
-                labelFrame.origin.x = cvRight - w + kMessageTimeBaseSpacing;
+                labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
             }
-            labelFrame.origin.y = cvBottom - kMessageTimeBaseSpacing;
+            labelFrame.origin.y = cvBottom + kMessageTimeBaseSpacing;
             break;
         case 4: // 消息下方(靠近头像)=微信优化pos4: sender=GetMaxX(cvRight-w/2), receiver=GetMinX(cvLeft+w/2)
             if (isSender) {
@@ -431,13 +431,13 @@ static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger po
             } else {
                 labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
             }
-            labelFrame.origin.y = cvBottom - kMessageTimeBaseSpacing;
+            labelFrame.origin.y = cvBottom + kMessageTimeBaseSpacing;
             break;
         case 5: // 消息上方(远离头像)=微信优化pos5: sender=GetMinX(cvLeft+w/2), receiver=GetMaxX(cvRight-w/2)
             if (isSender) {
-                labelFrame.origin.x = cvLeft - kMessageTimeBaseSpacing;
+                labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
             } else {
-                labelFrame.origin.x = cvRight - w + kMessageTimeBaseSpacing;
+                labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
             }
             labelFrame.origin.y = cvTop - h - kMessageTimeBaseSpacing;
             break;
