@@ -16,10 +16,6 @@ static const CGFloat kTimeLabelMaxYInset       = 2.0;
 static const CGFloat kStraddleFactor           = 0.5;
 static const CGFloat kMessageTimeBaseSpacing   = 2;
 
-// WeChat 反编译中第二次 setCenter 的 d10/d1 对应值，暂时用编译期常量，待调好再固化为公式
-static CGFloat kWeChatPadX = 0.0;  // <-- 调整这个
-static CGFloat kWeChatPadY = 0.0;  // <-- 调整这个
-
 static Class s_CMessageWrapClass; // install 时初始化
 
 // ============================================================
@@ -538,9 +534,8 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
             cy = cvBottom + h / 2;
             break;
         case 4: // 消息下方(远离头像)
-            cx = isSender ? (cvLeft + w / 2 + kWeChatPadX) : (cvRight - w / 2 + kWeChatPadX);
-            cy = cvBottom + h / 2 + kWeChatPadY;
-            mtLog([NSString stringWithFormat:@"[POS-PAD] pos=4 padX=%.1f padY=%.1f", kWeChatPadX, kWeChatPadY]);
+            cx = isSender ? (cvLeft + w) : (cvRight - w);
+            cy = cvBottom + h;
             break;
         case 5: // 消息上方(靠近头像)
             cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
@@ -857,8 +852,8 @@ static void addTimeLabelToCell(id cell) {
                 cy = cvBottom + h / 2;
                 break;
             case 4: // 消息下方(远离头像)
-                cx = isSender ? (cvLeft + w / 2 + kWeChatPadX) : (cvRight - w / 2 + kWeChatPadX);
-                cy = cvBottom + h / 2 + kWeChatPadY;
+                cx = isSender ? (cvLeft + w) : (cvRight - w);
+                cy = cvBottom + h;
                 break;
             case 5: // 消息上方(靠近头像)
                 cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
