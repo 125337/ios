@@ -1100,6 +1100,10 @@ static void repl_CommonMessageCellView_didMoveToWindow(id self, SEL _cmd) {
 }
 
 static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGRect frame) {
+    mtLog([NSString stringWithFormat:@"[BUBBLE-HOOK] called! frame=%@ class=%@",
+           NSStringFromCGRect(frame),
+           NSStringFromClass([self class])]);
+
     PluginConfig *config = [PluginConfig shared];
     if (config.showMessageTime && config.messageTimePosition == 7) {
         CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
