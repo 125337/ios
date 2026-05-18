@@ -166,24 +166,6 @@ static BOOL detectIsSender(id cell, id cellView, id contentView, id wrap) {
     return NO;
 }
 
-static void extendBubbleForPosition7(UIView *cellView, UIView *bubbleView, BOOL isSender, NSInteger position, PluginConfig *config) {
-    if (position != 7) return;
-    if (!bubbleView) return;
-    if (![NSStringFromClass([cellView class]) containsString:@"TextMessage"]) return;
-
-    NSNumber *alreadyExtended = objc_getAssociatedObject(cellView, @"mtBubbleExtended");
-    if ([alreadyExtended boolValue]) return;
-    objc_setAssociatedObject(cellView, @"mtBubbleExtended", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
-    CGRect frame = bubbleView.frame;
-    if (isSender) {
-        frame.origin.x -= extWidth;
-    }
-    frame.size.width += extWidth;
-    bubbleView.frame = frame;
-}
-
 // ============================================================
 // MARK: - Time Formatting
 // ============================================================
@@ -525,9 +507,6 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     
     BOOL isSender = detectIsSender(cell, cellView, contentView, nil);
 
-    UIView *bubbleView = getBubbleView(cell);
-    extendBubbleForPosition7(cellView, bubbleView, isSender, position, config);
-
     CGSize labelSize = label.frame.size;
     CGFloat cvLeft   = contentFrame.origin.x;
     CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
@@ -837,8 +816,6 @@ static void addTimeLabelToCell(id cell) {
         CGFloat offsetY = config.messageTimeOffsetY;
         NSInteger position = config.messageTimePosition;
 
-        extendBubbleForPosition7(cellView, bubbleView, isSender, position, config);
-
         CGRect avatarFrame = [(UIView *)avatarView frame];
         
         id contentView = getContentView(cell);
@@ -995,6 +972,7 @@ static void (*orig_CommonMessageCellView_didMoveToWindow)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
 static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
 static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
+static void (*orig_TextMsgCell_setFrameBgImg)(id, SEL, CGRect);
 
 // ============================================================
 // MARK: - Replacement Functions
@@ -1121,6 +1099,31 @@ static void repl_CommonMessageCellView_didMoveToWindow(id self, SEL _cmd) {
     });
 }
 
+static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGRect frame) {
+    PluginConfig *config = [PluginConfig shared];
+    if (config.showMessageTime && config.messageTimePosition == 7) {
+        CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
+
+        UIView *cv = (UIView *)self;
+        UIView *cell = cv;
+        while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
+            cell = [cell superview];
+        }
+
+        if (cell) {
+            BOOL isSender = detectIsSender(cell, cv, nil, nil);
+            if (isSender) {
+                frame.origin.x -= extWidth;
+            }
+            frame.size.width += extWidth;
+        }
+    }
+
+    if (orig_TextMsgCell_setFrameBgImg) {
+        orig_TextMsgCell_setFrameBgImg(self, _cmd, frame);
+    }
+}
+
 static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
     if (orig_ChatTableViewCell_prepareForReuse) {
         orig_ChatTableViewCell_prepareForReuse(self, _cmd);
@@ -1139,7 +1142,6 @@ static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
             [tagLabel removeFromSuperview];
         }
         objc_setAssociatedObject(cellView, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(cellView, @"mtBubbleExtended", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
     objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -1204,6 +1206,7 @@ static MTHookEntry g_hookTable[] = {
     {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
     {"ChatTimeViewModel",            "cellHeight",                                    (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
     {"CContact",                     "m_nsNickName",                                  (IMP)repl_CContact_m_nsNickName,              (IMP*)&orig_CContact_m_nsNickName},
+    {"TextMessageCellView",          "setFrameForBgImageView:",                        (IMP)repl_TextMsgCell_setFrameBgImg,          (IMP*)&orig_TextMsgCell_setFrameBgImg},
 };
 
 static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0]);
