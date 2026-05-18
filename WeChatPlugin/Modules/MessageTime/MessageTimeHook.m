@@ -558,6 +558,7 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     if (offsetY != 0) cy -= offsetY;
     CGPoint newCenter = CGPointMake(cx, cy);
     if (!CGPointEqualToPoint(label.center, newCenter)) {
+        label.bounds = CGRectMake(0, 0, w, h);
         label.center = newCenter;
     }
 }
@@ -908,6 +909,7 @@ static void addTimeLabelToCell(id cell) {
                finalCenter.x, finalCenter.y,
                equivalentFrame.origin.x, equivalentFrame.origin.y,
                equivalentFrame.size.width, equivalentFrame.size.height]);
+        timeLabel.bounds = CGRectMake(0, 0, w, h);
         timeLabel.center = finalCenter;
 
     setLabelDone:
