@@ -518,7 +518,27 @@ static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
     CGFloat cx = 0, cy = 0;
 
     switch (position) {
-        case 2:
+        case 0: { // 头像上方
+                if (!CGRectIsEmpty(avatarFrame)) {
+                    cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
+                    cy = avatarFrame.origin.y - h / 2;
+                } else {
+                    cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
+                    cy = cvBottom - h / 2;
+                }
+                break;
+            }
+            case 1: { // 头像下方
+                if (!CGRectIsEmpty(avatarFrame)) {
+                    cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
+                    cy = avatarFrame.origin.y + avatarFrame.size.height + h / 2;
+                } else {
+                    cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
+                    cy = cvBottom - h / 2;
+                }
+                break;
+            }
+            case 2:
         case 7: // 消息旁边(=气泡外)
             cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
             cy = cvBottom - h / 2;
@@ -841,6 +861,26 @@ static void addTimeLabelToCell(id cell) {
         CGFloat cx = 0, cy = 0;
 
         switch (position) {
+            case 0: { // 头像上方
+                if (!CGRectIsEmpty(avatarFrame)) {
+                    cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
+                    cy = avatarFrame.origin.y - h / 2;
+                } else {
+                    cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
+                    cy = cvBottom - h / 2;
+                }
+                break;
+            }
+            case 1: { // 头像下方
+                if (!CGRectIsEmpty(avatarFrame)) {
+                    cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
+                    cy = avatarFrame.origin.y + avatarFrame.size.height + h / 2;
+                } else {
+                    cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
+                    cy = cvBottom - h / 2;
+                }
+                break;
+            }
             case 2:
             case 7: // 消息旁边(=气泡外)
                 cx = isSender ? (cvLeft - pw / 2) : (cvRight + pw / 2);
