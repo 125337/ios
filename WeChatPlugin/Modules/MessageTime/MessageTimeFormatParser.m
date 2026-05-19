@@ -71,11 +71,13 @@ static NSString * const kStorageKey = @"com.wechat.enhance.messageTime.customFor
             formatted = [formatted stringByReplacingOccurrencesOfString:@"midnight" withString:@"AM"];
         }
 
-        // 用唯一占位符替换
-        NSString *placeholder = [NSString stringWithFormat:@"\x01SP%lu\x01",
+        // 用唯一占位符替换（'引用'防止 NSDateFormatter 解释 S/P 等字符）
+        NSString *placeholder = [NSString stringWithFormat:@"SP%lu",
                                   (unsigned long)specialReplacements.count];
         specialReplacements[placeholder] = formatted;
-        [nsdfFormat replaceOccurrencesOfString:token withString:placeholder
+        // 在格式字符串中加单引号，让 NSDateFormatter 视之为纯文字
+        [nsdfFormat replaceOccurrencesOfString:token
+                                    withString:[NSString stringWithFormat:@"'%@'", placeholder]
                                        options:0 range:NSMakeRange(0, nsdfFormat.length)];
     }
 

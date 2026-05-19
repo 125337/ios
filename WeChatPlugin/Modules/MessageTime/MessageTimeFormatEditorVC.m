@@ -124,19 +124,21 @@ static NSArray<NSString *> *_tokenDescs(void) {
         CGRectMake(15.0, y, w - 30.0, totalH)];
     table.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
     table.layer.cornerRadius = cornerR;
+    table.layer.borderWidth = 0.5;
+    table.layer.borderColor = [UIColor separatorColor].CGColor;
     table.clipsToBounds = YES;
     [self.contentView addSubview:table];
 
-    UIFont *tokenFont = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];  // 左列 15px Semibold
-    UIFont *descFont = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular];     // 右列 15px Regular
+    UIFont *tokenFont = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];  // 左列 14px Semibold
+    UIFont *descFont = [UIFont systemFontOfSize:14.0 weight:UIFontWeightRegular];     // 右列 14px Regular
 
     for (NSInteger i = 0; i < count; i++) {
-        // 左列
+        // 左列（蓝色字体）
         UILabel *leftLbl = [[UILabel alloc] initWithFrame:
-            CGRectMake(leftX, i * rowH, 60.0, rowH)];
+            CGRectMake(leftX, i * rowH, 70.0, rowH)];
         leftLbl.text = tokens[i];
         leftLbl.font = tokenFont;
-        leftLbl.textColor = [UIColor labelColor];
+        leftLbl.textColor = [UIColor systemBlueColor];
         [table addSubview:leftLbl];
 
         // 右列
