@@ -952,7 +952,19 @@ static void addTimeLabelToCell(id cell) {
             objc_setAssociatedObject(cell, @"messageTimeCreateTime", @(createTime), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             mtLog(@"Added timeLabel to cell");
         }
-        
+
+        if (position == 7 && bubbleView && [NSStringFromClass([cellView class]) containsString:@"TextMessage"]) {
+            CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
+            CGRect bf = bubbleView.frame;
+            if (isSender) {
+                bf.origin.x -= extWidth;
+            }
+            bf.size.width += extWidth;
+            bubbleView.frame = bf;
+            mtLog([NSString stringWithFormat:@"[BUBBLE-EXTEND] isSender=%d extWidth=%.0f newFrame=(%.0f,%.0f,%.0f,%.0f)",
+                   isSender, extWidth, bf.origin.x, bf.origin.y, bf.size.width, bf.size.height]);
+        }
+
         mtLog(@"=== addTimeLabelToCell completed successfully ===");
         
     } @catch (NSException *e) {
@@ -972,7 +984,6 @@ static void (*orig_CommonMessageCellView_didMoveToWindow)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
 static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
 static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
-static void (*orig_TextMsgCell_setFrameBgImg)(id, SEL, CGFloat, CGFloat, CGFloat, CGFloat);
 
 // ============================================================
 // MARK: - Replacement Functions
@@ -1099,44 +1110,6 @@ static void repl_CommonMessageCellView_didMoveToWindow(id self, SEL _cmd) {
     });
 }
 
-static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
-    mtLog([NSString stringWithFormat:@"[BUBBLE-HOOK] called! x=%.0f y=%.0f w=%.0f h=%.0f class=%@",
-           x, y, w, h, NSStringFromClass([self class])]);
-
-    @try {
-        PluginConfig *config = [PluginConfig shared];
-        if (config.showMessageTime && config.messageTimePosition == 7) {
-            CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
-
-            id viewModel = [self valueForKey:@"viewModel"];
-            BOOL isSender = NO;
-            if (viewModel && [viewModel respondsToSelector:@selector(isSender)]) {
-                isSender = ((BOOL (*)(id, SEL))objc_msgSend)(viewModel, @selector(isSender));
-            }
-
-            CGFloat newX = x;
-            if (isSender) {
-                newX = x - extWidth;
-            }
-            CGFloat newW = w + extWidth;
-
-            mtLog([NSString stringWithFormat:@"[BUBBLE-EXT] isSender=%d extWidth=%.0f orig=(%.0f,%.0f,%.0f,%.0f) new=(%.0f,%.0f,%.0f,%.0f)",
-                   isSender, extWidth, x, y, w, h, newX, y, newW, h]);
-
-            if (orig_TextMsgCell_setFrameBgImg) {
-                orig_TextMsgCell_setFrameBgImg(self, _cmd, newX, y, newW, h);
-            }
-            return;
-        }
-    } @catch (NSException *e) {
-        mtLog([NSString stringWithFormat:@"[BUBBLE-HOOK] exception: %@", e]);
-    }
-
-    if (orig_TextMsgCell_setFrameBgImg) {
-        orig_TextMsgCell_setFrameBgImg(self, _cmd, x, y, w, h);
-    }
-}
-
 static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
     if (orig_ChatTableViewCell_prepareForReuse) {
         orig_ChatTableViewCell_prepareForReuse(self, _cmd);
@@ -1219,7 +1192,6 @@ static MTHookEntry g_hookTable[] = {
     {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
     {"ChatTimeViewModel",            "cellHeight",                                    (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
     {"CContact",                     "m_nsNickName",                                  (IMP)repl_CContact_m_nsNickName,              (IMP*)&orig_CContact_m_nsNickName},
-    {"TextMessageCellView",          "setFrameForBgImageView:",                        (IMP)repl_TextMsgCell_setFrameBgImg,          (IMP*)&orig_TextMsgCell_setFrameBgImg},
 };
 
 static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0]);
