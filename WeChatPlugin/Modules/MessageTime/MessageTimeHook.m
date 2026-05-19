@@ -471,6 +471,35 @@ static id repl_CommonMessageCellView_initWithViewModel(id self, SEL _cmd, id vie
     return result;
 }
 
+// 复刻 FUN_0003c628 — TextMessageSubViewModel 复合消息过滤
+// 99 = 0b01100011: positions 0,1,5,6 → 只显示在第一个子视图; positions 2,3,4,7 → 只显示在最后一个子视图
+static BOOL shouldShowMessageTimeForSubViewModel(id viewModel, NSInteger position) {
+    Class subVMClass = NSClassFromString(@"TextMessageSubViewModel");
+    if (!subVMClass || ![viewModel isKindOfClass:subVMClass]) {
+        return YES;
+    }
+
+    id parentModel = nil;
+    @try { parentModel = [viewModel valueForKey:@"parentModel"]; } @catch (...) {}
+    if (!parentModel) return YES;
+
+    NSArray *subViewModels = nil;
+    @try { subViewModels = [parentModel valueForKey:@"subViewModels"]; } @catch (...) {}
+    if (!subViewModels || subViewModels.count == 0) return YES;
+
+    NSUInteger curIdx = [subViewModels indexOfObject:viewModel];
+    if (curIdx == NSNotFound) return YES;
+
+    NSUInteger targetIdx;
+    if (position < 7 && ((99U >> (unsigned int)(position & 0x1f) & 1) != 0)) {
+        targetIdx = 0;
+    } else {
+        targetIdx = subViewModels.count - 1;
+    }
+
+    return (curIdx == targetIdx);
+}
+
 static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     if (orig_CommonMessageCellView_updateNodeStatus) {
         orig_CommonMessageCellView_updateNodeStatus(self, _cmd);
@@ -496,11 +525,18 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     NSString *timeText = objc_getAssociatedObject(viewModel, @"messageTimeText");
     if (!timeText) { label.hidden = YES; return; }
 
+    // 复合消息过滤（复刻 FUN_0003c628 — 照抄 FUN_0003a06c 行 34573-34582）
+    PluginConfig *config = [PluginConfig shared];
+    NSInteger position = config.messageTimePosition;
+    if (!shouldShowMessageTimeForSubViewModel(viewModel, position)) {
+        label.hidden = YES;
+        return;
+    }
+
     label.hidden = NO;
     label.text = timeText;
 
     // 计算 label 尺寸（复刻 FUN_0003a06c 开头：textW+4, textH+4, clamp 30~88）
-    PluginConfig *config = [PluginConfig shared];
     CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
     UIFont *font = config.messageTimeBoldFont ? [UIFont boldSystemFontOfSize:fontSize] : [UIFont systemFontOfSize:fontSize];
     label.font = font;
@@ -556,7 +592,6 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
     CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
 
-    NSInteger position = config.messageTimePosition;
     CGFloat offsetX = config.messageTimeOffsetX;
     CGFloat offsetY = config.messageTimeOffsetY;
 
