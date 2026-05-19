@@ -953,18 +953,6 @@ static void addTimeLabelToCell(id cell) {
             mtLog(@"Added timeLabel to cell");
         }
 
-        if (config.showMessageTime && position == 7 && bubbleView && [NSStringFromClass([cellView class]) containsString:@"TextMessage"]) {
-            CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
-            CGRect bf = bubbleView.frame;
-            if (isSender) {
-                bf.origin.x -= extWidth;
-            }
-            bf.size.width += extWidth;
-            bubbleView.frame = bf;
-            mtLog([NSString stringWithFormat:@"[BUBBLE-EXTEND] isSender=%d extWidth=%.0f newFrame=(%.0f,%.0f,%.0f,%.0f)",
-                   isSender, extWidth, bf.origin.x, bf.origin.y, bf.size.width, bf.size.height]);
-        }
-
         mtLog(@"=== addTimeLabelToCell completed successfully ===");
         
     } @catch (NSException *e) {
@@ -984,6 +972,7 @@ static void (*orig_CommonMessageCellView_didMoveToWindow)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
 static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
 static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
+static void (*orig_TextMsgCell_setFrameBgImg)(id, SEL, CGFloat, CGFloat, CGFloat, CGFloat);
 
 // ============================================================
 // MARK: - Replacement Functions
@@ -1179,6 +1168,45 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
     return [NSString stringWithFormat:@"%@ %@", origName, suffix];
 }
 
+static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
+    orig_TextMsgCell_setFrameBgImg(self, _cmd, x, y, w, h);
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.showMessageTime || config.messageTimePosition != 7) return;
+
+    id viewModel = nil;
+    @try { viewModel = [self valueForKey:@"m_viewModel"] ?: [self valueForKey:@"viewModel"]; } @catch (NSException *e) {}
+    if (!viewModel) return;
+
+    BOOL isSender = NO;
+    @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) { return; }
+
+    UIView *view = (UIView *)self;
+    id cell = nil;
+    while (view) {
+        if ([NSStringFromClass([view class]) containsString:@"ChatTableViewCell"]) {
+            cell = view;
+            break;
+        }
+        view = view.superview;
+    }
+    if (!cell) return;
+
+    id bubbleView = getBubbleView(cell);
+    if (!bubbleView) return;
+
+    CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
+    CGRect bf = [(UIView *)bubbleView frame];
+    if (isSender) {
+        bf.origin.x -= extWidth;
+    }
+    bf.size.width += extWidth;
+    [(UIView *)bubbleView setFrame:bf];
+
+    mtLog([NSString stringWithFormat:@"[BUBBLE-EXTEND] isSender=%d extWidth=%.0f newFrame=(%.0f,%.0f,%.0f,%.0f)",
+           isSender, extWidth, bf.origin.x, bf.origin.y, bf.size.width, bf.size.height]);
+}
+
 // ============================================================
 // MARK: - Hook Configuration Table
 // ============================================================
@@ -1192,6 +1220,7 @@ static MTHookEntry g_hookTable[] = {
     {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
     {"ChatTimeViewModel",            "cellHeight",                                    (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
     {"CContact",                     "m_nsNickName",                                  (IMP)repl_CContact_m_nsNickName,              (IMP*)&orig_CContact_m_nsNickName},
+    {"TextMessageCellView",          "setFrameForBgImageView:",                       (IMP)repl_TextMsgCell_setFrameBgImg,          (IMP*)&orig_TextMsgCell_setFrameBgImg},
 };
 
 static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0]);
