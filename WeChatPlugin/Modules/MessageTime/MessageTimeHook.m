@@ -953,7 +953,7 @@ static void addTimeLabelToCell(id cell) {
             mtLog(@"Added timeLabel to cell");
         }
 
-        if (position == 7 && bubbleView && [NSStringFromClass([cellView class]) containsString:@"TextMessage"]) {
+        if (config.showMessageTime && position == 7 && bubbleView && [NSStringFromClass([cellView class]) containsString:@"TextMessage"]) {
             CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
             CGRect bf = bubbleView.frame;
             if (isSender) {
