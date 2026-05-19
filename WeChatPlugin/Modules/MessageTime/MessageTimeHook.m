@@ -373,602 +373,12 @@ static id getContentView(id cell) {
 }
 
 // ============================================================
-// MARK: - Label Positioning (shared between create and update)
-// ============================================================
-
-static CGRect computeLabelFrame(CGRect cellFrame, CGSize labelSize, NSInteger position,
-                                 CGFloat offsetX, CGFloat offsetY, BOOL isSender,
-                                 CGRect contentFrame, CGRect avatarFrame) {
-    CGRect labelFrame = CGRectMake(0, 0, labelSize.width, labelSize.height);
-    CGFloat w = labelSize.width;
-    CGFloat h = labelSize.height;
-    
-    CGFloat cvLeft   = contentFrame.origin.x;
-    CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
-    CGFloat cvTop    = contentFrame.origin.y;
-    CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
-
-    switch (position) {
-        case 0: // 头像上方：X 居中于头像，Y 在头像顶部上方4pt
-            if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = avatarFrame.origin.y - h - 2;
-            } else {
-                // 无头像 fallback：气泡外远离侧，垂直居中
-                if (isSender) {
-                    labelFrame.origin.x = cvRight + w * kStraddleFactor;
-                } else {
-                    labelFrame.origin.x = cvLeft - w;
-                }
-                labelFrame.origin.y = cvBottom - h;
-            }
-            break;
-        case 1: // 头像下方：X 居中于头像，Y 在头像底部下方2pt
-            if (!CGRectEqualToRect(avatarFrame, CGRectZero)) {
-                labelFrame.origin.x = avatarFrame.origin.x + (avatarFrame.size.width - w) / 2;
-                labelFrame.origin.y = avatarFrame.origin.y + avatarFrame.size.height + 2;
-            } else {
-                // 无头像 fallback：同位置0
-                if (isSender) {
-                    labelFrame.origin.x = cvRight + w * kStraddleFactor;
-                } else {
-                    labelFrame.origin.x = cvLeft - w;
-                }
-                labelFrame.origin.y = cvBottom - h;
-            }
-            break;
-        case 3: // 消息下方(远离头像)=微信优化pos3: sender=GetMinX(cvLeft+w/2), receiver=GetMaxX(cvRight-w/2)
-            if (isSender) {
-                labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
-            } else {
-                labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
-            }
-            labelFrame.origin.y = cvBottom + kMessageTimeBaseSpacing;
-            break;
-        case 4: // 消息下方(靠近头像)=微信优化pos4: sender=GetMaxX(cvRight-w/2), receiver=GetMinX(cvLeft+w/2)
-            if (isSender) {
-                labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
-            } else {
-                labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
-            }
-            labelFrame.origin.y = cvBottom + kMessageTimeBaseSpacing;
-            break;
-        case 5: // 消息上方(远离头像)=微信优化pos5: sender=GetMinX(cvLeft+w/2), receiver=GetMaxX(cvRight-w/2)
-            if (isSender) {
-                labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
-            } else {
-                labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
-            }
-            labelFrame.origin.y = cvTop - h - kMessageTimeBaseSpacing;
-            break;
-        case 6: // 消息上方(靠近头像)=微信优化pos6: sender=GetMaxX(cvRight-w/2), receiver=GetMinX(cvLeft+w/2)
-            if (isSender) {
-                labelFrame.origin.x = cvRight - w - kMessageTimeBaseSpacing;
-            } else {
-                labelFrame.origin.x = cvLeft + kMessageTimeBaseSpacing;
-            }
-            labelFrame.origin.y = cvTop - h - kMessageTimeBaseSpacing;
-            break;
-        case 7: // 消息旁边(=气泡外)
-        case 2: // 消息旁边(远离头像)
-            if (isSender) {
-                labelFrame.origin.x = cvLeft - w - kMessageTimeBaseSpacing;
-            } else {
-                labelFrame.origin.x = cvRight + kMessageTimeBaseSpacing;
-            }
-            labelFrame.origin.y = cvBottom - h - kMessageTimeBaseSpacing;
-            break;
-    }
-
-    if (offsetX != 0) {
-        labelFrame.origin.x += isSender ? -offsetX : offsetX;
-    }
-
-    if (offsetY != 0) {
-        labelFrame.origin.y -= offsetY;
-    }
-
-    CGFloat maxY = cellFrame.size.height - labelFrame.size.height - kTimeLabelMaxYInset;
-    if (labelFrame.origin.y > maxY) labelFrame.origin.y = maxY;
-
-    return labelFrame;
-}
-
-// Lightweight frame update (no logging)
-static void quickRelocateTimeLabel(id cell, id cellView, CGRect cellFrame) {
-    PluginConfig *config = [PluginConfig shared];
-    if (!config.showMessageTime) return;
-    
-    UILabel *label = objc_getAssociatedObject(cellView, @"msgTimeLabel");
-    if (!label) return;
-    
-    NSValue *lastSize = objc_getAssociatedObject(cellView, @"msgTimeLabelLastCellSize");
-    CGSize currentSize = cellFrame.size;
-    if (lastSize && CGSizeEqualToSize([lastSize CGSizeValue], currentSize)) {
-        return;
-    }
-    objc_setAssociatedObject(cellView, @"msgTimeLabelLastCellSize",
-                             [NSValue valueWithCGSize:currentSize],
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    
-    CGFloat offsetX = config.messageTimeOffsetX;
-    CGFloat offsetY = config.messageTimeOffsetY;
-    NSInteger position = config.messageTimePosition;
-    
-    id avatarView = getAvatarView(cell);
-    CGRect avatarFrame = avatarView ? [(UIView *)avatarView frame] : CGRectZero;
-    
-    id contentView = getContentView(cell);
-    CGRect contentFrame = contentFrameInCellView(contentView, cellView);
-    if (CGRectEqualToRect(contentFrame, CGRectZero)) {
-        contentFrame = cellFrame;
-        contentFrame.origin = CGPointZero;
-    }
-    
-    BOOL isSender = detectIsSender(cell, cellView, contentView, nil);
-
-    CGSize labelSize = label.frame.size;
-    CGFloat cvLeft   = contentFrame.origin.x;
-    CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
-    CGFloat cvTop    = contentFrame.origin.y;
-    CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
-    CGFloat cvMidX   = (cvLeft + cvRight) / 2;
-    CGFloat w = labelSize.width;
-    CGFloat h = labelSize.height;
-    CGFloat cx = 0, cy = 0;
-
-    switch (position) {
-        case 0: { // 头像上方
-                if (!CGRectIsEmpty(avatarFrame)) {
-                    cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
-                    cy = avatarFrame.origin.y - h / 2;
-                } else {
-                    cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
-                    cy = cvBottom - h / 2;
-                }
-                break;
-            }
-            case 1: { // 头像下方
-                if (!CGRectIsEmpty(avatarFrame)) {
-                    cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
-                    cy = avatarFrame.origin.y + avatarFrame.size.height + h / 2;
-                } else {
-                    cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
-                    cy = cvBottom - h / 2;
-                }
-                break;
-            }
-            case 2:
-        case 7: // 消息旁边(=气泡外)
-            cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
-            cy = cvBottom - h / 2;
-            break;
-        case 3: // 消息下方(远离头像)
-            cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
-            cy = cvBottom + h / 2;
-            break;
-        case 4: // 消息下方(靠近头像)
-            cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
-            cy = cvBottom + h / 2;
-            break;
-        case 5: // 消息上方(远离头像)
-            cx = isSender ? (cvLeft + w / 2) : (cvRight - w / 2);
-            cy = cvTop - h / 2;
-            break;
-        case 6: // 消息上方(靠近头像)
-            cx = isSender ? (cvRight - w / 2) : (cvLeft + w / 2);
-            cy = cvTop - h / 2;
-            break;
-        default: {
-            CGRect newFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
-            if (!CGRectEqualToRect(label.frame, newFrame)) {
-                label.frame = newFrame;
-            }
-            return;
-        }
-    }
-
-    if (offsetX != 0) cx += isSender ? -offsetX : offsetX;
-    if (offsetY != 0) cy -= offsetY;
-    CGPoint newCenter = CGPointMake(cx, cy);
-    if (!CGPointEqualToPoint(label.center, newCenter)) {
-        label.bounds = CGRectMake(0, 0, w, h);
-        label.center = newCenter;
-    }
-}
-
-// ============================================================
-// MARK: - Label Creation
-// ============================================================
-
-static void addTimeLabelToCell(id cell) {
-    @try {
-        if (!cell) {
-            mtLog(@"addTimeLabelToCell: cell is nil");
-            return;
-        }
-        
-        // 获取 cellView（CommonMessageCellView），标签添加到此视图上
-        id cellView = nil;
-        @try { cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"]; } @catch (...) {}
-        if (!cellView) {
-            mtLog(@"addTimeLabelToCell: cellView is nil");
-            return;
-        }
-        
-        // 每个 cellView 只创建一次标签（微信优化同款策略）
-        if (objc_getAssociatedObject(cellView, @"msgTimeLabel")) {
-            return;
-        }
-        
-        NSArray *callStack = [NSThread callStackSymbols];
-        NSString *from = @"unknown";
-        for (NSString *frame in callStack) {
-            if ([frame containsString:@"willDisplayCell"]) { from = @"willDisplayCell"; break; }
-            if ([frame containsString:@"layoutSubviews"]) { from = @"layoutSubviews"; break; }
-        }
-        
-        NSString *cellClass = NSStringFromClass([cell class]);
-        mtLog([NSString stringWithFormat:@"=== addTimeLabelToCell called on: %@ (from: %@) ===", cellClass, from]);
-        
-        UIView *cellViewDbg = (UIView *)cell;
-        mtLog([NSString stringWithFormat:@"[DBG] cell.subviews count=%lu", (unsigned long)[cellViewDbg.subviews count]]);
-        for (UIView *sv in cellViewDbg.subviews) {
-            mtLog([NSString stringWithFormat:@"[DBG] cell.subview: class=%@ tag=%ld frame=%@", NSStringFromClass([sv class]), (long)sv.tag, NSStringFromCGRect(sv.frame)]);
-            if ([NSStringFromClass([sv class]) containsString:@"ContentView"]) {
-                mtLog([NSString stringWithFormat:@"[DBG]   -> contentView.subviews count=%lu", (unsigned long)[sv.subviews count]]);
-                for (UIView *sv2 in sv.subviews) {
-                    mtLog([NSString stringWithFormat:@"[DBG]   -> subview: class=%@ frame=%@", NSStringFromClass([sv2 class]), NSStringFromCGRect(sv2.frame)]);
-                    for (UIView *sv3 in sv2.subviews) {
-                        mtLog([NSString stringWithFormat:@"[DBG]     -> sub-subview: class=%@ frame=%@", NSStringFromClass([sv3 class]), NSStringFromCGRect(sv3.frame)]);
-                    }
-                }
-            }
-        }
-        
-        CGRect cellFrame = [cell frame];
-        if (CGRectEqualToRect(cellFrame, CGRectZero)) {
-            mtLog(@"cellFrame is CGRectZero, deferring");
-            return;
-        }
-        
-        // 确保 cellView 上没有残留旧标签
-        UIView *staleLabel = [(UIView *)cellView viewWithTag:kTimeLabelTag];
-        if (staleLabel) {
-            mtLog(@"Removed stale timeLabel before creating new one");
-            [staleLabel removeFromSuperview];
-        }
-        
-        PluginConfig *config = [PluginConfig shared];
-        if (!config.showMessageTime) return;
-        
-        id wrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
-        if (wrap) {
-            mtLog(@"[DBG] wrap: got from cachedMsgWrap");
-        }
-        
-        if (!wrap) {
-            @try {
-                id cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"];
-                if (cellView) {
-                    wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
-                    if (wrap) mtLog(@"[DBG] wrap: got via cellView.messageWrap at addTimeLabelToCell time");
-                }
-            } @catch (NSException *e) {
-                mtLog([NSString stringWithFormat:@"[DBG] wrap: cellView path exception: %@", e]);
-            }
-        }
-        
-        if (!wrap) {
-            @try {
-                id viewModel = [cell valueForKey:@"_viewModel"] ?: [cell valueForKey:@"m_viewModel"];
-                if (viewModel) {
-                    id parentModel = [viewModel valueForKey:@"parentModel"];
-                    if (parentModel) {
-                        wrap = [parentModel valueForKey:@"m_messageWrap"] ?: [parentModel valueForKey:@"messageWrap"];
-                    }
-                }
-            } @catch (NSException *e) {}
-        }
-        
-        if (!wrap) {
-            @try {
-                id viewModel = [cell valueForKey:@"_viewModel"] ?: [cell valueForKey:@"m_viewModel"];
-                if (viewModel) {
-                    wrap = [viewModel valueForKey:@"m_messageWrap"] ?: [viewModel valueForKey:@"messageWrap"];
-                    if (!wrap) wrap = [viewModel valueForKey:@"m_msgWrap"] ?: [viewModel valueForKey:@"msgWrap"];
-                }
-            } @catch (NSException *e) {}
-        }
-        
-        if (!wrap) {
-            @try {
-                unsigned int mesLocalID = 0;
-                @try {
-                    id vid = [cell valueForKey:@"mesLocalID"];
-                    if (vid) mesLocalID = [vid unsignedIntValue];
-                } @catch (NSException *e) {}
-                if (!mesLocalID) {
-                    @try {
-                        id vid = [cell valueForKey:@"m_mesLocalID"];
-                        if (vid) mesLocalID = [vid unsignedIntValue];
-                    } @catch (NSException *e) {}
-                }
-                if (!mesLocalID) {
-                    id cellView = getCellView(cell);
-                    if (cellView) {
-                        @try { id vid = [cellView valueForKey:@"mesLocalID"]; if (vid) mesLocalID = [vid unsignedIntValue]; } @catch (NSException *e) {}
-                    }
-                }
-                if (mesLocalID > 0) {
-                    SEL sel = NSSelectorFromString(@"getMessageWrapInVisibleCellWithMesLocalID:");
-                    id responder = cell;
-                    while ((responder = [responder nextResponder])) {
-                        if ([responder respondsToSelector:sel]) {
-                            @try {
-                                id result = ((id (*)(id, SEL, unsigned int))objc_msgSend)(responder, sel, mesLocalID);
-                                if (result) {
-                                    wrap = result;
-                                }
-                            } @catch (NSException *e) {
-                                mtLog([NSString stringWithFormat:@"getMessageWrapInVisibleCell threw: %@", e.reason]);
-                            }
-                            break;
-                        }
-                    }
-                    if (!wrap) {
-                    }
-                } else {
-                    }
-            } @catch (NSException *e) {}
-        }
-        
-        Class CMessageWrapClass = objc_getClass("CMessageWrap");
-    if (!s_CMessageWrapClass) s_CMessageWrapClass = CMessageWrapClass;
-        if (!wrap) {
-            mtLog(@"wrap is nil");
-            return;
-        }
-        if (s_CMessageWrapClass && ![wrap isKindOfClass:s_CMessageWrapClass]) {
-            mtLog([NSString stringWithFormat:@"wrap is not CMessageWrap: %@", NSStringFromClass([wrap class])]);
-            return;
-        }
-        
-        unsigned int msgType = 0;
-        if ([wrap respondsToSelector:@selector(m_uiMessageType)]) {
-            msgType = ((unsigned int (*)(id, SEL))objc_msgSend)(wrap, @selector(m_uiMessageType));
-        }
-        
-        if (msgType == kSystemMessageType) {
-            mtLog(@"Skipping system message (msgType = 10000)");
-            return;
-        }
-        
-        unsigned int createTime = 0;
-        if ([wrap respondsToSelector:@selector(m_uiCreateTime)]) {
-            createTime = ((unsigned int (*)(id, SEL))objc_msgSend)(wrap, @selector(m_uiCreateTime));
-        } else {
-            mtLog(@"wrap doesn't respond to m_uiCreateTime");
-        }
-        
-        if (createTime == 0) {
-            mtLog(@"createTime is 0");
-            return;
-        }
-
-        id avatarView = getAvatarView(cell);
-        
-        NSDate *messageDate = [NSDate dateWithTimeIntervalSince1970:createTime];
-        NSString *timeString = formatMessageTime(messageDate, config.messageTimeFormat);
-        if (!timeString) {
-            mtLog(@"timeString is nil");
-            return;
-        }
-        
-        UILabel *timeLabel = initTimeLabel((UIView *)cellView);
-        timeLabel.text = timeString;
-
-        CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
-        UIFont *font = config.messageTimeBoldFont ? [UIFont boldSystemFontOfSize:fontSize] : [UIFont systemFontOfSize:fontSize];
-        timeLabel.font = font;
-        
-        UIView *bubbleView = getBubbleView(cell);
-        mtLog([NSString stringWithFormat:@"bubbleView: %@", bubbleView ? @"YES" : @"NO"]);
-        
-        BOOL isSender = NO;
-        {
-            isSender = detectIsSender(cell, cellView, getContentView(cell), wrap);
-        }
-        
-        UIColor *textColor = nil;
-        UIColor *bgColor = nil;
-        if (isSender) {
-            textColor = [config colorFromHex:config.senderTextColorHex] ?: [UIColor colorWithWhite:0.5 alpha:1.0];
-            NSString *bgHex = config.senderBackgroundColorHex;
-            if (bgHex.length > 0 && ![bgHex isEqualToString:@"#00000000"]) {
-                bgColor = [config colorFromHex:bgHex];
-            }
-        } else {
-            textColor = [config colorFromHex:config.receiverTextColorHex] ?: [UIColor colorWithWhite:0.5 alpha:1.0];
-            NSString *bgHex = config.receiverBackgroundColorHex;
-            if (bgHex.length > 0 && ![bgHex isEqualToString:@"#00000000"]) {
-                bgColor = [config colorFromHex:bgHex];
-            }
-        }
-        
-        timeLabel.textColor = colorInLightMode(textColor, autoDarkColor(textColor));
-        timeLabel.backgroundColor = bgColor ?: [UIColor clearColor];
-        
-        if (config.messageTimeCornerRadius > 0) {
-            timeLabel.layer.cornerRadius = config.messageTimeCornerRadius;
-            timeLabel.layer.masksToBounds = YES;
-        } else {
-            timeLabel.layer.cornerRadius = 0;
-            timeLabel.layer.masksToBounds = NO;
-        }
-        
-        CGSize textSize = [timeString sizeWithAttributes:@{NSFontAttributeName: timeLabel.font}];
-        CGSize labelSize = CGSizeMake(textSize.width, textSize.height);
-        
-        CGRect labelFrame = CGRectMake(0, 0, labelSize.width, labelSize.height);
-        
-        CGFloat offsetX = config.messageTimeOffsetX;
-        CGFloat offsetY = config.messageTimeOffsetY;
-        NSInteger position = config.messageTimePosition;
-
-        CGRect avatarFrame = [(UIView *)avatarView frame];
-        
-        id contentView = getContentView(cell);
-        if (contentView) mtLog([NSString stringWithFormat:@"[DBG] contentView: class=%@ frame=%@ superview=%@",
-                                 NSStringFromClass([contentView class]),
-                                 NSStringFromCGRect([(UIView *)contentView frame]),
-                                 NSStringFromClass([[(UIView *)contentView superview] class])]);
-        CGRect contentFrame = contentFrameInCellView(contentView, cellView);
-        if (CGRectEqualToRect(contentFrame, CGRectZero)) {
-            contentFrame = cellFrame;
-            contentFrame.origin = CGPointZero;
-        }
-
-        {
-            id cvFromCell = nil;
-            @try { cvFromCell = [cell valueForKey:@"m_contentView"]; } @catch (...) {}
-            if (cvFromCell && cvFromCell != contentView) {
-                CGRect fromCellFrame = contentFrameInCellView(cvFromCell, cellView);
-                mtLog([NSString stringWithFormat:@"[POS] cell.m_contentView=(%f,%f,%f,%f) cellView.m_contentView=(%f,%f,%f,%f)",
-                       fromCellFrame.origin.x, fromCellFrame.origin.y, fromCellFrame.size.width, fromCellFrame.size.height,
-                       contentFrame.origin.x, contentFrame.origin.y, contentFrame.size.width, contentFrame.size.height]);
-            }
-        }
-
-        CGFloat cvLeft   = contentFrame.origin.x;
-        CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
-        CGFloat cvTop    = contentFrame.origin.y;
-        CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
-        CGFloat cvMidX   = (cvLeft + cvRight) / 2;
-        CGFloat w = labelSize.width;
-        CGFloat h = labelSize.height;
-        static const CGFloat kLabelPadding = 4;
-        static const CGFloat kLabelPaddingHalf = kLabelPadding / 2;
-        CGFloat pw = w + kLabelPadding;
-        CGFloat ph = h + kLabelPadding;
-
-        CGFloat cx = 0, cy = 0;
-
-        switch (position) {
-            case 0: { // 头像上方
-                if (!CGRectIsEmpty(avatarFrame)) {
-                    cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
-                    cy = avatarFrame.origin.y - h / 2;
-                } else {
-                    cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
-                    cy = cvBottom - h / 2;
-                }
-                break;
-            }
-            case 1: { // 头像下方
-                if (!CGRectIsEmpty(avatarFrame)) {
-                    cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
-                    cy = avatarFrame.origin.y + avatarFrame.size.height + h / 2;
-                } else {
-                    cx = isSender ? (cvLeft - w / 2) : (cvRight + w / 2);
-                    cy = cvBottom - h / 2;
-                }
-                break;
-            }
-            case 2:
-            case 7: // 消息旁边(=气泡外)
-                cx = isSender ? (cvLeft - pw / 2) : (cvRight + pw / 2);
-                cy = cvBottom - ph / 2;
-                break;
-            case 3: // 消息下方(远离头像)
-                cx = isSender ? (cvLeft + pw / 2) : (cvRight - pw / 2);
-                cy = cvBottom + ph / 2;
-                break;
-            case 4: // 消息下方(靠近头像)
-                cx = isSender ? (cvRight - pw / 2) : (cvLeft + pw / 2);
-                cy = cvBottom + ph / 2;
-                break;
-            case 5: // 消息上方(远离头像)
-                cx = isSender ? (cvLeft + pw / 2) : (cvRight - pw / 2);
-                cy = cvTop - ph / 2;
-                break;
-            case 6: // 消息上方(靠近头像)
-                cx = isSender ? (cvRight - pw / 2) : (cvLeft + pw / 2);
-                cy = cvTop - ph / 2;
-                break;
-            default: {
-                timeLabel.textAlignment = NSTextAlignmentNatural;
-                labelFrame = computeLabelFrame(cellFrame, labelSize, position, offsetX, offsetY, isSender, contentFrame, avatarFrame);
-                mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) av=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelFrame=(%.0f,%.0f,%.0f,%.0f)",
-                       (long)position, isSender,
-                       contentFrame.origin.x, contentFrame.origin.y,
-                       contentFrame.origin.x + contentFrame.size.width,
-                       contentFrame.origin.y + contentFrame.size.height,
-                       bubbleView ? bubbleView.frame.origin.x : 0.0,
-                       bubbleView ? bubbleView.frame.origin.y : 0.0,
-                       bubbleView ? bubbleView.frame.size.width : 0.0,
-                       bubbleView ? bubbleView.frame.size.height : 0.0,
-                       avatarFrame.origin.x, avatarFrame.origin.y,
-                       avatarFrame.size.width, avatarFrame.size.height,
-                       labelSize.width, labelSize.height,
-                       cellFrame.size.height,
-                       offsetX, offsetY,
-                       labelFrame.origin.x, labelFrame.origin.y,
-                       labelFrame.size.width, labelFrame.size.height]);
-                timeLabel.frame = labelFrame;
-                goto setLabelDone;
-            }
-        }
-
-        CGFloat finalX = cx + (isSender ? -offsetX : offsetX);
-        CGFloat finalY = cy - offsetY;
-        CGPoint finalCenter = CGPointMake(finalX, finalY);
-        CGRect equivalentFrame = CGRectMake(finalX - w / 2, finalY - h / 2, w, h);
-        mtLog([NSString stringWithFormat:@"[POS-FINAL] pos=%ld sender=%d cv=(L=%.0f,T=%.0f,R=%.0f,B=%.0f) bv=(%.0f,%.0f,%.0f,%.0f) av=(%.0f,%.0f,%.0f,%.0f) labelW=%.1f labelH=%.1f cellH=%.0f off=(X=%.1f,Y=%.1f) => labelCenter=(%.0f,%.0f) labelFrame=(%.0f,%.0f,%.0f,%.0f)",
-               (long)position, isSender,
-               contentFrame.origin.x, contentFrame.origin.y,
-               contentFrame.origin.x + contentFrame.size.width,
-               contentFrame.origin.y + contentFrame.size.height,
-               bubbleView ? bubbleView.frame.origin.x : 0.0,
-               bubbleView ? bubbleView.frame.origin.y : 0.0,
-               bubbleView ? bubbleView.frame.size.width : 0.0,
-               bubbleView ? bubbleView.frame.size.height : 0.0,
-               avatarFrame.origin.x, avatarFrame.origin.y,
-               avatarFrame.size.width, avatarFrame.size.height,
-               w, h,
-               cellFrame.size.height,
-               offsetX, offsetY,
-               finalCenter.x, finalCenter.y,
-               equivalentFrame.origin.x, equivalentFrame.origin.y,
-               equivalentFrame.size.width, equivalentFrame.size.height]);
-        timeLabel.textAlignment = NSTextAlignmentCenter;
-        timeLabel.bounds = CGRectMake(0, 0, pw, ph);
-        timeLabel.center = finalCenter;
-
-    setLabelDone:
-        
-        if (![timeLabel superview]) {
-            [cellView addSubview:timeLabel];
-            objc_setAssociatedObject(cell, @"messageTimeCreateTime", @(createTime), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            mtLog(@"Added timeLabel to cell");
-        }
-
-        mtLog(@"=== addTimeLabelToCell completed successfully ===");
-        
-    } @catch (NSException *e) {
-        mtLog([NSString stringWithFormat:@"ERROR: %@", e]);
-    }
-}
-
-// ============================================================
 // MARK: - Original Function Pointers (one per hook target)
 // ============================================================
 
 static UITableViewCell* (*orig_BaseMsgContentVC_cellForRow)(id, SEL, id, NSIndexPath*);
-static void (*orig_BaseMsgContentVC_willDisplayCell)(id, SEL, id, id, NSIndexPath*);
-static void (*orig_ChatTableViewCell_prepareForReuse)(id, SEL);
+static long (*orig_CommonMessageCellView_initWithViewModel)(id, SEL, id);
 static void (*orig_CommonMessageCellView_updateNodeStatus)(id, SEL);
-static void (*orig_CommonMessageCellView_didMoveToWindow)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
 static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
 static NSString* (*orig_CContact_m_nsNickName)(id, SEL);
@@ -980,77 +390,92 @@ static void (*orig_TextMsgCell_setFrameBgImg)(id, SEL, CGFloat, CGFloat, CGFloat
 
 static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *ip) {
     UITableViewCell *cell = orig_BaseMsgContentVC_cellForRow(self, _cmd, tv, ip);
+
     if (![PluginConfig shared].showMessageTime || !cell) return cell;
 
-    NSString *cellCls = NSStringFromClass([cell class]);
-    id cellView = nil;
-    id wrap = nil;
+    // 反编译版风格：只处理 ChatTableViewCell
+    if (![cell isKindOfClass:NSClassFromString(@"ChatTableViewCell")]) return cell;
 
-    @try {
-        cellView = [cell valueForKey:@"m_cellView"];
-    } @catch (NSException *e) {}
-    if (!cellView) {
+    // 全局队列异步计算时间（复刻 FUN_0003b270 + FUN_0003c790）
+    dispatch_async(dispatch_get_global_queue(0, 0), ^{
+        id cellView = nil;
+        @try { cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"]; } @catch (NSException *e) {}
+        if (!cellView) return;
+
+        // 获取 viewModel
+        id viewModel = nil;
+        @try { viewModel = [cellView valueForKey:@"m_viewModel"] ?: [cellView valueForKey:@"viewModel"]; } @catch (NSException *e) {}
+        if (!viewModel) return;
+
+        unsigned int createTime = 0;
         @try {
-            cellView = [cell valueForKey:@"cellView"];
-        } @catch (NSException *e) {}
-    }
-    if (!cellView) {
-        for (UIView *sv in [(UIView *)cell subviews]) {
-            NSString *cn = NSStringFromClass([sv class]);
-            if ([cn containsString:@"CellView"]) {
-                cellView = sv;
-                break;
+            // 方式1: viewModel → messageWrap → m_uiCreateTime
+            id messageWrap = nil;
+            if ([viewModel respondsToSelector:NSSelectorFromString(@"messageWrap")]) {
+                @try { messageWrap = [viewModel valueForKey:@"messageWrap"]; } @catch (...) {}
             }
-        }
-    }
-    if (!cellView) {
-        mtLog([NSString stringWithFormat:@"[cellForRow] cell=%@ FAILED to get cellView (KVC nil, no subview match)", cellCls]);
-        return cell;
-    }
-
-    @try {
-        id viewModel = [cellView valueForKey:@"m_viewModel"] ?: [cellView valueForKey:@"viewModel"];
-        if (viewModel) {
-            wrap = [viewModel valueForKey:@"messageWrap"] ?: [viewModel valueForKey:@"m_messageWrap"];
-        }
-    } @catch (NSException *e) {}
-    if (!wrap) {
-        @try {
-            wrap = [cellView valueForKey:@"messageWrap"] ?: [cellView valueForKey:@"m_messageWrap"];
+            if (!messageWrap) {
+                @try { messageWrap = [viewModel valueForKey:@"m_messageWrap"]; } @catch (...) {}
+            }
+            if (messageWrap && [messageWrap respondsToSelector:NSSelectorFromString(@"m_uiCreateTime")]) {
+                createTime = (unsigned int)[[messageWrap valueForKey:@"m_uiCreateTime"] unsignedIntValue];
+            }
+            // 方式2: viewModel → createTime（直接属性）
+            if (createTime == 0 && [viewModel respondsToSelector:NSSelectorFromString(@"createTime")]) {
+                @try { createTime = (unsigned int)[[viewModel valueForKey:@"createTime"] unsignedIntValue]; } @catch (...) {}
+            }
         } @catch (NSException *e) {}
-    }
 
-    if (!wrap) {
-        mtLog([NSString stringWithFormat:@"[cellForRow] cellView=%@ messageWrap=nil", NSStringFromClass([cellView class])]);
-        return cell;
-    }
-    if (![wrap isKindOfClass:objc_getClass("CMessageWrap")]) {
-        mtLog([NSString stringWithFormat:@"[cellForRow] wrap class=%@ not CMessageWrap", NSStringFromClass([wrap class])]);
-        return cell;
-    }
+        if (createTime == 0) return;
 
-    objc_setAssociatedObject(cell, @"cachedMsgWrap", wrap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        // 格式化时间
+        PluginConfig *config = [PluginConfig shared];
+        NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
+        NSString *timeText = formatMessageTime(date, config.messageTimeFormat);
+        if (!timeText) return;
+
+        // 存入 viewModel 关联对象（复刻 DAT_0013ad99）
+        objc_setAssociatedObject(viewModel, @"messageTimeText", timeText, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        // dispatch_async(main) 触发 updateNodeStatus（复刻 FUN_0003cc68）
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([cellView respondsToSelector:NSSelectorFromString(@"updateNodeStatus")]) {
+                [cellView performSelector:NSSelectorFromString(@"updateNodeStatus")];
+            }
+        });
+    });
+
     return cell;
 }
 
-static void repl_willDisplayCell(id self, SEL _cmd, id tv, id cell, NSIndexPath *ip) {
-    if (orig_BaseMsgContentVC_willDisplayCell) {
-        orig_BaseMsgContentVC_willDisplayCell(self, _cmd, tv, cell, ip);
-    }
+static long repl_CommonMessageCellView_initWithViewModel(id self, SEL _cmd, id viewModel) {
+    long result = orig_CommonMessageCellView_initWithViewModel(self, _cmd, viewModel);
+    if (result == 0) return result;
 
-    if (![PluginConfig shared].showMessageTime) return;
+    // 复刻 FUN_00039d80：在 cellView 初始化时立即创建空标签
+    PluginConfig *config = [PluginConfig shared];
 
-    id cellView = getCellView(cell);
-    if (!cellView) return;
+    UILabel *label = [[UILabel alloc] init];
+    CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
+    UIFont *font = config.messageTimeBoldFont ? [UIFont boldSystemFontOfSize:fontSize] : [UIFont systemFontOfSize:fontSize];
+    label.font = font;
+    label.textAlignment = NSTextAlignmentCenter;
+    label.adjustsFontSizeToFitWidth = YES;
+    label.userInteractionEnabled = NO;
+    label.tag = kTimeLabelTag;
+    label.clipsToBounds = YES;
 
-    if (objc_getAssociatedObject(cellView, @"msgTimeLabel")) return;
+    CGFloat cornerRadius = config.messageTimeCornerRadius > 0 ? config.messageTimeCornerRadius : 8.0;
+    label.layer.cornerRadius = cornerRadius;
 
-    id cachedWrap = objc_getAssociatedObject(cell, @"cachedMsgWrap");
-    if (!cachedWrap) return;
+    // frame 默认 88×28（反编译版同款占位尺寸）
+    label.frame = CGRectMake(0, 0, 88, 28);
 
-    dispatch_async(dispatch_get_main_queue(), ^{
-        addTimeLabelToCell(cell);
-    });
+    objc_setAssociatedObject(self, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    mtLog(@"[initWithViewModel] Label created for cellView");
+
+    return result;
 }
 
 static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
@@ -1060,67 +485,126 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
 
     if (![PluginConfig shared].showMessageTime) return;
 
-    UIView *cellView = (UIView *)self;
-    UIView *cell = cellView;
-    while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
-        cell = [cell superview];
-    }
-    if (!cell) return;
-
-    UILabel *label = objc_getAssociatedObject(cellView, @"msgTimeLabel");
-    if (label) {
-        quickRelocateTimeLabel(cell, cellView, [cell frame]);
-        return;
-    }
-
-    addTimeLabelToCell(cell);
-}
-
-static void repl_CommonMessageCellView_didMoveToWindow(id self, SEL _cmd) {
-    if (orig_CommonMessageCellView_didMoveToWindow) {
-        orig_CommonMessageCellView_didMoveToWindow(self, _cmd);
-    }
-
-    if (![PluginConfig shared].showMessageTime) return;
-
     UIView *cv = (UIView *)self;
-    if (!cv.window) return;
+    UILabel *label = objc_getAssociatedObject(cv, @"msgTimeLabel");
+    if (!label) return;
 
-    if (objc_getAssociatedObject(cv, @"msgTimeLabel")) return;
+    // 获取 viewModel → 读取已缓存在 viewModel 上的时间文本
+    id viewModel = nil;
+    @try { viewModel = [cv valueForKey:@"m_viewModel"] ?: [cv valueForKey:@"viewModel"]; } @catch (NSException *e) {}
+    if (!viewModel) { label.hidden = YES; return; }
 
+    NSString *timeText = objc_getAssociatedObject(viewModel, @"messageTimeText");
+    if (!timeText) { label.hidden = YES; return; }
+
+    label.hidden = NO;
+    label.text = timeText;
+
+    // 计算 label 尺寸（复刻 FUN_0003a06c 开头：textW+4, textH+4, clamp 30~88）
+    PluginConfig *config = [PluginConfig shared];
+    CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
+    UIFont *font = config.messageTimeBoldFont ? [UIFont boldSystemFontOfSize:fontSize] : [UIFont systemFontOfSize:fontSize];
+    label.font = font;
+
+    NSDictionary *attrs = @{NSFontAttributeName: font};
+    CGSize textSize = [timeText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)
+                                             options:NSStringDrawingUsesLineFragmentOrigin
+                                          attributes:attrs
+                                             context:nil].size;
+
+    CGFloat labelW = MAX(30.0, MIN(textSize.width + 4.0, 88.0));
+    CGFloat labelH = textSize.height + 4.0;
+    label.frame = CGRectMake(0, 0, labelW, labelH);
+
+    // 设置颜色（根据 sender/receiver + 亮暗模式）
+    BOOL isSender = NO;
+    @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) {}
+
+    UIColor *textColor = config.senderTextColorHex;
+    UIColor *bgColor = config.senderBackgroundColorHex;
+    if (!isSender) {
+        textColor = config.receiverTextColorHex;
+        bgColor = config.receiverBackgroundColorHex;
+    }
+    if (!textColor) textColor = isSender ? [UIColor whiteColor] : [UIColor blackColor];
+
+    // 暗色模式自动提亮
+    if (isWeChatDarkMode()) {
+        textColor = autoDarkColor(textColor);
+        if (bgColor) bgColor = autoDarkColor(bgColor);
+    }
+
+    label.textColor = textColor;
+    if (bgColor) label.backgroundColor = bgColor;
+
+    CGFloat cornerRadius = config.messageTimeCornerRadius > 0 ? config.messageTimeCornerRadius : 8.0;
+    label.layer.cornerRadius = cornerRadius;
+
+    // 获取 contentView frame 用于定位
     UIView *cell = cv;
     while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
         cell = [cell superview];
     }
-    if (!cell) return;
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        addTimeLabelToCell(cell);
-    });
-}
-
-static void repl_ChatTableViewCell_prepareForReuse(id self, SEL _cmd) {
-    if (orig_ChatTableViewCell_prepareForReuse) {
-        orig_ChatTableViewCell_prepareForReuse(self, _cmd);
+    CGRect cellFrame = cell ? [cell frame] : CGRectZero;
+    id contentViewObj = getContentView(cell);
+    CGRect contentFrame = contentFrameInCellView(contentViewObj, cv);
+    if (CGRectEqualToRect(contentFrame, CGRectZero)) {
+        contentFrame = cellFrame;
+        contentFrame.origin = CGPointZero;
     }
 
-    // 清理 cellView 上的标签（标签存储在 cellView 的关联对象上）
-    id cellView = nil;
-    @try { cellView = [self valueForKey:@"m_cellView"] ?: [self valueForKey:@"cellView"]; } @catch (...) {}
-    if (cellView) {
-        UILabel *oldLabel = objc_getAssociatedObject(cellView, @"msgTimeLabel");
-        if (oldLabel) {
-            [oldLabel removeFromSuperview];
+    CGFloat cvLeft   = contentFrame.origin.x;
+    CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
+    CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
+
+    NSInteger position = config.messageTimePosition;
+    CGFloat offsetX = config.messageTimeOffsetX;
+    CGFloat offsetY = config.messageTimeOffsetY;
+
+    CGFloat cx = 0, cy = 0;
+
+    switch (position) {
+        case 0: case 1: { // 头像上方/下方 — fallback
+            cx = isSender ? (cvLeft - labelW / 2) : (cvRight + labelW / 2);
+            cy = cvBottom - labelH / 2;
+            break;
         }
-        UIView *tagLabel = [(UIView *)cellView viewWithTag:kTimeLabelTag];
-        if (tagLabel && tagLabel != oldLabel) {
-            [tagLabel removeFromSuperview];
+        case 2:
+        case 7: // 消息旁边(=气泡外)
+            cx = isSender ? (cvLeft - labelW / 2) : (cvRight + labelW / 2);
+            cy = cvBottom - labelH / 2;
+            break;
+        case 3: // 消息下方(远离头像)
+            cx = isSender ? (cvLeft + labelW / 2) : (cvRight - labelW / 2);
+            cy = cvBottom + labelH / 2;
+            break;
+        case 4: // 消息下方(靠近头像)
+            cx = isSender ? (cvRight - labelW / 2) : (cvLeft + labelW / 2);
+            cy = cvBottom + labelH / 2;
+            break;
+        case 5: // 消息上方(远离头像)
+            cx = isSender ? (cvLeft + labelW / 2) : (cvRight - labelW / 2);
+            cy = CGRectGetMinY(contentFrame) - labelH / 2;
+            break;
+        case 6: // 消息上方(靠近头像)
+            cx = isSender ? (cvRight - labelW / 2) : (cvLeft + labelW / 2);
+            cy = CGRectGetMinY(contentFrame) - labelH / 2;
+            break;
+        default: {
+            cx = isSender ? (cvLeft - labelW / 2) : (cvRight + labelW / 2);
+            cy = cvBottom - labelH / 2;
+            break;
         }
-        objc_setAssociatedObject(cellView, @"msgTimeLabel", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
-    objc_setAssociatedObject(self, @"messageTimeCreateTime", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(self, @"cachedMsgWrap", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (offsetX != 0) cx += isSender ? -offsetX : offsetX;
+    if (offsetY != 0) cy -= offsetY;
+
+    label.center = CGPointMake(cx, cy);
+
+    if (![label superview]) {
+        [cv addSubview:label];
+    }
 }
 
 static void repl_ChatTimeCellView_layoutSubviews(id self, SEL _cmd) {
@@ -1198,15 +682,13 @@ static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGFloat x, CGFloat
 // ============================================================
 
 static MTHookEntry g_hookTable[] = {
-    {"BaseMsgContentViewController", "tableView:cellForRowAtIndexPath:",              (IMP)repl_cellForRow,                         (IMP*)&orig_BaseMsgContentVC_cellForRow},
-    {"BaseMsgContentViewController", "tableView:willDisplayCell:forRowAtIndexPath:",  (IMP)repl_willDisplayCell,                    (IMP*)&orig_BaseMsgContentVC_willDisplayCell},
-    {"CommonMessageCellView",        "updateNodeStatus",                              (IMP)repl_CommonMessageCellView_updateNodeStatus, (IMP*)&orig_CommonMessageCellView_updateNodeStatus},
-    {"CommonMessageCellView",        "didMoveToWindow",                               (IMP)repl_CommonMessageCellView_didMoveToWindow,  (IMP*)&orig_CommonMessageCellView_didMoveToWindow},
-    {"ChatTableViewCell",            "prepareForReuse",                               (IMP)repl_ChatTableViewCell_prepareForReuse,  (IMP*)&orig_ChatTableViewCell_prepareForReuse},
-    {"ChatTimeCellView",             "layoutSubviews",                                (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
-    {"ChatTimeViewModel",            "cellHeight",                                    (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
-    {"CContact",                     "m_nsNickName",                                  (IMP)repl_CContact_m_nsNickName,              (IMP*)&orig_CContact_m_nsNickName},
-    {"TextMessageCellView",          "setFrameForBgImageView:",                       (IMP)repl_TextMsgCell_setFrameBgImg,          (IMP*)&orig_TextMsgCell_setFrameBgImg},
+    {"CommonMessageCellView",        "initWithViewModel:",                   (IMP)repl_CommonMessageCellView_initWithViewModel, (IMP*)&orig_CommonMessageCellView_initWithViewModel},
+    {"BaseMsgContentViewController", "tableView:cellForRowAtIndexPath:",     (IMP)repl_cellForRow,                         (IMP*)&orig_BaseMsgContentVC_cellForRow},
+    {"CommonMessageCellView",        "updateNodeStatus",                     (IMP)repl_CommonMessageCellView_updateNodeStatus, (IMP*)&orig_CommonMessageCellView_updateNodeStatus},
+    {"ChatTimeCellView",             "layoutSubviews",                       (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
+    {"ChatTimeViewModel",            "cellHeight",                           (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
+    {"CContact",                     "m_nsNickName",                         (IMP)repl_CContact_m_nsNickName,              (IMP*)&orig_CContact_m_nsNickName},
+    {"TextMessageCellView",          "setFrameForBgImageView:",              (IMP)repl_TextMsgCell_setFrameBgImg,          (IMP*)&orig_TextMsgCell_setFrameBgImg},
 };
 
 static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0]);
@@ -1219,8 +701,8 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
 
 + (void)install {
     mtLog(@"========================================");
-    mtLog(@"MessageTimeHook install - willDisplayCell(dispatch_async) + updateNodeStatus(model-driven) + didMoveToWindow(supplement)");
-    mtLog(@"Architecture: ViewModel驱动（复刻微信优化1.6.5）—— 0% layoutSubviews热路径参与");
+    mtLog(@"MessageTimeHook install - initWithViewModel(early label) + cellForRow(global_queue) + updateNodeStatus(model-driven)");
+    mtLog(@"Architecture: 复刻微信优化1.6.5 — 全局队列异步计算 + ViewModel驱动");
     mtLog(@"========================================");
 
     PluginConfig *config = [PluginConfig shared];
