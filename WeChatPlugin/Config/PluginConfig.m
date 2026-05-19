@@ -149,6 +149,9 @@ static void configLog(NSString *content) {
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFormat"]];
     if (v.length > 0) _messageTimeFormat = v;
     else _messageTimeFormat = @"HH:mm:ss";
+
+    v = [d objectForKey:[kPluginPrefix stringByAppendingString:@"CustomFormat"]];
+    if (v.length > 0) _messageTimeCustomFormat = v;
     
     _messageTimePosition = [d integerForKey:[kPluginPrefix stringByAppendingString:@"MessageTimePosition"]];
     if (_messageTimePosition < 0 || _messageTimePosition > 7) _messageTimePosition = 1;
@@ -260,6 +263,9 @@ static void configLog(NSString *content) {
     [d setBool:_showMessageTime forKey:[kPluginPrefix stringByAppendingString:@"ShowMessageTime"]];
     [d setFloat:_messageTimeFontSize forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFontSize"]];
     [d setBool:_messageTimeBoldFont forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBoldFont"]];
+    if (_messageTimeCustomFormat) {
+        [d setObject:_messageTimeCustomFormat forKey:[kPluginPrefix stringByAppendingString:@"CustomFormat"]];
+    }
     if (_messageTimeFormat) {
         [d setObject:_messageTimeFormat forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFormat"]];
     }

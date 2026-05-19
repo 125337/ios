@@ -1,5 +1,6 @@
 #import "MessageTimeHook.h"
 #import "../../Config/PluginConfig.h"
+#import "MessageTimeFormatParser.h"
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -82,15 +83,7 @@ static UILabel *initTimeLabel(UIView *targetView) {
     return label;
 }
 
-static NSDateFormatter *getTimeFormatter() {
-    static NSDateFormatter *formatter = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        formatter = [[NSDateFormatter alloc] init];
-        formatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
-    });
-    return formatter;
-}
+// Note: Formatter removed, using MessageTimeFormatParser now
 
 // ============================================================
 // MARK: - Color / Theme Helpers
@@ -170,12 +163,9 @@ static BOOL detectIsSender(id cell, id cellView, id contentView, id wrap) {
 // MARK: - Time Formatting
 // ============================================================
 
-static NSString *formatMessageTime(NSDate *date, NSString *format) {
-    if (!date || !format) return nil;
-    
-    NSDateFormatter *formatter = getTimeFormatter();
-    formatter.dateFormat = format;
-    return [formatter stringFromDate:date];
+// 使用 MessageTimeFormatParser 统一格式化（支持自定义格式）
+static NSString *formatMessageTime(NSDate *date, NSString *fallbackFormat, NSString *customFormat, BOOL isDark) {
+    return [MessageTimeFormatParser formatDate:date customFormat:customFormat isDarkMode:isDark];
 }
 
 // ============================================================
@@ -428,10 +418,11 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
 
         if (createTime == 0) return;
 
-        // 格式化时间
+        // 格式化时间（使用自定义格式引擎）
         PluginConfig *config = [PluginConfig shared];
         NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
-        NSString *timeText = formatMessageTime(date, config.messageTimeFormat);
+        NSString *timeText = formatMessageTime(date, config.messageTimeFormat,
+                                                config.messageTimeCustomFormat, [config isDarkMode]);
         if (!timeText) return;
 
         // 存入 viewModel 关联对象（复刻 DAT_0013ad99）

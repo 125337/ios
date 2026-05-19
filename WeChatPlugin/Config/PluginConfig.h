@@ -44,6 +44,7 @@
 @property (nonatomic, assign) CGFloat messageTimeFontSize;
 @property (nonatomic, assign) BOOL messageTimeBoldFont;
 @property (nonatomic, copy) NSString *messageTimeFormat;
+@property (nonatomic, copy) NSString *messageTimeCustomFormat;
 @property (nonatomic, assign) NSInteger messageTimePosition;
 @property (nonatomic, assign) CGFloat messageTimeOffsetX;
 @property (nonatomic, assign) CGFloat messageTimeOffsetY;

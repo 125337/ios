@@ -32,6 +32,8 @@ MioHelper_FILES = Tweak.m \
 	Modules/GroupExit/GroupExitHook.m \
 	Modules/FriendDetection/FriendDetectionHook.m \
 	Modules/MessageTime/MessageTimeHook.m \
+	Modules/MessageTime/MessageTimeFormatParser.m \
+	Modules/MessageTime/MessageTimeFormatEditorVC.m \
 	Settings/Common/WPBorderLayer.m \
 	Settings/Common/SettingCategoryController.m \
 	Settings/Controllers/SettingController.m \

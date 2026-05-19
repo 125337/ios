@@ -1,6 +1,7 @@
 #import "../Common/SettingController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/WPAlert.h"
+#import "../../Modules/MessageTime/MessageTimeFormatEditorVC.h"
 #import <objc/runtime.h>
 
 @implementation SettingGeneralFunctionController
@@ -89,6 +90,12 @@
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSwitchRowInGroup:expand title:@"粗体字体" desc:nil key:@"MessageTimeBoldFont" isOn:config.messageTimeBoldFont cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        // 自定义格式入口（复刻微信优化 CSTimeFormatEditor）
+        NSString *customFmtSub = config.messageTimeCustomFormat.length > 0
+            ? config.messageTimeCustomFormat
+            : @"{HH}:{mm}:{ss}";
+        *ecy = [self addNavRowInGroup:expand title:@"自定义格式" subtitle:customFmtSub tag:200 action:@selector(onMessageTimeCustomFormatTap) cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"文字颜色" key:@"MessageTimeTextColor" value:config.messageTimeTextColor hint:@"#999999" cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"水平偏移" key:@"MessageTimeOffsetX" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetX] hint:@"0" cy:*ecy width:w];
@@ -162,6 +169,18 @@
     }
 
     [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)onMessageTimeCustomFormatTap {
+    MessageTimeFormatEditorVC *editor = [[MessageTimeFormatEditorVC alloc] init];
+    editor.initialFormat = [PluginConfig shared].messageTimeCustomFormat;
+    editor.saveBlock = ^(NSString *newFormat) {
+        PluginConfig *cfg = [PluginConfig shared];
+        cfg.messageTimeCustomFormat = newFormat;
+        [cfg save];
+        [self buildUI];
+    };
+    [self.navigationController pushViewController:editor animated:YES];
 }
 
 @end
