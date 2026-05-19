@@ -448,11 +448,12 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
     return cell;
 }
 
+// 复刻 FUN_00039d80：始终创建空标签，不检查 showMessageTime
 static long repl_CommonMessageCellView_initWithViewModel(id self, SEL _cmd, id viewModel) {
     long result = orig_CommonMessageCellView_initWithViewModel(self, _cmd, viewModel);
     if (result == 0) return result;
 
-    // 复刻 FUN_00039d80：在 cellView 初始化时立即创建空标签
+    id realSelf = (id)result;
     PluginConfig *config = [PluginConfig shared];
 
     UILabel *label = [[UILabel alloc] init];
@@ -462,18 +463,14 @@ static long repl_CommonMessageCellView_initWithViewModel(id self, SEL _cmd, id v
     label.textAlignment = NSTextAlignmentCenter;
     label.adjustsFontSizeToFitWidth = YES;
     label.userInteractionEnabled = NO;
-    label.tag = kTimeLabelTag;
-    label.clipsToBounds = YES;
+    label.clipsToBounds = NO;
 
     CGFloat cornerRadius = config.messageTimeCornerRadius > 0 ? config.messageTimeCornerRadius : 8.0;
     label.layer.cornerRadius = cornerRadius;
 
-    // frame 默认 88×28（反编译版同款占位尺寸）
-    label.frame = CGRectMake(0, 0, 88, 28);
+    label.frame = CGRectMake(0, 0, 40, 30);
 
-    objc_setAssociatedObject(self, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    mtLog(@"[initWithViewModel] Label created for cellView");
+    objc_setAssociatedObject(realSelf, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     return result;
 }
@@ -483,10 +480,16 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
         orig_CommonMessageCellView_updateNodeStatus(self, _cmd);
     }
 
-    if (![PluginConfig shared].showMessageTime) return;
-
     UIView *cv = (UIView *)self;
     UILabel *label = objc_getAssociatedObject(cv, @"msgTimeLabel");
+
+    if (![PluginConfig shared].showMessageTime) {
+        if (label) {
+            label.hidden = YES;
+        }
+        return;
+    }
+
     if (!label) return;
 
     // 获取 viewModel → 读取已缓存在 viewModel 上的时间文本
