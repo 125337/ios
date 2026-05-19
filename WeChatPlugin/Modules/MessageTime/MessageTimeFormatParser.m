@@ -72,7 +72,7 @@ static NSString * const kStorageKey = @"com.wechat.enhance.messageTime.customFor
         }
 
         // 用唯一占位符替换
-        NSString *placeholder = [NSString stringWithFormat:@"\u0001SPECIAL%lu\u0001",
+        NSString *placeholder = [NSString stringWithFormat:@"\x01SP%lu\x01",
                                   (unsigned long)specialReplacements.count];
         specialReplacements[placeholder] = formatted;
         [nsdfFormat replaceOccurrencesOfString:token withString:placeholder
@@ -96,4 +96,8 @@ static NSString * const kStorageKey = @"com.wechat.enhance.messageTime.customFor
     return result;
 }
 
-+ (NSString *)previewWithFormat:(NSString *)customFormat isDarkMode:(BOO
++ (NSString *)previewWithFormat:(NSString *)customFormat isDarkMode:(BOOL)isDarkMode {
+    return [self formatDate:[NSDate date] customFormat:customFormat isDarkMode:isDarkMode];
+}
+
+@end
