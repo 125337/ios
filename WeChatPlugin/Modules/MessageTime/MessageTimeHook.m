@@ -519,12 +519,12 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     BOOL isSender = NO;
     @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) {}
 
-    UIColor *textColor = config.senderTextColorHex;
-    UIColor *bgColor = config.senderBackgroundColorHex;
-    if (!isSender) {
-        textColor = config.receiverTextColorHex;
-        bgColor = config.receiverBackgroundColorHex;
-    }
+    NSString *textHex = isSender ? config.senderTextColorHex : config.receiverTextColorHex;
+    NSString *bgHex   = isSender ? config.senderBackgroundColorHex : config.receiverBackgroundColorHex;
+
+    UIColor *textColor = textHex.length ? [config colorFromHex:textHex] : nil;
+    UIColor *bgColor   = bgHex.length   ? [config colorFromHex:bgHex]   : nil;
+
     if (!textColor) textColor = isSender ? [UIColor whiteColor] : [UIColor blackColor];
 
     // 暗色模式自动提亮
