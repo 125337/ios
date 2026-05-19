@@ -1169,42 +1169,28 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
 }
 
 static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
-    orig_TextMsgCell_setFrameBgImg(self, _cmd, x, y, w, h);
-
     PluginConfig *config = [PluginConfig shared];
-    if (!config.showMessageTime || config.messageTimePosition != 7) return;
 
-    id viewModel = nil;
-    @try { viewModel = [self valueForKey:@"m_viewModel"] ?: [self valueForKey:@"viewModel"]; } @catch (NSException *e) {}
-    if (!viewModel) return;
+    if (config.showMessageTime && config.messageTimePosition == 7) {
+        id viewModel = nil;
+        @try { viewModel = [self valueForKey:@"m_viewModel"] ?: [self valueForKey:@"viewModel"]; } @catch (NSException *e) {}
 
-    BOOL isSender = NO;
-    @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) { return; }
+        if (viewModel) {
+            BOOL isSender = NO;
+            @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) {}
 
-    UIView *view = (UIView *)self;
-    id cell = nil;
-    while (view) {
-        if ([NSStringFromClass([view class]) containsString:@"ChatTableViewCell"]) {
-            cell = view;
-            break;
+            CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
+            if (isSender) {
+                x -= extWidth;
+            }
+            w += extWidth;
+
+            mtLog([NSString stringWithFormat:@"[BUBBLE-EXTEND] isSender=%d extWidth=%.0f x=%.0f->%.0f w=%.0f->%.0f",
+                   isSender, extWidth, x + (isSender ? extWidth : 0), x, w - extWidth, w]);
         }
-        view = view.superview;
     }
-    if (!cell) return;
 
-    id bubbleView = getBubbleView(cell);
-    if (!bubbleView) return;
-
-    CGFloat extWidth = config.messageTimeBubbleExtWidth > 0 ? config.messageTimeBubbleExtWidth : 38.0;
-    CGRect bf = [(UIView *)bubbleView frame];
-    if (isSender) {
-        bf.origin.x -= extWidth;
-    }
-    bf.size.width += extWidth;
-    [(UIView *)bubbleView setFrame:bf];
-
-    mtLog([NSString stringWithFormat:@"[BUBBLE-EXTEND] isSender=%d extWidth=%.0f newFrame=(%.0f,%.0f,%.0f,%.0f)",
-           isSender, extWidth, bf.origin.x, bf.origin.y, bf.size.width, bf.size.height]);
+    orig_TextMsgCell_setFrameBgImg(self, _cmd, x, y, w, h);
 }
 
 // ============================================================
