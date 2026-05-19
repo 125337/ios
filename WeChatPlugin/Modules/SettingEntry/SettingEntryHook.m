@@ -72,7 +72,7 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     hy += 34;
 
     UILabel *heroVer = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 20)];
-    heroVer.text = @"v2.0.0";
+    heroVer.text = [NSString stringWithFormat:@"v%@", kPluginVersion];
     heroVer.font = [UIFont systemFontOfSize:13];
     heroVer.textColor = [UIColor colorWithRed:0.400 green:0.800 blue:0.451 alpha:1.0];
     heroVer.textAlignment = NSTextAlignmentCenter;
@@ -295,7 +295,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
                     if ([sharedInstance respondsToSelector:regSel]) {
                         ((void (*)(id, SEL, NSString *, NSString *, NSString *))objc_msgSend)(
                             sharedInstance, regSel,
-                            @"Mio助手", @"2.0.0", @"WeChatPluginEntryVC");
+                            @"Mio助手", kPluginVersion, @"WeChatPluginEntryVC");
                         reLog(@"[Plugin] registered");
                     } else {
                         reLog(@"[Plugin] registerController not found");
