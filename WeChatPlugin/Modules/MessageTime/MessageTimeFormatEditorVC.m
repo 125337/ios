@@ -2,65 +2,74 @@
 #import "MessageTimeFormatParser.h"
 
 // 复刻微信优化 1.6.5 CSTimeFormatEditorViewController
-// 格式令牌说明数据（照抄 NSConstantArray 00121bb0 / 00121bc8 / 00121be0）
+// 精确像素值从 123456.c 浮点常量解码，精确字符串从 微信优化1.6.5.dylib UTF-16 段提取
 
-// 左侧表格：令牌名（粗体）
+#pragma mark - 表格数据（从 dylib 提取）
+
+// 左列：令牌名 — 来自 NSConstantArray_00121bb0，15px Semibold
 static NSArray<NSString *> *_tokenNames(void) {
-    return @[@"{yyyy}", @"{MM}", @"{dd}", @"{HH}", @"{mm}", @"{ss}"];
+    return @[@"{YYYY}", @"{YY}", @"{MM}", @"{dd}", @"{HH}", @"{hh}", @"{mm}", @"{ss}", @"{EE}", @"{EEEE}", @"{a}"];
 }
 
-// 右侧表格：令牌说明
+// 右列：说明文字 — 来自 NSConstantArray_00121bc8，15px Regular
 static NSArray<NSString *> *_tokenDescs(void) {
     return @[
-        @"年 (2026)",
-        @"月 (01-12)",
-        @"日 (01-31)",
-        @"时 24小时 (00-23)",
-        @"分 (00-59)",
-        @"秒 (00-59)",
-    ];
-}
-
-// 预览标签
-static NSArray<NSString *> *_previewLabels(void) {
-    return @[@"年", @"月", @"日", @"时", @"分", @"秒"];
-}
-
-// 特殊令牌说明
-static NSArray<NSString *> *_specialTokenNames(void) {
-    return @[@"{EE}", @"{EEEE}", @"{a}", @"{b}"];
-}
-static NSArray<NSString *> *_specialTokenDescs(void) {
-    return @[
-        @"中文星期缩写 / 上午下午",
-        @"中文完整星期",
-        @"AM/PM",
-        @"上午/下午 (英文后处理)",
+        @"年份(2025)",
+        @"年份(25)",
+        @"月份(01-12)",
+        @"日期(01-31)",
+        @"小时-24小时制(00-23)",
+        @"小时-12小时制(01-12)",
+        @"分钟(00-59)",
+        @"秒数(00-59)",
+        @"星期(周一)",
+        @"星期(星期一)",
+        @"上午/下午",
     ];
 }
 
 @interface MessageTimeFormatEditorVC () <UITextViewDelegate>
 @property (nonatomic, strong) UIScrollView *scrollView;
 @property (nonatomic, strong) UIView *contentView;
-@property (nonatomic, strong) UITextView *textView;
-@property (nonatomic, strong) UITextView *previewTextView;
-@property (nonatomic, strong) UILabel *previewValueLabel;
+@property (nonatomic, strong) UITextView *editorView;
+@property (nonatomic, strong) UITextView *previewView;
 @end
 
 @implementation MessageTimeFormatEditorVC
 
+#pragma mark - Lifecycle
+
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"自定义格式";
+
+    // 复刻 viewDidLoad: 导航标题
+    self.title = @"自定义时间格式";
+
+    // 背景色（复刻微信优化 groupTableViewBackground）
     self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
 
-    [self setupNavigationBar];
+    [self setupNavBar];
     [self setupScrollView];
-    [self buildTokenTable];
-    [self buildSpecialTokenTable];
-    [self buildPreviewSection];
-    [self buildEditorSection];
-    [self buildPreviewResultSection];
+
+    CGFloat w = self.view.bounds.size.width;
+    CGFloat y = 20.0;  // 固定起始 Y（复刻 viewDidLoad 常量）
+
+    // ---- 第一部分：格式帮助表格 ----
+    y = [self buildHelpTableAtY:y width:w];
+    y += 20.0;
+
+    // ---- 第二部分：编辑区 ----
+    y = [self buildEditorSectionAtY:y width:w];
+    y += 20.0;
+
+    // ---- 第三部分：预览区 ----
+    y = [self buildPreviewSectionAtY:y width:w];
+
+    // 更新 contentSize
+    CGRect cf = self.contentView.frame;
+    cf.size.height = y + 40.0;
+    self.contentView.frame = cf;
+    self.scrollView.contentSize = CGSizeMake(w, cf.size.height);
 
     [self registerKeyboardNotifications];
     [self updatePreview];
@@ -70,22 +79,22 @@ static NSArray<NSString *> *_specialTokenDescs(void) {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
-#pragma mark - Navigation Bar
+#pragma mark - NavBar（复刻 viewDidLoad 导航栏设置）
 
-- (void)setupNavigationBar {
-    // 左侧：关闭
+- (void)setupNavBar {
+    // 左侧："关闭"
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-        initWithTitle:@"关闭" style:UIBarButtonItemStylePlain target:self action:@selector(dismiss)];
+        initWithTitle:@"关闭" style:UIBarButtonItemStylePlain target:self action:@selector(closeAction)];
 
-    // 右侧：恢复默认 + 保存
-    UIBarButtonItem *restoreBtn = [[UIBarButtonItem alloc]
-        initWithTitle:@"恢复默认" style:UIBarButtonItemStylePlain target:self action:@selector(restoreDefault)];
-    UIBarButtonItem *saveBtn = [[UIBarButtonItem alloc]
-        initWithTitle:@"保存" style:UIBarButtonItemStyleDone target:self action:@selector(saveAndDismiss)];
-    self.navigationItem.rightBarButtonItems = @[saveBtn, restoreBtn];
+    // 右侧："恢复" + "保存"
+    UIBarButtonItem *restore = [[UIBarButtonItem alloc]
+        initWithTitle:@"恢复" style:UIBarButtonItemStylePlain target:self action:@selector(restoreAction)];
+    UIBarButtonItem *save = [[UIBarButtonItem alloc]
+        initWithTitle:@"保存" style:UIBarButtonItemStyleDone target:self action:@selector(saveAction)];
+    self.navigationItem.rightBarButtonItems = @[save, restore];
 }
 
-#pragma mark - Scroll View
+#pragma mark - ScrollView
 
 - (void)setupScrollView {
     self.scrollView = [[UIScrollView alloc] initWithFrame:self.view.bounds];
@@ -93,314 +102,183 @@ static NSArray<NSString *> *_specialTokenDescs(void) {
     self.scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     [self.view addSubview:self.scrollView];
 
-    self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 0)];
+    self.contentView = [[UIView alloc] initWithFrame:
+        CGRectMake(0, 0, self.view.bounds.size.width, 0)];
     [self.scrollView addSubview:self.contentView];
 }
 
-#pragma mark - Token Table (复刻 viewDidLoad 第一个 Table)
+#pragma mark - 帮助表格（复刻 viewDidLoad 第一个 section）
 
-- (void)buildTokenTable {
-    CGFloat w = self.view.bounds.size.width;
-    CGFloat leftX = 15, rightX = 89;
-    CGFloat labelW_right = w - rightX - 15;
-    CGFloat rowH = 25;
-    CGFloat y = 20;
+- (CGFloat)buildHelpTableAtY:(CGFloat)y width:(CGFloat)w {
+    NSArray *tokens = _tokenNames();
+    NSInteger count = tokens.count;
+    CGFloat rowH = 25.0;  // 精确值
+    CGFloat cornerR = 10.0; // 精确值
+    CGFloat leftX = 20.0;  // 精确值
+    CGFloat descX = 92.0;  // 估算（原版 89 + 偏移调整）
+    CGFloat descW = w - descX - 15.0;
 
-    // 表格容器
-    UIView *tableContainer = [self makeTableContainerAtY:y width:w
-                                              tokenCount:_tokenNames().count
-                                                 rowH:rowH];
-    [self.contentView addSubview:tableContainer];
-    y = tableContainer.frame.origin.y;
+    // 容器背景
+    CGFloat totalH = count * rowH;
+    UIView *table = [[UIView alloc] initWithFrame:
+        CGRectMake(15.0, y, w - 30.0, totalH)];
+    table.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+    table.layer.cornerRadius = cornerR;
+    table.clipsToBounds = YES;
+    [self.contentView addSubview:table];
 
-    // 左列：令牌名（粗体）
-    UIFont *boldFont = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
-    UIFont *regularFont = [UIFont systemFontOfSize:15 weight:UIFontWeightRegular];
+    UIFont *tokenFont = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];  // 左列 15px Semibold
+    UIFont *descFont = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular];     // 右列 15px Regular
 
-    for (NSInteger i = 0; i < _tokenNames().count; i++) {
-        UILabel *leftLabel = [[UILabel alloc] initWithFrame:CGRectMake(leftX, i * rowH, 60, rowH)];
-        leftLabel.text = _tokenNames()[i];
-        leftLabel.font = boldFont;
-        leftLabel.textColor = [UIColor labelColor];
-        [tableContainer addSubview:leftLabel];
+    for (NSInteger i = 0; i < count; i++) {
+        // 左列
+        UILabel *leftLbl = [[UILabel alloc] initWithFrame:
+            CGRectMake(leftX, i * rowH, 60.0, rowH)];
+        leftLbl.text = tokens[i];
+        leftLbl.font = tokenFont;
+        leftLbl.textColor = [UIColor labelColor];
+        [table addSubview:leftLbl];
 
-        UILabel *rightLabel = [[UILabel alloc] initWithFrame:CGRectMake(rightX, i * rowH, labelW_right, rowH)];
-        rightLabel.text = _tokenDescs()[i];
-        rightLabel.font = regularFont;
-        rightLabel.textColor = [UIColor secondaryLabelColor];
-        [tableContainer addSubview:rightLabel];
+        // 右列
+        UILabel *rightLbl = [[UILabel alloc] initWithFrame:
+            CGRectMake(descX, i * rowH, descW, rowH)];
+        rightLbl.text = _tokenDescs()[i];
+        rightLbl.font = descFont;
+        rightLbl.textColor = [UIColor secondaryLabelColor];
+        [table addSubview:rightLbl];
 
         // 分隔线
-        if (i < _tokenNames().count - 1) {
+        if (i < count - 1) {
             UIView *sep = [[UIView alloc] initWithFrame:
-                CGRectMake(leftX, (i + 1) * rowH - 0.5, w - leftX - 15, 0.5)];
+                CGRectMake(leftX, (i + 1) * rowH - 0.5, w - 30.0 - leftX - 15.0, 0.5)];
             sep.backgroundColor = [UIColor separatorColor];
-            [tableContainer addSubview:sep];
+            [table addSubview:sep];
         }
     }
 
-    y = CGRectGetMaxY(tableContainer.frame) + 20;
-
-    // 自定义格式 section header
-    UILabel *specialHeader = [[UILabel alloc] initWithFrame:CGRectMake(20, y, w - 40, 20)];
-    specialHeader.text = nil;
-    specialHeader.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
-    specialHeader.textColor = [UIColor secondaryLabelColor];
-    [self.contentView addSubview:specialHeader];
-    y += 28;
-
-    // 特殊令牌表格
-    UIView *specialTable = [self makeTableContainerAtY:y width:w
-                                            tokenCount:_specialTokenNames().count
-                                                 rowH:rowH];
-    [self.contentView addSubview:specialTable];
-
-    for (NSInteger i = 0; i < _specialTokenNames().count; i++) {
-        UILabel *leftLabel = [[UILabel alloc] initWithFrame:CGRectMake(leftX, i * rowH, 60, rowH)];
-        leftLabel.text = _specialTokenNames()[i];
-        leftLabel.font = boldFont;
-        leftLabel.textColor = [UIColor labelColor];
-        [specialTable addSubview:leftLabel];
-
-        UILabel *rightLabel = [[UILabel alloc] initWithFrame:CGRectMake(rightX, i * rowH, labelW_right, rowH)];
-        rightLabel.text = _specialTokenDescs()[i];
-        rightLabel.font = regularFont;
-        rightLabel.textColor = [UIColor secondaryLabelColor];
-        [specialTable addSubview:rightLabel];
-
-        if (i < _specialTokenNames().count - 1) {
-            UIView *sep = [[UIView alloc] initWithFrame:
-                CGRectMake(leftX, (i + 1) * rowH - 0.5, w - leftX - 15, 0.5)];
-            sep.backgroundColor = [UIColor separatorColor];
-            [specialTable addSubview:sep];
-        }
-    }
-
-    self.previewValueLabel = [[UILabel alloc] init];
+    return CGRectGetMaxY(table.frame);
 }
 
-#pragma mark - Special Token Table
+#pragma mark - 编辑区（复刻 viewDidLoad 第二个 section）
 
-- (void)buildSpecialTokenTable {
-    // Merged into buildTokenTable
+- (CGFloat)buildEditorSectionAtY:(CGFloat)y width:(CGFloat)w {
+    // Section header: "编辑时间格式:"
+    UILabel *header = [[UILabel alloc] initWithFrame:CGRectMake(20.0, y, w - 40.0, 20.0)];
+    header.text = @"编辑时间格式:";
+    header.font = [UIFont systemFontOfSize:13.0 weight:UIFontWeightMedium]; // 13px Medium
+    header.textColor = [UIColor secondaryLabelColor];
+    [self.contentView addSubview:header];
+    y += 28.0;
+
+    // UITextView 编辑框
+    CGFloat tvH = 80.0;
+    self.editorView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
+    self.editorView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular]; // 15px Regular
+    self.editorView.textColor = [UIColor labelColor];
+    self.editorView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+    self.editorView.layer.cornerRadius = 10.0; // cornerRadius=10
+    self.editorView.layer.borderWidth = 1.0;
+    self.editorView.layer.borderColor = [UIColor separatorColor].CGColor;
+    self.editorView.delegate = self;
+    self.editorView.autocorrectionType = UITextAutocorrectionTypeNo;
+    self.editorView.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    self.editorView.returnKeyType = UIReturnKeyDone;
+
+    // 默认值（复刻 cf__HH___mm___ss_ = "{HH}:{mm}:{ss}"）
+    NSString *initial = self.initialFormat.length > 0
+        ? self.initialFormat
+        : [MessageTimeFormatParser defaultFormat];
+    self.editorView.text = initial;
+
+    [self.contentView addSubview:self.editorView];
+
+    return CGRectGetMaxY(self.editorView.frame);
 }
 
-#pragma mark - Preview Section (复刻 viewDidLoad 第二个 Table: 预览标签)
+#pragma mark - 预览区（复刻 viewDidLoad 第三个 section）
 
-- (void)buildPreviewSection {
-    CGFloat w = self.view.bounds.size.width;
-    CGFloat y = CGRectGetMaxY([self.contentView.subviews lastObject].frame) + 20;
+- (CGFloat)buildPreviewSectionAtY:(CGFloat)y width:(CGFloat)w {
+    // Section header: "预览:"
+    UILabel *header = [[UILabel alloc] initWithFrame:CGRectMake(20.0, y, w - 40.0, 20.0)];
+    header.text = @"预览:";
+    header.font = [UIFont systemFontOfSize:13.0 weight:UIFontWeightMedium]; // 13px Medium
+    header.textColor = [UIColor secondaryLabelColor];
+    [self.contentView addSubview:header];
+    y += 28.0;
 
-    // 输入格式 section header
-    UILabel *sectionHeader = [[UILabel alloc] initWithFrame:CGRectMake(20, y, w - 40, 20)];
-    sectionHeader.text = nil;
-    sectionHeader.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
-    sectionHeader.textColor = [UIColor secondaryLabelColor];
-    [self.contentView addSubview:sectionHeader];
-    y += 20;
+    // UITextView 预览框（只读）
+    CGFloat tvH = 50.0;
+    self.previewView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
+    self.previewView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular]; // 15px Regular
+    self.previewView.textColor = [UIColor labelColor];
+    self.previewView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+    self.previewView.layer.cornerRadius = 10.0; // cornerRadius=10
+    self.previewView.layer.borderWidth = 1.0;
+    self.previewView.layer.borderColor = [UIColor separatorColor].CGColor;
+    self.previewView.editable = NO;
+    [self.contentView addSubview:self.previewView];
 
-    // Preview labels line
-    CGFloat previewY = y;
-    CGFloat desktopW = w - 30;
-    UIView *previewBox = [[UIView alloc] initWithFrame:CGRectMake(15, y, desktopW, 90)];
-    previewBox.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
-    previewBox.layer.cornerRadius = 10;
-    previewBox.clipsToBounds = YES;
-    [self.contentView addSubview:previewBox];
-
-    UIFont *regularFont = [UIFont systemFontOfSize:14 weight:UIFontWeightRegular];
-
-    NSDictionary<NSString *, NSString *> *comps = [self currentComponents];
-
-    for (NSInteger i = 0; i < _previewLabels().count && i < _tokenNames().count; i++) {
-        CGFloat py = 8 + i * 13;
-        NSString *tk = _tokenNames()[i];
-        NSString *inner = [tk substringWithRange:NSMakeRange(1, tk.length - 2)];
-        NSString *val = comps[inner] ?: @"--";
-
-        UILabel *tagLabel = [[UILabel alloc] initWithFrame:CGRectMake(15, py, 30, 13)];
-        tagLabel.text = _previewLabels()[i];
-        tagLabel.font = regularFont;
-        tagLabel.textColor = [UIColor labelColor];
-        [previewBox addSubview:tagLabel];
-
-        UILabel *valLabel = [[UILabel alloc] initWithFrame:CGRectMake(50, py, desktopW - 65, 13)];
-        valLabel.text = val;
-        valLabel.font = regularFont;
-        valLabel.textColor = [UIColor tertiaryLabelColor];
-        valLabel.textAlignment = NSTextAlignmentRight;
-        [previewBox addSubview:valLabel];
-    }
-
-    y = CGRectGetMaxY(previewBox.frame) + 8;
+    return CGRectGetMaxY(self.previewView.frame);
 }
 
-#pragma mark - Editor Section (复刻 viewDidLoad UITextView)
-
-- (void)buildEditorSection {
-    CGFloat w = self.view.bounds.size.width;
-    CGFloat y = CGRectGetMaxY([self.contentView.subviews lastObject].frame) + 20;
-
-    // 输入格式 section header
-    UILabel *sectionHeader = [[UILabel alloc] initWithFrame:CGRectMake(20, y, w - 40, 20)];
-    sectionHeader.text = @"输入格式";
-    sectionHeader.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
-    sectionHeader.textColor = [UIColor secondaryLabelColor];
-    [self.contentView addSubview:sectionHeader];
-    y += 28;
-
-    // 编辑框
-    self.textView = [[UITextView alloc] initWithFrame:CGRectMake(20, y, w - 40, 80)];
-    self.textView.font = [UIFont systemFontOfSize:15];
-    self.textView.textColor = [UIColor labelColor];
-    self.textView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
-    self.textView.layer.cornerRadius = 10;
-    self.textView.layer.borderWidth = 1;
-    self.textView.layer.borderColor = [UIColor separatorColor].CGColor;
-    self.textView.delegate = self;
-    self.textView.autocorrectionType = UITextAutocorrectionTypeNo;
-    self.textView.autocapitalizationType = UITextAutocapitalizationTypeNone;
-
-    NSString *format = self.initialFormat.length > 0 ? self.initialFormat
-                                                      : [MessageTimeFormatParser defaultFormat];
-    self.textView.text = format;
-
-    [self.contentView addSubview:self.textView];
-    y = CGRectGetMaxY(self.textView.frame) + 8;
-}
-
-#pragma mark - Preview Result Section (复刻 viewDidLoad 底部 previewTextView)
-
-- (void)buildPreviewResultSection {
-    CGFloat w = self.view.bounds.size.width;
-    CGFloat y = CGRectGetMaxY([self.contentView.subviews lastObject].frame) + 20;
-
-    // 预览 section header
-    UILabel *sectionHeader = [[UILabel alloc] initWithFrame:CGRectMake(20, y, w - 40, 20)];
-    sectionHeader.text = @"预览";
-    sectionHeader.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
-    sectionHeader.textColor = [UIColor secondaryLabelColor];
-    [self.contentView addSubview:sectionHeader];
-    y += 28;
-
-    // 预览框
-    self.previewTextView = [[UITextView alloc] initWithFrame:CGRectMake(20, y, w - 40, 50)];
-    self.previewTextView.font = [UIFont systemFontOfSize:15];
-    self.previewTextView.textColor = [UIColor labelColor];
-    self.previewTextView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
-    self.previewTextView.layer.cornerRadius = 10;
-    self.previewTextView.layer.borderWidth = 1;
-    self.previewTextView.layer.borderColor = [UIColor separatorColor].CGColor;
-    self.previewTextView.editable = NO;
-    [self.contentView addSubview:self.previewTextView];
-
-    y = CGRectGetMaxY(self.previewTextView.frame) + 40;
-
-    // 更新 contentView 高度
-    CGRect frame = self.contentView.frame;
-    frame.size.height = y;
-    self.contentView.frame = frame;
-    self.scrollView.contentSize = CGSizeMake(w, y);
-}
-
-#pragma mark - Helpers
-
-- (UIView *)makeTableContainerAtY:(CGFloat)y width:(CGFloat)w
-                       tokenCount:(NSInteger)count rowH:(CGFloat)rowH {
-    CGFloat totalH = count * rowH;
-    UIView *container = [[UIView alloc] initWithFrame:CGRectMake(15, y, w - 30, totalH)];
-    container.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
-    container.layer.cornerRadius = 10;
-    container.clipsToBounds = YES;
-    return container;
-}
-
-- (NSDictionary<NSString *, NSString *> *)currentComponents {
-    NSDate *now = [NSDate date];
-    NSCalendar *cal = [NSCalendar currentCalendar];
-    NSCalendarUnit units = NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay |
-                           NSCalendarUnitHour | NSCalendarUnitMinute | NSCalendarUnitSecond;
-    NSDateComponents *comps = [cal components:units fromDate:now];
-    return @{
-        @"yyyy": [NSString stringWithFormat:@"%ld", (long)comps.year],
-        @"MM":   [NSString stringWithFormat:@"%02ld", (long)comps.month],
-        @"dd":   [NSString stringWithFormat:@"%02ld", (long)comps.day],
-        @"HH":   [NSString stringWithFormat:@"%02ld", (long)comps.hour],
-        @"mm":   [NSString stringWithFormat:@"%02ld", (long)comps.minute],
-        @"ss":   [NSString stringWithFormat:@"%02ld", (long)comps.second],
-    };
-}
-
-#pragma mark - UITextViewDelegate
+#pragma mark - UITextViewDelegate（复刻 textViewDidChange: → updatePreview）
 
 - (void)textViewDidChange:(UITextView *)textView {
     [self updatePreview];
 }
 
-#pragma mark - Preview Update (复刻 CSTimeFormatEditorViewController::updatePreview)
+#pragma mark - 预览更新（复刻 CSTimeFormatEditorViewController::updatePreview）
 
 - (void)updatePreview {
-    NSString *fmt = self.textView.text;
+    NSString *fmt = self.editorView.text;
     if (!fmt.length) {
-        self.previewTextView.text = @"";
+        self.previewView.text = @"";
         return;
     }
-
     BOOL isDark = (self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-    NSString *preview = [MessageTimeFormatParser previewWithFormat:fmt isDarkMode:isDark];
-    self.previewTextView.text = preview ?: @"---";
+    NSString *result = [MessageTimeFormatParser previewWithFormat:fmt isDarkMode:isDark];
+    self.previewView.text = result ?: @"---";
 }
 
 #pragma mark - Actions
 
-- (void)restoreDefault {
-    self.textView.text = [MessageTimeFormatParser defaultFormat];
+- (void)closeAction {
+    [self.navigationController popViewControllerAnimated:YES];
+}
+
+- (void)restoreAction {
+    self.editorView.text = [MessageTimeFormatParser defaultFormat];
     [self updatePreview];
 }
 
-- (void)saveAndDismiss {
-    NSString *fmt = self.textView.text;
+- (void)saveAction {
     if (self.saveBlock) {
-        self.saveBlock(fmt);
+        self.saveBlock(self.editorView.text);
     }
     [self.navigationController popViewControllerAnimated:YES];
 }
 
-- (void)dismiss {
-    [self.navigationController popViewControllerAnimated:YES];
-}
-
-#pragma mark - Keyboard
+#pragma mark - Keyboard（复刻 CSTimeFormatEditorViewController 键盘适配）
 
 - (void)registerKeyboardNotifications {
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(keyboardWillShow:)
-                                                 name:UIKeyboardWillShowNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(keyboardWillHide:)
-                                                 name:UIKeyboardWillHideNotification
-                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(kbShow:)
+                                                 name:UIKeyboardWillShowNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(kbHide:)
+                                                 name:UIKeyboardWillHideNotification object:nil];
 }
 
-- (void)keyboardWillShow:(NSNotification *)notif {
-    NSDictionary *info = notif.userInfo;
-    CGRect kbFrame = [info[UIKeyboardFrameEndUserInfoKey] CGRectValue];
-    NSTimeInterval duration = [info[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
-    kbFrame = [self.view convertRect:kbFrame fromView:nil];
-
+- (void)kbShow:(NSNotification *)n {
+    CGRect kb = [n.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    kb = [self.view convertRect:kb fromView:nil];
     UIEdgeInsets insets = self.scrollView.contentInset;
-    insets.bottom = kbFrame.size.height;
+    insets.bottom = kb.size.height;
     self.scrollView.contentInset = insets;
     self.scrollView.scrollIndicatorInsets = insets;
 }
 
-- (void)keyboardWillHide:(NSNotification *)notif {
-    NSTimeInterval duration = [notif.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
-    [UIView animateWithDuration:duration animations:^{
-        self.scrollView.contentInset = UIEdgeInsetsZero;
-        self.scrollView.scrollIndicatorInsets = UIEdgeInsetsZero;
-    }];
+- (void)kbHide:(NSNotification *)n {
+    self.scrollView.contentInset = UIEdgeInsetsZero;
+    self.scrollView.scrollIndicatorInsets = UIEdgeInsetsZero;
 }
 
 @end
