@@ -3,7 +3,7 @@
 
 #import <Foundation/Foundation.h>
 
-static NSString *const kPluginVersion = @"7.0.0";
+static NSString *const kPluginVersion = @"1.0.0";
 static NSString *const kPluginPrefix = @"WCP_";
 static const NSTimeInterval kRevokeDedupTTL = 8.0;
 static const unsigned int kSystemMsgType = 0x2710;
