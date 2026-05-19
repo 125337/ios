@@ -180,7 +180,9 @@
         [cfg save];
         [self buildUI];
     };
-    [self.navigationController pushViewController:editor animated:YES];
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
+    nav.modalPresentationStyle = UIModalPresentationPageSheet;
+    [self presentViewController:nav animated:YES completion:nil];
 }
 
 @end

@@ -243,7 +243,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
 #pragma mark - Actions
 
 - (void)closeAction {
-    [self.navigationController popViewControllerAnimated:YES];
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)restoreAction {
@@ -255,7 +255,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
     if (self.saveBlock) {
         self.saveBlock(self.editorView.text);
     }
-    [self.navigationController popViewControllerAnimated:YES];
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 #pragma mark - Keyboard（复刻 CSTimeFormatEditorViewController 键盘适配）
