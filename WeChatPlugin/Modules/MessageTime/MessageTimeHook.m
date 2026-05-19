@@ -560,12 +560,31 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     CGFloat offsetX = config.messageTimeOffsetX;
     CGFloat offsetY = config.messageTimeOffsetY;
 
+    // 获取头像 frame（position 0/1 需要）
+    id avatarView = getAvatarView(cell);
+    CGRect avatarFrame = avatarView ? [(UIView *)avatarView frame] : CGRectZero;
+
     CGFloat cx = 0, cy = 0;
 
     switch (position) {
-        case 0: case 1: { // 头像上方/下方 — fallback
-            cx = isSender ? (cvLeft - labelW / 2) : (cvRight + labelW / 2);
-            cy = cvBottom - labelH / 2;
+        case 0: { // 头像上方
+            if (!CGRectIsEmpty(avatarFrame)) {
+                cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
+                cy = avatarFrame.origin.y - labelH / 2;
+            } else {
+                cx = isSender ? (cvLeft - labelW / 2) : (cvRight + labelW / 2);
+                cy = cvBottom - labelH / 2;
+            }
+            break;
+        }
+        case 1: { // 头像下方
+            if (!CGRectIsEmpty(avatarFrame)) {
+                cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
+                cy = avatarFrame.origin.y + avatarFrame.size.height + labelH / 2;
+            } else {
+                cx = isSender ? (cvLeft - labelW / 2) : (cvRight + labelW / 2);
+                cy = cvBottom - labelH / 2;
+            }
             break;
         }
         case 2:
