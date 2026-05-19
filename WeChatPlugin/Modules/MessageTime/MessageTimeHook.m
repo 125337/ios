@@ -435,14 +435,10 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
         if (!timeText) return;
 
         // 存入 viewModel 关联对象（复刻 DAT_0013ad99）
+        // 不手动 dispatch_async(main) 调 updateNodeStatus，避免在 VC 转场时
+        // 与微信优化的 dispatch block 冲突导致 presentingModalViewController 崩溃
+        // 时间文本已缓存，WeChat 后续自然调用 updateNodeStatus 时自动读取
         objc_setAssociatedObject(viewModel, @"messageTimeText", timeText, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-        // dispatch_async(main) 触发 updateNodeStatus（复刻 FUN_0003cc68）
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if ([cellView respondsToSelector:NSSelectorFromString(@"updateNodeStatus")]) {
-                [cellView performSelector:NSSelectorFromString(@"updateNodeStatus")];
-            }
-        });
     });
 
     return cell;
