@@ -377,7 +377,7 @@ static id getContentView(id cell) {
 // ============================================================
 
 static UITableViewCell* (*orig_BaseMsgContentVC_cellForRow)(id, SEL, id, NSIndexPath*);
-static long (*orig_CommonMessageCellView_initWithViewModel)(id, SEL, id);
+static id (*orig_CommonMessageCellView_initWithViewModel)(id, SEL, id);
 static void (*orig_CommonMessageCellView_updateNodeStatus)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
 static CGFloat (*orig_ChatTimeViewModel_cellHeight)(id, SEL);
@@ -449,11 +449,11 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
 }
 
 // 复刻 FUN_00039d80：始终创建空标签，不检查 showMessageTime
-static long repl_CommonMessageCellView_initWithViewModel(id self, SEL _cmd, id viewModel) {
-    long result = orig_CommonMessageCellView_initWithViewModel(self, _cmd, viewModel);
-    if (result == 0) return result;
+static id repl_CommonMessageCellView_initWithViewModel(id self, SEL _cmd, id viewModel) {
+    id result = orig_CommonMessageCellView_initWithViewModel(self, _cmd, viewModel);
+    if (!result) return nil;
 
-    id realSelf = (id)result;
+    id realSelf = result;
     PluginConfig *config = [PluginConfig shared];
 
     UILabel *label = [[UILabel alloc] init];
