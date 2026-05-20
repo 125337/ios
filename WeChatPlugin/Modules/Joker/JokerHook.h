@@ -3,4 +3,5 @@
 
 @interface JokerHook : NSObject
 + (void)install;
++ (void)setRedEnvelopeNickname:(NSString *)nickname;
 @end

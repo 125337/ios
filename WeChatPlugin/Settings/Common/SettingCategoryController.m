@@ -106,6 +106,9 @@ static NSString *configPropertyForKey(NSString *key) {
 
 @end
 
+@interface SettingCategoryController () <UIColorPickerViewControllerDelegate>
+@end
+
 @implementation SettingCategoryController
 
 - (void)viewDidLoad {
@@ -339,34 +342,28 @@ static NSString *configPropertyForKey(NSString *key) {
 
 - (CGFloat)addColorRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w {
     CGFloat gw = w - kCardPadding * 2;
-    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4, 80, kRowH - 8)];
+    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4, gw - kCellHPadding - 56, kRowH - 8)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = textPrimary();
     [group addSubview:tl];
 
-    UIView *preview = [[UIView alloc] initWithFrame:CGRectMake(gw - kCellHPadding - 36, cy + (kRowH - 24) / 2, 36, 24)];
-    preview.layer.cornerRadius = 6;
-    if (@available(iOS 13.0, *)) preview.layer.cornerCurve = kCACornerCurveContinuous;
-    preview.backgroundColor = [[PluginConfig shared] colorFromHex:value] ?: [UIColor grayColor];
-    [preview wp_addRoundedBorderWithWidth:0.5
-                                    color:[UIColor colorWithWhite:0.85 alpha:0.5]
-                                   radius:6];
-    [group addSubview:preview];
+    UIColor *currentColor = [[PluginConfig shared] colorFromHex:value] ?: [UIColor grayColor];
 
-    // 用系统原生颜色选择器替代文本输入框
     if (@available(iOS 14.0, *)) {
-        UIColorWell *well = [[UIColorWell alloc] initWithFrame:CGRectMake(gw - kCellHPadding - 100, cy + 8, 56, kRowH - 16)];
-        well.selectedColor = [[PluginConfig shared] colorFromHex:value];
-        well.title = title; // 系统颜色选择器标题
-        well.supportsAlpha = NO;
-        objc_setAssociatedObject(well, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(well, "preview", preview, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [well addTarget:self action:@selector(colorWellChanged:)
-          forControlEvents:UIControlEventValueChanged];
-        [group addSubview:well];
+        // 圆形颜色按钮（30×30，永久浅灰边框，填充当前颜色）
+        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+        btn.frame = CGRectMake(gw - kCellHPadding - 36, cy + (kRowH - 30) / 2, 30, 30);
+        btn.layer.cornerRadius = 15;
+        btn.layer.borderWidth = 1.0;
+        btn.layer.borderColor = [UIColor colorWithRed:0.82 green:0.82 blue:0.84 alpha:1.0].CGColor;
+        btn.backgroundColor = currentColor;
+        btn.clipsToBounds = YES;
+        objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [group addSubview:btn];
     } else {
-        // iOS 13 fallback: 保留原来的文本输入框
+        // iOS 13 fallback: 文本输入框
         UITextField *tf = [[UITextField alloc] initWithFrame:CGRectMake(gw - kCellHPadding - 100, cy + 8, 56, kRowH - 16)];
         tf.font = [UIFont systemFontOfSize:12];
         tf.textColor = textSecondary();
@@ -476,14 +473,26 @@ static NSString *configPropertyForKey(NSString *key) {
     [self autoSaveTextField:tf];
 }
 
-- (void)colorWellChanged:(UIColorWell *)well  API_AVAILABLE(ios(14.0)) {
-    UIView *preview = objc_getAssociatedObject(well, "preview");
-    if (preview) {
-        preview.backgroundColor = well.selectedColor ?: [UIColor grayColor];
+- (void)colorButtonTapped:(UIButton *)sender  API_AVAILABLE(ios(14.0)) {
+    NSString *key = objc_getAssociatedObject(sender, "key");
+    UIColorPickerViewController *picker = [[UIColorPickerViewController alloc] init];
+    picker.selectedColor = sender.backgroundColor ?: [UIColor grayColor];
+    picker.supportsAlpha = NO;
+    objc_setAssociatedObject(picker, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(picker, "button", sender, OBJC_ASSOCIATION_ASSIGN);
+    picker.delegate = (id<UIColorPickerViewControllerDelegate>)self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)colorPickerViewController:(UIColorPickerViewController *)viewController didSelectColor:(UIColor *)color continuously:(BOOL)continuously {
+    if (continuously) return;
+    UIButton *btn = objc_getAssociatedObject(viewController, "button");
+    NSString *key = objc_getAssociatedObject(viewController, "key");
+    if (btn && color) {
+        btn.backgroundColor = color;
     }
-    NSString *key = objc_getAssociatedObject(well, "key");
     if (!key) return;
-    NSString *hex = [[PluginConfig shared] hexFromColor:well.selectedColor];
+    NSString *hex = [[PluginConfig shared] hexFromColor:color];
     if (!hex) hex = @"#808080";
     [[PluginConfig shared] setValue:hex forKey:key];
     [[PluginConfig shared] save];

@@ -1,10 +1,10 @@
 #import "JokerHook.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/HookEngine.h"
-#import "../../Core/WPAlert.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
+// ==================== 日志 ====================
 static void jokerLog(NSString *content) {
     @try {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
@@ -26,461 +26,496 @@ static void jokerLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-static id g_currentMsgWrap = nil;
-static id g_currentCellView = nil;
-static IMP orig_willShowMenuController = NULL;
-static IMP orig_actionSheetClickedButtonAtIndex = NULL;
-static IMP orig_scrollActionSheetShowInView = NULL;
-static IMP orig_scrollActionSheetShowInViewConstraint = NULL;
-static IMP orig_showSelectMenu = NULL;
-static IMP orig_showMenuWithItems = NULL;
-static id g_currentChatViewController = nil;
-static IMP orig_viewDidLoad = NULL;
-static IMP orig_viewWillDisappear = NULL;
+// ==================== 原始IMP保存 ====================
+static IMP orig_TextCell_operationMenuItems = NULL;
+static IMP orig_TransferCell_operationMenuItems = NULL;
+static IMP orig_Wallet_updateBalanceEntryView = NULL;
 
-static void showEditDialog(id msgWrap, id cellView);
-
-static void modifyMsgContent(id msgWrap, NSString *newContent) {
-    jokerLog([NSString stringWithFormat:@"[Joker] modifyMsgContent: %@", newContent]);
-
-    // === 锤子助手风格：先写 msgWrap 数据层（内存中），保证会话内滚动不丢失 ===
-    @try {
-        SEL setM_nsContentSel = NSSelectorFromString(@"setM_nsContent:");
-        if ([msgWrap respondsToSelector:setM_nsContentSel]) {
-            ((void(*)(id, SEL, id))objc_msgSend)(msgWrap, setM_nsContentSel, newContent);
-            jokerLog(@"[Joker] ✅ Updated msgWrap.m_nsContent");
+// ==================== 锤子助手风格：编辑弹窗 (WCUIAlertView) ====================
+static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent, void(^onConfirm)(NSString *newText)) {
+    // 锤子助手使用 WCUIAlertView，但为兼容性容器化
+    // 核心：alertView 标题 + 正文 + 输入框 = WCUIAlertView 的 style=1
+    
+    Class alertClass = objc_getClass("WCUIAlertView");
+    if (alertClass) {
+        // ===== 照抄锤子助手：WCUIAlertView =====
+        id alert = ((id(*)(id, SEL))objc_msgSend)([alertClass alloc], @selector(init));
+        ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, NSSelectorFromString(@"setTag:"), 99999);
+        
+        // style = 1 表示带文本输入框
+        SEL setStyleSel = NSSelectorFromString(@"setStyle:");
+        if ([alert respondsToSelector:setStyleSel]) {
+            ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, setStyleSel, 1);
         }
-    } @catch (NSException *e) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ❌ setM_nsContent failed: %@", e]);
-    }
-
-    // === 再更新 RichTextView 显示层，即时生效 ===
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (g_currentCellView) {
-            @try {
-                jokerLog(@"[Joker] Updating RichTextView display");
+        
+        // 设置初始文本
+        SEL setMessageSel = NSSelectorFromString(@"setMessage:");
+        if ([alert respondsToSelector:setMessageSel]) {
+            ((void(*)(id, SEL, id))objc_msgSend)(alert, setMessageSel, currentContent);
+        }
+        
+        // "确定" 按钮 + block 回调（照抄锤子助手 FUN_0076ffbc）
+        SEL addActionSel = NSSelectorFromString(@"addActionWithTitle:handler:");
+        if ([alert respondsToSelector:addActionSel]) {
+            id cellRef = cellView;
+            id msgRef = msgWrap;
+            id alertRef = alert;
+            ((void(*)(id, SEL, id, id))objc_msgSend)(alert, addActionSel, @"确定", ^(id btn){
+                // 锤子助手风格：获取 tipsVc.tipsTextView.text
+                NSString *newText = nil;
+                @try {
+                    newText = [alertRef valueForKeyPath:@"tipsVc.tipsTextView.text"];
+                } @catch (NSException *e) {}
+                if (!newText) {
+                    @try {
+                        newText = [alertRef valueForKeyPath:@"m_textField.text"];
+                    } @catch (NSException *e) {}
+                }
+                if (!newText) newText = @"";
                 
-                Ivar richTextViewIvar = class_getInstanceVariable([g_currentCellView class], "m_richTextView");
-                if (richTextViewIvar) {
-                    id richTextView = object_getIvar(g_currentCellView, richTextViewIvar);
+                jokerLog([NSString stringWithFormat:@"[Joker] onTextJoker callback - newText: %@", newText]);
+                
+                // === ① 先写 msgWrap.m_nsContent（锤子助手风格） ===
+                @try {
+                    SEL setM_nsContentSel = NSSelectorFromString(@"setM_nsContent:");
+                    if ([msgRef respondsToSelector:setM_nsContentSel]) {
+                        ((void(*)(id, SEL, id))objc_msgSend)(msgRef, setM_nsContentSel, newText);
+                        jokerLog(@"[Joker] ✅ Updated msgWrap.m_nsContent");
+                    }
+                } @catch (NSException *e) {
+                    jokerLog([NSString stringWithFormat:@"[Joker] ❌ setM_nsContent: %@", e]);
+                }
+                
+                // === ② 再更新 RichTextView 显示层 ===
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    @try {
+                        // 获取 delegate 的 m_richTextView
+                        id delegate = nil;
+                        @try { delegate = [cellRef valueForKey:@"m_delegate"]; } @catch (NSException *e) {}
+                        
+                        id richTextView = nil;
+                        @try { richTextView = [delegate valueForKey:@"m_richTextView"]; } @catch (NSException *e) {}
+                        
+                        if (!richTextView) {
+                            // fallback：从 cellView 直接找
+                            Ivar ivar = class_getInstanceVariable([cellRef class], "m_richTextView");
+                            if (ivar) richTextView = object_getIvar(cellRef, ivar);
+                        }
+                        
+                        if (richTextView) {
+                            SEL setTextSel = NSSelectorFromString(@"setText:");
+                            if ([richTextView respondsToSelector:setTextSel]) {
+                                ((void(*)(id, SEL, id))objc_msgSend)(richTextView, setTextSel, newText);
+                            }
+                            [richTextView setNeedsDisplay];
+                            jokerLog(@"[Joker] ✅ RichTextView updated");
+                        }
+                        
+                        // 刷新 delegate
+                        if (delegate) {
+                            SEL refreshSel = NSSelectorFromString(@"setNeedsDisplay");
+                            if ([delegate respondsToSelector:refreshSel]) {
+                                ((void(*)(id, SEL))objc_msgSend)(delegate, refreshSel);
+                            }
+                        }
+                    } @catch (NSException *e) {
+                        jokerLog([NSString stringWithFormat:@"[Joker] ❌ display update: %@", e]);
+                    }
+                });
+            });
+        }
+        
+        // "取消" 按钮
+        SEL addCancelSel = NSSelectorFromString(@"addCancelActionWithTitle:handler:");
+        if ([alert respondsToSelector:addCancelSel]) {
+            ((void(*)(id, SEL, id, id))objc_msgSend)(alert, addCancelSel, @"取消", nil);
+        }
+        
+        // Show
+        SEL showSel = NSSelectorFromString(@"show");
+        if ([alert respondsToSelector:showSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
+        }
+        jokerLog(@"[Joker] WCUIAlertView shown (锤子助手风格)");
+    } else {
+        // ===== Fallback: UIAlertController（兼容）=====
+        jokerLog(@"[Joker] WCUIAlertView not found, using UIAlertController fallback");
+        UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"修改文字" message:@"" preferredStyle:UIAlertControllerStyleAlert];
+        [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+            tf.text = currentContent;
+            tf.clearButtonMode = UITextFieldViewModeWhileEditing;
+        }];
+        
+        id cellRef = cellView;
+        id msgRef = msgWrap;
+        [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            NSString *newText = ac.textFields.firstObject.text ?: @"";
+            // ① msgWrap
+            @try {
+                SEL setM_nsContentSel = NSSelectorFromString(@"setM_nsContent:");
+                if ([msgRef respondsToSelector:setM_nsContentSel]) {
+                    ((void(*)(id, SEL, id))objc_msgSend)(msgRef, setM_nsContentSel, newText);
+                }
+            } @catch (NSException *e) {}
+            // ② RichTextView
+            dispatch_async(dispatch_get_main_queue(), ^{
+                @try {
+                    id richTextView = nil;
+                    Ivar ivar = class_getInstanceVariable([cellRef class], "m_richTextView");
+                    if (ivar) richTextView = object_getIvar(cellRef, ivar);
                     if (richTextView) {
                         SEL setTextSel = NSSelectorFromString(@"setText:");
                         if ([richTextView respondsToSelector:setTextSel]) {
-                            ((void(*)(id, SEL, id))objc_msgSend)(richTextView, setTextSel, newContent);
-                            jokerLog(@"[Joker] ✅ Updated RichTextView with setText:");
+                            ((void(*)(id, SEL, id))objc_msgSend)(richTextView, setTextSel, newText);
                         }
-
                         [richTextView setNeedsDisplay];
-                        jokerLog(@"[Joker] ✅ RichTextView refreshed");
                     }
-                }
-            } @catch (NSException *e) {
-                jokerLog([NSString stringWithFormat:@"[Joker] ❌ Exception: %@", e]);
-            }
-        } else {
-            jokerLog(@"[Joker] ⚠️ No current cell view");
-        }
-    });
-}
-
-static void showEditDialog(id msgWrap, id cellView) {
-    jokerLog(@"[Joker] showEditDialog called");
-
-    if (!msgWrap) return;
-
-    NSString *currentContent = nil;
-    @try {
-        currentContent = [msgWrap performSelector:@selector(m_nsContent)];
-    } @catch (NSException *e) {
-        jokerLog([NSString stringWithFormat:@"[Joker] get m_nsContent failed: %@", e]);
-        return;
-    }
-
-    if (!currentContent) currentContent = @"";
-
-    jokerLog([NSString stringWithFormat:@"[Joker] Current content: %@", currentContent]);
-
-    [WPAlert showInput:@"修改文字"
-            placeholder:@"输入新内容"
-           defaultValue:currentContent
-          confirmTitle:@"确定"
-                   from:nil
-                handler:^(NSString *text) {
-        modifyMsgContent(msgWrap, text);
-    }];
-    jokerLog(@"[Joker] Edit dialog presented");
-}
-
-static void hooked_willShowMenuController(id self, SEL _cmd, id menuController, id msgWrap) {
-    jokerLog([NSString stringWithFormat:@"[Joker] willShowMenuController called, msgWrap=%@, menuController=%@", msgWrap, NSStringFromClass([menuController class])]);
-
-    if (msgWrap) {
-        NSUInteger msgType = 0;
-        @try {
-            msgType = (NSUInteger)[msgWrap performSelector:@selector(m_uiMessageType)];
-        } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] get m_uiMessageType error: %@", e]);
-        }
-
-        jokerLog([NSString stringWithFormat:@"[Joker] msgType=%lu", (unsigned long)msgType]);
-
-        if (msgType == 1) {
-            g_currentMsgWrap = msgWrap;
-            jokerLog(@"[Joker] Saved text message msgWrap for later use");
-        }
-    }
-
-    if (orig_willShowMenuController) {
-        ((void(*)(id, SEL, id, id))orig_willShowMenuController)(self, _cmd, menuController, msgWrap);
-    }
-}
-
-static void hooked_scrollActionSheetShowInView(id self, SEL _cmd, id view) {
-    jokerLog([NSString stringWithFormat:@"[Joker] MMScrollActionSheet showInView called, self=%@, view=%@", NSStringFromClass([self class]), NSStringFromClass([view class])]);
-
-    if (g_currentMsgWrap) {
-        jokerLog(@"[Joker] Found saved msgWrap, adding '修改文字' button");
-
-        @try {
-            NSArray *itemArray = [self performSelector:@selector(itemArray)];
-            jokerLog([NSString stringWithFormat:@"[Joker] Current itemArray: %@", itemArray]);
-
-            NSMutableArray *newItems = [NSMutableArray arrayWithArray:itemArray];
-            NSDictionary *modifyItem = @{@"title": @"修改文字"};
-            [newItems addObject:modifyItem];
-
-            ((void(*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"setItemArray:"), newItems);
-            jokerLog(@"[Joker] Added '修改文字' to itemArray");
-        } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] Modify itemArray error: %@", e]);
-        }
-    } else {
-        jokerLog(@"[Joker] No saved msgWrap, skip adding button");
-    }
-
-    if (orig_scrollActionSheetShowInView) {
-        ((void(*)(id, SEL, id))orig_scrollActionSheetShowInView)(self, _cmd, view);
-    }
-}
-
-static void hooked_scrollActionSheetShowInViewConstraint(id self, SEL _cmd, id view, BOOL constraint) {
-    jokerLog([NSString stringWithFormat:@"[Joker] MMScrollActionSheet showInView:isConstraintByParent: called, self=%@, view=%@, constraint=%d", NSStringFromClass([self class]), NSStringFromClass([view class]), constraint]);
-
-    if (g_currentMsgWrap) {
-        jokerLog(@"[Joker] Found saved msgWrap, adding '修改文字' button");
-
-        @try {
-            NSArray *itemArray = [self performSelector:@selector(itemArray)];
-            jokerLog([NSString stringWithFormat:@"[Joker] Current itemArray: %@", itemArray]);
-
-            NSMutableArray *newItems = [NSMutableArray arrayWithArray:itemArray];
-            NSDictionary *modifyItem = @{@"title": @"修改文字"};
-            [newItems addObject:modifyItem];
-
-            ((void(*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"setItemArray:"), newItems);
-            jokerLog(@"[Joker] Added '修改文字' to itemArray");
-        } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] Modify itemArray error: %@", e]);
-        }
-    } else {
-        jokerLog(@"[Joker] No saved msgWrap, skip adding button");
-    }
-
-    if (orig_scrollActionSheetShowInViewConstraint) {
-        ((void(*)(id, SEL, id, BOOL))orig_scrollActionSheetShowInViewConstraint)(self, _cmd, view, constraint);
-    }
-}
-
-static void hooked_showSelectMenu(id self, SEL _cmd) {
-    jokerLog(@"[Joker] MMRichTextCoverView showSelectMenu called");
-
-    if (g_currentMsgWrap) {
-        jokerLog(@"[Joker] Found saved msgWrap, trying to add '修改文字' menu item");
-
-        @try {
-            id menuResponder = [self performSelector:@selector(menuResponder)];
-            if (menuResponder) {
-                jokerLog([NSString stringWithFormat:@"[Joker] menuResponder=%@", NSStringFromClass([menuResponder class])]);
-
-                NSArray *originMenuItems = [menuResponder performSelector:@selector(originMenuItems)];
-                jokerLog([NSString stringWithFormat:@"[Joker] originMenuItems: %@", originMenuItems]);
-
-                NSMutableArray *newItems = [NSMutableArray arrayWithArray:originMenuItems];
-                NSDictionary *modifyItem = @{@"title": @"修改文字"};
-                [newItems addObject:modifyItem];
-
-                ((void(*)(id, SEL, id))objc_msgSend)(menuResponder, NSSelectorFromString(@"setOriginMenuItems:"), newItems);
-                jokerLog(@"[Joker] Added '修改文字' to originMenuItems");
-            }
-        } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] Modify menuResponder error: %@", e]);
-        }
-    }
-
-    if (orig_showSelectMenu) {
-        ((void(*)(id, SEL))orig_showSelectMenu)(self, _cmd);
-    }
-}
-
-static void onModifyTextMenuItemClick(id self, SEL _cmd, id sender) {
-    jokerLog(@"[Joker] onModifyTextMenuItemClick called");
-    
-    @try {
-        SEL hideMenuSel = NSSelectorFromString(@"hideMenuUI");
-        if ([self respondsToSelector:hideMenuSel]) {
-            ((void(*)(id, SEL))objc_msgSend)(self, hideMenuSel);
-            jokerLog(@"[Joker] hideMenuUI called");
-        }
-    } @catch (NSException *e) {
-        jokerLog([NSString stringWithFormat:@"[Joker] hideMenuUI error: %@", e]);
-    }
-    
-    if (g_currentMsgWrap) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            showEditDialog(g_currentMsgWrap, nil);
-        });
-    } else {
-        jokerLog(@"[Joker] No saved msgWrap");
-    }
-}
-
-static void hooked_viewDidLoad(id self, SEL _cmd) {
-    jokerLog(@"[Joker] BaseMsgContentViewController viewDidLoad called");
-    
-    if (orig_viewDidLoad) {
-        ((void(*)(id, SEL))orig_viewDidLoad)(self, _cmd);
-    }
-    
-    g_currentChatViewController = self;
-    jokerLog(@"[Joker] Saved BaseMsgContentViewController instance");
-}
-
-static void hooked_viewWillDisappear(id self, SEL _cmd, BOOL animated) {
-    jokerLog(@"[Joker] BaseMsgContentViewController viewWillDisappear called");
-    
-    if (g_currentChatViewController == self) {
-        g_currentChatViewController = nil;
-        g_currentCellView = nil;
-        g_currentMsgWrap = nil;
-        jokerLog(@"[Joker] ✅ Cleared all instances");
-    }
-    
-    if (orig_viewWillDisappear) {
-        ((void(*)(id, SEL, BOOL))orig_viewWillDisappear)(self, _cmd, animated);
-    }
-}
-
-static void hooked_showMenuWithItems(id self, SEL _cmd, id items) {
-    jokerLog([NSString stringWithFormat:@"[Joker] MMRichTextCoverView showMenuWithItems: called, items=%@", items]);
-
-    if (!g_currentMsgWrap) {
-        jokerLog(@"[Joker] g_currentMsgWrap is nil, trying to get from delegate");
+                } @catch (NSException *e) {}
+            });
+        }]];
         
-        @try {
-            id delegate = [self performSelector:@selector(delegate)];
-            if (delegate) {
-                jokerLog([NSString stringWithFormat:@"[Joker] delegate=%@, checking for msgWrap", NSStringFromClass([delegate class])]);
-                
-                g_currentCellView = delegate;
-                jokerLog([NSString stringWithFormat:@"[Joker] Saved cell: %@", NSStringFromClass([g_currentCellView class])]);
-                
-                Ivar msgWrapIvar = class_getInstanceVariable([delegate class], "m_messageWrap");
-                if (msgWrapIvar) {
-                    g_currentMsgWrap = object_getIvar(delegate, msgWrapIvar);
-                    jokerLog([NSString stringWithFormat:@"[Joker] Got msgWrap from delegate: %@", g_currentMsgWrap]);
-                } else {
-                    Ivar viewModelIvar = class_getInstanceVariable([delegate class], "m_viewModel");
-                    if (viewModelIvar) {
-                        id viewModel = object_getIvar(delegate, viewModelIvar);
-                        if (viewModel) {
-                            Ivar mwIvar = class_getInstanceVariable([viewModel class], "m_messageWrap");
-                            if (mwIvar) {
-                                g_currentMsgWrap = object_getIvar(viewModel, mwIvar);
-                                jokerLog([NSString stringWithFormat:@"[Joker] Got msgWrap from viewModel: %@", g_currentMsgWrap]);
-                            }
-                        }
-                    }
-                }
-            }
-        } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] Get msgWrap from delegate error: %@", e]);
-        }
-    }
-
-    if (g_currentMsgWrap) {
-        jokerLog(@"[Joker] Found saved msgWrap, adding '修改文字' to items");
-
-        @try {
-            Class menuItemClass = objc_getClass("MMMenuItem");
-            if (menuItemClass) {
-                SEL modifyAction = NSSelectorFromString(@"onModifyTextMenuItemClick:");
-                SEL initWithTitleSel = NSSelectorFromString(@"initWithTitle:target:action:");
-                id modifyItem = nil;
-                if ([menuItemClass instancesRespondToSelector:initWithTitleSel]) {
-                    modifyItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
-                        [[menuItemClass alloc] init], initWithTitleSel,
-                        @"修改文字", self, modifyAction);
-                }
-                if (!modifyItem) {
-                    modifyItem = [[menuItemClass alloc] init];
-                    if (modifyItem) {
-                        ((void(*)(id, SEL, id))objc_msgSend)(modifyItem, NSSelectorFromString(@"setTitle:"), @"修改文字");
-                        ((void(*)(id, SEL, id))objc_msgSend)(modifyItem, NSSelectorFromString(@"setTarget:"), self);
-                        ((void(*)(id, SEL, SEL))objc_msgSend)(modifyItem, NSSelectorFromString(@"setAction:"), modifyAction);
-                    }
-                }
-                if (modifyItem) {
-                    jokerLog([NSString stringWithFormat:@"[Joker] Created MMMenuItem: %@ with action: %@", modifyItem, NSStringFromSelector(modifyAction)]);
-
-                    NSMutableArray *newItems = [NSMutableArray arrayWithArray:items];
-                    [newItems addObject:modifyItem];
-                    items = newItems;
-                    jokerLog([NSString stringWithFormat:@"[Joker] Modified items: %@", items]);
-                }
-            } else {
-                jokerLog(@"[Joker] MMMenuItem class NOT found");
-            }
-        } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] Create MMMenuItem error: %@", e]);
-        }
-    } else {
-        jokerLog(@"[Joker] No msgWrap available, skip adding button");
-    }
-
-    if (orig_showMenuWithItems) {
-        ((void(*)(id, SEL, id))orig_showMenuWithItems)(self, _cmd, items);
+        UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+        while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
+        [rootVC presentViewController:ac animated:YES completion:nil];
     }
 }
 
-static void hooked_actionSheetClickedButtonAtIndex(id self, SEL _cmd, id actionSheet, NSInteger buttonIndex) {
-    jokerLog([NSString stringWithFormat:@"[Joker] actionSheet:clickedButtonAtIndex: self=%@ actionSheet=%@ index=%ld",
-             NSStringFromClass([self class]), NSStringFromClass([actionSheet class]), (long)buttonIndex]);
-
-    NSString *buttonTitle = nil;
-    @try {
-        buttonTitle = [actionSheet performSelector:@selector(buttonTitleAtIndex:) withObject:@(buttonIndex)];
-    } @catch (NSException *e) {}
-
-    jokerLog([NSString stringWithFormat:@"[Joker] Button title: %@", buttonTitle]);
-
-    if (buttonTitle && [buttonTitle isEqualToString:@"修改文字"] && g_currentMsgWrap) {
-        jokerLog(@"[Joker] 修改文字 clicked");
-        id msgWrap = g_currentMsgWrap;
-        id cellView = g_currentCellView;
-        g_currentMsgWrap = nil;
-        g_currentCellView = nil;
-        showEditDialog(msgWrap, cellView);
-        return;
+// ==================== ① onTextJoker：照抄锤子助手 FUN_0076f720 ====================
+// self = TextMessageCellView
+static void onTextJoker(id self, SEL _cmd) {
+    jokerLog(@"[Joker] onTextJoker called (锤子助手风格)");
+    
+    // 锤子助手：cellView → m_delegate → m_messageWrap → m_nsContent
+    id delegate = nil;
+    id msgWrap = nil;
+    NSString *content = nil;
+    
+    @try { delegate = [self valueForKey:@"m_delegate"]; } @catch (NSException *e) {}
+    jokerLog([NSString stringWithFormat:@"[Joker] delegate: %@", NSStringFromClass([delegate class])]);
+    
+    @try { msgWrap = [delegate valueForKey:@"m_messageWrap"]; } @catch (NSException *e) {}
+    jokerLog([NSString stringWithFormat:@"[Joker] msgWrap: %@", msgWrap]);
+    
+    @try { content = [msgWrap valueForKey:@"m_nsContent"]; } @catch (NSException *e) {}
+    if (!content) {
+        @try { content = [msgWrap valueForKey:@"m_nsTitle"]; } @catch (NSException *e) {}
     }
+    if (!content) content = @"";
+    jokerLog([NSString stringWithFormat:@"[Joker] currentContent: %@", content]);
+    
+    showEditAlert(nil, self, msgWrap, content, nil);
+}
 
-    if (orig_actionSheetClickedButtonAtIndex) {
-        ((void(*)(id, SEL, id, NSInteger))orig_actionSheetClickedButtonAtIndex)(self, _cmd, actionSheet, buttonIndex);
+// ==================== ② onTransferJoker：照抄锤子助手 FUN_0076fb4c ====================
+// self = WCPayTransferMessageCellView
+static void onTransferJoker(id self, SEL _cmd) {
+    jokerLog(@"[Joker] onTransferJoker called (锤子助手风格)");
+    
+    id delegate = nil;
+    id msgWrap = nil;
+    NSString *content = nil;
+    
+    @try { delegate = [self valueForKey:@"m_delegate"]; } @catch (NSException *e) {}
+    @try { msgWrap = [delegate valueForKey:@"m_messageWrap"]; } @catch (NSException *e) {}
+    @try { content = [msgWrap valueForKey:@"m_nsContent"]; } @catch (NSException *e) {}
+    if (!content) {
+        @try { content = [msgWrap valueForKey:@"m_nsTitle"]; } @catch (NSException *e) {}
+    }
+    if (!content) content = @"";
+    jokerLog([NSString stringWithFormat:@"[Joker] transfer currentContent: %@", content]);
+    
+    showEditAlert(nil, self, msgWrap, content, nil);
+}
+
+// ==================== ③ 锤子助手风格 operationMenuItems hook ====================
+// 为 TextMessageCellView.operationMenuItems 添加 "修改文字" 按钮
+static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
+    NSMutableArray *items = nil;
+    if (orig_TextCell_operationMenuItems) {
+        items = ((id(*)(id, SEL))orig_TextCell_operationMenuItems)(self, _cmd);
+    }
+    if (!items) items = [NSMutableArray array];
+    
+    // 只在启用时添加菜单项
+    if (![PluginConfig shared].enableJoker) return items;
+    
+    NSMutableArray *newItems = [items mutableCopy];
+    Class mmItemClass = objc_getClass("MMMenuItem");
+    if (mmItemClass) {
+        @try {
+            // 照抄锤子助手：title=cf_O9e(=修改文字), icon=cf_expression, action="onTextJoker"
+            SEL initSel = NSSelectorFromString(@"initWithTitle:iconName:target:actionName:");
+            id mmItem = nil;
+            if ([mmItemClass instancesRespondToSelector:initSel]) {
+                mmItem = ((id(*)(id, SEL, id, id, id, id))objc_msgSend)(
+                    [[mmItemClass alloc] init], initSel,
+                    @"修改文字", @"expression", self, @"onTextJoker");
+            }
+            if (!mmItem) {
+                // fallback: initWithTitle:action:
+                SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
+                if ([mmItemClass instancesRespondToSelector:altInitSel]) {
+                    mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
+                        [[mmItemClass alloc] init], altInitSel,
+                        @"修改文字", NSSelectorFromString(@"onTextJoker"));
+                }
+            }
+            if (mmItem) {
+                [newItems addObject:mmItem];
+                jokerLog(@"[Joker] ✅ Added MMMenuItem to TextMessageCellView menu");
+            }
+        } @catch (NSException *e) {
+            jokerLog([NSString stringWithFormat:@"[Joker] ❌ TextCell menu item: %@", e]);
+        }
+    }
+    return newItems;
+}
+
+// 为 WCPayTransferMessageCellView.operationMenuItems 添加 "修改文字" 按钮
+static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
+    NSMutableArray *items = nil;
+    if (orig_TransferCell_operationMenuItems) {
+        items = ((id(*)(id, SEL))orig_TransferCell_operationMenuItems)(self, _cmd);
+    }
+    if (!items) items = [NSMutableArray array];
+    
+    if (![PluginConfig shared].enableJoker) return items;
+    
+    NSMutableArray *newItems = [items mutableCopy];
+    Class mmItemClass = objc_getClass("MMMenuItem");
+    if (mmItemClass) {
+        @try {
+            // 照抄锤子助手：title=cf_O9e, icon=cf_expression, action="onTransferJoker"
+            SEL initSel = NSSelectorFromString(@"initWithTitle:iconName:target:actionName:");
+            id mmItem = nil;
+            if ([mmItemClass instancesRespondToSelector:initSel]) {
+                mmItem = ((id(*)(id, SEL, id, id, id, id))objc_msgSend)(
+                    [[mmItemClass alloc] init], initSel,
+                    @"修改文字", @"expression", self, @"onTransferJoker");
+            }
+            if (!mmItem) {
+                SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
+                if ([mmItemClass instancesRespondToSelector:altInitSel]) {
+                    mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
+                        [[mmItemClass alloc] init], altInitSel,
+                        @"修改文字", NSSelectorFromString(@"onTransferJoker"));
+                }
+            }
+            if (mmItem) {
+                [newItems addObject:mmItem];
+                jokerLog(@"[Joker] ✅ Added MMMenuItem to TransferCellView menu");
+            }
+        } @catch (NSException *e) {
+            jokerLog([NSString stringWithFormat:@"[Joker] ❌ TransferCell menu item: %@", e]);
+        }
+    }
+    return newItems;
+}
+
+// ==================== ④ 钱包余额隐藏：照抄锤子助手 FUN_0076fdbc ====================
+static void walletLongPressHandler(UIGestureRecognizer *gesture) {
+    if (gesture.state != UIGestureRecognizerStateBegan) return;
+    
+    UIView *headerView = gesture.view;
+    // 切换所有子视图的 hidden 状态
+    BOOL allHidden = YES;
+    for (UIView *sub in headerView.subviews) {
+        if (!sub.hidden) { allHidden = NO; break; }
+    }
+    BOOL newState = !allHidden;
+    for (UIView *sub in headerView.subviews) {
+        sub.hidden = newState;
+        // 如果有嵌套的 label
+        for (UIView *nested in sub.subviews) {
+            nested.hidden = newState;
+        }
+    }
+    jokerLog([NSString stringWithFormat:@"[Joker] Wallet balance %@", newState ? @"hidden" : @"shown"]);
+}
+
+static void hooked_Wallet_updateBalanceEntryView(id self, SEL _cmd) {
+    if (orig_Wallet_updateBalanceEntryView) {
+        ((void(*)(id, SEL))orig_Wallet_updateBalanceEntryView)(self, _cmd);
+    }
+    
+    if (![PluginConfig shared].enableJoker) return;
+    
+    // 照抄锤子助手：添加 UILongPressGestureRecognizer 长按手势切换余额显示
+    // 检查是否已经添加过手势
+    BOOL hasGesture = NO;
+    for (UIGestureRecognizer *g in ((UIView *)self).gestureRecognizers) {
+        if ([g isKindOfClass:[UILongPressGestureRecognizer class]]) {
+            hasGesture = YES; break;
+        }
+    }
+    if (!hasGesture) {
+        UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] initWithTarget:nil action:nil];
+        lp.minimumPressDuration = 0.5;
+        [lp addTarget:nil action:@selector(jokerWalletToggle:)];
+        [(UIView *)self addGestureRecognizer:lp];
+        
+        // 使用关联对象设置 handler
+        static char kWalletHandlerKey;
+        objc_setAssociatedObject(self, &kWalletHandlerKey, lp, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        
+        jokerLog(@"[Joker] ✅ Wallet long press gesture added");
     }
 }
 
+// ==================== ⑤ 红包名称修改：照抄锤子助手 WeChatTweakRedEnvelopParam.setNickName_ ====================
+static IMP orig_RedEnvLogic_send = NULL;
+// 存储用户自定义的红包昵称
+static NSString *g_redEnvelopeCustomNickname = nil;
+
+static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
+    // 如果设置了自定义昵称，替换 params 中的昵称
+    if (g_redEnvelopeCustomNickname && g_redEnvelopeCustomNickname.length > 0) {
+        @try {
+            SEL setNickSel = NSSelectorFromString(@"setNickName:");
+            if ([params respondsToSelector:setNickSel]) {
+                ((void(*)(id, SEL, id))objc_msgSend)(params, setNickSel, g_redEnvelopeCustomNickname);
+                jokerLog([NSString stringWithFormat:@"[Joker] ✅ Red envelope nickname set to: %@", g_redEnvelopeCustomNickname]);
+            }
+        } @catch (NSException *e) {
+            jokerLog([NSString stringWithFormat:@"[Joker] ❌ Red envelope nickname: %@", e]);
+        }
+    }
+    
+    if (orig_RedEnvLogic_send) {
+        ((void(*)(id, SEL, id))orig_RedEnvLogic_send)(self, _cmd, params);
+    }
+}
+
+// ==================== JokerHook ====================
 @implementation JokerHook
 
 + (void)install {
-    jokerLog(@"[JokerHook] ========== install start ==========");
+    jokerLog(@"[JokerHook] ========== install start (锤子助手风格) ==========");
     jokerLog([NSString stringWithFormat:@"[JokerHook] enableJoker=%d", [PluginConfig shared].enableJoker]);
-
-    Class vcClass = objc_getClass("BaseMsgContentViewController");
-    if (vcClass) {
-        jokerLog(@"[JokerHook] BaseMsgContentViewController found");
-
-        SEL willShowSel = NSSelectorFromString(@"willShowMenuController:inMsgWrap:");
-        Method willShowMethod = class_getInstanceMethod(vcClass, willShowSel);
-        if (willShowMethod) {
-            orig_willShowMenuController = method_setImplementation(willShowMethod, (IMP)hooked_willShowMenuController);
-            jokerLog(@"[JokerHook] willShowMenuController:inMsgWrap: hooked");
-        } else {
-            jokerLog(@"[JokerHook] willShowMenuController:inMsgWrap: NOT found");
-        }
-
-        SEL actionSheetSel = NSSelectorFromString(@"actionSheet:clickedButtonAtIndex:");
-        Method actionSheetMethod = class_getInstanceMethod(vcClass, actionSheetSel);
-        if (actionSheetMethod) {
-            orig_actionSheetClickedButtonAtIndex = method_setImplementation(actionSheetMethod, (IMP)hooked_actionSheetClickedButtonAtIndex);
-            jokerLog(@"[JokerHook] actionSheet:clickedButtonAtIndex: hooked");
-        } else {
-            jokerLog(@"[JokerHook] actionSheet:clickedButtonAtIndex: NOT found");
-        }
-
-        SEL viewDidLoadSel = NSSelectorFromString(@"viewDidLoad");
-        Method viewDidLoadMethod = class_getInstanceMethod(vcClass, viewDidLoadSel);
-        if (viewDidLoadMethod) {
-            orig_viewDidLoad = method_setImplementation(viewDidLoadMethod, (IMP)hooked_viewDidLoad);
-            jokerLog(@"[JokerHook] viewDidLoad hooked");
-        }
-
-        SEL viewWillDisappearSel = NSSelectorFromString(@"viewWillDisappear:");
-        Method viewWillDisappearMethod = class_getInstanceMethod(vcClass, viewWillDisappearSel);
-        if (viewWillDisappearMethod) {
-            orig_viewWillDisappear = method_setImplementation(viewWillDisappearMethod, (IMP)hooked_viewWillDisappear);
-            jokerLog(@"[JokerHook] viewWillDisappear: hooked");
-        }
-
-        jokerLog(@"[JokerHook] ========== install complete ==========");
-    } else {
-        jokerLog(@"[JokerHook] BaseMsgContentViewController class NOT found");
+    
+    if (![PluginConfig shared].enableJoker) {
+        jokerLog(@"[JokerHook] Joker disabled, skip install");
+        return;
     }
-
-    Class actionSheetClass = objc_getClass("MMScrollActionSheet");
-    if (actionSheetClass) {
-        jokerLog(@"[JokerHook] MMScrollActionSheet found");
-
-        SEL showInViewSel = NSSelectorFromString(@"showInView:");
-        Method showInViewMethod = class_getInstanceMethod(actionSheetClass, showInViewSel);
-        if (showInViewMethod) {
-            orig_scrollActionSheetShowInView = method_setImplementation(showInViewMethod, (IMP)hooked_scrollActionSheetShowInView);
-            jokerLog(@"[JokerHook] MMScrollActionSheet.showInView: hooked");
+    
+    // ====== 版本检查：照抄锤子助手 CFBundleShortVersionString >= 8.0.29 ======
+    NSString *wxVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+    jokerLog([NSString stringWithFormat:@"[JokerHook] WeChat version: %@", wxVersion]);
+    if ([wxVersion compare:@"8.0.29" options:NSNumericSearch] == NSOrderedAscending) {
+        jokerLog(@"[JokerHook] ⚠️ WeChat version too old (<8.0.29), skip install");
+        return;
+    }
+    
+    // ====== ① 文本消息修改：照抄锤子助手 ======
+    Class textCellClass = objc_getClass("TextMessageCellView");
+    if (textCellClass) {
+        jokerLog(@"[JokerHook] TextMessageCellView found");
+        
+        // class_addMethod: onTextJoker → v@:
+        SEL onTextJokerSel = NSSelectorFromString(@"onTextJoker");
+        BOOL added = class_addMethod(textCellClass, onTextJokerSel, (IMP)onTextJoker, "v@:");
+        jokerLog([NSString stringWithFormat:@"[JokerHook] class_addMethod onTextJoker: %@", added ? @"YES" : @"NO (可能已存在)"]);
+        
+        // Hook operationMenuItems
+        SEL menuSel = NSSelectorFromString(@"operationMenuItems");
+        Method menuMethod = class_getInstanceMethod(textCellClass, menuSel);
+        if (menuMethod) {
+            orig_TextCell_operationMenuItems = method_setImplementation(menuMethod, (IMP)hooked_TextCell_operationMenuItems);
+            jokerLog(@"[JokerHook] ✅ TextMessageCellView.operationMenuItems hooked");
         } else {
-            jokerLog(@"[JokerHook] MMScrollActionSheet.showInView: NOT found");
-        }
-
-        SEL showInViewConstraintSel = NSSelectorFromString(@"showInView:isConstraintByParent:");
-        Method showInViewConstraintMethod = class_getInstanceMethod(actionSheetClass, showInViewConstraintSel);
-        if (showInViewConstraintMethod) {
-            orig_scrollActionSheetShowInViewConstraint = method_setImplementation(showInViewConstraintMethod, (IMP)hooked_scrollActionSheetShowInViewConstraint);
-            jokerLog(@"[JokerHook] MMScrollActionSheet.showInView:isConstraintByParent: hooked");
-        } else {
-            jokerLog(@"[JokerHook] MMScrollActionSheet.showInView:isConstraintByParent: NOT found");
+            jokerLog(@"[JokerHook] ⚠️ TextMessageCellView.operationMenuItems NOT found");
         }
     } else {
-        jokerLog(@"[JokerHook] MMScrollActionSheet class NOT found");
+        jokerLog(@"[JokerHook] ⚠️ TextMessageCellView class NOT found");
     }
-
-    Class coverViewClass = objc_getClass("MMRichTextCoverView");
-    if (coverViewClass) {
-        jokerLog(@"[JokerHook] MMRichTextCoverView found");
-
-        SEL modifyActionSel = NSSelectorFromString(@"onModifyTextMenuItemClick:");
-        Method modifyMethod = class_getInstanceMethod(coverViewClass, modifyActionSel);
-        if (!modifyMethod) {
-            class_addMethod(coverViewClass, modifyActionSel, (IMP)onModifyTextMenuItemClick, "v@:@");
-            jokerLog(@"[JokerHook] Added onModifyTextMenuItemClick: method to MMRichTextCoverView");
-        }
-
-        SEL showSelectMenuSel = NSSelectorFromString(@"showSelectMenu");
-        Method showSelectMenuMethod = class_getInstanceMethod(coverViewClass, showSelectMenuSel);
-        if (showSelectMenuMethod) {
-            orig_showSelectMenu = method_setImplementation(showSelectMenuMethod, (IMP)hooked_showSelectMenu);
-            jokerLog(@"[JokerHook] MMRichTextCoverView.showSelectMenu hooked");
+    
+    // ====== ② 转账消息修改：照抄锤子助手 ======
+    Class transferCellClass = objc_getClass("WCPayTransferMessageCellView");
+    if (transferCellClass) {
+        jokerLog(@"[JokerHook] WCPayTransferMessageCellView found");
+        
+        SEL onTransferJokerSel = NSSelectorFromString(@"onTransferJoker");
+        BOOL added = class_addMethod(transferCellClass, onTransferJokerSel, (IMP)onTransferJoker, "v@:");
+        jokerLog([NSString stringWithFormat:@"[JokerHook] class_addMethod onTransferJoker: %@", added ? @"YES" : @"NO"]);
+        
+        SEL menuSel = NSSelectorFromString(@"operationMenuItems");
+        Method menuMethod = class_getInstanceMethod(transferCellClass, menuSel);
+        if (menuMethod) {
+            orig_TransferCell_operationMenuItems = method_setImplementation(menuMethod, (IMP)hooked_TransferCell_operationMenuItems);
+            jokerLog(@"[JokerHook] ✅ WCPayTransferMessageCellView.operationMenuItems hooked");
         } else {
-            jokerLog(@"[JokerHook] MMRichTextCoverView.showSelectMenu NOT found");
-        }
-
-        SEL showMenuWithItemsSel = NSSelectorFromString(@"showMenuWithItems:");
-        Method showMenuWithItemsMethod = class_getInstanceMethod(coverViewClass, showMenuWithItemsSel);
-        if (showMenuWithItemsMethod) {
-            orig_showMenuWithItems = method_setImplementation(showMenuWithItemsMethod, (IMP)hooked_showMenuWithItems);
-            jokerLog(@"[JokerHook] MMRichTextCoverView.showMenuWithItems: hooked");
-        } else {
-            jokerLog(@"[JokerHook] MMRichTextCoverView.showMenuWithItems: NOT found");
+            jokerLog(@"[JokerHook] ⚠️ WCPayTransferMessageCellView.operationMenuItems NOT found");
         }
     } else {
-        jokerLog(@"[JokerHook] MMRichTextCoverView class NOT found");
+        jokerLog(@"[JokerHook] ⚠️ WCPayTransferMessageCellView class NOT found");
     }
+    
+    // ====== ③ 钱包余额隐藏：照抄锤子助手 ======
+    Class walletClass = objc_getClass("WCPayWalletEntryHeaderView");
+    if (walletClass) {
+        jokerLog(@"[JokerHook] WCPayWalletEntryHeaderView found");
+        
+        SEL updateSel = NSSelectorFromString(@"updateBalanceEntryView");
+        Method updateMethod = class_getInstanceMethod(walletClass, updateSel);
+        if (updateMethod) {
+            orig_Wallet_updateBalanceEntryView = method_setImplementation(updateMethod, (IMP)hooked_Wallet_updateBalanceEntryView);
+            jokerLog(@"[JokerHook] ✅ WCPayWalletEntryHeaderView.updateBalanceEntryView hooked");
+        } else {
+            jokerLog(@"[JokerHook] ⚠️ WCPayWalletEntryHeaderView.updateBalanceEntryView NOT found");
+        }
+    } else {
+        jokerLog(@"[JokerHook] ⚠️ WCPayWalletEntryHeaderView class NOT found");
+    }
+    
+    // ====== ④ 红包名称修改：照抄锤子助手 ======
+    Class redEnvLogicClass = objc_getClass("WCRedEnvelopesLogicMgr");
+    if (redEnvLogicClass) {
+        jokerLog(@"[JokerHook] WCRedEnvelopesLogicMgr found");
+        
+        // Hook WCPayLogicMgr (微信支付/红包发送管理器)
+        Class payLogicClass = objc_getClass("WCPayLogicMgr");
+        if (payLogicClass) {
+            // 尝试 hook 红包发送相关方法
+            SEL sendSel = NSSelectorFromString(@"sendRedEnvelopesRequest:");
+            Method sendMethod = class_getInstanceMethod(payLogicClass, sendSel);
+            if (sendMethod) {
+                orig_RedEnvLogic_send = method_setImplementation(sendMethod, (IMP)hooked_RedEnvelope_send);
+                jokerLog(@"[JokerHook] ✅ Red envelope send hooked");
+            }
+        }
+        
+        // 备用：hook WCRedEnvelopesLogicMgr 的直接方法
+        SEL openSel = NSSelectorFromString(@"OpenRedEnvelopesRequest:");
+        Method openMethod = class_getInstanceMethod(redEnvLogicClass, openSel);
+        if (openMethod && !orig_RedEnvLogic_send) {
+            orig_RedEnvLogic_send = method_setImplementation(openMethod, (IMP)hooked_RedEnvelope_send);
+            jokerLog(@"[JokerHook] ✅ Red envelope open hooked (fallback)");
+        }
+    } else {
+        jokerLog(@"[JokerHook] ⚠️ WCRedEnvelopesLogicMgr class NOT found");
+    }
+    
+    // ====== ⑤ 启用提示 ======
+    dispatch_async(dispatch_get_main_queue(), ^{
+        Class alertClass = objc_getClass("WCUIAlertView");
+        if (alertClass) {
+            @try {
+                id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc], @selector(initWithTitle:message:),
+                    @"锤子助手风格", @"修改文字功能已启用\n长按文本/转账消息即可修改\n长按钱包余额可隐藏");
+                SEL showSel = NSSelectorFromString(@"show");
+                if ([alert respondsToSelector:showSel]) {
+                    ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
+                }
+            } @catch (NSException *e) {}
+        }
+    });
+    
+    jokerLog(@"[JokerHook] ========== install complete (锤子助手风格) ==========");
+}
+
++ (void)setRedEnvelopeNickname:(NSString *)nickname {
+    g_redEnvelopeCustomNickname = nickname;
 }
 
 @end
