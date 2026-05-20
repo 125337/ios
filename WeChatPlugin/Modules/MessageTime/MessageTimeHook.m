@@ -191,23 +191,27 @@ static NSMutableDictionary<NSString *, NSNumber *> *_readStatusTracker(void) {
 /// @param createTime 消息的 m_uiCreateTime（时间戳），用于比较谁的消息更新
 /// @return 2=已读, 1=已送达
 static NSInteger computeReadStatus(BOOL isSender, NSString *chatUser, unsigned int createTime) {
+    // 接收方消息：始终返回 2 → 显示 "已读"（即使是 nil chatUser）
+    if (!isSender) {
+        if (chatUser.length > 0) {
+            NSMutableDictionary *tracker = _readStatusTracker();
+            @synchronized (tracker) {
+                NSNumber *stored = tracker[chatUser];
+                unsigned int storedMax = stored ? stored.unsignedIntValue : 0;
+                if (createTime > storedMax) {
+                    tracker[chatUser] = @(createTime);
+                }
+            }
+        }
+        return 2; // 复刻 FUN_0003bb04: 接收方始终返回 2
+    }
+
+    // 发送方消息：chatUser 为空时无法判断 → 保守返回 1（已送达）
     if (!chatUser || chatUser.length == 0) return 1;
 
     NSMutableDictionary *tracker = _readStatusTracker();
 
     @synchronized (tracker) {
-        if (!isSender) {
-            // --- 接收方消息：更新 stored_max = 接收方最新消息的时间戳 ---
-            // 复刻 FUN_0003bb04 param_1==0: 存储 max(createTime)
-            NSNumber *stored = tracker[chatUser];
-            unsigned int storedMax = stored ? stored.unsignedIntValue : 0;
-            if (createTime > storedMax) {
-                tracker[chatUser] = @(createTime);
-            }
-            return 2; // 接收方始终返回 2 → 显示 "已读"
-        }
-
-        // --- 发送方消息：比较 createTime 与 stored_max ---
         // 复刻 FUN_0003bb04 param_1!=0:
         //   发送方 createTime < 接收方最新 createTime → 对方发过更晚的消息 → 已读
         //   发送方 createTime >= 接收方最新 createTime → 对方没回 → 已送达
