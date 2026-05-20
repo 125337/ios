@@ -43,31 +43,34 @@ static void showEditDialog(id msgWrap, id cellView);
 static void modifyMsgContent(id msgWrap, NSString *newContent) {
     jokerLog([NSString stringWithFormat:@"[Joker] modifyMsgContent: %@", newContent]);
 
+    // === 锤子助手风格：先写 msgWrap 数据层（内存中），保证会话内滚动不丢失 ===
+    @try {
+        SEL setM_nsContentSel = NSSelectorFromString(@"setM_nsContent:");
+        if ([msgWrap respondsToSelector:setM_nsContentSel]) {
+            ((void(*)(id, SEL, id))objc_msgSend)(msgWrap, setM_nsContentSel, newContent);
+            jokerLog(@"[Joker] ✅ Updated msgWrap.m_nsContent");
+        }
+    } @catch (NSException *e) {
+        jokerLog([NSString stringWithFormat:@"[Joker] ❌ setM_nsContent failed: %@", e]);
+    }
+
+    // === 再更新 RichTextView 显示层，即时生效 ===
     dispatch_async(dispatch_get_main_queue(), ^{
         if (g_currentCellView) {
             @try {
-                jokerLog(@"[Joker] Updating RichTextView display only");
+                jokerLog(@"[Joker] Updating RichTextView display");
                 
                 Ivar richTextViewIvar = class_getInstanceVariable([g_currentCellView class], "m_richTextView");
                 if (richTextViewIvar) {
                     id richTextView = object_getIvar(g_currentCellView, richTextViewIvar);
                     if (richTextView) {
-                        SEL setContentSel = NSSelectorFromString(@"setContent:");
-                        if ([richTextView respondsToSelector:setContentSel]) {
-                            ((void(*)(id, SEL, id))objc_msgSend)(richTextView, setContentSel, newContent);
-                            jokerLog(@"[Joker] ✅ Updated RichTextView with setContent:");
-                        }
-                        
                         SEL setTextSel = NSSelectorFromString(@"setText:");
                         if ([richTextView respondsToSelector:setTextSel]) {
                             ((void(*)(id, SEL, id))objc_msgSend)(richTextView, setTextSel, newContent);
                             jokerLog(@"[Joker] ✅ Updated RichTextView with setText:");
                         }
-                        
-                        [richTextView setNeedsLayout];
-                        [richTextView layoutIfNeeded];
+
                         [richTextView setNeedsDisplay];
-                        
                         jokerLog(@"[Joker] ✅ RichTextView refreshed");
                     }
                 }

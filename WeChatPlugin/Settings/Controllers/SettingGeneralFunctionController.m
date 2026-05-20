@@ -96,7 +96,14 @@
             : @"{HH}:{mm}:{ss}";
         *ecy = [self addNavRowInGroup:expand title:@"自定义格式" subtitle:customFmtSub tag:200 action:@selector(onMessageTimeCustomFormatTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"文字颜色" key:@"MessageTimeTextColor" value:config.messageTimeTextColor hint:@"#999999" cy:*ecy width:w];
+        // 发送方/接收方 × 浅色/深色 四色独立 (照搬微信优化)
+        *ecy = [self addColorRowInGroup:expand title:@"发送方颜色" key:@"senderTextColorHex" value:config.senderTextColorHex cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addColorRowInGroup:expand title:@"发送方颜色(深色)" key:@"senderTextColorDarkHex" value:config.senderTextColorDarkHex cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addColorRowInGroup:expand title:@"接收方颜色" key:@"receiverTextColorHex" value:config.receiverTextColorHex cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addColorRowInGroup:expand title:@"接收方颜色(深色)" key:@"receiverTextColorDarkHex" value:config.receiverTextColorDarkHex cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"水平偏移" key:@"MessageTimeOffsetX" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetX] hint:@"0" cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
