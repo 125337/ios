@@ -433,27 +433,8 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         SEL onTextJokerSel = NSSelectorFromString(@"onTextJoker");
         BOOL added = class_addMethod(textCellClass, onTextJokerSel, (IMP)onTextJoker, "v@:");
         if (!added) {
-            // 诊断：找出方法到底在哪个类上
+            // 失败可能是热重载（上次 session 已添加）或微信同名方法，强制替换
             Method m = class_getInstanceMethod(textCellClass, onTextJokerSel);
-            Class owner = textCellClass;
-            // 遍历父类链，找方法来源
-            Class cursor = textCellClass;
-            while (cursor) {
-                unsigned int count = 0;
-                Method *methods = class_copyMethodList(cursor, &count);
-                for (unsigned int i = 0; i < count; i++) {
-                    if (method_getName(methods[i]) == onTextJokerSel) {
-                        owner = cursor;
-                        break;
-                    }
-                }
-                free(methods);
-                if (owner != textCellClass) break;
-                cursor = class_getSuperclass(cursor);
-            }
-            jokerLog([NSString stringWithFormat:@"[JokerHook] ⚠️ onTextJoker already exists on class: %@ (self=%@)", 
-                     NSStringFromClass(owner), NSStringFromClass(textCellClass)]);
-            
             if (m) {
                 method_setImplementation(m, (IMP)onTextJoker);
                 added = YES;
