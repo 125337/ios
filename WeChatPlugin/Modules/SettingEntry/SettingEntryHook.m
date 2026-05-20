@@ -50,14 +50,10 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
 
     CGFloat w = vc.view.bounds.size.width;
 
-    // 递归调用时，检查 view 是否被卸载过（无 subviews = 需重建 UI）
+    // 递归调用时视图已创建，直接返回避免重复添加子视图
     if (isRecursive) {
-        if (vc.view.subviews.count > 0) {
-            reLog(@"[Entry] recursive skip (view intact)");
-            return;
-        }
-        // view 被卸载后重建，子视图丢失，需重新构建 UI
-        reLog(@"[Entry] recursive but view was unloaded, rebuilding UI");
+        reLog(@"[Entry] recursive skip");
+        return;
     }
 
     // 以下为自定义 UI 创建逻辑
