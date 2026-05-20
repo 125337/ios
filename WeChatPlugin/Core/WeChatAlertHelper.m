@@ -1,14 +1,13 @@
 #import "WeChatAlertHelper.h"
-#import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
 // ==================== WCUIAlertView 本地声明：让 ARC 正确管理 block 生命周期 ====================
+// WCUIAlertView 是 NSObject 子类（非 UIView），管理自己的 UI。
 // 声明此接口后，使用标准 ObjC 语法调用 WCUIAlertView 方法，
 // ARC 能"看到" block 参数，自动触发 _Block_copy 将 block 从栈 copy 到堆。
 // 使用 objc_msgSend 裸调则 ARC 看不到 block → 栈上 block 被释放 → crash。
-@interface WCUIAlertView : UIView
+@interface WCUIAlertView : NSObject
 - (id)initWithTitle:(NSString *)title message:(NSString *)message;
-- (void)setTag:(NSInteger)tag;
 - (void)setMessage:(NSString *)message;
 - (void)setStyle:(NSInteger)style;
 - (void)addCancelActionWithTitle:(NSString *)title target:(id)target action:(SEL)action;
@@ -71,10 +70,7 @@ static void walertLog(NSString *content) {
             return;
         }
 
-        // 2. setTag:99999
-        [alert setTag:99999];
-
-        // 3. setMessage: 预填文本
+        // 2. setMessage: 预填文本
         if (text.length > 0) {
             [alert setMessage:text];
         }
