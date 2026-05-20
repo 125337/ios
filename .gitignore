@@ -19,3 +19,8 @@ WeChat_tweak/
 build/
 Mio_arm64.dylib
 编译流程.md
+*.html
+*对比分析*.md
+*分析*.md
+*调试*.md
+Code*.html

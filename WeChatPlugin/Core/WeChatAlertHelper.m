@@ -8,11 +8,12 @@
 // 使用 objc_msgSend 裸调则 ARC 看不到 block → 栈上 block 被释放 → crash。
 @interface WCUIAlertView : NSObject
 - (id)initWithTitle:(NSString *)title message:(NSString *)message;
-- (void)setMessage:(NSString *)message;
-- (void)setStyle:(NSInteger)style;
 - (void)addCancelActionWithTitle:(NSString *)title target:(id)target action:(SEL)action;
 - (void)addActionWithTitle:(NSString *)title handler:(void(^)(id button))handler;
 - (void)show;
+// TODO: 以下 selector 待 dump 确认
+// - (void)setMessage:(NSString *)message;
+// - (void)setStyle:(NSInteger)style;
 @end
 
 // ==================== 日志 ====================
@@ -46,6 +47,16 @@ static void walertLog(NSString *content) {
         _alertClass = objc_getClass("WCUIAlertView");
         if (_alertClass) {
             walertLog(@"[WeChatAlert] WCUIAlertView class found");
+
+            // dump 所有方法，找出真实 selector 名字
+            unsigned int methodCount = 0;
+            Method *methods = class_copyMethodList(_alertClass, &methodCount);
+            walertLog([NSString stringWithFormat:@"[WeChatAlert] WCUIAlertView has %u methods:", methodCount]);
+            for (unsigned int i = 0; i < methodCount; i++) {
+                SEL sel = method_getName(methods[i]);
+                walertLog([NSString stringWithFormat:@"[WeChatAlert]   - %@", NSStringFromSelector(sel)]);
+            }
+            free(methods);
         } else {
             walertLog(@"[WeChatAlert] ⚠️ WCUIAlertView class NOT found");
         }
@@ -63,22 +74,18 @@ static void walertLog(NSString *content) {
     }
 
     @try {
-        // 1. alloc + initWithTitle:message:
-        WCUIAlertView *alert = [[alertClass alloc] initWithTitle:title message:@""];
+        // 1. alloc + initWithTitle:message:（预填文本直接放 message 参数里）
+        WCUIAlertView *alert = [[alertClass alloc] initWithTitle:title message:text ?: @""];
         if (!alert) {
             walertLog(@"[WeChatAlert] ❌ WCUIAlertView alloc failed");
             return;
         }
 
-        // 2. setMessage: 预填文本
-        if (text.length > 0) {
-            [alert setMessage:text];
-        }
+        // TODO: setStyle / setMessage 等 selector 待 dump 确认后加入
+        // [alert setMessage:text];  // ❌ not available
+        // [alert setStyle:1];       // 待确认
 
-        // 4. setStyle:1 → 文本输入模式
-        [alert setStyle:1];
-
-        // 5. 取消按钮 —— target 不能为 nil（WCUIAlertView 需要有效 target 才能正常工作）
+        // 2. 取消按钮
         [alert addCancelActionWithTitle:@"取消" target:target action:NULL];
 
         // 6. 确定按钮 —— 标准 ObjC 调用，ARC 自动 copy block
@@ -127,10 +134,7 @@ static void walertLog(NSString *content) {
             return;
         }
 
-        // 2. style:0 = 无输入框模式
-        [alert setStyle:0];
-
-        // 4. 确认按钮
+        // 2. 确认按钮
         [alert addCancelActionWithTitle:buttonTitle target:nil action:NULL];
 
         // 5. show
