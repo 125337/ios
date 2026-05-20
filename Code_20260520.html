@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自定义时间格式</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        body {
+            background-color: #f2f2f7;
+            padding: 0;
+            margin: 0;
+        }
+        /* 导航栏 */
+        .nav-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #ffffff;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .nav-btn {
+            color: #007aff;
+            font-size: 17px;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+        .nav-title {
+            font-size: 17px;
+            font-weight: 600;
+        }
+        .nav-right {
+            display: flex;
+            gap: 16px;
+        }
+        /* 容器 */
+        .container {
+            padding: 16px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        /* 分组卡片 */
+        .card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .card-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .card-item:last-child {
+            border-bottom: none;
+        }
+        .placeholder {
+            color: #007aff;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        .desc {
+            color: #666666;
+            font-size: 16px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 24px 0 12px 0;
+        }
+        .orange-item .placeholder {
+            color: #ff9500;
+        }
+        /* 输入框区域 */
+        .input-section {
+            margin-bottom: 20px;
+        }
+        .format-input {
+            width: 100%;
+            padding: 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            background-color: #ffffff;
+        }
+        /* 预览区域 */
+        .preview-section {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .preview-text {
+            font-size: 18px;
+            color: #000000;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <div class="nav-bar">
+        <button class="nav-btn">取消</button>
+        <div class="nav-title">自定义时间格式</div>
+        <div class="nav-right">
+            <button class="nav-btn">恢复</button>
+            <button class="nav-btn">保存</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- 占位符说明卡片 -->
+        <div class="card">
+            <div class="card-item">
+                <span class="placeholder">{yyyy}</span>
+                <span class="desc">年份 (2025)</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{yy}</span>
+                <span class="desc">年份 (25)</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{MM}</span>
+                <span class="desc">月份 (01-12)</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{dd}</span>
+                <span class="desc">日期 (01-31)</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{HH}</span>
+                <span class="desc">小时-24小时制 (00-23)</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{hh}</span>
+                <span class="desc">小时-12小时制 (01-12)</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{mm}</span>
+                <span class="desc">分钟 (00-59)</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{ss}</span>
+                <span class="desc">秒数 (00-59)</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{a}</span>
+                <span class="desc">上午/下午</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{b}</span>
+                <span class="desc">AM/PM</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{EEEE}</span>
+                <span class="desc">星期 (星期一)</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{EE}</span>
+                <span class="desc">星期 (周一)</span>
+            </div>
+            <div class="card-item">
+                <span class="placeholder">{伪已读}</span>
+                <span class="desc">已送达/已读</span>
+            </div>
+        </div>
+
+        <!-- 伪已读自定义方式 -->
+        <div class="section-title">伪已读自定义方式 ():</div>
+        <div class="card">
+            <div class="card-item orange-item">
+                <span class="placeholder">{伪已读} - 使用默认文本</span>
+            </div>
+            <div class="card-item orange-item">
+                <span class="placeholder">{伪已读 已读=✓} - 自定义已读文本</span>
+            </div>
+            <div class="card-item orange-item">
+                <span class="placeholder">{伪已读 已送达=>} - 自定义已送达文本</span>
+            </div>
+            <div class="card-item orange-item">
+                <span class="placeholder">{伪已读 已读=✓ 已送达=>} - 自定义两种状态</span>
+            </div>
+        </div>
+
+        <!-- 编辑时间格式 -->
+        <div class="section-title">编辑时间格式:</div>
+        <div class="input-section">
+            <input type="text" class="format-input" value="{HH}:{mm}:{ss}">
+        </div>
+
+        <!-- 预览区域 -->
+        <div class="section-title">预览:</div>
+        <div class="preview-section">
+            <div class="preview-text">00:46:12</div>
+        </div>
+    </div>
+
+    <script>
+        // 简单的实时预览效果
+        const input = document.querySelector('.format-input');
+        const preview = document.querySelector('.preview-text');
+        
+        function updatePreview() {
+            const now = new Date();
+            let text = input.value;
+            
+            // 替换占位符
+            text = text.replace('{yyyy}', now.getFullYear());
+            text = text.replace('{yy}', String(now.getFullYear()).slice(-2));
+            text = text.replace('{MM}', String(now.getMonth() + 1).padStart(2, '0'));
+            text = text.replace('{dd}', String(now.getDate()).padStart(2, '0'));
+            text = text.replace('{HH}', String(now.getHours()).padStart(2, '0'));
+            text = text.replace('{mm}', String(now.getMinutes()).padStart(2, '0'));
+            text = text.replace('{ss}', String(now.getSeconds()).padStart(2, '0'));
+            
+            preview.textContent = text;
+        }
+        
+        input.addEventListener('input', updatePreview);
+        // 初始更新
+        updatePreview();
+        // 每秒更新一次时间
+        setInterval(updatePreview, 1000);
+    </script>
+</body>
+</html>
