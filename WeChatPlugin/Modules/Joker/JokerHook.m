@@ -1,6 +1,7 @@
 #import "JokerHook.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/HookEngine.h"
+#import "../../Core/WeChatAlertHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
@@ -30,39 +31,6 @@ static void jokerLog(NSString *content) {
 static IMP orig_TextCell_operationMenuItems = NULL;
 static IMP orig_TransferCell_operationMenuItems = NULL;
 static IMP orig_Wallet_updateBalanceEntryView = NULL;
-
-// ==================== WCUIAlertView 本地声明：让 ARC 正确管理 block 生命周期 ====================
-// 不声明此接口的话，ARC 在使用 objc_msgSend 裸调时看不到 block 参数，不会触发 _Block_copy，
-// block 停留在栈上，WCUIAlertView 稍后调用时已释放 → crash。
-// 声明后使用标准 ObjC 调用，ARC 自动将 block 从栈 copy 到堆。
-@interface WCUIAlertView : UIView
-- (id)initWithTitle:(NSString *)title message:(NSString *)message;
-- (void)setTag:(NSInteger)tag;
-- (void)setMessage:(NSString *)message;
-- (void)setStyle:(NSInteger)style;
-- (void)addCancelActionWithTitle:(NSString *)title target:(id)target action:(SEL)action;
-- (void)addActionWithTitle:(NSString *)title handler:(void(^)(id button))handler;
-- (void)show;
-@end
-
-// ==================== 编辑弹窗：严格照抄锤子助手 FUN_0076f720 WCUIAlertView 流程 ====================
-/*
- 锤子助手 onTextJoker 完整调用链（反编译 FUN_0076f720）：
- 1. [[WCUIAlertView alloc] initWithTitle:@"提示" message:@""]
- 2. [alert setTag:99999]
- 3. [alert setMessage:currentContent]                                    ← 预填文本内容
- 4. [alert setStyle:1]                                                   ← 文本输入模式
- 5. [alert addCancelActionWithTitle:@"取消" target:cellView action:NULL]
- 6. [alert addActionWithTitle:@"" handler:block]                         ← 确定按钮
- 7. [alert show]                                                         ← 直接加 window 子视图，绕过 presentViewController
-
- 回调中获取输入: [alert valueForKeyPath:@"tipsVc.tipsTextView.text"]
-
- ★ 核心区别：WCUIAlertView.show 把 alert 直接 add 到 window/view 层级，
-   不经过 UIViewController.presentViewController: 系统。
-   UIAlertController 走 present 流程，微信内部会检测并 dismiss 掉"外来"的 presented VC，
-   这就是弹窗秒关的根本原因。
- */
 
 // ==================== 公共：应用文字修改（msgWrap + RichTextView） ====================
 static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
@@ -110,83 +78,10 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
 static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent, void(^onConfirm)(NSString *newText)) {
     jokerLog(@"[Joker] showEditAlert");
 
-    id cellRef = cellView;
-    id msgRef = msgWrap;
-
-    // 使用 WCUIAlertView，照抄锤子助手 FUN_0076f720 全流程
-    Class alertClass = objc_getClass("WCUIAlertView");
-    if (!alertClass) {
-        jokerLog(@"[Joker] ❌ WCUIAlertView not found, fallback UIAlertController");
-        UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"修改文字" message:@""
-                                                             preferredStyle:UIAlertControllerStyleAlert];
-        [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-            tf.text = currentContent;
-            tf.clearButtonMode = UITextFieldViewModeWhileEditing;
-        }];
-        [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            NSString *nt = ac.textFields.firstObject.text ?: @"";
-            if (nt.length == 0) return;
-            applyTextModification(msgRef, cellRef, nt);
-        }]];
-        UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
-        while (rootVC.presentedViewController && !rootVC.presentedViewController.isBeingDismissed) {
-            rootVC = rootVC.presentedViewController;
-        }
-        [rootVC presentViewController:ac animated:YES completion:nil];
-        jokerLog(@"[Joker] UIAlertController shown (fallback)");
-        return;
-    }
-
-    @try {
-        // 1. alloc + initWithTitle:message:
-        //    注意：锤子助手用 title=@"提示" message=@""，然后通过 setMessage: 预填内容
-        WCUIAlertView *alert = [[alertClass alloc] initWithTitle:@"修改文字" message:@""];
-        if (!alert) {
-            jokerLog(@"[Joker] ❌ WCUIAlertView alloc failed");
-            return;
-        }
-
-        // 2. setTag:99999
-        [alert setTag:99999];
-
-        // 3. setMessage: 预填当前文本内容
-        if (currentContent.length > 0) {
-            [alert setMessage:currentContent];
-        }
-
-        // 4. setStyle:1 → 文本输入模式
-        [alert setStyle:1];
-
-        // 5. addCancelActionWithTitle:@"取消" target:cellView action:NULL
-        [alert addCancelActionWithTitle:@"取消" target:cellRef action:NULL];
-
-        // 6. addActionWithTitle:@"" handler: —— ARC 下标准 ObjC 调用，block 自动从栈 copy 到堆
-        //    锤子助手 confirm 按钮 title 是空字符串，WCUIAlertView 应该有默认标题
-        __weak id weakAlert = alert;
-        [alert addActionWithTitle:@"" handler:^(id button) {
-            // 照抄锤子助手 FUN_0076ffbc：通过 valueForKeyPath 获取输入文本
-            @try {
-                NSString *inputText = [weakAlert valueForKeyPath:@"tipsVc.tipsTextView.text"];
-                if (!inputText || inputText.length == 0) {
-                    inputText = [weakAlert valueForKeyPath:@"tipsVc.tipsTextField.text"];
-                }
-                jokerLog([NSString stringWithFormat:@"[Joker] input text from WCUIAlertView: %@", inputText]);
-                if (inputText.length > 0) {
-                    applyTextModification(msgRef, cellRef, inputText);
-                }
-            } @catch (NSException *e) {
-                jokerLog([NSString stringWithFormat:@"[Joker] ❌ get WCUIAlertView input: %@", e]);
-            }
-        }];
-
-        // 7. show —— 直接把 alert 加到 window 视图层级，不经过 UIViewController presentation
-        //    这就是锤子助手弹窗不秒关的核心原因
-        [alert show];
-        jokerLog(@"[Joker] ✅ WCUIAlertView shown via show()");
-    } @catch (NSException *e) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ❌ WCUIAlertView error: %@", e]);
-    }
+    [WeChatAlertHelper showInputAlert:@"修改文字" initialText:currentContent onConfirm:^(NSString *inputText) {
+        jokerLog([NSString stringWithFormat:@"[Joker] confirmed text: %@", inputText]);
+        applyTextModification(msgWrap, cellView, inputText);
+    }];
 }
 
 // ==================== 诊断：打印对象所有 ivar，发现正确的 msgWrap 路径 ====================

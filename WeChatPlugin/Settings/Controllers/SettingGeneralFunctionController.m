@@ -1,9 +1,9 @@
 #import "../Common/SettingController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/WPAlert.h"
+#import "../../Core/WeChatAlertHelper.h"
 #import "../../Modules/MessageTime/MessageTimeFormatEditorVC.h"
 #import <objc/runtime.h>
-#import <objc/message.h>
 
 @implementation SettingGeneralFunctionController
 
@@ -18,15 +18,7 @@
 
     NSString *key = objc_getAssociatedObject(sender, "key");
     if ([key isEqualToString:@"EnableJoker"] && sender.on) {
-        Class alertClass = objc_getClass("WCUIAlertView");
-        if (alertClass) {
-            id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc], @selector(initWithTitle:message:),
-                @"提示", @"修改文字功能已启用\n长按文本/转账消息即可修改\n长按钱包余额可隐藏");
-            SEL showSel = NSSelectorFromString(@"show");
-            if ([alert respondsToSelector:showSel]) {
-                ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
-            }
-        }
+        [WeChatAlertHelper showTipAlert:@"提示" message:@"修改文字功能已启用\n长按文本/转账消息即可修改\n长按钱包余额可隐藏"];
     }
 }
 
