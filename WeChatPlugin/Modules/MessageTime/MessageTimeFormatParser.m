@@ -75,17 +75,18 @@ static BOOL _isSpecialToken(NSString *token) {
     // ================================================================
     // 步骤0: 处理 {伪已读} — 复刻反编译 Loop 1（行 35505-35563）
     //
-    // 反编译关键: FUN_000c8f80 flag=1 搜 "=" (已读标记), flag=2 搜 ">" (已送达标记)
-    //            "已读=" 带前缀避免误匹配 "=>" 里的 "="
+    // 反编译关键: 两个标记都是 "=" 分隔！flag=1 取第一个 "=" 后的值（已读）,
+    //            flag=2 取第二个 "=" 后的值（已送达）。
+    //            用 "已读=" 带前缀搜索避免误匹配第二个 "="
     //
-    // 关键规则: 当「已读=」和「>」两个标记都出现时 → 始终输出 "已读:X | 已送达:Y"
+    // 关键规则: 当「已读=」和「已送达=」两个标记都出现时 → 始终输出 "已读:X | 已送达:Y"
     //          只有其中一个或都没有时 → 按 isSender/statusCode 选择单个文本
     //
     // 四个语法：
-    //   {伪已读}                         → 默认文本, 按状态选
-    //   {伪已读 已读=xxx}                 → 自定义已读, 按状态选
-    //   {伪已读 已送达=>yyy}              → 自定义已送达, 按状态选
-    //   {伪已读 已读=xxx 已送达=>yyy}     → 始终输出 "已读:xxx | 已送达:yyy"
+    //   {伪已读}                           → 默认文本, 按状态选
+    //   {伪已读 已读=xxx}                   → 自定义已读, 按状态选
+    //   {伪已读 已送达=yyy}                 → 自定义已送达, 按状态选
+    //   {伪已读 已读=xxx 已送达=yyy}        → 始终输出 "已读:xxx | 已送达:yyy"
     // ================================================================
     NSRegularExpression *pseudoRegex = [NSRegularExpression
         regularExpressionWithPattern:@"\\{[^}]*伪已读[^}]*\\}" options:0 error:nil];
@@ -114,19 +115,22 @@ static BOOL _isSpecialToken(NSString *token) {
         }
         // 未找到 "已读=" 标记 → 使用默认值
 
-        // --- 解析已送达文本: 搜索裸 ">" (复刻 FUN_000c8f80 flag=2) ---
-        // ">" 只在 "=>" 标记中唯一出现，不需要前缀，搜裸字符即可
+        // --- 解析已送达文本: 搜索 "已送达=" (复刻 FUN_000c8f80 flag=2) ---
+        // 两个标记都用 "=" 分隔，flag=2 取第二个 "="（即 "已送达=" 后的值）
         NSString *customDeliveredText = nil;
-        NSRange gtRange = [inner rangeOfString:@">"];
-        if (gtRange.location != NSNotFound && gtRange.location + 1 < inner.length) {
-            customDeliveredText = [inner substringFromIndex:gtRange.location + 1];
-            // 截到下一个空格为止
-            NSRange spaceRange = [customDeliveredText rangeOfString:@" "];
-            if (spaceRange.location != NSNotFound) {
-                customDeliveredText = [customDeliveredText substringToIndex:spaceRange.location];
+        NSRange deliveredMarkerRange = [inner rangeOfString:@"已送达="];
+        if (deliveredMarkerRange.location != NSNotFound) {
+            NSUInteger afterMarker = deliveredMarkerRange.location + deliveredMarkerRange.length;
+            if (afterMarker < inner.length) {
+                customDeliveredText = [inner substringFromIndex:afterMarker];
+                // 截到下一个空格为止
+                NSRange spaceRange = [customDeliveredText rangeOfString:@" "];
+                if (spaceRange.location != NSNotFound) {
+                    customDeliveredText = [customDeliveredText substringToIndex:spaceRange.location];
+                }
             }
         }
-        // 未找到 ">" → 使用默认值
+        // 未找到 "已送达=" → 使用默认值
 
         // --- 回退默认值 ---
         if (!customReadText || customReadText.length == 0) customReadText = kDefaultReadText;
@@ -136,7 +140,7 @@ static BOOL _isSpecialToken(NSString *token) {
         // 注意: 不能用 isEqualToString:kDefaultReadText 因为用户可能故意写 {伪已读 已读=已读}
         // 保守策略: 只要 marker 找到且值非空就认为是自定义的
         BOOL readMarkerFound = (readMarkerRange.location != NSNotFound);
-        BOOL deliveredMarkerFound = (gtRange.location != NSNotFound);
+        BOOL deliveredMarkerFound = (deliveredMarkerRange.location != NSNotFound);
 
         NSString *resultText;
         if (readMarkerFound && deliveredMarkerFound) {
