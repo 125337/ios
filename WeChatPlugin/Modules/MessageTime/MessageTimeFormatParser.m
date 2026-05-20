@@ -75,18 +75,16 @@ static BOOL _isSpecialToken(NSString *token) {
     // ================================================================
     // 步骤0: 处理 {伪已读} — 复刻反编译 Loop 1（行 35505-35563）
     //
-    // 反编译关键: 两个标记都是 "=" 分隔！flag=1 取第一个 "=" 后的值（已读）,
-    //            flag=2 取第二个 "=" 后的值（已送达）。
-    //            用 "已读=" 带前缀搜索避免误匹配第二个 "="
-    //
-    // 关键规则: 当「已读=」和「已送达=」两个标记都出现时 → 始终输出 "已读:X | 已送达:Y"
-    //          只有其中一个或都没有时 → 按 isSender/statusCode 选择单个文本
+    // 两个标记都用 "=" 分隔:
+    //   已读=xxx   → 自定义已读时显示的文本（statusCode==2 时用）
+    //   已送达=yyy → 自定义已送达时显示的文本（statusCode!=2 时用）
+    //   无论几个标记，始终按 isSender/statusCode 选一个文本，不会同时显示两个
     //
     // 四个语法：
-    //   {伪已读}                           → 默认文本, 按状态选
-    //   {伪已读 已读=xxx}                   → 自定义已读, 按状态选
-    //   {伪已读 已送达=yyy}                 → 自定义已送达, 按状态选
-    //   {伪已读 已读=xxx 已送达=yyy}        → 始终输出 "已读:xxx | 已送达:yyy"
+    //   {伪已读}                      → 默认: 已读=已读, 已送达=已送达
+    //   {伪已读 已读=xxx}              → 已读状态显示 xxx, 已送达用默认
+    //   {伪已读 已送达=yyy}            → 已送达状态显示 yyy, 已读用默认
+    //   {伪已读 已读=xxx 已送达=yyy}   → 已读显示 xxx, 已送达显示 yyy
     // ================================================================
     NSRegularExpression *pseudoRegex = [NSRegularExpression
         regularExpressionWithPattern:@"\\{[^}]*伪已读[^}]*\\}" options:0 error:nil];
@@ -136,30 +134,18 @@ static BOOL _isSpecialToken(NSString *token) {
         if (!customReadText || customReadText.length == 0) customReadText = kDefaultReadText;
         if (!customDeliveredText || customDeliveredText.length == 0) customDeliveredText = kDefaultDeliveredText;
 
-        // --- 判断是否两个标记都出现了（不等于默认即说明 marker 找到了且有值）---
-        // 注意: 不能用 isEqualToString:kDefaultReadText 因为用户可能故意写 {伪已读 已读=已读}
-        // 保守策略: 只要 marker 找到且值非空就认为是自定义的
-        BOOL readMarkerFound = (readMarkerRange.location != NSNotFound);
-        BOOL deliveredMarkerFound = (deliveredMarkerRange.location != NSNotFound);
-
-        NSString *resultText;
-        if (readMarkerFound && deliveredMarkerFound) {
-            // 双标记模式: 始终输出 "已读:X | 已送达:Y"，不受 isSender/statusCode 影响
-            resultText = [NSString stringWithFormat:@"已读:%@ | 已送达:%@", customReadText, customDeliveredText];
-        } else {
-            // 单标记/无标记模式: 按状态选一个 (复刻反编译 35542-35549)
-            // pcVar1 = pcVar5 (已送达文本)
-            // if (param_2 == 0) pcVar1 = ""    — 接收者不显示伪已读
-            // pcVar2 = pcVar15 (已读文本)
-            // if (param_3 != 2) pcVar2 = pcVar1 — 未读→已送达
-            NSString *deliveredText = customDeliveredText;
-            if (!isSender) {
-                deliveredText = @""; // 接收者: 不显示伪已读 (复刻 param_2==0 → "")
-            }
-            resultText = customReadText;
-            if (statusCode != 2) {
-                resultText = deliveredText; // 未读 → 显示已送达文本 (复刻 param_3!=2 → pcVar1)
-            }
+        // --- 按状态选一个 (复刻反编译 35542-35549) ---
+        // pcVar1 = pcVar5 (已送达文本)
+        // if (param_2 == 0) pcVar1 = ""    — 接收者不显示伪已读
+        // pcVar2 = pcVar15 (已读文本)
+        // if (param_3 != 2) pcVar2 = pcVar1 — 未读→已送达
+        NSString *deliveredText = customDeliveredText;
+        if (!isSender) {
+            deliveredText = @""; // 接收者: 不显示伪已读 (复刻 param_2==0 → "")
+        }
+        NSString *resultText = customReadText;
+        if (statusCode != 2) {
+            resultText = deliveredText; // 未读 → 显示已送达文本 (复刻 param_3!=2 → pcVar1)
         }
 
         // --- 替换整个 {...} match ---
