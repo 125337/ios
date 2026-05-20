@@ -78,7 +78,7 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
 static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent, void(^onConfirm)(NSString *newText)) {
     jokerLog(@"[Joker] showEditAlert");
 
-    [WeChatAlertHelper showInputAlert:@"修改文字" initialText:currentContent onConfirm:^(NSString *inputText) {
+    [WeChatAlertHelper showInputAlert:@"修改文字" initialText:currentContent target:cellView onConfirm:^(NSString *inputText) {
         jokerLog([NSString stringWithFormat:@"[Joker] confirmed text: %@", inputText]);
         applyTextModification(msgWrap, cellView, inputText);
     }];

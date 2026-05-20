@@ -56,7 +56,7 @@ static void walertLog(NSString *content) {
 
 #pragma mark - 文本输入弹窗
 
-+ (void)showInputAlert:(NSString *)title initialText:(NSString *)text onConfirm:(void(^)(NSString *inputText))confirm {
++ (void)showInputAlert:(NSString *)title initialText:(NSString *)text target:(id)target onConfirm:(void(^)(NSString *inputText))confirm {
     Class alertClass = [self alertClass];
     if (!alertClass) {
         walertLog(@"[WeChatAlert] ❌ WCUIAlertView not available, cannot show input alert");
@@ -82,8 +82,8 @@ static void walertLog(NSString *content) {
         // 4. setStyle:1 → 文本输入模式
         [alert setStyle:1];
 
-        // 5. 取消按钮
-        [alert addCancelActionWithTitle:@"取消" target:nil action:NULL];
+        // 5. 取消按钮 —— target 不能为 nil（WCUIAlertView 需要有效 target 才能正常工作）
+        [alert addCancelActionWithTitle:@"取消" target:target action:NULL];
 
         // 6. 确定按钮 —— 标准 ObjC 调用，ARC 自动 copy block
         __weak id weakAlert = alert;
