@@ -354,18 +354,32 @@ static NSString *configPropertyForKey(NSString *key) {
                                    radius:6];
     [group addSubview:preview];
 
-    UITextField *tf = [[UITextField alloc] initWithFrame:CGRectMake(gw - kCellHPadding - 100, cy + 8, 56, kRowH - 16)];
-    tf.font = [UIFont systemFontOfSize:12];
-    tf.textColor = textSecondary();
-    tf.text = value;
-    tf.textAlignment = NSTextAlignmentCenter;
-    tf.returnKeyType = UIReturnKeyDone;
-    [tf addTarget:self action:@selector(textFieldChanged:) forControlEvents:UIControlEventEditingChanged];
-    [tf addTarget:self action:@selector(textFieldDone:) forControlEvents:UIControlEventEditingDidEndOnExit];
-    [tf addTarget:self action:@selector(textFieldDone:) forControlEvents:UIControlEventEditingDidEnd];
-    objc_setAssociatedObject(tf, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [group addSubview:tf];
-    self.inputFields[key] = tf;
+    // 用系统原生颜色选择器替代文本输入框
+    if (@available(iOS 14.0, *)) {
+        UIColorWell *well = [[UIColorWell alloc] initWithFrame:CGRectMake(gw - kCellHPadding - 100, cy + 8, 56, kRowH - 16)];
+        well.selectedColor = [[PluginConfig shared] colorFromHex:value];
+        well.title = title; // 系统颜色选择器标题
+        well.supportsAlpha = NO;
+        objc_setAssociatedObject(well, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(well, "preview", preview, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [well addTarget:self action:@selector(colorWellChanged:)
+          forControlEvents:UIControlEventValueChanged];
+        [group addSubview:well];
+    } else {
+        // iOS 13 fallback: 保留原来的文本输入框
+        UITextField *tf = [[UITextField alloc] initWithFrame:CGRectMake(gw - kCellHPadding - 100, cy + 8, 56, kRowH - 16)];
+        tf.font = [UIFont systemFontOfSize:12];
+        tf.textColor = textSecondary();
+        tf.text = value;
+        tf.textAlignment = NSTextAlignmentCenter;
+        tf.returnKeyType = UIReturnKeyDone;
+        [tf addTarget:self action:@selector(textFieldChanged:) forControlEvents:UIControlEventEditingChanged];
+        [tf addTarget:self action:@selector(textFieldDone:) forControlEvents:UIControlEventEditingDidEndOnExit];
+        [tf addTarget:self action:@selector(textFieldDone:) forControlEvents:UIControlEventEditingDidEnd];
+        objc_setAssociatedObject(tf, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [group addSubview:tf];
+        self.inputFields[key] = tf;
+    }
     return cy + kRowH;
 }
 
@@ -460,6 +474,19 @@ static NSString *configPropertyForKey(NSString *key) {
 
 - (void)textFieldChanged:(UITextField *)tf {
     [self autoSaveTextField:tf];
+}
+
+- (void)colorWellChanged:(UIColorWell *)well  API_AVAILABLE(ios(14.0)) {
+    UIView *preview = objc_getAssociatedObject(well, "preview");
+    if (preview) {
+        preview.backgroundColor = well.selectedColor ?: [UIColor grayColor];
+    }
+    NSString *key = objc_getAssociatedObject(well, "key");
+    if (!key) return;
+    NSString *hex = [[PluginConfig shared] hexFromColor:well.selectedColor];
+    if (!hex) hex = @"#808080";
+    [[PluginConfig shared] setValue:hex forKey:key];
+    [[PluginConfig shared] save];
 }
 
 - (void)textFieldDone:(UITextField *)tf {

@@ -342,6 +342,14 @@ static void configLog(NSString *content) {
     return [UIColor colorWithRed:r / 255.0 green:g / 255.0 blue:b / 255.0 alpha:a / 255.0];
 }
 
+- (NSString *)hexFromColor:(UIColor *)color {
+    if (!color) return nil;
+    CGFloat r, g, b, a;
+    [color getRed:&r green:&g blue:&b alpha:&a];
+    return [NSString stringWithFormat:@"#%02X%02X%02X",
+            (int)(r * 255), (int)(g * 255), (int)(b * 255)];
+}
+
 - (BOOL)isDarkMode {
     if (@available(iOS 13.0, *)) {
         return UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;

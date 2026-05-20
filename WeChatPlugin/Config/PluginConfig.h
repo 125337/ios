@@ -84,6 +84,7 @@
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *userFormats;
 - (NSString *)notifyFormatForSession:(NSString *)session user:(NSString *)user;
 - (UIColor *)colorFromHex:(NSString *)hex;
+- (NSString *)hexFromColor:(UIColor *)color;
 - (BOOL)isDarkMode;
 - (UIColor *)nameColor;
 - (UIColor *)timeColor;
