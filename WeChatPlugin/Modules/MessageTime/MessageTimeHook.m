@@ -163,9 +163,9 @@ static BOOL detectIsSender(id cell, id cellView, id contentView, id wrap) {
 // MARK: - Time Formatting
 // ============================================================
 
-// 使用 MessageTimeFormatParser 统一格式化（支持自定义格式）
-static NSString *formatMessageTime(NSDate *date, NSString *fallbackFormat, NSString *customFormat, BOOL isDark) {
-    return [MessageTimeFormatParser formatDate:date customFormat:customFormat isDarkMode:isDark];
+// 使用 MessageTimeFormatParser 统一格式化（支持自定义格式 + 伪已读）
+static NSString *formatMessageTime(NSDate *date, NSString *customFormat, BOOL isDark, BOOL isSender, NSInteger statusCode) {
+    return [MessageTimeFormatParser formatDate:date customFormat:customFormat isDarkMode:isDark isSender:isSender statusCode:statusCode];
 }
 
 // ============================================================
@@ -398,17 +398,25 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
         if (!viewModel) return;
 
         unsigned int createTime = 0;
+        unsigned int uiStatus = 0; // 消息状态（用于伪已读）
+        id messageWrap = nil;
         @try {
-            // 方式1: viewModel → messageWrap → m_uiCreateTime
-            id messageWrap = nil;
+            // 方式1: viewModel → messageWrap → m_uiCreateTime / m_uiStatus
             if ([viewModel respondsToSelector:NSSelectorFromString(@"messageWrap")]) {
                 @try { messageWrap = [viewModel valueForKey:@"messageWrap"]; } @catch (...) {}
             }
             if (!messageWrap) {
                 @try { messageWrap = [viewModel valueForKey:@"m_messageWrap"]; } @catch (...) {}
             }
-            if (messageWrap && [messageWrap respondsToSelector:NSSelectorFromString(@"m_uiCreateTime")]) {
-                createTime = (unsigned int)[[messageWrap valueForKey:@"m_uiCreateTime"] unsignedIntValue];
+            if (messageWrap) {
+                if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_uiCreateTime")]) {
+                    createTime = (unsigned int)[[messageWrap valueForKey:@"m_uiCreateTime"] unsignedIntValue];
+                }
+                // 获取 m_uiStatus（消息发送/送达/已读状态）
+                if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_uiStatus")]) {
+                    @try { uiStatus = (unsigned int)[[messageWrap valueForKey:@"m_uiStatus"] unsignedIntValue]; }
+                    @catch (...) {}
+                }
             }
             // 方式2: viewModel → createTime（直接属性）
             if (createTime == 0 && [viewModel respondsToSelector:NSSelectorFromString(@"createTime")]) {
@@ -418,11 +426,31 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
 
         if (createTime == 0) return;
 
-        // 格式化时间（使用自定义格式引擎）
+        // 确定 isSender
+        BOOL isSender = NO;
+        @try {
+            id target = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"];
+            if (!target) target = cell;
+            if (messageWrap && [target respondsToSelector:NSSelectorFromString(@"isSenderFromMsgWrap:")]) {
+                isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(target, NSSelectorFromString(@"isSenderFromMsgWrap:"), messageWrap);
+            } else {
+                @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (...) {}
+            }
+        } @catch (...) {}
+
+        // 计算伪已读 statusCode（复刻反编译 FUN_0003bb04）
+        // WeChat m_uiStatus: 0=发送中, 1=已发送, 2=已送达, 3=已读, 4=已播放(语音)
+        // statusCode: 2=已读, 非2=已送达
+        NSInteger statusCode = (uiStatus >= 3) ? 2 : 1;
+
+        // 格式化时间（使用自定义格式引擎，含伪已读）
         PluginConfig *config = [PluginConfig shared];
         NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
-        NSString *timeText = formatMessageTime(date, config.messageTimeFormat,
-                                                config.messageTimeCustomFormat, [config isDarkMode]);
+        NSString *timeText = formatMessageTime(date,
+                                                config.messageTimeCustomFormat,
+                                                [config isDarkMode],
+                                                isSender,
+                                                statusCode);
         if (!timeText) return;
 
         // 存入 viewModel 关联对象（复刻 DAT_0013ad99）

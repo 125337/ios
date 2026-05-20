@@ -6,6 +6,10 @@
 static NSString * const kDefaultFormat = @"{HH}:{mm}:{ss}";
 static NSString * const kStorageKey = @"com.wechat.enhance.messageTime.customFormat";
 
+// 伪已读默认文本
+static NSString * const kDefaultReadText      = @"已读";
+static NSString * const kDefaultDeliveredText = @"已送达";
+
 // 标准 NSDateFormatter 令牌列表（花括号内的名字 → NSDateFormatter format specifier）
 static NSDictionary<NSString *, NSString *> *_stdTokenMap(void) {
     static NSDictionary *map;
@@ -44,6 +48,13 @@ static BOOL _isSpecialToken(NSString *token) {
 + (NSString *)storageKey   { return kStorageKey; }
 
 + (NSString *)formatDate:(NSDate *)date customFormat:(NSString *)customFormat isDarkMode:(BOOL)isDarkMode {
+    return [self formatDate:date customFormat:customFormat isDarkMode:isDarkMode isSender:NO statusCode:2];
+}
+
+// 核心格式化（含伪已读），复刻反编译 FUN_0003bcb0 双循环架构
+// Loop 1（步骤0）: 正则遍历 {伪已读...} → 参数解析 + 状态选择 → 替换
+// Loop 2（步骤1-3）: 令牌数组遍历 → 占位符 / NSDateFormatter → 回填
++ (NSString *)formatDate:(NSDate *)date customFormat:(NSString *)customFormat isDarkMode:(BOOL)isDarkMode isSender:(BOOL)isSender statusCode:(NSInteger)statusCode {
     if (!date) return nil;
 
     NSString *rawFormat = (customFormat.length > 0) ? customFormat : kDefaultFormat;
@@ -60,6 +71,71 @@ static BOOL _isSpecialToken(NSString *token) {
 
     // 去换行符
     fmt = [fmt stringByReplacingOccurrencesOfString:@"\n" withString:@""];
+
+    // ================================================================
+    // 步骤0: 处理 {伪已读} — 复刻反编译 Loop 1（行 35505-35563）
+    //
+    // 四个语法：
+    //   {伪已读}                         → 默认文本
+    //   {伪已读 已读=xxx}                 → 自定义已读文本
+    //   {伪已读 已送达=>yyy}              → 自定义已送达文本
+    //   {伪已读 已读=xxx 已送达=>yyy}     → 自定义两种状态
+    //
+    // 反编译逻辑: 在 {...} match 中搜索 "=" (flag 1) 取已读文本,
+    //             搜索 ">" (flag 2) 取已送达文本,
+    //             根据 isSender/statusCode 选择最终文本替换整个 match
+    // ================================================================
+    NSRegularExpression *pseudoRegex = [NSRegularExpression
+        regularExpressionWithPattern:@"\\{[^}]*伪已读[^}]*\\}" options:0 error:nil];
+    NSArray<NSTextCheckingResult *> *pseudoMatches = [pseudoRegex matchesInString:fmt options:0
+                                                                             range:NSMakeRange(0, fmt.length)];
+
+    // 从后往前替换（保持索引有效）
+    for (NSTextCheckingResult *match in [pseudoMatches reverseObjectEnumerator]) {
+        NSString *fullMatch = [fmt substringWithRange:match.range];  // e.g. "{伪已读 已读=已阅 已送达=>已到}"
+        NSString *inner = [fullMatch substringWithRange:NSMakeRange(1, fullMatch.length - 2)]; // 去花括号
+
+        // --- 解析: 搜索 "=" 取已读自定义文本 (复刻 FUN_000c8f80 flag=1) ---
+        NSString *customReadText = nil;
+        NSRange eqRange = [inner rangeOfString:@"="];
+        if (eqRange.location != NSNotFound && eqRange.location + 1 < inner.length) {
+            customReadText = [inner substringFromIndex:eqRange.location + 1];
+            // 如果 "已送达>" 部分也跟在后面，截掉（以第一个空格为界）
+            NSRange spaceRange = [customReadText rangeOfString:@" "];
+            if (spaceRange.location != NSNotFound) {
+                customReadText = [customReadText substringToIndex:spaceRange.location];
+            }
+        }
+
+        // --- 解析: 搜索 ">" 取已送达自定义文本 (复刻 FUN_000c8f80 flag=2) ---
+        NSString *customDeliveredText = nil;
+        NSRange gtRange = [inner rangeOfString:@">"];
+        if (gtRange.location != NSNotFound && gtRange.location + 1 < inner.length) {
+            customDeliveredText = [inner substringFromIndex:gtRange.location + 1];
+        }
+
+        // --- 回退默认值 ---
+        if (!customReadText || customReadText.length == 0) customReadText = kDefaultReadText;
+        if (!customDeliveredText || customDeliveredText.length == 0) customDeliveredText = kDefaultDeliveredText;
+
+        // --- 选择逻辑 (复刻反编译 35542-35552) ---
+        // pcVar1 = pcVar5 (已送达文本)
+        // if (param_2 == 0) pcVar1 = ""    — 接收者不显示伪已读
+        // pcVar2 = pcVar15 (已读文本)
+        // if (param_3 != 2) pcVar2 = pcVar1 — 未读→已送达
+        NSString *deliveredText = customDeliveredText;
+        if (!isSender) {
+            deliveredText = @""; // 接收者: 不显示伪已读 (复刻 param_2==0 → "")
+        }
+
+        NSString *resultText = customReadText;
+        if (statusCode != 2) {
+            resultText = deliveredText; // 未读 → 显示已送达文本 (复刻 param_3!=2 → pcVar1)
+        }
+
+        // --- 替换整个 {...} match ---
+        fmt = [fmt stringByReplacingCharactersInRange:match.range withString:resultText];
+    }
 
     // ================================================================
     // 步骤1: 处理特殊令牌 {EEEE}{EE}{a}{b} → 占位符

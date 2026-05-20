@@ -28,6 +28,16 @@ static NSArray<NSString *> *_tokenDescs(void) {
     ];
 }
 
+// 伪已读表格 — 单行格式（语法 + 说明用 " - " 分隔，复刻 1.6.5 橙色卡片样式）
+static NSArray<NSString *> *_pseudoReadItems(void) {
+    return @[
+        @"{伪已读} - 使用默认文本",
+        @"{伪已读 已读=✓} - 自定义已读文本",
+        @"{伪已读 已送达=>} - 自定义已送达文本",
+        @"{伪已读 已读=✓ 已送达=>} - 自定义两种状态",
+    ];
+}
+
 @interface MessageTimeFormatEditorVC () <UITextViewDelegate>
 @property (nonatomic, strong) UIScrollView *scrollView;
 @property (nonatomic, strong) UIView *contentView;
@@ -58,11 +68,15 @@ static NSArray<NSString *> *_tokenDescs(void) {
     y = [self buildHelpTableAtY:y width:w];
     y += 20.0;
 
-    // ---- 第二部分：编辑区 ----
+    // ---- 第二部分：伪已读自定义方式 ----
+    y = [self buildPseudoReadSectionAtY:y width:w];
+    y += 20.0;
+
+    // ---- 第三部分：编辑区 ----
     y = [self buildEditorSectionAtY:y width:w];
     y += 20.0;
 
-    // ---- 第三部分：预览区 ----
+    // ---- 第四部分：预览区 ----
     y = [self buildPreviewSectionAtY:y width:w];
 
     // 更新 contentSize
@@ -159,6 +173,75 @@ static NSArray<NSString *> *_tokenDescs(void) {
     }
 
     return CGRectGetMaxY(table.frame);
+}
+
+#pragma mark - 伪已读自定义方式（复刻 1.6.5 — 独立 section，橙色卡片）
+
+- (CGFloat)buildPseudoReadSectionAtY:(CGFloat)y width:(CGFloat)w {
+    NSArray *items = _pseudoReadItems();
+    NSInteger count = items.count;
+    CGFloat rowH = 25.0;
+    CGFloat cornerR = 10.0;
+    CGFloat leftX = 20.0;
+
+    // Section header: "伪已读自定义方式"
+    UILabel *header = [[UILabel alloc] initWithFrame:CGRectMake(20.0, y, w - 40.0, 20.0)];
+    header.text = @"伪已读自定义方式:";
+    header.font = [UIFont systemFontOfSize:13.0 weight:UIFontWeightMedium];
+    header.textColor = [UIColor secondaryLabelColor];
+    [self.contentView addSubview:header];
+    y += 28.0;
+
+    // 卡片容器
+    CGFloat totalH = count * rowH;
+    UIView *card = [[UIView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, totalH)];
+    card.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+    card.layer.cornerRadius = cornerR;
+    card.layer.borderWidth = 0.5;
+    card.layer.borderColor = [UIColor separatorColor].CGColor;
+    card.clipsToBounds = YES;
+    [self.contentView addSubview:card];
+
+    UIColor *orangeColor = [UIColor systemOrangeColor];
+    UIFont *itemFont = [UIFont systemFontOfSize:13.0 weight:UIFontWeightRegular];
+
+    for (NSInteger i = 0; i < count; i++) {
+        // 单行文本："{伪已读} - 使用默认文本"
+        UILabel *rowLabel = [[UILabel alloc] initWithFrame:
+            CGRectMake(leftX, i * rowH, w - 30.0 - leftX - 15.0, rowH)];
+        rowLabel.font = itemFont;
+        rowLabel.textColor = orangeColor;
+
+        NSString *text = items[i];
+        // 用 " - " 分割出语法部分，加粗显示
+        NSRange dashRange = [text rangeOfString:@" - "];
+        if (dashRange.location != NSNotFound) {
+            NSMutableAttributedString *attr = [[NSMutableAttributedString alloc] initWithString:text];
+            // 整个文本橙色
+            [attr addAttribute:NSForegroundColorAttributeName value:orangeColor range:NSMakeRange(0, text.length)];
+            // 语法部分（"{...}"）加粗
+            [attr addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:13.0 weight:UIFontWeightSemibold]
+                         range:NSMakeRange(0, dashRange.location)];
+            // 说明部分 Regular
+            [attr addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:13.0 weight:UIFontWeightRegular]
+                         range:NSMakeRange(dashRange.location, text.length - dashRange.location)];
+            rowLabel.attributedText = attr;
+        } else {
+            rowLabel.text = text;
+        }
+
+        [card addSubview:rowLabel];
+
+        // 分隔线
+        if (i < count - 1) {
+            UIView *sep = [[UIView alloc] initWithFrame:
+                CGRectMake(leftX, (i + 1) * rowH - 0.5, w - 30.0 - leftX - 15.0, 0.5)];
+            sep.backgroundColor = [UIColor separatorColor];
+            [card addSubview:sep];
+        }
+    }
+
+    return CGRectGetMaxY(card.frame);
 }
 
 #pragma mark - 编辑区（复刻 viewDidLoad 第二个 section）
