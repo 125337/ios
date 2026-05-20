@@ -127,10 +127,7 @@ static void walertLog(NSString *content) {
             return;
         }
 
-        // 2. setTag:99999
-        [alert setTag:99999];
-
-        // 3. style:0 = 无输入框模式
+        // 2. style:0 = 无输入框模式
         [alert setStyle:0];
 
         // 4. 确认按钮
