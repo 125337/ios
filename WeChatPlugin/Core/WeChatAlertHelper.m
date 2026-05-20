@@ -1,4 +1,5 @@
 #import "WeChatAlertHelper.h"
+#import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
 // ==================== WCUIAlertView 本地声明：让 ARC 正确管理 block 生命周期 ====================
@@ -85,7 +86,7 @@ static void walertLog(NSString *content) {
         [alert addCancelActionWithTitle:@"取消" target:nil action:NULL];
 
         // 6. 确定按钮 —— 标准 ObjC 调用，ARC 自动 copy block
-        __weak WCUIAlertView *weakAlert = alert;
+        __weak id weakAlert = alert;
         [alert addActionWithTitle:@"" handler:^(id button) {
             @try {
                 NSString *inputText = [weakAlert valueForKeyPath:@"tipsVc.tipsTextView.text"];
