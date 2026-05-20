@@ -15,7 +15,29 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-      
+
+    - name: Clear GitHub Actions cache
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const caches = await github.rest.actions.listActionsCacheEntries({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          console.log(`Found ${caches.data.actions_caches?.length || 0} cache entries`);
+          if (caches.data.actions_caches) {
+            for (const cache of caches.data.actions_caches) {
+              try {
+                await github.rest.actions.deleteActionsCacheEntry({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  cache_id: cache.id,
+                });
+                console.log(`Deleted cache id: ${cache.id}`);
+              } catch(e) {}
+            }
+          }
+
     - name: Setup Xcode
       uses: maxim-lobanov/setup-xcode@v1
       with:
@@ -24,6 +46,9 @@ jobs:
     - name: Build dylib (arm64)
       run: |
         set -o pipefail
+
+        # 强制清理旧编译产物，确保每次都是全新编译（防止 GitHub Actions 缓存导致 .m 更改未生效）
+        rm -rf build/
         mkdir -p build
 
         SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
