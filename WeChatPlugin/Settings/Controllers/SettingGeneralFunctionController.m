@@ -17,9 +17,15 @@
 
     NSString *key = objc_getAssociatedObject(sender, "key");
     if ([key isEqualToString:@"EnableJoker"] && sender.on) {
-        [WPAlert showTip:@"修改文字"
-                 message:@"已为你启用了修改文字功能\n长按聊天记录即可修改"
-                    from:self];
+        Class alertClass = objc_getClass("WCUIAlertView");
+        if (alertClass) {
+            id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc], @selector(initWithTitle:message:),
+                @"提示", @"修改文字功能已启用\n长按文本/转账消息即可修改\n长按钱包余额可隐藏");
+            SEL showSel = NSSelectorFromString(@"show");
+            if ([alert respondsToSelector:showSel]) {
+                ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
+            }
+        }
     }
 }
 
