@@ -33,12 +33,12 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     }
 
     NSNumber *ptr = [NSNumber numberWithUnsignedLong:(unsigned long)self];
-    if ([_viewDidLoadSet containsObject:ptr]) {
-        reLog(@"[Entry] recursive skip");
-        return;
+    BOOL isRecursive = [_viewDidLoadSet containsObject:ptr];
+    if (!isRecursive) {
+        [_viewDidLoadSet addObject:ptr];
     }
-    [_viewDidLoadSet addObject:ptr];
 
+    // 始终调用父类 viewDidLoad（确保视图被创建），即使递归调用也要创建视图
     Class uiVC = objc_getClass("UIViewController");
     Method m = class_getInstanceMethod(uiVC, _cmd);
     if (m) {
@@ -49,6 +49,14 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     vc.title = @"Mio助手";
 
     CGFloat w = vc.view.bounds.size.width;
+
+    // 递归调用时视图已创建，直接返回避免重复添加子视图
+    if (isRecursive) {
+        reLog(@"[Entry] recursive skip");
+        return;
+    }
+
+    // 以下为自定义 UI 创建逻辑
     UIScrollView *sv = WPMakeSV(vc);
     [vc.view addSubview:sv];
 
