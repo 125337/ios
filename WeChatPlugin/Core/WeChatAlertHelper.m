@@ -8,14 +8,9 @@
 - (id)initWithTitle:(NSString *)title message:(NSString *)message;
 - (void)showTextFieldWithMaxLen:(NSInteger)maxLen;
 - (void)setTextFieldDefaultText:(NSString *)text;
-- (void)setTextFieldPlaceHolder:(NSString *)placeholder;
-- (id)getTextField;
-- (NSString *)getTextFieldText;
 - (void)addBtnTitle:(NSString *)title handler:(void(^)(id button))handler;
-- (void)addCancelBtnTitle:(NSString *)title handler:(void(^)(id button))handler;
 - (void)addCancelBtnTitle:(NSString *)title target:(id)target sel:(SEL)sel;
 - (void)show;
-- (void)dismissAnimated:(BOOL)animated;
 @end
 
 // ==================== 日志 ====================
@@ -82,11 +77,17 @@ static void walertLog(NSString *content) {
         // 4. addCancelBtnTitle:target:sel: → 取消按钮
         [alert addCancelBtnTitle:@"取消" target:target sel:NULL];
 
-        // 5. addBtnTitle:handler: → 确定按钮（ARC 标准 ObjC 调用，block 自动 copy 到堆）
-        __weak id weakAlert = alert;
+        // 5. addBtnTitle:handler: → 确定按钮
+        //    用 __unsafe_unretained 而非 __weak（WCUIAlertView 生命周期由 window 管理，
+        //    __weak 可能被 ARC 过早置 nil 导致 handler 内 weakAlert 为空）
+        __unsafe_unretained id weakAlert = alert;
         [alert addBtnTitle:@"确定" handler:^(id button) {
             @try {
-                NSString *inputText = [weakAlert getTextFieldText];
+                // 照抄锤子助手 FUN_0076ffbc：valueForKeyPath 获取输入文本
+                NSString *inputText = [weakAlert valueForKeyPath:@"tipsVc.tipsTextView.text"];
+                if (!inputText || inputText.length == 0) {
+                    inputText = [weakAlert valueForKeyPath:@"tipsVc.tipsTextField.text"];
+                }
                 walertLog([NSString stringWithFormat:@"[WeChatAlert] input: %@", inputText]);
                 if (inputText.length > 0 && confirm) {
                     confirm(inputText);
