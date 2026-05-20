@@ -91,98 +91,33 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
 static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent, void(^onConfirm)(NSString *newText)) {
     jokerLog(@"[Joker] showEditAlert");
 
-    Class alertClass = objc_getClass("WCUIAlertView");
-    if (!alertClass) {
-        jokerLog(@"[Joker] ⚠️ WCUIAlertView not found, fallback to UIAlertController");
-        id cellRef = cellView;
-        id msgRef = msgWrap;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"修改文字" message:@"" preferredStyle:UIAlertControllerStyleAlert];
-            [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-                tf.text = currentContent;
-                tf.clearButtonMode = UITextFieldViewModeWhileEditing;
-            }];
-            [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-            [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-                NSString *nt = ac.textFields.firstObject.text ?: @"";
-                applyTextModification(msgRef, cellRef, nt);
-            }]];
-            UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
-            while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
-            [rootVC presentViewController:ac animated:YES completion:nil];
-        });
-        return;
-    }
-
-    // ===== 照抄锤子助手：[[WCUIAlertView alloc] initWithTitle:@"修改文字" message:currentContent] =====
-    // 关键：必须用 initWithTitle:message: 而不是 init，否则 alert 内部未初始化导致 show 秒关
-    id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc], @selector(initWithTitle:message:),
-        @"修改文字", currentContent);
-    jokerLog([NSString stringWithFormat:@"[Joker] WCUIAlertView init: %@", alert]);
-
-    if (!alert) {
-        jokerLog(@"[Joker] ❌ WCUIAlertView init returned nil");
-        return;
-    }
-
     id cellRef = cellView;
     id msgRef = msgWrap;
-    id alertRef = alert;
 
-    // ② setTag:99999
-    ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, NSSelectorFromString(@"setTag:"), 99999);
+    // ===== 主路径：UIAlertController（ARC 原生支持，稳定可靠） =====
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"修改文字" message:@""
+                                                             preferredStyle:UIAlertControllerStyleAlert];
+        [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+            tf.text = currentContent;
+            tf.clearButtonMode = UITextFieldViewModeWhileEditing;
+            tf.autocorrectionType = UITextAutocorrectionTypeNo;
+        }];
 
-    // ③ setMessage:currentContent（照抄 FUN_008560c0，在 setStyle 之前设内容）
-    SEL setMsgSel = NSSelectorFromString(@"setMessage:");
-    if ([alert respondsToSelector:setMsgSel]) {
-        ((void(*)(id, SEL, id))objc_msgSend)(alert, setMsgSel, currentContent);
-        jokerLog(@"[Joker] setMessage done");
-    }
+        [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            NSString *nt = ac.textFields.firstObject.text ?: @"";
+            if (nt.length == 0) return;
+            applyTextModification(msgRef, cellRef, nt);
+        }]];
 
-    // ④ setStyle:1（照抄 FUN_008556c0，文本输入模式）
-    SEL setStyleSel = NSSelectorFromString(@"setStyle:");
-    if ([alert respondsToSelector:setStyleSel]) {
-        ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, setStyleSel, 1);
-        jokerLog(@"[Joker] setStyle:1 done");
-    }
-
-    // ⑤ addCancelActionWithTitle:（照抄 FUN_00846340 → 取消按钮）
-    SEL addCancelSel = NSSelectorFromString(@"addCancelActionWithTitle:");
-    if ([alert respondsToSelector:addCancelSel]) {
-        ((void(*)(id, SEL, id))objc_msgSend)(alert, addCancelSel, @"取消");
-        jokerLog(@"[Joker] addCancelAction done");
-    }
-
-    // ⑥ addActionWithTitle:handler:（照抄 FUN_008462a0 → 确定按钮 + block回调）
-    SEL addActionSel = NSSelectorFromString(@"addActionWithTitle:handler:");
-    if ([alert respondsToSelector:addActionSel]) {
-        ((void(*)(id, SEL, id, id))objc_msgSend)(alert, addActionSel, @"确定", ^(id btn) {
-            jokerLog(@"[Joker] confirm callback");
-
-            // 照抄锤子助手：valueForKeyPath:@"tipsVc.tipsTextView.text"
-            NSString *newText = nil;
-            @try {
-                newText = [alertRef valueForKeyPath:@"tipsVc.tipsTextView.text"];
-            } @catch (NSException *e) {
-                jokerLog([NSString stringWithFormat:@"[Joker] tipsVc path error: %@", e]);
-            }
-            if (!newText) {
-                @try { newText = [alertRef valueForKeyPath:@"m_textField.text"]; } @catch (NSException *e) {}
-            }
-            if (!newText) newText = @"";
-
-            jokerLog([NSString stringWithFormat:@"[Joker] input: %@", newText]);
-            applyTextModification(msgRef, cellRef, newText);
-        });
-        jokerLog(@"[Joker] addAction handler done");
-    }
-
-    // ⑦ show（照抄 FUN_00856a00）
-    SEL showSel = NSSelectorFromString(@"show");
-    if ([alert respondsToSelector:showSel]) {
-        ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
-        jokerLog(@"[Joker] ✅ WCUIAlertView shown");
-    }
+        UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+        while (rootVC.presentedViewController && !rootVC.presentedViewController.isBeingDismissed) {
+            rootVC = rootVC.presentedViewController;
+        }
+        [rootVC presentViewController:ac animated:YES completion:nil];
+        jokerLog(@"[Joker] UIAlertController shown");
+    });
 }
 
 // ==================== 诊断：打印对象所有 ivar，发现正确的 msgWrap 路径 ====================
