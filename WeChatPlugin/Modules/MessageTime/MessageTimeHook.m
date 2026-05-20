@@ -662,10 +662,10 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     label.frame = CGRectMake(0, 0, labelW, labelH);
 
     // 设置颜色（复刻反编译 FUN_0003b3b4 — sender/receiver × 亮/暗 四色）
-    @try {
-        BOOL isSender = NO;
-        @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) {}
+    BOOL isSender = NO;
+    @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) {}
 
+    @try {
         NSString *textHex = isSender ? config.senderTextColorHex : config.receiverTextColorHex;
         NSString *textDarkHex = isSender ? config.senderTextColorDarkHex : config.receiverTextColorDarkHex;
         NSString *bgHex = isSender ? config.senderBackgroundColorHex : config.receiverBackgroundColorHex;
