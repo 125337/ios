@@ -1,19 +1,21 @@
 #import "WeChatAlertHelper.h"
 #import <objc/runtime.h>
 
-// ==================== WCUIAlertView 本地声明：让 ARC 正确管理 block 生命周期 ====================
+// ==================== WCUIAlertView 本地声明（基于运行时 dump 的真实方法） ====================
 // WCUIAlertView 是 NSObject 子类（非 UIView），管理自己的 UI。
-// 声明此接口后，使用标准 ObjC 语法调用 WCUIAlertView 方法，
-// ARC 能"看到" block 参数，自动触发 _Block_copy 将 block 从栈 copy 到堆。
-// 使用 objc_msgSend 裸调则 ARC 看不到 block → 栈上 block 被释放 → crash。
+// 声明此接口后，使用标准 ObjC 语法调用，ARC 自动 _Block_copy 管理 block 生命周期。
 @interface WCUIAlertView : NSObject
 - (id)initWithTitle:(NSString *)title message:(NSString *)message;
-- (void)addCancelActionWithTitle:(NSString *)title target:(id)target action:(SEL)action;
-- (void)addActionWithTitle:(NSString *)title handler:(void(^)(id button))handler;
+- (void)showTextFieldWithMaxLen:(NSInteger)maxLen;
+- (void)setTextFieldDefaultText:(NSString *)text;
+- (void)setTextFieldPlaceHolder:(NSString *)placeholder;
+- (id)getTextField;
+- (NSString *)getTextFieldText;
+- (void)addBtnTitle:(NSString *)title handler:(void(^)(id button))handler;
+- (void)addCancelBtnTitle:(NSString *)title handler:(void(^)(id button))handler;
+- (void)addCancelBtnTitle:(NSString *)title target:(id)target sel:(SEL)sel;
 - (void)show;
-// TODO: 以下 selector 待 dump 确认
-// - (void)setMessage:(NSString *)message;
-// - (void)setStyle:(NSInteger)style;
+- (void)dismissAnimated:(BOOL)animated;
 @end
 
 // ==================== 日志 ====================
@@ -45,21 +47,8 @@ static void walertLog(NSString *content) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         _alertClass = objc_getClass("WCUIAlertView");
-        if (_alertClass) {
-            walertLog(@"[WeChatAlert] WCUIAlertView class found");
-
-            // dump 所有方法，找出真实 selector 名字
-            unsigned int methodCount = 0;
-            Method *methods = class_copyMethodList(_alertClass, &methodCount);
-            walertLog([NSString stringWithFormat:@"[WeChatAlert] WCUIAlertView has %u methods:", methodCount]);
-            for (unsigned int i = 0; i < methodCount; i++) {
-                SEL sel = method_getName(methods[i]);
-                walertLog([NSString stringWithFormat:@"[WeChatAlert]   - %@", NSStringFromSelector(sel)]);
-            }
-            free(methods);
-        } else {
-            walertLog(@"[WeChatAlert] ⚠️ WCUIAlertView class NOT found");
-        }
+        walertLog(_alertClass ? @"[WeChatAlert] WCUIAlertView class found"
+                              : @"[WeChatAlert] ⚠️ WCUIAlertView class NOT found");
     });
     return _alertClass;
 }
@@ -69,34 +58,36 @@ static void walertLog(NSString *content) {
 + (void)showInputAlert:(NSString *)title initialText:(NSString *)text target:(id)target onConfirm:(void(^)(NSString *inputText))confirm {
     Class alertClass = [self alertClass];
     if (!alertClass) {
-        walertLog(@"[WeChatAlert] ❌ WCUIAlertView not available, cannot show input alert");
+        walertLog(@"[WeChatAlert] ❌ WCUIAlertView not available");
         return;
     }
 
     @try {
-        // 1. alloc + initWithTitle:message:（预填文本直接放 message 参数里）
-        WCUIAlertView *alert = [[alertClass alloc] initWithTitle:title message:text ?: @""];
+        // 1. alloc + initWithTitle:message:
+        //    照抄锤子助手：init title=@"提示" message=@""，然后 setTextFieldDefaultText 预填
+        WCUIAlertView *alert = [[alertClass alloc] initWithTitle:title message:@""];
         if (!alert) {
-            walertLog(@"[WeChatAlert] ❌ WCUIAlertView alloc failed");
+            walertLog(@"[WeChatAlert] ❌ alloc failed");
             return;
         }
 
-        // TODO: setStyle / setMessage 等 selector 待 dump 确认后加入
-        // [alert setMessage:text];  // ❌ not available
-        // [alert setStyle:1];       // 待确认
+        // 2. showTextFieldWithMaxLen:99999 → 开启文本输入模式（锤子 setStyle:1 等价）
+        [alert showTextFieldWithMaxLen:99999];
 
-        // 2. 取消按钮
-        [alert addCancelActionWithTitle:@"取消" target:target action:NULL];
+        // 3. setTextFieldDefaultText: → 预填文本（锤子 setMessage: 等价）
+        if (text.length > 0) {
+            [alert setTextFieldDefaultText:text];
+        }
 
-        // 6. 确定按钮 —— 标准 ObjC 调用，ARC 自动 copy block
+        // 4. addCancelBtnTitle:target:sel: → 取消按钮
+        [alert addCancelBtnTitle:@"取消" target:target sel:NULL];
+
+        // 5. addBtnTitle:handler: → 确定按钮（ARC 标准 ObjC 调用，block 自动 copy 到堆）
         __weak id weakAlert = alert;
-        [alert addActionWithTitle:@"" handler:^(id button) {
+        [alert addBtnTitle:@"" handler:^(id button) {
             @try {
-                NSString *inputText = [weakAlert valueForKeyPath:@"tipsVc.tipsTextView.text"];
-                if (!inputText || inputText.length == 0) {
-                    inputText = [weakAlert valueForKeyPath:@"tipsVc.tipsTextField.text"];
-                }
-                walertLog([NSString stringWithFormat:@"[WeChatAlert] input text: %@", inputText]);
+                NSString *inputText = [weakAlert getTextFieldText];
+                walertLog([NSString stringWithFormat:@"[WeChatAlert] input: %@", inputText]);
                 if (inputText.length > 0 && confirm) {
                     confirm(inputText);
                 }
@@ -105,7 +96,7 @@ static void walertLog(NSString *content) {
             }
         }];
 
-        // 7. show —— 直接加到 window 层级，不经过 UIViewController presentation
+        // 6. show → 直接加到 window 层级，绕过 UIViewController presentation
         [alert show];
         walertLog([NSString stringWithFormat:@"[WeChatAlert] ✅ input alert shown: %@", title]);
     } @catch (NSException *e) {
@@ -122,7 +113,7 @@ static void walertLog(NSString *content) {
 + (void)showTipAlert:(NSString *)title message:(NSString *)message buttonTitle:(NSString *)buttonTitle {
     Class alertClass = [self alertClass];
     if (!alertClass) {
-        walertLog(@"[WeChatAlert] ❌ WCUIAlertView not available, cannot show tip alert");
+        walertLog(@"[WeChatAlert] ❌ WCUIAlertView not available");
         return;
     }
 
@@ -130,14 +121,14 @@ static void walertLog(NSString *content) {
         // 1. alloc + initWithTitle:message:
         WCUIAlertView *alert = [[alertClass alloc] initWithTitle:title message:message];
         if (!alert) {
-            walertLog(@"[WeChatAlert] ❌ WCUIAlertView alloc failed");
+            walertLog(@"[WeChatAlert] ❌ alloc failed");
             return;
         }
 
         // 2. 确认按钮
-        [alert addCancelActionWithTitle:buttonTitle target:nil action:NULL];
+        [alert addCancelBtnTitle:buttonTitle target:nil sel:NULL];
 
-        // 5. show
+        // 3. show
         [alert show];
         walertLog([NSString stringWithFormat:@"[WeChatAlert] ✅ tip alert shown: %@", title]);
     } @catch (NSException *e) {
