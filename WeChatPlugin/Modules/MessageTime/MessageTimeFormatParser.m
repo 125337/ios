@@ -112,22 +112,19 @@ static BOOL _isSpecialToken(NSString *token) {
         }
         // 未找到 "已读=" 标记 → 使用默认值
 
-        // --- 解析已送达文本: 搜索完整标记 "已送达>" (复刻 FUN_000c8f80 flag=2) ---
-        // 条件: inner 长度 >= 3 (已送达> 至少 4 个字符，反编译用 >= 3 因为以字节/编码算)
+        // --- 解析已送达文本: 搜索裸 ">" (复刻 FUN_000c8f80 flag=2) ---
+        // ">" 只在 "=>" 标记中唯一出现，不需要前缀，搜裸字符即可
         NSString *customDeliveredText = nil;
-        NSRange deliveredMarkerRange = [inner rangeOfString:@"已送达>"];
-        if (deliveredMarkerRange.location != NSNotFound) {
-            NSUInteger afterMarker = deliveredMarkerRange.location + deliveredMarkerRange.length;
-            if (afterMarker < inner.length) {
-                customDeliveredText = [inner substringFromIndex:afterMarker];
-                // 截到下一个空格为止
-                NSRange spaceRange = [customDeliveredText rangeOfString:@" "];
-                if (spaceRange.location != NSNotFound) {
-                    customDeliveredText = [customDeliveredText substringToIndex:spaceRange.location];
-                }
+        NSRange gtRange = [inner rangeOfString:@">"];
+        if (gtRange.location != NSNotFound && gtRange.location + 1 < inner.length) {
+            customDeliveredText = [inner substringFromIndex:gtRange.location + 1];
+            // 截到下一个空格为止
+            NSRange spaceRange = [customDeliveredText rangeOfString:@" "];
+            if (spaceRange.location != NSNotFound) {
+                customDeliveredText = [customDeliveredText substringToIndex:spaceRange.location];
             }
         }
-        // 未找到 "已送达>" 标记 → 使用默认值
+        // 未找到 ">" → 使用默认值
 
         // --- 回退默认值 ---
         if (!customReadText || customReadText.length == 0) customReadText = kDefaultReadText;
