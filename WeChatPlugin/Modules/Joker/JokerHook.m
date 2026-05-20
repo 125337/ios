@@ -94,30 +94,28 @@ static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *curre
     id cellRef = cellView;
     id msgRef = msgWrap;
 
-    // ===== 主路径：UIAlertController（ARC 原生支持，稳定可靠） =====
-    dispatch_async(dispatch_get_main_queue(), ^{
-        UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"修改文字" message:@""
-                                                             preferredStyle:UIAlertControllerStyleAlert];
-        [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-            tf.text = currentContent;
-            tf.clearButtonMode = UITextFieldViewModeWhileEditing;
-            tf.autocorrectionType = UITextAutocorrectionTypeNo;
-        }];
+    // 菜单 action 在主线程，直接 present，不要 dispatch_async（否则微信菜单清理会把弹窗也关掉）
+    UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"修改文字" message:@""
+                                                         preferredStyle:UIAlertControllerStyleAlert];
+    [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+        tf.text = currentContent;
+        tf.clearButtonMode = UITextFieldViewModeWhileEditing;
+        tf.autocorrectionType = UITextAutocorrectionTypeNo;
+    }];
 
-        [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            NSString *nt = ac.textFields.firstObject.text ?: @"";
-            if (nt.length == 0) return;
-            applyTextModification(msgRef, cellRef, nt);
-        }]];
+    [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *nt = ac.textFields.firstObject.text ?: @"";
+        if (nt.length == 0) return;
+        applyTextModification(msgRef, cellRef, nt);
+    }]];
 
-        UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
-        while (rootVC.presentedViewController && !rootVC.presentedViewController.isBeingDismissed) {
-            rootVC = rootVC.presentedViewController;
-        }
-        [rootVC presentViewController:ac animated:YES completion:nil];
-        jokerLog(@"[Joker] UIAlertController shown");
-    });
+    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+    while (rootVC.presentedViewController && !rootVC.presentedViewController.isBeingDismissed) {
+        rootVC = rootVC.presentedViewController;
+    }
+    [rootVC presentViewController:ac animated:YES completion:nil];
+    jokerLog(@"[Joker] UIAlertController shown");
 }
 
 // ==================== 诊断：打印对象所有 ivar，发现正确的 msgWrap 路径 ====================
