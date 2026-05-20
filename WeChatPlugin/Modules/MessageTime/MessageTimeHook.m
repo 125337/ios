@@ -661,26 +661,25 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     CGFloat labelH = textSize.height + 4.0;
     label.frame = CGRectMake(0, 0, labelW, labelH);
 
-    // 设置颜色（根据 sender/receiver + 亮暗模式）
+    // 设置颜色（复刻反编译 FUN_0003b3b4 — sender/receiver × 亮/暗 四色）
+    // 浅色默认:#808080  深色默认:#BFBFBF  (colorWithWhite:0.5 / 0.75)
     BOOL isSender = NO;
     @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) {}
 
     NSString *textHex = isSender ? config.senderTextColorHex : config.receiverTextColorHex;
-    NSString *bgHex   = isSender ? config.senderBackgroundColorHex : config.receiverBackgroundColorHex;
+    NSString *textDarkHex = isSender ? config.senderTextColorDarkHex : config.receiverTextColorDarkHex;
+    NSString *bgHex = isSender ? config.senderBackgroundColorHex : config.receiverBackgroundColorHex;
+    NSString *bgDarkHex = isSender ? config.senderBackgroundColorDarkHex : config.receiverBackgroundColorDarkHex;
 
-    UIColor *textColor = textHex.length ? [config colorFromHex:textHex] : nil;
-    UIColor *bgColor   = bgHex.length   ? [config colorFromHex:bgHex]   : nil;
+    UIColor *lightTextColor = textHex.length ? [config colorFromHex:textHex] : nil;
+    UIColor *darkTextColor  = textDarkHex.length ? [config colorFromHex:textDarkHex] : nil;
+    UIColor *lightBgColor   = bgHex.length ? [config colorFromHex:bgHex] : nil;
+    UIColor *darkBgColor    = bgDarkHex.length ? [config colorFromHex:bgDarkHex] : nil;
 
-    if (!textColor) textColor = isSender ? [UIColor whiteColor] : [UIColor blackColor];
+    if (!lightTextColor) lightTextColor = [UIColor colorWithWhite:0.5 alpha:1.0];
 
-    // 暗色模式自动提亮
-    if (isWeChatDarkMode()) {
-        textColor = autoDarkColor(textColor);
-        if (bgColor) bgColor = autoDarkColor(bgColor);
-    }
-
-    label.textColor = textColor;
-    if (bgColor) label.backgroundColor = bgColor;
+    label.textColor = colorInLightMode(lightTextColor, darkTextColor);
+    label.backgroundColor = colorInLightMode(lightBgColor, darkBgColor);
 
     CGFloat cornerRadius = config.messageTimeCornerRadius > 0 ? config.messageTimeCornerRadius : 8.0;
     label.layer.cornerRadius = cornerRadius;

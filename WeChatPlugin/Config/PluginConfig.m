@@ -171,7 +171,7 @@ static void configLog(NSString *content) {
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderTextColorHex"]];
     if (v.length > 0) _senderTextColorHex = v; else _senderTextColorHex = @"#808080";
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderTextColorDarkHex"]];
-    if (v.length > 0) _senderTextColorDarkHex = v; else _senderTextColorDarkHex = @"#A0A0A0";
+    if (v.length > 0) _senderTextColorDarkHex = v; else _senderTextColorDarkHex = @"#BFBFBF";
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderBackgroundColorHex"]];
     if (v.length > 0) _senderBackgroundColorHex = v; else _senderBackgroundColorHex = @"#00000000";
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderBackgroundColorDarkHex"]];
@@ -179,7 +179,7 @@ static void configLog(NSString *content) {
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverTextColorHex"]];
     if (v.length > 0) _receiverTextColorHex = v; else _receiverTextColorHex = @"#808080";
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverTextColorDarkHex"]];
-    if (v.length > 0) _receiverTextColorDarkHex = v; else _receiverTextColorDarkHex = @"#A0A0A0";
+    if (v.length > 0) _receiverTextColorDarkHex = v; else _receiverTextColorDarkHex = @"#BFBFBF";
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorHex"]];
     if (v.length > 0) _receiverBackgroundColorHex = v; else _receiverBackgroundColorHex = @"#00000000";
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorDarkHex"]];
