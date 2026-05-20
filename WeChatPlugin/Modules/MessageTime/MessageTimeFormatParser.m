@@ -134,6 +134,8 @@ static BOOL _isSpecialToken(NSString *token) {
         }
 
         // --- 替换整个 {...} match ---
+        NSLog(@"[伪已读·Parser] isSender=%d, statusCode=%ld, match='%@', readText='%@', deliveredText='%@', result='%@'",
+              isSender, (long)statusCode, fullMatch, customReadText, customDeliveredText, resultText);
         fmt = [fmt stringByReplacingCharactersInRange:match.range withString:resultText];
     }
 

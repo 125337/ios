@@ -169,11 +169,7 @@ static NSString *formatMessageTime(NSDate *date, NSString *customFormat, BOOL is
 }
 
 // ============================================================
-// MARK: - 伪已读状态追踪器（复刻反编译 FUN_0003bb04 + DAT_0013ad68）
-//
-// 机制：per-chat 持久存储接收方消息的 max(m_uiStatus)
-//       发送方消息的 m_uiStatus < stored_max → 已读（对方发过更新消息）
-//       发送方消息的 m_uiStatus >= stored_max → 已送达（对方没发更新消息）
+// MARK: - 伪已读状态追踪器（复刻反编译 FUN_0003bb04 + FUN_0003ba04 + DAT_0013ad68）
 // ============================================================
 
 static NSMutableDictionary<NSString *, NSNumber *> *_readStatusTracker(void) {
@@ -185,43 +181,70 @@ static NSMutableDictionary<NSString *, NSNumber *> *_readStatusTracker(void) {
     return dict;
 }
 
+/// 复刻 FUN_0003ba04: 从 m_nsFromUsr / m_nsToUsr 生成一致的会话追踪 key
+/// - 群聊: 返回 chatroom ID（m_nsFromUsr 或 m_nsToUsr 中含 "@chatroom" 的那个）
+/// - 单聊: 将两个用户名排序后 "A@B" 拼接，保证收发双方生成相同的 key
+static NSString *chatSessionKey(NSString *fromUsr, NSString *toUsr) {
+    if (!fromUsr && !toUsr) return @"unknown_session";
+
+    // 群聊检测
+    if ([fromUsr containsString:@"@chatroom"]) return fromUsr;
+    if ([toUsr containsString:@"@chatroom"]) return toUsr;
+
+    // 单聊：排序保证一致性
+    if (!fromUsr) return toUsr ?: @"unknown_session";
+    if (!toUsr) return fromUsr ?: @"unknown_session";
+
+    NSArray *sorted = [@[fromUsr, toUsr] sortedArrayUsingSelector:@selector(compare:)];
+    return [NSString stringWithFormat:@"%@@%@", sorted[0], sorted[1]];
+}
+
 /// 复刻 FUN_0003bb04: 计算当前消息的伪已读状态
-/// @param isSender 是否发送者
-/// @param chatUser 会话标识（m_nsUsrName），用作追踪 key
-/// @param createTime 消息的 m_uiCreateTime（时间戳），用于比较谁的消息更新
+/// @param isSender 消息是否为发送方
+/// @param sessionKey 复刻 FUN_0003ba04 生成的会话追踪 key
+/// @param createTime 消息的 m_uiCreateTime（时间戳）
 /// @return 2=已读, 1=已送达
-static NSInteger computeReadStatus(BOOL isSender, NSString *chatUser, unsigned int createTime) {
-    // 接收方消息：始终返回 2 → 显示 "已读"（即使是 nil chatUser）
+static NSInteger computeReadStatus(BOOL isSender, NSString *sessionKey, unsigned int createTime) {
+    BOOL hasKey = (sessionKey.length > 0);
+
+    // ── 接收方路径（复刻 FUN_0003bb04 param_1==0 分支，行 35362-35390）──
     if (!isSender) {
-        if (chatUser.length > 0) {
+        if (hasKey) {
             NSMutableDictionary *tracker = _readStatusTracker();
             @synchronized (tracker) {
-                NSNumber *stored = tracker[chatUser];
+                NSNumber *stored = tracker[sessionKey];
                 unsigned int storedMax = stored ? stored.unsignedIntValue : 0;
                 if (createTime > storedMax) {
-                    tracker[chatUser] = @(createTime);
+                    tracker[sessionKey] = @(createTime);
+                    NSLog(@"[伪已读·追踪器] 接收方更新 stored_max: key=%@, old=%u, new=%u", sessionKey, storedMax, createTime);
+                } else {
+                    NSLog(@"[伪已读·追踪器] 接收方无需更新: key=%@, createTime=%u, stored=%u", sessionKey, createTime, storedMax);
                 }
             }
+        } else {
+            NSLog(@"[伪已读·追踪器] 接收方 sessionKey 为空，跳过更新");
         }
-        return 2; // 复刻 FUN_0003bb04: 接收方始终返回 2
+        NSLog(@"[伪已读·状态] 接收方 → statusCode=2 (已读)");
+        return 2;
     }
 
-    // 发送方消息：chatUser 为空时无法判断 → 保守返回 1（已送达）
-    if (!chatUser || chatUser.length == 0) return 1;
+    // ── 发送方路径（复刻 FUN_0003bb04 param_1!=0 分支，行 35392-35414）──
+    if (!hasKey) {
+        NSLog(@"[伪已读·状态] 发送方 sessionKey 为空 → 保守返回 statusCode=1 (已送达)");
+        return 1;
+    }
 
     NSMutableDictionary *tracker = _readStatusTracker();
-
     @synchronized (tracker) {
-        // 复刻 FUN_0003bb04 param_1!=0:
-        //   发送方 createTime < 接收方最新 createTime → 对方发过更晚的消息 → 已读
-        //   发送方 createTime >= 接收方最新 createTime → 对方没回 → 已送达
-        NSNumber *stored = tracker[chatUser];
+        NSNumber *stored = tracker[sessionKey];
         unsigned int storedMax = stored ? stored.unsignedIntValue : 0;
 
         if (createTime < storedMax) {
-            return 2; // 对方发过更晚的消息 → 已读
+            NSLog(@"[伪已读·状态] 发送方 → createTime(%u) < stored(%u) → statusCode=2 (已读)", createTime, storedMax);
+            return 2;
         }
-        return 1;     // 没有更新的消息 → 已送达
+        NSLog(@"[伪已读·状态] 发送方 → createTime(%u) >= stored(%u) → statusCode=1 (已送达)", createTime, storedMax);
+        return 1;
     }
 }
 
@@ -486,19 +509,25 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
             }
         } @catch (...) {}
 
-        // 获取会话标识（复刻反编译通过 m_contact.m_nsUsrName 获取 chatUser）
-        NSString *chatUser = nil;
-        @try {
-            id contact = [self valueForKey:@"m_contact"];
-            if (contact) {
-                chatUser = [contact valueForKey:@"m_nsUsrName"];
-            }
-        } @catch (...) {}
+        // 复刻 FUN_0003ba04: 从 messageWrap 的 m_nsFromUsr / m_nsToUsr 生成 sessionKey
+        // （不是从 m_contact！反编译代码用的是 messageWrap 的 from/to）
+        NSString *fromUsr = nil, *toUsr = nil;
+        if (messageWrap) {
+            @try {
+                if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_nsFromUsr")]) {
+                    fromUsr = [messageWrap valueForKey:@"m_nsFromUsr"];
+                }
+                if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_nsToUsr")]) {
+                    toUsr = [messageWrap valueForKey:@"m_nsToUsr"];
+                }
+            } @catch (...) {}
+        }
+        NSString *sessionKey = chatSessionKey(fromUsr, toUsr);
+        NSLog(@"[伪已读·调用] isSender=%d, fromUsr=%@, toUsr=%@, sessionKey=%@, createTime=%u",
+              isSender, fromUsr, toUsr, sessionKey, createTime);
 
-        // 计算伪已读 statusCode（复刻反编译 FUN_0003bb04）
-        // 核心：比较 createTime 时间戳，不是 m_uiStatus！
-        // 接收方消息也要调用 → 更新 per-chat stored_max createTime
-        NSInteger statusCode = computeReadStatus(isSender, chatUser, createTime);
+        // 复刻 FUN_0003bb04: 计算 statusCode
+        NSInteger statusCode = computeReadStatus(isSender, sessionKey, createTime);
 
         if (createTime == 0) return;
 
@@ -511,6 +540,9 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
                                                 isSender,
                                                 statusCode);
         if (!timeText) return;
+
+        NSLog(@"[伪已读·结果] isSender=%d, statusCode=%ld, format='%@', timeText='%@'",
+              isSender, (long)statusCode, config.messageTimeCustomFormat, timeText);
 
         // 存入 viewModel 关联对象（复刻 DAT_0013ad99）
         // 不手动 dispatch_async(main) 调 updateNodeStatus，避免在 VC 转场时
