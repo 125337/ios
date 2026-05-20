@@ -3,6 +3,7 @@
 #import "../../Core/WPAlert.h"
 #import "../../Modules/MessageTime/MessageTimeFormatEditorVC.h"
 #import <objc/runtime.h>
+#import <objc/message.h>
 
 @implementation SettingGeneralFunctionController
 
