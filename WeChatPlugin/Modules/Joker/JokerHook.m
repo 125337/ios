@@ -432,7 +432,15 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         // class_addMethod: onTextJoker → v@:
         SEL onTextJokerSel = NSSelectorFromString(@"onTextJoker");
         BOOL added = class_addMethod(textCellClass, onTextJokerSel, (IMP)onTextJoker, "v@:");
-        jokerLog([NSString stringWithFormat:@"[JokerHook] class_addMethod onTextJoker: %@", added ? @"YES" : @"NO (可能已存在)"]);
+        if (!added) {
+            // 失败可能是热重载（上次 session 已添加）或微信同名方法，强制替换
+            Method m = class_getInstanceMethod(textCellClass, onTextJokerSel);
+            if (m) {
+                method_setImplementation(m, (IMP)onTextJoker);
+                added = YES;
+            }
+        }
+        jokerLog([NSString stringWithFormat:@"[JokerHook] register onTextJoker: %@", added ? @"YES" : @"NO"]);
         
         // Hook operationMenuItems
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
@@ -454,7 +462,14 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         
         SEL onTransferJokerSel = NSSelectorFromString(@"onTransferJoker");
         BOOL added = class_addMethod(transferCellClass, onTransferJokerSel, (IMP)onTransferJoker, "v@:");
-        jokerLog([NSString stringWithFormat:@"[JokerHook] class_addMethod onTransferJoker: %@", added ? @"YES" : @"NO"]);
+        if (!added) {
+            Method m = class_getInstanceMethod(transferCellClass, onTransferJokerSel);
+            if (m) {
+                method_setImplementation(m, (IMP)onTransferJoker);
+                added = YES;
+            }
+        }
+        jokerLog([NSString stringWithFormat:@"[JokerHook] register onTransferJoker: %@", added ? @"YES" : @"NO"]);
         
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
         Method menuMethod = class_getInstanceMethod(transferCellClass, menuSel);
