@@ -169,6 +169,55 @@ static NSString *formatMessageTime(NSDate *date, NSString *customFormat, BOOL is
 }
 
 // ============================================================
+// MARK: - 伪已读状态追踪器（复刻反编译 FUN_0003bb04 + DAT_0013ad68）
+//
+// 机制：per-chat 持久存储接收方消息的 max(m_uiStatus)
+//       发送方消息的 m_uiStatus < stored_max → 已读（对方发过更新消息）
+//       发送方消息的 m_uiStatus >= stored_max → 已送达（对方没发更新消息）
+// ============================================================
+
+static NSMutableDictionary<NSString *, NSNumber *> *_readStatusTracker(void) {
+    static NSMutableDictionary *dict;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        dict = [NSMutableDictionary dictionary];
+    });
+    return dict;
+}
+
+/// 复刻 FUN_0003bb04: 计算当前消息的伪已读状态
+/// @param isSender 是否发送者
+/// @param chatUser 会话标识（m_nsUsrName），用作追踪 key
+/// @param uiStatus 消息的 m_uiStatus
+/// @return 2=已读, 1=已送达（接收方消息虽然也调用但返回值无影响）
+static NSInteger computeReadStatus(BOOL isSender, NSString *chatUser, unsigned int uiStatus) {
+    if (!chatUser || chatUser.length == 0) return 1;
+
+    NSMutableDictionary *tracker = _readStatusTracker();
+
+    @synchronized (tracker) {
+        if (!isSender) {
+            // --- 接收方消息：更新 stored_max (复刻 FUN_0003bb04 param_1==0 分支) ---
+            NSNumber *stored = tracker[chatUser];
+            unsigned int storedMax = stored ? stored.unsignedIntValue : 0;
+            if (uiStatus > storedMax) {
+                tracker[chatUser] = @(uiStatus);
+            }
+            return 2; // 接收方不展示伪已读，返回值无影响
+        }
+
+        // --- 发送方消息：比较 m_uiStatus 与 stored_max (复刻 FUN_0003bb04 param_1!=0 分支) ---
+        NSNumber *stored = tracker[chatUser];
+        unsigned int storedMax = stored ? stored.unsignedIntValue : 0;
+
+        if (uiStatus < storedMax) {
+            return 2; // 对方发过更新消息 → 已读
+        }
+        return 1;     // 对方没发更新消息 → 已送达
+    }
+}
+
+// ============================================================
 // MARK: - View Hierarchy Accessors
 // ============================================================
 
@@ -397,11 +446,11 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
         @try { viewModel = [cellView valueForKey:@"m_viewModel"] ?: [cellView valueForKey:@"viewModel"]; } @catch (NSException *e) {}
         if (!viewModel) return;
 
+        // 获取 messageWrap + m_uiStatus（先获取，用于追踪器更新）
         unsigned int createTime = 0;
-        unsigned int uiStatus = 0; // 消息状态（用于伪已读）
+        unsigned int uiStatus = 0;
         id messageWrap = nil;
         @try {
-            // 方式1: viewModel → messageWrap → m_uiCreateTime / m_uiStatus
             if ([viewModel respondsToSelector:NSSelectorFromString(@"messageWrap")]) {
                 @try { messageWrap = [viewModel valueForKey:@"messageWrap"]; } @catch (...) {}
             }
@@ -412,19 +461,15 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
                 if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_uiCreateTime")]) {
                     createTime = (unsigned int)[[messageWrap valueForKey:@"m_uiCreateTime"] unsignedIntValue];
                 }
-                // 获取 m_uiStatus（消息发送/送达/已读状态）
                 if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_uiStatus")]) {
                     @try { uiStatus = (unsigned int)[[messageWrap valueForKey:@"m_uiStatus"] unsignedIntValue]; }
                     @catch (...) {}
                 }
             }
-            // 方式2: viewModel → createTime（直接属性）
             if (createTime == 0 && [viewModel respondsToSelector:NSSelectorFromString(@"createTime")]) {
                 @try { createTime = (unsigned int)[[viewModel valueForKey:@"createTime"] unsignedIntValue]; } @catch (...) {}
             }
         } @catch (NSException *e) {}
-
-        if (createTime == 0) return;
 
         // 确定 isSender
         BOOL isSender = NO;
@@ -438,10 +483,20 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
             }
         } @catch (...) {}
 
+        // 获取会话标识（复刻反编译通过 m_contact.m_nsUsrName 获取 chatUser）
+        NSString *chatUser = nil;
+        @try {
+            id contact = [self valueForKey:@"m_contact"];
+            if (contact) {
+                chatUser = [contact valueForKey:@"m_nsUsrName"];
+            }
+        } @catch (...) {}
+
         // 计算伪已读 statusCode（复刻反编译 FUN_0003bb04）
-        // WeChat m_uiStatus: 0=发送中, 1=已发送, 2=已送达, 3=已读, 4=已播放(语音)
-        // statusCode: 2=已读, 非2=已送达
-        NSInteger statusCode = (uiStatus >= 3) ? 2 : 1;
+        // 注意：接收方消息也需要调用此函数来更新 per-chat stored_max！
+        NSInteger statusCode = computeReadStatus(isSender, chatUser, uiStatus);
+
+        if (createTime == 0) return;
 
         // 格式化时间（使用自定义格式引擎，含伪已读）
         PluginConfig *config = [PluginConfig shared];
