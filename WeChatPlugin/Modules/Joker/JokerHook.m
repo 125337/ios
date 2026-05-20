@@ -115,10 +115,10 @@ static void dumpAllIvars(id obj, NSString *label) {
     }
 }
 
-// ==================== ① onTextJoker：照抄锤子助手 FUN_0076f720 ====================
-// self = TextMessageCellView
-static void onTextJoker(id self, SEL _cmd) {
-    jokerLog(@"[Joker] onTextJoker called");
+// ==================== ① mioTextJoker：照抄锤子助手 FUN_0076f720 ====================
+// self = TextMessageCellView（mio 前缀避免与锤子 onTextJoker 冲突）
+static void mioTextJoker(id self, SEL _cmd) {
+    jokerLog(@"[Joker] mioTextJoker called");
 
     // === 诊断：打印 cellView 所有 ivar，定位 msgWrap ===
     dumpAllIvars(self, @"TextMessageCellView");
@@ -194,10 +194,10 @@ static void onTextJoker(id self, SEL _cmd) {
     showEditAlert(nil, self, msgWrap, content, nil);
 }
 
-// ==================== ② onTransferJoker：照抄锤子助手 FUN_0076fb4c ====================
-// self = WCPayTransferMessageCellView
-static void onTransferJoker(id self, SEL _cmd) {
-    jokerLog(@"[Joker] onTransferJoker called");
+// ==================== ② mioTransferJoker：照抄锤子助手 FUN_0076fb4c ====================
+// self = WCPayTransferMessageCellView（mio 前缀避免与锤子 onTransferJoker 冲突）
+static void mioTransferJoker(id self, SEL _cmd) {
+    jokerLog(@"[Joker] mioTransferJoker called");
 
     dumpAllIvars(self, @"WCPayTransferMessageCellView");
 
@@ -235,7 +235,7 @@ static void onTransferJoker(id self, SEL _cmd) {
 
 // ==================== ③ 锤子助手风格 operationMenuItems hook ====================
 // 照抄锤子助手：[[MMMenuItem alloc] initWithTitle:iconName:actionName:]
-// FUN_0084c460(alloc, &cf_O9e, &cf_expression, "onTextJoker") → 3参数，无target
+// FUN_0084c460(alloc, &cf_O9e, &cf_expression, "mioTextJoker") → 3参数，无target（mio 前缀避免冲突）
 
 // 为 TextMessageCellView.operationMenuItems 添加 "修改文字" 按钮
 static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
@@ -253,13 +253,13 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
     if (mmItemClass) {
         @try {
             // 照抄锤子助手: initWithTitle:iconName:actionName: (3参数，无target)
-            // actionName 是 C 字符串 "onTextJoker"
+            // actionName 是 C 字符串 "mioTextJoker"（mio 前缀避免与锤子助手 onTextJoker 冲突）
             SEL initSel = NSSelectorFromString(@"initWithTitle:iconName:actionName:");
             id mmItem = nil;
             if ([mmItemClass instancesRespondToSelector:initSel]) {
                 mmItem = ((id(*)(id, SEL, id, id, const char *))objc_msgSend)(
                     [[mmItemClass alloc] init], initSel,
-                    @"修改文字", @"expression", "onTextJoker");
+                    @"修改文字", @"expression", "mioTextJoker");
             }
             if (!mmItem) {
                 // fallback: initWithTitle:action:  (不带icon)
@@ -267,7 +267,7 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
                 if ([mmItemClass instancesRespondToSelector:altInitSel]) {
                     mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
                         [[mmItemClass alloc] init], altInitSel,
-                        @"修改文字", NSSelectorFromString(@"onTextJoker"));
+                        @"修改文字", NSSelectorFromString(@"mioTextJoker"));
                 }
             }
             if (mmItem) {
@@ -305,14 +305,14 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
             if ([mmItemClass instancesRespondToSelector:initSel]) {
                 mmItem = ((id(*)(id, SEL, id, id, const char *))objc_msgSend)(
                     [[mmItemClass alloc] init], initSel,
-                    @"修改文字", @"expression", "onTransferJoker");
+                    @"修改文字", @"expression", "mioTransferJoker");
             }
             if (!mmItem) {
                 SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
                 if ([mmItemClass instancesRespondToSelector:altInitSel]) {
                     mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
                         [[mmItemClass alloc] init], altInitSel,
-                        @"修改文字", NSSelectorFromString(@"onTransferJoker"));
+                        @"修改文字", NSSelectorFromString(@"mioTransferJoker"));
                 }
             }
             if (mmItem) {
@@ -429,18 +429,18 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
     if (textCellClass) {
         jokerLog(@"[JokerHook] TextMessageCellView found");
         
-        // class_addMethod: onTextJoker → v@:
-        SEL onTextJokerSel = NSSelectorFromString(@"onTextJoker");
-        BOOL added = class_addMethod(textCellClass, onTextJokerSel, (IMP)onTextJoker, "v@:");
+        // class_addMethod: mioTextJoker → v@:
+        SEL onTextJokerSel = NSSelectorFromString(@"mioTextJoker");
+        BOOL added = class_addMethod(textCellClass, onTextJokerSel, (IMP)mioTextJoker, "v@:");
         if (!added) {
-            // 失败可能是热重载（上次 session 已添加）或微信同名方法，强制替换
+            // 失败可能是热重载，强制替换
             Method m = class_getInstanceMethod(textCellClass, onTextJokerSel);
             if (m) {
-                method_setImplementation(m, (IMP)onTextJoker);
+                method_setImplementation(m, (IMP)mioTextJoker);
                 added = YES;
             }
         }
-        jokerLog([NSString stringWithFormat:@"[JokerHook] register onTextJoker: %@", added ? @"YES" : @"NO"]);
+        jokerLog([NSString stringWithFormat:@"[JokerHook] register mioTextJoker: %@", added ? @"YES" : @"NO"]);
         
         // Hook operationMenuItems
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
@@ -460,16 +460,16 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
     if (transferCellClass) {
         jokerLog(@"[JokerHook] WCPayTransferMessageCellView found");
         
-        SEL onTransferJokerSel = NSSelectorFromString(@"onTransferJoker");
-        BOOL added = class_addMethod(transferCellClass, onTransferJokerSel, (IMP)onTransferJoker, "v@:");
+        SEL onTransferJokerSel = NSSelectorFromString(@"mioTransferJoker");
+        BOOL added = class_addMethod(transferCellClass, onTransferJokerSel, (IMP)mioTransferJoker, "v@:");
         if (!added) {
             Method m = class_getInstanceMethod(transferCellClass, onTransferJokerSel);
             if (m) {
-                method_setImplementation(m, (IMP)onTransferJoker);
+                method_setImplementation(m, (IMP)mioTransferJoker);
                 added = YES;
             }
         }
-        jokerLog([NSString stringWithFormat:@"[JokerHook] register onTransferJoker: %@", added ? @"YES" : @"NO"]);
+        jokerLog([NSString stringWithFormat:@"[JokerHook] register mioTransferJoker: %@", added ? @"YES" : @"NO"]);
         
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
         Method menuMethod = class_getInstanceMethod(transferCellClass, menuSel);

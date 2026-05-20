@@ -84,7 +84,7 @@ static void walertLog(NSString *content) {
 
         // 5. addBtnTitle:handler: → 确定按钮（ARC 标准 ObjC 调用，block 自动 copy 到堆）
         __weak id weakAlert = alert;
-        [alert addBtnTitle:@"" handler:^(id button) {
+        [alert addBtnTitle:@"确定" handler:^(id button) {
             @try {
                 NSString *inputText = [weakAlert getTextFieldText];
                 walertLog([NSString stringWithFormat:@"[WeChatAlert] input: %@", inputText]);
