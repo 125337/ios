@@ -31,66 +31,158 @@ static IMP orig_TextCell_operationMenuItems = NULL;
 static IMP orig_TransferCell_operationMenuItems = NULL;
 static IMP orig_Wallet_updateBalanceEntryView = NULL;
 
-// ==================== 锤子助手风格：编辑弹窗（优先 UIAlertController，更稳定） ====================
+// ==================== 编辑弹窗：严格照抄锤子助手 FUN_0076f720 WCUIAlertView 流程 ====================
+/*
+ 锤子助手 onTextJoker 完整调用链（反编译 FUN_0076f720）：
+ 1. [[WCUIAlertView alloc] initWithTitle:cf__P_RKb message:cf__cO9e]   ← 必须带两个字符串参数 init
+ 2. [alert setTag:99999]
+ 3. [alert setMessage:currentContent]                                    ← 预填文本内容
+ 4. [alert setStyle:1]                                                   ← 文本输入模式
+ 5. [alert addCancelActionWithTitle:@"" target:cellView action:NULL]     ← 取消按钮
+ 6. [alert addActionWithTitle:@"" handler:block]                         ← 确定按钮
+ 7. [alert show]
+
+ 回调中获取输入: [alert valueForKeyPath:@"tipsVc.tipsTextView.text"]
+ */
+
+// ==================== 公共：应用文字修改（msgWrap + RichTextView） ====================
+static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
+    if (newText.length == 0) return;
+    jokerLog([NSString stringWithFormat:@"[Joker] applyTextModification: %@", newText]);
+
+    // ① 写 msgWrap.m_nsContent
+    if (msgRef) {
+        @try {
+            SEL setM_nsContentSel = NSSelectorFromString(@"setM_nsContent:");
+            if ([msgRef respondsToSelector:setM_nsContentSel]) {
+                ((void(*)(id, SEL, id))objc_msgSend)(msgRef, setM_nsContentSel, newText);
+                jokerLog(@"[Joker] ✅ Updated msgWrap.m_nsContent");
+            }
+        } @catch (NSException *e) {
+            jokerLog([NSString stringWithFormat:@"[Joker] ❌ setM_nsContent: %@", e]);
+        }
+    }
+
+    // ② 更新 RichTextView 显示层
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            id richTextView = nil;
+            Ivar ivar = class_getInstanceVariable([cellRef class], "m_richTextView");
+            if (ivar) richTextView = object_getIvar(cellRef, ivar);
+            if (!richTextView) {
+                id viewModel = nil;
+                @try { viewModel = [cellRef valueForKey:@"m_viewModel"]; } @catch (NSException *e) {}
+                @try { richTextView = [viewModel valueForKey:@"m_richTextView"]; } @catch (NSException *e) {}
+            }
+            if (richTextView) {
+                SEL setTextSel = NSSelectorFromString(@"setText:");
+                if ([richTextView respondsToSelector:setTextSel]) {
+                    ((void(*)(id, SEL, id))objc_msgSend)(richTextView, setTextSel, newText);
+                }
+                [richTextView setNeedsDisplay];
+                jokerLog(@"[Joker] ✅ RichTextView updated");
+            }
+        } @catch (NSException *e) {
+            jokerLog([NSString stringWithFormat:@"[Joker] ❌ display: %@", e]);
+        }
+    });
+}
+
 static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent, void(^onConfirm)(NSString *newText)) {
+    jokerLog(@"[Joker] showEditAlert");
+
+    Class alertClass = objc_getClass("WCUIAlertView");
+    if (!alertClass) {
+        jokerLog(@"[Joker] ⚠️ WCUIAlertView not found, fallback to UIAlertController");
+        id cellRef = cellView;
+        id msgRef = msgWrap;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"修改文字" message:@"" preferredStyle:UIAlertControllerStyleAlert];
+            [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+                tf.text = currentContent;
+                tf.clearButtonMode = UITextFieldViewModeWhileEditing;
+            }];
+            [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+            [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+                NSString *nt = ac.textFields.firstObject.text ?: @"";
+                applyTextModification(msgRef, cellRef, nt);
+            }]];
+            UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+            while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
+            [rootVC presentViewController:ac animated:YES completion:nil];
+        });
+        return;
+    }
+
+    // ===== 照抄锤子助手：[[WCUIAlertView alloc] initWithTitle:@"修改文字" message:currentContent] =====
+    // 关键：必须用 initWithTitle:message: 而不是 init，否则 alert 内部未初始化导致 show 秒关
+    id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc], @selector(initWithTitle:message:),
+        @"修改文字", currentContent);
+    jokerLog([NSString stringWithFormat:@"[Joker] WCUIAlertView init: %@", alert]);
+
+    if (!alert) {
+        jokerLog(@"[Joker] ❌ WCUIAlertView init returned nil");
+        return;
+    }
+
     id cellRef = cellView;
     id msgRef = msgWrap;
+    id alertRef = alert;
 
-    // 优先使用 UIAlertController（苹果原生，不会闪退）
-    UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"修改文字" message:@"" preferredStyle:UIAlertControllerStyleAlert];
-    [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-        tf.text = currentContent;
-        tf.clearButtonMode = UITextFieldViewModeWhileEditing;
-    }];
+    // ② setTag:99999
+    ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, NSSelectorFromString(@"setTag:"), 99999);
 
-    [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        NSString *newText = ac.textFields.firstObject.text ?: @"";
-        if (newText.length == 0) return;
-        jokerLog([NSString stringWithFormat:@"[Joker] callback - newText: %@", newText]);
+    // ③ setMessage:currentContent（照抄 FUN_008560c0，在 setStyle 之前设内容）
+    SEL setMsgSel = NSSelectorFromString(@"setMessage:");
+    if ([alert respondsToSelector:setMsgSel]) {
+        ((void(*)(id, SEL, id))objc_msgSend)(alert, setMsgSel, currentContent);
+        jokerLog(@"[Joker] setMessage done");
+    }
 
-        // ① 写 msgWrap.m_nsContent
-        if (msgRef) {
+    // ④ setStyle:1（照抄 FUN_008556c0，文本输入模式）
+    SEL setStyleSel = NSSelectorFromString(@"setStyle:");
+    if ([alert respondsToSelector:setStyleSel]) {
+        ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, setStyleSel, 1);
+        jokerLog(@"[Joker] setStyle:1 done");
+    }
+
+    // ⑤ addCancelActionWithTitle:（照抄 FUN_00846340 → 取消按钮）
+    SEL addCancelSel = NSSelectorFromString(@"addCancelActionWithTitle:");
+    if ([alert respondsToSelector:addCancelSel]) {
+        ((void(*)(id, SEL, id))objc_msgSend)(alert, addCancelSel, @"取消");
+        jokerLog(@"[Joker] addCancelAction done");
+    }
+
+    // ⑥ addActionWithTitle:handler:（照抄 FUN_008462a0 → 确定按钮 + block回调）
+    SEL addActionSel = NSSelectorFromString(@"addActionWithTitle:handler:");
+    if ([alert respondsToSelector:addActionSel]) {
+        ((void(*)(id, SEL, id, id))objc_msgSend)(alert, addActionSel, @"确定", ^(id btn) {
+            jokerLog(@"[Joker] confirm callback");
+
+            // 照抄锤子助手：valueForKeyPath:@"tipsVc.tipsTextView.text"
+            NSString *newText = nil;
             @try {
-                SEL setM_nsContentSel = NSSelectorFromString(@"setM_nsContent:");
-                if ([msgRef respondsToSelector:setM_nsContentSel]) {
-                    ((void(*)(id, SEL, id))objc_msgSend)(msgRef, setM_nsContentSel, newText);
-                    jokerLog(@"[Joker] ✅ Updated msgWrap.m_nsContent");
-                }
+                newText = [alertRef valueForKeyPath:@"tipsVc.tipsTextView.text"];
             } @catch (NSException *e) {
-                jokerLog([NSString stringWithFormat:@"[Joker] ❌ setM_nsContent: %@", e]);
+                jokerLog([NSString stringWithFormat:@"[Joker] tipsVc path error: %@", e]);
             }
-        }
+            if (!newText) {
+                @try { newText = [alertRef valueForKeyPath:@"m_textField.text"]; } @catch (NSException *e) {}
+            }
+            if (!newText) newText = @"";
 
-        // ② 更新 RichTextView 显示层
-        dispatch_async(dispatch_get_main_queue(), ^{
-            @try {
-                id richTextView = nil;
-                Ivar ivar = class_getInstanceVariable([cellRef class], "m_richTextView");
-                if (ivar) richTextView = object_getIvar(cellRef, ivar);
-                if (!richTextView) {
-                    id viewModel = nil;
-                    @try { viewModel = [cellRef valueForKey:@"m_viewModel"]; } @catch (NSException *e) {}
-                    @try { richTextView = [viewModel valueForKey:@"m_richTextView"]; } @catch (NSException *e) {}
-                }
-                if (richTextView) {
-                    SEL setTextSel = NSSelectorFromString(@"setText:");
-                    if ([richTextView respondsToSelector:setTextSel]) {
-                        ((void(*)(id, SEL, id))objc_msgSend)(richTextView, setTextSel, newText);
-                    }
-                    [richTextView setNeedsDisplay];
-                    jokerLog(@"[Joker] ✅ RichTextView updated");
-                }
-            } @catch (NSException *e) {
-                jokerLog([NSString stringWithFormat:@"[Joker] ❌ display: %@", e]);
-            }
+            jokerLog([NSString stringWithFormat:@"[Joker] input: %@", newText]);
+            applyTextModification(msgRef, cellRef, newText);
         });
-    }]];
+        jokerLog(@"[Joker] addAction handler done");
+    }
 
-    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
-    [rootVC presentViewController:ac animated:YES completion:nil];
-    jokerLog(@"[Joker] Edit dialog shown");
+    // ⑦ show（照抄 FUN_00856a00）
+    SEL showSel = NSSelectorFromString(@"show");
+    if ([alert respondsToSelector:showSel]) {
+        ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
+        jokerLog(@"[Joker] ✅ WCUIAlertView shown");
+    }
 }
 
 // ==================== 诊断：打印对象所有 ivar，发现正确的 msgWrap 路径 ====================
