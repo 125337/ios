@@ -75,15 +75,15 @@ static BOOL _isSpecialToken(NSString *token) {
     // ================================================================
     // 步骤0: 处理 {伪已读} — 复刻反编译 Loop 1（行 35505-35563）
     //
+    // 反编译关键: FUN_000c8f80 flag=1 搜索的是 "已读=" 这个完整标记，不是裸 "="
+    //            FUN_000c8f80 flag=2 搜索的是 "已送达>" 这个完整标记，不是裸 ">"
+    //            否则 {伪已读 已送达=>已到} 中的 "=" 在 "=>" 里会误匹配!
+    //
     // 四个语法：
     //   {伪已读}                         → 默认文本
     //   {伪已读 已读=xxx}                 → 自定义已读文本
     //   {伪已读 已送达=>yyy}              → 自定义已送达文本
     //   {伪已读 已读=xxx 已送达=>yyy}     → 自定义两种状态
-    //
-    // 反编译逻辑: 在 {...} match 中搜索 "=" (flag 1) 取已读文本,
-    //             搜索 ">" (flag 2) 取已送达文本,
-    //             根据 isSender/statusCode 选择最终文本替换整个 match
     // ================================================================
     NSRegularExpression *pseudoRegex = [NSRegularExpression
         regularExpressionWithPattern:@"\\{[^}]*伪已读[^}]*\\}" options:0 error:nil];
@@ -92,27 +92,42 @@ static BOOL _isSpecialToken(NSString *token) {
 
     // 从后往前替换（保持索引有效）
     for (NSTextCheckingResult *match in [pseudoMatches reverseObjectEnumerator]) {
-        NSString *fullMatch = [fmt substringWithRange:match.range];  // e.g. "{伪已读 已读=已阅 已送达=>已到}"
+        NSString *fullMatch = [fmt substringWithRange:match.range];
         NSString *inner = [fullMatch substringWithRange:NSMakeRange(1, fullMatch.length - 2)]; // 去花括号
 
-        // --- 解析: 搜索 "=" 取已读自定义文本 (复刻 FUN_000c8f80 flag=1) ---
+        // --- 解析已读文本: 搜索完整标记 "已读=" (复刻 FUN_000c8f80 flag=1) ---
+        // 这样 {伪已读 已送达=>已到}(只有已送达) 不会误把 "=>" 里的 "=" 当成已读标记
         NSString *customReadText = nil;
-        NSRange eqRange = [inner rangeOfString:@"="];
-        if (eqRange.location != NSNotFound && eqRange.location + 1 < inner.length) {
-            customReadText = [inner substringFromIndex:eqRange.location + 1];
-            // 如果 "已送达>" 部分也跟在后面，截掉（以第一个空格为界）
-            NSRange spaceRange = [customReadText rangeOfString:@" "];
-            if (spaceRange.location != NSNotFound) {
-                customReadText = [customReadText substringToIndex:spaceRange.location];
+        NSRange readMarkerRange = [inner rangeOfString:@"已读="];
+        if (readMarkerRange.location != NSNotFound) {
+            NSUInteger afterMarker = readMarkerRange.location + readMarkerRange.length;
+            if (afterMarker < inner.length) {
+                customReadText = [inner substringFromIndex:afterMarker];
+                // 截到下一个空格为止（space 分隔已读和已送达两部分）
+                NSRange spaceRange = [customReadText rangeOfString:@" "];
+                if (spaceRange.location != NSNotFound) {
+                    customReadText = [customReadText substringToIndex:spaceRange.location];
+                }
             }
         }
+        // 未找到 "已读=" 标记 → 使用默认值
 
-        // --- 解析: 搜索 ">" 取已送达自定义文本 (复刻 FUN_000c8f80 flag=2) ---
+        // --- 解析已送达文本: 搜索完整标记 "已送达>" (复刻 FUN_000c8f80 flag=2) ---
+        // 条件: inner 长度 >= 3 (已送达> 至少 4 个字符，反编译用 >= 3 因为以字节/编码算)
         NSString *customDeliveredText = nil;
-        NSRange gtRange = [inner rangeOfString:@">"];
-        if (gtRange.location != NSNotFound && gtRange.location + 1 < inner.length) {
-            customDeliveredText = [inner substringFromIndex:gtRange.location + 1];
+        NSRange deliveredMarkerRange = [inner rangeOfString:@"已送达>"];
+        if (deliveredMarkerRange.location != NSNotFound) {
+            NSUInteger afterMarker = deliveredMarkerRange.location + deliveredMarkerRange.length;
+            if (afterMarker < inner.length) {
+                customDeliveredText = [inner substringFromIndex:afterMarker];
+                // 截到下一个空格为止
+                NSRange spaceRange = [customDeliveredText rangeOfString:@" "];
+                if (spaceRange.location != NSNotFound) {
+                    customDeliveredText = [customDeliveredText substringToIndex:spaceRange.location];
+                }
+            }
         }
+        // 未找到 "已送达>" 标记 → 使用默认值
 
         // --- 回退默认值 ---
         if (!customReadText || customReadText.length == 0) customReadText = kDefaultReadText;
