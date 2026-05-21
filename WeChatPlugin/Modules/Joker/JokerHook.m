@@ -925,12 +925,30 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
     if (timeoutClass) {
         jokerLog(@"[JokerHook] TimeoutNumber found");
         SEL didMoveSel = NSSelectorFromString(@"didMoveToWindow");
-        Method didMoveMethod = class_getInstanceMethod(timeoutClass, didMoveSel);
-        if (didMoveMethod) {
+
+        // 检查 TimeoutNumber 是否自己重写了 didMoveToWindow（8.0.60 可能没有）
+        unsigned int methodCount;
+        Method *timeoutMethods = class_copyMethodList(timeoutClass, &methodCount);
+        BOOL hasOwnDidMove = NO;
+        for (unsigned int i = 0; i < methodCount; i++) {
+            if (sel_isEqual(method_getName(timeoutMethods[i]), didMoveSel)) {
+                hasOwnDidMove = YES; break;
+            }
+        }
+        free(timeoutMethods);
+        jokerLog([NSString stringWithFormat:@"[JokerHook] TimeoutNumber hasOwnDidMoveToWindow = %d", hasOwnDidMove]);
+
+        if (hasOwnDidMove) {
+            // 有自己的实现，安全替换
+            Method didMoveMethod = class_getInstanceMethod(timeoutClass, didMoveSel);
             orig_TimeoutNumber_didMoveToWindow = method_setImplementation(didMoveMethod, (IMP)hooked_TimeoutNumber_didMoveToWindow);
-            jokerLog(@"[JokerHook] ✅ TimeoutNumber.didMoveToWindow hooked");
+            jokerLog(@"[JokerHook] ✅ TimeoutNumber.didMoveToWindow hooked (own impl)");
         } else {
-            jokerLog(@"[JokerHook] ⚠️ TimeoutNumber.didMoveToWindow NOT found");
+            // 继承 UIView 的 didMoveToWindow，用 class_addMethod 只在 TimeoutNumber 上追加
+            Method uiViewMethod = class_getInstanceMethod(objc_getClass("UIView"), didMoveSel);
+            orig_TimeoutNumber_didMoveToWindow = method_getImplementation(uiViewMethod);
+            class_addMethod(timeoutClass, didMoveSel, (IMP)hooked_TimeoutNumber_didMoveToWindow, "v@:");
+            jokerLog(@"[JokerHook] ✅ TimeoutNumber.didMoveToWindow via class_addMethod (inherit from UIView)");
         }
     } else {
         jokerLog(@"[JokerHook] ⚠️ TimeoutNumber class NOT found");
