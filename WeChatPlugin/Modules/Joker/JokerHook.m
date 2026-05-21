@@ -94,10 +94,10 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
 static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent, void(^onConfirm)(NSString *newText)) {
     jokerLog(@"[Joker] showEditAlert");
 
-    // ===== 照抄锤子助手 FUN_0076f720 WCUIAlertView 流程 =====
-    // 锤子助手使用 addCancelActionWithTitle:target:action: + addActionWithTitle:handler:
-    // 而非 addCancelBtnTitle:target:sel: + addBtnTitle:target:sel:
-    // 后者是 WeChatAlertHelper 用的不同 selector，导致 confirm 回调不触发
+    // ===== WCUIAlertView 在微信 8.0.60 有两套 API：=====
+    // 旧版（锤子助手 2.4.1 使用）：setStyle:1 / setMessage: / addCancelActionWithTitle:target:action: / addActionWithTitle:handler:
+    // 新版（微信 8.0.60 使用）：showTextFieldWithMaxLen: / setTextFieldDefaultText: / addCancelBtnTitle:target:sel: / addBtnTitle:target:sel:
+    // 旧版 selector 在 8.0.60 上不存在或不工作，必须用新版 API
 
     Class alertClass = objc_getClass("WCUIAlertView");
     if (!alertClass) {
@@ -106,7 +106,7 @@ static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *curre
     }
 
     @try {
-        // ① alloc + initWithTitle:message:（锤子 assistant 用 @"提示" + @""，然后 setMessage 预填）
+        // ① alloc + initWithTitle:message:
         id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc], @selector(initWithTitle:message:),
             @"修改文字", @"");
         if (!alert) {
@@ -115,72 +115,77 @@ static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *curre
         }
         jokerLog([NSString stringWithFormat:@"[Joker] WCUIAlertView created: %@", alert]);
 
-        // ② setTag:99999（锤子助手标志位）
-        SEL setTagSel = NSSelectorFromString(@"setTag:");
-        if ([alert respondsToSelector:setTagSel]) {
-            ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, setTagSel, 99999);
-        }
-
-        // ③ setMessage:currentContent（锤子助手预填文本，在 setStyle 之前）
-        SEL setMsgSel = NSSelectorFromString(@"setMessage:");
-        if ([alert respondsToSelector:setMsgSel]) {
-            ((void(*)(id, SEL, id))objc_msgSend)(alert, setMsgSel, currentContent);
-            jokerLog(@"[Joker] setMessage done");
-        }
-
-        // ④ setStyle:1（锤子助手文本输入模式）
-        SEL setStyleSel = NSSelectorFromString(@"setStyle:");
-        if ([alert respondsToSelector:setStyleSel]) {
-            ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, setStyleSel, 1);
-            jokerLog(@"[Joker] setStyle:1 done");
-        }
-
-        // ⑤ addCancelActionWithTitle:target:action:（锤子助手取消按钮，target=cellView, action=NULL）
-        SEL addCancelSel = NSSelectorFromString(@"addCancelActionWithTitle:target:action:");
-        if ([alert respondsToSelector:addCancelSel]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, addCancelSel, @"取消", cellView, NULL);
-            jokerLog(@"[Joker] addCancelAction done");
+        // ② showTextFieldWithMaxLen: → 创建文本输入框（微信 8.0.60 新版 API）
+        SEL showTFSel = NSSelectorFromString(@"showTextFieldWithMaxLen:");
+        if ([alert respondsToSelector:showTFSel]) {
+            ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, showTFSel, 99999);
+            jokerLog(@"[Joker] showTextFieldWithMaxLen done");
         } else {
-            // fallback: addCancelBtnTitle:target:sel:
-            SEL altSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
-            if ([alert respondsToSelector:altSel]) {
-                ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, altSel, @"取消", cellView, NULL);
-                jokerLog(@"[Joker] addCancelBtn (fallback) done");
+            jokerLog(@"[Joker] ⚠️ showTextFieldWithMaxLen: not found");
+        }
+
+        // ③ setTextFieldDefaultText: → 预填原文
+        if (currentContent.length > 0) {
+            SEL setDefaultSel = NSSelectorFromString(@"setTextFieldDefaultText:");
+            if ([alert respondsToSelector:setDefaultSel]) {
+                ((void(*)(id, SEL, id))objc_msgSend)(alert, setDefaultSel, currentContent);
+                jokerLog(@"[Joker] setTextFieldDefaultText done");
             }
         }
 
-        // ⑥ addActionWithTitle:handler:（锤子助手确定按钮 + block 回调 — 关键！）
-        //    锤子助手用 block handler，而非 target/selector，确保回调触发
-        id alertRef = alert;
+        // ④ addCancelBtnTitle:target:sel: → 取消按钮
+        SEL addCancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
+        if ([alert respondsToSelector:addCancelSel]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, addCancelSel, @"取消", cellView, NULL);
+            jokerLog(@"[Joker] addCancelBtn done");
+        }
+
+        // ⑤ 确定按钮回调：用 imp_implementationWithBlock 注入方法到 alert 自身
+        //    关键：回调 target = alert 自身，确保 alert 存活期间回调有效
+        //    避免 WeChatAlertHelper 的 _WeChatAlertCallback 作为 target 被提前释放
         id cellRef = cellView;
         id msgRef = msgWrap;
 
-        SEL addActionSel = NSSelectorFromString(@"addActionWithTitle:handler:");
-        if ([alert respondsToSelector:addActionSel]) {
-            ((void(*)(id, SEL, id, id))objc_msgSend)(alert, addActionSel, @"确定", ^(id btn) {
+        // 将 msgWrap/cellView 关联到 alert（alert 存活期间保持引用）
+        objc_setAssociatedObject(alert, "joker_cell", cellRef, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(alert, "joker_msg", msgRef, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        // 动态添加回调方法到 WCUIAlertView
+        SEL confirmSel = NSSelectorFromString(@"__joker_text_confirm");
+        if (![alertClass instancesRespondToSelector:confirmSel]) {
+            IMP confirmIMP = imp_implementationWithBlock(^(id _self) {
                 jokerLog(@"[Joker] ✅ confirm callback fired");
 
-                // 照抄锤子助手 FUN_0076ffbc：valueForKeyPath:@"tipsVc.tipsTextView.text"
+                id _cell = objc_getAssociatedObject(_self, "joker_cell");
+                id _msg = objc_getAssociatedObject(_self, "joker_msg");
+
+                // 获取输入文本：多路径 fallback
                 NSString *newText = nil;
-                @try {
-                    newText = [alertRef valueForKeyPath:@"tipsVc.tipsTextView.text"];
-                } @catch (NSException *e) {
-                    jokerLog([NSString stringWithFormat:@"[Joker] tipsVc path error: %@", e]);
+                @try { newText = [_self valueForKeyPath:@"tipsVc.tipsTextView.text"]; } @catch (NSException *e) {}
+                if (!newText || newText.length == 0) {
+                    @try { newText = [_self valueForKeyPath:@"tipsVc.tipsTextField.text"]; } @catch (NSException *e) {}
                 }
                 if (!newText || newText.length == 0) {
-                    @try { newText = [alertRef valueForKeyPath:@"tipsVc.tipsTextField.text"]; } @catch (NSException *e) {}
+                    SEL getTextSel = NSSelectorFromString(@"getTextFieldText");
+                    if ([_self respondsToSelector:getTextSel]) {
+                        newText = ((id(*)(id, SEL))objc_msgSend)(_self, getTextSel);
+                    }
                 }
                 if (!newText) newText = @"";
 
                 jokerLog([NSString stringWithFormat:@"[Joker] input: %@", newText]);
-                applyTextModification(msgRef, cellRef, newText);
+                applyTextModification(_msg, _cell, newText);
             });
-            jokerLog(@"[Joker] addAction handler set");
-        } else {
-            jokerLog(@"[Joker] ⚠️ addActionWithTitle:handler: not found");
+            class_addMethod(alertClass, confirmSel, confirmIMP, "v@:");
         }
 
-        // ⑦ show（锤子助手直接加到 window 层级）
+        SEL addBtnSel = NSSelectorFromString(@"addBtnTitle:target:sel:");
+        if ([alert respondsToSelector:addBtnSel]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, addBtnSel, @"确定", alert, confirmSel);
+            jokerLog(@"[Joker] addBtnTitle (confirm) done");
+        }
+
+        // ⑥ show
         SEL showSel = NSSelectorFromString(@"show");
         if ([alert respondsToSelector:showSel]) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
