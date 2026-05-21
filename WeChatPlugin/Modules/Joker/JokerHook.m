@@ -29,7 +29,6 @@ static void jokerLog(NSString *content) {
 
 // ==================== 原始IMP保存 ====================
 static IMP orig_TextCell_operationMenuItems = NULL;
-static IMP orig_TransferCell_operationMenuItems = NULL;
 static IMP orig_Wallet_updateBalanceEntryView = NULL;
 
 // ==================== 公共：应用文字修改（msgWrap + RichTextView） ====================
@@ -545,14 +544,24 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
     return newItems;
 }
 
-// ==================== WCPayTransferMessageCellView 菜单Hook ====================
+// ==================== WCPayTransferMessageCellView 菜单Hook（链式hook，与锤子共存）====================
+// 链式hook原理：hook时把当前IMP拷贝到临时selector（chainSel），hook函数通过chainSel调用链。
+// 无论锤子先hook还是后hook，chainSel指向的是"我们的IMP被安装前那一刻的完整链"——
+//   锤子先hook → chainSel=锤子蹦床 → 锤子加按钮+WeChat ✓
+//   锤子后hook → chainSel=WeChat，锤子蹦床会调我们的IMP(其orig)→我们调chainSel→返回给锤子蹦床→锤子加按钮 ✓
+// 关键：不使用静态保存的orig（会被后续hook覆盖），而是用类方法（chainSel）保持链不变。
+static SEL transferChainSel = NULL;
+
 static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
-    jokerLog([NSString stringWithFormat:@"[Joker] 🔗 TransferCellMenu self=%@", NSStringFromClass([self class])]);
+    jokerLog([NSString stringWithFormat:@"[Joker] 🔗 TransferCellMenu (chain) self=%@", NSStringFromClass([self class])]);
     NSMutableArray *items = nil;
-    if (orig_TransferCell_operationMenuItems) {
-        items = ((id(*)(id, SEL))orig_TransferCell_operationMenuItems)(self, _cmd);
-        jokerLog([NSString stringWithFormat:@"[Joker]    orig items: %@", items ? [items valueForKey:@"title"] : @"(nil)"]);
+    
+    // 通过 chainSel 调用原链（无论链上是锤子蹦床还是微信原始）
+    if (transferChainSel && [self respondsToSelector:transferChainSel]) {
+        items = ((id(*)(id, SEL))objc_msgSend)(self, transferChainSel);
     }
+    jokerLog([NSString stringWithFormat:@"[Joker]    chain items: %@", items ? [items valueForKey:@"title"] : @"(nil)"]);
+    
     if (!items) items = [NSMutableArray array];
     if (![PluginConfig shared].enableJoker) return items;
     
@@ -564,13 +573,13 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
             id mmItem = nil;
             if ([mmItemClass instancesRespondToSelector:initSel]) {
                 mmItem = ((id(*)(id, SEL, id, id, const char *))objc_msgSend)(
-                    [[mmItemClass alloc] init], initSel, @"Mio修改文字", @"expression", "mioTransferJoker");
+                    [[mmItemClass alloc] init], initSel, @"修改文字", @"expression", "mioTransferJoker");
             }
             if (!mmItem) {
                 SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
                 if ([mmItemClass instancesRespondToSelector:altInitSel]) {
                     mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
-                        [[mmItemClass alloc] init], altInitSel, @"Mio修改文字", NSSelectorFromString(@"mioTransferJoker"));
+                        [[mmItemClass alloc] init], altInitSel, @"修改文字", NSSelectorFromString(@"mioTransferJoker"));
                 }
             }
             if (mmItem) { [newItems addObject:mmItem]; }
@@ -891,13 +900,21 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
     }
     
+    // ====== Transfer 菜单: 链式hook（拷贝当前IMP到chainSel，不与锤子冲突）======    
     if (transferCellClass) {
+        SEL menuSel = NSSelectorFromString(@"operationMenuItems");
         Method existing = class_getInstanceMethod(transferCellClass, menuSel);
         if (existing) {
+            // ① 拷贝当前IMP（可能是锤子蹦床或微信原始）到 chainSel
             IMP curIMP = method_getImplementation(existing);
-            orig_TransferCell_operationMenuItems = curIMP;
+            transferChainSel = NSSelectorFromString(@"__Joker_transferChain");
+            class_addMethod(transferCellClass, transferChainSel, curIMP, "@@:");
+            
+            // ② 用我们的IMP替换
             method_setImplementation(existing, (IMP)hooked_TransferCell_operationMenuItems);
-            jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell.operationMenuItems hooked, orig=%p", curIMP]);
+            
+            jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell chain-hook: chainSel=%p (was IMP=%p)", 
+                      (void*)transferChainSel, curIMP]);
         }
     }
     
