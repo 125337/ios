@@ -110,56 +110,74 @@ static void walertLog(NSString *content) {
         }
 
         // ⑤ confirm button — 照抄锤子: addBtnTitle:handler: (block 参数!)
-        id alertRef = alert;
-        void(^confirmBlock)(NSString *) = [confirm copy]; // ARC → MRC 安全: 显式 copy
-
+        // ⚠️ 关键问题：MRC 的 WCUIAlertView 只 assign block 不 copy。
+        //    ARC block 在 showInputAlert 返回后被释放，点确定时调用野指针 → SIGSEGV。
+        // ✅ 解决：用 objc_setAssociatedObject 强持有 trampoline block（alert 存活期间 block 不释放）。
+        //    trampoline 内部 __weak 引用 alert 避免循环引用。
         SEL handlerSel = NSSelectorFromString(@"addBtnTitle:handler:");
         BOOL usedHandlerAPI = NO;
         if ([alert respondsToSelector:handlerSel]) {
-            // 照抄锤子 FUN_008462a0: (*(code *)objc_msgSend)(alert, "addBtnTitle:handler:")
-            // get input via valueForKeyPath:@"tipsVc.tipsTextView.text" (照抄锤子 FUN_0076ffbc)
-            id handlerBlock = ^(id btn) {
-                walertLog(@"🔥🔥🔥 CONFIRM CALLBACK FIRED (addBtnTitle:handler:) 🔥🔥🔥");
-                walertLog([NSString stringWithFormat:@"   btn = %@", btn]);
+            // 将 JokerHook confirm block 存到 alert（alert 存活期间不释放）
+            void(^confirmBlock)(NSString *) = confirm;
+            objc_setAssociatedObject(alert, &kWAlertConfirmBlockKey, confirmBlock, OBJC_ASSOCIATION_COPY_NONATOMIC);
 
-                // 获取输入文本(照抄锤子 FUN_0076ffbc 第1行: valueForKeyPath:@"tipsVc.tipsTextView.text")
+            // trampoline: __weak 引用 alert 避免循环引用
+            __weak WCUIAlertView *weakAlert = alert;
+            id trampoline = ^(id btn) {
+                walertLog(@"🔥🔥🔥 CONFIRM CALLBACK FIRED (addBtnTitle:handler:) 🔥🔥🔥");
+                WCUIAlertView *strongAlert = weakAlert;
+                if (!strongAlert) {
+                    walertLog(@"   ⚠️ alert was deallocated, cannot read text");
+                    return;
+                }
+                walertLog([NSString stringWithFormat:@"   alert=%@ btn=%@", strongAlert, btn]);
+
+                // 获取输入文本(照抄锤子 FUN_0076ffbc: valueForKeyPath:@"tipsVc.tipsTextView.text")
                 NSString *input = nil;
                 @try {
-                    input = [alertRef valueForKeyPath:@"tipsVc.tipsTextView.text"];
+                    input = [strongAlert valueForKeyPath:@"tipsVc.tipsTextView.text"];
                     walertLog([NSString stringWithFormat:@"   tipsVc.tipsTextView.text = %@", input ?: @"(nil)"]);
                 } @catch (NSException *e) {
                     walertLog([NSString stringWithFormat:@"   tipsVc error: %@", e]);
                 }
                 if (!input || input.length == 0) {
                     @try {
-                        input = [alertRef valueForKeyPath:@"tipsVc.tipsTextField.text"];
+                        input = [strongAlert valueForKeyPath:@"tipsVc.tipsTextField.text"];
                         walertLog([NSString stringWithFormat:@"   tipsVc.tipsTextField.text = %@", input ?: @"(nil)"]);
                     } @catch (NSException *e) {}
                 }
                 if (!input || input.length == 0) {
                     SEL getText = NSSelectorFromString(@"getTextFieldText");
-                    if ([alertRef respondsToSelector:getText]) {
-                        input = ((id(*)(id, SEL))objc_msgSend)(alertRef, getText);
+                    if ([strongAlert respondsToSelector:getText]) {
+                        input = ((id(*)(id, SEL))objc_msgSend)(strongAlert, getText);
                         walertLog([NSString stringWithFormat:@"   getTextFieldText = %@", input ?: @"(nil)"]);
                     }
                 }
                 if (!input) input = @"";
                 walertLog([NSString stringWithFormat:@"   FINAL input: [%@]", input]);
 
-                if (input.length > 0 && confirmBlock) {
+                // 取出 confirm block (通过 alert 的 associated object)
+                void(^cb)(NSString *) = objc_getAssociatedObject(strongAlert, &kWAlertConfirmBlockKey);
+                if (input.length > 0 && cb) {
                     walertLog(@"   → calling confirmBlock...");
-                    confirmBlock(input);
+                    cb(input);
                     walertLog(@"   → confirmBlock returned");
                 } else {
-                    walertLog([NSString stringWithFormat:@"   ⚠️ skip: input.len=%lu confirmBlock=%s",
-                        (unsigned long)input.length, confirmBlock ? "YES" : "NO"]);
+                    walertLog([NSString stringWithFormat:@"   ⚠️ skip: input.len=%lu cb=%s",
+                        (unsigned long)input.length, cb ? "YES" : "NO"]);
                 }
             };
-            // MRC 环境下 block 可能存为 assign，显式 copy 保证堆上存活
-            id copiedHandler = [handlerBlock copy];
-            ((void(*)(id, SEL, id, id))objc_msgSend)(alert, handlerSel, @"确定", copiedHandler);
+
+            // ⭐ 关键：用 objc_setAssociatedObject 强持有 trampoline
+            //    MRC 的 addBtnTitle:handler: 只 assign，不会 retain block
+            //    但 alert 的 associated object (OBJC_ASSOCIATION_COPY) 会 retain
+            //    这样 alert 存活期间 trampoline 就不会被释放
+            id heapTrampoline = [trampoline copy];
+            objc_setAssociatedObject(alert, &kWAlertHandlerBlockKey, heapTrampoline, OBJC_ASSOCIATION_COPY_NONATOMIC);
+
+            ((void(*)(id, SEL, id, id))objc_msgSend)(alert, handlerSel, @"确定", heapTrampoline);
             usedHandlerAPI = YES;
-            walertLog(@"⑤ addBtnTitle:handler: ✅ (锤子风格 block 回调)");
+            walertLog(@"⑤ addBtnTitle:handler: ✅ (trampoline retained via associatedObject)");
         } else {
             walertLog(@"⑤ ⚠️ addBtnTitle:handler: NOT found");
         }
@@ -170,8 +188,9 @@ static void walertLog(NSString *content) {
             SEL btnTargetSel = NSSelectorFromString(@"addBtnTitle:target:sel:");
             if ([alert respondsToSelector:btnTargetSel]) {
                 // Store confirm block on alert for the injected method
+                void(^fbBlock)(NSString *) = confirm;
                 objc_setAssociatedObject(alert, @selector(showInputAlert:initialText:target:onConfirm:),
-                    confirmBlock, OBJC_ASSOCIATION_COPY_NONATOMIC);
+                    fbBlock, OBJC_ASSOCIATION_COPY_NONATOMIC);
 
                 // Inject handler method into WCUIAlertView
                 SEL confirmMethSel = NSSelectorFromString(@"__walert_confirm_handler");
