@@ -2,6 +2,7 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Core/HookEngine.h"
 #import "../../Core/WeChatAlertHelper.h"
+#import "../../libs/substrate.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
@@ -120,23 +121,22 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
     if (!payInfoItem) { jokerLog(@"[Joker] ❌ no payInfoItem found — trying XML patch"); }
     jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem=%@", payInfoItem]);
 
-    // ② 照抄锤子 FUN_00770164：只去空格，不去¥。用原始值验证和写入。
-    // hammer: uVar3 = [uVar2 stringByReplacingOccurrencesOfString:@" " withString:@""]
-    //         [formatter numberFromString:uVar3] 验证
-    //         [payInfoItem setM_nsFeeDesc:uVar2] 写入原始值（含¥）
-    NSString *validText = [newText stringByReplacingOccurrencesOfString:@" " withString:@""];
-    jokerLog([NSString stringWithFormat:@"[Joker]    validText(space-stripped)=[%@]", validText]);
+    // ② 验证：8.0.60 m_nsFeeDesc 返回"¥0.01"带¥前缀。锤子的微信版本只返回"0.01"。
+    // 所以锤子只去空格就能过 NSNumberFormatter。我们需要strip ¥再验证。
+    // 写入时保留原始newText（含¥），跟锤子 write uVar2(原始值) 一致。
+    NSString *validText = [newText stringByReplacingOccurrencesOfString:@"¥" withString:@""];
+    validText = [validText stringByReplacingOccurrencesOfString:@" " withString:@""];
+    jokerLog([NSString stringWithFormat:@"[Joker]    validText(stripped)=[%@]", validText]);
 
     NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
     [formatter setAllowsFloats:YES];
     NSNumber *n = [formatter numberFromString:validText];
     if (!n) {
-        // ¥符号可能导致NSNumberFormatter失败，用锤子的错误提示
         jokerLog([NSString stringWithFormat:@"[Joker] ❌ not a valid number: [%@]", validText]);
         return;
     }
 
-    // ③ 照抄锤子：写入原始输入值 newText（含¥），不用 cleanText
+    // ③ 写入原始输入值 newText（含¥），照抄锤子用原始值
     BOOL updated = NO;
     if (payInfoItem) {
         @try {
@@ -544,24 +544,16 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
     return newItems;
 }
 
-// ==================== WCPayTransferMessageCellView 菜单Hook（链式hook，与锤子共存）====================
-// 链式hook原理：hook时把当前IMP拷贝到临时selector（chainSel），hook函数通过chainSel调用链。
-// 无论锤子先hook还是后hook，chainSel指向的是"我们的IMP被安装前那一刻的完整链"——
-//   锤子先hook → chainSel=锤子蹦床 → 锤子加按钮+WeChat ✓
-//   锤子后hook → chainSel=WeChat，锤子蹦床会调我们的IMP(其orig)→我们调chainSel→返回给锤子蹦床→锤子加按钮 ✓
-// 关键：不使用静态保存的orig（会被后续hook覆盖），而是用类方法（chainSel）保持链不变。
-static SEL transferChainSel = NULL;
-
-static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
-    jokerLog([NSString stringWithFormat:@"[Joker] 🔗 TransferCellMenu (chain) self=%@", NSStringFromClass([self class])]);
+// ==================== WCPayTransferMessageCellView 菜单Hook（真正MSHookMessageEx，与锤子共存）====================
+// 蹦床调用签名：id hook(id self, SEL _cmd, IMP orig)
+// 无论锤子先hook还是后hook，每次MSHookMessageEx都创建独立蹦床，自动形成链。
+static id joker_transfer_menu(id self, SEL _cmd, IMP orig) {
+    jokerLog([NSString stringWithFormat:@"[Joker] 🔗 TransferMenu(MSHook) self=%@ orig=%p", NSStringFromClass([self class]), orig]);
     NSMutableArray *items = nil;
-    
-    // 通过 chainSel 调用原链（无论链上是锤子蹦床还是微信原始）
-    if (transferChainSel && [self respondsToSelector:transferChainSel]) {
-        items = ((id(*)(id, SEL))objc_msgSend)(self, transferChainSel);
+    if (orig) {
+        items = ((id(*)(id, SEL))orig)(self, _cmd);
     }
-    jokerLog([NSString stringWithFormat:@"[Joker]    chain items: %@", items ? [items valueForKey:@"title"] : @"(nil)"]);
-    
+    jokerLog([NSString stringWithFormat:@"[Joker]    orig items(%lu): %@", (unsigned long)(items ? items.count : 0), items ? [items valueForKey:@"title"] : @"(nil)"]);
     if (!items) items = [NSMutableArray array];
     if (![PluginConfig shared].enableJoker) return items;
     
@@ -573,13 +565,13 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
             id mmItem = nil;
             if ([mmItemClass instancesRespondToSelector:initSel]) {
                 mmItem = ((id(*)(id, SEL, id, id, const char *))objc_msgSend)(
-                    [[mmItemClass alloc] init], initSel, @"修改文字", @"expression", "mioTransferJoker");
+                    [[mmItemClass alloc] init], initSel, @"Mio修改文字", @"expression", "mioTransferJoker");
             }
             if (!mmItem) {
                 SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
                 if ([mmItemClass instancesRespondToSelector:altInitSel]) {
                     mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
-                        [[mmItemClass alloc] init], altInitSel, @"修改文字", NSSelectorFromString(@"mioTransferJoker"));
+                        [[mmItemClass alloc] init], altInitSel, @"Mio修改文字", NSSelectorFromString(@"mioTransferJoker"));
                 }
             }
             if (mmItem) { [newItems addObject:mmItem]; }
@@ -900,22 +892,12 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
     }
     
-    // ====== Transfer 菜单: 链式hook（拷贝当前IMP到chainSel，不与锤子冲突）======    
+    // ====== Transfer 菜单: MSHookMessageEx（真正ARM64蹦床，与锤子完美共存）======
     if (transferCellClass) {
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
-        Method existing = class_getInstanceMethod(transferCellClass, menuSel);
-        if (existing) {
-            // ① 拷贝当前IMP（可能是锤子蹦床或微信原始）到 chainSel
-            IMP curIMP = method_getImplementation(existing);
-            transferChainSel = NSSelectorFromString(@"__Joker_transferChain");
-            class_addMethod(transferCellClass, transferChainSel, curIMP, "@@:");
-            
-            // ② 用我们的IMP替换
-            method_setImplementation(existing, (IMP)hooked_TransferCell_operationMenuItems);
-            
-            jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell chain-hook: chainSel=%p (was IMP=%p)", 
-                      (void*)transferChainSel, curIMP]);
-        }
+        IMP savedOrig = NULL;
+        MSHookMessageEx(transferCellClass, menuSel, (IMP)joker_transfer_menu, &savedOrig);
+        jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell MSHookMessageEx: orig=%p hook=%p", savedOrig, (IMP)joker_transfer_menu]);
     }
     
     // ====== ③ 钱包余额隐藏：照抄锤子助手 ======

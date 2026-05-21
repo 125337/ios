@@ -16,6 +16,7 @@ MioHelper_FILES = Tweak.m \
 	Registry/HookRegistry.m \
 	Registry/FeatureModuleRegistry.m \
 	Registry/FeatureRegistry.m \
+	libs/CydiaSubstrate.m \
 	Modules/Revoke/RevokeHandler.m \
 	Modules/Revoke/RevokeHook.m \
 	Modules/RedEnvelop/RedEnvelopHook.m \
