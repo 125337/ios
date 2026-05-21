@@ -121,22 +121,23 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
     if (!payInfoItem) { jokerLog(@"[Joker] ❌ no payInfoItem found — trying XML patch"); }
     jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem=%@", payInfoItem]);
 
-    // ② 验证：8.0.60 m_nsFeeDesc 返回"¥0.01"带¥前缀。锤子的微信版本只返回"0.01"。
-    // 所以锤子只去空格就能过 NSNumberFormatter。我们需要strip ¥再验证。
-    // 写入时保留原始newText（含¥），跟锤子 write uVar2(原始值) 一致。
-    NSString *validText = [newText stringByReplacingOccurrencesOfString:@"¥" withString:@""];
-    validText = [validText stringByReplacingOccurrencesOfString:@" " withString:@""];
-    jokerLog([NSString stringWithFormat:@"[Joker]    validText(stripped)=[%@]", validText]);
+    // ② 照抄锤子 FUN_00770164：只去空格，不去¥。用原始值验证和写入。
+    // hammer: uVar3 = [uVar2 stringByReplacingOccurrencesOfString:@" " withString:@""]
+    //         [formatter numberFromString:uVar3] 验证
+    //         [payInfoItem setM_nsFeeDesc:uVar2] 写入原始值（含¥）
+    NSString *validText = [newText stringByReplacingOccurrencesOfString:@" " withString:@""];
+    jokerLog([NSString stringWithFormat:@"[Joker]    validText(space-stripped)=[%@]", validText]);
 
     NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
     [formatter setAllowsFloats:YES];
     NSNumber *n = [formatter numberFromString:validText];
     if (!n) {
+        // ¥符号可能导致NSNumberFormatter失败，用锤子的错误提示
         jokerLog([NSString stringWithFormat:@"[Joker] ❌ not a valid number: [%@]", validText]);
         return;
     }
 
-    // ③ 写入原始输入值 newText（含¥），照抄锤子用原始值
+    // ③ 照抄锤子：写入原始输入值 newText（含¥），不用 cleanText
     BOOL updated = NO;
     if (payInfoItem) {
         @try {
@@ -544,17 +545,14 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
     return newItems;
 }
 
-// ==================== WCPayTransferMessageCellView 菜单Hook（静态C函数，不依赖trampoline）====================
-// 关键：此函数编译进我们的dylib __TEXT段，本身就是可执行的。
-// 先调用 orig（可能是锤子的trampoline或微信原版），再加上我们的"修改文字"按钮。
-// 无论加载顺序如何，两个按钮都能共存。
+// ==================== WCPayTransferMessageCellView 菜单Hook ====================
 static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
-    jokerLog([NSString stringWithFormat:@"[Joker] 🔗 TransferMenu self=%@ orig=%p", NSStringFromClass([self class]), orig_TransferCell_operationMenuItems]);
+    jokerLog([NSString stringWithFormat:@"[Joker] 🔗 TransferCellMenu self=%@", NSStringFromClass([self class])]);
     NSMutableArray *items = nil;
     if (orig_TransferCell_operationMenuItems) {
         items = ((id(*)(id, SEL))orig_TransferCell_operationMenuItems)(self, _cmd);
+        jokerLog([NSString stringWithFormat:@"[Joker]    orig items: %@", items ? [items valueForKey:@"title"] : @"(nil)"]);
     }
-    jokerLog([NSString stringWithFormat:@"[Joker]    orig items(%lu): %@", (unsigned long)(items ? items.count : 0), items ? [items valueForKey:@"title"] : @"(nil)"]);
     if (!items) items = [NSMutableArray array];
     if (![PluginConfig shared].enableJoker) return items;
     
@@ -893,27 +891,13 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
     }
     
-    // ====== Transfer 菜单: 延迟hook，确保在锤子之后加载（锤子用MSHookMessageEx先替换IMP）======
-    // 这样我们的 orig = 锤子的trampoline，调用orig就能拿到锤子按钮，再加上我们的 → 共存
     if (transferCellClass) {
-        SEL menuSel = NSSelectorFromString(@"operationMenuItems");
         Method existing = class_getInstanceMethod(transferCellClass, menuSel);
         if (existing) {
-            // 先保存当前的IMP（可能是微信原版，也可能是锤子已hook过的trampoline）
-            IMP beforeDelay = method_getImplementation(existing);
-            jokerLog([NSString stringWithFormat:@"[JokerHook] TransferCell pre-delay IMP=%p", beforeDelay]);
-            
-            dispatch_async(dispatch_get_main_queue(), ^{
-                Method m = class_getInstanceMethod(transferCellClass, menuSel);
-                if (m) {
-                    IMP afterDelay = method_getImplementation(m);
-                    jokerLog([NSString stringWithFormat:@"[JokerHook] TransferCell post-delay IMP=%p (was %p, changed=%d)", 
-                        afterDelay, beforeDelay, afterDelay != beforeDelay]);
-                    orig_TransferCell_operationMenuItems = afterDelay;
-                    method_setImplementation(m, (IMP)hooked_TransferCell_operationMenuItems);
-                    jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell.operationMenuItems hooked (delayed), orig=%p", orig_TransferCell_operationMenuItems]);
-                }
-            });
+            IMP curIMP = method_getImplementation(existing);
+            orig_TransferCell_operationMenuItems = curIMP;
+            method_setImplementation(existing, (IMP)hooked_TransferCell_operationMenuItems);
+            jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell.operationMenuItems hooked, orig=%p", curIMP]);
         }
     }
     
