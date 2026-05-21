@@ -580,9 +580,7 @@ static void joker_wallet_confirm_IMP(id self, SEL _cmd) {
         jokerLog([NSString stringWithFormat:@"   ❌ wallet update: %@", e]);
     }
 
-    // 关闭弹窗
-    @try { [alert dismiss]; } @catch (NSException *e) {}
-}
+    }
 
 static void walletLongPressHandler(id self, SEL _cmd, UIGestureRecognizer *gesture) {
     if (gesture.state != UIGestureRecognizerStateBegan) return;
