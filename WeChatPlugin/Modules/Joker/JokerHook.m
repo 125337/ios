@@ -325,11 +325,17 @@ static void dumpAllIvars(id obj, NSString *label) {
             // 只关注可能跟 message/content 相关的 ivar
             if (strstr(name, "essage") || strstr(name, "ontent") || strstr(name, "Wrap") ||
                 strstr(name, "msg") || strstr(name, "Msg") || strstr(name, "odel")) {
-                @try {
-                    id val = object_getIvar(obj, ivars[i]);
-                    jokerLog([NSString stringWithFormat:@"[Joker]   %@ (%s) = %@", nameStr, type, val ? [NSString stringWithFormat:@"<%@>", NSStringFromClass([val class])] : @"nil"]);
-                } @catch (NSException *e) {
-                    jokerLog([NSString stringWithFormat:@"[Joker]   %@ → error: %@", nameStr, e]);
+                // 安全检查：只对对象类型(@)或类对象(#)调用 object_getIvar
+                if (type && (type[0] == '@' || type[0] == '#')) {
+                    @try {
+                        id val = object_getIvar(obj, ivars[i]);
+                        jokerLog([NSString stringWithFormat:@"[Joker]   %@ (%s) = %@", nameStr, type, val ? [NSString stringWithFormat:@"<%@>", NSStringFromClass([val class])] : @"nil"]);
+                    } @catch (NSException *e) {
+                        jokerLog([NSString stringWithFormat:@"[Joker]   %@ → error: %@", nameStr, e]);
+                    }
+                } else {
+                    // 原始类型，跳过但记录类型
+                    jokerLog([NSString stringWithFormat:@"[Joker]   %@ (%s) = <primitive, skipped>", nameStr, type ?: "?"]);
                 }
             }
         }
@@ -450,9 +456,8 @@ static void mioTransferJoker(id self, SEL _cmd) {
 
     // 转账文字：8.0.60 的 msgWrap.m_nsContent 是 XML 不是显示文字
     // 锤子旧版用 m_nsContent 直接是 "¥520.00"，新版需要从 payInfoItem 取
-    // 尝试多种 key 找 payInfoItem
-    jokerLog(@"[Joker] 🔍 dump msgWrap properties for transfer...");
-    dumpAllIvars(msgWrap, @"msgWrap(transfer)");
+    // NOTE: 不对 msgWrap 做全量 ivar dump（CMessageWrap 数百 ivar 含大量原始类型，object_getIvar 会炸）
+    jokerLog(@"[Joker] 🔍 trying payInfoItem keys for transfer...");
 
     id payInfoItem = nil;
     NSArray *payInfoKeys = @[@"m_oWCPayInfoItem", @"m_WCPayInfoItem", @"payInfoItem", @"m_payInfoItem",
