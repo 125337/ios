@@ -2,7 +2,6 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Core/HookEngine.h"
 #import "../../Core/WeChatAlertHelper.h"
-#import "../../libs/substrate.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
@@ -30,6 +29,7 @@ static void jokerLog(NSString *content) {
 
 // ==================== 原始IMP保存 ====================
 static IMP orig_TextCell_operationMenuItems = NULL;
+static IMP orig_TransferCell_operationMenuItems = NULL;
 static IMP orig_Wallet_updateBalanceEntryView = NULL;
 
 // ==================== 公共：应用文字修改（msgWrap + RichTextView） ====================
@@ -544,14 +544,15 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
     return newItems;
 }
 
-// ==================== WCPayTransferMessageCellView 菜单Hook（真正MSHookMessageEx，与锤子共存）====================
-// 蹦床调用签名：id hook(id self, SEL _cmd, IMP orig)
-// 无论锤子先hook还是后hook，每次MSHookMessageEx都创建独立蹦床，自动形成链。
-static id joker_transfer_menu(id self, SEL _cmd, IMP orig) {
-    jokerLog([NSString stringWithFormat:@"[Joker] 🔗 TransferMenu(MSHook) self=%@ orig=%p", NSStringFromClass([self class]), orig]);
+// ==================== WCPayTransferMessageCellView 菜单Hook（静态C函数，不依赖trampoline）====================
+// 关键：此函数编译进我们的dylib __TEXT段，本身就是可执行的。
+// 先调用 orig（可能是锤子的trampoline或微信原版），再加上我们的"修改文字"按钮。
+// 无论加载顺序如何，两个按钮都能共存。
+static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
+    jokerLog([NSString stringWithFormat:@"[Joker] 🔗 TransferMenu self=%@ orig=%p", NSStringFromClass([self class]), orig_TransferCell_operationMenuItems]);
     NSMutableArray *items = nil;
-    if (orig) {
-        items = ((id(*)(id, SEL))orig)(self, _cmd);
+    if (orig_TransferCell_operationMenuItems) {
+        items = ((id(*)(id, SEL))orig_TransferCell_operationMenuItems)(self, _cmd);
     }
     jokerLog([NSString stringWithFormat:@"[Joker]    orig items(%lu): %@", (unsigned long)(items ? items.count : 0), items ? [items valueForKey:@"title"] : @"(nil)"]);
     if (!items) items = [NSMutableArray array];
@@ -892,12 +893,15 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
     }
     
-    // ====== Transfer 菜单: 直接调用我们自己的 MSHookMessageEx（不依赖锤子助手）======
+    // ====== Transfer 菜单: 直接用 method_setImplementation，函数编译在dylib里无需trampoline ======
     if (transferCellClass) {
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
-        IMP savedOrig = NULL;
-        MSHookMessageEx(transferCellClass, menuSel, (IMP)joker_transfer_menu, &savedOrig);
-        jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell MSHookMessageEx: orig=%p", savedOrig]);
+        Method existing = class_getInstanceMethod(transferCellClass, menuSel);
+        if (existing) {
+            orig_TransferCell_operationMenuItems = method_getImplementation(existing);
+            method_setImplementation(existing, (IMP)hooked_TransferCell_operationMenuItems);
+            jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell.operationMenuItems hooked, orig=%p", orig_TransferCell_operationMenuItems]);
+        }
     }
     
     // ====== ③ 钱包余额隐藏：照抄锤子助手 ======
