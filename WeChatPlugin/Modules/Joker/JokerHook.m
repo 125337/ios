@@ -37,7 +37,7 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
     if (newText.length == 0) return;
     jokerLog([NSString stringWithFormat:@"[Joker] applyTextModification: %@", newText]);
 
-    // ① 写 msgWrap.m_nsContent
+    // ① 写 msgWrap.m_nsContent（保证滚动/复用时不丢失）
     if (msgRef) {
         @try {
             SEL setM_nsContentSel = NSSelectorFromString(@"setM_nsContent:");
@@ -50,24 +50,60 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
         }
     }
 
-    // ② 更新 RichTextView 显示层
+    // ② 更新 RichTextView 显示层（即时显示）
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
             id richTextView = nil;
-            Ivar ivar = class_getInstanceVariable([cellRef class], "m_richTextView");
-            if (ivar) richTextView = object_getIvar(cellRef, ivar);
-            if (!richTextView) {
-                id viewModel = nil;
-                @try { viewModel = [cellRef valueForKey:@"m_viewModel"]; } @catch (NSException *e) {}
-                @try { richTextView = [viewModel valueForKey:@"m_richTextView"]; } @catch (NSException *e) {}
+
+            // 方法1: getRichTextView selector（照抄 TintHook，最可靠）
+            if ([cellRef respondsToSelector:@selector(getRichTextView)]) {
+                richTextView = ((id(*)(id, SEL))objc_msgSend)(cellRef, @selector(getRichTextView));
+                if (richTextView) jokerLog(@"[Joker] ✅ RichTextView via getRichTextView");
             }
+
+            // 方法2: 遍历父类查找 m_richTextView ivar（class_getInstanceVariable 只查当前类）
+            if (!richTextView) {
+                Class cls = [cellRef class];
+                while (cls && cls != [NSObject class]) {
+                    Ivar ivar = class_getInstanceVariable(cls, "m_richTextView");
+                    if (ivar) {
+                        richTextView = object_getIvar(cellRef, ivar);
+                        jokerLog([NSString stringWithFormat:@"[Joker] ✅ RichTextView via ivar in %@", NSStringFromClass(cls)]);
+                        break;
+                    }
+                    cls = class_getSuperclass(cls);
+                }
+            }
+
+            // 方法3: 通过 viewModel 获取（备选）
+            if (!richTextView) {
+                @try {
+                    id viewModel = [cellRef valueForKey:@"m_viewModel"];
+                    richTextView = [viewModel valueForKey:@"m_richTextView"];
+                    if (richTextView) jokerLog(@"[Joker] ✅ RichTextView via viewModel");
+                } @catch (NSException *e) {}
+            }
+
             if (richTextView) {
-                SEL setTextSel = NSSelectorFromString(@"setText:");
-                if ([richTextView respondsToSelector:setTextSel]) {
-                    ((void(*)(id, SEL, id))objc_msgSend)(richTextView, setTextSel, newText);
+                // 优先使用 setAttributedText:（微信内部使用 attributed string）
+                if ([richTextView respondsToSelector:@selector(setAttributedText:)]) {
+                    NSMutableAttributedString *attrStr = [[NSMutableAttributedString alloc] initWithString:newText];
+                    ((void(*)(id, SEL, id))objc_msgSend)(richTextView, @selector(setAttributedText:), attrStr);
+                    jokerLog(@"[Joker] ✅ RichTextView setAttributedText updated");
+                } else if ([richTextView respondsToSelector:@selector(setText:)]) {
+                    ((void(*)(id, SEL, id))objc_msgSend)(richTextView, @selector(setText:), newText);
+                    jokerLog(@"[Joker] ✅ RichTextView setText updated");
                 }
                 [richTextView setNeedsDisplay];
-                jokerLog(@"[Joker] ✅ RichTextView updated");
+
+                // 触发 cell 重新布局（处理气泡大小、文本换行等）
+                SEL layoutSel = NSSelectorFromString(@"layoutContentView");
+                if ([cellRef respondsToSelector:layoutSel]) {
+                    ((void(*)(id, SEL))objc_msgSend)(cellRef, layoutSel);
+                    jokerLog(@"[Joker] ✅ layoutContentView triggered");
+                }
+            } else {
+                jokerLog(@"[Joker] ❌ RichTextView not found — text display may not update");
             }
         } @catch (NSException *e) {
             jokerLog([NSString stringWithFormat:@"[Joker] ❌ display: %@", e]);
