@@ -121,12 +121,12 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
     if (!payInfoItem) { jokerLog(@"[Joker] ❌ no payInfoItem found — trying XML patch"); }
     jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem=%@", payInfoItem]);
 
-    // ② 照抄锤子 FUN_00770164：只去空格，不去¥。用原始值验证和写入。
-    // hammer: uVar3 = [uVar2 stringByReplacingOccurrencesOfString:@" " withString:@""]
-    //         [formatter numberFromString:uVar3] 验证
-    //         [payInfoItem setM_nsFeeDesc:uVar2] 写入原始值（含¥）
+    // ② 照抄锤子 FUN_00770164 验证逻辑，但适配 8.0.60（m_nsFeeDesc 带 ¥）
+    // hammer 微信版 m_nsFeeDesc="0.01" 不含¥，所以只去空格就能验证通过
+    // 8.0.60 m_nsFeeDesc="¥0.01" 含¥，需要额外去¥再验证，但写入仍保留¥（照抄 hammer 写 uVar2）
     NSString *validText = [newText stringByReplacingOccurrencesOfString:@" " withString:@""];
-    jokerLog([NSString stringWithFormat:@"[Joker]    validText(space-stripped)=[%@]", validText]);
+    validText = [validText stringByReplacingOccurrencesOfString:@"¥" withString:@""];
+    jokerLog([NSString stringWithFormat:@"[Joker]    validText(cleaned)=[%@]", validText]);
 
     NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
     [formatter setAllowsFloats:YES];
