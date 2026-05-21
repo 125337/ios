@@ -3,14 +3,14 @@
 
 // ==================== WCUIAlertView 本地声明（基于运行时 dump 的真实方法） ====================
 // WCUIAlertView 是 NSObject 子类（非 UIView），管理自己的 UI。
-// 声明此接口后，使用标准 ObjC 语法调用，ARC 自动 _Block_copy 管理 block 生命周期。
 @interface WCUIAlertView : NSObject
 - (id)initWithTitle:(NSString *)title message:(NSString *)message;
 - (void)showTextFieldWithMaxLen:(NSInteger)maxLen;
 - (void)setTextFieldDefaultText:(NSString *)text;
-- (void)addBtnTitle:(NSString *)title handler:(void(^)(id button))handler;
+- (void)addBtnTitle:(NSString *)title target:(id)target sel:(SEL)sel;
 - (void)addCancelBtnTitle:(NSString *)title target:(id)target sel:(SEL)sel;
 - (void)show;
+- (NSString *)getTextFieldText;
 @end
 
 // ==================== 日志 ====================
@@ -34,6 +34,42 @@ static void walertLog(NSString *content) {
         [fh closeFile];
     } @catch (NSException *e) {}
 }
+
+// ==================== 回调 trampoline ====================
+// WCUIAlertView 是微信 MRC 编译的，addBtnTitle:handler: block 在 ARC 下生命周期不兼容导致 SIGSEGV。
+// 改用 addBtnTitle:target:sel: + 关联对象，让回调对象和 alert 同生命周期，彻底避免 ARC block 问题。
+@interface _WeChatAlertCallback : NSObject
+@property (nonatomic, copy) void(^confirmBlock)(NSString *);
+@property (nonatomic, unsafe_unretained) WCUIAlertView *alert;
+@end
+
+@implementation _WeChatAlertCallback
+
+- (void)handleConfirm {
+    NSString *inputText = nil;
+    @try {
+        // 优先用 getTextFieldText（运行时 dump 的真实方法）
+        inputText = [self.alert getTextFieldText];
+    } @catch (NSException *e) {
+        walertLog([NSString stringWithFormat:@"[WeChatAlert] getTextFieldText failed: %@", e]);
+    }
+    if (!inputText || inputText.length == 0) {
+        @try {
+            inputText = [self.alert valueForKeyPath:@"tipsVc.tipsTextView.text"];
+        } @catch (NSException *e) {}
+    }
+    if (!inputText || inputText.length == 0) {
+        @try {
+            inputText = [self.alert valueForKeyPath:@"tipsVc.tipsTextField.text"];
+        } @catch (NSException *e) {}
+    }
+    walertLog([NSString stringWithFormat:@"[WeChatAlert] input: %@", inputText]);
+    if (inputText.length > 0 && self.confirmBlock) {
+        self.confirmBlock(inputText);
+    }
+}
+
+@end
 
 @implementation WeChatAlertHelper
 
@@ -77,25 +113,13 @@ static void walertLog(NSString *content) {
         // 4. addCancelBtnTitle:target:sel: → 取消按钮
         [alert addCancelBtnTitle:@"取消" target:target sel:NULL];
 
-        // 5. addBtnTitle:handler: → 确定按钮
-        //    用 __unsafe_unretained 而非 __weak（WCUIAlertView 生命周期由 window 管理，
-        //    __weak 可能被 ARC 过早置 nil 导致 handler 内 weakAlert 为空）
-        __unsafe_unretained id weakAlert = alert;
-        [alert addBtnTitle:@"确定" handler:^(id button) {
-            @try {
-                // 照抄锤子助手 FUN_0076ffbc：valueForKeyPath 获取输入文本
-                NSString *inputText = [weakAlert valueForKeyPath:@"tipsVc.tipsTextView.text"];
-                if (!inputText || inputText.length == 0) {
-                    inputText = [weakAlert valueForKeyPath:@"tipsVc.tipsTextField.text"];
-                }
-                walertLog([NSString stringWithFormat:@"[WeChatAlert] input: %@", inputText]);
-                if (inputText.length > 0 && confirm) {
-                    confirm(inputText);
-                }
-            } @catch (NSException *e) {
-                walertLog([NSString stringWithFormat:@"[WeChatAlert] ❌ get input: %@", e]);
-            }
-        }];
+        // 5. addBtnTitle:target:sel: → 确定按钮（target/selector 模式，避免 block → MRC 崩溃）
+        _WeChatAlertCallback *cb = [[_WeChatAlertCallback alloc] init];
+        cb.alert = alert;
+        cb.confirmBlock = confirm;
+        // 关联到 alert，保证回调对象和 alert 同生命周期
+        objc_setAssociatedObject(alert, @selector(showInputAlert:initialText:target:onConfirm:), cb, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [alert addBtnTitle:@"确定" target:cb sel:@selector(handleConfirm)];
 
         // 6. show → 直接加到 window 层级，绕过 UIViewController presentation
         [alert show];
