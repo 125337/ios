@@ -101,17 +101,22 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
 static void applyTransferModification(id msgRef, id cellRef, NSString *newText) {
     jokerLog([NSString stringWithFormat:@"[Joker] 🔧 applyTransferModification START: [%@]", newText]);
 
-    // ① 查找 payInfoItem（多 key 尝试）
+    // ① 查找 payInfoItem（锤子路径: msgWrap → m_extendInfoWithMsgType → m_oWCPayInfoItem）
     id payInfoItem = nil;
-    NSArray *payInfoKeys = @[@"m_oWCPayInfoItem", @"m_WCPayInfoItem", @"payInfoItem", @"m_payInfoItem",
-                              @"m_oPayInfoItem", @"payInfo", @"m_payInfo", @"m_WCPayInfo"];
-    for (NSString *k in payInfoKeys) {
-        @try { payInfoItem = [msgRef valueForKey:k]; } @catch (NSException *e) {}
-        if (payInfoItem) { jokerLog([NSString stringWithFormat:@"[Joker]    found payInfoItem via msgRef.%@", k]); break; }
-    }
+    @try {
+        id extendInfo = [msgRef valueForKey:@"m_extendInfoWithMsgType"];
+        if (extendInfo) {
+            payInfoItem = [extendInfo valueForKey:@"m_oWCPayInfoItem"];
+            jokerLog([NSString stringWithFormat:@"[Joker]    extendInfo.m_oWCPayInfoItem = %@", payInfoItem ?: @"(nil)"]);
+        }
+    } @catch (NSException *e) {}
+
+    // fallback: 直接从 msgRef 查找
     if (!payInfoItem) {
-        // fallback: 尝试从 viewModel 获取
-        @try { id vm = [cellRef valueForKey:@"m_viewModel"]; payInfoItem = [vm valueForKey:@"payInfoItem"]; } @catch (NSException *e) {}
+        for (NSString *k in @[@"m_oWCPayInfoItem", @"m_WCPayInfoItem"]) {
+            @try { payInfoItem = [msgRef valueForKey:k]; } @catch (NSException *e) {}
+            if (payInfoItem) break;
+        }
     }
     if (!payInfoItem) { jokerLog(@"[Joker] ❌ no payInfoItem found — trying XML patch"); }
     jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem=%@", payInfoItem]);
@@ -454,36 +459,39 @@ static void mioTransferJoker(id self, SEL _cmd) {
         }
     }
 
-    // 转账文字：8.0.60 的 msgWrap.m_nsContent 是 XML 不是显示文字
-    // 锤子旧版用 m_nsContent 直接是 "¥520.00"，新版需要从 payInfoItem 取
-    // NOTE: 不对 msgWrap 做全量 ivar dump（CMessageWrap 数百 ivar 含大量原始类型，object_getIvar 会炸）
-    jokerLog(@"[Joker] 🔍 trying payInfoItem keys for transfer...");
+    // 转账文字：锤子路径 msgWrap → m_extendInfoWithMsgType → m_oWCPayInfoItem → m_nsFeeDesc
+    // 8.0.60 的 msgWrap.m_nsContent 是 XML 不是显示文字
+    jokerLog(@"[Joker] 🔍 transfer: msgWrap → m_extendInfoWithMsgType → m_oWCPayInfoItem → m_nsFeeDesc");
 
     id payInfoItem = nil;
-    NSArray *payInfoKeys = @[@"m_oWCPayInfoItem", @"m_WCPayInfoItem", @"payInfoItem", @"m_payInfoItem",
-                              @"m_oPayInfoItem", @"payInfo", @"m_payInfo", @"m_WCPayInfo"];
-    for (NSString *k in payInfoKeys) {
-        @try { payInfoItem = [msgWrap valueForKey:k]; } @catch (NSException *e) {}
-        jokerLog([NSString stringWithFormat:@"[Joker]    msgWrap.%@ = %@", k, payInfoItem ?: @"(nil)"]);
-        if (payInfoItem) break;
+    @try {
+        id extendInfo = [msgWrap valueForKey:@"m_extendInfoWithMsgType"];
+        jokerLog([NSString stringWithFormat:@"[Joker]    m_extendInfoWithMsgType = %@", extendInfo ? [NSString stringWithFormat:@"<%@>", NSStringFromClass([extendInfo class])] : @"(nil)"]);
+        if (extendInfo) {
+            payInfoItem = [extendInfo valueForKey:@"m_oWCPayInfoItem"];
+            jokerLog([NSString stringWithFormat:@"[Joker]    extendInfo.m_oWCPayInfoItem = %@", payInfoItem ?: @"(nil)"]);
+            if (payInfoItem) {
+                content = [payInfoItem valueForKey:@"m_nsFeeDesc"];
+                jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem.m_nsFeeDesc = %@", content ?: @"(nil)"]);
+            }
+        }
+    } @catch (NSException *e) {
+        jokerLog([NSString stringWithFormat:@"[Joker]    extendInfo path failed: %@", e]);
     }
 
-    if (payInfoItem) {
-        @try { content = [payInfoItem valueForKey:@"m_nsFeeDesc"]; } @catch (NSException *e) {}
-        jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem.m_nsFeeDesc = %@", content ?: @"(nil)"]);
-        if (!content) {
-            @try { content = [payInfoItem valueForKey:@"feeDesc"]; } @catch (NSException *e) {}
-            jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem.feeDesc = %@", content ?: @"(nil)"]);
+    // fallback: 直接从 msgWrap 找（旧版路径）
+    if (!payInfoItem) {
+        NSArray *fallbackKeys = @[@"m_oWCPayInfoItem", @"m_WCPayInfoItem"];
+        for (NSString *k in fallbackKeys) {
+            @try { payInfoItem = [msgWrap valueForKey:k]; } @catch (NSException *e) {}
+            if (payInfoItem) { jokerLog([NSString stringWithFormat:@"[Joker]    fallback: msgWrap.%@ found", k]); break; }
         }
-        if (!content) {
-            @try { content = [payInfoItem valueForKey:@"m_feeDesc"]; } @catch (NSException *e) {}
-            jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem.m_feeDesc = %@", content ?: @"(nil)"]);
+        if (payInfoItem && !content) {
+            @try { content = [payInfoItem valueForKey:@"m_nsFeeDesc"]; } @catch (NSException *e) {}
         }
     }
-    // 如果 XML 过长（>200 字符），说明是 XML 乱码，清空用空预填
-    if (!content) {
-        @try { content = [msgWrap valueForKey:@"m_nsContent"]; } @catch (NSException *e) {}
-    }
+
+    if (!content) { @try { content = [msgWrap valueForKey:@"m_nsContent"]; } @catch (NSException *e) {} }
     if (content.length > 200) {
         jokerLog(@"[Joker] ⚠️ content looks like XML (>200 chars), clearing for clean input");
         content = @"";
