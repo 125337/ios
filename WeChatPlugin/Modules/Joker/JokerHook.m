@@ -101,31 +101,59 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
 static void applyTransferModification(id msgRef, id cellRef, NSString *newText) {
     jokerLog([NSString stringWithFormat:@"[Joker] 🔧 applyTransferModification START: [%@]", newText]);
 
-    // ① 获取 payInfoItem
+    // ① 查找 payInfoItem（多 key 尝试）
     id payInfoItem = nil;
-    @try { payInfoItem = [msgRef valueForKey:@"m_oWCPayInfoItem"]; }
-    @catch (NSException *e) {}
+    NSArray *payInfoKeys = @[@"m_oWCPayInfoItem", @"m_WCPayInfoItem", @"payInfoItem", @"m_payInfoItem",
+                              @"m_oPayInfoItem", @"payInfo", @"m_payInfo", @"m_WCPayInfo"];
+    for (NSString *k in payInfoKeys) {
+        @try { payInfoItem = [msgRef valueForKey:k]; } @catch (NSException *e) {}
+        if (payInfoItem) { jokerLog([NSString stringWithFormat:@"[Joker]    found payInfoItem via msgRef.%@", k]); break; }
+    }
+    if (!payInfoItem) {
+        // fallback: 尝试从 viewModel 获取
+        @try { id vm = [cellRef valueForKey:@"m_viewModel"]; payInfoItem = [vm valueForKey:@"payInfoItem"]; } @catch (NSException *e) {}
+    }
+    if (!payInfoItem) { jokerLog(@"[Joker] ❌ no payInfoItem found — trying XML patch"); }
     jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem=%@", payInfoItem]);
-    if (!payInfoItem) { jokerLog(@"[Joker] ❌ no payInfoItem"); return; }
 
-    // ② 数字验证（锤子用 NSNumberFormatter DecimalStyle）
+    // ② 数字验证
     NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
-    [formatter setNumberStyle:NSNumberFormatterDecimalStyle];
-    [formatter setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"]];
+    [formatter setAllowsFloats:YES];
     NSNumber *n = [formatter numberFromString:newText];
     if (!n) {
         jokerLog([NSString stringWithFormat:@"[Joker] ❌ not a valid number: [%@]", newText]);
         return;
     }
 
-    // ③ 写入 payInfoItem.m_nsFeeDesc
+    // ③ 写入
     BOOL updated = NO;
-    @try {
-        [payInfoItem setValue:newText forKey:@"m_nsFeeDesc"];
-        jokerLog([NSString stringWithFormat:@"[Joker] ③ payInfoItem.m_nsFeeDesc ← [%@] ✅", newText]);
-        updated = YES;
-    } @catch (NSException *e) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ③ ❌ setM_nsFeeDesc failed: %@", e]);
+    if (payInfoItem) {
+        // 方法A: 写入 payInfoItem.m_nsFeeDesc
+        @try {
+            [payInfoItem setValue:newText forKey:@"m_nsFeeDesc"];
+            jokerLog([NSString stringWithFormat:@"[Joker] ③ payInfoItem.m_nsFeeDesc ← [%@] ✅", newText]);
+            updated = YES;
+        } @catch (NSException *e) {
+            jokerLog([NSString stringWithFormat:@"[Joker] ③ ❌ payInfoItem failed: %@", e]);
+        }
+    } else {
+        // 方法B: 直接改写 msgWrap.m_nsContent XML 中的 feedesc
+        @try {
+            NSString *xmlContent = [msgRef valueForKey:@"m_nsContent"];
+            if (xmlContent.length > 0) {
+                // 替换 <feedesc><![CDATA[...]]></feedesc> 中的内容
+                NSString *replacement = [NSString stringWithFormat:@"<feedesc><![CDATA[%@]]></feedesc>", newText];
+                NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"<feedesc><!\\[CDATA\\[.*?\\]\\]></feedesc>" options:NSRegularExpressionDotMatchesLineSeparators error:nil];
+                NSString *newXml = [regex stringByReplacingMatchesInString:xmlContent options:0 range:NSMakeRange(0, xmlContent.length) withTemplate:replacement];
+                if (newXml && ![newXml isEqualToString:xmlContent]) {
+                    [msgRef setValue:newXml forKey:@"m_nsContent"];
+                    jokerLog(@"[Joker] ③ XML feedesc patched ✅");
+                    updated = YES;
+                }
+            }
+        } @catch (NSException *e) {
+            jokerLog([NSString stringWithFormat:@"[Joker] ③ ❌ XML patch failed: %@", e]);
+        }
     }
 
     // ④ 刷新（锤子：viewModel.updateLayouts + cell.updateTitleLabel）
@@ -420,16 +448,43 @@ static void mioTransferJoker(id self, SEL _cmd) {
         }
     }
 
-    // 转账文字取自 payInfoItem.m_nsFeeDesc（照抄锤子 FUN_0076fb4c），不是 msgWrap.m_nsContent（XML）
+    // 转账文字：8.0.60 的 msgWrap.m_nsContent 是 XML 不是显示文字
+    // 锤子旧版用 m_nsContent 直接是 "¥520.00"，新版需要从 payInfoItem 取
+    // 尝试多种 key 找 payInfoItem
+    jokerLog(@"[Joker] 🔍 dump msgWrap properties for transfer...");
+    dumpAllIvars(msgWrap, @"msgWrap(transfer)");
+
     id payInfoItem = nil;
-    @try { payInfoItem = [msgWrap valueForKey:@"m_oWCPayInfoItem"]; } @catch (NSException *e) {}
+    NSArray *payInfoKeys = @[@"m_oWCPayInfoItem", @"m_WCPayInfoItem", @"payInfoItem", @"m_payInfoItem",
+                              @"m_oPayInfoItem", @"payInfo", @"m_payInfo", @"m_WCPayInfo"];
+    for (NSString *k in payInfoKeys) {
+        @try { payInfoItem = [msgWrap valueForKey:k]; } @catch (NSException *e) {}
+        jokerLog([NSString stringWithFormat:@"[Joker]    msgWrap.%@ = %@", k, payInfoItem ?: @"(nil)"]);
+        if (payInfoItem) break;
+    }
+
     if (payInfoItem) {
         @try { content = [payInfoItem valueForKey:@"m_nsFeeDesc"]; } @catch (NSException *e) {}
+        jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem.m_nsFeeDesc = %@", content ?: @"(nil)"]);
+        if (!content) {
+            @try { content = [payInfoItem valueForKey:@"feeDesc"]; } @catch (NSException *e) {}
+            jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem.feeDesc = %@", content ?: @"(nil)"]);
+        }
+        if (!content) {
+            @try { content = [payInfoItem valueForKey:@"m_feeDesc"]; } @catch (NSException *e) {}
+            jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem.m_feeDesc = %@", content ?: @"(nil)"]);
+        }
     }
-    if (!content) { @try { content = [msgWrap valueForKey:@"m_nsTitle"]; } @catch (NSException *e) {} }
-    if (!content) { @try { content = [msgWrap valueForKey:@"m_nsContent"]; } @catch (NSException *e) {} }
+    // 如果 XML 过长（>200 字符），说明是 XML 乱码，清空用空预填
+    if (!content) {
+        @try { content = [msgWrap valueForKey:@"m_nsContent"]; } @catch (NSException *e) {}
+    }
+    if (content.length > 200) {
+        jokerLog(@"[Joker] ⚠️ content looks like XML (>200 chars), clearing for clean input");
+        content = @"";
+    }
     if (!content) content = @"";
-    jokerLog([NSString stringWithFormat:@"[Joker] transfer content (from payInfoItem.m_nsFeeDesc): %@", content]);
+    jokerLog([NSString stringWithFormat:@"[Joker] transfer final content=[%@]", content]);
 
     showEditAlert(nil, self, msgWrap, content, nil);
 }
@@ -550,13 +605,14 @@ static void joker_wallet_confirm_IMP(id self, SEL _cmd) {
 
     if (!input || input.length == 0) { jokerLog(@"   ⚠️ empty input"); return; }
 
-    // 数字验证（锤子 NSNumberFormatter NoStyle）
+    // 数字验证（锤子: setAllowsFloats:YES + numberFromString:）
     NSNumberFormatter *fmt = [[NSNumberFormatter alloc] init];
-    [fmt setNumberStyle:NSNumberFormatterNoStyle];
+    [fmt setAllowsFloats:YES];
     NSNumber *n = [fmt numberFromString:input];
+    jokerLog([NSString stringWithFormat:@"   numberFromString result=%@", n]);
     if (!n) { jokerLog([NSString stringWithFormat:@"   ❌ not a valid number: [%@]", input]); return; }
 
-    // 获取 timeoutNumber 并调用 updateNumber（锤子 FUN_00857a80 + FUN_00857fc0）
+    // 获取 timeoutNumber 并调用 updateNumber（锤子：integerValue → updateNumber:NSInteger）
     @try {
         SEL tnSel = NSSelectorFromString(@"timeoutNumber");
         jokerLog([NSString stringWithFormat:@"   respondsTo timeoutNumber = %d", [self respondsToSelector:tnSel]]);
@@ -569,11 +625,14 @@ static void joker_wallet_confirm_IMP(id self, SEL _cmd) {
         jokerLog([NSString stringWithFormat:@"   timeoutNumber=%@", timeoutNumber]);
 
         if (timeoutNumber) {
+            NSInteger intVal = [n integerValue];
+            jokerLog([NSString stringWithFormat:@"   integerValue=%ld", (long)intVal]);
             SEL updateNumSel = NSSelectorFromString(@"updateNumber:");
             jokerLog([NSString stringWithFormat:@"   respondsTo updateNumber: = %d", [timeoutNumber respondsToSelector:updateNumSel]]);
             if ([timeoutNumber respondsToSelector:updateNumSel]) {
-                ((void(*)(id, SEL, id))objc_msgSend)(timeoutNumber, updateNumSel, input);
-                jokerLog([NSString stringWithFormat:@"   ✅ [timeoutNumber updateNumber:%@]", input]);
+                // 锤子直接传 NSInteger，方法签名可能是 updateNumber:(NSInteger)
+                ((void(*)(id, SEL, NSInteger))objc_msgSend)(timeoutNumber, updateNumSel, intVal);
+                jokerLog([NSString stringWithFormat:@"   ✅ [timeoutNumber updateNumber:%ld]", (long)intVal]);
             }
         }
     } @catch (NSException *e) {
@@ -641,6 +700,103 @@ static void hooked_Wallet_updateBalanceEntryView(id self, SEL _cmd) {
         lp.minimumPressDuration = 0.5;
         [(UIView *)self addGestureRecognizer:lp];
         jokerLog(@"[Joker] ✅ Wallet long press gesture added");
+    }
+}
+
+// ==================== ④.5 零钱通修改：照抄锤子助手 FUN_0076fec4 + FUN_007708bc ====================
+static char kJokerTimeoutAlertKey;
+
+// C IMP 注入到 TimeoutNumber：处理零钱通"确定"按钮
+static void joker_timeout_confirm_IMP(id self, SEL _cmd) {
+    jokerLog(@"🔥🔥🔥 JOKER TIMEOUT CONFIRM CALLBACK FIRED 🔥🔥🔥");
+    id alert = objc_getAssociatedObject(self, &kJokerTimeoutAlertKey);
+    jokerLog([NSString stringWithFormat:@"   self(timeoutNumber)=%@ alert=%@", self, alert]);
+
+    if (!alert) { jokerLog(@"   ⚠️ alert released"); return; }
+
+    NSString *input = nil;
+    @try { input = [alert valueForKeyPath:@"tipsVc.tipsTextView.text"]; }
+    @catch (NSException *e) {}
+    jokerLog([NSString stringWithFormat:@"   input=[%@]", input ?: @"(nil)"]);
+
+    if (!input || input.length == 0) { jokerLog(@"   ⚠️ empty input"); return; }
+
+    // 数字验证（锤子: setAllowsFloats:YES + numberFromString:）
+    NSNumberFormatter *fmt = [[NSNumberFormatter alloc] init];
+    [fmt setAllowsFloats:YES];
+    NSNumber *n = [fmt numberFromString:input];
+    jokerLog([NSString stringWithFormat:@"   numberFromString=%@", n]);
+    if (!n) { jokerLog([NSString stringWithFormat:@"   ❌ invalid number: [%@]", input]); return; }
+
+    NSInteger intVal = [n integerValue];
+    jokerLog([NSString stringWithFormat:@"   integerValue=%ld", (long)intVal]);
+
+    SEL updateSel = NSSelectorFromString(@"updateNumber:");
+    jokerLog([NSString stringWithFormat:@"   respondsTo updateNumber: = %d", [self respondsToSelector:updateSel]]);
+    if ([self respondsToSelector:updateSel]) {
+        ((void(*)(id, SEL, NSInteger))objc_msgSend)(self, updateSel, intVal);
+        jokerLog([NSString stringWithFormat:@"   ✅ [self updateNumber:%ld]", (long)intVal]);
+    }
+}
+
+// TimeoutNumber 长按手势处理
+static void joker_timeout_longpress_IMP(id self, SEL _cmd, UIGestureRecognizer *gesture) {
+    if (gesture.state != UIGestureRecognizerStateBegan) return;
+    UIView *timeoutView = (UIView *)self;
+    jokerLog([NSString stringWithFormat:@"[Joker] TimeoutNumber long press: %@", timeoutView]);
+
+    // 注入 confirm C IMP
+    Class cls = [timeoutView class];
+    SEL confirmSel = NSSelectorFromString(@"__joker_timeout_confirm");
+    if (![cls instancesRespondToSelector:confirmSel]) {
+        class_addMethod(cls, confirmSel, (IMP)joker_timeout_confirm_IMP, "v@:");
+        jokerLog([NSString stringWithFormat:@"✅ __joker_timeout_confirm injected into %@", NSStringFromClass(cls)]);
+    }
+
+    // 创建弹窗
+    Class alertCls = objc_getClass("WCUIAlertView");
+    if (!alertCls) { jokerLog(@"❌ WCUIAlertView not found"); return; }
+
+    @try {
+        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertCls alloc], @selector(initWithTitle:message:), @"提示", @"请输入金额");
+
+        SEL stf = NSSelectorFromString(@"showTextFieldWithMaxLen:");
+        if ([alert respondsToSelector:stf]) ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stf, 99999);
+
+        SEL cancel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
+        if ([alert respondsToSelector:cancel]) ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancel, @"取消", timeoutView, NULL);
+
+        objc_setAssociatedObject(timeoutView, &kJokerTimeoutAlertKey, alert, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        SEL btn = NSSelectorFromString(@"addBtnTitle:target:sel:");
+        if ([alert respondsToSelector:btn]) ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btn, @"确定", timeoutView, confirmSel);
+
+        SEL sh = NSSelectorFromString(@"show");
+        if ([alert respondsToSelector:sh]) ((void(*)(id, SEL))objc_msgSend)(alert, sh);
+        jokerLog(@"[Joker] ✅ TimeoutNumber alert shown");
+    } @catch (NSException *e) {
+        jokerLog([NSString stringWithFormat:@"[Joker] ❌ TimeoutNumber alert: %@", e]);
+    }
+}
+
+static IMP orig_TimeoutNumber_didMoveToWindow = NULL;
+static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
+    if (orig_TimeoutNumber_didMoveToWindow) {
+        ((void(*)(id, SEL))orig_TimeoutNumber_didMoveToWindow)(self, _cmd);
+    }
+    if (![PluginConfig shared].enableJoker) return;
+
+    BOOL hasGesture = NO;
+    for (UIGestureRecognizer *g in ((UIView *)self).gestureRecognizers) {
+        if ([g isKindOfClass:[UILongPressGestureRecognizer class]]) { hasGesture = YES; break; }
+    }
+    if (!hasGesture) {
+        SEL gestureSel = NSSelectorFromString(@"__joker_timeout_longpress");
+        class_addMethod([((UIView *)self) class], gestureSel, (IMP)joker_timeout_longpress_IMP, "v@:@");
+
+        UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:gestureSel];
+        lp.minimumPressDuration = 0.5;
+        [(UIView *)self addGestureRecognizer:lp];
+        jokerLog([NSString stringWithFormat:@"[Joker] ✅ TimeoutNumber long press added to %@", self]);
     }
 }
 
@@ -762,6 +918,22 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
     } else {
         jokerLog(@"[JokerHook] ⚠️ WCPayWalletEntryHeaderView class NOT found");
+    }
+    
+    // ====== ③.5 零钱通修改：照抄锤子助手 FUN_0076fec4 ======
+    Class timeoutClass = objc_getClass("TimeoutNumber");
+    if (timeoutClass) {
+        jokerLog(@"[JokerHook] TimeoutNumber found");
+        SEL didMoveSel = NSSelectorFromString(@"didMoveToWindow");
+        Method didMoveMethod = class_getInstanceMethod(timeoutClass, didMoveSel);
+        if (didMoveMethod) {
+            orig_TimeoutNumber_didMoveToWindow = method_setImplementation(didMoveMethod, (IMP)hooked_TimeoutNumber_didMoveToWindow);
+            jokerLog(@"[JokerHook] ✅ TimeoutNumber.didMoveToWindow hooked");
+        } else {
+            jokerLog(@"[JokerHook] ⚠️ TimeoutNumber.didMoveToWindow NOT found");
+        }
+    } else {
+        jokerLog(@"[JokerHook] ⚠️ TimeoutNumber class NOT found");
     }
     
     // ====== ④ 红包名称修改：照抄锤子助手 ======
