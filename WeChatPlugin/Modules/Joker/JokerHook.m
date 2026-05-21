@@ -893,14 +893,27 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
     }
     
-    // ====== Transfer 菜单: 直接用 method_setImplementation，函数编译在dylib里无需trampoline ======
+    // ====== Transfer 菜单: 延迟hook，确保在锤子之后加载（锤子用MSHookMessageEx先替换IMP）======
+    // 这样我们的 orig = 锤子的trampoline，调用orig就能拿到锤子按钮，再加上我们的 → 共存
     if (transferCellClass) {
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
         Method existing = class_getInstanceMethod(transferCellClass, menuSel);
         if (existing) {
-            orig_TransferCell_operationMenuItems = method_getImplementation(existing);
-            method_setImplementation(existing, (IMP)hooked_TransferCell_operationMenuItems);
-            jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell.operationMenuItems hooked, orig=%p", orig_TransferCell_operationMenuItems]);
+            // 先保存当前的IMP（可能是微信原版，也可能是锤子已hook过的trampoline）
+            IMP beforeDelay = method_getImplementation(existing);
+            jokerLog([NSString stringWithFormat:@"[JokerHook] TransferCell pre-delay IMP=%p", beforeDelay]);
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                Method m = class_getInstanceMethod(transferCellClass, menuSel);
+                if (m) {
+                    IMP afterDelay = method_getImplementation(m);
+                    jokerLog([NSString stringWithFormat:@"[JokerHook] TransferCell post-delay IMP=%p (was %p, changed=%d)", 
+                        afterDelay, beforeDelay, afterDelay != beforeDelay]);
+                    orig_TransferCell_operationMenuItems = afterDelay;
+                    method_setImplementation(m, (IMP)hooked_TransferCell_operationMenuItems);
+                    jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell.operationMenuItems hooked (delayed), orig=%p", orig_TransferCell_operationMenuItems]);
+                }
+            });
         }
     }
     
