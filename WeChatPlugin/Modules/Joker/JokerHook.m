@@ -875,19 +875,31 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         jokerLog(@"[JokerHook] BaseMessageCellView found — hooking operationMenuItems");
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
         
-        // 向上遍历找父类的原始IMP（BaseMessageCellView的父类）
+        // 先取当前 IMP（BaseMessageCellView 可能有自己的实现）
+        Method baseMethod = class_getInstanceMethod(baseCellClass, menuSel);
+        IMP curIMP = baseMethod ? method_getImplementation(baseMethod) : NULL;
+        jokerLog([NSString stringWithFormat:@"[JokerHook] baseCell curIMP=%p", curIMP]);
+        
+        // 向上遍历找父类的原始IMP（BaseMessageCellView 的父类）
         Method inheritedMethod = NULL;
         Class walkClass = class_getSuperclass(baseCellClass);
         while (walkClass && !inheritedMethod) {
             inheritedMethod = class_getInstanceMethod(walkClass, menuSel);
             if (!inheritedMethod) walkClass = class_getSuperclass(walkClass);
         }
-        if (inheritedMethod) {
-            orig_BaseCell_operationMenuItems = method_getImplementation(inheritedMethod);
-            jokerLog([NSString stringWithFormat:@"[JokerHook] baseCell parent IMP=%p from %@", orig_BaseCell_operationMenuItems, NSStringFromClass(walkClass)]);
+        IMP parentIMP = inheritedMethod ? method_getImplementation(inheritedMethod) : NULL;
+        jokerLog([NSString stringWithFormat:@"[JokerHook] baseCell parent IMP=%p from %@", parentIMP, NSStringFromClass(walkClass)]);
+        
+        BOOL added = class_addMethod(baseCellClass, menuSel, (IMP)hooked_BaseCell_operationMenuItems, "@@:");
+        if (added) {
+            orig_BaseCell_operationMenuItems = parentIMP;  // class_addMethod成功→链到父类
+            jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ BaseCell class_addMethod 成功, orig=%p", orig_BaseCell_operationMenuItems]);
+        } else {
+            // 类已有自己的实现（微信的），用 method_setImplementation 接链
+            orig_BaseCell_operationMenuItems = curIMP;  // 保留当前IMP
+            method_setImplementation(baseMethod, (IMP)hooked_BaseCell_operationMenuItems);
+            jokerLog([NSString stringWithFormat:@"[JokerHook] ⚠️ BaseCell class_addMethod 失败! 已替换, orig=%p", curIMP]);
         }
-        class_addMethod(baseCellClass, menuSel, (IMP)hooked_BaseCell_operationMenuItems, "@@:");
-        jokerLog(@"[JokerHook] ✅ BaseMessageCellView.operationMenuItems hooked");
     } else {
         jokerLog(@"[JokerHook] ⚠️ BaseMessageCellView NOT found");
     }
