@@ -258,7 +258,7 @@ static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *curre
 
     @try {
         // ① alloc + init
-        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([cls alloc], @selector(initWithTitle:message:), @"修改文字", @"");
+        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([cls alloc], @selector(initWithTitle:message:), @"Mio助手", @"");
         if (!alert) { jokerLog(@"❌ init nil"); return; }
         jokerLog([NSString stringWithFormat:@"① WCUIAlertView=%@", alert]);
 
@@ -664,7 +664,7 @@ static void walletLongPressHandler(id self, SEL _cmd, UIGestureRecognizer *gestu
     if (!alertCls) { jokerLog(@"❌ WCUIAlertView not found"); return; }
 
     @try {
-        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertCls alloc], @selector(initWithTitle:message:), @"修改文字", @"");
+        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertCls alloc], @selector(initWithTitle:message:), @"Mio助手", @"");
 
         SEL stf = NSSelectorFromString(@"showTextFieldWithMaxLen:");
         if ([alert respondsToSelector:stf]) ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stf, 99999);
@@ -763,7 +763,7 @@ static void joker_timeout_longpress_IMP(id self, SEL _cmd, UIGestureRecognizer *
     if (!alertCls) { jokerLog(@"❌ WCUIAlertView not found"); return; }
 
     @try {
-        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertCls alloc], @selector(initWithTitle:message:), @"提示", @"请输入金额");
+        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertCls alloc], @selector(initWithTitle:message:), @"Mio助手", @"请输入金额");
 
         SEL stf = NSSelectorFromString(@"showTextFieldWithMaxLen:");
         if ([alert respondsToSelector:stf]) ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stf, 99999);

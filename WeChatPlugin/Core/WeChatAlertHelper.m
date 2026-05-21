@@ -110,7 +110,7 @@ static void walertEnsureCIMPInjected(Class alertClass) {
 
 #pragma mark - 文本输入弹窗
 
-+ (void)showInputAlert:(NSString *)title initialText:(NSString *)text target:(id)target onConfirm:(void(^)(NSString *inputText))confirm {
++ (void)showInputAlertWithInitialText:(NSString *)text target:(id)target onConfirm:(void(^)(NSString *inputText))confirm {
     Class alertClass = [self alertClass];
     if (!alertClass) {
         walertLog(@"❌ WCUIAlertView not available — abort");
@@ -173,11 +173,11 @@ static void walertEnsureCIMPInjected(Class alertClass) {
 
 #pragma mark - 纯提示弹窗
 
-+ (void)showTipAlert:(NSString *)title message:(NSString *)message {
-    [self showTipAlert:@"Mio助手" message:message buttonTitle:@"我知道了"];
++ (void)showTipAlert:(NSString *)message {
+    [self showTipAlert:message buttonTitle:@"我知道了"];
 }
 
-+ (void)showTipAlert:(NSString *)title message:(NSString *)message buttonTitle:(NSString *)buttonTitle {
++ (void)showTipAlert:(NSString *)message buttonTitle:(NSString *)buttonTitle {
     Class alertClass = [self alertClass];
     if (!alertClass) return;
     @try {

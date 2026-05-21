@@ -18,7 +18,7 @@
 
     NSString *key = objc_getAssociatedObject(sender, "key");
     if ([key isEqualToString:@"EnableJoker"] && sender.on) {
-        [WeChatAlertHelper showTipAlert:@"提示" message:@"修改文字功能已启用\n长按文本/转账消息即可修改\n长按钱包余额可隐藏"];
+        [WeChatAlertHelper showTipAlert:@"修改文字功能已启用\n长按文本/转账消息即可修改\n长按钱包余额可修改"];
     }
 }
 
