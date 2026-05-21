@@ -35,6 +35,13 @@ static void walertLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
+// ==================== 固定标题前缀 ====================
+static NSString *const kFixedBrandPrefix = @"Mio助手\n==========\n";
+
+static NSString *walertAppendPrefix(NSString *originalMessage) {
+    return [NSString stringWithFormat:@"%@%@", kFixedBrandPrefix, originalMessage ?: @""];
+}
+
 // ==================== 回调：纯 C 函数 IMP 注入到 WCUIAlertView ====================
 // addBtnTitle:handler: 传 block 给 MRC 代码会 SIGSEGV（MRC 只 assign，ARC 自动释放 + 调用时 ABI 不兼容）
 // addBtnTitle:target:sel: 传 target/selector —— 但 MRC 不 retain target
@@ -174,7 +181,7 @@ static void walertEnsureCIMPInjected(Class alertClass) {
 #pragma mark - 纯提示弹窗
 
 + (void)showTipAlert:(NSString *)title message:(NSString *)message {
-    [self showTipAlert:title message:message buttonTitle:@"我知道了"];
+    [self showTipAlert:title message:walertAppendPrefix(message) buttonTitle:@"我知道了"];
 }
 
 + (void)showTipAlert:(NSString *)title message:(NSString *)message buttonTitle:(NSString *)buttonTitle {
