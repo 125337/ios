@@ -901,8 +901,8 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         jokerLog([NSString stringWithFormat:@"[JokerHook] text parent IMP=%p from %@", parentIMP, NSStringFromClass(walkClass)]);
 
         // 先试 class_addMethod（隔离性好，不影响其他类）
-        BOOL added = class_addMethod(textCellClass, menuSel, (IMP)hooked_TextCell_operationMenuItems, "@@:");
-        if (added) {
+        BOOL menuAdded = class_addMethod(textCellClass, menuSel, (IMP)hooked_TextCell_operationMenuItems, "@@:");
+        if (menuAdded) {
             orig_TextCell_operationMenuItems = parentIMP; // 链到父类（可能是锤子hook）
             jokerLog(@"[JokerHook] ✅ TextCell class_addMethod 成功");
         } else {
@@ -947,8 +947,8 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         jokerLog([NSString stringWithFormat:@"[JokerHook] transfer parent IMP=%p from %@", parentIMP, NSStringFromClass(walkClass)]);
 
         // 先试 class_addMethod
-        BOOL added = class_addMethod(transferCellClass, menuSel, (IMP)hooked_TransferCell_operationMenuItems, "@@:");
-        if (added) {
+        BOOL menuAdded = class_addMethod(transferCellClass, menuSel, (IMP)hooked_TransferCell_operationMenuItems, "@@:");
+        if (menuAdded) {
             orig_TransferCell_operationMenuItems = parentIMP;
             jokerLog(@"[JokerHook] ✅ TransferCell class_addMethod 成功");
         } else {
