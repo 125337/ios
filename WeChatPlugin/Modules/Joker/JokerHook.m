@@ -541,14 +541,14 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
             if ([mmItemClass instancesRespondToSelector:initSel]) {
                 mmItem = ((id(*)(id, SEL, id, id, const char *))objc_msgSend)(
                     [[mmItemClass alloc] init], initSel,
-                    @"修改文字", @"expression", "mioTextJoker");
+                    @"Mio修改", @"expression", "mioTextJoker");
             }
             if (!mmItem) {
                 SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
                 if ([mmItemClass instancesRespondToSelector:altInitSel]) {
                     mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
                         [[mmItemClass alloc] init], altInitSel,
-                        @"修改文字", NSSelectorFromString(@"mioTextJoker"));
+                        @"Mio修改", NSSelectorFromString(@"mioTextJoker"));
                 }
             }
             if (mmItem) {
@@ -582,19 +582,20 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
     Class mmItemClass = objc_getClass("MMMenuItem");
     if (mmItemClass) {
         @try {
+            // 两个插件按钮都叫"修改文字"会被微信去重，用不同标题
             SEL initSel = NSSelectorFromString(@"initWithTitle:iconName:actionName:");
             id mmItem = nil;
             if ([mmItemClass instancesRespondToSelector:initSel]) {
                 mmItem = ((id(*)(id, SEL, id, id, const char *))objc_msgSend)(
                     [[mmItemClass alloc] init], initSel,
-                    @"修改文字", @"expression", "mioTransferJoker");
+                    @"Mio修改", @"expression", "mioTransferJoker");
             }
             if (!mmItem) {
                 SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
                 if ([mmItemClass instancesRespondToSelector:altInitSel]) {
                     mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
                         [[mmItemClass alloc] init], altInitSel,
-                        @"修改文字", NSSelectorFromString(@"mioTransferJoker"));
+                        @"Mio修改", NSSelectorFromString(@"mioTransferJoker"));
                 }
             }
             if (mmItem) {
