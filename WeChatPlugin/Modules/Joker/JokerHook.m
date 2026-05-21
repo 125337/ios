@@ -250,7 +250,7 @@ static void joker_text_confirm_IMP(id self, SEL _cmd) {
     }
 }
 
-static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent, void(^onConfirm)(NSString *newText)) {
+static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent) {
     jokerLog(@"[Joker] showEditAlert — building WCUIAlertView directly");
 
     Class cls = objc_getClass("WCUIAlertView");
@@ -363,62 +363,16 @@ static void mioTextJoker(id self, SEL _cmd) {
     id msgWrap = nil;
     NSString *content = nil;
 
-    // 逐一尝试所有已知路径
-    NSArray *msgWrapKeys = @[@"m_messageWrap", @"m_msgWrap", @"messageWrap", @"msgWrap", @"m_msg", @"m_message"];
-    NSArray *intermediateObjects = @[
-        @[@""],                               // 直接从 cellView 自身取
-        @[@"m_viewModel"],                     // viewModel → msgWrap
-        @[@"m_delegate"],                      // delegate → msgWrap
-        @[@"m_cellData"],                      // cellData → msgWrap
-        @[@"m_viewModel", @"m_cellData"],      // viewModel → cellData → msgWrap
-        @[@"m_delegate", @"m_currentMessage"], // delegate → currentMessage
-    ];
-
-    for (NSArray *chain in intermediateObjects) {
-        if (msgWrap) break;
-        id current = self;
-        BOOL chainOK = YES;
-
-        for (NSString *key in chain) {
-            if (key.length == 0) continue;
-            @try { current = [current valueForKey:key]; } @catch (NSException *e) { chainOK = NO; break; }
-            if (!current) { chainOK = NO; break; }
-        }
-
-        if (!chainOK) continue;
-
-        if (chain.count == 1 && [chain[0] isEqual:@""]) {
-            // 直接从 self 取 msgWrapKeys
-            for (NSString *k in msgWrapKeys) {
-                id m = nil;
-                @try { m = [self valueForKey:k]; } @catch (NSException *e) {}
-                if (m) {
-                    msgWrap = m;
-                    jokerLog([NSString stringWithFormat:@"[Joker] ✅ Found msgWrap via self.%@", k]);
-                    break;
-                }
-            }
-        } else {
-            // 从中间对象取
-            for (NSString *k in msgWrapKeys) {
-                id m = nil;
-                @try { m = [current valueForKey:k]; } @catch (NSException *e) {}
-                if (m) {
-                    msgWrap = m;
-                    jokerLog([NSString stringWithFormat:@"[Joker] ✅ Found msgWrap via %@.%@", [chain componentsJoinedByString:@"."], k]);
-                    break;
-                }
-            }
-        }
-
-        if (!msgWrap && chain.count > 0) {
-            // 中间对象找到了但 msgWrap 没找到，打印它的 ivar 帮助诊断
-            NSString *chainStr = [chain componentsJoinedByString:@"."];
-            dumpAllIvars(current, [NSString stringWithFormat:@"intermediate(%@)", chainStr]);
-        }
+    // 8.0.60 确认路径：m_viewModel → m_messageWrap
+    @try {
+        id viewModel = [self valueForKey:@"m_viewModel"];
+        msgWrap = [viewModel valueForKey:@"m_messageWrap"];
+        jokerLog(@"[Joker] ✅ Found msgWrap via m_viewModel.m_messageWrap");
+    } @catch (NSException *e) {}
+    if (!msgWrap) {
+        @try { msgWrap = [self valueForKey:@"m_messageWrap"]; } @catch (NSException *e) {}
+        if (msgWrap) jokerLog(@"[Joker] ✅ Found msgWrap via self.m_messageWrap (fallback)");
     }
-
-    jokerLog([NSString stringWithFormat:@"[Joker] final msgWrap: %@", msgWrap]);
 
     // 获取当前内容
     @try { content = [msgWrap valueForKey:@"m_nsContent"]; } @catch (NSException *e) {}
@@ -428,7 +382,7 @@ static void mioTextJoker(id self, SEL _cmd) {
     if (!content) content = @"";
     jokerLog([NSString stringWithFormat:@"[Joker] currentContent: %@", content]);
 
-    showEditAlert(nil, self, msgWrap, content, nil);
+    showEditAlert(nil, self, msgWrap, content);
 }
 
 // ==================== ② mioTransferJoker：照抄锤子助手 FUN_0076fb4c ====================
@@ -441,25 +395,15 @@ static void mioTransferJoker(id self, SEL _cmd) {
     id msgWrap = nil;
     NSString *content = nil;
 
-    NSArray *msgWrapKeys = @[@"m_messageWrap", @"m_msgWrap", @"messageWrap", @"msgWrap"];
-    NSArray *intermediateObjects = @[@[@""], @[@"m_viewModel"], @[@"m_delegate"], @[@"m_cellData"]];
-
-    for (NSArray *chain in intermediateObjects) {
-        if (msgWrap) break;
-        id current = self;
-        BOOL chainOK = YES;
-        for (NSString *key in chain) {
-            if (key.length == 0) continue;
-            @try { current = [current valueForKey:key]; } @catch (NSException *e) { chainOK = NO; break; }
-            if (!current) { chainOK = NO; break; }
-        }
-        if (!chainOK) continue;
-
-        for (NSString *k in msgWrapKeys) {
-            id m = nil;
-            @try { m = chain.count==1 && [chain[0] isEqual:@""] ? [self valueForKey:k] : [current valueForKey:k]; } @catch (NSException *e) {}
-            if (m) { msgWrap = m; jokerLog([NSString stringWithFormat:@"[Joker] ✅ transfer msgWrap via %@.%@", [chain componentsJoinedByString:@"."], k]); break; }
-        }
+    // 8.0.60 确认路径：m_viewModel → m_messageWrap
+    @try {
+        id viewModel = [self valueForKey:@"m_viewModel"];
+        msgWrap = [viewModel valueForKey:@"m_messageWrap"];
+        jokerLog(@"[Joker] ✅ transfer msgWrap via m_viewModel.m_messageWrap");
+    } @catch (NSException *e) {}
+    if (!msgWrap) {
+        @try { msgWrap = [self valueForKey:@"m_messageWrap"]; } @catch (NSException *e) {}
+        if (msgWrap) jokerLog(@"[Joker] ✅ transfer msgWrap via self.m_messageWrap (fallback)");
     }
 
     // 转账文字：锤子路径 msgWrap → m_extendInfoWithMsgType → m_oWCPayInfoItem → m_nsFeeDesc
@@ -503,7 +447,7 @@ static void mioTransferJoker(id self, SEL _cmd) {
     // 照抄锤子：保留 ¥ 前缀，原始值预填
     jokerLog([NSString stringWithFormat:@"[Joker] transfer final content=[%@]", content]);
 
-    showEditAlert(nil, self, msgWrap, content, nil);
+    showEditAlert(nil, self, msgWrap, content);
 }
 
 // ==================== ③ 锤子助手风格 operationMenuItems hook ====================
@@ -791,30 +735,6 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
     }
 }
 
-// ==================== ⑤ 红包名称修改：照抄锤子助手 WeChatTweakRedEnvelopParam.setNickName_ ====================
-static IMP orig_RedEnvLogic_send = NULL;
-// 存储用户自定义的红包昵称
-static NSString *g_redEnvelopeCustomNickname = nil;
-
-static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
-    // 如果设置了自定义昵称，替换 params 中的昵称
-    if (g_redEnvelopeCustomNickname && g_redEnvelopeCustomNickname.length > 0) {
-        @try {
-            SEL setNickSel = NSSelectorFromString(@"setNickName:");
-            if ([params respondsToSelector:setNickSel]) {
-                ((void(*)(id, SEL, id))objc_msgSend)(params, setNickSel, g_redEnvelopeCustomNickname);
-                jokerLog([NSString stringWithFormat:@"[Joker] ✅ Red envelope nickname set to: %@", g_redEnvelopeCustomNickname]);
-            }
-        } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] ❌ Red envelope nickname: %@", e]);
-        }
-    }
-    
-    if (orig_RedEnvLogic_send) {
-        ((void(*)(id, SEL, id))orig_RedEnvLogic_send)(self, _cmd, params);
-    }
-}
-
 // ==================== JokerHook ====================
 @implementation JokerHook
 
@@ -842,9 +762,7 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         
         SEL onTextJokerSel = NSSelectorFromString(@"mioTextJoker");
         BOOL added = class_addMethod(textCellClass, onTextJokerSel, (IMP)mioTextJoker, "v@:");
-        SEL onTextJokerColonSel = NSSelectorFromString(@"mioTextJoker:");
-        BOOL colonAdded = class_addMethod(textCellClass, onTextJokerColonSel, (IMP)mioTextJoker, "v@:@");
-        jokerLog([NSString stringWithFormat:@"[JokerHook] text: mioTextJoker=%d mioTextJoker:=%d", added, colonAdded]);
+        jokerLog([NSString stringWithFormat:@"[JokerHook] text: mioTextJoker=%d", added]);
         if (!added) {
             Method m = class_getInstanceMethod(textCellClass, onTextJokerSel);
             if (m) { method_setImplementation(m, (IMP)mioTextJoker); added = YES; }
@@ -861,9 +779,7 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         
         SEL onTransferJokerSel = NSSelectorFromString(@"mioTransferJoker");
         BOOL added = class_addMethod(transferCellClass, onTransferJokerSel, (IMP)mioTransferJoker, "v@:");
-        SEL onTransferJokerColonSel = NSSelectorFromString(@"mioTransferJoker:");
-        BOOL colonAdded = class_addMethod(transferCellClass, onTransferJokerColonSel, (IMP)mioTransferJoker, "v@:@");
-        jokerLog([NSString stringWithFormat:@"[JokerHook] transfer: mioTransferJoker=%d mioTransferJoker:=%d", added, colonAdded]);
+        jokerLog([NSString stringWithFormat:@"[JokerHook] transfer: mioTransferJoker=%d", added]);
         if (!added) {
             Method m = class_getInstanceMethod(transferCellClass, onTransferJokerSel);
             if (m) { method_setImplementation(m, (IMP)mioTransferJoker); added = YES; }
@@ -950,39 +866,7 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         jokerLog(@"[JokerHook] ⚠️ TimeoutNumber class NOT found");
     }
     
-    // ====== ④ 红包名称修改：照抄锤子助手 ======
-    Class redEnvLogicClass = objc_getClass("WCRedEnvelopesLogicMgr");
-    if (redEnvLogicClass) {
-        jokerLog(@"[JokerHook] WCRedEnvelopesLogicMgr found");
-        
-        // Hook WCPayLogicMgr (微信支付/红包发送管理器)
-        Class payLogicClass = objc_getClass("WCPayLogicMgr");
-        if (payLogicClass) {
-            // 尝试 hook 红包发送相关方法
-            SEL sendSel = NSSelectorFromString(@"sendRedEnvelopesRequest:");
-            Method sendMethod = class_getInstanceMethod(payLogicClass, sendSel);
-            if (sendMethod) {
-                orig_RedEnvLogic_send = method_setImplementation(sendMethod, (IMP)hooked_RedEnvelope_send);
-                jokerLog(@"[JokerHook] ✅ Red envelope send hooked");
-            }
-        }
-        
-        // 备用：hook WCRedEnvelopesLogicMgr 的直接方法
-        SEL openSel = NSSelectorFromString(@"OpenRedEnvelopesRequest:");
-        Method openMethod = class_getInstanceMethod(redEnvLogicClass, openSel);
-        if (openMethod && !orig_RedEnvLogic_send) {
-            orig_RedEnvLogic_send = method_setImplementation(openMethod, (IMP)hooked_RedEnvelope_send);
-            jokerLog(@"[JokerHook] ✅ Red envelope open hooked (fallback)");
-        }
-    } else {
-        jokerLog(@"[JokerHook] ⚠️ WCRedEnvelopesLogicMgr class NOT found");
-    }
-    
     jokerLog(@"[JokerHook] ========== install complete (锤子助手风格) ==========");
-}
-
-+ (void)setRedEnvelopeNickname:(NSString *)nickname {
-    g_redEnvelopeCustomNickname = nickname;
 }
 
 @end
