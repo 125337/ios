@@ -69,7 +69,7 @@ static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
                 content = ((NSString *(*)(id, SEL))objc_msgSend)(arg1, contentSel);
             }
             
-            if (content && [content hasPrefix:@"<sysmsg type=\"revokemsg\">"]) {
+            if (content && [content containsString:@"<sysmsg type=\"revokemsg\">"]) {
                 hookLog(@"[WeChatPlugin][Revoke] detected revoke message in onNewSyncNotAddDBMessage");
                 
                 NSString *chatName = extractChatName(arg1);
