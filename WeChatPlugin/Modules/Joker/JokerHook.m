@@ -32,22 +32,6 @@ static IMP orig_TextCell_operationMenuItems = NULL;
 static IMP orig_TransferCell_operationMenuItems = NULL;
 static IMP orig_Wallet_updateBalanceEntryView = NULL;
 
-// ==================== 工具：检查类是否有自己的方法实现（非继承） ====================
-// 避免 method_setImplementation 影响所有共享父类方法的子类（锤子用 MSHookMessageEx 天然隔离）
-static BOOL hasOwnMethod(Class cls, SEL sel) {
-    unsigned int count;
-    Method *methods = class_copyMethodList(cls, &count);
-    BOOL found = NO;
-    for (unsigned int i = 0; i < count; i++) {
-        if (sel_isEqual(method_getName(methods[i]), sel)) {
-            found = YES;
-            break;
-        }
-    }
-    free(methods);
-    return found;
-}
-
 // ==================== 公共：应用文字修改（msgWrap + RichTextView） ====================
 static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
     if (newText.length == 0) {
@@ -535,21 +519,23 @@ static void mioTransferJoker(id self, SEL _cmd) {
 
 // 为 TextMessageCellView.operationMenuItems 添加 "修改文字" 按钮
 static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
+    jokerLog([NSString stringWithFormat:@"[Joker] 🔗 hooked_TextCell_operationMenuItems self=%@", NSStringFromClass([self class])]);
     NSMutableArray *items = nil;
     if (orig_TextCell_operationMenuItems) {
         items = ((id(*)(id, SEL))orig_TextCell_operationMenuItems)(self, _cmd);
+        jokerLog([NSString stringWithFormat:@"[Joker]    orig returned %lu items", (unsigned long)(items ? items.count : 0)]);
+    } else {
+        jokerLog(@"[Joker]    orig_TextCell_operationMenuItems is NULL!");
     }
     if (!items) items = [NSMutableArray array];
     
     // 只在启用时添加菜单项
-    if (![PluginConfig shared].enableJoker) return items;
+    if (![PluginConfig shared].enableJoker) { jokerLog(@"[Joker]    Joker disabled, return original"); return items; }
     
     NSMutableArray *newItems = [items mutableCopy];
     Class mmItemClass = objc_getClass("MMMenuItem");
     if (mmItemClass) {
         @try {
-            // 照抄锤子助手: initWithTitle:iconName:actionName: (3参数，无target)
-            // actionName 是 C 字符串 "mioTextJoker"（mio 前缀避免与锤子助手 onTextJoker 冲突）
             SEL initSel = NSSelectorFromString(@"initWithTitle:iconName:actionName:");
             id mmItem = nil;
             if ([mmItemClass instancesRespondToSelector:initSel]) {
@@ -558,7 +544,6 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
                     @"修改文字", @"expression", "mioTextJoker");
             }
             if (!mmItem) {
-                // fallback: initWithTitle:action:  (不带icon)
                 SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
                 if ([mmItemClass instancesRespondToSelector:altInitSel]) {
                     mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
@@ -568,34 +553,35 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
             }
             if (mmItem) {
                 [newItems addObject:mmItem];
-                jokerLog(@"[Joker] ✅ Added MMMenuItem to TextMessageCellView menu");
+                jokerLog([NSString stringWithFormat:@"[Joker] ✅ Added MMMenuItem to TextCell menu (total %lu)", (unsigned long)newItems.count]);
             } else {
                 jokerLog(@"[Joker] ⚠️ Failed to create MMMenuItem");
             }
         } @catch (NSException *e) {
             jokerLog([NSString stringWithFormat:@"[Joker] ❌ TextCell menu item: %@", e]);
         }
-    } else {
-        jokerLog(@"[Joker] ⚠️ MMMenuItem class not found");
     }
     return newItems;
 }
 
 // 为 WCPayTransferMessageCellView.operationMenuItems 添加 "修改文字" 按钮
 static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
+    jokerLog([NSString stringWithFormat:@"[Joker] 🔗 hooked_TransferCell_operationMenuItems self=%@", NSStringFromClass([self class])]);
     NSMutableArray *items = nil;
     if (orig_TransferCell_operationMenuItems) {
         items = ((id(*)(id, SEL))orig_TransferCell_operationMenuItems)(self, _cmd);
+        jokerLog([NSString stringWithFormat:@"[Joker]    orig returned %lu items: %@", (unsigned long)(items ? items.count : 0), items ? [items valueForKey:@"title"] : @"(nil)"]);
+    } else {
+        jokerLog(@"[Joker]    orig_TransferCell_operationMenuItems is NULL!");
     }
     if (!items) items = [NSMutableArray array];
     
-    if (![PluginConfig shared].enableJoker) return items;
+    if (![PluginConfig shared].enableJoker) { jokerLog(@"[Joker]    Joker disabled, return original"); return items; }
     
     NSMutableArray *newItems = [items mutableCopy];
     Class mmItemClass = objc_getClass("MMMenuItem");
     if (mmItemClass) {
         @try {
-            // 照抄锤子助手: initWithTitle:iconName:actionName: (3参数，无target)
             SEL initSel = NSSelectorFromString(@"initWithTitle:iconName:actionName:");
             id mmItem = nil;
             if ([mmItemClass instancesRespondToSelector:initSel]) {
@@ -613,15 +599,13 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
             }
             if (mmItem) {
                 [newItems addObject:mmItem];
-                jokerLog(@"[Joker] ✅ Added MMMenuItem to TransferCellView menu");
+                jokerLog([NSString stringWithFormat:@"[Joker] ✅ Added MMMenuItem to TransferCell menu (total %lu)", (unsigned long)newItems.count]);
             } else {
                 jokerLog(@"[Joker] ⚠️ Failed to create MMMenuItem for transfer");
             }
         } @catch (NSException *e) {
             jokerLog([NSString stringWithFormat:@"[Joker] ❌ TransferCell menu item: %@", e]);
         }
-    } else {
-        jokerLog(@"[Joker] ⚠️ MMMenuItem class not found");
     }
     return newItems;
 }
@@ -902,26 +886,33 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
         jokerLog([NSString stringWithFormat:@"[JokerHook] register mioTextJoker: %@", added ? @"YES" : @"NO"]);
         
-        // Hook operationMenuItems — 统一用父类IMP + class_addMethod，不跟锤子MSHookMessageEx打架
-        // 原因：method_setImplementation 会直接覆盖锤子的hook，导致按钮消失
-        // 正确做法：从父类拿原始IMP，class_addMethod 在当前类独立添加方法
+        // Hook operationMenuItems — class_addMethod 优先，失败则 method_setImplementation 接链
+        // 关键：无论哪种方式，orig 都要指向当前链上的 IMP（可能是锤子的 hook）
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
+        
+        // 向上遍历找父类的原始 IMP
         Method inheritedMethod = NULL;
-        // 向上遍历继承链，找到第一个实现了 operationMenuItems 的父类
         Class walkClass = class_getSuperclass(textCellClass);
         while (walkClass && !inheritedMethod) {
             inheritedMethod = class_getInstanceMethod(walkClass, menuSel);
             if (!inheritedMethod) walkClass = class_getSuperclass(walkClass);
         }
-        if (inheritedMethod) {
-            orig_TextCell_operationMenuItems = method_getImplementation(inheritedMethod);
-            jokerLog([NSString stringWithFormat:@"[JokerHook] text orig IMP from parent %@", NSStringFromClass(walkClass)]);
+        IMP parentIMP = inheritedMethod ? method_getImplementation(inheritedMethod) : NULL;
+        jokerLog([NSString stringWithFormat:@"[JokerHook] text parent IMP=%p from %@", parentIMP, NSStringFromClass(walkClass)]);
+
+        // 先试 class_addMethod（隔离性好，不影响其他类）
+        BOOL added = class_addMethod(textCellClass, menuSel, (IMP)hooked_TextCell_operationMenuItems, "@@:");
+        if (added) {
+            orig_TextCell_operationMenuItems = parentIMP; // 链到父类（可能是锤子hook）
+            jokerLog(@"[JokerHook] ✅ TextCell class_addMethod 成功");
         } else {
-            jokerLog(@"[JokerHook] ⚠️ text: no parent has operationMenuItems");
+            // 方法已存在，用 method_setImplementation 替换，当前IMP→orig（保留锤子hook）
+            Method existing = class_getInstanceMethod(textCellClass, menuSel);
+            IMP curIMP = method_getImplementation(existing);
+            orig_TextCell_operationMenuItems = curIMP;
+            method_setImplementation(existing, (IMP)hooked_TextCell_operationMenuItems);
+            jokerLog([NSString stringWithFormat:@"[JokerHook] ⚠️ TextCell class_addMethod 失败! 已替换，orig=%p", curIMP]);
         }
-        // 一律用 class_addMethod，只影响 TextMessageCellView，不干扰锤子
-        class_addMethod(textCellClass, menuSel, (IMP)hooked_TextCell_operationMenuItems, "@@:");
-        jokerLog(@"[JokerHook] ✅ TextMessageCellView.operationMenuItems via class_addMethod");
     } else {
         jokerLog(@"[JokerHook] ⚠️ TextMessageCellView class NOT found");
     }
@@ -942,22 +933,32 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
         jokerLog([NSString stringWithFormat:@"[JokerHook] register mioTransferJoker: %@", added ? @"YES" : @"NO"]);
         
-        // Hook operationMenuItems — 统一用父类IMP + class_addMethod，不跟锤子MSHookMessageEx打架
+        // Hook operationMenuItems — class_addMethod 优先，失败则 method_setImplementation 接链
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
+        
+        // 向上遍历找父类的原始 IMP
         Method inheritedMethod = NULL;
         Class walkClass = class_getSuperclass(transferCellClass);
         while (walkClass && !inheritedMethod) {
             inheritedMethod = class_getInstanceMethod(walkClass, menuSel);
             if (!inheritedMethod) walkClass = class_getSuperclass(walkClass);
         }
-        if (inheritedMethod) {
-            orig_TransferCell_operationMenuItems = method_getImplementation(inheritedMethod);
-            jokerLog([NSString stringWithFormat:@"[JokerHook] transfer orig IMP from parent %@", NSStringFromClass(walkClass)]);
+        IMP parentIMP = inheritedMethod ? method_getImplementation(inheritedMethod) : NULL;
+        jokerLog([NSString stringWithFormat:@"[JokerHook] transfer parent IMP=%p from %@", parentIMP, NSStringFromClass(walkClass)]);
+
+        // 先试 class_addMethod
+        BOOL added = class_addMethod(transferCellClass, menuSel, (IMP)hooked_TransferCell_operationMenuItems, "@@:");
+        if (added) {
+            orig_TransferCell_operationMenuItems = parentIMP;
+            jokerLog(@"[JokerHook] ✅ TransferCell class_addMethod 成功");
         } else {
-            jokerLog(@"[JokerHook] ⚠️ transfer: no parent has operationMenuItems");
+            // 方法已存在（可能有锤子hook或微信自己的实现）
+            Method existing = class_getInstanceMethod(transferCellClass, menuSel);
+            IMP curIMP = method_getImplementation(existing);
+            orig_TransferCell_operationMenuItems = curIMP; // 保留当前IMP（链上可能有锤子hook）
+            method_setImplementation(existing, (IMP)hooked_TransferCell_operationMenuItems);
+            jokerLog([NSString stringWithFormat:@"[JokerHook] ⚠️ TransferCell class_addMethod 失败! 已替换，orig=%p", curIMP]);
         }
-        class_addMethod(transferCellClass, menuSel, (IMP)hooked_TransferCell_operationMenuItems, "@@:");
-        jokerLog(@"[JokerHook] ✅ WCPayTransferMessageCellView.operationMenuItems via class_addMethod");
     } else {
         jokerLog(@"[JokerHook] ⚠️ WCPayTransferMessageCellView class NOT found");
     }
