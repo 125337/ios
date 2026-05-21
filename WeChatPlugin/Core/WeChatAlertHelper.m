@@ -35,41 +35,45 @@ static void walertLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-// ==================== 回调 trampoline ====================
-// WCUIAlertView 是微信 MRC 编译的，addBtnTitle:handler: block 在 ARC 下生命周期不兼容导致 SIGSEGV。
-// 改用 addBtnTitle:target:sel: + 关联对象，让回调对象和 alert 同生命周期，彻底避免 ARC block 问题。
-@interface _WeChatAlertCallback : NSObject
-@property (nonatomic, copy) void(^confirmBlock)(NSString *);
-@property (nonatomic, unsafe_unretained) WCUIAlertView *alert;
-@end
+// ==================== 回调注入：用 class_addMethod + imp_implementationWithBlock 注入到 WCUIAlertView ====================
+// addBtnTitle:target:sel: 在 MRC 环境下不会 retain target，独立的 _WeChatAlertCallback 对象可能被提前释放。
+// 解决方案：把回调方法注入到 WCUIAlertView 自身，target = alert，确保回调时 target 一定存活。
+// 同时用 objc_setAssociatedObject 存储 confirm block，alert 存活期间 block 不会被释放。
 
-@implementation _WeChatAlertCallback
+static char kWAlertConfirmBlockKey;
 
-- (void)handleConfirm {
-    NSString *inputText = nil;
-    @try {
-        // 优先用 getTextFieldText（运行时 dump 的真实方法）
-        inputText = [self.alert getTextFieldText];
-    } @catch (NSException *e) {
-        walertLog([NSString stringWithFormat:@"[WeChatAlert] getTextFieldText failed: %@", e]);
-    }
-    if (!inputText || inputText.length == 0) {
+static void walertInjectConfirmHandler(Class alertClass) {
+    SEL confirmSel = NSSelectorFromString(@"__walert_confirm_handler");
+    if ([alertClass instancesRespondToSelector:confirmSel]) return; // 已注入
+
+    IMP confirmIMP = imp_implementationWithBlock(^(id _self) {
+        walertLog(@"[WeChatAlert] confirm callback fired");
+
+        void(^confirmBlock)(NSString *) = objc_getAssociatedObject(_self, &kWAlertConfirmBlockKey);
+
+        NSString *inputText = nil;
         @try {
-            inputText = [self.alert valueForKeyPath:@"tipsVc.tipsTextView.text"];
-        } @catch (NSException *e) {}
-    }
-    if (!inputText || inputText.length == 0) {
-        @try {
-            inputText = [self.alert valueForKeyPath:@"tipsVc.tipsTextField.text"];
-        } @catch (NSException *e) {}
-    }
-    walertLog([NSString stringWithFormat:@"[WeChatAlert] input: %@", inputText]);
-    if (inputText.length > 0 && self.confirmBlock) {
-        self.confirmBlock(inputText);
-    }
+            SEL getTextSel = NSSelectorFromString(@"getTextFieldText");
+            if ([_self respondsToSelector:getTextSel]) {
+                inputText = ((id(*)(id, SEL))objc_msgSend)(_self, getTextSel);
+            }
+        } @catch (NSException *e) {
+            walertLog([NSString stringWithFormat:@"[WeChatAlert] getTextFieldText failed: %@", e]);
+        }
+        if (!inputText || inputText.length == 0) {
+            @try { inputText = [_self valueForKeyPath:@"tipsVc.tipsTextView.text"]; } @catch (NSException *e) {}
+        }
+        if (!inputText || inputText.length == 0) {
+            @try { inputText = [_self valueForKeyPath:@"tipsVc.tipsTextField.text"]; } @catch (NSException *e) {}
+        }
+        walertLog([NSString stringWithFormat:@"[WeChatAlert] input: %@", inputText]);
+        if (inputText.length > 0 && confirmBlock) {
+            confirmBlock(inputText);
+        }
+    });
+    class_addMethod(alertClass, confirmSel, confirmIMP, "v@:");
+    walertLog(@"[WeChatAlert] ✅ __walert_confirm_handler injected into WCUIAlertView");
 }
-
-@end
 
 @implementation WeChatAlertHelper
 
@@ -95,17 +99,16 @@ static void walertLog(NSString *content) {
 
     @try {
         // 1. alloc + initWithTitle:message:
-        //    照抄锤子助手：init title=@"提示" message=@""，然后 setTextFieldDefaultText 预填
         WCUIAlertView *alert = [[alertClass alloc] initWithTitle:title message:@""];
         if (!alert) {
             walertLog(@"[WeChatAlert] ❌ alloc failed");
             return;
         }
 
-        // 2. showTextFieldWithMaxLen:99999 → 开启文本输入模式（锤子 setStyle:1 等价）
+        // 2. showTextFieldWithMaxLen:99999 → 开启文本输入模式
         [alert showTextFieldWithMaxLen:99999];
 
-        // 3. setTextFieldDefaultText: → 预填文本（锤子 setMessage: 等价）
+        // 3. setTextFieldDefaultText: → 预填文本
         if (text.length > 0) {
             [alert setTextFieldDefaultText:text];
         }
@@ -113,15 +116,16 @@ static void walertLog(NSString *content) {
         // 4. addCancelBtnTitle:target:sel: → 取消按钮
         [alert addCancelBtnTitle:@"取消" target:target sel:NULL];
 
-        // 5. addBtnTitle:target:sel: → 确定按钮（target/selector 模式，避免 block → MRC 崩溃）
-        _WeChatAlertCallback *cb = [[_WeChatAlertCallback alloc] init];
-        cb.alert = alert;
-        cb.confirmBlock = confirm;
-        // 关联到 alert，保证回调对象和 alert 同生命周期
-        objc_setAssociatedObject(alert, @selector(showInputAlert:initialText:target:onConfirm:), cb, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [alert addBtnTitle:@"确定" target:cb sel:@selector(handleConfirm)];
+        // 5. 注入回调方法到 WCUIAlertView（只注入一次）+ addBtnTitle
+        walertInjectConfirmHandler(alertClass);
+        // 将 confirm block 关联到 alert，alert 存活期间 block 被 retain
+        if (confirm) {
+            objc_setAssociatedObject(alert, &kWAlertConfirmBlockKey, confirm, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        }
+        SEL confirmSel = NSSelectorFromString(@"__walert_confirm_handler");
+        [alert addBtnTitle:@"确定" target:alert sel:confirmSel];
 
-        // 6. show → 直接加到 window 层级，绕过 UIViewController presentation
+        // 6. show
         [alert show];
         walertLog([NSString stringWithFormat:@"[WeChatAlert] ✅ input alert shown: %@", title]);
     } @catch (NSException *e) {
