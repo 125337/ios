@@ -121,12 +121,16 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
     if (!payInfoItem) { jokerLog(@"[Joker] ❌ no payInfoItem found — trying XML patch"); }
     jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem=%@", payInfoItem]);
 
-    // ② 数字验证
+    // ② 数字验证（strip ¥ 符号，预填 text 带 ¥，用户可能保留）
+    NSString *cleanText = [newText stringByReplacingOccurrencesOfString:@"¥" withString:@""];
+    cleanText = [cleanText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    jokerLog([NSString stringWithFormat:@"[Joker]    cleanText=[%@]", cleanText]);
+
     NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
     [formatter setAllowsFloats:YES];
-    NSNumber *n = [formatter numberFromString:newText];
+    NSNumber *n = [formatter numberFromString:cleanText];
     if (!n) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ❌ not a valid number: [%@]", newText]);
+        jokerLog([NSString stringWithFormat:@"[Joker] ❌ not a valid number: [%@]", cleanText]);
         return;
     }
 
@@ -135,8 +139,8 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
     if (payInfoItem) {
         // 方法A: 写入 payInfoItem.m_nsFeeDesc
         @try {
-            [payInfoItem setValue:newText forKey:@"m_nsFeeDesc"];
-            jokerLog([NSString stringWithFormat:@"[Joker] ③ payInfoItem.m_nsFeeDesc ← [%@] ✅", newText]);
+            [payInfoItem setValue:cleanText forKey:@"m_nsFeeDesc"];
+            jokerLog([NSString stringWithFormat:@"[Joker] ③ payInfoItem.m_nsFeeDesc ← [%@] ✅", cleanText]);
             updated = YES;
         } @catch (NSException *e) {
             jokerLog([NSString stringWithFormat:@"[Joker] ③ ❌ payInfoItem failed: %@", e]);
@@ -147,7 +151,7 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
             NSString *xmlContent = [msgRef valueForKey:@"m_nsContent"];
             if (xmlContent.length > 0) {
                 // 替换 <feedesc><![CDATA[...]]></feedesc> 中的内容
-                NSString *replacement = [NSString stringWithFormat:@"<feedesc><![CDATA[%@]]></feedesc>", newText];
+                NSString *replacement = [NSString stringWithFormat:@"<feedesc><![CDATA[%@]]></feedesc>", cleanText];
                 NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"<feedesc><!\\[CDATA\\[.*?\\]\\]></feedesc>" options:NSRegularExpressionDotMatchesLineSeparators error:nil];
                 NSString *newXml = [regex stringByReplacingMatchesInString:xmlContent options:0 range:NSMakeRange(0, xmlContent.length) withTemplate:replacement];
                 if (newXml && ![newXml isEqualToString:xmlContent]) {
