@@ -137,48 +137,46 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
         return;
     }
 
-    // ③ 照抄锤子：写入原始输入值 newText（含¥），不用 cleanText
+    // ③ 更新 payInfoItem + XML（锤子只更新 payInfoItem，但 8.0.60 的 updateTitleLabel 读 XML）
     BOOL updated = NO;
     if (payInfoItem) {
         @try {
             [payInfoItem setValue:newText forKey:@"m_nsFeeDesc"];
             jokerLog([NSString stringWithFormat:@"[Joker] ③ payInfoItem.m_nsFeeDesc ← [%@] ✅", newText]);
+            // 验证写入
+            id verify = [payInfoItem valueForKey:@"m_nsFeeDesc"];
+            jokerLog([NSString stringWithFormat:@"[Joker]    VERIFY m_nsFeeDesc=[%@]", verify]);
             updated = YES;
         } @catch (NSException *e) {
             jokerLog([NSString stringWithFormat:@"[Joker] ③ ❌ payInfoItem failed: %@", e]);
         }
-    } else {
-        // 方法B: 直接改写 msgWrap.m_nsContent XML 中的 feedesc
-        @try {
-            NSString *xmlContent = [msgRef valueForKey:@"m_nsContent"];
-            if (xmlContent.length > 0) {
-                NSString *replacement = [NSString stringWithFormat:@"<feedesc><![CDATA[%@]]></feedesc>", newText];
-                NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"<feedesc><!\\[CDATA\\[.*?\\]\\]></feedesc>" options:NSRegularExpressionDotMatchesLineSeparators error:nil];
-                NSString *newXml = [regex stringByReplacingMatchesInString:xmlContent options:0 range:NSMakeRange(0, xmlContent.length) withTemplate:replacement];
-                if (newXml && ![newXml isEqualToString:xmlContent]) {
-                    [msgRef setValue:newXml forKey:@"m_nsContent"];
-                    jokerLog(@"[Joker] ③ XML feedesc patched ✅");
-                    updated = YES;
-                }
-            }
-        } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] ③ ❌ XML patch failed: %@", e]);
-        }
     }
 
-    // ④ 刷新（锤子：viewModel.updateLayouts + cell.updateTitleLabel）
+    // ③b 始终更新 XML feedesc（8.0.60 的 updateTitleLabel 可能从 XML 读取）
+    @try {
+        NSString *xmlContent = [msgRef valueForKey:@"m_nsContent"];
+        jokerLog([NSString stringWithFormat:@"[Joker] ③b XML m_nsContent length=%lu", (unsigned long)xmlContent.length]);
+        if (xmlContent.length > 0) {
+            NSString *replacement = [NSString stringWithFormat:@"<feedesc><![CDATA[%@]]></feedesc>", newText];
+            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"<feedesc><!\\[CDATA\\[.*?\\]\\]></feedesc>" options:NSRegularExpressionDotMatchesLineSeparators error:nil];
+            NSString *newXml = [regex stringByReplacingMatchesInString:xmlContent options:0 range:NSMakeRange(0, xmlContent.length) withTemplate:replacement];
+            if (newXml && ![newXml isEqualToString:xmlContent]) {
+                [msgRef setValue:newXml forKey:@"m_nsContent"];
+                jokerLog(@"[Joker] ③b XML feedesc patched ✅");
+                updated = YES;
+            } else {
+                jokerLog(@"[Joker] ③b XML feedesc NOT changed (no match or same)");
+            }
+        }
+    } @catch (NSException *e) {
+        jokerLog([NSString stringWithFormat:@"[Joker] ③b ❌ XML patch failed: %@", e]);
+    }
+
+    // ④ 只调 updateTitleLabel（锤子 FUN_00770164 只调这个，不调 updateLayouts）
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
-            id viewModel = [cellRef valueForKey:@"m_viewModel"];
-            SEL updateSel = NSSelectorFromString(@"updateLayouts");
-            jokerLog([NSString stringWithFormat:@"[Joker] ④ viewModel respondsTo updateLayouts = %d", [viewModel respondsToSelector:updateSel]]);
-            if ([viewModel respondsToSelector:updateSel]) {
-                ((void(*)(id, SEL))objc_msgSend)(viewModel, updateSel);
-                jokerLog(@"[Joker] ④ ✅ [viewModel updateLayouts]");
-            }
-
             SEL titleSel = NSSelectorFromString(@"updateTitleLabel");
-            jokerLog([NSString stringWithFormat:@"[Joker]    cell respondsTo updateTitleLabel = %d", [cellRef respondsToSelector:titleSel]]);
+            jokerLog([NSString stringWithFormat:@"[Joker] ④ cell respondsTo updateTitleLabel = %d", [cellRef respondsToSelector:titleSel]]);
             if ([cellRef respondsToSelector:titleSel]) {
                 ((void(*)(id, SEL))objc_msgSend)(cellRef, titleSel);
                 jokerLog(@"[Joker] ④ ✅ [cellRef updateTitleLabel]");
