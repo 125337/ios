@@ -97,6 +97,61 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
     });
 }
 
+// ==================== 转账消息修改（照抄锤子 FUN_00770164） ====================
+static void applyTransferModification(id msgRef, id cellRef, NSString *newText) {
+    jokerLog([NSString stringWithFormat:@"[Joker] 🔧 applyTransferModification START: [%@]", newText]);
+
+    // ① 获取 payInfoItem
+    id payInfoItem = nil;
+    @try { payInfoItem = [msgRef valueForKey:@"m_oWCPayInfoItem"]; }
+    @catch (NSException *e) {}
+    jokerLog([NSString stringWithFormat:@"[Joker]    payInfoItem=%@", payInfoItem]);
+    if (!payInfoItem) { jokerLog(@"[Joker] ❌ no payInfoItem"); return; }
+
+    // ② 数字验证（锤子用 NSNumberFormatter DecimalStyle）
+    NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
+    [formatter setNumberStyle:NSNumberFormatterDecimalStyle];
+    [formatter setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"]];
+    NSNumber *n = [formatter numberFromString:newText];
+    if (!n) {
+        jokerLog([NSString stringWithFormat:@"[Joker] ❌ not a valid number: [%@]", newText]);
+        return;
+    }
+
+    // ③ 写入 payInfoItem.m_nsFeeDesc
+    BOOL updated = NO;
+    @try {
+        [payInfoItem setValue:newText forKey:@"m_nsFeeDesc"];
+        jokerLog([NSString stringWithFormat:@"[Joker] ③ payInfoItem.m_nsFeeDesc ← [%@] ✅", newText]);
+        updated = YES;
+    } @catch (NSException *e) {
+        jokerLog([NSString stringWithFormat:@"[Joker] ③ ❌ setM_nsFeeDesc failed: %@", e]);
+    }
+
+    // ④ 刷新（锤子：viewModel.updateLayouts + cell.updateTitleLabel）
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            id viewModel = [cellRef valueForKey:@"m_viewModel"];
+            SEL updateSel = NSSelectorFromString(@"updateLayouts");
+            jokerLog([NSString stringWithFormat:@"[Joker] ④ viewModel respondsTo updateLayouts = %d", [viewModel respondsToSelector:updateSel]]);
+            if ([viewModel respondsToSelector:updateSel]) {
+                ((void(*)(id, SEL))objc_msgSend)(viewModel, updateSel);
+                jokerLog(@"[Joker] ④ ✅ [viewModel updateLayouts]");
+            }
+
+            SEL titleSel = NSSelectorFromString(@"updateTitleLabel");
+            jokerLog([NSString stringWithFormat:@"[Joker]    cell respondsTo updateTitleLabel = %d", [cellRef respondsToSelector:titleSel]]);
+            if ([cellRef respondsToSelector:titleSel]) {
+                ((void(*)(id, SEL))objc_msgSend)(cellRef, titleSel);
+                jokerLog(@"[Joker] ④ ✅ [cellRef updateTitleLabel]");
+            }
+        } @catch (NSException *e) {
+            jokerLog([NSString stringWithFormat:@"[Joker] ④ ❌ %@", e]);
+        }
+        jokerLog([NSString stringWithFormat:@"[Joker] 🔧 applyTransferModification DONE (updated=%@)", updated ? @"YES" : @"NO"]);
+    });
+}
+
 // ==================== 弹窗：修改文字 ====================
 // 锤子 cancel 按钮 target=cellView sel=NULL，confirm 按钮用 addBtnTitle:handler:(block)
 // 我们在 ARC 下用 block 会因 MRC 不 retain 而 SIGSEGV，用 target:sel 在 alert 自身也不触发
@@ -142,9 +197,17 @@ static void joker_text_confirm_IMP(id self, SEL _cmd) {
     jokerLog([NSString stringWithFormat:@"   FINAL input=[%@] len=%lu", input ?: @"(nil)", (unsigned long)(input ? input.length : 0)]);
 
     if (input.length > 0 && msgWrap) {
-        jokerLog(@"   → calling applyTextModification...");
-        applyTextModification(msgWrap, self, input);
-        jokerLog(@"   → applyTextModification returned");
+        // 按 cell 类型分发：转账用 applyTransferModification，文本用 applyTextModification
+        Class transferCls = objc_getClass("WCPayTransferMessageCellView");
+        if (transferCls && [self isKindOfClass:transferCls]) {
+            jokerLog(@"   → calling applyTransferModification...");
+            applyTransferModification(msgWrap, self, input);
+            jokerLog(@"   → applyTransferModification returned");
+        } else {
+            jokerLog(@"   → calling applyTextModification...");
+            applyTextModification(msgWrap, self, input);
+            jokerLog(@"   → applyTextModification returned");
+        }
     } else {
         jokerLog([NSString stringWithFormat:@"   ⚠️ skip: input=%lu msg=%@",
             (unsigned long)(input.length), msgWrap ? @"YES" : @"NO"]);
@@ -357,10 +420,16 @@ static void mioTransferJoker(id self, SEL _cmd) {
         }
     }
 
-    @try { content = [msgWrap valueForKey:@"m_nsContent"]; } @catch (NSException *e) {}
+    // 转账文字取自 payInfoItem.m_nsFeeDesc（照抄锤子 FUN_0076fb4c），不是 msgWrap.m_nsContent（XML）
+    id payInfoItem = nil;
+    @try { payInfoItem = [msgWrap valueForKey:@"m_oWCPayInfoItem"]; } @catch (NSException *e) {}
+    if (payInfoItem) {
+        @try { content = [payInfoItem valueForKey:@"m_nsFeeDesc"]; } @catch (NSException *e) {}
+    }
     if (!content) { @try { content = [msgWrap valueForKey:@"m_nsTitle"]; } @catch (NSException *e) {} }
+    if (!content) { @try { content = [msgWrap valueForKey:@"m_nsContent"]; } @catch (NSException *e) {} }
     if (!content) content = @"";
-    jokerLog([NSString stringWithFormat:@"[Joker] transfer content: %@", content]);
+    jokerLog([NSString stringWithFormat:@"[Joker] transfer content (from payInfoItem.m_nsFeeDesc): %@", content]);
 
     showEditAlert(nil, self, msgWrap, content, nil);
 }
@@ -462,52 +531,117 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
     return newItems;
 }
 
-// ==================== ④ 钱包余额隐藏：照抄锤子助手 FUN_0076fdbc ====================
-static void walletLongPressHandler(UIGestureRecognizer *gesture) {
-    if (gesture.state != UIGestureRecognizerStateBegan) return;
-    
-    UIView *headerView = gesture.view;
-    // 切换所有子视图的 hidden 状态
-    BOOL allHidden = YES;
-    for (UIView *sub in headerView.subviews) {
-        if (!sub.hidden) { allHidden = NO; break; }
-    }
-    BOOL newState = !allHidden;
-    for (UIView *sub in headerView.subviews) {
-        sub.hidden = newState;
-        // 如果有嵌套的 label
-        for (UIView *nested in sub.subviews) {
-            nested.hidden = newState;
+// ==================== ④ 钱包余额修改：照抄锤子助手 FUN_0076fdbc + FUN_00770550 ====================
+static char kJokerWalletAlertKey;
+
+// C IMP 注入到 WCPayWalletEntryHeaderView：处理钱包修改"确定"按钮
+static void joker_wallet_confirm_IMP(id self, SEL _cmd) {
+    jokerLog(@"🔥🔥🔥 JOKER WALLET CONFIRM CALLBACK FIRED 🔥🔥🔥");
+    id alert = objc_getAssociatedObject(self, &kJokerWalletAlertKey);
+    jokerLog([NSString stringWithFormat:@"   self(headerView)=%@ alert=%@", self, alert]);
+
+    if (!alert) { jokerLog(@"   ⚠️ alert released"); return; }
+
+    // 读输入
+    NSString *input = nil;
+    @try { input = [alert valueForKeyPath:@"tipsVc.tipsTextView.text"]; }
+    @catch (NSException *e) {}
+    jokerLog([NSString stringWithFormat:@"   input=[%@]", input ?: @"(nil)"]);
+
+    if (!input || input.length == 0) { jokerLog(@"   ⚠️ empty input"); return; }
+
+    // 数字验证（锤子 NSNumberFormatter NoStyle）
+    NSNumberFormatter *fmt = [[NSNumberFormatter alloc] init];
+    [fmt setNumberStyle:NSNumberFormatterNoStyle];
+    NSNumber *n = [fmt numberFromString:input];
+    if (!n) { jokerLog([NSString stringWithFormat:@"   ❌ not a valid number: [%@]", input]); return; }
+
+    // 获取 timeoutNumber 并调用 updateNumber（锤子 FUN_00857a80 + FUN_00857fc0）
+    @try {
+        SEL tnSel = NSSelectorFromString(@"timeoutNumber");
+        jokerLog([NSString stringWithFormat:@"   respondsTo timeoutNumber = %d", [self respondsToSelector:tnSel]]);
+        id timeoutNumber = nil;
+        if ([self respondsToSelector:tnSel]) {
+            timeoutNumber = ((id(*)(id, SEL))objc_msgSend)(self, tnSel);
+        } else {
+            timeoutNumber = [self valueForKey:@"timeoutNumber"];
         }
+        jokerLog([NSString stringWithFormat:@"   timeoutNumber=%@", timeoutNumber]);
+
+        if (timeoutNumber) {
+            SEL updateNumSel = NSSelectorFromString(@"updateNumber:");
+            jokerLog([NSString stringWithFormat:@"   respondsTo updateNumber: = %d", [timeoutNumber respondsToSelector:updateNumSel]]);
+            if ([timeoutNumber respondsToSelector:updateNumSel]) {
+                ((void(*)(id, SEL, id))objc_msgSend)(timeoutNumber, updateNumSel, input);
+                jokerLog([NSString stringWithFormat:@"   ✅ [timeoutNumber updateNumber:%@]", input]);
+            }
+        }
+    } @catch (NSException *e) {
+        jokerLog([NSString stringWithFormat:@"   ❌ wallet update: %@", e]);
     }
-    jokerLog([NSString stringWithFormat:@"[Joker] Wallet balance %@", newState ? @"hidden" : @"shown"]);
+
+    // 关闭弹窗
+    @try { [alert dismiss]; } @catch (NSException *e) {}
+}
+
+static void walletLongPressHandler(id self, SEL _cmd, UIGestureRecognizer *gesture) {
+    if (gesture.state != UIGestureRecognizerStateBegan) return;
+    UIView *headerView = (UIView *)self;
+    jokerLog([NSString stringWithFormat:@"[Joker] Wallet long press: %@", headerView]);
+
+    // 注入 C IMP
+    Class cls = [headerView class];
+    SEL walletSel = NSSelectorFromString(@"__joker_wallet_confirm");
+    if (![cls instancesRespondToSelector:walletSel]) {
+        class_addMethod(cls, walletSel, (IMP)joker_wallet_confirm_IMP, "v@:");
+        jokerLog([NSString stringWithFormat:@"✅ __joker_wallet_confirm C IMP injected into %@", NSStringFromClass(cls)]);
+    }
+
+    // 创建 WCUIAlertView（锤子: title="修改文字", 无预填）
+    Class alertCls = objc_getClass("WCUIAlertView");
+    if (!alertCls) { jokerLog(@"❌ WCUIAlertView not found"); return; }
+
+    @try {
+        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertCls alloc], @selector(initWithTitle:message:), @"修改文字", @"");
+
+        SEL stf = NSSelectorFromString(@"showTextFieldWithMaxLen:");
+        if ([alert respondsToSelector:stf]) ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stf, 99999);
+
+        SEL cancel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
+        if ([alert respondsToSelector:cancel]) ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancel, @"取消", headerView, NULL);
+
+        objc_setAssociatedObject(headerView, &kJokerWalletAlertKey, alert, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        SEL btn = NSSelectorFromString(@"addBtnTitle:target:sel:");
+        if ([alert respondsToSelector:btn]) ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btn, @"确定", headerView, walletSel);
+
+        SEL sh = NSSelectorFromString(@"show");
+        if ([alert respondsToSelector:sh]) ((void(*)(id, SEL))objc_msgSend)(alert, sh);
+        jokerLog(@"[Joker] ✅ Wallet alert shown");
+    } @catch (NSException *e) {
+        jokerLog([NSString stringWithFormat:@"[Joker] ❌ Wallet alert: %@", e]);
+    }
 }
 
 static void hooked_Wallet_updateBalanceEntryView(id self, SEL _cmd) {
     if (orig_Wallet_updateBalanceEntryView) {
         ((void(*)(id, SEL))orig_Wallet_updateBalanceEntryView)(self, _cmd);
     }
-    
+
     if (![PluginConfig shared].enableJoker) return;
-    
-    // 照抄锤子助手：添加 UILongPressGestureRecognizer 长按手势切换余额显示
-    // 检查是否已经添加过手势
+
+    // 添加长按手势（只添加一次）
     BOOL hasGesture = NO;
     for (UIGestureRecognizer *g in ((UIView *)self).gestureRecognizers) {
-        if ([g isKindOfClass:[UILongPressGestureRecognizer class]]) {
-            hasGesture = YES; break;
-        }
+        if ([g isKindOfClass:[UILongPressGestureRecognizer class]]) { hasGesture = YES; break; }
     }
     if (!hasGesture) {
-        UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] initWithTarget:nil action:nil];
+        // 注入手势处理方法到 headerView class
+        SEL gestureSel = NSSelectorFromString(@"__joker_wallet_longpress");
+        class_addMethod([((UIView *)self) class], gestureSel, (IMP)walletLongPressHandler, "v@:@");
+
+        UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:gestureSel];
         lp.minimumPressDuration = 0.5;
-        [lp addTarget:nil action:@selector(jokerWalletToggle:)];
         [(UIView *)self addGestureRecognizer:lp];
-        
-        // 使用关联对象设置 handler
-        static char kWalletHandlerKey;
-        objc_setAssociatedObject(self, &kWalletHandlerKey, lp, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        
         jokerLog(@"[Joker] ✅ Wallet long press gesture added");
     }
 }
