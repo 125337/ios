@@ -1,5 +1,6 @@
 #import "WeChatAlertHelper.h"
 #import <objc/runtime.h>
+#import <objc/message.h>
 
 // ==================== WCUIAlertView 本地声明（基于运行时 dump 的真实方法） ====================
 // WCUIAlertView 是 NSObject 子类（非 UIView），管理自己的 UI。
