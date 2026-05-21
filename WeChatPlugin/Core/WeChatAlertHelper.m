@@ -38,6 +38,10 @@ static void walertLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
+// ==================== 静态 key 用于 objc_setAssociatedObject ====================
+static char kWAlertHandlerBlockKey;
+static char kWAlertConfirmBlockKey;
+
 @implementation WeChatAlertHelper
 
 + (Class)alertClass {
