@@ -74,22 +74,35 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
     dispatch_async(dispatch_get_main_queue(), ^{
         jokerLog(@"[Joker] ② dispatch_async main_queue START");
 
-        // 2a. 更新 ViewModel 的 m_nsContent
-        jokerLog(@"[Joker] 2a 更新 viewModel.m_nsContent...");
+        // 2a. 更新 ViewModel（如果 ViewModel 缓存了内容，需要同步更新）
+        jokerLog(@"[Joker] 2a 更新 viewModel...");
         @try {
             id viewModel = [cellRef valueForKey:@"m_viewModel"];
             jokerLog([NSString stringWithFormat:@"[Joker]    viewModel=%@ class=%@", viewModel, viewModel ? NSStringFromClass([viewModel class]) : @"(nil)"]);
             if (viewModel) {
+                // 方法1: setM_nsContent:（锤子用这个，但 8.0.60 的 ViewModel 可能没有）
                 SEL setContentSel = NSSelectorFromString(@"setM_nsContent:");
-                jokerLog([NSString stringWithFormat:@"[Joker]    viewModel respondsTo setM_nsContent: = %d", [viewModel respondsToSelector:setContentSel]]);
+                jokerLog([NSString stringWithFormat:@"[Joker]    respondsTo setM_nsContent: = %d", [viewModel respondsToSelector:setContentSel]]);
                 if ([viewModel respondsToSelector:setContentSel]) {
                     ((void(*)(id, SEL, id))objc_msgSend)(viewModel, setContentSel, newText);
-                    jokerLog(@"[Joker] 2a viewModel.setM_nsContent ✅");
+                    jokerLog(@"[Joker] 2a ✅ viewModel.setM_nsContent");
                 } else {
-                    jokerLog(@"[Joker] 2a ❌ viewModel no setM_nsContent:");
+                    // 方法2: KVC fallback
+                    @try {
+                        [viewModel setValue:newText forKey:@"m_nsContent"];
+                        jokerLog(@"[Joker] 2a ✅ viewModel KVC setValue:forKey:m_nsContent");
+                    } @catch (NSException *kvcErr) {
+                        jokerLog([NSString stringWithFormat:@"[Joker] 2a KVC also failed: %@", kvcErr]);
+                        // 方法3: raw ivar access
+                        Ivar ivar = class_getInstanceVariable([viewModel class], "m_nsContent");
+                        if (ivar) {
+                            object_setIvar(viewModel, ivar, newText);
+                            jokerLog(@"[Joker] 2a ✅ viewModel raw ivar set");
+                        } else {
+                            jokerLog(@"[Joker] 2a ❌ all approaches failed for viewModel");
+                        }
+                    }
                 }
-            } else {
-                jokerLog(@"[Joker] 2a ⚠️ viewModel is nil");
             }
         } @catch (NSException *e) {
             jokerLog([NSString stringWithFormat:@"[Joker] 2a ❌ exception: %@", e]);
@@ -98,25 +111,38 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
         // 2b. 调用 cell 刷新方法
         jokerLog(@"[Joker] 2b 刷新 cell...");
         BOOL refreshed = NO;
-        // 锤子助手用 updateLayouts 刷新 cell
-        SEL updateLayoutsSel = NSSelectorFromString(@"updateLayouts");
-        jokerLog([NSString stringWithFormat:@"[Joker]    respondsTo updateLayouts = %d", [cellRef respondsToSelector:updateLayoutsSel]]);
-        if ([cellRef respondsToSelector:updateLayoutsSel]) {
-            ((void(*)(id, SEL))objc_msgSend)(cellRef, updateLayoutsSel);
-            jokerLog(@"[Joker] 2b ✅ updateLayouts called");
+
+        // 方法1: layoutContentView（微信 8.0.60 可用）
+        SEL layoutSel = NSSelectorFromString(@"layoutContentView");
+        jokerLog([NSString stringWithFormat:@"[Joker]    respondsTo layoutContentView = %d", [cellRef respondsToSelector:layoutSel]]);
+        if ([cellRef respondsToSelector:layoutSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(cellRef, layoutSel);
+            jokerLog(@"[Joker] 2b ✅ layoutContentView called");
             refreshed = YES;
         }
 
-        // fallback: layoutContentView
+        // 方法2: setNeedsLayout + layoutIfNeeded（系统标准刷新）
+        if ([cellRef respondsToSelector:@selector(setNeedsLayout)]) {
+            [cellRef setNeedsLayout];
+            jokerLog(@"[Joker] 2b setNeedsLayout ✅");
+        }
+        if ([cellRef respondsToSelector:@selector(layoutIfNeeded)]) {
+            [cellRef layoutIfNeeded];
+            jokerLog(@"[Joker] 2b layoutIfNeeded ✅");
+            refreshed = YES;
+        }
+
+        // 方法3: updateLayouts（锤子用，但 8.0.60 可能没有）
         if (!refreshed) {
-            SEL layoutSel = NSSelectorFromString(@"layoutContentView");
-            jokerLog([NSString stringWithFormat:@"[Joker]    fallback respondsTo layoutContentView = %d", [cellRef respondsToSelector:layoutSel]]);
-            if ([cellRef respondsToSelector:layoutSel]) {
-                ((void(*)(id, SEL))objc_msgSend)(cellRef, layoutSel);
-                jokerLog(@"[Joker] 2b ✅ layoutContentView called (fallback)");
+            SEL updateLayoutsSel = NSSelectorFromString(@"updateLayouts");
+            jokerLog([NSString stringWithFormat:@"[Joker]    respondsTo updateLayouts = %d", [cellRef respondsToSelector:updateLayoutsSel]]);
+            if ([cellRef respondsToSelector:updateLayoutsSel]) {
+                ((void(*)(id, SEL))objc_msgSend)(cellRef, updateLayoutsSel);
+                jokerLog(@"[Joker] 2b ✅ updateLayouts called");
                 refreshed = YES;
             }
         }
+
         if (!refreshed) {
             jokerLog(@"[Joker] 2b ❌ NO refresh method available");
         }
