@@ -902,26 +902,26 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
         jokerLog([NSString stringWithFormat:@"[JokerHook] register mioTextJoker: %@", added ? @"YES" : @"NO"]);
         
-        // Hook operationMenuItems（安全检查：用 hasOwnMethod 避免影响父类，照抄锤子 MSHookMessageEx 的隔离语义）
+        // Hook operationMenuItems — 统一用父类IMP + class_addMethod，不跟锤子MSHookMessageEx打架
+        // 原因：method_setImplementation 会直接覆盖锤子的hook，导致按钮消失
+        // 正确做法：从父类拿原始IMP，class_addMethod 在当前类独立添加方法
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
-        BOOL textHasOwnMenu = hasOwnMethod(textCellClass, menuSel);
-        jokerLog([NSString stringWithFormat:@"[JokerHook] TextMessageCellView hasOwn operationMenuItems = %d", textHasOwnMenu]);
-        if (textHasOwnMenu) {
-            Method menuMethod = class_getInstanceMethod(textCellClass, menuSel);
-            orig_TextCell_operationMenuItems = method_setImplementation(menuMethod, (IMP)hooked_TextCell_operationMenuItems);
-            jokerLog(@"[JokerHook] ✅ TextMessageCellView.operationMenuItems hooked (own impl)");
-        } else {
-            // 继承父类的，用 class_addMethod 只影响当前类
-            Class parentClass = class_getSuperclass(textCellClass);
-            Method parentMethod = class_getInstanceMethod(parentClass, menuSel);
-            if (parentMethod) {
-                orig_TextCell_operationMenuItems = method_getImplementation(parentMethod);
-                class_addMethod(textCellClass, menuSel, (IMP)hooked_TextCell_operationMenuItems, "@@:");
-                jokerLog(@"[JokerHook] ✅ TextMessageCellView.operationMenuItems via class_addMethod (inherit from parent)");
-            } else {
-                jokerLog(@"[JokerHook] ⚠️ TextMessageCellView.operationMenuItems NOT found in parent");
-            }
+        Method inheritedMethod = NULL;
+        // 向上遍历继承链，找到第一个实现了 operationMenuItems 的父类
+        Class walkClass = class_getSuperclass(textCellClass);
+        while (walkClass && !inheritedMethod) {
+            inheritedMethod = class_getInstanceMethod(walkClass, menuSel);
+            if (!inheritedMethod) walkClass = class_getSuperclass(walkClass);
         }
+        if (inheritedMethod) {
+            orig_TextCell_operationMenuItems = method_getImplementation(inheritedMethod);
+            jokerLog([NSString stringWithFormat:@"[JokerHook] text orig IMP from parent %@", NSStringFromClass(walkClass)]);
+        } else {
+            jokerLog(@"[JokerHook] ⚠️ text: no parent has operationMenuItems");
+        }
+        // 一律用 class_addMethod，只影响 TextMessageCellView，不干扰锤子
+        class_addMethod(textCellClass, menuSel, (IMP)hooked_TextCell_operationMenuItems, "@@:");
+        jokerLog(@"[JokerHook] ✅ TextMessageCellView.operationMenuItems via class_addMethod");
     } else {
         jokerLog(@"[JokerHook] ⚠️ TextMessageCellView class NOT found");
     }
@@ -942,26 +942,22 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
         jokerLog([NSString stringWithFormat:@"[JokerHook] register mioTransferJoker: %@", added ? @"YES" : @"NO"]);
         
-        // Hook operationMenuItems（安全检查：照抄锤子 MSHookMessageEx 隔离语义）
+        // Hook operationMenuItems — 统一用父类IMP + class_addMethod，不跟锤子MSHookMessageEx打架
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
-        BOOL transferHasOwnMenu = hasOwnMethod(transferCellClass, menuSel);
-        jokerLog([NSString stringWithFormat:@"[JokerHook] WCPayTransferMessageCellView hasOwn operationMenuItems = %d", transferHasOwnMenu]);
-        if (transferHasOwnMenu) {
-            Method menuMethod = class_getInstanceMethod(transferCellClass, menuSel);
-            orig_TransferCell_operationMenuItems = method_setImplementation(menuMethod, (IMP)hooked_TransferCell_operationMenuItems);
-            jokerLog(@"[JokerHook] ✅ WCPayTransferMessageCellView.operationMenuItems hooked (own impl)");
-        } else {
-            // 继承父类的，用 class_addMethod 只影响当前类
-            Class parentClass = class_getSuperclass(transferCellClass);
-            Method parentMethod = class_getInstanceMethod(parentClass, menuSel);
-            if (parentMethod) {
-                orig_TransferCell_operationMenuItems = method_getImplementation(parentMethod);
-                class_addMethod(transferCellClass, menuSel, (IMP)hooked_TransferCell_operationMenuItems, "@@:");
-                jokerLog(@"[JokerHook] ✅ WCPayTransferMessageCellView.operationMenuItems via class_addMethod (inherit from parent)");
-            } else {
-                jokerLog(@"[JokerHook] ⚠️ WCPayTransferMessageCellView.operationMenuItems NOT found in parent");
-            }
+        Method inheritedMethod = NULL;
+        Class walkClass = class_getSuperclass(transferCellClass);
+        while (walkClass && !inheritedMethod) {
+            inheritedMethod = class_getInstanceMethod(walkClass, menuSel);
+            if (!inheritedMethod) walkClass = class_getSuperclass(walkClass);
         }
+        if (inheritedMethod) {
+            orig_TransferCell_operationMenuItems = method_getImplementation(inheritedMethod);
+            jokerLog([NSString stringWithFormat:@"[JokerHook] transfer orig IMP from parent %@", NSStringFromClass(walkClass)]);
+        } else {
+            jokerLog(@"[JokerHook] ⚠️ transfer: no parent has operationMenuItems");
+        }
+        class_addMethod(transferCellClass, menuSel, (IMP)hooked_TransferCell_operationMenuItems, "@@:");
+        jokerLog(@"[JokerHook] ✅ WCPayTransferMessageCellView.operationMenuItems via class_addMethod");
     } else {
         jokerLog(@"[JokerHook] ⚠️ WCPayTransferMessageCellView class NOT found");
     }
