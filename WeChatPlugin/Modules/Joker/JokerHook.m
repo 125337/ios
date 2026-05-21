@@ -2,9 +2,9 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Core/HookEngine.h"
 #import "../../Core/WeChatAlertHelper.h"
+#import "../../libs/substrate.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
-#import <dlfcn.h>
 
 // ==================== 日志 ====================
 static void jokerLog(NSString *content) {
@@ -892,25 +892,12 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
     }
     
-    // ====== Transfer 菜单: MSHookMessageEx（如果libsubstrate.dylib已加载）======
+    // ====== Transfer 菜单: 直接调用我们自己的 MSHookMessageEx（不依赖锤子助手）======
     if (transferCellClass) {
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
-        
-        // 尝试调用真正的libsubstrate.dylib的MSHookMessageEx
-        void (*msHook)(Class, SEL, IMP, IMP*) = dlsym(RTLD_DEFAULT, "MSHookMessageEx");
-        if (msHook) {
-            IMP savedOrig = NULL;
-            msHook(transferCellClass, menuSel, (IMP)joker_transfer_menu, &savedOrig);
-            jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell libsubstrate MSHookMessageEx: orig=%p", savedOrig]);
-        } else {
-            // 回退：简单method_setImplementation
-            Method existing = class_getInstanceMethod(transferCellClass, menuSel);
-            if (existing) {
-                IMP curIMP = method_getImplementation(existing);
-                method_setImplementation(existing, (IMP)joker_transfer_menu);
-                jokerLog([NSString stringWithFormat:@"[JokerHook] ⚠️ TransferCell fallback method_setImplementation (no substrate), orig=%p", curIMP]);
-            }
-        }
+        IMP savedOrig = NULL;
+        MSHookMessageEx(transferCellClass, menuSel, (IMP)joker_transfer_menu, &savedOrig);
+        jokerLog([NSString stringWithFormat:@"[JokerHook] ✅ TransferCell MSHookMessageEx: orig=%p", savedOrig]);
     }
     
     // ====== ③ 钱包余额隐藏：照抄锤子助手 ======
