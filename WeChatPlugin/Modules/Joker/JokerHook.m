@@ -34,60 +34,95 @@ static IMP orig_Wallet_updateBalanceEntryView = NULL;
 
 // ==================== 公共：应用文字修改（msgWrap + RichTextView） ====================
 static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
-    if (newText.length == 0) return;
-    jokerLog([NSString stringWithFormat:@"[Joker] applyTextModification: %@", newText]);
+    if (newText.length == 0) {
+        jokerLog(@"[Joker] ⚠️ applyTextModification: empty text, skip");
+        return;
+    }
+    jokerLog([NSString stringWithFormat:@"[Joker] 🔧 applyTextModification START: [%@]", newText]);
+    jokerLog([NSString stringWithFormat:@"[Joker]    msgRef=%@ cellRef=%@", msgRef, cellRef]);
 
     // ① 写 msgWrap.m_nsContent（保证滚动/复用时不丢失）
+    jokerLog(@"[Joker] ① 写入 msgWrap.m_nsContent...");
+    BOOL msgUpdated = NO;
     if (msgRef) {
         @try {
             SEL setM_nsContentSel = NSSelectorFromString(@"setM_nsContent:");
+            jokerLog([NSString stringWithFormat:@"[Joker]    respondsTo setM_nsContent: = %d", [msgRef respondsToSelector:setM_nsContentSel]]);
             if ([msgRef respondsToSelector:setM_nsContentSel]) {
+                NSString *before = nil;
+                @try { before = [msgRef valueForKey:@"m_nsContent"]; } @catch (NSException *e) {}
+                jokerLog([NSString stringWithFormat:@"[Joker]    BEFORE m_nsContent=[%@]", before ?: @"(nil)"]);
+
                 ((void(*)(id, SEL, id))objc_msgSend)(msgRef, setM_nsContentSel, newText);
-                jokerLog(@"[Joker] ✅ Updated msgWrap.m_nsContent");
+
+                NSString *after = nil;
+                @try { after = [msgRef valueForKey:@"m_nsContent"]; } @catch (NSException *e) {}
+                jokerLog([NSString stringWithFormat:@"[Joker]    AFTER  m_nsContent=[%@]", after ?: @"(nil)"]);
+                msgUpdated = [newText isEqualToString:after];
+                jokerLog([NSString stringWithFormat:@"[Joker] ① msgWrap.m_nsContent %@", msgUpdated ? @"✅ UPDATED" : @"❌ MISMATCH"]);
+            } else {
+                jokerLog(@"[Joker] ① ❌ msgRef doesn't respond to setM_nsContent:");
             }
         } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] ❌ setM_nsContent: %@", e]);
+            jokerLog([NSString stringWithFormat:@"[Joker] ① ❌ exception: %@", e]);
         }
+    } else {
+        jokerLog(@"[Joker] ① ⚠️ msgRef is nil, skip");
     }
 
     // ② 更新 viewModel + cell 刷新（照抄锤子助手 FUN_0076ffbc）
     dispatch_async(dispatch_get_main_queue(), ^{
+        jokerLog(@"[Joker] ② dispatch_async main_queue START");
+
+        // 2a. 更新 ViewModel 的 m_nsContent
+        jokerLog(@"[Joker] 2a 更新 viewModel.m_nsContent...");
         @try {
-            // 锤子助手在 confirm 回调中做三件事：
-            //   1. [viewModel setM_nsContent:newText]
-            //   2. [msgWrap setM_nsContent:newText]  ← 我们在①已经做了
-            //   3. [cell updateLayouts]
-
-            // 更新 ViewModel 的 m_nsContent（锤子助手关键步骤）
-            @try {
-                id viewModel = [cellRef valueForKey:@"m_viewModel"];
-                if (viewModel) {
-                    SEL setContentSel = NSSelectorFromString(@"setM_nsContent:");
-                    if ([viewModel respondsToSelector:setContentSel]) {
-                        ((void(*)(id, SEL, id))objc_msgSend)(viewModel, setContentSel, newText);
-                        jokerLog(@"[Joker] ✅ viewModel setM_nsContent updated");
-                    }
+            id viewModel = [cellRef valueForKey:@"m_viewModel"];
+            jokerLog([NSString stringWithFormat:@"[Joker]    viewModel=%@ class=%@", viewModel, viewModel ? NSStringFromClass([viewModel class]) : @"(nil)"]);
+            if (viewModel) {
+                SEL setContentSel = NSSelectorFromString(@"setM_nsContent:");
+                jokerLog([NSString stringWithFormat:@"[Joker]    viewModel respondsTo setM_nsContent: = %d", [viewModel respondsToSelector:setContentSel]]);
+                if ([viewModel respondsToSelector:setContentSel]) {
+                    ((void(*)(id, SEL, id))objc_msgSend)(viewModel, setContentSel, newText);
+                    jokerLog(@"[Joker] 2a viewModel.setM_nsContent ✅");
+                } else {
+                    jokerLog(@"[Joker] 2a ❌ viewModel no setM_nsContent:");
                 }
-            } @catch (NSException *e) {
-                jokerLog([NSString stringWithFormat:@"[Joker] ❌ viewModel update: %@", e]);
-            }
-
-            // 锤子助手用 updateLayouts 刷新 cell（非 layoutContentView）
-            SEL updateLayoutsSel = NSSelectorFromString(@"updateLayouts");
-            if ([cellRef respondsToSelector:updateLayoutsSel]) {
-                ((void(*)(id, SEL))objc_msgSend)(cellRef, updateLayoutsSel);
-                jokerLog(@"[Joker] ✅ updateLayouts triggered");
             } else {
-                // fallback: layoutContentView
-                SEL layoutSel = NSSelectorFromString(@"layoutContentView");
-                if ([cellRef respondsToSelector:layoutSel]) {
-                    ((void(*)(id, SEL))objc_msgSend)(cellRef, layoutSel);
-                    jokerLog(@"[Joker] ✅ layoutContentView triggered (fallback)");
-                }
+                jokerLog(@"[Joker] 2a ⚠️ viewModel is nil");
             }
         } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] ❌ refresh: %@", e]);
+            jokerLog([NSString stringWithFormat:@"[Joker] 2a ❌ exception: %@", e]);
         }
+
+        // 2b. 调用 cell 刷新方法
+        jokerLog(@"[Joker] 2b 刷新 cell...");
+        BOOL refreshed = NO;
+        // 锤子助手用 updateLayouts 刷新 cell
+        SEL updateLayoutsSel = NSSelectorFromString(@"updateLayouts");
+        jokerLog([NSString stringWithFormat:@"[Joker]    respondsTo updateLayouts = %d", [cellRef respondsToSelector:updateLayoutsSel]]);
+        if ([cellRef respondsToSelector:updateLayoutsSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(cellRef, updateLayoutsSel);
+            jokerLog(@"[Joker] 2b ✅ updateLayouts called");
+            refreshed = YES;
+        }
+
+        // fallback: layoutContentView
+        if (!refreshed) {
+            SEL layoutSel = NSSelectorFromString(@"layoutContentView");
+            jokerLog([NSString stringWithFormat:@"[Joker]    fallback respondsTo layoutContentView = %d", [cellRef respondsToSelector:layoutSel]]);
+            if ([cellRef respondsToSelector:layoutSel]) {
+                ((void(*)(id, SEL))objc_msgSend)(cellRef, layoutSel);
+                jokerLog(@"[Joker] 2b ✅ layoutContentView called (fallback)");
+                refreshed = YES;
+            }
+        }
+        if (!refreshed) {
+            jokerLog(@"[Joker] 2b ❌ NO refresh method available");
+        }
+
+        jokerLog([NSString stringWithFormat:@"[Joker] 🔧 applyTextModification DONE (msg=%@ viewModel=YES cell=%@)",
+            msgUpdated ? @"YES" : @"NO", refreshed ? @"YES" : @"NO"]);
     });
 }
 
