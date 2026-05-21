@@ -32,6 +32,22 @@ static IMP orig_TextCell_operationMenuItems = NULL;
 static IMP orig_TransferCell_operationMenuItems = NULL;
 static IMP orig_Wallet_updateBalanceEntryView = NULL;
 
+// ==================== 工具：检查类是否有自己的方法实现（非继承） ====================
+// 避免 method_setImplementation 影响所有共享父类方法的子类（锤子用 MSHookMessageEx 天然隔离）
+static BOOL hasOwnMethod(Class cls, SEL sel) {
+    unsigned int count;
+    Method *methods = class_copyMethodList(cls, &count);
+    BOOL found = NO;
+    for (unsigned int i = 0; i < count; i++) {
+        if (sel_isEqual(method_getName(methods[i]), sel)) {
+            found = YES;
+            break;
+        }
+    }
+    free(methods);
+    return found;
+}
+
 // ==================== 公共：应用文字修改（msgWrap + RichTextView） ====================
 static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
     if (newText.length == 0) {
@@ -501,6 +517,13 @@ static void mioTransferJoker(id self, SEL _cmd) {
         content = @"";
     }
     if (!content) content = @"";
+
+    // 8.0.60 m_nsFeeDesc 返回 "¥0.01"（带¥前缀），锤子版本只返回 "0.01"
+    // 预填时 strip ¥，用户看到的输入框是纯数字，确认后写入干净值
+    if (content.length > 0 && [content hasPrefix:@"¥"]) {
+        content = [content substringFromIndex:1];
+        jokerLog([NSString stringWithFormat:@"[Joker] transfer stripped ¥ prefix → [%@]", content]);
+    }
     jokerLog([NSString stringWithFormat:@"[Joker] transfer final content=[%@]", content]);
 
     showEditAlert(nil, self, msgWrap, content, nil);
@@ -879,14 +902,25 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
         jokerLog([NSString stringWithFormat:@"[JokerHook] register mioTextJoker: %@", added ? @"YES" : @"NO"]);
         
-        // Hook operationMenuItems
+        // Hook operationMenuItems（安全检查：用 hasOwnMethod 避免影响父类，照抄锤子 MSHookMessageEx 的隔离语义）
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
-        Method menuMethod = class_getInstanceMethod(textCellClass, menuSel);
-        if (menuMethod) {
+        BOOL textHasOwnMenu = hasOwnMethod(textCellClass, menuSel);
+        jokerLog([NSString stringWithFormat:@"[JokerHook] TextMessageCellView hasOwn operationMenuItems = %d", textHasOwnMenu]);
+        if (textHasOwnMenu) {
+            Method menuMethod = class_getInstanceMethod(textCellClass, menuSel);
             orig_TextCell_operationMenuItems = method_setImplementation(menuMethod, (IMP)hooked_TextCell_operationMenuItems);
-            jokerLog(@"[JokerHook] ✅ TextMessageCellView.operationMenuItems hooked");
+            jokerLog(@"[JokerHook] ✅ TextMessageCellView.operationMenuItems hooked (own impl)");
         } else {
-            jokerLog(@"[JokerHook] ⚠️ TextMessageCellView.operationMenuItems NOT found");
+            // 继承父类的，用 class_addMethod 只影响当前类
+            Class parentClass = class_getSuperclass(textCellClass);
+            Method parentMethod = class_getInstanceMethod(parentClass, menuSel);
+            if (parentMethod) {
+                orig_TextCell_operationMenuItems = method_getImplementation(parentMethod);
+                class_addMethod(textCellClass, menuSel, (IMP)hooked_TextCell_operationMenuItems, "@@:");
+                jokerLog(@"[JokerHook] ✅ TextMessageCellView.operationMenuItems via class_addMethod (inherit from parent)");
+            } else {
+                jokerLog(@"[JokerHook] ⚠️ TextMessageCellView.operationMenuItems NOT found in parent");
+            }
         }
     } else {
         jokerLog(@"[JokerHook] ⚠️ TextMessageCellView class NOT found");
@@ -908,13 +942,25 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         }
         jokerLog([NSString stringWithFormat:@"[JokerHook] register mioTransferJoker: %@", added ? @"YES" : @"NO"]);
         
+        // Hook operationMenuItems（安全检查：照抄锤子 MSHookMessageEx 隔离语义）
         SEL menuSel = NSSelectorFromString(@"operationMenuItems");
-        Method menuMethod = class_getInstanceMethod(transferCellClass, menuSel);
-        if (menuMethod) {
+        BOOL transferHasOwnMenu = hasOwnMethod(transferCellClass, menuSel);
+        jokerLog([NSString stringWithFormat:@"[JokerHook] WCPayTransferMessageCellView hasOwn operationMenuItems = %d", transferHasOwnMenu]);
+        if (transferHasOwnMenu) {
+            Method menuMethod = class_getInstanceMethod(transferCellClass, menuSel);
             orig_TransferCell_operationMenuItems = method_setImplementation(menuMethod, (IMP)hooked_TransferCell_operationMenuItems);
-            jokerLog(@"[JokerHook] ✅ WCPayTransferMessageCellView.operationMenuItems hooked");
+            jokerLog(@"[JokerHook] ✅ WCPayTransferMessageCellView.operationMenuItems hooked (own impl)");
         } else {
-            jokerLog(@"[JokerHook] ⚠️ WCPayTransferMessageCellView.operationMenuItems NOT found");
+            // 继承父类的，用 class_addMethod 只影响当前类
+            Class parentClass = class_getSuperclass(transferCellClass);
+            Method parentMethod = class_getInstanceMethod(parentClass, menuSel);
+            if (parentMethod) {
+                orig_TransferCell_operationMenuItems = method_getImplementation(parentMethod);
+                class_addMethod(transferCellClass, menuSel, (IMP)hooked_TransferCell_operationMenuItems, "@@:");
+                jokerLog(@"[JokerHook] ✅ WCPayTransferMessageCellView.operationMenuItems via class_addMethod (inherit from parent)");
+            } else {
+                jokerLog(@"[JokerHook] ⚠️ WCPayTransferMessageCellView.operationMenuItems NOT found in parent");
+            }
         }
     } else {
         jokerLog(@"[JokerHook] ⚠️ WCPayTransferMessageCellView class NOT found");
