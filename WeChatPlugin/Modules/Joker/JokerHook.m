@@ -126,15 +126,123 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
     });
 }
 
-static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent, void(^onConfirm)(NSString *newText)) {
-    jokerLog(@"[Joker] showEditAlert");
+// ==================== 弹窗：修改文字 ====================
+// 锤子 cancel 按钮 target=cellView sel=NULL，confirm 按钮用 addBtnTitle:handler:(block)
+// 我们在 ARC 下用 block 会因 MRC 不 retain 而 SIGSEGV，用 target:sel 在 alert 自身也不触发
+// ✅ 最终方案：confirm 方法注入到 TextMessageCellView，target=cellView（跟 cancel 一致）
+//    cellView 是 table view 持有的长生命周期对象，不会提前释放
 
-    // 使用 WeChatAlertHelper 封装（内部已用 class_addMethod + imp_implementationWithBlock 
-    // 解决 MRC 环境下 addBtnTitle:target:sel: 不 retain target 导致回调失效的问题）
-    [WeChatAlertHelper showInputAlert:@"修改文字" initialText:currentContent target:cellView onConfirm:^(NSString *inputText) {
-        jokerLog([NSString stringWithFormat:@"[Joker] confirmed text: %@", inputText]);
-        applyTextModification(msgWrap, cellView, inputText);
-    }];
+static char kJokerAlertKey;
+static char kJokerMsgKey;
+
+// C IMP 注入到 TextMessageCellView：处理"确定"按钮点击
+static void joker_text_confirm_IMP(id self, SEL _cmd) {
+    jokerLog(@"🔥🔥🔥 JOKER CONFIRM CALLBACK FIRED 🔥🔥🔥");
+    id alert = objc_getAssociatedObject(self, &kJokerAlertKey);
+    id msgWrap = objc_getAssociatedObject(self, &kJokerMsgKey);
+    jokerLog([NSString stringWithFormat:@"   self(cell)=%@ alert=%@ msg=%@", self, alert, msgWrap]);
+
+    if (!alert) {
+        jokerLog(@"   ⚠️ alert was released, cannot read text");
+        return;
+    }
+
+    // 读取输入文本（照抄锤子 FUN_0076ffbc: valueForKeyPath:@"tipsVc.tipsTextView.text"）
+    NSString *input = nil;
+    @try {
+        input = [alert valueForKeyPath:@"tipsVc.tipsTextView.text"];
+        jokerLog([NSString stringWithFormat:@"   tipsVc.tipsTextView.text=%@", input ?: @"(nil)"]);
+    } @catch (NSException *e) {
+        jokerLog([NSString stringWithFormat:@"   tipsVc error: %@", e]);
+    }
+    if (!input || input.length == 0) {
+        @try {
+            input = [alert valueForKeyPath:@"tipsVc.tipsTextField.text"];
+            jokerLog([NSString stringWithFormat:@"   tipsVc.tipsTextField.text=%@", input ?: @"(nil)"]);
+        } @catch (NSException *e) {}
+    }
+    if (!input || input.length == 0) {
+        SEL getText = NSSelectorFromString(@"getTextFieldText");
+        if ([alert respondsToSelector:getText]) {
+            input = ((id(*)(id, SEL))objc_msgSend)(alert, getText);
+            jokerLog([NSString stringWithFormat:@"   getTextFieldText=%@", input ?: @"(nil)"]);
+        }
+    }
+    jokerLog([NSString stringWithFormat:@"   FINAL input=[%@] len=%lu", input ?: @"(nil)", (unsigned long)(input ? input.length : 0)]);
+
+    if (input.length > 0 && msgWrap) {
+        jokerLog(@"   → calling applyTextModification...");
+        applyTextModification(msgWrap, self, input);
+        jokerLog(@"   → applyTextModification returned");
+    } else {
+        jokerLog([NSString stringWithFormat:@"   ⚠️ skip: input=%lu msg=%@",
+            (unsigned long)(input.length), msgWrap ? @"YES" : @"NO"]);
+    }
+}
+
+static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent, void(^onConfirm)(NSString *newText)) {
+    jokerLog(@"[Joker] showEditAlert — building WCUIAlertView directly");
+
+    Class cls = objc_getClass("WCUIAlertView");
+    if (!cls) { jokerLog(@"❌ WCUIAlertView not found"); return; }
+
+    // 确保 confirm 方法注入到 TextMessageCellView（只注入一次）
+    SEL confirmSel = NSSelectorFromString(@"__joker_text_confirm");
+    Class cellClass = [cellView class];
+    if (![cellClass instancesRespondToSelector:confirmSel]) {
+        class_addMethod(cellClass, confirmSel, (IMP)joker_text_confirm_IMP, "v@:");
+        jokerLog([NSString stringWithFormat:@"✅ __joker_text_confirm C IMP injected into %@", NSStringFromClass(cellClass)]);
+    }
+
+    @try {
+        // ① alloc + init
+        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([cls alloc], @selector(initWithTitle:message:), @"修改文字", @"");
+        if (!alert) { jokerLog(@"❌ init nil"); return; }
+        jokerLog([NSString stringWithFormat:@"① WCUIAlertView=%@", alert]);
+
+        // ② textField
+        SEL stf = NSSelectorFromString(@"showTextFieldWithMaxLen:");
+        if ([alert respondsToSelector:stf]) {
+            ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stf, 99999);
+            jokerLog(@"② showTextFieldWithMaxLen ✅");
+        }
+
+        // ③ pre-fill
+        if (currentContent.length > 0) {
+            SEL dtf = NSSelectorFromString(@"setTextFieldDefaultText:");
+            if ([alert respondsToSelector:dtf]) {
+                ((void(*)(id, SEL, id))objc_msgSend)(alert, dtf, currentContent);
+                jokerLog(@"③ setTextFieldDefaultText ✅");
+            }
+        }
+
+        // ④ cancel (target=cellView, sel=NULL — 锤子模式)
+        SEL cancel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
+        if ([alert respondsToSelector:cancel]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancel, @"取消", cellView, NULL);
+            jokerLog(@"④ addCancelBtnTitle ✅");
+        }
+
+        // ⑤ confirm (target=cellView, sel=__joker_text_confirm)
+        // 将 alert + msgWrap 关联到 cellView（长生命周期对象）
+        objc_setAssociatedObject(cellView, &kJokerAlertKey, alert, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, &kJokerMsgKey, msgWrap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        SEL btn = NSSelectorFromString(@"addBtnTitle:target:sel:");
+        if ([alert respondsToSelector:btn]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btn, @"确定", cellView, confirmSel);
+            jokerLog(@"⑤ addBtnTitle:target:sel: (target=cellView, sel=__joker_text_confirm) ✅");
+        }
+
+        // ⑥ show
+        SEL sh = NSSelectorFromString(@"show");
+        if ([alert respondsToSelector:sh]) {
+            ((void(*)(id, SEL))objc_msgSend)(alert, sh);
+            jokerLog(@"⑥ show ✅");
+        }
+    } @catch (NSException *e) {
+        jokerLog([NSString stringWithFormat:@"❌ showEditAlert: %@", e]);
+    }
 }
 
 // ==================== 诊断：打印对象所有 ivar，发现正确的 msgWrap 路径 ====================
