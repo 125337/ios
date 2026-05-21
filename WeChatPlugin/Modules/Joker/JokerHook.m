@@ -32,6 +32,17 @@ static IMP orig_TextCell_operationMenuItems = NULL;
 static IMP orig_TransferCell_operationMenuItems = NULL;
 static IMP orig_Wallet_updateBalanceEntryView = NULL;
 
+// 复用 NSNumberFormatter（验证数字用）
+static NSNumberFormatter *sharedNumberFormatter(void) {
+    static NSNumberFormatter *fmt = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        fmt = [[NSNumberFormatter alloc] init];
+        [fmt setAllowsFloats:YES];
+    });
+    return fmt;
+}
+
 // ==================== 公共：应用文字修改（msgWrap + RichTextView） ====================
 static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
     if (newText.length == 0) {
@@ -128,8 +139,7 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
     validText = [validText stringByReplacingOccurrencesOfString:@"¥" withString:@""];
     jokerLog([NSString stringWithFormat:@"[Joker]    validText(cleaned)=[%@]", validText]);
 
-    NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
-    [formatter setAllowsFloats:YES];
+    NSNumberFormatter *formatter = sharedNumberFormatter();
     NSNumber *n = [formatter numberFromString:validText];
     if (!n) {
         // ¥符号可能导致NSNumberFormatter失败，用锤子的错误提示
@@ -248,6 +258,9 @@ static void joker_text_confirm_IMP(id self, SEL _cmd) {
         jokerLog([NSString stringWithFormat:@"   ⚠️ skip: input=%lu msg=%@",
             (unsigned long)(input.length), msgWrap ? @"YES" : @"NO"]);
     }
+    // 清理关联引用，避免 alert dismiss 后仍被持有
+    objc_setAssociatedObject(self, &kJokerAlertKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, &kJokerMsgKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent) {
@@ -541,8 +554,7 @@ static void joker_wallet_confirm_IMP(id self, SEL _cmd) {
     if (!input || input.length == 0) { jokerLog(@"   ⚠️ empty input"); return; }
 
     // 数字验证（锤子: setAllowsFloats:YES + numberFromString:）
-    NSNumberFormatter *fmt = [[NSNumberFormatter alloc] init];
-    [fmt setAllowsFloats:YES];
+    NSNumberFormatter *fmt = sharedNumberFormatter();
     NSNumber *n = [fmt numberFromString:input];
     jokerLog([NSString stringWithFormat:@"   numberFromString result=%@", n]);
     if (!n) { jokerLog([NSString stringWithFormat:@"   ❌ not a valid number: [%@]", input]); return; }
@@ -574,6 +586,7 @@ static void joker_wallet_confirm_IMP(id self, SEL _cmd) {
         jokerLog([NSString stringWithFormat:@"   ❌ wallet update: %@", e]);
     }
 
+    objc_setAssociatedObject(self, &kJokerWalletAlertKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
 static void walletLongPressHandler(id self, SEL _cmd, UIGestureRecognizer *gesture) {
@@ -657,8 +670,7 @@ static void joker_timeout_confirm_IMP(id self, SEL _cmd) {
     if (!input || input.length == 0) { jokerLog(@"   ⚠️ empty input"); return; }
 
     // 数字验证（锤子: setAllowsFloats:YES + numberFromString:）
-    NSNumberFormatter *fmt = [[NSNumberFormatter alloc] init];
-    [fmt setAllowsFloats:YES];
+    NSNumberFormatter *fmt = sharedNumberFormatter();
     NSNumber *n = [fmt numberFromString:input];
     jokerLog([NSString stringWithFormat:@"   numberFromString=%@", n]);
     if (!n) { jokerLog([NSString stringWithFormat:@"   ❌ invalid number: [%@]", input]); return; }
@@ -672,6 +684,7 @@ static void joker_timeout_confirm_IMP(id self, SEL _cmd) {
         ((void(*)(id, SEL, NSInteger))objc_msgSend)(self, updateSel, intVal);
         jokerLog([NSString stringWithFormat:@"   ✅ [self updateNumber:%ld]", (long)intVal]);
     }
+    objc_setAssociatedObject(self, &kJokerTimeoutAlertKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 // TimeoutNumber 长按手势处理
