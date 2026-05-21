@@ -877,6 +877,10 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         // class_addMethod: mioTextJoker → v@:
         SEL onTextJokerSel = NSSelectorFromString(@"mioTextJoker");
         BOOL added = class_addMethod(textCellClass, onTextJokerSel, (IMP)mioTextJoker, "v@:");
+        // 同时注册带冒号的版本 v@:@（微信 dispatch actionName 时会追加冒号→ performSelector:withObject:）
+        SEL onTextJokerColonSel = NSSelectorFromString(@"mioTextJoker:");
+        BOOL colonAdded = class_addMethod(textCellClass, onTextJokerColonSel, (IMP)mioTextJoker, "v@:@");
+        jokerLog([NSString stringWithFormat:@"[JokerHook] text: mioTextJoker=%d mioTextJoker:=%d", added, colonAdded]);
         if (!added) {
             // 失败可能是热重载，强制替换
             Method m = class_getInstanceMethod(textCellClass, onTextJokerSel);
@@ -925,6 +929,9 @@ static void hooked_RedEnvelope_send(id self, SEL _cmd, id params) {
         
         SEL onTransferJokerSel = NSSelectorFromString(@"mioTransferJoker");
         BOOL added = class_addMethod(transferCellClass, onTransferJokerSel, (IMP)mioTransferJoker, "v@:");
+        SEL onTransferJokerColonSel = NSSelectorFromString(@"mioTransferJoker:");
+        BOOL colonAdded = class_addMethod(transferCellClass, onTransferJokerColonSel, (IMP)mioTransferJoker, "v@:@");
+        jokerLog([NSString stringWithFormat:@"[JokerHook] transfer: mioTransferJoker=%d mioTransferJoker:=%d", added, colonAdded]);
         if (!added) {
             Method m = class_getInstanceMethod(transferCellClass, onTransferJokerSel);
             if (m) {
