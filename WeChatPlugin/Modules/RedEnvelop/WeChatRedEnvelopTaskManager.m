@@ -4,12 +4,6 @@
 #import <UIKit/UIKit.h>
 #import "../../Core/LogManager.h"
 
-else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-}
-
 @interface WeChatRedEnvelopTaskManager ()
 @property (nonatomic, strong) NSOperationQueue *taskQueue;
 @property (nonatomic, strong) NSMutableDictionary *pendingParams;

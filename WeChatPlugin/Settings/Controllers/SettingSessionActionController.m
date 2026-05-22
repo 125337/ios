@@ -2,12 +2,6 @@
 #import <objc/runtime.h>
 #import "../../Core/LogManager.h"
 
-else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-}
-
 @implementation SettingSessionActionController
 
 - (void)viewDidLoad {

@@ -5,36 +5,6 @@
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 
-static void revokeLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"revoke.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-}
-
-static id WXGetService(Class serviceClass) {
-    Class MMServiceCenterClass = objc_getClass("MMServiceCenter");
-    if (!MMServiceCenterClass) return nil;
-    SEL dcSel = NSSelectorFromString(@"defaultCenter");
-    if (![MMServiceCenterClass respondsToSelector:dcSel]) return nil;
-    id center = ((id (*)(id, SEL))objc_msgSend)(MMServiceCenterClass, dcSel);
-    if (!center) return nil;
-    SEL gsSel = NSSelectorFromString(@"getService:");
-    if (![center respondsToSelector:gsSel]) return nil;
-    return ((id (*)(id, SEL, Class))objc_msgSend)(center, gsSel, serviceClass);
-}
-
 static NSString *trimText(NSString *text) {
     if (![text isKindOfClass:[NSString class]]) return nil;
     NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
