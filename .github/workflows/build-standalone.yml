@@ -46,6 +46,7 @@ jobs:
           WeChatPlugin/Registry/FeatureRegistry.m \
           WeChatPlugin/Modules/Revoke/RevokeHandler.m \
           WeChatPlugin/Modules/Revoke/RevokeHook.m \
+          WeChatPlugin/Modules/Revoke/RevokeFormatEditorVC.m \
           WeChatPlugin/Modules/RedEnvelop/RedEnvelopHook.m \
           WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopParam.m \
           WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopOperation.m \

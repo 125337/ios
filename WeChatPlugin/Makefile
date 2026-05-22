@@ -18,6 +18,7 @@ MioHelper_FILES = Tweak.m \
 	Registry/FeatureRegistry.m \
 	Modules/Revoke/RevokeHandler.m \
 	Modules/Revoke/RevokeHook.m \
+	Modules/Revoke/RevokeFormatEditorVC.m \
 	Modules/RedEnvelop/RedEnvelopHook.m \
 	Modules/RedEnvelop/WeChatRedEnvelopParam.m \
 	Modules/RedEnvelop/WeChatRedEnvelopOperation.m \
