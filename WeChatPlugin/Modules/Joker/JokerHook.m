@@ -305,13 +305,13 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
             id mmItem = nil;
             if ([mmItemClass instancesRespondToSelector:initSel]) {
                 mmItem = ((id(*)(id, SEL, id, id, const char *))objc_msgSend)(
-                    [[mmItemClass alloc] init], initSel, @"修改", @"expression", "mioTextJoker");
+                    [mmItemClass alloc], initSel, @"修改", @"expression", "mioTextJoker");
             }
             if (!mmItem) {
                 SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
                 if ([mmItemClass instancesRespondToSelector:altInitSel]) {
                     mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
-                        [[mmItemClass alloc] init], altInitSel, @"修改", NSSelectorFromString(@"mioTextJoker"));
+                        [mmItemClass alloc], altInitSel, @"修改", NSSelectorFromString(@"mioTextJoker"));
                 }
             }
             if (mmItem) { [newItems addObject:mmItem]; }
@@ -336,13 +336,13 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
             id mmItem = nil;
             if ([mmItemClass instancesRespondToSelector:initSel]) {
                 mmItem = ((id(*)(id, SEL, id, id, const char *))objc_msgSend)(
-                    [[mmItemClass alloc] init], initSel, @"修改", @"expression", "mioTransferJoker");
+                    [mmItemClass alloc], initSel, @"修改", @"expression", "mioTransferJoker");
             }
             if (!mmItem) {
                 SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
                 if ([mmItemClass instancesRespondToSelector:altInitSel]) {
                     mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
-                        [[mmItemClass alloc] init], altInitSel, @"修改", NSSelectorFromString(@"mioTransferJoker"));
+                        [mmItemClass alloc], altInitSel, @"修改", NSSelectorFromString(@"mioTransferJoker"));
                 }
             }
             if (mmItem) { [newItems addObject:mmItem]; }

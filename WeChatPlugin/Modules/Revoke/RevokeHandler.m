@@ -1,6 +1,5 @@
 #import "RevokeHandler.h"
 #import "../../Config/PluginConfig.h"
-#import "../../Config/Constants.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
@@ -22,8 +21,6 @@ static void revokeLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-static NSMutableDictionary<NSString *, NSNumber *> *g_revokeHandledMap = nil;
-
 static id getService(Class serviceClass) {
     Class MMServiceCenterClass = objc_getClass("MMServiceCenter");
     if (!MMServiceCenterClass) return nil;
@@ -42,34 +39,29 @@ static NSString *trimText(NSString *text) {
     return trimmed.length > 0 ? trimmed : nil;
 }
 
-static NSString *stripCDATA(NSString *text) {
-    if (![text isKindOfClass:[NSString class]] || text.length == 0) return nil;
-    NSRange startRange = [text rangeOfString:@"<![CDATA["];
-    if (startRange.location == NSNotFound) return trimText(text);
+static NSString *extractBetween(NSString *text, NSString *startTag, NSString *endTag) {
+    if (!text || !startTag || !endTag) return nil;
+    NSRange startRange = [text rangeOfString:startTag];
+    if (startRange.location == NSNotFound) return nil;
     NSUInteger contentStart = NSMaxRange(startRange);
-    NSRange endRange = [text rangeOfString:@"]]>" options:0 range:NSMakeRange(contentStart, text.length - contentStart)];
-    if (endRange.location == NSNotFound) return trimText(text);
+    NSRange endRange = [text rangeOfString:endTag options:0 range:NSMakeRange(contentStart, text.length - contentStart)];
+    if (endRange.location == NSNotFound) return nil;
     return trimText([text substringWithRange:NSMakeRange(contentStart, endRange.location - contentStart)]);
 }
 
 static NSDictionary *parseRevokeXml(NSString *xml) {
-    if (![xml isKindOfClass:[NSString class]] || xml.length == 0) return nil;
-    static NSRegularExpression *regex = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        regex = [NSRegularExpression regularExpressionWithPattern:
-            @"<(session|replacemsg|newmsgid|msgid|fromusr)\\b[^>]*>([\\s\\S]*?)</\\1>"
-            options:0 error:nil];
-    });
-    if (!regex) return nil;
+    if (!xml.length) return nil;
+    NSString *session = extractBetween(xml, @"<session>", @"</session>");
+    NSString *newmsgid = extractBetween(xml, @"<newmsgid>", @"</newmsgid>");
+    NSString *replacemsg = extractBetween(xml, @"<replacemsg><![CDATA[", @"]]></replacemsg>");
+    NSString *msgid = extractBetween(xml, @"<msgid>", @"</msgid>");
+    NSString *fromusr = extractBetween(xml, @"<fromusr>", @"</fromusr>");
     NSMutableDictionary *result = [NSMutableDictionary dictionary];
-    [regex enumerateMatchesInString:xml options:0 range:NSMakeRange(0, xml.length)
-        usingBlock:^(NSTextCheckingResult *match, NSMatchingFlags flags, BOOL *stop) {
-            NSString *tagName = [xml substringWithRange:[match rangeAtIndex:1]];
-            NSString *rawValue = [xml substringWithRange:[match rangeAtIndex:2]];
-            NSString *value = trimText(stripCDATA(rawValue));
-            if (value.length > 0) result[tagName] = value;
-        }];
+    if (session) result[@"session"] = session;
+    if (replacemsg) result[@"replacemsg"] = replacemsg;
+    if (newmsgid) result[@"newmsgid"] = newmsgid;
+    if (msgid) result[@"msgid"] = msgid;
+    if (fromusr) result[@"fromusr"] = fromusr;
     return result.count > 0 ? [result copy] : nil;
 }
 
@@ -138,27 +130,6 @@ static NSString *digestForMsgWrap(id msgWrap) {
         case 47: return @"[表情]";
         case 49: return @"[应用消息]";
         default: return [NSString stringWithFormat:@"[类型:%u]", type];
-    }
-}
-
-static BOOL wasHandledRecently(NSString *dedupKey) {
-    if (!dedupKey.length || !g_revokeHandledMap) return NO;
-    @synchronized (g_revokeHandledMap) {
-        NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-        NSMutableArray *expired = [NSMutableArray array];
-        for (NSString *key in g_revokeHandledMap) {
-            if (g_revokeHandledMap[key].doubleValue <= now) [expired addObject:key];
-        }
-        [g_revokeHandledMap removeObjectsForKeys:expired];
-        return g_revokeHandledMap[dedupKey].doubleValue > now;
-    }
-}
-
-static void markHandled(NSString *dedupKey) {
-    if (!dedupKey.length) return;
-    if (!g_revokeHandledMap) g_revokeHandledMap = [NSMutableDictionary new];
-    @synchronized (g_revokeHandledMap) {
-        g_revokeHandledMap[dedupKey] = @([[NSDate date] timeIntervalSince1970] + kRevokeDedupTTL);
     }
 }
 
@@ -262,41 +233,10 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         if (cls) {
             SEL sel = NSSelectorFromString(@"isSenderFromMsgWrap:");
             if ([cls respondsToSelector:sel]) {
-                if (((BOOL (*)(id, SEL, id))objc_msgSend)(cls, sel, msgWrap)) return YES;
+                return ((BOOL (*)(id, SEL, id))objc_msgSend)(cls, sel, msgWrap);
             }
         }
     } @catch (NSException *e) {}
-
-    NSString *xml = nil;
-    SEL contentSel = NSSelectorFromString(@"m_nsContent");
-    if ([msgWrap respondsToSelector:contentSel]) xml = ((id (*)(id, SEL))objc_msgSend)(msgWrap, contentSel);
-    xml = trimText(xml);
-    if (xml.length == 0) return NO;
-
-    NSDictionary *parsed = parseRevokeXml(xml);
-    NSString *replaceText = parsed[@"replacemsg"];
-    if (replaceText) {
-        for (NSString *token in @[@"你撤回了一条消息", @"你撤回了一则消息", @"You recalled a message"]) {
-            if ([replaceText rangeOfString:token options:NSCaseInsensitiveSearch].location != NSNotFound) return YES;
-        }
-    }
-    NSString *actorFromXml = parsed[@"fromusr"];
-    if (actorFromXml.length > 0) {
-        id contactMgr = getService(objc_getClass("CContactMgr"));
-        if (contactMgr) {
-            SEL selfSel = NSSelectorFromString(@"getSelfContact");
-            if ([contactMgr respondsToSelector:selfSel]) {
-                id selfContact = ((id (*)(id, SEL))objc_msgSend)(contactMgr, selfSel);
-                if (selfContact) {
-                    SEL userNameSel = NSSelectorFromString(@"m_nsUsrName");
-                    if ([selfContact respondsToSelector:userNameSel]) {
-                        NSString *selfUserName = ((id (*)(id, SEL))objc_msgSend)(selfContact, userNameSel);
-                        if ([actorFromXml isEqualToString:selfUserName]) return YES;
-                    }
-                }
-            }
-        }
-    }
     return NO;
 }
 
@@ -346,10 +286,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         }
     }
 
-    NSString *dedupKey = [NSString stringWithFormat:@"%@#svr:%lld", session ?: @"?", revokedMsgId];
-    if (wasHandledRecently(dedupKey)) return YES;
-
-    if (config.noTip) { markHandled(dedupKey); return YES; }
+    if (config.noTip) return YES;
 
     id messageMgr = getService(objc_getClass("CMessageMgr"));
     if (!messageMgr) {
@@ -437,107 +374,6 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
 
     BOOL inserted = insertTipMessage_DKStyle(messageMgr, session, newMsgContent, revokedMsgWrap, createTime);
     revokeLog([NSString stringWithFormat:@"result=%d", inserted]);
-    if (inserted) markHandled(dedupKey);
-    return inserted;
-}
-
-- (BOOL)handleRevokeFromXmlSysMsg:(NSString *)xmlStr chatName:(NSString *)chatName {
-    if (!xmlStr.length) return NO;
-    revokeLog([NSString stringWithFormat:@"[XmlSys] handleRevokeFromXmlSysMsg chatName=%@", chatName]);
-    
-    PluginConfig *config = [PluginConfig shared];
-    NSDictionary *parsed = parseRevokeXml(xmlStr);
-    if (!parsed[@"replacemsg"]) return NO;
-    
-    NSString *replaceText = parsed[@"replacemsg"];
-    for (NSString *token in @[@"你撤回了一条消息", @"你撤回了一则消息", @"You recalled a message"]) {
-        if ([replaceText rangeOfString:token options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            revokeLog(@"[XmlSys] self revoke detected (text), skip");
-            return NO;
-        }
-    }
-    
-    NSString *actorFromXml = parsed[@"fromusr"];
-    if (actorFromXml.length > 0) {
-        id contactMgr = getService(objc_getClass("CContactMgr"));
-        if (contactMgr) {
-            SEL selfSel = NSSelectorFromString(@"getSelfContact");
-            if ([contactMgr respondsToSelector:selfSel]) {
-                id selfContact = ((id (*)(id, SEL))objc_msgSend)(contactMgr, selfSel);
-                if (selfContact) {
-                    SEL userNameSel = NSSelectorFromString(@"m_nsUsrName");
-                    if ([selfContact respondsToSelector:userNameSel]) {
-                        if ([actorFromXml isEqualToString:((id (*)(id, SEL))objc_msgSend)(selfContact, userNameSel)]) {
-                            revokeLog(@"[XmlSys] self revoke detected (fromusr), skip");
-                            return NO;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    NSString *session = parsed[@"session"];
-    long long revokedMsgId = 0;
-    NSString *newmsgidStr = parsed[@"newmsgid"];
-    if (newmsgidStr.length > 0) { NSScanner *s = [NSScanner scannerWithString:newmsgidStr]; [s scanLongLong:&revokedMsgId]; }
-    if (revokedMsgId <= 0) {
-        NSString *msgidStr = parsed[@"msgid"];
-        if (msgidStr.length > 0) { NSScanner *s = [NSScanner scannerWithString:msgidStr]; [s scanLongLong:&revokedMsgId]; }
-    }
-    
-    NSString *dedupKey = [NSString stringWithFormat:@"%@#svr:%lld", session ?: @"?", revokedMsgId];
-    if (wasHandledRecently(dedupKey)) return YES;
-    
-    if (config.noTip) { markHandled(dedupKey); return YES; }
-    
-    id messageMgr = getService(objc_getClass("CMessageMgr"));
-    if (!messageMgr) { revokeLog(@"[XmlSys] CMessageMgr not found"); return NO; }
-    
-    Class CMessageWrapClass = objc_getClass("CMessageWrap");
-    id revokedMsgWrap = nil;
-    SEL getMsgSel = NSSelectorFromString(@"GetMsg:n64SvrID:");
-    if (revokedMsgId > 0 && session.length > 0 && [messageMgr respondsToSelector:getMsgSel]) {
-        @try {
-            revokedMsgWrap = ((id (*)(id, SEL, id, long long))objc_msgSend)(messageMgr, getMsgSel, session, revokedMsgId);
-            if (revokedMsgWrap && CMessageWrapClass && ![revokedMsgWrap isKindOfClass:CMessageWrapClass]) revokedMsgWrap = nil;
-        } @catch (NSException *e) {}
-        if (!revokedMsgWrap && chatName.length > 0) {
-            @try {
-                id msg = ((id (*)(id, SEL, id, long long))objc_msgSend)(messageMgr, getMsgSel, chatName, revokedMsgId);
-                if (msg && CMessageWrapClass && [msg isKindOfClass:CMessageWrapClass]) revokedMsgWrap = msg;
-            } @catch (NSException *e) {}
-        }
-    }
-    
-    NSString *fromUsrName = actorFromXml;
-    if (!fromUsrName.length && revokedMsgWrap) {
-        SEL fromUsrSel = NSSelectorFromString(@"m_nsFromUsr");
-        if ([revokedMsgWrap respondsToSelector:fromUsrSel])
-            fromUsrName = ((id (*)(id, SEL))objc_msgSend)(revokedMsgWrap, fromUsrSel);
-    }
-    fromUsrName = displayName(fromUsrName) ?: @"对方";
-    
-    NSString *revokedContent = config.hideContent ? @"" : (digestForMsgWrap(revokedMsgWrap) ?: @"");
-    
-    unsigned int createTime = (unsigned int)[[NSDate date] timeIntervalSince1970];
-    if (revokedMsgWrap) {
-        SEL createTimeSel = NSSelectorFromString(@"m_uiCreateTime");
-        if ([revokedMsgWrap respondsToSelector:createTimeSel])
-            createTime = ((unsigned int (*)(id, SEL))objc_msgSend)(revokedMsgWrap, createTimeSel);
-    }
-    
-    NSString *timeText = timeTextFromTimestamp(createTime, config.dateFormat);
-    NSString *newMsgContent;
-    if (revokedContent.length > 0) {
-        newMsgContent = [NSString stringWithFormat:@"🔴 %@\n\"%@\"撤回了一条消息\n%@", timeText, fromUsrName, revokedContent];
-    } else {
-        newMsgContent = [NSString stringWithFormat:@"🔴 %@\n\"%@\"撤回了一条消息", timeText, fromUsrName];
-    }
-    
-    BOOL inserted = insertTipMessage_DKStyle(messageMgr, session, newMsgContent, revokedMsgWrap, createTime);
-    revokeLog([NSString stringWithFormat:@"[XmlSys] result=%d", inserted]);
-    if (inserted) markHandled(dedupKey);
     return inserted;
 }
 
