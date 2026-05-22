@@ -473,7 +473,7 @@ static void handleHongbaoResponse(id res, id req) {
 
 static IMP orig_OnWCToHongbaoCommonResponse2 = NULL;
 static IMP orig_OnWCToHongbaoCommonResponse3 = NULL;
-static IMP orig_StoryViewWillAppear = NULL;
+static IMP orig_StoryViewDidLoad = NULL;
 
 @interface REDetailButtonHandler : NSObject
 - (void)onDetailTap:(UIButton *)sender;
@@ -569,33 +569,17 @@ static void tryAddDetailButton(id self, int retryCount) {
     }
 }
 
-static void replaced_StoryViewWillAppear(id self, SEL _cmd, BOOL animated) {
-    reLog([NSString stringWithFormat:@"[DETAIL] viewWillAppear called on %@", NSStringFromClass(object_getClass(self))]);
+static void replaced_StoryViewDidLoad(id self, SEL _cmd) {
+    reLog([NSString stringWithFormat:@"[DETAIL] viewDidLoad called on %@", NSStringFromClass(object_getClass(self))]);
 
-    if (orig_StoryViewWillAppear) {
-        ((void (*)(id, SEL, BOOL))orig_StoryViewWillAppear)(self, _cmd, animated);
+    if (orig_StoryViewDidLoad) {
+        ((void (*)(id, SEL))orig_StoryViewDidLoad)(self, _cmd);
     }
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.redEnvelopeDetail) {
-        reLog(@"[DETAIL] redEnvelopeDetail disabled, skip");
-        return;
-    }
+    if (!config.redEnvelopeDetail) return;
 
-    // 立即尝试
     tryAddDetailButton(self, 0);
-
-    // 延迟重试：等红包数据异步加载
-    __weak id weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddDetailButton(weakSelf, 1);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddDetailButton(weakSelf, 2);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddDetailButton(weakSelf, 3);
-    });
 }
 
 static void replaced_OnWCToHongbaoCommonResponse2(id self, SEL _cmd, id res, id req) {
@@ -687,14 +671,26 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
         }
     }
 
-    Class StoryVCClass = objc_getClass("BaseMsgContentViewController");
+    // 仿锤子助手：hook viewDidLoad 在红包详情VC
+    Class StoryVCClass = objc_getClass("WCRedEnvelopesStoryViewController");
+    if (!StoryVCClass) StoryVCClass = objc_getClass("WCRedEnvelopesRedEnvelopesDetailViewController");
     if (StoryVCClass) {
-        IMP imp4 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewWillAppear:")
+        IMP imp4 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewDidLoad")
                                         inClass:StoryVCClass
-                                        withIMP:(IMP)replaced_StoryViewWillAppear];
+                                        withIMP:(IMP)replaced_StoryViewDidLoad];
         if (imp4) {
-            orig_StoryViewWillAppear = imp4;
-            reLog(@"[+] BaseMsgContentViewController viewWillAppear: hooked");
+            orig_StoryViewDidLoad = imp4;
+            reLog([NSString stringWithFormat:@"[+] %@ viewDidLoad hooked", NSStringFromClass(StoryVCClass)]);
+        }
+    }
+
+    Class DetailVCClass = objc_getClass("WCRedEnvelopesRedEnvelopesDetailViewController");
+    if (DetailVCClass && DetailVCClass != StoryVCClass) {
+        IMP imp5 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewDidLoad")
+                                        inClass:DetailVCClass
+                                        withIMP:(IMP)replaced_StoryViewDidLoad];
+        if (imp5) {
+            reLog(@"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
         }
     }
 
