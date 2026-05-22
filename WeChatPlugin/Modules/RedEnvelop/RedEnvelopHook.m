@@ -489,6 +489,7 @@ static void handleHongbaoResponse(id res, id req) {
 static IMP orig_OnWCToHongbaoCommonResponse2 = NULL;
 static IMP orig_OnWCToHongbaoCommonResponse3 = NULL;
 static IMP orig_BaseMsgViewWillAppear = NULL;
+static IMP orig_DetailViewDidLoad = NULL;
 
 @interface REDetailButtonHandler : NSObject
 - (void)onDetailTap:(UIButton *)sender;
@@ -582,6 +583,32 @@ static void tryAddDetailButton(id self, int retryCount) {
     } @catch (NSException *e) {
         reLog([NSString stringWithFormat:@"[DETAIL] 异常: %@ - %@", e.name, e.reason]);
     }
+}
+
+static void replaced_DetailViewDidLoad(id self, SEL _cmd) {
+    reLog([NSString stringWithFormat:@"[DETAIL] DetailVC viewDidLoad: %@", NSStringFromClass(object_getClass(self))]);
+
+    if (orig_DetailViewDidLoad) {
+        ((void (*)(id, SEL))orig_DetailViewDidLoad)(self, _cmd);
+    }
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.redEnvelopeDetail) return;
+
+    // 立即尝试用 g_pendingDetailInfo 添加按钮
+    tryAddPendingButton(self);
+
+    // 延迟重试
+    __weak id weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddPendingButton(weakSelf);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddPendingButton(weakSelf);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddPendingButton(weakSelf);
+    });
 }
 
 static void tryAddPendingButton(id self) {
@@ -726,14 +753,14 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
         }
     }
 
-    Class BaseMsgClass = objc_getClass("BaseMsgContentViewController");
-    if (BaseMsgClass) {
-        IMP imp6 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewWillAppear:")
-                                        inClass:BaseMsgClass
-                                        withIMP:(IMP)replaced_BaseMsgViewWillAppear];
-        if (imp6) {
-            orig_BaseMsgViewWillAppear = imp6;
-            reLog(@"[+] BaseMsgContentViewController viewWillAppear: hooked");
+    Class DetailVCClass = objc_getClass("WCRedEnvelopesRedEnvelopesDetailViewController");
+    if (DetailVCClass) {
+        IMP imp4 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewDidLoad")
+                                        inClass:DetailVCClass
+                                        withIMP:(IMP)replaced_DetailViewDidLoad];
+        if (imp4) {
+            orig_DetailViewDidLoad = imp4;
+            reLog(@"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
         }
     }
 
