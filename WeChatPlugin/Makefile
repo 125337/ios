@@ -40,6 +40,7 @@ MioHelper_FILES = Tweak.m \
 	Settings/Controllers/SettingController.m \
 	Settings/Controllers/SettingGeneralFunctionController.m \
 	Settings/Controllers/SettingMessageTimeController.m \
+	Settings/Controllers/SettingRevokeController.m \
 	Settings/Controllers/SettingLayoutFunctionController.m \
 	Settings/Controllers/SettingAssistFunctionController.m \
 	Settings/Controllers/SettingUIBeautifyController.m \

@@ -39,13 +39,14 @@
     UIView *group = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
 
-    cy = [self addSwitchRowInGroup:group
-                              title:@"启用消息防撤回"
-                               desc:nil
-                                key:@"PreventRecall"
-                               isOn:config.preventRecall
-                                 cy:cy
-                              width:w];
+    NSString *revokeStatus = config.preventRecall ? @"已开启" : @"已关闭";
+    cy = [self addNavRowInGroup:group
+                           title:@"消息防撤回"
+                        subtitle:revokeStatus
+                             tag:400
+                          action:@selector(onRevokeSettingTap)
+                              cy:cy
+                           width:w];
 
     cy = [self addSeparatorInGroup:group cy:cy width:w];
 
@@ -99,6 +100,11 @@
 
 - (void)onMessageTimeSettingTap {
     SettingMessageTimeController *vc = [[SettingMessageTimeController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
+- (void)onRevokeSettingTap {
+    SettingRevokeController *vc = [[SettingRevokeController alloc] init];
     [self.navigationController pushViewController:vc animated:YES];
 }
 

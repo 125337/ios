@@ -514,6 +514,7 @@ static NSString *configPropertyForKey(NSString *key) {
         else if ([key isEqualToString:@"CustomText"]) config.customText = value;
         else if ([key isEqualToString:@"InterceptNotifyTemplate"]) config.interceptNotifyTemplate = value ?: kDefaultInterceptTemplate;
         else if ([key isEqualToString:@"CustomNotifyFormat"]) config.customNotifyFormat = value ?: kDefaultCustomNotifyFormat;
+        else if ([key isEqualToString:@"RevokeTemplate"]) config.revokeTemplate = value ?: kDefaultRevokeTemplate;
         else if ([key isEqualToString:@"NameColorHex"]) config.nameColorHex = value ?: kDefaultNameColor;
         else if ([key isEqualToString:@"TimeColorHex"]) config.timeColorHex = value ?: kDefaultTimeColor;
         else if ([key isEqualToString:@"ContentColorHex"]) config.contentColorHex = value ?: kDefaultContentColor;

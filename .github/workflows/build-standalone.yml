@@ -68,6 +68,7 @@ jobs:
           WeChatPlugin/Settings/Controllers/SettingController.m \
           WeChatPlugin/Settings/Controllers/SettingGeneralFunctionController.m \
           WeChatPlugin/Settings/Controllers/SettingMessageTimeController.m \
+          WeChatPlugin/Settings/Controllers/SettingRevokeController.m \
           WeChatPlugin/Settings/Controllers/SettingLayoutFunctionController.m \
           WeChatPlugin/Settings/Controllers/SettingAssistFunctionController.m \
           WeChatPlugin/Settings/Controllers/SettingUIBeautifyController.m \
