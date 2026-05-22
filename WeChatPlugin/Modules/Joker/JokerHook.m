@@ -308,11 +308,13 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
                 jokerLog(@"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
             } else {
                 SEL actionSEL = sel_registerName("mioTextJoker");
+                // 图标名测试：先试锤子的 icons_filled_voice（已验证可用），再 fallback expression
+                NSString *iconName = @"icons_filled_voice";
                 id mmItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
-                    [mmItemClass alloc], initSel, @"修改文字", @"expression", actionSEL);
+                    [mmItemClass alloc], initSel, @"修改文字", iconName, actionSEL);
                 if (mmItem) {
                     [newItems addObject:mmItem];
-                    jokerLog(@"✅ MMMenuItem created: 修改文字 / expression / mioTextJoker (SEL)");
+                    jokerLog([NSString stringWithFormat:@"✅ MMMenuItem: 修改文字 / %@ / mioTextJoker (SEL)", iconName]);
                 }
             }
         } @catch (NSException *e) {
