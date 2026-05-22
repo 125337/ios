@@ -506,95 +506,40 @@ static IMP orig_DetailViewDidLoad = NULL;
 
 static REDetailButtonHandler *_detailHandler = nil;
 
-// 仿 Mikoto：在 viewDidLoad 中直接从 VC ivar 读取数据并添加按钮
+// 仿 Mikoto：只在 DetailVC.viewDidLoad 中注入按钮，StoryVC 不处理
 static void addDetailButtonIfNeeded(id self) {
     @try {
-        Class vcClass = object_getClass(self);
-        reLog([NSString stringWithFormat:@"[DETAIL] ====== enter addDetailButtonIfNeeded self=<%@:%p> ======",
-               NSStringFromClass(vcClass), self]);
-
-        // Step 1: 读取 detailInfo
         id detailInfo = nil;
         id mData = [self valueForKey:@"m_data"];
-        reLog([NSString stringWithFormat:@"[DETAIL] step1 m_data=%@", mData ? [NSString stringWithFormat:@"<%@:%p>", NSStringFromClass([mData class]), mData] : @"nil"]);
         if (mData) {
             detailInfo = [mData valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
-            reLog([NSString stringWithFormat:@"[DETAIL] step1 m_data.m_oWCRedEnvelopesDetailInfo=%@",
-                   detailInfo ? [NSString stringWithFormat:@"<%@:%p>", NSStringFromClass([detailInfo class]), detailInfo] : @"nil"]);
         }
         if (!detailInfo) {
             detailInfo = [self valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
-            reLog([NSString stringWithFormat:@"[DETAIL] step1 self.m_oWCRedEnvelopesDetailInfo=%@",
-                   detailInfo ? [NSString stringWithFormat:@"<%@:%p>", NSStringFromClass([detailInfo class]), detailInfo] : @"nil"]);
         }
         if (!detailInfo) {
-            reLog([NSString stringWithFormat:@"[DETAIL] step1 FAIL: no detailInfo on %@, dump ivars:", NSStringFromClass(vcClass)]);
-            unsigned int count = 0;
-            Ivar *ivars = class_copyIvarList([self class], &count);
-            for (unsigned int i = 0; i < count && i < 20; i++) {
-                const char *name = ivar_getName(ivars[i]);
-                const char *type = ivar_getTypeEncoding(ivars[i]);
-                id val = nil;
-                @try { val = [self valueForKey:@(name)]; } @catch (NSException *e) {}
-                reLog([NSString stringWithFormat:@"[DETAIL]   %s %s = %@", name, type,
-                       val ? [NSString stringWithFormat:@"<%@: %p>", NSStringFromClass([val class]), val] : @"nil"]);
-            }
-            free(ivars);
-            reLog(@"[DETAIL] ====== exit(no detailInfo) ======");
+            reLog([NSString stringWithFormat:@"[DETAIL] no detailInfo on %@", NSStringFromClass(object_getClass(self))]);
             return;
         }
-        reLog([NSString stringWithFormat:@"[DETAIL] step1 OK detailInfo=<%@:%p>", NSStringFromClass([detailInfo class]), detailInfo]);
 
-        // Step 2: 获取 handler
-        if (!_detailHandler) {
-            _detailHandler = [[REDetailButtonHandler alloc] init];
-            reLog([NSString stringWithFormat:@"[DETAIL] step2 handler created: %p", _detailHandler]);
-        }
+        if (!_detailHandler) _detailHandler = [[REDetailButtonHandler alloc] init];
 
-        // Step 3: 获取 self.view
         UIView *selfView = [self valueForKey:@"view"];
-        if (!selfView) {
-            reLog(@"[DETAIL] step3 FAIL: self.view is nil");
-            reLog(@"[DETAIL] ====== exit(no view) ======");
-            return;
-        }
-        reLog([NSString stringWithFormat:@"[DETAIL] step3 selfView=<%@:%p> frame=%@ bounds=%@ window=%@ superview=<%@:%p> alpha=%.2f hidden=%d clipsToBounds=%d",
-               NSStringFromClass([selfView class]), selfView,
-               NSStringFromCGRect(selfView.frame), NSStringFromCGRect(selfView.bounds),
-               selfView.window ? [NSString stringWithFormat:@"<%@:%p>", NSStringFromClass([selfView.window class]), selfView.window] : @"nil",
-               selfView.superview ? NSStringFromClass([selfView.superview class]) : @"nil", selfView.superview,
-               selfView.alpha, selfView.hidden, selfView.clipsToBounds]);
+        if (!selfView) return;
 
-        // Step 4: 检查是否已有按钮
-        UIButton *existBtn = (UIButton *)[selfView viewWithTag:99992];
-        if (existBtn) {
-            reLog([NSString stringWithFormat:@"[DETAIL] step4 SKIP: button already exists tag=99992 frame=%@ hidden=%d alpha=%.2f window=%@",
-                   NSStringFromCGRect(existBtn.frame), existBtn.hidden, existBtn.alpha,
-                   existBtn.window ? @"YES" : @"nil"]);
-            reLog(@"[DETAIL] ====== exit(already exists) ======");
-            return;
-        }
-        reLog(@"[DETAIL] step4 no existing button with tag 99992");
+        UIButton *floatBtn = (UIButton *)[selfView viewWithTag:99992];
+        if (floatBtn) return;
 
-        // Step 5: 计算按钮位置
         CGFloat viewW = selfView.bounds.size.width;
         CGFloat viewH = selfView.bounds.size.height;
-        BOOL boundsZero = (viewW <= 0 || viewH <= 0);
-        if (boundsZero) {
+        if (viewW <= 0 || viewH <= 0) {
             CGSize screen = [UIScreen mainScreen].bounds.size;
             viewW = screen.width;
             viewH = screen.height;
-            reLog([NSString stringWithFormat:@"[DETAIL] step5 bounds ZERO, fallback to screen: %.0fx%.0f", viewW, viewH]);
         }
-        CGFloat btnX = viewW - 50;
-        CGFloat btnY = viewH / 2 - 22;
-        reLog([NSString stringWithFormat:@"[DETAIL] step5 computed frame: (%.0f, %.0f, 44, 44) [boundsZero=%d viewBounds=%@]",
-               btnX, btnY, boundsZero, NSStringFromCGRect(selfView.bounds)]);
-
-        // Step 6: 创建按钮
-        UIButton *floatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+        floatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
         floatBtn.tag = 99992;
-        floatBtn.frame = CGRectMake(btnX, btnY, 44, 44);
+        floatBtn.frame = CGRectMake(viewW - 50, viewH / 2 - 22, 44, 44);
         floatBtn.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
         floatBtn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
         floatBtn.layer.cornerRadius = 22;
@@ -604,39 +549,12 @@ static void addDetailButtonIfNeeded(id self) {
         [floatBtn setTitle:@"详情" forState:UIControlStateNormal];
         [floatBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
         [floatBtn addTarget:_detailHandler action:@selector(onDetailTap:) forControlEvents:UIControlEventTouchUpInside];
-        reLog(@"[DETAIL] step6 button created");
-
-        // Step 7: 添加到视图
-        reLog([NSString stringWithFormat:@"[DETAIL] step7 before addSubview: subviews.count=%lu", (unsigned long)selfView.subviews.count]);
         [selfView addSubview:floatBtn];
         [selfView bringSubviewToFront:floatBtn];
         objc_setAssociatedObject(floatBtn, "detailInfo", detailInfo, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-        // Step 8: 验证按钮状态
-        reLog([NSString stringWithFormat:@"[DETAIL] step8 verify: btn.frame=%@ btn.bounds=%@ btn.superview=%@ btn.window=%@ btn.hidden=%d btn.alpha=%.2f btn.userInteractionEnabled=%d btn.opaque=%d",
-               NSStringFromCGRect(floatBtn.frame), NSStringFromCGRect(floatBtn.bounds),
-               floatBtn.superview ? [NSString stringWithFormat:@"<%@:%p>", NSStringFromClass([floatBtn.superview class]), floatBtn.superview] : @"nil",
-               floatBtn.window ? [NSString stringWithFormat:@"<%@:%p>", NSStringFromClass([floatBtn.window class]), floatBtn.window] : @"nil",
-               floatBtn.hidden, floatBtn.alpha, floatBtn.userInteractionEnabled, floatBtn.opaque]);
-
-        // Step 9: 打印视图层级（按钮向上溯源）
-        UIView *v = floatBtn;
-        int depth = 0;
-        NSMutableString *chain = [NSMutableString string];
-        while (v && depth < 10) {
-            NSString *indent = [@"" stringByPaddingToLength:depth * 2 withString:@" " startingAtIndex:0];
-            [chain appendFormat:@"%@[%d] <%@:%p> frame=%@ hidden=%d alpha=%.2f userInteraction=%d\n",
-             indent, depth, NSStringFromClass([v class]), v,
-             NSStringFromCGRect(v.frame), v.hidden, v.alpha, v.userInteractionEnabled];
-            v = v.superview;
-            depth++;
-        }
-        reLog([NSString stringWithFormat:@"[DETAIL] step9 view chain:\n%@", chain]);
-
-        reLog([NSString stringWithFormat:@"[DETAIL] ====== SUCCESS: button added to %@ ======", NSStringFromClass(vcClass)]);
+        reLog(@"[DETAIL] 页面按钮已添加");
     } @catch (NSException *e) {
-        reLog([NSString stringWithFormat:@"[DETAIL] EXCEPTION: %@ - %@\n%@", e.name, e.reason,
-               [e.callStackSymbols componentsJoinedByString:@"\n"]]);
+        reLog([NSString stringWithFormat:@"[DETAIL] 异常: %@ - %@", e.name, e.reason]);
     }
 }
 
