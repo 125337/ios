@@ -500,7 +500,7 @@ static IMP orig_StoryViewWillAppear = NULL;
         (long)totalNum, (long)recNum, (long)remainNum];
 
     NSString *fullMsg = [NSString stringWithFormat:@"红包详情\n\n%@", msg];
-    [WeChatAlertHelper showTipAlert:fullMsg];
+    [WeChatAlertHelper showTipAlert:fullMsg buttonTitle:@"好的"];
 }
 @end
 
