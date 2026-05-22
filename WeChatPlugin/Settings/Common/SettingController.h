@@ -7,9 +7,6 @@
 @interface SettingGeneralFunctionController : SettingCategoryController
 @end
 
-@interface SettingMessageTimeController : SettingCategoryController
-@end
-
 @interface SettingLayoutFunctionController : SettingCategoryController
 @end
 
