@@ -308,12 +308,12 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
                 jokerLog(@"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
             } else {
                 SEL actionSEL = sel_registerName("mioTextJoker");
-                // WeChat 8.0.60 编辑类图标候选（命名规则：icons_{filled|outlined}_{name}）
-                id mmItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
-                    [mmItemClass alloc], initSel, @"修改文字", @"icons_filled_edit", actionSEL);
+                // 锤子传 cf_expression C字符串给 svgName: — 可能参数类型是 const char* 而非 NSString*
+                id mmItem = ((id(*)(id, SEL, id, const char *, SEL))objc_msgSend)(
+                    [mmItemClass alloc], initSel, @"修改文字", "expression", actionSEL);
                 if (mmItem) {
                     [newItems addObject:mmItem];
-                    jokerLog(@"✅ MMMenuItem: 修改文字 / icons_filled_edit");
+                    jokerLog(@"✅ MMMenuItem: 修改文字 / expression (const char *)");
                 }
             }
         } @catch (NSException *e) {
