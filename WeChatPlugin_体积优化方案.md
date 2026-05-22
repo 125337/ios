@@ -76,7 +76,7 @@ void wp_shared_log(NSString *tag, NSString *content);
 **优化**: 
 1. 所有 `scanXXX` / `installXXX` 函数仅在首次运行时执行一次且不产生实际效果 → **直接删除，或放到 `#ifdef DEBUG` 块**
 2. `tryTransferDetection()` 不可用 → 删除
-3. ViewController 用简单的 UIAlertController 替代即可
+3. ViewController 中的弹窗改用 `WeChatAlertHelper` 即可
 4. **预期减少: 700+ 行**
 
 ---
@@ -105,19 +105,51 @@ if (v.length > 0) _notifyFormat = v;
 
 ---
 
-### 2.4 WPAlert.m — 完全冗余的自定义弹窗（292行）
+### 2.4 弹窗系统三套并存 → 统一用 WCUIAlertView（可减 ~305行 + 调用侧精简）
 
-**问题**: 从零手写了一个完整的 UIAlertController 替代品（带 Auto Layout），而系统内置的 `UIAlertController` 已经完全够用。项目中同时还有 `WeChatAlertHelper` 复用微信内置的 `WCUIAlertView`。
+**问题**: 项目同时存在 3 套弹窗系统，但实际调用量极不均衡:
 
-**存在 3 套弹窗系统**:
-1. `UIAlertController` (系统原生, 0行额外代码)
-2. `WPAlert` (自定义, 292行) 
-3. `WeChatAlertHelper` (复用微信的WCUIAlertView, 200行)
+| 弹窗系统 | 实现方式 | 自身代码 | 实际调用次数 | 位置 |
+|---------|---------|---------|-------------|------|
+| `WPAlert` | 手写 Auto Layout, 292行 | **305行** (含.h) | **1 处** | RedEnvelopHook (红包详情) |
+| `UIAlertController` | 系统原生, 0行 | 0行 | **8 处** | FriendDetection(4)、SessionBox(2)、BackupVC(1)、MessageTime(1) |
+| `WeChatAlertHelper` | 复用微信 `WCUIAlertView`, 200行 | 200行 | **2 处** | JokerHook、SettingGeneralFunction |
 
-**优化**: 
-- 删除 WPAlert.m/h，全部改用 `UIAlertController`
-- 需要微信风格弹窗时用 `WeChatAlertHelper`
-- 预期减少: 292 + 13(头文件) = **305 行**
+**分析**: `WPAlert` 292 行代码只被 1 个地方调用 — 典型的"为一行调用写了一套框架"。
+
+**优化方案 — 全部统一到 WeChatAlertHelper (WCUIAlertView)**:
+
+`WeChatAlertHelper` 已支持的接口:
+- `showTipAlert:` — 纯提示弹窗
+- `showTipAlert:buttonTitle:` — 自定义按钮文字
+- `showInputAlertWithInitialText:target:onConfirm:` — 带输入框+回调
+
+各调用点替换可行性:
+
+| 原调用 | 原弹窗 | 替换为 | 可行性 |
+|--------|--------|--------|--------|
+| FriendDetection (4处提示弹窗) | UIAlertController | `showTipAlert:` | ✅ |
+| WPBackupVC (确认重置) | UIAlertController | `showTipAlert:` | ✅ |
+| WPSessionBoxHook (备注编辑) | UIAlertController | `showInputAlertWithInitialText:...` | ✅ |
+| WPSessionBoxController (提示) | UIAlertController | `showTipAlert:` | ✅ |
+| RedEnvelopHook (红包详情) | WPAlert | `showTipAlert:message:` | ✅ |
+| JokerHook (输入弹窗) | WeChatAlertHelper | — | ✅ 已统一 |
+| SettingGeneralFunction | WeChatAlertHelper | — | ✅ 已统一 |
+| SettingMessageTime (ActionSheet) | UIAlertController | **保留** | ⚠️ WCUIAlertView 不支持 ActionSheet 多选，保留 1 处系统调用 |
+
+**最终架构**:
+```
+弹窗需求           → 实现
+──────────────────────────────
+简单提示           → WeChatAlertHelper (WCUIAlertView)
+带输入框弹窗       → WeChatAlertHelper (WCUIAlertView)
+ActionSheet 选择   → UIAlertController (系统, 仅 1 处)
+```
+
+**优化**:
+- 删除 `WPAlert.m` + `WPAlert.h` → **-305 行**
+- 8 处 `UIAlertController` 调用 → 改为 `WeChatAlertHelper`，代码更简洁统一
+- 预期减少: **305 行 (WPAlert 删除) + 调用侧代码精简**
 
 ---
 
@@ -210,6 +242,7 @@ MioHelper_LDFLAGS += -dead_strip -Wl,-S -Wl,-x -Wl,-dead_strip_dylibs
 
 | 问题 | 位置 | 影响 |
 |------|------|------|
+| 3 套弹窗系统并存 (WPAlert/UIAlertController/WeChatAlertHelper) | 全局 | 详见 2.4，WPAlert 只被调用 1 次 |
 | `substrate.h` + `CydiaSubstrate.m` | libs/ | 与 CydiaSubstrate.framework 重复, MessageTimeHook 使用 MSHookMessageEx |
 | HookEngine 与 CydiaSubstrate 混用 | 全局 | 两套 hook 机制并存，用一套即可 |
 | `#import <UIKit/UIKit.h>` 在每个文件 | 全局 | 用预编译头(.pch)统一引入 |
@@ -227,7 +260,7 @@ MioHelper_LDFLAGS += -dead_strip -Wl,-S -Wl,-x -Wl,-dead_strip_dylibs
 | 1. 统一日志模块 | ~350行(重复) | 30行(1个地方) | 320行 | ~8KB |
 | 2. FriendDetection 精简 | 1022行 | 250行 | 772行 | ~18KB |
 | 3. PluginConfig 宏化 | 441行 | 250行 | 191行 | ~5KB |
-| 4. 删除 WPAlert | 292行 | 0行 | 292行 | ~7KB |
+| 4. 统一弹窗(删WPAlert+迁移UIAlertController→WeChatAlertHelper) | 305行(自身)+8处调用 | 保留WeChatAlertHelper | 305行(WPAlert) + 调用侧精简 | ~7KB+ |
 | 5. 精简 WPBorderLayer | 603行 | 100行 | 503行 | ~12KB |
 | 6. 合并 Settings 控制器 | 1194行 | 500行 | 694行 | ~16KB |
 | 7. 精简 SessionBoxHook | 718行 | 400行 | 318行 | ~8KB |
@@ -248,7 +281,7 @@ MioHelper_LDFLAGS += -dead_strip -Wl,-S -Wl,-x -Wl,-dead_strip_dylibs
 
 ### P1 (本周完成)
 
-4. **删除 WPAlert, 全部用 UIAlertController** — 消除一整套弹窗系统
+4. **统一弹窗系统: 删除 WPAlert，UIAlertController 调用全部迁移到 WeChatAlertHelper** — 消除一整套弹窗系统，全局统一用 WCUIAlertView
 5. **PluginConfig 用宏重构** — 减少一半代码
 6. **合并空壳 Settings 控制器**
 7. **精简 WPBorderLayer**
@@ -329,5 +362,5 @@ after-install::
 1. **编译优化** — 马上添加 -Oz -flto -dead_strip
 2. **消除重复** — 日志模块统一, 宏化配置
 3. **删除死代码** — 类扫描、策略探测、不可用方案
-4. **复用而非重造** — 用 UIAlertController 替代自定义弹窗, 用微信内置类替代自定义 View
+4. **复用而非重造** — 统一用 WeChatAlertHelper (WCUIAlertView) 处理弹窗，复用微信内置类替代自定义 View
 5. **减少文件数** — 合并空壳控制器, 降低元数据开销

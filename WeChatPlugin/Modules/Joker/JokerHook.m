@@ -308,12 +308,13 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
                 jokerLog(@"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
             } else {
                 SEL actionSEL = sel_registerName("mioTextJoker");
-                // 锤子传 cf_expression C字符串给 svgName: — 可能参数类型是 const char* 而非 NSString*
-                id mmItem = ((id(*)(id, SEL, id, const char *, SEL))objc_msgSend)(
-                    [mmItemClass alloc], initSel, @"修改文字", "expression", actionSEL);
-                if (mmItem) {
-                    [newItems addObject:mmItem];
-                    jokerLog(@"✅ MMMenuItem: 修改文字 / expression (const char *)");
+    // 运行时构造 NSString，避免编译期字面量 intern 可能的问题
+    NSString *iconName = [NSString stringWithUTF8String:"expression"];
+    id mmItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
+        [mmItemClass alloc], initSel, @"修改文字", iconName, actionSEL);
+    if (mmItem) {
+        [newItems addObject:mmItem];
+        jokerLog([NSString stringWithFormat:@"✅ MMMenuItem: 修改文字 / %@", iconName]);
                 }
             }
         } @catch (NSException *e) {
