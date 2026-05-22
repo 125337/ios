@@ -1,8 +1,8 @@
 #import "../Common/SettingController.h"
+#import "SettingMessageTimeController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/WPAlert.h"
 #import "../../Core/WeChatAlertHelper.h"
-#import "../../Modules/MessageTime/MessageTimeFormatEditorVC.h"
 #import <objc/runtime.h>
 
 @implementation SettingGeneralFunctionController
@@ -78,38 +78,14 @@
     UIView *timeGroup = [self addTableGroupAtY:y width:w];
     CGFloat timeY = 0;
 
-    timeY = [self addMasterSwitchRowInGroup:timeGroup
-                                        title:@"显示消息时间"
-                                          key:@"ShowMessageTime"
-                                         isOn:config.showMessageTime
-                                   subBuilder:^(UIView *expand, CGFloat *ecy) {
-        *ecy = [self addNavRowInGroup:expand title:@"显示位置" subtitle:[self positionName:config.messageTimePosition] tag:100 action:@selector(onMessageTimePositionTap) cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"字体大小" key:@"MessageTimeFontSize" value:[NSString stringWithFormat:@"%.1f", config.messageTimeFontSize] hint:@"7.0" cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSwitchRowInGroup:expand title:@"粗体字体" desc:nil key:@"MessageTimeBoldFont" isOn:config.messageTimeBoldFont cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        // 自定义格式入口（复刻微信优化 CSTimeFormatEditor）
-        NSString *customFmtSub = config.messageTimeCustomFormat.length > 0
-            ? config.messageTimeCustomFormat
-            : @"{HH}:{mm}:{ss}";
-        *ecy = [self addNavRowInGroup:expand title:@"自定义格式" subtitle:customFmtSub tag:200 action:@selector(onMessageTimeCustomFormatTap) cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        // 发送方/接收方 × 浅色/深色 四色独立 (照搬微信优化)
-        *ecy = [self addColorRowInGroup:expand title:@"发送方颜色" key:@"senderTextColorHex" value:config.senderTextColorHex cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"发送方颜色(深色)" key:@"senderTextColorDarkHex" value:config.senderTextColorDarkHex cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"接收方颜色" key:@"receiverTextColorHex" value:config.receiverTextColorHex cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"接收方颜色(深色)" key:@"receiverTextColorDarkHex" value:config.receiverTextColorDarkHex cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"水平偏移" key:@"MessageTimeOffsetX" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetX] hint:@"0" cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"垂直偏移" key:@"MessageTimeOffsetY" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetY] hint:@"0" cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"气泡扩展宽度" key:@"MessageTimeBubbleExtWidth" value:[NSString stringWithFormat:@"%.1f", config.messageTimeBubbleExtWidth] hint:@"0" cy:*ecy width:w];
-    } cy:timeY width:w];
+    NSString *timeStatus = config.showMessageTime ? @"已开启" : @"已关闭";
+    timeY = [self addNavRowInGroup:timeGroup
+                             title:@"显示消息时间"
+                          subtitle:timeStatus
+                               tag:300
+                            action:@selector(onMessageTimeSettingTap)
+                                cy:timeY
+                             width:w];
 
     timeY = [self addSeparatorInGroup:timeGroup cy:timeY width:w];
     timeY = [self addSwitchRowInGroup:timeGroup
@@ -126,69 +102,9 @@
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
 
-- (NSString *)positionName:(NSInteger)position {
-    NSArray *names = @[
-        @"头像上方", @"头像下方",
-        @"消息旁边(远离头像)", @"消息下方(远离头像)",
-        @"消息下方(靠近头像)", @"消息上方(远离头像)",
-        @"消息上方(靠近头像)", @"消息旁边(=气泡外)"
-    ];
-    if (position >= 0 && position < (NSInteger)names.count) {
-        return names[position];
-    }
-    return @"头像下方";
-}
-
-- (void)onMessageTimePositionTap {
-    NSArray *positionNames = @[
-        @"头像上方", @"头像下方",
-        @"消息旁边(远离头像)", @"消息下方(远离头像)",
-        @"消息下方(靠近头像)", @"消息上方(远离头像)",
-        @"消息上方(靠近头像)", @"消息旁边(=气泡外)"
-    ];
-
-    PluginConfig *config = [PluginConfig shared];
-
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"请选择时间标签的显示位置"
-                                                                  message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-
-    for (NSInteger i = 0; i < (NSInteger)positionNames.count; i++) {
-        NSString *title = positionNames[i];
-        if (i == config.messageTimePosition) {
-            title = [NSString stringWithFormat:@"✓ %@", title];
-        }
-        [alert addAction:[UIAlertAction actionWithTitle:title
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *action) {
-            config.messageTimePosition = i;
-            [config save];
-            [self buildUI];
-        }]];
-    }
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-
-    [self presentViewController:alert animated:YES completion:nil];
-}
-
-- (void)onMessageTimeCustomFormatTap {
-    MessageTimeFormatEditorVC *editor = [[MessageTimeFormatEditorVC alloc] init];
-    editor.initialFormat = [PluginConfig shared].messageTimeCustomFormat;
-    editor.saveBlock = ^(NSString *newFormat) {
-        PluginConfig *cfg = [PluginConfig shared];
-        cfg.messageTimeCustomFormat = newFormat;
-        [cfg save];
-        [self buildUI];
-    };
-    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
-    nav.modalPresentationStyle = UIModalPresentationPageSheet;
-    [self presentViewController:nav animated:YES completion:nil];
+- (void)onMessageTimeSettingTap {
+    SettingMessageTimeController *vc = [[SettingMessageTimeController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 @end
