@@ -314,7 +314,13 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
                         [mmItemClass alloc], altInitSel, @"修改", NSSelectorFromString(@"mioTextJoker"));
                 }
             }
-            if (mmItem) { [newItems addObject:mmItem]; }
+            // 兜底：8.0.60 可能 iconName init 参数不生效，补设 KVC
+            if (mmItem) {
+                @try { [mmItem setValue:@"expression" forKey:@"m_nsImageName"]; } @catch (NSException *e) {}
+                @try { [mmItem setValue:@"expression" forKey:@"m_nsIconName"]; } @catch (NSException *e) {}
+                @try { [mmItem setValue:@"expression" forKey:@"iconName"]; } @catch (NSException *e) {}
+                [newItems addObject:mmItem];
+            }
         } @catch (NSException *e) {}
     }
     return newItems;
@@ -345,7 +351,13 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
                         [mmItemClass alloc], altInitSel, @"修改", NSSelectorFromString(@"mioTransferJoker"));
                 }
             }
-            if (mmItem) { [newItems addObject:mmItem]; }
+            // 兜底：8.0.60 可能 iconName init 参数不生效，补设 KVC
+            if (mmItem) {
+                @try { [mmItem setValue:@"expression" forKey:@"m_nsImageName"]; } @catch (NSException *e) {}
+                @try { [mmItem setValue:@"expression" forKey:@"m_nsIconName"]; } @catch (NSException *e) {}
+                @try { [mmItem setValue:@"expression" forKey:@"iconName"]; } @catch (NSException *e) {}
+                [newItems addObject:mmItem];
+            }
         } @catch (NSException *e) {}
     }
     return newItems;
