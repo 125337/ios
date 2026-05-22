@@ -507,24 +507,36 @@ static IMP orig_StoryViewWillAppear = NULL;
 static REDetailButtonHandler *_detailHandler = nil;
 
 static void replaced_StoryViewWillAppear(id self, SEL _cmd, BOOL animated) {
+    reLog(@"[DETAIL] viewWillAppear called on %@", NSStringFromClass(object_getClass(self)));
+
     if (orig_StoryViewWillAppear) {
         ((void (*)(id, SEL, BOOL))orig_StoryViewWillAppear)(self, _cmd, animated);
     }
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.redEnvelopeDetail) return;
+    if (!config.redEnvelopeDetail) {
+        reLog(@"[DETAIL] redEnvelopeDetail disabled, skip");
+        return;
+    }
 
     @try {
         id detailInfo = nil;
         id controlData = [self valueForKey:@"m_data"];
         if (controlData) detailInfo = [controlData valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
         if (!detailInfo) detailInfo = [self valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
-        if (!detailInfo) return;
+        if (!detailInfo) {
+            reLog(@"[DETAIL] no detailInfo found, skip");
+            return;
+        }
+        reLog(@"[DETAIL] detailInfo found: %@", detailInfo);
 
         if (!_detailHandler) _detailHandler = [[REDetailButtonHandler alloc] init];
 
         UIView *selfView = [self valueForKey:@"view"];
-        if (!selfView) return;
+        if (!selfView) {
+            reLog(@"[DETAIL] selfView is nil, skip");
+            return;
+        }
 
         UIButton *floatBtn = (UIButton *)[selfView viewWithTag:99992];
         if (!floatBtn) {
