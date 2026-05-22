@@ -32,6 +32,26 @@ static IMP orig_TextCell_operationMenuItems = NULL;
 static IMP orig_TransferCell_operationMenuItems = NULL;
 static IMP orig_Wallet_updateBalanceEntryView = NULL;
 
+// ==================== 诊断：扫描微信内置菜单图标名 ====================
+static IMP orig_MMMenuItem_setIconName = NULL;
+static void hooked_MMMenuItem_setIconName(id self, SEL _cmd, id iconName) {
+    if (orig_MMMenuItem_setIconName) {
+        ((void(*)(id, SEL, id))orig_MMMenuItem_setIconName)(self, _cmd, iconName);
+    }
+    if (iconName && [iconName isKindOfClass:[NSString class]]) {
+        jokerLog([NSString stringWithFormat:@"[IconScan] %@", iconName]);
+    }
+}
+
+// fallback: hook initWithTitle:iconName:actionName:（如果 setIconName: 不存在）
+static IMP orig_MMMenuItem_initWithTitleIconNameActionName = NULL;
+static id hooked_MMMenuItem_initWithTitleIconNameActionName(id self, SEL _cmd, id title, id iconName, const char *actionName) {
+    if (iconName && [iconName isKindOfClass:[NSString class]]) {
+        jokerLog([NSString stringWithFormat:@"[IconScan-init] %@", iconName]);
+    }
+    return ((id(*)(id, SEL, id, id, const char *))orig_MMMenuItem_initWithTitleIconNameActionName)(self, _cmd, title, iconName, actionName);
+}
+
 // 复用 NSNumberFormatter（验证数字用）
 static NSNumberFormatter *sharedNumberFormatter(void) {
     static NSNumberFormatter *fmt = nil;
@@ -621,6 +641,30 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
         }
     } else {
         jokerLog(@"[JokerHook] ⚠️ TimeoutNumber NOT found");
+    }
+
+    // ====== 诊断：扫描微信内置菜单图标名（临时，收集完删除） ======
+    Class mmItemClass = objc_getClass("MMMenuItem");
+    if (mmItemClass) {
+        SEL iconNameSel = NSSelectorFromString(@"setIconName:");
+        Method iconNameMethod = class_getInstanceMethod(mmItemClass, iconNameSel);
+        if (iconNameMethod) {
+            orig_MMMenuItem_setIconName = method_setImplementation(iconNameMethod, (IMP)hooked_MMMenuItem_setIconName);
+            jokerLog(@"[JokerHook] IconScan: MMMenuItem.setIconName: HOOKED ✅");
+        } else {
+            // fallback: hook initWithTitle:iconName:actionName:
+            jokerLog(@"[JokerHook] IconScan: setIconName: not found, trying initWithTitle:iconName:actionName:");
+            SEL initSel = NSSelectorFromString(@"initWithTitle:iconName:actionName:");
+            Method initMethod = class_getInstanceMethod(mmItemClass, initSel);
+            if (initMethod) {
+                orig_MMMenuItem_initWithTitleIconNameActionName = method_setImplementation(initMethod, (IMP)hooked_MMMenuItem_initWithTitleIconNameActionName);
+                jokerLog(@"[JokerHook] IconScan: initWithTitle:iconName:actionName: HOOKED ✅");
+            } else {
+                jokerLog(@"[JokerHook] IconScan: ❌ no hookable method found");
+            }
+        }
+    } else {
+        jokerLog(@"[JokerHook] IconScan: MMMenuItem class NOT found");
     }
 
     jokerLog(@"[JokerHook] install complete");
