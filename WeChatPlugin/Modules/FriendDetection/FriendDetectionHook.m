@@ -25,12 +25,6 @@
  * ============================================================================
  */
 
-else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-}
-
 #pragma mark - FriendDetectResult
 
 @interface MioFriendDetectResult : NSObject

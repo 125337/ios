@@ -4,13 +4,6 @@
 #import <objc/runtime.h>
 #import "../../Core/LogManager.h"
 
-__attribute__((unused))
-else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-}
-
 @implementation SettingRedEnvelopController
 
 - (void)viewDidLoad {

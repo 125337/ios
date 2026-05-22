@@ -6,13 +6,6 @@
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
 
-// ==================== 日志 ====================
-[fh seekToEndOfFile];
-        [fh writeData:[logLine dataUsingEncoding:NSUTF8StringEncoding]];
-        [fh closeFile];
-    } @catch (NSException *e) {}
-}
-
 // ==================== 原始IMP保存 ====================
 static IMP orig_TextCell_operationMenuItems = NULL;
 static IMP orig_TransferCell_operationMenuItems = NULL;
