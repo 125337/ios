@@ -250,6 +250,8 @@ static void processRedEnvelopMessage(id wrap) {
     [taskMgr addTaskWithParam:param delay:delay];
 }
 
+static NSDictionary *g_pendingDetailInfo = nil;
+
 static void handleHongbaoResponse(id res, id req) {
     PluginConfig *config = [PluginConfig shared];
     if (!config.autoRedEnvelop) return;
@@ -321,9 +323,9 @@ static void handleHongbaoResponse(id res, id req) {
                     @"m_lRecNum": @(recNumVal),
                     @"m_lRecAmount": receiveAmount ?: @(amount)
                 };
-                reLog(@"[DETAIL] 详情数据已保存: totalAmt=%ld totalNum=%ld recNum=%ld recAmt=%@",
+                reLog([NSString stringWithFormat:@"[DETAIL] 详情数据已保存: totalAmt=%ld totalNum=%ld recNum=%ld recAmt=%@",
                       (long)totalAmountVal, (long)totalNum, (long)recNumVal,
-                      receiveAmount ?: @(amount));
+                      receiveAmount ?: @(amount)]);
             } else if (receiveStatus == 2) {
                 reLog(@"[STAT] 红包已被领取");
             } else if (hbStatus == 4) {
@@ -487,7 +489,6 @@ static void handleHongbaoResponse(id res, id req) {
 static IMP orig_OnWCToHongbaoCommonResponse2 = NULL;
 static IMP orig_OnWCToHongbaoCommonResponse3 = NULL;
 static IMP orig_StoryViewDidLoad = NULL;
-static NSDictionary *g_pendingDetailInfo = nil;
 static IMP orig_BaseMsgViewWillAppear = NULL;
 
 @interface REDetailButtonHandler : NSObject
