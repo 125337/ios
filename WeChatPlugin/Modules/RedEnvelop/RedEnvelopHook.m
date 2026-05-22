@@ -473,8 +473,8 @@ static void handleHongbaoResponse(id res, id req) {
 
 static IMP orig_OnWCToHongbaoCommonResponse2 = NULL;
 static IMP orig_OnWCToHongbaoCommonResponse3 = NULL;
-static IMP orig_DetailViewDidLoad = NULL;
-static IMP orig_StoryViewDidLoad = NULL;
+static IMP orig_DetailViewWillAppear = NULL;
+static IMP orig_StoryViewWillAppear = NULL;
 
 @interface REDetailButtonHandler : NSObject
 - (void)onDetailTap:(UIButton *)sender;
@@ -641,9 +641,9 @@ static void addDetailButtonIfNeeded(id self) {
     }
 }
 
-static void replaced_DetailViewDidLoad(id self, SEL _cmd) {
-    if (orig_DetailViewDidLoad) {
-        ((void (*)(id, SEL))orig_DetailViewDidLoad)(self, _cmd);
+static void replaced_DetailViewWillAppear(id self, SEL _cmd, BOOL animated) {
+    if (orig_DetailViewWillAppear) {
+        ((void (*)(id, SEL, BOOL))orig_DetailViewWillAppear)(self, _cmd, animated);
     }
 
     PluginConfig *config = [PluginConfig shared];
@@ -652,9 +652,9 @@ static void replaced_DetailViewDidLoad(id self, SEL _cmd) {
     addDetailButtonIfNeeded(self);
 }
 
-static void replaced_StoryViewDidLoad(id self, SEL _cmd) {
-    if (orig_StoryViewDidLoad) {
-        ((void (*)(id, SEL))orig_StoryViewDidLoad)(self, _cmd);
+static void replaced_StoryViewWillAppear(id self, SEL _cmd, BOOL animated) {
+    if (orig_StoryViewWillAppear) {
+        ((void (*)(id, SEL, BOOL))orig_StoryViewWillAppear)(self, _cmd, animated);
     }
 
     PluginConfig *config = [PluginConfig shared];
@@ -754,23 +754,23 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
 
     Class DetailVCClass = objc_getClass("WCRedEnvelopesRedEnvelopesDetailViewController");
     if (DetailVCClass) {
-        IMP imp4 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewDidLoad")
+        IMP imp4 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewWillAppear:")
                                         inClass:DetailVCClass
-                                        withIMP:(IMP)replaced_DetailViewDidLoad];
+                                        withIMP:(IMP)replaced_DetailViewWillAppear];
         if (imp4) {
-            orig_DetailViewDidLoad = imp4;
-            reLog(@"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
+            orig_DetailViewWillAppear = imp4;
+            reLog(@"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewWillAppear: hooked");
         }
     }
 
     Class StoryVCClass = objc_getClass("WCRedEnvelopesStoryViewController");
     if (StoryVCClass) {
-        IMP imp5 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewDidLoad")
+        IMP imp5 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewWillAppear:")
                                         inClass:StoryVCClass
-                                        withIMP:(IMP)replaced_StoryViewDidLoad];
+                                        withIMP:(IMP)replaced_StoryViewWillAppear];
         if (imp5) {
-            orig_StoryViewDidLoad = imp5;
-            reLog(@"[+] WCRedEnvelopesStoryViewController viewDidLoad hooked");
+            orig_StoryViewWillAppear = imp5;
+            reLog(@"[+] WCRedEnvelopesStoryViewController viewWillAppear: hooked");
         }
     }
 
