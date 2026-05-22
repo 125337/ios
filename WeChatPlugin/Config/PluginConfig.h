@@ -74,6 +74,7 @@
 @property (nonatomic, copy) NSString *customText;
 @property (nonatomic, copy) NSString *interceptNotifyTemplate;
 @property (nonatomic, copy) NSString *customNotifyFormat;
+@property (nonatomic, copy) NSString *revokeTemplate;
 @property (nonatomic, copy) NSString *nameColorHex;
 @property (nonatomic, copy) NSString *timeColorHex;
 @property (nonatomic, copy) NSString *contentColorHex;
@@ -90,6 +91,7 @@
 - (UIColor *)timeColor;
 - (UIColor *)contentColor;
 - (NSString *)applyTemplate:(NSString *)tmpl time:(NSString *)time name:(NSString *)name content:(NSString *)content;
+- (NSString *)applyRevokeTemplate:(NSString *)tmpl name:(NSString *)name content:(NSString *)content createTime:(unsigned int)createTime;
 - (void)save;
 - (void)loadDefaults;
 - (void)resetAllConfig;

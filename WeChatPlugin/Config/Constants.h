@@ -12,6 +12,8 @@ static NSString *const kDefaultDateFormat = @"yyyy-MM-dd HH:mm:ss";
 static NSString *const kDefaultInterceptTemplate = @"[{name}]撤回了一条消息: {content}";
 static NSString *const kDefaultCustomNotifyFormat = @"[{name}]撤回了一条消息";
 
+static NSString *const kDefaultRevokeTemplate = @""; // 空=使用默认格式；非空=占位符模板
+
 static NSString *const kDefaultNameColor = @"#FA5151";
 static NSString *const kDefaultTimeColor = @"#FA5151";
 static NSString *const kDefaultContentColor = @"#999999";

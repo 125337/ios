@@ -43,6 +43,7 @@ static void configLog(NSString *content) {
         _darkContentColorHex = [kDefaultDarkContentColor copy];
         _interceptNotifyTemplate = [kDefaultInterceptTemplate copy];
         _customNotifyFormat = [kDefaultCustomNotifyFormat copy];
+        _revokeTemplate = [kDefaultRevokeTemplate copy];
         _sessionFormats = [NSMutableDictionary dictionary];
         _userFormats = [NSMutableDictionary dictionary];
         [self loadDefaults];
@@ -126,6 +127,9 @@ static void configLog(NSString *content) {
     if (v.length > 0) _interceptNotifyTemplate = v;
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CustomNotifyFormat"]];
     if (v.length > 0) _customNotifyFormat = v;
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"RevokeTemplate"]];
+    if (v.length > 0) _revokeTemplate = v;
 
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"NameColorHex"]];
     if (v.length > 0) _nameColorHex = v;
@@ -252,6 +256,7 @@ static void configLog(NSString *content) {
     if (_customText) [d setObject:_customText forKey:[kPluginPrefix stringByAppendingString:@"CustomText"]];
     if (_interceptNotifyTemplate) [d setObject:_interceptNotifyTemplate forKey:[kPluginPrefix stringByAppendingString:@"InterceptNotifyTemplate"]];
     if (_customNotifyFormat) [d setObject:_customNotifyFormat forKey:[kPluginPrefix stringByAppendingString:@"CustomNotifyFormat"]];
+    if (_revokeTemplate) [d setObject:_revokeTemplate forKey:[kPluginPrefix stringByAppendingString:@"RevokeTemplate"]];
 
     [d setObject:_nameColorHex forKey:[kPluginPrefix stringByAppendingString:@"NameColorHex"]];
     [d setObject:_timeColorHex forKey:[kPluginPrefix stringByAppendingString:@"TimeColorHex"]];
@@ -386,6 +391,32 @@ static void configLog(NSString *content) {
     result = [result stringByReplacingOccurrencesOfString:@"{time}" withString:time ?: @""];
     result = [result stringByReplacingOccurrencesOfString:@"{name}" withString:name ?: @""];
     result = [result stringByReplacingOccurrencesOfString:@"{content}" withString:content ?: @""];
+    return result;
+}
+
+- (NSString *)applyRevokeTemplate:(NSString *)tmpl name:(NSString *)name content:(NSString *)content createTime:(unsigned int)createTime {
+    if (!tmpl.length) return nil;
+    NSString *result = [tmpl copy];
+    
+    // 用户名
+    result = [result stringByReplacingOccurrencesOfString:@"{用户名}" withString:name ?: @""];
+    // 内容
+    result = [result stringByReplacingOccurrencesOfString:@"{内容}" withString:content ?: @""];
+    
+    // 时间占位符
+    NSDate *date = createTime > 0 ? [NSDate dateWithTimeIntervalSince1970:createTime] : [NSDate date];
+    NSCalendar *cal = [NSCalendar currentCalendar];
+    NSDateComponents *comp = [cal components:(NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay |
+                                               NSCalendarUnitHour | NSCalendarUnitMinute | NSCalendarUnitSecond)
+                                   fromDate:date];
+    
+    result = [result stringByReplacingOccurrencesOfString:@"{yyyy}" withString:[NSString stringWithFormat:@"%04ld", (long)comp.year]];
+    result = [result stringByReplacingOccurrencesOfString:@"{MM}" withString:[NSString stringWithFormat:@"%02ld", (long)comp.month]];
+    result = [result stringByReplacingOccurrencesOfString:@"{dd}" withString:[NSString stringWithFormat:@"%02ld", (long)comp.day]];
+    result = [result stringByReplacingOccurrencesOfString:@"{HH}" withString:[NSString stringWithFormat:@"%02ld", (long)comp.hour]];
+    result = [result stringByReplacingOccurrencesOfString:@"{mm}" withString:[NSString stringWithFormat:@"%02ld", (long)comp.minute]];
+    result = [result stringByReplacingOccurrencesOfString:@"{ss}" withString:[NSString stringWithFormat:@"%02ld", (long)comp.second]];
+    
     return result;
 }
 
