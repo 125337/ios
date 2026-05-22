@@ -546,6 +546,13 @@ static void addDetailButtonIfNeeded(id self) {
 
         CGFloat viewW = selfView.bounds.size.width;
         CGFloat viewH = selfView.bounds.size.height;
+        if (viewW <= 0 || viewH <= 0) {
+            // bounds 未就绪，用屏幕尺寸兜底
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            viewW = screen.width;
+            viewH = screen.height;
+            reLog([NSString stringWithFormat:@"[DETAIL] bounds zero, fallback to screen: %.0fx%.0f", viewW, viewH]);
+        }
         floatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
         floatBtn.tag = 99992;
         floatBtn.frame = CGRectMake(viewW - 50, viewH / 2 - 22, 44, 44);
@@ -558,8 +565,10 @@ static void addDetailButtonIfNeeded(id self) {
         [floatBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
         [floatBtn addTarget:_detailHandler action:@selector(onDetailTap:) forControlEvents:UIControlEventTouchUpInside];
         [selfView addSubview:floatBtn];
+        [selfView bringSubviewToFront:floatBtn];
         objc_setAssociatedObject(floatBtn, "detailInfo", detailInfo, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        reLog(@"[DETAIL] 页面按钮已添加");
+        reLog([NSString stringWithFormat:@"[DETAIL] 页面按钮已添加 frame=%@ bounds=%@",
+               NSStringFromCGRect(floatBtn.frame), NSStringFromCGRect(selfView.bounds)]);
     } @catch (NSException *e) {
         reLog([NSString stringWithFormat:@"[DETAIL] 异常: %@ - %@", e.name, e.reason]);
     }
