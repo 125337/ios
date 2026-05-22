@@ -1,5 +1,7 @@
 #import "RevokeFormatEditorVC.h"
 
+static NSString *const kDefaultRevokeEditorTemplate = @"拦截到一条 {用户名}撤回的消息\n发送时间：{yyyy}-{MM}-{dd} {HH}:{mm}:{ss}\n内容：{内容}";
+
 static NSArray<NSString *> *_tokenNames(void) {
     return @[@"{用户名}", @"{内容}", @"{yyyy}", @"{MM}", @"{dd}", @"{HH}", @"{mm}", @"{ss}"];
 }
@@ -137,7 +139,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
     [self.contentView addSubview:header];
     y += 28.0;
 
-    CGFloat tvH = 80.0;
+    CGFloat tvH = 110.0;
     self.editorView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
     self.editorView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular];
     self.editorView.textColor = [UIColor labelColor];
@@ -150,7 +152,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
     self.editorView.autocapitalizationType = UITextAutocapitalizationTypeNone;
     self.editorView.returnKeyType = UIReturnKeyDone;
 
-    NSString *initial = self.initialFormat.length > 0 ? self.initialFormat : @"";
+    NSString *initial = self.initialFormat.length > 0 ? self.initialFormat : kDefaultRevokeEditorTemplate;
     self.editorView.text = initial;
 
     [self.contentView addSubview:self.editorView];
@@ -168,7 +170,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
     [self.contentView addSubview:header];
     y += 28.0;
 
-    CGFloat tvH = 50.0;
+    CGFloat tvH = 110.0;
     self.previewView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
     self.previewView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular];
     self.previewView.textColor = [UIColor labelColor];
@@ -223,7 +225,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
 }
 
 - (void)restoreAction {
-    self.editorView.text = @"";
+    self.editorView.text = kDefaultRevokeEditorTemplate;
     [self updatePreview];
 }
 
