@@ -90,8 +90,8 @@ static void configLog(NSString *content) {
     _redEnvelopGroupFilterEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopGroupFilterEnabled"]];
     _redEnvelopAutoReply = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReply"]];
     _redEnvelopAutoReplyInGroup = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReplyInGroup"]];
-    configLog([NSString stringWithFormat:@"[LOAD] Loaded config from NSUserDefaults: auto=%d, catchMe=%d, personal=%d", 
-          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable]);
+    configLog([NSString stringWithFormat:@"[LOAD] Loaded config from NSUserDefaults: auto=%d, catchMe=%d, personal=%d, detail=%d", 
+          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail]);
     
     NSInteger delayVal = [d integerForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopDelay"]];
     _redEnvelopDelay = delayVal >= 0 ? (unsigned int)delayVal : 0;
@@ -214,8 +214,8 @@ static void configLog(NSString *content) {
 
 - (void)save {
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    configLog([NSString stringWithFormat:@"[SAVE] save() called: auto=%d, catchMe=%d, personal=%d", 
-          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable]);
+    configLog([NSString stringWithFormat:@"[SAVE] save() called: auto=%d, catchMe=%d, personal=%d, detail=%d", 
+          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail]);
     [d setBool:_preventRecall forKey:[kPluginPrefix stringByAppendingString:@"PreventRecall"]];
     [d setBool:_debugLogging forKey:[kPluginPrefix stringByAppendingString:@"DebugLogging"]];
     [d setBool:_hideContent forKey:[kPluginPrefix stringByAppendingString:@"HideContent"]];
