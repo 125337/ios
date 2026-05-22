@@ -308,18 +308,34 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
                 if ([mmItem respondsToSelector:setTitleSel]) {
                     ((void(*)(id, SEL, id))objc_msgSend)(mmItem, setTitleSel, @"修改");
                 }
-                // 8.0.60: 图标改为 UIImage，加载微信内置图标
-                NSString *wxBundlePath = [[NSBundle mainBundle] pathForResource:@"WeChat" ofType:@"bundle"];
-                NSBundle *wxBundle = wxBundlePath ? [NSBundle bundleWithPath:wxBundlePath] : [NSBundle mainBundle];
-                UIImage *iconImg = [UIImage imageNamed:@"expression" inBundle:wxBundle compatibleWithTraitCollection:nil];
-                if (!iconImg) iconImg = [UIImage imageNamed:@"expression"];
+                // 8.0.60: 图标改为 UIImage，必须先定位微信的图片加载系统
+                UIImage *iconImg = nil;
+                // 方法1: 直接 UIImage imageNamed: (含 Asset Catalog)
+                iconImg = [UIImage imageNamed:@"expression"];
+                // 方法2: 遍历所有 NSBundle 查找
                 if (!iconImg) {
-                    // 尝试其他可能的图标名
-                    NSArray *candidateNames = @[@"edit_expression", @"menu_expression", @"icons_outlined_expression"];
-                    for (NSString *name in candidateNames) {
-                        iconImg = [UIImage imageNamed:name inBundle:wxBundle compatibleWithTraitCollection:nil];
-                        if (!iconImg) iconImg = [UIImage imageNamed:name];
-                        if (iconImg) break;
+                    NSArray *allBundles = [[NSBundle allBundles] arrayByAddingObjectsFromArray:[NSBundle allFrameworks]];
+                    for (NSBundle *bun in allBundles) {
+                        iconImg = [UIImage imageNamed:@"expression" inBundle:bun compatibleWithTraitCollection:nil];
+                        if (iconImg) { jokerLog([NSString stringWithFormat:@"✅ found in %@", bun.bundlePath]); break; }
+                    }
+                }
+                // 方法3: 尝试其他名字
+                if (!iconImg) {
+                    NSArray *names = @[@"expression", @"EditExpression", @"edit_expression", @"icons_filled_expression",
+                        @"icons_outlined_expression", @"menu_expression", @"mm_expression", @"wc_expression"];
+                    for (NSString *nm in names) {
+                        iconImg = [UIImage imageNamed:nm];
+                        if (iconImg) { jokerLog([NSString stringWithFormat:@"✅ found alt name: %@", nm]); break; }
+                    }
+                }
+                // 诊断：打印可用的 bundle 列表
+                if (!iconImg) {
+                    jokerLog(@"🔍 Searching all bundles for 'expression' image:");
+                    for (NSBundle *bun in [[NSBundle allBundles] arrayByAddingObjectsFromArray:[NSBundle allFrameworks]]) {
+                        NSString *imgPath = [bun pathForResource:@"expression" ofType:@"png"];
+                        if (!imgPath) imgPath = [bun pathForResource:@"expression" ofType:@"pdf"];
+                        if (imgPath) jokerLog([NSString stringWithFormat:@"   FOUND in %@: %@", bun.bundleIdentifier ?: bun.bundlePath, imgPath]);
                     }
                 }
                 if (iconImg) {
