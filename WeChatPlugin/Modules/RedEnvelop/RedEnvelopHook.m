@@ -515,18 +515,19 @@ static void tryAddDetailButton(id self, int retryCount) {
         if (!detailInfo) detailInfo = [self valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
         if (!detailInfo) {
             if (retryCount == 0) {
-                // 首次失败时 dump key 信息来定位数据路径
-                reLog([NSString stringWithFormat:@"[DETAIL] DUMP self class=%@ keys(m_data):", NSStringFromClass(object_getClass(self))]);
-                if (controlData) {
-                    @try {
-                        unsigned int count = 0;
-                        objc_property_t *props = class_copyPropertyList([controlData class], &count);
-                        for (unsigned int i = 0; i < count; i++) {
-                            reLog([NSString stringWithFormat:@"[DETAIL]   m_data.%@", [NSString stringWithUTF8String:property_getName(props[i])]]);
-                        }
-                        free(props);
-                    } @catch (NSException *e) {}
+                // dump self ivars
+                reLog([NSString stringWithFormat:@"[DETAIL] DUMP self class=%@", NSStringFromClass(object_getClass(self))]);
+                unsigned int count = 0;
+                Ivar *ivars = class_copyIvarList([self class], &count);
+                for (unsigned int i = 0; i < count; i++) {
+                    const char *name = ivar_getName(ivars[i]);
+                    const char *type = ivar_getTypeEncoding(ivars[i]);
+                    id val = nil;
+                    @try { val = [self valueForKey:@(name)]; } @catch (NSException *e) {}
+                    reLog([NSString stringWithFormat:@"[DETAIL]   %s %s = %@", name, type,
+                           val ? [NSString stringWithFormat:@"<%@: %p>", NSStringFromClass([val class]), val] : @"nil"]);
                 }
+                free(ivars);
             }
             reLog([NSString stringWithFormat:@"[DETAIL] no detailInfo (retry=%d), skip", retryCount]);
             return;
