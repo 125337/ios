@@ -120,7 +120,7 @@ static void processRedEnvelopMessage(id wrap) {
     else if (isPersonalSender && config.redEnvelopCatchMe) shouldReceive = YES;
 
     WPLog(@"RedEnv", @"[STAT] from=%@ to=%@ self=%@ sender=%d groupRecv=%d groupSend=%d personalSend=%d catch=%d should=%d",
-          fromUsr ?: @"-", toUsr ?: @"-", selfUserName ?: @"-", isSender, isGroupReceiver, isGroupSender, isPersonalSender, config.redEnvelopCatchMe, shouldReceive]);
+          fromUsr ?: @"-", toUsr ?: @"-", selfUserName ?: @"-", isSender, isGroupReceiver, isGroupSender, isPersonalSender, config.redEnvelopCatchMe, shouldReceive);
 
     if (config.redEnvelopBlackList.count > 0) {
         for (NSString *blackItem in config.redEnvelopBlackList) {
