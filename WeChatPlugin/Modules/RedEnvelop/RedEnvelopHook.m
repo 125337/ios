@@ -507,7 +507,7 @@ static IMP orig_StoryViewWillAppear = NULL;
 static REDetailButtonHandler *_detailHandler = nil;
 
 static void replaced_StoryViewWillAppear(id self, SEL _cmd, BOOL animated) {
-    reLog(@"[DETAIL] viewWillAppear called on %@", NSStringFromClass(object_getClass(self)));
+    reLog([NSString stringWithFormat:@"[DETAIL] viewWillAppear called on %@", NSStringFromClass(object_getClass(self))]);
 
     if (orig_StoryViewWillAppear) {
         ((void (*)(id, SEL, BOOL))orig_StoryViewWillAppear)(self, _cmd, animated);
@@ -528,7 +528,7 @@ static void replaced_StoryViewWillAppear(id self, SEL _cmd, BOOL animated) {
             reLog(@"[DETAIL] no detailInfo found, skip");
             return;
         }
-        reLog(@"[DETAIL] detailInfo found: %@", detailInfo);
+        reLog([NSString stringWithFormat:@"[DETAIL] detailInfo found: %@", detailInfo]);
 
         if (!_detailHandler) _detailHandler = [[REDetailButtonHandler alloc] init];
 
