@@ -38,7 +38,7 @@
     } cy:chatBoxY width:w];
 
     y = [self finishGroup:chatBoxGroup atY:y height:chatBoxY];
-    saLog(@"[SettingSessionAction] chatBoxGroup built, y=%.1f", y);
+    WPLog(@"Setting", @"[SettingSessionAction] chatBoxGroup built, y=%.1f", y);
 
     UIView *pinGroup = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
@@ -54,7 +54,7 @@
     } cy:cy width:w];
 
     y = [self finishGroup:pinGroup atY:y height:cy];
-    saLog(@"[SettingSessionAction] pinGroup built, y=%.1f", y);
+    WPLog(@"Setting", @"[SettingSessionAction] pinGroup built, y=%.1f", y);
 
     UIView *remarkGroup = [self addTableGroupAtY:y width:w];
     CGFloat remarkY = 0;
@@ -68,7 +68,7 @@
                                    width:w];
 
     y = [self finishGroup:remarkGroup atY:y height:remarkY];
-    saLog(@"[SettingSessionAction] remarkGroup built, y=%.1f", y);
+    WPLog(@"Setting", @"[SettingSessionAction] remarkGroup built, y=%.1f", y);
 
     UIView *muteGroup = [self addTableGroupAtY:y width:w];
     CGFloat muteY = 0;
@@ -86,18 +86,18 @@
     } cy:muteY width:w];
 
     y = [self finishGroup:muteGroup atY:y height:muteY];
-    saLog(@"[SettingSessionAction] muteGroup built, y=%.1f", y);
+    WPLog(@"Setting", @"[SettingSessionAction] muteGroup built, y=%.1f", y);
 
     y = [self addSectionFooter:@"长按会话列表中的会话即可使用以上功能" y:y width:w];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
-    saLog(@"[SettingSessionAction] buildUI COMPLETE, contentHeight=%.1f", y + 40);
+    WPLog(@"Setting", @"[SettingSessionAction] buildUI COMPLETE, contentHeight=%.1f", y + 40);
 }
 
 - (void)switchChanged:(UISwitch *)sender {
     NSString *key = objc_getAssociatedObject(sender, "key");
-    saLog(@"[SettingSessionAction] switchChanged: key=%@, isOn=%d", key, sender.on);
+    WPLog(@"Setting", @"[SettingSessionAction] switchChanged: key=%@, isOn=%d", key, sender.on);
     [super switchChanged:sender];
 }
 
@@ -105,7 +105,7 @@
     NSString *key = objc_getAssociatedObject(tf, "key");
     if (!key) return;
     NSString *value = tf.text.length > 0 ? tf.text : nil;
-    saLog(@"[SettingSessionAction] autoSaveTextField: key=%@, value='%@'", key, value);
+    WPLog(@"Setting", @"[SettingSessionAction] autoSaveTextField: key=%@, value='%@'", key, value);
     PluginConfig *config = [PluginConfig shared];
     @try {
         if ([key isEqualToString:@"MuteAutoReplyMsg"]) {
@@ -115,7 +115,7 @@
             config.muteWorkingTime = value ?: @"";
         }
     } @catch (NSException *e) {
-        saLog(@"[SettingSessionAction] ✗ autoSaveTextField exception: %@", e.reason);
+        WPLog(@"Setting", @"[SettingSessionAction] ✗ autoSaveTextField exception: %@", e.reason);
         return;
     }
     [config save];

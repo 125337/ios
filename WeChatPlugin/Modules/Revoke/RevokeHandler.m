@@ -214,7 +214,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
 
 - (BOOL)handleRevoke:(id)revokeWrap chatName:(NSString *)chatNameHint {
     NSString *logMsg = [NSString stringWithFormat:@"handleRevoke called, chatNameHint=%@", chatNameHint];
-    revokeLog(logMsg);
+    WPLog(@"Revoke", @"%@", logMsg);
     
     Class CMessageWrapClass = objc_getClass("CMessageWrap");
     if (CMessageWrapClass && ![revokeWrap isKindOfClass:CMessageWrapClass]) {

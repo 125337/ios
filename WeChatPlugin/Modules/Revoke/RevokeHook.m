@@ -53,7 +53,7 @@ static NSString *extractChatName(id obj) {
 // ★ 核心：唯一 Hook 点 (onNewSyncNotAddDBMessage)
 // 检测 revokemsg → 解析 → 插入提示条 → return (阻断 sysmsg 入库)
 static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
-    hookLog(@"[WeChatPlugin][Revoke] onNewSyncNotAddDBMessage called, arg1=%@", arg1);
+    WPLog(@"Revoke", @"[WeChatPlugin][Revoke] onNewSyncNotAddDBMessage called, arg1=%@", arg1);
     
     if (![PluginConfig shared].preventRecall) {
         if (orig_onNewSyncNotAddDBMessage)
@@ -83,7 +83,7 @@ static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
             }
         }
     } @catch (NSException *e) {
-        hookLog(@"[WeChatPlugin][Revoke] exception (onNewSyncNotAddDBMessage): %@", e);
+        WPLog(@"Revoke", @"[WeChatPlugin][Revoke] exception (onNewSyncNotAddDBMessage): %@", e);
     }
     
     // 非撤回消息或处理失败 → 透传原始
@@ -101,7 +101,7 @@ static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
         WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook] ✗ CMessageMgr class not found!");
         return;
     }
-    hookLog(@"[WeChatPlugin][RevokeHook] CMessageMgr found: %@", msgMgrCls);
+    WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook] CMessageMgr found: %@", msgMgrCls);
     
     IMP imp = [HookEngine swizzleMethod:NSSelectorFromString(@"onNewSyncNotAddDBMessage:")
                                 inClass:msgMgrCls
@@ -114,24 +114,24 @@ static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
         WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook] ✗ onNewSyncNotAddDBMessage: hook failed");
     }
     
-    hookLog(@"[WeChatPlugin][RevokeHook] install complete: %@", g_hookSyncVerified ? @"✓ 1/1" : @"✗ FAILED");
+    WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook] install complete: %@", g_hookSyncVerified ? @"✓ 1/1" : @"✗ FAILED");
 }
 
 + (BOOL)checkHookWithSeq:(int)seq {
     if (!g_hookSyncVerified) {
-        hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] hook was never installed", seq);
+        WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook][checkHook:%d] hook was never installed", seq);
         return NO;
     }
     
     Class cls = objc_getClass("CMessageMgr");
     if (!cls) {
-        hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ CMessageMgr class gone", seq);
+        WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ CMessageMgr class gone", seq);
         return NO;
     }
     
     Method m = class_getInstanceMethod(cls, NSSelectorFromString(@"onNewSyncNotAddDBMessage:"));
     if (!m) {
-        hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ method gone", seq);
+        WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ method gone", seq);
         return NO;
     }
     
@@ -139,12 +139,12 @@ static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
     IMP ourIMP = (IMP)replaced_onNewSyncNotAddDBMessage;
     
     if (currentIMP != ourIMP) {
-        hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ IMP changed! restoring...", seq);
+        WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook][checkHook:%d] ✗ IMP changed! restoring...", seq);
         method_setImplementation(m, ourIMP);
         return NO;
     }
     
-    hookLog(@"[WeChatPlugin][RevokeHook][checkHook:%d] ✓ single hook OK", seq);
+    WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook][checkHook:%d] ✓ single hook OK", seq);
     return YES;
 }
 

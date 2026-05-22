@@ -406,16 +406,16 @@ static id getContentView(id cell) {
     if (cellView) {
         @try { contentView = [cellView valueForKey:@"m_contentView"]; } @catch (...) {}
         if (contentView) {
-            mtLog([NSString stringWithFormat:@"[DBG] getContentView: cellView.m_contentView class=%@ frame=%@",
-                   NSStringFromClass([contentView class]), NSStringFromCGRect([(UIView *)contentView frame])]);
+            WPLog(@"MsgTime", @"[DBG] getContentView: cellView.m_contentView class=%@ frame=%@",
+                   NSStringFromClass([contentView class]), NSStringFromCGRect([(UIView *)contentView frame]));
         }
     }
 
     if (!contentView) {
         @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {}
         if (contentView) {
-            mtLog([NSString stringWithFormat:@"[DBG] getContentView: cell.m_contentView class=%@ frame=%@",
-                   NSStringFromClass([contentView class]), NSStringFromCGRect([(UIView *)contentView frame])]);
+            WPLog(@"MsgTime", @"[DBG] getContentView: cell.m_contentView class=%@ frame=%@",
+                   NSStringFromClass([contentView class]), NSStringFromCGRect([(UIView *)contentView frame]));
         }
     }
 
@@ -843,8 +843,8 @@ static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGFloat x, CGFloat
             }
             w += extWidth;
 
-            mtLog([NSString stringWithFormat:@"[BUBBLE-EXTEND] isSender=%d extWidth=%.0f x=%.0f->%.0f w=%.0f->%.0f",
-                   isSender, extWidth, x + (isSender ? extWidth : 0), x, w - extWidth, w]);
+            WPLog(@"MsgTime", @"[BUBBLE-EXTEND] isSender=%d extWidth=%.0f x=%.0f->%.0f w=%.0f->%.0f",
+                   isSender, extWidth, x + (isSender ? extWidth : 0), x, w - extWidth, w);
         }
     }
 
