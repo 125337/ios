@@ -1,7 +1,6 @@
 #import "../Common/SettingController.h"
 #import "SettingMessageTimeController.h"
 #import "../../Config/PluginConfig.h"
-#import "../../Core/WPAlert.h"
 #import "../../Core/WeChatAlertHelper.h"
 #import <objc/runtime.h>
 

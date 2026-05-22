@@ -1,9 +1,9 @@
 #import "RedEnvelopHook.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/HookEngine.h"
-#import "../../Core/WPAlert.h"
 #import "WeChatRedEnvelopParam.h"
 #import "WeChatRedEnvelopTaskManager.h"
+#import "../../Core/WeChatAlertHelper.h"
 #import "../../Settings/Common/WPBorderLayer.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -499,7 +499,7 @@ static IMP orig_StoryViewWillAppear = NULL;
         totalAmount/100.0, recAmount/100.0, remainAmount/100.0,
         (long)totalNum, (long)recNum, (long)remainNum];
 
-    [WPAlert showCustom:@"红包详情" message:msg buttonTitle:@"好的" from:nil];
+    [WeChatAlertHelper showTipAlert:@"红包详情" message:msg];
 }
 @end
 

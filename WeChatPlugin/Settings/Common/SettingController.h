@@ -10,12 +10,6 @@
 @interface SettingLayoutFunctionController : SettingCategoryController
 @end
 
-@interface SettingAssistFunctionController : SettingCategoryController
-@end
-
-@interface SettingUIBeautifyController : SettingCategoryController
-@end
-
 @interface SettingRevokeController : SettingCategoryController
 @end
 

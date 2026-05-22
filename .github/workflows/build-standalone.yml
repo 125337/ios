@@ -39,7 +39,6 @@ jobs:
           WeChatPlugin/Tweak.m \
           WeChatPlugin/Config/PluginConfig.m \
           WeChatPlugin/Core/HookEngine.m \
-          WeChatPlugin/Core/WPAlert.m \
           WeChatPlugin/Core/WeChatAlertHelper.m \
           WeChatPlugin/Registry/HookRegistry.m \
           WeChatPlugin/Registry/FeatureModuleRegistry.m \
@@ -49,7 +48,6 @@ jobs:
           WeChatPlugin/Modules/Revoke/RevokeFormatEditorVC.m \
           WeChatPlugin/Modules/RedEnvelop/RedEnvelopHook.m \
           WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopParam.m \
-          WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopOperation.m \
           WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopTaskManager.m \
           WeChatPlugin/Modules/Layout/TintHook.m \
           WeChatPlugin/Modules/Unread/ClearUnreadHook.m \
@@ -71,8 +69,6 @@ jobs:
           WeChatPlugin/Settings/Controllers/SettingMessageTimeController.m \
           WeChatPlugin/Settings/Controllers/SettingRevokeController.m \
           WeChatPlugin/Settings/Controllers/SettingLayoutFunctionController.m \
-          WeChatPlugin/Settings/Controllers/SettingAssistFunctionController.m \
-          WeChatPlugin/Settings/Controllers/SettingUIBeautifyController.m \
           WeChatPlugin/Settings/Controllers/SettingRedEnvelopController.m \
           WeChatPlugin/Settings/Controllers/SettingAboutController.m \
           WeChatPlugin/Settings/Controllers/WeChatTweakGroupSelectsController.m; do
@@ -84,6 +80,7 @@ jobs:
                 -target arm64-apple-ios14.0 \
                 -c \
                 -fobjc-arc \
+                -Oz \
                 -Wno-deprecated-declarations \
                 -Wno-unused-function \
                 -IWeChatPlugin \
@@ -119,6 +116,9 @@ jobs:
               -framework Security \
               -framework AVFoundation \
               -framework UserNotifications \
+              -Wl,-dead_strip \
+              -Wl,-S \
+              -Wl,-x \
               -Wl,-undefined,dynamic_lookup \
               -o build/Mio_arm64.dylib \
               $OBJ_FILES

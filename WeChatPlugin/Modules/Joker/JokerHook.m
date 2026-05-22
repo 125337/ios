@@ -302,19 +302,18 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
     if (mmItemClass) {
         @try {
             // 照抄锤子助手 FUN_0084c460：initWithTitle:svgName:action:
-            // action 参数类型是 SEL（不是 NSString），必须传 registered selector
+            // action 参数类型是 SEL，svgName 用运行时 NSString（避免跨 dylib 指针比对问题）
             SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
             if (![mmItemClass instancesRespondToSelector:initSel]) {
                 jokerLog(@"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
             } else {
                 SEL actionSEL = sel_registerName("mioTextJoker");
-    // 运行时构造 NSString，避免编译期字面量 intern 可能的问题
-    NSString *iconName = [NSString stringWithUTF8String:"expression"];
-    id mmItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
-        [mmItemClass alloc], initSel, @"修改文字", iconName, actionSEL);
-    if (mmItem) {
-        [newItems addObject:mmItem];
-        jokerLog([NSString stringWithFormat:@"✅ MMMenuItem: 修改文字 / %@", iconName]);
+                NSString *iconName = [NSString stringWithUTF8String:"expression"];
+                id mmItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
+                    [mmItemClass alloc], initSel, @"修改文字", iconName, actionSEL);
+                if (mmItem) {
+                    [newItems addObject:mmItem];
+                    jokerLog(@"✅ MMMenuItem: 修改文字 / expression");
                 }
             }
         } @catch (NSException *e) {
@@ -336,18 +335,17 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
     Class mmItemClass = objc_getClass("MMMenuItem");
     if (mmItemClass) {
         @try {
-            // 照抄锤子助手 FUN_0084c460：initWithTitle:svgName:action:
-            // action 参数类型是 SEL（不是 NSString），必须传 registered selector
             SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
             if (![mmItemClass instancesRespondToSelector:initSel]) {
                 jokerLog(@"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
             } else {
                 SEL actionSEL = sel_registerName("mioTransferJoker");
+                NSString *iconName = [NSString stringWithUTF8String:"expression"];
                 id mmItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
-                    [mmItemClass alloc], initSel, @"修改文字", @"expression", actionSEL);
+                    [mmItemClass alloc], initSel, @"修改文字", iconName, actionSEL);
                 if (mmItem) {
                     [newItems addObject:mmItem];
-                    jokerLog(@"✅ MMMenuItem created: 修改文字 / expression / mioTransferJoker (SEL)");
+                    jokerLog(@"✅ MMMenuItem: 修改文字 / expression");
                 }
             }
         } @catch (NSException *e) {

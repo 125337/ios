@@ -55,18 +55,6 @@
                                              sectionTitle:@"通用"
                                           controllerClass:[SettingLayoutFunctionController class]
                                      hookInstallerClasses:@[[TintHook class]]],
-            [FeatureModuleDescriptor moduleWithIdentifier:@"assist"
-                                                    title:@"辅助功能"
-                                                 subtitle:@"即将推出"
-                                             sectionTitle:@"通用"
-                                          controllerClass:[SettingAssistFunctionController class]
-                                     hookInstallerClasses:@[]],
-            [FeatureModuleDescriptor moduleWithIdentifier:@"beautify"
-                                                    title:@"界面美化"
-                                                 subtitle:@"即将推出"
-                                             sectionTitle:@"更多"
-                                          controllerClass:[SettingUIBeautifyController class]
-                                     hookInstallerClasses:@[]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"about"
                                                     title:@"关于"
                                                  subtitle:@"插件信息"
