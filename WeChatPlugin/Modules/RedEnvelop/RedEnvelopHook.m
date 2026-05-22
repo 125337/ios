@@ -488,7 +488,6 @@ static void handleHongbaoResponse(id res, id req) {
 
 static IMP orig_OnWCToHongbaoCommonResponse2 = NULL;
 static IMP orig_OnWCToHongbaoCommonResponse3 = NULL;
-static IMP orig_StoryViewDidLoad = NULL;
 static IMP orig_BaseMsgViewWillAppear = NULL;
 
 @interface REDetailButtonHandler : NSObject
@@ -583,19 +582,6 @@ static void tryAddDetailButton(id self, int retryCount) {
     } @catch (NSException *e) {
         reLog([NSString stringWithFormat:@"[DETAIL] 异常: %@ - %@", e.name, e.reason]);
     }
-}
-
-static void replaced_StoryViewDidLoad(id self, SEL _cmd) {
-    reLog([NSString stringWithFormat:@"[DETAIL] viewDidLoad called on %@", NSStringFromClass(object_getClass(self))]);
-
-    if (orig_StoryViewDidLoad) {
-        ((void (*)(id, SEL))orig_StoryViewDidLoad)(self, _cmd);
-    }
-
-    PluginConfig *config = [PluginConfig shared];
-    if (!config.redEnvelopeDetail) return;
-
-    tryAddDetailButton(self, 0);
 }
 
 static void tryAddPendingButton(id self) {
@@ -737,29 +723,6 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
         if (imp3) {
             orig_OnWCToHongbaoCommonResponse3 = imp3;
             reLog(@"[+] OnWCToHongbaoCommonResponse:Request:WithType: hooked");
-        }
-    }
-
-    // 仿锤子助手：hook viewDidLoad 在红包详情VC
-    Class StoryVCClass = objc_getClass("WCRedEnvelopesStoryViewController");
-    if (!StoryVCClass) StoryVCClass = objc_getClass("WCRedEnvelopesRedEnvelopesDetailViewController");
-    if (StoryVCClass) {
-        IMP imp4 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewDidLoad")
-                                        inClass:StoryVCClass
-                                        withIMP:(IMP)replaced_StoryViewDidLoad];
-        if (imp4) {
-            orig_StoryViewDidLoad = imp4;
-            reLog([NSString stringWithFormat:@"[+] %@ viewDidLoad hooked", NSStringFromClass(StoryVCClass)]);
-        }
-    }
-
-    Class DetailVCClass = objc_getClass("WCRedEnvelopesRedEnvelopesDetailViewController");
-    if (DetailVCClass && DetailVCClass != StoryVCClass) {
-        IMP imp5 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewDidLoad")
-                                        inClass:DetailVCClass
-                                        withIMP:(IMP)replaced_StoryViewDidLoad];
-        if (imp5) {
-            reLog(@"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
         }
     }
 
