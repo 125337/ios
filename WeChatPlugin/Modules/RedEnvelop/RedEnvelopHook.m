@@ -311,6 +311,19 @@ static void handleHongbaoResponse(id res, id req) {
                       amount / 100.0, nickName, wishing,
                       totalAmountVal / 100.0, (long)totalNum,
                       (long)_statTotalCount, _statTotalAmount / 100.0]);
+
+                // 保存详情数据供 BaseMsgContentViewController 按钮使用
+                NSInteger recNumVal = [responseDict[@"recNum"] integerValue];
+                if (recNumVal == 0) recNumVal = [responseDict[@"receiveNum"] integerValue];
+                g_pendingDetailInfo = @{
+                    @"m_lTotalAmount": totalAmount,
+                    @"m_lTotalNum": @(totalNum),
+                    @"m_lRecNum": @(recNumVal),
+                    @"m_lRecAmount": receiveAmount ?: @(amount)
+                };
+                reLog(@"[DETAIL] 详情数据已保存: totalAmt=%ld totalNum=%ld recNum=%ld recAmt=%@",
+                      (long)totalAmountVal, (long)totalNum, (long)recNumVal,
+                      receiveAmount ?: @(amount));
             } else if (receiveStatus == 2) {
                 reLog(@"[STAT] 红包已被领取");
             } else if (hbStatus == 4) {
@@ -474,6 +487,8 @@ static void handleHongbaoResponse(id res, id req) {
 static IMP orig_OnWCToHongbaoCommonResponse2 = NULL;
 static IMP orig_OnWCToHongbaoCommonResponse3 = NULL;
 static IMP orig_StoryViewDidLoad = NULL;
+static NSDictionary *g_pendingDetailInfo = nil;
+static IMP orig_BaseMsgViewWillAppear = NULL;
 
 @interface REDetailButtonHandler : NSObject
 - (void)onDetailTap:(UIButton *)sender;
@@ -580,6 +595,59 @@ static void replaced_StoryViewDidLoad(id self, SEL _cmd) {
     if (!config.redEnvelopeDetail) return;
 
     tryAddDetailButton(self, 0);
+}
+
+static void tryAddPendingButton(id self) {
+    if (!self || !g_pendingDetailInfo) return;
+
+    if (!_detailHandler) _detailHandler = [[REDetailButtonHandler alloc] init];
+
+    UIView *selfView = [self valueForKey:@"view"];
+    if (!selfView) return;
+
+    UIButton *floatBtn = (UIButton *)[selfView viewWithTag:99992];
+    if (floatBtn) return;
+
+    CGFloat viewW = selfView.bounds.size.width;
+    CGFloat viewH = selfView.bounds.size.height;
+    floatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    floatBtn.tag = 99992;
+    floatBtn.frame = CGRectMake(viewW - 50, viewH / 2 - 22, 44, 44);
+    floatBtn.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+    floatBtn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
+    floatBtn.layer.cornerRadius = 22;
+    floatBtn.titleLabel.font = [UIFont systemFontOfSize:12];
+    floatBtn.titleLabel.textAlignment = NSTextAlignmentCenter;
+    [floatBtn setTitle:@"详情" forState:UIControlStateNormal];
+    [floatBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [floatBtn addTarget:_detailHandler action:@selector(onDetailTap:) forControlEvents:UIControlEventTouchUpInside];
+    [selfView addSubview:floatBtn];
+    objc_setAssociatedObject(floatBtn, "detailInfo", g_pendingDetailInfo, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    reLog(@"[DETAIL] 页面按钮已添加(pending data)");
+    g_pendingDetailInfo = nil;
+}
+
+static void replaced_BaseMsgViewWillAppear(id self, SEL _cmd, BOOL animated) {
+    if (orig_BaseMsgViewWillAppear) {
+        ((void (*)(id, SEL, BOOL))orig_BaseMsgViewWillAppear)(self, _cmd, animated);
+    }
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.redEnvelopeDetail) return;
+
+    tryAddPendingButton(self);
+
+    // 延迟重试：等响应数据到达
+    __weak id weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddPendingButton(weakSelf);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddPendingButton(weakSelf);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddPendingButton(weakSelf);
+    });
 }
 
 static void replaced_OnWCToHongbaoCommonResponse2(id self, SEL _cmd, id res, id req) {
@@ -691,6 +759,17 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
                                         withIMP:(IMP)replaced_StoryViewDidLoad];
         if (imp5) {
             reLog(@"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
+        }
+    }
+
+    Class BaseMsgClass = objc_getClass("BaseMsgContentViewController");
+    if (BaseMsgClass) {
+        IMP imp6 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewWillAppear:")
+                                        inClass:BaseMsgClass
+                                        withIMP:(IMP)replaced_BaseMsgViewWillAppear];
+        if (imp6) {
+            orig_BaseMsgViewWillAppear = imp6;
+            reLog(@"[+] BaseMsgContentViewController viewWillAppear: hooked");
         }
     }
 
