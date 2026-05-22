@@ -515,9 +515,6 @@ static void replaced_StoryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     if (!config.redEnvelopeDetail) return;
 
     @try {
-        NSString *className = NSStringFromClass(object_getClass(self));
-        if (![className containsString:@"RedEnvelopes"]) return;
-
         id detailInfo = nil;
         id controlData = [self valueForKey:@"m_data"];
         if (controlData) detailInfo = [controlData valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
@@ -643,15 +640,14 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
         }
     }
 
-    Class StoryVCClass = objc_getClass("WCRedEnvelopesStoryViewController");
-    if (!StoryVCClass) StoryVCClass = objc_getClass("WCRedEnvelopesRedEnvelopesDetailViewController");
+    Class StoryVCClass = objc_getClass("BaseMsgContentViewController");
     if (StoryVCClass) {
         IMP imp4 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewWillAppear:")
                                         inClass:StoryVCClass
                                         withIMP:(IMP)replaced_StoryViewWillAppear];
         if (imp4) {
             orig_StoryViewWillAppear = imp4;
-            reLog([NSString stringWithFormat:@"[+] %@ viewWillAppear: hooked", NSStringFromClass(StoryVCClass)]);
+            reLog(@"[+] BaseMsgContentViewController viewWillAppear: hooked");
         }
     }
 
