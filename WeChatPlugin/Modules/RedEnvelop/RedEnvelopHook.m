@@ -506,6 +506,53 @@ static IMP orig_StoryViewWillAppear = NULL;
 
 static REDetailButtonHandler *_detailHandler = nil;
 
+static void tryAddDetailButton(id self, int retryCount) {
+    @try {
+        id detailInfo = nil;
+        id controlData = [self valueForKey:@"m_data"];
+        if (controlData) detailInfo = [controlData valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
+        if (!detailInfo) detailInfo = [self valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
+        if (!detailInfo) {
+            reLog([NSString stringWithFormat:@"[DETAIL] no detailInfo (retry=%d), skip", retryCount]);
+            return;
+        }
+        reLog([NSString stringWithFormat:@"[DETAIL] detailInfo found (retry=%d): %@", retryCount, detailInfo]);
+
+        if (!_detailHandler) _detailHandler = [[REDetailButtonHandler alloc] init];
+
+        UIView *selfView = [self valueForKey:@"view"];
+        if (!selfView) {
+            reLog(@"[DETAIL] selfView is nil, skip");
+            return;
+        }
+
+        UIButton *floatBtn = (UIButton *)[selfView viewWithTag:99992];
+        if (floatBtn) {
+            reLog(@"[DETAIL] button already exists, skip");
+            return;
+        }
+
+        CGFloat viewW = selfView.bounds.size.width;
+        CGFloat viewH = selfView.bounds.size.height;
+        floatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+        floatBtn.tag = 99992;
+        floatBtn.frame = CGRectMake(viewW - 50, viewH / 2 - 22, 44, 44);
+        floatBtn.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+        floatBtn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
+        floatBtn.layer.cornerRadius = 22;
+        floatBtn.titleLabel.font = [UIFont systemFontOfSize:12];
+        floatBtn.titleLabel.textAlignment = NSTextAlignmentCenter;
+        [floatBtn setTitle:@"详情" forState:UIControlStateNormal];
+        [floatBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        [floatBtn addTarget:_detailHandler action:@selector(onDetailTap:) forControlEvents:UIControlEventTouchUpInside];
+        [selfView addSubview:floatBtn];
+        objc_setAssociatedObject(floatBtn, "detailInfo", detailInfo, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        reLog(@"[DETAIL] 页面按钮已添加");
+    } @catch (NSException *e) {
+        reLog([NSString stringWithFormat:@"[DETAIL] 异常: %@ - %@", e.name, e.reason]);
+    }
+}
+
 static void replaced_StoryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     reLog([NSString stringWithFormat:@"[DETAIL] viewWillAppear called on %@", NSStringFromClass(object_getClass(self))]);
 
@@ -519,48 +566,20 @@ static void replaced_StoryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         return;
     }
 
-    @try {
-        id detailInfo = nil;
-        id controlData = [self valueForKey:@"m_data"];
-        if (controlData) detailInfo = [controlData valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
-        if (!detailInfo) detailInfo = [self valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
-        if (!detailInfo) {
-            reLog(@"[DETAIL] no detailInfo found, skip");
-            return;
-        }
-        reLog([NSString stringWithFormat:@"[DETAIL] detailInfo found: %@", detailInfo]);
+    // 立即尝试
+    tryAddDetailButton(self, 0);
 
-        if (!_detailHandler) _detailHandler = [[REDetailButtonHandler alloc] init];
-
-        UIView *selfView = [self valueForKey:@"view"];
-        if (!selfView) {
-            reLog(@"[DETAIL] selfView is nil, skip");
-            return;
-        }
-
-        UIButton *floatBtn = (UIButton *)[selfView viewWithTag:99992];
-        if (!floatBtn) {
-            CGFloat viewW = selfView.bounds.size.width;
-            CGFloat viewH = selfView.bounds.size.height;
-            floatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-            floatBtn.tag = 99992;
-            floatBtn.frame = CGRectMake(viewW - 50, viewH / 2 - 22, 44, 44);
-            floatBtn.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
-            floatBtn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
-            floatBtn.layer.cornerRadius = 22;
-            floatBtn.titleLabel.font = [UIFont systemFontOfSize:12];
-            floatBtn.titleLabel.textAlignment = NSTextAlignmentCenter;
-            [floatBtn setTitle:@"详情" forState:UIControlStateNormal];
-            [floatBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-            [floatBtn addTarget:_detailHandler action:@selector(onDetailTap:) forControlEvents:UIControlEventTouchUpInside];
-            [selfView addSubview:floatBtn];
-        }
-
-        objc_setAssociatedObject(floatBtn, "detailInfo", detailInfo, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        reLog(@"[DETAIL] 页面按钮已添加(viewWillAppear)");
-    } @catch (NSException *e) {
-        reLog([NSString stringWithFormat:@"[DETAIL] 异常: %@ - %@", e.name, e.reason]);
-    }
+    // 延迟重试：等红包数据异步加载
+    __weak id weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddDetailButton(weakSelf, 1);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddDetailButton(weakSelf, 2);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddDetailButton(weakSelf, 3);
+    });
 }
 
 static void replaced_OnWCToHongbaoCommonResponse2(id self, SEL _cmd, id res, id req) {
