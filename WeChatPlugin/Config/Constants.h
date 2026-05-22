@@ -15,7 +15,7 @@ static NSString *const kDefaultCustomNotifyFormat = @"[{name}]撤回了一条消
 static NSString *const kDefaultRevokeTemplate = @""; // 空=使用默认格式；非空=占位符模板
 
 #pragma mark - 通知撤回者
-static NSString *const kDefaultNotifySenderTemplate = @"你的撤回已被拦截：\n{内容}";
+static NSString *const kDefaultNotifySenderTemplate = @"【捕抓到1条撤回消息】\n操作用户: {用户名}\n发送时间: {yyyy}-{MM}-{dd} {HH}:{mm}:{ss}\n撤回内容: {内容}\n\n撤回无效，消息已读并保存";
 
 static NSString *const kDefaultNameColor = @"#FA5151";
 static NSString *const kDefaultTimeColor = @"#FA5151";

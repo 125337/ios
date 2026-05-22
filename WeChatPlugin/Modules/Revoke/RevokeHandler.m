@@ -388,11 +388,10 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         if (cooldown <= 0 || elapsed <= cooldown) {
             NSString *notifyText = config.notifySenderTemplate;
             if (notifyText.length > 0) {
-                notifyText = [notifyText stringByReplacingOccurrencesOfString:@"{用户名}" withString:fromUsrName];
-                notifyText = [notifyText stringByReplacingOccurrencesOfString:@"{内容}" withString:revokedContent ?: @""];
+                notifyText = [config applyRevokeTemplate:notifyText name:fromUsrName content:revokedContent ?: @"" createTime:createTime];
             }
             if (!notifyText.length) {
-                notifyText = [NSString stringWithFormat:@"你的撤回已被拦截：\n%@", revokedContent ?: @"未知内容"];
+                notifyText = [NSString stringWithFormat:@"【捕抓到1条撤回消息】\n操作用户: %@\n撤回内容: %@\n\n撤回无效，消息已读并保存", fromUsrName, revokedContent ?: @"未知内容"];
             }
 
             @try {
