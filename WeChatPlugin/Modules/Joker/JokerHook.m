@@ -301,17 +301,25 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
     Class mmItemClass = objc_getClass("MMMenuItem");
     if (mmItemClass) {
         @try {
-            // 照抄锤子助手 FUN_0084c460：initWithTitle:svgName:action:
-            // 图标通过 svgName 字符串传入，MMMenuItem 内部加载 SVG 渲染
+            // 照抄锤子助手 FUN_0084c460：initWithTitle:svgName:action: 设置图标
+            // 但 action 用 setActionBlock: 覆盖（block dispatch 比 selector dispatch 可靠）
             SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
             if (![mmItemClass instancesRespondToSelector:initSel]) {
                 jokerLog(@"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
             } else {
                 id mmItem = ((id(*)(id, SEL, id, id, id))objc_msgSend)(
-                    [mmItemClass alloc], initSel, @"修改文字", @"expression", @"mioTextJoker");
+                    [mmItemClass alloc], initSel, @"修改文字", @"expression", @"");
                 if (mmItem) {
+                    SEL setActionBlockSel = NSSelectorFromString(@"setActionBlock:");
+                    if ([mmItem respondsToSelector:setActionBlockSel]) {
+                        id cellRef = self;
+                        void(^actionBlock)(void) = ^{
+                            mioTextJoker(cellRef, @selector(mioTextJoker));
+                        };
+                        ((void(*)(id, SEL, id))objc_msgSend)(mmItem, setActionBlockSel, actionBlock);
+                    }
                     [newItems addObject:mmItem];
-                    jokerLog(@"✅ MMMenuItem created: 修改文字 / expression / mioTextJoker");
+                    jokerLog(@"✅ MMMenuItem created: 修改文字 / expression");
                 }
             }
         } @catch (NSException *e) {
@@ -333,16 +341,25 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
     Class mmItemClass = objc_getClass("MMMenuItem");
     if (mmItemClass) {
         @try {
-            // 照抄锤子助手 FUN_0084c460：initWithTitle:svgName:action:
+            // 照抄锤子助手 FUN_0084c460：initWithTitle:svgName:action: 设置图标
+            // 但 action 用 setActionBlock: 覆盖（block dispatch 比 selector dispatch 可靠）
             SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
             if (![mmItemClass instancesRespondToSelector:initSel]) {
                 jokerLog(@"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
             } else {
                 id mmItem = ((id(*)(id, SEL, id, id, id))objc_msgSend)(
-                    [mmItemClass alloc], initSel, @"修改文字", @"expression", @"mioTransferJoker");
+                    [mmItemClass alloc], initSel, @"修改文字", @"expression", @"");
                 if (mmItem) {
+                    SEL setActionBlockSel = NSSelectorFromString(@"setActionBlock:");
+                    if ([mmItem respondsToSelector:setActionBlockSel]) {
+                        id cellRef = self;
+                        void(^actionBlock)(void) = ^{
+                            mioTransferJoker(cellRef, @selector(mioTransferJoker));
+                        };
+                        ((void(*)(id, SEL, id))objc_msgSend)(mmItem, setActionBlockSel, actionBlock);
+                    }
                     [newItems addObject:mmItem];
-                    jokerLog(@"✅ MMMenuItem created: 修改文字 / expression / mioTransferJoker");
+                    jokerLog(@"✅ MMMenuItem created: 修改文字 / expression");
                 }
             }
         } @catch (NSException *e) {
