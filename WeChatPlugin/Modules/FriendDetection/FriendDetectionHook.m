@@ -205,7 +205,7 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         WPLog(@"FriendDetect", @"[checkFriendsWithCompletion] Starting...");
         NSArray *friends = [self allFriends];
-        if (!friends || friends.count == 0) { WPLog(@"FriendDetect", @"[checkFriendsWithCompletion] No friends"); if (completion) completion(@[]); return; }
+        if (!friends || friends.count == 0) { WPLog(@"FriendDetect", @"[checkFriendsWithCompletion] No friends"); if (completion completion(@[]); return; }
 
         NSMutableArray *wxIDs = [NSMutableArray array];
         for (id contact in friends) {

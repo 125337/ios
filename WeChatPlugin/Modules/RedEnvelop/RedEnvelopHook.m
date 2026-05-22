@@ -132,7 +132,7 @@ static void processRedEnvelopMessage(id wrap) {
         for (NSString *groupItem in config.redEnvelopGroupFilterList) {
             if ([fromUsr containsString:groupItem] || [toUsr containsString:groupItem]) {
                 shouldReceive = NO;
-                WPLog(@"RedEnv", @"[FILTER] 群过滤命中: %@ 匹配 %@", fromUsr, groupItem));
+                WPLog(@"RedEnv", @"[FILTER] 群过滤命中: %@ 匹配 %@", fromUsr, groupItem);
                 break;
             }
         }
@@ -179,7 +179,7 @@ static void processRedEnvelopMessage(id wrap) {
         }
     }
     if (!nativeUrlDict) {
-        WPLog(@"RedEnv", @"[WARN] 无法解析nativeUrl: %@", [nativeUrl substringToIndex:MIN(nativeUrl.length, 100)]));
+        WPLog(@"RedEnv", @"[WARN] 无法解析nativeUrl: %@", [nativeUrl substringToIndex:MIN(nativeUrl.length, 100)]);
         return;
     }
 
@@ -199,7 +199,7 @@ static void processRedEnvelopMessage(id wrap) {
             NSString *trimmed = [kw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
             if (trimmed.length > 0 && [content containsString:trimmed]) {
                 shouldReceive = NO;
-                WPLog(@"RedEnv", @"[FILTER] 关键词过滤命中: %@", trimmed));
+                WPLog(@"RedEnv", @"[FILTER] 关键词过滤命中: %@", trimmed);
                 break;
             }
         }
@@ -216,12 +216,12 @@ static void processRedEnvelopMessage(id wrap) {
     }
 
     [taskMgr savePendingParam:param];
-    WPLog(@"RedEnv", @"[SAVE] 已保存 pending param: sendId=%@", param.sendId));
+    WPLog(@"RedEnv", @"[SAVE] 已保存 pending param: sendId=%@", param.sendId);
 
     [taskMgr startBackgroundKeepAlive];
 
     int delay = (int)config.redEnvelopDelay;
-    WPLog(@"RedEnv", @"[DISPATCH] 准备查询: sendId=%@ delay=%d", param.sendId, delay));
+    WPLog(@"RedEnv", @"[DISPATCH] 准备查询: sendId=%@ delay=%d", param.sendId, delay);
 
     [taskMgr addTaskWithParam:param delay:delay];
 }
@@ -350,14 +350,14 @@ static void handleHongbaoResponse(id res, id req) {
     if (!param && requestSendId.length > 0) {
         param = [taskMgr popPendingParamBySendId:requestSendId];
         if (param) {
-            WPLog(@"RedEnv", @"[MATCH] 通过requestSendId匹配: %@ -> %@", requestSendId, param.sendId));
+            WPLog(@"RedEnv", @"[MATCH] 通过requestSendId匹配: %@ -> %@", requestSendId, param.sendId);
         }
     }
 
     if (!param && requestSign.length > 0) {
         param = [taskMgr findPendingParamBySign:requestSign];
         if (param) {
-            WPLog(@"RedEnv", @"[MATCH] 通过sign匹配: %@", [requestSign substringToIndex:MIN(requestSign.length, 16)]));
+            WPLog(@"RedEnv", @"[MATCH] 通过sign匹配: %@", [requestSign substringToIndex:MIN(requestSign.length, 16)]);
         }
     }
 
@@ -370,11 +370,11 @@ static void handleHongbaoResponse(id res, id req) {
     BOOL signMatch = requestSign.length > 0 ? [requestSign isEqualToString:param.sign] : YES;
     BOOL shouldOpen = config.autoRedEnvelop;
     if (!param.isGroupSender && !signMatch) shouldOpen = NO;
-    WPLog(@"RedEnv", @"[CHECK] signMatch=%d shouldOpen=%d isGroupSender=%d sendId=%@", signMatch, shouldOpen, param.isGroupSender, param.sendId));
+    WPLog(@"RedEnv", @"[CHECK] signMatch=%d shouldOpen=%d isGroupSender=%d sendId=%@", signMatch, shouldOpen, param.isGroupSender, param.sendId);
 
     if (!shouldOpen) return;
 
-    WPLog(@"RedEnv", @"[OPEN] 打开红包 sendId=%@ timingId=%@", param.sendId, timingIdentifier));
+    WPLog(@"RedEnv", @"[OPEN] 打开红包 sendId=%@ timingId=%@", param.sendId, timingIdentifier);
 
     id logicMgr = WXGetService(objc_getClass("WCRedEnvelopesLogicMgr"));
     if (!logicMgr) return;
@@ -392,12 +392,12 @@ static void handleHongbaoResponse(id res, id req) {
     SEL openSel = NSSelectorFromString(@"OpenRedEnvelopesRequest:");
     if ([logicMgr respondsToSelector:openSel]) {
         ((void (*)(id, SEL, NSDictionary *, ...))objc_msgSend)(logicMgr, openSel, params);
-        WPLog(@"RedEnv", @"[OK] 红包已打开: sendId=%@", param.sendId));
+        WPLog(@"RedEnv", @"[OK] 红包已打开: sendId=%@", param.sendId);
     } else {
         SEL openIMSel = NSSelectorFromString(@"OpenOpenIMRedEnvelopesRequest:");
         if ([logicMgr respondsToSelector:openIMSel]) {
             ((void (*)(id, SEL, NSDictionary *, ...))objc_msgSend)(logicMgr, openIMSel, params);
-            WPLog(@"RedEnv", @"[OK] IM红包已打开: sendId=%@", param.sendId));
+            WPLog(@"RedEnv", @"[OK] IM红包已打开: sendId=%@", param.sendId);
         }
     }
 
@@ -425,7 +425,7 @@ static void handleHongbaoResponse(id res, id req) {
                             [msg setValue:config.redEnvelopAutoReplyStr forKey:@"m_nsContent"];
                             [msg setValue:param.sessionUserName forKey:@"m_nsToUsr"];
                         } @catch (NSException *e) {
-                            WPLog(@"RedEnv", @"[REPLY] 设置属性异常: %@ - %@", e.name, e.reason));
+                            WPLog(@"RedEnv", @"[REPLY] 设置属性异常: %@ - %@", e.name, e.reason);
                         }
 
                         @try {
@@ -434,13 +434,13 @@ static void handleHongbaoResponse(id res, id req) {
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
                             [msgMgr performSelector:addMsgSel withObject:param.sessionUserName withObject:msg];
 #pragma clang diagnostic pop
-                            WPLog(@"RedEnv", @"[REPLY] 自动回复已发送: %@ -> %@", config.redEnvelopAutoReplyStr, param.sessionUserName));
+                            WPLog(@"RedEnv", @"[REPLY] 自动回复已发送: %@ -> %@", config.redEnvelopAutoReplyStr, param.sessionUserName);
                         } @catch (NSException *e) {
-                            WPLog(@"RedEnv", @"[REPLY] AddMsg异常: %@ - %@", e.name, e.reason));
+                            WPLog(@"RedEnv", @"[REPLY] AddMsg异常: %@ - %@", e.name, e.reason);
                         }
                     }
                 } @catch (NSException *e) {
-                    WPLog(@"RedEnv", @"[WARN] 自动回复异常: %@ - %@", e.name, e.reason));
+                    WPLog(@"RedEnv", @"[WARN] 自动回复异常: %@ - %@", e.name, e.reason);
                 }
             });
         }
@@ -530,7 +530,7 @@ static void addDetailButtonIfNeeded(id self) {
         objc_setAssociatedObject(floatBtn, "detailInfo", detailInfo, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         WPLog(@"RedEnv", @"[DETAIL] 页面按钮已添加");
     } @catch (NSException *e) {
-        WPLog(@"RedEnv", @"[DETAIL] 异常: %@ - %@", e.name, e.reason));
+        WPLog(@"RedEnv", @"[DETAIL] 异常: %@ - %@", e.name, e.reason);
     }
 }
 

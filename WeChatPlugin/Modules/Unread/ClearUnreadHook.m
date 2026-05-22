@@ -90,7 +90,7 @@ static id findSessionMgr() {
         if (!cls) continue;
         id svc = WXGetService(cls);
         if (svc) {
-            WPLog(WPLog(@"ClearUnread", @"[INFO] Found session mgr: %s -> %@", classNames[i], NSStringFromClass([svc class])));
+            WPLog(@"ClearUnread", @"[INFO] Found session mgr: %s -> %@", classNames[i], NSStringFromClass([svc class]));
             return svc;
         }
     }
@@ -115,7 +115,7 @@ static id findSessionMgr() {
                 if ([activeCtx respondsToSelector:sel]) {
                     id mgr = ((id (*)(id, SEL))objc_msgSend)(activeCtx, sel);
                     if (mgr) {
-                        WPLog(WPLog(@"ClearUnread", @"[INFO] Found session mgr via MMContext.%s: %@", propNames[i], NSStringFromClass([mgr class])));
+                        WPLog(@"ClearUnread", @"[INFO] Found session mgr via MMContext.%s: %@", propNames[i], NSStringFromClass([mgr class]));
                         return mgr;
                     }
                 }
@@ -132,7 +132,7 @@ static id findSessionMgr() {
                 if (ivars[i]) {
                     id mgr = object_getIvar(activeCtx, ivars[i]);
                     if (mgr) {
-                        WPLog(WPLog(@"ClearUnread", @"[INFO] Found session mgr via MMContext ivar: %@", NSStringFromClass([mgr class])));
+                        WPLog(@"ClearUnread", @"[INFO] Found session mgr via MMContext ivar: %@", NSStringFromClass([mgr class]));
                         return mgr;
                     }
                 }
@@ -160,10 +160,10 @@ static NSArray *getSessionList(id sessionMgr) {
         if ([sessionMgr respondsToSelector:selectors[i]]) {
             id result = ((id (*)(id, SEL))objc_msgSend)(sessionMgr, selectors[i]);
             if ([result isKindOfClass:[NSArray class]] && [(NSArray *)result count] > 0) {
-                WPLog(WPLog(@"ClearUnread", @"[INFO] Got session list via %@ (%lu items)", NSStringFromSelector(selectors[i]), (unsigned long)[(NSArray *)result count]));
+                WPLog(@"ClearUnread", @"[INFO] Got session list via %@ (%lu items)", NSStringFromSelector(selectors[i]), (unsigned long)[(NSArray *)result count]);
                 return (NSArray *)result;
             } else if (result) {
-                WPLog(WPLog(@"ClearUnread", @"[INFO] %@ returned non-array or empty: %@", NSStringFromSelector(selectors[i]), NSStringFromClass([result class])));
+                WPLog(@"ClearUnread", @"[INFO] %@ returned non-array or empty: %@", NSStringFromSelector(selectors[i]), NSStringFromClass([result class]));
             }
         }
     }
@@ -182,7 +182,7 @@ static NSArray *getSessionList(id sessionMgr) {
         if (listIvar) {
             id result = object_getIvar(sessionMgr, listIvar);
             if ([result isKindOfClass:[NSArray class]] && [(NSArray *)result count] > 0) {
-                WPLog(WPLog(@"ClearUnread", @"[INFO] Got session list via Ivar %s (%lu items)", ivarNames[i], (unsigned long)[(NSArray *)result count]));
+                WPLog(@"ClearUnread", @"[INFO] Got session list via Ivar %s (%lu items)", ivarNames[i], (unsigned long)[(NSArray *)result count]);
                 return (NSArray *)result;
             }
         }
@@ -194,7 +194,7 @@ static NSArray *getSessionList(id sessionMgr) {
     } else if ([sessionMgr respondsToSelector:NSSelectorFromString(@"getSessionCount")]) {
         sessionCount = ((unsigned int (*)(id, SEL))objc_msgSend)(sessionMgr, NSSelectorFromString(@"getSessionCount"));
     }
-    WPLog(WPLog(@"ClearUnread", @"[INFO] Session count: %u", sessionCount));
+    WPLog(@"ClearUnread", @"[INFO] Session count: %u", sessionCount);
 
     if (sessionCount > 0 && [sessionMgr respondsToSelector:NSSelectorFromString(@"GetSessionAtIndex:")]) {
         NSMutableArray *sessions = [NSMutableArray array];
@@ -203,7 +203,7 @@ static NSArray *getSessionList(id sessionMgr) {
             if (session) [sessions addObject:session];
         }
         if (sessions.count > 0) {
-            WPLog(WPLog(@"ClearUnread", @"[INFO] Got %lu sessions via GetSessionAtIndex:", (unsigned long)sessions.count));
+            WPLog(@"ClearUnread", @"[INFO] Got %lu sessions via GetSessionAtIndex:", (unsigned long)sessions.count);
             return sessions;
         }
     }
@@ -295,9 +295,9 @@ static void clearAllUnread() {
             ((void (*)(id, SEL))objc_msgSend)(sessionMgr, NSSelectorFromString(@"recountUnReadCount"));
         }
 
-        WPLog(WPLog(@"ClearUnread", @"[INFO] cleared %d sessions", cleared));
+        WPLog(@"ClearUnread", @"[INFO] cleared %d sessions", cleared);
     } @catch (NSException *e) {
-        WPLog(WPLog(@"ClearUnread", @"[ERR] clearAllUnread exception: %@ - %@", e.name, e.reason));
+        WPLog(@"ClearUnread", @"[ERR] clearAllUnread exception: %@ - %@", e.name, e.reason);
     }
 }
 
@@ -305,17 +305,17 @@ static void replaced_clickMenu(id self, SEL _cmd, id menuItem) {
     @try {
         if ([menuItem isKindOfClass:[NSString class]]) {
             NSString *menuID = (NSString *)menuItem;
-            WPLog(WPLog(@"ClearUnread", @"[INFO] clickMenu: id=%@", menuID));
+            WPLog(@"ClearUnread", @"[INFO] clickMenu: id=%@", menuID);
 
             if ([menuID isEqualToString:@"99"]) {
                 WPLog(@"ClearUnread",@"[INFO] clickMenu: clearUnread tapped!");
                 clearAllUnread();
             }
         } else {
-            WPLog(WPLog(@"ClearUnread", @"[INFO] clickMenu: unexpected type %@", NSStringFromClass([menuItem class])));
+            WPLog(@"ClearUnread", @"[INFO] clickMenu: unexpected type %@", NSStringFromClass([menuItem class]));
         }
     } @catch (NSException *e) {
-        WPLog(WPLog(@"ClearUnread", @"[ERR] clickMenu exception: %@ - %@", e.name, e.reason));
+        WPLog(@"ClearUnread", @"[ERR] clickMenu exception: %@ - %@", e.name, e.reason);
     }
 
     if (orig_clickMenu) ((void (*)(id, SEL, id))orig_clickMenu)(self, _cmd, menuItem);
@@ -359,7 +359,7 @@ static void replaced_reloadMenuItems(id self, SEL _cmd) {
             }
         }
     } @catch (NSException *e) {
-        WPLog(WPLog(@"ClearUnread", @"[ERR] reloadMenuItems exception: %@ - %@", e.name, e.reason));
+        WPLog(@"ClearUnread", @"[ERR] reloadMenuItems exception: %@ - %@", e.name, e.reason);
     }
 }
 
