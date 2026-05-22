@@ -301,45 +301,47 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
     Class mmItemClass = objc_getClass("MMMenuItem");
     if (mmItemClass) {
         @try {
-            SEL initSel = NSSelectorFromString(@"initWithTitle:iconName:actionName:");
-            id mmItem = nil;
-            if ([mmItemClass instancesRespondToSelector:initSel]) {
-                mmItem = ((id(*)(id, SEL, id, id, const char *))objc_msgSend)(
-                    [mmItemClass alloc], initSel, @"修改", @"expression", "mioTextJoker");
-            }
-            if (!mmItem) {
-                SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
-                if ([mmItemClass instancesRespondToSelector:altInitSel]) {
-                    mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
-                        [mmItemClass alloc], altInitSel, @"修改", NSSelectorFromString(@"mioTextJoker"));
-                }
-            }
-            // 兜底：8.0.60 可能 iconName init 参数不生效，补设 KVC
+            id mmItem = ((id(*)(id, SEL))objc_msgSend)([mmItemClass alloc], @selector(init));
             if (mmItem) {
-                @try { [mmItem setValue:@"expression" forKey:@"m_nsImageName"]; } @catch (NSException *e) {}
-                @try { [mmItem setValue:@"expression" forKey:@"m_nsIconName"]; } @catch (NSException *e) {}
-                @try { [mmItem setValue:@"expression" forKey:@"iconName"]; } @catch (NSException *e) {}
-                // 🔍 诊断：打印 MMMenuItem 的所有 ivar（找到真正的图标属性名后删除此处）
-                jokerLog(@"🔍 MMMenuItem diagnostics START");
-                jokerLog([NSString stringWithFormat:@"   class=%@",
-                    NSStringFromClass([mmItem class])]);
-                unsigned int varCount;
-                Ivar *vars = class_copyIvarList([mmItem class], &varCount);
-                for (unsigned int i = 0; i < varCount; i++) {
-                    const char *name = ivar_getName(vars[i]);
-                    const char *type = ivar_getTypeEncoding(vars[i]);
-                    @try {
-                        id val = object_getIvar(mmItem, vars[i]);
-                        jokerLog([NSString stringWithFormat:@"   IVAR %s (%s) = %@", name, type, val ?: @"(nil)"]);
-                    } @catch (NSException *e) {
-                        jokerLog([NSString stringWithFormat:@"   IVAR %s (%s) = ❌ %@", name, type, e.reason]);
+                // 设置标题
+                SEL setTitleSel = NSSelectorFromString(@"setTitle:");
+                if ([mmItem respondsToSelector:setTitleSel]) {
+                    ((void(*)(id, SEL, id))objc_msgSend)(mmItem, setTitleSel, @"修改");
+                }
+                // 8.0.60: 图标改为 UIImage，加载微信内置图标
+                NSString *wxBundlePath = [[NSBundle mainBundle] pathForResource:@"WeChat" ofType:@"bundle"];
+                NSBundle *wxBundle = wxBundlePath ? [NSBundle bundleWithPath:wxBundlePath] : [NSBundle mainBundle];
+                UIImage *iconImg = [UIImage imageNamed:@"expression" inBundle:wxBundle compatibleWithTraitCollection:nil];
+                if (!iconImg) iconImg = [UIImage imageNamed:@"expression"];
+                if (!iconImg) {
+                    // 尝试其他可能的图标名
+                    NSArray *candidateNames = @[@"edit_expression", @"menu_expression", @"icons_outlined_expression"];
+                    for (NSString *name in candidateNames) {
+                        iconImg = [UIImage imageNamed:name inBundle:wxBundle compatibleWithTraitCollection:nil];
+                        if (!iconImg) iconImg = [UIImage imageNamed:name];
+                        if (iconImg) break;
                     }
                 }
-                free(vars);
-                jokerLog(@"🔍 MMMenuItem diagnostics END");
+                if (iconImg) {
+                    [mmItem setValue:iconImg forKey:@"_iconImage"];
+                    jokerLog(@"✅ MMMenuItem icon set (_iconImage)");
+                } else {
+                    jokerLog(@"⚠️ MMMenuItem: UIImage for 'expression' not found");
+                }
+                // 设置 action（block）
+                SEL setActionBlockSel = NSSelectorFromString(@"setActionBlock:");
+                if ([mmItem respondsToSelector:setActionBlockSel]) {
+                    id cellRef = self;
+                    void(^actionBlock)(void) = ^{
+                        mioTextJoker(cellRef, @selector(mioTextJoker));
+                    };
+                    ((void(*)(id, SEL, id))objc_msgSend)(mmItem, setActionBlockSel, actionBlock);
+                }
                 [newItems addObject:mmItem];
             }
-        } @catch (NSException *e) {}
+        } @catch (NSException *e) {
+            jokerLog([NSString stringWithFormat:@"[Joker] ❌ MMMenuItem create: %@", e]);
+        }
     }
     return newItems;
 }
@@ -356,45 +358,45 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
     Class mmItemClass = objc_getClass("MMMenuItem");
     if (mmItemClass) {
         @try {
-            SEL initSel = NSSelectorFromString(@"initWithTitle:iconName:actionName:");
-            id mmItem = nil;
-            if ([mmItemClass instancesRespondToSelector:initSel]) {
-                mmItem = ((id(*)(id, SEL, id, id, const char *))objc_msgSend)(
-                    [mmItemClass alloc], initSel, @"修改", @"expression", "mioTransferJoker");
-            }
-            if (!mmItem) {
-                SEL altInitSel = NSSelectorFromString(@"initWithTitle:action:");
-                if ([mmItemClass instancesRespondToSelector:altInitSel]) {
-                    mmItem = ((id(*)(id, SEL, id, SEL))objc_msgSend)(
-                        [mmItemClass alloc], altInitSel, @"修改", NSSelectorFromString(@"mioTransferJoker"));
-                }
-            }
-            // 兜底：8.0.60 可能 iconName init 参数不生效，补设 KVC
+            id mmItem = ((id(*)(id, SEL))objc_msgSend)([mmItemClass alloc], @selector(init));
             if (mmItem) {
-                @try { [mmItem setValue:@"expression" forKey:@"m_nsImageName"]; } @catch (NSException *e) {}
-                @try { [mmItem setValue:@"expression" forKey:@"m_nsIconName"]; } @catch (NSException *e) {}
-                @try { [mmItem setValue:@"expression" forKey:@"iconName"]; } @catch (NSException *e) {}
-                // 🔍 诊断：打印 MMMenuItem 的所有 ivar（找到真正的图标属性名后删除此处）
-                jokerLog(@"🔍 MMMenuItem diagnostics START");
-                jokerLog([NSString stringWithFormat:@"   class=%@",
-                    NSStringFromClass([mmItem class])]);
-                unsigned int varCount;
-                Ivar *vars = class_copyIvarList([mmItem class], &varCount);
-                for (unsigned int i = 0; i < varCount; i++) {
-                    const char *name = ivar_getName(vars[i]);
-                    const char *type = ivar_getTypeEncoding(vars[i]);
-                    @try {
-                        id val = object_getIvar(mmItem, vars[i]);
-                        jokerLog([NSString stringWithFormat:@"   IVAR %s (%s) = %@", name, type, val ?: @"(nil)"]);
-                    } @catch (NSException *e) {
-                        jokerLog([NSString stringWithFormat:@"   IVAR %s (%s) = ❌ %@", name, type, e.reason]);
+                SEL setTitleSel = NSSelectorFromString(@"setTitle:");
+                if ([mmItem respondsToSelector:setTitleSel]) {
+                    ((void(*)(id, SEL, id))objc_msgSend)(mmItem, setTitleSel, @"修改");
+                }
+                // 8.0.60: 图标改为 UIImage，加载微信内置图标
+                NSString *wxBundlePath = [[NSBundle mainBundle] pathForResource:@"WeChat" ofType:@"bundle"];
+                NSBundle *wxBundle = wxBundlePath ? [NSBundle bundleWithPath:wxBundlePath] : [NSBundle mainBundle];
+                UIImage *iconImg = [UIImage imageNamed:@"expression" inBundle:wxBundle compatibleWithTraitCollection:nil];
+                if (!iconImg) iconImg = [UIImage imageNamed:@"expression"];
+                if (!iconImg) {
+                    NSArray *candidateNames = @[@"edit_expression", @"menu_expression", @"icons_outlined_expression"];
+                    for (NSString *name in candidateNames) {
+                        iconImg = [UIImage imageNamed:name inBundle:wxBundle compatibleWithTraitCollection:nil];
+                        if (!iconImg) iconImg = [UIImage imageNamed:name];
+                        if (iconImg) break;
                     }
                 }
-                free(vars);
-                jokerLog(@"🔍 MMMenuItem diagnostics END");
+                if (iconImg) {
+                    [mmItem setValue:iconImg forKey:@"_iconImage"];
+                    jokerLog(@"✅ MMMenuItem icon set (_iconImage)");
+                } else {
+                    jokerLog(@"⚠️ MMMenuItem: UIImage for 'expression' not found");
+                }
+                // 设置 action（block）
+                SEL setActionBlockSel = NSSelectorFromString(@"setActionBlock:");
+                if ([mmItem respondsToSelector:setActionBlockSel]) {
+                    id cellRef = self;
+                    void(^actionBlock)(void) = ^{
+                        mioTransferJoker(cellRef, @selector(mioTransferJoker));
+                    };
+                    ((void(*)(id, SEL, id))objc_msgSend)(mmItem, setActionBlockSel, actionBlock);
+                }
                 [newItems addObject:mmItem];
             }
-        } @catch (NSException *e) {}
+        } @catch (NSException *e) {
+            jokerLog([NSString stringWithFormat:@"[Joker] ❌ MMMenuItem create: %@", e]);
+        }
     }
     return newItems;
 }
