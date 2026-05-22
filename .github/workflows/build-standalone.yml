@@ -116,7 +116,6 @@ jobs:
               -framework Security \
               -framework AVFoundation \
               -framework UserNotifications \
-              -Wl,-dead_strip \
               -Wl,-S \
               -Wl,-x \
               -Wl,-undefined,dynamic_lookup \
