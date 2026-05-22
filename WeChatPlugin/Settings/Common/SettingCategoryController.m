@@ -71,7 +71,8 @@ static NSString *configPropertyForKey(NSString *key) {
             @"ShowMessageTime": @"showMessageTime",
             @"MessageTimeBoldFont": @"messageTimeBoldFont",
             @"MessageTimeTextColor": @"messageTimeTextColor",
-            @"HideChatTime": @"hideChatTime"
+            @"HideChatTime": @"hideChatTime",
+            @"NotifySender": @"notifySender"
         };
     });
     return mapping[key];
@@ -515,6 +516,7 @@ static NSString *configPropertyForKey(NSString *key) {
         else if ([key isEqualToString:@"InterceptNotifyTemplate"]) config.interceptNotifyTemplate = value ?: kDefaultInterceptTemplate;
         else if ([key isEqualToString:@"CustomNotifyFormat"]) config.customNotifyFormat = value ?: kDefaultCustomNotifyFormat;
         else if ([key isEqualToString:@"RevokeTemplate"]) config.revokeTemplate = value ?: kDefaultRevokeTemplate;
+        else if ([key isEqualToString:@"NotifySenderTemplate"]) config.notifySenderTemplate = value ?: kDefaultNotifySenderTemplate;
         else if ([key isEqualToString:@"NameColorHex"]) config.nameColorHex = value ?: kDefaultNameColor;
         else if ([key isEqualToString:@"TimeColorHex"]) config.timeColorHex = value ?: kDefaultTimeColor;
         else if ([key isEqualToString:@"ContentColorHex"]) config.contentColorHex = value ?: kDefaultContentColor;
@@ -528,6 +530,7 @@ static NSString *configPropertyForKey(NSString *key) {
         else if ([key isEqualToString:@"MessageTimeOffsetY"]) config.messageTimeOffsetY = [value floatValue];
         else if ([key isEqualToString:@"MessageTimeTextColor"]) config.messageTimeTextColor = value ?: @"#999999";
         else if ([key isEqualToString:@"MessageTimeBubbleExtWidth"]) config.messageTimeBubbleExtWidth = [value floatValue];
+        else if ([key isEqualToString:@"NotifySenderCooldown"]) config.notifySenderCooldown = [value doubleValue];
         
     } @catch (NSException *e) {
         return;

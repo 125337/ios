@@ -20,6 +20,7 @@
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
 
+    // ===== 消息防撤回 =====
     UIView *group = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
 
@@ -34,6 +35,23 @@
 
     y = [self finishGroup:group atY:y height:cy];
 
+    // ===== 通知撤回者 =====
+    UIView *group2 = [self addTableGroupAtY:y width:w];
+    CGFloat cy2 = 0;
+
+    cy2 = [self addMasterSwitchRowInGroup:group2
+                                     title:@"启用通知撤回者"
+                                       key:@"NotifySender"
+                                      isOn:config.notifySender
+                                subBuilder:^(UIView *expand, CGFloat *ecy) {
+        NSString *sub = config.notifySenderTemplate.length > 0 ? config.notifySenderTemplate : @"默认内容";
+        *ecy = [self addNavRowInGroup:expand title:@"通知消息内容" subtitle:sub tag:200 action:@selector(onNotifyFormatTap) cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"频率限制(秒)" key:@"NotifySenderCooldown" value:[NSString stringWithFormat:@"%.0f", config.notifySenderCooldown] hint:@"0=不限制" cy:*ecy width:w];
+    } cy:cy2 width:w];
+
+    y = [self finishGroup:group2 atY:y height:cy2];
+
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
@@ -44,6 +62,20 @@
     editor.saveBlock = ^(NSString *newFormat) {
         PluginConfig *cfg = [PluginConfig shared];
         cfg.revokeTemplate = newFormat;
+        [cfg save];
+        [self buildUI];
+    };
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
+    nav.modalPresentationStyle = UIModalPresentationPageSheet;
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+- (void)onNotifyFormatTap {
+    RevokeFormatEditorVC *editor = [[RevokeFormatEditorVC alloc] init];
+    editor.initialFormat = [PluginConfig shared].notifySenderTemplate;
+    editor.saveBlock = ^(NSString *newFormat) {
+        PluginConfig *cfg = [PluginConfig shared];
+        cfg.notifySenderTemplate = newFormat;
         [cfg save];
         [self buildUI];
     };

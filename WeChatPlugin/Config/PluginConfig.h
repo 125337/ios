@@ -81,6 +81,10 @@
 @property (nonatomic, copy) NSString *darkNameColorHex;
 @property (nonatomic, copy) NSString *darkTimeColorHex;
 @property (nonatomic, copy) NSString *darkContentColorHex;
+#pragma mark - 通知撤回者
+@property (nonatomic, assign) BOOL notifySender;
+@property (nonatomic, copy) NSString *notifySenderTemplate;
+@property (nonatomic, assign) double notifySenderCooldown;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *sessionFormats;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *userFormats;
 - (NSString *)notifyFormatForSession:(NSString *)session user:(NSString *)user;

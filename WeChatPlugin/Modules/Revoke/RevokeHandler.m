@@ -377,6 +377,82 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
 
     BOOL inserted = insertTipMessage_DKStyle(messageMgr, session, newMsgContent, revokedMsgWrap, createTime);
     revokeLog([NSString stringWithFormat:@"result=%d", inserted]);
+
+    // ====== 通知撤回者 ======
+    if (config.notifySender && !config.noTip && inserted && fromUsrName.length > 0) {
+        NSTimeInterval currentTime = [[NSDate date] timeIntervalSince1970];
+        NSTimeInterval msgTime = (NSTimeInterval)createTime;
+        NSTimeInterval elapsed = currentTime - msgTime;
+        double cooldown = config.notifySenderCooldown;
+
+        if (cooldown <= 0 || elapsed <= cooldown) {
+            NSString *notifyText = config.notifySenderTemplate;
+            if (notifyText.length > 0) {
+                notifyText = [notifyText stringByReplacingOccurrencesOfString:@"{用户名}" withString:fromUsrName];
+                notifyText = [notifyText stringByReplacingOccurrencesOfString:@"{内容}" withString:revokedContent ?: @""];
+            }
+            if (!notifyText.length) {
+                notifyText = [NSString stringWithFormat:@"你的撤回已被拦截：\n%@", revokedContent ?: @"未知内容"];
+            }
+
+            @try {
+                id notifyWrap = ((id (*)(id, SEL, unsigned int))objc_msgSend)(
+                    [CMessageWrapClass alloc], NSSelectorFromString(@"initWithMsgType:"), 1);
+
+                if (notifyWrap) {
+                    SEL setContentSel = NSSelectorFromString(@"setM_nsContent:");
+                    if ([notifyWrap respondsToSelector:setContentSel])
+                        ((void (*)(id, SEL, id))objc_msgSend)(notifyWrap, setContentSel, notifyText);
+
+                    // 设置发送者（当前用户）和接收者（撤回者）
+                    if (revokedMsgWrap) {
+                        SEL fromSel = NSSelectorFromString(@"m_nsFromUsr");
+                        SEL toSel = NSSelectorFromString(@"m_nsToUsr");
+                        id originalFrom = nil;
+                        if ([revokedMsgWrap respondsToSelector:fromSel])
+                            originalFrom = ((id (*)(id, SEL))objc_msgSend)(revokedMsgWrap, fromSel);
+                        id originalTo = nil;
+                        if ([revokedMsgWrap respondsToSelector:toSel])
+                            originalTo = ((id (*)(id, SEL))objc_msgSend)(revokedMsgWrap, toSel);
+
+                        // 判断是群聊还是私聊
+                        BOOL isGroup = [session containsString:@"@chatroom"];
+
+                        if (isGroup) {
+                            // 群聊：发给撤回者的群内临时 ChatName
+                            SEL setToUsrSel = NSSelectorFromString(@"setM_nsToUsr:");
+                            if ([notifyWrap respondsToSelector:setToUsrSel]) {
+                                NSString *targetTo = originalFrom; // fromuser 在群聊中是临时 ChatName
+                                ((void (*)(id, SEL, id))objc_msgSend)(notifyWrap, setToUsrSel, targetTo);
+                            }
+                            SEL setFromUsrSel = NSSelectorFromString(@"setM_nsFromUsr:");
+                            if ([notifyWrap respondsToSelector:setFromUsrSel] && originalTo)
+                                ((void (*)(id, SEL, id))objc_msgSend)(notifyWrap, setFromUsrSel, originalTo);
+                        } else {
+                            // 私聊：发给当前会话
+                            SEL setToUsrSel = NSSelectorFromString(@"setM_nsToUsr:");
+                            if ([notifyWrap respondsToSelector:setToUsrSel] && originalFrom)
+                                ((void (*)(id, SEL, id))objc_msgSend)(notifyWrap, setToUsrSel, originalFrom);
+                            SEL setFromUsrSel = NSSelectorFromString(@"setM_nsFromUsr:");
+                            if ([notifyWrap respondsToSelector:setFromUsrSel] && originalTo)
+                                ((void (*)(id, SEL, id))objc_msgSend)(notifyWrap, setFromUsrSel, originalTo);
+                        }
+                    }
+
+                    // 尝试通过 AddLocalMsg 发送（私聊）或 AddMsg（有 toUsr 消息）
+                    SEL addLocalMsgSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
+                    if ([messageMgr respondsToSelector:addLocalMsgSel]) {
+                        ((void (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)(
+                            messageMgr, addLocalMsgSel, session, notifyWrap, YES, NO);
+                        revokeLog(@"notifySender: sent to revoker");
+                    }
+                }
+            } @catch (NSException *e) {
+                revokeLog([NSString stringWithFormat:@"notifySender exception: %@", e]);
+            }
+        }
+    }
+
     return inserted;
 }
 

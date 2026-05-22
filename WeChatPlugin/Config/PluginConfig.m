@@ -44,6 +44,7 @@ static void configLog(NSString *content) {
         _interceptNotifyTemplate = [kDefaultInterceptTemplate copy];
         _customNotifyFormat = [kDefaultCustomNotifyFormat copy];
         _revokeTemplate = [kDefaultRevokeTemplate copy];
+        _notifySenderTemplate = [kDefaultNotifySenderTemplate copy];
         _sessionFormats = [NSMutableDictionary dictionary];
         _userFormats = [NSMutableDictionary dictionary];
         [self loadDefaults];
@@ -257,6 +258,9 @@ static void configLog(NSString *content) {
     if (_interceptNotifyTemplate) [d setObject:_interceptNotifyTemplate forKey:[kPluginPrefix stringByAppendingString:@"InterceptNotifyTemplate"]];
     if (_customNotifyFormat) [d setObject:_customNotifyFormat forKey:[kPluginPrefix stringByAppendingString:@"CustomNotifyFormat"]];
     if (_revokeTemplate) [d setObject:_revokeTemplate forKey:[kPluginPrefix stringByAppendingString:@"RevokeTemplate"]];
+    if (_notifySenderTemplate) [d setObject:_notifySenderTemplate forKey:[kPluginPrefix stringByAppendingString:@"NotifySenderTemplate"]];
+    [d setBool:_notifySender forKey:[kPluginPrefix stringByAppendingString:@"NotifySender"]];
+    [d setDouble:_notifySenderCooldown forKey:[kPluginPrefix stringByAppendingString:@"NotifySenderCooldown"]];
 
     [d setObject:_nameColorHex forKey:[kPluginPrefix stringByAppendingString:@"NameColorHex"]];
     [d setObject:_timeColorHex forKey:[kPluginPrefix stringByAppendingString:@"TimeColorHex"]];
