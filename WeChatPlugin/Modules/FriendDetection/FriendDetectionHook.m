@@ -824,9 +824,9 @@ static void saveResults(NSArray *results) {
     for (id r in results) {
         processed++;
         BOOL isDel = NO, isInv = NO; id contact = nil;
-        @try { isDel = [[r valueForKey:@"isDeleted"] boolValue]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey isDeleted exception: %@", processed, e.reason);
-        @try { isInv = [[r valueForKey:@"isInvalid"] boolValue]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey isInvalid exception: %@", processed, e.reason);
-        @try { contact = [r valueForKey:@"contact"]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey contact exception: %@", processed, e.reason);
+        @try { isDel = [[r valueForKey:@"isDeleted"] boolValue]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey isDeleted exception: %@", processed, e.reason); }
+        @try { isInv = [[r valueForKey:@"isInvalid"] boolValue]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey isInvalid exception: %@", processed, e.reason); }
+        @try { contact = [r valueForKey:@"contact"]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey contact exception: %@", processed, e.reason); }
         
         if (processed <= 3)
             WPLog(@"FriendDetect", @"[Save] item#%d: isDel=%d isInv=%d contact=%@", processed, isDel, isInv, contact ? NSStringFromClass([contact class]) : @"nil");
