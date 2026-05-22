@@ -250,8 +250,6 @@ static void processRedEnvelopMessage(id wrap) {
     [taskMgr addTaskWithParam:param delay:delay];
 }
 
-static NSDictionary *g_pendingDetailInfo = nil;
-
 static void handleHongbaoResponse(id res, id req) {
     PluginConfig *config = [PluginConfig shared];
     if (!config.autoRedEnvelop) return;
@@ -313,19 +311,6 @@ static void handleHongbaoResponse(id res, id req) {
                       amount / 100.0, nickName, wishing,
                       totalAmountVal / 100.0, (long)totalNum,
                       (long)_statTotalCount, _statTotalAmount / 100.0]);
-
-                // 保存详情数据供 BaseMsgContentViewController 按钮使用
-                NSInteger recNumVal = [responseDict[@"recNum"] integerValue];
-                if (recNumVal == 0) recNumVal = [responseDict[@"receiveNum"] integerValue];
-                g_pendingDetailInfo = @{
-                    @"m_lTotalAmount": totalAmount,
-                    @"m_lTotalNum": @(totalNum),
-                    @"m_lRecNum": @(recNumVal),
-                    @"m_lRecAmount": receiveAmount ?: @(amount)
-                };
-                reLog([NSString stringWithFormat:@"[DETAIL] 详情数据已保存: totalAmt=%ld totalNum=%ld recNum=%ld recAmt=%@",
-                      (long)totalAmountVal, (long)totalNum, (long)recNumVal,
-                      receiveAmount ?: @(amount)]);
             } else if (receiveStatus == 2) {
                 reLog(@"[STAT] 红包已被领取");
             } else if (hbStatus == 4) {
@@ -488,8 +473,8 @@ static void handleHongbaoResponse(id res, id req) {
 
 static IMP orig_OnWCToHongbaoCommonResponse2 = NULL;
 static IMP orig_OnWCToHongbaoCommonResponse3 = NULL;
-static IMP orig_BaseMsgViewWillAppear = NULL;
 static IMP orig_DetailViewDidLoad = NULL;
+static IMP orig_StoryViewDidLoad = NULL;
 
 @interface REDetailButtonHandler : NSObject
 - (void)onDetailTap:(UIButton *)sender;
@@ -522,47 +507,42 @@ static IMP orig_DetailViewDidLoad = NULL;
 
 static REDetailButtonHandler *_detailHandler = nil;
 
-static void tryAddDetailButton(id self, int retryCount) {
-    if (!self) return;
+// 仿 Mikoto：在 viewDidLoad 中直接从 VC ivar 读取数据并添加按钮
+static void addDetailButtonIfNeeded(id self) {
     @try {
         id detailInfo = nil;
-        id controlData = [self valueForKey:@"m_data"];
-        if (controlData) detailInfo = [controlData valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
-        if (!detailInfo) detailInfo = [self valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
+        id mData = [self valueForKey:@"m_data"];
+        if (mData) {
+            detailInfo = [mData valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
+        }
         if (!detailInfo) {
-            if (retryCount == 0) {
-                // dump self ivars
-                reLog([NSString stringWithFormat:@"[DETAIL] DUMP self class=%@", NSStringFromClass(object_getClass(self))]);
-                unsigned int count = 0;
-                Ivar *ivars = class_copyIvarList([self class], &count);
-                for (unsigned int i = 0; i < count; i++) {
-                    const char *name = ivar_getName(ivars[i]);
-                    const char *type = ivar_getTypeEncoding(ivars[i]);
-                    id val = nil;
-                    @try { val = [self valueForKey:@(name)]; } @catch (NSException *e) {}
-                    reLog([NSString stringWithFormat:@"[DETAIL]   %s %s = %@", name, type,
-                           val ? [NSString stringWithFormat:@"<%@: %p>", NSStringFromClass([val class]), val] : @"nil"]);
-                }
-                free(ivars);
+            detailInfo = [self valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
+        }
+        if (!detailInfo) {
+            // dump ivars 用于调试
+            reLog([NSString stringWithFormat:@"[DETAIL] no detailInfo on %@, dump ivars:", NSStringFromClass(object_getClass(self))]);
+            unsigned int count = 0;
+            Ivar *ivars = class_copyIvarList([self class], &count);
+            for (unsigned int i = 0; i < count && i < 20; i++) {
+                const char *name = ivar_getName(ivars[i]);
+                const char *type = ivar_getTypeEncoding(ivars[i]);
+                id val = nil;
+                @try { val = [self valueForKey:@(name)]; } @catch (NSException *e) {}
+                reLog([NSString stringWithFormat:@"[DETAIL]   %s %s = %@", name, type,
+                       val ? [NSString stringWithFormat:@"<%@: %p>", NSStringFromClass([val class]), val] : @"nil"]);
             }
-            reLog([NSString stringWithFormat:@"[DETAIL] no detailInfo (retry=%d), skip", retryCount]);
+            free(ivars);
             return;
         }
-        reLog([NSString stringWithFormat:@"[DETAIL] detailInfo found (retry=%d): %@", retryCount, detailInfo]);
+        reLog([NSString stringWithFormat:@"[DETAIL] detailInfo found: %@", detailInfo]);
 
         if (!_detailHandler) _detailHandler = [[REDetailButtonHandler alloc] init];
 
         UIView *selfView = [self valueForKey:@"view"];
-        if (!selfView) {
-            reLog(@"[DETAIL] selfView is nil, skip");
-            return;
-        }
+        if (!selfView) return;
 
         UIButton *floatBtn = (UIButton *)[selfView viewWithTag:99992];
-        if (floatBtn) {
-            reLog(@"[DETAIL] button already exists, skip");
-            return;
-        }
+        if (floatBtn) return;
 
         CGFloat viewW = selfView.bounds.size.width;
         CGFloat viewH = selfView.bounds.size.height;
@@ -585,39 +565,7 @@ static void tryAddDetailButton(id self, int retryCount) {
     }
 }
 
-static void tryAddPendingButton(id self) {
-    if (!self || !g_pendingDetailInfo) return;
-
-    if (!_detailHandler) _detailHandler = [[REDetailButtonHandler alloc] init];
-
-    UIView *selfView = [self valueForKey:@"view"];
-    if (!selfView) return;
-
-    UIButton *floatBtn = (UIButton *)[selfView viewWithTag:99992];
-    if (floatBtn) return;
-
-    CGFloat viewW = selfView.bounds.size.width;
-    CGFloat viewH = selfView.bounds.size.height;
-    floatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-    floatBtn.tag = 99992;
-    floatBtn.frame = CGRectMake(viewW - 50, viewH / 2 - 22, 44, 44);
-    floatBtn.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
-    floatBtn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
-    floatBtn.layer.cornerRadius = 22;
-    floatBtn.titleLabel.font = [UIFont systemFontOfSize:12];
-    floatBtn.titleLabel.textAlignment = NSTextAlignmentCenter;
-    [floatBtn setTitle:@"详情" forState:UIControlStateNormal];
-    [floatBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    [floatBtn addTarget:_detailHandler action:@selector(onDetailTap:) forControlEvents:UIControlEventTouchUpInside];
-    [selfView addSubview:floatBtn];
-    objc_setAssociatedObject(floatBtn, "detailInfo", g_pendingDetailInfo, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    reLog(@"[DETAIL] 页面按钮已添加(pending data)");
-    g_pendingDetailInfo = nil;
-}
-
 static void replaced_DetailViewDidLoad(id self, SEL _cmd) {
-    reLog([NSString stringWithFormat:@"[DETAIL] DetailVC viewDidLoad: %@", NSStringFromClass(object_getClass(self))]);
-
     if (orig_DetailViewDidLoad) {
         ((void (*)(id, SEL))orig_DetailViewDidLoad)(self, _cmd);
     }
@@ -625,41 +573,18 @@ static void replaced_DetailViewDidLoad(id self, SEL _cmd) {
     PluginConfig *config = [PluginConfig shared];
     if (!config.redEnvelopeDetail) return;
 
-    tryAddPendingButton(self);
-
-    __weak id weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddPendingButton(weakSelf);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddPendingButton(weakSelf);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddPendingButton(weakSelf);
-    });
+    addDetailButtonIfNeeded(self);
 }
 
-static void replaced_BaseMsgViewWillAppear(id self, SEL _cmd, BOOL animated) {
-    if (orig_BaseMsgViewWillAppear) {
-        ((void (*)(id, SEL, BOOL))orig_BaseMsgViewWillAppear)(self, _cmd, animated);
+static void replaced_StoryViewDidLoad(id self, SEL _cmd) {
+    if (orig_StoryViewDidLoad) {
+        ((void (*)(id, SEL))orig_StoryViewDidLoad)(self, _cmd);
     }
 
     PluginConfig *config = [PluginConfig shared];
     if (!config.redEnvelopeDetail) return;
 
-    tryAddPendingButton(self);
-
-    // 延迟重试：等响应数据到达
-    __weak id weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddPendingButton(weakSelf);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddPendingButton(weakSelf);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddPendingButton(weakSelf);
-    });
+    addDetailButtonIfNeeded(self);
 }
 
 static void replaced_OnWCToHongbaoCommonResponse2(id self, SEL _cmd, id res, id req) {
@@ -759,6 +684,17 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
         if (imp4) {
             orig_DetailViewDidLoad = imp4;
             reLog(@"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
+        }
+    }
+
+    Class StoryVCClass = objc_getClass("WCRedEnvelopesStoryViewController");
+    if (StoryVCClass) {
+        IMP imp5 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewDidLoad")
+                                        inClass:StoryVCClass
+                                        withIMP:(IMP)replaced_StoryViewDidLoad];
+        if (imp5) {
+            orig_StoryViewDidLoad = imp5;
+            reLog(@"[+] WCRedEnvelopesStoryViewController viewDidLoad hooked");
         }
     }
 
