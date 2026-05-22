@@ -74,7 +74,6 @@
     _redEnvelopAutoReply = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReply"]];
     _redEnvelopAutoReplyInGroup = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReplyInGroup"]];
     WPLog(@"Config", @"[LOAD] Loaded config from NSUserDefaults: auto=%d, catchMe=%d, personal=%d, detail=%d", 
-          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail
           _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail);
     
     NSInteger delayVal = [d integerForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopDelay"]];
@@ -199,7 +198,6 @@
 - (void)save {
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
     WPLog(@"Config", @"[SAVE] save() called: auto=%d, catchMe=%d, personal=%d, detail=%d", 
-          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail
           _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail);
     [d setBool:_preventRecall forKey:[kPluginPrefix stringByAppendingString:@"PreventRecall"]];
     [d setBool:_debugLogging forKey:[kPluginPrefix stringByAppendingString:@"DebugLogging"]];
