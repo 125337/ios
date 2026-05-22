@@ -319,6 +319,24 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
                 @try { [mmItem setValue:@"expression" forKey:@"m_nsImageName"]; } @catch (NSException *e) {}
                 @try { [mmItem setValue:@"expression" forKey:@"m_nsIconName"]; } @catch (NSException *e) {}
                 @try { [mmItem setValue:@"expression" forKey:@"iconName"]; } @catch (NSException *e) {}
+                // 🔍 诊断：打印 MMMenuItem 的所有 ivar（找到真正的图标属性名后删除此处）
+                jokerLog(@"🔍 MMMenuItem diagnostics START");
+                jokerLog([NSString stringWithFormat:@"   class=%@",
+                    NSStringFromClass([mmItem class])]);
+                unsigned int varCount;
+                Ivar *vars = class_copyIvarList([mmItem class], &varCount);
+                for (unsigned int i = 0; i < varCount; i++) {
+                    const char *name = ivar_getName(vars[i]);
+                    const char *type = ivar_getTypeEncoding(vars[i]);
+                    @try {
+                        id val = object_getIvar(mmItem, vars[i]);
+                        jokerLog([NSString stringWithFormat:@"   IVAR %s (%s) = %@", name, type, val ?: @"(nil)"]);
+                    } @catch (NSException *e) {
+                        jokerLog([NSString stringWithFormat:@"   IVAR %s (%s) = ❌ %@", name, type, e.reason]);
+                    }
+                }
+                free(vars);
+                jokerLog(@"🔍 MMMenuItem diagnostics END");
                 [newItems addObject:mmItem];
             }
         } @catch (NSException *e) {}
@@ -356,6 +374,24 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
                 @try { [mmItem setValue:@"expression" forKey:@"m_nsImageName"]; } @catch (NSException *e) {}
                 @try { [mmItem setValue:@"expression" forKey:@"m_nsIconName"]; } @catch (NSException *e) {}
                 @try { [mmItem setValue:@"expression" forKey:@"iconName"]; } @catch (NSException *e) {}
+                // 🔍 诊断：打印 MMMenuItem 的所有 ivar（找到真正的图标属性名后删除此处）
+                jokerLog(@"🔍 MMMenuItem diagnostics START");
+                jokerLog([NSString stringWithFormat:@"   class=%@",
+                    NSStringFromClass([mmItem class])]);
+                unsigned int varCount;
+                Ivar *vars = class_copyIvarList([mmItem class], &varCount);
+                for (unsigned int i = 0; i < varCount; i++) {
+                    const char *name = ivar_getName(vars[i]);
+                    const char *type = ivar_getTypeEncoding(vars[i]);
+                    @try {
+                        id val = object_getIvar(mmItem, vars[i]);
+                        jokerLog([NSString stringWithFormat:@"   IVAR %s (%s) = %@", name, type, val ?: @"(nil)"]);
+                    } @catch (NSException *e) {
+                        jokerLog([NSString stringWithFormat:@"   IVAR %s (%s) = ❌ %@", name, type, e.reason]);
+                    }
+                }
+                free(vars);
+                jokerLog(@"🔍 MMMenuItem diagnostics END");
                 [newItems addObject:mmItem];
             }
         } @catch (NSException *e) {}
