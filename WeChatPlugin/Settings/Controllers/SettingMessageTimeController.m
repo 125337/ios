@@ -117,6 +117,8 @@
         *ecy = [self addInputRowInGroup:expand title:@"垂直偏移" key:@"MessageTimeOffsetY" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetY] hint:@"0" cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"气泡扩展宽度" key:@"MessageTimeBubbleExtWidth" value:[NSString stringWithFormat:@"%.1f", config.messageTimeBubbleExtWidth] hint:@"0" cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addSwitchRowInGroup:expand title:@"隐藏聊天时间分隔线" desc:nil key:@"HideChatTime" isOn:config.hideChatTime cy:*ecy width:w];
     } cy:cy width:w];
 
     y = [self finishGroup:group atY:y height:cy];

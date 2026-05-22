@@ -10,6 +10,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"通用功能";
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
     [self buildUI];
 }
 
@@ -86,15 +90,6 @@
                             action:@selector(onMessageTimeSettingTap)
                                 cy:timeY
                              width:w];
-
-    timeY = [self addSeparatorInGroup:timeGroup cy:timeY width:w];
-    timeY = [self addSwitchRowInGroup:timeGroup
-                                  title:@"隐藏聊天时间分隔线"
-                                   desc:nil
-                                    key:@"HideChatTime"
-                                   isOn:config.hideChatTime
-                                     cy:timeY
-                                  width:w];
 
     y = [self finishGroup:timeGroup atY:y height:timeY];
 
