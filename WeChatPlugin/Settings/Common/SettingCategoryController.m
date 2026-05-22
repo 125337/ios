@@ -4,6 +4,7 @@
 #import "../../Config/Constants.h"
 #import "../../Config/WPColors.h"
 #import <objc/runtime.h>
+#import <QuartzCore/QuartzCore.h>
 
 static void configLog(NSString *content) {
     @try {
@@ -194,12 +195,22 @@ static NSString *configPropertyForKey(NSString *key) {
         [group addSubview:dl];
     }
 
-    UILabel *arrow = [[UILabel alloc] initWithFrame:CGRectMake(gw - kCellHPadding - 4, cy + 10, 12, 14)];
-    arrow.text = @"›";
-    arrow.font = [UIFont systemFontOfSize:14];
-    arrow.textColor = textTertiary();
-    arrow.textAlignment = NSTextAlignmentRight;
-    [group addSubview:arrow];
+    CGFloat arrowW = 7, arrowH = 12;
+    CGFloat arrowX = gw - kCellHPadding - arrowW - 2;
+    CGFloat arrowCY = cy + kRowH / 2;
+    CAShapeLayer *arrow = [CAShapeLayer layer];
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    [path moveToPoint:CGPointMake(0, 0)];
+    [path addLineToPoint:CGPointMake(arrowW, arrowH / 2)];
+    [path addLineToPoint:CGPointMake(0, arrowH)];
+    arrow.path = path.CGPath;
+    arrow.strokeColor = textTertiary().CGColor;
+    arrow.fillColor = [UIColor clearColor].CGColor;
+    arrow.lineWidth = 1.8;
+    arrow.lineCap = kCALineCapRound;
+    arrow.lineJoin = kCALineJoinRound;
+    arrow.frame = CGRectMake(arrowX, arrowCY - arrowH / 2, arrowW, arrowH);
+    [group.layer addSublayer:arrow];
 
     UIButton *btn = [[UIButton alloc] initWithFrame:CGRectMake(0, cy, gw, kRowH)];
     btn.tag = tag;
@@ -306,12 +317,22 @@ static NSString *configPropertyForKey(NSString *key) {
     hl.textColor = textSecondary();
     [group addSubview:hl];
     
-    UILabel *arrow = [[UILabel alloc] initWithFrame:CGRectMake(gw - kCellHPadding - 4, cy + 10, 12, 14)];
-    arrow.text = @"›";
-    arrow.font = [UIFont systemFontOfSize:14];
-    arrow.textColor = textTertiary();
-    arrow.textAlignment = NSTextAlignmentRight;
-    [group addSubview:arrow];
+    CGFloat arrowW = 7, arrowH = 12;
+    CGFloat arrowX = gw - kCellHPadding - arrowW - 2;
+    CGFloat arrowCY = cy + kRowH / 2;
+    CAShapeLayer *arrow = [CAShapeLayer layer];
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    [path moveToPoint:CGPointMake(0, 0)];
+    [path addLineToPoint:CGPointMake(arrowW, arrowH / 2)];
+    [path addLineToPoint:CGPointMake(0, arrowH)];
+    arrow.path = path.CGPath;
+    arrow.strokeColor = textTertiary().CGColor;
+    arrow.fillColor = [UIColor clearColor].CGColor;
+    arrow.lineWidth = 1.8;
+    arrow.lineCap = kCALineCapRound;
+    arrow.lineJoin = kCALineJoinRound;
+    arrow.frame = CGRectMake(arrowX, arrowCY - arrowH / 2, arrowW, arrowH);
+    [group.layer addSublayer:arrow];
     
     UIButton *btn = [[UIButton alloc] initWithFrame:CGRectMake(0, cy, gw, kRowH)];
     objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
