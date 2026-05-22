@@ -507,12 +507,27 @@ static IMP orig_StoryViewWillAppear = NULL;
 static REDetailButtonHandler *_detailHandler = nil;
 
 static void tryAddDetailButton(id self, int retryCount) {
+    if (!self) return;
     @try {
         id detailInfo = nil;
         id controlData = [self valueForKey:@"m_data"];
         if (controlData) detailInfo = [controlData valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
         if (!detailInfo) detailInfo = [self valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
         if (!detailInfo) {
+            if (retryCount == 0) {
+                // 首次失败时 dump key 信息来定位数据路径
+                reLog([NSString stringWithFormat:@"[DETAIL] DUMP self class=%@ keys(m_data):", NSStringFromClass(object_getClass(self))]);
+                if (controlData) {
+                    @try {
+                        unsigned int count = 0;
+                        objc_property_t *props = class_copyPropertyList([controlData class], &count);
+                        for (unsigned int i = 0; i < count; i++) {
+                            reLog([NSString stringWithFormat:@"[DETAIL]   m_data.%@", [NSString stringWithUTF8String:property_getName(props[i])]]);
+                        }
+                        free(props);
+                    } @catch (NSException *e) {}
+                }
+            }
             reLog([NSString stringWithFormat:@"[DETAIL] no detailInfo (retry=%d), skip", retryCount]);
             return;
         }
