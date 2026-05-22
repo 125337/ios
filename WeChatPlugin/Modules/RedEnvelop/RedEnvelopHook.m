@@ -585,32 +585,6 @@ static void tryAddDetailButton(id self, int retryCount) {
     }
 }
 
-static void replaced_DetailViewDidLoad(id self, SEL _cmd) {
-    reLog([NSString stringWithFormat:@"[DETAIL] DetailVC viewDidLoad: %@", NSStringFromClass(object_getClass(self))]);
-
-    if (orig_DetailViewDidLoad) {
-        ((void (*)(id, SEL))orig_DetailViewDidLoad)(self, _cmd);
-    }
-
-    PluginConfig *config = [PluginConfig shared];
-    if (!config.redEnvelopeDetail) return;
-
-    // 立即尝试用 g_pendingDetailInfo 添加按钮
-    tryAddPendingButton(self);
-
-    // 延迟重试
-    __weak id weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddPendingButton(weakSelf);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddPendingButton(weakSelf);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        tryAddPendingButton(weakSelf);
-    });
-}
-
 static void tryAddPendingButton(id self) {
     if (!self || !g_pendingDetailInfo) return;
 
@@ -639,6 +613,30 @@ static void tryAddPendingButton(id self) {
     objc_setAssociatedObject(floatBtn, "detailInfo", g_pendingDetailInfo, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     reLog(@"[DETAIL] 页面按钮已添加(pending data)");
     g_pendingDetailInfo = nil;
+}
+
+static void replaced_DetailViewDidLoad(id self, SEL _cmd) {
+    reLog([NSString stringWithFormat:@"[DETAIL] DetailVC viewDidLoad: %@", NSStringFromClass(object_getClass(self))]);
+
+    if (orig_DetailViewDidLoad) {
+        ((void (*)(id, SEL))orig_DetailViewDidLoad)(self, _cmd);
+    }
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.redEnvelopeDetail) return;
+
+    tryAddPendingButton(self);
+
+    __weak id weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddPendingButton(weakSelf);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddPendingButton(weakSelf);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tryAddPendingButton(weakSelf);
+    });
 }
 
 static void replaced_BaseMsgViewWillAppear(id self, SEL _cmd, BOOL animated) {
