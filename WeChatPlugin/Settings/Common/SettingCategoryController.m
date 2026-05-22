@@ -5,6 +5,7 @@
 #import "../../Config/WPColors.h"
 #import <objc/runtime.h>
 #import <QuartzCore/QuartzCore.h>
+#import "../../Core/LogManager.h"
 
 static void configLog(NSString *content) {
     @try {
@@ -114,7 +115,7 @@ static NSString *configPropertyForKey(NSString *key) {
 @implementation SettingCategoryController
 
 - (void)viewDidLoad {
-    configLog(@"[UI] SettingCategoryController viewDidLoad");
+    WPLog(@"Config", @"[UI] SettingCategoryController viewDidLoad");
     @try {
         [super viewDidLoad];
         self.title = self.categoryName;
@@ -136,9 +137,9 @@ static NSString *configPropertyForKey(NSString *key) {
         
         self.inputFields = [NSMutableDictionary dictionary];
         self.masterSwitchKeys = [NSMutableSet set];
-        configLog(@"[UI] SettingCategoryController viewDidLoad 完成");
+        WPLog(@"Config", @"[UI] SettingCategoryController viewDidLoad 完成");
     } @catch (NSException *e) {
-        configLog([NSString stringWithFormat:@"[UI] SettingCategoryController viewDidLoad 异常: %@ - %@", e.name, e.reason]);
+        WPLog(@"Config", @"[UI] SettingCategoryController viewDidLoad 异常: %@ - %@", e.name, e.reason);
     }
 }
 
@@ -245,7 +246,7 @@ static NSString *configPropertyForKey(NSString *key) {
     objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [sw addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     [group addSubview:sw];
-    configLog([NSString stringWithFormat:@"[SWITCH] 创建 switch: key=%@, isOn=%d, target=%@, action=switchChanged:", key, on, self]);
+    WPLog(@"Config", @"[SWITCH] 创建 switch: key=%@, isOn=%d, target=%@, action=switchChanged:", key, on, self);
     return cy + kRowH;
 }
 
@@ -344,11 +345,11 @@ static NSString *configPropertyForKey(NSString *key) {
 
 - (void)buttonTapped:(UIButton *)sender {
     NSString *key = objc_getAssociatedObject(sender, "key");
-    configLog([NSString stringWithFormat:@"[BUTTON] buttonTapped called, key=%@, self=%@, respondsToSelector=%d", key, self, [self respondsToSelector:@selector(buttonClicked:)]]);
+    WPLog(@"Config", @"[BUTTON] buttonTapped called, key=%@, self=%@, respondsToSelector=%d", key, self, [self respondsToSelector:@selector(buttonClicked:)]);
     if (key && [self respondsToSelector:@selector(buttonClicked:)]) {
-        configLog([NSString stringWithFormat:@"[BUTTON] calling buttonClicked: with key=%@", key]);
+        WPLog(@"Config", @"[BUTTON] calling buttonClicked: with key=%@", key);
         [self performSelector:@selector(buttonClicked:) withObject:key];
-        configLog(@"[BUTTON] buttonClicked: returned");
+        WPLog(@"Config", @"[BUTTON] buttonClicked: returned");
     }
 }
 
@@ -431,7 +432,7 @@ static NSString *configPropertyForKey(NSString *key) {
 
 - (CGFloat)addMasterSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on subBuilder:(void (^)(UIView *expand, CGFloat *ecy))subBuilder cy:(CGFloat)cy width:(CGFloat)w {
     [self.masterSwitchKeys addObject:key];
-    configLog([NSString stringWithFormat:@"[MASTER] 注册 masterSwitchKey=%@, isOn=%d, masterKeys当前=%@", key, on, self.masterSwitchKeys]);
+    WPLog(@"Config", @"[MASTER] 注册 masterSwitchKey=%@, isOn=%d, masterKeys当前=%@", key, on, self.masterSwitchKeys);
 
     CGFloat resultCy = [self addSwitchRowInGroup:group title:title desc:nil key:key isOn:on cy:cy width:w];
 
@@ -440,9 +441,9 @@ static NSString *configPropertyForKey(NSString *key) {
         CGFloat ecy = 0;
         subBuilder(expand, &ecy);
         resultCy = [self finishExpandContainer:expand currentCy:ecy];
-        configLog([NSString stringWithFormat:@"[MASTER] 子功能已展开: key=%@, ecy=%.1f, resultCy=%.1f", key, ecy, resultCy]);
+        WPLog(@"Config", @"[MASTER] 子功能已展开: key=%@, ecy=%.1f, resultCy=%.1f", key, ecy, resultCy);
     } else {
-        configLog([NSString stringWithFormat:@"[MASTER] 子功能未展开: key=%@, on=%d, hasBuilder=%d", key, on, subBuilder != nil]);
+        WPLog(@"Config", @"[MASTER] 子功能未展开: key=%@, on=%d, hasBuilder=%d", key, on, subBuilder != nil);
     }
 
     return resultCy;
@@ -450,44 +451,44 @@ static NSString *configPropertyForKey(NSString *key) {
 
 - (void)switchChanged:(UISwitch *)sender {
     NSString *key = objc_getAssociatedObject(sender, "key");
-    configLog([NSString stringWithFormat:@"[SWITCH] switchChanged 触发! key=%@, isOn=%d, sender=%@", key, sender.on, sender]);
+    WPLog(@"Config", @"[SWITCH] switchChanged 触发! key=%@, isOn=%d, sender=%@", key, sender.on, sender);
     if (!key) {
-        configLog(@"[SWITCH] key 为空! 无法处理");
+        WPLog(@"Config", @"[SWITCH] key 为空! 无法处理");
         return;
     }
 
     NSString *propertyName = configPropertyForKey(key);
     if (propertyName.length == 0) {
-        configLog([NSString stringWithFormat:@"[ERR] Config save failed: no property mapping for key %@", key]);
+        WPLog(@"Config", @"[ERR] Config save failed: no property mapping for key %@", key);
         return;
     }
 
     PluginConfig *config = [PluginConfig shared];
     @try {
-        configLog([NSString stringWithFormat:@"[SAVE] Saving config: key=%@, property=%@, value=%@", key, propertyName, sender.on ? @"YES" : @"NO"]);
+        WPLog(@"Config", @"[SAVE] Saving config: key=%@, property=%@, value=%@", key, propertyName, sender.on ? @"YES" : @"NO");
         [config setValue:@(sender.on) forKey:propertyName];
-        configLog([NSString stringWithFormat:@"[OK] Config value after KVC: %d", sender.on]);
+        WPLog(@"Config", @"[OK] Config value after KVC: %d", sender.on);
     } @catch (NSException *e) {
-        configLog([NSString stringWithFormat:@"[WARN] Config save exception: %@ - %@", e.name, e.reason]);
+        WPLog(@"Config", @"[WARN] Config save exception: %@ - %@", e.name, e.reason);
         return;
     }
     [config save];
-    configLog([NSString stringWithFormat:@"[OK] Config saved successfully for key: %@", key]);
+    WPLog(@"Config", @"[OK] Config saved successfully for key: %@", key);
 
-    configLog([NSString stringWithFormat:@"[SWITCH] 检查 masterSwitchKeys: self=%@, masterSwitchKeys=%@, containsKey=%d", self, self.masterSwitchKeys, [self.masterSwitchKeys containsObject:key]]);
+    WPLog(@"Config", @"[SWITCH] 检查 masterSwitchKeys: self=%@, masterSwitchKeys=%@, containsKey=%d", self, self.masterSwitchKeys, [self.masterSwitchKeys containsObject:key]);
 
     if ([self.masterSwitchKeys containsObject:key]) {
-        configLog([NSString stringWithFormat:@"[SWITCH] 是 master key! 直接重建 UI: key=%@, 新值=%d", key, sender.on]);
+        WPLog(@"Config", @"[SWITCH] 是 master key! 直接重建 UI: key=%@, 新值=%d", key, sender.on);
         [self.view endEditing:YES];
         @try {
             [self buildUI];
             [self.scrollView setNeedsLayout];
             [self.scrollView layoutIfNeeded];
         } @catch (NSException *e) {
-            configLog([NSString stringWithFormat:@"[ERR] buildUI 重建异常: %@ - %@", e.name, e.reason]);
+            WPLog(@"Config", @"[ERR] buildUI 重建异常: %@ - %@", e.name, e.reason);
         }
     } else {
-        configLog([NSString stringWithFormat:@"[SWITCH] 不是 master key, 跳过重建: key=%@", key]);
+        WPLog(@"Config", @"[SWITCH] 不是 master key, 跳过重建: key=%@", key);
     }
 }
 
@@ -572,7 +573,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (void)buildUI {
-    configLog([NSString stringWithFormat:@"[BUILD] buildUI 调用! self=%@, 注意: 基类空实现, 子类应重写", self]);
+    WPLog(@"Config", @"[BUILD] buildUI 调用! self=%@, 注意: 基类空实现, 子类应重写", self);
 }
 
 - (void)buttonClicked:(NSString *)key {

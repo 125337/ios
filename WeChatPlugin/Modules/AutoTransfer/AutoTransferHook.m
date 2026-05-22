@@ -5,6 +5,7 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 #import <UserNotifications/UserNotifications.h>
+#import "../../Core/LogManager.h"
 
 static NSMutableSet *_processedTransferIds = nil;
 static NSMutableDictionary *_pendingTransferData = nil;
@@ -57,19 +58,19 @@ static void sendAutoReply(NSString *sessionUserName, NSString *replyText) {
         @try {
             id msgMgr = getService(objc_getClass("CMessageMgr"));
             if (!msgMgr) {
-                atLog(@"[REPLY] CMessageMgr不可用，无法发送自动回复");
+                WPLog(@"AutoTransfer", @"[REPLY] CMessageMgr不可用，无法发送自动回复");
                 return;
             }
 
             Class msgWrapClass = objc_getClass("CMessageWrap");
             if (!msgWrapClass) {
-                atLog(@"[REPLY] CMessageWrap类不可用，无法发送自动回复");
+                WPLog(@"AutoTransfer", @"[REPLY] CMessageWrap类不可用，无法发送自动回复");
                 return;
             }
 
             id msg = [[msgWrapClass alloc] performSelector:@selector(initWithMsgType:) withObject:@(1)];
             if (!msg) {
-                atLog(@"[REPLY] 消息对象创建失败");
+                WPLog(@"AutoTransfer", @"[REPLY] 消息对象创建失败");
                 return;
             }
 
@@ -78,7 +79,7 @@ static void sendAutoReply(NSString *sessionUserName, NSString *replyText) {
 
             SEL addMsgSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
             if (![msgMgr respondsToSelector:addMsgSel]) {
-                atLog(@"[REPLY] AddMsg:MsgWrap:方法不可用");
+                WPLog(@"AutoTransfer", @"[REPLY] AddMsg:MsgWrap:方法不可用");
                 return;
             }
 
@@ -86,7 +87,7 @@ static void sendAutoReply(NSString *sessionUserName, NSString *replyText) {
             atLog([NSString stringWithFormat:
                 @"[REPLY] 自动回复已发送: %@ -> %@", replyText, sessionUserName]);
         } @catch (NSException *e) {
-            atLog([NSString stringWithFormat:@"[REPLY] 自动回复异常: %@", e]);
+            WPLog(@"AutoTransfer", @"[REPLY] 自动回复异常: %@", e);
         }
     });
 }
@@ -127,7 +128,7 @@ static void processTransferMessage(id wrap) {
 
     id payInfoItem = [wrap valueForKey:@"m_oWCPayInfoItem"];
     if (payInfoItem) {
-        atLog(@"[INFO] m_oWCPayInfoItem可用(旧版本)");
+        WPLog(@"AutoTransfer", @"[INFO] m_oWCPayInfoItem可用(旧版本)");
         transferID = [payInfoItem valueForKey:@"m_nsTransferID"];
         invalidTimeStr = [NSString stringWithFormat:@"%llu", ((unsigned long long (*)(id, SEL, ...))objc_msgSend)(payInfoItem, NSSelectorFromString(@"m_uiInvalidTime"))];
         totalFee = [payInfoItem valueForKey:@"m_total_fee"];
@@ -141,7 +142,7 @@ static void processTransferMessage(id wrap) {
 
     if (!transferID.length) {
         if ([content containsString:@"<transferid>"] && [content containsString:@"<wcpayinfo>"]) {
-            atLog(@"[INFO] 使用XML解析(8.0.60+)");
+            WPLog(@"AutoTransfer", @"[INFO] 使用XML解析(8.0.60+)");
             transferID = extractXMLValue(content, @"transferid");
             invalidTimeStr = extractXMLValue(content, @"invalidtime");
             totalFee = extractXMLValue(content, @"total_fee");
@@ -161,12 +162,12 @@ static void processTransferMessage(id wrap) {
     }
 
     if (payInfoItem && receiveStatus != 0) {
-        atLog([NSString stringWithFormat:@"[SKIP] 转账已处理(状态码): %u", receiveStatus]);
+        WPLog(@"AutoTransfer", @"[SKIP] 转账已处理(状态码): %u", receiveStatus);
         return;
     }
     if (feedesc.length > 0) {
         if ([feedesc containsString:@"已收款"] || [feedesc containsString:@"已确认"] || [feedesc containsString:@"已退回"]) {
-            atLog([NSString stringWithFormat:@"[SKIP] 转账已处理(feedesc): %@", feedesc]);
+            WPLog(@"AutoTransfer", @"[SKIP] 转账已处理(feedesc): %@", feedesc);
             return;
         }
     }
@@ -186,7 +187,7 @@ static void processTransferMessage(id wrap) {
             payInfoItem, NSSelectorFromString(@"m_uiTransferAmount"));
         if (transferAmount > 0) {
             feeAmount = (long long)transferAmount;
-            atLog([NSString stringWithFormat:@"[FEE] 来源=m_uiTransferAmount, 值=%u分=%.2f元", transferAmount, feeAmount / 100.0]);
+            WPLog(@"AutoTransfer", @"[FEE] 来源=m_uiTransferAmount, 值=%u分=%.2f元", transferAmount, feeAmount / 100.0);
         }
     }
 
@@ -195,14 +196,14 @@ static void processTransferMessage(id wrap) {
             NSString *totalFeeProp = [payInfoItem valueForKey:@"m_total_fee"];
             if (totalFeeProp.length > 0) {
                 feeAmount = (long long)([totalFeeProp doubleValue] * 100);
-                atLog([NSString stringWithFormat:@"[FEE] 来源=m_total_fee, 值=%@=%.2f元", totalFeeProp, feeAmount / 100.0]);
+                WPLog(@"AutoTransfer", @"[FEE] 来源=m_total_fee, 值=%@=%.2f元", totalFeeProp, feeAmount / 100.0);
             }
         } @catch (NSException *e) {}
     }
 
     if (feeAmount == 0 && totalFee.length > 0) {
         feeAmount = (long long)([totalFee doubleValue] * 100);
-        atLog([NSString stringWithFormat:@"[FEE] 来源=XML total_fee, 值=%@=%.2f元", totalFee, feeAmount / 100.0]);
+        WPLog(@"AutoTransfer", @"[FEE] 来源=XML total_fee, 值=%@=%.2f元", totalFee, feeAmount / 100.0);
     }
 
     if (feeAmount == 0 && feedesc.length > 0) {
@@ -214,7 +215,7 @@ static void processTransferMessage(id wrap) {
         if (match && [match numberOfRanges] > 1) {
             NSString *feeStr = [feedesc substringWithRange:[match rangeAtIndex:1]];
             feeAmount = (long long)([feeStr doubleValue] * 100);
-            atLog([NSString stringWithFormat:@"[FEE] 来源=feedesc(￥格式), 值=%@=%.2f元", feeStr, feeAmount / 100.0]);
+            WPLog(@"AutoTransfer", @"[FEE] 来源=feedesc(￥格式), 值=%@=%.2f元", feeStr, feeAmount / 100.0);
         }
     }
 
@@ -227,14 +228,14 @@ static void processTransferMessage(id wrap) {
         if (match && [match numberOfRanges] > 1) {
             NSString *feeStr = [feedesc substringWithRange:[match rangeAtIndex:1]];
             feeAmount = (long long)([feeStr doubleValue] * 100);
-            atLog([NSString stringWithFormat:@"[FEE] 来源=feedesc(元格式), 值=%@=%.2f元", feeStr, feeAmount / 100.0]);
+            WPLog(@"AutoTransfer", @"[FEE] 来源=feedesc(元格式), 值=%@=%.2f元", feeStr, feeAmount / 100.0);
         }
     }
 
-    atLog([NSString stringWithFormat:@"[FEE] 最终金额: %lld分=%.2f元", feeAmount, feeAmount / 100.0]);
+    WPLog(@"AutoTransfer", @"[FEE] 最终金额: %lld分=%.2f元", feeAmount, feeAmount / 100.0);
 
     if (config.autoConfirmTransferMaxAmount > 0 && feeAmount > config.autoConfirmTransferMaxAmount) {
-        atLog([NSString stringWithFormat:@"[SKIP] 超过金额上限: %lld > %lld", feeAmount, config.autoConfirmTransferMaxAmount]);
+        WPLog(@"AutoTransfer", @"[SKIP] 超过金额上限: %lld > %lld", feeAmount, config.autoConfirmTransferMaxAmount);
         return;
     }
 
@@ -257,7 +258,7 @@ static void processTransferMessage(id wrap) {
         payInfoItem ? [payInfoItem valueForKey:@"m_uiTransferAmount"] ?: @"(nil)" : @"(N/A)",
         payInfoItem ? [payInfoItem valueForKey:@"m_total_fee"] ?: @"(nil)" : @"(N/A)"]);
 
-    atLog([NSString stringWithFormat:@"[DEBUG] 完整XML: %@", content]);
+    WPLog(@"AutoTransfer", @"[DEBUG] 完整XML: %@", content);
 
     if (!_pendingTransferData) _pendingTransferData = [NSMutableDictionary dictionary];
     NSDictionary *transferData = @{
@@ -275,10 +276,10 @@ static void processTransferMessage(id wrap) {
     NSUInteger delay = config.autoConfirmTransferDelay;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         @try {
-            atLog(@"[CONFIRM] 使用方案A: 直接调用ConfirmTransferMoney:");
+            WPLog(@"AutoTransfer", @"[CONFIRM] 使用方案A: 直接调用ConfirmTransferMoney:");
             Class requestClass = objc_getClass("WCPayConfirmTransferRequest");
             if (!requestClass) {
-                atLog(@"[ERROR] WCPayConfirmTransferRequest class not found");
+                WPLog(@"AutoTransfer", @"[ERROR] WCPayConfirmTransferRequest class not found");
                 return;
             }
             id request = [[requestClass alloc] init];
@@ -291,15 +292,15 @@ static void processTransferMessage(id wrap) {
             }
             id payLogicMgr = getService(objc_getClass("WCPayLogicMgr"));
             if (!payLogicMgr) {
-                atLog(@"[ERROR] WCPayLogicMgr service not found");
+                WPLog(@"AutoTransfer", @"[ERROR] WCPayLogicMgr service not found");
                 return;
             }
             SEL confirmSelA = NSSelectorFromString(@"ConfirmTransferMoney:");
             if ([payLogicMgr respondsToSelector:confirmSelA]) {
                 ((void (*)(id, SEL, id))objc_msgSend)(payLogicMgr, confirmSelA, request);
-                atLog([NSString stringWithFormat:@"[CONFIRM-A] 已确认收款: transferID=%@ fee=%.2f", transferID, feeAmount / 100.0]);
+                WPLog(@"AutoTransfer", @"[CONFIRM-A] 已确认收款: transferID=%@ fee=%.2f", transferID, feeAmount / 100.0);
             } else {
-                atLog(@"[ERROR] WCPayLogicMgr does not respond to ConfirmTransferMoney:");
+                WPLog(@"AutoTransfer", @"[ERROR] WCPayLogicMgr does not respond to ConfirmTransferMoney:");
                 return;
             }
 
@@ -310,7 +311,7 @@ static void processTransferMessage(id wrap) {
             NSString *notifyMsg = [NSString stringWithFormat:@"已收款 %.2f元", feeAmount / 100.0];
             pushLocalNotification(notifyMsg);
         } @catch (NSException *e) {
-            atLog([NSString stringWithFormat:@"[ERROR] 确认收款异常: %@", e]);
+            WPLog(@"AutoTransfer", @"[ERROR] 确认收款异常: %@", e);
         }
     });
 }
@@ -369,7 +370,7 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
 
     if (fee > 0) {
         NSString *msg = [NSString stringWithFormat:@"已收款 %.2f%@ 来自%@", fee / 100.0, feeType, payer];
-        atLog([NSString stringWithFormat:@"[OK] 自动收款成功(回调): %@", msg]);
+        WPLog(@"AutoTransfer", @"[OK] 自动收款成功(回调): %@", msg);
         pushLocalNotification(msg);
     }
 }
@@ -377,7 +378,7 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
 @implementation AutoTransferHook
 
 + (void)install {
-    atLog(@"AutoTransferHook install");
+    WPLog(@"AutoTransfer", @"AutoTransferHook install");
 
     Class CMessageMgrClass = objc_getClass("CMessageMgr");
     if (CMessageMgrClass) {
@@ -386,7 +387,7 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
                                         withIMP:(IMP)replaced_at_onNewSyncAddMessage];
         if (imp1) {
             orig_at_onNewSyncAddMessage = imp1;
-            atLog(@"[+] onNewSyncAddMessage: hooked");
+            WPLog(@"AutoTransfer", @"[+] onNewSyncAddMessage: hooked");
         }
 
         IMP imp1b = [HookEngine swizzleMethod:NSSelectorFromString(@"onNewSyncNotAddDBMessage:")
@@ -394,7 +395,7 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
                                          withIMP:(IMP)replaced_at_onNewSyncNotAddDBMessage];
         if (imp1b) {
             orig_at_onNewSyncNotAddDBMessage = imp1b;
-            atLog(@"[+] onNewSyncNotAddDBMessage: hooked");
+            WPLog(@"AutoTransfer", @"[+] onNewSyncNotAddDBMessage: hooked");
         }
 
         IMP imp1c = [HookEngine swizzleMethod:NSSelectorFromString(@"AddMsg:MsgWrap:")
@@ -402,7 +403,7 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
                                          withIMP:(IMP)replaced_at_AddMsgMsgWrap];
         if (imp1c) {
             orig_at_AddMsgMsgWrap = imp1c;
-            atLog(@"[+] AddMsg:MsgWrap: hooked");
+            WPLog(@"AutoTransfer", @"[+] AddMsg:MsgWrap: hooked");
         }
 
         IMP imp1d = [HookEngine swizzleMethod:NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:")
@@ -410,7 +411,7 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
                                          withIMP:(IMP)replaced_at_AsyncOnAddMsgMsgWrap];
         if (imp1d) {
             orig_at_AsyncOnAddMsgMsgWrap = imp1d;
-            atLog(@"[+] AsyncOnAddMsg:MsgWrap: hooked");
+            WPLog(@"AutoTransfer", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
         }
     }
 
@@ -421,11 +422,11 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
                                         withIMP:(IMP)replaced_at_ConfirmTransferResponse];
         if (imp2) {
             orig_at_ConfirmTransferResponse = imp2;
-            atLog(@"[+] insideCallBackOnConfirmTransferMoneyResponse:OnRequest: hooked");
+            WPLog(@"AutoTransfer", @"[+] insideCallBackOnConfirmTransferMoneyResponse:OnRequest: hooked");
         }
     }
 
-    atLog(@"AutoTransferHook install complete");
+    WPLog(@"AutoTransfer", @"AutoTransferHook install complete");
 }
 
 @end

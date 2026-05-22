@@ -5,6 +5,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <stdarg.h>
+#import "../../Core/LogManager.h"
 
 static void hookLog(NSString *format, ...) {
     va_list args;
@@ -70,13 +71,13 @@ static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
             }
             
             if (content && [content containsString:@"<sysmsg type=\"revokemsg\">"]) {
-                hookLog(@"[WeChatPlugin][Revoke] detected revoke message in onNewSyncNotAddDBMessage");
+                WPLog(@"Revoke", @"[WeChatPlugin][Revoke] detected revoke message in onNewSyncNotAddDBMessage");
                 
                 NSString *chatName = extractChatName(arg1);
                 BOOL handled = [[RevokeHandler shared] handleRevoke:arg1 chatName:chatName];
                 
                 if (handled) {
-                    hookLog(@"[WeChatPlugin][Revoke] blocking original revoke - message preserved!");
+                    WPLog(@"Revoke", @"[WeChatPlugin][Revoke] blocking original revoke - message preserved!");
                     return;  // ★ 阻断：sysmsg 不入库，整个撤回链条失效
                 }
             }
@@ -93,11 +94,11 @@ static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
 @implementation RevokeHook
 
 + (void)install {
-    hookLog(@"[WeChatPlugin][RevokeHook] install start (single hook architecture)");
+    WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook] install start (single hook architecture)");
     
     Class msgMgrCls = objc_getClass("CMessageMgr");
     if (!msgMgrCls) {
-        hookLog(@"[WeChatPlugin][RevokeHook] ✗ CMessageMgr class not found!");
+        WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook] ✗ CMessageMgr class not found!");
         return;
     }
     hookLog(@"[WeChatPlugin][RevokeHook] CMessageMgr found: %@", msgMgrCls);
@@ -108,9 +109,9 @@ static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
     if (imp) {
         orig_onNewSyncNotAddDBMessage = imp;
         g_hookSyncVerified = YES;
-        hookLog(@"[WeChatPlugin][RevokeHook] ✓ onNewSyncNotAddDBMessage: hooked ★ SINGLE HOOK (ref: WXOptimizer)");
+        WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook] ✓ onNewSyncNotAddDBMessage: hooked ★ SINGLE HOOK (ref: WXOptimizer)");
     } else {
-        hookLog(@"[WeChatPlugin][RevokeHook] ✗ onNewSyncNotAddDBMessage: hook failed");
+        WPLog(@"Revoke", @"[WeChatPlugin][RevokeHook] ✗ onNewSyncNotAddDBMessage: hook failed");
     }
     
     hookLog(@"[WeChatPlugin][RevokeHook] install complete: %@", g_hookSyncVerified ? @"✓ 1/1" : @"✗ FAILED");

@@ -3,6 +3,8 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
+#import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 
 /**
  * ============================================================================
@@ -23,19 +25,7 @@
  * ============================================================================
  */
 
-static void fdLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"friend_detection.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
+else {
             [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     } @catch (NSException *e) {}
@@ -78,32 +68,32 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
 @implementation MioFriendDetector
 
 - (NSArray *)allFriends {
-    fdLog(@"[allFriends] Starting...");
+    WPLog(@"FriendDetect", @"[allFriends] Starting...");
     Class mmSvc = objc_getClass("MMServiceCenter");
-    if (!mmSvc) { fdLog(@"[allFriends] MMServiceCenter not found"); return @[]; }
+    if (!mmSvc) { WPLog(@"FriendDetect", @"[allFriends] MMServiceCenter not found"); return @[]; }
     id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
-    if (!center) { fdLog(@"[allFriends] defaultCenter nil"); return @[]; }
+    if (!center) { WPLog(@"FriendDetect", @"[allFriends] defaultCenter nil"); return @[]; }
     Class mgrCls = objc_getClass("CContactMgr");
-    if (!mgrCls) { fdLog(@"[allFriends] CContactMgr not found"); return @[]; }
+    if (!mgrCls) { WPLog(@"FriendDetect", @"[allFriends] CContactMgr not found"); return @[]; }
     id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), mgrCls);
-    if (!contactMgr) { fdLog(@"[allFriends] CContactMgr service nil"); return @[]; }
+    if (!contactMgr) { WPLog(@"FriendDetect", @"[allFriends] CContactMgr service nil"); return @[]; }
 
     SEL sel = sel_registerName("getContactList:contactType:");
-    if (![contactMgr respondsToSelector:sel]) { fdLog(@"[allFriends] getContactList:contactType: not found"); return @[]; }
+    if (![contactMgr respondsToSelector:sel]) { WPLog(@"FriendDetect", @"[allFriends] getContactList:contactType: not found"); return @[]; }
 
     NSArray *contacts = nil;
     contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 8);
-    fdLog([NSString stringWithFormat:@"[allFriends] getContactList:0,8 = %@", contacts ? [NSString stringWithFormat:@"%lu contacts", (unsigned long)contacts.count] : @"nil"]);
+    WPLog(@"FriendDetect", @"[allFriends] getContactList:0,8 = %@", contacts ? [NSString stringWithFormat:@"%lu contacts", (unsigned long)contacts.count] : @"nil");
     if (!contacts || contacts.count == 0) {
         contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 0);
-        fdLog([NSString stringWithFormat:@"[allFriends] getContactList:0,0 = %@", contacts ? [NSString stringWithFormat:@"%lu contacts", (unsigned long)contacts.count] : @"nil"]);
+        WPLog(@"FriendDetect", @"[allFriends] getContactList:0,0 = %@", contacts ? [NSString stringWithFormat:@"%lu contacts", (unsigned long)contacts.count] : @"nil");
     }
     if (!contacts || contacts.count == 0) {
         contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 1, 0);
-        fdLog([NSString stringWithFormat:@"[allFriends] getContactList:1,0 = %@", contacts ? [NSString stringWithFormat:@"%lu contacts", (unsigned long)contacts.count] : @"nil"]);
+        WPLog(@"FriendDetect", @"[allFriends] getContactList:1,0 = %@", contacts ? [NSString stringWithFormat:@"%lu contacts", (unsigned long)contacts.count] : @"nil");
     }
     if (!contacts || contacts.count == 0) {
-        fdLog(@"[allFriends] ALL METHODS RETURNED NIL");
+        WPLog(@"FriendDetect", @"[allFriends] ALL METHODS RETURNED NIL");
         return @[];
     }
 
@@ -119,7 +109,7 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
             skipped++;
         }
     }
-    fdLog([NSString stringWithFormat:@"[allFriends] Filtered: %d added, %d skipped (chatrooms/gh)", added, skipped]);
+    WPLog(@"FriendDetect", @"[allFriends] Filtered: %d added, %d skipped (chatrooms/gh)", added, skipped);
     return [friends copy];
 }
 
@@ -127,7 +117,7 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
 
 // 策略B: CContactMgr 服务端获取 + 本地属性检测（保留作为 fallback）
 - (NSArray *)tryLocalDetection:(NSArray *)wxIDs {
-    fdLog(@"[Local] Starting local property detection...");
+    WPLog(@"FriendDetect", @"[Local] Starting local property detection...");
     NSMutableArray *results = [NSMutableArray array];
     Class cContactCls = objc_getClass("CContact");
 
@@ -138,12 +128,12 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
         if (center)
             contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), objc_getClass("CContactMgr"));
     }
-    if (!contactMgr) { fdLog(@"[Local] CContactMgr nil, aborting"); return nil; }
+    if (!contactMgr) { WPLog(@"FriendDetect", @"[Local] CContactMgr nil, aborting"); return nil; }
 
     // 先尝试 getContactByName: 批量获取完整信息（可能触发服务端同步）
     BOOL hasBatch = [contactMgr respondsToSelector:sel_registerName("getContactByName:")];
     BOOL hasInfo = [contactMgr respondsToSelector:sel_registerName("getContactInfo:")];
-    fdLog([NSString stringWithFormat:@"[Local] CContactMgr methods: getContactByName=%d getContactInfo=%d", hasBatch, hasInfo]);
+    WPLog(@"FriendDetect", @"[Local] CContactMgr methods: getContactByName=%d getContactInfo=%d", hasBatch, hasInfo);
 
     int count = 0, deletedCount = 0;
     for (NSString *wxID in wxIDs) {
@@ -172,10 +162,10 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
             }
             count++;
             if (count % 500 == 0)
-                fdLog([NSString stringWithFormat:@"[Local] Progress: %d/%lu, deleted=%d", count, (unsigned long)wxIDs.count, deletedCount]);
+                WPLog(@"FriendDetect", @"[Local] Progress: %d/%lu, deleted=%d", count, (unsigned long)wxIDs.count, deletedCount);
         }
     }
-    fdLog([NSString stringWithFormat:@"[Local] Complete: %d total, %d deleted", count, deletedCount]);
+    WPLog(@"FriendDetect", @"[Local] Complete: %d total, %d deleted", count, deletedCount);
     return [results copy];
 }
 
@@ -183,26 +173,26 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
 
 - (void)checkSpecificFriends:(NSArray *)wxIDs completion:(void(^)(NSArray *))completion {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        fdLog([NSString stringWithFormat:@"[checkSpecificFriends] Starting with %lu wxIDs", (unsigned long)wxIDs.count]);
+        WPLog(@"FriendDetect", @"[checkSpecificFriends] Starting with %lu wxIDs", (unsigned long)wxIDs.count);
 
         // 策略C: 绑定检测（优先）
-        fdLog(@"[checkSpecificFriends] === TRYING BIND DETECTION ===");
+        WPLog(@"FriendDetect", @"[checkSpecificFriends] === TRYING BIND DETECTION ===");
         NSArray *bindResults = runBoundDetection(wxIDs);
         if (bindResults && bindResults.count > 0) {
-            fdLog([NSString stringWithFormat:@"[checkSpecificFriends] Bind detection SUCCESS: %lu results", (unsigned long)bindResults.count]);
+            WPLog(@"FriendDetect", @"[checkSpecificFriends] Bind detection SUCCESS: %lu results", (unsigned long)bindResults.count);
             if (completion) completion(bindResults);
             return;
         }
 
         // 策略B: 本地检测（fallback）
-        fdLog(@"[checkSpecificFriends] === TRYING LOCAL DETECTION ===");
+        WPLog(@"FriendDetect", @"[checkSpecificFriends] === TRYING LOCAL DETECTION ===");
         NSArray *localResults = [self tryLocalDetection:wxIDs];
         if (localResults && localResults.count > 0) {
-            fdLog([NSString stringWithFormat:@"[checkSpecificFriends] Local detection SUCCESS: %lu results", (unsigned long)localResults.count]);
+            WPLog(@"FriendDetect", @"[checkSpecificFriends] Local detection SUCCESS: %lu results", (unsigned long)localResults.count);
             if (completion) completion(localResults);
             return;
         }
-        fdLog(@"[checkSpecificFriends] ALL DETECTION METHODS FAILED");
+        WPLog(@"FriendDetect", @"[checkSpecificFriends] ALL DETECTION METHODS FAILED");
         if (completion) completion(@[]);
     });
 }
@@ -213,9 +203,9 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
 
 - (void)checkFriendsWithCompletion:(void(^)(NSArray *))completion {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        fdLog(@"[checkFriendsWithCompletion] Starting...");
+        WPLog(@"FriendDetect", @"[checkFriendsWithCompletion] Starting...");
         NSArray *friends = [self allFriends];
-        if (!friends || friends.count == 0) { fdLog(@"[checkFriendsWithCompletion] No friends"); if (completion) completion(@[]); return; }
+        if (!friends || friends.count == 0) { WPLog(@"FriendDetect", @"[checkFriendsWithCompletion] No friends"); if (completion) completion(@[]); return; }
 
         NSMutableArray *wxIDs = [NSMutableArray array];
         for (id contact in friends) {
@@ -223,7 +213,7 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
             @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
             if (wxID.length > 0) [wxIDs addObject:wxID];
         }
-        fdLog([NSString stringWithFormat:@"[checkFriendsWithCompletion] Got %lu WX IDs, calling checkSpecificFriends...", (unsigned long)wxIDs.count]);
+        WPLog(@"FriendDetect", @"[checkFriendsWithCompletion] Got %lu WX IDs, calling checkSpecificFriends...", (unsigned long)wxIDs.count);
         [self checkSpecificFriends:wxIDs completion:completion];
     });
 }
@@ -237,12 +227,12 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
  * 这是"绑定"的第一步：看看 WeChat 到底提供了什么服务
  */
 static void scanAllServices(void) {
-    fdLog(@"[Scan] === 开始扫描所有 MMServiceCenter 服务 ===");
+    WPLog(@"FriendDetect", @"[Scan] === 开始扫描所有 MMServiceCenter 服务 ===");
 
     Class mmSvc = objc_getClass("MMServiceCenter");
-    if (!mmSvc) { fdLog(@"[Scan] MMServiceCenter not found"); return; }
+    if (!mmSvc) { WPLog(@"FriendDetect", @"[Scan] MMServiceCenter not found"); return; }
     id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
-    if (!center) { fdLog(@"[Scan] defaultCenter nil"); return; }
+    if (!center) { WPLog(@"FriendDetect", @"[Scan] defaultCenter nil"); return; }
 
     // 感兴趣的关键词列表
     NSSet *keywords = [NSSet setWithObjects:
@@ -322,7 +312,7 @@ static void scanAllServices(void) {
         @try {
             svc = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), svcCls);
         } @catch (NSException *e) {
-            fdLog([NSString stringWithFormat:@"[Scan] %@ getService exception: %@", svcName, e.reason]);
+            WPLog(@"FriendDetect", @"[Scan] %@ getService exception: %@", svcName, e.reason);
             continue;
         }
         if (!svc) continue;
@@ -345,23 +335,23 @@ static void scanAllServices(void) {
             }
             if (matched) {
                 if (!hasMatch) {
-                    fdLog([NSString stringWithFormat:@"[Scan] === %@ (%@) ===", svcName, svc]);
+                    WPLog(@"FriendDetect", @"[Scan] === %@ (%@) ===", svcName, svc);
                     hasMatch = YES;
                 }
                 // 获取参数类型
                 const char *type = method_getTypeEncoding(methods[i]);
                 NSString *typeStr = type ? [NSString stringWithUTF8String:type] : @"?";
-                fdLog([NSString stringWithFormat:@"[Scan]   [%d] %@  type=%@", i, selName, typeStr]);
+                WPLog(@"FriendDetect", @"[Scan]   [%d] %@  type=%@", i, selName, typeStr);
                 totalMethods++;
             }
         }
         free(methods);
     }
 
-    fdLog([NSString stringWithFormat:@"[Scan] 完成: %d 个服务, %d 个匹配方法", totalServices, totalMethods]);
+    WPLog(@"FriendDetect", @"[Scan] 完成: %d 个服务, %d 个匹配方法", totalServices, totalMethods);
 
     // 也扫描所有类和 Protocols
-    fdLog(@"[Scan] === 扫描所有 agreeDuty 相关类 ===");
+    WPLog(@"FriendDetect", @"[Scan] === 扫描所有 agreeDuty 相关类 ===");
     int numClasses = objc_getClassList(NULL, 0);
     Class *classes = (Class *)malloc(sizeof(Class) * numClasses);
     numClasses = objc_getClassList(classes, numClasses);
@@ -371,17 +361,17 @@ static void scanAllServices(void) {
         if ([cn rangeOfString:@"agree" options:NSCaseInsensitiveSearch].location != NSNotFound ||
             [cn rangeOfString:@"Agree" options:NSCaseInsensitiveSearch].location != NSNotFound ||
             [cn rangeOfString:@"Duty" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            fdLog([NSString stringWithFormat:@"[Scan]   类: %@", cn]);
+            WPLog(@"FriendDetect", @"[Scan]   类: %@", cn);
             related++;
         }
         // 也找 FriendDetectResult
         if ([cn rangeOfString:@"FriendDetectResult"].location != NSNotFound) {
-            fdLog([NSString stringWithFormat:@"[Scan]   FriendDetectResult 类: %@", cn]);
+            WPLog(@"FriendDetect", @"[Scan]   FriendDetectResult 类: %@", cn);
         }
     }
     free(classes);
-    if (related == 0) fdLog(@"[Scan]   没有找到 agreeDuty 相关类");
-    else fdLog([NSString stringWithFormat:@"[Scan]   找到 %d 个相关类", related]);
+    if (related == 0) WPLog(@"FriendDetect", @"[Scan]   没有找到 agreeDuty 相关类");
+    else WPLog(@"FriendDetect", @"[Scan]   找到 %d 个相关类", related);
 }
 
 #pragma mark - 策略G: 转账预检测法（主动检测）
@@ -407,10 +397,10 @@ static NSMutableDictionary *g_transferResults = nil;
 static void (*orig_OnGetTransferPrepayRequest)(id, SEL, id, id) = NULL;
 
 static void hooked_OnGetTransferPrepayRequest(id self, SEL _cmd, id response, id error) {
-    fdLog(@"[Transfer] === 收到转账预检响应 ===");
+    WPLog(@"FriendDetect", @"[Transfer] === 收到转账预检响应 ===");
     @try {
         id errorCode = [error valueForKey:@"code"];
-        fdLog([NSString stringWithFormat:@"[Transfer] error=%@ errorCode=%@", error, errorCode]);
+        WPLog(@"FriendDetect", @"[Transfer] error=%@ errorCode=%@", error, errorCode);
 
         // 从 contact 查找对应的 wxID
         // 错误码分析:
@@ -418,12 +408,12 @@ static void hooked_OnGetTransferPrepayRequest(id self, SEL _cmd, id response, id
         //   其他错误码 = 非好友关系
         if (error && errorCode) {
             int code = [errorCode intValue];
-            fdLog([NSString stringWithFormat:@"[Transfer] *** 错误码 %d - 可能被删除! ***", code]);
+            WPLog(@"FriendDetect", @"[Transfer] *** 错误码 %d - 可能被删除! ***", code);
         } else {
-            fdLog(@"[Transfer] 无错误 - 好友关系正常");
+            WPLog(@"FriendDetect", @"[Transfer] 无错误 - 好友关系正常");
         }
     } @catch (NSException *e) {
-        fdLog([NSString stringWithFormat:@"[Transfer] 异常: %@", e.reason]);
+        WPLog(@"FriendDetect", @"[Transfer] 异常: %@", e.reason);
     }
 
     if (orig_OnGetTransferPrepayRequest)
@@ -435,30 +425,30 @@ static void hooked_OnGetTransferPrepayRequest(id self, SEL _cmd, id response, id
  * 不实际扣钱，不通知对方
  */
 static NSArray *tryTransferDetection(NSArray *wxIDs) {
-    fdLog(@"[Transfer] === 转账预检测开始 ===");
+    WPLog(@"FriendDetect", @"[Transfer] === 转账预检测开始 ===");
 
     // 获取 WCPayLogicMgr
     Class mmSvcCls = objc_getClass("MMServiceCenter");
-    if (!mmSvcCls) { fdLog(@"[Transfer] MMServiceCenter 不存在"); return nil; }
+    if (!mmSvcCls) { WPLog(@"FriendDetect", @"[Transfer] MMServiceCenter 不存在"); return nil; }
     id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvcCls, sel_registerName("defaultCenter"));
-    if (!center) { fdLog(@"[Transfer] defaultCenter nil"); return nil; }
+    if (!center) { WPLog(@"FriendDetect", @"[Transfer] defaultCenter nil"); return nil; }
 
     // 检查 WCPayLogicMgr
     Class payMgrCls = objc_getClass("WCPayLogicMgr");
     if (!payMgrCls) {
-        fdLog(@"[Transfer] WCPayLogicMgr 不存在");
+        WPLog(@"FriendDetect", @"[Transfer] WCPayLogicMgr 不存在");
         // 也尝试其他可能的类名
         payMgrCls = objc_getClass("WCPayPayMgr");
-        if (payMgrCls) fdLog(@"[Transfer] 使用 WCPayPayMgr");
+        if (payMgrCls) WPLog(@"FriendDetect", @"[Transfer] 使用 WCPayPayMgr");
     }
-    if (!payMgrCls) { fdLog(@"[Transfer] 未能找到支付管理类"); return nil; }
+    if (!payMgrCls) { WPLog(@"FriendDetect", @"[Transfer] 未能找到支付管理类"); return nil; }
 
     id payMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), payMgrCls);
     if (!payMgr) {
-        fdLog(@"[Transfer] WCPayLogicMgr service nil, 尝试直接创建实例");
+        WPLog(@"FriendDetect", @"[Transfer] WCPayLogicMgr service nil, 尝试直接创建实例");
         @try { payMgr = [[payMgrCls alloc] init]; } @catch (...) {}
     }
-    if (!payMgr) { fdLog(@"[Transfer] 无法获取 WCPayLogicMgr"); return nil; }
+    if (!payMgr) { WPLog(@"FriendDetect", @"[Transfer] 无法获取 WCPayLogicMgr"); return nil; }
 
     // 检查 GetTransferPrepayRequest: 方法
     SEL prepaySel = sel_registerName("GetTransferPrepayRequest:");
@@ -472,14 +462,14 @@ static NSArray *tryTransferDetection(NSArray *wxIDs) {
             if (transferLogic && [transferLogic respondsToSelector:prepaySel]) {
                 payMgr = transferLogic;
                 hasPrepay = YES;
-                fdLog(@"[Transfer] 使用 WCPayTransferMoneyControlLogic");
+                WPLog(@"FriendDetect", @"[Transfer] 使用 WCPayTransferMoneyControlLogic");
             }
         }
     }
-    fdLog([NSString stringWithFormat:@"[Transfer] GetTransferPrepayRequest: available=%d", hasPrepay]);
+    WPLog(@"FriendDetect", @"[Transfer] GetTransferPrepayRequest: available=%d", hasPrepay);
 
     if (!hasPrepay) {
-        fdLog(@"[Transfer] GetTransferPrepayRequest: 方法不可用");
+        WPLog(@"FriendDetect", @"[Transfer] GetTransferPrepayRequest: 方法不可用");
         return nil;
     }
 
@@ -527,7 +517,7 @@ static NSArray *tryTransferDetection(NSArray *wxIDs) {
                     if (method) {
                         orig_OnGetTransferPrepayRequest = (void (*)(id, SEL, id, id))method_getImplementation(method);
                         method_setImplementation(method, (IMP)hooked_OnGetTransferPrepayRequest);
-                        fdLog(@"[Transfer] Hook OnGetTransferPrepayRequest:Error: 成功");
+                        WPLog(@"FriendDetect", @"[Transfer] Hook OnGetTransferPrepayRequest:Error: 成功");
                     }
                 }
             });
@@ -535,9 +525,9 @@ static NSArray *tryTransferDetection(NSArray *wxIDs) {
             @try {
                 // 调用转账预检
                 ((void (*)(id, SEL, id))objc_msgSend)(payMgr, prepaySel, contact);
-                fdLog([NSString stringWithFormat:@"[Transfer] 已对 %@ 发起转账预检", wxID]);
+                WPLog(@"FriendDetect", @"[Transfer] 已对 %@ 发起转账预检", wxID);
             } @catch (NSException *e) {
-                fdLog([NSString stringWithFormat:@"[Transfer] 转账预检异常(%@): %@", wxID, e.reason]);
+                WPLog(@"FriendDetect", @"[Transfer] 转账预检异常(%@): %@", wxID, e.reason);
                 [results addObject:[MioFriendDetectResult infoWithContact:contact isDeleted:NO isInvalid:YES]];
             }
 
@@ -545,11 +535,11 @@ static NSArray *tryTransferDetection(NSArray *wxIDs) {
             [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
 
             if ((i + 1) % 100 == 0)
-                fdLog([NSString stringWithFormat:@"[Transfer] 进度: %d/%d", i+1, total]);
+                WPLog(@"FriendDetect", @"[Transfer] 进度: %d/%d", i+1, total);
         }
     }
 
-    fdLog([NSString stringWithFormat:@"[Transfer] 完成: 发起 %d 个转账预检", total]);
+    WPLog(@"FriendDetect", @"[Transfer] 完成: 发起 %d 个转账预检", total);
     return results;
 }
 
@@ -567,7 +557,7 @@ static void scanCGIClasses(void) {
     Class *classes = (Class *)malloc(sizeof(Class) * numClasses);
     numClasses = objc_getClassList(classes, numClasses);
 
-    fdLog(@"[CGI] === 扫描所有 CGI 类 ===");
+    WPLog(@"FriendDetect", @"[CGI] === 扫描所有 CGI 类 ===");
     int cgiCount = 0;
     for (int i = 0; i < numClasses; i++) {
         NSString *cn = NSStringFromClass(classes[i]);
@@ -578,19 +568,19 @@ static void scanCGIClasses(void) {
             if ([cn rangeOfString:@"Contact" options:NSCaseInsensitiveSearch].location != NSNotFound ||
                 [cn rangeOfString:@"Friend" options:NSCaseInsensitiveSearch].location != NSNotFound ||
                 [cn rangeOfString:@"Relation" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                fdLog([NSString stringWithFormat:@"[CGI]   %@", cn]);
+                WPLog(@"FriendDetect", @"[CGI]   %@", cn);
                 cgiCount++;
             }
             // 也关注含 Duty/agree 的 CGI
             if ([cn rangeOfString:@"Duty" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                fdLog([NSString stringWithFormat:@"[CGI]   %@ (Duty related)", cn]);
+                WPLog(@"FriendDetect", @"[CGI]   %@ (Duty related)", cn);
                 cgiCount++;
             }
         }
     }
     free(classes);
-    if (cgiCount == 0) fdLog(@"[CGI]   没有找到相关的 CGI 类");
-    else fdLog([NSString stringWithFormat:@"[CGI]   找到 %d 个相关 CGI 类", cgiCount]);
+    if (cgiCount == 0) WPLog(@"FriendDetect", @"[CGI]   没有找到相关的 CGI 类");
+    else WPLog(@"FriendDetect", @"[CGI]   找到 %d 个相关 CGI 类", cgiCount);
 }
 
 #pragma mark - 策略D: Hook 网络请求层 - 拦截 agreeDuty 请求/响应
@@ -607,18 +597,18 @@ static void scanCGIClasses(void) {
 static void (*orig_CNetworkMgr_sendRequest)(id, SEL, id, id) = NULL;
 
 static void hooked_CNetworkMgr_sendRequest(id self, SEL _cmd, id request, id completion) {
-    fdLog(@"[Hook] CNetworkMgr sendRequest: Intercepted");
-    fdLog([NSString stringWithFormat:@"[Hook]   request class: %@", NSStringFromClass([request class])]);
+    WPLog(@"FriendDetect", @"[Hook] CNetworkMgr sendRequest: Intercepted");
+    WPLog(@"FriendDetect", @"[Hook]   request class: %@", NSStringFromClass([request class]));
 
     // 尝试检查 request 中是否包含 agreeDuty 关键词
     @try {
         NSString *desc = [request description];
         if ([desc rangeOfString:@"agree" options:NSCaseInsensitiveSearch].location != NSNotFound ||
             [desc rangeOfString:@"duty" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            fdLog(@"[Hook] **** 捕获到 agreeDuty 请求! ****");
-            fdLog([NSString stringWithFormat:@"[Hook]   %@", desc]);
+            WPLog(@"FriendDetect", @"[Hook] **** 捕获到 agreeDuty 请求! ****");
+            WPLog(@"FriendDetect", @"[Hook]   %@", desc);
         } else {
-            fdLog(@"[Hook]   未匹配 agreeDuty");
+            WPLog(@"FriendDetect", @"[Hook]   未匹配 agreeDuty");
         }
     } @catch (...) {}
 
@@ -630,7 +620,7 @@ static void hooked_CNetworkMgr_sendRequest(id self, SEL _cmd, id request, id com
 static void installNetworkHook(void) {
     Class cNetworkMgr = objc_getClass("CNetworkMgr");
     if (!cNetworkMgr) {
-        fdLog(@"[Hook] CNetworkMgr 类不存在，无法 hook");
+        WPLog(@"FriendDetect", @"[Hook] CNetworkMgr 类不存在，无法 hook");
         return;
     }
 
@@ -649,11 +639,11 @@ static void installNetworkHook(void) {
         SEL sel = sel_registerName([methodName UTF8String]);
         Method method = class_getInstanceMethod(cNetworkMgr, sel);
         if (method) {
-            fdLog([NSString stringWithFormat:@"[Hook] 找到 CNetworkMgr.%@，安装 hook...", methodName]);
+            WPLog(@"FriendDetect", @"[Hook] 找到 CNetworkMgr.%@，安装 hook...", methodName);
 
             // 获取原始 IMP
             // 注: 这里只是一个示例，实际 hook 需要正确的签名
-            fdLog([NSString stringWithFormat:@"[Hook]   typeEncoding: %s", method_getTypeEncoding(method)]);
+            WPLog(@"FriendDetect", @"[Hook]   typeEncoding: %s", method_getTypeEncoding(method));
         }
     }
 
@@ -670,10 +660,10 @@ static void installNetworkHook(void) {
     for (NSString *methodName in responseMethods) {
         SEL sel = sel_registerName([methodName UTF8String]);
         if ([cNetworkMgr instancesRespondToSelector:sel]) {
-            fdLog([NSString stringWithFormat:@"[Hook] CNetworkMgr 有响应方法: %@", methodName]);
+            WPLog(@"FriendDetect", @"[Hook] CNetworkMgr 有响应方法: %@", methodName);
             Method method = class_getInstanceMethod(cNetworkMgr, sel);
             if (method) {
-                fdLog([NSString stringWithFormat:@"[Hook]   typeEncoding: %s", method_getTypeEncoding(method)]);
+                WPLog(@"FriendDetect", @"[Hook]   typeEncoding: %s", method_getTypeEncoding(method));
             }
         }
     }
@@ -690,7 +680,7 @@ static void installNetworkHook(void) {
 static void (*orig_CContactMgr_onContactListChanged)(id, SEL, id) = NULL;
 
 static void hooked_CContactMgr_onContactListChanged(id self, SEL _cmd, id changedContacts) {
-    fdLog(@"[Sync] CContactMgr 联系人列表变更");
+    WPLog(@"FriendDetect", @"[Sync] CContactMgr 联系人列表变更");
     if (orig_CContactMgr_onContactListChanged) {
         orig_CContactMgr_onContactListChanged(self, _cmd, changedContacts);
     }
@@ -698,7 +688,7 @@ static void hooked_CContactMgr_onContactListChanged(id self, SEL _cmd, id change
 
 static void installContactSyncHook(void) {
     Class ccm = objc_getClass("CContactMgr");
-    if (!ccm) { fdLog(@"[Sync] CContactMgr 不存在"); return; }
+    if (!ccm) { WPLog(@"FriendDetect", @"[Sync] CContactMgr 不存在"); return; }
 
     NSArray *syncMethods = @[
         @"onContactListChanged:",
@@ -716,10 +706,10 @@ static void installContactSyncHook(void) {
     for (NSString *methodName in syncMethods) {
         SEL sel = sel_registerName([methodName UTF8String]);
         if ([ccm instancesRespondToSelector:sel]) {
-            fdLog([NSString stringWithFormat:@"[Sync] CContactMgr 有方法: %@", methodName]);
+            WPLog(@"FriendDetect", @"[Sync] CContactMgr 有方法: %@", methodName);
             Method method = class_getInstanceMethod(ccm, sel);
             if (method) {
-                fdLog([NSString stringWithFormat:@"[Sync]   typeEncoding: %s", method_getTypeEncoding(method)]);
+                WPLog(@"FriendDetect", @"[Sync]   typeEncoding: %s", method_getTypeEncoding(method));
             }
         }
     }
@@ -731,7 +721,7 @@ static void installContactSyncHook(void) {
  * 主检测函数: 先绑定尝试，再走 WeChat 网络层，最后本地回退
  */
 static NSArray *runBoundDetection(NSArray *wxIDs) {
-    fdLog(@"[Main] === 绑定检测开始 ===");
+    WPLog(@"FriendDetect", @"[Main] === 绑定检测开始 ===");
 
     // 第一步: 扫描所有服务（首次运行时）
     static dispatch_once_t onceToken;
@@ -748,19 +738,19 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
     if (mmSvcCls) {
         mmServiceCenter = ((id (*)(Class, SEL))objc_msgSend)(mmSvcCls, sel_registerName("defaultCenter"));
     }
-    if (!mmServiceCenter) { fdLog(@"[Main] MMServiceCenter 不可用"); return nil; }
+    if (!mmServiceCenter) { WPLog(@"FriendDetect", @"[Main] MMServiceCenter 不可用"); return nil; }
 
     // 第三步: 转账预检测（主动检测，与微信助手方案一致）
-    fdLog(@"[Main] === 尝试转账预检测 ===");
+    WPLog(@"FriendDetect", @"[Main] === 尝试转账预检测 ===");
     NSArray *transferResults = tryTransferDetection(wxIDs);
     if (transferResults && transferResults.count > 0) {
-        fdLog([NSString stringWithFormat:@"[Main] 转账预检测完成: %lu 结果", (unsigned long)transferResults.count]);
+        WPLog(@"FriendDetect", @"[Main] 转账预检测完成: %lu 结果", (unsigned long)transferResults.count);
         return transferResults;
     }
 
     // 第四步: 回退到本地检测
     NSMutableArray *results = [NSMutableArray array];
-    fdLog(@"[Main] === 转账预检不可用，回退到 CContactMgr 本地检测 ===");
+    WPLog(@"FriendDetect", @"[Main] === 转账预检不可用，回退到 CContactMgr 本地检测 ===");
     Class cContactCls = objc_getClass("CContact");
     id contactMgr = nil;
     if (mmServiceCenter) {
@@ -770,7 +760,7 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
     if (contactMgr) {
         // 检查 CContactMgr 可用方法（仅查询日志，不调用危险方法）
         BOOL hasGetByName = [contactMgr respondsToSelector:sel_registerName("getContactByName:")];
-        fdLog([NSString stringWithFormat:@"[Main] CContactMgr: getContactByName=%d", hasGetByName]);
+        WPLog(@"FriendDetect", @"[Main] CContactMgr: getContactByName=%d", hasGetByName);
 
         // 逐个用 getContactByName: 获取联系人
         // 注意: 这里只读本地缓存，不调 getContactsFromServer: 等带内
@@ -786,7 +776,7 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
                     @try {
                         contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactByName:"), wxID);
                     } @catch (NSException *e) {
-                        fdLog([NSString stringWithFormat:@"[Main] getContactByName 异常(%@): %@", wxID, e.reason]);
+                        WPLog(@"FriendDetect", @"[Main] getContactByName 异常(%@): %@", wxID, e.reason);
                     }
                 }
 
@@ -812,27 +802,27 @@ static NSArray *runBoundDetection(NSArray *wxIDs) {
                 if (isDeleted) delCount++;
 
                 if ((i + 1) % 500 == 0)
-                    fdLog([NSString stringWithFormat:@"[Main] Progress: %d/%d, deleted=%d", i+1, total, delCount]);
+                    WPLog(@"FriendDetect", @"[Main] Progress: %d/%d, deleted=%d", i+1, total, delCount);
             }
         }
-        fdLog([NSString stringWithFormat:@"[Main] CContactMgr 同步完成: %d total, %d deleted", total, delCount]);
+        WPLog(@"FriendDetect", @"[Main] CContactMgr 同步完成: %d total, %d deleted", total, delCount);
         return results;
     }
 
-    fdLog(@"[Main] ALL BINDING ATTEMPTS FAILED");
+    WPLog(@"FriendDetect", @"[Main] ALL BINDING ATTEMPTS FAILED");
     return nil;
 }
 
 static void saveResults(NSArray *results) {
-    fdLog(@"[Save] === Save results start ===");
-    if (!results) { fdLog(@"[Save] results is nil"); return; }
-    fdLog([NSString stringWithFormat:@"[Save] Total results to process: %lu", (unsigned long)results.count]);
+    WPLog(@"FriendDetect", @"[Save] === Save results start ===");
+    if (!results) { WPLog(@"FriendDetect", @"[Save] results is nil"); return; }
+    WPLog(@"FriendDetect", @"[Save] Total results to process: %lu", (unsigned long)results.count);
     
     if (results.count > 0) {
         id first = results[0];
-        fdLog([NSString stringWithFormat:@"[Save] First result class: %@", NSStringFromClass([first class])]);
-        fdLog([NSString stringWithFormat:@"[Save] First result respondsToSelector isDeleted: %d", [first respondsToSelector:NSSelectorFromString(@"isDeleted")] ? 1 : 0]);
-        fdLog([NSString stringWithFormat:@"[Save] First result respondsToSelector contact: %d", [first respondsToSelector:NSSelectorFromString(@"contact")] ? 1 : 0]);
+        WPLog(@"FriendDetect", @"[Save] First result class: %@", NSStringFromClass([first class]));
+        WPLog(@"FriendDetect", @"[Save] First result respondsToSelector isDeleted: %d", [first respondsToSelector:NSSelectorFromString(@"isDeleted")] ? 1 : 0);
+        WPLog(@"FriendDetect", @"[Save] First result respondsToSelector contact: %d", [first respondsToSelector:NSSelectorFromString(@"contact")] ? 1 : 0);
     }
 
     NSMutableArray *deleted = [NSMutableArray array];
@@ -840,12 +830,12 @@ static void saveResults(NSArray *results) {
     for (id r in results) {
         processed++;
         BOOL isDel = NO, isInv = NO; id contact = nil;
-        @try { isDel = [[r valueForKey:@"isDeleted"] boolValue]; } @catch (NSException *e) { fdLog([NSString stringWithFormat:@"[Save] item#%d valueForKey isDeleted exception: %@", processed, e.reason]); }
-        @try { isInv = [[r valueForKey:@"isInvalid"] boolValue]; } @catch (NSException *e) { fdLog([NSString stringWithFormat:@"[Save] item#%d valueForKey isInvalid exception: %@", processed, e.reason]); }
-        @try { contact = [r valueForKey:@"contact"]; } @catch (NSException *e) { fdLog([NSString stringWithFormat:@"[Save] item#%d valueForKey contact exception: %@", processed, e.reason]); }
+        @try { isDel = [[r valueForKey:@"isDeleted"] boolValue]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey isDeleted exception: %@", processed, e.reason);
+        @try { isInv = [[r valueForKey:@"isInvalid"] boolValue]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey isInvalid exception: %@", processed, e.reason);
+        @try { contact = [r valueForKey:@"contact"]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey contact exception: %@", processed, e.reason);
         
         if (processed <= 3)
-            fdLog([NSString stringWithFormat:@"[Save] item#%d: isDel=%d isInv=%d contact=%@", processed, isDel, isInv, contact ? NSStringFromClass([contact class]) : @"nil"]);
+            WPLog(@"FriendDetect", @"[Save] item#%d: isDel=%d isInv=%d contact=%@", processed, isDel, isInv, contact ? NSStringFromClass([contact class]) : @"nil");
 
         if (isDel || isInv) {
             NSString *wx = @"", *nk = @"";
@@ -856,24 +846,24 @@ static void saveResults(NSArray *results) {
             [deleted addObject:@{@"wxID": wx, @"nick": nk, @"status": isInv ? @"invalid" : @"deleted"}];
         } else { valid++; }
     }
-    fdLog([NSString stringWithFormat:@"[Save] Processed %d results: %lu deleted, %d valid", processed, (unsigned long)deleted.count, valid]);
+    WPLog(@"FriendDetect", @"[Save] Processed %d results: %lu deleted, %d valid", processed, (unsigned long)deleted.count, valid);
     
     NSDictionary *data = @{@"timestamp": @([[NSDate date] timeIntervalSince1970]), @"total": @(valid + (int)deleted.count), @"deleted": [deleted copy]};
     [[NSUserDefaults standardUserDefaults] setObject:data forKey:@"com.mio.wechat.plugin.FriendDetection.results"];
     [[NSUserDefaults standardUserDefaults] synchronize];
-    fdLog(@"[Save] Data saved to NSUserDefaults");
+    WPLog(@"FriendDetect", @"[Save] Data saved to NSUserDefaults");
 }
 
 static BOOL startFriendDetection(void) {
-    fdLog(@"[Main] ****************************************");
-    fdLog(@"[Main] * Friend Detection Start (Bind Mode)");
-    fdLog(@"[Main] ****************************************");
+    WPLog(@"FriendDetect", @"[Main] ****************************************");
+    WPLog(@"FriendDetect", @"[Main] * Friend Detection Start (Bind Mode)");
+    WPLog(@"FriendDetect", @"[Main] ****************************************");
 
     // 1. 获取所有好友 WX ID
     MioFriendDetector *d = [[MioFriendDetector alloc] init];
     NSArray *friends = [d allFriends];
     if (!friends || friends.count == 0) {
-        fdLog(@"[Main] No friends found");
+        WPLog(@"FriendDetect", @"[Main] No friends found");
         return NO;
     }
 
@@ -883,26 +873,26 @@ static BOOL startFriendDetection(void) {
         @try { wxID = [contact performSelector:@selector(m_nsUsrName)] ?: @""; } @catch (...) {}
         if (wxID.length > 0) [wxIDs addObject:wxID];
     }
-    fdLog([NSString stringWithFormat:@"[Main] Got %lu WX IDs", (unsigned long)wxIDs.count]);
+    WPLog(@"FriendDetect", @"[Main] Got %lu WX IDs", (unsigned long)wxIDs.count);
 
     // 2. 执行绑定检测
     NSArray *results = runBoundDetection(wxIDs);
 
     // 3. 如果绑定检测失败，回退到本地检测
     if (!results || results.count == 0) {
-        fdLog(@"[Main] Bind detection returned nil, trying local fallback");
+        WPLog(@"FriendDetect", @"[Main] Bind detection returned nil, trying local fallback");
         results = [d tryLocalDetection:wxIDs];
     }
 
     // 4. 保存并返回
     if (!results || results.count == 0) {
-        fdLog(@"[Main] ALL METHODS FAILED");
+        WPLog(@"FriendDetect", @"[Main] ALL METHODS FAILED");
         return NO;
     }
 
-    fdLog([NSString stringWithFormat:@"[Main] Saving %lu results...", (unsigned long)results.count]);
+    WPLog(@"FriendDetect", @"[Main] Saving %lu results...", (unsigned long)results.count);
     saveResults(results);
-    fdLog(@"[Main] Complete - SUCCESS");
+    WPLog(@"FriendDetect", @"[Main] Complete - SUCCESS");
     return YES;
 }
 
@@ -1017,6 +1007,6 @@ static void FDViewDidLoad(id self, SEL _cmd) {
 
 @implementation FriendDetectionHook
 + (void)install {
-    fdLog(@"FriendDetectionHook installed");
+    WPLog(@"FriendDetect", @"FriendDetectionHook installed");
 }
 @end

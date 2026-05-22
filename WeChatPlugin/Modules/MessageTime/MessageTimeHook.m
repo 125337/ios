@@ -6,6 +6,7 @@
 #import <objc/message.h>
 
 #import <UIKit/UIKit.h>
+#import "../../Core/LogManager.h"
 
 // ============================================================
 // MARK: - Constants
@@ -257,19 +258,19 @@ static id getCellView(id cell) {
     NSString *cellCls = NSStringFromClass([cell class]);
     @try {
         cellView = [cell valueForKey:@"m_cellView"];
-        if (cellView) mtLog([NSString stringWithFormat:@"[DBG] getCellView: found via m_cellView, class=%@", NSStringFromClass([cellView class])]);
+        if (cellView) WPLog(@"MsgTime", @"[DBG] getCellView: found via m_cellView, class=%@", NSStringFromClass([cellView class]));
     } @catch (NSException *e) {
-        mtLog([NSString stringWithFormat:@"[DBG] getCellView: m_cellView threw: %@", e.reason]);
+        WPLog(@"MsgTime", @"[DBG] getCellView: m_cellView threw: %@", e.reason);
     }
     if (!cellView) {
         @try {
             cellView = [cell valueForKey:@"cellView"];
-            if (cellView) mtLog([NSString stringWithFormat:@"[DBG] getCellView: found via cellView, class=%@", NSStringFromClass([cellView class])]);
+            if (cellView) WPLog(@"MsgTime", @"[DBG] getCellView: found via cellView, class=%@", NSStringFromClass([cellView class]));
         } @catch (NSException *e) {
-            mtLog([NSString stringWithFormat:@"[DBG] getCellView: cellView threw: %@", e.reason]);
+            WPLog(@"MsgTime", @"[DBG] getCellView: cellView threw: %@", e.reason);
         }
     }
-    if (!cellView) mtLog([NSString stringWithFormat:@"[DBG] getCellView: BOTH nil for cell=%@", cellCls]);
+    if (!cellView) WPLog(@"MsgTime", @"[DBG] getCellView: BOTH nil for cell=%@", cellCls);
     return cellView;
 }
 
@@ -294,7 +295,7 @@ static id getAvatarView(id cell) {
                 @try {
                     id view = ((id (*)(id, SEL))objc_msgSend)(target, sel);
                     if (view) {
-                        mtLog(@"[DBG] getAvatarView: getHeadImageView found");
+                        WPLog(@"MsgTime", @"[DBG] getAvatarView: getHeadImageView found");
                         avatarView = view;
                         break;
                     }
@@ -307,7 +308,7 @@ static id getAvatarView(id cell) {
             @try {
                 id view = [target valueForKey:@"headImageView"];
                 if (view && [view respondsToSelector:@selector(image)]) {
-                    mtLog(@"[DBG] getAvatarView: KVC headImageView found");
+                    WPLog(@"MsgTime", @"[DBG] getAvatarView: KVC headImageView found");
                     avatarView = view;
                     break;
                 }
@@ -318,7 +319,7 @@ static id getAvatarView(id cell) {
         if (!avatarView && MMHeadImageViewClass) {
             for (UIView *sv in [target subviews]) {
                 if ([sv isKindOfClass:MMHeadImageViewClass]) {
-                    mtLog(@"[DBG] getAvatarView: MMHeadImageView subview found");
+                    WPLog(@"MsgTime", @"[DBG] getAvatarView: MMHeadImageView subview found");
                     avatarView = sv;
                     break;
                 }
@@ -328,7 +329,7 @@ static id getAvatarView(id cell) {
         if (avatarView) break;
     }
     
-    if (!avatarView) mtLog(@"[DBG] getAvatarView: FAILED - all paths returned nil");
+    if (!avatarView) WPLog(@"MsgTime", @"[DBG] getAvatarView: FAILED - all paths returned nil");
     return avatarView;
 }
 
@@ -351,7 +352,7 @@ static id getBubbleView(id cell) {
                 @try {
                     id v = ((id (*)(id, SEL))objc_msgSend)(target, sel);
                     if (v) {
-                        mtLog(@"[DBG] getBubbleView: getBgImageView found");
+                        WPLog(@"MsgTime", @"[DBG] getBubbleView: getBgImageView found");
                         bubbleView = v;
                         break;
                     }
@@ -364,7 +365,7 @@ static id getBubbleView(id cell) {
                 @try {
                     id v = [target valueForKey:key];
                     if (v) {
-                        mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: KVC %@ found, class=%@", key, NSStringFromClass([v class])]);
+                        WPLog(@"MsgTime", @"[DBG] getBubbleView: KVC %@ found, class=%@", key, NSStringFromClass([v class]));
                         bubbleView = v;
                         break;
                     }
@@ -377,7 +378,7 @@ static id getBubbleView(id cell) {
                 NSString *cn = NSStringFromClass([sv class]);
                 if ([cn containsString:@"BgImage"] || [cn containsString:@"Bubble"] ||
                     [cn containsString:@"MessageView"] || [cn containsString:@"RichTextView"]) {
-                    mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: subview match class=%@", cn]);
+                    WPLog(@"MsgTime", @"[DBG] getBubbleView: subview match class=%@", cn);
                     bubbleView = sv;
                     break;
                 }
@@ -388,12 +389,12 @@ static id getBubbleView(id cell) {
     }
     
     if (bubbleView && CGRectEqualToRect([(UIView *)bubbleView frame], CGRectZero)) {
-        mtLog([NSString stringWithFormat:@"[DBG] getBubbleView: found class=%@ but frame is zero, treating as nil", NSStringFromClass([(UIView *)bubbleView class])]);
+        WPLog(@"MsgTime", @"[DBG] getBubbleView: found class=%@ but frame is zero, treating as nil", NSStringFromClass([(UIView *)bubbleView class]));
         bubbleView = nil;
     }
     
     if (!bubbleView) {
-        mtLog(@"[DBG] getBubbleView: FAILED - no valid bubble view found, returning nil");
+        WPLog(@"MsgTime", @"[DBG] getBubbleView: FAILED - no valid bubble view found, returning nil");
     }
     return bubbleView;
 }
@@ -425,7 +426,7 @@ static id getContentView(id cell) {
             if ([cn isEqualToString:@"UITableViewCellContentView"]) continue;
             if ([cn containsString:@"ContentView"] || [cn containsString:@"MessageView"]) {
                 contentView = sv;
-                mtLog([NSString stringWithFormat:@"[DBG] getContentView: subview fallback class=%@ frame=%@", cn, NSStringFromCGRect(sv.frame)]);
+                WPLog(@"MsgTime", @"[DBG] getContentView: subview fallback class=%@ frame=%@", cn, NSStringFromCGRect(sv.frame));
                 break;
             }
         }
@@ -433,12 +434,12 @@ static id getContentView(id cell) {
 
     if (contentView) {
         if (CGRectEqualToRect([(UIView *)contentView frame], CGRectZero) || [(UIView *)contentView frame].size.width < kMinContentViewWidth) {
-            mtLog([NSString stringWithFormat:@"[DBG] getContentView: class=%@ has zero/tiny frame, treating as nil", NSStringFromClass([contentView class])]);
+            WPLog(@"MsgTime", @"[DBG] getContentView: class=%@ has zero/tiny frame, treating as nil", NSStringFromClass([contentView class]));
             contentView = nil;
         }
     }
 
-    if (!contentView) mtLog(@"[DBG] getContentView: FAILED - returning nil");
+    if (!contentView) WPLog(@"MsgTime", @"[DBG] getContentView: FAILED - returning nil");
     return contentView;
 }
 
@@ -873,18 +874,18 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
 @implementation MessageTimeHook
 
 + (void)install {
-    mtLog(@"========================================");
-    mtLog(@"MessageTimeHook install - initWithViewModel(early label) + cellForRow(global_queue) + updateNodeStatus(model-driven)");
-    mtLog(@"Architecture: 复刻微信优化1.6.5 — 全局队列异步计算 + ViewModel驱动");
-    mtLog(@"========================================");
+    WPLog(@"MsgTime", @"========================================");
+    WPLog(@"MsgTime", @"MessageTimeHook install - initWithViewModel(early label) + cellForRow(global_queue) + updateNodeStatus(model-driven)");
+    WPLog(@"MsgTime", @"Architecture: 复刻微信优化1.6.5 — 全局队列异步计算 + ViewModel驱动");
+    WPLog(@"MsgTime", @"========================================");
 
     PluginConfig *config = [PluginConfig shared];
-    mtLog([NSString stringWithFormat:@"Config - showMessageTime: %d", config.showMessageTime]);
-    mtLog([NSString stringWithFormat:@"Config - messageTimePosition: %ld", (long)config.messageTimePosition]);
-    mtLog([NSString stringWithFormat:@"Config - messageTimeFontSize: %.1f", config.messageTimeFontSize]);
-    mtLog([NSString stringWithFormat:@"Config - messageTimeFormat: %@", config.messageTimeFormat]);
-    mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetX: %.2f", config.messageTimeOffsetX]);
-    mtLog([NSString stringWithFormat:@"Config - messageTimeOffsetY: %.2f", config.messageTimeOffsetY]);
+    WPLog(@"MsgTime", @"Config - showMessageTime: %d", config.showMessageTime);
+    WPLog(@"MsgTime", @"Config - messageTimePosition: %ld", (long)config.messageTimePosition);
+    WPLog(@"MsgTime", @"Config - messageTimeFontSize: %.1f", config.messageTimeFontSize);
+    WPLog(@"MsgTime", @"Config - messageTimeFormat: %@", config.messageTimeFormat);
+    WPLog(@"MsgTime", @"Config - messageTimeOffsetX: %.2f", config.messageTimeOffsetX);
+    WPLog(@"MsgTime", @"Config - messageTimeOffsetY: %.2f", config.messageTimeOffsetY);
 
     int hookedCount = 0;
 
@@ -893,27 +894,27 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
 
         Class cls = objc_getClass(entry->className);
         if (!cls) {
-            mtLog([NSString stringWithFormat:@"Class not found: %s, skipping", entry->className]);
+            WPLog(@"MsgTime", @"Class not found: %s, skipping", entry->className);
             continue;
         }
 
         SEL sel = sel_registerName(entry->selName);
         Method m = class_getInstanceMethod(cls, sel);
         if (!m) {
-            mtLog([NSString stringWithFormat:@"Method not found: %s - %s, skipping", entry->className, entry->selName]);
+            WPLog(@"MsgTime", @"Method not found: %s - %s, skipping", entry->className, entry->selName);
             continue;
         }
 
         MSHookMessageEx(cls, sel, entry->replacement, entry->original);
 
-        mtLog([NSString stringWithFormat:@"Hooked %s - %s ✓", entry->className, entry->selName]);
+        WPLog(@"MsgTime", @"Hooked %s - %s ✓", entry->className, entry->selName);
         hookedCount++;
     }
 
-    mtLog([NSString stringWithFormat:@"Hook table complete: %d/%d", hookedCount, g_hookTableCount]);
-    mtLog(@"========================================");
-    mtLog(@"MessageTimeHook install complete");
-    mtLog(@"========================================");
+    WPLog(@"MsgTime", @"Hook table complete: %d/%d", hookedCount, g_hookTableCount);
+    WPLog(@"MsgTime", @"========================================");
+    WPLog(@"MsgTime", @"MessageTimeHook install complete");
+    WPLog(@"MsgTime", @"========================================");
 }
 
 @end

@@ -4,24 +4,10 @@
 #import "../../Core/WeChatAlertHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import "../../Core/LogManager.h"
 
 // ==================== 日志 ====================
-static void jokerLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-        formatter.dateFormat = @"yyyy-MM-dd HH:mm:ss";
-        NSString *timestamp = [formatter stringFromDate:[NSDate date]];
-        NSString *logLine = [NSString stringWithFormat:@"[%@] %@\n", timestamp, content];
-        NSString *logPath = [folderPath stringByAppendingPathComponent:@"joker.log"];
-        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:logPath];
-        if (!fh) {
-            [[NSFileManager defaultManager] createFileAtPath:logPath contents:nil attributes:nil];
-            fh = [NSFileHandle fileHandleForWritingAtPath:logPath];
-        }
-        [fh seekToEndOfFile];
+[fh seekToEndOfFile];
         [fh writeData:[logLine dataUsingEncoding:NSUTF8StringEncoding]];
         [fh closeFile];
     } @catch (NSException *e) {}
@@ -58,7 +44,7 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
                 msgUpdated = [newText isEqualToString:after];
             }
         } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] text modify failed: %@", e]);
+            WPLog(@"Joker", @"[Joker] text modify failed: %@", e);
         }
     }
 
@@ -98,7 +84,7 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
     NSNumberFormatter *formatter = sharedNumberFormatter();
     NSNumber *n = [formatter numberFromString:validText];
     if (!n) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ❌ invalid transfer amount: [%@]", validText]);
+        WPLog(@"Joker", @"[Joker] ❌ invalid transfer amount: [%@]", validText);
         return;
     }
 
@@ -107,7 +93,7 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
         @try {
             [payInfoItem setValue:newText forKey:@"m_nsFeeDesc"];
         } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] ❌ payInfoItem write failed: %@", e]);
+            WPLog(@"Joker", @"[Joker] ❌ payInfoItem write failed: %@", e);
         }
     }
 
@@ -140,13 +126,13 @@ static char kJokerAlertKey;
 static char kJokerMsgKey;
 
 static void joker_text_confirm_IMP(id self, SEL _cmd) {
-    jokerLog(@"🔥 Joker confirm fired");
+    WPLog(@"Joker", @"🔥 Joker confirm fired");
 
     id alert = objc_getAssociatedObject(self, &kJokerAlertKey);
     id msgWrap = objc_getAssociatedObject(self, &kJokerMsgKey);
 
     if (!alert) {
-        jokerLog(@"   ⚠️ alert released");
+        WPLog(@"Joker", @"   ⚠️ alert released");
         return;
     }
 
@@ -221,7 +207,7 @@ static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *curre
             ((void(*)(id, SEL))objc_msgSend)(alert, sh);
         }
     } @catch (NSException *e) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ❌ showEditAlert: %@", e]);
+        WPLog(@"Joker", @"[Joker] ❌ showEditAlert: %@", e);
     }
 }
 
@@ -305,7 +291,7 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
             // action 参数类型是 SEL，svgName 用运行时 NSString（避免跨 dylib 指针比对问题）
             SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
             if (![mmItemClass instancesRespondToSelector:initSel]) {
-                jokerLog(@"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
+                WPLog(@"Joker", @"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
             } else {
                 SEL actionSEL = sel_registerName("mioTextJoker");
                 NSString *iconName = [NSString stringWithUTF8String:"expression"];
@@ -313,11 +299,11 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
                     [mmItemClass alloc], initSel, @"修改文字", iconName, actionSEL);
                 if (mmItem) {
                     [newItems addObject:mmItem];
-                    jokerLog(@"✅ MMMenuItem: 修改文字 / expression");
+                    WPLog(@"Joker", @"✅ MMMenuItem: 修改文字 / expression");
                 }
             }
         } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] ❌ MMMenuItem create: %@", e]);
+            WPLog(@"Joker", @"[Joker] ❌ MMMenuItem create: %@", e);
         }
     }
     return newItems;
@@ -337,7 +323,7 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
         @try {
             SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
             if (![mmItemClass instancesRespondToSelector:initSel]) {
-                jokerLog(@"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
+                WPLog(@"Joker", @"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
             } else {
                 SEL actionSEL = sel_registerName("mioTransferJoker");
                 NSString *iconName = [NSString stringWithUTF8String:"expression"];
@@ -345,11 +331,11 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
                     [mmItemClass alloc], initSel, @"修改文字", iconName, actionSEL);
                 if (mmItem) {
                     [newItems addObject:mmItem];
-                    jokerLog(@"✅ MMMenuItem: 修改文字 / expression");
+                    WPLog(@"Joker", @"✅ MMMenuItem: 修改文字 / expression");
                 }
             }
         } @catch (NSException *e) {
-            jokerLog([NSString stringWithFormat:@"[Joker] ❌ MMMenuItem create: %@", e]);
+            WPLog(@"Joker", @"[Joker] ❌ MMMenuItem create: %@", e);
         }
     }
     return newItems;
@@ -370,7 +356,7 @@ static void joker_wallet_confirm_IMP(id self, SEL _cmd) {
     NSNumberFormatter *fmt = sharedNumberFormatter();
     NSNumber *n = [fmt numberFromString:input];
     if (!n) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ❌ invalid wallet amount: [%@]", input]);
+        WPLog(@"Joker", @"[Joker] ❌ invalid wallet amount: [%@]", input);
         return;
     }
 
@@ -390,7 +376,7 @@ static void joker_wallet_confirm_IMP(id self, SEL _cmd) {
             }
         }
     } @catch (NSException *e) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ❌ wallet update: %@", e]);
+        WPLog(@"Joker", @"[Joker] ❌ wallet update: %@", e);
     }
 
     objc_setAssociatedObject(self, &kJokerWalletAlertKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -425,7 +411,7 @@ static void walletLongPressHandler(id self, SEL _cmd, UIGestureRecognizer *gestu
         SEL sh = NSSelectorFromString(@"show");
         if ([alert respondsToSelector:sh]) ((void(*)(id, SEL))objc_msgSend)(alert, sh);
     } @catch (NSException *e) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ❌ Wallet alert: %@", e]);
+        WPLog(@"Joker", @"[Joker] ❌ Wallet alert: %@", e);
     }
 }
 
@@ -464,7 +450,7 @@ static void joker_timeout_confirm_IMP(id self, SEL _cmd) {
     NSNumberFormatter *fmt = sharedNumberFormatter();
     NSNumber *n = [fmt numberFromString:input];
     if (!n) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ❌ invalid timeout amount: [%@]", input]);
+        WPLog(@"Joker", @"[Joker] ❌ invalid timeout amount: [%@]", input);
         return;
     }
 
@@ -506,7 +492,7 @@ static void joker_timeout_longpress_IMP(id self, SEL _cmd, UIGestureRecognizer *
         SEL sh = NSSelectorFromString(@"show");
         if ([alert respondsToSelector:sh]) ((void(*)(id, SEL))objc_msgSend)(alert, sh);
     } @catch (NSException *e) {
-        jokerLog([NSString stringWithFormat:@"[Joker] ❌ TimeoutNumber alert: %@", e]);
+        WPLog(@"Joker", @"[Joker] ❌ TimeoutNumber alert: %@", e);
     }
 }
 
@@ -535,17 +521,17 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
 @implementation JokerHook
 
 + (void)install {
-    jokerLog(@"[JokerHook] install start");
-    jokerLog([NSString stringWithFormat:@"[JokerHook] enableJoker=%d", [PluginConfig shared].enableJoker]);
+    WPLog(@"Joker", @"[JokerHook] install start");
+    WPLog(@"Joker", @"[JokerHook] enableJoker=%d", [PluginConfig shared].enableJoker);
 
     if (![PluginConfig shared].enableJoker) {
-        jokerLog(@"[JokerHook] Joker disabled");
+        WPLog(@"Joker", @"[JokerHook] Joker disabled");
         return;
     }
 
     NSString *wxVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
     if ([wxVersion compare:@"8.0.29" options:NSNumericSearch] == NSOrderedAscending) {
-        jokerLog([NSString stringWithFormat:@"[JokerHook] ⚠️ WeChat %@ too old (<8.0.29)", wxVersion]);
+        WPLog(@"Joker", @"[JokerHook] ⚠️ WeChat %@ too old (<8.0.29)", wxVersion);
         return;
     }
 
@@ -558,7 +544,7 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
             if (m) method_setImplementation(m, (IMP)mioTextJoker);
         }
     } else {
-        jokerLog(@"[JokerHook] ⚠️ TextMessageCellView NOT found");
+        WPLog(@"Joker", @"[JokerHook] ⚠️ TextMessageCellView NOT found");
     }
 
     Class transferCellClass = objc_getClass("WCPayTransferMessageCellView");
@@ -569,7 +555,7 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
             if (m) method_setImplementation(m, (IMP)mioTransferJoker);
         }
     } else {
-        jokerLog(@"[JokerHook] ⚠️ WCPayTransferMessageCellView NOT found");
+        WPLog(@"Joker", @"[JokerHook] ⚠️ WCPayTransferMessageCellView NOT found");
     }
 
     // ====== 菜单 Hook ======
@@ -600,7 +586,7 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
             orig_Wallet_updateBalanceEntryView = method_setImplementation(updateMethod, (IMP)hooked_Wallet_updateBalanceEntryView);
         }
     } else {
-        jokerLog(@"[JokerHook] ⚠️ WCPayWalletEntryHeaderView NOT found");
+        WPLog(@"Joker", @"[JokerHook] ⚠️ WCPayWalletEntryHeaderView NOT found");
     }
 
     // ====== 零钱通 Hook ======
@@ -624,10 +610,10 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
             class_addMethod(timeoutClass, didMoveSel, (IMP)hooked_TimeoutNumber_didMoveToWindow, "v@:");
         }
     } else {
-        jokerLog(@"[JokerHook] ⚠️ TimeoutNumber NOT found");
+        WPLog(@"Joker", @"[JokerHook] ⚠️ TimeoutNumber NOT found");
     }
 
-    jokerLog(@"[JokerHook] install complete");
+    WPLog(@"Joker", @"[JokerHook] install complete");
 }
 
 @end

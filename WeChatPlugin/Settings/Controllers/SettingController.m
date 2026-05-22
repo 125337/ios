@@ -1,20 +1,9 @@
 #import "../Common/SettingController.h"
 #import "../../Registry/FeatureRegistry.h"
 #import <objc/runtime.h>
+#import "../../Core/LogManager.h"
 
-static void reLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"setting_entry.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
+else {
             [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     } @catch (NSException *e) {}
@@ -23,11 +12,11 @@ static void reLog(NSString *content) {
 @implementation SettingController
 
 - (void)viewDidLoad {
-    reLog(@"[UI] SettingController viewDidLoad 开始");
+    WPLog(@"Setting", @"[UI] SettingController viewDidLoad 开始");
     @try {
         [super viewDidLoad];
         self.title = @"Mio助手";
-        reLog([NSString stringWithFormat:@"[UI] scrollView=%@ contentView=%@", self.scrollView ? @"有" : @"无", self.contentView ? @"有" : @"无"]);
+        WPLog(@"Setting", @"[UI] scrollView=%@ contentView=%@", self.scrollView ? @"有" : @"无", self.contentView ? @"有" : @"无");
         
         CGFloat w = [UIScreen mainScreen].bounds.size.width;
         CGFloat y = 0;
@@ -59,11 +48,11 @@ static void reLog(NSString *content) {
 
         NSInteger tag = 1000;
         NSArray *sectionTitles = [FeatureRegistry orderedSectionTitles];
-        reLog([NSString stringWithFormat:@"[UI] sections=%@", sectionTitles]);
+        WPLog(@"Setting", @"[UI] sections=%@", sectionTitles);
         
         for (NSString *sectionTitle in sectionTitles) {
             NSArray<SettingCategoryItem *> *items = [FeatureRegistry itemsForSection:sectionTitle];
-            reLog([NSString stringWithFormat:@"[UI] section=%@ items=%lu", sectionTitle, (unsigned long)items.count]);
+            WPLog(@"Setting", @"[UI] section=%@ items=%lu", sectionTitle, (unsigned long)items.count);
             if (items.count == 0) continue;
 
             for (SettingCategoryItem *item in items) {
@@ -89,21 +78,21 @@ static void reLog(NSString *content) {
 
         self.contentView.frame = CGRectMake(0, 0, w, y + 60);
         self.scrollView.contentSize = CGSizeMake(w, y + 60);
-        reLog(@"[UI] SettingController viewDidLoad 完成");
+        WPLog(@"Setting", @"[UI] SettingController viewDidLoad 完成");
     } @catch (NSException *e) {
-        reLog([NSString stringWithFormat:@"[UI] SettingController viewDidLoad 异常: %@ - %@", e.name, e.reason]);
+        WPLog(@"Setting", @"[UI] SettingController viewDidLoad 异常: %@ - %@", e.name, e.reason);
     }
 }
 
 - (void)categoryTapped:(UIButton *)sender {
     @try {
         SettingCategoryItem *item = objc_getAssociatedObject(sender, "item");
-        reLog([NSString stringWithFormat:@"[UI] categoryTapped: %@ controller=%@", item.title, item.controllerClass ? NSStringFromClass(item.controllerClass) : @"nil"]);
+        WPLog(@"Setting", @"[UI] categoryTapped: %@ controller=%@", item.title, item.controllerClass ? NSStringFromClass(item.controllerClass) : @"nil");
         if (!item.controllerClass) return;
         UIViewController *vc = [[item.controllerClass alloc] init];
         [self.navigationController pushViewController:vc animated:YES];
     } @catch (NSException *e) {
-        reLog([NSString stringWithFormat:@"[UI] categoryTapped 异常: %@ - %@", e.name, e.reason]);
+        WPLog(@"Setting", @"[UI] categoryTapped 异常: %@ - %@", e.name, e.reason);
     }
 }
 

@@ -1,6 +1,7 @@
 #import "WPCommonUI.h"
 #import "SettingEntryHook.h"
 #import "../../Config/PluginConfig.h"
+#import "../../Core/LogManager.h"
 
 static void reLog(NSString *content) {
     @try {
@@ -67,7 +68,7 @@ static void WPBackupViewDidLoad(id self, SEL _cmd) {
     y += cy + 16;
 
     sv.contentSize = CGSizeMake(w, y);
-    reLog(@"[Backup] viewDidLoad");
+    WPLog(@"UI", @"[Backup] viewDidLoad");
 }
 
 static void WPBackupOnReset(id self, SEL _cmd) {
@@ -101,7 +102,7 @@ static void WPBackupOnReset(id self, SEL _cmd) {
     [alert addAction:cancel];
     [alert addAction:confirm];
     [vc presentViewController:alert animated:YES completion:nil];
-    reLog(@"[Backup] reset dialog shown");
+    WPLog(@"UI", @"[Backup] reset dialog shown");
 }
 
 @interface WPBackupVCHelper : NSObject
@@ -118,9 +119,9 @@ static void WPBackupOnReset(id self, SEL _cmd) {
             class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPBackupViewDidLoad, "v@:");
             class_addMethod(subClass, NSSelectorFromString(@"onResetTapped"), (IMP)WPBackupOnReset, "v@:");
             objc_registerClassPair(subClass);
-            reLog(@"[Backup] WPBackupVC class created");
+            WPLog(@"UI", @"[Backup] WPBackupVC class created");
         } else {
-            reLog(@"[Backup] WPBackupVC class create FAILED");
+            WPLog(@"UI", @"[Backup] WPBackupVC class create FAILED");
         }
     }
     if (subClass) {

@@ -5,43 +5,19 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
+#import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 
 static IMP orig_reloadMenuItems = NULL;
 static IMP orig_clickMenu = NULL;
 
-static void clearUnreadLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"clear_unread.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
+else {
             [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     } @catch (NSException *e) {}
 }
 
-static id getServiceViaCenter(id center, Class serviceClass) {
-    if (!center) return nil;
-    if (![center respondsToSelector:NSSelectorFromString(@"getService:")]) return nil;
-    return ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), serviceClass);
 }
-
-static id getService(Class serviceClass) {
-    Class scClass = objc_getClass("MMServiceCenter");
-    if (scClass) {
-        if ([scClass respondsToSelector:NSSelectorFromString(@"defaultCenter")]) {
-            id center = ((id (*)(id, SEL))objc_msgSend)(scClass, NSSelectorFromString(@"defaultCenter"));
-            id svc = getServiceViaCenter(center, serviceClass);
-            if (svc) return svc;
-        }
-    }
 
     Class ctxClass = objc_getClass("MMContext");
     if (ctxClass) {
@@ -86,9 +62,9 @@ static id findSessionMgr() {
     for (int i = 0; i < count; i++) {
         Class cls = objc_getClass(classNames[i]);
         if (!cls) continue;
-        id svc = getService(cls);
+        id svc = WXGetService(cls);
         if (svc) {
-            clearUnreadLog([NSString stringWithFormat:@"[INFO] Found session mgr: %s -> %@", classNames[i], NSStringFromClass([svc class])]);
+            WPLog(@"ClearUnread", @"[INFO] Found session mgr: %s -> %@", classNames[i], NSStringFromClass([svc class]));
             return svc;
         }
     }
@@ -113,7 +89,7 @@ static id findSessionMgr() {
                 if ([activeCtx respondsToSelector:sel]) {
                     id mgr = ((id (*)(id, SEL))objc_msgSend)(activeCtx, sel);
                     if (mgr) {
-                        clearUnreadLog([NSString stringWithFormat:@"[INFO] Found session mgr via MMContext.%s: %@", propNames[i], NSStringFromClass([mgr class])]);
+                        WPLog(@"ClearUnread", @"[INFO] Found session mgr via MMContext.%s: %@", propNames[i], NSStringFromClass([mgr class]));
                         return mgr;
                     }
                 }
@@ -130,7 +106,7 @@ static id findSessionMgr() {
                 if (ivars[i]) {
                     id mgr = object_getIvar(activeCtx, ivars[i]);
                     if (mgr) {
-                        clearUnreadLog([NSString stringWithFormat:@"[INFO] Found session mgr via MMContext ivar: %@", NSStringFromClass([mgr class])]);
+                        WPLog(@"ClearUnread", @"[INFO] Found session mgr via MMContext ivar: %@", NSStringFromClass([mgr class]));
                         return mgr;
                     }
                 }
@@ -158,10 +134,10 @@ static NSArray *getSessionList(id sessionMgr) {
         if ([sessionMgr respondsToSelector:selectors[i]]) {
             id result = ((id (*)(id, SEL))objc_msgSend)(sessionMgr, selectors[i]);
             if ([result isKindOfClass:[NSArray class]] && [(NSArray *)result count] > 0) {
-                clearUnreadLog([NSString stringWithFormat:@"[INFO] Got session list via %@ (%lu items)", NSStringFromSelector(selectors[i]), (unsigned long)[(NSArray *)result count]]);
+                WPLog(@"ClearUnread", @"[INFO] Got session list via %@ (%lu items)", NSStringFromSelector(selectors[i]), (unsigned long)[(NSArray *)result count]);
                 return (NSArray *)result;
             } else if (result) {
-                clearUnreadLog([NSString stringWithFormat:@"[INFO] %@ returned non-array or empty: %@", NSStringFromSelector(selectors[i]), NSStringFromClass([result class])]);
+                WPLog(@"ClearUnread", @"[INFO] %@ returned non-array or empty: %@", NSStringFromSelector(selectors[i]), NSStringFromClass([result class]));
             }
         }
     }
@@ -180,7 +156,7 @@ static NSArray *getSessionList(id sessionMgr) {
         if (listIvar) {
             id result = object_getIvar(sessionMgr, listIvar);
             if ([result isKindOfClass:[NSArray class]] && [(NSArray *)result count] > 0) {
-                clearUnreadLog([NSString stringWithFormat:@"[INFO] Got session list via Ivar %s (%lu items)", ivarNames[i], (unsigned long)[(NSArray *)result count]]);
+                WPLog(@"ClearUnread", @"[INFO] Got session list via Ivar %s (%lu items)", ivarNames[i], (unsigned long)[(NSArray *)result count]);
                 return (NSArray *)result;
             }
         }
@@ -192,7 +168,7 @@ static NSArray *getSessionList(id sessionMgr) {
     } else if ([sessionMgr respondsToSelector:NSSelectorFromString(@"getSessionCount")]) {
         sessionCount = ((unsigned int (*)(id, SEL))objc_msgSend)(sessionMgr, NSSelectorFromString(@"getSessionCount"));
     }
-    clearUnreadLog([NSString stringWithFormat:@"[INFO] Session count: %u", sessionCount]);
+    WPLog(@"ClearUnread", @"[INFO] Session count: %u", sessionCount);
 
     if (sessionCount > 0 && [sessionMgr respondsToSelector:NSSelectorFromString(@"GetSessionAtIndex:")]) {
         NSMutableArray *sessions = [NSMutableArray array];
@@ -201,7 +177,7 @@ static NSArray *getSessionList(id sessionMgr) {
             if (session) [sessions addObject:session];
         }
         if (sessions.count > 0) {
-            clearUnreadLog([NSString stringWithFormat:@"[INFO] Got %lu sessions via GetSessionAtIndex:", (unsigned long)sessions.count]);
+            WPLog(@"ClearUnread", @"[INFO] Got %lu sessions via GetSessionAtIndex:", (unsigned long)sessions.count);
             return sessions;
         }
     }
@@ -256,23 +232,23 @@ static BOOL isSessionUnread(id session) {
 }
 
 static void clearAllUnread() {
-    clearUnreadLog(@"[INFO] clearAllUnread start");
+    WPLog(@"ClearUnread", @"[INFO] clearAllUnread start");
 
     id sessionMgr = findSessionMgr();
     if (!sessionMgr) {
-        clearUnreadLog(@"[ERR] No session manager found");
+        WPLog(@"ClearUnread", @"[ERR] No session manager found");
         return;
     }
 
     NSArray *sessionList = getSessionList(sessionMgr);
     if (!sessionList) {
-        clearUnreadLog(@"[ERR] Cannot get session list");
+        WPLog(@"ClearUnread", @"[ERR] Cannot get session list");
         return;
     }
 
-    id messageMgr = getService(objc_getClass("CMessageMgr"));
+    id messageMgr = WXGetService(objc_getClass("CMessageMgr"));
     if (!messageMgr) {
-        clearUnreadLog(@"[ERR] No CMessageMgr");
+        WPLog(@"ClearUnread", @"[ERR] No CMessageMgr");
         return;
     }
 
@@ -293,9 +269,9 @@ static void clearAllUnread() {
             ((void (*)(id, SEL))objc_msgSend)(sessionMgr, NSSelectorFromString(@"recountUnReadCount"));
         }
 
-        clearUnreadLog([NSString stringWithFormat:@"[INFO] cleared %d sessions", cleared]);
+        WPLog(@"ClearUnread", @"[INFO] cleared %d sessions", cleared);
     } @catch (NSException *e) {
-        clearUnreadLog([NSString stringWithFormat:@"[ERR] clearAllUnread exception: %@ - %@", e.name, e.reason]);
+        WPLog(@"ClearUnread", @"[ERR] clearAllUnread exception: %@ - %@", e.name, e.reason);
     }
 }
 
@@ -303,17 +279,17 @@ static void replaced_clickMenu(id self, SEL _cmd, id menuItem) {
     @try {
         if ([menuItem isKindOfClass:[NSString class]]) {
             NSString *menuID = (NSString *)menuItem;
-            clearUnreadLog([NSString stringWithFormat:@"[INFO] clickMenu: id=%@", menuID]);
+            WPLog(@"ClearUnread", @"[INFO] clickMenu: id=%@", menuID);
 
             if ([menuID isEqualToString:@"99"]) {
-                clearUnreadLog(@"[INFO] clickMenu: clearUnread tapped!");
+                WPLog(@"ClearUnread", @"[INFO] clickMenu: clearUnread tapped!");
                 clearAllUnread();
             }
         } else {
-            clearUnreadLog([NSString stringWithFormat:@"[INFO] clickMenu: unexpected type %@", NSStringFromClass([menuItem class])]);
+            WPLog(@"ClearUnread", @"[INFO] clickMenu: unexpected type %@", NSStringFromClass([menuItem class]));
         }
     } @catch (NSException *e) {
-        clearUnreadLog([NSString stringWithFormat:@"[ERR] clickMenu exception: %@ - %@", e.name, e.reason]);
+        WPLog(@"ClearUnread", @"[ERR] clickMenu exception: %@ - %@", e.name, e.reason);
     }
 
     if (orig_clickMenu) ((void (*)(id, SEL, id))orig_clickMenu)(self, _cmd, menuItem);
@@ -347,24 +323,24 @@ static void replaced_reloadMenuItems(id self, SEL _cmd) {
         ((void (*)(id, SEL, NSString *))objc_msgSend)(clearItem, NSSelectorFromString(@"setM_nsActionName:"), @"WP_clearUnread");
 
         [dicItems setObject:clearItem forKey:@"99"];
-        clearUnreadLog(@"[INFO] clearUnread item added to m_dicItems");
+        WPLog(@"ClearUnread", @"[INFO] clearUnread item added to m_dicItems");
 
         if (menuData) {
             NSMutableArray *arrShowIDs = ((id (*)(id, SEL))objc_msgSend)(menuData, NSSelectorFromString(@"m_arrShowIDs"));
             if ([arrShowIDs isKindOfClass:[NSMutableArray class]] && ![arrShowIDs containsObject:@"99"]) {
                 [arrShowIDs addObject:@"99"];
-                clearUnreadLog(@"[INFO] added 99 to m_arrShowIDs");
+                WPLog(@"ClearUnread", @"[INFO] added 99 to m_arrShowIDs");
             }
         }
     } @catch (NSException *e) {
-        clearUnreadLog([NSString stringWithFormat:@"[ERR] reloadMenuItems exception: %@ - %@", e.name, e.reason]);
+        WPLog(@"ClearUnread", @"[ERR] reloadMenuItems exception: %@ - %@", e.name, e.reason);
     }
 }
 
 @implementation ClearUnreadHook
 
 + (void)install {
-    clearUnreadLog(@"[INFO] ClearUnreadHook install start");
+    WPLog(@"ClearUnread", @"[INFO] ClearUnreadHook install start");
 
     Class menuBtnClass = objc_getClass("NewMainFrameRightTopMenuBtn");
     if (menuBtnClass) {
@@ -373,7 +349,7 @@ static void replaced_reloadMenuItems(id self, SEL _cmd) {
                                        withIMP:(IMP)replaced_reloadMenuItems];
         if (orig1) {
             orig_reloadMenuItems = orig1;
-            clearUnreadLog(@"[INFO] reloadMenuItems swizzled");
+            WPLog(@"ClearUnread", @"[INFO] reloadMenuItems swizzled");
         }
     }
 
@@ -384,15 +360,15 @@ static void replaced_reloadMenuItems(id self, SEL _cmd) {
                                        withIMP:(IMP)replaced_clickMenu];
         if (orig2) {
             orig_clickMenu = orig2;
-            clearUnreadLog(@"[INFO] clickMenu: swizzled on RightTopMenuData");
+            WPLog(@"ClearUnread", @"[INFO] clickMenu: swizzled on RightTopMenuData");
         } else {
-            clearUnreadLog(@"[ERR] clickMenu: swizzle failed on RightTopMenuData");
+            WPLog(@"ClearUnread", @"[ERR] clickMenu: swizzle failed on RightTopMenuData");
         }
     } else {
-        clearUnreadLog(@"[ERR] RightTopMenuData not found");
+        WPLog(@"ClearUnread", @"[ERR] RightTopMenuData not found");
     }
 
-    clearUnreadLog(@"[INFO] ClearUnreadHook install complete");
+    WPLog(@"ClearUnread", @"[INFO] ClearUnreadHook install complete");
 }
 
 + (void)clearUnreadTapped {

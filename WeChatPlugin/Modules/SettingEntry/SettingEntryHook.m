@@ -4,20 +4,9 @@
 #import "../../Settings/Common/SettingController.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import "../../Core/LogManager.h"
 
-static void reLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"setting_entry.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
+else {
             [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     } @catch (NSException *e) {}
@@ -26,7 +15,7 @@ static void reLog(NSString *content) {
 static NSMutableSet *_viewDidLoadSet = nil;
 
 static void pluginEntryViewDidLoad(id self, SEL _cmd) {
-    reLog(@"[Entry] viewDidLoad");
+    WPLog(@"Setting", @"[Entry] viewDidLoad");
 
     if (!_viewDidLoadSet) {
         _viewDidLoadSet = [NSMutableSet new];
@@ -52,7 +41,7 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
 
     // 递归调用时视图已创建，直接返回避免重复添加子视图
     if (isRecursive) {
-        reLog(@"[Entry] recursive skip");
+        WPLog(@"Setting", @"[Entry] recursive skip");
         return;
     }
 
@@ -122,7 +111,7 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     y += 60;
 
     sv.contentSize = CGSizeMake(w, y);
-    reLog(@"[Entry] viewDidLoad complete");
+    WPLog(@"Setting", @"[Entry] viewDidLoad complete");
 }
 
 static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
@@ -165,9 +154,9 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         @try {
             [config setValue:@(sender.on) forKey:prop];
             [config save];
-            reLog([NSString stringWithFormat:@"[SAVE] %@ = %@", key, sender.on ? @"ON" : @"OFF"]);
+            WPLog(@"Setting", @"[SAVE] %@ = %@", key, sender.on ? @"ON" : @"OFF");
         } @catch (NSException *e) {
-            reLog([NSString stringWithFormat:@"[ERR] save %@: %@ - %@", key, e.name, e.reason]);
+            WPLog(@"Setting", @"[ERR] save %@: %@ - %@", key, e.name, e.reason);
         }
     }
 }
@@ -183,75 +172,75 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 
 - (void)openCommon:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
-    if (!vc) { reLog(@"[Nav] openCommon: currentVC nil"); return; }
+    if (!vc) { WPLog(@"Setting", @"[Nav] openCommon: currentVC nil"); return; }
     SettingGeneralFunctionController *subVC = [[SettingGeneralFunctionController alloc] init];
     subVC.categoryName = @"通用功能";
     [vc.navigationController pushViewController:subVC animated:YES];
-    reLog(@"[Nav] pushed SettingGeneralFunctionController");
+    WPLog(@"Setting", @"[Nav] pushed SettingGeneralFunctionController");
 }
 
 - (void)openRedEnvelop:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
-    if (!vc) { reLog(@"[Nav] openRedEnvelop: currentVC nil"); return; }
+    if (!vc) { WPLog(@"Setting", @"[Nav] openRedEnvelop: currentVC nil"); return; }
     SettingRedEnvelopController *subVC = [[SettingRedEnvelopController alloc] init];
     subVC.categoryName = @"自动抢红包";
     [vc.navigationController pushViewController:subVC animated:YES];
-    reLog(@"[Nav] pushed SettingRedEnvelopController");
+    WPLog(@"Setting", @"[Nav] pushed SettingRedEnvelopController");
 }
 
 - (void)openOther:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
-    if (!vc) { reLog(@"[Nav] openOther: currentVC nil"); return; }
+    if (!vc) { WPLog(@"Setting", @"[Nav] openOther: currentVC nil"); return; }
     Class helperClass = objc_getClass("WPOtherVCHelper");
-    if (!helperClass) { reLog(@"[Nav] WPOtherVCHelper not found"); return; }
+    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPOtherVCHelper not found"); return; }
     UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
-        reLog(@"[Nav] pushed WPOtherVC");
+        WPLog(@"Setting", @"[Nav] pushed WPOtherVC");
     } else {
-        reLog(@"[Nav] WPOtherVCHelper makeVC returned nil");
+        WPLog(@"Setting", @"[Nav] WPOtherVCHelper makeVC returned nil");
     }
 }
 
 - (void)openFriendDetection:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
-    if (!vc) { reLog(@"[Nav] openFriendDetection: currentVC nil"); return; }
+    if (!vc) { WPLog(@"Setting", @"[Nav] openFriendDetection: currentVC nil"); return; }
     Class helperClass = objc_getClass("WPFriendDetectionVCHelper");
-    if (!helperClass) { reLog(@"[Nav] WPFriendDetectionVCHelper not found"); return; }
+    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPFriendDetectionVCHelper not found"); return; }
     UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
-        reLog(@"[Nav] pushed WPFriendDetectionVC");
+        WPLog(@"Setting", @"[Nav] pushed WPFriendDetectionVC");
     } else {
-        reLog(@"[Nav] WPFriendDetectionVCHelper makeVC returned nil");
+        WPLog(@"Setting", @"[Nav] WPFriendDetectionVCHelper makeVC returned nil");
     }
 }
 
 - (void)openBackup:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
-    if (!vc) { reLog(@"[Nav] openBackup: currentVC nil"); return; }
+    if (!vc) { WPLog(@"Setting", @"[Nav] openBackup: currentVC nil"); return; }
     Class helperClass = objc_getClass("WPBackupVCHelper");
-    if (!helperClass) { reLog(@"[Nav] WPBackupVCHelper not found"); return; }
+    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPBackupVCHelper not found"); return; }
     UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
-        reLog(@"[Nav] pushed WPBackupVC");
+        WPLog(@"Setting", @"[Nav] pushed WPBackupVC");
     } else {
-        reLog(@"[Nav] WPBackupVCHelper makeVC returned nil");
+        WPLog(@"Setting", @"[Nav] WPBackupVCHelper makeVC returned nil");
     }
 }
 
 - (void)openAbout:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
-    if (!vc) { reLog(@"[Nav] openAbout: currentVC nil"); return; }
+    if (!vc) { WPLog(@"Setting", @"[Nav] openAbout: currentVC nil"); return; }
     Class helperClass = objc_getClass("WPAboutVCHelper");
-    if (!helperClass) { reLog(@"[Nav] WPAboutVCHelper not found"); return; }
+    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPAboutVCHelper not found"); return; }
     UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
-        reLog(@"[Nav] pushed WPAboutVC");
+        WPLog(@"Setting", @"[Nav] pushed WPAboutVC");
     } else {
-        reLog(@"[Nav] WPAboutVCHelper makeVC returned nil");
+        WPLog(@"Setting", @"[Nav] WPAboutVCHelper makeVC returned nil");
     }
 }
 
@@ -273,15 +262,15 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 + (void)install {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        reLog(@"SettingEntryHook install");
+        WPLog(@"Setting", @"SettingEntryHook install");
 
         Class pluginsMgrClass = objc_getClass("WCPluginsMgr");
         if (pluginsMgrClass) {
-            reLog(@"[Plugin] WCPluginsMgr found");
+            WPLog(@"Setting", @"[Plugin] WCPluginsMgr found");
             id sharedInstance = ((id (*)(id, SEL, ...))objc_msgSend)(pluginsMgrClass, NSSelectorFromString(@"sharedInstance"));
             if (sharedInstance) {
                 Class baseClass = WPGetBaseClass();
-                reLog([NSString stringWithFormat:@"[Plugin] baseClass: %@", NSStringFromClass(baseClass)]);
+                WPLog(@"Setting", @"[Plugin] baseClass: %@", NSStringFromClass(baseClass));
 
                 Class entryClass = objc_getClass("WeChatPluginEntryVC");
                 if (!entryClass) {
@@ -290,12 +279,12 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
                         class_addMethod(entryClass, NSSelectorFromString(@"viewDidLoad"), (IMP)pluginEntryViewDidLoad, "v@:");
                         class_addMethod(entryClass, NSSelectorFromString(@"viewWillAppear:"), (IMP)pluginEntryViewWillAppear, "v@:B");
                         objc_registerClassPair(entryClass);
-                        reLog(@"[Plugin] WeChatPluginEntryVC created");
+                        WPLog(@"Setting", @"[Plugin] WeChatPluginEntryVC created");
                     } else {
-                        reLog(@"[Plugin] WeChatPluginEntryVC create failed");
+                        WPLog(@"Setting", @"[Plugin] WeChatPluginEntryVC create failed");
                     }
                 } else {
-                    reLog(@"[Plugin] WeChatPluginEntryVC exists");
+                    WPLog(@"Setting", @"[Plugin] WeChatPluginEntryVC exists");
                 }
 
                 if (entryClass) {
@@ -304,19 +293,19 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
                         ((void (*)(id, SEL, NSString *, NSString *, NSString *))objc_msgSend)(
                             sharedInstance, regSel,
                             @"Mio助手", kPluginVersion, @"WeChatPluginEntryVC");
-                        reLog(@"[Plugin] registered");
+                        WPLog(@"Setting", @"[Plugin] registered");
                     } else {
-                        reLog(@"[Plugin] registerController not found");
+                        WPLog(@"Setting", @"[Plugin] registerController not found");
                     }
                 }
             } else {
-                reLog(@"[Plugin] sharedInstance nil");
+                WPLog(@"Setting", @"[Plugin] sharedInstance nil");
             }
         } else {
-            reLog(@"[Plugin] WCPluginsMgr not found");
+            WPLog(@"Setting", @"[Plugin] WCPluginsMgr not found");
         }
 
-        reLog(@"SettingEntryHook install complete");
+        WPLog(@"Setting", @"SettingEntryHook install complete");
     });
 }
 

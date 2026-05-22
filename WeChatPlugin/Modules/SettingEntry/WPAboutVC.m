@@ -1,5 +1,6 @@
 #import "WPCommonUI.h"
 #import "../../Config/Constants.h"
+#import "../../Core/LogManager.h"
 
 static void reLog(NSString *content) {
     @try {
@@ -79,7 +80,7 @@ static void WPAboutViewDidLoad(id self, SEL _cmd) {
     [sv addSubview:archCard];
     y += ay + 40;
     sv.contentSize = CGSizeMake(w, y);
-    reLog(@"[Sub] aboutViewDidLoad");
+    WPLog(@"UI", @"[Sub] aboutViewDidLoad");
 }
 
 @interface WPAboutVCHelper : NSObject
@@ -95,9 +96,9 @@ static void WPAboutViewDidLoad(id self, SEL _cmd) {
         if (subClass) {
             class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPAboutViewDidLoad, "v@:");
             objc_registerClassPair(subClass);
-            reLog(@"[Sub] WPAboutVC class created");
+            WPLog(@"UI", @"[Sub] WPAboutVC class created");
         } else {
-            reLog(@"[Sub] WPAboutVC class create FAILED");
+            WPLog(@"UI", @"[Sub] WPAboutVC class create FAILED");
         }
     }
     if (subClass) {

@@ -1,19 +1,8 @@
 #import "PluginConfig.h"
 #import "../Modules/GroupExit/GroupExitHook.h"
+#import "../Core/LogManager.h"
 
-static void configLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"redenvelop.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
+else {
             [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     } @catch (NSException *e) {}
@@ -90,8 +79,9 @@ static void configLog(NSString *content) {
     _redEnvelopGroupFilterEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopGroupFilterEnabled"]];
     _redEnvelopAutoReply = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReply"]];
     _redEnvelopAutoReplyInGroup = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReplyInGroup"]];
-    configLog([NSString stringWithFormat:@"[LOAD] Loaded config from NSUserDefaults: auto=%d, catchMe=%d, personal=%d, detail=%d", 
-          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail]);
+    WPLog(@"Config", @"[LOAD] Loaded config from NSUserDefaults: auto=%d, catchMe=%d, personal=%d, detail=%d", 
+          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail
+          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail);
     
     NSInteger delayVal = [d integerForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopDelay"]];
     _redEnvelopDelay = delayVal >= 0 ? (unsigned int)delayVal : 0;
@@ -214,8 +204,9 @@ static void configLog(NSString *content) {
 
 - (void)save {
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    configLog([NSString stringWithFormat:@"[SAVE] save() called: auto=%d, catchMe=%d, personal=%d, detail=%d", 
-          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail]);
+    WPLog(@"Config", @"[SAVE] save() called: auto=%d, catchMe=%d, personal=%d, detail=%d", 
+          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail
+          _autoRedEnvelop, _redEnvelopCatchMe, _personalRedEnvelopEnable, _redEnvelopeDetail);
     [d setBool:_preventRecall forKey:[kPluginPrefix stringByAppendingString:@"PreventRecall"]];
     [d setBool:_debugLogging forKey:[kPluginPrefix stringByAppendingString:@"DebugLogging"]];
     [d setBool:_hideContent forKey:[kPluginPrefix stringByAppendingString:@"HideContent"]];
@@ -307,7 +298,7 @@ static void configLog(NSString *content) {
     } @catch (NSException *e) {}
 
     [d synchronize];
-    configLog(@"[OK] save() completed - NSUserDefaults synchronized");
+    WPLog(@"Config", @"[OK] save() completed - NSUserDefaults synchronized");
 }
 
 - (void)resetAllConfig {
@@ -322,7 +313,7 @@ static void configLog(NSString *content) {
     
     // 重新加载默认值
     [self loadDefaults];
-    configLog(@"[RESET] All plugin configs wiped, defaults reloaded");
+    WPLog(@"Config", @"[RESET] All plugin configs wiped, defaults reloaded");
 }
 
 - (NSString *)notifyFormatForSession:(NSString *)session user:(NSString *)user {

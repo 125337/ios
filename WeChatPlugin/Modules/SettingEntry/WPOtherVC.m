@@ -1,6 +1,7 @@
 #import "WPCommonUI.h"
 #import "SettingEntryHook.h"
 #import "../../Config/PluginConfig.h"
+#import "../../Core/LogManager.h"
 
 static void reLog(NSString *content) {
     @try {
@@ -73,7 +74,7 @@ static void WPOtherViewDidLoad(id self, SEL _cmd) {
     [sv addSubview:card];
     y += cy + 40;
     sv.contentSize = CGSizeMake(w, y);
-    reLog(@"[Sub] otherViewDidLoad");
+    WPLog(@"UI", @"[Sub] otherViewDidLoad");
 }
 
 @interface WPOtherVCHelper : NSObject
@@ -89,9 +90,9 @@ static void WPOtherViewDidLoad(id self, SEL _cmd) {
         if (subClass) {
             class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPOtherViewDidLoad, "v@:");
             objc_registerClassPair(subClass);
-            reLog(@"[Sub] WPOtherVC class created");
+            WPLog(@"UI", @"[Sub] WPOtherVC class created");
         } else {
-            reLog(@"[Sub] WPOtherVC class create FAILED");
+            WPLog(@"UI", @"[Sub] WPOtherVC class create FAILED");
         }
     }
     if (subClass) {

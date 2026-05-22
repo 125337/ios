@@ -2,6 +2,7 @@
 #import "../../Config/PluginConfig.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import "../../Core/LogManager.h"
 
 #pragma mark - 工具函数
 
@@ -50,7 +51,7 @@ static BOOL shouldProcessExit(NSString *chatRoomName, NSString *exitUserId) {
     if (lastProcessed) {
         NSTimeInterval elapsed = [[NSDate date] timeIntervalSinceDate:lastProcessed];
         if (elapsed < DEBOUNCE_INTERVAL) {
-            groupExitLog([NSString stringWithFormat:@"[GroupExit] Skipping duplicate exit (elapsed %.2fs < %.2fs): %@", elapsed, DEBOUNCE_INTERVAL, key]);
+            WPLog(@"GroupExit", @"[GroupExit] Skipping duplicate exit (elapsed %.2fs < %.2fs): %@", elapsed, DEBOUNCE_INTERVAL, key);
             return NO;
         }
     }
@@ -81,23 +82,23 @@ static void insertExitNotification(NSString *chatRoomName, NSString *exitUserId,
         @"监测到\"<a href=\"weixin://contacts/profile/%@/\">%@</a>\"退出了群聊",
         exitUserId, nickname];
     
-    groupExitLog([NSString stringWithFormat:@"[GroupExit] Preparing to insert notification for %@", chatRoomName]);
+    WPLog(@"GroupExit", @"[GroupExit] Preparing to insert notification for %@", chatRoomName);
     
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
             Class msgWrapClass = objc_getClass("CMessageWrap");
             if (!msgWrapClass) {
-                groupExitLog(@"[GroupExit] CMessageWrap class not found");
+                WPLog(@"GroupExit", @"[GroupExit] CMessageWrap class not found");
                 return;
             }
             
             id msgWrap = ((id(*)(id, SEL, unsigned int))objc_msgSend)([msgWrapClass alloc], NSSelectorFromString(@"initWithMsgType:"), 0x2710);
             if (!msgWrap) {
-                groupExitLog(@"[GroupExit] Failed to create CMessageWrap instance");
+                WPLog(@"GroupExit", @"[GroupExit] Failed to create CMessageWrap instance");
                 return;
             }
             
-            groupExitLog(@"[GroupExit] CMessageWrap created successfully");
+            WPLog(@"GroupExit", @"[GroupExit] CMessageWrap created successfully");
             
             SEL setFromUsrSel = NSSelectorFromString(@"setM_nsFromUsr:");
             if ([msgWrap respondsToSelector:setFromUsrSel])
@@ -121,27 +122,27 @@ static void insertExitNotification(NSString *chatRoomName, NSString *exitUserId,
             
             id msgMgr = getService(objc_getClass("CMessageMgr"));
             if (!msgMgr) {
-                groupExitLog(@"[GroupExit] CMessageMgr is nil");
+                WPLog(@"GroupExit", @"[GroupExit] CMessageMgr is nil");
                 return;
             }
             
-            groupExitLog(@"[GroupExit] CMessageMgr found, calling AddLocalMsg...");
+            WPLog(@"GroupExit", @"[GroupExit] CMessageMgr found, calling AddLocalMsg...");
             
             SEL addLocalMsgSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
             if ([msgMgr respondsToSelector:addLocalMsgSel]) {
                 ((void(*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)(msgMgr, addLocalMsgSel, chatRoomName, msgWrap, YES, NO);
-                groupExitLog([NSString stringWithFormat:@"[GroupExit] ✅ Inserted notification: %@ left %@", nickname, chatRoomName]);
+                WPLog(@"GroupExit", @"[GroupExit] ✅ Inserted notification: %@ left %@", nickname, chatRoomName);
             } else {
                 SEL addSimpleSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
                 if ([msgMgr respondsToSelector:addSimpleSel]) {
                     ((void(*)(id, SEL, id, id))objc_msgSend)(msgMgr, addSimpleSel, chatRoomName, msgWrap);
-                    groupExitLog([NSString stringWithFormat:@"[GroupExit] ✅ Inserted notification (simple): %@ left %@", nickname, chatRoomName]);
+                    WPLog(@"GroupExit", @"[GroupExit] ✅ Inserted notification (simple): %@ left %@", nickname, chatRoomName);
                 } else {
-                    groupExitLog(@"[GroupExit] No AddLocalMsg method found");
+                    WPLog(@"GroupExit", @"[GroupExit] No AddLocalMsg method found");
                 }
             }
         } @catch (NSException *e) {
-            groupExitLog([NSString stringWithFormat:@"[GroupExit] Error inserting message: %@", e]);
+            WPLog(@"GroupExit", @"[GroupExit] Error inserting message: %@", e);
         }
     });
 }
@@ -197,7 +198,7 @@ static void checkMemberExit(id contact, NSString *newMemberList) {
                     groupExitLog([NSString stringWithFormat:@"[GroupExit] Processing exitUserId: '%@', length=%lu", 
                                   exitUserId, (unsigned long)exitUserId.length]);
                     if (exitUserId.length == 0) {
-                        groupExitLog(@"[GroupExit] Skipping empty exitUserId");
+                        WPLog(@"GroupExit", @"[GroupExit] Skipping empty exitUserId");
                         continue;
                     }
                     
@@ -237,7 +238,7 @@ static void hooked_CContact_setM_nsChatRoomMemList(id self, SEL _cmd, NSString *
 @implementation GroupExitHook
 
 + (void)install {
-    groupExitLog(@"[GroupExitHook] install start");
+    WPLog(@"GroupExit", @"[GroupExitHook] install start");
     
     if (!groupMemberSnapshots) {
         groupMemberSnapshots = [NSMutableDictionary dictionary];
@@ -255,48 +256,48 @@ static void hooked_CContact_setM_nsChatRoomMemList(id self, SEL _cmd, NSString *
             if (setMethod) {
                 original_CContact_setM_nsChatRoomMemList = method_setImplementation(setMethod, (IMP)hooked_CContact_setM_nsChatRoomMemList);
                 hookInstalled = YES;
-                groupExitLog(@"[GroupExitHook] Hook installed for setM_nsChatRoomMemList:");
+                WPLog(@"GroupExit", @"[GroupExitHook] Hook installed for setM_nsChatRoomMemList:");
             } else {
-                groupExitLog(@"[GroupExitHook] setM_nsChatRoomMemList: method NOT found");
+                WPLog(@"GroupExit", @"[GroupExitHook] setM_nsChatRoomMemList: method NOT found");
             }
         } else {
-            groupExitLog(@"[GroupExitHook] CContact class NOT found");
+            WPLog(@"GroupExit", @"[GroupExitHook] CContact class NOT found");
         }
     }
     
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         appReady = YES;
-        groupExitLog(@"[GroupExitHook] appReady = YES");
+        WPLog(@"GroupExit", @"[GroupExitHook] appReady = YES");
         
         if ([PluginConfig shared].enableGroupExitMonitor) {
             [self startMonitoring];
         }
     });
     
-    groupExitLog(@"[GroupExitHook] install complete");
+    WPLog(@"GroupExit", @"[GroupExitHook] install complete");
 }
 
 + (void)startMonitoring {
     if (isMonitoring) {
-        groupExitLog(@"[GroupExitHook] Already monitoring");
+        WPLog(@"GroupExit", @"[GroupExitHook] Already monitoring");
         return;
     }
     
     isMonitoring = YES;
     [groupMemberSnapshots removeAllObjects];
-    groupExitLog(@"[GroupExitHook] startMonitoring");
+    WPLog(@"GroupExit", @"[GroupExitHook] startMonitoring");
 }
 
 + (void)stopMonitoring {
     if (!isMonitoring) {
-        groupExitLog(@"[GroupExitHook] Not monitoring");
+        WPLog(@"GroupExit", @"[GroupExitHook] Not monitoring");
         return;
     }
     
     isMonitoring = NO;
     [groupMemberSnapshots removeAllObjects];
     [processedExits removeAllObjects];
-    groupExitLog(@"[GroupExitHook] stopMonitoring");
+    WPLog(@"GroupExit", @"[GroupExitHook] stopMonitoring");
 }
 
 + (BOOL)isMonitoring {

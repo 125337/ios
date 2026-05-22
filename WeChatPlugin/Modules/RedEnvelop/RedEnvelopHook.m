@@ -8,32 +8,8 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
-
-static void reLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"redenvelop.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-}
-
-static id getService(Class serviceClass) {
-    Class MMServiceCenterClass = objc_getClass("MMServiceCenter");
-    if (!MMServiceCenterClass) return nil;
-    id center = ((id (*)(id, SEL, ...))objc_msgSend)(MMServiceCenterClass, NSSelectorFromString(@"defaultCenter"));
-    if (!center) return nil;
-    return ((id (*)(id, SEL, Class, ...))objc_msgSend)(center, NSSelectorFromString(@"getService:"), serviceClass);
-}
+#import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 
 static NSInteger _statTotalCount = 0;
 static NSInteger _statTotalAmount = 0;
@@ -114,7 +90,7 @@ static void processRedEnvelopMessage(id wrap) {
         [taskMgr markProcessed:msgId];
     }
 
-    id contactMgr = getService(objc_getClass("CContactMgr"));
+    id contactMgr = WXGetService(objc_getClass("CContactMgr"));
     if (!contactMgr) return;
 
     id selfContact = nil;
@@ -143,7 +119,7 @@ static void processRedEnvelopMessage(id wrap) {
     else if (!isGroupReceiver && !isSender && config.personalRedEnvelopEnable) shouldReceive = YES;
     else if (isPersonalSender && config.redEnvelopCatchMe) shouldReceive = YES;
 
-    reLog([NSString stringWithFormat:@"[STAT] from=%@ to=%@ self=%@ sender=%d groupRecv=%d groupSend=%d personalSend=%d catch=%d should=%d",
+    WPLog(@"RedEnv", @"[STAT] from=%@ to=%@ self=%@ sender=%d groupRecv=%d groupSend=%d personalSend=%d catch=%d should=%d",
           fromUsr ?: @"-", toUsr ?: @"-", selfUserName ?: @"-", isSender, isGroupReceiver, isGroupSender, isPersonalSender, config.redEnvelopCatchMe, shouldReceive]);
 
     if (config.redEnvelopBlackList.count > 0) {
@@ -156,7 +132,7 @@ static void processRedEnvelopMessage(id wrap) {
         for (NSString *groupItem in config.redEnvelopGroupFilterList) {
             if ([fromUsr containsString:groupItem] || [toUsr containsString:groupItem]) {
                 shouldReceive = NO;
-                reLog([NSString stringWithFormat:@"[FILTER] 群过滤命中: %@ 匹配 %@", fromUsr, groupItem]);
+                WPLog(@"RedEnv", @"[FILTER] 群过滤命中: %@ 匹配 %@", fromUsr, groupItem));
                 break;
             }
         }
@@ -203,7 +179,7 @@ static void processRedEnvelopMessage(id wrap) {
         }
     }
     if (!nativeUrlDict) {
-        reLog([NSString stringWithFormat:@"[WARN] 无法解析nativeUrl: %@", [nativeUrl substringToIndex:MIN(nativeUrl.length, 100)]]);
+        WPLog(@"RedEnv", @"[WARN] 无法解析nativeUrl: %@", [nativeUrl substringToIndex:MIN(nativeUrl.length, 100)]));
         return;
     }
 
@@ -223,7 +199,7 @@ static void processRedEnvelopMessage(id wrap) {
             NSString *trimmed = [kw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
             if (trimmed.length > 0 && [content containsString:trimmed]) {
                 shouldReceive = NO;
-                reLog([NSString stringWithFormat:@"[FILTER] 关键词过滤命中: %@", trimmed]);
+                WPLog(@"RedEnv", @"[FILTER] 关键词过滤命中: %@", trimmed));
                 break;
             }
         }
@@ -231,21 +207,21 @@ static void processRedEnvelopMessage(id wrap) {
 
     if (!shouldReceive) return;
 
-    reLog([NSString stringWithFormat:@"[HB] 红包参数: sendId=%@ sign=%@ channel=%@ msgType=%@ session=%@ isGroupSender=%d",
-          param.sendId, [param.sign substringToIndex:MIN(param.sign.length, 16)], param.channelId, param.msgType, param.sessionUserName, param.isGroupSender]);
+    WPLog(@"RedEnv", @"[HB] 红包参数: sendId=%@ sign=%@ channel=%@ msgType=%@ session=%@ isGroupSender=%d",
+          param.sendId, [param.sign substringToIndex:MIN(param.sign.length, 16)], param.channelId, param.msgType, param.sessionUserName, param.isGroupSender);
 
     if (!param.sendId.length) {
-        reLog(@"[WARN] sendId为空，跳过");
+        WPLog(@"RedEnv", @"[WARN] sendId为空，跳过");
         return;
     }
 
     [taskMgr savePendingParam:param];
-    reLog([NSString stringWithFormat:@"[SAVE] 已保存 pending param: sendId=%@", param.sendId]);
+    WPLog(@"RedEnv", @"[SAVE] 已保存 pending param: sendId=%@", param.sendId));
 
     [taskMgr startBackgroundKeepAlive];
 
     int delay = (int)config.redEnvelopDelay;
-    reLog([NSString stringWithFormat:@"[DISPATCH] 准备查询: sendId=%@ delay=%d", param.sendId, delay]);
+    WPLog(@"RedEnv", @"[DISPATCH] 准备查询: sendId=%@ delay=%d", param.sendId, delay));
 
     [taskMgr addTaskWithParam:param delay:delay];
 }
@@ -307,23 +283,23 @@ static void handleHongbaoResponse(id res, id req) {
             if (amount > 0) {
                 _statTotalCount++;
                 _statTotalAmount += amount;
-                reLog([NSString stringWithFormat:@"[STAT] 抢到红包: %.2f元 发送人=%@ 祝福=%@ 总额=%.2f/%ld个 累计:%ld个/%.2f元",
+                WPLog(@"RedEnv", @"[STAT] 抢到红包: %.2f元 发送人=%@ 祝福=%@ 总额=%.2f/%ld个 累计:%ld个/%.2f元",
                       amount / 100.0, nickName, wishing,
                       totalAmountVal / 100.0, (long)totalNum,
-                      (long)_statTotalCount, _statTotalAmount / 100.0]);
+                      (long)_statTotalCount, _statTotalAmount / 100.0);
             } else if (receiveStatus == 2) {
-                reLog(@"[STAT] 红包已被领取");
+                WPLog(@"RedEnv", @"[STAT] 红包已被领取");
             } else if (hbStatus == 4) {
-                reLog(@"[STAT] 红包已过期");
+                WPLog(@"RedEnv", @"[STAT] 红包已过期");
             } else {
-                reLog([NSString stringWithFormat:@"[STAT] 红包结果: receiveStatus=%ld hbStatus=%ld keys=%@",
-                      (long)receiveStatus, (long)hbStatus, [responseDict allKeys]]);
+                WPLog(@"RedEnv", @"[STAT] 红包结果: receiveStatus=%ld hbStatus=%ld keys=%@",
+                      (long)receiveStatus, (long)hbStatus, [responseDict allKeys]);
             }
         }
         return;
     }
 
-    reLog(@"[RESP] 收到查询响应(cgiCmdid=3)，开始处理");
+    WPLog(@"RedEnv", @"[RESP] 收到查询响应(cgiCmdid=3)，开始处理");
 
     NSString *requestString = nil;
     if ([req respondsToSelector:NSSelectorFromString(@"reqText")]) {
@@ -374,33 +350,33 @@ static void handleHongbaoResponse(id res, id req) {
     if (!param && requestSendId.length > 0) {
         param = [taskMgr popPendingParamBySendId:requestSendId];
         if (param) {
-            reLog([NSString stringWithFormat:@"[MATCH] 通过requestSendId匹配: %@ -> %@", requestSendId, param.sendId]);
+            WPLog(@"RedEnv", @"[MATCH] 通过requestSendId匹配: %@ -> %@", requestSendId, param.sendId));
         }
     }
 
     if (!param && requestSign.length > 0) {
         param = [taskMgr findPendingParamBySign:requestSign];
         if (param) {
-            reLog([NSString stringWithFormat:@"[MATCH] 通过sign匹配: %@", [requestSign substringToIndex:MIN(requestSign.length, 16)]]);
+            WPLog(@"RedEnv", @"[MATCH] 通过sign匹配: %@", [requestSign substringToIndex:MIN(requestSign.length, 16)]));
         }
     }
 
     if (!param) {
-        reLog([NSString stringWithFormat:@"[WARN] 未找到待处理红包: sendId=%@ reqSendId=%@ sign=%@",
-              sendId, requestSendId ?: @"-", requestSign.length > 0 ? [requestSign substringToIndex:MIN(requestSign.length, 16)] : @"-"]);
+        WPLog(@"RedEnv", @"[WARN] 未找到待处理红包: sendId=%@ reqSendId=%@ sign=%@",
+              sendId, requestSendId ?: @"-", requestSign.length > 0 ? [requestSign substringToIndex:MIN(requestSign.length, 16)] : @"-");
         return;
     }
 
     BOOL signMatch = requestSign.length > 0 ? [requestSign isEqualToString:param.sign] : YES;
     BOOL shouldOpen = config.autoRedEnvelop;
     if (!param.isGroupSender && !signMatch) shouldOpen = NO;
-    reLog([NSString stringWithFormat:@"[CHECK] signMatch=%d shouldOpen=%d isGroupSender=%d sendId=%@", signMatch, shouldOpen, param.isGroupSender, param.sendId]);
+    WPLog(@"RedEnv", @"[CHECK] signMatch=%d shouldOpen=%d isGroupSender=%d sendId=%@", signMatch, shouldOpen, param.isGroupSender, param.sendId));
 
     if (!shouldOpen) return;
 
-    reLog([NSString stringWithFormat:@"[OPEN] 打开红包 sendId=%@ timingId=%@", param.sendId, timingIdentifier]);
+    WPLog(@"RedEnv", @"[OPEN] 打开红包 sendId=%@ timingId=%@", param.sendId, timingIdentifier));
 
-    id logicMgr = getService(objc_getClass("WCRedEnvelopesLogicMgr"));
+    id logicMgr = WXGetService(objc_getClass("WCRedEnvelopesLogicMgr"));
     if (!logicMgr) return;
 
     NSMutableDictionary *params = [@{} mutableCopy];
@@ -416,12 +392,12 @@ static void handleHongbaoResponse(id res, id req) {
     SEL openSel = NSSelectorFromString(@"OpenRedEnvelopesRequest:");
     if ([logicMgr respondsToSelector:openSel]) {
         ((void (*)(id, SEL, NSDictionary *, ...))objc_msgSend)(logicMgr, openSel, params);
-        reLog([NSString stringWithFormat:@"[OK] 红包已打开: sendId=%@", param.sendId]);
+        WPLog(@"RedEnv", @"[OK] 红包已打开: sendId=%@", param.sendId));
     } else {
         SEL openIMSel = NSSelectorFromString(@"OpenOpenIMRedEnvelopesRequest:");
         if ([logicMgr respondsToSelector:openIMSel]) {
             ((void (*)(id, SEL, NSDictionary *, ...))objc_msgSend)(logicMgr, openIMSel, params);
-            reLog([NSString stringWithFormat:@"[OK] IM红包已打开: sendId=%@", param.sendId]);
+            WPLog(@"RedEnv", @"[OK] IM红包已打开: sendId=%@", param.sendId));
         }
     }
 
@@ -429,17 +405,17 @@ static void handleHongbaoResponse(id res, id req) {
         BOOL isGroup = [param.sessionUserName containsString:@"@chatroom"];
         if (!isGroup || config.redEnvelopAutoReplyInGroup) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                reLog(@"[REPLY] dispatch_after 触发，开始执行");
+                WPLog(@"RedEnv", @"[REPLY] dispatch_after 触发，开始执行");
                 @try {
-                    id msgMgr = getService(objc_getClass("CMessageMgr"));
+                    id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
                     if (!msgMgr) {
-                        reLog(@"[REPLY] CMessageMgr 未找到，跳过");
+                        WPLog(@"RedEnv", @"[REPLY] CMessageMgr 未找到，跳过");
                         return;
                     }
 
                     Class msgWrapClass = objc_getClass("CMessageWrap");
                     if (!msgWrapClass) {
-                        reLog(@"[REPLY] CMessageWrap class not found");
+                        WPLog(@"RedEnv", @"[REPLY] CMessageWrap class not found");
                         return;
                     }
 
@@ -449,7 +425,7 @@ static void handleHongbaoResponse(id res, id req) {
                             [msg setValue:config.redEnvelopAutoReplyStr forKey:@"m_nsContent"];
                             [msg setValue:param.sessionUserName forKey:@"m_nsToUsr"];
                         } @catch (NSException *e) {
-                            reLog([NSString stringWithFormat:@"[REPLY] 设置属性异常: %@ - %@", e.name, e.reason]);
+                            WPLog(@"RedEnv", @"[REPLY] 设置属性异常: %@ - %@", e.name, e.reason));
                         }
 
                         @try {
@@ -458,13 +434,13 @@ static void handleHongbaoResponse(id res, id req) {
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
                             [msgMgr performSelector:addMsgSel withObject:param.sessionUserName withObject:msg];
 #pragma clang diagnostic pop
-                            reLog([NSString stringWithFormat:@"[REPLY] 自动回复已发送: %@ -> %@", config.redEnvelopAutoReplyStr, param.sessionUserName]);
+                            WPLog(@"RedEnv", @"[REPLY] 自动回复已发送: %@ -> %@", config.redEnvelopAutoReplyStr, param.sessionUserName));
                         } @catch (NSException *e) {
-                            reLog([NSString stringWithFormat:@"[REPLY] AddMsg异常: %@ - %@", e.name, e.reason]);
+                            WPLog(@"RedEnv", @"[REPLY] AddMsg异常: %@ - %@", e.name, e.reason));
                         }
                     }
                 } @catch (NSException *e) {
-                    reLog([NSString stringWithFormat:@"[WARN] 自动回复异常: %@ - %@", e.name, e.reason]);
+                    WPLog(@"RedEnv", @"[WARN] 自动回复异常: %@ - %@", e.name, e.reason));
                 }
             });
         }
@@ -518,7 +494,7 @@ static void addDetailButtonIfNeeded(id self) {
             detailInfo = [self valueForKey:@"m_oWCRedEnvelopesDetailInfo"];
         }
         if (!detailInfo) {
-            reLog([NSString stringWithFormat:@"[DETAIL] no detailInfo on %@", NSStringFromClass(object_getClass(self))]);
+            WPLog(@"RedEnv", @"[DETAIL] no detailInfo on %@", NSStringFromClass(object_getClass(self)));
             return;
         }
 
@@ -552,9 +528,9 @@ static void addDetailButtonIfNeeded(id self) {
         [selfView addSubview:floatBtn];
         [selfView bringSubviewToFront:floatBtn];
         objc_setAssociatedObject(floatBtn, "detailInfo", detailInfo, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        reLog(@"[DETAIL] 页面按钮已添加");
+        WPLog(@"RedEnv", @"[DETAIL] 页面按钮已添加");
     } @catch (NSException *e) {
-        reLog([NSString stringWithFormat:@"[DETAIL] 异常: %@ - %@", e.name, e.reason]);
+        WPLog(@"RedEnv", @"[DETAIL] 异常: %@ - %@", e.name, e.reason));
     }
 }
 
@@ -586,7 +562,7 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
 @implementation RedEnvelopHook
 
 + (void)install {
-    reLog(@"RedEnvelopHook install (v3 - 模块化架构)");
+    WPLog(@"RedEnv", @"RedEnvelopHook install (v3 - 模块化架构)");
 
     Class CMessageMgrClass = objc_getClass("CMessageMgr");
     if (CMessageMgrClass) {
@@ -595,7 +571,7 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
                                          withIMP:(IMP)replaced_onNewSyncAddMessage];
         if (imp1) {
             orig_onNewSyncAddMessage = imp1;
-            reLog(@"[+] onNewSyncAddMessage: hooked");
+            WPLog(@"RedEnv", @"[+] onNewSyncAddMessage: hooked");
         }
 
         IMP imp1b = [HookEngine swizzleMethod:NSSelectorFromString(@"addMessageLibWithWrap:withVC:")
@@ -603,14 +579,14 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
                                           withIMP:(IMP)replaced_addMessageLibWithWrap];
         if (imp1b) {
             orig_addMessageLibWithWrap = imp1b;
-            reLog(@"[+] addMessageLibWithWrap:withVC: hooked");
+            WPLog(@"RedEnv", @"[+] addMessageLibWithWrap:withVC: hooked");
         } else {
             IMP imp1b2 = [HookEngine swizzleMethod:NSSelectorFromString(@"addMessageLibWithWrap:WithVC:")
                                               inClass:CMessageMgrClass
                                               withIMP:(IMP)replaced_addMessageLibWithWrap];
             if (imp1b2) {
                 orig_addMessageLibWithWrap = imp1b2;
-                reLog(@"[+] addMessageLibWithWrap:WithVC: hooked");
+                WPLog(@"RedEnv", @"[+] addMessageLibWithWrap:WithVC: hooked");
             }
         }
 
@@ -619,7 +595,7 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
                                           withIMP:(IMP)replaced_onNewSyncNotAddDBMessage];
         if (imp1c) {
             orig_onNewSyncNotAddDBMessage = imp1c;
-            reLog(@"[+] onNewSyncNotAddDBMessage: hooked");
+            WPLog(@"RedEnv", @"[+] onNewSyncNotAddDBMessage: hooked");
         }
 
         IMP imp1d = [HookEngine swizzleMethod:NSSelectorFromString(@"AddMsg:MsgWrap:")
@@ -627,7 +603,7 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
                                           withIMP:(IMP)replaced_AddMsgMsgWrap];
         if (imp1d) {
             orig_AddMsgMsgWrap = imp1d;
-            reLog(@"[+] AddMsg:MsgWrap: hooked");
+            WPLog(@"RedEnv", @"[+] AddMsg:MsgWrap: hooked");
         }
 
         IMP imp1e = [HookEngine swizzleMethod:NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:")
@@ -635,7 +611,7 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
                                           withIMP:(IMP)replaced_AsyncOnAddMsgMsgWrap];
         if (imp1e) {
             orig_AsyncOnAddMsgMsgWrap = imp1e;
-            reLog(@"[+] AsyncOnAddMsg:MsgWrap: hooked");
+            WPLog(@"RedEnv", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
         }
     }
 
@@ -646,7 +622,7 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
                                          withIMP:(IMP)replaced_OnWCToHongbaoCommonResponse2];
         if (imp2) {
             orig_OnWCToHongbaoCommonResponse2 = imp2;
-            reLog(@"[+] OnWCToHongbaoCommonResponse:Request: hooked");
+            WPLog(@"RedEnv", @"[+] OnWCToHongbaoCommonResponse:Request: hooked");
         }
 
         IMP imp3 = [HookEngine swizzleMethod:NSSelectorFromString(@"OnWCToHongbaoCommonResponse:Request:WithType:")
@@ -654,7 +630,7 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
                                          withIMP:(IMP)replaced_OnWCToHongbaoCommonResponse3];
         if (imp3) {
             orig_OnWCToHongbaoCommonResponse3 = imp3;
-            reLog(@"[+] OnWCToHongbaoCommonResponse:Request:WithType: hooked");
+            WPLog(@"RedEnv", @"[+] OnWCToHongbaoCommonResponse:Request:WithType: hooked");
         }
     }
 
@@ -665,11 +641,11 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
                                         withIMP:(IMP)replaced_DetailViewDidLoad];
         if (imp4) {
             orig_DetailViewDidLoad = imp4;
-            reLog(@"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
+            WPLog(@"RedEnv", @"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
         }
     }
 
-    reLog(@"RedEnvelopHook install complete");
+    WPLog(@"RedEnv", @"RedEnvelopHook install complete");
 }
 
 @end

@@ -2,26 +2,10 @@
 #import "../../Config/PluginConfig.h"
 #import "WeChatTweakGroupSelectsController.h"
 #import <objc/runtime.h>
+#import "../../Core/LogManager.h"
 
 __attribute__((unused))
-static void configLog(NSString *format, ...) {
-    @try {
-        va_list args;
-        va_start(args, format);
-        NSString *content = [[NSString alloc] initWithFormat:format arguments:args];
-        va_end(args);
-        
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"redenvelop.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
+else {
             [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     } @catch (NSException *e) {}
@@ -36,33 +20,33 @@ static void configLog(NSString *format, ...) {
 }
 
 - (void)buttonClicked:(NSString *)key {
-    configLog([NSString stringWithFormat:@"[BUTTON] SettingRedEnvelopController buttonClicked: called with key=%@", key]);
+    WPLog(@"Setting", @"[BUTTON] SettingRedEnvelopController buttonClicked: called with key=%@", key);
     if ([key isEqualToString:@"SelectGroupFilter"]) {
-        configLog(@"[BUTTON] key is SelectGroupFilter, calling showGroupSelectController");
+        WPLog(@"Setting", @"[BUTTON] key is SelectGroupFilter, calling showGroupSelectController");
         [self showGroupSelectController];
-        configLog(@"[BUTTON] showGroupSelectController returned");
+        WPLog(@"Setting", @"[BUTTON] showGroupSelectController returned");
         return;
     }
-    configLog(@"[BUTTON] key not SelectGroupFilter, calling super");
+    WPLog(@"Setting", @"[BUTTON] key not SelectGroupFilter, calling super");
     [super buttonClicked:key];
 }
 
 - (void)showGroupSelectController {
-    configLog(@"[GroupSelect] showGroupSelectController called");
+    WPLog(@"Setting", @"[GroupSelect] showGroupSelectController called");
     PluginConfig *config = [PluginConfig shared];
-    configLog([NSString stringWithFormat:@"[GroupSelect] config.redEnvelopGroupFilterList=%@", config.redEnvelopGroupFilterList]);
+    WPLog(@"Setting", @"[GroupSelect] config.redEnvelopGroupFilterList=%@", config.redEnvelopGroupFilterList);
     
     @try {
         WeChatTweakGroupSelectsController *vc = [[WeChatTweakGroupSelectsController alloc] 
             initWithSelectedGroups:config.redEnvelopGroupFilterList 
             title:@"选择不抢红包的群"];
-        configLog([NSString stringWithFormat:@"[GroupSelect] vc created: %@", vc]);
+        WPLog(@"Setting", @"[GroupSelect] vc created: %@", vc);
         vc.delegate = self;
-        configLog(@"[GroupSelect] delegate set");
+        WPLog(@"Setting", @"[GroupSelect] delegate set");
         [self.navigationController pushViewController:vc animated:YES];
-        configLog(@"[GroupSelect] pushViewController called");
+        WPLog(@"Setting", @"[GroupSelect] pushViewController called");
     } @catch (NSException *e) {
-        configLog([NSString stringWithFormat:@"[GroupSelect] exception: %@", e]);
+        WPLog(@"Setting", @"[GroupSelect] exception: %@", e);
     }
 }
 

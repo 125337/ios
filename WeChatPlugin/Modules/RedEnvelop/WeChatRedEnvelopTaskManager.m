@@ -2,20 +2,9 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
+#import "../../Core/LogManager.h"
 
-static void tmLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"redenvelop.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
+else {
             [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     } @catch (NSException *e) {}
@@ -85,12 +74,12 @@ static void tmLog(NSString *content) {
         dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, (int64_t)((delay + 15) * NSEC_PER_SEC)));
     }];
     [self.taskQueue addOperation:op];
-    tmLog([NSString stringWithFormat:@"[TASK] 红包任务入队: sendId=%@ delay=%d queueCount=%lu", param.sendId, delay, (unsigned long)self.taskQueue.operationCount]);
+    WPLog(@"RedEnv", @"[TASK] 红包任务入队: sendId=%@ delay=%d queueCount=%lu", param.sendId, delay, (unsigned long)self.taskQueue.operationCount);
 }
 
 - (void)cancelAllTasks {
     [self.taskQueue cancelAllOperations];
-    tmLog(@"[TASK] 所有任务已取消");
+    WPLog(@"RedEnv", @"[TASK] 所有任务已取消");
 }
 
 - (NSUInteger)pendingTaskCount {
@@ -195,7 +184,7 @@ static void tmLog(NSString *content) {
             BOOL isPlaying = ((BOOL (*)(id, SEL, ...))objc_msgSend)(self.blankPlayer, NSSelectorFromString(@"isPlaying"));
             if (!isPlaying) {
                 ((BOOL (*)(id, SEL, ...))objc_msgSend)(self.blankPlayer, NSSelectorFromString(@"play"));
-                tmLog(@"[BG] 后台保活: 静音音频开始播放");
+                WPLog(@"RedEnv", @"[BG] 后台保活: 静音音频开始播放");
             }
         }
 
@@ -208,7 +197,7 @@ static void tmLog(NSString *content) {
                     strongSelf.bgTaskId = 0;
                 }
             }];
-            tmLog(@"[BG] 后台保活: 后台任务已开启");
+            WPLog(@"RedEnv", @"[BG] 后台保活: 后台任务已开启");
         }
 
         if (!self.bgTaskTimer) {
@@ -230,10 +219,10 @@ static void tmLog(NSString *content) {
                                                            selector:@selector(main)
                                                            userInfo:nil
                                                             repeats:YES];
-            tmLog(@"[BG] 后台保活: 定时器已启动");
+            WPLog(@"RedEnv", @"[BG] 后台保活: 定时器已启动");
         }
     } @catch (NSException *e) {
-        tmLog([NSString stringWithFormat:@"[WARN] 后台保活异常: %@", e]);
+        WPLog(@"RedEnv", @"[WARN] 后台保活异常: %@", e);
     }
 }
 
@@ -243,18 +232,18 @@ static void tmLog(NSString *content) {
             BOOL isPlaying = ((BOOL (*)(id, SEL, ...))objc_msgSend)(self.blankPlayer, NSSelectorFromString(@"isPlaying"));
             if (isPlaying) {
                 ((void (*)(id, SEL, ...))objc_msgSend)(self.blankPlayer, NSSelectorFromString(@"stop"));
-                tmLog(@"[BG] 后台保活: 音频已停止");
+                WPLog(@"RedEnv", @"[BG] 后台保活: 音频已停止");
             }
         }
         if (self.bgTaskTimer) {
             [self.bgTaskTimer invalidate];
             self.bgTaskTimer = nil;
-            tmLog(@"[BG] 后台保活: 定时器已停止");
+            WPLog(@"RedEnv", @"[BG] 后台保活: 定时器已停止");
         }
         if (self.bgTaskId != 0) {
             [[UIApplication sharedApplication] endBackgroundTask:self.bgTaskId];
             self.bgTaskId = 0;
-            tmLog(@"[BG] 后台保活: 后台任务已结束");
+            WPLog(@"RedEnv", @"[BG] 后台保活: 后台任务已结束");
         }
     } @catch (NSException *e) {}
 }

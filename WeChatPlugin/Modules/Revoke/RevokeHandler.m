@@ -2,6 +2,8 @@
 #import "../../Config/PluginConfig.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 
 static void revokeLog(NSString *content) {
     @try {
@@ -21,7 +23,7 @@ static void revokeLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-static id getService(Class serviceClass) {
+static id WXGetService(Class serviceClass) {
     Class MMServiceCenterClass = objc_getClass("MMServiceCenter");
     if (!MMServiceCenterClass) return nil;
     SEL dcSel = NSSelectorFromString(@"defaultCenter");
@@ -89,7 +91,7 @@ static NSString *timeTextFromTimestamp(unsigned int timestamp, NSString *dateFor
 static NSString *displayName(NSString *userName) {
     NSString *trimmedUser = trimText(userName);
     if (!trimmedUser) return nil;
-    id contactMgr = getService(objc_getClass("CContactMgr"));
+    id contactMgr = WXGetService(objc_getClass("CContactMgr"));
     if (!contactMgr) return trimmedUser;
     NSString *nickName = nil;
     SEL gcSel = NSSelectorFromString(@"getContactByName:");
@@ -135,16 +137,16 @@ static NSString *digestForMsgWrap(id msgWrap) {
 
 static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString *tipText,
                                        id revokedMsgWrap, unsigned int createTime) {
-    revokeLog([NSString stringWithFormat:@"insertTipMessage_DKStyle: session=%@", session]);
+    WPLog(@"Revoke", @"insertTipMessage_DKStyle: session=%@", session);
     
     if (!messageMgr || !session.length || !tipText.length) {
-        revokeLog(@"invalid params");
+        WPLog(@"Revoke", @"invalid params");
         return NO;
     }
     
     Class CMessageWrapClass = objc_getClass("CMessageWrap");
     if (!CMessageWrapClass) {
-        revokeLog(@"CMessageWrap class not found");
+        WPLog(@"Revoke", @"CMessageWrap class not found");
         return NO;
     }
 
@@ -153,7 +155,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
             [CMessageWrapClass alloc], NSSelectorFromString(@"initWithMsgType:"), 0x2710);
 
         if (!newWrap) {
-            revokeLog(@"failed to create CMessageWrap");
+            WPLog(@"Revoke", @"failed to create CMessageWrap");
             return NO;
         }
 
@@ -197,22 +199,22 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         if ([messageMgr respondsToSelector:addLocalMsgSel]) {
             ((void (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)(
                 messageMgr, addLocalMsgSel, session, newWrap, YES, NO);
-            revokeLog(@"AddLocalMsg success (DK style)");
+            WPLog(@"Revoke", @"AddLocalMsg success (DK style)");
             return YES;
         }
 
         SEL addSimpleSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
         if ([messageMgr respondsToSelector:addSimpleSel]) {
             ((void (*)(id, SEL, id, id))objc_msgSend)(messageMgr, addSimpleSel, session, newWrap);
-            revokeLog(@"AddLocalMsg simple success");
+            WPLog(@"Revoke", @"AddLocalMsg simple success");
             return YES;
         }
 
-        revokeLog(@"no AddLocalMsg method found");
+        WPLog(@"Revoke", @"no AddLocalMsg method found");
         return NO;
         
     } @catch (NSException *e) {
-        revokeLog([NSString stringWithFormat:@"exception: %@", e]);
+        WPLog(@"Revoke", @"exception: %@", e);
         return NO;
     }
 }
@@ -246,18 +248,18 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
     
     Class CMessageWrapClass = objc_getClass("CMessageWrap");
     if (CMessageWrapClass && ![revokeWrap isKindOfClass:CMessageWrapClass]) {
-        revokeLog(@"not CMessageWrap class");
+        WPLog(@"Revoke", @"not CMessageWrap class");
         return NO;
     }
     if (!revokeWrap) {
-        revokeLog(@"revokeWrap is nil");
+        WPLog(@"Revoke", @"revokeWrap is nil");
         return NO;
     }
 
     PluginConfig *config = [PluginConfig shared];
 
     if ([self isSelfRevoke:revokeWrap]) {
-        revokeLog(@"is self revoke, skip");
+        WPLog(@"Revoke", @"is self revoke, skip");
         return NO;
     }
 
@@ -288,9 +290,9 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
 
     if (config.noTip) return YES;
 
-    id messageMgr = getService(objc_getClass("CMessageMgr"));
+    id messageMgr = WXGetService(objc_getClass("CMessageMgr"));
     if (!messageMgr) {
-        revokeLog(@"CMessageMgr not found");
+        WPLog(@"Revoke", @"CMessageMgr not found");
         return NO;
     }
 
@@ -317,7 +319,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         }
     }
     
-    revokeLog([NSString stringWithFormat:@"revokedMsgWrap=%@, msgId=%lld", revokedMsgWrap ? @"found" : @"nil", revokedMsgId]);
+    WPLog(@"Revoke", @"revokedMsgWrap=%@, msgId=%lld", revokedMsgWrap ? @"found" : @"nil", revokedMsgId);
 
     NSString *fromUsrName = nil;
     NSString *replaceText = sanitizeInlineText(parsed[@"replacemsg"], 180);
@@ -373,10 +375,10 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
                         timeText, fromUsrName];
     }
 
-    revokeLog([NSString stringWithFormat:@"newMsgContent=%@", newMsgContent]);
+    WPLog(@"Revoke", @"newMsgContent=%@", newMsgContent);
 
     BOOL inserted = insertTipMessage_DKStyle(messageMgr, session, newMsgContent, revokedMsgWrap, createTime);
-    revokeLog([NSString stringWithFormat:@"result=%d", inserted]);
+    WPLog(@"Revoke", @"result=%d", inserted);
 
     // ====== 通知撤回者 ======
     if (config.notifySender && !config.noTip && inserted && fromUsrName.length > 0) {
@@ -443,11 +445,11 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
                     if ([messageMgr respondsToSelector:addLocalMsgSel]) {
                         ((void (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)(
                             messageMgr, addLocalMsgSel, session, notifyWrap, YES, NO);
-                        revokeLog(@"notifySender: sent to revoker");
+                        WPLog(@"Revoke", @"notifySender: sent to revoker");
                     }
                 }
             } @catch (NSException *e) {
-                revokeLog([NSString stringWithFormat:@"notifySender exception: %@", e]);
+                WPLog(@"Revoke", @"notifySender exception: %@", e);
             }
         }
     }
