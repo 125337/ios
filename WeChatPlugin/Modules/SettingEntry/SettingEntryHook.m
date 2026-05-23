@@ -99,7 +99,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     UIView *listCard = WPMakeCard(y, w);
     CGFloat cy = 0;
 
-    NSArray *navItems = @[@[@"常用功能", @"openCommon:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"好友检测", @"openFriendDetection:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
+    NSArray *navItems = @[@[@"常用功能", @"openCommon:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
     CGFloat scale = [UIScreen mainScreen].scale;
     for (NSUInteger i = 0; i < navItems.count; i++) {
         if (i > 0) {
@@ -204,25 +204,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         WPLog(@"Setting", @"[Nav] pushed WPOtherVC");
     } else {
         WPLog(@"Setting", @"[Nav] WPOtherVCHelper makeVC returned nil");
-    }
-}
-
-- (void)openFriendDetection:(id)sender {
-    UIViewController *vc = [self currentVCFrom:sender];
-    if (!vc) { WPLog(@"Setting", @"[Nav] openFriendDetection: currentVC nil"); return; }
-
-    // 直接创建 MioFriendDetectionVC，不再依赖不存在的 WPFriendDetectionVCHelper
-    Class fdClass = objc_getClass("MioFriendDetectionVC");
-    if (!fdClass) {
-        WPLog(@"Setting", @"[Nav] MioFriendDetectionVC class not found");
-        return;
-    }
-    UIViewController *subVC = [[fdClass alloc] init];
-    if (subVC) {
-        [vc.navigationController pushViewController:subVC animated:YES];
-        WPLog(@"Setting", @"[Nav] pushed MioFriendDetectionVC");
-    } else {
-        WPLog(@"Setting", @"[Nav] MioFriendDetectionVC alloc failed");
     }
 }
 
