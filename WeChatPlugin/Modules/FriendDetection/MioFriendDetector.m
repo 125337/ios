@@ -341,10 +341,10 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
                 g_fdSemaphore = dispatch_semaphore_create(0);
                 g_fdCurrentWxID = wx;
 
-                BOOL ok = fdSendPrepayRequest(req);
+                BOOL ok = fdSendRequest(req);
                 long wr = ok ? 1 : -1;
                 if (ok && g_fdSemaphore) {
-                    wr = dispatch_semaphore_wait(g_fdSemaphore, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(FD_TIMEOUT * NSEC_PER_SEC)));
+                    wr = dispatch_semaphore_wait(g_fdSemaphore, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.5 * NSEC_PER_SEC)));
                 }
 
                 NSDictionary *resp = nil;
