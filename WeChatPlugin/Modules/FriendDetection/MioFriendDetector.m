@@ -142,24 +142,57 @@ static BOOL fdSendRequest(id request) {
 }
 
 // ============================================================
-// MARK: - 结果判定
+// MARK: - 结果判定（严格匹配微信优化 行 20379-20399）
+// 微信优化逻辑:
+//   1. retmsg == "ok"              → 正常好友
+//   2. retcode == "268502017"      → 账号异常 (invalidFriends)
+//   3. 其他                         → 已被删除 (notFriends)
+// 8.0.60 适配: insideCallback 返回的字典中 retmsg 为空时说明请求超时/失败
+//   → 归类为 Invalid 而非 Deleted，避免误报
 // ============================================================
 static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
     if (!response) return MioFriendStatusInvalid;
-    NSInteger rc = [response[@"retcode"] integerValue];
-    if (rc == 0) return MioFriendStatusNormal;
 
-    NSString *msg = response[@"retmsg"] ?: @"";
-    NSString *err = response[@"wx_error_msg"] ?: @"";
-    NSString *lower = [[msg stringByAppendingString:err] lowercaseString];
+    // 微信优化 行 20379-20383: 先检查 retmsg == "ok"
+    id retmsgRaw = response[@"retmsg"];
+    NSString *retmsg = nil;
+    if ([retmsgRaw isKindOfClass:[NSString class]]) {
+        retmsg = retmsgRaw;
+    } else if (retmsgRaw) {
+        retmsg = [retmsgRaw description];
+    }
 
-    if ([lower containsString:@"不是好友"] || [lower containsString:@"好友验证"] ||
-        [lower containsString:@"add friend"] || [lower containsString:@"not friend"] ||
-        [lower containsString:@"verify"])
-        return MioFriendStatusDeleted;
+    // 微信优化: retmsg == "ok" → 正常好友
+    if (retmsg && [retmsg isEqualToString:@"ok"]) {
+        return MioFriendStatusNormal;
+    }
 
-    WPLog(@"FriendDetect", @"[Judge] Unknown retcode=%ld msg=%@ → Invalid", (long)rc, msg);
-    return MioFriendStatusInvalid;
+    // 获取 retcode（兼容 NSNumber/NSString）
+    id rcRaw = response[@"retcode"];
+    NSInteger rc = -1;
+    NSString *rcStr = nil;
+    if ([rcRaw isKindOfClass:[NSNumber class]]) {
+        rc = [(NSNumber *)rcRaw integerValue];
+        rcStr = [(NSNumber *)rcRaw stringValue];
+    } else if ([rcRaw isKindOfClass:[NSString class]]) {
+        rc = [(NSString *)rcRaw integerValue];
+        rcStr = rcRaw;
+    }
+
+    // 微信优化 行 20386: retcode == "268502017" → 账号异常
+    if (rcStr && [rcStr isEqualToString:@"268502017"]) {
+        return MioFriendStatusInvalid;
+    }
+
+    // 8.0.60 适配: retmsg 为空 → 请求失败/超时 → Invalid
+    if (!retmsg || retmsg.length == 0) {
+        WPLog(@"FriendDetect", @"[Judge] empty retmsg, rc=%ld → Invalid (req failed)", (long)rc);
+        return MioFriendStatusInvalid;
+    }
+
+    // 微信优化 行 20388-20393: 其他 retcode → notFriends (已被删除)
+    WPLog(@"FriendDetect", @"[Judge] retcode=%@ retmsg=%@ → Deleted", rcStr, retmsg);
+    return MioFriendStatusDeleted;
 }
 
 // ============================================================
@@ -211,6 +244,42 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
     [self _runWithProgress:progress completion:completion resume:saved];
 }
 
+- (void)retestFriends:(NSArray<NSString *> *)wxIDs
+             progress:(MioFDProgressBlock)progress
+           completion:(MioFDCompletionBlock)completion {
+    if (self.isDetecting) {
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{
+            completion(nil, [NSError errorWithDomain:@"FD" code:-1 userInfo:@{NSLocalizedDescriptionKey:@"检测正在进行中"}]);
+        });
+        return;
+    }
+    if (wxIDs.count == 0) {
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{
+            completion(nil, [NSError errorWithDomain:@"FD" code:-2 userInfo:@{NSLocalizedDescriptionKey:@"未选择好友"}]);
+        });
+        return;
+    }
+
+    // 从全量好友中筛选出指定的 wxIDs
+    NSArray<NSDictionary *> *all = fdGetAllFriends();
+    NSMutableArray<NSDictionary *> *target = [NSMutableArray array];
+    for (NSDictionary *f in all) {
+        if ([wxIDs containsObject:f[@"wxID"]]) {
+            [target addObject:f];
+        }
+    }
+
+    if (target.count == 0) {
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{
+            completion(nil, [NSError errorWithDomain:@"FD" code:-3 userInfo:@{NSLocalizedDescriptionKey:@"未找到匹配的好友"}]);
+        });
+        return;
+    }
+
+    // 复用 _runWithTargetFriends: 只检测这些好友
+    [self _runWithTargetFriends:target progress:progress completion:completion];
+}
+
 - (void)stopDetection {
     self.isStopped = YES;
     self.isDetecting = NO;
@@ -229,6 +298,98 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
 }
 
 #pragma mark - Core Loop
+
+/// 只检测指定的好友列表（用于 retestFriends）
+- (void)_runWithTargetFriends:(NSArray<NSDictionary *> *)friends
+                     progress:(MioFDProgressBlock)progress
+                   completion:(MioFDCompletionBlock)completion {
+    self.isDetecting = YES;
+    self.isStopped = NO;
+    g_fdDetectionActive = YES;
+    NSInteger myToken = ++self.runToken;
+    WPLog(@"FriendDetect", @"[Run] targetFriends token=%ld count=%lu", (long)myToken, (unsigned long)friends.count);
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        if (self.isStopped || myToken != self.runToken || !g_fdDetectionActive) {
+            self.isDetecting = NO; g_fdDetectionActive = NO; return;
+        }
+
+        // 加载已有结果并移除这些 wxID（重新检测会用新结果覆盖）
+        MioFriendDetectSummary *saved = [MioFriendDetector loadSavedSummary];
+        NSMutableArray<MioFriendDetectResult *> *deleted = saved ? [saved.deletedFriends mutableCopy] : [NSMutableArray array];
+        NSMutableArray<MioFriendDetectResult *> *invalid = saved ? [saved.invalidFriends mutableCopy] : [NSMutableArray array];
+        NSMutableSet<NSString *> *allChecked = saved ? [saved.checkedWxIDs mutableCopy] : [NSMutableSet set];
+
+        // 移除旧结果（这些好友将被重新检测）
+        NSSet *wxSet = [NSSet setWithArray:[friends valueForKey:@"wxID"]];
+        [deleted filterUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(MioFriendDetectResult *r, id _) { return ![wxSet containsObject:r.wxID]; }]];
+        [invalid filterUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(MioFriendDetectResult *r, id _) { return ![wxSet containsObject:r.wxID]; }]];
+        [allChecked minusSet:wxSet];
+
+        NSInteger total = (NSInteger)friends.count;
+        for (NSInteger i = 0; i < total; i++) {
+            if (self.isStopped || myToken != self.runToken) { WPLog(@"FriendDetect", @"[Retest] Token %ld stopped at %ld/%ld", (long)myToken, (long)i, (long)total); break; }
+
+            NSDictionary *f = friends[i];
+            NSString *wx = f[@"wxID"], *nk = f[@"nickname"], *rk = f[@"remark"];
+
+            @autoreleasepool {
+                if (progress) dispatch_async(dispatch_get_main_queue(), ^{ progress(wx, nk.length ? nk : wx, i + 1, total); });
+
+                id req = fdCreateTransferRequest(wx);
+                g_fdCurrentResponse = nil;
+                g_fdSemaphore = dispatch_semaphore_create(0);
+                g_fdCurrentWxID = wx;
+
+                BOOL ok = fdSendPrepayRequest(req);
+                long wr = ok ? 1 : -1;
+                if (ok && g_fdSemaphore) {
+                    wr = dispatch_semaphore_wait(g_fdSemaphore, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(FD_TIMEOUT * NSEC_PER_SEC)));
+                }
+
+                NSDictionary *resp = nil;
+                @synchronized (g_fdCurrentResponse ?: [NSNull null]) { resp = g_fdCurrentResponse; }
+
+                MioFriendStatus st = (wr == 0 && resp) ? fdDetermineStatus(resp) : MioFriendStatusInvalid;
+
+                MioFriendDetectResult *r = [[MioFriendDetectResult alloc] init];
+                r.wxID = wx; r.nickname = nk; r.remark = rk; r.status = st;
+                if (resp) {
+                    id rcRaw = resp[@"retcode"];
+                    if ([rcRaw isKindOfClass:[NSNumber class]]) r.retcode = [(NSNumber *)rcRaw integerValue];
+                    else if ([rcRaw isKindOfClass:[NSString class]]) r.retcode = [(NSString *)rcRaw integerValue];
+                    else r.retcode = -1;
+                    id rmRaw = resp[@"retmsg"];
+                    r.retmsg = [rmRaw isKindOfClass:[NSString class]] ? rmRaw : (rmRaw ? [rmRaw description] : @"");
+                } else { r.retcode = -1; r.retmsg = @""; }
+
+                if (st == MioFriendStatusDeleted) [deleted addObject:r];
+                else if (st == MioFriendStatusInvalid) [invalid addObject:r];
+
+                [allChecked addObject:wx];
+                WPLog(@"FriendDetect", @"[Retest] %ld/%ld %@ → %@", (long)(i+1), (long)total, wx, r);
+
+                g_fdSemaphore = NULL; g_fdCurrentWxID = nil; g_fdCurrentResponse = nil;
+            }
+            [NSThread sleepForTimeInterval:0.1];
+        }
+
+        MioFriendDetectSummary *sum = [[MioFriendDetectSummary alloc] init];
+        sum.timestamp = [[NSDate date] timeIntervalSince1970];
+        sum.totalCount = (NSInteger)(saved ? saved.totalCount : total);
+        sum.deletedFriends = [deleted copy];
+        sum.invalidFriends = [invalid copy];
+        sum.checkedWxIDs = [allChecked copy];
+
+        [MioFriendDetector _saveSummary:sum];
+
+        g_fdDetectionActive = NO;
+        self.isDetecting = NO;
+        WPLog(@"FriendDetect", @"[Retest] Done: %lu deleted, %lu invalid", (unsigned long)deleted.count, (unsigned long)invalid.count);
+
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(sum, nil); });
+    });
+}
 
 - (void)_runWithProgress:(MioFDProgressBlock)progress
               completion:(MioFDCompletionBlock)completion
@@ -313,7 +474,7 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
                 dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.5 * NSEC_PER_SEC));
                 long wr = dispatch_semaphore_wait(g_fdSemaphore, timeout);
 
-                // ③-e 判定结果
+                // ③-e 判定结果（微信优化行 20379-20399）
                 NSDictionary *resp = nil;
                 @synchronized (g_fdCurrentResponse ?: [NSNull null]) { resp = g_fdCurrentResponse; }
 
@@ -321,8 +482,18 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
 
                 MioFriendDetectResult *r = [[MioFriendDetectResult alloc] init];
                 r.wxID = wx; r.nickname = nk; r.remark = rk; r.status = st;
-                r.retcode = resp ? [resp[@"retcode"] integerValue] : -1;
-                r.retmsg = resp[@"retmsg"] ?: @"";
+                // retcode/retmsg 从原始字典读取（兼容 NSNumber/NSString）
+                if (resp) {
+                    id rcRaw = resp[@"retcode"];
+                    if ([rcRaw isKindOfClass:[NSNumber class]]) r.retcode = [(NSNumber *)rcRaw integerValue];
+                    else if ([rcRaw isKindOfClass:[NSString class]]) r.retcode = [(NSString *)rcRaw integerValue];
+                    else r.retcode = -1;
+                    id rmRaw = resp[@"retmsg"];
+                    r.retmsg = [rmRaw isKindOfClass:[NSString class]] ? rmRaw : (rmRaw ? [rmRaw description] : @"");
+                } else {
+                    r.retcode = -1;
+                    r.retmsg = @"";
+                }
 
                 if (st == MioFriendStatusDeleted) [deleted addObject:r];
                 else if (st == MioFriendStatusInvalid) [invalid addObject:r];

@@ -15,6 +15,11 @@ typedef void(^MioFDCompletionBlock)(MioFriendDetectSummary * _Nullable summary, 
 /// 继续上次未完成的检测
 - (void)resumeDetection:(MioFDProgressBlock)progress completion:(MioFDCompletionBlock)completion;
 
+/// 重新检测指定好友（用于详情页"全部删除"后的复核）
+- (void)retestFriends:(NSArray<NSString *> *)wxIDs
+             progress:(MioFDProgressBlock)progress
+           completion:(MioFDCompletionBlock)completion;
+
 /// 停止当前检测
 - (void)stopDetection;
 
