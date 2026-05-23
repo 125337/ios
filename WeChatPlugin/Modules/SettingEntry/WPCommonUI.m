@@ -98,3 +98,38 @@ void WPAddInfoRow(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString
     r.textAlignment = NSTextAlignmentRight;
     [card addSubview:r];
 }
+
+#pragma mark - 安全 present
+
+UIViewController *WPGetTopVCForPresentation(void) {
+    // 1. 遍历所有 window scene 找 keyWindow
+    UIWindow *keyWindow = nil;
+    for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        for (UIWindow *w in scene.windows) {
+            if (w.isKeyWindow) { keyWindow = w; break; }
+        }
+    }
+    if (!keyWindow) {
+        keyWindow = [[UIApplication sharedApplication].windows firstObject];
+    }
+    if (!keyWindow) return nil;
+
+    // 2. 从 rootViewController 向下找 presentedViewController（复刻微信优化 getChatConfirmationTopViewController）
+    UIViewController *top = keyWindow.rootViewController;
+    while (top.presentedViewController) {
+        top = top.presentedViewController;
+    }
+    // 3. 如果是 UINavigationController，取 topViewController
+    if ([top isKindOfClass:[UINavigationController class]]) {
+        top = [(UINavigationController *)top topViewController];
+    }
+    // 如果是 UITabBarController，取 selectedViewController
+    if ([top isKindOfClass:[UITabBarController class]]) {
+        top = [(UITabBarController *)top selectedViewController];
+        if ([top isKindOfClass:[UINavigationController class]]) {
+            top = [(UINavigationController *)top topViewController];
+        }
+    }
+    return top;
+}
