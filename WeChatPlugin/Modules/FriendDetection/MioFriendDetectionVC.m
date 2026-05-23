@@ -22,6 +22,7 @@ static const CGFloat kIconSize  = 28.0;  // 图标圆点大小
 @property (nonatomic, strong) MioFriendDetector *detector;
 @property (nonatomic, assign) BOOL detecting;
 @property (nonatomic, weak)   UILabel *statusLabel;
+@property (nonatomic, weak)   UIScrollView *mainScrollView;
 
 // 详情页数据
 @property (nonatomic, copy)   NSArray<MioFriendDetectResult *> *detailFriends;
@@ -70,8 +71,21 @@ static const CGFloat kIconSize  = 28.0;  // 图标圆点大小
 }
 
 - (void)renderMainPage {
-    // 清除旧视图
-    for (UIView *v in self.view.subviews) [v removeFromSuperview];
+    // 创建/复用 ScrollView（处理导航栏安全区）
+    if (!self.mainScrollView) {
+        UIScrollView *sv = [[UIScrollView alloc] initWithFrame:self.view.bounds];
+        sv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        sv.backgroundColor = WPBgColor();
+        sv.alwaysBounceVertical = YES;
+        if (@available(iOS 11.0, *)) {
+            sv.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentAutomatic;
+        }
+        [self.view addSubview:sv];
+        self.mainScrollView = sv;
+    }
+
+    // 清除旧内容
+    for (UIView *v in self.mainScrollView.subviews) [v removeFromSuperview];
 
     CGFloat w = self.view.bounds.size.width;
     if (w <= 0) w = [UIScreen mainScreen].bounds.size.width;
@@ -79,8 +93,10 @@ static const CGFloat kIconSize  = 28.0;  // 图标圆点大小
     CGFloat cardW = w - kPad * 2;
     CGFloat y = 12;
 
+    UIView *container = self.mainScrollView;
+
     // ==================== 检测结果 Section ====================
-    [self.view addSubview:[self makeSectionTitle:@"检测结果" top:y width:w]]; y += 26;
+    [container addSubview:[self makeSectionTitle:@"检测结果" top:y width:w]]; y += 26;
 
     MioFriendDetectSummary *last = [MioFriendDetector loadSavedSummary];
     BOOL hasData = (last != nil);
@@ -110,7 +126,7 @@ static const CGFloat kIconSize  = 28.0;  // 图标圆点大小
                 action:@"deleted"];
 
     resultCard.frame = CGRectMake(cardX, y, cardW, kRowH * 2 + 0.5);
-    [self.view addSubview:resultCard];
+    [container addSubview:resultCard];
     y += resultCard.frame.size.height + 12;
 
     // 状态文字
@@ -126,12 +142,12 @@ static const CGFloat kIconSize  = 28.0;  // 图标圆点大小
     } else {
         hint.text = @"检测结果会显示在此处，点击可查看详细列表。";
     }
-    [self.view addSubview:hint];
+    [container addSubview:hint];
     self.statusLabel = hint;
     y += 52;
 
     // ==================== 操作 Section ====================
-    [self.view addSubview:[self makeSectionTitle:@"操作" top:y width:w]]; y += 26;
+    [container addSubview:[self makeSectionTitle:@"操作" top:y width:w]]; y += 26;
 
     UIView *actionCard = [self makeCard:y width:w];
     CGFloat ay = 0;
@@ -143,7 +159,7 @@ static const CGFloat kIconSize  = 28.0;  // 图标圆点大小
     [self addActionRow:actionCard top:ay width:cardW title:@"清空数据" action:@"clear"];
 
     actionCard.frame = CGRectMake(cardX, y, cardW, kRowH * 2 + 0.5);
-    [self.view addSubview:actionCard];
+    [container addSubview:actionCard];
     y += actionCard.frame.size.height + 12;
 
     // ==================== 底部说明 ====================
@@ -152,11 +168,10 @@ static const CGFloat kIconSize  = 28.0;  // 图标圆点大小
     footer.font = [UIFont systemFontOfSize:12];
     footer.textColor = WPT3();
     footer.numberOfLines = 0;
-    [self.view addSubview:footer];
+    [container addSubview:footer];
     y += 96;
 
-    // 设置 contentSize（如果用 UIScrollView 的话可以直接撑开）
-    self.view.frame = CGRectMake(0, 0, w, MAX(y + 20, self.view.bounds.size.height));
+    self.mainScrollView.contentSize = CGSizeMake(w, y + 20);
 }
 
 #pragma mark - 主页面 Row 构造
