@@ -467,6 +467,13 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
     // 反编译版风格：只处理 ChatTableViewCell
     if (![cell isKindOfClass:NSClassFromString(@"ChatTableViewCell")]) return cell;
 
+    // 守卫：app 处于非活跃状态时（外部分享文件、URL scheme 唤起等）不进行 cell 处理。
+    // 此时 WeChat 正在创建聊天选择器 VC（转场中），KVO 访问 cell 属性会触发微信布局管线，
+    // 在转场中调用废弃的 presentingModalViewController → SIGABRT。
+    if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
+        return cell;
+    }
+
     // === 同步计算时间文本（主线程，不 dispatch） ===
     // 复刻 微信优化 做法：不在 global_queue 中通过 KVO 访问 cell 属性。
     // KVO 访问在 global_queue 中触发异步侧效应 → 与微信布局管线在 VC 转场时冲突
@@ -608,13 +615,17 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     UILabel *label = objc_getAssociatedObject(cv, @"msgTimeLabel");
 
     if (![PluginConfig shared].showMessageTime) {
-        if (label) {
-            label.hidden = YES;
-        }
+        if (label) { label.hidden = YES; }
         return;
     }
 
     if (!label) return;
+
+    // 守卫：app 非活跃时不访问 KVO（与 cellForRow 同因）
+    if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
+        label.hidden = YES;
+        return;
+    }
 
     // 获取 viewModel → 读取已缓存在 viewModel 上的时间文本
     id viewModel = nil;

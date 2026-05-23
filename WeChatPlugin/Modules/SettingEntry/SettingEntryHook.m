@@ -6,8 +6,6 @@
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
 
-static NSMutableSet *_viewDidLoadSet = nil;
-
 // 仿微信优化做法：不在 viewDidLoad 里创建 UI（view bounds 可能为 (0,0,0,0)），
 // 改在 viewWillAppear 里创建 —— 此时 view 已在 window 中，bounds 正确。
 // 微信优化不创建新 VC，而是往微信现有 VC 上加子视图，所以天然没这个问题。
@@ -41,36 +39,28 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
     }
 
-    // 类级锁 + 一次性检查：防止多个实例并发创建 UI
-    @synchronized ([self class]) {
-        if (!_viewDidLoadSet) {
-            _viewDidLoadSet = [NSMutableSet new];
-        }
-        NSNumber *ptr = [NSNumber numberWithUnsignedLong:(unsigned long)self];
-        if ([_viewDidLoadSet containsObject:ptr]) {
-            WPLog(@"Setting", @"[Entry] viewWillAppear: already set up");
-            return;
-        }
-        [_viewDidLoadSet addObject:ptr];
+    // associated object 做一次性标记（runtime 级原子安全，无需 @synchronized）
+    if (objc_getAssociatedObject(self, @"_entrySetupDone")) {
+        WPLog(@"Setting", @"[Entry] viewWillAppear: already set up");
+        return;
+    }
+    objc_setAssociatedObject(self, @"_entrySetupDone", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-        UIViewController *vc = (UIViewController *)self;
+    UIViewController *vc = (UIViewController *)self;
 
-        // view 已入 window、bounds 有效？双重保险
-        // 注意：viewWillAppear 时 window 通常为 nil（view 尚未 add 到 window），
-        // 但 bounds 已正确。往不在 window 中的 view 加子视图是安全的，
-        // 会在 viewDidAppear 时正常渲染。去掉 window 检查，只检查 bounds。
-        if (vc.view.bounds.size.width < 1) {
-            WPLog(@"Setting", @"[Entry] viewWillAppear: bounds invalid (w=%.0f), skip",
-                  vc.view.bounds.size.width);
-            [_viewDidLoadSet removeObject:ptr]; // 未成功，允许重试
-            return;
-        }
+    // bounds 检查
+    if (vc.view.bounds.size.width < 1) {
+        WPLog(@"Setting", @"[Entry] viewWillAppear: bounds invalid (w=%.0f), skip",
+              vc.view.bounds.size.width);
+        objc_setAssociatedObject(self, @"_entrySetupDone", nil, OBJC_ASSOCIATION_ASSIGN); // 允许重试
+        return;
+    }
 
-        CGFloat w = vc.view.bounds.size.width;
+    CGFloat w = vc.view.bounds.size.width;
 
-        // === 以下是 UI 创建逻辑（与原来完全一致，只是移到了 viewWillAppear） ===
-        UIScrollView *sv = WPMakeSV(vc);
-        [vc.view addSubview:sv];
+    // === 以下是 UI 创建逻辑（与原来完全一致，只是移到了 viewWillAppear） ===
+    UIScrollView *sv = WPMakeSV(vc);
+    [vc.view addSubview:sv];
 
     CGFloat y = 20;
 
@@ -135,7 +125,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 
     sv.contentSize = CGSizeMake(w, y);
     WPLog(@"Setting", @"[Entry] setup complete (via viewWillAppear)");
-    }
 }
 
 @implementation WeChatPluginSwitchHandler
