@@ -18,9 +18,40 @@ cd /www/wwwroot/ios && git status
 
 ## 阶段一：消除重复代码（低风险，高收益）
 
-### 步骤 1：统一日志模块
+### 步骤 1：统一日志模块 ✅ 已完成
 
 **目标**：19 个文件各自实现了几乎相同的日志函数，合并为 1 个。
+
+**执行结果（2026-05-23）**：
+- 已创建 `Core/LogManager.h` 和 `Core/LogManager.m`
+- `LogManager.m` 已加入 `build-standalone.yml` 编译列表
+- 所有 19 个文件的日志函数调用已迁移到 `WPLog(tag, fmt, ...)`
+- 旧函数定义保留为死代码（安全策略）
+- ~250+ 处 `reLog`/`fdLog`/`mtLog` 等调用已替换
+
+**tag 映射表**：
+
+| 文件 | 旧函数 | 新 tag |
+|---|---|---|
+| `RedEnvelopHook.m` | `reLog` | `RedEnv` |
+| `PluginConfig.m` | `configLog` | `Config` |
+| `WeChatRedEnvelopTaskManager.m` | `tmLog` | `RedEnv` |
+| `FriendDetectionHook.m` | `fdLog` | `FriendDetect` |
+| `ClearUnreadHook.m` | `clearUnreadLog` | `ClearUnread` |
+| `SettingCategoryController.m` | `configLog` | `Config` |
+| `SettingEntryHook.m` | `reLog` | `Setting` |
+| `MessageTimeHook.m` | `mtLog` | `MsgTime` |
+| `JokerHook.m` | `jokerLog` | `Joker` |
+| `AutoTransferHook.m` | `atLog` | `AutoTransfer` |
+| `RevokeHandler.m` | `revokeLog` | `Revoke` |
+| `RevokeHook.m` | `hookLog` | `Revoke` |
+| `SettingController.m` | `reLog` | `Setting` |
+| `SettingRedEnvelopController.m` | `configLog` | `Setting` |
+| `SettingSessionActionController.m` | `saLog` | `Setting` |
+| `WPAboutVC.m` | `reLog` | `UI` |
+| `WPBackupVC.m` | `reLog` | `UI` |
+| `WPOtherVC.m` | `reLog` | `UI` |
+| `GroupExitHook.m` | 保留 | `GroupExit` |
 
 **操作**：
 
@@ -126,9 +157,14 @@ cd /www/wwwroot/ios && git add -A && git commit -m "step1: 统一日志模块" &
 
 ---
 
-### 步骤 2：统一 ServiceHelper
+### 步骤 2：统一 ServiceHelper ✅ 已完成
 
 **目标**：`getService()` 函数在 4 个文件中重复实现，提取为公共 inline 函数。
+
+**执行结果（2026-05-23）**：
+- 已创建 `Core/ServiceHelper.h`，提供 `static inline WXGetService(Class)` 
+- 所有 4 个文件的本地 `getService` 实现已替换
+- 旧函数定义保留为死代码
 
 **操作**：
 
@@ -562,9 +598,9 @@ cd /www/wwwroot/ios && git add -A && git commit -m "step11: MessageTimeHook 统�
 | 步骤 | 描述 | 状态 | 减少量 |
 |---|---|---|---|
 | 0 | 准备/确认当前状态 | ✅ | — |
-| 1 | 统一日志模块 | ⬜ | ~280行 + ~8KB |
-| 2 | 统一 ServiceHelper | ⬜ | ~100行 |
-| 3 | PluginConfig 宏化 | ⬜ | ~150行 |
+| 1 | 统一日志模块 | ✅ | ~280行 + ~8KB |
+| 2 | 统一 ServiceHelper | ✅ | ~50行 |
+| 3 | PluginConfig 宏化 | ⬜ (单独PR) | ~150行 |
 | 4 | FriendDetection 删探测代码 | ⬜ | ~400行 |
 | 5 | ClearUnreadHook 精简 | ⬜ | ~180行 |
 | 6 | WPBorderLayer 精简 | ⬜ | ~400行 |

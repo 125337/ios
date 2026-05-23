@@ -23,12 +23,18 @@
 | 2 | 删除 `WeChatRedEnvelopOperation.m/.h` (死代码) | -120行 |
 | 3 | 删除 `SettingAssistFunctionController` + `SettingUIBeautifyController` | -48行, FeatureModuleRegistry 已清理 |
 | 4 | FriendDetectionHook `onDetailTap` 弹窗 | 已改 WeChatAlertHelper (line 503) ✅ |
+| 5 | 统一日志模块 (LogManager.h/.m) | ~250+ 处调用迁移，19 文件 ✅ |
+| 6 | 统一 ServiceHelper.h | 4 文件 getService 去重 ✅ |
 
 ---
 
-## 三、待优化问题（11项，按严重程度排序）
+## 三、待优化问题（9项，按严重程度排序）
 
-### 问题1：重复日志函数 — 19 个编译文件各自实现
+### ~~问题1：重复日志函数~~ ✅ 已完成 (2026-05-23)
+
+> 已创建 `Core/LogManager.h/.m`，用 `WPLog(tag, fmt, ...)` 宏替换。所有 19 个文件的日志函数已迁移，旧函数保留为死代码（安全策略），`LogManager.m` 已加入编译列表。
+>
+> **实际减少**: ~280 行源码
 
 `build-standalone.yml` 编译的 39 个 .m 中，以下 19 个有独立日志函数：
 
@@ -62,7 +68,7 @@
 
 ---
 
-### 问题2：FriendDetectionHook.m — 1022行，~40% 是探测代码
+### 问题1：FriendDetectionHook.m — 1022行，~40% 是探测代码
 
 当前可删除内容：
 
@@ -82,7 +88,7 @@
 
 ---
 
-### 问题3：PluginConfig.m — 配置加载/保存高度重复（441行）
+### 问题2：PluginConfig.m — 配置加载/保存高度重复（441行）
 
 `loadDefaults` (lines 55-213, 158行) + `save` (lines 215-311, 96行) = 254行纯重复模式，每个属性 4-6行。
 
@@ -92,22 +98,15 @@
 
 ---
 
-### 问题4：getService() — 4 个编译文件各自实现
+### ~~问题3：getService() — 4 个文件各自实现~~ ✅ 已完成
 
-| 文件 | 行数 |
-|------|------|
-| RedEnvelopHook.m | 7 (lines 30-36) |
-| FriendDetectionHook.m | ~8 (内联) |
-| ClearUnreadHook.m | ~37 (含 getServiceViaCenter) |
-| RevokeHandler.m | ~10 |
-
-**方案**: 创建 `Core/ServiceHelper.h`，提供 `static inline WXService(Class)`
-
-**预计减少**: 50+行重复
+> 已创建 `Core/ServiceHelper.h`，提供 `static inline WXGetService(Class)` 函数。所有 4 个文件的 `getService` 实现已替换，旧函数定义保留为死代码。
+>
+> **实际减少**: ~50 行源码
 
 ---
 
-### 问题5：ClearUnreadHook — 多层 fallback（402行）
+### 问题3：ClearUnreadHook — 多层 fallback（402行）
 
 `findSessionMgr()` 4层 fallback (7个类名→5个属性→4个ivar)，`getSessionList()` 3层 (8个selector→6个ivar→逐个索引)。
 
@@ -119,7 +118,7 @@
 
 ---
 
-### 问题6：WPBorderLayer.m — 过度设计（603行）
+### 问题4：WPBorderLayer.m — 过度设计（603行）
 
 5 个类、12+ 工厂方法 → 核心功能可精简至 80 行。
 
@@ -129,7 +128,7 @@
 
 ---
 
-### 问题7：WPCommonUI.h — static 函数被多份编译（121行）
+### 问题5：WPCommonUI.h — static 函数被多份编译（121行）
 
 121行 `static` 函数在头文件中，每个 `#import` 的 .m 产生一份副本。
 
@@ -139,7 +138,7 @@
 
 ---
 
-### 问题8：Settings 控制器碎片化（9 个控制器文件）
+### 问题6：Settings 控制器碎片化（9 个控制器文件）
 
 `SettingAboutController`(86行) → 合入 `SettingController`。  
 `SettingLayoutFunctionController`(52行) → 合入 `SettingGeneralFunctionController`。
@@ -150,7 +149,7 @@
 
 ---
 
-### 问题9：WeChatRedEnvelopParam.m — 4 行空实现
+### 问题7：WeChatRedEnvelopParam.m — 4 行空实现
 
 只有 `@implementation WeChatRedEnvelopParam @end`。
 
@@ -160,7 +159,7 @@
 
 ---
 
-### 问题10：MessageTimeHook 独用 MSHookMessageEx
+### 问题8：MessageTimeHook 独用 MSHookMessageEx
 
 其余模块全用 HookEngine。
 
@@ -170,7 +169,7 @@
 
 ---
 
-### 问题11：未编译文件占用仓库空间
+### 问题9：未编译文件占用仓库空间
 
 `WPSessionBoxHook.m/.h` + `WPSessionBoxController.m/.h` 不在编译列表中，不进 dylib 但占仓库。
 
@@ -178,29 +177,29 @@
 
 ## 四、优化总表
 
-| # | 优化项 | 减少 | 文件变化 |
-|---|--------|------|---------|
-| 1 | 统一日志模块 | **280行** + ~8KB | +2文件 |
-| 2 | FriendDetection 删探测代码 | **400行** | 改1文件 |
-| 3 | PluginConfig 宏化 | **150行** | 改1文件 |
-| 4 | 统一 ServiceHelper | **50行** | +1文件 |
-| 5 | ClearUnreadHook 精简 | **180行** | 改1文件 |
-| 6 | WPBorderLayer 精简 | **520行** | 改1文件 |
-| 7 | WPCommonUI.h → .m | 消除多份副本 | +1文件 |
-| 8 | 合并 Settings 碎片 | **100行** | -2文件 |
-| 9 | 删除 RedEnvelopParam.m | 1编译项 | -1文件 |
-| 10 | 统一 hook (需真机验证) | ~3-5KB | -1编译项 |
-| 11 | 清理未编译文件 | — | -4文件 |
-| **合计** | | **~1680行** | **-3~7文件, +4文件** |
+| # | 优化项 | 减少 | 文件变化 | 状态 |
+|---|--------|------|---------|------|
+| 1 | 统一日志模块 | **280行** + ~8KB | +2文件 | ✅ |
+| 2 | 统一 ServiceHelper | **50行** | +1文件 | ✅ |
+| 3 | FriendDetection 删探测代码 | **400行** | 改1文件 | ⬜ |
+| 4 | PluginConfig 宏化 | **150行** | 改1文件 | ⬜ |
+| 5 | ClearUnreadHook 精简 | **180行** | 改1文件 | ⬜ |
+| 6 | WPBorderLayer 精简 | **520行** | 改1文件 | ⬜ |
+| 7 | WPCommonUI.h → .m | 消除多份副本 | +1文件 | ⬜ |
+| 8 | 合并 Settings 碎片 | **100行** | -2文件 | ⬜ |
+| 9 | 删除 RedEnvelopParam.m | 1编译项 | -1文件 | ⬜ |
+| 10 | 统一 hook (需真机验证) | ~3-5KB | -1编译项 | ⬜ |
+| 11 | 清理未编译文件 | — | -4文件 | ⬜ |
+| **合计** | | **~1680行** | **-3~7文件, +4文件** | |
 
 ---
 
 ## 五、分阶段目标
 
-| 阶段 | 内容 | 预计 dylib |
-|------|------|-----------|
-| 当前 | 已完成 4 项优化 | ~1.8-2.2 MB |
-| +消除重复 | 日志+ServiceHelper+宏化 | ~1.5-1.9 MB |
-| +删冗余 | FriendDetection探测+ClearUnread fallback+RedEnvelopParam | ~1.2-1.6 MB |
-| +精简UI | BorderLayer+CommonUI+Settings合并 | ~1.0-1.4 MB |
-| +收尾 | 统一hook+清理文件 | ~900-1300 KB |
+| 阶段 | 内容 | 预计 dylib | 状态 |
+|------|------|-----------|------|
+| 当前 | 已完成 6 项优化 | ~445K | ✅ |
+| +消除重复 | 日志+ServiceHelper+宏化 | — | 日志+ServiceHelper ✅, 宏化 ⬜ |
+| +删冗余 | FriendDetection探测+ClearUnread fallback+RedEnvelopParam | ~1.2-1.6 MB | ⬜ |
+| +精简UI | BorderLayer+CommonUI+Settings合并 | ~1.0-1.4 MB | ⬜ |
+| +收尾 | 统一hook+清理文件 | ~900-1300 KB | ⬜ |
