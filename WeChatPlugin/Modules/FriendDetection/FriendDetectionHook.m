@@ -25,6 +25,29 @@ static IMP _orig_OnGetTransferPrepayRespone = NULL;
 static IMP _orig_insideCallback = NULL;
 
 // ============================================================
+// MARK: - 原始函数指针（JailBreak 绕过 — 微信优化 行 27116-27118）
+// 多开微信是重签名 IPA，微信签名校验会认为 app 被篡改，触发支付限制。
+// 微信优化 hook JailBreakHelper 让 IsJailBreak 返回 NO 来绕过此限制。
+// ============================================================
+static IMP _orig_IsJailBreak = NULL;
+static IMP _orig_HasInstallJailbreakPlugin = NULL;
+static IMP _orig_JailBroken = NULL;
+
+static BOOL hook_IsJailBreak(id self, SEL _cmd) {
+    return NO;
+}
+
+static BOOL hook_HasInstallJailbreakPlugin(id self, SEL _cmd, id plugin) {
+    if (plugin) { ((id (*)(id, SEL))objc_msgSend)(plugin, sel_registerName("retain")); }
+    if (plugin) { ((void (*)(id, SEL))objc_msgSend)(plugin, sel_registerName("release")); }
+    return NO;
+}
+
+static BOOL hook_JailBroken(id self, SEL _cmd) {
+    return NO;
+}
+
+// ============================================================
 // MARK: - Hook 回调：OnGetTransferPrepayRespone:
 // 微信优化 FUN_00020e88（行 20659-20729）
 // 特点：无 checkFriendsEnd 守卫，总是处理
@@ -159,6 +182,21 @@ static void hook_insideCallback(id self, SEL _cmd, id response, id request) {
     WPLog(@"FriendDetect", @"========================================");
     WPLog(@"FriendDetect", @" FriendDetectionHook install complete");
     WPLog(@"FriendDetect", @"========================================");
+
+    // — JailBreak Bypass — 微信优化 行 27108-27119 —
+    // 多开微信是重签名 IPA，WCPayLogicMgr 可能通过 JailBreakHelper 检测 app 完整性并拒绝支付请求
+    {
+        Class jbCls = objc_getClass("JailBreakHelper");
+        if (jbCls) {
+            MSHookMessageEx(jbCls, sel_registerName("IsJailBreak"), (IMP)hook_IsJailBreak, &_orig_IsJailBreak);
+            MSHookMessageEx(jbCls, sel_registerName("HasInstallJailbreakPlugin:"), (IMP)hook_HasInstallJailbreakPlugin, &_orig_HasInstallJailbreakPlugin);
+            // JailBroken 是类方法，hook 在 metaclass 上
+            MSHookMessageEx(object_getClass(jbCls), sel_registerName("JailBroken"), (IMP)hook_JailBroken, &_orig_JailBroken);
+            WPLog(@"FriendDetect", @"[JailBreak] ✓ 3 hooks installed (IsJailBreak, HasInstallJailbreakPlugin:, JailBroken)");
+        } else {
+            WPLog(@"FriendDetect", @"[JailBreak] - JailBreakHelper not found");
+        }
+    }
 }
 
 @end
