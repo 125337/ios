@@ -58,10 +58,6 @@ jobs:
           WeChatPlugin/Modules/SettingEntry/WPBackupVC.m \
           WeChatPlugin/Modules/Joker/JokerHook.m \
           WeChatPlugin/Modules/GroupExit/GroupExitHook.m \
-          WeChatPlugin/Modules/FriendDetection/FriendDetectionHook.m \
-          WeChatPlugin/Modules/FriendDetection/MioFriendDetectResult.m \
-          WeChatPlugin/Modules/FriendDetection/MioFriendDetector.m \
-          WeChatPlugin/Modules/FriendDetection/MioFriendDetectionVC.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeHook.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeFormatParser.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeFormatEditorVC.m \
@@ -98,7 +94,6 @@ jobs:
                 -IWeChatPlugin/Modules/Joker \
                 -IWeChatPlugin/Modules/GroupExit \
                 -IWeChatPlugin/Modules/MessageTime \
-                -IWeChatPlugin/Modules/FriendDetection \
                 -IWeChatPlugin/Modules/AutoTransfer \
                 -IWeChatPlugin/Settings/Common \
                 -IWeChatPlugin/Settings/Controllers \
