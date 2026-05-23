@@ -121,24 +121,34 @@ static id _Nullable fdCreateTransferRequest(NSString *receiverWxID) {
 
 // ============================================================
 // MARK: - 发送转账预下单请求（严格参照微信优化 行 20325-20333）
+// 关键修改：dispatch_sync 到主线程，确保 WCPayLogicMgr 在有 RunLoop 的线程执行
+// 微信优化使用 NSOperationQueue（行 20079），其线程自带 RunLoop
 // ============================================================
 static BOOL fdSendRequest(id request) {
-    // WCPayLogicMgr *payMgr = [MMServiceCenter.defaultCenter getService:WCPayLogicMgr]
     Class payCls = objc_getClass("WCPayLogicMgr");
     if (!payCls) { WPLog(@"FriendDetect", @"[Send] WCPayLogicMgr class not found"); return NO; }
 
     id payMgr = WXGetService(payCls);
     if (!payMgr) { WPLog(@"FriendDetect", @"[Send] WCPayLogicMgr service nil"); return NO; }
 
-    // [payMgr GetTransferPrepayRequest:request] (行 20334-20336)
     SEL sendSel = sel_registerName("GetTransferPrepayRequest:");
     if (![payMgr respondsToSelector:sendSel]) {
         WPLog(@"FriendDetect", @"[Send] GetTransferPrepayRequest: not found on WCPayLogicMgr");
         return NO;
     }
-    ((void (*)(id, SEL, id))objc_msgSend)(payMgr, sendSel, request);
-    WPLog(@"FriendDetect", @"[Send] Request sent ✓");
-    return YES;
+
+    // dispatch_sync 到主线程：确保在有 RunLoop 的线程上调用
+    // 避免多开微信上 WCPayLogicMgr 因缺少 RunLoop 而本地超时
+    __block BOOL sent = YES;
+    if ([NSThread isMainThread]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(payMgr, sendSel, request);
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            ((void (*)(id, SEL, id))objc_msgSend)(payMgr, sendSel, request);
+        });
+    }
+    WPLog(@"FriendDetect", @"[Send] Request sent ✓ (thread=%@)", [NSThread isMainThread] ? @"main" : @"bg");
+    return sent;
 }
 
 // ============================================================
