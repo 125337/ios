@@ -36,6 +36,34 @@ static IMP _orig_JailBroken = NULL;
 // Hook GetTransferPrepayRequest: 本身（诊断用 — 不是微信优化的 hook）
 static IMP _orig_GetTransferPrepayRequest = NULL;
 
+// Hook WCPayTransferPrepayRequestStruct init — 完整属性诊断
+static IMP _orig_TransferReqInit = NULL;
+
+static id hook_TransferReqInit(id self, SEL _cmd) {
+    // 调用原始 init
+    if (_orig_TransferReqInit) {
+        self = ((id (*)(id, SEL))_orig_TransferReqInit)(self, _cmd);
+    }
+    if (!self) return nil;
+
+    // 用 objc runtime 枚举所有属性名和值
+    WPLog(@"FriendDetect", @"[InitDump] WCPayTransferPrepayRequestStruct init → %p", self);
+    unsigned int count = 0;
+    objc_property_t *props = class_copyPropertyList([self class], &count);
+    for (unsigned int i = 0; i < count; i++) {
+        const char *name = property_getName(props[i]);
+        if (!name) continue;
+        NSString *key = [NSString stringWithUTF8String:name];
+        id val = nil;
+        @try { val = [self valueForKey:key]; } @catch(...) {}
+        if (val) {
+            WPLog(@"FriendDetect", @"[InitDump]   %@ = %@", key, ([val isKindOfClass:[NSString class]] || [val isKindOfClass:[NSNumber class]]) ? val : NSStringFromClass([val class]));
+        }
+    }
+    free(props);
+    return self;
+}
+
 static void hook_GetTransferPrepayRequest(id self, SEL _cmd, id request) {
     WPLog(@"FriendDetect", @"[Trace] GetTransferPrepayRequest: called on WCPayLogicMgr=%p, request=%p class=%@",
           self, request, [request class]);
@@ -163,6 +191,15 @@ static void hook_insideCallback(id self, SEL _cmd, id response, id request) {
     WPLog(@"FriendDetect", @" Hook: WCPayLogicMgr x2 (OnGetTransferPrepayRespone + insideCallback)");
     WPLog(@"FriendDetect", @" 完全匹配微信优化 行 20651-20653 双 Hook 策略");
     WPLog(@"FriendDetect", @"========================================");
+
+    // — Hook WCPayTransferPrepayRequestStruct init — 诊断：打印 init 后所有属性 —
+    {
+        Class reqCls = objc_getClass("WCPayTransferPrepayRequestStruct");
+        if (reqCls) {
+            MSHookMessageEx(reqCls, @selector(init), (IMP)hook_TransferReqInit, &_orig_TransferReqInit);
+            WPLog(@"FriendDetect", @"[Hook] ✓ WCPayTransferPrepayRequestStruct init (dump all props)");
+        }
+    }
 
     Class payCls = objc_getClass("WCPayLogicMgr");
     if (!payCls) {
