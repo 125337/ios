@@ -56,9 +56,12 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         UIViewController *vc = (UIViewController *)self;
 
         // view 已入 window、bounds 有效？双重保险
-        if (vc.view.window == nil || vc.view.bounds.size.width < 1) {
-            WPLog(@"Setting", @"[Entry] viewWillAppear: view not ready (window=%p, w=%.0f), skip",
-                  vc.view.window, vc.view.bounds.size.width);
+        // 注意：viewWillAppear 时 window 通常为 nil（view 尚未 add 到 window），
+        // 但 bounds 已正确。往不在 window 中的 view 加子视图是安全的，
+        // 会在 viewDidAppear 时正常渲染。去掉 window 检查，只检查 bounds。
+        if (vc.view.bounds.size.width < 1) {
+            WPLog(@"Setting", @"[Entry] viewWillAppear: bounds invalid (w=%.0f), skip",
+                  vc.view.bounds.size.width);
             [_viewDidLoadSet removeObject:ptr]; // 未成功，允许重试
             return;
         }

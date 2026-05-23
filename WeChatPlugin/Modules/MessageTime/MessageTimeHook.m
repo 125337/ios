@@ -464,103 +464,81 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
 
     if (![PluginConfig shared].showMessageTime || !cell) return cell;
 
-    // 防护：VC 转场期间不进行 cell 时间计算
-    // 原因：外部分享文件进微信时，WeChat 创建聊天选择器 VC 的同时会刷新消息列表，
-    // 我们的 cellForRow dispatch 会在 global_queue 中通过 KVO 访问 cell 属性，
-    // 触发微信内部布局管线，在转场中调用废弃的 presentingModalViewController 导致 SIGABRT
-    UIViewController *baseVC = (UIViewController *)self;
-    if (baseVC.isBeingPresented || baseVC.isBeingDismissed ||
-        baseVC.isMovingFromParentViewController || baseVC.isMovingToParentViewController) {
-        return cell;
-    }
-
     // 反编译版风格：只处理 ChatTableViewCell
     if (![cell isKindOfClass:NSClassFromString(@"ChatTableViewCell")]) return cell;
 
-    // 全局队列异步计算时间（复刻 FUN_0003b270 + FUN_0003c790）
-    dispatch_async(dispatch_get_global_queue(0, 0), ^{
-        id cellView = nil;
-        @try { cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"]; } @catch (NSException *e) {}
-        if (!cellView) return;
+    // === 同步计算时间文本（主线程，不 dispatch） ===
+    // 复刻 微信优化 做法：不在 global_queue 中通过 KVO 访问 cell 属性。
+    // KVO 访问在 global_queue 中触发异步侧效应 → 与微信布局管线在 VC 转场时冲突
+    // → 调用废弃的 presentingModalViewController → SIGABRT。
+    // 同步计算避免了竞态，且计算量极小（属性读取 + 字符串格式化），无性能影响。
 
-        // 获取 viewModel
-        id viewModel = nil;
-        @try { viewModel = [cellView valueForKey:@"m_viewModel"] ?: [cellView valueForKey:@"viewModel"]; } @catch (NSException *e) {}
-        if (!viewModel) return;
+    id cellView = nil;
+    @try { cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"]; } @catch (NSException *e) {}
+    if (!cellView) return cell;
 
-        // 获取 messageWrap + createTime
-        unsigned int createTime = 0;
-        id messageWrap = nil;
+    id viewModel = nil;
+    @try { viewModel = [cellView valueForKey:@"m_viewModel"] ?: [cellView valueForKey:@"viewModel"]; } @catch (NSException *e) {}
+    if (!viewModel) return cell;
+
+    unsigned int createTime = 0;
+    id messageWrap = nil;
+    @try {
+        if ([viewModel respondsToSelector:NSSelectorFromString(@"messageWrap")]) {
+            @try { messageWrap = [viewModel valueForKey:@"messageWrap"]; } @catch (...) {}
+        }
+        if (!messageWrap) {
+            @try { messageWrap = [viewModel valueForKey:@"m_messageWrap"]; } @catch (...) {}
+        }
+        if (messageWrap) {
+            if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_uiCreateTime")]) {
+                createTime = (unsigned int)[[messageWrap valueForKey:@"m_uiCreateTime"] unsignedIntValue];
+            }
+        }
+        if (createTime == 0 && [viewModel respondsToSelector:NSSelectorFromString(@"createTime")]) {
+            @try { createTime = (unsigned int)[[viewModel valueForKey:@"createTime"] unsignedIntValue]; } @catch (...) {}
+        }
+    } @catch (NSException *e) {}
+
+    BOOL isSender = NO;
+    @try {
+        id target = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"];
+        if (!target) target = cell;
+        if (messageWrap && [target respondsToSelector:NSSelectorFromString(@"isSenderFromMsgWrap:")]) {
+            isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(target, NSSelectorFromString(@"isSenderFromMsgWrap:"), messageWrap);
+        } else {
+            @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (...) {}
+        }
+    } @catch (...) {}
+
+    NSString *fromUsr = nil, *toUsr = nil;
+    if (messageWrap) {
         @try {
-            if ([viewModel respondsToSelector:NSSelectorFromString(@"messageWrap")]) {
-                @try { messageWrap = [viewModel valueForKey:@"messageWrap"]; } @catch (...) {}
+            if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_nsFromUsr")]) {
+                fromUsr = [messageWrap valueForKey:@"m_nsFromUsr"];
             }
-            if (!messageWrap) {
-                @try { messageWrap = [viewModel valueForKey:@"m_messageWrap"]; } @catch (...) {}
-            }
-            if (messageWrap) {
-                if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_uiCreateTime")]) {
-                    createTime = (unsigned int)[[messageWrap valueForKey:@"m_uiCreateTime"] unsignedIntValue];
-                }
-            }
-            if (createTime == 0 && [viewModel respondsToSelector:NSSelectorFromString(@"createTime")]) {
-                @try { createTime = (unsigned int)[[viewModel valueForKey:@"createTime"] unsignedIntValue]; } @catch (...) {}
-            }
-        } @catch (NSException *e) {}
-
-        // 确定 isSender
-        BOOL isSender = NO;
-        @try {
-            id target = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"];
-            if (!target) target = cell;
-            if (messageWrap && [target respondsToSelector:NSSelectorFromString(@"isSenderFromMsgWrap:")]) {
-                isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(target, NSSelectorFromString(@"isSenderFromMsgWrap:"), messageWrap);
-            } else {
-                @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (...) {}
+            if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_nsToUsr")]) {
+                toUsr = [messageWrap valueForKey:@"m_nsToUsr"];
             }
         } @catch (...) {}
+    }
+    NSString *sessionKey = chatSessionKey(fromUsr, toUsr);
 
-        // 复刻 FUN_0003ba04: 从 messageWrap 的 m_nsFromUsr / m_nsToUsr 生成 sessionKey
-        // （不是从 m_contact！反编译代码用的是 messageWrap 的 from/to）
-        NSString *fromUsr = nil, *toUsr = nil;
-        if (messageWrap) {
-            @try {
-                if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_nsFromUsr")]) {
-                    fromUsr = [messageWrap valueForKey:@"m_nsFromUsr"];
-                }
-                if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_nsToUsr")]) {
-                    toUsr = [messageWrap valueForKey:@"m_nsToUsr"];
-                }
-            } @catch (...) {}
-        }
-        NSString *sessionKey = chatSessionKey(fromUsr, toUsr);
-        NSLog(@"[伪已读·调用] isSender=%d, fromUsr=%@, toUsr=%@, sessionKey=%@, createTime=%u",
-              isSender, fromUsr, toUsr, sessionKey, createTime);
+    if (createTime == 0) return cell;
 
-        // 复刻 FUN_0003bb04: 计算 statusCode
-        NSInteger statusCode = computeReadStatus(isSender, sessionKey, createTime);
+    NSInteger statusCode = computeReadStatus(isSender, sessionKey, createTime);
 
-        if (createTime == 0) return;
+    PluginConfig *config = [PluginConfig shared];
+    NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
+    NSString *timeText = formatMessageTime(date,
+                                            config.messageTimeCustomFormat,
+                                            [config isDarkMode],
+                                            isSender,
+                                            statusCode);
+    if (!timeText) return cell;
 
-        // 格式化时间（使用自定义格式引擎，含伪已读）
-        PluginConfig *config = [PluginConfig shared];
-        NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
-        NSString *timeText = formatMessageTime(date,
-                                                config.messageTimeCustomFormat,
-                                                [config isDarkMode],
-                                                isSender,
-                                                statusCode);
-        if (!timeText) return;
-
-        NSLog(@"[伪已读·结果] isSender=%d, statusCode=%ld, format='%@', timeText='%@'",
-              isSender, (long)statusCode, config.messageTimeCustomFormat, timeText);
-
-        // 存入 viewModel 关联对象（复刻 DAT_0013ad99）
-        // 不手动 dispatch_async(main) 调 updateNodeStatus，避免在 VC 转场时
-        // 与微信优化的 dispatch block 冲突导致 presentingModalViewController 崩溃
-        // 时间文本已缓存，WeChat 后续自然调用 updateNodeStatus 时自动读取
-        objc_setAssociatedObject(viewModel, @"messageTimeText", timeText, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    });
+    // 存入 viewModel 关联对象，WeChat 后续 updateNodeStatus 时自动读取
+    objc_setAssociatedObject(viewModel, @"messageTimeText", timeText, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     return cell;
 }
