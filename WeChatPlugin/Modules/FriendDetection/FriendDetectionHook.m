@@ -87,13 +87,32 @@ static void hook_insideCallback(id self, SEL _cmd, id response, id request) {
     // — Hook WCPayLogicMgr —
     Class payCls = objc_getClass("WCPayLogicMgr");
     if (payCls) {
-        SEL sel1 = sel_registerName("OnGetTransferPrepayRespone:");
+        // 8.0.60 中 OnGetTransferPrepayRespone: (大写O) 可能不存在
+        // 尝试 lowercase: onGetTransferPrepayRespone: (小写o)
+        SEL sel1 = sel_registerName("onGetTransferPrepayRespone:");
         Method m1 = class_getInstanceMethod(payCls, sel1);
+        if (!m1) {
+            // 回退到大写
+            sel1 = sel_registerName("OnGetTransferPrepayRespone:");
+            m1 = class_getInstanceMethod(payCls, sel1);
+        }
         if (m1) {
             MSHookMessageEx(payCls, sel1, (IMP)hook_OnGetTransferPrepayRespone, &_orig_OnGetTransferPrepayRespone);
-            WPLog(@"FriendDetect", @"[Hook] ✓ OnGetTransferPrepayRespone:");
+            WPLog(@"FriendDetect", @"[Hook] ✓ %@", NSStringFromSelector(sel1));
         } else {
-            WPLog(@"FriendDetect", @"[Hook] ✗ OnGetTransferPrepayRespone: NOT FOUND");
+            WPLog(@"FriendDetect", @"[Hook] ✗ onGetTransferPrepayRespone: NOT FOUND (both cases)");
+            // 诊断：列出 WCPayLogicMgr 中所有含 Transfer 的方法
+            unsigned int count = 0;
+            Method *methods = class_copyMethodList(payCls, &count);
+            for (unsigned int i = 0; i < count; i++) {
+                NSString *name = NSStringFromSelector(method_getName(methods[i]));
+                if ([name rangeOfString:@"Transfer" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                    [name rangeOfString:@"Prepay" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                    [name rangeOfString:@"prepay" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                    WPLog(@"FriendDetect", @"[Diag] WCPayLogicMgr method: %@", name);
+                }
+            }
+            free(methods);
         }
 
         SEL sel2 = sel_registerName("insideCallBackGetTransferPrepayResponse:OnRequest:");

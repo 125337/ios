@@ -3,9 +3,8 @@
 #import "MessageTimeFormatParser.h"
 #import <substrate.h>
 #import <objc/runtime.h>
-#import <objc/message.h>
-
 #import <UIKit/UIKit.h>
+#import <objc/message.h>
 #import "../../Core/LogManager.h"
 
 // ============================================================
@@ -528,6 +527,18 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     }
 
     if (!label) return;
+
+    // 守卫：VC 转场期间（如外部分享唤起聊天选择器）跳过 KVO 访问
+    // 防止 valueForKey 触发微信布局管线 → async dispatch → presentingModalViewController crash
+    UIResponder *r = cv.nextResponder;
+    while (r && ![r isKindOfClass:[UIViewController class]]) r = r.nextResponder;
+    if (r) {
+        UIViewController *parentVC = (UIViewController *)r;
+        if (parentVC.presentedViewController || parentVC.isBeingPresented || parentVC.isBeingDismissed) {
+            label.hidden = YES;
+            return;
+        }
+    }
 
     // 获取 viewModel → 直接从 messageWrap 计算时间文本（参照锤子助手方案，不依赖 cellForRow 缓存）
     id viewModel = nil;

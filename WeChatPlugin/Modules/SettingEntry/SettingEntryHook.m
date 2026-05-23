@@ -210,14 +210,19 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 - (void)openFriendDetection:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
     if (!vc) { WPLog(@"Setting", @"[Nav] openFriendDetection: currentVC nil"); return; }
-    Class helperClass = objc_getClass("WPFriendDetectionVCHelper");
-    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPFriendDetectionVCHelper not found"); return; }
-    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+
+    // 直接创建 MioFriendDetectionVC，不再依赖不存在的 WPFriendDetectionVCHelper
+    Class fdClass = objc_getClass("MioFriendDetectionVC");
+    if (!fdClass) {
+        WPLog(@"Setting", @"[Nav] MioFriendDetectionVC class not found");
+        return;
+    }
+    UIViewController *subVC = [[fdClass alloc] init];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
-        WPLog(@"Setting", @"[Nav] pushed WPFriendDetectionVC");
+        WPLog(@"Setting", @"[Nav] pushed MioFriendDetectionVC");
     } else {
-        WPLog(@"Setting", @"[Nav] WPFriendDetectionVCHelper makeVC returned nil");
+        WPLog(@"Setting", @"[Nav] MioFriendDetectionVC alloc failed");
     }
 }
 
