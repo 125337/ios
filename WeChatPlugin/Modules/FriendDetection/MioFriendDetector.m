@@ -1,0 +1,369 @@
+#import "MioFriendDetector.h"
+#import "../../Config/PluginConfig.h"
+#import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
+#import <objc/runtime.h>
+#import <objc/message.h>
+#import <UIKit/UIKit.h>
+
+static NSString * const kSummaryKey = @"com.mio.wechat.plugin.FriendDetection.summary_v2";
+
+// ============================================================
+// MARK: - 全局检测状态（供 Hook 回调使用）
+// ============================================================
+dispatch_semaphore_t g_fdSemaphore = NULL;
+NSString             *g_fdCurrentWxID = nil;
+NSDictionary         *g_fdCurrentResponse = nil;
+volatile BOOL         g_fdDetectionActive = NO;
+
+// ============================================================
+// MARK: - 好友列表获取
+// ============================================================
+static NSArray<NSDictionary *> *fdGetAllFriends(void) {
+    id contactMgr = WXGetService(objc_getClass("CContactMgr"));
+    if (!contactMgr) { WPLog(@"FriendDetect", @"[Friends] CContactMgr not found"); return @[]; }
+
+    SEL sel = sel_registerName("getContactList:contactType:");
+    if (![contactMgr respondsToSelector:sel]) { WPLog(@"FriendDetect", @"[Friends] getContactList: not found"); return @[]; }
+
+    NSArray *contacts = nil;
+    contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 8);
+    if (!contacts || contacts.count == 0) contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 0, 0);
+    if (!contacts || contacts.count == 0) contacts = ((NSArray *(*)(id, SEL, int, int))objc_msgSend)(contactMgr, sel, 1, 0);
+    if (!contacts || contacts.count == 0) { WPLog(@"FriendDetect", @"[Friends] All params returned nil"); return @[]; }
+
+    // 获取自己的 wxid
+    NSString *selfWxID = nil;
+    if ([contactMgr respondsToSelector:sel_registerName("getSelfContact")]) {
+        id sc = ((id (*)(id, SEL))objc_msgSend)(contactMgr, sel_registerName("getSelfContact"));
+        if ([sc respondsToSelector:sel_registerName("m_nsUsrName")])
+            selfWxID = ((id (*)(id, SEL))objc_msgSend)(sc, sel_registerName("m_nsUsrName"));
+    }
+
+    SEL wxidSel  = sel_registerName("m_nsUsrName");
+    SEL nickSel  = sel_registerName("m_nsNickName");
+    SEL remkSel  = sel_registerName("m_nsRemark");
+
+    NSMutableArray *friends = [NSMutableArray array];
+    for (id c in contacts) {
+        @try {
+            NSString *wxID = ((id (*)(id, SEL))objc_msgSend)(c, wxidSel);
+            if (!wxID || wxID.length == 0) continue;
+            if ([wxID containsString:@"@chatroom"]) continue;
+            if ([wxID hasPrefix:@"gh_"]) continue;
+            if (selfWxID && [wxID isEqualToString:selfWxID]) continue;
+
+            NSString *nick = nil;
+            if ([c respondsToSelector:nickSel]) nick = ((id (*)(id, SEL))objc_msgSend)(c, nickSel);
+            NSString *remk = nil;
+            if ([c respondsToSelector:remkSel]) remk = ((id (*)(id, SEL))objc_msgSend)(c, remkSel);
+
+            [friends addObject:@{@"wxID": wxID, @"nickname": nick ?: @"", @"remark": remk ?: @""}];
+        } @catch (NSException *e) {}
+    }
+    WPLog(@"FriendDetect", @"[Friends] %lu real friends filtered", (unsigned long)friends.count);
+    return [friends copy];
+}
+
+// ============================================================
+// MARK: - 构造转账预下单请求（严格参照微信优化 行 20297-20324）
+// ============================================================
+static id _Nullable fdCreateTransferRequest(NSString *receiverWxID) {
+    Class reqCls = objc_getClass("WCPayTransferPrepayRequestStruct");
+    if (!reqCls) { WPLog(@"FriendDetect", @"[Req] Class not found"); return nil; }
+
+    id req = ((id (*)(Class, SEL))objc_msgSend)(reqCls, sel_registerName("alloc"));
+    if (!req) return nil;
+    req = ((id (*)(id, SEL))objc_msgSend)(req, @selector(init));
+    if (!req) return nil;
+
+    // 微信优化唯一守卫: respondsToSelector("setM_nsReceiverUserName:")
+    SEL guardSel = sel_registerName("setM_nsReceiverUserName:");
+    if (![req respondsToSelector:guardSel]) { WPLog(@"FriendDetect", @"[Req] Missing setM_nsReceiverUserName:"); return nil; }
+
+    // m_nsReceiverUserName = wxID (行 20302)
+    ((void (*)(id, SEL, id))objc_msgSend)(req, guardSel, receiverWxID);
+
+    // m_uiAmount = 1 (行 20303)
+    SEL amtSel = sel_registerName("setM_uiAmount:");
+    if ([req respondsToSelector:amtSel]) ((void (*)(id, SEL, unsigned int))objc_msgSend)(req, amtSel, 1);
+
+    // m_uiFee = 1 (行 20304)
+    SEL feeSel = sel_registerName("setM_uiFee:");
+    if ([req respondsToSelector:feeSel]) ((void (*)(id, SEL, unsigned int))objc_msgSend)(req, feeSel, 1);
+
+    // m_uiFeeType = 31 (行 20305: 0x1f)
+    SEL ftSel = sel_registerName("setM_uiFeeType:");
+    if ([req respondsToSelector:ftSel]) ((void (*)(id, SEL, unsigned int))objc_msgSend)(req, ftSel, 31);
+
+    // m_transferScene = 2 (行 20306-20309)
+    SEL sceneSel = sel_registerName("setM_transferScene:");
+    if ([req respondsToSelector:sceneSel]) ((void (*)(id, SEL, unsigned int))objc_msgSend)(req, sceneSel, 2);
+
+    // m_uiPayScene = 11 (行 20312: 0xb)
+    SEL psSel = sel_registerName("setM_uiPayScene:");
+    if ([req respondsToSelector:psSel]) ((void (*)(id, SEL, unsigned int))objc_msgSend)(req, psSel, 11);
+
+    // m_nsTraceInfo = "MioFriendDetector" (行 20313)
+    SEL traceSel = sel_registerName("setM_nsTraceInfo:");
+    if ([req respondsToSelector:traceSel]) ((void (*)(id, SEL, id))objc_msgSend)(req, traceSel, @"MioFriendDetector");
+
+    // placeorderReserves = 当前时间戳 (行 20314-20323)
+    SEL resvSel = sel_registerName("setPlaceorderReserves:");
+    if ([req respondsToSelector:resvSel]) {
+        NSString *ts = [NSString stringWithFormat:@"%ld", (long)[[NSDate date] timeIntervalSince1970]];
+        ((void (*)(id, SEL, id))objc_msgSend)(req, resvSel, ts);
+    }
+
+    WPLog(@"FriendDetect", @"[Req] Created for %@", receiverWxID);
+    return req;
+}
+
+// ============================================================
+// MARK: - 发送转账预下单请求（严格参照微信优化 行 20325-20333）
+// ============================================================
+static BOOL fdSendRequest(id request) {
+    // WCPayLogicMgr *payMgr = [MMServiceCenter.defaultCenter getService:WCPayLogicMgr]
+    Class payCls = objc_getClass("WCPayLogicMgr");
+    if (!payCls) { WPLog(@"FriendDetect", @"[Send] WCPayLogicMgr class not found"); return NO; }
+
+    id payMgr = WXGetService(payCls);
+    if (!payMgr) { WPLog(@"FriendDetect", @"[Send] WCPayLogicMgr service nil"); return NO; }
+
+    // [payMgr GetTransferPrepayRequest:request] (行 20334-20336)
+    SEL sendSel = sel_registerName("GetTransferPrepayRequest:");
+    if (![payMgr respondsToSelector:sendSel]) {
+        WPLog(@"FriendDetect", @"[Send] GetTransferPrepayRequest: not found on WCPayLogicMgr");
+        return NO;
+    }
+    ((void (*)(id, SEL, id))objc_msgSend)(payMgr, sendSel, request);
+    WPLog(@"FriendDetect", @"[Send] Request sent ✓");
+    return YES;
+}
+
+// ============================================================
+// MARK: - 结果判定
+// ============================================================
+static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
+    if (!response) return MioFriendStatusInvalid;
+    NSInteger rc = [response[@"retcode"] integerValue];
+    if (rc == 0) return MioFriendStatusNormal;
+
+    NSString *msg = response[@"retmsg"] ?: @"";
+    NSString *err = response[@"wx_error_msg"] ?: @"";
+    NSString *lower = [[msg stringByAppendingString:err] lowercaseString];
+
+    if ([lower containsString:@"不是好友"] || [lower containsString:@"好友验证"] ||
+        [lower containsString:@"add friend"] || [lower containsString:@"not friend"] ||
+        [lower containsString:@"verify"])
+        return MioFriendStatusDeleted;
+
+    WPLog(@"FriendDetect", @"[Judge] Unknown retcode=%ld msg=%@ → Invalid", (long)rc, msg);
+    return MioFriendStatusInvalid;
+}
+
+// ============================================================
+// MARK: - MioFriendDetector
+// ============================================================
+@interface MioFriendDetector ()
+@property (nonatomic, assign, readwrite) BOOL isDetecting;
+@property (nonatomic, assign, readwrite) BOOL isStopped;
+@end
+
+@implementation MioFriendDetector
+
+#pragma mark - Init
+
+- (instancetype)init {
+    if (self = [super init]) {
+        _isDetecting = NO;
+        _isStopped = NO;
+    }
+    return self;
+}
+
+#pragma mark - Start / Resume / Stop
+
+- (void)startNewDetection:(MioFDProgressBlock)progress completion:(MioFDCompletionBlock)completion {
+    if (self.isDetecting) {
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{
+            completion(nil, [NSError errorWithDomain:@"FD" code:-1 userInfo:@{NSLocalizedDescriptionKey:@"检测正在进行中"}]);
+        });
+        return;
+    }
+    [MioFriendDetector clearSavedSummary];
+    [self _runWithProgress:progress completion:completion resume:nil];
+}
+
+- (void)resumeDetection:(MioFDProgressBlock)progress completion:(MioFDCompletionBlock)completion {
+    if (self.isDetecting) {
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{
+            completion(nil, [NSError errorWithDomain:@"FD" code:-1 userInfo:@{NSLocalizedDescriptionKey:@"检测正在进行中"}]);
+        });
+        return;
+    }
+    MioFriendDetectSummary *saved = [MioFriendDetector loadSavedSummary];
+    if (!saved || saved.checkedWxIDs.count == 0) {
+        [self startNewDetection:progress completion:completion];
+        return;
+    }
+    [self _runWithProgress:progress completion:completion resume:saved];
+}
+
+- (void)stopDetection {
+    self.isStopped = YES;
+    self.isDetecting = NO;
+    g_fdDetectionActive = NO;
+}
+
+#pragma mark - Core Loop
+
+- (void)_runWithProgress:(MioFDProgressBlock)progress
+              completion:(MioFDCompletionBlock)completion
+                  resume:(MioFriendDetectSummary *)resume {
+    self.isDetecting = YES;
+    self.isStopped = NO;
+    g_fdDetectionActive = YES;
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        WPLog(@"FriendDetect", @"========================================");
+        WPLog(@"FriendDetect", @" Detection loop start");
+        WPLog(@"FriendDetect", @"========================================");
+
+        // ① 获取好友列表
+        NSArray<NSDictionary *> *all = fdGetAllFriends();
+        if (all.count == 0) {
+            g_fdDetectionActive = NO;
+            self.isDetecting = NO;
+            if (completion) dispatch_async(dispatch_get_main_queue(), ^{
+                completion(nil, [NSError errorWithDomain:@"FD" code:-3 userInfo:@{NSLocalizedDescriptionKey:@"未找到好友列表"}]);
+            });
+            return;
+        }
+
+        // ② 断点续传：过滤已检测
+        NSSet *checked = resume ? resume.checkedWxIDs : [NSSet set];
+        NSMutableArray<NSDictionary *> *toCheck = [NSMutableArray array];
+        for (NSDictionary *f in all) {
+            if (![checked containsObject:f[@"wxID"]]) [toCheck addObject:f];
+        }
+        WPLog(@"FriendDetect", @"[Loop] %lu checked, %lu remaining", (unsigned long)checked.count, (unsigned long)toCheck.count);
+
+        // ③ 累积结果
+        NSMutableArray<MioFriendDetectResult *> *deleted = resume
+            ? [resume.deletedFriends mutableCopy] : [NSMutableArray array];
+        NSMutableArray<MioFriendDetectResult *> *invalid = resume
+            ? [resume.invalidFriends mutableCopy] : [NSMutableArray array];
+        NSMutableSet<NSString *> *allChecked = [checked mutableCopy];
+
+        NSInteger total = toCheck.count;
+
+        for (NSInteger i = 0; i < total; i++) {
+            if (self.isStopped) { WPLog(@"FriendDetect", @"[Loop] Stopped at %ld/%ld", (long)i, (long)total); break; }
+
+            NSDictionary *f = toCheck[i];
+            NSString *wx = f[@"wxID"], *nk = f[@"nickname"], *rk = f[@"remark"];
+
+            @autoreleasepool {
+                // 进度回调
+                if (progress) dispatch_async(dispatch_get_main_queue(), ^{
+                    progress(wx, nk.length ? nk : wx, i + 1 + (NSInteger)checked.count, (NSInteger)all.count);
+                });
+
+                // ③-a 构造请求
+                id req = fdCreateTransferRequest(wx);
+                if (!req) { [allChecked addObject:wx]; continue; }
+
+                // ③-b 设置全局状态
+                g_fdCurrentWxID = wx;
+                g_fdCurrentResponse = nil;
+                g_fdSemaphore = dispatch_semaphore_create(0);
+
+                // ③-c 发送请求
+                if (!fdSendRequest(req)) {
+                    g_fdSemaphore = NULL;
+                    g_fdCurrentWxID = nil;
+                    [allChecked addObject:wx];
+                    continue;
+                }
+
+                // ③-d 等待回调（超时 3.5 秒，同微信优化行 20339: 3500000000ns）
+                dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.5 * NSEC_PER_SEC));
+                long wr = dispatch_semaphore_wait(g_fdSemaphore, timeout);
+
+                // ③-e 判定结果
+                NSDictionary *resp = nil;
+                @synchronized (g_fdCurrentResponse ?: [NSNull null]) { resp = g_fdCurrentResponse; }
+
+                MioFriendStatus st = (wr == 0 && resp) ? fdDetermineStatus(resp) : MioFriendStatusInvalid;
+
+                MioFriendDetectResult *r = [[MioFriendDetectResult alloc] init];
+                r.wxID = wx; r.nickname = nk; r.remark = rk; r.status = st;
+                r.retcode = resp ? [resp[@"retcode"] integerValue] : -1;
+                r.retmsg = resp[@"retmsg"] ?: @"";
+
+                if (st == MioFriendStatusDeleted) [deleted addObject:r];
+                else if (st == MioFriendStatusInvalid) [invalid addObject:r];
+
+                [allChecked addObject:wx];
+                WPLog(@"FriendDetect", @"[Loop] %ld/%ld %@ → %@", (long)(i+1), (long)total, wx, r);
+
+                // 清理
+                g_fdSemaphore = NULL;
+                g_fdCurrentWxID = nil;
+                g_fdCurrentResponse = nil;
+            }
+
+            // 间隔 100ms
+            [NSThread sleepForTimeInterval:0.1];
+        }
+
+        // ④ 组装结果
+        MioFriendDetectSummary *sum = [[MioFriendDetectSummary alloc] init];
+        sum.timestamp = [[NSDate date] timeIntervalSince1970];
+        sum.totalCount = (NSInteger)all.count;
+        sum.deletedFriends = [deleted copy];
+        sum.invalidFriends = [invalid copy];
+        sum.checkedWxIDs = [allChecked copy];
+
+        // ⑤ 持久化
+        [MioFriendDetector _saveSummary:sum];
+
+        g_fdDetectionActive = NO;
+        self.isDetecting = NO;
+
+        WPLog(@"FriendDetect", @"========================================");
+        WPLog(@"FriendDetect", @" Done: %lu deleted, %lu invalid", (unsigned long)deleted.count, (unsigned long)invalid.count);
+        WPLog(@"FriendDetect", @"========================================");
+
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(sum, nil); });
+    });
+}
+
+#pragma mark - Persistence
+
++ (void)_saveSummary:(MioFriendDetectSummary *)sum {
+    if (!sum) return;
+    NSData *d = nil;
+    @try { d = [NSKeyedArchiver archivedDataWithRootObject:sum requiringSecureCoding:YES error:nil]; }
+    @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] Error: %@", e); return; }
+    if (d) { [[NSUserDefaults standardUserDefaults] setObject:d forKey:kSummaryKey]; [[NSUserDefaults standardUserDefaults] synchronize]; }
+}
+
++ (MioFriendDetectSummary *)loadSavedSummary {
+    NSData *d = [[NSUserDefaults standardUserDefaults] objectForKey:kSummaryKey];
+    if (!d) return nil;
+    @try { return [NSKeyedUnarchiver unarchivedObjectOfClass:[MioFriendDetectSummary class] fromData:d error:nil]; }
+    @catch (NSException *e) { return nil; }
+}
+
++ (void)clearSavedSummary {
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kSummaryKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
++ (NSInteger)friendsCount {
+    return (NSInteger)fdGetAllFriends().count;
+}
+
+@end

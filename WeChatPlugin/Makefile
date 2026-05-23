@@ -31,6 +31,9 @@ MioHelper_FILES = Tweak.m \
 	Modules/Joker/JokerHook.m \
 	Modules/GroupExit/GroupExitHook.m \
 	Modules/FriendDetection/FriendDetectionHook.m \
+	Modules/FriendDetection/MioFriendDetectResult.m \
+	Modules/FriendDetection/MioFriendDetector.m \
+	Modules/FriendDetection/MioFriendDetectionVC.m \
 	Modules/MessageTime/MessageTimeHook.m \
 	Modules/MessageTime/MessageTimeFormatParser.m \
 	Modules/MessageTime/MessageTimeFormatEditorVC.m \
@@ -55,6 +58,7 @@ MioHelper_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-function 
 	-I./Modules/SettingEntry \
 	-I./Modules/Joker \
 	-I./Modules/GroupExit \
+	-I./Modules/FriendDetection \
 	-I./Modules/MessageTime \
 	-I./Settings/Common \
 	-I./Settings/Controllers

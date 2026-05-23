@@ -9,6 +9,7 @@
 #import "../Modules/Joker/JokerHook.h"
 #import "../Modules/GroupExit/GroupExitHook.h"
 #import "../Modules/MessageTime/MessageTimeHook.h"
+#import "../Modules/FriendDetection/FriendDetectionHook.h"
 
 @implementation FeatureModuleDescriptor
 
@@ -55,6 +56,12 @@
                                              sectionTitle:@"通用"
                                           controllerClass:[SettingLayoutFunctionController class]
                                      hookInstallerClasses:@[[TintHook class]]],
+            [FeatureModuleDescriptor moduleWithIdentifier:@"frienddetection"
+                                                    title:@"好友检测"
+                                                 subtitle:@"检测被删除的好友（转账预下单法）"
+                                             sectionTitle:@"通用"
+                                          controllerClass:NSClassFromString(@"MioFriendDetectionVC")
+                                     hookInstallerClasses:@[[FriendDetectionHook class]]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"about"
                                                     title:@"关于"
                                                  subtitle:@"插件信息"
