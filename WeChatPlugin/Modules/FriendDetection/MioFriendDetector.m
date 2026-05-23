@@ -168,6 +168,7 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
 @interface MioFriendDetector ()
 @property (nonatomic, assign, readwrite) BOOL isDetecting;
 @property (nonatomic, assign, readwrite) BOOL isStopped;
+@property (nonatomic, assign) NSInteger runToken;  // 防止 stop+start 产生并发 dispatch block
 @end
 
 @implementation MioFriendDetector
@@ -214,6 +215,17 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
     self.isStopped = YES;
     self.isDetecting = NO;
     g_fdDetectionActive = NO;
+    ++self.runToken;  // 使旧 dispatch block 失效，防止 stop 后立即 start 产生并发
+
+    // 必须唤醒可能正在 semaphore_wait 中的检测线程
+    // 否则旧的 semaphore 被 ARC 释放时仍在 wait → "deallocated while in use" crash
+    if (g_fdSemaphore) {
+        dispatch_semaphore_signal(g_fdSemaphore);
+        g_fdSemaphore = NULL;
+    }
+    g_fdCurrentWxID = nil;
+    g_fdCurrentResponse = nil;
+    WPLog(@"FriendDetect", @"[Stop] runToken=%ld, signaled semaphore", (long)self.runToken);
 }
 
 #pragma mark - Core Loop
@@ -224,11 +236,21 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
     self.isDetecting = YES;
     self.isStopped = NO;
     g_fdDetectionActive = YES;
+    NSInteger myToken = ++self.runToken;
+    WPLog(@"FriendDetect", @"[Run] token=%ld", (long)myToken);
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         WPLog(@"FriendDetect", @"========================================");
-        WPLog(@"FriendDetect", @" Detection loop start");
+        WPLog(@"FriendDetect", @" Detection loop start (token=%ld)", (long)myToken);
         WPLog(@"FriendDetect", @"========================================");
+
+        // 检查是否已被作废（stop+start 场景）
+        if (self.isStopped || myToken != self.runToken || !g_fdDetectionActive) {
+            WPLog(@"FriendDetect", @"[Loop] Token %ld invalidated before start, exiting", (long)myToken);
+            self.isDetecting = NO;
+            g_fdDetectionActive = NO;
+            return;
+        }
 
         // ① 获取好友列表
         NSArray<NSDictionary *> *all = fdGetAllFriends();
@@ -259,7 +281,7 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
         NSInteger total = toCheck.count;
 
         for (NSInteger i = 0; i < total; i++) {
-            if (self.isStopped) { WPLog(@"FriendDetect", @"[Loop] Stopped at %ld/%ld", (long)i, (long)total); break; }
+            if (self.isStopped || myToken != self.runToken) { WPLog(@"FriendDetect", @"[Loop] Token %ld stopped/invalidated at %ld/%ld", (long)myToken, (long)i, (long)total); break; }
 
             NSDictionary *f = toCheck[i];
             NSString *wx = f[@"wxID"], *nk = f[@"nickname"], *rk = f[@"remark"];

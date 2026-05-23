@@ -64,11 +64,52 @@ static void hook_insideCallback(id self, SEL _cmd, id response, id request) {
     }
     if (!g_fdDetectionActive || g_fdCurrentResponse) return;
 
-    WPLog(@"FriendDetect", @"[Hook] insideCallback for %@", g_fdCurrentWxID);
+    WPLog(@"FriendDetect", @"[Hook] insideCallback for %@, response class=%@", g_fdCurrentWxID, NSStringFromClass([response class]));
+
+    NSMutableDictionary *result = [NSMutableDictionary dictionary];
 
     if ([response isKindOfClass:[NSDictionary class]]) {
-        g_fdCurrentResponse = response;
-        if (g_fdSemaphore) dispatch_semaphore_signal(g_fdSemaphore);
+        NSDictionary *d = (NSDictionary *)response;
+        // 诊断：打印所有 keys（方便适配不同版本）
+        WPLog(@"FriendDetect", @"[Diag] insideCallback NSDictionary keys: %@", [d.allKeys description]);
+
+        // 尝试多种 key 格式（不同 WeChat 版本可能用不同命名）
+        result[@"retcode"] = d[@"retcode"] ?: d[@"ret_code"] ?: d[@"resultCode"] ?: d[@"result_code"] ?: @-1;
+        result[@"retmsg"]  = d[@"retmsg"] ?: d[@"ret_msg"] ?: d[@"retMsg"] ?: d[@"resultMsg"] ?: d[@"result_msg"] ?: d[@"errmsg"] ?: @"";
+        result[@"wx_error_msg"] = d[@"wx_error_msg"] ?: d[@"wxErrorMsg"] ?: d[@"error_msg"] ?: @"";
+    } else {
+        // 非字典响应：从对象提取
+        if ([response respondsToSelector:sel_registerName("retcode")])
+            result[@"retcode"] = @(((NSInteger (*)(id, SEL))objc_msgSend)(response, sel_registerName("retcode")));
+        else if ([response respondsToSelector:sel_registerName("ret_code")])
+            result[@"retcode"] = @(((NSInteger (*)(id, SEL))objc_msgSend)(response, sel_registerName("ret_code")));
+        else if ([response respondsToSelector:sel_registerName("resultCode")])
+            result[@"retcode"] = @(((NSInteger (*)(id, SEL))objc_msgSend)(response, sel_registerName("resultCode")));
+        else
+            result[@"retcode"] = @-1;
+
+        if ([response respondsToSelector:sel_registerName("retmsg")])
+            result[@"retmsg"] = ((id (*)(id, SEL))objc_msgSend)(response, sel_registerName("retmsg"));
+        else if ([response respondsToSelector:sel_registerName("errmsg")])
+            result[@"retmsg"] = ((id (*)(id, SEL))objc_msgSend)(response, sel_registerName("errmsg"));
+        else if ([response respondsToSelector:sel_registerName("ret_msg")])
+            result[@"retmsg"] = ((id (*)(id, SEL))objc_msgSend)(response, sel_registerName("ret_msg"));
+        else
+            result[@"retmsg"] = @"";
+
+        if ([response respondsToSelector:sel_registerName("wx_error_msg")])
+            result[@"wx_error_msg"] = ((id (*)(id, SEL))objc_msgSend)(response, sel_registerName("wx_error_msg"));
+        else
+            result[@"wx_error_msg"] = @"";
+    }
+
+    @synchronized (result) {
+        g_fdCurrentResponse = [result copy];
+    }
+    WPLog(@"FriendDetect", @"[Hook] insideCallback parsed: %@", result);
+
+    if (g_fdSemaphore) {
+        dispatch_semaphore_signal(g_fdSemaphore);
     }
 }
 
