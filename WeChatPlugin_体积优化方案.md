@@ -94,13 +94,9 @@ FeatureModuleRegistry 中仍有这两个控制器的注册引用。
 
 ---
 
-### 问题7：WeChatRedEnvelopParam.m — 4 行空实现
+### 问题7：WeChatRedEnvelopParam.m — 4 行空实现，已删除 ✅
 
-只有 `@implementation WeChatRedEnvelopParam @end`。
-
-**方案**: 移到 RedEnvelopHook.m 底部，从编译列表删除
-
-**预计减少**: 1 个编译文件
+`@implementation` 移至 `RedEnvelopHook.m` 末尾。从编译列表 -1。
 
 ---
 
@@ -114,22 +110,15 @@ FeatureModuleRegistry 中仍有这两个控制器的注册引用。
 
 ---
 
-### 问题9：SettingSessionActionController — 死代码（124行）
+### 问题9：SettingSessionActionController — 已删除 ✅
 
-`SettingSessionActionController.m/.h` (124行) 存在于仓库但：
-- 不在 `build-standalone.yml` 编译列表中
-- 未被 FeatureModuleRegistry 引用
-- 未被任何其他文件 import
-
-**方案**: 直接删除
-
-**预计减少**: 2 个仓库文件
+`SettingSessionActionController.m/.h` (124行) 不在编译列表中，未被任何文件引用。直接删除。
 
 ---
 
-### 问题10：WPSessionBox 未编译文件占用仓库空间
+### 问题10：WPSessionBox 未编译文件，已清理 ✅
 
-`WPSessionBoxHook.m` (718行) + `WPSessionBoxController.m` (685行) + 2 .h 文件，不在编译列表中，不进 dylib 但占仓库。
+`WPSessionBoxHook.m` (718行) + `WPSessionBoxController.m` (685行) + 2 .h 文件已删除。
 
 ---
 
@@ -145,10 +134,10 @@ FeatureModuleRegistry 中仍有这两个控制器的注册引用。
 | 6 | WPBorderLayer 精简 | **~500行** | 改1文件(.m+.h) | ✅ |
 | 7 | WPCommonUI.h → .m | 消除多份副本 | +1文件, 改1文件 | ✅ |
 | 8 | 合并 Settings 碎片 | **~100行** | -2文件, 改2文件 | ✅ |
-| 9 | 删除 RedEnvelopParam.m | 1编译项 | -1文件 | ⬜ |
-| 10 | 删除 SettingSessionActionController (死代码) | — | -2文件 | ⬜ |
+| 9 | 删除 RedEnvelopParam.m | 1编译项 | -1文件 | ✅ |
+| 10 | 删除 SettingSessionActionController (死代码) | — | -2文件 | ✅ |
 | 11 | 统一 hook (需真机验证) | ~3-5KB | -1编译项 | ⬜ |
-| 12 | 清理未编译 WPSessionBox | — | -4文件 | ⬜ |
+| 12 | 清理未编译 WPSessionBox | — | -4文件 | ✅ |
 | **合计** | | **~1560行源码** | **-10~14文件, +4文件** | |
 
 ---
@@ -161,4 +150,4 @@ FeatureModuleRegistry 中仍有这两个控制器的注册引用。
 | +消除重复 | 日志+ServiceHelper+宏化 | — | 日志+ServiceHelper ✅, 宏化 ⬜ |
 | +删冗余 | FriendDetection探测+ClearUnread fallback+RedEnvelopParam+SessionAction | ~1.2-1.6 MB | ✅ FriendDetection+ClearUnread, 其余 ⬜ |
 | +精简UI | BorderLayer+CommonUI+Settings合并 | ~1.0-1.4 MB | ✅ |
-| +收尾 | 统一hook+清理WPSessionBox | ~900-1300 KB | ⬜ |
+| +收尾 | 统一hook+清理WPSessionBox | ~900-1300 KB | ✅ RedEnvelopParam+SessionAction+WPSessionBox, hook ⬜ |

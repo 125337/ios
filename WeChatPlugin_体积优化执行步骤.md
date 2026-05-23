@@ -240,85 +240,51 @@ Got session list via GetSessionInfoList (2529 items)
 
 ## 阶段四：编译项精简
 
-### 步骤 9：删除 WeChatRedEnvelopParam.m（仅 4 行空实现）
+### 步骤 9：删除 WeChatRedEnvelopParam.m（仅 4 行空实现） ✅ 已完成
 
 **目标**：`WeChatRedEnvelopParam.m` 只有 4 行空 `@implementation`。
 
-**操作**：
+**执行结果（2026-05-23）**：
+- `@implementation WeChatRedEnvelopParam @end` 已移至 `RedEnvelopHook.m` 末尾
+- `.h` 文件保留（被 `RedEnvelopHook.m` 和 `WeChatRedEnvelopTaskManager.m` 引用）
+- `.m` 文件已删除
+- `build-standalone.yml` 编译列表 -1 项
+- `Makefile` 同时清理了已删除的 `WeChatRedEnvelopOperation.m` 残留条目
 
-1. 将 `@implementation WeChatRedEnvelopParam @end` 追加到 `RedEnvelopHook.m` 末尾。
-2. 删除文件：
-   ```bash
-   rm WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopParam.m
-   # 保留 .h 文件（其他文件可能引用）
-   ```
-3. 在 `build-standalone.yml` 中移除 `WeChatRedEnvelopParam.m` 编译条目（line 51）。
+**验证**：待编译验证
 
-**验证**：
-```bash
-cd /www/wwwroot/ios && git add -A && git commit -m "step9: 删除 RedEnvelopParam.m 空文件" && git push origin HEAD
-```
-
-**预计减少**：1 个编译文件
+**实际减少**：1 个编译文件
 
 ---
 
-### 步骤 10：删除 SettingSessionActionController（死代码）
+### 步骤 10：删除 SettingSessionActionController（死代码） ✅ 已完成
 
 **目标**：`SettingSessionActionController.m/.h` (124行) 不在编译列表中，未被任何文件引用。
 
-**操作**：
+**执行结果（2026-05-23）**：
+- 已确认不在 `build-standalone.yml`、`FeatureModuleRegistry.m` 中
+- 无任何外部文件 import 引用
+- `.m` 和 `.h` 已删除
 
-```bash
-# 确认不在编译列表中
-grep -r "SettingSessionActionController" /www/wwwroot/ios/.github/workflows/build-standalone.yml
-# 无输出 → 确认未编译
+**验证**：待编译验证
 
-# 确认无其他文件引用
-grep -rn "SettingSessionActionController" /www/wwwroot/ios/WeChatPlugin/ --include="*.m" --include="*.h"
-# 仅自身文件 → 死代码
-
-# 删除
-rm /www/wwwroot/ios/WeChatPlugin/Settings/Controllers/SettingSessionActionController.m
-rm /www/wwwroot/ios/WeChatPlugin/Settings/Controllers/SettingSessionActionController.h
-```
-
-**验证**：
-```bash
-cd /www/wwwroot/ios && git add -A && git commit -m "step10: 删除未编译 SettingSessionActionController" && git push origin HEAD
-```
-
-**预计减少**：2 个仓库文件，124 行源码
+**实际减少**：2 个仓库文件，124 行源码
 
 ---
 
-### 步骤 11：清理未编译 WPSessionBox 文件
+### 步骤 11：清理未编译 WPSessionBox 文件 ✅ 已完成
 
 **目标**：`WPSessionBoxHook.m` (718行) + `WPSessionBoxController.m` (685行) + 2 .h 文件，不在编译列表中。
 
-**操作**：
+**执行结果（2026-05-23）**：
+- 已确认不在 `build-standalone.yml` 和 `Makefile` 中
+- 4 个文件仅自身互相引用，无外部依赖
+- 全部删除（`WPSessionBoxHook.m/.h`、`WPSessionBoxController.m/.h`）
+- `SessionBox` 目录已空
 
-```bash
-# 确认不在编译列表中
-grep -r "WPSessionBox" /www/wwwroot/ios/.github/workflows/build-standalone.yml
-# 无输出 → 确认未编译
+**验证**：待编译验证
 
-# 删除
-rm /www/wwwroot/ios/WeChatPlugin/Modules/SessionBox/WPSessionBoxHook.m
-rm /www/wwwroot/ios/WeChatPlugin/Modules/SessionBox/WPSessionBoxHook.h
-rm /www/wwwroot/ios/WeChatPlugin/Modules/SessionBox/WPSessionBoxController.m
-rm /www/wwwroot/ios/WeChatPlugin/Modules/SessionBox/WPSessionBoxController.h
-
-# 如果 SessionBox 目录已空，删除目录
-rmdir /www/wwwroot/ios/WeChatPlugin/Modules/SessionBox 2>/dev/null
-```
-
-**验证**：
-```bash
-cd /www/wwwroot/ios && git add -A && git commit -m "step11: 清理未编译 WPSessionBox 文件" && git push origin HEAD
-```
-
-**预计减少**：4 个仓库文件，~1400 行源码
+**实际减少**：4 个仓库文件，~1400 行源码
 
 ---
 
@@ -356,9 +322,9 @@ cd /www/wwwroot/ios && git add -A && git commit -m "step12: MessageTimeHook 统�
 | 6 | WPBorderLayer 精简 | ✅ | ~510行 |
 | 7 | WPCommonUI.h static → .m | ✅ | 去 4 份编译副本 |
 | 8 | 合并 Settings 碎片 | ✅ | 2 编译文件 |
-| 9 | 删除 RedEnvelopParam.m | ⬜ | 1 编译项 |
-| 10 | 删除 SettingSessionActionController | ⬜ | 2 文件, 124行 |
-| 11 | 清理未编译 WPSessionBox | ⬜ | 4 文件, ~1400行 |
+| 9 | 删除 RedEnvelopParam.m | ✅ | 1 编译项 |
+| 10 | 删除 SettingSessionActionController | ✅ | 2 文件, 124行 |
+| 11 | 清理未编译 WPSessionBox | ✅ | 4 文件, ~1400行 |
 | 12 | 统一 HookEngine | ⬜ | ~3-5KB |
 | **合计** | | | **~1560行源码** |
 

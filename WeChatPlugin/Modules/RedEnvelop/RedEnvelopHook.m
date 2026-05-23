@@ -649,3 +649,6 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
 }
 
 @end
+
+@implementation WeChatRedEnvelopParam
+@end

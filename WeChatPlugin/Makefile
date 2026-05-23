@@ -20,8 +20,6 @@ MioHelper_FILES = Tweak.m \
 	Modules/Revoke/RevokeHook.m \
 	Modules/Revoke/RevokeFormatEditorVC.m \
 	Modules/RedEnvelop/RedEnvelopHook.m \
-	Modules/RedEnvelop/WeChatRedEnvelopParam.m \
-	Modules/RedEnvelop/WeChatRedEnvelopOperation.m \
 	Modules/RedEnvelop/WeChatRedEnvelopTaskManager.m \
 	Modules/Layout/TintHook.m \
 	Modules/Unread/ClearUnreadHook.m \

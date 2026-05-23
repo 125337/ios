@@ -48,7 +48,6 @@ jobs:
           WeChatPlugin/Modules/Revoke/RevokeHook.m \
           WeChatPlugin/Modules/Revoke/RevokeFormatEditorVC.m \
           WeChatPlugin/Modules/RedEnvelop/RedEnvelopHook.m \
-          WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopParam.m \
           WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopTaskManager.m \
           WeChatPlugin/Modules/Layout/TintHook.m \
           WeChatPlugin/Modules/Unread/ClearUnreadHook.m \
