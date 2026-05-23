@@ -6,7 +6,7 @@
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
 
-
+static NSMutableSet *_viewDidLoadSet = nil;
 
 static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     WPLog(@"Setting", @"[Entry] viewDidLoad");
@@ -43,13 +43,12 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
             WPLog(@"Setting", @"[Entry] skip: isBeingDismissed=%d", vc.isBeingDismissed);
             return;
         }
-    }
 
-    CGFloat w = vc.view.bounds.size.width;
+        CGFloat w = vc.view.bounds.size.width;
 
-    // 以下为自定义 UI 创建逻辑
-    UIScrollView *sv = WPMakeSV(vc);
-    [vc.view addSubview:sv];
+        // 以下为自定义 UI 创建逻辑
+        UIScrollView *sv = WPMakeSV(vc);
+        [vc.view addSubview:sv];
 
     CGFloat y = 20;
 
@@ -114,6 +113,7 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
 
     sv.contentSize = CGSizeMake(w, y);
     WPLog(@"Setting", @"[Entry] viewDidLoad complete");
+    }
 }
 
 static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
