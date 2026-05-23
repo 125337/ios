@@ -339,6 +339,15 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
                     wr = dispatch_semaphore_wait(g_fdSemaphore, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.5 * NSEC_PER_SEC)));
                 }
 
+                // 微信优化 行 20425-20431：超时则重试一次
+                if (wr != 0) {
+                    WPLog(@"FriendDetect", @"[Retest] Timeout for %@, retry once (行20426)", wx);
+                    fdSendRequest(req);
+                    if (g_fdSemaphore) {
+                        wr = dispatch_semaphore_wait(g_fdSemaphore, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.5 * NSEC_PER_SEC)));
+                    }
+                }
+
                 NSDictionary *resp = nil;
                 @synchronized (g_fdCurrentResponse ?: [NSNull null]) { resp = g_fdCurrentResponse; }
 
@@ -465,6 +474,15 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
                 // ③-d 等待回调（超时 3.5 秒，同微信优化行 20339: 3500000000ns）
                 dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.5 * NSEC_PER_SEC));
                 long wr = dispatch_semaphore_wait(g_fdSemaphore, timeout);
+
+                // 微信优化 行 20425-20431：超时则重试一次
+                if (wr != 0) {
+                    WPLog(@"FriendDetect", @"[Loop] Timeout for %@, retry once (行20426)", wx);
+                    fdSendRequest(req);
+                    if (g_fdSemaphore) {
+                        wr = dispatch_semaphore_wait(g_fdSemaphore, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.5 * NSEC_PER_SEC)));
+                    }
+                }
 
                 // ③-e 判定结果（微信优化行 20379-20399）
                 NSDictionary *resp = nil;
