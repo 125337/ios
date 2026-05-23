@@ -4,24 +4,10 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 #import "../../Core/LogManager.h"
-#import "../../Core/ServiceHelper.h"
 
 /**
  * ============================================================================
- * 好友检测 - 绑定 WeChat 底层网络服务
- * ============================================================================
- *
- * 核心思路: 不依赖微信优化插件的 FriendDetector 类（它的检测方法来自 category），
- * 而是直接绑定 WeChat 底层的 agreeDuty 网络服务。
- *
- * 调用链 (反编译分析):
- *   MMServiceCenter → CNetworkMgr(?) → agreeDuty 请求 → 服务端验证 → 返回结果
- *
- * 策略:
- *   1. 运行时扫描所有 MMServiceCenter 服务，找出处理 agreeDuty 的网络服务
- *   2. 直接调用该服务的方法
- *   3. 如果找不到 → hook 网络请求/响应层
- *   4. 最后 fallback 到本地属性检测
+ * 好友检测 - CContactMgr 本地属性检测
  * ============================================================================
  */
 
@@ -44,7 +30,7 @@
 }
 @end
 
-#pragma mark - FriendDetector (一比一复刻微信优化)
+#pragma mark - FriendDetector
 
 @interface MioFriendDetector : NSObject
 @property (nonatomic, strong) NSArray *checkedFriendWxIDs;
@@ -56,8 +42,7 @@
 - (void)checkSpecificFriends:(NSArray *)wxIDs completion:(void(^)(NSArray *results))completion;
 @end
 
-// 前向声明: 绑定检测函数（定义在 @implementation 之后）
-static NSArray *runBoundDetection(NSArray *wxIDs);
+static NSArray *runDetection(NSArray *wxIDs);
 
 @implementation MioFriendDetector
 
@@ -107,87 +92,19 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
     return [friends copy];
 }
 
-#pragma mark - 本地检测（回退方案）
-
-// 策略B: CContactMgr 服务端获取 + 本地属性检测（保留作为 fallback）
-- (NSArray *)tryLocalDetection:(NSArray *)wxIDs {
-    WPLog(@"FriendDetect", @"[Local] Starting local property detection...");
-    NSMutableArray *results = [NSMutableArray array];
-    Class cContactCls = objc_getClass("CContact");
-
-    id contactMgr = nil;
-    Class mmSvc = objc_getClass("MMServiceCenter");
-    if (mmSvc) {
-        id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
-        if (center)
-            contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), objc_getClass("CContactMgr"));
-    }
-    if (!contactMgr) { WPLog(@"FriendDetect", @"[Local] CContactMgr nil, aborting"); return nil; }
-
-    // 先尝试 getContactByName: 批量获取完整信息（可能触发服务端同步）
-    BOOL hasBatch = [contactMgr respondsToSelector:sel_registerName("getContactByName:")];
-    BOOL hasInfo = [contactMgr respondsToSelector:sel_registerName("getContactInfo:")];
-    WPLog(@"FriendDetect", @"[Local] CContactMgr methods: getContactByName=%d getContactInfo=%d", hasBatch, hasInfo);
-
-    int count = 0, deletedCount = 0;
-    for (NSString *wxID in wxIDs) {
-        @autoreleasepool {
-            id contact = nil;
-            // 优先 getContactInfo: 可能服务端获取
-            if (hasInfo) {
-                @try { contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactInfo:"), wxID); } @catch (...) {}
-            }
-            if (!contact || ![contact isKindOfClass:cContactCls]) {
-                if (hasBatch)
-                    @try { contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactByName:"), wxID); } @catch (...) {}
-            }
-
-            if (!contact || ![contact isKindOfClass:cContactCls]) {
-                [results addObject:[MioFriendDetectResult infoWithContact:nil isDeleted:YES isInvalid:NO]];
-                deletedCount++;
-            } else {
-                // 检测各属性
-                NSString *nick = @""; unsigned int vf = 0;
-                @try { nick = [contact performSelector:@selector(m_nsNickName)] ?: @""; } @catch (...) {}
-                @try { vf = [[contact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
-                BOOL isDel = (vf > 0 || nick.length == 0 || [nick isEqualToString:wxID]);
-                if (isDel) deletedCount++;
-                [results addObject:[MioFriendDetectResult infoWithContact:contact isDeleted:isDel isInvalid:(vf > 1)]];
-            }
-            count++;
-            if (count % 500 == 0)
-                WPLog(@"FriendDetect", @"[Local] Progress: %d/%lu, deleted=%d", count, (unsigned long)wxIDs.count, deletedCount);
-        }
-    }
-    WPLog(@"FriendDetect", @"[Local] Complete: %d total, %d deleted", count, deletedCount);
-    return [results copy];
-}
-
 #pragma mark - 主检测方法
 
 - (void)checkSpecificFriends:(NSArray *)wxIDs completion:(void(^)(NSArray *))completion {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         WPLog(@"FriendDetect", @"[checkSpecificFriends] Starting with %lu wxIDs", (unsigned long)wxIDs.count);
-
-        // 策略C: 绑定检测（优先）
-        WPLog(@"FriendDetect", @"[checkSpecificFriends] === TRYING BIND DETECTION ===");
-        NSArray *bindResults = runBoundDetection(wxIDs);
-        if (bindResults && bindResults.count > 0) {
-            WPLog(@"FriendDetect", @"[checkSpecificFriends] Bind detection SUCCESS: %lu results", (unsigned long)bindResults.count);
-            if (completion) completion(bindResults);
-            return;
+        NSArray *results = runDetection(wxIDs);
+        if (results && results.count > 0) {
+            WPLog(@"FriendDetect", @"[checkSpecificFriends] Detection SUCCESS: %lu results", (unsigned long)results.count);
+        } else {
+            WPLog(@"FriendDetect", @"[checkSpecificFriends] ALL DETECTION METHODS FAILED");
+            results = @[];
         }
-
-        // 策略B: 本地检测（fallback）
-        WPLog(@"FriendDetect", @"[checkSpecificFriends] === TRYING LOCAL DETECTION ===");
-        NSArray *localResults = [self tryLocalDetection:wxIDs];
-        if (localResults && localResults.count > 0) {
-            WPLog(@"FriendDetect", @"[checkSpecificFriends] Local detection SUCCESS: %lu results", (unsigned long)localResults.count);
-            if (completion) completion(localResults);
-            return;
-        }
-        WPLog(@"FriendDetect", @"[checkSpecificFriends] ALL DETECTION METHODS FAILED");
-        if (completion) completion(@[]);
+        if (completion) completion(results);
     });
 }
 
@@ -214,597 +131,61 @@ static NSArray *runBoundDetection(NSArray *wxIDs);
 
 @end
 
-#pragma mark - 策略C: 运行时服务探索 + 绑定 agreeDuty 网络服务
+#pragma mark - CContactMgr 本地属性检测
 
-/**
- * 扫描 MMServiceCenter 下所有服务，列出感兴趣的方法
- * 这是"绑定"的第一步：看看 WeChat 到底提供了什么服务
- */
-static void scanAllServices(void) {
-    WPLog(@"FriendDetect", @"[Scan] === 开始扫描所有 MMServiceCenter 服务 ===");
+static NSArray *runDetection(NSArray *wxIDs) {
+    WPLog(@"FriendDetect", @"[Main] === 本地属性检测开始 ===");
 
-    Class mmSvc = objc_getClass("MMServiceCenter");
-    if (!mmSvc) { WPLog(@"FriendDetect", @"[Scan] MMServiceCenter not found"); return; }
-    id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvc, sel_registerName("defaultCenter"));
-    if (!center) { WPLog(@"FriendDetect", @"[Scan] defaultCenter nil"); return; }
-
-    // 感兴趣的关键词列表
-    NSSet *keywords = [NSSet setWithObjects:
-        @"agree", @"duty", @"Agree", @"Duty",
-        @"Friend", @"friend", @"FRIEND",
-        @"Verify", @"verify", @"VERIFY",
-        @"Check", @"check",
-        @"Delete", @"delete",
-        @"ContactVerify", @"contactVerify",
-        @"Contact", @"contact",
-        @"Network", @"network",
-        @"Request", @"request",
-        @"Sync", @"sync",
-        @"Relation", @"relation",
-        @"Detect", @"detect",
-        @"Protocol", @"protocol",
-        nil];
-
-    // 要扫描的服务类名列表（扩展了网络/CGI 相关）
-    NSArray *serviceNames = @[
-        @"CNetworkMgr",
-        @"CRequestMgr",
-        @"CContactMgr",
-        @"ContactVerifyMgr",
-        @"FriendDetector",
-        @"WeChatFriendDetector",
-        @"CSyncMgr",
-        @"CVOIPMgr",
-        @"CGroupMgr",
-        @"CBrandMgr",
-        @"CEmoticonMgr",
-        @"CMessageMgr",
-        @"CMainFrameMgr",
-        @"CAppUtil",
-        @"CAccountMgr",
-        @"CSettingMgr",
-        @"CSafeMgr",
-        @"CDeviceMgr",
-        @"CContactCacheMgr",
-        @"AddressBookContactMgr",
-        @"AddressBookMailContactMgr",
-        @"EnterpriseContactMgr",
-        @"ChatRoomContactMgr",
-        @"QQContactMgr",
-        @"FacebookContactMgr",
-        @"ContactTagMgr",
-        @"ContactRemarkMgr",
-        @"ContactBlockMgr",
-        @"ContactChatRoomMgr",
-        @"ContactEnterpriseMgr",
-        @"CNewNetworkMgr",
-        @"CUploadMgr",
-        @"CDownloadMgr",
-        @"CNetworkDispatcher",
-        @"CProtobufMgr",
-        @"CBizMgr",
-        @"CFriendMgr",
-        @"CContactSyncMgr",
-        @"CContactLoginMgr",
-        @"CContactStatusMgr",
-        // WeChat 新的网络层命名模式
-        @"MMNetworkKit",
-        @"MMNetworkManager",
-        @"MMTNetCenter",
-        @"MMCGIWrapMgr",
-        @"MMCGIRequest",
-        @"MMCGIProxy",
-        @"WCContactVerifyMgr",
-    ];
-
-    int totalServices = 0, totalMethods = 0;
-    for (NSString *svcName in serviceNames) {
-        Class svcCls = objc_getClass([svcName UTF8String]);
-        if (!svcCls) continue;
-
-        id svc = nil;
-        @try {
-            svc = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), svcCls);
-        } @catch (NSException *e) {
-            WPLog(@"FriendDetect", @"[Scan] %@ getService exception: %@", svcName, e.reason);
-            continue;
-        }
-        if (!svc) continue;
-
-        totalServices++;
-        BOOL hasMatch = NO;
-
-        // 列出所有 methods
-        unsigned int mc = 0;
-        Method *methods = class_copyMethodList(svcCls, &mc);
-        for (unsigned int i = 0; i < mc; i++) {
-            SEL sel = method_getName(methods[i]);
-            NSString *selName = NSStringFromSelector(sel);
-            BOOL matched = NO;
-            for (NSString *kw in keywords) {
-                if ([selName rangeOfString:kw].location != NSNotFound) {
-                    matched = YES;
-                    break;
-                }
-            }
-            if (matched) {
-                if (!hasMatch) {
-                    WPLog(@"FriendDetect", @"[Scan] === %@ (%@) ===", svcName, svc);
-                    hasMatch = YES;
-                }
-                // 获取参数类型
-                const char *type = method_getTypeEncoding(methods[i]);
-                NSString *typeStr = type ? [NSString stringWithUTF8String:type] : @"?";
-                WPLog(@"FriendDetect", @"[Scan]   [%d] %@  type=%@", i, selName, typeStr);
-                totalMethods++;
-            }
-        }
-        free(methods);
-    }
-
-    WPLog(@"FriendDetect", @"[Scan] 完成: %d 个服务, %d 个匹配方法", totalServices, totalMethods);
-
-    // 也扫描所有类和 Protocols
-    WPLog(@"FriendDetect", @"[Scan] === 扫描所有 agreeDuty 相关类 ===");
-    int numClasses = objc_getClassList(NULL, 0);
-    Class *classes = (Class *)malloc(sizeof(Class) * numClasses);
-    numClasses = objc_getClassList(classes, numClasses);
-    int related = 0;
-    for (int i = 0; i < numClasses; i++) {
-        NSString *cn = NSStringFromClass(classes[i]);
-        if ([cn rangeOfString:@"agree" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-            [cn rangeOfString:@"Agree" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-            [cn rangeOfString:@"Duty" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            WPLog(@"FriendDetect", @"[Scan]   类: %@", cn);
-            related++;
-        }
-        // 也找 FriendDetectResult
-        if ([cn rangeOfString:@"FriendDetectResult"].location != NSNotFound) {
-            WPLog(@"FriendDetect", @"[Scan]   FriendDetectResult 类: %@", cn);
-        }
-    }
-    free(classes);
-    if (related == 0) WPLog(@"FriendDetect", @"[Scan]   没有找到 agreeDuty 相关类");
-    else WPLog(@"FriendDetect", @"[Scan]   找到 %d 个相关类", related);
-}
-
-#pragma mark - 策略G: 转账预检测法（主动检测）
-
-/**
- * 微信助手使用的主动检测方案:
- *   调用 WCPayLogicMgr.GetTransferPrepayRequest: 发起转账预检
- *   服务端验证好友关系后返回结果
- *   - 好友正常 → 可以转账
- *   - 被删除/拉黑 → 返回错误
- *
- * 转账预检只查询是否可以转账，不实际扣钱，不通知对方。
- *
- * WeChat 方法:
- *   [WCPayLogicMgr GetTransferPrepayRequest:]  
- *   [WCPayTransferMoneyControlLogic OnGetTransferPrepayRequest:Error:]
- */
-
-// 转账预检结果缓存
-static NSMutableDictionary *g_transferResults = nil;
-
-// Hook 转账预检响应
-static void (*orig_OnGetTransferPrepayRequest)(id, SEL, id, id) = NULL;
-
-static void hooked_OnGetTransferPrepayRequest(id self, SEL _cmd, id response, id error) {
-    WPLog(@"FriendDetect", @"[Transfer] === 收到转账预检响应 ===");
-    @try {
-        id errorCode = [error valueForKey:@"code"];
-        WPLog(@"FriendDetect", @"[Transfer] error=%@ errorCode=%@", error, errorCode);
-
-        // 从 contact 查找对应的 wxID
-        // 错误码分析:
-        //   nil/0 = 转账正常 → 好友
-        //   其他错误码 = 非好友关系
-        if (error && errorCode) {
-            int code = [errorCode intValue];
-            WPLog(@"FriendDetect", @"[Transfer] *** 错误码 %d - 可能被删除! ***", code);
-        } else {
-            WPLog(@"FriendDetect", @"[Transfer] 无错误 - 好友关系正常");
-        }
-    } @catch (NSException *e) {
-        WPLog(@"FriendDetect", @"[Transfer] 异常: %@", e.reason);
-    }
-
-    if (orig_OnGetTransferPrepayRequest)
-        orig_OnGetTransferPrepayRequest(self, _cmd, response, error);
-}
-
-/**
- * 转账预检测: 逐个好友发起转账预检请求
- * 不实际扣钱，不通知对方
- */
-static NSArray *tryTransferDetection(NSArray *wxIDs) {
-    WPLog(@"FriendDetect", @"[Transfer] === 转账预检测开始 ===");
-
-    // 获取 WCPayLogicMgr
     Class mmSvcCls = objc_getClass("MMServiceCenter");
-    if (!mmSvcCls) { WPLog(@"FriendDetect", @"[Transfer] MMServiceCenter 不存在"); return nil; }
-    id center = ((id (*)(Class, SEL))objc_msgSend)(mmSvcCls, sel_registerName("defaultCenter"));
-    if (!center) { WPLog(@"FriendDetect", @"[Transfer] defaultCenter nil"); return nil; }
+    if (!mmSvcCls) { WPLog(@"FriendDetect", @"[Main] MMServiceCenter 不可用"); return nil; }
+    id mmServiceCenter = ((id (*)(Class, SEL))objc_msgSend)(mmSvcCls, sel_registerName("defaultCenter"));
+    if (!mmServiceCenter) { WPLog(@"FriendDetect", @"[Main] defaultCenter nil"); return nil; }
 
-    // 检查 WCPayLogicMgr
-    Class payMgrCls = objc_getClass("WCPayLogicMgr");
-    if (!payMgrCls) {
-        WPLog(@"FriendDetect", @"[Transfer] WCPayLogicMgr 不存在");
-        // 也尝试其他可能的类名
-        payMgrCls = objc_getClass("WCPayPayMgr");
-        if (payMgrCls) WPLog(@"FriendDetect", @"[Transfer] 使用 WCPayPayMgr");
-    }
-    if (!payMgrCls) { WPLog(@"FriendDetect", @"[Transfer] 未能找到支付管理类"); return nil; }
+    Class cContactCls = objc_getClass("CContact");
+    id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(mmServiceCenter, sel_registerName("getService:"), objc_getClass("CContactMgr"));
+    if (!contactMgr) { WPLog(@"FriendDetect", @"[Main] CContactMgr 不可用"); return nil; }
 
-    id payMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), payMgrCls);
-    if (!payMgr) {
-        WPLog(@"FriendDetect", @"[Transfer] WCPayLogicMgr service nil, 尝试直接创建实例");
-        @try { payMgr = [[payMgrCls alloc] init]; } @catch (...) {}
-    }
-    if (!payMgr) { WPLog(@"FriendDetect", @"[Transfer] 无法获取 WCPayLogicMgr"); return nil; }
-
-    // 检查 GetTransferPrepayRequest: 方法
-    SEL prepaySel = sel_registerName("GetTransferPrepayRequest:");
-    BOOL hasPrepay = [payMgr respondsToSelector:prepaySel];
-    if (!hasPrepay) {
-        // 也检查 WCPayTransferMoneyControlLogic
-        Class transferLogicCls = objc_getClass("WCPayTransferMoneyControlLogic");
-        if (transferLogicCls) {
-            id transferLogic = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), transferLogicCls);
-            if (!transferLogic) @try { transferLogic = [[transferLogicCls alloc] init]; } @catch (...) {}
-            if (transferLogic && [transferLogic respondsToSelector:prepaySel]) {
-                payMgr = transferLogic;
-                hasPrepay = YES;
-                WPLog(@"FriendDetect", @"[Transfer] 使用 WCPayTransferMoneyControlLogic");
-            }
-        }
-    }
-    WPLog(@"FriendDetect", @"[Transfer] GetTransferPrepayRequest: available=%d", hasPrepay);
-
-    if (!hasPrepay) {
-        WPLog(@"FriendDetect", @"[Transfer] GetTransferPrepayRequest: 方法不可用");
-        return nil;
-    }
-
-    // 获取联系人管理器和好友列表
-    Class contactMgrCls = objc_getClass("CContactMgr");
-    id contactMgr = nil;
-    if (contactMgrCls)
-        contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, sel_registerName("getService:"), contactMgrCls);
+    BOOL hasGetByName = [contactMgr respondsToSelector:sel_registerName("getContactByName:")];
+    WPLog(@"FriendDetect", @"[Main] CContactMgr: getContactByName=%d", hasGetByName);
 
     NSMutableArray *results = [NSMutableArray array];
     int total = (int)wxIDs.count, delCount = 0;
-
-    // 逐个好友发起转账预检
     for (int i = 0; i < total; i++) {
         @autoreleasepool {
             NSString *wxID = wxIDs[i];
-
-            // 获取好友的 CContact 对象
             id contact = nil;
-            if (contactMgr) {
+
+            if (hasGetByName) {
                 @try {
                     contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactByName:"), wxID);
-                } @catch (...) {}
-            }
-
-            if (!contact) {
-                // 无法获取联系人信息 → 可能已删除
-                [results addObject:[MioFriendDetectResult infoWithContact:nil isDeleted:YES isInvalid:NO]];
-                delCount++;
-                continue;
-            }
-
-            // 发起转账预检
-            __block BOOL done = NO;
-            __block BOOL isDeleted = NO;
-
-            // Hook 响应处理（如未安装）
-            static dispatch_once_t hookOnce;
-            dispatch_once(&hookOnce, ^{
-                Class transferLogicCls = objc_getClass("WCPayTransferMoneyControlLogic");
-                if (!transferLogicCls) transferLogicCls = objc_getClass("WCPayLogicMgr");
-                if (transferLogicCls) {
-                    SEL respSel = sel_registerName("OnGetTransferPrepayRequest:Error:");
-                    Method method = class_getInstanceMethod(transferLogicCls, respSel);
-                    if (method) {
-                        orig_OnGetTransferPrepayRequest = (void (*)(id, SEL, id, id))method_getImplementation(method);
-                        method_setImplementation(method, (IMP)hooked_OnGetTransferPrepayRequest);
-                        WPLog(@"FriendDetect", @"[Transfer] Hook OnGetTransferPrepayRequest:Error: 成功");
-                    }
+                } @catch (NSException *e) {
+                    WPLog(@"FriendDetect", @"[Main] getContactByName 异常(%@): %@", wxID, e.reason);
                 }
-            });
-
-            @try {
-                // 调用转账预检
-                ((void (*)(id, SEL, id))objc_msgSend)(payMgr, prepaySel, contact);
-                WPLog(@"FriendDetect", @"[Transfer] 已对 %@ 发起转账预检", wxID);
-            } @catch (NSException *e) {
-                WPLog(@"FriendDetect", @"[Transfer] 转账预检异常(%@): %@", wxID, e.reason);
-                [results addObject:[MioFriendDetectResult infoWithContact:contact isDeleted:NO isInvalid:YES]];
             }
 
-            // 等待一小段时间
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+            BOOL isDeleted = !(contact && [contact isKindOfClass:cContactCls]);
+            if (!isDeleted) {
+                unsigned int vf = 0;
+                @try { vf = [[contact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
+                if (vf > 0) {
+                    isDeleted = YES;
+                } else {
+                    unsigned int status = 0;
+                    @try { status = [[contact valueForKey:@"m_uiStatus"] unsignedIntValue]; } @catch (...) {}
+                    if (status > 0) isDeleted = YES;
+                }
+            }
 
-            if ((i + 1) % 100 == 0)
-                WPLog(@"FriendDetect", @"[Transfer] 进度: %d/%d", i+1, total);
+            MioFriendDetectResult *res = [MioFriendDetectResult infoWithContact:contact isDeleted:isDeleted isInvalid:NO];
+            [results addObject:res];
+            if (isDeleted) delCount++;
+
+            if ((i + 1) % 500 == 0)
+                WPLog(@"FriendDetect", @"[Main] Progress: %d/%d, deleted=%d", i+1, total, delCount);
         }
     }
-
-    WPLog(@"FriendDetect", @"[Transfer] 完成: 发起 %d 个转账预检", total);
+    WPLog(@"FriendDetect", @"[Main] 完成: %d total, %d deleted", total, delCount);
     return results;
-}
-
-#pragma mark - 策略F: CGI 类绑定
-
-/**
- * WeChat 使用 CGI 模式处理网络请求（Request → CGI类 → 服务端 → Response）
- * 例如: WCPayGetPayUserDutyCgi / GetPayUserDutyReq / GetPayUserDutyResp
- *
- * 如果有 "GetContactAgreeDutyCgi" 或类似类，我们可以直接调用它。
- * 这里扫描所有含 "Cgi" 或 "CGI" 的类，并尝试找到联系相关 CGI。
- */
-static void scanCGIClasses(void) {
-    int numClasses = objc_getClassList(NULL, 0);
-    Class *classes = (Class *)malloc(sizeof(Class) * numClasses);
-    numClasses = objc_getClassList(classes, numClasses);
-
-    WPLog(@"FriendDetect", @"[CGI] === 扫描所有 CGI 类 ===");
-    int cgiCount = 0;
-    for (int i = 0; i < numClasses; i++) {
-        NSString *cn = NSStringFromClass(classes[i]);
-        // 找包含 Cgi/CGI 且与联系/好友相关的类
-        if ([cn rangeOfString:@"Cgi" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-            [cn rangeOfString:@"CGI" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            // 过滤: 只关注与联系/好友相关的
-            if ([cn rangeOfString:@"Contact" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-                [cn rangeOfString:@"Friend" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-                [cn rangeOfString:@"Relation" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                WPLog(@"FriendDetect", @"[CGI]   %@", cn);
-                cgiCount++;
-            }
-            // 也关注含 Duty/agree 的 CGI
-            if ([cn rangeOfString:@"Duty" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                WPLog(@"FriendDetect", @"[CGI]   %@ (Duty related)", cn);
-                cgiCount++;
-            }
-        }
-    }
-    free(classes);
-    if (cgiCount == 0) WPLog(@"FriendDetect", @"[CGI]   没有找到相关的 CGI 类");
-    else WPLog(@"FriendDetect", @"[CGI]   找到 %d 个相关 CGI 类", cgiCount);
-}
-
-#pragma mark - 策略D: Hook 网络请求层 - 拦截 agreeDuty 请求/响应
-
-/**
- * WeChat 网络请求通常通过以下路径:
- *   MMServiceCenter → CNetworkMgr → sendRequest: → 服务端 → 响应回调
- *
- * 通过 Method Swizzling 绑定 CNetworkMgr 的请求发送方法，
- * 或者绑定 response 回调方法来捕获 agreeDuty 的响应结果。
- */
-
-// 保存原始 IMP
-static void (*orig_CNetworkMgr_sendRequest)(id, SEL, id, id) = NULL;
-
-static void hooked_CNetworkMgr_sendRequest(id self, SEL _cmd, id request, id completion) {
-    WPLog(@"FriendDetect", @"[Hook] CNetworkMgr sendRequest: Intercepted");
-    WPLog(@"FriendDetect", @"[Hook]   request class: %@", NSStringFromClass([request class]));
-
-    // 尝试检查 request 中是否包含 agreeDuty 关键词
-    @try {
-        NSString *desc = [request description];
-        if ([desc rangeOfString:@"agree" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-            [desc rangeOfString:@"duty" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            WPLog(@"FriendDetect", @"[Hook] **** 捕获到 agreeDuty 请求! ****");
-            WPLog(@"FriendDetect", @"[Hook]   %@", desc);
-        } else {
-            WPLog(@"FriendDetect", @"[Hook]   未匹配 agreeDuty");
-        }
-    } @catch (...) {}
-
-    if (orig_CNetworkMgr_sendRequest) {
-        orig_CNetworkMgr_sendRequest(self, _cmd, request, completion);
-    }
-}
-
-static void installNetworkHook(void) {
-    Class cNetworkMgr = objc_getClass("CNetworkMgr");
-    if (!cNetworkMgr) {
-        WPLog(@"FriendDetect", @"[Hook] CNetworkMgr 类不存在，无法 hook");
-        return;
-    }
-
-    // 尝试各种可能的请求发送方法
-    NSArray *requestMethods = @[
-        @"SendRequest:withDelegate:",
-        @"sendRequest:withDelegate:",
-        @"SendRequest:Completion:",
-        @"sendRequest:completion:",
-        @"SendRequest:completionBlock:",
-        @"Request:completion:",
-        @"request:completion:",
-    ];
-
-    for (NSString *methodName in requestMethods) {
-        SEL sel = sel_registerName([methodName UTF8String]);
-        Method method = class_getInstanceMethod(cNetworkMgr, sel);
-        if (method) {
-            WPLog(@"FriendDetect", @"[Hook] 找到 CNetworkMgr.%@，安装 hook...", methodName);
-
-            // 获取原始 IMP
-            // 注: 这里只是一个示例，实际 hook 需要正确的签名
-            WPLog(@"FriendDetect", @"[Hook]   typeEncoding: %s", method_getTypeEncoding(method));
-        }
-    }
-
-    // 也可以 hook 响应处理
-    NSArray *responseMethods = @[
-        @"onRequestCompleted:",
-        @"OnRequestCompleted:",
-        @"OnResponse:",
-        @"onResponse:",
-        @"handleResponse:",
-        @"HandleResponse:",
-    ];
-
-    for (NSString *methodName in responseMethods) {
-        SEL sel = sel_registerName([methodName UTF8String]);
-        if ([cNetworkMgr instancesRespondToSelector:sel]) {
-            WPLog(@"FriendDetect", @"[Hook] CNetworkMgr 有响应方法: %@", methodName);
-            Method method = class_getInstanceMethod(cNetworkMgr, sel);
-            if (method) {
-                WPLog(@"FriendDetect", @"[Hook]   typeEncoding: %s", method_getTypeEncoding(method));
-            }
-        }
-    }
-}
-
-#pragma mark - 策略E: Hook 联系人同步响应
-
-/**
- * 当 WeChat 与服务器同步联系人列表时会收到所有在当前设备上仍为好友的联系人。
- * 如果某人是好友但不在同步列表中 → 可能被删了。
- *
- * 通过 hook CContactMgr 的同步回调方法来捕获。
- */
-static void (*orig_CContactMgr_onContactListChanged)(id, SEL, id) = NULL;
-
-static void hooked_CContactMgr_onContactListChanged(id self, SEL _cmd, id changedContacts) {
-    WPLog(@"FriendDetect", @"[Sync] CContactMgr 联系人列表变更");
-    if (orig_CContactMgr_onContactListChanged) {
-        orig_CContactMgr_onContactListChanged(self, _cmd, changedContacts);
-    }
-}
-
-static void installContactSyncHook(void) {
-    Class ccm = objc_getClass("CContactMgr");
-    if (!ccm) { WPLog(@"FriendDetect", @"[Sync] CContactMgr 不存在"); return; }
-
-    NSArray *syncMethods = @[
-        @"onContactListChanged:",
-        @"OnContactListChanged:",
-        @"onModifyContact:",
-        @"OnModifyContact:",
-        @"onDelContact:",
-        @"OnDelContact:",
-        @"onSyncContact:",
-        @"OnSyncContact:",
-        @"onContactUpdated:",
-        @"OnContactUpdated:",
-    ];
-
-    for (NSString *methodName in syncMethods) {
-        SEL sel = sel_registerName([methodName UTF8String]);
-        if ([ccm instancesRespondToSelector:sel]) {
-            WPLog(@"FriendDetect", @"[Sync] CContactMgr 有方法: %@", methodName);
-            Method method = class_getInstanceMethod(ccm, sel);
-            if (method) {
-                WPLog(@"FriendDetect", @"[Sync]   typeEncoding: %s", method_getTypeEncoding(method));
-            }
-        }
-    }
-}
-
-#pragma mark - 主入口: 绑定检测
-
-/**
- * 主检测函数: 先绑定尝试，再走 WeChat 网络层，最后本地回退
- */
-static NSArray *runBoundDetection(NSArray *wxIDs) {
-    WPLog(@"FriendDetect", @"[Main] === 绑定检测开始 ===");
-
-    // 第一步: 扫描所有服务（首次运行时）
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        scanAllServices();
-        scanCGIClasses();
-        installNetworkHook();
-        installContactSyncHook();
-    });
-
-    // 第二步: 建立 MMServiceCenter
-    id mmServiceCenter = nil;
-    Class mmSvcCls = objc_getClass("MMServiceCenter");
-    if (mmSvcCls) {
-        mmServiceCenter = ((id (*)(Class, SEL))objc_msgSend)(mmSvcCls, sel_registerName("defaultCenter"));
-    }
-    if (!mmServiceCenter) { WPLog(@"FriendDetect", @"[Main] MMServiceCenter 不可用"); return nil; }
-
-    // 第三步: 转账预检测（主动检测，与微信助手方案一致）
-    WPLog(@"FriendDetect", @"[Main] === 尝试转账预检测 ===");
-    NSArray *transferResults = tryTransferDetection(wxIDs);
-    if (transferResults && transferResults.count > 0) {
-        WPLog(@"FriendDetect", @"[Main] 转账预检测完成: %lu 结果", (unsigned long)transferResults.count);
-        return transferResults;
-    }
-
-    // 第四步: 回退到本地检测
-    NSMutableArray *results = [NSMutableArray array];
-    WPLog(@"FriendDetect", @"[Main] === 转账预检不可用，回退到 CContactMgr 本地检测 ===");
-    Class cContactCls = objc_getClass("CContact");
-    id contactMgr = nil;
-    if (mmServiceCenter) {
-        contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(mmServiceCenter, sel_registerName("getService:"), objc_getClass("CContactMgr"));
-    }
-
-    if (contactMgr) {
-        // 检查 CContactMgr 可用方法（仅查询日志，不调用危险方法）
-        BOOL hasGetByName = [contactMgr respondsToSelector:sel_registerName("getContactByName:")];
-        WPLog(@"FriendDetect", @"[Main] CContactMgr: getContactByName=%d", hasGetByName);
-
-        // 逐个用 getContactByName: 获取联系人
-        // 注意: 这里只读本地缓存，不调 getContactsFromServer: 等带内
-        // 部状态的方法（传错参数会导致 WeChat 内部状态损坏 crash）
-        int total = (int)wxIDs.count, delCount = 0;
-        for (int i = 0; i < total; i++) {
-            @autoreleasepool {
-                NSString *wxID = wxIDs[i];
-                id contact = nil;
-
-                // getContactByName: 获取本地/缓存数据
-                if (hasGetByName) {
-                    @try {
-                        contact = ((id (*)(id, SEL, NSString *))objc_msgSend)(contactMgr, sel_registerName("getContactByName:"), wxID);
-                    } @catch (NSException *e) {
-                        WPLog(@"FriendDetect", @"[Main] getContactByName 异常(%@): %@", wxID, e.reason);
-                    }
-                }
-
-                // 如果 getContactByName 返回 nil → 本地无记录（可能被删）
-                BOOL isDeleted = !(contact && [contact isKindOfClass:cContactCls]);
-
-                // 即使 contact 存在，也检查属性
-                if (!isDeleted) {
-                    unsigned int vf = 0;
-                    @try { vf = [[contact valueForKey:@"m_uiVerifyFlag"] unsignedIntValue]; } @catch (...) {}
-                    if (vf > 0) {
-                        isDeleted = YES;
-                    } else {
-                        // 再检查 m_uiStatus
-                        unsigned int status = 0;
-                        @try { status = [[contact valueForKey:@"m_uiStatus"] unsignedIntValue]; } @catch (...) {}
-                        if (status > 0) isDeleted = YES;
-                    }
-                }
-
-                MioFriendDetectResult *res = [MioFriendDetectResult infoWithContact:contact isDeleted:isDeleted isInvalid:NO];
-                [results addObject:res];
-                if (isDeleted) delCount++;
-
-                if ((i + 1) % 500 == 0)
-                    WPLog(@"FriendDetect", @"[Main] Progress: %d/%d, deleted=%d", i+1, total, delCount);
-            }
-        }
-        WPLog(@"FriendDetect", @"[Main] CContactMgr 同步完成: %d total, %d deleted", total, delCount);
-        return results;
-    }
-
-    WPLog(@"FriendDetect", @"[Main] ALL BINDING ATTEMPTS FAILED");
-    return nil;
 }
 
 static void saveResults(NSArray *results) {
@@ -815,8 +196,6 @@ static void saveResults(NSArray *results) {
     if (results.count > 0) {
         id first = results[0];
         WPLog(@"FriendDetect", @"[Save] First result class: %@", NSStringFromClass([first class]));
-        WPLog(@"FriendDetect", @"[Save] First result respondsToSelector isDeleted: %d", [first respondsToSelector:NSSelectorFromString(@"isDeleted")] ? 1 : 0);
-        WPLog(@"FriendDetect", @"[Save] First result respondsToSelector contact: %d", [first respondsToSelector:NSSelectorFromString(@"contact")] ? 1 : 0);
     }
 
     NSMutableArray *deleted = [NSMutableArray array];
@@ -824,12 +203,9 @@ static void saveResults(NSArray *results) {
     for (id r in results) {
         processed++;
         BOOL isDel = NO, isInv = NO; id contact = nil;
-        @try { isDel = [[r valueForKey:@"isDeleted"] boolValue]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey isDeleted exception: %@", processed, e.reason); }
-        @try { isInv = [[r valueForKey:@"isInvalid"] boolValue]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey isInvalid exception: %@", processed, e.reason); }
-        @try { contact = [r valueForKey:@"contact"]; } @catch (NSException *e) { WPLog(@"FriendDetect", @"[Save] item#%d valueForKey contact exception: %@", processed, e.reason); }
-        
-        if (processed <= 3)
-            WPLog(@"FriendDetect", @"[Save] item#%d: isDel=%d isInv=%d contact=%@", processed, isDel, isInv, contact ? NSStringFromClass([contact class]) : @"nil");
+        @try { isDel = [[r valueForKey:@"isDeleted"] boolValue]; } @catch (NSException *e) {}
+        @try { isInv = [[r valueForKey:@"isInvalid"] boolValue]; } @catch (NSException *e) {}
+        @try { contact = [r valueForKey:@"contact"]; } @catch (NSException *e) {}
 
         if (isDel || isInv) {
             NSString *wx = @"", *nk = @"";
@@ -850,10 +226,9 @@ static void saveResults(NSArray *results) {
 
 static BOOL startFriendDetection(void) {
     WPLog(@"FriendDetect", @"[Main] ****************************************");
-    WPLog(@"FriendDetect", @"[Main] * Friend Detection Start (Bind Mode)");
+    WPLog(@"FriendDetect", @"[Main] * Friend Detection Start");
     WPLog(@"FriendDetect", @"[Main] ****************************************");
 
-    // 1. 获取所有好友 WX ID
     MioFriendDetector *d = [[MioFriendDetector alloc] init];
     NSArray *friends = [d allFriends];
     if (!friends || friends.count == 0) {
@@ -869,16 +244,7 @@ static BOOL startFriendDetection(void) {
     }
     WPLog(@"FriendDetect", @"[Main] Got %lu WX IDs", (unsigned long)wxIDs.count);
 
-    // 2. 执行绑定检测
-    NSArray *results = runBoundDetection(wxIDs);
-
-    // 3. 如果绑定检测失败，回退到本地检测
-    if (!results || results.count == 0) {
-        WPLog(@"FriendDetect", @"[Main] Bind detection returned nil, trying local fallback");
-        results = [d tryLocalDetection:wxIDs];
-    }
-
-    // 4. 保存并返回
+    NSArray *results = runDetection(wxIDs);
     if (!results || results.count == 0) {
         WPLog(@"FriendDetect", @"[Main] ALL METHODS FAILED");
         return NO;

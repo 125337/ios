@@ -11,81 +11,10 @@
 static IMP orig_reloadMenuItems = NULL;
 static IMP orig_clickMenu = NULL;
 
-static void clearUnreadLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"clear_unread.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-}
-
-static id getServiceViaCenter(id center, Class serviceClass) {
-    if (!center) return nil;
-    if (![center respondsToSelector:NSSelectorFromString(@"getService:")]) return nil;
-    return ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), serviceClass);
-}
-
-static id getService(Class serviceClass) {
-    Class scClass = objc_getClass("MMServiceCenter");
-    if (scClass) {
-        if ([scClass respondsToSelector:NSSelectorFromString(@"defaultCenter")]) {
-            id center = ((id (*)(id, SEL))objc_msgSend)(scClass, NSSelectorFromString(@"defaultCenter"));
-            id svc = getServiceViaCenter(center, serviceClass);
-            if (svc) return svc;
-        }
-    }
-
-    Class ctxClass = objc_getClass("MMContext");
-    if (ctxClass) {
-        id activeCtx = nil;
-        if ([ctxClass respondsToSelector:NSSelectorFromString(@"activeUserContext")]) {
-            activeCtx = ((id (*)(id, SEL))objc_msgSend)(ctxClass, NSSelectorFromString(@"activeUserContext"));
-        }
-        if (!activeCtx && [ctxClass respondsToSelector:NSSelectorFromString(@"currentContext")]) {
-            activeCtx = ((id (*)(id, SEL))objc_msgSend)(ctxClass, NSSelectorFromString(@"currentContext"));
-        }
-        if (!activeCtx && [ctxClass respondsToSelector:NSSelectorFromString(@"rootContext")]) {
-            activeCtx = ((id (*)(id, SEL))objc_msgSend)(ctxClass, NSSelectorFromString(@"rootContext"));
-        }
-        if (activeCtx) {
-            if ([activeCtx respondsToSelector:NSSelectorFromString(@"serviceCenter")]) {
-                id center = ((id (*)(id, SEL))objc_msgSend)(activeCtx, NSSelectorFromString(@"serviceCenter"));
-                id svc = getServiceViaCenter(center, serviceClass);
-                if (svc) return svc;
-            }
-            if ([activeCtx respondsToSelector:NSSelectorFromString(@"getService:")]) {
-                id svc = getServiceViaCenter(activeCtx, serviceClass);
-                if (svc) return svc;
-            }
-        }
-    }
-
-    return nil;
-}
-
 static id findSessionMgr() {
-    const char *classNames[] = {
-        "MMNewSessionMgr",
-        "CConversationMgr",
-        "CSessionMgr",
-        "MMSessionMgr",
-        "MainSessionMgr",
-        "SessionMgr",
-        "ConversationMgr",
-    };
-    int count = sizeof(classNames) / sizeof(classNames[0]);
-
-    for (int i = 0; i < count; i++) {
+    // 运行时日志已确认 MMNewSessionMgr 命中，CConversationMgr 作为兼容保留
+    const char *classNames[] = {"MMNewSessionMgr", "CConversationMgr"};
+    for (int i = 0; i < 2; i++) {
         Class cls = objc_getClass(classNames[i]);
         if (!cls) continue;
         id svc = WXGetService(cls);
@@ -94,120 +23,19 @@ static id findSessionMgr() {
             return svc;
         }
     }
-
-    Class ctxClass = objc_getClass("MMContext");
-    if (ctxClass) {
-        id activeCtx = nil;
-        if ([ctxClass respondsToSelector:NSSelectorFromString(@"activeUserContext")]) {
-            activeCtx = ((id (*)(id, SEL))objc_msgSend)(ctxClass, NSSelectorFromString(@"activeUserContext"));
-        }
-        if (activeCtx) {
-            const char *propNames[] = {
-                "newSessionMgr",
-                "sessionManager",
-                "m_newSessionMgr",
-                "_newSessionMgr",
-                "mainSessionMgr",
-            };
-            int propCount = sizeof(propNames) / sizeof(propNames[0]);
-            for (int i = 0; i < propCount; i++) {
-                SEL sel = NSSelectorFromString([NSString stringWithUTF8String:propNames[i]]);
-                if ([activeCtx respondsToSelector:sel]) {
-                    id mgr = ((id (*)(id, SEL))objc_msgSend)(activeCtx, sel);
-                    if (mgr) {
-                        WPLog(@"ClearUnread", @"[INFO] Found session mgr via MMContext.%s: %@", propNames[i], NSStringFromClass([mgr class]));
-                        return mgr;
-                    }
-                }
-            }
-
-            Ivar ivars[] = {
-                class_getInstanceVariable([activeCtx class], "m_newSessionMgr"),
-                class_getInstanceVariable([activeCtx class], "_newSessionMgr"),
-                class_getInstanceVariable([activeCtx class], "newSessionMgr"),
-                class_getInstanceVariable([activeCtx class], "sessionManager"),
-            };
-            int ivarCount = sizeof(ivars) / sizeof(ivars[0]);
-            for (int i = 0; i < ivarCount; i++) {
-                if (ivars[i]) {
-                    id mgr = object_getIvar(activeCtx, ivars[i]);
-                    if (mgr) {
-                        WPLog(@"ClearUnread", @"[INFO] Found session mgr via MMContext ivar: %@", NSStringFromClass([mgr class]));
-                        return mgr;
-                    }
-                }
-            }
-        }
-    }
-
     return nil;
 }
 
 static NSArray *getSessionList(id sessionMgr) {
-    SEL selectors[] = {
-        NSSelectorFromString(@"GetSessionInfoList"),
-        NSSelectorFromString(@"m_arrConvList"),
-        NSSelectorFromString(@"sessionList"),
-        NSSelectorFromString(@"m_arrSession"),
-        NSSelectorFromString(@"m_arrSessionInfo"),
-        NSSelectorFromString(@"m_arrSessions"),
-        NSSelectorFromString(@"m_normalSessions"),
-        NSSelectorFromString(@"sessionDataList"),
-    };
-    int count = sizeof(selectors) / sizeof(selectors[0]);
-
-    for (int i = 0; i < count; i++) {
-        if ([sessionMgr respondsToSelector:selectors[i]]) {
-            id result = ((id (*)(id, SEL))objc_msgSend)(sessionMgr, selectors[i]);
-            if ([result isKindOfClass:[NSArray class]] && [(NSArray *)result count] > 0) {
-                WPLog(@"ClearUnread", @"[INFO] Got session list via %@ (%lu items)", NSStringFromSelector(selectors[i]), (unsigned long)[(NSArray *)result count]);
-                return (NSArray *)result;
-            } else if (result) {
-                WPLog(@"ClearUnread", @"[INFO] %@ returned non-array or empty: %@", NSStringFromSelector(selectors[i]), NSStringFromClass([result class]));
-            }
+    // 运行时日志已确认 GetSessionInfoList 命中
+    SEL sel = NSSelectorFromString(@"GetSessionInfoList");
+    if ([sessionMgr respondsToSelector:sel]) {
+        id result = ((id (*)(id, SEL))objc_msgSend)(sessionMgr, sel);
+        if ([result isKindOfClass:[NSArray class]]) {
+            WPLog(@"ClearUnread", @"[INFO] Got session list via GetSessionInfoList (%lu items)", (unsigned long)[(NSArray *)result count]);
+            return (NSArray *)result;
         }
     }
-
-    const char *ivarNames[] = {
-        "m_arrConvList",
-        "sessionList",
-        "m_arrSession",
-        "m_arrSessionInfo",
-        "m_arrSessions",
-        "m_normalSessions",
-    };
-    int ivarCount = sizeof(ivarNames) / sizeof(ivarNames[0]);
-    for (int i = 0; i < ivarCount; i++) {
-        Ivar listIvar = class_getInstanceVariable([sessionMgr class], ivarNames[i]);
-        if (listIvar) {
-            id result = object_getIvar(sessionMgr, listIvar);
-            if ([result isKindOfClass:[NSArray class]] && [(NSArray *)result count] > 0) {
-                WPLog(@"ClearUnread", @"[INFO] Got session list via Ivar %s (%lu items)", ivarNames[i], (unsigned long)[(NSArray *)result count]);
-                return (NSArray *)result;
-            }
-        }
-    }
-
-    unsigned int sessionCount = 0;
-    if ([sessionMgr respondsToSelector:NSSelectorFromString(@"GetSessionCount")]) {
-        sessionCount = ((unsigned int (*)(id, SEL))objc_msgSend)(sessionMgr, NSSelectorFromString(@"GetSessionCount"));
-    } else if ([sessionMgr respondsToSelector:NSSelectorFromString(@"getSessionCount")]) {
-        sessionCount = ((unsigned int (*)(id, SEL))objc_msgSend)(sessionMgr, NSSelectorFromString(@"getSessionCount"));
-    }
-    WPLog(@"ClearUnread", @"[INFO] Session count: %u", sessionCount);
-
-    if (sessionCount > 0 && [sessionMgr respondsToSelector:NSSelectorFromString(@"GetSessionAtIndex:")]) {
-        NSMutableArray *sessions = [NSMutableArray array];
-        for (unsigned int i = 0; i < sessionCount; i++) {
-            id session = ((id (*)(id, SEL, unsigned int))objc_msgSend)(sessionMgr, NSSelectorFromString(@"GetSessionAtIndex:"), i);
-            if (session) [sessions addObject:session];
-        }
-        if (sessions.count > 0) {
-            WPLog(@"ClearUnread", @"[INFO] Got %lu sessions via GetSessionAtIndex:", (unsigned long)sessions.count);
-            return sessions;
-        }
-    }
-
     return nil;
 }
 
