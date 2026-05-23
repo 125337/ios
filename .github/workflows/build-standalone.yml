@@ -59,6 +59,9 @@ jobs:
           WeChatPlugin/Modules/Joker/JokerHook.m \
           WeChatPlugin/Modules/GroupExit/GroupExitHook.m \
           WeChatPlugin/Modules/FriendDetection/FriendDetectionHook.m \
+          WeChatPlugin/Modules/FriendDetection/MioFriendDetectResult.m \
+          WeChatPlugin/Modules/FriendDetection/MioFriendDetector.m \
+          WeChatPlugin/Modules/FriendDetection/MioFriendDetectionVC.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeHook.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeFormatParser.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeFormatEditorVC.m \
