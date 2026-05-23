@@ -98,6 +98,8 @@ static void hook_insideCallback(id self, SEL _cmd, id response, id request) {
 
     NSDictionary *rawDict = (NSDictionary *)response;
     WPLog(@"FriendDetect", @"[Hook] insideCallback raw dict for %@, keys=%@", g_fdCurrentWxID, rawDict.allKeys);
+    WPLog(@"FriendDetect", @"[Hook] ── values: retcode=%@, retmsg=%@, wx_error_type=%@, wx_error_msg=%@, req_key=%@",
+          rawDict[@"retcode"], rawDict[@"retmsg"], rawDict[@"wx_error_type"], rawDict[@"wx_error_msg"], rawDict[@"req_key"]);
 
     // 微信优化行 20756：原样设置 currentCheckResult，不解析
     @synchronized (rawDict) {
