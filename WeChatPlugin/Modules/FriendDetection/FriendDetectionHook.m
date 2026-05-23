@@ -935,11 +935,13 @@ static void FDViewDidLoad(id self, SEL _cmd) {
                 if (!strongVC) return;
                 if (!success) {
                     [btn setTitle:@"开始检测" forState:UIControlStateNormal];
-                    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"检测失败"
-                                                   message:@"请查看日志了解详情"
-                                            preferredStyle:UIAlertControllerStyleAlert];
-                    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:nil]];
-                    [strongVC presentViewController:alert animated:YES completion:nil];
+                    if (!strongVC.isBeingPresented && !strongVC.isBeingDismissed && !strongVC.presentedViewController) {
+                        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"检测失败"
+                                                       message:@"请查看日志了解详情"
+                                                preferredStyle:UIAlertControllerStyleAlert];
+                        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:nil]];
+                        [strongVC presentViewController:alert animated:YES completion:nil];
+                    }
                     return;
                 }
                 [btn setTitle:@"检测完成" forState:UIControlStateNormal];
@@ -948,10 +950,12 @@ static void FDViewDidLoad(id self, SEL _cmd) {
                 NSString *msg = (deleted && deleted.count > 0)
                     ? [NSString stringWithFormat:@"发现 %lu 个好友已将你删除", (unsigned long)deleted.count]
                     : @"未发现已将你删除的好友";
-                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"检测结果" message:msg
-                                            preferredStyle:UIAlertControllerStyleAlert];
-                [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:nil]];
-                [strongVC presentViewController:alert animated:YES completion:nil];
+                if (!strongVC.isBeingPresented && !strongVC.isBeingDismissed && !strongVC.presentedViewController) {
+                    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"检测结果" message:msg
+                                                preferredStyle:UIAlertControllerStyleAlert];
+                    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:nil]];
+                    [strongVC presentViewController:alert animated:YES completion:nil];
+                }
             });
         });
     }] forControlEvents:UIControlEventTouchUpInside];
@@ -967,6 +971,7 @@ static void FDViewDidLoad(id self, SEL _cmd) {
     [resultsBtn addAction:[UIAction actionWithTitle:@"" image:nil identifier:nil handler:^(__kindof UIAction *action) {
         UIViewController *strongVC = weakVC;
         if (!strongVC) return;
+        if (strongVC.isBeingPresented || strongVC.isBeingDismissed || strongVC.presentedViewController) return;
         NSDictionary *results = [[NSUserDefaults standardUserDefaults] objectForKey:@"com.mio.wechat.plugin.FriendDetection.results"];
         if (!results) {
             UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"提示" message:@"暂无检测记录"

@@ -410,12 +410,11 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
                         }
                     }
 
-                    // 尝试通过 AddLocalMsg 发送（私聊）或 AddMsg（有 toUsr 消息）
-                    SEL addLocalMsgSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
-                    if ([messageMgr respondsToSelector:addLocalMsgSel]) {
-                        ((void (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)(
-                            messageMgr, addLocalMsgSel, session, notifyWrap, YES, NO);
-                        WPLog(@"Revoke", @"notifySender: sent to revoker");
+                    // 通过 AddMsg 走服务器发送，确保双方都能看到
+                    SEL addMsgSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
+                    if ([messageMgr respondsToSelector:addMsgSel]) {
+                        ((void (*)(id, SEL, id, id))objc_msgSend)(messageMgr, addMsgSel, session, notifyWrap);
+                        WPLog(@"Revoke", @"notifySender: sent via AddMsg to revoker");
                     }
                 }
             } @catch (NSException *e) {
