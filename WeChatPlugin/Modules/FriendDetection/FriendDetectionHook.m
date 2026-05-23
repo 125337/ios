@@ -50,7 +50,8 @@ static id hook_TransferReqInit(id self, SEL _cmd) {
         @try {
             WPLog(@"FriendDetect", @"[InitDump] WCPayTransferPrepayRequestStruct init → %p", self);
             unsigned int count = 0;
-            objc_property_t *props = class_copyPropertyList([WCPayTransferPrepayRequestStruct class], &count);
+            Class reqClass = objc_getClass("WCPayTransferPrepayRequestStruct");
+            objc_property_t *props = reqClass ? class_copyPropertyList(reqClass, &count) : NULL;
             if (props && count > 0) {
                 for (unsigned int i = 0; i < count; i++) {
                     const char *name = property_getName(props[i]);
