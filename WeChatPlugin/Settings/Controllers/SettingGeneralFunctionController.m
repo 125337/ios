@@ -4,16 +4,36 @@
 #import "../../Core/WeChatAlertHelper.h"
 #import <objc/runtime.h>
 
-@implementation SettingGeneralFunctionController
+@implementation SettingLayoutFunctionController
+@end
+
+@implementation SettingGeneralFunctionController {
+    BOOL _isLayoutPage;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _isLayoutPage = [self isKindOfClass:[SettingLayoutFunctionController class]];
+    }
+    return self;
+}
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    if (_isLayoutPage) {
+        self.title = @"界面布局";
+        [self buildUI];
+        return;
+    }
     self.title = @"通用功能";
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [self buildUI];
+    if (!_isLayoutPage) {
+        [self buildUI];
+    }
 }
 
 - (void)switchChanged:(UISwitch *)sender {

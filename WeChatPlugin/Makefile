@@ -42,11 +42,7 @@ MioHelper_FILES = Tweak.m \
 	Settings/Controllers/SettingGeneralFunctionController.m \
 	Settings/Controllers/SettingMessageTimeController.m \
 	Settings/Controllers/SettingRevokeController.m \
-	Settings/Controllers/SettingLayoutFunctionController.m \
-	Settings/Controllers/SettingAssistFunctionController.m \
-	Settings/Controllers/SettingUIBeautifyController.m \
 	Settings/Controllers/SettingRedEnvelopController.m \
-	Settings/Controllers/SettingAboutController.m \
 	Settings/Controllers/WeChatTweakGroupSelectsController.m
 MioHelper_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-function -Wno-unused-variable \
 	-I. \

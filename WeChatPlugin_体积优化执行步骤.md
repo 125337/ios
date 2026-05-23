@@ -181,120 +181,60 @@ Got session list via GetSessionInfoList (2529 items)
 
 ## 阶段三：精简 UI 代码
 
-### 步骤 6：WPBorderLayer 精简
+### 步骤 6：WPBorderLayer 精简 ✅ 已完成
 
 **目标**：WPBorderLayer.m 共 603 行，5 个类、12+ 工厂方法，核心功能约 80 行。
 
-**操作**：编辑 `/www/wwwroot/ios/WeChatPlugin/Settings/Common/WPBorderLayer.m`
+**执行结果（2026-05-23）**：
+- 代码分析发现：**所有 border 设置 API 均未被任何代码调用**，仅 `wp_updateBorderAppearanceForDarkMode:` 被 `SettingCategoryController.m` 使用
+- 删除完全未使用的 4 个内部类：
+  - `WPSectionBorderShape` (~88行)
+  - `WPSeparatorConfiguration` (~32行)
+  - `WPModuleBorderConfig` (~20行)
+  - `WPBorderManager` (~74行)
+- 删除未使用的 WPBorderLayer 工厂方法：`leftBorderLayer`、`rightBorderLayer`、`bottomBorderLayer`、`separatorLayerWithLeftInset` (~58行)
+- 删除未使用的 UIView(WPBorder) API：`wp_setupBordersWithConfig:`、`wp_addBorderWithSides:`、`wp_addFourSideBordersWithWidth:`、`wp_addRoundedBorderWithWidth:`、`wp_addSeparatorWithLeftInset:`、`wp_addSeparatorWithType:config:` 等 (~130行)
+- 同时清理 `WPBorderLayer.h` 和 `WPCommonUI.h` 中的多余声明/import
+- 文件从 **603行 → 93行**
 
-1. 保留 `WPBorderLayer` 类及其绘制核心逻辑。
-2. 保留 `UIView(WPBorder)` category，因为多处使用 `wp_addBorder...` 和 `wp_updateBorderAppearanceForDarkMode` 接口。
-3. 删除多余的内部类和未被调用的工厂方法。
+**验证**：待编译验证
 
-   确认调用方：
-   ```bash
-   cd /www/wwwroot/ios && grep -rn "mainBorderLayer\|leftBorderLayer\|rightBorderLayer\|bottomBorderLayer\|topBorderLayer" WeChatPlugin/
-   ```
-
-**验证**：
-```bash
-cd /www/wwwroot/ios && git add -A && git commit -m "step6: 精简 WPBorderLayer" && git push origin HEAD
-```
-
-**预计减少**：~400 行源码
+**实际减少**：~510行源码（.m + .h）
 
 ---
 
-### 步骤 7：WPCommonUI.h static 函数改为 .m 实现
+### 步骤 7：WPCommonUI.h static 函数改为 .m 实现 ✅ 已完成
 
 **目标**：`WPCommonUI.h` 中 121 行 `static` 函数，被 4 个 .m 文件各自编译一份副本（SettingEntryHook、WPOtherVC、WPAboutVC、WPBackupVC）。
 
-**操作**：
+**执行结果（2026-05-23）**：
+- 已创建 `Modules/SettingEntry/WPCommonUI.m`（96行），将 8 个 static 函数移入，去掉 `static`
+- `WPCommonUI.h` 改为 extern 声明（31行） + 颜色宏
+- `WPCommonUI.m` 已加入 `build-standalone.yml` 编译列表
+- 同时移除 `WPCommonUI.h` 中未使用的 `#import WPBorderLayer.h`
 
-1. 创建 `/www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPCommonUI.m`，将 `.h` 中的 `static` 函数实现移入，去掉 `static` 关键字：
+**验证**：待编译验证
 
-```objc
-#import "WPCommonUI.h"
-
-const CGFloat kPad = 18.0;
-const CGFloat kRadius = 12.0;
-const CGFloat kRowH = 44.0;
-
-Class WPGetBaseClass(void) { ... }
-UIScrollView *WPMakeSV(UIViewController *vc) { ... }
-UIView *WPMakeCard(CGFloat top, CGFloat w) { ... }
-UILabel *WPMakeSectionHeader(NSString *text, CGFloat top, CGFloat w) { ... }
-void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *key, BOOL on, id target) { ... }
-void WPAddNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *action, id target) { ... }
-void WPAddSep(UIView *card, CGFloat cy, CGFloat cw) { ... }
-void WPAddInfoRow(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right) { ... }
-```
-
-2. 修改 `WPCommonUI.h`，将函数改为声明（去掉 `static` 和实现体）：
-
-```objc
-// 颜色宏保留（无需改）
-#define WPBgColor() WPBackgroundColor()
-#define WPCardBg() WPCardBackgroundColor()
-// ... 其他宏 ...
-
-// 函数声明
-extern const CGFloat kPad;
-extern const CGFloat kRadius;
-extern const CGFloat kRowH;
-
-Class WPGetBaseClass(void);
-UIScrollView *WPMakeSV(UIViewController *vc);
-UIView *WPMakeCard(CGFloat top, CGFloat w);
-UILabel *WPMakeSectionHeader(NSString *text, CGFloat top, CGFloat w);
-void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *key, BOOL on, id target);
-void WPAddNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *action, id target);
-void WPAddSep(UIView *card, CGFloat cy, CGFloat cw);
-void WPAddInfoRow(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right);
-```
-
-3. 在 `build-standalone.yml` 中追加 `WPCommonUI.m` 到编译列表。
-
-**验证**：
-```bash
-cd /www/wwwroot/ios && git add -A && git commit -m "step7: WPCommonUI.h static → .m" && git push origin HEAD
-```
-
-**预计减少**：消除 4 份编译副本（4 × 121 = 484 行等效编译输出）
+**实际减少**：消除 4 份编译副本（4 × ~100行等效编译输出）
 
 ---
 
-### 步骤 8：合并 Settings 碎片控制器
+### 步骤 8：合并 Settings 碎片控制器 ✅ 已完成
 
 **目标**：`SettingAboutController`(86行) 和 `SettingLayoutFunctionController`(52行) 功能简单，可合并到父控制器。
 
-**操作**：
+**执行结果（2026-05-23）**：
+- `SettingAboutController.m` 代码合入 `SettingController.m`（增加 `loadAboutView` 和 `addArchRowInGroup:name:desc:cy:width:` 方法）
+- `SettingLayoutFunctionController.m` 代码合入 `SettingGeneralFunctionController.m`
+- 两个类通过 `isKindOfClass:` 检测区分模式，@implementation 空壳内联在父 .m 中
+- 类声明保留在 `SettingController.h`（无需修改）
+- `FeatureModuleRegistry.m` 无需修改（类名不变）
+- 已删除 `SettingAboutController.m` 和 `SettingLayoutFunctionController.m`
+- `build-standalone.yml` 编译列表 -2 项（同时清理了 Makefile 中 4 个已删除文件的残留条目）
 
-1. 将 `SettingAboutController.m` 的核心逻辑移入 `SettingController.m`。
-2. 将 `SettingLayoutFunctionController.m` 的核心逻辑移入 `SettingGeneralFunctionController.m`。
-3. 修改 `FeatureModuleRegistry.m` (lines 56, 61-62)，将 class 引用改为父控制器：
+**验证**：待编译验证
 
-   ```objc
-   // SettingLayoutFunctionController → SettingGeneralFunctionController
-   // SettingAboutController → SettingController
-   ```
-
-4. 删除文件：
-   ```bash
-   rm WeChatPlugin/Settings/Controllers/SettingAboutController.m
-   rm WeChatPlugin/Settings/Controllers/SettingAboutController.h
-   rm WeChatPlugin/Settings/Controllers/SettingLayoutFunctionController.m
-   rm WeChatPlugin/Settings/Controllers/SettingLayoutFunctionController.h
-   ```
-
-5. 在 `build-standalone.yml` 中删除这两项的编译条目（lines 72, 74）。
-
-**验证**：
-```bash
-cd /www/wwwroot/ios && git add -A && git commit -m "step8: 合并 Settings 碎片" && git push origin HEAD
-```
-
-**预计减少**：~100 行源码，2 个编译文件
+**实际减少**：源码复用（无净减少，消除 2 个编译文件）
 
 ---
 
@@ -413,9 +353,9 @@ cd /www/wwwroot/ios && git add -A && git commit -m "step12: MessageTimeHook 统�
 | 3 | PluginConfig 宏化 | ⬜ | ~150行 |
 | 4 | FriendDetection 删探测代码 | ✅ | ~450行 |
 | 5 | ClearUnreadHook 精简 | ✅ | ~170行 |
-| 6 | WPBorderLayer 精简 | ⬜ | ~400行 |
-| 7 | WPCommonUI.h static → .m | ⬜ | 去 4 份编译副本 |
-| 8 | 合并 Settings 碎片 | ⬜ | ~100行 + 2编译文件 |
+| 6 | WPBorderLayer 精简 | ✅ | ~510行 |
+| 7 | WPCommonUI.h static → .m | ✅ | 去 4 份编译副本 |
+| 8 | 合并 Settings 碎片 | ✅ | 2 编译文件 |
 | 9 | 删除 RedEnvelopParam.m | ⬜ | 1 编译项 |
 | 10 | 删除 SettingSessionActionController | ⬜ | 2 文件, 124行 |
 | 11 | 清理未编译 WPSessionBox | ⬜ | 4 文件, ~1400行 |

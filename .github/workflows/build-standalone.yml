@@ -53,6 +53,7 @@ jobs:
           WeChatPlugin/Modules/Layout/TintHook.m \
           WeChatPlugin/Modules/Unread/ClearUnreadHook.m \
           WeChatPlugin/Modules/SettingEntry/SettingEntryHook.m \
+          WeChatPlugin/Modules/SettingEntry/WPCommonUI.m \
           WeChatPlugin/Modules/SettingEntry/WPOtherVC.m \
           WeChatPlugin/Modules/SettingEntry/WPAboutVC.m \
           WeChatPlugin/Modules/SettingEntry/WPBackupVC.m \
@@ -69,9 +70,7 @@ jobs:
           WeChatPlugin/Settings/Controllers/SettingGeneralFunctionController.m \
           WeChatPlugin/Settings/Controllers/SettingMessageTimeController.m \
           WeChatPlugin/Settings/Controllers/SettingRevokeController.m \
-          WeChatPlugin/Settings/Controllers/SettingLayoutFunctionController.m \
           WeChatPlugin/Settings/Controllers/SettingRedEnvelopController.m \
-          WeChatPlugin/Settings/Controllers/SettingAboutController.m \
           WeChatPlugin/Settings/Controllers/WeChatTweakGroupSelectsController.m; do
           BASENAME=$(basename "$f" .m)
           OBJ_FILE="build/${BASENAME}.o"

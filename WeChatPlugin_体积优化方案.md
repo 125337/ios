@@ -65,29 +65,17 @@
 
 ---
 
-### 问题4：WPBorderLayer.m — 过度设计（603行）
+### 问题4：WPBorderLayer.m — 过度设计（603行），已精简 ✅
 
-5 个类、12+ 工厂方法 → 核心功能可精简至 80 行。
+603行 → 93行，删除了完全未使用的 4 个内部类（WPSectionBorderShape、WPSeparatorConfiguration、WPModuleBorderConfig、WPBorderManager）和所有未使用的工厂方法/UIView(WPBorder) API。仅保留被 SettingCategoryController 调用的 `wp_updateBorderAppearanceForDarkMode:` 及其依赖。
 
-**方案**: 保留 WPBorderLayer + UIView(WPBorder) category，删多余工厂方法和内部类
-
-**预计减少**: 400+行
+**已减少**: ~500行
 
 ---
 
-### 问题5：WPCommonUI.h — static 函数被多份编译（121行）
+### 问题5：WPCommonUI.h — static 函数被多份编译，已修复 ✅
 
-121行 `static` 函数在头文件中，被 4 个 .m 文件 `#import`：
-- `SettingEntryHook.m`
-- `WPOtherVC.m`
-- `WPAboutVC.m`
-- `WPBackupVC.m`
-
-每个 `#import` 产生一份副本 → 4 份编译输出。
-
-**方案**: 拆为 .h(声明) + .m(实现，加入编译列表)
-
-**预计减少**: 消除 ~484 行等效编译输出
+已创建 `WPCommonUI.m`（加入编译列表），头文件改为 extern 声明。消除 4 份编译副本。
 
 ---
 
@@ -154,9 +142,9 @@ FeatureModuleRegistry 中仍有这两个控制器的注册引用。
 | 3 | FriendDetection 删探测代码 | **~450行** | 改1文件 | ✅ |
 | 4 | PluginConfig 宏化 | **150行** | 改1文件 | ⬜ |
 | 5 | ClearUnreadHook 精简 | **~170行** | 改1文件 | ✅ |
-| 6 | WPBorderLayer 精简 | **400行** | 改1文件 | ⬜ |
-| 7 | WPCommonUI.h → .m | 消除多份副本 | +1文件, 改1文件 | ⬜ |
-| 8 | 合并 Settings 碎片 | **100行** | -4文件, 改1注册文件 | ⬜ |
+| 6 | WPBorderLayer 精简 | **~500行** | 改1文件(.m+.h) | ✅ |
+| 7 | WPCommonUI.h → .m | 消除多份副本 | +1文件, 改1文件 | ✅ |
+| 8 | 合并 Settings 碎片 | **~100行** | -2文件, 改2文件 | ✅ |
 | 9 | 删除 RedEnvelopParam.m | 1编译项 | -1文件 | ⬜ |
 | 10 | 删除 SettingSessionActionController (死代码) | — | -2文件 | ⬜ |
 | 11 | 统一 hook (需真机验证) | ~3-5KB | -1编译项 | ⬜ |
@@ -172,5 +160,5 @@ FeatureModuleRegistry 中仍有这两个控制器的注册引用。
 | 当前 | 已完成 6 项优化 | ~445K | ✅ |
 | +消除重复 | 日志+ServiceHelper+宏化 | — | 日志+ServiceHelper ✅, 宏化 ⬜ |
 | +删冗余 | FriendDetection探测+ClearUnread fallback+RedEnvelopParam+SessionAction | ~1.2-1.6 MB | ✅ FriendDetection+ClearUnread, 其余 ⬜ |
-| +精简UI | BorderLayer+CommonUI+Settings合并 | ~1.0-1.4 MB | ⬜ |
+| +精简UI | BorderLayer+CommonUI+Settings合并 | ~1.0-1.4 MB | ✅ |
 | +收尾 | 统一hook+清理WPSessionBox | ~900-1300 KB | ⬜ |
