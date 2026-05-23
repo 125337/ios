@@ -21,4 +21,12 @@
 /// @param buttonTitle 按钮文字
 + (void)showTipAlert:(NSString *)message buttonTitle:(NSString *)buttonTitle;
 
+/// 确认弹窗（双按钮：取消 + 确认，带回调）
+/// @param message 提示内容
+/// @param confirmTitle 确认按钮文字，如 @"开始检测"
+/// @param onConfirm 确认回调（主线程）
++ (void)showConfirmAlert:(NSString *)message
+            confirmTitle:(NSString *)confirmTitle
+               onConfirm:(void(^)(void))onConfirm;
+
 @end

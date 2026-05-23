@@ -42,6 +42,7 @@ static void walertLog(NSString *content) {
 //    C IMP 通过 objc_getAssociatedObject 读取 confirm block，无 ARC/MRC 兼容问题
 
 static char kWAlertConfirmBlockKey;
+static char kWAlertSimpleConfirmBlockKey;  // 无输入框确认弹窗的 block
 
 // 纯 C IMP：WCUIAlertView 调用 addBtnTitle:@"确定" target:alert sel:@selector(__walert_confirm)
 // 当按钮被点击，MRC 代码调用 objc_msgSend(alert, @selector(__walert_confirm))
@@ -93,6 +94,14 @@ static void walertEnsureCIMPInjected(Class alertClass) {
 
     class_addMethod(alertClass, confirmSel, (IMP)__walert_confirm_IMP, "v@:");
     walertLog(@"✅ __walert_confirm C IMP injected into WCUIAlertView");
+
+    // 第二个 IMP：简单确认回调（无输入框，纯 void(^)(void)）
+    SEL simpleConfirmSel = NSSelectorFromString(@"__walert_simple_confirm");
+    class_addMethod(alertClass, simpleConfirmSel, imp_implementationWithBlock(^(id _self) {
+        void(^cb)(void) = objc_getAssociatedObject(_self, &kWAlertSimpleConfirmBlockKey);
+        if (cb) cb();
+    }), "v@:");
+    walertLog(@"✅ __walert_simple_confirm C IMP injected into WCUIAlertView");
 }
 
 @implementation WeChatAlertHelper
@@ -194,6 +203,47 @@ static void walertEnsureCIMPInjected(Class alertClass) {
         }
     } @catch (NSException *e) {
         walertLog([NSString stringWithFormat:@"❌ tip error: %@", e]);
+    }
+}
+
+#pragma mark - 确认弹窗（双按钮：取消 + 确认）
+
++ (void)showConfirmAlert:(NSString *)message
+            confirmTitle:(NSString *)confirmTitle
+               onConfirm:(void(^)(void))onConfirm {
+    Class alertClass = [self alertClass];
+    if (!alertClass) return;
+    @try {
+        WCUIAlertView *alert = ((id(*)(id, SEL, id, id))objc_msgSend)(
+            [alertClass alloc], @selector(initWithTitle:message:), @"Mio助手", message);
+        if (!alert) return;
+
+        // 取消按钮
+        SEL cancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
+        if ([alert respondsToSelector:cancelSel]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelSel, @"取消", nil, NULL);
+        }
+
+        // 确认按钮 → 注入 C IMP
+        walertEnsureCIMPInjected(alertClass);
+        if (onConfirm) {
+            objc_setAssociatedObject(alert, &kWAlertSimpleConfirmBlockKey, [onConfirm copy],
+                                     OBJC_ASSOCIATION_COPY_NONATOMIC);
+        }
+
+        SEL simpleConfirmSel = NSSelectorFromString(@"__walert_simple_confirm");
+        SEL btnSel = NSSelectorFromString(@"addBtnTitle:target:sel:");
+        if ([alert respondsToSelector:btnSel]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btnSel, confirmTitle, alert, simpleConfirmSel);
+        }
+
+        SEL showSel = NSSelectorFromString(@"show");
+        if ([alert respondsToSelector:showSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
+            walertLog([NSString stringWithFormat:@"✅ confirm shown: %@", confirmTitle]);
+        }
+    } @catch (NSException *e) {
+        walertLog([NSString stringWithFormat:@"❌ confirm error: %@", e]);
     }
 }
 

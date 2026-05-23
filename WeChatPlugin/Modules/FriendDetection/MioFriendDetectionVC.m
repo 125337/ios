@@ -2,6 +2,7 @@
 #import "MioFriendDetector.h"
 #import "../SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/WeChatAlertHelper.h"
 #import <objc/runtime.h>
 
 // ============================================================
@@ -249,16 +250,11 @@ static void WPAddResultCountRow(UIView *card, CGFloat cy, CGFloat cw, NSString *
 // ============================================================
 - (void)retestSelectedFriends {
     if (self.detailFriends.count == 0) return;
-
-    NSString *msg = [NSString stringWithFormat:@"确认重新检测选中的 %lu 个好友吗？", (unsigned long)self.detailFriends.count];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"重新检测"
-                                                                   message:msg
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"重新检测" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+    NSString *msg = [NSString stringWithFormat:@"确认重新检测选中的 %lu 个好友吗？",
+                     (unsigned long)self.detailFriends.count];
+    [WeChatAlertHelper showConfirmAlert:msg confirmTitle:@"重新检测" onConfirm:^{
         [self beginRetestSelected];
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
+    }];
 }
 
 - (void)beginRetestSelected {
@@ -296,18 +292,12 @@ static void WPAddResultCountRow(UIView *card, CGFloat cy, CGFloat cw, NSString *
 // ============================================================
 - (void)deleteAllDeletedContacts {
     if (self.detailFriends.count == 0) {
-        [self showAlert:@"提示" msg:@"暂无被拉黑或删除的好友"];
+        [WeChatAlertHelper showTipAlert:@"暂无被拉黑或删除的好友"];
         return;
     }
-
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"全部删除"
-                                                                   message:@"确认从通讯录删除所有已拉黑/删除你的好友吗？"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"确认删除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
-        [self performDeleteAll];
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
+    [WeChatAlertHelper showConfirmAlert:@"确认从通讯录删除所有已拉黑/删除你的好友吗？"
+                          confirmTitle:@"确认删除"
+                             onConfirm:^{ [self performDeleteAll]; }];
 }
 
 - (void)performDeleteAll {
@@ -398,30 +388,21 @@ static void WPAddResultCountRow(UIView *card, CGFloat cy, CGFloat cw, NSString *
 
 - (void)startDetectionTapped {
     if (self.detecting) return;
-
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"开始检测"
-                                                                   message:@"将向每个好友发起转账预下单检测，对方完全无感知。是否继续？"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"开始检测" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        [self beginDetection];
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
+    [WeChatAlertHelper showConfirmAlert:@"将向每个好友发起转账预下单检测，对方完全无感知。是否继续？"
+                          confirmTitle:@"开始检测"
+                             onConfirm:^{ [self beginDetection]; }];
 }
 
 - (void)clearDataTapped {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"清空数据"
-                                                                   message:@"是否确定清空所有检测数据？"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"确定清空" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+    [WeChatAlertHelper showConfirmAlert:@"是否确定清空所有检测数据？"
+                          confirmTitle:@"确定清空"
+                             onConfirm:^{
         [MioFriendDetector clearSavedSummary];
         [self.detector stopDetection];
         self.detecting = NO;
         self.detector = [[MioFriendDetector alloc] init];
         [self refreshMainUI];
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
+    }];
 }
 
 // ============================================================
@@ -456,10 +437,7 @@ static void WPAddResultCountRow(UIView *card, CGFloat cy, CGFloat cw, NSString *
 // MARK: - 通用
 // ============================================================
 - (void)showAlert:(NSString *)title msg:(NSString *)msg {
-    if (self.presentedViewController || self.isBeingDismissed || self.isBeingPresented) return;
-    UIAlertController *a = [UIAlertController alertControllerWithTitle:title message:msg preferredStyle:UIAlertControllerStyleAlert];
-    [a addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:nil]];
-    [self presentViewController:a animated:YES completion:nil];
+    [WeChatAlertHelper showTipAlert:[NSString stringWithFormat:@"%@\n%@", title, msg]];
 }
 
 - (void)detectionResultUpdated:(NSNotification *)note {
