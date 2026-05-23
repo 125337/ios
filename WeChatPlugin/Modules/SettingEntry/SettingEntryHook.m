@@ -8,45 +8,64 @@
 
 static NSMutableSet *_viewDidLoadSet = nil;
 
+// 仿微信优化做法：不在 viewDidLoad 里创建 UI（view bounds 可能为 (0,0,0,0)），
+// 改在 viewWillAppear 里创建 —— 此时 view 已在 window 中，bounds 正确。
+// 微信优化不创建新 VC，而是往微信现有 VC 上加子视图，所以天然没这个问题。
+// 我们虽然创建了新 VC（WeChatPluginEntryVC），但把 UI 创建推迟到 viewWillAppear，
+// 等价于在 view 已就绪后才开始施工，从根本上消除黑屏。
+
 static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     WPLog(@"Setting", @"[Entry] viewDidLoad");
 
-    @synchronized (self) {
+    // 调用父类 viewDidLoad（创建基础 view）
+    Class uiVC = objc_getClass("UIViewController");
+    Method m = class_getInstanceMethod(uiVC, _cmd);
+    if (m) {
+        ((void (*)(id, SEL))method_getImplementation(m))(self, _cmd);
+    }
+
+    UIViewController *vc = (UIViewController *)self;
+    vc.title = @"Mio助手";
+
+    // 不做 UI 创建 — 全部推迟到 viewWillAppear
+    WPLog(@"Setting", @"[Entry] viewDidLoad done, defer UI to viewWillAppear");
+}
+
+static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
+    WPLog(@"Setting", @"[Entry] viewWillAppear");
+
+    // 调用父类
+    Class uiVC = objc_getClass("UIViewController");
+    Method m = class_getInstanceMethod(uiVC, _cmd);
+    if (m) {
+        ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
+    }
+
+    // 类级锁 + 一次性检查：防止多个实例并发创建 UI
+    @synchronized ([self class]) {
         if (!_viewDidLoadSet) {
             _viewDidLoadSet = [NSMutableSet new];
         }
-
         NSNumber *ptr = [NSNumber numberWithUnsignedLong:(unsigned long)self];
-        BOOL isRecursive = [_viewDidLoadSet containsObject:ptr];
-        if (!isRecursive) {
-            [_viewDidLoadSet addObject:ptr];
-        }
-
-        // 始终调用父类 viewDidLoad（确保视图被创建），即使递归调用也要创建视图
-        Class uiVC = objc_getClass("UIViewController");
-        Method m = class_getInstanceMethod(uiVC, _cmd);
-        if (m) {
-            ((void (*)(id, SEL))method_getImplementation(m))(self, _cmd);
-        }
-
-        UIViewController *vc = (UIViewController *)self;
-        vc.title = @"Mio助手";
-
-        // 递归调用时视图已创建，直接返回避免重复添加子视图
-        if (isRecursive) {
-            WPLog(@"Setting", @"[Entry] recursive skip");
+        if ([_viewDidLoadSet containsObject:ptr]) {
+            WPLog(@"Setting", @"[Entry] viewWillAppear: already set up");
             return;
         }
+        [_viewDidLoadSet addObject:ptr];
 
-        // 防止 VC 正在被 dismiss 时仍然创建 UI 导致黑屏
-        if (vc.isBeingDismissed || vc.isMovingFromParentViewController) {
-            WPLog(@"Setting", @"[Entry] skip: isBeingDismissed=%d", vc.isBeingDismissed);
+        UIViewController *vc = (UIViewController *)self;
+
+        // view 已入 window、bounds 有效？双重保险
+        if (vc.view.window == nil || vc.view.bounds.size.width < 1) {
+            WPLog(@"Setting", @"[Entry] viewWillAppear: view not ready (window=%p, w=%.0f), skip",
+                  vc.view.window, vc.view.bounds.size.width);
+            [_viewDidLoadSet removeObject:ptr]; // 未成功，允许重试
             return;
         }
 
         CGFloat w = vc.view.bounds.size.width;
 
-        // 以下为自定义 UI 创建逻辑
+        // === 以下是 UI 创建逻辑（与原来完全一致，只是移到了 viewWillAppear） ===
         UIScrollView *sv = WPMakeSV(vc);
         [vc.view addSubview:sv];
 
@@ -112,15 +131,7 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     y += 60;
 
     sv.contentSize = CGSizeMake(w, y);
-    WPLog(@"Setting", @"[Entry] viewDidLoad complete");
-    }
-}
-
-static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
-    Class uiVC = objc_getClass("UIViewController");
-    Method m = class_getInstanceMethod(uiVC, _cmd);
-    if (m) {
-        ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
+    WPLog(@"Setting", @"[Entry] setup complete (via viewWillAppear)");
     }
 }
 

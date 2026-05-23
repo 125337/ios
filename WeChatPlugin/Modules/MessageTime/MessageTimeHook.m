@@ -464,6 +464,16 @@ static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *i
 
     if (![PluginConfig shared].showMessageTime || !cell) return cell;
 
+    // 防护：VC 转场期间不进行 cell 时间计算
+    // 原因：外部分享文件进微信时，WeChat 创建聊天选择器 VC 的同时会刷新消息列表，
+    // 我们的 cellForRow dispatch 会在 global_queue 中通过 KVO 访问 cell 属性，
+    // 触发微信内部布局管线，在转场中调用废弃的 presentingModalViewController 导致 SIGABRT
+    UIViewController *baseVC = (UIViewController *)self;
+    if (baseVC.isBeingPresented || baseVC.isBeingDismissed ||
+        baseVC.isMovingFromParentViewController || baseVC.isMovingToParentViewController) {
+        return cell;
+    }
+
     // 反编译版风格：只处理 ChatTableViewCell
     if (![cell isKindOfClass:NSClassFromString(@"ChatTableViewCell")]) return cell;
 
