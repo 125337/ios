@@ -33,6 +33,22 @@ static IMP _orig_IsJailBreak = NULL;
 static IMP _orig_HasInstallJailbreakPlugin = NULL;
 static IMP _orig_JailBroken = NULL;
 
+// Hook GetTransferPrepayRequest: 本身（诊断用 — 不是微信优化的 hook）
+static IMP _orig_GetTransferPrepayRequest = NULL;
+
+static void hook_GetTransferPrepayRequest(id self, SEL _cmd, id request) {
+    WPLog(@"FriendDetect", @"[Trace] GetTransferPrepayRequest: called on WCPayLogicMgr=%p, request=%p class=%@",
+          self, request, [request class]);
+    if ([request respondsToSelector:sel_registerName("m_nsReceiverUserName")]) {
+        id un = ((id (*)(id, SEL))objc_msgSend)(request, sel_registerName("m_nsReceiverUserName"));
+        WPLog(@"FriendDetect", @"[Trace]   receiver=%@", un);
+    }
+    if (_orig_GetTransferPrepayRequest) {
+        ((void (*)(id, SEL, id))_orig_GetTransferPrepayRequest)(self, _cmd, request);
+    }
+    WPLog(@"FriendDetect", @"[Trace] GetTransferPrepayRequest: returned");
+}
+
 static BOOL hook_IsJailBreak(id self, SEL _cmd) {
     return NO;
 }
@@ -164,6 +180,16 @@ static void hook_insideCallback(id self, SEL _cmd, id response, id request) {
             WPLog(@"FriendDetect", @"[Hook] ✓ OnGetTransferPrepayRespone:");
         } else {
             WPLog(@"FriendDetect", @"[Hook] - OnGetTransferPrepayRespone: not found (normal on 8.0.60, may exist on multi-open)");
+        }
+    }
+
+    // — Hook 0: GetTransferPrepayRequest: 本身（诊断用 — 非微信优化 hook）—
+    {
+        SEL sel = sel_registerName("GetTransferPrepayRequest:");
+        Method m = class_getInstanceMethod(payCls, sel);
+        if (m) {
+            MSHookMessageEx(payCls, sel, (IMP)hook_GetTransferPrepayRequest, &_orig_GetTransferPrepayRequest);
+            WPLog(@"FriendDetect", @"[Hook] ✓ GetTransferPrepayRequest: (trace)");
         }
     }
 

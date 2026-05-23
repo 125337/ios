@@ -104,9 +104,9 @@ static id _Nullable fdCreateTransferRequest(NSString *receiverWxID) {
     SEL psSel = sel_registerName("setM_uiPayScene:");
     if ([req respondsToSelector:psSel]) ((void (*)(id, SEL, unsigned int))objc_msgSend)(req, psSel, 11);
 
-    // m_nsTraceInfo = "MioFriendDetector" (行 20313)
+    // m_nsTraceInfo = "WeChatFriendDetector" (行 20313 — 严格匹配微信优化)
     SEL traceSel = sel_registerName("setM_nsTraceInfo:");
-    if ([req respondsToSelector:traceSel]) ((void (*)(id, SEL, id))objc_msgSend)(req, traceSel, @"MioFriendDetector");
+    if ([req respondsToSelector:traceSel]) ((void (*)(id, SEL, id))objc_msgSend)(req, traceSel, @"WeChatFriendDetector");
 
     // placeorderReserves = 当前时间戳 (行 20314-20323)
     SEL resvSel = sel_registerName("setPlaceorderReserves:");
