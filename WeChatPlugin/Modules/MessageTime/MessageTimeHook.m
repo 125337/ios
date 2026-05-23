@@ -447,7 +447,6 @@ static id getContentView(id cell) {
 // MARK: - Original Function Pointers (one per hook target)
 // ============================================================
 
-static UITableViewCell* (*orig_BaseMsgContentVC_cellForRow)(id, SEL, id, NSIndexPath*);
 static id (*orig_CommonMessageCellView_initWithViewModel)(id, SEL, id);
 static void (*orig_CommonMessageCellView_updateNodeStatus)(id, SEL);
 static void (*orig_ChatTimeCellView_layoutSubviews)(id, SEL);
@@ -458,97 +457,6 @@ static void (*orig_TextMsgCell_setFrameBgImg)(id, SEL, CGFloat, CGFloat, CGFloat
 // ============================================================
 // MARK: - Replacement Functions
 // ============================================================
-
-static UITableViewCell* repl_cellForRow(id self, SEL _cmd, id tv, NSIndexPath *ip) {
-    UITableViewCell *cell = orig_BaseMsgContentVC_cellForRow(self, _cmd, tv, ip);
-
-    if (![PluginConfig shared].showMessageTime || !cell) return cell;
-
-    // 反编译版风格：只处理 ChatTableViewCell
-    if (![cell isKindOfClass:NSClassFromString(@"ChatTableViewCell")]) return cell;
-
-    // 守卫：app 处于非活跃状态时（外部分享文件、URL scheme 唤起等）不进行 cell 处理。
-    // 此时 WeChat 正在创建聊天选择器 VC（转场中），KVO 访问 cell 属性会触发微信布局管线，
-    // 在转场中调用废弃的 presentingModalViewController → SIGABRT。
-    if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
-        return cell;
-    }
-
-    // === 同步计算时间文本（主线程，不 dispatch） ===
-    // 复刻 微信优化 做法：不在 global_queue 中通过 KVO 访问 cell 属性。
-    // KVO 访问在 global_queue 中触发异步侧效应 → 与微信布局管线在 VC 转场时冲突
-    // → 调用废弃的 presentingModalViewController → SIGABRT。
-    // 同步计算避免了竞态，且计算量极小（属性读取 + 字符串格式化），无性能影响。
-
-    id cellView = nil;
-    @try { cellView = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"]; } @catch (NSException *e) {}
-    if (!cellView) return cell;
-
-    id viewModel = nil;
-    @try { viewModel = [cellView valueForKey:@"m_viewModel"] ?: [cellView valueForKey:@"viewModel"]; } @catch (NSException *e) {}
-    if (!viewModel) return cell;
-
-    unsigned int createTime = 0;
-    id messageWrap = nil;
-    @try {
-        if ([viewModel respondsToSelector:NSSelectorFromString(@"messageWrap")]) {
-            @try { messageWrap = [viewModel valueForKey:@"messageWrap"]; } @catch (...) {}
-        }
-        if (!messageWrap) {
-            @try { messageWrap = [viewModel valueForKey:@"m_messageWrap"]; } @catch (...) {}
-        }
-        if (messageWrap) {
-            if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_uiCreateTime")]) {
-                createTime = (unsigned int)[[messageWrap valueForKey:@"m_uiCreateTime"] unsignedIntValue];
-            }
-        }
-        if (createTime == 0 && [viewModel respondsToSelector:NSSelectorFromString(@"createTime")]) {
-            @try { createTime = (unsigned int)[[viewModel valueForKey:@"createTime"] unsignedIntValue]; } @catch (...) {}
-        }
-    } @catch (NSException *e) {}
-
-    BOOL isSender = NO;
-    @try {
-        id target = [cell valueForKey:@"m_cellView"] ?: [cell valueForKey:@"cellView"];
-        if (!target) target = cell;
-        if (messageWrap && [target respondsToSelector:NSSelectorFromString(@"isSenderFromMsgWrap:")]) {
-            isSender = ((BOOL (*)(id, SEL, id))objc_msgSend)(target, NSSelectorFromString(@"isSenderFromMsgWrap:"), messageWrap);
-        } else {
-            @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (...) {}
-        }
-    } @catch (...) {}
-
-    NSString *fromUsr = nil, *toUsr = nil;
-    if (messageWrap) {
-        @try {
-            if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_nsFromUsr")]) {
-                fromUsr = [messageWrap valueForKey:@"m_nsFromUsr"];
-            }
-            if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_nsToUsr")]) {
-                toUsr = [messageWrap valueForKey:@"m_nsToUsr"];
-            }
-        } @catch (...) {}
-    }
-    NSString *sessionKey = chatSessionKey(fromUsr, toUsr);
-
-    if (createTime == 0) return cell;
-
-    NSInteger statusCode = computeReadStatus(isSender, sessionKey, createTime);
-
-    PluginConfig *config = [PluginConfig shared];
-    NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
-    NSString *timeText = formatMessageTime(date,
-                                            config.messageTimeCustomFormat,
-                                            [config isDarkMode],
-                                            isSender,
-                                            statusCode);
-    if (!timeText) return cell;
-
-    // 存入 viewModel 关联对象，WeChat 后续 updateNodeStatus 时自动读取
-    objc_setAssociatedObject(viewModel, @"messageTimeText", timeText, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    return cell;
-}
 
 // 复刻 FUN_00039d80：始终创建空标签，不检查 showMessageTime
 static id repl_CommonMessageCellView_initWithViewModel(id self, SEL _cmd, id viewModel) {
@@ -621,19 +529,10 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
 
     if (!label) return;
 
-    // 守卫：app 非活跃时不访问 KVO（与 cellForRow 同因）
-    if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
-        label.hidden = YES;
-        return;
-    }
-
-    // 获取 viewModel → 读取已缓存在 viewModel 上的时间文本
+    // 获取 viewModel → 直接从 messageWrap 计算时间文本（参照锤子助手方案，不依赖 cellForRow 缓存）
     id viewModel = nil;
     @try { viewModel = [cv valueForKey:@"m_viewModel"] ?: [cv valueForKey:@"viewModel"]; } @catch (NSException *e) {}
     if (!viewModel) { label.hidden = YES; return; }
-
-    NSString *timeText = objc_getAssociatedObject(viewModel, @"messageTimeText");
-    if (!timeText) { label.hidden = YES; return; }
 
     // 复合消息过滤（复刻 FUN_0003c628 — 照抄 FUN_0003a06c 行 34573-34582）
     PluginConfig *config = [PluginConfig shared];
@@ -642,6 +541,54 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
         label.hidden = YES;
         return;
     }
+
+    // === 直接从 messageWrap 计算时间文本（不依赖 cellForRow 预缓存） ===
+    unsigned int createTime = 0;
+    id messageWrap = nil;
+    @try {
+        if ([viewModel respondsToSelector:NSSelectorFromString(@"messageWrap")]) {
+            @try { messageWrap = [viewModel valueForKey:@"messageWrap"]; } @catch (...) {}
+        }
+        if (!messageWrap) {
+            @try { messageWrap = [viewModel valueForKey:@"m_messageWrap"]; } @catch (...) {}
+        }
+        if (messageWrap) {
+            if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_uiCreateTime")]) {
+                createTime = (unsigned int)[[messageWrap valueForKey:@"m_uiCreateTime"] unsignedIntValue];
+            }
+        }
+        if (createTime == 0 && [viewModel respondsToSelector:NSSelectorFromString(@"createTime")]) {
+            @try { createTime = (unsigned int)[[viewModel valueForKey:@"createTime"] unsignedIntValue]; } @catch (...) {}
+        }
+    } @catch (NSException *e) {}
+
+    if (createTime == 0) { label.hidden = YES; return; }
+
+    BOOL isSender = NO;
+    @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) {}
+
+    // 伪已读状态追踪
+    NSString *fromUsr = nil, *toUsr = nil;
+    if (messageWrap) {
+        @try {
+            if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_nsFromUsr")]) {
+                fromUsr = [messageWrap valueForKey:@"m_nsFromUsr"];
+            }
+            if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_nsToUsr")]) {
+                toUsr = [messageWrap valueForKey:@"m_nsToUsr"];
+            }
+        } @catch (...) {}
+    }
+    NSString *sessionKey = chatSessionKey(fromUsr, toUsr);
+    NSInteger statusCode = computeReadStatus(isSender, sessionKey, createTime);
+
+    NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
+    NSString *timeText = formatMessageTime(date,
+                                            config.messageTimeCustomFormat,
+                                            [config isDarkMode],
+                                            isSender,
+                                            statusCode);
+    if (!timeText) { label.hidden = YES; return; }
 
     label.hidden = NO;
     label.text = timeText;
@@ -662,9 +609,6 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     label.frame = CGRectMake(0, 0, labelW, labelH);
 
     // 设置颜色（复刻反编译 FUN_0003b3b4 — sender/receiver × 亮/暗 四色）
-    BOOL isSender = NO;
-    @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) {}
-
     @try {
         NSString *textHex = isSender ? config.senderTextColorHex : config.receiverTextColorHex;
         NSString *textDarkHex = isSender ? config.senderTextColorDarkHex : config.receiverTextColorDarkHex;
@@ -856,7 +800,6 @@ static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGFloat x, CGFloat
 
 static MTHookEntry g_hookTable[] = {
     {"CommonMessageCellView",        "initWithViewModel:",                   (IMP)repl_CommonMessageCellView_initWithViewModel, (IMP*)&orig_CommonMessageCellView_initWithViewModel},
-    {"BaseMsgContentViewController", "tableView:cellForRowAtIndexPath:",     (IMP)repl_cellForRow,                         (IMP*)&orig_BaseMsgContentVC_cellForRow},
     {"CommonMessageCellView",        "updateNodeStatus",                     (IMP)repl_CommonMessageCellView_updateNodeStatus, (IMP*)&orig_CommonMessageCellView_updateNodeStatus},
     {"ChatTimeCellView",             "layoutSubviews",                       (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
     {"ChatTimeViewModel",            "cellHeight",                           (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
@@ -874,8 +817,8 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
 
 + (void)install {
     WPLog(@"MsgTime", @"========================================");
-    WPLog(@"MsgTime", @"MessageTimeHook install - initWithViewModel(early label) + cellForRow(global_queue) + updateNodeStatus(model-driven)");
-    WPLog(@"MsgTime", @"Architecture: 复刻微信优化1.6.5 — 全局队列异步计算 + ViewModel驱动");
+    WPLog(@"MsgTime", @"MessageTimeHook install - initWithViewModel(label) + updateNodeStatus(compute+layout) 参照锤子助手方案");
+    WPLog(@"MsgTime", @"Architecture: 仅hook updateNodeStatus计算时间文本，不碰cellForRow，避开VC转场崩溃");
     WPLog(@"MsgTime", @"========================================");
 
     PluginConfig *config = [PluginConfig shared];
