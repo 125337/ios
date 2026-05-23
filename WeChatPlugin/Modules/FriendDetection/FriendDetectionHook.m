@@ -40,27 +40,36 @@ static IMP _orig_GetTransferPrepayRequest = NULL;
 static IMP _orig_TransferReqInit = NULL;
 
 static id hook_TransferReqInit(id self, SEL _cmd) {
-    // 调用原始 init
     if (_orig_TransferReqInit) {
         self = ((id (*)(id, SEL))_orig_TransferReqInit)(self, _cmd);
     }
     if (!self) return nil;
 
-    // 用 objc runtime 枚举所有属性名和值
-    WPLog(@"FriendDetect", @"[InitDump] WCPayTransferPrepayRequestStruct init → %p", self);
-    unsigned int count = 0;
-    objc_property_t *props = class_copyPropertyList([self class], &count);
-    for (unsigned int i = 0; i < count; i++) {
-        const char *name = property_getName(props[i]);
-        if (!name) continue;
-        NSString *key = [NSString stringWithUTF8String:name];
-        id val = nil;
-        @try { val = [self valueForKey:key]; } @catch(...) {}
-        if (val) {
-            WPLog(@"FriendDetect", @"[InitDump]   %@ = %@", key, ([val isKindOfClass:[NSString class]] || [val isKindOfClass:[NSNumber class]]) ? val : NSStringFromClass([val class]));
+    // 只在检测活跃时才 dump，避免启动时上百次调用导致 watchdog 杀进程
+    if (g_fdDetectionActive) {
+        @try {
+            WPLog(@"FriendDetect", @"[InitDump] WCPayTransferPrepayRequestStruct init → %p", self);
+            unsigned int count = 0;
+            objc_property_t *props = class_copyPropertyList([WCPayTransferPrepayRequestStruct class], &count);
+            if (props && count > 0) {
+                for (unsigned int i = 0; i < count; i++) {
+                    const char *name = property_getName(props[i]);
+                    if (!name) continue;
+                    NSString *key = [NSString stringWithUTF8String:name];
+                    id val = nil;
+                    @try { val = [self valueForKey:key]; } @catch(...) {}
+                    if (val) {
+                        WPLog(@"FriendDetect", @"[InitDump]   %@ = %@", key,
+                              ([val isKindOfClass:[NSString class]] || [val isKindOfClass:[NSNumber class]])
+                              ? val : NSStringFromClass([val class]));
+                    }
+                }
+            }
+            if (props) free(props);
+        } @catch (NSException *e) {
+            WPLog(@"FriendDetect", @"[InitDump] exception: %@", e);
         }
     }
-    free(props);
     return self;
 }
 
