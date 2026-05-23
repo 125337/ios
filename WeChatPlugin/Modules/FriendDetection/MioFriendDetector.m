@@ -147,8 +147,6 @@ static BOOL fdSendRequest(id request) {
 //   1. retmsg == "ok"              → 正常好友
 //   2. retcode == "268502017"      → 账号异常 (invalidFriends)
 //   3. 其他                         → 已被删除 (notFriends)
-// 8.0.60 适配: insideCallback 返回的字典中 retmsg 为空时说明请求超时/失败
-//   → 归类为 Invalid 而非 Deleted，避免误报
 // ============================================================
 static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
     if (!response) return MioFriendStatusInvalid;
@@ -169,8 +167,8 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
 
     // 获取 retcode（兼容 NSNumber/NSString）
     id rcRaw = response[@"retcode"];
-    NSInteger rc = -1;
     NSString *rcStr = nil;
+    NSInteger rc = -1;
     if ([rcRaw isKindOfClass:[NSNumber class]]) {
         rc = [(NSNumber *)rcRaw integerValue];
         rcStr = [(NSNumber *)rcRaw stringValue];
@@ -184,13 +182,7 @@ static MioFriendStatus fdDetermineStatus(NSDictionary *response) {
         return MioFriendStatusInvalid;
     }
 
-    // 8.0.60 适配: retmsg 为空 → 请求失败/超时 → Invalid
-    if (!retmsg || retmsg.length == 0) {
-        WPLog(@"FriendDetect", @"[Judge] empty retmsg, rc=%ld → Invalid (req failed)", (long)rc);
-        return MioFriendStatusInvalid;
-    }
-
-    // 微信优化 行 20388-20393: 其他 retcode → notFriends (已被删除)
+    // 微信优化 行 20388-20393: 其他 → notFriends (已被删除)
     WPLog(@"FriendDetect", @"[Judge] retcode=%@ retmsg=%@ → Deleted", rcStr, retmsg);
     return MioFriendStatusDeleted;
 }

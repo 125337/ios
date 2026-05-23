@@ -13,9 +13,10 @@
 })
 
 // ============================================================
-// 自定义：带图标圆点和计数的行（复刻微信优化"账号异常"和"被删除"两行）
+// 自定义：带图标圆点、计数、箭头、可点击的行（完全复刻 WPAddNavRow 的按钮交互模式）
+// 点击后调用 target 的 onNavigate: 方法，action 为关联的 action 字符串
 // ============================================================
-static void WPAddResultCountRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSInteger count, UIColor *iconBg, NSString *iconText) {
+static void WPAddResultNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSInteger count, UIColor *iconBg, NSString *iconText, NSString *action, id target) {
     CGFloat cardW = cw - kPad * 2;
 
     // 图标圆点
@@ -38,13 +39,29 @@ static void WPAddResultCountRow(UIView *card, CGFloat cy, CGFloat cw, NSString *
     tl.textColor = WPT1();
     [card addSubview:tl];
 
-    // 计数（右侧）
-    UILabel *cnt = [[UILabel alloc] initWithFrame:CGRectMake(cardW - 80, cy, 70, kRowH)];
+    // 计数（右侧，给箭头留空）
+    UILabel *cnt = [[UILabel alloc] initWithFrame:CGRectMake(cardW - 100, cy, 70, kRowH)];
     cnt.text = count >= 0 ? [NSString stringWithFormat:@"%ld", (long)count] : @"—";
     cnt.font = [UIFont systemFontOfSize:20 weight:UIFontWeightMedium];
     cnt.textColor = WPT2();
     cnt.textAlignment = NSTextAlignmentRight;
     [card addSubview:cnt];
+
+    // 箭头指示器（复刻 WPAddNavRow）
+    UILabel *arrow = [[UILabel alloc] initWithFrame:CGRectMake(cardW - 20, cy, 16, kRowH)];
+    arrow.text = @"›";
+    arrow.font = [UIFont systemFontOfSize:20];
+    arrow.textColor = WPT3();
+    [card addSubview:arrow];
+
+    // 全行透明按钮（复刻 WPAddNavRow 的按钮逻辑）
+    if (action && target) {
+        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+        btn.frame = CGRectMake(0, cy, cardW, kRowH);
+        objc_setAssociatedObject(btn, "action", action, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [btn addTarget:target action:@selector(onNavigate:) forControlEvents:UIControlEventTouchUpInside];
+        [card addSubview:btn];
+    }
 }
 
 // ============================================================
@@ -125,30 +142,17 @@ static void WPAddResultCountRow(UIView *card, CGFloat cy, CGFloat cw, NSString *
     NSInteger delCount = last ? (NSInteger)last.deletedFriends.count : -1;
 
     UIView *resultCard = WPMakeCard(y, w);
-    WPAddResultCountRow(resultCard, 0, w, @"账号异常或检测失败", errCount,
-                        [UIColor colorWithRed:1.0 green:0.23 blue:0.19 alpha:1.0], @"!"); // 红色
+    WPAddResultNavRow(resultCard, 0, w, @"账号异常或检测失败", errCount,
+                      [UIColor colorWithRed:1.0 green:0.23 blue:0.19 alpha:1.0], @"!",
+                      @"fd_tapInvalid", self);
     WPAddSep(resultCard, kRowH, w);
-    WPAddResultCountRow(resultCard, kRowH + 0.5, w, @"已被对方拉黑或删除", delCount,
-                        [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0], @"×"); // 橙色
+    WPAddResultNavRow(resultCard, kRowH + 0.5, w, @"已被对方拉黑或删除", delCount,
+                      [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0], @"×",
+                      @"fd_tapDeleted", self);
 
     CGFloat resultH = kRowH * 2 + 0.5;
     CGRect rf = resultCard.frame; rf.size.height = resultH; resultCard.frame = rf;
     [self.scrollView addSubview:resultCard];
-
-    // 可点击：给结果行添加透明按钮（宽度用 card 宽度，避免被 clipsToBounds 裁剪）
-    CGFloat cardW = w - kPad * 2;
-    if (errCount > 0) {
-        UIButton *errBtn = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, cardW, kRowH)];
-        [errBtn addTarget:self action:@selector(tapInvalidRow) forControlEvents:UIControlEventTouchUpInside];
-        [resultCard addSubview:errBtn];
-        [resultCard bringSubviewToFront:errBtn];
-    }
-    if (delCount > 0) {
-        UIButton *delBtn = [[UIButton alloc] initWithFrame:CGRectMake(0, kRowH + 0.5, cardW, kRowH)];
-        [delBtn addTarget:self action:@selector(tapDeletedRow) forControlEvents:UIControlEventTouchUpInside];
-        [resultCard addSubview:delBtn];
-        [resultCard bringSubviewToFront:delBtn];
-    }
     y += resultH + 16;
 
     // 结果说明
@@ -211,6 +215,24 @@ static void WPAddResultCountRow(UIView *card, CGFloat cy, CGFloat cw, NSString *
     if (!s || s.deletedFriends.count == 0) return;
     MioFriendDetectionVC *vc = [MioFriendDetectionVC vcWithType:@"deleted" friends:s.deletedFriends];
     [self.navigationController pushViewController:vc animated:YES];
+}
+
+// ============================================================
+// MARK: - onNavigate: (WPAddNavRow / WPAddResultNavRow 统一点击入口)
+// ============================================================
+- (void)onNavigate:(UIButton *)sender {
+    NSString *action = objc_getAssociatedObject(sender, "action");
+    if (!action) return;
+
+    if ([action isEqualToString:@"fd_startDetection"]) {
+        [self startDetectionTapped];
+    } else if ([action isEqualToString:@"fd_clearData"]) {
+        [self clearDataTapped];
+    } else if ([action isEqualToString:@"fd_tapInvalid"]) {
+        [self tapInvalidRow];
+    } else if ([action isEqualToString:@"fd_tapDeleted"]) {
+        [self tapDeletedRow];
+    }
 }
 
 // ============================================================
@@ -391,17 +413,6 @@ static void WPAddResultCountRow(UIView *card, CGFloat cy, CGFloat cw, NSString *
 // ============================================================
 // MARK: - 主页面 Actions
 // ============================================================
-- (void)onNavigate:(UIButton *)sender {
-    NSString *action = objc_getAssociatedObject(sender, "action");
-    if (!action) return;
-
-    if ([action isEqualToString:@"fd_startDetection"]) {
-        [self startDetectionTapped];
-    } else if ([action isEqualToString:@"fd_clearData"]) {
-        [self clearDataTapped];
-    }
-}
-
 - (void)startDetectionTapped {
     if (self.detecting) return;
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"开始检测"
