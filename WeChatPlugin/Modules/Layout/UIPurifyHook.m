@@ -54,7 +54,7 @@ static id hook_SysCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     if (purifyReadConfig(@"HideRevokeHint")) {
         UIView *v = (UIView *)result;
         [v setHidden:YES];
-        v.frame = v.frame;  // 触发 setNeedsLayout，匹配 微信优化 FUN_00025c48
+        v.alpha = 0;
     }
     return result;
 }
@@ -89,7 +89,7 @@ static id hook_PatCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     if (purifyReadConfig(@"HidePatHint")) {
         UIView *v = (UIView *)result;
         [v setHidden:YES];
-        v.frame = v.frame;  // 触发 setNeedsLayout，匹配 微信优化 FUN_00025f64
+        v.alpha = 0;
     }
     return result;
 }
@@ -166,13 +166,8 @@ static BOOL hook_MMGrow_enableDictation(id self, SEL _cmd) {
 }
 
 // ============================================================
-// MARK: - 隐藏水平分割线 — UIView.layoutSubviews（微信优化 FUN_0004627c）
+// MARK: - 隐藏水平分割线 — UIView.layoutSubviews
 // ============================================================
-
-/// 判断 frame 高度是否 ≤ 1px（细线特征）
-static BOOL hasThinFrame(UIView *v) {
-    return CGRectGetHeight(v.frame) <= 1.0;
-}
 
 static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
     ((void (*)(id, SEL))_orig_UIView_layoutSubviews)(self, _cmd);
@@ -180,7 +175,20 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
 
     UIView *v = (UIView *)self;
 
-    // 第1层：类名过滤 — 排除明确不可能是分割线的类
+    // 安全：不处理 WeChat 消息 cell 内部的视图（避免消息误伤）
+    {
+        Class baseMsgCell = NSClassFromString(@"BaseMessageCellView");
+        if (baseMsgCell) {
+            UIView *check = v;
+            while (check) {
+                if ([check isKindOfClass:baseMsgCell]) return;
+                check = check.superview;
+                if (check == nil) break;
+            }
+        }
+    }
+
+    // 第1层：类名过滤
     {
         Class brandCell = NSClassFromString(@"FTSBrandContactCell");
         if (brandCell && [v isKindOfClass:brandCell]) return;
@@ -192,7 +200,7 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         r = [className rangeOfString:@"Contact"];  if (r.location != NSNotFound) return;
     }
 
-    // 第2层：获取视图属性
+    // 第2层：获取属性
     BOOL   isSepView = [className isEqualToString:@"_UITableViewCellSeparatorView"];
     CGFloat h = CGRectGetHeight(v.frame);
     CGFloat w = CGRectGetWidth(v.frame);
@@ -200,34 +208,29 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
     BOOL isLabel = [v isKindOfClass:[UILabel class]];
     BOOL isImage = [v isKindOfClass:[UIImageView class]];
 
-    // 排除文字和图片视图（不可能是分割线）
     if (isLabel || isImage) return;
 
     BOOL isThin = (h <= 1.0);
     BOOL shouldHide = NO;
 
-    // 分支A：_UITableViewCellSeparatorView 系统分隔线
     if (isSepView) {
         if (h <= 0 || isThin) shouldHide = YES;
     }
-    // 分支：非系统分隔线，但符合细线特征
     else if (isThin && w > 100.0) {
         shouldHide = (bg != nil);
     }
-    // 分支B：普通 UIView 额外检查 — 类名就是 UIView、有背景色、无子视图
     else if ([className isEqualToString:@"UIView"] && isThin && bg != nil) {
         shouldHide = (v.subviews.count == 0);
     }
 
     if (!shouldHide) return;
 
-    // 第3层：父链排除 — 沿 nextResponder 链排除特定页面
+    // 第3层：父链排除
     {
         Class timelineVC = NSClassFromString(@"WCTimeLineViewController");
         Class subVC      = NSClassFromString(@"MPSubscriptionViewController");
         NSString *timelineFooter = @"WCTimelineFooterCell";
 
-        // 遍历1：排除朋友圈
         id resp = v;
         for (int i = 0; i < 11; i++) {
             if (timelineVC && [resp isKindOfClass:timelineVC]) return;
@@ -235,7 +238,6 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
             resp = [resp nextResponder];
             if (!resp) break;
         }
-        // 遍历2：排除订阅号
         resp = v;
         for (int i = 0; i < 11; i++) {
             if (subVC && [resp isKindOfClass:subVC]) return;
@@ -343,14 +345,14 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    // ——— 隐藏水平分割线：UIView.layoutSubviews（独立安装器 FUN_00046248）———
+    // ——— 隐藏水平分割线：UIView.layoutSubviews ———
     {
         MSHookMessageEx([UIView class], @selector(layoutSubviews),
             (IMP)hook_UIView_layoutSubviews, &_orig_UIView_layoutSubviews);
         WPLog(@"UIPurify", @"[Hook] ✓ UIView.layoutSubviews (global separator hiding)");
     }
 
-    WPLog(@"UIPurify", @"UIPurifyHook install complete (12 hooks, matched 微信优化 FUN_00025688 + FUN_00046248)");
+    WPLog(@"UIPurify", @"UIPurifyHook install complete (12 hooks)");
 }
 
 @end
