@@ -2,6 +2,15 @@
 #import "SettingEntryHook.h"
 #import "../../Core/LogManager.h"
 
+/// ========== 配置读取辅助 ==========
+static inline NSUserDefaults *SD(void) {
+    return [NSUserDefaults standardUserDefaults];
+}
+
+static inline NSString *SStr(NSString *key) {
+    return [SD() stringForKey:key];
+}
+
 /// ========== 编辑行 tap — 弹窗 + 持久化 ==========
 @implementation WeChatPluginSwitchHandler (WPUISimplify)
 
@@ -17,11 +26,12 @@
 
     // 从 NSUserDefaults 读取当前值作为初始值
     NSString *currentValue = nil;
+    NSUserDefaults *d = SD();
     if (dictKey) {
-        currentValue = [[NSUserDefaults standardUserDefaults] dictionaryForKey:nsKey][dictKey];
+        currentValue = [d dictionaryForKey:nsKey][dictKey];
     }
     if (!currentValue && nsKey) {
-        currentValue = [[NSUserDefaults standardUserDefaults] stringForKey:nsKey];
+        currentValue = [d stringForKey:nsKey];
     }
     if (!currentValue) {
         currentValue = valueLabel.text ?: @"";
@@ -44,7 +54,6 @@
         if (weakLabel) weakLabel.text = newText;
 
         // 持久化：字典项 vs 字符串项
-        NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
         if (dictKey && nsKey) {
             NSMutableDictionary *dict = [[d dictionaryForKey:nsKey] ?: @{} mutableCopy];
             dict[dictKey] = newText;
@@ -139,7 +148,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     // ========== 预取字典数据 ==========
     NSDictionary *menuDict = [d dictionaryForKey:@"Simplify_MenuNames"] ?: @{};
     NSDictionary *tabDict = [d dictionaryForKey:@"Simplify_Tab_Names"] ?: @{};
-    #define EVal(key, def) ([[d stringForKey:key] ?: (def)])
+    #define EVal(key, def) (SStr(key) ?: (def))
     #define EValD(dict, dk, def) ((dict)[dk] ?: (def))
 
     // ========== Section 1: 顶部标签自定义 ==========
