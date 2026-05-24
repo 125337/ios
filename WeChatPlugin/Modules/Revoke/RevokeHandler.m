@@ -338,7 +338,10 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
     NSString *timeText = timeTextFromTimestamp(createTime, config.dateFormat);
 
     NSString *newMsgContent = nil;
-    if (revokedContent.length > 0) {
+    if (config.revokeTemplate.length > 0) {
+        NSString *contentForTemplate = revokedContent ?: @"";
+        newMsgContent = [config applyRevokeTemplate:config.revokeTemplate name:fromUsrName content:contentForTemplate createTime:createTime];
+    } else if (revokedContent.length > 0) {
         newMsgContent = [NSString stringWithFormat:@"%@\n\"%@\"撤回了一条消息\n%@", 
                         timeText, fromUsrName, revokedContent];
     } else {
