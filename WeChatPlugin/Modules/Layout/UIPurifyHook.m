@@ -254,6 +254,15 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
 // ============================================================
 @implementation UIPurifyHook
 
+/// 检查方法是否在指定类中被重写（非继承）
+static BOOL purifyIsOverridden(Class cls, SEL sel) {
+    IMP own = class_getMethodImplementation(cls, sel);
+    Class superCls = class_getSuperclass(cls);
+    if (!superCls) return YES;
+    IMP parent = class_getMethodImplementation(superCls, sel);
+    return (own != parent);
+}
+
 + (void)install {
     WPLog(@"UIPurify", @"UIPurifyHook install start (微信优化方案)");
 
@@ -265,19 +274,31 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
                 (IMP)hook_SysCell_initWithViewModel, &_orig_SysCell_initWithViewModel);
             MSHookMessageEx(cls, sel_registerName("layoutInternal"),
                 (IMP)hook_SysCell_layoutInternal, &_orig_SysCell_layoutInternal);
-            MSHookMessageEx(cls, sel_registerName("canBeReused"),
-                (IMP)hook_SysCell_canBeReused, &_orig_SysCell_canBeReused);
-            MSHookMessageEx(cls, sel_registerName("shouldLayoutIfNeeded"),
-                (IMP)hook_SysCell_shouldLayoutIfNeeded, &_orig_SysCell_shouldLayoutIfNeeded);
-            WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageCellView x4 (hide revoke)");
+            if (purifyIsOverridden(cls, sel_registerName("canBeReused"))) {
+                MSHookMessageEx(cls, sel_registerName("canBeReused"),
+                    (IMP)hook_SysCell_canBeReused, &_orig_SysCell_canBeReused);
+            } else {
+                WPLog(@"UIPurify", @"[Hook] - SysCell.canBeReused inherited, skip");
+            }
+            if (purifyIsOverridden(cls, sel_registerName("shouldLayoutIfNeeded"))) {
+                MSHookMessageEx(cls, sel_registerName("shouldLayoutIfNeeded"),
+                    (IMP)hook_SysCell_shouldLayoutIfNeeded, &_orig_SysCell_shouldLayoutIfNeeded);
+            } else {
+                WPLog(@"UIPurify", @"[Hook] - SysCell.shouldLayoutIfNeeded inherited, skip");
+            }
+            WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageCellView (hide revoke)");
         } else {
             WPLog(@"UIPurify", @"[Hook] - SystemMessageCellView not found");
         }
         Class vmCls = objc_getClass("SystemMessageViewModel");
         if (vmCls) {
-            MSHookMessageEx(vmCls, sel_registerName("measure:"),
-                (IMP)hook_SysVM_measure, &_orig_SysVM_measure);
-            WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageViewModel.measure: (hide revoke)");
+            if (purifyIsOverridden(vmCls, sel_registerName("measure:"))) {
+                MSHookMessageEx(vmCls, sel_registerName("measure:"),
+                    (IMP)hook_SysVM_measure, &_orig_SysVM_measure);
+                WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageViewModel.measure: (hide revoke)");
+            } else {
+                WPLog(@"UIPurify", @"[Hook] - SysVM.measure: inherited, skip");
+            }
         } else {
             WPLog(@"UIPurify", @"[Hook] - SystemMessageViewModel not found");
         }
@@ -291,19 +312,31 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
                 (IMP)hook_PatCell_initWithViewModel, &_orig_PatCell_initWithViewModel);
             MSHookMessageEx(cls, sel_registerName("layoutInternal"),
                 (IMP)hook_PatCell_layoutInternal, &_orig_PatCell_layoutInternal);
-            MSHookMessageEx(cls, sel_registerName("canBeReused"),
-                (IMP)hook_PatCell_canBeReused, &_orig_PatCell_canBeReused);
-            MSHookMessageEx(cls, sel_registerName("shouldLayoutIfNeeded"),
-                (IMP)hook_PatCell_shouldLayoutIfNeeded, &_orig_PatCell_shouldLayoutIfNeeded);
-            WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageCellView x4 (hide pat)");
+            if (purifyIsOverridden(cls, sel_registerName("canBeReused"))) {
+                MSHookMessageEx(cls, sel_registerName("canBeReused"),
+                    (IMP)hook_PatCell_canBeReused, &_orig_PatCell_canBeReused);
+            } else {
+                WPLog(@"UIPurify", @"[Hook] - PatCell.canBeReused inherited, skip");
+            }
+            if (purifyIsOverridden(cls, sel_registerName("shouldLayoutIfNeeded"))) {
+                MSHookMessageEx(cls, sel_registerName("shouldLayoutIfNeeded"),
+                    (IMP)hook_PatCell_shouldLayoutIfNeeded, &_orig_PatCell_shouldLayoutIfNeeded);
+            } else {
+                WPLog(@"UIPurify", @"[Hook] - PatCell.shouldLayoutIfNeeded inherited, skip");
+            }
+            WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageCellView (hide pat)");
         } else {
             WPLog(@"UIPurify", @"[Hook] - AppPatMessageCellView not found");
         }
         Class vmCls = objc_getClass("AppPatMessageViewModel");
         if (vmCls) {
-            MSHookMessageEx(vmCls, sel_registerName("measure:"),
-                (IMP)hook_PatVM_measure, &_orig_PatVM_measure);
-            WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageViewModel.measure: (hide pat)");
+            if (purifyIsOverridden(vmCls, sel_registerName("measure:"))) {
+                MSHookMessageEx(vmCls, sel_registerName("measure:"),
+                    (IMP)hook_PatVM_measure, &_orig_PatVM_measure);
+                WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageViewModel.measure: (hide pat)");
+            } else {
+                WPLog(@"UIPurify", @"[Hook] - PatVM.measure: inherited, skip");
+            }
         } else {
             WPLog(@"UIPurify", @"[Hook] - AppPatMessageViewModel not found");
         }
