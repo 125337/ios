@@ -379,6 +379,28 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
             }
         }
     }
+    // Friends count (参照微信优化 FUN_00044ecc L40643)
+    if (_friendsCount && _friendsCount.length > 0) {
+        @try {
+            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"\\d+" options:0 error:nil];
+            if (regex) {
+                NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
+                if (match && match.range.location != NSNotFound && match.range.length > 0) {
+                    if ([text containsString:@"位"] && [text containsString:@"联系人"]) {
+                        NSString *number = [text substringWithRange:match.range];
+                        NSString *formatted = [NSString stringWithFormat:_friendsCount, number];
+                        if (formatted && formatted.length > 0) {
+                            NSAttributedString *replaced = replacedAttrStr(attrText, formatted);
+                            if (replaced) {
+                                ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd, replaced);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        } @catch (NSException *e) {}
+    }
     
     ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd, attrText);
 }
