@@ -116,7 +116,7 @@ void WPAddTextFieldRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NS
     [card addSubview:tf];
 }
 
-void WPAddEditableRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *value, id target) {
+UIButton *WPAddEditableRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *value, id target) {
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, cw - kPad * 2 - 150, kRowH)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
@@ -136,6 +136,7 @@ void WPAddEditableRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSS
     objc_setAssociatedObject(btn, "editValueLabel", vl, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [btn addTarget:target action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
     [card addSubview:btn];
+    return btn;
 }
 
 #pragma mark - 安全 present

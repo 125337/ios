@@ -33,6 +33,7 @@ MioHelper_FILES = Tweak.m \
 	Modules/SettingEntry/WPAboutVC.m \
 	Modules/SettingEntry/WPBackupVC.m \
 	Modules/Layout/UIPurifyHook.m \
+	Modules/Layout/UISimplifyHook.m \
 	Modules/Joker/JokerHook.m \
 	Modules/GroupExit/GroupExitHook.m \
 	Modules/FriendDetection/FriendDetectionHook.m \
