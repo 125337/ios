@@ -50,7 +50,7 @@ void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSStr
     UISwitch *sw = [[UISwitch alloc] init];
     sw.on = on;
     sw.onTintColor = WPSwOn();
-    sw.frame = CGRectMake(cw - kPad * 2 - 51, cy + 6.5, 51, 31);
+    sw.frame = CGRectMake(cw - kPad * 3 - 51, cy + 6.5, 51, 31);
     objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [sw addTarget:target action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     [card addSubview:sw];

@@ -120,7 +120,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     UISwitch *sw = [[UISwitch alloc] init];
     sw.on = enabled;
     sw.onTintColor = WPSwOn();
-    sw.frame = CGRectMake(w - kPad * 2 - 51, scy + 6.5, 51, 31);
+    sw.frame = CGRectMake(w - kPad * 3 - 51, scy + 6.5, 51, 31);
     [sw addTarget:(id)self action:@selector(onSimplifySwitch:) forControlEvents:UIControlEventValueChanged];
     [switchCard addSubview:sw];
     scy += kRowH;

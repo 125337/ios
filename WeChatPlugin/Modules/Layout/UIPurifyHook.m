@@ -8,7 +8,7 @@
 #import <UIKit/UIKit.h>
 #import <substrate.h>
 #import <objc/runtime.h>
-#import "../../Utils/WPLog.h"
+#import "../../Core/LogManager.h"
 
 // ============================================================
 // MARK: - Config & ordinals
