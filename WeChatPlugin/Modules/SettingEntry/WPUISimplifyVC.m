@@ -318,23 +318,17 @@ static void WPUISimplifyViewDidLoad(id self, SEL _cmd) {
     if (!subClass) {
         subClass = objc_allocateClassPair(WPGetBaseClass(), "WPUISimplifyVC", 0);
         if (subClass) {
+            class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPUISimplifyViewDidLoad, "v@:");
             objc_registerClassPair(subClass);
             WPLog(@"UI", @"[Sub] WPUISimplifyVC class created");
         } else {
             WPLog(@"UI", @"[Sub] WPUISimplifyVC class create FAILED");
-            return nil;
         }
     }
-    // 始终更新 IMP，确保新旧代码都能覆盖
-    Method m = class_getInstanceMethod(subClass, NSSelectorFromString(@"viewDidLoad"));
-    if (m) {
-        method_setImplementation(m, (IMP)WPUISimplifyViewDidLoad);
-        WPLog(@"UI", @"[Sub] WPUISimplifyVC viewDidLoad IMP updated");
-    } else {
-        class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPUISimplifyViewDidLoad, "v@:");
-        WPLog(@"UI", @"[Sub] WPUISimplifyVC viewDidLoad IMP added");
+    if (subClass) {
+        return [[subClass alloc] init];
     }
-    return [[subClass alloc] init];
+    return nil;
 }
 
 @end
