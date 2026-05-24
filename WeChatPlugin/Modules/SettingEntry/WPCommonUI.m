@@ -1,7 +1,8 @@
 #import "WPCommonUI.h"
+#import <QuartzCore/QuartzCore.h>
 
-const CGFloat kPad = 18.0;
-const CGFloat kRadius = 12.0;
+const CGFloat kPad = 16.0;
+const CGFloat kRadius = 10.0;
 const CGFloat kRowH = 44.0;
 
 Class WPGetBaseClass(void) {
@@ -64,12 +65,22 @@ void WPAddNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString
     [card addSubview:tl];
     [tl release];
 
-    UILabel *arrow = [[UILabel alloc] initWithFrame:CGRectMake(cw - kPad * 2 - 20, cy, 16, kRowH)];
-    arrow.text = @"\u203A";
-    arrow.font = [UIFont systemFontOfSize:20];
-    arrow.textColor = WPT3();
-    [card addSubview:arrow];
-    [arrow release];
+    CGFloat arrowW = 7, arrowH = 11;
+    CGFloat arrowX = cw - kPad - arrowW - 3;
+    CGFloat arrowCY = cy + kRowH / 2;
+    CAShapeLayer *arrow = [CAShapeLayer layer];
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    [path moveToPoint:CGPointMake(1, 0)];
+    [path addLineToPoint:CGPointMake(arrowW, arrowH / 2)];
+    [path addLineToPoint:CGPointMake(1, arrowH)];
+    arrow.path = path.CGPath;
+    arrow.strokeColor = [UIColor colorWithRed:0.78 green:0.78 blue:0.80 alpha:1.0].CGColor;
+    arrow.fillColor = [UIColor clearColor].CGColor;
+    arrow.lineWidth = 2.0;
+    arrow.lineCap = kCALineCapRound;
+    arrow.lineJoin = kCALineJoinRound;
+    arrow.frame = CGRectMake(arrowX, arrowCY - arrowH / 2, arrowW + 2, arrowH);
+    [card.layer addSublayer:arrow];
 
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
     btn.frame = CGRectMake(0, cy, cw - kPad * 2, kRowH);
@@ -170,12 +181,22 @@ UIButton *WPAddEditableRowWithArrow(UIView *card, CGFloat cy, CGFloat cw, NSStri
     [vl release];
 
     // 右箭头（与 WPAddNavRow 一致）
-    UILabel *arrow = [[UILabel alloc] initWithFrame:CGRectMake(cw - kPad * 2 - 20, cy, 16, kRowH)];
-    arrow.text = @"\u203A";
-    arrow.font = [UIFont systemFontOfSize:20];
-    arrow.textColor = WPT3();
-    [card addSubview:arrow];
-    [arrow release];
+    CGFloat arrowW = 7, arrowH = 11;
+    CGFloat arrowX = cw - kPad - arrowW - 3;
+    CGFloat arrowCY = cy + kRowH / 2;
+    CAShapeLayer *arrow = [CAShapeLayer layer];
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    [path moveToPoint:CGPointMake(1, 0)];
+    [path addLineToPoint:CGPointMake(arrowW, arrowH / 2)];
+    [path addLineToPoint:CGPointMake(1, arrowH)];
+    arrow.path = path.CGPath;
+    arrow.strokeColor = [UIColor colorWithRed:0.78 green:0.78 blue:0.80 alpha:1.0].CGColor;
+    arrow.fillColor = [UIColor clearColor].CGColor;
+    arrow.lineWidth = 2.0;
+    arrow.lineCap = kCALineCapRound;
+    arrow.lineJoin = kCALineJoinRound;
+    arrow.frame = CGRectMake(arrowX, arrowCY - arrowH / 2, arrowW + 2, arrowH);
+    [card.layer addSublayer:arrow];
 
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
     btn.frame = CGRectMake(0, cy, cw - kPad * 2, kRowH);
