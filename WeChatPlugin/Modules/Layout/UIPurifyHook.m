@@ -1,9 +1,7 @@
 //
 //  UIPurifyHook.m — 界面净化
-//  反编译参考微信优化 1.6.5 (FUN_00025688)
-//  安装顺序：ChatTime → AppPat → SystemMessage → Voice → YYAsync → MMGrowText
-//  （Pat 在 Sys 之前避免子类被父类 Hook 误伤）
-//  （setHidden 替代 setFrame: — frame 未变时 setFrame: 是空操作，但会留脏标记）
+//  完全匹配微信优化 1.6.5 反编译 (FUN_00025688)
+//  安装顺序：ChatTime → SystemMessage → AppPat → Voice → YYAsync → MMGrowText
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -24,7 +22,7 @@ static inline BOOL purifyReadConfig(NSString *key) {
 // MARK: - ChatTimeCellView (参照 FUN_0002592c / FUN_000259fc / …)
 // ============================================================
 
-static void (*_orig_ChatTimeCell_initWithViewModel)(id, SEL, id);
+static id (*_orig_ChatTimeCell_initWithViewModel)(id, SEL, id);
 static void (*_orig_ChatTimeCell_layoutInternal)(id, SEL);
 static BOOL (*_orig_ChatTimeCell_canBeReused)(id, SEL);
 static BOOL (*_orig_ChatTimeCell_shouldLayoutIfNeeded)(id, SEL);
@@ -62,7 +60,7 @@ static CGSize hook_ChatTimeVM_measure(id self, SEL _cmd, CGSize size) {
 // MARK: - SystemMessageCellView (参照 FUN_00025c48 / FUN_00025d18 / …)
 // ============================================================
 
-static void (*_orig_SysCell_initWithViewModel)(id, SEL, id);
+static id (*_orig_SysCell_initWithViewModel)(id, SEL, id);
 static void (*_orig_SysCell_layoutInternal)(id, SEL);
 static BOOL (*_orig_SysCell_canBeReused)(id, SEL);
 static BOOL (*_orig_SysCell_shouldLayoutIfNeeded)(id, SEL);
@@ -100,7 +98,7 @@ static CGSize hook_SysVM_measure(id self, SEL _cmd, CGSize size) {
 // MARK: - AppPatMessageCellView (参照 FUN_00025f64 / FUN_00026034 / …)
 // ============================================================
 
-static void (*_orig_PatCell_initWithViewModel)(id, SEL, id);
+static id (*_orig_PatCell_initWithViewModel)(id, SEL, id);
 static void (*_orig_PatCell_layoutInternal)(id, SEL);
 static BOOL (*_orig_PatCell_canBeReused)(id, SEL);
 static BOOL (*_orig_PatCell_shouldLayoutIfNeeded)(id, SEL);
@@ -221,30 +219,7 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"UIPurify", @"[Hook] ✓ ChatTimeViewModel.measure:");
     }
 
-    // ② AppPatMessageCellView — 参照 FUN_00025f64..FUN_000261d0
-    //   必须在 SystemMessageCellView 之前安装：
-    //   MSHookMessageEx 在 Hook 子类时捕获的是父类当前的 IMP，
-    //   先 Hook 子类 → _orig 指向原始父类实现 → 不会进入后续的父类 Hook
-    cls = objc_getClass("AppPatMessageCellView");
-    if (cls) {
-        MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
-            (IMP)hook_PatCell_initWithViewModel, (IMP *)&_orig_PatCell_initWithViewModel);
-        MSHookMessageEx(cls, sel_registerName("layoutInternal"),
-            (IMP)hook_PatCell_layoutInternal, (IMP *)&_orig_PatCell_layoutInternal);
-        MSHookMessageEx(cls, sel_registerName("canBeReused"),
-            (IMP)hook_PatCell_canBeReused, (IMP *)&_orig_PatCell_canBeReused);
-        MSHookMessageEx(cls, sel_registerName("shouldLayoutIfNeeded"),
-            (IMP)hook_PatCell_shouldLayoutIfNeeded, (IMP *)&_orig_PatCell_shouldLayoutIfNeeded);
-        WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageCellView");
-    }
-    cls = objc_getClass("AppPatMessageViewModel");
-    if (cls) {
-        MSHookMessageEx(cls, sel_registerName("measure:"),
-            (IMP)hook_PatVM_measure, (IMP *)&_orig_PatVM_measure);
-        WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageViewModel.measure:");
-    }
-
-    // ③ SystemMessageCellView — 参照 FUN_00025c48..FUN_00025eb4
+    // ② SystemMessageCellView — 参照 FUN_00025c48..FUN_00025eb4
     cls = objc_getClass("SystemMessageCellView");
     if (cls) {
         MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
@@ -262,6 +237,26 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         MSHookMessageEx(cls, sel_registerName("measure:"),
             (IMP)hook_SysVM_measure, (IMP *)&_orig_SysVM_measure);
         WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageViewModel.measure:");
+    }
+
+    // ③ AppPatMessageCellView — 参照 FUN_00025f64..FUN_000261d0
+    cls = objc_getClass("AppPatMessageCellView");
+    if (cls) {
+        MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
+            (IMP)hook_PatCell_initWithViewModel, (IMP *)&_orig_PatCell_initWithViewModel);
+        MSHookMessageEx(cls, sel_registerName("layoutInternal"),
+            (IMP)hook_PatCell_layoutInternal, (IMP *)&_orig_PatCell_layoutInternal);
+        MSHookMessageEx(cls, sel_registerName("canBeReused"),
+            (IMP)hook_PatCell_canBeReused, (IMP *)&_orig_PatCell_canBeReused);
+        MSHookMessageEx(cls, sel_registerName("shouldLayoutIfNeeded"),
+            (IMP)hook_PatCell_shouldLayoutIfNeeded, (IMP *)&_orig_PatCell_shouldLayoutIfNeeded);
+        WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageCellView");
+    }
+    cls = objc_getClass("AppPatMessageViewModel");
+    if (cls) {
+        MSHookMessageEx(cls, sel_registerName("measure:"),
+            (IMP)hook_PatVM_measure, (IMP *)&_orig_PatVM_measure);
+        WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageViewModel.measure:");
     }
 
     // ④ VoiceMessageCellView — 参照 FUN_00026280
