@@ -45,27 +45,13 @@ static inline BOOL purifyReadConfig(NSString *key) {
 }
 
 // ============================================================
-// MARK: - 防撤回消息标记（避免 hideLabel 误杀自定义提示）
-// ============================================================
-
-static BOOL purifyIsCustomRevokeTip(id viewModel) {
-    @try {
-        id msgWrap = [viewModel valueForKey:@"m_messageWrap"];
-        if (msgWrap && objc_getAssociatedObject(msgWrap, "MioRevokeTipMark")) {
-            return YES;
-        }
-    } @catch (NSException *e) {}
-    return NO;
-}
-
-// ============================================================
 // MARK: - 隐藏撤回消息 — SystemMessageCellView 5 连 Hook
 // ============================================================
 
 static id hook_SysCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     id result = ((id (*)(id, SEL, id))_orig_SysCell_initWithViewModel)(self, _cmd, viewModel);
     if (!result) return nil;
-    if (purifyReadConfig(@"HideRevokeHint") && !purifyIsCustomRevokeTip(viewModel)) {
+    if (purifyReadConfig(@"HideRevokeHint")) {
         UIView *v = (UIView *)result;
         [v setHidden:YES];
         v.frame = v.frame;
@@ -89,7 +75,7 @@ static BOOL hook_SysCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
 }
 
 static CGSize hook_SysVM_measure(id self, SEL _cmd, CGSize size) {
-    if (purifyReadConfig(@"HideRevokeHint") && !purifyIsCustomRevokeTip(self)) return CGSizeZero;
+    if (purifyReadConfig(@"HideRevokeHint")) return CGSizeZero;
     return ((CGSize (*)(id, SEL, CGSize))_orig_SysVM_measure)(self, _cmd, size);
 }
 
