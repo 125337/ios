@@ -45,16 +45,30 @@ static inline BOOL purifyReadConfig(NSString *key) {
 }
 
 // ============================================================
+// MARK: - 防撤回消息标记（避免 hideLabel 误杀自定义提示）
+// ============================================================
+
+static BOOL purifyIsCustomRevokeTip(id viewModel) {
+    @try {
+        id msgWrap = [viewModel valueForKey:@"m_messageWrap"];
+        if (msgWrap && objc_getAssociatedObject(msgWrap, "MioRevokeTipMark")) {
+            return YES;
+        }
+    } @catch (NSException *e) {}
+    return NO;
+}
+
+// ============================================================
 // MARK: - 隐藏撤回消息 — SystemMessageCellView 5 连 Hook
 // ============================================================
 
 static id hook_SysCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     id result = ((id (*)(id, SEL, id))_orig_SysCell_initWithViewModel)(self, _cmd, viewModel);
     if (!result) return nil;
-    if (purifyReadConfig(@"HideRevokeHint")) {
+    if (purifyReadConfig(@"HideRevokeHint") && !purifyIsCustomRevokeTip(viewModel)) {
         UIView *v = (UIView *)result;
         [v setHidden:YES];
-        v.frame = v.frame;  // 触发 setNeedsLayout，匹配微信优化 FUN_00025c48
+        v.frame = v.frame;
     }
     return result;
 }
@@ -75,7 +89,7 @@ static BOOL hook_SysCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
 }
 
 static CGSize hook_SysVM_measure(id self, SEL _cmd, CGSize size) {
-    if (purifyReadConfig(@"HideRevokeHint")) return CGSizeZero;
+    if (purifyReadConfig(@"HideRevokeHint") && !purifyIsCustomRevokeTip(self)) return CGSizeZero;
     return ((CGSize (*)(id, SEL, CGSize))_orig_SysVM_measure)(self, _cmd, size);
 }
 
@@ -288,31 +302,9 @@ static BOOL purifySafeHook(Class cls, SEL sel, IMP replacement, IMP *orig) {
 + (void)install {
     WPLog(@"UIPurify", @"UIPurifyHook install start (微信优化方案)");
 
-    // ——— 隐藏撤回消息：SystemMessageCellView + SystemMessageViewModel ———
-    {
-        Class cls = objc_getClass("SystemMessageCellView");
-        if (cls) {
-            MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
-                (IMP)hook_SysCell_initWithViewModel, &_orig_SysCell_initWithViewModel);
-            MSHookMessageEx(cls, sel_registerName("layoutInternal"),
-                (IMP)hook_SysCell_layoutInternal, &_orig_SysCell_layoutInternal);
-            purifySafeHook(cls, sel_registerName("canBeReused"),
-                (IMP)hook_SysCell_canBeReused, &_orig_SysCell_canBeReused);
-            purifySafeHook(cls, sel_registerName("shouldLayoutIfNeeded"),
-                (IMP)hook_SysCell_shouldLayoutIfNeeded, &_orig_SysCell_shouldLayoutIfNeeded);
-            WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageCellView (hide revoke)");
-        } else {
-            WPLog(@"UIPurify", @"[Hook] - SystemMessageCellView not found");
-        }
-        Class vmCls = objc_getClass("SystemMessageViewModel");
-        if (vmCls) {
-            purifySafeHook(vmCls, sel_registerName("measure:"),
-                (IMP)hook_SysVM_measure, &_orig_SysVM_measure);
-            WPLog(@"UIPurify", @"[Hook] ✓ SysVM.measure: safe (消除空白占位)");
-        } else {
-            WPLog(@"UIPurify", @"[Hook] - SystemMessageViewModel not found");
-        }
-    }
+    // ★ 关键：先 Hook 子类（AppPat），再 Hook 父类（System）
+    // 否则 purifySafeHook 的 class_addMethod 会导致子类的 _orig 指针
+    // 指向父类的 Hook，造成交叉污染（开撤回隐藏也会隐藏拍一拍）。
 
     // ——— 隐藏拍一拍：AppPatMessageCellView + AppPatMessageViewModel ———
     {
@@ -337,6 +329,32 @@ static BOOL purifySafeHook(Class cls, SEL sel, IMP replacement, IMP *orig) {
             WPLog(@"UIPurify", @"[Hook] ✓ PatVM.measure: safe (消除空白占位)");
         } else {
             WPLog(@"UIPurify", @"[Hook] - AppPatMessageViewModel not found");
+        }
+    }
+
+    // ——— 隐藏撤回消息：SystemMessageCellView + SystemMessageViewModel ———
+    {
+        Class cls = objc_getClass("SystemMessageCellView");
+        if (cls) {
+            MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
+                (IMP)hook_SysCell_initWithViewModel, &_orig_SysCell_initWithViewModel);
+            MSHookMessageEx(cls, sel_registerName("layoutInternal"),
+                (IMP)hook_SysCell_layoutInternal, &_orig_SysCell_layoutInternal);
+            purifySafeHook(cls, sel_registerName("canBeReused"),
+                (IMP)hook_SysCell_canBeReused, &_orig_SysCell_canBeReused);
+            purifySafeHook(cls, sel_registerName("shouldLayoutIfNeeded"),
+                (IMP)hook_SysCell_shouldLayoutIfNeeded, &_orig_SysCell_shouldLayoutIfNeeded);
+            WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageCellView (hide revoke)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - SystemMessageCellView not found");
+        }
+        Class vmCls = objc_getClass("SystemMessageViewModel");
+        if (vmCls) {
+            purifySafeHook(vmCls, sel_registerName("measure:"),
+                (IMP)hook_SysVM_measure, &_orig_SysVM_measure);
+            WPLog(@"UIPurify", @"[Hook] ✓ SysVM.measure: safe (消除空白占位)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - SystemMessageViewModel not found");
         }
     }
 

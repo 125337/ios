@@ -165,6 +165,9 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         if ([newWrap respondsToSelector:setCreateTimeSel])
             ((void (*)(id, SEL, unsigned int))objc_msgSend)(newWrap, setCreateTimeSel, createTime);
 
+        // ★ 标记为防撤回自定义提示，避免 HideRevokeHint 误隐藏
+        objc_setAssociatedObject(newWrap, "MioRevokeTipMark", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
         SEL addLocalMsgSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
         if ([messageMgr respondsToSelector:addLocalMsgSel]) {
             ((void (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)(
