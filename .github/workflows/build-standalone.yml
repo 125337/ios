@@ -21,51 +21,114 @@ jobs:
       with:
         xcode-version: latest-stable
 
-    - name: Install Theos
-      run: |
-        # 安装依赖
-        brew install ldid xz
-
-        # 安装 theos（如果不存在）
-        THEOS_PATH="$HOME/theos"
-        if [ ! -d "$THEOS_PATH" ]; then
-          git clone --depth 1 https://github.com/theos/theos.git "$THEOS_PATH"
-        fi
-        echo "THEOS=$HOME/theos" >> $GITHUB_ENV
-
-        # 下载 iOS SDK（如果不存在）
-        SDK_DIR="$HOME/sdks"
-        mkdir -p "$SDK_DIR"
-        if [ ! -d "$SDK_DIR/iphoneos14.0.sdk" ]; then
-          curl -L "https://github.com/sbingner/llvm-project/releases/download/swift-5.5-RELEASE/ios-sdk-14.0-darwin.tar.gz" -o /tmp/ios-sdk.tar.gz
-          tar -xzf /tmp/ios-sdk.tar.gz -C "$SDK_DIR"
-          mv "$SDK_DIR/iphoneos" "$SDK_DIR/iphoneos14.0.sdk"
-          rm /tmp/ios-sdk.tar.gz
-        fi
-        echo "THEOS_SDKS_PATH=$SDK_DIR" >> $GITHUB_ENV
-
     - name: Build dylib (arm64)
       run: |
-        cd WeChatPlugin
-        make clean
-        make package
+        set -o pipefail
 
-    - name: Extract dylib from deb
-      run: |
-        # deb 包路径
-        DEB_FILE=$(find WeChatPlugin/.theos/obj -name "*.deb" 2>/dev/null | head -1)
-        if [ -z "$DEB_FILE" ]; then
-          echo "ERROR: No .deb found"
-          exit 1
-        fi
-        echo "Found deb: $DEB_FILE"
-
-        # 解压 deb，提取 dylib
+        # 强制清理旧编译产物
+        rm -rf build/
         mkdir -p build
-        dpkg-deb -x "$DEB_FILE" build/deb_root
-        find build/deb_root -name "*.dylib" -exec cp {} build/Mio_arm64.dylib \;
-        echo "=== dylib extracted ==="
+
+        SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+        echo "SDK_PATH: $SDK_PATH"
+
+        # MRC 编译所有 .m 文件
+        for f in \
+          WeChatPlugin/libs/CydiaSubstrate.m \
+          WeChatPlugin/Tweak.m \
+          WeChatPlugin/Config/PluginConfig.m \
+          WeChatPlugin/Core/HookEngine.m \
+          WeChatPlugin/Core/WeChatAlertHelper.m \
+          WeChatPlugin/Core/LogManager.m \
+          WeChatPlugin/Registry/HookRegistry.m \
+          WeChatPlugin/Registry/FeatureModuleRegistry.m \
+          WeChatPlugin/Registry/FeatureRegistry.m \
+          WeChatPlugin/Modules/Revoke/RevokeHandler.m \
+          WeChatPlugin/Modules/Revoke/RevokeHook.m \
+          WeChatPlugin/Modules/Revoke/RevokeFormatEditorVC.m \
+          WeChatPlugin/Modules/RedEnvelop/RedEnvelopHook.m \
+          WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopTaskManager.m \
+          WeChatPlugin/Modules/Layout/TintHook.m \
+          WeChatPlugin/Modules/Layout/UIPurifyHook.m \
+          WeChatPlugin/Modules/Layout/UISimplifyHook.m \
+          WeChatPlugin/Modules/Unread/ClearUnreadHook.m \
+          WeChatPlugin/Modules/SettingEntry/SettingEntryHook.m \
+          WeChatPlugin/Modules/SettingEntry/WPCommonUI.m \
+          WeChatPlugin/Modules/SettingEntry/WPOtherVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPAboutVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPBackupVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPUIVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPUIPurifyVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPUISimplifyVC.m \
+          WeChatPlugin/Modules/Joker/JokerHook.m \
+          WeChatPlugin/Modules/GroupExit/GroupExitHook.m \
+          WeChatPlugin/Modules/MessageTime/MessageTimeHook.m \
+          WeChatPlugin/Modules/MessageTime/MessageTimeFormatParser.m \
+          WeChatPlugin/Modules/MessageTime/MessageTimeFormatEditorVC.m \
+          WeChatPlugin/Modules/AutoTransfer/AutoTransferHook.m \
+          WeChatPlugin/Settings/Common/SettingCategoryController.m \
+          WeChatPlugin/Settings/Common/WPBorderLayer.m \
+          WeChatPlugin/Settings/Controllers/SettingController.m \
+          WeChatPlugin/Settings/Controllers/SettingGeneralFunctionController.m \
+          WeChatPlugin/Settings/Controllers/SettingMessageTimeController.m \
+          WeChatPlugin/Settings/Controllers/SettingRevokeController.m \
+          WeChatPlugin/Settings/Controllers/SettingRedEnvelopController.m \
+          WeChatPlugin/Settings/Controllers/WeChatTweakGroupSelectsController.m; do
+          BASENAME=$(basename "$f" .m)
+          OBJ_FILE="build/${BASENAME}.o"
+          echo "Compiling: $f -> $OBJ_FILE"
+          clang -arch arm64 \
+                -isysroot "$SDK_PATH" \
+                -target arm64-apple-ios14.0 \
+                -c \
+                -fno-objc-arc \
+                -Oz \
+                -Wno-deprecated-declarations \
+                -Wno-unused-function \
+                -Wno-unused-variable \
+                -IWeChatPlugin \
+                -IWeChatPlugin/libs \
+                -IWeChatPlugin/Config \
+                -IWeChatPlugin/Core \
+                -IWeChatPlugin/Registry \
+                -IWeChatPlugin/Modules/Revoke \
+                -IWeChatPlugin/Modules/RedEnvelop \
+                -IWeChatPlugin/Modules/Layout \
+                -IWeChatPlugin/Modules/Unread \
+                -IWeChatPlugin/Modules/SettingEntry \
+                -IWeChatPlugin/Modules/Joker \
+                -IWeChatPlugin/Modules/GroupExit \
+                -IWeChatPlugin/Modules/MessageTime \
+                -IWeChatPlugin/Modules/AutoTransfer \
+                -IWeChatPlugin/Settings/Common \
+                -IWeChatPlugin/Settings/Controllers \
+                -IWeChatPlugin/libs/CydiaSubstrate.framework/Headers \
+                -o "$OBJ_FILE" \
+                "$f" || { echo "FAILED: $f"; exit 1; }
+        done
+
+        echo "=== Step 2: Link all .o into dylib ==="
+        clang -arch arm64 \
+              -isysroot "$SDK_PATH" \
+              -target arm64-apple-ios14.0 \
+              -dynamiclib \
+              -framework UIKit \
+              -framework Foundation \
+              -framework Security \
+              -framework AVFoundation \
+              -framework UserNotifications \
+              -Wl,-S \
+              -Wl,-x \
+              -Wl,-undefined,dynamic_lookup \
+              -o build/Mio_arm64.dylib \
+              build/*.o
+
+        echo "=== Build successful ==="
         ls -la build/Mio_arm64.dylib
+
+    - name: Sign dylib
+      run: |
+        codesign -f -s - build/Mio_arm64.dylib
 
     - name: Delete old artifacts
       uses: actions/github-script@v7
