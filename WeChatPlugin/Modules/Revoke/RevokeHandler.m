@@ -335,19 +335,10 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         createTime = ((unsigned int (*)(id, SEL))objc_msgSend)(revokeWrap, createTimeSel);
     if (createTime == 0) createTime = (unsigned int)[[NSDate date] timeIntervalSince1970];
 
-    NSString *timeText = timeTextFromTimestamp(createTime, config.dateFormat);
-
     NSString *newMsgContent = nil;
-    if (config.revokeTemplate.length > 0) {
-        NSString *contentForTemplate = revokedContent ?: @"";
-        newMsgContent = [config applyRevokeTemplate:config.revokeTemplate name:fromUsrName content:contentForTemplate createTime:createTime];
-    } else if (revokedContent.length > 0) {
-        newMsgContent = [NSString stringWithFormat:@"%@\n\"%@\"撤回了一条消息\n%@", 
-                        timeText, fromUsrName, revokedContent];
-    } else {
-        newMsgContent = [NSString stringWithFormat:@"%@\n\"%@\"撤回了一条消息", 
-                        timeText, fromUsrName];
-    }
+    NSString *contentForTemplate = revokedContent ?: @"";
+    NSString *template = config.revokeTemplate.length > 0 ? config.revokeTemplate : kDefaultRevokeTemplate;
+    newMsgContent = [config applyRevokeTemplate:template name:fromUsrName content:contentForTemplate createTime:createTime];
 
     WPLog(@"Revoke", @"newMsgContent=%@", newMsgContent);
 
