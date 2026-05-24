@@ -1,15 +1,43 @@
-//
-//  UIPurifyHook.m — 界面净化
-//  完全对齐微信优化 1.6.5 反编译 (FUN_00025688)
-//  全部 _MSHookMessageEx 直连，无 class_addMethod / purifySafeHook
-//  安装顺序：ChatTime → SystemMessage → AppPat → Voice → YYAsync → MMGrowText
-//
-
-#import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
-#import <substrate.h>
+#import "UIPurifyHook.h"
+#import "../../Config/PluginConfig.h"
 #import <objc/runtime.h>
+#import <objc/message.h>
+#import <substrate.h>
 #import "../../Core/LogManager.h"
+
+// ============================================================
+// MARK: - 原始 IMP 指针声明区
+// ============================================================
+
+// ——— 隐藏撤回消息（SystemMessageCellView + SystemMessageViewModel）———
+static IMP _orig_SysCell_initWithViewModel = NULL;
+static IMP _orig_SysCell_layoutInternal = NULL;
+static IMP _orig_SysCell_canBeReused = NULL;
+static IMP _orig_SysCell_shouldLayoutIfNeeded = NULL;
+static IMP _orig_SysVM_measure = NULL;
+
+// ——— 隐藏拍一拍（AppPatMessageCellView + AppPatMessageViewModel）———
+static IMP _orig_PatCell_initWithViewModel = NULL;
+static IMP _orig_PatCell_layoutInternal = NULL;
+static IMP _orig_PatCell_canBeReused = NULL;
+static IMP _orig_PatCell_shouldLayoutIfNeeded = NULL;
+static IMP _orig_PatVM_measure = NULL;
+
+// ——— 隐藏语音红点/转文字（VoiceMessageCellView）———
+static IMP _orig_VoiceCell_layoutSubviews = NULL;
+
+// ——— 气泡透明（YYAsyncImageView）———
+static IMP _orig_YYAsyncImage_layoutSubviews = NULL;
+
+// ——— 禁用听写（MMGrowTextViewExtConfig）———
+static IMP _orig_MMGrow_enableDictation = NULL;
+
+// ——— 隐藏水平分割线（UIView.layoutSubviews 全局）———
+static IMP _orig_UIView_layoutSubviews = NULL;
+
+// ============================================================
+// MARK: - 辅助
+// ============================================================
 
 static inline BOOL purifyReadConfig(NSString *key) {
     return [[NSUserDefaults standardUserDefaults] boolForKey:
@@ -17,57 +45,16 @@ static inline BOOL purifyReadConfig(NSString *key) {
 }
 
 // ============================================================
-// ChatTimeCellView
+// MARK: - 隐藏撤回消息 — SystemMessageCellView 5 连 Hook
 // ============================================================
-
-static IMP _orig_ChatTimeCell_initWithViewModel = NULL;
-static IMP _orig_ChatTimeCell_layoutInternal = NULL;
-static IMP _orig_ChatTimeCell_canBeReused = NULL;
-static IMP _orig_ChatTimeCell_shouldLayoutIfNeeded = NULL;
-static IMP _orig_ChatTimeVM_measure = NULL;
-
-static id hook_ChatTimeCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
-    id result = ((id (*)(id, SEL, id))_orig_ChatTimeCell_initWithViewModel)(self, _cmd, viewModel);
-    if (result && purifyReadConfig(@"HideChatTimeCell")) {
-        [result setHidden:YES];
-    }
-    return result;
-}
-
-static void hook_ChatTimeCell_layoutInternal(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideChatTimeCell")) return;
-    ((void (*)(id, SEL))_orig_ChatTimeCell_layoutInternal)(self, _cmd);
-}
-
-static BOOL hook_ChatTimeCell_canBeReused(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideChatTimeCell")) return YES;
-    return ((BOOL (*)(id, SEL))_orig_ChatTimeCell_canBeReused)(self, _cmd);
-}
-
-static BOOL hook_ChatTimeCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideChatTimeCell")) return NO;
-    return ((BOOL (*)(id, SEL))_orig_ChatTimeCell_shouldLayoutIfNeeded)(self, _cmd);
-}
-
-static CGSize hook_ChatTimeVM_measure(id self, SEL _cmd, CGSize size) {
-    if (purifyReadConfig(@"HideChatTimeCell")) return CGSizeZero;
-    return ((CGSize (*)(id, SEL, CGSize))_orig_ChatTimeVM_measure)(self, _cmd, size);
-}
-
-// ============================================================
-// SystemMessageCellView — 参照 FUN_00025c48..FUN_00025eb4
-// ============================================================
-
-static IMP _orig_SysCell_initWithViewModel = NULL;
-static IMP _orig_SysCell_layoutInternal = NULL;
-static IMP _orig_SysCell_canBeReused = NULL;
-static IMP _orig_SysCell_shouldLayoutIfNeeded = NULL;
-static IMP _orig_SysVM_measure = NULL;
 
 static id hook_SysCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     id result = ((id (*)(id, SEL, id))_orig_SysCell_initWithViewModel)(self, _cmd, viewModel);
-    if (result && purifyReadConfig(@"HideRevokeHint")) {
-        [result setHidden:YES];
+    if (!result) return nil;
+    if (purifyReadConfig(@"HideRevokeHint")) {
+        UIView *v = (UIView *)result;
+        [v setHidden:YES];
+        v.frame = v.frame;
     }
     return result;
 }
@@ -93,19 +80,16 @@ static CGSize hook_SysVM_measure(id self, SEL _cmd, CGSize size) {
 }
 
 // ============================================================
-// AppPatMessageCellView — 参照 FUN_00025f64..FUN_000261d0
+// MARK: - 隐藏拍一拍 — AppPatMessageCellView 5 连 Hook
 // ============================================================
-
-static IMP _orig_PatCell_initWithViewModel = NULL;
-static IMP _orig_PatCell_layoutInternal = NULL;
-static IMP _orig_PatCell_canBeReused = NULL;
-static IMP _orig_PatCell_shouldLayoutIfNeeded = NULL;
-static IMP _orig_PatVM_measure = NULL;
 
 static id hook_PatCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     id result = ((id (*)(id, SEL, id))_orig_PatCell_initWithViewModel)(self, _cmd, viewModel);
-    if (result && purifyReadConfig(@"HidePatHint")) {
-        [result setHidden:YES];
+    if (!result) return nil;
+    if (purifyReadConfig(@"HidePatHint")) {
+        UIView *v = (UIView *)result;
+        [v setHidden:YES];
+        v.frame = v.frame;  // 触发 setNeedsLayout，匹配微信优化 FUN_00025f64
     }
     return result;
 }
@@ -131,36 +115,50 @@ static CGSize hook_PatVM_measure(id self, SEL _cmd, CGSize size) {
 }
 
 // ============================================================
-// VoiceMessageCellView
+// MARK: - 隐藏语音红点/转文字 — VoiceMessageCellView.layoutSubviews
 // ============================================================
 
-static IMP _orig_VoiceCell_layoutSubviews = NULL;
-
 static void hook_VoiceCell_layoutSubviews(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideVoiceBubble")) return;
     ((void (*)(id, SEL))_orig_VoiceCell_layoutSubviews)(self, _cmd);
+    if (!purifyReadConfig(@"HideVoiceRedDot")) return;
+    @try {
+        id dot = [self valueForKey:@"m_unreadImageView"];
+        if (dot) [dot setHidden:YES];
+        id btn = [self valueForKey:@"m_quickTransTipButton"];
+        if (btn) [btn setHidden:YES];
+    } @catch (NSException *e) {}
 }
 
 // ============================================================
-// YYAsyncImageView
+// MARK: - 气泡透明 — YYAsyncImageView.layoutSubviews
 // ============================================================
 
-static IMP _orig_YYAsyncImage_layoutSubviews = NULL;
-
 static void hook_YYAsyncImage_layoutSubviews(id self, SEL _cmd) {
-    if (!purifyReadConfig(@"HideChatBg")) {
-        ((void (*)(id, SEL))_orig_YYAsyncImage_layoutSubviews)(self, _cmd);
-    } else {
-        [self setAlpha:0];
-        ((void (*)(id, SEL))_orig_YYAsyncImage_layoutSubviews)(self, _cmd);
+    ((void (*)(id, SEL))_orig_YYAsyncImage_layoutSubviews)(self, _cmd);
+    if (!purifyReadConfig(@"HideBubbleBackground")) return;
+
+    UIView *current = (UIView *)self;
+    UIView *check = current;
+    while (check) {
+        UIView *parent = check.superview;
+        if (!parent) break;
+        check = parent;
+        if ([check isKindOfClass:NSClassFromString(@"CommonMessageCellView")]) {
+            id bgImageView = nil;
+            @try { bgImageView = [check valueForKey:@"m_bgImageView"]; }
+            @catch (NSException *e) {}
+            if (bgImageView && [current isDescendantOfView:bgImageView]) {
+                current.alpha = 0;
+                return;
+            }
+            break;
+        }
     }
 }
 
 // ============================================================
-// MMGrowTextViewExtConfig
+// MARK: - 禁用听写 — MMGrowTextViewExtConfig.enableDictation
 // ============================================================
-
-static IMP _orig_MMGrow_enableDictation = NULL;
 
 static BOOL hook_MMGrow_enableDictation(id self, SEL _cmd) {
     if (purifyReadConfig(@"DisableDictation")) return NO;
@@ -168,124 +166,228 @@ static BOOL hook_MMGrow_enableDictation(id self, SEL _cmd) {
 }
 
 // ============================================================
-// UIView 分割线
+// MARK: - 隐藏水平分割线 — UIView.layoutSubviews
 // ============================================================
-
-static IMP _orig_UIView_layoutSubviews = NULL;
 
 static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
     ((void (*)(id, SEL))_orig_UIView_layoutSubviews)(self, _cmd);
-    if (purifyReadConfig(@"HideSeparator")) {
-        Class sepClass = NSClassFromString(@"_UITableViewCellSeparatorView");
-        if (sepClass && [self isKindOfClass:sepClass]) {
-            [self setHidden:YES];
+    if (!purifyReadConfig(@"HideSeparatorLine")) return;
+
+    UIView *v = (UIView *)self;
+
+    // 安全：不处理 WeChat 消息 cell 内部的视图（避免消息误伤）
+    {
+        Class baseMsgCell = NSClassFromString(@"BaseMessageCellView");
+        if (baseMsgCell) {
+            UIView *check = v;
+            while (check) {
+                if ([check isKindOfClass:baseMsgCell]) return;
+                check = check.superview;
+                if (check == nil) break;
+            }
         }
     }
+
+    // 第1层：类名过滤
+    {
+        Class brandCell = NSClassFromString(@"FTSBrandContactCell");
+        if (brandCell && [v isKindOfClass:brandCell]) return;
+    }
+    NSString *className = NSStringFromClass([v class]);
+    {
+        NSRange r;
+        r = [className rangeOfString:@"Brand"];    if (r.location != NSNotFound) return;
+        r = [className rangeOfString:@"Contact"];  if (r.location != NSNotFound) return;
+    }
+
+    // 第2层：获取属性
+    BOOL   isSepView = [className isEqualToString:@"_UITableViewCellSeparatorView"];
+    CGFloat h = CGRectGetHeight(v.frame);
+    CGFloat w = CGRectGetWidth(v.frame);
+    UIColor *bg = nil; @try { bg = v.backgroundColor; } @catch (NSException *e) {}
+    BOOL isLabel = [v isKindOfClass:[UILabel class]];
+    BOOL isImage = [v isKindOfClass:[UIImageView class]];
+
+    if (isLabel || isImage) return;
+
+    BOOL isThin = (h <= 1.0);
+    BOOL shouldHide = NO;
+
+    if (isSepView) {
+        if (h <= 0 || isThin) shouldHide = YES;
+    }
+    else if (isThin && w > 100.0) {
+        shouldHide = (bg != nil);
+    }
+    else if ([className isEqualToString:@"UIView"] && isThin && bg != nil) {
+        shouldHide = (v.subviews.count == 0);
+    }
+
+    if (!shouldHide) return;
+
+    // 第3层：父链排除
+    {
+        Class timelineVC = NSClassFromString(@"WCTimeLineViewController");
+        Class subVC      = NSClassFromString(@"MPSubscriptionViewController");
+        NSString *timelineFooter = @"WCTimelineFooterCell";
+
+        id resp = v;
+        for (int i = 0; i < 11; i++) {
+            if (timelineVC && [resp isKindOfClass:timelineVC]) return;
+            if ([NSStringFromClass([resp class]) isEqualToString:timelineFooter]) return;
+            resp = [resp nextResponder];
+            if (!resp) break;
+        }
+        resp = v;
+        for (int i = 0; i < 11; i++) {
+            if (subVC && [resp isKindOfClass:subVC]) return;
+            resp = [resp nextResponder];
+            if (!resp) break;
+        }
+    }
+
+    [v setHidden:YES];
 }
 
 // ============================================================
-// MARK: - Install（完全对齐 FUN_00025688 安装顺序）
+// MARK: - +install 入口
 // ============================================================
-
-@interface UIPurifyHook : NSObject
-@end
-
 @implementation UIPurifyHook
 
+/// 检查方法是否在指定类中被重写（非继承）
+static BOOL purifyIsOverridden(Class cls, SEL sel) {
+    IMP own = class_getMethodImplementation(cls, sel);
+    Class superCls = class_getSuperclass(cls);
+    if (!superCls) return YES;
+    IMP parent = class_getMethodImplementation(superCls, sel);
+    return (own != parent);
+}
+
+/// 安全 Hook：继承的方法先用 class_addMethod 创建本地副本隔离父类，再 Hook
+/// class_addMethod 在子类方法表中创建一个指向父类 IMP 的独立条目，
+/// 然后 MSHookMessageEx 只修改这个本地副本，父类方法表完全未动。
+static BOOL purifySafeHook(Class cls, SEL sel, IMP replacement, IMP *orig) {
+    if (!cls) return NO;
+    if (purifyIsOverridden(cls, sel)) {
+        MSHookMessageEx(cls, sel, replacement, orig);
+        return YES;
+    }
+    // 继承的 → class_addMethod 创建本地副本
+    Method parentMethod = class_getInstanceMethod(class_getSuperclass(cls), sel);
+    if (!parentMethod) {
+        MSHookMessageEx(cls, sel, replacement, orig);
+        return YES;
+    }
+    IMP parentIMP = method_getImplementation(parentMethod);
+    const char *types = method_getTypeEncoding(parentMethod);
+    class_addMethod(cls, sel, parentIMP, types);
+    MSHookMessageEx(cls, sel, replacement, orig);
+    return YES;
+}
+
 + (void)install {
-    WPLog(@"UIPurify", @"UIPurifyHook install (对齐微信优化 1.6.5)");
-    Class cls;
+    WPLog(@"UIPurify", @"UIPurifyHook install start (微信优化方案)");
 
-    // ① ChatTimeCellView + ChatTimeViewModel
-    cls = objc_getClass("ChatTimeCellView");
-    if (cls) {
-        MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
-            (IMP)hook_ChatTimeCell_initWithViewModel, &_orig_ChatTimeCell_initWithViewModel);
-        MSHookMessageEx(cls, sel_registerName("layoutInternal"),
-            (IMP)hook_ChatTimeCell_layoutInternal, &_orig_ChatTimeCell_layoutInternal);
-        MSHookMessageEx(cls, sel_registerName("canBeReused"),
-            (IMP)hook_ChatTimeCell_canBeReused, &_orig_ChatTimeCell_canBeReused);
-        MSHookMessageEx(cls, sel_registerName("shouldLayoutIfNeeded"),
-            (IMP)hook_ChatTimeCell_shouldLayoutIfNeeded, &_orig_ChatTimeCell_shouldLayoutIfNeeded);
-        WPLog(@"UIPurify", @"[Hook] ✓ ChatTimeCellView");
-    }
-    cls = objc_getClass("ChatTimeViewModel");
-    if (cls) {
-        MSHookMessageEx(cls, sel_registerName("measure:"),
-            (IMP)hook_ChatTimeVM_measure, &_orig_ChatTimeVM_measure);
-        WPLog(@"UIPurify", @"[Hook] ✓ ChatTimeViewModel.measure:");
-    }
+    // ★ 关键：先 Hook 子类（AppPat），再 Hook 父类（System）
+    // 否则 purifySafeHook 的 class_addMethod 会导致子类的 _orig 指针
+    // 指向父类的 Hook，造成交叉污染（开撤回隐藏也会隐藏拍一拍）。
 
-    // ② SystemMessageCellView + SystemMessageViewModel
-    cls = objc_getClass("SystemMessageCellView");
-    if (cls) {
-        MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
-            (IMP)hook_SysCell_initWithViewModel, &_orig_SysCell_initWithViewModel);
-        MSHookMessageEx(cls, sel_registerName("layoutInternal"),
-            (IMP)hook_SysCell_layoutInternal, &_orig_SysCell_layoutInternal);
-        MSHookMessageEx(cls, sel_registerName("canBeReused"),
-            (IMP)hook_SysCell_canBeReused, &_orig_SysCell_canBeReused);
-        MSHookMessageEx(cls, sel_registerName("shouldLayoutIfNeeded"),
-            (IMP)hook_SysCell_shouldLayoutIfNeeded, &_orig_SysCell_shouldLayoutIfNeeded);
-        WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageCellView");
-    }
-    cls = objc_getClass("SystemMessageViewModel");
-    if (cls) {
-        MSHookMessageEx(cls, sel_registerName("measure:"),
-            (IMP)hook_SysVM_measure, &_orig_SysVM_measure);
-        WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageViewModel.measure:");
+    // ——— 隐藏拍一拍：AppPatMessageCellView + AppPatMessageViewModel ———
+    {
+        Class cls = objc_getClass("AppPatMessageCellView");
+        if (cls) {
+            MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
+                (IMP)hook_PatCell_initWithViewModel, &_orig_PatCell_initWithViewModel);
+            MSHookMessageEx(cls, sel_registerName("layoutInternal"),
+                (IMP)hook_PatCell_layoutInternal, &_orig_PatCell_layoutInternal);
+            purifySafeHook(cls, sel_registerName("canBeReused"),
+                (IMP)hook_PatCell_canBeReused, &_orig_PatCell_canBeReused);
+            purifySafeHook(cls, sel_registerName("shouldLayoutIfNeeded"),
+                (IMP)hook_PatCell_shouldLayoutIfNeeded, &_orig_PatCell_shouldLayoutIfNeeded);
+            WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageCellView (hide pat)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - AppPatMessageCellView not found");
+        }
+        Class vmCls = objc_getClass("AppPatMessageViewModel");
+        if (vmCls) {
+            purifySafeHook(vmCls, sel_registerName("measure:"),
+                (IMP)hook_PatVM_measure, &_orig_PatVM_measure);
+            WPLog(@"UIPurify", @"[Hook] ✓ PatVM.measure: safe (消除空白占位)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - AppPatMessageViewModel not found");
+        }
     }
 
-    // ③ AppPatMessageCellView + AppPatMessageViewModel
-    cls = objc_getClass("AppPatMessageCellView");
-    if (cls) {
-        MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
-            (IMP)hook_PatCell_initWithViewModel, &_orig_PatCell_initWithViewModel);
-        MSHookMessageEx(cls, sel_registerName("layoutInternal"),
-            (IMP)hook_PatCell_layoutInternal, &_orig_PatCell_layoutInternal);
-        MSHookMessageEx(cls, sel_registerName("canBeReused"),
-            (IMP)hook_PatCell_canBeReused, &_orig_PatCell_canBeReused);
-        MSHookMessageEx(cls, sel_registerName("shouldLayoutIfNeeded"),
-            (IMP)hook_PatCell_shouldLayoutIfNeeded, &_orig_PatCell_shouldLayoutIfNeeded);
-        WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageCellView");
-    }
-    cls = objc_getClass("AppPatMessageViewModel");
-    if (cls) {
-        MSHookMessageEx(cls, sel_registerName("measure:"),
-            (IMP)hook_PatVM_measure, &_orig_PatVM_measure);
-        WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageViewModel.measure:");
-    }
-
-    // ④ VoiceMessageCellView
-    cls = objc_getClass("VoiceMessageCellView");
-    if (cls) {
-        MSHookMessageEx(cls, @selector(layoutSubviews),
-            (IMP)hook_VoiceCell_layoutSubviews, &_orig_VoiceCell_layoutSubviews);
-        WPLog(@"UIPurify", @"[Hook] ✓ VoiceMessageCellView");
+    // ——— 隐藏撤回消息：SystemMessageCellView + SystemMessageViewModel ———
+    {
+        Class cls = objc_getClass("SystemMessageCellView");
+        if (cls) {
+            MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
+                (IMP)hook_SysCell_initWithViewModel, &_orig_SysCell_initWithViewModel);
+            MSHookMessageEx(cls, sel_registerName("layoutInternal"),
+                (IMP)hook_SysCell_layoutInternal, &_orig_SysCell_layoutInternal);
+            purifySafeHook(cls, sel_registerName("canBeReused"),
+                (IMP)hook_SysCell_canBeReused, &_orig_SysCell_canBeReused);
+            purifySafeHook(cls, sel_registerName("shouldLayoutIfNeeded"),
+                (IMP)hook_SysCell_shouldLayoutIfNeeded, &_orig_SysCell_shouldLayoutIfNeeded);
+            WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageCellView (hide revoke)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - SystemMessageCellView not found");
+        }
+        Class vmCls = objc_getClass("SystemMessageViewModel");
+        if (vmCls) {
+            purifySafeHook(vmCls, sel_registerName("measure:"),
+                (IMP)hook_SysVM_measure, &_orig_SysVM_measure);
+            WPLog(@"UIPurify", @"[Hook] ✓ SysVM.measure: safe (消除空白占位)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - SystemMessageViewModel not found");
+        }
     }
 
-    // ⑤ YYAsyncImageView
-    cls = objc_getClass("YYAsyncImageView");
-    if (cls) {
-        MSHookMessageEx(cls, @selector(layoutSubviews),
-            (IMP)hook_YYAsyncImage_layoutSubviews, &_orig_YYAsyncImage_layoutSubviews);
-        WPLog(@"UIPurify", @"[Hook] ✓ YYAsyncImageView");
+    // ——— 隐藏语音红点/转文字：VoiceMessageCellView.layoutSubviews ———
+    {
+        Class cls = objc_getClass("VoiceMessageCellView");
+        if (cls) {
+            MSHookMessageEx(cls, @selector(layoutSubviews),
+                (IMP)hook_VoiceCell_layoutSubviews, &_orig_VoiceCell_layoutSubviews);
+            WPLog(@"UIPurify", @"[Hook] ✓ VoiceMessageCellView.layoutSubviews (hide voice hint)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - VoiceMessageCellView not found");
+        }
     }
 
-    // ⑥ MMGrowTextViewExtConfig
-    cls = objc_getClass("MMGrowTextViewExtConfig");
-    if (cls) {
-        MSHookMessageEx(cls, sel_registerName("enableDictation"),
-            (IMP)hook_MMGrow_enableDictation, &_orig_MMGrow_enableDictation);
-        WPLog(@"UIPurify", @"[Hook] ✓ MMGrowTextViewExtConfig.enableDictation");
+    // ——— 气泡透明：YYAsyncImageView.layoutSubviews ———
+    {
+        Class cls = objc_getClass("YYAsyncImageView");
+        if (cls) {
+            MSHookMessageEx(cls, @selector(layoutSubviews),
+                (IMP)hook_YYAsyncImage_layoutSubviews, &_orig_YYAsyncImage_layoutSubviews);
+            WPLog(@"UIPurify", @"[Hook] ✓ YYAsyncImageView.layoutSubviews (transparent bubble)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - YYAsyncImageView not found");
+        }
     }
 
-    // ⑦ UIView 分割线
-    MSHookMessageEx([UIView class], @selector(layoutSubviews),
-        (IMP)hook_UIView_layoutSubviews, &_orig_UIView_layoutSubviews);
-    WPLog(@"UIPurify", @"[Hook] ✓ UIView.layoutSubviews (separator)");
+    // ——— 禁用听写：MMGrowTextViewExtConfig.enableDictation ———
+    {
+        Class cls = objc_getClass("MMGrowTextViewExtConfig");
+        if (cls) {
+            MSHookMessageEx(cls, sel_registerName("enableDictation"),
+                (IMP)hook_MMGrow_enableDictation, &_orig_MMGrow_enableDictation);
+            WPLog(@"UIPurify", @"[Hook] ✓ MMGrowTextViewExtConfig.enableDictation (disable dictation)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - MMGrowTextViewExtConfig not found");
+        }
+    }
 
-    WPLog(@"UIPurify", @"UIPurifyHook install complete (对齐微信优化)");
+    // ——— 隐藏水平分割线：UIView.layoutSubviews ———
+    {
+        MSHookMessageEx([UIView class], @selector(layoutSubviews),
+            (IMP)hook_UIView_layoutSubviews, &_orig_UIView_layoutSubviews);
+        WPLog(@"UIPurify", @"[Hook] ✓ UIView.layoutSubviews (global separator hiding)");
+    }
+
+    WPLog(@"UIPurify", @"UIPurifyHook install complete (12 hooks)");
 }
 
 @end
