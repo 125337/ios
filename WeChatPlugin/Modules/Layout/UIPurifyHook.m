@@ -44,11 +44,26 @@ static inline BOOL purifyReadConfig(NSString *key) {
             [@"WCP_" stringByAppendingString:key]];
 }
 
+/// 判断当前实例是否是 AppPat 子类（防止父类 Hook 误伤子类）
+static BOOL purifyIsPatInstance(id self) {
+    static Class patCellCls = nil;
+    static Class patVMCls = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        patCellCls = NSClassFromString(@"AppPatMessageCellView");
+        patVMCls = NSClassFromString(@"AppPatMessageViewModel");
+    });
+    if ((patCellCls && [self isKindOfClass:patCellCls]) ||
+        (patVMCls && [self isKindOfClass:patVMCls])) return YES;
+    return NO;
+}
+
 // ============================================================
 // MARK: - 隐藏撤回消息 — SystemMessageCellView 5 连 Hook
 // ============================================================
 
 static id hook_SysCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
+    if (purifyIsPatInstance(self)) return ((id (*)(id, SEL, id))_orig_SysCell_initWithViewModel)(self, _cmd, viewModel);
     id result = ((id (*)(id, SEL, id))_orig_SysCell_initWithViewModel)(self, _cmd, viewModel);
     if (!result) return nil;
     if (purifyReadConfig(@"HideRevokeHint")) {
@@ -60,21 +75,25 @@ static id hook_SysCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
 }
 
 static void hook_SysCell_layoutInternal(id self, SEL _cmd) {
+    if (purifyIsPatInstance(self)) { ((void (*)(id, SEL))_orig_SysCell_layoutInternal)(self, _cmd); return; }
     if (purifyReadConfig(@"HideRevokeHint")) return;
     ((void (*)(id, SEL))_orig_SysCell_layoutInternal)(self, _cmd);
 }
 
 static BOOL hook_SysCell_canBeReused(id self, SEL _cmd) {
+    if (purifyIsPatInstance(self)) return ((BOOL (*)(id, SEL))_orig_SysCell_canBeReused)(self, _cmd);
     if (purifyReadConfig(@"HideRevokeHint")) return YES;
     return ((BOOL (*)(id, SEL))_orig_SysCell_canBeReused)(self, _cmd);
 }
 
 static BOOL hook_SysCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
+    if (purifyIsPatInstance(self)) return ((BOOL (*)(id, SEL))_orig_SysCell_shouldLayoutIfNeeded)(self, _cmd);
     if (purifyReadConfig(@"HideRevokeHint")) return NO;
     return ((BOOL (*)(id, SEL))_orig_SysCell_shouldLayoutIfNeeded)(self, _cmd);
 }
 
 static CGSize hook_SysVM_measure(id self, SEL _cmd, CGSize size) {
+    if (purifyIsPatInstance(self)) return ((CGSize (*)(id, SEL, CGSize))_orig_SysVM_measure)(self, _cmd, size);
     if (purifyReadConfig(@"HideRevokeHint")) return CGSizeZero;
     return ((CGSize (*)(id, SEL, CGSize))_orig_SysVM_measure)(self, _cmd, size);
 }
