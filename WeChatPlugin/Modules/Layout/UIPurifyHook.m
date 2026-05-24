@@ -54,7 +54,7 @@ static id hook_SysCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     if (purifyReadConfig(@"HideRevokeHint")) {
         UIView *v = (UIView *)result;
         [v setHidden:YES];
-        v.alpha = 0;
+        v.frame = v.frame;  // 触发 setNeedsLayout，匹配微信优化 FUN_00025c48
     }
     return result;
 }
@@ -89,7 +89,7 @@ static id hook_PatCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     if (purifyReadConfig(@"HidePatHint")) {
         UIView *v = (UIView *)result;
         [v setHidden:YES];
-        v.alpha = 0;
+        v.frame = v.frame;  // 触发 setNeedsLayout，匹配微信优化 FUN_00025f64
     }
     return result;
 }
