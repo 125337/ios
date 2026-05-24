@@ -125,14 +125,14 @@ static NSString *configPropertyForKey(NSString *key) {
         CGFloat h = [UIScreen mainScreen].bounds.size.height;
         CGRect frame = CGRectMake(0, 0, w, h);
         
-        self.scrollView = [[UIScrollView alloc] initWithFrame:frame];
+        self.scrollView = [[[UIScrollView alloc] initWithFrame:frame] autorelease];
         self.scrollView.backgroundColor = bgColor();
         if (@available(iOS 13.0, *)) {
             self.scrollView.automaticallyAdjustsScrollIndicatorInsets = NO;
         }
         [self.view addSubview:self.scrollView];
         
-        self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 2000)];
+        self.contentView = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 2000)] autorelease];
         [self.scrollView addSubview:self.contentView];
         
         self.inputFields = [NSMutableDictionary dictionary];
@@ -150,6 +150,7 @@ static NSString *configPropertyForKey(NSString *key) {
     if (@available(iOS 13.0, *)) group.layer.cornerCurve = kCACornerCurveContinuous;
     group.clipsToBounds = YES;
     [self.contentView addSubview:group];
+    [group release];
     return group;
 }
 
@@ -166,6 +167,7 @@ static NSString *configPropertyForKey(NSString *key) {
     l.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
     l.textColor = textSecondary();
     [self.contentView addSubview:l];
+    [l release];
     return y + 32;
 }
 
@@ -177,6 +179,7 @@ static NSString *configPropertyForKey(NSString *key) {
     l.numberOfLines = 0;
     [l sizeToFit];
     [self.contentView addSubview:l];
+    [l release];
     return y + l.frame.size.height + 6;
 }
 
@@ -187,6 +190,7 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = textPrimary();
     [group addSubview:tl];
+    [tl release];
 
     if (subtitle.length > 0) {
         UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 22, gw - kCellHPadding * 2 - 20, 14)];
@@ -194,6 +198,7 @@ static NSString *configPropertyForKey(NSString *key) {
         dl.font = [UIFont systemFontOfSize:12];
         dl.textColor = textSecondary();
         [group addSubview:dl];
+        [dl release];
     }
 
     CGFloat arrowW = 7, arrowH = 11;
@@ -217,6 +222,7 @@ static NSString *configPropertyForKey(NSString *key) {
     btn.tag = tag;
     [btn addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     [group addSubview:btn];
+    [btn release];
     return cy + kRowH;
 }
 
@@ -230,6 +236,7 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = textPrimary();
     [group addSubview:tl];
+    [tl release];
 
     if (desc.length > 0) {
         UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 22, textW, 14)];
@@ -237,6 +244,7 @@ static NSString *configPropertyForKey(NSString *key) {
         dl.font = [UIFont systemFontOfSize:12];
         dl.textColor = textSecondary();
         [group addSubview:dl];
+        [dl release];
     }
 
     UISwitch *sw = [[UISwitch alloc] init];
@@ -246,6 +254,7 @@ static NSString *configPropertyForKey(NSString *key) {
     objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [sw addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     [group addSubview:sw];
+    [sw release];
     WPLog(@"Config", @"[SWITCH] 创建 switch: key=%@, isOn=%d, target=%@, action=switchChanged:", key, on, self);
     return cy + kRowH;
 }
@@ -257,6 +266,7 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = textPrimary();
     [group addSubview:tl];
+    [tl release];
 
     UISwitch *sw = [[UISwitch alloc] init];
     sw.on = on;
@@ -265,6 +275,7 @@ static NSString *configPropertyForKey(NSString *key) {
     objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [sw addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     [group addSubview:sw];
+    [sw release];
     return cy + kRowH;
 }
 
@@ -275,6 +286,7 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = textPrimary();
     [group addSubview:tl];
+    [tl release];
 
     UITextField *tf = [[UITextField alloc] initWithFrame:CGRectMake(kCellHPadding + 84, cy, gw - kCellHPadding * 2 - 94, kRowH)];
     tf.font = [UIFont systemFontOfSize:14];
@@ -289,6 +301,7 @@ static NSString *configPropertyForKey(NSString *key) {
     [tf addTarget:self action:@selector(textFieldDone:) forControlEvents:UIControlEventEditingDidEnd];
     objc_setAssociatedObject(tf, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [group addSubview:tf];
+    [tf release];
     self.inputFields[key] = tf;
     return cy + kRowH;
 }
@@ -300,6 +313,7 @@ static NSString *configPropertyForKey(NSString *key) {
     l.font = [UIFont systemFontOfSize:12];
     l.textColor = textTertiary();
     [group addSubview:l];
+    [l release];
     return cy + 20;
 }
 
@@ -311,12 +325,14 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = textPrimary();
     [group addSubview:tl];
+    [tl release];
     
     UILabel *hl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 22, gw - kCellHPadding * 2 - 20, 14)];
     hl.text = hint;
     hl.font = [UIFont systemFontOfSize:12];
     hl.textColor = textSecondary();
     [group addSubview:hl];
+    [hl release];
     
     CGFloat arrowW = 7, arrowH = 11;
     CGFloat arrowX = gw - kCellHPadding - arrowW - 3;
@@ -339,6 +355,7 @@ static NSString *configPropertyForKey(NSString *key) {
     objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [btn addTarget:self action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
     [group addSubview:btn];
+    [btn release];
     
     return cy + kRowH;
 }
@@ -360,6 +377,7 @@ static NSString *configPropertyForKey(NSString *key) {
     l.font = [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold];
     l.textColor = textSecondary();
     [group addSubview:l];
+    [l release];
     return cy + 24;
 }
 
@@ -370,6 +388,7 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = textPrimary();
     [group addSubview:tl];
+    [tl release];
 
     UIColor *currentColor = [[PluginConfig shared] colorFromHex:value] ?: [UIColor grayColor];
 
@@ -398,6 +417,7 @@ static NSString *configPropertyForKey(NSString *key) {
         [tf addTarget:self action:@selector(textFieldDone:) forControlEvents:UIControlEventEditingDidEnd];
         objc_setAssociatedObject(tf, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [group addSubview:tf];
+        [tf release];
         self.inputFields[key] = tf;
     }
     return cy + kRowH;
@@ -411,6 +431,7 @@ static NSString *configPropertyForKey(NSString *key) {
     UIView *sepView = [[UIView alloc] initWithFrame:CGRectMake(kCellHPadding, pixelY, gw - kCellHPadding, onePixel)];
     sepView.backgroundColor = separatorColor();
     [group addSubview:sepView];
+    [sepView release];
     return cy + onePixel;
 }
 
@@ -420,6 +441,7 @@ static NSString *configPropertyForKey(NSString *key) {
     container.backgroundColor = cardBgColor();
     [container setExpanded:YES animated:NO];
     [group addSubview:container];
+    [container release];
     return container;
 }
 
@@ -577,6 +599,15 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (void)buttonClicked:(NSString *)key {
+}
+
+- (void)dealloc {
+    [_scrollView release];
+    [_contentView release];
+    [_inputFields release];
+    [_categoryName release];
+    [_masterSwitchKeys release];
+    [super dealloc];
 }
 
 @end

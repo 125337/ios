@@ -69,8 +69,8 @@ static void gsLog(NSString *content) {
 - (instancetype)initWithSelectedGroups:(NSArray<NSString *> *)selectedGroups title:(NSString *)title {
     gsLog(@"[GroupSelect] initWithSelectedGroups called");
     if (self = [super initWithNibName:nil bundle:nil]) {
-        _selectedGroups = selectedGroups ?: @[];
-        _titleText = title ?: @"选择群聊";
+        _selectedGroups = [(selectedGroups ?: @[]) retain];
+        _titleText = [(title ?: @"选择群聊") copy];
         gsLog([NSString stringWithFormat:@"[GroupSelect] _selectedGroups=%@, _titleText=%@", _selectedGroups, _titleText]);
         Class helperClass = objc_getClass("MMUIViewController");
         if (helperClass) {

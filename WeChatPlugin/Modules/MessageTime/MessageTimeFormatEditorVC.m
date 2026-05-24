@@ -95,6 +95,8 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
     [_contentView release];
     [_editorView release];
     [_previewView release];
+    [_initialFormat release];
+    [_saveBlock release];
     [super dealloc];
 }
 
@@ -116,13 +118,13 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
 #pragma mark - ScrollView
 
 - (void)setupScrollView {
-    self.scrollView = [[UIScrollView alloc] initWithFrame:self.view.bounds];
+    self.scrollView = [[[UIScrollView alloc] initWithFrame:self.view.bounds] autorelease];
     self.scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     [self.view addSubview:self.scrollView];
 
-    self.contentView = [[UIView alloc] initWithFrame:
-        CGRectMake(0, 0, self.view.bounds.size.width, 0)];
+    self.contentView = [[[UIView alloc] initWithFrame:
+        CGRectMake(0, 0, self.view.bounds.size.width, 0)] autorelease];
     [self.scrollView addSubview:self.contentView];
 }
 
@@ -262,7 +264,7 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
 
     // UITextView 编辑框
     CGFloat tvH = 80.0;
-    self.editorView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
+    self.editorView = [[[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)] autorelease];
     self.editorView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular]; // 15px Regular
     self.editorView.textColor = [UIColor labelColor];
     self.editorView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
@@ -298,7 +300,7 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
 
     // UITextView 预览框（只读）
     CGFloat tvH = 50.0;
-    self.previewView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
+    self.previewView = [[[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)] autorelease];
     self.previewView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular]; // 15px Regular
     self.previewView.textColor = [UIColor labelColor];
     self.previewView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];

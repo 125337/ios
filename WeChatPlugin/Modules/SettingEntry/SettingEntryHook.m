@@ -94,6 +94,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 
     CGRect hcf = heroCard.frame; hcf.size.height = hy; heroCard.frame = hcf;
     [sv addSubview:heroCard];
+    [heroCard release];
     y += hy + 16;
 
     [sv addSubview:WPMakeSectionHeader(@"功能列表", y, w)];
@@ -115,6 +116,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 
     CGRect lcf = listCard.frame; lcf.size.height = cy; listCard.frame = lcf;
     [sv addSubview:listCard];
+    [listCard release];
     y += cy + 16;
 
     UILabel *footer = [[UILabel alloc] initWithFrame:CGRectMake(0, y, w, 50)];

@@ -63,6 +63,12 @@
     self.strokeColor = color.CGColor;
 }
 
+- (void)dealloc {
+    [_borderColorLight release];
+    [_borderColorDark release];
+    [super dealloc];
+}
+
 @end
 
 #pragma mark - UIView (WPBorder)

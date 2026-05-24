@@ -103,6 +103,7 @@
         if (!item.controllerClass) return;
         UIViewController *vc = [[item.controllerClass alloc] init];
         [self.navigationController pushViewController:vc animated:YES];
+        [vc release];
     } @catch (NSException *e) {
         WPLog(@"Setting", @"[UI] categoryTapped 异常: %@ - %@", e.name, e.reason);
     }

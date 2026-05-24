@@ -68,6 +68,8 @@
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     [self presentViewController:nav animated:YES completion:nil];
+    [editor release];
+    [nav release];
 }
 
 - (void)onNotifyFormatTap {
@@ -82,6 +84,8 @@
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     [self presentViewController:nav animated:YES completion:nil];
+    [editor release];
+    [nav release];
 }
 
 @end

@@ -538,7 +538,7 @@
 
 - (NSString *)applyRevokeTemplate:(NSString *)tmpl name:(NSString *)name content:(NSString *)content createTime:(unsigned int)createTime {
     if (!tmpl.length) return nil;
-    NSString *result = [tmpl copy];
+    NSString *result = [[tmpl copy] autorelease];
     
     // 用户名
     result = [result stringByReplacingOccurrencesOfString:@"{用户名}" withString:name ?: @""];

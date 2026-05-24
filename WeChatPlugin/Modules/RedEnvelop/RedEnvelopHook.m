@@ -498,7 +498,8 @@ static void addDetailButtonIfNeeded(id self) {
             return;
         }
 
-        if (!_detailHandler) _detailHandler = [[REDetailButtonHandler alloc] init];
+        [_detailHandler release];
+        _detailHandler = [[REDetailButtonHandler alloc] init];
 
         UIView *selfView = [self valueForKey:@"view"];
         if (!selfView) return;

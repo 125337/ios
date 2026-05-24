@@ -170,6 +170,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
             ((void (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)(
                 messageMgr, addLocalMsgSel, session, newWrap, YES, NO);
             WPLog(@"Revoke", @"AddLocalMsg success (DK style)");
+            [newWrap release];
             return YES;
         }
 
@@ -177,10 +178,12 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         if ([messageMgr respondsToSelector:addSimpleSel]) {
             ((void (*)(id, SEL, id, id))objc_msgSend)(messageMgr, addSimpleSel, session, newWrap);
             WPLog(@"Revoke", @"AddLocalMsg simple success");
+            [newWrap release];
             return YES;
         }
 
         WPLog(@"Revoke", @"no AddLocalMsg method found");
+        [newWrap release];
         return NO;
         
     } @catch (NSException *e) {
@@ -240,7 +243,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
     if (xml.length == 0) return NO;
 
     NSDictionary *parsed = parseRevokeXml(xml);
-    if (!parsed[@"replacemsg"]) return NO;
+    if (!parsed[@"replacemsg"]) { [parsed release]; return NO; }
 
     NSString *session = parsed[@"session"];
 
@@ -310,6 +313,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         NSString *actorFromXml = parsed[@"fromusr"];
         if (actorFromXml.length > 0) fromUsrName = actorFromXml;
     }
+    [parsed release];
     if (!fromUsrName.length) {
         SEL fromUsrSel = NSSelectorFromString(@"m_nsFromUsr");
         if ([revokeWrap respondsToSelector:fromUsrSel])
@@ -416,6 +420,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
                         ((void (*)(id, SEL, id, id))objc_msgSend)(messageMgr, addMsgSel, session, notifyWrap);
                         WPLog(@"Revoke", @"notifySender: sent via AddMsg to revoker");
                     }
+                    [notifyWrap release];
                 }
             } @catch (NSException *e) {
                 WPLog(@"Revoke", @"notifySender exception: %@", e);

@@ -61,18 +61,20 @@ static NSArray<NSString *> *_tokenDescs(void) {
     [_contentView release];
     [_editorView release];
     [_previewView release];
+    [_initialFormat release];
+    [_saveBlock release];
     [super dealloc];
 }
 
 #pragma mark - NavBar
 
 - (void)setupNavBar {
-    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-        initWithTitle:@"关闭" style:UIBarButtonItemStylePlain target:self action:@selector(closeAction)];
-    UIBarButtonItem *restore = [[UIBarButtonItem alloc]
-        initWithTitle:@"恢复" style:UIBarButtonItemStylePlain target:self action:@selector(restoreAction)];
-    UIBarButtonItem *save = [[UIBarButtonItem alloc]
-        initWithTitle:@"保存" style:UIBarButtonItemStyleDone target:self action:@selector(saveAction)];
+    self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc]
+        initWithTitle:@"关闭" style:UIBarButtonItemStylePlain target:self action:@selector(closeAction)] autorelease];
+    UIBarButtonItem *restore = [[[UIBarButtonItem alloc]
+        initWithTitle:@"恢复" style:UIBarButtonItemStylePlain target:self action:@selector(restoreAction)] autorelease];
+    UIBarButtonItem *save = [[[UIBarButtonItem alloc]
+        initWithTitle:@"保存" style:UIBarButtonItemStyleDone target:self action:@selector(saveAction)] autorelease];
     self.navigationItem.rightBarButtonItems = @[save, restore];
 }
 
@@ -210,7 +212,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
                                                NSCalendarUnitHour | NSCalendarUnitMinute | NSCalendarUnitSecond)
                                    fromDate:now];
 
-    NSString *result = [fmt copy];
+    NSString *result = [[fmt copy] autorelease];
     result = [result stringByReplacingOccurrencesOfString:@"{用户名}" withString:@"张三"];
     result = [result stringByReplacingOccurrencesOfString:@"{内容}" withString:@"这是一条测试消息"];
     result = [result stringByReplacingOccurrencesOfString:@"{yyyy}" withString:[NSString stringWithFormat:@"%04ld", (long)comp.year]];
