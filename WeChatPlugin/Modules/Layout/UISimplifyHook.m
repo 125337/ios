@@ -31,10 +31,12 @@ static NSString     *_contactsTitle    = nil;
 static NSString     *_discoverTitle    = nil;
 static NSString     *_friendsCount     = nil;
 
-// 菜单名替代映射：新版微信某些菜单文字可能变化
-// alt key (微信实际显示) → primary key (我们 dict 里的 key)
-// 微信优化 和 WCRefine 通过首字/containsString 自动适配，我们用显式映射
+// alt key 回退映射 (策略A使用，不受 oldPlugin 影响)
 static NSDictionary *_altMenuKeys     = nil;
+
+// 检测设备上是否加载了 微信优化 旧插件（避免策略B双钩冲突导致 objc_retain(0x3) 崩溃）
+// 仅影响策略B的3个 context hook，策略A的6个 dict hook 不受影响
+static BOOL _oldPluginLoaded = NO;
 
 static void UISimplify_ReloadConfig(void) {
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
@@ -422,9 +424,15 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
     // 1. 加载配置 (参照 FUN_00043e44)
     UISimplify_ReloadConfig();
     
-    WPLog(@"UISimplify", @"UISimplifyHook install start");
+    // 2. 检测 微信优化 旧插件 (参照 crash log: objc_retain(0x3) 双钩冲突)
+    if (objc_getClass("CSWCEnhanceViewController")) {
+        _oldPluginLoaded = YES;
+        WPLog(@"UISimplify", @"[Warn] 微信优化 detected — strategy B (context hooks) disabled");
+    }
     
-    // ===== 策略A: 字典查找替换 (6个) =====
+    WPLog(@"UISimplify", @"UISimplifyHook install start (strategyB=%d)", !_oldPluginLoaded);
+    
+    // ===== 策略A: 字典查找替换 (6个) — 始终安装，与微信优化共存无冲突 =====
     
     Class configClass = SafeGetClass("WCTableViewCellLeftConfig");
     if (configClass) {
@@ -458,23 +466,26 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
             (IMP)hook_MMTableViewInfo_getTitle, (IMP *)&_orig_MMTableViewInfo_getTitle);
     }
     
-    // ===== 策略B: 上下文匹配 (3个) — 始终安装（问题4：之前因 oldPlugin 检测被跳过导致不生效）=====
+    // ===== 策略B: 上下文匹配 (3个) — 仅微信优化未加载时安装（避免 objc_retain(0x3)）=====
     
-    Class mmLabel = SafeGetClass("MMUILabel");
-    if (mmLabel) {
-        MSHookMessageEx(mmLabel, @selector(setText:),
-            (IMP)hook_MMUILabel_setText, (IMP *)&_orig_MMUILabel_setText);
-        MSHookMessageEx(mmLabel, @selector(setAttributedText:),
-            (IMP)hook_MMUILabel_setAttributedText, (IMP *)&_orig_MMUILabel_setAttributedText);
+    if (!_oldPluginLoaded) {
+        Class mmLabel = SafeGetClass("MMUILabel");
+        if (mmLabel) {
+            MSHookMessageEx(mmLabel, @selector(setText:),
+                (IMP)hook_MMUILabel_setText, (IMP *)&_orig_MMUILabel_setText);
+            MSHookMessageEx(mmLabel, @selector(setAttributedText:),
+                (IMP)hook_MMUILabel_setAttributedText, (IMP *)&_orig_MMUILabel_setAttributedText);
+        }
+        
+        Class mfTitle = SafeGetClass("MFTitleView");
+        if (mfTitle) {
+            MSHookMessageEx(mfTitle, @selector(updateTitleView:title:),
+                (IMP)hook_MFTitleView_updateTitle, (IMP *)&_orig_MFTitleView_updateTitle);
+        }
     }
     
-    Class mfTitle = SafeGetClass("MFTitleView");
-    if (mfTitle) {
-        MSHookMessageEx(mfTitle, @selector(updateTitleView:title:),
-            (IMP)hook_MFTitleView_updateTitle, (IMP *)&_orig_MFTitleView_updateTitle);
-    }
-    
-    WPLog(@"UISimplify", @"UISimplifyHook install done (9 hooks)");
+    int totalHooks = !_oldPluginLoaded ? 9 : 6;
+    WPLog(@"UISimplify", @"UISimplifyHook install done (%d hooks)", totalHooks);
 }
 
 @end
