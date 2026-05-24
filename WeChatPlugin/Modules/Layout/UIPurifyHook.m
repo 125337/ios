@@ -258,22 +258,22 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"UIPurify", @"[Hook] ✓ ChatTimeViewModel");
     }
 
-    // ② SystemMessageCellView + SystemMessageViewModel — 直接 MSHookMessageEx（Sys 是父类）
+    // ② SystemMessageCellView + SystemMessageViewModel — purifySafeHook（TintHook 修改了 Base 层，需隔离）
     cls = objc_getClass("SystemMessageCellView");
     if (cls) {
-        MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
+        purifySafeHook(cls, sel_registerName("initWithViewModel:"),
             (IMP)hook_SysCell_initWithViewModel, &_orig_SysCell_initWithViewModel);
-        MSHookMessageEx(cls, sel_registerName("layoutInternal"),
+        purifySafeHook(cls, sel_registerName("layoutInternal"),
             (IMP)hook_SysCell_layoutInternal, &_orig_SysCell_layoutInternal);
-        MSHookMessageEx(cls, sel_registerName("canBeReused"),
+        purifySafeHook(cls, sel_registerName("canBeReused"),
             (IMP)hook_SysCell_canBeReused, &_orig_SysCell_canBeReused);
-        MSHookMessageEx(cls, sel_registerName("shouldLayoutIfNeeded"),
+        purifySafeHook(cls, sel_registerName("shouldLayoutIfNeeded"),
             (IMP)hook_SysCell_shouldLayoutIfNeeded, &_orig_SysCell_shouldLayoutIfNeeded);
         WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageCellView");
     }
     cls = objc_getClass("SystemMessageViewModel");
     if (cls) {
-        MSHookMessageEx(cls, sel_registerName("measure:"),
+        purifySafeHook(cls, sel_registerName("measure:"),
             (IMP)hook_SysVM_measure, &_orig_SysVM_measure);
         WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageViewModel");
     }
