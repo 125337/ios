@@ -138,6 +138,8 @@ static void WPUISimplifyViewDidLoad(id self, SEL _cmd) {
     sw.onTintColor = WPSwOn();
     sw.frame = CGRectMake(w - kPad * 2 - 51, scy + 6.5, 51, 31);
     [sw addTarget:swTarget action:@selector(toggleSwitch:) forControlEvents:UIControlEventValueChanged];
+    // ⚠️ UISwitch.addTarget: 不持有 target，必须用 associated object 保住 swTarget
+    objc_setAssociatedObject(sw, "swTarget", swTarget, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [switchCard addSubview:sw];
     scy += kRowH;
 
