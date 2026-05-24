@@ -62,8 +62,9 @@ static void UISimplify_ReloadConfig(void) {
         @"订单与卡包": @"卡包",
         @"支付与服务": @"服务",
     } retain];
-    WPLog(@"UISimplify", @"Config loaded: enabled=%d menu=%lu tab=%lu",
-          _simplifyEnabled, (unsigned long)_menuNames.count, (unsigned long)_tabNames.count);
+    WPLog(@"UISimplify", @"Config loaded: enabled=%d menu=%lu tab=%lu main='%@' contacts='%@' discover='%@' friendsCount='%@'",
+          _simplifyEnabled, (unsigned long)_menuNames.count, (unsigned long)_tabNames.count,
+          _mainTitle, _contactsTitle, _discoverTitle, _friendsCount);
 }
 
 // 安全宏：保证所有输入不为 nil
@@ -231,6 +232,11 @@ static id hook_MMTableViewInfo_getTitle(id self, SEL _cmd) {
 static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
     if (!_orig_MMUILabel_setText) return;
     
+    // 全量追踪：包含"联系人"的文本全部打印，确认是否走 MMUILabel
+    if (text && [text containsString:@"联系人"]) {
+        WPLog(@"UISimplify", @"[TRACE setText] class=%@ text='%@'", NSStringFromClass([self class]), text);
+    }
+    
     // Guard 0: 开关关闭 → 原始
     if (!_simplifyEnabled) {
         ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, text);
@@ -299,9 +305,11 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
                 NSTextCheckingResult *match = [regex firstMatchInString:text
                     options:0 range:NSMakeRange(0, text.length)];
                 if (match && match.range.location != NSNotFound && match.range.length > 0) {
+                    WPLog(@"UISimplify", @"[setText] digit match: class=%@ text=%@", NSStringFromClass([self class]), text);
                     if ([text containsString:@"位"] && [text containsString:@"联系人"]) {
                         NSString *number = [text substringWithRange:match.range];
                         NSString *formatted = [NSString stringWithFormat:_friendsCount, number];
+                        WPLog(@"UISimplify", @"[setText] friendsCount: '%@' -> '%@'", number, formatted);
                         if (formatted) {
                             ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, formatted);
                             return;
@@ -333,6 +341,12 @@ static NSAttributedString *replacedAttrStr(NSAttributedString *orig, NSString *n
 
 static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedString *attrText) {
     if (!_orig_MMUILabel_setAttributedText) return;
+    
+    // 全量追踪：包含"联系人"的文本全部打印
+    NSString *traceText = attrText.string;
+    if (traceText && [traceText containsString:@"联系人"]) {
+        WPLog(@"UISimplify", @"[TRACE setAttrText] class=%@ text='%@'", NSStringFromClass([self class]), traceText);
+    }
     
     if (!_simplifyEnabled || !attrText) {
         ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd, attrText);
@@ -386,9 +400,11 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
             if (regex) {
                 NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
                 if (match && match.range.location != NSNotFound && match.range.length > 0) {
+                    WPLog(@"UISimplify", @"[setAttrText] digit match: class=%@ text=%@", NSStringFromClass([self class]), text);
                     if ([text containsString:@"位"] && [text containsString:@"联系人"]) {
                         NSString *number = [text substringWithRange:match.range];
                         NSString *formatted = [NSString stringWithFormat:_friendsCount, number];
+                        WPLog(@"UISimplify", @"[setAttrText] friendsCount: '%@' -> '%@'", number, formatted);
                         if (formatted && formatted.length > 0) {
                             NSAttributedString *replaced = replacedAttrStr(attrText, formatted);
                             if (replaced) {
