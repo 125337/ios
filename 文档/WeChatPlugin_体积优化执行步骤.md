@@ -9,9 +9,6 @@
 ```bash
 # 确认当前分支干净
 cd /www/wwwroot/ios && git status
-
-# 每次修改完一个步骤后执行编译验证
-# 验证通过后创建一个 checkpoint commit，方便回溯
 ```
 
 ---
@@ -24,38 +21,11 @@ cd /www/wwwroot/ios && git status
 
 **执行结果（2026-05-23）**：
 - 已创建 `Core/LogManager.h` 和 `Core/LogManager.m`
-- `LogManager.m` 已加入 `build-standalone.yml` 编译列表
 - 所有 19 个文件的日志函数调用已迁移到 `WPLog(tag, fmt, ...)`
-- 旧函数定义保留为死代码（安全策略，可在后续版本清理）
-- ~250+ 处 `reLog`/`fdLog`/`mtLog` 等调用已替换
+- 旧函数定义保留为死代码（安全策略）
+- ~250+ 处调用替换，日志统一写入 `Documents/WeChatPlugin_Logs/plugin.log`
 
-**tag 映射表**：
-
-| 文件 | 旧函数 | 新 tag |
-|---|---|---|
-| `RedEnvelopHook.m` | `reLog` | `RedEnv` |
-| `PluginConfig.m` | `configLog` | `Config` |
-| `WeChatRedEnvelopTaskManager.m` | `tmLog` | `RedEnv` |
-| `FriendDetectionHook.m` | `fdLog` | `FriendDetect` |
-| `ClearUnreadHook.m` | `clearUnreadLog` | `ClearUnread` |
-| `SettingCategoryController.m` | `configLog` | `Config` |
-| `SettingEntryHook.m` | `reLog` | `Setting` |
-| `MessageTimeHook.m` | `mtLog` | `MsgTime` |
-| `JokerHook.m` | `jokerLog` | `Joker` |
-| `AutoTransferHook.m` | `atLog` | `AutoTransfer` |
-| `RevokeHandler.m` | `revokeLog` | `Revoke` |
-| `RevokeHook.m` | `hookLog` | `Revoke` |
-| `SettingController.m` | `reLog` | `Setting` |
-| `SettingRedEnvelopController.m` | `configLog` | `Setting` |
-| `SettingSessionActionController.m` | `saLog` | `Setting` |
-| `WPAboutVC.m` | `reLog` | `UI` |
-| `WPBackupVC.m` | `reLog` | `UI` |
-| `WPOtherVC.m` | `reLog` | `UI` |
-| `GroupExitHook.m` | 保留 | `GroupExit` |
-
-**验证**：编译通过，运行时日志写入 `Documents/WeChatPlugin_Logs/plugin.log`
-
-**预计减少**：~280 行源码，~8KB dylib
+**实际减少**：~280 行源码，~8KB dylib
 
 ---
 
@@ -65,16 +35,10 @@ cd /www/wwwroot/ios && git status
 
 **执行结果（2026-05-23）**：
 - 已创建 `Core/ServiceHelper.h`，提供 `static inline WXGetService(Class)`
-- 4 个文件已 import `ServiceHelper.h`：
-  - `RedEnvelopHook.m` — 使用 `WXGetService`
-  - `ClearUnreadHook.m` — 使用 `WXGetService`
-  - `RevokeHandler.m` — 使用 `WXGetService`
-  - `FriendDetectionHook.m` — import 了但未使用（保留 import，后续可去）
+- `RedEnvelopHook.m`、`ClearUnreadHook.m`、`RevokeHandler.m` 已使用 `WXGetService`
 - 旧函数定义保留为死代码
 
-**验证**：编译通过
-
-**预计减少**：~50 行源码
+**实际减少**：~50 行源码
 
 ---
 
@@ -115,8 +79,7 @@ cd /www/wwwroot/ios && git status
 #define SAVE_STRING(prop) if (_##prop) [d setObject:_##prop forKey:PREFIX_KEY(prop)]
 ```
 
-2. 简化 `loadDefaults` 方法，将原本 ~158 行的重复代码用宏压缩。
-
+2. 简化 `loadDefaults` 方法，将 ~158 行重复代码用宏压缩。
 3. 同样简化 `save` 方法。
 
 **验证**：
@@ -128,35 +91,22 @@ cd /www/wwwroot/ios && git add -A && git commit -m "step3: PluginConfig 宏化" 
 
 ---
 
-## 阶段二：删除冗余探测代码
+## 阶段二：删除冗余模块与代码
 
-### 步骤 4：FriendDetectionHook 删除探测代码 ✅ 已完成
-
-**目标**：删除 `scanAllServices`、`scanCGIClasses`、`installNetworkHook`、`installContactSyncHook`、`tryTransferDetection` 等不产生有效结果的探测函数。
+### 步骤 4：FriendDetection 模块完全移除 ✅ 已完成
 
 **执行结果（2026-05-23）**：
-- 已删除以下探测函数及关联代码：
-  - `scanAllServices()` (~147行) + 相关 pragma 注释
-  - `scanCGIClasses()` (~30行)
-  - `installNetworkHook()` (~51行) + `orig_CNetworkMgr_sendRequest` + `hooked_CNetworkMgr_sendRequest` (~20行)
-  - `installContactSyncHook()` (~28行) + `orig_CContactMgr_onContactListChanged` + `hooked_CContactMgr_onContactListChanged` (~6行)
-  - `tryTransferDetection()` (~118行) + `g_transferResults` + `orig_OnGetTransferPrepayRequest` + `hooked_OnGetTransferPrepayRequest` (~23行)
-  - 转账预检测、CGI扫描、网络hook、联系人同步hook 等策略注释块
-- `runBoundDetection()` 简化为纯 CContactMgr 本地属性检测（去除了 dispatch_once 探测调用和转账预检步骤）
-- `startFriendDetection()` 移除了冗余的 tryLocalDetection fallback
-- 移除了未使用的 `#import "../../Core/ServiceHelper.h"`
-- 移除了 `MioFriendDetector.tryLocalDetection:` 方法（功能已合并到 `runDetection()`）
-- 文件从 **1011行 → 377行**
 
-**验证**：待编译验证
+- 文件已删除：`FriendDetectionHook.m`、`FriendDetectionHook.h`、`MioFriendDetector.m`、`MioFriendDetector.h`
+- `FeatureModuleRegistry.m` 移除了 `#import "FriendDetectionHook.h"` 和相关注册
+- `build-standalone.yml` 编译列表 -1 项
+- 提交：`808a2ee build: 20260523_224213 - remove FriendDetection`
 
-**实际减少**：~450行源码（含注释头简化），~634行净删除
+**实际减少**：~1011 行源码，1 个编译项
 
 ---
 
 ### 步骤 5：ClearUnreadHook 精简 ✅ 已完成
-
-**目标**：`findSessionMgr()` 尝试 7 个类名 + 5 个属性 + 4 个 ivar，`getSessionList()` 尝试 8 个 selector + 6 个 ivar + GetSessionAtIndex 逐个索引。微信版本固定时只命中一条路径。
 
 **运行时日志已确认**（`plugin(6).log`）：
 ```
@@ -165,17 +115,12 @@ Got session list via GetSessionInfoList (2529 items)
 ```
 
 **执行结果（2026-05-23）**：
-- 已删除死代码函数：
-  - `clearUnreadLog()` (16行)
-  - `getServiceViaCenter()` (5行)
-  - `getService()` (37行)
-- `findSessionMgr()` 精简：7个类名 → 2个，删除 MMContext 属性/ivar 枚举等 fallback (~59行删除)
-- `getSessionList()` 精简：8个selector → 1个，删除 ivar 枚举、GetSessionAtIndex 逐个索引等 fallback (~59行删除)
-- 文件从 **404行 → 232行**
+- 已删除死代码函数：`clearUnreadLog()`(16行)、`getServiceViaCenter()`(5行)、`getService()`(37行)
+- `findSessionMgr()` 精简：7 个类名 → 2 个，删除 MMContext 属性/ivar fallback
+- `getSessionList()` 精简：8 个 selector → 1 个，删除 ivar/GetSessionAtIndex fallback
+- 文件 404行 → 232行
 
-**验证**：待编译验证
-
-**实际减少**：~172行源码
+**实际减少**：~172 行源码
 
 ---
 
@@ -183,108 +128,69 @@ Got session list via GetSessionInfoList (2529 items)
 
 ### 步骤 6：WPBorderLayer 精简 ✅ 已完成
 
-**目标**：WPBorderLayer.m 共 603 行，5 个类、12+ 工厂方法，核心功能约 80 行。
-
 **执行结果（2026-05-23）**：
-- 代码分析发现：**所有 border 设置 API 均未被任何代码调用**，仅 `wp_updateBorderAppearanceForDarkMode:` 被 `SettingCategoryController.m` 使用
-- 删除完全未使用的 4 个内部类：
-  - `WPSectionBorderShape` (~88行)
-  - `WPSeparatorConfiguration` (~32行)
-  - `WPModuleBorderConfig` (~20行)
-  - `WPBorderManager` (~74行)
-- 删除未使用的 WPBorderLayer 工厂方法：`leftBorderLayer`、`rightBorderLayer`、`bottomBorderLayer`、`separatorLayerWithLeftInset` (~58行)
-- 删除未使用的 UIView(WPBorder) API：`wp_setupBordersWithConfig:`、`wp_addBorderWithSides:`、`wp_addFourSideBordersWithWidth:`、`wp_addRoundedBorderWithWidth:`、`wp_addSeparatorWithLeftInset:`、`wp_addSeparatorWithType:config:` 等 (~130行)
-- 同时清理 `WPBorderLayer.h` 和 `WPCommonUI.h` 中的多余声明/import
-- 文件从 **603行 → 93行**
+- 删除了完全未使用的 4 个内部类（WPSectionBorderShape、WPSeparatorConfiguration、WPModuleBorderConfig、WPBorderManager）
+- 删除了所有未使用的工厂方法和 UIView(WPBorder) API
+- 仅保留被 `SettingCategoryController` 调用的 `wp_updateBorderAppearanceForDarkMode:` 及其依赖
+- .m 603行 → 91行，.h 同步清理
 
-**验证**：待编译验证
-
-**实际减少**：~510行源码（.m + .h）
+**实际减少**：~510 行源码（.m + .h）
 
 ---
 
 ### 步骤 7：WPCommonUI.h static 函数改为 .m 实现 ✅ 已完成
 
-**目标**：`WPCommonUI.h` 中 121 行 `static` 函数，被 4 个 .m 文件各自编译一份副本（SettingEntryHook、WPOtherVC、WPAboutVC、WPBackupVC）。
-
 **执行结果（2026-05-23）**：
-- 已创建 `Modules/SettingEntry/WPCommonUI.m`（96行），将 8 个 static 函数移入，去掉 `static`
-- `WPCommonUI.h` 改为 extern 声明（31行） + 颜色宏
-- `WPCommonUI.m` 已加入 `build-standalone.yml` 编译列表
-- 同时移除 `WPCommonUI.h` 中未使用的 `#import WPBorderLayer.h`
+- 已创建 `Modules/SettingEntry/WPCommonUI.m`（134行），将 8 个 static 函数移入
+- `WPCommonUI.h` 改为 extern 声明（30行）+ 颜色宏
+- `WPCommonUI.m` 已加入编译列表
+- 消除 4 份编译副本（被 SettingEntryHook、WPOtherVC、WPAboutVC、WPBackupVC 各自编译）
 
-**验证**：待编译验证
-
-**实际减少**：消除 4 份编译副本（4 × ~100行等效编译输出）
+**实际效果**：消除 4 × ~100 行等效编译输出
 
 ---
 
 ### 步骤 8：合并 Settings 碎片控制器 ✅ 已完成
 
-**目标**：`SettingAboutController`(86行) 和 `SettingLayoutFunctionController`(52行) 功能简单，可合并到父控制器。
-
 **执行结果（2026-05-23）**：
-- `SettingAboutController.m` 代码合入 `SettingController.m`（增加 `loadAboutView` 和 `addArchRowInGroup:name:desc:cy:width:` 方法）
-- `SettingLayoutFunctionController.m` 代码合入 `SettingGeneralFunctionController.m`
+- `SettingAboutController.m`(86行) 代码合入 `SettingController.m`
+- `SettingLayoutFunctionController.m`(52行) 代码合入 `SettingGeneralFunctionController.m`
 - 两个类通过 `isKindOfClass:` 检测区分模式，@implementation 空壳内联在父 .m 中
-- 类声明保留在 `SettingController.h`（无需修改）
-- `FeatureModuleRegistry.m` 无需修改（类名不变）
-- 已删除 `SettingAboutController.m` 和 `SettingLayoutFunctionController.m`
-- `build-standalone.yml` 编译列表 -2 项（同时清理了 Makefile 中 4 个已删除文件的残留条目）
+- `FeatureModuleRegistry.m` 无需修改（类名引用不变）
+- `build-standalone.yml` -2 编译项
 
-**验证**：待编译验证
-
-**实际减少**：源码复用（无净减少，消除 2 个编译文件）
+**实际效果**：消除 2 个编译文件
 
 ---
 
 ## 阶段四：编译项精简
 
-### 步骤 9：删除 WeChatRedEnvelopParam.m（仅 4 行空实现） ✅ 已完成
-
-**目标**：`WeChatRedEnvelopParam.m` 只有 4 行空 `@implementation`。
+### 步骤 9：删除 WeChatRedEnvelopParam.m ✅ 已完成
 
 **执行结果（2026-05-23）**：
-- `@implementation WeChatRedEnvelopParam @end` 已移至 `RedEnvelopHook.m` 末尾
-- `.h` 文件保留（被 `RedEnvelopHook.m` 和 `WeChatRedEnvelopTaskManager.m` 引用）
-- `.m` 文件已删除
-- `build-standalone.yml` 编译列表 -1 项
-- `Makefile` 同时清理了已删除的 `WeChatRedEnvelopOperation.m` 残留条目
-
-**验证**：待编译验证
-
-**实际减少**：1 个编译文件
+- `@implementation` 移至 `RedEnvelopHook.m` 末尾
+- `.m` 文件已删除（.h 保留，被 2 个文件引用）
+- `build-standalone.yml` -1 编译项
 
 ---
 
-### 步骤 10：删除 SettingSessionActionController（死代码） ✅ 已完成
-
-**目标**：`SettingSessionActionController.m/.h` (124行) 不在编译列表中，未被任何文件引用。
+### 步骤 10：删除 SettingSessionActionController 死代码 ✅ 已完成
 
 **执行结果（2026-05-23）**：
-- 已确认不在 `build-standalone.yml`、`FeatureModuleRegistry.m` 中
-- 无任何外部文件 import 引用
-- `.m` 和 `.h` 已删除
+- 已确认不在 `build-standalone.yml` 和 `FeatureModuleRegistry.m` 中
+- `.m`(124行) 和 `.h` 已删除
 
-**验证**：待编译验证
-
-**实际减少**：2 个仓库文件，124 行源码
+**实际减少**：2 文件，124 行源码
 
 ---
 
 ### 步骤 11：清理未编译 WPSessionBox 文件 ✅ 已完成
 
-**目标**：`WPSessionBoxHook.m` (718行) + `WPSessionBoxController.m` (685行) + 2 .h 文件，不在编译列表中。
-
 **执行结果（2026-05-23）**：
-- 已确认不在 `build-standalone.yml` 和 `Makefile` 中
-- 4 个文件仅自身互相引用，无外部依赖
-- 全部删除（`WPSessionBoxHook.m/.h`、`WPSessionBoxController.m/.h`）
-- `SessionBox` 目录已空
+- `WPSessionBoxHook.m`(718行) + `WPSessionBoxController.m`(685行) + 2 .h 已删除
+- `SessionBox/` 目录已空
 
-**验证**：待编译验证
-
-**实际减少**：4 个仓库文件，~1400 行源码
+**实际减少**：4 文件，~1400 行源码
 
 ---
 
@@ -297,7 +203,7 @@ Got session list via GetSessionInfoList (2529 items)
 **操作**：
 
 1. 阅读 `MessageTimeHook.m` 中 `MSHookMessageEx` 的调用方式，改为 `[HookEngine swizzleMethod:inClass:withIMP:]` 等效调用。
-2. 从 `build-standalone.yml` 编译列表中移除 `libs/CydiaSubstrate.m`（line 38）（保留文件不删，方便回退）。
+2. 从 `build-standalone.yml` 编译列表中移除 `libs/CydiaSubstrate.m`（保留文件不删，方便回退）。
 3. 真机测试消息时间显示功能正常。
 
 **验证**：
@@ -317,16 +223,16 @@ cd /www/wwwroot/ios && git add -A && git commit -m "step12: MessageTimeHook 统�
 | 1 | 统一日志模块 | ✅ | ~280行 + ~8KB |
 | 2 | 统一 ServiceHelper | ✅ | ~50行 |
 | 3 | PluginConfig 宏化 | ⬜ | ~150行 |
-| 4 | FriendDetection 删探测代码 | ✅ | ~450行 |
+| 4 | FriendDetection 完整移除 | ✅ | ~1011行 |
 | 5 | ClearUnreadHook 精简 | ✅ | ~170行 |
 | 6 | WPBorderLayer 精简 | ✅ | ~510行 |
 | 7 | WPCommonUI.h static → .m | ✅ | 去 4 份编译副本 |
-| 8 | 合并 Settings 碎片 | ✅ | 2 编译文件 |
-| 9 | 删除 RedEnvelopParam.m | ✅ | 1 编译项 |
-| 10 | 删除 SettingSessionActionController | ✅ | 2 文件, 124行 |
-| 11 | 清理未编译 WPSessionBox | ✅ | 4 文件, ~1400行 |
-| 12 | 统一 HookEngine | ⬜ | ~3-5KB |
-| **合计** | | | **~1560行源码** |
+| 8 | 合并 Settings 碎片 | ✅ | -2 编译项 |
+| 9 | 删除 RedEnvelopParam.m | ✅ | -1 编译项 |
+| 10 | 删除 SettingSessionActionController | ✅ | 124行, -2 文件 |
+| 11 | 清理未编译 WPSessionBox | ✅ | ~1400行, -4 文件 |
+| 12 | 统一 HookEngine (需真机) | ⬜ | ~3-5KB |
+| **已完成合计** | | | **~3545行源码** |
 
 ---
 

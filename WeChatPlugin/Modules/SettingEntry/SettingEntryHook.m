@@ -99,7 +99,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     UIView *listCard = WPMakeCard(y, w);
     CGFloat cy = 0;
 
-    NSArray *navItems = @[@[@"常用功能", @"openCommon:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
+    NSArray *navItems = @[@[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
     CGFloat scale = [UIScreen mainScreen].scale;
     for (NSUInteger i = 0; i < navItems.count; i++) {
         if (i > 0) {
@@ -182,6 +182,20 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     subVC.categoryName = @"通用功能";
     [vc.navigationController pushViewController:subVC animated:YES];
     WPLog(@"Setting", @"[Nav] pushed SettingGeneralFunctionController");
+}
+
+- (void)openUI:(id)sender {
+    UIViewController *vc = [self currentVCFrom:sender];
+    if (!vc) { WPLog(@"Setting", @"[Nav] openUI: currentVC nil"); return; }
+    Class helperClass = objc_getClass("WPUIVCHelper");
+    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPUIVCHelper not found"); return; }
+    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        WPLog(@"Setting", @"[Nav] pushed WPUIVC");
+    } else {
+        WPLog(@"Setting", @"[Nav] WPUIVCHelper makeVC returned nil");
+    }
 }
 
 - (void)openRedEnvelop:(id)sender {
