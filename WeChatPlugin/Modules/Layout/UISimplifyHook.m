@@ -1,12 +1,15 @@
 // ============================================================
 // UISimplifyHook.m — 微信界面简化 Hook 模块
-// 参照反编译: 微信优化反编译最新/123456.c FUN_00044244 (L40131)
+// 参照反编译: 微信优化 FRE_00044a80 + WCRefine FUN_002f0d4c
 //
-// 防御版本:
-// - 所有方法调用前做 nil/isKindOfClass 检查
-// - 响应者链遍历加长度限制防死循环
-// - NSUserDefaults 缓存到静态变量，避免 Hook 路径 IO
-// - 菜单名 alt key 回退映射（支持新版微信文字变化如 "订单与卡包"）
+// 深度分析结果:
+// - 微信优化 & WCRefine 均无 oldPlugin 检测，只用简单 enabled flag
+// - 微信优化 setText: comma 检测 → NavBar → mainTitle
+// - 微信优化 setText: "U" 检测 → contacts
+// - 微信优化 setText: "发现" 检测 → discover
+// - WCRefine tab hooks: 首字回退匹配
+// - WCRefine getTitle: 仅处理分隔符 (\n)
+// - 两者 tab hooks: dict[title] 直查 + 首字 fallback
 // ============================================================
 
 #import "UISimplifyHook.h"
@@ -28,8 +31,9 @@ static NSString     *_contactsTitle    = nil;
 static NSString     *_discoverTitle    = nil;
 static NSString     *_friendsCount     = nil;
 
-// 菜单名替代映射：新版微信某些菜单文字可能变化（如 "卡包" → "订单与卡包"）
-// 当 hook 遇到 alternate key 时，回退查 primary key
+// 菜单名替代映射：新版微信某些菜单文字可能变化
+// alt key (微信实际显示) → primary key (我们 dict 里的 key)
+// 微信优化 和 WCRefine 通过首字/containsString 自动适配，我们用显式映射
 static NSDictionary *_altMenuKeys     = nil;
 
 static void UISimplify_ReloadConfig(void) {
@@ -43,9 +47,12 @@ static void UISimplify_ReloadConfig(void) {
     _contactsTitle = [d stringForKey:@"Simplify_ContactsTitle"];
     _discoverTitle = [d stringForKey:@"Simplify_DiscoverTitle"];
     _friendsCount  = [d stringForKey:@"Simplify_FriendsCount"];
-    // 问题4：新版微信菜单文字可能变化（如 "订单与卡包" 替代 "卡包"）
-    // alt key → primary key 回退映射
-    _altMenuKeys   = @{@"订单与卡包": @"卡包"};
+    // alt key → primary key 回退映射 (参照 WCRefine 首字回退思路)
+    // 微信 8.0.60+ 部分菜单文字变化，添加全部已知变体
+    _altMenuKeys   = @{
+        @"订单与卡包": @"卡包",
+        @"支付与服务": @"服务",
+    };
     WPLog(@"UISimplify", @"Config loaded: enabled=%d menu=%lu tab=%lu",
           _simplifyEnabled, (unsigned long)_menuNames.count, (unsigned long)_tabNames.count);
 }
@@ -108,7 +115,8 @@ static BOOL SafeHasPrefix(NSString *s, NSString *prefix) {
     return s && prefix && [s hasPrefix:prefix];
 }
 
-// 菜单名查找：先直接查 menuNames，再查替代 key 映射（问题4：支持 "订单与卡包" → "卡包"）
+// 菜单名查找：先直接查，再 alt key 回退
+// 参照 微信优化 FUN_00044910 getTitle 的 "\n" 分割逻辑 + WCRefine 首字回退思路
 static id menuNameLookup(id orig) {
     id repl = [_menuNames objectForKey:orig];
     if (repl) return repl;
@@ -121,33 +129,57 @@ static id menuNameLookup(id orig) {
     return nil;
 }
 
-static id hook_WCTitle(id self, SEL _cmd) {
-    if (!_orig_WCTableViewCellLeftConfig_title) return nil;
-    id orig = ((id (*)(id, SEL))_orig_WCTableViewCellLeftConfig_title)(self, _cmd);
-    if (!_simplifyEnabled || !orig || !_menuNames) return orig;
-    
+// 针对复合标题 (如 "卡包\n订单与卡包") 做全路径匹配:
+// 1. 整体查 2. \n前半查 3. \n后半查 4. 查alt key
+static id menuNameLookupWithNewline(id orig) {
     id repl = menuNameLookup(orig);
     if (repl) return repl;
     
     @try {
         NSRange nl = [orig rangeOfString:@"\n"];
-        if (nl.location != NSNotFound && nl.location + 1 < [orig length]) {
-            NSString *suffix = [orig substringFromIndex:nl.location + 1];
-            id subRepl = menuNameLookup(suffix);
-            if (subRepl) return subRepl;
+        if (nl.location != NSNotFound) {
+            // "\n" 前半段 (参照 WCRefine 首字思路，微信主行通常在 \n 前)
+            if (nl.location > 0) {
+                NSString *prefix = [orig substringToIndex:nl.location];
+                repl = menuNameLookup(prefix);
+                if (repl) return repl;
+            }
+            // "\n" 后半段
+            if (nl.location + 1 < [orig length]) {
+                NSString *suffix = [orig substringFromIndex:nl.location + 1];
+                repl = menuNameLookup(suffix);
+                if (repl) return repl;
+            }
         }
     } @catch (NSException *e) {}
-    return orig;
+    return nil;
+}
+
+static id hook_WCTitle(id self, SEL _cmd) {
+    if (!_orig_WCTableViewCellLeftConfig_title) return nil;
+    id orig = ((id (*)(id, SEL))_orig_WCTableViewCellLeftConfig_title)(self, _cmd);
+    if (!_simplifyEnabled || !orig || !_menuNames) return orig;
+    
+    id repl = menuNameLookupWithNewline(orig);
+    return repl ?: orig;
 }
 
 // ============================================================
 // MARK: - 策略A: Tab 标题替换 (4个Hook)
 // ============================================================
 
+// 参照 WCRefine FUN_002efbe4: dict 查不到时用首字回退
 static NSString *replaceTabTitle(NSString *title) {
     if (!_simplifyEnabled || !title || !_tabNames) return title;
     id repl = [_tabNames objectForKey:title];
-    return repl ?: title;
+    if (repl) return repl;
+    // 首字回退 (WCRefine: FUN_002fa550 提取首字符查 dict)
+    if (title.length > 0) {
+        NSString *firstChar = [title substringToIndex:1];
+        repl = [_tabNames objectForKey:firstChar];
+        if (repl) return repl;
+    }
+    return title;
 }
 
 static id hook_MMTabbarItem_init(id self, SEL _cmd, NSString *title, id img, id selImg) {
@@ -179,22 +211,12 @@ static id hook_MMTableViewInfo_getTitle(id self, SEL _cmd) {
     id orig = ((id (*)(id, SEL))_orig_MMTableViewInfo_getTitle)(self, _cmd);
     if (!_simplifyEnabled || !orig || !_menuNames) return orig;
     
-    id repl = menuNameLookup(orig);
-    if (repl) return repl;
-    
-    @try {
-        NSRange nl = [orig rangeOfString:@"\n"];
-        if (nl.location != NSNotFound && nl.location + 1 < [orig length]) {
-            NSString *suffix = [orig substringFromIndex:nl.location + 1];
-            id subRepl = menuNameLookup(suffix);
-            if (subRepl) return subRepl;
-        }
-    } @catch (NSException *e) {}
-    return orig;
+    id repl = menuNameLookupWithNewline(orig);
+    return repl ?: orig;
 }
 
 // ============================================================
-// MARK: - 策略B: MMUILabel.setText: (参照 FUN_00044a80) ⭐核心
+// MARK: - 策略B: MMUILabel.setText: (参照 微信优化FUN_00044a80 + WCRefineFUN_002f0d4c) ⭐核心
 // ============================================================
 
 static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
@@ -210,7 +232,7 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
         ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, text);
         return;
     }
-    // Guard 2: badge 数字 (以 "[" 开头) → 原始
+    // Guard 2: badge 数字 (以 "[" 开头, 微信优化 L40398 hasPrefix:@"[")
     if ([text hasPrefix:@"["]) {
         ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, text);
         return;
@@ -221,8 +243,21 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
         return;
     }
     
+    // 微信优化: 先做 containsString 检测再做上下文遍历
+    // bVar1 = [text containsString:@","] → 导航栏路径
+    // bVar2 = [text containsString:@"U"] → 通讯录路径
+    BOOL hasComma = [text containsString:@","];
+    
     // --- 匹配层1: NavigationBar → mainTitleReplacement ---
-    if (_mainTitle && _mainTitle.length > 0) {
+    // 微信优化 L40405: bVar1 (comma) + NavigationBar → mainTitle
+    if (_mainTitle && _mainTitle.length > 0 && hasComma) {
+        if (ResponderChainContainsClassName(self, @"NavigationBar", 10)) {
+            ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _mainTitle);
+            return;
+        }
+    }
+    // 兜底：无 comma 也查 NavigationBar (处理其他标题格式)
+    if (_mainTitle && _mainTitle.length > 0 && !hasComma) {
         if (ResponderChainContainsClassName(self, @"NavigationBar", 10)) {
             ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _mainTitle);
             return;
@@ -230,12 +265,11 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
     }
     
     // --- 匹配层2: Contacts → contactsReplacement ---
+    // 微信优化 L40479: bVar2 ("U" 检测) + contactsTitle
     if (_contactsTitle && _contactsTitle.length > 0) {
         if (SafeHasPrefix(text, @"通讯录") || [text isEqualToString:@"通讯录"]) {
-            if (ResponderChainContainsClassName(self, @"Contact", 10)) {
-                ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _contactsTitle);
-                return;
-            }
+            ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _contactsTitle);
+            return;
         }
     }
     
