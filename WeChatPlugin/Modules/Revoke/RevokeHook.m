@@ -28,6 +28,7 @@ static void hookLog(NSString *format, ...) {
             [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     } @catch (NSException *e) {}
+    [content release];
 }
 
 // ============================================================

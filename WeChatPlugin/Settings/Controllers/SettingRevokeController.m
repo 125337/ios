@@ -59,12 +59,12 @@
 - (void)onRevokeFormatTap {
     RevokeFormatEditorVC *editor = [[RevokeFormatEditorVC alloc] init];
     editor.initialFormat = [PluginConfig shared].revokeTemplate;
-    editor.saveBlock = ^(NSString *newFormat) {
+    editor.saveBlock = [^(NSString *newFormat) {
         PluginConfig *cfg = [PluginConfig shared];
         cfg.revokeTemplate = newFormat;
         [cfg save];
         [self buildUI];
-    };
+    } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     [self presentViewController:nav animated:YES completion:nil];
@@ -73,12 +73,12 @@
 - (void)onNotifyFormatTap {
     RevokeFormatEditorVC *editor = [[RevokeFormatEditorVC alloc] init];
     editor.initialFormat = [PluginConfig shared].notifySenderTemplate;
-    editor.saveBlock = ^(NSString *newFormat) {
+    editor.saveBlock = [^(NSString *newFormat) {
         PluginConfig *cfg = [PluginConfig shared];
         cfg.notifySenderTemplate = newFormat;
         [cfg save];
         [self buildUI];
-    };
+    } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     [self presentViewController:nav animated:YES completion:nil];

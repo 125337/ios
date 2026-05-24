@@ -4,11 +4,11 @@
 Class SettingCategoryBaseClass(void);
 
 @interface SettingCategoryController : UIViewController
-@property (nonatomic, strong) UIScrollView *scrollView;
-@property (nonatomic, strong) UIView *contentView;
-@property (nonatomic, strong) NSMutableDictionary<NSString *, UITextField *> *inputFields;
+@property (nonatomic, retain) UIScrollView *scrollView;
+@property (nonatomic, retain) UIView *contentView;
+@property (nonatomic, retain) NSMutableDictionary<NSString *, UITextField *> *inputFields;
 @property (nonatomic, copy) NSString *categoryName;
-@property (nonatomic, strong) NSMutableSet<NSString *> *masterSwitchKeys;
+@property (nonatomic, retain) NSMutableSet<NSString *> *masterSwitchKeys;
 
 - (UIView *)addTableGroupAtY:(CGFloat)y width:(CGFloat)w;
 - (CGFloat)finishGroup:(UIView *)group atY:(CGFloat)y height:(CGFloat)h;

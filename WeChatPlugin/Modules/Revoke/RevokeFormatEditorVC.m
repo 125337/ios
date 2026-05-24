@@ -20,10 +20,10 @@ static NSArray<NSString *> *_tokenDescs(void) {
 }
 
 @interface RevokeFormatEditorVC () <UITextViewDelegate>
-@property (nonatomic, strong) UIScrollView *scrollView;
-@property (nonatomic, strong) UIView *contentView;
-@property (nonatomic, strong) UITextView *editorView;
-@property (nonatomic, strong) UITextView *previewView;
+@property (nonatomic, retain) UIScrollView *scrollView;
+@property (nonatomic, retain) UIView *contentView;
+@property (nonatomic, retain) UITextView *editorView;
+@property (nonatomic, retain) UITextView *previewView;
 @end
 
 @implementation RevokeFormatEditorVC
@@ -57,6 +57,11 @@ static NSArray<NSString *> *_tokenDescs(void) {
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [_scrollView release];
+    [_contentView release];
+    [_editorView release];
+    [_previewView release];
+    [super dealloc];
 }
 
 #pragma mark - NavBar
@@ -74,12 +79,12 @@ static NSArray<NSString *> *_tokenDescs(void) {
 #pragma mark - ScrollView
 
 - (void)setupScrollView {
-    self.scrollView = [[UIScrollView alloc] initWithFrame:self.view.bounds];
+    self.scrollView = [[[UIScrollView alloc] initWithFrame:self.view.bounds] autorelease];
     self.scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     [self.view addSubview:self.scrollView];
 
-    self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 0)];
+    self.contentView = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 0)] autorelease];
     [self.scrollView addSubview:self.contentView];
 }
 
@@ -140,7 +145,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
     y += 28.0;
 
     CGFloat tvH = 110.0;
-    self.editorView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
+    self.editorView = [[[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)] autorelease];
     self.editorView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular];
     self.editorView.textColor = [UIColor labelColor];
     self.editorView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
@@ -171,7 +176,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
     y += 28.0;
 
     CGFloat tvH = 110.0;
-    self.previewView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
+    self.previewView = [[[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)] autorelease];
     self.previewView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular];
     self.previewView.textColor = [UIColor labelColor];
     self.previewView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];

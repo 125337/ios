@@ -26,11 +26,11 @@
 @property (nonatomic, assign) BOOL redEnvelopTextFilterEnabled;
 @property (nonatomic, copy) NSString *redEnvelopTextFilter;
 @property (nonatomic, assign) BOOL redEnvelopGroupFilterEnabled;
-@property (nonatomic, strong) NSArray<NSString *> *redEnvelopGroupFilterList;
+@property (nonatomic, retain) NSArray<NSString *> *redEnvelopGroupFilterList;
 @property (nonatomic, assign) BOOL redEnvelopAutoReply;
 @property (nonatomic, assign) BOOL redEnvelopAutoReplyInGroup;
 @property (nonatomic, copy) NSString *redEnvelopAutoReplyStr;
-@property (nonatomic, strong) NSArray<NSString *> *redEnvelopBlackList;
+@property (nonatomic, retain) NSArray<NSString *> *redEnvelopBlackList;
 @property (nonatomic, assign) BOOL autoConfirmTransfer;
 @property (nonatomic, assign) BOOL autoConfirmTransferPersonal;
 @property (nonatomic, assign) BOOL autoConfirmTransferGroup;
@@ -93,8 +93,8 @@
 @property (nonatomic, assign) BOOL notifySender;
 @property (nonatomic, copy) NSString *notifySenderTemplate;
 @property (nonatomic, assign) double notifySenderCooldown;
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *sessionFormats;
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *userFormats;
+@property (nonatomic, retain) NSMutableDictionary<NSString *, NSString *> *sessionFormats;
+@property (nonatomic, retain) NSMutableDictionary<NSString *, NSString *> *userFormats;
 - (NSString *)notifyFormatForSession:(NSString *)session user:(NSString *)user;
 - (UIColor *)colorFromHex:(NSString *)hex;
 - (NSString *)hexFromColor:(UIColor *)color;

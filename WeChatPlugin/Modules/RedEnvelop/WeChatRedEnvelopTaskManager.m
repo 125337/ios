@@ -5,12 +5,12 @@
 #import "../../Core/LogManager.h"
 
 @interface WeChatRedEnvelopTaskManager ()
-@property (nonatomic, strong) NSOperationQueue *taskQueue;
-@property (nonatomic, strong) NSMutableDictionary *pendingParams;
-@property (nonatomic, strong) NSMutableDictionary *processedMsgIds;
-@property (nonatomic, strong) id blankPlayer;
+@property (nonatomic, retain) NSOperationQueue *taskQueue;
+@property (nonatomic, retain) NSMutableDictionary *pendingParams;
+@property (nonatomic, retain) NSMutableDictionary *processedMsgIds;
+@property (nonatomic, retain) id blankPlayer;
 @property (nonatomic, assign) unsigned long bgTaskId;
-@property (nonatomic, strong) NSTimer *bgTaskTimer;
+@property (nonatomic, retain) NSTimer *bgTaskTimer;
 @end
 
 @implementation WeChatRedEnvelopTaskManager
@@ -27,8 +27,8 @@
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _pendingParams = [NSMutableDictionary dictionary];
-        _processedMsgIds = [NSMutableDictionary dictionary];
+        _pendingParams = [[NSMutableDictionary dictionary] retain];
+        _processedMsgIds = [[NSMutableDictionary dictionary] retain];
         _bgTaskId = 0;
 
         _taskQueue = [NSOperationQueue new];
@@ -183,9 +183,9 @@
         }
 
         if (self.bgTaskId == 0) {
-            __weak typeof(self) weakSelf = self;
+            __unsafe_unretained typeof(self) weakSelf = self;
             self.bgTaskId = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
-                __strong typeof(weakSelf) strongSelf = weakSelf;
+                typeof(weakSelf) strongSelf = weakSelf;
                 if (strongSelf.bgTaskId != 0) {
                     [[UIApplication sharedApplication] endBackgroundTask:strongSelf.bgTaskId];
                     strongSelf.bgTaskId = 0;
@@ -195,15 +195,15 @@
         }
 
         if (!self.bgTaskTimer) {
-            __weak typeof(self) weakSelf = self;
+            __unsafe_unretained typeof(self) weakSelf = self;
             self.bgTaskTimer = [NSTimer scheduledTimerWithTimeInterval:5.0
                                                               target:[NSBlockOperation blockOperationWithBlock:^{
-                __strong typeof(weakSelf) strongSelf = weakSelf;
+                typeof(weakSelf) strongSelf = weakSelf;
                 if (strongSelf.bgTaskId != 0) {
                     [[UIApplication sharedApplication] endBackgroundTask:strongSelf.bgTaskId];
                 }
                 strongSelf.bgTaskId = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
-                    __strong typeof(weakSelf) strongSelf2 = weakSelf;
+                    typeof(weakSelf) strongSelf2 = weakSelf;
                     if (strongSelf2.bgTaskId != 0) {
                         [[UIApplication sharedApplication] endBackgroundTask:strongSelf2.bgTaskId];
                         strongSelf2.bgTaskId = 0;
@@ -240,6 +240,15 @@
             WPLog(@"RedEnv", @"[BG] 后台保活: 后台任务已结束");
         }
     } @catch (NSException *e) {}
+}
+
+- (void)dealloc {
+    [_taskQueue release];
+    [_pendingParams release];
+    [_processedMsgIds release];
+    [_blankPlayer release];
+    [_bgTaskTimer release];
+    [super dealloc];
 }
 
 @end

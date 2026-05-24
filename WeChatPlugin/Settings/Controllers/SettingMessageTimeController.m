@@ -64,12 +64,12 @@
 - (void)onMessageTimeCustomFormatTap {
     MessageTimeFormatEditorVC *editor = [[MessageTimeFormatEditorVC alloc] init];
     editor.initialFormat = [PluginConfig shared].messageTimeCustomFormat;
-    editor.saveBlock = ^(NSString *newFormat) {
+    editor.saveBlock = [^(NSString *newFormat) {
         PluginConfig *cfg = [PluginConfig shared];
         cfg.messageTimeCustomFormat = newFormat;
         [cfg save];
         [self buildUI];
-    };
+    } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     [self presentViewController:nav animated:YES completion:nil];

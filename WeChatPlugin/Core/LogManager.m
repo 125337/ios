@@ -9,7 +9,7 @@
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
         NSString *folder = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
         [[NSFileManager defaultManager] createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil];
-        _logPath = [folder stringByAppendingPathComponent:@"plugin.log"];
+        _logPath = [[folder stringByAppendingPathComponent:@"plugin.log"] retain];
     });
     return _logPath;
 }

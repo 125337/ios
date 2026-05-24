@@ -39,10 +39,10 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
 }
 
 @interface MessageTimeFormatEditorVC () <UITextViewDelegate>
-@property (nonatomic, strong) UIScrollView *scrollView;
-@property (nonatomic, strong) UIView *contentView;
-@property (nonatomic, strong) UITextView *editorView;
-@property (nonatomic, strong) UITextView *previewView;
+@property (nonatomic, retain) UIScrollView *scrollView;
+@property (nonatomic, retain) UIView *contentView;
+@property (nonatomic, retain) UITextView *editorView;
+@property (nonatomic, retain) UITextView *previewView;
 @end
 
 @implementation MessageTimeFormatEditorVC
@@ -91,6 +91,11 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [_scrollView release];
+    [_contentView release];
+    [_editorView release];
+    [_previewView release];
+    [super dealloc];
 }
 
 #pragma mark - NavBar（复刻 viewDidLoad 导航栏设置）

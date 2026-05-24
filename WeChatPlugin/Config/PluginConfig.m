@@ -28,11 +28,46 @@
         _customNotifyFormat = [kDefaultCustomNotifyFormat copy];
         _revokeTemplate = [kDefaultRevokeTemplate copy];
         _notifySenderTemplate = [kDefaultNotifySenderTemplate copy];
-        _sessionFormats = [NSMutableDictionary dictionary];
-        _userFormats = [NSMutableDictionary dictionary];
+        _sessionFormats = [[NSMutableDictionary dictionary] retain];
+        _userFormats = [[NSMutableDictionary dictionary] retain];
         [self loadDefaults];
     }
     return self;
+}
+
+- (void)dealloc {
+    [_notifyFormat release];
+    [_dateFormat release];
+    [_nameColorHex release];
+    [_timeColorHex release];
+    [_contentColorHex release];
+    [_darkNameColorHex release];
+    [_darkTimeColorHex release];
+    [_darkContentColorHex release];
+    [_interceptNotifyTemplate release];
+    [_customNotifyFormat release];
+    [_revokeTemplate release];
+    [_notifySenderTemplate release];
+    [_customText release];
+    [_redEnvelopTextFilter release];
+    [_redEnvelopAutoReplyStr release];
+    [_messageTimeFormat release];
+    [_messageTimeCustomFormat release];
+    [_messageTimeTextColor release];
+    [_senderTextColorHex release];
+    [_senderTextColorDarkHex release];
+    [_senderBackgroundColorHex release];
+    [_senderBackgroundColorDarkHex release];
+    [_receiverTextColorHex release];
+    [_receiverTextColorDarkHex release];
+    [_receiverBackgroundColorHex release];
+    [_receiverBackgroundColorDarkHex release];
+    [_addTimeSuffixFormat release];
+    [_redEnvelopBlackList release];
+    [_redEnvelopGroupFilterList release];
+    [_sessionFormats release];
+    [_userFormats release];
+    [super dealloc];
 }
 
 - (void)loadDefaults {
@@ -81,52 +116,98 @@
     
     NSArray *blackList = [d arrayForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopBlackList"]];
     if (blackList) {
-        _redEnvelopBlackList = blackList;
+        [_redEnvelopBlackList release];
+        _redEnvelopBlackList = [blackList retain];
     } else {
-        _redEnvelopBlackList = @[];
+        _redEnvelopBlackList = [@[] retain];
     }
 
     NSArray *groupFilterList = [d arrayForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopGroupFilterList"]];
     if (groupFilterList) {
-        _redEnvelopGroupFilterList = groupFilterList;
+        [_redEnvelopGroupFilterList release];
+        _redEnvelopGroupFilterList = [groupFilterList retain];
     } else {
-        _redEnvelopGroupFilterList = @[];
+        _redEnvelopGroupFilterList = [@[] retain];
     }
 
     NSString *v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopTextFilter"]];
-    if (v.length > 0) _redEnvelopTextFilter = v;
-    else _redEnvelopTextFilter = @"";
+    if (v.length > 0) {
+        [_redEnvelopTextFilter release];
+        _redEnvelopTextFilter = [v copy];
+    } else {
+        _redEnvelopTextFilter = [@"" retain];
+    }
 
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopAutoReplyStr"]];
-    if (v.length > 0) _redEnvelopAutoReplyStr = v;
-    else _redEnvelopAutoReplyStr = @"谢谢老板";
+    if (v.length > 0) {
+        [_redEnvelopAutoReplyStr release];
+        _redEnvelopAutoReplyStr = [v copy];
+    } else {
+        _redEnvelopAutoReplyStr = [@"谢谢老板" retain];
+    }
 
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"NotifyFormat"]];
-    if (v.length > 0) _notifyFormat = v;
+    if (v.length > 0) {
+        [_notifyFormat release];
+        _notifyFormat = [v copy];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DateFormat"]];
-    if (v.length > 0) _dateFormat = v;
+    if (v.length > 0) {
+        [_dateFormat release];
+        _dateFormat = [v copy];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CustomText"]];
-    if (v.length > 0) _customText = v;
+    if (v.length > 0) {
+        [_customText release];
+        _customText = [v copy];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"InterceptNotifyTemplate"]];
-    if (v.length > 0) _interceptNotifyTemplate = v;
+    if (v.length > 0) {
+        [_interceptNotifyTemplate release];
+        _interceptNotifyTemplate = [v copy];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CustomNotifyFormat"]];
-    if (v.length > 0) _customNotifyFormat = v;
+    if (v.length > 0) {
+        [_customNotifyFormat release];
+        _customNotifyFormat = [v copy];
+    }
 
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"RevokeTemplate"]];
-    if (v.length > 0) _revokeTemplate = v;
+    if (v.length > 0) {
+        [_revokeTemplate release];
+        _revokeTemplate = [v copy];
+    }
 
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"NameColorHex"]];
-    if (v.length > 0) _nameColorHex = v;
+    if (v.length > 0) {
+        [_nameColorHex release];
+        _nameColorHex = [v copy];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"TimeColorHex"]];
-    if (v.length > 0) _timeColorHex = v;
+    if (v.length > 0) {
+        [_timeColorHex release];
+        _timeColorHex = [v copy];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ContentColorHex"]];
-    if (v.length > 0) _contentColorHex = v;
+    if (v.length > 0) {
+        [_contentColorHex release];
+        _contentColorHex = [v copy];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DarkNameColorHex"]];
-    if (v.length > 0) _darkNameColorHex = v;
+    if (v.length > 0) {
+        [_darkNameColorHex release];
+        _darkNameColorHex = [v copy];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DarkTimeColorHex"]];
-    if (v.length > 0) _darkTimeColorHex = v;
+    if (v.length > 0) {
+        [_darkTimeColorHex release];
+        _darkTimeColorHex = [v copy];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DarkContentColorHex"]];
-    if (v.length > 0) _darkContentColorHex = v;
+    if (v.length > 0) {
+        [_darkContentColorHex release];
+        _darkContentColorHex = [v copy];
+    }
 
     // 消息时间显示配置
     _showMessageTime = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowMessageTime"]];
@@ -135,11 +216,18 @@
     _messageTimeBoldFont = [d boolForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBoldFont"]];
     
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFormat"]];
-    if (v.length > 0) _messageTimeFormat = v;
-    else _messageTimeFormat = @"HH:mm:ss";
+    if (v.length > 0) {
+        [_messageTimeFormat release];
+        _messageTimeFormat = [v copy];
+    } else {
+        _messageTimeFormat = [@"HH:mm:ss" retain];
+    }
 
     v = [d objectForKey:[kPluginPrefix stringByAppendingString:@"CustomFormat"]];
-    if (v.length > 0) _messageTimeCustomFormat = v;
+    if (v.length > 0) {
+        [_messageTimeCustomFormat release];
+        _messageTimeCustomFormat = [v copy];
+    }
     
     _messageTimePosition = [d integerForKey:[kPluginPrefix stringByAppendingString:@"MessageTimePosition"]];
     if (_messageTimePosition < 0 || _messageTimePosition > 7) _messageTimePosition = 1;
@@ -148,8 +236,12 @@
     _messageTimeOffsetY = [d floatForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeOffsetY"]];
     
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeTextColor"]];
-    if (v.length > 0) _messageTimeTextColor = v;
-    else _messageTimeTextColor = @"#999999";
+    if (v.length > 0) {
+        [_messageTimeTextColor release];
+        _messageTimeTextColor = [v copy];
+    } else {
+        _messageTimeTextColor = [@"#999999" retain];
+    }
     
     _messageTimeBubbleExtWidth = [d floatForKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBubbleExtWidth"]];
     
@@ -157,21 +249,61 @@
     _disableLabelWidthAdjustment = [d boolForKey:[kPluginPrefix stringByAppendingString:@"DisableLabelWidthAdjustment"]];
     
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderTextColorHex"]];
-    if (v.length > 0) _senderTextColorHex = v; else _senderTextColorHex = @"#808080";
+    if (v.length > 0) {
+        [_senderTextColorHex release];
+        _senderTextColorHex = [v copy];
+    } else {
+        _senderTextColorHex = [@"#808080" retain];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderTextColorDarkHex"]];
-    if (v.length > 0) _senderTextColorDarkHex = v; else _senderTextColorDarkHex = @"#BFBFBF";
+    if (v.length > 0) {
+        [_senderTextColorDarkHex release];
+        _senderTextColorDarkHex = [v copy];
+    } else {
+        _senderTextColorDarkHex = [@"#BFBFBF" retain];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderBackgroundColorHex"]];
-    if (v.length > 0) _senderBackgroundColorHex = v; else _senderBackgroundColorHex = @"#00000000";
+    if (v.length > 0) {
+        [_senderBackgroundColorHex release];
+        _senderBackgroundColorHex = [v copy];
+    } else {
+        _senderBackgroundColorHex = [@"#00000000" retain];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"SenderBackgroundColorDarkHex"]];
-    if (v.length > 0) _senderBackgroundColorDarkHex = v; else _senderBackgroundColorDarkHex = @"#00000000";
+    if (v.length > 0) {
+        [_senderBackgroundColorDarkHex release];
+        _senderBackgroundColorDarkHex = [v copy];
+    } else {
+        _senderBackgroundColorDarkHex = [@"#00000000" retain];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverTextColorHex"]];
-    if (v.length > 0) _receiverTextColorHex = v; else _receiverTextColorHex = @"#808080";
+    if (v.length > 0) {
+        [_receiverTextColorHex release];
+        _receiverTextColorHex = [v copy];
+    } else {
+        _receiverTextColorHex = [@"#808080" retain];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverTextColorDarkHex"]];
-    if (v.length > 0) _receiverTextColorDarkHex = v; else _receiverTextColorDarkHex = @"#BFBFBF";
+    if (v.length > 0) {
+        [_receiverTextColorDarkHex release];
+        _receiverTextColorDarkHex = [v copy];
+    } else {
+        _receiverTextColorDarkHex = [@"#BFBFBF" retain];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorHex"]];
-    if (v.length > 0) _receiverBackgroundColorHex = v; else _receiverBackgroundColorHex = @"#00000000";
+    if (v.length > 0) {
+        [_receiverBackgroundColorHex release];
+        _receiverBackgroundColorHex = [v copy];
+    } else {
+        _receiverBackgroundColorHex = [@"#00000000" retain];
+    }
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorDarkHex"]];
-    if (v.length > 0) _receiverBackgroundColorDarkHex = v; else _receiverBackgroundColorDarkHex = @"#00000000";
+    if (v.length > 0) {
+        [_receiverBackgroundColorDarkHex release];
+        _receiverBackgroundColorDarkHex = [v copy];
+    } else {
+        _receiverBackgroundColorDarkHex = [@"#00000000" retain];
+    }
     
     _hideChatTime = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideChatTime"]];
     
@@ -185,19 +317,29 @@
     _showAddTimeSuffix = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
-    if (v.length > 0) _addTimeSuffixFormat = v;
-    else _addTimeSuffixFormat = @"(yyyy-MM-dd)";
+    if (v.length > 0) {
+        [_addTimeSuffixFormat release];
+        _addTimeSuffixFormat = [v copy];
+    } else {
+        _addTimeSuffixFormat = [@"(yyyy-MM-dd)" retain];
+    }
 
     @try {
         NSData *data = [d dataForKey:[kPluginPrefix stringByAppendingString:@"SessionFormats"]];
         if (data) {
             id obj = [NSKeyedUnarchiver unarchiveObjectWithData:data];
-            if ([obj isKindOfClass:[NSMutableDictionary class]]) _sessionFormats = obj;
+            if ([obj isKindOfClass:[NSMutableDictionary class]]) {
+                [_sessionFormats release];
+                _sessionFormats = [obj retain];
+            }
         }
         data = [d dataForKey:[kPluginPrefix stringByAppendingString:@"UserFormats"]];
         if (data) {
             id obj = [NSKeyedUnarchiver unarchiveObjectWithData:data];
-            if ([obj isKindOfClass:[NSMutableDictionary class]]) _userFormats = obj;
+            if ([obj isKindOfClass:[NSMutableDictionary class]]) {
+                [_userFormats release];
+                _userFormats = [obj retain];
+            }
         }
     } @catch (NSException *e) {}
 }

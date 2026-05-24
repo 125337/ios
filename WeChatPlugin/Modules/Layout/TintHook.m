@@ -51,6 +51,7 @@ static void tintRevokeCell(id cell) {
 
                 ((void (*)(id, SEL, id))objc_msgSend)(rtv, @selector(setAttributedText:), ma);
             }
+            [ma release];
         }
         if ([rtv respondsToSelector:@selector(setNeedsDisplay)])
             ((void (*)(id, SEL))objc_msgSend)(rtv, @selector(setNeedsDisplay));
@@ -65,7 +66,7 @@ static void hookCellColor(NSString *className) {
     
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        gTintOrigIMPs = [NSMutableDictionary dictionary];
+        gTintOrigIMPs = [[NSMutableDictionary dictionary] retain];
     });
     
     for (NSString *methodName in @[@"updateStatus", @"layoutContentView"]) {

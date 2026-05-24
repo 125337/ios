@@ -10,7 +10,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface WeChatTweakGroupSelectsController : UIViewController
 - (instancetype)initWithSelectedGroups:(NSArray<NSString *> *)selectedGroups title:(NSString *)title;
-@property (nonatomic, weak) id<WeChatTweakGroupSelectsDelegate> delegate;
+@property (nonatomic, assign) id<WeChatTweakGroupSelectsDelegate> delegate;
 @end
 
 NS_ASSUME_NONNULL_END

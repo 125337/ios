@@ -2,14 +2,8 @@
 // UISimplifyHook.m — 微信界面简化 Hook 模块
 // 参照反编译: 微信优化 FRE_00044a80 + WCRefine FUN_002f0d4c
 //
-// 深度分析结果:
-// - 微信优化 & WCRefine 均无 oldPlugin 检测，只用简单 enabled flag
-// - 微信优化 setText: comma 检测 → NavBar → mainTitle
-// - 微信优化 setText: "U" 检测 → contacts
-// - 微信优化 setText: "发现" 检测 → discover
-// - WCRefine tab hooks: 首字回退匹配
-// - WCRefine getTitle: 仅处理分隔符 (\n)
-// - 两者 tab hooks: dict[title] 直查 + 首字 fallback
+// 全项目已切换为 MRC，与 WCRefine/微信优化 同为 MRC 编译，
+// 不再有 ARC+MSHookMessageEx trampoline 冲突，所有 9 个 hook 全部安装。
 // ============================================================
 
 #import "UISimplifyHook.h"
@@ -31,12 +25,8 @@ static NSString     *_contactsTitle    = nil;
 static NSString     *_discoverTitle    = nil;
 static NSString     *_friendsCount     = nil;
 
-// alt key 回退映射 (策略A使用，不受 oldPlugin 影响)
+// alt key 回退映射
 static NSDictionary *_altMenuKeys     = nil;
-
-// 检测设备上是否加载了 微信优化 旧插件（避免策略B双钩冲突导致 objc_retain(0x3) 崩溃）
-// 仅影响策略B的3个 context hook，策略A的6个 dict hook 不受影响
-static BOOL _oldPluginLoaded = NO;
 
 static void UISimplify_ReloadConfig(void) {
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
@@ -321,7 +311,7 @@ static NSAttributedString *replacedAttrStr(NSAttributedString *orig, NSString *n
             attrs = [orig attributesAtIndex:0 effectiveRange:NULL];
         }
     } @catch (NSException *e) {}
-    return [[NSAttributedString alloc] initWithString:newText attributes:attrs ?: @{}];
+    return [[[NSAttributedString alloc] initWithString:newText attributes:attrs ?: @{}] autorelease];
 }
 
 static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedString *attrText) {
@@ -424,15 +414,9 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
     // 1. 加载配置 (参照 FUN_00043e44)
     UISimplify_ReloadConfig();
     
-    // 2. 检测 微信优化 旧插件 (参照 crash log: objc_retain(0x3) 双钩冲突)
-    if (objc_getClass("CSWCEnhanceViewController")) {
-        _oldPluginLoaded = YES;
-        WPLog(@"UISimplify", @"[Warn] 微信优化 detected — strategy B (context hooks) disabled");
-    }
+    WPLog(@"UISimplify", @"UISimplifyHook install start (MRC mode, 9 hooks)");
     
-    WPLog(@"UISimplify", @"UISimplifyHook install start (strategyB=%d)", !_oldPluginLoaded);
-    
-    // ===== 策略A: 字典查找替换 (6个) — 始终安装，与微信优化共存无冲突 =====
+    // ===== 策略A: 字典查找替换 (6个) =====
     
     Class configClass = SafeGetClass("WCTableViewCellLeftConfig");
     if (configClass) {
@@ -466,26 +450,23 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
             (IMP)hook_MMTableViewInfo_getTitle, (IMP *)&_orig_MMTableViewInfo_getTitle);
     }
     
-    // ===== 策略B: 上下文匹配 (3个) — 仅微信优化未加载时安装（避免 objc_retain(0x3)）=====
+    // ===== 策略B: 上下文匹配 (3个) — MRC 编译，可与微信优化/WCRefine 安全共存 =====
     
-    if (!_oldPluginLoaded) {
-        Class mmLabel = SafeGetClass("MMUILabel");
-        if (mmLabel) {
-            MSHookMessageEx(mmLabel, @selector(setText:),
-                (IMP)hook_MMUILabel_setText, (IMP *)&_orig_MMUILabel_setText);
-            MSHookMessageEx(mmLabel, @selector(setAttributedText:),
-                (IMP)hook_MMUILabel_setAttributedText, (IMP *)&_orig_MMUILabel_setAttributedText);
-        }
-        
-        Class mfTitle = SafeGetClass("MFTitleView");
-        if (mfTitle) {
-            MSHookMessageEx(mfTitle, @selector(updateTitleView:title:),
-                (IMP)hook_MFTitleView_updateTitle, (IMP *)&_orig_MFTitleView_updateTitle);
-        }
+    Class mmLabel = SafeGetClass("MMUILabel");
+    if (mmLabel) {
+        MSHookMessageEx(mmLabel, @selector(setText:),
+            (IMP)hook_MMUILabel_setText, (IMP *)&_orig_MMUILabel_setText);
+        MSHookMessageEx(mmLabel, @selector(setAttributedText:),
+            (IMP)hook_MMUILabel_setAttributedText, (IMP *)&_orig_MMUILabel_setAttributedText);
     }
     
-    int totalHooks = !_oldPluginLoaded ? 9 : 6;
-    WPLog(@"UISimplify", @"UISimplifyHook install done (%d hooks)", totalHooks);
+    Class mfTitle = SafeGetClass("MFTitleView");
+    if (mfTitle) {
+        MSHookMessageEx(mfTitle, @selector(updateTitleView:title:),
+            (IMP)hook_MFTitleView_updateTitle, (IMP *)&_orig_MFTitleView_updateTitle);
+    }
+    
+    WPLog(@"UISimplify", @"UISimplifyHook install done (9 hooks)");
 }
 
 @end

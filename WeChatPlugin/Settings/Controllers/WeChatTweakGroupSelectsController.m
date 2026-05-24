@@ -33,7 +33,7 @@ static void gsLog(NSString *content) {
 @property (nonatomic, assign) BOOL m_bMultiSelect;
 @property (nonatomic, assign) BOOL m_bShowHistoryGroup;
 @property (nonatomic, assign) BOOL m_bShowRadarCreateRoom;
-@property (nonatomic, strong) NSMutableDictionary *m_dicMultiSelect;
+@property (nonatomic, retain) NSMutableDictionary *m_dicMultiSelect;
 - (id)initWithFrame:(CGRect)frame delegate:(id)delegate;
 - (void)initData:(unsigned int)scene;
 - (void)initView;
@@ -51,12 +51,20 @@ static void gsLog(NSString *content) {
 @interface WeChatTweakGroupSelectsController () <ContactSelectViewDelegate> {
     id _helper;
 }
-@property (strong, nonatomic) ContactSelectView *selectView;
-@property (strong, nonatomic) NSArray<NSString *> *selectedGroups;
+@property (retain, nonatomic) ContactSelectView *selectView;
+@property (retain, nonatomic) NSArray<NSString *> *selectedGroups;
 @property (copy, nonatomic) NSString *titleText;
 @end
 
 @implementation WeChatTweakGroupSelectsController
+
+- (void)dealloc {
+    [_helper release];
+    [_selectView release];
+    [_selectedGroups release];
+    [_titleText release];
+    [super dealloc];
+}
 
 - (instancetype)initWithSelectedGroups:(NSArray<NSString *> *)selectedGroups title:(NSString *)title {
     gsLog(@"[GroupSelect] initWithSelectedGroups called");

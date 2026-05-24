@@ -51,7 +51,7 @@ MioHelper_FILES = Tweak.m \
 	Settings/Controllers/SettingRevokeController.m \
 	Settings/Controllers/SettingRedEnvelopController.m \
 	Settings/Controllers/WeChatTweakGroupSelectsController.m
-MioHelper_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-function -Wno-unused-variable \
+MioHelper_CFLAGS = -Wno-deprecated-declarations -Wno-unused-function -Wno-unused-variable \
 	-I. \
 	-I./Config \
 	-I./Core \
