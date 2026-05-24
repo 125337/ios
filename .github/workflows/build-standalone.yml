@@ -1,0 +1,158 @@
+name: Build Mio助手
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    permissions:
+      actions: write
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+
+    - name: Build dylib (arm64)
+      run: |
+        set -o pipefail
+
+        # 强制清理旧编译产物
+        rm -rf build/
+        mkdir -p build
+
+        SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+        echo "SDK_PATH: $SDK_PATH"
+
+        # MRC 编译所有 .m 文件
+        for f in \
+          WeChatPlugin/libs/CydiaSubstrate.m \
+          WeChatPlugin/Tweak.m \
+          WeChatPlugin/Config/PluginConfig.m \
+          WeChatPlugin/Core/HookEngine.m \
+          WeChatPlugin/Core/WeChatAlertHelper.m \
+          WeChatPlugin/Core/LogManager.m \
+          WeChatPlugin/Registry/HookRegistry.m \
+          WeChatPlugin/Registry/FeatureModuleRegistry.m \
+          WeChatPlugin/Registry/FeatureRegistry.m \
+          WeChatPlugin/Modules/Revoke/RevokeHandler.m \
+          WeChatPlugin/Modules/Revoke/RevokeHook.m \
+          WeChatPlugin/Modules/Revoke/RevokeFormatEditorVC.m \
+          WeChatPlugin/Modules/RedEnvelop/RedEnvelopHook.m \
+          WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopTaskManager.m \
+          WeChatPlugin/Modules/Layout/TintHook.m \
+          WeChatPlugin/Modules/Layout/UIPurifyHook.m \
+          WeChatPlugin/Modules/Layout/UISimplifyHook.m \
+          WeChatPlugin/Modules/Unread/ClearUnreadHook.m \
+          WeChatPlugin/Modules/SettingEntry/SettingEntryHook.m \
+          WeChatPlugin/Modules/SettingEntry/WPCommonUI.m \
+          WeChatPlugin/Modules/SettingEntry/WPOtherVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPAboutVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPBackupVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPUIVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPUIPurifyVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPUISimplifyVC.m \
+          WeChatPlugin/Modules/Joker/JokerHook.m \
+          WeChatPlugin/Modules/GroupExit/GroupExitHook.m \
+          WeChatPlugin/Modules/MessageTime/MessageTimeHook.m \
+          WeChatPlugin/Modules/MessageTime/MessageTimeFormatParser.m \
+          WeChatPlugin/Modules/MessageTime/MessageTimeFormatEditorVC.m \
+          WeChatPlugin/Modules/AutoTransfer/AutoTransferHook.m \
+          WeChatPlugin/Settings/Common/SettingCategoryController.m \
+          WeChatPlugin/Settings/Common/WPBorderLayer.m \
+          WeChatPlugin/Settings/Controllers/SettingController.m \
+          WeChatPlugin/Settings/Controllers/SettingGeneralFunctionController.m \
+          WeChatPlugin/Settings/Controllers/SettingMessageTimeController.m \
+          WeChatPlugin/Settings/Controllers/SettingRevokeController.m \
+          WeChatPlugin/Settings/Controllers/SettingRedEnvelopController.m \
+          WeChatPlugin/Settings/Controllers/WeChatTweakGroupSelectsController.m; do
+          BASENAME=$(basename "$f" .m)
+          OBJ_FILE="build/${BASENAME}.o"
+          echo "Compiling: $f -> $OBJ_FILE"
+          clang -arch arm64 \
+                -isysroot "$SDK_PATH" \
+                -target arm64-apple-ios14.0 \
+                -c \
+                -fno-objc-arc \
+                -Oz \
+                -Wno-deprecated-declarations \
+                -Wno-unused-function \
+                -Wno-unused-variable \
+                -IWeChatPlugin \
+                -IWeChatPlugin/libs \
+                -IWeChatPlugin/Config \
+                -IWeChatPlugin/Core \
+                -IWeChatPlugin/Registry \
+                -IWeChatPlugin/Modules/Revoke \
+                -IWeChatPlugin/Modules/RedEnvelop \
+                -IWeChatPlugin/Modules/Layout \
+                -IWeChatPlugin/Modules/Unread \
+                -IWeChatPlugin/Modules/SettingEntry \
+                -IWeChatPlugin/Modules/Joker \
+                -IWeChatPlugin/Modules/GroupExit \
+                -IWeChatPlugin/Modules/MessageTime \
+                -IWeChatPlugin/Modules/AutoTransfer \
+                -IWeChatPlugin/Settings/Common \
+                -IWeChatPlugin/Settings/Controllers \
+                -IWeChatPlugin/libs/CydiaSubstrate.framework/Headers \
+                -o "$OBJ_FILE" \
+                "$f" || { echo "FAILED: $f"; exit 1; }
+        done
+
+        echo "=== Step 2: Link all .o into dylib ==="
+        clang -arch arm64 \
+              -isysroot "$SDK_PATH" \
+              -target arm64-apple-ios14.0 \
+              -dynamiclib \
+              -framework UIKit \
+              -framework Foundation \
+              -framework Security \
+              -framework AVFoundation \
+              -framework UserNotifications \
+              -Wl,-S \
+              -Wl,-x \
+              -Wl,-undefined,dynamic_lookup \
+              -o build/Mio_arm64.dylib \
+              build/*.o
+
+        echo "=== Build successful ==="
+        ls -la build/Mio_arm64.dylib
+
+    - name: Sign dylib
+      run: |
+        codesign -f -s - build/Mio_arm64.dylib
+
+    - name: Delete old artifacts
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const artifacts = await github.rest.actions.listArtifactsForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          for (const artifact of artifacts.data.artifacts) {
+            if (artifact.name === 'Mio.dylib') {
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id,
+              });
+              console.log(`Deleted old artifact: ${artifact.name} (id: ${artifact.id})`);
+            }
+          }
+
+    - name: Upload dylib
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mio.dylib
+        path: |
+          build/Mio_arm64.dylib
+        retention-days: 30
