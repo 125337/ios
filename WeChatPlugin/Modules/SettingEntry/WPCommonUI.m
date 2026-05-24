@@ -116,6 +116,28 @@ void WPAddTextFieldRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NS
     [card addSubview:tf];
 }
 
+void WPAddEditableRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *value, id target) {
+    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, cw - kPad * 2 - 150, kRowH)];
+    tl.text = title;
+    tl.font = [UIFont systemFontOfSize:15];
+    tl.textColor = WPT1();
+    [card addSubview:tl];
+
+    UILabel *vl = [[UILabel alloc] initWithFrame:CGRectMake(cw - kPad * 2 - 154, cy, 140, kRowH)];
+    vl.text = value;
+    vl.font = [UIFont systemFontOfSize:14];
+    vl.textColor = WPT2();
+    vl.textAlignment = NSTextAlignmentRight;
+    [card addSubview:vl];
+
+    UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+    btn.frame = CGRectMake(0, cy, cw - kPad * 2, kRowH);
+    objc_setAssociatedObject(btn, "editTitle", title, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(btn, "editValueLabel", vl, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [btn addTarget:target action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
+    [card addSubview:btn];
+}
+
 #pragma mark - 安全 present
 
 UIViewController *WPGetTopVCForPresentation(void) {

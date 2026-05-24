@@ -25,6 +25,7 @@ void WPAddNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString
 void WPAddSep(UIView *card, CGFloat cy, CGFloat cw);
 void WPAddInfoRow(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right);
 void WPAddTextFieldRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *placeholder);
+void WPAddEditableRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *value, id target);
 
 /// 获取微信原生顶层 ViewController（用于安全 present UIAlertController）
 /// 复刻微信优化 getChatConfirmationTopViewController — 遍历 UIWindow 层级找到 MMUIViewController 子类
