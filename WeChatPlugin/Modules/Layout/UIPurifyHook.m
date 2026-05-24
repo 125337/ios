@@ -2,7 +2,8 @@
 //  UIPurifyHook.m — 界面净化
 //  反编译参考微信优化 1.6.5 (FUN_00025688)
 //  安装顺序：ChatTime → AppPat → SystemMessage → Voice → YYAsync → MMGrowText
-//  （Pat 必须在 Sys 之前，避免子类通过 super 链被父类 Hook 误伤）
+//  （Pat 在 Sys 之前避免子类被父类 Hook 误伤）
+//  （setHidden 替代 setFrame: — frame 未变时 setFrame: 是空操作，但会留脏标记）
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -33,7 +34,6 @@ static id hook_ChatTimeCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     id result = ((id (*)(id, SEL, id))_orig_ChatTimeCell_initWithViewModel)(self, _cmd, viewModel);
     if (result && purifyReadConfig(@"HideChatTimeCell")) {
         [result setHidden:YES];
-        [result setFrame:[result frame]];
     }
     return result;
 }
@@ -72,7 +72,6 @@ static id hook_SysCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     id result = ((id (*)(id, SEL, id))_orig_SysCell_initWithViewModel)(self, _cmd, viewModel);
     if (result && purifyReadConfig(@"HideRevokeHint")) {
         [result setHidden:YES];
-        [result setFrame:[result frame]];
     }
     return result;
 }
@@ -111,7 +110,6 @@ static id hook_PatCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     id result = ((id (*)(id, SEL, id))_orig_PatCell_initWithViewModel)(self, _cmd, viewModel);
     if (result && purifyReadConfig(@"HidePatHint")) {
         [result setHidden:YES];
-        [result setFrame:[result frame]];
     }
     return result;
 }
