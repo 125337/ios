@@ -152,6 +152,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         @"DebugLogging": @"debugLogging",
         @"HideContent": @"hideContent",
         @"NoTip": @"noTip",
+        @"HideSeparatorLine": @"hideSeparatorLine",
         @"HideRevokeHint": @"hideRevokeHint",
         @"HidePatHint": @"hidePatHint",
         @"HideVoiceRedDot": @"hideVoiceRedDot",

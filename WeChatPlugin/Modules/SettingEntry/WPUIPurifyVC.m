@@ -26,6 +26,7 @@ static void WPUIPurifyViewDidLoad(id self, SEL _cmd) {
     UIView *msgCard = WPMakeCard(y, w);
     CGFloat mcy = 0;
     NSArray *msgItems = @[
+        @[@"隐藏水平分割线", @"HideSeparatorLine", @(config.hideSeparatorLine)],
         @[@"隐藏撤回消息提示", @"HideRevokeHint", @(config.hideRevokeHint)],
         @[@"隐藏拍一拍提示", @"HidePatHint", @(config.hidePatHint)],
         @[@"隐藏语音红点和转文字", @"HideVoiceRedDot", @(config.hideVoiceRedDot)],

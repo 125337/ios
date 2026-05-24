@@ -175,6 +175,7 @@
     
     _hideChatTime = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideChatTime"]];
     
+    _hideSeparatorLine = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideSeparatorLine"]];
     _hideRevokeHint = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideRevokeHint"]];
     _hidePatHint = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HidePatHint"]];
     _hideVoiceRedDot = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideVoiceRedDot"]];
@@ -285,6 +286,7 @@
     if (_receiverBackgroundColorHex) [d setObject:_receiverBackgroundColorHex forKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorHex"]];
     if (_receiverBackgroundColorDarkHex) [d setObject:_receiverBackgroundColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorDarkHex"]];
     [d setBool:_hideChatTime forKey:[kPluginPrefix stringByAppendingString:@"HideChatTime"]];
+    [d setBool:_hideSeparatorLine forKey:[kPluginPrefix stringByAppendingString:@"HideSeparatorLine"]];
     [d setBool:_hideRevokeHint forKey:[kPluginPrefix stringByAppendingString:@"HideRevokeHint"]];
     [d setBool:_hidePatHint forKey:[kPluginPrefix stringByAppendingString:@"HidePatHint"]];
     [d setBool:_hideVoiceRedDot forKey:[kPluginPrefix stringByAppendingString:@"HideVoiceRedDot"]];

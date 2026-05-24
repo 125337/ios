@@ -32,10 +32,12 @@ static IMP _orig_YYAsyncImage_layoutSubviews = NULL;
 // ——— 禁用听写（MMGrowTextViewExtConfig）———
 static IMP _orig_MMGrow_enableDictation = NULL;
 
+// ——— 隐藏水平分割线（UIView.layoutSubviews 全局）———
+static IMP _orig_UIView_layoutSubviews = NULL;
+
 // ============================================================
-// MARK: - 辅助键
+// MARK: - 辅助
 // ============================================================
-static void *kPurifyHiddenKey = &kPurifyHiddenKey;
 
 static inline BOOL purifyReadConfig(NSString *key) {
     return [[NSUserDefaults standardUserDefaults] boolForKey:
@@ -46,41 +48,34 @@ static inline BOOL purifyReadConfig(NSString *key) {
 // MARK: - 隐藏撤回消息 — SystemMessageCellView 5 连 Hook
 // ============================================================
 
-// 1) initWithViewModel: — 标记隐藏 + 零尺寸
 static id hook_SysCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     id result = ((id (*)(id, SEL, id))_orig_SysCell_initWithViewModel)(self, _cmd, viewModel);
     if (!result) return nil;
     if (purifyReadConfig(@"HideRevokeHint")) {
         UIView *v = (UIView *)result;
-        objc_setAssociatedObject(result, kPurifyHiddenKey, @YES, OBJC_ASSOCIATION_RETAIN);
         [v setHidden:YES];
         v.alpha = 0;
-        v.frame = CGRectZero;
     }
     return result;
 }
 
-// 2) layoutInternal — 已标记则不执行原始布局
 static void hook_SysCell_layoutInternal(id self, SEL _cmd) {
     if (purifyReadConfig(@"HideRevokeHint")) return;
     ((void (*)(id, SEL))_orig_SysCell_layoutInternal)(self, _cmd);
 }
 
-// 3) canBeReused — 已标记则返回 YES（阻止复用）
 static BOOL hook_SysCell_canBeReused(id self, SEL _cmd) {
     if (purifyReadConfig(@"HideRevokeHint")) return YES;
     return ((BOOL (*)(id, SEL))_orig_SysCell_canBeReused)(self, _cmd);
 }
 
-// 4) shouldLayoutIfNeeded — 已标记则返回 NO
 static BOOL hook_SysCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
     if (purifyReadConfig(@"HideRevokeHint")) return NO;
     return ((BOOL (*)(id, SEL))_orig_SysCell_shouldLayoutIfNeeded)(self, _cmd);
 }
 
-// 5) SystemMessageViewModel.measure: — 已配置则不测量
 static CGSize hook_SysVM_measure(id self, SEL _cmd, CGSize size) {
-    if (purifyReadConfig(@"HideRevokeHint")) return CGSizeZero;
+    if (purifyReadConfig(@"HideRevokeHint")) return CGSizeMake(size.width, CGFLOAT_MIN);
     return ((CGSize (*)(id, SEL, CGSize))_orig_SysVM_measure)(self, _cmd, size);
 }
 
@@ -93,10 +88,8 @@ static id hook_PatCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     if (!result) return nil;
     if (purifyReadConfig(@"HidePatHint")) {
         UIView *v = (UIView *)result;
-        objc_setAssociatedObject(result, kPurifyHiddenKey, @YES, OBJC_ASSOCIATION_RETAIN);
         [v setHidden:YES];
         v.alpha = 0;
-        v.frame = CGRectZero;
     }
     return result;
 }
@@ -117,7 +110,7 @@ static BOOL hook_PatCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
 }
 
 static CGSize hook_PatVM_measure(id self, SEL _cmd, CGSize size) {
-    if (purifyReadConfig(@"HidePatHint")) return CGSizeZero;
+    if (purifyReadConfig(@"HidePatHint")) return CGSizeMake(size.width, CGFLOAT_MIN);
     return ((CGSize (*)(id, SEL, CGSize))_orig_PatVM_measure)(self, _cmd, size);
 }
 
@@ -152,9 +145,8 @@ static void hook_YYAsyncImage_layoutSubviews(id self, SEL _cmd) {
         check = parent;
         if ([check isKindOfClass:NSClassFromString(@"CommonMessageCellView")]) {
             id bgImageView = nil;
-            @try {
-                bgImageView = [check valueForKey:@"m_bgImageView"];
-            } @catch (NSException *e) {}
+            @try { bgImageView = [check valueForKey:@"m_bgImageView"]; }
+            @catch (NSException *e) {}
             if (bgImageView && [current isDescendantOfView:bgImageView]) {
                 current.alpha = 0;
                 return;
@@ -174,7 +166,89 @@ static BOOL hook_MMGrow_enableDictation(id self, SEL _cmd) {
 }
 
 // ============================================================
-// MARK: - +install 入口（完全匹配微信优化 FUN_00025688）
+// MARK: - 隐藏水平分割线 — UIView.layoutSubviews（微信优化 FUN_0004627c）
+// ============================================================
+
+/// 判断 frame 高度是否 ≤ 1px（细线特征）
+static BOOL hasThinFrame(UIView *v) {
+    return CGRectGetHeight(v.frame) <= 1.0;
+}
+
+static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
+    ((void (*)(id, SEL))_orig_UIView_layoutSubviews)(self, _cmd);
+    if (!purifyReadConfig(@"HideSeparatorLine")) return;
+
+    UIView *v = (UIView *)self;
+
+    // 第1层：类名过滤 — 排除明确不可能是分割线的类
+    {
+        Class brandCell = NSClassFromString(@"FTSBrandContactCell");
+        if (brandCell && [v isKindOfClass:brandCell]) return;
+    }
+    NSString *className = NSStringFromClass([v class]);
+    {
+        NSRange r;
+        r = [className rangeOfString:@"Brand"];    if (r.location != NSNotFound) return;
+        r = [className rangeOfString:@"Contact"];  if (r.location != NSNotFound) return;
+    }
+
+    // 第2层：获取视图属性
+    BOOL   isSepView = [className isEqualToString:@"_UITableViewCellSeparatorView"];
+    CGFloat h = CGRectGetHeight(v.frame);
+    CGFloat w = CGRectGetWidth(v.frame);
+    UIColor *bg = nil; @try { bg = v.backgroundColor; } @catch (NSException *e) {}
+    BOOL isLabel = [v isKindOfClass:[UILabel class]];
+    BOOL isImage = [v isKindOfClass:[UIImageView class]];
+
+    // 排除文字和图片视图（不可能是分割线）
+    if (isLabel || isImage) return;
+
+    BOOL isThin = (h <= 1.0);
+    BOOL shouldHide = NO;
+
+    // 分支A：_UITableViewCellSeparatorView 系统分隔线
+    if (isSepView) {
+        if (h <= 0 || isThin) shouldHide = YES;
+    }
+    // 分支：非系统分隔线，但符合细线特征
+    else if (isThin && w > 100.0) {
+        shouldHide = (bg != nil);
+    }
+    // 分支B：普通 UIView 额外检查 — 类名就是 UIView、有背景色、无子视图
+    else if ([className isEqualToString:@"UIView"] && isThin && bg != nil) {
+        shouldHide = (v.subviews.count == 0);
+    }
+
+    if (!shouldHide) return;
+
+    // 第3层：父链排除 — 沿 nextResponder 链排除特定页面
+    {
+        Class timelineVC = NSClassFromString(@"WCTimeLineViewController");
+        Class subVC      = NSClassFromString(@"MPSubscriptionViewController");
+        NSString *timelineFooter = @"WCTimelineFooterCell";
+
+        // 遍历1：排除朋友圈
+        id resp = v;
+        for (int i = 0; i < 11; i++) {
+            if (timelineVC && [resp isKindOfClass:timelineVC]) return;
+            if ([NSStringFromClass([resp class]) isEqualToString:timelineFooter]) return;
+            resp = [resp nextResponder];
+            if (!resp) break;
+        }
+        // 遍历2：排除订阅号
+        resp = v;
+        for (int i = 0; i < 11; i++) {
+            if (subVC && [resp isKindOfClass:subVC]) return;
+            resp = [resp nextResponder];
+            if (!resp) break;
+        }
+    }
+
+    [v setHidden:YES];
+}
+
+// ============================================================
+// MARK: - +install 入口
 // ============================================================
 @implementation UIPurifyHook
 
@@ -269,7 +343,14 @@ static BOOL hook_MMGrow_enableDictation(id self, SEL _cmd) {
         }
     }
 
-    WPLog(@"UIPurify", @"UIPurifyHook install complete (11 hooks, matched 微信优化 FUN_00025688)");
+    // ——— 隐藏水平分割线：UIView.layoutSubviews（独立安装器 FUN_00046248）———
+    {
+        MSHookMessageEx([UIView class], @selector(layoutSubviews),
+            (IMP)hook_UIView_layoutSubviews, &_orig_UIView_layoutSubviews);
+        WPLog(@"UIPurify", @"[Hook] ✓ UIView.layoutSubviews (global separator hiding)");
+    }
+
+    WPLog(@"UIPurify", @"UIPurifyHook install complete (12 hooks, matched 微信优化 FUN_00025688 + FUN_00046248)");
 }
 
 @end
