@@ -112,14 +112,14 @@ static BOOL SafeHasPrefix(NSString *s, NSString *prefix) {
 static id hook_WCTitle(id self, SEL _cmd) {
     if (!_orig_WCTableViewCellLeftConfig_title) return nil;
     id orig = ((id (*)(id, SEL))_orig_WCTableViewCellLeftConfig_title)(self, _cmd);
-    if (!Enabled() || !orig || !_menuNames) return orig;
+    if (!_simplifyEnabled || !orig || !_menuNames) return orig;
     
     id repl = [_menuNames objectForKey:orig];
     if (repl) return repl;
     
     @try {
         NSRange nl = [orig rangeOfString:@"\n"];
-        if (nl.location != NSNotFound && nl.location + 1 < orig.length) {
+        if (nl.location != NSNotFound && nl.location + 1 < [orig length]) {
             NSString *suffix = [orig substringFromIndex:nl.location + 1];
             id subRepl = [_menuNames objectForKey:suffix];
             if (subRepl) return subRepl;
@@ -133,7 +133,7 @@ static id hook_WCTitle(id self, SEL _cmd) {
 // ============================================================
 
 static NSString *replaceTabTitle(NSString *title) {
-    if (!Enabled() || !title || !_tabNames) return title;
+    if (!_simplifyEnabled || !title || !_tabNames) return title;
     id repl = [_tabNames objectForKey:title];
     return repl ?: title;
 }
@@ -165,14 +165,14 @@ static void hook_MMTabBarController_setTabBarItemTitle(id self, SEL _cmd, NSStri
 static id hook_MMTableViewInfo_getTitle(id self, SEL _cmd) {
     if (!_orig_MMTableViewInfo_getTitle) return nil;
     id orig = ((id (*)(id, SEL))_orig_MMTableViewInfo_getTitle)(self, _cmd);
-    if (!Enabled() || !orig || !_menuNames) return orig;
+    if (!_simplifyEnabled || !orig || !_menuNames) return orig;
     
     id repl = [_menuNames objectForKey:orig];
     if (repl) return repl;
     
     @try {
         NSRange nl = [orig rangeOfString:@"\n"];
-        if (nl.location != NSNotFound && nl.location + 1 < orig.length) {
+        if (nl.location != NSNotFound && nl.location + 1 < [orig length]) {
             NSString *suffix = [orig substringFromIndex:nl.location + 1];
             id subRepl = [_menuNames objectForKey:suffix];
             if (subRepl) return subRepl;
