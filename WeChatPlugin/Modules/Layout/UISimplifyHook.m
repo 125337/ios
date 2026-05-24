@@ -6,28 +6,36 @@
 #import "../../Core/LogManager.h"
 
 // ============================================================
-// MARK: - 配置读取辅助（直接读 NSUserDefaults）
+// MARK: - 配置缓存（参照反编译 FUN_00043e84 L39977 启动时一次性加载到全局静态变量）
 // ============================================================
 
-static inline BOOL SimplifyEnabled(void) {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"SimplifyEnabled"];
+static BOOL          _simplifyEnabled  = NO;
+static NSDictionary *_menuNames        = nil;
+static NSDictionary *_tabNames         = nil;
+static NSString     *_mainTitle        = nil;
+static NSString     *_contactsTitle    = nil;
+static NSString     *_discoverTitle    = nil;
+static NSString     *_friendsCount     = nil;
+
+static void UISimplify_ReloadConfig(void) {
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    _simplifyEnabled = [d boolForKey:@"SimplifyEnabled"];
+    _menuNames       = [d dictionaryForKey:@"Simplify_MenuNames"] ?: @{};
+    _tabNames        = [d dictionaryForKey:@"Simplify_Tab_Names"] ?: @{};
+    _mainTitle       = [d stringForKey:@"Simplify_MainTitle"];
+    _contactsTitle   = [d stringForKey:@"Simplify_ContactsTitle"];
+    _discoverTitle   = [d stringForKey:@"Simplify_DiscoverTitle"];
+    _friendsCount    = [d stringForKey:@"Simplify_FriendsCount"];
 }
 
-static inline NSDictionary *MenuNames(void) {
-    return [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"Simplify_MenuNames"] ?: @{};
-}
-
-static inline NSDictionary *TabNames(void) {
-    return [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"Simplify_Tab_Names"] ?: @{};
-}
-
-static inline NSString *StrForKey(NSString *key) {
-    return [[NSUserDefaults standardUserDefaults] stringForKey:key];
-}
-#define MainTitle()     (StrForKey(@"Simplify_MainTitle"))
-#define ContactsTitle() (StrForKey(@"Simplify_ContactsTitle"))
-#define DiscoverTitle() (StrForKey(@"Simplify_DiscoverTitle"))
-#define FriendsCount()  (StrForKey(@"Simplify_FriendsCount"))
+// 参照反编译: DAT_0013a400 等全局变量直接读取，不再每次调 NSUserDefaults
+#define SimplifyEnabled()  (_simplifyEnabled)
+#define MenuNames()        (_menuNames)
+#define TabNames()         (_tabNames)
+#define MainTitle()        (_mainTitle)
+#define ContactsTitle()    (_contactsTitle)
+#define DiscoverTitle()    (_discoverTitle)
+#define FriendsCount()     (_friendsCount)
 
 // ============================================================
 // MARK: - 原始 IMP 指针声明区 (9个)
@@ -103,8 +111,8 @@ static void hook_MMTabBarController_setTabBarItemTitle(id self, SEL _cmd, NSStri
 // MARK: - 策略A: MMTableViewInfo.getTitle:
 // ============================================================
 
-static id hook_MMTableViewInfo_getTitle(id self, SEL _cmd, id param) {
-    id orig = ((id (*)(id, SEL, id))_orig_MMTableViewInfo_getTitle)(self, _cmd, param);
+static id hook_MMTableViewInfo_getTitle(id self, SEL _cmd) {
+    id orig = ((id (*)(id, SEL))_orig_MMTableViewInfo_getTitle)(self, _cmd);
     if (!SimplifyEnabled() || !orig) return orig;
 
     id repl = MenuNames()[orig];
@@ -120,7 +128,7 @@ static id hook_MMTableViewInfo_getTitle(id self, SEL _cmd, id param) {
 }
 
 // ============================================================
-// MARK: - 策略B: MMUILabel.setText: 4层决策树 ⭐核心
+// MARK: - 策略B: MMUILabel.setText: 4层决策树 ⭐核心 (参照 FUN_00044a80 L40388)
 // ============================================================
 
 static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
@@ -129,43 +137,54 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
         return;
     }
 
-    // 守卫: "[" 开头 = badge 数字，白名单跳过
+    // 守卫: "[" 开头 = badge 数字，白名单跳过 (参照 L40413: cf__O_ = "[")
     if ([text hasPrefix:@"["]) {
         ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, text);
         return;
     }
 
-    // 匹配层1: NavigationBar → 微信/通讯录/发现标题
-    id responder = (UIView *)self;
-    while ((responder = [responder nextResponder])) {
-        NSString *className = NSStringFromClass([responder class]);
-        if ([className containsString:@"NavigationBar"]) {
-            NSString *title = MainTitle();
-            if (title.length == 0) title = ContactsTitle();
-            if (title.length == 0) title = DiscoverTitle();
-            if (title.length > 0) {
-                ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, title);
-                return;
-            }
-            break;
-        }
-    }
+    // 参照反编译 L40418-40450: 正则前置守卫 bVar1/bVar2
+    // bVar1: 检查 text 是否含 "," 模式 → 用于 NavigationBar 上下文判断
+    NSRegularExpression *commaRegex = [NSRegularExpression
+        regularExpressionWithPattern:@"," options:0 error:nil];
+    BOOL bVar1 = ([commaRegex firstMatchInString:text options:0
+        range:NSMakeRange(0, text.length)] != nil);
+    // bVar2: 检查 text 是否含 "U" 模式 → 用于通讯录上下文判断
+    NSRegularExpression *uRegex = [NSRegularExpression
+        regularExpressionWithPattern:@"U" options:0 error:nil];
+    BOOL bVar2 = ([uRegex firstMatchInString:text options:0
+        range:NSMakeRange(0, text.length)] != nil);
 
-    // 匹配层2: Contacts 上下文
-    NSString *ct = ContactsTitle();
-    if (ct.length > 0) {
-        responder = (UIView *)self;
+    // 匹配层1: NavigationBar (参照 L40450-40473, 仅 bVar1 时遍历)
+    if (bVar1) {
+        id responder = (UIView *)self;
         while ((responder = [responder nextResponder])) {
-            if ([NSStringFromClass([responder class]) containsString:@"Contact"]) {
-                if ([text hasPrefix:@"通讯录"] || [text isEqualToString:@"通讯录"]) {
-                    ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, ct);
+            NSString *className = NSStringFromClass([responder class]);
+            if ([className containsString:@"NavigationBar"]) {
+                NSString *title = MainTitle();
+                if (title.length == 0) title = ContactsTitle();
+                if (title.length == 0) title = DiscoverTitle();
+                if (title.length > 0) {
+                    ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, title);
                     return;
                 }
+                break;
             }
         }
     }
 
-    // 匹配层3: Discover 上下文
+    // 匹配层2: Contacts (参照 L40475-40483, bVar2 守卫)
+    if (bVar2) {
+        NSString *ct = ContactsTitle();
+        if (ct.length > 0) {
+            if ([text hasPrefix:@"通讯录"] || [text isEqualToString:@"通讯录"]) {
+                ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, ct);
+                return;
+            }
+        }
+    }
+
+    // 匹配层3: Discover (参照 L40486-40491)
     NSString *dt = DiscoverTitle();
     if (dt.length > 0) {
         if ([text hasPrefix:@"发现"] || [text isEqualToString:@"发现"]) {
@@ -174,7 +193,7 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
         }
     }
 
-    // 匹配层4: 好友数格式替换
+    // 匹配层4: 好友数格式替换 (参照 L40492-40511)
     NSString *fc = FriendsCount();
     if (fc.length > 0) {
         NSRegularExpression *regex = [NSRegularExpression
@@ -194,7 +213,7 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
 }
 
 // ============================================================
-// MARK: - 策略B: MMUILabel.setAttributedText: (保留富文本属性)
+// MARK: - 策略B: MMUILabel.setAttributedText: (保留富文本属性, 参照 FUN_00044ecc L40526)
 // ============================================================
 
 static NSAttributedString *replacedAttrStr(NSAttributedString *orig, NSString *newText) {
@@ -216,33 +235,42 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
         return;
     }
 
+    // bVar1/bVar2 正则守卫 (同 setText:)
+    NSRegularExpression *commaRegex = [NSRegularExpression
+        regularExpressionWithPattern:@"," options:0 error:nil];
+    BOOL bVar1 = ([commaRegex firstMatchInString:text options:0
+        range:NSMakeRange(0, text.length)] != nil);
+    NSRegularExpression *uRegex = [NSRegularExpression
+        regularExpressionWithPattern:@"U" options:0 error:nil];
+    BOOL bVar2 = ([uRegex firstMatchInString:text options:0
+        range:NSMakeRange(0, text.length)] != nil);
+
     // 匹配层1: NavigationBar
-    id responder = (UIView *)self;
-    while ((responder = [responder nextResponder])) {
-        if ([NSStringFromClass([responder class]) containsString:@"NavigationBar"]) {
-            NSString *title = MainTitle();
-            if (title.length == 0) title = ContactsTitle();
-            if (title.length == 0) title = DiscoverTitle();
-            if (title.length > 0) {
-                ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd,
-                    replacedAttrStr(attrText, title));
-                return;
+    if (bVar1) {
+        id responder = (UIView *)self;
+        while ((responder = [responder nextResponder])) {
+            if ([NSStringFromClass([responder class]) containsString:@"NavigationBar"]) {
+                NSString *title = MainTitle();
+                if (title.length == 0) title = ContactsTitle();
+                if (title.length == 0) title = DiscoverTitle();
+                if (title.length > 0) {
+                    ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd,
+                        replacedAttrStr(attrText, title));
+                    return;
+                }
+                break;
             }
-            break;
         }
     }
 
     // 匹配层2: Contacts
-    NSString *ct = ContactsTitle();
-    if (ct.length > 0) {
-        responder = (UIView *)self;
-        while ((responder = [responder nextResponder])) {
-            if ([NSStringFromClass([responder class]) containsString:@"Contact"]) {
-                if ([text hasPrefix:@"通讯录"] || [text isEqualToString:@"通讯录"]) {
-                    ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd,
-                        replacedAttrStr(attrText, ct));
-                    return;
-                }
+    if (bVar2) {
+        NSString *ct = ContactsTitle();
+        if (ct.length > 0) {
+            if ([text hasPrefix:@"通讯录"] || [text isEqualToString:@"通讯录"]) {
+                ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd,
+                    replacedAttrStr(attrText, ct));
+                return;
             }
         }
     }
@@ -257,7 +285,7 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
         }
     }
 
-    // 匹配层4: 好友数 (attributed)
+    // 匹配层4: 好友数
     NSString *fc = FriendsCount();
     if (fc.length > 0) {
         NSRegularExpression *regex = [NSRegularExpression
@@ -277,7 +305,7 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
 }
 
 // ============================================================
-// MARK: - 策略B: MFTitleView.updateTitleView:title: (3层标题决策树)
+// MARK: - 策略B: MFTitleView.updateTitleView:title: (参照 FUN_000454d0 L40696)
 // ============================================================
 
 static void hook_MFTitleView_updateTitleView(id self, SEL _cmd, id titleView, NSString *title) {
@@ -290,31 +318,42 @@ static void hook_MFTitleView_updateTitleView(id self, SEL _cmd, id titleView, NS
         return;
     }
 
+    // bVar1/bVar2 正则守卫
+    NSRegularExpression *commaRegex = [NSRegularExpression
+        regularExpressionWithPattern:@"," options:0 error:nil];
+    BOOL bVar1 = ([commaRegex firstMatchInString:title options:0
+        range:NSMakeRange(0, title.length)] != nil);
+    NSRegularExpression *uRegex = [NSRegularExpression
+        regularExpressionWithPattern:@"U" options:0 error:nil];
+    BOOL bVar2 = ([uRegex firstMatchInString:title options:0
+        range:NSMakeRange(0, title.length)] != nil);
+
     // 匹配层1: NavigationBar
-    id responder = (UIView *)self;
-    while ((responder = [responder nextResponder])) {
-        if ([NSStringFromClass([responder class]) containsString:@"NavigationBar"]) {
-            NSString *t = MainTitle();
-            if (t.length == 0) t = ContactsTitle();
-            if (t.length == 0) t = DiscoverTitle();
-            if (t.length > 0) {
-                ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitleView)(self, _cmd, titleView, t);
-                return;
+    if (bVar1) {
+        id responder = (UIView *)self;
+        while ((responder = [responder nextResponder])) {
+            if ([NSStringFromClass([responder class]) containsString:@"NavigationBar"]) {
+                NSString *t = MainTitle();
+                if (t.length == 0) t = ContactsTitle();
+                if (t.length == 0) t = DiscoverTitle();
+                if (t.length > 0) {
+                    ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitleView)(
+                        self, _cmd, titleView, t);
+                    return;
+                }
+                break;
             }
-            break;
         }
     }
 
     // 匹配层2: Contacts
-    NSString *ct = ContactsTitle();
-    if (ct.length > 0) {
-        responder = (UIView *)self;
-        while ((responder = [responder nextResponder])) {
-            if ([NSStringFromClass([responder class]) containsString:@"Contact"]) {
-                if ([title hasPrefix:@"通讯录"] || [title isEqualToString:@"通讯录"]) {
-                    ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitleView)(self, _cmd, titleView, ct);
-                    return;
-                }
+    if (bVar2) {
+        NSString *ct = ContactsTitle();
+        if (ct.length > 0) {
+            if ([title hasPrefix:@"通讯录"] || [title isEqualToString:@"通讯录"]) {
+                ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitleView)(
+                    self, _cmd, titleView, ct);
+                return;
             }
         }
     }
@@ -323,7 +362,8 @@ static void hook_MFTitleView_updateTitleView(id self, SEL _cmd, id titleView, NS
     NSString *dt = DiscoverTitle();
     if (dt.length > 0) {
         if ([title hasPrefix:@"发现"] || [title isEqualToString:@"发现"]) {
-            ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitleView)(self, _cmd, titleView, dt);
+            ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitleView)(
+                self, _cmd, titleView, dt);
             return;
         }
     }
@@ -338,6 +378,8 @@ static void hook_MFTitleView_updateTitleView(id self, SEL _cmd, id titleView, NS
 @implementation UISimplifyHook
 
 + (void)install {
+    UISimplify_ReloadConfig();  // 参照 FUN_00043e44: 启动时一次性加载配置到静态缓存
+
     WPLog(@"UISimplify", @"UISimplifyHook install start");
 
     // ===== 策略A: 字典查找替换 (6个) =====
