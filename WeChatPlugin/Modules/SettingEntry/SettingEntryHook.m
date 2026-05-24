@@ -190,7 +190,19 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     WPLog(@"Setting", @"[Nav] pushed SettingGeneralFunctionController");
 }
 
-- (void)openUI:(id)sender { [self p_pushHelperVC:@"WPUIVCHelper" from:sender]; }
+- (void)openUI:(id)sender {
+    UIViewController *vc = [self currentVCFrom:sender];
+    if (!vc) { WPLog(@"Setting", @"[Nav] openUI: currentVC nil"); return; }
+    Class helperClass = objc_getClass("WPUIVCHelper");
+    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPUIVCHelper not found"); return; }
+    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        WPLog(@"Setting", @"[Nav] pushed WPUIVC");
+    } else {
+        WPLog(@"Setting", @"[Nav] WPUIVCHelper makeVC returned nil");
+    }
+}
 
 - (void)openRedEnvelop:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
@@ -201,21 +213,45 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     WPLog(@"Setting", @"[Nav] pushed SettingRedEnvelopController");
 }
 
-- (void)openOther:(id)sender { [self p_pushHelperVC:@"WPOtherVCHelper"  from:sender]; }
-- (void)openBackup:(id)sender { [self p_pushHelperVC:@"WPBackupVCHelper" from:sender]; }
-- (void)openAbout:(id)sender { [self p_pushHelperVC:@"WPAboutVCHelper"  from:sender]; }
-
-- (void)p_pushHelperVC:(NSString *)helperClassName from:(id)sender {
+- (void)openOther:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
-    if (!vc) { WPLog(@"Setting", @"[Nav] %@: currentVC nil", helperClassName); return; }
-    Class helperClass = objc_getClass([helperClassName UTF8String]);
-    if (!helperClass) { WPLog(@"Setting", @"[Nav] %@ not found", helperClassName); return; }
+    if (!vc) { WPLog(@"Setting", @"[Nav] openOther: currentVC nil"); return; }
+    Class helperClass = objc_getClass("WPOtherVCHelper");
+    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPOtherVCHelper not found"); return; }
     UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
-        WPLog(@"Setting", @"[Nav] pushed %@", helperClassName);
+        WPLog(@"Setting", @"[Nav] pushed WPOtherVC");
     } else {
-        WPLog(@"Setting", @"[Nav] %@ makeVC returned nil", helperClassName);
+        WPLog(@"Setting", @"[Nav] WPOtherVCHelper makeVC returned nil");
+    }
+}
+
+- (void)openBackup:(id)sender {
+    UIViewController *vc = [self currentVCFrom:sender];
+    if (!vc) { WPLog(@"Setting", @"[Nav] openBackup: currentVC nil"); return; }
+    Class helperClass = objc_getClass("WPBackupVCHelper");
+    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPBackupVCHelper not found"); return; }
+    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        WPLog(@"Setting", @"[Nav] pushed WPBackupVC");
+    } else {
+        WPLog(@"Setting", @"[Nav] WPBackupVCHelper makeVC returned nil");
+    }
+}
+
+- (void)openAbout:(id)sender {
+    UIViewController *vc = [self currentVCFrom:sender];
+    if (!vc) { WPLog(@"Setting", @"[Nav] openAbout: currentVC nil"); return; }
+    Class helperClass = objc_getClass("WPAboutVCHelper");
+    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPAboutVCHelper not found"); return; }
+    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        WPLog(@"Setting", @"[Nav] pushed WPAboutVC");
+    } else {
+        WPLog(@"Setting", @"[Nav] WPAboutVCHelper makeVC returned nil");
     }
 }
 

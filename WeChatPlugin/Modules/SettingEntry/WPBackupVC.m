@@ -3,6 +3,24 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
 
+static void reLog(NSString *content) {
+    @try {
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
+        NSString *filePath = [folderPath stringByAppendingPathComponent:@"setting_entry.log"];
+        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
+        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
+        if (handle) {
+            [handle seekToEndOfFile];
+            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+            [handle closeFile];
+        } else {
+            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        }
+    } @catch (NSException *e) {}
+}
+
 static void WPBackupViewDidLoad(id self, SEL _cmd) {
     Class uiVC = objc_getClass("UIViewController");
     Method m = class_getInstanceMethod(uiVC, _cmd);

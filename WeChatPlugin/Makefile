@@ -25,9 +25,14 @@ MioHelper_FILES = Tweak.m \
 	Modules/Unread/ClearUnreadHook.m \
 	Modules/AutoTransfer/AutoTransferHook.m \
 	Modules/SettingEntry/SettingEntryHook.m \
+	Modules/SettingEntry/WPCommonUI.m \
+	Modules/SettingEntry/WPUIVC.m \
+	Modules/SettingEntry/WPUIPurifyVC.m \
+	Modules/SettingEntry/WPUISimplifyVC.m \
 	Modules/SettingEntry/WPOtherVC.m \
 	Modules/SettingEntry/WPAboutVC.m \
 	Modules/SettingEntry/WPBackupVC.m \
+	Modules/Layout/UIPurifyHook.m \
 	Modules/Joker/JokerHook.m \
 	Modules/GroupExit/GroupExitHook.m \
 	Modules/FriendDetection/FriendDetectionHook.m \

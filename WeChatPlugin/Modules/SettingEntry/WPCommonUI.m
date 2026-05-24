@@ -99,6 +99,23 @@ void WPAddInfoRow(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString
     [card addSubview:r];
 }
 
+void WPAddTextFieldRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *placeholder) {
+    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, cw - kPad * 2 - 150, kRowH)];
+    tl.text = title;
+    tl.font = [UIFont systemFontOfSize:15];
+    tl.textColor = WPT1();
+    [card addSubview:tl];
+
+    UITextField *tf = [[UITextField alloc] initWithFrame:CGRectMake(cw - kPad * 2 - 150, cy + 4, 140, kRowH - 8)];
+    tf.placeholder = placeholder;
+    tf.font = [UIFont systemFontOfSize:14];
+    tf.textColor = WPT2();
+    tf.textAlignment = NSTextAlignmentRight;
+    tf.returnKeyType = UIReturnKeyDone;
+    tf.autocorrectionType = UITextAutocorrectionTypeNo;
+    [card addSubview:tf];
+}
+
 #pragma mark - 安全 present
 
 UIViewController *WPGetTopVCForPresentation(void) {

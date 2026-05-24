@@ -285,41 +285,60 @@ static BOOL purifySafeHook(Class cls, SEL sel, IMP replacement, IMP *orig) {
     return YES;
 }
 
-// ============================================================
-// MARK: - 5连Hook 宏（Sys/Pat 共用模板）
-// ============================================================
-
-#define PURIFY_INSTALL_5HOOK(pfx, clsStr, vmStr, tag) do { \
-    Class cls = objc_getClass(clsStr); \
-    if (cls) { \
-        MSHookMessageEx(cls, sel_registerName("initWithViewModel:"), \
-            (IMP)hook_##pfx##Cell_initWithViewModel, &_orig_##pfx##Cell_initWithViewModel); \
-        MSHookMessageEx(cls, sel_registerName("layoutInternal"), \
-            (IMP)hook_##pfx##Cell_layoutInternal, &_orig_##pfx##Cell_layoutInternal); \
-        purifySafeHook(cls, sel_registerName("canBeReused"), \
-            (IMP)hook_##pfx##Cell_canBeReused, &_orig_##pfx##Cell_canBeReused); \
-        purifySafeHook(cls, sel_registerName("shouldLayoutIfNeeded"), \
-            (IMP)hook_##pfx##Cell_shouldLayoutIfNeeded, &_orig_##pfx##Cell_shouldLayoutIfNeeded); \
-        WPLog(@"UIPurify", @"[Hook] ✓ %s (" tag ")", clsStr); \
-    } else { \
-        WPLog(@"UIPurify", @"[Hook] - %s not found", clsStr); \
-    } \
-    Class vmCls = objc_getClass(vmStr); \
-    if (vmCls) { \
-        purifySafeHook(vmCls, sel_registerName("measure:"), \
-            (IMP)hook_##pfx##VM_measure, &_orig_##pfx##VM_measure); \
-        WPLog(@"UIPurify", @"[Hook] ✓ %s.measure: (占位归零)", vmStr); \
-    } \
-} while(0)
-
 + (void)install {
     WPLog(@"UIPurify", @"UIPurifyHook install start (微信优化方案)");
 
     // ——— 隐藏撤回消息：SystemMessageCellView + SystemMessageViewModel ———
-    PURIFY_INSTALL_5HOOK(Sys, "SystemMessageCellView", "SystemMessageViewModel", "hide revoke");
+    {
+        Class cls = objc_getClass("SystemMessageCellView");
+        if (cls) {
+            MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
+                (IMP)hook_SysCell_initWithViewModel, &_orig_SysCell_initWithViewModel);
+            MSHookMessageEx(cls, sel_registerName("layoutInternal"),
+                (IMP)hook_SysCell_layoutInternal, &_orig_SysCell_layoutInternal);
+            purifySafeHook(cls, sel_registerName("canBeReused"),
+                (IMP)hook_SysCell_canBeReused, &_orig_SysCell_canBeReused);
+            purifySafeHook(cls, sel_registerName("shouldLayoutIfNeeded"),
+                (IMP)hook_SysCell_shouldLayoutIfNeeded, &_orig_SysCell_shouldLayoutIfNeeded);
+            WPLog(@"UIPurify", @"[Hook] ✓ SystemMessageCellView (hide revoke)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - SystemMessageCellView not found");
+        }
+        Class vmCls = objc_getClass("SystemMessageViewModel");
+        if (vmCls) {
+            purifySafeHook(vmCls, sel_registerName("measure:"),
+                (IMP)hook_SysVM_measure, &_orig_SysVM_measure);
+            WPLog(@"UIPurify", @"[Hook] ✓ SysVM.measure: safe (消除空白占位)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - SystemMessageViewModel not found");
+        }
+    }
 
     // ——— 隐藏拍一拍：AppPatMessageCellView + AppPatMessageViewModel ———
-    PURIFY_INSTALL_5HOOK(Pat, "AppPatMessageCellView", "AppPatMessageViewModel", "hide pat");
+    {
+        Class cls = objc_getClass("AppPatMessageCellView");
+        if (cls) {
+            MSHookMessageEx(cls, sel_registerName("initWithViewModel:"),
+                (IMP)hook_PatCell_initWithViewModel, &_orig_PatCell_initWithViewModel);
+            MSHookMessageEx(cls, sel_registerName("layoutInternal"),
+                (IMP)hook_PatCell_layoutInternal, &_orig_PatCell_layoutInternal);
+            purifySafeHook(cls, sel_registerName("canBeReused"),
+                (IMP)hook_PatCell_canBeReused, &_orig_PatCell_canBeReused);
+            purifySafeHook(cls, sel_registerName("shouldLayoutIfNeeded"),
+                (IMP)hook_PatCell_shouldLayoutIfNeeded, &_orig_PatCell_shouldLayoutIfNeeded);
+            WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageCellView (hide pat)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - AppPatMessageCellView not found");
+        }
+        Class vmCls = objc_getClass("AppPatMessageViewModel");
+        if (vmCls) {
+            purifySafeHook(vmCls, sel_registerName("measure:"),
+                (IMP)hook_PatVM_measure, &_orig_PatVM_measure);
+            WPLog(@"UIPurify", @"[Hook] ✓ PatVM.measure: safe (消除空白占位)");
+        } else {
+            WPLog(@"UIPurify", @"[Hook] - AppPatMessageViewModel not found");
+        }
+    }
 
     // ——— 隐藏语音红点/转文字：VoiceMessageCellView.layoutSubviews ———
     {
