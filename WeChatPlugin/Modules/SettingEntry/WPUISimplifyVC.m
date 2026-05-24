@@ -24,25 +24,15 @@ static inline NSString *SStr(NSString *key) {
     UIViewController *topVC = WPGetTopVCForPresentation();
     if (!topVC) return;
 
-    // 从 NSUserDefaults 读取当前值作为初始值
-    NSString *currentValue = nil;
+    // 问题1：弹窗输入框默认空白，不预填任何值
     NSUserDefaults *d = SD();
-    if (dictKey) {
-        currentValue = [d dictionaryForKey:nsKey][dictKey];
-    }
-    if (!currentValue && nsKey) {
-        currentValue = [d stringForKey:nsKey];
-    }
-    if (!currentValue) {
-        currentValue = valueLabel.text ?: @"";
-    }
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
                                                                    message:nil
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-        tf.text = currentValue;
-        tf.placeholder = title;
+        tf.text = @"";
+        tf.placeholder = @"";
         tf.clearButtonMode = UITextFieldViewModeWhileEditing;
     }];
 
@@ -50,10 +40,8 @@ static inline NSString *SStr(NSString *key) {
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *newText = alert.textFields.firstObject.text;
-        if (newText.length == 0) return;
         if (weakLabel) weakLabel.text = newText;
 
-        // 持久化：字典项 vs 字符串项
         if (dictKey && nsKey) {
             NSMutableDictionary *dict = [[d dictionaryForKey:nsKey] ?: @{} mutableCopy];
             dict[dictKey] = newText;
@@ -74,10 +62,6 @@ static inline NSString *SStr(NSString *key) {
 
 static NSString *const kSimplifyEnabledKey = @"SimplifyEnabled";
 
-/// rebuild 标记：在 viewDidLoad 入口检查此 flag
-static BOOL _needsRebuildUI = NO;
-
-// 内部前向声明
 static void WPUISimplifyBuildUI(id self, SEL _cmd);
 
 #pragma mark - ========== viewDidLoad ==========
@@ -86,13 +70,6 @@ static void WPUISimplifyViewDidLoad(id self, SEL _cmd) {
     Class uiVC = objc_getClass("UIViewController");
     Method m = class_getInstanceMethod(uiVC, _cmd);
     if (m) ((void (*)(id, SEL))method_getImplementation(m))(self, _cmd);
-
-    // 如果是 toggle 触发的 rebuild，直接构建 UI 后返回
-    if (_needsRebuildUI) {
-        _needsRebuildUI = NO;
-        WPUISimplifyBuildUI(self, _cmd);
-        return;
-    }
 
     UIViewController *vc = (UIViewController *)self;
     vc.title = @"界面简化";
@@ -107,6 +84,8 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     CGFloat w = vc.view.bounds.size.width;
     CGFloat scale = [UIScreen mainScreen].scale;
     id handler = [WeChatPluginSwitchHandler sharedInstance];
+    NSUserDefaults *d = SD();
+    BOOL enabled = [d boolForKey:kSimplifyEnabledKey];
 
     // 清除旧的 scrollView，重新创建
     UIView *oldSV = objc_getAssociatedObject(self, "buildUISV");
@@ -117,8 +96,6 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     objc_setAssociatedObject(self, "buildUISV", sv, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     CGFloat y = 8;
-    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    BOOL enabled = [d boolForKey:kSimplifyEnabledKey];
 
     // ========== 总开关 ==========
     [sv addSubview:WPMakeSectionHeader(@"界面名称简化", y, w)];
@@ -145,70 +122,86 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     [sv addSubview:switchCard];
     y += scy + 16;
 
-    // ========== 预取字典数据 ==========
-    NSDictionary *menuDict = [d dictionaryForKey:@"Simplify_MenuNames"] ?: @{};
-    NSDictionary *tabDict = [d dictionaryForKey:@"Simplify_Tab_Names"] ?: @{};
-    #define EVal(key, def) (SStr(key) ?: (def))
-    #define EValD(dict, dk, def) ((dict)[dk] ?: (def))
+    // 问题3：开关关闭时只显示开关卡片，不显示下方配置区
+    if (!enabled) {
+        UILabel *footer = [[UILabel alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 40)];
+        footer.text = @"修改后将在下次启动时生效";
+        footer.font = [UIFont systemFontOfSize:12];
+        footer.textColor = WPT3();
+        footer.textAlignment = NSTextAlignmentCenter;
+        [sv addSubview:footer];
+        y += 48;
+        sv.contentSize = CGSizeMake(w, y);
+        WPLog(@"UI", @"[Sub] WPUISimplifyBuildUI done (enabled=0, switch only)");
+        return;
+    }
 
     // ========== Section 1: 顶部标签自定义 ==========
-    [sv addSubview:WPMakeSectionHeader(@"顶部标签自定义", y, w)];
+    UILabel *sec1Header = WPMakeSectionHeader(@"顶部标签自定义", y, w);
+    [sv addSubview:sec1Header];
     y += 32;
 
     UIView *topBarCard = WPMakeCard(y, w);
     CGFloat tby = 0;
-    {
-        UIButton *row = WPAddEditableRow(topBarCard, tby, w, @"微信标题", EVal(@"Simplify_MainTitle", @"微信"), handler);
-        objc_setAssociatedObject(row, "editNSKey", @"Simplify_MainTitle", OBJC_ASSOCIATION_COPY_NONATOMIC);
+
+    // 问题2: 加 > 箭头，无默认值（问题1）
+    // NSUserDefaults key 必须与 UISimplifyHook.m 中完全一致
+    NSArray *topDefs = @[
+        @[@"微信标题",      @"Simplify_MainTitle"],
+        @[@"通讯录标题",    @"Simplify_ContactsTitle"],
+        @[@"发现标题",      @"Simplify_DiscoverTitle"],
+    ];
+    for (NSUInteger i = 0; i < topDefs.count; i++) {
+        if (i > 0) {
+            WPAddSep(topBarCard, tby, w);
+            tby = round((tby + 1.0 / scale) * scale) / scale;
+        }
+        NSString *rowTitle = topDefs[i][0];
+        NSString *nsKey = topDefs[i][1];
+        NSString *curVal = SStr(nsKey) ?: @"";
+        UIButton *row = WPAddEditableRowWithArrow(topBarCard, tby, w, rowTitle, curVal, handler);
+        objc_setAssociatedObject(row, "editNSKey", nsKey, OBJC_ASSOCIATION_COPY_NONATOMIC);
         tby += kRowH;
     }
-    {
-        WPAddSep(topBarCard, tby, w);
-        tby = round((tby + 1.0 / scale) * scale) / scale;
-        UIButton *row = WPAddEditableRow(topBarCard, tby, w, @"通讯录标题", EVal(@"Simplify_ContactsTitle", @"通讯录"), handler);
-        objc_setAssociatedObject(row, "editNSKey", @"Simplify_ContactsTitle", OBJC_ASSOCIATION_COPY_NONATOMIC);
-        tby += kRowH;
-    }
-    {
-        WPAddSep(topBarCard, tby, w);
-        tby = round((tby + 1.0 / scale) * scale) / scale;
-        UIButton *row = WPAddEditableRow(topBarCard, tby, w, @"发现标题", EVal(@"Simplify_DiscoverTitle", @"发现"), handler);
-        objc_setAssociatedObject(row, "editNSKey", @"Simplify_DiscoverTitle", OBJC_ASSOCIATION_COPY_NONATOMIC);
-        tby += kRowH;
-    }
+
     CGRect tbf = topBarCard.frame; tbf.size.height = tby; topBarCard.frame = tbf;
     [sv addSubview:topBarCard];
     y += tby + 16;
 
     // ========== Section 2: 特殊自定义 ==========
-    [sv addSubview:WPMakeSectionHeader(@"特殊自定义", y, w)];
+    UILabel *sec2Header = WPMakeSectionHeader(@"特殊自定义", y, w);
+    [sv addSubview:sec2Header];
     y += 32;
 
     UIView *specialCard = WPMakeCard(y, w);
     CGFloat spy = 0;
-    {
-        UIButton *row = WPAddEditableRow(specialCard, spy, w, @"通讯录底部好友", EVal(@"Simplify_FriendsCount", @"好友"), handler);
-        objc_setAssociatedObject(row, "editNSKey", @"Simplify_FriendsCount", OBJC_ASSOCIATION_COPY_NONATOMIC);
-        spy += kRowH;
-    }
+
+    NSString *fcCur = SStr(@"Simplify_FriendsCount") ?: @"";
+    UIButton *fcRow = WPAddEditableRowWithArrow(specialCard, spy, w, @"通讯录底部好友", fcCur, handler);
+    objc_setAssociatedObject(fcRow, "editNSKey", @"Simplify_FriendsCount", OBJC_ASSOCIATION_COPY_NONATOMIC);
+    spy += kRowH;
+
     CGRect spf = specialCard.frame; spf.size.height = spy; specialCard.frame = spf;
     [sv addSubview:specialCard];
     y += spy + 16;
 
     // ========== Section 3: 我的页面菜单名称自定义 ==========
-    [sv addSubview:WPMakeSectionHeader(@"我的页面菜单名称自定义", y, w)];
+    UILabel *sec3Header = WPMakeSectionHeader(@"我的页面菜单名称自定义", y, w);
+    [sv addSubview:sec3Header];
     y += 32;
 
     UIView *menuCard = WPMakeCard(y, w);
     CGFloat mcy = 0;
+
+    NSDictionary *menuDict = [d dictionaryForKey:@"Simplify_MenuNames"] ?: @{};
     NSArray *menuDefs = @[
-        @[@"服务/支付与服务", @"服务", @"服务"],
-        @[@"收藏", @"收藏", @"收藏"],
-        @[@"朋友圈", @"朋友圈", @"朋友圈"],
-        @[@"卡片/订单与卡包", @"卡包", @"卡包"],
-        @[@"表情", @"表情", @"表情"],
-        @[@"设置", @"设置", @"设置"],
-        @[@"插件", @"插件", @"插件"],
+        @[@"服务/支付与服务", @"服务"],
+        @[@"收藏",             @"收藏"],
+        @[@"朋友圈",           @"朋友圈"],
+        @[@"卡片/订单与卡包", @"卡包"],
+        @[@"表情",             @"表情"],
+        @[@"设置",             @"设置"],
+        @[@"插件",             @"插件"],
     ];
     for (NSUInteger i = 0; i < menuDefs.count; i++) {
         if (i > 0) {
@@ -217,28 +210,31 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
         }
         NSString *rowTitle = menuDefs[i][0];
         NSString *dictKeyVal = menuDefs[i][1];
-        NSString *defVal = menuDefs[i][2];
-        NSString *curVal = EValD(menuDict, dictKeyVal, defVal);
-        UIButton *row = WPAddEditableRow(menuCard, mcy, w, rowTitle, curVal, handler);
+        NSString *curVal = menuDict[dictKeyVal] ?: @"";
+        UIButton *row = WPAddEditableRowWithArrow(menuCard, mcy, w, rowTitle, curVal, handler);
         objc_setAssociatedObject(row, "editNSKey", @"Simplify_MenuNames", OBJC_ASSOCIATION_COPY_NONATOMIC);
         objc_setAssociatedObject(row, "editDictKey", dictKeyVal, OBJC_ASSOCIATION_COPY_NONATOMIC);
         mcy += kRowH;
     }
+
     CGRect mcf = menuCard.frame; mcf.size.height = mcy; menuCard.frame = mcf;
     [sv addSubview:menuCard];
     y += mcy + 16;
 
     // ========== Section 4: 底部标签自定义 ==========
-    [sv addSubview:WPMakeSectionHeader(@"底部标签自定义", y, w)];
+    UILabel *sec4Header = WPMakeSectionHeader(@"底部标签自定义", y, w);
+    [sv addSubview:sec4Header];
     y += 32;
 
     UIView *bottomCard = WPMakeCard(y, w);
     CGFloat bcy = 0;
+
+    NSDictionary *tabDict = [d dictionaryForKey:@"Simplify_Tab_Names"] ?: @{};
     NSArray *tabDefs = @[
-        @[@"微信", @"微信", @"微信"],
-        @[@"通讯录", @"通讯录", @"通讯录"],
-        @[@"发现", @"发现", @"发现"],
-        @[@"我", @"我", @"我"],
+        @[@"微信",   @"微信"],
+        @[@"通讯录", @"通讯录"],
+        @[@"发现",   @"发现"],
+        @[@"我",     @"我"],
     ];
     for (NSUInteger i = 0; i < tabDefs.count; i++) {
         if (i > 0) {
@@ -247,13 +243,13 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
         }
         NSString *rowTitle = tabDefs[i][0];
         NSString *dictKeyVal = tabDefs[i][1];
-        NSString *defVal = tabDefs[i][2];
-        NSString *curVal = EValD(tabDict, dictKeyVal, defVal);
-        UIButton *row = WPAddEditableRow(bottomCard, bcy, w, rowTitle, curVal, handler);
+        NSString *curVal = tabDict[dictKeyVal] ?: @"";
+        UIButton *row = WPAddEditableRowWithArrow(bottomCard, bcy, w, rowTitle, curVal, handler);
         objc_setAssociatedObject(row, "editNSKey", @"Simplify_Tab_Names", OBJC_ASSOCIATION_COPY_NONATOMIC);
         objc_setAssociatedObject(row, "editDictKey", dictKeyVal, OBJC_ASSOCIATION_COPY_NONATOMIC);
         bcy += kRowH;
     }
+
     CGRect bcf = bottomCard.frame; bcf.size.height = bcy; bottomCard.frame = bcf;
     [sv addSubview:bottomCard];
     y += bcy + 16;
@@ -268,13 +264,23 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     y += 48;
 
     sv.contentSize = CGSizeMake(w, y);
-    WPLog(@"UI", @"[Sub] WPUISimplifyBuildUI done");
+    WPLog(@"UI", @"[Sub] WPUISimplifyBuildUI done (enabled=%d)", enabled);
 }
 
-#pragma mark - ========== Helper ==========
 
-// 前向声明：onSimplifySwitchIMP 在 class_addMethod 之前定义
-static void onSimplifySwitchIMP(id self, SEL _cmd, UISwitch *sender);
+#pragma mark - ========== 开关响应 ==========
+
+static void onSimplifySwitchIMP(id self, SEL _cmd, UISwitch *sender) {
+    [[NSUserDefaults standardUserDefaults] setBool:sender.on forKey:kSimplifyEnabledKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    WPLog(@"UI", @"[Toggle] SimplifyEnabled=%d, rebuilding UI", sender.on);
+
+    // 问题3：展开/关闭时完全重建界面，确保布局、scrollView contentSize 正确
+    WPUISimplifyBuildUI(self, _cmd);
+}
+
+
+#pragma mark - ========== Helper ==========
 
 @interface WPUISimplifyVCHelper : NSObject
 + (UIViewController *)makeVC;
@@ -300,14 +306,6 @@ static void onSimplifySwitchIMP(id self, SEL _cmd, UISwitch *sender);
         return [[subClass alloc] init];
     }
     return nil;
-}
-
-// IMP for onSimplifySwitch: — C 函数指针
-static void onSimplifySwitchIMP(id self, SEL _cmd, UISwitch *sender) {
-    [[NSUserDefaults standardUserDefaults] setBool:sender.on forKey:kSimplifyEnabledKey];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-    WPLog(@"UI", @"[Toggle] SimplifyEnabled=%d, trigger rebuild", sender.on);
-    _needsRebuildUI = YES;
 }
 
 @end

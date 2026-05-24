@@ -139,6 +139,39 @@ UIButton *WPAddEditableRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title
     return btn;
 }
 
+/// 带右箭头版本的 WPAddEditableRow（问题2：和导航条目样式一致）
+UIButton *WPAddEditableRowWithArrow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *value, id target) {
+    // 标题
+    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, cw - kPad * 2 - 168, kRowH)];
+    tl.text = title;
+    tl.font = [UIFont systemFontOfSize:15];
+    tl.textColor = WPT1();
+    [card addSubview:tl];
+
+    // 值（箭头左侧）
+    UILabel *vl = [[UILabel alloc] initWithFrame:CGRectMake(cw - kPad * 2 - 164, cy, 136, kRowH)];
+    vl.text = value;
+    vl.font = [UIFont systemFontOfSize:14];
+    vl.textColor = WPT2();
+    vl.textAlignment = NSTextAlignmentRight;
+    [card addSubview:vl];
+
+    // 右箭头（与 WPAddNavRow 一致）
+    UILabel *arrow = [[UILabel alloc] initWithFrame:CGRectMake(cw - kPad * 2 - 20, cy, 16, kRowH)];
+    arrow.text = @"\u203A";
+    arrow.font = [UIFont systemFontOfSize:20];
+    arrow.textColor = WPT3();
+    [card addSubview:arrow];
+
+    UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+    btn.frame = CGRectMake(0, cy, cw - kPad * 2, kRowH);
+    objc_setAssociatedObject(btn, "editTitle", title, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(btn, "editValueLabel", vl, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [btn addTarget:target action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
+    [card addSubview:btn];
+    return btn;
+}
+
 #pragma mark - 安全 present
 
 UIViewController *WPGetTopVCForPresentation(void) {

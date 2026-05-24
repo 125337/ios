@@ -2,11 +2,11 @@
 // UISimplifyHook.m — 微信界面简化 Hook 模块
 // 参照反编译: 微信优化反编译最新/123456.c FUN_00044244 (L40131)
 //
-// 极致防御版本:
+// 防御版本:
 // - 所有方法调用前做 nil/isKindOfClass 检查
 // - 响应者链遍历加长度限制防死循环
-// - 检测老版本 微信优化1.6.5.dylib 避免方法钩子冲突
 // - NSUserDefaults 缓存到静态变量，避免 Hook 路径 IO
+// - 菜单名 alt key 回退映射（支持新版微信文字变化如 "订单与卡包"）
 // ============================================================
 
 #import "UISimplifyHook.h"
@@ -28,8 +28,9 @@ static NSString     *_contactsTitle    = nil;
 static NSString     *_discoverTitle    = nil;
 static NSString     *_friendsCount     = nil;
 
-// 检测设备上是否加载了老版本插件（避免双钩子冲突）
-static BOOL _oldPluginLoaded = NO;
+// 菜单名替代映射：新版微信某些菜单文字可能变化（如 "卡包" → "订单与卡包"）
+// 当 hook 遇到 alternate key 时，回退查 primary key
+static NSDictionary *_altMenuKeys     = nil;
 
 static void UISimplify_ReloadConfig(void) {
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
@@ -42,6 +43,9 @@ static void UISimplify_ReloadConfig(void) {
     _contactsTitle = [d stringForKey:@"Simplify_ContactsTitle"];
     _discoverTitle = [d stringForKey:@"Simplify_DiscoverTitle"];
     _friendsCount  = [d stringForKey:@"Simplify_FriendsCount"];
+    // 问题4：新版微信菜单文字可能变化（如 "订单与卡包" 替代 "卡包"）
+    // alt key → primary key 回退映射
+    _altMenuKeys   = @{@"订单与卡包": @"卡包"};
     WPLog(@"UISimplify", @"Config loaded: enabled=%d menu=%lu tab=%lu",
           _simplifyEnabled, (unsigned long)_menuNames.count, (unsigned long)_tabNames.count);
 }
@@ -49,7 +53,6 @@ static void UISimplify_ReloadConfig(void) {
 // 安全宏：保证所有输入不为 nil
 #define SafeStr(s)   ((s) ?: @"")
 #define SafeDict(d)  ((d) ?: @{})
-#define Enabled()    (_simplifyEnabled && !_oldPluginLoaded)
 
 // ============================================================
 // MARK: - 原始 IMP 指针
@@ -105,23 +108,32 @@ static BOOL SafeHasPrefix(NSString *s, NSString *prefix) {
     return s && prefix && [s hasPrefix:prefix];
 }
 
-// ============================================================
-// MARK: - 策略A: WCTableViewCellLeftConfig.title (参照 FUN_00044490)
-// ============================================================
+// 菜单名查找：先直接查 menuNames，再查替代 key 映射（问题4：支持 "订单与卡包" → "卡包"）
+static id menuNameLookup(id orig) {
+    id repl = [_menuNames objectForKey:orig];
+    if (repl) return repl;
+    // alt key fallback (e.g. "订单与卡包" → "卡包")
+    NSString *altKey = [_altMenuKeys objectForKey:orig];
+    if (altKey) {
+        repl = [_menuNames objectForKey:altKey];
+        if (repl) return repl;
+    }
+    return nil;
+}
 
 static id hook_WCTitle(id self, SEL _cmd) {
     if (!_orig_WCTableViewCellLeftConfig_title) return nil;
     id orig = ((id (*)(id, SEL))_orig_WCTableViewCellLeftConfig_title)(self, _cmd);
     if (!_simplifyEnabled || !orig || !_menuNames) return orig;
     
-    id repl = [_menuNames objectForKey:orig];
+    id repl = menuNameLookup(orig);
     if (repl) return repl;
     
     @try {
         NSRange nl = [orig rangeOfString:@"\n"];
         if (nl.location != NSNotFound && nl.location + 1 < [orig length]) {
             NSString *suffix = [orig substringFromIndex:nl.location + 1];
-            id subRepl = [_menuNames objectForKey:suffix];
+            id subRepl = menuNameLookup(suffix);
             if (subRepl) return subRepl;
         }
     } @catch (NSException *e) {}
@@ -167,14 +179,14 @@ static id hook_MMTableViewInfo_getTitle(id self, SEL _cmd) {
     id orig = ((id (*)(id, SEL))_orig_MMTableViewInfo_getTitle)(self, _cmd);
     if (!_simplifyEnabled || !orig || !_menuNames) return orig;
     
-    id repl = [_menuNames objectForKey:orig];
+    id repl = menuNameLookup(orig);
     if (repl) return repl;
     
     @try {
         NSRange nl = [orig rangeOfString:@"\n"];
         if (nl.location != NSNotFound && nl.location + 1 < [orig length]) {
             NSString *suffix = [orig substringFromIndex:nl.location + 1];
-            id subRepl = [_menuNames objectForKey:suffix];
+            id subRepl = menuNameLookup(suffix);
             if (subRepl) return subRepl;
         }
     } @catch (NSException *e) {}
@@ -210,7 +222,7 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
     }
     
     // --- 匹配层1: NavigationBar → mainTitleReplacement ---
-    if (!_oldPluginLoaded && _mainTitle && _mainTitle.length > 0) {
+    if (_mainTitle && _mainTitle.length > 0) {
         if (ResponderChainContainsClassName(self, @"NavigationBar", 10)) {
             ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _mainTitle);
             return;
@@ -218,7 +230,7 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
     }
     
     // --- 匹配层2: Contacts → contactsReplacement ---
-    if (!_oldPluginLoaded && _contactsTitle && _contactsTitle.length > 0) {
+    if (_contactsTitle && _contactsTitle.length > 0) {
         if (SafeHasPrefix(text, @"通讯录") || [text isEqualToString:@"通讯录"]) {
             if (ResponderChainContainsClassName(self, @"Contact", 10)) {
                 ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _contactsTitle);
@@ -228,7 +240,7 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
     }
     
     // --- 匹配层3: Discover → discoverReplacement ---
-    if (!_oldPluginLoaded && _discoverTitle && _discoverTitle.length > 0) {
+    if (_discoverTitle && _discoverTitle.length > 0) {
         if (SafeHasPrefix(text, @"发现") || [text isEqualToString:@"发现"]) {
             ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _discoverTitle);
             return;
@@ -236,7 +248,7 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
     }
     
     // --- 匹配层4: 好友数格式 ---
-    if (!_oldPluginLoaded && _friendsCount && _friendsCount.length > 0) {
+    if (_friendsCount && _friendsCount.length > 0) {
         @try {
             NSRegularExpression *regex = [NSRegularExpression
                 regularExpressionWithPattern:@"\\d+" options:0 error:nil];
@@ -295,7 +307,7 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
     }
     
     // Nav
-    if (!_oldPluginLoaded && _mainTitle && _mainTitle.length > 0) {
+    if (_mainTitle && _mainTitle.length > 0) {
         if (ResponderChainContainsClassName(self, @"NavigationBar", 10)) {
             NSAttributedString *replaced = replacedAttrStr(attrText, _mainTitle);
             if (replaced) {
@@ -305,7 +317,7 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
         }
     }
     // Contacts
-    if (!_oldPluginLoaded && _contactsTitle && _contactsTitle.length > 0) {
+    if (_contactsTitle && _contactsTitle.length > 0) {
         if (SafeHasPrefix(text, @"通讯录") || [text isEqualToString:@"通讯录"]) {
             NSAttributedString *replaced = replacedAttrStr(attrText, _contactsTitle);
             if (replaced) {
@@ -315,7 +327,7 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
         }
     }
     // Discover
-    if (!_oldPluginLoaded && _discoverTitle && _discoverTitle.length > 0) {
+    if (_discoverTitle && _discoverTitle.length > 0) {
         if (SafeHasPrefix(text, @"发现") || [text isEqualToString:@"发现"]) {
             NSAttributedString *replaced = replacedAttrStr(attrText, _discoverTitle);
             if (replaced) {
@@ -335,7 +347,7 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
 static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSString *title) {
     if (!_orig_MFTitleView_updateTitle) return;
     
-    if (!_simplifyEnabled || !title || [title hasPrefix:@"["] || _oldPluginLoaded) {
+    if (!_simplifyEnabled || !title || [title hasPrefix:@"["]) {
         ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitle)(self, _cmd, titleView, title);
         return;
     }
@@ -376,15 +388,9 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
     // 1. 加载配置 (参照 FUN_00043e44)
     UISimplify_ReloadConfig();
     
-    // 2. 检测老版本插件 (如果同时加载则跳过我们的上下文 Hook，避免冲突)
-    if (objc_getClass("CSWCEnhanceViewController")) {
-        _oldPluginLoaded = YES;
-        WPLog(@"UISimplify", @"[Warn] Old plugin 微信优化 detected — context hooks disabled");
-    }
+    WPLog(@"UISimplify", @"UISimplifyHook install start");
     
-    WPLog(@"UISimplify", @"UISimplifyHook install start (oldPlugin=%d)", _oldPluginLoaded);
-    
-    // ===== 策略A: 字典查找替换 (6个) — 相对安全，始终安装 =====
+    // ===== 策略A: 字典查找替换 (6个) =====
     
     Class configClass = SafeGetClass("WCTableViewCellLeftConfig");
     if (configClass) {
@@ -418,25 +424,23 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
             (IMP)hook_MMTableViewInfo_getTitle, (IMP *)&_orig_MMTableViewInfo_getTitle);
     }
     
-    // ===== 策略B: 上下文匹配 (3个) — 仅老插件不存在时安装 =====
+    // ===== 策略B: 上下文匹配 (3个) — 始终安装（问题4：之前因 oldPlugin 检测被跳过导致不生效）=====
     
-    if (!_oldPluginLoaded) {
-        Class mmLabel = SafeGetClass("MMUILabel");
-        if (mmLabel) {
-            MSHookMessageEx(mmLabel, @selector(setText:),
-                (IMP)hook_MMUILabel_setText, (IMP *)&_orig_MMUILabel_setText);
-            MSHookMessageEx(mmLabel, @selector(setAttributedText:),
-                (IMP)hook_MMUILabel_setAttributedText, (IMP *)&_orig_MMUILabel_setAttributedText);
-        }
-        
-        Class mfTitle = SafeGetClass("MFTitleView");
-        if (mfTitle) {
-            MSHookMessageEx(mfTitle, @selector(updateTitleView:title:),
-                (IMP)hook_MFTitleView_updateTitle, (IMP *)&_orig_MFTitleView_updateTitle);
-        }
+    Class mmLabel = SafeGetClass("MMUILabel");
+    if (mmLabel) {
+        MSHookMessageEx(mmLabel, @selector(setText:),
+            (IMP)hook_MMUILabel_setText, (IMP *)&_orig_MMUILabel_setText);
+        MSHookMessageEx(mmLabel, @selector(setAttributedText:),
+            (IMP)hook_MMUILabel_setAttributedText, (IMP *)&_orig_MMUILabel_setAttributedText);
     }
     
-    WPLog(@"UISimplify", @"UISimplifyHook install done (%d hooks)", _oldPluginLoaded ? 6 : 9);
+    Class mfTitle = SafeGetClass("MFTitleView");
+    if (mfTitle) {
+        MSHookMessageEx(mfTitle, @selector(updateTitleView:title:),
+            (IMP)hook_MFTitleView_updateTitle, (IMP *)&_orig_MFTitleView_updateTitle);
+    }
+    
+    WPLog(@"UISimplify", @"UISimplifyHook install done (9 hooks)");
 }
 
 @end
