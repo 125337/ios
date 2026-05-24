@@ -54,7 +54,7 @@ static id hook_SysCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     if (purifyReadConfig(@"HideRevokeHint")) {
         UIView *v = (UIView *)result;
         [v setHidden:YES];
-        v.alpha = 0;
+        v.frame = v.frame;  // 触发 setNeedsLayout，匹配 微信优化 FUN_00025c48
     }
     return result;
 }
@@ -75,7 +75,7 @@ static BOOL hook_SysCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
 }
 
 static CGSize hook_SysVM_measure(id self, SEL _cmd, CGSize size) {
-    if (purifyReadConfig(@"HideRevokeHint")) return CGSizeMake(size.width, CGFLOAT_MIN);
+    if (purifyReadConfig(@"HideRevokeHint")) return CGSizeZero;
     return ((CGSize (*)(id, SEL, CGSize))_orig_SysVM_measure)(self, _cmd, size);
 }
 
@@ -89,7 +89,7 @@ static id hook_PatCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     if (purifyReadConfig(@"HidePatHint")) {
         UIView *v = (UIView *)result;
         [v setHidden:YES];
-        v.alpha = 0;
+        v.frame = v.frame;  // 触发 setNeedsLayout，匹配 微信优化 FUN_00025f64
     }
     return result;
 }
@@ -110,7 +110,7 @@ static BOOL hook_PatCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
 }
 
 static CGSize hook_PatVM_measure(id self, SEL _cmd, CGSize size) {
-    if (purifyReadConfig(@"HidePatHint")) return CGSizeMake(size.width, CGFLOAT_MIN);
+    if (purifyReadConfig(@"HidePatHint")) return CGSizeZero;
     return ((CGSize (*)(id, SEL, CGSize))_orig_PatVM_measure)(self, _cmd, size);
 }
 
