@@ -1,6 +1,6 @@
 # WeChatPlugin UI 代码体积优化方案
 
-> 当前 35 个编译文件中，UI/Settings 代码约 **2,200 行，占 27%**。存在大量模板化重复代码。
+> 当前 38 个编译文件中，UI/Settings 代码约 **2,900 行，占 33%**。
 
 ---
 
@@ -8,92 +8,32 @@
 
 | 分类 | 文件 | 行数 | UI占比 | 主要问题 |
 |------|------|------|--------|----------|
-| **格式编辑器** | MessageTimeFormatEditorVC.m | 368 | 60% | 🔴 与 Revoke 98% 结构相同 |
-| | RevokeFormatEditorVC.m | 261 | 50% | 🔴 与 MessageTime 98% 结构相同 |
-| **Setting VCs** | SettingRedEnvelopController.m | 184 | 70% | 🟡 4 个 VC 的 buildUI 入口重复 |
-| | SettingGeneralFunctionController.m | 130 | 70% | 🟡 同上 |
-| | SettingMessageTimeController.m | 129 | 70% | 🟡 同上 |
-| | SettingRevokeController.m | 86 | 70% | 🟡 同上 |
-| | SettingController.m | 187 | 50% | 🟡 导航函数与 SettingCategoryController 部分重叠 |
-| **WP*VC 子页** | WPOtherVC.m | 104 | 80% | 🟡 含 16 行 reLog 死代码 |
+| **UI净化Hook** | UIPurifyHook.m | 388 | 100% | 🟡 SysCell/PatCell 两组 5连Hook 完全相同 |
+| **格式编辑器** | MessageTimeFormatEditorVC.m | 368 | 60% | 🔴 与 RevokeFormatEditorVC 98% 结构相同 |
+| | RevokeFormatEditorVC.m | 261 | 50% | 🔴 与 MessageTimeFormatEditorVC 98% 结构相同 |
+| **Setting VCs** | SettingRedEnvelopController.m | 184 | 70% | 🟡 buildUI 开头结尾部分重复 |
+| | SettingGeneralFunctionController.m | 130 | 70% | 🟡 buildUI 开头结尾部分重复 |
+| | SettingMessageTimeController.m | 129 | 70% | 🟡 buildUI 开头结尾部分重复 |
+| | SettingRevokeController.m | 86 | 70% | 🟡 buildUI 开头结尾部分重复 |
+| | SettingController.m | 187 | 50% | ✅ 父类 |
+| **WP*VC 子页** | WPUIVC.m | 104 | 80% | 🟡 14 项导航，13 个 noop 占位 |
+| | WPOtherVC.m | 104 | 80% | 🟡 含 16 行 reLog 死代码 |
 | | WPAboutVC.m | 110 | 80% | 🟡 含 16 行 reLog 死代码 |
 | | WPBackupVC.m | 133 | 80% | 🟡 含 16 行 reLog 死代码 |
+| | WPUIPurifyVC.m | 94 | 80% | 🟡 6 个开关配置 |
 | **主入口+分类** | SettingCategoryController.m | 582 | 60% | 🟡 含 16 行 configLog 死代码 |
-| | SettingEntryHook.m | 323 | 30% | 🟡 5 个 open* 函数相同模板 |
-| **工具+辅助** | WPCommonUI.m | 134 | 100% | ✅ 已是最优 |
+| | SettingEntryHook.m | 323 | 30% | 🟡 4 个 open*Helper 函数相同模板 |
+| **工具+辅助** | WPCommonUI.m | 134 | 100% | ✅ |
 | | WPBorderLayer.m | 91 | 80% | ✅ 已精简 |
 | | WeChatTweakGroupSelectsController.m | 217 | 50% | ✅ 重度依赖微信内部类 |
 | | TintHook.m | 101 | 30% | ✅ 独立功能 |
-| **合计** | **16 个文件** | **~3,040** | | |
+| **合计** | **19 个文件** | **~3,660** | | |
 
 ---
 
-## 二、优化方案（5 项，按收益排序）
+## 二、优化方案（6 项，按风险从低到高排序）
 
-### 优化 1：合并两个 FormatEditorVC → FormatEditorBaseVC 🔴 最大收益
-
-**当前**: `MessageTimeFormatEditorVC.m` (368行) + `RevokeFormatEditorVC.m` (261行) = **629 行**
-
-**重复部分**（完全相同）:
-- `viewDidLoad` — 结构完全一致
-- `setupNavBar` — 导航栏按钮完全一致
-- `setupScrollView` — ScrollView 创建完全一致
-- `buildHelpTableAtY:` — 表格构建逻辑完全一致（只 token 列表不同）
-- `buildEditorSectionAtY:` — 编辑器 UI 完全一致
-- `buildPreviewSectionAtY:` — 预览区 UI 完全一致
-- `closeAction` / `restoreAction` / `registerKeyboardNotifications` / `kbShow:` / `kbHide:` / `textViewDidChange:` — 全相同
-- `dealloc` — 完全一致
-
-**差异部分**（仅此不同）:
-- 标题: `@"自定义时间格式"` vs `@"撤回消息显示"`
-- token 列表: `_tokenNames()` / `_tokenDescs()` 内容不同
-- `saveAction` 保存逻辑: `config.messageTimeFormat` vs `config.detailedRevokeFormatMsg`
-- `updatePreview`: 时间格式化 vs 撤回消息格式化
-
-**方案**: 创建 `FormatEditorBaseVC.m` 提取所有公共代码；两个子类只提供：
-- `- (NSString *)viewTitle` — 返回标题
-- `- (NSArray<NSString *> *)tokenNames` / `tokenDescs` — 返回 token 列表
-- `- (NSString *)defaultTemplate` — 返回默认模板
-- `- (void)saveFormat:(NSString *)format` — 保存逻辑
-- `- (NSString *)previewForFormat:(NSString *)format` — 预览逻辑
-
-<details>
-<summary>基类骨架（点击展开）</summary>
-
-```objc
-// FormatEditorBaseVC.h
-@interface FormatEditorBaseVC : UIViewController <UITextViewDelegate>
-// 子类必须重写（5 个方法）
-- (NSString *)viewTitle;
-- (NSArray<NSString *> *)tokenNames;
-- (NSArray<NSString *> *)tokenDescs;
-- (NSString *)defaultTemplate;
-- (void)saveFormat:(NSString *)format;
-- (NSString *)previewForFormat:(NSString *)format;
-@end
-
-// 子类示例（MessageTimeFormatEditorVC，~40行）
-@implementation MessageTimeFormatEditorVC
-- (NSString *)viewTitle { return @"自定义时间格式"; }
-- (NSArray *)tokenNames { return @[@"{YYYY}", ...]; }
-- (NSArray *)tokenDescs { return @[@"年份(2025)", ...]; }
-- (NSString *)defaultTemplate { return @"{YYYY}-{MM}-{dd} {HH}:{mm}:{ss}"; }
-- (void)saveFormat:(NSString *)fmt { [PluginConfig shared].messageTimeFormat = fmt; [[PluginConfig shared] save]; }
-- (NSString *)previewForFormat:(NSString *)fmt { return [MessageTimeFormatParser previewForFormat:fmt]; }
-@end
-```
-
-</details>
-
-**文件变化**: +1 文件 (Base), 改 2 文件 (两个子类变轻量), -4编译项→-3
-
-**预计减少**: **~300 行源码**
-
----
-
-### 优化 2：删除 4 个死 `*Log` 函数（净删除）
-
-**当前**: 4 个文件中各有一个已无调用的日志函数，已被 `WPLog()` 替代：
+### 优化 A：删除 4 个死 `*Log` 函数
 
 | 文件 | 死函数 | 行数 |
 |------|--------|------|
@@ -102,205 +42,171 @@
 | `WPAboutVC.m` | `reLog()` (lines 5-21) | 16 行 |
 | `WPBackupVC.m` | `reLog()` (lines 6-22) | 16 行 |
 
-**验证**: grep 确认无调用引用
-```bash
-grep -rn "configLog(" WeChatPlugin/SettingCategoryController.m  # 仅定义，无调用
-grep -rn "reLog(" WeChatPlugin/Modules/SettingEntry/*.m          # 仅定义，无调用
-```
+**风险评估**: 🟢 零风险
 
-**方案**: 直接删除
+| 风险维度 | 评估 |
+|----------|------|
+| 功能影响 | **无** — grep 确认全仓无任何 `configLog(` / `reLog(` 调用，这些文件已全部改用 `WPLog()` |
+| 编译影响 | **无** — 删除 static 函数只在当前编译单元生效，不影响链接 |
+| 回退难度 | **极易** — git revert 即可 |
+| 受影响功能 | **0 个** |
 
 **预计减少**: **64 行**
 
 ---
 
-### 优化 3：合并 3 个 WPVCHelper `makeVC` 相同模板
+### 优化 B：合并 SettingEntryHook 的 4 个 open*Helper 导航函数
 
-**当前**: `WPOtherVC.m`, `WPAboutVC.m`, `WPBackupVC.m` 各有 `*VCHelper` 类，`makeVC` 方法完全相同：
+**当前**: `openUI:`、`openOther:`、`openBackup:`、`openAbout:` 四个方法仅 Helper 类名不同。
 
-```objc
-// 三个文件中的 makeVC 都是这个模板（仅类名和 method 数量不同）
-+ (UIViewController *)makeVC {
-    Class subClass = objc_getClass("WPXXXVC");
-    if (!subClass) {
-        subClass = objc_allocateClassPair(WPGetBaseClass(), "WPXXXVC", 0);
-        if (subClass) {
-            class_addMethod(subClass, @selector(viewDidLoad), (IMP)WPXXXViewDidLoad, "v@:");
-            // ... 可能还有 onResetTapped
-            objc_registerClassPair(subClass);
-            WPLog(@"UI", @"[Sub] WPXXXVC class created");
-        }
-    }
-    return subClass ? [[subClass alloc] init] : nil;
-}
-```
+> 代码验证：4 个方法体完全相同（均为 12 行），差异仅为 `objc_getClass("WPXXXVCHelper")` 的字符串和 `WPLog` 标签。
 
-**方案**: 提取一个公共函数：
+**风险评估**: 🟢 低风险
 
-```objc
-// WPCommonUI.m 追加
-UIViewController *WPMakeSimpleVC(NSString *className, void *func_imp, const char *types) {
-    Class subClass = objc_getClass([className UTF8String]);
-    if (!subClass) {
-        subClass = objc_allocateClassPair(WPGetBaseClass(), [className UTF8String], 0);
-        if (subClass) {
-            class_addMethod(subClass, @selector(viewDidLoad), func_imp, types);
-            objc_registerClassPair(subClass);
-        }
-    }
-    return subClass ? [[subClass alloc] init] : nil;
-}
-```
-
-三个 `makeVC` 简化为一行：
-```objc
-+ (UIViewController *)makeVC {
-    return WPMakeSimpleVC(@"WPAboutVC", (void *)WPAboutViewDidLoad, "v@:");
-}
-```
-
-**文件变化**: 改 1 文件 (WPCommonUI.m), 改 3 文件 (WP*VC), 净减 ~60 行
-
-**预计减少**: **~60 行**
-
----
-
-### 优化 4：提取 Settings VC 公共 buildUI 入口
-
-**当前**: `SettingRedEnvelopController`、`SettingGeneralFunctionController`、`SettingMessageTimeController`、`SettingRevokeController` 四个 VC 的 `buildUI` 方法开头都有同样的模板：
-
-```objc
-// 4 个 VC 的 buildUI 开头完全相同
-- (void)buildUI {
-    for (UIView *v in self.contentView.subviews) { [v removeFromSuperview]; }
-    [self.inputFields removeAllObjects];
-    CGFloat w = self.view.bounds.size.width;
-    // ... 各自不同的 UI 构建代码 ...
-    CGRect cf = self.contentView.frame;
-    cf.size.height = y + 40;
-    self.contentView.frame = cf;
-    self.scrollView.contentSize = CGSizeMake(w, y + 40);
-}
-```
-
-如果把上面三行和下面三行提取为父类方法，每个 VC 省 ~8 行：
-
-```objc
-// SettingController 中新增两个方法
-- (CGFloat)beginBuildUI {
-    for (UIView *v in self.contentView.subviews) { [v removeFromSuperview]; }
-    [self.inputFields removeAllObjects];
-    return self.view.bounds.size.width;
-}
-- (void)endBuildUI:(CGFloat)y width:(CGFloat)w {
-    CGRect cf = self.contentView.frame;
-    cf.size.height = y + 40;
-    self.contentView.frame = cf;
-    self.scrollView.contentSize = CGSizeMake(w, y + 40);
-}
-```
-
-子 VC 的 `buildUI` 变为：
-```objc
-- (void)buildUI {
-    CGFloat w = [self beginBuildUI];
-    CGFloat y = 8;
-    // ... 构建 UI ...
-    [self endBuildUI:y width:w];
-}
-```
-
-**文件变化**: 改 1 文件 (SettingController 新增方法), 改 4 文件 (子 VC 简化 buildUI)
-
-**预计减少**: **~40 行**
-
----
-
-### 优化 5：SettingEntryHook 合并 3 个 open* Helper 导航函数
-
-**当前**: `openOther:`、`openBackup:`、`openAbout:` 三个方法仅 helperClass 类名不同，其余完全相同：
-
-```objc
-// 这三个方法的唯一区别是 helper 类名和 WPLog 标签
-- (void)openOther:(id)sender  { /* 仅 helper = "WPOtherVCHelper" */ }
-- (void)openBackup:(id)sender { /* 仅 helper = "WPBackupVCHelper" */ }
-- (void)openAbout:(id)sender  { /* 仅 helper = "WPAboutVCHelper" */ }
-```
-
-**方案**: 提取通用方法：
-
-```objc
-- (void)p_openHelperVC:(NSString *)helperClassName tag:(NSString *)tag from:(id)sender {
-    UIViewController *vc = [self currentVCFrom:sender];
-    if (!vc) { WPLog(@"Setting", @"[Nav] %@: currentVC nil", tag); return; }
-    Class helperClass = objc_getClass([helperClassName UTF8String]);
-    if (!helperClass) { WPLog(@"Setting", @"[Nav] %@ not found", helperClassName); return; }
-    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
-    if (subVC) {
-        [vc.navigationController pushViewController:subVC animated:YES];
-        WPLog(@"Setting", @"[Nav] pushed %@", tag);
-    } else {
-        WPLog(@"Setting", @"[Nav] %@ makeVC returned nil", helperClassName);
-    }
-}
-
-- (void)openOther:(id)sender  { [self p_openHelperVC:@"WPOtherVCHelper"  tag:@"OTHER" from:sender]; }
-- (void)openBackup:(id)sender { [self p_openHelperVC:@"WPBackupVCHelper" tag:@"BACKUP" from:sender]; }
-- (void)openAbout:(id)sender  { [self p_openHelperVC:@"WPAboutVCHelper"  tag:@"ABOUT" from:sender]; }
-```
-
-**文件变化**: 改 1 文件 (SettingEntryHook.m)
+| 风险维度 | 评估 |
+|----------|------|
+| 功能影响 | **极低** — 提取公共函数后，4 个方法变为一行转发调用，逻辑路径完全相同。需仔细核对类名字符串大小写（已确认：`WPUIVCHelper`、`WPOtherVCHelper`、`WPBackupVCHelper`、`WPAboutVCHelper`） |
+| 编译影响 | **无** — 仅同一个 .m 文件内部重构 |
+| 回退难度 | **极易** — git revert |
+| 受影响功能 | 4 个导航入口（界面定制、其他功能、备份、关于）。验证：各点一遍确保正常 push |
+| **失败模式** | 如果 helper 类名拼错 → `objc_getClass` 返回 nil → 日志 `makeVC returned nil` → 页面不跳转，不 crash |
 
 **预计减少**: **~35 行**
 
 ---
 
-## 三、优化总表
+### 优化 C：删除 WPUIVC.m 的 13 个 noop 占位导航项
 
-| # | 优化项 | 涉及文件 | 减少行数 | 难度 |
-|---|--------|----------|----------|------|
-| 1 | 合并 FormatEditorVCs → BaseVC | 3 文件 | **~300 行** | 中 |
-| 2 | 删除 4 个死 `*Log` 函数 | 4 文件 | **~64 行** | 低 |
-| 3 | 合并 WPVCHelper makeVC | 4 文件 | **~60 行** | 低 |
-| 4 | 提取 buildUI 公共模板 | 5 文件 | **~40 行** | 低 |
-| 5 | 合并 open* Helper 导航 | 1 文件 | **~35 行** | 低 |
-| **合计** | | **9 个文件（去重后）** | **~499 行** | |
+**当前**: 14 个导航项，13 个 action 是 `@"noop:"`。
 
----
+> 代码验证：`noop:` selector 在 `WeChatPluginSwitchHandler` 上 `respondsToSelector:` 返回 NO → `onNavigate:` 无操作。删除不影响 `openUIPurify:` 方法（该方法在同一个文件内的 category 中独立存在）。
 
-## 四、剩余 UI 代码分布（优化后）
+**风险评估**: 🟢 低风险
 
-| 分类 | 文件 | 优化前 | 优化后 |
-|------|------|--------|--------|
-| 格式编辑器 | FormatEditorBaseVC（新） | — | ~270 |
-| | MessageTimeFormatEditorVC | 368 | ~40 |
-| | RevokeFormatEditorVC | 261 | ~40 |
-| Setting VCs | SettingCategoryController | 582 | ~566 |
-| | SettingController | 187 | ~200 |
-| | SettingRedEnvelopController | 184 | ~176 |
-| | SettingGeneralFunctionController | 130 | ~122 |
-| | SettingMessageTimeController | 129 | ~121 |
-| | SettingRevokeController | 86 | ~78 |
-| WP*VC 子页 | WPOtherVC | 104 | ~62 |
-| | WPAboutVC | 110 | ~68 |
-| | WPBackupVC | 133 | ~91 |
-| 入口 | SettingEntryHook | 323 | ~288 |
-| 工具 | WPCommonUI | 134 | ~150 |
-| | WPBorderLayer | 91 | 91 |
-| | WeChatTweakGroupSelectsController | 217 | 217 |
-| | TintHook | 101 | 101 |
-| **合计** | **16→15 文件** | **~3,040** | **~2,680** |
+| 风险维度 | 评估 |
+|----------|------|
+| 功能影响 | **无** — 点击 noop 项当前无任何行为，删除后菜单变短，用户体验轻微改变但无功能影响 |
+| 编译影响 | **无** |
+| 回退难度 | **极易** — git revert |
+| 受影响功能 | 1 个（`界面净化` 导航，保留不变） |
+| **注意事项** | 删 items 数组项后，需同时删除 `for` 循环和后面的 `y += cy + 40` 中计算的 `cy` 变量（因为 card 高度变短），否则 scrollView.contentSize 会多出空白 |
 
-> UI 占比从 27% 降至 **~24%**，源码总行数从 ~8,055 → **~7,556**。
+**预计减少**: **~25 行**
 
 ---
 
-## 五、执行顺序建议
+### 优化 D：UIPurifyHook — SysCell/PatCell 5连Hook 提取宏
 
-| 顺序 | 优化项 | 理由 |
-|------|--------|------|
-| 先做 | 优化 2：删除死日志函数 | 零风险，纯删除 |
-| 次做 | 优化 5：合并 open* 导航 | 单文件改动 |
-| 再做 | 优化 4：提取 buildUI 模板 | 父类加方法，子类改调用 |
-| 然后 | 优化 3：合并 WPVCHelper | 改动 WPCommonUI + 3 文件 |
-| 最后 | 优化 1：合并 FormatEditorVCs | 改动最大，需验证两个编辑功能 |
+> 代码验证：两组 hook 的 IMP 函数命名约定完全一致（`hook_SysCell_*` vs `hook_PatCell_*`，`_orig_SysCell_*` vs `_orig_PatCell_*`），宏 token pasting 已验证兼容。
+
+**风险评估**: 🟡 低风险
+
+| 风险维度 | 评估 |
+|----------|------|
+| 功能影响 | **极低** — 宏是纯文本替换，展开后代码与展开前逐字符相同。Clang 预处理阶段替换，二进制输出不变 |
+| 编译影响 | **无** — 编译产物 bit-for-bit 相同 |
+| 回退难度 | **极易** |
+| 受影响功能 | 2 个 hook 组（撤回提示隐藏、拍一拍隐藏）。直接安装到真机验证这两个开关 |
+| **失败模式** | 如果 hook 函数命名不一致 → 编译期报错（链接器找不到符号），不会静默失败 |
+
+**预计减少**: **~30 行**
+
+---
+
+### 优化 E：提取 Settings VC 公共 buildUI 模板 ⚠️ 方案调整
+
+**代码验证后发现的问题**:
+
+```
+4 个 VC 的 buildUI 结构对比：
+                                   清理段              宽度获取                     起始Y    结尾
+SettingRedEnvelopController      subviews+inputFields+masterSwitchKeys  [UIScreen mainScreen]    y=0  self.contentView.frame=... y+40
+SettingGeneralFunctionController subviews+inputFields                   [UIScreen mainScreen]    y=0  self.contentView.frame=... y+40
+SettingMessageTimeController     subviews+inputFields                   [UIScreen mainScreen]    y=0  self.contentView.frame=... y+40
+SettingRevokeController          subviews+inputFields                   [UIScreen mainScreen]    y=0  self.contentView.frame=... y+40
+```
+
+| 风险维度 | 评估 |
+|----------|------|
+| 功能影响 | **中等** — 3 个 VC 可统一提取，但 SettingRedEnvelopController 清理段多了 `self.masterSwitchKeys = [NSMutableSet set];`，不能简单地用统一 beginBuildUI |
+| 方案调整 | **放弃完全统一的 begin/end 方法**。改为：仅在 SettingController 父类添加 `endBuildUI:width:`（尾部 2 行），4 个子 VC 开头各自保留自己的清理段 |
+| 受影响功能 | 4 个设置页面。验证：每个页面进入退出、开关切换后 rebuild 正常 |
+| **失败模式** | 如果 `masterSwitchKeys` 没清 → 切换红包开关时展开态错乱；`contentOffset` 不归零 → rebuild 后 scrollView 位置不对 |
+
+**方案**: 仅提取尾部公共代码，各 VC 开头保持独立（差异太大不宜统一）。
+
+**预计减少**: **~20 行**（从原估 40 行下调）
+
+---
+
+### 优化 F：合并两个 FormatEditorVC → FormatEditorBaseVC 🔴 高收益高风险
+
+> 代码验证：两者 98% 结构相同。差异仅为 6 个方法 + MessageTime 多了 `buildPseudoReadSectionAtY:width:`。
+
+**风险评估**: 🔴 中高风险
+
+| 风险维度 | 评估 |
+|----------|------|
+| 功能影响 | **高** — 涉及大量代码从子类移到基类，需要确保每个方法的 self 调用在子类/基类上下文中都正确 |
+| 编译影响 | **中等** — +1 文件编译项，需更新 build-standalone.yml |
+| 回退难度 | **中等** — 可从 git 回退，但改动分散在 3 个文件中 |
+| 受影响功能 | 2 个功能（消息时间格式编辑、撤回消息格式编辑） |
+| **失败模式分析** | 见下方详细说明 |
+
+**具体失败场景**:
+
+| 场景 | 后果 | 预防 |
+|------|------|------|
+| `viewDidLoad` 中 `[self buildHelpTableAtY:y width:w]` 在基类被调用，但子类把 `buildHelpTableAtY:` 误删或方法签名错误 | 编译报错（方法签名不匹配）或运行时方法找不到 | 基类声明抽象方法，子类 `#pragma mark - Required Overrides` |
+| MessageTime 的 `buildPseudoReadSectionAtY:` 在基类 viewDidLoad 中不应被调用（Revoke 不需要） | Revoke 也显示伪已读段落 | 基类用 `buildExtraSectionAtY:` 钩子，默认返回 y |
+| 两个子类的 `saveAction` 调用 `[self saveFormat:]`，但参数类型混淆 | 编译报错 | 统一声明 `- (void)saveFormat:(NSString *)format` |
+| `dealloc` 中 `removeObserver` 从子类移到基类 | 无影响，dealloc 总是正确的 | 验证 |
+| 键盘通知注册在基类 `viewDidLoad` 中，但子类如果有自己的 `viewDidLoad` 覆盖 | 键盘通知不注册 | 子类不覆盖 `viewDidLoad`，改为重写配置方法 |
+
+**验证要求**:
+- 两个格式编辑器分别打开、编辑、保存、关闭、恢复默认值
+- 键盘弹出/收起时编辑区不被遮挡
+- 真机测试（模拟器和真机键盘行为可能不同）
+
+**预计减少**: **~300 行**
+
+---
+
+## 三、优化总表（含风险）
+
+| # | 优化项 | 涉及文件 | 减少行数 | 风险 | 需真机验证 |
+|---|--------|----------|----------|------|------------|
+| A | 删除 4 个死 `*Log` 函数 | 4 文件 | **~64** | 🟢 零 | 否 |
+| B | 合并 open*Helper 导航 | 1 文件 | **~35** | 🟢 低 | 否 |
+| C | 删除 WPUIVC noop 占位 | 1 文件 | **~25** | 🟢 低 | 否 |
+| D | UIPurifyHook 5连Hook 宏化 | 1 文件 | **~30** | 🟢 低 | 推荐 |
+| E | 提取 buildUI 尾部模板 (调整后) | 5 文件 | **~20** | 🟡 中低 | 推荐 |
+| F | 合并 FormatEditorVCs → BaseVC | 3 文件 | **~300** | 🔴 中高 | 必须 |
+| **合计** | | **10 文件** | **~474** | | |
+
+---
+
+## 四、执行顺序
+
+| 顺序 | 优化 | 风险 | 理由 |
+|------|------|------|------|
+| 1 | A：删除死日志 | 🟢 | 零风险，立即可做 |
+| 2 | C：删除 noop 占位 | 🟢 | 零功能影响 |
+| 3 | B：合并 open* 导航 | 🟢 | 单文件重构 |
+| 4 | D：UIPurifyHook 宏化 | 🟢 | 编译产物 bit-for-bit 相同 |
+| 5 | E：提取 buildUI 尾部 | 🟡 | 需验证 4 个页面的 rebuild |
+| 6 | F：合并 FormatEditorVCs | 🔴 | 需双向真机测试，最后做 |
+
+---
+
+## 五、不接受的风险（红线）
+
+以下场景不能发生，方案已设计保护：
+
+| 红线 | 保护措施 |
+|------|----------|
+| 删除死日志后编译不过 | grep 预检 + git revert 秒级回退 |
+| 合并 open* 后导航失灵 | git diff 检查类名一致性 + 构建验证 |
+| FormatEditor 合并后键盘遮挡 | 基类完整保留 registerKeyboardNotifications / kbShow / kbHide |
+| FormatEditor 合并后保存逻辑错误 | 子类 saveFormat: 方法独立，基类只转发调用 |
+| buildUI 重构后 rebuild 异常 | 只提取尾部 2 行，不改变逻辑流 |

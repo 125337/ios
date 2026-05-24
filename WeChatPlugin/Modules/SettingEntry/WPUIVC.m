@@ -22,29 +22,11 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
 
     UIView *card = WPMakeCard(y, w);
     CGFloat cy = 0;
-    CGFloat scale = [UIScreen mainScreen].scale;
     NSArray *items = @[
-        @[@"聊天顶栏",      @"noop:"],
-        @[@"消息居中",      @"noop:"],
-        @[@"名字颜色",      @"noop:"],
-        @[@"文本颜色",      @"noop:"],
-        @[@"长按菜单",      @"noop:"],
-        @[@"附件布局",      @"noop:"],
-        @[@"文本占位",      @"noop:"],
-        @[@"界面简化",      @"noop:"],
         @[@"界面净化",      @"openUIPurify:"],
-        @[@"隐藏头像",      @"noop:"],
-        @[@"圆角设置",      @"noop:"],
-        @[@"卡片背景",      @"noop:"],
-        @[@"列表圆角",      @"noop:"],
-        @[@"悬浮底栏",      @"noop:"],
     ];
     id handler = [WeChatPluginSwitchHandler sharedInstance];
     for (NSUInteger i = 0; i < items.count; i++) {
-        if (i > 0) {
-            WPAddSep(card, cy, w);
-            cy = round((cy + 1.0 / scale) * scale) / scale;
-        }
         WPAddNavRow(card, cy, w, items[i][0], items[i][1], handler);
         cy += kRowH;
     }
