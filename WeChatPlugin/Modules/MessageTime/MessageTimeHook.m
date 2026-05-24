@@ -176,7 +176,7 @@ static NSMutableDictionary<NSString *, NSNumber *> *_readStatusTracker(void) {
     static NSMutableDictionary *dict;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        dict = [NSMutableDictionary dictionary];
+        dict = [[NSMutableDictionary dictionary] retain];
     });
     return dict;
 }

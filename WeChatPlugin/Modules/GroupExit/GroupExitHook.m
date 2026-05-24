@@ -241,11 +241,11 @@ static void hooked_CContact_setM_nsChatRoomMemList(id self, SEL _cmd, NSString *
     WPLog(@"GroupExit", @"[GroupExitHook] install start");
     
     if (!groupMemberSnapshots) {
-        groupMemberSnapshots = [NSMutableDictionary dictionary];
+        groupMemberSnapshots = [[NSMutableDictionary dictionary] retain];
     }
     
     if (!processedExits) {
-        processedExits = [NSMutableDictionary dictionary];
+        processedExits = [[NSMutableDictionary dictionary] retain];
     }
     
     if (!hookInstalled) {

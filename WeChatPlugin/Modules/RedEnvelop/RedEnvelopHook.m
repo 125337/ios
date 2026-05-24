@@ -260,7 +260,7 @@ static void handleHongbaoResponse(id res, id req) {
             NSString *wishing = responseDict[@"wishing"] ?: @"";
 
             if (sendId.length > 0) {
-                if (!_countedSendIds) _countedSendIds = [NSMutableSet set];
+                if (!_countedSendIds) _countedSendIds = [[NSMutableSet set] retain];
                 @synchronized (_countedSendIds) {
                     if ([_countedSendIds containsObject:sendId]) return;
                     [_countedSendIds addObject:sendId];

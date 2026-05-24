@@ -31,20 +31,37 @@ static NSDictionary *_altMenuKeys     = nil;
 static void UISimplify_ReloadConfig(void) {
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
     _simplifyEnabled = [d boolForKey:@"SimplifyEnabled"];
-    if (!_simplifyEnabled) return;  // 没开开关，不加载后续配置
     
-    _menuNames     = [d dictionaryForKey:@"Simplify_MenuNames"] ?: @{};
-    _tabNames      = [d dictionaryForKey:@"Simplify_Tab_Names"]  ?: @{};
-    _mainTitle     = [d stringForKey:@"Simplify_MainTitle"];
-    _contactsTitle = [d stringForKey:@"Simplify_ContactsTitle"];
-    _discoverTitle = [d stringForKey:@"Simplify_DiscoverTitle"];
-    _friendsCount  = [d stringForKey:@"Simplify_FriendsCount"];
-    // alt key → primary key 回退映射 (参照 WCRefine 首字回退思路)
-    // 微信 8.0.60+ 部分菜单文字变化，添加全部已知变体
-    _altMenuKeys   = @{
+    // MRC: 先释放旧值，retain 新值。NSUserDefaults 返回 autorelease 对象，必须 retain
+    [_menuNames release];
+    [_tabNames release];
+    [_mainTitle release];
+    [_contactsTitle release];
+    [_discoverTitle release];
+    [_friendsCount release];
+    
+    if (!_simplifyEnabled) {
+        _menuNames     = nil;
+        _tabNames      = nil;
+        _mainTitle     = nil;
+        _contactsTitle = nil;
+        _discoverTitle = nil;
+        _friendsCount  = nil;
+        return;
+    }
+    
+    _menuNames     = [[d dictionaryForKey:@"Simplify_MenuNames"] retain] ?: @{};
+    _tabNames      = [[d dictionaryForKey:@"Simplify_Tab_Names"] retain]  ?: @{};
+    _mainTitle     = [[d stringForKey:@"Simplify_MainTitle"] retain];
+    _contactsTitle = [[d stringForKey:@"Simplify_ContactsTitle"] retain];
+    _discoverTitle = [[d stringForKey:@"Simplify_DiscoverTitle"] retain];
+    _friendsCount  = [[d stringForKey:@"Simplify_FriendsCount"] retain];
+    
+    [_altMenuKeys release];
+    _altMenuKeys   = [@{
         @"订单与卡包": @"卡包",
         @"支付与服务": @"服务",
-    };
+    } retain];
     WPLog(@"UISimplify", @"Config loaded: enabled=%d menu=%lu tab=%lu",
           _simplifyEnabled, (unsigned long)_menuNames.count, (unsigned long)_tabNames.count);
 }
