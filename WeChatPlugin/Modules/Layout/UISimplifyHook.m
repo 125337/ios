@@ -103,8 +103,8 @@ static void hook_MMTabBarController_setTabBarItemTitle(id self, SEL _cmd, NSStri
 // MARK: - 策略A: MMTableViewInfo.getTitle:
 // ============================================================
 
-static id hook_MMTableViewInfo_getTitle(id self, SEL _cmd) {
-    id orig = ((id (*)(id, SEL))_orig_MMTableViewInfo_getTitle)(self, _cmd);
+static id hook_MMTableViewInfo_getTitle(id self, SEL _cmd, id param) {
+    id orig = ((id (*)(id, SEL, id))_orig_MMTableViewInfo_getTitle)(self, _cmd, param);
     if (!SimplifyEnabled() || !orig) return orig;
 
     id repl = MenuNames()[orig];
