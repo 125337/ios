@@ -66,6 +66,14 @@
 #pragma mark - 隐藏聊天时间分隔线
 @property (nonatomic, assign) BOOL hideChatTime;
 
+#pragma mark - 界面净化
+@property (nonatomic, assign) BOOL hideSeparatorLine;       // 隐藏水平分割线
+@property (nonatomic, assign) BOOL hideRevokeHint;          // 隐藏撤回消息提示标签
+@property (nonatomic, assign) BOOL hidePatHint;             // 隐藏拍一拍消息提示标签
+@property (nonatomic, assign) BOOL hideVoiceRedDot;         // 隐藏语音红点和转文字标签
+@property (nonatomic, assign) BOOL hideBubbleBackground;    // 隐藏聊天气泡背景(气泡透明)
+@property (nonatomic, assign) BOOL disableDictation;        // 禁用聊天页输入框听写功能
+
 #pragma mark - 好友添加时间后缀
 @property (nonatomic, assign) BOOL showAddTimeSuffix;
 @property (nonatomic, copy) NSString *addTimeSuffixFormat;

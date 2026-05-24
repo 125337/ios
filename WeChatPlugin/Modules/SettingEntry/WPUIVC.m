@@ -24,20 +24,20 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
     CGFloat cy = 0;
     CGFloat scale = [UIScreen mainScreen].scale;
     NSArray *items = @[
-        @"聊天顶栏",
-        @"消息居中",
-        @"名字颜色",
-        @"文本颜色",
-        @"长按菜单",
-        @"附件布局",
-        @"文本占位",
-        @"界面简化",
-        @"界面净化",
-        @"隐藏头像",
-        @"圆角设置",
-        @"卡片背景",
-        @"列表圆角",
-        @"悬浮底栏",
+        @[@"聊天顶栏",      @"noop:"],
+        @[@"消息居中",      @"noop:"],
+        @[@"名字颜色",      @"noop:"],
+        @[@"文本颜色",      @"noop:"],
+        @[@"长按菜单",      @"noop:"],
+        @[@"附件布局",      @"noop:"],
+        @[@"文本占位",      @"noop:"],
+        @[@"界面简化",      @"noop:"],
+        @[@"界面净化",      @"openUIPurify:"],
+        @[@"隐藏头像",      @"noop:"],
+        @[@"圆角设置",      @"noop:"],
+        @[@"卡片背景",      @"noop:"],
+        @[@"列表圆角",      @"noop:"],
+        @[@"悬浮底栏",      @"noop:"],
     ];
     id handler = [WeChatPluginSwitchHandler sharedInstance];
     for (NSUInteger i = 0; i < items.count; i++) {
@@ -45,7 +45,7 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
             WPAddSep(card, cy, w);
             cy = round((cy + 1.0 / scale) * scale) / scale;
         }
-        WPAddNavRow(card, cy, w, items[i], @"noop:", handler);
+        WPAddNavRow(card, cy, w, items[i][0], items[i][1], handler);
         cy += kRowH;
     }
     CGRect cf = card.frame; cf.size.height = cy; card.frame = cf;
@@ -54,6 +54,29 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
     sv.contentSize = CGSizeMake(w, y);
     WPLog(@"UI", @"[Sub] uiViewDidLoad");
 }
+
+@implementation WeChatPluginSwitchHandler (WPUICustomization)
+
+- (void)openUIPurify:(id)sender {
+    UIResponder *responder = (UIResponder *)sender;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) break;
+        responder = [responder nextResponder];
+    }
+    UIViewController *vc = (UIViewController *)responder;
+    if (!vc) { WPLog(@"UI", @"[Nav] openUIPurify: currentVC nil"); return; }
+    Class helperClass = objc_getClass("WPUIPurifyVCHelper");
+    if (!helperClass) { WPLog(@"UI", @"[Nav] WPUIPurifyVCHelper not found"); return; }
+    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        WPLog(@"UI", @"[Nav] pushed WPUIPurifyVC");
+    } else {
+        WPLog(@"UI", @"[Nav] WPUIPurifyVCHelper makeVC returned nil");
+    }
+}
+
+@end
 
 @interface WPUIVCHelper : NSObject
 + (UIViewController *)makeVC;

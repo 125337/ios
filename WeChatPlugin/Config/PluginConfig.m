@@ -175,6 +175,13 @@
     
     _hideChatTime = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideChatTime"]];
     
+    _hideSeparatorLine = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideSeparatorLine"]];
+    _hideRevokeHint = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideRevokeHint"]];
+    _hidePatHint = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HidePatHint"]];
+    _hideVoiceRedDot = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideVoiceRedDot"]];
+    _hideBubbleBackground = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideBubbleBackground"]];
+    _disableDictation = [d boolForKey:[kPluginPrefix stringByAppendingString:@"DisableDictation"]];
+    
     _showAddTimeSuffix = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
@@ -279,6 +286,12 @@
     if (_receiverBackgroundColorHex) [d setObject:_receiverBackgroundColorHex forKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorHex"]];
     if (_receiverBackgroundColorDarkHex) [d setObject:_receiverBackgroundColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"ReceiverBackgroundColorDarkHex"]];
     [d setBool:_hideChatTime forKey:[kPluginPrefix stringByAppendingString:@"HideChatTime"]];
+    [d setBool:_hideSeparatorLine forKey:[kPluginPrefix stringByAppendingString:@"HideSeparatorLine"]];
+    [d setBool:_hideRevokeHint forKey:[kPluginPrefix stringByAppendingString:@"HideRevokeHint"]];
+    [d setBool:_hidePatHint forKey:[kPluginPrefix stringByAppendingString:@"HidePatHint"]];
+    [d setBool:_hideVoiceRedDot forKey:[kPluginPrefix stringByAppendingString:@"HideVoiceRedDot"]];
+    [d setBool:_hideBubbleBackground forKey:[kPluginPrefix stringByAppendingString:@"HideBubbleBackground"]];
+    [d setBool:_disableDictation forKey:[kPluginPrefix stringByAppendingString:@"DisableDictation"]];
     [d setBool:_showAddTimeSuffix forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     if (_addTimeSuffixFormat) {
         [d setObject:_addTimeSuffixFormat forKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
