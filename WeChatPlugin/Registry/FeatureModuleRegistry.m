@@ -3,6 +3,7 @@
 #import "../Modules/Revoke/RevokeHook.h"
 #import "../Modules/Layout/TintHook.h"
 #import "../Modules/Layout/UIPurifyHook.h"
+#import "../Modules/Layout/UISimplifyHook.h"
 #import "../Modules/Unread/ClearUnreadHook.h"
 #import "../Modules/RedEnvelop/RedEnvelopHook.h"
 #import "../Modules/AutoTransfer/AutoTransferHook.h"
