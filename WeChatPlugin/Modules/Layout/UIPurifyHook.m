@@ -262,21 +262,28 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
     BOOL isSepClass = [className containsString:@"_UITableViewCellSeparatorView"];
     
     // 条件2：几何启发式 — 高度 ≤ 1pt 的细线（WCTableViewManager 自定义分割线）
+    // 注意：不限制宽度！设置页/通讯录的分割线是全宽的（~375pt）
     CGRect frame = [self frame];
     CGFloat h = frame.size.height;
-    CGFloat w = frame.size.width;
     BOOL isThinLine = (h > 0 && h <= 1.0);
-    BOOL isNarrow = (w <= 100.0);
     
     // 条件3：不能是 UIImageView / UILabel（避免误隐藏图标和文字）
     BOOL isSafe = ![self isKindOfClass:[UIImageView class]] && ![self isKindOfClass:[UILabel class]];
     
-    if (isSepClass || (isThinLine && isNarrow && isSafe)) {
+    // 条件4：自身宽度必须 ≥ 父视图宽度的 90%（确保不是局部 UI 元素）
+    UIView *parent = [self superview];
+    CGFloat superW = parent ? [parent bounds].size.width : 0;
+    if (superW > 0) {
+        CGFloat selfW = frame.size.width;
+        if (selfW / superW < 0.9) return;
+    }
+    
+    if (isSepClass || (isThinLine && isSafe)) {
         // 遍历父视图链：WCTimelineFooterCell 下的分割线保留（朋友圈底部）
-        UIView *sv = [self superview];
-        while (sv) {
-            if ([NSStringFromClass([sv class]) containsString:@"WCTimelineFooterCell"]) return;
-            sv = [sv superview];
+        UIView *p = parent;
+        while (p) {
+            if ([NSStringFromClass([p class]) containsString:@"WCTimelineFooterCell"]) return;
+            p = [p superview];
         }
         [self setHidden:YES];
     }
