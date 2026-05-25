@@ -62,7 +62,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     UIScrollView *sv = WPMakeSV(vc);
     [vc.view addSubview:sv];
 
-    CGFloat y = 20;
+    CGFloat y = 8;
 
     UIView *heroCard = WPMakeCard(y, w);
     CGFloat hy = 24;
@@ -95,7 +95,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     CGRect hcf = heroCard.frame; hcf.size.height = hy; heroCard.frame = hcf;
     [sv addSubview:heroCard];
     [heroCard release];
-    y += hy + 16;
+    y += hy + 8;
 
     [sv addSubview:WPMakeSectionHeader(@"功能列表", y, w)];
     y += 32;
@@ -117,7 +117,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     CGRect lcf = listCard.frame; lcf.size.height = cy; listCard.frame = lcf;
     [sv addSubview:listCard];
     [listCard release];
-    y += cy + 16;
+    y += cy + 8;
 
     UILabel *footer = [[UILabel alloc] initWithFrame:CGRectMake(0, y, w, 50)];
     footer.text = @"Mio助手 v2.0.0";
@@ -150,20 +150,49 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 
     PluginConfig *config = [PluginConfig shared];
     NSDictionary *mapping = @{
+        @"AutoConfirmTransfer": @"autoConfirmTransfer",
+        @"AutoConfirmTransferAutoReply": @"autoConfirmTransferAutoReply",
+        @"AutoConfirmTransferGroup": @"autoConfirmTransferGroup",
+        @"AutoConfirmTransferPersonal": @"autoConfirmTransferPersonal",
         @"AutoRedEnvelop": @"autoRedEnvelop",
-        @"RedEnvelopCatchMe": @"redEnvelopCatchMe",
+        @"BottomPosition": @"bottomPosition",
+        @"ClearUnreadEnabled": @"clearUnreadEnabled",
+        @"CustomColorsEnabled": @"customColorsEnabled",
+        @"CustomNotifyEnabled": @"customNotifyEnabled",
+        @"DebugLogging": @"debugLogging",
+        @"DisableDictation": @"disableDictation",
+        @"EnableGroupExitMonitor": @"enableGroupExitMonitor",
+        @"EnableJoker": @"enableJoker",
+        @"HideBubbleBackground": @"hideBubbleBackground",
+        @"HideC2COtherAvatar": @"hideC2COtherAvatar",
+        @"HideC2CSelfAvatar": @"hideC2CSelfAvatar",
+        @"HideChatTime": @"hideChatTime",
+        @"HideContent": @"hideContent",
+        @"HideDiscoverBadge": @"hideDiscoverBadge",
+        @"HideEnterpriseBadge": @"hideEnterpriseBadge",
+        @"HideGroupOtherAvatar": @"hideGroupOtherAvatar",
+        @"HideGroupSelfAvatar": @"hideGroupSelfAvatar",
+        @"HideOAOtherAvatar": @"hideOAOtherAvatar",
+        @"HideOASelfAvatar": @"hideOASelfAvatar",
+        @"HidePatHint": @"hidePatHint",
+        @"HideRevokeHint": @"hideRevokeHint",
+        @"HideSeparatorLine": @"hideSeparatorLine",
+        @"HideVoiceRedDot": @"hideVoiceRedDot",
+        @"InterceptNotifyEnabled": @"interceptNotifyEnabled",
+        @"MessageTimeBoldFont": @"messageTimeBoldFont",
+        @"MessageTimeTextColor": @"messageTimeTextColor",
+        @"NoTip": @"noTip",
+        @"NotifySender": @"notifySender",
         @"PersonalRedEnvelopEnable": @"personalRedEnvelopEnable",
         @"PreventRecall": @"preventRecall",
-        @"ClearUnreadEnabled": @"clearUnreadEnabled",
-        @"DebugLogging": @"debugLogging",
-        @"HideContent": @"hideContent",
-        @"NoTip": @"noTip",
-        @"HideSeparatorLine": @"hideSeparatorLine",
-        @"HideRevokeHint": @"hideRevokeHint",
-        @"HidePatHint": @"hidePatHint",
-        @"HideVoiceRedDot": @"hideVoiceRedDot",
-        @"HideBubbleBackground": @"hideBubbleBackground",
-        @"DisableDictation": @"disableDictation"
+        @"RedEnvelopAutoReply": @"redEnvelopAutoReply",
+        @"RedEnvelopAutoReplyInGroup": @"redEnvelopAutoReplyInGroup",
+        @"RedEnvelopCatchMe": @"redEnvelopCatchMe",
+        @"RedEnvelopDetail": @"redEnvelopeDetail",
+        @"RedEnvelopGroupFilterEnabled": @"redEnvelopGroupFilterEnabled",
+        @"RedEnvelopTextFilterEnabled": @"redEnvelopTextFilterEnabled",
+        @"SendInterceptedContent": @"sendInterceptedContent",
+        @"ShowMessageTime": @"showMessageTime"
     };
 
     NSString *prop = mapping[key];

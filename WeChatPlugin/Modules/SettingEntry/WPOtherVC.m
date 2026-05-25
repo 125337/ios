@@ -36,6 +36,7 @@ static void WPOtherViewDidLoad(id self, SEL _cmd) {
     [vc.view addSubview:sv];
 
     CGFloat y = 8;
+    CGFloat scale = [UIScreen mainScreen].scale;
 
     [sv addSubview:WPMakeSectionHeader(@"消息", y, w)];
     y += 32;
@@ -47,13 +48,13 @@ static void WPOtherViewDidLoad(id self, SEL _cmd) {
     ];
     id handler = [WeChatPluginSwitchHandler sharedInstance];
     for (NSUInteger i = 0; i < msgItems.count; i++) {
-        if (i > 0) { WPAddSep(msgCard, mcy, w); mcy += 0.5; }
+        if (i > 0) { WPAddSep(msgCard, mcy, w); mcy = round((mcy + 1.0 / scale) * scale) / scale; }
         WPAddSwitchRow(msgCard, mcy, w, msgItems[i][0], msgItems[i][1], [msgItems[i][2] boolValue], handler);
         mcy += kRowH;
     }
     CGRect mcf = msgCard.frame; mcf.size.height = mcy; msgCard.frame = mcf;
     [sv addSubview:msgCard];
-    y += mcy + 16;
+    y += mcy + 8;
 
     [sv addSubview:WPMakeSectionHeader(@"其他", y, w)];
     y += 32;
@@ -66,13 +67,13 @@ static void WPOtherViewDidLoad(id self, SEL _cmd) {
         @[@"免提示", @"NoTip", @(config.noTip)],
     ];
     for (NSUInteger i = 0; i < items.count; i++) {
-        if (i > 0) { WPAddSep(card, cy, w); cy += 0.5; }
+        if (i > 0) { WPAddSep(card, cy, w); cy = round((cy + 1.0 / scale) * scale) / scale; }
         WPAddSwitchRow(card, cy, w, items[i][0], items[i][1], [items[i][2] boolValue], handler);
         cy += kRowH;
     }
     CGRect cf = card.frame; cf.size.height = cy; card.frame = cf;
     [sv addSubview:card];
-    y += cy + 40;
+    y += cy + 8;
     sv.contentSize = CGSizeMake(w, y);
     WPLog(@"UI", @"[Sub] otherViewDidLoad");
 }

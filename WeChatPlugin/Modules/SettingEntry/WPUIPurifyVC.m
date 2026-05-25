@@ -42,7 +42,7 @@ static void WPUIPurifyViewDidLoad(id self, SEL _cmd) {
     }
     CGRect mcf = msgCard.frame; mcf.size.height = mcy; msgCard.frame = mcf;
     [sv addSubview:msgCard];
-    y += mcy + 16;
+    y += mcy + 8;
 
     [sv addSubview:WPMakeSectionHeader(@"气泡与输入", y, w)];
     y += 32;
@@ -63,7 +63,7 @@ static void WPUIPurifyViewDidLoad(id self, SEL _cmd) {
     }
     CGRect bcf = bubbleCard.frame; bcf.size.height = bcy; bubbleCard.frame = bcf;
     [sv addSubview:bubbleCard];
-    y += bcy + 40;
+    y += bcy + 8;
     sv.contentSize = CGSizeMake(w, y);
     WPLog(@"UI", @"[Sub] uiPurifyViewDidLoad");
 }

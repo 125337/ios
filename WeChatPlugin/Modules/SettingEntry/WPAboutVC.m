@@ -33,6 +33,7 @@ static void WPAboutViewDidLoad(id self, SEL _cmd) {
     [vc.view addSubview:sv];
 
     CGFloat y = 8;
+    CGFloat scale = [UIScreen mainScreen].scale;
 
     UIView *heroCard = WPMakeCard(y, w);
     CGFloat hy = 24;
@@ -63,7 +64,7 @@ static void WPAboutViewDidLoad(id self, SEL _cmd) {
 
     CGRect hcf = heroCard.frame; hcf.size.height = hy; heroCard.frame = hcf;
     [sv addSubview:heroCard];
-    y += hy + 16;
+    y += hy + 8;
 
     [sv addSubview:WPMakeSectionHeader(@"架构", y, w)];
     y += 32;
@@ -72,13 +73,13 @@ static void WPAboutViewDidLoad(id self, SEL _cmd) {
     CGFloat ay = 0;
     NSArray *archs = @[@[@"RedEnvelopHook", @"自动抢红包"], @[@"PreventRecallHook", @"防撤回"], @[@"HookEngine", @"Hook引擎"], @[@"PluginConfig", @"配置中心"]];
     for (NSUInteger i = 0; i < archs.count; i++) {
-        if (i > 0) { WPAddSep(archCard, ay, w); ay += 0.5; }
+        if (i > 0) { WPAddSep(archCard, ay, w); ay = round((ay + 1.0 / scale) * scale) / scale; }
         WPAddInfoRow(archCard, ay, w, archs[i][0], archs[i][1]);
         ay += kRowH;
     }
     CGRect acf = archCard.frame; acf.size.height = ay; archCard.frame = acf;
     [sv addSubview:archCard];
-    y += ay + 40;
+    y += ay + 8;
     sv.contentSize = CGSizeMake(w, y);
     WPLog(@"UI", @"[Sub] aboutViewDidLoad");
 }

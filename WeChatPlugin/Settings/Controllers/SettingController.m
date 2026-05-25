@@ -1,6 +1,6 @@
 #import "../Common/SettingController.h"
-#import "../../Registry/FeatureRegistry.h"
 #import "../../Config/Constants.h"
+#import "../../Config/WPColors.h"
 #import <objc/runtime.h>
 #import "../../Core/LogManager.h"
 
@@ -34,8 +34,8 @@
         CGFloat y = 0;
 
         UIView *heroCard = [[UIView alloc] initWithFrame:CGRectMake(16, y, w - 32, 130)];
-        heroCard.backgroundColor = [UIColor whiteColor];
-        heroCard.layer.cornerRadius = 12;
+        heroCard.backgroundColor = WPCardBackgroundColor();
+        heroCard.layer.cornerRadius = 10;
         if (@available(iOS 13.0, *)) heroCard.layer.cornerCurve = kCACornerCurveContinuous;
         heroCard.clipsToBounds = YES;
         [self.contentView addSubview:heroCard];
@@ -55,31 +55,6 @@
 
         y = [self addSectionHeader:@"功能列表" y:y width:w];
 
-        UIView *group = [self addTableGroupAtY:y width:w];
-        CGFloat cy = 0;
-
-        NSInteger tag = 1000;
-        NSArray *sectionTitles = [FeatureRegistry orderedSectionTitles];
-        WPLog(@"Setting", @"[UI] sections=%@", sectionTitles);
-        
-        for (NSString *sectionTitle in sectionTitles) {
-            NSArray<SettingCategoryItem *> *items = [FeatureRegistry itemsForSection:sectionTitle];
-            WPLog(@"Setting", @"[UI] section=%@ items=%lu", sectionTitle, (unsigned long)items.count);
-            if (items.count == 0) continue;
-
-            for (SettingCategoryItem *item in items) {
-                if (cy > 0) cy = [self addSeparatorInGroup:group cy:cy width:w];
-                cy = [self addNavRowInGroup:group title:item.title subtitle:item.subtitle tag:tag action:@selector(categoryTapped:) cy:cy width:w];
-                UIButton *button = (UIButton *)[group viewWithTag:tag];
-                if ([button isKindOfClass:[UIButton class]]) {
-                    objc_setAssociatedObject(button, "item", item, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                }
-                tag += 1;
-            }
-        }
-
-        y = [self finishGroup:group atY:y height:cy];
-
         UILabel *footer = [[UILabel alloc] initWithFrame:CGRectMake(0, y + 12, w, 40)];
         footer.text = @"Mio助手 © 2024 ~ 2026\nDeveloped with <3\nAll Rights Reserved";
         footer.font = [UIFont systemFontOfSize:12];
@@ -96,27 +71,14 @@
     }
 }
 
-- (void)categoryTapped:(UIButton *)sender {
-    @try {
-        SettingCategoryItem *item = objc_getAssociatedObject(sender, "item");
-        WPLog(@"Setting", @"[UI] categoryTapped: %@ controller=%@", item.title, item.controllerClass ? NSStringFromClass(item.controllerClass) : @"nil");
-        if (!item.controllerClass) return;
-        UIViewController *vc = [[item.controllerClass alloc] init];
-        [self.navigationController pushViewController:vc animated:YES];
-        [vc release];
-    } @catch (NSException *e) {
-        WPLog(@"Setting", @"[UI] categoryTapped 异常: %@ - %@", e.name, e.reason);
-    }
-}
-
 - (void)loadAboutView {
     self.title = @"关于";
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
 
     UIView *heroCard = [[UIView alloc] initWithFrame:CGRectMake(16, y, w - 32, 120)];
-    heroCard.backgroundColor = [UIColor whiteColor];
-    heroCard.layer.cornerRadius = 12;
+    heroCard.backgroundColor = WPCardBackgroundColor();
+    heroCard.layer.cornerRadius = 10;
     if (@available(iOS 13.0, *)) heroCard.layer.cornerCurve = kCACornerCurveContinuous;
     heroCard.clipsToBounds = YES;
     [self.contentView addSubview:heroCard];

@@ -50,7 +50,7 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
     }
     CGRect cf = card.frame; cf.size.height = cy; card.frame = cf;
     [sv addSubview:card];
-    y += cy + 40;
+    y += cy + 8;
     sv.contentSize = CGSizeMake(w, y);
     WPLog(@"UI", @"[Sub] uiViewDidLoad");
 }

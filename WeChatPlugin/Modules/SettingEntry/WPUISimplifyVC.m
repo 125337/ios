@@ -127,7 +127,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
 
     CGRect scf = switchCard.frame; scf.size.height = scy; switchCard.frame = scf;
     [sv addSubview:switchCard];
-    y += scy + 16;
+    y += scy + 8;
 
     // 问题3：开关关闭时只显示开关卡片，不显示下方配置区
     if (!enabled) {
@@ -177,7 +177,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
 
     CGRect tbf = topBarCard.frame; tbf.size.height = tby; topBarCard.frame = tbf;
     [sv addSubview:topBarCard];
-    y += tby + 16;
+    y += tby + 8;
 
     // ========== Section 2: 特殊自定义 ==========
     UILabel *sec2Header = WPMakeSectionHeader(@"特殊自定义", y, w);
@@ -197,7 +197,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
 
     CGRect spf = specialCard.frame; spf.size.height = spy; specialCard.frame = spf;
     [sv addSubview:specialCard];
-    y += spy + 16;
+    y += spy + 8;
 
     // ========== Section 3: 我的页面菜单名称自定义 ==========
     UILabel *sec3Header = WPMakeSectionHeader(@"我的页面菜单名称自定义", y, w);
@@ -236,7 +236,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
 
     CGRect mcf = menuCard.frame; mcf.size.height = mcy; menuCard.frame = mcf;
     [sv addSubview:menuCard];
-    y += mcy + 16;
+    y += mcy + 8;
 
     // ========== Section 4: 底部标签自定义 ==========
     UILabel *sec4Header = WPMakeSectionHeader(@"底部标签自定义", y, w);
@@ -272,7 +272,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
 
     CGRect bcf = bottomCard.frame; bcf.size.height = bcy; bottomCard.frame = bcf;
     [sv addSubview:bottomCard];
-    y += bcy + 16;
+    y += bcy + 8;
 
     // 提示文字
     UILabel *footer = [[UILabel alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 40)];

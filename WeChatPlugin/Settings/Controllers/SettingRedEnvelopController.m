@@ -111,7 +111,13 @@
     y = [self finishGroup:group atY:y height:cy];
 
     if (!config.autoRedEnvelop) {
-        y = [self addHintRowInGroup:[UIView new] text:@"开启自动抢红包后可配置详细选项" cy:y width:w];
+        UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(16, y, w - 32, 16)];
+        hint.text = @"开启自动抢红包后可配置详细选项";
+        hint.font = [UIFont systemFontOfSize:12];
+        hint.textColor = [UIColor colorWithRed:0.722 green:0.722 blue:0.749 alpha:1.0];
+        [self.contentView addSubview:hint];
+        [hint release];
+        y += 20;
     }
 
     y = [self addSectionHeader:@"自动收款" y:y width:w];
@@ -144,7 +150,13 @@
     y = [self finishGroup:group2 atY:y height:cy2];
 
     if (!config.autoConfirmTransfer) {
-        y = [self addHintRowInGroup:[UIView new] text:@"开启自动收款后可配置详细选项" cy:y width:w];
+        UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(16, y, w - 32, 16)];
+        hint.text = @"开启自动收款后可配置详细选项";
+        hint.font = [UIFont systemFontOfSize:12];
+        hint.textColor = [UIColor colorWithRed:0.722 green:0.722 blue:0.749 alpha:1.0];
+        [self.contentView addSubview:hint];
+        [hint release];
+        y += 20;
     }
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);

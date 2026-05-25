@@ -35,7 +35,7 @@ static void WPBackupViewDidLoad(id self, SEL _cmd) {
     UIScrollView *sv = WPMakeSV(vc);
     [vc.view addSubview:sv];
 
-    CGFloat y = 20;
+    CGFloat y = 8;
 
     // 提示信息
     [sv addSubview:WPMakeSectionHeader(@"重置插件配置", y, w)];
@@ -65,7 +65,7 @@ static void WPBackupViewDidLoad(id self, SEL _cmd) {
 
     CGRect cf = card.frame; cf.size.height = cy; card.frame = cf;
     [sv addSubview:card];
-    y += cy + 16;
+    y += cy + 8;
 
     sv.contentSize = CGSizeMake(w, y);
     WPLog(@"UI", @"[Backup] viewDidLoad");
