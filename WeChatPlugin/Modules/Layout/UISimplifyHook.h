@@ -2,4 +2,5 @@
 
 @interface UISimplifyHook : NSObject
 + (void)install;
++ (void)reloadConfig;
 @end
