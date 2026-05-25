@@ -242,18 +242,43 @@ static BOOL hook_MMGrow_enableDictation(id self, SEL _cmd) {
 }
 
 // ============================================================
-// UIView 分割线
+// UIView 分割线 — 对齐 FUN_0004627c（类名匹配 + 几何启发式）
+// 微信优化不止隐藏 _UITableViewCellSeparatorView，还用高度 ≤ 1.0 检测所有细线
+// 这样设置页、通讯录、朋友圈等各处的 WCTableViewManager 自定义分割线也会被隐藏
 // ============================================================
 
 static IMP _orig_UIView_layoutSubviews = NULL;
 
 static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
     ((void (*)(id, SEL))_orig_UIView_layoutSubviews)(self, _cmd);
-    if (purifyReadConfig(@"HideSeparatorLine")) {
-        Class sepClass = NSClassFromString(@"_UITableViewCellSeparatorView");
-        if (sepClass && [self isKindOfClass:sepClass]) {
-            [self setHidden:YES];
+    if (!purifyReadConfig(@"HideSeparatorLine")) return;
+    
+    // 对齐微信优化：跳过 Brand / Contact 相关（避免隐藏头像等关键 UI）
+    NSString *className = NSStringFromClass([self class]);
+    if ([className containsString:@"Brand"]) return;
+    if ([className containsString:@"Contact"]) return;
+    
+    // 条件1：_UITableViewCellSeparatorView（系统原生分割线，聊天列表等）
+    BOOL isSepClass = [className containsString:@"_UITableViewCellSeparatorView"];
+    
+    // 条件2：几何启发式 — 高度 ≤ 1pt 的细线（WCTableViewManager 自定义分割线）
+    CGRect frame = [self frame];
+    CGFloat h = frame.size.height;
+    CGFloat w = frame.size.width;
+    BOOL isThinLine = (h > 0 && h <= 1.0);
+    BOOL isNarrow = (w <= 100.0);
+    
+    // 条件3：不能是 UIImageView / UILabel（避免误隐藏图标和文字）
+    BOOL isSafe = ![self isKindOfClass:[UIImageView class]] && ![self isKindOfClass:[UILabel class]];
+    
+    if (isSepClass || (isThinLine && isNarrow && isSafe)) {
+        // 遍历父视图链：WCTimelineFooterCell 下的分割线保留（朋友圈底部）
+        UIView *sv = [self superview];
+        while (sv) {
+            if ([NSStringFromClass([sv class]) containsString:@"WCTimelineFooterCell"]) return;
+            sv = [sv superview];
         }
+        [self setHidden:YES];
     }
 }
 
