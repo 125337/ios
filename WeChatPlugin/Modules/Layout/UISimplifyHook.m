@@ -52,6 +52,31 @@ static void UISimplify_ReloadConfig(void) {
     _menuNames = [[d dictionaryForKey:@"Simplify_MenuNames"] retain];
     if (!_menuNames) _menuNames = [@{} retain];
     
+    // 微信优化 L40024-40051: 菜单名跨版本兼容预处理
+    // 高版本和低版本菜单标题不同(如"订单与卡包"/"卡包")，
+    // 用户只需配其中一个，自动补齐另一个。
+    {
+        NSArray *versionPairs = @[
+            @[@"订单与卡包", @"卡包"],
+        ];
+        NSMutableDictionary *mutDict = [_menuNames mutableCopy];
+        for (NSArray *pair in versionPairs) {
+            NSString *newName = pair[0];
+            NSString *oldName = pair[1];
+            id newVal = [mutDict objectForKey:newName];
+            id oldVal = [mutDict objectForKey:oldName];
+            
+            if (oldVal && !newVal) {
+                [mutDict setObject:oldVal forKey:newName];
+            } else if (!oldVal && newVal) {
+                [mutDict setObject:newVal forKey:oldName];
+            }
+        }
+        [_menuNames release];
+        _menuNames = [mutDict copy];
+        [mutDict release];
+    }
+    
     // 微信优化 L40089-40096: 加载Tab名映射
     _tabNames = [[d dictionaryForKey:@"Simplify_Tab_Names"] retain];
     if (!_tabNames) _tabNames = [@{} retain];
@@ -216,8 +241,13 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
         return;
     }
     
-    // L40492-40511: 好友数格式 — 固定正则 \\d+ 匹配数字，_friendsCount 作为 format
+    // L40492-40511: 好友数格式 — 门控+固定正则+format
+    // 只有通讯录底部好友数文本才处理，防止误伤其他含数字的文本
     if (_friendsCount && _friendsCount.length > 0) {
+        if (![text containsString:@"个朋友"]) {
+            ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, text);
+            return;
+        }
         NSRegularExpression *regex = [NSRegularExpression
             regularExpressionWithPattern:@"\\d+" options:0 error:nil];
         if (regex) {
@@ -313,8 +343,12 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
         }
     }
     
-    // Friends count — 固定正则 \\d+ 匹配数字，_friendsCount 作为 format
+    // Friends count — 门控+固定正则+format
     if (_friendsCount && _friendsCount.length > 0) {
+        if (![text containsString:@"个朋友"]) {
+            ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd, attrText);
+            return;
+        }
         NSRegularExpression *regex = [NSRegularExpression
             regularExpressionWithPattern:@"\\d+" options:0 error:nil];
         if (regex) {
