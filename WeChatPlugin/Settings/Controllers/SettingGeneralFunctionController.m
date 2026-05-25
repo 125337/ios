@@ -31,9 +31,7 @@
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    if (!_isLayoutPage) {
-        [self buildUI];
-    }
+    [self buildUI];
 }
 
 - (void)switchChanged:(UISwitch *)sender {
@@ -54,6 +52,22 @@
     PluginConfig *config = [PluginConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
+
+    if (_isLayoutPage) {
+        // ===== 界面布局页 =====
+        UIView *group = [self addTableGroupAtY:y width:w];
+        CGFloat cy = 0;
+
+        cy = [self addNavRowInGroup:group
+                               title:@"隐藏头像"
+                            subtitle:@"私聊/群聊/公众号"
+                                 tag:500
+                              action:@selector(onAvatarHideTap)
+                                  cy:cy
+                               width:w];
+
+        y = [self finishGroup:group atY:y height:cy];
+    }
 
     UIView *group = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
@@ -97,21 +111,18 @@
                                  cy:cy
                               width:w];
 
-    y = [self finishGroup:group atY:y height:cy];
-
-    UIView *timeGroup = [self addTableGroupAtY:y width:w];
-    CGFloat timeY = 0;
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
 
     NSString *timeStatus = config.showMessageTime ? @"已开启" : @"已关闭";
-    timeY = [self addNavRowInGroup:timeGroup
+    cy = [self addNavRowInGroup:group
                              title:@"显示消息时间"
                           subtitle:timeStatus
                                tag:300
                             action:@selector(onMessageTimeSettingTap)
-                                cy:timeY
+                                cy:cy
                              width:w];
 
-    y = [self finishGroup:timeGroup atY:y height:timeY];
+    y = [self finishGroup:group atY:y height:cy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
@@ -125,6 +136,12 @@
 
 - (void)onRevokeSettingTap {
     SettingRevokeController *vc = [[SettingRevokeController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
+    [vc release];
+}
+
+- (void)onAvatarHideTap {
+    SettingAvatarHideController *vc = [[SettingAvatarHideController alloc] init];
     [self.navigationController pushViewController:vc animated:YES];
     [vc release];
 }

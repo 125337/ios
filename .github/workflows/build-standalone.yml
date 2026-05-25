@@ -65,6 +65,7 @@ jobs:
           WeChatPlugin/Modules/MessageTime/MessageTimeHook.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeFormatParser.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeFormatEditorVC.m \
+          WeChatPlugin/Modules/HideAvatar/HideAvatarHook.m \
           WeChatPlugin/Modules/AutoTransfer/AutoTransferHook.m \
           WeChatPlugin/Settings/Common/SettingCategoryController.m \
           WeChatPlugin/Settings/Common/WPBorderLayer.m \
@@ -72,7 +73,8 @@ jobs:
           WeChatPlugin/Settings/Controllers/SettingGeneralFunctionController.m \
           WeChatPlugin/Settings/Controllers/SettingMessageTimeController.m \
           WeChatPlugin/Settings/Controllers/SettingRevokeController.m \
-          WeChatPlugin/Settings/Controllers/SettingRedEnvelopController.m \
+          WeChatPlugin/Settings/Controllers/SettingAvatarHideController.m \
+          WeChatPlugin/Settings/Controllers/SettingLayoutFunctionController.m \
           WeChatPlugin/Settings/Controllers/WeChatTweakGroupSelectsController.m; do
           BASENAME=$(basename "$f" .m)
           OBJ_FILE="build/${BASENAME}.o"

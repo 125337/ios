@@ -25,5 +25,8 @@
 @interface SettingAboutController : SettingCategoryController
 @end
 
+@interface SettingAvatarHideController : SettingCategoryController
+@end
+
 @interface SettingRedEnvelopController : SettingCategoryController
 @end

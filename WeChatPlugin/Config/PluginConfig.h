@@ -73,6 +73,13 @@
 @property (nonatomic, assign) BOOL hideVoiceRedDot;         // 隐藏语音红点和转文字标签
 @property (nonatomic, assign) BOOL hideBubbleBackground;    // 隐藏聊天气泡背景(气泡透明)
 @property (nonatomic, assign) BOOL disableDictation;        // 禁用聊天页输入框听写功能
+#pragma mark - 隐藏头像
+@property (nonatomic, assign) BOOL hideC2COtherAvatar;       // 私聊-隐藏对方头像
+@property (nonatomic, assign) BOOL hideC2CSelfAvatar;        // 私聊-隐藏自己头像
+@property (nonatomic, assign) BOOL hideGroupOtherAvatar;     // 群聊-隐藏对方头像
+@property (nonatomic, assign) BOOL hideGroupSelfAvatar;      // 群聊-隐藏自己头像
+@property (nonatomic, assign) BOOL hideOAOtherAvatar;        // 公众号-隐藏对方头像
+@property (nonatomic, assign) BOOL hideOASelfAvatar;         // 公众号-隐藏自己头像
 
 #pragma mark - 好友添加时间后缀
 @property (nonatomic, assign) BOOL showAddTimeSuffix;

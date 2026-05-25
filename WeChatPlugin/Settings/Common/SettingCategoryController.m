@@ -74,7 +74,13 @@ static NSString *configPropertyForKey(NSString *key) {
             @"MessageTimeBoldFont": @"messageTimeBoldFont",
             @"MessageTimeTextColor": @"messageTimeTextColor",
             @"HideChatTime": @"hideChatTime",
-            @"NotifySender": @"notifySender"
+            @"NotifySender": @"notifySender",
+            @"HideC2COtherAvatar": @"hideC2COtherAvatar",
+            @"HideC2CSelfAvatar": @"hideC2CSelfAvatar",
+            @"HideGroupOtherAvatar": @"hideGroupOtherAvatar",
+            @"HideGroupSelfAvatar": @"hideGroupSelfAvatar",
+            @"HideOAOtherAvatar": @"hideOAOtherAvatar",
+            @"HideOASelfAvatar": @"hideOASelfAvatar"
         };
     });
     return mapping[key];

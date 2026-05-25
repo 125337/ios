@@ -314,6 +314,13 @@
     _hideBubbleBackground = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideBubbleBackground"]];
     _disableDictation = [d boolForKey:[kPluginPrefix stringByAppendingString:@"DisableDictation"]];
     
+    _hideC2COtherAvatar = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideC2COtherAvatar"]];
+    _hideC2CSelfAvatar = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideC2CSelfAvatar"]];
+    _hideGroupOtherAvatar = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideGroupOtherAvatar"]];
+    _hideGroupSelfAvatar = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideGroupSelfAvatar"]];
+    _hideOAOtherAvatar = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideOAOtherAvatar"]];
+    _hideOASelfAvatar = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideOASelfAvatar"]];
+    
     _showAddTimeSuffix = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
@@ -434,6 +441,12 @@
     [d setBool:_hideVoiceRedDot forKey:[kPluginPrefix stringByAppendingString:@"HideVoiceRedDot"]];
     [d setBool:_hideBubbleBackground forKey:[kPluginPrefix stringByAppendingString:@"HideBubbleBackground"]];
     [d setBool:_disableDictation forKey:[kPluginPrefix stringByAppendingString:@"DisableDictation"]];
+    [d setBool:_hideC2COtherAvatar forKey:[kPluginPrefix stringByAppendingString:@"HideC2COtherAvatar"]];
+    [d setBool:_hideC2CSelfAvatar forKey:[kPluginPrefix stringByAppendingString:@"HideC2CSelfAvatar"]];
+    [d setBool:_hideGroupOtherAvatar forKey:[kPluginPrefix stringByAppendingString:@"HideGroupOtherAvatar"]];
+    [d setBool:_hideGroupSelfAvatar forKey:[kPluginPrefix stringByAppendingString:@"HideGroupSelfAvatar"]];
+    [d setBool:_hideOAOtherAvatar forKey:[kPluginPrefix stringByAppendingString:@"HideOAOtherAvatar"]];
+    [d setBool:_hideOASelfAvatar forKey:[kPluginPrefix stringByAppendingString:@"HideOASelfAvatar"]];
     [d setBool:_showAddTimeSuffix forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     if (_addTimeSuffixFormat) {
         [d setObject:_addTimeSuffixFormat forKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
