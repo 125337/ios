@@ -26,17 +26,14 @@ static inline NSString *SStr(NSString *key) {
 
     NSUserDefaults *d = SD();
 
-    // 预填值：当前有自定义值就用自定义值，否则用默认值
-    NSString *editDefault = objc_getAssociatedObject(sender, "editDefault");
     NSString *currentVal = valueLabel.text;
-    NSString *prefill = (currentVal && currentVal.length > 0) ? currentVal : (editDefault ?: @"");
+    NSString *prefill = (currentVal && currentVal.length > 0) ? currentVal : @"";
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
                                                                    message:nil
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
         tf.text = prefill;
-        tf.placeholder = editDefault;
         tf.clearButtonMode = UITextFieldViewModeWhileEditing;
     }];
 
@@ -45,8 +42,7 @@ static inline NSString *SStr(NSString *key) {
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *newText = alert.textFields.firstObject.text;
         if (weakLabel) {
-            NSString *show = (newText && newText.length > 0) ? newText : (editDefault ?: @"");
-            weakLabel.text = show;
+            weakLabel.text = (newText && newText.length > 0) ? newText : @"";
         }
 
         if (dictKey && nsKey) {
@@ -159,13 +155,11 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     UIView *topBarCard = WPMakeCard(y, w);
     CGFloat tby = 0;
 
-    // 问题2: 加 > 箭头，无默认值（问题1）
-    // NSUserDefaults key 必须与 UISimplifyHook.m 中完全一致
-    // 顶部标题默认值: 微信/通讯录/发现
+    // 顶部标题
     NSArray *topDefs = @[
-        @[@"微信标题",      @"Simplify_MainTitle",    @"微信"],
-        @[@"通讯录标题",    @"Simplify_ContactsTitle", @"通讯录"],
-        @[@"发现标题",      @"Simplify_DiscoverTitle", @"发现"],
+        @[@"微信标题",      @"Simplify_MainTitle"],
+        @[@"通讯录标题",    @"Simplify_ContactsTitle"],
+        @[@"发现标题",      @"Simplify_DiscoverTitle"],
     ];
     for (NSUInteger i = 0; i < topDefs.count; i++) {
         if (i > 0) {
@@ -174,12 +168,10 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
         }
         NSString *rowTitle  = topDefs[i][0];
         NSString *nsKey     = topDefs[i][1];
-        NSString *defVal    = topDefs[i][2];
         NSString *curVal    = SStr(nsKey);
-        NSString *showVal   = (curVal && curVal.length > 0) ? curVal : defVal;
+        NSString *showVal   = (curVal && curVal.length > 0) ? curVal : @"";
         UIButton *row = WPAddEditableRowWithArrow(topBarCard, tby, w, rowTitle, showVal, handler);
         objc_setAssociatedObject(row, "editNSKey", nsKey, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        objc_setAssociatedObject(row, "editDefault", defVal, OBJC_ASSOCIATION_COPY_NONATOMIC);
         tby += kRowH;
     }
 
@@ -196,11 +188,9 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     CGFloat spy = 0;
 
     NSString *fcCur = SStr(@"Simplify_FriendsCount");
-    NSString *fcDef = @""; // 好友数无默认值
-    NSString *fcShow = (fcCur && fcCur.length > 0) ? fcCur : fcDef;
+    NSString *fcShow = (fcCur && fcCur.length > 0) ? fcCur : @"";
     UIButton *fcRow = WPAddEditableRowWithArrow(specialCard, spy, w, @"通讯录底部好友", fcShow, handler);
     objc_setAssociatedObject(fcRow, "editNSKey", @"Simplify_FriendsCount", OBJC_ASSOCIATION_COPY_NONATOMIC);
-    objc_setAssociatedObject(fcRow, "editDefault", fcDef, OBJC_ASSOCIATION_COPY_NONATOMIC);
     spy += kRowH;
 
     CGRect spf = specialCard.frame; spf.size.height = spy; specialCard.frame = spf;
@@ -215,7 +205,6 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     UIView *menuCard = WPMakeCard(y, w);
     CGFloat mcy = 0;
 
-    // 菜单默认值: dictKey 本身就是原始名称
     NSDictionary *menuDict = [d dictionaryForKey:@"Simplify_MenuNames"] ?: @{};
     NSArray *menuDefs = @[
         @[@"服务/支付与服务", @"服务"],
@@ -234,11 +223,10 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
         NSString *rowTitle   = menuDefs[i][0];
         NSString *dictKeyVal = menuDefs[i][1];
         NSString *curVal     = menuDict[dictKeyVal];
-        NSString *showVal    = (curVal && curVal.length > 0) ? curVal : dictKeyVal;
+        NSString *showVal    = (curVal && curVal.length > 0) ? curVal : @"";
         UIButton *row = WPAddEditableRowWithArrow(menuCard, mcy, w, rowTitle, showVal, handler);
         objc_setAssociatedObject(row, "editNSKey", @"Simplify_MenuNames", OBJC_ASSOCIATION_COPY_NONATOMIC);
         objc_setAssociatedObject(row, "editDictKey", dictKeyVal, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        objc_setAssociatedObject(row, "editDefault", dictKeyVal, OBJC_ASSOCIATION_COPY_NONATOMIC);
         mcy += kRowH;
     }
 
@@ -254,7 +242,6 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     UIView *bottomCard = WPMakeCard(y, w);
     CGFloat bcy = 0;
 
-    // 底部标签默认值: dictKey 本身就是原始名称
     NSDictionary *tabDict = [d dictionaryForKey:@"Simplify_Tab_Names"] ?: @{};
     NSArray *tabDefs = @[
         @[@"微信",   @"微信"],
@@ -270,11 +257,10 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
         NSString *rowTitle   = tabDefs[i][0];
         NSString *dictKeyVal = tabDefs[i][1];
         NSString *curVal     = tabDict[dictKeyVal];
-        NSString *showVal    = (curVal && curVal.length > 0) ? curVal : dictKeyVal;
+        NSString *showVal    = (curVal && curVal.length > 0) ? curVal : @"";
         UIButton *row = WPAddEditableRowWithArrow(bottomCard, bcy, w, rowTitle, showVal, handler);
         objc_setAssociatedObject(row, "editNSKey", @"Simplify_Tab_Names", OBJC_ASSOCIATION_COPY_NONATOMIC);
         objc_setAssociatedObject(row, "editDictKey", dictKeyVal, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        objc_setAssociatedObject(row, "editDefault", dictKeyVal, OBJC_ASSOCIATION_COPY_NONATOMIC);
         bcy += kRowH;
     }
 
