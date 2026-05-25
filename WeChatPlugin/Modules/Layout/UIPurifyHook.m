@@ -242,136 +242,35 @@ static BOOL hook_MMGrow_enableDictation(id self, SEL _cmd) {
 }
 
 // ============================================================
-// UIView 分割线 — 完全复刻 FUN_0004627c
+// 分隔线隐藏 — 精准两源头方案
 // ============================================================
-// 微信优化算法（逐行翻译自反编译）：
-//   1. 跳过 FTSBrandContactCell / Brand / Contact
-//   2. isSepClass = [class isEqualToString:"_UITableViewCellSeparatorView"]（精确）
-//   3. 高度 ≤ 0 或 > 1.0 → bVar1=YES（跳过）
-//   4. 宽度 + alpha + 背景色 + 非Label非Image → 决策
-//   5. 两条路径：
-//      Path A: class == "UIView"（精确匹配）→ 宽度 > 100 且无子视图才隐藏
-//      Path B: class != "UIView"（自定义子类）→ 细线+宽+不透明+有背景色 或 isSepClass 才隐藏
-//   6. 遍历父视图链：WCTimeLineViewController / WCTimelineFooterCell / MPSubscriptionViewController → 跳过
+// 微信优化用 UIView.layoutSubviews 全局 hook（危险，朋友圈会加粗）
+// 我们改为精准 hook 两个源头：
+//   ① _UITableViewCellSeparatorView — 聊天列表系统分隔线
+//   ② WCTableViewManager.getSeparator — 设置/通讯录/我的等自定义分隔线
+// 朋友圈等不受影响
 // ============================================================
 
-static IMP _orig_UIView_layoutSubviews = NULL;
+// ① _UITableViewCellSeparatorView 分隔线
+static IMP _orig_SeparatorView_layoutSubviews = NULL;
 
-static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
-    ((void (*)(id, SEL))_orig_UIView_layoutSubviews)(self, _cmd);
-    if (!purifyReadConfig(@"HideSeparatorLine")) return;
-    
-    // 行 33-36: 获取类名
-    NSString *className = NSStringFromClass([self class]);
-    
-    // 行 37: isKindOfClass FTSBrandContactCell → skip
-    Class ftsBrandCell = NSClassFromString(@"FTSBrandContactCell");
-    if (ftsBrandCell && [self isKindOfClass:ftsBrandCell]) return;
-    
-    // 行 39-42: className 包含 Brand 或 Contact → skip
-    if ([className containsString:@"Brand"]) return;
-    if ([className containsString:@"Contact"]) return;
-    
-    // 行 43: isSepClass = isEqualToString（精确匹配！不是 containsString）
-    BOOL isSepClass = [className isEqualToString:@"_UITableViewCellSeparatorView"];
-    
-    // 行 44-52: 高度判断 → bVar1
-    CGRect frame = [self frame];
-    CGFloat height = frame.size.height;
-    BOOL bVar1; // bVar1=YES 表示"不是细分割线"→跳过
-    if (height <= 0.0) {
-        bVar1 = YES;
-    } else {
-        bVar1 = (1.0 < height); // height > 1.0 → bVar1=YES
+static void hook_SeparatorView_layoutSubviews(id self, SEL _cmd) {
+    if (_orig_SeparatorView_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_SeparatorView_layoutSubviews)(self, _cmd);
     }
-    // bVar1=YES: height≤0 或 height>1.0 → 跳过
-    // bVar1=NO:  0 < height ≤ 1.0 → 是细线，继续判断
-    
-    // 行 54-56: 宽度 + alpha
-    CGFloat width = frame.size.width;
-    CGFloat alpha = [self alpha];
-    
-    // 行 57-59: 背景色
-    BOOL hasBgColor = ([self backgroundColor] != nil);
-    
-    // 行 60-68: uVar3 = !isUILabel && !isUIImageView
-    BOOL isUILabel = [self isKindOfClass:[UILabel class]];
-    BOOL uVar3;
-    if (isUILabel) {
-        uVar3 = NO;
-    } else {
-        BOOL isUIImageView = [self isKindOfClass:[UIImageView class]];
-        uVar3 = !isUIImageView;
+    if (purifyReadConfig(@"HideSeparatorLine")) {
+        [self setHidden:YES];
     }
-    
-    // 行 70-73: isKindOfClass UIView → 总是 YES（UIView hook）→ 走 else
-    
-    // ==========================================
-    // 行 74-75: [className isEqualToString:@"UIView"]（精确）
-    BOOL isUIViewExact = [className isEqualToString:@"UIView"];
-    
-    if (isUIViewExact) {
-        // PATH A: exact "UIView"（非子类）
-        // 行 82-84: 宽度 ≤ 100 → 标记为跳过
-        if (width <= 100.0) {
-            bVar1 = YES;
-        }
-        // 行 85-95: 任一条件不满足 → 跳过
-        if (bVar1 || alpha <= 0.9 || !hasBgColor || !uVar3) {
-            return;
-        }
-        // 行 87-95: 有子视图 → 跳过
-        NSArray *subs = [self subviews];
-        if ([subs count] > 0) {
-            return;
-        }
-        // → 无子视图的纯 UIView 细线 → 隐藏
-    } else {
-        // PATH B: UIView 子类（MMUIView 等，WCTableViewManager 自定义分割线）
-        // 行 104-107: !isSepClass && !bVar1 && w>100 && alpha>0.9
-        if (!isSepClass && !bVar1 && width > 100.0 && alpha > 0.9) {
-            if (!hasBgColor || !uVar3) {
-                return; // 无背景色 或 是Label/Image → 跳过
-            }
-            // → 细线+宽+不透明+有背景色 → 隐藏
-        } else if (!isSepClass) {
-            // 非分割线类且不满足几何条件 → 跳过
-            return;
-        }
-        // isSepClass=YES → uVar2 保持 YES → 进入隐藏
+}
+
+// ② WCTableViewManager.getSeparator → 返回 nil 从源头阻止分隔线创建
+static IMP _orig_WCTableView_getSeparator = NULL;
+
+static id hook_WCTableView_getSeparator(id self, SEL _cmd) {
+    if (purifyReadConfig(@"HideSeparatorLine")) {
+        return nil;
     }
-    
-    // ==========================================
-    // 行 76-82 (41276-41295): 父视图链检查
-    // Walk 1: WCTimeLineViewController
-    Class timeLineVC = NSClassFromString(@"WCTimeLineViewController");
-    if (timeLineVC) {
-        UIView *p = [self superview];
-        while (p) {
-            if ([p isKindOfClass:timeLineVC]) return;
-            p = [p superview];
-        }
-    }
-    // Walk 2: WCTimelineFooterCell（精确 isEqualToString）
-    {
-        UIView *p = [self superview];
-        while (p) {
-            if ([[p class] isEqualToString:@"WCTimelineFooterCell"]) return;
-            p = [p superview];
-        }
-    }
-    // Walk 3: MPSubscriptionViewController
-    Class mpSubVC = NSClassFromString(@"MPSubscriptionViewController");
-    if (mpSubVC) {
-        UIView *p = [self superview];
-        while (p) {
-            if ([p isKindOfClass:mpSubVC]) return;
-            p = [p superview];
-        }
-    }
-    
-    // 行 295-298 (41295-41315): setHidden:YES
-    [self setHidden:YES];
+    return ((id (*)(id, SEL))_orig_WCTableView_getSeparator)(self, _cmd);
 }
 
 // ============================================================
@@ -478,10 +377,19 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"UIPurify", @"[Hook] ✓ MMGrowTextViewExtConfig");
     }
 
-    // ⑦ UIView 分割线
-    MSHookMessageEx([UIView class], @selector(layoutSubviews),
-        (IMP)hook_UIView_layoutSubviews, &_orig_UIView_layoutSubviews);
-    WPLog(@"UIPurify", @"[Hook] ✓ UIView.layoutSubviews");
+    // ⑦ 分隔线隐藏 — 精准两源头（不 hook UIView 全局，避免朋友圈加粗）
+    cls = objc_getClass("_UITableViewCellSeparatorView");
+    if (cls) {
+        MSHookMessageEx(cls, @selector(layoutSubviews),
+            (IMP)hook_SeparatorView_layoutSubviews, &_orig_SeparatorView_layoutSubviews);
+        WPLog(@"UIPurify", @"[Hook] ✓ _UITableViewCellSeparatorView");
+    }
+    cls = objc_getClass("WCTableViewManager");
+    if (cls) {
+        MSHookMessageEx(cls, sel_registerName("getSeparator"),
+            (IMP)hook_WCTableView_getSeparator, &_orig_WCTableView_getSeparator);
+        WPLog(@"UIPurify", @"[Hook] ✓ WCTableViewManager.getSeparator");
+    }
 
     WPLog(@"UIPurify", @"UIPurifyHook install complete");
 }
