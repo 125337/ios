@@ -176,37 +176,25 @@ static CGSize hook_PatVM_measure(id self, SEL _cmd, CGSize size) {
 
 static IMP _orig_VoiceCell_layoutSubviews = NULL;
 
-static void hideIvarIfExists(id obj, const char *ivarName) {
-    Ivar ivar = class_getInstanceVariable([obj class], ivarName);
-    if (!ivar) {
-        ivar = class_getInstanceVariable(class_getSuperclass([obj class]), ivarName);
-    }
-    if (ivar) {
-        id subview = object_getIvar(obj, ivar);
-        if (subview) {
-            [subview setHidden:YES];
-        } else {
-            WPLog(@"UIPurify", @"[Voice] ivar %s found but value is nil", ivarName);
-        }
-    } else {
-        WPLog(@"UIPurify", @"[Voice] ivar %s not found in class hierarchy", ivarName);
+/// 用 valueForKey: 获取子视图并隐藏，对齐 FUN_00026280（KVC 访问，不依赖 ivar 偏移）
+static void hideIvarWithKVC(id obj, NSString *key) {
+    id subview = [obj valueForKey:key];
+    if (subview) {
+        [subview setHidden:YES];
     }
 }
 
 static void hook_VoiceCell_layoutSubviews(id self, SEL _cmd) {
-    // 先调用原始布局，确保语音 cell 正常渲染
+    // 调用原始布局（对齐 FUN_00026280 行 22: (*DAT_0013ac10)()）
     ((void (*)(id, SEL))_orig_VoiceCell_layoutSubviews)(self, _cmd);
     
-    static BOOL loggedOnce = NO;
-    BOOL enabled = purifyReadConfig(@"HideVoiceRedDot");
-    if (!loggedOnce) {
-        WPLog(@"UIPurify", @"[Voice] layoutSubviews called, config=%d. Class hierarchy: self=%@, super=%@",
-              enabled, NSStringFromClass([self class]), NSStringFromClass(class_getSuperclass([self class])));
-        loggedOnce = YES;
-    }
-    if (enabled) {
-        hideIvarIfExists(self, "_unreadImageView");
-        hideIvarIfExists(self, "_quickTransTipButton");
+    if (purifyReadConfig(@"HideVoiceRedDot")) {
+        // 对齐 FUN_00026280 行 27: [self valueForKey:@"cf_m_unreadImageView"]
+        // 头文件证实 ivar = MMBadgeView *m_unreadImageView，KVC 自动查找 _m_unreadImageView
+        hideIvarWithKVC(self, @"m_unreadImageView");
+        // 对齐 FUN_00026280 行 35: [self valueForKey:@"cf_m_quickTransTipButton"]
+        // 头文件证实 ivar = UIButton *m_quickTransTipButton
+        hideIvarWithKVC(self, @"m_quickTransTipButton");
     }
 }
 
@@ -327,12 +315,12 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageViewModel");
     }
 
-    // ④ VoiceMessageCellView — 只 hook layoutSubviews，内部隐藏红点+转文字子视图（对齐 FUN_00026280）
+    // ④ VoiceMessageCellView — purifySafeHook 隔离父类，隐藏红点+转文字（对齐 FUN_00026280）
     cls = objc_getClass("VoiceMessageCellView");
     if (cls) {
-        MSHookMessageEx(cls, @selector(layoutSubviews),
+        purifySafeHook(cls, @selector(layoutSubviews),
             (IMP)hook_VoiceCell_layoutSubviews, &_orig_VoiceCell_layoutSubviews);
-        WPLog(@"UIPurify", @"[Hook] ✓ VoiceMessageCellView");
+        WPLog(@"UIPurify", @"[Hook] ✓ VoiceMessageCellView (purifySafeHook)");
     }
 
     // ⑤ YYAsyncImageView
