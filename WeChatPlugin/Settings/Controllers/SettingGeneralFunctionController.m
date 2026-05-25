@@ -1,5 +1,4 @@
 #import "../Common/SettingController.h"
-#import "SettingAvatarHideController.h"
 #import "SettingMessageTimeController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/WeChatAlertHelper.h"
