@@ -5,6 +5,13 @@
 #import <objc/runtime.h>
 
 @implementation SettingLayoutFunctionController
+
+- (void)onAvatarHideTap {
+    SettingAvatarHideController *vc = [[SettingAvatarHideController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
+    [vc release];
+}
+
 @end
 
 @implementation SettingGeneralFunctionController {
@@ -136,12 +143,6 @@
 
 - (void)onRevokeSettingTap {
     SettingRevokeController *vc = [[SettingRevokeController alloc] init];
-    [self.navigationController pushViewController:vc animated:YES];
-    [vc release];
-}
-
-- (void)onAvatarHideTap {
-    SettingAvatarHideController *vc = [[SettingAvatarHideController alloc] init];
     [self.navigationController pushViewController:vc animated:YES];
     [vc release];
 }
