@@ -176,6 +176,25 @@ static CGSize hook_PatVM_measure(id self, SEL _cmd, CGSize size) {
 
 static IMP _orig_VoiceCell_layoutSubviews = NULL;
 
+// ============================================================
+// cf_m_ 前缀 category getter —— 完全对齐微信优化 FUN_00026280
+// 微信优化通过 category 给 VoiceMessageCellView 添加了以下 getter：
+//   - (MMBadgeView *)cf_m_unreadImageView;
+//   - (UIButton *)cf_m_quickTransTipButton;
+// 我们用 class_addMethod 在运行时注入，KVC 兼容，不依赖 ivar 偏移量
+// 即使未来微信改 ivar 名，只要更新这里即可，不影响外部调用
+// ============================================================
+
+static id cf_get_unreadImageView(id self, SEL _cmd) {
+    Ivar ivar = class_getInstanceVariable([self class], "_m_unreadImageView");
+    return ivar ? object_getIvar(self, ivar) : nil;
+}
+
+static id cf_get_quickTransTipButton(id self, SEL _cmd) {
+    Ivar ivar = class_getInstanceVariable([self class], "_m_quickTransTipButton");
+    return ivar ? object_getIvar(self, ivar) : nil;
+}
+
 /// 用 valueForKey: 获取子视图并隐藏，对齐 FUN_00026280（KVC 访问，不依赖 ivar 偏移）
 static void hideIvarWithKVC(id obj, NSString *key) {
     id subview = [obj valueForKey:key];
@@ -190,11 +209,9 @@ static void hook_VoiceCell_layoutSubviews(id self, SEL _cmd) {
     
     if (purifyReadConfig(@"HideVoiceRedDot")) {
         // 对齐 FUN_00026280 行 27: [self valueForKey:@"cf_m_unreadImageView"]
-        // 头文件证实 ivar = MMBadgeView *m_unreadImageView，KVC 自动查找 _m_unreadImageView
-        hideIvarWithKVC(self, @"m_unreadImageView");
+        hideIvarWithKVC(self, @"cf_m_unreadImageView");
         // 对齐 FUN_00026280 行 35: [self valueForKey:@"cf_m_quickTransTipButton"]
-        // 头文件证实 ivar = UIButton *m_quickTransTipButton
-        hideIvarWithKVC(self, @"m_quickTransTipButton");
+        hideIvarWithKVC(self, @"cf_m_quickTransTipButton");
     }
 }
 
@@ -315,20 +332,25 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageViewModel");
     }
 
-    // ④ VoiceMessageCellView — purifySafeHook 隔离父类，隐藏红点+转文字（对齐 FUN_00026280）
+    // ④ VoiceMessageCellView — purifySafeHook + cf_m_ category getter（完全对齐 FUN_00026280）
     cls = objc_getClass("VoiceMessageCellView");
     if (cls) {
+        // 对齐微信优化：添加 cf_m_ 前缀 category getter，KVC 兼容，长期稳定
+        class_addMethod(cls, sel_registerName("cf_m_unreadImageView"),
+            (IMP)cf_get_unreadImageView, "@@:");
+        class_addMethod(cls, sel_registerName("cf_m_quickTransTipButton"),
+            (IMP)cf_get_quickTransTipButton, "@@:");
         purifySafeHook(cls, @selector(layoutSubviews),
             (IMP)hook_VoiceCell_layoutSubviews, &_orig_VoiceCell_layoutSubviews);
-        WPLog(@"UIPurify", @"[Hook] ✓ VoiceMessageCellView (purifySafeHook)");
+        WPLog(@"UIPurify", @"[Hook] ✓ VoiceMessageCellView (purifySafeHook + cf_m_ category)");
     }
 
-    // ⑤ YYAsyncImageView
+    // ⑤ YYAsyncImageView — purifySafeHook（未覆写 layoutSubviews，继承自 UIImageView）
     cls = objc_getClass("YYAsyncImageView");
     if (cls) {
-        MSHookMessageEx(cls, @selector(layoutSubviews),
+        purifySafeHook(cls, @selector(layoutSubviews),
             (IMP)hook_YYAsyncImage_layoutSubviews, &_orig_YYAsyncImage_layoutSubviews);
-        WPLog(@"UIPurify", @"[Hook] ✓ YYAsyncImageView");
+        WPLog(@"UIPurify", @"[Hook] ✓ YYAsyncImageView (purifySafeHook)");
     }
 
     // ⑥ MMGrowTextViewExtConfig
