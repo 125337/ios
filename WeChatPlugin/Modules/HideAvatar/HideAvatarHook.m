@@ -41,25 +41,31 @@ static IMP _orig_CommonMessageVM_isShowHeadImage    = NULL;
 // ============================================================
 
 static void updateChatContext(id self) {
-    // Step 1: 获取联系人 → [self getContact] (FUN_000c2420)
+    // Step 1: 获取联系人 → [self GetContact] (FUN_000c2420 → 反编译 L127432)
+    // ★ 关键: 微信优化用 objc_msgSend 方法调用, 不是 KVC!
+    //    KVC [valueForKey:@"m_contact"] 与 [self GetContact] 不是同一路径
     id contact = nil;
     @try {
-        contact = [self valueForKey:@"m_contact"];
+        contact = ((id (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"GetContact"));
     } @catch (NSException *e) {
+        WPLog(@"HideAvatar", @"updateChatContext: GetContact exception %@", e.reason);
         _currentChatType = MOChatTypeUnknown;
         return;
     }
 
     if (!contact) {
+        WPLog(@"HideAvatar", @"updateChatContext: contact is nil");
         _currentChatType = MOChatTypeUnknown;
         return;
     }
 
-    // Step 2: 获取用户名 → [contact getUserName] (FUN_000c7b40)
+    // Step 2: 获取用户名 → [contact m_nsUsrName] (FUN_000c7b40 → 反编译 L133725)
+    // ★ 同样用 objc_msgSend, 不是 KVC
     NSString *username = nil;
     @try {
-        username = [contact valueForKey:@"m_nsUsrName"];
+        username = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
     } @catch (NSException *e) {
+        WPLog(@"HideAvatar", @"updateChatContext: m_nsUsrName exception %@", e.reason);
         _currentChatType = MOChatTypeUnknown;
         return;
     }
@@ -133,11 +139,13 @@ static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
         return ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
     }
 
-    // ── 获取 isSender (FUN_000c6f20) ──
+    // ── 获取 isSender (FUN_000c6f20 → 反编译 L132851) ──
+    // ★ 同样用 objc_msgSend 方法调用
     BOOL isSender = NO;
     @try {
-        isSender = [[self valueForKey:@"isSender"] boolValue];
+        isSender = ((BOOL (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"isSender"));
     } @catch (NSException *e) {
+        WPLog(@"HideAvatar", @"isShowHeadImage: isSender exception %@", e.reason);
         return ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
     }
 
