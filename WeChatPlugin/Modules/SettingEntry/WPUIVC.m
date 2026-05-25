@@ -33,7 +33,7 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
         @[@"文本占位",      @"noop:"],
         @[@"界面简化",      @"openUISimplify:"],
         @[@"界面净化",      @"openUIPurify:"],
-        @[@"隐藏头像",      @"noop:"],
+        @[@"隐藏头像",      @"openAvatarHide:"],
         @[@"圆角设置",      @"noop:"],
         @[@"卡片背景",      @"noop:"],
         @[@"列表圆角",      @"noop:"],
@@ -56,6 +56,24 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
 }
 
 @implementation WeChatPluginSwitchHandler (WPUICustomization)
+
+- (void)openAvatarHide:(id)sender {
+    UIResponder *responder = (UIResponder *)sender;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) break;
+        responder = [responder nextResponder];
+    }
+    UIViewController *vc = (UIViewController *)responder;
+    if (!vc) { WPLog(@"UI", @"[Nav] openAvatarHide: currentVC nil"); return; }
+    Class cls = NSClassFromString(@"SettingAvatarHideController");
+    if (!cls) { WPLog(@"UI", @"[Nav] SettingAvatarHideController not found"); return; }
+    UIViewController *subVC = [[cls alloc] init];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        [subVC release];
+        WPLog(@"UI", @"[Nav] pushed SettingAvatarHideController");
+    }
+}
 
 - (void)openUIPurify:(id)sender {
     UIResponder *responder = (UIResponder *)sender;
