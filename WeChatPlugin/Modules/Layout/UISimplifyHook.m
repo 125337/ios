@@ -254,8 +254,8 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
             NSTextCheckingResult *match = [regex firstMatchInString:text
                 options:0 range:NSMakeRange(0, text.length)];
             if (match && match.range.location != NSNotFound) {
-                NSString *number = [text substringWithRange:match.range];
-                NSString *formatted = [NSString stringWithFormat:_friendsCount, number];
+                NSString *formatted = [text stringByReplacingCharactersInRange:match.range
+                                                                    withString:_friendsCount];
                 if (formatted) {
                     ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, formatted);
                     return;
@@ -355,8 +355,8 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
             NSTextCheckingResult *match = [regex firstMatchInString:text
                 options:0 range:NSMakeRange(0, text.length)];
             if (match && match.range.location != NSNotFound) {
-                NSString *number = [text substringWithRange:match.range];
-                NSString *formatted = [NSString stringWithFormat:_friendsCount, number];
+                NSString *formatted = [text stringByReplacingCharactersInRange:match.range
+                                                                    withString:_friendsCount];
                 if (formatted) {
                     NSDictionary *attrs = nil;
                     if (attrText.length > 0) {
