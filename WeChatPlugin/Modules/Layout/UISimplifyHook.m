@@ -40,10 +40,10 @@ static void UISimplify_ReloadConfig(void) {
     [_discoverTitle release];
     [_friendsCount release];
     
-    // 微信优化 L40005-40012: 无此key时默认 enabled=1
+    // 无配置时默认不启用，留空代表不改动
     id enabledObj = [d objectForKey:@"SimplifyEnabled"];
     if (enabledObj == nil) {
-        _simplifyEnabled = YES;
+        _simplifyEnabled = NO;
     } else {
         _simplifyEnabled = [d boolForKey:@"SimplifyEnabled"];
     }
