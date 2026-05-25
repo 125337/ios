@@ -171,14 +171,42 @@ static CGSize hook_PatVM_measure(id self, SEL _cmd, CGSize size) {
 }
 
 // ============================================================
-// VoiceMessageCellView
+// VoiceMessageCellView + VoiceMessageViewModel — 5连hook（对齐撤回/拍一拍方案）
 // ============================================================
 
-static IMP _orig_VoiceCell_layoutSubviews = NULL;
+static IMP _orig_VoiceCell_initWithViewModel = NULL;
+static IMP _orig_VoiceCell_layoutInternal = NULL;
+static IMP _orig_VoiceCell_canBeReused = NULL;
+static IMP _orig_VoiceCell_shouldLayoutIfNeeded = NULL;
+static IMP _orig_VoiceVM_measure = NULL;
 
-static void hook_VoiceCell_layoutSubviews(id self, SEL _cmd) {
+static id hook_VoiceCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
+    id result = ((id (*)(id, SEL, id))_orig_VoiceCell_initWithViewModel)(self, _cmd, viewModel);
+    if (result && purifyReadConfig(@"HideVoiceRedDot")) {
+        [result setHidden:YES];
+        [result setFrame:[result frame]];
+    }
+    return result;
+}
+
+static void hook_VoiceCell_layoutInternal(id self, SEL _cmd) {
     if (purifyReadConfig(@"HideVoiceRedDot")) return;
-    ((void (*)(id, SEL))_orig_VoiceCell_layoutSubviews)(self, _cmd);
+    ((void (*)(id, SEL))_orig_VoiceCell_layoutInternal)(self, _cmd);
+}
+
+static BOOL hook_VoiceCell_canBeReused(id self, SEL _cmd) {
+    if (purifyReadConfig(@"HideVoiceRedDot")) return YES;
+    return ((BOOL (*)(id, SEL))_orig_VoiceCell_canBeReused)(self, _cmd);
+}
+
+static BOOL hook_VoiceCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
+    if (purifyReadConfig(@"HideVoiceRedDot")) return NO;
+    return ((BOOL (*)(id, SEL))_orig_VoiceCell_shouldLayoutIfNeeded)(self, _cmd);
+}
+
+static CGSize hook_VoiceVM_measure(id self, SEL _cmd, CGSize size) {
+    if (purifyReadConfig(@"HideVoiceRedDot")) return CGSizeZero;
+    return ((CGSize (*)(id, SEL, CGSize))_orig_VoiceVM_measure)(self, _cmd, size);
 }
 
 // ============================================================
@@ -298,12 +326,24 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageViewModel");
     }
 
-    // ④ VoiceMessageCellView
+    // ④ VoiceMessageCellView + VoiceMessageViewModel — purifySafeHook（对齐撤回/拍一拍方案）
     cls = objc_getClass("VoiceMessageCellView");
     if (cls) {
-        MSHookMessageEx(cls, @selector(layoutSubviews),
-            (IMP)hook_VoiceCell_layoutSubviews, &_orig_VoiceCell_layoutSubviews);
+        purifySafeHook(cls, sel_registerName("initWithViewModel:"),
+            (IMP)hook_VoiceCell_initWithViewModel, &_orig_VoiceCell_initWithViewModel);
+        purifySafeHook(cls, sel_registerName("layoutInternal"),
+            (IMP)hook_VoiceCell_layoutInternal, &_orig_VoiceCell_layoutInternal);
+        purifySafeHook(cls, sel_registerName("canBeReused"),
+            (IMP)hook_VoiceCell_canBeReused, &_orig_VoiceCell_canBeReused);
+        purifySafeHook(cls, sel_registerName("shouldLayoutIfNeeded"),
+            (IMP)hook_VoiceCell_shouldLayoutIfNeeded, &_orig_VoiceCell_shouldLayoutIfNeeded);
         WPLog(@"UIPurify", @"[Hook] ✓ VoiceMessageCellView");
+    }
+    cls = objc_getClass("VoiceMessageViewModel");
+    if (cls) {
+        purifySafeHook(cls, sel_registerName("measure:"),
+            (IMP)hook_VoiceVM_measure, &_orig_VoiceVM_measure);
+        WPLog(@"UIPurify", @"[Hook] ✓ VoiceMessageViewModel");
     }
 
     // ⑤ YYAsyncImageView
