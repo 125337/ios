@@ -65,7 +65,7 @@ static IMP _orig_ChatTimeVM_measure = NULL;
 
 static id hook_ChatTimeCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
     id result = ((id (*)(id, SEL, id))_orig_ChatTimeCell_initWithViewModel)(self, _cmd, viewModel);
-    if (result && purifyReadConfig(@"HideChatTimeCell")) {
+    if (result && purifyReadConfig(@"HideChatTime")) {
         [result setHidden:YES];
         [result setFrame:[result frame]];
     }
@@ -73,22 +73,22 @@ static id hook_ChatTimeCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
 }
 
 static void hook_ChatTimeCell_layoutInternal(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideChatTimeCell")) return;
+    if (purifyReadConfig(@"HideChatTime")) return;
     ((void (*)(id, SEL))_orig_ChatTimeCell_layoutInternal)(self, _cmd);
 }
 
 static BOOL hook_ChatTimeCell_canBeReused(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideChatTimeCell")) return YES;
+    if (purifyReadConfig(@"HideChatTime")) return YES;
     return ((BOOL (*)(id, SEL))_orig_ChatTimeCell_canBeReused)(self, _cmd);
 }
 
 static BOOL hook_ChatTimeCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideChatTimeCell")) return NO;
+    if (purifyReadConfig(@"HideChatTime")) return NO;
     return ((BOOL (*)(id, SEL))_orig_ChatTimeCell_shouldLayoutIfNeeded)(self, _cmd);
 }
 
 static CGSize hook_ChatTimeVM_measure(id self, SEL _cmd, CGSize size) {
-    if (purifyReadConfig(@"HideChatTimeCell")) return CGSizeZero;
+    if (purifyReadConfig(@"HideChatTime")) return CGSizeZero;
     return ((CGSize (*)(id, SEL, CGSize))_orig_ChatTimeVM_measure)(self, _cmd, size);
 }
 
@@ -177,7 +177,7 @@ static CGSize hook_PatVM_measure(id self, SEL _cmd, CGSize size) {
 static IMP _orig_VoiceCell_layoutSubviews = NULL;
 
 static void hook_VoiceCell_layoutSubviews(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideVoiceBubble")) return;
+    if (purifyReadConfig(@"HideVoiceRedDot")) return;
     ((void (*)(id, SEL))_orig_VoiceCell_layoutSubviews)(self, _cmd);
 }
 
@@ -188,7 +188,7 @@ static void hook_VoiceCell_layoutSubviews(id self, SEL _cmd) {
 static IMP _orig_YYAsyncImage_layoutSubviews = NULL;
 
 static void hook_YYAsyncImage_layoutSubviews(id self, SEL _cmd) {
-    if (!purifyReadConfig(@"HideChatBg")) {
+    if (!purifyReadConfig(@"HideBubbleBackground")) {
         ((void (*)(id, SEL))_orig_YYAsyncImage_layoutSubviews)(self, _cmd);
     } else {
         [self setAlpha:0];
@@ -215,7 +215,7 @@ static IMP _orig_UIView_layoutSubviews = NULL;
 
 static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
     ((void (*)(id, SEL))_orig_UIView_layoutSubviews)(self, _cmd);
-    if (purifyReadConfig(@"HideSeparator")) {
+    if (purifyReadConfig(@"HideSeparatorLine")) {
         Class sepClass = NSClassFromString(@"_UITableViewCellSeparatorView");
         if (sepClass && [self isKindOfClass:sepClass]) {
             [self setHidden:YES];
