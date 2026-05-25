@@ -29,7 +29,7 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
         @[@"名字颜色",      @"noop:"],
         @[@"文本颜色",      @"noop:"],
         @[@"长按菜单",      @"noop:"],
-        @[@"附件布局",      @"noop:"],
+        @[@"附件布局",      @"openAttachLayout:"],
         @[@"文本占位",      @"noop:"],
         @[@"界面简化",      @"openUISimplify:"],
         @[@"界面净化",      @"openUIPurify:"],
@@ -110,6 +110,25 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
         WPLog(@"UI", @"[Nav] pushed WPUISimplifyVC");
     } else {
         WPLog(@"UI", @"[Nav] WPUISimplifyVCHelper makeVC returned nil");
+    }
+}
+
+- (void)openAttachLayout:(id)sender {
+    UIResponder *responder = (UIResponder *)sender;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) break;
+        responder = [responder nextResponder];
+    }
+    UIViewController *vc = (UIViewController *)responder;
+    if (!vc) { WPLog(@"UI", @"[Nav] openAttachLayout: currentVC nil"); return; }
+    Class helperClass = objc_getClass("WPUIAttachLayoutVCHelper");
+    if (!helperClass) { WPLog(@"UI", @"[Nav] WPUIAttachLayoutVCHelper not found"); return; }
+    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        WPLog(@"UI", @"[Nav] pushed WPUIAttachLayoutVC");
+    } else {
+        WPLog(@"UI", @"[Nav] WPUIAttachLayoutVCHelper makeVC returned nil");
     }
 }
 
