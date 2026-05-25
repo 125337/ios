@@ -51,10 +51,18 @@ static inline NSString *SStr(NSString *key) {
 
         if (dictKey && nsKey) {
             NSMutableDictionary *dict = [[d dictionaryForKey:nsKey] ?: @{} mutableCopy];
-            dict[dictKey] = newText;
+            if (newText && newText.length > 0) {
+                dict[dictKey] = newText;
+            } else {
+                [dict removeObjectForKey:dictKey];
+            }
             [d setObject:dict forKey:nsKey];
         } else if (nsKey) {
-            [d setObject:newText forKey:nsKey];
+            if (newText && newText.length > 0) {
+                [d setObject:newText forKey:nsKey];
+            } else {
+                [d removeObjectForKey:nsKey];
+            }
         }
         [d synchronize];
     }]];
