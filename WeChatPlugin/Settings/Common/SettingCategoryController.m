@@ -26,7 +26,7 @@ static void configLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-static const CGFloat kRowH = 44.0;
+// kRowH 由 WPCommonUI.h 提供 (extern)
 static const CGFloat kCardRadius = 10.0;
 static const CGFloat kCardPadding = 16.0;
 static const CGFloat kCellHPadding = 16.0;
