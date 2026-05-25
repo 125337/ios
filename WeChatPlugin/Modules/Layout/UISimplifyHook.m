@@ -216,10 +216,10 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
         return;
     }
     
-    // L40492-40511: 好友数格式 — 用配置值作为正则pattern
+    // L40492-40511: 好友数格式 — 固定正则 \\d+ 匹配数字，_friendsCount 作为 format
     if (_friendsCount && _friendsCount.length > 0) {
         NSRegularExpression *regex = [NSRegularExpression
-            regularExpressionWithPattern:_friendsCount options:0 error:nil];
+            regularExpressionWithPattern:@"\\d+" options:0 error:nil];
         if (regex) {
             NSTextCheckingResult *match = [regex firstMatchInString:text
                 options:0 range:NSMakeRange(0, text.length)];
@@ -313,10 +313,10 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
         }
     }
     
-    // Friends count — 用配置值作为正则
+    // Friends count — 固定正则 \\d+ 匹配数字，_friendsCount 作为 format
     if (_friendsCount && _friendsCount.length > 0) {
         NSRegularExpression *regex = [NSRegularExpression
-            regularExpressionWithPattern:_friendsCount options:0 error:nil];
+            regularExpressionWithPattern:@"\\d+" options:0 error:nil];
         if (regex) {
             NSTextCheckingResult *match = [regex firstMatchInString:text
                 options:0 range:NSMakeRange(0, text.length)];
