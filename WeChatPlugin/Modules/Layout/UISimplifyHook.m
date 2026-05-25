@@ -399,10 +399,23 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
     // L40721-40735: bVar2 = containsString:@","
     BOOL hasComma = [title containsString:@","];
     
-    // L40754-40758: 主标题 — 纯逗号检测,不查responder chain!
-    if (_mainTitle && _mainTitle.length > 0 && hasComma) {
-        ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitle)(self, _cmd, titleView, _mainTitle);
-        return;
+    // L40754-40758: 主标题 — 逗号优先；无逗号时 responder chain 兜底
+    if (_mainTitle && _mainTitle.length > 0) {
+        BOOL shouldReplace = hasComma;
+        if (!shouldReplace) {
+            id responder = [self nextResponder];
+            while (responder) {
+                if ([NSStringFromClass([responder class]) hasPrefix:@"NavigationBar"]) {
+                    shouldReplace = YES;
+                    break;
+                }
+                responder = [responder nextResponder];
+            }
+        }
+        if (shouldReplace) {
+            ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitle)(self, _cmd, titleView, _mainTitle);
+            return;
+        }
     }
     
     // L40762-40766: 通讯录 — 纯文本检测,不查responder chain!
