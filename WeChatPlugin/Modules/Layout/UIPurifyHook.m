@@ -242,13 +242,12 @@ static BOOL hook_MMGrow_enableDictation(id self, SEL _cmd) {
 }
 
 // ============================================================
-// 分隔线隐藏 — 精准两源头方案
+// 分隔线隐藏 — 精准三源头方案
 // ============================================================
-// 微信优化用 UIView.layoutSubviews 全局 hook（危险，朋友圈会加粗）
-// 我们改为精准 hook 两个源头：
-//   ① _UITableViewCellSeparatorView — 聊天列表系统分隔线
-//   ② WCTableViewManager.getSeparator — 设置/通讯录/我的等自定义分隔线
-// 朋友圈等不受影响
+// ① _UITableViewCellSeparatorView — 聊天列表系统分隔线
+// ② WCTableViewManager.getSeparator — 设置/我的页等 WCTableView 分隔线
+// ③ MMTableView.layoutSubviews — 通讯录（MMMainTableView）等用默认分隔线的页面
+// 不碰 UIView 全局，避免朋友圈加粗
 // ============================================================
 
 // ① _UITableViewCellSeparatorView 分隔线
@@ -271,6 +270,25 @@ static id hook_WCTableView_getSeparator(id self, SEL _cmd) {
         return nil;
     }
     return ((id (*)(id, SEL))_orig_WCTableView_getSeparator)(self, _cmd);
+}
+
+// ③ MMTableView.layoutSubviews → 通讯录等直接使用默认分隔线的页面
+static IMP _orig_MMTableView_layoutSubviews = NULL;
+
+static void hook_MMTableView_layoutSubviews(id self, SEL _cmd) {
+    if (_orig_MMTableView_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMTableView_layoutSubviews)(self, _cmd);
+    }
+    if (purifyReadConfig(@"HideSeparatorLine")) {
+        // 遍历 MMTableView 子视图，隐藏类名包含 "Separator" 的视图
+        // MMTableView 是 WeChat 的 UITableView 基类，通讯录/聊天列表等都用它
+        for (UIView *sub in [self subviews]) {
+            NSString *cls = NSStringFromClass([sub class]);
+            if ([cls containsString:@"Separator"]) {
+                [sub setHidden:YES];
+            }
+        }
+    }
 }
 
 // ============================================================
@@ -377,7 +395,7 @@ static id hook_WCTableView_getSeparator(id self, SEL _cmd) {
         WPLog(@"UIPurify", @"[Hook] ✓ MMGrowTextViewExtConfig");
     }
 
-    // ⑦ 分隔线隐藏 — 精准两源头（不 hook UIView 全局，避免朋友圈加粗）
+    // ⑦ 分隔线隐藏 — 精准三源头
     cls = objc_getClass("_UITableViewCellSeparatorView");
     if (cls) {
         MSHookMessageEx(cls, @selector(layoutSubviews),
@@ -389,6 +407,12 @@ static id hook_WCTableView_getSeparator(id self, SEL _cmd) {
         MSHookMessageEx(cls, sel_registerName("getSeparator"),
             (IMP)hook_WCTableView_getSeparator, &_orig_WCTableView_getSeparator);
         WPLog(@"UIPurify", @"[Hook] ✓ WCTableViewManager.getSeparator");
+    }
+    cls = objc_getClass("MMTableView");
+    if (cls) {
+        MSHookMessageEx(cls, @selector(layoutSubviews),
+            (IMP)hook_MMTableView_layoutSubviews, &_orig_MMTableView_layoutSubviews);
+        WPLog(@"UIPurify", @"[Hook] ✓ MMTableView.layoutSubviews");
     }
 
     WPLog(@"UIPurify", @"UIPurifyHook install complete");
