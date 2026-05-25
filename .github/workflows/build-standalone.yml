@@ -73,6 +73,7 @@ jobs:
           WeChatPlugin/Settings/Controllers/SettingGeneralFunctionController.m \
           WeChatPlugin/Settings/Controllers/SettingMessageTimeController.m \
           WeChatPlugin/Settings/Controllers/SettingRevokeController.m \
+          WeChatPlugin/Settings/Controllers/SettingRedEnvelopController.m \
           WeChatPlugin/Settings/Controllers/SettingAvatarHideController.m \
           WeChatPlugin/Settings/Controllers/WeChatTweakGroupSelectsController.m; do
           BASENAME=$(basename "$f" .m)
