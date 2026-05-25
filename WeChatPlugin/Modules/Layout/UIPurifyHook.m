@@ -242,9 +242,17 @@ static BOOL hook_MMGrow_enableDictation(id self, SEL _cmd) {
 }
 
 // ============================================================
-// UIView 分割线 — 对齐 FUN_0004627c（类名匹配 + 几何启发式）
-// 微信优化不止隐藏 _UITableViewCellSeparatorView，还用高度 ≤ 1.0 检测所有细线
-// 这样设置页、通讯录、朋友圈等各处的 WCTableViewManager 自定义分割线也会被隐藏
+// UIView 分割线 — 完全复刻 FUN_0004627c
+// ============================================================
+// 微信优化算法（逐行翻译自反编译）：
+//   1. 跳过 FTSBrandContactCell / Brand / Contact
+//   2. isSepClass = [class isEqualToString:"_UITableViewCellSeparatorView"]（精确）
+//   3. 高度 ≤ 0 或 > 1.0 → bVar1=YES（跳过）
+//   4. 宽度 + alpha + 背景色 + 非Label非Image → 决策
+//   5. 两条路径：
+//      Path A: class == "UIView"（精确匹配）→ 宽度 > 100 且无子视图才隐藏
+//      Path B: class != "UIView"（自定义子类）→ 细线+宽+不透明+有背景色 或 isSepClass 才隐藏
+//   6. 遍历父视图链：WCTimeLineViewController / WCTimelineFooterCell / MPSubscriptionViewController → 跳过
 // ============================================================
 
 static IMP _orig_UIView_layoutSubviews = NULL;
@@ -253,40 +261,117 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
     ((void (*)(id, SEL))_orig_UIView_layoutSubviews)(self, _cmd);
     if (!purifyReadConfig(@"HideSeparatorLine")) return;
     
-    // 对齐微信优化：跳过 Brand / Contact 相关（避免隐藏头像等关键 UI）
+    // 行 33-36: 获取类名
     NSString *className = NSStringFromClass([self class]);
+    
+    // 行 37: isKindOfClass FTSBrandContactCell → skip
+    Class ftsBrandCell = NSClassFromString(@"FTSBrandContactCell");
+    if (ftsBrandCell && [self isKindOfClass:ftsBrandCell]) return;
+    
+    // 行 39-42: className 包含 Brand 或 Contact → skip
     if ([className containsString:@"Brand"]) return;
     if ([className containsString:@"Contact"]) return;
     
-    // 条件1：_UITableViewCellSeparatorView（系统原生分割线，聊天列表等）
-    BOOL isSepClass = [className containsString:@"_UITableViewCellSeparatorView"];
+    // 行 43: isSepClass = isEqualToString（精确匹配！不是 containsString）
+    BOOL isSepClass = [className isEqualToString:@"_UITableViewCellSeparatorView"];
     
-    // 条件2：几何启发式 — 高度 ≤ 1pt 的细线（WCTableViewManager 自定义分割线）
-    // 注意：不限制宽度！设置页/通讯录的分割线是全宽的（~375pt）
+    // 行 44-52: 高度判断 → bVar1
     CGRect frame = [self frame];
-    CGFloat h = frame.size.height;
-    BOOL isThinLine = (h > 0 && h <= 1.0);
+    CGFloat height = frame.size.height;
+    BOOL bVar1; // bVar1=YES 表示"不是细分割线"→跳过
+    if (height <= 0.0) {
+        bVar1 = YES;
+    } else {
+        bVar1 = (1.0 < height); // height > 1.0 → bVar1=YES
+    }
+    // bVar1=YES: height≤0 或 height>1.0 → 跳过
+    // bVar1=NO:  0 < height ≤ 1.0 → 是细线，继续判断
     
-    // 条件3：不能是 UIImageView / UILabel（避免误隐藏图标和文字）
-    BOOL isSafe = ![self isKindOfClass:[UIImageView class]] && ![self isKindOfClass:[UILabel class]];
+    // 行 54-56: 宽度 + alpha
+    CGFloat width = frame.size.width;
+    CGFloat alpha = [self alpha];
     
-    // 条件4：自身宽度必须 ≥ 父视图宽度的 90%（确保不是局部 UI 元素）
-    UIView *parent = [self superview];
-    CGFloat superW = parent ? [parent bounds].size.width : 0;
-    if (superW > 0) {
-        CGFloat selfW = frame.size.width;
-        if (selfW / superW < 0.9) return;
+    // 行 57-59: 背景色
+    BOOL hasBgColor = ([self backgroundColor] != nil);
+    
+    // 行 60-68: uVar3 = !isUILabel && !isUIImageView
+    BOOL isUILabel = [self isKindOfClass:[UILabel class]];
+    BOOL uVar3;
+    if (isUILabel) {
+        uVar3 = NO;
+    } else {
+        BOOL isUIImageView = [self isKindOfClass:[UIImageView class]];
+        uVar3 = !isUIImageView;
     }
     
-    if (isSepClass || (isThinLine && isSafe)) {
-        // 遍历父视图链：WCTimelineFooterCell 下的分割线保留（朋友圈底部）
-        UIView *p = parent;
+    // 行 70-73: isKindOfClass UIView → 总是 YES（UIView hook）→ 走 else
+    
+    // ==========================================
+    // 行 74-75: [className isEqualToString:@"UIView"]（精确）
+    BOOL isUIViewExact = [className isEqualToString:@"UIView"];
+    
+    if (isUIViewExact) {
+        // PATH A: exact "UIView"（非子类）
+        // 行 82-84: 宽度 ≤ 100 → 标记为跳过
+        if (width <= 100.0) {
+            bVar1 = YES;
+        }
+        // 行 85-95: 任一条件不满足 → 跳过
+        if (bVar1 || alpha <= 0.9 || !hasBgColor || !uVar3) {
+            return;
+        }
+        // 行 87-95: 有子视图 → 跳过
+        NSArray *subs = [self subviews];
+        if ([subs count] > 0) {
+            return;
+        }
+        // → 无子视图的纯 UIView 细线 → 隐藏
+    } else {
+        // PATH B: UIView 子类（MMUIView 等，WCTableViewManager 自定义分割线）
+        // 行 104-107: !isSepClass && !bVar1 && w>100 && alpha>0.9
+        if (!isSepClass && !bVar1 && width > 100.0 && alpha > 0.9) {
+            if (!hasBgColor || !uVar3) {
+                return; // 无背景色 或 是Label/Image → 跳过
+            }
+            // → 细线+宽+不透明+有背景色 → 隐藏
+        } else if (!isSepClass) {
+            // 非分割线类且不满足几何条件 → 跳过
+            return;
+        }
+        // isSepClass=YES → uVar2 保持 YES → 进入隐藏
+    }
+    
+    // ==========================================
+    // 行 76-82 (41276-41295): 父视图链检查
+    // Walk 1: WCTimeLineViewController
+    Class timeLineVC = NSClassFromString(@"WCTimeLineViewController");
+    if (timeLineVC) {
+        UIView *p = [self superview];
         while (p) {
-            if ([NSStringFromClass([p class]) containsString:@"WCTimelineFooterCell"]) return;
+            if ([p isKindOfClass:timeLineVC]) return;
             p = [p superview];
         }
-        [self setHidden:YES];
     }
+    // Walk 2: WCTimelineFooterCell（精确 isEqualToString）
+    {
+        UIView *p = [self superview];
+        while (p) {
+            if ([[p class] isEqualToString:@"WCTimelineFooterCell"]) return;
+            p = [p superview];
+        }
+    }
+    // Walk 3: MPSubscriptionViewController
+    Class mpSubVC = NSClassFromString(@"MPSubscriptionViewController");
+    if (mpSubVC) {
+        UIView *p = [self superview];
+        while (p) {
+            if ([p isKindOfClass:mpSubVC]) return;
+            p = [p superview];
+        }
+    }
+    
+    // 行 295-298 (41295-41315): setHidden:YES
+    [self setHidden:YES];
 }
 
 // ============================================================
