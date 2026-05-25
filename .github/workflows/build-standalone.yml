@@ -74,7 +74,6 @@ jobs:
           WeChatPlugin/Settings/Controllers/SettingMessageTimeController.m \
           WeChatPlugin/Settings/Controllers/SettingRevokeController.m \
           WeChatPlugin/Settings/Controllers/SettingAvatarHideController.m \
-          WeChatPlugin/Settings/Controllers/SettingLayoutFunctionController.m \
           WeChatPlugin/Settings/Controllers/WeChatTweakGroupSelectsController.m; do
           BASENAME=$(basename "$f" .m)
           OBJ_FILE="build/${BASENAME}.o"
