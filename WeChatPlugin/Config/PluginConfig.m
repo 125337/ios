@@ -469,6 +469,18 @@
             [d removeObjectForKey:key];
         }
     }
+    
+    // 清理界面简化/附件布局的非前缀 key（这些 key 没有 WCP_ 前缀）
+    [d removeObjectForKey:@"SimplifyEnabled"];
+    [d removeObjectForKey:@"Simplify_MenuNames"];
+    [d removeObjectForKey:@"Simplify_Tab_Names"];
+    [d removeObjectForKey:@"Simplify_MainTitle"];
+    [d removeObjectForKey:@"Simplify_ContactsTitle"];
+    [d removeObjectForKey:@"Simplify_DiscoverTitle"];
+    [d removeObjectForKey:@"Simplify_FriendsCount"];
+    [d removeObjectForKey:@"AttachLayout_Columns"];
+    [d removeObjectForKey:@"AttachLayout_Rows"];
+    
     [d synchronize];
     
     // 重新加载默认值
