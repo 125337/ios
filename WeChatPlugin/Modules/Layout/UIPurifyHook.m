@@ -8,8 +8,8 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-#import <substrate.h>
 #import <objc/runtime.h>
+#import <substrate.h>
 #import "../../Core/LogManager.h"
 
 static inline BOOL purifyReadConfig(NSString *key) {
@@ -176,18 +176,37 @@ static CGSize hook_PatVM_measure(id self, SEL _cmd, CGSize size) {
 
 static IMP _orig_VoiceCell_layoutSubviews = NULL;
 
+static void hideIvarIfExists(id obj, const char *ivarName) {
+    Ivar ivar = class_getInstanceVariable([obj class], ivarName);
+    if (!ivar) {
+        ivar = class_getInstanceVariable(class_getSuperclass([obj class]), ivarName);
+    }
+    if (ivar) {
+        id subview = object_getIvar(obj, ivar);
+        if (subview) {
+            [subview setHidden:YES];
+        } else {
+            WPLog(@"UIPurify", @"[Voice] ivar %s found but value is nil", ivarName);
+        }
+    } else {
+        WPLog(@"UIPurify", @"[Voice] ivar %s not found in class hierarchy", ivarName);
+    }
+}
+
 static void hook_VoiceCell_layoutSubviews(id self, SEL _cmd) {
     // 先调用原始布局，确保语音 cell 正常渲染
     ((void (*)(id, SEL))_orig_VoiceCell_layoutSubviews)(self, _cmd);
     
-    if (purifyReadConfig(@"HideVoiceRedDot")) {
-        // 只隐藏红点，不隐藏整条语音消息
-        id unreadView = [self valueForKey:@"_unreadImageView"];
-        if (unreadView) [unreadView setHidden:YES];
-        
-        // 只隐藏"转文字"按钮
-        id transBtn = [self valueForKey:@"_quickTransTipButton"];
-        if (transBtn) [transBtn setHidden:YES];
+    static BOOL loggedOnce = NO;
+    BOOL enabled = purifyReadConfig(@"HideVoiceRedDot");
+    if (!loggedOnce) {
+        WPLog(@"UIPurify", @"[Voice] layoutSubviews called, config=%d. Class hierarchy: self=%@, super=%@",
+              enabled, NSStringFromClass([self class]), NSStringFromClass(class_getSuperclass([self class])));
+        loggedOnce = YES;
+    }
+    if (enabled) {
+        hideIvarIfExists(self, "_unreadImageView");
+        hideIvarIfExists(self, "_quickTransTipButton");
     }
 }
 
