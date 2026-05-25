@@ -89,6 +89,7 @@ static void updateChatContext(id self) {
     } else {
         _currentChatType = MOChatTypePrivate;     // 私聊
     }
+    WPLog(@"HideAvatar", @"updateChatContext: username=%@ chatType=%ld", username, (long)_currentChatType);
 }
 
 // ============================================================
@@ -97,6 +98,7 @@ static void updateChatContext(id self) {
 
 static void hook_viewDidLoad(id self, SEL _cmd) {
     ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
+    WPLog(@"HideAvatar", @"viewDidLoad triggered");
     updateChatContext(self);
 }
 
@@ -161,6 +163,10 @@ static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
         default:
             return ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
     }
+
+    WPLog(@"HideAvatar", @"isShowHeadImage called: chatType=%ld isSender=%d hide=%d orig=%d",
+          (long)_currentChatType, isSender, shouldHide,
+          ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd));
 
     if (shouldHide) {
         return NO;  // ★ 隐藏头像 (对齐 FUN_000078bc L6127-L6128)
