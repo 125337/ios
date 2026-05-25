@@ -310,22 +310,18 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
     // 所有 UIView 子类都 isKindOfClass:[UIView class] → 走 PATH B
     // PATH A (严格路径) 通过 className hasPrefix/suffix "UIView" 二次判断进入
     
-    BOOL classIsUIView = [className isEqualToString:@"UIView"];
+    // 文件: 隐藏分割线bug根因分析.md 建议修复
+    // isKindOfClass 匹配 UIView 及其所有子类，对齐微信优化 isKindOfClass:[UIView class]
+    // 注意：isKindOfClass:[UIView class] 对所有 UIView 子类永远 YES，
+    //       因此 PATH A/B 分流实际由 classNameHasUIView 决定
     BOOL classNameHasUIView = [className containsString:@"UIView"];
     
     BOOL shouldHide = NO;
     
-    if (!classIsUIView && classNameHasUIView && isSepClass) {
-        // ── PATH A：类名含 "UIView" 且是分隔线类 ──
-        // 例：_UITableViewCellSeparatorView 含 "View" 但不等同 "UIView"
-        //     实际类名不含 "UIView"，不走这里
-        goto CHECK_PARENT_CHAIN;
-    }
-    
-    if (classIsUIView || classNameHasUIView) {
-        // ── PATH A 严格路径：class == "UIView" 或类名含 "UIView" ──
+    if (classNameHasUIView) {
+        // ── PATH A 严格路径：类名含 "UIView" ──
         if (width <= 100.0) {
-            heightTooTall = NO; // 窄视图放宽高度限制
+            heightTooTall = YES; // 窄视图跳过，对齐微信优化 bVar1 = true
         }
         if (heightTooTall || alpha <= 0.9 || !hasBgColor || !isNotImageView) {
             goto CLEANUP; // 四条件任一不满足 → 跳过
@@ -334,7 +330,7 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         goto CHECK_PARENT_CHAIN;
     }
     
-    // ── PATH B：UIView 子类（非 UIView 非含 "UIView" 类名）──
+    // ── PATH B：类名不含 "UIView"（如 _UITableViewCellSeparatorView）──
     // _UITableViewCellSeparatorView 走这里
     // 先检查综合条件
     if (!isSepClass && !heightTooTall && width > 100.0 && alpha > 0.9) {
