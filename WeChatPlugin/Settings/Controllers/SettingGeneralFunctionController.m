@@ -2,6 +2,7 @@
 #import "SettingMessageTimeController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/WeChatAlertHelper.h"
+#import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 
 @implementation SettingLayoutFunctionController
