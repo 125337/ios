@@ -57,16 +57,11 @@ void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSStr
     [sw release];
 }
 
-void WPAddNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *action, id target) {
-    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, cw - kPad * 2 - 30, kRowH)];
-    tl.text = title;
-    tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = WPT1();
-    [card addSubview:tl];
-    [tl release];
+#pragma mark - 公共箭头
 
+void WPDrawDisclosureArrow(UIView *card, CGFloat cy, CGFloat containerW, CGFloat rightPadding) {
     CGFloat arrowW = 7, arrowH = 11;
-    CGFloat arrowX = cw - kPad - arrowW - 3;
+    CGFloat arrowX = containerW - rightPadding - arrowW - 3;
     CGFloat arrowCY = cy + kRowH / 2;
     CAShapeLayer *arrow = [CAShapeLayer layer];
     UIBezierPath *path = [UIBezierPath bezierPath];
@@ -81,6 +76,17 @@ void WPAddNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString
     arrow.lineJoin = kCALineJoinRound;
     arrow.frame = CGRectMake(arrowX, arrowCY - arrowH / 2, arrowW + 2, arrowH);
     [card.layer addSublayer:arrow];
+}
+
+void WPAddNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *action, id target) {
+    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, cw - kPad * 2 - 30, kRowH)];
+    tl.text = title;
+    tl.font = [UIFont systemFontOfSize:15];
+    tl.textColor = WPT1();
+    [card addSubview:tl];
+    [tl release];
+
+    WPDrawDisclosureArrow(card, cy, cw, kPad * 3);
 
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
     btn.frame = CGRectMake(0, cy, cw - kPad * 2, kRowH);
@@ -180,23 +186,7 @@ UIButton *WPAddEditableRowWithArrow(UIView *card, CGFloat cy, CGFloat cw, NSStri
     [card addSubview:vl];
     [vl release];
 
-    // 右箭头（与 WPAddNavRow 一致）
-    CGFloat arrowW = 7, arrowH = 11;
-    CGFloat arrowX = cw - kPad - arrowW - 3;
-    CGFloat arrowCY = cy + kRowH / 2;
-    CAShapeLayer *arrow = [CAShapeLayer layer];
-    UIBezierPath *path = [UIBezierPath bezierPath];
-    [path moveToPoint:CGPointMake(1, 0)];
-    [path addLineToPoint:CGPointMake(arrowW, arrowH / 2)];
-    [path addLineToPoint:CGPointMake(1, arrowH)];
-    arrow.path = path.CGPath;
-    arrow.strokeColor = [UIColor colorWithRed:0.78 green:0.78 blue:0.80 alpha:1.0].CGColor;
-    arrow.fillColor = [UIColor clearColor].CGColor;
-    arrow.lineWidth = 2.0;
-    arrow.lineCap = kCALineCapRound;
-    arrow.lineJoin = kCALineJoinRound;
-    arrow.frame = CGRectMake(arrowX, arrowCY - arrowH / 2, arrowW + 2, arrowH);
-    [card.layer addSublayer:arrow];
+    WPDrawDisclosureArrow(card, cy, cw, kPad * 3);
 
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
     btn.frame = CGRectMake(0, cy, cw - kPad * 2, kRowH);

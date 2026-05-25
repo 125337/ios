@@ -28,6 +28,9 @@ void WPAddTextFieldRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NS
 UIButton *WPAddEditableRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *value, id target);
 UIButton *WPAddEditableRowWithArrow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *value, id target);
 
+/// 绘制通用右箭头（>），containerW 为容器宽度，rightPadding 为箭头到容器右边缘的距离
+void WPDrawDisclosureArrow(UIView *card, CGFloat cy, CGFloat containerW, CGFloat rightPadding);
+
 /// 获取微信原生顶层 ViewController（用于安全 present UIAlertController）
 /// 复刻微信优化 getChatConfirmationTopViewController — 遍历 UIWindow 层级找到 MMUIViewController 子类
 /// 避免直接 [self presentViewController:] 触发 iOS 17 presentingModalViewController 崩溃

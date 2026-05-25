@@ -3,6 +3,7 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Config/Constants.h"
 #import "../../Config/WPColors.h"
+#import "../../Modules/SettingEntry/WPCommonUI.h"
 #import <objc/runtime.h>
 #import <QuartzCore/QuartzCore.h>
 #import "../../Core/LogManager.h"
@@ -207,22 +208,7 @@ static NSString *configPropertyForKey(NSString *key) {
         [dl release];
     }
 
-    CGFloat arrowW = 7, arrowH = 11;
-    CGFloat arrowX = gw - kCellHPadding - arrowW - 3;
-    CGFloat arrowCY = cy + kRowH / 2;
-    CAShapeLayer *arrow = [CAShapeLayer layer];
-    UIBezierPath *path = [UIBezierPath bezierPath];
-    [path moveToPoint:CGPointMake(1, 0)];
-    [path addLineToPoint:CGPointMake(arrowW, arrowH / 2)];
-    [path addLineToPoint:CGPointMake(1, arrowH)];
-    arrow.path = path.CGPath;
-    arrow.strokeColor = [UIColor colorWithRed:0.78 green:0.78 blue:0.80 alpha:1.0].CGColor;
-    arrow.fillColor = [UIColor clearColor].CGColor;
-    arrow.lineWidth = 2.0;
-    arrow.lineCap = kCALineCapRound;
-    arrow.lineJoin = kCALineJoinRound;
-    arrow.frame = CGRectMake(arrowX, arrowCY - arrowH / 2, arrowW + 2, arrowH);
-    [group.layer addSublayer:arrow];
+    WPDrawDisclosureArrow(group, cy, gw, kCellHPadding);
 
     UIButton *btn = [[UIButton alloc] initWithFrame:CGRectMake(0, cy, gw, kRowH)];
     btn.tag = tag;
@@ -340,22 +326,7 @@ static NSString *configPropertyForKey(NSString *key) {
     [group addSubview:hl];
     [hl release];
     
-    CGFloat arrowW = 7, arrowH = 11;
-    CGFloat arrowX = gw - kCellHPadding - arrowW - 3;
-    CGFloat arrowCY = cy + kRowH / 2;
-    CAShapeLayer *arrow = [CAShapeLayer layer];
-    UIBezierPath *path = [UIBezierPath bezierPath];
-    [path moveToPoint:CGPointMake(1, 0)];
-    [path addLineToPoint:CGPointMake(arrowW, arrowH / 2)];
-    [path addLineToPoint:CGPointMake(1, arrowH)];
-    arrow.path = path.CGPath;
-    arrow.strokeColor = [UIColor colorWithRed:0.78 green:0.78 blue:0.80 alpha:1.0].CGColor;
-    arrow.fillColor = [UIColor clearColor].CGColor;
-    arrow.lineWidth = 2.0;
-    arrow.lineCap = kCALineCapRound;
-    arrow.lineJoin = kCALineJoinRound;
-    arrow.frame = CGRectMake(arrowX, arrowCY - arrowH / 2, arrowW + 2, arrowH);
-    [group.layer addSublayer:arrow];
+    WPDrawDisclosureArrow(group, cy, gw, kCellHPadding);
     
     UIButton *btn = [[UIButton alloc] initWithFrame:CGRectMake(0, cy, gw, kRowH)];
     objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
