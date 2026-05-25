@@ -1,11 +1,13 @@
 #import "../Common/SettingController.h"
 #import "../../Config/PluginConfig.h"
+#import "../../Core/LogManager.h"
 
 @implementation SettingAvatarHideController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"隐藏头像";
+    WPLog(@"Setting", @"[Avatar] SettingAvatarHideController viewDidLoad contentView=%@", self.contentView);
     [self buildUI];
 }
 

@@ -7,7 +7,9 @@
 @implementation SettingLayoutFunctionController
 
 - (void)onAvatarHideTap {
+    WPLog(@"Setting", @"[Layout] onAvatarHideTap tapped! navController=%@", self.navigationController);
     SettingAvatarHideController *vc = [[SettingAvatarHideController alloc] init];
+    WPLog(@"Setting", @"[Layout] onAvatarHideTap vc=%@", vc);
     [self.navigationController pushViewController:vc animated:YES];
     [vc release];
 }
@@ -28,6 +30,7 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    WPLog(@"Setting", @"[Layout] SettingLayoutFunctionController viewDidLoad _isLayoutPage=%d", _isLayoutPage);
     if (_isLayoutPage) {
         self.title = @"界面布局";
         [self buildUI];
