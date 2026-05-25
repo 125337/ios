@@ -12,6 +12,7 @@
 #import "../Modules/GroupExit/GroupExitHook.h"
 #import "../Modules/MessageTime/MessageTimeHook.h"
 #import "../Modules/HideAvatar/HideAvatarHook.h"
+#import "../Modules/Layout/UIAttachLayoutHook.h"
 
 @implementation FeatureModuleDescriptor
 
@@ -57,7 +58,7 @@
                                                  subtitle:@"外观颜色、深色模式"
                                              sectionTitle:@"通用"
                                           controllerClass:[SettingLayoutFunctionController class]
-                                     hookInstallerClasses:@[[TintHook class], [UIPurifyHook class], [UISimplifyHook class], [HideAvatarHook class]]],
+                                     hookInstallerClasses:@[[TintHook class], [UIPurifyHook class], [UISimplifyHook class], [HideAvatarHook class], [UIAttachLayoutHook class]]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"about"
                                                     title:@"关于"
                                                  subtitle:@"插件信息"
