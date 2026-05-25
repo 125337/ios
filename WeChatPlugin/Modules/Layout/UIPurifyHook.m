@@ -242,27 +242,32 @@ static BOOL hook_MMGrow_enableDictation(id self, SEL _cmd) {
 }
 
 // ============================================================
-// 分隔线隐藏 — 精准三源头方案
+// 分隔线隐藏 — 双管齐下（UIView 极简全局 + WCTableViewManager 源头拦截）
 // ============================================================
-// ① _UITableViewCellSeparatorView — 聊天列表系统分隔线
-// ② WCTableViewManager.getSeparator — 设置/我的页等 WCTableView 分隔线
-// ③ MMTableView.layoutSubviews — 通讯录（MMMainTableView）等用默认分隔线的页面
-// 不碰 UIView 全局，避免朋友圈加粗
+// 微信优化最终方案：
+//   ① UIView.layoutSubviews 全局 hook，只检查类名含 "Separator"
+//      （不查 frame/alpha/bgColor，零副作用）
+//   ② WCTableViewManager.getSeparator → return nil（源头阻止）
+// 通讯录的分隔线就是 _UITableViewCellSeparatorView，归 ① 覆盖
+// 朋友圈不受影响（朋友圈没有 Separator 类名的视图）
 // ============================================================
 
-// ① _UITableViewCellSeparatorView 分隔线
-static IMP _orig_SeparatorView_layoutSubviews = NULL;
+// ① UIView.layoutSubviews — 极简全局：只匹配类名含 "Separator"
+static IMP _orig_UIView_layoutSubviews = NULL;
 
-static void hook_SeparatorView_layoutSubviews(id self, SEL _cmd) {
-    if (_orig_SeparatorView_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_SeparatorView_layoutSubviews)(self, _cmd);
-    }
+static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
+    ((void (*)(id, SEL))_orig_UIView_layoutSubviews)(self, _cmd);
     if (purifyReadConfig(@"HideSeparatorLine")) {
-        [self setHidden:YES];
+        NSString *cls = NSStringFromClass([self class]);
+        // 只匹配类名含 "Separator" 的视图（_UITableViewCellSeparatorView 等）
+        // 不匹配 scroll indicator 等
+        if ([cls containsString:@"Separator"] && ![cls containsString:@"Indicator"]) {
+            [self setHidden:YES];
+        }
     }
 }
 
-// ② WCTableViewManager.getSeparator → 返回 nil 从源头阻止分隔线创建
+// ② WCTableViewManager.getSeparator → 返回 nil 从源头阻止自定义分隔线
 static IMP _orig_WCTableView_getSeparator = NULL;
 
 static id hook_WCTableView_getSeparator(id self, SEL _cmd) {
@@ -270,25 +275,6 @@ static id hook_WCTableView_getSeparator(id self, SEL _cmd) {
         return nil;
     }
     return ((id (*)(id, SEL))_orig_WCTableView_getSeparator)(self, _cmd);
-}
-
-// ③ MMTableView.layoutSubviews → 通讯录等直接使用默认分隔线的页面
-static IMP _orig_MMTableView_layoutSubviews = NULL;
-
-static void hook_MMTableView_layoutSubviews(id self, SEL _cmd) {
-    if (_orig_MMTableView_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMTableView_layoutSubviews)(self, _cmd);
-    }
-    if (purifyReadConfig(@"HideSeparatorLine")) {
-        // 遍历 MMTableView 子视图，隐藏类名包含 "Separator" 的视图
-        // MMTableView 是 WeChat 的 UITableView 基类，通讯录/聊天列表等都用它
-        for (UIView *sub in [self subviews]) {
-            NSString *cls = NSStringFromClass([sub class]);
-            if ([cls containsString:@"Separator"]) {
-                [sub setHidden:YES];
-            }
-        }
-    }
 }
 
 // ============================================================
@@ -395,24 +381,16 @@ static void hook_MMTableView_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"UIPurify", @"[Hook] ✓ MMGrowTextViewExtConfig");
     }
 
-    // ⑦ 分隔线隐藏 — 精准三源头
-    cls = objc_getClass("_UITableViewCellSeparatorView");
-    if (cls) {
-        MSHookMessageEx(cls, @selector(layoutSubviews),
-            (IMP)hook_SeparatorView_layoutSubviews, &_orig_SeparatorView_layoutSubviews);
-        WPLog(@"UIPurify", @"[Hook] ✓ _UITableViewCellSeparatorView");
-    }
+    // ⑦ 分隔线隐藏 — 双管齐下
+    MSHookMessageEx([UIView class], @selector(layoutSubviews),
+        (IMP)hook_UIView_layoutSubviews, &_orig_UIView_layoutSubviews);
+    WPLog(@"UIPurify", @"[Hook] ✓ UIView.layoutSubviews (极简 Separator 匹配)");
+    
     cls = objc_getClass("WCTableViewManager");
     if (cls) {
         MSHookMessageEx(cls, sel_registerName("getSeparator"),
             (IMP)hook_WCTableView_getSeparator, &_orig_WCTableView_getSeparator);
         WPLog(@"UIPurify", @"[Hook] ✓ WCTableViewManager.getSeparator");
-    }
-    cls = objc_getClass("MMTableView");
-    if (cls) {
-        MSHookMessageEx(cls, @selector(layoutSubviews),
-            (IMP)hook_MMTableView_layoutSubviews, &_orig_MMTableView_layoutSubviews);
-        WPLog(@"UIPurify", @"[Hook] ✓ MMTableView.layoutSubviews");
     }
 
     WPLog(@"UIPurify", @"UIPurifyHook install complete");
