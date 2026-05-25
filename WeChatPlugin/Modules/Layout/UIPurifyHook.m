@@ -171,42 +171,24 @@ static CGSize hook_PatVM_measure(id self, SEL _cmd, CGSize size) {
 }
 
 // ============================================================
-// VoiceMessageCellView + VoiceMessageViewModel — 5连hook（对齐撤回/拍一拍方案）
+// VoiceMessageCellView — 对齐 FUN_00026280（只隐藏 _unreadImageView + _quickTransTipButton）
 // ============================================================
 
-static IMP _orig_VoiceCell_initWithViewModel = NULL;
-static IMP _orig_VoiceCell_layoutInternal = NULL;
-static IMP _orig_VoiceCell_canBeReused = NULL;
-static IMP _orig_VoiceCell_shouldLayoutIfNeeded = NULL;
-static IMP _orig_VoiceVM_measure = NULL;
+static IMP _orig_VoiceCell_layoutSubviews = NULL;
 
-static id hook_VoiceCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
-    id result = ((id (*)(id, SEL, id))_orig_VoiceCell_initWithViewModel)(self, _cmd, viewModel);
-    if (result && purifyReadConfig(@"HideVoiceRedDot")) {
-        [result setHidden:YES];
-        [result setFrame:[result frame]];
+static void hook_VoiceCell_layoutSubviews(id self, SEL _cmd) {
+    // 先调用原始布局，确保语音 cell 正常渲染
+    ((void (*)(id, SEL))_orig_VoiceCell_layoutSubviews)(self, _cmd);
+    
+    if (purifyReadConfig(@"HideVoiceRedDot")) {
+        // 只隐藏红点，不隐藏整条语音消息
+        id unreadView = [self valueForKey:@"_unreadImageView"];
+        if (unreadView) [unreadView setHidden:YES];
+        
+        // 只隐藏"转文字"按钮
+        id transBtn = [self valueForKey:@"_quickTransTipButton"];
+        if (transBtn) [transBtn setHidden:YES];
     }
-    return result;
-}
-
-static void hook_VoiceCell_layoutInternal(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideVoiceRedDot")) return;
-    ((void (*)(id, SEL))_orig_VoiceCell_layoutInternal)(self, _cmd);
-}
-
-static BOOL hook_VoiceCell_canBeReused(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideVoiceRedDot")) return YES;
-    return ((BOOL (*)(id, SEL))_orig_VoiceCell_canBeReused)(self, _cmd);
-}
-
-static BOOL hook_VoiceCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
-    if (purifyReadConfig(@"HideVoiceRedDot")) return NO;
-    return ((BOOL (*)(id, SEL))_orig_VoiceCell_shouldLayoutIfNeeded)(self, _cmd);
-}
-
-static CGSize hook_VoiceVM_measure(id self, SEL _cmd, CGSize size) {
-    if (purifyReadConfig(@"HideVoiceRedDot")) return CGSizeZero;
-    return ((CGSize (*)(id, SEL, CGSize))_orig_VoiceVM_measure)(self, _cmd, size);
 }
 
 // ============================================================
@@ -326,24 +308,12 @@ static void hook_UIView_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"UIPurify", @"[Hook] ✓ AppPatMessageViewModel");
     }
 
-    // ④ VoiceMessageCellView + VoiceMessageViewModel — purifySafeHook（对齐撤回/拍一拍方案）
+    // ④ VoiceMessageCellView — 只 hook layoutSubviews，内部隐藏红点+转文字子视图（对齐 FUN_00026280）
     cls = objc_getClass("VoiceMessageCellView");
     if (cls) {
-        purifySafeHook(cls, sel_registerName("initWithViewModel:"),
-            (IMP)hook_VoiceCell_initWithViewModel, &_orig_VoiceCell_initWithViewModel);
-        purifySafeHook(cls, sel_registerName("layoutInternal"),
-            (IMP)hook_VoiceCell_layoutInternal, &_orig_VoiceCell_layoutInternal);
-        purifySafeHook(cls, sel_registerName("canBeReused"),
-            (IMP)hook_VoiceCell_canBeReused, &_orig_VoiceCell_canBeReused);
-        purifySafeHook(cls, sel_registerName("shouldLayoutIfNeeded"),
-            (IMP)hook_VoiceCell_shouldLayoutIfNeeded, &_orig_VoiceCell_shouldLayoutIfNeeded);
+        MSHookMessageEx(cls, @selector(layoutSubviews),
+            (IMP)hook_VoiceCell_layoutSubviews, &_orig_VoiceCell_layoutSubviews);
         WPLog(@"UIPurify", @"[Hook] ✓ VoiceMessageCellView");
-    }
-    cls = objc_getClass("VoiceMessageViewModel");
-    if (cls) {
-        purifySafeHook(cls, sel_registerName("measure:"),
-            (IMP)hook_VoiceVM_measure, &_orig_VoiceVM_measure);
-        WPLog(@"UIPurify", @"[Hook] ✓ VoiceMessageViewModel");
     }
 
     // ⑤ YYAsyncImageView
