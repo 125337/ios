@@ -3,6 +3,7 @@
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <ImageIO/ImageIO.h>
 
 @implementation CSChatAvatarTitleView
 
@@ -359,6 +360,12 @@
     }
 
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (!opponentAvatar) {
+            opponentAvatar = [UIImage imageNamed:@"DefaultHead"];
+        }
+        if (!selfAvatar) {
+            selfAvatar = [UIImage imageNamed:@"DefaultHead"];
+        }
         self.leftAvatarView.image = opponentAvatar;
         self.rightAvatarView.image = selfAvatar;
         self.titleLabel.text = titleText;
@@ -366,20 +373,10 @@
 }
 
 - (NSString *)getSelfWxid {
-    // Get self wxid from MMServiceCenter
     Class serviceCenter = objc_getClass("MMServiceCenter");
     if (!serviceCenter) return @"";
 
     id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-
-    // Try CSetting
-    id setting = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CSetting"));
-    if (setting && [setting respondsToSelector:@selector(GetSelfUserName)]) {
-        NSString *selfName = ((NSString *(*)(id, SEL))objc_msgSend)(setting, @selector(GetSelfUserName));
-        if (selfName.length > 0) return selfName;
-    }
-
-    // Fallback: CContactMgr
     id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
     if (contactMgr && [contactMgr respondsToSelector:@selector(getSelfContact)]) {
         id selfContact = ((id (*)(id, SEL))objc_msgSend)(contactMgr, @selector(getSelfContact));
@@ -393,8 +390,47 @@
 
 #pragma mark - Avatar Loading
 
+- (UIImage *)createAnimatedImageFromGIFData:(NSData *)data {
+    if (!data) return nil;
+    CGImageSourceRef source = CGImageSourceCreateWithData((CFDataRef)data, NULL);
+    if (!source) return nil;
+
+    size_t count = CGImageSourceGetCount(source);
+    if (count < 2) {
+        CFRelease(source);
+        return [UIImage imageWithData:data];
+    }
+
+    NSMutableArray *images = [NSMutableArray array];
+    NSTimeInterval totalDuration = 0;
+
+    for (size_t i = 0; i < count; i++) {
+        CGImageRef cgImage = CGImageSourceCreateImageAtIndex(source, i, NULL);
+        if (!cgImage) continue;
+
+        NSDictionary *props = (NSDictionary *)CGImageSourceCopyPropertiesAtIndex(source, i, NULL);
+        if (props) {
+            NSDictionary *gifProps = props[(NSString *)kCGImagePropertyGIFDictionary];
+            NSNumber *delay = gifProps[(NSString *)kCGImagePropertyGIFUnclampedDelayTime];
+            if (!delay) delay = gifProps[(NSString *)kCGImagePropertyGIFDelayTime];
+            NSTimeInterval dt = delay ? [delay doubleValue] : 0.1;
+            totalDuration += dt;
+            [props release];
+        } else {
+            totalDuration += 0.1;
+        }
+
+        [images addObject:[UIImage imageWithCGImage:cgImage]];
+        CGImageRelease(cgImage);
+    }
+
+    CFRelease(source);
+    if (images.count == 0) return nil;
+    return [UIImage animatedImageWithImages:images duration:totalDuration];
+}
+
 - (UIImage *)loadAvatarWithPriorityForWxid:(NSString *)wxid {
-    if (!wxid.length) return [UIImage imageNamed:@"DefaultHead"];
+    if (!wxid.length) return nil;
 
     // 1. Try custom avatar first
     UIImage *custom = [self loadCustomAvatarForWxid:wxid];
@@ -404,8 +440,7 @@
     UIImage *native = [self loadWeChatAvatarForWxid:wxid];
     if (native) return native;
 
-    // 3. Default placeholder
-    return [UIImage imageNamed:@"DefaultHead"];
+    return nil;
 }
 
 - (UIImage *)loadCustomAvatarForWxid:(NSString *)wxid {
@@ -417,7 +452,7 @@
         [NSString stringWithFormat:@"HBWechatHelper/UserHeadImage/%@.gif", wxid]];
     if ([[NSFileManager defaultManager] fileExistsAtPath:gifPath]) {
         NSData *data = [NSData dataWithContentsOfFile:gifPath];
-        return [UIImage imageWithData:data];
+        return [self createAnimatedImageFromGIFData:data];
     }
 
     // 2. Try .jpg
@@ -436,18 +471,18 @@
     if (!serviceCenter) return nil;
 
     id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-    id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
+    id headImageMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"),
+        objc_getClass("MMHeadImageMgr"));
+    if (!headImageMgr) return nil;
 
-    if (!contactMgr) return nil;
-
-    id contact = ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getContactByName:), wxid);
-    if (!contact) return nil;
-
-    if ([contact respondsToSelector:@selector(m_avatarImage)]) {
-        return ((UIImage *(*)(id, SEL))objc_msgSend)(contact, @selector(m_avatarImage));
+    if (!((BOOL (*)(id, SEL, SEL))objc_msgSend)(headImageMgr, @selector(respondsToSelector:),
+        NSSelectorFromString(@"getHeadImage:withCategory:"))) {
+        return nil;
     }
 
-    return nil;
+    UIImage *image = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr,
+        NSSelectorFromString(@"getHeadImage:withCategory:"), wxid, @0);
+    return image;
 }
 
 #pragma mark - Separator
@@ -542,10 +577,7 @@
     if (!self.chatController) return;
 
     id contact = ((id (*)(id, SEL))objc_msgSend)(self.chatController, NSSelectorFromString(@"GetContact"));
-    if (contact) {
-        NSString *opponentWxid = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
-        [self presentUserInfoPopoverWithContact:opponentWxid sourceView:self.leftAvatarView];
-    }
+    [self presentUserInfoPopoverWithContact:contact sourceView:self.leftAvatarView];
 }
 
 - (void)onRightAvatarTapped:(UITapGestureRecognizer *)gesture {
@@ -554,33 +586,24 @@
         [self playHapticFeedback];
     }
 
-    if (!self.chatController) return;
-
-    NSString *selfWxid = [self getSelfWxid];
-    if (selfWxid.length > 0) {
-        [self presentUserInfoPopoverWithContact:selfWxid sourceView:self.rightAvatarView];
-    }
-}
-
-- (void)presentUserInfoPopoverWithContact:(NSString *)wxid sourceView:(UIView *)sourceView {
-    if (!wxid.length) return;
-
-    // Try to get contact info and present via WCContactInfoViewController or similar
     Class serviceCenter = objc_getClass("MMServiceCenter");
     if (!serviceCenter) return;
-
     id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-    id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
-    if (!contactMgr) return;
+    id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"),
+        objc_getClass("CContactMgr"));
+    id selfContact = ((id (*)(id, SEL))objc_msgSend)(contactMgr, @selector(getSelfContact));
+    [self presentUserInfoPopoverWithContact:selfContact sourceView:self.rightAvatarView];
+}
 
-    id contact = ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getContactByName:), wxid);
+- (void)presentUserInfoPopoverWithContact:(id)contact sourceView:(UIView *)sourceView {
     if (!contact) return;
 
-    // Try WCUserInfoViewController
     Class infoVCClass = objc_getClass("WCUserInfoViewController");
     if (infoVCClass) {
+        NSString *wxid = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
         id infoVC = ((id (*)(Class, SEL))objc_msgSend)(infoVCClass, NSSelectorFromString(@"alloc"));
-        infoVC = ((id (*)(id, SEL, id, id))objc_msgSend)(infoVC, NSSelectorFromString(@"initWithUsrName:contact:"), wxid, contact);
+        infoVC = ((id (*)(id, SEL, id, id))objc_msgSend)(infoVC,
+            NSSelectorFromString(@"initWithUsrName:contact:"), wxid, contact);
         if (infoVC) {
             UIViewController *parentVC = [self findViewController];
             if (parentVC && parentVC.navigationController) {
@@ -588,23 +611,7 @@
                 [infoVC release];
                 return;
             }
-        }
-        [infoVC release];
-    }
-
-    // Fallback: try ContactInfoViewController
-    Class contactInfoVC = objc_getClass("ContactInfoViewController");
-    if (contactInfoVC) {
-        id ciVC = ((id (*)(Class, SEL))objc_msgSend)(contactInfoVC, NSSelectorFromString(@"alloc"));
-        ciVC = ((id (*)(id, SEL, id))objc_msgSend)(ciVC, NSSelectorFromString(@"initWithContact:"), contact);
-        if (ciVC) {
-            UIViewController *parentVC = [self findViewController];
-            if (parentVC && parentVC.navigationController) {
-                [parentVC.navigationController pushViewController:ciVC animated:YES];
-                [ciVC release];
-            } else {
-                [ciVC release];
-            }
+            [infoVC release];
         }
     }
 }
