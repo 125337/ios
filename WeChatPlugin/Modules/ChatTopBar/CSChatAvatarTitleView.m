@@ -622,7 +622,7 @@
 
     // popover 配置
     popover.modalPresentationStyle = UIModalPresentationPopover;
-    popover.preferredContentSize = CGSizeMake(300, 520);
+    popover.preferredContentSize = CGSizeMake(272, 400);
 
     UIPopoverPresentationController *popPC = popover.popoverPresentationController;
     popPC.sourceView = sourceView;

@@ -6,7 +6,7 @@
 
 #pragma mark - infoCardHeight
 
-static const CGFloat kPopoverRowH = 50.0;
+static const CGFloat kPopoverRowH = 46.0;
 
 #pragma mark - 辅助：从 contact KVC 取值
 
@@ -147,7 +147,7 @@ static NSInteger contactIntForKey(id contact, NSString *key) {
         CGFloat y = i * kPopoverRowH;
 
         // 左侧 label
-        UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20, 0, 60, kPopoverRowH)];
+        UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 60, kPopoverRowH)];
         label.text = item[@"label"];
         label.font = [UIFont systemFontOfSize:14];
         label.textColor = [UIColor blackColor];
@@ -155,7 +155,7 @@ static NSInteger contactIntForKey(id contact, NSString *key) {
         [label release];
 
         // 右侧 value
-        UILabel *value = [[UILabel alloc] initWithFrame:CGRectMake(100, 0, cardWidth - 120, kPopoverRowH)];
+        UILabel *value = [[UILabel alloc] initWithFrame:CGRectMake(100, y, cardWidth - 120, kPopoverRowH)];
         value.text = [self valueForInfoKey:item[@"key"]];
         value.font = [UIFont systemFontOfSize:13];
         value.textColor = [UIColor colorWithRed:0.56 green:0.56 blue:0.58 alpha:1.0];
