@@ -1,12 +1,9 @@
 // CSContactInfoPopoverController.m — MRC 环境
 // 基于 123456.c 反编译分析实现自定义联系人信息弹窗
+// v2: UITableView 架构（与 123456.c 一致）
 #import "CSContactInfoPopoverController.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
-
-#pragma mark - infoCardHeight
-
-static const CGFloat kPopoverRowH = 46.0;
 
 #pragma mark - 辅助：从 contact KVC 取值
 
@@ -20,6 +17,25 @@ static NSInteger contactIntForKey(id contact, NSString *key) {
     id val = contactValueForKey(contact, key);
     if (val) return [(NSNumber *)val integerValue];
     return 0;
+}
+
+#pragma mark - 信息行定义
+
+static NSArray *s_infoItems(void) {
+    static NSArray *items = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        items = [@[
+            @{@"label": @"主页",   @"key": @"homepage",   @"copiable": @NO},
+            @{@"label": @"类型",   @"key": @"chatType",   @"copiable": @NO},
+            @{@"label": @"微信",   @"key": @"wxid",       @"copiable": @YES},
+            @{@"label": @"备注",   @"key": @"remark",     @"copiable": @YES},
+            @{@"label": @"性别",   @"key": @"gender",     @"copiable": @NO},
+            @{@"label": @"地区",   @"key": @"location",   @"copiable": @NO},
+            @{@"label": @"签名",   @"key": @"signature",  @"copiable": @YES},
+        ] retain];
+    });
+    return items;
 }
 
 @implementation CSContactInfoPopoverController
@@ -56,143 +72,128 @@ static NSInteger contactIntForKey(id contact, NSString *key) {
 
     self.view.backgroundColor = [UIColor colorWithRed:0.96 green:0.96 blue:0.97 alpha:1.0];
 
-    CGFloat width = self.view.bounds.size.width;
-
-    // UIScrollView
-    UIScrollView *scrollView = [[UIScrollView alloc] init];
-    scrollView.frame = self.view.bounds;
-    scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    scrollView.showsVerticalScrollIndicator = NO;
-    [self.view addSubview:scrollView];
-    [scrollView release];
-
-    // 头像卡片
-    UIView *headerView = [self createHeaderView];
-    [scrollView addSubview:headerView];
-    [headerView release];
-
-    // 信息卡片
-    UIView *infoCard = [self createInfoCardView];
-    CGFloat infoY = CGRectGetMaxY(headerView.frame) + 12;
-    infoCard.frame = CGRectMake(16, infoY, width - 32, [self infoCardHeight]);
-    [scrollView addSubview:infoCard];
-    [infoCard release];
-
-    // 底部提示
-    UILabel *tip = [[UILabel alloc] init];
-    tip.text = @"点击信息项复制到剪贴板";
-    tip.font = [UIFont systemFontOfSize:11];
-    tip.textColor = [UIColor grayColor];
-    tip.textAlignment = NSTextAlignmentCenter;
-    tip.frame = CGRectMake(0, CGRectGetMaxY(infoCard.frame) + 16, width, 20);
-    [scrollView addSubview:tip];
-    [tip release];
-
-    scrollView.contentSize = CGSizeMake(width, CGRectGetMaxY(tip.frame) + 20);
+    // ★ UITableView 替换 UIScrollView（与 123456.c L116655 一致）
+    UITableView *tableView = [[UITableView alloc] initWithFrame:self.view.bounds
+                                                          style:UITableViewStyleGrouped];
+    tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    tableView.delegate = self;
+    tableView.dataSource = self;
+    tableView.rowHeight = 46;                          // 123456.c L116672: 46pt
+    tableView.estimatedRowHeight = UITableViewAutomaticDimension;
+    tableView.contentInset = UIEdgeInsetsMake(8, 0, 8, 0);
+    tableView.separatorInset = UIEdgeInsetsMake(0, 10, 0, 10);
+    tableView.showsVerticalScrollIndicator = NO;
+    tableView.backgroundColor = [UIColor whiteColor];
+    tableView.tableHeaderView = [self createHeaderView];
+    tableView.tableFooterView = [self createFooterView];
+    // 注册 CSSettingTableViewCell（如果类存在，否则用系统 cell）
+    Class cellClass = objc_getClass("CSSettingTableViewCell");
+    if (!cellClass) cellClass = [UITableViewCell class];
+    [tableView registerClass:cellClass forCellReuseIdentifier:@"Cell"];
+    [self.view addSubview:tableView];
+    [tableView release];
 }
 
 #pragma mark - 创建 UI
 
 - (UIView *)createHeaderView {
     CGFloat width = self.view.bounds.size.width;
-    UIView *card = [[UIView alloc] initWithFrame:CGRectMake(16, 12, width - 32, 180)];
-    card.backgroundColor = [UIColor whiteColor];
-    card.layer.cornerRadius = 16;
-    card.clipsToBounds = YES;
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 190)];
 
     // 头像
     UIImageView *avatar = [[UIImageView alloc] init];
-    avatar.frame = CGRectMake((card.bounds.size.width - 60) / 2, 30, 60, 60);
+    avatar.frame = CGRectMake((width - 60) / 2, 24, 60, 60);
     avatar.layer.cornerRadius = 30;
     avatar.clipsToBounds = YES;
     avatar.contentMode = UIViewContentModeScaleAspectFill;
     if (self.avatarImage) {
         avatar.image = self.avatarImage;
     }
-    [card addSubview:avatar];
+    [header addSubview:avatar];
     [avatar release];
 
     // 昵称
     UILabel *nickname = [[UILabel alloc] init];
-    nickname.frame = CGRectMake(20, 100, card.bounds.size.width - 40, 28);
+    nickname.frame = CGRectMake(20, 94, width - 40, 28);
     nickname.textAlignment = NSTextAlignmentCenter;
     nickname.font = [UIFont boldSystemFontOfSize:18];
     id name = contactValueForKey(self.contact, @"m_nsNickName");
     nickname.text = name ?: @"";
-    [card addSubview:nickname];
+    [header addSubview:nickname];
     [nickname release];
 
-    return card;
+    return header;
 }
 
-- (UIView *)createInfoCardView {
-    CGFloat cardWidth = self.view.bounds.size.width - 32;
-    UIView *card = [[UIView alloc] init];
-    card.backgroundColor = [UIColor whiteColor];
-    card.layer.cornerRadius = 16;
-    card.clipsToBounds = YES;
+- (UIView *)createFooterView {
+    CGFloat width = self.view.bounds.size.width;
+    UIView *footer = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 40)];
+    UILabel *tip = [[UILabel alloc] init];
+    tip.text = @"点击信息项复制到剪贴板";
+    tip.font = [UIFont systemFontOfSize:11];
+    tip.textColor = [UIColor grayColor];
+    tip.textAlignment = NSTextAlignmentCenter;
+    tip.frame = CGRectMake(0, 10, width, 20);
+    [footer addSubview:tip];
+    [tip release];
+    return footer;
+}
 
-    NSArray *items = @[
-        @{@"label": @"主页",   @"key": @"homepage",   @"copiable": @NO},
-        @{@"label": @"类型",   @"key": @"chatType",   @"copiable": @NO},
-        @{@"label": @"微信",   @"key": @"wxid",       @"copiable": @YES},
-        @{@"label": @"备注",   @"key": @"remark",     @"copiable": @YES},
-        @{@"label": @"性别",   @"key": @"gender",     @"copiable": @NO},
-        @{@"label": @"地区",   @"key": @"location",   @"copiable": @NO},
-        @{@"label": @"签名",   @"key": @"signature",  @"copiable": @YES},
-    ];
+#pragma mark - UITableViewDataSource
 
-    for (NSInteger i = 0; i < (NSInteger)items.count; i++) {
-        NSDictionary *item = items[i];
-        CGFloat y = i * kPopoverRowH;
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+    return 1;
+}
 
-        // 左侧 label
-        UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 60, kPopoverRowH)];
-        label.text = item[@"label"];
-        label.font = [UIFont systemFontOfSize:14];
-        label.textColor = [UIColor blackColor];
-        [card addSubview:label];
-        [label release];
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return (NSInteger)s_infoItems().count;
+}
 
-        // 右侧 value
-        UILabel *value = [[UILabel alloc] initWithFrame:CGRectMake(100, y, cardWidth - 120, kPopoverRowH)];
-        value.text = [self valueForInfoKey:item[@"key"]];
-        value.font = [UIFont systemFontOfSize:13];
-        value.textColor = [UIColor colorWithRed:0.56 green:0.56 blue:0.58 alpha:1.0];
-        [card addSubview:value];
-        [value release];
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"Cell" forIndexPath:indexPath];
 
-        // 分割线
-        if (i < (NSInteger)items.count - 1) {
-            UIView *sep = [[UIView alloc] initWithFrame:CGRectMake(0, y + kPopoverRowH - 0.5, cardWidth, 0.5)];
-            sep.backgroundColor = [UIColor colorWithRed:0.92 green:0.92 blue:0.93 alpha:1.0];
-            [card addSubview:sep];
-            [sep release];
-        }
+    NSDictionary *item = s_infoItems()[indexPath.row];
+    cell.textLabel.text = item[@"label"];
+    cell.textLabel.font = [UIFont systemFontOfSize:14];
+    cell.detailTextLabel.text = [self valueForInfoKey:item[@"key"]];
+    cell.detailTextLabel.font = [UIFont systemFontOfSize:13];
+    cell.detailTextLabel.textColor = [UIColor colorWithRed:0.56 green:0.56 blue:0.58 alpha:1.0];
+    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 
-        // 可复制行：覆盖透明 view + 手势
-        BOOL copiable = [item[@"copiable"] boolValue];
-        NSString *key = item[@"key"];
+    return cell;
+}
 
-        if (copiable || [key isEqualToString:@"homepage"]) {
-            UIView *rowView = [[UIView alloc] initWithFrame:CGRectMake(0, y, cardWidth, kPopoverRowH)];
-            rowView.backgroundColor = [UIColor clearColor];
-            UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
-                initWithTarget:self action:@selector(onInfoRowTapped:)];
-            [rowView addGestureRecognizer:tap];
-            [tap release];
-            objc_setAssociatedObject(rowView, "infoKey", key, OBJC_ASSOCIATION_COPY_NONATOMIC);
-            objc_setAssociatedObject(rowView, "copyText", value.text, OBJC_ASSOCIATION_COPY_NONATOMIC);
-            [card addSubview:rowView];
-            [rowView release];
-        }
+#pragma mark - UITableViewDelegate
+
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    return 46;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+
+    NSDictionary *item = s_infoItems()[indexPath.row];
+    NSString *key = item[@"key"];
+
+    // 主页 → 跳转微信资料页
+    if ([key isEqualToString:@"homepage"]) {
+        [self onHomepageTapped];
+        return;
     }
 
-    return card;
-}
+    // 不可复制的行 → 忽略
+    if (![item[@"copiable"] boolValue]) return;
 
-- (CGFloat)infoCardHeight {
-    return 7 * kPopoverRowH;
+    // 复制到剪贴板 + haptic
+    NSString *text = [self valueForInfoKey:key];
+    if (!text || text.length == 0) return;
+
+    [UIPasteboard generalPasteboard].string = text;
+
+    UIImpactFeedbackGenerator *gen = [[[UIImpactFeedbackGenerator alloc]
+        initWithStyle:UIImpactFeedbackStyleLight] autorelease];
+    [gen prepare];
+    [gen impactOccurred];
 }
 
 #pragma mark - 数据取值（参考 123456.c KVC 方式）
@@ -273,29 +274,7 @@ static NSInteger contactIntForKey(id contact, NSString *key) {
     return @"未设置";
 }
 
-#pragma mark - 点击交互
-
-- (void)onInfoRowTapped:(UITapGestureRecognizer *)gesture {
-    UIView *rowView = gesture.view;
-    NSString *key = objc_getAssociatedObject(rowView, "infoKey");
-
-    if ([key isEqualToString:@"homepage"]) {
-        [self onHomepageTapped];
-        return;
-    }
-
-    // 复制到剪贴板
-    NSString *text = objc_getAssociatedObject(rowView, "copyText");
-    if (!text || text.length == 0) return;
-
-    [UIPasteboard generalPasteboard].string = text;
-
-    // haptic 反馈
-    UIImpactFeedbackGenerator *gen = [[[UIImpactFeedbackGenerator alloc]
-        initWithStyle:UIImpactFeedbackStyleLight] autorelease];
-    [gen prepare];
-    [gen impactOccurred];
-}
+#pragma mark - 主页跳转
 
 - (void)onHomepageTapped {
     NSString *usrName = contactValueForKey(self.contact, @"m_nsUsrName");
