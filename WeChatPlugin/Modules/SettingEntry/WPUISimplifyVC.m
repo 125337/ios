@@ -13,6 +13,8 @@ static inline NSString *SStr(NSString *key) {
     return [SD() stringForKey:key];
 }
 
+static BOOL _simplifyPageDidModify = NO;
+
 /// ========== 编辑行 tap — 弹窗 + 持久化 ==========
 @implementation WeChatPluginSwitchHandler (WPUISimplify)
 
@@ -75,7 +77,6 @@ static inline NSString *SStr(NSString *key) {
 #pragma mark - ========== UI 构建 ==========
 
 static NSString *const kSimplifyEnabledKey = @"SimplifyEnabled";
-static BOOL _simplifyPageDidModify = NO;
 
 static void WPUISimplifyBuildUI(id self, SEL _cmd);
 
