@@ -303,16 +303,19 @@ static void onSimplifySwitchIMP(id self, SEL _cmd, UISwitch *sender) {
 }
 
 
-#pragma mark - ========== viewWillDisappear ==========
+#pragma mark - ========== viewDidDisappear ==========
 
-static void WPUISimplifyViewWillDisappear(id self, SEL _cmd, BOOL animated) {
+static void WPUISimplifyViewDidDisappear(id self, SEL _cmd, BOOL animated) {
     Class uiVC = objc_getClass("UIViewController");
-    Method m = class_getInstanceMethod(uiVC, NSSelectorFromString(@"viewWillDisappear:"));
+    Method m = class_getInstanceMethod(uiVC, NSSelectorFromString(@"viewDidDisappear:"));
     if (m) ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
 
     if (_simplifyPageDidModify) {
         _simplifyPageDidModify = NO;
-        [WeChatRestartHelper showRestartAlertFromVC:(UIViewController *)self];
+        UIViewController *topVC = WPGetTopVCForPresentation();
+        if (topVC) {
+            [WeChatRestartHelper showRestartAlertFromVC:topVC];
+        }
     }
 }
 
@@ -331,7 +334,7 @@ static void WPUISimplifyViewWillDisappear(id self, SEL _cmd, BOOL animated) {
         if (subClass) {
             // ⚠️ class_addMethod 必须在 objc_registerClassPair 之前
             class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPUISimplifyViewDidLoad, "v@:");
-            class_addMethod(subClass, NSSelectorFromString(@"viewWillDisappear:"), (IMP)WPUISimplifyViewWillDisappear, "v@:B");
+            class_addMethod(subClass, NSSelectorFromString(@"viewDidDisappear:"), (IMP)WPUISimplifyViewDidDisappear, "v@:B");
             class_addMethod(subClass, NSSelectorFromString(@"onSimplifySwitch:"), (IMP)onSimplifySwitchIMP, "v@:@");
             objc_registerClassPair(subClass);
             WPLog(@"UI", @"[Sub] WPUISimplifyVC class created");
