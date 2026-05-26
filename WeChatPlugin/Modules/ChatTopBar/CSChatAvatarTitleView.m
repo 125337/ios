@@ -195,10 +195,10 @@
     }
 
     // Mode 1, 2, 3, 4: Single avatar modes
-    if (mode == 1 || mode == 2 || mode == 3 || mode == 4) {
-        // mode 1 & 2: right avatar (self), mode 0 & 3 & 4: left avatar (opponent)
-        BOOL showLeft = (mode == 0 || mode == 3 || mode == 4);
-        BOOL showRight = (mode == 1 || mode == 2);
+    if (mode == 1 || mode == 3 || mode == 4) {
+        // mode 1: right avatar (self), mode 3 & 4: left avatar (opponent)
+        BOOL showLeft = (mode == 3 || mode == 4);
+        BOOL showRight = (mode == 1);
 
         self.leftAvatarView.hidden = !showLeft;
         self.rightAvatarView.hidden = !showRight;
@@ -266,6 +266,25 @@
     [self applyPositionOffset];
 }
 
+#pragma mark - Preload Contact
+
+- (void)silentLoadContactExtInfo:(id)contact {
+    Class infoVCClass = objc_getClass("ContactInfoViewController");
+    if (!infoVCClass) return;
+
+    id infoVC = ((id (*)(Class, SEL))objc_msgSend)(infoVCClass, NSSelectorFromString(@"alloc"));
+    infoVC = ((id (*)(id, SEL, id))objc_msgSend)(infoVC, NSSelectorFromString(@"initWithContact:"), contact);
+    if (!infoVC) return;
+
+    ((void (*)(id, SEL))objc_msgSend)(infoVC, @selector(view)); // force load
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.8 * NSEC_PER_SEC),
+                   dispatch_get_main_queue(), ^{
+        [infoVC dismissViewControllerAnimated:NO completion:nil];
+        [infoVC release];
+    });
+}
+
 #pragma mark - Avatar Update
 
 - (void)updateAvatars {
@@ -276,6 +295,9 @@
     // Get contact info
     id contact = ((id (*)(id, SEL))objc_msgSend)(self.chatController, NSSelectorFromString(@"GetContact"));
     if (!contact) return;
+
+    // Preload contact info to avoid delay on tap
+    [self silentLoadContactExtInfo:contact];
 
     NSString *opponentWxid = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
     NSString *nickname = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsNickName"));
@@ -315,6 +337,7 @@
 
     // Load separator
     [self loadSeparatorIcon];
+    [self loadSeparatorGIF];
     [self loadSeparatorText];
 
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -436,6 +459,18 @@
     }
 }
 
+- (void)loadSeparatorGIF {
+    NSData *gifData = [[NSUserDefaults standardUserDefaults]
+        dataForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
+    if (gifData) {
+        UIImage *gifImage = [UIImage imageWithData:gifData];
+        self.separatorView.image = gifImage;
+        self.separatorView.hidden = NO;
+        [self.separatorView sizeToFit];
+        self.separatorView.userInteractionEnabled = YES;
+    }
+}
+
 #pragma mark - Helpers
 
 - (void)updateFontSizes {
@@ -460,7 +495,18 @@
 }
 
 - (CGFloat)calculateNameWidth {
-    return self.bounds.size.width;
+    PluginConfig *config = [PluginConfig shared];
+
+    NSString *text = self.titleLabel.text ?: @"";
+    if (text.length == 0) return 30.0;
+
+    UIFont *font = [UIFont systemFontOfSize:config.chatNicknameFontSize];
+    NSDictionary *attrs = @{NSFontAttributeName: font};
+    CGFloat textWidth = [text sizeWithAttributes:attrs].width;
+
+    CGFloat minW = self.bounds.size.width - config.chatAvatarSize - 20;
+    if (minW < 30.0) minW = 30.0;
+    return MAX(textWidth + 4.0, minW);
 }
 
 #pragma mark - Tap Gestures

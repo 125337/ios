@@ -68,6 +68,8 @@
     [_sessionFormats release];
     [_userFormats release];
     [_chatSeparatorText release];
+    [_chatGroupMemberCountSuffix release];
+    [_chatAddTimeSuffixFormat release];
     [super dealloc];
 }
 
@@ -321,6 +323,62 @@
     _hideGroupSelfAvatar = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideGroupSelfAvatar"]];
     _hideOAOtherAvatar = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideOAOtherAvatar"]];
     _hideOASelfAvatar = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideOASelfAvatar"]];
+    
+    // ========== 聊天顶栏配置 ==========
+    _showChatAvatar = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowChatAvatar"]];
+    _avatarTapFeedback = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AvatarTapFeedback"]];
+    _showAddTime = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTime"]];
+    _showGroupMemberCount = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowGroupMemberCount"]];
+
+    _chatDisplayMode = [d integerForKey:[kPluginPrefix stringByAppendingString:@"ChatDisplayMode"]];
+    if (_chatDisplayMode < 0 || _chatDisplayMode > 7) _chatDisplayMode = 3;
+
+    _chatAvatarSize = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarSize"]];
+    if (_chatAvatarSize == 0) _chatAvatarSize = 30.0;
+
+    _chatAvatarSpacing = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarSpacing"]];
+    if (_chatAvatarSpacing == 0) _chatAvatarSpacing = 3.0;
+
+    _chatAvatarCornerRadius = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarCornerRadius"]];
+    if (_chatAvatarCornerRadius == 0) _chatAvatarCornerRadius = 1.0;
+
+    _chatNicknameFontSize = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatNicknameFontSize"]];
+    if (_chatNicknameFontSize == 0) _chatNicknameFontSize = 9.0;
+
+    _chatSeparatorSize = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorSize"]];
+    if (_chatSeparatorSize == 0) _chatSeparatorSize = 12.0;
+
+    _chatTitleViewWidth = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatTitleViewWidth"]];
+    if (_chatTitleViewWidth == 0) _chatTitleViewWidth = 210.0;
+
+    _chatVerticalOffset = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatVerticalOffset"]];
+    _chatHorizontalOffset = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatHorizontalOffset"]];
+    _chatNicknameOffsetY = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatNicknameOffsetY"]];
+    _chatNicknameOffsetX = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatNicknameOffsetX"]];
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorText"]];
+    if (v.length > 0) {
+        [_chatSeparatorText release];
+        _chatSeparatorText = [v copy];
+    } else {
+        _chatSeparatorText = [@"" retain];
+    }
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatGroupMemberCountSuffix"]];
+    if (v.length > 0) {
+        [_chatGroupMemberCountSuffix release];
+        _chatGroupMemberCountSuffix = [v copy];
+    } else {
+        _chatGroupMemberCountSuffix = [@"%u人" retain];
+    }
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatAddTimeSuffixFormat"]];
+    if (v.length > 0) {
+        [_chatAddTimeSuffixFormat release];
+        _chatAddTimeSuffixFormat = [v copy];
+    } else {
+        _chatAddTimeSuffixFormat = [@"%ld天" retain];
+    }
     
     _showAddTimeSuffix = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     

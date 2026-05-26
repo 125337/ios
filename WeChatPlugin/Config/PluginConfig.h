@@ -102,6 +102,8 @@
 @property (nonatomic, assign) CGFloat chatHorizontalOffset;  // 整体水平偏移
 @property (nonatomic, assign) CGFloat chatNicknameOffsetY;   // 昵称垂直偏移
 @property (nonatomic, assign) CGFloat chatNicknameOffsetX;   // 昵称水平偏移
+@property (nonatomic, copy)   NSString *chatGroupMemberCountSuffix;  // 群成员数后缀格式（默认"%u人"）
+@property (nonatomic, copy)   NSString *chatAddTimeSuffixFormat;     // 聊天顶栏添加时间后缀格式（默认"%ld天"）
 
 #pragma mark - 名字颜色设置
 @property (nonatomic, assign) BOOL enableChatNameColor;      // 启用聊天界面名称颜色
