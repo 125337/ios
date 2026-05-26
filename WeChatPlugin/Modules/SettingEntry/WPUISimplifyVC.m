@@ -42,7 +42,6 @@ static BOOL _simplifyPageDidModify = NO;
     }];
 
     __unsafe_unretained UILabel *weakLabel = valueLabel;
-    __unsafe_unretained UIViewController *weakTopVC = topVC;
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *newText = alert.textFields.firstObject.text;
@@ -67,13 +66,8 @@ static BOOL _simplifyPageDidModify = NO;
         }
         [d synchronize];
         
-        // 保存后立即弹出重启弹窗（等输入弹窗 dismiss 后再弹）
-        if (weakTopVC) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-                [WeChatRestartHelper showRestartAlertFromVC:weakTopVC];
-            });
-        }
+        // 标记已修改，返回时弹窗（仅界面简化有 viewWillDisappear 兜底，文本占位等动态读取功能不会弹窗）
+        _simplifyPageDidModify = YES;
     }]];
     
     [topVC presentViewController:alert animated:YES completion:nil];
