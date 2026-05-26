@@ -69,6 +69,8 @@ static BOOL _simplifyPageDidModify = NO;
         // 标记已修改，返回时弹窗
         _simplifyPageDidModify = YES;
     }]];
+    
+    [topVC presentViewController:alert animated:YES completion:nil];
 }
 
 @end
