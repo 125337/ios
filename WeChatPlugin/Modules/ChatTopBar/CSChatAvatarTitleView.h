@@ -4,12 +4,12 @@
 
 @interface CSChatAvatarTitleView : UIView
 
-@property (nonatomic, weak)   BaseMsgContentViewController *chatController;
-@property (nonatomic, strong) UIImageView *leftAvatarView;
-@property (nonatomic, strong) UIImageView *rightAvatarView;
-@property (nonatomic, strong) UIImageView *separatorView;
-@property (nonatomic, strong) UILabel     *separatorTextLabel;
-@property (nonatomic, strong) UILabel     *titleLabel;
+@property (nonatomic, assign) BaseMsgContentViewController *chatController;
+@property (nonatomic, retain) UIImageView *leftAvatarView;
+@property (nonatomic, retain) UIImageView *rightAvatarView;
+@property (nonatomic, retain) UIImageView *separatorView;
+@property (nonatomic, retain) UILabel     *separatorTextLabel;
+@property (nonatomic, retain) UILabel     *titleLabel;
 
 - (void)updateAvatars;
 - (void)applyPositionOffset;
