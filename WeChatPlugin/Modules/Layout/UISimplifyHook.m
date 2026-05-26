@@ -211,34 +211,39 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
     // L40418-40432: bVar1 = containsString:@"," (逗号检测)
     BOOL hasComma = [text containsString:@","];
     
-    // L40450-40473: 逗号路径 → 遍历responder chain → NavigationBar
-    if (hasComma) {
-        id responder = [self nextResponder];
-        while (responder) {
-            NSString *clsName = NSStringFromClass([responder class]);
-            // L40457: hasPrefix:@"NavigationBar"
-            if ([clsName hasPrefix:@"NavigationBar"]) {
-                // L40460-40461: mainTitle存在且长度>0 → 替换
-                if (_mainTitle && _mainTitle.length > 0) {
-                    ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _mainTitle);
-                    return;
+    // L40450-40473: NavBar 检测 → 逗号优先，无逗号时 responder chain 兜底
+    if (_mainTitle && _mainTitle.length > 0) {
+        BOOL shouldReplace = hasComma;
+        if (!shouldReplace) {
+            id responder = [self nextResponder];
+            while (responder) {
+                if ([NSStringFromClass([responder class]) hasPrefix:@"NavigationBar"]) {
+                    shouldReplace = YES;
+                    break;
                 }
-                break;
+                responder = [responder nextResponder];
             }
-            responder = [responder nextResponder];
+        }
+        if (shouldReplace) {
+            ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _mainTitle);
+            return;
         }
     }
     
-    // L40474-40483: 通讯录路径
-    if (_contactsTitle && _contactsTitle.length > 0 && hasComma) {
-        ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _contactsTitle);
-        return;
+    // L40474-40483: 通讯录路径 — 逗号 OR 文本匹配"通讯录"
+    if (_contactsTitle && _contactsTitle.length > 0) {
+        if (hasComma || [text containsString:@"通讯录"]) {
+            ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _contactsTitle);
+            return;
+        }
     }
     
-    // L40484-40516: 发现页路径
-    if (_discoverTitle && _discoverTitle.length > 0 && hasComma) {
-        ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _discoverTitle);
-        return;
+    // L40484-40516: 发现页路径 — 逗号 OR 文本匹配"发现"
+    if (_discoverTitle && _discoverTitle.length > 0) {
+        if (hasComma || [text containsString:@"发现"]) {
+            ((void (*)(id, SEL, id))_orig_MMUILabel_setText)(self, _cmd, _discoverTitle);
+            return;
+        }
     }
     
     // L40492-40511: 好友数格式 — 门控+固定正则+format
@@ -288,58 +293,66 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
     
     BOOL hasComma = [text containsString:@","];
     
-    // Nav bar + comma → walk responder chain
-    if (hasComma) {
-        id responder = [self nextResponder];
-        while (responder) {
-            if ([NSStringFromClass([responder class]) hasPrefix:@"NavigationBar"]) {
-                if (_mainTitle && _mainTitle.length > 0) {
-                    // L40600-40604: NSMutableAttributedString 保持原属性
-                    NSDictionary *attrs = nil;
-                    if (attrText.length > 0) {
-                        attrs = [attrText attributesAtIndex:0 effectiveRange:NULL];
-                    }
-                    NSMutableAttributedString *replaced = [[NSMutableAttributedString alloc]
-                        initWithString:_mainTitle attributes:attrs ?: @{}];
-                    if (replaced) {
-                        ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd, replaced);
-                        [replaced release];
-                        return;
-                    }
+    // Nav bar — 逗号优先，无逗号时 responder chain 兜底
+    if (_mainTitle && _mainTitle.length > 0) {
+        BOOL shouldReplace = hasComma;
+        if (!shouldReplace) {
+            id responder = [self nextResponder];
+            while (responder) {
+                if ([NSStringFromClass([responder class]) hasPrefix:@"NavigationBar"]) {
+                    shouldReplace = YES;
+                    break;
                 }
-                break;
+                responder = [responder nextResponder];
             }
-            responder = [responder nextResponder];
+        }
+        if (shouldReplace) {
+            // L40600-40604: NSMutableAttributedString 保持原属性
+            NSDictionary *attrs = nil;
+            if (attrText.length > 0) {
+                attrs = [attrText attributesAtIndex:0 effectiveRange:NULL];
+            }
+            NSMutableAttributedString *replaced = [[NSMutableAttributedString alloc]
+                initWithString:_mainTitle attributes:attrs ?: @{}];
+            if (replaced) {
+                ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd, replaced);
+                [replaced release];
+                return;
+            }
         }
     }
     
-    // Contacts
-    if (_contactsTitle && _contactsTitle.length > 0 && hasComma) {
-        NSDictionary *attrs = nil;
-        if (attrText.length > 0) {
-            attrs = [attrText attributesAtIndex:0 effectiveRange:NULL];
-        }
-        NSMutableAttributedString *replaced = [[NSMutableAttributedString alloc]
-            initWithString:_contactsTitle attributes:attrs ?: @{}];
-        if (replaced) {
-            ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd, replaced);
-            [replaced release];
-            return;
+    // Contacts — 逗号 OR 文本匹配"通讯录"
+    if (_contactsTitle && _contactsTitle.length > 0) {
+        if (hasComma || [text containsString:@"通讯录"]) {
+            NSDictionary *attrs = nil;
+            if (attrText.length > 0) {
+                attrs = [attrText attributesAtIndex:0 effectiveRange:NULL];
+            }
+            NSMutableAttributedString *replaced = [[NSMutableAttributedString alloc]
+                initWithString:_contactsTitle attributes:attrs ?: @{}];
+            if (replaced) {
+                ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd, replaced);
+                [replaced release];
+                return;
+            }
         }
     }
     
-    // Discover
-    if (_discoverTitle && _discoverTitle.length > 0 && hasComma) {
-        NSDictionary *attrs = nil;
-        if (attrText.length > 0) {
-            attrs = [attrText attributesAtIndex:0 effectiveRange:NULL];
-        }
-        NSMutableAttributedString *replaced = [[NSMutableAttributedString alloc]
-            initWithString:_discoverTitle attributes:attrs ?: @{}];
-        if (replaced) {
-            ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd, replaced);
-            [replaced release];
-            return;
+    // Discover — 逗号 OR 文本匹配"发现"
+    if (_discoverTitle && _discoverTitle.length > 0) {
+        if (hasComma || [text containsString:@"发现"]) {
+            NSDictionary *attrs = nil;
+            if (attrText.length > 0) {
+                attrs = [attrText attributesAtIndex:0 effectiveRange:NULL];
+            }
+            NSMutableAttributedString *replaced = [[NSMutableAttributedString alloc]
+                initWithString:_discoverTitle attributes:attrs ?: @{}];
+            if (replaced) {
+                ((void (*)(id, SEL, id))_orig_MMUILabel_setAttributedText)(self, _cmd, replaced);
+                [replaced release];
+                return;
+            }
         }
     }
     
@@ -418,16 +431,20 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
         }
     }
     
-    // L40762-40766: 通讯录 — 纯文本检测,不查responder chain!
-    if (_contactsTitle && _contactsTitle.length > 0 && hasComma) {
-        ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitle)(self, _cmd, titleView, _contactsTitle);
-        return;
+    // L40762-40766: 通讯录 — 逗号 OR 文本匹配"通讯录"
+    if (_contactsTitle && _contactsTitle.length > 0) {
+        if (hasComma || [title containsString:@"通讯录"]) {
+            ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitle)(self, _cmd, titleView, _contactsTitle);
+            return;
+        }
     }
     
-    // L40769-40778: 发现页 — 纯文本检测,不查responder chain!
-    if (_discoverTitle && _discoverTitle.length > 0 && hasComma) {
-        ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitle)(self, _cmd, titleView, _discoverTitle);
-        return;
+    // L40769-40778: 发现页 — 逗号 OR 文本匹配"发现"
+    if (_discoverTitle && _discoverTitle.length > 0) {
+        if (hasComma || [title containsString:@"发现"]) {
+            ((void (*)(id, SEL, id, id))_orig_MFTitleView_updateTitle)(self, _cmd, titleView, _discoverTitle);
+            return;
+        }
     }
     
     // L40775: default → original
