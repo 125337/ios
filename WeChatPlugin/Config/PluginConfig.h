@@ -87,6 +87,22 @@
 @property (nonatomic, assign) BOOL showAddTime;              // 显示添加时间
 @property (nonatomic, assign) BOOL showGroupMemberCount;     // 显示群聊人数
 
+// 聊天顶栏数值配置
+@property (nonatomic, assign) NSInteger chatDisplayMode;     // 头像显示模式 (0~7)
+@property (nonatomic, assign) CGFloat chatAvatarSize;        // 头像大小 (默认30)
+@property (nonatomic, assign) CGFloat chatAvatarSpacing;     // 头像间距 (默认3)
+@property (nonatomic, assign) CGFloat chatAvatarCornerRadius;// 头像圆角系数 (默认1.0)
+@property (nonatomic, assign) CGFloat chatNicknameFontSize;  // 昵称字体大小 (默认9)
+@property (nonatomic, assign) CGFloat chatSeparatorSize;     // 分隔符大小 (默认12)
+@property (nonatomic, assign) CGFloat chatTitleViewWidth;    // titleView整体宽度 (默认210)
+@property (nonatomic, copy)   NSString *chatSeparatorText;   // 分隔符文字
+
+// 位移偏移
+@property (nonatomic, assign) CGFloat chatVerticalOffset;    // 整体垂直偏移
+@property (nonatomic, assign) CGFloat chatHorizontalOffset;  // 整体水平偏移
+@property (nonatomic, assign) CGFloat chatNicknameOffsetY;   // 昵称垂直偏移
+@property (nonatomic, assign) CGFloat chatNicknameOffsetX;   // 昵称水平偏移
+
 #pragma mark - 名字颜色设置
 @property (nonatomic, assign) BOOL enableChatNameColor;      // 启用聊天界面名称颜色
 @property (nonatomic, assign) BOOL enableChatNameSize;       // 启用聊天界面名称大小

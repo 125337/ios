@@ -1,5 +1,6 @@
 #import "ChatTopBarBlacklistEditorVC.h"
 #import "../../Config/WPColors.h"
+#import "../../Config/Constants.h"
 
 @interface ChatTopBarBlacklistEditorVC () <UITextViewDelegate>
 @property (nonatomic, retain) UIScrollView *scrollView;
@@ -20,6 +21,13 @@
 
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 20.0;
+
+    // 加载已有黑名单
+    NSString *saved = [[NSUserDefaults standardUserDefaults]
+        stringForKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"]];
+    if (saved.length > 0) {
+        self.editorView.text = saved;
+    }
 
     y = [self buildHelpTableAtY:y width:w];
     y += 20.0;
@@ -164,6 +172,10 @@
 }
 
 - (void)saveAction {
+    NSString *text = self.editorView.text ?: @"";
+    [[NSUserDefaults standardUserDefaults] setObject:text
+                                              forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"]];
+    [[NSUserDefaults standardUserDefaults] synchronize];
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 

@@ -2,6 +2,7 @@
 #import "ChatTopBarBlacklistEditorVC.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Config/WPColors.h"
+#import "../../Config/Constants.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 
 #pragma mark - 数值输入弹窗描述
@@ -61,7 +62,7 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numeric
     ];
 
     PluginConfig *config = [PluginConfig shared];
-    NSInteger currentMode = config.messageTimePosition;
+    NSInteger currentMode = config.chatDisplayMode;
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"选择显示模式"
                                                                    message:nil
@@ -139,7 +140,7 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numeric
     [inputAlert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *text = inputAlert.textFields.firstObject.text ?: @"";
         PluginConfig *config = [PluginConfig shared];
-        config.messageTimeFormat = text;
+        config.chatSeparatorText = text;
         [config save];
         [self buildUI];
     }]];
@@ -153,6 +154,8 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numeric
     UIImagePickerController *picker = [[UIImagePickerController alloc] init];
     picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
     picker.mediaTypes = @[@"public.image"];
+    picker.delegate = self;
+    picker.view.tag = 100;
     [self presentViewController:picker animated:YES completion:nil];
     [picker release];
 }
@@ -161,6 +164,8 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numeric
     UIImagePickerController *picker = [[UIImagePickerController alloc] init];
     picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
     picker.mediaTypes = @[@"public.image"];
+    picker.delegate = self;
+    picker.view.tag = 200;
     [self presentViewController:picker animated:YES completion:nil];
     [picker release];
 }
@@ -245,9 +250,9 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numeric
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSwitchRowInGroup:expand title:@"显示群聊人数" desc:nil key:@"ShowGroupMemberCount" isOn:config.showGroupMemberCount cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addNavRowInGroup:expand title:@"头像显示模式" subtitle:[self avatarDisplayModeName:config.messageTimePosition] tag:100 action:@selector(onAvatarDisplayModeTap) cy:*ecy width:w];
+        *ecy = [self addNavRowInGroup:expand title:@"头像显示模式" subtitle:[self avatarDisplayModeName:config.chatDisplayMode] tag:100 action:@selector(onAvatarDisplayModeTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        NSString *sepSub = config.messageTimeFormat.length > 0 ? config.messageTimeFormat : @"未设置";
+        NSString *sepSub = config.chatSeparatorText.length > 0 ? config.chatSeparatorText : @"未设置";
         *ecy = [self addNavRowInGroup:expand title:@"头像分隔符号" subtitle:sepSub tag:200 action:@selector(onAvatarSeparatorTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addNavRowInGroup:expand title:@"管理显示黑名单" subtitle:@"" tag:300 action:@selector(onBlacklistTap) cy:*ecy width:w];
@@ -291,6 +296,42 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numeric
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
+}
+
+#pragma mark - UIImagePickerControllerDelegate
+
+- (void)imagePickerController:(UIImagePickerController *)picker
+didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey, id> *)info {
+    UIImage *image = info[UIImagePickerControllerOriginalImage];
+    if (!image) {
+        [picker dismissViewControllerAnimated:YES completion:nil];
+        return;
+    }
+
+    PluginConfig *config = [PluginConfig shared];
+
+    if (picker.view.tag == 100) {
+        // Static image
+        NSData *pngData = UIImagePNGRepresentation(image);
+        [[NSUserDefaults standardUserDefaults] setObject:pngData
+                                                  forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
+    } else if (picker.view.tag == 200) {
+        // GIF
+        NSData *gifData = [NSData dataWithContentsOfURL:info[UIImagePickerControllerImageURL]];
+        if (gifData) {
+            [[NSUserDefaults standardUserDefaults] setObject:gifData
+                                                      forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
+        }
+    }
+
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    [picker dismissViewControllerAnimated:YES completion:^{
+        [self buildUI];
+    }];
+}
+
+- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
+    [picker dismissViewControllerAnimated:YES completion:nil];
 }
 
 @end

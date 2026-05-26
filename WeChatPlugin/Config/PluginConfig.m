@@ -67,6 +67,7 @@
     [_redEnvelopGroupFilterList release];
     [_sessionFormats release];
     [_userFormats release];
+    [_chatSeparatorText release];
     [super dealloc];
 }
 
