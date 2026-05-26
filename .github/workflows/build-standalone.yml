@@ -71,6 +71,7 @@ jobs:
           WeChatPlugin/Modules/MessageTime/MessageTimeFormatEditorVC.m \
           WeChatPlugin/Modules/HideAvatar/HideAvatarHook.m \
           WeChatPlugin/Modules/AutoTransfer/AutoTransferHook.m \
+          WeChatPlugin/Modules/PlaceholderText/PlaceholderTextHook.m \
           WeChatPlugin/Settings/Common/SettingCategoryController.m \
           WeChatPlugin/Settings/Common/WPBorderLayer.m \
           WeChatPlugin/Settings/Controllers/SettingController.m \
@@ -106,6 +107,8 @@ jobs:
                 -IWeChatPlugin/Modules/GroupExit \
                 -IWeChatPlugin/Modules/MessageTime \
                 -IWeChatPlugin/Modules/AutoTransfer \
+                -IWeChatPlugin/Modules/HideAvatar \
+                -IWeChatPlugin/Modules/PlaceholderText \
                 -IWeChatPlugin/Settings/Common \
                 -IWeChatPlugin/Settings/Controllers \
                 -IWeChatPlugin/libs/CydiaSubstrate.framework/Headers \
