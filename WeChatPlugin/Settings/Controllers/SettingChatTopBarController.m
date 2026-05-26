@@ -47,6 +47,24 @@ static NSString *keyForTag(NSInteger tag) {
     [self buildUI];
 }
 
+/// 返回指定 key 对应的当前配置值（用于列表项 subtitle 显示）
+- (NSString *)subtitleForKey:(NSString *)key {
+    PluginConfig *c = [PluginConfig shared];
+    CGFloat val = 0;
+    if ([key isEqualToString:@"AvatarCornerRadius"])       val = c.chatAvatarCornerRadius;
+    else if ([key isEqualToString:@"AvatarSize"])           val = c.chatAvatarSize;
+    else if ([key isEqualToString:@"SeparatorSize"])        val = c.chatSeparatorSize;
+    else if ([key isEqualToString:@"NicknameFontSize"])     val = c.chatNicknameFontSize;
+    else if ([key isEqualToString:@"AvatarSpacing"])        val = c.chatAvatarSpacing;
+    else if ([key isEqualToString:@"VerticalOffset"])       val = c.chatVerticalOffset;
+    else if ([key isEqualToString:@"HorizontalOffset"])     val = c.chatHorizontalOffset;
+    else if ([key isEqualToString:@"NicknameVerticalOffset"])  val = c.chatNicknameOffsetY;
+    else if ([key isEqualToString:@"NicknameHorizontalOffset"]) val = c.chatNicknameOffsetX;
+    else if ([key isEqualToString:@"ViewWidth"])            val = c.chatTitleViewWidth;
+    else return @"";
+    return [NSString stringWithFormat:@"%.0f", val];
+}
+
 #pragma mark - 头像显示模式
 
 - (NSString *)avatarDisplayModeName:(NSInteger)mode {
@@ -297,20 +315,21 @@ static NSString *keyForTag(NSInteger tag) {
     CGFloat cy2 = 0;
 
     NSArray<NSDictionary *> *card2Items = @[
-        @{@"title": @"头像圆角程度",   @"tag": @(1001)},
-        @{@"title": @"双方头像大小",   @"tag": @(1002)},
-        @{@"title": @"分隔符大小",     @"tag": @(1003)},
-        @{@"title": @"网名字体大小",   @"tag": @(1004)},
-        @{@"title": @"双方头像间距",   @"tag": @(1005)},
-        @{@"title": @"整体上下偏移",   @"tag": @(1006)},
-        @{@"title": @"整体水平偏移",   @"tag": @(1007)},
-        @{@"title": @"网名上下偏移",   @"tag": @(1008)},
-        @{@"title": @"网名水平偏移",   @"tag": @(1009)},
+        @{@"title": @"头像圆角程度",   @"tag": @(1001), @"key": @"AvatarCornerRadius"},
+        @{@"title": @"双方头像大小",   @"tag": @(1002), @"key": @"AvatarSize"},
+        @{@"title": @"分隔符大小",     @"tag": @(1003), @"key": @"SeparatorSize"},
+        @{@"title": @"网名字体大小",   @"tag": @(1004), @"key": @"NicknameFontSize"},
+        @{@"title": @"双方头像间距",   @"tag": @(1005), @"key": @"AvatarSpacing"},
+        @{@"title": @"整体上下偏移",   @"tag": @(1006), @"key": @"VerticalOffset"},
+        @{@"title": @"整体水平偏移",   @"tag": @(1007), @"key": @"HorizontalOffset"},
+        @{@"title": @"网名上下偏移",   @"tag": @(1008), @"key": @"NicknameVerticalOffset"},
+        @{@"title": @"网名水平偏移",   @"tag": @(1009), @"key": @"NicknameHorizontalOffset"},
     ];
 
     for (NSUInteger i = 0; i < card2Items.count; i++) {
         NSDictionary *item = card2Items[i];
-        cy2 = [self addNavRowInGroup:card2 title:item[@"title"] subtitle:@"" tag:[item[@"tag"] integerValue] action:@selector(onNumericRowTap:) cy:cy2 width:w];
+        NSString *sub = [self subtitleForKey:item[@"key"]];
+        cy2 = [self addNavRowInGroup:card2 title:item[@"title"] subtitle:sub tag:[item[@"tag"] integerValue] action:@selector(onNumericRowTap:) cy:cy2 width:w];
         if (i < card2Items.count - 1) {
             cy2 = [self addSeparatorInGroup:card2 cy:cy2 width:w];
         }
@@ -322,7 +341,7 @@ static NSString *keyForTag(NSInteger tag) {
     UIView *card3 = [self addTableGroupAtY:y width:w];
     CGFloat cy3 = 0;
 
-    cy3 = [self addNavRowInGroup:card3 title:@"视图宽度" subtitle:@"" tag:1010 action:@selector(onNumericRowTap:) cy:cy3 width:w];
+    cy3 = [self addNavRowInGroup:card3 title:@"视图宽度" subtitle:[self subtitleForKey:@"ViewWidth"] tag:1010 action:@selector(onNumericRowTap:) cy:cy3 width:w];
 
     y = [self finishGroup:card3 atY:y height:cy3];
 
