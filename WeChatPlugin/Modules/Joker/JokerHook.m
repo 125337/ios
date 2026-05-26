@@ -274,7 +274,7 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
         items = ((id(*)(id, SEL))orig_TextCell_operationMenuItems)(self, _cmd);
     }
     if (!items) items = [NSMutableArray array];
-    if (![PluginConfig shared].enableJoker) return items;
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:@"WCP_EnableJoker"]) return items;
 
     NSMutableArray *newItems = [items mutableCopy];
     Class mmItemClass = objc_getClass("MMMenuItem");
@@ -308,7 +308,7 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
         items = ((id(*)(id, SEL))orig_TransferCell_operationMenuItems)(self, _cmd);
     }
     if (!items) items = [NSMutableArray array];
-    if (![PluginConfig shared].enableJoker) return items;
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:@"WCP_EnableJoker"]) return items;
 
     NSMutableArray *newItems = [items mutableCopy];
     Class mmItemClass = objc_getClass("MMMenuItem");
@@ -412,7 +412,7 @@ static void hooked_Wallet_updateBalanceEntryView(id self, SEL _cmd) {
     if (orig_Wallet_updateBalanceEntryView) {
         ((void(*)(id, SEL))orig_Wallet_updateBalanceEntryView)(self, _cmd);
     }
-    if (![PluginConfig shared].enableJoker) return;
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:@"WCP_EnableJoker"]) return;
 
     BOOL hasGesture = NO;
     for (UIGestureRecognizer *g in ((UIView *)self).gestureRecognizers) {
@@ -494,7 +494,7 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
     if (orig_TimeoutNumber_didMoveToWindow) {
         ((void(*)(id, SEL))orig_TimeoutNumber_didMoveToWindow)(self, _cmd);
     }
-    if (![PluginConfig shared].enableJoker) return;
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:@"WCP_EnableJoker"]) return;
 
     BOOL hasGesture = NO;
     for (UIGestureRecognizer *g in ((UIView *)self).gestureRecognizers) {
@@ -515,12 +515,8 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
 
 + (void)install {
     WPLog(@"Joker", @"[JokerHook] install start");
-    WPLog(@"Joker", @"[JokerHook] enableJoker=%d", [PluginConfig shared].enableJoker);
-
-    if (![PluginConfig shared].enableJoker) {
-        WPLog(@"Joker", @"[JokerHook] Joker disabled");
-        return;
-    }
+    BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"WCP_EnableJoker"];
+    WPLog(@"Joker", @"[JokerHook] enableJoker=%d", enabled);
 
     NSString *wxVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
     if ([wxVersion compare:@"8.0.29" options:NSNumericSearch] == NSOrderedAscending) {

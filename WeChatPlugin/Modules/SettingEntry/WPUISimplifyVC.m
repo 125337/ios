@@ -308,12 +308,6 @@ static void onSimplifySwitchIMP(id self, SEL _cmd, UISwitch *sender) {
 
     // 展开/关闭时完全重建界面，确保布局、scrollView contentSize 正确
     WPUISimplifyBuildUI(self, _cmd);
-
-    // 开关切换后立即弹重启
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [WeChatRestartHelper showRestartAlertFromVC:(UIViewController *)self];
-    });
 }
 
 
