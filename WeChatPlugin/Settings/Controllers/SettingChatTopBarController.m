@@ -151,7 +151,7 @@ static NSString *keyForTag(NSInteger tag) {
 
     [inputAlert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
         textField.placeholder = @"请输入分隔文本";
-        textField.text = @"";
+        textField.text = [PluginConfig shared].chatSeparatorText ?: @"";
     }];
 
     [inputAlert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
@@ -213,8 +213,23 @@ static NSString *keyForTag(NSInteger tag) {
                                                             preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+        PluginConfig *cfg2 = [PluginConfig shared];
+        CGFloat val = 0;
+        if ([key isEqualToString:@"AvatarCornerRadius"])       val = cfg2.chatAvatarCornerRadius;
+        else if ([key isEqualToString:@"AvatarSize"])           val = cfg2.chatAvatarSize;
+        else if ([key isEqualToString:@"SeparatorSize"])        val = cfg2.chatSeparatorSize;
+        else if ([key isEqualToString:@"NicknameFontSize"])     val = cfg2.chatNicknameFontSize;
+        else if ([key isEqualToString:@"AvatarSpacing"])        val = cfg2.chatAvatarSpacing;
+        else if ([key isEqualToString:@"VerticalOffset"])       val = cfg2.chatVerticalOffset;
+        else if ([key isEqualToString:@"HorizontalOffset"])     val = cfg2.chatHorizontalOffset;
+        else if ([key isEqualToString:@"NicknameVerticalOffset"])  val = cfg2.chatNicknameOffsetY;
+        else if ([key isEqualToString:@"NicknameHorizontalOffset"]) val = cfg2.chatNicknameOffsetX;
+        else if ([key isEqualToString:@"ViewWidth"])            val = cfg2.chatTitleViewWidth;
+
         textField.placeholder = cfg[@"placeholder"];
-        textField.text = @"";
+        if (val != 0) {
+            textField.text = [NSString stringWithFormat:@"%.0f", val];
+        }
         textField.keyboardType = UIKeyboardTypeNumbersAndPunctuation;
     }];
 
