@@ -108,12 +108,16 @@
 
     // Calculate avatar Y position
     CGFloat avatarY;
-    if (mode == 1 || mode == 2 || mode == 3 || mode == 7) {
-        avatarY = (totalH - avatarSize) * 0.5;
+    if (mode == 1 || mode == 4) {
+        // modes 1,4: avatar 偏上给 name 留空间
+        CGFloat contentH = avatarSize + 3 + nameFontSize;
+        avatarY = (totalH - contentH) * 0.5 + 1;
     } else {
-        CGFloat contentH = avatarSize + 2 + nameFontSize + 1;
-        avatarY = (totalH - contentH) * 0.5;
+        // modes 0,2,3,5,6,7: avatar 纯居中
+        avatarY = (totalH - avatarSize) * 0.5;
     }
+
+    CGFloat nameY = avatarY + (avatarSize - nameFontSize) * 0.5 - config.chatNicknameOffsetY;
 
     // Mode 7: Overlap mode
     if (mode == 7) {
@@ -131,34 +135,26 @@
         return;
     }
 
-    // Mode 5: left avatar + separator + nickname
+    // Mode 5: nickname(左) + avatar(右)
     if (mode == 5) {
         self.separatorView.hidden = YES;
-        self.separatorTextLabel.hidden = !hasSeparator;
+        self.separatorTextLabel.hidden = YES;
         self.rightAvatarView.hidden = YES;
-
-        if (hasSeparator) {
-            NSString *sepText = config.chatSeparatorText;
-            self.separatorTextLabel.text = sepText;
-            [self.separatorTextLabel sizeToFit];
-            self.separatorTextLabel.hidden = NO;
-        }
-
-        // Left avatar
-        self.leftAvatarView.frame = CGRectMake(0, avatarY, avatarSize, avatarSize);
-        self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
-
-        CGFloat sepX = avatarSize + halfSpacing;
-        if (hasSeparator) {
-            self.separatorTextLabel.frame = CGRectMake(sepX, (totalH - self.separatorTextLabel.frame.size.height) * 0.5,
-                                                         self.separatorTextLabel.frame.size.width, self.separatorTextLabel.frame.size.height);
-            sepX = CGRectGetMaxX(self.separatorTextLabel.frame) + halfSpacing;
-        }
-
         self.titleLabel.hidden = NO;
-        CGFloat nameW = totalW - sepX;
+
+        CGFloat nameWidth = [self calculateNameWidth];
+        CGFloat gap = 8.0;
+
+        self.titleLabel.textAlignment = NSTextAlignmentLeft;
         [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
-        self.titleLabel.frame = CGRectMake(sepX, (totalH - nameFontSize) * 0.5, nameW, nameFontSize);
+        self.titleLabel.frame = CGRectMake(
+            (totalW - avatarSize - nameWidth - gap) * 0.5 + config.chatNicknameOffsetX,
+            nameY, nameWidth, nameFontSize);
+
+        self.leftAvatarView.frame = CGRectMake(
+            CGRectGetMaxX(self.titleLabel.frame) + gap,
+            avatarY, avatarSize, avatarSize);
+        self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
         return;
     }
 
@@ -174,7 +170,7 @@
         self.rightAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
 
         [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
-        self.titleLabel.frame = CGRectMake(avatarSize + halfSpacing, (totalH - nameFontSize) * 0.5,
+        self.titleLabel.frame = CGRectMake(avatarSize + halfSpacing, nameY,
                                              totalW - avatarSize - halfSpacing, nameFontSize);
         return;
     }
@@ -190,15 +186,32 @@
         self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
 
         [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
-        self.titleLabel.frame = CGRectMake(avatarSize + halfSpacing, (totalH - nameFontSize) * 0.5,
+        self.titleLabel.frame = CGRectMake(avatarSize + halfSpacing, nameY,
                                              totalW - avatarSize - halfSpacing, nameFontSize);
         return;
     }
 
-    // Mode 1, 2, 3, 4: Single avatar modes
-    if (mode == 1 || mode == 3 || mode == 4) {
-        // mode 1: right avatar (self), mode 3 & 4: left avatar (opponent)
-        BOOL showLeft = (mode == 3 || mode == 4);
+    // Mode 4: opponent avatar(center) + name below
+    if (mode == 4) {
+        self.rightAvatarView.hidden = YES;
+        self.separatorView.hidden = YES;
+        self.separatorTextLabel.hidden = YES;
+        self.titleLabel.hidden = NO;
+
+        CGFloat centerX = (totalW - avatarSize) * 0.5;
+        self.leftAvatarView.frame = CGRectMake(centerX, avatarY, avatarSize, avatarSize);
+        self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
+
+        [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
+        self.titleLabel.textAlignment = NSTextAlignmentCenter;
+        self.titleLabel.frame = CGRectMake(0, avatarY + avatarSize + 1, totalW, nameFontSize);
+        return;
+    }
+
+    // Mode 1, 3: single avatar (centered, no name)
+    if (mode == 1 || mode == 3) {
+        // mode 1: right avatar (self), mode 3: left avatar (opponent)
+        BOOL showLeft = (mode == 3);
         BOOL showRight = (mode == 1);
 
         self.leftAvatarView.hidden = !showLeft;
@@ -536,10 +549,10 @@
 
 - (void)applyPositionOffset {
     PluginConfig *config = [PluginConfig shared];
-    CGRect f = self.frame;
-    f.origin.x += config.chatHorizontalOffset;
-    f.origin.y += config.chatVerticalOffset;
-    self.frame = f;
+    CGRect f = self.titleLabel.frame;
+    f.origin.x += config.chatNicknameOffsetX;
+    f.origin.y -= config.chatNicknameOffsetY;
+    self.titleLabel.frame = f;
 }
 
 - (CGFloat)calculateCornerRadiusForSize:(CGFloat)size {
@@ -610,6 +623,22 @@
             [infoVC release];
         }
     }
+
+    // Fallback: ContactInfoViewController (init + setM_contact:)
+    Class contactInfoVC = objc_getClass("ContactInfoViewController");
+    if (contactInfoVC) {
+        id vc = ((id (*)(Class, SEL))objc_msgSend)(contactInfoVC, NSSelectorFromString(@"alloc"));
+        vc = ((id (*)(id, SEL))objc_msgSend)(vc, @selector(init));
+        if (vc && [vc respondsToSelector:NSSelectorFromString(@"setM_contact:")]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(vc,
+                NSSelectorFromString(@"setM_contact:"), contact);
+            UIViewController *parentVC = [self findViewController];
+            if (parentVC && parentVC.navigationController) {
+                [parentVC.navigationController pushViewController:vc animated:YES];
+                [vc release];
+            }
+        }
+    }
 }
 
 - (UIViewController *)findViewController {
@@ -624,10 +653,10 @@
 }
 
 - (void)playHapticFeedback {
-    UIImpactFeedbackGenerator *generator = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+    UIImpactFeedbackGenerator *generator = [[[UIImpactFeedbackGenerator alloc]
+        initWithStyle:UIImpactFeedbackStyleLight] autorelease];
     [generator prepare];
     [generator impactOccurred];
-    [generator release];
 }
 
 @end
