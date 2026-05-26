@@ -85,7 +85,11 @@ static NSString *configPropertyForKey(NSString *key) {
             @"ShowChatAvatar": @"showChatAvatar",
             @"AvatarTapFeedback": @"avatarTapFeedback",
             @"ShowAddTime": @"showAddTime",
-            @"ShowGroupMemberCount": @"showGroupMemberCount"
+            @"ShowGroupMemberCount": @"showGroupMemberCount",
+            @"EnableChatNameColor": @"enableChatNameColor",
+            @"EnableChatNameSize": @"enableChatNameSize",
+            @"EnableMomentsNameColor": @"enableMomentsNameColor",
+            @"EnableMomentsNameSize": @"enableMomentsNameSize"
         };
     });
     return mapping[key];

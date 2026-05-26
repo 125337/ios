@@ -87,6 +87,12 @@
 @property (nonatomic, assign) BOOL showAddTime;              // 显示添加时间
 @property (nonatomic, assign) BOOL showGroupMemberCount;     // 显示群聊人数
 
+#pragma mark - 名字颜色设置
+@property (nonatomic, assign) BOOL enableChatNameColor;      // 启用聊天界面名称颜色
+@property (nonatomic, assign) BOOL enableChatNameSize;       // 启用聊天界面名称大小
+@property (nonatomic, assign) BOOL enableMomentsNameColor;   // 启用朋友圈名称颜色
+@property (nonatomic, assign) BOOL enableMomentsNameSize;    // 启用朋友圈名称大小
+
 #pragma mark - 好友添加时间后缀
 @property (nonatomic, assign) BOOL showAddTimeSuffix;
 @property (nonatomic, copy) NSString *addTimeSuffixFormat;

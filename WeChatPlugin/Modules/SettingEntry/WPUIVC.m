@@ -26,7 +26,7 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
     NSArray *items = @[
         @[@"聊天顶栏",      @"openChatTopBar:"],
         @[@"消息居中",      @"noop:"],
-        @[@"名字颜色",      @"noop:"],
+        @[@"名字颜色",      @"openNameColor:"],
         @[@"文本颜色",      @"noop:"],
         @[@"长按菜单",      @"noop:"],
         @[@"附件布局",      @"openAttachLayout:"],
@@ -72,6 +72,24 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
         [vc.navigationController pushViewController:subVC animated:YES];
         [subVC release];
         WPLog(@"UI", @"[Nav] pushed SettingChatTopBarController");
+    }
+}
+
+- (void)openNameColor:(id)sender {
+    UIResponder *responder = (UIResponder *)sender;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) break;
+        responder = [responder nextResponder];
+    }
+    UIViewController *vc = (UIViewController *)responder;
+    if (!vc) { WPLog(@"UI", @"[Nav] openNameColor: currentVC nil"); return; }
+    Class cls = NSClassFromString(@"SettingNameColorController");
+    if (!cls) { WPLog(@"UI", @"[Nav] SettingNameColorController not found"); return; }
+    UIViewController *subVC = [[cls alloc] init];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        [subVC release];
+        WPLog(@"UI", @"[Nav] pushed SettingNameColorController");
     }
 }
 
