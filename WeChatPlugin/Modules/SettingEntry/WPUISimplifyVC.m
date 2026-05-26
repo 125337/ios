@@ -13,8 +13,6 @@ static inline NSString *SStr(NSString *key) {
     return [SD() stringForKey:key];
 }
 
-static BOOL _simplifyPageDidModify = NO;
-
 /// ========== 编辑行 tap — 弹窗 + 持久化 ==========
 @implementation WeChatPluginSwitchHandler (WPUISimplify)
 
@@ -42,6 +40,8 @@ static BOOL _simplifyPageDidModify = NO;
     }];
 
     __unsafe_unretained UILabel *weakLabel = valueLabel;
+    __unsafe_unretained UIViewController *weakTopVC = topVC;
+    BOOL needsRestart = [objc_getAssociatedObject(sender, "needsRestart") boolValue];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *newText = alert.textFields.firstObject.text;
@@ -66,8 +66,13 @@ static BOOL _simplifyPageDidModify = NO;
         }
         [d synchronize];
         
-        // 标记已修改，返回时弹窗（仅界面简化有 viewWillDisappear 兜底，文本占位等动态读取功能不会弹窗）
-        _simplifyPageDidModify = YES;
+        // 仅标记了 needsRestart 的行（界面简化）保存后立即弹重启
+        if (needsRestart && weakTopVC) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                [WeChatRestartHelper showRestartAlertFromVC:weakTopVC];
+            });
+        }
     }]];
     
     [topVC presentViewController:alert animated:YES completion:nil];
@@ -179,6 +184,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
         NSString *showVal   = (curVal && curVal.length > 0) ? curVal : @"";
         UIButton *row = WPAddEditableRowWithArrow(topBarCard, tby, w, rowTitle, showVal, handler);
         objc_setAssociatedObject(row, "editNSKey", nsKey, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        objc_setAssociatedObject(row, "needsRestart", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         tby += kRowH;
     }
 
@@ -198,6 +204,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     NSString *fcShow = (fcCur && fcCur.length > 0) ? fcCur : @"";
     UIButton *fcRow = WPAddEditableRowWithArrow(specialCard, spy, w, @"通讯录底部好友", fcShow, handler);
     objc_setAssociatedObject(fcRow, "editNSKey", @"Simplify_FriendsCount", OBJC_ASSOCIATION_COPY_NONATOMIC);
+    objc_setAssociatedObject(fcRow, "needsRestart", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     spy += kRowH;
 
     CGRect spf = specialCard.frame; spf.size.height = spy; specialCard.frame = spf;
@@ -235,6 +242,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
         UIButton *row = WPAddEditableRowWithArrow(menuCard, mcy, w, rowTitle, showVal, handler);
         objc_setAssociatedObject(row, "editNSKey", @"Simplify_MenuNames", OBJC_ASSOCIATION_COPY_NONATOMIC);
         objc_setAssociatedObject(row, "editDictKey", dictKeyVal, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        objc_setAssociatedObject(row, "needsRestart", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         mcy += kRowH;
     }
 
@@ -269,6 +277,7 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
         UIButton *row = WPAddEditableRowWithArrow(bottomCard, bcy, w, rowTitle, showVal, handler);
         objc_setAssociatedObject(row, "editNSKey", @"Simplify_Tab_Names", OBJC_ASSOCIATION_COPY_NONATOMIC);
         objc_setAssociatedObject(row, "editDictKey", dictKeyVal, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        objc_setAssociatedObject(row, "needsRestart", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         bcy += kRowH;
     }
 
@@ -295,11 +304,16 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
 static void onSimplifySwitchIMP(id self, SEL _cmd, UISwitch *sender) {
     [[NSUserDefaults standardUserDefaults] setBool:sender.on forKey:kSimplifyEnabledKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
-    _simplifyPageDidModify = YES;
     WPLog(@"UI", @"[Toggle] SimplifyEnabled=%d, rebuilding UI", sender.on);
 
-    // 问题3：展开/关闭时完全重建界面，确保布局、scrollView contentSize 正确
+    // 展开/关闭时完全重建界面，确保布局、scrollView contentSize 正确
     WPUISimplifyBuildUI(self, _cmd);
+
+    // 开关切换后立即弹重启
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [WeChatRestartHelper showRestartAlertFromVC:(UIViewController *)self];
+    });
 }
 
 
@@ -309,11 +323,6 @@ static void WPUISimplifyViewWillDisappear(id self, SEL _cmd, BOOL animated) {
     Class uiVC = objc_getClass("UIViewController");
     Method m = class_getInstanceMethod(uiVC, NSSelectorFromString(@"viewWillDisappear:"));
     if (m) ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
-
-    if (_simplifyPageDidModify) {
-        _simplifyPageDidModify = NO;
-        [WeChatRestartHelper showRestartAlertFromVC:(UIViewController *)self];
-    }
 }
 
 #pragma mark - ========== Helper ==========
