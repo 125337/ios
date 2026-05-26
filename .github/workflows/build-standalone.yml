@@ -112,6 +112,7 @@ jobs:
                 -IWeChatPlugin/Modules/AutoTransfer \
                 -IWeChatPlugin/Modules/HideAvatar \
                 -IWeChatPlugin/Modules/PlaceholderText \
+                -IWeChatPlugin/Modules/ChatTopBar \
                 -IWeChatPlugin/Settings/Common \
                 -IWeChatPlugin/Settings/Controllers \
                 -IWeChatPlugin/libs/CydiaSubstrate.framework/Headers \
