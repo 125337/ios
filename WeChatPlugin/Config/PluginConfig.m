@@ -506,6 +506,31 @@
     [d setBool:_hideGroupSelfAvatar forKey:[kPluginPrefix stringByAppendingString:@"HideGroupSelfAvatar"]];
     [d setBool:_hideOAOtherAvatar forKey:[kPluginPrefix stringByAppendingString:@"HideOAOtherAvatar"]];
     [d setBool:_hideOASelfAvatar forKey:[kPluginPrefix stringByAppendingString:@"HideOASelfAvatar"]];
+    // ========== 聊天顶栏配置 ==========
+    [d setBool:_showChatAvatar forKey:[kPluginPrefix stringByAppendingString:@"ShowChatAvatar"]];
+    [d setBool:_avatarTapFeedback forKey:[kPluginPrefix stringByAppendingString:@"AvatarTapFeedback"]];
+    [d setBool:_showAddTime forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTime"]];
+    [d setBool:_showGroupMemberCount forKey:[kPluginPrefix stringByAppendingString:@"ShowGroupMemberCount"]];
+    [d setInteger:_chatDisplayMode forKey:[kPluginPrefix stringByAppendingString:@"ChatDisplayMode"]];
+    [d setFloat:_chatAvatarSize forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarSize"]];
+    [d setFloat:_chatAvatarSpacing forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarSpacing"]];
+    [d setFloat:_chatAvatarCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarCornerRadius"]];
+    [d setFloat:_chatNicknameFontSize forKey:[kPluginPrefix stringByAppendingString:@"ChatNicknameFontSize"]];
+    [d setFloat:_chatSeparatorSize forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorSize"]];
+    [d setFloat:_chatTitleViewWidth forKey:[kPluginPrefix stringByAppendingString:@"ChatTitleViewWidth"]];
+    [d setFloat:_chatVerticalOffset forKey:[kPluginPrefix stringByAppendingString:@"ChatVerticalOffset"]];
+    [d setFloat:_chatHorizontalOffset forKey:[kPluginPrefix stringByAppendingString:@"ChatHorizontalOffset"]];
+    [d setFloat:_chatNicknameOffsetY forKey:[kPluginPrefix stringByAppendingString:@"ChatNicknameOffsetY"]];
+    [d setFloat:_chatNicknameOffsetX forKey:[kPluginPrefix stringByAppendingString:@"ChatNicknameOffsetX"]];
+    if (_chatSeparatorText) {
+        [d setObject:_chatSeparatorText forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorText"]];
+    }
+    if (_chatGroupMemberCountSuffix) {
+        [d setObject:_chatGroupMemberCountSuffix forKey:[kPluginPrefix stringByAppendingString:@"ChatGroupMemberCountSuffix"]];
+    }
+    if (_chatAddTimeSuffixFormat) {
+        [d setObject:_chatAddTimeSuffixFormat forKey:[kPluginPrefix stringByAppendingString:@"ChatAddTimeSuffixFormat"]];
+    }
     [d setBool:_showAddTimeSuffix forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     if (_addTimeSuffixFormat) {
         [d setObject:_addTimeSuffixFormat forKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];

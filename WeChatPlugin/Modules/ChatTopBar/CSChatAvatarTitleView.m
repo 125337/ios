@@ -273,14 +273,22 @@
     if (!infoVCClass) return;
 
     id infoVC = ((id (*)(Class, SEL))objc_msgSend)(infoVCClass, NSSelectorFromString(@"alloc"));
-    infoVC = ((id (*)(id, SEL, id))objc_msgSend)(infoVC, NSSelectorFromString(@"initWithContact:"), contact);
+    infoVC = ((id (*)(id, SEL))objc_msgSend)(infoVC, @selector(init));
     if (!infoVC) return;
 
-    ((void (*)(id, SEL))objc_msgSend)(infoVC, @selector(view)); // force load
+    if ([infoVC respondsToSelector:NSSelectorFromString(@"setM_contact:")]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(infoVC,
+            NSSelectorFromString(@"setM_contact:"), contact);
+    }
+
+    ((void (*)(id, SEL))objc_msgSend)(infoVC, @selector(view));
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.8 * NSEC_PER_SEC),
                    dispatch_get_main_queue(), ^{
-        [infoVC dismissViewControllerAnimated:NO completion:nil];
+        if ([infoVC respondsToSelector:@selector(dismissViewControllerAnimated:completion:)]) {
+            ((void (*)(id, SEL, BOOL, id))objc_msgSend)(infoVC,
+                @selector(dismissViewControllerAnimated:completion:), NO, nil);
+        }
         [infoVC release];
     });
 }
@@ -319,7 +327,11 @@
             id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
             if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
                 unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), contact);
-                titleText = [NSString stringWithFormat:@"%@(%u人)", nickname ?: @"", count];
+                NSString *suffix = config.chatGroupMemberCountSuffix.length > 0
+                    ? config.chatGroupMemberCountSuffix : @"%u人";
+                titleText = [NSString stringWithFormat:@"%@%@",
+                    nickname ?: @"",
+                    [NSString stringWithFormat:suffix, count]];
             }
         }
     } else if (!isGroup && config.showAddTime) {
@@ -331,14 +343,20 @@
         if (addTime > 0) {
             NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
             NSInteger days = (NSInteger)((now - addTime) / 86400.0);
-            titleText = [NSString stringWithFormat:@"%@(%ld天)", nickname ?: @"", (long)days];
+            NSString *suffix = config.chatAddTimeSuffixFormat.length > 0
+                    ? config.chatAddTimeSuffixFormat : @"%ld天";
+            titleText = [NSString stringWithFormat:@"%@%@",
+                nickname ?: @"",
+                [NSString stringWithFormat:suffix, (long)days]];
         }
     }
 
     // Load separator
-    [self loadSeparatorIcon];
-    [self loadSeparatorGIF];
-    [self loadSeparatorText];
+    if (![self loadSeparatorIcon]) {
+        if (![self loadSeparatorGIF]) {
+            [self loadSeparatorText];
+        }
+    }
 
     dispatch_async(dispatch_get_main_queue(), ^{
         self.leftAvatarView.image = opponentAvatar;
@@ -434,10 +452,9 @@
 
 #pragma mark - Separator
 
-- (void)loadSeparatorIcon {
+- (BOOL)loadSeparatorIcon {
     PluginConfig *config = [PluginConfig shared];
 
-    // Load separator icon from NSUserDefaults
     NSData *iconData = [[NSUserDefaults standardUserDefaults]
         dataForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
     if (iconData) {
@@ -445,9 +462,9 @@
         self.separatorView.image = icon;
         self.separatorView.hidden = NO;
         [self.separatorView sizeToFit];
-    } else {
-        self.separatorView.hidden = YES;
+        return YES;
     }
+    return NO;
 }
 
 - (void)loadSeparatorText {
@@ -459,7 +476,7 @@
     }
 }
 
-- (void)loadSeparatorGIF {
+- (BOOL)loadSeparatorGIF {
     NSData *gifData = [[NSUserDefaults standardUserDefaults]
         dataForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
     if (gifData) {
@@ -468,7 +485,9 @@
         self.separatorView.hidden = NO;
         [self.separatorView sizeToFit];
         self.separatorView.userInteractionEnabled = YES;
+        return YES;
     }
+    return NO;
 }
 
 #pragma mark - Helpers
@@ -479,6 +498,9 @@
 
     CGFloat sepFontSize = MAX(8.0, MIN(config.chatSeparatorSize * 0.4, 16.0));
     [self.separatorTextLabel setFont:[UIFont systemFontOfSize:sepFontSize weight:UIFontWeightMedium]];
+
+    [self setNeedsLayout];
+    [self layoutIfNeeded];
 }
 
 - (void)applyPositionOffset {
