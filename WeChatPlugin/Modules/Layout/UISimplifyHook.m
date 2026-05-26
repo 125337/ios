@@ -215,13 +215,17 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
     if (_mainTitle && _mainTitle.length > 0) {
         BOOL shouldReplace = hasComma;
         if (!shouldReplace) {
-            id responder = [self nextResponder];
-            while (responder) {
-                if ([NSStringFromClass([responder class]) rangeOfString:@"NavigationBar"].location != NSNotFound) {
-                    shouldReplace = YES;
-                    break;
+            BOOL isMainTabText = ([text isEqualToString:@"微信"] ||
+                                  [text hasPrefix:@"微信("]);
+            if (isMainTabText) {
+                id responder = [self nextResponder];
+                while (responder) {
+                    if ([NSStringFromClass([responder class]) rangeOfString:@"NavigationBar"].location != NSNotFound) {
+                        shouldReplace = YES;
+                        break;
+                    }
+                    responder = [responder nextResponder];
                 }
-                responder = [responder nextResponder];
             }
         }
         if (shouldReplace) {
@@ -297,13 +301,17 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
     if (_mainTitle && _mainTitle.length > 0) {
         BOOL shouldReplace = hasComma;
         if (!shouldReplace) {
-            id responder = [self nextResponder];
-            while (responder) {
-                if ([NSStringFromClass([responder class]) rangeOfString:@"NavigationBar"].location != NSNotFound) {
-                    shouldReplace = YES;
-                    break;
+            BOOL isMainTabText = ([text isEqualToString:@"微信"] ||
+                                  [text hasPrefix:@"微信("]);
+            if (isMainTabText) {
+                id responder = [self nextResponder];
+                while (responder) {
+                    if ([NSStringFromClass([responder class]) rangeOfString:@"NavigationBar"].location != NSNotFound) {
+                        shouldReplace = YES;
+                        break;
+                    }
+                    responder = [responder nextResponder];
                 }
-                responder = [responder nextResponder];
             }
         }
         if (shouldReplace) {
@@ -416,13 +424,17 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
     if (_mainTitle && _mainTitle.length > 0) {
         BOOL shouldReplace = hasComma;
         if (!shouldReplace) {
-            id responder = [self nextResponder];
-            while (responder) {
-                if ([NSStringFromClass([responder class]) rangeOfString:@"NavigationBar"].location != NSNotFound) {
-                    shouldReplace = YES;
-                    break;
+            BOOL isMainTabText = ([title isEqualToString:@"微信"] ||
+                                  [title hasPrefix:@"微信("]);
+            if (isMainTabText) {
+                id responder = [self nextResponder];
+                while (responder) {
+                    if ([NSStringFromClass([responder class]) rangeOfString:@"NavigationBar"].location != NSNotFound) {
+                        shouldReplace = YES;
+                        break;
+                    }
+                    responder = [responder nextResponder];
                 }
-                responder = [responder nextResponder];
             }
         }
         if (shouldReplace) {
