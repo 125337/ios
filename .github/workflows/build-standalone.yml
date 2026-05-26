@@ -73,6 +73,7 @@ jobs:
           WeChatPlugin/Modules/AutoTransfer/AutoTransferHook.m \
           WeChatPlugin/Modules/PlaceholderText/PlaceholderTextHook.m \
           WeChatPlugin/Modules/ChatTopBar/CSChatAvatarTitleView.m \
+          WeChatPlugin/Modules/ChatTopBar/CSContactInfoPopoverController.m \
           WeChatPlugin/Modules/ChatTopBar/ChatTopBarHook.m \
           WeChatPlugin/Settings/Common/SettingCategoryController.m \
           WeChatPlugin/Settings/Common/WPBorderLayer.m \

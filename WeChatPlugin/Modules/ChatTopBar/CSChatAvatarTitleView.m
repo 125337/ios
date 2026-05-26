@@ -4,6 +4,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <ImageIO/ImageIO.h>
+#import "CSContactInfoPopoverController.h"
 
 @implementation CSChatAvatarTitleView
 
@@ -607,49 +608,35 @@
 - (void)presentUserInfoPopoverWithContact:(id)contact sourceView:(UIView *)sourceView {
     if (!contact) return;
 
-    Class infoVCClass = objc_getClass("WCUserInfoViewController");
-    if (infoVCClass) {
-        NSString *wxid = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
-        id infoVC = ((id (*)(Class, SEL))objc_msgSend)(infoVCClass, NSSelectorFromString(@"alloc"));
-        infoVC = ((id (*)(id, SEL, id, id))objc_msgSend)(infoVC,
-            NSSelectorFromString(@"initWithUsrName:contact:"), wxid, contact);
-        if (infoVC) {
-            UIViewController *parentVC = [self findViewController];
-            if (parentVC && parentVC.navigationController) {
-                [parentVC.navigationController pushViewController:infoVC animated:YES];
-                [infoVC release];
-                return;
-            }
-            [infoVC release];
-        }
+    // 获取头像
+    UIImage *avatar = nil;
+    if (sourceView == self.leftAvatarView) {
+        avatar = self.leftAvatarView.image;
+    } else {
+        avatar = self.rightAvatarView.image;
     }
 
-    // Fallback: ContactInfoViewController (init + setM_contact:)
-    Class contactInfoVC = objc_getClass("ContactInfoViewController");
-    if (contactInfoVC) {
-        id vc = ((id (*)(Class, SEL))objc_msgSend)(contactInfoVC, NSSelectorFromString(@"alloc"));
-        vc = ((id (*)(id, SEL))objc_msgSend)(vc, @selector(init));
-        if (vc && [vc respondsToSelector:NSSelectorFromString(@"setM_contact:")]) {
-            ((void (*)(id, SEL, id))objc_msgSend)(vc,
-                NSSelectorFromString(@"setM_contact:"), contact);
-            UIViewController *parentVC = [self findViewController];
-            if (parentVC && parentVC.navigationController) {
-                [parentVC.navigationController pushViewController:vc animated:YES];
-                [vc release];
-            }
-        }
-    }
-}
+    // 创建自定义弹窗
+    CSContactInfoPopoverController *popover =
+        [[CSContactInfoPopoverController alloc] initWithContact:contact avatar:avatar];
 
-- (UIViewController *)findViewController {
-    UIResponder *responder = self;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) {
-            return (UIViewController *)responder;
-        }
-        responder = [responder nextResponder];
+    // popover 配置
+    popover.modalPresentationStyle = UIModalPresentationPopover;
+    popover.preferredContentSize = CGSizeMake(300, 520);
+
+    UIPopoverPresentationController *popPC = popover.popoverPresentationController;
+    popPC.sourceView = sourceView;
+    popPC.sourceRect = sourceView.bounds;
+    popPC.permittedArrowDirections = UIPopoverArrowDirectionUp;
+    popPC.backgroundColor = [UIColor whiteColor];
+
+    // 直接用 chatController present
+    UIViewController *parentVC = (UIViewController *)self.chatController;
+    if (parentVC) {
+        [parentVC presentViewController:popover animated:YES completion:nil];
     }
-    return nil;
+
+    [popover release];
 }
 
 - (void)playHapticFeedback {
