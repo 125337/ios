@@ -81,7 +81,11 @@ static NSString *configPropertyForKey(NSString *key) {
             @"HideGroupOtherAvatar": @"hideGroupOtherAvatar",
             @"HideGroupSelfAvatar": @"hideGroupSelfAvatar",
             @"HideOAOtherAvatar": @"hideOAOtherAvatar",
-            @"HideOASelfAvatar": @"hideOASelfAvatar"
+            @"HideOASelfAvatar": @"hideOASelfAvatar",
+            @"ShowChatAvatar": @"showChatAvatar",
+            @"AvatarTapFeedback": @"avatarTapFeedback",
+            @"ShowAddTime": @"showAddTime",
+            @"ShowGroupMemberCount": @"showGroupMemberCount"
         };
     });
     return mapping[key];

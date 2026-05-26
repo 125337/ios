@@ -81,6 +81,12 @@
 @property (nonatomic, assign) BOOL hideOAOtherAvatar;        // 公众号-隐藏对方头像
 @property (nonatomic, assign) BOOL hideOASelfAvatar;         // 公众号-隐藏自己头像
 
+#pragma mark - 聊天顶栏设置
+@property (nonatomic, assign) BOOL showChatAvatar;           // 显示聊天头像
+@property (nonatomic, assign) BOOL avatarTapFeedback;        // 头像点击反馈
+@property (nonatomic, assign) BOOL showAddTime;              // 显示添加时间
+@property (nonatomic, assign) BOOL showGroupMemberCount;     // 显示群聊人数
+
 #pragma mark - 好友添加时间后缀
 @property (nonatomic, assign) BOOL showAddTimeSuffix;
 @property (nonatomic, copy) NSString *addTimeSuffixFormat;

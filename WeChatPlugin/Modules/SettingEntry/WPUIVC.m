@@ -24,7 +24,7 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
     CGFloat cy = 0;
     CGFloat scale = [UIScreen mainScreen].scale;
     NSArray *items = @[
-        @[@"聊天顶栏",      @"noop:"],
+        @[@"聊天顶栏",      @"openChatTopBar:"],
         @[@"消息居中",      @"noop:"],
         @[@"名字颜色",      @"noop:"],
         @[@"文本颜色",      @"noop:"],
@@ -56,6 +56,24 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
 }
 
 @implementation WeChatPluginSwitchHandler (WPUICustomization)
+
+- (void)openChatTopBar:(id)sender {
+    UIResponder *responder = (UIResponder *)sender;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) break;
+        responder = [responder nextResponder];
+    }
+    UIViewController *vc = (UIViewController *)responder;
+    if (!vc) { WPLog(@"UI", @"[Nav] openChatTopBar: currentVC nil"); return; }
+    Class cls = NSClassFromString(@"SettingChatTopBarController");
+    if (!cls) { WPLog(@"UI", @"[Nav] SettingChatTopBarController not found"); return; }
+    UIViewController *subVC = [[cls alloc] init];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        [subVC release];
+        WPLog(@"UI", @"[Nav] pushed SettingChatTopBarController");
+    }
+}
 
 - (void)openAvatarHide:(id)sender {
     UIResponder *responder = (UIResponder *)sender;
