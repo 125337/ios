@@ -629,6 +629,7 @@
     popPC.sourceRect = sourceView.bounds;
     popPC.permittedArrowDirections = UIPopoverArrowDirectionUp;
     popPC.backgroundColor = [UIColor whiteColor];
+    popPC.delegate = popover;
 
     // 直接用 chatController present
     UIViewController *parentVC = (UIViewController *)self.chatController;

@@ -44,10 +44,15 @@ static NSInteger contactIntForKey(id contact, NSString *key) {
     [super dealloc];
 }
 
+- (UIModalPresentationStyle)adaptivePresentationStyleForPresentationController:
+        (UIPresentationController *)controller {
+    return UIModalPresentationNone;
+}
+
 #pragma mark - viewDidLoad
 
 - (void)viewDidLoad {
-    ((void (*)(id, SEL))objc_msgSendSuper)(self, @selector(viewDidLoad));
+    [super viewDidLoad];
 
     self.view.backgroundColor = [UIColor colorWithRed:0.96 green:0.96 blue:0.97 alpha:1.0];
 

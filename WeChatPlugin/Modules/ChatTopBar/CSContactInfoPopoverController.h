@@ -1,7 +1,7 @@
 // CSContactInfoPopoverController.h — MRC 环境
 #import <UIKit/UIKit.h>
 
-@interface CSContactInfoPopoverController : UIViewController
+@interface CSContactInfoPopoverController : UIViewController <UIAdaptivePresentationControllerDelegate>
 
 @property (nonatomic, retain) id contact;                    // WeChat CContact 对象
 @property (nonatomic, retain) NSString *wxid;                // 微信号
