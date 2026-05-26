@@ -265,7 +265,10 @@ static NSString *keyForTag(NSInteger tag) {
         else if ([key isEqualToString:@"NicknameHorizontalOffset"]) c.chatNicknameOffsetX = [text floatValue];
         else if ([key isEqualToString:@"ViewWidth"])            c.chatTitleViewWidth = [text floatValue];
         [c save];
-        [self buildUI];
+        UILabel *valueLabel = objc_getAssociatedObject(sender, "editValueLabel");
+        if (valueLabel) {
+            valueLabel.text = [NSString stringWithFormat:@"%.0f", [text floatValue]];
+        }
     }]];
 
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -310,9 +313,10 @@ static NSString *keyForTag(NSInteger tag) {
 
     y = [self finishGroup:card1 atY:y height:cy1];
 
-    // ========== Card 2: 外观数值设置（单击项：仅标题+箭头，无描述） ==========
-    UIView *card2 = [self addTableGroupAtY:y width:w];
+    // ========== Card 2: 外观数值设置 ==========
+    UIView *card2 = WPMakeCard(y, w);
     CGFloat cy2 = 0;
+    CGFloat scale2 = [UIScreen mainScreen].scale;
 
     NSArray<NSDictionary *> *card2Items = @[
         @{@"title": @"头像圆角程度",   @"tag": @(1001), @"key": @"AvatarCornerRadius"},
@@ -328,22 +332,36 @@ static NSString *keyForTag(NSInteger tag) {
 
     for (NSUInteger i = 0; i < card2Items.count; i++) {
         NSDictionary *item = card2Items[i];
-        NSString *sub = [self subtitleForKey:item[@"key"]];
-        cy2 = [self addNavRowInGroup:card2 title:item[@"title"] subtitle:sub tag:[item[@"tag"] integerValue] action:@selector(onNumericRowTap:) cy:cy2 width:w];
-        if (i < card2Items.count - 1) {
-            cy2 = [self addSeparatorInGroup:card2 cy:cy2 width:w];
+        if (i > 0) {
+            WPAddSep(card2, cy2, w);
+            cy2 = round((cy2 + 1.0 / scale2) * scale2) / scale2;
         }
+        NSString *showVal = [self subtitleForKey:item[@"key"]];
+        UIButton *row = WPAddEditableRowWithArrow(card2, cy2, w, item[@"title"], showVal, self);
+        [row removeTarget:self action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
+        row.tag = [item[@"tag"] integerValue];
+        [row addTarget:self action:@selector(onNumericRowTap:) forControlEvents:UIControlEventTouchUpInside];
+        cy2 += kRowH;
     }
 
-    y = [self finishGroup:card2 atY:y height:cy2];
+    CGRect c2f = card2.frame; c2f.size.height = cy2; card2.frame = c2f;
+    [self.contentView addSubview:card2];
+    y += cy2 + 8;
 
-    // ========== Card 3: 视图宽度（单击项：仅标题+箭头，无描述） ==========
-    UIView *card3 = [self addTableGroupAtY:y width:w];
+    // ========== Card 3: 视图宽度 ==========
+    UIView *card3 = WPMakeCard(y, w);
     CGFloat cy3 = 0;
 
-    cy3 = [self addNavRowInGroup:card3 title:@"视图宽度" subtitle:[self subtitleForKey:@"ViewWidth"] tag:1010 action:@selector(onNumericRowTap:) cy:cy3 width:w];
+    NSString *vwVal = [self subtitleForKey:@"ViewWidth"];
+    UIButton *vwRow = WPAddEditableRowWithArrow(card3, cy3, w, @"视图宽度", vwVal, self);
+    [vwRow removeTarget:self action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
+    vwRow.tag = 1010;
+    [vwRow addTarget:self action:@selector(onNumericRowTap:) forControlEvents:UIControlEventTouchUpInside];
+    cy3 += kRowH;
 
-    y = [self finishGroup:card3 atY:y height:cy3];
+    CGRect c3f = card3.frame; c3f.size.height = cy3; card3.frame = c3f;
+    [self.contentView addSubview:card3];
+    y += cy3 + 8;
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
