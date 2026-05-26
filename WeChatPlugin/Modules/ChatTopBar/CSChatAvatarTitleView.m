@@ -360,14 +360,10 @@
     }
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (!opponentAvatar) {
-            opponentAvatar = [UIImage imageNamed:@"DefaultHead"];
-        }
-        if (!selfAvatar) {
-            selfAvatar = [UIImage imageNamed:@"DefaultHead"];
-        }
-        self.leftAvatarView.image = opponentAvatar;
-        self.rightAvatarView.image = selfAvatar;
+        UIImage *displayOpponent = opponentAvatar ?: [UIImage imageNamed:@"DefaultHead"];
+        UIImage *displaySelf = selfAvatar ?: [UIImage imageNamed:@"DefaultHead"];
+        self.leftAvatarView.image = displayOpponent;
+        self.rightAvatarView.image = displaySelf;
         self.titleLabel.text = titleText;
     });
 }
