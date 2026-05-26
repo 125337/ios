@@ -217,7 +217,7 @@ static void hook_MMUILabel_setText(id self, SEL _cmd, NSString *text) {
         if (!shouldReplace) {
             id responder = [self nextResponder];
             while (responder) {
-                if ([NSStringFromClass([responder class]) hasPrefix:@"NavigationBar"]) {
+                if ([NSStringFromClass([responder class]) rangeOfString:@"NavigationBar"].location != NSNotFound) {
                     shouldReplace = YES;
                     break;
                 }
@@ -299,7 +299,7 @@ static void hook_MMUILabel_setAttributedText(id self, SEL _cmd, NSAttributedStri
         if (!shouldReplace) {
             id responder = [self nextResponder];
             while (responder) {
-                if ([NSStringFromClass([responder class]) hasPrefix:@"NavigationBar"]) {
+                if ([NSStringFromClass([responder class]) rangeOfString:@"NavigationBar"].location != NSNotFound) {
                     shouldReplace = YES;
                     break;
                 }
@@ -418,7 +418,7 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
         if (!shouldReplace) {
             id responder = [self nextResponder];
             while (responder) {
-                if ([NSStringFromClass([responder class]) hasPrefix:@"NavigationBar"]) {
+                if ([NSStringFromClass([responder class]) rangeOfString:@"NavigationBar"].location != NSNotFound) {
                     shouldReplace = YES;
                     break;
                 }
