@@ -63,6 +63,7 @@ jobs:
           WeChatPlugin/Modules/SettingEntry/WPUIPurifyVC.m \
           WeChatPlugin/Modules/SettingEntry/WPUISimplifyVC.m \
           WeChatPlugin/Modules/SettingEntry/WPUIAttachmentLayoutVC.m \
+          WeChatPlugin/Modules/SettingEntry/WPUIPlaceholderTextVC.m \
           WeChatPlugin/Modules/Joker/JokerHook.m \
           WeChatPlugin/Modules/GroupExit/GroupExitHook.m \
           WeChatPlugin/Modules/MessageTime/MessageTimeHook.m \

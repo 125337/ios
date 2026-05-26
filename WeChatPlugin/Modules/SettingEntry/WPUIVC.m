@@ -30,7 +30,7 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
         @[@"文本颜色",      @"noop:"],
         @[@"长按菜单",      @"noop:"],
         @[@"附件布局",      @"openAttachLayout:"],
-        @[@"文本占位",      @"noop:"],
+        @[@"文本占位",      @"openPlaceholderText:"],
         @[@"界面简化",      @"openUISimplify:"],
         @[@"界面净化",      @"openUIPurify:"],
         @[@"隐藏头像",      @"openAvatarHide:"],
@@ -129,6 +129,25 @@ static void WPUIViewDidLoad(id self, SEL _cmd) {
         WPLog(@"UI", @"[Nav] pushed WPUIAttachLayoutVC");
     } else {
         WPLog(@"UI", @"[Nav] WPUIAttachLayoutVCHelper makeVC returned nil");
+    }
+}
+
+- (void)openPlaceholderText:(id)sender {
+    UIResponder *responder = (UIResponder *)sender;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) break;
+        responder = [responder nextResponder];
+    }
+    UIViewController *vc = (UIViewController *)responder;
+    if (!vc) { WPLog(@"UI", @"[Nav] openPlaceholderText: currentVC nil"); return; }
+    Class helperClass = objc_getClass("WPUIPlaceholderTextVCHelper");
+    if (!helperClass) { WPLog(@"UI", @"[Nav] WPUIPlaceholderTextVCHelper not found"); return; }
+    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    if (subVC) {
+        [vc.navigationController pushViewController:subVC animated:YES];
+        WPLog(@"UI", @"[Nav] pushed WPUIPlaceholderTextVC");
+    } else {
+        WPLog(@"UI", @"[Nav] WPUIPlaceholderTextVCHelper makeVC returned nil");
     }
 }
 
