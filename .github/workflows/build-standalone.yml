@@ -39,6 +39,7 @@ jobs:
           WeChatPlugin/Config/PluginConfig.m \
           WeChatPlugin/Core/HookEngine.m \
           WeChatPlugin/Core/WeChatAlertHelper.m \
+          WeChatPlugin/Core/WeChatRestartHelper.m \
           WeChatPlugin/Core/LogManager.m \
           WeChatPlugin/Registry/HookRegistry.m \
           WeChatPlugin/Registry/FeatureModuleRegistry.m \

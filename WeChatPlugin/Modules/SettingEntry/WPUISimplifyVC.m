@@ -1,6 +1,8 @@
 #import "WPCommonUI.h"
 #import "SettingEntryHook.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/WeChatRestartHelper.h"
+#import <objc/runtime.h>
 
 /// ========== 配置读取辅助 ==========
 static inline NSUserDefaults *SD(void) {
@@ -61,9 +63,10 @@ static inline NSString *SStr(NSString *key) {
             }
         }
         [d synchronize];
+        
+        // 标记已修改，返回时弹窗
+        _simplifyPageDidModify = YES;
     }]];
-
-    [topVC presentViewController:alert animated:YES completion:nil];
 }
 
 @end
@@ -72,6 +75,7 @@ static inline NSString *SStr(NSString *key) {
 #pragma mark - ========== UI 构建 ==========
 
 static NSString *const kSimplifyEnabledKey = @"SimplifyEnabled";
+static BOOL _simplifyPageDidModify = NO;
 
 static void WPUISimplifyBuildUI(id self, SEL _cmd);
 
@@ -288,12 +292,26 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
 static void onSimplifySwitchIMP(id self, SEL _cmd, UISwitch *sender) {
     [[NSUserDefaults standardUserDefaults] setBool:sender.on forKey:kSimplifyEnabledKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
+    _simplifyPageDidModify = YES;
     WPLog(@"UI", @"[Toggle] SimplifyEnabled=%d, rebuilding UI", sender.on);
 
     // 问题3：展开/关闭时完全重建界面，确保布局、scrollView contentSize 正确
     WPUISimplifyBuildUI(self, _cmd);
 }
 
+
+#pragma mark - ========== viewWillDisappear ==========
+
+static void WPUISimplifyViewWillDisappear(id self, SEL _cmd, BOOL animated) {
+    Class uiVC = objc_getClass("UIViewController");
+    Method m = class_getInstanceMethod(uiVC, NSSelectorFromString(@"viewWillDisappear:"));
+    if (m) ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
+
+    if (_simplifyPageDidModify) {
+        _simplifyPageDidModify = NO;
+        [WeChatRestartHelper showRestartAlertFromVC:(UIViewController *)self];
+    }
+}
 
 #pragma mark - ========== Helper ==========
 
@@ -310,6 +328,7 @@ static void onSimplifySwitchIMP(id self, SEL _cmd, UISwitch *sender) {
         if (subClass) {
             // ⚠️ class_addMethod 必须在 objc_registerClassPair 之前
             class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPUISimplifyViewDidLoad, "v@:");
+            class_addMethod(subClass, NSSelectorFromString(@"viewWillDisappear:"), (IMP)WPUISimplifyViewWillDisappear, "v@:B");
             class_addMethod(subClass, NSSelectorFromString(@"onSimplifySwitch:"), (IMP)onSimplifySwitchIMP, "v@:@");
             objc_registerClassPair(subClass);
             WPLog(@"UI", @"[Sub] WPUISimplifyVC class created");
