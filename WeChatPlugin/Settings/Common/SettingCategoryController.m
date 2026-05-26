@@ -200,14 +200,17 @@ static NSString *configPropertyForKey(NSString *key) {
 
 - (CGFloat)addNavRowInGroup:(UIView *)group title:(NSString *)title subtitle:(NSString *)subtitle tag:(NSInteger)tag action:(SEL)action cy:(CGFloat)cy width:(CGFloat)w {
     CGFloat gw = w - kCardPadding * 2;
-    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4, gw - kCellHPadding * 2 - 20, 18)];
+    BOOL hasSubtitle = subtitle.length > 0;
+    CGFloat titleY = hasSubtitle ? cy + 4 : cy;
+    CGFloat titleH = hasSubtitle ? 18 : kRowH;
+    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, titleY, gw - kCellHPadding * 2 - 20, titleH)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = textPrimary();
     [group addSubview:tl];
     [tl release];
 
-    if (subtitle.length > 0) {
+    if (hasSubtitle) {
         UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 22, gw - kCellHPadding * 2 - 20, 14)];
         dl.text = subtitle;
         dl.font = [UIFont systemFontOfSize:12];

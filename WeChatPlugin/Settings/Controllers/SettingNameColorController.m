@@ -69,7 +69,7 @@
     cy1 = [self addMasterSwitchRowInGroup:card1
                                     title:@"启用聊天界面名称颜色"
                                       key:@"EnableChatNameColor"
-                                     isOn:config.showChatAvatar
+                                     isOn:config.enableChatNameColor
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addColorRowInGroup:expand title:@"浅色模式文字颜色" key:@"ChatNameLightColor" value:config.senderTextColorHex cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
@@ -82,7 +82,7 @@
     cy1 = [self addMasterSwitchRowInGroup:card1
                                     title:@"启用聊天界面名称大小"
                                       key:@"EnableChatNameSize"
-                                     isOn:config.avatarTapFeedback
+                                     isOn:config.enableChatNameSize
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addButtonRowInGroup:expand title:@"字体大小" hint:@"请输入字体大小(10pt-24pt)" key:@"ChatNameFontSize" cy:*ecy width:w];
     } cy:cy1 width:w];
@@ -110,7 +110,7 @@
     cy2 = [self addMasterSwitchRowInGroup:card2
                                     title:@"启用朋友圈名称大小"
                                       key:@"EnableMomentsNameSize"
-                                     isOn:config.showGroupMemberCount
+                                     isOn:config.enableMomentsNameSize
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addButtonRowInGroup:expand title:@"字体大小" hint:@"请输入字体大小(10pt-24pt)" key:@"MomentsNameFontSize" cy:*ecy width:w];
     } cy:cy2 width:w];
