@@ -273,9 +273,7 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numeric
 
     for (NSUInteger i = 0; i < card2Items.count; i++) {
         NSDictionary *item = card2Items[i];
-        NSDictionary *cfg = numericInputConfig()[item[@"key"]];
-        NSString *hint = cfg[@"desc"];
-        cy2 = [self addButtonRowInGroup:card2 title:item[@"title"] hint:hint key:item[@"key"] cy:cy2 width:w];
+        cy2 = [self addButtonRowInGroup:card2 title:item[@"title"] hint:@"" key:item[@"key"] cy:cy2 width:w];
         if (i < card2Items.count - 1) {
             cy2 = [self addSeparatorInGroup:card2 cy:cy2 width:w];
         }
@@ -287,8 +285,7 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numeric
     UIView *card3 = [self addTableGroupAtY:y width:w];
     CGFloat cy3 = 0;
 
-    NSDictionary *viewWidthCfg = numericInputConfig()[@"ViewWidth"];
-    cy3 = [self addButtonRowInGroup:card3 title:@"视图宽度" hint:viewWidthCfg[@"desc"] key:@"ViewWidth" cy:cy3 width:w];
+    cy3 = [self addButtonRowInGroup:card3 title:@"视图宽度" hint:@"" key:@"ViewWidth" cy:cy3 width:w];
 
     y = [self finishGroup:card3 atY:y height:cy3];
 
