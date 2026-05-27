@@ -91,7 +91,8 @@ static NSString *configPropertyForKey(NSString *key) {
             @"EnableMomentsNameSize": @"enableMomentsNameSize",
             @"AttachLayoutEnabled": @"attachLayoutEnabled",
             @"PlaceholderTextEnabled": @"placeholderTextEnabled",
-            @"PlaceholderText_Bold": @"placeholderTextBold"
+            @"PlaceholderText_Bold": @"placeholderTextBold",
+            @"SimplifyEnabled": @"simplifyEnabled"
         };
     });
     return mapping[key];

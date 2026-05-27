@@ -1,5 +1,7 @@
 #import "../../Settings/Common/SettingCategoryController.h"
 #import "../../Settings/Common/SettingController.h"
+#import "../../Settings/Controllers/SettingChatTopBarController.h"
+#import "../../Settings/Controllers/SettingNameColorController.h"
 #import "../../Core/LogManager.h"
 
 @interface WPUIVC : SettingCategoryController

@@ -142,6 +142,9 @@
 @property (nonatomic, assign) CGFloat placeholderTextAlpha;
 @property (nonatomic, copy) NSString *placeholderTextColorHex;
 
+#pragma mark - 界面简化
+@property (nonatomic, assign) BOOL simplifyEnabled;
+
 @property (nonatomic, assign) BOOL notifySender;
 @property (nonatomic, copy) NSString *notifySenderTemplate;
 @property (nonatomic, assign) double notifySenderCooldown;
