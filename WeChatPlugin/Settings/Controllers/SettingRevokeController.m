@@ -2,6 +2,10 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Modules/Revoke/RevokeFormatEditorVC.h"
 
+@interface SettingRevokeController ()
+@property (nonatomic, strong) NSMutableArray *inputFields;
+@end
+
 @implementation SettingRevokeController
 
 - (void)viewDidLoad {

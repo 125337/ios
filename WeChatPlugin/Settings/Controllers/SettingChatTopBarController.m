@@ -5,6 +5,10 @@
 #import "../../Config/Constants.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 
+@interface SettingChatTopBarController ()
+@property (nonatomic, strong) NSMutableArray *inputFields;
+@end
+
 #pragma mark - 数值输入弹窗描述（仅用于弹窗message，列表项不显示）
 
 static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numericInputConfig(void) {

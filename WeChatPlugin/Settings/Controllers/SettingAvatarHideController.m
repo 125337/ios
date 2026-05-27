@@ -2,6 +2,10 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
 
+@interface SettingAvatarHideController ()
+@property (nonatomic, strong) NSMutableArray *inputFields;
+@end
+
 @implementation SettingAvatarHideController
 
 - (void)viewDidLoad {

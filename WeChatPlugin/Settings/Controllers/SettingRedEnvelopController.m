@@ -4,6 +4,10 @@
 #import <objc/runtime.h>
 #import "../../Core/LogManager.h"
 
+@interface SettingRedEnvelopController ()
+@property (nonatomic, strong) NSMutableArray *inputFields;
+@end
+
 @implementation SettingRedEnvelopController
 
 - (void)viewDidLoad {

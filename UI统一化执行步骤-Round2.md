@@ -10,15 +10,15 @@
 
 | # | 检查项 | 结果 |
 |---|--------|------|
-| 1 | §2.2 卡片容器 — `addTableGroupAtY:` → `WPMakeCard` | ❌ 未实施（等效代码，合理跳过） |
-| 2 | §2.3 Section Header — `addSectionHeader:` → `WPMakeSectionHeader` | ✅ L177-188 |
+| 1 | §2.2 卡片容器 — `addTableGroupAtY:` → `WPMakeCard` | ✅ L159-163 |
+| 2 | §2.3 Section Header — `addSectionHeader:` → `WPMakeSectionHeader` | ✅ L172-183 |
 | 3 | §2.4 导航行 — 不改动 | 按计划 |
-| 4 | §2.5 可编辑行 — `addInputRowInGroup:` → `WPAddEditableRowWithArrow` | ✅ L286-293 |
+| 4 | §2.5 可编辑行 — `addInputRowInGroup:` → `WPAddEditableRowWithArrow` | ✅ |
 | 5 | `WPUISimplifyVC.m` `onEditRowTap:` 增加 PluginConfig 分支 | ✅ L70-80 |
 | 6 | `autoSaveTextField:` 删除 | ✅ |
 | 7 | `textFieldChanged:` 删除 | ✅ |
 | 8 | `inputFields` property 清理（.h/.m/dealloc） | ✅ |
-| 9 | `textFieldDone:` 残留死代码 (L466-468) | ⚠️ 仅 `resignFirstResponder`，无调用方 |
+| 9 | `textFieldDone:` 死代码删除 | ✅ |
 
 ---
 
@@ -26,15 +26,10 @@
 
 | 文件 | 变更 |
 |------|------|
-| [SettingCategoryController.m](file:///www/wwwroot/ios/WeChatPlugin/Settings/Common/SettingCategoryController.m) | `addSectionHeader:` → 调用 `WPMakeSectionHeader` + 适配 frame（L177-188） |
-| [SettingCategoryController.m](file:///www/wwwroot/ios/WeChatPlugin/Settings/Common/SettingCategoryController.m) | `addInputRowInGroup:` → `WPAddEditableRowWithArrow` + `editConfigKey`/`editConfigHint`（L286-293） |
-| [SettingCategoryController.m](file:///www/wwwroot/ios/WeChatPlugin/Settings/Common/SettingCategoryController.m) | 删除 `autoSaveTextField:`、`textFieldChanged:`、`inputFields` 属性 |
+| [SettingCategoryController.m](file:///www/wwwroot/ios/WeChatPlugin/Settings/Common/SettingCategoryController.m) | `addTableGroupAtY:` → 调用 `WPMakeCard`（L159-163） |
+| [SettingCategoryController.m](file:///www/wwwroot/ios/WeChatPlugin/Settings/Common/SettingCategoryController.m) | `addSectionHeader:` → 调用 `WPMakeSectionHeader` + 适配 frame（L172-183） |
+| [SettingCategoryController.m](file:///www/wwwroot/ios/WeChatPlugin/Settings/Common/SettingCategoryController.m) | `addInputRowInGroup:` → `WPAddEditableRowWithArrow` + `editConfigKey`/`editConfigHint` |
+| [SettingCategoryController.m](file:///www/wwwroot/ios/WeChatPlugin/Settings/Common/SettingCategoryController.m) | 删除 `autoSaveTextField:`、`textFieldChanged:`、`textFieldDone:`、`inputFields` 属性 |
 | [WPUISimplifyVC.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPUISimplifyVC.m) | `onEditRowTap:` 增加 PluginConfig KVC 保存分支（L70-80） |
 
-**净效果**：统一 2 个组件（Section Header + 可编辑行），净减约 60 行。
-
----
-
-## 待清理（可选）
-
-- [SettingCategoryController.m L466-468](file:///www/wwwroot/ios/WeChatPlugin/Settings/Common/SettingCategoryController.m#L466-L468)：`textFieldDone:` 方法已是死代码，仅含 `resignFirstResponder`，可安全删除。
+**净效果**：统一 3 个组件（卡片 + Section Header + 可编辑行），净减约 70 行。

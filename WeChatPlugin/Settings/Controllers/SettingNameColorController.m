@@ -3,6 +3,10 @@
 #import "../../Config/WPColors.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 
+@interface SettingNameColorController ()
+@property (nonatomic, strong) NSMutableArray *inputFields;
+@end
+
 static NSString *keyForTag(NSInteger tag) {
     switch (tag) {
         case 2001: return @"ChatNameFontSize";

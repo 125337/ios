@@ -2,6 +2,10 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Modules/MessageTime/MessageTimeFormatEditorVC.h"
 
+@interface SettingMessageTimeController ()
+@property (nonatomic, strong) NSMutableArray *inputFields;
+@end
+
 @implementation SettingMessageTimeController
 
 - (void)viewDidLoad {
