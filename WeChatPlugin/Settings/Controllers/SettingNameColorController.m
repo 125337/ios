@@ -3,12 +3,20 @@
 #import "../../Config/WPColors.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 
-static NSString *fontSizeKeyForTag(NSInteger tag) {
+static NSString *keyForTag(NSInteger tag) {
     switch (tag) {
         case 2001: return @"ChatNameFontSize";
         case 2002: return @"MomentsNameFontSize";
         default: return nil;
     }
+}
+
+static NSString *fontSizeForKey(NSString *key) {
+    PluginConfig *c = [PluginConfig shared];
+    CGFloat val = 0;
+    if ([key isEqualToString:@"ChatNameFontSize"])         val = c.chatNameFontSize;
+    else if ([key isEqualToString:@"MomentsNameFontSize"])  val = c.momentsNameFontSize;
+    return [NSString stringWithFormat:@"%.0fpt", val];
 }
 
 @implementation SettingNameColorController
@@ -21,45 +29,44 @@ static NSString *fontSizeKeyForTag(NSInteger tag) {
 
 #pragma mark - 字体大小输入弹窗
 
-- (void)onFontSizeRowTap:(UIButton *)sender {
-    NSString *key = fontSizeKeyForTag(sender.tag);
+- (void)onNumericRowTap:(UIButton *)sender {
+    NSString *key = keyForTag(sender.tag);
     if (!key) return;
 
-    NSString *title = @"字体大小";
-    NSString *desc = @"请输入字体大小(10pt-24pt)";
-    NSString *placeholder = @"15";
+    NSDictionary *configMap = @{
+        @"ChatNameFontSize":    @{@"title": @"字体大小", @"desc": @"请输入字体大小(10pt-24pt)", @"placeholder": @"16"},
+        @"MomentsNameFontSize": @{@"title": @"字体大小", @"desc": @"请输入字体大小(10pt-24pt)", @"placeholder": @"16"},
+    };
 
-    PluginConfig *config = [PluginConfig shared];
-    if ([key isEqualToString:@"ChatNameFontSize"]) {
-        placeholder = [NSString stringWithFormat:@"%.0f", config.chatNameFontSize];
-    } else if ([key isEqualToString:@"MomentsNameFontSize"]) {
-        placeholder = [NSString stringWithFormat:@"%.0f", config.momentsNameFontSize];
-    }
+    NSDictionary *cfg = configMap[key];
+    if (!cfg) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
-                                                                   message:desc
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:cfg[@"title"]
+                                                                   message:cfg[@"desc"]
                                                             preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-        textField.placeholder = [NSString stringWithFormat:@"%@pt", placeholder];
-        textField.text = @"";
+        CGFloat val = 0;
+        if ([key isEqualToString:@"ChatNameFontSize"])         val = [PluginConfig shared].chatNameFontSize;
+        else if ([key isEqualToString:@"MomentsNameFontSize"])  val = [PluginConfig shared].momentsNameFontSize;
+        if (val == 0) val = 16;
+        textField.placeholder = cfg[@"placeholder"];
+        textField.text = [NSString stringWithFormat:@"%.0f", val];
         textField.keyboardType = UIKeyboardTypeNumbersAndPunctuation;
     }];
 
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        NSString *text = alert.textFields.firstObject.text;
+        NSString *text = alert.textFields.firstObject.text ?: cfg[@"placeholder"];
         CGFloat val = [text floatValue];
-        if (val < 10 || val > 24) val = [placeholder floatValue];
-        if (val == 0) val = 15;
+        if (val < 10 || val > 24) val = 16;
 
         PluginConfig *c = [PluginConfig shared];
-        if ([key isEqualToString:@"ChatNameFontSize"]) {
-            c.chatNameFontSize = val;
-        } else if ([key isEqualToString:@"MomentsNameFontSize"]) {
-            c.momentsNameFontSize = val;
-        }
+        if ([key isEqualToString:@"ChatNameFontSize"])         c.chatNameFontSize = val;
+        else if ([key isEqualToString:@"MomentsNameFontSize"])  c.momentsNameFontSize = val;
         [c save];
-        [self buildUI];
+
+        UILabel *valueLabel = objc_getAssociatedObject(sender, "editValueLabel");
+        if (valueLabel) valueLabel.text = [NSString stringWithFormat:@"%.0fpt", val];
     }]];
 
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -102,8 +109,8 @@ static NSString *fontSizeKeyForTag(NSInteger tag) {
                                       key:@"EnableChatNameSize"
                                      isOn:config.enableChatNameSize
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
-        NSString *preview = [NSString stringWithFormat:@"%.0fpt", config.chatNameFontSize];
-        *ecy = [self addNavRowInGroup:expand title:@"字体大小" subtitle:preview tag:2001 action:@selector(onFontSizeRowTap:) cy:*ecy width:w];
+        NSString *preview = fontSizeForKey(@"ChatNameFontSize");
+        *ecy = [self addNavRowInGroup:expand title:@"字体大小" subtitle:preview tag:2001 action:@selector(onNumericRowTap:) cy:*ecy width:w];
     } cy:cy1 width:w];
 
     y = [self finishGroup:card1 atY:y height:cy1];
@@ -131,8 +138,8 @@ static NSString *fontSizeKeyForTag(NSInteger tag) {
                                       key:@"EnableMomentsNameSize"
                                      isOn:config.enableMomentsNameSize
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
-        NSString *preview = [NSString stringWithFormat:@"%.0fpt", config.momentsNameFontSize];
-        *ecy = [self addNavRowInGroup:expand title:@"字体大小" subtitle:preview tag:2002 action:@selector(onFontSizeRowTap:) cy:*ecy width:w];
+        NSString *preview = fontSizeForKey(@"MomentsNameFontSize");
+        *ecy = [self addNavRowInGroup:expand title:@"字体大小" subtitle:preview tag:2002 action:@selector(onNumericRowTap:) cy:*ecy width:w];
     } cy:cy2 width:w];
 
     y = [self finishGroup:card2 atY:y height:cy2];

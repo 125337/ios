@@ -329,6 +329,14 @@
     _avatarTapFeedback = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AvatarTapFeedback"]];
     _showAddTime = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTime"]];
     _showGroupMemberCount = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowGroupMemberCount"]];
+    _enableChatNameColor = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableChatNameColor"]];
+    _enableChatNameSize = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableChatNameSize"]];
+    _chatNameFontSize = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatNameFontSize"]];
+    if (_chatNameFontSize == 0) _chatNameFontSize = 16.0;
+    _enableMomentsNameColor = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableMomentsNameColor"]];
+    _enableMomentsNameSize = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableMomentsNameSize"]];
+    _momentsNameFontSize = [d floatForKey:[kPluginPrefix stringByAppendingString:@"MomentsNameFontSize"]];
+    if (_momentsNameFontSize == 0) _momentsNameFontSize = 16.0;
 
     _chatDisplayMode = [d integerForKey:[kPluginPrefix stringByAppendingString:@"ChatDisplayMode"]];
     if (_chatDisplayMode < 0 || _chatDisplayMode > 7) _chatDisplayMode = 3;
