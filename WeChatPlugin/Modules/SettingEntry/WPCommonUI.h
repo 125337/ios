@@ -20,7 +20,8 @@ Class WPGetBaseClass(void);
 UIScrollView *WPMakeSV(UIViewController *vc);
 UIView *WPMakeCard(CGFloat top, CGFloat w);
 UILabel *WPMakeSectionHeader(NSString *text, CGFloat top, CGFloat w);
-void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *key, BOOL on, id target);
+void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *key, BOOL on, id target,
+                    void(^onChanged)(BOOL isOn));
 void WPAddNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *action, id target);
 void WPAddSep(UIView *card, CGFloat cy, CGFloat cw);
 void WPAddInfoRow(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right);

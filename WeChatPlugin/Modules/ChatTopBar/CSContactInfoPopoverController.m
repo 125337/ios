@@ -270,6 +270,8 @@ static NSArray *s_infoItems(void) {
 
     [UIPasteboard generalPasteboard].string = text;
 
+    [self showCopySuccessToast];
+
     UIImpactFeedbackGenerator *gen = [[[UIImpactFeedbackGenerator alloc]
         initWithStyle:UIImpactFeedbackStyleLight] autorelease];
     [gen prepare];
@@ -396,6 +398,34 @@ static NSArray *s_infoItems(void) {
         }
         [vc release];
     }];
+}
+
+#pragma mark - Copy Toast
+
+- (void)showCopySuccessToast {
+    UILabel *toast = [[UILabel alloc] init];
+    toast.text = @"已复制";
+    toast.textAlignment = NSTextAlignmentCenter;
+    toast.font = [UIFont systemFontOfSize:14];
+    toast.textColor = [UIColor whiteColor];
+    toast.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.7];
+    toast.layer.cornerRadius = 6;
+    toast.clipsToBounds = YES;
+    [toast sizeToFit];
+    CGFloat w = toast.frame.size.width + 20;
+    CGFloat h = toast.frame.size.height + 10;
+    toast.frame = CGRectMake((self.view.bounds.size.width - w) * 0.5,
+                              self.view.bounds.size.height * 0.8, w, h);
+    [self.view addSubview:toast];
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [UIView animateWithDuration:0.3 animations:^{
+            toast.alpha = 0;
+        } completion:^(BOOL finished) {
+            [toast removeFromSuperview];
+        }];
+    });
 }
 
 @end

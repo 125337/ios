@@ -354,7 +354,7 @@
     if (_chatNicknameFontSize == 0) _chatNicknameFontSize = 9.0;
 
     _chatSeparatorSize = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorSize"]];
-    if (_chatSeparatorSize == 0) _chatSeparatorSize = 12.0;
+    if (_chatSeparatorSize == 0) _chatSeparatorSize = 30.0;
 
     _chatTitleViewWidth = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatTitleViewWidth"]];
     if (_chatTitleViewWidth == 0) _chatTitleViewWidth = 210.0;

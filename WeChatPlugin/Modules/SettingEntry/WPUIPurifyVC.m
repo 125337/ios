@@ -37,7 +37,7 @@ static void WPUIPurifyViewDidLoad(id self, SEL _cmd) {
             WPAddSep(msgCard, mcy, w);
             mcy = round((mcy + 1.0 / scale) * scale) / scale;
         }
-        WPAddSwitchRow(msgCard, mcy, w, msgItems[i][0], msgItems[i][1], [msgItems[i][2] boolValue], handler);
+        WPAddSwitchRow(msgCard, mcy, w, msgItems[i][0], msgItems[i][1], [msgItems[i][2] boolValue], handler, NULL);
         mcy += kRowH;
     }
     CGRect mcf = msgCard.frame; mcf.size.height = mcy; msgCard.frame = mcf;

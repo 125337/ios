@@ -1,6 +1,20 @@
 #import "WPCommonUI.h"
 #import <QuartzCore/QuartzCore.h>
 
+/// UISwitch block 回调桥接（MRC 安全）
+@interface _WPBlockSwitchTarget : NSObject
+@property (nonatomic, copy) void(^action)(BOOL isOn);
+@end
+@implementation _WPBlockSwitchTarget
+- (void)fire:(UISwitch *)sender {
+    if (self.action) self.action(sender.on);
+}
+- (void)dealloc {
+    [_action release];
+    [super dealloc];
+}
+@end
+
 const CGFloat kPad = 16.0;
 const CGFloat kRadius = 10.0;
 const CGFloat kRowH = 44.0;
@@ -39,7 +53,8 @@ UILabel *WPMakeSectionHeader(NSString *text, CGFloat top, CGFloat w) {
     return l;
 }
 
-void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *key, BOOL on, id target) {
+void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *key, BOOL on, id target,
+                    void(^onChanged)(BOOL isOn)) {
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, cw - kPad * 2 - 70, kRowH)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
@@ -51,8 +66,17 @@ void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSStr
     sw.on = on;
     sw.onTintColor = WPSwOn();
     sw.frame = CGRectMake(cw - kPad * 3 - 51, cy + 6.5, 51, 31);
-    objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [sw addTarget:target action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
+
+    if (onChanged) {
+        _WPBlockSwitchTarget *bridge = [[_WPBlockSwitchTarget alloc] init];
+        bridge.action = onChanged;
+        objc_setAssociatedObject(sw, "wp_bridge", bridge, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [bridge release];
+        [sw addTarget:bridge action:@selector(fire:) forControlEvents:UIControlEventValueChanged];
+    } else {
+        objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [sw addTarget:target action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
+    }
     [card addSubview:sw];
     [sw release];
 }

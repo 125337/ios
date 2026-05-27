@@ -126,8 +126,8 @@
         self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
 
         CGFloat smallSize = avatarSize * 0.85;
-        CGFloat offset = avatarSize * 0.3;
-        self.rightAvatarView.frame = CGRectMake(offset, avatarY + avatarSize - smallSize + (avatarSize * 0.15), smallSize, smallSize);
+        CGFloat offset = avatarSize * 0.7;
+        self.rightAvatarView.frame = CGRectMake(offset, avatarY + (avatarSize - smallSize), smallSize, smallSize);
         self.rightAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:smallSize];
 
         self.separatorView.hidden = YES;
@@ -218,9 +218,9 @@
 
         self.leftAvatarView.hidden = !showLeft;
         self.rightAvatarView.hidden = !showRight;
-        self.separatorView.hidden = YES;
-        self.separatorTextLabel.hidden = YES;
-        self.titleLabel.hidden = YES;
+        self.separatorView.hidden = NO;
+        self.separatorTextLabel.hidden = !config.chatSeparatorText.length;
+        self.titleLabel.hidden = NO;
 
         UIImageView *activeAvatar = showLeft ? self.leftAvatarView : self.rightAvatarView;
         CGFloat centerX = (totalW - avatarSize) * 0.5;
@@ -321,9 +321,13 @@
             }
         }
     } else if (!isGroup && config.showAddTime) {
-        // Get add time
+        // Get add time — try m_uiAddCreateTime first, fallback to m_uiAddTime
         unsigned int addTime = 0;
-        if ([contact respondsToSelector:@selector(m_uiAddTime)]) {
+        SEL addCreateSel = NSSelectorFromString(@"m_uiAddCreateTime");
+        if ([contact respondsToSelector:addCreateSel]) {
+            addTime = (unsigned int)((unsigned int (*)(id, SEL))objc_msgSend)(contact, addCreateSel);
+        }
+        if (addTime == 0 && [contact respondsToSelector:@selector(m_uiAddTime)]) {
             addTime = (unsigned int)((unsigned int (*)(id, SEL))objc_msgSend)(contact, @selector(m_uiAddTime));
         }
         if (addTime > 0) {
@@ -626,7 +630,7 @@
     UIPopoverPresentationController *popPC = popover.popoverPresentationController;
     popPC.sourceView = sourceView;
     popPC.sourceRect = sourceView.bounds;
-    popPC.permittedArrowDirections = UIPopoverArrowDirectionUp;
+    popPC.permittedArrowDirections = UIPopoverArrowDirectionAny;
     popPC.backgroundColor = [UIColor whiteColor];
     popPC.delegate = popover;
 
