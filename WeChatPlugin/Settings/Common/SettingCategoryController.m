@@ -3,6 +3,7 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Config/Constants.h"
 #import "../../Config/WPColors.h"
+#import "../../Config/WPColorPicker.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import <objc/runtime.h>
 #import <QuartzCore/QuartzCore.h>
@@ -124,7 +125,7 @@ static NSString *configPropertyForKey(NSString *key) {
 
 @end
 
-@interface SettingCategoryController () <UIColorPickerViewControllerDelegate>
+@interface SettingCategoryController ()
 @end
 
 @implementation SettingCategoryController
@@ -380,34 +381,12 @@ static NSString *configPropertyForKey(NSString *key) {
 
     UIColor *currentColor = [[PluginConfig shared] colorFromHex:value] ?: [UIColor grayColor];
 
-    if (@available(iOS 14.0, *)) {
-        // 圆形颜色按钮（30×30，永久浅灰边框，填充当前颜色）
-        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-        btn.frame = CGRectMake(gw - kCellHPadding - 36, cy + (kRowH - 30) / 2, 30, 30);
-        btn.layer.cornerRadius = 15;
-        btn.layer.borderWidth = 1.0;
-        btn.layer.borderColor = [UIColor colorWithRed:0.82 green:0.82 blue:0.84 alpha:1.0].CGColor;
-        btn.backgroundColor = currentColor;
-        btn.clipsToBounds = YES;
-        objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [group addSubview:btn];
-    } else {
-        // iOS 13 fallback: 文本输入框
-        UITextField *tf = [[UITextField alloc] initWithFrame:CGRectMake(gw - kCellHPadding - 100, cy + 8, 56, kRowH - 16)];
-        tf.font = [UIFont systemFontOfSize:12];
-        tf.textColor = textSecondary();
-        tf.text = value;
-        tf.textAlignment = NSTextAlignmentCenter;
-        tf.returnKeyType = UIReturnKeyDone;
-        [tf addTarget:self action:@selector(textFieldChanged:) forControlEvents:UIControlEventEditingChanged];
-        [tf addTarget:self action:@selector(textFieldDone:) forControlEvents:UIControlEventEditingDidEndOnExit];
-        [tf addTarget:self action:@selector(textFieldDone:) forControlEvents:UIControlEventEditingDidEnd];
-        objc_setAssociatedObject(tf, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [group addSubview:tf];
-        [tf release];
-        self.inputFields[key] = tf;
-    }
+    // 使用统一颜色选择器工具类
+    UIButton *btn = [WPColorPicker makeColorButtonWithColor:currentColor];
+    btn.frame = CGRectMake(gw - kCellHPadding - 36, cy + (kRowH - 30) / 2, 30, 30);
+    objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+    [group addSubview:btn];
     return cy + kRowH;
 }
 
@@ -506,29 +485,31 @@ static NSString *configPropertyForKey(NSString *key) {
     [self autoSaveTextField:tf];
 }
 
-- (void)colorButtonTapped:(UIButton *)sender  API_AVAILABLE(ios(14.0)) {
+- (void)colorButtonTapped:(UIButton *)sender {
     NSString *key = objc_getAssociatedObject(sender, "key");
-    UIColorPickerViewController *picker = [[UIColorPickerViewController alloc] init];
-    picker.selectedColor = sender.backgroundColor ?: [UIColor grayColor];
-    picker.supportsAlpha = NO;
-    objc_setAssociatedObject(picker, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(picker, "button", sender, OBJC_ASSOCIATION_ASSIGN);
-    picker.delegate = (id<UIColorPickerViewControllerDelegate>)self;
-    [self presentViewController:picker animated:YES completion:nil];
-}
-
-- (void)colorPickerViewController:(UIColorPickerViewController *)viewController didSelectColor:(UIColor *)color continuously:(BOOL)continuously {
-    if (continuously) return;
-    UIButton *btn = objc_getAssociatedObject(viewController, "button");
-    NSString *key = objc_getAssociatedObject(viewController, "key");
-    if (btn && color) {
-        btn.backgroundColor = color;
-    }
     if (!key) return;
-    NSString *hex = [[PluginConfig shared] hexFromColor:color];
-    if (!hex) hex = @"#808080";
-    [[PluginConfig shared] setValue:hex forKey:key];
-    [[PluginConfig shared] save];
+    
+    UIColor *currentColor = sender.backgroundColor ?: [UIColor grayColor];
+    
+    __weak typeof(self) weakSelf = self;
+    [WPColorPicker presentOnViewController:self
+                             currentColor:currentColor
+                             sourceButton:sender
+                               onSelected:^(UIColor *color, NSString *hex) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        
+        PluginConfig *config = [PluginConfig shared];
+        @try {
+            // 将 HEX 值保存到对应的 PluginConfig 属性（KVC）
+            [config setValue:hex forKey:key];
+            [config save];
+        } @catch (NSException *e) {
+            // 对于无法通过 KVC 设置的 key，降级为直接保存 NSUserDefaults
+            [[NSUserDefaults standardUserDefaults] setObject:hex forKey:key];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+        }
+    }];
 }
 
 - (void)textFieldDone:(UITextField *)tf {

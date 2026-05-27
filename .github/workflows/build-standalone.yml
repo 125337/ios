@@ -37,6 +37,7 @@ jobs:
           WeChatPlugin/libs/CydiaSubstrate.m \
           WeChatPlugin/Tweak.m \
           WeChatPlugin/Config/PluginConfig.m \
+          WeChatPlugin/Config/WPColorPicker.m \
           WeChatPlugin/Core/HookEngine.m \
           WeChatPlugin/Core/WeChatAlertHelper.m \
           WeChatPlugin/Core/WeChatRestartHelper.m \

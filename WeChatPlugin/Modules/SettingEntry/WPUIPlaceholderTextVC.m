@@ -1,31 +1,9 @@
 #import "WPCommonUI.h"
 #import "../../Config/PluginConfig.h"
+#import "../../Config/WPColorPicker.h"
 #import "../../Core/LogManager.h"
 
 static NSString *const kPlaceholderTextEnabledKey = @"PlaceholderTextEnabled";
-
-/// ========== 颜色选择器代理 ==========
-/// 与消息时间设置中的颜色选择器一致，使用 UIColorPickerViewController (iOS 14+)
-@interface _PlaceholderColorDelegate : NSObject <UIColorPickerViewControllerDelegate>
-@end
-@implementation _PlaceholderColorDelegate
-- (void)colorPickerViewController:(UIColorPickerViewController *)vc
-                   didSelectColor:(UIColor *)color
-                    continuously:(BOOL)continuously {
-    if (continuously) return;
-    UIButton *btn = objc_getAssociatedObject(vc, "colorButton");
-    NSString *key = objc_getAssociatedObject(vc, "colorKey");
-    if (btn && color) btn.backgroundColor = color;
-    if (!key) return;
-    NSString *hex = [[PluginConfig shared] hexFromColor:color];
-    if (!hex) hex = @"#808080";
-    [[NSUserDefaults standardUserDefaults] setObject:hex forKey:key];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-}
-@end
-
-/// 全局保留代理实例
-static _PlaceholderColorDelegate *_colorDelegate = nil;
 
 /// ========== buildUI ==========
 static void WPUIPlaceholderTextBuildUI(id self, SEL _cmd);
@@ -39,9 +17,6 @@ static void WPUIPlaceholderTextViewDidLoad(id self, SEL _cmd) {
 
     UIViewController *vc = (UIViewController *)self;
     vc.title = @"文本占位";
-
-    // 全局保留代理实例
-    if (!_colorDelegate) _colorDelegate = [[_PlaceholderColorDelegate alloc] init];
 
     WPUIPlaceholderTextBuildUI(self, _cmd);
 }
@@ -167,18 +142,10 @@ static void WPUIPlaceholderTextBuildUI(id self, SEL _cmd) {
         NSString *colorHex = [d stringForKey:@"PlaceholderText_ColorHex"] ?: @"#808080";
         UIColor *currentColor = [[PluginConfig shared] colorFromHex:colorHex] ?: [UIColor grayColor];
 
-        if (@available(iOS 14.0, *)) {
-            UIButton *colorBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-            colorBtn.frame = CGRectMake(w - kPad * 2 - 36, ccy + (kRowH - 30) / 2, 30, 30);
-            colorBtn.layer.cornerRadius = 15;
-            colorBtn.layer.borderWidth = 1.0;
-            colorBtn.layer.borderColor = [UIColor colorWithRed:0.82 green:0.82 blue:0.84 alpha:1.0].CGColor;
-            colorBtn.backgroundColor = currentColor;
-            colorBtn.clipsToBounds = YES;
-            objc_setAssociatedObject(colorBtn, "colorKey", @"PlaceholderText_ColorHex", OBJC_ASSOCIATION_COPY_NONATOMIC);
-            [colorBtn addTarget:(id)self action:@selector(onPlaceholderColorTap:) forControlEvents:UIControlEventTouchUpInside];
-            [contentCard addSubview:colorBtn];
-        }
+        UIButton *colorBtn = [WPColorPicker makeColorButtonWithColor:currentColor];
+        colorBtn.frame = CGRectMake(w - kPad * 2 - 36, ccy + (kRowH - 30) / 2, 30, 30);
+        [colorBtn addTarget:(id)self action:@selector(onPlaceholderColorTap:) forControlEvents:UIControlEventTouchUpInside];
+        [contentCard addSubview:colorBtn];
         ccy += kRowH;
     }
 
@@ -226,18 +193,18 @@ static void onBoldFontSwitchIMP(id self, SEL _cmd, UISwitch *sender) {
     WPLog(@"UI", @"[Placeholder] Bold=%d", sender.on);
 }
 
-/// 颜色按钮点击 → 打开 iOS 14 颜色选择器
+/// 颜色按钮点击 → 使用统一颜色选择器
 static void onPlaceholderColorTapIMP(id self, SEL _cmd, UIButton *sender) {
-    if (@available(iOS 14.0, *)) {
-        UIViewController *vc = (UIViewController *)self;
-        UIColorPickerViewController *picker = [[UIColorPickerViewController alloc] init];
-        picker.selectedColor = sender.backgroundColor ?: [UIColor grayColor];
-        picker.supportsAlpha = NO;
-        objc_setAssociatedObject(picker, "colorButton", sender, OBJC_ASSOCIATION_ASSIGN);
-        objc_setAssociatedObject(picker, "colorKey", objc_getAssociatedObject(sender, "colorKey"), OBJC_ASSOCIATION_COPY_NONATOMIC);
-        picker.delegate = _colorDelegate;
-        [vc presentViewController:picker animated:YES completion:nil];
-    }
+    UIViewController *vc = (UIViewController *)self;
+    UIColor *currentColor = sender.backgroundColor ?: [UIColor grayColor];
+    
+    [WPColorPicker presentOnViewController:vc
+                             currentColor:currentColor
+                             sourceButton:sender
+                               onSelected:^(UIColor *color, NSString *hex) {
+        [[NSUserDefaults standardUserDefaults] setObject:hex forKey:@"PlaceholderText_ColorHex"];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+    }];
 }
 
 
