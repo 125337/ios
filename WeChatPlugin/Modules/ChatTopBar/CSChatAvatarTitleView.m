@@ -281,33 +281,6 @@
     [self applyPositionOffset];
 }
 
-#pragma mark - Preload Contact
-
-- (void)silentLoadContactExtInfo:(id)contact {
-    Class infoVCClass = objc_getClass("ContactInfoViewController");
-    if (!infoVCClass) return;
-
-    id infoVC = ((id (*)(Class, SEL))objc_msgSend)(infoVCClass, NSSelectorFromString(@"alloc"));
-    infoVC = ((id (*)(id, SEL))objc_msgSend)(infoVC, @selector(init));
-    if (!infoVC) return;
-
-    if ([infoVC respondsToSelector:NSSelectorFromString(@"setM_contact:")]) {
-        ((void (*)(id, SEL, id))objc_msgSend)(infoVC,
-            NSSelectorFromString(@"setM_contact:"), contact);
-    }
-
-    ((void (*)(id, SEL))objc_msgSend)(infoVC, @selector(view));
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.8 * NSEC_PER_SEC),
-                   dispatch_get_main_queue(), ^{
-        if ([infoVC respondsToSelector:@selector(dismissViewControllerAnimated:completion:)]) {
-            ((void (*)(id, SEL, BOOL, id))objc_msgSend)(infoVC,
-                @selector(dismissViewControllerAnimated:completion:), NO, nil);
-        }
-        [infoVC release];
-    });
-}
-
 #pragma mark - Avatar Update
 
 - (void)updateAvatars {
@@ -318,9 +291,6 @@
     // Get contact info
     id contact = ((id (*)(id, SEL))objc_msgSend)(self.chatController, NSSelectorFromString(@"GetContact"));
     if (!contact) return;
-
-    // Preload contact info to avoid delay on tap
-    [self silentLoadContactExtInfo:contact];
 
     NSString *opponentWxid = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
     NSString *nickname = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsNickName"));
@@ -373,13 +343,9 @@
         }
     }
 
-    dispatch_async(dispatch_get_main_queue(), ^{
-        UIImage *displayOpponent = opponentAvatar ?: [UIImage imageNamed:@"DefaultHead"];
-        UIImage *displaySelf = selfAvatar ?: [UIImage imageNamed:@"DefaultHead"];
-        self.leftAvatarView.image = displayOpponent;
-        self.rightAvatarView.image = displaySelf;
-        self.titleLabel.text = titleText;
-    });
+    self.leftAvatarView.image = opponentAvatar ?: [UIImage imageNamed:@"DefaultHead"];
+    self.rightAvatarView.image = selfAvatar ?: [UIImage imageNamed:@"DefaultHead"];
+    self.titleLabel.text = titleText;
 }
 
 - (NSString *)getSelfWxid {

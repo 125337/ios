@@ -354,70 +354,33 @@ static NSArray *s_infoItems(void) {
     return @"未设置";
 }
 
-#pragma mark - 主页跳转（与 123456.c L118375-118441 一致）
+#pragma mark - 主页跳转（与 123456.c L118375-118441 百分百一致，无任何兜底）
 
 - (void)onHomepageTapped {
-    // 123456.c L118375: objc_getClass("ContactInfoViewController")
+    // 123456.c L118383-118386: 只用 ContactInfoViewController，不存在就跳过
     Class infoVC = objc_getClass("ContactInfoViewController");
-    if (!infoVC) {
-        infoVC = objc_getClass("WCContactInfoViewController");
-    }
-    if (!infoVC) {
-        UIAlertController *alert = [UIAlertController
-            alertControllerWithTitle:nil
-            message:@"当前微信版本不支持直接跳转资料页"
-            preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"确定"
-                                                  style:UIAlertActionStyleDefault
-                                                handler:nil]];
-        [self presentViewController:alert animated:YES completion:nil];
-        return;
-    }
+    if (!infoVC) return;
 
-    // 123456.c L118383-118386: alloc init + KVC
+    // 123456.c L118384: [[ContactInfoViewController alloc] init]
     id vc = ((id (*)(Class, SEL))objc_msgSend)(infoVC, NSSelectorFromString(@"alloc"));
     vc = ((id (*)(id, SEL))objc_msgSend)(vc, NSSelectorFromString(@"init"));
     if (!vc) return;
 
-    // 123456.c L118386: setValue:forKey:@"m_contact"
-    // 用 @try/@catch 防止 key 不存在时静默失败
-    BOOL contactSet = NO;
-    @try {
-        ((void (*)(id, SEL, id, NSString *))objc_msgSend)(vc,
-            NSSelectorFromString(@"setValue:forKey:"), self.contact, @"m_contact");
-        contactSet = YES;
-    } @catch (NSException *e) {
-        // KVC key "m_contact" 不存在 → 尝试直接设 ivar
-        Ivar ivar = class_getInstanceVariable(infoVC, "m_contact");
-        if (!ivar) ivar = class_getInstanceVariable(infoVC, "_m_contact");
-        if (!ivar) ivar = class_getInstanceVariable(infoVC, "_contact");
-        if (ivar) {
-            object_setIvar(vc, ivar, self.contact);
-            contactSet = YES;
-        }
-    }
-    if (!contactSet) {
-        [vc release];
-        UIAlertController *alert = [UIAlertController
-            alertControllerWithTitle:nil
-            message:@"无法设置联系人信息，请更新插件"
-            preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"确定"
-                                                  style:UIAlertActionStyleDefault handler:nil]];
-        [self presentViewController:alert animated:YES completion:nil];
-        return;
-    }
+    // 123456.c L118386: [vc setValue:contact forKey:@"m_contact"]
+    // ★ 不包 @try/@catch，123456.c 没有任何异常处理
+    ((void (*)(id, SEL, id, NSString *))objc_msgSend)(vc,
+        NSSelectorFromString(@"setValue:forKey:"), self.contact, @"m_contact");
 
-    // 123456.c L118387-118395：MRC 下需手动 retain vc 供 block 使用
+    // 123456.c L118393: _objc_retain(vc) — MRC 手动 retain 供 block 使用
     [vc retain];
 
-    // 123456.c L118395: dismiss + completion block
+    // 123456.c L118395: [self dismissViewControllerAnimated:YES completion:block]
     [self dismissViewControllerAnimated:YES completion:^{
         // 123456.c L118418-118421: [weakSelf presentingViewController]
         UIViewController *presenting = self.presentingViewController;
         if (!presenting) { [vc release]; return; }
 
-        // 123456.c L118422-118431: 先判断 presentingVC 是否就是 nav
+        // 123456.c L118422-118431: 判断 presentingVC 是否 UINavigationController
         UINavigationController *nav = nil;
         if ([presenting isKindOfClass:[UINavigationController class]]) {
             nav = (UINavigationController *)presenting;
@@ -425,7 +388,7 @@ static NSArray *s_infoItems(void) {
             nav = presenting.navigationController;
         }
 
-        // 123456.c L118432-118437: nav 不存在 → modal present 兜底
+        // 123456.c L118432-118437: nav → push, 否则 modal present
         if (nav) {
             [nav pushViewController:vc animated:YES];
         } else {

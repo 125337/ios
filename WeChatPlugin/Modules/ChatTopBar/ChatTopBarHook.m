@@ -44,10 +44,6 @@ static BOOL isContactInBlacklist(NSString *contactID) {
 static void hook_viewDidLoad(id self, SEL _cmd) {
     ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
 
-    // 只在 BaseMsgContentViewController 本身（非子类）执行
-    Class baseCls = objc_getClass("BaseMsgContentViewController");
-    if (object_getClass(self) != baseCls) return;
-
     PluginConfig *config = [PluginConfig shared];
     if (!config.showChatAvatar) return;
 
@@ -86,10 +82,6 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
 // ============================================================
 static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
-
-    // 只在 BaseMsgContentViewController 本身（非子类）执行
-    Class baseCls = objc_getClass("BaseMsgContentViewController");
-    if (object_getClass(self) != baseCls) return;
 
     PluginConfig *config = [PluginConfig shared];
     id currentTitle = [[self navigationItem] titleView];
