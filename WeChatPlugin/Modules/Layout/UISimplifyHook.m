@@ -520,12 +520,10 @@ static void hook_MFTitleView_updateTitle(id self, SEL _cmd, id titleView, NSStri
     // L40147-40149: MMUILabel.setText: + setAttributedText:
     Class mmLabel = objc_getClass("MMUILabel");
     if (mmLabel) {
-        // TEMPORARILY DISABLED - Mio-exclusive global hook (微信优化 does NOT hook MMUILabel),
-// responder chain walk causes interference with WCRefine + 黄白助手 rendering hooks
-//    MSHookMessageEx(mmLabel, @selector(setText:),
-//        (IMP)hook_MMUILabel_setText, (IMP *)&_orig_MMUILabel_setText);
-//    MSHookMessageEx(mmLabel, @selector(setAttributedText:),
-//        (IMP)hook_MMUILabel_setAttributedText, (IMP *)&_orig_MMUILabel_setAttributedText);
+        MSHookMessageEx(mmLabel, @selector(setText:),
+        (IMP)hook_MMUILabel_setText, (IMP *)&_orig_MMUILabel_setText);
+    MSHookMessageEx(mmLabel, @selector(setAttributedText:),
+        (IMP)hook_MMUILabel_setAttributedText, (IMP *)&_orig_MMUILabel_setAttributedText);
     }
     
     // L40150-40151: MFTitleView
