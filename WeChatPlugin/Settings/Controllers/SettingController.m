@@ -48,7 +48,7 @@
         UILabel *heroName = [[UILabel alloc] initWithFrame:CGRectMake(0, 108, w - 32, 26)];
         heroName.text = @"Mio助手";
         heroName.font = [UIFont systemFontOfSize:22 weight:UIFontWeightBold];
-        heroName.textColor = [UIColor colorWithRed:0.2 green:0.78 blue:0.349 alpha:1.0];
+        heroName.textColor = WPAccentColor();
         heroName.textAlignment = NSTextAlignmentCenter;
         [heroCard addSubview:heroName];
         y += 146;
@@ -58,7 +58,7 @@
         UILabel *footer = [[UILabel alloc] initWithFrame:CGRectMake(0, y + 12, w, 40)];
         footer.text = @"Mio助手 © 2024 ~ 2026\nDeveloped with <3\nAll Rights Reserved";
         footer.font = [UIFont systemFontOfSize:12];
-        footer.textColor = [UIColor colorWithRed:0.722 green:0.722 blue:0.749 alpha:1.0];
+        footer.textColor = WPTextTertiaryColor();
         footer.textAlignment = NSTextAlignmentCenter;
         footer.numberOfLines = 3;
         [self.contentView addSubview:footer];
@@ -86,7 +86,7 @@
     UILabel *heroName = [[UILabel alloc] initWithFrame:CGRectMake(0, 24, w - 32, 26)];
     heroName.text = @"Mio助手";
     heroName.font = [UIFont systemFontOfSize:22 weight:UIFontWeightBold];
-    heroName.textColor = [UIColor colorWithRed:0.2 green:0.78 blue:0.349 alpha:1.0];
+    heroName.textColor = WPAccentColor();
     heroName.textAlignment = NSTextAlignmentCenter;
     [heroCard addSubview:heroName];
 
@@ -100,8 +100,7 @@
     UILabel *heroDesc = [[UILabel alloc] initWithFrame:CGRectMake(20, 76, w - 52, 34)];
     heroDesc.text = @"模块化插件框架，支持防撤回、未读清零、外观自定义等功能";
     heroDesc.font = [UIFont systemFontOfSize:13];
-    if (@available(iOS 13.0, *)) heroDesc.textColor = [UIColor tertiaryLabelColor];
-    else heroDesc.textColor = [UIColor colorWithRed:0.722 green:0.722 blue:0.749 alpha:1.0];
+    heroDesc.textColor = WPTextTertiaryColor();
     heroDesc.textAlignment = NSTextAlignmentCenter;
     heroDesc.numberOfLines = 2;
     [heroCard addSubview:heroDesc];

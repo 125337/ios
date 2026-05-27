@@ -1,6 +1,7 @@
 #import "../../Settings/Common/SettingCategoryController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
+#import "../../Config/WPColors.h"
 
 @interface WPUIAttachmentLayoutVC : SettingCategoryController
 @end
@@ -52,7 +53,7 @@
         UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(16, y, w - 32, 16)];
         hint.text = @"开启附件布局优化后可配置详细选项";
         hint.font = [UIFont systemFontOfSize:12];
-        hint.textColor = [UIColor colorWithRed:0.722 green:0.722 blue:0.749 alpha:1.0];
+        hint.textColor = WPTextTertiaryColor();
         [self.contentView addSubview:hint];
         [hint release];
         y += 20;
