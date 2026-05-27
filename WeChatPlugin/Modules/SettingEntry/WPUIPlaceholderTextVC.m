@@ -1,6 +1,7 @@
 #import "../../Settings/Common/SettingCategoryController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
+#import "../../Config/WPColors.h"
 
 @interface WPUIPlaceholderTextVC : SettingCategoryController
 @end
