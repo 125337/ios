@@ -69,14 +69,14 @@ static NSString *keyForTag(NSInteger tag) {
 
 - (NSString *)avatarDisplayModeName:(NSInteger)mode {
     NSArray *names = @[
-        @"显示自己头像",
-        @"显示对方头像",
-        @"显示双方头像",
-        @"显示双方头像(名字在下方)",
-        @"显示对方头像(名字在下方)",
-        @"显示对方头像(名字在左侧)",
-        @"显示对方头像(名字在右侧)",
-        @"显示双方头像(左侧堆叠名字居中)",
+        @"显示自己头像",                    // mode 0
+        @"显示对方头像",                    // mode 1
+        @"显示双方头像",                    // mode 2
+        @"显示双方头像(名字在下方)",         // mode 3
+        @"显示自己头像(名字在下方)",         // mode 4
+        @"显示对方头像(名字在左侧)",         // mode 5
+        @"显示对方头像(名字在右侧)",         // mode 6
+        @"显示双方头像(重叠)",              // mode 7
     ];
     if (mode >= 0 && mode < (NSInteger)names.count) {
         return names[mode];
@@ -90,10 +90,10 @@ static NSString *keyForTag(NSInteger tag) {
         @"显示对方头像",
         @"显示双方头像",
         @"显示双方头像(名字在下方)",
-        @"显示对方头像(名字在下方)",
+        @"显示自己头像(名字在下方)",
         @"显示对方头像(名字在左侧)",
         @"显示对方头像(名字在右侧)",
-        @"显示双方头像(左侧堆叠名字居中)",
+        @"显示双方头像(重叠)",
     ];
 
     PluginConfig *config = [PluginConfig shared];

@@ -106,15 +106,15 @@
 
     BOOL hasSeparator = (config.chatSeparatorText.length > 0);
 
-    // avatarY: 微信两路公式
+    // avatarY: mode 3(双方+名) 和 mode 4(自己+名) 偏上留空间
     CGFloat avatarY;
-    if (mode == 1 || mode == 4) {
+    if (mode == 3 || mode == 4) {
         avatarY = (totalH - avatarSize - 4 - nameFontSize) * 0.5 + 1;
     } else {
         avatarY = (totalH - avatarSize) * 0.5;
     }
 
-    // ============ Mode 7: Overlap ============
+    // ============ Mode 7: 显示双方头像(重叠) ============
     if (mode == 7) {
         self.leftAvatarView.frame = CGRectMake(0, avatarY, avatarSize, avatarSize);
         self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
@@ -130,7 +130,7 @@
         return;
     }
 
-    // ============ Mode 5: 名字左 + 头像右 ============
+    // ============ Mode 5: 显示对方头像(名字在左侧) ============
     if (mode == 5) {
         self.separatorView.hidden = YES;
         self.separatorTextLabel.hidden = YES;
@@ -154,7 +154,7 @@
         return;
     }
 
-    // ============ Mode 6: 左头像居中 + 名右对齐 ============
+    // ============ Mode 6: 显示对方头像(名字在右侧) ============
     if (mode == 6) {
         self.rightAvatarView.hidden = YES;
         self.separatorView.hidden = YES;
@@ -178,22 +178,10 @@
         return;
     }
 
-    // ============ Mode 2: 左头像居中, 无名字 ============
-    if (mode == 2) {
-        self.rightAvatarView.hidden = YES;
-        self.separatorView.hidden = YES;
-        self.separatorTextLabel.hidden = YES;
-        self.titleLabel.hidden = YES;
-
-        self.leftAvatarView.frame = CGRectMake((totalW - avatarSize) * 0.5, avatarY,
-                                                avatarSize, avatarSize);
-        self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
-        return;
-    }
-
-    // ============ Mode 1, 3: 右头像居中, 无分隔符 ============
-    if (mode == 1 || mode == 3) {
-        BOOL showName = (mode == 1);
+    // ============ Mode 0: 显示自己头像 (右头像居中, 无名字) ============
+    // ============ Mode 4: 显示自己头像(名字在下方) ============
+    if (mode == 0 || mode == 4) {
+        BOOL showName = (mode == 4);
 
         self.leftAvatarView.hidden = YES;
         self.rightAvatarView.hidden = NO;
@@ -217,8 +205,23 @@
         return;
     }
 
-    // ============ Mode 0, 4 + default: 双方头像 + 可选名字/分隔符 ============
-    BOOL showName = (mode == 4);
+    // ============ Mode 1: 显示对方头像 (左头像居中, 无名字) ============
+    if (mode == 1) {
+        self.rightAvatarView.hidden = YES;
+        self.separatorView.hidden = YES;
+        self.separatorTextLabel.hidden = YES;
+        self.titleLabel.hidden = YES;
+
+        self.leftAvatarView.frame = CGRectMake((totalW - avatarSize) * 0.5, avatarY,
+                                                avatarSize, avatarSize);
+        self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
+        return;
+    }
+
+    // ============ Mode 2: 显示双方头像 (无名字) ============
+    // ============ Mode 3: 显示双方头像(名字在下方) ============
+    // ============ + default (双方头像 + 分隔符) ============
+    BOOL showName = (mode == 3);
     self.titleLabel.hidden = !showName;
     self.leftAvatarView.hidden = NO;
     self.rightAvatarView.hidden = NO;
