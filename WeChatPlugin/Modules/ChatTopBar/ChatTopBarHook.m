@@ -60,7 +60,7 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
         if (originalTitleView) {
             objc_setAssociatedObject(self, kOriginalTitleViewKey,
                                      originalTitleView,
-                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                                     OBJC_ASSOCIATION_ASSIGN);
         }
     }
 
