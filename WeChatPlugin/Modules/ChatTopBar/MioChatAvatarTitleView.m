@@ -267,10 +267,6 @@
         [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
         self.titleLabel.textAlignment = NSTextAlignmentCenter;
         self.titleLabel.frame = CGRectMake(0, avatarY + avatarSize + 1, totalW, nameFontSize);
-        CGRect f = self.titleLabel.frame;
-        f.origin.x += config.chatNicknameOffsetX;
-        f.origin.y -= config.chatNicknameOffsetY;
-        self.titleLabel.frame = f;
     }
 
     [self applyPositionOffset];
