@@ -105,22 +105,16 @@
     CGFloat nameFontSize = config.chatNicknameFontSize;
 
     BOOL hasSeparator = (config.chatSeparatorText.length > 0);
-    BOOL hasName = YES;
 
-    // Calculate avatar Y position
+    // avatarY: 微信两路公式
     CGFloat avatarY;
     if (mode == 1 || mode == 4) {
-        // modes 1,4: avatar 偏上给 name 留空间
-        CGFloat contentH = avatarSize + 3 + nameFontSize;
-        avatarY = (totalH - contentH) * 0.5 + 1;
+        avatarY = (totalH - avatarSize - 4 - nameFontSize) * 0.5 + 1;
     } else {
-        // modes 0,2,3,5,6,7: avatar 纯居中
         avatarY = (totalH - avatarSize) * 0.5;
     }
 
-    CGFloat nameY = avatarY + (avatarSize - nameFontSize) * 0.5 - config.chatNicknameOffsetY;
-
-    // Mode 7: Overlap mode
+    // ============ Mode 7: Overlap ============
     if (mode == 7) {
         self.leftAvatarView.frame = CGRectMake(0, avatarY, avatarSize, avatarSize);
         self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
@@ -136,7 +130,7 @@
         return;
     }
 
-    // Mode 5: nickname(左) + avatar(右)
+    // ============ Mode 5: 名字左 + 头像右 ============
     if (mode == 5) {
         self.separatorView.hidden = YES;
         self.separatorTextLabel.hidden = YES;
@@ -150,7 +144,8 @@
         [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
         self.titleLabel.frame = CGRectMake(
             (totalW - avatarSize - nameWidth - gap) * 0.5 + config.chatNicknameOffsetX,
-            nameY, nameWidth, nameFontSize);
+            avatarY + (avatarSize - nameFontSize) * 0.5 - config.chatNicknameOffsetY,
+            nameWidth, nameFontSize);
 
         self.leftAvatarView.frame = CGRectMake(
             CGRectGetMaxX(self.titleLabel.frame) + gap,
@@ -159,83 +154,76 @@
         return;
     }
 
-    // Mode 6: right avatar + nickname
+    // ============ Mode 6: 左头像居中 + 名右对齐 ============
     if (mode == 6) {
-        self.leftAvatarView.hidden = YES;
+        self.rightAvatarView.hidden = YES;
         self.separatorView.hidden = YES;
         self.separatorTextLabel.hidden = YES;
-        self.rightAvatarView.hidden = NO;
         self.titleLabel.hidden = NO;
+        self.leftAvatarView.hidden = NO;
 
-        self.rightAvatarView.frame = CGRectMake(0, avatarY, avatarSize, avatarSize);
-        self.rightAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
+        CGFloat nameWidth = [self calculateNameWidth];
+        CGFloat gap = 8.0;
+
+        CGFloat avatarX = (totalW - avatarSize - nameWidth - gap) * 0.5;
+        self.leftAvatarView.frame = CGRectMake(avatarX, avatarY, avatarSize, avatarSize);
+        self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
 
         [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
         self.titleLabel.textAlignment = NSTextAlignmentRight;
-        self.titleLabel.frame = CGRectMake(avatarSize + halfSpacing, nameY,
-                                             totalW - avatarSize - halfSpacing, nameFontSize);
+        CGFloat nameX = avatarX + avatarSize + gap + config.chatNicknameOffsetX;
+        self.titleLabel.frame = CGRectMake(nameX,
+            avatarY + (avatarSize - nameFontSize) * 0.5 - config.chatNicknameOffsetY,
+            nameWidth, nameFontSize);
         return;
     }
 
-    // Mode 0: left avatar + name
-    if (mode == 0) {
+    // ============ Mode 2: 左头像居中, 无名字 ============
+    if (mode == 2) {
         self.rightAvatarView.hidden = YES;
         self.separatorView.hidden = YES;
         self.separatorTextLabel.hidden = YES;
-        self.titleLabel.hidden = NO;
+        self.titleLabel.hidden = YES;
 
-        self.leftAvatarView.frame = CGRectMake(0, avatarY, avatarSize, avatarSize);
+        self.leftAvatarView.frame = CGRectMake((totalW - avatarSize) * 0.5, avatarY,
+                                                avatarSize, avatarSize);
         self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
-
-        [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
-        self.titleLabel.frame = CGRectMake(avatarSize + halfSpacing, nameY,
-                                             totalW - avatarSize - halfSpacing, nameFontSize);
         return;
     }
 
-    // Mode 4: opponent avatar(center) + name below
-    if (mode == 4) {
-        self.rightAvatarView.hidden = YES;
-        self.separatorView.hidden = YES;
-        self.separatorTextLabel.hidden = YES;
-        self.titleLabel.hidden = NO;
-
-        CGFloat centerX = (totalW - avatarSize) * 0.5;
-        self.leftAvatarView.frame = CGRectMake(centerX, avatarY, avatarSize, avatarSize);
-        self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
-
-        [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
-        self.titleLabel.textAlignment = NSTextAlignmentCenter;
-        self.titleLabel.frame = CGRectMake(0, avatarY + avatarSize + 1, totalW, nameFontSize);
-        return;
-    }
-
-    // Mode 1, 3: single avatar (centered, no name)
+    // ============ Mode 1, 3: 右头像居中, 无分隔符 ============
     if (mode == 1 || mode == 3) {
-        // mode 1: right avatar (self), mode 3: left avatar (opponent)
-        BOOL showLeft = (mode == 3);
-        BOOL showRight = (mode == 1);
+        BOOL showName = (mode == 1);
 
-        self.leftAvatarView.hidden = !showLeft;
-        self.rightAvatarView.hidden = !showRight;
-        self.separatorView.hidden = NO;
-        self.separatorTextLabel.hidden = !config.chatSeparatorText.length;
-        self.titleLabel.hidden = NO;
+        self.leftAvatarView.hidden = YES;
+        self.rightAvatarView.hidden = NO;
+        self.separatorView.hidden = YES;
+        self.separatorTextLabel.hidden = YES;
+        self.titleLabel.hidden = !showName;
 
-        UIImageView *activeAvatar = showLeft ? self.leftAvatarView : self.rightAvatarView;
-        CGFloat centerX = (totalW - avatarSize) * 0.5;
-        activeAvatar.frame = CGRectMake(centerX, avatarY, avatarSize, avatarSize);
-        activeAvatar.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
+        self.rightAvatarView.frame = CGRectMake((totalW - avatarSize) * 0.5, avatarY,
+                                                 avatarSize, avatarSize);
+        self.rightAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
+
+        if (showName) {
+            [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
+            self.titleLabel.textAlignment = NSTextAlignmentCenter;
+            self.titleLabel.frame = CGRectMake(0, avatarY + avatarSize + 1, totalW, nameFontSize);
+            CGRect f = self.titleLabel.frame;
+            f.origin.x += config.chatNicknameOffsetX;
+            f.origin.y -= config.chatNicknameOffsetY;
+            self.titleLabel.frame = f;
+        }
         return;
     }
 
-    // Default: dual avatar with separator
+    // ============ Mode 0, 4 + default: 双方头像 + 可选名字/分隔符 ============
+    BOOL showName = (mode == 4);
+    self.titleLabel.hidden = !showName;
     self.leftAvatarView.hidden = NO;
     self.rightAvatarView.hidden = NO;
-    self.titleLabel.hidden = YES;
 
     if (hasSeparator) {
-        // Full layout: leftAvatar | separator | rightAvatar
         self.separatorTextLabel.hidden = !config.chatSeparatorText.length;
 
         CGFloat totalContentW;
@@ -253,31 +241,37 @@
 
         if (!self.separatorTextLabel.hidden) {
             self.separatorTextLabel.frame = CGRectMake(startX + avatarSize + halfSpacing,
-                                                         (totalH - self.separatorTextLabel.frame.size.height) * 0.5,
-                                                         self.separatorTextLabel.frame.size.width,
-                                                         self.separatorTextLabel.frame.size.height);
+                (totalH - self.separatorTextLabel.frame.size.height) * 0.5,
+                self.separatorTextLabel.frame.size.width,
+                self.separatorTextLabel.frame.size.height);
             self.rightAvatarView.frame = CGRectMake(CGRectGetMaxX(self.separatorTextLabel.frame) + halfSpacing,
-                                                      avatarY, avatarSize, avatarSize);
+                avatarY, avatarSize, avatarSize);
         } else {
             self.rightAvatarView.frame = CGRectMake(startX + avatarSize + avatarSpacing,
-                                                      avatarY, avatarSize, avatarSize);
+                avatarY, avatarSize, avatarSize);
         }
-
         self.separatorView.hidden = YES;
     } else {
-        // No separator: dual avatars centered with spacing
         CGFloat dualW = avatarSize * 2 + avatarSpacing;
         CGFloat startX = (totalW - dualW) * 0.5;
-
         self.separatorTextLabel.hidden = YES;
         self.separatorView.hidden = YES;
-
-        self.leftAvatarView.frame = CGRectMake(startX, avatarY, avatarSize, avatarSize);
+        self.leftAvatarView.frame  = CGRectMake(startX, avatarY, avatarSize, avatarSize);
         self.rightAvatarView.frame = CGRectMake(startX + avatarSize + avatarSpacing, avatarY, avatarSize, avatarSize);
     }
 
     self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
     self.rightAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
+
+    if (showName) {
+        [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
+        self.titleLabel.textAlignment = NSTextAlignmentCenter;
+        self.titleLabel.frame = CGRectMake(0, avatarY + avatarSize + 1, totalW, nameFontSize);
+        CGRect f = self.titleLabel.frame;
+        f.origin.x += config.chatNicknameOffsetX;
+        f.origin.y -= config.chatNicknameOffsetY;
+        self.titleLabel.frame = f;
+    }
 
     [self applyPositionOffset];
 }
