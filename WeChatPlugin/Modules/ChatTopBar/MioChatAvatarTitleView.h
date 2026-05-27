@@ -2,7 +2,7 @@
 
 @class BaseMsgContentViewController;
 
-@interface CSChatAvatarTitleView : UIView
+@interface MioChatAvatarTitleView : UIView
 
 @property (nonatomic, assign) BaseMsgContentViewController *chatController;
 @property (nonatomic, retain) UIImageView *leftAvatarView;

@@ -1,4 +1,4 @@
-#import "CSChatAvatarTitleView.h"
+#import "MioChatAvatarTitleView.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
@@ -6,7 +6,7 @@
 #import <ImageIO/ImageIO.h>
 #import "CSContactInfoPopoverController.h"
 
-@implementation CSChatAvatarTitleView
+@implementation MioChatAvatarTitleView
 
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
@@ -53,8 +53,8 @@
     [ra release];
     [ra setContentMode:UIViewContentModeScaleAspectFill];
     [ra setTag:2];
-    [ra setUserInteractionEnabled:YES];
     [ra setClipsToBounds:YES];
+    [ra setUserInteractionEnabled:YES];
     UITapGestureRecognizer *rightTap = [[UITapGestureRecognizer alloc]
         initWithTarget:self action:@selector(onRightAvatarTapped:)];
     [ra addGestureRecognizer:rightTap];

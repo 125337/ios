@@ -1,5 +1,5 @@
 #import "ChatTopBarHook.h"
-#import "CSChatAvatarTitleView.h"
+#import "MioChatAvatarTitleView.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Config/Constants.h"
 #import "../../Core/LogManager.h"
@@ -8,8 +8,9 @@
 #import <objc/message.h>
 
 // Original IMPs
-static IMP _orig_BaseMsgContentVC_viewDidLoad   = NULL;
-static IMP _orig_BaseMsgContentVC_viewWillAppear = NULL;
+static IMP _orig_BaseMsgContentVC_viewDidLoad    = NULL;
+static IMP _orig_BaseMsgContentVC_viewWillAppear  = NULL;
+static IMP _orig_UINavigationController_push       = NULL;
 
 // associatedObject key
 static const void *kOriginalTitleViewKey = &kOriginalTitleViewKey;
@@ -44,11 +45,10 @@ static BOOL isContactInBlacklist(NSString *contactID) {
 static void hook_viewDidLoad(id self, SEL _cmd) {
     ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
 
-    // ★ 不检查 object_getClass / isViewLoaded / view.window。123456.c 不做任何过滤。
     PluginConfig *config = [PluginConfig shared];
     if (!config.showChatAvatar) return;
 
-    // Check if original titleView already saved
+    // 保存原始 titleView
     id savedTitle = objc_getAssociatedObject(self, kOriginalTitleViewKey);
     if (!savedTitle) {
         id originalTitleView = [self navigationItem].titleView;
@@ -59,16 +59,20 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
         }
     }
 
-    // Get contact
+    // 如果 pushViewController hook 已经设置过 MioChatAvatarTitleView 则跳过
+    id currentTitle = [[self navigationItem] titleView];
+    if ([currentTitle isKindOfClass:[MioChatAvatarTitleView class]]) return;
+
+    // 获取 contact
     id contact = ((id (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"GetContact"));
     if (!contact) return;
 
     NSString *username = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
     if (isContactInBlacklist(username)) return;
 
-    // Create CSChatAvatarTitleView
+    // 创建 MioChatAvatarTitleView
     CGFloat width = config.chatTitleViewWidth > 0 ? config.chatTitleViewWidth : 210.0;
-    CSChatAvatarTitleView *view = [[CSChatAvatarTitleView alloc]
+    MioChatAvatarTitleView *view = [[MioChatAvatarTitleView alloc]
                                     initWithFrame:CGRectMake(0, 0, width, 45)];
     [view setChatController:(BaseMsgContentViewController *)self];
 
@@ -84,13 +88,11 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
 static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
 
-    // ★ 不检查 object_getClass / isViewLoaded / view.window。123456.c 不做任何过滤。
     PluginConfig *config = [PluginConfig shared];
     id currentTitle = [[self navigationItem] titleView];
 
     if (!config.showChatAvatar) {
-        // Switch off -> restore original titleView
-        if ([currentTitle isKindOfClass:[CSChatAvatarTitleView class]]) {
+        if ([currentTitle isKindOfClass:[MioChatAvatarTitleView class]]) {
             UIView *originalTitle = objc_getAssociatedObject(self, kOriginalTitleViewKey);
             if (originalTitle) {
                 [[self navigationItem] setTitleView:originalTitle];
@@ -99,22 +101,20 @@ static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
         return;
     }
 
-    // Switch on -> blacklist check
     id contact = ((id (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"GetContact"));
     if (!contact) return;
     NSString *username = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
     if (isContactInBlacklist(username)) {
         UIView *originalTitle = objc_getAssociatedObject(self, kOriginalTitleViewKey);
-        if (originalTitle && [currentTitle isKindOfClass:[CSChatAvatarTitleView class]]) {
+        if (originalTitle && [currentTitle isKindOfClass:[MioChatAvatarTitleView class]]) {
             [[self navigationItem] setTitleView:originalTitle];
         }
         return;
     }
 
-    // Ensure titleView is CSChatAvatarTitleView
-    if (![currentTitle isKindOfClass:[CSChatAvatarTitleView class]]) {
+    if (![currentTitle isKindOfClass:[MioChatAvatarTitleView class]]) {
         CGFloat width = config.chatTitleViewWidth > 0 ? config.chatTitleViewWidth : 210.0;
-        CSChatAvatarTitleView *view = [[CSChatAvatarTitleView alloc]
+        MioChatAvatarTitleView *view = [[MioChatAvatarTitleView alloc]
                                         initWithFrame:CGRectMake(0, 0, width, 45)];
         [view setChatController:(BaseMsgContentViewController *)self];
         [[self navigationItem] setTitleView:view];
@@ -122,11 +122,45 @@ static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
         [view release];
     }
 
-    // Refresh
-    [(CSChatAvatarTitleView *)currentTitle updateAvatars];
+    [(MioChatAvatarTitleView *)currentTitle updateAvatars];
     [currentTitle setNeedsLayout];
     [currentTitle layoutIfNeeded];
     [currentTitle setNeedsDisplay];
+}
+
+// ============================================================
+// Hook: UINavigationController::pushViewController:animated:
+// 对齐微信优化 L36413
+// ============================================================
+static void hook_pushViewController(id self, SEL _cmd, id viewController, BOOL animated) {
+    // 先调用原始实现，确保 WeChat 正常执行 push
+    ((void (*)(id, SEL, id, BOOL))_orig_UINavigationController_push)
+        (self, _cmd, viewController, animated);
+
+    // 只处理聊天页
+    Class msgCls = objc_getClass("BaseMsgContentViewController");
+    if (!msgCls || ![viewController isKindOfClass:msgCls]) return;
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.showChatAvatar) return;
+
+    id contact = ((id (*)(id, SEL))objc_msgSend)(viewController,
+        NSSelectorFromString(@"GetContact"));
+    if (!contact) return;
+
+    NSString *username = ((id (*)(id, SEL))objc_msgSend)(contact,
+        NSSelectorFromString(@"m_nsUsrName"));
+    if (isContactInBlacklist(username)) return;
+
+    CGFloat width = config.chatTitleViewWidth > 0 ? config.chatTitleViewWidth : 210.0;
+    MioChatAvatarTitleView *view = [[MioChatAvatarTitleView alloc]
+                                     initWithFrame:CGRectMake(0, 0, width, 45)];
+    [view setChatController:(BaseMsgContentViewController *)viewController];
+
+    [[viewController navigationItem].titleView removeFromSuperview];
+    [[viewController navigationItem] setTitleView:view];
+    [view layoutSubviews];
+    [view release];
 }
 
 // ============================================================
@@ -146,6 +180,15 @@ static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
                         (IMP)hook_viewWillAppear,
                         &_orig_BaseMsgContentVC_viewWillAppear);
         WPLog(@"ChatTopBar", @"[Hook] ✓ BaseMsgContentViewController");
+    }
+
+    // 对齐微信优化 L36413
+    Class navCls = objc_getClass("UINavigationController");
+    if (navCls) {
+        MSHookMessageEx(navCls, @selector(pushViewController:animated:),
+                        (IMP)hook_pushViewController,
+                        &_orig_UINavigationController_push);
+        WPLog(@"ChatTopBar", @"[Hook] ✓ UINavigationController::pushViewController:animated:");
     }
 }
 
