@@ -503,8 +503,9 @@ static id hook_WCTableView_getSeparator(id self, SEL _cmd) {
     WPLog(@"UIPurify", @"[Hook] ✓ Class cache preloaded (3/4)");
     
     // Step 2：UIView.layoutSubviews 全局 Hook (对齐 FUN_00046248)
-    MSHookMessageEx([UIView class], @selector(layoutSubviews),
-        (IMP)hook_UIView_layoutSubviews, &_orig_UIView_layoutSubviews);
+    // TEMPORARILY DISABLED - duplicated with 微信优化, causes crash chain with WCRefine + 黄白助手
+// MSHookMessageEx([UIView class], @selector(layoutSubviews),
+//     (IMP)hook_UIView_layoutSubviews, &_orig_UIView_layoutSubviews);
     WPLog(@"UIPurify", @"[Hook] ✓ UIView.layoutSubviews (FUN_0004627c 10-dim filter)");
     
     // Step 3：WCTableViewManager.getSeparator → nil (Mio 独家，比微信优化更彻底)
