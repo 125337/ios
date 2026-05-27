@@ -6,7 +6,7 @@
 
 @interface _WPColorPickerDelegate : NSObject <UIColorPickerViewControllerDelegate>
 @property (nonatomic, copy) void(^onSelected)(UIColor *color, NSString *hex);
-@property (nonatomic, weak) UIButton *sourceButton;
+@property (nonatomic, assign) UIButton *sourceButton;
 @end
 
 @implementation _WPColorPickerDelegate
