@@ -86,10 +86,6 @@ static NSArray *s_infoItems(void) {
     tableView.backgroundColor = [UIColor whiteColor];
     tableView.tableHeaderView = [self createHeaderView];
     tableView.tableFooterView = [self createFooterView];
-    // 注册 CSSettingTableViewCell（如果类存在，否则用系统 cell）
-    Class cellClass = objc_getClass("CSSettingTableViewCell");
-    if (!cellClass) cellClass = [UITableViewCell class];
-    [tableView registerClass:cellClass forCellReuseIdentifier:@"Cell"];
     [self.view addSubview:tableView];
     [tableView release];
 }
@@ -97,7 +93,7 @@ static NSArray *s_infoItems(void) {
 #pragma mark - 创建 UI
 
 - (UIView *)createHeaderView {
-    CGFloat width = self.view.bounds.size.width;
+    CGFloat width = 272;
     UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 190)];
 
     // 头像
@@ -114,7 +110,7 @@ static NSArray *s_infoItems(void) {
 
     // 昵称
     UILabel *nickname = [[UILabel alloc] init];
-    nickname.frame = CGRectMake(20, 94, width - 40, 28);
+    nickname.frame = CGRectMake(16, 94, width - 32, 28);
     nickname.textAlignment = NSTextAlignmentCenter;
     nickname.font = [UIFont boldSystemFontOfSize:18];
     id name = contactValueForKey(self.contact, @"m_nsNickName");
@@ -126,7 +122,7 @@ static NSArray *s_infoItems(void) {
 }
 
 - (UIView *)createFooterView {
-    CGFloat width = self.view.bounds.size.width;
+    CGFloat width = 272;
     UIView *footer = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 40)];
     UILabel *tip = [[UILabel alloc] init];
     tip.text = @"点击信息项复制到剪贴板";
@@ -150,7 +146,27 @@ static NSArray *s_infoItems(void) {
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"Cell" forIndexPath:indexPath];
+    // 检查 CSSettingTableViewCell 是否可用
+    static Class cssCellClass = nil;
+    static dispatch_once_t onceCSS;
+    dispatch_once(&onceCSS, ^{
+        cssCellClass = objc_getClass("CSSettingTableViewCell");
+    });
+
+    UITableViewCell *cell;
+    if (cssCellClass) {
+        cell = [tableView dequeueReusableCellWithIdentifier:@"CSSettingCell"];
+        if (!cell) {
+            cell = [[cssCellClass alloc] initWithStyle:UITableViewCellStyleValue1
+                                       reuseIdentifier:@"CSSettingCell"];
+        }
+    } else {
+        cell = [tableView dequeueReusableCellWithIdentifier:@"Cell"];
+        if (!cell) {
+            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1
+                                          reuseIdentifier:@"Cell"];
+        }
+    }
 
     NSDictionary *item = s_infoItems()[indexPath.row];
     cell.textLabel.text = item[@"label"];
@@ -158,6 +174,7 @@ static NSArray *s_infoItems(void) {
     cell.detailTextLabel.text = [self valueForInfoKey:item[@"key"]];
     cell.detailTextLabel.font = [UIFont systemFontOfSize:13];
     cell.detailTextLabel.textColor = [UIColor colorWithRed:0.56 green:0.56 blue:0.58 alpha:1.0];
+    cell.accessoryType = UITableViewCellAccessoryNone;
     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 
     return cell;
@@ -277,22 +294,38 @@ static NSArray *s_infoItems(void) {
 #pragma mark - 主页跳转
 
 - (void)onHomepageTapped {
-    NSString *usrName = contactValueForKey(self.contact, @"m_nsUsrName");
-    if (!usrName) return;
-
-    Class infoVC = objc_getClass("WCUserInfoViewController");
-    if (!infoVC) return;
+    // 123456.c L118375: ContactInfoViewController
+    Class infoVC = objc_getClass("ContactInfoViewController");
+    if (!infoVC) {
+        infoVC = objc_getClass("WCContactInfoViewController");
+    }
+    if (!infoVC) {
+        UIAlertController *alert = [UIAlertController
+            alertControllerWithTitle:nil
+            message:@"当前微信版本不支持直接跳转资料页"
+            preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
 
     id vc = ((id (*)(Class, SEL))objc_msgSend)(infoVC, NSSelectorFromString(@"alloc"));
-    vc = ((id (*)(id, SEL, id, id))objc_msgSend)(vc,
-        NSSelectorFromString(@"initWithUsrName:contact:"), usrName, self.contact);
+    vc = ((id (*)(id, SEL))objc_msgSend)(vc, NSSelectorFromString(@"init"));
     if (!vc) return;
 
-    // dismiss 当前 popover，然后 push
-    UIViewController *parent = self.presentingViewController;
+    ((void (*)(id, SEL, id))objc_msgSend)(vc,
+        NSSelectorFromString(@"setContact:"), self.contact);
+
     [self dismissViewControllerAnimated:YES completion:^{
-        if (parent && parent.navigationController) {
-            [parent.navigationController pushViewController:vc animated:YES];
+        UIViewController *presenting = self.presentingViewController;
+        if (!presenting) { [vc release]; return; }
+
+        UINavigationController *nav = presenting.navigationController;
+        if (!nav && [presenting isKindOfClass:[UINavigationController class]]) {
+            nav = (UINavigationController *)presenting;
+        }
+        if (nav) {
+            [nav pushViewController:vc animated:YES];
         }
         [vc release];
     }];
