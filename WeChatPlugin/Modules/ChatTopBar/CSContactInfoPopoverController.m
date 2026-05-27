@@ -76,7 +76,7 @@ static NSArray *s_infoItems(void) {
     // 123456.c L116655-116659: UITableViewStyleGrouped (style:2)
     UITableView *tableView = [[UITableView alloc] initWithFrame:self.view.bounds
                                                           style:UITableViewStyleGrouped];
-    tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth;  // 123456.c L116662: 仅宽度 (值 2)
     tableView.delegate = self;
     tableView.dataSource = self;
 
@@ -92,6 +92,10 @@ static NSArray *s_infoItems(void) {
 
     // 123456.c L116675: showsVerticalScrollIndicator = NO
     tableView.showsVerticalScrollIndicator = NO;
+
+    // 显式禁用水平滚动
+    tableView.alwaysBounceHorizontal = NO;
+    tableView.showsHorizontalScrollIndicator = NO;
 
     // 123456.c L116676-116677: contentInset = (8, 8, 8, 8)
     tableView.contentInset = UIEdgeInsetsMake(8, 8, 8, 8);
@@ -350,7 +354,7 @@ static NSArray *s_infoItems(void) {
     return @"未设置";
 }
 
-#pragma mark - 主页跳转（与 123456.c L118375-118386 一致）
+#pragma mark - 主页跳转（与 123456.c L118375-118441 一致）
 
 - (void)onHomepageTapped {
     // 123456.c L118375: objc_getClass("ContactInfoViewController")
@@ -370,26 +374,62 @@ static NSArray *s_infoItems(void) {
         return;
     }
 
-    // 123456.c L118383: [[ContactInfoViewController alloc] init]
+    // 123456.c L118383-118386: alloc init + KVC
     id vc = ((id (*)(Class, SEL))objc_msgSend)(infoVC, NSSelectorFromString(@"alloc"));
     vc = ((id (*)(id, SEL))objc_msgSend)(vc, NSSelectorFromString(@"init"));
     if (!vc) return;
 
-    // 123456.c L118386: KVC setValue:forKey:@"m_contact"
-    // ★ 不是 setContact:！！！ContactInfoViewController 没有这个方法！！！
-    ((void (*)(id, SEL, id, NSString *))objc_msgSend)(vc,
-        NSSelectorFromString(@"setValue:forKey:"), self.contact, @"m_contact");
+    // 123456.c L118386: setValue:forKey:@"m_contact"
+    // 用 @try/@catch 防止 key 不存在时静默失败
+    BOOL contactSet = NO;
+    @try {
+        ((void (*)(id, SEL, id, NSString *))objc_msgSend)(vc,
+            NSSelectorFromString(@"setValue:forKey:"), self.contact, @"m_contact");
+        contactSet = YES;
+    } @catch (NSException *e) {
+        // KVC key "m_contact" 不存在 → 尝试直接设 ivar
+        Ivar ivar = class_getInstanceVariable(infoVC, "m_contact");
+        if (!ivar) ivar = class_getInstanceVariable(infoVC, "_m_contact");
+        if (!ivar) ivar = class_getInstanceVariable(infoVC, "_contact");
+        if (ivar) {
+            object_setIvar(vc, ivar, self.contact);
+            contactSet = YES;
+        }
+    }
+    if (!contactSet) {
+        [vc release];
+        UIAlertController *alert = [UIAlertController
+            alertControllerWithTitle:nil
+            message:@"无法设置联系人信息，请更新插件"
+            preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"确定"
+                                                  style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
 
+    // 123456.c L118387-118395：MRC 下需手动 retain vc 供 block 使用
+    [vc retain];
+
+    // 123456.c L118395: dismiss + completion block
     [self dismissViewControllerAnimated:YES completion:^{
+        // 123456.c L118418-118421: [weakSelf presentingViewController]
         UIViewController *presenting = self.presentingViewController;
         if (!presenting) { [vc release]; return; }
 
-        UINavigationController *nav = presenting.navigationController;
-        if (!nav && [presenting isKindOfClass:[UINavigationController class]]) {
+        // 123456.c L118422-118431: 先判断 presentingVC 是否就是 nav
+        UINavigationController *nav = nil;
+        if ([presenting isKindOfClass:[UINavigationController class]]) {
             nav = (UINavigationController *)presenting;
+        } else {
+            nav = presenting.navigationController;
         }
+
+        // 123456.c L118432-118437: nav 不存在 → modal present 兜底
         if (nav) {
             [nav pushViewController:vc animated:YES];
+        } else {
+            [presenting presentViewController:vc animated:YES completion:nil];
         }
         [vc release];
     }];

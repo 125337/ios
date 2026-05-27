@@ -42,25 +42,23 @@ static BOOL isContactInBlacklist(NSString *contactID) {
 // Hook: viewDidLoad
 // ============================================================
 static void hook_viewDidLoad(id self, SEL _cmd) {
-    // 仅在聊天对话页生效，不在会话列表或其他页面执行
-    if (![self isKindOfClass:objc_getClass("BaseMsgContentViewController")]) {
-        ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
-        return;
-    }
-
     ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
+
+    // 只在 BaseMsgContentViewController 本身（非子类）执行
+    Class baseCls = objc_getClass("BaseMsgContentViewController");
+    if (object_getClass(self) != baseCls) return;
 
     PluginConfig *config = [PluginConfig shared];
     if (!config.showChatAvatar) return;
 
     // Check if original titleView already saved
-    uintptr_t saved = (uintptr_t)objc_getAssociatedObject(self, kOriginalTitleViewKey);
-    if (saved == 0) {
+    id savedTitle = objc_getAssociatedObject(self, kOriginalTitleViewKey);
+    if (!savedTitle) {
         id originalTitleView = [self navigationItem].titleView;
         if (originalTitleView) {
             objc_setAssociatedObject(self, kOriginalTitleViewKey,
-                                     (__bridge id)(void *)originalTitleView,
-                                     OBJC_ASSOCIATION_ASSIGN);
+                                     originalTitleView,
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
     }
 
@@ -87,13 +85,11 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
 // Hook: viewWillAppear:
 // ============================================================
 static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
-    // 仅在聊天对话页生效，不在会话列表或其他页面执行
-    if (![self isKindOfClass:objc_getClass("BaseMsgContentViewController")]) {
-        ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
-        return;
-    }
-
     ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
+
+    // 只在 BaseMsgContentViewController 本身（非子类）执行
+    Class baseCls = objc_getClass("BaseMsgContentViewController");
+    if (object_getClass(self) != baseCls) return;
 
     PluginConfig *config = [PluginConfig shared];
     id currentTitle = [[self navigationItem] titleView];
@@ -101,9 +97,8 @@ static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     if (!config.showChatAvatar) {
         // Switch off -> restore original titleView
         if ([currentTitle isKindOfClass:[CSChatAvatarTitleView class]]) {
-            uintptr_t saved = (uintptr_t)objc_getAssociatedObject(self, kOriginalTitleViewKey);
-            if (saved != 0) {
-                UIView *originalTitle = (__bridge UIView *)(void *)saved;
+            UIView *originalTitle = objc_getAssociatedObject(self, kOriginalTitleViewKey);
+            if (originalTitle) {
                 [[self navigationItem] setTitleView:originalTitle];
             }
         }
@@ -115,9 +110,9 @@ static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     if (!contact) return;
     NSString *username = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
     if (isContactInBlacklist(username)) {
-        uintptr_t saved = (uintptr_t)objc_getAssociatedObject(self, kOriginalTitleViewKey);
-        if (saved != 0 && [currentTitle isKindOfClass:[CSChatAvatarTitleView class]]) {
-            [[self navigationItem] setTitleView:(__bridge UIView *)(void *)saved];
+        UIView *originalTitle = objc_getAssociatedObject(self, kOriginalTitleViewKey);
+        if (originalTitle && [currentTitle isKindOfClass:[CSChatAvatarTitleView class]]) {
+            [[self navigationItem] setTitleView:originalTitle];
         }
         return;
     }
