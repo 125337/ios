@@ -44,9 +44,7 @@ static BOOL isContactInBlacklist(NSString *contactID) {
 static void hook_viewDidLoad(id self, SEL _cmd) {
     ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
 
-    // v18: 只处理 view 已加载到 window 上的活跃 VC，跳过预加载/缓存的非活跃 VC
-    if (![self isViewLoaded] || ![self view].window) return;
-
+    // ★ 不检查 object_getClass / isViewLoaded / view.window。123456.c 不做任何过滤。
     PluginConfig *config = [PluginConfig shared];
     if (!config.showChatAvatar) return;
 
@@ -86,9 +84,7 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
 static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
 
-    // v18: 只处理 view 已加载到 window 上的活跃 VC，跳过预加载/缓存的非活跃 VC
-    if (![self isViewLoaded] || ![self view].window) return;
-
+    // ★ 不检查 object_getClass / isViewLoaded / view.window。123456.c 不做任何过滤。
     PluginConfig *config = [PluginConfig shared];
     id currentTitle = [[self navigationItem] titleView];
 
