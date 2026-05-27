@@ -157,13 +157,8 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (UIView *)addTableGroupAtY:(CGFloat)y width:(CGFloat)w {
-    UIView *group = [[UIView alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 0)];
-    group.backgroundColor = cardBgColor();
-    group.layer.cornerRadius = kRadius;
-    if (@available(iOS 13.0, *)) group.layer.cornerCurve = kCACornerCurveContinuous;
-    group.clipsToBounds = YES;
+    UIView *group = WPMakeCard(y, w);
     [self.contentView addSubview:group];
-    [group release];
     return group;
 }
 
@@ -461,10 +456,6 @@ static NSString *configPropertyForKey(NSString *key) {
     } else {
         WPLog(@"Config", @"[SWITCH] 不是 master key, 跳过重建: key=%@", key);
     }
-}
-
-- (void)textFieldDone:(UITextField *)tf {
-    [tf resignFirstResponder];
 }
 
 - (void)colorButtonTapped:(UIButton *)sender {

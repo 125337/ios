@@ -5,6 +5,10 @@
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 
+@interface SettingGeneralFunctionController ()
+@property (nonatomic, strong) NSMutableArray *inputFields;
+@end
+
 @implementation SettingLayoutFunctionController
 
 - (void)onAvatarHideTap {
