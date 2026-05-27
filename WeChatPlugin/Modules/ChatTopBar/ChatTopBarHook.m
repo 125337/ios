@@ -42,6 +42,12 @@ static BOOL isContactInBlacklist(NSString *contactID) {
 // Hook: viewDidLoad
 // ============================================================
 static void hook_viewDidLoad(id self, SEL _cmd) {
+    // 仅在聊天对话页生效，不在会话列表或其他页面执行
+    if (![self isKindOfClass:objc_getClass("BaseMsgContentViewController")]) {
+        ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
+        return;
+    }
+
     ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
 
     PluginConfig *config = [PluginConfig shared];
@@ -81,6 +87,12 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
 // Hook: viewWillAppear:
 // ============================================================
 static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
+    // 仅在聊天对话页生效，不在会话列表或其他页面执行
+    if (![self isKindOfClass:objc_getClass("BaseMsgContentViewController")]) {
+        ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
+        return;
+    }
+
     ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
 
     PluginConfig *config = [PluginConfig shared];
