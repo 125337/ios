@@ -22,6 +22,10 @@
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 20.0;
 
+    y = [self buildHelpTableAtY:y width:w];
+    y += 20.0;
+    y = [self buildEditorSectionAtY:y width:w];
+
     // 加载已有黑名单（优先使用传入的 blacklist，fallback NSUserDefaults）
     NSString *saved = self.blacklist;
     if (!saved.length) {
@@ -31,10 +35,6 @@
     if (saved.length > 0) {
         self.editorView.text = saved;
     }
-
-    y = [self buildHelpTableAtY:y width:w];
-    y += 20.0;
-    y = [self buildEditorSectionAtY:y width:w];
 
     CGRect cf = self.contentView.frame;
     cf.size.height = y + 40.0;

@@ -31,14 +31,6 @@ static void configLog(NSString *content) {
 static const CGFloat kCellHPadding = 16.0;
 static char kExpandedAssociationKey;
 
-#define bgColor() WPBackgroundColor()
-#define cardBgColor() WPCardBackgroundColor()
-#define textPrimary() WPTextPrimaryColor()
-#define textSecondary() WPTextSecondaryColor()
-#define textTertiary() WPTextTertiaryColor()
-#define switchOnColor() WPSwitchOnColor()
-#define separatorColor() WPSeparatorColor()
-
 static NSString *configPropertyForKey(NSString *key) {
     static NSDictionary<NSString *, NSString *> *mapping = nil;
     static dispatch_once_t onceToken;
@@ -137,14 +129,14 @@ static NSString *configPropertyForKey(NSString *key) {
     @try {
         [super viewDidLoad];
         self.title = self.categoryName;
-        self.view.backgroundColor = bgColor();
+        self.view.backgroundColor = WPBgColor();
         
         CGFloat w = [UIScreen mainScreen].bounds.size.width;
         CGFloat h = [UIScreen mainScreen].bounds.size.height;
         CGRect frame = CGRectMake(0, 0, w, h);
         
         self.scrollView = [[[UIScrollView alloc] initWithFrame:frame] autorelease];
-        self.scrollView.backgroundColor = bgColor();
+        self.scrollView.backgroundColor = WPBgColor();
         if (@available(iOS 13.0, *)) {
             self.scrollView.automaticallyAdjustsScrollIndicatorInsets = NO;
         }
@@ -190,7 +182,7 @@ static NSString *configPropertyForKey(NSString *key) {
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 0)];
     l.text = text;
     l.font = [UIFont systemFontOfSize:12];
-    l.textColor = textTertiary();
+    l.textColor = WPT3();
     l.numberOfLines = 0;
     [l sizeToFit];
     [self.contentView addSubview:l];
@@ -206,7 +198,7 @@ static NSString *configPropertyForKey(NSString *key) {
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, titleY, gw - kCellHPadding * 2 - 20, titleH)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = textPrimary();
+    tl.textColor = WPT1();
     [group addSubview:tl];
     [tl release];
 
@@ -214,7 +206,7 @@ static NSString *configPropertyForKey(NSString *key) {
         UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 22, gw - kCellHPadding * 2 - 20, 14)];
         dl.text = subtitle;
         dl.font = [UIFont systemFontOfSize:12];
-        dl.textColor = textSecondary();
+        dl.textColor = WPT2();
         [group addSubview:dl];
         [dl release];
     }
@@ -237,7 +229,7 @@ static NSString *configPropertyForKey(NSString *key) {
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, titleY, textW, 18)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = textPrimary();
+    tl.textColor = WPT1();
     [group addSubview:tl];
     [tl release];
 
@@ -245,14 +237,14 @@ static NSString *configPropertyForKey(NSString *key) {
         UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 22, textW, 14)];
         dl.text = desc;
         dl.font = [UIFont systemFontOfSize:12];
-        dl.textColor = textSecondary();
+        dl.textColor = WPT2();
         [group addSubview:dl];
         [dl release];
     }
 
     UISwitch *sw = [[UISwitch alloc] init];
     sw.on = on;
-    sw.onTintColor = switchOnColor();
+    sw.onTintColor = WPSwOn();
     sw.frame = CGRectMake(gw - kCellHPadding - 51, cy + (kRowH - 31) / 2, 51, 31);
     objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [sw addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
@@ -267,13 +259,13 @@ static NSString *configPropertyForKey(NSString *key) {
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy, gw - kCellHPadding * 2 - 70, kRowH)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = textPrimary();
+    tl.textColor = WPT1();
     [group addSubview:tl];
     [tl release];
 
     UISwitch *sw = [[UISwitch alloc] init];
     sw.on = on;
-    sw.onTintColor = switchOnColor();
+    sw.onTintColor = WPSwOn();
     sw.frame = CGRectMake(gw - kCellHPadding - 51, cy + (kRowH - 31) / 2, 51, 31);
     objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [sw addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
@@ -296,7 +288,7 @@ static NSString *configPropertyForKey(NSString *key) {
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy, gw - kCellHPadding * 2, 16)];
     l.text = text;
     l.font = [UIFont systemFontOfSize:12];
-    l.textColor = textTertiary();
+    l.textColor = WPT3();
     [group addSubview:l];
     [l release];
     return cy + 20;
@@ -308,14 +300,14 @@ static NSString *configPropertyForKey(NSString *key) {
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4, gw - kCellHPadding * 2 - 20, 18)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = textPrimary();
+    tl.textColor = WPT1();
     [group addSubview:tl];
     [tl release];
     
     UILabel *hl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 22, gw - kCellHPadding * 2 - 20, 14)];
     hl.text = hint;
     hl.font = [UIFont systemFontOfSize:12];
-    hl.textColor = textSecondary();
+    hl.textColor = WPT2();
     [group addSubview:hl];
     [hl release];
     
@@ -345,7 +337,7 @@ static NSString *configPropertyForKey(NSString *key) {
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy, gw - kCellHPadding * 2, 16)];
     l.text = text.uppercaseString;
     l.font = [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold];
-    l.textColor = textSecondary();
+    l.textColor = WPT2();
     [group addSubview:l];
     [l release];
     return cy + 24;
@@ -356,7 +348,7 @@ static NSString *configPropertyForKey(NSString *key) {
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4, gw - kCellHPadding - 56, kRowH - 8)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = textPrimary();
+    tl.textColor = WPT1();
     [group addSubview:tl];
     [tl release];
 
@@ -377,7 +369,7 @@ static NSString *configPropertyForKey(NSString *key) {
     CGFloat pixelY = round(cy * scale) / scale;
     CGFloat onePixel = 1.0 / scale;
     UIView *sepView = [[UIView alloc] initWithFrame:CGRectMake(kCellHPadding, pixelY, gw - kCellHPadding, onePixel)];
-    sepView.backgroundColor = separatorColor();
+    sepView.backgroundColor = WPSepColor();
     [group addSubview:sepView];
     [sepView release];
     return cy + onePixel;
@@ -386,7 +378,7 @@ static NSString *configPropertyForKey(NSString *key) {
 - (UIView *)addExpandContainerInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w {
     CGFloat gw = w - kPad * 2;
     UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, cy, gw, 0)];
-    container.backgroundColor = cardBgColor();
+    container.backgroundColor = WPCardBg();
     [container setExpanded:YES animated:NO];
     [group addSubview:container];
     [container release];
