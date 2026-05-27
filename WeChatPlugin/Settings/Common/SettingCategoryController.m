@@ -27,9 +27,7 @@ static void configLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-// kRowH 由 WPCommonUI.h 提供 (extern)
-static const CGFloat kCardRadius = 10.0;
-static const CGFloat kCardPadding = 16.0;
+// kRowH/kPad/kRadius 由 WPCommonUI.h 提供 (extern)
 static const CGFloat kCellHPadding = 16.0;
 static char kExpandedAssociationKey;
 
@@ -160,9 +158,9 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (UIView *)addTableGroupAtY:(CGFloat)y width:(CGFloat)w {
-    UIView *group = [[UIView alloc] initWithFrame:CGRectMake(kCardPadding, y, w - kCardPadding * 2, 0)];
+    UIView *group = [[UIView alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 0)];
     group.backgroundColor = cardBgColor();
-    group.layer.cornerRadius = kCardRadius;
+    group.layer.cornerRadius = kRadius;
     if (@available(iOS 13.0, *)) group.layer.cornerCurve = kCACornerCurveContinuous;
     group.clipsToBounds = YES;
     [self.contentView addSubview:group];
@@ -178,7 +176,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addSectionHeader:(NSString *)text y:(CGFloat)y width:(CGFloat)w {
-    UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kCardPadding, y, w - kCardPadding * 2, 20)];
+    UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 20)];
     l.text = text.uppercaseString;
     l.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
     l.textColor = textSecondary();
@@ -188,7 +186,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addSectionFooter:(NSString *)text y:(CGFloat)y width:(CGFloat)w {
-    UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kCardPadding, y, w - kCardPadding * 2, 0)];
+    UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 0)];
     l.text = text;
     l.font = [UIFont systemFontOfSize:12];
     l.textColor = textTertiary();
@@ -200,7 +198,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addNavRowInGroup:(UIView *)group title:(NSString *)title subtitle:(NSString *)subtitle tag:(NSInteger)tag action:(SEL)action cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kCardPadding * 2;
+    CGFloat gw = w - kPad * 2;
     BOOL hasSubtitle = subtitle.length > 0;
     CGFloat titleY = hasSubtitle ? cy + 4 : cy;
     CGFloat titleH = hasSubtitle ? 18 : kRowH;
@@ -231,7 +229,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addSwitchRowInGroup:(UIView *)group title:(NSString *)title desc:(NSString *)desc key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kCardPadding * 2;
+    CGFloat gw = w - kPad * 2;
     CGFloat textW = gw - kCellHPadding * 2 - 70;
 
     CGFloat titleY = desc.length > 0 ? cy + 4 : cy + (kRowH - 18) / 2;
@@ -264,7 +262,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addSubSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kCardPadding * 2;
+    CGFloat gw = w - kPad * 2;
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy, gw - kCellHPadding * 2 - 70, kRowH)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
@@ -284,7 +282,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addInputRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value hint:(NSString *)hint cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kCardPadding * 2;
+    CGFloat gw = w - kPad * 2;
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy, 80, kRowH)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
@@ -311,7 +309,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addHintRowInGroup:(UIView *)group text:(NSString *)text cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kCardPadding * 2;
+    CGFloat gw = w - kPad * 2;
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy, gw - kCellHPadding * 2, 16)];
     l.text = text;
     l.font = [UIFont systemFontOfSize:12];
@@ -322,7 +320,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addButtonRowInGroup:(UIView *)group title:(NSString *)title hint:(NSString *)hint key:(NSString *)key cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kCardPadding * 2;
+    CGFloat gw = w - kPad * 2;
     
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4, gw - kCellHPadding * 2 - 20, 18)];
     tl.text = title;
@@ -360,7 +358,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addSubSectionLabelInGroup:(UIView *)group text:(NSString *)text cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kCardPadding * 2;
+    CGFloat gw = w - kPad * 2;
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy, gw - kCellHPadding * 2, 16)];
     l.text = text.uppercaseString;
     l.font = [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold];
@@ -371,7 +369,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addColorRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kCardPadding * 2;
+    CGFloat gw = w - kPad * 2;
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4, gw - kCellHPadding - 56, kRowH - 8)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
@@ -391,7 +389,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addSeparatorInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kCardPadding * 2;
+    CGFloat gw = w - kPad * 2;
     CGFloat scale = [UIScreen mainScreen].scale;
     CGFloat pixelY = round(cy * scale) / scale;
     CGFloat onePixel = 1.0 / scale;
@@ -403,7 +401,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (UIView *)addExpandContainerInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kCardPadding * 2;
+    CGFloat gw = w - kPad * 2;
     UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, cy, gw, 0)];
     container.backgroundColor = cardBgColor();
     [container setExpanded:YES animated:NO];

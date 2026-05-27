@@ -49,7 +49,7 @@ static void WPOtherViewDidLoad(id self, SEL _cmd) {
     id handler = [WeChatPluginSwitchHandler sharedInstance];
     for (NSUInteger i = 0; i < msgItems.count; i++) {
         if (i > 0) { WPAddSep(msgCard, mcy, w); mcy = round((mcy + 1.0 / scale) * scale) / scale; }
-        WPAddSwitchRow(msgCard, mcy, w, msgItems[i][0], msgItems[i][1], [msgItems[i][2] boolValue], handler);
+        WPAddSwitchRow(msgCard, mcy, w, msgItems[i][0], msgItems[i][1], [msgItems[i][2] boolValue], handler, NULL);
         mcy += kRowH;
     }
     CGRect mcf = msgCard.frame; mcf.size.height = mcy; msgCard.frame = mcf;
@@ -68,7 +68,7 @@ static void WPOtherViewDidLoad(id self, SEL _cmd) {
     ];
     for (NSUInteger i = 0; i < items.count; i++) {
         if (i > 0) { WPAddSep(card, cy, w); cy = round((cy + 1.0 / scale) * scale) / scale; }
-        WPAddSwitchRow(card, cy, w, items[i][0], items[i][1], [items[i][2] boolValue], handler);
+        WPAddSwitchRow(card, cy, w, items[i][0], items[i][1], [items[i][2] boolValue], handler, NULL);
         cy += kRowH;
     }
     CGRect cf = card.frame; cf.size.height = cy; card.frame = cf;

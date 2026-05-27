@@ -343,11 +343,9 @@
         }
     }
 
-    // Load separator
+    // Load separator — GIF check merged into loadSeparatorIcon
     if (![self loadSeparatorIcon]) {
-        if (![self loadSeparatorGIF]) {
-            [self loadSeparatorText];
-        }
+        [self loadSeparatorText];
     }
 
     self.leftAvatarView.image = opponentAvatar ?: [UIImage imageNamed:@"DefaultHead"];
@@ -497,6 +495,39 @@
 #pragma mark - Separator
 
 - (BOOL)loadSeparatorIcon {
+    // 1. 优先检查 GIF 文件路径
+    NSString *gifPath = [[NSUserDefaults standardUserDefaults]
+        stringForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
+    if (gifPath.length && [[NSFileManager defaultManager] fileExistsAtPath:gifPath]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSData *data = [NSData dataWithContentsOfFile:gifPath];
+            UIImage *gifImage = [UIImage imageWithData:data];
+            if (gifImage) {
+                self.separatorView.image = gifImage;
+                self.separatorView.hidden = NO;
+                [self.separatorView sizeToFit];
+            }
+        });
+        return YES;
+    }
+
+    // 2. 检查静态图标文件路径
+    NSString *iconPath = [[NSUserDefaults standardUserDefaults]
+        stringForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
+    if (iconPath.length && [[NSFileManager defaultManager] fileExistsAtPath:iconPath]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSData *data = [NSData dataWithContentsOfFile:iconPath];
+            UIImage *icon = [UIImage imageWithData:data];
+            if (icon) {
+                self.separatorView.image = icon;
+                self.separatorView.hidden = NO;
+                [self.separatorView sizeToFit];
+            }
+        });
+        return YES;
+    }
+
+    // 3. 兼容旧 NSData 格式
     NSData *iconData = [[NSUserDefaults standardUserDefaults]
         dataForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
     if (iconData) {
@@ -522,23 +553,18 @@
     }
 }
 
-- (BOOL)loadSeparatorGIF {
-    NSData *gifData = [[NSUserDefaults standardUserDefaults]
-        dataForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
-    if (gifData) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            UIImage *gifImage = [UIImage imageWithData:gifData];
-            self.separatorView.image = gifImage;
-            self.separatorView.hidden = NO;
-            [self.separatorView sizeToFit];
-            self.separatorView.userInteractionEnabled = YES;
-        });
-        return YES;
-    }
-    return NO;
-}
-
 #pragma mark - Helpers
+
+- (UIViewController *)findViewController {
+    UIResponder *responder = self;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            return (UIViewController *)responder;
+        }
+        responder = [responder nextResponder];
+    }
+    return (UIViewController *)self.chatController;
+}
 
 - (void)updateFontSizes {
     PluginConfig *config = [PluginConfig shared];

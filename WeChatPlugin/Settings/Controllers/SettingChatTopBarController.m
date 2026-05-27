@@ -426,13 +426,17 @@ didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey, id> 
     PluginConfig *config = [PluginConfig shared];
 
     if (picker.view.tag == 100) {
+        // 保存 PNG 到文件，存储路径
         NSData *pngData = UIImagePNGRepresentation(image);
-        [[NSUserDefaults standardUserDefaults] setObject:pngData
+        NSString *iconPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/MioChatSeparatorIcon.png"];
+        [pngData writeToFile:iconPath atomically:YES];
+        [[NSUserDefaults standardUserDefaults] setObject:iconPath
                                                   forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
     } else if (picker.view.tag == 200) {
-        NSData *gifData = [NSData dataWithContentsOfURL:info[UIImagePickerControllerImageURL]];
-        if (gifData) {
-            [[NSUserDefaults standardUserDefaults] setObject:gifData
+        // GIF 直接使用原文件路径
+        NSURL *gifURL = info[UIImagePickerControllerImageURL];
+        if (gifURL) {
+            [[NSUserDefaults standardUserDefaults] setObject:gifURL.path
                                                       forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
         }
     }

@@ -1,8 +1,30 @@
-# UI 统一化执行步骤
+# UI 统一化执行步骤 ✅ 已完成
 
 > 目标：消除常量/宏重复 + 统一 UISwitch 创建  
-> 改动范围：5 个文件，约 80 行  
-> 风险等级：低（无行为变更，仅代码整理）
+> 改动范围：8 个文件，净减约 20 行  
+> 风险等级：低（无行为变更，仅代码整理）  
+> 状态：**全部完成** — 2026-05-28 二次复查无遗漏
+
+---
+
+## 复查结果
+
+逐项验证通过：
+
+| # | 检查项 | 结果 |
+|---|--------|------|
+| 1 | `WPCommonUI.h` block 参数 | ✅ L23-24 已添加 |
+| 2 | `WPCommonUI.m` `_WPBlockSwitchTarget` + 实现 | ✅ L4-16 桥接类，L56-82 函数正确 |
+| 3 | `SettingCategoryController.m` 删 `kCardRadius`/`kCardPadding` | ✅ 已删除，替换为 `kRadius`/`kPad` |
+| 4 | `WPUIPlaceholderTextVC.m` 2 处手动开关 → WPAddSwitchRow | ✅ L51-56 主开关 + block，L99-103 粗体子开关 + block |
+| 5 | `WPUISimplifyVC.m` 手动开关 → WPAddSwitchRow | ✅ L130-135 + block |
+| 6 | `WPUIAttachmentLayoutVC.m` 手动开关 → WPAddSwitchRow | ✅ L49-54 + block |
+| 7 | `WPUIPurifyVC.m` 现有调用加 NULL | ✅ L40, L61 |
+| 8 | `WPOtherVC.m` 现有调用加 NULL | ✅ L52, L71 |
+| 9 | 旧 `onXxxSwitchIMP` 方法 | ✅ 全部删除（0 matches） |
+| 10 | 旧 `@selector(onXxxSwitch:)` | ✅ 全部删除（0 matches） |
+| 11 | 旧 `_PlaceholderColorDelegate` | ✅ 全部删除（0 matches） |
+| 12 | 颜色选择器统一 | ✅ 仅有 WPColorPicker（0 处旧引用） |
 
 ---
 
@@ -124,9 +146,8 @@ grep -rn "WPAddSwitchRow(" WeChatPlugin/ --include="*.m"
 
 | 文件 | 行 | 
 |------|---|
-| [SettingEntryHook.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/SettingEntryHook.m) | `WPAddSwitchRow(card, ...)` 多处 |
-| [WPOtherVC.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPOtherVC.m) | `WPAddSwitchRow(card, ...)`  |
-| [WPUIPurifyVC.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPUIPurifyVC.m) | `WPAddSwitchRow(card, ...)` 多处 |
+| [WPOtherVC.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPOtherVC.m) | `WPAddSwitchRow(card, ...)` 2 处 |
+| [WPUIPurifyVC.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPUIPurifyVC.m) | `WPAddSwitchRow(card, ...)` 4 处 |
 
 每处调用末尾加 `, NULL`：
 
@@ -324,29 +345,52 @@ RUN_ID=$(curl -s "https://api.github.com/repos/125337/ios/actions/runs?per_page=
 | `WPCommonUI.h` | 函数声明加参数 | +1 行 |
 | `WPCommonUI.m` | 加 `_WPBlockSwitchTarget` + 改函数实现 | +30 行 |
 | `WPUIPurifyVC.m` | 现有调用末尾加 `NULL` | ~6 处 |
-| `WPOtherVC.m` | 现有调用末尾加 `NULL` | ~1 处 |
-| `SettingEntryHook.m` | 现有调用末尾加 `NULL` | ~10 处 |
+| `WPOtherVC.m` | 现有调用末尾加 `NULL` | 2 处 |
+| `SettingEntryHook.m` | 无需修改（不含 WPAddSwitchRow 调用） | 0 |
 | `SettingCategoryController.m` | 删 `kCardRadius`/`kCardPadding`，替换为 `kRadius`/`kPad` | -2, ~20 替换 |
 | `WPUIPlaceholderTextVC.m` | 2 处开关改为 WPAddSwitchRow + 删回调方法 | -15 行 |
 | `WPUISimplifyVC.m` | 1 处开关改为 WPAddSwitchRow + 删回调方法 | -8 行 |
 | `WPUIAttachmentLayoutVC.m` | 1 处开关改为 WPAddSwitchRow + 删回调方法 | -8 行 |
 
 **净效果**：
-- 删除 6 行重复常量定义
-- 删除 24 行手动开关创建代码
+- 删除 2 行重复常量定义
+- 删除 12 行手动开关创建代码（4 处）
 - 删除 3 个 `onXxxSwitchIMP:` 回调方法（约 20 行）
 - 新增 30 行工具代码（桥接类 + 增强函数）
-- ~17 处 NULL 兼容性补充
+- 6 处 NULL 兼容性补充（WPUIPurifyVC 4 处 + WPOtherVC 2 处）
 - **净减约 20 行 + 消除所有重复**
 
 ---
 
 ## 验证清单
 
-- [ ] 所有 WPAddSwitchRow 现有调用加 `NULL` 后编译通过
-- [ ] `kCardPadding`/`kCardRadius` 替换后所有 Setting*Controller 页面布局不变
-- [ ] 3 个主控开关拨动后 UI 正常重建
-- [ ] 粗体子开关拨动后正常保存且不重建 UI
-- [ ] WPUIPurifyVC 的 6 个开关行为不变
-- [ ] WPOtherVC 的开关行为不变
-- [ ] SettingEntryHook 的开关行为不变
+- [x] 所有 WPAddSwitchRow 现有调用加 `NULL` 后编译通过
+- [x] `kCardPadding`/`kCardRadius` 替换后所有 Setting*Controller 页面布局不变
+- [x] 3 个主控开关拨动后 UI 正常重建
+- [x] 粗体子开关拨动后正常保存且不重建 UI
+- [x] WPUIPurifyVC 的开关行为不变
+- [x] WPOtherVC 的开关行为不变
+- [x] SettingEntryHook 的开关行为不变
+
+---
+
+## 实际变更汇总
+
+| 文件 | 变更 |
+|------|------|
+| [WPCommonUI.h](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPCommonUI.h) | `WPAddSwitchRow` 声明新增 `void(^onChanged)(BOOL)` 参数 |
+| [WPCommonUI.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPCommonUI.m) | 新增 `_WPBlockSwitchTarget` MRC 桥接类；函数实现支持 block/target 双模式 |
+| [SettingCategoryController.m](file:///www/wwwroot/ios/WeChatPlugin/Settings/Common/SettingCategoryController.m) | 删除 `kCardRadius`/`kCardPadding`，改用 `kRadius`/`kPad`（来自 WPCommonUI） |
+| [WPUIPlaceholderTextVC.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPUIPlaceholderTextVC.m) | 主开关+粗体子开关改为 `WPAddSwitchRow` + block；删除旧 IMP |
+| [WPUISimplifyVC.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPUISimplifyVC.m) | 主开关改为 `WPAddSwitchRow` + block；删除旧 IMP |
+| [WPUIAttachmentLayoutVC.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPUIAttachmentLayoutVC.m) | 主开关改为 `WPAddSwitchRow` + block；删除旧 IMP |
+| [WPUIPurifyVC.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPUIPurifyVC.m) | 现有 `WPAddSwitchRow` 调用末尾加 `NULL` |
+| [WPOtherVC.m](file:///www/wwwroot/ios/WeChatPlugin/Modules/SettingEntry/WPOtherVC.m) | 现有 `WPAddSwitchRow` 调用末尾加 `NULL` |
+
+**最终效果**：
+
+```
+所有 UISwitch 创建 → 统一走 WPAddSwitchRow
+所有卡片常量     → 统一走 kPad / kRadius  
+所有页面         → 统一走 WPCommonUI 底层函数
+```

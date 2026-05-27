@@ -46,18 +46,12 @@ static void WPUIAttachLayoutBuildUI(id self, SEL _cmd) {
     UIView *switchCard = WPMakeCard(y, w);
     CGFloat scy = 0;
 
-    UILabel *swLabel = [[UILabel alloc] initWithFrame:CGRectMake(kPad, scy, w - kPad * 2 - 70, kRowH)];
-    swLabel.text = @"附件布局优化";
-    swLabel.font = [UIFont systemFontOfSize:15];
-    swLabel.textColor = WPT1();
-    [switchCard addSubview:swLabel];
-
-    UISwitch *sw = [[UISwitch alloc] init];
-    sw.on = enabled;
-    sw.onTintColor = WPSwOn();
-    sw.frame = CGRectMake(w - kPad * 3 - 51, scy + 6.5, 51, 31);
-    [sw addTarget:(id)self action:@selector(onAttachLayoutSwitch:) forControlEvents:UIControlEventValueChanged];
-    [switchCard addSubview:sw];
+    WPAddSwitchRow(switchCard, scy, w, @"附件布局优化", kAttachLayoutEnabledKey, enabled, nil,
+        ^(BOOL isOn) {
+            [[NSUserDefaults standardUserDefaults] setBool:isOn forKey:kAttachLayoutEnabledKey];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+            WPUIAttachLayoutBuildUI(self, NULL);
+        });
     scy += kRowH;
 
     CGRect scf = switchCard.frame; scf.size.height = scy; switchCard.frame = scf;
@@ -126,18 +120,6 @@ static void WPUIAttachLayoutBuildUI(id self, SEL _cmd) {
 }
 
 
-#pragma mark - ========== 开关响应 ==========
-
-static void onAttachLayoutSwitchIMP(id self, SEL _cmd, UISwitch *sender) {
-    [[NSUserDefaults standardUserDefaults] setBool:sender.on forKey:kAttachLayoutEnabledKey];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-    WPLog(@"UI", @"[AttachLayout] Toggle=%d, rebuilding UI", sender.on);
-
-    // 与界面简化一致：开关切换时调用 buildUI 完全重建
-    WPUIAttachLayoutBuildUI(self, _cmd);
-}
-
-
 #pragma mark - ========== Helper ==========
 
 @interface WPUIAttachLayoutVCHelper : NSObject
@@ -152,7 +134,6 @@ static void onAttachLayoutSwitchIMP(id self, SEL _cmd, UISwitch *sender) {
         subClass = objc_allocateClassPair(WPGetBaseClass(), "WPUIAttachLayoutVC", 0);
         if (subClass) {
             class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPUIAttachLayoutViewDidLoad, "v@:");
-            class_addMethod(subClass, NSSelectorFromString(@"onAttachLayoutSwitch:"), (IMP)onAttachLayoutSwitchIMP, "v@:@");
             objc_registerClassPair(subClass);
             WPLog(@"UI", @"[Sub] WPUIAttachLayoutVC class created");
         } else {

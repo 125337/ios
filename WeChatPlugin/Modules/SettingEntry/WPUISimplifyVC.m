@@ -127,18 +127,12 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
     UIView *switchCard = WPMakeCard(y, w);
     CGFloat scy = 0;
 
-    UILabel *swLabel = [[UILabel alloc] initWithFrame:CGRectMake(kPad, scy, w - kPad * 2 - 70, kRowH)];
-    swLabel.text = @"界面名称简化";
-    swLabel.font = [UIFont systemFontOfSize:15];
-    swLabel.textColor = WPT1();
-    [switchCard addSubview:swLabel];
-
-    UISwitch *sw = [[UISwitch alloc] init];
-    sw.on = enabled;
-    sw.onTintColor = WPSwOn();
-    sw.frame = CGRectMake(w - kPad * 3 - 51, scy + 6.5, 51, 31);
-    [sw addTarget:(id)self action:@selector(onSimplifySwitch:) forControlEvents:UIControlEventValueChanged];
-    [switchCard addSubview:sw];
+    WPAddSwitchRow(switchCard, scy, w, @"界面名称简化", kSimplifyEnabledKey, enabled, nil,
+        ^(BOOL isOn) {
+            [[NSUserDefaults standardUserDefaults] setBool:isOn forKey:kSimplifyEnabledKey];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+            WPUISimplifyBuildUI(self, NULL);
+        });
     scy += kRowH;
 
     CGRect scf = switchCard.frame; scf.size.height = scy; switchCard.frame = scf;
@@ -299,18 +293,6 @@ static void WPUISimplifyBuildUI(id self, SEL _cmd) {
 }
 
 
-#pragma mark - ========== 开关响应 ==========
-
-static void onSimplifySwitchIMP(id self, SEL _cmd, UISwitch *sender) {
-    [[NSUserDefaults standardUserDefaults] setBool:sender.on forKey:kSimplifyEnabledKey];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-    WPLog(@"UI", @"[Toggle] SimplifyEnabled=%d, rebuilding UI", sender.on);
-
-    // 展开/关闭时完全重建界面，确保布局、scrollView contentSize 正确
-    WPUISimplifyBuildUI(self, _cmd);
-}
-
-
 #pragma mark - ========== viewWillDisappear ==========
 
 static void WPUISimplifyViewWillDisappear(id self, SEL _cmd, BOOL animated) {
@@ -335,7 +317,6 @@ static void WPUISimplifyViewWillDisappear(id self, SEL _cmd, BOOL animated) {
             // ⚠️ class_addMethod 必须在 objc_registerClassPair 之前
             class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPUISimplifyViewDidLoad, "v@:");
             class_addMethod(subClass, NSSelectorFromString(@"viewWillDisappear:"), (IMP)WPUISimplifyViewWillDisappear, "v@:B");
-            class_addMethod(subClass, NSSelectorFromString(@"onSimplifySwitch:"), (IMP)onSimplifySwitchIMP, "v@:@");
             objc_registerClassPair(subClass);
             WPLog(@"UI", @"[Sub] WPUISimplifyVC class created");
         } else {

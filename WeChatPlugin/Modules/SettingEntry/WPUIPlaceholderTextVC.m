@@ -48,18 +48,12 @@ static void WPUIPlaceholderTextBuildUI(id self, SEL _cmd) {
     UIView *switchCard = WPMakeCard(y, w);
     CGFloat scy = 0;
 
-    UILabel *swLabel = [[UILabel alloc] initWithFrame:CGRectMake(kPad, scy, w - kPad * 2 - 70, kRowH)];
-    swLabel.text = @"显示占位文本";
-    swLabel.font = [UIFont systemFontOfSize:15];
-    swLabel.textColor = WPT1();
-    [switchCard addSubview:swLabel];
-
-    UISwitch *sw = [[UISwitch alloc] init];
-    sw.on = enabled;
-    sw.onTintColor = WPSwOn();
-    sw.frame = CGRectMake(w - kPad * 3 - 51, scy + 6.5, 51, 31);
-    [sw addTarget:(id)self action:@selector(onPlaceholderSwitch:) forControlEvents:UIControlEventValueChanged];
-    [switchCard addSubview:sw];
+    WPAddSwitchRow(switchCard, scy, w, @"显示占位文本", kPlaceholderTextEnabledKey, enabled, nil,
+        ^(BOOL isOn) {
+            [[NSUserDefaults standardUserDefaults] setBool:isOn forKey:kPlaceholderTextEnabledKey];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+            WPUIPlaceholderTextBuildUI(self, NULL);
+        });
     scy += kRowH;
 
     CGRect scf = switchCard.frame; scf.size.height = scy; switchCard.frame = scf;
@@ -102,18 +96,11 @@ static void WPUIPlaceholderTextBuildUI(id self, SEL _cmd) {
         ccy = round((ccy + 1.0 / scale) * scale) / scale;
 
         BOOL boldOn = [d boolForKey:@"PlaceholderText_Bold"];
-        UILabel *boldLabel = [[UILabel alloc] initWithFrame:CGRectMake(kPad, ccy, w - kPad * 2 - 70, kRowH)];
-        boldLabel.text = @"使用粗体文字";
-        boldLabel.font = [UIFont systemFontOfSize:15];
-        boldLabel.textColor = WPT1();
-        [contentCard addSubview:boldLabel];
-
-        UISwitch *boldSw = [[UISwitch alloc] init];
-        boldSw.on = boldOn;
-        boldSw.onTintColor = WPSwOn();
-        boldSw.frame = CGRectMake(w - kPad * 3 - 51, ccy + 6.5, 51, 31);
-        [boldSw addTarget:(id)self action:@selector(onBoldFontSwitch:) forControlEvents:UIControlEventValueChanged];
-        [contentCard addSubview:boldSw];
+        WPAddSwitchRow(contentCard, ccy, w, @"使用粗体文字", @"PlaceholderText_Bold", boldOn, nil,
+            ^(BOOL isOn) {
+                [[NSUserDefaults standardUserDefaults] setBool:isOn forKey:@"PlaceholderText_Bold"];
+                [[NSUserDefaults standardUserDefaults] synchronize];
+            });
         ccy += kRowH;
     }
 
@@ -177,22 +164,6 @@ static void WPUIPlaceholderTextBuildUI(id self, SEL _cmd) {
     WPLog(@"UI", @"[Sub] WPUIPlaceholderTextBuildUI done (enabled=%d)", enabled);
 }
 
-
-#pragma mark - ========== 开关响应 ==========
-
-static void onPlaceholderSwitchIMP(id self, SEL _cmd, UISwitch *sender) {
-    [[NSUserDefaults standardUserDefaults] setBool:sender.on forKey:kPlaceholderTextEnabledKey];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-    WPLog(@"UI", @"[Placeholder] Toggle=%d, rebuilding UI", sender.on);
-    WPUIPlaceholderTextBuildUI(self, _cmd);
-}
-
-static void onBoldFontSwitchIMP(id self, SEL _cmd, UISwitch *sender) {
-    [[NSUserDefaults standardUserDefaults] setBool:sender.on forKey:@"PlaceholderText_Bold"];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-    WPLog(@"UI", @"[Placeholder] Bold=%d", sender.on);
-}
-
 /// 颜色按钮点击 → 使用统一颜色选择器
 static void onPlaceholderColorTapIMP(id self, SEL _cmd, UIButton *sender) {
     UIViewController *vc = (UIViewController *)self;
@@ -222,8 +193,6 @@ static void onPlaceholderColorTapIMP(id self, SEL _cmd, UIButton *sender) {
         subClass = objc_allocateClassPair(WPGetBaseClass(), "WPUIPlaceholderTextVC", 0);
         if (subClass) {
             class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPUIPlaceholderTextViewDidLoad, "v@:");
-            class_addMethod(subClass, NSSelectorFromString(@"onPlaceholderSwitch:"), (IMP)onPlaceholderSwitchIMP, "v@:@");
-            class_addMethod(subClass, NSSelectorFromString(@"onBoldFontSwitch:"), (IMP)onBoldFontSwitchIMP, "v@:@");
             class_addMethod(subClass, NSSelectorFromString(@"onPlaceholderColorTap:"), (IMP)onPlaceholderColorTapIMP, "v@:@");
             objc_registerClassPair(subClass);
             WPLog(@"UI", @"[Sub] WPUIPlaceholderTextVC class created");

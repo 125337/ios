@@ -345,7 +345,7 @@
     if (_chatAvatarSize == 0) _chatAvatarSize = 30.0;
 
     _chatAvatarSpacing = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarSpacing"]];
-    if (_chatAvatarSpacing == 0) _chatAvatarSpacing = 3.0;
+    if (_chatAvatarSpacing == 0) _chatAvatarSpacing = 6.0;
 
     _chatAvatarCornerRadius = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarCornerRadius"]];
     if (_chatAvatarCornerRadius == 0) _chatAvatarCornerRadius = 100.0;
