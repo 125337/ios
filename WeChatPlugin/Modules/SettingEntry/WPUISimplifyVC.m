@@ -2,6 +2,7 @@
 #import "SettingEntryHook.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/WeChatRestartHelper.h"
+#import "../../Config/PluginConfig.h"
 #import <objc/runtime.h>
 
 /// ========== 配置读取辅助 ==========
@@ -65,7 +66,19 @@ static inline NSString *SStr(NSString *key) {
             }
         }
         [d synchronize];
-        
+
+        // PluginConfig 保存分支（Setting*Controller 迁移用）
+        NSString *configKey = objc_getAssociatedObject(sender, "editConfigKey");
+        if (configKey) {
+            PluginConfig *config = [PluginConfig shared];
+            @try {
+                [config setValue:@([newText floatValue]) forKey:configKey];
+            } @catch (NSException *e) {
+                [config setValue:newText forKey:configKey];
+            }
+            [config save];
+        }
+
         // 仅标记了 needsRestart 的行（界面简化）保存后立即弹重启
         if (needsRestart && weakTopVC) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),

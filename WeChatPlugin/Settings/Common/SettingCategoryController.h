@@ -6,7 +6,6 @@ Class SettingCategoryBaseClass(void);
 @interface SettingCategoryController : UIViewController
 @property (nonatomic, retain) UIScrollView *scrollView;
 @property (nonatomic, retain) UIView *contentView;
-@property (nonatomic, retain) NSMutableDictionary<NSString *, UITextField *> *inputFields;
 @property (nonatomic, copy) NSString *categoryName;
 @property (nonatomic, retain) NSMutableSet<NSString *> *masterSwitchKeys;
 
@@ -27,7 +26,6 @@ Class SettingCategoryBaseClass(void);
 - (CGFloat)finishExpandContainer:(UIView *)container currentCy:(CGFloat)cy;
 - (CGFloat)addMasterSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on subBuilder:(void (^)(UIView *expand, CGFloat *ecy))subBuilder cy:(CGFloat)cy width:(CGFloat)w;
 - (void)switchChanged:(UISwitch *)sender;
-- (void)autoSaveTextField:(UITextField *)tf;
 - (void)buttonClicked:(NSString *)key;
 - (void)buildUI;
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection;

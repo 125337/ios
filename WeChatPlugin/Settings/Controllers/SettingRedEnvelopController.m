@@ -163,34 +163,4 @@
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
 
-- (void)autoSaveTextField:(UITextField *)tf {
-    NSString *key = objc_getAssociatedObject(tf, "key");
-    if (!key) return;
-    NSString *value = tf.text.length > 0 ? tf.text : nil;
-    PluginConfig *config = [PluginConfig shared];
-    @try {
-        if ([key isEqualToString:@"RedEnvelopDelay"]) {
-            NSInteger v = [value integerValue];
-            config.redEnvelopDelay = v >= 0 ? (unsigned int)v : 0;
-        } else if ([key isEqualToString:@"RedEnvelopTextFilter"]) {
-            config.redEnvelopTextFilter = value ?: @"";
-        } else if ([key isEqualToString:@"RedEnvelopAutoReplyStr"]) {
-            config.redEnvelopAutoReplyStr = value ?: @"谢谢老板";
-        } else if ([key isEqualToString:@"AutoConfirmTransferDelay"]) {
-            NSInteger v = [value integerValue];
-            config.autoConfirmTransferDelay = v >= 0 ? (unsigned int)v : 0;
-        } else if ([key isEqualToString:@"AutoConfirmTransferMaxAmount"]) {
-            config.autoConfirmTransferMaxAmount = [value longLongValue];
-        } else if ([key isEqualToString:@"AutoConfirmTransferAutoReplyStr"]) {
-            config.autoConfirmTransferAutoReplyStr = value ?: @"已收到款项，谢谢！";
-        } else {
-            [super autoSaveTextField:tf];
-            return;
-        }
-    } @catch (NSException *e) {
-        return;
-    }
-    [config save];
-}
-
 @end

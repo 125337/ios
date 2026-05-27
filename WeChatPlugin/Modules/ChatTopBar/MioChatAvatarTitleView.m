@@ -53,7 +53,7 @@
     [ra release];
     [ra setContentMode:UIViewContentModeScaleAspectFill];
     [ra setTag:2];
-    [ra setClipsToBounds:NO];
+    [ra setClipsToBounds:YES];
     [ra setUserInteractionEnabled:YES];
     UITapGestureRecognizer *rightTap = [[UITapGestureRecognizer alloc]
         initWithTarget:self action:@selector(onRightAvatarTapped:)];

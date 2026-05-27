@@ -149,7 +149,6 @@ static NSString *configPropertyForKey(NSString *key) {
         self.contentView = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 2000)] autorelease];
         [self.scrollView addSubview:self.contentView];
         
-        self.inputFields = [NSMutableDictionary dictionary];
         self.masterSwitchKeys = [NSMutableSet set];
         WPLog(@"Config", @"[UI] SettingCategoryController viewDidLoad 完成");
     } @catch (NSException *e) {
@@ -176,10 +175,13 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addSectionHeader:(NSString *)text y:(CGFloat)y width:(CGFloat)w {
-    UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 20)];
+    UILabel *l = WPMakeSectionHeader(text, y, w);
     l.text = text.uppercaseString;
-    l.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
-    l.textColor = textSecondary();
+    // WPMakeSectionHeader 默认 x=kPad+4, w=w-kPad*2-8，适配 Setting*Controller 布局
+    CGRect f = l.frame;
+    f.origin.x = kPad;
+    f.size.width = w - kPad * 2;
+    l.frame = f;
     [self.contentView addSubview:l];
     [l release];
     return y + 32;
@@ -282,29 +284,11 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addInputRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value hint:(NSString *)hint cy:(CGFloat)cy width:(CGFloat)w {
-    CGFloat gw = w - kPad * 2;
-    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy, 80, kRowH)];
-    tl.text = title;
-    tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = textPrimary();
-    [group addSubview:tl];
-    [tl release];
-
-    UITextField *tf = [[UITextField alloc] initWithFrame:CGRectMake(kCellHPadding + 84, cy, gw - kCellHPadding * 2 - 94, kRowH)];
-    tf.font = [UIFont systemFontOfSize:14];
-    tf.textColor = textSecondary();
-    tf.placeholder = hint;
-    tf.text = value;
-    tf.textAlignment = NSTextAlignmentRight;
-    tf.returnKeyType = UIReturnKeyDone;
-    tf.clearButtonMode = UITextFieldViewModeWhileEditing;
-    [tf addTarget:self action:@selector(textFieldChanged:) forControlEvents:UIControlEventEditingChanged];
-    [tf addTarget:self action:@selector(textFieldDone:) forControlEvents:UIControlEventEditingDidEndOnExit];
-    [tf addTarget:self action:@selector(textFieldDone:) forControlEvents:UIControlEventEditingDidEnd];
-    objc_setAssociatedObject(tf, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [group addSubview:tf];
-    [tf release];
-    self.inputFields[key] = tf;
+    id handler = [objc_getClass("WeChatPluginSwitchHandler") sharedInstance];
+    NSString *displayValue = (value && value.length > 0) ? value : hint;
+    UIButton *row = WPAddEditableRowWithArrow(group, cy, w, title, displayValue, handler);
+    objc_setAssociatedObject(row, "editConfigKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (hint) objc_setAssociatedObject(row, "editConfigHint", hint, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     return cy + kRowH;
 }
 
@@ -479,16 +463,16 @@ static NSString *configPropertyForKey(NSString *key) {
     }
 }
 
-- (void)textFieldChanged:(UITextField *)tf {
-    [self autoSaveTextField:tf];
+- (void)textFieldDone:(UITextField *)tf {
+    [tf resignFirstResponder];
 }
 
 - (void)colorButtonTapped:(UIButton *)sender {
     NSString *key = objc_getAssociatedObject(sender, "key");
     if (!key) return;
-    
+
     UIColor *currentColor = sender.backgroundColor ?: [UIColor grayColor];
-    
+
     [WPColorPicker presentOnViewController:self
                              currentColor:currentColor
                              sourceButton:sender
@@ -502,45 +486,6 @@ static NSString *configPropertyForKey(NSString *key) {
             [[NSUserDefaults standardUserDefaults] synchronize];
         }
     }];
-}
-
-- (void)textFieldDone:(UITextField *)tf {
-    [tf resignFirstResponder];
-    [self autoSaveTextField:tf];
-}
-
-- (void)autoSaveTextField:(UITextField *)tf {
-    NSString *key = objc_getAssociatedObject(tf, "key");
-    if (!key) return;
-    NSString *value = tf.text.length > 0 ? tf.text : nil;
-    PluginConfig *config = [PluginConfig shared];
-    @try {
-        if ([key isEqualToString:@"NotifyFormat"]) config.notifyFormat = value ?: kDefaultNotifyFormat;
-        else if ([key isEqualToString:@"DateFormat"]) config.dateFormat = value ?: kDefaultDateFormat;
-        else if ([key isEqualToString:@"CustomText"]) config.customText = value;
-        else if ([key isEqualToString:@"InterceptNotifyTemplate"]) config.interceptNotifyTemplate = value ?: kDefaultInterceptTemplate;
-        else if ([key isEqualToString:@"CustomNotifyFormat"]) config.customNotifyFormat = value ?: kDefaultCustomNotifyFormat;
-        else if ([key isEqualToString:@"RevokeTemplate"]) config.revokeTemplate = value ?: kDefaultRevokeTemplate;
-        else if ([key isEqualToString:@"NotifySenderTemplate"]) config.notifySenderTemplate = value ?: kDefaultNotifySenderTemplate;
-        else if ([key isEqualToString:@"NameColorHex"]) config.nameColorHex = value ?: kDefaultNameColor;
-        else if ([key isEqualToString:@"TimeColorHex"]) config.timeColorHex = value ?: kDefaultTimeColor;
-        else if ([key isEqualToString:@"ContentColorHex"]) config.contentColorHex = value ?: kDefaultContentColor;
-        else if ([key isEqualToString:@"DarkNameColorHex"]) config.darkNameColorHex = value ?: kDefaultDarkNameColor;
-        else if ([key isEqualToString:@"DarkTimeColorHex"]) config.darkTimeColorHex = value ?: kDefaultDarkTimeColor;
-        else if ([key isEqualToString:@"DarkContentColorHex"]) config.darkContentColorHex = value ?: kDefaultDarkContentColor;
-        else if ([key isEqualToString:@"MessageTimeFontSize"]) config.messageTimeFontSize = [value floatValue] > 0 ? [value floatValue] : 11.0;
-        else if ([key isEqualToString:@"MessageTimeFormat"]) config.messageTimeFormat = value ?: @"HH:mm";
-        else if ([key isEqualToString:@"MessageTimePosition"]) config.messageTimePosition = [value integerValue];
-        else if ([key isEqualToString:@"MessageTimeOffsetX"]) config.messageTimeOffsetX = [value floatValue];
-        else if ([key isEqualToString:@"MessageTimeOffsetY"]) config.messageTimeOffsetY = [value floatValue];
-        else if ([key isEqualToString:@"MessageTimeTextColor"]) config.messageTimeTextColor = value ?: @"#999999";
-        else if ([key isEqualToString:@"MessageTimeBubbleExtWidth"]) config.messageTimeBubbleExtWidth = [value floatValue];
-        else if ([key isEqualToString:@"NotifySenderCooldown"]) config.notifySenderCooldown = [value doubleValue];
-        
-    } @catch (NSException *e) {
-        return;
-    }
-    [config save];
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
@@ -565,7 +510,6 @@ static NSString *configPropertyForKey(NSString *key) {
 - (void)dealloc {
     [_scrollView release];
     [_contentView release];
-    [_inputFields release];
     [_categoryName release];
     [_masterSwitchKeys release];
     [super dealloc];
