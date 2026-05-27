@@ -1,149 +1,66 @@
-#import "WPCommonUI.h"
+#import "../../Settings/Common/SettingCategoryController.h"
+#import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
 
-static NSString *const kAttachLayoutEnabledKey = @"AttachLayoutEnabled";
-
-/// ========== buildUI ==========
-static void WPUIAttachLayoutBuildUI(id self, SEL _cmd);
-
-#pragma mark - ========== viewDidLoad ==========
-
-static void WPUIAttachLayoutViewDidLoad(id self, SEL _cmd) {
-    Class uiVC = objc_getClass("UIViewController");
-    Method m = class_getInstanceMethod(uiVC, _cmd);
-    if (m) ((void (*)(id, SEL))method_getImplementation(m))(self, _cmd);
-
-    UIViewController *vc = (UIViewController *)self;
-    vc.title = @"附件布局优化";
-
-    WPUIAttachLayoutBuildUI(self, _cmd);
-}
-
-#pragma mark - ========== buildUI ==========
-
-static void WPUIAttachLayoutBuildUI(id self, SEL _cmd) {
-    UIViewController *vc = (UIViewController *)self;
-    CGFloat w = vc.view.bounds.size.width;
-    CGFloat scale = [UIScreen mainScreen].scale;
-    id handler = [objc_getClass("WeChatPluginSwitchHandler") sharedInstance];
-    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    BOOL enabled = [d boolForKey:kAttachLayoutEnabledKey];
-
-    // 清除旧的 scrollView，重新创建
-    UIView *oldSV = objc_getAssociatedObject(self, "buildUISV");
-    [oldSV removeFromSuperview];
-
-    UIScrollView *sv = WPMakeSV(vc);
-    [vc.view addSubview:sv];
-    objc_setAssociatedObject(self, "buildUISV", sv, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    CGFloat y = 8;
-
-    // ========== 总开关 ==========
-    [sv addSubview:WPMakeSectionHeader(@"附件布局优化", y, w)];
-    y += 32;
-
-    UIView *switchCard = WPMakeCard(y, w);
-    CGFloat scy = 0;
-
-    WPAddSwitchRow(switchCard, scy, w, @"附件布局优化", kAttachLayoutEnabledKey, enabled, nil,
-        ^(BOOL isOn) {
-            [[NSUserDefaults standardUserDefaults] setBool:isOn forKey:kAttachLayoutEnabledKey];
-            [[NSUserDefaults standardUserDefaults] synchronize];
-            WPUIAttachLayoutBuildUI(self, NULL);
-        });
-    scy += kRowH;
-
-    CGRect scf = switchCard.frame; scf.size.height = scy; switchCard.frame = scf;
-    [sv addSubview:switchCard];
-    y += scy + 8;
-
-    // 关闭状态：只显示开关卡片
-    if (!enabled) {
-        UILabel *footer = [[UILabel alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 40)];
-        footer.text = @"修改后将在下次启动时生效";
-        footer.font = [UIFont systemFontOfSize:12];
-        footer.textColor = WPT3();
-        footer.textAlignment = NSTextAlignmentCenter;
-        [sv addSubview:footer];
-        y += 48;
-        sv.contentSize = CGSizeMake(w, y);
-        WPLog(@"UI", @"[Sub] WPUIAttachLayoutBuildUI done (enabled=0, switch only)");
-        return;
-    }
-
-    // ========== 子功能：布局设置 ==========
-    UILabel *secHeader = WPMakeSectionHeader(@"布局设置", y, w);
-    [sv addSubview:secHeader];
-    y += 32;
-
-    UIView *layoutCard = WPMakeCard(y, w);
-    CGFloat lcy = 0;
-
-    NSString *colsKey = @"AttachLayout_Columns";
-    NSString *rowsKey = @"AttachLayout_Rows";
-    NSString *colsVal = [d stringForKey:colsKey] ?: @"";
-    NSString *rowsVal = [d stringForKey:rowsKey] ?: @"";
-
-    // 每行列数
-    {
-        UIButton *row = WPAddEditableRowWithArrow(layoutCard, lcy, w, @"每行列数", colsVal, handler);
-        objc_setAssociatedObject(row, "editNSKey", colsKey, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        objc_setAssociatedObject(row, "editDefault", @"", OBJC_ASSOCIATION_COPY_NONATOMIC);
-        lcy += kRowH;
-    }
-    // 显示行数
-    {
-        WPAddSep(layoutCard, lcy, w);
-        lcy = round((lcy + 1.0 / scale) * scale) / scale;
-        UIButton *row = WPAddEditableRowWithArrow(layoutCard, lcy, w, @"显示行数", rowsVal, handler);
-        objc_setAssociatedObject(row, "editNSKey", rowsKey, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        objc_setAssociatedObject(row, "editDefault", @"", OBJC_ASSOCIATION_COPY_NONATOMIC);
-        lcy += kRowH;
-    }
-
-    CGRect lcf = layoutCard.frame; lcf.size.height = lcy; layoutCard.frame = lcf;
-    [sv addSubview:layoutCard];
-    y += lcy + 8;
-
-    // 提示文字
-    UILabel *footer = [[UILabel alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 40)];
-    footer.text = @"修改后将在下次启动时生效";
-    footer.font = [UIFont systemFontOfSize:12];
-    footer.textColor = WPT3();
-    footer.textAlignment = NSTextAlignmentCenter;
-    [sv addSubview:footer];
-    y += 48;
-
-    sv.contentSize = CGSizeMake(w, y);
-    WPLog(@"UI", @"[Sub] WPUIAttachLayoutBuildUI done (enabled=%d)", enabled);
-}
-
-
-#pragma mark - ========== Helper ==========
-
-@interface WPUIAttachLayoutVCHelper : NSObject
-+ (UIViewController *)makeVC;
+@interface WPUIAttachmentLayoutVC : SettingCategoryController
 @end
 
-@implementation WPUIAttachLayoutVCHelper
+@implementation WPUIAttachmentLayoutVC
 
-+ (UIViewController *)makeVC {
-    Class subClass = objc_getClass("WPUIAttachLayoutVC");
-    if (!subClass) {
-        subClass = objc_allocateClassPair(WPGetBaseClass(), "WPUIAttachLayoutVC", 0);
-        if (subClass) {
-            class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPUIAttachLayoutViewDidLoad, "v@:");
-            objc_registerClassPair(subClass);
-            WPLog(@"UI", @"[Sub] WPUIAttachLayoutVC class created");
-        } else {
-            WPLog(@"UI", @"[Sub] WPUIAttachLayoutVC class create FAILED");
-        }
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"附件布局优化";
+    [self buildUI];
+}
+
+- (void)buildUI {
+    for (UIView *v in self.contentView.subviews) {
+        [v removeFromSuperview];
     }
-    if (subClass) {
-        return [[subClass alloc] init];
+    self.masterSwitchKeys = [NSMutableSet set];
+
+    PluginConfig *config = [PluginConfig shared];
+    CGFloat w = self.view.bounds.size.width;
+    CGFloat y = 8;
+
+    y = [self addSectionHeader:@"附件布局优化" y:y width:w];
+
+    UIView *group = [self addTableGroupAtY:y width:w];
+    CGFloat cy = 0;
+
+    cy = [self addMasterSwitchRowInGroup:group
+                                   title:@"附件布局优化"
+                                     key:@"AttachLayoutEnabled"
+                                    isOn:config.attachLayoutEnabled
+                              subBuilder:^(UIView *expand, CGFloat *ecy) {
+        *ecy = [self addInputRowInGroup:expand title:@"每行列数"
+                                    key:@"attachLayoutColumns"
+                                  value:config.attachLayoutColumns
+                                   hint:@"3"
+                                    cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"显示行数"
+                                    key:@"attachLayoutRows"
+                                  value:config.attachLayoutRows
+                                   hint:@"自动"
+                                    cy:*ecy width:w];
+    } cy:cy width:w];
+
+    y = [self finishGroup:group atY:y height:cy];
+
+    if (!config.attachLayoutEnabled) {
+        UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(16, y, w - 32, 16)];
+        hint.text = @"开启附件布局优化后可配置详细选项";
+        hint.font = [UIFont systemFontOfSize:12];
+        hint.textColor = [UIColor colorWithRed:0.722 green:0.722 blue:0.749 alpha:1.0];
+        [self.contentView addSubview:hint];
+        [hint release];
+        y += 20;
     }
-    return nil;
+
+    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
+    self.scrollView.contentSize = CGSizeMake(w, y + 40);
+    WPLog(@"UI", @"[Sub] WPUIAttachmentLayoutVC buildUI done");
 }
 
 @end

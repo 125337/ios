@@ -1,48 +1,39 @@
+#import "../../Settings/Common/SettingCategoryController.h"
 #import "WPCommonUI.h"
 #import "../../Config/Constants.h"
 #import "../../Core/LogManager.h"
+#import "../../Config/WPColors.h"
 
-static void reLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"setting_entry.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
+@interface WPAboutVC : SettingCategoryController
+@end
+
+@implementation WPAboutVC
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"关于";
+    [self buildUI];
 }
 
-static void WPAboutViewDidLoad(id self, SEL _cmd) {
-    Class uiVC = objc_getClass("UIViewController");
-    Method m = class_getInstanceMethod(uiVC, _cmd);
-    if (m) ((void (*)(id, SEL))method_getImplementation(m))(self, _cmd);
+- (void)buildUI {
+    for (UIView *v in self.contentView.subviews) {
+        [v removeFromSuperview];
+    }
 
-    UIViewController *vc = (UIViewController *)self;
-    vc.title = @"关于";
-
-    CGFloat w = vc.view.bounds.size.width;
-    UIScrollView *sv = WPMakeSV(vc);
-    [vc.view addSubview:sv];
-
+    CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
-    CGFloat scale = [UIScreen mainScreen].scale;
 
-    UIView *heroCard = WPMakeCard(y, w);
+    // Hero 卡片
+    UIView *heroGroup = [self addTableGroupAtY:y width:w];
     CGFloat hy = 24;
+
     UILabel *nameLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 30)];
     nameLabel.text = @"Mio助手";
     nameLabel.font = [UIFont systemFontOfSize:22 weight:UIFontWeightBold];
     nameLabel.textColor = WPAccent();
     nameLabel.textAlignment = NSTextAlignmentCenter;
-    [heroCard addSubview:nameLabel];
+    [heroGroup addSubview:nameLabel];
+    [nameLabel release];
     hy += 34;
 
     UILabel *verLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 20)];
@@ -50,7 +41,8 @@ static void WPAboutViewDidLoad(id self, SEL _cmd) {
     verLabel.font = [UIFont systemFontOfSize:13];
     verLabel.textColor = [UIColor colorWithRed:0.400 green:0.800 blue:0.451 alpha:1.0];
     verLabel.textAlignment = NSTextAlignmentCenter;
-    [heroCard addSubview:verLabel];
+    [heroGroup addSubview:verLabel];
+    [verLabel release];
     hy += 24;
 
     UILabel *descLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, hy, w - kPad * 2 - 40, 40)];
@@ -59,53 +51,44 @@ static void WPAboutViewDidLoad(id self, SEL _cmd) {
     descLabel.textColor = WPT3();
     descLabel.textAlignment = NSTextAlignmentCenter;
     descLabel.numberOfLines = 2;
-    [heroCard addSubview:descLabel];
+    [heroGroup addSubview:descLabel];
+    [descLabel release];
     hy += 48;
 
-    CGRect hcf = heroCard.frame; hcf.size.height = hy; heroCard.frame = hcf;
-    [sv addSubview:heroCard];
-    y += hy + 8;
+    y = [self finishGroup:heroGroup atY:y height:hy];
 
-    [sv addSubview:WPMakeSectionHeader(@"架构", y, w)];
-    y += 32;
+    // 架构
+    y = [self addSectionHeader:@"架构" y:y width:w];
 
-    UIView *archCard = WPMakeCard(y, w);
+    UIView *archGroup = [self addTableGroupAtY:y width:w];
     CGFloat ay = 0;
-    NSArray *archs = @[@[@"RedEnvelopHook", @"自动抢红包"], @[@"PreventRecallHook", @"防撤回"], @[@"HookEngine", @"Hook引擎"], @[@"PluginConfig", @"配置中心"]];
+    NSArray *archs = @[@[@"RedEnvelopHook", @"自动抢红包"],
+                        @[@"PreventRecallHook", @"防撤回"],
+                        @[@"HookEngine", @"Hook引擎"],
+                        @[@"PluginConfig", @"配置中心"]];
     for (NSUInteger i = 0; i < archs.count; i++) {
-        if (i > 0) { WPAddSep(archCard, ay, w); ay = round((ay + 1.0 / scale) * scale) / scale; }
-        WPAddInfoRow(archCard, ay, w, archs[i][0], archs[i][1]);
+        if (i > 0) ay = [self addSeparatorInGroup:archGroup cy:ay width:w];
+        UILabel *leftLabel = [[UILabel alloc] initWithFrame:CGRectMake(kPad, ay, (w - kPad * 2) / 2, kRowH)];
+        leftLabel.text = archs[i][0];
+        leftLabel.font = [UIFont systemFontOfSize:15];
+        leftLabel.textColor = WPT1();
+        [archGroup addSubview:leftLabel];
+        [leftLabel release];
+
+        UILabel *rightLabel = [[UILabel alloc] initWithFrame:CGRectMake(kPad + (w - kPad * 2) / 2, ay, (w - kPad * 2) / 2, kRowH)];
+        rightLabel.text = archs[i][1];
+        rightLabel.font = [UIFont systemFontOfSize:13];
+        rightLabel.textColor = WPT3();
+        rightLabel.textAlignment = NSTextAlignmentRight;
+        [archGroup addSubview:rightLabel];
+        [rightLabel release];
         ay += kRowH;
     }
-    CGRect acf = archCard.frame; acf.size.height = ay; archCard.frame = acf;
-    [sv addSubview:archCard];
-    y += ay + 8;
-    sv.contentSize = CGSizeMake(w, y);
-    WPLog(@"UI", @"[Sub] aboutViewDidLoad");
-}
+    y = [self finishGroup:archGroup atY:y height:ay];
 
-@interface WPAboutVCHelper : NSObject
-+ (UIViewController *)makeVC;
-@end
-
-@implementation WPAboutVCHelper
-
-+ (UIViewController *)makeVC {
-    Class subClass = objc_getClass("WPAboutVC");
-    if (!subClass) {
-        subClass = objc_allocateClassPair(WPGetBaseClass(), "WPAboutVC", 0);
-        if (subClass) {
-            class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPAboutViewDidLoad, "v@:");
-            objc_registerClassPair(subClass);
-            WPLog(@"UI", @"[Sub] WPAboutVC class created");
-        } else {
-            WPLog(@"UI", @"[Sub] WPAboutVC class create FAILED");
-        }
-    }
-    if (subClass) {
-        return [[subClass alloc] init];
-    }
-    return nil;
+    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
+    self.scrollView.contentSize = CGSizeMake(w, y + 40);
+    WPLog(@"UI", @"[Sub] WPAboutVC buildUI done");
 }
 
 @end

@@ -1,216 +1,93 @@
-#import "WPCommonUI.h"
-#import "SettingEntryHook.h"
+#import "../../Settings/Common/SettingCategoryController.h"
+#import "../../Settings/Common/SettingController.h"
 #import "../../Core/LogManager.h"
 
-static void WPUIViewDidLoad(id self, SEL _cmd) {
-    Class uiVC = objc_getClass("UIViewController");
-    Method m = class_getInstanceMethod(uiVC, _cmd);
-    if (m) ((void (*)(id, SEL))method_getImplementation(m))(self, _cmd);
+@interface WPUIVC : SettingCategoryController
+@end
 
-    UIViewController *vc = (UIViewController *)self;
-    vc.title = @"界面定制";
+@implementation WPUIVC
 
-    CGFloat w = vc.view.bounds.size.width;
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"界面定制";
+    [self buildUI];
+}
 
-    UIScrollView *sv = WPMakeSV(vc);
-    [vc.view addSubview:sv];
+- (void)buildUI {
+    for (UIView *v in self.contentView.subviews) {
+        [v removeFromSuperview];
+    }
 
+    CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 
-    [sv addSubview:WPMakeSectionHeader(@"界面定制", y, w)];
-    y += 32;
+    y = [self addSectionHeader:@"界面定制" y:y width:w];
 
-    UIView *card = WPMakeCard(y, w);
+    UIView *group = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
-    CGFloat scale = [UIScreen mainScreen].scale;
+
     NSArray *items = @[
-        @[@"聊天顶栏",      @"openChatTopBar:"],
-        @[@"消息居中",      @"noop:"],
-        @[@"名字颜色",      @"openNameColor:"],
-        @[@"文本颜色",      @"noop:"],
-        @[@"长按菜单",      @"noop:"],
-        @[@"附件布局",      @"openAttachLayout:"],
-        @[@"文本占位",      @"openPlaceholderText:"],
-        @[@"界面简化",      @"openUISimplify:"],
-        @[@"界面净化",      @"openUIPurify:"],
-        @[@"隐藏头像",      @"openAvatarHide:"],
-        @[@"圆角设置",      @"noop:"],
-        @[@"卡片背景",      @"noop:"],
-        @[@"列表圆角",      @"noop:"],
-        @[@"悬浮底栏",      @"noop:"],
+        @[@"聊天顶栏", @(100)],
+        @[@"名字颜色", @(101)],
+        @[@"附件布局", @(102)],
+        @[@"文本占位", @(103)],
+        @[@"界面简化", @(104)],
+        @[@"界面净化", @(105)],
+        @[@"隐藏头像", @(106)],
     ];
-    id handler = [WeChatPluginSwitchHandler sharedInstance];
+
     for (NSUInteger i = 0; i < items.count; i++) {
         if (i > 0) {
-            WPAddSep(card, cy, w);
-            cy = round((cy + 1.0 / scale) * scale) / scale;
+            cy = [self addSeparatorInGroup:group cy:cy width:w];
         }
-        WPAddNavRow(card, cy, w, items[i][0], items[i][1], handler);
-        cy += kRowH;
+        NSInteger tag = [items[i][1] integerValue];
+        cy = [self addNavRowInGroup:group
+                              title:items[i][0]
+                           subtitle:nil
+                                tag:tag
+                             action:@selector(navigateTo:)
+                                 cy:cy width:w];
     }
-    CGRect cf = card.frame; cf.size.height = cy; card.frame = cf;
-    [sv addSubview:card];
-    y += cy + 8;
-    sv.contentSize = CGSizeMake(w, y);
-    WPLog(@"UI", @"[Sub] uiViewDidLoad");
+
+    y = [self finishGroup:group atY:y height:cy];
+
+    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
+    self.scrollView.contentSize = CGSizeMake(w, y + 40);
+    WPLog(@"UI", @"[Sub] WPUIVC buildUI done");
 }
 
-@implementation WeChatPluginSwitchHandler (WPUICustomization)
+- (void)navigateTo:(UIButton *)sender {
+    NSInteger tag = sender.tag;
+    UIViewController *subVC = nil;
 
-- (void)openChatTopBar:(id)sender {
-    UIResponder *responder = (UIResponder *)sender;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) break;
-        responder = [responder nextResponder];
+    switch (tag) {
+        case 100:
+            subVC = [[SettingChatTopBarController alloc] init];
+            break;
+        case 101:
+            subVC = [[SettingNameColorController alloc] init];
+            break;
+        case 102:
+            subVC = [[NSClassFromString(@"WPUIAttachmentLayoutVC") alloc] init];
+            break;
+        case 103:
+            subVC = [[NSClassFromString(@"WPUIPlaceholderTextVC") alloc] init];
+            break;
+        case 104:
+            subVC = [[NSClassFromString(@"WPUISimplifyVC") alloc] init];
+            break;
+        case 105:
+            subVC = [[NSClassFromString(@"WPUIPurifyVC") alloc] init];
+            break;
+        case 106:
+            subVC = [[SettingAvatarHideController alloc] init];
+            break;
     }
-    UIViewController *vc = (UIViewController *)responder;
-    if (!vc) { WPLog(@"UI", @"[Nav] openChatTopBar: currentVC nil"); return; }
-    Class cls = NSClassFromString(@"SettingChatTopBarController");
-    if (!cls) { WPLog(@"UI", @"[Nav] SettingChatTopBarController not found"); return; }
-    UIViewController *subVC = [[cls alloc] init];
+
     if (subVC) {
-        [vc.navigationController pushViewController:subVC animated:YES];
+        [self.navigationController pushViewController:subVC animated:YES];
         [subVC release];
-        WPLog(@"UI", @"[Nav] pushed SettingChatTopBarController");
     }
-}
-
-- (void)openNameColor:(id)sender {
-    UIResponder *responder = (UIResponder *)sender;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) break;
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
-    if (!vc) { WPLog(@"UI", @"[Nav] openNameColor: currentVC nil"); return; }
-    Class cls = NSClassFromString(@"SettingNameColorController");
-    if (!cls) { WPLog(@"UI", @"[Nav] SettingNameColorController not found"); return; }
-    UIViewController *subVC = [[cls alloc] init];
-    if (subVC) {
-        [vc.navigationController pushViewController:subVC animated:YES];
-        [subVC release];
-        WPLog(@"UI", @"[Nav] pushed SettingNameColorController");
-    }
-}
-
-- (void)openAvatarHide:(id)sender {
-    UIResponder *responder = (UIResponder *)sender;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) break;
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
-    if (!vc) { WPLog(@"UI", @"[Nav] openAvatarHide: currentVC nil"); return; }
-    Class cls = NSClassFromString(@"SettingAvatarHideController");
-    if (!cls) { WPLog(@"UI", @"[Nav] SettingAvatarHideController not found"); return; }
-    UIViewController *subVC = [[cls alloc] init];
-    if (subVC) {
-        [vc.navigationController pushViewController:subVC animated:YES];
-        [subVC release];
-        WPLog(@"UI", @"[Nav] pushed SettingAvatarHideController");
-    }
-}
-
-- (void)openUIPurify:(id)sender {
-    UIResponder *responder = (UIResponder *)sender;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) break;
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
-    if (!vc) { WPLog(@"UI", @"[Nav] openUIPurify: currentVC nil"); return; }
-    Class helperClass = objc_getClass("WPUIPurifyVCHelper");
-    if (!helperClass) { WPLog(@"UI", @"[Nav] WPUIPurifyVCHelper not found"); return; }
-    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
-    if (subVC) {
-        [vc.navigationController pushViewController:subVC animated:YES];
-        WPLog(@"UI", @"[Nav] pushed WPUIPurifyVC");
-    } else {
-        WPLog(@"UI", @"[Nav] WPUIPurifyVCHelper makeVC returned nil");
-    }
-}
-
-- (void)openUISimplify:(id)sender {
-    UIResponder *responder = (UIResponder *)sender;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) break;
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
-    if (!vc) { WPLog(@"UI", @"[Nav] openUISimplify: currentVC nil"); return; }
-    Class helperClass = objc_getClass("WPUISimplifyVCHelper");
-    if (!helperClass) { WPLog(@"UI", @"[Nav] WPUISimplifyVCHelper not found"); return; }
-    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
-    if (subVC) {
-        [vc.navigationController pushViewController:subVC animated:YES];
-        WPLog(@"UI", @"[Nav] pushed WPUISimplifyVC");
-    } else {
-        WPLog(@"UI", @"[Nav] WPUISimplifyVCHelper makeVC returned nil");
-    }
-}
-
-- (void)openAttachLayout:(id)sender {
-    UIResponder *responder = (UIResponder *)sender;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) break;
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
-    if (!vc) { WPLog(@"UI", @"[Nav] openAttachLayout: currentVC nil"); return; }
-    Class helperClass = objc_getClass("WPUIAttachLayoutVCHelper");
-    if (!helperClass) { WPLog(@"UI", @"[Nav] WPUIAttachLayoutVCHelper not found"); return; }
-    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
-    if (subVC) {
-        [vc.navigationController pushViewController:subVC animated:YES];
-        WPLog(@"UI", @"[Nav] pushed WPUIAttachLayoutVC");
-    } else {
-        WPLog(@"UI", @"[Nav] WPUIAttachLayoutVCHelper makeVC returned nil");
-    }
-}
-
-- (void)openPlaceholderText:(id)sender {
-    UIResponder *responder = (UIResponder *)sender;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) break;
-        responder = [responder nextResponder];
-    }
-    UIViewController *vc = (UIViewController *)responder;
-    if (!vc) { WPLog(@"UI", @"[Nav] openPlaceholderText: currentVC nil"); return; }
-    Class helperClass = objc_getClass("WPUIPlaceholderTextVCHelper");
-    if (!helperClass) { WPLog(@"UI", @"[Nav] WPUIPlaceholderTextVCHelper not found"); return; }
-    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
-    if (subVC) {
-        [vc.navigationController pushViewController:subVC animated:YES];
-        WPLog(@"UI", @"[Nav] pushed WPUIPlaceholderTextVC");
-    } else {
-        WPLog(@"UI", @"[Nav] WPUIPlaceholderTextVCHelper makeVC returned nil");
-    }
-}
-
-@end
-
-@interface WPUIVCHelper : NSObject
-+ (UIViewController *)makeVC;
-@end
-
-@implementation WPUIVCHelper
-
-+ (UIViewController *)makeVC {
-    Class subClass = objc_getClass("WPUIVC");
-    if (!subClass) {
-        subClass = objc_allocateClassPair(WPGetBaseClass(), "WPUIVC", 0);
-        if (subClass) {
-            class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPUIViewDidLoad, "v@:");
-            objc_registerClassPair(subClass);
-            WPLog(@"UI", @"[Sub] WPUIVC class created");
-        } else {
-            WPLog(@"UI", @"[Sub] WPUIVC class create FAILED");
-        }
-    }
-    if (subClass) {
-        return [[subClass alloc] init];
-    }
-    return nil;
 }
 
 @end

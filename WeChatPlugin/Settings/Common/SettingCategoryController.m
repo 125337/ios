@@ -88,7 +88,10 @@ static NSString *configPropertyForKey(NSString *key) {
             @"EnableChatNameColor": @"enableChatNameColor",
             @"EnableChatNameSize": @"enableChatNameSize",
             @"EnableMomentsNameColor": @"enableMomentsNameColor",
-            @"EnableMomentsNameSize": @"enableMomentsNameSize"
+            @"EnableMomentsNameSize": @"enableMomentsNameSize",
+            @"AttachLayoutEnabled": @"attachLayoutEnabled",
+            @"PlaceholderTextEnabled": @"placeholderTextEnabled",
+            @"PlaceholderText_Bold": @"placeholderTextBold"
         };
     });
     return mapping[key];

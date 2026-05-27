@@ -1,105 +1,56 @@
-#import "WPCommonUI.h"
-#import "SettingEntryHook.h"
+#import "../../Settings/Common/SettingCategoryController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
 
-static void reLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"WeChatPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"setting_entry.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-}
-
-static void WPOtherViewDidLoad(id self, SEL _cmd) {
-    Class uiVC = objc_getClass("UIViewController");
-    Method m = class_getInstanceMethod(uiVC, _cmd);
-    if (m) ((void (*)(id, SEL))method_getImplementation(m))(self, _cmd);
-
-    UIViewController *vc = (UIViewController *)self;
-    vc.title = @"其他功能";
-
-    PluginConfig *config = [PluginConfig shared];
-    CGFloat w = vc.view.bounds.size.width;
-
-    UIScrollView *sv = WPMakeSV(vc);
-    [vc.view addSubview:sv];
-
-    CGFloat y = 8;
-    CGFloat scale = [UIScreen mainScreen].scale;
-
-    [sv addSubview:WPMakeSectionHeader(@"消息", y, w)];
-    y += 32;
-
-    UIView *msgCard = WPMakeCard(y, w);
-    CGFloat mcy = 0;
-    NSArray *msgItems = @[
-        @[@"一键已读", @"ClearUnreadEnabled", @(config.clearUnreadEnabled)],
-    ];
-    id handler = [WeChatPluginSwitchHandler sharedInstance];
-    for (NSUInteger i = 0; i < msgItems.count; i++) {
-        if (i > 0) { WPAddSep(msgCard, mcy, w); mcy = round((mcy + 1.0 / scale) * scale) / scale; }
-        WPAddSwitchRow(msgCard, mcy, w, msgItems[i][0], msgItems[i][1], [msgItems[i][2] boolValue], handler, NULL);
-        mcy += kRowH;
-    }
-    CGRect mcf = msgCard.frame; mcf.size.height = mcy; msgCard.frame = mcf;
-    [sv addSubview:msgCard];
-    y += mcy + 8;
-
-    [sv addSubview:WPMakeSectionHeader(@"其他", y, w)];
-    y += 32;
-
-    UIView *card = WPMakeCard(y, w);
-    CGFloat cy = 0;
-    NSArray *items = @[
-        @[@"调试日志", @"DebugLogging", @(config.debugLogging)],
-        @[@"隐藏内容", @"HideContent", @(config.hideContent)],
-        @[@"免提示", @"NoTip", @(config.noTip)],
-    ];
-    for (NSUInteger i = 0; i < items.count; i++) {
-        if (i > 0) { WPAddSep(card, cy, w); cy = round((cy + 1.0 / scale) * scale) / scale; }
-        WPAddSwitchRow(card, cy, w, items[i][0], items[i][1], [items[i][2] boolValue], handler, NULL);
-        cy += kRowH;
-    }
-    CGRect cf = card.frame; cf.size.height = cy; card.frame = cf;
-    [sv addSubview:card];
-    y += cy + 8;
-    sv.contentSize = CGSizeMake(w, y);
-    WPLog(@"UI", @"[Sub] otherViewDidLoad");
-}
-
-@interface WPOtherVCHelper : NSObject
-+ (UIViewController *)makeVC;
+@interface WPOtherVC : SettingCategoryController
 @end
 
-@implementation WPOtherVCHelper
+@implementation WPOtherVC
 
-+ (UIViewController *)makeVC {
-    Class subClass = objc_getClass("WPOtherVC");
-    if (!subClass) {
-        subClass = objc_allocateClassPair(WPGetBaseClass(), "WPOtherVC", 0);
-        if (subClass) {
-            class_addMethod(subClass, NSSelectorFromString(@"viewDidLoad"), (IMP)WPOtherViewDidLoad, "v@:");
-            objc_registerClassPair(subClass);
-            WPLog(@"UI", @"[Sub] WPOtherVC class created");
-        } else {
-            WPLog(@"UI", @"[Sub] WPOtherVC class create FAILED");
-        }
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"其他功能";
+    [self buildUI];
+}
+
+- (void)buildUI {
+    for (UIView *v in self.contentView.subviews) {
+        [v removeFromSuperview];
     }
-    if (subClass) {
-        return [[subClass alloc] init];
-    }
-    return nil;
+
+    PluginConfig *config = [PluginConfig shared];
+    CGFloat w = self.view.bounds.size.width;
+    CGFloat y = 8;
+
+    y = [self addSectionHeader:@"消息" y:y width:w];
+
+    UIView *msgGroup = [self addTableGroupAtY:y width:w];
+    CGFloat mcy = 0;
+    mcy = [self addSwitchRowInGroup:msgGroup title:@"一键已读" desc:nil
+                                key:@"ClearUnreadEnabled" isOn:config.clearUnreadEnabled
+                                cy:mcy width:w];
+    y = [self finishGroup:msgGroup atY:y height:mcy];
+
+    y = [self addSectionHeader:@"其他" y:y width:w];
+
+    UIView *group = [self addTableGroupAtY:y width:w];
+    CGFloat cy = 0;
+    cy = [self addSwitchRowInGroup:group title:@"调试日志" desc:nil
+                               key:@"DebugLogging" isOn:config.debugLogging
+                               cy:cy width:w];
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+    cy = [self addSwitchRowInGroup:group title:@"隐藏内容" desc:nil
+                               key:@"HideContent" isOn:config.hideContent
+                               cy:cy width:w];
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+    cy = [self addSwitchRowInGroup:group title:@"免提示" desc:nil
+                               key:@"NoTip" isOn:config.noTip
+                               cy:cy width:w];
+    y = [self finishGroup:group atY:y height:cy];
+
+    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
+    self.scrollView.contentSize = CGSizeMake(w, y + 40);
+    WPLog(@"UI", @"[Sub] WPOtherVC buildUI done");
 }
 
 @end

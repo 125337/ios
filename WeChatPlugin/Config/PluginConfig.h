@@ -129,6 +129,19 @@
 @property (nonatomic, copy) NSString *darkTimeColorHex;
 @property (nonatomic, copy) NSString *darkContentColorHex;
 #pragma mark - 通知撤回者
+#pragma mark - 附件布局
+@property (nonatomic, assign) BOOL attachLayoutEnabled;
+@property (nonatomic, copy) NSString *attachLayoutColumns;
+@property (nonatomic, copy) NSString *attachLayoutRows;
+
+#pragma mark - 文本占位
+@property (nonatomic, assign) BOOL placeholderTextEnabled;
+@property (nonatomic, assign) BOOL placeholderTextBold;
+@property (nonatomic, copy) NSString *placeholderTextText;
+@property (nonatomic, assign) CGFloat placeholderTextFontSize;
+@property (nonatomic, assign) CGFloat placeholderTextAlpha;
+@property (nonatomic, copy) NSString *placeholderTextColorHex;
+
 @property (nonatomic, assign) BOOL notifySender;
 @property (nonatomic, copy) NSString *notifySenderTemplate;
 @property (nonatomic, assign) double notifySenderCooldown;

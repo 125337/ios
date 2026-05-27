@@ -229,14 +229,15 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 - (void)openUI:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
     if (!vc) { WPLog(@"Setting", @"[Nav] openUI: currentVC nil"); return; }
-    Class helperClass = objc_getClass("WPUIVCHelper");
-    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPUIVCHelper not found"); return; }
-    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    Class cls = NSClassFromString(@"WPUIVC");
+    if (!cls) { WPLog(@"Setting", @"[Nav] WPUIVC class not found"); return; }
+    UIViewController *subVC = [[cls alloc] init];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
+        [subVC release];
         WPLog(@"Setting", @"[Nav] pushed WPUIVC");
     } else {
-        WPLog(@"Setting", @"[Nav] WPUIVCHelper makeVC returned nil");
+        WPLog(@"Setting", @"[Nav] WPUIVC alloc returned nil");
     }
 }
 
@@ -253,42 +254,45 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 - (void)openOther:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
     if (!vc) { WPLog(@"Setting", @"[Nav] openOther: currentVC nil"); return; }
-    Class helperClass = objc_getClass("WPOtherVCHelper");
-    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPOtherVCHelper not found"); return; }
-    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    Class cls = NSClassFromString(@"WPOtherVC");
+    if (!cls) { WPLog(@"Setting", @"[Nav] WPOtherVC class not found"); return; }
+    UIViewController *subVC = [[cls alloc] init];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
+        [subVC release];
         WPLog(@"Setting", @"[Nav] pushed WPOtherVC");
     } else {
-        WPLog(@"Setting", @"[Nav] WPOtherVCHelper makeVC returned nil");
+        WPLog(@"Setting", @"[Nav] WPOtherVC alloc returned nil");
     }
 }
 
 - (void)openBackup:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
     if (!vc) { WPLog(@"Setting", @"[Nav] openBackup: currentVC nil"); return; }
-    Class helperClass = objc_getClass("WPBackupVCHelper");
-    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPBackupVCHelper not found"); return; }
-    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    Class cls = NSClassFromString(@"WPBackupVC");
+    if (!cls) { WPLog(@"Setting", @"[Nav] WPBackupVC class not found"); return; }
+    UIViewController *subVC = [[cls alloc] init];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
+        [subVC release];
         WPLog(@"Setting", @"[Nav] pushed WPBackupVC");
     } else {
-        WPLog(@"Setting", @"[Nav] WPBackupVCHelper makeVC returned nil");
+        WPLog(@"Setting", @"[Nav] WPBackupVC alloc returned nil");
     }
 }
 
 - (void)openAbout:(id)sender {
     UIViewController *vc = [self currentVCFrom:sender];
     if (!vc) { WPLog(@"Setting", @"[Nav] openAbout: currentVC nil"); return; }
-    Class helperClass = objc_getClass("WPAboutVCHelper");
-    if (!helperClass) { WPLog(@"Setting", @"[Nav] WPAboutVCHelper not found"); return; }
-    UIViewController *subVC = [helperClass performSelector:@selector(makeVC)];
+    Class cls = NSClassFromString(@"WPAboutVC");
+    if (!cls) { WPLog(@"Setting", @"[Nav] WPAboutVC class not found"); return; }
+    UIViewController *subVC = [[cls alloc] init];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
+        [subVC release];
         WPLog(@"Setting", @"[Nav] pushed WPAboutVC");
     } else {
-        WPLog(@"Setting", @"[Nav] WPAboutVCHelper makeVC returned nil");
+        WPLog(@"Setting", @"[Nav] WPAboutVC alloc returned nil");
     }
 }
 

@@ -22,9 +22,12 @@
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 20.0;
 
-    // 加载已有黑名单
-    NSString *saved = [[NSUserDefaults standardUserDefaults]
-        stringForKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"]];
+    // 加载已有黑名单（优先使用传入的 blacklist，fallback NSUserDefaults）
+    NSString *saved = self.blacklist;
+    if (!saved.length) {
+        saved = [[NSUserDefaults standardUserDefaults]
+            stringForKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"]];
+    }
     if (saved.length > 0) {
         self.editorView.text = saved;
     }
@@ -168,14 +171,47 @@
 }
 
 - (void)restoreAction {
-    self.editorView.text = @"";
+    [self.editorView resignFirstResponder];
+
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"清空黑名单"
+                                                                   message:@"确定要清空所有黑名单内容吗？"
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"清空"
+                                              style:UIAlertActionStyleDestructive
+                                            handler:^(UIAlertAction *action) {
+        self.editorView.text = @"";
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)saveAction {
-    NSString *text = self.editorView.text ?: @"";
-    [[NSUserDefaults standardUserDefaults] setObject:text
-                                              forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"]];
+    [self.editorView resignFirstResponder];
+
+    NSString *rawText = self.editorView.text ?: @"";
+    NSArray *rawLines = [rawText componentsSeparatedByString:@"\n"];
+
+    // 去重 + trim（对齐微信 saveAndDismiss）
+    NSMutableArray *deduped = [NSMutableArray array];
+    for (NSString *line in rawLines) {
+        NSString *trimmed = [line stringByTrimmingCharactersInSet:
+                              [NSCharacterSet whitespaceCharacterSet]];
+        if (!trimmed.length) continue;
+        if ([deduped containsObject:trimmed]) continue;
+        [deduped addObject:trimmed];
+    }
+
+    NSString *cleanText = [deduped componentsJoinedByString:@"\n"];
+
+    NSString *key = [kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"];
+    [[NSUserDefaults standardUserDefaults] setObject:cleanText forKey:key];
     [[NSUserDefaults standardUserDefaults] synchronize];
+
+    // saveBlock 回调
+    if (self.saveBlock) {
+        self.saveBlock(cleanText);
+    }
+
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 

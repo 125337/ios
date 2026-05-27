@@ -25,15 +25,21 @@ static BOOL isContactInBlacklist(NSString *contactID) {
 
     NSArray *lines = [blacklist componentsSeparatedByString:@"\n"];
     BOOL isGroup = [contactID containsString:@"@chatroom"];
+    BOOL isOA = [contactID hasPrefix:@"gh_"];
 
     for (NSString *line in lines) {
         NSString *t = [line stringByTrimmingCharactersInSet:
                         [NSCharacterSet whitespaceCharacterSet]];
         if (!t.length) continue;
-        if (isGroup && [t isEqualToString:@"@"]) return YES;
-        if ([contactID hasPrefix:@"gh_"] && [t hasPrefix:@"gh_"]) return YES;
+
+        // 条件1: {群聊} — 屏蔽所有群聊
+        if (isGroup && [t isEqualToString:@"{群聊}"]) return YES;
+        // 条件2: {私聊} — 屏蔽所有私聊（非群非公众号）
+        if (!isGroup && !isOA && [t isEqualToString:@"{私聊}"]) return YES;
+        // 条件3: {公众号} — 屏蔽所有公众号
+        if (isOA && [t isEqualToString:@"{公众号}"]) return YES;
+        // 条件4: 精确匹配 wxid
         if ([t isEqualToString:contactID]) return YES;
-        if (isGroup && [contactID containsString:t]) return YES;
     }
     return NO;
 }

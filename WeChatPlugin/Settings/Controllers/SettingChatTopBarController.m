@@ -252,12 +252,16 @@ static NSString *keyForTag(NSInteger tag) {
 #pragma mark - 管理显示黑名单
 
 - (void)onBlacklistTap {
-    ChatTopBarBlacklistEditorVC *editor = [[ChatTopBarBlacklistEditorVC alloc] init];
-    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
+    ChatTopBarBlacklistEditorVC *vc = [[[ChatTopBarBlacklistEditorVC alloc] init] autorelease];
+    NSString *key = [kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"];
+    vc.blacklist = [[NSUserDefaults standardUserDefaults] stringForKey:key];
+    vc.saveBlock = ^(NSString *blacklist) {
+        [[NSUserDefaults standardUserDefaults] setObject:blacklist forKey:key];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+    };
+    UINavigationController *nav = [[[UINavigationController alloc] initWithRootViewController:vc] autorelease];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     [self presentViewController:nav animated:YES completion:nil];
-    [editor release];
-    [nav release];
 }
 
 #pragma mark - 数值输入弹窗（Card 2/3 点击触发）
