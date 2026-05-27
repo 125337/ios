@@ -86,13 +86,49 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
 static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
 
+    PluginConfig *config = [PluginConfig shared];
     id currentTitle = [[self navigationItem] titleView];
-    if (!currentTitle || ![currentTitle isKindOfClass:[MioChatAvatarTitleView class]]) return;
 
-    [(MioChatAvatarTitleView *)currentTitle loadSeparatorIcon];
-    [(MioChatAvatarTitleView *)currentTitle loadSeparatorText];
-    [currentTitle setNeedsLayout];
+    // 功能关闭时恢复原始 titleView
+    if (!config.showChatAvatar) {
+        if ([currentTitle isKindOfClass:[MioChatAvatarTitleView class]]) {
+            UIView *originalTitle = objc_getAssociatedObject(self, kOriginalTitleViewKey);
+            if (originalTitle) {
+                [[self navigationItem] setTitleView:originalTitle];
+            }
+        }
+        return;
+    }
+
+    // 获取 contact 并检查黑名单
+    id contact = ((id (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"GetContact"));
+    if (!contact) return;
+
+    NSString *username = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
+    if (isContactInBlacklist(username)) {
+        // 黑名单中，恢复原始 titleView
+        UIView *originalTitle = objc_getAssociatedObject(self, kOriginalTitleViewKey);
+        if (originalTitle && [currentTitle isKindOfClass:[MioChatAvatarTitleView class]]) {
+            [[self navigationItem] setTitleView:originalTitle];
+        }
+        return;
+    }
+
+    // 非 MioChatAvatarTitleView 则创建
+    if (![currentTitle isKindOfClass:[MioChatAvatarTitleView class]]) {
+        CGFloat width = config.chatTitleViewWidth > 0 ? config.chatTitleViewWidth : 210.0;
+        MioChatAvatarTitleView *view = [[MioChatAvatarTitleView alloc]
+                                        initWithFrame:CGRectMake(0, 0, width, 45)];
+        [view setChatController:(BaseMsgContentViewController *)self];
+        [[self navigationItem] setTitleView:view];
+        currentTitle = view;
+        [view release];
+    }
+
+    // 更新
     [(MioChatAvatarTitleView *)currentTitle updateAvatars];
+    [currentTitle setNeedsLayout];
+    [currentTitle layoutIfNeeded];
     [currentTitle setNeedsDisplay];
 }
 

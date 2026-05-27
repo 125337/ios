@@ -205,6 +205,46 @@ static NSString *keyForTag(NSInteger tag) {
     [picker release];
 }
 
+#pragma mark - 后缀格式设置
+
+- (void)onAddTimeSuffixTap {
+    PluginConfig *config = [PluginConfig shared];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"添加时间后缀格式"
+                                                                   message:@"输入格式字符串，如 %%ld天"
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+        textField.placeholder = @"%ld天";
+        textField.text = config.chatAddTimeSuffixFormat ?: @"";
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        NSString *text = alert.textFields.firstObject.text;
+        config.chatAddTimeSuffixFormat = text.length > 0 ? text : nil;
+        [config save];
+        [self buildUI];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)onGroupCountSuffixTap {
+    PluginConfig *config = [PluginConfig shared];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"群成员数后缀格式"
+                                                                   message:@"输入格式字符串，如 %%u人"
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+        textField.placeholder = @"%u人";
+        textField.text = config.chatGroupMemberCountSuffix ?: @"";
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        NSString *text = alert.textFields.firstObject.text;
+        config.chatGroupMemberCountSuffix = text.length > 0 ? text : nil;
+        [config save];
+        [self buildUI];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
 #pragma mark - 管理显示黑名单
 
 - (void)onBlacklistTap {
@@ -301,7 +341,13 @@ static NSString *keyForTag(NSInteger tag) {
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSwitchRowInGroup:expand title:@"显示添加时间" desc:nil key:@"ShowAddTime" isOn:config.showAddTime cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        NSString *addTimeSuffix = config.chatAddTimeSuffixFormat.length > 0 ? config.chatAddTimeSuffixFormat : @"%ld天";
+        *ecy = [self addNavRowInGroup:expand title:@"添加时间后缀格式" subtitle:addTimeSuffix tag:400 action:@selector(onAddTimeSuffixTap) cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSwitchRowInGroup:expand title:@"显示群聊人数" desc:nil key:@"ShowGroupMemberCount" isOn:config.showGroupMemberCount cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        NSString *groupCountSuffix = config.chatGroupMemberCountSuffix.length > 0 ? config.chatGroupMemberCountSuffix : @"%u人";
+        *ecy = [self addNavRowInGroup:expand title:@"群成员数后缀格式" subtitle:groupCountSuffix tag:401 action:@selector(onGroupCountSuffixTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addNavRowInGroup:expand title:@"头像显示模式" subtitle:[self avatarDisplayModeName:config.chatDisplayMode] tag:100 action:@selector(onAvatarDisplayModeTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];

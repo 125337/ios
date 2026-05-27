@@ -53,7 +53,7 @@
     [ra release];
     [ra setContentMode:UIViewContentModeScaleAspectFill];
     [ra setTag:2];
-    [ra setClipsToBounds:YES];
+    [ra setClipsToBounds:NO];
     [ra setUserInteractionEnabled:YES];
     UITapGestureRecognizer *rightTap = [[UITapGestureRecognizer alloc]
         initWithTarget:self action:@selector(onRightAvatarTapped:)];
@@ -171,6 +171,7 @@
         self.rightAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
 
         [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
+        self.titleLabel.textAlignment = NSTextAlignmentRight;
         self.titleLabel.frame = CGRectMake(avatarSize + halfSpacing, nameY,
                                              totalW - avatarSize - halfSpacing, nameFontSize);
         return;
@@ -333,6 +334,8 @@
             titleText = [NSString stringWithFormat:@"%@%@",
                 nickname ?: @"",
                 [NSString stringWithFormat:suffix, (long)days]];
+        } else {
+            [self silentLoadContactExtInfo:contact];
         }
     }
 
@@ -461,18 +464,44 @@
     return image;
 }
 
+#pragma mark - Silent Contact ExtInfo Loading
+
+- (void)silentLoadContactExtInfo:(id)contact {
+    if (!contact) return;
+
+    Class contactInfoVCClass = objc_getClass("ContactInfoViewController");
+    if (!contactInfoVCClass) return;
+
+    id vc = [[contactInfoVCClass alloc] init];
+    if (!vc) return;
+
+    SEL setContactSel = NSSelectorFromString(@"setM_contact:");
+    if ([vc respondsToSelector:setContactSel]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(vc, setContactSel, contact);
+    }
+
+    ((void (*)(id, SEL))objc_msgSend)(vc, @selector(viewDidLoad));
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self updateAvatars];
+    });
+
+    [vc release];
+}
+
 #pragma mark - Separator
 
 - (BOOL)loadSeparatorIcon {
-    PluginConfig *config = [PluginConfig shared];
-
     NSData *iconData = [[NSUserDefaults standardUserDefaults]
         dataForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
     if (iconData) {
-        UIImage *icon = [UIImage imageWithData:iconData];
-        self.separatorView.image = icon;
-        self.separatorView.hidden = NO;
-        [self.separatorView sizeToFit];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIImage *icon = [UIImage imageWithData:iconData];
+            self.separatorView.image = icon;
+            self.separatorView.hidden = NO;
+            [self.separatorView sizeToFit];
+        });
         return YES;
     }
     return NO;
@@ -481,9 +510,11 @@
 - (void)loadSeparatorText {
     PluginConfig *config = [PluginConfig shared];
     if (config.chatSeparatorText.length > 0) {
-        self.separatorTextLabel.text = config.chatSeparatorText;
-        self.separatorTextLabel.hidden = NO;
-        [self.separatorTextLabel sizeToFit];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.separatorTextLabel.text = config.chatSeparatorText;
+            self.separatorTextLabel.hidden = NO;
+            [self.separatorTextLabel sizeToFit];
+        });
     }
 }
 
@@ -491,11 +522,13 @@
     NSData *gifData = [[NSUserDefaults standardUserDefaults]
         dataForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
     if (gifData) {
-        UIImage *gifImage = [UIImage imageWithData:gifData];
-        self.separatorView.image = gifImage;
-        self.separatorView.hidden = NO;
-        [self.separatorView sizeToFit];
-        self.separatorView.userInteractionEnabled = YES;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIImage *gifImage = [UIImage imageWithData:gifData];
+            self.separatorView.image = gifImage;
+            self.separatorView.hidden = NO;
+            [self.separatorView sizeToFit];
+            self.separatorView.userInteractionEnabled = YES;
+        });
         return YES;
     }
     return NO;
@@ -597,10 +630,13 @@
     popPC.backgroundColor = [UIColor whiteColor];
     popPC.delegate = popover;
 
-    // 直接用 chatController present
-    UIViewController *parentVC = (UIViewController *)self.chatController;
-    if (parentVC) {
-        [parentVC presentViewController:popover animated:YES completion:nil];
+    // 通过 findViewController 查找 present 的 VC
+    UIViewController *presentingVC = [self findViewController];
+    if (!presentingVC) {
+        presentingVC = (UIViewController *)self.chatController;
+    }
+    if (presentingVC) {
+        [presentingVC presentViewController:popover animated:YES completion:nil];
     }
 
     [popover release];
