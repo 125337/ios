@@ -511,6 +511,12 @@
     [d setBool:_avatarTapFeedback forKey:[kPluginPrefix stringByAppendingString:@"AvatarTapFeedback"]];
     [d setBool:_showAddTime forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTime"]];
     [d setBool:_showGroupMemberCount forKey:[kPluginPrefix stringByAppendingString:@"ShowGroupMemberCount"]];
+    [d setBool:_enableChatNameColor forKey:[kPluginPrefix stringByAppendingString:@"EnableChatNameColor"]];
+    [d setBool:_enableChatNameSize forKey:[kPluginPrefix stringByAppendingString:@"EnableChatNameSize"]];
+    [d setFloat:_chatNameFontSize forKey:[kPluginPrefix stringByAppendingString:@"ChatNameFontSize"]];
+    [d setBool:_enableMomentsNameColor forKey:[kPluginPrefix stringByAppendingString:@"EnableMomentsNameColor"]];
+    [d setBool:_enableMomentsNameSize forKey:[kPluginPrefix stringByAppendingString:@"EnableMomentsNameSize"]];
+    [d setFloat:_momentsNameFontSize forKey:[kPluginPrefix stringByAppendingString:@"MomentsNameFontSize"]];
     [d setInteger:_chatDisplayMode forKey:[kPluginPrefix stringByAppendingString:@"ChatDisplayMode"]];
     [d setFloat:_chatAvatarSize forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarSize"]];
     [d setFloat:_chatAvatarSpacing forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarSpacing"]];

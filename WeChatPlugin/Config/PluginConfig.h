@@ -108,8 +108,10 @@
 #pragma mark - 名字颜色设置
 @property (nonatomic, assign) BOOL enableChatNameColor;      // 启用聊天界面名称颜色
 @property (nonatomic, assign) BOOL enableChatNameSize;       // 启用聊天界面名称大小
+@property (nonatomic, assign) CGFloat chatNameFontSize;      // 聊天名称字体大小
 @property (nonatomic, assign) BOOL enableMomentsNameColor;   // 启用朋友圈名称颜色
 @property (nonatomic, assign) BOOL enableMomentsNameSize;    // 启用朋友圈名称大小
+@property (nonatomic, assign) CGFloat momentsNameFontSize;   // 朋友圈名称字体大小
 
 #pragma mark - 好友添加时间后缀
 @property (nonatomic, assign) BOOL showAddTimeSuffix;
