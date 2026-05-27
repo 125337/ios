@@ -76,6 +76,7 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
     [view setChatController:(BaseMsgContentViewController *)self];
 
     [[self navigationItem] setTitleView:view];
+    [(MioChatAvatarTitleView *)view updateAvatars];
     [view release];
 }
 
@@ -119,8 +120,10 @@ static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
         [view release];
     }
 
-    [(MioChatAvatarTitleView *)currentTitle updateAvatars];
+    [(MioChatAvatarTitleView *)currentTitle loadSeparatorIcon];
+    [(MioChatAvatarTitleView *)currentTitle loadSeparatorText];
     [currentTitle setNeedsLayout];
+    [(MioChatAvatarTitleView *)currentTitle updateAvatars];
     [currentTitle setNeedsDisplay];
 }
 
