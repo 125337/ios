@@ -491,21 +491,15 @@ static NSString *configPropertyForKey(NSString *key) {
     
     UIColor *currentColor = sender.backgroundColor ?: [UIColor grayColor];
     
-    __weak typeof(self) weakSelf = self;
     [WPColorPicker presentOnViewController:self
                              currentColor:currentColor
                              sourceButton:sender
                                onSelected:^(UIColor *color, NSString *hex) {
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf) return;
-        
         PluginConfig *config = [PluginConfig shared];
         @try {
-            // 将 HEX 值保存到对应的 PluginConfig 属性（KVC）
             [config setValue:hex forKey:key];
             [config save];
         } @catch (NSException *e) {
-            // 对于无法通过 KVC 设置的 key，降级为直接保存 NSUserDefaults
             [[NSUserDefaults standardUserDefaults] setObject:hex forKey:key];
             [[NSUserDefaults standardUserDefaults] synchronize];
         }
