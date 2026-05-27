@@ -97,7 +97,7 @@
     cy2 = [self addMasterSwitchRowInGroup:card2
                                     title:@"启用朋友圈名称颜色"
                                       key:@"EnableMomentsNameColor"
-                                     isOn:config.showAddTime
+                                     isOn:config.enableMomentsNameColor
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addColorRowInGroup:expand title:@"浅色模式文字颜色" key:@"MomentsNameLightColor" value:config.receiverTextColorHex cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
