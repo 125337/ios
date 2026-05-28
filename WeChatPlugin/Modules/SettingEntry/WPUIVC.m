@@ -75,9 +75,7 @@
         case 103:
             subVC = [[NSClassFromString(@"WPUIPlaceholderTextVC") alloc] init];
             break;
-        case 104:
-            subVC = [[NSClassFromString(@"WPUISimplifyVC") alloc] init];
-            break;
+        
         case 105:
             subVC = [[NSClassFromString(@"WPUIPurifyVC") alloc] init];
             break;

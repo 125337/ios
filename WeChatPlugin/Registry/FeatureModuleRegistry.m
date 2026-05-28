@@ -3,7 +3,6 @@
 #import "../Modules/Revoke/RevokeHook.h"
 #import "../Modules/Layout/TintHook.h"
 #import "../Modules/Layout/UIPurifyHook.h"
-#import "../Modules/Layout/UISimplifyHook.h"
 #import "../Modules/Unread/ClearUnreadHook.h"
 #import "../Modules/RedEnvelop/RedEnvelopHook.h"
 #import "../Modules/AutoTransfer/AutoTransferHook.h"
@@ -59,7 +58,7 @@
                                                  subtitle:@"外观颜色、深色模式"
                                              sectionTitle:@"通用"
                                           controllerClass:[SettingLayoutFunctionController class]
-                                     hookInstallerClasses:@[[TintHook class], [UIPurifyHook class], [UISimplifyHook class], [HideAvatarHook class], [UIAttachLayoutHook class], [PlaceholderTextHook class]]],
+                                     hookInstallerClasses:@[[TintHook class], [UIPurifyHook class], [HideAvatarHook class], [UIAttachLayoutHook class], [PlaceholderTextHook class]]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"about"
                                                     title:@"关于"
                                                  subtitle:@"插件信息"

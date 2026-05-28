@@ -84,7 +84,7 @@ static NSString *configPropertyForKey(NSString *key) {
             @"AttachLayoutEnabled": @"attachLayoutEnabled",
             @"PlaceholderTextEnabled": @"placeholderTextEnabled",
             @"PlaceholderText_Bold": @"placeholderTextBold",
-            @"SimplifyEnabled": @"simplifyEnabled"
+            
         };
     });
     return mapping[key];

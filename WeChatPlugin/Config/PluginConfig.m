@@ -546,7 +546,7 @@
         [d setObject:_chatAddTimeSuffixFormat forKey:[kPluginPrefix stringByAppendingString:@"ChatAddTimeSuffixFormat"]];
     }
     [d setBool:_showAddTimeSuffix forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
-    [d setBool:_simplifyEnabled forKey:[kPluginPrefix stringByAppendingString:@"SimplifyEnabled"]];
+    
     if (_addTimeSuffixFormat) {
         [d setObject:_addTimeSuffixFormat forKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
     }
