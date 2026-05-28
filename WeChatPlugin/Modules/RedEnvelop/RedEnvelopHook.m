@@ -1,6 +1,5 @@
 #import "RedEnvelopHook.h"
 #import "../../Config/PluginConfig.h"
-#import "../../Core/HookEngine.h"
 #import "WeChatRedEnvelopParam.h"
 #import "WeChatRedEnvelopTaskManager.h"
 #import "../../Core/WeChatAlertHelper.h"
@@ -10,6 +9,7 @@
 #import <UIKit/UIKit.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
+#import <substrate.h>
 
 static NSInteger _statTotalCount = 0;
 static NSInteger _statTotalAmount = 0;
@@ -567,83 +567,42 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
 
     Class CMessageMgrClass = objc_getClass("CMessageMgr");
     if (CMessageMgrClass) {
-        IMP imp1 = [HookEngine swizzleMethod:NSSelectorFromString(@"onNewSyncAddMessage:")
-                                         inClass:CMessageMgrClass
-                                         withIMP:(IMP)replaced_onNewSyncAddMessage];
-        if (imp1) {
-            orig_onNewSyncAddMessage = imp1;
-            WPLog(@"RedEnv", @"[+] onNewSyncAddMessage: hooked");
-        }
+        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncAddMessage:), (IMP)replaced_onNewSyncAddMessage, &orig_onNewSyncAddMessage);
+        WPLog(@"RedEnv", @"[+] onNewSyncAddMessage: hooked");
 
-        IMP imp1b = [HookEngine swizzleMethod:NSSelectorFromString(@"addMessageLibWithWrap:withVC:")
-                                          inClass:CMessageMgrClass
-                                          withIMP:(IMP)replaced_addMessageLibWithWrap];
-        if (imp1b) {
-            orig_addMessageLibWithWrap = imp1b;
+        MSHookMessageEx(CMessageMgrClass, @selector(addMessageLibWithWrap:withVC:), (IMP)replaced_addMessageLibWithWrap, &orig_addMessageLibWithWrap);
+        if (orig_addMessageLibWithWrap) {
             WPLog(@"RedEnv", @"[+] addMessageLibWithWrap:withVC: hooked");
         } else {
-            IMP imp1b2 = [HookEngine swizzleMethod:NSSelectorFromString(@"addMessageLibWithWrap:WithVC:")
-                                              inClass:CMessageMgrClass
-                                              withIMP:(IMP)replaced_addMessageLibWithWrap];
-            if (imp1b2) {
-                orig_addMessageLibWithWrap = imp1b2;
+            MSHookMessageEx(CMessageMgrClass, @selector(addMessageLibWithWrap:WithVC:), (IMP)replaced_addMessageLibWithWrap, &orig_addMessageLibWithWrap);
+            if (orig_addMessageLibWithWrap) {
                 WPLog(@"RedEnv", @"[+] addMessageLibWithWrap:WithVC: hooked");
             }
         }
 
-        IMP imp1c = [HookEngine swizzleMethod:NSSelectorFromString(@"onNewSyncNotAddDBMessage:")
-                                          inClass:CMessageMgrClass
-                                          withIMP:(IMP)replaced_onNewSyncNotAddDBMessage];
-        if (imp1c) {
-            orig_onNewSyncNotAddDBMessage = imp1c;
-            WPLog(@"RedEnv", @"[+] onNewSyncNotAddDBMessage: hooked");
-        }
+        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncNotAddDBMessage:), (IMP)replaced_onNewSyncNotAddDBMessage, &orig_onNewSyncNotAddDBMessage);
+        WPLog(@"RedEnv", @"[+] onNewSyncNotAddDBMessage: hooked");
 
-        IMP imp1d = [HookEngine swizzleMethod:NSSelectorFromString(@"AddMsg:MsgWrap:")
-                                          inClass:CMessageMgrClass
-                                          withIMP:(IMP)replaced_AddMsgMsgWrap];
-        if (imp1d) {
-            orig_AddMsgMsgWrap = imp1d;
-            WPLog(@"RedEnv", @"[+] AddMsg:MsgWrap: hooked");
-        }
+        MSHookMessageEx(CMessageMgrClass, @selector(AddMsg:MsgWrap:), (IMP)replaced_AddMsgMsgWrap, &orig_AddMsgMsgWrap);
+        WPLog(@"RedEnv", @"[+] AddMsg:MsgWrap: hooked");
 
-        IMP imp1e = [HookEngine swizzleMethod:NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:")
-                                          inClass:CMessageMgrClass
-                                          withIMP:(IMP)replaced_AsyncOnAddMsgMsgWrap];
-        if (imp1e) {
-            orig_AsyncOnAddMsgMsgWrap = imp1e;
-            WPLog(@"RedEnv", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
-        }
+        MSHookMessageEx(CMessageMgrClass, @selector(AsyncOnAddMsg:MsgWrap:), (IMP)replaced_AsyncOnAddMsgMsgWrap, &orig_AsyncOnAddMsgMsgWrap);
+        WPLog(@"RedEnv", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
     }
 
     Class LogicMgrClass = objc_getClass("WCRedEnvelopesLogicMgr");
     if (LogicMgrClass) {
-        IMP imp2 = [HookEngine swizzleMethod:NSSelectorFromString(@"OnWCToHongbaoCommonResponse:Request:")
-                                         inClass:LogicMgrClass
-                                         withIMP:(IMP)replaced_OnWCToHongbaoCommonResponse2];
-        if (imp2) {
-            orig_OnWCToHongbaoCommonResponse2 = imp2;
-            WPLog(@"RedEnv", @"[+] OnWCToHongbaoCommonResponse:Request: hooked");
-        }
+        MSHookMessageEx(LogicMgrClass, @selector(OnWCToHongbaoCommonResponse:Request:), (IMP)replaced_OnWCToHongbaoCommonResponse2, &orig_OnWCToHongbaoCommonResponse2);
+        WPLog(@"RedEnv", @"[+] OnWCToHongbaoCommonResponse:Request: hooked");
 
-        IMP imp3 = [HookEngine swizzleMethod:NSSelectorFromString(@"OnWCToHongbaoCommonResponse:Request:WithType:")
-                                         inClass:LogicMgrClass
-                                         withIMP:(IMP)replaced_OnWCToHongbaoCommonResponse3];
-        if (imp3) {
-            orig_OnWCToHongbaoCommonResponse3 = imp3;
-            WPLog(@"RedEnv", @"[+] OnWCToHongbaoCommonResponse:Request:WithType: hooked");
-        }
+        MSHookMessageEx(LogicMgrClass, @selector(OnWCToHongbaoCommonResponse:Request:WithType:), (IMP)replaced_OnWCToHongbaoCommonResponse3, &orig_OnWCToHongbaoCommonResponse3);
+        WPLog(@"RedEnv", @"[+] OnWCToHongbaoCommonResponse:Request:WithType: hooked");
     }
 
     Class DetailVCClass = objc_getClass("WCRedEnvelopesRedEnvelopesDetailViewController");
     if (DetailVCClass) {
-        IMP imp4 = [HookEngine swizzleMethod:NSSelectorFromString(@"viewDidLoad")
-                                        inClass:DetailVCClass
-                                        withIMP:(IMP)replaced_DetailViewDidLoad];
-        if (imp4) {
-            orig_DetailViewDidLoad = imp4;
-            WPLog(@"RedEnv", @"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
-        }
+        MSHookMessageEx(DetailVCClass, @selector(viewDidLoad), (IMP)replaced_DetailViewDidLoad, &orig_DetailViewDidLoad);
+        WPLog(@"RedEnv", @"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
     }
 
     WPLog(@"RedEnv", @"RedEnvelopHook install complete");

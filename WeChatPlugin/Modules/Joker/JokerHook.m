@@ -1,6 +1,5 @@
 #import "JokerHook.h"
 #import "../../Config/PluginConfig.h"
-#import "../../Core/HookEngine.h"
 #import "../../Core/WeChatAlertHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>

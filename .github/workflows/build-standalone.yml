@@ -37,10 +37,10 @@ jobs:
           WeChatPlugin/Tweak.m \
           WeChatPlugin/Config/PluginConfig.m \
           WeChatPlugin/Config/WPColorPicker.m \
-          WeChatPlugin/Core/HookEngine.m \
           WeChatPlugin/Core/WeChatAlertHelper.m \
           WeChatPlugin/Core/WeChatRestartHelper.m \
           WeChatPlugin/Core/LogManager.m \
+          WeChatPlugin/Core/ServiceHelper.m \
           WeChatPlugin/Registry/HookRegistry.m \
           WeChatPlugin/Registry/FeatureModuleRegistry.m \
           WeChatPlugin/Registry/FeatureRegistry.m \

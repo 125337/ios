@@ -1,11 +1,11 @@
 #import "AutoTransferHook.h"
 #import "../../Config/PluginConfig.h"
-#import "../../Core/HookEngine.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 #import <UserNotifications/UserNotifications.h>
 #import "../../Core/LogManager.h"
+#import <substrate.h>
 
 static NSMutableSet *_processedTransferIds = nil;
 static NSMutableDictionary *_pendingTransferData = nil;
@@ -382,48 +382,23 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
 
     Class CMessageMgrClass = objc_getClass("CMessageMgr");
     if (CMessageMgrClass) {
-        IMP imp1 = [HookEngine swizzleMethod:NSSelectorFromString(@"onNewSyncAddMessage:")
-                                        inClass:CMessageMgrClass
-                                        withIMP:(IMP)replaced_at_onNewSyncAddMessage];
-        if (imp1) {
-            orig_at_onNewSyncAddMessage = imp1;
-            WPLog(@"AutoTransfer", @"[+] onNewSyncAddMessage: hooked");
-        }
+        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncAddMessage:), (IMP)replaced_at_onNewSyncAddMessage, &orig_at_onNewSyncAddMessage);
+        WPLog(@"AutoTransfer", @"[+] onNewSyncAddMessage: hooked");
 
-        IMP imp1b = [HookEngine swizzleMethod:NSSelectorFromString(@"onNewSyncNotAddDBMessage:")
-                                         inClass:CMessageMgrClass
-                                         withIMP:(IMP)replaced_at_onNewSyncNotAddDBMessage];
-        if (imp1b) {
-            orig_at_onNewSyncNotAddDBMessage = imp1b;
-            WPLog(@"AutoTransfer", @"[+] onNewSyncNotAddDBMessage: hooked");
-        }
+        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncNotAddDBMessage:), (IMP)replaced_at_onNewSyncNotAddDBMessage, &orig_at_onNewSyncNotAddDBMessage);
+        WPLog(@"AutoTransfer", @"[+] onNewSyncNotAddDBMessage: hooked");
 
-        IMP imp1c = [HookEngine swizzleMethod:NSSelectorFromString(@"AddMsg:MsgWrap:")
-                                         inClass:CMessageMgrClass
-                                         withIMP:(IMP)replaced_at_AddMsgMsgWrap];
-        if (imp1c) {
-            orig_at_AddMsgMsgWrap = imp1c;
-            WPLog(@"AutoTransfer", @"[+] AddMsg:MsgWrap: hooked");
-        }
+        MSHookMessageEx(CMessageMgrClass, @selector(AddMsg:MsgWrap:), (IMP)replaced_at_AddMsgMsgWrap, &orig_at_AddMsgMsgWrap);
+        WPLog(@"AutoTransfer", @"[+] AddMsg:MsgWrap: hooked");
 
-        IMP imp1d = [HookEngine swizzleMethod:NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:")
-                                         inClass:CMessageMgrClass
-                                         withIMP:(IMP)replaced_at_AsyncOnAddMsgMsgWrap];
-        if (imp1d) {
-            orig_at_AsyncOnAddMsgMsgWrap = imp1d;
-            WPLog(@"AutoTransfer", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
-        }
+        MSHookMessageEx(CMessageMgrClass, @selector(AsyncOnAddMsg:MsgWrap:), (IMP)replaced_at_AsyncOnAddMsgMsgWrap, &orig_at_AsyncOnAddMsgMsgWrap);
+        WPLog(@"AutoTransfer", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
     }
 
     Class PayLogicMgrClass = objc_getClass("WCPayLogicMgr");
     if (PayLogicMgrClass) {
-        IMP imp2 = [HookEngine swizzleMethod:NSSelectorFromString(@"insideCallBackOnConfirmTransferMoneyResponse:OnRequest:")
-                                        inClass:PayLogicMgrClass
-                                        withIMP:(IMP)replaced_at_ConfirmTransferResponse];
-        if (imp2) {
-            orig_at_ConfirmTransferResponse = imp2;
-            WPLog(@"AutoTransfer", @"[+] insideCallBackOnConfirmTransferMoneyResponse:OnRequest: hooked");
-        }
+        MSHookMessageEx(PayLogicMgrClass, @selector(insideCallBackOnConfirmTransferMoneyResponse:OnRequest:), (IMP)replaced_at_ConfirmTransferResponse, &orig_at_ConfirmTransferResponse);
+        WPLog(@"AutoTransfer", @"[+] insideCallBackOnConfirmTransferMoneyResponse:OnRequest: hooked");
     }
 
     WPLog(@"AutoTransfer", @"AutoTransferHook install complete");

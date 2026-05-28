@@ -1,12 +1,12 @@
 #import "ClearUnreadHook.h"
 #import "../../Config/PluginConfig.h"
-#import "../../Core/HookEngine.h"
 #import "../../Config/Constants.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
+#import <substrate.h>
 
 static IMP orig_reloadMenuItems = NULL;
 static IMP orig_clickMenu = NULL;
@@ -198,26 +198,14 @@ static void replaced_reloadMenuItems(id self, SEL _cmd) {
 
     Class menuBtnClass = objc_getClass("NewMainFrameRightTopMenuBtn");
     if (menuBtnClass) {
-        IMP orig1 = [HookEngine swizzleMethod:NSSelectorFromString(@"reloadMenuItems")
-                                       inClass:menuBtnClass
-                                       withIMP:(IMP)replaced_reloadMenuItems];
-        if (orig1) {
-            orig_reloadMenuItems = orig1;
-            WPLog(@"ClearUnread",@"[INFO] reloadMenuItems swizzled");
-        }
+        MSHookMessageEx(menuBtnClass, @selector(reloadMenuItems), (IMP)replaced_reloadMenuItems, &orig_reloadMenuItems);
+        WPLog(@"ClearUnread",@"[INFO] reloadMenuItems hooked");
     }
 
     Class menuDataClass = objc_getClass("RightTopMenuData");
     if (menuDataClass) {
-        IMP orig2 = [HookEngine swizzleMethod:NSSelectorFromString(@"clickMenu:")
-                                       inClass:menuDataClass
-                                       withIMP:(IMP)replaced_clickMenu];
-        if (orig2) {
-            orig_clickMenu = orig2;
-            WPLog(@"ClearUnread",@"[INFO] clickMenu: swizzled on RightTopMenuData");
-        } else {
-            WPLog(@"ClearUnread",@"[ERR] clickMenu: swizzle failed on RightTopMenuData");
-        }
+        MSHookMessageEx(menuDataClass, @selector(clickMenu:), (IMP)replaced_clickMenu, &orig_clickMenu);
+        WPLog(@"ClearUnread",@"[INFO] clickMenu: hooked on RightTopMenuData");
     } else {
         WPLog(@"ClearUnread",@"[ERR] RightTopMenuData not found");
     }
