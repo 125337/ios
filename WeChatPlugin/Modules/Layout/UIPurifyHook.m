@@ -1,4 +1,4 @@
-#import <Foundation/Foundation.h>
+#import "UIPurifyHook.h"
 #import "../../Core/LogManager.h"
 
 @implementation UIPurifyHook
