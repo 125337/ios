@@ -62,7 +62,6 @@ jobs:
           WeChatPlugin/Modules/SettingEntry/WPBackupVC.m \
           WeChatPlugin/Modules/SettingEntry/WPUIVC.m \
           WeChatPlugin/Modules/SettingEntry/WPUIPurifyVC.m \
-          WeChatPlugin/Modules/SettingEntry/WPUISimplifyVC.m \
           WeChatPlugin/Modules/SettingEntry/WPUIAttachmentLayoutVC.m \
           WeChatPlugin/Modules/SettingEntry/WPUIPlaceholderTextVC.m \
           WeChatPlugin/Modules/Joker/JokerHook.m \
