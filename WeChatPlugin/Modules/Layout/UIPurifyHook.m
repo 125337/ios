@@ -375,7 +375,11 @@ static id hook_WCColor_seperatorColor(id self, SEL _cmd) {
         WPLog(@"UIPurify", @"[Hook] ✓ MMGrowTextViewExtConfig");
     }
 
-    // ── 分隔线隐藏 — 对齐锤子助手 2.4.1 (FUN_0075159c) ──
+    // ⚠️ 禁用：三个分隔线 getter Hook 导致 iOS 17.2.1 首页滑动闪退
+    // 根因：首页会话列表(UITableView)滑动时频繁触发 separatorColor/Style + WCColor.seperatorColor
+    //       Substrate trampoline 内 purifyReadConfig(objc_msgSend) 遭遇缓存未命中
+    //       → lookUpImpOrForward → runtimeLock 递归 → _os_unfair_lock_recursive_abort
+    /*
     {
         MSHookMessageEx([UITableView class], @selector(separatorColor),
             (IMP)hook_separatorColor, &_orig_UITableView_separatorColor);
@@ -395,6 +399,8 @@ static id hook_WCColor_seperatorColor(id self, SEL _cmd) {
             WPLog(@"UIPurify", @"[Hook] ⚠ WCColor class not found");
         }
     }
+    */
+    WPLog(@"UIPurify", @"[Hook] ⚠ 分隔线隐藏已禁用（iOS 17.2.1 闪退规避）");
 
     WPLog(@"UIPurify", @"UIPurifyHook install complete");
 }
