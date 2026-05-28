@@ -1,6 +1,7 @@
 #import "TintHook.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/HookEngine.h"
+#import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
@@ -94,9 +95,7 @@ static void hookCellColor(NSString *className) {
 @implementation TintHook
 
 + (void)install {
-    for (NSString *cls in @[@"SystemMessageCellView", @"TextMessageCellView", @"CommonMessageCellView", @"BaseMessageCellView"]) {
-        hookCellColor(cls);
-    }
+    WPLog(@"Tint", @"TintHook install SKIPPED — 排查 EXC_BAD_ACCESS 首页闪退");
 }
 
 @end
