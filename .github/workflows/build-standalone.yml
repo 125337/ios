@@ -52,7 +52,6 @@ jobs:
           WeChatPlugin/Modules/RedEnvelop/WeChatRedEnvelopTaskManager.m \
           WeChatPlugin/Modules/Layout/TintHook.m \
           WeChatPlugin/Modules/Layout/UIPurifyHook.m \
-          WeChatPlugin/Modules/Layout/UISimplifyHook.m \
           WeChatPlugin/Modules/Layout/UIAttachLayoutHook.m \
           WeChatPlugin/Modules/Unread/ClearUnreadHook.m \
           WeChatPlugin/Modules/SettingEntry/SettingEntryHook.m \
