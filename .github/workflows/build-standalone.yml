@@ -34,7 +34,6 @@ jobs:
 
         # MRC 编译所有 .m 文件
         for f in \
-          WeChatPlugin/libs/CydiaSubstrate.m \
           WeChatPlugin/Tweak.m \
           WeChatPlugin/Config/PluginConfig.m \
           WeChatPlugin/Config/WPColorPicker.m \
@@ -117,7 +116,6 @@ jobs:
                 -IWeChatPlugin/Modules/ChatTopBar \
                 -IWeChatPlugin/Settings/Common \
                 -IWeChatPlugin/Settings/Controllers \
-                -IWeChatPlugin/libs/CydiaSubstrate.framework/Headers \
                 -o "$OBJ_FILE" \
                 "$f" || { echo "FAILED: $f"; exit 1; }
         done
