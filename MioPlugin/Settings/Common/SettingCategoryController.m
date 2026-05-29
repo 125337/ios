@@ -599,6 +599,17 @@ static NSString *configPropertyForKey(NSString *key) {
     [config save];
     WPLog(@"Config", @"[OK] Config saved successfully for key: %@", key);
 
+    for (UIView *sv in self.contentView.subviews) {
+        if ([sv isKindOfClass:[UITableView class]]) {
+            NSMutableArray *rows = rowsForTable((UITableView *)sv);
+            for (NSMutableDictionary *row in rows) {
+                if ([row[@"key"] isEqualToString:key]) {
+                    row[@"isOn"] = @(sender.on);
+                }
+            }
+        }
+    }
+
     if ([key isEqualToString:@"HideSeparatorLine"]) {
         for (UIView *sv in self.contentView.subviews) {
             if ([sv isKindOfClass:[UITableView class]]) {
