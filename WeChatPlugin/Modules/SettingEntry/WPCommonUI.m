@@ -9,10 +9,6 @@
 - (void)fire:(UISwitch *)sender {
     if (self.action) self.action(sender.on);
 }
-- (void)dealloc {
-    [_action release];
-    [super dealloc];
-}
 @end
 
 const CGFloat kPad = 16.0;
@@ -60,7 +56,6 @@ void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSStr
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [card addSubview:tl];
-    [tl release];
 
     UISwitch *sw = [[UISwitch alloc] init];
     sw.on = on;
@@ -71,14 +66,12 @@ void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSStr
         _WPBlockSwitchTarget *bridge = [[_WPBlockSwitchTarget alloc] init];
         bridge.action = onChanged;
         objc_setAssociatedObject(sw, "wp_bridge", bridge, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [bridge release];
         [sw addTarget:bridge action:@selector(fire:) forControlEvents:UIControlEventValueChanged];
     } else {
         objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [sw addTarget:target action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     }
     [card addSubview:sw];
-    [sw release];
 }
 
 #pragma mark - 公共箭头
@@ -108,7 +101,6 @@ void WPAddNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [card addSubview:tl];
-    [tl release];
 
     WPDrawDisclosureArrow(card, cy, cw, kPad * 3);
 
@@ -127,7 +119,6 @@ void WPAddSep(UIView *card, CGFloat cy, CGFloat cw) {
     UIView *sepView = [[UIView alloc] initWithFrame:CGRectMake(kPad, pixelY, cardW - kPad, onePixel)];
     sepView.backgroundColor = WPSepColor();
     [card addSubview:sepView];
-    [sepView release];
 }
 
 void WPAddInfoRow(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right) {
@@ -136,7 +127,6 @@ void WPAddInfoRow(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString
     l.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
     l.textColor = WPT1();
     [card addSubview:l];
-    [l release];
 
     UILabel *r = [[UILabel alloc] initWithFrame:CGRectMake(cw - kPad * 2 - 160, cy, 144, kRowH)];
     r.text = right;
@@ -144,7 +134,6 @@ void WPAddInfoRow(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString
     r.textColor = WPT2();
     r.textAlignment = NSTextAlignmentRight;
     [card addSubview:r];
-    [r release];
 }
 
 void WPAddTextFieldRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *placeholder) {
@@ -153,7 +142,6 @@ void WPAddTextFieldRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NS
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [card addSubview:tl];
-    [tl release];
 
     UITextField *tf = [[UITextField alloc] initWithFrame:CGRectMake(cw - kPad * 2 - 150, cy + 4, 140, kRowH - 8)];
     tf.placeholder = placeholder;
@@ -163,7 +151,6 @@ void WPAddTextFieldRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NS
     tf.returnKeyType = UIReturnKeyDone;
     tf.autocorrectionType = UITextAutocorrectionTypeNo;
     [card addSubview:tf];
-    [tf release];
 }
 
 UIButton *WPAddEditableRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *value, id target) {
@@ -172,7 +159,6 @@ UIButton *WPAddEditableRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [card addSubview:tl];
-    [tl release];
 
     UILabel *vl = [[UILabel alloc] initWithFrame:CGRectMake(cw - kPad * 2 - 154, cy, 140, kRowH)];
     vl.text = value;
@@ -180,7 +166,6 @@ UIButton *WPAddEditableRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title
     vl.textColor = WPT2();
     vl.textAlignment = NSTextAlignmentRight;
     [card addSubview:vl];
-    [vl release];
 
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
     btn.frame = CGRectMake(0, cy, cw - kPad * 2, kRowH);
@@ -199,7 +184,6 @@ UIButton *WPAddEditableRowWithArrow(UIView *card, CGFloat cy, CGFloat cw, NSStri
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [card addSubview:tl];
-    [tl release];
 
     // 值（箭头左侧）
     UILabel *vl = [[UILabel alloc] initWithFrame:CGRectMake(cw - kPad * 2 - 164, cy, 136, kRowH)];
@@ -208,7 +192,6 @@ UIButton *WPAddEditableRowWithArrow(UIView *card, CGFloat cy, CGFloat cw, NSStri
     vl.textColor = WPT2();
     vl.textAlignment = NSTextAlignmentRight;
     [card addSubview:vl];
-    [vl release];
 
     WPDrawDisclosureArrow(card, cy, cw, kPad * 3);
 

@@ -88,7 +88,7 @@ jobs:
                 -isysroot "$SDK_PATH" \
                 -target arm64-apple-ios14.0 \
                 -c \
-                -fno-objc-arc \
+                -fobjc-arc \
                 -Oz \
                 -Wno-deprecated-declarations \
                 -Wno-unused-function \

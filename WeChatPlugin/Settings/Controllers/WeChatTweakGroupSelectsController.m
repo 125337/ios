@@ -51,25 +51,20 @@ static void gsLog(NSString *content) {
 @interface WeChatTweakGroupSelectsController () <ContactSelectViewDelegate> {
     id _helper;
 }
-@property (retain, nonatomic) ContactSelectView *selectView;
-@property (retain, nonatomic) NSArray<NSString *> *selectedGroups;
+@property (strong, nonatomic) ContactSelectView *selectView;
+@property (strong, nonatomic) NSArray<NSString *> *selectedGroups;
 @property (copy, nonatomic) NSString *titleText;
 @end
 
 @implementation WeChatTweakGroupSelectsController
 
 - (void)dealloc {
-    [_helper release];
-    [_selectView release];
-    [_selectedGroups release];
-    [_titleText release];
-    [super dealloc];
 }
 
 - (instancetype)initWithSelectedGroups:(NSArray<NSString *> *)selectedGroups title:(NSString *)title {
     gsLog(@"[GroupSelect] initWithSelectedGroups called");
     if (self = [super initWithNibName:nil bundle:nil]) {
-        _selectedGroups = [(selectedGroups ?: @[]) retain];
+        _selectedGroups = (selectedGroups ?: @[]);
         _titleText = [(title ?: @"选择群聊") copy];
         gsLog([NSString stringWithFormat:@"[GroupSelect] _selectedGroups=%@, _titleText=%@", _selectedGroups, _titleText]);
         Class helperClass = objc_getClass("MMUIViewController");

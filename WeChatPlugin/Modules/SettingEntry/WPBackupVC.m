@@ -33,7 +33,6 @@
     hint.textColor = WPT2();
     hint.numberOfLines = 0;
     [group addSubview:hint];
-    [hint release];
     cy += 84;
 
     cy = [self addButtonRowInGroup:group title:@"重置所有配置"

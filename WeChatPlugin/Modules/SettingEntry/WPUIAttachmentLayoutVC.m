@@ -55,7 +55,6 @@
         hint.font = [UIFont systemFontOfSize:12];
         hint.textColor = WPTextTertiaryColor();
         [self.contentView addSubview:hint];
-        [hint release];
         y += 20;
     }
 

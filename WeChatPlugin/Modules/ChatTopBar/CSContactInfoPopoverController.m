@@ -25,7 +25,7 @@ static NSArray *s_infoItems(void) {
     static NSArray *items = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        items = [@[
+        items = @[
             @{@"label": @"主页",   @"key": @"homepage",   @"copiable": @NO},
             @{@"label": @"类型",   @"key": @"chatType",   @"copiable": @NO},
             @{@"label": @"微信",   @"key": @"wxid",       @"copiable": @YES},
@@ -33,7 +33,7 @@ static NSArray *s_infoItems(void) {
             @{@"label": @"性别",   @"key": @"gender",     @"copiable": @NO},
             @{@"label": @"地区",   @"key": @"location",   @"copiable": @NO},
             @{@"label": @"签名",   @"key": @"signature",  @"copiable": @YES},
-        ] retain];
+        ];
     });
     return items;
 }
@@ -43,21 +43,14 @@ static NSArray *s_infoItems(void) {
 - (instancetype)initWithContact:(id)contact avatar:(UIImage *)avatar {
     self = [super init];
     if (self) {
-        _contact = [contact retain];
-        _avatarImage = [avatar retain];
+        _contact = contact;
+        _avatarImage = avatar;
         if (contact) {
             id usrName = contactValueForKey(contact, @"m_nsUsrName");
-            _wxid = [usrName retain];
+            _wxid = usrName;
         }
     }
     return self;
-}
-
-- (void)dealloc {
-    [_contact release];
-    [_wxid release];
-    [_avatarImage release];
-    [super dealloc];
 }
 
 - (UIModalPresentationStyle)adaptivePresentationStyleForPresentationController:
@@ -111,7 +104,6 @@ static NSArray *s_infoItems(void) {
     }
 
     [self.view addSubview:tableView];
-    [tableView release];
 }
 
 #pragma mark - 创建 UI
@@ -160,7 +152,6 @@ static NSArray *s_infoItems(void) {
             avatarView.contentMode = UIViewContentModeScaleAspectFill;
             avatarView.translatesAutoresizingMaskIntoConstraints = NO;
             [cell.contentView addSubview:avatarView];
-            [avatarView release];
 
             [NSLayoutConstraint activateConstraints:@[
                 [avatarView.centerXAnchor constraintEqualToAnchor:cell.contentView.centerXAnchor],
@@ -176,7 +167,6 @@ static NSArray *s_infoItems(void) {
             nameLabel.font = [UIFont boldSystemFontOfSize:18];
             nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
             [cell.contentView addSubview:nameLabel];
-            [nameLabel release];
 
             [NSLayoutConstraint activateConstraints:@[
                 [nameLabel.centerXAnchor constraintEqualToAnchor:cell.contentView.centerXAnchor],
@@ -193,7 +183,6 @@ static NSArray *s_infoItems(void) {
             wxidLabel.textColor = [UIColor grayColor];
             wxidLabel.translatesAutoresizingMaskIntoConstraints = NO;
             [cell.contentView addSubview:wxidLabel];
-            [wxidLabel release];
 
             [NSLayoutConstraint activateConstraints:@[
                 [wxidLabel.centerXAnchor constraintEqualToAnchor:cell.contentView.centerXAnchor],
@@ -272,8 +261,8 @@ static NSArray *s_infoItems(void) {
 
     [self showCopySuccessToast];
 
-    UIImpactFeedbackGenerator *gen = [[[UIImpactFeedbackGenerator alloc]
-        initWithStyle:UIImpactFeedbackStyleLight] autorelease];
+    UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc]
+        initWithStyle:UIImpactFeedbackStyleLight];
     [gen prepare];
     [gen impactOccurred];
 }
@@ -373,16 +362,10 @@ static NSArray *s_infoItems(void) {
     ((void (*)(id, SEL, id, NSString *))objc_msgSend)(vc,
         NSSelectorFromString(@"setValue:forKey:"), self.contact, @"m_contact");
 
-    // 123456.c L118393: _objc_retain(vc) — MRC 手动 retain 供 block 使用
-    [vc retain];
-
-    // 123456.c L118395: [self dismissViewControllerAnimated:YES completion:block]
     [self dismissViewControllerAnimated:YES completion:^{
-        // 123456.c L118418-118421: [weakSelf presentingViewController]
         UIViewController *presenting = self.presentingViewController;
-        if (!presenting) { [vc release]; return; }
+        if (!presenting) { return; }
 
-        // 123456.c L118422-118431: 判断 presentingVC 是否 UINavigationController
         UINavigationController *nav = nil;
         if ([presenting isKindOfClass:[UINavigationController class]]) {
             nav = (UINavigationController *)presenting;
@@ -390,13 +373,11 @@ static NSArray *s_infoItems(void) {
             nav = presenting.navigationController;
         }
 
-        // 123456.c L118432-118437: nav → push, 否则 modal present
         if (nav) {
             [nav pushViewController:vc animated:YES];
         } else {
             [presenting presentViewController:vc animated:YES completion:nil];
         }
-        [vc release];
     }];
 }
 

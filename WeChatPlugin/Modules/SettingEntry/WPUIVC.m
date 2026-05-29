@@ -86,7 +86,6 @@
 
     if (subVC) {
         [self.navigationController pushViewController:subVC animated:YES];
-        [subVC release];
     }
 }
 

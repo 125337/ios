@@ -196,7 +196,6 @@ static NSString *keyForTag(NSInteger tag) {
     picker.delegate = self;
     picker.view.tag = 100;
     [self presentViewController:picker animated:YES completion:nil];
-    [picker release];
 }
 
 - (void)onPickGIFImage {
@@ -206,7 +205,6 @@ static NSString *keyForTag(NSInteger tag) {
     picker.delegate = self;
     picker.view.tag = 200;
     [self presentViewController:picker animated:YES completion:nil];
-    [picker release];
 }
 
 #pragma mark - 后缀格式设置
@@ -252,14 +250,14 @@ static NSString *keyForTag(NSInteger tag) {
 #pragma mark - 管理显示黑名单
 
 - (void)onBlacklistTap {
-    ChatTopBarBlacklistEditorVC *vc = [[[ChatTopBarBlacklistEditorVC alloc] init] autorelease];
+    ChatTopBarBlacklistEditorVC *vc = [[ChatTopBarBlacklistEditorVC alloc] init];
     NSString *key = [kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"];
     vc.blacklist = [[NSUserDefaults standardUserDefaults] stringForKey:key];
     vc.saveBlock = ^(NSString *blacklist) {
         [[NSUserDefaults standardUserDefaults] setObject:blacklist forKey:key];
         [[NSUserDefaults standardUserDefaults] synchronize];
     };
-    UINavigationController *nav = [[[UINavigationController alloc] initWithRootViewController:vc] autorelease];
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     [self presentViewController:nav animated:YES completion:nil];
 }

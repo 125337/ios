@@ -39,10 +39,10 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
 }
 
 @interface MessageTimeFormatEditorVC () <UITextViewDelegate>
-@property (nonatomic, retain) UIScrollView *scrollView;
-@property (nonatomic, retain) UIView *contentView;
-@property (nonatomic, retain) UITextView *editorView;
-@property (nonatomic, retain) UITextView *previewView;
+@property (nonatomic, strong) UIScrollView *scrollView;
+@property (nonatomic, strong) UIView *contentView;
+@property (nonatomic, strong) UITextView *editorView;
+@property (nonatomic, strong) UITextView *previewView;
 @end
 
 @implementation MessageTimeFormatEditorVC
@@ -91,13 +91,6 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    [_scrollView release];
-    [_contentView release];
-    [_editorView release];
-    [_previewView release];
-    [_initialFormat release];
-    [_saveBlock release];
-    [super dealloc];
 }
 
 #pragma mark - NavBar（复刻 viewDidLoad 导航栏设置）
@@ -118,13 +111,13 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
 #pragma mark - ScrollView
 
 - (void)setupScrollView {
-    self.scrollView = [[[UIScrollView alloc] initWithFrame:self.view.bounds] autorelease];
+    self.scrollView = [[UIScrollView alloc] initWithFrame:self.view.bounds];
     self.scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     [self.view addSubview:self.scrollView];
 
-    self.contentView = [[[UIView alloc] initWithFrame:
-        CGRectMake(0, 0, self.view.bounds.size.width, 0)] autorelease];
+    self.contentView = [[UIView alloc] initWithFrame:
+        CGRectMake(0, 0, self.view.bounds.size.width, 0)];
     [self.scrollView addSubview:self.contentView];
 }
 
@@ -264,7 +257,7 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
 
     // UITextView 编辑框
     CGFloat tvH = 80.0;
-    self.editorView = [[[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)] autorelease];
+    self.editorView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
     self.editorView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular]; // 15px Regular
     self.editorView.textColor = [UIColor labelColor];
     self.editorView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
@@ -300,7 +293,7 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
 
     // UITextView 预览框（只读）
     CGFloat tvH = 50.0;
-    self.previewView = [[[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)] autorelease];
+    self.previewView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
     self.previewView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular]; // 15px Regular
     self.previewView.textColor = [UIColor labelColor];
     self.previewView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];

@@ -20,10 +20,10 @@ static NSArray<NSString *> *_tokenDescs(void) {
 }
 
 @interface RevokeFormatEditorVC () <UITextViewDelegate>
-@property (nonatomic, retain) UIScrollView *scrollView;
-@property (nonatomic, retain) UIView *contentView;
-@property (nonatomic, retain) UITextView *editorView;
-@property (nonatomic, retain) UITextView *previewView;
+@property (nonatomic, strong) UIScrollView *scrollView;
+@property (nonatomic, strong) UIView *contentView;
+@property (nonatomic, strong) UITextView *editorView;
+@property (nonatomic, strong) UITextView *previewView;
 @end
 
 @implementation RevokeFormatEditorVC
@@ -57,36 +57,29 @@ static NSArray<NSString *> *_tokenDescs(void) {
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    [_scrollView release];
-    [_contentView release];
-    [_editorView release];
-    [_previewView release];
-    [_initialFormat release];
-    [_saveBlock release];
-    [super dealloc];
 }
 
 #pragma mark - NavBar
 
 - (void)setupNavBar {
-    self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc]
-        initWithTitle:@"关闭" style:UIBarButtonItemStylePlain target:self action:@selector(closeAction)] autorelease];
-    UIBarButtonItem *restore = [[[UIBarButtonItem alloc]
-        initWithTitle:@"恢复" style:UIBarButtonItemStylePlain target:self action:@selector(restoreAction)] autorelease];
-    UIBarButtonItem *save = [[[UIBarButtonItem alloc]
-        initWithTitle:@"保存" style:UIBarButtonItemStyleDone target:self action:@selector(saveAction)] autorelease];
+    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
+        initWithTitle:@"关闭" style:UIBarButtonItemStylePlain target:self action:@selector(closeAction)];
+    UIBarButtonItem *restore = [[UIBarButtonItem alloc]
+        initWithTitle:@"恢复" style:UIBarButtonItemStylePlain target:self action:@selector(restoreAction)];
+    UIBarButtonItem *save = [[UIBarButtonItem alloc]
+        initWithTitle:@"保存" style:UIBarButtonItemStyleDone target:self action:@selector(saveAction)];
     self.navigationItem.rightBarButtonItems = @[save, restore];
 }
 
 #pragma mark - ScrollView
 
 - (void)setupScrollView {
-    self.scrollView = [[[UIScrollView alloc] initWithFrame:self.view.bounds] autorelease];
+    self.scrollView = [[UIScrollView alloc] initWithFrame:self.view.bounds];
     self.scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     [self.view addSubview:self.scrollView];
 
-    self.contentView = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 0)] autorelease];
+    self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 0)];
     [self.scrollView addSubview:self.contentView];
 }
 
@@ -147,7 +140,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
     y += 28.0;
 
     CGFloat tvH = 110.0;
-    self.editorView = [[[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)] autorelease];
+    self.editorView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
     self.editorView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular];
     self.editorView.textColor = [UIColor labelColor];
     self.editorView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
@@ -178,7 +171,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
     y += 28.0;
 
     CGFloat tvH = 110.0;
-    self.previewView = [[[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)] autorelease];
+    self.previewView = [[UITextView alloc] initWithFrame:CGRectMake(15.0, y, w - 30.0, tvH)];
     self.previewView.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular];
     self.previewView.textColor = [UIColor labelColor];
     self.previewView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
@@ -212,7 +205,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
                                                NSCalendarUnitHour | NSCalendarUnitMinute | NSCalendarUnitSecond)
                                    fromDate:now];
 
-    NSString *result = [[fmt copy] autorelease];
+    NSString *result = [fmt copy];
     result = [result stringByReplacingOccurrencesOfString:@"{用户名}" withString:@"张三"];
     result = [result stringByReplacingOccurrencesOfString:@"{内容}" withString:@"这是一条测试消息"];
     result = [result stringByReplacingOccurrencesOfString:@"{yyyy}" withString:[NSString stringWithFormat:@"%04ld", (long)comp.year]];

@@ -28,8 +28,7 @@ static void hookLog(NSString *format, ...) {
             [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     } @catch (NSException *e) {}
-    [content release];
-}
+    }
 
 // ============================================================
 // 单 Hook 精简架构（参考微信优化 onNewSyncNotAddDBMessage）

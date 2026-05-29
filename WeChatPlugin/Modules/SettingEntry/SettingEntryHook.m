@@ -71,7 +71,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     avatar.backgroundColor = [UIColor colorWithRed:0.851 green:0.851 blue:0.859 alpha:1.0];
     avatar.layer.cornerRadius = 40;
     [heroCard addSubview:avatar];
-    [avatar release];
     hy += 88;
 
     UILabel *heroName = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 30)];
@@ -80,7 +79,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     heroName.textColor = WPAccent();
     heroName.textAlignment = NSTextAlignmentCenter;
     [heroCard addSubview:heroName];
-    [heroName release];
     hy += 34;
 
     UILabel *heroVer = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 20)];
@@ -89,12 +87,10 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     heroVer.textColor = [UIColor colorWithRed:0.400 green:0.800 blue:0.451 alpha:1.0];
     heroVer.textAlignment = NSTextAlignmentCenter;
     [heroCard addSubview:heroVer];
-    [heroVer release];
     hy += 28;
 
     CGRect hcf = heroCard.frame; hcf.size.height = hy; heroCard.frame = hcf;
     [sv addSubview:heroCard];
-    [heroCard release];
     y += hy + 8;
 
     [sv addSubview:WPMakeSectionHeader(@"功能列表", y, w)];
@@ -116,7 +112,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 
     CGRect lcf = listCard.frame; lcf.size.height = cy; listCard.frame = lcf;
     [sv addSubview:listCard];
-    [listCard release];
     y += cy + 8;
 
     UILabel *footer = [[UILabel alloc] initWithFrame:CGRectMake(0, y, w, 50)];
@@ -126,7 +121,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     footer.textAlignment = NSTextAlignmentCenter;
     footer.numberOfLines = 2;
     [sv addSubview:footer];
-    [footer release];
     y += 60;
 
     sv.contentSize = CGSizeMake(w, y);
@@ -222,7 +216,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     SettingGeneralFunctionController *subVC = [[SettingGeneralFunctionController alloc] init];
     subVC.categoryName = @"通用功能";
     [vc.navigationController pushViewController:subVC animated:YES];
-    [subVC release];
     WPLog(@"Setting", @"[Nav] pushed SettingGeneralFunctionController");
 }
 
@@ -234,7 +227,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     UIViewController *subVC = [[cls alloc] init];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
-        [subVC release];
         WPLog(@"Setting", @"[Nav] pushed WPUIVC");
     } else {
         WPLog(@"Setting", @"[Nav] WPUIVC alloc returned nil");
@@ -247,7 +239,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     SettingRedEnvelopController *subVC = [[SettingRedEnvelopController alloc] init];
     subVC.categoryName = @"自动抢红包";
     [vc.navigationController pushViewController:subVC animated:YES];
-    [subVC release];
     WPLog(@"Setting", @"[Nav] pushed SettingRedEnvelopController");
 }
 
@@ -259,7 +250,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     UIViewController *subVC = [[cls alloc] init];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
-        [subVC release];
         WPLog(@"Setting", @"[Nav] pushed WPOtherVC");
     } else {
         WPLog(@"Setting", @"[Nav] WPOtherVC alloc returned nil");
@@ -274,7 +264,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     UIViewController *subVC = [[cls alloc] init];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
-        [subVC release];
         WPLog(@"Setting", @"[Nav] pushed WPBackupVC");
     } else {
         WPLog(@"Setting", @"[Nav] WPBackupVC alloc returned nil");
@@ -289,7 +278,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     UIViewController *subVC = [[cls alloc] init];
     if (subVC) {
         [vc.navigationController pushViewController:subVC animated:YES];
-        [subVC release];
         WPLog(@"Setting", @"[Nav] pushed WPAboutVC");
     } else {
         WPLog(@"Setting", @"[Nav] WPAboutVC alloc returned nil");

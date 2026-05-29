@@ -19,12 +19,7 @@
 }
 
 - (void)dealloc {
-    [_leftAvatarView release];
-    [_rightAvatarView release];
-    [_separatorView release];
-    [_separatorTextLabel release];
-    [_titleLabel release];
-    [super dealloc];
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 #pragma mark - Setup
@@ -36,7 +31,6 @@
     UIImageView *la = [[UIImageView alloc] init];
     [self addSubview:la];
     [self setLeftAvatarView:la];
-    [la release];
     [la setContentMode:UIViewContentModeScaleAspectFill];
     [la setTag:2];
     [la setClipsToBounds:YES];
@@ -44,13 +38,11 @@
     UITapGestureRecognizer *leftTap = [[UITapGestureRecognizer alloc]
         initWithTarget:self action:@selector(onLeftAvatarTapped:)];
     [la addGestureRecognizer:leftTap];
-    [leftTap release];
 
     // 2. rightAvatarView
     UIImageView *ra = [[UIImageView alloc] init];
     [self addSubview:ra];
     [self setRightAvatarView:ra];
-    [ra release];
     [ra setContentMode:UIViewContentModeScaleAspectFill];
     [ra setTag:2];
     [ra setClipsToBounds:YES];
@@ -58,13 +50,11 @@
     UITapGestureRecognizer *rightTap = [[UITapGestureRecognizer alloc]
         initWithTarget:self action:@selector(onRightAvatarTapped:)];
     [ra addGestureRecognizer:rightTap];
-    [rightTap release];
 
     // 3. separatorView
     UIImageView *sv = [[UIImageView alloc] init];
     [self addSubview:sv];
     [self setSeparatorView:sv];
-    [sv release];
     [sv setContentMode:UIViewContentModeScaleAspectFill];
     [sv setUserInteractionEnabled:YES];
     [sv setHidden:YES];
@@ -73,7 +63,6 @@
     UILabel *st = [[UILabel alloc] init];
     [self addSubview:st];
     [self setSeparatorTextLabel:st];
-    [st release];
     CGFloat sepFontSize = MAX(8.0, MIN(config.chatSeparatorSize * 0.4, 16.0));
     [st setFont:[UIFont systemFontOfSize:sepFontSize weight:UIFontWeightMedium]];
     [st setTextColor:[UIColor grayColor]];
@@ -83,7 +72,6 @@
     UILabel *tl = [[UILabel alloc] init];
     [self addSubview:tl];
     [self setTitleLabel:tl];
-    [tl release];
     [tl setFont:[UIFont systemFontOfSize:config.chatNicknameFontSize]];
     [tl setTextColor:[UIColor grayColor]];
     [tl setNumberOfLines:1];
@@ -389,7 +377,6 @@
             if (!delay) delay = gifProps[(NSString *)kCGImagePropertyGIFDelayTime];
             NSTimeInterval dt = delay ? [delay doubleValue] : 0.1;
             totalDuration += dt;
-            [props release];
         } else {
             totalDuration += 0.1;
         }
@@ -481,8 +468,6 @@
                    dispatch_get_main_queue(), ^{
         [self updateAvatars];
     });
-
-    [vc release];
 }
 
 #pragma mark - Separator
@@ -661,13 +646,11 @@
     if (presentingVC) {
         [presentingVC presentViewController:popover animated:YES completion:nil];
     }
-
-    [popover release];
 }
 
 - (void)playHapticFeedback {
-    UIImpactFeedbackGenerator *generator = [[[UIImpactFeedbackGenerator alloc]
-        initWithStyle:UIImpactFeedbackStyleLight] autorelease];
+    UIImpactFeedbackGenerator *generator = [[UIImpactFeedbackGenerator alloc]
+        initWithStyle:UIImpactFeedbackStyleLight];
     [generator prepare];
     [generator impactOccurred];
 }

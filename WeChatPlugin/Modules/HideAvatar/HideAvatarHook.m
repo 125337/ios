@@ -71,7 +71,6 @@ static void updateChatContext(id self) {
     }
 
     if (!username || username.length == 0) {
-        [_cachedUsername release];
         _cachedUsername = nil;
         _currentChatType = MOChatTypeUnknown;
         return;
@@ -83,7 +82,6 @@ static void updateChatContext(id self) {
     }
 
     // Step 4: 更新缓存
-    [_cachedUsername release];
     _cachedUsername = [username copy];
 
     // Step 5: 分类判定 (优先级: gh_ → @chatroom → 默认私聊)

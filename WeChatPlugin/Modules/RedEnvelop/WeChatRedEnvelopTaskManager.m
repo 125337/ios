@@ -5,12 +5,12 @@
 #import "../../Core/LogManager.h"
 
 @interface WeChatRedEnvelopTaskManager ()
-@property (nonatomic, retain) NSOperationQueue *taskQueue;
-@property (nonatomic, retain) NSMutableDictionary *pendingParams;
-@property (nonatomic, retain) NSMutableDictionary *processedMsgIds;
-@property (nonatomic, retain) id blankPlayer;
+@property (nonatomic, strong) NSOperationQueue *taskQueue;
+@property (nonatomic, strong) NSMutableDictionary *pendingParams;
+@property (nonatomic, strong) NSMutableDictionary *processedMsgIds;
+@property (nonatomic, strong) id blankPlayer;
 @property (nonatomic, assign) unsigned long bgTaskId;
-@property (nonatomic, retain) NSTimer *bgTaskTimer;
+@property (nonatomic, strong) NSTimer *bgTaskTimer;
 @end
 
 @implementation WeChatRedEnvelopTaskManager
@@ -27,8 +27,8 @@
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _pendingParams = [[NSMutableDictionary dictionary] retain];
-        _processedMsgIds = [[NSMutableDictionary dictionary] retain];
+        _pendingParams = [NSMutableDictionary dictionary];
+        _processedMsgIds = [NSMutableDictionary dictionary];
         _bgTaskId = 0;
 
         _taskQueue = [NSOperationQueue new];
@@ -243,12 +243,6 @@
 }
 
 - (void)dealloc {
-    [_taskQueue release];
-    [_pendingParams release];
-    [_processedMsgIds release];
-    [_blankPlayer release];
-    [_bgTaskTimer release];
-    [super dealloc];
 }
 
 @end

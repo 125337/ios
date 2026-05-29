@@ -155,7 +155,7 @@ static void processTransferMessage(id wrap) {
 
     if (!transferID.length) return;
 
-    if (!_processedTransferIds) _processedTransferIds = [[NSMutableSet set] retain];
+    if (!_processedTransferIds) _processedTransferIds = [NSMutableSet set];
     @synchronized (_processedTransferIds) {
         if ([_processedTransferIds containsObject:transferID]) return;
         [_processedTransferIds addObject:transferID];
@@ -260,7 +260,7 @@ static void processTransferMessage(id wrap) {
 
     WPLog(@"AutoTransfer", @"[DEBUG] 完整XML: %@", content);
 
-    if (!_pendingTransferData) _pendingTransferData = [[NSMutableDictionary dictionary] retain];
+    if (!_pendingTransferData) _pendingTransferData = [NSMutableDictionary dictionary];
     NSDictionary *transferData = @{
         @"transferID": transferID ?: @"",
         @"fromUsr": fromUsr ?: @"",

@@ -13,8 +13,8 @@ typedef NS_ENUM(NSInteger, WPBorderSide) {
 
 @property (nonatomic, assign) WPBorderSide sides;
 @property (assign) CGFloat borderWidth;
-@property (nonatomic, retain) UIColor *borderColorLight;
-@property (nonatomic, retain) UIColor *borderColorDark;
+@property (nonatomic, strong) UIColor *borderColorLight;
+@property (nonatomic, strong) UIColor *borderColorDark;
 @property (assign) CGFloat cornerRadius;
 @property (nonatomic, assign) UIRectCorner roundedCorners;
 @property (nonatomic, assign) CGFloat leftInset;
@@ -32,7 +32,7 @@ typedef NS_ENUM(NSInteger, WPBorderSide) {
 
 @interface UIView (WPBorder)
 
-@property (nonatomic, retain, readonly) NSMutableArray<WPBorderLayer *> *wp_borderLayers;
+@property (nonatomic, strong, readonly) NSMutableArray<WPBorderLayer *> *wp_borderLayers;
 
 - (void)wp_updateBorderAppearanceForDarkMode:(BOOL)isDark;
 

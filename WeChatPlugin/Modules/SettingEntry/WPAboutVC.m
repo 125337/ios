@@ -33,7 +33,6 @@
     nameLabel.textColor = WPAccent();
     nameLabel.textAlignment = NSTextAlignmentCenter;
     [heroGroup addSubview:nameLabel];
-    [nameLabel release];
     hy += 34;
 
     UILabel *verLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 20)];
@@ -42,7 +41,6 @@
     verLabel.textColor = [UIColor colorWithRed:0.400 green:0.800 blue:0.451 alpha:1.0];
     verLabel.textAlignment = NSTextAlignmentCenter;
     [heroGroup addSubview:verLabel];
-    [verLabel release];
     hy += 24;
 
     UILabel *descLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, hy, w - kPad * 2 - 40, 40)];
@@ -52,7 +50,6 @@
     descLabel.textAlignment = NSTextAlignmentCenter;
     descLabel.numberOfLines = 2;
     [heroGroup addSubview:descLabel];
-    [descLabel release];
     hy += 48;
 
     y = [self finishGroup:heroGroup atY:y height:hy];
@@ -73,7 +70,6 @@
         leftLabel.font = [UIFont systemFontOfSize:15];
         leftLabel.textColor = WPT1();
         [archGroup addSubview:leftLabel];
-        [leftLabel release];
 
         UILabel *rightLabel = [[UILabel alloc] initWithFrame:CGRectMake(kPad + (w - kPad * 2) / 2, ay, (w - kPad * 2) / 2, kRowH)];
         rightLabel.text = archs[i][1];
@@ -81,7 +77,6 @@
         rightLabel.textColor = WPT3();
         rightLabel.textAlignment = NSTextAlignmentRight;
         [archGroup addSubview:rightLabel];
-        [rightLabel release];
         ay += kRowH;
     }
     y = [self finishGroup:archGroup atY:y height:ay];

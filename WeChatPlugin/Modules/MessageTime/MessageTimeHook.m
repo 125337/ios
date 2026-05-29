@@ -176,7 +176,7 @@ static NSMutableDictionary<NSString *, NSNumber *> *_readStatusTracker(void) {
     static NSMutableDictionary *dict;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        dict = [[NSMutableDictionary dictionary] retain];
+        dict = [NSMutableDictionary dictionary];
     });
     return dict;
 }
@@ -773,11 +773,9 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
 
     NSDate *addDate = [NSDate dateWithTimeIntervalSince1970:addTime];
     NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
-    fmt.locale = [[[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"] autorelease];
+    fmt.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
     fmt.dateFormat = config.addTimeSuffixFormat;
     NSString *suffix = [fmt stringFromDate:addDate];
-
-    [fmt release];
 
     return [NSString stringWithFormat:@"%@ %@", origName, suffix];
 }

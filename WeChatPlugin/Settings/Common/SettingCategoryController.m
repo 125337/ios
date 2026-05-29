@@ -135,14 +135,14 @@ static NSString *configPropertyForKey(NSString *key) {
         CGFloat h = [UIScreen mainScreen].bounds.size.height;
         CGRect frame = CGRectMake(0, 0, w, h);
         
-        self.scrollView = [[[UIScrollView alloc] initWithFrame:frame] autorelease];
+        self.scrollView = [[UIScrollView alloc] initWithFrame:frame];
         self.scrollView.backgroundColor = WPBgColor();
         if (@available(iOS 13.0, *)) {
             self.scrollView.automaticallyAdjustsScrollIndicatorInsets = NO;
         }
         [self.view addSubview:self.scrollView];
         
-        self.contentView = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 2000)] autorelease];
+        self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 2000)];
         [self.scrollView addSubview:self.contentView];
         
         self.masterSwitchKeys = [NSMutableSet set];
@@ -174,7 +174,6 @@ static NSString *configPropertyForKey(NSString *key) {
     f.size.width = w - kPad * 2;
     l.frame = f;
     [self.contentView addSubview:l];
-    [l release];
     return y + 32;
 }
 
@@ -186,7 +185,6 @@ static NSString *configPropertyForKey(NSString *key) {
     l.numberOfLines = 0;
     [l sizeToFit];
     [self.contentView addSubview:l];
-    [l release];
     return y + l.frame.size.height + 6;
 }
 
@@ -200,7 +198,6 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [group addSubview:tl];
-    [tl release];
 
     if (hasSubtitle) {
         UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 22, gw - kCellHPadding * 2 - 20, 14)];
@@ -208,7 +205,6 @@ static NSString *configPropertyForKey(NSString *key) {
         dl.font = [UIFont systemFontOfSize:12];
         dl.textColor = WPT2();
         [group addSubview:dl];
-        [dl release];
     }
 
     WPDrawDisclosureArrow(group, cy, gw, kCellHPadding);
@@ -217,7 +213,6 @@ static NSString *configPropertyForKey(NSString *key) {
     btn.tag = tag;
     [btn addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     [group addSubview:btn];
-    [btn release];
     return cy + kRowH;
 }
 
@@ -231,7 +226,6 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [group addSubview:tl];
-    [tl release];
 
     if (desc.length > 0) {
         UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 22, textW, 14)];
@@ -239,7 +233,6 @@ static NSString *configPropertyForKey(NSString *key) {
         dl.font = [UIFont systemFontOfSize:12];
         dl.textColor = WPT2();
         [group addSubview:dl];
-        [dl release];
     }
 
     UISwitch *sw = [[UISwitch alloc] init];
@@ -249,7 +242,6 @@ static NSString *configPropertyForKey(NSString *key) {
     objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [sw addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     [group addSubview:sw];
-    [sw release];
     WPLog(@"Config", @"[SWITCH] 创建 switch: key=%@, isOn=%d, target=%@, action=switchChanged:", key, on, self);
     return cy + kRowH;
 }
@@ -261,7 +253,6 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [group addSubview:tl];
-    [tl release];
 
     UISwitch *sw = [[UISwitch alloc] init];
     sw.on = on;
@@ -270,7 +261,6 @@ static NSString *configPropertyForKey(NSString *key) {
     objc_setAssociatedObject(sw, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [sw addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     [group addSubview:sw];
-    [sw release];
     return cy + kRowH;
 }
 
@@ -290,7 +280,6 @@ static NSString *configPropertyForKey(NSString *key) {
     l.font = [UIFont systemFontOfSize:12];
     l.textColor = WPT3();
     [group addSubview:l];
-    [l release];
     return cy + 20;
 }
 
@@ -302,14 +291,12 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [group addSubview:tl];
-    [tl release];
     
     UILabel *hl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 22, gw - kCellHPadding * 2 - 20, 14)];
     hl.text = hint;
     hl.font = [UIFont systemFontOfSize:12];
     hl.textColor = WPT2();
     [group addSubview:hl];
-    [hl release];
     
     WPDrawDisclosureArrow(group, cy, gw, kCellHPadding);
     
@@ -317,7 +304,6 @@ static NSString *configPropertyForKey(NSString *key) {
     objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [btn addTarget:self action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
     [group addSubview:btn];
-    [btn release];
     
     return cy + kRowH;
 }
@@ -339,7 +325,6 @@ static NSString *configPropertyForKey(NSString *key) {
     l.font = [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold];
     l.textColor = WPT2();
     [group addSubview:l];
-    [l release];
     return cy + 24;
 }
 
@@ -350,7 +335,6 @@ static NSString *configPropertyForKey(NSString *key) {
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [group addSubview:tl];
-    [tl release];
 
     UIColor *currentColor = [[PluginConfig shared] colorFromHex:value] ?: [UIColor grayColor];
 
@@ -371,7 +355,6 @@ static NSString *configPropertyForKey(NSString *key) {
     UIView *sepView = [[UIView alloc] initWithFrame:CGRectMake(kCellHPadding, pixelY, gw - kCellHPadding, onePixel)];
     sepView.backgroundColor = WPSepColor();
     [group addSubview:sepView];
-    [sepView release];
     return cy + onePixel;
 }
 
@@ -381,7 +364,6 @@ static NSString *configPropertyForKey(NSString *key) {
     container.backgroundColor = WPCardBg();
     [container setExpanded:YES animated:NO];
     [group addSubview:container];
-    [container release];
     return container;
 }
 
@@ -492,14 +474,6 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (void)buttonClicked:(NSString *)key {
-}
-
-- (void)dealloc {
-    [_scrollView release];
-    [_contentView release];
-    [_categoryName release];
-    [_masterSwitchKeys release];
-    [super dealloc];
 }
 
 @end
