@@ -349,6 +349,29 @@
             }
         }
     } @catch (NSException *e) {}
+    // ========== 文本占位配置 ==========
+    _placeholderTextEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"PlaceholderTextEnabled"]];
+    _placeholderTextBold = [d boolForKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_Bold"]];
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_Text"]];
+    if (v.length > 0) {
+        _placeholderTextText = [v copy];
+    } else {
+        _placeholderTextText = @"";
+    }
+
+    _placeholderTextFontSize = [d floatForKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_FontSize"]];
+    if (_placeholderTextFontSize == 0) _placeholderTextFontSize = 15.0;
+
+    _placeholderTextAlpha = [d floatForKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_Alpha"]];
+    if (_placeholderTextAlpha == 0) _placeholderTextAlpha = 0.6;
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_ColorHex"]];
+    if (v.length > 0) {
+        _placeholderTextColorHex = [v copy];
+    } else {
+        _placeholderTextColorHex = @"#808080";
+    }
 }
 
 - (void)save {
@@ -488,6 +511,13 @@
         [d setObject:[NSKeyedArchiver archivedDataWithRootObject:_sessionFormats] forKey:[kPluginPrefix stringByAppendingString:@"SessionFormats"]];
         [d setObject:[NSKeyedArchiver archivedDataWithRootObject:_userFormats] forKey:[kPluginPrefix stringByAppendingString:@"UserFormats"]];
     } @catch (NSException *e) {}
+    // ========== 文本占位配置 ==========
+    [d setBool:_placeholderTextEnabled forKey:[kPluginPrefix stringByAppendingString:@"PlaceholderTextEnabled"]];
+    [d setBool:_placeholderTextBold forKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_Bold"]];
+    if (_placeholderTextText) [d setObject:_placeholderTextText forKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_Text"]];
+    [d setFloat:_placeholderTextFontSize forKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_FontSize"]];
+    [d setFloat:_placeholderTextAlpha forKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_Alpha"]];
+    if (_placeholderTextColorHex) [d setObject:_placeholderTextColorHex forKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_ColorHex"]];
 
     [d synchronize];
     WPLog(@"Config", @"[OK] save() completed - NSUserDefaults synchronized");

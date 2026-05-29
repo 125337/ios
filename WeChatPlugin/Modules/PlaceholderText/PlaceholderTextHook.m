@@ -22,12 +22,12 @@
 // MARK: - 配置 Key (与 WPUIPlaceholderTextVC.m 对齐)
 // ============================================================
 
-static NSString *const kEnabled    = @"PlaceholderTextEnabled";
-static NSString *const kText       = @"PlaceholderText_Text";
-static NSString *const kBold       = @"PlaceholderText_Bold";
-static NSString *const kFontSize   = @"PlaceholderText_FontSize";
-static NSString *const kColorHex   = @"PlaceholderText_ColorHex";
-static NSString *const kAlpha      = @"PlaceholderText_Alpha";
+static NSString *const kEnabled    = @"WCP_PlaceholderTextEnabled";
+static NSString *const kText       = @"WCP_PlaceholderText_Text";
+static NSString *const kBold       = @"WCP_PlaceholderText_Bold";
+static NSString *const kFontSize   = @"WCP_PlaceholderText_FontSize";
+static NSString *const kColorHex   = @"WCP_PlaceholderText_ColorHex";
+static NSString *const kAlpha      = @"WCP_PlaceholderText_Alpha";
 
 // ============================================================
 // MARK: - 默认值 (对齐 FUN_0002c284)
