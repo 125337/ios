@@ -201,6 +201,51 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     }
 }
 
+- (void)onEditRowTap:(UIButton *)sender {
+    NSString *key = objc_getAssociatedObject(sender, "editConfigKey");
+    NSString *title = objc_getAssociatedObject(sender, "editTitle");
+    UILabel *valueLabel = objc_getAssociatedObject(sender, "editValueLabel");
+    NSString *hint = objc_getAssociatedObject(sender, "editConfigHint");
+    if (!key || !title) return;
+
+    PluginConfig *config = [PluginConfig shared];
+    NSString *currentValue = nil;
+    @try {
+        id val = [config valueForKey:key];
+        if ([val isKindOfClass:[NSString class]]) currentValue = val;
+        else if ([val isKindOfClass:[NSNumber class]]) currentValue = [val stringValue];
+    } @catch (NSException *e) {}
+
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+                                                                   message:hint ?: nil
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+        textField.text = currentValue ?: @"";
+        textField.placeholder = hint ?: @"";
+        textField.clearButtonMode = UITextFieldViewModeWhileEditing;
+    }];
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        NSString *newValue = alert.textFields.firstObject.text ?: @"";
+        @try {
+            [config setValue:newValue forKey:key];
+            [config save];
+            WPLog(@"Setting", @"[EDIT] %@ = %@", key, newValue);
+            if (valueLabel) {
+                valueLabel.text = newValue.length > 0 ? newValue : hint ?: @"";
+            }
+        } @catch (NSException *e) {
+            WPLog(@"Setting", @"[ERR] save %@: %@ - %@", key, e.name, e.reason);
+        }
+    }]];
+
+    UIViewController *topVC = WPGetTopVCForPresentation();
+    if (topVC) {
+        [topVC presentViewController:alert animated:YES completion:nil];
+    }
+}
+
 - (void)onNavigate:(UIButton *)sender {
     NSString *action = objc_getAssociatedObject(sender, "action");
     if (!action) return;
