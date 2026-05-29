@@ -84,7 +84,12 @@ static NSString *configPropertyForKey(NSString *key) {
             @"AttachLayoutEnabled": @"attachLayoutEnabled",
             @"PlaceholderTextEnabled": @"placeholderTextEnabled",
             @"PlaceholderText_Bold": @"placeholderTextBold",
-            
+            @"HideSeparatorLine": @"hideSeparatorLine",
+            @"HideRevokeHint": @"hideRevokeHint",
+            @"HidePatHint": @"hidePatHint",
+            @"HideVoiceRedDot": @"hideVoiceRedDot",
+            @"HideBubbleBackground": @"hideBubbleBackground",
+            @"DisableDictation": @"disableDictation",
         };
     });
     return mapping[key];
