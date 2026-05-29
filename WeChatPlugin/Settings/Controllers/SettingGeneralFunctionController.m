@@ -14,7 +14,6 @@
 - (void)onAvatarHideTap {
     SettingAvatarHideController *vc = [[SettingAvatarHideController alloc] init];
     [self.navigationController pushViewController:vc animated:YES];
-    [vc release];
 }
 
 @end
@@ -149,7 +148,6 @@
 - (void)onRevokeSettingTap {
     SettingRevokeController *vc = [[SettingRevokeController alloc] init];
     [self.navigationController pushViewController:vc animated:YES];
-    [vc release];
 }
 
 @end
