@@ -370,7 +370,7 @@
         CGImageRef cgImage = CGImageSourceCreateImageAtIndex(source, i, NULL);
         if (!cgImage) continue;
 
-        NSDictionary *props = (NSDictionary *)CGImageSourceCopyPropertiesAtIndex(source, i, NULL);
+        NSDictionary *props = CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(source, i, NULL));
         if (props) {
             NSDictionary *gifProps = props[(NSString *)kCGImagePropertyGIFDictionary];
             NSNumber *delay = gifProps[(NSString *)kCGImagePropertyGIFUnclampedDelayTime];
