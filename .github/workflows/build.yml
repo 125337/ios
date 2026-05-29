@@ -1,4 +1,4 @@
-name: Build WeChat Plugin (Theos)
+name: Build Mio Plugin (Theos)
 
 on:
   workflow_dispatch:
@@ -23,14 +23,14 @@ jobs:
         echo "THEOS=$HOME/theos" >> $GITHUB_ENV
         
     - name: Build dylib
-      working-directory: WeChatPlugin
+      working-directory: MioPlugin
       run: |
         make clean
         make THEOS=$HOME/theos
         
-    - name: Upload WeChatPlugin.dylib
+    - name: Upload MioPlugin.dylib
       uses: actions/upload-artifact@v4
       with:
-        name: WeChatPlugin_Theos.dylib
-        path: WeChatPlugin/.theos/obj/debug/MioHelper.dylib
+        name: MioPlugin_Theos.dylib
+        path: MioPlugin/.theos/obj/debug/MioHelper.dylib
         retention-days: 30

@@ -16,7 +16,7 @@ if [ $# -lt 2 ]; then
     echo "  $0 <IPA路径> <dylib路径> [输出目录]"
     echo ""
     echo -e "${YELLOW}示例:${NC}"
-    echo "  $0 WeChat.ipa WeChatPlugin.dylib ./output"
+    echo "  $0 WeChat.ipa Mio_arm64.dylib ./output"
     exit 1
 fi
 
