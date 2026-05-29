@@ -1,6 +1,10 @@
 #import "WeChatRestartHelper.h"
 #import <UIKit/UIKit.h>
 
+@interface UIApplication (Private)
+- (void)suspend;
+@end
+
 @implementation WeChatRestartHelper
 
 + (void)showRestartAlertFromVC:(UIViewController *)vc {
