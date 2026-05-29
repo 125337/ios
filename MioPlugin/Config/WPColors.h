@@ -1,14 +1,21 @@
 #import <UIKit/UIKit.h>
+#import "PluginConfig.h"
 
 #pragma mark - Separator Colors
 
 __attribute__((unused))
 static UIColor *WPSeparatorColor(void) {
+    if ([PluginConfig shared].hideSeparatorLine) {
+        return [UIColor clearColor];
+    }
     return [UIColor colorWithWhite:0.0 alpha:0.08];
 }
 
 __attribute__((unused))
 static UIColor *WPSeparatorColorDark(void) {
+    if ([PluginConfig shared].hideSeparatorLine) {
+        return [UIColor clearColor];
+    }
     return [UIColor colorWithWhite:1.0 alpha:0.08];
 }
 
