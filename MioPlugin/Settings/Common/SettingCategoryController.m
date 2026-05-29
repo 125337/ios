@@ -859,14 +859,20 @@ static NSString *configPropertyForKey(NSString *key) {
         }
     } else if ([type isEqualToString:@"input"]) {
         NSString *key = row[@"key"];
+        NSString *title = row[@"title"];
+        NSString *hint = row[@"hint"];
         Class handlerClass = objc_getClass("MioPluginSwitchHandler");
         id handler = [handlerClass performSelector:@selector(sharedInstance)];
-        if (handler && [handler respondsToSelector:@selector(handleEditRowTap:)]) {
+        if (handler && [handler respondsToSelector:@selector(onEditRowTap:)]) {
             UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-            [handler performSelector:@selector(handleEditRowTap:) withObject:cell];
             objc_setAssociatedObject(cell, "editConfigKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            NSString *hint = row[@"hint"];
+            objc_setAssociatedObject(cell, "editTitle", title, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(cell, "editValueLabel", cell.detailTextLabel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             if (hint.length > 0) objc_setAssociatedObject(cell, "editConfigHint", hint, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+            [handler performSelector:@selector(onEditRowTap:) withObject:cell];
+#pragma clang diagnostic pop
         }
     }
 }

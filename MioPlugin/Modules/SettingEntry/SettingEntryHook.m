@@ -201,7 +201,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     }
 }
 
-- (void)onEditRowTap:(UIButton *)sender {
+- (void)onEditRowTap:(id)sender {
     NSString *key = objc_getAssociatedObject(sender, "editConfigKey");
     NSString *title = objc_getAssociatedObject(sender, "editTitle");
     UILabel *valueLabel = objc_getAssociatedObject(sender, "editValueLabel");

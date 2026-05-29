@@ -4,7 +4,7 @@
 @interface MioPluginSwitchHandler : NSObject
 + (instancetype)sharedInstance;
 - (void)switchChanged:(UISwitch *)sender;
-- (void)onEditRowTap:(UIButton *)sender;
+- (void)onEditRowTap:(id)sender;
 @end
 
 @interface SettingEntryHook : NSObject
