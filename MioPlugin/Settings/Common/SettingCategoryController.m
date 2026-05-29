@@ -825,10 +825,20 @@ static NSString *configPropertyForKey(NSString *key) {
         if (actionStr.length > 0) {
             SEL action = NSSelectorFromString(actionStr);
             if (tag != 0 && [self respondsToSelector:action]) {
+                BOOL needsArgument = [actionStr hasSuffix:@":"];
+                if (needsArgument) {
+                    UIButton *dummySender = [UIButton buttonWithType:UIButtonTypeCustom];
+                    dummySender.tag = tag;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-                [self performSelector:action];
+                    [self performSelector:action withObject:dummySender];
 #pragma clang diagnostic pop
+                } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+                    [self performSelector:action];
+#pragma clang diagnostic pop
+                }
             }
         }
     } else if ([type isEqualToString:@"button"]) {
