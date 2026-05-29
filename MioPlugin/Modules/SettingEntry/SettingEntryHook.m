@@ -217,7 +217,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     } @catch (NSException *e) {}
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
-                                                                   message:hint ?: nil
+                                                                   message:nil
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
         textField.text = currentValue ?: @"";
