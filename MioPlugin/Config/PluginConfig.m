@@ -107,6 +107,18 @@
         _redEnvelopAutoReplyStr = @"谢谢老板";
     }
 
+    NSInteger autoConfirmDelay = [d integerForKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferDelay"]];
+    _autoConfirmTransferDelay = autoConfirmDelay >= 0 ? (unsigned int)autoConfirmDelay : 0;
+    _autoConfirmTransferMaxAmount = [d integerForKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferMaxAmount"]];
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferAutoReplyStr"]];
+    if (v.length > 0) _autoConfirmTransferAutoReplyStr = [v copy];
+    if (!_autoConfirmTransferAutoReplyStr) _autoConfirmTransferAutoReplyStr = @"已收到款项，谢谢！";
+
+    _autoConfirmTransfer = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransfer"]];
+    _autoConfirmTransferPersonal = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferPersonal"]];
+    _autoConfirmTransferGroup = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferGroup"]];
+    _autoConfirmTransferAutoReply = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferAutoReply"]];
+
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"NotifyFormat"]];
     if (v.length > 0) {
         _notifyFormat = [v copy];
@@ -322,6 +334,17 @@
     
     _showAddTimeSuffix = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     
+    _notifySender = [d boolForKey:[kPluginPrefix stringByAppendingString:@"NotifySender"]];
+    _notifySenderCooldown = [d doubleForKey:[kPluginPrefix stringByAppendingString:@"NotifySenderCooldown"]];
+    
+    _attachLayoutEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AttachLayoutEnabled"]];
+    
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AttachLayout_Columns"]];
+    if (v.length > 0) _attachLayoutColumns = [v copy];
+    
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AttachLayout_Rows"]];
+    if (v.length > 0) _attachLayoutRows = [v copy];
+    
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"AddTimeSuffixFormat"]];
     if (v.length > 0) {
         _addTimeSuffixFormat = [v copy];
@@ -423,6 +446,22 @@
     if (_notifySenderTemplate) [d setObject:_notifySenderTemplate forKey:[kPluginPrefix stringByAppendingString:@"NotifySenderTemplate"]];
     [d setBool:_notifySender forKey:[kPluginPrefix stringByAppendingString:@"NotifySender"]];
     [d setDouble:_notifySenderCooldown forKey:[kPluginPrefix stringByAppendingString:@"NotifySenderCooldown"]];
+    if (_attachLayoutColumns) {
+        [d setObject:_attachLayoutColumns forKey:[kPluginPrefix stringByAppendingString:@"AttachLayout_Columns"]];
+    }
+    if (_attachLayoutRows) {
+        [d setObject:_attachLayoutRows forKey:[kPluginPrefix stringByAppendingString:@"AttachLayout_Rows"]];
+    }
+    [d setBool:_attachLayoutEnabled forKey:[kPluginPrefix stringByAppendingString:@"AttachLayoutEnabled"]];
+    [d setInteger:(NSInteger)_autoConfirmTransferDelay forKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferDelay"]];
+    [d setObject:@(_autoConfirmTransferMaxAmount) forKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferMaxAmount"]];
+    if (_autoConfirmTransferAutoReplyStr) {
+        [d setObject:_autoConfirmTransferAutoReplyStr forKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferAutoReplyStr"]];
+    }
+    [d setBool:_autoConfirmTransfer forKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransfer"]];
+    [d setBool:_autoConfirmTransferPersonal forKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferPersonal"]];
+    [d setBool:_autoConfirmTransferGroup forKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferGroup"]];
+    [d setBool:_autoConfirmTransferAutoReply forKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferAutoReply"]];
 
     [d setObject:_nameColorHex forKey:[kPluginPrefix stringByAppendingString:@"NameColorHex"]];
     [d setObject:_timeColorHex forKey:[kPluginPrefix stringByAppendingString:@"TimeColorHex"]];
