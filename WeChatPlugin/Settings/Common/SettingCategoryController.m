@@ -265,7 +265,7 @@ static NSString *configPropertyForKey(NSString *key) {
 }
 
 - (CGFloat)addInputRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value hint:(NSString *)hint cy:(CGFloat)cy width:(CGFloat)w {
-    id handler = [objc_getClass("WeChatPluginSwitchHandler") sharedInstance];
+    id handler = [(id)objc_getClass("WeChatPluginSwitchHandler") sharedInstance];
     NSString *displayValue = (value && value.length > 0) ? value : hint;
     UIButton *row = WPAddEditableRowWithArrow(group, cy, w, title, displayValue, handler);
     objc_setAssociatedObject(row, "editConfigKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
