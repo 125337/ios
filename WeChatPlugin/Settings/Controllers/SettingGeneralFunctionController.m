@@ -142,7 +142,6 @@
 - (void)onMessageTimeSettingTap {
     SettingMessageTimeController *vc = [[SettingMessageTimeController alloc] init];
     [self.navigationController pushViewController:vc animated:YES];
-    [vc release];
 }
 
 - (void)onRevokeSettingTap {
