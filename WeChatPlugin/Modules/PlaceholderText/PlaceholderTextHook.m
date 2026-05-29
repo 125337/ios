@@ -11,6 +11,13 @@
 #import <objc/runtime.h>
 #import <UIKit/UIKit.h>
 
+@interface NSObject (MMGrowTextViewPlaceholder)
+- (void)setPlaceHolder:(NSString *)text;
+- (void)setPlaceHolderColor:(UIColor *)color;
+- (void)setPlaceholderFont:(UIFont *)font;
+- (void)setPlaceHolderMultiLine:(BOOL)flag;
+@end
+
 // ============================================================
 // MARK: - 配置 Key (与 WPUIPlaceholderTextVC.m 对齐)
 // ============================================================
