@@ -25,14 +25,11 @@ jobs:
       run: |
         set -o pipefail
 
-        # 强制清理旧编译产物
         rm -rf build/
         mkdir -p build
 
         SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-        echo "SDK_PATH: $SDK_PATH"
 
-        # MRC 编译所有 .m 文件
         for f in \
           WeChatPlugin/Tweak.m \
           WeChatPlugin/Config/PluginConfig.m \
@@ -119,7 +116,7 @@ jobs:
                 "$f" || { echo "FAILED: $f"; exit 1; }
         done
 
-        echo "=== Step 2: Link all .o into dylib ==="
+        echo "=== Link all .o into dylib ==="
         clang -arch arm64 \
               -isysroot "$SDK_PATH" \
               -target arm64-apple-ios14.0 \
