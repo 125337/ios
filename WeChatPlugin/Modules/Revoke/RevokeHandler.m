@@ -180,12 +180,10 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         if ([messageMgr respondsToSelector:addSimpleSel]) {
             ((void (*)(id, SEL, id, id))objc_msgSend)(messageMgr, addSimpleSel, session, newWrap);
             WPLog(@"Revoke", @"AddLocalMsg simple success");
-            [newWrap release];
             return YES;
         }
 
         WPLog(@"Revoke", @"no AddLocalMsg method found");
-        [newWrap release];
         return NO;
         
     } @catch (NSException *e) {
@@ -245,7 +243,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
     if (xml.length == 0) return NO;
 
     NSDictionary *parsed = parseRevokeXml(xml);
-    if (!parsed[@"replacemsg"]) { [parsed release]; return NO; }
+    if (!parsed[@"replacemsg"]) return NO;
 
     NSString *session = parsed[@"session"];
 
