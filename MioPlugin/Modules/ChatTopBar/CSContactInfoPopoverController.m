@@ -111,6 +111,24 @@ static NSString *contactStringForKey(id contact, NSString *key) {
     return footer;
 }
 
+- (UIView *)createCardViewWithCornerRadius:(CGFloat)radius {
+    UIView *card = [[UIView alloc] init];
+    card.backgroundColor = [UIColor whiteColor];
+    card.layer.cornerRadius = radius;
+    card.clipsToBounds = YES;
+    card.translatesAutoresizingMaskIntoConstraints = NO;
+    return card;
+}
+
+- (UIImageView *)createAvatarImageView {
+    UIImageView *iv = [[UIImageView alloc] init];
+    iv.layer.cornerRadius = 35;
+    iv.clipsToBounds = YES;
+    iv.contentMode = UIViewContentModeScaleAspectFill;
+    iv.translatesAutoresizingMaskIntoConstraints = NO;
+    return iv;
+}
+
 #pragma mark - 数据构建
 
 - (void)updateUIWithContact:(id)contact {
@@ -135,6 +153,7 @@ static NSString *contactStringForKey(id contact, NSString *key) {
         @"title": [self nicknameValue:contact],
         @"detail": self.wxid ?: @"未知ID",
     };
+    objc_setAssociatedObject((__bridge id)(__bridge void *)item, "contact", contact, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     NSDictionary *section = @{@"header": @"", @"items": @[item]};
     [_sections addObject:[section mutableCopy]];
 }
@@ -244,52 +263,62 @@ static NSString *contactStringForKey(id contact, NSString *key) {
     return UITableViewAutomaticDimension;
 }
 
-#pragma mark - Cell 构建
+#pragma mark - Avatar Cell 构建
 
 - (UITableViewCell *)createAvatarCellForTableView:(UITableView *)tableView atIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"AvatarCell"];
     if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"AvatarCell"];
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"AvatarCell"];
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        cell.backgroundColor = [UIColor clearColor];
 
-        UIImageView *avatarView = [[UIImageView alloc] init];
-        avatarView.tag = 1000;
-        avatarView.layer.cornerRadius = 35;
-        avatarView.clipsToBounds = YES;
-        avatarView.contentMode = UIViewContentModeScaleAspectFill;
-        avatarView.translatesAutoresizingMaskIntoConstraints = NO;
-        [cell.contentView addSubview:avatarView];
+        // 白色圆角卡片容器
+        UIView *cardView = [self createCardViewWithCornerRadius:16];
+        cardView.tag = 1000;
+        [cell.contentView addSubview:cardView];
 
         [NSLayoutConstraint activateConstraints:@[
-            [avatarView.centerXAnchor constraintEqualToAnchor:cell.contentView.centerXAnchor],
-            [avatarView.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:16],
-            [avatarView.widthAnchor constraintEqualToConstant:70],
-            [avatarView.heightAnchor constraintEqualToConstant:70],
+            [cardView.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:12],
+            [cardView.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:4],
+            [cardView.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-4],
+            [cardView.bottomAnchor constraintEqualToAnchor:cell.contentView.bottomAnchor constant:-12],
         ]];
 
-        UILabel *nameLabel = [[UILabel alloc] init];
-        nameLabel.tag = 1001;
-        nameLabel.font = [UIFont boldSystemFontOfSize:20];
-        nameLabel.textColor = [UIColor darkTextColor];
-        nameLabel.textAlignment = NSTextAlignmentCenter;
-        nameLabel.numberOfLines = 0;
-        nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [cell.contentView addSubview:nameLabel];
+        // 头像
+        UIImageView *avatarView = [self createAvatarImageView];
+        avatarView.tag = 1001;
+        [cardView addSubview:avatarView];
 
         [NSLayoutConstraint activateConstraints:@[
-            [nameLabel.centerXAnchor constraintEqualToAnchor:cell.contentView.centerXAnchor],
-            [nameLabel.topAnchor constraintEqualToAnchor:avatarView.bottomAnchor constant:16],
-            [nameLabel.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:10],
-            [nameLabel.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-10],
+            [avatarView.centerYAnchor constraintEqualToAnchor:cardView.centerYAnchor],
+            [avatarView.leadingAnchor constraintEqualToAnchor:cardView.leadingAnchor constant:16],
+            [avatarView.widthAnchor constraintEqualToConstant:68],
+            [avatarView.heightAnchor constraintEqualToConstant:68],
+        ]];
+
+        // 昵称
+        UILabel *nameLabel = [[UILabel alloc] init];
+        nameLabel.tag = 1002;
+        nameLabel.font = [UIFont boldSystemFontOfSize:20];
+        nameLabel.textColor = [UIColor darkTextColor];
+        nameLabel.numberOfLines = 0;
+        nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [cardView addSubview:nameLabel];
+
+        [NSLayoutConstraint activateConstraints:@[
+            [nameLabel.topAnchor constraintEqualToAnchor:cardView.topAnchor constant:16],
+            [nameLabel.bottomAnchor constraintEqualToAnchor:cardView.bottomAnchor constant:-16],
+            [nameLabel.leadingAnchor constraintEqualToAnchor:avatarView.trailingAnchor constant:10],
+            [nameLabel.trailingAnchor constraintEqualToAnchor:cardView.trailingAnchor constant:-16],
         ]];
     }
 
-    UIImageView *av = [cell.contentView viewWithTag:1000];
+    UIImageView *av = [cell.contentView viewWithTag:1001];
     if (self.avatarImage) {
         av.image = self.avatarImage;
     }
 
-    UILabel *nl = [cell.contentView viewWithTag:1001];
+    UILabel *nl = [cell.contentView viewWithTag:1002];
     NSDictionary *sec = _sections[0];
     NSDictionary *item = sec[@"items"][0];
     nl.text = item[@"title"] ?: @"未知";
@@ -297,48 +326,65 @@ static NSString *contactStringForKey(id contact, NSString *key) {
     return cell;
 }
 
+#pragma mark - Detail Cell 构建
+
 - (UITableViewCell *)createDetailCellForTableView:(UITableView *)tableView atIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"DetailCell"];
     if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"DetailCell"];
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"DetailCell"];
         cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+        cell.backgroundColor = [UIColor clearColor];
 
-        UILabel *titleLabel = [[UILabel alloc] init];
-        titleLabel.tag = 2000;
-        titleLabel.font = [UIFont boldSystemFontOfSize:12];
-        titleLabel.textColor = [UIColor grayColor];
-        titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [cell.contentView addSubview:titleLabel];
+        // 白色圆角卡片容器
+        UIView *cardView = [self createCardViewWithCornerRadius:12];
+        cardView.tag = 2000;
+        [cell.contentView addSubview:cardView];
 
         [NSLayoutConstraint activateConstraints:@[
-            [titleLabel.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:4],
-            [titleLabel.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:12],
-            [titleLabel.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-12],
+            [cardView.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:4],
+            [cardView.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:4],
+            [cardView.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-4],
+            [cardView.bottomAnchor constraintEqualToAnchor:cell.contentView.bottomAnchor constant:-4],
         ]];
 
+        // 标题
+        UILabel *titleLabel = [[UILabel alloc] init];
+        titleLabel.tag = 2001;
+        titleLabel.font = [UIFont systemFontOfSize:16];
+        titleLabel.textColor = [UIColor grayColor];
+        titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [cardView addSubview:titleLabel];
+
+        [NSLayoutConstraint activateConstraints:@[
+            [titleLabel.topAnchor constraintEqualToAnchor:cardView.topAnchor constant:12],
+            [titleLabel.centerXAnchor constraintEqualToAnchor:cardView.centerXAnchor],
+            [titleLabel.heightAnchor constraintEqualToConstant:50],
+        ]];
+
+        // 详情
         UILabel *detailLabel = [[UILabel alloc] init];
-        detailLabel.tag = 2001;
+        detailLabel.tag = 2002;
         detailLabel.font = [UIFont systemFontOfSize:15];
         detailLabel.textColor = [UIColor lightGrayColor];
         detailLabel.numberOfLines = 0;
         detailLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [cell.contentView addSubview:detailLabel];
+        [cardView addSubview:detailLabel];
 
         [NSLayoutConstraint activateConstraints:@[
-            [detailLabel.topAnchor constraintEqualToAnchor:titleLabel.bottomAnchor constant:-12],
-            [detailLabel.leadingAnchor constraintEqualToAnchor:titleLabel.leadingAnchor],
-            [detailLabel.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-12],
-            [detailLabel.bottomAnchor constraintEqualToAnchor:cell.contentView.bottomAnchor constant:-12],
+            [detailLabel.topAnchor constraintEqualToAnchor:titleLabel.bottomAnchor],
+            [detailLabel.leadingAnchor constraintEqualToAnchor:cardView.leadingAnchor constant:12],
+            [detailLabel.trailingAnchor constraintEqualToAnchor:cardView.trailingAnchor constant:-12],
+            [detailLabel.bottomAnchor constraintEqualToAnchor:cardView.bottomAnchor constant:-12],
         ]];
     }
 
     NSDictionary *sec = _sections[indexPath.section];
     NSDictionary *item = sec[@"items"][indexPath.row];
 
-    UILabel *tl = [cell.contentView viewWithTag:2000];
+    UILabel *tl = [cell.contentView viewWithTag:2001];
     tl.text = item[@"title"];
 
-    UILabel *dl = [cell.contentView viewWithTag:2001];
+    UILabel *dl = [cell.contentView viewWithTag:2002];
     NSString *detail = item[@"detail"] ?: @"暂无";
     dl.text = detail;
 
