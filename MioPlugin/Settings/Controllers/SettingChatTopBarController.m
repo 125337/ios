@@ -5,6 +5,7 @@
 #import "../../Config/Constants.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import <PhotosUI/PhotosUI.h>
+#import <MobileCoreServices/MobileCoreServices.h>
 
 @interface SettingChatTopBarController () <PHPickerViewControllerDelegate>
 @property (nonatomic, strong) NSMutableArray *inputFields;
@@ -210,11 +211,7 @@ static NSString *keyForTag(NSInteger tag) {
 - (void)onPickGIFImage {
     PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
     config.selectionLimit = 1;
-    if (@available(iOS 14.0, *)) {
-        config.filter = [PHPickerFilter anyFilterMatchingSubfilters:@[
-            [PHPickerFilter filterWithUTType:(__bridge NSString *)kUTTypeGIF]
-        ]];
-    }
+    config.filter = [PHPickerFilter imagesFilter];
 
     PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
     picker.delegate = self;
