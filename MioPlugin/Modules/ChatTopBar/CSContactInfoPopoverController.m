@@ -46,6 +46,10 @@ static NSInteger contactIntForKey(id contact, NSString *key) {
     return 0;
 }
 
+static NSInteger safeContactInt(id contact, NSString *key) {
+    return contactIntForKey(contact, key);
+}
+
 static NSString *contactStringForKey(id contact, NSString *key) {
     id val = contactValueForKey(contact, key);
     if (val && [val isKindOfClass:[NSString class]] && [(NSString *)val length] > 0) return val;
@@ -252,6 +256,10 @@ static NSString *contactStringForKey(id contact, NSString *key) {
 - (NSString *)ownerValue:(id)contact {
     NSString *owner = contactStringForKey(contact, @"m_nsOwner");
     return owner;
+}
+
+- (NSUInteger)safeMemberCount:(id)contact {
+    return (NSUInteger)contactIntForKey(contact, @"m_uiChatRoomMemCount");
 }
 
 - (NSUInteger)memberCountValue:(id)contact {
