@@ -144,35 +144,80 @@ static NSString *contactStringForKey(id contact, NSString *key) {
 }
 
 - (void)addBasicInfoSection:(id)contact {
-    NSArray *items = @[
-        @{@"title": @"昵称", @"detail": [self nicknameValue:contact]},
-        @{@"title": @"微信号", @"detail": [self wxidValue]},
-        @{@"title": @"备注", @"detail": [self remarkValue]},
-        @{@"title": @"性别", @"detail": [self genderValue]},
-        @{@"title": @"地区", @"detail": [self locationValue]},
-        @{@"title": @"签名", @"detail": [self signatureValue]},
-    ];
-    NSDictionary *section = @{@"header": @"基本信息", @"items": items};
-    [_sections addObject:[section mutableCopy]];
+    NSMutableArray *items = [NSMutableArray array];
+
+    NSString *typeLabel = [self chatTypeValue:contact];
+    if (typeLabel.length) {
+        [items addObject:@{@"title": @"类型", @"detail": typeLabel, @"icon": @"person.text.rectangle"}];
+    }
+
+    NSString *remark = [self remarkRawValue];
+    if (remark.length) {
+        [items addObject:@{@"title": @"备注", @"detail": remark, @"icon": @"pencil.tip"}];
+    }
+
+    NSString *wxid = [self wxidValue];
+    if (wxid.length) {
+        [items addObject:@{@"title": @"微信号", @"detail": wxid, @"icon": @"number"}];
+    }
+
+    NSString *nickname = [self nicknameValue:contact];
+    if (nickname.length && ![nickname isEqualToString:remark]) {
+        [items addObject:@{@"title": @"昵称", @"detail": nickname, @"icon": @"person"}];
+    }
+
+    NSString *gender = [self genderValue];
+    if (gender.length) {
+        [items addObject:@{@"title": @"性别", @"detail": gender, @"icon": @"person.fill.questionmark"}];
+    }
+
+    NSString *loc = [self locationValue];
+    if (loc.length) {
+        [items addObject:@{@"title": @"地区", @"detail": loc, @"icon": @"location"}];
+    }
+
+    NSString *sig = [self signatureValue];
+    if (sig.length) {
+        [items addObject:@{@"title": @"签名", @"detail": sig, @"icon": @"text.quote"}];
+    }
+
+    if (items.count) {
+        NSDictionary *section = @{@"header": @"基本信息", @"items": items};
+        [_sections addObject:[section mutableCopy]];
+    }
 }
 
 - (void)addGroupInfoSection:(id)contact {
-    NSArray *items = @[
-        @{@"title": @"昵称", @"detail": [self nicknameValue:contact]},
-        @{@"title": @"群主", @"detail": @"暂无"},
-        @{@"title": @"群成员", @"detail": @"暂无"},
-    ];
-    NSDictionary *section = @{@"header": @"群聊信息", @"items": items};
-    [_sections addObject:[section mutableCopy]];
+    NSMutableArray *items = [NSMutableArray array];
+
+    NSString *owner = [self ownerValue:contact];
+    if (owner.length) {
+        [items addObject:@{@"title": @"群主", @"detail": owner, @"icon": @"crown"}];
+    }
+
+    NSUInteger count = [self memberCountValue:contact];
+    if (count > 0) {
+        [items addObject:@{@"title": @"群成员", @"detail": [NSString stringWithFormat:@"%lu 人", (unsigned long)count], @"icon": @"person.3"}];
+    }
+
+    if (items.count) {
+        NSDictionary *section = @{@"header": @"群聊信息", @"items": items};
+        [_sections addObject:[section mutableCopy]];
+    }
 }
 
 - (void)addOfficialAccountInfoSection:(id)contact {
-    NSArray *items = @[
-        @{@"title": @"昵称", @"detail": [self nicknameValue:contact]},
-        @{@"title": @"认证", @"detail": [self verifyFlagValue:contact]},
-    ];
-    NSDictionary *section = @{@"header": @"公众号信息", @"items": items};
-    [_sections addObject:[section mutableCopy]];
+    NSMutableArray *items = [NSMutableArray array];
+
+    [items addObject:@{@"title": @"公众号类型", @"detail": @"服务号", @"icon": @"megaphone"}];
+
+    NSString *verify = [self verifyFlagValue:contact];
+    [items addObject:@{@"title": @"认证状态", @"detail": verify, @"icon": @"checkmark.seal"}];
+
+    if (items.count) {
+        NSDictionary *section = @{@"header": @"公众号信息", @"items": items};
+        [_sections addObject:[section mutableCopy]];
+    }
 }
 
 #pragma mark - 数据取值
@@ -182,8 +227,53 @@ static NSString *contactStringForKey(id contact, NSString *key) {
     return val ?: @"未知";
 }
 
+- (NSString *)chatTypeValue:(id)contact {
+    NSString *name = ((id (*)(id, SEL))objc_msgSend)(contact, @selector(m_nsUsrName));
+    if ([name hasPrefix:@"gh_"]) return @"公众号";
+    if ([name containsString:@"@chatroom"]) return @"群聊";
+    return @"联系人";
+}
+
+- (NSString *)remarkRawValue {
+    NSString *remark = contactStringForKey(self.contact, @"m_nsRemark");
+    if (remark) return remark;
+    return contactStringForKey(self.contact, @"m_nsRemarkName");
+}
+
+- (NSString *)ownerValue:(id)contact {
+    NSString *owner = contactStringForKey(contact, @"m_nsOwner");
+    return owner;
+}
+
+- (NSUInteger)memberCountValue:(id)contact {
+    id members = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsChatRoomMembers"));
+    if ([members isKindOfClass:[NSString class]]) {
+        NSArray *arr = [((NSString *)members) componentsSeparatedByString:@";"];
+        NSUInteger c = 0;
+        for (NSString *m in arr) { if (m.length) c++; }
+        return c;
+    }
+    Class svc = objc_getClass("MMServiceCenter");
+    if (svc) {
+        id center = ((id (*)(Class, SEL))objc_msgSend)(svc, NSSelectorFromString(@"defaultCenter"));
+        id mgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"),
+            objc_getClass("CContactMgr"));
+        if (mgr && ((BOOL (*)(id, SEL, SEL))objc_msgSend)(mgr, @selector(respondsToSelector:),
+            @selector(getGroupMemberCountForContact:))) {
+            return ((unsigned int (*)(id, SEL, id))objc_msgSend)(mgr,
+                @selector(getGroupMemberCountForContact:), contact);
+        }
+    }
+    return 0;
+}
+
 - (NSString *)wxidValue {
-    return self.wxid ?: @"未知ID";
+    if (!self.wxid) return @"";
+    if ([self.wxid hasPrefix:@"gh_"]) {
+        NSString *alias = contactStringForKey(self.contact, @"m_nsAliasName");
+        if (alias.length) return alias;
+    }
+    return self.wxid;
 }
 
 - (NSString *)remarkValue {
@@ -196,9 +286,9 @@ static NSString *contactStringForKey(id contact, NSString *key) {
 
 - (NSString *)genderValue {
     NSInteger sex = contactIntForKey(self.contact, @"m_uiSex");
-    if (sex == 1) return @"男";
-    if (sex == 2) return @"女";
-    return @"未知";
+    if (sex == 1) return @"♂";
+    if (sex == 2) return @"♀";
+    return @"";
 }
 
 - (NSString *)locationValue {
@@ -303,6 +393,11 @@ static NSString *contactStringForKey(id contact, NSString *key) {
 
     cell.textLabel.text = item[@"title"];
     cell.detailTextLabel.text = item[@"detail"] ?: @"暂无";
+
+    NSString *iconName = item[@"icon"];
+    if (iconName.length && @available(iOS 13.0, *)) {
+        cell.imageView.image = [UIImage systemImageNamed:iconName];
+    }
 
     return cell;
 }
