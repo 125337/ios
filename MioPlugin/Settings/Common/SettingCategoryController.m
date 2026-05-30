@@ -134,6 +134,10 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     return table;
 }
 
+- (void)addRowToTable:(UITableView *)table row:(NSDictionary *)row {
+    [rowsForTable(table) addObject:row];
+}
+
 - (CGFloat)finishGroup:(UIView *)group atY:(CGFloat)y height:(CGFloat)h {
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
@@ -296,6 +300,10 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 #pragma mark - Row: Input
 
 - (CGFloat)addInputRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value hint:(NSString *)hint cy:(CGFloat)cy width:(CGFloat)w {
+    return [self addInputRowInGroup:group title:title key:key value:value hint:hint alertTitle:nil alertMessage:nil cy:cy width:w];
+}
+
+- (CGFloat)addInputRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value hint:(NSString *)hint alertTitle:(NSString *)alertTitle alertMessage:(NSString *)alertMessage cy:(CGFloat)cy width:(CGFloat)w {
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
@@ -304,7 +312,9 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         row[@"key"] = key;
         if (value.length > 0) row[@"value"] = value;
         if (hint.length > 0) row[@"hint"] = hint;
-        [rowsForTable(table) addObject:row];
+        if (alertTitle.length > 0) row[@"alertTitle"] = alertTitle;
+        if (alertMessage.length > 0) row[@"alertMessage"] = alertMessage;
+        [self addRowToTable:table row:row];
         return cy + kRowH;
     }
 
@@ -314,6 +324,8 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     UIButton *row = WPAddEditableRowWithArrow(group, cy, w, title, displayValue, handler);
     objc_setAssociatedObject(row, "editConfigKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (hint) objc_setAssociatedObject(row, "editConfigHint", hint, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (alertTitle) objc_setAssociatedObject(row, "editTitle", alertTitle, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (alertMessage) objc_setAssociatedObject(row, "editMessage", alertMessage, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     return cy + kRowH;
 }
 
@@ -789,7 +801,7 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         }
     } else if ([type isEqualToString:@"input"]) {
         NSString *key = row[@"key"];
-        NSString *title = row[@"title"];
+        NSString *title = row[@"alertTitle"] ?: row[@"title"];
         NSString *hint = row[@"hint"];
         Class handlerClass = objc_getClass("MioPluginSwitchHandler");
         id handler = [handlerClass performSelector:@selector(sharedInstance)];
@@ -799,6 +811,8 @@ static NSMutableArray *rowsForTable(UITableView *table) {
             objc_setAssociatedObject(cell, "editTitle", title, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             objc_setAssociatedObject(cell, "editValueLabel", cell.detailTextLabel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             if (hint.length > 0) objc_setAssociatedObject(cell, "editConfigHint", hint, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            NSString *message = row[@"alertMessage"];
+            if (message.length > 0) objc_setAssociatedObject(cell, @"editMessage", message, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
             [handler performSelector:@selector(onEditRowTap:) withObject:cell];

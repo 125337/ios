@@ -55,38 +55,46 @@
 
         CGFloat cr = cfg.listCellCornerRadius > 0 ? cfg.listCellCornerRadius : 18.0;
         *ecy = [self addInputRowInGroup:expand
-                                  title:@"Cell圆角半径"
-                                    key:@"listCellCornerRadius"
-                                  value:[NSString stringWithFormat:@"%.0f", cr]
-                                   hint:@"18"
-                                     cy:*ecy width:w];
+                                   title:@"Cell圆角半径"
+                                     key:@"listCellCornerRadius"
+                                   value:[NSString stringWithFormat:@"%.0f", cr]
+                                    hint:@"18"
+                              alertTitle:@"设置列表圆角半径"
+                            alertMessage:@"请输入圆角半径(5-30像素)"
+                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         CGFloat lm = cfg.listCellMargin > 0 ? cfg.listCellMargin : 9.0;
         *ecy = [self addInputRowInGroup:expand
-                                  title:@"Cell左右边距"
-                                    key:@"listCellMargin"
-                                  value:[NSString stringWithFormat:@"%.0f", lm]
-                                   hint:@"9"
-                                     cy:*ecy width:w];
+                                   title:@"Cell左右边距"
+                                     key:@"listCellMargin"
+                                   value:[NSString stringWithFormat:@"%.0f", lm]
+                                    hint:@"9"
+                              alertTitle:@"设置Cell左右边距"
+                            alertMessage:@"请输入边距值(1-30像素)"
+                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         CGFloat pt = cfg.listPinnedSessionTopSpacing > 0 ? cfg.listPinnedSessionTopSpacing : 15.0;
         *ecy = [self addInputRowInGroup:expand
-                                  title:@"置顶会话距顶栏间距"
-                                    key:@"listPinnedSessionTopSpacing"
-                                  value:[NSString stringWithFormat:@"%.0f", pt]
-                                   hint:@"15"
-                                     cy:*ecy width:w];
+                                   title:@"置顶会话距顶栏间距"
+                                     key:@"listPinnedSessionTopSpacing"
+                                   value:[NSString stringWithFormat:@"%.0f", pt]
+                                    hint:@"15"
+                              alertTitle:@"设置置顶会话距顶部间距"
+                            alertMessage:@"请输入间距值(1-50像素)"
+                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         CGFloat ns = cfg.listNormalSessionSpacing > 0 ? cfg.listNormalSessionSpacing : 15.0;
         *ecy = [self addInputRowInGroup:expand
-                                  title:@"普通会话距置顶会话间距"
-                                    key:@"listNormalSessionSpacing"
-                                  value:[NSString stringWithFormat:@"%.0f", ns]
-                                   hint:@"15"
-                                     cy:*ecy width:w];
+                                   title:@"普通会话距置顶会话间距"
+                                     key:@"listNormalSessionSpacing"
+                                   value:[NSString stringWithFormat:@"%.0f", ns]
+                                    hint:@"15"
+                              alertTitle:@"设置普通会话距置顶会话间距"
+                            alertMessage:@"请输入间距值(1-50像素)"
+                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         *ecy = [self addColorRowInGroup:expand
