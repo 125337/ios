@@ -473,9 +473,10 @@
 #pragma mark - Separator
 
 - (BOOL)loadSeparatorIcon {
+    PluginConfig *config = [PluginConfig shared];
+
     // 1. 优先检查 GIF 文件路径
-    NSString *gifPath = [[NSUserDefaults standardUserDefaults]
-        stringForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
+    NSString *gifPath = config.chatSeparatorGIF;
     if (gifPath.length && [[NSFileManager defaultManager] fileExistsAtPath:gifPath]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             NSData *data = [NSData dataWithContentsOfFile:gifPath];
@@ -490,8 +491,7 @@
     }
 
     // 2. 检查静态图标文件路径
-    NSString *iconPath = [[NSUserDefaults standardUserDefaults]
-        stringForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
+    NSString *iconPath = config.chatSeparatorIcon;
     if (iconPath.length && [[NSFileManager defaultManager] fileExistsAtPath:iconPath]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             NSData *data = [NSData dataWithContentsOfFile:iconPath];
@@ -501,19 +501,6 @@
                 self.separatorView.hidden = NO;
                 [self.separatorView sizeToFit];
             }
-        });
-        return YES;
-    }
-
-    // 3. 兼容旧 NSData 格式
-    NSData *iconData = [[NSUserDefaults standardUserDefaults]
-        dataForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
-    if (iconData) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            UIImage *icon = [UIImage imageWithData:iconData];
-            self.separatorView.image = icon;
-            self.separatorView.hidden = NO;
-            [self.separatorView sizeToFit];
         });
         return YES;
     }

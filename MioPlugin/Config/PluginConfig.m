@@ -332,6 +332,15 @@
         _chatAddTimeSuffixFormat = @"%ld天";
     }
     
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"]];
+    if (v.length > 0) _chatAvatarBlacklist = [v copy];
+    
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
+    if (v.length > 0) _chatSeparatorIcon = [v copy];
+    
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
+    if (v.length > 0) _chatSeparatorGIF = [v copy];
+    
     _showAddTimeSuffix = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     
     _notifySender = [d boolForKey:[kPluginPrefix stringByAppendingString:@"NotifySender"]];
@@ -539,6 +548,15 @@
     }
     if (_chatAddTimeSuffixFormat) {
         [d setObject:_chatAddTimeSuffixFormat forKey:[kPluginPrefix stringByAppendingString:@"ChatAddTimeSuffixFormat"]];
+    }
+    if (_chatAvatarBlacklist) {
+        [d setObject:_chatAvatarBlacklist forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"]];
+    }
+    if (_chatSeparatorIcon) {
+        [d setObject:_chatSeparatorIcon forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
+    }
+    if (_chatSeparatorGIF) {
+        [d setObject:_chatSeparatorGIF forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
     }
     [d setBool:_showAddTimeSuffix forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     

@@ -251,11 +251,10 @@ static NSString *keyForTag(NSInteger tag) {
 
 - (void)onBlacklistTap {
     ChatTopBarBlacklistEditorVC *vc = [[ChatTopBarBlacklistEditorVC alloc] init];
-    NSString *key = [kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"];
-    vc.blacklist = [[NSUserDefaults standardUserDefaults] stringForKey:key];
+    vc.blacklist = [PluginConfig shared].chatAvatarBlacklist;
     vc.saveBlock = ^(NSString *blacklist) {
-        [[NSUserDefaults standardUserDefaults] setObject:blacklist forKey:key];
-        [[NSUserDefaults standardUserDefaults] synchronize];
+        [PluginConfig shared].chatAvatarBlacklist = blacklist;
+        [[PluginConfig shared] save];
     };
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
@@ -433,22 +432,18 @@ didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey, id> 
     PluginConfig *config = [PluginConfig shared];
 
     if (picker.view.tag == 100) {
-        // 保存 PNG 到文件，存储路径
         NSData *pngData = UIImagePNGRepresentation(image);
         NSString *iconPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/MioChatSeparatorIcon.png"];
         [pngData writeToFile:iconPath atomically:YES];
-        [[NSUserDefaults standardUserDefaults] setObject:iconPath
-                                                  forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
+        config.chatSeparatorIcon = iconPath;
     } else if (picker.view.tag == 200) {
-        // GIF 直接使用原文件路径
         NSURL *gifURL = info[UIImagePickerControllerImageURL];
         if (gifURL) {
-            [[NSUserDefaults standardUserDefaults] setObject:gifURL.path
-                                                      forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
+            config.chatSeparatorGIF = gifURL.path;
         }
     }
 
-    [[NSUserDefaults standardUserDefaults] synchronize];
+    [config save];
     [picker dismissViewControllerAnimated:YES completion:^{
         [self buildUI];
     }];

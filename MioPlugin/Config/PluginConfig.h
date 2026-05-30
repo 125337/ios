@@ -104,6 +104,9 @@
 @property (nonatomic, assign) CGFloat chatNicknameOffsetX;   // 昵称水平偏移
 @property (nonatomic, copy)   NSString *chatGroupMemberCountSuffix;  // 群成员数后缀格式（默认"%u人"）
 @property (nonatomic, copy)   NSString *chatAddTimeSuffixFormat;     // 聊天顶栏添加时间后缀格式（默认"%ld天"）
+@property (nonatomic, copy)   NSString *chatAvatarBlacklist;         // 头像黑名单（JSON字符串）
+@property (nonatomic, copy)   NSString *chatSeparatorIcon;           // 自定义分隔符图标路径
+@property (nonatomic, copy)   NSString *chatSeparatorGIF;            // 自定义分隔符GIF路径
 
 #pragma mark - 名字颜色设置
 @property (nonatomic, assign) BOOL enableChatNameColor;      // 启用聊天界面名称颜色

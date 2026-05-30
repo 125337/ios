@@ -1,6 +1,7 @@
 #import "ChatTopBarBlacklistEditorVC.h"
 #import "../../Config/WPColors.h"
 #import "../../Config/Constants.h"
+#import "../../Config/PluginConfig.h"
 
 @interface ChatTopBarBlacklistEditorVC () <UITextViewDelegate>
 @property (nonatomic, strong) UIScrollView *scrollView;
@@ -26,11 +27,10 @@
     y += 20.0;
     y = [self buildEditorSectionAtY:y width:w];
 
-    // 加载已有黑名单（优先使用传入的 blacklist，fallback NSUserDefaults）
+    // 加载已有黑名单（优先使用传入的 blacklist，fallback PluginConfig）
     NSString *saved = self.blacklist;
     if (!saved.length) {
-        saved = [[NSUserDefaults standardUserDefaults]
-            stringForKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"]];
+        saved = [PluginConfig shared].chatAvatarBlacklist;
     }
     if (saved.length > 0) {
         self.editorView.text = saved;
@@ -198,10 +198,6 @@
     }
 
     NSString *cleanText = [deduped componentsJoinedByString:@"\n"];
-
-    NSString *key = [kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"];
-    [[NSUserDefaults standardUserDefaults] setObject:cleanText forKey:key];
-    [[NSUserDefaults standardUserDefaults] synchronize];
 
     // saveBlock 回调
     if (self.saveBlock) {

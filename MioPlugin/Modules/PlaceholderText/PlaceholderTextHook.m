@@ -19,17 +19,6 @@
 @end
 
 // ============================================================
-// MARK: - 配置 Key (与 WPUIPlaceholderTextVC.m 对齐)
-// ============================================================
-
-static NSString *const kEnabled    = @"Mio_PlaceholderTextEnabled";
-static NSString *const kText       = @"Mio_PlaceholderText_Text";
-static NSString *const kBold       = @"Mio_PlaceholderText_Bold";
-static NSString *const kFontSize   = @"Mio_PlaceholderText_FontSize";
-static NSString *const kColorHex   = @"Mio_PlaceholderText_ColorHex";
-static NSString *const kAlpha      = @"Mio_PlaceholderText_Alpha";
-
-// ============================================================
 // MARK: - 默认值 (对齐 FUN_0002c284)
 // ============================================================
 
@@ -73,15 +62,6 @@ static BOOL isBaseMsgContentVC(UIViewController *vc) {
 }
 
 // ============================================================
-// MARK: - 辅助函数: 安全解析 float (UI 层存储为 NSString)
-// ============================================================
-
-static CGFloat safeFloat(NSString *str, CGFloat fallback) {
-    if (!str || str.length == 0) return fallback;
-    return [str floatValue];
-}
-
-// ============================================================
 // MARK: - Hook: MMGrowTextView.layoutSubviews
 //         对齐 FUN_0002c284 (L26655-L26864)
 // ============================================================
@@ -107,22 +87,23 @@ static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
     if (!isBaseMsgContentVC(parentVC)) return;
 
     // ⑤ 读取配置 (L26720-L26723)
-    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    if (![d boolForKey:kEnabled]) return;
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.placeholderTextEnabled) return;
 
     // ⑥ 占位文本内容 (L26726-L26733)
-    NSString *content = [d stringForKey:kText];
+    NSString *content = config.placeholderTextText;
     if (content.length > 0) {
         [self setPlaceHolder:content];
     }
 
     // ⑦ 占位文本颜色 (L26734-L26783)
-    NSString *hexColor = [d stringForKey:kColorHex];
-    CGFloat alpha = safeFloat([d stringForKey:kAlpha], kDefaultAlpha);
+    NSString *hexColor = config.placeholderTextColorHex;
+    CGFloat alpha = config.placeholderTextAlpha;
+    if (alpha <= 0) alpha = kDefaultAlpha;
 
     UIColor *color = nil;
     if (hexColor.length > 0) {
-        color = [[PluginConfig shared] colorFromHex:hexColor];
+        color = [config colorFromHex:hexColor];
     }
     if (!color) {
         // 没有设置颜色时使用默认灰色 + alpha
@@ -134,11 +115,11 @@ static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
     [self setPlaceHolderColor:color];
 
     // ⑧ 字体大小 + 粗体 (L26785-L26800)
-    CGFloat fontSize = safeFloat([d stringForKey:kFontSize], kDefaultFontSize);
+    CGFloat fontSize = config.placeholderTextFontSize;
     if (fontSize <= 0) fontSize = kDefaultFontSize;
 
     if ([self respondsToSelector:@selector(setPlaceholderFont:)]) {
-        BOOL bold = [d boolForKey:kBold];
+        BOOL bold = config.placeholderTextBold;
         UIFont *font = bold
             ? [UIFont boldSystemFontOfSize:fontSize]
             : [UIFont systemFontOfSize:fontSize];
