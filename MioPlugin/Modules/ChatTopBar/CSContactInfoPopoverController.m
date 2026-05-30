@@ -60,33 +60,56 @@ enum {
 
 #pragma mark - Contact Info Helpers
 
+#define SAFE_CALL_OBJC(rettype, obj, sel) \
+    ({ rettype __r = ({ rettype _v = 0; _v; }); \
+       if ((obj) && [(id)(obj) respondsToSelector:(sel)]) \
+           __r = ((rettype (*)(id, SEL))objc_msgSend)((id)(obj), (sel)); \
+       __r; })
+
+#define SAFE_CALL_OBJC1(rettype, obj, sel, arg1) \
+    ({ rettype __r = ({ rettype _v = 0; _v; }); \
+       if ((obj) && [(id)(obj) respondsToSelector:(sel)]) \
+           __r = ((rettype (*)(id, SEL, id))objc_msgSend)((id)(obj), (sel), (id)(arg1)); \
+       __r; })
+
 static id mmServiceCenterGet(NSString *svcName) {
     Class cls = objc_getClass("MMServiceCenter");
     if (!cls) return nil;
-    id center = ((id (*)(id, SEL))objc_msgSend)(cls, NSSelectorFromString(@"defaultCenter"));
+    SEL centerSel = NSSelectorFromString(@"defaultCenter");
+    if (![cls respondsToSelector:centerSel]) return nil;
+    id center = ((id (*)(Class, SEL))objc_msgSend)(cls, centerSel);
     if (!center) return nil;
+    SEL svcSel = NSSelectorFromString(@"getService:");
+    if (![center respondsToSelector:svcSel]) return nil;
     return ((id (*)(id, SEL, Class))objc_msgSend)(center,
-        NSSelectorFromString(@"getService:"), objc_getClass([svcName UTF8String]));
+        svcSel, objc_getClass([svcName UTF8String]));
+}
+
+static id safeSend(id obj, const char *selName) {
+    if (!obj) return nil;
+    SEL sel = NSSelectorFromString(selName);
+    if (![obj respondsToSelector:sel]) return nil;
+    return ((id (*)(id, SEL))objc_msgSend)(obj, sel);
 }
 
 static NSString *contactDisplayName(id contact) {
     if (!contact) return @"";
-    id v = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsNickName"));
+    id v = safeSend(contact, "m_nsNickName");
     if ([v isKindOfClass:[NSString class]] && ((NSString *)v).length) return v;
-    v = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsRemark"));
+    v = safeSend(contact, "m_nsRemark");
     if ([v isKindOfClass:[NSString class]] && ((NSString *)v).length) return v;
-    v = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
+    v = safeSend(contact, "m_nsUsrName");
     if ([v isKindOfClass:[NSString class]]) return v;
     return @"";
 }
 
 static NSString *contactWxid(id contact) {
     if (!contact) return @"";
-    id v = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
+    id v = safeSend(contact, "m_nsUsrName");
     if (![v isKindOfClass:[NSString class]]) return @"";
     NSString *name = (NSString *)v;
     if ([name hasPrefix:@"gh_"]) {
-        v = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsAliasName"));
+        v = safeSend(contact, "m_nsAliasName");
         if ([v isKindOfClass:[NSString class]] && ((NSString *)v).length) return v;
     }
     return name;
@@ -94,16 +117,18 @@ static NSString *contactWxid(id contact) {
 
 static NSString *contactRemark(id contact) {
     if (!contact) return @"";
-    id v = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsRemark"));
+    id v = safeSend(contact, "m_nsRemark");
     if ([v isKindOfClass:[NSString class]] && ((NSString *)v).length) return v;
-    v = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsRemarkName"));
+    v = safeSend(contact, "m_nsRemarkName");
     if ([v isKindOfClass:[NSString class]] && ((NSString *)v).length) return v;
     return @"";
 }
 
 static NSString *contactGender(id contact) {
     if (!contact) return @"";
-    unsigned int sex = ((unsigned int (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_uiSex"));
+    SEL sel = NSSelectorFromString(@"m_uiSex");
+    if (![contact respondsToSelector:sel]) return @"";
+    unsigned int sex = ((unsigned int (*)(id, SEL))objc_msgSend)(contact, sel);
     if (sex == 1) return @"♂";
     if (sex == 2) return @"♀";
     return @"";
@@ -111,8 +136,8 @@ static NSString *contactGender(id contact) {
 
 static NSString *contactLocation(id contact) {
     if (!contact) return @"";
-    id p = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsProvince"));
-    id c = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsCity"));
+    id p = safeSend(contact, "m_nsProvince");
+    id c = safeSend(contact, "m_nsCity");
     NSString *prov = ([p isKindOfClass:[NSString class]] && ((NSString *)p).length) ? p : @"";
     NSString *city = ([c isKindOfClass:[NSString class]] && ((NSString *)c).length) ? c : @"";
     if (prov.length && city.length) return [NSString stringWithFormat:@"%@ %@", prov, city];
@@ -123,21 +148,21 @@ static NSString *contactLocation(id contact) {
 
 static NSString *contactSignature(id contact) {
     if (!contact) return @"";
-    id v = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsSignature"));
+    id v = safeSend(contact, "m_nsSignature");
     if ([v isKindOfClass:[NSString class]] && ((NSString *)v).length) return v;
     return @"";
 }
 
 static NSString *contactOwnerName(id contact) {
     if (!contact) return @"";
-    id v = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsOwner"));
+    id v = safeSend(contact, "m_nsOwner");
     if ([v isKindOfClass:[NSString class]]) return v;
     return @"";
 }
 
 static NSUInteger contactMemberCount(id contact) {
     if (!contact) return 0;
-    id members = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsChatRoomMembers"));
+    id members = safeSend(contact, "m_nsChatRoomMembers");
     if ([members isKindOfClass:[NSString class]]) {
         NSArray *arr = [((NSString *)members) componentsSeparatedByString:@";"];
         NSUInteger c = 0;
@@ -146,13 +171,16 @@ static NSUInteger contactMemberCount(id contact) {
     }
     Class svc = objc_getClass("MMServiceCenter");
     if (svc) {
-        id center = ((id (*)(Class, SEL))objc_msgSend)(svc, NSSelectorFromString(@"defaultCenter"));
-        id mgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"),
+        SEL dcSel = NSSelectorFromString(@"defaultCenter");
+        if (![svc respondsToSelector:dcSel]) return 0;
+        id center = ((id (*)(Class, SEL))objc_msgSend)(svc, dcSel);
+        SEL svcSel = NSSelectorFromString(@"getService:");
+        if (![center respondsToSelector:svcSel]) return 0;
+        id mgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, svcSel,
             objc_getClass("CContactMgr"));
-        if (mgr && ((BOOL (*)(id, SEL, SEL))objc_msgSend)(mgr, @selector(respondsToSelector:),
-            @selector(getGroupMemberCountForContact:))) {
-            return ((unsigned int (*)(id, SEL, id))objc_msgSend)(mgr,
-                @selector(getGroupMemberCountForContact:), contact);
+        SEL cntSel = @selector(getGroupMemberCountForContact:);
+        if (mgr && [mgr respondsToSelector:cntSel]) {
+            return ((unsigned int (*)(id, SEL, id))objc_msgSend)(mgr, cntSel, contact);
         }
     }
     return 0;
@@ -411,12 +439,12 @@ static UIImage *loadCachedAvatar(NSString *username) {
     UIImage *cached = loadCachedAvatar(username);
     if (cached) { imageView.image = cached; return; }
 
-    NSString *url = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsHeadImgUrl"));
+    NSString *url = safeSend(contact, "m_nsHeadImgUrl");
     if (![url isKindOfClass:[NSString class]] || !url.length) {
         id mgr = mmServiceCenterGet(@"MMHeadImageMgr");
-        if (mgr) {
-            url = ((id (*)(id, SEL, id))objc_msgSend)(mgr,
-                NSSelectorFromString(@"getUsrHeadImgUrl:"), username);
+        SEL sel = NSSelectorFromString(@"getUsrHeadImgUrl:");
+        if (mgr && [mgr respondsToSelector:sel]) {
+            url = ((id (*)(id, SEL, id))objc_msgSend)(mgr, sel, username);
         }
     }
     if (![url isKindOfClass:[NSString class]] || !url.length) return;
@@ -690,8 +718,14 @@ static UIImage *loadCachedAvatar(NSString *username) {
     if (!vcClass) return;
 
     id vc = [[vcClass alloc] init];
-    ((void (*)(id, SEL, id))objc_msgSend)(vc, NSSelectorFromString(@"setM_contact:"), _contact);
-    ((void (*)(id, SEL, id))objc_msgSend)(vc, NSSelectorFromString(@"setM_nsUsrName:"), username);
+    SEL contactSel = NSSelectorFromString(@"setM_contact:");
+    if ([vc respondsToSelector:contactSel]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(vc, contactSel, _contact);
+    }
+    SEL usrSel = NSSelectorFromString(@"setM_nsUsrName:");
+    if ([vc respondsToSelector:usrSel]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(vc, usrSel, username);
+    }
 
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
 
