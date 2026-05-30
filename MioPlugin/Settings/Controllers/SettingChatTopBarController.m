@@ -376,6 +376,9 @@ static NSString *keyForTag(NSInteger tag) {
     CGFloat cy2 = 0;
     CGFloat scale2 = [UIScreen mainScreen].scale;
 
+    NSString *addTimeSuffixSub = config.chatAddTimeSuffixFormat.length > 0 ? config.chatAddTimeSuffixFormat : @"%ld天";
+    NSString *groupCountSuffixSub = config.chatGroupMemberCountSuffix.length > 0 ? config.chatGroupMemberCountSuffix : @"%ld人";
+
     NSArray<NSDictionary *> *card2Items = @[
         @{@"title": @"头像圆角程度",   @"tag": @(1001), @"key": @"AvatarCornerRadius"},
         @{@"title": @"双方头像大小",   @"tag": @(1002), @"key": @"AvatarSize"},
@@ -386,6 +389,8 @@ static NSString *keyForTag(NSInteger tag) {
         @{@"title": @"整体水平偏移",   @"tag": @(1007), @"key": @"HorizontalOffset"},
         @{@"title": @"网名上下偏移",   @"tag": @(1008), @"key": @"NicknameVerticalOffset"},
         @{@"title": @"网名水平偏移",   @"tag": @(1009), @"key": @"NicknameHorizontalOffset"},
+        @{@"title": @"添加时间后缀",   @"tag": @(400),  @"value": addTimeSuffixSub,    @"action": @"onAddTimeSuffixTap"},
+        @{@"title": @"群聊人数后缀",   @"tag": @(401),  @"value": groupCountSuffixSub, @"action": @"onGroupCountSuffixTap"},
     ];
 
     for (NSUInteger i = 0; i < card2Items.count; i++) {
@@ -394,31 +399,14 @@ static NSString *keyForTag(NSInteger tag) {
             WPAddSep(card2, cy2, w);
             cy2 = round((cy2 + 1.0 / scale2) * scale2) / scale2;
         }
-        NSString *showVal = [self subtitleForKey:item[@"key"]];
+        NSString *showVal = item[@"value"] ?: [self subtitleForKey:item[@"key"]];
         UIButton *row = WPAddEditableRowWithArrow(card2, cy2, w, item[@"title"], showVal, self);
         [row removeTarget:self action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
         row.tag = [item[@"tag"] integerValue];
-        [row addTarget:self action:@selector(onNumericRowTap:) forControlEvents:UIControlEventTouchUpInside];
+        SEL action = item[@"action"] ? NSSelectorFromString(item[@"action"]) : @selector(onNumericRowTap:);
+        [row addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
         cy2 += kRowH;
     }
-
-    WPAddSep(card2, cy2, w);
-    cy2 = round((cy2 + 1.0 / scale2) * scale2) / scale2;
-    NSString *addTimeSuffixSub = config.chatAddTimeSuffixFormat.length > 0 ? config.chatAddTimeSuffixFormat : @"%ld天";
-    UIButton *addTimeRow = WPAddEditableRowWithArrow(card2, cy2, w, @"添加时间后缀", addTimeSuffixSub, self);
-    [addTimeRow removeTarget:self action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
-    addTimeRow.tag = 400;
-    [addTimeRow addTarget:self action:@selector(onAddTimeSuffixTap) forControlEvents:UIControlEventTouchUpInside];
-    cy2 += kRowH;
-
-    WPAddSep(card2, cy2, w);
-    cy2 = round((cy2 + 1.0 / scale2) * scale2) / scale2;
-    NSString *groupCountSuffixSub = config.chatGroupMemberCountSuffix.length > 0 ? config.chatGroupMemberCountSuffix : @"%ld人";
-    UIButton *groupCountRow = WPAddEditableRowWithArrow(card2, cy2, w, @"群聊人数后缀", groupCountSuffixSub, self);
-    [groupCountRow removeTarget:self action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
-    groupCountRow.tag = 401;
-    [groupCountRow addTarget:self action:@selector(onGroupCountSuffixTap) forControlEvents:UIControlEventTouchUpInside];
-    cy2 += kRowH;
 
     CGRect c2f = card2.frame; c2f.size.height = cy2; card2.frame = c2f;
     [self.contentView addSubview:card2];
