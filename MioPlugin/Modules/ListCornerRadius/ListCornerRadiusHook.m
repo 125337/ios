@@ -10,34 +10,10 @@ static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
 
 static const void *kCornerRadiusAppliedKey = &kCornerRadiusAppliedKey;
 
-static NSSet *excludedVCClassNames(void) {
-    static NSSet *set = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        set = [NSSet setWithObjects:
-            @"WCTimeLineViewController",
-            @"WCAccountLoginUsersViewController",
-            @"SessionSelectController",
-            @"WCListViewController",
-            @"BrandNotificationListViewController",
-            @"BrandNewSessionViewController",
-            @"BaseMsgContentViewController",
-            @"BraceletRankProfileViewController",
-            @"BraceletRankViewController",
-            @"WCRedEnvelopesRedEnvelopesDetailViewController",
-            @"MsgRecordDetailViewController",
-            @"ChatRoomInfoViewController",
-            @"ContactInfoViewController",
-            @"AddFriendEntryViewController",
-            @"AddContactToChatRoomViewController",
-            @"SayHelloViewController",
-            @"FTSHomeViewController",
-            @"MMFinderPivotLiveViewController",
-            @"WCSearchController",
-            @"ContactsViewController",
-            nil];
-    });
-    return set;
+static BOOL shouldApplyCornerRadius(UIViewController *vc) {
+    if (!vc) return NO;
+    NSString *vcName = NSStringFromClass([vc class]);
+    return [vcName isEqualToString:@"NewMainFrameViewController"];
 }
 
 static UIViewController *findParentViewController(UIView *view) {
@@ -125,11 +101,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         UITableViewCell *cell = (UITableViewCell *)self;
 
         UIViewController *parentVC = findParentViewController(cell);
-        if (parentVC) {
-            NSString *vcName = NSStringFromClass([parentVC class]);
-            if ([excludedVCClassNames() containsObject:vcName]) {
-                return;
-            }
+        if (!shouldApplyCornerRadius(parentVC)) {
+            return;
         }
 
         UITableView *tableView = findParentTableView(cell);
