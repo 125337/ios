@@ -85,7 +85,7 @@ static id mmServiceCenterGet(NSString *svcName) {
         svcSel, objc_getClass([svcName UTF8String]));
 }
 
-static id safeSend(id obj, const char *selName) {
+static id safeSend(id obj, NSString *selName) {
     if (!obj) return nil;
     SEL sel = NSSelectorFromString(selName);
     if (![obj respondsToSelector:sel]) return nil;
