@@ -67,7 +67,6 @@ jobs:
           MioPlugin/Modules/AutoTransfer/AutoTransferHook.m \
           MioPlugin/Modules/PlaceholderText/PlaceholderTextHook.m \
           MioPlugin/Modules/ChatTopBar/MioChatAvatarTitleView.m \
-          MioPlugin/Modules/ChatTopBar/CSContactInfoPopoverController.m \
           MioPlugin/Modules/ChatTopBar/ChatTopBarHook.m \
           MioPlugin/Settings/Common/SettingCategoryController.m \
           MioPlugin/Settings/Common/WPBorderLayer.m \
