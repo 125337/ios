@@ -7,8 +7,50 @@
 #import <objc/message.h>
 
 static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
+static IMP _orig_UIView_layoutSubviews = NULL;
 
 static const void *kCornerRadiusAppliedKey = &kCornerRadiusAppliedKey;
+
+static NSSet *excludedVCClassNames(void) {
+    static NSSet *set = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        set = [NSSet setWithObjects:
+            @"WCTimeLineViewController",
+            @"WCAccountLoginUsersViewController",
+            @"SessionSelectController",
+            @"WCListViewController",
+            @"BrandNotificationListViewController",
+            @"BrandNewSessionViewController",
+            @"BaseMsgContentViewController",
+            @"BraceletRankProfileViewController",
+            @"BraceletRankViewController",
+            @"WCRedEnvelopesRedEnvelopesDetailViewController",
+            @"MsgRecordDetailViewController",
+            @"ChatRoomInfoViewController",
+            @"ContactInfoViewController",
+            @"AddFriendEntryViewController",
+            @"AddContactToChatRoomViewController",
+            @"SayHelloViewController",
+            @"FTSHomeViewController",
+            @"MMFinderPivotLiveViewController",
+            @"WCSearchController",
+            @"ContactsViewController",
+            nil];
+    });
+    return set;
+}
+
+static UIViewController *findParentViewController(UIView *view) {
+    UIResponder *responder = view;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            return (UIViewController *)responder;
+        }
+        responder = [responder nextResponder];
+    }
+    return nil;
+}
 
 static UITableView *findParentTableView(UIView *view) {
     UIView *superview = view.superview;
@@ -82,6 +124,14 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     @try {
         UITableViewCell *cell = (UITableViewCell *)self;
+
+        UIViewController *parentVC = findParentViewController(cell);
+        if (parentVC) {
+            NSString *vcName = NSStringFromClass([parentVC class]);
+            if ([excludedVCClassNames() containsObject:vcName]) {
+                return;
+            }
+        }
 
         UITableView *tableView = findParentTableView(cell);
         NSInteger position = cellPositionInSection(cell, tableView);
@@ -213,6 +263,36 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
+static void replaced_UIView_layoutSubviews(id self, SEL _cmd) {
+    if (_orig_UIView_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_UIView_layoutSubviews)(self, _cmd);
+    }
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.listCornerRadiusEnabled || !config.listSearchCornerRadius) return;
+
+    @try {
+        UIView *view = (UIView *)self;
+
+        if (![NSStringFromClass([view class]) isEqualToString:@"UIView"]) return;
+
+        UIViewController *parentVC = findParentViewController(view);
+        if (!parentVC) return;
+
+        NSString *vcName = NSStringFromClass([parentVC class]);
+        if ([vcName isEqualToString:@"WCSearchController"] ||
+            [vcName isEqualToString:@"FTSHomeViewController"]) {
+
+            CGSize size = view.bounds.size;
+            if (size.width > 200 && size.height > 30 && size.height < 60) {
+                view.layer.cornerRadius = config.listCellCornerRadius;
+                view.layer.masksToBounds = YES;
+            }
+        }
+    } @catch (NSException *e) {
+    }
+}
+
 @implementation ListCornerRadiusHook
 
 + (void)initListCornerRadiusHook {
@@ -230,6 +310,14 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     } else {
         WPLog(@"ListCornerRadius", @"[WARN] MMTableViewCell class not found!");
     }
+
+    MSHookMessageEx(
+        [UIView class],
+        @selector(layoutSubviews),
+        (IMP)replaced_UIView_layoutSubviews,
+        &_orig_UIView_layoutSubviews
+    );
+    WPLog(@"ListCornerRadius", @"[OK] Hook: UIView::layoutSubviews (search box, filtered)");
 
     WPLog(@"ListCornerRadius", @"[INIT] ListCornerRadius hook initialized.");
 }
