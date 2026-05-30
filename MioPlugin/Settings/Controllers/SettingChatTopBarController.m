@@ -405,12 +405,20 @@ static NSString *keyForTag(NSInteger tag) {
     WPAddSep(card2, cy2, w);
     cy2 = round((cy2 + 1.0 / scale2) * scale2) / scale2;
     NSString *addTimeSuffixSub = config.chatAddTimeSuffixFormat.length > 0 ? config.chatAddTimeSuffixFormat : @"%ld天";
-    cy2 = [self addNavRowInGroup:card2 title:@"添加时间后缀" subtitle:addTimeSuffixSub tag:400 action:@selector(onAddTimeSuffixTap) cy:cy2 width:w];
+    UIButton *addTimeRow = WPAddEditableRowWithArrow(card2, cy2, w, @"添加时间后缀", addTimeSuffixSub, self);
+    [addTimeRow removeTarget:self action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
+    addTimeRow.tag = 400;
+    [addTimeRow addTarget:self action:@selector(onAddTimeSuffixTap) forControlEvents:UIControlEventTouchUpInside];
+    cy2 += kRowH;
 
     WPAddSep(card2, cy2, w);
     cy2 = round((cy2 + 1.0 / scale2) * scale2) / scale2;
     NSString *groupCountSuffixSub = config.chatGroupMemberCountSuffix.length > 0 ? config.chatGroupMemberCountSuffix : @"%ld人";
-    cy2 = [self addNavRowInGroup:card2 title:@"群聊人数后缀" subtitle:groupCountSuffixSub tag:401 action:@selector(onGroupCountSuffixTap) cy:cy2 width:w];
+    UIButton *groupCountRow = WPAddEditableRowWithArrow(card2, cy2, w, @"群聊人数后缀", groupCountSuffixSub, self);
+    [groupCountRow removeTarget:self action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
+    groupCountRow.tag = 401;
+    [groupCountRow addTarget:self action:@selector(onGroupCountSuffixTap) forControlEvents:UIControlEventTouchUpInside];
+    cy2 += kRowH;
 
     CGRect c2f = card2.frame; c2f.size.height = cy2; card2.frame = c2f;
     [self.contentView addSubview:card2];
