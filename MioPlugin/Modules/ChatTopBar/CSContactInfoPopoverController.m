@@ -2,6 +2,36 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 
+#pragma mark - 颜色常量 (对齐 MioPlugin WPT1/WPT2)
+
+static UIColor *WPT1Color(void) {
+    if (@available(iOS 13.0, *)) {
+        return [UIColor labelColor];
+    }
+    return [UIColor blackColor];
+}
+
+static UIColor *WPT2Color(void) {
+    if (@available(iOS 13.0, *)) {
+        return [UIColor secondaryLabelColor];
+    }
+    return [UIColor colorWithWhite:0.4 alpha:1.0];
+}
+
+static UIColor *WPCardBgColor(void) {
+    if (@available(iOS 13.0, *)) {
+        return [UIColor systemBackgroundColor];
+    }
+    return [UIColor whiteColor];
+}
+
+static const CGFloat kCardCornerRadius = 12.0;
+static const CGFloat kContentInset = 16.0;
+static const CGFloat kCellHPadding = 16.0;
+static const CGFloat kAvatarSize = 68.0;
+static const CGFloat kAvatarCellHeight = 100.0;
+static const CGFloat kDetailCellHeight = 44.0;
+
 #pragma mark - KVC 辅助
 
 static id contactValueForKey(id contact, NSString *key) {
@@ -47,24 +77,25 @@ static NSString *contactStringForKey(id contact, NSString *key) {
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.view.backgroundColor = [UIColor whiteColor];
+    self.view.backgroundColor = [UIColor clearColor];
 
     _sections = [NSMutableArray new];
 
     UITableView *tableView = [[UITableView alloc] initWithFrame:self.view.bounds
-                                                          style:UITableViewStylePlain];
+                                                          style:UITableViewStyleGrouped];
     tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     tableView.delegate = self;
     tableView.dataSource = self;
     tableView.backgroundColor = [UIColor clearColor];
-    tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
-    tableView.rowHeight = UITableViewAutomaticDimension;
-    tableView.estimatedRowHeight = 44;
+    tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
+    tableView.separatorInset = UIEdgeInsetsMake(0, kCellHPadding, 0, kCellHPadding);
+    tableView.separatorColor = [UIColor colorWithWhite:0.85 alpha:1.0];
+    tableView.rowHeight = kDetailCellHeight;
+    tableView.estimatedRowHeight = kDetailCellHeight;
     tableView.showsVerticalScrollIndicator = NO;
-    tableView.contentInset = UIEdgeInsetsMake(8, 8, 8, 8);
-
-    tableView.tableHeaderView = [self createHeaderView];
-    tableView.tableFooterView = [self createFooterView];
+    tableView.sectionHeaderHeight = 36;
+    tableView.sectionFooterHeight = 0.01;
+    tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
 
     [self.view addSubview:tableView];
     _tableView = tableView;
@@ -81,52 +112,6 @@ static NSString *contactStringForKey(id contact, NSString *key) {
             self.preferredContentSize = CGSizeMake(400, 500);
         }
     }
-}
-
-#pragma mark - UI 创建
-
-- (UIView *)createHeaderView {
-    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 272, 20)];
-    header.backgroundColor = [UIColor clearColor];
-    return header;
-}
-
-- (UIView *)createFooterView {
-    UIView *footer = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 272, 44)];
-    footer.backgroundColor = [UIColor clearColor];
-
-    UILabel *label = [[UILabel alloc] init];
-    label.text = @"查看详细资料";
-    label.font = [UIFont systemFontOfSize:15];
-    label.textColor = [UIColor grayColor];
-    label.textAlignment = NSTextAlignmentCenter;
-    label.translatesAutoresizingMaskIntoConstraints = NO;
-    [footer addSubview:label];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [label.centerXAnchor constraintEqualToAnchor:footer.centerXAnchor],
-        [label.centerYAnchor constraintEqualToAnchor:footer.centerYAnchor],
-    ]];
-
-    return footer;
-}
-
-- (UIView *)createCardViewWithCornerRadius:(CGFloat)radius {
-    UIView *card = [[UIView alloc] init];
-    card.backgroundColor = [UIColor whiteColor];
-    card.layer.cornerRadius = radius;
-    card.clipsToBounds = YES;
-    card.translatesAutoresizingMaskIntoConstraints = NO;
-    return card;
-}
-
-- (UIImageView *)createAvatarImageView {
-    UIImageView *iv = [[UIImageView alloc] init];
-    iv.layer.cornerRadius = 35;
-    iv.clipsToBounds = YES;
-    iv.contentMode = UIViewContentModeScaleAspectFill;
-    iv.translatesAutoresizingMaskIntoConstraints = NO;
-    return iv;
 }
 
 #pragma mark - 数据构建
@@ -259,148 +244,67 @@ static NSString *contactStringForKey(id contact, NSString *key) {
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (indexPath.section == 0) return 170;
-    return UITableViewAutomaticDimension;
+    if (indexPath.section == 0) return kAvatarCellHeight;
+    return kDetailCellHeight;
 }
 
-#pragma mark - Avatar Cell 构建
+#pragma mark - Avatar Cell (工厂化: imageView + textLabel/detailTextLabel)
 
 - (UITableViewCell *)createAvatarCellForTableView:(UITableView *)tableView atIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"AvatarCell"];
+    static NSString *identifier = @"AvatarCell";
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
     if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"AvatarCell"];
-        cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        cell.backgroundColor = [UIColor clearColor];
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
+        cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        cell.backgroundColor = WPCardBgColor();
+        cell.textLabel.font = [UIFont boldSystemFontOfSize:17];
+        cell.textLabel.textColor = WPT1Color();
+        cell.detailTextLabel.font = [UIFont systemFontOfSize:13];
+        cell.detailTextLabel.textColor = WPT2Color();
+        cell.detailTextLabel.numberOfLines = 1;
 
-        // 白色圆角卡片容器
-        UIView *cardView = [self createCardViewWithCornerRadius:16];
-        cardView.tag = 1000;
-        [cell.contentView addSubview:cardView];
-
-        [NSLayoutConstraint activateConstraints:@[
-            [cardView.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:12],
-            [cardView.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:4],
-            [cardView.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-4],
-            [cardView.bottomAnchor constraintEqualToAnchor:cell.contentView.bottomAnchor constant:-12],
-        ]];
-
-        // 头像
-        UIImageView *avatarView = [self createAvatarImageView];
-        avatarView.tag = 1001;
-        [cardView addSubview:avatarView];
-
-        [NSLayoutConstraint activateConstraints:@[
-            [avatarView.centerYAnchor constraintEqualToAnchor:cardView.centerYAnchor],
-            [avatarView.leadingAnchor constraintEqualToAnchor:cardView.leadingAnchor constant:16],
-            [avatarView.widthAnchor constraintEqualToConstant:68],
-            [avatarView.heightAnchor constraintEqualToConstant:68],
-        ]];
-
-        // 昵称
-        UILabel *nameLabel = [[UILabel alloc] init];
-        nameLabel.tag = 1002;
-        nameLabel.font = [UIFont boldSystemFontOfSize:20];
-        nameLabel.textColor = [UIColor darkTextColor];
-        nameLabel.numberOfLines = 0;
-        nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [cardView addSubview:nameLabel];
-
-        [NSLayoutConstraint activateConstraints:@[
-            [nameLabel.topAnchor constraintEqualToAnchor:cardView.topAnchor constant:16],
-            [nameLabel.bottomAnchor constraintEqualToAnchor:cardView.bottomAnchor constant:-16],
-            [nameLabel.leadingAnchor constraintEqualToAnchor:avatarView.trailingAnchor constant:10],
-            [nameLabel.trailingAnchor constraintEqualToAnchor:cardView.trailingAnchor constant:-16],
-        ]];
+        cell.imageView.layer.cornerRadius = kAvatarSize * 0.5;
+        cell.imageView.clipsToBounds = YES;
+        cell.imageView.contentMode = UIViewContentModeScaleAspectFill;
     }
 
-    UIImageView *av = [cell.contentView viewWithTag:1001];
-    if (self.avatarImage) {
-        av.image = self.avatarImage;
-    }
-
-    UILabel *nl = [cell.contentView viewWithTag:1002];
     NSDictionary *sec = _sections[0];
     NSDictionary *item = sec[@"items"][0];
-    nl.text = item[@"title"] ?: @"未知";
+
+    cell.textLabel.text = item[@"title"] ?: @"未知";
+    cell.detailTextLabel.text = item[@"detail"] ?: @"未知ID";
+
+    if (self.avatarImage) {
+        cell.imageView.image = self.avatarImage;
+    }
 
     return cell;
 }
 
-#pragma mark - Detail Cell 构建
+#pragma mark - Detail Cell (工厂化: UITableViewCellStyleValue1, 对齐 MioPlugin)
 
 - (UITableViewCell *)createDetailCellForTableView:(UITableView *)tableView atIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"DetailCell"];
+    static NSString *identifier = @"DetailCell";
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
     if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"DetailCell"];
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:identifier];
         cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-        cell.backgroundColor = [UIColor clearColor];
-
-        // 白色圆角卡片容器
-        UIView *cardView = [self createCardViewWithCornerRadius:12];
-        cardView.tag = 2000;
-        [cell.contentView addSubview:cardView];
-
-        [NSLayoutConstraint activateConstraints:@[
-            [cardView.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:4],
-            [cardView.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:4],
-            [cardView.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-4],
-            [cardView.bottomAnchor constraintEqualToAnchor:cell.contentView.bottomAnchor constant:-4],
-        ]];
-
-        // 标题
-        UILabel *titleLabel = [[UILabel alloc] init];
-        titleLabel.tag = 2001;
-        titleLabel.font = [UIFont systemFontOfSize:16];
-        titleLabel.textColor = [UIColor grayColor];
-        titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [cardView addSubview:titleLabel];
-
-        [NSLayoutConstraint activateConstraints:@[
-            [titleLabel.topAnchor constraintEqualToAnchor:cardView.topAnchor constant:12],
-            [titleLabel.centerXAnchor constraintEqualToAnchor:cardView.centerXAnchor],
-            [titleLabel.heightAnchor constraintEqualToConstant:50],
-        ]];
-
-        // 详情
-        UILabel *detailLabel = [[UILabel alloc] init];
-        detailLabel.tag = 2002;
-        detailLabel.font = [UIFont systemFontOfSize:15];
-        detailLabel.textColor = [UIColor lightGrayColor];
-        detailLabel.numberOfLines = 0;
-        detailLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [cardView addSubview:detailLabel];
-
-        [NSLayoutConstraint activateConstraints:@[
-            [detailLabel.topAnchor constraintEqualToAnchor:titleLabel.bottomAnchor],
-            [detailLabel.leadingAnchor constraintEqualToAnchor:cardView.leadingAnchor constant:12],
-            [detailLabel.trailingAnchor constraintEqualToAnchor:cardView.trailingAnchor constant:-12],
-            [detailLabel.bottomAnchor constraintEqualToAnchor:cardView.bottomAnchor constant:-12],
-        ]];
+        cell.backgroundColor = WPCardBgColor();
+        cell.textLabel.font = [UIFont systemFontOfSize:15];
+        cell.textLabel.textColor = WPT1Color();
+        cell.detailTextLabel.font = [UIFont systemFontOfSize:13];
+        cell.detailTextLabel.textColor = WPT2Color();
+        cell.detailTextLabel.numberOfLines = 1;
     }
 
     NSDictionary *sec = _sections[indexPath.section];
     NSDictionary *item = sec[@"items"][indexPath.row];
 
-    UILabel *tl = [cell.contentView viewWithTag:2001];
-    tl.text = item[@"title"];
-
-    UILabel *dl = [cell.contentView viewWithTag:2002];
-    NSString *detail = item[@"detail"] ?: @"暂无";
-    dl.text = detail;
-
-    [self updateDetailLabelStyle:dl forDetail:detail];
+    cell.textLabel.text = item[@"title"];
+    cell.detailTextLabel.text = item[@"detail"] ?: @"暂无";
 
     return cell;
-}
-
-- (void)updateDetailLabelStyle:(UILabel *)label forDetail:(NSString *)detail {
-    if (!detail || [detail isEqualToString:@"暂无"] || [detail isEqualToString:@"未知"]) {
-        label.font = [UIFont systemFontOfSize:15];
-        label.textColor = [UIColor colorWithWhite:0.4 alpha:1.0];
-    } else {
-        label.font = [UIFont boldSystemFontOfSize:15];
-        label.textColor = [UIColor colorWithWhite:0.55 alpha:1.0];
-    }
 }
 
 #pragma mark - 点击交互
@@ -422,6 +326,29 @@ static NSString *contactStringForKey(id contact, NSString *key) {
     [self copyTextToClipboard:detail];
     [self showCopySuccessToast];
     [self playHapticFeedback];
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    NSInteger rows = [tableView numberOfRowsInSection:indexPath.section];
+    BOOL isFirst = indexPath.row == 0;
+    BOOL isLast = indexPath.row == rows - 1;
+
+    if (isFirst && isLast) {
+        cell.layer.cornerRadius = kCardCornerRadius;
+        cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+        cell.clipsToBounds = YES;
+    } else if (isFirst) {
+        cell.layer.cornerRadius = kCardCornerRadius;
+        cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+        cell.clipsToBounds = YES;
+    } else if (isLast) {
+        cell.layer.cornerRadius = kCardCornerRadius;
+        cell.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+        cell.clipsToBounds = YES;
+    } else {
+        cell.layer.cornerRadius = 0;
+        cell.clipsToBounds = NO;
+    }
 }
 
 - (void)handleProfileNavigation {
