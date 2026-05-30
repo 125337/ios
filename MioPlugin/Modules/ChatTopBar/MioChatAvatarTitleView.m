@@ -1,6 +1,7 @@
 #import "MioChatAvatarTitleView.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
+#import "CSContactInfoPopoverController.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <ImageIO/ImageIO.h>
@@ -604,15 +605,13 @@
 - (void)presentUserInfoPopoverWithContact:(id)contact sourceView:(UIView *)sourceView {
     if (!contact) return;
 
-    // 创建微信原生资料卡弹窗
-    Class popoverClass = objc_getClass("CSUserInfoPopoverController");
-    if (!popoverClass) return;
-    UIViewController *popover = [[popoverClass alloc] init];
-    if ([popover respondsToSelector:@selector(setContact:)]) {
-        ((void (*)(id, SEL, id))objc_msgSend)(popover, @selector(setContact:), contact);
+    UIImage *avatar = nil;
+    if ([sourceView isKindOfClass:[UIImageView class]]) {
+        avatar = [(UIImageView *)sourceView image];
     }
 
-    // popover 配置
+    CSContactInfoPopoverController *popover = [[CSContactInfoPopoverController alloc] initWithContact:contact avatar:avatar];
+
     popover.modalPresentationStyle = UIModalPresentationPopover;
     popover.preferredContentSize = CGSizeMake(280, 400);
 
@@ -620,9 +619,8 @@
     popPC.sourceView = sourceView;
     popPC.sourceRect = sourceView.bounds;
     popPC.permittedArrowDirections = UIPopoverArrowDirectionAny;
-    popPC.delegate = (id<UIPopoverPresentationControllerDelegate>)popover;
+    popPC.delegate = popover;
 
-    // 通过 findViewController 查找 present 的 VC
     UIViewController *presentingVC = [self findViewController];
     if (!presentingVC) {
         presentingVC = (UIViewController *)self.chatController;
