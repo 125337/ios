@@ -4,42 +4,33 @@
 #import <objc/objc.h>
 #import <objc/message.h>
 
-static const CGFloat kPopoverWidth     = 280.0;
-static const CGFloat kPopoverMaxHeight = 400.0;
-static const CGFloat kAvatarSize       = 60.0;
-static const CGFloat kAvatarCorner     = 18.0;
-static const CGFloat kRowHeight        = 44.0;
+static const CGFloat kPopoverWidth       = 280.0;
+static const CGFloat kPopoverPortHeight  = 400.0;
+static const CGFloat kPopoverLandWidth   = 400.0;
+static const CGFloat kPopoverLandHeight  = 500.0;
+static const CGFloat kAvatarCellHeight   = 170.0;
+static const CGFloat kRowHeight          = 44.0;
 
-static NSString * const kAvatarCellID  = @"CSAvatarCell";
-static NSString * const kDetailCellID  = @"CSDetailCell";
+static NSString * const kAvatarCellID  = @"AvatarCell";
+static NSString * const kDetailCellID  = @"DetailCell";
 
 enum {
-    kTagAvatarView  = 1000,
-    kTagNameLabel   = 1001,
-    kTagValueLabel  = 1002,
+    kTagAvatarContainer = 1000,
+    kTagAvatarImage     = 1001,
+    kTagAvatarName      = 1002,
     kTagDetailContainer = 2000,
-    kTagTitleLabel  = 2001,
-    kTagDetailLabel = 2002,
+    kTagTitleLabel      = 2001,
+    kTagDetailLabel     = 2002,
 };
 
 #pragma mark - CSSettingItem
 
 @interface CSSettingItem : NSObject
 @property (nonatomic, copy) NSString *title;
-@property (nonatomic, copy) NSString *iconName;
 @property (nonatomic, copy) NSString *detail;
 @end
 
 @implementation CSSettingItem
-+ (instancetype)itemWithTitle:(NSString *)title
-                     iconName:(NSString *)iconName
-                       detail:(NSString *)detail {
-    CSSettingItem *item = [[self alloc] init];
-    item.title    = title;
-    item.iconName = iconName;
-    item.detail   = detail;
-    return item;
-}
 @end
 
 #pragma mark - CSSettingSection
@@ -50,27 +41,16 @@ enum {
 @end
 
 @implementation CSSettingSection
-+ (instancetype)sectionWithHeader:(NSString *)header items:(NSArray<CSSettingItem *> *)items {
-    CSSettingSection *s = [[self alloc] init];
-    s.header = header;
-    s.items  = [NSMutableArray arrayWithArray:items];
-    return s;
-}
 @end
 
-#pragma mark - Contact Info Helpers
+#pragma mark - Safe Message Sending
 
-#define SAFE_CALL_OBJC(rettype, obj, sel) \
-    ({ rettype __r = ({ rettype _v = 0; _v; }); \
-       if ((obj) && [(id)(obj) respondsToSelector:(sel)]) \
-           __r = ((rettype (*)(id, SEL))objc_msgSend)((id)(obj), (sel)); \
-       __r; })
-
-#define SAFE_CALL_OBJC1(rettype, obj, sel, arg1) \
-    ({ rettype __r = ({ rettype _v = 0; _v; }); \
-       if ((obj) && [(id)(obj) respondsToSelector:(sel)]) \
-           __r = ((rettype (*)(id, SEL, id))objc_msgSend)((id)(obj), (sel), (id)(arg1)); \
-       __r; })
+static id safeSend(id obj, const char *selName) {
+    if (!obj) return nil;
+    SEL sel = sel_registerName(selName);
+    if (![obj respondsToSelector:sel]) return nil;
+    return ((id (*)(id, SEL))objc_msgSend)(obj, sel);
+}
 
 static id mmServiceCenterGet(NSString *svcName) {
     Class cls = objc_getClass("MMServiceCenter");
@@ -85,12 +65,7 @@ static id mmServiceCenterGet(NSString *svcName) {
         svcSel, objc_getClass([svcName UTF8String]));
 }
 
-static id safeSend(id obj, const char *selName) {
-    if (!obj) return nil;
-    SEL sel = sel_registerName(selName);
-    if (![obj respondsToSelector:sel]) return nil;
-    return ((id (*)(id, SEL))objc_msgSend)(obj, sel);
-}
+#pragma mark - Contact Info Helpers
 
 static NSString *contactDisplayName(id contact) {
     if (!contact) return @"";
@@ -221,6 +196,7 @@ static UIImage *loadCachedAvatar(NSString *username) {
 @property (nonatomic, strong) UIImage *avatar;
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) NSMutableArray<CSSettingSection *> *sections;
+@property (nonatomic, strong) UILabel *footerLabel;
 @end
 
 @implementation CSContactInfoPopoverController
@@ -240,20 +216,20 @@ static UIImage *loadCachedAvatar(NSString *username) {
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.view.backgroundColor = [UIColor colorWithRed:0.949 green:0.949 blue:0.969 alpha:1.0];
-
     if (!_sections) _sections = [NSMutableArray array];
+
+    self.view.backgroundColor = [UIColor clearColor];
 
     _tableView = [[UITableView alloc] initWithFrame:CGRectZero
                                               style:UITableViewStyleGrouped];
     _tableView.delegate                     = self;
     _tableView.dataSource                   = self;
     _tableView.backgroundColor              = [UIColor clearColor];
-    _tableView.separatorInset               = UIEdgeInsetsMake(0, 18, 0, 18);
     _tableView.rowHeight                    = kRowHeight;
-    _tableView.estimatedRowHeight           = kRowHeight;
+    _tableView.estimatedRowHeight           = UITableViewAutomaticDimension;
     _tableView.showsVerticalScrollIndicator = NO;
-    _tableView.contentInset                 = UIEdgeInsetsMake(8, 0, 8, 0);
+    _tableView.separatorInset               = UIEdgeInsetsMake(10, 0, 10, 0);
+    _tableView.contentInset                 = UIEdgeInsetsMake(8, 8, 8, 8);
     _tableView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:_tableView];
 
@@ -267,9 +243,6 @@ static UIImage *loadCachedAvatar(NSString *username) {
     _tableView.tableHeaderView = [self createHeaderView];
     _tableView.tableFooterView = [self createFooterView];
 
-    [_tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:kAvatarCellID];
-    [_tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:kDetailCellID];
-
     if (_contact) [self updateUIWithContact:_contact];
 }
 
@@ -277,22 +250,85 @@ static UIImage *loadCachedAvatar(NSString *username) {
     [super viewDidLayoutSubviews];
     CGSize size = self.view.bounds.size;
     if (CGSizeEqualToSize(size, CGSizeZero)) {
-        self.preferredContentSize = CGSizeMake(kPopoverWidth, kPopoverMaxHeight);
+        UIDeviceOrientation orientation = [[UIDevice currentDevice] orientation];
+        if (orientation == UIDeviceOrientationLandscapeLeft ||
+            orientation == UIDeviceOrientationLandscapeRight) {
+            self.preferredContentSize = CGSizeMake(kPopoverLandWidth, kPopoverLandHeight);
+        } else {
+            self.preferredContentSize = CGSizeMake(kPopoverWidth, kPopoverPortHeight);
+        }
     }
+}
+
+#pragma mark - Helpers
+
+- (UIView *)createCardViewWithCornerRadius:(CGFloat)cornerRadius {
+    UIView *card = [[UIView alloc] init];
+    card.backgroundColor = [UIColor whiteColor];
+    card.layer.cornerRadius = cornerRadius;
+    card.clipsToBounds = YES;
+    card.translatesAutoresizingMaskIntoConstraints = NO;
+    return card;
+}
+
+- (UILabel *)createLabelWithText:(NSString *)text
+                            font:(UIFont *)font
+                       textColor:(UIColor *)textColor {
+    UILabel *label = [[UILabel alloc] init];
+    label.text = text;
+    label.font = font;
+    label.textColor = textColor;
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    return label;
+}
+
+- (UIImageView *)createAvatarImageView {
+    UIImageView *imageView = [[UIImageView alloc] init];
+    imageView.contentMode = UIViewContentModeScaleAspectFill;
+    imageView.layer.cornerRadius = 35.0;
+    imageView.layer.masksToBounds = YES;
+    imageView.translatesAutoresizingMaskIntoConstraints = NO;
+    return imageView;
+}
+
+- (void)applyConstraintsToView:(UIView *)view
+                    inContainer:(UIView *)container
+                     withInsets:(UIEdgeInsets)insets {
+    [NSLayoutConstraint activateConstraints:@[
+        [view.topAnchor constraintEqualToAnchor:container.topAnchor constant:insets.top],
+        [view.leadingAnchor constraintEqualToAnchor:container.leadingAnchor constant:insets.left],
+        [view.trailingAnchor constraintEqualToAnchor:container.trailingAnchor constant:-insets.right],
+        [view.bottomAnchor constraintEqualToAnchor:container.bottomAnchor constant:-insets.bottom],
+    ]];
 }
 
 #pragma mark - Header / Footer
 
 - (UIView *)createHeaderView {
-    UIView *v = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPopoverWidth, 20)];
+    UIView *v = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 0, 20)];
     v.backgroundColor = [UIColor clearColor];
     return v;
 }
 
 - (UIView *)createFooterView {
-    UIView *v = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPopoverWidth, 8)];
-    v.backgroundColor = [UIColor clearColor];
-    return v;
+    UIView *container = [[UIView alloc] initWithFrame:CGRectZero];
+    container.backgroundColor = [UIColor clearColor];
+
+    _footerLabel = [self createLabelWithText:@"点击信息可复制"
+                                        font:[UIFont systemFontOfSize:13.0]
+                                   textColor:[UIColor grayColor]];
+    _footerLabel.textAlignment = NSTextAlignmentCenter;
+    _footerLabel.numberOfLines = 1;
+    [container addSubview:_footerLabel];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_footerLabel.topAnchor constraintEqualToAnchor:container.topAnchor constant:16],
+        [_footerLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor constant:16],
+        [_footerLabel.trailingAnchor constraintEqualToAnchor:container.trailingAnchor constant:-16],
+        [_footerLabel.bottomAnchor constraintEqualToAnchor:container.bottomAnchor constant:0],
+    ]];
+
+    return container;
 }
 
 #pragma mark - Data Building
@@ -316,12 +352,14 @@ static UIImage *loadCachedAvatar(NSString *username) {
     NSString *name = contactDisplayName(contact);
     NSString *wxid = contactWxid(contact);
 
-    CSSettingItem *item = [CSSettingItem itemWithTitle:name
-                                              iconName:nil
-                                                detail:wxid];
+    CSSettingItem *item = [[CSSettingItem alloc] init];
+    item.title  = name.length ? name : wxid;
+    item.detail = wxid.length ? wxid : @"";
     objc_setAssociatedObject(item, "contact", contact, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    CSSettingSection *section = [CSSettingSection sectionWithHeader:nil items:@[item]];
+    CSSettingSection *section = [[CSSettingSection alloc] init];
+    section.header = nil;
+    section.items  = [NSMutableArray arrayWithObject:item];
     [_sections addObject:section];
 }
 
@@ -330,60 +368,72 @@ static UIImage *loadCachedAvatar(NSString *username) {
 
     NSString *typeLabel = contactChatType(contact);
     if (typeLabel.length) {
-        [items addObject:[CSSettingItem itemWithTitle:@"类型"
-                                              iconName:@"person.text.rectangle"
-                                                detail:typeLabel]];
+        CSSettingItem *item = [[CSSettingItem alloc] init];
+        item.title  = @"类型";
+        item.detail = typeLabel;
+        [items addObject:item];
     }
 
     NSString *remark = contactRemark(contact);
     if (remark.length && !isOAContact(contact)) {
-        [items addObject:[CSSettingItem itemWithTitle:@"备注"
-                                              iconName:@"pencil.tip"
-                                                detail:remark]];
+        CSSettingItem *item = [[CSSettingItem alloc] init];
+        item.title  = @"备注";
+        item.detail = remark;
+        [items addObject:item];
     }
 
     NSString *wxid = contactWxid(contact);
     if (wxid.length) {
-        [items addObject:[CSSettingItem itemWithTitle:@"微信号"
-                                              iconName:@"number"
-                                                detail:wxid]];
+        CSSettingItem *item = [[CSSettingItem alloc] init];
+        item.title  = @"微信号";
+        item.detail = wxid;
+        [items addObject:item];
     }
 
     NSString *nickname = contactDisplayName(contact);
     if (nickname.length) {
         NSString *r = contactRemark(contact);
-        if (![nickname isEqualToString:r]) {
-            [items addObject:[CSSettingItem itemWithTitle:@"昵称"
-                                                  iconName:@"person"
-                                                    detail:nickname]];
+        BOOL sameAsRemark = (r.length && [nickname isEqualToString:r]);
+        BOOL sameAsWxid  = (wxid.length && [nickname isEqualToString:wxid]);
+        if (!sameAsRemark && !sameAsWxid) {
+            CSSettingItem *item = [[CSSettingItem alloc] init];
+            item.title  = @"昵称";
+            item.detail = nickname;
+            [items addObject:item];
         }
     }
 
     if (!isGroupContact(contact) && !isOAContact(contact)) {
         NSString *gender = contactGender(contact);
         if (gender.length) {
-            [items addObject:[CSSettingItem itemWithTitle:@"性别"
-                                                  iconName:@"person.fill.questionmark"
-                                                    detail:gender]];
+            CSSettingItem *item = [[CSSettingItem alloc] init];
+            item.title  = @"性别";
+            item.detail = gender;
+            [items addObject:item];
         }
 
         NSString *loc = contactLocation(contact);
         if (loc.length) {
-            [items addObject:[CSSettingItem itemWithTitle:@"地区"
-                                                  iconName:@"location"
-                                                    detail:loc]];
+            CSSettingItem *item = [[CSSettingItem alloc] init];
+            item.title  = @"地区";
+            item.detail = loc;
+            [items addObject:item];
         }
 
         NSString *sig = contactSignature(contact);
         if (sig.length) {
-            [items addObject:[CSSettingItem itemWithTitle:@"签名"
-                                                  iconName:@"text.quote"
-                                                    detail:sig]];
+            CSSettingItem *item = [[CSSettingItem alloc] init];
+            item.title  = @"签名";
+            item.detail = sig;
+            [items addObject:item];
         }
     }
 
     if (items.count) {
-        [_sections addObject:[CSSettingSection sectionWithHeader:@"基本信息" items:items]];
+        CSSettingSection *section = [[CSSettingSection alloc] init];
+        section.header = @"基本信息";
+        section.items  = items;
+        [_sections addObject:section];
     }
 }
 
@@ -392,29 +442,35 @@ static UIImage *loadCachedAvatar(NSString *username) {
 
     NSString *owner = contactOwnerName(contact);
     if (owner.length) {
-        [items addObject:[CSSettingItem itemWithTitle:@"群主"
-                                              iconName:@"crown"
-                                                detail:owner]];
+        CSSettingItem *item = [[CSSettingItem alloc] init];
+        item.title  = @"群主";
+        item.detail = owner;
+        [items addObject:item];
     }
 
     NSUInteger count = contactMemberCount(contact);
     if (count > 0) {
-        [items addObject:[CSSettingItem itemWithTitle:@"成员"
-                                              iconName:@"person.3"
-                                                detail:[NSString stringWithFormat:@"%lu 人", (unsigned long)count]]];
+        CSSettingItem *item = [[CSSettingItem alloc] init];
+        item.title  = @"成员";
+        item.detail = [NSString stringWithFormat:@"%lu 人", (unsigned long)count];
+        [items addObject:item];
     }
 
     if (items.count) {
-        [_sections addObject:[CSSettingSection sectionWithHeader:@"群聊信息" items:items]];
+        CSSettingSection *section = [[CSSettingSection alloc] init];
+        section.header = @"群聊信息";
+        section.items  = items;
+        [_sections addObject:section];
     }
 }
 
 - (void)addOfficialAccountInfoSection:(id)contact {
     NSMutableArray *items = [NSMutableArray array];
 
-    [items addObject:[CSSettingItem itemWithTitle:@"公众号类型"
-                                         iconName:@"megaphone"
-                                           detail:@"服务号"]];
+    CSSettingItem *item1 = [[CSSettingItem alloc] init];
+    item1.title  = @"公众号类型";
+    item1.detail = @"服务号";
+    [items addObject:item1];
 
     BOOL verified = NO;
     SEL verifySel = NSSelectorFromString(@"m_uiVerifyFlag");
@@ -422,24 +478,44 @@ static UIImage *loadCachedAvatar(NSString *username) {
         unsigned int flag = ((unsigned int (*)(id, SEL))objc_msgSend)(contact, verifySel);
         verified = (flag > 0);
     }
-    [items addObject:[CSSettingItem itemWithTitle:@"认证状态"
-                                         iconName:@"checkmark.seal"
-                                           detail:verified ? @"已验证" : @"未验证"]];
+    CSSettingItem *item2 = [[CSSettingItem alloc] init];
+    item2.title  = @"认证状态";
+    item2.detail = verified ? @"已验证" : @"未验证";
+    [items addObject:item2];
 
     if (items.count) {
-        [_sections addObject:[CSSettingSection sectionWithHeader:@"公众号信息" items:items]];
+        CSSettingSection *section = [[CSSettingSection alloc] init];
+        section.header = @"公众号信息";
+        section.items  = items;
+        [_sections addObject:section];
     }
 }
 
 #pragma mark - Avatar Loading
 
-- (void)loadAvatarAsync:(UIImageView *)imageView contact:(id)contact {
+- (void)loadAvatarForImageView:(UIImageView *)imageView withContact:(id)contact {
+    imageView.image = [UIImage imageNamed:@"DefaultProfileHead@2x"];
+
+    if (!contact) return;
+
     NSString *username = contactWxid(contact);
+    if (!username.length) return;
 
     UIImage *cached = loadCachedAvatar(username);
-    if (cached) { imageView.image = cached; return; }
+    if (cached) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            imageView.image = cached;
+        });
+        return;
+    }
 
-    NSString *url = safeSend(contact, "m_nsHeadImgUrl");
+    [self loadWeChatAvatarForImageView:imageView withUserName:username];
+}
+
+- (void)loadWeChatAvatarForImageView:(UIImageView *)imageView withUserName:(NSString *)username {
+    if (!username.length) return;
+
+    NSString *url = safeSend(_contact, "m_nsHeadImgUrl");
     if (![url isKindOfClass:[NSString class]] || !url.length) {
         id mgr = mmServiceCenterGet(@"MMHeadImageMgr");
         SEL sel = NSSelectorFromString(@"getUsrHeadImgUrl:");
@@ -480,9 +556,13 @@ static UIImage *loadCachedAvatar(NSString *username) {
     CSSettingItem *item = _sections[indexPath.section].items[indexPath.row];
 
     if (indexPath.section == 0) {
-        return [self createAvatarCellForTableView:tableView withItem:item atIndexPath:indexPath];
+        return [self createAvatarCellForTableView:tableView
+                                         withItem:item
+                                      atIndexPath:indexPath];
     }
-    return [self createDetailCellForTableView:tableView withItem:item atIndexPath:indexPath];
+    return [self createDetailCellForTableView:tableView
+                                     withItem:item
+                                  atIndexPath:indexPath];
 }
 
 #pragma mark - Avatar Cell
@@ -490,77 +570,48 @@ static UIImage *loadCachedAvatar(NSString *username) {
 - (UITableViewCell *)createAvatarCellForTableView:(UITableView *)tableView
                                          withItem:(CSSettingItem *)item
                                       atIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kAvatarCellID
-                                                            forIndexPath:indexPath];
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kAvatarCellID];
     if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
                                       reuseIdentifier:kAvatarCellID];
-    }
-    cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    cell.backgroundColor = [UIColor clearColor];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
 
-    UIView *content = cell.contentView;
+        UIView *container = [self createCardViewWithCornerRadius:16.0];
+        container.tag = kTagAvatarContainer;
+        [cell.contentView addSubview:container];
 
-    UIImageView *avatar = [content viewWithTag:kTagAvatarView];
-    if (!avatar) {
-        avatar = [[UIImageView alloc] init];
-        avatar.tag = kTagAvatarView;
-        avatar.contentMode = UIViewContentModeScaleAspectFill;
-        avatar.layer.cornerRadius = kAvatarCorner;
-        avatar.clipsToBounds = YES;
-        avatar.backgroundColor = [UIColor colorWithWhite:0.92 alpha:1.0];
-        avatar.translatesAutoresizingMaskIntoConstraints = NO;
-        [content addSubview:avatar];
+        [self applyConstraintsToView:container inContainer:cell.contentView
+                         withInsets:UIEdgeInsetsMake(12, 4, 4, 12)];
 
-        [NSLayoutConstraint activateConstraints:@[
-            [avatar.topAnchor constraintEqualToAnchor:content.topAnchor constant:12],
-            [avatar.centerXAnchor constraintEqualToAnchor:content.centerXAnchor],
-            [avatar.widthAnchor constraintEqualToConstant:kAvatarSize],
-            [avatar.heightAnchor constraintEqualToConstant:kAvatarSize],
-        ]];
-    }
+        UIImageView *avatarImage = [self createAvatarImageView];
+        avatarImage.tag = kTagAvatarImage;
+        [container addSubview:avatarImage];
 
-    UILabel *nameLabel = [content viewWithTag:kTagNameLabel];
-    if (!nameLabel) {
-        nameLabel = [[UILabel alloc] init];
-        nameLabel.tag = kTagNameLabel;
-        nameLabel.font = [UIFont systemFontOfSize:18.0];
-        nameLabel.textColor = [UIColor blackColor];
+        [self applyConstraintsToView:avatarImage inContainer:container
+                         withInsets:UIEdgeInsetsMake(0, 0, 0, 0)];
+
+        UILabel *nameLabel = [self createLabelWithText:@""
+                                                  font:[UIFont systemFontOfSize:20.0]
+                                             textColor:[UIColor grayColor]];
+        nameLabel.tag = kTagAvatarName;
         nameLabel.textAlignment = NSTextAlignmentCenter;
-        nameLabel.numberOfLines = 1;
-        nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [content addSubview:nameLabel];
+        nameLabel.numberOfLines = 0;
+        [container addSubview:nameLabel];
 
         [NSLayoutConstraint activateConstraints:@[
-            [nameLabel.topAnchor constraintEqualToAnchor:avatar.bottomAnchor constant:8],
-            [nameLabel.centerXAnchor constraintEqualToAnchor:content.centerXAnchor],
-            [nameLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:content.leadingAnchor constant:16],
-            [nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:content.trailingAnchor constant:-16],
+            [nameLabel.topAnchor constraintEqualToAnchor:avatarImage.bottomAnchor constant:16],
+            [nameLabel.centerXAnchor constraintEqualToAnchor:container.centerXAnchor],
+            [nameLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:container.leadingAnchor constant:10],
+            [nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:container.trailingAnchor constant:-10],
+            [nameLabel.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
         ]];
     }
 
-    UILabel *valueLabel = [content viewWithTag:kTagValueLabel];
-    if (!valueLabel) {
-        valueLabel = [[UILabel alloc] init];
-        valueLabel.tag = kTagValueLabel;
-        valueLabel.font = [UIFont systemFontOfSize:14.0];
-        valueLabel.textColor = [UIColor grayColor];
-        valueLabel.textAlignment = NSTextAlignmentCenter;
-        valueLabel.numberOfLines = 1;
-        valueLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [content addSubview:valueLabel];
-
-        [NSLayoutConstraint activateConstraints:@[
-            [valueLabel.topAnchor constraintEqualToAnchor:nameLabel.bottomAnchor constant:2],
-            [valueLabel.centerXAnchor constraintEqualToAnchor:content.centerXAnchor],
-            [valueLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:content.leadingAnchor constant:16],
-            [valueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:content.trailingAnchor constant:-16],
-            [valueLabel.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-12],
-        ]];
-    }
+    UIView *container = [cell.contentView viewWithTag:kTagAvatarContainer];
+    UIImageView *avatarImage = [container viewWithTag:kTagAvatarImage];
+    UILabel *nameLabel = [container viewWithTag:kTagAvatarName];
 
     nameLabel.text = item.title;
-    valueLabel.text = item.detail;
 
     id contact = objc_getAssociatedObject(item, "contact");
 
@@ -568,9 +619,9 @@ static UIImage *loadCachedAvatar(NSString *username) {
     if (!av) {
         av = loadCachedAvatar(contactWxid(contact));
     }
-    avatar.image = av;
-    if (!avatar.image && contact) {
-        [self loadAvatarAsync:avatar contact:contact];
+    avatarImage.image = av;
+    if (!avatarImage.image && contact) {
+        [self loadAvatarForImageView:avatarImage withContact:contact];
     }
 
     return cell;
@@ -581,86 +632,93 @@ static UIImage *loadCachedAvatar(NSString *username) {
 - (UITableViewCell *)createDetailCellForTableView:(UITableView *)tableView
                                          withItem:(CSSettingItem *)item
                                       atIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kDetailCellID
-                                                            forIndexPath:indexPath];
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kDetailCellID];
     if (!cell) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                       reuseIdentifier:kDetailCellID];
-    }
-    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+        cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 
-    UIView *content = cell.contentView;
+        UIView *container = [self createCardViewWithCornerRadius:12.0];
+        container.tag = kTagDetailContainer;
+        [cell.contentView addSubview:container];
 
-    UILabel *titleLabel = [content viewWithTag:kTagTitleLabel];
-    if (!titleLabel) {
-        titleLabel = [[UILabel alloc] init];
+        [self applyConstraintsToView:container inContainer:cell.contentView
+                         withInsets:UIEdgeInsetsMake(4, 4, 4, 4)];
+
+        UILabel *titleLabel = [self createLabelWithText:@""
+                                                   font:[UIFont systemFontOfSize:15.0]
+                                              textColor:[UIColor grayColor]];
         titleLabel.tag = kTagTitleLabel;
-        titleLabel.font = [UIFont systemFontOfSize:15.0];
-        titleLabel.textColor = [UIColor colorWithWhite:0.3 alpha:1.0];
-        [titleLabel setContentHuggingPriority:UILayoutPriorityRequired
-                                      forAxis:UILayoutConstraintAxisHorizontal];
-        [titleLabel setContentCompressionResistancePriority:UILayoutPriorityRequired
-                                                    forAxis:UILayoutConstraintAxisHorizontal];
-        titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [content addSubview:titleLabel];
+        [container addSubview:titleLabel];
 
         [NSLayoutConstraint activateConstraints:@[
-            [titleLabel.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:20],
-            [titleLabel.centerYAnchor constraintEqualToAnchor:content.centerYAnchor],
+            [titleLabel.topAnchor constraintEqualToAnchor:container.topAnchor constant:12],
+            [titleLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor constant:12],
+            [titleLabel.widthAnchor constraintEqualToConstant:50],
         ]];
-    }
 
-    UILabel *detailLabel = [content viewWithTag:kTagDetailLabel];
-    if (!detailLabel) {
-        detailLabel = [[UILabel alloc] init];
+        UILabel *detailLabel = [self createLabelWithText:@""
+                                                    font:[UIFont systemFontOfSize:15.0]
+                                               textColor:[UIColor grayColor]];
         detailLabel.tag = kTagDetailLabel;
-        detailLabel.font = [UIFont systemFontOfSize:15.0];
-        detailLabel.textColor = [UIColor blackColor];
-        detailLabel.textAlignment = NSTextAlignmentRight;
-        detailLabel.numberOfLines = 3;
-        detailLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [content addSubview:detailLabel];
+        detailLabel.numberOfLines = 0;
+        [container addSubview:detailLabel];
 
         [NSLayoutConstraint activateConstraints:@[
-            [detailLabel.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-20],
-            [detailLabel.centerYAnchor constraintEqualToAnchor:content.centerYAnchor],
-            [detailLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:titleLabel.trailingAnchor constant:12],
+            [detailLabel.topAnchor constraintEqualToAnchor:titleLabel.topAnchor],
+            [detailLabel.leadingAnchor constraintEqualToAnchor:titleLabel.trailingAnchor constant:12],
+            [detailLabel.trailingAnchor constraintEqualToAnchor:container.trailingAnchor constant:-12],
+            [detailLabel.bottomAnchor constraintEqualToAnchor:container.bottomAnchor constant:-12],
         ]];
     }
+
+    UIView *container = [cell.contentView viewWithTag:kTagDetailContainer];
+    UILabel *titleLabel = [container viewWithTag:kTagTitleLabel];
+    UILabel *detailLabel = [container viewWithTag:kTagDetailLabel];
 
     titleLabel.text = item.title;
     detailLabel.text = item.detail;
 
     [self updateDetailLabelStyle:detailLabel forDetail:item.detail];
 
-    if (item.iconName.length) {
-        cell.imageView.image = [UIImage systemImageNamed:item.iconName];
-        cell.imageView.tintColor = titleLabel.textColor;
-    } else {
-        cell.imageView.image = nil;
-    }
-
     return cell;
 }
 
 - (void)updateDetailLabelStyle:(UILabel *)label forDetail:(NSString *)detail {
-    BOOL isEmpty = (!detail.length || [detail isEqualToString:@"(null)"] ||
+    BOOL isEmpty = (!detail.length ||
+                    [detail isEqualToString:@"(null)"] ||
                     [detail isEqualToString:@"(无)"]);
+
     if (isEmpty) {
         label.font = [UIFont systemFontOfSize:15.0];
-        label.textColor = [UIColor colorWithWhite:0.7 alpha:1.0];
     } else {
         label.font = [UIFont boldSystemFontOfSize:15.0];
-        label.textColor = [UIColor blackColor];
     }
+
+    CGFloat grayValue;
+    if (isEmpty) {
+        if (@available(iOS 13.0, *)) {
+            if (self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) {
+                grayValue = 0.8;
+            } else {
+                grayValue = 0.4;
+            }
+        } else {
+            grayValue = 0.4;
+        }
+    } else {
+        grayValue = 0.6;
+    }
+
+    label.textColor = [UIColor colorWithRed:grayValue green:grayValue blue:grayValue alpha:1.0];
 }
 
 #pragma mark - UITableViewDelegate
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
     if (indexPath.section == 0)
-        return kAvatarSize + 62.0;
-    return kRowHeight;
+        return kAvatarCellHeight;
+    return UITableViewAutomaticDimension;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
