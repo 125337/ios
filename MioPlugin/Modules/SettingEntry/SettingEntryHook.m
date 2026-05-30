@@ -208,10 +208,30 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     NSString *hint = objc_getAssociatedObject(sender, "editConfigHint");
     if (!key || !title) return;
 
+    static NSDictionary *propMap = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        propMap = @{
+            @"RedEnvelopDelay": @"redEnvelopDelay",
+            @"RedEnvelopTextFilter": @"redEnvelopTextFilter",
+            @"RedEnvelopAutoReplyStr": @"redEnvelopAutoReplyStr",
+            @"AutoConfirmTransferDelay": @"autoConfirmTransferDelay",
+            @"AutoConfirmTransferMaxAmount": @"autoConfirmTransferMaxAmount",
+            @"AutoConfirmTransferAutoReplyStr": @"autoConfirmTransferAutoReplyStr",
+            @"MessageTimeFontSize": @"messageTimeFontSize",
+            @"MessageTimeOffsetX": @"messageTimeOffsetX",
+            @"MessageTimeOffsetY": @"messageTimeOffsetY",
+            @"MessageTimeBubbleExtWidth": @"messageTimeBubbleExtWidth",
+            @"NotifySenderCooldown": @"notifySenderCooldown",
+        };
+    });
+
+    NSString *prop = propMap[key] ?: key;
+
     PluginConfig *config = [PluginConfig shared];
     NSString *currentValue = nil;
     @try {
-        id val = [config valueForKey:key];
+        id val = [config valueForKey:prop];
         if ([val isKindOfClass:[NSString class]]) currentValue = val;
         else if ([val isKindOfClass:[NSNumber class]]) currentValue = [val stringValue];
     } @catch (NSException *e) {}
@@ -229,7 +249,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *newValue = alert.textFields.firstObject.text ?: @"";
         @try {
-            [config setValue:newValue forKey:key];
+            [config setValue:newValue forKey:prop];
             [config save];
             WPLog(@"Setting", @"[EDIT] %@ = %@", key, newValue);
             if (valueLabel) {
