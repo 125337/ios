@@ -1,7 +1,7 @@
 // CSContactInfoPopoverController.h
 #import <UIKit/UIKit.h>
 
-@interface CSContactInfoPopoverController : UIViewController <UIAdaptivePresentationControllerDelegate, UITableViewDataSource, UITableViewDelegate>
+@interface CSContactInfoPopoverController : UIViewController <UITableViewDataSource, UITableViewDelegate>
 
 @property (nonatomic, strong) id contact;                    // WeChat CContact 对象
 @property (nonatomic, strong) NSString *wxid;                // 微信号

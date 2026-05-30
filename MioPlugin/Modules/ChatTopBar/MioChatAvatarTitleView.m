@@ -610,16 +610,11 @@
         avatar = [(UIImageView *)sourceView image];
     }
 
-    CSContactInfoPopoverController *popover = [[CSContactInfoPopoverController alloc] initWithContact:contact avatar:avatar];
+    CSContactInfoPopoverController *popover =
+        [[CSContactInfoPopoverController alloc] initWithContact:contact avatar:avatar];
 
-    popover.modalPresentationStyle = UIModalPresentationPopover;
-    popover.preferredContentSize = CGSizeMake(280, 400);
-
-    UIPopoverPresentationController *popPC = popover.popoverPresentationController;
-    popPC.sourceView = sourceView;
-    popPC.sourceRect = sourceView.bounds;
-    popPC.permittedArrowDirections = UIPopoverArrowDirectionAny;
-    popPC.delegate = popover;
+    popover.modalPresentationStyle = UIModalPresentationOverCurrentContext;
+    popover.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
 
     UIViewController *presentingVC = [self findViewController];
     if (!presentingVC) {

@@ -90,6 +90,7 @@ static NSArray *s_oaInfoItems(void) {
 @implementation CSContactInfoPopoverController {
     NSMutableArray *_sections;
     UITableView *_tableView;
+    UIView *_cardView;
 }
 
 - (instancetype)initWithContact:(id)contact avatar:(UIImage *)avatar {
@@ -104,19 +105,33 @@ static NSArray *s_oaInfoItems(void) {
     return self;
 }
 
-- (UIModalPresentationStyle)adaptivePresentationStyleForPresentationController:
-        (UIPresentationController *)controller {
-    return UIModalPresentationNone;
-}
-
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.view.backgroundColor = [UIColor clearColor];
+    self.view.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.4];
+
+    UITapGestureRecognizer *bgTap = [[UITapGestureRecognizer alloc]
+        initWithTarget:self action:@selector(dismissSelf)];
+    bgTap.delegate = (id<UIGestureRecognizerDelegate>)self;
+    [self.view addGestureRecognizer:bgTap];
 
     _sections = [NSMutableArray new];
 
-    UITableView *tableView = [[UITableView alloc] initWithFrame:self.view.bounds
+    CGFloat cardW = 280;
+    CGFloat cardH = 400;
+    CGFloat cardX = (self.view.bounds.size.width - cardW) / 2;
+    CGFloat cardY = (self.view.bounds.size.height - cardH) / 2;
+    if (cardY < 60) cardY = 60;
+
+    _cardView = [[UIView alloc] initWithFrame:CGRectMake(cardX, cardY, cardW, cardH)];
+    _cardView.backgroundColor = WPCardBgColor();
+    _cardView.layer.cornerRadius = kCardCornerRadius;
+    _cardView.clipsToBounds = YES;
+    _cardView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin |
+                                  UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+    [self.view addSubview:_cardView];
+
+    UITableView *tableView = [[UITableView alloc] initWithFrame:_cardView.bounds
                                                           style:UITableViewStyleGrouped];
     tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     tableView.delegate = self;
@@ -132,22 +147,27 @@ static NSArray *s_oaInfoItems(void) {
     tableView.sectionFooterHeight = 0.01;
     tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
 
-    [self.view addSubview:tableView];
+    [_cardView addSubview:tableView];
     _tableView = tableView;
 
     if (_contact) {
-        [self buildSections];
+        @try {
+            [self buildSections];
+        } @catch (NSException *e) {
+            [_sections removeAllObjects];
+            [self addAvatarSection];
+        }
         [_tableView reloadData];
     }
 }
 
-- (void)viewDidLayoutSubviews {
-    [super viewDidLayoutSubviews];
-    if (CGSizeEqualToSize(self.preferredContentSize, CGSizeZero)) {
-        if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) {
-            self.preferredContentSize = CGSizeMake(400, 500);
-        }
-    }
+- (void)dismissSelf {
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
+    if ([touch.view isDescendantOfView:_cardView]) return NO;
+    return YES;
 }
 
 #pragma mark - 构建 Sections
