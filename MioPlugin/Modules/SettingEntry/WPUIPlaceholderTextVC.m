@@ -31,7 +31,7 @@
 
     cy = [self addMasterSwitchRowInGroup:group
                                    title:@"显示占位文本"
-                                     key:@"PlaceholderTextEnabled"
+                                     key:@"placeholderTextEnabled"
                                     isOn:config.placeholderTextEnabled
                               subBuilder:^(UIView *expand, CGFloat *ecy) {
         // 占位文本内容
@@ -45,7 +45,7 @@
         // 使用粗体文字
         *ecy = [self addSubSwitchRowInGroup:expand
                                       title:@"使用粗体文字"
-                                        key:@"PlaceholderText_Bold"
+                                        key:@"placeholderTextBold"
                                        isOn:config.placeholderTextBold
                                          cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];

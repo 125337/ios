@@ -27,7 +27,7 @@
     UIView *msgGroup = [self addTableGroupAtY:y width:w];
     CGFloat mcy = 0;
     mcy = [self addSwitchRowInGroup:msgGroup title:@"一键已读" desc:nil
-                                key:@"ClearUnreadEnabled" isOn:config.clearUnreadEnabled
+                                key:@"clearUnreadEnabled" isOn:config.clearUnreadEnabled
                                 cy:mcy width:w];
     y = [self finishGroup:msgGroup atY:y height:mcy];
 
@@ -36,15 +36,15 @@
     UIView *group = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
     cy = [self addSwitchRowInGroup:group title:@"调试日志" desc:nil
-                               key:@"DebugLogging" isOn:config.debugLogging
+                               key:@"debugLogging" isOn:config.debugLogging
                                cy:cy width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addSwitchRowInGroup:group title:@"隐藏内容" desc:nil
-                               key:@"HideContent" isOn:config.hideContent
+                               key:@"hideContent" isOn:config.hideContent
                                cy:cy width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addSwitchRowInGroup:group title:@"免提示" desc:nil
-                               key:@"NoTip" isOn:config.noTip
+                               key:@"noTip" isOn:config.noTip
                                cy:cy width:w];
     y = [self finishGroup:group atY:y height:cy];
 

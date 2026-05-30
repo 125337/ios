@@ -30,7 +30,7 @@
 
     cy = [self addMasterSwitchRowInGroup:group
                                     title:@"启用消息防撤回"
-                                      key:@"PreventRecall"
+                                      key:@"preventRecall"
                                      isOn:config.preventRecall
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         NSString *fmtSub = config.revokeTemplate.length > 0 ? config.revokeTemplate : @"默认格式";
@@ -45,13 +45,13 @@
 
     cy2 = [self addMasterSwitchRowInGroup:group2
                                      title:@"启用通知撤回者"
-                                       key:@"NotifySender"
+                                       key:@"notifySender"
                                       isOn:config.notifySender
                                 subBuilder:^(UIView *expand, CGFloat *ecy) {
         NSString *sub = config.notifySenderTemplate.length > 0 ? config.notifySenderTemplate : @"默认内容";
         *ecy = [self addNavRowInGroup:expand title:@"通知消息内容" subtitle:sub tag:200 action:@selector(onNotifyFormatTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"频率限制(秒)" key:@"NotifySenderCooldown" value:[NSString stringWithFormat:@"%.0f", config.notifySenderCooldown] hint:@"0=不限制" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"频率限制(秒)" key:@"notifySenderCooldown" value:[NSString stringWithFormat:@"%.0f", config.notifySenderCooldown] hint:@"0=不限制" cy:*ecy width:w];
     } cy:cy2 width:w];
 
     y = [self finishGroup:group2 atY:y height:cy2];

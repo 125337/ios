@@ -340,17 +340,17 @@ static NSString *keyForTag(NSInteger tag) {
 
     cy1 = [self addMasterSwitchRowInGroup:card1
                                     title:@"显示聊天头像"
-                                      key:@"ShowChatAvatar"
+                                      key:@"showChatAvatar"
                                      isOn:config.showChatAvatar
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
-        *ecy = [self addSwitchRowInGroup:expand title:@"头像点击反馈" desc:nil key:@"AvatarTapFeedback" isOn:config.avatarTapFeedback cy:*ecy width:w];
+        *ecy = [self addSwitchRowInGroup:expand title:@"头像点击反馈" desc:nil key:@"avatarTapFeedback" isOn:config.avatarTapFeedback cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSwitchRowInGroup:expand title:@"显示添加时间" desc:nil key:@"ShowAddTime" isOn:config.showAddTime cy:*ecy width:w];
+        *ecy = [self addSwitchRowInGroup:expand title:@"显示添加时间" desc:nil key:@"showAddTime" isOn:config.showAddTime cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         NSString *addTimeSuffix = config.chatAddTimeSuffixFormat.length > 0 ? config.chatAddTimeSuffixFormat : @"%ld天";
         *ecy = [self addNavRowInGroup:expand title:@"添加时间后缀格式" subtitle:addTimeSuffix tag:400 action:@selector(onAddTimeSuffixTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSwitchRowInGroup:expand title:@"显示群聊人数" desc:nil key:@"ShowGroupMemberCount" isOn:config.showGroupMemberCount cy:*ecy width:w];
+        *ecy = [self addSwitchRowInGroup:expand title:@"显示群聊人数" desc:nil key:@"showGroupMemberCount" isOn:config.showGroupMemberCount cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         NSString *groupCountSuffix = config.chatGroupMemberCountSuffix.length > 0 ? config.chatGroupMemberCountSuffix : @"%u人";
         *ecy = [self addNavRowInGroup:expand title:@"群成员数后缀格式" subtitle:groupCountSuffix tag:401 action:@selector(onGroupCountSuffixTap) cy:*ecy width:w];

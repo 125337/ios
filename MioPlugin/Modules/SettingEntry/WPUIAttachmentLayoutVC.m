@@ -31,7 +31,7 @@
 
     cy = [self addMasterSwitchRowInGroup:group
                                    title:@"附件布局优化"
-                                     key:@"AttachLayoutEnabled"
+                                     key:@"attachLayoutEnabled"
                                     isOn:config.attachLayoutEnabled
                               subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addInputRowInGroup:expand title:@"每行列数"

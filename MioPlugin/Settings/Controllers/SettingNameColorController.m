@@ -97,12 +97,12 @@ static NSString *fontSizeForKey(NSString *key) {
     // 1. 启用聊天界面名称颜色
     cy1 = [self addMasterSwitchRowInGroup:card1
                                     title:@"启用聊天界面名称颜色"
-                                      key:@"EnableChatNameColor"
+                                      key:@"enableChatNameColor"
                                      isOn:config.enableChatNameColor
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
-        *ecy = [self addColorRowInGroup:expand title:@"浅色模式文字颜色" key:@"ChatNameLightColor" value:config.senderTextColorHex cy:*ecy width:w];
+        *ecy = [self addColorRowInGroup:expand title:@"浅色模式文字颜色" key:@"chatNameLightColor" value:config.senderTextColorHex cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"深色模式文字颜色" key:@"ChatNameDarkColor" value:config.senderTextColorDarkHex cy:*ecy width:w];
+        *ecy = [self addColorRowInGroup:expand title:@"深色模式文字颜色" key:@"chatNameDarkColor" value:config.senderTextColorDarkHex cy:*ecy width:w];
     } cy:cy1 width:w];
 
     cy1 = [self addSeparatorInGroup:card1 cy:cy1 width:w];
@@ -110,7 +110,7 @@ static NSString *fontSizeForKey(NSString *key) {
     // 2. 启用聊天界面名称大小
     cy1 = [self addMasterSwitchRowInGroup:card1
                                     title:@"启用聊天界面名称大小"
-                                      key:@"EnableChatNameSize"
+                                      key:@"enableChatNameSize"
                                      isOn:config.enableChatNameSize
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         NSString *preview = fontSizeForKey(@"ChatNameFontSize");
@@ -126,12 +126,12 @@ static NSString *fontSizeForKey(NSString *key) {
     // 1. 启用朋友圈名称颜色
     cy2 = [self addMasterSwitchRowInGroup:card2
                                     title:@"启用朋友圈名称颜色"
-                                      key:@"EnableMomentsNameColor"
+                                      key:@"enableMomentsNameColor"
                                      isOn:config.enableMomentsNameColor
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
-        *ecy = [self addColorRowInGroup:expand title:@"浅色模式文字颜色" key:@"MomentsNameLightColor" value:config.receiverTextColorHex cy:*ecy width:w];
+        *ecy = [self addColorRowInGroup:expand title:@"浅色模式文字颜色" key:@"momentsNameLightColor" value:config.receiverTextColorHex cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"深色模式文字颜色" key:@"MomentsNameDarkColor" value:config.receiverTextColorDarkHex cy:*ecy width:w];
+        *ecy = [self addColorRowInGroup:expand title:@"深色模式文字颜色" key:@"momentsNameDarkColor" value:config.receiverTextColorDarkHex cy:*ecy width:w];
     } cy:cy2 width:w];
 
     cy2 = [self addSeparatorInGroup:card2 cy:cy2 width:w];
@@ -139,7 +139,7 @@ static NSString *fontSizeForKey(NSString *key) {
     // 2. 启用朋友圈名称大小
     cy2 = [self addMasterSwitchRowInGroup:card2
                                     title:@"启用朋友圈名称大小"
-                                      key:@"EnableMomentsNameSize"
+                                      key:@"enableMomentsNameSize"
                                      isOn:config.enableMomentsNameSize
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         NSString *preview = fontSizeForKey(@"MomentsNameFontSize");

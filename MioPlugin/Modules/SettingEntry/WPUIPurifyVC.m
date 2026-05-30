@@ -27,10 +27,10 @@
     UIView *msgGroup = [self addTableGroupAtY:y width:w];
     CGFloat mcy = 0;
     NSArray *msgItems = @[
-        @[@"隐藏水平分割线", @"HideSeparatorLine", @(config.hideSeparatorLine)],
-        @[@"隐藏撤回消息提示", @"HideRevokeHint", @(config.hideRevokeHint)],
-        @[@"隐藏拍一拍提示", @"HidePatHint", @(config.hidePatHint)],
-        @[@"隐藏语音红点和转文字", @"HideVoiceRedDot", @(config.hideVoiceRedDot)],
+        @[@"隐藏水平分割线", @"hideSeparatorLine", @(config.hideSeparatorLine)],
+        @[@"隐藏撤回消息提示", @"hideRevokeHint", @(config.hideRevokeHint)],
+        @[@"隐藏拍一拍提示", @"hidePatHint", @(config.hidePatHint)],
+        @[@"隐藏语音红点和转文字", @"hideVoiceRedDot", @(config.hideVoiceRedDot)],
     ];
     for (NSUInteger i = 0; i < msgItems.count; i++) {
         if (i > 0) mcy = [self addSeparatorInGroup:msgGroup cy:mcy width:w];
@@ -45,11 +45,11 @@
     UIView *bubbleGroup = [self addTableGroupAtY:y width:w];
     CGFloat bcy = 0;
     bcy = [self addSwitchRowInGroup:bubbleGroup title:@"隐藏聊天气泡背景" desc:nil
-                                key:@"HideBubbleBackground" isOn:config.hideBubbleBackground
+                                key:@"hideBubbleBackground" isOn:config.hideBubbleBackground
                                 cy:bcy width:w];
     bcy = [self addSeparatorInGroup:bubbleGroup cy:bcy width:w];
     bcy = [self addSwitchRowInGroup:bubbleGroup title:@"禁用输入框听写" desc:nil
-                                key:@"DisableDictation" isOn:config.disableDictation
+                                key:@"disableDictation" isOn:config.disableDictation
                                 cy:bcy width:w];
     y = [self finishGroup:bubbleGroup atY:y height:bcy];
 

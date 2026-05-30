@@ -49,70 +49,6 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     return rows;
 }
 
-static NSString *configPropertyForKey(NSString *key) {
-    static NSDictionary<NSString *, NSString *> *mapping = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        mapping = @{
-            @"PreventRecall": @"preventRecall",
-            @"DebugLogging": @"debugLogging",
-            @"HideContent": @"hideContent",
-            @"NoTip": @"noTip",
-            @"BottomPosition": @"bottomPosition",
-            @"SendInterceptedContent": @"sendInterceptedContent",
-            @"InterceptNotifyEnabled": @"interceptNotifyEnabled",
-            @"CustomNotifyEnabled": @"customNotifyEnabled",
-            @"ClearUnreadEnabled": @"clearUnreadEnabled",
-            @"HideDiscoverBadge": @"hideDiscoverBadge",
-            @"HideEnterpriseBadge": @"hideEnterpriseBadge",
-            @"CustomColorsEnabled": @"customColorsEnabled",
-            @"AutoRedEnvelop": @"autoRedEnvelop",
-            @"RedEnvelopCatchMe": @"redEnvelopCatchMe",
-            @"PersonalRedEnvelopEnable": @"personalRedEnvelopEnable",
-            @"RedEnvelopeDetail": @"redEnvelopeDetail",
-            @"RedEnvelopTextFilterEnabled": @"redEnvelopTextFilterEnabled",
-            @"RedEnvelopGroupFilterEnabled": @"redEnvelopGroupFilterEnabled",
-            @"RedEnvelopAutoReply": @"redEnvelopAutoReply",
-            @"RedEnvelopAutoReplyInGroup": @"redEnvelopAutoReplyInGroup",
-            @"EnableJoker": @"enableJoker",
-            @"EnableGroupExitMonitor": @"enableGroupExitMonitor",
-            @"AutoConfirmTransfer": @"autoConfirmTransfer",
-            @"AutoConfirmTransferPersonal": @"autoConfirmTransferPersonal",
-            @"AutoConfirmTransferGroup": @"autoConfirmTransferGroup",
-            @"AutoConfirmTransferAutoReply": @"autoConfirmTransferAutoReply",
-            @"ShowMessageTime": @"showMessageTime",
-            @"MessageTimeBoldFont": @"messageTimeBoldFont",
-            @"MessageTimeTextColor": @"messageTimeTextColor",
-            @"HideChatTime": @"hideChatTime",
-            @"NotifySender": @"notifySender",
-            @"HideC2COtherAvatar": @"hideC2COtherAvatar",
-            @"HideC2CSelfAvatar": @"hideC2CSelfAvatar",
-            @"HideGroupOtherAvatar": @"hideGroupOtherAvatar",
-            @"HideGroupSelfAvatar": @"hideGroupSelfAvatar",
-            @"HideOAOtherAvatar": @"hideOAOtherAvatar",
-            @"HideOASelfAvatar": @"hideOASelfAvatar",
-            @"ShowChatAvatar": @"showChatAvatar",
-            @"AvatarTapFeedback": @"avatarTapFeedback",
-            @"ShowAddTime": @"showAddTime",
-            @"ShowGroupMemberCount": @"showGroupMemberCount",
-            @"EnableChatNameColor": @"enableChatNameColor",
-            @"EnableChatNameSize": @"enableChatNameSize",
-            @"EnableMomentsNameColor": @"enableMomentsNameColor",
-            @"EnableMomentsNameSize": @"enableMomentsNameSize",
-            @"AttachLayoutEnabled": @"attachLayoutEnabled",
-            @"PlaceholderTextEnabled": @"placeholderTextEnabled",
-            @"PlaceholderText_Bold": @"placeholderTextBold",
-            @"HideSeparatorLine": @"hideSeparatorLine",
-            @"HideRevokeHint": @"hideRevokeHint",
-            @"HidePatHint": @"hidePatHint",
-            @"HideVoiceRedDot": @"hideVoiceRedDot",
-            @"HideBubbleBackground": @"hideBubbleBackground",
-            @"DisableDictation": @"disableDictation",
-        };
-    });
-    return mapping[key];
-}
-
 @implementation UIView (ExpandHelper)
 
 - (void)setIsExpanded:(BOOL)isExpanded {
@@ -581,16 +517,10 @@ static NSString *configPropertyForKey(NSString *key) {
         return;
     }
 
-    NSString *propertyName = configPropertyForKey(key);
-    if (propertyName.length == 0) {
-        WPLog(@"Config", @"[ERR] Config save failed: no property mapping for key %@", key);
-        return;
-    }
-
     PluginConfig *config = [PluginConfig shared];
     @try {
-        WPLog(@"Config", @"[SAVE] Saving config: key=%@, property=%@, value=%@", key, propertyName, sender.on ? @"YES" : @"NO");
-        [config setValue:@(sender.on) forKey:propertyName];
+        WPLog(@"Config", @"[SAVE] Saving config: key=%@, value=%@", key, sender.on ? @"YES" : @"NO");
+        [config setValue:@(sender.on) forKey:key];
         WPLog(@"Config", @"[OK] Config value after KVC: %d", sender.on);
     } @catch (NSException *e) {
         WPLog(@"Config", @"[WARN] Config save exception: %@ - %@", e.name, e.reason);
@@ -610,7 +540,7 @@ static NSString *configPropertyForKey(NSString *key) {
         }
     }
 
-    if ([key isEqualToString:@"HideSeparatorLine"]) {
+    if ([key isEqualToString:@"hideSeparatorLine"]) {
         for (UIView *sv in self.contentView.subviews) {
             if ([sv isKindOfClass:[UITableView class]]) {
                 [(UITableView *)sv reloadData];

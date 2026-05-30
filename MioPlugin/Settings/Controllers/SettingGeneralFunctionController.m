@@ -49,7 +49,7 @@
     [super switchChanged:sender];
 
     NSString *key = objc_getAssociatedObject(sender, "key");
-    if ([key isEqualToString:@"EnableJoker"] && sender.on) {
+    if ([key isEqualToString:@"enableJoker"] && sender.on) {
         [MioAlertHelper showTipAlert:@"修改文字功能已启用\n长按文本/转账消息即可修改\n长按钱包余额可修改"];
     }
 }
@@ -97,7 +97,7 @@
     cy = [self addSwitchRowInGroup:group
                               title:@"启用一键已读消息"
                                desc:nil
-                                key:@"ClearUnreadEnabled"
+                                key:@"clearUnreadEnabled"
                                isOn:config.clearUnreadEnabled
                                  cy:cy
                               width:w];
@@ -107,7 +107,7 @@
     cy = [self addSwitchRowInGroup:group
                               title:@"启用修改文字(小丑功能)"
                                desc:nil
-                                key:@"EnableJoker"
+                                key:@"enableJoker"
                                isOn:config.enableJoker
                                  cy:cy
                               width:w];
@@ -117,7 +117,7 @@
     cy = [self addSwitchRowInGroup:group
                               title:@"启用退群检测"
                                desc:nil
-                                key:@"EnableGroupExitMonitor"
+                                key:@"enableGroupExitMonitor"
                                isOn:config.enableGroupExitMonitor
                                  cy:cy
                               width:w];
