@@ -54,7 +54,7 @@ static NSString *contactWxid(id contact) {
 
 static NSString *contactGender(id contact) {
     if (!contact) return @"";
-    unsigned int sex = (unsigned int)((long)objc_msgSend)(contact, NSSelectorFromString(@"m_uiSex"));
+    unsigned int sex = ((unsigned int (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_uiSex"));
     if (sex == 1) return @"男";
     if (sex == 2) return @"女";
     return @"";
@@ -217,8 +217,8 @@ static UIImage *loadCachedAvatar(NSString *username) {
         _titleLabel.font = [UIFont systemFontOfSize:15.0];
         _titleLabel.textColor = [UIColor colorWithWhite:0.3 alpha:1.0];
         _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        _titleLabel.setContentHuggingPriority(UILayoutPriorityRequired, UILayoutConstraintAxisHorizontal);
-        _titleLabel.setContentCompressionResistancePriority(UILayoutPriorityRequired, UILayoutConstraintAxisHorizontal);
+        [_titleLabel setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+[_titleLabel setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
         [self.contentView addSubview:_titleLabel];
 
         _detailLabel = [[UILabel alloc] init];
@@ -417,8 +417,8 @@ static UIImage *loadCachedAvatar(NSString *username) {
     if (![headImgUrl isKindOfClass:[NSString class]] || !((NSString *)headImgUrl).length) {
         id headImageMgr = mmServiceCenterGet(@"MMHeadImageMgr");
         if (headImageMgr) {
-            headImgUrl = ((id (*)(id, SEL))objc_msgSend)(headImageMgr,
-                NSSelectorFromString(@"getUsrHeadImgUrl:"), username);
+            headImgUrl = ((id (*)(id, SEL, id))objc_msgSend)(headImageMgr,
+    NSSelectorFromString(@"getUsrHeadImgUrl:"), username);
         }
     }
     if (![headImgUrl isKindOfClass:[NSString class]] || !((NSString *)headImgUrl).length) return;
