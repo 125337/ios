@@ -650,7 +650,7 @@ static NSString *configPropertyForKey(NSString *key) {
             [config setValue:hex forKey:key];
             [config save];
         } @catch (NSException *e) {
-            [[NSUserDefaults standardUserDefaults] setObject:hex forKey:key];
+            [[NSUserDefaults standardUserDefaults] setObject:hex forKey:[kPluginPrefix stringByAppendingString:key]];
             [[NSUserDefaults standardUserDefaults] synchronize];
         }
     }];

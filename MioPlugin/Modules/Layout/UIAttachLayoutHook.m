@@ -12,31 +12,25 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <substrate.h>
+#import "../../Config/PluginConfig.h"
 
 // ═══════════════════════════════════════════════════════
-// 配置键
-// ═══════════════════════════════════════════════════════
-static NSString *const kEnabledKey = @"AttachLayoutEnabled";
-static NSString *const kColumnsKey = @"AttachLayout_Columns";
-static NSString *const kRowsKey    = @"AttachLayout_Rows";
-
-// ═══════════════════════════════════════════════════════
-// 读取配置
+// 读取配置（统一使用 PluginConfig，保证与设置页面一致）
 // ═══════════════════════════════════════════════════════
 static inline BOOL attachLayoutEnabled(void) {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:kEnabledKey];
+    return [PluginConfig shared].attachLayoutEnabled;
 }
 
 static inline NSInteger attachLayoutColumns(void) {
     // 微信优化默认值 = 5 (123456.c:5153)
-    NSString *val = [[NSUserDefaults standardUserDefaults] stringForKey:kColumnsKey];
+    NSString *val = [PluginConfig shared].attachLayoutColumns;
     if (!val || val.length == 0) return 5;
     return [val integerValue];
 }
 
 static inline NSInteger attachLayoutRows(void) {
     // 微信优化默认值 = 2 (123456.c:5186)
-    NSString *val = [[NSUserDefaults standardUserDefaults] stringForKey:kRowsKey];
+    NSString *val = [PluginConfig shared].attachLayoutRows;
     if (!val || val.length == 0) return 2;
     return [val integerValue];
 }
