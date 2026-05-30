@@ -2,7 +2,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 
-#pragma mark - 辅助：从 contact KVC 取值
+#pragma mark - KVC 辅助
 
 static id contactValueForKey(id contact, NSString *key) {
     if (!contact || !key) return nil;
@@ -16,22 +16,10 @@ static NSInteger contactIntForKey(id contact, NSString *key) {
     return 0;
 }
 
-#pragma mark - 信息行定义
-
-static NSArray *s_infoItems(void) {
-    static NSArray *items = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        items = @[
-            @{@"label": @"微信",   @"key": @"wxid",       @"copiable": @YES},
-            @{@"label": @"备注",   @"key": @"remark",     @"copiable": @YES},
-            @{@"label": @"性别",   @"key": @"gender",     @"copiable": @NO},
-            @{@"label": @"地区",   @"key": @"location",   @"copiable": @NO},
-            @{@"label": @"签名",   @"key": @"signature",  @"copiable": @YES},
-            @{@"label": @"类型",   @"key": @"chatType",   @"copiable": @NO},
-        ];
-    });
-    return items;
+static NSString *contactStringForKey(id contact, NSString *key) {
+    id val = contactValueForKey(contact, key);
+    if (val && [val isKindOfClass:[NSString class]] && [(NSString *)val length] > 0) return val;
+    return nil;
 }
 
 @implementation CSContactInfoPopoverController {
@@ -45,8 +33,7 @@ static NSArray *s_infoItems(void) {
         _contact = contact;
         _avatarImage = avatar;
         if (contact) {
-            id usrName = contactValueForKey(contact, @"m_nsUsrName");
-            _wxid = usrName;
+            _wxid = ((id (*)(id, SEL))objc_msgSend)(contact, @selector(m_nsUsrName));
         }
     }
     return self;
@@ -96,7 +83,7 @@ static NSArray *s_infoItems(void) {
     }
 }
 
-#pragma mark - 创建 UI
+#pragma mark - UI 创建
 
 - (UIView *)createHeaderView {
     UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 272, 20)];
@@ -124,7 +111,7 @@ static NSArray *s_infoItems(void) {
     return footer;
 }
 
-#pragma mark - 数据更新
+#pragma mark - 数据构建
 
 - (void)updateUIWithContact:(id)contact {
     [_sections removeAllObjects];
@@ -144,74 +131,51 @@ static NSArray *s_infoItems(void) {
 }
 
 - (void)addAvatarSection:(id)contact {
-    id item = ((id (*)(id, SEL))objc_msgSend)([objc_getClass("CSSettingItem") alloc], @selector(init));
-    NSString *nickname = contactValueForKey(contact, @"m_nsNickName");
-    if (!nickname) nickname = @"未知";
-    ((void (*)(id, SEL, id))objc_msgSend)(item, @selector(setTitle:), nickname);
-    NSString *usrName = ((id (*)(id, SEL))objc_msgSend)(contact, @selector(m_nsUsrName));
-    ((void (*)(id, SEL, id))objc_msgSend)(item, @selector(setSubtitle:), usrName ?: @"未知ID");
-    objc_setAssociatedObject(item, "contact", contact, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    id section = ((id (*)(id, SEL, id, id))objc_msgSend)(
-        [objc_getClass("CSSettingSection") alloc], @selector(initWithTitle:items:),
-        @"", @[item]);
-    [_sections addObject:section];
+    NSDictionary *item = @{
+        @"title": [self nicknameValue:contact],
+        @"detail": self.wxid ?: @"未知ID",
+    };
+    NSDictionary *section = @{@"header": @"", @"items": @[item]};
+    [_sections addObject:[section mutableCopy]];
 }
 
 - (void)addBasicInfoSection:(id)contact {
-    NSMutableArray *items = [NSMutableArray new];
-
-    [items addObject:[self infoItemWithTitle:@"昵称" detail:[self nicknameValue:contact]]];
-    [items addObject:[self infoItemWithTitle:@"微信号" detail:[self wxidValue]]];
-    [items addObject:[self infoItemWithTitle:@"备注" detail:[self remarkValue]]];
-    [items addObject:[self infoItemWithTitle:@"性别" detail:[self genderValue]]];
-    [items addObject:[self infoItemWithTitle:@"地区" detail:[self locationValue]]];
-    [items addObject:[self infoItemWithTitle:@"签名" detail:[self signatureValue]]];
-
-    id section = ((id (*)(id, SEL, id, id))objc_msgSend)(
-        [objc_getClass("CSSettingSection") alloc], @selector(initWithTitle:items:),
-        @"基本信息", items);
-    [_sections addObject:section];
+    NSArray *items = @[
+        @{@"title": @"昵称", @"detail": [self nicknameValue:contact]},
+        @{@"title": @"微信号", @"detail": [self wxidValue]},
+        @{@"title": @"备注", @"detail": [self remarkValue]},
+        @{@"title": @"性别", @"detail": [self genderValue]},
+        @{@"title": @"地区", @"detail": [self locationValue]},
+        @{@"title": @"签名", @"detail": [self signatureValue]},
+    ];
+    NSDictionary *section = @{@"header": @"基本信息", @"items": items};
+    [_sections addObject:[section mutableCopy]];
 }
 
 - (void)addGroupInfoSection:(id)contact {
-    NSMutableArray *items = [NSMutableArray new];
-
-    [items addObject:[self infoItemWithTitle:@"昵称" detail:[self nicknameValue:contact]]];
-    [items addObject:[self infoItemWithTitle:@"群主" detail:[self groupOwnerValue:contact]]];
-    [items addObject:[self infoItemWithTitle:@"群成员" detail:[self groupMemberCountValue:contact]]];
-
-    id section = ((id (*)(id, SEL, id, id))objc_msgSend)(
-        [objc_getClass("CSSettingSection") alloc], @selector(initWithTitle:items:),
-        @"群聊信息", items);
-    [_sections addObject:section];
+    NSArray *items = @[
+        @{@"title": @"昵称", @"detail": [self nicknameValue:contact]},
+        @{@"title": @"群主", @"detail": @"暂无"},
+        @{@"title": @"群成员", @"detail": @"暂无"},
+    ];
+    NSDictionary *section = @{@"header": @"群聊信息", @"items": items};
+    [_sections addObject:[section mutableCopy]];
 }
 
 - (void)addOfficialAccountInfoSection:(id)contact {
-    NSMutableArray *items = [NSMutableArray new];
-
-    [items addObject:[self infoItemWithTitle:@"昵称" detail:[self nicknameValue:contact]]];
-    [items addObject:[self infoItemWithTitle:@"认证" detail:[self verifyFlagValue:contact]]];
-
-    id section = ((id (*)(id, SEL, id, id))objc_msgSend)(
-        [objc_getClass("CSSettingSection") alloc], @selector(initWithTitle:items:),
-        @"公众号信息", items);
-    [_sections addObject:section];
-}
-
-- (id)infoItemWithTitle:(NSString *)title detail:(NSString *)detail {
-    id item = ((id (*)(id, SEL))objc_msgSend)([objc_getClass("CSSettingItem") alloc], @selector(init));
-    ((void (*)(id, SEL, id))objc_msgSend)(item, @selector(setTitle:), title);
-    ((void (*)(id, SEL, id))objc_msgSend)(item, @selector(setSubtitle:), detail ?: @"暂无");
-    return item;
+    NSArray *items = @[
+        @{@"title": @"昵称", @"detail": [self nicknameValue:contact]},
+        @{@"title": @"认证", @"detail": [self verifyFlagValue:contact]},
+    ];
+    NSDictionary *section = @{@"header": @"公众号信息", @"items": items};
+    [_sections addObject:[section mutableCopy]];
 }
 
 #pragma mark - 数据取值
 
 - (NSString *)nicknameValue:(id)contact {
-    id val = contactValueForKey(contact, @"m_nsNickName");
-    if (val && [val isKindOfClass:[NSString class]] && [(NSString *)val length] > 0) return val;
-    return @"未知";
+    NSString *val = contactStringForKey(contact, @"m_nsNickName");
+    return val ?: @"未知";
 }
 
 - (NSString *)wxidValue {
@@ -219,10 +183,10 @@ static NSArray *s_infoItems(void) {
 }
 
 - (NSString *)remarkValue {
-    id remark = contactValueForKey(self.contact, @"m_nsRemark");
-    if (remark && [remark isKindOfClass:[NSString class]] && [(NSString *)remark length] > 0) return remark;
-    id remarkName = contactValueForKey(self.contact, @"m_nsRemarkName");
-    if (remarkName && [remarkName isKindOfClass:[NSString class]] && [(NSString *)remarkName length] > 0) return remarkName;
+    NSString *remark = contactStringForKey(self.contact, @"m_nsRemark");
+    if (remark) return remark;
+    NSString *remarkName = contactStringForKey(self.contact, @"m_nsRemarkName");
+    if (remarkName) return remarkName;
     return @"暂无";
 }
 
@@ -234,36 +198,22 @@ static NSArray *s_infoItems(void) {
 }
 
 - (NSString *)locationValue {
-    id province = contactValueForKey(self.contact, @"m_nsProvince");
-    id city = contactValueForKey(self.contact, @"m_nsCity");
-    NSString *p = [province isKindOfClass:[NSString class]] ? [province stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] : @"";
-    NSString *c = [city isKindOfClass:[NSString class]] ? city : @"";
-    if (p.length > 0 && c.length > 0) return [NSString stringWithFormat:@"%@ %@", p, c];
-    if (p.length > 0) return p;
-    if (c.length > 0) return c;
+    NSString *p = contactStringForKey(self.contact, @"m_nsProvince");
+    NSString *c = contactStringForKey(self.contact, @"m_nsCity");
+    if (p && c) return [NSString stringWithFormat:@"%@ %@", p, c];
+    if (p) return p;
+    if (c) return c;
     return @"暂无";
 }
 
 - (NSString *)signatureValue {
-    id sig = contactValueForKey(self.contact, @"m_nsSignature");
-    if (sig && [sig isKindOfClass:[NSString class]] && [(NSString *)sig length] > 0) return sig;
-    return @"暂无";
-}
-
-- (NSString *)groupOwnerValue:(id)contact {
-    return @"暂无";
-}
-
-- (NSString *)groupMemberCountValue:(id)contact {
-    return @"暂无";
+    NSString *sig = contactStringForKey(self.contact, @"m_nsSignature");
+    return sig ?: @"暂无";
 }
 
 - (NSString *)verifyFlagValue:(id)contact {
-    id flag = contactValueForKey(contact, @"m_uiVerifyFlag");
-    if (flag) {
-        NSInteger v = [flag integerValue];
-        if (v > 0) return @"已认证";
-    }
+    NSInteger v = contactIntForKey(contact, @"m_uiVerifyFlag");
+    if (v > 0) return @"已认证";
     return @"未认证";
 }
 
@@ -274,10 +224,8 @@ static NSArray *s_infoItems(void) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (section >= _sections.count) return 0;
-    id sec = _sections[section];
-    id items = ((id (*)(id, SEL))objc_msgSend)(sec, @selector(items));
-    return ((NSInteger (*)(id, SEL))objc_msgSend)(items, @selector(count));
+    NSDictionary *sec = _sections[section];
+    return [sec[@"items"] count];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -288,9 +236,7 @@ static NSArray *s_infoItems(void) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    if (section >= _sections.count) return nil;
-    id sec = _sections[section];
-    return ((id (*)(id, SEL))objc_msgSend)(sec, @selector(title));
+    return _sections[section][@"header"];
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -344,9 +290,9 @@ static NSArray *s_infoItems(void) {
     }
 
     UILabel *nl = [cell.contentView viewWithTag:1001];
-    id item = ((id (*)(id, SEL, NSInteger))objc_msgSend)(_sections[0], @selector(items), 0);
-    id title = ((id (*)(id, SEL))objc_msgSend)(item, @selector(title));
-    nl.text = title ?: @"未知";
+    NSDictionary *sec = _sections[0];
+    NSDictionary *item = sec[@"items"][0];
+    nl.text = item[@"title"] ?: @"未知";
 
     return cell;
 }
@@ -386,16 +332,15 @@ static NSArray *s_infoItems(void) {
         ]];
     }
 
-    id sec = _sections[indexPath.section];
-    id items = ((id (*)(id, SEL))objc_msgSend)(sec, @selector(items));
-    id item = ((id (*)(id, SEL, NSUInteger))objc_msgSend)(items, @selector(objectAtIndex:), indexPath.row);
+    NSDictionary *sec = _sections[indexPath.section];
+    NSDictionary *item = sec[@"items"][indexPath.row];
 
     UILabel *tl = [cell.contentView viewWithTag:2000];
-    tl.text = ((id (*)(id, SEL))objc_msgSend)(item, @selector(title));
+    tl.text = item[@"title"];
 
     UILabel *dl = [cell.contentView viewWithTag:2001];
-    NSString *detail = ((id (*)(id, SEL))objc_msgSend)(item, @selector(subtitle));
-    dl.text = detail ?: @"暂无";
+    NSString *detail = item[@"detail"] ?: @"暂无";
+    dl.text = detail;
 
     [self updateDetailLabelStyle:dl forDetail:detail];
 
@@ -422,10 +367,9 @@ static NSArray *s_infoItems(void) {
         return;
     }
 
-    id sec = _sections[indexPath.section];
-    id items = ((id (*)(id, SEL))objc_msgSend)(sec, @selector(items));
-    id item = ((id (*)(id, SEL, NSUInteger))objc_msgSend)(items, @selector(objectAtIndex:), indexPath.row);
-    NSString *detail = ((id (*)(id, SEL))objc_msgSend)(item, @selector(subtitle));
+    NSDictionary *sec = _sections[indexPath.section];
+    NSDictionary *item = sec[@"items"][indexPath.row];
+    NSString *detail = item[@"detail"];
 
     if (!detail || detail.length == 0 || [detail isEqualToString:@"暂无"] || [detail isEqualToString:@"未知"]) return;
 
@@ -474,7 +418,7 @@ static NSArray *s_infoItems(void) {
     [gen notificationOccurred:UINotificationFeedbackTypeSuccess];
 }
 
-#pragma mark - Copy Toast
+#pragma mark - 复制成功 Toast
 
 - (void)showCopySuccessToast {
     CGFloat toastW = 200;
