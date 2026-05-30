@@ -167,8 +167,9 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         else if ([val isKindOfClass:[NSNumber class]]) currentValue = [val stringValue];
     } @catch (NSException *e) {}
 
+    NSString *message = objc_getAssociatedObject(sender, @"editMessage");
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
-                                                                   message:nil
+                                                                   message:message
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
         textField.text = currentValue ?: @"";

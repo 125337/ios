@@ -80,6 +80,7 @@ jobs:
           MioPlugin/Settings/Controllers/SettingChatTopBarController.m \
           MioPlugin/Settings/Controllers/ChatTopBarBlacklistEditorVC.m \
           MioPlugin/Settings/Controllers/SettingNameColorController.m \
+          MioPlugin/Settings/Controllers/SettingListCornerRadiusController.m \
           MioPlugin/Settings/Controllers/MioTweakGroupSelectsController.m; do
           BASENAME=$(basename "$f" .m)
           OBJ_FILE="build/${BASENAME}.o"

@@ -145,7 +145,19 @@
 @property (nonatomic, assign) CGFloat placeholderTextAlpha;
 @property (nonatomic, copy) NSString *placeholderTextColorHex;
 
-
+#pragma mark - 列表圆角
+@property (nonatomic, assign) BOOL listCornerRadiusEnabled;
+@property (nonatomic, assign) BOOL listSearchCornerRadius;
+@property (nonatomic, assign) BOOL listHideRightQRCode;
+@property (nonatomic, assign) BOOL listCellBorder;
+@property (nonatomic, assign) CGFloat listCellCornerRadius;
+@property (nonatomic, assign) CGFloat listCellMargin;
+@property (nonatomic, assign) CGFloat listPinnedSessionTopSpacing;
+@property (nonatomic, assign) CGFloat listNormalSessionSpacing;
+@property (nonatomic, copy) NSString *listCellLightBgColor;
+@property (nonatomic, copy) NSString *listCellDarkBgColor;
+@property (nonatomic, copy) NSString *listCardLightBgColor;
+@property (nonatomic, copy) NSString *listCardDarkBgColor;
 
 @property (nonatomic, assign) BOOL notifySender;
 @property (nonatomic, copy) NSString *notifySenderTemplate;
