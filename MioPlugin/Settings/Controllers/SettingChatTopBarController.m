@@ -4,8 +4,9 @@
 #import "../../Config/WPColors.h"
 #import "../../Config/Constants.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
+#import <PhotosUI/PhotosUI.h>
 
-@interface SettingChatTopBarController ()
+@interface SettingChatTopBarController () <PHPickerViewControllerDelegate>
 @property (nonatomic, strong) NSMutableArray *inputFields;
 @end
 
@@ -156,6 +157,12 @@ static NSString *keyForTag(NSInteger tag) {
         [self onPickGIFImage];
     }]];
 
+    [alert addAction:[UIAlertAction actionWithTitle:@"清除分隔符"
+                                             style:UIAlertActionStyleDestructive
+                                           handler:^(UIAlertAction *action) {
+        [self deleteAllSeparators];
+    }]];
+
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
 
     if (@available(iOS 13.0, *)) {
@@ -190,18 +197,26 @@ static NSString *keyForTag(NSInteger tag) {
 }
 
 - (void)onPickStaticImage {
-    UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-    picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-    picker.mediaTypes = @[@"public.image"];
+    PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
+    config.selectionLimit = 1;
+    config.filter = [PHPickerFilter imagesFilter];
+
+    PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
     picker.delegate = self;
     picker.view.tag = 100;
     [self presentViewController:picker animated:YES completion:nil];
 }
 
 - (void)onPickGIFImage {
-    UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-    picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-    picker.mediaTypes = @[@"public.image"];
+    PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
+    config.selectionLimit = 1;
+    if (@available(iOS 14.0, *)) {
+        config.filter = [PHPickerFilter anyFilterMatchingSubfilters:@[
+            [PHPickerFilter filterWithUTType:(__bridge NSString *)kUTTypeGIF]
+        ]];
+    }
+
+    PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
     picker.delegate = self;
     picker.view.tag = 200;
     [self presentViewController:picker animated:YES completion:nil];
@@ -419,38 +434,60 @@ static NSString *keyForTag(NSInteger tag) {
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
 
-#pragma mark - UIImagePickerControllerDelegate
+#pragma mark - PHPickerViewControllerDelegate
 
-- (void)imagePickerController:(UIImagePickerController *)picker
-didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey, id> *)info {
-    UIImage *image = info[UIImagePickerControllerOriginalImage];
-    if (!image) {
+- (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
+    if (results.count == 0) {
         [picker dismissViewControllerAnimated:YES completion:nil];
         return;
     }
 
+    PHPickerResult *result = results.firstObject;
     PluginConfig *config = [PluginConfig shared];
 
     if (picker.view.tag == 100) {
-        NSData *pngData = UIImagePNGRepresentation(image);
-        NSString *iconPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/MioChatSeparatorIcon.png"];
-        [pngData writeToFile:iconPath atomically:YES];
-        config.chatSeparatorIcon = iconPath;
+        [result.itemProvider loadObjectOfClass:[UIImage class] completionHandler:^(__kindof id<NSItemProviderReading> object, NSError *error) {
+            if (error || ![object isKindOfClass:[UIImage class]]) return;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                UIImage *image = (UIImage *)object;
+                NSData *pngData = UIImagePNGRepresentation(image);
+                NSString *iconPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/MioChatSeparatorIcon.png"];
+                [pngData writeToFile:iconPath atomically:YES];
+                config.chatSeparatorIcon = iconPath;
+                [config save];
+                [picker dismissViewControllerAnimated:YES completion:^{
+                    [self buildUI];
+                }];
+            });
+        }];
     } else if (picker.view.tag == 200) {
-        NSURL *gifURL = info[UIImagePickerControllerImageURL];
-        if (gifURL) {
-            config.chatSeparatorGIF = gifURL.path;
-        }
+        [result.itemProvider loadFileRepresentationForTypeIdentifier:(__bridge NSString *)kUTTypeGIF completionHandler:^(NSURL *url, NSError *error) {
+            if (error || !url) return;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                config.chatSeparatorGIF = url.path;
+                [config save];
+                [picker dismissViewControllerAnimated:YES completion:^{
+                    [self buildUI];
+                }];
+            });
+        }];
     }
-
-    [config save];
-    [picker dismissViewControllerAnimated:YES completion:^{
-        [self buildUI];
-    }];
 }
 
-- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-    [picker dismissViewControllerAnimated:YES completion:nil];
+- (void)deleteAllSeparators {
+    PluginConfig *config = [PluginConfig shared];
+    config.chatSeparatorIcon = nil;
+    config.chatSeparatorGIF = nil;
+    config.chatSeparatorText = nil;
+    [config save];
+
+    NSString *iconPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/MioChatSeparatorIcon.png"];
+    [[NSFileManager defaultManager] removeItemAtPath:iconPath error:nil];
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self buildUI];
+    });
 }
 
 @end

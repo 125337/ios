@@ -294,10 +294,10 @@
             if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
                 unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), contact);
                 NSString *suffix = config.chatGroupMemberCountSuffix.length > 0
-                    ? config.chatGroupMemberCountSuffix : @"%u人";
+                    ? config.chatGroupMemberCountSuffix : @"%ld人";
                 titleText = [NSString stringWithFormat:@"%@%@",
                     nickname ?: @"",
-                    [NSString stringWithFormat:suffix, count]];
+                    [NSString stringWithFormat:suffix, (long)count]];
             }
         }
     } else if (!isGroup && config.showAddTime) {
@@ -312,12 +312,15 @@
         }
         if (addTime > 0) {
             NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-            NSInteger days = (NSInteger)((now - addTime) / 86400.0);
-            NSString *suffix = config.chatAddTimeSuffixFormat.length > 0
-                    ? config.chatAddTimeSuffixFormat : @"%ld天";
-            titleText = [NSString stringWithFormat:@"%@%@",
-                nickname ?: @"",
-                [NSString stringWithFormat:suffix, (long)days]];
+            NSTimeInterval diff = now - addTime;
+            if (diff > -86400) {
+                NSInteger days = (NSInteger)(diff / 86400.0);
+                NSString *suffix = config.chatAddTimeSuffixFormat.length > 0
+                        ? config.chatAddTimeSuffixFormat : @"%ld天";
+                titleText = [NSString stringWithFormat:@"%@%@",
+                    nickname ?: @"",
+                    [NSString stringWithFormat:suffix, (long)days]];
+            }
         } else {
             [self silentLoadContactExtInfo:contact];
         }
