@@ -37,13 +37,13 @@
         *ecy = [self addInputRowInGroup:expand title:@"每行列数"
                                     key:@"attachLayoutColumns"
                                   value:config.attachLayoutColumns
-                                   hint:@"3"
+                                   hint:@"5"
                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"显示行数"
                                     key:@"attachLayoutRows"
                                   value:config.attachLayoutRows
-                                   hint:@"自动"
+                                   hint:@"2"
                                     cy:*ecy width:w];
     } cy:cy width:w];
 

@@ -1,6 +1,8 @@
 #import "SettingListCornerRadiusController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
+#import "../../Core/LogManager.h"
+#import "../../Config/WPColors.h"
 
 @implementation SettingListCornerRadiusController
 
@@ -53,44 +55,48 @@
                                          cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        CGFloat cr = cfg.listCellCornerRadius > 0 ? cfg.listCellCornerRadius : 18.0;
+        NSString *crStr = cfg.listCellCornerRadius > 0
+            ? [NSString stringWithFormat:@"%.0f", cfg.listCellCornerRadius] : nil;
         *ecy = [self addInputRowInGroup:expand
                                    title:@"Cell圆角半径"
                                      key:@"listCellCornerRadius"
-                                   value:[NSString stringWithFormat:@"%.0f", cr]
+                                   value:crStr
                                     hint:@"18"
                               alertTitle:@"设置列表圆角半径"
                             alertMessage:@"请输入圆角半径(5-30像素)"
                                       cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        CGFloat lm = cfg.listCellMargin > 0 ? cfg.listCellMargin : 9.0;
+        NSString *lmStr = cfg.listCellMargin > 0
+            ? [NSString stringWithFormat:@"%.0f", cfg.listCellMargin] : nil;
         *ecy = [self addInputRowInGroup:expand
                                    title:@"Cell左右边距"
                                      key:@"listCellMargin"
-                                   value:[NSString stringWithFormat:@"%.0f", lm]
+                                   value:lmStr
                                     hint:@"9"
                               alertTitle:@"设置Cell左右边距"
                             alertMessage:@"请输入边距值(1-30像素)"
                                       cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        CGFloat pt = cfg.listPinnedSessionTopSpacing > 0 ? cfg.listPinnedSessionTopSpacing : 15.0;
+        NSString *ptStr = cfg.listPinnedSessionTopSpacing > 0
+            ? [NSString stringWithFormat:@"%.0f", cfg.listPinnedSessionTopSpacing] : nil;
         *ecy = [self addInputRowInGroup:expand
                                    title:@"置顶会话距顶栏间距"
                                      key:@"listPinnedSessionTopSpacing"
-                                   value:[NSString stringWithFormat:@"%.0f", pt]
+                                   value:ptStr
                                     hint:@"15"
                               alertTitle:@"设置置顶会话距顶部间距"
                             alertMessage:@"请输入间距值(1-50像素)"
                                       cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        CGFloat ns = cfg.listNormalSessionSpacing > 0 ? cfg.listNormalSessionSpacing : 15.0;
+        NSString *nsStr = cfg.listNormalSessionSpacing > 0
+            ? [NSString stringWithFormat:@"%.0f", cfg.listNormalSessionSpacing] : nil;
         *ecy = [self addInputRowInGroup:expand
                                    title:@"普通会话距置顶会话间距"
                                      key:@"listNormalSessionSpacing"
-                                   value:[NSString stringWithFormat:@"%.0f", ns]
+                                   value:nsStr
                                     hint:@"15"
                               alertTitle:@"设置普通会话距置顶会话间距"
                             alertMessage:@"请输入间距值(1-50像素)"
@@ -127,8 +133,18 @@
 
     y = [self finishGroup:group atY:y height:cy];
 
+    if (!config.listCornerRadiusEnabled) {
+        UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(16, y, w - 32, 16)];
+        hint.text = @"开启后可自定义微信列表圆角及间距样式";
+        hint.font = [UIFont systemFontOfSize:12];
+        hint.textColor = WPTextTertiaryColor();
+        [self.contentView addSubview:hint];
+        y += 20;
+    }
+
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
+    WPLog(@"UI", @"[Sub] SettingListCornerRadiusController buildUI done");
 }
 
 @end
