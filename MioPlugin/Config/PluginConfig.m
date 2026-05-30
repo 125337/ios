@@ -404,6 +404,36 @@
     } else {
         _placeholderTextColorHex = @"#808080";
     }
+
+    // ========== 列表圆角配置 ==========
+    _listCornerRadiusEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListCornerRadiusEnabled"]];
+    _listSearchCornerRadius = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListSearchCornerRadius"]];
+    _listHideRightQRCode = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListHideRightQRCode"]];
+    _listCellBorder = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorder"]];
+
+    CGFloat cr = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListCellCornerRadius"]];
+    _listCellCornerRadius = (cr > 0) ? cr : 18.0;
+
+    CGFloat lm = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListCellMargin"]];
+    _listCellMargin = (lm > 0) ? lm : 9.0;
+
+    CGFloat ps = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListPinnedSessionTopSpacing"]];
+    _listPinnedSessionTopSpacing = (ps > 0) ? ps : 15.0;
+
+    CGFloat ns = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListNormalSessionSpacing"]];
+    _listNormalSessionSpacing = (ns > 0) ? ns : 15.0;
+
+    NSString *clb = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellLightBgColor"]];
+    _listCellLightBgColor = [clb copy];
+
+    NSString *cdb = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellDarkBgColor"]];
+    _listCellDarkBgColor = [cdb copy];
+
+    NSString *clb2 = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCardLightBgColor"]];
+    _listCardLightBgColor = [clb2 copy];
+
+    NSString *cdb2 = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCardDarkBgColor"]];
+    _listCardDarkBgColor = [cdb2 copy];
 }
 
 - (void)save {
@@ -576,6 +606,20 @@
     [d setFloat:_placeholderTextAlpha forKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_Alpha"]];
     if (_placeholderTextColorHex) [d setObject:_placeholderTextColorHex forKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_ColorHex"]];
 
+    // ========== 列表圆角配置 ==========
+    [d setBool:_listCornerRadiusEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListCornerRadiusEnabled"]];
+    [d setBool:_listSearchCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"ListSearchCornerRadius"]];
+    [d setBool:_listHideRightQRCode forKey:[kPluginPrefix stringByAppendingString:@"ListHideRightQRCode"]];
+    [d setBool:_listCellBorder forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorder"]];
+    [d setFloat:_listCellCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"ListCellCornerRadius"]];
+    [d setFloat:_listCellMargin forKey:[kPluginPrefix stringByAppendingString:@"ListCellMargin"]];
+    [d setFloat:_listPinnedSessionTopSpacing forKey:[kPluginPrefix stringByAppendingString:@"ListPinnedSessionTopSpacing"]];
+    [d setFloat:_listNormalSessionSpacing forKey:[kPluginPrefix stringByAppendingString:@"ListNormalSessionSpacing"]];
+    if (_listCellLightBgColor) [d setObject:_listCellLightBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellLightBgColor"]];
+    if (_listCellDarkBgColor) [d setObject:_listCellDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellDarkBgColor"]];
+    if (_listCardLightBgColor) [d setObject:_listCardLightBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCardLightBgColor"]];
+    if (_listCardDarkBgColor) [d setObject:_listCardDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCardDarkBgColor"]];
+    
     [d synchronize];
     WPLog(@"Config", @"[OK] save() completed - NSUserDefaults synchronized");
 }

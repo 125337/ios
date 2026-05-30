@@ -3,6 +3,7 @@
 #import <objc/runtime.h>
 #import "Registry/HookRegistry.h"
 #import "Config/PluginConfig.h"
+#import "Modules/ListCornerRadius/ListCornerRadiusHook.h"
 
 __attribute__((constructor))
 static void MioPluginInitialize() {
@@ -12,6 +13,7 @@ static void MioPluginInitialize() {
         @autoreleasepool {
             NSLog(@"[MioPlugin] entering constructor");
             [HookRegistry installAllHooks];
+            [ListCornerRadiusHook initListCornerRadiusHook];
             NSLog(@"[MioPlugin] all hooks installed");
         }
     } @catch (NSException *e) {
