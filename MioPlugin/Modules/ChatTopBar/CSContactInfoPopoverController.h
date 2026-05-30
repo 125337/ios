@@ -1,13 +1,15 @@
-// CSContactInfoPopoverController.h
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 
-@interface CSContactInfoPopoverController : UIViewController <UIAdaptivePresentationControllerDelegate, UITableViewDataSource, UITableViewDelegate>
+NS_ASSUME_NONNULL_BEGIN
 
-@property (nonatomic, strong) id contact;                    // WeChat CContact 对象
-@property (nonatomic, strong) NSString *wxid;                // 微信号
-@property (nonatomic, strong) UIImage *avatarImage;          // 头像
+@interface CSContactInfoPopoverController : UIViewController <
+    UITableViewDelegate,
+    UITableViewDataSource,
+    UIPopoverPresentationControllerDelegate>
 
-// 初始化（传入 contact + 头像）
-- (instancetype)initWithContact:(id)contact avatar:(UIImage *)avatar;
+- (instancetype)initWithContact:(id)contact avatar:(nullable UIImage *)avatar;
 
 @end
+
+NS_ASSUME_NONNULL_END

@@ -1,412 +1,583 @@
-// CSContactInfoPopoverController.m — MRC 环境
-// 基于 123456.c 反编译分析实现自定义联系人信息弹窗
-// v3: 多 Section（头像 Section 0 + 信息 Section 1），完全对齐 123456.c
 #import "CSContactInfoPopoverController.h"
-#import <objc/runtime.h>
+#import "../../Config/PluginConfig.h"
+#import "../../Core/LogManager.h"
+#import <objc/objc.h>
 #import <objc/message.h>
 
-#pragma mark - 辅助：从 contact KVC 取值
+static const CGFloat kPopoverWidth      = 280.0;
+static const CGFloat kAvatarSize        = 60.0;
+static const CGFloat kAvatarCorner      = 30.0;
+static const CGFloat kPopoverMaxHeight  = 420.0;
+static const CGFloat kRowHeight         = 46.0;
+static const CGFloat kSectionSpacing    = 16.0;
 
-static id contactValueForKey(id contact, NSString *key) {
-    if (!contact || !key) return nil;
-    return ((id (*)(id, SEL, NSString *))objc_msgSend)(
-        contact, NSSelectorFromString(@"valueForKey:"), key);
+#pragma mark - Cell Reuse IDs
+
+static NSString * const kAvatarCellID   = @"CSAvatarCell";
+static NSString * const kDetailCellID   = @"CSDetailCell";
+
+#pragma mark - Contact Info Helpers
+
+static id mmServiceCenterGet(NSString *svcName) {
+    Class centerClass = objc_getClass("MMServiceCenter");
+    if (!centerClass) return nil;
+    id center = ((id (*)(id, SEL))objc_msgSend)(centerClass, @selector(defaultCenter));
+    if (!center) return nil;
+    return ((id (*)(id, SEL, Class))objc_msgSend)(center,
+        NSSelectorFromString(@"getService:"), objc_getClass([svcName UTF8String]));
 }
 
-static NSInteger contactIntForKey(id contact, NSString *key) {
-    id val = contactValueForKey(contact, key);
-    if (val) return [(NSNumber *)val integerValue];
+static NSString *contactDisplayName(id contact) {
+    if (!contact) return @"";
+    id result = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsNickName"));
+    if ([result isKindOfClass:[NSString class]] && ((NSString *)result).length) return result;
+
+    result = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsRemark"));
+    if ([result isKindOfClass:[NSString class]] && ((NSString *)result).length) return result;
+
+    result = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
+    if ([result isKindOfClass:[NSString class]]) return result;
+    return @"";
+}
+
+static NSString *contactWxid(id contact) {
+    if (!contact) return @"";
+    id val = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
+    if (![val isKindOfClass:[NSString class]]) return @"";
+    NSString *username = (NSString *)val;
+    if ([username hasPrefix:@"gh_"]) {
+        val = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsAliasName"));
+        if ([val isKindOfClass:[NSString class]] && ((NSString *)val).length) return val;
+    }
+    return username;
+}
+
+static NSString *contactGender(id contact) {
+    if (!contact) return @"";
+    unsigned int sex = (unsigned int)((long)objc_msgSend)(contact, NSSelectorFromString(@"m_uiSex"));
+    if (sex == 1) return @"男";
+    if (sex == 2) return @"女";
+    return @"";
+}
+
+static NSString *contactRegion(id contact) {
+    if (!contact) return @"";
+    id province = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsProvince"));
+    id city     = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsCity"));
+    NSString *p = [province isKindOfClass:[NSString class]] ? province : @"";
+    NSString *c = [city isKindOfClass:[NSString class]] ? city : @"";
+    if (p.length && c.length) return [NSString stringWithFormat:@"%@ %@", p, c];
+    if (p.length) return p;
+    if (c.length) return c;
+    return @"";
+}
+
+static NSString *contactSignature(id contact) {
+    if (!contact) return @"";
+    id val = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsSignature"));
+    if ([val isKindOfClass:[NSString class]]) return val;
+    return @"";
+}
+
+static NSString *contactRemark(id contact) {
+    if (!contact) return @"";
+    id val = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsRemark"));
+    if ([val isKindOfClass:[NSString class]] && ((NSString *)val).length) return val;
+    return @"";
+}
+
+static NSString *contactOwnerName(id contact) {
+    if (!contact) return @"";
+    id val = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsOwner"));
+    if ([val isKindOfClass:[NSString class]]) return val;
+    return @"";
+}
+
+static NSUInteger contactMemberCount(id contact) {
+    if (!contact) return 0;
+    id members = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsChatRoomMembers"));
+    if ([members isKindOfClass:[NSString class]]) {
+        NSArray *arr = [((NSString *)members) componentsSeparatedByString:@";"];
+        NSUInteger c = 0;
+        for (NSString *m in arr) {
+            if (m.length) c++;
+        }
+        return c;
+    }
     return 0;
 }
 
-#pragma mark - 信息行定义
-
-static NSArray *s_infoItems(void) {
-    static NSArray *items = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        items = @[
-            @{@"label": @"主页",   @"key": @"homepage",   @"copiable": @NO},
-            @{@"label": @"类型",   @"key": @"chatType",   @"copiable": @NO},
-            @{@"label": @"微信",   @"key": @"wxid",       @"copiable": @YES},
-            @{@"label": @"备注",   @"key": @"remark",     @"copiable": @YES},
-            @{@"label": @"性别",   @"key": @"gender",     @"copiable": @NO},
-            @{@"label": @"地区",   @"key": @"location",   @"copiable": @NO},
-            @{@"label": @"签名",   @"key": @"signature",  @"copiable": @YES},
-        ];
-    });
-    return items;
+static NSString *contactTypeLabel(id contact) {
+    if (!contact) return @"";
+    NSString *name = contactWxid(contact);
+    if ([name hasPrefix:@"gh_"]) return @"公众号";
+    if ([name containsString:@"@chatroom"]) return @"群聊";
+    return @"联系人";
 }
 
+static BOOL isGroupContact(id contact) {
+    NSString *name = contactWxid(contact);
+    return [name containsString:@"@chatroom"];
+}
+
+static BOOL isOAContact(id contact) {
+    NSString *name = contactWxid(contact);
+    return [name hasPrefix:@"gh_"];
+}
+
+static UIImage *loadCachedAvatar(NSString *username) {
+    if (!username.length) return nil;
+    NSString *docs = NSSearchPathForDirectoriesInDomains(
+        NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    NSString *dir  = [docs stringByAppendingPathComponent:@"HBWechatHelper_UserHeadImage"];
+    NSString *path = [dir stringByAppendingPathComponent:
+        [NSString stringWithFormat:@"%@.jpg", username]];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:path])
+        return [UIImage imageWithContentsOfFile:path];
+    return nil;
+}
+
+#pragma mark - CSContactInfoAvatarCell
+
+@interface CSContactInfoAvatarCell : UITableViewCell
+@property (nonatomic, strong) UIView *cardView;
+@property (nonatomic, strong) UIImageView *avatarView;
+@property (nonatomic, strong) UILabel *nameLabel;
+@end
+
+@implementation CSContactInfoAvatarCell
+
+- (instancetype)initWithStyle:(UITableViewCellStyle)style
+              reuseIdentifier:(NSString *)reuseIdentifier {
+    self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
+    if (self) {
+        self.selectionStyle = UITableViewCellSelectionStyleNone;
+        self.backgroundColor = [UIColor clearColor];
+        self.contentView.backgroundColor = [UIColor clearColor];
+
+        _cardView = [[UIView alloc] init];
+        _cardView.backgroundColor = [UIColor clearColor];
+        _cardView.translatesAutoresizingMaskIntoConstraints = NO;
+        [self.contentView addSubview:_cardView];
+
+        _avatarView = [[UIImageView alloc] init];
+        _avatarView.contentMode = UIViewContentModeScaleAspectFill;
+        _avatarView.layer.cornerRadius = kAvatarCorner;
+        _avatarView.clipsToBounds = YES;
+        _avatarView.backgroundColor = [UIColor colorWithWhite:0.92 alpha:1.0];
+        _avatarView.translatesAutoresizingMaskIntoConstraints = NO;
+        [_cardView addSubview:_avatarView];
+
+        _nameLabel = [[UILabel alloc] init];
+        _nameLabel.font = [UIFont systemFontOfSize:17.0 weight:UIFontWeightMedium];
+        _nameLabel.textColor = [UIColor blackColor];
+        _nameLabel.numberOfLines = 2;
+        _nameLabel.textAlignment = NSTextAlignmentCenter;
+        _nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [_cardView addSubview:_nameLabel];
+
+        [NSLayoutConstraint activateConstraints:@[
+            [_cardView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:16],
+            [_cardView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-16],
+            [_cardView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:12],
+            [_cardView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-12],
+
+            [_avatarView.topAnchor constraintEqualToAnchor:_cardView.topAnchor],
+            [_avatarView.centerXAnchor constraintEqualToAnchor:_cardView.centerXAnchor],
+            [_avatarView.widthAnchor constraintEqualToConstant:kAvatarSize],
+            [_avatarView.heightAnchor constraintEqualToConstant:kAvatarSize],
+
+            [_nameLabel.topAnchor constraintEqualToAnchor:_avatarView.bottomAnchor constant:8],
+            [_nameLabel.leadingAnchor constraintEqualToAnchor:_cardView.leadingAnchor],
+            [_nameLabel.trailingAnchor constraintEqualToAnchor:_cardView.trailingAnchor],
+            [_nameLabel.bottomAnchor constraintEqualToAnchor:_cardView.bottomAnchor],
+        ]];
+    }
+    return self;
+}
+
+@end
+
+#pragma mark - CSContactInfoDetailCell
+
+@interface CSContactInfoDetailCell : UITableViewCell
+@property (nonatomic, strong) UILabel *titleLabel;
+@property (nonatomic, strong) UILabel *detailLabel;
+@end
+
+@implementation CSContactInfoDetailCell
+
+- (instancetype)initWithStyle:(UITableViewCellStyle)style
+              reuseIdentifier:(NSString *)reuseIdentifier {
+    self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
+    if (self) {
+        self.selectionStyle = UITableViewCellSelectionStyleNone;
+
+        _titleLabel = [[UILabel alloc] init];
+        _titleLabel.font = [UIFont systemFontOfSize:15.0];
+        _titleLabel.textColor = [UIColor colorWithWhite:0.3 alpha:1.0];
+        _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        _titleLabel.setContentHuggingPriority(UILayoutPriorityRequired, UILayoutConstraintAxisHorizontal);
+        _titleLabel.setContentCompressionResistancePriority(UILayoutPriorityRequired, UILayoutConstraintAxisHorizontal);
+        [self.contentView addSubview:_titleLabel];
+
+        _detailLabel = [[UILabel alloc] init];
+        _detailLabel.font = [UIFont systemFontOfSize:15.0];
+        _detailLabel.textColor = [UIColor blackColor];
+        _detailLabel.textAlignment = NSTextAlignmentRight;
+        _detailLabel.numberOfLines = 3;
+        _detailLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [self.contentView addSubview:_detailLabel];
+
+        [NSLayoutConstraint activateConstraints:@[
+            [_titleLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:20],
+            [_titleLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
+            [_titleLabel.widthAnchor constraintLessThanOrEqualToAnchor:self.contentView.widthAnchor multiplier:0.38],
+
+            [_detailLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-20],
+            [_detailLabel.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
+            [_detailLabel.leadingAnchor constraintEqualToAnchor:_titleLabel.trailingAnchor constant:12],
+        ]];
+    }
+    return self;
+}
+
+@end
+
+#pragma mark - CSContactInfoPopoverController
+
+@interface CSContactInfoPopoverController ()
+@property (nonatomic, strong) id contact;
+@property (nonatomic, strong) UIImage *avatar;
+@property (nonatomic, strong) UITableView *tableView;
+@property (nonatomic, strong) NSMutableArray<NSMutableArray<NSDictionary *> *> *sections;
+@end
+
 @implementation CSContactInfoPopoverController
+
+#pragma mark - Init
 
 - (instancetype)initWithContact:(id)contact avatar:(UIImage *)avatar {
     self = [super init];
     if (self) {
         _contact = contact;
-        _avatarImage = avatar;
-        if (contact) {
-            id usrName = contactValueForKey(contact, @"m_nsUsrName");
-            _wxid = usrName;
-        }
+        _avatar = avatar;
+        _sections = [NSMutableArray array];
     }
     return self;
 }
 
-- (UIModalPresentationStyle)adaptivePresentationStyleForPresentationController:
-        (UIPresentationController *)controller {
-    return UIModalPresentationNone;
-}
-
-#pragma mark - viewDidLoad（与 123456.c L116643-116692 完全对齐）
+#pragma mark - View Lifecycle
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithRed:0.949 green:0.949 blue:0.969 alpha:1.0];
 
-    // 123456.c L116643-116649: systemGroupedBackgroundColor
-    self.view.backgroundColor = [UIColor colorWithRed:0.96 green:0.96 blue:0.97 alpha:1.0];
+    _tableView = [[UITableView alloc] initWithFrame:CGRectZero
+                                              style:UITableViewStyleGrouped];
+    _tableView.delegate = self;
+    _tableView.dataSource = self;
+    _tableView.backgroundColor = [UIColor clearColor];
+    _tableView.separatorInset = UIEdgeInsetsMake(0, 18, 0, 18);
+    _tableView.rowHeight = kRowHeight;
+    _tableView.estimatedRowHeight = kRowHeight;
+    _tableView.showsVerticalScrollIndicator = NO;
+    _tableView.contentInset = UIEdgeInsetsMake(8, 0, 8, 0);
+    _tableView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_tableView];
 
-    // 123456.c L116655-116659: UITableViewStyleGrouped (style:2)
-    UITableView *tableView = [[UITableView alloc] initWithFrame:self.view.bounds
-                                                          style:UITableViewStyleGrouped];
-    tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth;  // 123456.c L116662: 仅宽度 (值 2)
-    tableView.delegate = self;
-    tableView.dataSource = self;
+    [NSLayoutConstraint activateConstraints:@[
+        [_tableView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [_tableView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_tableView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_tableView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+    ]];
 
-    // 123456.c L116667-116669: whiteColor
-    tableView.backgroundColor = [UIColor whiteColor];
+    [_tableView registerClass:[CSContactInfoAvatarCell class] forCellReuseIdentifier:kAvatarCellID];
+    [_tableView registerClass:[CSContactInfoDetailCell class] forCellReuseIdentifier:kDetailCellID];
 
-    // 123456.c L116671: separatorInset = (18, 0, 18, 0)
-    tableView.separatorInset = UIEdgeInsetsMake(0, 18, 0, 18);
+    [self buildSections];
+}
 
-    // 123456.c L116672: rowHeight = 46
-    tableView.rowHeight = 46;
-    tableView.estimatedRowHeight = UITableViewAutomaticDimension;
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    CGSize size = self.view.bounds.size;
+    if (CGSizeEqualToSize(size, CGSizeZero)) {
+        self.preferredContentSize = CGSizeMake(kPopoverWidth, kPopoverMaxHeight);
+    }
+}
 
-    // 123456.c L116675: showsVerticalScrollIndicator = NO
-    tableView.showsVerticalScrollIndicator = NO;
+#pragma mark - Data Building
 
-    // 显式禁用水平滚动
-    tableView.alwaysBounceHorizontal = NO;
-    tableView.showsHorizontalScrollIndicator = NO;
+- (void)buildSections {
+    [_sections removeAllObjects];
 
-    // 123456.c L116676-116677: contentInset = (8, 8, 8, 8)
-    tableView.contentInset = UIEdgeInsetsMake(8, 8, 8, 8);
+    [self buildAvatarSection];
+    [self buildBasicInfoSection];
 
-    // 123456.c L116679-116686: 空白 header + footer
-    tableView.tableHeaderView = [self createHeaderView];
-    tableView.tableFooterView = [self createFooterView];
+    if (isGroupContact(_contact))
+        [self buildGroupInfoSection];
+    if (isOAContact(_contact))
+        [self buildOfficialAccountInfoSection];
+}
 
-    // 123456.c L116691-116692: 注册 CSSettingTableViewCell
-    Class cellClass = objc_getClass("CSSettingTableViewCell");
-    if (cellClass) {
-        [tableView registerClass:cellClass forCellReuseIdentifier:@"Cell"];
+- (void)buildAvatarSection {
+    NSMutableArray *rows = [NSMutableArray array];
+    NSString *displayName = contactDisplayName(_contact);
+    NSString *wxid         = contactWxid(_contact);
+
+    NSString *labelText = displayName;
+    if (wxid.length && ![wxid isEqualToString:displayName])
+        labelText = [NSString stringWithFormat:@"%@\n%@", displayName, wxid];
+
+    UIImage *av = _avatar;
+    if (!av) {
+        av = loadCachedAvatar(wxid);
     }
 
-    [self.view addSubview:tableView];
+    [rows addObject:@{
+        @"type":   @"avatar",
+        @"name":   labelText ?: @"",
+        @"avatar": av ?: [NSNull null],
+    }];
+    [_sections addObject:rows];
 }
 
-#pragma mark - 创建 UI
+- (void)buildBasicInfoSection {
+    NSMutableArray *rows = [NSMutableArray array];
 
-- (UIView *)createHeaderView {
-    // 123456.c L116709-116720: 空白 + clearColor，高度 ~20pt
-    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 272, 20)];
-    header.backgroundColor = [UIColor clearColor];
-    return header;
+    NSString *typeLabel = contactTypeLabel(_contact);
+    if (typeLabel.length) {
+        [rows addObject:@{@"title": @"类型", @"detail": typeLabel}];
+    }
+
+    NSString *wxid = contactWxid(_contact);
+    if (wxid.length) {
+        [rows addObject:@{@"title": @"微信", @"detail": wxid}];
+    }
+
+    NSString *remark = contactRemark(_contact);
+    if (remark.length && !isOAContact(_contact)) {
+        [rows addObject:@{@"title": @"备注", @"detail": remark}];
+    }
+
+    if (!isGroupContact(_contact) && !isOAContact(_contact)) {
+        NSString *gender = contactGender(_contact);
+        if (gender.length) {
+            [rows addObject:@{@"title": @"性别", @"detail": gender}];
+        }
+
+        NSString *region = contactRegion(_contact);
+        if (region.length) {
+            [rows addObject:@{@"title": @"地区", @"detail": region}];
+        }
+
+        NSString *sig = contactSignature(_contact);
+        if (sig.length) {
+            [rows addObject:@{@"title": @"签名", @"detail": sig}];
+        }
+    }
+
+    if (rows.count) [_sections addObject:rows];
 }
 
-- (UIView *)createFooterView {
-    // 123456.c L116739-116763: 空白 + clearColor，高度 ~20pt
-    UIView *footer = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 272, 20)];
-    footer.backgroundColor = [UIColor clearColor];
-    return footer;
+- (void)buildGroupInfoSection {
+    NSMutableArray *rows = [NSMutableArray array];
+
+    NSString *owner = contactOwnerName(_contact);
+    if (owner.length) {
+        [rows addObject:@{@"title": @"群主", @"detail": owner}];
+    }
+
+    NSUInteger count = contactMemberCount(_contact);
+    if (count > 0) {
+        [rows addObject:@{@"title": @"成员", @"detail":
+            [NSString stringWithFormat:@"%lu 人", (unsigned long)count]}];
+    }
+
+    if (rows.count) [_sections addObject:rows];
 }
 
-#pragma mark - UITableViewDataSource（多 Section）
+- (void)buildOfficialAccountInfoSection {
+    (void)_contact;
+}
+
+#pragma mark - Avatar Loading
+
+- (void)loadAvatarAsync:(UIImageView *)imageView contact:(id)contact {
+    NSString *username = contactWxid(contact);
+
+    UIImage *cached = loadCachedAvatar(username);
+    if (cached) {
+        imageView.image = cached;
+        return;
+    }
+
+    NSString *headImgUrl = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsHeadImgUrl"));
+    if (![headImgUrl isKindOfClass:[NSString class]] || !((NSString *)headImgUrl).length) {
+        id headImageMgr = mmServiceCenterGet(@"MMHeadImageMgr");
+        if (headImageMgr) {
+            headImgUrl = ((id (*)(id, SEL))objc_msgSend)(headImageMgr,
+                NSSelectorFromString(@"getUsrHeadImgUrl:"), username);
+        }
+    }
+    if (![headImgUrl isKindOfClass:[NSString class]] || !((NSString *)headImgUrl).length) return;
+
+    NSURL *url = [NSURL URLWithString:headImgUrl];
+    if (!url) return;
+
+    NSURLSession *session = [NSURLSession sharedSession];
+    [[session dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+        if (!data || err) return;
+        UIImage *img = [UIImage imageWithData:data];
+        if (!img) return;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            imageView.image = img;
+        });
+    }] resume];
+}
+
+#pragma mark - UITableViewDataSource
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 2;  // section 0 = 头像卡片, section 1 = 信息卡片
+    return _sections.count;
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (section == 0) return 1;              // 头像行
-    return (NSInteger)s_infoItems().count;   // 7 行信息
+- (NSInteger)tableView:(UITableView *)tableView
+ numberOfRowsInSection:(NSInteger)section {
+    return _sections[section].count;
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+- (UITableViewCell *)tableView:(UITableView *)tableView
+         cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    NSDictionary *row = _sections[indexPath.section][indexPath.row];
+    NSString *type = row[@"type"];
 
-    if (indexPath.section == 0) {
-        // ===== 头像 Cell（123456.c createAvatarCellForTableView L117847）=====
-        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"AvatarCell"];
-        if (!cell) {
-            // 123456.c L117847-117848: UITableViewCellStyleDefault
-            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                          reuseIdentifier:@"AvatarCell"];
-            cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-            // 头像 ImageView — 居中放置（123456.c L117854-117878）
-            UIImageView *avatarView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 60, 60)];
-            avatarView.tag = 1000;
-            avatarView.layer.cornerRadius = 30;
-            avatarView.clipsToBounds = YES;
-            avatarView.contentMode = UIViewContentModeScaleAspectFill;
-            avatarView.translatesAutoresizingMaskIntoConstraints = NO;
-            [cell.contentView addSubview:avatarView];
-
-            [NSLayoutConstraint activateConstraints:@[
-                [avatarView.centerXAnchor constraintEqualToAnchor:cell.contentView.centerXAnchor],
-                [avatarView.topAnchor constraintEqualToAnchor:cell.contentView.topAnchor constant:24],
-                [avatarView.widthAnchor constraintEqualToConstant:60],
-                [avatarView.heightAnchor constraintEqualToConstant:60],
-            ]];
-
-            // 昵称 Label（123456.c L117912-117947）
-            UILabel *nameLabel = [[UILabel alloc] init];
-            nameLabel.tag = 1001;
-            nameLabel.textAlignment = NSTextAlignmentCenter;
-            nameLabel.font = [UIFont boldSystemFontOfSize:18];
-            nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
-            [cell.contentView addSubview:nameLabel];
-
-            [NSLayoutConstraint activateConstraints:@[
-                [nameLabel.centerXAnchor constraintEqualToAnchor:cell.contentView.centerXAnchor],
-                [nameLabel.topAnchor constraintEqualToAnchor:avatarView.bottomAnchor constant:10],
-                [nameLabel.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:16],
-                [nameLabel.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-16],
-            ]];
-
-            // 微信号 Label（123456.c L116866-116873）
-            UILabel *wxidLabel = [[UILabel alloc] init];
-            wxidLabel.tag = 1002;
-            wxidLabel.textAlignment = NSTextAlignmentCenter;
-            wxidLabel.font = [UIFont systemFontOfSize:13];
-            wxidLabel.textColor = [UIColor grayColor];
-            wxidLabel.translatesAutoresizingMaskIntoConstraints = NO;
-            [cell.contentView addSubview:wxidLabel];
-
-            [NSLayoutConstraint activateConstraints:@[
-                [wxidLabel.centerXAnchor constraintEqualToAnchor:cell.contentView.centerXAnchor],
-                [wxidLabel.topAnchor constraintEqualToAnchor:nameLabel.bottomAnchor constant:4],
-            ]];
+    if ([type isEqualToString:@"avatar"]) {
+        CSContactInfoAvatarCell *cell =
+            [tableView dequeueReusableCellWithIdentifier:kAvatarCellID
+                                            forIndexPath:indexPath];
+        cell.nameLabel.text = row[@"name"];
+        id avObj = row[@"avatar"];
+        if (avObj == [NSNull null]) {
+            cell.avatarView.image = nil;
+        } else {
+            cell.avatarView.image = (UIImage *)avObj;
         }
-
-        UIImageView *av = [cell.contentView viewWithTag:1000];
-        if (self.avatarImage) {
-            av.image = self.avatarImage;
+        NSString *username = contactWxid(_contact);
+        if (!cell.avatarView.image && username.length) {
+            [self loadAvatarAsync:cell.avatarView contact:_contact];
         }
-
-        UILabel *nl = [cell.contentView viewWithTag:1001];
-        nl.text = contactValueForKey(self.contact, @"m_nsNickName") ?: @"微信用户";
-
-        UILabel *wl = [cell.contentView viewWithTag:1002];
-        wl.text = self.wxid ?: @"";
-
         return cell;
     }
 
-    // ===== 信息 Cell（123456.c createDetailCellForTableView L118045）=====
-    // 123456.c: 手动创建 UITableViewCellStyleValue1 (style:1)
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"DetailCell"];
-    if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1
-                                      reuseIdentifier:@"DetailCell"];
-        // 123456.c L118060-118068: textLabel font=16, color=black
-        cell.textLabel.font = [UIFont systemFontOfSize:16];
-        cell.textLabel.textColor = [UIColor blackColor];
-        // 123456.c L118101-118110: detailTextLabel font=15, color=gray
-        cell.detailTextLabel.font = [UIFont systemFontOfSize:15];
-        cell.detailTextLabel.textColor = [UIColor grayColor];
-        cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-    }
-
-    NSDictionary *item = s_infoItems()[indexPath.row];
-    cell.textLabel.text = item[@"label"];
-    cell.detailTextLabel.text = [self valueForInfoKey:item[@"key"]];
-
+    CSContactInfoDetailCell *cell =
+        [tableView dequeueReusableCellWithIdentifier:kDetailCellID
+                                        forIndexPath:indexPath];
+    cell.titleLabel.text  = row[@"title"];
+    cell.detailLabel.text = row[@"detail"];
     return cell;
 }
 
 #pragma mark - UITableViewDelegate
 
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    // 123456.c L118455: section 0 → 170pt
-    if (indexPath.section == 0) return 170;
-    // 123456.c L118458: section > 0 → UITableViewAutomaticDimension
-    return UITableViewAutomaticDimension;
+- (CGFloat)tableView:(UITableView *)tableView
+heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    NSDictionary *row = _sections[indexPath.section][indexPath.row];
+    if ([row[@"type"] isEqualToString:@"avatar"]) {
+        return kAvatarSize + 40.0;
+    }
+    return kRowHeight;
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+- (CGFloat)tableView:(UITableView *)tableView
+heightForHeaderInSection:(NSInteger)section {
+    return section == 0 ? 0.01 : kSectionSpacing;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView
+heightForFooterInSection:(NSInteger)section {
+    return 0.01;
+}
+
+- (UIView *)tableView:(UITableView *)tableView
+viewForHeaderInSection:(NSInteger)section {
+    return [[UIView alloc] initWithFrame:CGRectZero];
+}
+
+- (UIView *)tableView:(UITableView *)tableView
+viewForFooterInSection:(NSInteger)section {
+    return [[UIView alloc] initWithFrame:CGRectZero];
+}
+
+- (BOOL)tableView:(UITableView *)tableView
+shouldHighlightRowAtIndexPath:(NSIndexPath *)indexPath {
+    NSDictionary *row = _sections[indexPath.section][indexPath.row];
+    if ([row[@"type"] isEqualToString:@"avatar"]) return NO;
+    return YES;
+}
+
+- (void)tableView:(UITableView *)tableView
+didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
 
-    // 123456.c L118293-118298: section 0 → handleProfileNavigation
+    NSDictionary *row = _sections[indexPath.section][indexPath.row];
+    NSString *detail = row[@"detail"];
+    if (!detail.length) return;
+
     if (indexPath.section == 0) {
-        [self onHomepageTapped];
+        [self handleProfileNavigation];
         return;
     }
 
-    NSDictionary *item = s_infoItems()[indexPath.row];
-    NSString *key = item[@"key"];
+    UIPasteboard *pb = [UIPasteboard generalPasteboard];
+    [pb setString:detail];
 
-    if ([key isEqualToString:@"homepage"]) {
-        [self onHomepageTapped];
-        return;
-    }
-
-    if (![item[@"copiable"] boolValue]) return;
-
-    NSString *text = [self valueForInfoKey:key];
-    if (!text || text.length == 0) return;
-
-    [UIPasteboard generalPasteboard].string = text;
-
-    [self showCopySuccessToast];
-
-    UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc]
-        initWithStyle:UIImpactFeedbackStyleLight];
-    [gen prepare];
-    [gen impactOccurred];
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:nil
+                         message:[NSString stringWithFormat:@"已复制: %@", detail]
+                  preferredStyle:UIAlertControllerStyleAlert];
+    [self presentViewController:alert animated:YES completion:nil];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [alert dismissViewControllerAnimated:YES completion:nil];
+    });
 }
 
-#pragma mark - 数据取值（参考 123456.c KVC 方式）
+#pragma mark - Navigation
 
-- (NSString *)valueForInfoKey:(NSString *)key {
-    if ([key isEqualToString:@"homepage"]) {
-        return @"点击进入信息页";
-    }
-    if ([key isEqualToString:@"chatType"]) {
-        return [self chatTypeValue];
-    }
-    if ([key isEqualToString:@"wxid"]) {
-        return self.wxid ?: @"";
-    }
-    if ([key isEqualToString:@"remark"]) {
-        return [self remarkValue];
-    }
-    if ([key isEqualToString:@"gender"]) {
-        return [self genderValue];
-    }
-    if ([key isEqualToString:@"location"]) {
-        return [self locationValue];
-    }
-    if ([key isEqualToString:@"signature"]) {
-        return [self signatureValue];
-    }
-    return @"";
-}
+- (void)handleProfileNavigation {
+    NSString *username = contactWxid(_contact);
+    if (!username.length) return;
 
-- (NSString *)chatTypeValue {
-    if (!self.wxid) return @"私聊";
-    if ([self.wxid containsString:@"@chatroom"]) return @"群聊";
-    if ([self.wxid hasPrefix:@"gh_"]) return @"公众号";
-    return @"私聊";
-}
+    Class contactInfoVCClass = objc_getClass("ContactInfoViewController");
+    if (!contactInfoVCClass) return;
 
-- (NSString *)remarkValue {
-    id remark = contactValueForKey(self.contact, @"m_nsRemark");
-    if (remark && [remark isKindOfClass:[NSString class]] && [(NSString *)remark length] > 0) {
-        return remark;
-    }
-    id remarkName = contactValueForKey(self.contact, @"m_nsRemarkName");
-    if (remarkName && [remarkName isKindOfClass:[NSString class]] && [(NSString *)remarkName length] > 0) {
-        return remarkName;
-    }
-    return @"未设置";
-}
+    id vc = [[contactInfoVCClass alloc] init];
+    ((void (*)(id, SEL, id))objc_msgSend)(vc, NSSelectorFromString(@"setM_contact:"), _contact);
+    ((void (*)(id, SEL, id))objc_msgSend)(vc, NSSelectorFromString(@"setM_nsUsrName:"), username);
 
-- (NSString *)genderValue {
-    SEL m_uiSex = NSSelectorFromString(@"m_uiSex");
-    if (!((BOOL (*)(id, SEL, SEL))objc_msgSend)(self.contact, @selector(respondsToSelector:), m_uiSex)) {
-        return @"未知";
-    }
-    NSInteger sex = contactIntForKey(self.contact, @"m_uiSex");
-    if (sex == 1) return @"男";
-    if (sex == 2) return @"女";
-    return @"未知";
-}
+    UINavigationController *nav = [[UINavigationController alloc]
+        initWithRootViewController:vc];
 
-- (NSString *)locationValue {
-    id province = contactValueForKey(self.contact, @"m_nsProvince");
-    id city = contactValueForKey(self.contact, @"m_nsCity");
-    if (!province || [(NSString *)province length] == 0) {
-        if (city && [(NSString *)city length] > 0) return city;
-        return @"未设置";
-    }
-    NSString *trimmed = [province stringByTrimmingCharactersInSet:
-        [NSCharacterSet whitespaceCharacterSet]];
-    if ([trimmed length] == 0) return @"未设置";
-    return [NSString stringWithFormat:@"%@ %@", trimmed, city ?: @""];
-}
-
-- (NSString *)signatureValue {
-    id sig = contactValueForKey(self.contact, @"m_nsSignature");
-    if (sig && [sig isKindOfClass:[NSString class]] && [(NSString *)sig length] > 0) {
-        return sig;
-    }
-    return @"未设置";
-}
-
-#pragma mark - 主页跳转（与 123456.c L118375-118441 百分百一致，无任何兜底）
-
-- (void)onHomepageTapped {
-    // 123456.c L118383-118386: 只用 ContactInfoViewController，不存在就跳过
-    Class infoVC = objc_getClass("ContactInfoViewController");
-    if (!infoVC) return;
-
-    // 123456.c L118384: [[ContactInfoViewController alloc] init]
-    id vc = ((id (*)(Class, SEL))objc_msgSend)(infoVC, NSSelectorFromString(@"alloc"));
-    vc = ((id (*)(id, SEL))objc_msgSend)(vc, NSSelectorFromString(@"init"));
-    if (!vc) return;
-
-    // 123456.c L118386: [vc setValue:contact forKey:@"m_contact"]
-    // ★ 不包 @try/@catch，123456.c 没有任何异常处理
-    ((void (*)(id, SEL, id, NSString *))objc_msgSend)(vc,
-        NSSelectorFromString(@"setValue:forKey:"), self.contact, @"m_contact");
-
-    [self dismissViewControllerAnimated:YES completion:^{
-        UIViewController *presenting = self.presentingViewController;
-        if (!presenting) { return; }
-
-        UINavigationController *nav = nil;
-        if ([presenting isKindOfClass:[UINavigationController class]]) {
-            nav = (UINavigationController *)presenting;
-        } else {
-            nav = presenting.navigationController;
-        }
-
-        if (nav) {
-            [nav pushViewController:vc animated:YES];
-        } else {
-            [presenting presentViewController:vc animated:YES completion:nil];
-        }
+    UIViewController *presentingVC = self.presentingViewController;
+    [presentingVC dismissViewControllerAnimated:YES completion:^{
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [presentingVC presentViewController:nav animated:YES completion:nil];
+        });
     }];
 }
 
-#pragma mark - Copy Toast
+#pragma mark - UIPopoverPresentationControllerDelegate
 
-- (void)showCopySuccessToast {
-    UILabel *toast = [[UILabel alloc] init];
-    toast.text = @"已复制";
-    toast.textAlignment = NSTextAlignmentCenter;
-    toast.font = [UIFont systemFontOfSize:14];
-    toast.textColor = [UIColor whiteColor];
-    toast.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.7];
-    toast.layer.cornerRadius = 6;
-    toast.clipsToBounds = YES;
-    [toast sizeToFit];
-    CGFloat w = toast.frame.size.width + 20;
-    CGFloat h = toast.frame.size.height + 10;
-    toast.frame = CGRectMake((self.view.bounds.size.width - w) * 0.5,
-                              self.view.bounds.size.height * 0.8, w, h);
-    [self.view addSubview:toast];
+- (UIModalPresentationStyle)adaptivePresentationStyleForPresentationController:
+    (UIPresentationController *)controller {
+    return UIModalPresentationNone;
+}
 
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [UIView animateWithDuration:0.3 animations:^{
-            toast.alpha = 0;
-        } completion:^(BOOL finished) {
-            [toast removeFromSuperview];
-        }];
-    });
+- (BOOL)popoverPresentationControllerShouldDismissPopover:
+    (UIPopoverPresentationController *)popoverPresentationController {
+    return YES;
 }
 
 @end
