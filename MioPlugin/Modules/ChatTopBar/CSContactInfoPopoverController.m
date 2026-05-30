@@ -146,63 +146,75 @@ static NSString *contactStringForKey(id contact, NSString *key) {
 - (void)addBasicInfoSection:(id)contact {
     NSMutableArray *items = [NSMutableArray array];
 
-    NSString *typeLabel = [self chatTypeValue:contact];
-    if (typeLabel.length) {
-        [items addObject:@{@"title": @"类型", @"detail": typeLabel, @"icon": @"person.text.rectangle"}];
+    NSString *typeLabel = nil;
+    NSString *wxid = self.wxid;
+    if ([wxid hasPrefix:@"gh_"]) {
+        typeLabel = @"公众号";
+    } else if ([wxid containsString:@"@chatroom"]) {
+        typeLabel = @"群聊";
+    } else {
+        typeLabel = @"联系人";
     }
+    [items addObject:@{@"title": @"类型", @"detail": typeLabel, @"icon": @"person.text.rectangle"}];
 
-    NSString *remark = [self remarkRawValue];
+    NSString *remark = contactStringForKey(contact, @"m_nsRemark");
+    if (!remark.length) remark = contactStringForKey(contact, @"m_nsRemarkName");
     if (remark.length) {
         [items addObject:@{@"title": @"备注", @"detail": remark, @"icon": @"pencil.tip"}];
     }
 
-    NSString *wxid = [self wxidValue];
     if (wxid.length) {
         [items addObject:@{@"title": @"微信号", @"detail": wxid, @"icon": @"number"}];
     }
 
-    NSString *nickname = [self nicknameValue:contact];
+    NSString *nickname = contactStringForKey(contact, @"m_nsNickName");
     if (nickname.length && ![nickname isEqualToString:remark]) {
         [items addObject:@{@"title": @"昵称", @"detail": nickname, @"icon": @"person"}];
     }
 
-    NSString *gender = [self genderValue];
+    NSString *gender = nil;
+    NSInteger sex = safeContactInt(contact, @"m_uiSex");
+    if (sex == 1) gender = @"♂";
+    else if (sex == 2) gender = @"♀";
     if (gender.length) {
         [items addObject:@{@"title": @"性别", @"detail": gender, @"icon": @"person.fill.questionmark"}];
     }
 
-    NSString *loc = [self locationValue];
+    NSString *loc = nil;
+    NSString *prov = contactStringForKey(contact, @"m_nsProvince");
+    NSString *city = contactStringForKey(contact, @"m_nsCity");
+    if (prov.length && city.length) loc = [NSString stringWithFormat:@"%@ %@", prov, city];
+    else if (prov.length) loc = prov;
+    else if (city.length) loc = city;
     if (loc.length) {
         [items addObject:@{@"title": @"地区", @"detail": loc, @"icon": @"location"}];
     }
 
-    NSString *sig = [self signatureValue];
+    NSString *sig = contactStringForKey(contact, @"m_nsSignature");
     if (sig.length) {
         [items addObject:@{@"title": @"签名", @"detail": sig, @"icon": @"text.quote"}];
     }
 
     if (items.count) {
-        NSDictionary *section = @{@"header": @"基本信息", @"items": items};
-        [_sections addObject:[section mutableCopy]];
+        [_sections addObject:@{@"header": @"基本信息", @"items": items}];
     }
 }
 
 - (void)addGroupInfoSection:(id)contact {
     NSMutableArray *items = [NSMutableArray array];
 
-    NSString *owner = [self ownerValue:contact];
+    NSString *owner = contactStringForKey(contact, @"m_nsOwner");
     if (owner.length) {
         [items addObject:@{@"title": @"群主", @"detail": owner, @"icon": @"crown"}];
     }
 
-    NSUInteger count = [self memberCountValue:contact];
+    NSUInteger count = [self safeMemberCount:contact];
     if (count > 0) {
         [items addObject:@{@"title": @"群成员", @"detail": [NSString stringWithFormat:@"%lu 人", (unsigned long)count], @"icon": @"person.3"}];
     }
 
     if (items.count) {
-        NSDictionary *section = @{@"header": @"群聊信息", @"items": items};
-        [_sections addObject:[section mutableCopy]];
+        [_sections addObject:@{@"header": @"群聊信息", @"items": items}];
     }
 }
 
@@ -211,13 +223,10 @@ static NSString *contactStringForKey(id contact, NSString *key) {
 
     [items addObject:@{@"title": @"公众号类型", @"detail": @"服务号", @"icon": @"megaphone"}];
 
-    NSString *verify = [self verifyFlagValue:contact];
+    NSString *verify = safeContactInt(contact, @"m_uiVerifyFlag") > 0 ? @"已认证" : @"未认证";
     [items addObject:@{@"title": @"认证状态", @"detail": verify, @"icon": @"checkmark.seal"}];
 
-    if (items.count) {
-        NSDictionary *section = @{@"header": @"公众号信息", @"items": items};
-        [_sections addObject:[section mutableCopy]];
-    }
+    [_sections addObject:@{@"header": @"公众号信息", @"items": items}];
 }
 
 #pragma mark - 数据取值

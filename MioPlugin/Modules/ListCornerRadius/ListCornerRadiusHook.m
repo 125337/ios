@@ -7,20 +7,8 @@
 #import <objc/message.h>
 
 static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
-static IMP _orig_UIView_layoutSubviews_forSearch = NULL;
 
 static const void *kCornerRadiusAppliedKey = &kCornerRadiusAppliedKey;
-
-static UIViewController *findParentViewController(UIView *view) {
-    UIResponder *responder = view;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) {
-            return (UIViewController *)responder;
-        }
-        responder = [responder nextResponder];
-    }
-    return nil;
-}
 
 static UITableView *findParentTableView(UIView *view) {
     UIView *superview = view.superview;
@@ -225,34 +213,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
-static void replaced_UIView_layoutSubviews_forSearch(id self, SEL _cmd) {
-    if (_orig_UIView_layoutSubviews_forSearch) {
-        ((void (*)(id, SEL))_orig_UIView_layoutSubviews_forSearch)(self, _cmd);
-    }
-
-    PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled || !config.listSearchCornerRadius) return;
-
-    @try {
-        UIView *view = (UIView *)self;
-        UIViewController *vc = findParentViewController(view);
-        if (!vc) return;
-
-        NSString *className = NSStringFromClass([vc class]);
-
-        if ([className isEqualToString:@"WCSearchController"] ||
-            [className isEqualToString:@"FTSHomeViewController"]) {
-
-            CGSize size = view.bounds.size;
-            if (size.width > 200 && size.height > 30 && size.height < 60) {
-                view.layer.cornerRadius = config.listCellCornerRadius;
-                view.layer.masksToBounds = YES;
-            }
-        }
-    } @catch (NSException *e) {
-    }
-}
-
 @implementation ListCornerRadiusHook
 
 + (void)initListCornerRadiusHook {
@@ -270,14 +230,6 @@ static void replaced_UIView_layoutSubviews_forSearch(id self, SEL _cmd) {
     } else {
         WPLog(@"ListCornerRadius", @"[WARN] MMTableViewCell class not found!");
     }
-
-    MSHookMessageEx(
-        [UIView class],
-        @selector(layoutSubviews),
-        (IMP)replaced_UIView_layoutSubviews_forSearch,
-        &_orig_UIView_layoutSubviews_forSearch
-    );
-    WPLog(@"ListCornerRadius", @"[OK] Hook: UIView::layoutSubviews (search box)");
 
     WPLog(@"ListCornerRadius", @"[INIT] ListCornerRadius hook initialized.");
 }
