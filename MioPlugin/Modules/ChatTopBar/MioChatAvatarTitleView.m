@@ -605,17 +605,30 @@
 - (void)presentUserInfoPopoverWithContact:(id)contact sourceView:(UIView *)sourceView {
     if (!contact) return;
 
+    // 获取头像
     UIImage *avatar = nil;
-    if ([sourceView isKindOfClass:[UIImageView class]]) {
-        avatar = [(UIImageView *)sourceView image];
+    if (sourceView == self.leftAvatarView) {
+        avatar = self.leftAvatarView.image;
+    } else {
+        avatar = self.rightAvatarView.image;
     }
 
+    // 创建自定义弹窗
     CSContactInfoPopoverController *popover =
         [[CSContactInfoPopoverController alloc] initWithContact:contact avatar:avatar];
 
-    popover.modalPresentationStyle = UIModalPresentationOverCurrentContext;
-    popover.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    // popover 配置
+    popover.modalPresentationStyle = UIModalPresentationPopover;
+    popover.preferredContentSize = CGSizeMake(272, 400);
 
+    UIPopoverPresentationController *popPC = popover.popoverPresentationController;
+    popPC.sourceView = sourceView;
+    popPC.sourceRect = sourceView.bounds;
+    popPC.permittedArrowDirections = UIPopoverArrowDirectionAny;
+    popPC.backgroundColor = [UIColor whiteColor];
+    popPC.delegate = popover;
+
+    // 通过 findViewController 查找 present 的 VC
     UIViewController *presentingVC = [self findViewController];
     if (!presentingVC) {
         presentingVC = (UIViewController *)self.chatController;
