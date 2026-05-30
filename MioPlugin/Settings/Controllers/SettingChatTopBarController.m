@@ -359,13 +359,7 @@ static NSString *keyForTag(NSInteger tag) {
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSwitchRowInGroup:expand title:@"显示添加时间" desc:nil key:@"showAddTime" isOn:config.showAddTime cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        NSString *addTimeSuffix = config.chatAddTimeSuffixFormat.length > 0 ? config.chatAddTimeSuffixFormat : @"%ld天";
-        *ecy = [self addNavRowInGroup:expand title:@"添加时间后缀格式" subtitle:addTimeSuffix tag:400 action:@selector(onAddTimeSuffixTap) cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSwitchRowInGroup:expand title:@"显示群聊人数" desc:nil key:@"showGroupMemberCount" isOn:config.showGroupMemberCount cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        NSString *groupCountSuffix = config.chatGroupMemberCountSuffix.length > 0 ? config.chatGroupMemberCountSuffix : @"%u人";
-        *ecy = [self addNavRowInGroup:expand title:@"群成员数后缀格式" subtitle:groupCountSuffix tag:401 action:@selector(onGroupCountSuffixTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addNavRowInGroup:expand title:@"头像显示模式" subtitle:[self avatarDisplayModeName:config.chatDisplayMode] tag:100 action:@selector(onAvatarDisplayModeTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
@@ -407,6 +401,16 @@ static NSString *keyForTag(NSInteger tag) {
         [row addTarget:self action:@selector(onNumericRowTap:) forControlEvents:UIControlEventTouchUpInside];
         cy2 += kRowH;
     }
+
+    WPAddSep(card2, cy2, w);
+    cy2 = round((cy2 + 1.0 / scale2) * scale2) / scale2;
+    NSString *addTimeSuffixSub = config.chatAddTimeSuffixFormat.length > 0 ? config.chatAddTimeSuffixFormat : @"%ld天";
+    cy2 = [self addNavRowInGroup:card2 title:@"添加时间后缀" subtitle:addTimeSuffixSub tag:400 action:@selector(onAddTimeSuffixTap) cy:cy2 width:w];
+
+    WPAddSep(card2, cy2, w);
+    cy2 = round((cy2 + 1.0 / scale2) * scale2) / scale2;
+    NSString *groupCountSuffixSub = config.chatGroupMemberCountSuffix.length > 0 ? config.chatGroupMemberCountSuffix : @"%ld人";
+    cy2 = [self addNavRowInGroup:card2 title:@"群聊人数后缀" subtitle:groupCountSuffixSub tag:401 action:@selector(onGroupCountSuffixTap) cy:cy2 width:w];
 
     CGRect c2f = card2.frame; c2f.size.height = cy2; card2.frame = c2f;
     [self.contentView addSubview:card2];
