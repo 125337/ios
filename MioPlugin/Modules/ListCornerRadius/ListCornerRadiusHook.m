@@ -7,7 +7,6 @@
 #import <objc/message.h>
 
 static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
-static IMP _orig_UIView_layoutSubviews = NULL;
 
 static const void *kCornerRadiusAppliedKey = &kCornerRadiusAppliedKey;
 
@@ -263,36 +262,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
-static void replaced_UIView_layoutSubviews(id self, SEL _cmd) {
-    if (_orig_UIView_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_UIView_layoutSubviews)(self, _cmd);
-    }
-
-    PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled || !config.listSearchCornerRadius) return;
-
-    @try {
-        UIView *view = (UIView *)self;
-
-        if (![NSStringFromClass([view class]) isEqualToString:@"UIView"]) return;
-
-        UIViewController *parentVC = findParentViewController(view);
-        if (!parentVC) return;
-
-        NSString *vcName = NSStringFromClass([parentVC class]);
-        if ([vcName isEqualToString:@"WCSearchController"] ||
-            [vcName isEqualToString:@"FTSHomeViewController"]) {
-
-            CGSize size = view.bounds.size;
-            if (size.width > 200 && size.height > 30 && size.height < 60) {
-                view.layer.cornerRadius = config.listCellCornerRadius;
-                view.layer.masksToBounds = YES;
-            }
-        }
-    } @catch (NSException *e) {
-    }
-}
-
 @implementation ListCornerRadiusHook
 
 + (void)initListCornerRadiusHook {
@@ -311,15 +280,7 @@ static void replaced_UIView_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"ListCornerRadius", @"[WARN] MMTableViewCell class not found!");
     }
 
-    MSHookMessageEx(
-        [UIView class],
-        @selector(layoutSubviews),
-        (IMP)replaced_UIView_layoutSubviews,
-        &_orig_UIView_layoutSubviews
-    );
-    WPLog(@"ListCornerRadius", @"[OK] Hook: UIView::layoutSubviews (search box, filtered)");
-
-    WPLog(@"ListCornerRadius", @"[INIT] ListCornerRadius hook initialized.");
+    WPLog(@"ListCornerRadius", @"[INIT] ListCornerRadius hook initialized (VC exclusion list).");
 }
 
 @end
