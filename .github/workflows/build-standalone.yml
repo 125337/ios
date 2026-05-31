@@ -69,6 +69,7 @@ jobs:
           MioPlugin/Modules/ChatTopBar/MioChatAvatarTitleView.m \
           MioPlugin/Modules/ChatTopBar/ChatTopBarHook.m \
           MioPlugin/Modules/ChatTopBar/CSContactInfoPopoverController.m \
+          MioPlugin/Modules/ChatTopBar/AvatarLoader.m \
           MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m \
           MioPlugin/Modules/ListCornerRadius/WPSessionSpacingHook.m \
           MioPlugin/Modules/ListCornerRadius/WPSearchBoxHook.m \
