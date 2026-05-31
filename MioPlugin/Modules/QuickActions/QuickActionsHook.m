@@ -244,7 +244,20 @@ static BOOL replaced_gestureRecognizerShouldBegin(id self, SEL _cmd, UIGestureRe
 
     if ([gesture isKindOfClass:[UISwipeGestureRecognizer class]]) {
         UISwipeGestureRecognizerDirection dir = ((UISwipeGestureRecognizer *)gesture).direction;
-        if (dir == UISwipeGestureRecognizerDirectionLeft) {
+        UIUserInterfaceLayoutDirection layoutDir = [UIApplication sharedApplication].userInterfaceLayoutDirection;
+        BOOL isRTL = (layoutDir == UIUserInterfaceLayoutDirectionRightToLeft);
+
+        BOOL isLeading = isRTL ? (dir == UISwipeGestureRecognizerDirectionLeft)
+                               : (dir == UISwipeGestureRecognizerDirectionRight);
+        BOOL isTrailing = isRTL ? (dir == UISwipeGestureRecognizerDirectionRight)
+                                : (dir == UISwipeGestureRecognizerDirectionLeft);
+
+        if (isLeading) {
+            WPLog(@"QuickActions", @"[DEBUG] blocking leading swipe (dir=%lu, RTL=%d)", (unsigned long)dir, isRTL);
+            return NO;
+        }
+        if (isTrailing) {
+            WPLog(@"QuickActions", @"[DEBUG] allowing trailing swipe (dir=%lu, RTL=%d)", (unsigned long)dir, isRTL);
             return YES;
         }
     }
