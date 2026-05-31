@@ -5,6 +5,7 @@
 #import "../../Config/Constants.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
+#import "../SettingEntry/WPCommonUI.h"
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
