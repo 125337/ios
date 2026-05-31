@@ -1,5 +1,6 @@
 #import "CSContactInfoPopoverController.h"
 #import "WPCommonUI.h"
+#import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
