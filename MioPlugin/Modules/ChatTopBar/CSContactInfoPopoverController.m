@@ -280,7 +280,8 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
                     if (!result) continue;
 
                     if ([result isKindOfClass:[UIImage class]]) {
-                        NSLog(@"[Mio-Preload]       ✅ 异步返回 UIImage size=%.0fx%.0f", [(UIImage *)result size].width, [(UIImage *)result size].height]);
+                        CGSize imgSize = [(UIImage *)result size];
+                        NSLog(@"[Mio-Preload]       ✅ 异步返回 UIImage size=%.0fx%.0f", imgSize.width, imgSize.height);
                         dispatch_async(dispatch_get_main_queue(), ^{
                             __strong typeof(weakSelf) strongSelf = weakSelf;
                             if (strongSelf && strongSelf->_avatarView) {
@@ -406,7 +407,8 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         if (!result) continue;
 
         if ([result isKindOfClass:[UIImage class]]) {
-            NSLog(@"[Mio-OA]     ✅ 返回 UIImage size=%.0fx%.0f", [(UIImage *)result size].width, [(UIImage *)result size].height);
+            CGSize imgSize = [(UIImage *)result size];
+            NSLog(@"[Mio-OA]     ✅ 返回 UIImage size=%.0fx%.0f", imgSize.width, imgSize.height);
             return result;
         }
         if ([result isKindOfClass:[NSString class]] && [(NSString *)result length] > 0) {
