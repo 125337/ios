@@ -236,56 +236,50 @@ static id replaced_trailingSwipeActionsConfig(id self, SEL _cmd, UITableView *ta
 @implementation QuickActionsHook
 
 + (void)install {
-    WPLog(@"QuickActions", @"[INFO] install start");
-
-    Class targetClass = objc_getClass("NewMainFrameViewController");
-    if (targetClass) {
-        unsigned int methodCount = 0;
-        Method *methods = class_copyMethodList(targetClass, &methodCount);
-        for (unsigned int i = 0; i < methodCount; i++) {
-            NSString *name = NSStringFromSelector(method_getName(methods[i]));
-            if ([name containsString:@"swipe"] || [name containsString:@"trailing"]
-                || [name containsString:@"SessionInfo"] || [name containsString:@"getSession"]) {
-                WPLog(@"QuickActions", @"[DEBUG] Found method: %@", name);
-            }
-        }
-        free(methods);
-
-        unsigned int ivarCount = 0;
-        Ivar *ivars = class_copyIvarList(targetClass, &ivarCount);
-        for (unsigned int i = 0; i < ivarCount; i++) {
-            NSString *name = [NSString stringWithUTF8String:ivar_getName(ivars[i])];
-            if ([name containsString:@"session"] || [name containsString:@"Session"]) {
-                WPLog(@"QuickActions", @"[DEBUG] Found ivar: %@", name);
-            }
-        }
-        free(ivars);
-
-        SEL targetSel = @selector(tableView:trailingSwipeActionsConfigurationForRowAtIndexPath:);
-        if ([targetClass instancesRespondToSelector:targetSel]) {
-            MSHookMessageEx(targetClass, targetSel,
-                (IMP)replaced_trailingSwipeActionsConfig,
-                &orig_trailingSwipeActionsConfig);
-            WPLog(@"QuickActions", @"[INFO] trailing swipe hooked on NewMainFrameViewController");
-        } else {
-            WPLog(@"QuickActions", @"[ERR] NewMainFrameViewController does NOT implement trailingSwipeActionsConfiguration");
-        }
-    }
+    Class newClass = objc_getClass("NewMainFrameViewController");
+    Class mmClass = objc_getClass("MMMainFrameViewController");
+    Class targetClass = newClass ?: mmClass;
 
     if (!targetClass) {
-        targetClass = objc_getClass("MMMainFrameViewController");
-        if (targetClass) {
-            SEL targetSel = @selector(tableView:trailingSwipeActionsConfigurationForRowAtIndexPath:);
-            if ([targetClass instancesRespondToSelector:targetSel]) {
-                MSHookMessageEx(targetClass, targetSel,
-                    (IMP)replaced_trailingSwipeActionsConfig,
-                    &orig_trailingSwipeActionsConfig);
-                WPLog(@"QuickActions", @"[INFO] trailing swipe hooked on MMMainFrameViewController");
+        WPLog(@"QuickActions", @"[ERR] No target class found");
+        return;
+    }
+
+    SEL targetSel = @selector(tableView:trailingSwipeActionsConfigurationForRowAtIndexPath:);
+
+    if (newClass) {
+        if ([newClass instancesRespondToSelector:targetSel]) {
+            MSHookMessageEx(newClass, targetSel,
+                (IMP)replaced_trailingSwipeActionsConfig,
+                &orig_trailingSwipeActionsConfig);
+            WPLog(@"QuickActions", @"[INFO] hooked on NewMainFrameViewController (method exists)");
+        } else {
+            IMP impl = (IMP)replaced_trailingSwipeActionsConfig;
+            BOOL added = class_addMethod(newClass, targetSel, impl, "@@:@@");
+            if (added) {
+                WPLog(@"QuickActions", @"[INFO] class_addMethod on NewMainFrameViewController OK");
+            } else {
+                WPLog(@"QuickActions", @"[ERR] class_addMethod on NewMainFrameViewController FAILED");
             }
         }
     }
 
-    WPLog(@"QuickActions", @"[INFO] install complete");
+    if (mmClass && mmClass != newClass) {
+        if ([mmClass instancesRespondToSelector:targetSel]) {
+            MSHookMessageEx(mmClass, targetSel,
+                (IMP)replaced_trailingSwipeActionsConfig,
+                &orig_trailingSwipeActionsConfig);
+            WPLog(@"QuickActions", @"[INFO] hooked on MMMainFrameViewController (method exists)");
+        } else {
+            IMP impl = (IMP)replaced_trailingSwipeActionsConfig;
+            BOOL added = class_addMethod(mmClass, targetSel, impl, "@@:@@");
+            if (added) {
+                WPLog(@"QuickActions", @"[INFO] class_addMethod on MMMainFrameViewController OK");
+            } else {
+                WPLog(@"QuickActions", @"[ERR] class_addMethod on MMMainFrameViewController FAILED");
+            }
+        }
+    }
 }
 
 @end
