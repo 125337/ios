@@ -147,7 +147,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     return y + cy + 8;
 }
 
-#pragma mark - 头像加载（三级回退策略）
+#pragma mark - 头像加载（四级回退策略）
 
 - (void)loadAvatarForImageView:(UIImageView *)imageView {
     if (self.avatarImage) {
@@ -159,6 +159,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         return;
     }
 
+    // 1. 本地自定义头像缓存
     NSString *dir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
     if (dir) {
         NSString *jpgPath = [dir stringByAppendingPathComponent:
@@ -171,6 +172,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         }
     }
 
+    // 2. 微信内部 MMHeadImageMgr
     Class serviceCenter = objc_getClass("MMServiceCenter");
     if (serviceCenter) {
         id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
@@ -188,7 +190,46 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         }
     }
 
+    // 3. 网络下载（针对公众号等 MMHeadImageMgr 获取不到的情况）
+    NSString *avatarURL = [self headImageURLFromContact];
+    if (avatarURL.length) {
+        __weak UIImageView *weakImageView = imageView;
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:avatarURL]];
+            if (data) {
+                UIImage *downloaded = [UIImage imageWithData:data];
+                if (downloaded) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        weakImageView.image = downloaded;
+                        self.avatarImage = downloaded;
+                    });
+                    return;
+                }
+            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (!self.avatarImage) {
+                    weakImageView.image = [UIImage imageNamed:@"DefaultHead"];
+                }
+            });
+        });
+        return;
+    }
+
     imageView.image = [UIImage imageNamed:@"DefaultHead"];
+}
+
+- (NSString *)headImageURLFromContact {
+    SEL sel = NSSelectorFromString(@"m_nsHeadHDImgUrl");
+    if ([self.contact respondsToSelector:sel]) {
+        id url = ((id (*)(id, SEL))objc_msgSend)(self.contact, sel);
+        if (url && [url isKindOfClass:[NSString class]] && [(NSString *)url length] > 0) return url;
+    }
+    sel = NSSelectorFromString(@"m_nsHeadImgUrl");
+    if ([self.contact respondsToSelector:sel]) {
+        id url = ((id (*)(id, SEL))objc_msgSend)(self.contact, sel);
+        if (url && [url isKindOfClass:[NSString class]] && [(NSString *)url length] > 0) return url;
+    }
+    return nil;
 }
 
 #pragma mark - 通用卡片构建
@@ -422,25 +463,19 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     if (serviceCenter) {
         id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
         id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
-        SEL getCountSel = NSSelectorFromString(@"getGroupMemberCountForContact:");
-        if (contactMgr && [contactMgr respondsToSelector:getCountSel]) {
-            unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, getCountSel, self.contact);
-            if (count > 0) {
-                return [NSString stringWithFormat:@"%u 人", count];
-            }
+        if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
+            unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), self.contact);
+            return [NSString stringWithFormat:@"%u 人", count];
         }
     }
 
-    SEL memListSel = NSSelectorFromString(@"m_nsChatRoomMemList");
-    if ([self.contact respondsToSelector:memListSel]) {
-        id memList = ((id (*)(id, SEL))objc_msgSend)(self.contact, memListSel);
+    @try {
+        id memList = ((id (*)(id, SEL, NSString *))objc_msgSend)(self.contact, NSSelectorFromString(@"valueForKey:"), @"m_nsChatRoomMemList");
         if (memList && [memList isKindOfClass:[NSArray class]]) {
             NSUInteger cnt = [(NSArray *)memList count];
-            if (cnt > 0) {
-                return [NSString stringWithFormat:@"%lu 人", (unsigned long)cnt];
-            }
+            return [NSString stringWithFormat:@"%lu 人", (unsigned long)cnt];
         }
-    }
+    } @catch (NSException *e) {}
 
     return @"未知";
 }
