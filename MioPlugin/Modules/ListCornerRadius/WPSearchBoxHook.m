@@ -38,13 +38,18 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (margin == 0) margin = 9;
 
     UIView *view = (UIView *)self;
-    CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
-    CGFloat newWidth = screenWidth - 2.0 * margin;
-    if (newWidth > 0) {
-        CGRect frame = view.frame;
-        frame.origin.x = margin;
-        frame.size.width = newWidth;
-        view.frame = frame;
+
+    if (view.translatesAutoresizingMaskIntoConstraints) {
+        CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
+        CGFloat newWidth = screenWidth - 2.0 * margin;
+        if (newWidth > 0) {
+            CGRect frame = view.frame;
+            if (frame.origin.x != margin || frame.size.width != newWidth) {
+                frame.origin.x = margin;
+                frame.size.width = newWidth;
+                view.frame = frame;
+            }
+        }
     }
 
     if ([view respondsToSelector:@selector(isFolding)]) {

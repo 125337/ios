@@ -137,9 +137,11 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     CGFloat newWidth = superview.bounds.size.width - 2.0 * margin;
     if (newWidth > 0) {
         CGRect frame = cellView.frame;
-        frame.origin.x = margin;
-        frame.size.width = newWidth;
-        cellView.frame = frame;
+        if (frame.origin.x != margin || frame.size.width != newWidth) {
+            frame.origin.x = margin;
+            frame.size.width = newWidth;
+            cellView.frame = frame;
+        }
     }
 
     UIView *parent = cellView.superview;
