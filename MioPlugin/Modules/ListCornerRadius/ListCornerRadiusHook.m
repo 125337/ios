@@ -126,25 +126,19 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
     if (cornerRadius == 0) cornerRadius = 18;
 
-    CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
-
     NSInteger margin = (NSInteger)config.listCellMargin;
     if (margin == 0) margin = 9;
 
     BOOL isContacts = [className isEqualToString:@"ContactsViewController"];
 
     UIView *cellView = (UIView *)self;
-    CGFloat currentOriginX = cellView.frame.origin.x;
     UIView *superview = cellView.superview;
-    CGFloat superviewOriginX = superview ? superview.frame.origin.x : 0;
-    CGFloat targetX = (margin > superviewOriginX) ? margin - superviewOriginX : 0;
 
-    if (currentOriginX - 2.0 * margin <= screenWidth) {
+    CGFloat newWidth = superview.bounds.size.width - 2.0 * margin;
+    if (newWidth > 0) {
         CGRect frame = cellView.frame;
-        frame.origin.x = targetX;
-        if (fabs(currentOriginX - targetX) > 0.1) {
-            frame.size.width = frame.size.width - 2.0 * margin;
-        }
+        frame.origin.x = margin;
+        frame.size.width = newWidth;
         cellView.frame = frame;
     }
 

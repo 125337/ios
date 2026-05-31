@@ -32,31 +32,18 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled) return;
 
-    UIView *view = (UIView *)self;
-    NSString *viewClassName = NSStringFromClass([view class]);
-
-    if (!config.listSearchCornerRadius) {
-        if ([viewClassName isEqualToString:@"UIView"]) {
-            UIView *superview = view.superview;
-            if (superview) {
-                NSString *superClassName = NSStringFromClass([superview class]);
-                if ([superClassName containsString:@"MainFrameTableView"]) {
-                    view.backgroundColor = [UIColor clearColor];
-                }
-            }
-        }
-        return;
-    }
-
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
     if (radius == 0) radius = 18;
     NSInteger margin = (NSInteger)config.listCellMargin;
     if (margin == 0) margin = 9;
 
+    UIView *view = (UIView *)self;
     CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
-    if (view.frame.origin.x - 2 * margin <= screenWidth) {
+    CGFloat newWidth = screenWidth - 2.0 * margin;
+    if (newWidth > 0) {
         CGRect frame = view.frame;
         frame.origin.x = margin;
+        frame.size.width = newWidth;
         view.frame = frame;
     }
 
