@@ -32,11 +32,14 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
 
-    UIColor *customBg = [config colorFromHex:isDark
+    UIColor *targetBg = [config colorFromHex:isDark
         ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    if (customBg) {
-        ((UIView *)self).backgroundColor = customBg;
+    if (!targetBg) {
+        targetBg = isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor];
     }
+    ((UIView *)self).backgroundColor = targetBg;
 }
 
 static void (*_orig_MFBannerBtn_layoutSubviews)(id, SEL);
@@ -55,11 +58,14 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
 
-    UIColor *customBg = [config colorFromHex:isDark
+    UIColor *targetBg = [config colorFromHex:isDark
         ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    if (customBg) {
-        ((UIView *)self).backgroundColor = customBg;
+    if (!targetBg) {
+        targetBg = isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor];
     }
+    ((UIView *)self).backgroundColor = targetBg;
 }
 
 static void (*_orig_FoldView_layoutSubviews)(id, SEL);
