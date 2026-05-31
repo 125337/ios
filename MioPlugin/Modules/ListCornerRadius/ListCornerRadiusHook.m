@@ -183,7 +183,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                           className:className];
     }
 
-    cellView.layer.masksToBounds = YES;
+    if (cellView.layer.cornerRadius > 0) {
+        cellView.layer.masksToBounds = YES;
+    }
 
 }
 

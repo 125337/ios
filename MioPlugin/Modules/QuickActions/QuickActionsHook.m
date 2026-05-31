@@ -8,6 +8,7 @@
 #import <substrate.h>
 
 static IMP orig_trailingSwipeActionsConfig = NULL;
+static BOOL (*orig_gestureRecognizerShouldBegin)(id, SEL, id) = NULL;
 
 static id getSessionInfo(id self, NSIndexPath *indexPath) {
     if ([self respondsToSelector:@selector(getSessionInfoAtIndexPath:)]) {
@@ -233,6 +234,27 @@ static id replaced_trailingSwipeActionsConfig(id self, SEL _cmd, UITableView *ta
     return [UISwipeActionsConfiguration configurationWithActions:merged];
 }
 
+static BOOL replaced_gestureRecognizerShouldBegin(id self, SEL _cmd, UIGestureRecognizer *gesture) {
+    if (![PluginConfig shared].quickActionsEnabled) {
+        if (orig_gestureRecognizerShouldBegin) {
+            return orig_gestureRecognizerShouldBegin(self, _cmd, gesture);
+        }
+        return YES;
+    }
+
+    if ([gesture isKindOfClass:[UISwipeGestureRecognizer class]]) {
+        UISwipeGestureRecognizerDirection dir = ((UISwipeGestureRecognizer *)gesture).direction;
+        if (dir == UISwipeGestureRecognizerDirectionLeft) {
+            return YES;
+        }
+    }
+
+    if (orig_gestureRecognizerShouldBegin) {
+        return orig_gestureRecognizerShouldBegin(self, _cmd, gesture);
+    }
+    return YES;
+}
+
 @implementation QuickActionsHook
 
 + (void)install {
@@ -278,6 +300,22 @@ static id replaced_trailingSwipeActionsConfig(id self, SEL _cmd, UITableView *ta
             } else {
                 WPLog(@"QuickActions", @"[ERR] class_addMethod on MMMainFrameViewController FAILED");
             }
+        }
+    }
+
+    SEL grSel = @selector(gestureRecognizerShouldBegin:);
+    if ([targetClass instancesRespondToSelector:grSel]) {
+        MSHookMessageEx(targetClass, grSel,
+            (IMP)replaced_gestureRecognizerShouldBegin,
+            (IMP *)&orig_gestureRecognizerShouldBegin);
+        WPLog(@"QuickActions", @"[INFO] hooked gestureRecognizerShouldBegin on %@", targetClass);
+    } else {
+        BOOL added = class_addMethod(targetClass, grSel,
+            (IMP)replaced_gestureRecognizerShouldBegin, "B@:@");
+        if (added) {
+            WPLog(@"QuickActions", @"[INFO] class_addMethod gestureRecognizerShouldBegin on %@ OK", targetClass);
+        } else {
+            WPLog(@"QuickActions", @"[ERR] class_addMethod gestureRecognizerShouldBegin on %@ FAILED", targetClass);
         }
     }
 }
