@@ -89,11 +89,35 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     CGRect frame = view.frame;
     CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
     CGFloat newWidth = screenWidth - 2.0 * margin;
+
+    BOOL isExpanded = NO;
+    if ([view respondsToSelector:@selector(isFolding)]) {
+        BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(view, @selector(isFolding));
+        isExpanded = !folding;
+    }
+
+    if (isExpanded) {
+        UIView *foldParent = view.superview;
+        while (foldParent && ![foldParent isKindOfClass:[UITableView class]]) {
+            foldParent = foldParent.superview;
+        }
+        if ([foldParent isKindOfClass:[UITableView class]]) {
+            UITableView *tv = (UITableView *)foldParent;
+            NSInteger count = [tv numberOfRowsInSection:1];
+            if (count > 0) {
+                UITableViewCell *lastCell = [tv cellForRowAtIndexPath:[NSIndexPath indexPathForRow:count - 1 inSection:1]];
+                if (lastCell) {
+                    frame.origin.y = CGRectGetMaxY(lastCell.frame);
+                }
+            }
+        }
+    }
+
     if (frame.origin.x != (CGFloat)margin || frame.size.width != newWidth) {
         frame.origin.x = (CGFloat)margin;
         frame.size.width = newWidth;
-        view.frame = frame;
     }
+    view.frame = frame;
     view.autoresizingMask = UIViewAutoresizingNone;
 
     if ([view respondsToSelector:@selector(isFolding)]) {
