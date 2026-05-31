@@ -167,7 +167,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                           className:className];
     }
 
-    cellView.layer.masksToBounds = YES;
 }
 
 @implementation ListCornerRadiusHook
@@ -364,6 +363,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             break;
         }
     }
+}
+
++ (void)applyBorderToView:(UIView *)view radius:(NSInteger)radius position:(NSInteger)position isFTSHome:(BOOL)isFTSHome {
+    [self wp_applyBorderAndBg:view radius:radius position:position isFTSHome:isFTSHome];
 }
 
 + (UIView *)wp_findFoldViewInSubviews:(NSArray<UIView *> *)subviews {

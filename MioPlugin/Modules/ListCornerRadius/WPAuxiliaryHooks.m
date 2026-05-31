@@ -1,4 +1,5 @@
 #import "WPAuxiliaryHooks.h"
+#import "ListCornerRadiusHook.h"
 #import "../../Config/PluginConfig.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -104,6 +105,10 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
                                  | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
 
+    view.layer.masksToBounds = YES;
+
+    [ListCornerRadiusHook applyBorderToView:view radius:radius position:0 isFTSHome:NO];
+
     BOOL isDark = NO;
     if (@available(iOS 13.0, *)) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
@@ -112,6 +117,10 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
         ? config.listCellDarkBgColor : config.listCellLightBgColor];
     if (customBg) {
         view.backgroundColor = customBg;
+    } else {
+        view.backgroundColor = isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor];
     }
 }
 
