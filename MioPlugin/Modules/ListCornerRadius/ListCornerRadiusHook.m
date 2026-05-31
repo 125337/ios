@@ -244,8 +244,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         UIView *foldView = [self wp_findFoldViewInSubviews:cell.subviews];
         if (foldView) {
             if ([foldView respondsToSelector:@selector(isFolding)]) {
-                NSNumber *folding = ((id (*)(id, SEL))objc_msgSend)(foldView, @selector(isFolding));
-                if (folding && ![folding boolValue]) {
+                BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(foldView, @selector(isFolding));
+                if (!folding) {
                     cell.layer.cornerRadius = 0;
                     cell.layer.maskedCorners = 0;
                     [self wp_applyBorderAndBg:cell radius:0 position:2 isFTSHome:isFTSHome];
