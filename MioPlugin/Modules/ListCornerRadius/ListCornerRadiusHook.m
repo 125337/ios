@@ -184,6 +184,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                           className:className];
     }
 
+    cellView.layer.masksToBounds = YES;
+
 }
 
 @implementation ListCornerRadiusHook
@@ -248,16 +250,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                     cell.layer.cornerRadius = 0;
                     cell.layer.maskedCorners = 0;
                     [self wp_applyBorderAndBg:cell radius:0 position:2 isFTSHome:isFTSHome];
-                    cell.layer.masksToBounds = YES;
                     return;
                 }
-            } else {
-                cell.layer.masksToBounds = YES;
-                return;
             }
-        } else {
-            cell.layer.masksToBounds = YES;
-            return;
         }
     }
 
