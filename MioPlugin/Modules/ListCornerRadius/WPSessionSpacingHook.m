@@ -37,6 +37,37 @@ static void _hooked_setBgImageView(id self, SEL _cmd, id imageView) {
     }
 }
 
+static BOOL _wp_isTableViewClass(NSString *name) {
+    return [name isEqualToString:@"MMTableView"] ||
+           [name isEqualToString:@"MMMainTableView"] ||
+           [name isEqualToString:@"MainFrameTableView"] ||
+           [name isEqualToString:@"TextStateProfileTableView"];
+}
+
+static void (*_orig_UIView_layoutSubviews)(id, SEL);
+static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
+    _orig_UIView_layoutSubviews(self, _cmd);
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.listCornerRadiusEnabled) return;
+
+    if (![NSStringFromClass([self class]) isEqualToString:@"UIView"]) return;
+
+    UIView *view = (UIView *)self;
+    UIView *parent = view.superview;
+    if (!parent) return;
+
+    if (_wp_isTableViewClass(NSStringFromClass([parent class]))) {
+        view.backgroundColor = [UIColor clearColor];
+        return;
+    }
+
+    UIView *gp = parent.superview;
+    if (gp && _wp_isTableViewClass(NSStringFromClass([gp class]))) {
+        view.backgroundColor = [UIColor clearColor];
+    }
+}
+
 static void (*_orig_NMFVC_viewDidLayoutSubviews)(id, SEL);
 static void _wp_clearPlainUIViewBackgrounds(UIView *root) {
     for (UIView *subview in root.subviews) {
@@ -61,6 +92,11 @@ static void _hooked_NMFVC_viewDidLayoutSubviews(id self, SEL _cmd) {
 }
 
 void WPInstallSessionSpacingHooks(void) {
+    Class uiView = objc_getClass("UIView");
+    if (uiView) {
+        MSHookMessageEx(uiView, @selector(layoutSubviews),
+            (IMP)_hooked_UIView_layoutSubviews, (IMP *)&_orig_UIView_layoutSubviews);
+    }
     Class nmfvc = objc_getClass("NewMainFrameViewController");
     if (nmfvc) {
         MSHookMessageEx(nmfvc, @selector(tableView:heightForHeaderInSection:),
