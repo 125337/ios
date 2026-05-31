@@ -3,9 +3,9 @@
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 #import "CSContactInfoPopoverController.h"
+#import "AvatarLoader.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
-#import <ImageIO/ImageIO.h>
 
 @implementation MioChatAvatarTitleView
 
@@ -343,122 +343,8 @@
 
 #pragma mark - Avatar Loading
 
-- (UIImage *)createAnimatedImageFromGIFData:(NSData *)data {
-    if (!data) return nil;
-    CGImageSourceRef source = CGImageSourceCreateWithData((CFDataRef)data, NULL);
-    if (!source) return nil;
-
-    size_t count = CGImageSourceGetCount(source);
-    if (count < 2) {
-        CFRelease(source);
-        return [UIImage imageWithData:data];
-    }
-
-    NSMutableArray *images = [NSMutableArray array];
-    NSTimeInterval totalDuration = 0;
-
-    for (size_t i = 0; i < count; i++) {
-        CGImageRef cgImage = CGImageSourceCreateImageAtIndex(source, i, NULL);
-        if (!cgImage) continue;
-
-        NSDictionary *props = CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(source, i, NULL));
-        if (props) {
-            NSDictionary *gifProps = props[(NSString *)kCGImagePropertyGIFDictionary];
-            NSNumber *delay = gifProps[(NSString *)kCGImagePropertyGIFUnclampedDelayTime];
-            if (!delay) delay = gifProps[(NSString *)kCGImagePropertyGIFDelayTime];
-            NSTimeInterval dt = delay ? [delay doubleValue] : 0.1;
-            totalDuration += dt;
-        } else {
-            totalDuration += 0.1;
-        }
-
-        [images addObject:[UIImage imageWithCGImage:cgImage]];
-        CGImageRelease(cgImage);
-    }
-
-    CFRelease(source);
-    if (images.count == 0) return nil;
-    return [UIImage animatedImageWithImages:images duration:totalDuration];
-}
-
 - (UIImage *)loadAvatarWithPriorityForWxid:(NSString *)wxid contact:(id)contact {
-    if (!wxid.length) return nil;
-
-    // 1. Try custom avatar first
-    UIImage *custom = [self loadCustomAvatarForWxid:wxid];
-    if (custom) return custom;
-
-    // 2. For official accounts, MMHeadImageMgr returns placeholder only → use URL download
-    if ([wxid hasPrefix:@"gh_"]) {
-        NSString *avatarURL = [self getOfficialAccountAvatarURLFromContact:contact wxid:wxid];
-        WPLog(@"Mio-TopBar", @"公众号 %@ URL=%@", wxid, avatarURL ?: @"(空)");
-        if (avatarURL.length) {
-            NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:avatarURL]];
-            WPLog(@"Mio-TopBar", @"  URL下载 data=%@ len=%lu", data ? @"YES":@"NO", (unsigned long)data.length);
-            if (data) {
-                UIImage *img = [UIImage imageWithData:data];
-                if (img) {
-                    WPLog(@"Mio-TopBar", @"  ✅ 公众号头像URL下载成功 size=%.0fx%.0f", img.size.width, img.size.height);
-                    return img;
-                }
-            }
-        }
-        WPLog(@"Mio-TopBar", @"  ❌ 公众号URL下载失败，回退到MMHeadImageMgr");
-    }
-
-    // 3. Try WeChat native avatar
-    UIImage *native = [self loadWeChatAvatarForWxid:wxid];
-    if (native) return native;
-
-    return nil;
-}
-
-- (NSString *)getOfficialAccountAvatarURLFromContact:(id)contact wxid:(NSString *)wxid {
-    if (!contact) {
-        contact = WXGetContactForWxid(wxid);
-    }
-    return WXContactHeadImageURL(contact);
-}
-
-- (id)getContactForWxid:(NSString *)wxid {
-    return WXGetContactForWxid(wxid);
-}
-
-- (UIImage *)loadCustomAvatarForWxid:(NSString *)wxid {
-    NSString *dir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    if (!dir) return nil;
-
-    // 1. Try .gif first
-    NSString *gifPath = [dir stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"HBWechatHelper/UserHeadImage/%@.gif", wxid]];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:gifPath]) {
-        NSData *data = [NSData dataWithContentsOfFile:gifPath];
-        return [self createAnimatedImageFromGIFData:data];
-    }
-
-    // 2. Try .jpg
-    NSString *jpgPath = [dir stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"HBWechatHelper/UserHeadImage/%@.jpg", wxid]];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:jpgPath]) {
-        NSData *data = [NSData dataWithContentsOfFile:jpgPath];
-        return [UIImage imageWithData:data];
-    }
-
-    return nil;
-}
-
-- (UIImage *)loadWeChatAvatarForWxid:(NSString *)wxid {
-    id headImageMgr = WXGetService(objc_getClass("MMHeadImageMgr"));
-    if (!headImageMgr) return nil;
-
-    if (!((BOOL (*)(id, SEL, SEL))objc_msgSend)(headImageMgr, @selector(respondsToSelector:),
-        NSSelectorFromString(@"getHeadImage:withCategory:"))) {
-        return nil;
-    }
-
-    UIImage *image = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr,
-        NSSelectorFromString(@"getHeadImage:withCategory:"), wxid, @0);
-    return image;
+    return [[AvatarLoader shared] loadAvatarSyncForWxid:wxid contact:contact];
 }
 
 #pragma mark - Silent Contact ExtInfo Loading
