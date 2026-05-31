@@ -124,6 +124,16 @@
 
     cy = [self addSeparatorInGroup:group cy:cy width:w];
 
+    cy = [self addSwitchRowInGroup:group
+                              title:@"快速置顶/备注/免打扰"
+                               desc:nil
+                                key:@"quickActionsEnabled"
+                               isOn:config.quickActionsEnabled
+                                 cy:cy
+                              width:w];
+
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+
     NSString *timeStatus = config.showMessageTime ? @"已开启" : @"已关闭";
     cy = [self addNavRowInGroup:group
                              title:@"显示消息时间"

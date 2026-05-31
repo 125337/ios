@@ -17,6 +17,7 @@
 @property (nonatomic, assign) BOOL hideEnterpriseBadge;
 @property (nonatomic, assign) BOOL enableJoker;
 @property (nonatomic, assign) BOOL enableGroupExitMonitor;
+@property (nonatomic, assign) BOOL quickActionsEnabled;
 @property (nonatomic, assign) BOOL customColorsEnabled;
 @property (nonatomic, assign) BOOL autoRedEnvelop;
 @property (nonatomic, assign) BOOL redEnvelopCatchMe;
