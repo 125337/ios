@@ -15,6 +15,7 @@
 #import "../Modules/PlaceholderText/PlaceholderTextHook.h"
 #import "../Modules/ChatTopBar/ChatTopBarHook.h"
 #import "../Modules/ListCornerRadius/ListCornerRadiusHook.h"
+#import "../Modules/QuickActions/QuickActionsHook.h"
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
 
 @implementation FeatureModuleDescriptor
@@ -49,7 +50,7 @@
                                                  subtitle:@"防撤回、未读管理、通知"
                                              sectionTitle:@"通用"
                                           controllerClass:[SettingGeneralFunctionController class]
-                                     hookInstallerClasses:@[[RevokeHook class], [ClearUnreadHook class], [JokerHook class], [GroupExitHook class], [MessageTimeHook class]]],
+                                     hookInstallerClasses:@[[RevokeHook class], [ClearUnreadHook class], [JokerHook class], [GroupExitHook class], [MessageTimeHook class], [QuickActionsHook class]]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"redenvelop"
                                                     title:@"自动抢红包"
                                                  subtitle:@"自动领取红包、延迟设置"
