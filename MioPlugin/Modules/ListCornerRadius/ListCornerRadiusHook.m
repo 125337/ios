@@ -241,7 +241,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 
     if (isNewMainFrame && indexSection == 1) {
-        UIView *foldView = [self wp_findFoldViewInSubviews:cell.subviews];
+        UIView *foldView = [self wp_findFoldViewInSubviews:tableView.subviews];
         if (foldView) {
             if ([foldView respondsToSelector:@selector(isFolding)]) {
                 BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(foldView, @selector(isFolding));
