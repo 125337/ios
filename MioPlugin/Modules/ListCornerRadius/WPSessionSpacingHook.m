@@ -54,6 +54,9 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (![NSStringFromClass([self class]) isEqualToString:@"UIView"]) return;
 
     UIView *view = (UIView *)self;
+
+    if (view.bounds.size.height < 1.0) return;
+
     UIView *parent = view.superview;
     if (!parent) return;
 
