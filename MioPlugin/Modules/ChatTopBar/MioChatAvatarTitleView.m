@@ -278,9 +278,9 @@
     NSString *nickname = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsNickName"));
     NSString *selfWxid = [self getSelfWxid];
 
-    // Load avatars
-    UIImage *opponentAvatar = [self loadAvatarWithPriorityForWxid:opponentWxid];
-    UIImage *selfAvatar = [self loadAvatarWithPriorityForWxid:selfWxid];
+    // Load avatars — pass contact for official accounts to get avatar URL
+    UIImage *opponentAvatar = [self loadAvatarWithPriorityForWxid:opponentWxid contact:contact];
+    UIImage *selfAvatar = [self loadAvatarWithPriorityForWxid:selfWxid contact:nil];
 
     // Build title text
     NSString *titleText = nickname ?: @"";
@@ -393,7 +393,7 @@
     return [UIImage animatedImageWithImages:images duration:totalDuration];
 }
 
-- (UIImage *)loadAvatarWithPriorityForWxid:(NSString *)wxid {
+- (UIImage *)loadAvatarWithPriorityForWxid:(NSString *)wxid contact:(id)contact {
     if (!wxid.length) return nil;
 
     // 1. Try custom avatar first
@@ -402,7 +402,7 @@
 
     // 2. For official accounts, MMHeadImageMgr returns placeholder only → use URL download
     if ([wxid hasPrefix:@"gh_"]) {
-        NSString *avatarURL = [self getOfficialAccountAvatarURL:wxid];
+        NSString *avatarURL = [self getOfficialAccountAvatarURLFromContact:contact wxid:wxid];
         WPLog(@"Mio-TopBar", @"公众号 %@ URL=%@", wxid, avatarURL ?: @"(空)");
         if (avatarURL.length) {
             NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:avatarURL]];
@@ -425,8 +425,10 @@
     return nil;
 }
 
-- (NSString *)getOfficialAccountAvatarURL:(NSString *)wxid {
-    id contact = [self getContactForWxid:wxid];
+- (NSString *)getOfficialAccountAvatarURLFromContact:(id)contact wxid:(NSString *)wxid {
+    if (!contact) {
+        contact = [self getContactForWxid:wxid];
+    }
     if (!contact) return nil;
 
     SEL headHDImgUrlSel = NSSelectorFromString(@"m_nsHeadHDImgUrl");
