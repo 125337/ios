@@ -70,6 +70,9 @@ jobs:
           MioPlugin/Modules/ChatTopBar/ChatTopBarHook.m \
           MioPlugin/Modules/ChatTopBar/CSContactInfoPopoverController.m \
           MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m \
+          MioPlugin/Modules/ListCornerRadius/WPSessionSpacingHook.m \
+          MioPlugin/Modules/ListCornerRadius/WPSearchBoxHook.m \
+          MioPlugin/Modules/ListCornerRadius/WPAuxiliaryHooks.m \
           MioPlugin/Settings/Common/SettingCategoryController.m \
           MioPlugin/Settings/Common/WPBorderLayer.m \
           MioPlugin/Settings/Controllers/SettingController.m \

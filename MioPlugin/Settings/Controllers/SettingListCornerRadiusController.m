@@ -2,6 +2,7 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioRestartHelper.h"
 #import "../../Config/WPColors.h"
 
 @implementation SettingListCornerRadiusController
@@ -35,7 +36,7 @@
         PluginConfig *cfg = [PluginConfig shared];
 
         *ecy = [self addSubSwitchRowInGroup:expand
-                                      title:@"搜索圆角"
+                                      title:@"搜索框圆角"
                                         key:@"listSearchCornerRadius"
                                        isOn:cfg.listSearchCornerRadius
                                          cy:*ecy width:w];
@@ -55,52 +56,90 @@
                                          cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"媒体视图圆角"
+                                        key:@"listMediaCornerEnabled"
+                                       isOn:cfg.listMediaCornerEnabled
+                                         cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"禁用标签宽度调整"
+                                        key:@"listDisableLabelWidthAdjustment"
+                                       isOn:cfg.listDisableLabelWidthAdjustment
+                                         cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
         NSString *crStr = cfg.listCellCornerRadius > 0
             ? [NSString stringWithFormat:@"%.0f", cfg.listCellCornerRadius] : nil;
         *ecy = [self addInputRowInGroup:expand
-                                   title:@"Cell圆角半径"
-                                     key:@"listCellCornerRadius"
-                                   value:crStr
-                                    hint:@"18"
-                              alertTitle:@"设置列表圆角半径"
-                            alertMessage:@"请输入圆角半径(5-30像素)"
-                                      cy:*ecy width:w];
+                                  title:@"Cell圆角半径"
+                                    key:@"listCellCornerRadius"
+                                  value:crStr
+                                   hint:@"18"
+                             alertTitle:@"设置列表圆角半径"
+                           alertMessage:@"请输入圆角半径(5-30像素)"
+                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         NSString *lmStr = cfg.listCellMargin > 0
             ? [NSString stringWithFormat:@"%.0f", cfg.listCellMargin] : nil;
         *ecy = [self addInputRowInGroup:expand
-                                   title:@"Cell左右边距"
-                                     key:@"listCellMargin"
-                                   value:lmStr
-                                    hint:@"9"
-                              alertTitle:@"设置Cell左右边距"
-                            alertMessage:@"请输入边距值(1-30像素)"
-                                      cy:*ecy width:w];
+                                  title:@"Cell左右边距"
+                                    key:@"listCellMargin"
+                                  value:lmStr
+                                   hint:@"9"
+                             alertTitle:@"设置Cell左右边距"
+                           alertMessage:@"请输入边距值(0-30像素)"
+                                     cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        NSString *sbcrStr = cfg.listSearchBoxCornerRadius > 0
+            ? [NSString stringWithFormat:@"%ld", (long)cfg.listSearchBoxCornerRadius] : nil;
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"搜索框圆角半径"
+                                    key:@"listSearchBoxCornerRadius"
+                                  value:sbcrStr
+                                   hint:@"18"
+                             alertTitle:@"设置搜索框圆角半径"
+                           alertMessage:@"请输入圆角半径(5-30像素)"
+                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         NSString *ptStr = cfg.listPinnedSessionTopSpacing > 0
             ? [NSString stringWithFormat:@"%.0f", cfg.listPinnedSessionTopSpacing] : nil;
         *ecy = [self addInputRowInGroup:expand
-                                   title:@"置顶会话距顶栏间距"
-                                     key:@"listPinnedSessionTopSpacing"
-                                   value:ptStr
-                                    hint:@"15"
-                              alertTitle:@"设置置顶会话距顶部间距"
-                            alertMessage:@"请输入间距值(1-50像素)"
-                                      cy:*ecy width:w];
+                                  title:@"置顶会话距顶栏间距"
+                                    key:@"listPinnedSessionTopSpacing"
+                                  value:ptStr
+                                   hint:@"15"
+                             alertTitle:@"设置置顶会话距顶部间距"
+                           alertMessage:@"请输入间距值(1-50像素)"
+                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         NSString *nsStr = cfg.listNormalSessionSpacing > 0
             ? [NSString stringWithFormat:@"%.0f", cfg.listNormalSessionSpacing] : nil;
         *ecy = [self addInputRowInGroup:expand
-                                   title:@"普通会话距置顶会话间距"
-                                     key:@"listNormalSessionSpacing"
-                                   value:nsStr
-                                    hint:@"15"
-                              alertTitle:@"设置普通会话距置顶会话间距"
-                            alertMessage:@"请输入间距值(1-50像素)"
-                                      cy:*ecy width:w];
+                                  title:@"普通会话距置顶会话间距"
+                                    key:@"listNormalSessionSpacing"
+                                  value:nsStr
+                                   hint:@"15"
+                             alertTitle:@"设置普通会话距置顶会话间距"
+                           alertMessage:@"请输入间距值(1-50像素)"
+                                     cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        NSString *bwStr = cfg.listCellBorderWidth > 0
+            ? [NSString stringWithFormat:@"%.1f", cfg.listCellBorderWidth] : nil;
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"边框宽度"
+                                    key:@"listCellBorderWidth"
+                                  value:bwStr
+                                   hint:@"2.0"
+                             alertTitle:@"设置边框宽度"
+                           alertMessage:@"请输入边框宽度(0.5-5.0)"
+                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         *ecy = [self addColorRowInGroup:expand
@@ -114,6 +153,20 @@
                                   title:@"Cell深色模式背景色"
                                     key:@"listCellDarkBgColor"
                                   value:cfg.listCellDarkBgColor
+                                     cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        *ecy = [self addColorRowInGroup:expand
+                                  title:@"边框浅色模式颜色"
+                                    key:@"listCellBorderLightColor"
+                                  value:cfg.listCellBorderLightColor
+                                     cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        *ecy = [self addColorRowInGroup:expand
+                                  title:@"边框深色模式颜色"
+                                    key:@"listCellBorderDarkColor"
+                                  value:cfg.listCellBorderDarkColor
                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
@@ -145,6 +198,22 @@
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
     WPLog(@"UI", @"[Sub] SettingListCornerRadiusController buildUI done");
+}
+
+- (void)switchChanged:(UISwitch *)sender {
+    [super switchChanged:sender];
+
+    NSString *key = objc_getAssociatedObject(sender, "key");
+    if (!key) return;
+
+    if ([key isEqualToString:@"listCornerRadiusEnabled"]
+        || [key isEqualToString:@"listSearchCornerRadius"]
+        || [key isEqualToString:@"listCellBorder"]
+        || [key isEqualToString:@"listHideRightQRCode"]
+        || [key isEqualToString:@"listDisableLabelWidthAdjustment"]
+        || [key isEqualToString:@"listMediaCornerEnabled"]) {
+        [MioRestartHelper showRestartAlertFromVC:self];
+    }
 }
 
 @end

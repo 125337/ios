@@ -158,6 +158,12 @@
 @property (nonatomic, copy) NSString *listCellDarkBgColor;
 @property (nonatomic, copy) NSString *listCardLightBgColor;
 @property (nonatomic, copy) NSString *listCardDarkBgColor;
+@property (nonatomic, assign) CGFloat listCellBorderWidth;
+@property (nonatomic, copy) NSString *listCellBorderLightColor;
+@property (nonatomic, copy) NSString *listCellBorderDarkColor;
+@property (nonatomic, assign) BOOL listDisableLabelWidthAdjustment;
+@property (nonatomic, assign) BOOL listMediaCornerEnabled;
+@property (nonatomic, assign) NSInteger listSearchBoxCornerRadius;
 
 @property (nonatomic, assign) BOOL notifySender;
 @property (nonatomic, copy) NSString *notifySenderTemplate;

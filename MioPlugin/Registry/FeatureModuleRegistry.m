@@ -14,6 +14,8 @@
 #import "../Modules/Layout/UIAttachLayoutHook.h"
 #import "../Modules/PlaceholderText/PlaceholderTextHook.h"
 #import "../Modules/ChatTopBar/ChatTopBarHook.h"
+#import "../Modules/ListCornerRadius/ListCornerRadiusHook.h"
+#import "../Settings/Controllers/SettingListCornerRadiusController.h"
 
 @implementation FeatureModuleDescriptor
 
@@ -54,6 +56,12 @@
                                              sectionTitle:@"通用"
                                           controllerClass:[SettingRedEnvelopController class]
                                      hookInstallerClasses:@[[RedEnvelopHook class], [AutoTransferHook class]]],
+            [FeatureModuleDescriptor moduleWithIdentifier:@"listcorner"
+                                                    title:@"列表圆角"
+                                                 subtitle:@"Cell圆角、边距、边框样式"
+                                             sectionTitle:@"通用"
+                                          controllerClass:[SettingListCornerRadiusController class]
+                                     hookInstallerClasses:@[]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"layout"
                                                     title:@"界面布局"
                                                  subtitle:@"外观颜色、深色模式"

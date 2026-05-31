@@ -3,8 +3,10 @@
 #import <objc/runtime.h>
 #import "Registry/HookRegistry.h"
 #import "Config/PluginConfig.h"
-// ListCornerRadius disabled - will be re-enabled after research
-// #import "Modules/ListCornerRadius/ListCornerRadiusHook.h"
+#import "Modules/ListCornerRadius/ListCornerRadiusHook.h"
+#import "Modules/ListCornerRadius/WPSessionSpacingHook.h"
+#import "Modules/ListCornerRadius/WPSearchBoxHook.h"
+#import "Modules/ListCornerRadius/WPAuxiliaryHooks.h"
 
 __attribute__((constructor))
 static void MioPluginInitialize() {
@@ -13,8 +15,14 @@ static void MioPluginInitialize() {
     @try {
         @autoreleasepool {
             NSLog(@"[MioPlugin] entering constructor");
+
             [HookRegistry installAllHooks];
-            // [ListCornerRadiusHook initListCornerRadiusHook]; // disabled - causing watchdog timeout
+
+            [ListCornerRadiusHook initListCornerRadiusHook];
+            WPInstallSessionSpacingHooks();
+            WPInstallSearchBoxHook();
+            WPInstallAuxiliaryHooks();
+
             NSLog(@"[MioPlugin] all hooks installed");
         }
     } @catch (NSException *e) {

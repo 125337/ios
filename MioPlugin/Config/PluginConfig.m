@@ -434,6 +434,21 @@
 
     NSString *cdb2 = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCardDarkBgColor"]];
     _listCardDarkBgColor = [cdb2 copy];
+
+    CGFloat cbw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderWidth"]];
+    _listCellBorderWidth = (cbw > 0) ? cbw : 2.0;
+
+    NSString *cbl = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderLightColor"]];
+    _listCellBorderLightColor = [cbl copy];
+
+    NSString *cbd = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderDarkColor"]];
+    _listCellBorderDarkColor = [cbd copy];
+
+    _listDisableLabelWidthAdjustment = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListDisableLabelWidthAdjustment"]];
+    _listMediaCornerEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListMediaCornerEnabled"]];
+
+    NSInteger scr = [d integerForKey:[kPluginPrefix stringByAppendingString:@"ListSearchBoxCornerRadius"]];
+    _listSearchBoxCornerRadius = (scr > 0) ? scr : 18;
 }
 
 - (void)save {
@@ -619,6 +634,12 @@
     if (_listCellDarkBgColor) [d setObject:_listCellDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellDarkBgColor"]];
     if (_listCardLightBgColor) [d setObject:_listCardLightBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCardLightBgColor"]];
     if (_listCardDarkBgColor) [d setObject:_listCardDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCardDarkBgColor"]];
+    [d setFloat:_listCellBorderWidth forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderWidth"]];
+    if (_listCellBorderLightColor) [d setObject:_listCellBorderLightColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderLightColor"]];
+    if (_listCellBorderDarkColor) [d setObject:_listCellBorderDarkColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderDarkColor"]];
+    [d setBool:_listDisableLabelWidthAdjustment forKey:[kPluginPrefix stringByAppendingString:@"ListDisableLabelWidthAdjustment"]];
+    [d setBool:_listMediaCornerEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListMediaCornerEnabled"]];
+    [d setInteger:_listSearchBoxCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"ListSearchBoxCornerRadius"]];
     
     [d synchronize];
     WPLog(@"Config", @"[OK] save() completed - NSUserDefaults synchronized");
