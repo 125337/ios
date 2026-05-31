@@ -81,14 +81,11 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     if (margin == 0) margin = 9;
 
     UIView *foldSuperview = view.superview;
-    CGFloat newWidth = foldSuperview.bounds.size.width - 2.0 * margin;
-    if (newWidth > 0) {
-        CGRect frame = view.frame;
-        if (frame.origin.x != margin || frame.size.width != newWidth) {
-            frame.origin.x = margin;
-            frame.size.width = newWidth;
-            view.frame = frame;
-        }
+    CGRect frame = view.frame;
+    if (frame.origin.x != 0 || frame.size.width != foldSuperview.bounds.size.width) {
+        frame.origin.x = 0;
+        frame.size.width = foldSuperview.bounds.size.width;
+        view.frame = frame;
     }
     view.autoresizingMask = UIViewAutoresizingNone;
 
