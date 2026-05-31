@@ -605,7 +605,6 @@
 - (void)presentUserInfoPopoverWithContact:(id)contact sourceView:(UIView *)sourceView {
     if (!contact) return;
 
-    // 获取头像
     UIImage *avatar = nil;
     if (sourceView == self.leftAvatarView) {
         avatar = self.leftAvatarView.image;
@@ -613,11 +612,24 @@
         avatar = self.rightAvatarView.image;
     }
 
-    // 创建自定义弹窗
+    NSString *wxid = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
+
+    if ([wxid hasPrefix:@"gh_"]) {
+        [self silentLoadContactExtInfo:contact];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            UIImage *updatedAvatar = [self loadAvatarWithPriorityForWxid:wxid];
+            [self doPresentPopoverWithContact:contact avatar:updatedAvatar ?: avatar sourceView:sourceView];
+        });
+        return;
+    }
+
+    [self doPresentPopoverWithContact:contact avatar:avatar sourceView:sourceView];
+}
+
+- (void)doPresentPopoverWithContact:(id)contact avatar:(UIImage *)avatar sourceView:(UIView *)sourceView {
     CSContactInfoPopoverController *popover =
         [[CSContactInfoPopoverController alloc] initWithContact:contact avatar:avatar];
 
-    // popover 配置
     popover.modalPresentationStyle = UIModalPresentationPopover;
     popover.preferredContentSize = CGSizeMake(280, 400);
 
@@ -628,7 +640,6 @@
     popPC.backgroundColor = [UIColor whiteColor];
     popPC.delegate = popover;
 
-    // 通过 findViewController 查找 present 的 VC
     UIViewController *presentingVC = [self findViewController];
     if (!presentingVC) {
         presentingVC = (UIViewController *)self.chatController;

@@ -465,17 +465,22 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
         if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
             unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), self.contact);
-            return [NSString stringWithFormat:@"%u 人", count];
+            if (count > 0) {
+                return [NSString stringWithFormat:@"%u 人", count];
+            }
         }
     }
 
-    @try {
-        id memList = ((id (*)(id, SEL, NSString *))objc_msgSend)(self.contact, NSSelectorFromString(@"valueForKey:"), @"m_nsChatRoomMemList");
-        if (memList && [memList isKindOfClass:[NSArray class]]) {
-            NSUInteger cnt = [(NSArray *)memList count];
-            return [NSString stringWithFormat:@"%lu 人", (unsigned long)cnt];
+    SEL memListSel = NSSelectorFromString(@"m_nsChatRoomMemList");
+    if ([self.contact respondsToSelector:memListSel]) {
+        id memList = ((id (*)(id, SEL))objc_msgSend)(self.contact, memListSel);
+        if (memList && [memList isKindOfClass:[NSString class]]) {
+            NSArray *members = [(NSString *)memList componentsSeparatedByString:@";"];
+            if (members.count > 0) {
+                return [NSString stringWithFormat:@"%lu 人", (unsigned long)members.count];
+            }
         }
-    } @catch (NSException *e) {}
+    }
 
     return @"未知";
 }
