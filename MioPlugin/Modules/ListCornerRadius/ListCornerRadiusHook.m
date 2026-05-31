@@ -63,6 +63,15 @@ static UIViewController *findParentViewController(UIView *view) {
 
 @end
 
+static UIColor *wp_cellDefaultBgColor(BOOL isDark) {
+    if (@available(iOS 13.0, *)) {
+        if (isDark) {
+            return [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0];
+        }
+    }
+    return [UIColor whiteColor];
+}
+
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     if (_orig_MMTableViewCell_layoutSubviews) {
         ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
@@ -105,6 +114,14 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     if ([cornerExcludeList containsObject:className]) {
         return;
     }
+
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    }
+    UIColor *customBg = [config colorFromHex:isDark
+        ? config.listCellDarkBgColor : config.listCellLightBgColor];
+    ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
 
     NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
     if (cornerRadius == 0) cornerRadius = 18;
@@ -205,35 +222,48 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
                                  | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
         [self wp_applyBorderAndBg:cell radius:configuredRadius position:0 isFTSHome:isFTSHome];
+        return;
+    }
 
-    } else if (row == 0) {
+    if (row == 0) {
         cell.layer.cornerRadius = configuredRadius;
         cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
         [self wp_applyBorderAndBg:cell radius:configuredRadius position:1 isFTSHome:isFTSHome];
+        return;
+    }
 
-    } else if (row == totalRows - 1) {
-        if (isNewMainFrame && indexSection == 1) {
-            UIView *foldView = [self wp_findFoldViewInSubviews:cell.subviews];
-            if (foldView && [foldView respondsToSelector:@selector(isFolding)]) {
+    if (row != totalRows - 1) {
+        cell.layer.cornerRadius = 0;
+        cell.layer.maskedCorners = 0;
+        [self wp_applyBorderAndBg:cell radius:0 position:2 isFTSHome:isFTSHome];
+        return;
+    }
+
+    if (isNewMainFrame && indexSection == 1) {
+        UIView *foldView = [self wp_findFoldViewInSubviews:cell.subviews];
+        if (foldView) {
+            if ([foldView respondsToSelector:@selector(isFolding)]) {
                 NSNumber *folding = ((id (*)(id, SEL))objc_msgSend)(foldView, @selector(isFolding));
                 if (folding && ![folding boolValue]) {
                     cell.layer.cornerRadius = 0;
                     cell.layer.maskedCorners = 0;
                     [self wp_applyBorderAndBg:cell radius:0 position:2 isFTSHome:isFTSHome];
+                    cell.layer.masksToBounds = YES;
                     return;
                 }
+            } else {
+                cell.layer.masksToBounds = YES;
+                return;
             }
+        } else {
+            cell.layer.masksToBounds = YES;
+            return;
         }
-
-        cell.layer.cornerRadius = configuredRadius;
-        cell.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
-        [self wp_applyBorderAndBg:cell radius:configuredRadius position:3 isFTSHome:isFTSHome];
-
-    } else {
-        cell.layer.cornerRadius = 0;
-        cell.layer.maskedCorners = 0;
-        [self wp_applyBorderAndBg:cell radius:0 position:2 isFTSHome:isFTSHome];
     }
+
+    cell.layer.cornerRadius = configuredRadius;
+    cell.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+    [self wp_applyBorderAndBg:cell radius:configuredRadius position:3 isFTSHome:isFTSHome];
 }
 
 + (void)wp_applyCornerForContacts:(UIView *)cell
