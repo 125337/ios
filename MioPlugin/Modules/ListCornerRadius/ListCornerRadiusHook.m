@@ -126,21 +126,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
 
-    NSInteger margin = (NSInteger)config.listCellMargin;
-    if (margin == 0) margin = 9;
-
     UIView *cellView = (UIView *)self;
-    UIView *superview = cellView.superview;
-
-    CGFloat newWidth = superview.bounds.size.width - 2.0 * margin;
-    if (newWidth > 0) {
-        CGRect frame = cellView.frame;
-        if (frame.origin.x != margin || frame.size.width != newWidth) {
-            frame.origin.x = margin;
-            frame.size.width = newWidth;
-            cellView.frame = frame;
-        }
-    }
 
     BOOL isDark = NO;
     if (@available(iOS 13.0, *)) {
