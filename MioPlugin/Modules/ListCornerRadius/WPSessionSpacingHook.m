@@ -37,6 +37,29 @@ static void _hooked_setBgImageView(id self, SEL _cmd, id imageView) {
     }
 }
 
+static void (*_orig_NMFVC_viewDidLayoutSubviews)(id, SEL);
+static void _wp_clearPlainUIViewBackgrounds(UIView *root) {
+    for (UIView *subview in root.subviews) {
+        if ([subview isKindOfClass:[UITableView class]]) {
+            for (UIView *child in subview.subviews) {
+                if ([NSStringFromClass([child class]) isEqualToString:@"UIView"]) {
+                    child.backgroundColor = [UIColor clearColor];
+                }
+            }
+        }
+        _wp_clearPlainUIViewBackgrounds(subview);
+    }
+}
+
+static void _hooked_NMFVC_viewDidLayoutSubviews(id self, SEL _cmd) {
+    _orig_NMFVC_viewDidLayoutSubviews(self, _cmd);
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.listCornerRadiusEnabled) return;
+
+    _wp_clearPlainUIViewBackgrounds(((UIViewController *)self).view);
+}
+
 void WPInstallSessionSpacingHooks(void) {
     Class nmfvc = objc_getClass("NewMainFrameViewController");
     if (nmfvc) {
@@ -44,6 +67,8 @@ void WPInstallSessionSpacingHooks(void) {
             (IMP)_hooked_NMFVC_heightForHeader, (IMP *)&_orig_NMFVC_heightForHeader);
         MSHookMessageEx(nmfvc, @selector(tableView:viewForHeaderInSection:),
             (IMP)_hooked_NMFVC_viewForHeader, (IMP *)&_orig_NMFVC_viewForHeader);
+        MSHookMessageEx(nmfvc, @selector(viewDidLayoutSubviews),
+            (IMP)_hooked_NMFVC_viewDidLayoutSubviews, (IMP *)&_orig_NMFVC_viewDidLayoutSubviews);
     }
     Class header = objc_getClass("MMTableSectionHeaderView");
     if (header) {
