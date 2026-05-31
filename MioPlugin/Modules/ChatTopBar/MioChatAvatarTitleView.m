@@ -1,6 +1,7 @@
 #import "MioChatAvatarTitleView.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 #import "CSContactInfoPopoverController.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -287,19 +288,14 @@
     BOOL isGroup = [opponentWxid containsString:@"@chatroom"];
 
     if (isGroup && config.showGroupMemberCount) {
-        // Get group member count via CContactMgr
-        Class serviceCenter = objc_getClass("MMServiceCenter");
-        if (serviceCenter) {
-            id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-            id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
-            if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
-                unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), contact);
-                NSString *suffix = config.chatGroupMemberCountSuffix.length > 0
-                    ? config.chatGroupMemberCountSuffix : @"%ld人";
-                titleText = [NSString stringWithFormat:@"%@%@",
-                    nickname ?: @"",
-                    [NSString stringWithFormat:suffix, (long)count]];
-            }
+        id contactMgr = WXGetService(objc_getClass("CContactMgr"));
+        if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
+            unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), contact);
+            NSString *suffix = config.chatGroupMemberCountSuffix.length > 0
+                ? config.chatGroupMemberCountSuffix : @"%ld人";
+            titleText = [NSString stringWithFormat:@"%@%@",
+                nickname ?: @"",
+                [NSString stringWithFormat:suffix, (long)count]];
         }
     } else if (!isGroup && config.showAddTime) {
         // Get add time — try m_uiAddCreateTime first, fallback to m_uiAddTime
@@ -338,18 +334,10 @@
 }
 
 - (NSString *)getSelfWxid {
-    Class serviceCenter = objc_getClass("MMServiceCenter");
-    if (!serviceCenter) return @"";
-
-    id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-    id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
-    if (contactMgr && [contactMgr respondsToSelector:@selector(getSelfContact)]) {
-        id selfContact = ((id (*)(id, SEL))objc_msgSend)(contactMgr, @selector(getSelfContact));
-        if (selfContact && [selfContact respondsToSelector:@selector(m_nsUsrName)]) {
-            return ((NSString *(*)(id, SEL))objc_msgSend)(selfContact, @selector(m_nsUsrName));
-        }
+    id selfContact = WXGetSelfContact();
+    if (selfContact && [selfContact respondsToSelector:@selector(m_nsUsrName)]) {
+        return ((NSString *(*)(id, SEL))objc_msgSend)(selfContact, @selector(m_nsUsrName));
     }
-
     return @"";
 }
 
@@ -427,38 +415,13 @@
 
 - (NSString *)getOfficialAccountAvatarURLFromContact:(id)contact wxid:(NSString *)wxid {
     if (!contact) {
-        contact = [self getContactForWxid:wxid];
+        contact = WXGetContactForWxid(wxid);
     }
-    if (!contact) return nil;
-
-    SEL headHDImgUrlSel = NSSelectorFromString(@"m_nsHeadHDImgUrl");
-    if ([contact respondsToSelector:headHDImgUrlSel]) {
-        NSString *url = ((id (*)(id, SEL))objc_msgSend)(contact, headHDImgUrlSel);
-        if (url.length) return url;
-    }
-
-    SEL headImgUrlSel = NSSelectorFromString(@"m_nsHeadImgUrl");
-    if ([contact respondsToSelector:headImgUrlSel]) {
-        NSString *url = ((id (*)(id, SEL))objc_msgSend)(contact, headImgUrlSel);
-        if (url.length) return url;
-    }
-
-    return nil;
+    return WXContactHeadImageURL(contact);
 }
 
 - (id)getContactForWxid:(NSString *)wxid {
-    Class serviceCenter = objc_getClass("MMServiceCenter");
-    if (!serviceCenter) return nil;
-
-    id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-    id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
-    if (!contactMgr) return nil;
-
-    if ([contactMgr respondsToSelector:@selector(getContactByUserName:)]) {
-        return ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getContactByUserName:), wxid);
-    }
-
-    return nil;
+    return WXGetContactForWxid(wxid);
 }
 
 - (UIImage *)loadCustomAvatarForWxid:(NSString *)wxid {
@@ -485,12 +448,7 @@
 }
 
 - (UIImage *)loadWeChatAvatarForWxid:(NSString *)wxid {
-    Class serviceCenter = objc_getClass("MMServiceCenter");
-    if (!serviceCenter) return nil;
-
-    id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-    id headImageMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"),
-        objc_getClass("MMHeadImageMgr"));
+    id headImageMgr = WXGetService(objc_getClass("MMHeadImageMgr"));
     if (!headImageMgr) return nil;
 
     if (!((BOOL (*)(id, SEL, SEL))objc_msgSend)(headImageMgr, @selector(respondsToSelector:),

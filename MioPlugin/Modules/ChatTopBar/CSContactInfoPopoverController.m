@@ -1,26 +1,25 @@
 #import "CSContactInfoPopoverController.h"
 #import "WPCommonUI.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
 #pragma mark - KVC
 
 static id contactValueForKey(id contact, NSString *key) {
-    if (!contact || !key) return nil;
-    return ((id (*)(id, SEL, NSString *))objc_msgSend)(
-        contact, NSSelectorFromString(@"valueForKey:"), key);
+    return WXContactValueForKey(contact, key);
 }
 
 static NSInteger contactIntForKey(id contact, NSString *key) {
-    id val = contactValueForKey(contact, key);
-    if (val) return [(NSNumber *)val integerValue];
+    if (!contact || !key) return 0;
+    NSNumber *n = (id)WXContactValueForKey(contact, key);
+    if (n && [n isKindOfClass:[NSNumber class]]) return [n integerValue];
     return 0;
 }
 
 static BOOL contactRespondsTo(id contact, NSString *selName) {
-    if (!contact) return NO;
-    return ((BOOL (*)(id, SEL, SEL))objc_msgSend)(contact, @selector(respondsToSelector:), NSSelectorFromString(selName));
+    return WXContactRespondsTo(contact, selName);
 }
 
 #pragma mark - 信息行（内容靠左，与标题保持6pt间距，支持多行）
@@ -186,27 +185,21 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 
     if (!isOfficialAccount) {
         WPLog(@"Mio-Avatar", @"⏳ Step2-MMHeadImageMgr...");
-        Class serviceCenter = objc_getClass("MMServiceCenter");
-        if (serviceCenter) {
-            id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-            id headImageMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("MMHeadImageMgr"));
-            WPLog(@"Mio-Avatar", @"  MMServiceCenter=%@ headImageMgr=%@ class=%@", center ? @"YES":@"NO", headImageMgr ? @"YES":@"NO", NSStringFromClass([headImageMgr class]));
-            if (headImageMgr) {
-                SEL getHeadSel = NSSelectorFromString(@"getHeadImage:withCategory:");
-                if ([headImageMgr respondsToSelector:getHeadSel]) {
-                    UIImage *wxImg = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr, getHeadSel, self.wxid, @0);
-                    WPLog(@"Mio-Avatar", @"  getHeadImage:withCategory: 结果=%@ size=%.0fx%.0f", wxImg ? @"有图":@"nil", wxImg.size.width, wxImg.size.height);
-                    if (wxImg) {
-                        imageView.image = wxImg;
-                        self.avatarImage = wxImg;
-                        return;
-                    }
-                } else {
-                    WPLog(@"Mio-Avatar", @"  ❌ 不支持 getHeadImage:withCategory:");
+        id headImageMgr = WXGetService(objc_getClass("MMHeadImageMgr"));
+        WPLog(@"Mio-Avatar", @"  MMServiceCenter %@ headImageMgr=%@", headImageMgr ? @"YES":@"NO", headImageMgr ? @"YES":@"NO");
+        if (headImageMgr) {
+            SEL getHeadSel = NSSelectorFromString(@"getHeadImage:withCategory:");
+            if ([headImageMgr respondsToSelector:getHeadSel]) {
+                UIImage *wxImg = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr, getHeadSel, self.wxid, @0);
+                WPLog(@"Mio-Avatar", @"  getHeadImage:withCategory: 结果=%@ size=%.0fx%.0f", wxImg ? @"有图":@"nil", wxImg.size.width, wxImg.size.height);
+                if (wxImg) {
+                    imageView.image = wxImg;
+                    self.avatarImage = wxImg;
+                    return;
                 }
+            } else {
+                WPLog(@"Mio-Avatar", @"  ❌ 不支持 getHeadImage:withCategory:");
             }
-        } else {
-            WPLog(@"Mio-Avatar", @"  ❌ MMServiceCenter 不存在");
         }
     } else {
         WPLog(@"Mio-Avatar", @"⏳ Step2-SKIP(公众号用MMHeadImageMgr只返回占位图，直接走URL下载)");
@@ -298,21 +291,17 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         }
 
         WPLog(@"Mio-Preload", @"  0.6s后重试 MMHeadImageMgr...");
-        Class serviceCenter = objc_getClass("MMServiceCenter");
-        if (serviceCenter) {
-            id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-            id headImageMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("MMHeadImageMgr"));
-            if (headImageMgr) {
-                SEL getHeadSel = NSSelectorFromString(@"getHeadImage:withCategory:");
-                if ([headImageMgr respondsToSelector:getHeadSel]) {
-                    UIImage *wxImg = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr, getHeadSel, strongSelf.wxid, @0);
-                    WPLog(@"Mio-Preload", @"    getHeadImage:withCategory: 结果=%@ size=%.0fx%.0f", wxImg ? @"有图":@"nil", wxImg.size.width, wxImg.size.height);
-                    if (wxImg && !strongSelf.avatarImage) {
-                        WPLog(@"Mio-Preload", @"    ✅ MMHeadImageMgr 重试成功");
-                        strongSelf->_avatarView.image = wxImg;
-                        strongSelf.avatarImage = wxImg;
-                        return;
-                    }
+        id headImageMgr = WXGetService(objc_getClass("MMHeadImageMgr"));
+        if (headImageMgr) {
+            SEL getHeadSel = NSSelectorFromString(@"getHeadImage:withCategory:");
+            if ([headImageMgr respondsToSelector:getHeadSel]) {
+                UIImage *wxImg = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr, getHeadSel, strongSelf.wxid, @0);
+                WPLog(@"Mio-Preload", @"    getHeadImage:withCategory: 结果=%@ size=%.0fx%.0f", wxImg ? @"有图":@"nil", wxImg.size.width, wxImg.size.height);
+                if (wxImg && !strongSelf.avatarImage) {
+                    WPLog(@"Mio-Preload", @"    ✅ MMHeadImageMgr 重试成功");
+                    strongSelf->_avatarView.image = wxImg;
+                    strongSelf.avatarImage = wxImg;
+                    return;
                 }
             }
         }
@@ -345,17 +334,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 }
 
 - (NSString *)headImageURLFromContact {
-    SEL sel = NSSelectorFromString(@"m_nsHeadHDImgUrl");
-    if ([self.contact respondsToSelector:sel]) {
-        id url = ((id (*)(id, SEL))objc_msgSend)(self.contact, sel);
-        if (url && [url isKindOfClass:[NSString class]] && [(NSString *)url length] > 0) return url;
-    }
-    sel = NSSelectorFromString(@"m_nsHeadImgUrl");
-    if ([self.contact respondsToSelector:sel]) {
-        id url = ((id (*)(id, SEL))objc_msgSend)(self.contact, sel);
-        if (url && [url isKindOfClass:[NSString class]] && [(NSString *)url length] > 0) return url;
-    }
-    return nil;
+    return WXContactHeadImageURL(self.contact);
 }
 
 #pragma mark - 通用卡片构建
@@ -483,7 +462,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
 
-        UIViewController *topVC = [strongSelf findTopViewController];
+        UIViewController *topVC = WPGetTopVCForPresentation();
         if (!topVC) {
             UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
             if (rootVC) {
@@ -504,30 +483,6 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
             [topVC presentViewController:nav animated:YES completion:nil];
         }
     }];
-}
-
-- (UIViewController *)findTopViewController {
-    for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
-        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
-        for (UIWindow *window in scene.windows) {
-            if (!window.isKeyWindow) continue;
-            UIViewController *top = window.rootViewController;
-            while (top.presentedViewController) {
-                top = top.presentedViewController;
-            }
-            if ([top isKindOfClass:[UINavigationController class]]) {
-                top = [(UINavigationController *)top visibleViewController];
-            }
-            if ([top isKindOfClass:[UITabBarController class]]) {
-                top = [(UITabBarController *)top selectedViewController];
-                if ([top isKindOfClass:[UINavigationController class]]) {
-                    top = [(UINavigationController *)top visibleViewController];
-                }
-            }
-            return top;
-        }
-    }
-    return nil;
 }
 
 #pragma mark - 数据取值
@@ -592,15 +547,11 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         return [NSString stringWithFormat:@"%lu 人", (unsigned long)total];
     };
 
-    Class serviceCenter = objc_getClass("MMServiceCenter");
-    if (serviceCenter) {
-        id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-        id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
-        if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
-            unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), self.contact);
-            if (count > 0) {
-                return fmtWithAdmin(count, [self adminCountPart]);
-            }
+    id contactMgr = WXGetService(objc_getClass("CContactMgr"));
+    if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
+        unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), self.contact);
+        if (count > 0) {
+            return fmtWithAdmin(count, [self adminCountPart]);
         }
     }
 
