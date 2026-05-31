@@ -26,7 +26,7 @@ static BOOL contactRespondsTo(id contact, NSString *selName) {
 
 static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right) {
     CGFloat titleWidth = 60;
-    CGFloat spacing = 6;
+    CGFloat spacing = 3;
 
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, titleWidth, kRowH)];
     l.text = left;
@@ -193,6 +193,16 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         }
     }
 
+    // 2.5. 公众号专用：MCOfficialAccountInfoMgr
+    if ([self.wxid hasPrefix:@"gh_"]) {
+        UIImage *oaImg = [self loadOfficialAccountAvatarSync];
+        if (oaImg) {
+            imageView.image = oaImg;
+            self.avatarImage = oaImg;
+            return;
+        }
+    }
+
     // 3. 网络下载（针对公众号等 MMHeadImageMgr 获取不到的情况）
     NSString *avatarURL = [self headImageURLFromContact];
     if (avatarURL.length) {
@@ -222,6 +232,62 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 }
 
 - (void)preloadAndRefreshAvatar {
+    __weak typeof(self) weakSelf = self;
+
+    Class oaInfoMgrClass = objc_getClass("MCOfficialAccountInfoMgr");
+    if (oaInfoMgrClass) {
+        Class serviceCenter = objc_getClass("MMServiceCenter");
+        if (serviceCenter) {
+            id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
+            id oaInfoMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), oaInfoMgrClass);
+            if (oaInfoMgr) {
+                NSArray *selNames = @[
+                    @"getOfficialAccountHeadImage:",
+                    @"headImageForUserName:",
+                    @"getBrandHeadImage:",
+                    @"getOfficialAccountInfo:",
+                ];
+                for (NSString *selName in selNames) {
+                    SEL sel = NSSelectorFromString(selName);
+                    if (![oaInfoMgr respondsToSelector:sel]) continue;
+
+                    id result = ((id (*)(id, SEL, id))objc_msgSend)(oaInfoMgr, sel, self.wxid);
+                    if (!result) continue;
+
+                    if ([result isKindOfClass:[UIImage class]]) {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            __strong typeof(weakSelf) strongSelf = weakSelf;
+                            if (strongSelf && strongSelf->_avatarView) {
+                                strongSelf->_avatarView.image = result;
+                                strongSelf.avatarImage = result;
+                            }
+                        });
+                        return;
+                    }
+                    if ([result isKindOfClass:[NSString class]] && [(NSString *)result length] > 0) {
+                        NSString *url = result;
+                        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                            NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:url]];
+                            if (data) {
+                                UIImage *img = [UIImage imageWithData:data];
+                                if (img) {
+                                    dispatch_async(dispatch_get_main_queue(), ^{
+                                        __strong typeof(weakSelf) strongSelf = weakSelf;
+                                        if (strongSelf && strongSelf->_avatarView) {
+                                            strongSelf->_avatarView.image = img;
+                                            strongSelf.avatarImage = img;
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     Class contactInfoVCClass = objc_getClass("ContactInfoViewController");
     if (contactInfoVCClass) {
         id vc = [[contactInfoVCClass alloc] init];
@@ -234,7 +300,6 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         }
     }
 
-    __weak typeof(self) weakSelf = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf || strongSelf.avatarImage) return;
@@ -275,6 +340,45 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
             }
         });
     });
+}
+
+- (UIImage *)loadOfficialAccountAvatarSync {
+    Class oaInfoMgrClass = objc_getClass("MCOfficialAccountInfoMgr");
+    if (!oaInfoMgrClass) return nil;
+
+    Class serviceCenter = objc_getClass("MMServiceCenter");
+    if (!serviceCenter) return nil;
+
+    id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
+    id oaInfoMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), oaInfoMgrClass);
+    if (!oaInfoMgr) return nil;
+
+    NSArray *selNames = @[
+        @"getOfficialAccountHeadImage:",
+        @"headImageForUserName:",
+        @"getBrandHeadImage:",
+        @"getOfficialAccountInfo:",
+    ];
+
+    for (NSString *selName in selNames) {
+        SEL sel = NSSelectorFromString(selName);
+        if (![oaInfoMgr respondsToSelector:sel]) continue;
+
+        id result = ((id (*)(id, SEL, id))objc_msgSend)(oaInfoMgr, sel, self.wxid);
+        if (!result) continue;
+
+        if ([result isKindOfClass:[UIImage class]]) {
+            return result;
+        }
+        if ([result isKindOfClass:[NSString class]] && [(NSString *)result length] > 0) {
+            NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:result]];
+            if (data) {
+                return [UIImage imageWithData:data];
+            }
+        }
+    }
+
+    return nil;
 }
 
 - (NSString *)headImageURLFromContact {
