@@ -1,9 +1,19 @@
 #import <UIKit/UIKit.h>
 
 @class BaseMsgContentViewController;
+@class MioChatAvatarTitleView;
+
+@protocol MioChatAvatarTitleViewDelegate <NSObject>
+- (void)avatarTitleView:(MioChatAvatarTitleView *)view
+   didTapAvatarWithContact:(id)contact
+                avatarImage:(UIImage *)avatar
+                sourceView:(UIView *)sourceView
+                      wxid:(NSString *)wxid;
+@end
 
 @interface MioChatAvatarTitleView : UIView
 
+@property (nonatomic, weak) id<MioChatAvatarTitleViewDelegate> delegate;
 @property (nonatomic, assign) BaseMsgContentViewController *chatController;
 @property (nonatomic, strong) UIImageView *leftAvatarView;
 @property (nonatomic, strong) UIImageView *rightAvatarView;
@@ -13,5 +23,6 @@
 
 - (void)updateAvatars;
 - (void)applyPositionOffset;
+- (void)updateFontSizes;
 
 @end

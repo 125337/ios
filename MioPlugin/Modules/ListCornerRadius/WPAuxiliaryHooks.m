@@ -2,44 +2,123 @@
 #import "../../Config/PluginConfig.h"
 #import <substrate.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
+
+static UIViewController *wp_findViewController(UIView *view) {
+    UIResponder *responder = view;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            return (UIViewController *)responder;
+        }
+        responder = [responder nextResponder];
+    }
+    return nil;
+}
+
+static UIColor *wp_defaultBgColor(BOOL dark) {
+    if (@available(iOS 13.0, *)) {
+        return dark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor];
+    }
+    return [UIColor whiteColor];
+}
 
 static void (*_orig_MFWebMMBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     _orig_MFWebMMBtn_layoutSubviews(self, _cmd);
+
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled) return;
 
-    UIView *view = (UIView *)self;
-    NSInteger radius = (NSInteger)config.listCellCornerRadius;
-    if (radius == 0) radius = 18;
-    view.layer.cornerRadius = radius;
-    view.layer.masksToBounds = YES;
+    UIViewController *vc = wp_findViewController((UIView *)self);
+    if (!vc) return;
+    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
+
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    }
+
+    UIColor *customBg = [config colorFromHex:isDark
+        ? config.listCellDarkBgColor : config.listCellLightBgColor];
+    ((UIView *)self).backgroundColor = customBg ?: wp_defaultBgColor(isDark);
 }
 
 static void (*_orig_MFBannerBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     _orig_MFBannerBtn_layoutSubviews(self, _cmd);
+
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled) return;
 
-    UIView *view = (UIView *)self;
-    NSInteger radius = (NSInteger)config.listCellCornerRadius;
-    if (radius == 0) radius = 18;
-    view.layer.cornerRadius = radius;
-    view.layer.masksToBounds = YES;
+    UIViewController *vc = wp_findViewController((UIView *)self);
+    if (!vc) return;
+    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
+
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    }
+
+    UIColor *customBg = [config colorFromHex:isDark
+        ? config.listCellDarkBgColor : config.listCellLightBgColor];
+    ((UIView *)self).backgroundColor = customBg ?: wp_defaultBgColor(isDark);
 }
 
 static void (*_orig_FoldView_layoutSubviews)(id, SEL);
 static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     _orig_FoldView_layoutSubviews(self, _cmd);
+
+    UIViewController *vc = wp_findViewController((UIView *)self);
+    if (!vc) return;
+    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
+
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled) return;
 
     UIView *view = (UIView *)self;
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
     if (radius == 0) radius = 18;
-    view.layer.cornerRadius = radius;
+
+    NSInteger margin = (NSInteger)config.listCellMargin;
+    if (margin == 0) margin = 9;
+
+    CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
+    if (view.frame.origin.x - 2.0 * margin <= screenWidth) {
+        UIView *superview = view.superview;
+        CGFloat superOriginX = superview ? superview.frame.origin.x : 0;
+        CGFloat targetX = (margin > superOriginX) ? margin - superOriginX : 0;
+        CGRect frame = view.frame;
+        frame.origin.x = targetX;
+        view.frame = frame;
+    }
+
+    if ([view respondsToSelector:@selector(isFolding)]) {
+        NSNumber *folding = ((id (*)(id, SEL))objc_msgSend)(view, @selector(isFolding));
+        if (folding && [folding boolValue]) {
+            view.layer.cornerRadius = radius;
+            view.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
+                                     | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+        } else {
+            view.layer.cornerRadius = radius;
+            view.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+        }
+    } else {
+        view.layer.cornerRadius = radius;
+        view.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
+                                 | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+    }
+
     view.layer.masksToBounds = YES;
+
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    }
+    UIColor *customBg = [config colorFromHex:isDark
+        ? config.listCellDarkBgColor : config.listCellLightBgColor];
+    view.backgroundColor = customBg ?: wp_defaultBgColor(isDark);
 }
 
 static void (*_orig_MMUIButton_layoutSubviews)(id, SEL);
@@ -59,7 +138,8 @@ static void _hooked_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
     if (config.listHideRightQRCode) {
         UIView *view = (UIView *)self;
-        NSString *className = NSStringFromClass([view class]);
+        Class cls = [view class];
+        NSString *className = NSStringFromClass(cls);
         if ([className containsString:@"QRCode"] || [className containsString:@"Qrcode"]) {
             view.hidden = YES;
             view.alpha = 0;
