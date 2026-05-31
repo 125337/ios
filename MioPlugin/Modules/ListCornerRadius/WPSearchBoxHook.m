@@ -2,6 +2,7 @@
 #import "../../Config/PluginConfig.h"
 #import <substrate.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
 
 static UIColor *WPSearchBoxDefaultBackgroundColor(BOOL dark) {
     if (@available(iOS 13.0, *)) {
