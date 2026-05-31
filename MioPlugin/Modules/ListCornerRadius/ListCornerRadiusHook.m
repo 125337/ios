@@ -121,7 +121,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
     UIColor *customBg = [config colorFromHex:isDark
         ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
+    if (customBg) {
+        ((UIView *)self).backgroundColor = customBg;
+    }
 
     NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
     if (cornerRadius == 0) cornerRadius = 18;
