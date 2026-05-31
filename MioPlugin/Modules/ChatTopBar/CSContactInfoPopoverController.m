@@ -153,11 +153,15 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 #pragma mark - 头像加载（四级回退策略）
 
 - (void)loadAvatarForImageView:(UIImageView *)imageView {
+    NSLog(@"[Mio-Avatar] loadAvatarForImageView START  wxid=%@", self.wxid);
+
     if (self.avatarImage) {
+        NSLog(@"[Mio-Avatar] ✅ 已有缓存 avatarImage");
         imageView.image = self.avatarImage;
         return;
     }
     if (!self.wxid.length) {
+        NSLog(@"[Mio-Avatar] ❌ wxid 为空，使用默认头像");
         imageView.image = [UIImage imageNamed:@"DefaultHead"];
         return;
     }
@@ -169,46 +173,61 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
             [NSString stringWithFormat:@"HBWechatHelper/UserHeadImage/%@.jpg", self.wxid]];
         UIImage *custom = [UIImage imageWithContentsOfFile:jpgPath];
         if (custom) {
+            NSLog(@"[Mio-Avatar] ✅ Step1-本地自定义头像命中");
             imageView.image = custom;
             self.avatarImage = custom;
             return;
         }
     }
 
+    NSLog(@"[Mio-Avatar] ⏳ Step2-MMHeadImageMgr...");
+
     // 2. 微信内部 MMHeadImageMgr
     Class serviceCenter = objc_getClass("MMServiceCenter");
     if (serviceCenter) {
         id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
         id headImageMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("MMHeadImageMgr"));
+        NSLog(@"[Mio-Avatar]   MMServiceCenter=%@ headImageMgr=%@ class=%@", center ? @"YES":@"NO", headImageMgr ? @"YES":@"NO", NSStringFromClass([headImageMgr class]));
         if (headImageMgr) {
             SEL getHeadSel = NSSelectorFromString(@"getHeadImage:withCategory:");
             if ([headImageMgr respondsToSelector:getHeadSel]) {
                 UIImage *wxImg = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr, getHeadSel, self.wxid, @0);
+                NSLog(@"[Mio-Avatar]   getHeadImage:withCategory: 结果=%@ size=%.0fx%.0f", wxImg ? @"有图":@"nil", wxImg.size.width, wxImg.size.height);
                 if (wxImg) {
                     imageView.image = wxImg;
                     self.avatarImage = wxImg;
                     return;
                 }
+            } else {
+                NSLog(@"[Mio-Avatar]   ❌ 不支持 getHeadImage:withCategory:");
             }
         }
+    } else {
+        NSLog(@"[Mio-Avatar]   ❌ MMServiceCenter 不存在");
     }
 
     // 2.5. 公众号专用：MCOfficialAccountInfoMgr
     if ([self.wxid hasPrefix:@"gh_"]) {
+        NSLog(@"[Mio-Avatar] ⏳ Step2.5-MCOfficialAccountInfoMgr (公众号)");
         UIImage *oaImg = [self loadOfficialAccountAvatarSync];
         if (oaImg) {
+            NSLog(@"[Mio-Avatar] ✅ MCOfficialAccountInfoMgr 成功 size=%.0fx%.0f", oaImg.size.width, oaImg.size.height);
             imageView.image = oaImg;
             self.avatarImage = oaImg;
             return;
+        } else {
+            NSLog(@"[Mio-Avatar] ❌ MCOfficialAccountInfoMgr 失败");
         }
     }
 
     // 3. 网络下载（针对公众号等 MMHeadImageMgr 获取不到的情况）
     NSString *avatarURL = [self headImageURLFromContact];
+    NSLog(@"[Mio-Avatar] ⏳ Step3-网络下载 URL=%@", avatarURL ?: @"(空)");
     if (avatarURL.length) {
         __weak UIImageView *weakImageView = imageView;
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:avatarURL]];
+            NSLog(@"[Mio-Avatar]   网络下载 data=%@ len=%lu", data ? @"YES":@"NO", (unsigned long)data.length);
             if (data) {
                 UIImage *downloaded = [UIImage imageWithData:data];
                 if (downloaded) {
@@ -228,18 +247,22 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         return;
     }
 
+    NSLog(@"[Mio-Avatar] ❌ 所有路径失败，使用默认头像");
     imageView.image = [UIImage imageNamed:@"DefaultHead"];
 }
 
 - (void)preloadAndRefreshAvatar {
+    NSLog(@"[Mio-Preload] preloadAndRefreshAvatar START wxid=%@", self.wxid);
     __weak typeof(self) weakSelf = self;
 
     Class oaInfoMgrClass = objc_getClass("MCOfficialAccountInfoMgr");
+    NSLog(@"[Mio-Preload]   MCOfficialAccountInfoMgr exists=%@", oaInfoMgrClass ? @"YES":@"NO");
     if (oaInfoMgrClass) {
         Class serviceCenter = objc_getClass("MMServiceCenter");
         if (serviceCenter) {
             id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
             id oaInfoMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), oaInfoMgrClass);
+            NSLog(@"[Mio-Preload]   oaInfoMgr=%@ class=%@", oaInfoMgr ? @"YES":@"NO", NSStringFromClass([oaInfoMgr class]));
             if (oaInfoMgr) {
                 NSArray *selNames = @[
                     @"getOfficialAccountHeadImage:",
@@ -249,12 +272,15 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
                 ];
                 for (NSString *selName in selNames) {
                     SEL sel = NSSelectorFromString(selName);
+                    NSLog(@"[Mio-Preload]     尝试 %@  respondsToSelector=%@", selName, [oaInfoMgr respondsToSelector:sel] ? @"YES":@"NO");
                     if (![oaInfoMgr respondsToSelector:sel]) continue;
 
                     id result = ((id (*)(id, SEL, id))objc_msgSend)(oaInfoMgr, sel, self.wxid);
+                    NSLog(@"[Mio-Preload]       返回值 type=%@ desc=%@", NSStringFromClass([result class]), [result description]);
                     if (!result) continue;
 
                     if ([result isKindOfClass:[UIImage class]]) {
+                        NSLog(@"[Mio-Preload]       ✅ 异步返回 UIImage size=%.0fx%.0f", [(UIImage *)result size].width, [(UIImage *)result size].height]);
                         dispatch_async(dispatch_get_main_queue(), ^{
                             __strong typeof(weakSelf) strongSelf = weakSelf;
                             if (strongSelf && strongSelf->_avatarView) {
@@ -266,8 +292,10 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
                     }
                     if ([result isKindOfClass:[NSString class]] && [(NSString *)result length] > 0) {
                         NSString *url = result;
+                        NSLog(@"[Mio-Preload]       异步返回 URL=%@ 开始下载", url);
                         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                             NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:url]];
+                            NSLog(@"[Mio-Preload]         下载结果 data=%@ len=%lu", data ? @"YES":@"NO", (unsigned long)data.length);
                             if (data) {
                                 UIImage *img = [UIImage imageWithData:data];
                                 if (img) {
@@ -282,12 +310,16 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
                             }
                         });
                         return;
+                    } else if ([result isKindOfClass:[NSDictionary class]]) {
+                        NSLog(@"[Mio-Preload]       返回 NSDictionary keys=%@ desc=%@", [(NSDictionary *)result allKeys], [result description]);
                     }
                 }
+                NSLog(@"[Mio-Preload]   ❌ MCOfficialAccountInfoMgr 所有选择器均失败");
             }
         }
     }
 
+    NSLog(@"[Mio-Preload] ⏳ 回退到 ContactInfoViewController 预加载...");
     Class contactInfoVCClass = objc_getClass("ContactInfoViewController");
     if (contactInfoVCClass) {
         id vc = [[contactInfoVCClass alloc] init];
@@ -343,7 +375,10 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 }
 
 - (UIImage *)loadOfficialAccountAvatarSync {
+    NSLog(@"[Mio-OA] loadOfficialAccountAvatarSync START wxid=%@", self.wxid);
+
     Class oaInfoMgrClass = objc_getClass("MCOfficialAccountInfoMgr");
+    NSLog(@"[Mio-OA]   MCOfficialAccountInfoMgr class=%@ exists=%@", oaInfoMgrClass ? NSStringFromClass(oaInfoMgrClass) : @"nil", oaInfoMgrClass ? @"YES":@"NO");
     if (!oaInfoMgrClass) return nil;
 
     Class serviceCenter = objc_getClass("MMServiceCenter");
@@ -351,6 +386,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 
     id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
     id oaInfoMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), oaInfoMgrClass);
+    NSLog(@"[Mio-OA]   oaInfoMgr=%@ class=%@", oaInfoMgr ? @"YES":@"NO", NSStringFromClass([oaInfoMgr class]));
     if (!oaInfoMgr) return nil;
 
     NSArray *selNames = @[
@@ -362,22 +398,33 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 
     for (NSString *selName in selNames) {
         SEL sel = NSSelectorFromString(selName);
+        NSLog(@"[Mio-OA]   尝试 %@  respondsToSelector=%@", selName, [oaInfoMgr respondsToSelector:sel] ? @"YES":@"NO");
         if (![oaInfoMgr respondsToSelector:sel]) continue;
 
         id result = ((id (*)(id, SEL, id))objc_msgSend)(oaInfoMgr, sel, self.wxid);
+        NSLog(@"[Mio-OA]     返回值 type=%@ desc=%@", NSStringFromClass([result class]), [result description]);
         if (!result) continue;
 
         if ([result isKindOfClass:[UIImage class]]) {
+            NSLog(@"[Mio-OA]     ✅ 返回 UIImage size=%.0fx%.0f", [(UIImage *)result size].width, [(UIImage *)result size].height);
             return result;
         }
         if ([result isKindOfClass:[NSString class]] && [(NSString *)result length] > 0) {
-            NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:result]];
+            NSString *urlStr = (NSString *)result;
+            NSLog(@"[Mio-OA]     返回 NSString URL=%@ len=%lu", urlStr, (unsigned long)[urlStr length]);
+            NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:urlStr]];
+            NSLog(@"[Mio-OA]       URL下载 data=%@ len=%lu", data ? @"YES":@"NO", (unsigned long)data.length);
             if (data) {
                 return [UIImage imageWithData:data];
             }
+        } else if ([result isKindOfClass:[NSDictionary class]]) {
+            NSLog(@"[Mio-OA]     返回 NSDictionary keys=%@ desc=%@", [(NSDictionary *)result allKeys], [result description]);
+        } else if ([result isKindOfClass:[NSData class]]) {
+            NSLog(@"[Mio-OA]     返回 NSData len=%lu", (unsigned long)[(NSData *)result length]);
         }
     }
 
+    NSLog(@"[Mio-OA] ❌ 所有选择器均未返回有效结果");
     return nil;
 }
 
