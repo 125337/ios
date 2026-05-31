@@ -85,12 +85,11 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     if (margin == 0) margin = 9;
 
     CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
-    if (view.frame.origin.x - 2.0 * margin <= screenWidth) {
-        UIView *superview = view.superview;
-        CGFloat superOriginX = superview ? superview.frame.origin.x : 0;
-        CGFloat targetX = (margin > superOriginX) ? margin - superOriginX : 0;
-        CGRect frame = view.frame;
-        frame.origin.x = targetX;
+    CGRect frame = view.frame;
+    CGFloat currentOriginX = frame.origin.x;
+    if (currentOriginX - 2.0 * margin <= screenWidth) {
+        frame.origin.x = (CGFloat)margin;
+        frame.size.width = frame.size.width - 2.0 * ((CGFloat)margin);
         view.frame = frame;
     }
 
@@ -109,8 +108,6 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
         view.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
                                  | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
-
-    view.layer.masksToBounds = YES;
 
     BOOL isDark = NO;
     if (@available(iOS 13.0, *)) {
