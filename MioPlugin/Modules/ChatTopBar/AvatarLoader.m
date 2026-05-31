@@ -153,14 +153,14 @@
     if (!dir) return nil;
 
     NSString *gifPath = [dir stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"HBWechatHelper/UserHeadImage/%@.gif", wxid]];
+        [NSString stringWithFormat:@"MioHelper/UserHeadImage/%@.gif", wxid]];
     if ([[NSFileManager defaultManager] fileExistsAtPath:gifPath]) {
         NSData *data = [NSData dataWithContentsOfFile:gifPath];
         return [self animatedImageFromGIFData:data];
     }
 
     NSString *jpgPath = [dir stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"HBWechatHelper/UserHeadImage/%@.jpg", wxid]];
+        [NSString stringWithFormat:@"MioHelper/UserHeadImage/%@.jpg", wxid]];
     if ([[NSFileManager defaultManager] fileExistsAtPath:jpgPath]) {
         NSData *data = [NSData dataWithContentsOfFile:jpgPath];
         return [UIImage imageWithData:data];
