@@ -15,15 +15,6 @@ static UIViewController *wp_findViewController(UIView *view) {
     return nil;
 }
 
-static UIColor *wp_defaultBgColor(BOOL dark) {
-    if (@available(iOS 13.0, *)) {
-        return dark
-            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
-            : [UIColor whiteColor];
-    }
-    return [UIColor whiteColor];
-}
-
 static void (*_orig_MFWebMMBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     _orig_MFWebMMBtn_layoutSubviews(self, _cmd);
@@ -42,7 +33,9 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
 
     UIColor *customBg = [config colorFromHex:isDark
         ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    ((UIView *)self).backgroundColor = customBg ?: wp_defaultBgColor(isDark);
+    if (customBg) {
+        ((UIView *)self).backgroundColor = customBg;
+    }
 }
 
 static void (*_orig_MFBannerBtn_layoutSubviews)(id, SEL);
@@ -63,7 +56,9 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
 
     UIColor *customBg = [config colorFromHex:isDark
         ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    ((UIView *)self).backgroundColor = customBg ?: wp_defaultBgColor(isDark);
+    if (customBg) {
+        ((UIView *)self).backgroundColor = customBg;
+    }
 }
 
 static void (*_orig_FoldView_layoutSubviews)(id, SEL);
@@ -115,7 +110,9 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     }
     UIColor *customBg = [config colorFromHex:isDark
         ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    view.backgroundColor = customBg ?: wp_defaultBgColor(isDark);
+    if (customBg) {
+        view.backgroundColor = customBg;
+    }
 }
 
 static void (*_orig_MMUIButton_layoutSubviews)(id, SEL);
@@ -124,6 +121,10 @@ static void _hooked_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled) return;
+
+    UIViewController *vc = wp_findViewController((UIView *)self);
+    if (!vc) return;
+    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
     if (config.listMediaCornerEnabled) {
         UIView *view = (UIView *)self;

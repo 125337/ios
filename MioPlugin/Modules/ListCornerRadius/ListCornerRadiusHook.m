@@ -7,17 +7,6 @@
 
 static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
 
-static UIColor *WPCellDefaultBackgroundColor(BOOL dark) {
-    if (@available(iOS 13.0, *)) {
-        if (dark) {
-            return [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0];
-        } else {
-            return [UIColor whiteColor];
-        }
-    }
-    return [UIColor whiteColor];
-}
-
 static UIViewController *findParentViewController(UIView *view) {
     UIResponder *responder = view;
     while (responder) {
@@ -25,35 +14,6 @@ static UIViewController *findParentViewController(UIView *view) {
             return (UIViewController *)responder;
         }
         responder = [responder nextResponder];
-    }
-    return nil;
-}
-
-static UIColor *WPColorFromHex(NSString *hex) {
-    if (!hex || hex.length == 0) return nil;
-    NSString *clean = [hex stringByReplacingOccurrencesOfString:@"#" withString:@""];
-    if (clean.length < 6) return nil;
-    unsigned int r = 0, g = 0, b = 0, a = 255;
-    [[NSScanner scannerWithString:[clean substringWithRange:NSMakeRange(0, 2)]] scanHexInt:&r];
-    [[NSScanner scannerWithString:[clean substringWithRange:NSMakeRange(2, 2)]] scanHexInt:&g];
-    [[NSScanner scannerWithString:[clean substringWithRange:NSMakeRange(4, 2)]] scanHexInt:&b];
-    if (clean.length >= 8) {
-        [[NSScanner scannerWithString:[clean substringWithRange:NSMakeRange(6, 2)]] scanHexInt:&a];
-    }
-    return [UIColor colorWithRed:r / 255.0 green:g / 255.0 blue:b / 255.0 alpha:a / 255.0];
-}
-
-static UIColor *WPLoadDynamicColor(NSString *lightKey, NSString *darkKey, BOOL isDark) {
-    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    NSString *hex = nil;
-    if (isDark) {
-        hex = [d stringForKey:darkKey];
-    }
-    if (!hex || hex.length == 0) {
-        hex = [d stringForKey:lightKey];
-    }
-    if (hex && hex.length > 0) {
-        return WPColorFromHex(hex);
     }
     return nil;
 }
@@ -114,41 +74,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     UIViewController *vc = findParentViewController((UIView *)self);
     if (!vc) return;
     NSString *className = NSStringFromClass([vc class]);
-
-    BOOL isDark = NO;
-    if (@available(iOS 13.0, *)) {
-        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-    }
-
-    static NSSet *bgSkipList = nil;
-    static dispatch_once_t onceBgToken;
-    dispatch_once(&onceBgToken, ^{
-        bgSkipList = [NSSet setWithObjects:
-            @"WCTimeLineViewController",
-            @"WCAccountLoginUsersViewController",
-            @"SessionSelectController",
-            @"WCListViewController",
-            @"BrandNotificationListViewController",
-            @"BrandNewSessionViewController",
-            @"BaseMsgContentViewController",
-            @"BraceletRankProfileViewController",
-            @"BraceletRankViewController",
-            @"WCRedEnvelopesRedEnvelopesDetailViewController",
-            @"MsgRecordDetailViewController",
-            @"ChatRoomInfoViewController",
-            @"ContactInfoViewController",
-            @"AddFriendEntryViewController",
-            @"AddContactToChatRoomViewController",
-            @"SayHelloViewController",
-            @"FTSHomeViewController",
-            @"MMFinderPivotLiveViewController",
-            @"WCSearchController",
-            nil];
-    });
-
-    if (![bgSkipList containsObject:className]) {
-        ((UIView *)self).backgroundColor = WPCellDefaultBackgroundColor(isDark);
-    }
 
     BOOL isFTSHome = [className isEqualToString:@"FTSHomeViewController"];
 
@@ -390,11 +315,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         borderColor = isDark
             ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
             : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
-    }
-
-    UIColor *bgColor = [config colorFromHex:isDark ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    if (bgColor) {
-        cell.backgroundColor = bgColor;
     }
 
     NSArray *sublayers = [cell.layer.sublayers copy];
