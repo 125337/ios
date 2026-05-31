@@ -73,18 +73,22 @@ static UIColor *wp_cellDefaultBgColor(BOOL isDark) {
 }
 
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
-    if (_orig_MMTableViewCell_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.listCornerRadiusEnabled) {
+        if (_orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+        return;
     }
 
-    PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled) return;
-
     UIViewController *vc = findParentViewController((UIView *)self);
-    if (!vc) return;
+    if (!vc) {
+        if (_orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
     NSString *className = NSStringFromClass([vc class]);
-
-    BOOL isFTSHome = [className isEqualToString:@"FTSHomeViewController"];
 
     static NSSet *cornerExcludeList = nil;
     static dispatch_once_t onceCornerToken;
@@ -112,24 +116,14 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     });
 
     if ([cornerExcludeList containsObject:className]) {
+        if (_orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
         return;
     }
 
-    BOOL isDark = NO;
-    if (@available(iOS 13.0, *)) {
-        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-    }
-    UIColor *customBg = [config colorFromHex:isDark
-        ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
-
-    NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
-    if (cornerRadius == 0) cornerRadius = 18;
-
     NSInteger margin = (NSInteger)config.listCellMargin;
     if (margin == 0) margin = 9;
-
-    BOOL isContacts = [className isEqualToString:@"ContactsViewController"];
 
     UIView *cellView = (UIView *)self;
     UIView *superview = cellView.superview;
@@ -143,6 +137,24 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             cellView.frame = frame;
         }
     }
+
+    if (_orig_MMTableViewCell_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+    }
+
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    }
+    UIColor *customBg = [config colorFromHex:isDark
+        ? config.listCellDarkBgColor : config.listCellLightBgColor];
+    ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
+
+    NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
+    if (cornerRadius == 0) cornerRadius = 18;
+
+    BOOL isContacts = [className isEqualToString:@"ContactsViewController"];
+    BOOL isFTSHome = [className isEqualToString:@"FTSHomeViewController"];
 
     UIView *parent = cellView.superview;
     UITableView *tableView = nil;
