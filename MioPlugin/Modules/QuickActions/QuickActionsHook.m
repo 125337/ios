@@ -8,7 +8,7 @@
 #import <substrate.h>
 
 static IMP orig_trailingSwipeActionsConfig = NULL;
-static BOOL (*orig_gestureRecognizerShouldBegin)(id, SEL, id) = NULL;
+static BOOL (*orig_canEditRowAtIndexPath)(id, SEL, id, id) = NULL;
 
 static id getSessionInfo(id self, NSIndexPath *indexPath) {
     if ([self respondsToSelector:@selector(getSessionInfoAtIndexPath:)]) {
@@ -154,6 +154,16 @@ static void handlePin(id contact, NSString *userName) {
     [feedback impactOccurred];
 }
 
+static BOOL replaced_canEditRowAtIndexPath(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
+    if ([PluginConfig shared].quickActionsEnabled) {
+        return YES;
+    }
+    if (orig_canEditRowAtIndexPath) {
+        return orig_canEditRowAtIndexPath(self, _cmd, tableView, indexPath);
+    }
+    return NO;
+}
+
 static id replaced_trailingSwipeActionsConfig(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
     id origConfig = nil;
     if (orig_trailingSwipeActionsConfig) {
@@ -234,40 +244,6 @@ static id replaced_trailingSwipeActionsConfig(id self, SEL _cmd, UITableView *ta
     return [UISwipeActionsConfiguration configurationWithActions:merged];
 }
 
-static BOOL replaced_gestureRecognizerShouldBegin(id self, SEL _cmd, UIGestureRecognizer *gesture) {
-    if (![PluginConfig shared].quickActionsEnabled) {
-        if (orig_gestureRecognizerShouldBegin) {
-            return orig_gestureRecognizerShouldBegin(self, _cmd, gesture);
-        }
-        return YES;
-    }
-
-    if ([gesture isKindOfClass:[UISwipeGestureRecognizer class]]) {
-        UISwipeGestureRecognizerDirection dir = ((UISwipeGestureRecognizer *)gesture).direction;
-        UIUserInterfaceLayoutDirection layoutDir = [UIApplication sharedApplication].userInterfaceLayoutDirection;
-        BOOL isRTL = (layoutDir == UIUserInterfaceLayoutDirectionRightToLeft);
-
-        BOOL isLeading = isRTL ? (dir == UISwipeGestureRecognizerDirectionLeft)
-                               : (dir == UISwipeGestureRecognizerDirectionRight);
-        BOOL isTrailing = isRTL ? (dir == UISwipeGestureRecognizerDirectionRight)
-                                : (dir == UISwipeGestureRecognizerDirectionLeft);
-
-        if (isLeading) {
-            WPLog(@"QuickActions", @"[DEBUG] blocking leading swipe (dir=%lu, RTL=%d)", (unsigned long)dir, isRTL);
-            return NO;
-        }
-        if (isTrailing) {
-            WPLog(@"QuickActions", @"[DEBUG] allowing trailing swipe (dir=%lu, RTL=%d)", (unsigned long)dir, isRTL);
-            return YES;
-        }
-    }
-
-    if (orig_gestureRecognizerShouldBegin) {
-        return orig_gestureRecognizerShouldBegin(self, _cmd, gesture);
-    }
-    return YES;
-}
-
 @implementation QuickActionsHook
 
 + (void)install {
@@ -316,19 +292,19 @@ static BOOL replaced_gestureRecognizerShouldBegin(id self, SEL _cmd, UIGestureRe
         }
     }
 
-    SEL grSel = @selector(gestureRecognizerShouldBegin:);
-    if ([targetClass instancesRespondToSelector:grSel]) {
-        MSHookMessageEx(targetClass, grSel,
-            (IMP)replaced_gestureRecognizerShouldBegin,
-            (IMP *)&orig_gestureRecognizerShouldBegin);
-        WPLog(@"QuickActions", @"[INFO] hooked gestureRecognizerShouldBegin on %@", targetClass);
+    SEL canEditSel = @selector(tableView:canEditRowAtIndexPath:);
+    if ([targetClass instancesRespondToSelector:canEditSel]) {
+        MSHookMessageEx(targetClass, canEditSel,
+            (IMP)replaced_canEditRowAtIndexPath,
+            (IMP *)&orig_canEditRowAtIndexPath);
+        WPLog(@"QuickActions", @"[INFO] hooked canEditRowAtIndexPath on %@", targetClass);
     } else {
-        BOOL added = class_addMethod(targetClass, grSel,
-            (IMP)replaced_gestureRecognizerShouldBegin, "B@:@");
+        IMP impl = (IMP)replaced_canEditRowAtIndexPath;
+        BOOL added = class_addMethod(targetClass, canEditSel, impl, "B@:@@");
         if (added) {
-            WPLog(@"QuickActions", @"[INFO] class_addMethod gestureRecognizerShouldBegin on %@ OK", targetClass);
+            WPLog(@"QuickActions", @"[INFO] class_addMethod canEditRowAtIndexPath on %@ OK", targetClass);
         } else {
-            WPLog(@"QuickActions", @"[ERR] class_addMethod gestureRecognizerShouldBegin on %@ FAILED", targetClass);
+            WPLog(@"QuickActions", @"[ERR] class_addMethod canEditRowAtIndexPath on %@ FAILED", targetClass);
         }
     }
 }
