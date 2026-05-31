@@ -400,9 +400,61 @@
     UIImage *custom = [self loadCustomAvatarForWxid:wxid];
     if (custom) return custom;
 
-    // 2. Try WeChat native avatar
+    // 2. For official accounts, MMHeadImageMgr returns placeholder only → use URL download
+    if ([wxid hasPrefix:@"gh_"]) {
+        NSString *avatarURL = [self getOfficialAccountAvatarURL:wxid];
+        WPLog(@"Mio-TopBar", @"公众号 %@ URL=%@", wxid, avatarURL ?: @"(空)");
+        if (avatarURL.length) {
+            NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:avatarURL]];
+            WPLog(@"Mio-TopBar", @"  URL下载 data=%@ len=%lu", data ? @"YES":@"NO", (unsigned long)data.length);
+            if (data) {
+                UIImage *img = [UIImage imageWithData:data];
+                if (img) {
+                    WPLog(@"Mio-TopBar", @"  ✅ 公众号头像URL下载成功 size=%.0fx%.0f", img.size.width, img.size.height);
+                    return img;
+                }
+            }
+        }
+        WPLog(@"Mio-TopBar", @"  ❌ 公众号URL下载失败，回退到MMHeadImageMgr");
+    }
+
+    // 3. Try WeChat native avatar
     UIImage *native = [self loadWeChatAvatarForWxid:wxid];
     if (native) return native;
+
+    return nil;
+}
+
+- (NSString *)getOfficialAccountAvatarURL:(NSString *)wxid {
+    id contact = [self getContactForWxid:wxid];
+    if (!contact) return nil;
+
+    SEL headHDImgUrlSel = NSSelectorFromString(@"m_nsHeadHDImgUrl");
+    if ([contact respondsToSelector:headHDImgUrlSel]) {
+        NSString *url = ((id (*)(id, SEL))objc_msgSend)(contact, headHDImgUrlSel);
+        if (url.length) return url;
+    }
+
+    SEL headImgUrlSel = NSSelectorFromString(@"m_nsHeadImgUrl");
+    if ([contact respondsToSelector:headImgUrlSel]) {
+        NSString *url = ((id (*)(id, SEL))objc_msgSend)(contact, headImgUrlSel);
+        if (url.length) return url;
+    }
+
+    return nil;
+}
+
+- (id)getContactForWxid:(NSString *)wxid {
+    Class serviceCenter = objc_getClass("MMServiceCenter");
+    if (!serviceCenter) return nil;
+
+    id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
+    id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
+    if (!contactMgr) return nil;
+
+    if ([contactMgr respondsToSelector:@selector(getContactByUserName:)]) {
+        return ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getContactByUserName:), wxid);
+    }
 
     return nil;
 }
