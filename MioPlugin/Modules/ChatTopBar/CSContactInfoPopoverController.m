@@ -59,6 +59,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 
 @implementation CSContactInfoPopoverController {
     UIScrollView *_scrollView;
+    UIImageView *_avatarView;
 }
 
 - (instancetype)initWithContact:(id)contact avatar:(UIImage *)avatar {
@@ -96,6 +97,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
             y = [self buildGroupInfoCardAtY:y width:w];
         } else if ([self.wxid hasPrefix:@"gh_"]) {
             y = [self buildOfficialAccountInfoCardAtY:y width:w];
+            [self preloadAndRefreshAvatar];
         } else {
             y = [self buildBasicInfoCardAtY:y width:w];
         }
@@ -120,6 +122,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     avatarView.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1.0];
     avatarView.userInteractionEnabled = YES;
     avatarView.tag = 1000;
+    _avatarView = avatarView;
     [self loadAvatarForImageView:avatarView];
     UITapGestureRecognizer *avatarTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(onAvatarTapped:)];
     [avatarView addGestureRecognizer:avatarTap];
@@ -216,6 +219,62 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     }
 
     imageView.image = [UIImage imageNamed:@"DefaultHead"];
+}
+
+- (void)preloadAndRefreshAvatar {
+    Class contactInfoVCClass = objc_getClass("ContactInfoViewController");
+    if (contactInfoVCClass) {
+        id vc = [[contactInfoVCClass alloc] init];
+        if (vc) {
+            SEL setContactSel = NSSelectorFromString(@"setM_contact:");
+            if ([vc respondsToSelector:setContactSel]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(vc, setContactSel, self.contact);
+            }
+            ((void (*)(id, SEL))objc_msgSend)(vc, @selector(viewDidLoad));
+        }
+    }
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || strongSelf.avatarImage) return;
+
+        Class serviceCenter = objc_getClass("MMServiceCenter");
+        if (serviceCenter) {
+            id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
+            id headImageMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("MMHeadImageMgr"));
+            if (headImageMgr) {
+                SEL getHeadSel = NSSelectorFromString(@"getHeadImage:withCategory:");
+                if ([headImageMgr respondsToSelector:getHeadSel]) {
+                    UIImage *wxImg = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr, getHeadSel, strongSelf.wxid, @0);
+                    if (wxImg) {
+                        strongSelf->_avatarView.image = wxImg;
+                        strongSelf.avatarImage = wxImg;
+                        return;
+                    }
+                }
+            }
+        }
+
+        NSString *avatarURL = [strongSelf headImageURLFromContact];
+        if (!avatarURL.length) return;
+
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:avatarURL]];
+            if (data) {
+                UIImage *downloaded = [UIImage imageWithData:data];
+                if (downloaded) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        __strong typeof(weakSelf) innerSelf = weakSelf;
+                        if (innerSelf && innerSelf->_avatarView) {
+                            innerSelf->_avatarView.image = downloaded;
+                            innerSelf.avatarImage = downloaded;
+                        }
+                    });
+                }
+            }
+        });
+    });
 }
 
 - (NSString *)headImageURLFromContact {
@@ -459,6 +518,13 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 }
 
 - (NSString *)groupMemberCountValue {
+    NSString *(^fmtWithAdmin)(NSUInteger, NSString *) = ^(NSUInteger total, NSString *adminStr) {
+        if (adminStr.length) {
+            return [NSString stringWithFormat:@"群人员%lu人 %@", (unsigned long)total, adminStr];
+        }
+        return [NSString stringWithFormat:@"%lu 人", (unsigned long)total];
+    };
+
     Class serviceCenter = objc_getClass("MMServiceCenter");
     if (serviceCenter) {
         id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
@@ -466,7 +532,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
             unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), self.contact);
             if (count > 0) {
-                return [NSString stringWithFormat:@"%u 人", count];
+                return fmtWithAdmin(count, [self adminCountPart]);
             }
         }
     }
@@ -477,12 +543,25 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         if (memList && [memList isKindOfClass:[NSString class]]) {
             NSArray *members = [(NSString *)memList componentsSeparatedByString:@";"];
             if (members.count > 0) {
-                return [NSString stringWithFormat:@"%lu 人", (unsigned long)members.count];
+                return fmtWithAdmin(members.count, [self adminCountPart]);
             }
         }
     }
 
     return @"未知";
+}
+
+- (NSString *)adminCountPart {
+    SEL adminListSel = NSSelectorFromString(@"m_nsChatRoomAdminList");
+    if (![self.contact respondsToSelector:adminListSel]) return nil;
+
+    id adminList = ((id (*)(id, SEL))objc_msgSend)(self.contact, adminListSel);
+    if (!adminList || ![adminList isKindOfClass:[NSString class]]) return nil;
+
+    NSArray *admins = [(NSString *)adminList componentsSeparatedByString:@";"];
+    if (admins.count == 0) return nil;
+
+    return [NSString stringWithFormat:@"管理员%lu人", (unsigned long)admins.count];
 }
 
 - (NSString *)verifyStatusValue {

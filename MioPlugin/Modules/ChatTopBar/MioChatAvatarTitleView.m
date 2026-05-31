@@ -612,17 +612,6 @@
         avatar = self.rightAvatarView.image;
     }
 
-    NSString *wxid = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
-
-    if ([wxid hasPrefix:@"gh_"]) {
-        [self silentLoadContactExtInfo:contact];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            UIImage *updatedAvatar = [self loadAvatarWithPriorityForWxid:wxid];
-            [self doPresentPopoverWithContact:contact avatar:updatedAvatar ?: avatar sourceView:sourceView];
-        });
-        return;
-    }
-
     [self doPresentPopoverWithContact:contact avatar:avatar sourceView:sourceView];
 }
 
