@@ -7,8 +7,11 @@
 #import <UIKit/UIKit.h>
 #import <substrate.h>
 
-static IMP orig_trailingSwipeActionsConfig = NULL;
+static __unused IMP orig_trailingSwipeActionsConfig = NULL;
+static __unused IMP orig_leadingSwipeActionsConfig = NULL;
 static BOOL (*orig_canEditRowAtIndexPath)(id, SEL, id, id) = NULL;
+static void (*orig_viewDidAppear)(id, SEL, BOOL) = NULL;
+static BOOL s_methodsInstalled = NO;
 
 static id getSessionInfo(id self, NSIndexPath *indexPath) {
     if ([self respondsToSelector:@selector(getSessionInfoAtIndexPath:)]) {
@@ -165,19 +168,16 @@ static BOOL replaced_canEditRowAtIndexPath(id self, SEL _cmd, UITableView *table
 }
 
 static id replaced_trailingSwipeActionsConfig(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
-    id origConfig = nil;
-    if (orig_trailingSwipeActionsConfig) {
-        origConfig = ((id (*)(id, SEL, id, id))orig_trailingSwipeActionsConfig)(self, _cmd, tableView, indexPath);
-    }
-
     if (![PluginConfig shared].quickActionsEnabled) {
-        return origConfig;
+        if (orig_trailingSwipeActionsConfig) {
+            return ((id (*)(id, SEL, id, id))orig_trailingSwipeActionsConfig)(self, _cmd, tableView, indexPath);
+        }
+        return nil;
     }
 
     id sessionInfo = getSessionInfo(self, indexPath);
     if (!sessionInfo) {
-        WPLog(@"QuickActions", @"[DEBUG] no sessionInfo for indexPath %@", indexPath);
-        return origConfig;
+        return nil;
     }
 
     NSString *userName = nil;
@@ -185,10 +185,10 @@ static id replaced_trailingSwipeActionsConfig(id self, SEL _cmd, UITableView *ta
     if ([sessionInfo respondsToSelector:userNameSel]) {
         userName = ((id (*)(id, SEL))objc_msgSend)(sessionInfo, userNameSel);
     }
-    if (!userName || userName.length == 0) return origConfig;
+    if (!userName || userName.length == 0) return nil;
 
     id contact = WXGetContactForWxid(userName);
-    if (!contact) return origConfig;
+    if (!contact) return nil;
 
     BOOL isTop = NO;
     SEL isTopSel = NSSelectorFromString(@"isContactSessionTop");
@@ -228,67 +228,58 @@ static id replaced_trailingSwipeActionsConfig(id self, SEL _cmd, UITableView *ta
         }];
     pinAction.backgroundColor = [UIColor redColor];
 
-    NSArray *ourActions = @[muteAction, remarkAction, pinAction];
-    NSArray *origActions = @[];
-    if (origConfig) {
-        SEL actionsSel = NSSelectorFromString(@"actions");
-        if ([origConfig respondsToSelector:actionsSel]) {
-            NSArray *acts = ((id (*)(id, SEL))objc_msgSend)(origConfig, actionsSel);
-            if (acts) origActions = acts;
-        }
-    }
-
-    NSMutableArray *merged = [NSMutableArray arrayWithArray:ourActions];
-    [merged addObjectsFromArray:origActions];
-
-    return [UISwipeActionsConfiguration configurationWithActions:merged];
+    return [UISwipeActionsConfiguration configurationWithActions:@[muteAction, remarkAction, pinAction]];
 }
 
-@implementation QuickActionsHook
+static id replaced_leadingSwipeActionsConfig(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
+    if ([PluginConfig shared].quickActionsEnabled) {
+        return [UISwipeActionsConfiguration configurationWithActions:@[]];
+    }
+    if (orig_leadingSwipeActionsConfig) {
+        return ((id (*)(id, SEL, id, id))orig_leadingSwipeActionsConfig)(self, _cmd, tableView, indexPath);
+    }
+    return nil;
+}
 
-+ (void)install {
-    Class newClass = objc_getClass("NewMainFrameViewController");
-    Class mmClass = objc_getClass("MMMainFrameViewController");
-    Class targetClass = newClass ?: mmClass;
-
+static void installMethodsOnClass(Class targetClass) {
+    if (s_methodsInstalled) return;
     if (!targetClass) {
-        WPLog(@"QuickActions", @"[ERR] No target class found");
+        WPLog(@"QuickActions", @"[ERR] targetClass is nil");
         return;
     }
 
-    SEL targetSel = @selector(tableView:trailingSwipeActionsConfigurationForRowAtIndexPath:);
+    s_methodsInstalled = YES;
+    WPLog(@"QuickActions", @"[INFO] installing methods on class: %@", NSStringFromClass(targetClass));
 
-    if (newClass) {
-        if ([newClass instancesRespondToSelector:targetSel]) {
-            MSHookMessageEx(newClass, targetSel,
-                (IMP)replaced_trailingSwipeActionsConfig,
-                &orig_trailingSwipeActionsConfig);
-            WPLog(@"QuickActions", @"[INFO] hooked on NewMainFrameViewController (method exists)");
+    SEL trailingSel = @selector(tableView:trailingSwipeActionsConfigurationForRowAtIndexPath:);
+    if ([targetClass instancesRespondToSelector:trailingSel]) {
+        MSHookMessageEx(targetClass, trailingSel,
+            (IMP)replaced_trailingSwipeActionsConfig,
+            &orig_trailingSwipeActionsConfig);
+        WPLog(@"QuickActions", @"[INFO] hooked trailingSwipeActions on %@ (method exists)", NSStringFromClass(targetClass));
+    } else {
+        IMP impl = (IMP)replaced_trailingSwipeActionsConfig;
+        BOOL added = class_addMethod(targetClass, trailingSel, impl, "@@:@@");
+        if (added) {
+            WPLog(@"QuickActions", @"[INFO] class_addMethod trailingSwipeActions on %@ OK", NSStringFromClass(targetClass));
         } else {
-            IMP impl = (IMP)replaced_trailingSwipeActionsConfig;
-            BOOL added = class_addMethod(newClass, targetSel, impl, "@@:@@");
-            if (added) {
-                WPLog(@"QuickActions", @"[INFO] class_addMethod on NewMainFrameViewController OK");
-            } else {
-                WPLog(@"QuickActions", @"[ERR] class_addMethod on NewMainFrameViewController FAILED");
-            }
+            WPLog(@"QuickActions", @"[ERR] class_addMethod trailingSwipeActions on %@ FAILED", NSStringFromClass(targetClass));
         }
     }
 
-    if (mmClass && mmClass != newClass) {
-        if ([mmClass instancesRespondToSelector:targetSel]) {
-            MSHookMessageEx(mmClass, targetSel,
-                (IMP)replaced_trailingSwipeActionsConfig,
-                &orig_trailingSwipeActionsConfig);
-            WPLog(@"QuickActions", @"[INFO] hooked on MMMainFrameViewController (method exists)");
+    SEL leadingSel = @selector(tableView:leadingSwipeActionsConfigurationForRowAtIndexPath:);
+    if ([targetClass instancesRespondToSelector:leadingSel]) {
+        MSHookMessageEx(targetClass, leadingSel,
+            (IMP)replaced_leadingSwipeActionsConfig,
+            &orig_leadingSwipeActionsConfig);
+        WPLog(@"QuickActions", @"[INFO] hooked leadingSwipeActions on %@ (method exists)", NSStringFromClass(targetClass));
+    } else {
+        IMP impl = (IMP)replaced_leadingSwipeActionsConfig;
+        BOOL added = class_addMethod(targetClass, leadingSel, impl, "@@:@@");
+        if (added) {
+            WPLog(@"QuickActions", @"[INFO] class_addMethod leadingSwipeActions on %@ OK", NSStringFromClass(targetClass));
         } else {
-            IMP impl = (IMP)replaced_trailingSwipeActionsConfig;
-            BOOL added = class_addMethod(mmClass, targetSel, impl, "@@:@@");
-            if (added) {
-                WPLog(@"QuickActions", @"[INFO] class_addMethod on MMMainFrameViewController OK");
-            } else {
-                WPLog(@"QuickActions", @"[ERR] class_addMethod on MMMainFrameViewController FAILED");
-            }
+            WPLog(@"QuickActions", @"[ERR] class_addMethod leadingSwipeActions on %@ FAILED", NSStringFromClass(targetClass));
         }
     }
 
@@ -297,15 +288,72 @@ static id replaced_trailingSwipeActionsConfig(id self, SEL _cmd, UITableView *ta
         MSHookMessageEx(targetClass, canEditSel,
             (IMP)replaced_canEditRowAtIndexPath,
             (IMP *)&orig_canEditRowAtIndexPath);
-        WPLog(@"QuickActions", @"[INFO] hooked canEditRowAtIndexPath on %@", targetClass);
+        WPLog(@"QuickActions", @"[INFO] hooked canEditRowAtIndexPath on %@", NSStringFromClass(targetClass));
     } else {
         IMP impl = (IMP)replaced_canEditRowAtIndexPath;
         BOOL added = class_addMethod(targetClass, canEditSel, impl, "B@:@@");
         if (added) {
-            WPLog(@"QuickActions", @"[INFO] class_addMethod canEditRowAtIndexPath on %@ OK", targetClass);
+            WPLog(@"QuickActions", @"[INFO] class_addMethod canEditRowAtIndexPath on %@ OK", NSStringFromClass(targetClass));
         } else {
-            WPLog(@"QuickActions", @"[ERR] class_addMethod canEditRowAtIndexPath on %@ FAILED", targetClass);
+            WPLog(@"QuickActions", @"[ERR] class_addMethod canEditRowAtIndexPath on %@ FAILED", NSStringFromClass(targetClass));
         }
+    }
+}
+
+static void replaced_viewDidAppear(id self, SEL _cmd, BOOL animated) {
+    if (orig_viewDidAppear) {
+        orig_viewDidAppear(self, _cmd, animated);
+    }
+
+    if (![PluginConfig shared].quickActionsEnabled) return;
+
+    if (s_methodsInstalled) return;
+
+    id tableView = nil;
+    @try {
+        tableView = [self valueForKey:@"m_tableView"];
+    } @catch (NSException *e) {}
+
+    if (!tableView) {
+        WPLog(@"QuickActions", @"[DEBUG] no m_tableView found on %@", NSStringFromClass([self class]));
+        return;
+    }
+
+    id delegate = [tableView delegate];
+    if (!delegate) {
+        WPLog(@"QuickActions", @"[DEBUG] no delegate on tableView");
+        return;
+    }
+
+    Class delegateClass = [delegate class];
+    WPLog(@"QuickActions", @"[INFO] found tableView delegate class: %@", NSStringFromClass(delegateClass));
+
+    installMethodsOnClass(delegateClass);
+}
+
+@implementation QuickActionsHook
+
++ (void)install {
+    Class newClass = objc_getClass("NewMainFrameViewController");
+    if (!newClass) {
+        newClass = objc_getClass("MMMainFrameViewController");
+    }
+
+    if (!newClass) {
+        WPLog(@"QuickActions", @"[ERR] No main frame class found");
+        return;
+    }
+
+    WPLog(@"QuickActions", @"[INFO] hooking viewDidAppear on %@", NSStringFromClass(newClass));
+
+    SEL appearSel = @selector(viewDidAppear:);
+    if ([newClass instancesRespondToSelector:appearSel]) {
+        MSHookMessageEx(newClass, appearSel,
+            (IMP)replaced_viewDidAppear,
+            (IMP *)&orig_viewDidAppear);
+        WPLog(@"QuickActions", @"[INFO] hooked viewDidAppear on %@", NSStringFromClass(newClass));
+    } else {
+        WPLog(@"QuickActions", @"[ERR] viewDidAppear not found on %@", NSStringFromClass(newClass));
     }
 }
 
