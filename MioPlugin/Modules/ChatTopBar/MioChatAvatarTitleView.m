@@ -2,7 +2,6 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
-#import "CSContactInfoPopoverController.h"
 #import "AvatarLoader.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -419,19 +418,6 @@
     }
 }
 
-#pragma mark - Helpers
-
-- (UIViewController *)findViewController {
-    UIResponder *responder = self;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) {
-            return (UIViewController *)responder;
-        }
-        responder = [responder nextResponder];
-    }
-    return (UIViewController *)self.chatController;
-}
-
 - (void)updateFontSizes {
     PluginConfig *config = [PluginConfig shared];
     [self.titleLabel setFont:[UIFont systemFontOfSize:config.chatNicknameFontSize]];
@@ -441,6 +427,13 @@
 
     [self setNeedsLayout];
     [self layoutIfNeeded];
+}
+
+- (CGFloat)separatorTextWidth {
+    NSString *text = self.separatorTextLabel.text;
+    if (!text || text.length == 0) return 0;
+    CGFloat fontSize = self.separatorTextLabel.font.pointSize;
+    return [text sizeWithAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:fontSize weight:UIFontWeightMedium]}].width;
 }
 
 - (void)applyPositionOffset {
@@ -474,73 +467,20 @@
 #pragma mark - Tap Gestures
 
 - (void)onLeftAvatarTapped:(UITapGestureRecognizer *)gesture {
-    PluginConfig *config = [PluginConfig shared];
-    if (config.avatarTapFeedback) {
-        [self playHapticFeedback];
-    }
-
     if (!self.chatController) return;
-
     id contact = ((id (*)(id, SEL))objc_msgSend)(self.chatController, NSSelectorFromString(@"GetContact"));
-    [self presentUserInfoPopoverWithContact:contact sourceView:self.leftAvatarView];
+    if ([self.delegate respondsToSelector:@selector(avatarTitleView:didTapAvatarWithContact:avatarImage:sourceView:wxid:)]) {
+        NSString *wxid = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
+        [self.delegate avatarTitleView:self didTapAvatarWithContact:contact avatarImage:self.leftAvatarView.image sourceView:self.leftAvatarView wxid:wxid];
+    }
 }
 
 - (void)onRightAvatarTapped:(UITapGestureRecognizer *)gesture {
-    PluginConfig *config = [PluginConfig shared];
-    if (config.avatarTapFeedback) {
-        [self playHapticFeedback];
+    id selfContact = WXGetSelfContact();
+    if ([self.delegate respondsToSelector:@selector(avatarTitleView:didTapAvatarWithContact:avatarImage:sourceView:wxid:)]) {
+        NSString *wxid = ((id (*)(id, SEL))objc_msgSend)(selfContact, NSSelectorFromString(@"m_nsUsrName"));
+        [self.delegate avatarTitleView:self didTapAvatarWithContact:selfContact avatarImage:self.rightAvatarView.image sourceView:self.rightAvatarView wxid:wxid];
     }
-
-    Class serviceCenter = objc_getClass("MMServiceCenter");
-    if (!serviceCenter) return;
-    id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-    id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"),
-        objc_getClass("CContactMgr"));
-    id selfContact = ((id (*)(id, SEL))objc_msgSend)(contactMgr, @selector(getSelfContact));
-    [self presentUserInfoPopoverWithContact:selfContact sourceView:self.rightAvatarView];
-}
-
-- (void)presentUserInfoPopoverWithContact:(id)contact sourceView:(UIView *)sourceView {
-    if (!contact) return;
-
-    UIImage *avatar = nil;
-    if (sourceView == self.leftAvatarView) {
-        avatar = self.leftAvatarView.image;
-    } else {
-        avatar = self.rightAvatarView.image;
-    }
-
-    [self doPresentPopoverWithContact:contact avatar:avatar sourceView:sourceView];
-}
-
-- (void)doPresentPopoverWithContact:(id)contact avatar:(UIImage *)avatar sourceView:(UIView *)sourceView {
-    CSContactInfoPopoverController *popover =
-        [[CSContactInfoPopoverController alloc] initWithContact:contact avatar:avatar];
-
-    popover.modalPresentationStyle = UIModalPresentationPopover;
-    popover.preferredContentSize = CGSizeMake(280, 400);
-
-    UIPopoverPresentationController *popPC = popover.popoverPresentationController;
-    popPC.sourceView = sourceView;
-    popPC.sourceRect = sourceView.bounds;
-    popPC.permittedArrowDirections = UIPopoverArrowDirectionAny;
-    popPC.backgroundColor = [UIColor whiteColor];
-    popPC.delegate = popover;
-
-    UIViewController *presentingVC = [self findViewController];
-    if (!presentingVC) {
-        presentingVC = (UIViewController *)self.chatController;
-    }
-    if (presentingVC) {
-        [presentingVC presentViewController:popover animated:YES completion:nil];
-    }
-}
-
-- (void)playHapticFeedback {
-    UIImpactFeedbackGenerator *generator = [[UIImpactFeedbackGenerator alloc]
-        initWithStyle:UIImpactFeedbackStyleLight];
-    [generator prepare];
-    [generator impactOccurred];
 }
 
 @end
