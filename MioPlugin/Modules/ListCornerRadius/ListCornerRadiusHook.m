@@ -142,6 +142,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     if (currentOriginX - 2.0 * margin <= screenWidth) {
         CGRect frame = cellView.frame;
         frame.origin.x = targetX;
+        if (fabs(currentOriginX - targetX) > 0.1) {
+            frame.size.width = frame.size.width - 2.0 * margin;
+        }
         cellView.frame = frame;
     }
 
@@ -270,6 +273,15 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                      cornerRadius:(NSInteger)radius
                          isFTSHome:(BOOL)isFTSHome {
 
+    if (section > 3) {
+        [self wp_applyStandardCornerPerSection:cell
+                                            row:row
+                                          total:rowInThisSection
+                                   cornerRadius:radius
+                                      isFTSHome:isFTSHome];
+        return;
+    }
+
     NSMutableArray<NSNumber *> *sectionRowCounts = [NSMutableArray array];
     NSInteger sectionCount = [tableView numberOfSections];
     NSInteger maxSections = MIN(sectionCount, 4);
@@ -309,6 +321,31 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         [self wp_applyBorderAndBg:cell radius:radius position:1 isFTSHome:isFTSHome];
     } else if (section == lastNonEmptySection
                && row == [sectionRowCounts[lastNonEmptySection] integerValue] - 1) {
+        cell.layer.cornerRadius = radius;
+        cell.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+        [self wp_applyBorderAndBg:cell radius:radius position:3 isFTSHome:isFTSHome];
+    } else {
+        cell.layer.cornerRadius = 0;
+        cell.layer.maskedCorners = 0;
+        [self wp_applyBorderAndBg:cell radius:0 position:2 isFTSHome:isFTSHome];
+    }
+}
+
++ (void)wp_applyStandardCornerPerSection:(UIView *)cell
+                                     row:(NSInteger)row
+                                   total:(NSInteger)totalRows
+                            cornerRadius:(NSInteger)radius
+                               isFTSHome:(BOOL)isFTSHome {
+    if (totalRows == 1) {
+        cell.layer.cornerRadius = radius;
+        cell.layer.maskedCorners = (kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
+                                  | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner);
+        [self wp_applyBorderAndBg:cell radius:radius position:0 isFTSHome:isFTSHome];
+    } else if (row == 0) {
+        cell.layer.cornerRadius = radius;
+        cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+        [self wp_applyBorderAndBg:cell radius:radius position:1 isFTSHome:isFTSHome];
+    } else if (row == totalRows - 1) {
         cell.layer.cornerRadius = radius;
         cell.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
         [self wp_applyBorderAndBg:cell radius:radius position:3 isFTSHome:isFTSHome];
