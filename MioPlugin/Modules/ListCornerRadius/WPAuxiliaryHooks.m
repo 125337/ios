@@ -80,14 +80,17 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     NSInteger margin = (NSInteger)config.listCellMargin;
     if (margin == 0) margin = 9;
 
-    CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
-    CGRect frame = view.frame;
-    CGFloat currentOriginX = frame.origin.x;
-    if (currentOriginX - 2.0 * margin <= screenWidth) {
-        frame.origin.x = (CGFloat)margin;
-        frame.size.width = frame.size.width - 2.0 * ((CGFloat)margin);
-        view.frame = frame;
+    UIView *foldSuperview = view.superview;
+    CGFloat newWidth = foldSuperview.bounds.size.width - 2.0 * margin;
+    if (newWidth > 0) {
+        CGRect frame = view.frame;
+        if (frame.origin.x != margin || frame.size.width != newWidth) {
+            frame.origin.x = margin;
+            frame.size.width = newWidth;
+            view.frame = frame;
+        }
     }
+    view.autoresizingMask = UIViewAutoresizingNone;
 
     if ([view respondsToSelector:@selector(isFolding)]) {
         BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(view, @selector(isFolding));

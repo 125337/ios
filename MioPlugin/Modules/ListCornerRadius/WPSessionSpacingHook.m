@@ -41,6 +41,8 @@ static void (*_orig_NMFVC_viewDidLayoutSubviews)(id, SEL);
 static void _wp_clearPlainUIViewBackgrounds(UIView *root) {
     for (UIView *subview in root.subviews) {
         if ([subview isKindOfClass:[UITableView class]]) {
+            UITableView *tv = (UITableView *)subview;
+            tv.separatorStyle = UITableViewCellSeparatorStyleNone;
             for (UIView *child in subview.subviews) {
                 if ([NSStringFromClass([child class]) isEqualToString:@"UIView"]) {
                     child.backgroundColor = [UIColor clearColor];
