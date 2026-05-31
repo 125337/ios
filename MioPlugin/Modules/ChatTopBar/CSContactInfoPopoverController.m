@@ -182,33 +182,37 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         }
     }
 
-    WPLog(@"Mio-Avatar", @"⏳ Step2-MMHeadImageMgr...");
+    BOOL isOfficialAccount = [self.wxid hasPrefix:@"gh_"];
 
-    // 2. 微信内部 MMHeadImageMgr
-    Class serviceCenter = objc_getClass("MMServiceCenter");
-    if (serviceCenter) {
-        id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
-        id headImageMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("MMHeadImageMgr"));
-        WPLog(@"Mio-Avatar", @"  MMServiceCenter=%@ headImageMgr=%@ class=%@", center ? @"YES":@"NO", headImageMgr ? @"YES":@"NO", NSStringFromClass([headImageMgr class]));
-        if (headImageMgr) {
-            SEL getHeadSel = NSSelectorFromString(@"getHeadImage:withCategory:");
-            if ([headImageMgr respondsToSelector:getHeadSel]) {
-                UIImage *wxImg = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr, getHeadSel, self.wxid, @0);
-                WPLog(@"Mio-Avatar", @"  getHeadImage:withCategory: 结果=%@ size=%.0fx%.0f", wxImg ? @"有图":@"nil", wxImg.size.width, wxImg.size.height);
-                if (wxImg) {
-                    imageView.image = wxImg;
-                    self.avatarImage = wxImg;
-                    return;
+    if (!isOfficialAccount) {
+        WPLog(@"Mio-Avatar", @"⏳ Step2-MMHeadImageMgr...");
+        Class serviceCenter = objc_getClass("MMServiceCenter");
+        if (serviceCenter) {
+            id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
+            id headImageMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("MMHeadImageMgr"));
+            WPLog(@"Mio-Avatar", @"  MMServiceCenter=%@ headImageMgr=%@ class=%@", center ? @"YES":@"NO", headImageMgr ? @"YES":@"NO", NSStringFromClass([headImageMgr class]));
+            if (headImageMgr) {
+                SEL getHeadSel = NSSelectorFromString(@"getHeadImage:withCategory:");
+                if ([headImageMgr respondsToSelector:getHeadSel]) {
+                    UIImage *wxImg = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr, getHeadSel, self.wxid, @0);
+                    WPLog(@"Mio-Avatar", @"  getHeadImage:withCategory: 结果=%@ size=%.0fx%.0f", wxImg ? @"有图":@"nil", wxImg.size.width, wxImg.size.height);
+                    if (wxImg) {
+                        imageView.image = wxImg;
+                        self.avatarImage = wxImg;
+                        return;
+                    }
+                } else {
+                    WPLog(@"Mio-Avatar", @"  ❌ 不支持 getHeadImage:withCategory:");
                 }
-            } else {
-                WPLog(@"Mio-Avatar", @"  ❌ 不支持 getHeadImage:withCategory:");
             }
+        } else {
+            WPLog(@"Mio-Avatar", @"  ❌ MMServiceCenter 不存在");
         }
     } else {
-        WPLog(@"Mio-Avatar", @"  ❌ MMServiceCenter 不存在");
+        WPLog(@"Mio-Avatar", @"⏳ Step2-SKIP(公众号用MMHeadImageMgr只返回占位图，直接走URL下载)");
     }
 
-    // 3. 网络下载（针对公众号等 MMHeadImageMgr 获取不到的情况）
+    // 3. 网络下载
     NSString *avatarURL = [self headImageURLFromContact];
     WPLog(@"Mio-Avatar", @"⏳ Step3-网络下载 URL=%@", avatarURL ?: @"(空)");
     if (avatarURL.length) {
@@ -242,6 +246,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 - (void)preloadAndRefreshAvatar {
     WPLog(@"Mio-Preload", @"preloadAndRefreshAvatar START wxid=%@", self.wxid);
     __weak typeof(self) weakSelf = self;
+    BOOL isOfficialAccount = [self.wxid hasPrefix:@"gh_"];
 
     WPLog(@"Mio-Preload", @"⏳ ContactInfoViewController 预加载（仿微信优化 silentLoadContactExtInfo）...");
     Class contactInfoVCClass = objc_getClass("ContactInfoViewController");
@@ -260,6 +265,37 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf || !strongSelf.wxid) return;
+
+        if (isOfficialAccount) {
+            WPLog(@"Mio-Preload", @"  0.6s后重新读取 m_nsHeadImgUrl...");
+            NSString *avatarURL = [strongSelf headImageURLFromContact];
+            WPLog(@"Mio-Preload", @"  URL=%@", avatarURL ?: @"(空)");
+            if (!avatarURL.length) return;
+
+            if (strongSelf.avatarImage && strongSelf.avatarImage.size.width > 44) {
+                WPLog(@"Mio-Preload", @"  已有非占位头像，跳过下载");
+                return;
+            }
+
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:avatarURL]];
+                WPLog(@"Mio-Preload", @"    下载结果 data=%@ len=%lu", data ? @"YES":@"NO", (unsigned long)data.length);
+                if (data) {
+                    UIImage *downloaded = [UIImage imageWithData:data];
+                    if (downloaded) {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            __strong typeof(weakSelf) innerSelf = weakSelf;
+                            if (innerSelf && innerSelf->_avatarView) {
+                                WPLog(@"Mio-Preload", @"    ✅ URL下载成功 size=%.0fx%.0f", downloaded.size.width, downloaded.size.height);
+                                innerSelf->_avatarView.image = downloaded;
+                                innerSelf.avatarImage = downloaded;
+                            }
+                        });
+                    }
+                }
+            });
+            return;
+        }
 
         WPLog(@"Mio-Preload", @"  0.6s后重试 MMHeadImageMgr...");
         Class serviceCenter = objc_getClass("MMServiceCenter");
