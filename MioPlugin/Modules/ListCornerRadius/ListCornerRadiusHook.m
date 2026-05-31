@@ -122,6 +122,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
+    if (_orig_MMTableViewCell_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+    }
+
     NSInteger margin = (NSInteger)config.listCellMargin;
     if (margin == 0) margin = 9;
 
@@ -136,10 +140,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             frame.size.width = newWidth;
             cellView.frame = frame;
         }
-    }
-
-    if (_orig_MMTableViewCell_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
 
     BOOL isDark = NO;
