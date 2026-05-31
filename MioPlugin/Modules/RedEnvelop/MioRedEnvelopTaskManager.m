@@ -3,6 +3,7 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 #import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 
 @interface MioRedEnvelopTaskManager ()
 @property (nonatomic, strong) NSOperationQueue *taskQueue;
@@ -43,12 +44,7 @@
     NSBlockOperation *op = [NSBlockOperation blockOperationWithBlock:^{
         dispatch_semaphore_t sema = dispatch_semaphore_create(0);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            id logicMgr = nil;
-            Class MMServiceCenterClass = objc_getClass("MMServiceCenter");
-            if (MMServiceCenterClass) {
-                id center = ((id (*)(id, SEL, ...))objc_msgSend)(MMServiceCenterClass, NSSelectorFromString(@"defaultCenter"));
-                if (center) logicMgr = ((id (*)(id, SEL, Class, ...))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("WCRedEnvelopesLogicMgr"));
-            }
+            id logicMgr = WXGetService(objc_getClass("WCRedEnvelopesLogicMgr"));
             if (logicMgr) {
                 NSMutableDictionary *params = [@{} mutableCopy];
                 params[@"agreeDuty"] = @"0";

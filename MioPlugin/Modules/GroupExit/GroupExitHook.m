@@ -3,16 +3,9 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 
 #pragma mark - 工具函数
-
-static id getService(Class serviceClass) {
-    Class MMServiceCenterClass = objc_getClass("MMServiceCenter");
-    if (!MMServiceCenterClass) return nil;
-    id center = ((id (*)(id, SEL, ...))objc_msgSend)(MMServiceCenterClass, NSSelectorFromString(@"defaultCenter"));
-    if (!center) return nil;
-    return ((id (*)(id, SEL, Class, ...))objc_msgSend)(center, NSSelectorFromString(@"getService:"), serviceClass);
-}
 
 static void groupExitLog(NSString *content) {
     @try {
@@ -120,7 +113,7 @@ static void insertExitNotification(NSString *chatRoomName, NSString *exitUserId,
             if ([msgWrap respondsToSelector:setCreateTimeSel])
                 ((void(*)(id, SEL, unsigned int))objc_msgSend)(msgWrap, setCreateTimeSel, (unsigned int)[[NSDate date] timeIntervalSince1970]);
             
-            id msgMgr = getService(objc_getClass("CMessageMgr"));
+            id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
             if (!msgMgr) {
                 WPLog(@"GroupExit", @"[GroupExit] CMessageMgr is nil");
                 return;
@@ -204,7 +197,7 @@ static void checkMemberExit(id contact, NSString *newMemberList) {
                     
                     NSString *nickname = exitUserId;
                     @try {
-                        id contactMgr = getService(objc_getClass("CContactMgr"));
+                        id contactMgr = WXGetService(objc_getClass("CContactMgr"));
                         if (contactMgr) {
                             id exitContact = ((id(*)(id, SEL, NSString *))objc_msgSend)(contactMgr, NSSelectorFromString(@"getContactByName:"), exitUserId);
                             if (exitContact) {

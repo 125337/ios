@@ -5,6 +5,7 @@
 #import <UIKit/UIKit.h>
 #import <UserNotifications/UserNotifications.h>
 #import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 #import <substrate.h>
 
 static NSMutableSet *_processedTransferIds = nil;
@@ -28,14 +29,6 @@ static void atLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-static id getService(Class serviceClass) {
-    Class MMServiceCenterClass = objc_getClass("MMServiceCenter");
-    if (!MMServiceCenterClass) return nil;
-    id center = ((id (*)(id, SEL, ...))objc_msgSend)(MMServiceCenterClass, NSSelectorFromString(@"defaultCenter"));
-    if (!center) return nil;
-    return ((id (*)(id, SEL, Class, ...))objc_msgSend)(center, NSSelectorFromString(@"getService:"), serviceClass);
-}
-
 static NSString *extractXMLValue(NSString *content, NSString *tagName) {
     NSString *pattern = [NSString stringWithFormat:@"<%@>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?</%@>", tagName, tagName];
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
@@ -56,7 +49,7 @@ static void sendAutoReply(NSString *sessionUserName, NSString *replyText) {
     if (!replyText.length || !sessionUserName.length) return;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         @try {
-            id msgMgr = getService(objc_getClass("CMessageMgr"));
+            id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
             if (!msgMgr) {
                 WPLog(@"AutoTransfer", @"[REPLY] CMessageMgr不可用，无法发送自动回复");
                 return;
@@ -290,7 +283,7 @@ static void processTransferMessage(id wrap) {
             if (isGroup) {
                 [request setValue:fromUsr forKey:@"group_username"];
             }
-            id payLogicMgr = getService(objc_getClass("WCPayLogicMgr"));
+            id payLogicMgr = WXGetService(objc_getClass("WCPayLogicMgr"));
             if (!payLogicMgr) {
                 WPLog(@"AutoTransfer", @"[ERROR] WCPayLogicMgr service not found");
                 return;
