@@ -22,10 +22,11 @@ static BOOL contactRespondsTo(id contact, NSString *selName) {
     return ((BOOL (*)(id, SEL, SEL))objc_msgSend)(contact, @selector(respondsToSelector:), NSSelectorFromString(selName));
 }
 
-#pragma mark - 信息行（内容靠左，与标题保持间距）
+#pragma mark - 信息行（内容靠左，与标题保持6pt间距，支持多行）
 
-static void WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right) {
+static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right) {
     CGFloat titleWidth = 60;
+    CGFloat spacing = 6;
 
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, titleWidth, kRowH)];
     l.text = left;
@@ -33,15 +34,27 @@ static void WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *lef
     l.textColor = WPT2();
     [card addSubview:l];
 
-    CGFloat contentX = kPad + titleWidth + 12;
+    CGFloat contentX = kPad + titleWidth + spacing;
     CGFloat contentW = cw - contentX - kPad;
-    UILabel *r = [[UILabel alloc] initWithFrame:CGRectMake(contentX, cy, contentW, kRowH)];
+    UIFont *contentFont = [UIFont systemFontOfSize:14];
+
+    CGRect textRect = [right boundingRectWithSize:CGSizeMake(contentW, CGFLOAT_MAX)
+                                          options:NSStringDrawingUsesLineFragmentOrigin
+                                       attributes:@{NSFontAttributeName: contentFont}
+                                          context:nil];
+    CGFloat textHeight = ceil(textRect.size.height);
+    CGFloat rowHeight = MAX(kRowH, textHeight + 10);
+
+    UILabel *r = [[UILabel alloc] initWithFrame:CGRectMake(contentX, cy, contentW, rowHeight)];
     r.text = right;
-    r.font = [UIFont systemFontOfSize:14];
+    r.font = contentFont;
     r.textColor = WPT1();
     r.textAlignment = NSTextAlignmentLeft;
-    r.lineBreakMode = NSLineBreakByTruncatingTail;
+    r.numberOfLines = 0;
+    r.lineBreakMode = NSLineBreakByWordWrapping;
     [card addSubview:r];
+
+    return rowHeight;
 }
 
 @implementation CSContactInfoPopoverController {
@@ -106,7 +119,8 @@ static void WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *lef
     avatarView.contentMode = UIViewContentModeScaleAspectFill;
     avatarView.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1.0];
     avatarView.userInteractionEnabled = YES;
-    if (self.avatarImage) avatarView.image = self.avatarImage;
+    avatarView.tag = 1000;
+    [self loadAvatarForImageView:avatarView];
     UITapGestureRecognizer *avatarTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(onAvatarTapped:)];
     [avatarView addGestureRecognizer:avatarTap];
     [card addSubview:avatarView];
@@ -133,38 +147,87 @@ static void WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *lef
     return y + cy + 8;
 }
 
-#pragma mark - 基本信息卡片
+#pragma mark - 头像加载（三级回退策略）
 
-- (CGFloat)buildBasicInfoCardAtY:(CGFloat)y width:(CGFloat)w {
-    [_scrollView addSubview:WPMakeSectionHeader(@"基本信息", y, w)];
+- (void)loadAvatarForImageView:(UIImageView *)imageView {
+    if (self.avatarImage) {
+        imageView.image = self.avatarImage;
+        return;
+    }
+    if (!self.wxid.length) {
+        imageView.image = [UIImage imageNamed:@"DefaultHead"];
+        return;
+    }
+
+    NSString *dir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    if (dir) {
+        NSString *jpgPath = [dir stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"HBWechatHelper/UserHeadImage/%@.jpg", self.wxid]];
+        UIImage *custom = [UIImage imageWithContentsOfFile:jpgPath];
+        if (custom) {
+            imageView.image = custom;
+            self.avatarImage = custom;
+            return;
+        }
+    }
+
+    Class serviceCenter = objc_getClass("MMServiceCenter");
+    if (serviceCenter) {
+        id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
+        id headImageMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("MMHeadImageMgr"));
+        if (headImageMgr) {
+            SEL getHeadSel = NSSelectorFromString(@"getHeadImage:withCategory:");
+            if ([headImageMgr respondsToSelector:getHeadSel]) {
+                UIImage *wxImg = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headImageMgr, getHeadSel, self.wxid, @0);
+                if (wxImg) {
+                    imageView.image = wxImg;
+                    self.avatarImage = wxImg;
+                    return;
+                }
+            }
+        }
+    }
+
+    imageView.image = [UIImage imageNamed:@"DefaultHead"];
+}
+
+#pragma mark - 通用卡片构建
+
+- (CGFloat)buildCardWithItems:(NSArray *)items sectionTitle:(NSString *)title atY:(CGFloat)y width:(CGFloat)w {
+    [_scrollView addSubview:WPMakeSectionHeader(title, y, w)];
     y += 32;
 
     UIView *card = WPMakeCard(y, w);
     CGFloat cw = w - kPad * 2;
     CGFloat cy = 0;
 
-    NSArray *items = [self basicInfoItems];
     for (NSUInteger i = 0; i < items.count; i++) {
         if (i > 0) {
             WPAddSep(card, cy, cw);
         }
         NSDictionary *item = items[i];
         NSString *value = [self valueForInfoKey:item[@"key"]];
-        WPAddInfoRowLeft(card, cy, cw, item[@"label"], value);
+        CGFloat rowH = WPAddInfoRowLeft(card, cy, cw, item[@"label"], value);
 
         UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-        btn.frame = CGRectMake(0, cy, cw, kRowH);
+        btn.frame = CGRectMake(0, cy, cw, rowH);
         objc_setAssociatedObject(btn, "infoKey", item[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(btn, "copiable", item[@"copiable"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [btn addTarget:self action:@selector(onInfoRowTapped:) forControlEvents:UIControlEventTouchUpInside];
         [card addSubview:btn];
 
-        cy += kRowH;
+        cy += rowH;
     }
 
     CGRect f = card.frame; f.size.height = cy; card.frame = f;
     [_scrollView addSubview:card];
     return y + cy + 8;
+}
+
+#pragma mark - 基本信息卡片
+
+- (CGFloat)buildBasicInfoCardAtY:(CGFloat)y width:(CGFloat)w {
+    return [self buildCardWithItems:[self basicInfoItems] sectionTitle:@"基本信息" atY:y width:w];
 }
 
 - (NSArray *)basicInfoItems {
@@ -181,35 +244,7 @@ static void WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *lef
 #pragma mark - 群聊信息卡片
 
 - (CGFloat)buildGroupInfoCardAtY:(CGFloat)y width:(CGFloat)w {
-    [_scrollView addSubview:WPMakeSectionHeader(@"群聊信息", y, w)];
-    y += 32;
-
-    UIView *card = WPMakeCard(y, w);
-    CGFloat cw = w - kPad * 2;
-    CGFloat cy = 0;
-
-    NSArray *items = [self groupInfoItems];
-    for (NSUInteger i = 0; i < items.count; i++) {
-        if (i > 0) {
-            WPAddSep(card, cy, cw);
-        }
-        NSDictionary *item = items[i];
-        NSString *value = [self valueForInfoKey:item[@"key"]];
-        WPAddInfoRowLeft(card, cy, cw, item[@"label"], value);
-
-        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-        btn.frame = CGRectMake(0, cy, cw, kRowH);
-        objc_setAssociatedObject(btn, "infoKey", item[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(btn, "copiable", item[@"copiable"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [btn addTarget:self action:@selector(onInfoRowTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [card addSubview:btn];
-
-        cy += kRowH;
-    }
-
-    CGRect f = card.frame; f.size.height = cy; card.frame = f;
-    [_scrollView addSubview:card];
-    return y + cy + 8;
+    return [self buildCardWithItems:[self groupInfoItems] sectionTitle:@"群聊信息" atY:y width:w];
 }
 
 - (NSArray *)groupInfoItems {
@@ -224,35 +259,7 @@ static void WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *lef
 #pragma mark - 公众号信息卡片
 
 - (CGFloat)buildOfficialAccountInfoCardAtY:(CGFloat)y width:(CGFloat)w {
-    [_scrollView addSubview:WPMakeSectionHeader(@"公众号信息", y, w)];
-    y += 32;
-
-    UIView *card = WPMakeCard(y, w);
-    CGFloat cw = w - kPad * 2;
-    CGFloat cy = 0;
-
-    NSArray *items = [self officialAccountInfoItems];
-    for (NSUInteger i = 0; i < items.count; i++) {
-        if (i > 0) {
-            WPAddSep(card, cy, cw);
-        }
-        NSDictionary *item = items[i];
-        NSString *value = [self valueForInfoKey:item[@"key"]];
-        WPAddInfoRowLeft(card, cy, cw, item[@"label"], value);
-
-        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-        btn.frame = CGRectMake(0, cy, cw, kRowH);
-        objc_setAssociatedObject(btn, "infoKey", item[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(btn, "copiable", item[@"copiable"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [btn addTarget:self action:@selector(onInfoRowTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [card addSubview:btn];
-
-        cy += kRowH;
-    }
-
-    CGRect f = card.frame; f.size.height = cy; card.frame = f;
-    [_scrollView addSubview:card];
-    return y + cy + 8;
+    return [self buildCardWithItems:[self officialAccountInfoItems] sectionTitle:@"公众号信息" atY:y width:w];
 }
 
 - (NSArray *)officialAccountInfoItems {
@@ -415,21 +422,31 @@ static void WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *lef
     if (serviceCenter) {
         id center = ((id (*)(Class, SEL))objc_msgSend)(serviceCenter, NSSelectorFromString(@"defaultCenter"));
         id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), objc_getClass("CContactMgr"));
-        if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
-            unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), self.contact);
-            return [NSString stringWithFormat:@"%u 人", count];
+        SEL getCountSel = NSSelectorFromString(@"getGroupMemberCountForContact:");
+        if (contactMgr && [contactMgr respondsToSelector:getCountSel]) {
+            unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, getCountSel, self.contact);
+            if (count > 0) {
+                return [NSString stringWithFormat:@"%u 人", count];
+            }
         }
     }
 
-    id memList = contactValueForKey(self.contact, @"m_nsChatRoomMemList");
-    if (memList && [memList isKindOfClass:[NSArray class]]) {
-        return [NSString stringWithFormat:@"%lu 人", (unsigned long)[(NSArray *)memList count]];
+    SEL memListSel = NSSelectorFromString(@"m_nsChatRoomMemList");
+    if ([self.contact respondsToSelector:memListSel]) {
+        id memList = ((id (*)(id, SEL))objc_msgSend)(self.contact, memListSel);
+        if (memList && [memList isKindOfClass:[NSArray class]]) {
+            NSUInteger cnt = [(NSArray *)memList count];
+            if (cnt > 0) {
+                return [NSString stringWithFormat:@"%lu 人", (unsigned long)cnt];
+            }
+        }
     }
+
     return @"未知";
 }
 
 - (NSString *)verifyStatusValue {
-    if (!contactRespondsTo(self.contact, @"m_uiVerifyFlag")) return @"未知";
+    if (!contactRespondsTo(self.contact, @"m_uiVerifyFlag")) return @"未认证";
     NSInteger flag = contactIntForKey(self.contact, @"m_uiVerifyFlag");
     return flag > 0 ? @"已认证" : @"未认证";
 }
