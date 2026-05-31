@@ -114,14 +114,28 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     if (@available(iOS 13.0, *)) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
-    UIColor *customBg = [config colorFromHex:isDark
+    UIColor *targetBg = [config colorFromHex:isDark
         ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    if (customBg) {
-        view.backgroundColor = customBg;
-    } else {
-        view.backgroundColor = isDark
+    if (!targetBg) {
+        targetBg = isDark
             ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
             : [UIColor whiteColor];
+    }
+    view.backgroundColor = targetBg;
+
+    for (UIView *subview in view.subviews) {
+        if ([NSStringFromClass([subview class]) isEqualToString:@"UIView"]) {
+            BOOL hasLabel = NO;
+            for (UIView *child in subview.subviews) {
+                if ([child isKindOfClass:[UILabel class]]) {
+                    hasLabel = YES;
+                    break;
+                }
+            }
+            if (!hasLabel) {
+                subview.backgroundColor = [UIColor clearColor];
+            }
+        }
     }
 }
 
