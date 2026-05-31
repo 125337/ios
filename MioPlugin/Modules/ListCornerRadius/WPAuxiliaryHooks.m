@@ -49,6 +49,14 @@ static void _hooked_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled) return;
 
+    if (config.listMediaCornerEnabled) {
+        UIView *view = (UIView *)self;
+        NSInteger radius = (NSInteger)config.listCellCornerRadius;
+        if (radius == 0) radius = 18;
+        view.layer.cornerRadius = radius;
+        view.layer.masksToBounds = YES;
+    }
+
     if (config.listHideRightQRCode) {
         UIView *view = (UIView *)self;
         NSString *className = NSStringFromClass([view class]);
