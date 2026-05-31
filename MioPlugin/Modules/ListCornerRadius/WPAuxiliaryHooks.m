@@ -90,8 +90,8 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     }
 
     if ([view respondsToSelector:@selector(isFolding)]) {
-        NSNumber *folding = ((id (*)(id, SEL))objc_msgSend)(view, @selector(isFolding));
-        if (folding && [folding boolValue]) {
+        BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(view, @selector(isFolding));
+        if (folding) {
             view.layer.cornerRadius = radius;
             view.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
                                      | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
