@@ -63,6 +63,15 @@ static UIViewController *findParentViewController(UIView *view) {
 
 @end
 
+static UIColor *wp_cellDefaultBgColor(BOOL isDark) {
+    if (@available(iOS 13.0, *)) {
+        if (isDark) {
+            return [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0];
+        }
+    }
+    return [UIColor whiteColor];
+}
+
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     if (_orig_MMTableViewCell_layoutSubviews) {
         ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
@@ -112,9 +121,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
     UIColor *customBg = [config colorFromHex:isDark
         ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    if (customBg) {
-        ((UIView *)self).backgroundColor = customBg;
-    }
+    ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
 
     NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
     if (cornerRadius == 0) cornerRadius = 18;
