@@ -99,7 +99,20 @@ static BOOL shouldSkipCorner(UIViewController *vc) {
             @"WCSearchController",
             nil];
     });
-    return [skipSet containsObject:vcName];
+    if ([skipSet containsObject:vcName]) return YES;
+
+    static NSArray *prefixBlacklist = nil;
+    static dispatch_once_t prefixOnce;
+    dispatch_once(&prefixOnce, ^{
+        prefixBlacklist = @[
+            @"WCRefine",
+        ];
+    });
+    for (NSString *prefix in prefixBlacklist) {
+        if ([vcName hasPrefix:prefix]) return YES;
+    }
+
+    return NO;
 }
 
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
