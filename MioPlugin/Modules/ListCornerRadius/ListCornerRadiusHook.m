@@ -61,6 +61,11 @@ static UIViewController *findParentViewController(UIView *view) {
                       borderColor:(UIColor *)borderColor
                              side:(NSString *)side;
 
++ (CALayer *)wp_buildHorizontalLineLayer:(CGRect)rect
+                              borderWidth:(CGFloat)borderWidth
+                             borderColor:(UIColor *)borderColor
+                                  position:(NSString *)linePosition;
+
 @end
 
 static UIColor *wp_cellDefaultBgColor(BOOL isDark) {
@@ -496,6 +501,13 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                                        radius:radius];
             shape.name = @"com.mio.cornerBorder";
             [cell.layer addSublayer:shape];
+
+            CALayer *bottomLine = [self wp_buildHorizontalLineLayer:cell.bounds
+                                                        borderWidth:borderWidth
+                                                       borderColor:borderColor
+                                                            position:@"bottom"];
+            bottomLine.name = @"com.mio.cornerBorder";
+            [cell.layer addSublayer:bottomLine];
             break;
         }
         case 2: {
@@ -520,6 +532,13 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                                           radius:radius];
             shape.name = @"com.mio.cornerBorder";
             [cell.layer addSublayer:shape];
+
+            CALayer *topLine = [self wp_buildHorizontalLineLayer:cell.bounds
+                                                     borderWidth:borderWidth
+                                                    borderColor:borderColor
+                                                         position:@"top"];
+            topLine.name = @"com.mio.cornerBorder";
+            [cell.layer addSublayer:topLine];
             break;
         }
     }
@@ -558,8 +577,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     CGFloat h = rect.size.height;
 
     UIBezierPath *path = [UIBezierPath bezierPath];
-    [path moveToPoint:CGPointMake(hw, h)];
-    [path addLineToPoint:CGPointMake(hw, radius)];
+    [path moveToPoint:CGPointMake(hw, radius)];
     [path addArcWithCenter:CGPointMake(hw + radius, radius)
                     radius:radius
                 startAngle:M_PI
@@ -570,7 +588,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                 startAngle:M_PI * 1.5
                   endAngle:0
                  clockwise:YES];
-    [path addLineToPoint:CGPointMake(w - hw, h)];
+    [path addLineToPoint:CGPointMake(w - hw, h - hw)];
     shape.path = path.CGPath;
     return shape;
 }
@@ -590,8 +608,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     CGFloat h = rect.size.height;
 
     UIBezierPath *path = [UIBezierPath bezierPath];
-    [path moveToPoint:CGPointMake(hw, 0)];
-    [path addLineToPoint:CGPointMake(hw, h - radius)];
+    [path moveToPoint:CGPointMake(hw, h - radius)];
     [path addArcWithCenter:CGPointMake(hw + radius, h - radius)
                     radius:radius
                 startAngle:M_PI
@@ -602,7 +619,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                 startAngle:M_PI * 0.5
                   endAngle:0
                  clockwise:NO];
-    [path addLineToPoint:CGPointMake(w - hw, 0)];
+    [path addLineToPoint:CGPointMake(w - hw, hw)];
     shape.path = path.CGPath;
     return shape;
 }
@@ -616,6 +633,19 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     CGFloat x = [side isEqualToString:@"left"] ? 0 : (rect.size.width - borderWidth);
     layer.frame = CGRectMake(x, 0, borderWidth, rect.size.height);
+
+    return layer;
+}
+
++ (CALayer *)wp_buildHorizontalLineLayer:(CGRect)rect
+                              borderWidth:(CGFloat)borderWidth
+                             borderColor:(UIColor *)borderColor
+                                  position:(NSString *)linePosition {
+    CALayer *layer = [CALayer layer];
+    layer.backgroundColor = borderColor.CGColor;
+
+    CGFloat y = [linePosition isEqualToString:@"top"] ? 0 : (rect.size.height - borderWidth);
+    layer.frame = CGRectMake(0, y, rect.size.width, borderWidth);
 
     return layer;
 }
