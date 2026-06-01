@@ -143,6 +143,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         if (currentX - 2.0 * margin <= screenW && currentX != targetX) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
+            f.size.width = screenW - 2.0 * margin;
             cellView.frame = f;
             WPLog(@"Corner", @"[DIAG-FRAME] vc=%@ x=%.1f y=%.1f w=%.1f h=%.1f screenW=%.1f margin=%.1f",
                 className,
@@ -162,24 +163,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                     p.bounds.origin.x, p.bounds.origin.y,
                     p.bounds.size.width, p.bounds.size.height);
                 p = p.superview;
-                depth++;
-            }
-            static NSArray *clipTargetVCs = nil;
-            static dispatch_once_t onceClip;
-            dispatch_once(&onceClip, ^{
-                clipTargetVCs = @[@"NewMainFrameViewController",
-                                 @"ContactsViewController",
-                                 @"FTSHomeViewController"];
-            });
-            if ([clipTargetVCs containsObject:className]) {
-                UIView *tv = cellView.superview;
-                while (tv && ![tv isKindOfClass:[UITableView class]]) {
-                    tv = tv.superview;
-                }
-                if (tv && tv.clipsToBounds) {
-                    tv.clipsToBounds = NO;
-                }
-            }
+            depth++;
         }
     }
 
