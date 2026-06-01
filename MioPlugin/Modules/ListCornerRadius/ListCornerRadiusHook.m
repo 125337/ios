@@ -56,10 +56,10 @@ static UIViewController *findParentViewController(UIView *view) {
                                borderColor:(UIColor *)borderColor
                                     radius:(CGFloat)radius;
 
-+ (CAShapeLayer *)wp_buildSideLinePath:(CGRect)rect
-                           borderWidth:(CGFloat)borderWidth
-                           borderColor:(UIColor *)borderColor
-                                  side:(NSString *)side;
++ (CALayer *)wp_buildSideLineLayer:(CGRect)rect
+                       borderWidth:(CGFloat)borderWidth
+                      borderColor:(UIColor *)borderColor
+                             side:(NSString *)side;
 
 @end
 
@@ -143,7 +143,13 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 
     UIViewController *vc = findParentViewController((UIView *)self);
-    NSString *className = vc ? NSStringFromClass([vc class]) : nil;
+    if (!vc) {
+        if (_orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
+    NSString *className = NSStringFromClass([vc class]);
 
     if (shouldSkipCorner(vc)) {
         if (_orig_MMTableViewCell_layoutSubviews) {
@@ -483,14 +489,14 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             break;
         }
         case 2: {
-            CAShapeLayer *left = [self wp_buildSideLinePath:cell.bounds
-                                                borderWidth:borderWidth
-                                                borderColor:borderColor
-                                                       side:@"left"];
-            CAShapeLayer *right = [self wp_buildSideLinePath:cell.bounds
-                                                 borderWidth:borderWidth
-                                                 borderColor:borderColor
-                                                        side:@"right"];
+            CALayer *left = [self wp_buildSideLineLayer:cell.bounds
+                                            borderWidth:borderWidth
+                                           borderColor:borderColor
+                                                  side:@"left"];
+            CALayer *right = [self wp_buildSideLineLayer:cell.bounds
+                                             borderWidth:borderWidth
+                                            borderColor:borderColor
+                                                   side:@"right"];
             left.name = @"com.mio.cornerBorder";
             right.name = @"com.mio.cornerBorder";
             [cell.layer addSublayer:left];
@@ -591,30 +597,17 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     return shape;
 }
 
-+ (CAShapeLayer *)wp_buildSideLinePath:(CGRect)rect
-                           borderWidth:(CGFloat)borderWidth
-                           borderColor:(UIColor *)borderColor
-                                  side:(NSString *)side {
-    CAShapeLayer *shape = [CAShapeLayer layer];
-    shape.fillColor = [UIColor clearColor].CGColor;
-    shape.strokeColor = borderColor.CGColor;
-    shape.lineWidth = borderWidth;
-    shape.lineJoin = kCALineJoinRound;
++ (CALayer *)wp_buildSideLineLayer:(CGRect)rect
+                       borderWidth:(CGFloat)borderWidth
+                      borderColor:(UIColor *)borderColor
+                             side:(NSString *)side {
+    CALayer *layer = [CALayer layer];
+    layer.backgroundColor = borderColor.CGColor;
 
-    CGFloat hw = borderWidth / 2.0;
-    CGFloat w = rect.size.width;
-    CGFloat h = rect.size.height;
+    CGFloat x = [side isEqualToString:@"left"] ? 0 : (rect.size.width - borderWidth);
+    layer.frame = CGRectMake(x, 0, borderWidth, rect.size.height);
 
-    UIBezierPath *path = [UIBezierPath bezierPath];
-    if ([side isEqualToString:@"left"]) {
-        [path moveToPoint:CGPointMake(hw, 0)];
-        [path addLineToPoint:CGPointMake(hw, h)];
-    } else {
-        [path moveToPoint:CGPointMake(w - hw, 0)];
-        [path addLineToPoint:CGPointMake(w - hw, h)];
-    }
-    shape.path = path.CGPath;
-    return shape;
+    return layer;
 }
 
 @end
