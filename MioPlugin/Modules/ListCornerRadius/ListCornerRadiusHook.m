@@ -72,6 +72,29 @@ static UIColor *wp_cellDefaultBgColor(BOOL isDark) {
     return [UIColor whiteColor];
 }
 
+static BOOL shouldSkipCorner(UIViewController *vc) {
+    if (!vc) return YES;
+    NSString *vcName = NSStringFromClass([vc class]);
+    static NSSet *skipSet = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        skipSet = [NSSet setWithObjects:
+            @"WCTimeLineViewController",
+            @"WCAccountLoginUsersViewController",
+            @"BaseMsgContentViewController",
+            @"WCRedEnvelopesRedEnvelopesDetailViewController",
+            @"MsgRecordDetailViewController",
+            @"ChatRoomInfoViewController",
+            @"ContactInfoViewController",
+            @"AddFriendEntryViewController",
+            @"AddContactToChatRoomViewController",
+            @"SayHelloViewController",
+            @"MMFinderPivotLiveViewController",
+            nil];
+    });
+    return [skipSet containsObject:vcName];
+}
+
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled) {
@@ -90,32 +113,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
     NSString *className = NSStringFromClass([vc class]);
 
-    static NSSet *cornerExcludeList = nil;
-    static dispatch_once_t onceCornerToken;
-    dispatch_once(&onceCornerToken, ^{
-        cornerExcludeList = [NSSet setWithObjects:
-            @"WCTimeLineViewController",
-            @"WCAccountLoginUsersViewController",
-            @"SessionSelectController",
-            @"WCListViewController",
-            @"BrandNotificationListViewController",
-            @"BrandNewSessionViewController",
-            @"BaseMsgContentViewController",
-            @"BraceletRankProfileViewController",
-            @"BraceletRankViewController",
-            @"WCRedEnvelopesRedEnvelopesDetailViewController",
-            @"MsgRecordDetailViewController",
-            @"ChatRoomInfoViewController",
-            @"ContactInfoViewController",
-            @"AddFriendEntryViewController",
-            @"AddContactToChatRoomViewController",
-            @"SayHelloViewController",
-            @"MMFinderPivotLiveViewController",
-            @"WCSearchController",
-            nil];
-    });
-
-    if ([cornerExcludeList containsObject:className]) {
+    if (shouldSkipCorner(vc)) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
