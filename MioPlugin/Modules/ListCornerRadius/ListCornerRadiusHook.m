@@ -175,29 +175,21 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     UIView *cellView = (UIView *)self;
 
     CGFloat margin = config.listCellMargin;
-    BOOL useContainer = (margin > 0 && config.listCornerRadiusEnabled);
-    UIView *targetView = cellView;
-
-    if (useContainer) {
-        static char kMioContainerKey;
-        UIView *mioContainer = objc_getAssociatedObject(cellView, &kMioContainerKey);
-        if (!mioContainer) {
-            mioContainer = [[UIView alloc] init];
-            mioContainer.opaque = NO;
-            mioContainer.userInteractionEnabled = NO;
-            objc_setAssociatedObject(cellView, &kMioContainerKey, mioContainer,
-                OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            [cellView addSubview:mioContainer];
+    if (margin > 0 && config.listCornerRadiusEnabled) {
+        CGFloat currentX = cellView.frame.origin.x;
+        UIView *superview = cellView.superview;
+        CGFloat superX = superview ? superview.frame.origin.x : 0;
+        CGFloat targetX = (margin > superX) ? margin - superX : 0;
+        CGFloat containerW = superview ? superview.bounds.size.width
+                                       : [UIScreen mainScreen].bounds.size.width;
+        CGFloat targetW = containerW - 2.0 * margin;
+        CGFloat currentW = cellView.frame.size.width;
+        if (currentX != targetX || fabs(currentW - targetW) > 0.5) {
+            CGRect f = cellView.frame;
+            f.origin.x = targetX;
+            f.size.width = targetW;
+            cellView.frame = f;
         }
-        CGFloat cw = cellView.bounds.size.width;
-        mioContainer.frame = CGRectMake(margin, 0, cw - 2.0 * margin, cellView.bounds.size.height);
-        targetView = mioContainer;
-
-        cellView.backgroundColor = [UIColor clearColor];
-        cellView.layer.cornerRadius = 0;
-        cellView.layer.maskedCorners = 0;
-        cellView.layer.borderWidth = 0;
-        cellView.layer.borderColor = nil;
     }
 
     static NSSet *bgColorSkipList = nil;
@@ -233,7 +225,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }
         UIColor *customBg = [config colorFromHex:isDark
             ? config.listCellDarkBgColor : config.listCellLightBgColor];
-        targetView.backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
+        ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
     }
 
     NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
@@ -261,7 +253,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     NSInteger totalRows = [tableView numberOfRowsInSection:section];
 
     if (isContacts) {
-        [ListCornerRadiusHook wp_applyCornerForContacts:targetView
+        [ListCornerRadiusHook wp_applyCornerForContacts:cellView
                                              tableView:tableView
                                              indexPath:indexPath
                                                section:section
@@ -270,7 +262,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                           cornerRadius:cornerRadius
                                               isFTSHome:isFTSHome];
     } else {
-        [ListCornerRadiusHook wp_applyStandardCorner:targetView
+        [ListCornerRadiusHook wp_applyStandardCorner:cellView
                                           tableView:tableView
                                           indexPath:indexPath
                                             section:section
@@ -281,7 +273,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                           className:className];
     }
 
-    targetView.layer.masksToBounds = YES;
+    cellView.layer.masksToBounds = YES;
 
 }
 
