@@ -449,6 +449,17 @@
 
     NSInteger scr = [d integerForKey:[kPluginPrefix stringByAppendingString:@"ListSearchBoxCornerRadius"]];
     _listSearchBoxCornerRadius = (scr > 0) ? scr : 18;
+
+    _listProfileCardBorderEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderEnabled"]];
+
+    CGFloat pcbw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderWidth"]];
+    _listProfileCardBorderWidth = (pcbw > 0) ? pcbw : 2.0;
+
+    NSString *pcbl = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderLightColor"]];
+    _listProfileCardBorderLightColor = pcbl.length > 0 ? pcbl : @"#E5E5E5";
+
+    NSString *pcbd = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderDarkColor"]];
+    _listProfileCardBorderDarkColor = pcbd.length > 0 ? pcbd : @"#3A3A3C";
 }
 
 - (void)save {
@@ -640,6 +651,11 @@
     [d setBool:_listDisableLabelWidthAdjustment forKey:[kPluginPrefix stringByAppendingString:@"ListDisableLabelWidthAdjustment"]];
     [d setBool:_listMediaCornerEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListMediaCornerEnabled"]];
     [d setInteger:_listSearchBoxCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"ListSearchBoxCornerRadius"]];
+    
+    [d setBool:_listProfileCardBorderEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderEnabled"]];
+    [d setFloat:_listProfileCardBorderWidth forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderWidth"]];
+    if (_listProfileCardBorderLightColor) [d setObject:_listProfileCardBorderLightColor forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderLightColor"]];
+    if (_listProfileCardBorderDarkColor) [d setObject:_listProfileCardBorderDarkColor forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderDarkColor"]];
     
     [d synchronize];
     WPLog(@"Config", @"[OK] save() completed - NSUserDefaults synchronized");

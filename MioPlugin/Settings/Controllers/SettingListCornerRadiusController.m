@@ -182,6 +182,39 @@
                                     key:@"listCardDarkBgColor"
                                   value:cfg.listCardDarkBgColor
                                      cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"资料卡边框"
+                                        key:@"listProfileCardBorderEnabled"
+                                       isOn:cfg.listProfileCardBorderEnabled
+                                         cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        NSString *pcbwStr = cfg.listProfileCardBorderWidth > 0
+            ? [NSString stringWithFormat:@"%.1f", cfg.listProfileCardBorderWidth] : nil;
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"资料卡边框宽度"
+                                    key:@"listProfileCardBorderWidth"
+                                  value:pcbwStr
+                                   hint:@"2.0"
+                             alertTitle:@"设置资料卡边框宽度"
+                           alertMessage:@"请输入边框宽度(0.5-5.0)"
+                                     cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        *ecy = [self addColorRowInGroup:expand
+                                  title:@"资料卡边框浅色"
+                                    key:@"listProfileCardBorderLightColor"
+                                  value:cfg.listProfileCardBorderLightColor
+                                     cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        *ecy = [self addColorRowInGroup:expand
+                                  title:@"资料卡边框深色"
+                                    key:@"listProfileCardBorderDarkColor"
+                                  value:cfg.listProfileCardBorderDarkColor
+                                     cy:*ecy width:w];
     } cy:cy width:w];
 
     y = [self finishGroup:group atY:y height:cy];
@@ -211,7 +244,8 @@
         || [key isEqualToString:@"listCellBorder"]
         || [key isEqualToString:@"listHideRightQRCode"]
         || [key isEqualToString:@"listDisableLabelWidthAdjustment"]
-        || [key isEqualToString:@"listMediaCornerEnabled"]) {
+        || [key isEqualToString:@"listMediaCornerEnabled"]
+        || [key isEqualToString:@"listProfileCardBorderEnabled"]) {
         [MioRestartHelper showRestartAlertFromVC:self];
     }
 }

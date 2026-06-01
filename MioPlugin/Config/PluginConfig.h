@@ -164,6 +164,10 @@
 @property (nonatomic, assign) BOOL listDisableLabelWidthAdjustment;
 @property (nonatomic, assign) BOOL listMediaCornerEnabled;
 @property (nonatomic, assign) NSInteger listSearchBoxCornerRadius;
+@property (nonatomic, assign) BOOL listProfileCardBorderEnabled;
+@property (nonatomic, assign) CGFloat listProfileCardBorderWidth;
+@property (nonatomic, copy) NSString *listProfileCardBorderLightColor;
+@property (nonatomic, copy) NSString *listProfileCardBorderDarkColor;
 
 @property (nonatomic, assign) BOOL notifySender;
 @property (nonatomic, copy) NSString *notifySenderTemplate;

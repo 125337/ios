@@ -20,7 +20,6 @@ static void MioPluginInitialize() {
 
             [ListCornerRadiusHook initListCornerRadiusHook];
             WPInstallSessionSpacingHooks();
-            WPInstallSearchBoxHook();
             WPInstallAuxiliaryHooks();
 
             NSLog(@"[MioPlugin] all hooks installed");

@@ -6,6 +6,7 @@
 #import <objc/message.h>
 
 static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
+static IMP _orig_WCSearchBar_layoutSubviews = NULL;
 
 static UIViewController *findParentViewController(UIView *view) {
     UIResponder *responder = view;
@@ -134,6 +135,30 @@ static BOOL shouldSkipCorner(UIViewController *vc) {
     return NO;
 }
 
+static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
+    if (_orig_WCSearchBar_layoutSubviews) {
+        _orig_WCSearchBar_layoutSubviews(self, _cmd);
+    }
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.listCornerRadiusEnabled || !config.listSearchCornerRadius) return;
+
+    NSInteger radius = config.listSearchBoxCornerRadius;
+    if (radius <= 0) radius = 18;
+
+    UIView *container = nil;
+    @try {
+        container = [self valueForKey:@"searchBoxContainer"];
+    } @catch (NSException *e) {
+        return;
+    }
+
+    if (container) {
+        container.layer.cornerRadius = radius;
+        container.layer.masksToBounds = YES;
+    }
+}
+
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled) {
@@ -159,11 +184,37 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
+    UIView *cellView = (UIView *)self;
+
+    BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
+    if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
+        if (_orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+
+        BOOL isDark = NO;
+        if (@available(iOS 13.0, *)) {
+            isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+        }
+
+        NSInteger radius = (NSInteger)config.listCellCornerRadius;
+        if (radius == 0) radius = 18;
+
+        [ListCornerRadiusHook wp_applyProfileCardCorner:cellView
+                                           cornerRadius:radius
+                                                isDark:isDark];
+
+        if (config.listHideRightQRCode) {
+            [ListCornerRadiusHook wp_hideQRButtonInCell:cellView];
+        }
+
+        cellView.layer.masksToBounds = YES;
+        return;
+    }
+
     if (_orig_MMTableViewCell_layoutSubviews) {
         ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
-
-    UIView *cellView = (UIView *)self;
 
     CGFloat margin = config.listCellMargin;
     if (margin > 0 && config.listCornerRadiusEnabled) {
@@ -283,6 +334,19 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"ListCornerRadius", @"[OK] MMTableViewCell::layoutSubviews");
     } else {
         WPLog(@"ListCornerRadius", @"[WARN] MMTableViewCell class not found!");
+    }
+
+    Class WCSearchBarClass = objc_getClass("WCSearchBar");
+    if (WCSearchBarClass) {
+        MSHookMessageEx(
+            WCSearchBarClass,
+            @selector(layoutSubviews),
+            (IMP)replaced_WCSearchBar_layoutSubviews,
+            &_orig_WCSearchBar_layoutSubviews
+        );
+        WPLog(@"ListCornerRadius", @"[OK] WCSearchBar::layoutSubviews");
+    } else {
+        WPLog(@"ListCornerRadius", @"[WARN] WCSearchBar class not found!");
     }
 }
 
@@ -532,6 +596,84 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         if (found) return found;
     }
     return nil;
+}
+
++ (BOOL)wp_isProfileCard:(UIView *)cell {
+    BOOL found = NO;
+    for (UIView *subview in cell.subviews) {
+        NSString *cn = NSStringFromClass([subview class]);
+        if ([cn isEqualToString:@"MMHeadImageView"]) {
+            found = YES;
+            break;
+        }
+        for (UIView *sub2 in subview.subviews) {
+            NSString *cn2 = NSStringFromClass([sub2 class]);
+            if ([cn2 isEqualToString:@"MMHeadImageView"]) {
+                found = YES;
+                break;
+            }
+        }
+        if (found) break;
+    }
+    return found;
+}
+
++ (void)wp_applyProfileCardCorner:(UIView *)cell
+                      cornerRadius:(NSInteger)radius
+                           isDark:(BOOL)isDark {
+    PluginConfig *config = [PluginConfig shared];
+
+    cell.layer.cornerRadius = radius;
+    cell.layer.masksToBounds = YES;
+
+    UIColor *cardBg = [config colorFromHex:isDark
+        ? config.listCardDarkBgColor : config.listCardLightBgColor];
+    if (cardBg) {
+        cell.backgroundColor = cardBg;
+    }
+
+    if (config.listProfileCardBorderEnabled) {
+        CGFloat bw = config.listProfileCardBorderWidth;
+        if (bw <= 0) bw = 2.0;
+
+        UIColor *borderColor = [config colorFromHex:isDark
+            ? config.listProfileCardBorderDarkColor
+            : config.listProfileCardBorderLightColor];
+        if (!borderColor) {
+            borderColor = isDark
+                ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
+                : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
+        }
+
+        cell.layer.borderWidth = bw;
+        cell.layer.borderColor = borderColor.CGColor;
+    } else {
+        cell.layer.borderWidth = 0;
+        cell.layer.borderColor = nil;
+    }
+}
+
++ (void)wp_hideQRButtonInCell:(UIView *)cell {
+    for (UIView *sub in cell.subviews) {
+        NSString *cn = NSStringFromClass([sub class]);
+        if ([cn containsString:@"Button"]) {
+            sub.hidden = YES;
+        }
+        [self wp_hideQRButtonInSubviews:sub.subviews];
+    }
+}
+
++ (void)wp_hideQRButtonInSubviews:(NSArray<UIView *> *)subviews {
+    for (UIView *sub in subviews) {
+        NSString *cn = NSStringFromClass([sub class]);
+        if ([cn containsString:@"Button"]) {
+            CGFloat x = sub.frame.origin.x;
+            if (x > sub.superview.bounds.size.width * 0.7) {
+                sub.hidden = YES;
+            }
+        }
+        [self wp_hideQRButtonInSubviews:sub.subviews];
+    }
 }
 
 + (CAShapeLayer *)wp_buildUnifiedBorderLayer:(CGRect)rect
