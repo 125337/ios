@@ -184,9 +184,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         if (!mioContainer) {
             mioContainer = [[UIView alloc] init];
             mioContainer.opaque = NO;
+            mioContainer.userInteractionEnabled = NO;
             objc_setAssociatedObject(cellView, &kMioContainerKey, mioContainer,
                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            [cellView insertSubview:mioContainer atIndex:0];
+            [cellView addSubview:mioContainer];
         }
         CGFloat cw = cellView.bounds.size.width;
         mioContainer.frame = CGRectMake(margin, 0, cw - 2.0 * margin, cellView.bounds.size.height);
@@ -197,11 +198,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         cellView.layer.maskedCorners = 0;
         cellView.layer.borderWidth = 0;
         cellView.layer.borderColor = nil;
-
-        UIView *cv = ((UITableViewCell *)self).contentView;
-        if (cv) {
-            cv.frame = CGRectMake(margin, 0, cw - 2.0 * margin, cv.frame.size.height);
-        }
     }
 
     static NSSet *bgColorSkipList = nil;
