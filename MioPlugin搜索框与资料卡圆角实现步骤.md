@@ -1,6 +1,6 @@
 # MioPlugin 搜索框圆角 & 资料卡圆角 实现步骤
 
-> **日期**: 2026-06-02（二次验证修订版）
+> **日期**: 2026-06-02（代码审查修订版）
 > **文档位置**: `/www/wwwroot/ios/MioPlugin搜索框与资料卡圆角实现步骤.md`
 > **参考分析**: [微信优化搜索框与资料卡圆角深度分析.md](file:///www/wwwroot/ios/微信优化搜索框与资料卡圆角深度分析.md)
 > **目标文件**: [ListCornerRadiusHook.m](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m)
@@ -15,6 +15,7 @@
 4. [功能一: 搜索框圆角](#4-功能一-搜索框圆角)
 5. [功能二: 资料卡圆角（Cell Hook 中处理的部分）](#5-功能二-资料卡圆角cell-hook-中处理的部分)
 6. [改动总览](#6-改动总览)
+7. [代码审查结果](#7-代码审查结果)
 
 ---
 
@@ -608,3 +609,211 @@ Phase 2: 资料卡圆角（中等，依赖 Phase 1 的配置结构）
 - **资料卡背景图**: 需要处理图片加载、缓存、深浅模式切换、对齐方式等，复杂度高
 - **资料卡高度调整**: 修改 Cell frame 可能与微信内部布局冲突
 - **资料卡间距调整**: 依赖 Cell margin 的整体逻辑，单独处理资料卡间距可能导致布局异常
+
+---
+
+## 7️⃣ 代码审查结果
+
+> **审查日期**: 2026-06-02
+> **审查范围**: 搜索框圆角 + 资料卡圆角全部已实现代码
+
+### 7.1 审查总览
+
+| 审查项 | 文件 | 结果 | 问题数 |
+|--------|------|:----:|:-----:|
+| 搜索框圆角 Hook | [ListCornerRadiusHook.m L148-L170](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L148-L170) | ✅ 通过 | 0 |
+| WCSearchBar Hook 注册 | [ListCornerRadiusHook.m L349-L360](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L349-L360) | ✅ 通过 | 0 |
+| 资料卡识别 | [ListCornerRadiusHook.m L199-L223](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L199-L223) | ⚠️ 有建议 | 1 |
+| wp_isProfileCard | [ListCornerRadiusHook.m L611-L629](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L611-L629) | ⚠️ 有建议 | 1 |
+| wp_applyProfileCardCorner | [ListCornerRadiusHook.m L631-L664](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L631-L664) | ✅ 通过 | 0 |
+| wp_hideQRButtonInCell | [ListCornerRadiusHook.m L666-L673](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L666-L673) | ⚠️ 有问题 | 1 |
+| wp_hideQRButtonInSubviews | [ListCornerRadiusHook.m L676-L687](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L676-L687) | ✅ 通过 | 0 |
+| PluginConfig 配置 | [PluginConfig.h L167-L170](file:///www/wwwroot/ios/MioPlugin/Config/PluginConfig.h#L167-L170) | ✅ 通过 | 0 |
+| PluginConfig 默认值 | [PluginConfig.m L453-L462](file:///www/wwwroot/ios/MioPlugin/Config/PluginConfig.m#L453-L462) | ✅ 通过 | 0 |
+| 设置界面 | [SettingListCornerRadiusController.m L187-L217](file:///www/wwwroot/ios/MioPlugin/Settings/Controllers/SettingListCornerRadiusController.m#L187-L217) | ✅ 通过 | 0 |
+| switchChanged 更新 | [SettingListCornerRadiusController.m L248](file:///www/wwwroot/ios/MioPlugin/Settings/Controllers/SettingListCornerRadiusController.m#L248) | ✅ 通过 | 0 |
+
+**总结**: 0 个严重问题，1 个需修复问题，2 个优化建议
+
+---
+
+### 7.2 🔴 需修复问题
+
+#### 问题 1: `wp_hideQRButtonInCell` 会误隐藏所有 Button
+
+**位置**: [L666-L673](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L666-L673)
+
+**当前代码**:
+```objc
++ (void)wp_hideQRButtonInCell:(UIView *)cell {
+    for (UIView *sub in cell.subviews) {
+        NSString *cn = NSStringFromClass([sub class]);
+        if ([cn containsString:@"Button"]) {  // ← 问题: 匹配所有 Button
+            sub.hidden = YES;                  // ← 无条件隐藏
+        }
+        [self wp_hideQRButtonInSubviews:sub.subviews];
+    }
+}
+```
+
+**问题**: 第一层遍历中，所有类名包含 "Button" 的子视图都会被**无条件隐藏**，而 `wp_hideQRButtonInSubviews` 中反而加了 `x > 70%` 的位置判断。逻辑不一致，可能导致资料卡中非二维码的按钮也被隐藏。
+
+**微信优化的做法** ([L9598-L9630](file:///www/wwwroot/ios/插件/微信优化反编译最新/123456.c#L9598-L9630)):
+```c
+// 微信优化只隐藏特定类型的按钮
+if ([subview isKindOfClass:[MMUIButton class]] ||
+    [subview isKindOfClass:[UIButton class]]) {
+    BOOL hideQR = [defaults boolForKey:@"HideQRCodeButton"];
+    if (hideQR) {
+        [subview setHidden:YES];
+    }
+}
+```
+
+**建议修复**:
+```objc
++ (void)wp_hideQRButtonInCell:(UIView *)cell {
+    for (UIView *sub in cell.subviews) {
+        NSString *cn = NSStringFromClass([sub class]);
+        if ([cn containsString:@"Button"]) {
+            CGFloat x = sub.frame.origin.x;
+            if (x > sub.superview.bounds.size.width * 0.7) {  // ← 加位置判断
+                sub.hidden = YES;
+            }
+        }
+        [self wp_hideQRButtonInSubviews:sub.subviews];
+    }
+}
+```
+
+---
+
+### 7.3 🟡 优化建议
+
+#### 建议 1: `wp_isProfileCard` 只搜索了 2 层 subviews
+
+**位置**: [L611-L629](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L611-L629)
+
+**当前代码**: 只搜索 `cell.subviews` 和 `subview.subviews` 两层。
+
+**微信优化的做法** ([L6318-L6328](file:///www/wwwroot/ios/插件/微信优化反编译最新/123456.c#L6318-L6328)):
+```c
+// 微信优化使用 _NSClassFromString + isKindOfClass，遍历所有层级
+FUN_000d0160(param_5);  // [cell subviews] → 递归遍历所有层级
+uVar14 = _NSClassFromString(&cf_MMHeadImageView);
+auVar26 = _objc_opt_isKindOfClass(uVar20, uVar14);  // isKindOfClass 判断
+```
+
+**建议**: 改为递归搜索所有层级，或使用 `isKindOfClass` 代替字符串匹配：
+
+```objc
++ (BOOL)wp_isProfileCard:(UIView *)cell {
+    return [self wp_findMMHeadImageViewInSubviews:cell.subviews];
+}
+
++ (BOOL)wp_findMMHeadImageViewInSubviews:(NSArray<UIView *> *)subviews {
+    for (UIView *sub in subviews) {
+        NSString *cn = NSStringFromClass([sub class]);
+        if ([cn isEqualToString:@"MMHeadImageView"]) {
+            return YES;
+        }
+        if ([self wp_findMMHeadImageViewInSubviews:sub.subviews]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+```
+
+**风险**: 低。当前 2 层搜索在大多数情况下够用，但微信内部视图层级可能变化。
+
+#### 建议 2: 资料卡识别可以增加 `cellHeight > 50` 的辅助判断
+
+**位置**: [L199-L200](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L199-L200)
+
+**当前代码**:
+```objc
+BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
+if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
+```
+
+**微信优化的做法** ([L6330-L6333](file:///www/wwwroot/ios/插件/微信优化反编译最新/123456.c#L6330-L6333)):
+```c
+if ((auVar26._0_8_ & 1) != 0) {  // 找到 MMHeadImageView
+    FUN_000c58c0(param_5);         // [cell frame]
+    if (param_4 <= 50.0) goto LAB_000085a4;  // ★ cellHeight <= 50 → 跳过
+    // ... 进入资料卡处理 ...
+}
+```
+
+**建议**: 增加 cellHeight 判断，避免将 MoreViewController 中的普通 Cell 误判为资料卡：
+
+```objc
+BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
+CGFloat cellHeight = cellView.frame.size.height;
+if (isMoreVC && cellHeight > 50 && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
+```
+
+**风险**: 低。资料卡行通常高度 > 100pt，普通 Cell 通常 < 50pt，这个判断可以有效区分。
+
+---
+
+### 7.4 ✅ 实现正确的部分
+
+#### 搜索框圆角 — 完全正确 ✅
+
+| 检查项 | 结果 |
+|--------|:----:|
+| Hook 目标正确 (`WCSearchBar.layoutSubviews`) | ✅ |
+| 先调用原方法再处理 | ✅ |
+| 配置开关检查 (`listSearchCornerRadius`) | ✅ |
+| 圆角半径默认值 18 | ✅ |
+| 使用 `searchBoxContainer`（不是 `searchField`） | ✅ |
+| `@try/@catch` 保护 `valueForKey:` | ✅ |
+| Hook 注册时检查 class 是否存在 | ✅ |
+| 日志输出 | ✅ |
+
+#### 资料卡圆角 — 核心逻辑正确 ✅
+
+| 检查项 | 结果 |
+|--------|:----:|
+| 识别 `MoreViewController` | ✅ |
+| 识别 `MMHeadImageView` | ✅ |
+| 先调用原方法再处理 | ✅ |
+| 圆角半径复用 `listCellCornerRadius` | ✅ |
+| 圆角半径默认值 18 | ✅ |
+| `layer.cornerRadius` + `masksToBounds` | ✅ |
+| 卡片背景色使用独立配置 | ✅ |
+| 深色模式判断 | ✅ |
+| 边框开关/宽度/颜色配置 | ✅ |
+| 边框默认宽度 2.0 | ✅ |
+| 边框颜色 fallback | ✅ |
+| 处理后 `return`，不走普通 Cell 逻辑 | ✅ |
+
+#### PluginConfig — 完全正确 ✅
+
+| 检查项 | 结果 |
+|--------|:----:|
+| 4 个新属性声明 | ✅ |
+| 默认值设置 | ✅ |
+| 读取/保存逻辑 | ✅ |
+| Key 前缀处理 | ✅ |
+
+#### 设置界面 — 完全正确 ✅
+
+| 检查项 | 结果 |
+|--------|:----:|
+| 资料卡边框开关 | ✅ |
+| 资料卡边框宽度输入 | ✅ |
+| 资料卡边框浅色/深色 | ✅ |
+| `switchChanged:` 重启提示 | ✅ |
+
+---
+
+### 7.5 修复优先级
+
+| 优先级 | 问题 | 建议 |
+|:------:|------|------|
+| 🔴 高 | `wp_hideQRButtonInCell` 误隐藏所有 Button | 加 `x > 70%` 位置判断 |
+| 🟡 中 | 资料卡识别缺少 `cellHeight > 50` 辅助判断 | 增加高度判断条件 |
+| 🟢 低 | `wp_isProfileCard` 只搜索 2 层 | 改为递归搜索（可选） |

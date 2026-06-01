@@ -49,6 +49,8 @@ static UIViewController *findParentViewController(UIView *view) {
 
 + (BOOL)wp_isProfileCard:(UIView *)cell;
 
++ (BOOL)wp_findMMHeadImageViewInSubviews:(NSArray<UIView *> *)subviews;
+
 + (void)wp_applyProfileCardCorner:(UIView *)cell
                       cornerRadius:(NSInteger)radius
                            isDark:(BOOL)isDark;
@@ -197,7 +199,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     UIView *cellView = (UIView *)self;
 
     BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
-    if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
+    CGFloat cellHeight = cellView.frame.size.height;
+    if (isMoreVC && cellHeight > 50 && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
@@ -609,23 +612,20 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 }
 
 + (BOOL)wp_isProfileCard:(UIView *)cell {
-    BOOL found = NO;
-    for (UIView *subview in cell.subviews) {
-        NSString *cn = NSStringFromClass([subview class]);
+    return [self wp_findMMHeadImageViewInSubviews:cell.subviews];
+}
+
++ (BOOL)wp_findMMHeadImageViewInSubviews:(NSArray<UIView *> *)subviews {
+    for (UIView *sub in subviews) {
+        NSString *cn = NSStringFromClass([sub class]);
         if ([cn isEqualToString:@"MMHeadImageView"]) {
-            found = YES;
-            break;
+            return YES;
         }
-        for (UIView *sub2 in subview.subviews) {
-            NSString *cn2 = NSStringFromClass([sub2 class]);
-            if ([cn2 isEqualToString:@"MMHeadImageView"]) {
-                found = YES;
-                break;
-            }
+        if ([self wp_findMMHeadImageViewInSubviews:sub.subviews]) {
+            return YES;
         }
-        if (found) break;
     }
-    return found;
+    return NO;
 }
 
 + (void)wp_applyProfileCardCorner:(UIView *)cell
@@ -667,7 +667,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     for (UIView *sub in cell.subviews) {
         NSString *cn = NSStringFromClass([sub class]);
         if ([cn containsString:@"Button"]) {
-            sub.hidden = YES;
+            CGFloat x = sub.frame.origin.x;
+            if (x > sub.superview.bounds.size.width * 0.7) {
+                sub.hidden = YES;
+            }
         }
         [self wp_hideQRButtonInSubviews:sub.subviews];
     }
