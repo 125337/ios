@@ -564,20 +564,22 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
 + (CAShapeLayer *)wp_buildTopBorderPath:(CGRect)rect
                             borderWidth:(CGFloat)borderWidth
-                            borderColor:(UIColor *)borderColor
-                                 radius:(CGFloat)radius {
+                           borderColor:(UIColor *)borderColor
+                                radius:(CGFloat)radius {
     CAShapeLayer *shape = [CAShapeLayer layer];
     shape.fillColor = [UIColor clearColor].CGColor;
     shape.strokeColor = borderColor.CGColor;
     shape.lineWidth = borderWidth;
     shape.lineJoin = kCALineJoinRound;
+    shape.lineCapStyle = kCALineCapButt;
 
     CGFloat hw = borderWidth / 2.0;
     CGFloat w = rect.size.width;
     CGFloat h = rect.size.height;
 
     UIBezierPath *path = [UIBezierPath bezierPath];
-    [path moveToPoint:CGPointMake(hw, radius)];
+    [path moveToPoint:CGPointMake(hw, h)];
+    [path addLineToPoint:CGPointMake(hw, radius)];
     [path addArcWithCenter:CGPointMake(hw + radius, radius)
                     radius:radius
                 startAngle:M_PI
@@ -588,27 +590,29 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                 startAngle:M_PI * 1.5
                   endAngle:0
                  clockwise:YES];
-    [path addLineToPoint:CGPointMake(w - hw, h - hw)];
+    [path addLineToPoint:CGPointMake(w - hw, h)];
     shape.path = path.CGPath;
     return shape;
 }
 
 + (CAShapeLayer *)wp_buildBottomBorderPath:(CGRect)rect
                                borderWidth:(CGFloat)borderWidth
-                               borderColor:(UIColor *)borderColor
-                                    radius:(CGFloat)radius {
+                              borderColor:(UIColor *)borderColor
+                                   radius:(CGFloat)radius {
     CAShapeLayer *shape = [CAShapeLayer layer];
     shape.fillColor = [UIColor clearColor].CGColor;
     shape.strokeColor = borderColor.CGColor;
     shape.lineWidth = borderWidth;
     shape.lineJoin = kCALineJoinRound;
+    shape.lineCapStyle = kCALineCapButt;
 
     CGFloat hw = borderWidth / 2.0;
     CGFloat w = rect.size.width;
     CGFloat h = rect.size.height;
 
     UIBezierPath *path = [UIBezierPath bezierPath];
-    [path moveToPoint:CGPointMake(hw, h - radius)];
+    [path moveToPoint:CGPointMake(hw, 0)];
+    [path addLineToPoint:CGPointMake(hw, h - radius)];
     [path addArcWithCenter:CGPointMake(hw + radius, h - radius)
                     radius:radius
                 startAngle:M_PI
@@ -619,7 +623,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                 startAngle:M_PI * 0.5
                   endAngle:0
                  clockwise:NO];
-    [path addLineToPoint:CGPointMake(w - hw, hw)];
+    [path addLineToPoint:CGPointMake(w - hw, 0)];
     shape.path = path.CGPath;
     return shape;
 }
