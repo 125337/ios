@@ -176,27 +176,19 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     CGFloat margin = config.listCellMargin;
     if (margin > 0 && config.listCornerRadiusEnabled) {
-        UITableView *tv = nil;
-        UIView *p = cellView.superview;
-        while (p) {
-            if ([p isKindOfClass:[UITableView class]]) {
-                tv = (UITableView *)p;
-                break;
-            }
-            p = p.superview;
-        }
-        if (tv && (tv.isTracking || tv.isDragging || tv.isDecelerating)) {
-            goto SKIP_FRAME_MODIFY;
-        }
-
         CGFloat currentX = cellView.frame.origin.x;
+        CGFloat currentW = cellView.frame.size.width;
         UIView *superview = cellView.superview;
         CGFloat superX = superview ? superview.frame.origin.x : 0;
         CGFloat targetX = (margin > superX) ? margin - superX : 0;
         CGFloat containerW = superview ? superview.bounds.size.width
                                        : [UIScreen mainScreen].bounds.size.width;
         CGFloat targetW = containerW - 2.0 * margin;
-        CGFloat currentW = cellView.frame.size.width;
+
+        if (fabs(currentX - targetX) > margin * 2 || fabs(currentW - targetW) > margin * 2) {
+            return;
+        }
+
         if (currentX != targetX || fabs(currentW - targetW) > 0.5) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
@@ -204,7 +196,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             cellView.frame = f;
         }
     }
-SKIP_FRAME_MODIFY:
 
     static NSSet *bgColorSkipList = nil;
     static dispatch_once_t onceBgToken;
