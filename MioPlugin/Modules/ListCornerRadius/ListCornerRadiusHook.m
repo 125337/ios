@@ -152,6 +152,18 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                 cellView.frame.size.height,
                 screenW,
                 margin);
+            UIView *p = cellView.superview;
+            int depth = 0;
+            while (p && depth < 10) {
+                WPLog(@"Corner", @"[DIAG-HIERARCHY] d=%d class=%@ clip=%d bounds=(%.0f,%.0f,%.0f,%.0f)",
+                    depth,
+                    NSStringFromClass([p class]),
+                    p.clipsToBounds,
+                    p.bounds.origin.x, p.bounds.origin.y,
+                    p.bounds.size.width, p.bounds.size.height);
+                p = p.superview;
+                depth++;
+            }
         }
     }
 
