@@ -112,13 +112,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 
     UIViewController *vc = findParentViewController((UIView *)self);
-    if (!vc) {
-        if (_orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
-        return;
-    }
-    NSString *className = NSStringFromClass([vc class]);
+    NSString *className = vc ? NSStringFromClass([vc class]) : nil;
 
     if (shouldSkipCorner(vc)) {
         if (_orig_MMTableViewCell_layoutSubviews) {
@@ -134,8 +128,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     UIView *cellView = (UIView *)self;
 
     CGFloat margin = config.listCellMargin;
-    BOOL hasOwnCorner = (cellView.layer.cornerRadius > 0.5);
-    if (margin > 0 && config.listCornerRadiusEnabled && !hasOwnCorner) {
+    if (margin > 0 && config.listCornerRadiusEnabled) {
         CGFloat currentX = cellView.frame.origin.x;
         UIView *superview = cellView.superview;
         CGFloat superX = superview ? superview.frame.origin.x : 0;
@@ -212,27 +205,25 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     NSInteger row = indexPath.row;
     NSInteger totalRows = [tableView numberOfRowsInSection:section];
 
-    if (!hasOwnCorner) {
-        if (isContacts) {
-            [ListCornerRadiusHook wp_applyCornerForContacts:cellView
-                                                 tableView:tableView
-                                                 indexPath:indexPath
-                                                   section:section
-                                                       row:row
-                                                     total:totalRows
+    if (isContacts) {
+        [ListCornerRadiusHook wp_applyCornerForContacts:cellView
+                                             tableView:tableView
+                                             indexPath:indexPath
+                                               section:section
+                                                   row:row
+                                                 total:totalRows
                                           cornerRadius:cornerRadius
                                               isFTSHome:isFTSHome];
-        } else {
-            [ListCornerRadiusHook wp_applyStandardCorner:cellView
-                                              tableView:tableView
-                                              indexPath:indexPath
-                                                section:section
-                                                    row:row
-                                                  total:totalRows
+    } else {
+        [ListCornerRadiusHook wp_applyStandardCorner:cellView
+                                          tableView:tableView
+                                          indexPath:indexPath
+                                            section:section
+                                                row:row
+                                              total:totalRows
                                        cornerRadius:cornerRadius
                                           isFTSHome:isFTSHome
                                           className:className];
-        }
     }
 
     cellView.layer.masksToBounds = YES;

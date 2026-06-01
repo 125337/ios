@@ -118,7 +118,6 @@ jobs:
                 -IMioPlugin/Modules/PlaceholderText \
                 -IMioPlugin/Modules/ChatTopBar \
                 -IMioPlugin/Modules/ListCornerRadius \
-                -IMioPlugin/Modules/QuickActions \
                 -IMioPlugin/Settings/Common \
                 -IMioPlugin/Settings/Controllers \
                 -o "$OBJ_FILE" \
