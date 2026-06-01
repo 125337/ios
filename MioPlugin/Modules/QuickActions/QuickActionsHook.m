@@ -7,10 +7,10 @@
 #import <UIKit/UIKit.h>
 #import <substrate.h>
 
-static __unused IMP orig_trailingSwipeActionsConfig = NULL;
-static __unused IMP orig_leadingSwipeActionsConfig = NULL;
+static IMP orig_trailingSwipeActionsConfig = NULL;
+static IMP orig_leadingSwipeActionsConfig = NULL;
 static BOOL (*orig_canEditRowAtIndexPath)(id, SEL, id, id) = NULL;
-static void (*orig_viewDidAppear)(id, SEL, BOOL) = NULL;
+static void (*orig_setDelegate)(id, SEL, id) = NULL;
 static BOOL s_methodsInstalled = NO;
 
 static id getSessionInfo(id self, NSIndexPath *indexPath) {
@@ -243,10 +243,7 @@ static id replaced_leadingSwipeActionsConfig(id self, SEL _cmd, UITableView *tab
 
 static void installMethodsOnClass(Class targetClass) {
     if (s_methodsInstalled) return;
-    if (!targetClass) {
-        WPLog(@"QuickActions", @"[ERR] targetClass is nil");
-        return;
-    }
+    if (!targetClass) return;
 
     s_methodsInstalled = YES;
     WPLog(@"QuickActions", @"[INFO] installing methods on class: %@", NSStringFromClass(targetClass));
@@ -256,7 +253,7 @@ static void installMethodsOnClass(Class targetClass) {
         MSHookMessageEx(targetClass, trailingSel,
             (IMP)replaced_trailingSwipeActionsConfig,
             &orig_trailingSwipeActionsConfig);
-        WPLog(@"QuickActions", @"[INFO] hooked trailingSwipeActions on %@ (method exists)", NSStringFromClass(targetClass));
+        WPLog(@"QuickActions", @"[INFO] hooked trailingSwipeActions on %@", NSStringFromClass(targetClass));
     } else {
         IMP impl = (IMP)replaced_trailingSwipeActionsConfig;
         BOOL added = class_addMethod(targetClass, trailingSel, impl, "@@:@@");
@@ -272,7 +269,7 @@ static void installMethodsOnClass(Class targetClass) {
         MSHookMessageEx(targetClass, leadingSel,
             (IMP)replaced_leadingSwipeActionsConfig,
             &orig_leadingSwipeActionsConfig);
-        WPLog(@"QuickActions", @"[INFO] hooked leadingSwipeActions on %@ (method exists)", NSStringFromClass(targetClass));
+        WPLog(@"QuickActions", @"[INFO] hooked leadingSwipeActions on %@", NSStringFromClass(targetClass));
     } else {
         IMP impl = (IMP)replaced_leadingSwipeActionsConfig;
         BOOL added = class_addMethod(targetClass, leadingSel, impl, "@@:@@");
@@ -300,60 +297,47 @@ static void installMethodsOnClass(Class targetClass) {
     }
 }
 
-static void replaced_viewDidAppear(id self, SEL _cmd, BOOL animated) {
-    if (orig_viewDidAppear) {
-        orig_viewDidAppear(self, _cmd, animated);
+static void replaced_setDelegate(id self, SEL _cmd, id delegate) {
+    if (orig_setDelegate) {
+        orig_setDelegate(self, _cmd, delegate);
     }
+
+    if (!delegate) return;
+    if (s_methodsInstalled) return;
 
     if (![PluginConfig shared].quickActionsEnabled) return;
 
-    if (s_methodsInstalled) return;
+    WPLog(@"QuickActions", @"[INFO] MainFrameTableView setDelegate: %@", NSStringFromClass([delegate class]));
 
-    id tableView = nil;
-    @try {
-        tableView = [self valueForKey:@"m_tableView"];
-    } @catch (NSException *e) {}
-
-    if (!tableView) {
-        WPLog(@"QuickActions", @"[DEBUG] no m_tableView found on %@", NSStringFromClass([self class]));
-        return;
-    }
-
-    id delegate = [tableView delegate];
-    if (!delegate) {
-        WPLog(@"QuickActions", @"[DEBUG] no delegate on tableView");
-        return;
-    }
-
-    Class delegateClass = [delegate class];
-    WPLog(@"QuickActions", @"[INFO] found tableView delegate class: %@", NSStringFromClass(delegateClass));
-
-    installMethodsOnClass(delegateClass);
+    installMethodsOnClass([delegate class]);
 }
 
 @implementation QuickActionsHook
 
 + (void)install {
-    Class newClass = objc_getClass("NewMainFrameViewController");
-    if (!newClass) {
-        newClass = objc_getClass("MMMainFrameViewController");
-    }
-
-    if (!newClass) {
-        WPLog(@"QuickActions", @"[ERR] No main frame class found");
-        return;
-    }
-
-    WPLog(@"QuickActions", @"[INFO] hooking viewDidAppear on %@", NSStringFromClass(newClass));
-
-    SEL appearSel = @selector(viewDidAppear:);
-    if ([newClass instancesRespondToSelector:appearSel]) {
-        MSHookMessageEx(newClass, appearSel,
-            (IMP)replaced_viewDidAppear,
-            (IMP *)&orig_viewDidAppear);
-        WPLog(@"QuickActions", @"[INFO] hooked viewDidAppear on %@", NSStringFromClass(newClass));
+    Class mftClass = objc_getClass("MainFrameTableView");
+    if (mftClass) {
+        SEL setDelSel = @selector(setDelegate:);
+        if ([mftClass instancesRespondToSelector:setDelSel]) {
+            MSHookMessageEx(mftClass, setDelSel,
+                (IMP)replaced_setDelegate,
+                (IMP *)&orig_setDelegate);
+            WPLog(@"QuickActions", @"[INFO] hooked setDelegate on MainFrameTableView");
+        } else {
+            WPLog(@"QuickActions", @"[ERR] MainFrameTableView has no setDelegate:");
+        }
     } else {
-        WPLog(@"QuickActions", @"[ERR] viewDidAppear not found on %@", NSStringFromClass(newClass));
+        WPLog(@"QuickActions", @"[ERR] MainFrameTableView class not found, trying fallback");
+
+        Class newClass = objc_getClass("NewMainFrameViewController");
+        if (!newClass) {
+            newClass = objc_getClass("MMMainFrameViewController");
+        }
+
+        if (newClass) {
+            WPLog(@"QuickActions", @"[INFO] fallback: using %@ for delegate discovery", NSStringFromClass(newClass));
+            installMethodsOnClass(newClass);
+        }
     }
 }
 
