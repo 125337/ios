@@ -176,7 +176,16 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     CGFloat margin = config.listCellMargin;
     if (margin > 0 && config.listCornerRadiusEnabled) {
-        if (cellView.frame.origin.x < 0) {
+        UITableView *tv = nil;
+        UIView *p = cellView.superview;
+        while (p) {
+            if ([p isKindOfClass:[UITableView class]]) {
+                tv = (UITableView *)p;
+                break;
+            }
+            p = p.superview;
+        }
+        if (tv && (tv.isTracking || tv.isDragging || tv.isDecelerating)) {
             goto SKIP_FRAME_MODIFY;
         }
 
