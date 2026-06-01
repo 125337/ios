@@ -139,32 +139,13 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         UIView *superview = cellView.superview;
         CGFloat superX = superview ? superview.frame.origin.x : 0;
         CGFloat targetX = (margin > superX) ? margin - superX : 0;
-        CGFloat screenW = [UIScreen mainScreen].bounds.size.width;
-        if (currentX - 2.0 * margin <= screenW && currentX != targetX) {
+        CGFloat containerW = superview ? superview.bounds.size.width
+                                       : [UIScreen mainScreen].bounds.size.width;
+        if (currentX != targetX) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
-            f.size.width = screenW - 2.0 * margin;
+            f.size.width = containerW - 2.0 * margin;
             cellView.frame = f;
-            WPLog(@"Corner", @"[DIAG-FRAME] vc=%@ x=%.1f y=%.1f w=%.1f h=%.1f screenW=%.1f margin=%.1f",
-                className,
-                cellView.frame.origin.x,
-                cellView.frame.origin.y,
-                cellView.frame.size.width,
-                cellView.frame.size.height,
-                screenW,
-                margin);
-            UIView *p = cellView.superview;
-            int depth = 0;
-            while (p && depth < 10) {
-                WPLog(@"Corner", @"[DIAG-HIERARCHY] d=%d class=%@ clip=%d bounds=(%.0f,%.0f,%.0f,%.0f)",
-                    depth,
-                    NSStringFromClass([p class]),
-                    p.clipsToBounds,
-                    p.bounds.origin.x, p.bounds.origin.y,
-                    p.bounds.size.width, p.bounds.size.height);
-                p = p.superview;
-                depth++;
-            }
         }
     }
 
