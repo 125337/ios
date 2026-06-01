@@ -174,29 +174,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
-    CGFloat margin = config.listCellMargin;
-    if (margin > 0 && config.listCornerRadiusEnabled) {
-        CGFloat currentX = cellView.frame.origin.x;
-        CGFloat currentW = cellView.frame.size.width;
-        UIView *superview = cellView.superview;
-        CGFloat superX = superview ? superview.frame.origin.x : 0;
-        CGFloat targetX = (margin > superX) ? margin - superX : 0;
-        CGFloat containerW = superview ? superview.bounds.size.width
-                                       : [UIScreen mainScreen].bounds.size.width;
-        CGFloat targetW = containerW - 2.0 * margin;
-
-        if (fabs(currentX - targetX) > margin * 2 || fabs(currentW - targetW) > margin * 2) {
-            return;
-        }
-
-        if (currentX != targetX || fabs(currentW - targetW) > 0.5) {
-            CGRect f = cellView.frame;
-            f.origin.x = targetX;
-            f.size.width = targetW;
-            cellView.frame = f;
-        }
-    }
-
     static NSSet *bgColorSkipList = nil;
     static dispatch_once_t onceBgToken;
     dispatch_once(&onceBgToken, ^{
@@ -249,6 +226,17 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         parent = parent.superview;
     }
     if (!tableView) return;
+
+    CGFloat margin = config.listCellMargin;
+    if (margin > 0 && config.listCornerRadiusEnabled) {
+        UIEdgeInsets currentInset = tableView.contentInset;
+        if (fabs(currentInset.left - margin) > 0.5 || fabs(currentInset.right - margin) > 0.5) {
+            UIEdgeInsets targetInset = UIEdgeInsetsMake(currentInset.top, margin,
+                                                      currentInset.bottom, margin);
+            tableView.contentInset = targetInset;
+            tableView.scrollIndicatorInsets = targetInset;
+        }
+    }
 
     NSIndexPath *indexPath = [tableView indexPathForCell:(UITableViewCell *)self];
     if (!indexPath) return;
