@@ -128,13 +128,41 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
-    BOOL isDark = NO;
-    if (@available(iOS 13.0, *)) {
-        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    static NSSet *bgColorSkipList = nil;
+    static dispatch_once_t onceBgToken;
+    dispatch_once(&onceBgToken, ^{
+        bgColorSkipList = [NSSet setWithObjects:
+            @"WCTimeLineViewController",
+            @"WCAccountLoginUsersViewController",
+            @"SessionSelectController",
+            @"WCListViewController",
+            @"BrandNotificationListViewController",
+            @"BrandNewSessionViewController",
+            @"BaseMsgContentViewController",
+            @"BraceletRankProfileViewController",
+            @"BraceletRankViewController",
+            @"WCRedEnvelopesRedEnvelopesDetailViewController",
+            @"MsgRecordDetailViewController",
+            @"ChatRoomInfoViewController",
+            @"ContactInfoViewController",
+            @"AddFriendEntryViewController",
+            @"AddContactToChatRoomViewController",
+            @"SayHelloViewController",
+            @"FTSHomeViewController",
+            @"MMFinderPivotLiveViewController",
+            @"WCSearchController",
+            nil];
+    });
+
+    if (![bgColorSkipList containsObject:className]) {
+        BOOL isDark = NO;
+        if (@available(iOS 13.0, *)) {
+            isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+        }
+        UIColor *customBg = [config colorFromHex:isDark
+            ? config.listCellDarkBgColor : config.listCellLightBgColor];
+        ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
     }
-    UIColor *customBg = [config colorFromHex:isDark
-        ? config.listCellDarkBgColor : config.listCellLightBgColor];
-    ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
 
     NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
     if (cornerRadius == 0) cornerRadius = 18;
