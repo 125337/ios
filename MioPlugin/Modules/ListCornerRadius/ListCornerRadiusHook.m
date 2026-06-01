@@ -144,6 +144,14 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
             cellView.frame = f;
+            WPLog(@"Corner", @"[DIAG-FRAME] vc=%@ x=%.1f y=%.1f w=%.1f h=%.1f screenW=%.1f margin=%.1f",
+                className,
+                cellView.frame.origin.x,
+                cellView.frame.origin.y,
+                cellView.frame.size.width,
+                cellView.frame.size.height,
+                screenW,
+                margin);
         }
     }
 
