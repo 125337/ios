@@ -81,7 +81,13 @@ static BOOL shouldSkipCorner(UIViewController *vc) {
         skipSet = [NSSet setWithObjects:
             @"WCTimeLineViewController",
             @"WCAccountLoginUsersViewController",
+            @"SessionSelectController",
+            @"WCListViewController",
+            @"BrandNotificationListViewController",
+            @"BrandNewSessionViewController",
             @"BaseMsgContentViewController",
+            @"BraceletRankProfileViewController",
+            @"BraceletRankViewController",
             @"WCRedEnvelopesRedEnvelopesDetailViewController",
             @"MsgRecordDetailViewController",
             @"ChatRoomInfoViewController",
@@ -90,6 +96,7 @@ static BOOL shouldSkipCorner(UIViewController *vc) {
             @"AddContactToChatRoomViewController",
             @"SayHelloViewController",
             @"MMFinderPivotLiveViewController",
+            @"WCSearchController",
             nil];
     });
     return [skipSet containsObject:vcName];
@@ -221,9 +228,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                           className:className];
     }
 
-    if (cellView.layer.cornerRadius > 0) {
-        cellView.layer.masksToBounds = YES;
-    }
+    cellView.layer.masksToBounds = YES;
 
 }
 
