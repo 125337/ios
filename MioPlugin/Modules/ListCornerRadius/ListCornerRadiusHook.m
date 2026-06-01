@@ -163,7 +163,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                     p.bounds.origin.x, p.bounds.origin.y,
                     p.bounds.size.width, p.bounds.size.height);
                 p = p.superview;
-            depth++;
+                depth++;
+            }
         }
     }
 
