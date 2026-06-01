@@ -47,6 +47,16 @@ static UIViewController *findParentViewController(UIView *view) {
 
 + (UIView *)wp_findFoldViewInSubviews:(NSArray<UIView *> *)subviews;
 
++ (BOOL)wp_isProfileCard:(UIView *)cell;
+
++ (void)wp_applyProfileCardCorner:(UIView *)cell
+                      cornerRadius:(NSInteger)radius
+                           isDark:(BOOL)isDark;
+
++ (void)wp_hideQRButtonInCell:(UIView *)cell;
+
++ (void)wp_hideQRButtonInSubviews:(NSArray<UIView *> *)subviews;
+
 + (CAShapeLayer *)wp_buildUnifiedBorderLayer:(CGRect)rect
                                  borderWidth:(CGFloat)borderWidth
                                 borderColor:(UIColor *)borderColor
@@ -137,7 +147,7 @@ static BOOL shouldSkipCorner(UIViewController *vc) {
 
 static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
     if (_orig_WCSearchBar_layoutSubviews) {
-        _orig_WCSearchBar_layoutSubviews(self, _cmd);
+        ((void (*)(id, SEL))_orig_WCSearchBar_layoutSubviews)(self, _cmd);
     }
 
     PluginConfig *config = [PluginConfig shared];
