@@ -115,6 +115,13 @@ static BOOL shouldSkipCorner(UIViewController *vc) {
             @"KeyBoardMainController",
             @"WCAvatarFrameMainController",
             @"ChatFunctionsinfoController",
+            @"WCEhanceViewController",
+            @"WCUIBeautifyController",
+            @"WCCustomNameController",
+            @"WCHideToolController",
+            @"WCVersionFakeController",
+            @"WCEnhanceToolController",
+            @"WCAboutController",
             nil];
     });
     if ([skipSet containsObject:vcName]) return YES;
@@ -124,6 +131,9 @@ static BOOL shouldSkipCorner(UIViewController *vc) {
     dispatch_once(&prefixOnce, ^{
         prefixBlacklist = @[
             @"WCRefine",
+            @"WCPulse",
+            @"Themebox",
+            @"BubbleBox",
         ];
     });
     for (NSString *prefix in prefixBlacklist) {
@@ -166,6 +176,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     CGFloat margin = config.listCellMargin;
     if (margin > 0 && config.listCornerRadiusEnabled) {
+        if (cellView.frame.origin.x < 0) {
+            goto SKIP_FRAME_MODIFY;
+        }
+
         CGFloat currentX = cellView.frame.origin.x;
         UIView *superview = cellView.superview;
         CGFloat superX = superview ? superview.frame.origin.x : 0;
@@ -181,6 +195,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             cellView.frame = f;
         }
     }
+SKIP_FRAME_MODIFY:
 
     static NSSet *bgColorSkipList = nil;
     static dispatch_once_t onceBgToken;
