@@ -75,7 +75,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         }
         view.backgroundColor = bgColor ?: (isDark
             ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
-            : [UIColor groupTableViewBackgroundColor]);
+            : [UIColor clearColor]);
         return;
     }
 
@@ -95,7 +95,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         }
         view.backgroundColor = bgColor ?: (isDark
             ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
-            : [UIColor groupTableViewBackgroundColor]);
+            : [UIColor clearColor]);
     }
 }
 
@@ -118,7 +118,7 @@ static void _wp_clearPlainUIViewBackgrounds(UIView *root) {
             }
             UIColor *targetBg = bgColor ?: (isDark
         ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
-        : [UIColor groupTableViewBackgroundColor]);
+        : [UIColor clearColor]);
             for (UIView *child in subview.subviews) {
                 if ([NSStringFromClass([child class]) isEqualToString:@"UIView"]) {
                     child.backgroundColor = targetBg;
