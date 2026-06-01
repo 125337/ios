@@ -128,7 +128,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
-    PluginConfig *config = [PluginConfig shared];
     CGFloat margin = config.listCellMargin;
     if (margin > 0 && config.listCornerRadiusEnabled) {
         CGFloat currentX = cellView.frame.origin.x;
