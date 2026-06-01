@@ -412,9 +412,11 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 
     static void *const kBorderCacheKey = &kBorderCacheKey;
-    NSString *cacheKey = [NSString stringWithFormat:@"%ld_%.0f_%.0f_%ld_%.1f",
+    BOOL isDark = config.isDarkMode;
+    NSString *cacheKey = [NSString stringWithFormat:@"%ld_%.0f_%.0f_%ld_%.1f_%d",
         (long)position, cell.bounds.size.width, cell.bounds.size.height,
-        (long)radius, config.listCellBorderWidth];
+        (long)radius, config.listCellBorderWidth,
+        (int)isDark];
     NSString *lastCache = objc_getAssociatedObject(cell, kBorderCacheKey);
     if ([lastCache isEqualToString:cacheKey]) {
         return;
@@ -425,8 +427,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     CGFloat borderWidth = config.listCellBorderWidth;
     if (borderWidth == 0) borderWidth = 2.0;
-
-    BOOL isDark = config.isDarkMode;
 
     UIColor *borderColor = [config colorFromHex:isDark ? config.listCellBorderDarkColor : config.listCellBorderLightColor];
     if (!borderColor) {
