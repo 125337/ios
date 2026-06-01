@@ -428,6 +428,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
+    cell.layer.borderWidth = 0;
+    cell.layer.borderColor = nil;
+
     CGFloat borderWidth = config.listCellBorderWidth;
     if (borderWidth == 0) borderWidth = 2.0;
 
