@@ -128,6 +128,21 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
+    PluginConfig *config = [PluginConfig shared];
+    CGFloat margin = config.listCellMargin;
+    if (margin > 0 && config.listCornerRadiusEnabled) {
+        CGFloat currentX = cellView.frame.origin.x;
+        UIView *superview = cellView.superview;
+        CGFloat superX = superview ? superview.frame.origin.x : 0;
+        CGFloat targetX = (margin > superX) ? margin - superX : 0;
+        CGFloat screenW = [UIScreen mainScreen].bounds.size.width;
+        if (currentX - 2.0 * margin <= screenW && currentX != targetX) {
+            CGRect f = cellView.frame;
+            f.origin.x = targetX;
+            cellView.frame = f;
+        }
+    }
+
     static NSSet *bgColorSkipList = nil;
     static dispatch_once_t onceBgToken;
     dispatch_once(&onceBgToken, ^{
