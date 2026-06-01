@@ -411,9 +411,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
-    cell.layer.borderWidth = 0;
-    cell.layer.borderColor = nil;
-
     static void *const kBorderCacheKey = &kBorderCacheKey;
     NSString *cacheKey = [NSString stringWithFormat:@"%ld_%.0f_%.0f_%ld_%.1f",
         (long)position, cell.bounds.size.width, cell.bounds.size.height,
@@ -422,6 +419,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     if ([lastCache isEqualToString:cacheKey]) {
         return;
     }
+
+    cell.layer.borderWidth = 0;
+    cell.layer.borderColor = nil;
 
     CGFloat borderWidth = config.listCellBorderWidth;
     if (borderWidth == 0) borderWidth = 2.0;
