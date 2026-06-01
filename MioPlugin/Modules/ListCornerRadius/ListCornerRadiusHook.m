@@ -164,6 +164,22 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                 p = p.superview;
                 depth++;
             }
+            static NSArray *clipTargetVCs = nil;
+            static dispatch_once_t onceClip;
+            dispatch_once(&onceClip, ^{
+                clipTargetVCs = @[@"NewMainFrameViewController",
+                                 @"ContactsViewController",
+                                 @"FTSHomeViewController"];
+            });
+            if ([clipTargetVCs containsObject:className]) {
+                UIView *tv = cellView.superview;
+                while (tv && ![tv isKindOfClass:[UITableView class]]) {
+                    tv = tv.superview;
+                }
+                if (tv && tv.clipsToBounds) {
+                    tv.clipsToBounds = NO;
+                }
+            }
         }
     }
 

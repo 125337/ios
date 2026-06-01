@@ -61,23 +61,67 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (!parent) return;
 
     if (_wp_isTableViewClass(NSStringFromClass([parent class]))) {
-        view.backgroundColor = [UIColor clearColor];
+        BOOL isDark = NO;
+        if (@available(iOS 13.0, *)) {
+            isDark = (parent.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+        }
+        UIColor *bgColor = nil;
+        NSString *lightHex = [config valueForKey:@"listCellLightBgColor"];
+        NSString *darkHex = [config valueForKey:@"listCellDarkBgColor"];
+        if (isDark && darkHex.length > 0) {
+            bgColor = [config colorFromHex:darkHex];
+        } else if (!isDark && lightHex.length > 0) {
+            bgColor = [config colorFromHex:lightHex];
+        }
+        view.backgroundColor = bgColor ?: (isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor]);
         return;
     }
 
     UIView *gp = parent.superview;
     if (gp && _wp_isTableViewClass(NSStringFromClass([gp class]))) {
-        view.backgroundColor = [UIColor clearColor];
+        BOOL isDark = NO;
+        if (@available(iOS 13.0, *)) {
+            isDark = (gp.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+        }
+        UIColor *bgColor = nil;
+        NSString *lightHex = [config valueForKey:@"listCellLightBgColor"];
+        NSString *darkHex = [config valueForKey:@"listCellDarkBgColor"];
+        if (isDark && darkHex.length > 0) {
+            bgColor = [config colorFromHex:darkHex];
+        } else if (!isDark && lightHex.length > 0) {
+            bgColor = [config colorFromHex:lightHex];
+        }
+        view.backgroundColor = bgColor ?: (isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor]);
     }
 }
 
 static void (*_orig_NMFVC_viewDidLayoutSubviews)(id, SEL);
 static void _wp_clearPlainUIViewBackgrounds(UIView *root) {
+    PluginConfig *config = [PluginConfig shared];
     for (UIView *subview in root.subviews) {
         if ([subview isKindOfClass:[UITableView class]]) {
+            BOOL isDark = NO;
+            if (@available(iOS 13.0, *)) {
+                isDark = (subview.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+            }
+            UIColor *bgColor = nil;
+            NSString *lightHex = [config valueForKey:@"listCellLightBgColor"];
+            NSString *darkHex = [config valueForKey:@"listCellDarkBgColor"];
+            if (isDark && darkHex.length > 0) {
+                bgColor = [config colorFromHex:darkHex];
+            } else if (!isDark && lightHex.length > 0) {
+                bgColor = [config colorFromHex:lightHex];
+            }
+            UIColor *targetBg = bgColor ?: (isDark
+                ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+                : [UIColor whiteColor]);
             for (UIView *child in subview.subviews) {
                 if ([NSStringFromClass([child class]) isEqualToString:@"UIView"]) {
-                    child.backgroundColor = [UIColor clearColor];
+                    child.backgroundColor = targetBg;
                 }
             }
         }
