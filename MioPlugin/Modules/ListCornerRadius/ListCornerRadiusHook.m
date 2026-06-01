@@ -571,7 +571,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     shape.strokeColor = borderColor.CGColor;
     shape.lineWidth = borderWidth;
     shape.lineJoin = kCALineJoinRound;
-    shape.lineCapStyle = kCALineCapButt;
+    shape.lineCap = kCALineCapButt;
 
     CGFloat hw = borderWidth / 2.0;
     CGFloat w = rect.size.width;
@@ -604,7 +604,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     shape.strokeColor = borderColor.CGColor;
     shape.lineWidth = borderWidth;
     shape.lineJoin = kCALineJoinRound;
-    shape.lineCapStyle = kCALineCapButt;
+    shape.lineCap = kCALineCapButt;
 
     CGFloat hw = borderWidth / 2.0;
     CGFloat w = rect.size.width;
