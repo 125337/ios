@@ -141,10 +141,12 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         CGFloat targetX = (margin > superX) ? margin - superX : 0;
         CGFloat containerW = superview ? superview.bounds.size.width
                                        : [UIScreen mainScreen].bounds.size.width;
-        if (currentX != targetX) {
+        CGFloat targetW = containerW - 2.0 * margin;
+        CGFloat currentW = cellView.frame.size.width;
+        if (currentX != targetX || fabs(currentW - targetW) > 0.5) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
-            f.size.width = containerW - 2.0 * margin;
+            f.size.width = targetW;
             cellView.frame = f;
         }
     }
@@ -412,6 +414,15 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     cell.layer.borderWidth = 0;
     cell.layer.borderColor = nil;
 
+    static void *const kBorderCacheKey = &kBorderCacheKey;
+    NSString *cacheKey = [NSString stringWithFormat:@"%ld_%.0f_%.0f_%ld_%.1f",
+        (long)position, cell.bounds.size.width, cell.bounds.size.height,
+        (long)radius, config.listCellBorderWidth];
+    NSString *lastCache = objc_getAssociatedObject(cell, kBorderCacheKey);
+    if ([lastCache isEqualToString:cacheKey]) {
+        return;
+    }
+
     CGFloat borderWidth = config.listCellBorderWidth;
     if (borderWidth == 0) borderWidth = 2.0;
 
@@ -471,6 +482,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             break;
         }
     }
+
+    objc_setAssociatedObject(cell, kBorderCacheKey, cacheKey,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 + (void)applyBorderToView:(UIView *)view radius:(NSInteger)radius position:(NSInteger)position isFTSHome:(BOOL)isFTSHome {
