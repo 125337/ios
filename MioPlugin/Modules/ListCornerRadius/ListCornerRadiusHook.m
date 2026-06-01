@@ -174,6 +174,36 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
+    CGFloat margin = config.listCellMargin;
+    BOOL useContainer = (margin > 0 && config.listCornerRadiusEnabled);
+    UIView *targetView = cellView;
+
+    if (useContainer) {
+        static char kMioContainerKey;
+        UIView *mioContainer = objc_getAssociatedObject(cellView, &kMioContainerKey);
+        if (!mioContainer) {
+            mioContainer = [[UIView alloc] init];
+            mioContainer.opaque = NO;
+            objc_setAssociatedObject(cellView, &kMioContainerKey, mioContainer,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            [cellView insertSubview:mioContainer atIndex:0];
+        }
+        CGFloat cw = cellView.bounds.size.width;
+        mioContainer.frame = CGRectMake(margin, 0, cw - 2.0 * margin, cellView.bounds.size.height);
+        targetView = mioContainer;
+
+        cellView.backgroundColor = [UIColor clearColor];
+        cellView.layer.cornerRadius = 0;
+        cellView.layer.maskedCorners = 0;
+        cellView.layer.borderWidth = 0;
+        cellView.layer.borderColor = nil;
+
+        UIView *cv = ((UITableViewCell *)self).contentView;
+        if (cv) {
+            cv.frame = CGRectMake(margin, 0, cw - 2.0 * margin, cv.frame.size.height);
+        }
+    }
+
     static NSSet *bgColorSkipList = nil;
     static dispatch_once_t onceBgToken;
     dispatch_once(&onceBgToken, ^{
@@ -207,7 +237,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }
         UIColor *customBg = [config colorFromHex:isDark
             ? config.listCellDarkBgColor : config.listCellLightBgColor];
-        ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
+        targetView.backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
     }
 
     NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
@@ -227,17 +257,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
     if (!tableView) return;
 
-    CGFloat margin = config.listCellMargin;
-    if (margin > 0 && config.listCornerRadiusEnabled) {
-        UIEdgeInsets currentInset = tableView.contentInset;
-        if (fabs(currentInset.left - margin) > 0.5 || fabs(currentInset.right - margin) > 0.5) {
-            UIEdgeInsets targetInset = UIEdgeInsetsMake(currentInset.top, margin,
-                                                      currentInset.bottom, margin);
-            tableView.contentInset = targetInset;
-            tableView.scrollIndicatorInsets = targetInset;
-        }
-    }
-
     NSIndexPath *indexPath = [tableView indexPathForCell:(UITableViewCell *)self];
     if (!indexPath) return;
 
@@ -246,7 +265,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     NSInteger totalRows = [tableView numberOfRowsInSection:section];
 
     if (isContacts) {
-        [ListCornerRadiusHook wp_applyCornerForContacts:cellView
+        [ListCornerRadiusHook wp_applyCornerForContacts:targetView
                                              tableView:tableView
                                              indexPath:indexPath
                                                section:section
@@ -255,7 +274,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                           cornerRadius:cornerRadius
                                               isFTSHome:isFTSHome];
     } else {
-        [ListCornerRadiusHook wp_applyStandardCorner:cellView
+        [ListCornerRadiusHook wp_applyStandardCorner:targetView
                                           tableView:tableView
                                           indexPath:indexPath
                                             section:section
@@ -266,7 +285,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                           className:className];
     }
 
-    cellView.layer.masksToBounds = YES;
+    targetView.layer.masksToBounds = YES;
 
 }
 
