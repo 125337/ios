@@ -46,25 +46,11 @@ static UIViewController *findParentViewController(UIView *view) {
 
 + (UIView *)wp_findFoldViewInSubviews:(NSArray<UIView *> *)subviews;
 
-+ (CAShapeLayer *)wp_buildTopBorderPath:(CGRect)rect
-                            borderWidth:(CGFloat)borderWidth
-                            borderColor:(UIColor *)borderColor
-                                 radius:(CGFloat)radius;
-
-+ (CAShapeLayer *)wp_buildBottomBorderPath:(CGRect)rect
-                               borderWidth:(CGFloat)borderWidth
-                               borderColor:(UIColor *)borderColor
-                                    radius:(CGFloat)radius;
-
-+ (CALayer *)wp_buildSideLineLayer:(CGRect)rect
-                       borderWidth:(CGFloat)borderWidth
-                      borderColor:(UIColor *)borderColor
-                             side:(NSString *)side;
-
-+ (CALayer *)wp_buildHorizontalLineLayer:(CGRect)rect
-                              borderWidth:(CGFloat)borderWidth
-                             borderColor:(UIColor *)borderColor
-                                  position:(NSString *)linePosition;
++ (CAShapeLayer *)wp_buildUnifiedBorderLayer:(CGRect)rect
+                                 borderWidth:(CGFloat)borderWidth
+                                borderColor:(UIColor *)borderColor
+                                     radius:(CGFloat)radius
+                                       type:(NSString *)type;
 
 @end
 
@@ -495,50 +481,36 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             break;
         }
         case 1: {
-            CAShapeLayer *shape = [self wp_buildTopBorderPath:cell.bounds
-                                                  borderWidth:borderWidth
-                                                  borderColor:borderColor
-                                                       radius:radius];
-            shape.name = @"com.mio.cornerBorder";
+            CAShapeLayer *shape = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                       borderWidth:borderWidth
+                                                      borderColor:borderColor
+                                                           radius:radius
+                                                             type:@"top"];
             [cell.layer addSublayer:shape];
-
-            CALayer *bottomLine = [self wp_buildHorizontalLineLayer:cell.bounds
-                                                        borderWidth:borderWidth
-                                                       borderColor:borderColor
-                                                            position:@"bottom"];
-            bottomLine.name = @"com.mio.cornerBorder";
-            [cell.layer addSublayer:bottomLine];
             break;
         }
         case 2: {
-            CALayer *left = [self wp_buildSideLineLayer:cell.bounds
-                                            borderWidth:borderWidth
-                                           borderColor:borderColor
-                                                  side:@"left"];
-            CALayer *right = [self wp_buildSideLineLayer:cell.bounds
-                                             borderWidth:borderWidth
-                                            borderColor:borderColor
-                                                   side:@"right"];
-            left.name = @"com.mio.cornerBorder";
-            right.name = @"com.mio.cornerBorder";
+            CAShapeLayer *left = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                      borderWidth:borderWidth
+                                                     borderColor:borderColor
+                                                          radius:0
+                                                            type:@"left"];
+            CAShapeLayer *right = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                       borderWidth:borderWidth
+                                                      borderColor:borderColor
+                                                           radius:0
+                                                             type:@"right"];
             [cell.layer addSublayer:left];
             [cell.layer addSublayer:right];
             break;
         }
         case 3: {
-            CAShapeLayer *shape = [self wp_buildBottomBorderPath:cell.bounds
-                                                     borderWidth:borderWidth
-                                                     borderColor:borderColor
-                                                          radius:radius];
-            shape.name = @"com.mio.cornerBorder";
+            CAShapeLayer *shape = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                       borderWidth:borderWidth
+                                                      borderColor:borderColor
+                                                           radius:radius
+                                                             type:@"bottom"];
             [cell.layer addSublayer:shape];
-
-            CALayer *topLine = [self wp_buildHorizontalLineLayer:cell.bounds
-                                                     borderWidth:borderWidth
-                                                    borderColor:borderColor
-                                                         position:@"top"];
-            topLine.name = @"com.mio.cornerBorder";
-            [cell.layer addSublayer:topLine];
             break;
         }
     }
@@ -562,96 +534,69 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     return nil;
 }
 
-+ (CAShapeLayer *)wp_buildTopBorderPath:(CGRect)rect
-                            borderWidth:(CGFloat)borderWidth
-                           borderColor:(UIColor *)borderColor
-                                radius:(CGFloat)radius {
++ (CAShapeLayer *)wp_buildUnifiedBorderLayer:(CGRect)rect
+                                 borderWidth:(CGFloat)borderWidth
+                                borderColor:(UIColor *)borderColor
+                                     radius:(CGFloat)radius
+                                       type:(NSString *)type {
     CAShapeLayer *shape = [CAShapeLayer layer];
-    shape.fillColor = [UIColor clearColor].CGColor;
+    shape.name = @"com.mio.cornerBorder";
     shape.strokeColor = borderColor.CGColor;
+    shape.fillColor = [UIColor clearColor].CGColor;
     shape.lineWidth = borderWidth;
     shape.lineJoin = kCALineJoinRound;
-    shape.lineCap = kCALineCapButt;
 
     CGFloat hw = borderWidth / 2.0;
     CGFloat w = rect.size.width;
     CGFloat h = rect.size.height;
+    CGFloat r = (radius > 0) ? radius : 0;
 
     UIBezierPath *path = [UIBezierPath bezierPath];
-    [path moveToPoint:CGPointMake(hw, h)];
-    [path addLineToPoint:CGPointMake(hw, radius)];
-    [path addArcWithCenter:CGPointMake(hw + radius, radius)
-                    radius:radius
-                startAngle:M_PI
-                  endAngle:M_PI * 1.5
-                 clockwise:YES];
-    [path addArcWithCenter:CGPointMake(w - hw - radius, radius)
-                    radius:radius
-                startAngle:M_PI * 1.5
-                  endAngle:0
-                 clockwise:YES];
-    [path addLineToPoint:CGPointMake(w - hw, h)];
+
+    if ([type isEqualToString:@"top"]) {
+        [path moveToPoint:CGPointMake(hw, h)];
+        [path addLineToPoint:CGPointMake(hw, hw + r)];
+        if (r > 0) {
+            [path addArcWithCenter:CGPointMake(hw + r, hw + r)
+                            radius:r
+                        startAngle:M_PI
+                          endAngle:M_PI * 1.5
+                         clockwise:YES];
+            [path addArcWithCenter:CGPointMake(w - hw - r, hw + r)
+                            radius:r
+                        startAngle:M_PI * 1.5
+                          endAngle:0
+                         clockwise:YES];
+        }
+        [path addLineToPoint:CGPointMake(w - hw, h)];
+    } else if ([type isEqualToString:@"bottom"]) {
+        [path moveToPoint:CGPointMake(hw, 0)];
+        [path addLineToPoint:CGPointMake(hw, h - hw - r)];
+        if (r > 0) {
+            [path addArcWithCenter:CGPointMake(hw + r, h - hw - r)
+                            radius:r
+                        startAngle:M_PI
+                          endAngle:M_PI * 0.5
+                         clockwise:NO];
+            [path addArcWithCenter:CGPointMake(w - hw - r, h - hw - r)
+                            radius:r
+                        startAngle:M_PI * 0.5
+                          endAngle:0
+                         clockwise:NO];
+        }
+        [path addLineToPoint:CGPointMake(w - hw, 0)];
+    } else if ([type isEqualToString:@"left"]) {
+        [path moveToPoint:CGPointMake(hw, 0)];
+        [path addLineToPoint:CGPointMake(hw, h)];
+    } else if ([type isEqualToString:@"right"]) {
+        [path moveToPoint:CGPointMake(w - hw, 0)];
+        [path addLineToPoint:CGPointMake(w - hw, h)];
+    }
+
     shape.path = path.CGPath;
+    shape.frame = rect;
+
     return shape;
-}
-
-+ (CAShapeLayer *)wp_buildBottomBorderPath:(CGRect)rect
-                               borderWidth:(CGFloat)borderWidth
-                              borderColor:(UIColor *)borderColor
-                                   radius:(CGFloat)radius {
-    CAShapeLayer *shape = [CAShapeLayer layer];
-    shape.fillColor = [UIColor clearColor].CGColor;
-    shape.strokeColor = borderColor.CGColor;
-    shape.lineWidth = borderWidth;
-    shape.lineJoin = kCALineJoinRound;
-    shape.lineCap = kCALineCapButt;
-
-    CGFloat hw = borderWidth / 2.0;
-    CGFloat w = rect.size.width;
-    CGFloat h = rect.size.height;
-
-    UIBezierPath *path = [UIBezierPath bezierPath];
-    [path moveToPoint:CGPointMake(hw, 0)];
-    [path addLineToPoint:CGPointMake(hw, h - radius)];
-    [path addArcWithCenter:CGPointMake(hw + radius, h - radius)
-                    radius:radius
-                startAngle:M_PI
-                  endAngle:M_PI * 0.5
-                 clockwise:NO];
-    [path addArcWithCenter:CGPointMake(w - hw - radius, h - radius)
-                    radius:radius
-                startAngle:M_PI * 0.5
-                  endAngle:0
-                 clockwise:NO];
-    [path addLineToPoint:CGPointMake(w - hw, 0)];
-    shape.path = path.CGPath;
-    return shape;
-}
-
-+ (CALayer *)wp_buildSideLineLayer:(CGRect)rect
-                       borderWidth:(CGFloat)borderWidth
-                      borderColor:(UIColor *)borderColor
-                             side:(NSString *)side {
-    CALayer *layer = [CALayer layer];
-    layer.backgroundColor = borderColor.CGColor;
-
-    CGFloat x = [side isEqualToString:@"left"] ? 0 : (rect.size.width - borderWidth);
-    layer.frame = CGRectMake(x, 0, borderWidth, rect.size.height);
-
-    return layer;
-}
-
-+ (CALayer *)wp_buildHorizontalLineLayer:(CGRect)rect
-                              borderWidth:(CGFloat)borderWidth
-                             borderColor:(UIColor *)borderColor
-                                  position:(NSString *)linePosition {
-    CALayer *layer = [CALayer layer];
-    layer.backgroundColor = borderColor.CGColor;
-
-    CGFloat y = [linePosition isEqualToString:@"top"] ? 0 : (rect.size.height - borderWidth);
-    layer.frame = CGRectMake(0, y, rect.size.width, borderWidth);
-
-    return layer;
 }
 
 @end
