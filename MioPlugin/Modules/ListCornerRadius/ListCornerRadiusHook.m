@@ -212,6 +212,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
             break;
         }
     }
+
+    // ★★★ MMUIButton Hook 诊断日志 ★★★
+    WPLog(@"ListCornerRadius", @"[CardBg-MUIB] vc=%@, foundHead=%d, cardBgEnabled=%d, cardBgHidden=%d, subviews=%lu",
+          vcName, foundHead, config.cardBgEnabled, config.cardBgHidden,
+          (unsigned long)((UIView *)self).subviews.count);
     if (!foundHead) {
         if (_orig_MMUIButton_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
@@ -387,11 +392,17 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     static const NSInteger kBgImageTagCard = 999901;
 
     UIViewController *vcCardEarly = findParentViewController((UIView *)self);
-    NSString *classNameCardEarly = vcCardEarly ? NSStringFromClass([vcCardEarly class]) : @"";
+    NSString *classNameCardEarly = vcCardEarly ? NSStringFromClass([vcCardEarly class]) : @"(nil)";
     BOOL isMoreVCCard = [classNameCardEarly isEqualToString:@"MoreViewController"];
     UIView *cellViewCard = (UIView *)self;
+    BOOL isProfile = [ListCornerRadiusHook wp_isProfileCard:cellViewCard];
 
-    if (isMoreVCCard && [ListCornerRadiusHook wp_isProfileCard:cellViewCard] && config.cardBgEnabled) {
+    // ★★★ 逐条件诊断日志 ★★★
+    WPLog(@"ListCornerRadius", @"[CardBg-Diag] vc=%@, isMoreVC=%d, isProfile=%d, cardBgEnabled=%d",
+          classNameCardEarly, isMoreVCCard, isProfile, config.cardBgEnabled);
+
+    if (isMoreVCCard && isProfile && config.cardBgEnabled) {
+        WPLog(@"ListCornerRadius", @"[CardBg-Diag] ★ ALL CONDITIONS PASSED! Entering branch.");
         CGFloat customHeight = config.cardBgHeight;
         if (customHeight > 0) {
             CGFloat currentH = cellViewCard.frame.size.height;
