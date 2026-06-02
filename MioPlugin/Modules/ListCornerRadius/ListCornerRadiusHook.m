@@ -241,6 +241,12 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         // ★ 清除微信原始的 m_bgImageView
         Ivar bgIvar = class_getInstanceVariable([(id)self class], "m_bgImageView");
         if (bgIvar) {
+            id bgImgView = object_getIvar((id)self, bgIvar);
+            if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
+                [(UIImageView *)bgImgView setImage:nil];
+                [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
+                [(UIImageView *)bgImgView setHidden:YES];
+            }
             object_setIvar((id)self, bgIvar, nil);
         }
 
@@ -329,21 +335,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
             if (bgIvar) {
                 id bgImgView = object_getIvar((id)self, bgIvar);
                 if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
-                    object_setIvar((id)self, bgIvar, nil);
+                    [(UIImageView *)bgImgView setImage:nil];
+                    [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
+                    [(UIImageView *)bgImgView setHidden:YES];
                 }
-            }
-
-            // ★ 额外保险：遍历 MMUIButton 子视图，隐藏大尺寸背景 ImageView
-            for (UIView *sub in ((UIView *)self).subviews) {
-                if ([sub isKindOfClass:[UIImageView class]]) {
-                    UIImageView *iv = (UIImageView *)sub;
-                    if (![NSStringFromClass([iv class]) isEqualToString:@"MMHeadImageView"]) {
-                        if (iv.frame.size.width > ((UIView *)self).frame.size.width * 0.8 &&
-                            iv.frame.size.height > ((UIView *)self).frame.size.height * 0.5) {
-                            iv.hidden = YES;
-                        }
-                    }
-                }
+                object_setIvar((id)self, bgIvar, nil);
             }
         } else {
             UIColor *cardBg = [config colorFromHex:isDark
@@ -491,8 +487,11 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                     if (bgIvar) {
                         id bgImgView = object_getIvar(sub, bgIvar);
                         if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
-                            object_setIvar(sub, bgIvar, nil);
+                            [(UIImageView *)bgImgView setImage:nil];
+                            [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
+                            [(UIImageView *)bgImgView setHidden:YES];
                         }
+                        object_setIvar(sub, bgIvar, nil);
                     }
                 }
             }
@@ -501,6 +500,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         for (UIView *sub in cellViewCard.subviews) {
             if ([sub isKindOfClass:[UIImageView class]]) {
                 UIImageView *imgView = (UIImageView *)sub;
+                if (imgView.tag == kBgImageTagCard) continue;  // ★ 排除自定义背景图
+
                 if (imgView.image != nil &&
                     ![imgView isEqual:objc_getAssociatedObject(cellViewCard, "mio_bgImageView")]) {
                     imgView.hidden = YES;
@@ -1293,6 +1294,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 imageView.image = resultImage;
                 imageView.alpha = 1.0;
+                imageView.hidden = NO;
             });
         }
     });
