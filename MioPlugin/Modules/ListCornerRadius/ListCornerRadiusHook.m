@@ -446,10 +446,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     PluginConfig *config = [PluginConfig shared];
 
-    // ★★★ 绝招三：Cell Hook 不再处理资料卡 ★★★
-    // 所有资料卡逻辑（bgImageView、HideCard、高度调整等）都在 MMUIButton Hook 中
-    // Cell Hook 只处理通用圆角逻辑
-
     if (!config.listCornerRadiusEnabled && !config.cardBgEnabled) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
@@ -474,42 +470,13 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 
     UIView *cellView = (UIView *)self;
-
     BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
-    // ★★★ 不再用 wp_isProfileCard 判断（Race Condition：Cell Hook 时 MMHeadImageView 尚未创建）
-    // MoreViewController 的资料卡识别完全由 MMUIButton Hook 的4层过滤负责
-    // Cell Hook 只负责：MoreVC + cardBgEnabled 时做 Cell 层的透明化+高度+间距
-    if (isMoreVC && config.cardBgEnabled) {
-        if (_orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
 
-        // Cell 透明化（让 MMUIButton 层的背景图可见）
-        cellView.backgroundColor = [UIColor clearColor];
-        cellView.layer.borderWidth = 0;
-        cellView.layer.masksToBounds = NO;
+    // ★★★ 记录标志位：MoreVC + cardBgEnabled 时需要透明化 ★★★
+    // 透明化必须在函数末尾执行（所有 orig + margin + bgColor + corner 之后）
+    BOOL needsCardBgTransparency = (isMoreVC && config.cardBgEnabled);
 
-        UIView *cv = [(UITableViewCell *)cellView contentView];
-        if (cv) {
-            cv.backgroundColor = [UIColor clearColor];
-            cv.layer.masksToBounds = NO;
-        }
-
-        if ([cellView respondsToSelector:@selector(backgroundView)]) {
-            UIView *bgv = [(id)cellView backgroundView];
-            if (bgv) { bgv.backgroundColor = [UIColor clearColor]; bgv.hidden = YES; }
-        }
-        if ([cellView respondsToSelector:@selector(selectedBackgroundView)]) {
-            UIView *sbgv = [(id)cellView selectedBackgroundView];
-            if (sbgv) { sbgv.backgroundColor = [UIColor clearColor]; }
-        }
-
-        // ★★★ 不在 layoutSubviews 中修改 Cell 自身 frame（会触发 UIKit 反馈循环导致卡死）
-        // cardBgHeight / cardBgListSpacing 需要在 tableView delegate 层面实现
-        // 当前只做透明化，背景图由 MMUIButton Hook 处理
-        // ★ 不 return，继续往下执行圆角和边距逻辑
-    }
-
+    // ★★★ 只调一次 orig（所有 Cell 统一）★★★
     if (_orig_MMTableViewCell_layoutSubviews) {
         ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
@@ -611,6 +578,33 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                        cornerRadius:cornerRadius
                                           isFTSHome:isFTSHome
                                           className:className];
+    }
+
+    // ════════════════════════════════════════════════════════
+    // ★★★ 最后：资料卡透明化（在所有 orig + margin + bgColor + corner 之后！）★★★
+    // ════════════════════════════════════════════════════════
+    if (needsCardBgTransparency) {
+        cellView.backgroundColor = [UIColor clearColor];
+        cellView.layer.borderWidth = 0;
+        cellView.layer.masksToBounds = NO;  // Cell 层不裁剪，由 MMUIButton 层负责
+
+        UIView *cv = [(UITableViewCell *)cellView contentView];
+        if (cv) {
+            cv.backgroundColor = [UIColor clearColor];
+            cv.layer.masksToBounds = NO;
+        }
+
+        if ([cellView respondsToSelector:@selector(backgroundView)]) {
+            UIView *bgv = [(id)cellView backgroundView];
+            if (bgv) { bgv.backgroundColor = [UIColor clearColor]; bgv.hidden = YES; }
+        }
+        if ([cellView respondsToSelector:@selector(selectedBackgroundView)]) {
+            UIView *sbgv = [(id)cellView selectedBackgroundView];
+            if (sbgv) { sbgv.backgroundColor = [UIColor clearColor]; }
+        }
+
+        // ★ 不设 masksToBounds=YES（让 MMUIButton 层负责裁剪）
+        return;
     }
 
     cellView.layer.masksToBounds = YES;

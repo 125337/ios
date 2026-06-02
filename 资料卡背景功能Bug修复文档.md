@@ -1,356 +1,393 @@
 # MioPlugin 资料卡背景功能 Bug 修复文档
 
-> **更新日期**: 2026-06-03 (v12 — 第二次崩溃深度分析版)
-> **当前状态**: 隐藏信息卡片 ✅ 已修复 | 背景图不显示 ❌ 根因已100%确认 | 点"我"卡死 ❌❌ 两次崩溃
-> **根因（背景图）**: 时序问题 — Cell Hook 执行时 MMHeadImageView 尚未创建
-> **根因（卡死v1）**: Watchdog Timeout — 主线程阻塞超过10秒（8插件叠加 + MMUIButton Hook 过重）
-> **根因（卡死v2）**: **Frame 修改触发布局反馈循环** — Cell Hook 中修改 frame 导致递归 layoutSubviews
+> **更新日期**: 2026-06-03 (v13 — 最终根因确认版)
+> **当前状态**: 隐藏信息卡片 ✅ 已修复 | 背景图不显示 ❌ | 圆角 ✅ 正常 | 边距 ❌ 无 | 点"我"卡死 ❌ 已知（frame问题）
+> **根因（v13 最终确认）**: Cell Hook 中 `orig` 被调用两次，第二次覆盖了透明化设置
 
 ---
 
 ## 目录
 
-- [0. 崩溃事件总览](#0-崩溃事件总览)
-- [1. 第一次崩溃分析（005528.ips）回顾](#1-第一次崩溃分析005528ips回顾)
-- [2. 第二次崩溃分析（015159.ips）— 新发现](#2-第二次崩溃分析015159ips--新发现)
-- [3. 两次崩溃对比 — 关键差异](#3-两次崩溃对比--关键差异)
-- [4. 真正的根因：Frame 反馈循环](#4-真正的根因frame-反馈循环)
-- [5. 为什么微信优化不会触发这个循环](#5-为什么微信优化不会触发这个循环)
-- [6. v12 修正方案](#6-v12-修正方案)
-- [7. 实施检查清单（更新）](#7-实施检查清单更新)
+- [0. 当前状态（截图证据）](#0-当前状态截图证据)
+- [1. v13 根因：double-orig 覆盖问题](#1-v13-根因double-orig-覆盖问题)
+- [2. 完整执行流追踪（带行号）](#2-完整执行流追踪带行号)
+- [3. 为什么圆角正常但背景图不显示](#3-为什么圆角正常但背景图不显示)
+- [4. 三大症状统一解释](#4-三大症状统一解释)
+- [5. 修复方案（唯一正确做法）](#5-修复方案唯一正确做法)
+- [6. 完整修复后的代码结构](#6-完整修复后的代码结构)
+- [7. 实施检查清单](#7-实施检查清单)
 
 ---
 
-## 0. 崩溃事件总览
+## 0. 当前状态（截图证据）
 
-| 项目 | 第一次崩溃 | 第二次崩溃 |
-|------|:---------:|:---------:|
-| **文件** | `WeChat-2026-06-03-005528.ips` | `WeChat-2026-06-03-015159(1).ips` |
-| **时间** | 00:55:25 | 01:51:58 |
-| **进程存活时间** | ~25秒 | **~19秒**（更短！） |
-| **崩溃类型** | SIGKILL / 0x8BADF00D | SIGKILL / 0x8BADF00D |
-| **终止原因** | watchdog timeout 10s | watchdog timeout 10s |
-| **总CPU时间** | 28.150s (48%) | **38.180s (66%)** ↑ 更高！ |
-| **应用CPU** | 9.898s (17%) | 9.929s (17%) ≈ 持平 |
-| **MALLOC** | 2.7G (2875区域) | 1.5G (1612区域) ↓ 略低 |
-| **Memory Tag 240** | 3.9G | 3.9G 持平 |
-| **WebKit Malloc** | 704MB | **672MB** ↓ |
-| **malloc 失败次数** | 5次 | **5次** 持平 |
-| **卡死位置** | `hasPrefix:` 字符串比较 | **`[UITableViewCell frame]` → `_containerView`** |
+从用户提供的截图可以确认：
+
+```
+┌──────────────────────────────────────────┐
+│  ┌────────────────────────────────────┐  │
+│  │ 📷 啊哲                     >    │  │  ← 绿色边框 ✅
+│  │   微信号: gb1236542580           │  │  ← 圆角 ✅
+│  │   + 状态  👥 2个朋友 ●         │  │
+│  └────────────────────────────────────┘  │
+│                                        │
+│  ✓ 服务                           >     │  ← 圆角 ✅
+│  □ 收藏                           >     │  ← 圆角 ✅
+│  □ 朋友圈                         >     │  ← 圆角 ✅
+│  □ 订单与卡包    [推荐]东鹏特饮...  >     │  ← 圆角 ✅
+│  □ 表情                           >     │
+│  □ 插件                           >     │
+│                                        │
+│  ⚙ 设置                           >     │  ← 圆角 ✅
+└──────────────────────────────────────────┘
+```
+
+| 功能 | 状态 | 证据 |
+|:----:|:----:|:-----|
+| 列表圆角（其他Cell） | ✅ 正常 | 服务、收藏、朋友圈等都有圆角 |
+| 资料卡圆角+边框 | ✅ 正常 | 截图中绿色边框 + 圆角清晰可见 |
+| **资料卡背景图** | **❌ 不显示** | 显示的是默认白/灰色背景 |
+| **资料卡间距** | **❌ 没有** | 卡片之间无额外间距 |
+| 点击"我"卡死 | ❓ 未测试 | 上次因 frame 修改导致 |
 
 ---
 
-## 1. 第一次崩溃分析（005528.ips）回顾
+## 1. v13 根因：double-orig 覆盖问题
 
-### 调用栈
+### 1.1 问题代码
 
-```
-thread #0 (main):
-├─ CFStringFindWithOptionsAndLocale
-│  └─ hasPrefix:                    ← 卡在这里
-│     └─ cmdString
-│        └─ ...深层调用...
-│           └─ UITableViewCell.layoutSubviews
-│              └─ MioPlugin Cell Hook
-│                 └─ orig
-│                    └─ MMUIButton.layoutSubviews
-│                       └─ MioPlugin MMUIButton Hook
-│                          └─ ...大量处理...
-```
-
-### 当时判断的根因
-
-1. 8个插件叠加 Hook 链
-2. MMUIButton Hook 过重（25+ 步操作/每次）
-3. 文件 I/O 在主线程
-4. 内存压力
-5. 无去重机制
-
-→ 对标微信优化三大绝招进行了重构（v11方案）
-
----
-
-## 2. 第二次崩溃分析（015159.ips）— 新发现
-
-### 2.1 崩溃调用栈（完全不同！）
-
-```
-thread #0 (main) — ★ 崩溃线程
-├─ objc_msgSend$unsafeUnretainedDelegate   ← ★ 卡在这里！
-│  └─ [UITableViewCell _containerView]      ← 访问容器视图
-│     └─ [UITableViewCell _swipeContainerView] ← 访问滑动容器
-│        └─ [UITableViewCell frame]          ← ★ 读取 frame 属性
-│           └─ [UIView(Geometry) setFrame:]  ← ★ 设置 frame 触发的！
-│              └─ [UITableViewCell _setFrame:skipLayout:]
-│                 └─ imageIndex:20 (某个插件的 Hook)    ← 插件链入口
-│                 └─ imageIndex:22 (另一个插件的 Hook)
-│                 └─ imageIndex:27 (又一个插件的 Hook)
-│                    └─ ... 更深的 Hook 链 ...
-```
-
-### 2.2 关键变化
-
-| 对比项 | 第一次崩溃 | 第二次崩溃 |
-|:------:|:---------:|:----------:|
-| **卡死操作** | 字符串比较 (`hasPrefix:`) | **属性访问 (`frame`) |
-| **触发来源** | MMUIButton Hook 内部 | **Cell Hook 的 setFrame:** |
-| **UIKit 内部路径** | CFString → hasPrefix | **frame → _containerView → _swipeContainerView → delegate** |
-| **CPU 总时间** | 28.15s | **38.18s** (+36%!) |
-| **进程存活时间** | ~25s | **~19s** (-24%，更快被杀!) |
-
-### 2.3 这意味着什么
-
-**`setFrame:` 是由我们的代码主动调用的！**
-
-回看当前代码 [Cell Hook 第505-518行](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L505-L518)：
+[ListCornerRadiusHook.m 第482-515行](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L482-L515)：
 
 ```objc
-// ★★★ 高度调整 — 修改了 cellView.frame ★★★
-if (config.cardBgHeight > 0) {
-    CGFloat currentH = cellView.frame.size.height;
-    if (currentH < config.cardBgHeight) {
-        CGRect f = cellView.frame;       // 读取 frame
-        f.size.height = config.cardBgHeight;
-        cellView.frame = f;               // ★★★ 写入 frame → 触发 setFrame: ★★★
+// 第482行：进入 MoreVC + cardBgEnabled 分支
+if (isMoreVC && config.cardBgEnabled) {
+
+    // ★ 第1次调用 orig（第484行）
+    if (_orig_MMTableViewCell_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews(self, _cmd);
     }
+
+    // 设置透明（第488行）
+    cellView.backgroundColor = [UIColor clearColor];      // ← 设置了！
+    cellView.layer.borderWidth = 0;
+    cellView.layer.masksToBounds = NO;
+    // ... contentView 透明化 ...
+    // ... backgroundView 隐藏 ...
+
+    // ★ 第510行：注释说 "不 return，继续往下执行"
+    // ★ 问题就在这里！往下走会再次调用 orig！
 }
 
-// ★★★ 间距调整 — 又修改了 cellView.frame ★★★
-if (config.cardBgListSpacing > 0) {
-    CGRect f = cellView.frame;            // 读取 frame
-    f.size.height += config.cardBgListSpacing;
-    f.origin.y -= config.cardBgListSpacing / 2.0;
-    cellView.frame = f;                   // ★★★ 又一次写入 frame ★★★
+// ★★★ 第513-515行：所有 Cell 都会走到这里 ★★★
+if (_orig_MMTableViewCell_layoutSubviews) {
+    ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews(self, _cmd);  // ← 第2次调用 orig！
 }
 ```
 
-**这两处 `cellView.frame = f` 就是崩溃的源头。**
-
-### 2.4 为什么 setFrame: 会卡死
-
-当我们在 Cell Hook 的 `layoutSubviews` 中修改 Cell 的 `frame` 时，会触发以下连锁反应：
+### 1.2 执行时序
 
 ```
-Cell Hook: layoutSubviews
-  │
-  ├─ orig_layoutSubviews()           ← 微信完成原始布局
-  │   └─ 微信内部可能设置了 Cell 的初始 frame
-  │
-  ├─ cellView.frame = newFrame       ← ★ 我们的代码修改 frame
-  │   │
-  │   ├─ UIView.setFrame:
-  │   │   ├─ [UITableViewCell _setFrame:skipLayout:]
-  │   │   │   ├─ 内部访问 self.frame（getter）
-  │   │   │   │   ├─ _containerView         ← UIKit 内部计算
-  │   │   │   │   │   └─ _swipeContainerView ← UIKit 内部计算
-  │   │   │   │   │       └─ unsafeUnretainedDelegate ← ★ 卡在这里
-  │   │   │   │
-  │   │   │   └─ 如果 frame 真的变了 → setNeedsLayout → ★ 可能触发新一轮 layoutSubviews!
-  │   │   │
-  │   │   └─ 其他插件拦截 setFrame: （imageIndex:20, 22, 27...）
-  │   │       └─ 每个插件都做自己的处理...
-  │   │
-  │   └─ 返回
-  │
-  ├─ cellView.frame = anotherFrame    ← ★ 间距又改了一次 frame
-  │   └─ 同样的连锁反应再来一遍！
-  │
-  └─ return
+MoreVC 的资料卡 Cell 进入 layoutSubviews：
+│
+├─ 第482行：isMoreVC && cardBgEnabled → YES，进入分支
+│   ├─ 第484行：orig() 第1次          ← 微信设置初始样式
+│   │   └─ 微信内部：cell.backgroundColor = [UIColor whiteColor]
+│   │       cell.backgroundView = grayView
+│   │       ...
+│   │
+│   ├─ 第488行：backgroundColor = clearColor    ← ★ 我们设为透明 ★
+│   ├─ 第490行：masksToBounds = NO
+│   ├─ 第494行：contentView.backgroundColor = clearColor
+│   ├─ 第500行：backgroundView.hidden = YES
+│   │
+│   │   ═══ 此时 Cell 是透明的，bgImageView 应该可见 ═══
+│   │
+│   └─ 第511行：（没有 return，继续往下走）
+│
+├─ 第513行：★ 又到了这里！（因为没 return）
+│   └─ 第514行：orig() 第2次             ← ★ 微信重新设置样式！★
+│       └─ 微信内部：cell.backgroundColor = [UIColor whiteColor]  ← ★ 覆盖了！★
+│           cell.backgroundView = <重建或恢复>
+│           cell.layer.borderWidth = ...
+│           ...
+│
+│   ═══ 此时 Cell 又变回不透明的了！═══
+│
+├─ 第518-533行：margin 逻辑（修改 x, width）
+├─ 第562-578行：backgroundColor 逻辑（又设一次颜色）
+├─ 第581-624行：corner 逻辑（设置 cornerRadius）
+└─ 第626行：masksToBounds = YES
 ```
 
-**关键问题**：`setFrame:` 在 `layoutSubviews` 内部被调用时：
-1. UIKit 内部需要重新计算 `_containerView` 和 `_swipeContainerView`
-2. 这些计算涉及 `unsafeUnretainedDelegate`（弱引用代理），在内存紧张时可能变慢
-3. **如果 frame 变化导致布局失效，UIKit 可能立即触发下一轮 `layoutSubviews`**
-4. 下一轮又进入我们的 Hook → 又修改 frame → 又触发 setFrame: → **反馈循环**
+### 1.3 关键证据
+
+**为什么圆角正常？**
+
+因为圆角逻辑在 **第581-624行**，在 **两次 orig 之后** 执行。所以圆角"赢了最后一场"——它覆盖了 orig 设置的默认圆角值。
+
+**为什么背景图不显示？**
+
+因为透明化逻辑在 **第488行**，在 **第一次 orig 之后、第二次 orig 之前** 执行。第二次 orig（第514行）把 backgroundColor 重置回白色/灰色，**覆盖了我们的透明设置**。
+
+**这是一个经典的"执行顺序错误"——透明化设得太早，被后面的 orig 覆盖了。**
 
 ---
 
-## 3. 两次崩溃对比 — 关键差异
+## 2. 完整执行流追踪（带行号）
 
-### 3.1 代码变化 vs 崩溃变化
+### 2.1 MMUIButton Hook（第177-431行）— 正常工作
 
-| | v9（第一次崩溃） | v11修改后（第二次崩溃） |
-|:-:|:---------------:|:---------------------:|
-| **MMUIButton Hook** | 旧版（无极速拒绝链） | 新版（有极速拒绝链+去重+异步加载） |
-| **Cell Hook** | 有 `wp_isProfileCard` 判断（进不去分支） | 改为 `isMoreVC && cardBgEnabled`（能进去） |
-| **Cell Hook 操作** | 不执行高度/间距/透明化（死代码） | **执行高度/间距/透明化（含 setFrame:)** |
-| **卡死位置** | MMUIButton Hook 内部的字符串操作 | **Cell Hook 内部的 setFrame: 操作** |
-| **CPU 总时间** | 28.15s | **38.18s** (+36%) |
-| **存活时间** | ~25s | **~19s** (-24%) |
+```
+MMUIButton layoutSubviews 被调用：
+│
+├─ L185: needsCardBg = YES (用户开启了)
+├─ L196: orig() ← 微信创建 MMHeadImageView 等子视图
+├─ L201: !needsCardBg? → NO (需要资料卡)
+├─ L210-221: VC 类型 → MoreViewController ✅
+├─ L224-231: foundHead → MMHeadImageView 存在 ✅
+├─ L234-235: height > 50 ✅
+│
+├─ L247: HideCard? → NO (用户没开启隐藏)
+│
+├─ L275: self.backgroundColor = clearColor ✅
+├─ L278-287: 清除 m_bgImageView ✅
+│
+├─ L296-304: 查找已有 bgImageView → 首次，nil
+├─ L307: 分支A跳过（不存在）
+├─ L329: 创建 btnBgImg ✅
+├─ L341: insertSubview:atIndex:0 ✅
+├─ L348: 设置 frame ✅
+├─ L355: kMioBgLoadedKey = NO
+├─ L363: dispatch_async(加载图片) ✅ （后台线程）
+│
+├─ L410: goto APPLY_CORNER
+├─ L416: wp_applyProfileCardCorner → 设置圆角+边框 ✅
+├─ L426: masksToBounds = YES
+│
+└─ 返回
+    结果：✅ 圆角有、✅ 边框有、⏳ bgImageView 创建了等图片加载
+```
 
-### 3.2 结论
+→ **MMUIButton 层面一切正常。bgImageView 已创建并插入，图片正在异步加载。**
 
-**MMUIButton Hook 的优化生效了**（不再卡在 MMUIButton Hook 内部），但 **Cell Hook 中新加入的 `setFrame:` 操作成为了新的瓶颈**。
+### 2.2 Cell Hook（第433-628行）— 有 bug
 
-这是一个典型的"按住葫芦浮起瓢"——修好了 MMUIButton 的问题，Cell Hook 的问题暴露了。
+```
+Cell (MoreVC资料卡) layoutSubviews 被调用：
+│
+├─ L434-445: lazy register MMUIButton hook（已注册则跳过）
+├─ L447: config 读取
+│
+├─ L478: isMoreVC = YES
+├─ L482: isMoreVC && cardBgEnabled → YES，进入分支
+│   ├─ L484: orig() 【第1次】← 微信设置 Cell 初始样式
+│   ├─ L488: backgroundColor = clearColor  ★ 设好了
+│   ├─ L490: masksToBounds = NO
+│   ├─ L494: contentView.backgroundColor = clearColor ★
+│   ├─ L500: backgroundView.hidden = YES ★
+│   └─ L511: （无 return，继续）
+│
+├─ L513: ★ 又到这里了
+│   └─ L514: orig() 【第2次】← ★ 覆盖了上面的透明化！★
+│       └─ backgroundColor 回到 white/gray
+│       └─ backgroundView 可能被恢复
+│
+├─ L518-533: margin 逻辑（只改 x 和 width）
+├─ L562-578: bgColorSkipList 检查 → MoreVC 不在 skipList
+│   └─ 设置 backgroundColor（又一次覆盖）
+│
+├─ L581: cornerRadius 设置
+├─ L587-624: wp_applyStandardCorner 或 skip
+│   └─ ★ 但注意：isMoreVC 分支在上面已经处理过，
+│        这里会再走一遍通用圆角逻辑
+│
+└─ L626: masksToBounds = YES
+    结果：❌ 透明化被覆盖 → bgImageView 被遮挡
+         ✅ 圆角在最后设置 → 有效
+```
 
 ---
 
-## 4. 真正的根因：Frame 反馈循环
+## 3. 为什么圆角正常但背景图不显示
 
-### 4.1 问题代码位置
+### 视图层叠分析
 
-[ListCornerRadiusHook.m 第505-518行](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L505-L518)：
+```
+MoreViewController 的资料卡区域视图层级：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UITableView
+ └─ UITableViewCell (Cell)
+     │  ← backgroundColor 被 orig#2 设为 white
+     │  ← masksToBounds = YES (L626)
+     │
+     ├─ contentView
+     │   │  ← backgroundColor 在 L494 设为 clearColor
+     │   │     但 contentView 本身可能不占满 Cell
+     │   │
+     │   └─ MMUIButton (我们的目标)
+     │       │  ← backgroundColor = clearColor (L275)
+     │       │  ← cornerRadius = 18 (L958)
+     │       │  ← borderWidth = green (L983)
+     │       │  ← masksToBounds = YES (L959, L426)
+     │       │
+     │       ├── UIImageView (bgImageView) ← 我们创建的
+     │       │   └─ tag=999902, atIndex:0
+     │       │   └─ image = (异步加载中...)
+     │       │
+     │       ├── MMHeadImageView (头像)
+     │       ├── UILabel (名字)
+     │       ├── UILabel (微信号)
+     │       └─ ... 其他子视图
+     │
+     └─ backgroundView (可能被微信 orig#2 恢复)
+         └─ 可能是不透明白色
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**关键路径**：眼睛看到的光线
+
+```
+光线路径：
+屏幕 ← Cell.backgroundColor (white/gray ← orig#2设置的!)
+       ↑ 这个颜色挡住了下面的所有东西！
+
+如果 Cell.backgroundColor = clearColor（我们想设的）：
+屏幕 ← Cell (透明) ← contentView (透明) ← MMUIButton (透明) ← bgImageView (有图!) ✅
+```
+
+**但因为 orig#2 把 Cell.backgroundColor 改回了 white，所以：**
+```
+屏幕 ← Cell (white 不透明!) ← 挡住了 bgImageView ❌
+```
+
+而圆角之所以能生效，是因为 `cell.layer.cornerRadius` 和 `cell.layer.masksToBounds` 是在 **L581-L626** 设置的（两次 orig 之后），最终值"赢"了。
+
+---
+
+## 4. 三大症状统一解释
+
+| 症状 | 原因 | 代码位置 |
+|:----:|------|---------|
+| **背景图不显示** | Cell.backgroundColor 被 orig#2 覆盖为白色，挡住 MMUIButton 层的 bgImageView | [L514 覆盖 L488](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L514) |
+| **资料卡间距没了** | cardBgHeight/cardBgListSpacing 的 frame 修改已被注释掉（防卡死），且无替代实现 | [L507-509](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L507) |
+| **圆角正常** | cornerRadius 在 L581-626 设置（两次 orig 之后），最终值有效 | [L581-624](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L581) |
+| **之前卡死** | setFrame: 修改 Cell 自身 frame 触发 UIKit 反馈循环（已通过注释掉解决） | （已移除） |
+
+**一句话总结：透明化设得太早（orig#1 之后），被 orig#2 覆盖；圆角设得够晚（orig#2 之后），所以有效。**
+
+---
+
+## 5. 修复方案（唯一正确做法）
+
+### 5.1 核心原则
+
+> **对于 MoreVC + cardBgEnabled 的 Cell：透明化必须在最后一次 orig 之后执行。**
+
+### 5.2 方案：将透明化移到函数末尾（推荐）
 
 ```objc
-// 当前代码（导致第二次崩溃的元凶）：
-if (config.cardBgHeight > 0) {          // 第505行
-    CGFloat currentH = cellView.frame.size.height;
-    if (currentH < config.cardBgHeight) {
-        CGRect f = cellView.frame;
-        f.size.height = config.cardBgHeight;
-        cellView.frame = f;             // ★★★ setFrame: → 触发连锁反应 ★★★
+static void replaced_MMUITableViewCell_layoutSubviews(id self, SEL _cmd) {
+    // ... lazy register (不变) ...
+
+    PluginConfig *config = [PluginConfig shared];
+
+    // ★★★ 通用流程（不变）★★★
+    if (!config.listCornerRadiusEnabled && !config.cardBgEnabled) {
+        orig(); return;
     }
-}
-if (config.cardBgListSpacing > 0) {     // 第513行
-    CGRect f = cellView.frame;
-    f.size.height += config.cardBgListSpacing;
-    f.origin.y -= config.cardBgListSpacing / 2.0;
-    cellView.frame = f;                 // ★★★ 又一次 setFrame: ★★★
-}
-```
 
-### 4.2 三重打击
+    UIViewController *vc = findParentViewController((UIView *)self);
+    if (!vc) { orig(); return; }
+    NSString *className = NSStringFromClass([vc class]);
+    if (shouldSkipCorner(vc)) { orig(); return; }
 
-#### 打击一：setFrame: 本身昂贵
+    UIView *cellView = (UIView *)self;
+    BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
 
-在 `layoutSubviews` 内部调用 `setFrame:` 不是普通赋值。UIKit 的 `UITableViewCell.setFrame:` 是一个**重载方法**，它会：
-- 重新计算 `_containerView` 的布局
-- 重新计算 `_swipeContainerView` 的布局
-- 通知 delegate
-- 检查是否需要重新布局子视图
-- 可能触发 `setNeedsLayout` 或直接触发 `layoutSubviews`
+    // ★★★ 关键改变：不再在这里做透明化 ★★★
+    // 只记录是否是 MoreVC + cardBgEnabled，后面统一处理
+    BOOL needsCardBgTransparency = (isMoreVC && config.cardBgEnabled);
 
-#### 打击二：调用了两次
+    // ★★★ 只调一次 orig（所有 Cell 统一）★★★
+    if (_orig_MMTableViewCell_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews(self, _cmd);
+    }
 
-高度调整和间距调整**分别**调用了一次 `setFrame:`，等于对一个 Cell 在一次 `layoutSubviews` 中触发了两次完整的 frame 设置流程。
+    // ★★★ 通用 margin / bgColor / corner 逻辑（不变）★★★
+    CGFloat margin = config.listCellMargin;
+    if (margin > 0 && config.listCornerRadiusEnabled) { /* ... */ }
 
-#### 打击三：对每个 MoreViewController Cell 都执行
+    // ... bgColorSkipList / backgroundColor ...
 
-MoreViewController 可能有 10-30 个 Cell，每个 Cell 都执行两次 `setFrame:` = 20-60 次 `setFrame:` 调用，每次都在主线程上触发 UIKit 内部复杂计算。
+    // ★★★ 圆角逻辑 ★★★
+    if (isMoreVC && needsCardBgTransparency) {
+        // MoreVC 资料卡：使用 wp_applyProfileCardCorner（由 MMUIButton Hook 负责）
+        // 或者在这里也设置一下圆角（双重保险）
+    } else {
+        // 其他 Cell：通用圆角
+        // ... wp_applyStandardCorner ...
+    }
 
-### 4.3 与微信优化的关键区别
+    cellView.layer.masksToBounds = YES;
 
-**微信优化的 MMUIButton Hook 中没有任何 `setFrame:` 调用。**
+    // ═══════════════════════════════════════════════════
+    // ★★★ 最后：资料卡透明化（在所有 orig 和样式之后！）★★★
+    // ═══════════════════════════════════════════════════
+    if (needsCardBgTransparency) {
+        cellView.backgroundColor = [UIColor clearColor];     // ← 最后设，不会被覆盖
+        cellView.layer.borderWidth = 0;
+        cellView.layer.masksToBounds = NO;                  // ← 注意：下面又设了YES，需要调整顺序
 
-回顾反编译代码 `FUN_00007b4c`：
-- 它只设置 bgImageView 的 frame（新建视图的首次设置，不触发布局反馈）
-- 它**从不修改 Cell 或 MMUIButton 自身的 frame**
-- 它**从不修改 height/spacing 等 Cell 几何属性**
-
-而我们的代码在 Cell Hook 中修改 Cell 自身的 frame —— 这完全违背了 Layout Subviews 的最佳实践。
-
----
-
-## 5. 为什么微信优化不会触发这个循环
-
-### 微信优化的做法
-
-```
-微信优化 FUN_00007b4c（MMUIButton Hook）:
-
-① orig_layoutSubviews()          ← 让微信自己设置所有 frame
-② 创建 bgImageView
-③ bgImageView.frame = calculated  ← 只设置新建子视图的 frame
-④ insertSubview:bgImageView       ← 插入到视图层级
-⑤ dispatch_async(加载图片)         ← 异步加载
-⑥ return                          ← 结束
-
-★ 全程不修改 Cell/frame/MMUIButton 自身的任何几何属性 ★
-```
-
-### 我们的做法（问题所在）
-
-```
-MioPlugin Cell Hook（当前）:
-
-① orig_layoutSubviews()
-② cellView.backgroundColor = clearColor    ← OK，轻量
-③ cellView.frame.height = customHeight      ← ★★★ 危险！修改自身 frame ★★★
-④ cellView.frame.height += spacing          ← ★★★ 又一次！★★★
-⑤ return
-
-★ 在 layoutSubviews 内修改自身 frame → 触发 UIKit 重算 → 可能递归 ★
-```
-
-### iOS layoutSubviews 最佳实践
-
-Apple 的文档明确指出：
-
-> **不要在 `layoutSubviews` 中修改 `self.frame` 或 `self.bounds`。**
-> `layoutSubviews` 的职责是根据当前的 bounds 来布置子视图，而不是修改自身的尺寸。
-> 修改自身的 frame 应该在外部（如父视图的 `layoutSubviews`）或通过 Auto Layout constraint 完成。
-
----
-
-## 6. v12 修正方案
-
-### 6.1 核心原则
-
-> **永远不在 `layoutSubviews` 中修改自身或父视图的 frame。**
-
-### 6.2 方案 A：移除 Cell Hook 中的 frame 修改（推荐）
-
-将 `cardBgHeight` 和 `cardBgListSpacing` 的实现从 **frame 修改** 改为 **约束/内容尺寸** 方式：
-
-#### cardBgHeight 的替代方案
-
-```objc
-// ❌ 错误做法（当前）：在 layoutSubviews 中修改 frame
-cellView.frame = CGRectMake(..., config.cardBgHeight);
-
-// ✅ 正确做法：不修改 frame，改为设置 MMUIButton 的最小高度
-// 在 MMUIButton Hook 中（orig 之后）：
-CGFloat minHeight = config.cardBgHeight;
-if (minHeight > 0 && selfHeight < minHeight) {
-    // 方案A1：只影响内容显示，不改 frame
-    // （让背景图自然撑开视觉效果）
-
-    // 方案A2：使用 autoresizingMask 或 constraint
-    // （但这对 UITableViewCell 不太适用）
-
-    // 方案A3（最简单）：接受微信原始高度，
-    // 只让 bgImageView 的 frame 基于 bounds 而非 frame
-    // bgImageView 已经是这样做的（第348行 btnBgImg.frame 基于 btnBounds）
-}
-```
-
-**实际上**：`cardBgHeight` 的目的是让资料卡更高以容纳背景图。
-但如果我们把 bgImageView 放在 MMUIButton 层（已经做了），bgImageView 的尺寸基于 MMUIButton.bounds，
-所以**不需要修改 Cell 的 frame** —— 背景图自然会填充 MMUIButton 区域。
-
-#### cardBgListSpacing 的替代方案
-
-```objc
-// ❌ 错误做法（当前）：在 layoutSubviews 中修改 frame
-f.size.height += spacing;
-f.origin.y -= spacing / 2.0;
-
-// ✅ 正确做法：使用 UITableView 的 sectionHeaderHeight / sectionFooterHeight
-// 或者在 Cell 的 contentView 内部添加 padding view
-// 但这些都不应在 layoutSubviews 中通过修改 frame 实现
-
-// 最简单的替代：暂时禁用此功能，或在 settings UI 中标注
-// "此功能需要在 tableView 层面实现，不支持动态 frame 修改"
-```
-
-### 6.3 方案 B：延迟到下一 RunLoop（折中）
-
-如果必须保留 frame 修改，将其推迟到当前 layoutSubviews 完成之后：
-
-```objc
-// 使用 dispatch_async(dispatch_get_main_queue()) 延迟 frame 修改
-// 这样不会在当前 layoutSubviews 调用栈内触发反馈循环
-dispatch_async(dispatch_get_main_queue(), ^{
-    if (config.cardBgHeight > 0) {
-        CGFloat currentH = cellView.frame.size.height;
-        if (currentH < config.cardBgHeight) {
-            CGRect f = cellView.frame;
-            f.size.height = config.cardBgHeight;
-            cellView.frame = f;  // 此时不在 layoutSubviews 调用栈内
+        UIView *cv = [(UITableViewCell *)cellView contentView];
+        if (cv) {
+            cv.backgroundColor = [UIColor clearColor];
+            cv.layer.masksToBounds = NO;
         }
+
+        if ([cellView respondsToSelector:@selector(backgroundView)]) {
+            UIView *bgv = [(id)cellView backgroundView];
+            if (bgv) { bgv.backgroundColor = [UIColor clearColor]; bgv.hidden = YES; }
+        }
+        if ([cellView respondsToSelector:@selector(selectedBackgroundView)]) {
+            UIView *sbgv = [(id)cellView selectedBackgroundView];
+            if (sbgv) { sbgv.backgroundColor = [UIColor clearColor]; }
+        }
+
+        // ★ 如果上面 masksToBounds=NO，这里不需要再设 YES
+        // ★ 让 MMUIButton 自身的 masksToBounds 来裁剪即可
     }
+}
+```
+
+### 5.3 关于 masksToBounds 的冲突
+
+当前代码有一个细微的 masksToBounds 冲突：
+
+```
+L490:  Cell Hook 中: cellView.layer.masksToBounds = NO    （让 bgImageView 可见）
+L626:  Cell Hook 末尾: cellView.layer.masksToBounds = YES   （通用逻辑）
+L426:  MMUIButton Hook: self.layer.masksToBounds = YES        （裁剪圆角）
+L959:  wp_applyProfileCardCorner: cell.layer.masksToBounds = YES
+```
+
+**如果 Cell.masksToBounds = YES**，且 Cell 的 bounds 小于 bgImageView 的实际范围，bgImageView 会被裁剪。
+
+**正确的 masksToBounds 策略**：
+- **Cell 层**：`masksToBounds = NO`（让 MMUIButton 层的内容可以稍微溢出，或者至少不被 Cell 裁剪）
+- **MMUIButton 层**：`masksToBounds = YES`（由 `wp_applyProfileCardCorner` 设置，负责圆角裁剪）
+
+### 5.4 关于资料卡间距（cardBgListSpacing）
+
+由于不能在 layoutSubviews 中修改 frame（会导致卡死），间距功能需要在别处实现：
+
+**选项 A（推荐）：暂时禁用**
+- 在 Settings UI 中隐藏此选项
+- 或者在代码中保留但不生效（加注释说明原因）
+
+**选项 B：dispatch_async 延迟**
+```objc
+// 在透明化之后，用 dispatch_async 延迟修改 spacing
+dispatch_async(dispatch_get_main_queue(), ^{
     if (config.cardBgListSpacing > 0) {
         CGRect f = cellView.frame;
         f.size.height += config.cardBgListSpacing;
@@ -359,116 +396,96 @@ dispatch_async(dispatch_get_main_queue(), ^{
     }
 });
 ```
+风险：仍可能触发额外的 layout pass，但不在当前调用栈内。
 
-**风险**：仍然可能触发额外的 layoutSubviews pass，但至少不会在当前调用栈内形成同步递归。
-
-### 6.4 推荐方案：组合策略
-
+**选项 C（正确做法）：Hook heightForRowAtIndexPath:**
+```objc
+// Hook UITableViewDelegate 的 heightForRowAtIndexPath:
+// 对于 MoreViewController 的资料卡 row 返回原始高度 + spacing
+// 这是 Apple 推荐的做法
 ```
-v12 最终方案：
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Cell Hook (MoreVC + cardBgEnabled):
-  1. orig_layoutSubviews()           ← 必须最先
-  2. backgroundColor = clearColor     ← OK
-  3. layer.borderWidth = 0           ← OK
-  4. layer.masksToBounds = NO        ← OK
-  5. contentView clearColor          ← OK
-  6. backgroundView hide             ← OK
-  7. ★ 删除 cardBgHeight frame 修改 ★
-  8. ★ 删除 cardBgListSpacing frame 修改 ★
-  9. return
-
-MMUIButton Hook (保持 v11 不变):
-  1. 极速拒绝链（4关过滤）
-  2. orig_layoutSubviews()
-  3. HideCard 分支
-  4. 清除 m_bgImageView
-  5. bgImageView 去重查找
-  6. 首次：创建 + 异步加载
-  7. 非首次：更新 frame + return
-  8. 圆角 + 边框 + masksToBounds
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-### 6.5 关于 cardBgHeight 和 cardBgListSpacing 的说明
-
-这两个配置项的正确实现位置应该是：
-- **cardBgHeight**：应该在 `heightForRowAtIndexPath:` delegate 方法中返回自定义高度
-- **cardBgListSpacing**：应该通过 `sectionHeaderHeight` / `sectionFooterHeight` 或 Cell 间的 spacing view 来实现
-
-这些都属于 **TableView 数据源/代理层面**的操作，不属于 `layoutSubviews` 的职责范围。
 
 ---
 
-## 7. 实施检查清单（更新）
+## 6. 完整修复后的代码结构
 
-### Phase 1：消除 Frame 反馈循环（P0 — 解决卡死）
+### 6.1 Cell Hook 伪代码
 
-- [ ] **1.1** 删除 Cell Hook 中 `cardBgHeight` 的 frame 修改代码（第505-512行）
-- [ ] **1.2** 删除 Cell Hook 中 `cardBgListSpacing` 的 frame 修改代码（第513-518行）
-- [ ] **1.3** 保留 Cell Hook 中的透明化逻辑（clearColor / backgroundView hide）
-- [ ] **1.4** 编译测试，点击"我"不再卡死
+```
+replaced_MMUITableViewCell_layoutSubviews(self, _cmd):
+│
+│ ① lazy register MMUIButton hook
+│
+│ ② 快速拒绝：!corner && !cardBg → orig → return
+│
+│ ③ find VC → nil → orig → return
+│ ④ shouldSkipCorner → orig → return
+│
+│ ⑤ 记录标志位：needsCardBgTransparency = (isMoreVC && cardBgEnabled)
+│
+│ ⑥ ★ orig() — 只调用一次，所有 Cell 统一
+│
+│ ⑦ margin 逻辑（不改 height/y，只改 x/width）
+│
+│ ⑧ backgroundColor 逻辑（非 skipList 的 VC）
+│
+│ ⑨ 圆角逻辑
+│    ├─ isMoreVC && needsCardBgTransparency → 跳过通用圆角（MMUIButton负责）
+│    └─ 其他 → wp_applyStandardCorner
+│
+│ ⑩ ★★★ 资料卡透明化（在所有操作之后！）★★★
+│    if (needsCardBgTransparency):
+│        Cell.backgroundColor = clearColor
+│        Cell.masksToBounds = NO
+│        contentView.backgroundColor = clearColor
+│        backgroundView.hidden = YES
+│        // ★ 不设 masksToBounds=YES（让 MMUIButton 层负责裁剪）★
+│
+│ ⑪ return
+```
 
-### Phase 2：验证 MMUIButton Hook 优化效果（P1）
+### 6.2 MMUIButton Hook 保持不变
 
-- [ ] **2.1** 确认 MMUIButton Hook 的极速拒绝链正常工作
-- [ ] **2.2** 确认 bgImageView 去重逻辑正常（第二次调用走零开销路径）
-- [ ] **2.3** 确认图片异步加载正常（后台线程解码）
-- [ ] **2.4** 确认背景图能正确显示
-
-### Phase 3：恢复 cardBgHeight / cardBgListSpacing（P2 — 低优先级）
-
-- [ ] **3.1** 如需 cardBgHeight 功能：Hook `heightForRowAtIndexPath:` 返回自定义高度
-- [ ] **3.2** 如需 cardBgListSpacing 功能：通过 section header/footer 或 spacing view 实现
-- [ ] **3.3** 或者：在 Settings UI 中暂时隐藏这两个选项
-
-### Phase 4：完整验证
-
-- [ ] **4.1** 安装只有 MioPlugin 的微信，点击"我"不卡死
-- [ ] **4.2** 安装 8 个插件的微信，点击"我"不卡死
-- [ ] **4.3** 背景图正常显示
-- [ ] **4.4** HideCard 正常工作
-- [ ] **4.5** 列表圆角正常工作（不受影响）
-- [ ] **4.6** 切换深色模式正常
-- [ ] **4.7** 反复进入/离开"我"页面 10+ 次不泄漏内存
+MMUIButton Hook（第177-431行）已经是对标微信优化重构过的版本，**不需要改动**：
+- 极速拒绝链 ✅
+- 单次创建 + 去重 ✅
+- 异步加载 ✅
+- 圆角 + 边框 ✅
 
 ---
 
-## 附录：崩溃时间线完整还原
+## 7. 实施检查清单
 
-### 第一次崩溃（v9 代码）
+### Phase 1：修复 double-orig 覆盖问题（P0 — 解决背景图不显示）
 
-```
-00:55:00  进程启动
-00:55:01  插件安装
-00:55:28  插件热加载？
-00:55:43  appReady
-00:55:53  HideAvatar viewDidLoad
-00:55:25  ★ SIGKILL (watchdog timeout, 25秒存活)
-          卡在: hasPrefix: (MMUIButton Hook 内部)
-          CPU: 28.15s (48%)
-          原因: MMUIButton Hook 过重 + 8插件叠加
-```
+- [ ] **1.1** 删除 `if (isMoreVC && config.cardBgEnabled)` 分支内的 orig 调用（第483-485行）
+- [ ] **1.2** 删除该分支内的透明化代码（第487-505行），改为只设置标志位
+- [ ] **1.3** 将透明化代码移到函数末尾（orig + margin + corner + bgColor 之后）
+- [ ] **1.4** 确保 Cell 层 `masksToBounds = NO`（当 needsCardBgTransparency 时）
+- [ ] **1.5** 编译测试，背景图能显示
 
-### 第二次崩溃（v11 修改后）
+### Phase 2：验证（P1）
 
-```
-01:51:39  进程启动
-01:51:58  ★ SIGKILL (watchdog timeout, 仅19秒存活!)
-          卡在: [UITableViewCell frame] → _containerView (Cell Hook 的 setFrame:)
-          CPU: 38.18s (66%)  ← 比第一次还高!
-          原因: Cell Hook 中修改 frame 触发 UIKit 内部重算 + 反馈循环
-```
+- [ ] **2.1** 点击"我"不卡死
+- [ ] **2.2** 背景图正常显示
+- [ ] **2.3** 圆角正常（资料卡 + 其他页面）
+- [ ] **2.4** HideCard 正常
+- [ ] **2.5** 列表边距正常（其他页面）
+- [ ] **2.6** 8 插件共存时不卡死
 
-### 变化趋势
+### Phase 3：资料卡间距（P2 — 低优先级）
 
-```
-指标          v9(第1次)    v11(第2次)    趋势
-─────────── ──────────  ──────────  ──────
-存活时间      25秒         19秒         ↓ 更快死
-总CPU        28.15s       38.18s       ↑ 更高
-卡死位置     MMUIButton    Cell Hook    ← 转移了
-根因         Hook过重      Frame反馈循环  ← 新问题
-```
+- [ ] **3.1** 实现 dispatch_async 延迟方案 或 heightForRowAtIndexPath: Hook
+- [ ] **3.2** 或暂时禁用该功能
 
-**结论：MMUIButton Hook 的优化有效（不再卡在那里），但 Cell Hook 的 frame 修改引入了更严重的问题。**
+---
+
+## 附录：历史崩溃回顾（已解决的问题）
+
+| 版本 | 问题 | 状态 |
+|:----:|------|:----:|
+| v9 | MMUIButton Hook 过重，25+步操作/次，无去重 | ✅ 已解决（v11 重构） |
+| v9 | 文件 I/O 在主线程 | ✅ 已解决（移到 dispatch_async） |
+| v11 | Cell Hook 中修改 Cell.frame 导致反馈循环 | ✅ 已解决（注释掉 frame 修改） |
+| v12 | Cell Hook 中 `return` 太早导致圆角/边距丢失 | ✅ 已解决（去掉 return） |
+| **v13** | **Cell Hook 中 orig 被调用2次，第2次覆盖透明化** | **⏳ 待实施** |
