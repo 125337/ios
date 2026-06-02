@@ -3,6 +3,7 @@
 #import "../../Settings/Controllers/SettingChatTopBarController.h"
 #import "../../Settings/Controllers/SettingNameColorController.h"
 #import "../../Settings/Controllers/SettingListCornerRadiusController.h"
+#import "../../Settings/Controllers/SettingCardBackgroundController.h"
 #import "../../Core/LogManager.h"
 
 @interface WPUIVC : SettingCategoryController
@@ -86,6 +87,9 @@
             break;
         case 107:
             subVC = [[SettingListCornerRadiusController alloc] init];
+            break;
+        case 108:
+            subVC = [[SettingCardBackgroundController alloc] init];
             break;
     }
 

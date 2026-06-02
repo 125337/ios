@@ -169,6 +169,21 @@
 @property (nonatomic, copy) NSString *listProfileCardBorderLightColor;
 @property (nonatomic, copy) NSString *listProfileCardBorderDarkColor;
 
+#pragma mark - 卡片背景
+@property (nonatomic, assign) BOOL cardBgEnabled;
+@property (nonatomic, assign) BOOL cardBgHidden;
+@property (nonatomic, assign) CGFloat cardBgHeight;
+@property (nonatomic, assign) CGFloat cardBgListSpacing;
+@property (nonatomic, copy) NSString *cardBgLightImagePath;
+@property (nonatomic, copy) NSString *cardBgDarkImagePath;
+@property (nonatomic, assign) NSInteger cardBgFillMode;
+@property (nonatomic, assign) NSInteger cardBgLightLayer;
+@property (nonatomic, assign) NSInteger cardBgDarkLayer;
+@property (nonatomic, assign) CGFloat cardBgLightOffsetY;
+@property (nonatomic, assign) CGFloat cardBgDarkOffsetY;
+@property (nonatomic, assign) CGFloat cardBgLightOffsetX;
+@property (nonatomic, assign) CGFloat cardBgDarkOffsetX;
+
 @property (nonatomic, assign) BOOL notifySender;
 @property (nonatomic, copy) NSString *notifySenderTemplate;
 @property (nonatomic, assign) double notifySenderCooldown;
