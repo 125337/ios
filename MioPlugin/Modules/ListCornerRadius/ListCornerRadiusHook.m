@@ -304,6 +304,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     PluginConfig *config = [PluginConfig shared];
 
+    static const NSInteger kBgImageTagCard = 999901;
+
     UIViewController *vcCardEarly = findParentViewController((UIView *)self);
     NSString *classNameCardEarly = vcCardEarly ? NSStringFromClass([vcCardEarly class]) : @"";
     BOOL isMoreVCCard = [classNameCardEarly isEqualToString:@"MoreViewController"];
@@ -372,7 +374,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             }
         }
 
-        static const NSInteger kBgImageTagCard = 999901;
         UIImageView *bgImageView = (UIImageView *)[cellViewCard viewWithTag:kBgImageTagCard];
 
         if (!bgImageView) {
