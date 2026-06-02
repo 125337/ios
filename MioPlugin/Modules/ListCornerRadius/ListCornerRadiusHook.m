@@ -507,8 +507,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         // ★★★ 不在 layoutSubviews 中修改 Cell 自身 frame（会触发 UIKit 反馈循环导致卡死）
         // cardBgHeight / cardBgListSpacing 需要在 tableView delegate 层面实现
         // 当前只做透明化，背景图由 MMUIButton Hook 处理
-
-        return;
+        // ★ 不 return，继续往下执行圆角和边距逻辑
     }
 
     if (_orig_MMTableViewCell_layoutSubviews) {
