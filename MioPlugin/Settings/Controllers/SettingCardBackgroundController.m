@@ -16,30 +16,6 @@
     [self buildUI];
 }
 
-#pragma mark - 自定义输入行
-
-- (CGFloat)addCustomInputRow:(UIView *)group
-                       title:(NSString *)title
-                         key:(NSString *)key
-                       value:(NSString *)value
-                        hint:(NSString *)hint
-                  alertTitle:(NSString *)alertTitle
-                alertMessage:(NSString *)alertMessage
-                          cy:(CGFloat)cy
-                       width:(CGFloat)w {
-    Class handlerClass = objc_getClass("MioPluginSwitchHandler");
-    id handler = [handlerClass performSelector:@selector(sharedInstance)];
-    NSString *displayValue = (value && value.length > 0) ? value : hint;
-    UIButton *row = WPAddEditableRowWithArrow(group, cy, w, title, displayValue, handler);
-    objc_setAssociatedObject(row, "editConfigKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    if (hint) objc_setAssociatedObject(row, "editConfigHint", hint, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    if (alertTitle) objc_setAssociatedObject(row, "editTitle", alertTitle, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    if (alertMessage) objc_setAssociatedObject(row, "editMessage", alertMessage, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return cy + kRowH;
-}
-
-#pragma mark - buildUI
-
 - (void)buildUI {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
@@ -70,25 +46,25 @@
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         CGFloat h = cfg.cardBgHeight > 0 ? cfg.cardBgHeight : 144.0;
-        *ecy = [self addCustomInputRow:expand
-                                 title:@"信息卡片高度"
-                                   key:@"cardBgHeight"
-                                 value:[NSString stringWithFormat:@"%.0f", h]
-                                  hint:@"144"
-                            alertTitle:@"设置信息卡片高度"
-                          alertMessage:@"请输入高度值(144-500像素)"
-                                    cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"信息卡片高度"
+                                    key:@"cardBgHeight"
+                                  value:[NSString stringWithFormat:@"%.0f", h]
+                                   hint:@"144"
+                             alertTitle:@"设置信息卡片高度"
+                           alertMessage:@"请输入高度值(144-500像素)"
+                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         CGFloat sp = cfg.cardBgListSpacing > 0 ? cfg.cardBgListSpacing : 9.0;
-        *ecy = [self addCustomInputRow:expand
-                                 title:@"列表向下间距"
-                                   key:@"cardBgListSpacing"
-                                 value:[NSString stringWithFormat:@"%.0f", sp]
-                                  hint:@"9"
-                            alertTitle:@"设置列表向下间距"
-                          alertMessage:@"请输入间距值(1-550像素)\n调整卡片下方列表相对原生位置的间距"
-                                    cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"列表向下间距"
+                                    key:@"cardBgListSpacing"
+                                  value:[NSString stringWithFormat:@"%.0f", sp]
+                                   hint:@"9"
+                             alertTitle:@"设置列表向下间距"
+                           alertMessage:@"请输入间距值(1-550像素)\n调整卡片下方列表相对原生位置的间距"
+                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         NSString *lightSub = cfg.cardBgLightImagePath.length > 0 ? @"已设置" : @"未设置";
@@ -114,47 +90,47 @@
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         CGFloat loy = cfg.cardBgLightOffsetY;
-        *ecy = [self addCustomInputRow:expand
-                                 title:@"浅色背景Y轴偏移"
-                                   key:@"cardBgLightOffsetY"
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"浅色背景Y轴偏移"
+                                    key:@"cardBgLightOffsetY"
                                  value:loy != 0 ? [NSString stringWithFormat:@"%.0f", loy] : nil
-                                  hint:@"0"
-                            alertTitle:@"设置浅色背景Y轴偏移"
-                          alertMessage:@"请输入Y轴偏移值(-500~500像素)\n正值向上偏移，负值向下偏移"
-                                    cy:*ecy width:w];
+                                   hint:@"0"
+                             alertTitle:@"设置浅色背景Y轴偏移"
+                           alertMessage:@"请输入Y轴偏移值(-500~500像素)\n正值向上偏移，负值向下偏移"
+                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         CGFloat doy = cfg.cardBgDarkOffsetY;
-        *ecy = [self addCustomInputRow:expand
-                                 title:@"深色背景Y轴偏移"
-                                   key:@"cardBgDarkOffsetY"
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"深色背景Y轴偏移"
+                                    key:@"cardBgDarkOffsetY"
                                  value:doy != 0 ? [NSString stringWithFormat:@"%.0f", doy] : nil
-                                  hint:@"0"
-                            alertTitle:@"设置深色背景Y轴偏移"
-                          alertMessage:@"请输入Y轴偏移值(-500~500像素)\n正值向上偏移，负值向下偏移"
-                                    cy:*ecy width:w];
+                                   hint:@"0"
+                             alertTitle:@"设置深色背景Y轴偏移"
+                           alertMessage:@"请输入Y轴偏移值(-500~500像素)\n正值向上偏移，负值向下偏移"
+                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         CGFloat lox = cfg.cardBgLightOffsetX;
-        *ecy = [self addCustomInputRow:expand
-                                 title:@"浅色背景X轴偏移"
-                                   key:@"cardBgLightOffsetX"
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"浅色背景X轴偏移"
+                                    key:@"cardBgLightOffsetX"
                                  value:lox != 0 ? [NSString stringWithFormat:@"%.0f", lox] : nil
-                                  hint:@"0"
-                            alertTitle:@"设置浅色背景X轴偏移"
-                          alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
-                                    cy:*ecy width:w];
+                                   hint:@"0"
+                             alertTitle:@"设置浅色背景X轴偏移"
+                           alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
+                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         CGFloat dox = cfg.cardBgDarkOffsetX;
-        *ecy = [self addCustomInputRow:expand
-                                 title:@"深色背景X轴偏移"
-                                   key:@"cardBgDarkOffsetX"
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"深色背景X轴偏移"
+                                    key:@"cardBgDarkOffsetX"
                                  value:dox != 0 ? [NSString stringWithFormat:@"%.0f", dox] : nil
-                                  hint:@"0"
-                            alertTitle:@"设置深色背景X轴偏移"
-                          alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
-                                    cy:*ecy width:w];
+                                   hint:@"0"
+                             alertTitle:@"设置深色背景X轴偏移"
+                           alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
+                                     cy:*ecy width:w];
     } cy:cy width:w];
 
     y = [self finishGroup:group atY:y height:cy];
