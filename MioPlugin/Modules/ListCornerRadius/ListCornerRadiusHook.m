@@ -305,7 +305,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
 
-    // ★ 资料卡背景功能：有背景图时用透明背景，无背景图时用不透明背景
+    // ★ 资料卡背景功能：有背景图时清除 m_bgImageView + 透明背景
     if (config.cardBgEnabled) {
         NSString *imagePath = isDark ? config.cardBgDarkImagePath
                                      : config.cardBgLightImagePath;
@@ -323,6 +323,28 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
         if (hasBgImage) {
             ((UIView *)self).backgroundColor = [UIColor clearColor];
+
+            // ★★★ 关键修复：清除微信内部的 m_bgImageView ★★★
+            Ivar bgIvar = class_getInstanceVariable([(id)self class], "m_bgImageView");
+            if (bgIvar) {
+                id bgImgView = object_getIvar((id)self, bgIvar);
+                if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
+                    object_setIvar((id)self, bgIvar, nil);
+                }
+            }
+
+            // ★ 额外保险：遍历 MMUIButton 子视图，隐藏大尺寸背景 ImageView
+            for (UIView *sub in ((UIView *)self).subviews) {
+                if ([sub isKindOfClass:[UIImageView class]]) {
+                    UIImageView *iv = (UIImageView *)sub;
+                    if (![NSStringFromClass([iv class]) isEqualToString:@"MMHeadImageView"]) {
+                        if (iv.frame.size.width > ((UIView *)self).frame.size.width * 0.8 &&
+                            iv.frame.size.height > ((UIView *)self).frame.size.height * 0.5) {
+                            iv.hidden = YES;
+                        }
+                    }
+                }
+            }
         } else {
             UIColor *cardBg = [config colorFromHex:isDark
                 ? config.listCardDarkBgColor : config.listCardLightBgColor];
@@ -461,6 +483,19 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         } else {
             // ★ 非 HideCard 时也设置透明背景
             cellViewCard.backgroundColor = [UIColor clearColor];
+
+            // ★ 清除 MMUIButton 内部的 m_bgImageView（双重保险）
+            for (UIView *sub in cellViewCard.subviews) {
+                if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+                    Ivar bgIvar = class_getInstanceVariable([sub class], "m_bgImageView");
+                    if (bgIvar) {
+                        id bgImgView = object_getIvar(sub, bgIvar);
+                        if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
+                            object_setIvar(sub, bgIvar, nil);
+                        }
+                    }
+                }
+            }
         }
 
         for (UIView *sub in cellViewCard.subviews) {
