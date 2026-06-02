@@ -690,8 +690,16 @@
     [d setBool:_cardBgHidden forKey:[kPluginPrefix stringByAppendingString:@"CardBgHidden"]];
     [d setFloat:_cardBgHeight forKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];
     [d setFloat:_cardBgListSpacing forKey:[kPluginPrefix stringByAppendingString:@"CardBgListSpacing"]];
-    if (_cardBgLightImagePath) [d setObject:_cardBgLightImagePath forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightImagePath"]];
-    if (_cardBgDarkImagePath) [d setObject:_cardBgDarkImagePath forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkImagePath"]];
+    if (_cardBgLightImagePath) {
+        [d setObject:_cardBgLightImagePath forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightImagePath"]];
+    } else {
+        [d removeObjectForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightImagePath"]];
+    }
+    if (_cardBgDarkImagePath) {
+        [d setObject:_cardBgDarkImagePath forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkImagePath"]];
+    } else {
+        [d removeObjectForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkImagePath"]];
+    }
     [d setInteger:_cardBgFillMode forKey:[kPluginPrefix stringByAppendingString:@"CardBgFillMode"]];
     [d setInteger:_cardBgLightLayer forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightLayer"]];
     [d setInteger:_cardBgDarkLayer forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkLayer"]];
