@@ -393,6 +393,22 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         cornerType = 1; borderType = 1;  // 顶角 + 顶边框
     } else if (row == totalRows - 1) {
         cornerType = 2; borderType = 3;  // 底角 + 底边框
+
+        // ★ 折叠置顶检测（仅聊天列表 section 1 的末行）★
+        BOOL isNewMainFrame = [className isEqualToString:@"NewMainFrameViewController"];
+        if (isNewMainFrame && indexPath.section == 1) {
+            UIView *foldView = [ListCornerRadiusHook wp_findFoldViewInSubviews:tableView.subviews];
+            if (foldView && [foldView respondsToSelector:@selector(isFolding)]) {
+                BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(foldView, @selector(isFolding));
+                if (!folding) {
+                    // 展开状态 → 无圆角 + 左右边框
+                    cell.layer.cornerRadius = 0;
+                    cell.layer.maskedCorners = 0;
+                    [self wp_applyBorderAndBg:cell radius:0 position:2 isFTSHome:isFTSHome];
+                    return;
+                }
+            }
+        }
     } else {
         cornerType = 0; borderType = 2;  // 无角 + 左右边框
     }

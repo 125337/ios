@@ -177,6 +177,8 @@
 @property (nonatomic, copy) NSString *cardBgLightImagePath;
 @property (nonatomic, copy) NSString *cardBgDarkImagePath;
 @property (nonatomic, assign) NSInteger cardBgFillMode;
+@property (nonatomic, assign) NSInteger cardBgLightAlignment;
+@property (nonatomic, assign) NSInteger cardBgDarkAlignment;
 @property (nonatomic, assign) NSInteger cardBgLightLayer;
 @property (nonatomic, assign) NSInteger cardBgDarkLayer;
 @property (nonatomic, assign) CGFloat cardBgLightOffsetY;
