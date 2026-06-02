@@ -474,8 +474,15 @@
             }
         }
 
-        // 分支A：已存在且已加载 → 更新 frame
+        // 分支A：已存在且已加载 → 更新 contentMode + frame
         if (existingBgImg != nil && alreadyLoaded) {
+            NSInteger fillMode = config.cardBgFillMode;
+            switch (fillMode) {
+                case 1: existingBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
+                case 2: existingBgImg.contentMode = UIViewContentModeScaleToFill; break;
+                default: existingBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
+            }
+
             CGFloat imgW = button.bounds.size.width;
             CGFloat imgH = button.bounds.size.height;
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
@@ -499,8 +506,8 @@
         NSInteger fillMode = config.cardBgFillMode;
         switch (fillMode) {
             case 1: btnBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
-            case 2: btnBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
-            default: btnBgImg.contentMode = UIViewContentModeScaleToFill; break;
+            case 2: btnBgImg.contentMode = UIViewContentModeScaleToFill; break;
+            default: btnBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
         }
         [button insertSubview:btnBgImg atIndex:0];
 
@@ -580,21 +587,24 @@
     } // end needsFullCardBg
 
 APPLY_CORNER:
-    // ── 圆角 + 边框 + QR码隐藏（始终执行）──
+    // ── 圆角 + 边框 + QR码隐藏 ──
     {
         NSInteger radius = (NSInteger)config.listCellCornerRadius;
         if (radius == 0) radius = 18;
 
-        [ProfileCardBgHook applyProfileCardCorner:button
-                                     cornerRadius:radius
-                                          isDark:isDark];
+        BOOL skipMasksToBounds = (config.cardBgEnabled && config.cardBgFillMode == 3);
+        if (!skipMasksToBounds) {
+            [ProfileCardBgHook applyProfileCardCorner:button
+                                         cornerRadius:radius
+                                              isDark:isDark];
+        } else {
+            button.layer.cornerRadius = 0;
+            button.layer.masksToBounds = NO;
+        }
 
         if (config.listHideRightQRCode) {
             [ProfileCardBgHook hideQRButtonInCell:button];
         }
-
-        BOOL skipMasksToBounds = (config.cardBgEnabled && config.cardBgFillMode == 3);
-        button.layer.masksToBounds = skipMasksToBounds ? NO : YES;
     }
 }
 
