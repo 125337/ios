@@ -303,6 +303,121 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 
     PluginConfig *config = [PluginConfig shared];
+
+    UIViewController *vcCardEarly = findParentViewController((UIView *)self);
+    NSString *classNameCardEarly = vcCardEarly ? NSStringFromClass([vcCardEarly class]) : @"";
+    BOOL isMoreVCCard = [classNameCardEarly isEqualToString:@"MoreViewController"];
+    UIView *cellViewCard = (UIView *)self;
+
+    if (isMoreVCCard && [ListCornerRadiusHook wp_isProfileCard:cellViewCard] && config.cardBgEnabled) {
+        CGFloat customHeight = config.cardBgHeight;
+        if (customHeight > 0) {
+            CGFloat currentH = cellViewCard.frame.size.height;
+            if (currentH < customHeight) {
+                CGRect f = cellViewCard.frame;
+                f.size.height = customHeight;
+                cellViewCard.frame = f;
+            }
+        }
+
+        if (config.cardBgListSpacing > 0) {
+            CGFloat spacing = config.cardBgListSpacing;
+            CGRect f = cellViewCard.frame;
+            f.size.height += spacing;
+            f.origin.y -= spacing / 2.0;
+            cellViewCard.frame = f;
+        }
+
+        if (_orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+
+        BOOL isDark = [ListCornerRadiusHook wp_isCurrentDarkMode];
+
+        if (config.cardBgHidden) {
+            for (UIView *sub in cellViewCard.subviews) {
+                if (![sub isKindOfClass:[UIImageView class]]) {
+                    sub.hidden = YES;
+                }
+            }
+            cellViewCard.backgroundColor = [UIColor clearColor];
+            UIColor *hideColor = [config colorFromHex:isDark
+                ? config.listCardDarkBgColor : config.listCardLightBgColor];
+            if (hideColor) {
+                for (UIView *sub in cellViewCard.subviews) {
+                    sub.backgroundColor = hideColor;
+                }
+            }
+        }
+
+        for (UIView *sub in cellViewCard.subviews) {
+            if ([sub isKindOfClass:[UIImageView class]]) {
+                UIImageView *imgView = (UIImageView *)sub;
+                if (imgView.image != nil &&
+                    ![imgView isEqual:objc_getAssociatedObject(cellViewCard, "mio_bgImageView")]) {
+                    imgView.hidden = YES;
+                } else if (imgView.image == nil) {
+                    imgView.hidden = YES;
+                }
+            }
+        }
+
+        static const NSInteger kBgImageTagCard = 999901;
+        UIImageView *bgImageView = (UIImageView *)[cellViewCard viewWithTag:kBgImageTagCard];
+
+        if (!bgImageView) {
+            bgImageView = [[UIImageView alloc] init];
+            bgImageView.tag = kBgImageTagCard;
+            bgImageView.clipsToBounds = YES;
+            bgImageView.userInteractionEnabled = NO;
+
+            NSInteger fillMode = config.cardBgFillMode;
+            switch (fillMode) {
+                case 1: bgImageView.contentMode = UIViewContentModeScaleAspectFit; break;
+                case 2: bgImageView.contentMode = UIViewContentModeScaleAspectFill; break;
+                default: bgImageView.contentMode = UIViewContentModeScaleToFill; break;
+            }
+
+            [cellViewCard addSubview:bgImageView];
+            objc_setAssociatedObject(cellViewCard, "mio_bgImageView",
+                                     bgImageView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+
+        CGRect bounds = cellViewCard.bounds;
+        CGFloat margin = config.listCellMargin;
+        if (margin <= 0) margin = 9;
+
+        CGFloat imgW = bounds.size.width;
+        CGFloat imgH = bounds.size.height;
+        CGFloat imgX = 0;
+        CGFloat imgY = 0;
+
+        if (config.listCornerRadiusEnabled && config.cardBgFillMode != 3) {
+            imgW -= margin * 2;
+            imgX = margin;
+        }
+
+        CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+        CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
+        imgY += offsetY;
+        imgX += offsetX;
+
+        bgImageView.frame = CGRectMake(imgX, imgY, imgW, imgH);
+
+        NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
+        if (layerPos == 1) {
+            [cellViewCard bringSubviewToFront:bgImageView];
+        } else {
+            [cellViewCard sendSubviewToBack:bgImageView];
+        }
+
+        bgImageView.image = nil;
+        bgImageView.alpha = 0.5;
+        [ListCornerRadiusHook wp_loadBackgroundImageForImageView:bgImageView
+                                                         isDark:isDark];
+        return;
+    }
+
     if (!config.listCornerRadiusEnabled) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
@@ -330,117 +445,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
     if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
-        PluginConfig *config = [PluginConfig shared];
-
-        if (config.cardBgEnabled) {
-            CGFloat customHeight = config.cardBgHeight;
-            if (customHeight > 0) {
-                CGFloat currentH = cellView.frame.size.height;
-                if (currentH < customHeight) {
-                    CGRect f = cellView.frame;
-                    f.size.height = customHeight;
-                    cellView.frame = f;
-                }
-            }
-
-            if (config.cardBgEnabled && config.cardBgListSpacing > 0) {
-                CGFloat spacing = config.cardBgListSpacing;
-                CGRect f = cellView.frame;
-                f.size.height += spacing;
-                f.origin.y -= spacing / 2.0;
-                cellView.frame = f;
-            }
-        }
-
         if (_orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
-
-        if (config.cardBgEnabled) {
-
-            BOOL isDark = [ListCornerRadiusHook wp_isCurrentDarkMode];
-
-            if (config.cardBgHidden) {
-                for (UIView *sub in cellView.subviews) {
-                    if (![sub isKindOfClass:[UIImageView class]]) {
-                        sub.hidden = YES;
-                    }
-                }
-                cellView.backgroundColor = [UIColor clearColor];
-                UIColor *hideColor = [config colorFromHex:isDark
-                    ? config.listCardDarkBgColor : config.listCardLightBgColor];
-                if (hideColor) {
-                    for (UIView *sub in cellView.subviews) {
-                        sub.backgroundColor = hideColor;
-                    }
-                }
-            }
-
-            for (UIView *sub in cellView.subviews) {
-                if ([sub isKindOfClass:[UIImageView class]]) {
-                    UIImageView *imgView = (UIImageView *)sub;
-                    if (imgView.image != nil &&
-                        ![imgView isEqual:objc_getAssociatedObject(cellView, "mio_bgImageView")]) {
-                        imgView.hidden = YES;
-                    } else if (imgView.image == nil) {
-                        imgView.hidden = YES;
-                    }
-                }
-            }
-
-            static const NSInteger kBgImageTag = 999901;
-            UIImageView *bgImageView = (UIImageView *)[cellView viewWithTag:kBgImageTag];
-
-            if (!bgImageView) {
-                bgImageView = [[UIImageView alloc] init];
-                bgImageView.tag = kBgImageTag;
-                bgImageView.clipsToBounds = YES;
-                bgImageView.userInteractionEnabled = NO;
-
-                NSInteger fillMode = config.cardBgFillMode;
-                switch (fillMode) {
-                    case 1: bgImageView.contentMode = UIViewContentModeScaleAspectFit; break;
-                    case 2: bgImageView.contentMode = UIViewContentModeScaleAspectFill; break;
-                    default: bgImageView.contentMode = UIViewContentModeScaleToFill; break;
-                }
-
-                [cellView addSubview:bgImageView];
-                objc_setAssociatedObject(cellView, "mio_bgImageView",
-                                         bgImageView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
-
-            CGRect bounds = cellView.bounds;
-            CGFloat margin = config.listCellMargin;
-            if (margin <= 0) margin = 9;
-
-            CGFloat imgW = bounds.size.width;
-            CGFloat imgH = bounds.size.height;
-            CGFloat imgX = 0;
-            CGFloat imgY = 0;
-
-            if (config.listCornerRadiusEnabled && config.cardBgFillMode != 3) {
-                imgW -= margin * 2;
-                imgX = margin;
-            }
-
-            CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
-            CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
-            imgY += offsetY;
-            imgX += offsetX;
-
-            bgImageView.frame = CGRectMake(imgX, imgY, imgW, imgH);
-
-            NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
-            if (layerPos == 1) {
-                [cellView bringSubviewToFront:bgImageView];
-            } else {
-                [cellView sendSubviewToBack:bgImageView];
-            }
-
-            bgImageView.image = nil;
-            bgImageView.alpha = 0.5;
-            [ListCornerRadiusHook wp_loadBackgroundImageForImageView:bgImageView
-                                                             isDark:isDark];
+            ((void (*)(id, SEL))_orig_MMUITableViewCell_layoutSubviews)(self, _cmd);
         }
         return;
     }
