@@ -231,6 +231,24 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
     }
 
+    // ★ 资料卡背景功能：HideCard 模式下不设置 MMUIButton 背景色和圆角
+    if (config.cardBgEnabled && config.cardBgHidden) {
+        ((UIView *)self).backgroundColor = [UIColor clearColor];
+        ((UIView *)self).layer.masksToBounds = NO;
+        ((UIView *)self).layer.cornerRadius = 0;
+        ((UIView *)self).layer.borderWidth = 0;
+        if (config.listHideRightQRCode) {
+            [ListCornerRadiusHook wp_hideQRButtonInCell:(UIView *)self];
+        }
+        return;
+    }
+
+    // ★ 资料卡背景功能：ContentMode==3 时不设置 masksToBounds（全宽模式）
+    BOOL skipMasksToBounds = NO;
+    if (config.cardBgEnabled && config.cardBgFillMode == 3) {
+        skipMasksToBounds = YES;
+    }
+
     CGFloat margin = config.listCellMargin;
 
     NSMutableArray *labelFrames = nil;
@@ -274,6 +292,16 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     if (@available(iOS 13.0, *)) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
+
+    // ★ 资料卡背景功能：非 HideCard 时设置卡片背景色
+    if (config.cardBgEnabled) {
+        UIColor *cardBg = [config colorFromHex:isDark
+            ? config.listCardDarkBgColor : config.listCardLightBgColor];
+        if (cardBg) {
+            ((UIView *)self).backgroundColor = cardBg;
+        }
+    }
+
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
     if (radius == 0) radius = 18;
 
@@ -285,7 +313,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         [ListCornerRadiusHook wp_hideQRButtonInCell:(UIView *)self];
     }
 
-    ((UIView *)self).layer.masksToBounds = YES;
+    if (!skipMasksToBounds) {
+        ((UIView *)self).layer.masksToBounds = YES;
+    } else {
+        ((UIView *)self).layer.masksToBounds = NO;
+    }
 }
 
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
@@ -336,11 +368,19 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
         BOOL isDark = [ListCornerRadiusHook wp_isCurrentDarkMode];
 
+        // ★ 无论是否 HideCard，都清理 Cell 自身样式
+        // 让 Cell 完全透明，背景图和圆角由 MMUIButton 层控制
+        cellViewCard.layer.borderWidth = 0;
+        cellViewCard.layer.cornerRadius = 0;
+        cellViewCard.layer.masksToBounds = NO;
+
         if (config.cardBgHidden) {
+            // HideCard 模式：隐藏非背景图内容，但保留 MMUIButton（用于渐变遮罩）
             for (UIView *sub in cellViewCard.subviews) {
-                if (![sub isKindOfClass:[UIImageView class]]) {
+                if (![sub isKindOfClass:[UIImageView class]] &&
+                    ![sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
                     sub.hidden = YES;
-                } else {
+                } else if ([sub isKindOfClass:[UIImageView class]]) {
                     UIImageView *iv = (UIImageView *)sub;
                     if (iv.tag != kBgImageTagCard) {
                         iv.hidden = YES;
@@ -348,18 +388,26 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                 }
             }
             cellViewCard.backgroundColor = [UIColor clearColor];
-            cellViewCard.layer.borderWidth = 0;
-            cellViewCard.layer.cornerRadius = 0;
-            cellViewCard.layer.masksToBounds = NO;
-            UIColor *hideColor = [config colorFromHex:isDark
-                ? config.listCardDarkBgColor : config.listCardLightBgColor];
-            if (hideColor) {
-                for (UIView *sub in cellViewCard.subviews) {
-                    if (sub.tag != kBgImageTagCard) {
-                        sub.backgroundColor = hideColor;
+
+            // HideCard 时清理 MMUIButton 的样式，但保留其子视图用于渐变遮罩
+            for (UIView *sub in cellViewCard.subviews) {
+                if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+                    sub.backgroundColor = [UIColor clearColor];
+                    sub.layer.cornerRadius = 0;
+                    sub.layer.borderWidth = 0;
+                    sub.layer.masksToBounds = NO;
+                    UIColor *hideColor = [config colorFromHex:isDark
+                        ? config.listCardDarkBgColor : config.listCardLightBgColor];
+                    if (hideColor) {
+                        for (UIView *btnSub in sub.subviews) {
+                            btnSub.backgroundColor = hideColor;
+                        }
                     }
                 }
             }
+        } else {
+            // ★ 非 HideCard 时也设置透明背景
+            cellViewCard.backgroundColor = [UIColor clearColor];
         }
 
         for (UIView *sub in cellViewCard.subviews) {
