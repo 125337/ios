@@ -660,11 +660,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     // 透明化必须在函数末尾执行（所有 orig + margin + bgColor + corner 之后）
     BOOL needsCardBgTransparency = (isMoreVC && config.cardBgEnabled);
 
-    // ★★★ 只调一次 orig（所有 Cell 统一）★★★
-    if (_orig_MMTableViewCell_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-    }
-
+    // ★★★ margin 前置：先改 Cell 的 x/width，再调 orig ★★★
+    // 这样 orig 内部触发的 MMUIButton Hook 能读到缩小后的 Cell.bounds
     CGFloat margin = config.listCellMargin;
     if (margin > 0 && config.listCornerRadiusEnabled) {
         CGFloat currentX = cellView.frame.origin.x;
@@ -681,6 +678,11 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             f.size.width = targetW;
             cellView.frame = f;
         }
+    }
+
+    // ★★★ orig（margin 已生效，MMUIButton Hook 读到正确的 Cell.bounds）★★★
+    if (_orig_MMTableViewCell_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
 
     static NSSet *bgColorSkipList = nil;
