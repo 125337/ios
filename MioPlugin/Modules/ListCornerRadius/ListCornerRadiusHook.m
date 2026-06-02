@@ -445,6 +445,12 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
             cellViewCard.backgroundColor = [UIColor clearColor];
 
+            // ★ HideCard 时也设置 contentView 透明
+            UIView *contentViewHC = [(UITableViewCell *)cellViewCard contentView];
+            if (contentViewHC) {
+                contentViewHC.backgroundColor = [UIColor clearColor];
+            }
+
             // ★ Step 3: 处理 MMUIButton —— 清除样式，设置渐变遮罩
             UIColor *hideColor = [config colorFromHex:isDark
                 ? config.listCardDarkBgColor : config.listCardLightBgColor];
@@ -479,6 +485,20 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         } else {
             // ★ 非 HideCard 时也设置透明背景
             cellViewCard.backgroundColor = [UIColor clearColor];
+
+            // ★★★ 关键修复：contentView 背景透明（参照微信优化 setAlpha:0）★★★
+            UIView *contentView = [(UITableViewCell *)cellViewCard contentView];
+            if (contentView) {
+                contentView.backgroundColor = [UIColor clearColor];
+                contentView.layer.masksToBounds = NO;
+            }
+
+            // ★★★ 关键修复：所有 Cell 直接子视图背景透明（排除 bgImageView）★★★
+            for (UIView *sub in cellViewCard.subviews) {
+                if (sub.tag != kBgImageTagCard) {
+                    sub.backgroundColor = [UIColor clearColor];
+                }
+            }
 
             // ★ 清除 MMUIButton 内部的 m_bgImageView（双重保险）
             for (UIView *sub in cellViewCard.subviews) {
@@ -531,6 +551,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                      bgImageView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
 
+        // ★★★ 诊断日志：确认分支执行 + 视图层级信息 ★★★
+        WPLog(@"ListCornerRadius", @"[CardBg] branch entered! subviews.count=%lu, bounds=%@",
+              (unsigned long)cellViewCard.subviews.count, NSStringFromCGRect(cellViewCard.bounds));
+
         CGRect bounds = cellViewCard.bounds;
         CGFloat margin = config.listCellMargin;
         if (margin <= 0) margin = 9;
@@ -552,15 +576,40 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
         bgImageView.frame = CGRectMake(imgX, imgY, imgW, imgH);
 
+        // ★★★ 关键修复：处理 backgroundView（UITableViewCell 特有）★★★
+        if ([cellViewCard respondsToSelector:@selector(backgroundView)]) {
+            UIView *bgv = [(id)cellViewCard backgroundView];
+            if (bgv) {
+                bgv.backgroundColor = [UIColor clearColor];
+                bgv.hidden = YES;  // 直接隐藏，最彻底
+            }
+        }
+        if ([cellViewCard respondsToSelector:@selector(selectedBackgroundView)]) {
+            UIView *sbgv = [(id)cellViewCard selectedBackgroundView];
+            if (sbgv) {
+                sbgv.backgroundColor = [UIColor clearColor];
+            }
+        }
+
         NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
         if (layerPos == 1) {
             [cellViewCard bringSubviewToFront:bgImageView];
         } else {
-            [cellViewCard sendSubviewToBack:bgImageView];
+            // ★ 改用 bringSubviewToFront 确保可见（先验证图片能否显示）
+            // 如果 bringToFront 能看到图，说明是图层顺序问题；看不到则是加载问题
+            [cellViewCard bringSubviewToFront:bgImageView];
+
+            // ★ 或者用 insertSubview 确保在 contentView 之上：
+            // NSInteger insertIndex = MAX(0, (NSInteger)cellViewCard.subviews.count - 2);
+            // [cellViewCard insertSubview:bgImageView atIndex:insertIndex];
         }
 
+        // ★★★ 诊断：先用纯色测试 bgImageView 是否可见 ★★★
+        bgImageView.backgroundColor = [UIColor redColor];  // 诊断色，确认可见后删除
         bgImageView.image = nil;
-        bgImageView.alpha = 0.5;
+        bgImageView.alpha = 0.7;  // 提高透明度便于观察
+        bgImageView.hidden = NO;
+
         [ListCornerRadiusHook wp_loadBackgroundImageForImageView:bgImageView
                                                          isDark:isDark];
         return;
