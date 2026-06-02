@@ -476,46 +476,49 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     UIView *cellView = (UIView *)self;
 
     BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
-    if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
+    // ★★★ 不再用 wp_isProfileCard 判断（Race Condition：Cell Hook 时 MMHeadImageView 尚未创建）
+    // MoreViewController 的资料卡识别完全由 MMUIButton Hook 的4层过滤负责
+    // Cell Hook 只负责：MoreVC + cardBgEnabled 时做 Cell 层的透明化+高度+间距
+    if (isMoreVC && config.cardBgEnabled) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
 
-        // ★ cardBgEnabled 时：Cell 透明化（让 MMUIButton 层的背景图可见）
-        if (config.cardBgEnabled) {
-            cellView.backgroundColor = [UIColor clearColor];
-            cellView.layer.borderWidth = 0;
-            cellView.layer.masksToBounds = NO;
+        // Cell 透明化（让 MMUIButton 层的背景图可见）
+        cellView.backgroundColor = [UIColor clearColor];
+        cellView.layer.borderWidth = 0;
+        cellView.layer.masksToBounds = NO;
 
-            UIView *cv = [(UITableViewCell *)cellView contentView];
-            if (cv) {
-                cv.backgroundColor = [UIColor clearColor];
-                cv.layer.masksToBounds = NO;
-            }
+        UIView *cv = [(UITableViewCell *)cellView contentView];
+        if (cv) {
+            cv.backgroundColor = [UIColor clearColor];
+            cv.layer.masksToBounds = NO;
+        }
 
-            if ([cellView respondsToSelector:@selector(backgroundView)]) {
-                UIView *bgv = [(id)cellView backgroundView];
-                if (bgv) { bgv.backgroundColor = [UIColor clearColor]; bgv.hidden = YES; }
-            }
-            if ([cellView respondsToSelector:@selector(selectedBackgroundView)]) {
-                UIView *sbgv = [(id)cellView selectedBackgroundView];
-                if (sbgv) { sbgv.backgroundColor = [UIColor clearColor]; }
-            }
+        if ([cellView respondsToSelector:@selector(backgroundView)]) {
+            UIView *bgv = [(id)cellView backgroundView];
+            if (bgv) { bgv.backgroundColor = [UIColor clearColor]; bgv.hidden = YES; }
+        }
+        if ([cellView respondsToSelector:@selector(selectedBackgroundView)]) {
+            UIView *sbgv = [(id)cellView selectedBackgroundView];
+            if (sbgv) { sbgv.backgroundColor = [UIColor clearColor]; }
+        }
 
-            if (config.cardBgHeight > 0) {
-                CGFloat currentH = cellView.frame.size.height;
-                if (currentH < config.cardBgHeight) {
-                    CGRect f = cellView.frame;
-                    f.size.height = config.cardBgHeight;
-                    cellView.frame = f;
-                }
-            }
-            if (config.cardBgListSpacing > 0) {
+        // 高度调整
+        if (config.cardBgHeight > 0) {
+            CGFloat currentH = cellView.frame.size.height;
+            if (currentH < config.cardBgHeight) {
                 CGRect f = cellView.frame;
-                f.size.height += config.cardBgListSpacing;
-                f.origin.y -= config.cardBgListSpacing / 2.0;
+                f.size.height = config.cardBgHeight;
                 cellView.frame = f;
             }
+        }
+        // 间距
+        if (config.cardBgListSpacing > 0) {
+            CGRect f = cellView.frame;
+            f.size.height += config.cardBgListSpacing;
+            f.origin.y -= config.cardBgListSpacing / 2.0;
+            cellView.frame = f;
         }
         return;
     }
