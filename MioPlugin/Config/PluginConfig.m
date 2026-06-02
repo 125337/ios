@@ -470,11 +470,15 @@
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightImagePath"]];
     if (v.length > 0) {
         _cardBgLightImagePath = [v copy];
+        WPLog(@"CardBg-Diag", @"[CONFIG] cardBgLightImagePath=%@", _cardBgLightImagePath);
+        WPLog(@"CardBg-Diag", @"[CONFIG] fileExists=%d", [[NSFileManager defaultManager] fileExistsAtPath:_cardBgLightImagePath]);
     }
 
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkImagePath"]];
     if (v.length > 0) {
         _cardBgDarkImagePath = [v copy];
+        WPLog(@"CardBg-Diag", @"[CONFIG] cardBgDarkImagePath=%@", _cardBgDarkImagePath);
+        WPLog(@"CardBg-Diag", @"[CONFIG] fileExists=%d", [[NSFileManager defaultManager] fileExistsAtPath:_cardBgDarkImagePath]);
     }
 
     _cardBgFillMode = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgFillMode"]];

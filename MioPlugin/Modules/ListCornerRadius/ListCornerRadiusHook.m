@@ -287,6 +287,71 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     }
 
     // ════════════════════════════════════════════════════════
+    // ★★★ 微信优化做法：遍历子视图，隐藏白色背景UIView等不需要的视图 ★★★
+    // 根因B：MMUIButton.subviews[1] 是白色 UIView (UIDynamicProviderColor)
+    //        frame=(0,-722,393,852) 完全遮挡 bgImageView
+    // ════════════════════════════════════════════════════════
+    {
+        static const NSInteger kMioBgImageTag_local = 999902;
+        for (NSInteger i = ((UIView *)self).subviews.count - 1; i >= 0; i--) {
+            UIView *sub = ((UIView *)self).subviews[i];
+
+            // 保留我们的 bgImageView
+            if (sub.tag == kMioBgImageTag_local) continue;
+            // 保留头像
+            if ([sub isKindOfClass:NSClassFromString(@"MMHeadImageView")]) continue;
+            // 保留文字标签
+            if ([sub isKindOfClass:[UILabel class]]) continue;
+            if ([NSStringFromClass([sub class]) isEqualToString:@"MMCPLabel"]) continue;
+            if ([NSStringFromClass([sub class]) isEqualToString:@"MMUILabel"]) continue;
+            // 保留状态入口按钮
+            if ([NSStringFromClass([sub class]) isEqualToString:@"TextStatePublishEntryButton"]) continue;
+            if ([NSStringFromClass([sub class]) isEqualToString:@"TextStateFriendTopicButton"]) continue;
+            // 保留 UIImageView（箭头等小图标）
+            if ([sub isKindOfClass:[UIImageView class]] && sub.tag != 0) continue;
+
+            // 检查是否是白色/动态白色背景视图（需要隐藏）
+            UIColor *subBg = sub.backgroundColor;
+            BOOL shouldHide = NO;
+
+            if (subBg) {
+                // 检查 UIDynamicProviderColor（浅色模式=白色的动态色）
+                NSString *bgClassName = NSStringFromClass([subBg class]);
+                if ([bgClassName containsString:@"DynamicProvider"] ||
+                    [bgClassName containsString:@"UIDynamic"]) {
+                    shouldHide = YES;
+                }
+                // 检查纯白色
+                else if ([subBg isEqual:[UIColor whiteColor]]) {
+                    shouldHide = YES;
+                }
+                // 检查接近白色
+                else {
+                    CGFloat r = 0, g = 0, b = 0, a = 0;
+                    if ([subBg getRed:&r green:&g blue:&b alpha:&a]) {
+                        if (r > 0.95 && g > 0.95 && b > 0.95 && a > 0.95) {
+                            shouldHide = YES;
+                        }
+                    }
+                }
+            }
+
+            // 普通 UIView（非标签/非按钮/非头像）且有背景色 → 大概率是微信的背景板
+            if ([NSStringFromClass([sub class]) isEqualToString:@"UIView"] && subBg) {
+                shouldHide = YES;
+            }
+
+            if (shouldHide) {
+                sub.hidden = YES;
+                WPLog(@"CardBg-Diag", @"[FIX-WHITE] Hidden subview[%ld]: class=%@, bg=%@, frame=(%.0f,%.0f,%.0f,%.0f)",
+                      (long)i, NSStringFromClass([sub class]), subBg,
+                      sub.frame.origin.x, sub.frame.origin.y,
+                      sub.frame.size.width, sub.frame.size.height);
+            }
+        }
+    }
+
+    // ════════════════════════════════════════════════════════
     // ★★★ 绝招二：单次创建 + 去重 + 异步加载 ★★★
     // ════════════════════════════════════════════════════════
 

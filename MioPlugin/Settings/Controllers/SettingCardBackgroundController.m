@@ -1,6 +1,7 @@
 #import "SettingCardBackgroundController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
+#import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 #import <PhotosUI/PhotosUI.h>
 #import <MobileCoreServices/MobileCoreServices.h>
@@ -163,6 +164,7 @@
         [alert addAction:[UIAlertAction actionWithTitle:@"删除浅色背景"
                                                  style:UIAlertActionStyleDestructive
                                                handler:^(UIAlertAction *action) {
+            WPLog(@"CardBg-Diag", @"[PICKER] Deleting light image path: %@", config.cardBgLightImagePath);
             config.cardBgLightImagePath = nil;
             [config save];
             [self buildUI];
@@ -202,6 +204,7 @@
         [alert addAction:[UIAlertAction actionWithTitle:@"删除深色背景"
                                                  style:UIAlertActionStyleDestructive
                                                handler:^(UIAlertAction *action) {
+            WPLog(@"CardBg-Diag", @"[PICKER] Deleting dark image path: %@", config.cardBgDarkImagePath);
             config.cardBgDarkImagePath = nil;
             [config save];
             [self buildUI];
@@ -234,6 +237,7 @@
 
 - (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
     if (results.count == 0) {
+        WPLog(@"CardBg-Diag", @"[PICKER] No results selected");
         [picker dismissViewControllerAnimated:YES completion:nil];
         return;
     }
@@ -243,6 +247,8 @@
     NSInteger mode = picker.view.tag;
     BOOL isDark = (mode == 200 || mode == 201);
     BOOL isGif = (mode == 101 || mode == 201);
+
+    WPLog(@"CardBg-Diag", @"[PICKER] mode=%ld, isDark=%d, isGif=%d", (long)mode, isDark, isGif);
 
     NSString *bgDir = [NSSearchPathForDirectoriesInDomains(
         NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
@@ -254,6 +260,9 @@
         [fm createDirectoryAtPath:bgDir withIntermediateDirectories:YES
                         attributes:nil error:nil];
     }
+
+    WPLog(@"CardBg-Diag", @"[PICKER] bgDir=%@", bgDir);
+    WPLog(@"CardBg-Diag", @"[PICKER] dirExists=%d", [fm fileExistsAtPath:bgDir]);
 
     NSString *targetFile;
     NSString *altExt;
@@ -268,22 +277,33 @@
     NSString *targetPath = [bgDir stringByAppendingPathComponent:targetFile];
     NSString *altPath = [bgDir stringByAppendingPathComponent:altExt];
 
+    WPLog(@"CardBg-Diag", @"[PICKER] targetPath=%@", targetPath);
+    WPLog(@"CardBg-Diag", @"[PICKER] altPath=%@", altPath);
+
     if ([fm fileExistsAtPath:altPath]) {
         [fm removeItemAtPath:altPath error:nil];
+        WPLog(@"CardBg-Diag", @"[PICKER] Removed alt file: %@", altPath);
     }
 
     if (isGif) {
         [result.itemProvider loadDataRepresentationForTypeIdentifier:@"com.compuserve.gif"
                                                completionHandler:^(NSData *data, NSError *error) {
-            if (error || !data) return;
+            if (error || !data) {
+                WPLog(@"CardBg-Diag", @"[PICKER] GIF load FAILED: error=%@", error ?: @"data nil");
+                return;
+            }
+            WPLog(@"CardBg-Diag", @"[PICKER] GIF data loaded, size=%lu bytes", (unsigned long)data.length);
             dispatch_async(dispatch_get_main_queue(), ^{
-                [data writeToFile:targetPath atomically:YES];
+                BOOL written = [data writeToFile:targetPath atomically:YES];
+                WPLog(@"CardBg-Diag", @"[PICKER] GIF write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
                 if (isDark) {
                     config.cardBgDarkImagePath = targetPath;
                 } else {
                     config.cardBgLightImagePath = targetPath;
                 }
                 [config save];
+                WPLog(@"CardBg-Diag", @"[PICKER] Saved config: %@=%@", isDark ? @"cardBgDarkImagePath" : @"cardBgLightImagePath", targetPath);
+                WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
                 [picker dismissViewControllerAnimated:YES completion:^{
                     [self buildUI];
                 }];
@@ -292,15 +312,22 @@
     } else {
         [result.itemProvider loadDataRepresentationForTypeIdentifier:@"public.image"
                                                completionHandler:^(NSData *data, NSError *error) {
-            if (error || !data) return;
+            if (error || !data) {
+                WPLog(@"CardBg-Diag", @"[PICKER] Image load FAILED: error=%@", error ?: @"data nil");
+                return;
+            }
+            WPLog(@"CardBg-Diag", @"[PICKER] Image data loaded, size=%lu bytes", (unsigned long)data.length);
             dispatch_async(dispatch_get_main_queue(), ^{
-                [data writeToFile:targetPath atomically:YES];
+                BOOL written = [data writeToFile:targetPath atomically:YES];
+                WPLog(@"CardBg-Diag", @"[PICKER] Image write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
                 if (isDark) {
                     config.cardBgDarkImagePath = targetPath;
                 } else {
                     config.cardBgLightImagePath = targetPath;
                 }
                 [config save];
+                WPLog(@"CardBg-Diag", @"[PICKER] Saved config: %@=%@", isDark ? @"cardBgDarkImagePath" : @"cardBgLightImagePath", targetPath);
+                WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
                 [picker dismissViewControllerAnimated:YES completion:^{
                     [self buildUI];
                 }];
