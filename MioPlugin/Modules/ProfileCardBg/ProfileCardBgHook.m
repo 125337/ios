@@ -648,15 +648,15 @@ APPLY_CORNER:
         cv.layer.masksToBounds = NO;
     }
 
-    if ([cellView respondsToSelector:@selector(backgroundView)]) {
-        UIView *bgv = [cellView backgroundView];
+    if ([cell respondsToSelector:@selector(backgroundView)]) {
+        UIView *bgv = [(UITableViewCell *)cell backgroundView];
         if (bgv) {
             bgv.backgroundColor = [UIColor clearColor];
             bgv.hidden = YES;
         }
     }
-    if ([cellView respondsToSelector:@selector(selectedBackgroundView)]) {
-        UIView *sbgv = [cellView selectedBackgroundView];
+    if ([cell respondsToSelector:@selector(selectedBackgroundView)]) {
+        UIView *sbgv = [(UITableViewCell *)cell selectedBackgroundView];
         if (sbgv) sbgv.backgroundColor = [UIColor clearColor];
     }
 
