@@ -221,7 +221,22 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
+    if (_orig_MMUIButton_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews(self, _cmd);
+    }
+
     CGFloat margin = config.listCellMargin;
+
+    NSMutableArray *labelFrames = nil;
+    if (margin > 0) {
+        labelFrames = [NSMutableArray array];
+        for (UIView *sub in ((UIView *)self).subviews) {
+            if ([sub isKindOfClass:[UILabel class]]) {
+                [labelFrames addObject:[NSValue valueWithCGRect:sub.frame]];
+            }
+        }
+    }
+
     if (margin > 0) {
         UIView *cell = ((UIView *)self).superview;
         if (cell) {
@@ -233,8 +248,20 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    if (_orig_MMUIButton_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+    if (margin > 0 && labelFrames.count > 0) {
+        NSInteger idx = 0;
+        for (UIView *sub in ((UIView *)self).subviews) {
+            if ([sub isKindOfClass:[UILabel class]] && idx < labelFrames.count) {
+                CGRect originalFrame = [labelFrames[idx] CGRectValue];
+                CGRect newFrame = originalFrame;
+                newFrame.size.width = originalFrame.size.width - 2.0 * margin;
+                if (newFrame.size.width > 0) {
+                    sub.frame = newFrame;
+                    [(UILabel *)sub sizeToFit];
+                }
+                idx++;
+            }
+        }
     }
 
     BOOL isDark = NO;
