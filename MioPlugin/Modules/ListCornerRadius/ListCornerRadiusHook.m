@@ -70,6 +70,8 @@ static UIViewController *findParentViewController(UIView *view) {
 
 + (void)wp_loadBackgroundImageForImageView:(UIImageView *)imageView isDark:(BOOL)isDark;
 
++ (UIImage *)wp_loadBackgroundImageSync:(BOOL)isDark;
+
 + (NSString *)wp_cardBackgroundDirectory;
 
 @end
@@ -174,13 +176,37 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
 
 static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled) {
+
+    // ════════════════════════════════════════════════════════
+    // ★★★ 绝招一：极速拒绝链 ★★★
+    // ════════════════════════════════════════════════════════
+
+    // 第1关：功能开关（最早退出）
+    BOOL needsCardBg = config.cardBgEnabled;
+    BOOL needsCorner = config.listCornerRadiusEnabled;
+
+    if (!needsCardBg && !needsCorner) {
         if (_orig_MMUIButton_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
         }
         return;
     }
 
+    // 先调 orig（让微信完成原始布局）
+    if (_orig_MMUIButton_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+    }
+
+    // 只需要圆角不需要资料卡 → 快速处理
+    if (!needsCardBg && needsCorner) {
+        return;
+    }
+
+    // ════════════════════════════════════════════════════════
+    // 以下 needsCardBg == YES
+    // ════════════════════════════════════════════════════════
+
+    // 第2关：VC 类型
     UIViewController *vc = nil;
     UIResponder *responder = (UIResponder *)self;
     while (responder) {
@@ -190,56 +216,40 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         }
         responder = [responder nextResponder];
     }
-    if (!vc) {
-        if (_orig_MMUIButton_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
-        }
+    if (!vc || ![NSStringFromClass([vc class]) isEqualToString:@"MoreViewController"]) {
         return;
     }
 
-    NSString *vcName = NSStringFromClass([vc class]);
-    if (![vcName isEqualToString:@"MoreViewController"]) {
-        if (_orig_MMUIButton_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
-        }
-        return;
-    }
-
+    // 第3关：MMHeadImageView 存在（只搜直接子视图）
     BOOL foundHead = NO;
-    for (UIView *subview in ((UIView *)self).subviews) {
-        if ([subview isKindOfClass:NSClassFromString(@"MMHeadImageView")]) {
+    for (UIView *sub in ((UIView *)self).subviews) {
+        if ([sub isKindOfClass:NSClassFromString(@"MMHeadImageView")]) {
             foundHead = YES;
             break;
         }
     }
+    if (!foundHead) return;
 
-    if (!foundHead) {
-        if (_orig_MMUIButton_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
-        }
-        return;
-    }
-
+    // 第4关：高度过滤
     CGFloat selfHeight = ((UIView *)self).frame.size.height;
-    if (selfHeight <= 50.0) {
-        if (_orig_MMUIButton_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
-        }
-        return;
+    if (selfHeight <= 50.0) return;
+
+    // ════════════════════════════════════════════════════════
+    // ★★★ 通过所有4关 → 业务逻辑 ★★★
+    // ════════════════════════════════════════════════════════
+
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
 
-    if (_orig_MMUIButton_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
-    }
-
-    // ★ 资料卡背景功能：HideCard 模式下清除所有微信原始内容
-    if (config.cardBgEnabled && config.cardBgHidden) {
+    // ── HideCard 分支 ──
+    if (config.cardBgHidden) {
         ((UIView *)self).backgroundColor = [UIColor clearColor];
         ((UIView *)self).layer.masksToBounds = NO;
         ((UIView *)self).layer.cornerRadius = 0;
         ((UIView *)self).layer.borderWidth = 0;
 
-        // ★ 清除微信原始的 m_bgImageView
         Ivar bgIvar = class_getInstanceVariable([(id)self class], "m_bgImageView");
         if (bgIvar) {
             id bgImgView = object_getIvar((id)self, bgIvar);
@@ -251,7 +261,6 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
             object_setIvar((id)self, bgIvar, nil);
         }
 
-        // ★ 隐藏 MMUIButton 内部所有子视图
         for (UIView *sub in ((UIView *)self).subviews) {
             sub.hidden = YES;
         }
@@ -262,144 +271,145 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
-    // ★ 资料卡背景功能：ContentMode==3 时不设置 masksToBounds（全宽模式）
-    BOOL skipMasksToBounds = NO;
-    if (config.cardBgEnabled && config.cardBgFillMode == 3) {
-        skipMasksToBounds = YES;
+    // ── 背景图分支 ──
+    ((UIView *)self).backgroundColor = [UIColor clearColor];
+
+    // 清除微信原生 m_bgImageView
+    Ivar bgIvar = class_getInstanceVariable([(id)self class], "m_bgImageView");
+    if (bgIvar) {
+        id bgImgView = object_getIvar((id)self, bgIvar);
+        if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
+            [(UIImageView *)bgImgView setImage:nil];
+            [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
+            [(UIImageView *)bgImgView setHidden:YES];
+        }
+        object_setIvar((id)self, bgIvar, nil);
     }
 
-    CGFloat margin = config.listCellMargin;
+    // ════════════════════════════════════════════════════════
+    // ★★★ 绝招二：单次创建 + 去重 + 异步加载 ★★★
+    // ════════════════════════════════════════════════════════
 
-    NSMutableArray *labelFrames = nil;
-    if (margin > 0) {
-        labelFrames = [NSMutableArray array];
-        for (UIView *sub in ((UIView *)self).subviews) {
-            if ([sub isKindOfClass:[UILabel class]]) {
-                [labelFrames addObject:[NSValue valueWithCGRect:sub.frame]];
-            }
+    static const NSInteger kMioBgImageTag = 999902;
+    static const void *kMioBgLoadedKey = &kMioBgLoadedKey;
+
+    UIImageView *existingBgImg = nil;
+    BOOL alreadyLoaded = [objc_getAssociatedObject(self, kMioBgLoadedKey) boolValue];
+
+    for (UIView *sub in ((UIView *)self).subviews) {
+        if (sub.tag == kMioBgImageTag && [sub isKindOfClass:[UIImageView class]]) {
+            existingBgImg = (UIImageView *)sub;
+            break;
         }
     }
 
-    if (margin > 0) {
-        UIView *cell = ((UIView *)self).superview;
-        if (cell) {
-            CGFloat containerW = cell.superview ? cell.superview.bounds.size.width
-                                                : [UIScreen mainScreen].bounds.size.width;
-            CGFloat targetW = containerW - 2.0 * margin;
-            CGFloat currentH = ((UIView *)self).frame.size.height;
-            ((UIView *)self).frame = CGRectMake(margin, 0, targetW, currentH);
+    // 分支A：已存在且已加载 → 只更新 frame（零开销路径）
+    if (existingBgImg != nil && alreadyLoaded) {
+        CGRect btnBounds = ((UIView *)self).bounds;
+        CGFloat imgW = btnBounds.size.width;
+        CGFloat imgH = btnBounds.size.height;
+        CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
+        CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+        existingBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
+
+        NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
+        if (layerPos == 1) {
+            [((UIView *)self) bringSubviewToFront:existingBgImg];
         }
+
+        goto APPLY_CORNER;
     }
 
-    if (margin > 0 && labelFrames.count > 0) {
-        NSInteger idx = 0;
-        for (UIView *sub in ((UIView *)self).subviews) {
-            if ([sub isKindOfClass:[UILabel class]] && idx < labelFrames.count) {
-                CGRect originalFrame = [labelFrames[idx] CGRectValue];
-                CGRect newFrame = originalFrame;
-                newFrame.size.width = originalFrame.size.width - 2.0 * margin;
-                if (newFrame.size.width > 0) {
-                    sub.frame = newFrame;
-                    [(UILabel *)sub sizeToFit];
+    // 分支B：不存在或未加载 → 创建（仅首次）
+    if (existingBgImg != nil) {
+        [existingBgImg removeFromSuperview];
+    }
+
+    {
+    UIImageView *btnBgImg = [[UIImageView alloc] init];
+    btnBgImg.tag = kMioBgImageTag;
+    btnBgImg.clipsToBounds = YES;
+    btnBgImg.userInteractionEnabled = NO;
+
+    NSInteger fillMode = config.cardBgFillMode;
+    switch (fillMode) {
+        case 1: btnBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
+        case 2: btnBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
+        default: btnBgImg.contentMode = UIViewContentModeScaleToFill; break;
+    }
+
+    [((UIView *)self) insertSubview:btnBgImg atIndex:0];
+
+    CGRect btnBounds = ((UIView *)self).bounds;
+    CGFloat imgW = btnBounds.size.width;
+    CGFloat imgH = btnBounds.size.height;
+    CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
+    CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+    btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
+
+    NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
+    if (layerPos == 1) {
+        [((UIView *)self) bringSubviewToFront:btnBgImg];
+    }
+
+    objc_setAssociatedObject(self, kMioBgLoadedKey, @NO,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    // 异步加载图片（文件 I/O 和解码全在后台）
+    __weak UIImageView *weakBgImg = btnBgImg;
+    __weak UIView *weakSelf = (UIView *)self;
+    BOOL capturedIsDark = isDark;
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        __strong UIImageView *strongBgImg = weakBgImg;
+        __strong UIView *strongSelf = weakSelf;
+        if (!strongBgImg || !strongSelf) return;
+
+        UIImage *resultImage = [ListCornerRadiusHook wp_loadBackgroundImageSync:capturedIsDark];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong UIImageView *finalImg = weakBgImg;
+            __strong UIView *finalSelf = weakSelf;
+            if (!finalImg || !finalSelf) return;
+
+            if (resultImage) {
+                finalImg.image = resultImage;
+                finalImg.alpha = 1.0;
+                finalImg.hidden = NO;
+                objc_setAssociatedObject(finalSelf, kMioBgLoadedKey, @YES,
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            } else {
+                BOOL dark = NO;
+                if (@available(iOS 13.0, *)) {
+                    UIViewController *vCtrl = nil;
+                    UIResponder *resp = finalSelf.nextResponder;
+                    while (resp) {
+                        if ([resp isKindOfClass:[UIViewController class]]) {
+                            vCtrl = (UIViewController *)resp;
+                            break;
+                        }
+                        resp = resp.nextResponder;
+                    }
+                    if (vCtrl) {
+                        dark = (vCtrl.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+                    }
                 }
-                idx++;
-            }
-        }
-    }
-
-    BOOL isDark = NO;
-    if (@available(iOS 13.0, *)) {
-        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-    }
-
-    // ★ 资料卡背景功能：有背景图时清除 m_bgImageView + 透明背景
-    if (config.cardBgEnabled) {
-        NSString *imagePath = isDark ? config.cardBgDarkImagePath
-                                     : config.cardBgLightImagePath;
-        BOOL hasBgImage = (imagePath.length > 0);
-
-        if (!hasBgImage) {
-            NSString *bgDir = [ListCornerRadiusHook wp_cardBackgroundDirectory];
-            NSFileManager *fm = [NSFileManager defaultManager];
-            NSString *gifPath = [bgDir stringByAppendingPathComponent:
-                isDark ? @"MioCardBgDark.gif" : @"MioCardBgLight.gif"];
-            NSString *pngPath = [bgDir stringByAppendingPathComponent:
-                isDark ? @"MioCardBgDark.png" : @"MioCardBgLight.png"];
-            hasBgImage = [fm fileExistsAtPath:gifPath] || [fm fileExistsAtPath:pngPath];
-        }
-
-        if (hasBgImage) {
-            ((UIView *)self).backgroundColor = [UIColor clearColor];
-
-            // ★★★ 关键修复：清除微信内部的 m_bgImageView ★★★
-            Ivar bgIvar = class_getInstanceVariable([(id)self class], "m_bgImageView");
-            if (bgIvar) {
-                id bgImgView = object_getIvar((id)self, bgIvar);
-                if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
-                    [(UIImageView *)bgImgView setImage:nil];
-                    [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
-                    [(UIImageView *)bgImgView setHidden:YES];
+                PluginConfig *cfg = [PluginConfig shared];
+                UIColor *cardBg = [cfg colorFromHex:dark
+                    ? cfg.listCardDarkBgColor : cfg.listCardLightBgColor];
+                if (cardBg) {
+                    finalSelf.backgroundColor = cardBg;
                 }
-                object_setIvar((id)self, bgIvar, nil);
+                objc_setAssociatedObject(finalSelf, kMioBgLoadedKey, @YES,
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             }
-
-            // ★★★ 在 MMUIButton 上创建/获取 bgImageView ★★★
-            static const NSInteger kBtnBgImageTag = 999902;
-            UIImageView *btnBgImg = (UIImageView *)[((UIView *)self) viewWithTag:kBtnBgImageTag];
-
-            if (!btnBgImg) {
-                btnBgImg = [[UIImageView alloc] init];
-                btnBgImg.tag = kBtnBgImageTag;
-                btnBgImg.clipsToBounds = YES;
-                btnBgImg.userInteractionEnabled = NO;
-
-                NSInteger fillMode = config.cardBgFillMode;
-                switch (fillMode) {
-                    case 1: btnBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
-                    case 2: btnBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
-                    default: btnBgImg.contentMode = UIViewContentModeScaleToFill; break;
-                }
-
-                // ★ 插入到 MMUIButton 最底层（在所有内容之下）
-                [((UIView *)self) insertSubview:btnBgImg atIndex:0];
-                objc_setAssociatedObject((id)self, "mio_btnBgImageView",
-                                         btnBgImg, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
-
-            // ★ 计算 frame（基于 MMUIButton 的 bounds）
-            CGRect btnBounds = ((UIView *)self).bounds;
-            CGFloat imgW = btnBounds.size.width;
-            CGFloat imgH = btnBounds.size.height;
-            CGFloat imgX = 0;
-            CGFloat imgY = 0;
-
-            CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
-            CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
-            imgY += offsetY;
-            imgX += offsetX;
-
-            btnBgImg.frame = CGRectMake(imgX, imgY, imgW, imgH);
-
-            // ★ 图层排序
-            NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
-            if (layerPos == 1) {
-                [((UIView *)self) bringSubviewToFront:btnBgImg];
-            }
-
-            // ★ 加载图片
-            btnBgImg.image = nil;
-            btnBgImg.alpha = 1.0;
-            btnBgImg.hidden = NO;
-            [ListCornerRadiusHook wp_loadBackgroundImageForImageView:btnBgImg isDark:isDark];
-        } else {
-            UIColor *cardBg = [config colorFromHex:isDark
-                ? config.listCardDarkBgColor : config.listCardLightBgColor];
-            if (cardBg) {
-                ((UIView *)self).backgroundColor = cardBg;
-            }
-        }
+        });
+    });
     }
 
+APPLY_CORNER:
+    // ── 圆角 + 边框 + QR码隐藏 ──
+    {
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
     if (radius == 0) radius = 18;
 
@@ -411,10 +421,12 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         [ListCornerRadiusHook wp_hideQRButtonInCell:(UIView *)self];
     }
 
+    BOOL skipMasksToBounds = (config.cardBgFillMode == 3);
     if (!skipMasksToBounds) {
         ((UIView *)self).layer.masksToBounds = YES;
     } else {
         ((UIView *)self).layer.masksToBounds = NO;
+    }
     }
 }
 
@@ -434,85 +446,11 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     PluginConfig *config = [PluginConfig shared];
 
-    UIViewController *vcCardEarly = findParentViewController((UIView *)self);
-    NSString *classNameCardEarly = vcCardEarly ? NSStringFromClass([vcCardEarly class]) : @"";
-    BOOL isMoreVCCard = [classNameCardEarly isEqualToString:@"MoreViewController"];
-    UIView *cellViewCard = (UIView *)self;
+    // ★★★ 绝招三：Cell Hook 不再处理资料卡 ★★★
+    // 所有资料卡逻辑（bgImageView、HideCard、高度调整等）都在 MMUIButton Hook 中
+    // Cell Hook 只处理通用圆角逻辑
 
-    // ★ cardBg 分支：不再依赖 isProfile（时序问题导致 Cell Hook 中找不到 MMHeadImageView）
-    // bgImageView 创建逻辑已移到 MMUIButton Hook（那里 foundHead=1 可靠）
-    // Cell Hook 只做 Cell 层通用处理：高度调整、透明化、HideCard
-    if (isMoreVCCard && config.cardBgEnabled) {
-        CGFloat customHeight = config.cardBgHeight;
-        if (customHeight > 0) {
-            CGFloat currentH = cellViewCard.frame.size.height;
-            if (currentH < customHeight) {
-                CGRect f = cellViewCard.frame;
-                f.size.height = customHeight;
-                cellViewCard.frame = f;
-            }
-        }
-
-        if (config.cardBgListSpacing > 0) {
-            CGFloat spacing = config.cardBgListSpacing;
-            CGRect f = cellViewCard.frame;
-            f.size.height += spacing;
-            f.origin.y -= spacing / 2.0;
-            cellViewCard.frame = f;
-        }
-
-        if (_orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
-
-        BOOL isDark = [ListCornerRadiusHook wp_isCurrentDarkMode];
-
-        // ★ 清理 Cell 自身样式，让背景图由 MMUIButton 层控制
-        cellViewCard.layer.borderWidth = 0;
-        cellViewCard.layer.cornerRadius = 0;
-        cellViewCard.layer.masksToBounds = NO;
-        cellViewCard.backgroundColor = [UIColor clearColor];
-
-        // ★ contentView 透明
-        UIView *contentView = [(UITableViewCell *)cellViewCard contentView];
-        if (contentView) {
-            contentView.backgroundColor = [UIColor clearColor];
-            contentView.layer.masksToBounds = NO;
-        }
-
-        // ★ backgroundView 隐藏
-        if ([cellViewCard respondsToSelector:@selector(backgroundView)]) {
-            UIView *bgv = [(id)cellViewCard backgroundView];
-            if (bgv) {
-                bgv.backgroundColor = [UIColor clearColor];
-                bgv.hidden = YES;
-            }
-        }
-        if ([cellViewCard respondsToSelector:@selector(selectedBackgroundView)]) {
-            UIView *sbgv = [(id)cellViewCard selectedBackgroundView];
-            if (sbgv) {
-                sbgv.backgroundColor = [UIColor clearColor];
-            }
-        }
-
-        // ★ 所有 Cell 直接子视图背景透明
-        for (UIView *sub in cellViewCard.subviews) {
-            sub.backgroundColor = [UIColor clearColor];
-        }
-
-        if (config.cardBgHidden) {
-            // HideCard：隐藏非 MMUIButton 的子视图
-            for (UIView *sub in cellViewCard.subviews) {
-                if (![sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-                    sub.hidden = YES;
-                }
-            }
-        }
-
-        return;
-    }
-
-    if (!config.listCornerRadiusEnabled) {
+    if (!config.listCornerRadiusEnabled && !config.cardBgEnabled) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
@@ -541,6 +479,43 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+
+        // ★ cardBgEnabled 时：Cell 透明化（让 MMUIButton 层的背景图可见）
+        if (config.cardBgEnabled) {
+            cellView.backgroundColor = [UIColor clearColor];
+            cellView.layer.borderWidth = 0;
+            cellView.layer.masksToBounds = NO;
+
+            UIView *cv = [(UITableViewCell *)cellView contentView];
+            if (cv) {
+                cv.backgroundColor = [UIColor clearColor];
+                cv.layer.masksToBounds = NO;
+            }
+
+            if ([cellView respondsToSelector:@selector(backgroundView)]) {
+                UIView *bgv = [(id)cellView backgroundView];
+                if (bgv) { bgv.backgroundColor = [UIColor clearColor]; bgv.hidden = YES; }
+            }
+            if ([cellView respondsToSelector:@selector(selectedBackgroundView)]) {
+                UIView *sbgv = [(id)cellView selectedBackgroundView];
+                if (sbgv) { sbgv.backgroundColor = [UIColor clearColor]; }
+            }
+
+            if (config.cardBgHeight > 0) {
+                CGFloat currentH = cellView.frame.size.height;
+                if (currentH < config.cardBgHeight) {
+                    CGRect f = cellView.frame;
+                    f.size.height = config.cardBgHeight;
+                    cellView.frame = f;
+                }
+            }
+            if (config.cardBgListSpacing > 0) {
+                CGRect f = cellView.frame;
+                f.size.height += config.cardBgListSpacing;
+                f.origin.y -= config.cardBgListSpacing / 2.0;
+                cellView.frame = f;
+            }
         }
         return;
     }
@@ -1119,6 +1094,93 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }
     }
     return NO;
+}
+
++ (UIImage *)wp_loadBackgroundImageSync:(BOOL)isDark {
+    PluginConfig *config = [PluginConfig shared];
+    NSString *imagePath = isDark ? config.cardBgDarkImagePath
+                                 : config.cardBgLightImagePath;
+
+    if (!imagePath || imagePath.length == 0) {
+        NSString *bgDir = [ListCornerRadiusHook wp_cardBackgroundDirectory];
+        NSFileManager *fm = [NSFileManager defaultManager];
+
+        NSString *gifPath = [bgDir stringByAppendingPathComponent:
+            isDark ? @"MioCardBgDark.gif" : @"MioCardBgLight.gif"];
+        NSString *pngPath = [bgDir stringByAppendingPathComponent:
+            isDark ? @"MioCardBgDark.png" : @"MioCardBgLight.png"];
+
+        if ([fm fileExistsAtPath:gifPath]) {
+            imagePath = gifPath;
+        } else if ([fm fileExistsAtPath:pngPath]) {
+            imagePath = pngPath;
+        }
+    }
+
+    if (!imagePath || imagePath.length == 0) return nil;
+
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if (![fm fileExistsAtPath:imagePath]) return nil;
+
+    NSString *ext = imagePath.pathExtension.lowercaseString;
+
+    if ([ext isEqualToString:@"gif"]) {
+        NSData *gifData = [NSData dataWithContentsOfFile:imagePath];
+        if (!gifData) return nil;
+
+        CGImageSourceRef source = CGImageSourceCreateWithData(
+            (__bridge CFDataRef)gifData, NULL);
+        if (!source) return nil;
+
+        size_t count = CGImageSourceGetCount(source);
+        if (count < 2) {
+            CGImageRef cgImg = CGImageSourceCreateImageAtIndex(source, 0, NULL);
+            UIImage *result = cgImg ? [UIImage imageWithCGImage:cgImg] : nil;
+            if (cgImg) CGImageRelease(cgImg);
+            CFRelease(source);
+            return result;
+        }
+
+        NSMutableArray<UIImage *> *frames = [NSMutableArray array];
+        NSTimeInterval totalDuration = 0;
+        for (size_t i = 0; i < count; i++) {
+            CGImageRef frameImg = CGImageSourceCreateImageAtIndex(source, i, NULL);
+            if (frameImg) {
+                [frames addObject:[UIImage imageWithCGImage:frameImg]];
+                CGImageRelease(frameImg);
+
+                CFDictionaryRef props =
+                    CGImageSourceCopyPropertiesAtIndex(source, i, NULL);
+                if (props) {
+                    CFDictionaryRef gifDict = CFDictionaryGetValue(
+                        props, kCGImagePropertyGIFDictionary);
+                    if (gifDict) {
+                        CFNumberRef delayRef = CFDictionaryGetValue(
+                            gifDict, kCGImagePropertyGIFDelayTime);
+                        if (!delayRef) {
+                            delayRef = CFDictionaryGetValue(
+                                gifDict, kCGImagePropertyGIFUnclampedDelayTime);
+                        }
+                        NSTimeInterval delay = 0.1;
+                        if (delayRef) {
+                            CFNumberGetValue(delayRef, kCFNumberFloatType, &delay);
+                            if (delay < 0.02) delay = 0.1;
+                        }
+                        totalDuration += delay;
+                    }
+                    CFRelease(props);
+                }
+            }
+        }
+        CFRelease(source);
+
+        if (frames.count > 0) {
+            return [UIImage animatedImageWithImages:frames duration:totalDuration];
+        }
+        return nil;
+    } else {
+        return [UIImage imageWithContentsOfFile:imagePath];
+    }
 }
 
 + (NSString *)wp_cardBackgroundDirectory {
