@@ -222,7 +222,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     }
 
     if (_orig_MMUIButton_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews(self, _cmd);
+        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
     }
 
     CGFloat margin = config.listCellMargin;
