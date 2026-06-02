@@ -347,6 +347,15 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
     btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
 
+    WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), btnBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
+          (long)btnBgImg.tag,
+          btnBgImg.frame.origin.x, btnBgImg.frame.origin.y,
+          btnBgImg.frame.size.width, btnBgImg.frame.size.height,
+          btnBounds.origin.x, btnBounds.origin.y,
+          btnBounds.size.width, btnBounds.size.height,
+          NSStringFromClass([btnBgImg.superview class]),
+          (long)[((UIView *)self).subviews indexOfObject:btnBgImg]);
+
     NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
     if (layerPos == 1) {
         [((UIView *)self) bringSubviewToFront:btnBgImg];
@@ -378,7 +387,13 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
                 finalImg.hidden = NO;
                 objc_setAssociatedObject(finalSelf, kMioBgLoadedKey, @YES,
                                          OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                WPLog(@"CardBg-Diag", @"[BGIMG-SET] image=SET, size=%.0fx%.0f, frame=(%.0f,%.0f,%.0f,%.0f), hidden=%d, alpha=%.2f, tag=%ld",
+                      resultImage.size.width, resultImage.size.height,
+                      finalImg.frame.origin.x, finalImg.frame.origin.y,
+                      finalImg.frame.size.width, finalImg.frame.size.height,
+                      finalImg.isHidden, finalImg.alpha, (long)finalImg.tag);
             } else {
+                WPLog(@"CardBg-Diag", @"[BGIMG-SET] image=NIL, tag=%ld, finalImg=%@", (long)finalImg.tag, finalImg ? @"exists" : @"nil");
                 BOOL dark = NO;
                 if (@available(iOS 13.0, *)) {
                     UIViewController *vCtrl = nil;
@@ -400,6 +415,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
                 if (cardBg) {
                     finalSelf.backgroundColor = cardBg;
                 }
+                WPLog(@"CardBg-Diag", @"[IMG-CB] FALLBACK: set bg=%@, dark=%d", cardBg ?: @"(nil)", dark);
                 objc_setAssociatedObject(finalSelf, kMioBgLoadedKey, @YES,
                                          OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             }
@@ -408,6 +424,101 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     }
 
 APPLY_CORNER:
+    // ════════════════════════════════════════════════════════
+    // ★★★ 诊断：Dump MMUIButton 视图层级 ★★★
+    // ════════════════════════════════════════════════════════
+    {
+        CALayer *selfLayer = ((UIView *)self).layer;
+        WPLog(@"CardBg-Diag", @"[DUMP-MMUI] bg=%@, alpha=%.2f, sublayers=%zu, subviews=%zu",
+              ((UIView *)self).backgroundColor,
+              selfLayer.opacity,
+              selfLayer.sublayers.count,
+              ((UIView *)self).subviews.count);
+
+        // Dump 所有 sublayer
+        for (NSInteger i = 0; i < (NSInteger)selfLayer.sublayers.count; i++) {
+            CALayer *sub = selfLayer.sublayers[i];
+            WPLog(@"CardBg-Diag", @"[DUMP-LAYER[%ld]] class=%@, bg=%@, frame=(%.0f,%.0f,%.0f,%.0f), name=%@",
+                  (long)i,
+                  NSStringFromClass([sub class]),
+                  sub.backgroundColor ? [UIColor colorWithCGColor:sub.backgroundColor] : @"(nil)",
+                  sub.frame.origin.x, sub.frame.origin.y,
+                  sub.frame.size.width, sub.frame.size.height,
+                  sub.name ?: @"(nil)");
+        }
+
+        // Dump 所有 subview
+        for (NSInteger i = 0; i < (NSInteger)((UIView *)self).subviews.count; i++) {
+            UIView *sub = ((UIView *)self).subviews[i];
+            WPLog(@"CardBg-Diag", @"[DUMP-SUB[%ld]] class=%@, tag=%ld, bg=%@, hidden=%d, alpha=%.2f, frame=(%.0f,%.0f,%.0f,%.0f)",
+                  (long)i,
+                  NSStringFromClass([sub class]),
+                  (long)sub.tag,
+                  sub.backgroundColor,
+                  sub.isHidden,
+                  sub.alpha,
+                  sub.frame.origin.x, sub.frame.origin.y,
+                  sub.frame.size.width, sub.frame.size.height);
+        }
+
+        // Dump Cell 层级
+        UIView *cellView = (UIView *)self;
+        while (cellView && ![NSStringFromClass([cellView class]) containsString:@"Cell"]) {
+            cellView = cellView.superview;
+        }
+        if (cellView) {
+            WPLog(@"CardBg-Diag", @"[DUMP-CELL] class=%@, bg=%@, masks=%d, subviews=%zu",
+                  NSStringFromClass([cellView class]),
+                  cellView.backgroundColor,
+                  cellView.layer.masksToBounds,
+                  cellView.subviews.count);
+
+            for (NSInteger i = 0; i < (NSInteger)cellView.subviews.count; i++) {
+                UIView *sub = cellView.subviews[i];
+                WPLog(@"CardBg-Diag", @"[DUMP-CELL-SUB[%ld]] class=%@, bg=%@, hidden=%d, alpha=%.2f, frame=(%.0f,%.0f,%.0f,%.0f)",
+                      (long)i,
+                      NSStringFromClass([sub class]),
+                      sub.backgroundColor,
+                      sub.isHidden,
+                      sub.alpha,
+                      sub.frame.origin.x, sub.frame.origin.y,
+                      sub.frame.size.width, sub.frame.size.height);
+            }
+
+            // Dump Cell 的 contentView
+            UIView *cv = [(id)cellView respondsToSelector:@selector(contentView)]
+                ? [(id)cellView contentView] : nil;
+            if (cv) {
+                WPLog(@"CardBg-Diag", @"[DUMP-CONTENTVIEW] bg=%@, masks=%d, subviews=%zu",
+                      cv.backgroundColor, cv.layer.masksToBounds, cv.subviews.count);
+                for (NSInteger i = 0; i < (NSInteger)cv.subviews.count; i++) {
+                    UIView *sub = cv.subviews[i];
+                    WPLog(@"CardBg-Diag", @"[DUMP-CV-SUB[%ld]] class=%@, bg=%@, hidden=%d, alpha=%.2f, frame=(%.0f,%.0f,%.0f,%.0f)",
+                          (long)i,
+                          NSStringFromClass([sub class]),
+                          sub.backgroundColor,
+                          sub.isHidden,
+                          sub.alpha,
+                          sub.frame.origin.x, sub.frame.origin.y,
+                          sub.frame.size.width, sub.frame.size.height);
+                }
+            }
+
+            // Dump Cell 的 layer sublayers
+            WPLog(@"CardBg-Diag", @"[DUMP-CELL-LAYERS] sublayers=%zu", cellView.layer.sublayers.count);
+            for (NSInteger i = 0; i < (NSInteger)cellView.layer.sublayers.count; i++) {
+                CALayer *sub = cellView.layer.sublayers[i];
+                WPLog(@"CardBg-Diag", @"[DUMP-CELL-LAYER[%ld]] class=%@, bg=%@, frame=(%.0f,%.0f,%.0f,%.0f), name=%@",
+                      (long)i,
+                      NSStringFromClass([sub class]),
+                      sub.backgroundColor ? [UIColor colorWithCGColor:sub.backgroundColor] : @"(nil)",
+                      sub.frame.origin.x, sub.frame.origin.y,
+                      sub.frame.size.width, sub.frame.size.height,
+                      sub.name ?: @"(nil)");
+            }
+        }
+    }
+
     // ── 圆角 + 边框 + QR码隐藏 ──
     {
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
@@ -584,24 +695,39 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     // ★★★ 最后：资料卡透明化（在所有 orig + margin + bgColor + corner 之后！）★★★
     // ════════════════════════════════════════════════════════
     if (needsCardBgTransparency) {
+        WPLog(@"CardBg-Diag", @"[CELL-TRANSPARENCY] Before: cellBg=%@, cellMasks=%d, cellBorder=%.1f",
+              cellView.backgroundColor, cellView.layer.masksToBounds, cellView.layer.borderWidth);
         cellView.backgroundColor = [UIColor clearColor];
         cellView.layer.borderWidth = 0;
         cellView.layer.masksToBounds = NO;  // Cell 层不裁剪，由 MMUIButton 层负责
 
         UIView *cv = [(UITableViewCell *)cellView contentView];
         if (cv) {
+            WPLog(@"CardBg-Diag", @"[CELL-TRANSPARENCY] contentView: bg=%@, masks=%d", cv.backgroundColor, cv.layer.masksToBounds);
             cv.backgroundColor = [UIColor clearColor];
             cv.layer.masksToBounds = NO;
         }
 
         if ([cellView respondsToSelector:@selector(backgroundView)]) {
             UIView *bgv = [(id)cellView backgroundView];
-            if (bgv) { bgv.backgroundColor = [UIColor clearColor]; bgv.hidden = YES; }
+            if (bgv) {
+                WPLog(@"CardBg-Diag", @"[CELL-TRANSPARENCY] backgroundView: class=%@, bg=%@, hidden=%d",
+                      NSStringFromClass([bgv class]), bgv.backgroundColor, bgv.isHidden);
+                bgv.backgroundColor = [UIColor clearColor]; bgv.hidden = YES;
+            }
         }
         if ([cellView respondsToSelector:@selector(selectedBackgroundView)]) {
             UIView *sbgv = [(id)cellView selectedBackgroundView];
-            if (sbgv) { sbgv.backgroundColor = [UIColor clearColor]; }
+            if (sbgv) {
+                WPLog(@"CardBg-Diag", @"[CELL-TRANSPARENCY] selectedBgView: class=%@, bg=%@",
+                      NSStringFromClass([sbgv class]), sbgv.backgroundColor);
+                sbgv.backgroundColor = [UIColor clearColor];
+            }
         }
+
+        WPLog(@"CardBg-Diag", @"[CELL-TRANSPARENCY] After: cellBg=%@, cellMasks=%d, cvBg=%@",
+              cellView.backgroundColor, cellView.layer.masksToBounds,
+              cv ? cv.backgroundColor : @"(nil)");
 
         // ★ 不设 masksToBounds=YES（让 MMUIButton 层负责裁剪）
         return;
@@ -1081,9 +1207,11 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 }
 
 + (UIImage *)wp_loadBackgroundImageSync:(BOOL)isDark {
+    WPLog(@"CardBg-Diag", @"[IMG-LOAD] Start: isDark=%d", isDark);
     PluginConfig *config = [PluginConfig shared];
     NSString *imagePath = isDark ? config.cardBgDarkImagePath
                                  : config.cardBgLightImagePath;
+    WPLog(@"CardBg-Diag", @"[IMG-LOAD] configPath=%@", imagePath ?: @"(nil)");
 
     if (!imagePath || imagePath.length == 0) {
         NSString *bgDir = [ListCornerRadiusHook wp_cardBackgroundDirectory];
@@ -1099,29 +1227,46 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         } else if ([fm fileExistsAtPath:pngPath]) {
             imagePath = pngPath;
         }
+        WPLog(@"CardBg-Diag", @"[IMG-LOAD] resolvedPath=%@", imagePath ?: @"(nil)");
     }
 
-    if (!imagePath || imagePath.length == 0) return nil;
+    if (!imagePath || imagePath.length == 0) {
+        WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: NIL (no path)");
+        return nil;
+    }
 
     NSFileManager *fm = [NSFileManager defaultManager];
-    if (![fm fileExistsAtPath:imagePath]) return nil;
+    if (![fm fileExistsAtPath:imagePath]) {
+        WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: NIL (file not exists at %@)", imagePath);
+        return nil;
+    }
+    WPLog(@"CardBg-Diag", @"[IMG-LOAD] fileExists=YES, ext=%@", imagePath.pathExtension.lowercaseString);
 
     NSString *ext = imagePath.pathExtension.lowercaseString;
 
     if ([ext isEqualToString:@"gif"]) {
         NSData *gifData = [NSData dataWithContentsOfFile:imagePath];
-        if (!gifData) return nil;
+        if (!gifData) {
+            WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: NIL (gifData nil for %@)", imagePath);
+            return nil;
+        }
 
         CGImageSourceRef source = CGImageSourceCreateWithData(
             (__bridge CFDataRef)gifData, NULL);
-        if (!source) return nil;
+        if (!source) {
+            WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: NIL (CGImageSourceCreateWithData failed)");
+            return nil;
+        }
 
         size_t count = CGImageSourceGetCount(source);
+        WPLog(@"CardBg-Diag", @"[IMG-LOAD] GIF frameCount=%zu", count);
         if (count < 2) {
             CGImageRef cgImg = CGImageSourceCreateImageAtIndex(source, 0, NULL);
             UIImage *result = cgImg ? [UIImage imageWithCGImage:cgImg] : nil;
             if (cgImg) CGImageRelease(cgImg);
             CFRelease(source);
+            WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: %@ (single-frame GIF, size=%.0fx%.0f)",
+                  result ? @"SUCCESS" : @"NIL", result.size.width, result.size.height);
             return result;
         }
 
@@ -1159,11 +1304,19 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         CFRelease(source);
 
         if (frames.count > 0) {
-            return [UIImage animatedImageWithImages:frames duration:totalDuration];
+            UIImage *result = [UIImage animatedImageWithImages:frames duration:totalDuration];
+            WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: %@ (animated GIF, %lu frames, dur=%.2f, size=%.0fx%.0f)",
+                  result ? @"SUCCESS" : @"NIL", (unsigned long)frames.count, totalDuration,
+                  result.size.width, result.size.height);
+            return result;
         }
+        WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: NIL (GIF frames empty)");
         return nil;
     } else {
-        return [UIImage imageWithContentsOfFile:imagePath];
+        UIImage *result = [UIImage imageWithContentsOfFile:imagePath];
+        WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: %@ (static image, size=%.0fx%.0f)",
+              result ? @"SUCCESS" : @"NIL", result.size.width, result.size.height);
+        return result;
     }
 }
 
