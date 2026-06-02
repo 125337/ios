@@ -200,6 +200,17 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     CGFloat selfHeight = ((UIView *)self).frame.size.height;
     if (selfHeight <= 50.0) return;
 
+    CGFloat margin = config.listCellMargin;
+    if (margin > 0 && config.listCornerRadiusEnabled) {
+        UIView *cell = ((UIView *)self).superview;
+        if (cell) {
+            CGFloat containerW = cell.superview ? cell.superview.bounds.size.width
+                                               : [UIScreen mainScreen].bounds.size.width;
+            CGFloat targetW = containerW - 2.0 * margin;
+            ((UIView *)self).frame = CGRectMake(margin, 0, targetW, cell.bounds.size.height);
+        }
+    }
+
     BOOL isDark = NO;
     if (@available(iOS 13.0, *)) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
