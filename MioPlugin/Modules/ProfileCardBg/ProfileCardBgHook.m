@@ -601,7 +601,7 @@ APPLY_CORNER:
             [ProfileCardBgHook hideQRButtonInCell:button];
         }
 
-        BOOL skipMasksToBounds = (config.cardBgFillMode == 3);
+        BOOL skipMasksToBounds = (config.cardBgEnabled && config.cardBgFillMode == 3);
         button.layer.masksToBounds = skipMasksToBounds ? NO : YES;
     }
 }

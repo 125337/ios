@@ -310,11 +310,12 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                           className:className];
     }
 
-    // ★ 分发到资料卡模块（透明化处理）★
-    [ProfileCardBgHook handleCellLayout:(UITableViewCell *)self];
-
     // ★ 非 MoreVC 资料卡 Cell 的正常收尾 ★
     cellView.layer.masksToBounds = YES;
+
+    // ★ 分发到资料卡模块（透明化处理，在 masksToBounds=YES 之后执行）★
+    // 资料卡 Cell 会设 masksToBounds=NO，覆盖上面的 YES
+    [ProfileCardBgHook handleCellLayout:(UITableViewCell *)self];
 }
 
 @implementation ListCornerRadiusHook
@@ -384,28 +385,31 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                   cornerRadius:(NSInteger)configuredRadius
                      isFTSHome:(BOOL)isFTSHome
                      className:(NSString *)className {
-    NSInteger position = 0;
+    NSInteger cornerType = 0;  // 用于 maskedCorners
+    NSInteger borderType = 0;  // 用于 wp_applyBorderAndBg switch
     if (totalRows == 1) {
-        position = 3;
+        cornerType = 3; borderType = 0;  // 全角 + 完整边框
     } else if (row == 0) {
-        position = 1;
+        cornerType = 1; borderType = 1;  // 顶角 + 顶边框
     } else if (row == totalRows - 1) {
-        position = 2;
+        cornerType = 2; borderType = 3;  // 底角 + 底边框
+    } else {
+        cornerType = 0; borderType = 2;  // 无角 + 左右边框
     }
 
     cell.layer.cornerRadius = configuredRadius;
     cell.layer.maskedCorners = 0;
 
-    if (position == 1) {
+    if (cornerType == 1) {
         cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-    } else if (position == 2) {
+    } else if (cornerType == 2) {
         cell.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
-    } else if (position == 3) {
+    } else if (cornerType == 3) {
         cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
                                    kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
 
-    [self wp_applyBorderAndBg:cell radius:configuredRadius position:position isFTSHome:isFTSHome];
+    [self wp_applyBorderAndBg:cell radius:configuredRadius position:borderType isFTSHome:isFTSHome];
 }
 
 + (void)wp_applyCornerForContacts:(UIView *)cell
@@ -416,28 +420,31 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                             total:(NSInteger)rowInThisSection
                      cornerRadius:(NSInteger)radius
                          isFTSHome:(BOOL)isFTSHome {
-    NSInteger position = 0;
+    NSInteger cornerType = 0;
+    NSInteger borderType = 0;
     if (rowInThisSection == 1) {
-        position = 3;
+        cornerType = 3; borderType = 0;
     } else if (row == 0) {
-        position = 1;
+        cornerType = 1; borderType = 1;
     } else if (row == rowInThisSection - 1) {
-        position = 2;
+        cornerType = 2; borderType = 3;
+    } else {
+        cornerType = 0; borderType = 2;
     }
 
     cell.layer.cornerRadius = radius;
     cell.layer.maskedCorners = 0;
 
-    if (position == 1) {
+    if (cornerType == 1) {
         cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-    } else if (position == 2) {
+    } else if (cornerType == 2) {
         cell.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
-    } else if (position == 3) {
+    } else if (cornerType == 3) {
         cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
                                    kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
 
-    [self wp_applyBorderAndBg:cell radius:radius position:position isFTSHome:isFTSHome];
+    [self wp_applyBorderAndBg:cell radius:radius position:borderType isFTSHome:isFTSHome];
 }
 
 + (void)wp_applyBorderAndBg:(UIView *)cell
@@ -484,7 +491,22 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 
     switch (position) {
-        case 1: {
+        case 0: {  // 完整边框（单独 cell / 全圆角 cell）
+            CAShapeLayer *top = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                      borderWidth:borderWidth
+                                                     borderColor:borderColor
+                                                          radius:radius
+                                                            type:@"top"];
+            CAShapeLayer *bottom = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                         borderWidth:borderWidth
+                                                        borderColor:borderColor
+                                                             radius:radius
+                                                               type:@"bottom"];
+            [cell.layer addSublayer:top];
+            [cell.layer addSublayer:bottom];
+            break;
+        }
+        case 1: {  // 顶部边框（首行）
             CAShapeLayer *shape = [self wp_buildUnifiedBorderLayer:cell.bounds
                                                        borderWidth:borderWidth
                                                       borderColor:borderColor
@@ -493,7 +515,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             [cell.layer addSublayer:shape];
             break;
         }
-        case 2: {
+        case 2: {  // 左右边框（中间行）
             CAShapeLayer *left = [self wp_buildUnifiedBorderLayer:cell.bounds
                                                       borderWidth:borderWidth
                                                      borderColor:borderColor
@@ -508,7 +530,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             [cell.layer addSublayer:right];
             break;
         }
-        case 3: {
+        case 3: {  // 底部边框（末行）
             CAShapeLayer *shape = [self wp_buildUnifiedBorderLayer:cell.bounds
                                                        borderWidth:borderWidth
                                                       borderColor:borderColor
