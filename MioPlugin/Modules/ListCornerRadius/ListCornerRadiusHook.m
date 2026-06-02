@@ -7,6 +7,7 @@
 
 static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
 static IMP _orig_WCSearchBar_layoutSubviews = NULL;
+static IMP _orig_MMUIButton_layoutSubviews = NULL;
 
 static UIViewController *findParentViewController(UIView *view) {
     UIResponder *responder = view;
@@ -158,20 +159,80 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
     NSInteger radius = config.listSearchBoxCornerRadius;
     if (radius <= 0) radius = 18;
 
-    UIView *container = nil;
-    @try {
-        container = [self valueForKey:@"searchBoxContainer"];
-    } @catch (NSException *e) {
-        return;
-    }
-
+    UIView *container = ((UIView *(*)(id, SEL))objc_msgSend)(self, @selector(searchBoxContainer));
     if (container) {
         container.layer.cornerRadius = radius;
         container.layer.masksToBounds = YES;
     }
 }
 
+static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
+    if (_orig_MMUIButton_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+    }
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.listCornerRadiusEnabled) return;
+
+    UIViewController *vc = nil;
+    UIResponder *responder = (UIResponder *)self;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            vc = (UIViewController *)responder;
+            break;
+        }
+        responder = [responder nextResponder];
+    }
+    if (!vc) return;
+
+    NSString *vcName = NSStringFromClass([vc class]);
+    if (![vcName isEqualToString:@"MoreViewController"]) return;
+
+    BOOL foundHead = NO;
+    for (UIView *subview in ((UIView *)self).subviews) {
+        if ([subview isKindOfClass:NSClassFromString(@"MMHeadImageView")]) {
+            foundHead = YES;
+            break;
+        }
+    }
+    if (!foundHead) return;
+
+    CGFloat selfHeight = ((UIView *)self).frame.size.height;
+    if (selfHeight <= 50.0) return;
+
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    }
+
+    NSInteger radius = (NSInteger)config.listCellCornerRadius;
+    if (radius == 0) radius = 18;
+
+    [ListCornerRadiusHook wp_applyProfileCardCorner:(UIView *)self
+                                       cornerRadius:radius
+                                            isDark:isDark];
+
+    if (config.listHideRightQRCode) {
+        [ListCornerRadiusHook wp_hideQRButtonInCell:(UIView *)self];
+    }
+
+    ((UIView *)self).layer.masksToBounds = YES;
+}
+
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
+    if (!_orig_MMUIButton_layoutSubviews) {
+        Class MMUIButtonClass = objc_getClass("MMUIButton");
+        if (MMUIButtonClass) {
+            MSHookMessageEx(
+                MMUIButtonClass,
+                @selector(layoutSubviews),
+                (IMP)replaced_MMUIButton_layoutSubviews,
+                &_orig_MMUIButton_layoutSubviews
+            );
+            WPLog(@"ListCornerRadius", @"[OK] MMUIButton::layoutSubviews (lazy registered)");
+        }
+    }
+
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled) {
         if (_orig_MMTableViewCell_layoutSubviews) {
@@ -199,29 +260,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     UIView *cellView = (UIView *)self;
 
     BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
-    CGFloat cellHeight = cellView.frame.size.height;
-    if (isMoreVC && cellHeight > 50 && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
+    if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
-
-        BOOL isDark = NO;
-        if (@available(iOS 13.0, *)) {
-            isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-        }
-
-        NSInteger radius = (NSInteger)config.listCellCornerRadius;
-        if (radius == 0) radius = 18;
-
-        [ListCornerRadiusHook wp_applyProfileCardCorner:cellView
-                                           cornerRadius:radius
-                                                isDark:isDark];
-
-        if (config.listHideRightQRCode) {
-            [ListCornerRadiusHook wp_hideQRButtonInCell:cellView];
-        }
-
-        cellView.layer.masksToBounds = YES;
         return;
     }
 
@@ -360,6 +402,33 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"ListCornerRadius", @"[OK] WCSearchBar::layoutSubviews");
     } else {
         WPLog(@"ListCornerRadius", @"[WARN] WCSearchBar class not found!");
+    }
+
+    WPLog(@"ListCornerRadius", @"[DEBUG] About to register MMUIButton hook...");
+    Class MMUIButtonClass = objc_getClass("MMUIButton");
+    WPLog(@"ListCornerRadius", @"[DEBUG] MMUIButton class = %@", MMUIButtonClass);
+    if (MMUIButtonClass) {
+        MSHookMessageEx(
+            MMUIButtonClass,
+            @selector(layoutSubviews),
+            (IMP)replaced_MMUIButton_layoutSubviews,
+            &_orig_MMUIButton_layoutSubviews
+        );
+        WPLog(@"ListCornerRadius", @"[OK] MMUIButton::layoutSubviews (ProfileCard)");
+    } else {
+        MMUIButtonClass = objc_lookUpClass("MMUIButton");
+        WPLog(@"ListCornerRadius", @"[DEBUG] objc_lookUpClass result = %@", MMUIButtonClass);
+        if (MMUIButtonClass) {
+            MSHookMessageEx(
+                MMUIButtonClass,
+                @selector(layoutSubviews),
+                (IMP)replaced_MMUIButton_layoutSubviews,
+                &_orig_MMUIButton_layoutSubviews
+            );
+            WPLog(@"ListCornerRadius", @"[OK] MMUIButton::layoutSubviews (ProfileCard, via lookUp)");
+        } else {
+            WPLog(@"ListCornerRadius", @"[WARN] MMUIButton class not found! Will retry on first MMTableViewCell layoutSubviews");
+        }
     }
 }
 

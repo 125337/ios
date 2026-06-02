@@ -44,6 +44,27 @@ static BOOL _wp_isTableViewClass(NSString *name) {
            [name isEqualToString:@"TextStateProfileTableView"];
 }
 
+static BOOL _wp_isAllowedVC(NSString *name) {
+    return [name isEqualToString:@"NewMainFrameViewController"] ||
+           [name isEqualToString:@"BrandSessionViewController"] ||
+           [name isEqualToString:@"ChatBoxSessionListViewController"] ||
+           [name isEqualToString:@"OpenIMBrandContactListViewController"] ||
+           [name isEqualToString:@"ContactTagNewDetailViewController"] ||
+           [name isEqualToString:@"ChatRoomListViewController"] ||
+           [name isEqualToString:@"BrandServiceContactsViewController"];
+}
+
+static UIViewController *_wp_findParentVC(UIView *view) {
+    UIResponder *responder = view;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            return (UIViewController *)responder;
+        }
+        responder = [responder nextResponder];
+    }
+    return nil;
+}
+
 static void (*_orig_UIView_layoutSubviews)(id, SEL);
 static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     _orig_UIView_layoutSubviews(self, _cmd);
@@ -56,6 +77,9 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     UIView *view = (UIView *)self;
 
     if (view.bounds.size.height < 1.0) return;
+
+    UIViewController *vc = _wp_findParentVC(view);
+    if (!vc || !_wp_isAllowedVC(NSStringFromClass([vc class]))) return;
 
     UIView *parent = view.superview;
     if (!parent) return;
