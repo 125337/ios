@@ -370,9 +370,13 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
     // 分支A：已存在且已加载 → 只更新 frame（零开销路径）
     if (existingBgImg != nil && alreadyLoaded) {
-        CGRect btnBounds = ((UIView *)self).bounds;
-        CGFloat imgW = btnBounds.size.width;
-        CGFloat imgH = btnBounds.size.height;
+        // 从 Cell 的 bounds 推导 bgImageView 尺寸（Cell 已被 margin 逻辑缩小）
+        UIView *parentCell = nil;
+        UIView *p = ((UIView *)self).superview;  // MMUIButton → contentView
+        if (p) parentCell = p.superview;          // contentView → Cell
+        CGRect cellBounds = parentCell ? parentCell.bounds : ((UIView *)self).bounds;
+        CGFloat imgW = cellBounds.size.width;
+        CGFloat imgH = cellBounds.size.height;
         CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
         CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
         existingBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
@@ -405,19 +409,23 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
     [((UIView *)self) insertSubview:btnBgImg atIndex:0];
 
-    CGRect btnBounds = ((UIView *)self).bounds;
-    CGFloat imgW = btnBounds.size.width;
-    CGFloat imgH = btnBounds.size.height;
+    // 从 Cell 的 bounds 推导 bgImageView 尺寸（Cell 已被 margin 逻辑缩小）
+    UIView *parentCell = nil;
+    UIView *p = ((UIView *)self).superview;  // MMUIButton → contentView
+    if (p) parentCell = p.superview;          // contentView → Cell
+    CGRect cellBounds = parentCell ? parentCell.bounds : ((UIView *)self).bounds;
+    CGFloat imgW = cellBounds.size.width;
+    CGFloat imgH = cellBounds.size.height;
     CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
     CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
     btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
 
-    WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), btnBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
+    WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), cellBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
           (long)btnBgImg.tag,
           btnBgImg.frame.origin.x, btnBgImg.frame.origin.y,
           btnBgImg.frame.size.width, btnBgImg.frame.size.height,
-          btnBounds.origin.x, btnBounds.origin.y,
-          btnBounds.size.width, btnBounds.size.height,
+          cellBounds.origin.x, cellBounds.origin.y,
+          cellBounds.size.width, cellBounds.size.height,
           NSStringFromClass([btnBgImg.superview class]),
           (long)[((UIView *)self).subviews indexOfObject:btnBgImg]);
 
