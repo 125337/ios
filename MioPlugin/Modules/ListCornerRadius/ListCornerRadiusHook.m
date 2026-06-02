@@ -448,7 +448,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     static NSString *kBorderCacheKey = @"com.mio.cornerBorderCache";
 
-    NSString *existingCacheKey = objc_getAssociatedObject(cell, kBorderCacheKey);
+    NSString *existingCacheKey = objc_getAssociatedObject(cell, (__bridge const void *)kBorderCacheKey);
     NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-f%d-b%.1f",
                           (long)radius, (long)position, isFTSHome,
                           config.listCellBorderWidth];
@@ -461,8 +461,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    if (!config.listCellBorderEnabled) {
-        objc_setAssociatedObject(cell, kBorderCacheKey, cacheKey,
+    if (!config.listCellBorder) {
+        objc_setAssociatedObject(cell, (__bridge const void *)kBorderCacheKey, cacheKey,
             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         return;
     }
@@ -476,7 +476,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 
     UIColor *borderColor = [config colorFromHex:isDark
-        ? config.listCellDarkBorderColor : config.listCellLightBorderColor];
+        ? config.listCellBorderDarkColor : config.listCellBorderLightColor];
     if (!borderColor) {
         borderColor = isDark
             ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
@@ -519,7 +519,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    objc_setAssociatedObject(cell, kBorderCacheKey, cacheKey,
+    objc_setAssociatedObject(cell, (__bridge const void *)kBorderCacheKey, cacheKey,
         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
