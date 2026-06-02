@@ -504,22 +504,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             if (sbgv) { sbgv.backgroundColor = [UIColor clearColor]; }
         }
 
-        // 高度调整
-        if (config.cardBgHeight > 0) {
-            CGFloat currentH = cellView.frame.size.height;
-            if (currentH < config.cardBgHeight) {
-                CGRect f = cellView.frame;
-                f.size.height = config.cardBgHeight;
-                cellView.frame = f;
-            }
-        }
-        // 间距
-        if (config.cardBgListSpacing > 0) {
-            CGRect f = cellView.frame;
-            f.size.height += config.cardBgListSpacing;
-            f.origin.y -= config.cardBgListSpacing / 2.0;
-            cellView.frame = f;
-        }
+        // ★★★ 不在 layoutSubviews 中修改 Cell 自身 frame（会触发 UIKit 反馈循环导致卡死）
+        // cardBgHeight / cardBgListSpacing 需要在 tableView delegate 层面实现
+        // 当前只做透明化，背景图由 MMUIButton Hook 处理
+
         return;
     }
 
