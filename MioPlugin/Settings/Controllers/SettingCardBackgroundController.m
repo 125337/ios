@@ -165,6 +165,21 @@
                                                  style:UIAlertActionStyleDestructive
                                                handler:^(UIAlertAction *action) {
             WPLog(@"CardBg-Diag", @"[PICKER] Deleting light image path: %@", config.cardBgLightImagePath);
+            // 删除磁盘上的文件
+            if (config.cardBgLightImagePath.length > 0) {
+                NSFileManager *fm = [NSFileManager defaultManager];
+                if ([fm fileExistsAtPath:config.cardBgLightImagePath]) {
+                    [fm removeItemAtPath:config.cardBgLightImagePath error:nil];
+                    WPLog(@"CardBg-Diag", @"[PICKER] Deleted light image file from disk");
+                }
+            }
+            // 同时删除默认目录下的同名文件（防止自动扫描恢复）
+            NSString *bgDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+            bgDir = [bgDir stringByAppendingPathComponent:@"MioCardBackground"];
+            NSFileManager *fm = [NSFileManager defaultManager];
+            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBgLight.png"] error:nil];
+            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBgLight.gif"] error:nil];
+            WPLog(@"CardBg-Diag", @"[PICKER] Removed default light image files from MioCardBackground/");
             config.cardBgLightImagePath = nil;
             [config save];
             [self buildUI];
@@ -205,6 +220,21 @@
                                                  style:UIAlertActionStyleDestructive
                                                handler:^(UIAlertAction *action) {
             WPLog(@"CardBg-Diag", @"[PICKER] Deleting dark image path: %@", config.cardBgDarkImagePath);
+            // 删除磁盘上的文件
+            if (config.cardBgDarkImagePath.length > 0) {
+                NSFileManager *fm = [NSFileManager defaultManager];
+                if ([fm fileExistsAtPath:config.cardBgDarkImagePath]) {
+                    [fm removeItemAtPath:config.cardBgDarkImagePath error:nil];
+                    WPLog(@"CardBg-Diag", @"[PICKER] Deleted dark image file from disk");
+                }
+            }
+            // 同时删除默认目录下的同名文件（防止自动扫描恢复）
+            NSString *bgDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+            bgDir = [bgDir stringByAppendingPathComponent:@"MioCardBackground"];
+            NSFileManager *fm = [NSFileManager defaultManager];
+            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBgDark.png"] error:nil];
+            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBgDark.gif"] error:nil];
+            WPLog(@"CardBg-Diag", @"[PICKER] Removed default dark image files from MioCardBackground/");
             config.cardBgDarkImagePath = nil;
             [config save];
             [self buildUI];
