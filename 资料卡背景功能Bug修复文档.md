@@ -1,601 +1,444 @@
 # MioPlugin 资料卡背景功能 Bug 修复文档
 
-> **分析日期**: 2026-06-02
-> **问题**: 隐藏信息卡片功能不生效、设置了背景图也没有效果
-> **参考**: 微信优化反编译代码 (`123456.c`) 的实现方式
+> **更新日期**: 2026-06-02
+> **当前问题**: 开启隐藏信息卡片后显示微信原始卡片，没有真正隐藏
+> **参考**: 微信优化反编译代码 (`123456.c`) 深度分析
 
 ---
 
-## 1️⃣ 问题根因分析
+## 1️⃣ 当前 Bug 现象
 
-经过深度对比微信优化反编译代码与 MioPlugin 源码，发现 **3 个关键 Bug** 和 **2 个设计缺陷**。
+开启 `cardBgHidden`（隐藏信息卡片）后，资料卡**显示微信原始卡片样式**，内容（头像、昵称等）全部可见，没有被隐藏。
 
 ---
 
-## 2️⃣ Bug #1：MMUIButton Hook 覆盖了 Cell Hook 的 HideCard 和背景图效果（🔴 根因）
+## 2️⃣ 根因分析：微信优化 HideCard 的真实实现
 
-### 问题描述
+### 微信优化的 Cell Hook (`FUN_00007b4c`) 中 HideCard 的完整逻辑
 
-微信的资料卡 Cell 视图层级如下：
-
-```
-MMTableViewCell (Cell 层)          ← Cell Hook 在这里处理
- └── MMUIButton (卡片内容容器)     ← MMUIButton Hook 在这里处理
-      ├── MMHeadImageView (头像)
-      ├── MMCPLabel / MMUILabel (文字)
-      └── 其他子视图
-```
-
-**微信优化的做法**（正确）：
-- **Cell Hook** (`FUN_00007b4c`)：负责背景图创建、frame 计算、图层排序、异步加载、HideCard 的 `setAlpha:0` + `setBorderWidth:0` + `setCornerRadius:0` + `setMasksToBounds:NO`
-- **MMUIButton Hook** (`FUN_0000d898`)：负责圆角设置、边框绘制、HideCard 时设置背景色、非 HideCard 时设置渐变背景色
-
-两个 Hook **协同工作**：
-1. Cell Hook 先将 Cell 自身设为完全透明（alpha=0, borderWidth=0, cornerRadius=0, masksToBounds=NO）
-2. MMUIButton Hook 再给 MMUIButton 设置圆角、背景色、边框
-
-**MioPlugin 的做法**（错误）：
-
-在 [ListCornerRadiusHook.m:175-289](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L175-289) 的 `replaced_MMUIButton_layoutSubviews` 中：
+反编译代码第 6347-6436 行，还原为 ObjC 伪代码：
 
 ```objc
-// 第 288 行
-((UIView *)self).layer.masksToBounds = YES;  // ← 问题！
+// Cell Hook 中，检测到 HideCard=YES 时的处理
+if (ProfileCardHideCard) {
+    // ★ 关键步骤 1：设置 Cell 自身背景色为 clearColor
+    [self setBackgroundColor:[UIColor clearColor]];   // FUN_000ca840(param_5, ..., clearColor)
+
+    // ★ 关键步骤 2：获取动态渐变色，设置到 Cell 的 superview（layer）
+    UIColor *gradient = [self.layer backgroundColor];  // FUN_000c71e0 + FUN_000c2380
+    [self.layer setBackgroundColor:gradient];           // FUN_000ca840
+
+    // ★ 关键步骤 3：遍历 Cell 的 subviews
+    for (UIView *sub in self.subviews) {
+        // 如果 subview 的宽度接近 Cell 宽度（-10pt 容差）且高度接近 Cell 高度
+        if (sub.frame.size.width + 10 >= self.frame.size.width &&
+            sub.frame.size.height + 10 >= self.frame.size.height) {
+
+            // ★★★ 这是 MMUIButton（大尺寸子视图）★★★
+            // 检查它是否有 m_bgImageView 实例变量
+            Ivar bgIvar = class_getInstanceVariable([sub class], "m_bgImageView");
+            if (bgIvar) {
+                // ★ 关键步骤 4：将 MMUIButton 的 m_bgImageView 设为 nil
+                // 这会清除微信原始的头像背景图！
+                object_setIvar(sub, bgIvar, nil);   // FUN_000c83c0(..., 0)
+
+                // ★ 关键步骤 5：获取 MMUIButton 的 frame
+                CGRect btnFrame = sub.frame;         // FUN_000c58c0 + FUN_000c35e0
+
+                // ★ 关键步骤 6：再次检查尺寸（确认是资料卡 MMUIButton）
+                if (btnFrame.size.width + 10 >= self.frame.size.width &&
+                    btnFrame.size.height + 10 >= self.frame.size.height) {
+
+                    // ★ 关键步骤 7：检查 MMUIButton 是否有 m_bgImageView
+                    id bgImg = object_getIvar(sub, "m_bgImageView");
+                    if (bgImg != nil) {
+                        // ★★★ 设置 MMUIButton 背景色为 clearColor ★★★
+                        [sub setBackgroundColor:[UIColor clearColor]];  // FUN_000ca840
+                        // ★★★ 设置 MMUIButton.layer 背景色为动态渐变色 ★★★
+                        [sub.layer setBackgroundColor:gradient];        // FUN_000ca840
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ★ 关键步骤 8：遍历 Cell 的 subviews，隐藏非目标 ImageView
+for (UIView *sub in self.subviews) {
+    if (![sub isKindOfClass:[UIImageView class]]) {
+        sub.hidden = YES;   // FUN_000cba80(..., 1)  ← 隐藏非 ImageView
+    } else {
+        // 如果是 UIImageView 但不是背景图标记（UNK_0000270e / DAT_0000270f）
+        if (sub.tag != bgTag1 && sub.tag != bgTag2) {
+            sub.hidden = NO;   // FUN_000cba80(..., 0)  ← 保留标记的 ImageView
+        }
+    }
+}
 ```
 
-以及 [ListCornerRadiusHook.m:280-282](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L280-282)：
+### 微信优化的 MMUIButton Hook (`FUN_0000d898`) 中 HideCard 的处理
+
+反编译代码第 9673-9681 行：
 
 ```objc
-[ListCornerRadiusHook wp_applyProfileCardCorner:(UIView *)self
-                                   cornerRadius:radius
-                                        isDark:isDark];
+// MMUIButton Hook 中
+if (ProfileCardHideCard == NO) {
+    // ★ 只有非 HideCard 时才设置 MMUIButton 背景色
+    UIColor *color = [self getGradientColor:1];  // FUN_0000e02c(cfg, 1)
+    [self setBackgroundColor:color];              // FUN_000ca840
+}
+
+if (specialMode == 0) {  // ContentMode != 3
+    // ★ 只有非特殊模式时才设置圆角和 masksToBounds
+    [self.layer setCornerRadius:radius];          // FUN_000cb180
+    [self.layer setMasksToBounds:YES];            // FUN_000cc8c0(1)
+}
 ```
 
-`wp_applyProfileCardCorner` 方法（[第895-928行](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L895-928)）做了：
+---
 
-```objc
-cell.layer.cornerRadius = radius;
-cell.layer.masksToBounds = YES;    // ← 强制裁剪
-cell.backgroundColor = cardBg;     // ← 覆盖了 Cell Hook 设置的 clearColor
-```
+## 3️⃣ MioPlugin 当前代码的问题
 
-**这导致了两个严重问题**：
+### 问题 #1：HideCard 时 MMUIButton 的 `m_bgImageView` 未被清除（🔴 根因）
 
-1. **HideCard 不生效**：Cell Hook 设置了 `backgroundColor = clearColor`，但 MMUIButton Hook 又通过 `wp_applyProfileCardCorner` 把 MMUIButton 的背景色设为了不透明的 cardBg 色，遮住了背景图
-2. **背景图不可见**：MMUIButton 的 `masksToBounds = YES` + 不透明背景色，完全遮挡了 Cell 层的背景 UIImageView
-
-### 微信优化如何避免此问题
-
-微信优化的 MMUIButton Hook (`FUN_0000d898`) 中有明确的条件判断：
+微信优化在 HideCard 时，**主动清除了 MMUIButton 的 `m_bgImageView` 实例变量**：
 
 ```c
-// 反编译代码第 9673-9681 行
-auVar21 = FUN_000c3380(uVar4, extraout_x1_06, &cf_ProfileCardHideCard);
-if ((auVar21._0_8_ & 1) == 0) {    // ← 只有 HideCard=NO 时才设置背景色
-    FUN_0000e02c(uVar4, 1);          // 获取渐变色
-    FUN_000ca840(lVar6, ...);         // 设置 MMUIButton 背景色
-}
+// 反编译代码第 6385 行
+FUN_000c83c0(auVar26._0_8_, auVar26._8_8_, 0);  // object_setIvar(sub, bgIvar, nil)
+```
 
-// 第 9682 行
-if ((uVar1 & 1) == 0) {              // ← 只有 ContentMode != 3 时才设置圆角
-    FUN_000cb180((double)lVar8);      // 设置圆角
-    FUN_000cc8c0(1);                  // 设置 masksToBounds = YES
+`m_bgImageView` 是微信 MMUIButton 内部用于显示头像背景图的实例变量。微信原始的资料卡通过这个变量显示头像/背景图。**如果不将其设为 nil，微信会在下一次 layoutSubviews 中重新绘制原始卡片内容**，导致 HideCard 无效。
+
+MioPlugin 当前代码**完全没有处理 `m_bgImageView`**，只是设置了 `sub.hidden = YES` 或 `backgroundColor = clearColor`，但微信的原始布局逻辑会在后续 layoutSubviews 中恢复这些属性。
+
+### 问题 #2：HideCard 时 MMUIButton 的 `hidden` 状态被微信原始逻辑恢复（🔴 根因）
+
+当前 MioPlugin 代码在 Cell Hook 中设置了 MMUIButton 的 `backgroundColor = clearColor` 和 `masksToBounds = NO`，但微信的原始 `layoutSubviews` 会在后续调用中**重新设置** MMUIButton 的背景色和 masksToBounds，覆盖掉 MioPlugin 的设置。
+
+微信优化通过以下方式避免此问题：
+1. **Cell Hook 中**：清除 `m_bgImageView`，设置 MMUIButton 背景为 clearColor
+2. **MMUIButton Hook 中**：检测到 HideCard=YES 时，**跳过**背景色和圆角设置
+
+MioPlugin 的 MMUIButton Hook 已经添加了 HideCard 判断（第 235-244 行），但 **Cell Hook 中缺少对 `m_bgImageView` 的清除**。
+
+### 问题 #3：HideCard 时遍历 subviews 的逻辑与微信优化不同（🟡 重要）
+
+微信优化的 HideCard 逻辑是**按尺寸判断**来找到 MMUIButton（宽度接近 Cell 宽度、高度接近 Cell 高度的子视图），然后专门处理它。而 MioPlugin 是按类名 `MMUIButton` 来查找。
+
+微信优化的方式更可靠，因为：
+- 不依赖类名（类名可能在新版微信中变化）
+- 按尺寸判断能精确找到资料卡内容容器
+
+### 问题 #4：HideCard 时微信原始 ImageView 的 hidden 状态未正确处理（🟡 重要）
+
+微信优化在 HideCard 时的 ImageView 处理逻辑：
+
+```objc
+// 非 ImageView → hidden = YES
+// ImageView + 不是背景图标记 → hidden = YES（微信优化中这些也被隐藏）
+// ImageView + 是背景图标记 → hidden = NO（保留自定义背景图）
+```
+
+MioPlugin 当前代码（第 379-389 行）：
+
+```objc
+for (UIView *sub in cellViewCard.subviews) {
+    if (![sub isKindOfClass:[UIImageView class]] &&
+        ![sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+        sub.hidden = YES;
+    } else if ([sub isKindOfClass:[UIImageView class]]) {
+        UIImageView *iv = (UIImageView *)sub;
+        if (iv.tag != kBgImageTagCard) {
+            iv.hidden = YES;
+        }
+    }
 }
 ```
 
-**关键逻辑**：
-- **HideCard=YES 时**：跳过 MMUIButton 背景色设置，不遮挡背景图
-- **ContentMode=3（特殊模式）时**：跳过圆角和 masksToBounds，让背景图全宽显示
+这段代码**保留了 MMUIButton 不隐藏**，但问题是微信的 MMUIButton 内部仍然有原始内容（头像、文字等），这些内容没有被隐藏。微信优化的做法是**也隐藏 MMUIButton**（`hidden = YES`），但同时给其子视图设置渐变背景色作为遮罩。
 
-### 修复方案
+---
 
-修改 `replaced_MMUIButton_layoutSubviews`，在处理资料卡时增加 HideCard 和背景图的条件判断：
+## 4️⃣ 修复方案
+
+### 修复 #1：在 Cell Hook 的 HideCard 分支中清除 `m_bgImageView`
+
+在 [ListCornerRadiusHook.m](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m) 的 HideCard 分支中，添加清除 `m_bgImageView` 的逻辑：
 
 ```objc
-// 修复位置：ListCornerRadiusHook.m 第 230-288 行
-// 在 orig 调用之后，增加条件判断
+if (config.cardBgHidden) {
+    // ★ 清除微信原始的 m_bgImageView（防止微信恢复原始卡片）
+    for (UIView *sub in cellViewCard.subviews) {
+        Ivar bgIvar = class_getInstanceVariable([sub class], "m_bgImageView");
+        if (bgIvar) {
+            object_setIvar(sub, bgIvar, nil);
+        }
+    }
 
-if (_orig_MMUIButton_layoutSubviews) {
-    ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+    // 隐藏所有非自定义背景图的内容
+    for (UIView *sub in cellViewCard.subviews) {
+        if ([sub isKindOfClass:[UIImageView class]]) {
+            UIImageView *iv = (UIImageView *)sub;
+            if (iv.tag != kBgImageTagCard) {
+                iv.hidden = YES;
+            }
+        } else {
+            sub.hidden = YES;
+        }
+    }
+
+    cellViewCard.backgroundColor = [UIColor clearColor];
+
+    // ★ 给 MMUIButton 的子视图设置渐变遮罩色
+    UIColor *hideColor = [config colorFromHex:isDark
+        ? config.listCardDarkBgColor : config.listCardLightBgColor];
+    for (UIView *sub in cellViewCard.subviews) {
+        if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+            sub.backgroundColor = [UIColor clearColor];
+            sub.layer.cornerRadius = 0;
+            sub.layer.borderWidth = 0;
+            sub.layer.masksToBounds = NO;
+            if (hideColor) {
+                for (UIView *btnSub in sub.subviews) {
+                    btnSub.backgroundColor = hideColor;
+                }
+            }
+        }
+    }
 }
+```
 
-PluginConfig *config = [PluginConfig shared];
+### 修复 #2：在 MMUIButton Hook 的 HideCard 分支中也清除 `m_bgImageView`
 
-// ★ 新增：如果 cardBgEnabled 且 cardBgHidden，跳过背景色设置
+当前 MMUIButton Hook 的 HideCard 分支（第 235-244 行）需要补充 `m_bgImageView` 清除：
+
+```objc
 if (config.cardBgEnabled && config.cardBgHidden) {
-    // HideCard 模式：不设置 MMUIButton 背景色，让背景图可见
     ((UIView *)self).backgroundColor = [UIColor clearColor];
     ((UIView *)self).layer.masksToBounds = NO;
+    ((UIView *)self).layer.cornerRadius = 0;
+    ((UIView *)self).layer.borderWidth = 0;
+
+    // ★ 清除微信原始的 m_bgImageView
+    Ivar bgIvar = class_getInstanceVariable([(id)self class], "m_bgImageView");
+    if (bgIvar) {
+        object_setIvar((id)self, bgIvar, nil);
+    }
+
+    // ★ 隐藏 MMUIButton 内部的所有子视图（头像、文字等）
+    for (UIView *sub in ((UIView *)self).subviews) {
+        sub.hidden = YES;
+    }
+
+    if (config.listHideRightQRCode) {
+        [ListCornerRadiusHook wp_hideQRButtonInCell:(UIView *)self];
+    }
     return;
 }
+```
 
-// ★ 新增：如果 cardBgEnabled 且 ContentMode==3，不设置 masksToBounds
-BOOL shouldApplyCorner = YES;
-if (config.cardBgEnabled && config.cardBgFillMode == 3) {
-    shouldApplyCorner = NO;
-}
+### 修复 #3：确保 HideCard 时微信原始 ImageView 也被隐藏
 
-// ★ 新增：如果 cardBgEnabled 且非 HideCard，使用渐变背景色
-if (config.cardBgEnabled && !config.cardBgHidden) {
-    BOOL isDark = NO;
-    if (@available(iOS 13.0, *)) {
-        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+当前代码在 Cell Hook 第 413-423 行有一个**独立的 ImageView 清理循环**，在 HideCard 分支之后执行。这个循环会隐藏 `image != nil` 且不是自定义背景图的 ImageView。但问题是：
+
+1. 这个循环在 HideCard 分支**之后**执行
+2. HideCard 分支中已经隐藏了非 UIImageView 的子视图
+3. 但微信的 MMUIButton 内部的 ImageView（如 MMHeadImageView）**不在 Cell 的直接 subviews 中**，而是在 MMUIButton 的 subviews 中
+
+需要确保 MMUIButton 内部的 ImageView 也被隐藏：
+
+```objc
+// 在 HideCard 分支中，遍历 MMUIButton 的子视图
+for (UIView *sub in cellViewCard.subviews) {
+    if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+        // ★ 递归隐藏 MMUIButton 内部的所有 ImageView
+        void (^hideImageViews)(NSArray<UIView *> *) = ^(NSArray<UIView *> *views) {
+            for (UIView *v in views) {
+                if ([v isKindOfClass:[UIImageView class]]) {
+                    v.hidden = YES;
+                }
+                hideImageViews(v.subviews);
+            }
+        };
+        hideImageViews(sub.subviews);
     }
-    UIColor *cardBg = [config colorFromHex:isDark
-        ? config.listCardDarkBgColor : config.listCardLightBgColor];
-    if (cardBg) {
-        ((UIView *)self).backgroundColor = cardBg;
-    }
-}
-
-if (shouldApplyCorner) {
-    NSInteger radius = (NSInteger)config.listCellCornerRadius;
-    if (radius == 0) radius = 18;
-
-    [ListCornerRadiusHook wp_applyProfileCardCorner:(UIView *)self
-                                       cornerRadius:radius
-                                            isDark:isDark];
-}
-
-if (config.listHideRightQRCode) {
-    [ListCornerRadiusHook wp_hideQRButtonInCell:(UIView *)self];
-}
-
-if (shouldApplyCorner) {
-    ((UIView *)self).layer.masksToBounds = YES;
 }
 ```
 
 ---
 
-## 3️⃣ Bug #2：Cell Hook 中 HideCard 后未清理 Cell 自身的样式属性（🔴 根因）
+## 5️⃣ 完整修复代码
 
-### 问题描述
+### 5.1 修复 `replaced_MMTableViewCell_layoutSubviews` 的 HideCard 分支
 
-微信优化的 Cell Hook 在 HideCard 模式下，**先清理 Cell 自身的样式**，再隐藏子视图：
-
-```c
-// 反编译代码第 6506-6517 行
-FUN_000caa60(0);    // setBorderWidth:0
-FUN_000cb180(0);    // setCornerRadius:0
-FUN_000cc8c0(0);    // setMasksToBounds:NO
-```
-
-同时在非 HideCard 模式下也做了同样的清理（第 6506-6517 行在 HideCard 分支之外）：
-
-```c
-// 这些操作在 HideCard 判断之后、背景图创建之前执行
-FUN_000caa60(0);    // Cell 的 borderWidth = 0
-FUN_000cb180(0);    // Cell 的 cornerRadius = 0
-FUN_000cc8c0(0);    // Cell 的 masksToBounds = NO
-```
-
-**MioPlugin 的做法**：
-
-在 [ListCornerRadiusHook.m:339-363](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L339-363) 中，HideCard 分支确实做了部分清理：
+将 [ListCornerRadiusHook.m](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m) 第 377-411 行替换为：
 
 ```objc
-cellViewCard.backgroundColor = [UIColor clearColor];
-cellViewCard.layer.borderWidth = 0;
-cellViewCard.layer.cornerRadius = 0;
-cellViewCard.layer.masksToBounds = NO;   // ← 这行是对的
+        if (config.cardBgHidden) {
+            // ★ Step 1: 清除微信原始的 m_bgImageView（防止微信恢复原始卡片）
+            for (UIView *sub in cellViewCard.subviews) {
+                Ivar bgIvar = class_getInstanceVariable([sub class], "m_bgImageView");
+                if (bgIvar) {
+                    object_setIvar(sub, bgIvar, nil);
+                }
+            }
+
+            // ★ Step 2: 隐藏所有非自定义背景图的内容
+            for (UIView *sub in cellViewCard.subviews) {
+                if ([sub isKindOfClass:[UIImageView class]]) {
+                    UIImageView *iv = (UIImageView *)sub;
+                    if (iv.tag != kBgImageTagCard) {
+                        iv.hidden = YES;
+                    }
+                } else {
+                    sub.hidden = YES;
+                }
+            }
+
+            cellViewCard.backgroundColor = [UIColor clearColor];
+
+            // ★ Step 3: 处理 MMUIButton —— 清除样式，设置渐变遮罩
+            UIColor *hideColor = [config colorFromHex:isDark
+                ? config.listCardDarkBgColor : config.listCardLightBgColor];
+            for (UIView *sub in cellViewCard.subviews) {
+                if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+                    sub.backgroundColor = [UIColor clearColor];
+                    sub.layer.cornerRadius = 0;
+                    sub.layer.borderWidth = 0;
+                    sub.layer.masksToBounds = NO;
+
+                    // ★ Step 4: 隐藏 MMUIButton 内部的所有 ImageView
+                    void (^hideImageViews)(NSArray<UIView *> *) = ^(NSArray<UIView *> *views) {
+                        for (UIView *v in views) {
+                            if ([v isKindOfClass:[UIImageView class]]) {
+                                v.hidden = YES;
+                            }
+                            hideImageViews(v.subviews);
+                        }
+                    };
+                    hideImageViews(sub.subviews);
+
+                    // ★ Step 5: 给 MMUIButton 的非 ImageView 子视图设置渐变遮罩色
+                    if (hideColor) {
+                        for (UIView *btnSub in sub.subviews) {
+                            if (![btnSub isKindOfClass:[UIImageView class]]) {
+                                btnSub.backgroundColor = hideColor;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            cellViewCard.backgroundColor = [UIColor clearColor];
+        }
 ```
 
-但问题是：**这些清理只在 HideCard 分支中做了**。当 `cardBgEnabled=YES` 但 `cardBgHidden=NO` 时，Cell 的 `masksToBounds` 可能仍为 YES（由之前的 layoutSubviews 或其他 Hook 设置），导致背景图被裁剪。
+### 5.2 修复 `replaced_MMUIButton_layoutSubviews` 的 HideCard 分支
 
-更关键的是，微信优化在 **背景图创建之前** 就清理了 Cell 样式，而 MioPlugin 在 HideCard 分支中清理，但 **非 HideCard 时没有清理**。
-
-### 修复方案
-
-在 Cell Hook 的背景图处理流程中，**无论是否 HideCard，都清理 Cell 自身样式**：
+将 [ListCornerRadiusHook.m](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m) 第 234-244 行替换为：
 
 ```objc
-// 修复位置：ListCornerRadiusHook.m 第 337 行之后（HideCard 分支结束后）
-// 在背景图创建之前，统一清理 Cell 样式
-
-// ★ 无论是否 HideCard，都清理 Cell 自身样式
-cellViewCard.layer.borderWidth = 0;
-cellViewCard.layer.cornerRadius = 0;
-cellViewCard.layer.masksToBounds = NO;
-if (!config.cardBgHidden) {
-    // 非 HideCard 时也设置透明背景，让背景图可见
-    // MMUIButton Hook 会负责设置 MMUIButton 的背景色
-    cellViewCard.backgroundColor = [UIColor clearColor];
-}
-```
-
----
-
-## 4️⃣ Bug #3：Cell Hook 调用 orig 的时机导致布局被覆盖（🟡 重要）
-
-### 问题描述
-
-**微信优化**的 Cell Hook 调用顺序：
-
-```
-Phase 0: 快速过滤
-Phase 1: 高度调整
-Phase 2: HideCard 处理
-Phase 3: 清理 Cell 样式（alpha=0, borderWidth=0, cornerRadius=0, masksToBounds=NO）
-Phase 4: 创建/复用背景 UIImageView
-Phase 5: 计算 frame
-Phase 6: 图层排序
-Phase 7: 异步加载图片
-Phase 8: 调用 orig ← 最后调用
-```
-
-**MioPlugin** 的 Cell Hook 调用顺序：
-
-```
-Phase 1: 高度调整
-Phase 2: 间距调整
-→ 调用 orig ← 中间调用！
-Phase 3: HideCard 处理
-Phase 4: 清理 ImageView
-Phase 5: 创建背景 UIImageView
-Phase 6: 计算 frame
-Phase 7: 图层排序
-Phase 8: 异步加载图片
-```
-
-**问题**：MioPlugin 在中间调用 orig，orig 执行后可能会重新布局子视图，覆盖掉之前的高度/间距调整。然后后续的 HideCard 和背景图处理虽然能工作，但 orig 造成的布局变化可能导致闪烁或尺寸不一致。
-
-### 修复方案
-
-将 orig 调用移到所有处理之后（与微信优化一致）：
-
-```objc
-// 修复位置：ListCornerRadiusHook.m 第 312-429 行
-// 将 orig 调用从第 333 行移到第 428 行之前
-
-// 原代码：
-// if (_orig_MMTableViewCell_layoutSubviews) {
-//     ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-// }
-// ... 所有背景图处理 ...
-// return;
-
-// 修改为：
-// ... 所有背景图处理 ...
-if (_orig_MMTableViewCell_layoutSubviews) {
-    ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-}
-return;
-```
-
-**注意**：这个修改需要谨慎测试，因为 orig 的调用时机变化可能影响其他依赖 orig 先执行的逻辑。微信优化之所以能最后调 orig，是因为它使用了**链式 Hook**（Cell Hook → 高度修正中间层 → 原始实现），orig 的返回值不会覆盖之前的设置。
-
----
-
-## 5️⃣ 设计缺陷 #1：背景图加载后 Cell 的 masksToBounds 被重新设置
-
-### 问题描述
-
-即使 Cell Hook 中设置了 `masksToBounds = NO`，由于 `layoutSubviews` 会被多次调用，且 MMUIButton Hook 会设置 `masksToBounds = YES`，背景图仍然会被裁剪。
-
-微信优化的解决方案是 **分层控制**：
-- Cell 层：`masksToBounds = NO`（不裁剪，让背景图可以溢出）
-- MMUIButton 层：`masksToBounds = YES`（裁剪内容，圆角生效）
-
-这样背景图在 Cell 层不受裁剪，而内容在 MMUIButton 层被圆角裁剪，两者互不干扰。
-
-### 修复方案
-
-确保 Cell Hook 中始终设置 `masksToBounds = NO`，圆角裁剪由 MMUIButton 层负责：
-
-```objc
-// Cell Hook 中（cardBgEnabled 分支）
-cellViewCard.layer.masksToBounds = NO;  // Cell 不裁剪
-
-// MMUIButton Hook 中
-((UIView *)self).layer.masksToBounds = YES;  // MMUIButton 裁剪（圆角生效）
-```
-
----
-
-## 6️⃣ 设计缺陷 #2：背景图 frame 计算未考虑 MMUIButton 的偏移
-
-### 问题描述
-
-微信优化中，背景图的 frame 是基于 **Cell 的 bounds** 计算的，但背景图是添加到 **Cell** 上的。而 MMUIButton 在 Cell 内部有 margin 偏移（由圆角功能设置），所以背景图和 MMUIButton 的位置需要对齐。
-
-微信优化通过 `FUN_00008e48` 计算偏移量，并在 `FUN_00008bbc`（异步帧更新）中重新计算 frame，确保背景图位置正确。
-
-MioPlugin 的 frame 计算（[第386-416行](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L386-416)）：
-
-```objc
-CGRect bounds = cellViewCard.bounds;
-CGFloat margin = config.listCellMargin;
-if (margin <= 0) margin = 9;
-
-CGFloat imgW = bounds.size.width;
-CGFloat imgH = bounds.size.height;
-CGFloat imgX = 0;
-CGFloat imgY = 0;
-
-if (config.listCornerRadiusEnabled && config.cardBgFillMode != 3) {
-    imgW -= margin * 2;
-    imgX = margin;
-}
-```
-
-这个计算是正确的，但需要确保 **MMUIButton 的 frame 与背景图的 frame 一致**。当 MMUIButton Hook 修改了 MMUIButton 的 frame（添加 margin 偏移）时，背景图也需要相应的偏移。
-
-### 修复方案
-
-确保 MMUIButton Hook 中 MMUIButton 的 frame 调整与背景图 frame 计算使用相同的 margin 值。当前代码已经使用 `config.listCellMargin`，基本一致，但需要验证 MMUIButton Hook 中的 frame 调整逻辑。
-
----
-
-## 7️⃣ 完整修复代码
-
-### 7.1 修复 `replaced_MMUIButton_layoutSubviews`
-
-**文件**: [ListCornerRadiusHook.m](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L175-289)
-
-将第 230-288 行替换为：
-
-```objc
-    if (_orig_MMUIButton_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
-    }
-
-    PluginConfig *config = [PluginConfig shared];
-
-    // ★ 资料卡背景功能：HideCard 模式下不设置 MMUIButton 背景色和圆角
+    // ★ 资料卡背景功能：HideCard 模式下清除所有微信原始内容
     if (config.cardBgEnabled && config.cardBgHidden) {
         ((UIView *)self).backgroundColor = [UIColor clearColor];
         ((UIView *)self).layer.masksToBounds = NO;
         ((UIView *)self).layer.cornerRadius = 0;
         ((UIView *)self).layer.borderWidth = 0;
+
+        // ★ 清除微信原始的 m_bgImageView
+        Ivar bgIvar = class_getInstanceVariable([(id)self class], "m_bgImageView");
+        if (bgIvar) {
+            object_setIvar((id)self, bgIvar, nil);
+        }
+
+        // ★ 隐藏 MMUIButton 内部所有子视图
+        for (UIView *sub in ((UIView *)self).subviews) {
+            sub.hidden = YES;
+        }
+
         if (config.listHideRightQRCode) {
             [ListCornerRadiusHook wp_hideQRButtonInCell:(UIView *)self];
         }
         return;
     }
-
-    // ★ 资料卡背景功能：ContentMode==3 时不设置 masksToBounds（全宽模式）
-    BOOL skipMasksToBounds = NO;
-    if (config.cardBgEnabled && config.cardBgFillMode == 3) {
-        skipMasksToBounds = YES;
-    }
-
-    CGFloat margin = config.listCellMargin;
-
-    NSMutableArray *labelFrames = nil;
-    if (margin > 0) {
-        labelFrames = [NSMutableArray array];
-        for (UIView *sub in ((UIView *)self).subviews) {
-            if ([sub isKindOfClass:[UILabel class]]) {
-                [labelFrames addObject:[NSValue valueWithCGRect:sub.frame]];
-            }
-        }
-    }
-
-    if (margin > 0) {
-        UIView *cell = ((UIView *)self).superview;
-        if (cell) {
-            CGFloat containerW = cell.superview ? cell.superview.bounds.size.width
-                                                : [UIScreen mainScreen].bounds.size.width;
-            CGFloat targetW = containerW - 2.0 * margin;
-            CGFloat currentH = ((UIView *)self).frame.size.height;
-            ((UIView *)self).frame = CGRectMake(margin, 0, targetW, currentH);
-        }
-    }
-
-    if (margin > 0 && labelFrames.count > 0) {
-        NSInteger idx = 0;
-        for (UIView *sub in ((UIView *)self).subviews) {
-            if ([sub isKindOfClass:[UILabel class]] && idx < labelFrames.count) {
-                CGRect originalFrame = [labelFrames[idx] CGRectValue];
-                CGRect newFrame = originalFrame;
-                newFrame.size.width = originalFrame.size.width - 2.0 * margin;
-                if (newFrame.size.width > 0) {
-                    sub.frame = newFrame;
-                    [(UILabel *)sub sizeToFit];
-                }
-                idx++;
-            }
-        }
-    }
-
-    BOOL isDark = NO;
-    if (@available(iOS 13.0, *)) {
-        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-    }
-
-    // ★ 资料卡背景功能：非 HideCard 时设置卡片背景色
-    if (config.cardBgEnabled) {
-        UIColor *cardBg = [config colorFromHex:isDark
-            ? config.listCardDarkBgColor : config.listCardLightBgColor];
-        if (cardBg) {
-            ((UIView *)self).backgroundColor = cardBg;
-        }
-    }
-
-    NSInteger radius = (NSInteger)config.listCellCornerRadius;
-    if (radius == 0) radius = 18;
-
-    [ListCornerRadiusHook wp_applyProfileCardCorner:(UIView *)self
-                                       cornerRadius:radius
-                                            isDark:isDark];
-
-    if (config.listHideRightQRCode) {
-        [ListCornerRadiusHook wp_hideQRButtonInCell:(UIView *)self];
-    }
-
-    if (!skipMasksToBounds) {
-        ((UIView *)self).layer.masksToBounds = YES;
-    } else {
-        ((UIView *)self).layer.masksToBounds = NO;
-    }
-```
-
-### 7.2 修复 `replaced_MMTableViewCell_layoutSubviews` 中的 Cell 样式清理
-
-**文件**: [ListCornerRadiusHook.m](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L312-429)
-
-在第 336 行（`BOOL isDark = ...` 之后）添加 Cell 样式清理：
-
-```objc
-        BOOL isDark = [ListCornerRadiusHook wp_isCurrentDarkMode];
-
-        // ★ 无论是否 HideCard，都清理 Cell 自身样式
-        // 让 Cell 完全透明，背景图和圆角由 MMUIButton 层控制
-        cellViewCard.layer.borderWidth = 0;
-        cellViewCard.layer.cornerRadius = 0;
-        cellViewCard.layer.masksToBounds = NO;
-
-        if (config.cardBgHidden) {
-            // HideCard 模式：隐藏所有非背景图内容
-            for (UIView *sub in cellViewCard.subviews) {
-                if (![sub isKindOfClass:[UIImageView class]]) {
-                    sub.hidden = YES;
-                } else {
-                    UIImageView *iv = (UIImageView *)sub;
-                    if (iv.tag != kBgImageTagCard) {
-                        iv.hidden = YES;
-                    }
-                }
-            }
-            cellViewCard.backgroundColor = [UIColor clearColor];
-
-            // ★ HideCard 时也清理 MMUIButton 的样式
-            for (UIView *sub in cellViewCard.subviews) {
-                if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-                    sub.backgroundColor = [UIColor clearColor];
-                    sub.layer.cornerRadius = 0;
-                    sub.layer.borderWidth = 0;
-                    sub.layer.masksToBounds = NO;
-                }
-            }
-
-            UIColor *hideColor = [config colorFromHex:isDark
-                ? config.listCardDarkBgColor : config.listCardLightBgColor];
-            if (hideColor) {
-                for (UIView *sub in cellViewCard.subviews) {
-                    if (sub.tag != kBgImageTagCard) {
-                        sub.backgroundColor = hideColor;
-                    }
-                }
-            }
-        } else {
-            // ★ 非 HideCard 时也设置透明背景
-            cellViewCard.backgroundColor = [UIColor clearColor];
-        }
-```
-
-### 7.3 修复 HideCard 分支中 MMUIButton 的 hidden 处理
-
-当前 HideCard 逻辑隐藏了所有非 UIImageView 的子视图，但 **MMUIButton 本身也是 UIView（不是 UIImageView）**，所以它会被 hidden。然而 MMUIButton 内部包含了头像和文字，如果 MMUIButton 被 hidden，那背景图之上的渐变遮罩也不会显示。
-
-微信优化的做法是：**不隐藏 MMUIButton**，而是给 MMUIButton 的子视图设置渐变背景色作为遮罩。
-
-修复 HideCard 逻辑，排除 MMUIButton：
-
-```objc
-        if (config.cardBgHidden) {
-            for (UIView *sub in cellViewCard.subviews) {
-                // ★ 不隐藏 MMUIButton（它是内容容器，需要显示渐变遮罩）
-                if (![sub isKindOfClass:[UIImageView class]] &&
-                    ![sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-                    sub.hidden = YES;
-                } else if ([sub isKindOfClass:[UIImageView class]]) {
-                    UIImageView *iv = (UIImageView *)sub;
-                    if (iv.tag != kBgImageTagCard) {
-                        iv.hidden = YES;
-                    }
-                }
-            }
-            cellViewCard.backgroundColor = [UIColor clearColor];
-
-            // MMUIButton 设置为透明，但保留其子视图用于渐变遮罩
-            for (UIView *sub in cellViewCard.subviews) {
-                if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-                    sub.backgroundColor = [UIColor clearColor];
-                    sub.layer.cornerRadius = 0;
-                    sub.layer.borderWidth = 0;
-                    sub.layer.masksToBounds = NO;
-                    // 给 MMUIButton 的子视图设置渐变色作为遮罩
-                    UIColor *hideColor = [config colorFromHex:isDark
-                        ? config.listCardDarkBgColor : config.listCardLightBgColor];
-                    if (hideColor) {
-                        for (UIView *btnSub in sub.subviews) {
-                            btnSub.backgroundColor = hideColor;
-                        }
-                    }
-                }
-            }
-        }
 ```
 
 ---
 
-## 8️⃣ Bug 影响链路图
+## 6️⃣ Bug 影响链路图
 
-```
-用户开启 cardBgEnabled
-  │
-  ├─ Cell Hook 执行
-  │   ├─ 设置 Cell backgroundColor = clearColor ✅
-  │   ├─ 创建背景 UIImageView ✅
-  │   ├─ 计算 frame ✅
-  │   └─ 异步加载图片 ✅
-  │
-  └─ MMUIButton Hook 执行 ← 问题出在这里！
-      ├─ wp_applyProfileCardCorner
-      │   ├─ backgroundColor = cardBg (不透明) ← ❌ 遮住了背景图
-      │   ├─ cornerRadius = 18 ← ❌ 可能裁剪背景图
-      │   └─ masksToBounds = YES ← ❌ 裁剪了背景图
-      └─ layer.masksToBounds = YES ← ❌ 再次确认裁剪
-
-结果：背景图被 MMUIButton 的不透明背景色完全遮挡
-```
+### 当前问题：HideCard 显示原始卡片
 
 ```
 用户开启 cardBgHidden
   │
   ├─ Cell Hook 执行
-  │   ├─ 隐藏非 UIImageView 子视图
-  │   │   └─ MMUIButton 也被 hidden ← ❌ 渐变遮罩无法显示
   │   ├─ 设置 Cell backgroundColor = clearColor ✅
-  │   └─ 创建背景图 ✅
+  │   ├─ 隐藏非 UIImageView 子视图（包括 MMUIButton）✅
+  │   ├─ 设置 MMUIButton backgroundColor = clearColor ✅
+  │   ├─ 设置 MMUIButton masksToBounds = NO ✅
+  │   └─ ❌ 未清除 m_bgImageView → 微信在下次 layoutSubviews 恢复原始内容
+  │
+  ├─ 微信原始 layoutSubviews 执行（通过 orig 调用）
+  │   ├─ 检测到 m_bgImageView != nil → 重新绘制头像和背景
+  │   ├─ 恢复 MMUIButton 的 backgroundColor → 原始卡片背景色
+  │   └─ 恢复 MMUIButton 的 masksToBounds → YES
   │
   └─ MMUIButton Hook 执行
-      ├─ wp_applyProfileCardCorner
-      │   └─ backgroundColor = cardBg ← ❌ MMUIButton 虽然 hidden，
-      │                               但如果后续 layoutSubviews 取消 hidden，
-      │                               不透明背景色又会遮住背景图
-      └─ masksToBounds = YES ← ❌
+      ├─ 检测到 HideCard=YES → 设置 clearColor ✅
+      ├─ 设置 masksToBounds = NO ✅
+      └─ ❌ 但微信原始 layoutSubviews 已经先执行了，恢复了内容
+      └─ ❌ 未清除 m_bgImageView → 下次 layoutSubviews 又恢复
 
-结果：HideCard 模式下背景图可能可见，但渐变遮罩不显示；
-      或者 MMUIButton 的背景色遮挡了背景图
+结果：微信原始卡片内容反复被恢复，HideCard 无效
+```
+
+### 修复后的预期链路
+
+```
+用户开启 cardBgHidden
+  │
+  ├─ Cell Hook 执行
+  │   ├─ 清除 m_bgImageView = nil ★ 防止微信恢复
+  │   ├─ 隐藏所有非自定义背景图内容 ★
+  │   ├─ 设置 Cell backgroundColor = clearColor ✅
+  │   ├─ MMUIButton: clearColor + masksToBounds = NO ✅
+  │   ├─ 隐藏 MMUIButton 内部所有 ImageView ★
+  │   └─ 给非 ImageView 子视图设置渐变遮罩色 ★
+  │
+  ├─ 微信原始 layoutSubviews 执行
+  │   ├─ m_bgImageView == nil → 不绘制原始头像背景 ✅
+  │   └─ 其他内容已被 hidden = YES → 不可见 ✅
+  │
+  └─ MMUIButton Hook 执行
+      ├─ 检测到 HideCard=YES → 设置 clearColor ✅
+      ├─ 清除 m_bgImageView = nil ★ 双重保险
+      ├─ 隐藏所有子视图 ★
+      └─ masksToBounds = NO ✅
+
+结果：只显示自定义背景图 + 渐变遮罩，原始卡片内容完全隐藏
 ```
 
 ---
 
-## 9️⃣ 修复优先级
+## 7️⃣ 修复优先级
 
-| 优先级 | Bug | 影响 | 修复难度 |
-|:------:|-----|------|:--------:|
-| 🔴 P0 | MMUIButton Hook 覆盖背景图效果 | 背景图完全不可见 | 中 |
-| 🔴 P0 | HideCard 时 MMUIButton 处理不当 | 隐藏功能不生效 | 中 |
-| 🟡 P1 | Cell 样式清理不完整 | 非 HideCard 时背景图可能被裁剪 | 低 |
-| 🟢 P2 | orig 调用时机 | 可能布局闪烁 | 高（需谨慎） |
+| 优先级 | Bug | 影响 | 修复方式 |
+|:------:|-----|------|---------|
+| 🔴 P0 | 未清除 `m_bgImageView` | 微信恢复原始卡片，HideCard 无效 | Cell Hook + MMUIButton Hook 中清除 |
+| 🔴 P0 | MMUIButton 内部 ImageView 未隐藏 | 头像等仍可见 | 递归隐藏 MMUIButton 子视图中的 ImageView |
+| 🟡 P1 | MMUIButton Hook 中未隐藏子视图 | 文字等仍可见 | HideCard 分支中隐藏所有子视图 |
 
 ---
 
-## 🔟 验证步骤
+## 8️⃣ 验证步骤
 
 修复后需要验证以下场景：
 
-1. **cardBgEnabled=YES, cardBgHidden=NO**：背景图可见，卡片内容正常显示
-2. **cardBgEnabled=YES, cardBgHidden=YES**：只显示背景图+渐变遮罩，卡片内容隐藏
-3. **cardBgEnabled=YES, FillMode=3**：背景图全宽显示，不受 margin 影响
-4. **cardBgEnabled=YES, 圆角开启**：背景图与圆角区域对齐
-5. **cardBgEnabled=YES, 圆角关闭**：背景图全宽显示
-6. **cardBgEnabled=YES, 图层=顶层**：背景图在内容之上
-7. **cardBgEnabled=YES, 图层=底层**：背景图在内容之下
-8. **深色/浅色模式切换**：背景图和颜色正确切换
-9. **GIF 动图**：动画正常播放
-10. **边框功能**：边框在背景图模式下正常显示
+1. **cardBgEnabled=YES, cardBgHidden=YES, 有背景图**：只显示背景图+渐变遮罩，原始卡片内容完全隐藏
+2. **cardBgEnabled=YES, cardBgHidden=YES, 无背景图**：显示空白/渐变遮罩，原始卡片内容完全隐藏
+3. **cardBgEnabled=YES, cardBgHidden=NO**：背景图可见，卡片内容正常显示
+4. **切换 HideCard 开关**：从隐藏切换到显示，内容正确恢复
+5. **深色/浅色模式切换**：渐变遮罩颜色正确切换
+6. **多次进出"我"页面**：HideCard 效果稳定，不被微信原始逻辑覆盖

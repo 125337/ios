@@ -231,12 +231,24 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
     }
 
-    // ★ 资料卡背景功能：HideCard 模式下不设置 MMUIButton 背景色和圆角
+    // ★ 资料卡背景功能：HideCard 模式下清除所有微信原始内容
     if (config.cardBgEnabled && config.cardBgHidden) {
         ((UIView *)self).backgroundColor = [UIColor clearColor];
         ((UIView *)self).layer.masksToBounds = NO;
         ((UIView *)self).layer.cornerRadius = 0;
         ((UIView *)self).layer.borderWidth = 0;
+
+        // ★ 清除微信原始的 m_bgImageView
+        Ivar bgIvar = class_getInstanceVariable([(id)self class], "m_bgImageView");
+        if (bgIvar) {
+            object_setIvar((id)self, bgIvar, nil);
+        }
+
+        // ★ 隐藏 MMUIButton 内部所有子视图
+        for (UIView *sub in ((UIView *)self).subviews) {
+            sub.hidden = YES;
+        }
+
         if (config.listHideRightQRCode) {
             [ListCornerRadiusHook wp_hideQRButtonInCell:(UIView *)self];
         }
@@ -375,32 +387,55 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         cellViewCard.layer.masksToBounds = NO;
 
         if (config.cardBgHidden) {
-            // HideCard 模式：隐藏非背景图内容，但保留 MMUIButton（用于渐变遮罩）
+            // ★ Step 1: 清除微信原始的 m_bgImageView（防止微信恢复原始卡片）
             for (UIView *sub in cellViewCard.subviews) {
-                if (![sub isKindOfClass:[UIImageView class]] &&
-                    ![sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-                    sub.hidden = YES;
-                } else if ([sub isKindOfClass:[UIImageView class]]) {
+                Ivar bgIvar = class_getInstanceVariable([sub class], "m_bgImageView");
+                if (bgIvar) {
+                    object_setIvar(sub, bgIvar, nil);
+                }
+            }
+
+            // ★ Step 2: 隐藏所有非自定义背景图的内容
+            for (UIView *sub in cellViewCard.subviews) {
+                if ([sub isKindOfClass:[UIImageView class]]) {
                     UIImageView *iv = (UIImageView *)sub;
                     if (iv.tag != kBgImageTagCard) {
                         iv.hidden = YES;
                     }
+                } else {
+                    sub.hidden = YES;
                 }
             }
+
             cellViewCard.backgroundColor = [UIColor clearColor];
 
-            // HideCard 时清理 MMUIButton 的样式，但保留其子视图用于渐变遮罩
+            // ★ Step 3: 处理 MMUIButton —— 清除样式，设置渐变遮罩
+            UIColor *hideColor = [config colorFromHex:isDark
+                ? config.listCardDarkBgColor : config.listCardLightBgColor];
             for (UIView *sub in cellViewCard.subviews) {
                 if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
                     sub.backgroundColor = [UIColor clearColor];
                     sub.layer.cornerRadius = 0;
                     sub.layer.borderWidth = 0;
                     sub.layer.masksToBounds = NO;
-                    UIColor *hideColor = [config colorFromHex:isDark
-                        ? config.listCardDarkBgColor : config.listCardLightBgColor];
+
+                    // ★ Step 4: 递归隐藏 MMUIButton 内部的所有 ImageView
+                    void (^hideImageViews)(NSArray<UIView *> *) = ^(NSArray<UIView *> *views) {
+                        for (UIView *v in views) {
+                            if ([v isKindOfClass:[UIImageView class]]) {
+                                v.hidden = YES;
+                            }
+                            hideImageViews(v.subviews);
+                        }
+                    };
+                    hideImageViews(sub.subviews);
+
+                    // ★ Step 5: 给 MMUIButton 的非 ImageView 子视图设置渐变遮罩色
                     if (hideColor) {
                         for (UIView *btnSub in sub.subviews) {
-                            btnSub.backgroundColor = hideColor;
+                            if (![btnSub isKindOfClass:[UIImageView class]]) {
+                                btnSub.backgroundColor = hideColor;
+                            }
                         }
                     }
                 }
