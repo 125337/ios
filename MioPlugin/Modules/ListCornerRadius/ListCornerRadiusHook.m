@@ -207,7 +207,8 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
             CGFloat containerW = cell.superview ? cell.superview.bounds.size.width
                                                : [UIScreen mainScreen].bounds.size.width;
             CGFloat targetW = containerW - 2.0 * margin;
-            ((UIView *)self).frame = CGRectMake(margin, 0, targetW, cell.bounds.size.height);
+            CGFloat currentH = ((UIView *)self).frame.size.height;
+            ((UIView *)self).frame = CGRectMake(margin, 0, targetW, currentH);
         }
     }
 

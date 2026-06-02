@@ -61,29 +61,58 @@ if (screenW - 2 * margin <= screenW) {  // L8416: always true
 
 ### 修复方案
 
-**方案 A（推荐）**: 在 MMUIButton Hook 中直接设置 MMUIButton 的 frame，使其填满缩窄后的 cell：
+**方案 A（已尝试，有问题）**: 在 MMUIButton Hook 中直接设置 MMUIButton 的 frame：
 
 ```objc
-// 在 replaced_MMUIButton_layoutSubviews 中，设置圆角之前：
-CGFloat margin = config.listCellMargin;
-if (margin > 0 && config.listCornerRadiusEnabled) {
-    UIView *cell = ((UIView *)self).superview;
-    if (cell) {
-        CGFloat containerW = cell.superview ? cell.superview.bounds.size.width
-                                           : [UIScreen mainScreen].bounds.size.width;
-        CGFloat targetW = containerW - 2.0 * margin;
-        ((UIView *)self).frame = CGRectMake(margin, 0, targetW, cell.bounds.size.height);
+// ❌ 问题：cell.bounds.size.height 在 MMUIButton layoutSubviews 时
+//    可能不是预期的高度，导致卡片高度异常
+CGFloat targetW = containerW - 2.0 * margin;
+((UIView *)self).frame = CGRectMake(margin, 0, targetW, cell.bounds.size.height);
+```
+
+**实测结果**: 圆角生效 ✅，但卡片高度几乎占满整个屏幕 ❌。原因是 `cell.bounds.size.height` 在 MMUIButton 的 `layoutSubviews` 执行时可能返回异常值（如屏幕高度）。
+
+**方案 A 修正**: 使用 MMUIButton 自身高度而非 cell 高度：
+
+```objc
+// ✅ 使用 self.frame.size.height（MMUIButton 当前高度）
+CGFloat currentH = ((UIView *)self).frame.size.height;
+((UIView *)self).frame = CGRectMake(margin, 0, targetW, currentH);
+```
+
+**方案 B（与微信优化一致）**: 不在 MMUIButton Hook 中设 frame，而在 Cell Hook 中对资料卡也设置边距：
+
+```objc
+// Cell Hook 中，资料卡分支的 return 之前：
+if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
+    if (_orig_MMTableViewCell_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
+    
+    // ★ 与普通 Cell 相同的边距逻辑
+    CGFloat margin = config.listCellMargin;
+    if (margin > 0 && config.listCornerRadiusEnabled) {
+        UIView *superview = cellView.superview;
+        CGFloat superX = superview ? superview.frame.origin.x : 0;
+        CGFloat targetX = (margin > superX) ? margin - superX : 0;
+        CGFloat containerW = superview ? superview.bounds.size.width
+                                       : [UIScreen mainScreen].bounds.size.width;
+        CGFloat targetW = containerW - 2.0 * margin;
+        CGFloat currentX = cellView.frame.origin.x;
+        CGFloat currentW = cellView.frame.size.width;
+        if (currentX != targetX || fabs(currentW - targetW) > 0.5) {
+            CGRect f = cellView.frame;
+            f.origin.x = targetX;
+            f.size.width = targetW;
+            cellView.frame = f;
+        }
+    }
+    
+    return;
 }
 ```
 
-**方案 B**: 在 Cell Hook 中，对资料卡 Cell 只修改 `origin.x`（与微信优化一致），不修改 `width`。然后在 MMUIButton Hook 中也只修改 `origin.x`。
-
-**方案 C**: 在 MMUIButton Hook 中设置 `autoresizingMask`，使其跟随 cell 宽度变化：
-
-```objc
-((UIView *)self).autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-```
+然后 MMUIButton Hook 中**完全不设置 frame**，只负责圆角/边框/隐藏二维码。依赖 MMUIButton 原生的 `autoresizingMask` 或 AutoLayout 来跟随 cell 宽度变化。如果仍然不跟随，再考虑在 MMUIButton Hook 中用**自身高度**来设置 frame（方案 A 修正）。
 
 ---
 
