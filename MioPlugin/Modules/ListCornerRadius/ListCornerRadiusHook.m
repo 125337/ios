@@ -305,12 +305,30 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
 
-    // ★ 资料卡背景功能：非 HideCard 时设置卡片背景色
+    // ★ 资料卡背景功能：有背景图时用透明背景，无背景图时用不透明背景
     if (config.cardBgEnabled) {
-        UIColor *cardBg = [config colorFromHex:isDark
-            ? config.listCardDarkBgColor : config.listCardLightBgColor];
-        if (cardBg) {
-            ((UIView *)self).backgroundColor = cardBg;
+        NSString *imagePath = isDark ? config.cardBgDarkImagePath
+                                     : config.cardBgLightImagePath;
+        BOOL hasBgImage = (imagePath.length > 0);
+
+        if (!hasBgImage) {
+            NSString *bgDir = [ListCornerRadiusHook wp_cardBackgroundDirectory];
+            NSFileManager *fm = [NSFileManager defaultManager];
+            NSString *gifPath = [bgDir stringByAppendingPathComponent:
+                isDark ? @"MioCardBgDark.gif" : @"MioCardBgLight.gif"];
+            NSString *pngPath = [bgDir stringByAppendingPathComponent:
+                isDark ? @"MioCardBgDark.png" : @"MioCardBgLight.png"];
+            hasBgImage = [fm fileExistsAtPath:gifPath] || [fm fileExistsAtPath:pngPath];
+        }
+
+        if (hasBgImage) {
+            ((UIView *)self).backgroundColor = [UIColor clearColor];
+        } else {
+            UIColor *cardBg = [config colorFromHex:isDark
+                ? config.listCardDarkBgColor : config.listCardLightBgColor];
+            if (cardBg) {
+                ((UIView *)self).backgroundColor = cardBg;
+            }
         }
     }
 
@@ -983,10 +1001,13 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     cell.layer.cornerRadius = radius;
     cell.layer.masksToBounds = YES;
 
-    UIColor *cardBg = [config colorFromHex:isDark
-        ? config.listCardDarkBgColor : config.listCardLightBgColor];
-    if (cardBg) {
-        cell.backgroundColor = cardBg;
+    // ★ cardBgEnabled 时不设置不透明背景色，避免遮挡 Cell 层的背景图
+    if (!config.cardBgEnabled) {
+        UIColor *cardBg = [config colorFromHex:isDark
+            ? config.listCardDarkBgColor : config.listCardLightBgColor];
+        if (cardBg) {
+            cell.backgroundColor = cardBg;
+        }
     }
 
     if (config.listProfileCardBorderEnabled) {
