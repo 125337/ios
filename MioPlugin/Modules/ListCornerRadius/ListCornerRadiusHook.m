@@ -338,14 +338,24 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             for (UIView *sub in cellViewCard.subviews) {
                 if (![sub isKindOfClass:[UIImageView class]]) {
                     sub.hidden = YES;
+                } else {
+                    UIImageView *iv = (UIImageView *)sub;
+                    if (iv.tag != kBgImageTagCard) {
+                        iv.hidden = YES;
+                    }
                 }
             }
             cellViewCard.backgroundColor = [UIColor clearColor];
+            cellViewCard.layer.borderWidth = 0;
+            cellViewCard.layer.cornerRadius = 0;
+            cellViewCard.layer.masksToBounds = NO;
             UIColor *hideColor = [config colorFromHex:isDark
                 ? config.listCardDarkBgColor : config.listCardLightBgColor];
             if (hideColor) {
                 for (UIView *sub in cellViewCard.subviews) {
-                    sub.backgroundColor = hideColor;
+                    if (sub.tag != kBgImageTagCard) {
+                        sub.backgroundColor = hideColor;
+                    }
                 }
             }
         }
@@ -1057,6 +1067,22 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         NSString *imagePath = isDark ? config.cardBgDarkImagePath
                                      : config.cardBgLightImagePath;
 
+        if (!imagePath || imagePath.length == 0) {
+            NSString *bgDir = [[ListCornerRadiusHook wp_cardBackgroundDirectory] copy];
+            NSFileManager *fm = [NSFileManager defaultManager];
+
+            NSString *gifPath = [bgDir stringByAppendingPathComponent:
+                isDark ? @"MioCardBgDark.gif" : @"MioCardBgLight.gif"];
+            NSString *pngPath = [bgDir stringByAppendingPathComponent:
+                isDark ? @"MioCardBgDark.png" : @"MioCardBgLight.png"];
+
+            if ([fm fileExistsAtPath:gifPath]) {
+                imagePath = gifPath;
+            } else if ([fm fileExistsAtPath:pngPath]) {
+                imagePath = pngPath;
+            }
+        }
+
         if (!imagePath || imagePath.length == 0) return;
 
         NSFileManager *fm = [NSFileManager defaultManager];
@@ -1076,6 +1102,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                         CGImageRef cgImg = CGImageSourceCreateImageAtIndex(source, 0, NULL);
                         resultImage = [UIImage imageWithCGImage:cgImg];
                         CGImageRelease(cgImg);
+                        CFRelease(source);
                     } else {
                         NSMutableArray<UIImage *> *frames = [NSMutableArray array];
                         NSTimeInterval totalDuration = 0;

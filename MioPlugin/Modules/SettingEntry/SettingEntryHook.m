@@ -181,7 +181,11 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *newValue = alert.textFields.firstObject.text ?: @"";
         @try {
-            [config setValue:newValue forKey:key];
+            if (newValue.length == 0 && hint.length > 0) {
+                newValue = hint;
+            }
+            NSDecimalNumber *decimal = [NSDecimalNumber decimalNumberWithString:newValue];
+            [config setValue:decimal forKey:key];
             [config save];
             WPLog(@"Setting", @"[EDIT] %@ = %@", key, newValue);
             if (valueLabel) {
