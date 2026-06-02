@@ -167,12 +167,13 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
 }
 
 static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
-    if (_orig_MMUIButton_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
-    }
-
     PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled) return;
+    if (!config.listCornerRadiusEnabled) {
+        if (_orig_MMUIButton_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
 
     UIViewController *vc = nil;
     UIResponder *responder = (UIResponder *)self;
@@ -183,10 +184,20 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         }
         responder = [responder nextResponder];
     }
-    if (!vc) return;
+    if (!vc) {
+        if (_orig_MMUIButton_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
 
     NSString *vcName = NSStringFromClass([vc class]);
-    if (![vcName isEqualToString:@"MoreViewController"]) return;
+    if (![vcName isEqualToString:@"MoreViewController"]) {
+        if (_orig_MMUIButton_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
 
     BOOL foundHead = NO;
     for (UIView *subview in ((UIView *)self).subviews) {
@@ -195,10 +206,20 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
             break;
         }
     }
-    if (!foundHead) return;
+    if (!foundHead) {
+        if (_orig_MMUIButton_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
 
     CGFloat selfHeight = ((UIView *)self).frame.size.height;
-    if (selfHeight <= 50.0) return;
+    if (selfHeight <= 50.0) {
+        if (_orig_MMUIButton_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
 
     CGFloat margin = config.listCellMargin;
     if (margin > 0) {
@@ -207,16 +228,19 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
             CGFloat containerW = cell.superview ? cell.superview.bounds.size.width
                                                 : [UIScreen mainScreen].bounds.size.width;
             CGFloat targetW = containerW - 2.0 * margin;
-            CGFloat currentH = ((UIView *)self).bounds.size.height;
+            CGFloat currentH = ((UIView *)self).frame.size.height;
             ((UIView *)self).frame = CGRectMake(margin, 0, targetW, currentH);
         }
+    }
+
+    if (_orig_MMUIButton_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
     }
 
     BOOL isDark = NO;
     if (@available(iOS 13.0, *)) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
-
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
     if (radius == 0) radius = 18;
 
