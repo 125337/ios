@@ -74,6 +74,7 @@ jobs:
           MioPlugin/Modules/ListCornerRadius/WPSessionSpacingHook.m \
           MioPlugin/Modules/ListCornerRadius/WPSearchBoxHook.m \
           MioPlugin/Modules/ListCornerRadius/WPAuxiliaryHooks.m \
+          MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m \
           MioPlugin/Settings/Common/SettingCategoryController.m \
           MioPlugin/Settings/Common/WPBorderLayer.m \
           MioPlugin/Settings/Controllers/SettingController.m \
@@ -118,6 +119,7 @@ jobs:
                 -IMioPlugin/Modules/PlaceholderText \
                 -IMioPlugin/Modules/ChatTopBar \
                 -IMioPlugin/Modules/ListCornerRadius \
+                -IMioPlugin/Modules/ProfileCardBg \
                 -IMioPlugin/Settings/Common \
                 -IMioPlugin/Settings/Controllers \
                 -o "$OBJ_FILE" \
