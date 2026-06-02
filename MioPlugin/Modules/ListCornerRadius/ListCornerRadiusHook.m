@@ -672,11 +672,20 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                        : [UIScreen mainScreen].bounds.size.width;
         CGFloat targetW = containerW - 2.0 * margin;
         CGFloat currentW = cellView.frame.size.width;
+        WPLog(@"CardBg-Diag", @"[MARGIN] margin=%.0f, currentFrame=(%.0f,%.0f,%.0f,%.0f), targetX=%.0f, targetW=%.0f, containerW=%.0f, isMoreVC=%d",
+              margin,
+              cellView.frame.origin.x, cellView.frame.origin.y,
+              cellView.frame.size.width, cellView.frame.size.height,
+              targetX, targetW, containerW, isMoreVC);
         if (currentX != targetX || fabs(currentW - targetW) > 0.5) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
             f.size.width = targetW;
             cellView.frame = f;
+            WPLog(@"CardBg-Diag", @"[MARGIN] Applied: newFrame=(%.0f,%.0f,%.0f,%.0f)",
+                  f.origin.x, f.origin.y, f.size.width, f.size.height);
+        } else {
+            WPLog(@"CardBg-Diag", @"[MARGIN] Skipped: already correct");
         }
     }
 
