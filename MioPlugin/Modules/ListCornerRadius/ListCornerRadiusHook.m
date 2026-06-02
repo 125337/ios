@@ -658,7 +658,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     // ★★★ 记录标志位：MoreVC + cardBgEnabled 时需要透明化 ★★★
     // 透明化必须在函数末尾执行（所有 orig + margin + bgColor + corner 之后）
-    BOOL needsCardBgTransparency = (isMoreVC && config.cardBgEnabled);
+    BOOL isProfileCardCell = [ListCornerRadiusHook wp_isProfileCard:cellView];
+    BOOL needsCardBgTransparency = (isMoreVC && config.cardBgEnabled && isProfileCardCell);
 
     // ★★★ margin 前置：先改 Cell 的 x/width，再调 orig ★★★
     // 这样 orig 内部触发的 MMUIButton Hook 能读到缩小后的 Cell.bounds
