@@ -213,10 +213,6 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    // ★★★ MMUIButton Hook 诊断日志 ★★★
-    WPLog(@"ListCornerRadius", @"[CardBg-MUIB] vc=%@, foundHead=%d, cardBgEnabled=%d, cardBgHidden=%d, subviews=%lu",
-          vcName, foundHead, config.cardBgEnabled, config.cardBgHidden,
-          (unsigned long)((UIView *)self).subviews.count);
     if (!foundHead) {
         if (_orig_MMUIButton_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
@@ -346,6 +342,55 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
                 }
                 object_setIvar((id)self, bgIvar, nil);
             }
+
+            // ★★★ 在 MMUIButton 上创建/获取 bgImageView ★★★
+            static const NSInteger kBtnBgImageTag = 999902;
+            UIImageView *btnBgImg = (UIImageView *)[((UIView *)self) viewWithTag:kBtnBgImageTag];
+
+            if (!btnBgImg) {
+                btnBgImg = [[UIImageView alloc] init];
+                btnBgImg.tag = kBtnBgImageTag;
+                btnBgImg.clipsToBounds = YES;
+                btnBgImg.userInteractionEnabled = NO;
+
+                NSInteger fillMode = config.cardBgFillMode;
+                switch (fillMode) {
+                    case 1: btnBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
+                    case 2: btnBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
+                    default: btnBgImg.contentMode = UIViewContentModeScaleToFill; break;
+                }
+
+                // ★ 插入到 MMUIButton 最底层（在所有内容之下）
+                [((UIView *)self) insertSubview:btnBgImg atIndex:0];
+                objc_setAssociatedObject((id)self, "mio_btnBgImageView",
+                                         btnBgImg, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+
+            // ★ 计算 frame（基于 MMUIButton 的 bounds）
+            CGRect btnBounds = ((UIView *)self).bounds;
+            CGFloat imgW = btnBounds.size.width;
+            CGFloat imgH = btnBounds.size.height;
+            CGFloat imgX = 0;
+            CGFloat imgY = 0;
+
+            CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+            CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
+            imgY += offsetY;
+            imgX += offsetX;
+
+            btnBgImg.frame = CGRectMake(imgX, imgY, imgW, imgH);
+
+            // ★ 图层排序
+            NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
+            if (layerPos == 1) {
+                [((UIView *)self) bringSubviewToFront:btnBgImg];
+            }
+
+            // ★ 加载图片
+            btnBgImg.image = nil;
+            btnBgImg.alpha = 1.0;
+            btnBgImg.hidden = NO;
+            [ListCornerRadiusHook wp_loadBackgroundImageForImageView:btnBgImg isDark:isDark];
         } else {
             UIColor *cardBg = [config colorFromHex:isDark
                 ? config.listCardDarkBgColor : config.listCardLightBgColor];
@@ -389,20 +434,15 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     PluginConfig *config = [PluginConfig shared];
 
-    static const NSInteger kBgImageTagCard = 999901;
-
     UIViewController *vcCardEarly = findParentViewController((UIView *)self);
-    NSString *classNameCardEarly = vcCardEarly ? NSStringFromClass([vcCardEarly class]) : @"(nil)";
+    NSString *classNameCardEarly = vcCardEarly ? NSStringFromClass([vcCardEarly class]) : @"";
     BOOL isMoreVCCard = [classNameCardEarly isEqualToString:@"MoreViewController"];
     UIView *cellViewCard = (UIView *)self;
-    BOOL isProfile = [ListCornerRadiusHook wp_isProfileCard:cellViewCard];
 
-    // ★★★ 逐条件诊断日志 ★★★
-    WPLog(@"ListCornerRadius", @"[CardBg-Diag] vc=%@, isMoreVC=%d, isProfile=%d, cardBgEnabled=%d",
-          classNameCardEarly, isMoreVCCard, isProfile, config.cardBgEnabled);
-
-    if (isMoreVCCard && isProfile && config.cardBgEnabled) {
-        WPLog(@"ListCornerRadius", @"[CardBg-Diag] ★ ALL CONDITIONS PASSED! Entering branch.");
+    // ★ cardBg 分支：不再依赖 isProfile（时序问题导致 Cell Hook 中找不到 MMHeadImageView）
+    // bgImageView 创建逻辑已移到 MMUIButton Hook（那里 foundHead=1 可靠）
+    // Cell Hook 只做 Cell 层通用处理：高度调整、透明化、HideCard
+    if (isMoreVCCard && config.cardBgEnabled) {
         CGFloat customHeight = config.cardBgHeight;
         if (customHeight > 0) {
             CGFloat currentH = cellViewCard.frame.size.height;
@@ -427,172 +467,25 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
         BOOL isDark = [ListCornerRadiusHook wp_isCurrentDarkMode];
 
-        // ★ 无论是否 HideCard，都清理 Cell 自身样式
-        // 让 Cell 完全透明，背景图和圆角由 MMUIButton 层控制
+        // ★ 清理 Cell 自身样式，让背景图由 MMUIButton 层控制
         cellViewCard.layer.borderWidth = 0;
         cellViewCard.layer.cornerRadius = 0;
         cellViewCard.layer.masksToBounds = NO;
+        cellViewCard.backgroundColor = [UIColor clearColor];
 
-        if (config.cardBgHidden) {
-            // ★ Step 1: 清除微信原始的 m_bgImageView（防止微信恢复原始卡片）
-            for (UIView *sub in cellViewCard.subviews) {
-                Ivar bgIvar = class_getInstanceVariable([sub class], "m_bgImageView");
-                if (bgIvar) {
-                    object_setIvar(sub, bgIvar, nil);
-                }
-            }
-
-            // ★ Step 2: 隐藏所有非自定义背景图的内容
-            for (UIView *sub in cellViewCard.subviews) {
-                if ([sub isKindOfClass:[UIImageView class]]) {
-                    UIImageView *iv = (UIImageView *)sub;
-                    if (iv.tag != kBgImageTagCard) {
-                        iv.hidden = YES;
-                    }
-                } else {
-                    sub.hidden = YES;
-                }
-            }
-
-            cellViewCard.backgroundColor = [UIColor clearColor];
-
-            // ★ HideCard 时也设置 contentView 透明
-            UIView *contentViewHC = [(UITableViewCell *)cellViewCard contentView];
-            if (contentViewHC) {
-                contentViewHC.backgroundColor = [UIColor clearColor];
-            }
-
-            // ★ Step 3: 处理 MMUIButton —— 清除样式，设置渐变遮罩
-            UIColor *hideColor = [config colorFromHex:isDark
-                ? config.listCardDarkBgColor : config.listCardLightBgColor];
-            for (UIView *sub in cellViewCard.subviews) {
-                if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-                    sub.backgroundColor = [UIColor clearColor];
-                    sub.layer.cornerRadius = 0;
-                    sub.layer.borderWidth = 0;
-                    sub.layer.masksToBounds = NO;
-
-                    // ★ Step 4: 递归隐藏 MMUIButton 内部的所有 ImageView
-                    void (^hideImageViews)(NSArray<UIView *> *) = ^(NSArray<UIView *> *views) {
-                        for (UIView *v in views) {
-                            if ([v isKindOfClass:[UIImageView class]]) {
-                                v.hidden = YES;
-                            }
-                            hideImageViews(v.subviews);
-                        }
-                    };
-                    hideImageViews(sub.subviews);
-
-                    // ★ Step 5: 给 MMUIButton 的非 ImageView 子视图设置渐变遮罩色
-                    if (hideColor) {
-                        for (UIView *btnSub in sub.subviews) {
-                            if (![btnSub isKindOfClass:[UIImageView class]]) {
-                                btnSub.backgroundColor = hideColor;
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            // ★ 非 HideCard 时也设置透明背景
-            cellViewCard.backgroundColor = [UIColor clearColor];
-
-            // ★★★ 关键修复：contentView 背景透明（参照微信优化 setAlpha:0）★★★
-            UIView *contentView = [(UITableViewCell *)cellViewCard contentView];
-            if (contentView) {
-                contentView.backgroundColor = [UIColor clearColor];
-                contentView.layer.masksToBounds = NO;
-            }
-
-            // ★★★ 关键修复：所有 Cell 直接子视图背景透明（排除 bgImageView）★★★
-            for (UIView *sub in cellViewCard.subviews) {
-                if (sub.tag != kBgImageTagCard) {
-                    sub.backgroundColor = [UIColor clearColor];
-                }
-            }
-
-            // ★ 清除 MMUIButton 内部的 m_bgImageView（双重保险）
-            for (UIView *sub in cellViewCard.subviews) {
-                if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-                    Ivar bgIvar = class_getInstanceVariable([sub class], "m_bgImageView");
-                    if (bgIvar) {
-                        id bgImgView = object_getIvar(sub, bgIvar);
-                        if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
-                            [(UIImageView *)bgImgView setImage:nil];
-                            [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
-                            [(UIImageView *)bgImgView setHidden:YES];
-                        }
-                        object_setIvar(sub, bgIvar, nil);
-                    }
-                }
-            }
+        // ★ contentView 透明
+        UIView *contentView = [(UITableViewCell *)cellViewCard contentView];
+        if (contentView) {
+            contentView.backgroundColor = [UIColor clearColor];
+            contentView.layer.masksToBounds = NO;
         }
 
-        for (UIView *sub in cellViewCard.subviews) {
-            if ([sub isKindOfClass:[UIImageView class]]) {
-                UIImageView *imgView = (UIImageView *)sub;
-                if (imgView.tag == kBgImageTagCard) continue;  // ★ 排除自定义背景图
-
-                if (imgView.image != nil &&
-                    ![imgView isEqual:objc_getAssociatedObject(cellViewCard, "mio_bgImageView")]) {
-                    imgView.hidden = YES;
-                } else if (imgView.image == nil) {
-                    imgView.hidden = YES;
-                }
-            }
-        }
-
-        UIImageView *bgImageView = (UIImageView *)[cellViewCard viewWithTag:kBgImageTagCard];
-
-        if (!bgImageView) {
-            bgImageView = [[UIImageView alloc] init];
-            bgImageView.tag = kBgImageTagCard;
-            bgImageView.clipsToBounds = YES;
-            bgImageView.userInteractionEnabled = NO;
-
-            NSInteger fillMode = config.cardBgFillMode;
-            switch (fillMode) {
-                case 1: bgImageView.contentMode = UIViewContentModeScaleAspectFit; break;
-                case 2: bgImageView.contentMode = UIViewContentModeScaleAspectFill; break;
-                default: bgImageView.contentMode = UIViewContentModeScaleToFill; break;
-            }
-
-            [cellViewCard addSubview:bgImageView];
-            objc_setAssociatedObject(cellViewCard, "mio_bgImageView",
-                                     bgImageView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
-
-        // ★★★ 诊断日志：确认分支执行 + 视图层级信息 ★★★
-        WPLog(@"ListCornerRadius", @"[CardBg] branch entered! subviews.count=%lu, bounds=%@",
-              (unsigned long)cellViewCard.subviews.count, NSStringFromCGRect(cellViewCard.bounds));
-
-        CGRect bounds = cellViewCard.bounds;
-        CGFloat margin = config.listCellMargin;
-        if (margin <= 0) margin = 9;
-
-        CGFloat imgW = bounds.size.width;
-        CGFloat imgH = bounds.size.height;
-        CGFloat imgX = 0;
-        CGFloat imgY = 0;
-
-        if (config.listCornerRadiusEnabled && config.cardBgFillMode != 3) {
-            imgW -= margin * 2;
-            imgX = margin;
-        }
-
-        CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
-        CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
-        imgY += offsetY;
-        imgX += offsetX;
-
-        bgImageView.frame = CGRectMake(imgX, imgY, imgW, imgH);
-
-        // ★★★ 关键修复：处理 backgroundView（UITableViewCell 特有）★★★
+        // ★ backgroundView 隐藏
         if ([cellViewCard respondsToSelector:@selector(backgroundView)]) {
             UIView *bgv = [(id)cellViewCard backgroundView];
             if (bgv) {
                 bgv.backgroundColor = [UIColor clearColor];
-                bgv.hidden = YES;  // 直接隐藏，最彻底
+                bgv.hidden = YES;
             }
         }
         if ([cellViewCard respondsToSelector:@selector(selectedBackgroundView)]) {
@@ -602,27 +495,20 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             }
         }
 
-        NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
-        if (layerPos == 1) {
-            [cellViewCard bringSubviewToFront:bgImageView];
-        } else {
-            // ★ 改用 bringSubviewToFront 确保可见（先验证图片能否显示）
-            // 如果 bringToFront 能看到图，说明是图层顺序问题；看不到则是加载问题
-            [cellViewCard bringSubviewToFront:bgImageView];
-
-            // ★ 或者用 insertSubview 确保在 contentView 之上：
-            // NSInteger insertIndex = MAX(0, (NSInteger)cellViewCard.subviews.count - 2);
-            // [cellViewCard insertSubview:bgImageView atIndex:insertIndex];
+        // ★ 所有 Cell 直接子视图背景透明
+        for (UIView *sub in cellViewCard.subviews) {
+            sub.backgroundColor = [UIColor clearColor];
         }
 
-        // ★★★ 诊断：先用纯色测试 bgImageView 是否可见 ★★★
-        bgImageView.backgroundColor = [UIColor redColor];  // 诊断色，确认可见后删除
-        bgImageView.image = nil;
-        bgImageView.alpha = 0.7;  // 提高透明度便于观察
-        bgImageView.hidden = NO;
+        if (config.cardBgHidden) {
+            // HideCard：隐藏非 MMUIButton 的子视图
+            for (UIView *sub in cellViewCard.subviews) {
+                if (![sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+                    sub.hidden = YES;
+                }
+            }
+        }
 
-        [ListCornerRadiusHook wp_loadBackgroundImageForImageView:bgImageView
-                                                         isDark:isDark];
         return;
     }
 
