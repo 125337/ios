@@ -200,6 +200,18 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     CGFloat selfHeight = ((UIView *)self).frame.size.height;
     if (selfHeight <= 50.0) return;
 
+    CGFloat margin = config.listCellMargin;
+    if (margin > 0) {
+        UIView *cell = ((UIView *)self).superview;
+        if (cell) {
+            CGFloat containerW = cell.superview ? cell.superview.bounds.size.width
+                                                : [UIScreen mainScreen].bounds.size.width;
+            CGFloat targetW = containerW - 2.0 * margin;
+            CGFloat currentH = ((UIView *)self).bounds.size.height;
+            ((UIView *)self).frame = CGRectMake(margin, 0, targetW, currentH);
+        }
+    }
+
     BOOL isDark = NO;
     if (@available(iOS 13.0, *)) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
@@ -261,29 +273,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
     if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
-
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
-
-        CGFloat margin = config.listCellMargin;
-        if (margin > 0 && config.listCornerRadiusEnabled) {
-            CGFloat currentX = cellView.frame.origin.x;
-            UIView *superview = cellView.superview;
-            CGFloat superX = superview ? superview.frame.origin.x : 0;
-            CGFloat targetX = (margin > superX) ? margin - superX : 0;
-            CGFloat containerW = superview ? superview.bounds.size.width
-                                           : [UIScreen mainScreen].bounds.size.width;
-            CGFloat targetW = containerW - 2.0 * margin;
-            CGFloat currentW = cellView.frame.size.width;
-            if (currentX != targetX || fabs(currentW - targetW) > 0.5) {
-                CGRect f = cellView.frame;
-                f.origin.x = targetX;
-                f.size.width = targetW;
-                cellView.frame = f;
-            }
-        }
-
         return;
     }
 

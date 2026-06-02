@@ -11,107 +11,140 @@
 |------|:----:|------|
 | 搜索框圆角 | ✅ 已生效 | `WCSearchBar.layoutSubviews` + `objc_msgSend` |
 | 资料卡圆角 | ✅ 已生效 | `MMUIButton.layoutSubviews` Hook 注册成功 |
-| 资料卡边距 | ✅ 有左右边距 | Cell Hook + MMUIButton Hook 均设置 frame |
-| **资料卡内容显示** | ❌ 异常 | 内容（头像+文字）挤在顶部，下方大片空白 |
+| 资料卡边距（旧方案） | ❌ 失效 | Cell Hook 改 frame → 被 UITableView 覆盖或 MMUIButton 不跟随 |
+| **资料卡内容显示** | ✅ 正常 | 先 orig 后改 frame 的顺序正确 |
 
 ---
 
-## 2️⃣ 资料卡内容显示异常问题
+## 2️⃣ 边距失效根因深度分析
 
-### 当前症状（2026-06-02 截图）
+### 2.1 问题现象
 
-- 圆角生效 ✅
-- 左右边距生效 ✅
-- **内容（头像+昵称+微信号）挤在卡片顶部，下方大片空白** ❌
+采用"先orig后改frame"方案（文档 v3 推荐方案）后：
+- 内容（头像+昵称+微信号）显示正常 ✅
+- **左右边距失效，资料卡全宽显示** ❌
 
-### 根因分析
+### 2.2 为什么修改 cell.frame 无效
 
-#### 问题 1: Cell Hook 中 frame 修改和 orig 调用顺序错误
+#### 原因 1：视图层级中的"真身"
 
-当前代码 [L275-L300](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L275-L300)：
-
-```objc
-// ❌ 当前错误顺序
-if (isMoreVC && wp_isProfileCard) {
-    // ① 先修改 cell.frame（缩窄 width）
-    cellView.frame = CGRectMake(targetX, 0, targetW, ...);
-
-    // ② 然后才调用 orig layoutSubviews
-    _orig_MMTableViewCell_layoutSubviews(self, _cmd);  // ← cell 已经缩窄了！
-    return;
-}
+```
+MMTableViewCell (cell)          ← 逻辑容器，frame 由 UITableView 管理
+  └── MMUIButton (self)         ← ★ 视觉容器！这才是用户看到的卡片
+        ├── MMHeadImageView     ← 头像
+        ├── MMCPLabel           ← 昵称
+        └── MMUILabel           ← 微信号
 ```
 
-**后果**: orig 按缩窄后的 cell bounds 来布局 MMUIButton 及其内部子视图，所有空间计算基于错误的尺寸。
+**MMUIButton 才是真正的视觉容器**。用户看到的"资料卡"实际上是 MMUIButton，不是 cell。
 
-#### 问题 2: Cell Hook 和 MMUIButton Hook 同时修改 frame，产生冲突
+#### 原因 2：autoresizingMask 的双向影响
 
-| Hook 点 | 操作 | 影响 |
-|---------|------|------|
-| Cell Hook | 缩窄 cell.frame (width) | MMUIButton 被 orig 按**新尺寸**布局 |
-| MMUIButton Hook | 读取 self.height（已被影响），重新设置 self.frame = (margin, 0, targetW, currentH) | 与上一步产生二次冲突 |
+当我们修改 `cell.frame.width` 缩窄时：
 
-**结果**: MMUIButton 内部子视图（头像、标签等）位置计算混乱，内容挤在顶部。
+| MMUIButton 的 autoresizingMask | 行为 | 结果 |
+|--------------------------------|------|------|
+| 含 `UIViewAutoresizingFlexibleWidth` | MMUIButton 随 cell 缩小 | 内容已被 orig 按原始尺寸布局好，缩小后内容溢出或压缩 |
+| 不含 `UIViewAutoresizingFlexibleWidth` | MMUIButton 保持原尺寸 | **MMUIButton 溢出 cell 边界，视觉上仍然是全宽** |
 
-### 微信优化是怎么做到的
+从截图看，属于第二种情况——MMUIButton 保持原尺寸溢出 cell。
 
-微信优化对 `MMTableViewCell.layoutSubviews` 进行了**两次链式 Hook**：
-1. **第一次 Hook**: 调用 orig → 设置边距（只改 origin.x，不改 width）→ 设置圆角
-2. **第二次 Hook**: 调用 orig2（=第一次的替换函数）→ 清理背景色
+#### 原因 3：UITableView 可能覆盖 cell.frame
 
-关键：微信优化只修改 `origin.x`，不修改 `width`。且两次 Hook 的执行顺序保证了布局一致性。
+`UITableView` 在内部布局过程中会主动设置每个 cell 的 frame。我们在 `layoutSubviews` 结束后修改的 frame，可能在下一次布局循环中被覆盖。
 
-### 修复方案（推荐）
+### 2.3 微信优化为什么能生效
 
-**核心原则**: 只在一个地方设置 frame，避免冲突。
-
-**Step 1**: Cell Hook 中修正顺序——先 orig 后改 frame，MMUIButton Hook 中移除 frame 设置：
+微信优化**只改 `origin.x`，不改 `width`**：
 
 ```objc
-// Cell Hook - 资料卡分支（修正后）
+// 微信优化伪代码
+cell.frame.origin.x = margin;   // 只移动位置
+// cell.frame.size.width 不变    // 宽度保持原样
+```
+
+**为什么只改 x 能工作**：
+1. 微信优化的边距效果是通过**让 cell 整体右移**实现的
+2. 因为 width 不变，MMUIButton 的 autoresizingMask 不会被触发
+3. UITableView 对 `origin.x` 的容忍度比 `size.width` 高
+4. 左侧空白由 cell 的背景色（或父视图背景色）填充
+
+**但我们的需求不同**：我们需要的是**缩小内容宽度产生边距**，不是移动 cell 位置。所以不能照搬微信优化的方案。
+
+---
+
+## 3️⃣ 新方案：在 MMUIButton Hook 中设置 frame
+
+### 3.1 核心思路
+
+**谁负责视觉效果，就由谁来设置 frame**。
+
+MMUIButton 是视觉容器 → 在 `MMUIButton.layoutSubviews` 中设置 MMUIButton 自身的 frame。
+
+### 3.2 方案设计
+
+#### Cell Hook 职责（精简版）
+
+```objc
+// replaced_MMTableViewCell_layoutSubviews - 资料卡分支
 if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
 
-    // ★ 先调用 orig，让子视图按原始尺寸正确布局
+    // ① 调用 orig（必须最先执行，确保子视图正确布局）
     if (_orig_MMTableViewCell_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews(self, _cmd);
     }
 
-    // ★ 然后再修改 cell.frame（缩窄）
-    CGFloat margin = config.listCellMargin;
-    if (margin > 0 && config.listCornerRadiusEnabled) {
-        UIView *superview = cellView.superview;
-        CGFloat superX = superview ? superview.frame.origin.x : 0;
-        CGFloat targetX = (margin > superX) ? margin - superX : 0;
-        CGFloat containerW = superview ? superview.bounds.size.width
-                                       : [UIScreen mainScreen].bounds.size.width;
-        CGFloat targetW = containerW - 2.0 * margin;
-        CGFloat currentX = cellView.frame.origin.x;
-        CGFloat currentW = cellView.frame.size.width;
-        if (currentX != targetX || fabs(currentW - targetW) > 0.5) {
-            CGRect f = cellView.frame;
-            f.origin.x = targetX;
-            f.size.width = targetW;
-            cellView.frame = f;
-        }
-    }
+    // ② 只设置 cell 层级的属性：圆角、背景色、masksToBounds
+    //    ★ 不修改 cell.frame！
+    NSInteger radius = (NSInteger)config.listCellCornerRadius;
+    if (radius == 0) radius = 18;
+    cellView.layer.cornerRadius = radius;
+    cellView.layer.masksToBounds = YES;
 
-    return;  // 圆角/边框/隐藏二维码由 MMUIButton Hook 处理
+    return;
+    // 边距、详细圆角、边框、隐藏二维码 → 全部交给 MMUIButton Hook
 }
 ```
 
+#### MMUIButton Hook 职责（增强版）
+
 ```objc
-// MMUIButton Hook - 移除所有 frame 设置代码
 static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
+
+    // ① 调用 orig（必须最先执行）
     if (_orig_MMUIButton_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews(self, _cmd);
     }
 
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled) return;
 
-    // ... VC 判断 / MMHeadImageView 搜索 / 高度判断 ...
+    // ... VC 判断 / MMHeadImageView 搜索 / 高度判断（保持不变） ...
 
-    // ★ 不设置 frame！只设置圆角属性
+    // ② ★ 设置边距（修改 MMUIButton 自身的 frame）
+    CGFloat margin = config.listCellMargin;
+    if (margin > 0) {
+        UIView *cell = ((UIView *)self).superview;  // MMUITableViewCell
+        if (cell) {
+            CGFloat containerW = cell.superview ? cell.superview.bounds.size.width
+                                                : [UIScreen mainScreen].bounds.size.width;
+            CGFloat targetW = containerW - 2.0 * margin;
+            CGFloat currentH = ((UIView *)self).frame.size.height;
+
+            // 关键：使用 bounds.height 而非 frame.height
+            // 因为 orig 刚执行完，bounds 已更新
+            CGFloat correctH = ((UIView *)self).bounds.size.height;
+            if (correctH > currentH) currentH = correctH;
+
+            ((UIView *)self).frame = CGRectMake(margin, 0, targetW, currentH);
+        }
+    }
+
+    // ③ 设置圆角、边框、隐藏二维码
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    }
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
     if (radius == 0) radius = 18;
 
@@ -122,45 +155,125 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     if (config.listHideRightQRCode) {
         [ListCornerRadiusHook wp_hideQRButtonInCell:(UIView *)self];
     }
+
+    ((UIView *)self).layer.masksToBounds = YES;
 }
 ```
 
-**为什么这样能工作**:
-1. Cell Hook 先让 orig 用原始全宽布局好所有子视图（MMUIButton 及其内部头像、标签等）
-2. 然后再缩窄 cell.frame → MMUIButton 已有正确的内部布局
-3. MMUIButton 可能因 `autoresizingMask` 或保持原尺寸而溢出 cell 边界
-4. 但 `masksToBounds = YES` + `cornerRadius` 会裁剪溢出部分，视觉效果正确
+### 3.3 为什么这个方案能工作
+
+| 步骤 | 操作 | 结果 |
+|------|------|------|
+| Cell Hook orig | 按原始全宽布局 MMUIButton | MMUIButton 内部子视图正确排列 |
+| Cell Hook 返回 | 不改 cell.frame | cell 保持全宽，不被 UITableView 抵制 |
+| MMUIButton Hook orig | MMUIButton 内部子视图 layoutSubviews | 头像/标签等位置确定 |
+| MMUIButton Hook 设 frame | 缩窄 MMUIButton 自身 | **直接作用于视觉容器** |
+| masksToBounds + cornerRadius | 裁剪溢出+圆角 | 视觉效果正确 |
+
+**关键优势**：
+1. 修改的是**视觉容器自身**的 frame，不是父容器的
+2. 不涉及 autoresizingMask 的级联问题
+3. 不受 UITableView 的 frame 管理干扰
+4. orig 在 frame 修改**之前**执行，内容布局基于正确的原始尺寸
+
+### 3.4 注意事项
+
+1. **高度获取**：使用 `self.bounds.size.height` 而非 `self.frame.size.height`
+   - orig 执行后 bounds 已更新，更准确
+   - 如果 bounds 和 frame 差异大，以较大的为准
+
+2. **cell 不设 masksToBounds**：cell 层级不需要裁剪，裁剪由 MMUIButton 负责
+
+3. **cell 不设 cornerRadius**：圆角也由 MMUIButton 负责，cell 保持矩形避免干扰
+
+4. **边框绘制**：在 MMUIButton 上绘制，与圆角一致
 
 ---
 
-## 3️⃣ 微信优化资料卡实现（反编译精确还原）
+## 4️⃣ 微信优化 vs MioPlugin 方案对比
 
-### 3.1 视图层级
+| 对比项 | 微信优化 | MioPlugin（新方案） |
+|--------|---------|-------------------|
+| 边距实现方式 | 改 cell.origin.x（右移） | 改 MMUIButton.frame（缩窄） |
+| 视觉原理 | cell 右移，左侧留白 | MMUIButton 缩窄，两侧留白 |
+| width 是否变化 | ❌ 不变 | ✅ 变小 |
+| 修改目标 | cell（逻辑容器） | MMUIButton（视觉容器） |
+| 圆角设置位置 | cell + MMUIButton | 仅 MMUIButton |
+| 背景色清理 | 第二次链式 Hook | Cell Hook 中处理 |
+| 代码复杂度 | 两次链式 Hook | 两个独立 Hook，职责清晰 |
 
+**为什么不能照搬微信优化**：
+- 微信优化只改 origin.x，产生的边距是"左移右溢"，依赖 cell 背景色遮罩
+- 我们的 UI 设计需要**真正的两侧等宽边距**，必须缩小内容宽度
+- 缩小宽度必须在**视觉容器**上操作才有效
+
+---
+
+## 5️⃣ 实施步骤
+
+### Step 1: 修改 Cell Hook（[L263-L288](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L263-L288)）
+
+移除所有 frame 设置代码，只保留 orig 调用和返回：
+
+```objc
+if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
+    if (_orig_MMTableViewCell_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews(self, _cmd);
+    }
+    // ★ 删除所有 frame 设置代码（L269-285）
+    return;
+}
 ```
-MMTableViewCell (cell)
-  └── MMUIButton (资料卡按钮，占满整个 cell)
-        ├── MMHeadImageView (头像)
-        ├── MMCPLabel / MMUILabel (昵称/微信号)
-        ├── MMUIButton / UIButton (二维码按钮)
-        └── ...
+
+### Step 2: 修改 MMUIButton Hook（[L169-L220](file:///www/wwwroot/ios/MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m#L169-L220)）
+
+在 orig 调用之后、圆角设置之前，添加 frame 设置代码：
+
+```objc
+static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
+    if (_orig_MMUIButton_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews(self, _cmd);
+    }
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.listCornerRadiusEnabled) return;
+
+    // ... VC 判断 / MMHeadImageView 搜索 / 高度判断（L177-L201 保持不变） ...
+
+    // ★ 新增：设置边距
+    CGFloat margin = config.listCellMargin;
+    if (margin > 0) {
+        UIView *cell = ((UIView *)self).superview;
+        if (cell) {
+            CGFloat containerW = cell.superview ? cell.superview.bounds.size.width
+                                                : [UIScreen mainScreen].bounds.size.width;
+            CGFloat targetW = containerW - 2.0 * margin;
+            CGFloat currentH = ((UIView *)self).bounds.size.height;
+            ((UIView *)self).frame = CGRectMake(margin, 0, targetW, currentH);
+        }
+    }
+
+    // 以下保持不变（圆角、边框、隐藏二维码）
+    // ...
+}
 ```
 
-### 3.2 Cell Hook 对 MoreViewController 的处理
+### Step 3: 编译验证
 
-微信优化进行**两次链式 Hook**:
-- **第一次 Hook**: 边距 + 圆角（只改 origin.x）
-- **第二次 Hook**: 背景色清理（clearColor）
+推送编译后检查：
+- [ ] 资料卡有左右边距
+- [ ] 内容（头像+昵称+微信号）位置正常
+- [ ] 圆角生效
+- [ ] 边框生效（如开启）
+- [ ] 二维码按钮隐藏（如开启）
+- [ ] 其他列表 Cell 不受影响
 
-### 3.3 MMUIButton Hook 对资料卡的处理
+---
 
-只负责：圆角、边框、隐藏二维码。**不修改 frame**。
+## 6️⃣ 附录：历史方案演进
 
-### 3.4 对比表
-
-| 对比项 | 微信优化 | MioPlugin（当前） | MioPlugin（修复后） |
-|--------|---------|-----------|:------------:|
-| 搜索框获取方式 | `objc_msgSend` | `objc_msgSend` | ✅ |
-| 资料卡 Hook 点 | `MMUIButton.layoutSubviews` | `MMUIButton.layoutSubviews` | ✅ |
-| Cell Hook 顺序 | orig → 改 frame | 改 frame → orig ❌ | orig → 改 frame ✅ |
-| MMUIButton 设 frame | ❌ 不设 | ✅ 设了（冲突）❌ | ❌ 不设 ✅ |
+| 版本 | 方案 | 内容显示 | 边距 | 问题 |
+|------|------|:--------:|:----:|------|
+| v1 | Cell Hook: 先改frame后orig | ❌ 挤在顶部 | ✅ | orig 按错误尺寸布局 |
+| v2 | Cell Hook: 先orig后改frame + MMUIButton不改frame | ✅ 正常 | ❌ 失效 | cell.frame 被覆盖/MMUIButton不跟随 |
+| **v3（当前）** | **Cell Hook: 只调orig + MMUIButton: 设置frame** | ✅ 预期正常 | ✅ 预期有效 | 待验证 |
