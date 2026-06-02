@@ -476,12 +476,8 @@
 
         // 分支A：已存在且已加载 → 更新 frame
         if (existingBgImg != nil && alreadyLoaded) {
-            UIView *parentCell = nil;
-            UIView *p = button.superview;
-            if (p) parentCell = p.superview;
-            CGRect cellBounds = parentCell ? parentCell.bounds : button.bounds;
-            CGFloat imgW = cellBounds.size.width;
-            CGFloat imgH = cellBounds.size.height;
+            CGFloat imgW = button.bounds.size.width;
+            CGFloat imgH = button.bounds.size.height;
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
             existingBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
@@ -508,22 +504,18 @@
         }
         [button insertSubview:btnBgImg atIndex:0];
 
-        UIView *parentCell = nil;
-        UIView *p = button.superview;
-        if (p) parentCell = p.superview;
-        CGRect cellBounds = parentCell ? parentCell.bounds : button.bounds;
-        CGFloat imgW = cellBounds.size.width;
-        CGFloat imgH = cellBounds.size.height;
+        CGFloat imgW = button.bounds.size.width;
+        CGFloat imgH = button.bounds.size.height;
         CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
         CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
         btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
 
-        WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), cellBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
+        WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), buttonBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
               (long)btnBgImg.tag,
               btnBgImg.frame.origin.x, btnBgImg.frame.origin.y,
               btnBgImg.frame.size.width, btnBgImg.frame.size.height,
-              cellBounds.origin.x, cellBounds.origin.y,
-              cellBounds.size.width, cellBounds.size.height,
+              button.bounds.origin.x, button.bounds.origin.y,
+              button.bounds.size.width, button.bounds.size.height,
               NSStringFromClass([btnBgImg.superview class]),
               (long)[button.subviews indexOfObject:btnBgImg]);
 
