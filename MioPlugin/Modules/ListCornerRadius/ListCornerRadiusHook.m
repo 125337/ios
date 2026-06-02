@@ -197,14 +197,9 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
     }
 
-    // 只需要圆角不需要资料卡 → 快速处理
-    if (!needsCardBg && needsCorner) {
-        return;
-    }
-
-    // ════════════════════════════════════════════════════════
-    // 以下 needsCardBg == YES
-    // ════════════════════════════════════════════════════════
+    // ★ 已删除原来的 early return (!needsCardBg && needsCorner → return)
+    // 该 return 导致只开圆角不开背景图时，MMUIButton 的圆角逻辑无法执行
+    // 现在让后续的 VC/HeadImage 过滤和 APPLY_CORNER 统一处理
 
     // 第2关：VC 类型
     UIViewController *vc = nil;
@@ -242,6 +237,15 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     if (@available(iOS 13.0, *)) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
+
+    // ★ needsFullCardBg: 是否需要完整卡片背景功能（背景图/隐藏卡片）
+    // 圆角逻辑在 APPLY_CORNER 处始终执行，不依赖此标志
+    BOOL needsFullCardBg = needsCardBg;
+
+    // ════════════════════════════════════════════════════════
+    // ★★★ 卡片背景专属操作（只在 cardBgEnabled 时执行）★★★
+    // ════════════════════════════════════════════════════════
+    if (needsFullCardBg) {
 
     // ── HideCard 分支 ──
     if (config.cardBgHidden) {
@@ -495,6 +499,8 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         });
     });
     }
+
+    } // end needsFullCardBg
 
 APPLY_CORNER:
     // ════════════════════════════════════════════════════════
