@@ -446,7 +446,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
     if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
         if (_orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMUITableViewCell_layoutSubviews)(self, _cmd);
+            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
         return;
     }
