@@ -25,4 +25,7 @@
 + (void)loadBackgroundImageForImageView:(UIImageView *)imageView isDark:(BOOL)isDark;
 + (NSString *)cardBackgroundDirectory;
 
+// Hook 注册
++ (void)initCellHeightHook;
+
 @end

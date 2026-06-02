@@ -1,214 +1,165 @@
 # MioPlugin 资料卡背景功能 — 技术文档
 
-> **更新日期**: 2026-06-03 (v26 — fillMode 效果差异根因确认)
+> **更新日期**: 2026-06-03 (v28 — 基于微信头文件确认高度 Hook 方案)
 > **架构**: ListCornerRadiusHook（薄分发层） + ProfileCardBgHook（独立资料卡模块）
 
 ---
 
 ## 1. 当前 Bug
 
-### 🔴 Bug I：fillMode 效果与微信优化完全不同 — 待修复
+### 🔴 Bug J：对齐方式不生效 — 待修复
 
-**现象**：
-- fillMode=0（拉伸）：图片变形拉伸，微信优化中不会
-- fillMode=2（填充）：图片被裁剪位置不对
-- fillMode=3（顶部填充）：效果完全不同
+**现象**：切换对齐方式（靠左/居中/靠右），背景图位置没有变化
 
-**位置**：[ProfileCardBgHook.m L499-L504](file:///www/wwwroot/ios/MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m#L499-L504)
+**根因**：`cardBgLightAlignment` / `cardBgDarkAlignment` 在 PluginConfig 中定义了，但**代码中没有任何地方使用它们**。frame 计算只用了 offsetX/offsetY。
 
-#### 根因 1：contentMode 映射错误
+**微信优化的做法**：alignment 在微信优化中也**没有直接修改 frame**，只做了默认值保护（未设置时默认写入 1=居中）。背景图水平位置由 contentMode（ScaleAspectFill 默认居中裁剪）+ offsetX 决定。
 
-当前代码的映射：
+**修复方案**：根据 alignment 值修改 `frame.origin.x`：
 
 ```objc
-// ❌ 当前 MioPlugin 映射
-switch (fillMode) {
-    case 1: btnBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
-    case 2: btnBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
-    default: btnBgImg.contentMode = UIViewContentModeScaleToFill; break;  // fillMode=0,3
+NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
+CGFloat imgX = offsetX;
+if (alignment == 2) {
+    imgX = button.bounds.size.width - imgW + offsetX;  // 靠右
 }
+// alignment==0 靠左 或 ==1 居中：imgX = offsetX（默认）
+btnBgImg.frame = CGRectMake(imgX, offsetY, imgW, imgH);
 ```
-
-微信优化的映射（[123456.c L6550-L6555](file:///www/wwwroot/ios/插件/微信优化反编译最新/123456.c#L6550-L6555)）：
-
-```c
-lVar11 = (ulong)(ContentMode != 2) << 1;  // 默认值：≠2 → 2
-if (ContentMode == 1) {
-    lVar11 = 1;  // ==1 → 1
-}
-[imageView setContentMode:lVar11];
-```
-
-**微信优化的真实映射表**：
-
-| 用户配置 ContentMode | 计算过程 | 实际 UIViewContentMode | 视觉效果 |
-|:---:|:---:|:---:|:---:|
-| 0（拉伸） | `0≠2 → 1<<1 = 2` | **ScaleAspectFill** | 等比填充裁剪 |
-| 1（适应） | `1==1 → 1` | **ScaleAspectFit** | 等比适应留白 |
-| 2（填充） | `2==2 → 0<<1 = 0` | **ScaleToFill** | 拉伸变形填满 |
-| 3（顶部） | `3≠2 → 1<<1 = 2` | **ScaleAspectFill** | 等比填充裁剪 |
-
-**对比**：
-
-| 用户配置 | MioPlugin 当前 | 微信优化 | 差异 |
-|:---:|:---:|:---:|:---:|
-| 0（拉伸） | ScaleToFill（变形拉伸） | **ScaleAspectFill**（等比裁剪） | ❌ 完全不同 |
-| 1（适应） | ScaleAspectFit | ScaleAspectFit | ✅ 一致 |
-| 2（填充） | ScaleAspectFill（等比裁剪） | **ScaleToFill**（变形拉伸） | ❌ 完全反了 |
-| 3（顶部） | ScaleToFill（变形拉伸） | **ScaleAspectFill**（等比裁剪） | ❌ 完全不同 |
-
-**结论**：fillMode=0 和 fillMode=2 的映射**完全反了**，fillMode=3 也映射错了。
-
-#### 根因 2：fillMode=3 的特殊行为不完整
-
-微信优化中 fillMode=3 有**三个特殊行为**，MioPlugin 只实现了一个：
-
-| 特殊行为 | 微信优化 | MioPlugin 当前 |
-|---------|---------|:---:|
-| ① contentMode = ScaleAspectFill | ✅ | ❌ 用了 ScaleToFill |
-| ② 背景图不受 margin 影响（全宽） | ✅ | ✅ 已实现 |
-| ③ **跳过圆角 + masksToBounds** | ✅ | ❌ 仍然设了圆角和 masksToBounds |
-
-**微信优化 L9682 的关键判断**：
-
-```c
-// uVar1 = (ContentMode==3) ? cardBgEnabled : 0
-if ((uVar1 & 1) == 0) {  // fillMode≠3 或 cardBgEnabled=NO 时
-    // 设置圆角
-    [self.layer setCornerRadius:radius];
-    [self.layer setMasksToBounds:YES];
-    // 设置边框...
-}
-// fillMode==3 且 cardBgEnabled=YES 时 → 跳过圆角和 masksToBounds
-```
-
-**为什么 fillMode=3 要跳过 masksToBounds**：
-- fillMode=3 的目的是让背景图**溢出卡片边界**（顶部填充，覆盖整个 Cell 区域）
-- 如果 `masksToBounds=YES`，背景图会被裁剪到 MMUIButton 的 bounds 内，无法溢出
-- 微信优化中 fillMode=3 的背景图是**全宽**的（不受 margin 影响），且**不被圆角裁剪**
-
-#### 根因 3：fillMode=3 时 Cell 透明化不完整
-
-微信优化在 Cell Hook 中，当 fillMode=3 时会做额外的透明化处理：
-
-```c
-// Cell Hook 中（L6385-L6413）
-// 遍历 Cell 的子视图，对非 MMHeadImageView 的子视图：
-// 1. [subview setFrame:...]  → 清除 frame（让内容不遮挡背景）
-// 2. [subview setBackgroundColor:[UIColor clearColor]]  → 透明背景
-// 3. [cell setBackgroundColor:[UIColor clearColor]]  → Cell 透明
-```
-
-MioPlugin 的 `handleCellLayout:` 已经做了 Cell 透明化（`cellView.backgroundColor = clearColor` + `cellView.layer.masksToBounds = NO`），但**没有处理 MMUIButton 上的子视图透明化**。
 
 ---
 
-## 2. 修复方案
+### 🔴 Bug K：列表向下间距和信息卡片高度改了没效果 — 待修复
 
-### 修复 1：contentMode 映射（[L499-L504](file:///www/wwwroot/ios/MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m#L499-L504)）
+**现象**：修改 `cardBgListSpacing` 和 `cardBgHeight` 后无变化
 
-```objc
-// ✅ 修正后的映射（与微信优化一致）
-NSInteger fillMode = config.cardBgFillMode;
-switch (fillMode) {
-    case 1: btnBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
-    case 2: btnBgImg.contentMode = UIViewContentModeScaleToFill; break;
-    default: btnBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
-    // fillMode=0 和 fillMode=3 都用 ScaleAspectFill
+**根因**：`handleCellLayout:` 只做了 Cell 透明化，**没有实现 height 和 spacing 逻辑**。
+
+#### 微信头文件分析结果
+
+MoreViewController 的高度计算链：
+
+```
+MoreViewController
+  └── WCTableViewManager (m_tableViewMgr)
+        ├── tableView:heightForRowAtIndexPath:  ← 高度计算入口
+        └── WCTableViewCellManager (每个 Cell 对应一个)
+              ├── fCellHeight (属性)             ← ★ 行高存储
+              └── cellHeightFor: (方法)          ← ★ 行高计算
+```
+
+**关键发现**：
+- MoreViewController **自身没有**实现 `tableView:heightForRowAtIndexPath:`
+- 高度由 `WCTableViewManager` 管理，内部调用 `WCTableViewCellManager.fCellHeight`
+- `MMTableViewCell`（不是 MMUITableViewCell）没有 `sizeThatFits`，高度完全由 `WCTableViewCellManager` 控制
+
+#### 微信优化的做法
+
+微信优化通过**链式 Hook** `WCTableViewCellManager.cellHeightFor:` 的中间层实现 spacing：
+
+```c
+// FUN_00008874 — Hook 了 cellHeightFor: 的链式中间层
+double result = orig(self, sel, view, param_4);
+if (param_4 == 1 && isMoreVC && cardBgEnabled) {
+    result += ProfileCardSpacing;  // 在返回高度上加间距
 }
+return result;
 ```
 
-### 修复 2：fillMode=3 跳过圆角和 masksToBounds
-
-在 `APPLY_CORNER` 区域（约 [L596-L597](file:///www/wwwroot/ios/MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m#L596-L597)），已有 `skipMasksToBounds` 逻辑：
+#### 最佳方案：Hook `WCTableViewCellManager` 的 `cellHeightFor:`
 
 ```objc
-BOOL skipMasksToBounds = (config.cardBgEnabled && config.cardBgFillMode == 3);
-button.layer.masksToBounds = skipMasksToBounds ? NO : YES;
-```
+// 在 ProfileCardBgHook.m 的 +load 或 constructor 中注册
+static double (*_orig_cellHeightFor)(id, SEL, id, long long);
+static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) {
+    double result = _orig_cellHeightFor(self, _cmd, arg1, arg2);
 
-但**圆角也需要跳过**。当前代码在 `skipMasksToBounds=YES` 时仍然设置了 `cornerRadius`，需要同步跳过：
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.cardBgEnabled) return result;
 
-```objc
-if (!skipMasksToBounds) {
-    button.layer.cornerRadius = radius;
-    button.layer.masksToBounds = YES;
-} else {
-    button.layer.cornerRadius = 0;
-    button.layer.masksToBounds = NO;
-}
-```
-
-### 修复 3：分支A 中的 contentMode 也需要更新
-
-[L477-L488](file:///www/wwwroot/ios/MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m#L477-L488) 分支A（已存在 bgImageView）中，如果用户切换了 fillMode，contentMode 不会更新。需要在分支A 中也设置 contentMode：
-
-```objc
-// 分支A：更新 frame + contentMode
-if (existingBgImg != nil && alreadyLoaded) {
-    // 更新 contentMode
-    NSInteger fillMode = config.cardBgFillMode;
-    switch (fillMode) {
-        case 1: existingBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
-        case 2: existingBgImg.contentMode = UIViewContentModeScaleToFill; break;
-        default: existingBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
+    // 判断是否 MoreVC 的资料卡行
+    UIViewController *vc = nil;
+    UIResponder *responder = [arg1 nextResponder];
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            vc = (UIViewController *)responder;
+            break;
+        }
+        responder = responder.nextResponder;
     }
-    // 更新 frame
-    ...
+    if (!vc || ![NSStringFromClass([vc class]) isEqualToString:@"MoreViewController"]) {
+        return result;
+    }
+
+    // arg2 == 1 表示资料卡行（微信优化用 param_4==1 判断）
+    // 更安全的方式：通过 WCTableViewCellManager 的属性判断是否资料卡
+    CGFloat spacing = config.cardBgListSpacing;
+    if (spacing > 0) {
+        result += spacing;
+    }
+
+    return result;
 }
 ```
 
+**注册 Hook**：
+
+```objc
+// 在 ListCornerRadiusHook 的 constructor 或 ProfileCardBgHook 的 +load 中
+Class cellMgrClass = objc_getClass("WCTableViewCellManager");
+if (cellMgrClass) {
+    MSHookMessageEx(cellMgrClass,
+                    @selector(cellHeightFor:),
+                    (IMP)_hooked_cellHeightFor,
+                    (IMP *)&_orig_cellHeightFor);
+}
+```
+
+#### cardBgHeight 的实现
+
+在 `handleCellLayout:` 中添加，带循环保护：
+
+```objc
+CGFloat customHeight = config.cardBgHeight;
+if (customHeight > 0) {
+    CGFloat currentH = ((UIView *)cell).frame.size.height;
+    if (currentH < customHeight) {  // ★ 只在当前 < 目标时设置，防循环
+        CGRect f = ((UIView *)cell).frame;
+        f.size.height = customHeight;
+        ((UIView *)cell).frame = f;
+    }
+}
+```
+
+**注意**：cardBgHeight 和 cardBgListSpacing 可以叠加使用。cardBgHeight 先生效（强制最小高度），spacing 再在高度计算函数中追加额外间距。
+
 ---
 
-## 3. 微信优化 fillMode 完整行为对照表
+## 2. 已修复 Bug（简要）
 
-### 3.1 fillMode=0（拉伸/缩放填充）
+| Bug | 说明 |
+|-----|------|
+| ✅ A-D | position 语义拆分 / case 0 边框 / skipMasksToFit 守卫 / masksToBounds 顺序 |
+| ✅ H | 背景图 frame 高度 1704pt → 改用 button.bounds |
+| ✅ I | fillMode contentMode 映射反了 → 修正映射 + fillMode=3 跳过圆角 |
 
-| 行为 | 微信优化 | MioPlugin 应实现 |
-|------|---------|----------------|
-| contentMode | **ScaleAspectFill** | ScaleAspectFill |
-| 圆角 | 有 | 有 |
-| masksToBounds | YES | YES |
-| 受 margin 影响 | 是（width -= margin*2） | 是 |
-| 视觉效果 | 图片等比填充，超出部分被圆角裁剪 | 同左 |
+---
 
-### 3.2 fillMode=1（适应/等比适应）
+## 3. 待修复汇总
 
-| 行为 | 微信优化 | MioPlugin 应实现 |
-|------|---------|----------------|
-| contentMode | **ScaleAspectFit** | ScaleAspectFit |
-| 圆角 | 有 | 有 |
-| masksToBounds | YES | YES |
-| 受 margin 影响 | 是 | 是 |
-| 视觉效果 | 图片完整显示，可能有留白区域 | 同左 |
-
-### 3.3 fillMode=2（填充/拉伸填充）
-
-| 行为 | 微信优化 | MioPlugin 应实现 |
-|------|---------|----------------|
-| contentMode | **ScaleToFill** | ScaleToFill |
-| 圆角 | 有 | 有 |
-| masksToBounds | YES | YES |
-| 受 margin 影响 | 是 | 是 |
-| 视觉效果 | 图片拉伸变形填满整个区域 | 同左 |
-
-### 3.4 fillMode=3（顶部填充/特殊模式）
-
-| 行为 | 微信优化 | MioPlugin 应实现 |
-|------|---------|----------------|
-| contentMode | **ScaleAspectFill** | ScaleAspectFill |
-| 圆角 | **❌ 无**（跳过） | 无 |
-| masksToBounds | **❌ NO**（跳过） | NO |
-| 受 margin 影响 | **❌ 否**（全宽） | 否 |
-| Cell 透明化 | Cell+子视图全透明 | Cell 透明 |
-| 视觉效果 | 背景图等比填充，溢出卡片边界，不被裁剪 | 同左 |
+| 优先级 | Bug | 改动量 | 方案 |
+|:------:|:---:|:-----:|------|
+| **P0** | **K** 间距/高度不生效 | ~30 行 | Hook `WCTableViewCellManager.cellHeightFor:` + handleCellLayout 加 height |
+| **P1** | **J** 对齐方式不生效 | ~5 行 | frame.origin.x 根据 alignment 计算 |
+| **P2** | **G** 折叠置顶逻辑丢失 | ~12 行 | wp_applyStandardCorner 中插入折叠检测 |
 
 ---
 
 ## 4. 视图层级
 
 ```
-MMUITableViewCell (Cell Hook)
+MMTableViewCell (Cell Hook)
+├── _cellInfo → WCTableViewCellManager.fCellHeight  ← ★ 行高由这里控制
 ├── layer.cornerRadius = 18          ← 列表圆角
 ├── layer.masksToBounds = YES (普通) / NO (资料卡+卡片背景)
 ├── backgroundColor = 自定义色 (普通) / clearColor (资料卡+卡片背景)
@@ -216,9 +167,7 @@ MMUITableViewCell (Cell Hook)
 └── contentView
     └── MMUIButton (ProfileCardBgHook)
         ├── layer.cornerRadius = 18      ← 资料卡圆角 (fillMode≠3)
-        ├── layer.cornerRadius = 0       ← fillMode=3 时不设圆角
         ├── layer.masksToBounds = YES    ← fillMode≠3
-        ├── layer.masksToBounds = NO     ← fillMode=3
         ├── backgroundColor = clearColor (卡片开) / 自定义色 (卡片关)
         ├── [0] UIImageView tag=999902   ← bgImageView
         ├── [1] UIView (DynamicProvider) ← hidden by FIX-WHITE
@@ -229,18 +178,18 @@ MMUITableViewCell (Cell Hook)
 
 ## 5. 配置项说明
 
-| 配置项 | 类型 | 默认值 | 所属功能 |
-|:------:|:-----:|:------:|:--------:|
-| `listCornerRadiusEnabled` | BOOL | NO | 列表圆角 |
-| `listCellCornerRadius` | CGFloat | 18 | 列表圆角 |
-| `listCellMargin` | CGFloat | 0 | 列表圆角 |
-| `listCellBorder` | BOOL | NO | 列表圆角 |
-| `listCellBorderWidth` | CGFloat | 1.0 | 列表圆角 |
-| `cardBgEnabled` | BOOL | NO | 资料卡背景 |
-| `cardBgHidden` | BOOL | NO | 资料卡背景 (HideCard) |
-| `cardBgFillMode` | NSInteger | 0 | 0=缩放填充(AspectFill) 1=等比适应(AspectFit) 2=拉伸填充(ScaleToFill) 3=顶部填充(AspectFill+无圆角) |
-| `cardBgLight/DarkImagePath` | NSString* | nil | 资料卡背景 |
-| `listCardLight/DarkBgColor` | NSString* | nil | 资料卡背景色 |
+| 配置项 | 类型 | 默认值 | 状态 | 说明 |
+|:------:|:-----:|:------:|:---:|------|
+| `cardBgEnabled` | BOOL | NO | ✅ | 总开关 |
+| `cardBgHidden` | BOOL | NO | ✅ | 隐藏卡片内容 |
+| `cardBgFillMode` | NSInteger | 0 | ✅ | 0=AspectFill 1=AspectFit 2=ScaleToFill 3=AspectFill+无圆角 |
+| `cardBgLight/DarkImagePath` | NSString* | nil | ✅ | 背景图路径 |
+| `cardBgLight/DarkAlignment` | NSInteger | 1 | ❌ | **未使用** |
+| `cardBgLight/DarkLayer` | NSInteger | 0 | ✅ | 图层位置 |
+| `cardBgLight/DarkOffsetX` | CGFloat | 0 | ✅ | X 偏移 |
+| `cardBgLight/DarkOffsetY` | CGFloat | 0 | ✅ | Y 偏移 |
+| `cardBgHeight` | CGFloat | 144 | ❌ | **未实现** |
+| `cardBgListSpacing` | CGFloat | 9 | ❌ | **未实现** |
 
 ---
 
@@ -250,7 +199,7 @@ MMUITableViewCell (Cell Hook)
 |:-:|:-----|:-----|:---------|
 | A | 图片文件不存在 | 用户未保存背景图 | picker 保存后文件存在 |
 | B | 白色 UIView 遮挡 bgImageView | UIDynamicProviderColor 白色板 | FIX-WHITE 遍历隐藏 |
-| C | 点"我"卡死 watchdog | setFrame: height 触发循环 | 移除 height 修改 |
+| C | 点"我"卡死 watchdog | setFrame: height 触发循环 | 移除 height 修改（需重新实现带守卫的版本） |
 | D | 第二次 orig 覆盖 | if 块内外各调一次 orig | 标志位模式 |
 | E | v13 过渡期圆角边距全丢 | early return 跳过通用代码 | 删除 early return |
 | F | 圆角不裁剪 | Cell 层 masksToBounds=NO | 改 MMUIButton 层做圆角 |
@@ -262,4 +211,6 @@ MMUITableViewCell (Cell Hook)
 | L | skipMasksToFit 无守卫 | 只看 fillMode 没看 cardBgEnabled | 加 && config.cardBgEnabled |
 | M | masksToBounds 覆盖 | handleCellLayout 在 masksToBounds=YES 之前 | 交换执行顺序 |
 | N | 背景图 frame 高度 1704pt | superview.superview 不是 Cell | 改用 button.bounds |
-| **O** | **fillMode 效果与微信优化不同** | **contentMode 映射反了 + fillMode=3 缺少跳过圆角** | **修正映射 + fillMode=3 跳过圆角** |
+| O | fillMode 效果与微信优化不同 | contentMode 映射反了 + fillMode=3 缺跳过圆角 | 修正映射 + fillMode=3 跳过圆角 |
+| **P** | **对齐方式不生效** | **alignment 配置从未被代码使用** | **根据 alignment 计算 frame.origin.x** |
+| **Q** | **间距/高度改了没效果** | **handleCellLayout 中没有实现** | **Hook cellHeightFor: + handleCellLayout 加 height** |

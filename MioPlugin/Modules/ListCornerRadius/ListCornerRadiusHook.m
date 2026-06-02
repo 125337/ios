@@ -374,6 +374,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             WPLog(@"ListCornerRadius", @"[WARN] MMUIButton class not found! Will retry on first MMTableViewCell layoutSubviews");
         }
     }
+
+    [ProfileCardBgHook initCellHeightHook];
 }
 
 + (void)wp_applyStandardCorner:(UIView *)cell

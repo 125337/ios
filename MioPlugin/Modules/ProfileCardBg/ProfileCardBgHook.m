@@ -3,6 +3,41 @@
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <substrate.h>
+
+static double (*_orig_cellHeightFor)(id, SEL, id, long long);
+
+static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) {
+    double result = _orig_cellHeightFor(self, _cmd, arg1, arg2);
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.cardBgEnabled) return result;
+
+    CGFloat spacing = config.cardBgListSpacing;
+    if (spacing <= 0) return result;
+
+    // 判断是否 MoreVC
+    UIViewController *vc = nil;
+    UIResponder *responder = [arg1 nextResponder];
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            vc = (UIViewController *)responder;
+            break;
+        }
+        responder = [responder nextResponder];
+    }
+    if (!vc || ![NSStringFromClass([vc class]) isEqualToString:@"MoreViewController"]) {
+        return result;
+    }
+
+    // 判断是否资料卡行
+    if (![ProfileCardBgHook isProfileCard:(UIView *)arg1]) {
+        return result;
+    }
+
+    result += spacing;
+    return result;
+}
 
 @implementation ProfileCardBgHook
 
@@ -487,7 +522,12 @@
             CGFloat imgH = button.bounds.size.height;
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
-            existingBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
+            NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
+            CGFloat imgX = offsetX;
+            if (alignment == 2) {
+                imgX = button.bounds.size.width - imgW + offsetX;
+            }
+            existingBgImg.frame = CGRectMake(imgX, offsetY, imgW, imgH);
 
             NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
             if (layerPos == 1) [button bringSubviewToFront:existingBgImg];
@@ -515,7 +555,12 @@
         CGFloat imgH = button.bounds.size.height;
         CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
         CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
-        btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
+        NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
+        CGFloat imgX = offsetX;
+        if (alignment == 2) {
+            imgX = button.bounds.size.width - imgW + offsetX;
+        }
+        btnBgImg.frame = CGRectMake(imgX, offsetY, imgW, imgH);
 
         WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), buttonBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
               (long)btnBgImg.tag,
@@ -665,7 +710,31 @@ APPLY_CORNER:
     WPLog(@"CardBg-Diag", @"[CELL-TRANSPARENCY] After: cellBg=%@, cellMasks=%d",
           cellView.backgroundColor, cellView.layer.masksToBounds);
 
+    // ★ cardBgHeight：强制最小高度（带循环保护）
+    CGFloat customHeight = config.cardBgHeight;
+    if (customHeight > 0) {
+        CGFloat currentH = cellView.frame.size.height;
+        if (currentH < customHeight) {
+            CGRect f = cellView.frame;
+            f.size.height = customHeight;
+            cellView.frame = f;
+        }
+    }
+
     // 注意：不设 masksToBounds=YES，由 MMUIButton 层负责裁剪
+}
+
++ (void)initCellHeightHook {
+    Class cellMgrClass = objc_getClass("WCTableViewCellManager");
+    if (cellMgrClass) {
+        MSHookMessageEx(cellMgrClass,
+                        @selector(cellHeightFor:),
+                        (IMP)_hooked_cellHeightFor,
+                        (IMP *)&_orig_cellHeightFor);
+        WPLog(@"CardBg", @"[OK] WCTableViewCellManager::cellHeightFor: (spacing)");
+    } else {
+        WPLog(@"CardBg", @"[WARN] WCTableViewCellManager class not found!");
+    }
 }
 
 @end
