@@ -460,6 +460,30 @@
 
     NSString *pcbd = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderDarkColor"]];
     _listProfileCardBorderDarkColor = pcbd.length > 0 ? pcbd : @"#3A3A3C";
+
+    // ========== 资料卡背景配置 ==========
+    _cardBgEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgEnabled"]];
+    _cardBgHidden = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgHidden"]];
+    _cardBgHeight = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];
+    _cardBgListSpacing = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgListSpacing"]];
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightImagePath"]];
+    if (v.length > 0) {
+        _cardBgLightImagePath = [v copy];
+    }
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkImagePath"]];
+    if (v.length > 0) {
+        _cardBgDarkImagePath = [v copy];
+    }
+
+    _cardBgFillMode = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgFillMode"]];
+    _cardBgLightLayer = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightLayer"]];
+    _cardBgDarkLayer = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkLayer"]];
+    _cardBgLightOffsetY = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightOffsetY"]];
+    _cardBgDarkOffsetY = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkOffsetY"]];
+    _cardBgLightOffsetX = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightOffsetX"]];
+    _cardBgDarkOffsetX = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkOffsetX"]];
 }
 
 - (void)save {
@@ -656,7 +680,22 @@
     [d setFloat:_listProfileCardBorderWidth forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderWidth"]];
     if (_listProfileCardBorderLightColor) [d setObject:_listProfileCardBorderLightColor forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderLightColor"]];
     if (_listProfileCardBorderDarkColor) [d setObject:_listProfileCardBorderDarkColor forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderDarkColor"]];
-    
+
+    // ========== 资料卡背景配置 ==========
+    [d setBool:_cardBgEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgEnabled"]];
+    [d setBool:_cardBgHidden forKey:[kPluginPrefix stringByAppendingString:@"CardBgHidden"]];
+    [d setFloat:_cardBgHeight forKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];
+    [d setFloat:_cardBgListSpacing forKey:[kPluginPrefix stringByAppendingString:@"CardBgListSpacing"]];
+    if (_cardBgLightImagePath) [d setObject:_cardBgLightImagePath forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightImagePath"]];
+    if (_cardBgDarkImagePath) [d setObject:_cardBgDarkImagePath forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkImagePath"]];
+    [d setInteger:_cardBgFillMode forKey:[kPluginPrefix stringByAppendingString:@"CardBgFillMode"]];
+    [d setInteger:_cardBgLightLayer forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightLayer"]];
+    [d setInteger:_cardBgDarkLayer forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkLayer"]];
+    [d setFloat:_cardBgLightOffsetY forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightOffsetY"]];
+    [d setFloat:_cardBgDarkOffsetY forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkOffsetY"]];
+    [d setFloat:_cardBgLightOffsetX forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightOffsetX"]];
+    [d setFloat:_cardBgDarkOffsetX forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkOffsetX"]];
+
     [d synchronize];
     WPLog(@"Config", @"[OK] save() completed - NSUserDefaults synchronized");
 }

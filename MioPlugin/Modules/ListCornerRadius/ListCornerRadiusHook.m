@@ -66,6 +66,12 @@ static UIViewController *findParentViewController(UIView *view) {
                                      radius:(CGFloat)radius
                                        type:(NSString *)type;
 
++ (BOOL)wp_isCurrentDarkMode;
+
++ (void)wp_loadBackgroundImageForImageView:(UIImageView *)imageView isDark:(BOOL)isDark;
+
++ (NSString *)wp_cardBackgroundDirectory;
+
 @end
 
 static UIColor *wp_cellDefaultBgColor(BOOL isDark) {
@@ -324,8 +330,117 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
     if (isMoreVC && [ListCornerRadiusHook wp_isProfileCard:cellView]) {
+        PluginConfig *config = [PluginConfig shared];
+
+        if (config.cardBgEnabled) {
+            CGFloat customHeight = config.cardBgHeight;
+            if (customHeight > 0) {
+                CGFloat currentH = cellView.frame.size.height;
+                if (currentH < customHeight) {
+                    CGRect f = cellView.frame;
+                    f.size.height = customHeight;
+                    cellView.frame = f;
+                }
+            }
+
+            if (config.cardBgEnabled && config.cardBgListSpacing > 0) {
+                CGFloat spacing = config.cardBgListSpacing;
+                CGRect f = cellView.frame;
+                f.size.height += spacing;
+                f.origin.y -= spacing / 2.0;
+                cellView.frame = f;
+            }
+        }
+
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+
+        if (config.cardBgEnabled) {
+
+            BOOL isDark = [ListCornerRadiusHook wp_isCurrentDarkMode];
+
+            if (config.cardBgHidden) {
+                for (UIView *sub in cellView.subviews) {
+                    if (![sub isKindOfClass:[UIImageView class]]) {
+                        sub.hidden = YES;
+                    }
+                }
+                cellView.backgroundColor = [UIColor clearColor];
+                UIColor *hideColor = [config colorFromHex:isDark
+                    ? config.listCardDarkBgColor : config.listCardLightBgColor];
+                if (hideColor) {
+                    for (UIView *sub in cellView.subviews) {
+                        sub.backgroundColor = hideColor;
+                    }
+                }
+            }
+
+            for (UIView *sub in cellView.subviews) {
+                if ([sub isKindOfClass:[UIImageView class]]) {
+                    UIImageView *imgView = (UIImageView *)sub;
+                    if (imgView.image != nil &&
+                        ![imgView isEqual:objc_getAssociatedObject(cellView, "mio_bgImageView")]) {
+                        imgView.hidden = YES;
+                    } else if (imgView.image == nil) {
+                        imgView.hidden = YES;
+                    }
+                }
+            }
+
+            static const NSInteger kBgImageTag = 999901;
+            UIImageView *bgImageView = (UIImageView *)[cellView viewWithTag:kBgImageTag];
+
+            if (!bgImageView) {
+                bgImageView = [[UIImageView alloc] init];
+                bgImageView.tag = kBgImageTag;
+                bgImageView.clipsToBounds = YES;
+                bgImageView.userInteractionEnabled = NO;
+
+                NSInteger fillMode = config.cardBgFillMode;
+                switch (fillMode) {
+                    case 1: bgImageView.contentMode = UIViewContentModeScaleAspectFit; break;
+                    case 2: bgImageView.contentMode = UIViewContentModeScaleAspectFill; break;
+                    default: bgImageView.contentMode = UIViewContentModeScaleToFill; break;
+                }
+
+                [cellView addSubview:bgImageView];
+                objc_setAssociatedObject(cellView, "mio_bgImageView",
+                                         bgImageView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+
+            CGRect bounds = cellView.bounds;
+            CGFloat margin = config.listCellMargin;
+            if (margin <= 0) margin = 9;
+
+            CGFloat imgW = bounds.size.width;
+            CGFloat imgH = bounds.size.height;
+            CGFloat imgX = 0;
+            CGFloat imgY = 0;
+
+            if (config.listCornerRadiusEnabled && config.cardBgFillMode != 3) {
+                imgW -= margin * 2;
+                imgX = margin;
+            }
+
+            CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+            CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
+            imgY += offsetY;
+            imgX += offsetX;
+
+            bgImageView.frame = CGRectMake(imgX, imgY, imgW, imgH);
+
+            NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
+            if (layerPos == 1) {
+                [cellView bringSubviewToFront:bgImageView];
+            } else {
+                [cellView sendSubviewToBack:bgImageView];
+            }
+
+            bgImageView.image = nil;
+            bgImageView.alpha = 0.5;
+            [ListCornerRadiusHook wp_loadBackgroundImageForImageView:bgImageView
+                                                             isDark:isDark];
         }
         return;
     }
@@ -884,6 +999,130 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     shape.frame = rect;
 
     return shape;
+}
+
++ (BOOL)wp_isCurrentDarkMode {
+    if (@available(iOS 13.0, *)) {
+        UIApplication *app = [UIApplication sharedApplication];
+        for (UIScene *scene in app.connectedScenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene *ws = (UIWindowScene *)scene;
+                for (UIWindow *window in ws.windows) {
+                    if (window.isKeyWindow) {
+                        return window.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+                    }
+                }
+            }
+        }
+    }
+    return NO;
+}
+
++ (NSString *)wp_cardBackgroundDirectory {
+    static NSString *dir = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSString *docsDir = [NSSearchPathForDirectoriesInDomains(
+            NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+        dir = [docsDir stringByAppendingPathComponent:@"MioCardBackground"];
+
+        NSFileManager *fm = [NSFileManager defaultManager];
+        BOOL isDir = NO;
+        BOOL exists = [fm fileExistsAtPath:dir isDirectory:&isDir];
+        if (!exists) {
+            [fm createDirectoryAtPath:dir
+           withIntermediateDirectories:YES
+                            attributes:nil
+                                 error:nil];
+        } else if (!isDir) {
+            [fm removeItemAtPath:dir error:nil];
+            [fm createDirectoryAtPath:dir
+           withIntermediateDirectories:YES
+                            attributes:nil
+                                 error:nil];
+        }
+    });
+    return dir;
+}
+
++ (void)wp_loadBackgroundImageForImageView:(UIImageView *)imageView isDark:(BOOL)isDark {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        PluginConfig *config = [PluginConfig shared];
+        NSString *imagePath = isDark ? config.cardBgDarkImagePath
+                                     : config.cardBgLightImagePath;
+
+        if (!imagePath || imagePath.length == 0) return;
+
+        NSFileManager *fm = [NSFileManager defaultManager];
+        if (![fm fileExistsAtPath:imagePath]) return;
+
+        UIImage *resultImage = nil;
+        NSString *ext = imagePath.pathExtension.lowercaseString;
+
+        if ([ext isEqualToString:@"gif"]) {
+            NSData *gifData = [NSData dataWithContentsOfFile:imagePath];
+            if (gifData) {
+                CGImageSourceRef source = CGImageSourceCreateWithData(
+                    (__bridge CFDataRef)gifData, NULL);
+                if (source) {
+                    size_t count = CGImageSourceGetCount(source);
+                    if (count < 2) {
+                        CGImageRef cgImg = CGImageSourceCreateImageAtIndex(source, 0, NULL);
+                        resultImage = [UIImage imageWithCGImage:cgImg];
+                        CGImageRelease(cgImg);
+                    } else {
+                        NSMutableArray<UIImage *> *frames = [NSMutableArray array];
+                        NSTimeInterval totalDuration = 0;
+                        for (size_t i = 0; i < count; i++) {
+                            CGImageRef frameImg = CGImageSourceCreateImageAtIndex(source, i, NULL);
+                            if (frameImg) {
+                                [frames addObject:[UIImage imageWithCGImage:frameImg]];
+                                CGImageRelease(frameImg);
+
+                                CFDictionaryRef props =
+                                    CGImageSourceCopyPropertiesAtIndex(source, i, NULL);
+                                if (props) {
+                                    CFDictionaryRef gifDict = CFDictionaryGetValue(
+                                        props, kCGImagePropertyGIFDictionary);
+                                    if (gifDict) {
+                                        CFNumberRef delayRef = CFDictionaryGetValue(
+                                            gifDict, kCGImagePropertyGIFDelayTime);
+                                        if (!delayRef) {
+                                            delayRef = CFDictionaryGetValue(
+                                                gifDict,
+                                                kCGImagePropertyGIFUnclampedDelayTime);
+                                        }
+                                        NSTimeInterval delay = 0.1;
+                                        if (delayRef) {
+                                            CFNumberGetValue(delayRef,
+                                                kCFNumberFloatType, &delay);
+                                            if (delay < 0.02) delay = 0.1;
+                                        }
+                                        totalDuration += delay;
+                                    }
+                                    CFRelease(props);
+                                }
+                            }
+                        }
+                        CFRelease(source);
+                        if (frames.count > 0) {
+                            resultImage = [UIImage animatedImageWithImages:frames
+                                                            duration:totalDuration];
+                        }
+                    }
+                }
+            }
+        } else {
+            resultImage = [UIImage imageWithContentsOfFile:imagePath];
+        }
+
+        if (resultImage && imageView) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                imageView.image = resultImage;
+                imageView.alpha = 1.0;
+            });
+        }
+    });
 }
 
 @end

@@ -273,7 +273,19 @@
                 UIImage *image = (UIImage *)object;
                 NSData *pngData = UIImagePNGRepresentation(image);
                 NSString *filename = mode == 100 ? @"MioCardBgLight.png" : @"MioCardBgDark.png";
-                NSString *path = [NSHomeDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"Documents/%@", filename]];
+
+                NSString *bgDir = [NSSearchPathForDirectoriesInDomains(
+                    NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+                bgDir = [bgDir stringByAppendingPathComponent:@"MioCardBackground"];
+
+                NSFileManager *fm = [NSFileManager defaultManager];
+                BOOL isDir = NO;
+                if (![fm fileExistsAtPath:bgDir isDirectory:&isDir] || !isDir) {
+                    [fm createDirectoryAtPath:bgDir withIntermediateDirectories:YES
+                                     attributes:nil error:nil];
+                }
+
+                NSString *path = [bgDir stringByAppendingPathComponent:filename];
                 [pngData writeToFile:path atomically:YES];
                 if (mode == 100) {
                     config.cardBgLightImagePath = path;
@@ -290,10 +302,25 @@
         [result.itemProvider loadFileRepresentationForTypeIdentifier:(__bridge NSString *)kUTTypeGIF completionHandler:^(NSURL *url, NSError *error) {
             if (error || !url) return;
             dispatch_async(dispatch_get_main_queue(), ^{
+                NSString *bgDir = [NSSearchPathForDirectoriesInDomains(
+                    NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+                bgDir = [bgDir stringByAppendingPathComponent:@"MioCardBackground"];
+
+                NSFileManager *fm = [NSFileManager defaultManager];
+                BOOL isDir = NO;
+                if (![fm fileExistsAtPath:bgDir isDirectory:&isDir] || !isDir) {
+                    [fm createDirectoryAtPath:bgDir withIntermediateDirectories:YES
+                                     attributes:nil error:nil];
+                }
+
+                NSString *filename = mode == 101 ? @"MioCardBgLight.gif" : @"MioCardBgDark.gif";
+                NSString *destPath = [bgDir stringByAppendingPathComponent:filename];
+                NSError *copyError = nil;
+                [fm copyItemAtURL:url toURL:[NSURL fileURLWithPath:destPath] error:&copyError];
                 if (mode == 101) {
-                    config.cardBgLightImagePath = url.path;
+                    config.cardBgLightImagePath = destPath;
                 } else {
-                    config.cardBgDarkImagePath = url.path;
+                    config.cardBgDarkImagePath = destPath;
                 }
                 [config save];
                 [picker dismissViewControllerAnimated:YES completion:^{
