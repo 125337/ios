@@ -81,6 +81,8 @@
                                                     title:@"开发者工具"
                                                  subtitle:@"NSLog监控、VC抓取、导航日志"
                                              sectionTitle:@"通用"
+                                          controllerClass:[SettingDevToolsController class]
+                                     hookInstallerClasses:@[[DevToolsHook class]]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"settingentry"
                                                     title:@"插件入口"
                                                  subtitle:@"设置页面入口"
