@@ -81,12 +81,12 @@
         *ecy = [self addNavRowInGroup:expand title:@"背景填充模式" subtitle:fillSub tag:202 action:@selector(onFillModeTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        NSArray *alignNames = @[@"居中对齐", @"底部对齐", @"顶部对齐"];
-        NSString *lightAlignSub = (cfg.cardBgLightAlignment >= 0 && cfg.cardBgLightAlignment < (NSInteger)alignNames.count) ? alignNames[cfg.cardBgLightAlignment] : @"居中对齐";
+        NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
+        NSString *lightAlignSub = (cfg.cardBgLightAlignment >= 0 && cfg.cardBgLightAlignment < (NSInteger)alignNames.count) ? alignNames[cfg.cardBgLightAlignment] : @"底部对齐";
         *ecy = [self addNavRowInGroup:expand title:@"浅色模式对齐方式" subtitle:lightAlignSub tag:205 action:@selector(onLightAlignmentTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        NSString *darkAlignSub = (cfg.cardBgDarkAlignment >= 0 && cfg.cardBgDarkAlignment < (NSInteger)alignNames.count) ? alignNames[cfg.cardBgDarkAlignment] : @"居中对齐";
+        NSString *darkAlignSub = (cfg.cardBgDarkAlignment >= 0 && cfg.cardBgDarkAlignment < (NSInteger)alignNames.count) ? alignNames[cfg.cardBgDarkAlignment] : @"底部对齐";
         *ecy = [self addNavRowInGroup:expand title:@"深色模式对齐方式" subtitle:darkAlignSub tag:206 action:@selector(onDarkAlignmentTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
@@ -478,7 +478,7 @@
 
 - (void)onLightAlignmentTap {
     PluginConfig *config = [PluginConfig shared];
-    NSArray *alignNames = @[@"居中对齐", @"底部对齐", @"顶部对齐"];
+    NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"浅色模式对齐方式"
                                                                    message:nil
@@ -511,7 +511,7 @@
 
 - (void)onDarkAlignmentTap {
     PluginConfig *config = [PluginConfig shared];
-    NSArray *alignNames = @[@"居中对齐", @"底部对齐", @"顶部对齐"];
+    NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"深色模式对齐方式"
                                                                    message:nil

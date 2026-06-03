@@ -5,26 +5,18 @@
 #import <objc/message.h>
 #import <substrate.h>
 
-static double (*_orig_cellHeightFor)(id, SEL, id, long long);
+static double (*_orig_heightForHeader)(id, SEL, id, long long);
 
-static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) {
-    double result = _orig_cellHeightFor(self, _cmd, arg1, arg2);
+static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long section) {
+    double result = _orig_heightForHeader(self, _cmd, tableView, section);
 
     PluginConfig *config = [PluginConfig shared];
     if (!config.cardBgEnabled) return result;
 
-    // ★ 通过 self.cell 获取真正的 UITableViewCell
-    UITableViewCell *cell = nil;
-    @try {
-        cell = [self valueForKey:@"cell"];
-    } @catch (NSException *e) {
-        return result;
-    }
-    if (!cell) return result;
+    if (section != 1) return result;
 
-    // 判断是否 MoreVC
+    UIResponder *responder = [tableView nextResponder];
     UIViewController *vc = nil;
-    UIResponder *responder = [cell nextResponder];
     while (responder) {
         if ([responder isKindOfClass:[UIViewController class]]) {
             vc = (UIViewController *)responder;
@@ -36,22 +28,18 @@ static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) 
         return result;
     }
 
-    // ★ 用真正的 Cell 判断是否资料卡
-    if (![ProfileCardBgHook isProfileCard:(UIView *)cell]) {
-        return result;
-    }
-
-    // cardBgHeight：强制最小高度
     CGFloat customHeight = config.cardBgHeight;
     if (customHeight > 0 && result < customHeight) {
         result = customHeight;
     }
 
-    // cardBgListSpacing：追加间距
     CGFloat spacing = config.cardBgListSpacing;
     if (spacing > 0) {
         result += spacing;
     }
+
+    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, vc=%@",
+          section, result, vc ? NSStringFromClass([vc class]) : @"nil");
 
     return result;
 }
@@ -541,15 +529,6 @@ static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) 
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
             existingBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
 
-            NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
-            if (alignment == 1) {
-                existingBgImg.layer.contentsRect = CGRectMake(0, 0.5, 1, 0.5);
-            } else if (alignment == 2) {
-                existingBgImg.layer.contentsRect = CGRectMake(0, 0, 1, 0.5);
-            } else {
-                existingBgImg.layer.contentsRect = CGRectMake(0, 0, 1, 1);
-            }
-
             NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
             if (layerPos == 1) [button bringSubviewToFront:existingBgImg];
 
@@ -561,7 +540,7 @@ static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) 
 
         UIImageView *btnBgImg = [[UIImageView alloc] init];
         btnBgImg.tag = kMioBgImageTag;
-        btnBgImg.clipsToBounds = YES;
+        btnBgImg.clipsToBounds = NO;
         btnBgImg.userInteractionEnabled = NO;
 
         NSInteger fillMode = config.cardBgFillMode;
@@ -577,15 +556,6 @@ static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) 
         CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
         CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
         btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
-
-        NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
-        if (alignment == 1) {
-            btnBgImg.layer.contentsRect = CGRectMake(0, 0.5, 1, 0.5);
-        } else if (alignment == 2) {
-            btnBgImg.layer.contentsRect = CGRectMake(0, 0, 1, 0.5);
-        } else {
-            btnBgImg.layer.contentsRect = CGRectMake(0, 0, 1, 1);
-        }
 
         WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), buttonBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
               (long)btnBgImg.tag,
@@ -622,6 +592,43 @@ static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) 
                     finalImg.image = resultImage;
                     finalImg.alpha = 1.0;
                     finalImg.hidden = NO;
+
+                    // ★ 计算 alignment 偏移（AspectFill 模式下）
+                    PluginConfig *cfg = [PluginConfig shared];
+                    NSInteger fillMode = cfg.cardBgFillMode;
+                    NSInteger alignment = capturedIsDark ? cfg.cardBgDarkAlignment : cfg.cardBgLightAlignment;
+                    CGFloat userOffsetY = capturedIsDark ? cfg.cardBgDarkOffsetY : cfg.cardBgLightOffsetY;
+
+                    if ((fillMode == 0 || fillMode == 3) && resultImage.size.width > 0) {
+                        CGFloat imgW = resultImage.size.width;
+                        CGFloat imgH = resultImage.size.height;
+                        CGFloat viewW = finalSelf.bounds.size.width;
+                        CGFloat viewH = finalSelf.bounds.size.height;
+
+                        CGFloat scale = viewW / imgW;
+                        CGFloat renderedH = imgH * scale;
+                        CGFloat overflow = renderedH - viewH;
+
+                        if (overflow > 0) {
+                            CGFloat alignmentOffset = 0;
+                            switch (alignment) {
+                                case 0:  // 底部对齐
+                                    alignmentOffset = -overflow / 2.0;
+                                    break;
+                                case 2:  // 顶部对齐
+                                    alignmentOffset = overflow / 2.0;
+                                    break;
+                                case 1:  // 居中对齐（默认）
+                                default:
+                                    alignmentOffset = 0;
+                                    break;
+                            }
+                            CGRect f = finalImg.frame;
+                            f.origin.y = userOffsetY + alignmentOffset;
+                            finalImg.frame = f;
+                        }
+                    }
+
                     objc_setAssociatedObject(finalSelf, kMioBgLoadedKey, @YES,
                                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                     WPLog(@"CardBg-Diag", @"[BGIMG-SET] image=SET, size=%.0fx%.0f, frame=(%.0f,%.0f,%.0f,%.0f), hidden=%d, alpha=%.2f, tag=%ld",
@@ -739,15 +746,15 @@ APPLY_CORNER:
 }
 
 + (void)initCellHeightHook {
-    Class cellMgrClass = objc_getClass("WCTableViewCellManager");
-    if (cellMgrClass) {
-        MSHookMessageEx(cellMgrClass,
-                        @selector(cellHeightFor:),
-                        (IMP)_hooked_cellHeightFor,
-                        (IMP *)&_orig_cellHeightFor);
-        WPLog(@"CardBg", @"[OK] WCTableViewCellManager::cellHeightFor: (spacing)");
+    Class tableMgrClass = objc_getClass("WCTableViewManager");
+    if (tableMgrClass) {
+        MSHookMessageEx(tableMgrClass,
+                        @selector(tableView:heightForHeaderInSection:),
+                        (IMP)_hooked_heightForHeader,
+                        (IMP *)&_orig_heightForHeader);
+        WPLog(@"CardBg", @"[OK] WCTableViewManager::heightForHeaderInSection: (spacing+height)");
     } else {
-        WPLog(@"CardBg", @"[WARN] WCTableViewCellManager class not found!");
+        WPLog(@"CardBg", @"[WARN] WCTableViewManager class not found!");
     }
 }
 
