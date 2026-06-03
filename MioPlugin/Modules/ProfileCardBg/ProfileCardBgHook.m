@@ -128,66 +128,37 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                          isDark:(BOOL)isDark {
     PluginConfig *config = [PluginConfig shared];
 
-    CGFloat margin = config.listCellMargin;
+    // ★ 与微信优化一致：始终 masksToBounds=YES
+    // Cell 层已在 ListCornerRadiusHook 中缩窄，button 在缩窄的 cell 内
+    cell.layer.cornerRadius = radius;
+    cell.layer.masksToBounds = YES;
 
-    if (margin > 0) {
-        // ★ 有边距时：只设圆角和边框到 button 层，不裁切内容
-        // 背景图已在 handleButtonLayout 中内缩，这里只做圆角边框
-        // 不用 mask/masksToBounds，避免裁掉子视图内容
-        cell.layer.cornerRadius = radius;
-        cell.layer.masksToBounds = NO;
-
-        if (config.listProfileCardBorderEnabled) {
-            CGFloat bw = config.listProfileCardBorderWidth;
-            if (bw <= 0) bw = 2.0;
-
-            UIColor *borderColor = [config colorFromHex:isDark
-                ? config.listProfileCardBorderDarkColor
-                : config.listProfileCardBorderLightColor];
-            if (!borderColor) {
-                borderColor = isDark
-                    ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
-                    : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
-            }
-
-            cell.layer.borderWidth = bw;
-            cell.layer.borderColor = borderColor.CGColor;
-        } else {
-            cell.layer.borderWidth = 0;
-            cell.layer.borderColor = nil;
+    if (!config.cardBgEnabled) {
+        UIColor *cardBg = [config colorFromHex:isDark
+            ? config.listCardDarkBgColor : config.listCardLightBgColor];
+        if (cardBg) {
+            cell.backgroundColor = cardBg;
         }
+    }
+
+    if (config.listProfileCardBorderEnabled) {
+        CGFloat bw = config.listProfileCardBorderWidth;
+        if (bw <= 0) bw = 2.0;
+
+        UIColor *borderColor = [config colorFromHex:isDark
+            ? config.listProfileCardBorderDarkColor
+            : config.listProfileCardBorderLightColor];
+        if (!borderColor) {
+            borderColor = isDark
+                ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
+                : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
+        }
+
+        cell.layer.borderWidth = bw;
+        cell.layer.borderColor = borderColor.CGColor;
     } else {
-        // ★ 无边距时：原始方案
-        cell.layer.cornerRadius = radius;
-        cell.layer.masksToBounds = YES;
-
-        if (!config.cardBgEnabled) {
-            UIColor *cardBg = [config colorFromHex:isDark
-                ? config.listCardDarkBgColor : config.listCardLightBgColor];
-            if (cardBg) {
-                cell.backgroundColor = cardBg;
-            }
-        }
-
-        if (config.listProfileCardBorderEnabled) {
-            CGFloat bw = config.listProfileCardBorderWidth;
-            if (bw <= 0) bw = 2.0;
-
-            UIColor *borderColor = [config colorFromHex:isDark
-                ? config.listProfileCardBorderDarkColor
-                : config.listProfileCardBorderLightColor];
-            if (!borderColor) {
-                borderColor = isDark
-                    ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
-                    : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
-            }
-
-            cell.layer.borderWidth = bw;
-            cell.layer.borderColor = borderColor.CGColor;
-        } else {
-            cell.layer.borderWidth = 0;
-            cell.layer.borderColor = nil;
-        }
+        cell.layer.borderWidth = 0;
+        cell.layer.borderColor = nil;
     }
 }
 
@@ -614,11 +585,11 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
 
-            // ★ 背景图内缩（视觉边距）
+            // ★ 背景图内缩（与微信优化一致：宽度减 margin*2，x 偏移用固定 -2.0）
             CGFloat bgMargin = config.listCellMargin;
             if (bgMargin > 0) {
-                offsetX += bgMargin;
                 imgW -= bgMargin * 2;
+                offsetX = -2.0;  // 微信优化用固定值 -2.0
             }
 
             NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
@@ -673,11 +644,11 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
         CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
 
-        // ★ 背景图内缩（视觉边距）
+        // ★ 背景图内缩（与微信优化一致：宽度减 margin*2，x 偏移用固定 -2.0）
         CGFloat bgMargin2 = config.listCellMargin;
         if (bgMargin2 > 0) {
-            offsetX += bgMargin2;
             imgW -= bgMargin2 * 2;
+            offsetX = -2.0;  // 微信优化用固定值 -2.0
         }
         btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
 
