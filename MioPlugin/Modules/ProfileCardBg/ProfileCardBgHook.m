@@ -586,13 +586,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
 
-            // ★ 背景图内缩（视觉边距，不影响子视图布局）
-            CGFloat bgMargin = config.listCellMargin;
-            if (bgMargin > 0) {
-                offsetX += bgMargin;
-                imgW -= bgMargin * 2;
-            }
-
             NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
 
             CGFloat alignmentOffset = 0;
@@ -644,13 +637,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         CGFloat imgH = button.bounds.size.height;
         CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
         CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
-
-        // ★ 背景图内缩（视觉边距，不影响子视图布局）
-        CGFloat bgMargin = config.listCellMargin;
-        if (bgMargin > 0) {
-            offsetX += bgMargin;
-            imgW -= bgMargin * 2;
-        }
         btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
 
         WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), buttonBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
@@ -788,7 +774,39 @@ APPLY_CORNER:
         CGRect bf = button.frame;
         CGFloat oldH = bf.size.height;
         bf.size.height = targetH;
+
+        // ★ 改 button 左右边距（先记录 UILabel 原始位置）
+        CGFloat margin = config.listCellMargin;
+        NSMutableArray<NSValue *> *savedLabelFrames = nil;
+        if (margin > 0) {
+            savedLabelFrames = [NSMutableArray array];
+            for (UIView *sub in button.subviews) {
+                if ([sub isKindOfClass:[UILabel class]]) {
+                    [savedLabelFrames addObject:[NSValue valueWithCGRect:sub.frame]];
+                }
+            }
+            // 缩窄 button
+            bf.origin.x += margin;
+            bf.size.width -= margin * 2;
+        }
         button.frame = bf;
+
+        // ★ 修复 UILabel：缩小宽度 + sizeToFit 让文字重新排布
+        if (margin > 0 && savedLabelFrames.count > 0) {
+            NSInteger idx = 0;
+            for (UIView *sub in button.subviews) {
+                if ([sub isKindOfClass:[UILabel class]] && idx < savedLabelFrames.count) {
+                    CGRect origFrame = [savedLabelFrames[idx] CGRectValue];
+                    CGRect newFrame = origFrame;
+                    newFrame.size.width = origFrame.size.width - 2 * margin;
+                    if (newFrame.size.width > 0) {
+                        sub.frame = newFrame;
+                        [(UILabel *)sub sizeToFit];
+                    }
+                    idx++;
+                }
+            }
+        }
 
         WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
               oldH, targetH,
