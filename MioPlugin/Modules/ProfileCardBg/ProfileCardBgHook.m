@@ -6,6 +6,62 @@
 #import <substrate.h>
 
 static double (*_orig_heightForHeader)(id, SEL, id, long long);
+static void (*_orig_headerSetFrame)(id, SEL, CGRect);
+
+static void _hooked_headerSetFrame(id self, SEL _cmd, CGRect newFrame) {
+    _orig_headerSetFrame(self, _cmd, newFrame);
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.cardBgEnabled) return;
+    if (config.cardBgHeight <= 0) return;
+
+    // 判断是否在 MoreViewController 中
+    UIViewController *vc = nil;
+    UIResponder *responder = [self nextResponder];
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            vc = (UIViewController *)responder;
+            break;
+        }
+        responder = [responder nextResponder];
+    }
+    if (!vc || ![NSStringFromClass([vc class]) isEqualToString:@"MoreViewController"]) return;
+
+    // 遍历子视图找到 MMUIButton（含 MMHeadImageView）
+    UIView *targetButton = nil;
+    for (UIView *sub in ((UIView *)self).subviews) {
+        for (UIView *sub2 in sub.subviews) {
+            if ([sub2 isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+                for (UIView *sub3 in sub2.subviews) {
+                    if ([sub3 isKindOfClass:NSClassFromString(@"MMHeadImageView")]) {
+                        targetButton = (UIView *)sub2;
+                        break;
+                    }
+                }
+            }
+            if (targetButton) break;
+        }
+        if (targetButton) break;
+    }
+
+    if (!targetButton) return;
+
+    CGFloat targetH = config.cardBgHeight;
+    CGFloat spacing = config.cardBgListSpacing;
+    if (spacing > 0) targetH += spacing;  // header 高度已包含 spacing，button 也需要匹配
+
+    if (targetButton.frame.size.height < targetH && targetH > 0) {
+        CGRect f = targetButton.frame;
+        f.size.height = targetH;
+        targetButton.frame = f;
+
+        WPLog(@"CardBg-Diag", @"[SETFRAME-HOOK] headerFrame=(%.0f,%.0f,%.0f,%.0f), "
+              @"button→height=%.0f, targetH=%.1f",
+              newFrame.origin.x, newFrame.origin.y,
+              newFrame.size.width, newFrame.size.height,
+              targetButton.frame.size.height, targetH);
+    }
+}
 
 static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long section) {
     double result = _orig_heightForHeader(self, _cmd, tableView, section);
@@ -690,14 +746,10 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     } // end needsFullCardBg
 
 APPLY_CORNER:
-    // ── 资料卡高度调整（autoresizingMask 实验方案）──
-    button.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-
-    WPLog(@"CardBg-Diag", @"[AUTO-RESIZE] button.frame=(%.0f,%.0f,%.0f,%.0f), "
-          @"mask=%ld, superview=%@",
+    // ── 资料卡高度由 _hooked_headerSetFrame 同步处理 ──
+    WPLog(@"CardBg-Diag", @"[LAYOUT] button.frame=(%.0f,%.0f,%.0f,%.0f), superview=%@",
           button.frame.origin.x, button.frame.origin.y,
           button.frame.size.width, button.frame.size.height,
-          (long)button.autoresizingMask,
           NSStringFromClass([button.superview class]));
 
     // ── 圆角 + 边框 + QR码隐藏 ──
@@ -788,9 +840,24 @@ APPLY_CORNER:
                         @selector(tableView:heightForHeaderInSection:),
                         (IMP)_hooked_heightForHeader,
                         (IMP *)&_orig_heightForHeader);
-        WPLog(@"CardBg", @"[OK] WCTableViewManager::heightForHeaderInSection: (spacing+height)");
+        WPLog(@"CardBg", @"[OK] WCTableViewManager::heightForHeaderInSection:");
     } else {
         WPLog(@"CardBg", @"[WARN] WCTableViewManager class not found!");
+    }
+
+    // ★ 最终方案：Hook header view 的 setFrame: 同步 button 高度
+    Class headerViewClass = objc_getClass("MMTableSectionHeaderView");
+    if (!headerViewClass) {
+        headerViewClass = objc_getClass("MMUITableViewCell");
+    }
+    if (headerViewClass) {
+        MSHookMessageEx(headerViewClass,
+                        @selector(setFrame:),
+                        (IMP)_hooked_headerSetFrame,
+                        (IMP *)&_orig_headerSetFrame);
+        WPLog(@"CardBg", @"[OK] %@::setFrame: (height sync)", NSStringFromClass(headerViewClass));
+    } else {
+        WPLog(@"CardBg", @"[WARN] MMTableSectionHeaderView/MMUITableViewCell class not found!");
     }
 }
 
