@@ -90,8 +90,14 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         result = customHeight;
     }
 
-    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, height=%.1f",
-          section, result, customHeight);
+    // ★ ② 追加间距
+    CGFloat spacing = config.cardBgListSpacing;
+    if (spacing > 0) {
+        result += spacing;
+    }
+
+    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, height=%.1f, spacing=%.1f",
+          section, result, customHeight, spacing);
 
     return result;
 }
@@ -770,20 +776,7 @@ APPLY_CORNER:
         bf.size.height = targetH;
         button.frame = bf;
 
-        // ② ★ 触发表格重新布局（方案 H 改进版）
-        if ([tableView isKindOfClass:[UITableView class]]) {
-            UITableView *tv = (UITableView *)tableView;
-            [tv beginUpdates];
-            [tv endUpdates];
-            // 备选：强制同步重算
-            [tableView setNeedsLayout];
-            [tableView layoutIfNeeded];
-        }
-        // 让父容器也重算
-        [container setNeedsLayout];
-        [container layoutIfNeeded];
-
-        WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f), triggered reload",
+        WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
               oldH, targetH,
               container.frame.origin.x, container.frame.origin.y,
               container.frame.size.width, container.frame.size.height);
