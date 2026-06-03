@@ -19,7 +19,7 @@
 
     self.logTextView = [[UITextView alloc] initWithFrame:self.view.bounds];
     self.logTextView.editable = NO;
-    self.logTextView.font = [UIFont monospacedSystemFontOfSize:11];
+    self.logTextView.font = [UIFont monospacedSystemFontOfSize:11 weight:UIFontWeightRegular];
     self.logTextView.text = [self.logs componentsJoinedByString:@"\n"];
     self.logTextView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:self.logTextView];
@@ -51,7 +51,7 @@
 
     self.logTextView = [[UITextView alloc] initWithFrame:self.view.bounds];
     self.logTextView.editable = NO;
-    self.logTextView.font = [UIFont monospacedSystemFontOfSize:11];
+    self.logTextView.font = [UIFont monospacedSystemFontOfSize:11 weight:UIFontWeightRegular];
     self.logTextView.text = [self.logs componentsJoinedByString:@"\n"];
     self.logTextView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:self.logTextView];
@@ -86,7 +86,7 @@
 
     self.textView = [[UITextView alloc] initWithFrame:self.view.bounds];
     self.textView.editable = NO;
-    self.textView.font = [UIFont monospacedSystemFontOfSize:12];
+    self.textView.font = [UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];
     self.textView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:self.textView];
 
@@ -171,7 +171,7 @@
     }];
     cy = [self addSeparatorInGroup:g3 cy:cy width:w];
 
-    cy = [self addButtonRowInGroup:g3 title:@"显示 VC 层级树" cy:cy width:w block:^{
+    cy = [self addButtonRowInGroup:g3 title:@"显示 VC 层级树" cy:cy width:w action:^{
         MioHierarchyViewerController *vc = [[MioHierarchyViewerController alloc] init];
         [self.navigationController pushViewController:vc animated:YES];
     }];

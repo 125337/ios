@@ -1,4 +1,4 @@
-#import <UIKit/UIKit.h>
+#import "../../Settings/Common/SettingCategoryController.h"
 
-@interface SettingDevToolsController : UITableViewController
+@interface SettingDevToolsController : SettingCategoryController
 @end
