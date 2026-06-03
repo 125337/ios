@@ -205,7 +205,7 @@ static void mio_dismissViewControllerAnimated(id self, SEL _cmd, BOOL animated, 
     MSHookMessageEx(vcClass, @selector(presentViewController:animated:completion:),
                     (IMP)mio_presentViewController, (IMP *)&orig_mio_presentViewController);
     MSHookMessageEx(vcClass, @selector(dismissViewControllerAnimated:completion:),
-                    (IMP)mio_dismissViewControllerAnimated, (IMP *)&orig_mio_dismissAnimatedViewController);
+                    (IMP)mio_dismissViewControllerAnimated, (IMP *)&orig_mio_dismissViewControllerAnimated);
 
     WPLog(@"DevTools", @"[MioNavMonitor] ✓ 13个Hook已安装");
 }
