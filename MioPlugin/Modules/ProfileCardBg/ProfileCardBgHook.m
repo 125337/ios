@@ -783,6 +783,10 @@ APPLY_CORNER:
         }
         button.frame = bf;
 
+        // ⭐ 强制重新布局子视图，让微信自动适应新宽度
+        [button setNeedsLayout];
+        [button layoutIfNeeded];
+
         WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
               oldH, targetH,
               container.frame.origin.x, container.frame.origin.y,
