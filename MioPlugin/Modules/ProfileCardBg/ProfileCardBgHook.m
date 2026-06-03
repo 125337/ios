@@ -774,6 +774,13 @@ APPLY_CORNER:
         CGRect bf = button.frame;
         CGFloat oldH = bf.size.height;
         bf.size.height = targetH;
+
+        // ★ 改 button 左右边距（与列表圆角一致）
+        CGFloat margin = config.listCellMargin;
+        if (margin > 0) {
+            bf.origin.x += margin;
+            bf.size.width -= margin * 2;
+        }
         button.frame = bf;
 
         WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
