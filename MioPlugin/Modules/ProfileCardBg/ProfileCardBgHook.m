@@ -128,36 +128,90 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                          isDark:(BOOL)isDark {
     PluginConfig *config = [PluginConfig shared];
 
-    cell.layer.cornerRadius = radius;
-    cell.layer.masksToBounds = YES;
+    CGFloat margin = config.listCellMargin;
 
-    // ★ cardBgEnabled 时不设置不透明背景色，避免遮挡 Cell 层的背景图
-    if (!config.cardBgEnabled) {
-        UIColor *cardBg = [config colorFromHex:isDark
-            ? config.listCardDarkBgColor : config.listCardLightBgColor];
-        if (cardBg) {
-            cell.backgroundColor = cardBg;
-        }
-    }
-
-    if (config.listProfileCardBorderEnabled) {
-        CGFloat bw = config.listProfileCardBorderWidth;
-        if (bw <= 0) bw = 2.0;
-
-        UIColor *borderColor = [config colorFromHex:isDark
-            ? config.listProfileCardBorderDarkColor
-            : config.listProfileCardBorderLightColor];
-        if (!borderColor) {
-            borderColor = isDark
-                ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
-                : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
-        }
-
-        cell.layer.borderWidth = bw;
-        cell.layer.borderColor = borderColor.CGColor;
-    } else {
+    if (margin > 0) {
+        // ★ 有边距时：用 CAShapeLayer 绘制内缩圆角+边框，不动 button.layer
+        cell.layer.cornerRadius = 0;
         cell.layer.borderWidth = 0;
-        cell.layer.borderColor = nil;
+        cell.layer.masksToBounds = NO;
+
+        // 移除旧的 shape layer
+        static const void *kMioMarginLayerKey = &kMioMarginLayerKey;
+        CAShapeLayer *oldLayer = objc_getAssociatedObject(cell, kMioMarginLayerKey);
+        [oldLayer removeFromSuperlayer];
+
+        CGFloat m = margin;
+        CGRect insetRect = CGRectMake(m, m, cell.bounds.size.width - m * 2, cell.bounds.size.height - m * 2);
+        if (insetRect.size.width <= 0 || insetRect.size.height <= 0) return;
+
+        UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:insetRect
+                                                       cornerRadius:radius];
+
+        // 圆角裁剪层
+        CAShapeLayer *maskLayer = [CAShapeLayer layer];
+        maskLayer.path = path.CGPath;
+        maskLayer.frame = cell.bounds;
+        cell.layer.mask = maskLayer;
+        objc_setAssociatedObject(cell, kMioMarginLayerKey, maskLayer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        // 边框层（如果有）
+        if (config.listProfileCardBorderEnabled) {
+            CGFloat bw = config.listProfileCardBorderWidth;
+            if (bw <= 0) bw = 2.0;
+
+            UIColor *borderColor = [config colorFromHex:isDark
+                ? config.listProfileCardBorderDarkColor
+                : config.listProfileCardBorderLightColor];
+            if (!borderColor) {
+                borderColor = isDark
+                    ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
+                    : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
+            }
+
+            CAShapeLayer *borderLayer = [CAShapeLayer layer];
+            borderLayer.path = path.CGPath;
+            borderLayer.fillColor = [UIColor clearColor].CGColor;
+            borderLayer.strokeColor = borderColor.CGColor;
+            borderLayer.lineWidth = bw;
+            borderLayer.frame = cell.bounds;
+            [cell.layer addSublayer:borderLayer];
+            objc_setAssociatedObject(cell, @"kMioBorderLayer", borderLayer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    } else {
+        // ★ 无边距时：原始方案
+        cell.layer.mask = nil;
+        cell.layer.cornerRadius = radius;
+        cell.layer.masksToBounds = YES;
+
+        // ★ cardBgEnabled 时不设置不透明背景色，避免遮挡 Cell 层的背景图
+        if (!config.cardBgEnabled) {
+            UIColor *cardBg = [config colorFromHex:isDark
+                ? config.listCardDarkBgColor : config.listCardLightBgColor];
+            if (cardBg) {
+                cell.backgroundColor = cardBg;
+            }
+        }
+
+        if (config.listProfileCardBorderEnabled) {
+            CGFloat bw = config.listProfileCardBorderWidth;
+            if (bw <= 0) bw = 2.0;
+
+            UIColor *borderColor = [config colorFromHex:isDark
+                ? config.listProfileCardBorderDarkColor
+                : config.listProfileCardBorderLightColor];
+            if (!borderColor) {
+                borderColor = isDark
+                    ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
+                    : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
+            }
+
+            cell.layer.borderWidth = bw;
+            cell.layer.borderColor = borderColor.CGColor;
+        } else {
+            cell.layer.borderWidth = 0;
+            cell.layer.borderColor = nil;
+        }
     }
 }
 
@@ -584,6 +638,13 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
 
+            // ★ 背景图内缩（视觉边距）
+            CGFloat bgMargin = config.listCellMargin;
+            if (bgMargin > 0) {
+                offsetX += bgMargin;
+                imgW -= bgMargin * 2;
+            }
+
             NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
 
             CGFloat alignmentOffset = 0;
@@ -635,6 +696,13 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         CGFloat imgH = button.bounds.size.height;
         CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
         CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+
+        // ★ 背景图内缩（视觉边距）
+        CGFloat bgMargin2 = config.listCellMargin;
+        if (bgMargin2 > 0) {
+            offsetX += bgMargin2;
+            imgW -= bgMargin2 * 2;
+        }
         btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
 
         WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), buttonBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
@@ -772,39 +840,7 @@ APPLY_CORNER:
         CGRect bf = button.frame;
         CGFloat oldH = bf.size.height;
         bf.size.height = targetH;
-
-        // ★ 改 button 左右边距（先记录 UILabel 原始位置）
-        CGFloat margin = config.listCellMargin;
-        NSMutableArray<NSValue *> *savedLabelFrames = nil;
-        if (margin > 0) {
-            savedLabelFrames = [NSMutableArray array];
-            for (UIView *sub in button.subviews) {
-                if ([sub isKindOfClass:[UILabel class]]) {
-                    [savedLabelFrames addObject:[NSValue valueWithCGRect:sub.frame]];
-                }
-            }
-            // 缩窄 button
-            bf.origin.x += margin;
-            bf.size.width -= margin * 2;
-        }
         button.frame = bf;
-
-        // ★ 修复 UILabel：缩小宽度 + sizeToFit 让文字重新排布
-        if (margin > 0 && savedLabelFrames.count > 0) {
-            NSInteger idx = 0;
-            for (UIView *sub in button.subviews) {
-                if ([sub isKindOfClass:[UILabel class]] && idx < savedLabelFrames.count) {
-                    CGRect origFrame = [savedLabelFrames[idx] CGRectValue];
-                    CGRect newFrame = origFrame;
-                    newFrame.size.width = origFrame.size.width - 2 * margin;
-                    if (newFrame.size.width > 0) {
-                        sub.frame = newFrame;
-                        [(UILabel *)sub sizeToFit];
-                    }
-                    idx++;
-                }
-            }
-        }
 
         WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
               oldH, targetH,
