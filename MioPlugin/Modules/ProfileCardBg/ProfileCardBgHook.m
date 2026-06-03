@@ -780,12 +780,10 @@ APPLY_CORNER:
         if (margin > 0) {
             bf.origin.x += margin;
             bf.size.width -= margin * 2;
+            // 子视图保持原布局不变，只裁剪超出部分
+            button.clipsToBounds = YES;
         }
         button.frame = bf;
-
-        // ⭐ 强制重新布局子视图，让微信自动适应新宽度
-        [button setNeedsLayout];
-        [button layoutIfNeeded];
 
         WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
               oldH, targetH,
