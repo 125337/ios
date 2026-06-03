@@ -47,8 +47,6 @@ static void _hooked_headerSetFrame(id self, SEL _cmd, CGRect newFrame) {
     if (!targetButton) return;
 
     CGFloat targetH = config.cardBgHeight;
-    CGFloat spacing = config.cardBgListSpacing;
-    if (spacing > 0) targetH += spacing;  // header 高度已包含 spacing，button 也需要匹配
 
     if (targetButton.frame.size.height < targetH && targetH > 0) {
         CGRect f = targetButton.frame;
