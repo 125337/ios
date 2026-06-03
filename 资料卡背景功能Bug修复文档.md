@@ -1,188 +1,166 @@
 # MioPlugin 资料卡背景功能 — 技术文档
 
-> **更新日期**: 2026-06-03 (v39 — 高度方案最终分析：cellHeightFor: 不可行，给出可行方案)
+> **更新日期**: 2026-06-03 (v40 — 深度分析 autoresizingMask 方案可行性，给出完整实验方案)
 > **架构**: ListCornerRadiusHook（薄分发层） + ProfileCardBgHook（独立资料卡模块）
 
 ---
 
-## 1. 当前 Bug：高度问题（最终分析）
+## 1. 当前 Bug：高度问题（最终方案）
 
-### 为什么 `cellHeightFor:` 不可行
+### 为什么之前所有方案都失败
 
-**铁证**：资料卡在 Section 1 的 **Header** 中，不是 Cell。
+| 方案 | 做法 | 结果 | 失败根因 |
+|:----:|:-----|:-----|:-------:|
+| A | 只改 heightForHeader | 空白 | header 变大了但 button 没跟随 |
+| B | 只改 layoutSubviews button.frame | 覆盖 | button 变大了但空间没分配够 |
+| C | 两处都改 | 回到空白 | button 的 frame 被后续布局覆盖 |
+| D(方案2) | 改整条 superview 链 | 空白 | superview 的 frame 也被系统覆盖 |
 
-```
-UITableView
-├── Section 0 Header / Cells
-├── Section 1
-│   ├── ★ Header ← 资料卡在这里（MMTableViewCell 作为 headerView）
-│   └── Cells: 服务、收藏、朋友圈...
-└── Section 2+
-```
+**核心矛盾**：我们在 `layoutSubviews` 中手动设的 frame，会被微信内部后续的布局步骤重新计算并覆盖。微信的布局系统是**确定性的**——它会在自己的 `layoutSubviews` 中根据父视图 bounds 重新计算每个子视图的位置和大小。
 
-| 方法 | 控制对象 | 对资料卡生效？ |
-|:-----|:--------:|:------------:|
-| `tableView:heightForHeaderInSection:` | Section Header 高度 | ✅ |
-| `tableView:heightForRowAtIndexPath:` | Cell 行高 | ❌ |
-| `WCTableViewCellManager.cellHeightFor:` | Cell 行高（内部方法） | ❌ |
+### autoresizingMask 方案可行性深度分析
 
-`cellHeightFor:` 是 `WCTableViewCellManager` 的方法，只被 Cell 高度计算调用。**Header 的高度走的是完全独立的代码路径**，不会经过 `cellHeightFor:`。
-
-### 三种已尝试的方案及其结果
-
-| 方案 | heightForHeader | layoutSubviews 改 button | 结果 |
-|:----:|:--------------:|:----------------------:|:-----:|
-| A | `max(orig, 144) + 9` | 不改 | 卡片正常大小，底部多一截空白 ❌ |
-| B | `orig + 9` | button.height = 200 | 卡片变大但覆盖下面 cell ❌ |
-| C | `max(orig, 200) + 9` | button.height = 200 | 回到方案A的效果（空白）❌ |
-
-### 根因：鸡生蛋问题
+**原理**：
 
 ```
-布局循环：
-  ① UITableView 调用 heightForHeader → 得到返回值 → 分配 header 空间
-  ② header 空间变化 → 触发 header view 的 layoutSubviews
-  ③ layoutSubviews 中改 button.frame → button 变大
-  ④ 但第①步已经完成了！header 空间不会因为③自动重算
-  ⑤ 除非触发新一轮布局循环 → 可能导致 watchdog 卡死（Bug C）
+UITableView 设置 header frame（由 heightForHeader 返回值决定）
+  ↓
+MMTableSectionHeaderView.frame 变大
+  ↓
+UIKit 自动应用 autoresizing 到子视图
+  ↓
+contentView.height 随之变大（如果有 flexibleHeight）
+  ↓
+MMTableViewCell.height 随之变大
+  ↓
+MMUIButton.height 随之变大（如果有 flexibleHeight）✓
 ```
 
-**方案A 失败原因**：空间变大了（比如 209pt），但 button 没有变大（还是 150pt）→ 59pt 空白。button 没变大是因为它可能依赖父视图的 bounds 来确定自己的尺寸，而父视图虽然空间大了但内部子视图没有重新布局。
+**关键条件链**：header → contentView → cell → button，每一级都需要 `flexibleHeight` 才能传递。
 
-**方案B 失败原因**：button 变大了（200pt），但分配的空间只有 159pt → 41pt 溢出覆盖。
+**可行性判断**：**高可行度**
 
-**方案C 失败原因**：同方案A——说明 button 的 frame 修改在 layoutSubviews 中被后续布局步骤覆盖了，或者 button 的尺寸由其 superview 决定而非自身 frame。
+理由：
+1. `UITableViewHeaderFooterView` 的 `contentView` 默认就有 `flexibleWidth | flexibleHeight`
+2. 微信优化反编译中 `FUN_00007b4c` 改完 button frame 后没有额外处理 superview 链——说明微信内部的布局系统确实会自动传播尺寸变化
+3. 我们方案A失败的原因很可能就是 **button 缺少 flexibleHeight**，导致 autoresizing 在 button 这一层断了
 
-### 微信优化为什么能工作
+**风险点**：
+- 如果 `MMTableViewCell` 或中间某层用了 **auto-layout 约束**而非 autoresizing，autoresizing 不会生效
+- 如果微信在 `MMTableSectionHeaderView.layoutSubviews` 或 `MMTableViewCell.layoutSubviews` 中**硬编码了子视图的高度**，会覆盖 autoresizing 的结果
 
-微信优化的 `FUN_00007b4c`（layoutSubviews hook）中改 button frame 后，**紧接着还修改了 superview 链的尺寸**。而且微信优化可能在改完 frame 后触发了 `[tableView reloadData]` 或 `[tableView beginUpdates/endUpdates]` 让 UITableView 重新计算。
+### 实验方案：autoresizingMask（推荐先试）
 
-另外关键区别：微信优化的 layoutSubviews hook 可能是在 **orig 之前** 执行的（MSHookMessageEx 可以控制执行顺序），而我们的 `handleButtonLayout:` 是在 **orig 之后** 执行的。
-
-### 可行方案（按推荐顺序）
-
-#### 方案 1：只用 heightForHeader + 让 button 自动撑满（最简）
-
-**原理**：如果 button 设置了正确的 `autoresizingMask`（如 `UIViewAutoresizingFlexibleHeight`），当 header 容器变大时 button 会自动跟随变大。
+**步骤 1**：`_hooked_heightForHeader` 恢复完整的高度+间距逻辑
 
 ```objc
-// _hooked_heightForHeader：控制总高度
 static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long section) {
     double result = _orig_heightForHeader(self, _cmd, tableView, section);
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.cardBgEnabled || section != 1) return result;
+    if (!config.cardBgEnabled) return result;
+    if (section != 1) return result;
 
     // ... MoreVC 判断（保持不变） ...
 
+    // ★ ① 保证 ≥ 自定义高度
     CGFloat customHeight = config.cardBgHeight;
     if (customHeight > 0 && result < customHeight) {
         result = customHeight;
     }
+
+    // ★ ② 追加间距
     CGFloat spacing = config.cardBgListSpacing;
     if (spacing > 0) {
         result += spacing;
     }
+
+    WPLog(@"CardBg-Diag", @"[HFH] section=%lld, orig→result=%.1f, h=%.1f, sp=%.1f",
+          section, result, customHeight, spacing);
     return result;
 }
+```
 
-// handleButtonLayout：删除按钮高度调整代码，改为设置 autoresizingMask
-// 在创建 bgImageView 之后添加：
+**步骤 2**：`handleButtonLayout` 中删除按钮高度调整代码，改为设置 autoresizingMask
+
+```objc
+// ❌ 删除这段（APPLY_CORNER 前面的高度调整）：
+// {
+//     CGFloat customHeight = config.cardBgHeight;
+//     if (customHeight > 0 && button.frame.size.height < customHeight) {
+//         CGRect f = button.frame;
+//         f.size.height = customHeight;
+//         button.frame = f;
+//     }
+// }
+
+// ★ 替换为：设置 autoresizingMask（让 button 跟随 header 自动拉伸）
 button.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-```
 
-**优点**：简单，不涉及手动 frame 操作
-**风险**：如果 button 没有设 flexibleHeight，或 superview 用了 auto-layout 约束，可能不生效
-
-#### 方案 2：layoutSubviews 中改整个 superview 链（与微信优化一致）
-
-在 `handleButtonLayout` 的 APPLY_CORNER 之前，不只改 button，而是**向上传播**：
-
-```objc
-{
-    CGFloat customHeight = config.cardBgHeight;
-    if (customHeight > 0 && button.frame.size.height < customHeight) {
-        // 从 button 向上逐级改 frame
-        UIView *current = button;
-        while (current && current.frame.size.height < customHeight) {
-            CGRect f = current.frame;
-            f.size.height = customHeight;
-            current.frame = f;
-            current = current.superview;
-            // 只改到 MMUITableViewCell 层就停止（不改 header 的 frame，让系统处理）
-            if ([NSStringFromClass([current class]) isEqualToString:@"MMUITableViewCell"]) break;
-        }
-    }
-}
 APPLY_CORNER:
 ```
 
-**优点**：确保整条链路都变大
-**风险**：可能触发布局循环（需测试）
+**步骤 3**：加诊断日志确认 autoresizing 是否生效
 
-#### 方案 3：改完 frame 后通知 UITableView 重算
+在 `handleButtonLayout` 开头（第 4 关之后）添加：
 
 ```objc
-{
-    CGFloat customHeight = config.cardBgHeight;
-    if (customHeight > 0 && button.frame.size.height < customHeight) {
-        CGRect f = button.frame;
-        f.size.height = customHeight;
-        button.frame = f;
-
-        // ★ 通知 UITableView 重算布局
-        UITableView *tv = nil;
-        UIView *v = button.superview;
-        while (v) {
-            if ([v isKindOfClass:[UITableView class]]) {
-                tv = (UITableView *)v; break;
-            }
-            v = v.superview;
-        }
-        if (tv) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [tv beginUpdates];
-                [tv endUpdates];
-            });
-        }
-    }
-}
-APPLY_CORNER:
+WPLog(@"CardBg-Diag", @"[AUTO-RESIZE] button.frame=(%.0f,%.0f,%.0f,%.0f), "
+      @"mask=%ld, superview=%@",
+      button.frame.origin.x, button.frame.origin.y,
+      button.frame.size.width, button.frame.size.height,
+      (long)button.autoresizingMask,
+      NSStringFromClass([button.superview class]));
 ```
 
-**优点**：让 UITableView 在下一轮循环中重新调用 heightForHeader，拿到正确值
-**风险**：可能导致短暂闪烁；频繁触发影响性能
+### 如何判断实验结果
+
+| 日志/现象 | 含义 | 下一步 |
+|:---------|:-----|:------:|
+| button.height 随 cardBgHeight 变大 | ✅ autoresizing 生效 | 成功！清理日志 |
+| button.height 不变（=原始值） | ❌ autoresizing 未生效 | 尝试备选方案 |
+| 出现空白但无覆盖 | ⚠️ 高度生效但 button 检测时机早 | 检查日志中的具体数值 |
+
+### 备选方案：如果 autoresizing 不生效
+
+**方案 E：Hook MMTableSectionHeaderView.setFrame:**
+
+当 UITableView 设置 header frame 时，拦截并同步修改 button 的高度：
+
+```objc
+static void (*_orig_headerSetFrame)(id, SEL, CGRect);
+static void _hooked_headerSetFrame(id self, SEL _cmd, CGRect newFrame) {
+    _orig_headerSetFrame(self, _cmd, newFrame);
+
+    // 只处理 MoreVC 的 Section 1 Header
+    // 找到里面的 MMUIButton 并同步修改其高度
+}
+```
+
+**方案 F：dispatch_async(beginUpdates/endUpdates)**
+
+在 handleButtonLayout 中改完 button frame 后通知重算：
+
+```objc
+dispatch_async(dispatch_get_main_queue(), ^{
+    [tableView beginUpdates];
+    [tableView endUpdates];
+});
+```
 
 ---
 
 ## 2. 待修复汇总
 
-| 优先级 | Bug | 方案 |
-|:------:|:---:|:------|
-| **P0** | **M** 资料卡高度 | 先试方案1（autoresizingMask），不行试方案2 或 3 |
+| 优先级 | Bug | 当前方案 |
+|:------:|:---:|:--------|
+| **P0** | **M** 资料卡高度 | **实验 autoresizingMask 方案（见上方）** |
 | **P1** | **L** 分支A缺少 alignment 偏移 | 分支A复用 alignment 偏移计算 |
 | **P2** | **G** 折叠置顶逻辑丢失 | wp_applyStandardCorner 中插入折叠检测 |
 
 ---
 
-## 3. alignment 偏移计算原理
-
-### 核心机制：clipsToBounds = NO + frame.origin.y 移动
-
-```
-imageView.clipsToBounds = NO   ← 图片可以溢出 imageView 的 frame
-button.masksToBounds = YES     ← button 裁剪溢出部分
-```
-
-图示（button 高 100pt，AspectFill 后图片高 200pt，overflow=100pt）：
-
-```
-居中（origin.y = 0）：可见像素 50~150 ✅
-顶部对齐（origin.y = +50）：可见像素 0~100 ✅
-底部对齐（origin.y = -50）：可见像素 100~200 ✅
-```
-
-### 计算公式
+## 3. alignment 偏移计算
 
 ```objc
 CGFloat scale = viewW / imgW;
@@ -203,26 +181,26 @@ frame.origin.y = userOffsetY + alignmentOffset;
 
 ## 4. 配置项说明
 
-| 配置项 | 类型 | 默认值 | 状态 | 说明 |
-|:------:|:-----:|:------:|:---:|------|
-| `cardBgEnabled` | BOOL | NO | ✅ | 总开关 |
-| `cardBgHidden` | BOOL | NO | ✅ | 隐藏卡片内容 |
-| `cardBgFillMode` | NSInteger | 0 | ✅ | 0=AspectFill 1=AspectFit 2=ScaleToFill 3=AspectFill+无圆角 |
-| `cardBgLight/DarkImagePath` | NSString* | nil | ✅ | 背景图路径 |
-| `cardBgLight/DarkAlignment` | NSInteger | 0 | ✅ | 垂直对齐 0=底部 1=居中 2=顶部 |
-| `cardBgLight/DarkLayer` | NSInteger | 0 | ✅ | 图层位置 0=底层 1=顶层 |
-| `cardBgLight/DarkOffsetX/Y` | CGFloat | 0 | ✅ | X/Y 偏移 |
-| `cardBgHeight` | CGFloat | 144 | ⚠️ | 高度方案待定（见 Bug M） |
-| `cardBgListSpacing` | CGFloat | 9 | ✅ | 通过 heightForHeader Hook 生效 |
+| 配置项 | 类型 | 默认值 | 状态 |
+|:------:|:-----:|:------:|:----:|
+| `cardBgEnabled` | BOOL | NO | ✅ |
+| `cardBgHidden` | BOOL | NO | ✅ |
+| `cardBgFillMode` | NSInteger | 0 | ✅ |
+| `cardBgLight/DarkImagePath` | NSString* | nil | ✅ |
+| `cardBgLight/DarkAlignment` | NSInteger | 0 | ✅ |
+| `cardBgLight/DarkLayer` | NSInteger | 0 | ✅ |
+| `cardBgLight/DarkOffsetX/Y` | CGFloat | 0 | ✅ |
+| `cardBgHeight` | CGFloat | 144 | ⚠️ 实验中 |
+| `cardBgListSpacing` | CGFloat | 9 | ✅ |
 
 ---
 
-## 5. 历史踩坑记录（精简版）
+## 5. 历史踩坑记录（精简）
 
 | # | 问题 | 根因 | 状态 |
 |:-:|:-----|:-----|:----:|
-| A-O | （基础功能、圆角、边框、背景图加载等） | 已逐一修复 | ✅ |
-| P | 对齐方式始终居中 | contentsRect 裁剪方式不对 | ✅ 改为 frame.origin.y |
-| Q | 间距/高度不生效 | Hook 目标错误 | ✅ 改为 heightForHeader |
-| R | 分支A切换对齐不生效 | 缺少 alignmentOffset | ⚠️ 待修复 |
-| S-T | **高度问题** | **forHeader 和 layoutSubviews 双方冲突** | ⚠️ 待修复（见上方3个方案） |
+| A-O | 基础功能、圆角、边框、背景图等 | 已逐一修复 | ✅ |
+| P | 对齐方式始终居中 | contentsRect 裁剪方式不对 | ✅ 已改 frame.origin.y |
+| Q | 间距/高度不生效 | Hook 目标错误 | ✅ 已改 heightForHeader |
+| R | 分支A切换对齐不生效 | 缺 alignmentOffset | ⚠️ 待修 |
+| S-T | 高度问题（4种方案均失败） | 手动 frame 被微信布局覆盖 | 🔄 实验 autoresizingMask |

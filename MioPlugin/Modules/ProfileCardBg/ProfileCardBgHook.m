@@ -690,23 +690,15 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     } // end needsFullCardBg
 
 APPLY_CORNER:
-    // ── 资料卡高度调整（方案2：向上传播 superview 链）──
-    {
-        CGFloat customHeight = config.cardBgHeight;
-        if (customHeight > 0 && button.frame.size.height < customHeight) {
-            UIView *current = button;
-            while (current && current.frame.size.height < customHeight) {
-                CGRect f = current.frame;
-                f.size.height = customHeight;
-                current.frame = f;
-                current = current.superview;
-                // 只改到 MMUITableViewCell 层就停止
-                if ([NSStringFromClass([current class]) isEqualToString:@"MMUITableViewCell"]) break;
-            }
-            WPLog(@"CardBg-Diag", @"[CARD-HEIGHT] button=%.0f → %.0f (propagate up)",
-                  button.frame.size.height, customHeight);
-        }
-    }
+    // ── 资料卡高度调整（autoresizingMask 实验方案）──
+    button.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+
+    WPLog(@"CardBg-Diag", @"[AUTO-RESIZE] button.frame=(%.0f,%.0f,%.0f,%.0f), "
+          @"mask=%ld, superview=%@",
+          button.frame.origin.x, button.frame.origin.y,
+          button.frame.size.width, button.frame.size.height,
+          (long)button.autoresizingMask,
+          NSStringFromClass([button.superview class]));
 
     // ── 圆角 + 边框 + QR码隐藏 ──
     {
