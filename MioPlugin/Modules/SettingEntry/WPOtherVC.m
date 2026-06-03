@@ -50,6 +50,7 @@
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addNavRowInGroup:group title:@"开发者工具" subtitle:@"NSLog监控、导航日志"
                                  tag:999 action:@selector(openDevTools:) cy:cy width:w];
+    WPLog(@"UI", @"[Sub] WPOtherVC devtools nav row added, building UI complete");
     y = [self finishGroup:group atY:y height:cy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
