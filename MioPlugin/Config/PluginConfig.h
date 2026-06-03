@@ -171,6 +171,12 @@
 
 #pragma mark - 卡片背景
 @property (nonatomic, assign) BOOL cardBgEnabled;
+
+// ===== 开发者工具 =====
+@property (nonatomic, assign) BOOL nsLogMonitorEnabled;
+@property (nonatomic, assign) BOOL nsLogLocalSave;
+@property (nonatomic, copy)   NSString *nsLogKeywords;
+@property (nonatomic, assign) BOOL navMonitorEnabled;
 @property (nonatomic, assign) BOOL cardBgHidden;
 @property (nonatomic, assign) CGFloat cardBgHeight;
 @property (nonatomic, assign) CGFloat cardBgListSpacing;

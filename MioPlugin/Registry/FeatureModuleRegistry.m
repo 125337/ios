@@ -16,6 +16,9 @@
 #import "../Modules/ChatTopBar/ChatTopBarHook.h"
 #import "../Modules/ListCornerRadius/ListCornerRadiusHook.h"
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
+#import "../Modules/ProfileCardBg/ProfileCardBgHook.h"
+#import "../Modules/DevTools/DevToolsHook.h"
+#import "../Settings/Controllers/SettingDevToolsController.h"
 
 @implementation FeatureModuleDescriptor
 
@@ -74,6 +77,12 @@
                                              sectionTitle:@"更多"
                                           controllerClass:[SettingAboutController class]
                                      hookInstallerClasses:@[]],
+            [FeatureModuleDescriptor moduleWithIdentifier:@"devtools"
+                                                    title:@"开发者工具"
+                                                 subtitle:@"NSLog监控、VC抓取、导航日志"
+                                             sectionTitle:@"更多"
+                                          controllerClass:[SettingDevToolsController class]
+                                     hookInstallerClasses:@[[DevToolsHook class]]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"settingentry"
                                                     title:@"插件入口"
                                                  subtitle:@"设置页面入口"

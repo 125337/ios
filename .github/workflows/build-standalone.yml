@@ -75,6 +75,9 @@ jobs:
           MioPlugin/Modules/ListCornerRadius/WPSearchBoxHook.m \
           MioPlugin/Modules/ListCornerRadius/WPAuxiliaryHooks.m \
           MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m \
+          MioPlugin/Modules/DevTools/MioLogMonitor.m \
+          MioPlugin/Modules/DevTools/MioNavMonitor.m \
+          MioPlugin/Modules/DevTools/DevToolsHook.m \
           MioPlugin/Settings/Common/SettingCategoryController.m \
           MioPlugin/Settings/Common/WPBorderLayer.m \
           MioPlugin/Settings/Controllers/SettingController.m \
@@ -88,6 +91,7 @@ jobs:
           MioPlugin/Settings/Controllers/SettingNameColorController.m \
           MioPlugin/Settings/Controllers/SettingListCornerRadiusController.m \
           MioPlugin/Settings/Controllers/SettingCardBackgroundController.m \
+          MioPlugin/Settings/Controllers/SettingDevToolsController.m \
           MioPlugin/Settings/Controllers/MioTweakGroupSelectsController.m; do
           BASENAME=$(basename "$f" .m)
           OBJ_FILE="build/${BASENAME}.o"
@@ -120,6 +124,7 @@ jobs:
                 -IMioPlugin/Modules/ChatTopBar \
                 -IMioPlugin/Modules/ListCornerRadius \
                 -IMioPlugin/Modules/ProfileCardBg \
+                -IMioPlugin/Modules/DevTools \
                 -IMioPlugin/Settings/Common \
                 -IMioPlugin/Settings/Controllers \
                 -o "$OBJ_FILE" \

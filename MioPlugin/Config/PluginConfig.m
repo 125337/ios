@@ -467,6 +467,13 @@
     _cardBgHeight = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];
     _cardBgListSpacing = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgListSpacing"]];
 
+    // ========== 开发者工具配置 ==========
+    _nsLogMonitorEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"NsLogMonitorEnabled"]];
+    _nsLogLocalSave = [d boolForKey:[kPluginPrefix stringByAppendingString:@"NsLogLocalSave"]];
+    NSString *nlkw = [d stringForKey:[kPluginPrefix stringByAppendingString:@"NsLogKeywords"]];
+    _nsLogKeywords = nlkw.length > 0 ? nlkw : @"";
+    _navMonitorEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"NavMonitorEnabled"]];
+
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightImagePath"]];
     if (v.length > 0) {
         _cardBgLightImagePath = [v copy];
@@ -707,6 +714,16 @@
     [d setFloat:_cardBgDarkOffsetY forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkOffsetY"]];
     [d setFloat:_cardBgLightOffsetX forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightOffsetX"]];
     [d setFloat:_cardBgDarkOffsetX forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkOffsetX"]];
+
+    // ========== 开发者工具配置 ==========
+    [d setBool:_nsLogMonitorEnabled forKey:[kPluginPrefix stringByAppendingString:@"NsLogMonitorEnabled"]];
+    [d setBool:_nsLogLocalSave forKey:[kPluginPrefix stringByAppendingString:@"NsLogLocalSave"]];
+    if (_nsLogKeywords) {
+        [d setObject:_nsLogKeywords forKey:[kPluginPrefix stringByAppendingString:@"NsLogKeywords"]];
+    } else {
+        [d removeObjectForKey:[kPluginPrefix stringByAppendingString:@"NsLogKeywords"]];
+    }
+    [d setBool:_navMonitorEnabled forKey:[kPluginPrefix stringByAppendingString:@"NavMonitorEnabled"]];
 
     [d synchronize];
     WPLog(@"Config", @"[OK] save() completed - NSUserDefaults synchronized");
