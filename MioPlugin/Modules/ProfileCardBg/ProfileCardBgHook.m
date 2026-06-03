@@ -131,31 +131,12 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     CGFloat margin = config.listCellMargin;
 
     if (margin > 0) {
-        // ★ 有边距时：用 CAShapeLayer 绘制内缩圆角+边框，不动 button.layer
-        cell.layer.cornerRadius = 0;
-        cell.layer.borderWidth = 0;
+        // ★ 有边距时：只设圆角和边框到 button 层，不裁切内容
+        // 背景图已在 handleButtonLayout 中内缩，这里只做圆角边框
+        // 不用 mask/masksToBounds，避免裁掉子视图内容
+        cell.layer.cornerRadius = radius;
         cell.layer.masksToBounds = NO;
 
-        // 移除旧的 shape layer
-        static const void *kMioMarginLayerKey = &kMioMarginLayerKey;
-        CAShapeLayer *oldLayer = objc_getAssociatedObject(cell, kMioMarginLayerKey);
-        [oldLayer removeFromSuperlayer];
-
-        CGFloat m = margin;
-        CGRect insetRect = CGRectMake(m, m, cell.bounds.size.width - m * 2, cell.bounds.size.height - m * 2);
-        if (insetRect.size.width <= 0 || insetRect.size.height <= 0) return;
-
-        UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:insetRect
-                                                       cornerRadius:radius];
-
-        // 圆角裁剪层
-        CAShapeLayer *maskLayer = [CAShapeLayer layer];
-        maskLayer.path = path.CGPath;
-        maskLayer.frame = cell.bounds;
-        cell.layer.mask = maskLayer;
-        objc_setAssociatedObject(cell, kMioMarginLayerKey, maskLayer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-        // 边框层（如果有）
         if (config.listProfileCardBorderEnabled) {
             CGFloat bw = config.listProfileCardBorderWidth;
             if (bw <= 0) bw = 2.0;
@@ -169,22 +150,17 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                     : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
             }
 
-            CAShapeLayer *borderLayer = [CAShapeLayer layer];
-            borderLayer.path = path.CGPath;
-            borderLayer.fillColor = [UIColor clearColor].CGColor;
-            borderLayer.strokeColor = borderColor.CGColor;
-            borderLayer.lineWidth = bw;
-            borderLayer.frame = cell.bounds;
-            [cell.layer addSublayer:borderLayer];
-            objc_setAssociatedObject(cell, @"kMioBorderLayer", borderLayer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            cell.layer.borderWidth = bw;
+            cell.layer.borderColor = borderColor.CGColor;
+        } else {
+            cell.layer.borderWidth = 0;
+            cell.layer.borderColor = nil;
         }
     } else {
         // ★ 无边距时：原始方案
-        cell.layer.mask = nil;
         cell.layer.cornerRadius = radius;
         cell.layer.masksToBounds = YES;
 
-        // ★ cardBgEnabled 时不设置不透明背景色，避免遮挡 Cell 层的背景图
         if (!config.cardBgEnabled) {
             UIColor *cardBg = [config colorFromHex:isDark
                 ? config.listCardDarkBgColor : config.listCardLightBgColor];
