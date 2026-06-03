@@ -3,6 +3,12 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
 
+@interface MioNavMonitor (Private)
+- (BOOL)shouldIgnoreVC:(UIViewController *)vc;
+- (NSString *)displayNameForVC:(UIViewController *)vc;
+- (void)logEvent:(NSString *)eventTag vcName:(NSString *)vcName;
+@end
+
 // ===== Hook 函数声明 =====
 static void (*orig_mio_viewDidLoad)(id, SEL);
 static void (*orig_mio_viewWillAppear)(id, SEL, BOOL);
