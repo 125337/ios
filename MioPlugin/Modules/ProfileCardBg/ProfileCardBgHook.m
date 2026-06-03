@@ -439,6 +439,9 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     // ★ 极速拒绝链 ★
     if (!config.cardBgEnabled && !config.listCornerRadiusEnabled) return;
 
+    WPLog(@"CardBg-Diag", @"[ENTRY] handleButtonLayout called, cardBg=%d, corner=%d, margin=%.1f",
+          config.cardBgEnabled, config.listCornerRadiusEnabled, config.listCellMargin);
+
     // 第2关：VC 类型
     UIViewController *vc = nil;
     UIResponder *responder = button.nextResponder;
@@ -449,7 +452,9 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         }
         responder = responder.nextResponder;
     }
-    if (!vc || ![NSStringFromClass([vc class]) isEqualToString:@"MoreViewController"]) return;
+    NSString *vcClass = vc ? NSStringFromClass([vc class]) : @"nil";
+    WPLog(@"CardBg-Diag", @"[VC-CHECK] vc=%@", vcClass);
+    if (!vc || ![vcClass isEqualToString:@"MoreViewController"]) return;
 
     // 第3关：MMHeadImageView 存在
     BOOL foundHead = NO;
