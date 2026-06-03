@@ -47,8 +47,6 @@ static void _hooked_headerSetFrame(id self, SEL _cmd, CGRect newFrame) {
     if (!targetButton) return;
 
     CGFloat targetH = config.cardBgHeight;
-    CGFloat spacing = config.cardBgListSpacing;
-    if (spacing > 0) targetH += spacing;  // header 高度已包含 spacing，button 也需要匹配
 
     if (targetButton.frame.size.height < targetH && targetH > 0) {
         CGRect f = targetButton.frame;
@@ -90,14 +88,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         result = customHeight;
     }
 
-    // ★ ② 追加间距
-    CGFloat spacing = config.cardBgListSpacing;
-    if (spacing > 0) {
-        result += spacing;
-    }
-
-    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, height=%.1f, spacing=%.1f",
-          section, result, customHeight, spacing);
+    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, height=%.1f",
+          section, result, customHeight);
 
     return result;
 }
