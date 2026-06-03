@@ -746,11 +746,24 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     } // end needsFullCardBg
 
 APPLY_CORNER:
-    // ── 资料卡高度由 _hooked_headerSetFrame 同步处理 ──
-    WPLog(@"CardBg-Diag", @"[LAYOUT] button.frame=(%.0f,%.0f,%.0f,%.0f), superview=%@",
-          button.frame.origin.x, button.frame.origin.y,
-          button.frame.size.width, button.frame.size.height,
-          NSStringFromClass([button.superview class]));
+    // ── 诊断：打印完整视图层级链 ──
+    {
+        NSMutableString *chain = [NSMutableString string];
+        UIView *v = button;
+        NSInteger depth = 0;
+        while (v && depth < 10) {
+            [chain appendFormat:@"\n  [%ld] %@ frame=(%.0f,%.0f,%.0f,%.0f) bounds=(%.0f,%.0f,%.0f,%.0f)",
+                  (long)depth,
+                  NSStringFromClass([v class]),
+                  v.frame.origin.x, v.frame.origin.y,
+                  v.frame.size.width, v.frame.size.height,
+                  v.bounds.origin.x, v.bounds.origin.y,
+                  v.bounds.size.width, v.bounds.size.height];
+            v = v.superview;
+            depth++;
+        }
+        WPLog(@"CardBg-Diag", @"[VIEW-CHAIN] cardBgHeight=%.1f, spacing=%.1f%@", config.cardBgHeight, config.cardBgListSpacing, chain);
+    }
 
     // ── 圆角 + 边框 + QR码隐藏 ──
     {
