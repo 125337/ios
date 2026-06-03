@@ -524,7 +524,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
 
-            NSInteger fillMode = config.cardBgFillMode;
             NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
 
             CGFloat alignmentOffset = 0;
