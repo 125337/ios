@@ -586,6 +586,13 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
 
+            // ★ 背景图内缩（视觉边距，不影响子视图布局）
+            CGFloat bgMargin = config.listCellMargin;
+            if (bgMargin > 0) {
+                offsetX += bgMargin;
+                imgW -= bgMargin * 2;
+            }
+
             NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
 
             CGFloat alignmentOffset = 0;
@@ -637,6 +644,13 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         CGFloat imgH = button.bounds.size.height;
         CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
         CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+
+        // ★ 背景图内缩（视觉边距，不影响子视图布局）
+        CGFloat bgMargin = config.listCellMargin;
+        if (bgMargin > 0) {
+            offsetX += bgMargin;
+            imgW -= bgMargin * 2;
+        }
         btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
 
         WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), buttonBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
@@ -774,15 +788,6 @@ APPLY_CORNER:
         CGRect bf = button.frame;
         CGFloat oldH = bf.size.height;
         bf.size.height = targetH;
-
-        // ★ 改 button 左右边距（与列表圆角一致）
-        CGFloat margin = config.listCellMargin;
-        if (margin > 0) {
-            bf.origin.x += margin;
-            bf.size.width -= margin * 2;
-            // 子视图保持原布局不变，只裁剪超出部分
-            button.clipsToBounds = YES;
-        }
         button.frame = bf;
 
         WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
