@@ -131,12 +131,38 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     CGFloat margin = config.listCellMargin;
 
     if (margin > 0) {
-        // ★ 有边距时：只设圆角和边框到 button 层，不裁切内容
-        // 背景图已在 handleButtonLayout 中内缩，这里只做圆角边框
-        // 不用 mask/masksToBounds，避免裁掉子视图内容
-        cell.layer.cornerRadius = radius;
+        // ★ WCRefine 方案：用 CAShapeLayer sublayer（装饰），不用 mask/masksToBounds
+        cell.layer.cornerRadius = 0;
         cell.layer.masksToBounds = NO;
+        cell.layer.borderWidth = 0;
+        cell.layer.borderColor = nil;
+        cell.layer.mask = nil;
 
+        // 清除旧的 shape layers
+        static const void *kMioBgShapeKey = &kMioBgShapeKey;
+        static const void *kMioBorderShapeKey = &kMioBorderShapeKey;
+        [(CAShapeLayer *)objc_getAssociatedObject(cell, kMioBgShapeKey) removeFromSuperlayer];
+        [(CAShapeLayer *)objc_getAssociatedObject(cell, kMioBorderShapeKey) removeFromSuperlayer];
+
+        CGRect insetRect = CGRectMake(margin, margin,
+                                       cell.bounds.size.width - margin * 2,
+                                       cell.bounds.size.height - margin * 2);
+        if (insetRect.size.width <= 0 || insetRect.size.height <= 0) return;
+
+        UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:insetRect
+                                                       cornerRadius:radius];
+
+        // ★ 填充层（圆角背景）→ sublayer，不裁切内容
+        CAShapeLayer *bgShapeLayer = [CAShapeLayer layer];
+        bgShapeLayer.path = path.CGPath;
+        UIColor *fillColor = [config colorFromHex:isDark
+            ? config.listCardDarkBgColor : config.listCardLightBgColor];
+        bgShapeLayer.fillColor = (fillColor ?: [UIColor whiteColor]).CGColor;
+        bgShapeLayer.frame = cell.bounds;
+        [cell.layer insertSublayer:bgShapeLayer atIndex:0];
+        objc_setAssociatedObject(cell, kMioBgShapeKey, bgShapeLayer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        // ★ 描边层（边框）→ sublayer，跟随内缩路径
         if (config.listProfileCardBorderEnabled) {
             CGFloat bw = config.listProfileCardBorderWidth;
             if (bw <= 0) bw = 2.0;
@@ -150,11 +176,14 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                     : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
             }
 
-            cell.layer.borderWidth = bw;
-            cell.layer.borderColor = borderColor.CGColor;
-        } else {
-            cell.layer.borderWidth = 0;
-            cell.layer.borderColor = nil;
+            CAShapeLayer *borderShapeLayer = [CAShapeLayer layer];
+            borderShapeLayer.path = path.CGPath;
+            borderShapeLayer.fillColor = [UIColor clearColor].CGColor;
+            borderShapeLayer.strokeColor = borderColor.CGColor;
+            borderShapeLayer.lineWidth = bw;
+            borderShapeLayer.frame = cell.bounds;
+            [cell.layer addSublayer:borderShapeLayer];
+            objc_setAssociatedObject(cell, kMioBorderShapeKey, borderShapeLayer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
     } else {
         // ★ 无边距时：原始方案
