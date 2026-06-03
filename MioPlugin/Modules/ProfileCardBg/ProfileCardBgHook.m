@@ -28,18 +28,14 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         return result;
     }
 
-    CGFloat customHeight = config.cardBgHeight;
-    if (customHeight > 0 && result < customHeight) {
-        result = customHeight;
-    }
-
+    // ★ 只加间距，不做高度处理（高度在 layoutSubviews 中改 button frame）
     CGFloat spacing = config.cardBgListSpacing;
     if (spacing > 0) {
         result += spacing;
     }
 
-    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, vc=%@",
-          section, result, vc ? NSStringFromClass([vc class]) : @"nil");
+    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, spacing=%.1f",
+          section, result, spacing);
 
     return result;
 }
@@ -527,7 +523,32 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             CGFloat imgH = button.bounds.size.height;
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
-            existingBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
+
+            NSInteger fillMode = config.cardBgFillMode;
+            NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
+
+            CGFloat alignmentOffset = 0;
+            if ((fillMode == 0 || fillMode == 3) && existingBgImg.image &&
+                existingBgImg.image.size.width > 0) {
+                CGFloat iW = existingBgImg.image.size.width;
+                CGFloat iH = existingBgImg.image.size.height;
+                CGFloat vW = button.bounds.size.width;
+                CGFloat vH = button.bounds.size.height;
+
+                CGFloat scale = vW / iW;
+                CGFloat renderedH = iH * scale;
+                CGFloat overflow = renderedH - vH;
+
+                if (overflow > 0) {
+                    switch (alignment) {
+                        case 0:  alignmentOffset = -overflow / 2.0; break;
+                        case 2:  alignmentOffset = overflow / 2.0; break;
+                        default: alignmentOffset = 0; break;
+                    }
+                }
+            }
+
+            existingBgImg.frame = CGRectMake(offsetX, offsetY + alignmentOffset, imgW, imgH);
 
             NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
             if (layerPos == 1) [button bringSubviewToFront:existingBgImg];
@@ -664,6 +685,18 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     } // end needsFullCardBg
 
 APPLY_CORNER:
+    // ── 资料卡高度调整（与微信优化一致：在 layoutSubviews 中改 button frame）──
+    {
+        CGFloat customHeight = config.cardBgHeight;
+        if (customHeight > 0 && button.frame.size.height < customHeight) {
+            CGRect f = button.frame;
+            f.size.height = customHeight;
+            button.frame = f;
+            WPLog(@"CardBg-Diag", @"[CARD-HEIGHT] %.0f → %.0f",
+                  button.frame.size.height, customHeight);
+        }
+    }
+
     // ── 圆角 + 边框 + QR码隐藏 ──
     {
         NSInteger radius = (NSInteger)config.listCellCornerRadius;
