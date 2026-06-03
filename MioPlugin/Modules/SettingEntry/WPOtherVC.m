@@ -1,6 +1,7 @@
 #import "../../Settings/Common/SettingCategoryController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
+#import "../Settings/Controllers/SettingDevToolsController.h"
 
 @interface WPOtherVC : SettingCategoryController
 @end
@@ -46,11 +47,18 @@
     cy = [self addSwitchRowInGroup:group title:@"免提示" desc:nil
                                key:@"noTip" isOn:config.noTip
                                cy:cy width:w];
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+    cy = [self addNavRowInGroup:group title:@"开发者工具" subtitle:@"NSLog监控、导航日志"
+                                 tag:999 action:@selector(openDevTools:) cy:cy width:w];
     y = [self finishGroup:group atY:y height:cy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
     WPLog(@"UI", @"[Sub] WPOtherVC buildUI done");
+}
+
+- (void)openDevTools:(id)sender {
+    [self.navigationController pushViewController:[[SettingDevToolsController alloc] init] animated:YES];
 }
 
 @end

@@ -80,7 +80,7 @@
             [FeatureModuleDescriptor moduleWithIdentifier:@"devtools"
                                                     title:@"开发者工具"
                                                  subtitle:@"NSLog监控、VC抓取、导航日志"
-                                             sectionTitle:@"通用"
+                                             sectionTitle:@"_hidden"
                                           controllerClass:[SettingDevToolsController class]
                                      hookInstallerClasses:@[[DevToolsHook class]]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"settingentry"
