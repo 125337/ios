@@ -13,12 +13,18 @@ static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) 
     PluginConfig *config = [PluginConfig shared];
     if (!config.cardBgEnabled) return result;
 
-    CGFloat spacing = config.cardBgListSpacing;
-    if (spacing <= 0) return result;
+    // ★ 通过 self.cell 获取真正的 UITableViewCell
+    UITableViewCell *cell = nil;
+    @try {
+        cell = [self valueForKey:@"cell"];
+    } @catch (NSException *e) {
+        return result;
+    }
+    if (!cell) return result;
 
     // 判断是否 MoreVC
     UIViewController *vc = nil;
-    UIResponder *responder = [arg1 nextResponder];
+    UIResponder *responder = [cell nextResponder];
     while (responder) {
         if ([responder isKindOfClass:[UIViewController class]]) {
             vc = (UIViewController *)responder;
@@ -30,12 +36,23 @@ static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) 
         return result;
     }
 
-    // 判断是否资料卡行
-    if (![ProfileCardBgHook isProfileCard:(UIView *)arg1]) {
+    // ★ 用真正的 Cell 判断是否资料卡
+    if (![ProfileCardBgHook isProfileCard:(UIView *)cell]) {
         return result;
     }
 
-    result += spacing;
+    // cardBgHeight：强制最小高度
+    CGFloat customHeight = config.cardBgHeight;
+    if (customHeight > 0 && result < customHeight) {
+        result = customHeight;
+    }
+
+    // cardBgListSpacing：追加间距
+    CGFloat spacing = config.cardBgListSpacing;
+    if (spacing > 0) {
+        result += spacing;
+    }
+
     return result;
 }
 
@@ -522,12 +539,16 @@ static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) 
             CGFloat imgH = button.bounds.size.height;
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+            existingBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
+
             NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
-            CGFloat imgX = offsetX;
-            if (alignment == 2) {
-                imgX = button.bounds.size.width - imgW + offsetX;
+            if (alignment == 1) {
+                existingBgImg.layer.contentsRect = CGRectMake(0, 0.5, 1, 0.5);
+            } else if (alignment == 2) {
+                existingBgImg.layer.contentsRect = CGRectMake(0, 0, 1, 0.5);
+            } else {
+                existingBgImg.layer.contentsRect = CGRectMake(0, 0, 1, 1);
             }
-            existingBgImg.frame = CGRectMake(imgX, offsetY, imgW, imgH);
 
             NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
             if (layerPos == 1) [button bringSubviewToFront:existingBgImg];
@@ -555,12 +576,16 @@ static double _hooked_cellHeightFor(id self, SEL _cmd, id arg1, long long arg2) 
         CGFloat imgH = button.bounds.size.height;
         CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
         CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+        btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
+
         NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
-        CGFloat imgX = offsetX;
-        if (alignment == 2) {
-            imgX = button.bounds.size.width - imgW + offsetX;
+        if (alignment == 1) {
+            btnBgImg.layer.contentsRect = CGRectMake(0, 0.5, 1, 0.5);
+        } else if (alignment == 2) {
+            btnBgImg.layer.contentsRect = CGRectMake(0, 0, 1, 0.5);
+        } else {
+            btnBgImg.layer.contentsRect = CGRectMake(0, 0, 1, 1);
         }
-        btnBgImg.frame = CGRectMake(imgX, offsetY, imgW, imgH);
 
         WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), buttonBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
               (long)btnBgImg.tag,
@@ -709,17 +734,6 @@ APPLY_CORNER:
 
     WPLog(@"CardBg-Diag", @"[CELL-TRANSPARENCY] After: cellBg=%@, cellMasks=%d",
           cellView.backgroundColor, cellView.layer.masksToBounds);
-
-    // ★ cardBgHeight：强制最小高度（带循环保护）
-    CGFloat customHeight = config.cardBgHeight;
-    if (customHeight > 0) {
-        CGFloat currentH = cellView.frame.size.height;
-        if (currentH < customHeight) {
-            CGRect f = cellView.frame;
-            f.size.height = customHeight;
-            cellView.frame = f;
-        }
-    }
 
     // 注意：不设 masksToBounds=YES，由 MMUIButton 层负责裁剪
 }
