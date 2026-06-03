@@ -28,14 +28,20 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         return result;
     }
 
-    // ★ 只加间距，不做高度处理（高度在 layoutSubviews 中改 button frame）
+    // ★ ① 保证空间 ≥ 自定义高度（防止 button 被截断或覆盖其他 cell）
+    CGFloat customHeight = config.cardBgHeight;
+    if (customHeight > 0 && result < customHeight) {
+        result = customHeight;
+    }
+
+    // ★ ② 追加间距
     CGFloat spacing = config.cardBgListSpacing;
     if (spacing > 0) {
         result += spacing;
     }
 
-    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, spacing=%.1f",
-          section, result, spacing);
+    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, height=%.1f, spacing=%.1f",
+          section, result, customHeight, spacing);
 
     return result;
 }
