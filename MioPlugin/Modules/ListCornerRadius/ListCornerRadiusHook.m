@@ -159,15 +159,13 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
 
 // ★★★ 薄分发层：MMUIButton Hook ★★★
 static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
-    // 先让微信完成原始布局
+    // ★★★ 先改 frame（方案H：在 orig 之前！）★★★
+    [ProfileCardBgHook handleButtonLayout:(UIView *)self];
+
+    // 再让微信基于新尺寸完成布局
     if (_orig_MMUIButton_layoutSubviews) {
         ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
     }
-
-    // ★ 分发到资料卡模块 ★
-    [ProfileCardBgHook handleButtonLayout:(UIView *)self];
-
-    // 列表圆角不需要在 MMUIButton 层做任何事
 }
 
 // ★★★ Cell Hook：列表圆角 + 分发到资料卡透明化 ★★★
