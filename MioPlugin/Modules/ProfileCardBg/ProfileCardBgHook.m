@@ -690,14 +690,20 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     } // end needsFullCardBg
 
 APPLY_CORNER:
-    // ── 资料卡高度调整（与微信优化一致：在 layoutSubviews 中改 button frame）──
+    // ── 资料卡高度调整（方案2：向上传播 superview 链）──
     {
         CGFloat customHeight = config.cardBgHeight;
         if (customHeight > 0 && button.frame.size.height < customHeight) {
-            CGRect f = button.frame;
-            f.size.height = customHeight;
-            button.frame = f;
-            WPLog(@"CardBg-Diag", @"[CARD-HEIGHT] %.0f → %.0f",
+            UIView *current = button;
+            while (current && current.frame.size.height < customHeight) {
+                CGRect f = current.frame;
+                f.size.height = customHeight;
+                current.frame = f;
+                current = current.superview;
+                // 只改到 MMUITableViewCell 层就停止
+                if ([NSStringFromClass([current class]) isEqualToString:@"MMUITableViewCell"]) break;
+            }
+            WPLog(@"CardBg-Diag", @"[CARD-HEIGHT] button=%.0f → %.0f (propagate up)",
                   button.frame.size.height, customHeight);
         }
     }
