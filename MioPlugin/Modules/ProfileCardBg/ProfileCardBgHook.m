@@ -776,7 +776,20 @@ APPLY_CORNER:
         bf.size.height = targetH;
         button.frame = bf;
 
-        WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
+        // ② ★ 触发表格重新布局（方案 H 改进版）
+        if ([tableView isKindOfClass:[UITableView class]]) {
+            UITableView *tv = (UITableView *)tableView;
+            [tv beginUpdates];
+            [tv endUpdates];
+            // 备选：强制同步重算
+            [tableView setNeedsLayout];
+            [tableView layoutIfNeeded];
+        }
+        // 让父容器也重算
+        [container setNeedsLayout];
+        [container layoutIfNeeded];
+
+        WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f), triggered reload",
               oldH, targetH,
               container.frame.origin.x, container.frame.origin.y,
               container.frame.size.width, container.frame.size.height);
