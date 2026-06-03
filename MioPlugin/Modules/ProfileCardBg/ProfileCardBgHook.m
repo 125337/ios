@@ -746,24 +746,43 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     } // end needsFullCardBg
 
 APPLY_CORNER:
-    // ── 诊断：打印完整视图层级链 ──
+    // ── 方案 H：通过视图层级链修改 button 高度 ──
     {
-        NSMutableString *chain = [NSMutableString string];
-        UIView *v = button;
-        NSInteger depth = 0;
-        while (v && depth < 10) {
-            [chain appendFormat:@"\n  [%ld] %@ frame=(%.0f,%.0f,%.0f,%.0f) bounds=(%.0f,%.0f,%.0f,%.0f)",
-                  (long)depth,
-                  NSStringFromClass([v class]),
-                  v.frame.origin.x, v.frame.origin.y,
-                  v.frame.size.width, v.frame.size.height,
-                  v.bounds.origin.x, v.bounds.origin.y,
-                  v.bounds.size.width, v.bounds.size.height];
-            v = v.superview;
-            depth++;
+        CGFloat targetH = config.cardBgHeight;
+        if (targetH <= 0 || button.frame.size.height >= targetH) {
+            WPLog(@"CardBg-Diag", @"[HEIGHT-SKIP] targetH=%.1f, currentH=%.1f", targetH, button.frame.size.height);
+            goto DO_CORNER;
         }
-        WPLog(@"CardBg-Diag", @"[VIEW-CHAIN] cardBgHeight=%.1f, spacing=%.1f%@", config.cardBgHeight, config.cardBgListSpacing, chain);
+
+        // 向上找 TextStateProfileTableView（index [1]）
+        UIView *tableView = button.superview;
+        if (!tableView || ![NSStringFromClass([tableView class]) isEqualToString:@"TextStateProfileTableView"]) {
+            WPLog(@"CardBg-Diag", @"[HEIGHT-SKIP] superview is %@, not TextStateProfileTableView",
+                  tableView ? NSStringFromClass([tableView class]) : @"nil");
+            goto DO_CORNER;
+        }
+
+        // 继续向上找 MMUIButton 容器（index [2]，h=1704）
+        UIView *container = tableView.superview;
+        if (!container || ![container isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+            WPLog(@"CardBg-Diag", @"[HEIGHT-SKIP] tableView.superview is %@, not MMUIButton",
+                  container ? NSStringFromClass([container class]) : @"nil");
+            goto DO_CORNER;
+        }
+
+        // ★ 改 button 自身高度
+        CGRect bf = button.frame;
+        CGFloat oldH = bf.size.height;
+        bf.size.height = targetH;
+        button.frame = bf;
+
+        WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
+              oldH, targetH,
+              container.frame.origin.x, container.frame.origin.y,
+              container.frame.size.width, container.frame.size.height);
     }
+
+DO_CORNER:
 
     // ── 圆角 + 边框 + QR码隐藏 ──
     {
