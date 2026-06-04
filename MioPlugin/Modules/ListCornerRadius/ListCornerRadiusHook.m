@@ -211,9 +211,19 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
-    // ★★ 改造 B：资料卡 cell 的 margin 由 Button Hook 统一处理 ★★
+    // ★★ 改造 B：仅跳过含 MMUIButton 的资料卡 cell（margin 由 Button Hook 统一管理）★★
     if ([className isEqualToString:@"MoreViewController"]) {
-        goto AFTER_MARGIN;
+        __block BOOL isProfileCardCell = NO;
+        [cellView.subviews enumerateObjectsUsingBlock:^(__kindof UIView * _Nonnull sub,
+                                                         NSUInteger idx, BOOL * _Nonnull stop) {
+            if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+                isProfileCardCell = YES;
+                *stop = YES;
+            }
+        }];
+        if (isProfileCardCell) {
+            goto AFTER_MARGIN;
+        }
     }
 
     // ★ margin 代码（只在 listCornerRadiusEnabled 时执行，进入此处说明已开启）★
