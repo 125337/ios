@@ -236,35 +236,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
 
-    // ★ 新增：资料卡 cell → 缩窄 MMUIButton.frame 匹配 cell 边距 ★
-    if (margin > 0 && [className isEqualToString:@"MoreViewController"]) {
-        [cellView.subviews enumerateObjectsUsingBlock:^(__kindof UIView *sub,
-                                                         NSUInteger idx, BOOL *stop) {
-            if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-                CGRect sf = sub.frame;
-                CGFloat targetW = cellView.bounds.size.width;
-                if (fabs(sf.origin.x) > 0.5 || fabs(sf.size.width - targetW) > 0.5) {
-                    sf.origin.x = 0;
-                    sf.size.width = targetW;
-                    sub.frame = sf;
-                }
-
-                // ★ 修复：label 内容压缩（改造误删）★
-                for (UIView *sv in sub.subviews) {
-                    if ([sv isKindOfClass:[UILabel class]]) {
-                        UILabel *label = (UILabel *)sv;
-                        if (CGRectGetMaxX(label.frame) > sub.bounds.size.width) {
-                            label.numberOfLines = 0;
-                            [label sizeToFit];
-                        }
-                    }
-                }
-
-                *stop = YES;
-            }
-        }];
-    }
-
     // ★ bgColor 设置 ★
     static NSSet *bgColorSkipList = nil;
     static dispatch_once_t onceBgToken;

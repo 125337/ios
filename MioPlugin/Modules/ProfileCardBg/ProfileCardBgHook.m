@@ -641,6 +641,32 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     } // end needsFullCardBg
 
+    // ── 改动 6：资料卡 button 宽度匹配列表边距（必须放在方案 H 之前，避免被 goto DO_CORNER 跳过）──
+    if (config.listCornerRadiusEnabled) {
+        CGFloat margin = config.listCellMargin;
+        if (margin > 0) {
+            CGFloat screenW = [UIScreen mainScreen].bounds.size.width;
+            CGFloat targetW = screenW - 2.0 * margin;
+            if (fabs(button.frame.size.width - targetW) > 0.5) {
+                CGRect bf = button.frame;
+                bf.origin.x = 0;
+                bf.size.width = targetW;
+                button.frame = bf;
+            }
+
+            // ★ 修复：label 内容压缩 ★
+            for (UIView *sv in button.subviews) {
+                if ([sv isKindOfClass:[UILabel class]]) {
+                    UILabel *label = (UILabel *)sv;
+                    if (CGRectGetMaxX(label.frame) > button.bounds.size.width) {
+                        label.numberOfLines = 0;
+                        [label sizeToFit];
+                    }
+                }
+            }
+        }
+    }
+
     // ── 方案 H：通过视图层级链修改 button 高度 ──
     {
         CGFloat targetH = config.cardBgHeight;
