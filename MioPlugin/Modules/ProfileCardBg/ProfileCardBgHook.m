@@ -641,7 +641,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     } // end needsFullCardBg
 
-    // ── 改动 6：资料卡 button 宽度匹配列表边距（必须放在方案 H 之前，避免被 goto DO_CORNER 跳过）──
+    // ── 改动 6：资料卡 button 宽度匹配列表边距（放在方案 H 之前，避免被 goto 跳过）──
     if (config.listCornerRadiusEnabled) {
         CGFloat margin = config.listCellMargin;
         if (margin > 0) {
@@ -654,7 +654,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                 button.frame = bf;
             }
 
-            // ★ 修复：label 内容压缩 ★
+            // ★ 修复：label 内容压缩（来自改动 5）★
             for (UIView *sv in button.subviews) {
                 if ([sv isKindOfClass:[UILabel class]]) {
                     UILabel *label = (UILabel *)sv;
