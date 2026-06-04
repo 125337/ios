@@ -5,6 +5,9 @@
 #import <objc/message.h>
 #import <substrate.h>
 
+static const NSInteger kProfileCardBgImageTag = 999902;
+static const void *kMioBgLoadedKey = &kMioBgLoadedKey;
+
 static double (*_orig_heightForHeader)(id, SEL, id, long long);
 
 static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long section) {
@@ -376,6 +379,36 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     });
 }
 
+#pragma mark - 辅助方法
+
++ (UIView *)findMMUIButtonInCell:(UITableViewCell *)cell {
+    for (UIView *sub in cell.contentView.subviews) {
+        if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+            return sub;
+        }
+    }
+    for (UIView *sub in cell.subviews) {
+        if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+            return sub;
+        }
+    }
+    return nil;
+}
+
++ (BOOL)isDarkModeWithCell:(UITableViewCell *)cell {
+    if (@available(iOS 13.0, *)) {
+        UIResponder *resp = cell.nextResponder;
+        while (resp) {
+            if ([resp isKindOfClass:[UIViewController class]]) {
+                return (((UIViewController *)resp).traitCollection.userInterfaceStyle ==
+                        UIUserInterfaceStyleDark);
+            }
+            resp = resp.nextResponder;
+        }
+    }
+    return NO;
+}
+
 #pragma mark - ★ 核心：handleButtonLayout
 
 + (void)handleButtonLayout:(UIView *)button {
@@ -438,7 +471,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                 }
                 object_setIvar(button, bgIvar, nil);
             }
-            for (UIView *sub in button.subviews) { sub.hidden = YES; }
+            // ★ [修改] button 本身整体隐藏，子视图自动跟随
+            button.hidden = YES;
 
             if (config.listHideRightQRCode) {
                 [ProfileCardBgHook hideQRButtonInCell:button];
@@ -446,10 +480,15 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             return;
         }
 
-        // ── 背景图分支 ──
+        // ── 非 HideCard 分支 ──
+
+        // 1. 确保 button 可见（HideCard→非HideCard toggle 时恢复）
+        button.hidden = NO;
+
+        // 2. Button 背景色清透明
         button.backgroundColor = [UIColor clearColor];
 
-        // 清除微信原生 m_bgImageView
+        // 3. 清除微信原生 m_bgImageView
         Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
         if (bgIvar) {
             id bgImgView = object_getIvar(button, bgIvar);
@@ -461,7 +500,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             object_setIvar(button, bgIvar, nil);
         }
 
-        // FIX-WHITE: 隐藏白色视图
+        // 4. FIX-WHITE：隐藏白色视图
         {
             static const NSInteger kMioBgImageTag_local = 999902;
             for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
@@ -504,192 +543,12 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             }
         }
 
-        // bgImageView 创建/去重/加载
-        static const NSInteger kMioBgImageTag = 999902;
-        static const void *kMioBgLoadedKey = &kMioBgLoadedKey;
-
-        UIImageView *existingBgImg = nil;
-        BOOL alreadyLoaded = [objc_getAssociatedObject(button, kMioBgLoadedKey) boolValue];
-        for (UIView *sub in button.subviews) {
-            if (sub.tag == kMioBgImageTag && [sub isKindOfClass:[UIImageView class]]) {
-                existingBgImg = (UIImageView *)sub; break;
-            }
-        }
-
-        // 分支A：已存在且已加载 → 更新 contentMode + frame
-        if (existingBgImg != nil && alreadyLoaded) {
-            NSInteger fillMode = config.cardBgFillMode;
-            switch (fillMode) {
-                case 1: existingBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
-                case 2: existingBgImg.contentMode = UIViewContentModeScaleToFill; break;
-                default: existingBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
-            }
-
-            CGFloat imgW = button.bounds.size.width;
-            CGFloat imgH = button.bounds.size.height;
-            CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
-            CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
-
-            NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
-
-            CGFloat alignmentOffset = 0;
-            if ((fillMode == 0 || fillMode == 3) && existingBgImg.image &&
-                existingBgImg.image.size.width > 0) {
-                CGFloat iW = existingBgImg.image.size.width;
-                CGFloat iH = existingBgImg.image.size.height;
-                CGFloat vW = button.bounds.size.width;
-                CGFloat vH = button.bounds.size.height;
-
-                CGFloat scale = vW / iW;
-                CGFloat renderedH = iH * scale;
-                CGFloat overflow = renderedH - vH;
-
-                if (overflow > 0) {
-                    switch (alignment) {
-                        case 0:  alignmentOffset = -overflow / 2.0; break;
-                        case 2:  alignmentOffset = overflow / 2.0; break;
-                        default: alignmentOffset = 0; break;
-                    }
-                }
-            }
-
-            existingBgImg.frame = CGRectMake(offsetX, offsetY + alignmentOffset, imgW, imgH);
-
-            NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
-            if (layerPos == 1) [button bringSubviewToFront:existingBgImg];
-
-            goto APPLY_CORNER;
-        }
-
-        // 分支B：不存在或未加载 → 创建
-        if (existingBgImg != nil) [existingBgImg removeFromSuperview];
-
-        UIImageView *btnBgImg = [[UIImageView alloc] init];
-        btnBgImg.tag = kMioBgImageTag;
-        btnBgImg.clipsToBounds = NO;
-        btnBgImg.userInteractionEnabled = NO;
-
-        NSInteger fillMode = config.cardBgFillMode;
-        switch (fillMode) {
-            case 1: btnBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
-            case 2: btnBgImg.contentMode = UIViewContentModeScaleToFill; break;
-            default: btnBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
-        }
-        [button insertSubview:btnBgImg atIndex:0];
-
-        CGFloat imgW = button.bounds.size.width;
-        CGFloat imgH = button.bounds.size.height;
-        CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
-        CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
-        btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
-
-        WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), buttonBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
-              (long)btnBgImg.tag,
-              btnBgImg.frame.origin.x, btnBgImg.frame.origin.y,
-              btnBgImg.frame.size.width, btnBgImg.frame.size.height,
-              button.bounds.origin.x, button.bounds.origin.y,
-              button.bounds.size.width, button.bounds.size.height,
-              NSStringFromClass([btnBgImg.superview class]),
-              (long)[button.subviews indexOfObject:btnBgImg]);
-
-        NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
-        if (layerPos == 1) [button bringSubviewToFront:btnBgImg];
-
-        objc_setAssociatedObject(button, kMioBgLoadedKey, @NO,
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-        __weak UIImageView *weakBgImg = btnBgImg;
-        __weak UIView *weakSelf = button;
-        BOOL capturedIsDark = isDark;
-
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            __strong UIImageView *strongBgImg = weakBgImg;
-            __strong UIView *strongSelf = weakSelf;
-            if (!strongBgImg || !strongSelf) return;
-
-            UIImage *resultImage = [ProfileCardBgHook loadBackgroundImageSync:capturedIsDark];
-
-            dispatch_async(dispatch_get_main_queue(), ^{
-                __strong UIImageView *finalImg = weakBgImg;
-                __strong UIView *finalSelf = weakSelf;
-                if (!finalImg || !finalSelf) return;
-
-                if (resultImage) {
-                    finalImg.image = resultImage;
-                    finalImg.alpha = 1.0;
-                    finalImg.hidden = NO;
-
-                    // ★ 计算 alignment 偏移（AspectFill 模式下）
-                    PluginConfig *cfg = [PluginConfig shared];
-                    NSInteger fillMode = cfg.cardBgFillMode;
-                    NSInteger alignment = capturedIsDark ? cfg.cardBgDarkAlignment : cfg.cardBgLightAlignment;
-                    CGFloat userOffsetY = capturedIsDark ? cfg.cardBgDarkOffsetY : cfg.cardBgLightOffsetY;
-
-                    if ((fillMode == 0 || fillMode == 3) && resultImage.size.width > 0) {
-                        CGFloat imgW = resultImage.size.width;
-                        CGFloat imgH = resultImage.size.height;
-                        CGFloat viewW = finalSelf.bounds.size.width;
-                        CGFloat viewH = finalSelf.bounds.size.height;
-
-                        CGFloat scale = viewW / imgW;
-                        CGFloat renderedH = imgH * scale;
-                        CGFloat overflow = renderedH - viewH;
-
-                        if (overflow > 0) {
-                            CGFloat alignmentOffset = 0;
-                            switch (alignment) {
-                                case 0:  // 底部对齐
-                                    alignmentOffset = -overflow / 2.0;
-                                    break;
-                                case 2:  // 顶部对齐
-                                    alignmentOffset = overflow / 2.0;
-                                    break;
-                                case 1:  // 居中对齐（默认）
-                                default:
-                                    alignmentOffset = 0;
-                                    break;
-                            }
-                            CGRect f = finalImg.frame;
-                            f.origin.y = userOffsetY + alignmentOffset;
-                            finalImg.frame = f;
-                        }
-                    }
-
-                    objc_setAssociatedObject(finalSelf, kMioBgLoadedKey, @YES,
-                                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                    WPLog(@"CardBg-Diag", @"[BGIMG-SET] image=SET, size=%.0fx%.0f, frame=(%.0f,%.0f,%.0f,%.0f), hidden=%d, alpha=%.2f, tag=%ld",
-                          resultImage.size.width, resultImage.size.height,
-                          finalImg.frame.origin.x, finalImg.frame.origin.y,
-                          finalImg.frame.size.width, finalImg.frame.size.height,
-                          finalImg.isHidden, finalImg.alpha, (long)finalImg.tag);
-                } else {
-                    WPLog(@"CardBg-Diag", @"[BGIMG-SET] image=NIL, tag=%ld, finalImg=%@", (long)finalImg.tag, finalImg ? @"exists" : @"nil");
-                    BOOL dark = NO;
-                    if (@available(iOS 13.0, *)) {
-                        UIViewController *vCtrl = nil;
-                        UIResponder *resp = finalSelf.nextResponder;
-                        while (resp) {
-                            if ([resp isKindOfClass:[UIViewController class]]) {
-                                vCtrl = (UIViewController *)resp; break;
-                            }
-                            resp = resp.nextResponder;
-                        }
-                        if (vCtrl) dark = (vCtrl.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-                    }
-                    PluginConfig *cfg = [PluginConfig shared];
-                    UIColor *cardBg = [cfg colorFromHex:dark
-                        ? cfg.listCardDarkBgColor : cfg.listCardLightBgColor];
-                    if (cardBg) finalSelf.backgroundColor = cardBg;
-                    WPLog(@"CardBg-Diag", @"[IMG-CB] FALLBACK: set bg=%@, dark=%d", cardBg ?: @"(nil)", dark);
-                    objc_setAssociatedObject(finalSelf, kMioBgLoadedKey, @YES,
-                                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                }
-            });
-        });
+        // ★ [删除] 不再有 bgImageView 创建/去重/加载、async dispatch
+        // ★ [删除] objc_setAssociatedObject(kMioBgLoadedKey)
+        // ★ [删除] APPLY_CORNER 标签前的 bg frame 更新逻辑
 
     } // end needsFullCardBg
 
-APPLY_CORNER:
     // ── 方案 H：通过视图层级链修改 button 高度 ──
     {
         CGFloat targetH = config.cardBgHeight;
@@ -776,31 +635,37 @@ DO_CORNER:
 
     if (!config.cardBgEnabled) return;
 
-    NSString *className = nil;
+    // ── 检测 MoreViewController ──
     UIViewController *vc = nil;
     UIResponder *responder = cell.nextResponder;
     while (responder) {
         if ([responder isKindOfClass:[UIViewController class]]) {
             vc = (UIViewController *)responder;
-            className = NSStringFromClass([vc class]);
             break;
         }
         responder = responder.nextResponder;
     }
     if (!vc) return;
-
-    BOOL isMoreVC = [className isEqualToString:@"MoreViewController"];
+    BOOL isMoreVC = [NSStringFromClass([vc class]) isEqualToString:@"MoreViewController"];
     if (!isMoreVC) return;
 
     BOOL isProfileCard = [ProfileCardBgHook isProfileCard:(UIView *)cell];
-    if (!isProfileCard) return;
 
-    // ★ 到这里的一定是 MoreVC + cardBgEnabled + 资料卡 Cell ★
+    // ★ 非资料卡 Cell → 清理残留 bg
+    if (!isProfileCard) {
+        for (UIView *sub in cell.subviews) {
+            if (sub.tag == kProfileCardBgImageTag) {
+                [sub removeFromSuperview];
+                objc_setAssociatedObject(cell, &kMioBgLoadedKey, nil,
+                                          OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                break;
+            }
+        }
+        return;
+    }
+
+    // ── Cell 透明化（不变）──
     UIView *cellView = (UIView *)cell;
-
-    WPLog(@"CardBg-Diag", @"[CELL-TRANSPARENCY] Before: cellBg=%@, cellMasks=%d, cellBorder=%.1f",
-          cellView.backgroundColor, cellView.layer.masksToBounds, cellView.layer.borderWidth);
-
     cellView.backgroundColor = [UIColor clearColor];
     cellView.layer.borderWidth = 0;
     cellView.layer.masksToBounds = NO;
@@ -818,15 +683,177 @@ DO_CORNER:
             bgv.hidden = YES;
         }
     }
+
     if ([cell respondsToSelector:@selector(selectedBackgroundView)]) {
         UIView *sbgv = [(UITableViewCell *)cell selectedBackgroundView];
         if (sbgv) sbgv.backgroundColor = [UIColor clearColor];
     }
 
-    WPLog(@"CardBg-Diag", @"[CELL-TRANSPARENCY] After: cellBg=%@, cellMasks=%d",
-          cellView.backgroundColor, cellView.layer.masksToBounds);
+    WPLog(@"CardBg-Diag", @"[CELL-TRANSPARENCY] Done");
 
-    // 注意：不设 masksToBounds=YES，由 MMUIButton 层负责裁剪
+    // ════════════════════════════════════════════════
+    // ★ [新增] Cell 层背景图生命周期管理
+    // ════════════════════════════════════════════════
+
+    // ── 获取 button 引用 ──
+    UIView *button = [self findMMUIButtonInCell:cell];
+    if (!button) return;
+
+    BOOL isDark = [self isDarkModeWithCell:cell];
+
+    // ── Cell 层 bg 查找/创建 ──
+    BOOL alreadyLoaded = [objc_getAssociatedObject(cell, &kMioBgLoadedKey) boolValue];
+    UIImageView *existingBgImg = nil;
+    for (UIView *sub in cell.subviews) {
+        if (sub.tag == kProfileCardBgImageTag &&
+            [sub isKindOfClass:[UIImageView class]]) {
+            existingBgImg = (UIImageView *)sub; break;
+        }
+    }
+
+    // ── 计算 bg 在 Cell 坐标系中的 frame ──
+    CGRect btnFrameInCell = [button convertRect:button.bounds toView:cell];
+    CGFloat imgW = btnFrameInCell.size.width;
+    CGFloat imgH = btnFrameInCell.size.height;
+    CGFloat baseX = btnFrameInCell.origin.x;
+    CGFloat baseY = btnFrameInCell.origin.y;
+    CGFloat ox = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
+    CGFloat oy = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+
+    // ── 分支 A：已存在且已加载 → 仅更新 frame ──
+    if (existingBgImg && alreadyLoaded) {
+        NSInteger fillMode = config.cardBgFillMode;
+        switch (fillMode) {
+            case 1: existingBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
+            case 2: existingBgImg.contentMode = UIViewContentModeScaleToFill; break;
+            default: existingBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
+        }
+
+        // alignment 偏移（AspectFill 溢出偏移）
+        NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
+        CGFloat alignOffset = 0;
+        if ((fillMode == 0 || fillMode == 3) && existingBgImg.image &&
+            existingBgImg.image.size.width > 0) {
+            CGFloat iW = existingBgImg.image.size.width;
+            CGFloat iH = existingBgImg.image.size.height;
+            CGFloat scale = imgW / iW;
+            CGFloat renderedH = iH * scale;
+            CGFloat overflow = renderedH - imgH;
+            if (overflow > 0) {
+                switch (alignment) {
+                    case 0:  alignOffset = -overflow / 2.0; break;
+                    case 2:  alignOffset = overflow / 2.0; break;
+                    default: alignOffset = 0; break;
+                }
+            }
+        }
+
+        existingBgImg.frame = CGRectMake(baseX + ox, baseY + oy + alignOffset, imgW, imgH);
+
+        // 图层顺序
+        NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
+        if (layerPos == 1) [cell bringSubviewToFront:existingBgImg];
+
+        return;  // 分支 A 结束
+    }
+
+    // ── 分支 B：不存在或未加载 → 创建新 bg ──
+    if (existingBgImg) [existingBgImg removeFromSuperview];
+
+    UIImageView *cellBgImg = [[UIImageView alloc] init];
+    cellBgImg.tag = kProfileCardBgImageTag;
+    cellBgImg.clipsToBounds = NO;
+    cellBgImg.userInteractionEnabled = NO;
+
+    NSInteger fillMode = config.cardBgFillMode;
+    switch (fillMode) {
+        case 1: cellBgImg.contentMode = UIViewContentModeScaleAspectFit; break;
+        case 2: cellBgImg.contentMode = UIViewContentModeScaleToFill; break;
+        default: cellBgImg.contentMode = UIViewContentModeScaleAspectFill; break;
+    }
+
+    // ★ 插入到 Cell 层（最底层）
+    [cell insertSubview:cellBgImg atIndex:0];
+
+    cellBgImg.frame = CGRectMake(baseX + ox, baseY + oy, imgW, imgH);
+
+    NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
+    if (layerPos == 1) [cell bringSubviewToFront:cellBgImg];
+
+    objc_setAssociatedObject(cell, &kMioBgLoadedKey, @NO,
+                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    // ── 异步加载图片 ──
+    __weak UIImageView *weakBgImg = cellBgImg;
+    __weak UIView *weakCell = cell;
+    __weak UIView *weakButton = button;
+    BOOL capturedIsDark = isDark;
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        __strong UIImageView *strongBgImg = weakBgImg;
+        __strong UIView *strongCell = weakCell;
+        if (!strongBgImg || !strongCell) return;
+
+        UIImage *resultImage = [ProfileCardBgHook loadBackgroundImageSync:capturedIsDark];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong UIImageView *finalImg = weakBgImg;
+            __strong UIView *finalCell = weakCell;
+            __strong UIView *finalButton = weakButton;
+            if (!finalImg || !finalCell) return;
+
+            if (resultImage) {
+                finalImg.image = resultImage;
+                finalImg.alpha = 1.0;
+                finalImg.hidden = NO;
+
+                // alignment 偏移（异步加载时重新计算）
+                PluginConfig *cfg = [PluginConfig shared];
+                NSInteger fm = cfg.cardBgFillMode;
+                NSInteger alignment = capturedIsDark ? cfg.cardBgDarkAlignment : cfg.cardBgLightAlignment;
+                CGFloat userOy = capturedIsDark ? cfg.cardBgDarkOffsetY : cfg.cardBgLightOffsetY;
+
+                if ((fm == 0 || fm == 3) && resultImage.size.width > 0) {
+                    CGFloat iW = resultImage.size.width;
+                    CGFloat iH = resultImage.size.height;
+                    CGRect btnFrm = [finalButton convertRect:finalButton.bounds toView:finalCell];
+                    CGFloat viewW = btnFrm.size.width;
+                    CGFloat viewH = btnFrm.size.height;
+
+                    CGFloat scale = viewW / iW;
+                    CGFloat renderedH = iH * scale;
+                    CGFloat overflow = renderedH - viewH;
+
+                    if (overflow > 0) {
+                        CGFloat alignOff = 0;
+                        switch (alignment) {
+                            case 0:  alignOff = -overflow / 2.0; break;
+                            case 2:  alignOff = overflow / 2.0; break;
+                            default: alignOff = 0; break;
+                        }
+                        CGRect f = finalImg.frame;
+                        f.origin.y = btnFrm.origin.y + userOy + alignOff;
+                        finalImg.frame = f;
+                    }
+                }
+
+                objc_setAssociatedObject(finalCell, &kMioBgLoadedKey, @YES,
+                                          OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                WPLog(@"CardBg-Diag", @"[CELL-BG] image=SET, frame=(%.0f,%.0f,%.0f,%.0f)",
+                      finalImg.frame.origin.x, finalImg.frame.origin.y,
+                      finalImg.frame.size.width, finalImg.frame.size.height);
+            } else {
+                // 回退背景色
+                BOOL dark = capturedIsDark;
+                UIColor *cardBg = [cfg colorFromHex:dark
+                    ? cfg.listCardDarkBgColor : cfg.listCardLightBgColor];
+                if (cardBg) finalCell.backgroundColor = cardBg;
+                objc_setAssociatedObject(finalCell, &kMioBgLoadedKey, @YES,
+                                          OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                WPLog(@"CardBg-Diag", @"[CELL-BG] FALLBACK: set cell bg=%@", cardBg);
+            }
+        });
+    });
 }
 
 + (void)initCellHeightHook {
