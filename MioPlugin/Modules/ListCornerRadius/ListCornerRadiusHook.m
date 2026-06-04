@@ -187,11 +187,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     // ★ 列表圆角入口守卫：只看自己的开关 ★
     if (!config.listCornerRadiusEnabled) {
-        // 列表圆角关闭 → 但仍需调用 orig + 让资料卡处理透明化
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
-        [ProfileCardBgHook handleCellLayout:(UITableViewCell *)self];
         return;
     }
 
@@ -310,10 +308,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     // ★ 非 MoreVC 资料卡 Cell 的正常收尾 ★
     cellView.layer.masksToBounds = YES;
-
-    // ★ 分发到资料卡模块（透明化处理，在 masksToBounds=YES 之后执行）★
-    // 资料卡 Cell 会设 masksToBounds=NO，覆盖上面的 YES
-    [ProfileCardBgHook handleCellLayout:(UITableViewCell *)self];
 }
 
 @implementation ListCornerRadiusHook

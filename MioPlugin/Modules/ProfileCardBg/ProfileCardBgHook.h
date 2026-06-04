@@ -3,13 +3,8 @@
 
 @interface ProfileCardBgHook : NSObject
 
-// 入口方法（由 ListCornerRadiusHook 的薄分发层调用）
-+ (void)handleCellLayout:(UITableViewCell *)cell;
+// 唯一入口方法（由 ListCornerRadiusHook 分发）
 + (void)handleButtonLayout:(UIView *)button;
-
-// 资料卡识别
-+ (BOOL)isProfileCard:(UIView *)cell;
-+ (BOOL)findMMHeadImageViewInSubviews:(NSArray<UIView *> *)subviews;
 
 // 资料卡圆角
 + (void)applyProfileCardCorner:(UIView *)cell
