@@ -673,6 +673,7 @@ DO_CORNER:
     UIView *cv = cell.contentView;
     if (cv) {
         cv.backgroundColor = [UIColor clearColor];
+        cv.opaque = NO;
         cv.layer.masksToBounds = NO;
     }
 
