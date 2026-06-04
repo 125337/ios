@@ -844,6 +844,7 @@ DO_CORNER:
                       finalImg.frame.size.width, finalImg.frame.size.height);
             } else {
                 // 回退背景色
+                PluginConfig *cfg = [PluginConfig shared];
                 BOOL dark = capturedIsDark;
                 UIColor *cardBg = [cfg colorFromHex:dark
                     ? cfg.listCardDarkBgColor : cfg.listCardLightBgColor];
