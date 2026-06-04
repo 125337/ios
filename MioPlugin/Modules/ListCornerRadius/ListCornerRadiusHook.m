@@ -231,11 +231,38 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    AFTER_MARGIN:  // ★ 改造 B：跳转标签
-
     // ★ orig ★
     if (_orig_MMTableViewCell_layoutSubviews) {
         ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+    }
+
+    // ★ 新增：资料卡 cell → 缩窄 MMUIButton.frame 匹配 cell 边距 ★
+    if (margin > 0 && [className isEqualToString:@"MoreViewController"]) {
+        [cellView.subviews enumerateObjectsUsingBlock:^(__kindof UIView *sub,
+                                                         NSUInteger idx, BOOL *stop) {
+            if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+                CGRect sf = sub.frame;
+                CGFloat targetW = cellView.bounds.size.width;
+                if (fabs(sf.origin.x) > 0.5 || fabs(sf.size.width - targetW) > 0.5) {
+                    sf.origin.x = 0;
+                    sf.size.width = targetW;
+                    sub.frame = sf;
+                }
+
+                // ★ 修复：label 内容压缩（改造误删）★
+                for (UIView *sv in sub.subviews) {
+                    if ([sv isKindOfClass:[UILabel class]]) {
+                        UILabel *label = (UILabel *)sv;
+                        if (CGRectGetMaxX(label.frame) > sub.bounds.size.width) {
+                            label.numberOfLines = 0;
+                            [label sizeToFit];
+                        }
+                    }
+                }
+
+                *stop = YES;
+            }
+        }];
     }
 
     // ★ bgColor 设置 ★
@@ -262,6 +289,21 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         UIColor *customBg = [config colorFromHex:isDark
             ? config.listCellDarkBgColor : config.listCellLightBgColor];
         ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
+    }
+
+    // ★ 新增：资料卡 button 的背景色（卡片背景色配置项）★
+    if ([className isEqualToString:@"MoreViewController"]) {
+        [cellView.subviews enumerateObjectsUsingBlock:^(__kindof UIView *sub,
+                                                         NSUInteger idx, BOOL *stop) {
+            if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+                UIColor *cardBg = [config colorFromHex:isDark
+                    ? config.listCardDarkBgColor : config.listCardLightBgColor];
+                if (cardBg) {
+                    sub.backgroundColor = cardBg;
+                }
+                *stop = YES;
+            }
+        }];
     }
 
     // ★ corner 圆角设置（不需要 if 守卫！进入这里一定是因为 listCornerRadiusEnabled==YES）★
