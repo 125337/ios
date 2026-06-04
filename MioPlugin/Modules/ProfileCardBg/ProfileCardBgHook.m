@@ -478,6 +478,14 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             if (adjustedW < 0) adjustedW = 0;
             newBg.frame = CGRectMake(adjustedX, bgY + oy, adjustedW, bgH);
 
+            // ★ 新增：创建 bg 时同时缩窄 button 自身（只执行 1 次，匹配微信优化）
+            if (bgMargin > 0) {
+                CGRect bf = button.frame;
+                bf.origin.x += bgMargin;
+                bf.size.width -= bgMargin * 2;
+                button.frame = bf;
+            }
+
             NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
             if (layerPos == 1) {
                 [button addSubview:newBg];

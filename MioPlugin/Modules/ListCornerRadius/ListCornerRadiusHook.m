@@ -231,6 +231,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
+    AFTER_MARGIN:  // ★ 改造 B：跳转标签
+
     // ★ orig ★
     if (_orig_MMTableViewCell_layoutSubviews) {
         ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
