@@ -645,12 +645,11 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     if (config.listCornerRadiusEnabled) {
         CGFloat margin = config.listCellMargin;
         if (margin > 0) {
-            CGFloat screenW = [UIScreen mainScreen].bounds.size.width;
-            CGFloat targetW = screenW - 2.0 * margin;
-            if (fabs(button.frame.size.width - targetW) > 0.5) {
-                CGRect bf = button.frame;
-                bf.origin.x = 0;
-                bf.size.width = targetW;
+            CGRect bf = button.frame;
+            bf.origin.x += margin;
+            bf.size.width -= margin * 2;
+            if (fabs(button.frame.origin.x - bf.origin.x) > 0.5 ||
+                fabs(button.frame.size.width - bf.size.width) > 0.5) {
                 button.frame = bf;
             }
 
