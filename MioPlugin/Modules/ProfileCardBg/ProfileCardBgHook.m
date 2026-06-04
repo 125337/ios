@@ -30,20 +30,14 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         return result;
     }
 
-    // ★ ① 保证空间 ≥ 自定义高度（防止 button 被截断或覆盖其他 cell）
-    CGFloat customHeight = config.cardBgHeight;
-    if (customHeight > 0 && result < customHeight) {
-        result = customHeight;
-    }
-
-    // ★ ② 追加间距
+    // ★ 追加间距
     CGFloat spacing = config.cardBgListSpacing;
     if (spacing > 0) {
         result += spacing;
     }
 
-    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, height=%.1f, spacing=%.1f",
-          section, result, customHeight, spacing);
+    WPLog(@"CardBg-Diag", @"[HEIGHT-FOR-HEADER] section=%lld, result=%.1f, spacing=%.1f",
+          section, result, spacing);
 
     return result;
 }
@@ -544,6 +538,21 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             });
         }
 
+        // ── ★ 独立 width/margin 调整（与高度调整解耦，始终执行）──
+        if (config.listCornerRadiusEnabled &&
+            !(config.cardBgFillMode == 3 && config.cardBgEnabled)) {
+            CGFloat margin = config.listCellMargin;
+            if (margin > 0) {
+                CGRect bf = button.frame;
+                bf.origin.x += margin;
+                bf.size.width -= margin * 2;
+                button.frame = bf;
+
+                WPLog(@"CardBg-Diag", @"[WIDTH-MARGIN] margin=%.0f, newWidth=%.0f",
+                      margin, bf.size.width);
+            }
+        }
+
         // ══════════════════════════════════════════
         // HideCard 分支（改造：选择性隐藏 + 不 return）
         // ══════════════════════════════════════════
@@ -676,26 +685,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         CGFloat oldH = bf.size.height;
         bf.size.height = targetH;
 
-        // ★ 改 button 左右边距（与列表圆角一致）
-        CGFloat margin = config.listCellMargin;
-        if (margin > 0) {
-            bf.origin.x += margin;
-            bf.size.width -= margin * 2;
-        }
         button.frame = bf;
-
-        // ★ 只对 Label 调用 sizeToFit，不显式修改宽度（依赖 autoresizing 自然跟随）
-        if (margin > 0) {
-            for (UIView *sub in button.subviews) {
-                if ([sub isKindOfClass:[UILabel class]]) {
-                    UILabel *label = (UILabel *)sub;
-                    NSString *text = label.text;
-                    if (text && text.length > 0) {
-                        [label sizeToFit];
-                    }
-                }
-            }
-        }
 
         WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
               oldH, targetH,
