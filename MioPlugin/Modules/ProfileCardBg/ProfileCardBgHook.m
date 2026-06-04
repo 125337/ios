@@ -466,25 +466,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                 default: newBg.contentMode = UIViewContentModeScaleAspectFill; break;
             }
 
-            // ★★ 改造 C：只在 bg 创建时应用 margin（匹配微信优化 FUN_00007b4c）★★
-            CGFloat bgMargin = 0;
-            if (config.listCornerRadiusEnabled &&
-                !(config.cardBgFillMode == 3 && config.cardBgEnabled)) {
-                bgMargin = config.listCellMargin;
-                if (bgMargin < 0) bgMargin = 0;
-            }
-            CGFloat adjustedX = bgX + ox + bgMargin;
-            CGFloat adjustedW = bgW - bgMargin * 2;
-            if (adjustedW < 0) adjustedW = 0;
-            newBg.frame = CGRectMake(adjustedX, bgY + oy, adjustedW, bgH);
-
-            // ★ 新增：创建 bg 时同时缩窄 button 自身（只执行 1 次，匹配微信优化）
-            if (bgMargin > 0) {
-                CGRect bf = button.frame;
-                bf.origin.x += bgMargin;
-                bf.size.width -= bgMargin * 2;
-                button.frame = bf;
-            }
+            newBg.frame = CGRectMake(bgX + ox, bgY + oy, bgW, bgH);
 
             NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
             if (layerPos == 1) {
