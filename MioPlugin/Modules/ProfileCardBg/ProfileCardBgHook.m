@@ -645,11 +645,19 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     if (config.listCornerRadiusEnabled) {
         CGFloat margin = config.listCellMargin;
         if (margin > 0) {
-            CGRect bf = button.frame;
-            bf.origin.x += margin;
-            bf.size.width -= margin * 2;
-            if (fabs(button.frame.origin.x - bf.origin.x) > 0.5 ||
-                fabs(button.frame.size.width - bf.size.width) > 0.5) {
+            // ★ 使用绝对目标计算（匹配微信优化：x=0, width-=margin*2）
+            // 避免从当前 frame 做 += 增量导致的逐轮漂移
+            UIView *superview = button.superview;
+            CGFloat containerW = superview ? superview.bounds.size.width
+                                           : [UIScreen mainScreen].bounds.size.width;
+            CGFloat targetW = containerW - margin * 2;
+            if (targetW < 0) targetW = 0;
+
+            if (fabs(button.frame.origin.x) > 0.5 ||
+                fabs(button.frame.size.width - targetW) > 0.5) {
+                CGRect bf = button.frame;
+                bf.origin.x = 0;
+                bf.size.width = targetW;
                 button.frame = bf;
             }
 
