@@ -413,11 +413,11 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     // ★ [NEW] 资料卡确认后的操作（合并自原 handleCellLayout:）
     // ══════════════════════════════════════════
 
-    // ── [NEW] 获取 Cell ──
+    // ── [NEW] 获取 Cell → Cell 透明化 + bg 生命周期 ──
     UITableViewCell *cell = [self getCellFromButton:button];
-    if (!cell) goto SKIP_CELL_OPS;
+    if (cell) {
 
-    // ── [NEW] Cell 透明化（4 层）──
+    // ── Cell 透明化（4 层）──
     UIView *cellView = (UIView *)cell;
     cellView.backgroundColor = [UIColor clearColor];
     cellView.layer.borderWidth = 0;
@@ -597,7 +597,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         });
     }
 
-SKIP_CELL_OPS:
+} // end if (cell)
 
     BOOL needsFullCardBg = config.cardBgEnabled;
 
