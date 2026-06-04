@@ -466,7 +466,17 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                 default: newBg.contentMode = UIViewContentModeScaleAspectFill; break;
             }
 
-            newBg.frame = CGRectMake(bgX + ox, bgY + oy, bgW, bgH);
+            // ★★ 改造 C：只在 bg 创建时应用 margin（匹配微信优化 FUN_00007b4c）★★
+            CGFloat bgMargin = 0;
+            if (config.listCornerRadiusEnabled &&
+                !(config.cardBgFillMode == 3 && config.cardBgEnabled)) {
+                bgMargin = config.listCellMargin;
+                if (bgMargin < 0) bgMargin = 0;
+            }
+            CGFloat adjustedX = bgX + ox + bgMargin;
+            CGFloat adjustedW = bgW - bgMargin * 2;
+            if (adjustedW < 0) adjustedW = 0;
+            newBg.frame = CGRectMake(adjustedX, bgY + oy, adjustedW, bgH);
 
             NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
             if (layerPos == 1) {
@@ -536,21 +546,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                     }
                 });
             });
-        }
-
-        // ── ★ 独立 width/margin 调整（与高度调整解耦，始终执行）──
-        if (config.listCornerRadiusEnabled &&
-            !(config.cardBgFillMode == 3 && config.cardBgEnabled)) {
-            CGFloat margin = config.listCellMargin;
-            if (margin > 0) {
-                CGRect bf = button.frame;
-                bf.origin.x += margin;
-                bf.size.width -= margin * 2;
-                button.frame = bf;
-
-                WPLog(@"CardBg-Diag", @"[WIDTH-MARGIN] margin=%.0f, newWidth=%.0f",
-                      margin, bf.size.width);
-            }
         }
 
         // ══════════════════════════════════════════

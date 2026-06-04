@@ -211,6 +211,11 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
+    // ★★ 改造 B：资料卡 cell 的 margin 由 Button Hook 统一处理 ★★
+    if ([className isEqualToString:@"MoreViewController"]) {
+        goto AFTER_MARGIN;
+    }
+
     // ★ margin 代码（只在 listCornerRadiusEnabled 时执行，进入此处说明已开启）★
     CGFloat margin = config.listCellMargin;
     if (margin > 0) {
@@ -222,13 +227,15 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                        : [UIScreen mainScreen].bounds.size.width;
         CGFloat targetW = containerW - 2.0 * margin;
         CGFloat currentW = cellView.frame.size.width;
-        if (currentX != targetX || fabs(currentW - targetW) > 0.5) {
+        // ★ 改造 A：浮点比较使用 fabs 阈值，精确匹配微信优化的整数运算行为
+        if (fabs(currentX - targetX) > 0.5 || fabs(currentW - targetW) > 0.5) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
             f.size.width = targetW;
             cellView.frame = f;
         }
     }
+AFTER_MARGIN:  // ★ 改造 B：跳转标签
 
     // ★ orig ★
     if (_orig_MMTableViewCell_layoutSubviews) {
