@@ -72,7 +72,6 @@ jobs:
           MioPlugin/Modules/ChatTopBar/AvatarLoader.m \
           MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m \
           MioPlugin/Modules/ListCornerRadius/WPSessionSpacingHook.m \
-          MioPlugin/Modules/ListCornerRadius/WPSearchBoxHook.m \
           MioPlugin/Modules/ListCornerRadius/WPAuxiliaryHooks.m \
           MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m \
           MioPlugin/Modules/DevTools/MioLogMonitor.m \

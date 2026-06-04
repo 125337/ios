@@ -5,7 +5,6 @@
 #import "Config/PluginConfig.h"
 #import "Modules/ListCornerRadius/ListCornerRadiusHook.h"
 #import "Modules/ListCornerRadius/WPSessionSpacingHook.h"
-#import "Modules/ListCornerRadius/WPSearchBoxHook.h"
 #import "Modules/ListCornerRadius/WPAuxiliaryHooks.h"
 
 __attribute__((constructor))
