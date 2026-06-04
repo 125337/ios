@@ -633,6 +633,8 @@ DO_CORNER:
 + (void)handleCellLayout:(UITableViewCell *)cell {
     PluginConfig *config = [PluginConfig shared];
 
+    // ── 入口日志 ──
+    WPLog(@"CardBg-Diag", @"[CELL-ENTER] handleCellLayout: called, cardBgEnabled=%d", config.cardBgEnabled);
     if (!config.cardBgEnabled) return;
 
     // ── 检测 MoreViewController ──
@@ -645,11 +647,17 @@ DO_CORNER:
         }
         responder = responder.nextResponder;
     }
-    if (!vc) return;
+    WPLog(@"CardBg-Diag", @"[CELL-EXIT] vc=%@", vc ? NSStringFromClass([vc class]) : @"nil");
+    if (!vc) {
+        WPLog(@"CardBg-Diag", @"[CELL-EXIT] no VC");
+        return;
+    }
     BOOL isMoreVC = [NSStringFromClass([vc class]) isEqualToString:@"MoreViewController"];
+    WPLog(@"CardBg-Diag", @"[CELL-EXIT] isMoreVC=%d", isMoreVC);
     if (!isMoreVC) return;
 
     BOOL isProfileCard = [ProfileCardBgHook isProfileCard:(UIView *)cell];
+    WPLog(@"CardBg-Diag", @"[CELL-EXIT] isProfileCard=%d", isProfileCard);
 
     // ★ 非资料卡 Cell → 清理残留 bg
     if (!isProfileCard) {
