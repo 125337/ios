@@ -293,6 +293,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     // ★ 新增：资料卡 button 的背景色（卡片背景色配置项）★
     if ([className isEqualToString:@"MoreViewController"]) {
+        BOOL isDark = NO;
+        if (@available(iOS 13.0, *)) {
+            isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+        }
         [cellView.subviews enumerateObjectsUsingBlock:^(__kindof UIView *sub,
                                                          NSUInteger idx, BOOL *stop) {
             if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
