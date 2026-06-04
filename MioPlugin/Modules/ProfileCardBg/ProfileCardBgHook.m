@@ -670,7 +670,26 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         CGFloat oldH = bf.size.height;
         bf.size.height = targetH;
 
+        // ★ 改 button 左右边距（与列表圆角一致）
+        CGFloat margin = config.listCellMargin;
+        if (margin > 0) {
+            bf.origin.x += margin;
+            bf.size.width -= margin * 2;
+        }
         button.frame = bf;
+
+        // ★ 只对 Label 调用 sizeToFit，不显式修改宽度（依赖 autoresizing 自然跟随）
+        if (margin > 0) {
+            for (UIView *sub in button.subviews) {
+                if ([sub isKindOfClass:[UILabel class]]) {
+                    UILabel *label = (UILabel *)sub;
+                    NSString *text = label.text;
+                    if (text && text.length > 0) {
+                        [label sizeToFit];
+                    }
+                }
+            }
+        }
 
         WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
               oldH, targetH,
