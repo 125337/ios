@@ -128,11 +128,10 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                          isDark:(BOOL)isDark {
     PluginConfig *config = [PluginConfig shared];
 
-    // ★ 与微信优化一致：始终 masksToBounds=YES
-    // Cell 层已在 ListCornerRadiusHook 中缩窄，button 在缩窄的 cell 内
     cell.layer.cornerRadius = radius;
     cell.layer.masksToBounds = YES;
 
+    // ★ cardBgEnabled 时不设置不透明背景色，避免遮挡 Cell 层的背景图
     if (!config.cardBgEnabled) {
         UIColor *cardBg = [config colorFromHex:isDark
             ? config.listCardDarkBgColor : config.listCardLightBgColor];
@@ -439,9 +438,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     // ★ 极速拒绝链 ★
     if (!config.cardBgEnabled && !config.listCornerRadiusEnabled) return;
 
-    WPLog(@"CardBg-Diag", @"[ENTRY] handleButtonLayout called, cardBg=%d, corner=%d, margin=%.1f",
-          config.cardBgEnabled, config.listCornerRadiusEnabled, config.listCellMargin);
-
     // 第2关：VC 类型
     UIViewController *vc = nil;
     UIResponder *responder = button.nextResponder;
@@ -452,9 +448,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         }
         responder = responder.nextResponder;
     }
-    NSString *vcClass = vc ? NSStringFromClass([vc class]) : @"nil";
-    WPLog(@"CardBg-Diag", @"[VC-CHECK] vc=%@", vcClass);
-    if (!vc || ![vcClass isEqualToString:@"MoreViewController"]) return;
+    if (!vc || ![NSStringFromClass([vc class]) isEqualToString:@"MoreViewController"]) return;
 
     // 第3关：MMHeadImageView 存在
     BOOL foundHead = NO;
@@ -590,13 +584,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
             CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
 
-            // ★ 背景图内缩（与微信优化一致：宽度减 margin*2，x 偏移用固定 -2.0）
-            CGFloat bgMargin = config.listCellMargin;
-            if (bgMargin > 0) {
-                imgW -= bgMargin * 2;
-                offsetX = -2.0;  // 微信优化用固定值 -2.0
-            }
-
             NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
 
             CGFloat alignmentOffset = 0;
@@ -648,13 +635,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         CGFloat imgH = button.bounds.size.height;
         CGFloat offsetX = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
         CGFloat offsetY = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
-
-        // ★ 背景图内缩（与微信优化一致：宽度减 margin*2，x 偏移用固定 -2.0）
-        CGFloat bgMargin2 = config.listCellMargin;
-        if (bgMargin2 > 0) {
-            imgW -= bgMargin2 * 2;
-            offsetX = -2.0;  // 微信优化用固定值 -2.0
-        }
         btnBgImg.frame = CGRectMake(offsetX, offsetY, imgW, imgH);
 
         WPLog(@"CardBg-Diag", @"[BGIMG-CREATE] tag=%ld, frame=(%.0f,%.0f,%.0f,%.0f), buttonBounds=(%.0f,%.0f,%.0f,%.0f), superview=%@, subviewIndex=%ld",
@@ -792,15 +772,22 @@ APPLY_CORNER:
         CGRect bf = button.frame;
         CGFloat oldH = bf.size.height;
         bf.size.height = targetH;
+
+        // ★ 改 button 左右边距（与列表圆角一致）
+        CGFloat margin = config.listCellMargin;
+        if (margin > 0) {
+            bf.origin.x += margin;
+            bf.size.width -= margin * 2;
+        }
         button.frame = bf;
 
-        // ★ 对 UILabel 调 sizeToFit（微信优化方案：不改 button 宽度，让 label 自适应）
-        CGFloat margin = config.listCellMargin;
+        // ★ 只对 Label 调用 sizeToFit，不显式修改宽度（依赖 autoresizing 自然跟随）
         if (margin > 0) {
             for (UIView *sub in button.subviews) {
                 if ([sub isKindOfClass:[UILabel class]]) {
                     UILabel *label = (UILabel *)sub;
-                    if (label.text.length > 0) {
+                    NSString *text = label.text;
+                    if (text && text.length > 0) {
                         [label sizeToFit];
                     }
                 }
