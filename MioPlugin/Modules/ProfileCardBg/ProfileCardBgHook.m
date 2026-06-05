@@ -382,7 +382,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     PluginConfig *config = [PluginConfig shared];
 
     // ★ 极速拒绝链 ★
-    if (!config.cardBgBeautifyEnabled && !config.globalCornerRadiusEnabled) return;
+    if (!config.cardBgBeautifyEnabled) return;
 
     // 第2关：VC 类型
     UIViewController *vc = nil;
@@ -724,7 +724,10 @@ DO_CORNER:
 
     // ── 圆角 + 边框 + QR码隐藏 ──
     {
-        [ProfileCardBgHook applyProfileCardCorner:button isDark:isDark];
+        // ★ 仅在"开启资料圆角"时才处理资料卡圆角和边距 ★
+        if (config.cardBgCornerEnabled) {
+            [ProfileCardBgHook applyProfileCardCorner:button isDark:isDark];
+        }
 
         if (config.listHideRightQRCode) {
             [ProfileCardBgHook hideQRButtonInCell:button];

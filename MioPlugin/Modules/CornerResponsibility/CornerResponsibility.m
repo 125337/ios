@@ -8,9 +8,9 @@
 /// ========== 配置区：在此维护各模块的 VC 归属 ==========
 
 /// 资料卡片美化模块专属的 VC 类名列表
-/// 这些 VC 的 Cell 由 ProfileCardBgHook 全权管理
+/// ★ MoreViewController 不再归为资料卡模块，它的列表 Cell 由列表圆角模块处理。
+///   资料卡的识别在 handleButtonLayout 中通过 MMHeadImageView 子视图检查 + VC 类型检查完成。
 static NSString *const kProfileCardVCs[] = {
-    @"MoreViewController",
 };
 
 /// 列表圆角黑名单（不支持任何圆角的 VC 类名列表）
