@@ -146,6 +146,12 @@
 @property (nonatomic, copy) NSString *placeholderTextColorHex;
 
 #pragma mark - 列表圆角
+// 全局圆角
+@property (nonatomic, assign) BOOL globalCornerRadiusEnabled;
+@property (nonatomic, assign) BOOL globalCornerMyPageEnabled;
+@property (nonatomic, assign) BOOL globalCornerContactsPageEnabled;
+@property (nonatomic, assign) BOOL globalCornerDiscoverPageEnabled;
+// 列表圆角
 @property (nonatomic, assign) BOOL listCornerRadiusEnabled;
 @property (nonatomic, assign) BOOL listSearchCornerRadius;
 @property (nonatomic, assign) BOOL listHideRightQRCode;

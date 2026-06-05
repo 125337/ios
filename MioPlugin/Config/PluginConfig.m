@@ -406,6 +406,12 @@
     }
 
     // ========== 列表圆角配置 ==========
+    // 全局圆角
+    _globalCornerRadiusEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerRadiusEnabled"]];
+    _globalCornerMyPageEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerMyPageEnabled"]];
+    _globalCornerContactsPageEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerContactsPageEnabled"]];
+    _globalCornerDiscoverPageEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerDiscoverPageEnabled"]];
+    // 列表圆角
     _listCornerRadiusEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListCornerRadiusEnabled"]];
     _listSearchCornerRadius = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListSearchCornerRadius"]];
     _listHideRightQRCode = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListHideRightQRCode"]];
@@ -668,6 +674,12 @@
     if (_placeholderTextColorHex) [d setObject:_placeholderTextColorHex forKey:[kPluginPrefix stringByAppendingString:@"PlaceholderText_ColorHex"]];
 
     // ========== 列表圆角配置 ==========
+    // 全局圆角
+    [d setBool:_globalCornerRadiusEnabled forKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerRadiusEnabled"]];
+    [d setBool:_globalCornerMyPageEnabled forKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerMyPageEnabled"]];
+    [d setBool:_globalCornerContactsPageEnabled forKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerContactsPageEnabled"]];
+    [d setBool:_globalCornerDiscoverPageEnabled forKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerDiscoverPageEnabled"]];
+    // 列表圆角
     [d setBool:_listCornerRadiusEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListCornerRadiusEnabled"]];
     [d setBool:_listSearchCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"ListSearchCornerRadius"]];
     [d setBool:_listHideRightQRCode forKey:[kPluginPrefix stringByAppendingString:@"ListHideRightQRCode"]];

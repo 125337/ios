@@ -23,6 +23,43 @@
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 
+    // ========== 全局圆角分组 ==========
+    y = [self addSectionHeader:@"全局圆角" y:y width:w];
+
+    UIView *globalGroup = [self addTableGroupAtY:y width:w];
+    CGFloat gcy = 0;
+
+    gcy = [self addMasterSwitchRowInGroup:globalGroup
+                                     title:@"主页圆角"
+                                       key:@"globalCornerRadiusEnabled"
+                                      isOn:config.globalCornerRadiusEnabled
+                                subBuilder:^(UIView *expand, CGFloat *ecy) {
+        PluginConfig *cfg = [PluginConfig shared];
+
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"我的页面"
+                                        key:@"globalCornerMyPageEnabled"
+                                       isOn:cfg.globalCornerMyPageEnabled
+                                         cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"联系人页面"
+                                        key:@"globalCornerContactsPageEnabled"
+                                       isOn:cfg.globalCornerContactsPageEnabled
+                                         cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"发现页面"
+                                        key:@"globalCornerDiscoverPageEnabled"
+                                       isOn:cfg.globalCornerDiscoverPageEnabled
+                                         cy:*ecy width:w];
+    } cy:gcy width:w];
+
+    y = [self finishGroup:globalGroup atY:y height:gcy];
+
+    // ========== 列表圆角设置分组 ==========
     y = [self addSectionHeader:@"列表圆角设置" y:y width:w];
 
     UIView *group = [self addTableGroupAtY:y width:w];
@@ -239,7 +276,11 @@
     NSString *key = objc_getAssociatedObject(sender, "key");
     if (!key) return;
 
-    if ([key isEqualToString:@"listCornerRadiusEnabled"]
+    if ([key isEqualToString:@"globalCornerRadiusEnabled"]
+        || [key isEqualToString:@"globalCornerMyPageEnabled"]
+        || [key isEqualToString:@"globalCornerContactsPageEnabled"]
+        || [key isEqualToString:@"globalCornerDiscoverPageEnabled"]
+        || [key isEqualToString:@"listCornerRadiusEnabled"]
         || [key isEqualToString:@"listSearchCornerRadius"]
         || [key isEqualToString:@"listCellBorder"]
         || [key isEqualToString:@"listHideRightQRCode"]
