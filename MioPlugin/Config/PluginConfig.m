@@ -453,9 +453,6 @@
     _listDisableLabelWidthAdjustment = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListDisableLabelWidthAdjustment"]];
     _listMediaCornerEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListMediaCornerEnabled"]];
 
-    NSInteger scr = [d integerForKey:[kPluginPrefix stringByAppendingString:@"ListSearchBoxCornerRadius"]];
-    _listSearchBoxCornerRadius = (scr > 0) ? scr : 18;
-
     _listProfileCardBorderEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderEnabled"]];
 
     CGFloat pcbw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderWidth"]];
