@@ -174,7 +174,7 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
     PluginConfig *config = [PluginConfig shared];
     if (!config.listCornerRadiusEnabled || !config.listSearchCornerRadius) return;
 
-    NSInteger radius = config.listSearchBoxCornerRadius;
+    NSInteger radius = (NSInteger)config.listCellCornerRadius;  // ★ 复用 Cell 圆角半径
     if (radius <= 0) radius = 18;
 
     UIView *container = ((UIView *(*)(id, SEL))objc_msgSend)(self, @selector(searchBoxContainer));

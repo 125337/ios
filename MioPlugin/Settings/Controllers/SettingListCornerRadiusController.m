@@ -131,18 +131,6 @@
                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        NSString *sbcrStr = cfg.listSearchBoxCornerRadius > 0
-            ? [NSString stringWithFormat:@"%ld", (long)cfg.listSearchBoxCornerRadius] : nil;
-        *ecy = [self addInputRowInGroup:expand
-                                  title:@"搜索框圆角半径"
-                                    key:@"listSearchBoxCornerRadius"
-                                  value:sbcrStr
-                                   hint:@"18"
-                             alertTitle:@"设置搜索框圆角半径"
-                           alertMessage:@"请输入圆角半径(5-30像素)"
-                                     cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-
         NSString *ptStr = cfg.listPinnedSessionTopSpacing > 0
             ? [NSString stringWithFormat:@"%.0f", cfg.listPinnedSessionTopSpacing] : nil;
         *ecy = [self addInputRowInGroup:expand

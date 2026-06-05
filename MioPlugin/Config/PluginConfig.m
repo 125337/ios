@@ -697,7 +697,6 @@
     if (_listCellBorderDarkColor) [d setObject:_listCellBorderDarkColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderDarkColor"]];
     [d setBool:_listDisableLabelWidthAdjustment forKey:[kPluginPrefix stringByAppendingString:@"ListDisableLabelWidthAdjustment"]];
     [d setBool:_listMediaCornerEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListMediaCornerEnabled"]];
-    [d setInteger:_listSearchBoxCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"ListSearchBoxCornerRadius"]];
     
     [d setBool:_listProfileCardBorderEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderEnabled"]];
     [d setFloat:_listProfileCardBorderWidth forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderWidth"]];

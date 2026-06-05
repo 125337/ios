@@ -169,7 +169,6 @@
 @property (nonatomic, copy) NSString *listCellBorderDarkColor;
 @property (nonatomic, assign) BOOL listDisableLabelWidthAdjustment;
 @property (nonatomic, assign) BOOL listMediaCornerEnabled;
-@property (nonatomic, assign) NSInteger listSearchBoxCornerRadius;
 @property (nonatomic, assign) BOOL listProfileCardBorderEnabled;
 @property (nonatomic, assign) CGFloat listProfileCardBorderWidth;
 @property (nonatomic, copy) NSString *listProfileCardBorderLightColor;
