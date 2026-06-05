@@ -74,6 +74,7 @@ jobs:
           MioPlugin/Modules/ListCornerRadius/WPSessionSpacingHook.m \
           MioPlugin/Modules/ListCornerRadius/WPAuxiliaryHooks.m \
           MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m \
+          MioPlugin/Modules/CornerResponsibility/CornerResponsibility.m \
           MioPlugin/Modules/DevTools/MioLogMonitor.m \
           MioPlugin/Modules/DevTools/MioNavMonitor.m \
           MioPlugin/Modules/DevTools/DevToolsHook.m \
