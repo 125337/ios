@@ -412,7 +412,6 @@
     _globalCornerContactsPageEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerContactsPageEnabled"]];
     _globalCornerDiscoverPageEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerDiscoverPageEnabled"]];
     // 列表圆角
-    _listCornerRadiusEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListCornerRadiusEnabled"]];
     _listSearchCornerRadius = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListSearchCornerRadius"]];
     _listHideRightQRCode = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListHideRightQRCode"]];
     _listCellBorder = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorder"]];
@@ -677,7 +676,6 @@
     [d setBool:_globalCornerContactsPageEnabled forKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerContactsPageEnabled"]];
     [d setBool:_globalCornerDiscoverPageEnabled forKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerDiscoverPageEnabled"]];
     // 列表圆角
-    [d setBool:_listCornerRadiusEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListCornerRadiusEnabled"]];
     [d setBool:_listSearchCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"ListSearchCornerRadius"]];
     [d setBool:_listHideRightQRCode forKey:[kPluginPrefix stringByAppendingString:@"ListHideRightQRCode"]];
     [d setBool:_listCellBorder forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorder"]];

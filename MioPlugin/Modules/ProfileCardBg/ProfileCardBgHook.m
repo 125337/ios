@@ -361,7 +361,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     PluginConfig *config = [PluginConfig shared];
 
     // ★ 极速拒绝链 ★
-    if (!config.cardBgEnabled && !config.listCornerRadiusEnabled) return;
+    if (!config.cardBgEnabled && !config.globalCornerRadiusEnabled) return;
 
     // 第2关：VC 类型
     UIViewController *vc = nil;

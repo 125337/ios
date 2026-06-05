@@ -246,7 +246,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
-    // ★ margin 代码（只在 listCornerRadiusEnabled 时执行，进入此处说明已开启）★
+    // ★ margin 代码（进入此处说明 globalCornerRadiusEnabled 已开启）★
     CGFloat margin = config.listCellMargin;
     if (margin > 0) {
         CGFloat currentX = cellView.frame.origin.x;
@@ -316,7 +316,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }];
     }
 
-    // ★ corner 圆角设置（不需要 if 守卫！进入这里一定是因为 listCornerRadiusEnabled==YES）★
+    // ★ corner 圆角设置（不需要 if 守卫！进入这里一定是因为 globalCornerRadiusEnabled==YES）★
     NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
     if (cornerRadius == 0) cornerRadius = 18;
 

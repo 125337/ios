@@ -152,7 +152,6 @@
 @property (nonatomic, assign) BOOL globalCornerContactsPageEnabled;
 @property (nonatomic, assign) BOOL globalCornerDiscoverPageEnabled;
 // 列表圆角
-@property (nonatomic, assign) BOOL listCornerRadiusEnabled;
 @property (nonatomic, assign) BOOL listSearchCornerRadius;
 @property (nonatomic, assign) BOOL listHideRightQRCode;
 @property (nonatomic, assign) BOOL listCellBorder;
