@@ -124,6 +124,7 @@ jobs:
                 -IMioPlugin/Modules/ChatTopBar \
                 -IMioPlugin/Modules/ListCornerRadius \
                 -IMioPlugin/Modules/ProfileCardBg \
+                -IMioPlugin/Modules/CornerResponsibility \
                 -IMioPlugin/Modules/DevTools \
                 -IMioPlugin/Settings/Common \
                 -IMioPlugin/Settings/Controllers \
