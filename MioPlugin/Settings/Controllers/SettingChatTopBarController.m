@@ -1,6 +1,5 @@
 #import "SettingChatTopBarController.h"
 #import "ChatTopBarBlacklistEditorVC.h"
-#import "SettingRoundedCornerController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Config/WPColors.h"
 #import "../../Config/Constants.h"
@@ -16,6 +15,7 @@
 
 static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numericInputConfig(void) {
     return @{
+        @"AvatarCornerRadius":      @{@"title": @"头像圆角程度", @"desc": @"请输入圆角百分比(0%-100%)", @"placeholder": @"100"},
         @"AvatarSize":              @{@"title": @"双方头像大小", @"desc": @"请输入头像大小(10px-44px)", @"placeholder": @"30"},
         @"SeparatorSize":           @{@"title": @"分隔符大小",   @"desc": @"请输入分隔符大小(10px-44px)", @"placeholder": @"30"},
         @"NicknameFontSize":        @{@"title": @"网名字体大小", @"desc": @"请输入网名字体大小(6px-20px)", @"placeholder": @"9"},
@@ -31,6 +31,7 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *numeric
 /// tag → key 映射
 static NSString *keyForTag(NSInteger tag) {
     switch (tag) {
+        case 1001: return @"AvatarCornerRadius";
         case 1002: return @"AvatarSize";
         case 1003: return @"SeparatorSize";
         case 1004: return @"NicknameFontSize";
@@ -56,7 +57,8 @@ static NSString *keyForTag(NSInteger tag) {
 - (NSString *)subtitleForKey:(NSString *)key {
     PluginConfig *c = [PluginConfig shared];
     CGFloat val = 0;
-    if ([key isEqualToString:@"AvatarSize"])           val = c.chatAvatarSize;
+    if ([key isEqualToString:@"AvatarCornerRadius"])       val = c.chatAvatarCornerRadius;
+    else if ([key isEqualToString:@"AvatarSize"])           val = c.chatAvatarSize;
     else if ([key isEqualToString:@"SeparatorSize"])        val = c.chatSeparatorSize;
     else if ([key isEqualToString:@"NicknameFontSize"])     val = c.chatNicknameFontSize;
     else if ([key isEqualToString:@"AvatarSpacing"])        val = c.chatAvatarSpacing;
@@ -257,14 +259,6 @@ static NSString *keyForTag(NSInteger tag) {
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-#pragma mark - 跳转子页面
-
-- (void)onRoundedCornerTap {
-    SettingRoundedCornerController *vc = [[SettingRoundedCornerController alloc] init];
-    vc.hidesBottomBarWhenPushed = YES;
-    [self.navigationController pushViewController:vc animated:YES];
-}
-
 #pragma mark - 管理显示黑名单
 
 - (void)onBlacklistTap {
@@ -296,7 +290,8 @@ static NSString *keyForTag(NSInteger tag) {
     [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
         PluginConfig *cfg2 = [PluginConfig shared];
         CGFloat val = 0;
-        if ([key isEqualToString:@"AvatarSize"])           val = cfg2.chatAvatarSize;
+        if ([key isEqualToString:@"AvatarCornerRadius"])       val = cfg2.chatAvatarCornerRadius;
+        else if ([key isEqualToString:@"AvatarSize"])           val = cfg2.chatAvatarSize;
         else if ([key isEqualToString:@"SeparatorSize"])        val = cfg2.chatSeparatorSize;
         else if ([key isEqualToString:@"NicknameFontSize"])     val = cfg2.chatNicknameFontSize;
         else if ([key isEqualToString:@"AvatarSpacing"])        val = cfg2.chatAvatarSpacing;
@@ -317,7 +312,8 @@ static NSString *keyForTag(NSInteger tag) {
         NSString *raw = alert.textFields.firstObject.text;
         NSString *text = (raw.length > 0) ? raw : cfg[@"placeholder"];
         PluginConfig *c = [PluginConfig shared];
-        if ([key isEqualToString:@"AvatarSize"])           c.chatAvatarSize = [text floatValue];
+        if ([key isEqualToString:@"AvatarCornerRadius"])       c.chatAvatarCornerRadius = [text floatValue];
+        else if ([key isEqualToString:@"AvatarSize"])           c.chatAvatarSize = [text floatValue];
         else if ([key isEqualToString:@"SeparatorSize"])        c.chatSeparatorSize = [text floatValue];
         else if ([key isEqualToString:@"NicknameFontSize"])     c.chatNicknameFontSize = [text floatValue];
         else if ([key isEqualToString:@"AvatarSpacing"])        c.chatAvatarSpacing = [text floatValue];
@@ -383,13 +379,8 @@ static NSString *keyForTag(NSInteger tag) {
     NSString *addTimeSuffixSub = config.chatAddTimeSuffixFormat.length > 0 ? config.chatAddTimeSuffixFormat : @"%ld天";
     NSString *groupCountSuffixSub = config.chatGroupMemberCountSuffix.length > 0 ? config.chatGroupMemberCountSuffix : @"%ld人";
 
-    // 圆角美化（跳转子页面）
-    cy2 = [self addNavRowInGroup:card2 title:@"圆角美化" subtitle:@"" tag:500 action:@selector(onRoundedCornerTap) cy:cy2 width:w];
-
-    WPAddSep(card2, cy2, w);
-    cy2 = round((cy2 + 1.0 / scale2) * scale2) / scale2;
-
     NSArray<NSDictionary *> *card2Items = @[
+        @{@"title": @"头像圆角程度",   @"tag": @(1001), @"key": @"AvatarCornerRadius"},
         @{@"title": @"双方头像大小",   @"tag": @(1002), @"key": @"AvatarSize"},
         @{@"title": @"分隔符大小",     @"tag": @(1003), @"key": @"SeparatorSize"},
         @{@"title": @"网名字体大小",   @"tag": @(1004), @"key": @"NicknameFontSize"},

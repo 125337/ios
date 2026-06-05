@@ -2,8 +2,7 @@
 #import "../../Settings/Common/SettingController.h"
 #import "../../Settings/Controllers/SettingChatTopBarController.h"
 #import "../../Settings/Controllers/SettingNameColorController.h"
-#import "../../Settings/Controllers/SettingListCornerRadiusController.h"
-#import "../../Settings/Controllers/SettingCardBackgroundController.h"
+#import "../../Settings/Controllers/SettingCornerRadiusController.h"
 #import "../../Core/LogManager.h"
 
 @interface WPUIVC : SettingCategoryController
@@ -38,8 +37,7 @@
         @[@"界面简化", @(104)],
         @[@"界面净化", @(105)],
         @[@"隐藏头像", @(106)],
-        @[@"列表圆角", @(107)],
-        @[@"卡片背景", @(108)],
+        @[@"圆角美化", @(107)],
     ];
 
     for (NSUInteger i = 0; i < items.count; i++) {
@@ -87,10 +85,7 @@
             subVC = [[SettingAvatarHideController alloc] init];
             break;
         case 107:
-            subVC = [[SettingListCornerRadiusController alloc] init];
-            break;
-        case 108:
-            subVC = [[SettingCardBackgroundController alloc] init];
+            subVC = [[SettingCornerRadiusController alloc] init];
             break;
     }
 
