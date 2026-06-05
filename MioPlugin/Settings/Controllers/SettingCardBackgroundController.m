@@ -165,9 +165,16 @@
                 *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
 
                 *e3y = [self addColorRowInGroup:e3
-                                          title:@"背景颜色"
+                                          title:@"浅色模式背景颜色"
                                             key:@"cardBgCornerBgColor"
                                           value:cfg.cardBgCornerBgColor
+                                             cy:*e3y width:w];
+                *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
+
+                *e3y = [self addColorRowInGroup:e3
+                                          title:@"深色模式背景颜色"
+                                            key:@"cardBgCornerDarkBgColor"
+                                          value:cfg.cardBgCornerDarkBgColor
                                              cy:*e3y width:w];
                 *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
 

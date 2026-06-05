@@ -721,6 +721,7 @@
     [d setFloat:_cardBgCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerRadius"]];
     [d setFloat:_cardBgCornerMargin forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerMargin"]];
     if (_cardBgCornerBgColor) [d setObject:_cardBgCornerBgColor forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerBgColor"]];
+    if (_cardBgCornerDarkBgColor) [d setObject:_cardBgCornerDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerDarkBgColor"]];
     [d setFloat:_cardBgStrokeWidth forKey:[kPluginPrefix stringByAppendingString:@"CardBgStrokeWidth"]];
     // 卡片背景（旧 UI）
     [d setBool:_cardBgEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgEnabled"]];

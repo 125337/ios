@@ -182,6 +182,7 @@
 @property (nonatomic, assign) CGFloat cardBgCornerRadius;
 @property (nonatomic, assign) CGFloat cardBgCornerMargin;
 @property (nonatomic, copy) NSString *cardBgCornerBgColor;
+@property (nonatomic, copy) NSString *cardBgCornerDarkBgColor;
 @property (nonatomic, assign) CGFloat cardBgStrokeWidth;
 // 卡片背景（旧 UI）
 @property (nonatomic, assign) BOOL cardBgEnabled;
