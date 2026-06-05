@@ -508,10 +508,8 @@
 
     _cardBgFillMode = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgFillMode"]];
     _cardBgLayer = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgLayer"]];
-    _cardBgLightOffsetY = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightOffsetY"]];
-    _cardBgDarkOffsetY = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkOffsetY"]];
-    _cardBgLightOffsetX = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightOffsetX"]];
-    _cardBgDarkOffsetX = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkOffsetX"]];
+    _cardBgOffsetY = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetY"]];
+    _cardBgOffsetX = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetX"]];
 }
 
 - (void)save {
@@ -741,10 +739,8 @@
     }
     [d setInteger:_cardBgFillMode forKey:[kPluginPrefix stringByAppendingString:@"CardBgFillMode"]];
     [d setInteger:_cardBgLayer forKey:[kPluginPrefix stringByAppendingString:@"CardBgLayer"]];
-    [d setFloat:_cardBgLightOffsetY forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightOffsetY"]];
-    [d setFloat:_cardBgDarkOffsetY forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkOffsetY"]];
-    [d setFloat:_cardBgLightOffsetX forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightOffsetX"]];
-    [d setFloat:_cardBgDarkOffsetX forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkOffsetX"]];
+    [d setFloat:_cardBgOffsetY forKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetY"]];
+    [d setFloat:_cardBgOffsetX forKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetX"]];
 
     // ========== 开发者工具配置 ==========
     [d setBool:_nsLogMonitorEnabled forKey:[kPluginPrefix stringByAppendingString:@"NsLogMonitorEnabled"]];

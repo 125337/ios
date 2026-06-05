@@ -127,6 +127,31 @@
         }
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
+        // ─── 新 UI：背景 Y/X 偏移 ───
+        {
+            CGFloat oy = cfg.cardBgOffsetY;
+            *ecy = [self addInputRowInGroup:expand
+                                      title:@"背景Y轴偏移"
+                                        key:@"cardBgOffsetY"
+                                      value:oy != 0 ? [NSString stringWithFormat:@"%.0f", oy] : nil
+                                       hint:@"0"
+                                 alertTitle:@"设置背景Y轴偏移"
+                               alertMessage:@"请输入Y轴偏移值(-500~500像素)\n正值向上偏移，负值向下偏移"
+                                         cy:*ecy width:w];
+            *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+            CGFloat ox = cfg.cardBgOffsetX;
+            *ecy = [self addInputRowInGroup:expand
+                                      title:@"背景X轴偏移"
+                                        key:@"cardBgOffsetX"
+                                      value:ox != 0 ? [NSString stringWithFormat:@"%.0f", ox] : nil
+                                       hint:@"0"
+                                 alertTitle:@"设置背景X轴偏移"
+                               alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
+                                         cy:*ecy width:w];
+        }
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w>;
+
         // ─── 隐藏信息卡片（平铺开关，无子参数） ───
         *ecy = [self addSubSwitchRowInGroup:expand
                                       title:@"隐藏信息卡片"
@@ -270,46 +295,24 @@
         *ecy = [self addNavRowInGroup:expand title:@"背景显示层级" subtitle:layerSub tag:203 action:@selector(onLayerTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        CGFloat loy = cfg.cardBgLightOffsetY;
+        CGFloat oy = cfg.cardBgOffsetY;
         *ecy = [self addInputRowInGroup:expand
-                                  title:@"浅色背景Y轴偏移"
-                                    key:@"cardBgLightOffsetY"
-                                 value:loy != 0 ? [NSString stringWithFormat:@"%.0f", loy] : nil
+                                  title:@"背景Y轴偏移"
+                                    key:@"cardBgOffsetY"
+                                 value:oy != 0 ? [NSString stringWithFormat:@"%.0f", oy] : nil
                                    hint:@"0"
-                             alertTitle:@"设置浅色背景Y轴偏移"
+                             alertTitle:@"设置背景Y轴偏移"
                            alertMessage:@"请输入Y轴偏移值(-500~500像素)\n正值向上偏移，负值向下偏移"
                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        CGFloat doy = cfg.cardBgDarkOffsetY;
+        CGFloat ox = cfg.cardBgOffsetX;
         *ecy = [self addInputRowInGroup:expand
-                                  title:@"深色背景Y轴偏移"
-                                    key:@"cardBgDarkOffsetY"
-                                 value:doy != 0 ? [NSString stringWithFormat:@"%.0f", doy] : nil
+                                  title:@"背景X轴偏移"
+                                    key:@"cardBgOffsetX"
+                                 value:ox != 0 ? [NSString stringWithFormat:@"%.0f", ox] : nil
                                    hint:@"0"
-                             alertTitle:@"设置深色背景Y轴偏移"
-                           alertMessage:@"请输入Y轴偏移值(-500~500像素)\n正值向上偏移，负值向下偏移"
-                                     cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-
-        CGFloat lox = cfg.cardBgLightOffsetX;
-        *ecy = [self addInputRowInGroup:expand
-                                  title:@"浅色背景X轴偏移"
-                                    key:@"cardBgLightOffsetX"
-                                 value:lox != 0 ? [NSString stringWithFormat:@"%.0f", lox] : nil
-                                   hint:@"0"
-                             alertTitle:@"设置浅色背景X轴偏移"
-                           alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
-                                     cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-
-        CGFloat dox = cfg.cardBgDarkOffsetX;
-        *ecy = [self addInputRowInGroup:expand
-                                  title:@"深色背景X轴偏移"
-                                    key:@"cardBgDarkOffsetX"
-                                 value:dox != 0 ? [NSString stringWithFormat:@"%.0f", dox] : nil
-                                   hint:@"0"
-                             alertTitle:@"设置深色背景X轴偏移"
+                             alertTitle:@"设置背景X轴偏移"
                            alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
                                      cy:*ecy width:w];
     } cy:cy width:w];

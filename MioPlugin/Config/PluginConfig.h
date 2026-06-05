@@ -201,10 +201,8 @@
 @property (nonatomic, assign) NSInteger cardBgLightAlignment;
 @property (nonatomic, assign) NSInteger cardBgDarkAlignment;
 @property (nonatomic, assign) NSInteger cardBgLayer;
-@property (nonatomic, assign) CGFloat cardBgLightOffsetY;
-@property (nonatomic, assign) CGFloat cardBgDarkOffsetY;
-@property (nonatomic, assign) CGFloat cardBgLightOffsetX;
-@property (nonatomic, assign) CGFloat cardBgDarkOffsetX;
+@property (nonatomic, assign) CGFloat cardBgOffsetY;
+@property (nonatomic, assign) CGFloat cardBgOffsetX;
 
 @property (nonatomic, assign) BOOL notifySender;
 @property (nonatomic, copy) NSString *notifySenderTemplate;

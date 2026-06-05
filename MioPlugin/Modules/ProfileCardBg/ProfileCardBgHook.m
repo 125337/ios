@@ -438,8 +438,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         CGFloat bgH = button.bounds.size.height;
         CGFloat bgX = 0;
         CGFloat bgY = 0;
-        CGFloat ox = isDark ? config.cardBgDarkOffsetX : config.cardBgLightOffsetX;
-        CGFloat oy = isDark ? config.cardBgDarkOffsetY : config.cardBgLightOffsetY;
+        CGFloat ox = config.cardBgOffsetX;
+        CGFloat oy = config.cardBgOffsetY;
 
         // ── 分支 A：已存在 bg → 更新 frame ──
         if (bgImgView) {
@@ -520,8 +520,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                         NSInteger fm = cfg.cardBgFillMode;
                         NSInteger alignment = capturedIsDark ? cfg.cardBgDarkAlignment
                                                              : cfg.cardBgLightAlignment;
-                        CGFloat userOy = capturedIsDark ? cfg.cardBgDarkOffsetY
-                                                        : cfg.cardBgLightOffsetY;
+                        CGFloat userOy = cfg.cardBgOffsetY;
 
                         if ((fm == 0 || fm == 3) && resultImage.size.width > 0) {
                             CGFloat iW = resultImage.size.width;
