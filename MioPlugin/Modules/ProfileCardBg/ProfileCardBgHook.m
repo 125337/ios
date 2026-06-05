@@ -13,7 +13,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     double result = _orig_heightForHeader(self, _cmd, tableView, section);
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.cardBgEnabled) return result;
+    if (!config.cardBgBeautifyEnabled) return result;
 
     if (section != 1) return result;
 

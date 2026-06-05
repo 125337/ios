@@ -13,8 +13,8 @@
 | `PluginConfig.h` | `cardBgLayer` 单属性 ✅，无旧属性残留 |
 | `PluginConfig.m: loadDefaults / save` | 只读写 `CardBgLayer` ✅ |
 | `ProfileCardBgHook.m` | 无 `lightLayer`/`darkLayer` 引用 ✅ |
-| `SettingCardBackgroundController.m` 新 UI（行 116-127） | 单行"背景显示层级" + `onLayerTap` ✅ |
-| `SettingCardBackgroundController.m` 旧 UI（行 268-270） | 单行"背景显示层级" + `onLayerTap` ✅ |
+| `SettingCardBackgroundController.m` 新 UI（行 110-115） | 单行"背景显示层级" + `onLayerTap` ✅ |
+| `SettingCardBackgroundController.m` 旧 UI（行 272-274） | 单行"背景显示层级" + `onLayerTap` ✅ |
 
 > 注意：层级合并与旧 UI 清理是两个独立任务。层级合并已100%完成（新旧 UI 都已是 `cardBgLayer` 单属性）。旧 UI 清理是指删掉整个旧 UI section，与层级无关。
 
@@ -24,10 +24,10 @@
 
 | 遗留项 | 位置 |
 |--------|------|
-| 旧 UI 完整 section | `SettingCardBackgroundController.m:209-317` |
+| 旧 UI 完整 section | `SettingCardBackgroundController.m:221-299` |
 | `cardBgEnabled` 属性 | `PluginConfig.h:188` |
 | `cardBgEnabled` loadDefaults | `PluginConfig.m:483` |
-| `cardBgEnabled` save | `PluginConfig.m:728` |
+| `cardBgEnabled` save | `PluginConfig.m:719-720`（注释 + setBool） |
 | `_hooked_heightForHeader` 守卫 | `ProfileCardBgHook.m:16` ← 仍用 `cardBgEnabled` |
 
 ---
@@ -36,15 +36,18 @@
 
 ### 1.1 SettingCardBackgroundController.m — 删除旧 UI
 
-**删除范围**：第 209-317 行（从 `// ★ 旧 UI：卡片背景设置（暂留）` 到 `y = [self finishGroup:group atY:y height:cy];`）
+**删除范围**：第 221-299 行（从 `// ★ 旧 UI：卡片背景设置（暂留）` 到 `y = [self finishGroup:group atY:y height:cy];`）
 
 具体删除内容：
 
 | 行号 | 内容 |
 |------|------|
-| 209-211 | 旧 UI section header 注释 + 文字「卡片背景设置」 |
-| 212-315 | 旧 UI master switch (`cardBgEnabled`) + 全部子项（高度、间距、背景图、填充、对齐方式x2、层级、偏移x4） |
-| 317 | `finishGroup` |
+| 221-223 | 旧 UI section header 注释 |
+| 224 | `addSectionHeader:@"卡片背景设置"` |
+| 226-298 | 旧 UI `addTableGroup` + master switch (`cardBgEnabled`) + 全部子项（高度、间距、背景图、填充、对齐方式、层级、Y偏移、X偏移） |
+| 299 | `finishGroup` |
+
+> ⚠️ 行 301-303（`contentView.frame` / `scrollView.contentSize` / `}`）**不属于旧 UI section，保留勿删**。
 
 **删除后页面结构**：
 - 页面只显示"资料卡片美化"一个 section
@@ -74,14 +77,14 @@ _cardBgEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgEn
 // 改后：直接删除
 ```
 
-**save**（第 728 行）：删除
+**save**（第 719-720 行）：删除注释 + setBool
 
 ```objc
 // 改前：
 // 卡片背景（旧 UI）
 [d setBool:_cardBgEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgEnabled"]];  // ← 删除
 
-// 改后：直接删除
+// 改后：直接删除这两行
 ```
 
 ### 1.4 ProfileCardBgHook.m — 修改守卫条件
@@ -98,17 +101,18 @@ if (!config.cardBgEnabled) return result;
 if (!config.cardBgBeautifyEnabled) return result;
 ```
 
-### 1.5 SettingCardBackgroundController.m — 删除旧 UI 专有 action 方法
+### ⚠️ 注意事项：无需删除 action 方法
 
-旧 UI 删除后，以下 action 方法不再被任何 UI 引用，一并清理：
+经代码实测，**不存在**独立的 `onLightAlignmentTap`、`onDarkAlignmentTap`、`onLightOffsetYTap`、`onDarkOffsetYTap`、`onLightOffsetXTap`、`onDarkOffsetXTap`、`onLightImageTap`、`onDarkImageTap` 方法。
 
-| 方法 | 用途 | 是否被新 UI 使用 |
-|------|------|----------------|
-| `onLightAlignmentTap` | 浅色模式对齐方式选择 | ❌ 仅旧 UI |
-| `onLightOffsetYTap` / `onDarkOffsetYTap` | Y轴偏移输入 | ❌ 仅旧 UI |
-| `onLightOffsetXTap` / `onDarkOffsetXTap` | X轴偏移输入 | ❌ 仅旧 UI |
+新旧 UI 共用以下 action 方法，删除旧 UI section **不需要删除也不应删除**这些方法：
 
-> 保留的方法：`onLightImageTap`、`onDarkImageTap`、`onFillModeTap`、`onDarkAlignmentTap`、`onLayerTap` — 这些被新 UI 继续使用。
+| 方法 | 用途 | 新 UI 引用行 |
+|------|------|-------------|
+| `onImageTap` | 背景图选择 | 行 80 |
+| `onFillModeTap` | 背景填充模式选择 | 行 91 |
+| `onAlignmentTap` | 对齐方式选择 | 行 102 |
+| `onLayerTap` | 背景显示层级选择 | 行 114 |
 
 ---
 
@@ -119,19 +123,16 @@ if (!config.cardBgBeautifyEnabled) return result;
 | 参数 | 旧 UI 位置 | 新 UI 位置 | 状态 |
 |------|-----------|-----------|------|
 | 总开关 | `cardBgEnabled`（信息卡片背景） | `cardBgBeautifyEnabled`（资料卡片美化） | **已迁移** |
-| 信息卡片高度 | 旧手风琴 → 输入框 | 资料美化 → 素材手风琴 → 输入框 | **已存在** |
-| 列表向下间距 | 旧手风琴 → 输入框 | 资料美化 → 素材手风琴 → 输入框 | **已存在** |
-| 浅色背景图 | 旧手风琴 → 导航 | 资料美化 → 素材手风琴 → 导航 | **已存在** |
-| 深色背景图 | 旧手风琴 → 导航 | 资料美化 → 素材手风琴 → 导航 | **已存在** |
-| 背景填充模式 | 旧手风琴 → 导航 | 资料美化 → 素材手风琴 → 导航 | **已存在** |
-| 浅色模式对齐方式 | 旧手风琴 → 导航 | **新 UI 缺失** | ⚠️ |
-| 深色模式对齐方式 | 旧手风琴 → 导航 | 资料美化 → 素材手风琴 → 导航 | **已存在** |
-| 背景显示层级 | 旧手风琴 → 导航 | 资料美化 → 平铺行（素材手风琴外） | **已存在** ✅ |
-| X/Y 偏移（浅/深） | 旧手风琴 → 4行输入框 | **新 UI 缺失** | ⚠️ |
+| 信息卡片高度 | 旧 UI → 输入框 | 新 UI → 素材手风琴 → 输入框 | **已存在** |
+| 列表向下间距 | 旧 UI → 输入框 | 新 UI → 素材手风琴 → 输入框 | **已存在** |
+| 背景图 | 旧 UI → 导航（统一） | 新 UI → 素材手风琴 → 导航（统一） | **已存在** |
+| 背景填充模式 | 旧 UI → 导航 | 新 UI → 素材手风琴 → 导航 | **已存在** |
+| 对齐方式 | 旧 UI → 导航（统一） | 新 UI → 素材手风琴 → 导航（统一） | **已存在** ✅ |
+| 背景显示层级 | 旧 UI → 导航 | 新 UI → 素材手风琴 → 导航 | **已存在** ✅ |
+| 背景Y轴偏移 | 旧 UI → 输入框 | 新 UI → 素材手风琴 → 输入框 | **已存在** ✅ |
+| 背景X轴偏移 | 旧 UI → 输入框 | 新 UI → 素材手风琴 → 输入框 | **已存在** ✅ |
 
-> ⚠️ **新 UI 缺失的参数**：浅色对齐方式、X/Y 偏移（浅/深共4个）。  
-> 这些参数在 `handleButtonLayout:` 中**仍然被实际使用**，如果新 UI 不提供入口则用户无法调节。默认值（align=0, offset=0）表现为"底部对齐/无偏移"，对大多数用户可接受。  
-> 建议后续在"使用背景素材"手风琴中补充这些缺失的参数入口。
+> 新旧 UI 参数**完全对应**，新 UI 将原来浅/深分离的参数统一为单入口，功能无缺失。
 
 ---
 
@@ -165,13 +166,14 @@ if ([d objectForKey:@"Mio_CardBgEnabled"] && ![d objectForKey:@"Mio_CardBgBeauti
 
 | 步骤 | 文件 | 操作 | 精确行号 |
 |------|------|------|---------|
-| 1 | SettingCardBackgroundController.m | 删除旧 UI section（header + masterSwitch + subBuilder + finishGroup） | 209-317 |
-| 2 | SettingCardBackgroundController.m | 删除旧 UI 专有 action 方法 | `onLightAlignmentTap` + 4个 offset 方法 |
-| 3 | PluginConfig.h | 删除 `@property cardBgEnabled` | 188 |
-| 4 | PluginConfig.m | 删除 loadDefaults 中读取 | 483 |
-| 5 | PluginConfig.m | 删除 save 中写入 | 728 |
-| 6 | ProfileCardBgHook.m | `cardBgEnabled` → `cardBgBeautifyEnabled` | 16 |
-| 7 | 验证编译 | `make package` 无报错 | - |
+| 1 | SettingCardBackgroundController.m | 删除旧 UI section（注释 + header + group + masterSwitch + subBuilder + finishGroup） | 221-299 |
+| 2 | PluginConfig.h | 删除 `@property cardBgEnabled` | 188 |
+| 3 | PluginConfig.m | 删除 loadDefaults 中读取 | 483 |
+| 4 | PluginConfig.m | 删除 save 中写入（注释 + setBool 共两行） | 719-720 |
+| 5 | ProfileCardBgHook.m | `cardBgEnabled` → `cardBgBeautifyEnabled` | 16 |
+| 6 | 验证编译 | `make package` 无报错 | - |
+
+> **注意**：不需要删除任何 action 方法（`onImageTap`、`onFillModeTap`、`onAlignmentTap`、`onLayerTap` 均为新旧 UI 共用）。
 
 ---
 
@@ -180,14 +182,15 @@ if ([d objectForKey:@"Mio_CardBgEnabled"] && ![d objectForKey:@"Mio_CardBgBeauti
 ```
 卡片背景设置页面
 └─ 资料卡片美化（总开关: cardBgBeautifyEnabled）
-    ├─ 使用背景素材（子手风琴: cardBgMaterialEnabled → 空壳）
+    ├─ 使用背景素材（子手风琴: cardBgMaterialEnabled）
     │   ├─ 信息卡片高度
     │   ├─ 列表向下间距
-    │   ├─ 浅色背景图
-    │   ├─ 深色背景图
+    │   ├─ 背景图
     │   ├─ 背景填充模式
-    │   └─ 深色模式对齐方式
-    ├─ 背景显示层级（平铺行）
+    │   ├─ 对齐方式
+    │   ├─ 背景Y轴偏移
+    │   └─ 背景X轴偏移
+    ├─ 背景显示层级（导航行）
     ├─ 隐藏信息卡片（平铺开关）
     └─ 开启资料圆角（子手风琴）
         ├─ 使用全局配置（平铺开关）

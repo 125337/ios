@@ -184,8 +184,6 @@
 @property (nonatomic, copy) NSString *cardBgCornerBgColor;
 @property (nonatomic, copy) NSString *cardBgCornerDarkBgColor;
 @property (nonatomic, assign) CGFloat cardBgStrokeWidth;
-// 卡片背景（旧 UI）
-@property (nonatomic, assign) BOOL cardBgEnabled;
 
 // ===== 开发者工具 =====
 @property (nonatomic, assign) BOOL nsLogMonitorEnabled;

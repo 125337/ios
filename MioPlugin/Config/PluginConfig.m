@@ -479,8 +479,6 @@
     _cardBgCornerDarkBgColor = cbgdc.length > 0 ? cbgdc : @"#1C1C1E";
     CGFloat cbsw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgStrokeWidth"]];
     _cardBgStrokeWidth = (cbsw > 0) ? cbsw : 2.0;
-    // 卡片背景（旧 UI）
-    _cardBgEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgEnabled"]];
     _cardBgHidden = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgHidden"]];
     _cardBgHeight = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];
     _cardBgListSpacing = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgListSpacing"]];
@@ -716,8 +714,6 @@
     if (_cardBgCornerBgColor) [d setObject:_cardBgCornerBgColor forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerBgColor"]];
     if (_cardBgCornerDarkBgColor) [d setObject:_cardBgCornerDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerDarkBgColor"]];
     [d setFloat:_cardBgStrokeWidth forKey:[kPluginPrefix stringByAppendingString:@"CardBgStrokeWidth"]];
-    // 卡片背景（旧 UI）
-    [d setBool:_cardBgEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgEnabled"]];
     [d setBool:_cardBgHidden forKey:[kPluginPrefix stringByAppendingString:@"CardBgHidden"]];
     [d setFloat:_cardBgHeight forKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];
     [d setFloat:_cardBgListSpacing forKey:[kPluginPrefix stringByAppendingString:@"CardBgListSpacing"]];
