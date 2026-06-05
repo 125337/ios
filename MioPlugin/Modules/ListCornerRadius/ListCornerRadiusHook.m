@@ -139,6 +139,33 @@ static BOOL shouldSkipCorner(UIViewController *vc) {
     return NO;
 }
 
+// ★★★ 新增：全局开关过滤 ★★★
+static NSString * const kMyPageVCClassName        = @"MoreViewController";
+static NSString * const kContactsVCClassName       = @"ContactsViewController";
+static NSString * const kDiscoverVCClassName       = @"FindFriendEntryViewController";
+
+static BOOL shouldApplyGlobalCorner(UIViewController *vc) {
+    if (!vc) return NO;
+
+    PluginConfig *config = [PluginConfig shared];
+
+    if (!config.globalCornerRadiusEnabled) return NO;
+
+    NSString *vcName = NSStringFromClass([vc class]);
+
+    if ([vcName isEqualToString:kMyPageVCClassName]) {
+        return config.globalCornerMyPageEnabled;
+    }
+    if ([vcName isEqualToString:kContactsVCClassName]) {
+        return config.globalCornerContactsPageEnabled;
+    }
+    if ([vcName isEqualToString:kDiscoverVCClassName]) {
+        return config.globalCornerDiscoverPageEnabled;
+    }
+
+    return YES;
+}
+
 static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
     if (_orig_WCSearchBar_layoutSubviews) {
         ((void (*)(id, SEL))_orig_WCSearchBar_layoutSubviews)(self, _cmd);
@@ -203,6 +230,14 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     NSString *className = NSStringFromClass([vc class]);
 
     if (shouldSkipCorner(vc)) {
+        if (_orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
+
+    // ★★★ 新增：全局开关过滤 ★★★
+    if (!shouldApplyGlobalCorner(vc)) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
