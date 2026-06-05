@@ -2,6 +2,7 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
 #import "../ProfileCardBg/ProfileCardBgHook.h"
+#import "../CornerResponsibility/CornerResponsibility.h"
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -68,78 +69,7 @@ static UIColor *wp_cellDefaultBgColor(BOOL isDark) {
     return [UIColor whiteColor];
 }
 
-static BOOL shouldSkipCorner(UIViewController *vc) {
-    if (!vc) return YES;
-    NSString *vcName = NSStringFromClass([vc class]);
-    static NSSet *skipSet = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        skipSet = [NSSet setWithObjects:
-            @"WCTimeLineViewController",
-            @"WCAccountLoginUsersViewController",
-            @"SessionSelectController",
-            @"WCListViewController",
-            @"BrandNotificationListViewController",
-            @"BrandNewSessionViewController",
-            @"BaseMsgContentViewController",
-            @"BraceletRankProfileViewController",
-            @"BraceletRankViewController",
-            @"WCRedEnvelopesRedEnvelopesDetailViewController",
-            @"MsgRecordDetailViewController",
-            @"ChatRoomInfoViewController",
-            @"ContactInfoViewController",
-            @"AddFriendEntryViewController",
-            @"AddContactToChatRoomViewController",
-            @"SayHelloViewController",
-            @"MMFinderPivotLiveViewController",
-            @"WCSearchController",
-            @"WCPluginsViewController",
-            @"AccountDetailViewController",
-            @"SpecificPageLockViewController",
-            @"ThemeExchangeViewController",
-            @"RepeatEnhanceViewController",
-            @"NewHBALLSettingController",
-            @"DisableWeChatController",
-            @"TheMessageController",
-            @"TheVoiceController",
-            @"VoiceCenterSettingController",
-            @"TheGroupController",
-            @"TheTimeLineController",
-            @"AutoChangeWallpaperController",
-            @"TheAutoMationController",
-            @"TheSpecialController",
-            @"KeyBoardMainController",
-            @"WCAvatarFrameMainController",
-            @"ChatFunctionsinfoController",
-            @"WCEhanceViewController",
-            @"WCUIBeautifyController",
-            @"WCCustomNameController",
-            @"WCHideToolController",
-            @"WCVersionFakeController",
-            @"WCEnhanceToolController",
-            @"WCAboutController",
-            nil];
-    });
-    if ([skipSet containsObject:vcName]) return YES;
-
-    static NSArray *prefixBlacklist = nil;
-    static dispatch_once_t prefixOnce;
-    dispatch_once(&prefixOnce, ^{
-        prefixBlacklist = @[
-            @"WCRefine",
-            @"WCPulse",
-            @"Themebox",
-            @"BubbleBox",
-        ];
-    });
-    for (NSString *prefix in prefixBlacklist) {
-        if ([vcName hasPrefix:prefix]) return YES;
-    }
-
-    return NO;
-}
-
-// ★★★ 新增：全局开关过滤 ★★★
+// ★★★ 全局开关过滤 ★★★
 static NSString * const kMyPageVCClassName        = @"MoreViewController";
 static NSString * const kContactsVCClassName       = @"ContactsViewController";
 static NSString * const kDiscoverVCClassName       = @"FindFriendEntryViewController";
@@ -229,14 +159,15 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
     NSString *className = NSStringFromClass([vc class]);
 
-    if (shouldSkipCorner(vc)) {
+    // ★ 模块责任查询：不属于列表圆角则跳过 ★
+    if (![CornerResponsibility isListCornerResponsibleFor:vc]) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
         return;
     }
 
-    // ★★★ 新增：全局开关过滤 ★★★
+    // ★★★ 全局开关过滤 ★★★
     if (!shouldApplyGlobalCorner(vc)) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
