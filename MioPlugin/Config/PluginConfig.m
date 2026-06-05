@@ -464,6 +464,19 @@
     _listProfileCardBorderDarkColor = pcbd.length > 0 ? pcbd : @"#3A3A3C";
 
     // ========== 资料卡背景配置 ==========
+    // 资料卡片美化（新 UI）
+    _cardBgBeautifyEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgBeautifyEnabled"]];
+    _cardBgMaterialEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgMaterialEnabled"]];
+    _cardBgCornerEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerEnabled"]];
+    CGFloat cbcr = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerRadius"]];
+    _cardBgCornerRadius = (cbcr > 0) ? cbcr : 18.0;
+    CGFloat cbcm = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerMargin"]];
+    _cardBgCornerMargin = (cbcm > 0) ? cbcm : 9.0;
+    NSString *cbgc = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerBgColor"]];
+    _cardBgCornerBgColor = cbgc.length > 0 ? cbgc : @"#FFFFFF";
+    CGFloat cbsw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgStrokeWidth"]];
+    _cardBgStrokeWidth = (cbsw > 0) ? cbsw : 2.0;
+    // 卡片背景（旧 UI）
     _cardBgEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgEnabled"]];
     _cardBgHidden = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgHidden"]];
     _cardBgHeight = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];
@@ -699,6 +712,15 @@
     if (_listProfileCardBorderDarkColor) [d setObject:_listProfileCardBorderDarkColor forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderDarkColor"]];
 
     // ========== 资料卡背景配置 ==========
+    // 资料卡片美化（新 UI）
+    [d setBool:_cardBgBeautifyEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgBeautifyEnabled"]];
+    [d setBool:_cardBgMaterialEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgMaterialEnabled"]];
+    [d setBool:_cardBgCornerEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerEnabled"]];
+    [d setFloat:_cardBgCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerRadius"]];
+    [d setFloat:_cardBgCornerMargin forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerMargin"]];
+    if (_cardBgCornerBgColor) [d setObject:_cardBgCornerBgColor forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerBgColor"]];
+    [d setFloat:_cardBgStrokeWidth forKey:[kPluginPrefix stringByAppendingString:@"CardBgStrokeWidth"]];
+    // 卡片背景（旧 UI）
     [d setBool:_cardBgEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgEnabled"]];
     [d setBool:_cardBgHidden forKey:[kPluginPrefix stringByAppendingString:@"CardBgHidden"]];
     [d setFloat:_cardBgHeight forKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];

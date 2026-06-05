@@ -174,6 +174,15 @@
 @property (nonatomic, copy) NSString *listProfileCardBorderDarkColor;
 
 #pragma mark - 卡片背景
+// 资料卡片美化（新 UI）
+@property (nonatomic, assign) BOOL cardBgBeautifyEnabled;
+@property (nonatomic, assign) BOOL cardBgMaterialEnabled;
+@property (nonatomic, assign) BOOL cardBgCornerEnabled;
+@property (nonatomic, assign) CGFloat cardBgCornerRadius;
+@property (nonatomic, assign) CGFloat cardBgCornerMargin;
+@property (nonatomic, copy) NSString *cardBgCornerBgColor;
+@property (nonatomic, assign) CGFloat cardBgStrokeWidth;
+// 卡片背景（旧 UI）
 @property (nonatomic, assign) BOOL cardBgEnabled;
 
 // ===== 开发者工具 =====
