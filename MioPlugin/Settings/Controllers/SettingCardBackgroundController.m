@@ -150,7 +150,7 @@
                                alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
                                          cy:*ecy width:w];
         }
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w>;
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         // ─── 隐藏信息卡片（平铺开关，无子参数） ───
         *ecy = [self addSubSwitchRowInGroup:expand
