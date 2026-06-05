@@ -110,7 +110,7 @@
                                       tag:206
                                    action:@selector(onDarkAlignmentTap)
                                        cy:*e2y width:w];
-        }];
+        } cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         // ─── 隐藏信息卡片（平铺开关，无子参数） ───
@@ -166,7 +166,7 @@
                                  alertTitle:@"设置描边大小"
                                alertMessage:@"请输入描边宽度(0.5-5.0)"
                                          cy:*e3y width:w];
-        }];
+        } cy:*ecy width:w];
     } cy:ncy width:w];
 
     y = [self finishGroup:newGroup atY:y height:ncy];
