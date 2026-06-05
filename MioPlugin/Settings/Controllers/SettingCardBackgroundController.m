@@ -187,13 +187,6 @@
                               subBuilder:^(UIView *expand, CGFloat *ecy) {
         PluginConfig *cfg = [PluginConfig shared];
 
-        *ecy = [self addSubSwitchRowInGroup:expand
-                                      title:@"隐藏信息卡片"
-                                        key:@"cardBgHidden"
-                                       isOn:cfg.cardBgHidden
-                                         cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-
         CGFloat h = cfg.cardBgHeight > 0 ? cfg.cardBgHeight : 144.0;
         *ecy = [self addInputRowInGroup:expand
                                   title:@"信息卡片高度"

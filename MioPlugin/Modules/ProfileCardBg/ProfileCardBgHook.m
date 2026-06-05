@@ -361,7 +361,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     PluginConfig *config = [PluginConfig shared];
 
     // ★ 极速拒绝链 ★
-    if (!config.cardBgEnabled && !config.globalCornerRadiusEnabled) return;
+    if (!config.cardBgBeautifyEnabled && !config.globalCornerRadiusEnabled) return;
 
     // 第2关：VC 类型
     UIViewController *vc = nil;
@@ -393,12 +393,12 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
 
-    BOOL needsFullCardBg = config.cardBgEnabled;
+    BOOL needsNewCardBg = config.cardBgBeautifyEnabled;
 
     // ══════════════════════════════════════════
-    // 卡片背景专属操作（只在 cardBgEnabled 时执行）
+    // 卡片背景专属操作（只在 cardBgBeautifyEnabled 时执行）
     // ══════════════════════════════════════════
-    if (needsFullCardBg) {
+    if (needsNewCardBg) {
 
         // ══════════════════════════════════════════
         // ★ Button 层 bg 生命周期（始终执行，不依赖 HideCard）
@@ -639,7 +639,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             }
         }
 
-    } // end needsFullCardBg
+    } // end needsNewCardBg
 
     // ── 方案 H：通过视图层级链修改 button 高度 ──
     {
