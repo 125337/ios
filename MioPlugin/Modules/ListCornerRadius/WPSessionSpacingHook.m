@@ -8,7 +8,7 @@ static CGFloat _hooked_NMFVC_heightForHeader(id self, SEL _cmd, id tableView, NS
     CGFloat height = _orig_NMFVC_heightForHeader(self, _cmd, tableView, section);
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled) return height;
+    if (!config.globalCornerRadiusEnabled) return height;
 
     if (section == 1) {
         NSInteger spacing = (NSInteger)config.listPinnedSessionTopSpacing;
@@ -23,7 +23,7 @@ static CGFloat _hooked_NMFVC_heightForHeader(id self, SEL _cmd, id tableView, NS
 static id (*_orig_NMFVC_viewForHeader)(id, SEL, id, NSInteger);
 static id _hooked_NMFVC_viewForHeader(id self, SEL _cmd, id tableView, NSInteger section) {
     PluginConfig *config = [PluginConfig shared];
-    if (config.listCornerRadiusEnabled && section > 0) {
+    if (config.globalCornerRadiusEnabled && section > 0) {
         return [[UIView alloc] initWithFrame:CGRectZero];
     }
     return _orig_NMFVC_viewForHeader(self, _cmd, tableView, section);
@@ -32,7 +32,7 @@ static id _hooked_NMFVC_viewForHeader(id self, SEL _cmd, id tableView, NSInteger
 static void (*_orig_setBgImageView)(id, SEL, id);
 static void _hooked_setBgImageView(id self, SEL _cmd, id imageView) {
     PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled) {
+    if (!config.globalCornerRadiusEnabled) {
         _orig_setBgImageView(self, _cmd, imageView);
     }
 }
@@ -70,7 +70,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     _orig_UIView_layoutSubviews(self, _cmd);
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled) return;
+    if (!config.globalCornerRadiusEnabled) return;
 
     if (![NSStringFromClass([self class]) isEqualToString:@"UIView"]) return;
 

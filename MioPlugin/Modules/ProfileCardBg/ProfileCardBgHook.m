@@ -54,8 +54,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     cell.layer.cornerRadius = radius;
     cell.layer.masksToBounds = YES;
 
-    // ★ listCornerRadiusEnabled 时不设背景色（由 Cell Hook 统一管）
-    if (!config.listCornerRadiusEnabled) {
+    // ★ globalCornerRadiusEnabled 守卫（始终设置卡片背景色）
+    if (!config.globalCornerRadiusEnabled) {
         UIColor *cardBg = [config colorFromHex:isDark
             ? config.listCardDarkBgColor : config.listCardLightBgColor];
         if (cardBg) {

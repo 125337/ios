@@ -213,7 +213,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     PluginConfig *config = [PluginConfig shared];
 
     // ★ 列表圆角入口守卫：只看自己的开关 ★
-    if (!config.listCornerRadiusEnabled) {
+    if (!config.globalCornerRadiusEnabled) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }

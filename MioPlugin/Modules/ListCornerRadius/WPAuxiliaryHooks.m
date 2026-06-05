@@ -21,7 +21,7 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     _orig_MFWebMMBtn_layoutSubviews(self, _cmd);
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled) return;
+    if (!config.globalCornerRadiusEnabled) return;
 
     UIViewController *vc = wp_findViewController((UIView *)self);
     if (!vc) return;
@@ -47,7 +47,7 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     _orig_MFBannerBtn_layoutSubviews(self, _cmd);
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled) return;
+    if (!config.globalCornerRadiusEnabled) return;
 
     UIViewController *vc = wp_findViewController((UIView *)self);
     if (!vc) return;
@@ -77,7 +77,7 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled) return;
+    if (!config.globalCornerRadiusEnabled) return;
 
     UIView *view = (UIView *)self;
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
@@ -150,7 +150,7 @@ static void _hooked_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     _orig_MMUIButton_layoutSubviews(self, _cmd);
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.listCornerRadiusEnabled) return;
+    if (!config.globalCornerRadiusEnabled) return;
 
     UIViewController *vc = wp_findViewController((UIView *)self);
     if (!vc) return;
