@@ -7,9 +7,7 @@
 + (void)handleButtonLayout:(UIView *)button;
 
 // 资料卡圆角
-+ (void)applyProfileCardCorner:(UIView *)cell
-                    cornerRadius:(NSInteger)radius
-                         isDark:(BOOL)isDark;
++ (void)applyProfileCardCorner:(UIView *)cell isDark:(BOOL)isDark;
 
 // QR 码隐藏
 + (void)hideQRButtonInCell:(UIView *)cell;

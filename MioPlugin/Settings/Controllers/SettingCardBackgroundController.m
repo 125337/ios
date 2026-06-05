@@ -130,14 +130,12 @@
 
             PluginConfig *c3 = [PluginConfig shared];
 
-            // ── 使用全局配置（子手风琴：展开时隐藏四项配置） ──
-            *e3y = [self addMasterSwitchRowInGroup:e3
-                                             title:@"使用全局配置"
-                                               key:@"cardBgCornerUseGlobal"
-                                              isOn:c3.cardBgCornerUseGlobal
-                                        subBuilder:^(UIView *e4, CGFloat *e4y) {
-                // 展开 = 使用全局配置，不显示手写项
-            } cy:*e3y width:w];
+            // ── 使用全局配置（平铺开关） ──
+            *e3y = [self addSubSwitchRowInGroup:e3
+                                          title:@"使用全局配置"
+                                            key:@"cardBgCornerUseGlobal"
+                                           isOn:c3.cardBgCornerUseGlobal
+                                             cy:*e3y width:w];
 
             if (!c3.cardBgCornerUseGlobal) {
                 *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];

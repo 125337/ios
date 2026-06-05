@@ -475,6 +475,8 @@
     _cardBgCornerMargin = (cbcm > 0) ? cbcm : 9.0;
     NSString *cbgc = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerBgColor"]];
     _cardBgCornerBgColor = cbgc.length > 0 ? cbgc : @"#FFFFFF";
+    NSString *cbgdc = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerDarkBgColor"]];
+    _cardBgCornerDarkBgColor = cbgdc.length > 0 ? cbgdc : @"#1C1C1E";
     CGFloat cbsw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgStrokeWidth"]];
     _cardBgStrokeWidth = (cbsw > 0) ? cbsw : 2.0;
     // 卡片背景（旧 UI）

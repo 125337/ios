@@ -46,41 +46,62 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
 #pragma mark - 资料卡圆角
 
-+ (void)applyProfileCardCorner:(UIView *)cell
-                    cornerRadius:(NSInteger)radius
-                         isDark:(BOOL)isDark {
++ (void)applyProfileCardCorner:(UIView *)cell isDark:(BOOL)isDark {
     PluginConfig *config = [PluginConfig shared];
 
-    cell.layer.cornerRadius = radius;
-    cell.layer.masksToBounds = YES;
-
-    // ★ globalCornerRadiusEnabled 守卫（始终设置卡片背景色）
-    if (!config.globalCornerRadiusEnabled) {
-        UIColor *cardBg = [config colorFromHex:isDark
-            ? config.listCardDarkBgColor : config.listCardLightBgColor];
-        if (cardBg) {
-            cell.backgroundColor = cardBg;
-        }
-    }
-
-    if (config.listProfileCardBorderEnabled) {
-        CGFloat bw = config.listProfileCardBorderWidth;
-        if (bw <= 0) bw = 2.0;
-
-        UIColor *borderColor = [config colorFromHex:isDark
-            ? config.listProfileCardBorderDarkColor
-            : config.listProfileCardBorderLightColor];
-        if (!borderColor) {
-            borderColor = isDark
-                ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
-                : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
-        }
-
-        cell.layer.borderWidth = bw;
-        cell.layer.borderColor = borderColor.CGColor;
-    } else {
+    if (!config.cardBgCornerEnabled) {
+        cell.layer.cornerRadius = 0;
+        cell.layer.masksToBounds = NO;
         cell.layer.borderWidth = 0;
         cell.layer.borderColor = nil;
+        return;
+    }
+
+    if (config.cardBgCornerUseGlobal) {
+        // ── 使用全局配置 ──
+        NSInteger radius = (NSInteger)config.listCellCornerRadius;
+        if (radius <= 0) radius = 18;
+        cell.layer.cornerRadius = radius;
+        cell.layer.masksToBounds = YES;
+
+        UIColor *bgColor = [config colorFromHex:isDark
+            ? config.listCellDarkBgColor : config.listCellLightBgColor];
+        if (bgColor) {
+            cell.backgroundColor = bgColor;
+        }
+
+        CGFloat bw = config.listCellBorderWidth;
+        if (bw > 0) {
+            cell.layer.borderWidth = bw;
+            UIColor *borderColor = [config colorFromHex:isDark
+                ? config.listCellBorderDarkColor : config.listCellBorderLightColor];
+            cell.layer.borderColor = borderColor.CGColor;
+        } else {
+            cell.layer.borderWidth = 0;
+            cell.layer.borderColor = nil;
+        }
+    } else {
+        // ── 使用单独配置 ──
+        NSInteger radius = (NSInteger)config.cardBgCornerRadius;
+        if (radius <= 0) radius = 18;
+        cell.layer.cornerRadius = radius;
+        cell.layer.masksToBounds = YES;
+
+        UIColor *bgColor = [config colorFromHex:isDark
+            ? config.cardBgCornerDarkBgColor : config.cardBgCornerBgColor];
+        if (bgColor) {
+            cell.backgroundColor = bgColor;
+        }
+
+        CGFloat bw = config.cardBgStrokeWidth;
+        if (bw > 0) {
+            cell.layer.borderWidth = bw;
+            UIColor *strokeColor = [bgColor colorWithAlphaComponent:0.5];
+            cell.layer.borderColor = strokeColor.CGColor;
+        } else {
+            cell.layer.borderWidth = 0;
+            cell.layer.borderColor = nil;
+        }
     }
 }
 
@@ -670,8 +691,10 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         CGFloat oldH = bf.size.height;
         bf.size.height = targetH;
 
-        // ★ 改 button 左右边距（与列表圆角一致）
-        CGFloat margin = config.listCellMargin;
+        // ★ 改 button 左右边距（跟随全局/独立配置）
+        CGFloat margin = config.cardBgCornerUseGlobal
+            ? config.listCellMargin
+            : (config.cardBgCornerMargin > 0 ? config.cardBgCornerMargin : 9.0);
         if (margin > 0) {
             bf.origin.x += margin;
             bf.size.width -= margin * 2;
@@ -701,18 +724,7 @@ DO_CORNER:
 
     // ── 圆角 + 边框 + QR码隐藏 ──
     {
-        NSInteger radius = (NSInteger)config.listCellCornerRadius;
-        if (radius == 0) radius = 18;
-
-        BOOL skipMasksToBounds = (config.cardBgEnabled && config.cardBgFillMode == 3);
-        if (!skipMasksToBounds) {
-            [ProfileCardBgHook applyProfileCardCorner:button
-                                         cornerRadius:radius
-                                              isDark:isDark];
-        } else {
-            button.layer.cornerRadius = 0;
-            button.layer.masksToBounds = NO;
-        }
+        [ProfileCardBgHook applyProfileCardCorner:button isDark:isDark];
 
         if (config.listHideRightQRCode) {
             [ProfileCardBgHook hideQRButtonInCell:button];

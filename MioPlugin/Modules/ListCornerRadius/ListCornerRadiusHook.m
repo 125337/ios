@@ -297,25 +297,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
     }
 
-    // ★ 新增：资料卡 button 的背景色（卡片背景色配置项）★
-    if ([className isEqualToString:@"MoreViewController"]) {
-        BOOL isDark = NO;
-        if (@available(iOS 13.0, *)) {
-            isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-        }
-        [cellView.subviews enumerateObjectsUsingBlock:^(__kindof UIView *sub,
-                                                         NSUInteger idx, BOOL *stop) {
-            if ([sub isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-                UIColor *cardBg = [config colorFromHex:isDark
-                    ? config.listCardDarkBgColor : config.listCardLightBgColor];
-                if (cardBg) {
-                    sub.backgroundColor = cardBg;
-                }
-                *stop = YES;
-            }
-        }];
-    }
-
     // ★ corner 圆角设置（不需要 if 守卫！进入这里一定是因为 globalCornerRadiusEnabled==YES）★
     NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
     if (cornerRadius == 0) cornerRadius = 18;
