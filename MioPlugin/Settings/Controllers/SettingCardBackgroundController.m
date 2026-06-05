@@ -72,21 +72,12 @@
                                          cy:*e2y width:w];
             *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
 
-            NSString *lightSub = cfg.cardBgLightImagePath.length > 0 ? @"已设置" : @"未设置";
+            NSString *imgSub = cfg.cardBgImagePath.length > 0 ? @"已设置" : @"未设置";
             *e2y = [self addNavRowInGroup:e2
-                                    title:@"浅色背景图"
-                                  subtitle:lightSub
+                                    title:@"背景图"
+                                  subtitle:imgSub
                                       tag:200
-                                   action:@selector(onLightImageTap)
-                                       cy:*e2y width:w];
-            *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
-
-            NSString *darkSub = cfg.cardBgDarkImagePath.length > 0 ? @"已设置" : @"未设置";
-            *e2y = [self addNavRowInGroup:e2
-                                    title:@"深色背景图"
-                                  subtitle:darkSub
-                                      tag:201
-                                   action:@selector(onDarkImageTap)
+                                   action:@selector(onImageTap)
                                        cy:*e2y width:w];
             *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
 
@@ -264,12 +255,8 @@
                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        NSString *lightSub = cfg.cardBgLightImagePath.length > 0 ? @"已设置" : @"未设置";
-        *ecy = [self addNavRowInGroup:expand title:@"浅色背景图" subtitle:lightSub tag:200 action:@selector(onLightImageTap) cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-
-        NSString *darkSub = cfg.cardBgDarkImagePath.length > 0 ? @"已设置" : @"未设置";
-        *ecy = [self addNavRowInGroup:expand title:@"深色背景图" subtitle:darkSub tag:201 action:@selector(onDarkImageTap) cy:*ecy width:w];
+        NSString *imgSub = cfg.cardBgImagePath.length > 0 ? @"已设置" : @"未设置";
+        *ecy = [self addNavRowInGroup:expand title:@"背景图" subtitle:imgSub tag:200 action:@selector(onImageTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         NSArray *fillNames = @[@"填充模式", @"适应模式", @"拉伸填充", @"顶部填充"];
@@ -315,47 +302,46 @@
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
 
-#pragma mark - 浅色背景图选择
+#pragma mark - 背景图选择
 
-- (void)onLightImageTap {
+- (void)onImageTap {
     PluginConfig *config = [PluginConfig shared];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"浅色背景图"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景图"
                                                                    message:nil
                                                             preferredStyle:UIAlertControllerStyleActionSheet];
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"选择浅色静态图片"
+    [alert addAction:[UIAlertAction actionWithTitle:@"选择静态图片"
                                              style:UIAlertActionStyleDefault
                                            handler:^(UIAlertAction *action) {
         [self pickImageForMode:100];
     }]];
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"选择浅色GIF动图"
+    [alert addAction:[UIAlertAction actionWithTitle:@"选择GIF动图"
                                              style:UIAlertActionStyleDefault
                                            handler:^(UIAlertAction *action) {
         [self pickImageForMode:101];
     }]];
 
-    if (config.cardBgLightImagePath.length > 0) {
-        [alert addAction:[UIAlertAction actionWithTitle:@"删除浅色背景"
+    if (config.cardBgImagePath.length > 0) {
+        [alert addAction:[UIAlertAction actionWithTitle:@"删除背景图"
                                                  style:UIAlertActionStyleDestructive
                                                handler:^(UIAlertAction *action) {
-            WPLog(@"CardBg-Diag", @"[PICKER] Deleting light image path: %@", config.cardBgLightImagePath);
-            // 删除磁盘上的文件
-            if (config.cardBgLightImagePath.length > 0) {
+            WPLog(@"CardBg-Diag", @"[PICKER] Deleting image path: %@", config.cardBgImagePath);
+            if (config.cardBgImagePath.length > 0) {
                 NSFileManager *fm = [NSFileManager defaultManager];
-                if ([fm fileExistsAtPath:config.cardBgLightImagePath]) {
-                    [fm removeItemAtPath:config.cardBgLightImagePath error:nil];
-                    WPLog(@"CardBg-Diag", @"[PICKER] Deleted light image file from disk");
+                if ([fm fileExistsAtPath:config.cardBgImagePath]) {
+                    [fm removeItemAtPath:config.cardBgImagePath error:nil];
+                    WPLog(@"CardBg-Diag", @"[PICKER] Deleted image file from disk");
                 }
             }
-            // 同时删除默认目录下的同名文件（防止自动扫描恢复）
+            // 删除默认目录下的同名文件
             NSString *bgDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
             bgDir = [bgDir stringByAppendingPathComponent:@"MioCardBackground"];
             NSFileManager *fm = [NSFileManager defaultManager];
-            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBgLight.png"] error:nil];
-            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBgLight.gif"] error:nil];
-            WPLog(@"CardBg-Diag", @"[PICKER] Removed default light image files from MioCardBackground/");
-            config.cardBgLightImagePath = nil;
+            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBg.png"] error:nil];
+            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBg.gif"] error:nil];
+            WPLog(@"CardBg-Diag", @"[PICKER] Removed default image files from MioCardBackground/");
+            config.cardBgImagePath = nil;
             [config save];
             [self buildUI];
         }]];
@@ -365,62 +351,8 @@
 
     if (@available(iOS 13.0, *)) {
         alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-    [self presentViewController:alert animated:YES completion:nil];
-}
-
-#pragma mark - 深色背景图选择
-
-- (void)onDarkImageTap {
-    PluginConfig *config = [PluginConfig shared];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"深色背景图"
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"选择深色静态图片"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *action) {
-        [self pickImageForMode:200];
-    }]];
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"选择深色GIF动图"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *action) {
-        [self pickImageForMode:201];
-    }]];
-
-    if (config.cardBgDarkImagePath.length > 0) {
-        [alert addAction:[UIAlertAction actionWithTitle:@"删除深色背景"
-                                                 style:UIAlertActionStyleDestructive
-                                               handler:^(UIAlertAction *action) {
-            WPLog(@"CardBg-Diag", @"[PICKER] Deleting dark image path: %@", config.cardBgDarkImagePath);
-            // 删除磁盘上的文件
-            if (config.cardBgDarkImagePath.length > 0) {
-                NSFileManager *fm = [NSFileManager defaultManager];
-                if ([fm fileExistsAtPath:config.cardBgDarkImagePath]) {
-                    [fm removeItemAtPath:config.cardBgDarkImagePath error:nil];
-                    WPLog(@"CardBg-Diag", @"[PICKER] Deleted dark image file from disk");
-                }
-            }
-            // 同时删除默认目录下的同名文件（防止自动扫描恢复）
-            NSString *bgDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-            bgDir = [bgDir stringByAppendingPathComponent:@"MioCardBackground"];
-            NSFileManager *fm = [NSFileManager defaultManager];
-            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBgDark.png"] error:nil];
-            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBgDark.gif"] error:nil];
-            WPLog(@"CardBg-Diag", @"[PICKER] Removed default dark image files from MioCardBackground/");
-            config.cardBgDarkImagePath = nil;
-            [config save];
-            [self buildUI];
-        }]];
-    }
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
+        alert.popoverPresentationController.sourceRect = CGRectMake(
+            self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
     }
     [self presentViewController:alert animated:YES completion:nil];
 }
@@ -430,7 +362,9 @@
 - (void)pickImageForMode:(NSInteger)mode {
     PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
     config.selectionLimit = 1;
-    config.filter = [PHPickerFilter imagesFilter];
+
+    BOOL isGif = (mode == 101);
+    config.filter = isGif ? [PHPickerFilter imagesFilter] : [PHPickerFilter imagesFilter];
 
     PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
     picker.delegate = self;
@@ -450,10 +384,9 @@
     PHPickerResult *result = results.firstObject;
     PluginConfig *config = [PluginConfig shared];
     NSInteger mode = picker.view.tag;
-    BOOL isDark = (mode == 200 || mode == 201);
-    BOOL isGif = (mode == 101 || mode == 201);
+    BOOL isGif = (mode == 101);
 
-    WPLog(@"CardBg-Diag", @"[PICKER] mode=%ld, isDark=%d, isGif=%d", (long)mode, isDark, isGif);
+    WPLog(@"CardBg-Diag", @"[PICKER] mode=%ld, isGif=%d", (long)mode, isGif);
 
     NSString *bgDir = [NSSearchPathForDirectoriesInDomains(
         NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
@@ -469,15 +402,8 @@
     WPLog(@"CardBg-Diag", @"[PICKER] bgDir=%@", bgDir);
     WPLog(@"CardBg-Diag", @"[PICKER] dirExists=%d", [fm fileExistsAtPath:bgDir]);
 
-    NSString *targetFile;
-    NSString *altExt;
-    if (isGif) {
-        targetFile = isDark ? @"MioCardBgDark.gif" : @"MioCardBgLight.gif";
-        altExt = isDark ? @"MioCardBgDark.png" : @"MioCardBgLight.png";
-    } else {
-        targetFile = isDark ? @"MioCardBgDark.png" : @"MioCardBgLight.png";
-        altExt = isDark ? @"MioCardBgDark.gif" : @"MioCardBgLight.gif";
-    }
+    NSString *targetFile = isGif ? @"MioCardBg.gif" : @"MioCardBg.png";
+    NSString *altExt = isGif ? @"MioCardBg.png" : @"MioCardBg.gif";
 
     NSString *targetPath = [bgDir stringByAppendingPathComponent:targetFile];
     NSString *altPath = [bgDir stringByAppendingPathComponent:altExt];
@@ -501,13 +427,9 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 BOOL written = [data writeToFile:targetPath atomically:YES];
                 WPLog(@"CardBg-Diag", @"[PICKER] GIF write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
-                if (isDark) {
-                    config.cardBgDarkImagePath = targetPath;
-                } else {
-                    config.cardBgLightImagePath = targetPath;
-                }
+                config.cardBgImagePath = targetPath;
                 [config save];
-                WPLog(@"CardBg-Diag", @"[PICKER] Saved config: %@=%@", isDark ? @"cardBgDarkImagePath" : @"cardBgLightImagePath", targetPath);
+                WPLog(@"CardBg-Diag", @"[PICKER] Saved config: cardBgImagePath=%@", targetPath);
                 WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
                 [picker dismissViewControllerAnimated:YES completion:^{
                     [self buildUI];
@@ -525,13 +447,9 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 BOOL written = [data writeToFile:targetPath atomically:YES];
                 WPLog(@"CardBg-Diag", @"[PICKER] Image write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
-                if (isDark) {
-                    config.cardBgDarkImagePath = targetPath;
-                } else {
-                    config.cardBgLightImagePath = targetPath;
-                }
+                config.cardBgImagePath = targetPath;
                 [config save];
-                WPLog(@"CardBg-Diag", @"[PICKER] Saved config: %@=%@", isDark ? @"cardBgDarkImagePath" : @"cardBgLightImagePath", targetPath);
+                WPLog(@"CardBg-Diag", @"[PICKER] Saved config: cardBgImagePath=%@", targetPath);
                 WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
                 [picker dismissViewControllerAnimated:YES completion:^{
                     [self buildUI];

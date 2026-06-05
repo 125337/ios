@@ -492,18 +492,11 @@
     _nsLogKeywords = nlkw.length > 0 ? nlkw : @"";
     _navMonitorEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"NavMonitorEnabled"]];
 
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightImagePath"]];
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgImagePath"]];
     if (v.length > 0) {
-        _cardBgLightImagePath = [v copy];
-        WPLog(@"CardBg-Diag", @"[CONFIG] cardBgLightImagePath=%@", _cardBgLightImagePath);
-        WPLog(@"CardBg-Diag", @"[CONFIG] fileExists=%d", [[NSFileManager defaultManager] fileExistsAtPath:_cardBgLightImagePath]);
-    }
-
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkImagePath"]];
-    if (v.length > 0) {
-        _cardBgDarkImagePath = [v copy];
-        WPLog(@"CardBg-Diag", @"[CONFIG] cardBgDarkImagePath=%@", _cardBgDarkImagePath);
-        WPLog(@"CardBg-Diag", @"[CONFIG] fileExists=%d", [[NSFileManager defaultManager] fileExistsAtPath:_cardBgDarkImagePath]);
+        _cardBgImagePath = [v copy];
+        WPLog(@"CardBg-Diag", @"[CONFIG] cardBgImagePath=%@", _cardBgImagePath);
+        WPLog(@"CardBg-Diag", @"[CONFIG] fileExists=%d", [[NSFileManager defaultManager] fileExistsAtPath:_cardBgImagePath]);
     }
 
     _cardBgFillMode = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgFillMode"]];
@@ -728,15 +721,10 @@
     [d setBool:_cardBgHidden forKey:[kPluginPrefix stringByAppendingString:@"CardBgHidden"]];
     [d setFloat:_cardBgHeight forKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];
     [d setFloat:_cardBgListSpacing forKey:[kPluginPrefix stringByAppendingString:@"CardBgListSpacing"]];
-    if (_cardBgLightImagePath) {
-        [d setObject:_cardBgLightImagePath forKey:[kPluginPrefix stringByAppendingString:@"CardBgLightImagePath"]];
+    if (_cardBgImagePath) {
+        [d setObject:_cardBgImagePath forKey:[kPluginPrefix stringByAppendingString:@"CardBgImagePath"]];
     } else {
-        [d removeObjectForKey:[kPluginPrefix stringByAppendingString:@"CardBgLightImagePath"]];
-    }
-    if (_cardBgDarkImagePath) {
-        [d setObject:_cardBgDarkImagePath forKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkImagePath"]];
-    } else {
-        [d removeObjectForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkImagePath"]];
+        [d removeObjectForKey:[kPluginPrefix stringByAppendingString:@"CardBgImagePath"]];
     }
     [d setInteger:_cardBgFillMode forKey:[kPluginPrefix stringByAppendingString:@"CardBgFillMode"]];
     [d setInteger:_cardBgAlignment forKey:[kPluginPrefix stringByAppendingString:@"CardBgAlignment"]];

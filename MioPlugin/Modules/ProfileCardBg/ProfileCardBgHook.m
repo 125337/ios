@@ -135,21 +135,18 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
 #pragma mark - 图片加载
 
-+ (UIImage *)loadBackgroundImageSync:(BOOL)isDark {
-    WPLog(@"CardBg-Diag", @"[IMG-LOAD] Start: isDark=%d", isDark);
++ (UIImage *)loadBackgroundImageSync {
+    WPLog(@"CardBg-Diag", @"[IMG-LOAD] Start");
     PluginConfig *config = [PluginConfig shared];
-    NSString *imagePath = isDark ? config.cardBgDarkImagePath
-                                 : config.cardBgLightImagePath;
+    NSString *imagePath = config.cardBgImagePath;
     WPLog(@"CardBg-Diag", @"[IMG-LOAD] configPath=%@", imagePath ?: @"(nil)");
 
     if (!imagePath || imagePath.length == 0) {
         NSString *bgDir = [ProfileCardBgHook cardBackgroundDirectory];
         NSFileManager *fm = [NSFileManager defaultManager];
 
-        NSString *gifPath = [bgDir stringByAppendingPathComponent:
-            isDark ? @"MioCardBgDark.gif" : @"MioCardBgLight.gif"];
-        NSString *pngPath = [bgDir stringByAppendingPathComponent:
-            isDark ? @"MioCardBgDark.png" : @"MioCardBgLight.png"];
+        NSString *gifPath = [bgDir stringByAppendingPathComponent:@"MioCardBg.gif"];
+        NSString *pngPath = [bgDir stringByAppendingPathComponent:@"MioCardBg.png"];
 
         if ([fm fileExistsAtPath:gifPath]) {
             imagePath = gifPath;
@@ -276,11 +273,10 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     return dir;
 }
 
-+ (void)loadBackgroundImageForImageView:(UIImageView *)imageView isDark:(BOOL)isDark {
++ (void)loadBackgroundImageForImageView:(UIImageView *)imageView {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         PluginConfig *config = [PluginConfig shared];
-        NSString *imagePath = isDark ? config.cardBgDarkImagePath
-                                     : config.cardBgLightImagePath;
+        NSString *imagePath = config.cardBgImagePath;
 
         if (!imagePath || imagePath.length == 0) {
             NSString *bgDir = [[ProfileCardBgHook cardBackgroundDirectory] copy];
@@ -498,13 +494,12 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             // ── 异步加载图片 ──
             __weak UIImageView *weakBg = newBg;
             __weak UIView *weakButton = button;
-            BOOL capturedIsDark = isDark;
 
             dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                 __strong UIImageView *strongBg = weakBg;
                 if (!strongBg) return;
 
-                UIImage *resultImage = [ProfileCardBgHook loadBackgroundImageSync:capturedIsDark];
+                UIImage *resultImage = [ProfileCardBgHook loadBackgroundImageSync];
 
                 dispatch_async(dispatch_get_main_queue(), ^{
                     __strong UIImageView *finalBg = weakBg;
@@ -546,7 +541,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                               finalBg.frame.size.width, finalBg.frame.size.height);
                     } else {
                         PluginConfig *cfg = [PluginConfig shared];
-                        UIColor *cardBg = [cfg colorFromHex:capturedIsDark
+                        UIColor *cardBg = [cfg colorFromHex:isDark
                             ? cfg.listCardDarkBgColor : cfg.listCardLightBgColor];
                         if (cardBg) finalButton.backgroundColor = cardBg;
                         WPLog(@"CardBg-Diag", @"[CELL-BG] FALLBACK: set button bg=%@", cardBg);

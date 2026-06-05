@@ -14,8 +14,8 @@
 + (void)hideQRButtonInSubviews:(NSArray<UIView *> *)subviews;
 
 // 图片加载
-+ (UIImage *)loadBackgroundImageSync:(BOOL)isDark;
-+ (void)loadBackgroundImageForImageView:(UIImageView *)imageView isDark:(BOOL)isDark;
++ (UIImage *)loadBackgroundImageSync;
++ (void)loadBackgroundImageForImageView:(UIImageView *)imageView;
 + (NSString *)cardBackgroundDirectory;
 
 // Hook 注册
