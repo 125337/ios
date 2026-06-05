@@ -113,6 +113,20 @@
         } cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
+        // ─── 新 UI：背景显示层级 ───
+        {
+            NSArray *layerNames = @[@"底层显示", @"顶层显示"];
+            NSString *layerSub = (cfg.cardBgLayer >= 0 && cfg.cardBgLayer < (NSInteger)layerNames.count)
+                ? layerNames[cfg.cardBgLayer] : @"底层显示";
+            *ecy = [self addNavRowInGroup:expand
+                                    title:@"背景显示层级"
+                                  subtitle:layerSub
+                                      tag:203
+                                   action:@selector(onLayerTap)
+                                       cy:*ecy width:w];
+        }
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
         // ─── 隐藏信息卡片（平铺开关，无子参数） ───
         *ecy = [self addSubSwitchRowInGroup:expand
                                       title:@"隐藏信息卡片"
@@ -252,12 +266,8 @@
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         NSArray *layerNames = @[@"底层显示", @"顶层显示"];
-        NSString *lightLayerSub = (cfg.cardBgLightLayer >= 0 && cfg.cardBgLightLayer < (NSInteger)layerNames.count) ? layerNames[cfg.cardBgLightLayer] : @"底层显示";
-        *ecy = [self addNavRowInGroup:expand title:@"浅色背景显示层级" subtitle:lightLayerSub tag:203 action:@selector(onLightLayerTap) cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-
-        NSString *darkLayerSub = (cfg.cardBgDarkLayer >= 0 && cfg.cardBgDarkLayer < (NSInteger)layerNames.count) ? layerNames[cfg.cardBgDarkLayer] : @"底层显示";
-        *ecy = [self addNavRowInGroup:expand title:@"深色背景显示层级" subtitle:darkLayerSub tag:204 action:@selector(onDarkLayerTap) cy:*ecy width:w];
+        NSString *layerSub = (cfg.cardBgLayer >= 0 && cfg.cardBgLayer < (NSInteger)layerNames.count) ? layerNames[cfg.cardBgLayer] : @"底层显示";
+        *ecy = [self addNavRowInGroup:expand title:@"背景显示层级" subtitle:layerSub tag:203 action:@selector(onLayerTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         CGFloat loy = cfg.cardBgLightOffsetY;
@@ -569,25 +579,25 @@
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-#pragma mark - 浅色背景显示层级
+#pragma mark - 背景显示层级
 
-- (void)onLightLayerTap {
+- (void)onLayerTap {
     PluginConfig *config = [PluginConfig shared];
     NSArray *layerNames = @[@"底层显示", @"顶层显示"];
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"浅色背景显示层级"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景显示层级"
                                                                    message:nil
                                                             preferredStyle:UIAlertControllerStyleActionSheet];
 
     for (NSInteger i = 0; i < (NSInteger)layerNames.count; i++) {
         NSString *title = layerNames[i];
-        if (i == config.cardBgLightLayer) {
+        if (i == config.cardBgLayer) {
             title = [NSString stringWithFormat:@"✓ %@", title];
         }
         [alert addAction:[UIAlertAction actionWithTitle:title
                                                  style:UIAlertActionStyleDefault
                                                handler:^(UIAlertAction *action) {
-            config.cardBgLightLayer = i;
+            config.cardBgLayer = i;
             [config save];
             [self buildUI];
         }]];
@@ -597,40 +607,8 @@
 
     if (@available(iOS 13.0, *)) {
         alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-    [self presentViewController:alert animated:YES completion:nil];
-}
-
-#pragma mark - 深色背景显示层级
-
-- (void)onDarkLayerTap {
-    PluginConfig *config = [PluginConfig shared];
-    NSArray *layerNames = @[@"底层显示", @"顶层显示"];
-
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"深色背景显示层级"
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-
-    for (NSInteger i = 0; i < (NSInteger)layerNames.count; i++) {
-        NSString *title = layerNames[i];
-        if (i == config.cardBgDarkLayer) {
-            title = [NSString stringWithFormat:@"✓ %@", title];
-        }
-        [alert addAction:[UIAlertAction actionWithTitle:title
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *action) {
-            config.cardBgDarkLayer = i;
-            [config save];
-            [self buildUI];
-        }]];
-    }
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
+        alert.popoverPresentationController.sourceRect = CGRectMake(
+            self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
     }
     [self presentViewController:alert animated:YES completion:nil];
 }

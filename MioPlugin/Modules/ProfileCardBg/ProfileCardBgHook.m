@@ -470,8 +470,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
             bgImgView.frame = CGRectMake(bgX + ox, bgY + oy + alignOffset, bgW, bgH);
 
-            NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
-            if (layerPos == 1) [button bringSubviewToFront:bgImgView];
+            if (config.cardBgLayer == 1) [button bringSubviewToFront:bgImgView];
         }
         // ── 分支 B：不存在 → 创建新 bg ──
         else {
@@ -489,8 +488,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
             newBg.frame = CGRectMake(bgX + ox, bgY + oy, bgW, bgH);
 
-            NSInteger layerPos = isDark ? config.cardBgDarkLayer : config.cardBgLightLayer;
-            if (layerPos == 1) {
+            if (config.cardBgLayer == 1) {
                 [button addSubview:newBg];
                 [button bringSubviewToFront:newBg];
             } else {

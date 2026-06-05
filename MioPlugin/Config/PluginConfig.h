@@ -200,8 +200,7 @@
 @property (nonatomic, assign) NSInteger cardBgFillMode;
 @property (nonatomic, assign) NSInteger cardBgLightAlignment;
 @property (nonatomic, assign) NSInteger cardBgDarkAlignment;
-@property (nonatomic, assign) NSInteger cardBgLightLayer;
-@property (nonatomic, assign) NSInteger cardBgDarkLayer;
+@property (nonatomic, assign) NSInteger cardBgLayer;
 @property (nonatomic, assign) CGFloat cardBgLightOffsetY;
 @property (nonatomic, assign) CGFloat cardBgDarkOffsetY;
 @property (nonatomic, assign) CGFloat cardBgLightOffsetX;
