@@ -282,10 +282,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             NSString *bgDir = [[ProfileCardBgHook cardBackgroundDirectory] copy];
             NSFileManager *fm = [NSFileManager defaultManager];
 
-            NSString *gifPath = [bgDir stringByAppendingPathComponent:
-                isDark ? @"MioCardBgDark.gif" : @"MioCardBgLight.gif"];
-            NSString *pngPath = [bgDir stringByAppendingPathComponent:
-                isDark ? @"MioCardBgDark.png" : @"MioCardBgLight.png"];
+            NSString *gifPath = [bgDir stringByAppendingPathComponent:@"MioCardBg.gif"];
+            NSString *pngPath = [bgDir stringByAppendingPathComponent:@"MioCardBg.png"];
 
             if ([fm fileExistsAtPath:gifPath]) {
                 imagePath = gifPath;
