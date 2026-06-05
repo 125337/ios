@@ -90,6 +90,7 @@ jobs:
           MioPlugin/Settings/Controllers/SettingNameColorController.m \
           MioPlugin/Settings/Controllers/SettingListCornerRadiusController.m \
           MioPlugin/Settings/Controllers/SettingCardBackgroundController.m \
+          MioPlugin/Settings/Controllers/SettingRoundedCornerController.m \
           MioPlugin/Settings/Controllers/SettingDevToolsController.m \
           MioPlugin/Settings/Controllers/MioTweakGroupSelectsController.m; do
           BASENAME=$(basename "$f" .m)
