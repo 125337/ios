@@ -507,6 +507,7 @@
     }
 
     _cardBgFillMode = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgFillMode"]];
+    _cardBgAlignment = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgAlignment"]];
     _cardBgLayer = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgLayer"]];
     _cardBgOffsetY = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetY"]];
     _cardBgOffsetX = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetX"]];
@@ -738,6 +739,7 @@
         [d removeObjectForKey:[kPluginPrefix stringByAppendingString:@"CardBgDarkImagePath"]];
     }
     [d setInteger:_cardBgFillMode forKey:[kPluginPrefix stringByAppendingString:@"CardBgFillMode"]];
+    [d setInteger:_cardBgAlignment forKey:[kPluginPrefix stringByAppendingString:@"CardBgAlignment"]];
     [d setInteger:_cardBgLayer forKey:[kPluginPrefix stringByAppendingString:@"CardBgLayer"]];
     [d setFloat:_cardBgOffsetY forKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetY"]];
     [d setFloat:_cardBgOffsetX forKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetX"]];

@@ -450,7 +450,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                 default: bgImgView.contentMode = UIViewContentModeScaleAspectFill; break;
             }
 
-            NSInteger alignment = isDark ? config.cardBgDarkAlignment : config.cardBgLightAlignment;
+            NSInteger alignment = config.cardBgAlignment;
             CGFloat alignOffset = 0;
             if ((fillMode == 0 || fillMode == 3) && bgImgView.image &&
                 bgImgView.image.size.width > 0) {
@@ -518,8 +518,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
                         PluginConfig *cfg = [PluginConfig shared];
                         NSInteger fm = cfg.cardBgFillMode;
-                        NSInteger alignment = capturedIsDark ? cfg.cardBgDarkAlignment
-                                                             : cfg.cardBgLightAlignment;
+                        NSInteger alignment = cfg.cardBgAlignment;
                         CGFloat userOy = cfg.cardBgOffsetY;
 
                         if ((fm == 0 || fm == 3) && resultImage.size.width > 0) {

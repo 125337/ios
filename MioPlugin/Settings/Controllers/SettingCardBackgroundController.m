@@ -102,13 +102,13 @@
             *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
 
             NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
-            NSString *alignSub = (cfg.cardBgDarkAlignment >= 0 && cfg.cardBgDarkAlignment < (NSInteger)alignNames.count)
-                ? alignNames[cfg.cardBgDarkAlignment] : @"底部对齐";
+            NSString *alignSub = (cfg.cardBgAlignment >= 0 && cfg.cardBgAlignment < (NSInteger)alignNames.count)
+                ? alignNames[cfg.cardBgAlignment] : @"底部对齐";
             *e2y = [self addNavRowInGroup:e2
-                                    title:@"深色模式对齐方式"
+                                    title:@"对齐方式"
                                   subtitle:alignSub
-                                      tag:206
-                                   action:@selector(onDarkAlignmentTap)
+                                      tag:207
+                                   action:@selector(onAlignmentTap)
                                        cy:*e2y width:w];
         } cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
@@ -282,12 +282,8 @@
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
-        NSString *lightAlignSub = (cfg.cardBgLightAlignment >= 0 && cfg.cardBgLightAlignment < (NSInteger)alignNames.count) ? alignNames[cfg.cardBgLightAlignment] : @"底部对齐";
-        *ecy = [self addNavRowInGroup:expand title:@"浅色模式对齐方式" subtitle:lightAlignSub tag:205 action:@selector(onLightAlignmentTap) cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-
-        NSString *darkAlignSub = (cfg.cardBgDarkAlignment >= 0 && cfg.cardBgDarkAlignment < (NSInteger)alignNames.count) ? alignNames[cfg.cardBgDarkAlignment] : @"底部对齐";
-        *ecy = [self addNavRowInGroup:expand title:@"深色模式对齐方式" subtitle:darkAlignSub tag:206 action:@selector(onDarkAlignmentTap) cy:*ecy width:w];
+        NSString *alignSub = (cfg.cardBgAlignment >= 0 && cfg.cardBgAlignment < (NSInteger)alignNames.count) ? alignNames[cfg.cardBgAlignment] : @"底部对齐";
+        *ecy = [self addNavRowInGroup:expand title:@"对齐方式" subtitle:alignSub tag:207 action:@selector(onAlignmentTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         NSArray *layerNames = @[@"底层显示", @"顶层显示"];
@@ -616,25 +612,25 @@
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-#pragma mark - 浅色模式对齐方式
+#pragma mark - 对齐方式
 
-- (void)onLightAlignmentTap {
+- (void)onAlignmentTap {
     PluginConfig *config = [PluginConfig shared];
     NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"浅色模式对齐方式"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"对齐方式"
                                                                    message:nil
                                                             preferredStyle:UIAlertControllerStyleActionSheet];
 
     for (NSInteger i = 0; i < (NSInteger)alignNames.count; i++) {
         NSString *title = alignNames[i];
-        if (i == config.cardBgLightAlignment) {
+        if (i == config.cardBgAlignment) {
             title = [NSString stringWithFormat:@"✓ %@", title];
         }
         [alert addAction:[UIAlertAction actionWithTitle:title
                                                  style:UIAlertActionStyleDefault
                                                handler:^(UIAlertAction *action) {
-            config.cardBgLightAlignment = i;
+            config.cardBgAlignment = i;
             [config save];
             [self buildUI];
         }]];
@@ -644,43 +640,13 @@
 
     if (@available(iOS 13.0, *)) {
         alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
+        alert.popoverPresentationController.sourceRect = CGRectMake(
+            self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
     }
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-#pragma mark - 深色模式对齐方式
 
-- (void)onDarkAlignmentTap {
-    PluginConfig *config = [PluginConfig shared];
-    NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
-
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"深色模式对齐方式"
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-
-    for (NSInteger i = 0; i < (NSInteger)alignNames.count; i++) {
-        NSString *title = alignNames[i];
-        if (i == config.cardBgDarkAlignment) {
-            title = [NSString stringWithFormat:@"✓ %@", title];
-        }
-        [alert addAction:[UIAlertAction actionWithTitle:title
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *action) {
-            config.cardBgDarkAlignment = i;
-            [config save];
-            [self buildUI];
-        }]];
-    }
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-    [self presentViewController:alert animated:YES completion:nil];
-}
 
 #pragma mark - switchChanged
 
