@@ -128,44 +128,59 @@
                                           isOn:cfg.cardBgCornerEnabled
                                     subBuilder:^(UIView *e3, CGFloat *e3y) {
 
-            CGFloat cr = cfg.cardBgCornerRadius > 0 ? cfg.cardBgCornerRadius : 18.0;
-            *e3y = [self addInputRowInGroup:e3
-                                      title:@"圆角大小"
-                                        key:@"cardBgCornerRadius"
-                                      value:[NSString stringWithFormat:@"%.0f", cr]
-                                       hint:@"18"
-                                 alertTitle:@"设置圆角大小"
-                               alertMessage:@"请输入圆角大小(5-30像素)"
-                                         cy:*e3y width:w];
-            *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
+            PluginConfig *c3 = [PluginConfig shared];
 
-            CGFloat cm = cfg.cardBgCornerMargin > 0 ? cfg.cardBgCornerMargin : 9.0;
-            *e3y = [self addInputRowInGroup:e3
-                                      title:@"边距大小"
-                                        key:@"cardBgCornerMargin"
-                                      value:[NSString stringWithFormat:@"%.0f", cm]
-                                       hint:@"9"
-                                 alertTitle:@"设置边距大小"
-                               alertMessage:@"请输入边距值(0-30像素)"
-                                         cy:*e3y width:w];
-            *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
+            // ── 使用全局配置（子手风琴：展开时隐藏四项配置） ──
+            *e3y = [self addMasterSwitchRowInGroup:e3
+                                             title:@"使用全局配置"
+                                               key:@"cardBgCornerUseGlobal"
+                                              isOn:c3.cardBgCornerUseGlobal
+                                        subBuilder:^(UIView *e4, CGFloat *e4y) {
+                // 展开 = 使用全局配置，不显示手写项
+            } cy:*e3y width:w];
 
-            *e3y = [self addColorRowInGroup:e3
-                                      title:@"背景颜色"
-                                        key:@"cardBgCornerBgColor"
-                                      value:cfg.cardBgCornerBgColor
-                                         cy:*e3y width:w];
-            *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
+            if (!c3.cardBgCornerUseGlobal) {
+                *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
 
-            CGFloat sw = cfg.cardBgStrokeWidth > 0 ? cfg.cardBgStrokeWidth : 2.0;
-            *e3y = [self addInputRowInGroup:e3
-                                      title:@"描边大小"
-                                        key:@"cardBgStrokeWidth"
-                                      value:[NSString stringWithFormat:@"%.1f", sw]
-                                       hint:@"2.0"
-                                 alertTitle:@"设置描边大小"
-                               alertMessage:@"请输入描边宽度(0.5-5.0)"
-                                         cy:*e3y width:w];
+                CGFloat cr = cfg.cardBgCornerRadius > 0 ? cfg.cardBgCornerRadius : 18.0;
+                *e3y = [self addInputRowInGroup:e3
+                                          title:@"圆角大小"
+                                            key:@"cardBgCornerRadius"
+                                          value:[NSString stringWithFormat:@"%.0f", cr]
+                                           hint:@"18"
+                                     alertTitle:@"设置圆角大小"
+                                   alertMessage:@"请输入圆角大小(5-30像素)"
+                                             cy:*e3y width:w];
+                *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
+
+                CGFloat cm = cfg.cardBgCornerMargin > 0 ? cfg.cardBgCornerMargin : 9.0;
+                *e3y = [self addInputRowInGroup:e3
+                                          title:@"边距大小"
+                                            key:@"cardBgCornerMargin"
+                                          value:[NSString stringWithFormat:@"%.0f", cm]
+                                           hint:@"9"
+                                     alertTitle:@"设置边距大小"
+                                   alertMessage:@"请输入边距值(0-30像素)"
+                                             cy:*e3y width:w];
+                *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
+
+                *e3y = [self addColorRowInGroup:e3
+                                          title:@"背景颜色"
+                                            key:@"cardBgCornerBgColor"
+                                          value:cfg.cardBgCornerBgColor
+                                             cy:*e3y width:w];
+                *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
+
+                CGFloat sw = cfg.cardBgStrokeWidth > 0 ? cfg.cardBgStrokeWidth : 2.0;
+                *e3y = [self addInputRowInGroup:e3
+                                          title:@"描边大小"
+                                            key:@"cardBgStrokeWidth"
+                                          value:[NSString stringWithFormat:@"%.1f", sw]
+                                           hint:@"2.0"
+                                     alertTitle:@"设置描边大小"
+                                   alertMessage:@"请输入描边宽度(0.5-5.0)"
+                                             cy:*e3y width:w];
+            }
         } cy:*ecy width:w];
     } cy:ncy width:w];
 
@@ -693,6 +708,7 @@
     if ([key isEqualToString:@"cardBgBeautifyEnabled"]
         || [key isEqualToString:@"cardBgMaterialEnabled"]
         || [key isEqualToString:@"cardBgCornerEnabled"]
+        || [key isEqualToString:@"cardBgCornerUseGlobal"]
         || [key isEqualToString:@"cardBgHidden"]) {
         [self buildUI];
         return;

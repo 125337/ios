@@ -178,6 +178,7 @@
 @property (nonatomic, assign) BOOL cardBgBeautifyEnabled;
 @property (nonatomic, assign) BOOL cardBgMaterialEnabled;
 @property (nonatomic, assign) BOOL cardBgCornerEnabled;
+@property (nonatomic, assign) BOOL cardBgCornerUseGlobal;
 @property (nonatomic, assign) CGFloat cardBgCornerRadius;
 @property (nonatomic, assign) CGFloat cardBgCornerMargin;
 @property (nonatomic, copy) NSString *cardBgCornerBgColor;

@@ -468,6 +468,7 @@
     _cardBgBeautifyEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgBeautifyEnabled"]];
     _cardBgMaterialEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgMaterialEnabled"]];
     _cardBgCornerEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerEnabled"]];
+    _cardBgCornerUseGlobal = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerUseGlobal"]];
     CGFloat cbcr = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerRadius"]];
     _cardBgCornerRadius = (cbcr > 0) ? cbcr : 18.0;
     CGFloat cbcm = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerMargin"]];
@@ -716,6 +717,7 @@
     [d setBool:_cardBgBeautifyEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgBeautifyEnabled"]];
     [d setBool:_cardBgMaterialEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgMaterialEnabled"]];
     [d setBool:_cardBgCornerEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerEnabled"]];
+    [d setBool:_cardBgCornerUseGlobal forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerUseGlobal"]];
     [d setFloat:_cardBgCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerRadius"]];
     [d setFloat:_cardBgCornerMargin forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerMargin"]];
     if (_cardBgCornerBgColor) [d setObject:_cardBgCornerBgColor forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerBgColor"]];
