@@ -605,45 +605,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     }
 
     // 独立功能
-    [ProfileCardBgHook handleHeightAdjustment:button];
-    [ProfileCardBgHook handleMarginAdjustment:button];  // ← 新增
+    [ProfileCardBgHook handleMarginAdjustment:button];
     [ProfileCardBgHook handleCornerAndQR:button isDark:isDark];
-}
-
-#pragma mark - 方案 H：高度扩展
-
-+ (void)handleHeightAdjustment:(UIView *)button {
-    PluginConfig *config = [PluginConfig shared];
-    CGFloat targetH = config.cardBgHeight;
-    if (targetH <= 0) return;
-
-    // ★ 当前高度已达标则跳过（防递归守卫）
-    if (button.frame.size.height >= targetH) return;
-
-    // ── 父视图链检查 ──
-    UIView *tableView = button.superview;
-    if (!tableView || ![NSStringFromClass([tableView class]) isEqualToString:@"TextStateProfileTableView"]) {
-        WPLog(@"CardBg-Diag", @"[HEIGHT-SKIP] superview is %@, not TextStateProfileTableView",
-              tableView ? NSStringFromClass([tableView class]) : @"nil");
-        return;
-    }
-    UIView *container = tableView.superview;
-    if (!container || ![container isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-        WPLog(@"CardBg-Diag", @"[HEIGHT-SKIP] tableView.superview is %@, not MMUIButton",
-              container ? NSStringFromClass([container class]) : @"nil");
-        return;
-    }
-
-    // ── 只改 height ──
-    CGRect bf = button.frame;
-    CGFloat oldH = bf.size.height;
-    bf.size.height = targetH;
-    button.frame = bf;
-
-    WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
-          oldH, targetH,
-          container.frame.origin.x, container.frame.origin.y,
-          container.frame.size.width, container.frame.size.height);
 }
 
 #pragma mark - 方案 M：左右边距

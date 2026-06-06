@@ -191,7 +191,6 @@
 @property (nonatomic, copy)   NSString *nsLogKeywords;
 @property (nonatomic, assign) BOOL navMonitorEnabled;
 @property (nonatomic, assign) BOOL cardBgHidden;
-@property (nonatomic, assign) CGFloat cardBgHeight;
 @property (nonatomic, assign) CGFloat cardBgListSpacing;
 @property (nonatomic, copy) NSString *cardBgImagePath;
 @property (nonatomic, assign) NSInteger cardBgFillMode;

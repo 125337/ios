@@ -50,17 +50,6 @@
                                           isOn:cfg.cardBgMaterialEnabled
                                     subBuilder:^(UIView *e2, CGFloat *e2y) {
 
-            CGFloat h = cfg.cardBgHeight > 0 ? cfg.cardBgHeight : 144.0;
-            *e2y = [self addInputRowInGroup:e2
-                                      title:@"信息卡片高度"
-                                        key:@"cardBgHeight"
-                                      value:[NSString stringWithFormat:@"%.0f", h]
-                                       hint:@"144"
-                                 alertTitle:@"设置信息卡片高度"
-                               alertMessage:@"请输入高度值(144-500像素)"
-                                         cy:*e2y width:w];
-            *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
-
             CGFloat sp = cfg.cardBgListSpacing > 0 ? cfg.cardBgListSpacing : 9.0;
             *e2y = [self addInputRowInGroup:e2
                                       title:@"列表向下间距"

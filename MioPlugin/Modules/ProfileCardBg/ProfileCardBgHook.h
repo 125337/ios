@@ -27,7 +27,6 @@
 // ★ 独立功能路径
 + (void)handleHiddenPath:(UIView *)button isDark:(BOOL)isDark;
 + (void)handleVisiblePath:(UIView *)button isDark:(BOOL)isDark;
-+ (void)handleHeightAdjustment:(UIView *)button;
 + (void)handleCornerAndQR:(UIView *)button isDark:(BOOL)isDark;
 
 // 资料卡圆角

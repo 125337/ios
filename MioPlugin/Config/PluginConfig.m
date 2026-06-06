@@ -715,7 +715,6 @@
     if (_cardBgCornerDarkBgColor) [d setObject:_cardBgCornerDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerDarkBgColor"]];
     [d setFloat:_cardBgStrokeWidth forKey:[kPluginPrefix stringByAppendingString:@"CardBgStrokeWidth"]];
     [d setBool:_cardBgHidden forKey:[kPluginPrefix stringByAppendingString:@"CardBgHidden"]];
-    [d setFloat:_cardBgHeight forKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];
     [d setFloat:_cardBgListSpacing forKey:[kPluginPrefix stringByAppendingString:@"CardBgListSpacing"]];
     if (_cardBgImagePath) {
         [d setObject:_cardBgImagePath forKey:[kPluginPrefix stringByAppendingString:@"CardBgImagePath"]];
