@@ -17,18 +17,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     if (section != 1) return result;
 
-    UIResponder *responder = [tableView nextResponder];
-    UIViewController *vc = nil;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) {
-            vc = (UIViewController *)responder;
-            break;
-        }
-        responder = [responder nextResponder];
-    }
-    if (!vc || ![NSStringFromClass([vc class]) isEqualToString:@"MoreViewController"]) {
-        return result;
-    }
+    UIViewController *vc = [ProfileCardBgHook findMoreViewController:(UIView *)tableView];
+    if (!vc) return result;
 
     // ★ 追加间距
     CGFloat spacing = config.cardBgListSpacing;
@@ -368,420 +358,454 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     });
 }
 
-#pragma mark - 辅助方法
+#pragma mark - 通用辅助方法（Step 1）
 
-#pragma mark - ★ 核心：handleButtonLayout
-
-+ (void)handleButtonLayout:(UIView *)button {
-    PluginConfig *config = [PluginConfig shared];
-
-    // ★ 极速拒绝链 ★
-    if (!config.cardBgBeautifyEnabled) return;
-
-    // 第2关：VC 类型
-    UIViewController *vc = nil;
-    UIResponder *responder = button.nextResponder;
+/// 从任意 view 向上查找 MoreViewController
++ (UIViewController *)findMoreViewController:(UIView *)view {
+    UIResponder *responder = view.nextResponder;
     while (responder) {
         if ([responder isKindOfClass:[UIViewController class]]) {
-            vc = (UIViewController *)responder;
-            break;
+            NSString *className = NSStringFromClass([(UIViewController *)responder class]);
+            if ([className isEqualToString:@"MoreViewController"]) {
+                return (UIViewController *)responder;
+            }
         }
         responder = responder.nextResponder;
     }
-    if (!vc || ![NSStringFromClass([vc class]) isEqualToString:@"MoreViewController"]) return;
+    return nil;
+}
 
-    // 第3关：MMHeadImageView 存在
-    BOOL foundHead = NO;
-    for (UIView *sub in button.subviews) {
+/// 检查 button 中是否存在 MMHeadImageView（确定这是资料卡按钮）
++ (BOOL)hasHeadImageViewInView:(UIView *)view {
+    for (UIView *sub in view.subviews) {
         if ([sub isKindOfClass:NSClassFromString(@"MMHeadImageView")]) {
-            foundHead = YES; break;
+            return YES;
         }
     }
-    if (!foundHead) return;
+    return NO;
+}
 
-    // 第4关：高度过滤
-    CGFloat selfHeight = button.frame.size.height;
-    if (selfHeight <= 50.0) return;
-
-    BOOL isDark = NO;
+/// 判断当前是否为暗色模式
++ (BOOL)isDarkModeForVc:(UIViewController *)vc {
     if (@available(iOS 13.0, *)) {
-        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+        return vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
     }
+    return NO;
+}
 
-    BOOL needsNewCardBg = config.cardBgBeautifyEnabled;
+/// 清理微信原生的 m_bgImageView，防止灰色装饰残留
++ (void)cleanNativeBgImageView:(UIView *)button {
+    Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
+    if (!bgIvar) return;
+    id bgImgView = object_getIvar(button, bgIvar);
+    if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
+        [(UIImageView *)bgImgView setImage:nil];
+        [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
+        [(UIImageView *)bgImgView setHidden:YES];
+    }
+    object_setIvar(button, bgIvar, nil);
+}
 
-    // ══════════════════════════════════════════
-    // 场景判断
-    // ══════════════════════════════════════════
-    BOOL hasMaterial = config.cardBgMaterialEnabled;
-    BOOL isHidden = config.cardBgHidden;
+/// 判断子视图是否为关键 UI（FIX-WHITE 时应豁免隐藏）
++ (BOOL)isEssentialSubview:(UIView *)sub {
+    NSString *cn = NSStringFromClass([sub class]);
+    if ([sub isKindOfClass:NSClassFromString(@"MMHeadImageView")]) return YES;
+    if ([sub isKindOfClass:[UILabel class]]) return YES;
+    if ([cn isEqualToString:@"MMCPLabel"]) return YES;
+    if ([cn isEqualToString:@"MMUILabel"]) return YES;
+    if ([cn isEqualToString:@"TextStatePublishEntryButton"]) return YES;
+    if ([cn isEqualToString:@"TextStateFriendTopicButton"]) return YES;
+    if ([sub isKindOfClass:[UIImageView class]] && sub.tag != 0) return YES;
+    return NO;
+}
 
-    // ══════════════════════════════════════════
-    // 卡片背景专属操作（只在 cardBgBeautifyEnabled 时执行）
-    // ══════════════════════════════════════════
-    if (needsNewCardBg) {
+/// 判断子视图是否有白色/动态背景（应被 FIX-WHITE 隐藏）
++ (BOOL)isWhiteOrDynamicBackground:(UIView *)sub {
+    UIColor *bg = sub.backgroundColor;
+    if (!bg) return NO;
 
-        // ══════════════════════════════════════════
-        // ★ Button 层 bg 生命周期（有素材才执行）
-        // ══════════════════════════════════════════
-        if (hasMaterial) {
+    NSString *cn = NSStringFromClass([bg class]);
+    if ([cn containsString:@"DynamicProvider"] || [cn containsString:@"UIDynamic"]) return YES;
+    if ([bg isEqual:[UIColor whiteColor]]) return YES;
 
-        // ── 查找 Button 层已有 bg ──
-        UIImageView *bgImgView = nil;
-        for (UIView *sub in button.subviews) {
-            if (sub.tag == kProfileCardBgImageTag && [sub isKindOfClass:[UIImageView class]]) {
-                bgImgView = (UIImageView *)sub;
-                break;
-            }
+    CGFloat r=0,g=0,b=0,a=0;
+    if ([bg getRed:&r green:&g blue:&b alpha:&a]) {
+        if (r>0.95 && g>0.95 && b>0.95 && a>0.95) return YES;
+    }
+    if ([NSStringFromClass([sub class]) isEqualToString:@"UIView"] && bg) return YES;
+    return NO;
+}
+
+#pragma mark - 背景素材方法（Step 2）
+
+/// 查找 button 中已有的背景 ImageView（通过 tag 识别）
++ (UIImageView *)findBackgroundImageViewInButton:(UIView *)button {
+    for (UIView *sub in button.subviews) {
+        if (sub.tag == kProfileCardBgImageTag && [sub isKindOfClass:[UIImageView class]]) {
+            return (UIImageView *)sub;
         }
+    }
+    return nil;
+}
 
-        CGFloat bgW = button.bounds.size.width;
-        CGFloat bgH = button.bounds.size.height;
-        CGFloat bgX = 0;
-        CGFloat bgY = 0;
-        CGFloat ox = config.cardBgOffsetX;
-        CGFloat oy = config.cardBgOffsetY;
+/// 计算背景图在 button 中的垂直对齐偏移
++ (CGFloat)calcImageAlignmentOffsetWithImageSize:(CGSize)imageSize
+                                     buttonWidth:(CGFloat)buttonWidth
+                                    buttonHeight:(CGFloat)buttonHeight
+                                        fillMode:(NSInteger)fillMode
+                                       alignment:(NSInteger)alignment {
+    if (fillMode != 0 && fillMode != 3) return 0;
+    if (imageSize.width <= 0) return 0;
 
-        // ── 分支 A：已存在 bg → 更新 frame ──
-        if (bgImgView) {
-            NSInteger fillMode = config.cardBgFillMode;
-            switch (fillMode) {
-                case 1: bgImgView.contentMode = UIViewContentModeScaleAspectFit; break;
-                case 2: bgImgView.contentMode = UIViewContentModeScaleToFill; break;
-                default: bgImgView.contentMode = UIViewContentModeScaleAspectFill; break;
-            }
+    CGFloat scale = buttonWidth / imageSize.width;
+    CGFloat renderedH = imageSize.height * scale;
+    CGFloat overflow = renderedH - buttonHeight;
+    if (overflow <= 0) return 0;
 
-            NSInteger alignment = config.cardBgAlignment;
-            CGFloat alignOffset = 0;
-            if ((fillMode == 0 || fillMode == 3) && bgImgView.image &&
-                bgImgView.image.size.width > 0) {
-                CGFloat iW = bgImgView.image.size.width;
-                CGFloat iH = bgImgView.image.size.height;
-                CGFloat scale = bgW / iW;
-                CGFloat renderedH = iH * scale;
-                CGFloat overflow = renderedH - bgH;
-                if (overflow > 0) {
-                    switch (alignment) {
-                        case 0:  alignOffset = -overflow / 2.0; break;
-                        case 2:  alignOffset =  overflow / 2.0; break;
-                        default: alignOffset = 0; break;
-                    }
+    switch (alignment) {
+        case 0:  return -overflow / 2.0;  // 居中
+        case 2:  return  overflow / 2.0;  // 底部
+        default: return 0;                 // 顶部
+    }
+}
+
+/// 在 button 中创建新的背景 ImageView
++ (UIImageView *)createBackgroundImageViewInButton:(UIView *)button
+                                             frame:(CGRect)frame
+                                          fillMode:(NSInteger)fillMode {
+    UIImageView *newBg = [[UIImageView alloc] init];
+    newBg.tag = kProfileCardBgImageTag;
+    newBg.clipsToBounds = NO;
+    newBg.userInteractionEnabled = NO;
+
+    switch (fillMode) {
+        case 1: newBg.contentMode = UIViewContentModeScaleAspectFit; break;
+        case 2: newBg.contentMode = UIViewContentModeScaleToFill; break;
+        default: newBg.contentMode = UIViewContentModeScaleAspectFill; break;
+    }
+    newBg.frame = frame;
+
+    PluginConfig *config = [PluginConfig shared];
+    if (config.cardBgLayer == 1) {
+        [button addSubview:newBg];
+        [button bringSubviewToFront:newBg];
+    } else {
+        [button insertSubview:newBg atIndex:0];
+    }
+    return newBg;
+}
+
+/// 异步加载背景图并设置到 ImageView 上
++ (void)loadImageAsyncForImageView:(UIImageView *)imageView
+                            button:(UIView *)button
+                            isDark:(BOOL)isDark {
+    if (!imageView) return;
+    __weak UIImageView *weakImgView = imageView;
+    __weak UIView *weakButton = button;
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        __strong UIImageView *strongImgView = weakImgView;
+        if (!strongImgView) return;
+
+        UIImage *resultImage = [ProfileCardBgHook loadBackgroundImageSync];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong UIImageView *finalImgView = weakImgView;
+            __strong UIView *finalButton = weakButton;
+            if (!finalImgView || !finalButton) return;
+
+            if (resultImage) {
+                finalImgView.image = resultImage;
+                finalImgView.alpha = 1.0;
+                finalImgView.hidden = NO;
+
+                // 重新计算对齐偏移
+                PluginConfig *cfg = [PluginConfig shared];
+                CGFloat alignOff = [ProfileCardBgHook
+                    calcImageAlignmentOffsetWithImageSize:resultImage.size
+                                              buttonWidth:finalButton.bounds.size.width
+                                             buttonHeight:finalButton.bounds.size.height
+                                                 fillMode:cfg.cardBgFillMode
+                                                alignment:cfg.cardBgAlignment];
+                if (alignOff != 0) {
+                    CGRect f = finalImgView.frame;
+                    f.origin.y = cfg.cardBgOffsetY + alignOff;
+                    finalImgView.frame = f;
                 }
-            }
-
-            bgImgView.frame = CGRectMake(bgX + ox, bgY + oy + alignOffset, bgW, bgH);
-
-            if (config.cardBgLayer == 1) [button bringSubviewToFront:bgImgView];
-        }
-        // ── 分支 B：不存在 → 创建新 bg ──
-        else {
-            UIImageView *newBg = [[UIImageView alloc] init];
-            newBg.tag = kProfileCardBgImageTag;
-            newBg.clipsToBounds = NO;
-            newBg.userInteractionEnabled = NO;
-
-            NSInteger fillMode = config.cardBgFillMode;
-            switch (fillMode) {
-                case 1: newBg.contentMode = UIViewContentModeScaleAspectFit; break;
-                case 2: newBg.contentMode = UIViewContentModeScaleToFill; break;
-                default: newBg.contentMode = UIViewContentModeScaleAspectFill; break;
-            }
-
-            newBg.frame = CGRectMake(bgX + ox, bgY + oy, bgW, bgH);
-
-            if (config.cardBgLayer == 1) {
-                [button addSubview:newBg];
-                [button bringSubviewToFront:newBg];
             } else {
-                [button insertSubview:newBg atIndex:0];
+                // 回退到纯色背景
+                PluginConfig *cfg = [PluginConfig shared];
+                UIColor *cardBg = [cfg colorFromHex:isDark
+                    ? cfg.listCardDarkBgColor : cfg.listCardLightBgColor];
+                if (cardBg) finalButton.backgroundColor = cardBg;
             }
+        });
+    });
+}
 
-            // ── 异步加载图片 ──
-            __weak UIImageView *weakBg = newBg;
-            __weak UIView *weakButton = button;
+/// 完整处理背景素材生命周期（查找/创建/更新）
++ (void)setupBackgroundMaterialInButton:(UIView *)button isDark:(BOOL)isDark {
+    PluginConfig *config = [PluginConfig shared];
 
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                __strong UIImageView *strongBg = weakBg;
-                if (!strongBg) return;
+    // 1. 查找已有 bg
+    UIImageView *bgImgView = [ProfileCardBgHook findBackgroundImageViewInButton:button];
 
-                UIImage *resultImage = [ProfileCardBgHook loadBackgroundImageSync];
+    CGFloat bgW = button.bounds.size.width;
+    CGFloat bgH = button.bounds.size.height;
+    CGFloat bgX = 0, bgY = 0;
+    CGFloat ox = config.cardBgOffsetX;
+    CGFloat oy = config.cardBgOffsetY;
 
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    __strong UIImageView *finalBg = weakBg;
-                    __strong UIView *finalButton = weakButton;
-                    if (!finalBg || !finalButton) return;
-
-                    if (resultImage) {
-                        finalBg.image = resultImage;
-                        finalBg.alpha = 1.0;
-                        finalBg.hidden = NO;
-
-                        PluginConfig *cfg = [PluginConfig shared];
-                        NSInteger fm = cfg.cardBgFillMode;
-                        NSInteger alignment = cfg.cardBgAlignment;
-                        CGFloat userOy = cfg.cardBgOffsetY;
-
-                        if ((fm == 0 || fm == 3) && resultImage.size.width > 0) {
-                            CGFloat iW = resultImage.size.width;
-                            CGFloat iH = resultImage.size.height;
-                            CGFloat scale = finalButton.bounds.size.width / iW;
-                            CGFloat renderedH = iH * scale;
-                            CGFloat overflow = renderedH - finalButton.bounds.size.height;
-
-                            if (overflow > 0) {
-                                CGFloat alignOff = 0;
-                                switch (alignment) {
-                                    case 0:  alignOff = -overflow / 2.0; break;
-                                    case 2:  alignOff =  overflow / 2.0; break;
-                                    default: alignOff = 0; break;
-                                }
-                                CGRect f = finalBg.frame;
-                                f.origin.y = userOy + alignOff;
-                                finalBg.frame = f;
-                            }
-                        }
-
-                        WPLog(@"CardBg-Diag", @"[CELL-BG] image=SET (Button layer), frame=(%.0f,%.0f,%.0f,%.0f)",
-                              finalBg.frame.origin.x, finalBg.frame.origin.y,
-                              finalBg.frame.size.width, finalBg.frame.size.height);
-                    } else {
-                        PluginConfig *cfg = [PluginConfig shared];
-                        UIColor *cardBg = [cfg colorFromHex:isDark
-                            ? cfg.listCardDarkBgColor : cfg.listCardLightBgColor];
-                        if (cardBg) finalButton.backgroundColor = cardBg;
-                        WPLog(@"CardBg-Diag", @"[CELL-BG] FALLBACK: set button bg=%@", cardBg);
-                    }
-                });
-            });
-        }  // else (Branch B)
-
-        // ── bg 存在时清 button 背景色让 bg 透出 ──
-        button.backgroundColor = [UIColor clearColor];
-
-        // ── 清微信原生 m_bgImageView ──
-        Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
-        if (bgIvar) {
-            id bgImgView = object_getIvar(button, bgIvar);
-            if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
-                [(UIImageView *)bgImgView setImage:nil];
-                [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
-                [(UIImageView *)bgImgView setHidden:YES];
-            }
-            object_setIvar(button, bgIvar, nil);
-        }
-        }  // if (hasMaterial)
-
-        // ══════════════════════════════════════════
-        // 隐藏信息卡片（独立方法）
-        // ══════════════════════════════════════════
-        if ([ProfileCardBgHook handleCardHiddenInButton:button
-                                                isHidden:isHidden
-                                             hasMaterial:hasMaterial]) {
-            return;  // Scene B：完全隐藏，后面的不用执行了
+    if (bgImgView) {
+        // ── 分支 A：已存在 → 更新 frame ──
+        NSInteger fillMode = config.cardBgFillMode;
+        switch (fillMode) {
+            case 1: bgImgView.contentMode = UIViewContentModeScaleAspectFit; break;
+            case 2: bgImgView.contentMode = UIViewContentModeScaleToFill; break;
+            default: bgImgView.contentMode = UIViewContentModeScaleAspectFill; break;
         }
 
-        // ══════════════════════════════════════════
-        // 4. FIX-WHITE：隐藏白色视图
-        //    ★ 仅在隐藏态执行（Scene A），非隐藏态跳过 ★
-        // ══════════════════════════════════════════
-        if (isHidden)
-        {
-            for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
-                UIView *sub = button.subviews[i];
-                // 场景 A 中背景图存在，需跳过；场景 B 已早返，不会走到此处
-                if (sub.tag == kProfileCardBgImageTag) continue;
-                if ([sub isKindOfClass:NSClassFromString(@"MMHeadImageView")]) continue;
-                if ([sub isKindOfClass:[UILabel class]]) continue;
-                if ([NSStringFromClass([sub class]) isEqualToString:@"MMCPLabel"]) continue;
-                if ([NSStringFromClass([sub class]) isEqualToString:@"MMUILabel"]) continue;
-                if ([NSStringFromClass([sub class]) isEqualToString:@"TextStatePublishEntryButton"]) continue;
-                if ([NSStringFromClass([sub class]) isEqualToString:@"TextStateFriendTopicButton"]) continue;
-                if ([sub isKindOfClass:[UIImageView class]] && sub.tag != 0) continue;
-
-                UIColor *subBg = sub.backgroundColor;
-                BOOL shouldHide = NO;
-                if (subBg) {
-                    NSString *bgClassName = NSStringFromClass([subBg class]);
-                    if ([bgClassName containsString:@"DynamicProvider"] ||
-                        [bgClassName containsString:@"UIDynamic"]) {
-                        shouldHide = YES;
-                    } else if ([subBg isEqual:[UIColor whiteColor]]) {
-                        shouldHide = YES;
-                    } else {
-                        CGFloat r=0,g=0,b=0,a=0;
-                        if ([subBg getRed:&r green:&g blue:&b alpha:&a]) {
-                            if (r>0.95 && g>0.95 && b>0.95 && a>0.95) shouldHide=YES;
-                        }
-                    }
-                }
-                if ([NSStringFromClass([sub class]) isEqualToString:@"UIView"] && subBg) {
-                    shouldHide = YES;
-                }
-                if (shouldHide) {
-                    sub.hidden = YES;
-                    WPLog(@"CardBg-Diag", @"[FIX-WHITE] Hidden subview[%ld]: class=%@, bg=%@, frame=(%.0f,%.0f,%.0f,%.0f)",
-                          (long)i, NSStringFromClass([sub class]), subBg,
-                          sub.frame.origin.x, sub.frame.origin.y,
-                          sub.frame.size.width, sub.frame.size.height);
-                }
-            }
+        CGFloat alignOff = 0;
+        if ((fillMode == 0 || fillMode == 3) && bgImgView.image &&
+            bgImgView.image.size.width > 0) {
+            alignOff = [ProfileCardBgHook
+                calcImageAlignmentOffsetWithImageSize:bgImgView.image.size
+                                          buttonWidth:bgW buttonHeight:bgH
+                                             fillMode:fillMode
+                                            alignment:config.cardBgAlignment];
         }
-
-    } // end needsNewCardBg
-
-    // ── 方案 H：通过视图层级链修改 button 高度 ──
-    {
-        CGFloat targetH = config.cardBgHeight;
-        if (targetH <= 0 || button.frame.size.height >= targetH) {
-            WPLog(@"CardBg-Diag", @"[HEIGHT-SKIP] targetH=%.1f, currentH=%.1f", targetH, button.frame.size.height);
-            goto DO_CORNER;
-        }
-
-        // 向上找 TextStateProfileTableView（index [1]）
-        UIView *tableView = button.superview;
-        if (!tableView || ![NSStringFromClass([tableView class]) isEqualToString:@"TextStateProfileTableView"]) {
-            WPLog(@"CardBg-Diag", @"[HEIGHT-SKIP] superview is %@, not TextStateProfileTableView",
-                  tableView ? NSStringFromClass([tableView class]) : @"nil");
-            goto DO_CORNER;
-        }
-
-        // 继续向上找 MMUIButton 容器（index [2]，h=1704）
-        UIView *container = tableView.superview;
-        if (!container || ![container isKindOfClass:NSClassFromString(@"MMUIButton")]) {
-            WPLog(@"CardBg-Diag", @"[HEIGHT-SKIP] tableView.superview is %@, not MMUIButton",
-                  container ? NSStringFromClass([container class]) : @"nil");
-            goto DO_CORNER;
-        }
-
-        // ★ 改 button 自身高度
-        CGRect bf = button.frame;
-        CGFloat oldH = bf.size.height;
-        bf.size.height = targetH;
-
-        // ★ 改 button 左右边距（跟随全局/独立配置）
-        CGFloat margin = config.cardBgCornerUseGlobal
-            ? config.listCellMargin
-            : (config.cardBgCornerMargin > 0 ? config.cardBgCornerMargin : 9.0);
-        if (margin > 0) {
-            bf.origin.x += margin;
-            bf.size.width -= margin * 2;
-        }
-        button.frame = bf;
-
-        // ★ 只对 Label 调用 sizeToFit，不显式修改宽度（依赖 autoresizing 自然跟随）
-        if (margin > 0) {
-            for (UIView *sub in button.subviews) {
-                if ([sub isKindOfClass:[UILabel class]]) {
-                    UILabel *label = (UILabel *)sub;
-                    NSString *text = label.text;
-                    if (text && text.length > 0) {
-                        [label sizeToFit];
-                    }
-                }
-            }
-        }
-
-        WPLog(@"CardBg-Diag", @"[HEIGHT-SET] %.0f→%.0f, container=(%.0f,%.0f,%.0f,%.0f)",
-              oldH, targetH,
-              container.frame.origin.x, container.frame.origin.y,
-              container.frame.size.width, container.frame.size.height);
+        bgImgView.frame = CGRectMake(bgX + ox, bgY + oy + alignOff, bgW, bgH);
+        if (config.cardBgLayer == 1) [button bringSubviewToFront:bgImgView];
+    } else {
+        // ── 分支 B：不存在 → 创建 ──
+        CGRect frame = CGRectMake(bgX + ox, bgY + oy, bgW, bgH);
+        UIImageView *newBg = [ProfileCardBgHook
+            createBackgroundImageViewInButton:button frame:frame
+                                    fillMode:config.cardBgFillMode];
+        [ProfileCardBgHook loadImageAsyncForImageView:newBg button:button isDark:isDark];
     }
 
-DO_CORNER:
+    // 2. 清 button 背景色让 bg 透出
+    button.backgroundColor = [UIColor clearColor];
 
-    // ── 圆角 + 边框 + QR码隐藏 ──
-    {
-        // ★ 仅在"开启资料圆角"时才处理资料卡圆角和边距 ★
-        if (config.cardBgCornerEnabled) {
-            [ProfileCardBgHook applyProfileCardCorner:button isDark:isDark];
-        }
+    // 3. 清理原生 m_bgImageView
+    [ProfileCardBgHook cleanNativeBgImageView:button];
+}
 
-        if (config.listHideRightQRCode) {
-            [ProfileCardBgHook hideQRButtonInCell:button];
+#pragma mark - 高度调整方法（Step 3）
+
+/// 调整资料卡高度（使用全局/独立边距配置）
++ (void)handleHeightAdjustment:(UIView *)button {
+    PluginConfig *config = [PluginConfig shared];
+    CGFloat targetH = config.cardBgHeight;
+    if (targetH <= 0 || button.frame.size.height >= targetH) return;
+
+    // 查找 TextStateProfileTableView
+    UIView *tableView = button.superview;
+    if (!tableView || ![NSStringFromClass([tableView class]) isEqualToString:@"TextStateProfileTableView"]) return;
+
+    // 查找 MMUIButton 容器
+    UIView *container = tableView.superview;
+    if (!container || ![container isKindOfClass:NSClassFromString(@"MMUIButton")]) return;
+
+    // 改 button 高度 + 左右边距
+    CGRect bf = button.frame;
+    CGFloat oldH = bf.size.height;
+    bf.size.height = targetH;
+
+    CGFloat margin = config.cardBgCornerUseGlobal
+        ? config.listCellMargin
+        : (config.cardBgCornerMargin > 0 ? config.cardBgCornerMargin : 9.0);
+    if (margin > 0) {
+        bf.origin.x += margin;
+        bf.size.width -= margin * 2;
+    }
+    button.frame = bf;
+
+    // Label sizeToFit
+    if (margin > 0) {
+        for (UIView *sub in button.subviews) {
+            if ([sub isKindOfClass:[UILabel class]]) {
+                UILabel *label = (UILabel *)sub;
+                if (label.text && label.text.length > 0) {
+                    [label sizeToFit];
+                }
+            }
         }
     }
 }
 
-#pragma mark - 隐藏信息卡片
+#pragma mark - 圆角 + QR 码隐藏方法（Step 4）
 
-+ (BOOL)handleCardHiddenInButton:(UIView *)button
-                       isHidden:(BOOL)isHidden
-                    hasMaterial:(BOOL)hasMaterial {
-    
-    // ══════════════════════════════════════════
-    // 非隐藏态：确保可见，清理原生 bg
-    // ══════════════════════════════════════════
-    if (!isHidden) {
-        button.hidden = NO;
+/// 独立处理资料卡圆角 + QR 码隐藏
++ (void)handleCornerAndQR:(UIView *)button isDark:(BOOL)isDark {
+    PluginConfig *config = [PluginConfig shared];
 
-        // ★★ 追加：清理原生 m_bgImageView ★★
-        // 防止微信原生背景装饰的灰色效果透出
-        Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
-        if (bgIvar) {
-            id bgImgView = object_getIvar(button, bgIvar);
-            if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
-                [(UIImageView *)bgImgView setImage:nil];
-                [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
-                [(UIImageView *)bgImgView setHidden:YES];
-            }
-            object_setIvar(button, bgIvar, nil);
-        }
-
-        return NO;  // 让调用者继续处理背景和布局
+    if (config.cardBgCornerEnabled) {
+        [ProfileCardBgHook applyProfileCardCorner:button isDark:isDark];
     }
+    if (config.listHideRightQRCode) {
+        [ProfileCardBgHook hideQRButtonInCell:button];
+    }
+}
 
-    // ══════════════════════════════════════════
-    // 隐藏态共有清除：button 背景色 + 原生 bg
-    // ══════════════════════════════════════════
+#pragma mark - 隐藏态完整路径（Step 5）
+
+/// 隐藏态完整路径（cardBgHidden = YES）
++ (void)handleHiddenPath:(UIView *)button isDark:(BOOL)isDark {
+    PluginConfig *config = [PluginConfig shared];
+    BOOL hasMaterial = config.cardBgMaterialEnabled;
+
+    // ── 共通：清理原生状态 ──
     button.backgroundColor = [UIColor clearColor];
     button.layer.backgroundColor = [UIColor clearColor].CGColor;
     button.layer.masksToBounds = NO;
     button.layer.cornerRadius = 0;
     button.layer.borderWidth = 0;
+    [ProfileCardBgHook cleanNativeBgImageView:button];
 
-    Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
-    if (bgIvar) {
-        id bgImgView = object_getIvar(button, bgIvar);
-        if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
-            [(UIImageView *)bgImgView setImage:nil];
-            [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
-            [(UIImageView *)bgImgView setHidden:YES];
-        }
-        object_setIvar(button, bgIvar, nil);
-    }
+    if (hasMaterial) {
+        // ── Scene A：隐藏 + 有素材 ──
+        // 加载背景图（会设置 clearColor + 清理 m_bgImageView）
+        [ProfileCardBgHook setupBackgroundMaterialInButton:button isDark:isDark];
 
-    PluginConfig *config = [PluginConfig shared];
-
-    // ══════════════════════════════════════════
-    // Scene B：隐藏 + 无素材 → 完全隐藏
-    // ══════════════════════════════════════════
-    if (!hasMaterial) {
+        // 隐藏非背景子视图
         for (UIView *sub in button.subviews) {
+            if ([sub isKindOfClass:[UIImageView class]] &&
+                sub.tag == kProfileCardBgImageTag) {
+                continue;  // 豁免背景图
+            }
             sub.hidden = YES;
         }
 
-        if (config.listHideRightQRCode) {
-            [ProfileCardBgHook hideQRButtonInCell:button];
+        // FIX-WHITE：隐藏白色/动态背景视图（只在 Scene A 执行）
+        for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
+            UIView *sub = button.subviews[i];
+            if (sub.tag == kProfileCardBgImageTag) continue;
+            if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
+            if ([ProfileCardBgHook isWhiteOrDynamicBackground:sub]) {
+                sub.hidden = YES;
+            }
         }
-        return YES;  // Scene B → 调用者应 return
+    } else {
+        // ── Scene B：隐藏 + 无素材 → 完全隐藏 ──
+        for (UIView *sub in button.subviews) {
+            sub.hidden = YES;
+        }
     }
 
-    // ══════════════════════════════════════════
-    // Scene A：隐藏 + 有素材 → 隐藏内容，保留背景
-    // ══════════════════════════════════════════
-    for (UIView *sub in button.subviews) {
-        if ([sub isKindOfClass:[UIImageView class]] &&
-            sub.tag == kProfileCardBgImageTag) {
-            continue;  // 豁免背景图
-        }
-        sub.hidden = YES;
-    }
-
+    // QR 码隐藏
     if (config.listHideRightQRCode) {
         [ProfileCardBgHook hideQRButtonInCell:button];
     }
-    return NO;  // Scene A → 调用者继续执行
 }
+
+#pragma mark - 可见态美化路径（Step 6）
+
+/// 可见态美化路径（cardBgHidden = NO）
++ (void)handleVisiblePath:(UIView *)button isDark:(BOOL)isDark {
+    PluginConfig *config = [PluginConfig shared];
+    BOOL hasMaterial = config.cardBgMaterialEnabled;
+
+    if (hasMaterial) {
+        // ── 有素材：加载背景图 + 清理原生 ──
+        [ProfileCardBgHook setupBackgroundMaterialInButton:button isDark:isDark];
+        // setupBackgroundMaterialInButton 内部已经做了：
+        //   - button.backgroundColor = clearColor
+        //   - cleanNativeBgImageView
+    }
+    // ★★ 无素材时：不碰 button 背景色，不碰 m_bgImageView，不隐藏子视图 ★★
+}
+
+#pragma mark - ★ 核心：handleButtonLayout（Step 7）
+
++ (void)handleButtonLayout:(UIView *)button {
+    // ══════════════════════════════════════════
+    // ★ 入口守卫：OR 聚合（等效于 WCRefine 的 OR 聚合）
+    // 所有子功能平级，无层级关系
+    // ══════════════════════════════════════════
+    PluginConfig *config = [PluginConfig shared];
+    BOOL anyFeatureEnabled = config.cardBgBeautifyEnabled
+                          || config.cardBgHidden
+                          || config.cardBgCornerEnabled;
+    if (!anyFeatureEnabled) return;
+
+    // ══════════════════════════════════════════
+    // 通用守卫（提取为辅助方法）
+    // ══════════════════════════════════════════
+    UIViewController *vc = [ProfileCardBgHook findMoreViewController:button];
+    if (!vc) return;
+
+    if (![ProfileCardBgHook hasHeadImageViewInView:button]) return;
+
+    if (button.frame.size.height <= 50.0) return;
+
+    BOOL isDark = [ProfileCardBgHook isDarkModeForVc:vc];
+
+    // ══════════════════════════════════════════
+    // ★ 场景路由：隐藏 vs 可见（两个独立路径）
+    // ══════════════════════════════════════════
+    if (config.cardBgHidden) {
+        [ProfileCardBgHook handleHiddenPath:button isDark:isDark];
+    } else if (config.cardBgMaterialEnabled || config.cardBgCornerEnabled) {
+        [ProfileCardBgHook handleVisiblePath:button isDark:isDark];
+    }
+
+    // ══════════════════════════════════════════
+    // 独立功能（不依赖上方路径的执行结果）
+    // ══════════════════════════════════════════
+    [ProfileCardBgHook handleHeightAdjustment:button];
+    [ProfileCardBgHook handleCornerAndQR:button isDark:isDark];
+}
+
+#pragma mark - 隐藏信息卡片（精简保留，Step 8）
+
+/// 隐藏信息卡片（保留兼容，以防其他调用者）
+/// 注意：handleButtonLayout 已不再使用此方法
++ (BOOL)handleCardHiddenInButton:(UIView *)button
+                       isHidden:(BOOL)isHidden
+                    hasMaterial:(BOOL)hasMaterial {
+    if (!isHidden) {
+        button.hidden = NO;
+        [ProfileCardBgHook cleanNativeBgImageView:button];
+        return NO;
+    }
+
+    button.backgroundColor = [UIColor clearColor];
+    button.layer.backgroundColor = [UIColor clearColor].CGColor;
+    button.layer.masksToBounds = NO;
+    button.layer.cornerRadius = 0;
+    button.layer.borderWidth = 0;
+    [ProfileCardBgHook cleanNativeBgImageView:button];
+
+    PluginConfig *config = [PluginConfig shared];
+
+    if (!hasMaterial) {
+        // Scene B
+        for (UIView *sub in button.subviews) {
+            sub.hidden = YES;
+        }
+        if (config.listHideRightQRCode) {
+            [ProfileCardBgHook hideQRButtonInCell:button];
+        }
+        return YES;
+    }
+
+    // Scene A
+    for (UIView *sub in button.subviews) {
+        if ([sub isKindOfClass:[UIImageView class]] &&
+            sub.tag == kProfileCardBgImageTag) {
+            continue;
+        }
+        sub.hidden = YES;
+    }
+    if (config.listHideRightQRCode) {
+        [ProfileCardBgHook hideQRButtonInCell:button];
+    }
+    return NO;
+}
+
+#pragma mark - Hook 注册
 
 + (void)initCellHeightHook {
     Class tableMgrClass = objc_getClass("WCTableViewManager");

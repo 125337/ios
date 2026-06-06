@@ -6,6 +6,35 @@
 // 唯一入口方法（由 ListCornerRadiusHook 分发）
 + (void)handleButtonLayout:(UIView *)button;
 
+// ★ 通用辅助方法
++ (UIViewController *)findMoreViewController:(UIView *)view;
++ (BOOL)hasHeadImageViewInView:(UIView *)view;
++ (BOOL)isDarkModeForVc:(UIViewController *)vc;
++ (void)cleanNativeBgImageView:(UIView *)button;
++ (BOOL)isEssentialSubview:(UIView *)sub;
++ (BOOL)isWhiteOrDynamicBackground:(UIView *)sub;
+
+// ★ 背景素材方法
++ (UIImageView *)findBackgroundImageViewInButton:(UIView *)button;
++ (CGFloat)calcImageAlignmentOffsetWithImageSize:(CGSize)imageSize
+                                    buttonWidth:(CGFloat)buttonWidth
+                                   buttonHeight:(CGFloat)buttonHeight
+                                       fillMode:(NSInteger)fillMode
+                                      alignment:(NSInteger)alignment;
++ (UIImageView *)createBackgroundImageViewInButton:(UIView *)button
+                                             frame:(CGRect)frame
+                                          fillMode:(NSInteger)fillMode;
++ (void)loadImageAsyncForImageView:(UIImageView *)imageView
+                            button:(UIView *)button
+                            isDark:(BOOL)isDark;
++ (void)setupBackgroundMaterialInButton:(UIView *)button isDark:(BOOL)isDark;
+
+// ★ 独立功能路径
++ (void)handleHiddenPath:(UIView *)button isDark:(BOOL)isDark;
++ (void)handleVisiblePath:(UIView *)button isDark:(BOOL)isDark;
++ (void)handleHeightAdjustment:(UIView *)button;
++ (void)handleCornerAndQR:(UIView *)button isDark:(BOOL)isDark;
+
 // 资料卡圆角
 + (void)applyProfileCardCorner:(UIView *)cell isDark:(BOOL)isDark;
 
@@ -18,7 +47,7 @@
 + (void)loadBackgroundImageForImageView:(UIImageView *)imageView;
 + (NSString *)cardBackgroundDirectory;
 
-// 隐藏信息卡片
+// 隐藏信息卡片（保留兼容）
 + (BOOL)handleCardHiddenInButton:(UIView *)button
                        isHidden:(BOOL)isHidden
                     hasMaterial:(BOOL)hasMaterial;
