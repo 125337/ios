@@ -480,7 +480,6 @@
     CGFloat cbsw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgStrokeWidth"]];
     _cardBgStrokeWidth = (cbsw > 0) ? cbsw : 2.0;
     _cardBgHidden = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgHidden"]];
-    _cardBgHeight = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgHeight"]];
     _cardBgListSpacing = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgListSpacing"]];
 
     // ========== 开发者工具配置 ==========
