@@ -422,38 +422,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     if (needsNewCardBg) {
 
         // ══════════════════════════════════════════
-        // 场景 B：隐藏 + 无素材 → 完全隐藏，直接返回
-        // ══════════════════════════════════════════
-        if (isHidden && !hasMaterial) {
-            button.backgroundColor = [UIColor clearColor];
-            button.layer.backgroundColor = [UIColor clearColor].CGColor;
-            button.layer.masksToBounds = NO;
-            button.layer.cornerRadius = 0;
-            button.layer.borderWidth = 0;
-
-            Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
-            if (bgIvar) {
-                id bgImgView = object_getIvar(button, bgIvar);
-                if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
-                    [(UIImageView *)bgImgView setImage:nil];
-                    [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
-                    [(UIImageView *)bgImgView setHidden:YES];
-                }
-                object_setIvar(button, bgIvar, nil);
-            }
-
-            // 隐藏所有子视图（无豁免！没有背景图需要保留）
-            for (UIView *sub in button.subviews) {
-                sub.hidden = YES;
-            }
-
-            if (config.listHideRightQRCode) {
-                [ProfileCardBgHook hideQRButtonInCell:button];
-            }
-            return;
-        }
-
-        // ══════════════════════════════════════════
         // ★ Button 层 bg 生命周期（有素材才执行）
         // ══════════════════════════════════════════
         if (hasMaterial) {
@@ -586,67 +554,30 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                 });
             });
         }  // else (Branch B)
+
+        // ── bg 存在时清 button 背景色让 bg 透出 ──
+        button.backgroundColor = [UIColor clearColor];
+
+        // ── 清微信原生 m_bgImageView ──
+        Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
+        if (bgIvar) {
+            id bgImgView = object_getIvar(button, bgIvar);
+            if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
+                [(UIImageView *)bgImgView setImage:nil];
+                [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
+                [(UIImageView *)bgImgView setHidden:YES];
+            }
+            object_setIvar(button, bgIvar, nil);
+        }
         }  // if (hasMaterial)
 
         // ══════════════════════════════════════════
-        // HideCard 分支（改造：选择性隐藏 + 不 return）
+        // 隐藏信息卡片（独立方法）
         // ══════════════════════════════════════════
-        if (isHidden) {
-            // 场景 A：隐藏内容，保留背景图
-            button.backgroundColor = [UIColor clearColor];
-            button.layer.backgroundColor = [UIColor clearColor].CGColor;
-            button.layer.masksToBounds = NO;
-            button.layer.cornerRadius = 0;
-            button.layer.borderWidth = 0;
-
-            Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
-            if (bgIvar) {
-                id bgImgView = object_getIvar(button, bgIvar);
-                if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
-                    [(UIImageView *)bgImgView setImage:nil];
-                    [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
-                    [(UIImageView *)bgImgView setHidden:YES];
-                }
-                object_setIvar(button, bgIvar, nil);
-            }
-
-            // ★ 选择性隐藏子视图（bg 通过 tag 豁免）
-            for (UIView *sub in button.subviews) {
-                if ([sub isKindOfClass:[UIImageView class]] &&
-                    sub.tag == kProfileCardBgImageTag) {
-                    continue;
-                }
-                sub.hidden = YES;
-            }
-
-            // ★ 不设 button.hidden=YES（否则 bg 也被隐藏）
-            // ★ 不 return（继续到 FIX-WHITE）
-
-            if (config.listHideRightQRCode) {
-                [ProfileCardBgHook hideQRButtonInCell:button];
-            }
-        } else {
-            // ── 非 HideCard 分支 ──
-
-            // 1. 确保 button 可见
-            button.hidden = NO;
-
-            // 2. 有素材时清透明让 bg 透出；无素材时保持默认外观
-            if (hasMaterial) {
-                button.backgroundColor = [UIColor clearColor];
-            }
-
-            // 3. 清除微信原生 m_bgImageView
-            Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
-            if (bgIvar) {
-                id bgImgView = object_getIvar(button, bgIvar);
-                if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
-                    [(UIImageView *)bgImgView setImage:nil];
-                    [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
-                    [(UIImageView *)bgImgView setHidden:YES];
-                }
-                object_setIvar(button, bgIvar, nil);
-            }
+        if ([ProfileCardBgHook handleCardHiddenInButton:button
+                                                isHidden:isHidden
+                                             hasMaterial:hasMaterial]) {
+            return;  // Scene B：完全隐藏，后面的不用执行了
         }
 
         // 4. FIX-WHITE：隐藏白色视图（始终执行，bg 通过 tag 豁免）
@@ -765,6 +696,73 @@ DO_CORNER:
             [ProfileCardBgHook hideQRButtonInCell:button];
         }
     }
+}
+
+#pragma mark - 隐藏信息卡片
+
++ (BOOL)handleCardHiddenInButton:(UIView *)button
+                       isHidden:(BOOL)isHidden
+                    hasMaterial:(BOOL)hasMaterial {
+    
+    // ══════════════════════════════════════════
+    // 非隐藏态：确保可见，不干预背景
+    // ══════════════════════════════════════════
+    if (!isHidden) {
+        button.hidden = NO;
+        return NO;  // 让调用者继续处理背景和布局
+    }
+
+    // ══════════════════════════════════════════
+    // 隐藏态共有清除：button 背景色 + 原生 bg
+    // ══════════════════════════════════════════
+    button.backgroundColor = [UIColor clearColor];
+    button.layer.backgroundColor = [UIColor clearColor].CGColor;
+    button.layer.masksToBounds = NO;
+    button.layer.cornerRadius = 0;
+    button.layer.borderWidth = 0;
+
+    Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
+    if (bgIvar) {
+        id bgImgView = object_getIvar(button, bgIvar);
+        if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
+            [(UIImageView *)bgImgView setImage:nil];
+            [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
+            [(UIImageView *)bgImgView setHidden:YES];
+        }
+        object_setIvar(button, bgIvar, nil);
+    }
+
+    PluginConfig *config = [PluginConfig shared];
+
+    // ══════════════════════════════════════════
+    // Scene B：隐藏 + 无素材 → 完全隐藏
+    // ══════════════════════════════════════════
+    if (!hasMaterial) {
+        for (UIView *sub in button.subviews) {
+            sub.hidden = YES;
+        }
+
+        if (config.listHideRightQRCode) {
+            [ProfileCardBgHook hideQRButtonInCell:button];
+        }
+        return YES;  // Scene B → 调用者应 return
+    }
+
+    // ══════════════════════════════════════════
+    // Scene A：隐藏 + 有素材 → 隐藏内容，保留背景
+    // ══════════════════════════════════════════
+    for (UIView *sub in button.subviews) {
+        if ([sub isKindOfClass:[UIImageView class]] &&
+            sub.tag == kProfileCardBgImageTag) {
+            continue;  // 豁免背景图
+        }
+        sub.hidden = YES;
+    }
+
+    if (config.listHideRightQRCode) {
+        [ProfileCardBgHook hideQRButtonInCell:button];
+    }
+    return NO;  // Scene A → 调用者继续执行
 }
 
 + (void)initCellHeightHook {
