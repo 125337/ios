@@ -17,13 +17,8 @@
 // ★ 背景素材方法
 + (UIImageView *)findBackgroundImageViewInButton:(UIView *)button;
 + (CGFloat)calcImageAlignmentOffsetWithImageSize:(CGSize)imageSize
-                                    buttonWidth:(CGFloat)buttonWidth
-                                   buttonHeight:(CGFloat)buttonHeight
-                                       fillMode:(NSInteger)fillMode
-                                      alignment:(NSInteger)alignment;
-+ (UIImageView *)createBackgroundImageViewInButton:(UIView *)button
-                                             frame:(CGRect)frame
-                                          fillMode:(NSInteger)fillMode;
+                                          inView:(UIView *)view;
++ (UIImageView *)createBackgroundImageViewInButton:(UIView *)button;
 + (void)loadImageAsyncForImageView:(UIImageView *)imageView
                             button:(UIView *)button
                             isDark:(BOOL)isDark;
