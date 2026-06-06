@@ -70,7 +70,7 @@
                                        cy:*e2y width:w];
             *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
 
-            NSArray *fillNames = @[@"填充模式", @"适应模式", @"拉伸填充", @"顶部填充"];
+            NSArray *fillNames = @[@"填充模式", @"适应模式", @"拉伸填充"];
             NSString *fillSub = (cfg.cardBgFillMode >= 0 && cfg.cardBgFillMode < (NSInteger)fillNames.count)
                 ? fillNames[cfg.cardBgFillMode] : @"填充模式";
             *e2y = [self addNavRowInGroup:e2
@@ -372,7 +372,7 @@
 
 - (void)onFillModeTap {
     PluginConfig *config = [PluginConfig shared];
-    NSArray *modeNames = @[@"填充模式", @"适应模式", @"拉伸填充", @"顶部填充"];
+    NSArray *modeNames = @[@"填充模式", @"适应模式", @"拉伸填充"];
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景填充模式"
                                                                    message:nil

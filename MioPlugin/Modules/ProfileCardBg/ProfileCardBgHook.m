@@ -447,8 +447,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     NSInteger fillMode = config.cardBgFillMode;
     NSInteger alignment = config.cardBgAlignment;
 
-    // 只在 aspectFill(fillMode=0) 或 fillMode=3 时计算
-    if (fillMode != 0 && fillMode != 3) return 0;
+    // 只在 aspectFill(fillMode=0) 时计算
+    if (fillMode != 0) return 0;
     if (imageSize.width <= 0) return 0;
 
     CGFloat viewW = view.bounds.size.width;
@@ -576,10 +576,10 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                                                isDark:isDark];
     }
 
-    // ★ 适应模式 / 顶部填充模式下，按图片比例向下延伸 button 高度
+    // ★ 适应模式下，按图片比例向下延伸 button 高度
     // （和 WCRefine 的做法一致：改 frame → setTableHeaderView → 完成）
     NSInteger fillMode = config.cardBgFillMode;
-    if (fillMode == 1 || fillMode == 3) {
+    if (fillMode == 1) {
         UIImage *img = [ProfileCardBgHook loadBackgroundImageSync];
         if (img && img.size.width > 0 && img.size.height > 0) {
             CGFloat btnW = button.bounds.size.width;
