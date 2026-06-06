@@ -577,49 +577,34 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     }
 
     // ★ 适应模式 / 顶部填充模式下，按图片比例向下延伸 button 高度
-    // （和 WCRefine 的做法一致：origin.y 不变，推子视图，更新 contentSize）
+    // （和 WCRefine 的做法一致：改 frame → setTableHeaderView → 完成）
     NSInteger fillMode = config.cardBgFillMode;
-    if (fillMode == 1 || fillMode == 3) {  // 适应模式 或 顶部填充
+    if (fillMode == 1 || fillMode == 3) {
         UIImage *img = [ProfileCardBgHook loadBackgroundImageSync];
         if (img && img.size.width > 0 && img.size.height > 0) {
             CGFloat btnW = button.bounds.size.width;
             CGFloat imgRatio = img.size.height / img.size.width;
-            CGFloat targetH = btnW * imgRatio;  // 按宽度等比计算高度
+            CGFloat targetH = btnW * imgRatio;
 
             if (targetH > button.bounds.size.height) {
-                CGFloat deltaH = targetH - button.bounds.size.height;
-
-                // ★ 向下延伸（origin.y 不变，和 WCRefine 一致）
+                // ── 1. 向下延伸（origin.y 不变，和 WCRefine 一致）──
                 CGRect bf = button.frame;
                 bf.size.height = targetH;
                 button.frame = bf;
 
-                // 同步更新 bgImageView 的 frame
+                // ── 2. 同步更新 bgImageView 的 frame ──
                 if (bgImgView) {
                     CGRect bgf = bgImgView.frame;
                     bgf.size.height = targetH;
                     bgImgView.frame = bgf;
                 }
 
-                // ★ 把 button 新底部下方的子视图向下推（和 WCRefine 一致）
-                CGFloat newMaxY = CGRectGetMaxY(button.frame);
-                for (UIView *sub in button.subviews) {
-                    if (sub == button) continue;
-                    if (sub.tag == kProfileCardBgImageTag) continue;
-                    CGFloat subMinY = CGRectGetMinY(sub.frame);
-                    if (subMinY > newMaxY - 0.5) {
-                        CGRect sf = sub.frame;
-                        sf.origin.y += deltaH;
-                        sub.frame = sf;
-                    }
-                }
-
-                // ★ 更新 contentSize（和 WCRefine 一致）
+                // ── 3. ★ 关键：通知 table view header 变了（和 WCRefine 一致）──
                 UIView *tableView = button.superview;
-                if (tableView) {
-                    CGSize cs = ((UIScrollView *)tableView).contentSize;
-                    cs.height += deltaH;
-                    ((UIScrollView *)tableView).contentSize = cs;
+                if (tableView && [tableView isKindOfClass:[UIScrollView class]]) {
+                    if (((UITableView *)tableView).tableHeaderView == button) {
+                        [((UITableView *)tableView) setTableHeaderView:button];
+                    }
                 }
             }
         }
