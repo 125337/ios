@@ -454,8 +454,9 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         }
 
         // ══════════════════════════════════════════
-        // ★ Button 层 bg 生命周期
+        // ★ Button 层 bg 生命周期（有素材才执行）
         // ══════════════════════════════════════════
+        if (hasMaterial) {
 
         // ── 查找 Button 层已有 bg ──
         UIImageView *bgImgView = nil;
@@ -584,7 +585,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                     }
                 });
             });
-        }  // hasMaterial
+        }  // else (Branch B)
+        }  // if (hasMaterial)
 
         // ══════════════════════════════════════════
         // HideCard 分支（改造：选择性隐藏 + 不 return）
@@ -629,8 +631,10 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             // 1. 确保 button 可见
             button.hidden = NO;
 
-            // 2. Button 背景色清透明
-            button.backgroundColor = [UIColor clearColor];
+            // 2. 有素材时清透明让 bg 透出；无素材时保持默认外观
+            if (hasMaterial) {
+                button.backgroundColor = [UIColor clearColor];
+            }
 
             // 3. 清除微信原生 m_bgImageView
             Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
