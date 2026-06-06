@@ -705,10 +705,24 @@ DO_CORNER:
                     hasMaterial:(BOOL)hasMaterial {
     
     // ══════════════════════════════════════════
-    // 非隐藏态：确保可见，不干预背景
+    // 非隐藏态：确保可见，清理原生 bg
     // ══════════════════════════════════════════
     if (!isHidden) {
         button.hidden = NO;
+
+        // ★★ 追加：清理原生 m_bgImageView ★★
+        // 防止微信原生背景装饰的灰色效果透出
+        Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
+        if (bgIvar) {
+            id bgImgView = object_getIvar(button, bgIvar);
+            if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
+                [(UIImageView *)bgImgView setImage:nil];
+                [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
+                [(UIImageView *)bgImgView setHidden:YES];
+            }
+            object_setIvar(button, bgIvar, nil);
+        }
+
         return NO;  // 让调用者继续处理背景和布局
     }
 
