@@ -624,33 +624,49 @@ UIResponder *responder = [tableView nextResponder];
 
 **当前入口**：[第375-649行](file:///www/wwwroot/ios/MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m#L375-L649)（~275行）
 
-**改造后入口**（~30行）：
+**改造后入口**（~30行）—— 双层守卫：总开关 + 各功能独立守卫，详见 [最终架构文档](file:///www/wwwroot/ios/文档/WCRefine圆角功能分析/最终架构：总开关+各功能独立守卫.md)：
 
 ```objc
 + (void)handleButtonLayout:(UIView *)button {
-    // ★ 入口守卫：OR 聚合
     PluginConfig *config = [PluginConfig shared];
-    BOOL anyFeatureEnabled = config.cardBgBeautifyEnabled
-                          || config.cardBgHidden
-                          || config.cardBgCornerEnabled;
-    if (!anyFeatureEnabled) return;
 
-    // 通用守卫（提取为辅助方法）
+    // ══════════════════════════════════════════
+    // ★ 第1层：总开关守卫
+    // ★ cardBgBeautifyEnabled 关闭时，全部不生效
+    // ══════════════════════════════════════════
+    if (!config.cardBgBeautifyEnabled) return;
+
+    // ══════════════════════════════════════════
+    // 通用安全检查（与具体功能无关）
+    // ══════════════════════════════════════════
     UIViewController *vc = [ProfileCardBgHook findMoreViewController:button];
     if (!vc) return;
     if (![ProfileCardBgHook hasHeadImageViewInView:button]) return;
     if (button.frame.size.height <= 50.0) return;
     BOOL isDark = [ProfileCardBgHook isDarkModeForVc:vc];
 
-    // ★ 场景路由：隐藏 vs 可见
+    // ══════════════════════════════════════════
+    // ★ 第2层：功能级守卫（每个功能各自检查开关）
+    // ══════════════════════════════════════════
+
+    // ── 场景路由 ──
     if (config.cardBgHidden) {
         [ProfileCardBgHook handleHiddenPath:button isDark:isDark];
     } else if (config.cardBgMaterialEnabled || config.cardBgCornerEnabled) {
         [ProfileCardBgHook handleVisiblePath:button isDark:isDark];
     }
 
-    // 独立功能
-    [ProfileCardBgHook handleHeightAdjustment:button];
+    // ── 高度调整（独立守卫：config.cardBgHeight > 0） ──
+    if (config.cardBgHeight > 0) {
+        [ProfileCardBgHook handleHeightAdjustment:button];
+    }
+
+    // ── 边距跟随圆角（独立守卫：config.cardBgCornerEnabled） ──
+    if (config.cardBgCornerEnabled) {
+        [ProfileCardBgHook handleMarginAdjustment:button];
+    }
+
+    // ── 圆角 + QR（内部已有 cornerEnabled + listHideRightQRCode 守卫） ──
     [ProfileCardBgHook handleCornerAndQR:button isDark:isDark];
 }
 ```
@@ -691,7 +707,7 @@ UIResponder *responder = [tableView nextResponder];
 | 4b | handleCornerAndQR | ❌ 未做 | L641-649（内联） |
 | 5 | handleHiddenPath | ❌ 未做 | 分散在 L578 + L588 |
 | 6 | handleVisiblePath | ❌ 未做 | 分散在 L427 + L751 |
-| **7** | OR聚合入口 | ❌ 未做 | L379 `!beautify` guard |
+| **7** | **双层守卫入口（总开关+独立守卫）** | ❌ 未做 | L589-594 OR guard |
 | 8 | 清理handleCardHiddenInButton | ❌ 未做 | L744-823（~80行） |
 | 9 | _hooked_heightForHeader 优化 | ❌ 未做 | L20-31 |
 | 10 | ProfileCardBgHook.h | ❌ 未做 | - |
@@ -700,31 +716,32 @@ UIResponder *responder = [tableView nextResponder];
 
 ---
 
-## 五、场景验证（不变）
+## 五、场景验证（最终架构：总开关+独立守卫）
 
 ### 所有场景覆盖
 
-| # | beautify | hidden | material | corner | 执行路径 | 预期结果 |
-|---|----------|--------|----------|--------|---------|---------|
-| 1 | ON | OFF | OFF | OFF | 入口放行→场景路由跳过→高度→圆角 | 保持原生，无变化 |
-| 2 | ON | OFF | ON | ON | 更路径→setupBackground+清理→高度→圆角 | 背景图 + 圆角 ✅ |
-| 3 | OFF | ON | OFF | OFF | handleHiddenPath（Scene B→完全隐藏）→高度→圆角 | 完全隐藏 ✅ |
-| 4 | OFF | ON | ON | ON | handleHiddenPath（Scene A→留背景+FIX-WHITE）→高度→圆角 | 背景图 + 隐藏 + 圆角 ✅ |
-| 5 | OFF | OFF | OFF | ON | **入口OR聚合放行**→场景路由跳过→高度→圆角 | **仅圆角生效** ✅ |
-| 6 | OFF | OFF | ON | OFF | 入口放行→handleVisiblePath→高度→圆角 | 背景图 + 圆角 ✅ |
-| 7 | ON | ON | OFF | OFF | handleHiddenPath（Scene B→完全隐藏）→高度→圆角 | 完全隐藏 ✅ |
-| 8 | ON | ON | ON | ON | handleHiddenPath（Scene A→留背景+FIX-WHITE）→高度→圆角 | 背景图 + 隐藏 + 圆角 ✅ |
+| # | beautify | hidden | material | corner | height | 执行路径 | 可见效果 |
+|---|----------|--------|----------|--------|-------|---------|---------|
+| 1 | **OFF** | ON | ON | ON | >0 | **总开关拦截，全部不执行** | 无变化 |
+| 2 | **OFF** | OFF | OFF | OFF | 0 | **总开关拦截，全部不执行** | 无变化 |
+| 3 | **ON** | OFF | OFF | OFF | 0 | 总开关通过→场景路由跳过→height(跳过)→margin(不调用)→corner(跳过) | **无变化** ✅ |
+| 4 | **ON** | OFF | OFF | OFF | >0 | 总开关通过→场景路由跳过→height(执行)→margin(不调用)→corner(跳过) | 仅高度 ✅ |
+| 5 | **ON** | OFF | ON | OFF | 0 | visiblePath(素材) → height(跳过) → margin(不调) → corner(跳过) | 背景图 ✅ |
+| 6 | **ON** | OFF | OFF | ON | 0 | 场景路由跳过→height(跳过)→margin(跟随corner)→cornerAndQR | 圆角+边距 ✅ |
+| 7 | **ON** | ON | OFF | OFF | 0 | hiddenPath(Scene B→完全隐藏)→height(跳过)→margin(不调)→corner(跳过) | 完全隐藏 ✅ |
+| 8 | **ON** | ON | ON | ON | >0 | hiddenPath(Scene A→留背景)→height(执行)→margin(执行)→cornerAndQR | 背景图+隐藏+圆角+边距+高度 ✅ |
 
-**场景 5 是改造后的独特能力**——只开圆角不开美化也能生效。
+**场景 3 是本次修复的核心**——只开 beautify 总开关，什么都不发生。
 
-### 与当前架构的差异
+### 与旧架构（OR守卫）的差异
 
-| 场景 | 当前架构行为 | 新架构行为 | 差异 |
-|------|------------|-----------|------|
-| 仅 corner=ON | 被 beautify 卡住，不生效 | OR 聚合放行，**生效** | ✅ 新能力 |
-| 仅 hidden=ON | 被 beautify 卡住，不生效 | OR 聚合放行，**生效** | ✅ 新能力 |
-| beautify=ON, 全关 | 进入 needsNewCardBg 空跑 | 入口 OR 放行→场景路由跳过 | 行为一致 |
-| 全关 | 入口 return | 入口 return | 一致 |
+| 场景 | 旧架构（OR守卫） | 最终架构（总开关+独立守卫） | 差异 |
+|------|----------------|--------------------------|------|
+| 仅 beautify=ON | OR 放行→height+margin **意外执行** | 总开关放行→第2层全跳过→**无效果** | ✅ **修复** |
+| 仅 corner=ON | 被 OR 中 beautify=OFF 拦截 → 不生效 | 被总开关 beautify=OFF 拦截 → 不生效 | 行为一致 |
+| 仅 hidden=ON | 被 OR 中 beautify=OFF 拦截 → 不生效 | 被总开关 beautify=OFF 拦截 → 不生效 | 行为一致 |
+| beautify=ON, corner=ON | 全部生效 | 全部生效 | 一致 |
+| beautify=ON, 全OFF | needsNewCardBg 空跑 | 第2层全部跳过 | ✅ 修复 |
 
 ---
 
@@ -748,7 +765,7 @@ UIResponder *responder = [tableView nextResponder];
 第6步（新建） ─→ 创建 handleVisiblePath（调用 setupBackgroundMaterialInButton）
   │
 第7步（改造） ─→ 重写 handleButtonLayout 入口
-  │               改为 OR 聚合 + 场景路由
+  │               双层守卫：总开关(!beautify) + 各功能独立守卫
   │               ⚠️ 关键改动，需重点验证
   │
 第8步（清理） ─→ 删除 handleCardHiddenInButton（80行）
@@ -760,10 +777,11 @@ UIResponder *responder = [tableView nextResponder];
 
 ### 验证清单
 
-- [ ] 场景 1-8 全部通过
-- [ ] 圆角可单独开启（不需 beautify）
-- [ ] 隐藏可单独开启（不需 beautify）
-- [ ] 非隐藏态 + 无素材 → 导航栏白色（不透明）
-- [ ] Scene A（隐藏 + 有素材）→ FIX-WHITE 正常执行
-- [ ] Scene B（隐藏 + 无素材）→ 完全隐藏
-- [ ] 高度调整 + 圆角 在所有场景下都生效
+- [ ] beautify=OFF → 全部不执行（总开关拦截）
+- [ ] beautify=ON, 全OFF → 什么都不发生（第2层全跳过）
+- [ ] beautify=ON, corner=ON → 圆角+边距生效
+- [ ] beautify=ON, hidden=ON → 隐藏生效
+- [ ] beautify=ON, material=ON → 背景图生效
+- [ ] beautify=ON, height>0 → 高度调整生效
+- [ ] Scene A（隐藏+有素材）→ FIX-WHITE 正常执行
+- [ ] Scene B（隐藏+无素材）→ 完全隐藏

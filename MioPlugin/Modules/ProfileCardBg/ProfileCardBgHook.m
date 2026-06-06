@@ -654,9 +654,13 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 + (void)handleMarginAdjustment:(UIView *)button {
     PluginConfig *config = [PluginConfig shared];
 
-    CGFloat margin = config.cardBgCornerUseGlobal
-        ? config.listCellMargin
-        : (config.cardBgCornerMargin > 0 ? config.cardBgCornerMargin : 9.0);
+    CGFloat margin = 0;
+    if (config.cardBgCornerUseGlobal) {
+        margin = config.listCellMargin;
+    } else if (config.cardBgCornerMargin > 0) {
+        margin = config.cardBgCornerMargin;
+    }
+    // margin=0 时，后续 margin <= 0 守卫直接跳过，不产生任何效果
 
     WPLog(@"CardBg-Diag", @"[MARGIN] useGlobal=%d, margin=%.1f, cardBgCornerMargin=%.1f, listCellMargin=%.1f",
           config.cardBgCornerUseGlobal, margin,
