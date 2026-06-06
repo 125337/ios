@@ -476,7 +476,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     NSInteger fillMode = config.cardBgFillMode;
     switch (fillMode) {
-        case 1: newBg.contentMode = UIViewContentModeScaleAspectFit; break;
+        case 1: newBg.contentMode = UIViewContentModeScaleAspectFill; break;
         case 2: newBg.contentMode = UIViewContentModeScaleToFill; break;
         default: newBg.contentMode = UIViewContentModeScaleAspectFill; break;
     }
