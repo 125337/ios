@@ -586,12 +586,9 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 #pragma mark - ★ 核心：handleButtonLayout
 
 + (void)handleButtonLayout:(UIView *)button {
-    // ★ 入口守卫：OR 聚合
+    // ★ 第1层：总开关守卫
     PluginConfig *config = [PluginConfig shared];
-    BOOL anyFeatureEnabled = config.cardBgBeautifyEnabled
-                          || config.cardBgHidden
-                          || config.cardBgCornerEnabled;
-    if (!anyFeatureEnabled) return;
+    if (!config.cardBgBeautifyEnabled) return;
 
     // 通用守卫（提取为辅助方法）
     UIViewController *vc = [ProfileCardBgHook findMoreViewController:button];
