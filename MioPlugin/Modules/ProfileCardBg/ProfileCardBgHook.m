@@ -411,12 +411,50 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     BOOL needsNewCardBg = config.cardBgBeautifyEnabled;
 
     // ══════════════════════════════════════════
+    // 场景判断
+    // ══════════════════════════════════════════
+    BOOL hasMaterial = config.cardBgMaterialEnabled;
+    BOOL isHidden = config.cardBgHidden;
+
+    // ══════════════════════════════════════════
     // 卡片背景专属操作（只在 cardBgBeautifyEnabled 时执行）
     // ══════════════════════════════════════════
     if (needsNewCardBg) {
 
         // ══════════════════════════════════════════
-        // ★ Button 层 bg 生命周期（始终执行，不依赖 HideCard）
+        // 场景 B：隐藏 + 无素材 → 完全隐藏，直接返回
+        // ══════════════════════════════════════════
+        if (isHidden && !hasMaterial) {
+            button.backgroundColor = [UIColor clearColor];
+            button.layer.backgroundColor = [UIColor clearColor].CGColor;
+            button.layer.masksToBounds = NO;
+            button.layer.cornerRadius = 0;
+            button.layer.borderWidth = 0;
+
+            Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
+            if (bgIvar) {
+                id bgImgView = object_getIvar(button, bgIvar);
+                if (bgImgView && [bgImgView isKindOfClass:[UIImageView class]]) {
+                    [(UIImageView *)bgImgView setImage:nil];
+                    [(UIImageView *)bgImgView setBackgroundColor:[UIColor clearColor]];
+                    [(UIImageView *)bgImgView setHidden:YES];
+                }
+                object_setIvar(button, bgIvar, nil);
+            }
+
+            // 隐藏所有子视图（无豁免！没有背景图需要保留）
+            for (UIView *sub in button.subviews) {
+                sub.hidden = YES;
+            }
+
+            if (config.listHideRightQRCode) {
+                [ProfileCardBgHook hideQRButtonInCell:button];
+            }
+            return;
+        }
+
+        // ══════════════════════════════════════════
+        // ★ Button 层 bg 生命周期
         // ══════════════════════════════════════════
 
         // ── 查找 Button 层已有 bg ──
@@ -546,12 +584,13 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                     }
                 });
             });
-        }
+        }  // hasMaterial
 
         // ══════════════════════════════════════════
         // HideCard 分支（改造：选择性隐藏 + 不 return）
         // ══════════════════════════════════════════
-        if (config.cardBgHidden) {
+        if (isHidden) {
+            // 场景 A：隐藏内容，保留背景图
             button.backgroundColor = [UIColor clearColor];
             button.layer.backgroundColor = [UIColor clearColor].CGColor;
             button.layer.masksToBounds = NO;
@@ -610,7 +649,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         {
             for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
                 UIView *sub = button.subviews[i];
-                // 使用全局常量 kProfileCardBgImageTag（=999902）跳过 bg
+                // 场景 A 中背景图存在，需跳过；场景 B 已早返，不会走到此处
                 if (sub.tag == kProfileCardBgImageTag) continue;
                 if ([sub isKindOfClass:NSClassFromString(@"MMHeadImageView")]) continue;
                 if ([sub isKindOfClass:[UILabel class]]) continue;
