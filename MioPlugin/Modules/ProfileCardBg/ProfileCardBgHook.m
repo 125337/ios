@@ -797,7 +797,28 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     // 有素材：设置背景
     // ══════════════════════════════════════════
     if (hasMaterial) {
+        // ★★★ 新增：预清理（和 handleHiddenPath 做的一样）★★★
+        button.backgroundColor = [UIColor clearColor];
+        button.layer.backgroundColor = [UIColor clearColor].CGColor;
+        button.layer.masksToBounds = NO;
+        button.layer.cornerRadius = 0;
+        button.layer.borderWidth = 0;
+        [ProfileCardBgHook cleanNativeBgImageView:button];
+        // ★★★★★★
+
+        // ★ 创建背景图（原来的代码）★
         [ProfileCardBgHook setupBackgroundMaterialInButton:button isDark:isDark];
+
+        // ★★★ 新增：隐藏白色背景 View（FIX-WHITE）★★★
+        for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
+            UIView *sub = button.subviews[i];
+            if (sub.tag == kProfileCardBgImageTag) continue;
+            if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
+            if ([ProfileCardBgHook isWhiteOrDynamicBackground:sub]) {
+                sub.hidden = YES;
+            }
+        }
+        // ★★★★★★
     } else {
         // ══════════════════════════════════════════
         // 无素材：不做任何背景操作
