@@ -718,28 +718,16 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     // 1. 设置背景素材
     [ProfileCardBgHook setupBackgroundMaterialInButton:button isDark:isDark];
 
-    // 2. 隐藏子视图，豁免 bg + 关键子视图
+    // 隐藏所有子视图，只保留自定义背景图（tag=999902）
     for (UIView *sub in button.subviews) {
-        // 豁免：背景图
         if ([sub isKindOfClass:[UIImageView class]] &&
             sub.tag == kProfileCardBgImageTag) {
-            continue;
+            continue;  // ← 保留背景图
         }
-        // 豁免：头像、标签等关键子视图
-        if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
-
-        sub.hidden = YES;
+        sub.hidden = YES;  // ← 全部隐藏，不再豁免任何事情
     }
 
-    // 3. FIX-WHITE：隐藏白色/动态背景视图
-    for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
-        UIView *sub = button.subviews[i];
-        if (sub.tag == kProfileCardBgImageTag) continue;
-        if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
-        if ([ProfileCardBgHook isWhiteOrDynamicBackground:sub]) {
-            sub.hidden = YES;
-        }
-    }
+    // ★ 不再需要 FIX-WHITE：所有子视图都隐藏了，白色背景也被隐藏
 
     // 4. 二维码隐藏
     if (config.listHideRightQRCode) {
