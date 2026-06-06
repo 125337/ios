@@ -654,6 +654,9 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 + (void)handleMarginAdjustment:(UIView *)button {
     PluginConfig *config = [PluginConfig shared];
 
+    // ★ 内部守卫：圆角未开启时不做边距调整
+    if (!config.cardBgCornerEnabled) return;
+
     CGFloat margin = 0;
     if (config.cardBgCornerUseGlobal) {
         margin = config.listCellMargin;
