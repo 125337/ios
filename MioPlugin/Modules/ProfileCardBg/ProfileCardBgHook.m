@@ -580,7 +580,11 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             return;  // Scene B：完全隐藏，后面的不用执行了
         }
 
-        // 4. FIX-WHITE：隐藏白色视图（始终执行，bg 通过 tag 豁免）
+        // ══════════════════════════════════════════
+        // 4. FIX-WHITE：隐藏白色视图
+        //    ★ 仅在隐藏态执行（Scene A），非隐藏态跳过 ★
+        // ══════════════════════════════════════════
+        if (isHidden)
         {
             for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
                 UIView *sub = button.subviews[i];
