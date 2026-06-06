@@ -471,7 +471,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     UIImageView *newBg = [[UIImageView alloc] init];
     newBg.tag = kProfileCardBgImageTag;
-    newBg.clipsToBounds = NO;
+    newBg.clipsToBounds = YES;
     newBg.userInteractionEnabled = NO;
 
     NSInteger fillMode = config.cardBgFillMode;
@@ -574,6 +574,55 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         [ProfileCardBgHook loadImageAsyncForImageView:bgImgView
                                                button:button
                                                isDark:isDark];
+    }
+
+    // ★ 适应模式 / 顶部填充模式下，按图片比例向下延伸 button 高度
+    // （和 WCRefine 的做法一致：origin.y 不变，推子视图，更新 contentSize）
+    NSInteger fillMode = config.cardBgFillMode;
+    if (fillMode == 1 || fillMode == 3) {  // 适应模式 或 顶部填充
+        UIImage *img = [ProfileCardBgHook loadBackgroundImageSync];
+        if (img && img.size.width > 0 && img.size.height > 0) {
+            CGFloat btnW = button.bounds.size.width;
+            CGFloat imgRatio = img.size.height / img.size.width;
+            CGFloat targetH = btnW * imgRatio;  // 按宽度等比计算高度
+
+            if (targetH > button.bounds.size.height) {
+                CGFloat deltaH = targetH - button.bounds.size.height;
+
+                // ★ 向下延伸（origin.y 不变，和 WCRefine 一致）
+                CGRect bf = button.frame;
+                bf.size.height = targetH;
+                button.frame = bf;
+
+                // 同步更新 bgImageView 的 frame
+                if (bgImgView) {
+                    CGRect bgf = bgImgView.frame;
+                    bgf.size.height = targetH;
+                    bgImgView.frame = bgf;
+                }
+
+                // ★ 把 button 新底部下方的子视图向下推（和 WCRefine 一致）
+                CGFloat newMaxY = CGRectGetMaxY(button.frame);
+                for (UIView *sub in button.subviews) {
+                    if (sub == button) continue;
+                    if (sub.tag == kProfileCardBgImageTag) continue;
+                    CGFloat subMinY = CGRectGetMinY(sub.frame);
+                    if (subMinY > newMaxY - 0.5) {
+                        CGRect sf = sub.frame;
+                        sf.origin.y += deltaH;
+                        sub.frame = sf;
+                    }
+                }
+
+                // ★ 更新 contentSize（和 WCRefine 一致）
+                UIView *tableView = button.superview;
+                if (tableView) {
+                    CGSize cs = ((UIScrollView *)tableView).contentSize;
+                    cs.height += deltaH;
+                    ((UIScrollView *)tableView).contentSize = cs;
+                }
+            }
+        }
     }
 
     // ── bg 存在时清 button 背景色让 bg 透出 ──
@@ -748,28 +797,38 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     // 有素材：设置背景
     // ══════════════════════════════════════════
     if (hasMaterial) {
-        // ★★★ 新增：预清理（和 handleHiddenPath 做的一样）★★★
-        button.backgroundColor = [UIColor clearColor];
-        button.layer.backgroundColor = [UIColor clearColor].CGColor;
+        // ── 检查是否有图片路径 ──
+        BOOL hasImagePath = config.cardBgImagePath.length > 0;
+
+        // 只有有图片路径时才清背景，否则保持原生
+        if (hasImagePath) {
+            button.backgroundColor = [UIColor clearColor];
+            button.layer.backgroundColor = [UIColor clearColor].CGColor;
+        }
+
         button.layer.masksToBounds = NO;
         button.layer.cornerRadius = 0;
         button.layer.borderWidth = 0;
-        [ProfileCardBgHook cleanNativeBgImageView:button];
-        // ★★★★★★
 
-        // ★ 创建背景图（原来的代码）★
+        // 有图片路径时才清原生 bg
+        if (hasImagePath) {
+            [ProfileCardBgHook cleanNativeBgImageView:button];
+        }
+
+        // ★ 创建背景图 ★
         [ProfileCardBgHook setupBackgroundMaterialInButton:button isDark:isDark];
 
-        // ★★★ 新增：隐藏白色背景 View（FIX-WHITE）★★★
-        for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
-            UIView *sub = button.subviews[i];
-            if (sub.tag == kProfileCardBgImageTag) continue;
-            if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
-            if ([ProfileCardBgHook isWhiteOrDynamicBackground:sub]) {
-                sub.hidden = YES;
+        // ★★★ FIX-WHITE（只有有图片时才执行）★★★
+        if (hasImagePath) {
+            for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
+                UIView *sub = button.subviews[i];
+                if (sub.tag == kProfileCardBgImageTag) continue;
+                if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
+                if ([ProfileCardBgHook isWhiteOrDynamicBackground:sub]) {
+                    sub.hidden = YES;
+                }
             }
         }
-        // ★★★★★★
     } else {
         // ══════════════════════════════════════════
         // 无素材：不做任何背景操作
