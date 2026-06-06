@@ -609,6 +609,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     // 独立功能
     [ProfileCardBgHook handleHeightAdjustment:button];
+    [ProfileCardBgHook handleMarginAdjustment:button];  // ← 新增
     [ProfileCardBgHook handleCornerAndQR:button isDark:isDark];
 }
 

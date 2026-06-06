@@ -42,11 +42,6 @@
 + (void)loadBackgroundImageForImageView:(UIImageView *)imageView;
 + (NSString *)cardBackgroundDirectory;
 
-// 隐藏信息卡片（保留兼容）
-+ (BOOL)handleCardHiddenInButton:(UIView *)button
-                       isHidden:(BOOL)isHidden
-                    hasMaterial:(BOOL)hasMaterial;
-
 // Hook 注册
 + (void)initCellHeightHook;
 
