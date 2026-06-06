@@ -16,8 +16,6 @@
 
 // ★ 背景素材方法
 + (UIImageView *)findBackgroundImageViewInButton:(UIView *)button;
-+ (CGFloat)calcImageAlignmentOffsetWithImageSize:(CGSize)imageSize
-                                          inView:(UIView *)view;
 + (UIImageView *)createBackgroundImageViewInButton:(UIView *)button;
 + (void)loadImageAsyncForImageView:(UIImageView *)imageView
                             button:(UIView *)button
