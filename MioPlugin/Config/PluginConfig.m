@@ -428,26 +428,17 @@
     CGFloat ns = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListNormalSessionSpacing"]];
     _listNormalSessionSpacing = (ns > 0) ? ns : 15.0;
 
-    NSString *clb = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellLightBgColor"]];
-    _listCellLightBgColor = [clb copy];
+    NSString *cbg = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellBgColor"]];
+    _listCellBgColor = cbg.length > 0 ? cbg : @"#FFFFFF";
 
-    NSString *cdb = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellDarkBgColor"]];
-    _listCellDarkBgColor = [cdb copy];
-
-    NSString *clb2 = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCardLightBgColor"]];
-    _listCardLightBgColor = [clb2 copy];
-
-    NSString *cdb2 = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCardDarkBgColor"]];
-    _listCardDarkBgColor = [cdb2 copy];
+    NSString *cbg2 = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCardBgColor"]];
+    _listCardBgColor = cbg2.length > 0 ? cbg2 : @"#FFFFFF";
 
     CGFloat cbw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderWidth"]];
     _listCellBorderWidth = (cbw > 0) ? cbw : 2.0;
 
-    NSString *cbl = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderLightColor"]];
-    _listCellBorderLightColor = [cbl copy];
-
-    NSString *cbd = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderDarkColor"]];
-    _listCellBorderDarkColor = [cbd copy];
+    NSString *cbc = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderColor"]];
+    _listCellBorderColor = cbc.length > 0 ? cbc : @"#E5E5E5";
 
     _listDisableLabelWidthAdjustment = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListDisableLabelWidthAdjustment"]];
     _listMediaCornerEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListMediaCornerEnabled"]];
@@ -457,11 +448,8 @@
     CGFloat pcbw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderWidth"]];
     _listProfileCardBorderWidth = (pcbw > 0) ? pcbw : 2.0;
 
-    NSString *pcbl = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderLightColor"]];
-    _listProfileCardBorderLightColor = pcbl.length > 0 ? pcbl : @"#E5E5E5";
-
-    NSString *pcbd = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderDarkColor"]];
-    _listProfileCardBorderDarkColor = pcbd.length > 0 ? pcbd : @"#3A3A3C";
+    NSString *pcbc = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderColor"]];
+    _listProfileCardBorderColor = pcbc.length > 0 ? pcbc : @"#E5E5E5";
 
     // ========== 资料卡背景配置 ==========
     // 资料卡片美化（新 UI）
@@ -687,20 +675,16 @@
     [d setFloat:_listCellMargin forKey:[kPluginPrefix stringByAppendingString:@"ListCellMargin"]];
     [d setFloat:_listPinnedSessionTopSpacing forKey:[kPluginPrefix stringByAppendingString:@"ListPinnedSessionTopSpacing"]];
     [d setFloat:_listNormalSessionSpacing forKey:[kPluginPrefix stringByAppendingString:@"ListNormalSessionSpacing"]];
-    if (_listCellLightBgColor) [d setObject:_listCellLightBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellLightBgColor"]];
-    if (_listCellDarkBgColor) [d setObject:_listCellDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellDarkBgColor"]];
-    if (_listCardLightBgColor) [d setObject:_listCardLightBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCardLightBgColor"]];
-    if (_listCardDarkBgColor) [d setObject:_listCardDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCardDarkBgColor"]];
+    if (_listCellBgColor) [d setObject:_listCellBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBgColor"]];
+    if (_listCardBgColor) [d setObject:_listCardBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCardBgColor"]];
     [d setFloat:_listCellBorderWidth forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderWidth"]];
-    if (_listCellBorderLightColor) [d setObject:_listCellBorderLightColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderLightColor"]];
-    if (_listCellBorderDarkColor) [d setObject:_listCellBorderDarkColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderDarkColor"]];
+    if (_listCellBorderColor) [d setObject:_listCellBorderColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderColor"]];
     [d setBool:_listDisableLabelWidthAdjustment forKey:[kPluginPrefix stringByAppendingString:@"ListDisableLabelWidthAdjustment"]];
     [d setBool:_listMediaCornerEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListMediaCornerEnabled"]];
     
     [d setBool:_listProfileCardBorderEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderEnabled"]];
     [d setFloat:_listProfileCardBorderWidth forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderWidth"]];
-    if (_listProfileCardBorderLightColor) [d setObject:_listProfileCardBorderLightColor forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderLightColor"]];
-    if (_listProfileCardBorderDarkColor) [d setObject:_listProfileCardBorderDarkColor forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderDarkColor"]];
+    if (_listProfileCardBorderColor) [d setObject:_listProfileCardBorderColor forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderColor"]];
 
     // ========== 资料卡背景配置 ==========
     // 资料卡片美化（新 UI）

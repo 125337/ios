@@ -55,8 +55,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         cell.layer.cornerRadius = radius;
         cell.layer.masksToBounds = YES;
 
-        UIColor *bgColor = [config colorFromHex:isDark
-            ? config.listCellDarkBgColor : config.listCellLightBgColor];
+        UIColor *bgColor = [config colorFromHex:config.listCellBgColor];
         if (bgColor) {
             cell.backgroundColor = bgColor;
         }
@@ -64,8 +63,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         CGFloat bw = config.listCellBorderWidth;
         if (bw > 0) {
             cell.layer.borderWidth = bw;
-            UIColor *borderColor = [config colorFromHex:isDark
-                ? config.listCellBorderDarkColor : config.listCellBorderLightColor];
+            UIColor *borderColor = [config colorFromHex:config.listCellBorderColor];
             cell.layer.borderColor = borderColor.CGColor;
         } else {
             cell.layer.borderWidth = 0;
@@ -542,8 +540,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             } else {
                 // fallback：无图片时设置背景色
                 PluginConfig *cfg = [PluginConfig shared];
-                UIColor *cardBg = [cfg colorFromHex:isDark
-                    ? cfg.listCardDarkBgColor : cfg.listCardLightBgColor];
+                UIColor *cardBg = [cfg colorFromHex:cfg.listCardBgColor];
                 if (cardBg) strongButton.backgroundColor = cardBg;
             }
         });

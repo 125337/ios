@@ -223,8 +223,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         if (@available(iOS 13.0, *)) {
             isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
         }
-        UIColor *customBg = [config colorFromHex:isDark
-            ? config.listCellDarkBgColor : config.listCellLightBgColor];
+        UIColor *customBg = [config colorFromHex:config.listCellBgColor];
         ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
     }
 
@@ -459,8 +458,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         isDark = [ListCornerRadiusHook wp_isCurrentDarkMode];
     }
 
-    UIColor *borderColor = [config colorFromHex:isDark
-        ? config.listCellBorderDarkColor : config.listCellBorderLightColor];
+    UIColor *borderColor = [config colorFromHex:config.listCellBorderColor];
     if (!borderColor) {
         borderColor = isDark
             ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]

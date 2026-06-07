@@ -163,44 +163,23 @@
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
     pcy = [self addColorRowInGroup:paramGroup
-                         title:@"Cell浅色模式背景色"
-                           key:@"listCellLightBgColor"
-                         value:cfg.listCellLightBgColor
+                         title:@"Cell背景色"
+                           key:@"listCellBgColor"
+                         value:cfg.listCellBgColor
                             cy:pcy width:w];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
     pcy = [self addColorRowInGroup:paramGroup
-                         title:@"Cell深色模式背景色"
-                           key:@"listCellDarkBgColor"
-                         value:cfg.listCellDarkBgColor
+                         title:@"边框颜色"
+                           key:@"listCellBorderColor"
+                         value:cfg.listCellBorderColor
                             cy:pcy width:w];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
     pcy = [self addColorRowInGroup:paramGroup
-                         title:@"边框浅色模式颜色"
-                           key:@"listCellBorderLightColor"
-                         value:cfg.listCellBorderLightColor
-                            cy:pcy width:w];
-    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
-
-    pcy = [self addColorRowInGroup:paramGroup
-                         title:@"边框深色模式颜色"
-                           key:@"listCellBorderDarkColor"
-                         value:cfg.listCellBorderDarkColor
-                            cy:pcy width:w];
-    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
-
-    pcy = [self addColorRowInGroup:paramGroup
-                         title:@"卡片浅色模式背景色"
-                           key:@"listCardLightBgColor"
-                         value:cfg.listCardLightBgColor
-                            cy:pcy width:w];
-    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
-
-    pcy = [self addColorRowInGroup:paramGroup
-                         title:@"卡片深色模式背景色"
-                           key:@"listCardDarkBgColor"
-                         value:cfg.listCardDarkBgColor
+                         title:@"卡片背景色"
+                           key:@"listCardBgColor"
+                         value:cfg.listCardBgColor
                             cy:pcy width:w];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
@@ -224,16 +203,9 @@
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
     pcy = [self addColorRowInGroup:paramGroup
-                         title:@"资料卡边框浅色"
-                           key:@"listProfileCardBorderLightColor"
-                         value:cfg.listProfileCardBorderLightColor
-                            cy:pcy width:w];
-    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
-
-    pcy = [self addColorRowInGroup:paramGroup
-                         title:@"资料卡边框深色"
-                           key:@"listProfileCardBorderDarkColor"
-                         value:cfg.listProfileCardBorderDarkColor
+                         title:@"资料卡边框颜色"
+                           key:@"listProfileCardBorderColor"
+                         value:cfg.listProfileCardBorderColor
                             cy:pcy width:w];
 
     y = [self finishGroup:paramGroup atY:y height:pcy];

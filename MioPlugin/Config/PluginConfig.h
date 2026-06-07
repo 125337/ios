@@ -159,19 +159,15 @@
 @property (nonatomic, assign) CGFloat listCellMargin;
 @property (nonatomic, assign) CGFloat listPinnedSessionTopSpacing;
 @property (nonatomic, assign) CGFloat listNormalSessionSpacing;
-@property (nonatomic, copy) NSString *listCellLightBgColor;
-@property (nonatomic, copy) NSString *listCellDarkBgColor;
-@property (nonatomic, copy) NSString *listCardLightBgColor;
-@property (nonatomic, copy) NSString *listCardDarkBgColor;
+@property (nonatomic, copy) NSString *listCellBgColor;
+@property (nonatomic, copy) NSString *listCardBgColor;
 @property (nonatomic, assign) CGFloat listCellBorderWidth;
-@property (nonatomic, copy) NSString *listCellBorderLightColor;
-@property (nonatomic, copy) NSString *listCellBorderDarkColor;
+@property (nonatomic, copy) NSString *listCellBorderColor;
 @property (nonatomic, assign) BOOL listDisableLabelWidthAdjustment;
 @property (nonatomic, assign) BOOL listMediaCornerEnabled;
 @property (nonatomic, assign) BOOL listProfileCardBorderEnabled;
 @property (nonatomic, assign) CGFloat listProfileCardBorderWidth;
-@property (nonatomic, copy) NSString *listProfileCardBorderLightColor;
-@property (nonatomic, copy) NSString *listProfileCardBorderDarkColor;
+@property (nonatomic, copy) NSString *listProfileCardBorderColor;
 
 #pragma mark - 卡片背景
 // 资料卡片美化（新 UI）
