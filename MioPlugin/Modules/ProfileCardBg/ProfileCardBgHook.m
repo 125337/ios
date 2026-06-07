@@ -118,10 +118,9 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 }
 
 /// 识别资料卡右侧的二维码按钮
-/// 旧版已验证：二维码是一个 MMUIButton（类名含"Button"），位于父视图右侧
+/// 二维码是 MMUIButton，用 isKindOfClass: 精准匹配（兼容子类）
 + (BOOL)isQRCodeButton:(UIView *)view {
-    NSString *cn = NSStringFromClass([view class]);
-    if (![cn containsString:@"Button"]) return NO;
+    if (![view isKindOfClass:NSClassFromString(@"MMUIButton")]) return NO;
     // 位于右侧区域（距右边界 60pt 以内）
     CGFloat x = view.frame.origin.x;
     CGFloat parentW = view.superview.bounds.size.width;
