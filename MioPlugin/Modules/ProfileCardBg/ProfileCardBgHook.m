@@ -94,47 +94,25 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     }
 }
 
-#pragma mark - 箭码/二维码识别（单层遍历，参考 WCRefine）
-
-+ (BOOL)isArrowQRByAccessibilityLabel:(UIView *)view {
-    NSString *label = view.accessibilityLabel;
-    if (!label) return NO;
-    // WCRefine FUN_00336e4c 反编译确认的三次 isEqualToString 对比
-    return [label isEqualToString:@"More_CardInfo"] ||
-           [label isEqualToString:@"•"] ||
-           [label isEqualToString:@"• N"];
-}
-
-+ (BOOL)isArrowQRByFrameHeuristic:(UIView *)view {
-    if (![view isKindOfClass:[UIImageView class]]) return NO;
-    CGFloat w = view.frame.size.width;
-    CGFloat h = view.frame.size.height;
-    CGFloat x = view.frame.origin.x;
-    CGFloat parentW = view.superview.bounds.size.width;
-    // WCRefine FUN_00337128 反编译确认的帧判断
-    return (w >= 10 && w <= 18) &&
-           (h >= 8 && h <= 40) &&
-           (x >= parentW - 40);
-}
-
-/// 识别资料卡右侧的二维码按钮
-/// 二维码是 MMUIButton，用 isKindOfClass: 精准匹配（兼容子类）
-+ (BOOL)isQRCodeButton:(UIView *)view {
-    if (![view isKindOfClass:NSClassFromString(@"MMUIButton")]) return NO;
-    // 位于右侧区域（距右边界 60pt 以内）
-    CGFloat x = view.frame.origin.x;
-    CGFloat parentW = view.superview.bounds.size.width;
-    return x >= parentW - 60;
-}
+#pragma mark - 箭码/二维码识别
 
 + (BOOL)isArrowQRView:(UIView *)view {
-    return [self isArrowQRByAccessibilityLabel:view] ||   // → 箭头
-           [self isArrowQRByFrameHeuristic:view] ||       // → 箭头（UIImageView）
-           [self isQRCodeButton:view];                    // → 二维码（MMUIButton）
+    // 箭头：accessibilityLabel
+    NSString *label = view.accessibilityLabel;
+    if ([label isEqualToString:@"More_CardInfo"] ||
+        [label isEqualToString:@"•"] ||
+        [label isEqualToString:@"• N"]) {
+        return YES;
+    }
+    // 二维码：精准类型匹配
+    if ([view isKindOfClass:NSClassFromString(@"MMUIButton")]) {
+        return YES;
+    }
+    return NO;
 }
 
 + (void)hideArrowQRInCell:(UIView *)cell {
-    for (UIView *sub in cell.subviews) {  // 单层遍历，不递归
+    for (UIView *sub in cell.subviews) {
         if ([self isArrowQRView:sub]) {
             sub.hidden = YES;
         }
