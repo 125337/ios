@@ -441,12 +441,37 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     return nil;
 }
 
++ (CGFloat)calcImageAlignmentOffsetWithImageSize:(CGSize)imageSize
+                                          inView:(UIView *)view {
+    PluginConfig *config = [PluginConfig shared];
+    NSInteger fillMode = config.cardBgFillMode;
+    NSInteger alignment = config.cardBgAlignment;
+
+    // 只在 aspectFill(fillMode=0) 时计算
+    if (fillMode != 0) return 0;
+    if (imageSize.width <= 0) return 0;
+
+    CGFloat viewW = view.bounds.size.width;
+    CGFloat viewH = view.bounds.size.height;
+    CGFloat scale = viewW / imageSize.width;
+    CGFloat renderedH = imageSize.height * scale;
+    CGFloat overflow = renderedH - viewH;
+
+    if (overflow <= 0) return 0;
+
+    switch (alignment) {
+        case 0:  return -overflow / 2.0;  // center
+        case 2:  return  overflow / 2.0;  // bottom
+        default: return 0;                // top
+    }
+}
+
 + (UIImageView *)createBackgroundImageViewInButton:(UIView *)button {
     PluginConfig *config = [PluginConfig shared];
 
     UIImageView *newBg = [[UIImageView alloc] init];
     newBg.tag = kProfileCardBgImageTag;
-    newBg.clipsToBounds = NO;
+    newBg.clipsToBounds = YES;
     newBg.userInteractionEnabled = NO;
 
     NSInteger fillMode = config.cardBgFillMode;
@@ -491,7 +516,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                 strongBg.alpha = 1.0;
                 strongBg.hidden = NO;
 
-                // ★ 恢复：图片尺寸已知，应用 fillMode=0 对齐偏移
+                // 异步加载后重新计算对齐偏移（图片尺寸现在已知）
                 CGFloat alignOffset = [ProfileCardBgHook
                     calcImageAlignmentOffsetWithImageSize:resultImage.size
                                                    inView:strongButton];
@@ -526,6 +551,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     if (bgImgView) {
         // ── 分支 A：已存在 → 更新 frame ──
+        bgImgView.clipsToBounds = NO;
         NSInteger fillMode = config.cardBgFillMode;
         switch (fillMode) {
             case 1: bgImgView.contentMode = UIViewContentModeScaleAspectFill; break;
@@ -533,7 +559,14 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             default: bgImgView.contentMode = UIViewContentModeScaleAspectFill; break;
         }
 
-        bgImgView.frame = CGRectMake(ox, oy, bgW, bgH);
+        CGFloat alignOffset = 0;
+        if (bgImgView.image && bgImgView.image.size.width > 0) {
+            alignOffset = [ProfileCardBgHook
+                calcImageAlignmentOffsetWithImageSize:bgImgView.image.size
+                                               inView:button];
+        }
+
+        bgImgView.frame = CGRectMake(ox, oy + alignOffset, bgW, bgH);
 
         if (config.cardBgLayer == 1) [button bringSubviewToFront:bgImgView];
     } else {
