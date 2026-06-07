@@ -117,15 +117,21 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
            (x >= parentW - 40);
 }
 
-+ (BOOL)isQRCodeByClassName:(UIView *)view {
+/// 识别资料卡右侧的二维码按钮
+/// 旧版已验证：二维码是一个 MMUIButton（类名含"Button"），位于父视图右侧
++ (BOOL)isQRCodeButton:(UIView *)view {
     NSString *cn = NSStringFromClass([view class]);
-    return [cn containsString:@"QRCode"] || [cn containsString:@"Qrcode"];
+    if (![cn containsString:@"Button"]) return NO;
+    // 位于右侧区域（距右边界 60pt 以内）
+    CGFloat x = view.frame.origin.x;
+    CGFloat parentW = view.superview.bounds.size.width;
+    return x >= parentW - 60;
 }
 
 + (BOOL)isArrowQRView:(UIView *)view {
-    return [self isArrowQRByAccessibilityLabel:view] ||
-           [self isArrowQRByFrameHeuristic:view] ||
-           [self isQRCodeByClassName:view];  // ← 新增第三种策略
+    return [self isArrowQRByAccessibilityLabel:view] ||   // → 箭头
+           [self isArrowQRByFrameHeuristic:view] ||       // → 箭头（UIImageView）
+           [self isQRCodeButton:view];                    // → 二维码（MMUIButton）
 }
 
 + (void)hideArrowQRInCell:(UIView *)cell {
