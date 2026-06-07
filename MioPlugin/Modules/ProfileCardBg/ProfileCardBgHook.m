@@ -117,9 +117,15 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
            (x >= parentW - 40);
 }
 
++ (BOOL)isQRCodeByClassName:(UIView *)view {
+    NSString *cn = NSStringFromClass([view class]);
+    return [cn containsString:@"QRCode"] || [cn containsString:@"Qrcode"];
+}
+
 + (BOOL)isArrowQRView:(UIView *)view {
     return [self isArrowQRByAccessibilityLabel:view] ||
-           [self isArrowQRByFrameHeuristic:view];
+           [self isArrowQRByFrameHeuristic:view] ||
+           [self isQRCodeByClassName:view];  // ← 新增第三种策略
 }
 
 + (void)hideArrowQRInCell:(UIView *)cell {
