@@ -5,6 +5,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
+#import "../../Settings/Controllers/SettingCornerRadiusController.h"
 
 // 仿微信优化做法：不在 viewDidLoad 里创建 UI（view bounds 可能为 (0,0,0,0)），
 // 改在 viewWillAppear 里创建 —— 此时 view 已在 window 中，bounds 正确。
@@ -232,6 +233,14 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     } else {
         WPLog(@"Setting", @"[Nav] WPUIVC alloc returned nil");
     }
+}
+
+- (void)openCorner:(id)sender {
+    UIViewController *vc = [self currentVCFrom:sender];
+    if (!vc) { WPLog(@"Setting", @"[Nav] openCorner: currentVC nil"); return; }
+    SettingCornerRadiusController *subVC = [[SettingCornerRadiusController alloc] init];
+    [vc.navigationController pushViewController:subVC animated:YES];
+    WPLog(@"Setting", @"[Nav] pushed SettingCornerRadiusController");
 }
 
 - (void)openRedEnvelop:(id)sender {
