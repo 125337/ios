@@ -471,7 +471,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     UIImageView *newBg = [[UIImageView alloc] init];
     newBg.tag = kProfileCardBgImageTag;
-    newBg.clipsToBounds = YES;
+    newBg.clipsToBounds = NO;
     newBg.userInteractionEnabled = NO;
 
     NSInteger fillMode = config.cardBgFillMode;
