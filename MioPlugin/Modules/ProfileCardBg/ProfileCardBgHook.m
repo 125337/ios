@@ -97,24 +97,18 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 #pragma mark - 箭码/二维码识别
 
 + (BOOL)isArrowQRView:(UIView *)view {
-    // 箭头：accessibilityLabel 匹配
-    NSString *label = view.accessibilityLabel;
-    if ([label isEqualToString:@"More_CardInfo"] ||
-        [label isEqualToString:@"•"] ||
-        [label isEqualToString:@"• N"]) {
-        return YES;
-    }
-    // 箭头：UIImageView 帧启发式兜底（WCRefine FUN_00337128）
+    // 箭头：UIImageView + 帧 + 右侧位置（排除 TextState 按钮）
     if ([view isKindOfClass:[UIImageView class]]) {
         CGFloat w = view.frame.size.width;
         CGFloat h = view.frame.size.height;
         CGFloat x = view.frame.origin.x;
         CGFloat parentW = view.superview.bounds.size.width;
-        if (w >= 10 && w <= 18 && h >= 8 && h <= 40 && x >= parentW - 40) {
+        // ★ parentW - 25 需根据实测调整，原则是「箭头在范围内、状态在范围外」
+        if (w >= 10 && w <= 18 && h >= 8 && h <= 40 && x >= parentW - 25) {
             return YES;
         }
     }
-    // 二维码：MMUIButton 精准类型匹配
+    // 二维码：MMUIButton 精准匹配（容器内唯一 MMUIButton）
     if ([view isKindOfClass:NSClassFromString(@"MMUIButton")]) {
         return YES;
     }
