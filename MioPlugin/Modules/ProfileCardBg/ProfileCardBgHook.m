@@ -616,6 +616,9 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     // ── 清微信原生 m_bgImageView ──
     [ProfileCardBgHook cleanNativeBgImageView:button];
+
+    // ★ 裁剪：防止 clipsToBounds=NO 的图片溢出 button
+    button.layer.masksToBounds = YES;
 }
 
 #pragma mark - ★ 核心：handleButtonLayout
