@@ -179,7 +179,7 @@
 @property (nonatomic, assign) CGFloat cardBgCornerMargin;
 @property (nonatomic, copy) NSString *cardBgCornerBgColor;
 @property (nonatomic, copy) NSString *cardBgCornerDarkBgColor;
-@property (nonatomic, assign) CGFloat cardBgOffsetX;
+@property (nonatomic, assign) CGFloat cardBgStrokeWidth;
 
 // ★ 新增：隐藏资料卡状态按钮（独立功能，不受 cardBgBeautifyEnabled 保护）
 @property (nonatomic, assign) BOOL cardBgHideStateEnabled;
