@@ -446,7 +446,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     UIImageView *newBg = [[UIImageView alloc] init];
     newBg.tag = kProfileCardBgImageTag;
-    newBg.clipsToBounds = YES;
+    newBg.clipsToBounds = NO;
     newBg.userInteractionEnabled = NO;
 
     NSInteger fillMode = config.cardBgFillMode;
@@ -491,7 +491,16 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                 strongBg.alpha = 1.0;
                 strongBg.hidden = NO;
 
-                // 不移 frame.origin.y — 与微信优化一致
+                // ★ 恢复：图片尺寸已知，应用 fillMode=0 对齐偏移
+                CGFloat alignOffset = [ProfileCardBgHook
+                    calcImageAlignmentOffsetWithImageSize:resultImage.size
+                                                   inView:strongButton];
+                if (fabs(alignOffset) > 0.5) {
+                    PluginConfig *cfg = [PluginConfig shared];
+                    CGRect f = strongBg.frame;
+                    f.origin.y = cfg.cardBgOffsetY + alignOffset;
+                    strongBg.frame = f;
+                }
             } else {
                 // fallback：无图片时设置背景色
                 PluginConfig *cfg = [PluginConfig shared];

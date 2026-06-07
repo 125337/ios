@@ -16,6 +16,13 @@
 
 // ★ 背景素材方法
 + (UIImageView *)findBackgroundImageViewInButton:(UIView *)button;
+/// 计算 fillMode=0（填充模式）下垂直对齐所需的 frame.origin.y 偏移量
+/// 仅在 clipsToBounds=NO 时生效
+/// @param imageSize   原始图片尺寸
+/// @param view        父视图（button）
+/// @return 偏移量，正数向下移，负数向上移
++ (CGFloat)calcImageAlignmentOffsetWithImageSize:(CGSize)imageSize
+                                          inView:(UIView *)view;
 + (UIImageView *)createBackgroundImageViewInButton:(UIView *)button;
 + (void)loadImageAsyncForImageView:(UIImageView *)imageView
                             button:(UIView *)button
