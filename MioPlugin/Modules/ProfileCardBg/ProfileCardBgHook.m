@@ -651,8 +651,13 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 #pragma mark - ★ 核心：handleButtonLayout
 
 + (void)handleButtonLayout:(UIView *)button {
-    // ★ 第1层：总开关守卫
     PluginConfig *config = [PluginConfig shared];
+
+    // ☆ 独立功能：状态隐藏（不受总开关保护）
+    [ProfileCardBgHook hideStateElementsInCell:button
+                                   shouldHide:config.cardBgHideStateEnabled];
+
+    // ★ 第1层：总开关守卫
     if (!config.cardBgBeautifyEnabled) return;
 
     // 通用守卫（提取为辅助方法）
@@ -672,10 +677,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     // 独立功能
     [ProfileCardBgHook handleMarginAdjustment:button];
     [ProfileCardBgHook handleCornerAndQR:button isDark:isDark];
-
-    // ★ 状态隐藏（直接调用，不包额外入口）
-    [ProfileCardBgHook hideStateElementsInCell:button
-                                   shouldHide:config.cardBgHideStateEnabled];
 }
 
 #pragma mark - 方案 M：左右边距
