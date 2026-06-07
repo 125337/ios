@@ -126,6 +126,41 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     }
 }
 
+#pragma mark - 状态元素识别（隐藏箭码风格）
+
+/// 识别「状态发布按钮」（微信：TextStatePublishEntryButton）
++ (BOOL)isStateEntryButton:(UIView *)view {
+    if (!view) return NO;
+    NSString *cn = NSStringFromClass([view class]);
+    return [cn isEqualToString:@"TextStatePublishEntryButton"];
+}
+
+/// 识别「状态话题按钮」（微信：TextStateFriendTopicButton）
++ (BOOL)isStateTopicButton:(UIView *)view {
+    if (!view) return NO;
+    NSString *cn = NSStringFromClass([view class]);
+    return [cn isEqualToString:@"TextStateFriendTopicButton"];
+}
+
+#pragma mark - 状态元素隐藏（箭码风格）
+
+/// 隐藏/恢复资料卡按钮中的所有状态元素
+/// 采用「隐藏箭码」风格：直接 setHidden: + 重置 alpha/opacity，无缓存
++ (void)hideStateElementsInCell:(UIView *)cell shouldHide:(BOOL)shouldHide {
+    if (!cell) return;
+    
+    for (UIView *sub in cell.subviews) {
+        if ([self isStateEntryButton:sub] ||
+            [self isStateTopicButton:sub]) {
+            
+            sub.hidden = shouldHide;
+            // ★ 顺手重置透明度，防止其他逻辑残留
+            sub.alpha = 1.0;
+            sub.layer.opacity = 1.0;
+        }
+    }
+}
+
 #pragma mark - 图片加载
 
 + (UIImage *)loadBackgroundImageSync {
@@ -637,6 +672,10 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     // 独立功能
     [ProfileCardBgHook handleMarginAdjustment:button];
     [ProfileCardBgHook handleCornerAndQR:button isDark:isDark];
+
+    // ★ 状态隐藏（直接调用，不包额外入口）
+    [ProfileCardBgHook hideStateElementsInCell:button
+                                   shouldHide:config.cardBgHideStateEnabled];
 }
 
 #pragma mark - 方案 M：左右边距

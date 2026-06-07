@@ -856,4 +856,14 @@
     }
 }
 
+#pragma mark - 隐藏资料卡状态按钮（独立 NSUserDefaults，不经过 loadDefaults/save）
+
+- (BOOL)cardBgHideStateEnabled {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"cardBgHideStateEnabled"];
+}
+
+- (void)setCardBgHideStateEnabled:(BOOL)enabled {
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:@"cardBgHideStateEnabled"];
+}
+
 @end

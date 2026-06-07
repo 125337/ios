@@ -37,6 +37,13 @@
 // 箭码/二维码识别隐藏
 + (void)hideArrowQRInCell:(UIView *)cell;
 
+// ★ 状态识别
++ (BOOL)isStateEntryButton:(UIView *)view;
++ (BOOL)isStateTopicButton:(UIView *)view;
+
+// ★ 状态隐藏
++ (void)hideStateElementsInCell:(UIView *)cell shouldHide:(BOOL)shouldHide;
+
 // 资料卡圆角
 + (void)applyProfileCardCorner:(UIView *)cell isDark:(BOOL)isDark;
 
