@@ -34,12 +34,11 @@
 // ★ 箭码隐藏（独立功能，不受总开关保护）
 + (void)handleArrowQRHiding:(UIView *)button;
 
+// 箭码/二维码识别隐藏
++ (void)hideArrowQRInCell:(UIView *)cell;
+
 // 资料卡圆角
 + (void)applyProfileCardCorner:(UIView *)cell isDark:(BOOL)isDark;
-
-// QR 码隐藏
-+ (void)hideQRButtonInCell:(UIView *)cell;
-+ (void)hideQRButtonInSubviews:(NSArray<UIView *> *)subviews;
 
 // 图片加载
 + (UIImage *)loadBackgroundImageSync;

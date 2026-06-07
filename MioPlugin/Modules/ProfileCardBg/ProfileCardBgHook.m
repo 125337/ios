@@ -94,31 +94,39 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     }
 }
 
-#pragma mark - QR 码隐藏
+#pragma mark - 箭码/二维码识别（单层遍历，参考 WCRefine）
 
-+ (void)hideQRButtonInCell:(UIView *)cell {
-    for (UIView *sub in cell.subviews) {
-        NSString *cn = NSStringFromClass([sub class]);
-        if ([cn containsString:@"Button"]) {
-            CGFloat x = sub.frame.origin.x;
-            if (x > sub.superview.bounds.size.width * 0.7) {
-                sub.hidden = YES;
-            }
-        }
-        [self hideQRButtonInSubviews:sub.subviews];
-    }
++ (BOOL)isArrowQRByAccessibilityLabel:(UIView *)view {
+    NSString *label = view.accessibilityLabel;
+    if (!label) return NO;
+    // WCRefine FUN_00336e4c 反编译确认的三次 isEqualToString 对比
+    return [label isEqualToString:@"More_CardInfo"] ||
+           [label isEqualToString:@"•"] ||
+           [label isEqualToString:@"• N"];
 }
 
-+ (void)hideQRButtonInSubviews:(NSArray<UIView *> *)subviews {
-    for (UIView *sub in subviews) {
-        NSString *cn = NSStringFromClass([sub class]);
-        if ([cn containsString:@"Button"]) {
-            CGFloat x = sub.frame.origin.x;
-            if (x > sub.superview.bounds.size.width * 0.7) {
-                sub.hidden = YES;
-            }
++ (BOOL)isArrowQRByFrameHeuristic:(UIView *)view {
+    if (![view isKindOfClass:[UIImageView class]]) return NO;
+    CGFloat w = view.frame.size.width;
+    CGFloat h = view.frame.size.height;
+    CGFloat x = view.frame.origin.x;
+    CGFloat parentW = view.superview.bounds.size.width;
+    // WCRefine FUN_00337128 反编译确认的帧判断
+    return (w >= 10 && w <= 18) &&
+           (h >= 8 && h <= 40) &&
+           (x >= parentW - 40);
+}
+
++ (BOOL)isArrowQRView:(UIView *)view {
+    return [self isArrowQRByAccessibilityLabel:view] ||
+           [self isArrowQRByFrameHeuristic:view];
+}
+
++ (void)hideArrowQRInCell:(UIView *)cell {
+    for (UIView *sub in cell.subviews) {  // 单层遍历，不递归
+        if ([self isArrowQRView:sub]) {
+            sub.hidden = YES;
         }
-        [self hideQRButtonInSubviews:sub.subviews];
     }
 }
 
@@ -717,7 +725,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     PluginConfig *config = [PluginConfig shared];
     if (config.myPageHideArrow) {
-        [ProfileCardBgHook hideQRButtonInCell:button];
+        [ProfileCardBgHook hideArrowQRInCell:button];
     }
 }
 
@@ -745,7 +753,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         }
 
         if (config.myPageHideArrow) {
-            [ProfileCardBgHook hideQRButtonInCell:button];
+            [ProfileCardBgHook hideArrowQRInCell:button];
         }
         return;  // ← 直接 return，不进入背景段
     }
@@ -770,7 +778,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     // 4. 二维码隐藏
     if (config.myPageHideArrow) {
-        [ProfileCardBgHook hideQRButtonInCell:button];
+        [ProfileCardBgHook hideArrowQRInCell:button];
     }
 }
 
