@@ -136,14 +136,6 @@
                                          cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        // ─── 隐藏状态按钮（平铺开关） ───
-        *ecy = [self addSubSwitchRowInGroup:expand
-                                      title:@"隐藏状态按钮"
-                                        key:@"cardBgHideStateEnabled"
-                                       isOn:cfg.cardBgHideStateEnabled
-                                         cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-
         // ─── 子手风琴3：开启资料圆角 ───
         *ecy = [self addMasterSwitchRowInGroup:expand
                                          title:@"开启资料圆角"
@@ -225,8 +217,8 @@
 
     mcy = [self addSubSwitchRowInGroup:myGroup
                                  title:@"隐藏状态"
-                                   key:@"myPageHideStatus"
-                                  isOn:NO
+                                   key:@"cardBgHideStateEnabled"
+                                  isOn:config.cardBgHideStateEnabled
                                     cy:mcy width:w];
     mcy = [self addSeparatorInGroup:myGroup cy:mcy width:w];
 
