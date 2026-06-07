@@ -225,7 +225,7 @@
     mcy = [self addSubSwitchRowInGroup:myGroup
                              title:@"隐藏箭码"
                                key:@"myPageHideArrow"
-                              isOn:cfg.myPageHideArrow
+                              isOn:config.myPageHideArrow
                                     cy:mcy width:w];
 
     y = [self finishGroup:myGroup atY:y height:mcy];
