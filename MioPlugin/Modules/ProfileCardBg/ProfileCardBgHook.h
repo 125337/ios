@@ -19,6 +19,8 @@
 + (CGFloat)calcImageAlignmentOffsetWithImageSize:(CGSize)imageSize
                                           inView:(UIView *)view;
 + (UIImageView *)createBackgroundImageViewInButton:(UIView *)button;
++ (void)configureBackgroundImageView:(UIImageView *)imageView
+                            inButton:(UIView *)button;
 + (void)loadImageAsyncForImageView:(UIImageView *)imageView
                             button:(UIView *)button
                             isDark:(BOOL)isDark;

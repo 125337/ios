@@ -471,30 +471,50 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     UIImageView *newBg = [[UIImageView alloc] init];
     newBg.tag = kProfileCardBgImageTag;
-    newBg.clipsToBounds = NO;
     newBg.userInteractionEnabled = NO;
-
-    NSInteger fillMode = config.cardBgFillMode;
-    switch (fillMode) {
-        case 1: newBg.contentMode = UIViewContentModeScaleAspectFill; break;
-        case 2: newBg.contentMode = UIViewContentModeScaleToFill; break;
-        default: newBg.contentMode = UIViewContentModeScaleAspectFill; break;
-    }
-
-    CGFloat ox = config.cardBgOffsetX;
-    CGFloat oy = config.cardBgOffsetY;
-    newBg.frame = CGRectMake(ox, oy,
+    newBg.frame = CGRectMake(config.cardBgOffsetX, config.cardBgOffsetY,
                              button.bounds.size.width,
                              button.bounds.size.height);
+    [button insertSubview:newBg atIndex:0];
+    return newBg;
+}
 
-    if (config.cardBgLayer == 1) {
-        [button addSubview:newBg];
-        [button bringSubviewToFront:newBg];
-    } else {
-        [button insertSubview:newBg atIndex:0];
+/// 统一配置 imageView：clipsToBounds、contentMode、frame（含对齐偏移）、层级
+/// 无论新建还是复用都走这里，保证行为一致
+/// imageView 必须已添加到 button 上
++ (void)configureBackgroundImageView:(UIImageView *)imageView
+                            inButton:(UIView *)button {
+    PluginConfig *config = [PluginConfig shared];
+
+    // ── 裁剪：让 aspectFill 渲染超界部分透出，对齐偏移才能生效 ──
+    imageView.clipsToBounds = NO;
+
+    // ── 填充模式 ──
+    NSInteger fillMode = config.cardBgFillMode;
+    switch (fillMode) {
+        case 1: imageView.contentMode = UIViewContentModeScaleAspectFill; break;
+        case 2: imageView.contentMode = UIViewContentModeScaleToFill; break;
+        default: imageView.contentMode = UIViewContentModeScaleAspectFill; break;
     }
 
-    return newBg;
+    // ── 计算对齐偏移（无图片时偏移为 0）──
+    CGFloat alignOffset = 0;
+    if (imageView.image && imageView.image.size.width > 0) {
+        alignOffset = [self calcImageAlignmentOffsetWithImageSize:imageView.image.size
+                                                          inView:button];
+    }
+
+    // ── frame（含偏移）──
+    CGFloat ox = config.cardBgOffsetX;
+    CGFloat oy = config.cardBgOffsetY;
+    imageView.frame = CGRectMake(ox, oy + alignOffset,
+                                 button.bounds.size.width,
+                                 button.bounds.size.height);
+
+    // ── 层级 ──
+    if (config.cardBgLayer == 1) {
+        [button bringSubviewToFront:imageView];
+    }
 }
 
 + (void)loadImageAsyncForImageView:(UIImageView *)imageView
@@ -516,16 +536,9 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
                 strongBg.alpha = 1.0;
                 strongBg.hidden = NO;
 
-                // 异步加载后重新计算对齐偏移（图片尺寸现在已知）
-                CGFloat alignOffset = [ProfileCardBgHook
-                    calcImageAlignmentOffsetWithImageSize:resultImage.size
-                                                   inView:strongButton];
-                if (fabs(alignOffset) > 0.5) {
-                    PluginConfig *cfg = [PluginConfig shared];
-                    CGRect f = strongBg.frame;
-                    f.origin.y = cfg.cardBgOffsetY + alignOffset;
-                    strongBg.frame = f;
-                }
+                // ★ 统一配置：此时 image 已存在，偏移能正确计算
+                [ProfileCardBgHook configureBackgroundImageView:strongBg
+                                                      inButton:strongButton];
             } else {
                 // fallback：无图片时设置背景色
                 PluginConfig *cfg = [PluginConfig shared];
@@ -544,31 +557,9 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     // ── 查找已有 bg ──
     UIImageView *bgImgView = [ProfileCardBgHook findBackgroundImageViewInButton:button];
 
-    CGFloat bgW = button.bounds.size.width;
-    CGFloat bgH = button.bounds.size.height;
-    CGFloat ox = config.cardBgOffsetX;
-    CGFloat oy = config.cardBgOffsetY;
-
     if (bgImgView) {
-        // ── 分支 A：已存在 → 更新 frame ──
-        bgImgView.clipsToBounds = NO;
-        NSInteger fillMode = config.cardBgFillMode;
-        switch (fillMode) {
-            case 1: bgImgView.contentMode = UIViewContentModeScaleAspectFill; break;
-            case 2: bgImgView.contentMode = UIViewContentModeScaleToFill; break;
-            default: bgImgView.contentMode = UIViewContentModeScaleAspectFill; break;
-        }
-
-        CGFloat alignOffset = 0;
-        if (bgImgView.image && bgImgView.image.size.width > 0) {
-            alignOffset = [ProfileCardBgHook
-                calcImageAlignmentOffsetWithImageSize:bgImgView.image.size
-                                               inView:button];
-        }
-
-        bgImgView.frame = CGRectMake(ox, oy + alignOffset, bgW, bgH);
-
-        if (config.cardBgLayer == 1) [button bringSubviewToFront:bgImgView];
+        // ── 分支 A：已存在 → 统一配置 ──
+        [ProfileCardBgHook configureBackgroundImageView:bgImgView inButton:button];
     } else {
         // ── 分支 B：不存在 → 创建新 bg ──
         bgImgView = [ProfileCardBgHook createBackgroundImageViewInButton:button];
