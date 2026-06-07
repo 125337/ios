@@ -489,6 +489,9 @@
     _cardBgLayer = [d integerForKey:[kPluginPrefix stringByAppendingString:@"CardBgLayer"]];
     _cardBgOffsetY = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetY"]];
     _cardBgOffsetX = [d floatForKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetX"]];
+
+    // ★ 新增：隐藏资料卡状态按钮
+    _cardBgHideStateEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgHideStateEnabled"]];
 }
 
 - (void)save {
@@ -709,6 +712,8 @@
     [d setInteger:_cardBgLayer forKey:[kPluginPrefix stringByAppendingString:@"CardBgLayer"]];
     [d setFloat:_cardBgOffsetY forKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetY"]];
     [d setFloat:_cardBgOffsetX forKey:[kPluginPrefix stringByAppendingString:@"CardBgOffsetX"]];
+    // ★ 新增：隐藏资料卡状态按钮
+    [d setBool:_cardBgHideStateEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgHideStateEnabled"]];
 
     // ========== 开发者工具配置 ==========
     [d setBool:_nsLogMonitorEnabled forKey:[kPluginPrefix stringByAppendingString:@"NsLogMonitorEnabled"]];
@@ -854,16 +859,6 @@
         
         [self save];
     }
-}
-
-#pragma mark - 隐藏资料卡状态按钮（独立 NSUserDefaults，不经过 loadDefaults/save）
-
-- (BOOL)cardBgHideStateEnabled {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"cardBgHideStateEnabled"];
-}
-
-- (void)setCardBgHideStateEnabled:(BOOL)enabled {
-    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:@"cardBgHideStateEnabled"];
 }
 
 @end
