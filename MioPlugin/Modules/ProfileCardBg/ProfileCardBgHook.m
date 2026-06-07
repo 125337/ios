@@ -753,12 +753,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 #pragma mark - 箭码隐藏（独立功能，不受总开关保护）
 
 + (void)handleArrowQRHiding:(UIView *)button {
-    // 只做守卫：必须是资料卡按钮
-    UIViewController *vc = [self findMoreViewController:button];
-    if (!vc) return;
-    if (![self hasHeadImageViewInView:button]) return;
-    if (button.frame.size.height <= 50.0) return;
-
+    // 守卫交给 handleButtonLayout 处理
     PluginConfig *config = [PluginConfig shared];
     if (config.myPageHideArrow) {
         [ProfileCardBgHook hideArrowQRInCell:button];
