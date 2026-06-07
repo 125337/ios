@@ -703,7 +703,20 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     if (config.cardBgCornerEnabled) {
         [ProfileCardBgHook applyProfileCardCorner:button isDark:isDark];
     }
-    if (config.listHideRightQRCode) {
+    // ★ QR/箭码隐藏已移到 handleArrowQRHiding:，不再在此处理
+}
+
+#pragma mark - 箭码隐藏（独立功能，不受总开关保护）
+
++ (void)handleArrowQRHiding:(UIView *)button {
+    // 只做守卫：必须是资料卡按钮
+    UIViewController *vc = [self findMoreViewController:button];
+    if (!vc) return;
+    if (![self hasHeadImageViewInView:button]) return;
+    if (button.frame.size.height <= 50.0) return;
+
+    PluginConfig *config = [PluginConfig shared];
+    if (config.myPageHideArrow) {
         [ProfileCardBgHook hideQRButtonInCell:button];
     }
 }
@@ -731,7 +744,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             sub.hidden = YES;
         }
 
-        if (config.listHideRightQRCode) {
+        if (config.myPageHideArrow) {
             [ProfileCardBgHook hideQRButtonInCell:button];
         }
         return;  // ← 直接 return，不进入背景段
@@ -756,7 +769,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     // ★ 不再需要 FIX-WHITE：所有子视图都隐藏了，白色背景也被隐藏
 
     // 4. 二维码隐藏
-    if (config.listHideRightQRCode) {
+    if (config.myPageHideArrow) {
         [ProfileCardBgHook hideQRButtonInCell:button];
     }
 }

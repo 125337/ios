@@ -75,14 +75,14 @@
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
     pcy = [self addSubSwitchRowInGroup:paramGroup
-                             title:@"隐藏右侧二维码"
-                               key:@"listHideRightQRCode"
-                              isOn:cfg.listHideRightQRCode
+                             title:@"Cell边框开关"
+                               key:@"listCellBorder"
+                              isOn:cfg.listCellBorder
                                 cy:pcy width:w];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
     pcy = [self addSubSwitchRowInGroup:paramGroup
-                             title:@"Cell边框开关"
+                             title:@"媒体视图圆角"
                                key:@"listCellBorder"
                               isOn:cfg.listCellBorder
                                 cy:pcy width:w];
@@ -227,7 +227,6 @@
         || [key isEqualToString:@"globalCornerDiscoverPageEnabled"]
         || [key isEqualToString:@"listSearchCornerRadius"]
         || [key isEqualToString:@"listCellBorder"]
-        || [key isEqualToString:@"listHideRightQRCode"]
         || [key isEqualToString:@"listDisableLabelWidthAdjustment"]
         || [key isEqualToString:@"listMediaCornerEnabled"]
         || [key isEqualToString:@"listProfileCardBorderEnabled"]) {

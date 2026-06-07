@@ -413,7 +413,7 @@
     _globalCornerDiscoverPageEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerDiscoverPageEnabled"]];
     // 列表圆角
     _listSearchCornerRadius = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListSearchCornerRadius"]];
-    _listHideRightQRCode = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListHideRightQRCode"]];
+    _myPageHideArrow = [d boolForKey:[kPluginPrefix stringByAppendingString:@"MyPageHideArrow"]];
     _listCellBorder = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorder"]];
 
     CGFloat cr = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListCellCornerRadius"]];
@@ -669,7 +669,7 @@
     [d setBool:_globalCornerDiscoverPageEnabled forKey:[kPluginPrefix stringByAppendingString:@"GlobalCornerDiscoverPageEnabled"]];
     // 列表圆角
     [d setBool:_listSearchCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"ListSearchCornerRadius"]];
-    [d setBool:_listHideRightQRCode forKey:[kPluginPrefix stringByAppendingString:@"ListHideRightQRCode"]];
+    [d setBool:_myPageHideArrow forKey:[kPluginPrefix stringByAppendingString:@"MyPageHideArrow"]];
     [d setBool:_listCellBorder forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorder"]];
     [d setFloat:_listCellCornerRadius forKey:[kPluginPrefix stringByAppendingString:@"ListCellCornerRadius"]];
     [d setFloat:_listCellMargin forKey:[kPluginPrefix stringByAppendingString:@"ListCellMargin"]];

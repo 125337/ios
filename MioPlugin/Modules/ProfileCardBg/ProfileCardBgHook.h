@@ -31,6 +31,9 @@
 + (void)handleVisiblePath:(UIView *)button isDark:(BOOL)isDark;
 + (void)handleCornerAndQR:(UIView *)button isDark:(BOOL)isDark;
 
+// ★ 箭码隐藏（独立功能，不受总开关保护）
++ (void)handleArrowQRHiding:(UIView *)button;
+
 // 资料卡圆角
 + (void)applyProfileCardCorner:(UIView *)cell isDark:(BOOL)isDark;
 

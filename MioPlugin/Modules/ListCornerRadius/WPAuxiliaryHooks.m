@@ -161,16 +161,6 @@ static void _hooked_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         view.layer.masksToBounds = YES;
     }
 
-    if (config.listHideRightQRCode) {
-        UIView *view = (UIView *)self;
-        Class cls = [view class];
-        NSString *className = NSStringFromClass(cls);
-        if ([className containsString:@"QRCode"] || [className containsString:@"Qrcode"]) {
-            view.hidden = YES;
-            view.alpha = 0;
-        }
-    }
-
     if (config.listDisableLabelWidthAdjustment) {
         UIView *view = (UIView *)self;
         for (UIView *subview in view.subviews) {

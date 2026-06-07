@@ -223,9 +223,9 @@
     mcy = [self addSeparatorInGroup:myGroup cy:mcy width:w];
 
     mcy = [self addSubSwitchRowInGroup:myGroup
-                                 title:@"隐藏箭头"
-                                   key:@"myPageHideArrow"
-                                  isOn:NO
+                             title:@"隐藏箭码"
+                               key:@"myPageHideArrow"
+                              isOn:cfg.myPageHideArrow
                                     cy:mcy width:w];
 
     y = [self finishGroup:myGroup atY:y height:mcy];
@@ -508,7 +508,8 @@
         || [key isEqualToString:@"cardBgMaterialEnabled"]
         || [key isEqualToString:@"cardBgCornerEnabled"]
         || [key isEqualToString:@"cardBgCornerUseGlobal"]
-        || [key isEqualToString:@"cardBgHidden"]) {
+        || [key isEqualToString:@"cardBgHidden"]
+        || [key isEqualToString:@"myPageHideArrow"]) {
         [self buildUI];
         return;
     }

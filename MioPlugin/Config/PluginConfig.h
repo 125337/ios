@@ -153,7 +153,7 @@
 @property (nonatomic, assign) BOOL globalCornerDiscoverPageEnabled;
 // 列表圆角
 @property (nonatomic, assign) BOOL listSearchCornerRadius;
-@property (nonatomic, assign) BOOL listHideRightQRCode;
+@property (nonatomic, assign) BOOL myPageHideArrow;
 @property (nonatomic, assign) BOOL listCellBorder;
 @property (nonatomic, assign) CGFloat listCellCornerRadius;
 @property (nonatomic, assign) CGFloat listCellMargin;
