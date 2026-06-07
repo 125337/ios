@@ -205,7 +205,31 @@
     } cy:ncy width:w];
 
     y = [self finishGroup:newGroup atY:y height:ncy];
-    y += 8;  // 组间距
+    y += 8;
+
+    // ════════════════════════════════════
+    // ★ 我的页面美化
+    // ════════════════════════════════════
+    y = [self addSectionHeader:@"我的页面美化" y:y width:w];
+
+    UIView *myGroup = [self addTableGroupAtY:y width:w];
+    CGFloat mcy = 0;
+
+    mcy = [self addSubSwitchRowInGroup:myGroup
+                                 title:@"隐藏状态"
+                                   key:@"myPageHideStatus"
+                                  isOn:NO
+                                    cy:mcy width:w];
+    mcy = [self addSeparatorInGroup:myGroup cy:mcy width:w];
+
+    mcy = [self addSubSwitchRowInGroup:myGroup
+                                 title:@"隐藏箭头"
+                                   key:@"myPageHideArrow"
+                                  isOn:NO
+                                    cy:mcy width:w];
+
+    y = [self finishGroup:myGroup atY:y height:mcy];
+    y += 8;
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
