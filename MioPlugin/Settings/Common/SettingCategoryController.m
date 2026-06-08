@@ -421,7 +421,14 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 
 #pragma mark - Row: Color
 
-- (CGFloat)addColorRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w {
+- (CGFloat)addColorRowInGroup:(UIView *)group
+                        title:(NSString *)title
+                          key:(NSString *)key
+                        value:(NSString *)value
+                           cy:(CGFloat)cy
+                        width:(CGFloat)w
+                     darkKey:(NSString *)darkKey
+                   darkValue:(NSString *)darkValue {
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
@@ -429,78 +436,64 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         row[@"title"] = title;
         row[@"key"] = key;
         if (value.length > 0) row[@"value"] = value;
+        if (darkKey.length > 0) row[@"darkKey"] = darkKey;
+        if (darkValue.length > 0) row[@"darkValue"] = darkValue;
         [rowsForTable(table) addObject:row];
         return cy + kRowH;
     }
 
     CGFloat gw = w - kPad * 2;
-    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4, gw - kCellHPadding - 56, kRowH - 8)];
-    tl.text = title;
-    tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = WPT1();
-    [group addSubview:tl];
 
-    UIColor *currentColor = [[PluginConfig shared] colorFromHex:value] ?: [UIColor grayColor];
+    if (darkKey == nil) {
+        // ─── 原单按钮逻辑（一字不改） ───
+        UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4,
+                                              gw - kCellHPadding - 36, kRowH - 8)];
+        tl.text = title;
+        tl.font = [UIFont systemFontOfSize:15];
+        tl.textColor = WPT1();
+        [group addSubview:tl];
 
-    UIButton *btn = [WPColorPicker makeColorButtonWithColor:currentColor];
-    btn.frame = CGRectMake(gw - kCellHPadding - 36, cy + (kRowH - 30) / 2, 30, 30);
-    objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
-    [group addSubview:btn];
-    return cy + kRowH;
-}
+        UIColor *color = [[PluginConfig shared] colorFromHex:value] ?: [UIColor grayColor];
+        UIButton *btn = [WPColorPicker makeColorButtonWithColor:color];
+        btn.frame = CGRectMake(gw - kCellHPadding - 36, cy + (kRowH - 30) / 2, 30, 30);
+        objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [btn addTarget:self action:@selector(colorButtonTapped:)
+          forControlEvents:UIControlEventTouchUpInside];
+        [group addSubview:btn];
+    } else {
+        // ─── 双按钮逻辑（用同一套坐标常量） ───
+        CGFloat btnSize = 24;
+        CGFloat gap = 8;
+        // 两个按钮占宽: btnSize + gap + btnSize + 4(右侧留白) = 60
+        // 按钮们的右边界: gw - kCellHPadding
+        // 按钮们的左边界: gw - kCellHPadding - 60
 
-/// 创建带双颜色预览的单行（无文字标注）
-/// @param group  父 view
-/// @param title  行标题
-/// @param lightKey  浅色属性 key
-/// @param darkKey   深色属性 key
-/// @param lightHex  浅色 hex 值
-/// @param darkHex   深色 hex 值
-/// @param cy    当前 y 坐标
-/// @param w     屏幕宽度
-/// @return 底部 y 坐标（cy + kRowH）
-- (CGFloat)addDualColorRowInGroup:(UIView *)group
-                            title:(NSString *)title
-                         lightKey:(NSString *)lightKey
-                          darkKey:(NSString *)darkKey
-                         lightHex:(NSString *)lightHex
-                          darkHex:(NSString *)darkHex
-                                cy:(CGFloat)cy
-                             width:(CGFloat)w {
-    CGFloat gw = w - kPad * 2;
-    CGFloat btnSize = 24;
-    CGFloat gap = 8;
+        UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4,
+                                              gw - kCellHPadding - kCellHPadding - 60, kRowH - 8)];
+        tl.text = title;
+        tl.font = [UIFont systemFontOfSize:15];
+        tl.textColor = WPT1();
+        [group addSubview:tl];
 
-    // ─── 标题 ───
-    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy + 4,
-                                          gw - kCellHPadding - 56 - btnSize - gap, kRowH - 8)];
-    tl.text = title;
-    tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = WPT1();
-    [group addSubview:tl];
+        // 深色按钮（右侧）
+        UIColor *darkColor = [[PluginConfig shared] colorFromHex:darkValue] ?: [UIColor darkGrayColor];
+        UIButton *darkBtn = [WPColorPicker makeColorButtonWithColor:darkColor];
+        CGFloat darkX = gw - kCellHPadding - btnSize - 4;
+        darkBtn.frame = CGRectMake(darkX, cy + (kRowH - btnSize) / 2, btnSize, btnSize);
+        objc_setAssociatedObject(darkBtn, "key", darkKey, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [darkBtn addTarget:self action:@selector(colorButtonTapped:)
+          forControlEvents:UIControlEventTouchUpInside];
+        [group addSubview:darkBtn];
 
-    // ─── 深色按钮（右侧） ───
-    UIColor *darkColor = [[PluginConfig shared] colorFromHex:darkHex] ?: [UIColor darkGrayColor];
-    UIButton *darkBtn = [WPColorPicker makeColorButtonWithColor:darkColor];
-    darkBtn.frame = CGRectMake(gw - kCellHPadding - btnSize,
-                               cy + (kRowH - btnSize) / 2,
-                               btnSize, btnSize);
-    objc_setAssociatedObject(darkBtn, "key", darkKey, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [darkBtn addTarget:self action:@selector(colorButtonTapped:)
-      forControlEvents:UIControlEventTouchUpInside];
-    [group addSubview:darkBtn];
-
-    // ─── 浅色按钮（深色按钮左边） ───
-    UIColor *lightColor = [[PluginConfig shared] colorFromHex:lightHex] ?: [UIColor whiteColor];
-    UIButton *lightBtn = [WPColorPicker makeColorButtonWithColor:lightColor];
-    lightBtn.frame = CGRectMake(darkBtn.frame.origin.x - gap - btnSize,
-                                darkBtn.frame.origin.y,
-                                btnSize, btnSize);
-    objc_setAssociatedObject(lightBtn, "key", lightKey, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [lightBtn addTarget:self action:@selector(colorButtonTapped:)
-      forControlEvents:UIControlEventTouchUpInside];
-    [group addSubview:lightBtn];
+        // 浅色按钮（左侧）
+        UIColor *lightColor = [[PluginConfig shared] colorFromHex:value] ?: [UIColor whiteColor];
+        UIButton *lightBtn = [WPColorPicker makeColorButtonWithColor:lightColor];
+        lightBtn.frame = CGRectMake(darkX - gap - btnSize, darkBtn.frame.origin.y, btnSize, btnSize);
+        objc_setAssociatedObject(lightBtn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [lightBtn addTarget:self action:@selector(colorButtonTapped:)
+          forControlEvents:UIControlEventTouchUpInside];
+        [group addSubview:lightBtn];
+    }
 
     return cy + kRowH;
 }

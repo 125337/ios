@@ -65,7 +65,8 @@
                                   title:@"字体颜色"
                                     key:@"placeholderTextColorHex"
                                   value:config.placeholderTextColorHex
-                                     cy:*ecy width:w];
+                                     cy:*ecy width:w
+                               darkKey:nil darkValue:nil];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         // 文字透明度

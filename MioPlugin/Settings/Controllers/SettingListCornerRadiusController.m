@@ -162,19 +162,14 @@
                             cy:pcy width:w];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
-    // 浅色模式 Cell 背景色
+    // Cell 背景色（浅色+深色双预览）
     pcy = [self addColorRowInGroup:paramGroup
-                             title:@"浅色模式背景色"
+                             title:@"Cell背景色"
                                key:@"listCellLightBgColor"
                              value:cfg.listCellLightBgColor
-                                cy:pcy width:w];
-    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
-    // 深色模式 Cell 背景色
-    pcy = [self addColorRowInGroup:paramGroup
-                             title:@"深色模式背景色"
-                               key:@"listCellDarkBgColor"
-                             value:cfg.listCellDarkBgColor
-                                cy:pcy width:w];
+                                cy:pcy width:w
+                          darkKey:@"listCellDarkBgColor"
+                        darkValue:cfg.listCellDarkBgColor];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
     pcy = [self addColorRowInGroup:paramGroup
@@ -214,7 +209,8 @@
                          title:@"资料卡边框颜色"
                            key:@"listProfileCardBorderColor"
                          value:cfg.listProfileCardBorderColor
-                            cy:pcy width:w];
+                            cy:pcy width:w
+                      darkKey:nil darkValue:nil];
 
     y = [self finishGroup:paramGroup atY:y height:pcy];
 
