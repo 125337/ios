@@ -22,6 +22,7 @@ Class SettingCategoryBaseClass(void);
 - (CGFloat)addButtonRowInGroup:(UIView *)group title:(NSString *)title hint:(NSString *)hint key:(NSString *)key cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addSubSectionLabelInGroup:(UIView *)group text:(NSString *)text cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addColorRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w;
+- (CGFloat)addDualColorRowInGroup:(UIView *)group title:(NSString *)title lightKey:(NSString *)lightKey darkKey:(NSString *)darkKey lightHex:(NSString *)lightHex darkHex:(NSString *)darkHex cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addSeparatorInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w;
 - (UIView *)addExpandContainerInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)finishExpandContainer:(UIView *)container currentCy:(CGFloat)cy;
