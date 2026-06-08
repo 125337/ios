@@ -9,7 +9,6 @@
 
 static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
 static IMP _orig_WCSearchBar_layoutSubviews = NULL;
-static IMP _orig_MMUIButton_layoutSubviews = NULL;
 
 static UIViewController *findParentViewController(UIView *view) {
     UIResponder *responder = view;
@@ -114,32 +113,8 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
-// ★★★ 薄分发层：MMUIButton Hook ★★★
-static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
-    // 先让微信完成原始布局
-    if (_orig_MMUIButton_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
-    }
-
-    // ★ 方案H：改 button 高度 ★
-    [ProfileCardBgHook handleButtonLayout:(UIView *)self];
-}
-
 // ★★★ Cell Hook：列表圆角 + 分发到资料卡透明化 ★★★
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
-    // 懒注册 MMUIButton hook（如果还没注册的话）
-    if (!_orig_MMUIButton_layoutSubviews) {
-        Class MMUIButtonClass = objc_getClass("MMUIButton");
-        if (MMUIButtonClass) {
-            MSHookMessageEx(
-                MMUIButtonClass,
-                @selector(layoutSubviews),
-                (IMP)replaced_MMUIButton_layoutSubviews,
-                &_orig_MMUIButton_layoutSubviews
-            );
-        }
-    }
-
     PluginConfig *config = [PluginConfig shared];
 
     // ★ 列表圆角入口守卫：只看自己的开关 ★
@@ -304,33 +279,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"ListCornerRadius", @"[OK] WCSearchBar::layoutSubviews");
     } else {
         WPLog(@"ListCornerRadius", @"[WARN] WCSearchBar class not found!");
-    }
-
-    WPLog(@"ListCornerRadius", @"[DEBUG] About to register MMUIButton hook...");
-    Class MMUIButtonClass = objc_getClass("MMUIButton");
-    WPLog(@"ListCornerRadius", @"[DEBUG] MMUIButton class = %@", MMUIButtonClass);
-    if (MMUIButtonClass) {
-        MSHookMessageEx(
-            MMUIButtonClass,
-            @selector(layoutSubviews),
-            (IMP)replaced_MMUIButton_layoutSubviews,
-            &_orig_MMUIButton_layoutSubviews
-        );
-        WPLog(@"ListCornerRadius", @"[OK] MMUIButton::layoutSubviews (ProfileCard)");
-    } else {
-        MMUIButtonClass = objc_lookUpClass("MMUIButton");
-        WPLog(@"ListCornerRadius", @"[DEBUG] objc_lookUpClass result = %@", MMUIButtonClass);
-        if (MMUIButtonClass) {
-            MSHookMessageEx(
-                MMUIButtonClass,
-                @selector(layoutSubviews),
-                (IMP)replaced_MMUIButton_layoutSubviews,
-                &_orig_MMUIButton_layoutSubviews
-            );
-            WPLog(@"ListCornerRadius", @"[OK] MMUIButton::layoutSubviews (ProfileCard, via lookUp)");
-        } else {
-            WPLog(@"ListCornerRadius", @"[WARN] MMUIButton class not found! Will retry on first MMTableViewCell layoutSubviews");
-        }
     }
 
     [ProfileCardBgHook initCellHeightHook];

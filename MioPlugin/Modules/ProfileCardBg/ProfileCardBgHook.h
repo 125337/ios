@@ -51,5 +51,6 @@
 
 // Hook 注册
 + (void)initCellHeightHook;
++ (void)initProfileCardHook;
 
 @end

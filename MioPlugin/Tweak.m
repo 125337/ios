@@ -18,6 +18,7 @@ static void MioPluginInitialize() {
             [HookRegistry installAllHooks];
 
             [ListCornerRadiusHook initListCornerRadiusHook];
+            [ProfileCardBgHook initProfileCardHook];
             WPInstallSessionSpacingHooks();
             WPInstallAuxiliaryHooks();
 

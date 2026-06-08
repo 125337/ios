@@ -33,6 +33,14 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     return result;
 }
 
+static IMP _orig_MMUIButton_layoutSubviews = NULL;
+static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
+    if (_orig_MMUIButton_layoutSubviews) {
+        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+    }
+    [ProfileCardBgHook handleButtonLayout:(UIView *)self];
+}
+
 @implementation ProfileCardBgHook
 
 #pragma mark - 资料卡圆角
@@ -868,6 +876,15 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
         WPLog(@"CardBg", @"[OK] WCTableViewManager::heightForHeaderInSection:");
     } else {
         WPLog(@"CardBg", @"[WARN] WCTableViewManager class not found!");
+    }
+}
+
++ (void)initProfileCardHook {
+    Class cls = objc_getClass("MMUIButton");
+    if (cls) {
+        MSHookMessageEx(cls, @selector(layoutSubviews),
+            (IMP)replaced_MMUIButton_layoutSubviews,
+            (IMP *)&_orig_MMUIButton_layoutSubviews);
     }
 }
 
