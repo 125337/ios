@@ -63,7 +63,9 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         cell.layer.cornerRadius = radius;
         cell.layer.masksToBounds = YES;
 
-        UIColor *bgColor = [config colorFromHex:config.listCellBgColor];
+        UIColor *bgColor = isDark
+            ? [config colorFromHex:config.listCellDarkBgColor]
+            : [config colorFromHex:config.listCellLightBgColor];
         if (bgColor) {
             cell.backgroundColor = bgColor;
         }

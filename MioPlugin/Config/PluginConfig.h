@@ -159,7 +159,8 @@
 @property (nonatomic, assign) CGFloat listCellMargin;
 @property (nonatomic, assign) CGFloat listPinnedSessionTopSpacing;
 @property (nonatomic, assign) CGFloat listNormalSessionSpacing;
-@property (nonatomic, copy) NSString *listCellBgColor;
+@property (nonatomic, copy) NSString *listCellLightBgColor;  // 浅色模式背景色
+@property (nonatomic, copy) NSString *listCellDarkBgColor;   // 深色模式背景色
 @property (nonatomic, copy) NSString *listCardBgColor;
 @property (nonatomic, assign) CGFloat listCellBorderWidth;
 @property (nonatomic, copy) NSString *listCellBorderColor;

@@ -198,7 +198,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         if (@available(iOS 13.0, *)) {
             isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
         }
-        UIColor *customBg = [config colorFromHex:config.listCellBgColor];
+        UIColor *customBg = isDark
+            ? [config colorFromHex:config.listCellDarkBgColor]
+            : [config colorFromHex:config.listCellLightBgColor];
         ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
     }
 
@@ -268,7 +270,9 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
 
-    UIColor *targetBg = [config colorFromHex:config.listCellBgColor];
+    UIColor *targetBg = isDark
+            ? [config colorFromHex:config.listCellDarkBgColor]
+            : [config colorFromHex:config.listCellLightBgColor];
     if (!targetBg) {
         targetBg = isDark
             ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
@@ -294,7 +298,9 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
 
-    UIColor *targetBg = [config colorFromHex:config.listCellBgColor];
+    UIColor *targetBg = isDark
+            ? [config colorFromHex:config.listCellDarkBgColor]
+            : [config colorFromHex:config.listCellLightBgColor];
     if (!targetBg) {
         targetBg = isDark
             ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
@@ -356,7 +362,9 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     if (@available(iOS 13.0, *)) {
         isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     }
-    UIColor *targetBg = [config colorFromHex:config.listCellBgColor];
+    UIColor *targetBg = isDark
+            ? [config colorFromHex:config.listCellDarkBgColor]
+            : [config colorFromHex:config.listCellLightBgColor];
     if (!targetBg) {
         targetBg = isDark
             ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]

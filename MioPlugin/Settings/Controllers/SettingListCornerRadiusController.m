@@ -164,11 +164,19 @@
                             cy:pcy width:w];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
+    // 浅色模式 Cell 背景色
     pcy = [self addColorRowInGroup:paramGroup
-                         title:@"Cell背景色"
-                           key:@"listCellBgColor"
-                         value:cfg.listCellBgColor
-                            cy:pcy width:w];
+                             title:@"浅色模式背景色"
+                               key:@"listCellLightBgColor"
+                             value:cfg.listCellLightBgColor
+                                cy:pcy width:w];
+    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
+    // 深色模式 Cell 背景色
+    pcy = [self addColorRowInGroup:paramGroup
+                             title:@"深色模式背景色"
+                               key:@"listCellDarkBgColor"
+                             value:cfg.listCellDarkBgColor
+                                cy:pcy width:w];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
     pcy = [self addColorRowInGroup:paramGroup
@@ -240,18 +248,24 @@
     NSString *key = objc_getAssociatedObject(sender, "key");
     if (!key) return;
 
-    if ([key isEqualToString:@"listCellBgColor"]) {
-        // ─── Cell背景色 → 直接弹出自定义颜色选择器 ───
+    if ([key isEqualToString:@"listCellLightBgColor"] ||
+        [key isEqualToString:@"listCellDarkBgColor"]) {
         PluginConfig *cfg = [PluginConfig shared];
-        NSString *hex = cfg.listCellBgColor;
 
         WPHsvColorPickerController *picker = [[WPHsvColorPickerController alloc]
-            initWithHex:hex ?: @"#FFFFFF"
-            callback:^(NSString *selectedHex) {
-                // 更新按钮颜色
-                sender.backgroundColor = [WPColorUtil colorFromHexString:selectedHex];
-                // 保存配置
-                cfg.listCellBgColor = selectedHex;
+            initWithLightHex:cfg.listCellLightBgColor
+                    darkHex:cfg.listCellDarkBgColor
+                   callback:^(NSString *lightHex, NSString *darkHex) {
+                // 更新按钮颜色（当前编辑哪个模式就更新对应的按钮）
+                if ([key isEqualToString:@"listCellLightBgColor"]) {
+                    sender.backgroundColor = [WPColorUtil colorFromHexString:lightHex];
+                } else {
+                    sender.backgroundColor = [WPColorUtil colorFromHexString:darkHex];
+                }
+
+                // 保存两个值（用户在颜色选择器里可能同时编辑了浅色和深色）
+                if (lightHex) cfg.listCellLightBgColor = lightHex;
+                if (darkHex)  cfg.listCellDarkBgColor  = darkHex;
                 [cfg save];
             }];
 

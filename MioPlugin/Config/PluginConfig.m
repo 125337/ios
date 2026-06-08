@@ -428,8 +428,10 @@
     CGFloat ns = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListNormalSessionSpacing"]];
     _listNormalSessionSpacing = (ns > 0) ? ns : 15.0;
 
-    NSString *cbg = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellBgColor"]];
-    _listCellBgColor = cbg.length > 0 ? cbg : @"#FFFFFF";
+    NSString *light = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellLightBgColor"]];
+    _listCellLightBgColor = light.length > 0 ? light : @"#FFFFFF";
+    NSString *dark = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellDarkBgColor"]];
+    _listCellDarkBgColor = dark.length > 0 ? dark : @"#1C1C1E";
 
     NSString *cbg2 = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCardBgColor"]];
     _listCardBgColor = cbg2.length > 0 ? cbg2 : @"#FFFFFF";
@@ -678,7 +680,8 @@
     [d setFloat:_listCellMargin forKey:[kPluginPrefix stringByAppendingString:@"ListCellMargin"]];
     [d setFloat:_listPinnedSessionTopSpacing forKey:[kPluginPrefix stringByAppendingString:@"ListPinnedSessionTopSpacing"]];
     [d setFloat:_listNormalSessionSpacing forKey:[kPluginPrefix stringByAppendingString:@"ListNormalSessionSpacing"]];
-    if (_listCellBgColor) [d setObject:_listCellBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBgColor"]];
+    if (_listCellLightBgColor) [d setObject:_listCellLightBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellLightBgColor"]];
+    if (_listCellDarkBgColor) [d setObject:_listCellDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellDarkBgColor"]];
     if (_listCardBgColor) [d setObject:_listCardBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCardBgColor"]];
     [d setFloat:_listCellBorderWidth forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderWidth"]];
     if (_listCellBorderColor) [d setObject:_listCellBorderColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderColor"]];
