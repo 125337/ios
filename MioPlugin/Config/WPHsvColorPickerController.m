@@ -430,4 +430,14 @@ static CGFloat const kSBViewRatio = 0.85;    // S/B 面板占 contentView 宽度
     [prev.bottomAnchor constraintEqualToAnchor:cv.bottomAnchor constant:-20].active = YES;
 }
 
+#pragma mark - 历史颜色加载
+
+- (void)loadHistoryColors {
+    NSArray *saved = [[NSUserDefaults standardUserDefaults] arrayForKey:@"WPColorPickerHistory"];
+    if (saved) {
+        self.historyColors = [saved mutableCopy];
+        [self.colorPalette setHistoryHexes:self.historyColors];
+    }
+}
+
 @end
