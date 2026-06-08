@@ -172,18 +172,10 @@
                         darkValue:cfg.listCellDarkBgColor];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
-    pcy = [self addColorRowInGroup:paramGroup
-                         title:@"边框颜色"
-                           key:@"listCellBorderColor"
-                         value:cfg.listCellBorderColor
-                            cy:pcy width:w];
+    pcy = [self addColorRowInGroup:paramGroup title:@"边框颜色" key:@"listCellBorderColor" value:cfg.listCellBorderColor cy:pcy width:w darkKey:nil darkValue:nil];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
-    pcy = [self addColorRowInGroup:paramGroup
-                         title:@"卡片背景色"
-                           key:@"listCardBgColor"
-                         value:cfg.listCardBgColor
-                            cy:pcy width:w];
+    pcy = [self addColorRowInGroup:paramGroup title:@"卡片背景色" key:@"listCardBgColor" value:cfg.listCardBgColor cy:pcy width:w darkKey:nil darkValue:nil];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
     pcy = [self addSubSwitchRowInGroup:paramGroup
