@@ -644,6 +644,10 @@ static NSDictionary *ColorPairMap(void) {
             
             // SettingMessageTimeController (接收方)
             @"receiverTextColorHex": @"receiverTextColorDarkHex",
+            
+            // SettingNameColorController
+            @"chatNameColorHex": @"chatNameColorDarkHex",
+            @"momentsNameColorHex": @"momentsNameColorDarkHex",
         };
     });
     return map;

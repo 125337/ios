@@ -102,11 +102,11 @@ static NSString *fontSizeForKey(NSString *key) {
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addColorRowInGroup:expand
                                       title:@"聊天名字颜色"
-                                        key:@"senderTextColorHex"
-                                      value:config.senderTextColorHex
+                                        key:@"chatNameColorHex"
+                                      value:config.chatNameColorHex
                                          cy:*ecy width:w
-                                   darkKey:@"senderTextColorDarkHex"
-                                 darkValue:config.senderTextColorDarkHex];
+                                   darkKey:@"chatNameColorDarkHex"
+                                 darkValue:config.chatNameColorDarkHex];
     } cy:cy1 width:w];
 
     cy1 = [self addSeparatorInGroup:card1 cy:cy1 width:w];
@@ -135,11 +135,11 @@ static NSString *fontSizeForKey(NSString *key) {
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addColorRowInGroup:expand
                                       title:@"朋友圈名字颜色"
-                                        key:@"receiverTextColorHex"
-                                      value:config.receiverTextColorHex
+                                        key:@"momentsNameColorHex"
+                                      value:config.momentsNameColorHex
                                          cy:*ecy width:w
-                                   darkKey:@"receiverTextColorDarkHex"
-                                 darkValue:config.receiverTextColorDarkHex];
+                                   darkKey:@"momentsNameColorDarkHex"
+                                 darkValue:config.momentsNameColorDarkHex];
     } cy:cy2 width:w];
 
     cy2 = [self addSeparatorInGroup:card2 cy:cy2 width:w];

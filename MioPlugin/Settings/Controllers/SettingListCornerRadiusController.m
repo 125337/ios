@@ -83,8 +83,8 @@
 
     pcy = [self addSubSwitchRowInGroup:paramGroup
                              title:@"媒体视图圆角"
-                               key:@"listCellBorder"
-                              isOn:cfg.listCellBorder
+                               key:@"listMediaCornerEnabled"
+                              isOn:cfg.listMediaCornerEnabled
                                 cy:pcy width:w];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 

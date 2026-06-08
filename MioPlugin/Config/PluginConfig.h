@@ -125,6 +125,11 @@
 @property (nonatomic, copy) NSString *interceptNotifyTemplate;
 @property (nonatomic, copy) NSString *customNotifyFormat;
 @property (nonatomic, copy) NSString *revokeTemplate;
+// 名字颜色设置（聊天界面昵称颜色，与消息时间颜色独立）
+@property (nonatomic, copy) NSString *chatNameColorHex;
+@property (nonatomic, copy) NSString *chatNameColorDarkHex;
+@property (nonatomic, copy) NSString *momentsNameColorHex;
+@property (nonatomic, copy) NSString *momentsNameColorDarkHex;
 @property (nonatomic, copy) NSString *nameColorHex;
 @property (nonatomic, copy) NSString *timeColorHex;
 @property (nonatomic, copy) NSString *contentColorHex;

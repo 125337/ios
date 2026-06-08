@@ -157,6 +157,16 @@
     if (v.length > 0) {
         _contentColorHex = [v copy];
     }
+
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatNameColorHex"]];
+    _chatNameColorHex = v.length > 0 ? [v copy] : @"#808080";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatNameColorDarkHex"]];
+    _chatNameColorDarkHex = v.length > 0 ? [v copy] : @"#BFBFBF";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MomentsNameColorHex"]];
+    _momentsNameColorHex = v.length > 0 ? [v copy] : @"#808080";
+    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MomentsNameColorDarkHex"]];
+    _momentsNameColorDarkHex = v.length > 0 ? [v copy] : @"#BFBFBF";
+
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DarkNameColorHex"]];
     if (v.length > 0) {
         _darkNameColorHex = [v copy];
@@ -568,6 +578,10 @@
     [d setObject:_darkNameColorHex forKey:[kPluginPrefix stringByAppendingString:@"DarkNameColorHex"]];
     [d setObject:_darkTimeColorHex forKey:[kPluginPrefix stringByAppendingString:@"DarkTimeColorHex"]];
     [d setObject:_darkContentColorHex forKey:[kPluginPrefix stringByAppendingString:@"DarkContentColorHex"]];
+    if (_chatNameColorHex) [d setObject:_chatNameColorHex forKey:[kPluginPrefix stringByAppendingString:@"ChatNameColorHex"]];
+    if (_chatNameColorDarkHex) [d setObject:_chatNameColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"ChatNameColorDarkHex"]];
+    if (_momentsNameColorHex) [d setObject:_momentsNameColorHex forKey:[kPluginPrefix stringByAppendingString:@"MomentsNameColorHex"]];
+    if (_momentsNameColorDarkHex) [d setObject:_momentsNameColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"MomentsNameColorDarkHex"]];
 
     [d setBool:_showMessageTime forKey:[kPluginPrefix stringByAppendingString:@"ShowMessageTime"]];
     [d setFloat:_messageTimeFontSize forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFontSize"]];
