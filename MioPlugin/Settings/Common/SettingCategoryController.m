@@ -577,24 +577,90 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     }
 }
 
+/// Light ↔ Dark 颜色 key 配对表
+/// key = light 侧属性名, value = dark 侧属性名
+static NSDictionary *ColorPairMap(void) {
+    static NSDictionary *map;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        map = @{
+            // SettingListCornerRadiusController
+            @"listCellLightBgColor": @"listCellDarkBgColor",
+            
+            // SettingCardBackgroundController
+            @"cardBgCornerBgColor": @"cardBgCornerDarkBgColor",
+            
+            // SettingNameColorController (聊天名字)
+            @"chatNameLightColor": @"chatNameDarkColor",
+            
+            // SettingNameColorController (朋友圈名字)
+            @"momentsNameLightColor": @"momentsNameDarkColor",
+            
+            // SettingMessageTimeController (发送方)
+            @"senderTextColorHex": @"senderTextColorDarkHex",
+            
+            // SettingMessageTimeController (接收方)
+            @"receiverTextColorHex": @"receiverTextColorDarkHex",
+        };
+    });
+    return map;
+}
+
+/// Dark → Light 反向映射
+static NSString *LightKeyForDarkKey(NSString *darkKey) {
+    __block NSString *result = nil;
+    [ColorPairMap() enumerateKeysAndObjectsUsingBlock:^(NSString *light, NSString *dark, BOOL *stop) {
+        if ([dark isEqualToString:darkKey]) {
+            result = light;
+            *stop = YES;
+        }
+    }];
+    return result;
+}
+
 - (void)colorButtonTapped:(UIButton *)sender {
     NSString *key = objc_getAssociatedObject(sender, "key");
     if (!key) return;
 
+    PluginConfig *config = [PluginConfig shared];
     UIColor *currentColor = sender.backgroundColor ?: [UIColor grayColor];
 
-    [WPColorPicker presentOnViewController:self
-                             currentColor:currentColor
-                             sourceButton:sender
-                               onSelected:^(UIColor *color, NSString *hex) {
-        PluginConfig *config = [PluginConfig shared];
-        @try {
-            [config setValue:hex forKey:key];
-            [config save];
-        } @catch (NSException *e) {
-            [[NSUserDefaults standardUserDefaults] setObject:hex forKey:[kPluginPrefix stringByAppendingString:key]];
-            [[NSUserDefaults standardUserDefaults] synchronize];
+    // ─── 判断是否有配对 ───
+    NSString *lightKey = nil, *darkKey = nil;
+    NSString *pairedDark = ColorPairMap()[key];
+    if (pairedDark) {
+        // 当前 key 是 light 侧
+        lightKey = key;
+        darkKey = pairedDark;
+    } else {
+        // 检查当前 key 是否是 dark 侧
+        NSString *pairedLight = LightKeyForDarkKey(key);
+        if (pairedLight) {
+            lightKey = pairedLight;
+            darkKey = key;
         }
+    }
+
+    // ★ 统一用双模式入口
+    // 无配对时 lightKey=nil, darkKey=nil, 内部自动走单色模式
+    NSString *lightHex = lightKey ? [config valueForKey:lightKey] : [config hexFromColor:currentColor];
+    NSString *darkHex  = darkKey  ? [config valueForKey:darkKey]  : nil;
+    BOOL activeIsLight = lightKey ? [key isEqualToString:lightKey] : YES;
+
+    [WPColorPicker presentCustomPickerOnViewController:self
+                                              lightHex:lightHex
+                                               darkHex:darkHex
+                                         activeIsLight:activeIsLight
+                                          sourceButton:sender
+                                            onSelected:^(NSString *lHex, NSString *dHex) {
+        if (lightKey) {
+            [config setValue:lHex forKey:lightKey];
+        } else {
+            // 单色 → 用 valueForKey: 直接设
+            [config setValue:dHex forKey:key];
+        }
+        if (darkKey)  [config setValue:dHex forKey:darkKey];
+        [config save];
     }];
 }
 

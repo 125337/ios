@@ -1,5 +1,7 @@
 #import "WPColorPicker.h"
 #import "PluginConfig.h"
+#import "WPHsvColorPickerController.h"
+#import "WPColorUtil.h"
 #import <objc/runtime.h>
 
 #pragma mark - 内部代理类
@@ -95,6 +97,44 @@
 
         [vc presentViewController:alert animated:YES completion:nil];
     }
+}
+
++ (void)presentCustomPickerOnViewController:(UIViewController *)vc
+                                    lightHex:(NSString *)lightHex
+                                     darkHex:(NSString *)darkHex
+                               activeIsLight:(BOOL)activeIsLight
+                                sourceButton:(UIButton *)button
+                                  onSelected:(void(^)(NSString *lightHex, NSString *darkHex))onSelected {
+    
+    BOOL isDual = (lightHex.length > 0 && darkHex.length > 0);
+    
+    WPHsvColorPickerController *picker;
+    if (isDual) {
+        picker = [[WPHsvColorPickerController alloc]
+            initWithLightHex:lightHex
+                    darkHex:darkHex
+                   callback:^(NSString *lHex, NSString *dHex) {
+                if (button) {
+                    NSString *hex = activeIsLight ? lHex : dHex;
+                    button.backgroundColor = [WPColorUtil colorFromHexString:hex];
+                }
+                if (onSelected) onSelected(lHex ?: lightHex, dHex ?: darkHex);
+            }];
+        picker.singleColorMode = NO;
+        picker.isLightMode = activeIsLight;
+    } else {
+        // 只有一个 hex → 单色模式
+        NSString *hex = lightHex.length > 0 ? lightHex : (darkHex.length > 0 ? darkHex : @"#FFFFFF");
+        picker = [[WPHsvColorPickerController alloc]
+            initWithHex:hex
+            callback:^(NSString *selectedHex) {
+                if (button) button.backgroundColor = [WPColorUtil colorFromHexString:selectedHex];
+                if (onSelected) onSelected(selectedHex, selectedHex);
+            }];
+    }
+
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:picker];
+    [vc presentViewController:nav animated:YES completion:nil];
 }
 
 @end

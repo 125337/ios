@@ -1,7 +1,5 @@
 #import "SettingListCornerRadiusController.h"
 #import "../../Config/PluginConfig.h"
-#import "../../Config/WPColorUtil.h"
-#import "../../Config/WPHsvColorPickerController.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioRestartHelper.h"
@@ -242,40 +240,6 @@
         || [key isEqualToString:@"listProfileCardBorderEnabled"]) {
         [MioRestartHelper showRestartAlertFromVC:self];
     }
-}
-
-- (void)colorButtonTapped:(UIButton *)sender {
-    NSString *key = objc_getAssociatedObject(sender, "key");
-    if (!key) return;
-
-    if ([key isEqualToString:@"listCellLightBgColor"] ||
-        [key isEqualToString:@"listCellDarkBgColor"]) {
-        PluginConfig *cfg = [PluginConfig shared];
-
-        WPHsvColorPickerController *picker = [[WPHsvColorPickerController alloc]
-            initWithLightHex:cfg.listCellLightBgColor
-                    darkHex:cfg.listCellDarkBgColor
-                   callback:^(NSString *lightHex, NSString *darkHex) {
-                // 更新按钮颜色（当前编辑哪个模式就更新对应的按钮）
-                if ([key isEqualToString:@"listCellLightBgColor"]) {
-                    sender.backgroundColor = [WPColorUtil colorFromHexString:lightHex];
-                } else {
-                    sender.backgroundColor = [WPColorUtil colorFromHexString:darkHex];
-                }
-
-                // 保存两个值（用户在颜色选择器里可能同时编辑了浅色和深色）
-                if (lightHex) cfg.listCellLightBgColor = lightHex;
-                if (darkHex)  cfg.listCellDarkBgColor  = darkHex;
-                [cfg save];
-            }];
-
-        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:picker];
-        [self presentViewController:nav animated:YES completion:nil];
-        return;
-    }
-
-    // ─── 其他颜色 key → 走父类默认（系统原生） ───
-    [super colorButtonTapped:sender];
 }
 
 @end
