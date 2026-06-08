@@ -5,8 +5,6 @@
 #import "Config/PluginConfig.h"
 #import "Modules/ListCornerRadius/ListCornerRadiusHook.h"
 #import "Modules/ProfileCardBg/ProfileCardBgHook.h"
-#import "Modules/ListCornerRadius/WPSessionSpacingHook.h"
-#import "Modules/ListCornerRadius/WPAuxiliaryHooks.h"
 
 __attribute__((constructor))
 static void MioPluginInitialize() {
@@ -18,10 +16,9 @@ static void MioPluginInitialize() {
 
             [HookRegistry installAllHooks];
 
-            [ListCornerRadiusHook initListCornerRadiusHook];
+            // ★ 资料卡模块暂未通过 FeatureModuleRegistry 注册
+            // 待实现 +install 后可删除此行
             [ProfileCardBgHook initProfileCardHook];
-            WPInstallSessionSpacingHooks();
-            WPInstallAuxiliaryHooks();
 
             NSLog(@"[MioPlugin] all hooks installed");
         }
