@@ -170,6 +170,7 @@
 @property (nonatomic, copy) NSString *listCardBgColorDarkHex;
 @property (nonatomic, assign) CGFloat listCellBorderWidth;
 @property (nonatomic, copy) NSString *listCellBorderColor;
+@property (nonatomic, copy) NSString *listCellBorderColorDarkHex;
 @property (nonatomic, assign) BOOL listDisableLabelWidthAdjustment;
 @property (nonatomic, assign) BOOL listMediaCornerEnabled;
 @property (nonatomic, assign) BOOL listProfileCardBorderEnabled;
