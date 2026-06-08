@@ -38,15 +38,14 @@
                                     initWithTarget:self action:@selector(handleGesture:)];
     [self addGestureRecognizer:tap];
 
-    // ─── 指示器 ───
-    self.indicator = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 24, 24)];
-    self.indicator.layer.cornerRadius = 12;
-    self.indicator.backgroundColor = [UIColor whiteColor];
+    // ─── 指示器（与色相条保持完全一致） ───
+    self.indicator = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 20, 20)];
+    self.indicator.layer.cornerRadius = 10;
     self.indicator.layer.borderWidth = 2.5;
-    self.indicator.layer.borderColor = [UIColor colorWithWhite:0.3 alpha:0.5].CGColor;
+    self.indicator.layer.borderColor = [UIColor whiteColor].CGColor;
     self.indicator.layer.shadowColor = [UIColor blackColor].CGColor;
-    self.indicator.layer.shadowOffset = CGSizeMake(0, 2);
-    self.indicator.layer.shadowRadius = 3;
+    self.indicator.layer.shadowOffset = CGSizeMake(0, 1);
+    self.indicator.layer.shadowRadius = 2;
     self.indicator.layer.shadowOpacity = 0.4;
     self.indicator.userInteractionEnabled = NO;
     [self addSubview:self.indicator];
@@ -82,7 +81,7 @@
     satLayer.startPoint = CGPointMake(0, 0.5);
     satLayer.endPoint = CGPointMake(1, 0.5);
     satLayer.colors = @[(id)[UIColor whiteColor].CGColor, (id)pureColor.CGColor];
-    [self.layer addSublayer:satLayer];
+    [self.layer insertSublayer:satLayer atIndex:0];
 
     // Layer 2：明度渐变（下→上：黑 → 透明）
     CAGradientLayer *briLayer = [CAGradientLayer layer];
@@ -90,7 +89,7 @@
     briLayer.startPoint = CGPointMake(0.5, 1);
     briLayer.endPoint = CGPointMake(0.5, 0);
     briLayer.colors = @[(id)[UIColor blackColor].CGColor, (id)[UIColor clearColor].CGColor];
-    [self.layer addSublayer:briLayer];
+    [self.layer insertSublayer:briLayer atIndex:1];
 }
 
 #pragma mark - 手势
