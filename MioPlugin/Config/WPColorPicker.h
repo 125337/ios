@@ -4,9 +4,10 @@
 /// 提供标准颜色按钮创建和自定义颜色选择器弹出功能
 @interface WPColorPicker : NSObject
 
-/// 创建标准颜色按钮 (30×30 圆形, 浅灰边框)
+/// 创建标准颜色按钮 (正圆形, 浅灰边框)
 /// @param color 按钮填充颜色 (可为 nil, 默认灰色)
-+ (UIButton *)makeColorButtonWithColor:(nullable UIColor *)color;
+/// @param size 按钮尺寸 (宽高一致, 自动计算圆角为 size/2)
++ (UIButton *)makeColorButtonWithColor:(nullable UIColor *)color size:(CGFloat)size;
 
 /// 弹出自定义颜色选择器（统一入口，自动处理单色/双模式）
 /// @param vc 当前 VC

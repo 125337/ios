@@ -4,10 +4,10 @@
 
 @implementation WPColorPicker
 
-+ (UIButton *)makeColorButtonWithColor:(UIColor *)color {
++ (UIButton *)makeColorButtonWithColor:(UIColor *)color size:(CGFloat)size {
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
     btn.backgroundColor = color ?: [UIColor grayColor];
-    btn.layer.cornerRadius = 15;
+    btn.layer.cornerRadius = size / 2;
     btn.layer.borderWidth = 1.0;
     btn.layer.borderColor = [UIColor colorWithRed:0.82 green:0.82 blue:0.84 alpha:1.0].CGColor;
     btn.clipsToBounds = YES;
