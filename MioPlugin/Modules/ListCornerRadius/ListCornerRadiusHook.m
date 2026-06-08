@@ -632,97 +632,68 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                      cornerRadius:(NSInteger)radius
                          isFTSHome:(BOOL)isFTSHome {
 
-    // ★ 合并前 N 个 section 为一个圆角组
-    NSInteger mergeSectionsCount = 7;
-    // 前 7 个 = 新的朋友 / 群聊 / 标签 / 公众号 /
-    //          通讯录安全助手 / 微信团队 / 企业微信联系人
-    // 每个 section 只有 1 行，需要合并处理
-
     NSInteger totalSections = [tableView numberOfSections];
 
-    // ─── 分支 A：section 超出合并范围 → 标准 per-section ───
-    if (section >= mergeSectionsCount) {
-        [self wp_applyStandardCorner:cell
-                          tableView:tableView
-                          indexPath:indexPath
-                            section:section
-                                row:row
-                              total:rowInThisSection
-                       cornerRadius:radius
-                          isFTSHome:isFTSHome
-                          className:@"ContactsViewController"];
-        return;
-    }
+    // ─── Step 1: 动态确定当前 section 所属的合并组范围 ───
+    //     向前找：从当前 section 往回扫，找到合并组的起始位置
+    //     向后找：从当前 section 往后扫，找到合并组的结束位置
+    //     合并规则：连续的单行（rowInThisSection == 1）section 归为同一组
 
-    // ─── 分支 B：在合并范围内 → 多 Section 合并模式 ───
+    NSInteger groupStart = section;   // 组起始 section
+    NSInteger groupEnd = section;     // 组结束 section
 
-    // Step 1: 收集前 mergeSectionsCount 个 section 的行数
-    NSMutableArray<NSNumber *> *sectionRowCounts = [NSMutableArray array];
-    for (NSInteger i = 0; i < mergeSectionsCount; i++) {
-        if (i < totalSections) {
-            [sectionRowCounts addObject:@([tableView numberOfRowsInSection:i])];
+    // 向前延伸：只要前面的 section 也是单行就继续
+    for (NSInteger s = section - 1; s >= 0; s--) {
+        NSInteger rows = [tableView numberOfRowsInSection:s];
+        if (rows == 1) {
+            groupStart = s;
         } else {
-            [sectionRowCounts addObject:@0];  // 不存在的 section 视为 0 行
+            break;  // 遇到多行或空 section，停止向前延伸
         }
     }
 
-    // Step 2: 找到第一个和最后一个非空 section
-    NSInteger firstRealSection = -1;
-    NSInteger lastRealSection = -1;
-    for (NSInteger i = 0; i < mergeSectionsCount; i++) {
-        if ([sectionRowCounts[i] integerValue] > 0) {
-            if (firstRealSection == -1) firstRealSection = i;
-            lastRealSection = i;
+    // 向后延伸：只要后面的 section 也是单行就继续
+    for (NSInteger s = section + 1; s < totalSections && s < section + 20; s++) {
+        NSInteger rows = [tableView numberOfRowsInSection:s];
+        if (rows == 1) {
+            groupEnd = s;
+        } else {
+            break;  // 遇到多行或空 section，停止向后延伸
         }
     }
 
-    // 如果没有非空 section（理论上不会走到这里），回退
-    if (firstRealSection == -1) {
-        [self wp_applyStandardCorner:cell
-                          tableView:tableView
-                          indexPath:indexPath
-                            section:section
-                                row:row
-                              total:rowInThisSection
-                       cornerRadius:radius
-                          isFTSHome:isFTSHome
-                          className:@"ContactsViewController"];
-        return;
-    }
-
-    // Step 3: 判定 cornerType
+    // ─── Step 2: 在确定的组范围内判定 cornerType ───
     NSInteger cornerType = 0;
     NSInteger borderType = 0;
 
-    // 唯一非空 section 且只有 1 行 → 全圆角
-    if (firstRealSection == lastRealSection &&
-        [sectionRowCounts[firstRealSection] integerValue] == 1) {
+    BOOL isFirstInGroup = (section == groupStart);
+    BOOL isLastInGroup = (section == groupEnd);
+    BOOL isOnlyOneInGroup = (groupStart == groupEnd);
+
+    if (isOnlyOneInGroup) {
+        // 组内只有这一个 section → 全圆角（孤立卡片）
         cornerType = 3; borderType = 0;
-    }
-    // 第一个非空 section 的首行 → 顶角
-    else if (section == firstRealSection && row == 0) {
+    } else if (isFirstInGroup && row == 0) {
+        // 组的首行的第一个 cell → 顶角
         cornerType = 1; borderType = 1;
-    }
-    // 最后一个非空 section 的末行 → 底角
-    else if (section == lastRealSection &&
-             row == [sectionRowCounts[section] integerValue] - 1) {
+    } else if (isLastInGroup && row == rowInThisSection - 1) {
+        // 组的末行的最后一个 cell → 底角
         cornerType = 2; borderType = 3;
-    }
-    // 合并组中间的单行 section → 无圆角（只保留左右边框）
-    else if (rowInThisSection == 1) {
+    } else if (rowInThisSection == 1) {
+        // 组中间的单行 section → 无圆角
         cornerType = 0; borderType = 2;
-    }
-    // 多行 section 内部 → 标准首/中/末行
-    else if (row == 0) {
-        cornerType = 1; borderType = 1;
-    } else if (row == rowInThisSection - 1) {
-        cornerType = 2; borderType = 3;
     } else {
-        cornerType = 0; borderType = 2;
+        // 多行 section 内部 → 标准首/中/末行
+        if (row == 0) {
+            cornerType = 1; borderType = 1;
+        } else if (row == rowInThisSection - 1) {
+            cornerType = 2; borderType = 3;
+        } else {
+            cornerType = 0; borderType = 2;
+        }
     }
 
-    // Step 4: 应用圆角
-    // ★ cornerType == 0 时 radius 设 0 —— 防止任何意外圆角
+    // ─── Step 3: 应用圆角 ───
     cell.layer.cornerRadius = (cornerType == 0) ? 0 : radius;
     cell.layer.maskedCorners = 0;
 
@@ -735,7 +706,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                                    kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
 
-    // Step 5: 应用边框（同样当 cornerType == 0 时 radius 为 0）
+    // ─── Step 4: 应用边框 ───
     [self wp_applyBorderAndBg:cell
                        radius:(cornerType == 0 ? 0 : radius)
                      position:borderType
