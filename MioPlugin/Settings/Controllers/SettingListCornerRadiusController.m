@@ -1,5 +1,7 @@
 #import "SettingListCornerRadiusController.h"
 #import "../../Config/PluginConfig.h"
+#import "../../Config/WPColorUtil.h"
+#import "../../Config/WPHsvColorPickerController.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioRestartHelper.h"
@@ -232,6 +234,34 @@
         || [key isEqualToString:@"listProfileCardBorderEnabled"]) {
         [MioRestartHelper showRestartAlertFromVC:self];
     }
+}
+
+- (void)colorButtonTapped:(UIButton *)sender {
+    NSString *key = objc_getAssociatedObject(sender, "key");
+    if (!key) return;
+
+    if ([key isEqualToString:@"listCellBgColor"]) {
+        // ─── Cell背景色 → 直接弹出自定义颜色选择器 ───
+        PluginConfig *cfg = [PluginConfig shared];
+        NSString *hex = cfg.listCellBgColor;
+
+        WPHsvColorPickerController *picker = [[WPHsvColorPickerController alloc]
+            initWithHex:hex ?: @"#FFFFFF"
+            callback:^(NSString *selectedHex) {
+                // 更新按钮颜色
+                sender.backgroundColor = [WPColorUtil colorFromHexString:selectedHex];
+                // 保存配置
+                cfg.listCellBgColor = selectedHex;
+                [cfg save];
+            }];
+
+        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:picker];
+        [self presentViewController:nav animated:YES completion:nil];
+        return;
+    }
+
+    // ─── 其他颜色 key → 走父类默认（系统原生） ───
+    [super colorButtonTapped:sender];
 }
 
 @end

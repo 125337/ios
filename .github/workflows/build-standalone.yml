@@ -33,6 +33,8 @@ jobs:
         for f in \
           MioPlugin/Tweak.m \
           MioPlugin/Config/PluginConfig.m \
+          MioPlugin/Config/WPColorUtil.m \
+          MioPlugin/Config/WPHsvColorPickerController.m \
           MioPlugin/Config/WPColorPicker.m \
           MioPlugin/Core/MioAlertHelper.m \
           MioPlugin/Core/MioRestartHelper.m \
