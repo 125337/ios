@@ -196,7 +196,6 @@ static NSInteger const kMaxHistory = 20;
     gradient.frame = self.hueSliderView.bounds;
     gradient.startPoint = CGPointMake(0, 0.5);
     gradient.endPoint = CGPointMake(1, 0.5);
-    gradient.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 
     // 每隔 30° 一个颜色 stop，共 13 个（0~360）
     NSMutableArray *colors = [NSMutableArray array];
@@ -232,7 +231,7 @@ static NSInteger const kMaxHistory = 20;
 - (void)handleHueGesture:(UIGestureRecognizer *)gesture {
     CGPoint loc = [gesture locationInView:self.hueSliderView];
     CGFloat hue = MAX(0, MIN(1, loc.x / self.hueSliderView.bounds.size.width));
-    self.currentHsv.hue = hue;
+    _currentHsv.hue = hue;
 
     [self updateSaturationBrightnessBackground];
     [self updateColorFromComponents];
@@ -311,8 +310,8 @@ static NSInteger const kMaxHistory = 20;
     // 明度 → 1 - (Y 坐标比例)
     CGFloat brightness = MAX(0, MIN(1, 1.0 - loc.y / h));
 
-    self.currentHsv.saturation = saturation;
-    self.currentHsv.brightness = brightness;
+    _currentHsv.saturation = saturation;
+    _currentHsv.brightness = brightness;
 
     [self updateColorFromComponents];
     [self updateIndicatorPositionsAnimated:NO];
@@ -569,14 +568,14 @@ static NSInteger const kMaxHistory = 20;
 }
 
 - (void)alphaSliderChanged:(UISlider *)slider {
-    self.currentHsv.alpha = slider.value;
+    _currentHsv.alpha = slider.value;
     [self updateColorFromComponents];
 }
 
 - (void)alphaTextFieldChanged:(UITextField *)textField {
     CGFloat alpha = [textField.text floatValue];
     alpha = MAX(0, MIN(1, alpha));
-    self.currentHsv.alpha = alpha;
+    _currentHsv.alpha = alpha;
     self.alphaSlider.value = alpha;
     [self updateColorFromComponents];
 }
