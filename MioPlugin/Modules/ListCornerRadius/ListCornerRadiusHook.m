@@ -643,6 +643,23 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                      cornerRadius:(NSInteger)radius
                          isFTSHome:(BOOL)isFTSHome {
 
+    // ★★★ 排查日志：打印通讯录 Section 结构 ★★★
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        WPLog(@"ListCornerRadius", @"=== 通讯录 Section 结构排查 ===");
+        NSInteger totalSecs = [tableView numberOfSections];
+        WPLog(@"ListCornerRadius", @"总 Section 数: %ld", (long)totalSecs);
+        for (NSInteger s = 0; s < MIN(10, totalSecs); s++) {
+            NSInteger rows = [tableView numberOfRowsInSection:s];
+            NSString *headerTitle = nil;
+            if ([tableView respondsToSelector:@selector(titleForHeaderInSection:)]) {
+                headerTitle = [tableView tableView:tableView titleForHeaderInSection:s];
+            }
+            WPLog(@"ListCornerRadius", @"Section %ld: %ld 行, Header: %@", (long)s, (long)rows, headerTitle ?: @"(无)");
+        }
+        WPLog(@"ListCornerRadius", @"=== 排查结束 ===");
+    });
+
     // ─── 分支 A：section > 3 → 标准 per-section ───
     if (section > 3) {
         [self wp_applyStandardCorner:cell
