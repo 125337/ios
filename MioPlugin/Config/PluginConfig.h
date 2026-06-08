@@ -167,6 +167,7 @@
 @property (nonatomic, copy) NSString *listCellLightBgColor;  // 浅色模式背景色
 @property (nonatomic, copy) NSString *listCellDarkBgColor;   // 深色模式背景色
 @property (nonatomic, copy) NSString *listCardBgColor;
+@property (nonatomic, copy) NSString *listCardBgColorDarkHex;
 @property (nonatomic, assign) CGFloat listCellBorderWidth;
 @property (nonatomic, copy) NSString *listCellBorderColor;
 @property (nonatomic, assign) BOOL listDisableLabelWidthAdjustment;
@@ -174,6 +175,7 @@
 @property (nonatomic, assign) BOOL listProfileCardBorderEnabled;
 @property (nonatomic, assign) CGFloat listProfileCardBorderWidth;
 @property (nonatomic, copy) NSString *listProfileCardBorderColor;
+@property (nonatomic, copy) NSString *listProfileCardBorderColorDarkHex;
 
 #pragma mark - 卡片背景
 // 资料卡片美化（新 UI）

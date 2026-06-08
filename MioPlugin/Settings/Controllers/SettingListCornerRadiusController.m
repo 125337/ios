@@ -172,10 +172,10 @@
                         darkValue:cfg.listCellDarkBgColor];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
-    pcy = [self addColorRowInGroup:paramGroup title:@"边框颜色" key:@"listCellBorderColor" value:cfg.listCellBorderColor cy:pcy width:w darkKey:nil darkValue:nil];
+    pcy = [self addColorRowInGroup:paramGroup title:@"边框颜色" key:@"listCellBorderColor" value:cfg.listCellBorderColor cy:pcy width:w darkKey:@"listCellBorderColorDarkHex" darkValue:cfg.listCellBorderColorDarkHex];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
-    pcy = [self addColorRowInGroup:paramGroup title:@"卡片背景色" key:@"listCardBgColor" value:cfg.listCardBgColor cy:pcy width:w darkKey:nil darkValue:nil];
+    pcy = [self addColorRowInGroup:paramGroup title:@"卡片背景色" key:@"listCardBgColor" value:cfg.listCardBgColor cy:pcy width:w darkKey:@"listCardBgColorDarkHex" darkValue:cfg.listCardBgColorDarkHex];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
     pcy = [self addSubSwitchRowInGroup:paramGroup
@@ -202,7 +202,8 @@
                            key:@"listProfileCardBorderColor"
                          value:cfg.listProfileCardBorderColor
                             cy:pcy width:w
-                      darkKey:nil darkValue:nil];
+                      darkKey:@"listProfileCardBorderColorDarkHex"
+                    darkValue:cfg.listProfileCardBorderColorDarkHex];
 
     y = [self finishGroup:paramGroup atY:y height:pcy];
 

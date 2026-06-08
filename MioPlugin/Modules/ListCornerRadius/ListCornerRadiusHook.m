@@ -727,12 +727,9 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     CGFloat borderWidth = config.listCellBorderWidth;
     if (borderWidth <= 0) borderWidth = 1.0;
 
-    BOOL isDark = NO;
-    if (@available(iOS 13.0, *)) {
-        isDark = [ListCornerRadiusHook wp_isCurrentDarkMode];
-    }
+    BOOL isDark = [config isDarkMode];
 
-    UIColor *borderColor = [config colorFromHex:config.listCellBorderColor];
+    UIColor *borderColor = [config colorFromHex:isDark ? config.listCellBorderColorDarkHex : config.listCellBorderColor];
     if (!borderColor) {
         borderColor = isDark
             ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]

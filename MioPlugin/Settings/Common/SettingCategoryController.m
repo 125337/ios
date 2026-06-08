@@ -636,6 +636,11 @@ static NSDictionary *ColorPairMap(void) {
             // SettingListCornerRadiusController
             @"listCellLightBgColor": @"listCellDarkBgColor",
             
+            // SettingListCornerRadiusController (新增暗色支持)
+            @"listCellBorderColor": @"listCellBorderColorDarkHex",
+            @"listCardBgColor": @"listCardBgColorDarkHex",
+            @"listProfileCardBorderColor": @"listProfileCardBorderColorDarkHex",
+            
             // SettingCardBackgroundController
             @"cardBgCornerBgColor": @"cardBgCornerDarkBgColor",
             
