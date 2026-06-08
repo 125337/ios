@@ -4,6 +4,7 @@
 #import "../../Config/Constants.h"
 #import "../../Config/WPColors.h"
 #import "../../Config/WPColorPicker.h"
+#import "../../Config/WPColorUtil.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import <objc/runtime.h>
 #import <QuartzCore/QuartzCore.h>
@@ -476,7 +477,7 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         [group addSubview:tl];
 
         // 深色按钮（右侧）
-        UIColor *darkColor = [[PluginConfig shared] colorFromHex:darkValue] ?: [UIColor darkGrayColor];
+        UIColor *darkColor = [[WPColorUtil class] colorFromHexString:darkValue] ?: [UIColor darkGrayColor];
         UIButton *darkBtn = [WPColorPicker makeColorButtonWithColor:darkColor];
         CGFloat darkX = gw - kCellHPadding - btnSize - 4;
         darkBtn.frame = CGRectMake(darkX, cy + (kRowH - btnSize) / 2, btnSize, btnSize);
@@ -486,7 +487,7 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         [group addSubview:darkBtn];
 
         // 浅色按钮（左侧）
-        UIColor *lightColor = [[PluginConfig shared] colorFromHex:value] ?: [UIColor whiteColor];
+        UIColor *lightColor = [[WPColorUtil class] colorFromHexString:value] ?: [UIColor whiteColor];
         UIButton *lightBtn = [WPColorPicker makeColorButtonWithColor:lightColor];
         lightBtn.frame = CGRectMake(darkX - gap - btnSize, darkBtn.frame.origin.y, btnSize, btnSize);
         objc_setAssociatedObject(lightBtn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -637,12 +638,6 @@ static NSDictionary *ColorPairMap(void) {
             
             // SettingCardBackgroundController
             @"cardBgCornerBgColor": @"cardBgCornerDarkBgColor",
-            
-            // SettingNameColorController (聊天名字)
-            @"chatNameLightColor": @"chatNameDarkColor",
-            
-            // SettingNameColorController (朋友圈名字)
-            @"momentsNameLightColor": @"momentsNameDarkColor",
             
             // SettingMessageTimeController (发送方)
             @"senderTextColorHex": @"senderTextColorDarkHex",
@@ -815,17 +810,49 @@ static NSString *LightKeyForDarkKey(NSString *darkKey) {
 
     cell.textLabel.text = row[@"title"];
 
+    // 清理旧按钮
     UIView *existingSwatch = [cell.contentView viewWithTag:888];
     [existingSwatch removeFromSuperview];
+    UIView *existingSwatch2 = [cell.contentView viewWithTag:889];
+    [existingSwatch2 removeFromSuperview];
 
-    UIColor *currentColor = [[PluginConfig shared] colorFromHex:row[@"value"]] ?: [UIColor grayColor];
-    UIButton *swatch = [WPColorPicker makeColorButtonWithColor:currentColor];
-    swatch.tag = 888;
     CGFloat cellW = tableView.bounds.size.width;
-    swatch.frame = CGRectMake(cellW - kCellHPadding - 36, (kRowH - 30) / 2, 30, 30);
-    objc_setAssociatedObject(swatch, "key", row[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [swatch addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
-    [cell.contentView addSubview:swatch];
+    NSString *darkKey = row[@"darkKey"];
+    NSString *darkValue = row[@"darkValue"];
+
+    if (darkKey.length > 0) {
+        // ─── 双按钮 ───
+        CGFloat btnSize = 24;
+        CGFloat gap = 8;
+
+        // 深色按钮
+        UIColor *darkColor = [[WPColorUtil class] colorFromHexString:darkValue] ?: [UIColor darkGrayColor];
+        UIButton *darkBtn = [WPColorPicker makeColorButtonWithColor:darkColor];
+        darkBtn.tag = 889;
+        CGFloat darkX = cellW - kCellHPadding - btnSize - 4;
+        darkBtn.frame = CGRectMake(darkX, (kRowH - btnSize) / 2, btnSize, btnSize);
+        objc_setAssociatedObject(darkBtn, "key", darkKey, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [darkBtn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [cell.contentView addSubview:darkBtn];
+
+        // 浅色按钮
+        UIColor *lightColor = [[WPColorUtil class] colorFromHexString:row[@"value"]] ?: [UIColor whiteColor];
+        UIButton *lightBtn = [WPColorPicker makeColorButtonWithColor:lightColor];
+        lightBtn.tag = 888;
+        lightBtn.frame = CGRectMake(darkX - gap - btnSize, (kRowH - btnSize) / 2, btnSize, btnSize);
+        objc_setAssociatedObject(lightBtn, "key", row[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [lightBtn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [cell.contentView addSubview:lightBtn];
+    } else {
+        // ─── 单按钮（原逻辑） ───
+        UIColor *color = [[WPColorUtil class] colorFromHexString:row[@"value"]] ?: [UIColor grayColor];
+        UIButton *swatch = [WPColorPicker makeColorButtonWithColor:color];
+        swatch.tag = 888;
+        swatch.frame = CGRectMake(cellW - kCellHPadding - 36, (kRowH - 30) / 2, 30, 30);
+        objc_setAssociatedObject(swatch, "key", row[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [swatch addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [cell.contentView addSubview:swatch];
+    }
 
     return cell;
 }

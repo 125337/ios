@@ -102,10 +102,10 @@ static NSString *fontSizeForKey(NSString *key) {
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addColorRowInGroup:expand
                                       title:@"聊天名字颜色"
-                                        key:@"chatNameLightColor"
+                                        key:@"senderTextColorHex"
                                       value:config.senderTextColorHex
                                          cy:*ecy width:w
-                                   darkKey:@"chatNameDarkColor"
+                                   darkKey:@"senderTextColorDarkHex"
                                  darkValue:config.senderTextColorDarkHex];
     } cy:cy1 width:w];
 
@@ -135,10 +135,10 @@ static NSString *fontSizeForKey(NSString *key) {
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addColorRowInGroup:expand
                                       title:@"朋友圈名字颜色"
-                                        key:@"momentsNameLightColor"
+                                        key:@"receiverTextColorHex"
                                       value:config.receiverTextColorHex
                                          cy:*ecy width:w
-                                   darkKey:@"momentsNameDarkColor"
+                                   darkKey:@"receiverTextColorDarkHex"
                                  darkValue:config.receiverTextColorDarkHex];
     } cy:cy2 width:w];
 
