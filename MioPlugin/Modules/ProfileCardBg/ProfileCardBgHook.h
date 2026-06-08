@@ -31,11 +31,8 @@
 + (void)handleVisiblePath:(UIView *)button isDark:(BOOL)isDark;
 + (void)handleCornerAndQR:(UIView *)button isDark:(BOOL)isDark;
 
-// ★ 箭码隐藏（独立功能，不受总开关保护）
-+ (void)handleArrowQRHiding:(UIView *)button;
-
 // 箭码/二维码识别隐藏
-+ (void)hideArrowQRInCell:(UIView *)cell;
++ (void)hideArrowQRInCell:(UIView *)cell shouldHide:(BOOL)shouldHide;
 
 // ★ 状态识别
 + (BOOL)isStateEntryButton:(UIView *)view;

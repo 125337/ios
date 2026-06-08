@@ -121,9 +121,6 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
     }
 
-    // ★ 独立功能：箭码隐藏（不受资料卡片美化总开关保护）
-    [ProfileCardBgHook handleArrowQRHiding:(UIView *)self];
-
     // ★ 方案H：改 button 高度 ★
     [ProfileCardBgHook handleButtonLayout:(UIView *)self];
 }

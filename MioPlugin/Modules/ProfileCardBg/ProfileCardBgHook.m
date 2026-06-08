@@ -118,10 +118,13 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     return NO;
 }
 
-+ (void)hideArrowQRInCell:(UIView *)cell {
++ (void)hideArrowQRInCell:(UIView *)cell shouldHide:(BOOL)shouldHide {
+    if (!cell) return;
     for (UIView *sub in cell.subviews) {
         if ([self isArrowQRView:sub]) {
-            sub.hidden = YES;
+            sub.hidden = shouldHide;
+            sub.alpha = 1.0;
+            sub.layer.opacity = 1.0;
         }
     }
 }
@@ -657,6 +660,10 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     [ProfileCardBgHook hideStateElementsInCell:button
                                    shouldHide:config.cardBgHideStateEnabled];
 
+    // ☆ 独立功能：箭码隐藏（不受总开关保护）
+    [ProfileCardBgHook hideArrowQRInCell:button
+                              shouldHide:config.myPageHideArrow];
+
     // ★ 第1层：总开关守卫
     if (!config.cardBgBeautifyEnabled) return;
 
@@ -747,17 +754,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     if (config.cardBgCornerEnabled) {
         [ProfileCardBgHook applyProfileCardCorner:button isDark:isDark];
     }
-    // ★ QR/箭码隐藏已移到 handleArrowQRHiding:，不再在此处理
-}
-
-#pragma mark - 箭码隐藏（独立功能，不受总开关保护）
-
-+ (void)handleArrowQRHiding:(UIView *)button {
-    // 守卫交给 handleButtonLayout 处理
-    PluginConfig *config = [PluginConfig shared];
-    if (config.myPageHideArrow) {
-        [ProfileCardBgHook hideArrowQRInCell:button];
-    }
+    // ★ QR/箭码隐藏已由 handleButtonLayout 统一处理
 }
 
 #pragma mark - 隐藏路径
@@ -783,9 +780,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             sub.hidden = YES;
         }
 
-        if (config.myPageHideArrow) {
-            [ProfileCardBgHook hideArrowQRInCell:button];
-        }
+        // ★ 箭码：强制隐藏（隐藏模式下子视图已被全部隐藏，加调确保覆盖）
+        [ProfileCardBgHook hideArrowQRInCell:button shouldHide:YES];
         return;  // ← 直接 return，不进入背景段
     }
 
@@ -807,10 +803,8 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
 
     // ★ 不再需要 FIX-WHITE：所有子视图都隐藏了，白色背景也被隐藏
 
-    // 4. 二维码隐藏
-    if (config.myPageHideArrow) {
-        [ProfileCardBgHook hideArrowQRInCell:button];
-    }
+    // ★ 箭码：强制隐藏（隐藏模式下子视图已被全部隐藏，加调确保覆盖）
+    [ProfileCardBgHook hideArrowQRInCell:button shouldHide:YES];
 }
 
 #pragma mark - 可见态美化路径
