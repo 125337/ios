@@ -4,6 +4,7 @@
 #import "Registry/HookRegistry.h"
 #import "Config/PluginConfig.h"
 #import "Modules/ListCornerRadius/ListCornerRadiusHook.h"
+#import "Modules/ProfileCardBg/ProfileCardBgHook.h"
 #import "Modules/ListCornerRadius/WPSessionSpacingHook.h"
 #import "Modules/ListCornerRadius/WPAuxiliaryHooks.h"
 
