@@ -149,7 +149,9 @@ static NSInteger const kMaxHistory = 20;
     self.hueSlider.hueDidChange = ^(CGFloat hue) {
         __strong __typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
-        strongSelf.currentHsv.hue = hue;
+        WPHsvColor hsv = strongSelf.currentHsv;
+        hsv.hue = hue;
+        strongSelf.currentHsv = hsv;
         // 通知 S/B 面板色相变了
         strongSelf.sbView.hue = hue;
         // 更新输出
