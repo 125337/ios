@@ -10,6 +10,7 @@
 static CGFloat const kMargin = 16.0;
 static CGFloat const kControlHeight = 36.0;
 static CGFloat const kSBViewRatio = 0.85;    // S/B 面板占 contentView 宽度比例
+static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 
 #pragma mark - 私有属性
 
