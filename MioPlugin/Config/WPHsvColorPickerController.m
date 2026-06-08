@@ -13,6 +13,7 @@ static NSInteger const kMaxHistory = 20;
 
 @interface WPHsvColorPickerController ()
 @property (nonatomic, copy) void(^callback)(NSString *lightHex, NSString *darkHex);
+@property (nonatomic, assign) BOOL hasPerformedInitialLayout;
 @end
 
 #pragma mark - 初始化
@@ -79,6 +80,19 @@ static NSInteger const kMaxHistory = 20;
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+
+    if (!self.hasPerformedInitialLayout) {
+        self.hasPerformedInitialLayout = YES;
+
+        // ─── 首次布局完成后重建渐变（此时 subview frame 已正确）───
+        [self setupHueSliderGradient];
+        [self updateSaturationBrightnessBackground];
+        [self updateIndicatorPositionsAnimated:NO];
+    }
 }
 
 #pragma mark - Navigation Bar
@@ -191,20 +205,7 @@ static NSInteger const kMaxHistory = 20;
 #pragma mark - 色相条
 
 - (void)setupHueSlider {
-    // CAGradientLayer：横向色相渐变
-    CAGradientLayer *gradient = [CAGradientLayer layer];
-    gradient.frame = self.hueSliderView.bounds;
-    gradient.startPoint = CGPointMake(0, 0.5);
-    gradient.endPoint = CGPointMake(1, 0.5);
-
-    // 每隔 30° 一个颜色 stop，共 13 个（0~360）
-    NSMutableArray *colors = [NSMutableArray array];
-    for (NSInteger i = 0; i <= 360; i += 30) {
-        UIColor *c = [UIColor colorWithHue:i / 360.0 saturation:1.0 brightness:1.0 alpha:1.0];
-        [colors addObject:(id)c.CGColor];
-    }
-    gradient.colors = colors;
-    [self.hueSliderView.layer addSublayer:gradient];
+    // ⛔ 不再创建 CAGradientLayer（移到 viewDidLayoutSubviews → setupHueSliderGradient）
 
     // 手势
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
@@ -226,6 +227,30 @@ static NSInteger const kMaxHistory = 20;
     self.hueIndicator.layer.shadowOpacity = 0.4;
     self.hueIndicator.userInteractionEnabled = NO;
     [self.hueSliderView addSubview:self.hueIndicator];
+}
+
+- (void)setupHueSliderGradient {
+    // 移除旧的 gradient layer
+    for (CALayer *layer in self.hueSliderView.layer.sublayers) {
+        if ([layer isKindOfClass:[CAGradientLayer class]]) {
+            [layer removeFromSuperlayer];
+        }
+    }
+
+    // CAGradientLayer：横向色相渐变（此时 bounds 已正确）
+    CAGradientLayer *gradient = [CAGradientLayer layer];
+    gradient.frame = self.hueSliderView.bounds;
+    gradient.startPoint = CGPointMake(0, 0.5);
+    gradient.endPoint = CGPointMake(1, 0.5);
+
+    // 每隔 30° 一个颜色 stop，共 13 个（0~360）
+    NSMutableArray *colors = [NSMutableArray array];
+    for (NSInteger i = 0; i <= 360; i += 30) {
+        UIColor *c = [UIColor colorWithHue:i / 360.0 saturation:1.0 brightness:1.0 alpha:1.0];
+        [colors addObject:(id)c.CGColor];
+    }
+    gradient.colors = colors;
+    [self.hueSliderView.layer addSublayer:gradient];
 }
 
 - (void)handleHueGesture:(UIGestureRecognizer *)gesture {
