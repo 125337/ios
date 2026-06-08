@@ -685,6 +685,54 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
+    // ★ Step 2.5: 检查 Section 0 和 Section 1 是否需要合并 ★
+    NSInteger section1Rows = [rowCounts[1] integerValue];
+    if (section0Rows == 4 && section1Rows == 3) {
+        // 合并 Section 0 和 Section 1
+        NSInteger ct = 0, bt = 2;
+
+        if (section == 0) {
+            if (row == 0) {
+                ct = 1; bt = 1;  // 顶角
+            } else if (row == rowInThisSection - 1) {
+                ct = 0; bt = 2;  // 末行 → 无角（和 Section 1 连在一起）
+            } else {
+                ct = 0; bt = 2;  // 中间行
+            }
+        }
+        else if (section == 1) {
+            if (row == 0) {
+                ct = 0; bt = 2;  // 首行 → 无角（和 Section 0 连在一起）
+            } else if (row == rowInThisSection - 1) {
+                ct = 2; bt = 3;  // 底角
+            } else {
+                ct = 0; bt = 2;  // 中间行
+            }
+        }
+        else {
+            // Section 2+ → 标准 per-section
+            [self wp_applyStandardCorner:cell
+                              tableView:tableView
+                              indexPath:indexPath
+                                section:section
+                                    row:row
+                                  total:rowInThisSection
+                           cornerRadius:radius
+                              isFTSHome:isFTSHome
+                              className:@"ContactsViewController"];
+            return;
+        }
+
+        cell.layer.cornerRadius = (ct == 0) ? 0 : radius;
+        cell.layer.maskedCorners = ct == 1 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner)
+                                     : ct == 2 ? (kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
+                                     : ct == 3 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner|
+                                                  kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
+                                     : 0;
+        [self wp_applyBorderAndBg:cell radius:radius position:bt isFTSHome:isFTSHome];
+        return;
+    }
+
     // Step 3: bVar1 检测 - section 1/2/3 是否都是 1 行
     BOOL bVar1 = ([rowCounts[1] integerValue] == 1 &&
                   [rowCounts[2] integerValue] == 1 &&
