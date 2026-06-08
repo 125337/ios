@@ -780,8 +780,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
             sub.hidden = YES;
         }
 
-        // ★ 箭码：强制隐藏（隐藏模式下子视图已被全部隐藏，加调确保覆盖）
-        [ProfileCardBgHook hideArrowQRInCell:button shouldHide:YES];
         return;  // ← 直接 return，不进入背景段
     }
 
@@ -802,9 +800,6 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     }
 
     // ★ 不再需要 FIX-WHITE：所有子视图都隐藏了，白色背景也被隐藏
-
-    // ★ 箭码：强制隐藏（隐藏模式下子视图已被全部隐藏，加调确保覆盖）
-    [ProfileCardBgHook hideArrowQRInCell:button shouldHide:YES];
 }
 
 #pragma mark - 可见态美化路径

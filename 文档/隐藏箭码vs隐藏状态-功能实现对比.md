@@ -1,6 +1,8 @@
 # 隐藏箭码 vs 隐藏状态 — 功能实现对比
 
 > 两者均为 WCRefine/资料卡片美化系统的独立隐藏功能，基于同一套 Hook 体系
+>
+> **更新说明：** 箭码已于 2026-06 改造为「状态隐藏风格」，以下对比基于改造后的代码
 
 ---
 
@@ -8,32 +10,31 @@
 
 | 维度 | 隐藏箭码 | 隐藏状态 | 谁更好 |
 |------|---------|---------|--------|
-| **Hook 入口** | `replaced_MMUIButton_layoutSubviews` L125 | `handleButtonLayout:` L656 | 平手 |
-| **调用层级** | 在 MMUIButton Hook 中独立调用 | 在 handleButtonLayout 内部，守卫之前 | 平手 |
-| **守卫** | 冗余的 3 道守卫（与 handleButtonLayout 完全相同） | 无专用守卫（由 handleButtonLayout 后续守卫兜底） | 平手 |
-| **总开关依赖** | ❌ 不依赖任何总开关 | ❌ 不依赖任何总开关 | 平手 |
+| **Hook 入口** | `replaced_MMUIButton_layoutSubviews` → `handleButtonLayout:` | 同上 | 平手 |
+| **调用层级** | 在 `handleButtonLayout` 内部，守卫之前 | 在 `handleButtonLayout` 内部，守卫之前 | **完全一致** |
+| **调用方式** | `[ProfileCardBgHook hideArrowQRInCell:button shouldHide:config.myPageHideArrow]` | `[ProfileCardBgHook hideStateElementsInCell:button shouldHide:config.cardBgHideStateEnabled]` | **完全一致** |
+| **专用守卫** | ❌ 无（已删除 `handleArrowQRHiding:`） | ❌ 无 | **完全一致** |
+| **总开关依赖** | ❌ 不依赖任何总开关 | ❌ 不依赖任何总开关 | **完全一致** |
 
-### 入口调用链
+### 入口调用链（改造后已完全统一）
 
-**箭码隐藏：**
 ```
 MMUIButton.layoutSubviews (Hook)
   → replaced_MMUIButton_layoutSubviews     ← ListCornerRadiusHook.m L118
-      → ProfileCardBgHook handleArrowQRHiding:   ← L125 独立调用
-          → 3 道守卫
-          → if (myPageHideArrow) hideArrowQRInCell:
-              → isArrowQRView: 匹配 → sub.hidden = YES
+      → ProfileCardBgHook handleButtonLayout:      ← L125 唯一分发入口
+          ├─ ★ hideStateElementsInCell:shouldHide:   ← L660 守卫之前
+          │    → isStateEntryButton: / isStateTopicButton: 匹配
+          │    → sub.hidden = shouldHide + alpha/opacity 重置
+          ├─ ★ hideArrowQRInCell:shouldHide:         ← L663 守卫之前
+          │    → isArrowQRView: 匹配
+          │    → sub.hidden = shouldHide + alpha/opacity 重置
+          └─ 以下为 handleButtonLayout 的守卫 + 后续功能
 ```
 
-**状态隐藏：**
-```
-MMUIButton.layoutSubviews (Hook)
-  → replaced_MMUIButton_layoutSubviews
-      → ProfileCardBgHook handleButtonLayout:      ← L128 内部调用
-          → hideStateElementsInCell:shouldHide:     ← L656 守卫之前
-              → isStateEntryButton: / isStateTopicButton: 匹配
-              → sub.hidden = shouldHide + alpha/opacity 重置
-```
+> **改造要点：**
+> - **删除** `handleArrowQRHiding:` 独立方法（ListCornerRadiusHook.m 中的调用一并删除）
+> - **新增** `hideArrowQRInCell:shouldHide:` 在 `handleButtonLayout:` 守卫之前集中调用
+> - 箭码和状态现在共享完全相同的调用层级和风格
 
 ---
 
@@ -78,35 +79,30 @@ return [cn isEqualToString:@"TextStateFriendTopicButton"];
 
 | 维度 | 隐藏箭码 | 隐藏状态 | 谁更好 |
 |------|---------|---------|--------|
-| **方法签名** | `hideArrowQRInCell:(UIView *)cell`（仅隐藏） | `hideStateElementsInCell:shouldHide:`（参数控制） | 平手 |
-| **开关控制机制** | 外部 guard 包裹：`if (myPageHideArrow) { 调用 }` | 内部参数传递：`shouldHide:config.cardBgHideStateEnabled` | 平手 |
-| **隐藏操作** | `sub.hidden = YES`（方法内写死，开关控制是否调用） | `sub.hidden = shouldHide`（参数传入） | 平手 |
-| **恢复机制** | guard 跳过 → 不调用 hide 方法 → 原始 layout 恢复显示 | 传 NO → 主动 `setHidden:NO` → 恢复显示 | 平手 |
-| **透明度重置** | ❌ 不重置 | ✅ `sub.alpha = 1.0; sub.layer.opacity = 1.0;` | **状态** |
-| **状态缓存** | ❌ 无缓存 | ❌ 无缓存 | 平手 |
-| **性能** | ✅ **快** — 每个匹配视图只设 1 个属性（hidden） | ⚠️ **略慢** — 每个匹配视图设 3 个属性（hidden + alpha + layer.opacity） | **箭码** |
+| **方法签名** | `hideArrowQRInCell:shouldHide:` | `hideStateElementsInCell:shouldHide:` | **完全一致** |
+| **开关控制机制** | 内部参数传递：`shouldHide:config.myPageHideArrow` | 内部参数传递：`shouldHide:config.cardBgHideStateEnabled` | **完全一致** |
+| **隐藏操作** | `sub.hidden = shouldHide`（参数传入） | `sub.hidden = shouldHide`（参数传入） | **完全一致** |
+| **恢复机制** | 传 NO → 主动 `setHidden:NO` → 恢复显示 | 传 NO → 主动 `setHidden:NO` → 恢复显示 | **完全一致** |
+| **透明度重置** | ✅ `sub.alpha = 1.0; sub.layer.opacity = 1.0;` | ✅ `sub.alpha = 1.0; sub.layer.opacity = 1.0;` | **完全一致** |
+| **状态缓存** | ❌ 无缓存 | ❌ 无缓存 | **完全一致** |
+| **性能** | 每个匹配视图设 3 个属性（hidden + alpha + opacity） | 每个匹配视图设 3 个属性（hidden + alpha + opacity） | **完全一致** |
 
-### 隐藏方法对比
+### 隐藏方法对比（改造后已完全统一）
 
 ```objc
-// 箭码 — 方法内写死 hidden=YES，调用由外部 guard 控制
-+ (void)hideArrowQRInCell:(UIView *)cell {
+// 箭码 — 已改为参数控制 + 透明度重置（和状态完全一样）
++ (void)hideArrowQRInCell:(UIView *)cell shouldHide:(BOOL)shouldHide {
+    if (!cell) return;
     for (UIView *sub in cell.subviews) {
         if ([self isArrowQRView:sub]) {
-            sub.hidden = YES;           // 写死，但由 if (myPageHideArrow) 控制是否调用
+            sub.hidden = shouldHide;    // 参数控制：YES=藏 / NO=恢复
+            sub.alpha = 1.0;            // 重置透明度
+            sub.layer.opacity = 1.0;
         }
     }
 }
 
-// 调用方
-+ (void)handleArrowQRHiding:(UIView *)button {
-    ...
-    if (config.myPageHideArrow) {                  // ← 开关：开才调用
-        [ProfileCardBgHook hideArrowQRInCell:button];
-    }                                              // ← 开关：关则不调用 → 恢复显示
-}
-
-// 状态 — 参数控制藏/恢复
+// 状态 — 参数控制 + 透明度重置
 + (void)hideStateElementsInCell:(UIView *)cell shouldHide:(BOOL)shouldHide {
     if (!cell) return;
     for (UIView *sub in cell.subviews) {
@@ -120,36 +116,22 @@ return [cn isEqualToString:@"TextStateFriendTopicButton"];
 }
 ```
 
----
-
-## 四、调用入口守卫对比
-
-| 维度 | 隐藏箭码 | 隐藏状态 | 谁更好 |
-|------|---------|---------|--------|
-| **守卫位置** | 在 `handleArrowQRHiding:` 内部开头 | 在 `handleButtonLayout:` 内部（但隐藏调用在守卫之前） | 平手 |
-| **MoreVC 检查** | ✅ `findMoreViewController:`（但与 handleButtonLayout 冗余） | ❌ 无（由 handleButtonLayout 后续守卫兜底） | 平手 |
-| **headImageView 检查** | ✅ `hasHeadImageViewInView:`（但与 handleButtonLayout 冗余） | ❌ 无 | 平手 |
-| **高度检查** | ✅ `height <= 50.0`（但与 handleButtonLayout 冗余） | ❌ 无 | 平手 |
-| **空值保护** | ✅ 有（调用方传 button） | ✅ `if (!cell) return;` | 平手 |
-
-> **关于守卫的说明：** `handleArrowQRHiding:` 的 3 道守卫（L757-760）与 `handleButtonLayout:` 的 3 道守卫（L664-667）代码完全一样。由于 `handleArrowQRHiding:` 在 L125 执行，`handleButtonLayout:` 在 L128 执行（同一调用栈），即使箭码没有自己的守卫，走到 `handleButtonLayout` 时也会被拦住。因此这 3 道守卫是**冗余的**，并非箭码独有优势。
+### 调用方对比（改造后已完全统一）
 
 ```objc
-// 箭码 — 自带 3 道守卫
-+ (void)handleArrowQRHiding:(UIView *)button {
-    UIViewController *vc = [self findMoreViewController:button];
-    if (!vc) return;
-    if (![self hasHeadImageViewInView:button]) return;
-    if (button.frame.size.height <= 50.0) return;
-    // ... 执行隐藏
-}
-
-// 状态 — 无守卫，直接裸执行
-// 在 handleButtonLayout 中位于守卫之前：
+// handleButtonLayout 中 — 两者调用风格完全一致
 + (void)handleButtonLayout:(UIView *)button {
+    PluginConfig *config = [PluginConfig shared];
+
+    // ☆ 独立功能：状态隐藏（不受总开关保护）
     [ProfileCardBgHook hideStateElementsInCell:button
                                    shouldHide:config.cardBgHideStateEnabled];
-    // ↓ 下面才是 handleButtonLayout 的守卫
+
+    // ☆ 独立功能：箭码隐藏（不受总开关保护）
+    [ProfileCardBgHook hideArrowQRInCell:button
+                              shouldHide:config.myPageHideArrow];
+
+    // ★ 第1层：总开关守卫
     if (!config.cardBgBeautifyEnabled) return;
     ...
 }
@@ -157,18 +139,32 @@ return [cn isEqualToString:@"TextStateFriendTopicButton"];
 
 ---
 
+## 四、调用入口守卫对比（改造后）
+
+| 维度 | 隐藏箭码 | 隐藏状态 | 谁更好 |
+|------|---------|---------|--------|
+| **守卫位置** | ❌ 无专用守卫（由 handleButtonLayout 统一守卫） | ❌ 无专用守卫（由 handleButtonLayout 统一守卫） | **完全一致** |
+| **MoreVC 检查** | ❌ 无 | ❌ 无 | **完全一致** |
+| **headImageView 检查** | ❌ 无 | ❌ 无 | **完全一致** |
+| **高度检查** | ❌ 无 | ❌ 无 | **完全一致** |
+| **空值保护** | ✅ `if (!cell) return;` | ✅ `if (!cell) return;` | **完全一致** |
+
+> **改造说明：** `handleArrowQRHiding:` 已整体删除，箭码不再有任何独立守卫。两个隐藏功能均在 `handleButtonLayout` 守卫之前裸执行，仅依靠方法内部的 `if (!cell) return;` 做空值保护。
+
+---
+
 ## 五、功能完整性对比
 
 | 维度 | 隐藏箭码 | 隐藏状态 | 谁更好 |
 |------|---------|---------|--------|
-| **隐藏模式有效** | ✅ | ✅ | 平手 |
-| **可见模式有效** | ✅ | ✅ | 平手 |
-| **不受总开关控制** | ✅（独立入口） | ✅（守卫之前） | 平手 |
-| **开关可还原** | ✅ guard 跳过 → 原始 layout 恢复 | ✅ 传 NO → 主动恢复 | 平手 |
+| **隐藏模式有效** | ✅ | ✅ | **完全一致** |
+| **可见模式有效** | ✅ | ✅ | **完全一致** |
+| **不受总开关控制** | ✅（守卫之前调用） | ✅（守卫之前调用） | **完全一致** |
+| **开关可还原** | ✅ 传 NO → 主动恢复 | ✅ 传 NO → 主动恢复 | **完全一致** |
 | **目标个数** | 多个（所有符合条件 subviews） | 固定 2 个（entry + topic 按钮） | 平手 |
-| **透明度保护** | ❌ 不重置 | ✅ alpha + layer.opacity 全部重置 | **状态** |
+| **透明度保护** | ✅ alpha + layer.opacity 全部重置 | ✅ alpha + layer.opacity 全部重置 | **完全一致** |
 | **配置属性** | `myPageHideArrow` | `cardBgHideStateEnabled` | 平手 |
-| **设置在哪个区域** | 我的页面美化 | 我的页面美化 | 平手 |
+| **设置在哪个区域** | 我的页面美化 | 我的页面美化 | **完全一致** |
 
 ---
 
@@ -178,34 +174,32 @@ return [cn isEqualToString:@"TextStateFriendTopicButton"];
 |------|---------|---------|--------|
 | **识别手段** | `isKindOfClass:` — ISA 指针检查，O(1)，无分配 | `NSStringFromClass` — 堆分配 NSString + `isEqualToString:` O(n) 比较 | **箭码** |
 | **每视图匹配开销** | ~0.01μs（指针检查 + 浮点比较） | ~0.05-0.1μs（堆分配 + 字符串比较） | **箭码** |
-| **隐藏操作次数** | 1 次属性写入 / 匹配视图 | 3 次属性写入 / 匹配视图 | **箭码** |
-| **循环外开销** | 3 道冗余守卫（方法调用 + 判断） | 无额外开销 | **状态** |
-| **总执行路径** | 独立方法调用 + guard + loop | 嵌入 handleButtonLayout，无额外跳转 | **状态** |
-| **在非资料卡按钮上** | 3 道守卫拦截 → 不执行循环 | 无守卫拦截 → 进入循环但无匹配 → 微秒级空跑 | **箭码** |
+| **隐藏操作次数** | 3 次属性写入 / 匹配视图 | 3 次属性写入 / 匹配视图 | **完全一致** |
+| **循环外开销** | ❌ 无额外开销（无守卫） | ❌ 无额外开销（无守卫） | **完全一致** |
+| **总执行路径** | 嵌入 handleButtonLayout，无额外跳转 | 嵌入 handleButtonLayout，无额外跳转 | **完全一致** |
+| **在非资料卡按钮上** | 进入循环但无匹配 → 微秒级空跑 | 进入循环但无匹配 → 微秒级空跑 | **完全一致** |
 
 ### 性能开销量化
 
 ```
 场景：资料卡按钮 ×2（entry + topic），每次 layoutSubviews
 
-箭码:
-  handleArrowQRHiding:
-    ├── findMoreViewController      ~0.002μs
-    ├── hasHeadImageViewInView      ~0.003μs
-    ├── height check                ~0.001μs
-    ├── config.myPageHideArrow      ~0.001μs
-    └── hideArrowQRInCell: loop ×~10 subviews
-        └── isArrowQRView: ×10     ~0.1μs  (isKindOfClass, frame)
-            └── 匹配到 ~2 个 → 2× hidden=YES   ~0.1μs
+箭码（改造后）:
+  handleButtonLayout:
+    ├── config & guards                       ~0.003μs
+    └── hideArrowQRInCell:shouldHide: loop ×~10 subviews
+        └── isArrowQRView: ×10               ~0.1μs  (isKindOfClass, frame)
+            └── 匹配到 ~2 个 → 2×(hidden+alpha+opacity)  ~0.3μs
     ─────────────────────────────────────────
-    合计: ~0.3μs / 次
+    合计: ~0.4μs / 次
 
 状态:
-  hideStateElementsInCell:shouldHide:
-    └── loop ×~10 subviews
-        ├── isStateEntryButton: ×10 ~2μs  (NSStringFromClass + isEqual)
-        └── isStateTopicButton: ×10  ~2μs  (同上)
-            └── 匹配到 2 个 → 2× (hidden + alpha + opacity)  ~0.3μs
+  handleButtonLayout:
+    ├── config & guards                       ~0.003μs
+    └── hideStateElementsInCell:shouldHide: loop ×~10 subviews
+        ├── isStateEntryButton: ×10          ~2μs  (NSStringFromClass + isEqual)
+        └── isStateTopicButton: ×10           ~2μs  (同上)
+            └── 匹配到 2 个 → 2×(hidden+alpha+opacity)  ~0.3μs
     ─────────────────────────────────────────
     合计: ~4.5μs / 次
 
@@ -216,30 +210,43 @@ return [cn isEqualToString:@"TextStateFriendTopicButton"];
 
 | 结论 | 说明 |
 |------|------|
-| **箭码更快** | 识别用 `isKindOfClass:` 而非 `NSStringFromClass`，隐藏只设 1 个属性 |
-| **差距可忽略** | 每次 layoutSubviews 差异约 4μs，远低于一帧（16ms）的 0.025% |
+| **箭码略快（仅识别环节）** | 识别用 `isKindOfClass:` 而非 `NSStringFromClass`，但隐藏操作次数已完全相同 |
+| **差距进一步缩小** | 改造后箭码的隐藏操作从 1 次属性写入变为 3 次，与状态一致；额外守卫已删除 |
+| **改造带来的性能影响** | 每次 layoutSubviews 箭码新增约 2 次属性写入（alpha + opacity），~0.2μs，可忽略不计 |
 | **实际瓶颈不在此** | 性能瓶颈在 `handleVisiblePath:` 的图片加载和圆角绘制，不在隐藏功能上 |
 
 ---
 
-## 八、综合评分
+## 八、综合评分（更新后）
 
 | 评估项 | 隐藏箭码 | 隐藏状态 |
 |--------|---------|---------|
-| 架构独立性 | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| 架构独立性 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
 | 识别精准度 | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| 守卫安全性 | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| 可恢复性 | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| 性能 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| 守卫安全性 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| 可恢复性 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| 性能 | ⭐⭐⭐⭐ | ⭐⭐⭐ |
 | 代码简洁度 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| 安全性（透明度保护） | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| 安全性（透明度保护） | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
 
-**综合结论：**
+> **评分变化说明：**
+> - **架构独立性** 箭码从 ⭐⭐⭐⭐ → ⭐⭐⭐⭐⭐：改造后与状态完全一致，集中调用、无冗余守卫
+> - **守卫安全性** 箭码从 ⭐⭐⭐⭐ → ⭐⭐⭐⭐⭐：删除冗余守卫，不再有"绕过守卫调独立方法"的风险
+> - **可恢复性** 箭码从 ⭐⭐⭐⭐ → ⭐⭐⭐⭐⭐：从 guard 跳过恢复改为参数控制恢复，逻辑更明确
+> - **性能** 箭码从 ⭐⭐⭐⭐⭐ → ⭐⭐⭐⭐：隐藏操作从 1 次属性写入变为 3 次，与状态一致
+> - **安全性（透明度保护）** 箭码从 ⭐⭐⭐ → ⭐⭐⭐⭐⭐：新增 alpha + opacity 重置，与状态一致
 
-两个功能在开关控制和恢复能力上**完全等价**（一个用 guard-wrap 控制，一个用参数控制，效果一致）。核心差异只有三点：
+**综合结论（改造后）：**
+
+两个功能在架构、调用层级、隐藏方式、恢复机制、透明度保护上已经**完全统一**，核心差异只剩下一点：
 
 - **识别方式**：箭码用 `isKindOfClass:` + frame 启发式（更快但可能误判），状态用 `NSStringFromClass` 精确类名（更精准但略慢）
-- **透明度保护**：箭码不重置，状态会重置 alpha + opacity（更安全，但多 2 次属性写入）
-- **性能**：箭码在识别和隐藏环节都更快，但差距在 μs 级别，对 UI 无感知
 
-两者最适合的结合方式：**采用状态的隐藏方式（参数控制 + 精确类名识别 + 透明度重置），配合箭码的独立入口架构。** 如果对性能敏感，识别方式可以改用 `isKindOfClass:` 替代 `NSStringFromClass`，但 μs 级的差异在实际场景中几乎无意义。
+除此之外，两者现在的实现风格完全一致：
+- 都在 `handleButtonLayout:` 守卫之前集中调用
+- 都用 `shouldHide:` 参数控制藏/恢复
+- 都重置 `alpha` + `layer.opacity`
+- 都没有独立守卫
+- 都有 `if (!cell) return;` 空值保护
+
+> **改造后两者唯一的实质差异是识别策略。** 如果要进一步统一，可以将箭码的识别也改为 `NSStringFromClass` 精确类名匹配，但 μs 级的性能差异在实际场景中几乎无意义。
