@@ -651,9 +651,11 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"ListCornerRadius", @"总 Section 数: %ld", (long)totalSecs);
         for (NSInteger s = 0; s < MIN(10, totalSecs); s++) {
             NSInteger rows = [tableView numberOfRowsInSection:s];
+            // 尝试从 dataSource 获取 header title
             NSString *headerTitle = nil;
-            if ([tableView respondsToSelector:@selector(titleForHeaderInSection:)]) {
-                headerTitle = [tableView tableView:tableView titleForHeaderInSection:s];
+            id<UITableViewDataSource> dataSource = tableView.dataSource;
+            if (dataSource && [dataSource respondsToSelector:@selector(tableView:titleForHeaderInSection:)]) {
+                headerTitle = [dataSource tableView:tableView titleForHeaderInSection:s];
             }
             WPLog(@"ListCornerRadius", @"Section %ld: %ld 行, Header: %@", (long)s, (long)rows, headerTitle ?: @"(无)");
         }
