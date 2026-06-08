@@ -784,15 +784,15 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     NSInteger ct = 0, bt = 2;  // ct = cornerType, bt = borderType
 
     if (section == 0) {
-        // Section 0 → per-section（首行顶角，末行底角）
+        // ★ 修改：Section 0 末行无角（和后面连在一起）
         if (rowInThisSection == 1) {
-            ct = 3; bt = 0;  // 全角
+            ct = 3; bt = 0;  // 只有 1 行 → 全角
         } else if (row == 0) {
-            ct = 1; bt = 1;  // 顶角
+            ct = 1; bt = 1;  // 首行 → 顶角
         } else if (row == rowInThisSection - 1) {
-            ct = 2; bt = 3;  // 底角
+            ct = 0; bt = 2;  // 末行 → 无角 ★ 修改点
         } else {
-            ct = 0; bt = 2;  // 无角
+            ct = 0; bt = 2;  // 中间行
         }
     } else if (section == lastOneRowSection) {
         // 最后一个单行 section → 底角
