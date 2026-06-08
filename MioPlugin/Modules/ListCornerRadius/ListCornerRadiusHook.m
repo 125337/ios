@@ -631,11 +631,89 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                             total:(NSInteger)rowInThisSection
                      cornerRadius:(NSInteger)radius
                          isFTSHome:(BOOL)isFTSHome {
+
+    // ★ 合并前 N 个 section 为一个圆角组
+    NSInteger mergeSectionsCount = 7;
+    // 前 7 个 = 新的朋友 / 群聊 / 标签 / 公众号 /
+    //          通讯录安全助手 / 微信团队 / 企业微信联系人
+    // 每个 section 只有 1 行，需要合并处理
+
+    NSInteger totalSections = [tableView numberOfSections];
+
+    // ─── 分支 A：section 超出合并范围 → 标准 per-section ───
+    if (section >= mergeSectionsCount) {
+        [self wp_applyStandardCorner:cell
+                          tableView:tableView
+                          indexPath:indexPath
+                            section:section
+                                row:row
+                              total:rowInThisSection
+                       cornerRadius:radius
+                          isFTSHome:isFTSHome
+                          className:@"ContactsViewController"];
+        return;
+    }
+
+    // ─── 分支 B：在合并范围内 → 多 Section 合并模式 ───
+
+    // Step 1: 收集前 mergeSectionsCount 个 section 的行数
+    NSMutableArray<NSNumber *> *sectionRowCounts = [NSMutableArray array];
+    for (NSInteger i = 0; i < mergeSectionsCount; i++) {
+        if (i < totalSections) {
+            [sectionRowCounts addObject:@([tableView numberOfRowsInSection:i])];
+        } else {
+            [sectionRowCounts addObject:@0];  // 不存在的 section 视为 0 行
+        }
+    }
+
+    // Step 2: 找到第一个和最后一个非空 section
+    NSInteger firstRealSection = -1;
+    NSInteger lastRealSection = -1;
+    for (NSInteger i = 0; i < mergeSectionsCount; i++) {
+        if ([sectionRowCounts[i] integerValue] > 0) {
+            if (firstRealSection == -1) firstRealSection = i;
+            lastRealSection = i;
+        }
+    }
+
+    // 如果没有非空 section（理论上不会走到这里），回退
+    if (firstRealSection == -1) {
+        [self wp_applyStandardCorner:cell
+                          tableView:tableView
+                          indexPath:indexPath
+                            section:section
+                                row:row
+                              total:rowInThisSection
+                       cornerRadius:radius
+                          isFTSHome:isFTSHome
+                          className:@"ContactsViewController"];
+        return;
+    }
+
+    // Step 3: 判定 cornerType
     NSInteger cornerType = 0;
     NSInteger borderType = 0;
-    if (rowInThisSection == 1) {
+
+    // 唯一非空 section 且只有 1 行 → 全圆角
+    if (firstRealSection == lastRealSection &&
+        [sectionRowCounts[firstRealSection] integerValue] == 1) {
         cornerType = 3; borderType = 0;
-    } else if (row == 0) {
+    }
+    // 第一个非空 section 的首行 → 顶角
+    else if (section == firstRealSection && row == 0) {
+        cornerType = 1; borderType = 1;
+    }
+    // 最后一个非空 section 的末行 → 底角
+    else if (section == lastRealSection &&
+             row == [sectionRowCounts[section] integerValue] - 1) {
+        cornerType = 2; borderType = 3;
+    }
+    // 合并组中间的单行 section → 无圆角（只保留左右边框）
+    else if (rowInThisSection == 1) {
+        cornerType = 0; borderType = 2;
+    }
+    // 多行 section 内部 → 标准首/中/末行
+    else if (row == 0) {
         cornerType = 1; borderType = 1;
     } else if (row == rowInThisSection - 1) {
         cornerType = 2; borderType = 3;
@@ -643,7 +721,9 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         cornerType = 0; borderType = 2;
     }
 
-    cell.layer.cornerRadius = radius;
+    // Step 4: 应用圆角
+    // ★ cornerType == 0 时 radius 设 0 —— 防止任何意外圆角
+    cell.layer.cornerRadius = (cornerType == 0) ? 0 : radius;
     cell.layer.maskedCorners = 0;
 
     if (cornerType == 1) {
@@ -655,7 +735,11 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                                    kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
 
-    [self wp_applyBorderAndBg:cell radius:radius position:borderType isFTSHome:isFTSHome];
+    // Step 5: 应用边框（同样当 cornerType == 0 时 radius 为 0）
+    [self wp_applyBorderAndBg:cell
+                       radius:(cornerType == 0 ? 0 : radius)
+                     position:borderType
+                    isFTSHome:isFTSHome];
 }
 
 + (void)wp_applyBorderAndBg:(UIView *)cell
