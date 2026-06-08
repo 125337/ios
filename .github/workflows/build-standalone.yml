@@ -36,6 +36,9 @@ jobs:
           MioPlugin/Config/WPColorUtil.m \
           MioPlugin/Config/WPHueSlider.m \
           MioPlugin/Config/WPSaturationBrightnessView.m \
+          MioPlugin/Config/WPRGBAControl.m \
+          MioPlugin/Config/WPHexInputView.m \
+          MioPlugin/Config/WPColorPaletteView.m \
           MioPlugin/Config/WPHsvColorPickerController.m \
           MioPlugin/Config/WPColorPicker.m \
           MioPlugin/Core/MioAlertHelper.m \

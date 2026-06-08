@@ -41,21 +41,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, strong) UIView *colorDisplayView;             // 颜色预览块
 
-@property (nonatomic, strong) UILabel    *hexLabel;
-@property (nonatomic, strong) UITextField *hexTextField;
-
-@property (nonatomic, strong) UIView    *rgbControlView;
-@property (nonatomic, strong) UISlider  *redSlider, *greenSlider, *blueSlider;
-@property (nonatomic, strong) UITextField *redTextField, *greenTextField, *blueTextField;
-@property (nonatomic, strong) UILabel   *redLabel, *greenLabel, *blueLabel;
-
-@property (nonatomic, strong) UILabel    *alphaLabel;
-@property (nonatomic, strong) UISlider   *alphaSlider;
-@property (nonatomic, strong) UITextField *alphaTextField;
-
-@property (nonatomic, strong) UIScrollView *presetColorScrollView;
-@property (nonatomic, strong) UIScrollView *morandiColorScrollView;
-@property (nonatomic, strong) UIScrollView *historyColorScrollView;
 @property (nonatomic, strong) NSMutableArray<NSString *> *historyColors;
 
 @end
