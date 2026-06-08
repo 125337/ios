@@ -400,7 +400,7 @@ static CGFloat const kSBViewRatio = 0.85;    // S/B 面板占 contentView 宽度
         [self.sbView.topAnchor constraintEqualToAnchor:prev.bottomAnchor constant:12],
         [self.sbView.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
         [self.sbView.widthAnchor constraintEqualToAnchor:cv.widthAnchor multiplier:kSBViewRatio],
-        [self.sbView.heightAnchor constraintEqualToAnchor:self.sbView.widthAnchor],
+        [self.sbView.heightAnchor constraintEqualToAnchor:self.sbView.widthAnchor multiplier:kSBAspectRatio],
     ]];
     prev = self.sbView;
 
