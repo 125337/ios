@@ -1,4 +1,6 @@
 #import "WPHsvColorPickerController.h"
+#import "WPHueSlider.h"
+#import "WPSaturationBrightnessView.h"
 
 #pragma mark - 常量
 
@@ -13,7 +15,8 @@ static NSInteger const kMaxHistory = 20;
 
 @interface WPHsvColorPickerController ()
 @property (nonatomic, copy) void(^callback)(NSString *lightHex, NSString *darkHex);
-@property (nonatomic, assign) BOOL hasPerformedInitialLayout;
+@property (nonatomic, strong) WPHueSlider *hueSlider;
+@property (nonatomic, strong) WPSaturationBrightnessView *sbView;
 @end
 
 #pragma mark - 初始化
@@ -65,9 +68,7 @@ static NSInteger const kMaxHistory = 20;
 
     // 根据 Hex 初始化当前颜色
     [self updateCurrentColorFromHex];
-    [self updateColorDisplay];
-    [self updateInputFields];
-    [self updateIndicatorPositionsAnimated:NO];
+    [self syncToComponentsFromCurrentColor];
 
     // 键盘通知
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -80,19 +81,6 @@ static NSInteger const kMaxHistory = 20;
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-}
-
-- (void)viewDidLayoutSubviews {
-    [super viewDidLayoutSubviews];
-
-    if (!self.hasPerformedInitialLayout) {
-        self.hasPerformedInitialLayout = YES;
-
-        // ─── 首次布局完成后重建渐变（此时 subview frame 已正确）───
-        [self setupHueSliderGradient];
-        [self updateSaturationBrightnessBackground];
-        [self updateIndicatorPositionsAnimated:NO];
-    }
 }
 
 #pragma mark - Navigation Bar
@@ -155,19 +143,30 @@ static NSInteger const kMaxHistory = 20;
     // ─── Hex 输入 ───
     [self setupHexInput];
 
-    // ─── 色相条 ───
-    self.hueSliderView = [[UIView alloc] init];
-    self.hueSliderView.layer.cornerRadius = 6;
-    self.hueSliderView.clipsToBounds = YES;
-    [self.contentView addSubview:self.hueSliderView];
-    [self setupHueSlider];
+    // ─── 色相条（独立组件，一行搞定） ───
+    self.hueSlider = [[WPHueSlider alloc] init];
+    __weak __typeof(self) weakSelf = self;
+    self.hueSlider.hueDidChange = ^(CGFloat hue) {
+        __strong __typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        strongSelf.currentHsv.hue = hue;
+        // 通知 S/B 面板色相变了
+        strongSelf.sbView.hue = hue;
+        // 更新输出
+        [strongSelf updateColorFromComponents];
+    };
+    [self.contentView addSubview:self.hueSlider];
 
-    // ─── 饱和度/亮度面板 ───
-    self.saturationBrightnessView = [[UIView alloc] init];
-    self.saturationBrightnessView.layer.cornerRadius = 8;
-    self.saturationBrightnessView.clipsToBounds = YES;
-    [self.contentView addSubview:self.saturationBrightnessView];
-    [self setupSaturationBrightnessView];
+    // ─── S/B 面板（独立组件，一行搞定） ───
+    self.sbView = [[WPSaturationBrightnessView alloc] init];
+    self.sbView.sbDidChange = ^(CGFloat saturation, CGFloat brightness) {
+        __strong __typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        strongSelf.currentHsv.saturation = saturation;
+        strongSelf.currentHsv.brightness = brightness;
+        [strongSelf updateColorFromComponents];
+    };
+    [self.contentView addSubview:self.sbView];
 
     // ─── 颜色预览 ───
     self.colorDisplayView = [[UIView alloc] init];
@@ -202,165 +201,6 @@ static NSInteger const kMaxHistory = 20;
     [self updateCurrentColorFromHex];
 }
 
-#pragma mark - 色相条
-
-- (void)setupHueSlider {
-    // ⛔ 不再创建 CAGradientLayer（移到 viewDidLayoutSubviews → setupHueSliderGradient）
-
-    // 手势
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
-                                    initWithTarget:self action:@selector(handleHueGesture:)];
-    [self.hueSliderView addGestureRecognizer:pan];
-
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
-                                    initWithTarget:self action:@selector(handleHueGesture:)];
-    [self.hueSliderView addGestureRecognizer:tap];
-
-    // 指示器
-    self.hueIndicator = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 20, 20)];
-    self.hueIndicator.layer.cornerRadius = 10;
-    self.hueIndicator.layer.borderWidth = 2.5;
-    self.hueIndicator.layer.borderColor = [UIColor whiteColor].CGColor;
-    self.hueIndicator.layer.shadowColor = [UIColor blackColor].CGColor;
-    self.hueIndicator.layer.shadowOffset = CGSizeMake(0, 1);
-    self.hueIndicator.layer.shadowRadius = 2;
-    self.hueIndicator.layer.shadowOpacity = 0.4;
-    self.hueIndicator.userInteractionEnabled = NO;
-    [self.hueSliderView addSubview:self.hueIndicator];
-}
-
-- (void)setupHueSliderGradient {
-    // 移除旧的 gradient layer
-    for (CALayer *layer in self.hueSliderView.layer.sublayers) {
-        if ([layer isKindOfClass:[CAGradientLayer class]]) {
-            [layer removeFromSuperlayer];
-        }
-    }
-
-    // CAGradientLayer：横向色相渐变（此时 bounds 已正确）
-    CAGradientLayer *gradient = [CAGradientLayer layer];
-    gradient.frame = self.hueSliderView.bounds;
-    gradient.startPoint = CGPointMake(0, 0.5);
-    gradient.endPoint = CGPointMake(1, 0.5);
-
-    // 每隔 30° 一个颜色 stop，共 13 个（0~360）
-    NSMutableArray *colors = [NSMutableArray array];
-    for (NSInteger i = 0; i <= 360; i += 30) {
-        UIColor *c = [UIColor colorWithHue:i / 360.0 saturation:1.0 brightness:1.0 alpha:1.0];
-        [colors addObject:(id)c.CGColor];
-    }
-    gradient.colors = colors;
-    [self.hueSliderView.layer addSublayer:gradient];
-}
-
-- (void)handleHueGesture:(UIGestureRecognizer *)gesture {
-    CGPoint loc = [gesture locationInView:self.hueSliderView];
-    CGFloat hue = MAX(0, MIN(1, loc.x / self.hueSliderView.bounds.size.width));
-    _currentHsv.hue = hue;
-
-    [self updateSaturationBrightnessBackground];
-    [self updateColorFromComponents];
-    [self updateIndicatorPositionsAnimated:NO];
-}
-
-#pragma mark - 饱和度/亮度面板
-
-- (void)setupSaturationBrightnessView {
-    // 手势
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
-                                    initWithTarget:self action:@selector(handleSBGesture:)];
-    [self.saturationBrightnessView addGestureRecognizer:pan];
-
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
-                                    initWithTarget:self action:@selector(handleSBGesture:)];
-    [self.saturationBrightnessView addGestureRecognizer:tap];
-
-    // S/B 指示器
-    self.sbIndicator = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 24, 24)];
-    self.sbIndicator.layer.cornerRadius = 12;
-    self.sbIndicator.layer.borderWidth = 2.5;
-    self.sbIndicator.layer.borderColor = [UIColor whiteColor].CGColor;
-    self.sbIndicator.layer.shadowColor = [UIColor blackColor].CGColor;
-    self.sbIndicator.layer.shadowOffset = CGSizeMake(0, 2);
-    self.sbIndicator.layer.shadowRadius = 3;
-    self.sbIndicator.layer.shadowOpacity = 0.4;
-    self.sbIndicator.userInteractionEnabled = NO;
-    [self.saturationBrightnessView addSubview:self.sbIndicator];
-
-    // 初始绘制背景
-    [self updateSaturationBrightnessBackground];
-}
-
-- (void)updateSaturationBrightnessBackground {
-    // 1. 移除旧的 CAGradientLayer
-    NSArray *oldLayers = [self.saturationBrightnessView.layer.sublayers copy];
-    for (CALayer *layer in oldLayers) {
-        if ([layer isKindOfClass:[CAGradientLayer class]]) {
-            [layer removeFromSuperlayer];
-        }
-    }
-
-    CGRect bounds = self.saturationBrightnessView.bounds;
-    if (bounds.size.width <= 0 || bounds.size.height <= 0) return;
-
-    // 2. 纯色 (当前色相，100% 饱和度 + 明度)
-    UIColor *pureColor = [UIColor colorWithHue:self.currentHsv.hue
-                                    saturation:1.0 brightness:1.0 alpha:1.0];
-
-    // 3. Layer 1：饱和度渐变（左→右：白 → 纯色）
-    CAGradientLayer *satLayer = [CAGradientLayer layer];
-    satLayer.frame = bounds;
-    satLayer.startPoint = CGPointMake(0, 0.5);
-    satLayer.endPoint = CGPointMake(1, 0.5);
-    satLayer.colors = @[(id)[UIColor whiteColor].CGColor, (id)pureColor.CGColor];
-    [self.saturationBrightnessView.layer addSublayer:satLayer];
-
-    // 4. Layer 2：明度渐变（下→上：黑色 → 透明）
-    CAGradientLayer *briLayer = [CAGradientLayer layer];
-    briLayer.frame = bounds;
-    briLayer.startPoint = CGPointMake(0.5, 1);
-    briLayer.endPoint = CGPointMake(0.5, 0);
-    briLayer.colors = @[(id)[UIColor blackColor].CGColor, (id)[UIColor clearColor].CGColor];
-    [self.saturationBrightnessView.layer addSublayer:briLayer];
-}
-
-- (void)handleSBGesture:(UIGestureRecognizer *)gesture {
-    CGPoint loc = [gesture locationInView:self.saturationBrightnessView];
-    CGFloat w = self.saturationBrightnessView.bounds.size.width;
-    CGFloat h = self.saturationBrightnessView.bounds.size.height;
-    if (w <= 0 || h <= 0) return;
-
-    // 饱和度 → X 坐标比例
-    CGFloat saturation = MAX(0, MIN(1, loc.x / w));
-    // 明度 → 1 - (Y 坐标比例)
-    CGFloat brightness = MAX(0, MIN(1, 1.0 - loc.y / h));
-
-    _currentHsv.saturation = saturation;
-    _currentHsv.brightness = brightness;
-
-    [self updateColorFromComponents];
-    [self updateIndicatorPositionsAnimated:NO];
-}
-
-- (void)updateIndicatorPositionsAnimated:(BOOL)animated {
-    void (^update)(void) = ^{
-        // S/B 指示器
-        CGFloat sx = self.currentHsv.saturation * self.saturationBrightnessView.bounds.size.width;
-        CGFloat sy = (1.0 - self.currentHsv.brightness) * self.saturationBrightnessView.bounds.size.height;
-        self.sbIndicator.center = CGPointMake(sx, sy);
-
-        // 色相指示器
-        CGFloat hx = self.currentHsv.hue * self.hueSliderView.bounds.size.width;
-        self.hueIndicator.center = CGPointMake(hx, self.hueSliderView.bounds.size.height / 2);
-    };
-
-    if (animated) {
-        [UIView animateWithDuration:0.15 animations:update];
-    } else {
-        update();
-    }
-}
-
 #pragma mark - 颜色更新核心链路
 
 - (void)updateColorFromComponents {
@@ -385,10 +225,17 @@ static NSInteger const kMaxHistory = 20;
     UIColor *color = [WPColorUtil colorFromHexString:hex];
     self.currentHsv = [WPColorUtil hsvFromColor:color];
 
-    [self updateSaturationBrightnessBackground];
+    [self syncToComponentsFromCurrentColor];
+}
+
+- (void)syncToComponentsFromCurrentColor {
+    self.hueSlider.hue = self.currentHsv.hue;          // 色相条指示器移动
+    self.sbView.hue = self.currentHsv.hue;              // S/B 面板渐变重绘
+    self.sbView.saturation = self.currentHsv.saturation;
+    self.sbView.brightness = self.currentHsv.brightness;
+
     [self updateColorDisplay];
     [self updateInputFields];
-    [self updateIndicatorPositionsAnimated:NO];
 }
 
 - (void)updateColorDisplay {
@@ -457,25 +304,19 @@ static NSInteger const kMaxHistory = 20;
 - (void)redSliderChanged:(UISlider *)slider {
     self.currentHsv = [WPColorUtil hsvFromRed:slider.value green:self.greenSlider.value
                                          blue:self.blueSlider.value alpha:self.alphaSlider.value];
-    [self updateSaturationBrightnessBackground];
-    [self updateColorFromComponents];
-    [self updateIndicatorPositionsAnimated:YES];
+    [self syncToComponentsFromCurrentColor];
 }
 
 - (void)greenSliderChanged:(UISlider *)slider {
     self.currentHsv = [WPColorUtil hsvFromRed:self.redSlider.value green:slider.value
                                          blue:self.blueSlider.value alpha:self.alphaSlider.value];
-    [self updateSaturationBrightnessBackground];
-    [self updateColorFromComponents];
-    [self updateIndicatorPositionsAnimated:YES];
+    [self syncToComponentsFromCurrentColor];
 }
 
 - (void)blueSliderChanged:(UISlider *)slider {
     self.currentHsv = [WPColorUtil hsvFromRed:self.redSlider.value green:self.greenSlider.value
                                          blue:slider.value alpha:self.alphaSlider.value];
-    [self updateSaturationBrightnessBackground];
-    [self updateColorFromComponents];
-    [self updateIndicatorPositionsAnimated:YES];
+    [self syncToComponentsFromCurrentColor];
 }
 
 - (void)rgbTextFieldChanged:(UITextField *)textField {
@@ -483,9 +324,7 @@ static NSInteger const kMaxHistory = 20;
     val = MAX(0, MIN(255, val));
     self.currentHsv = [WPColorUtil hsvFromRed:self.redSlider.value green:self.greenSlider.value
                                          blue:self.blueSlider.value alpha:self.alphaSlider.value];
-    [self updateSaturationBrightnessBackground];
-    [self updateColorFromComponents];
-    [self updateIndicatorPositionsAnimated:YES];
+    [self syncToComponentsFromCurrentColor];
 }
 
 - (UILabel *)makeRGBLabelWithText:(NSString *)text color:(UIColor *)color {
@@ -549,17 +388,7 @@ static NSInteger const kMaxHistory = 20;
     UIColor *color = [WPColorUtil colorFromHexString:hex];
     self.currentHsv = [WPColorUtil hsvFromColor:color];
 
-    [self updateSaturationBrightnessBackground];
-    [self updateColorDisplay];
-    [self updateIndicatorPositionsAnimated:YES];
-    // 同步 RGB/Alpha 显示
-    CGFloat r, g, b;
-    [WPColorUtil getRed:&r green:&g blue:&b fromHsv:self.currentHsv];
-    self.redSlider.value = r;   self.redTextField.text = [NSString stringWithFormat:@"%.0f", r];
-    self.greenSlider.value = g; self.greenTextField.text = [NSString stringWithFormat:@"%.0f", g];
-    self.blueSlider.value = b;  self.blueTextField.text = [NSString stringWithFormat:@"%.0f", b];
-    self.alphaSlider.value = self.currentHsv.alpha;
-    self.alphaTextField.text = [NSString stringWithFormat:@"%.2f", self.currentHsv.alpha];
+    [self syncToComponentsFromCurrentColor];
 }
 
 #pragma mark - Alpha 控制区
@@ -712,30 +541,21 @@ static NSInteger const kMaxHistory = 20;
     UIColor *color = button.backgroundColor;
     if (!color) return;
     self.currentHsv = [WPColorUtil hsvFromColor:color];
-
-    [self updateSaturationBrightnessBackground];
-    [self updateColorFromComponents];
-    [self updateIndicatorPositionsAnimated:YES];
+    [self syncToComponentsFromCurrentColor];
 }
 
 - (void)morandiColorTapped:(UIButton *)button {
     UIColor *color = button.backgroundColor;
     if (!color) return;
     self.currentHsv = [WPColorUtil hsvFromColor:color];
-
-    [self updateSaturationBrightnessBackground];
-    [self updateColorFromComponents];
-    [self updateIndicatorPositionsAnimated:YES];
+    [self syncToComponentsFromCurrentColor];
 }
 
 - (void)historyColorTapped:(UIButton *)button {
     UIColor *color = button.backgroundColor;
     if (!color) return;
     self.currentHsv = [WPColorUtil hsvFromColor:color];
-
-    [self updateSaturationBrightnessBackground];
-    [self updateColorFromComponents];
-    [self updateIndicatorPositionsAnimated:YES];
+    [self syncToComponentsFromCurrentColor];
 }
 
 #pragma mark - 历史颜色持久化
@@ -873,18 +693,17 @@ static NSInteger const kMaxHistory = 20;
     prev = self.hexTextField;
 
     // 3. 色相条
-    layout(self.hueSliderView, 32);
+    layout(self.hueSlider, 32);
 
     // 4. S/B 面板 (正方形)
-    self.saturationBrightnessView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.sbView.translatesAutoresizingMaskIntoConstraints = NO;
     [NSLayoutConstraint activateConstraints:@[
-        [self.saturationBrightnessView.topAnchor constraintEqualToAnchor:prev.bottomAnchor constant:12],
-        [self.saturationBrightnessView.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
-        [self.saturationBrightnessView.widthAnchor constraintEqualToAnchor:cv.widthAnchor
-                                                                 multiplier:kSBViewRatio],
-        [self.saturationBrightnessView.heightAnchor constraintEqualToAnchor:self.saturationBrightnessView.widthAnchor],
+        [self.sbView.topAnchor constraintEqualToAnchor:prev.bottomAnchor constant:12],
+        [self.sbView.centerXAnchor constraintEqualToAnchor:cv.centerXAnchor],
+        [self.sbView.widthAnchor constraintEqualToAnchor:cv.widthAnchor multiplier:kSBViewRatio],
+        [self.sbView.heightAnchor constraintEqualToAnchor:self.sbView.widthAnchor],
     ]];
-    prev = self.saturationBrightnessView;
+    prev = self.sbView;
 
     // 5. 颜色预览
     layout(self.colorDisplayView, 44);

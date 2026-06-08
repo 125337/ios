@@ -39,11 +39,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong) UIView              *contentView;
 @property (nonatomic, strong) UISegmentedControl  *modeSegmentedControl;
 
-@property (nonatomic, strong) UIView *hueSliderView;                // 色相条容器
-@property (nonatomic, strong) UIView *hueIndicator;                 // 色相指示器
-@property (nonatomic, strong) UIView *saturationBrightnessView;     // S/B 面板容器
-@property (nonatomic, strong) UIView *sbIndicator;                  // S/B 指示器
-
 @property (nonatomic, strong) UIView *colorDisplayView;             // 颜色预览块
 
 @property (nonatomic, strong) UILabel    *hexLabel;
