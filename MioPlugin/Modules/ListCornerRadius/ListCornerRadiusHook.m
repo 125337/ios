@@ -194,10 +194,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             @"WCSearchController", nil];
     });
     if (![bgColorSkipList containsObject:className]) {
-        BOOL isDark = NO;
-        if (@available(iOS 13.0, *)) {
-            isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-        }
+        BOOL isDark = [config isDarkModeForViewController:vc];
         UIColor *customBg = isDark
             ? [config colorFromHex:config.listCellDarkBgColor]
             : [config colorFromHex:config.listCellLightBgColor];
@@ -265,10 +262,7 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    BOOL isDark = NO;
-    if (@available(iOS 13.0, *)) {
-        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-    }
+    BOOL isDark = [config isDarkModeForViewController:vc];
 
     UIColor *targetBg = isDark
             ? [config colorFromHex:config.listCellDarkBgColor]
@@ -293,10 +287,7 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    BOOL isDark = NO;
-    if (@available(iOS 13.0, *)) {
-        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-    }
+    BOOL isDark = [config isDarkModeForViewController:vc];
 
     UIColor *targetBg = isDark
             ? [config colorFromHex:config.listCellDarkBgColor]
@@ -358,10 +349,7 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
     [ListCornerRadiusHook applyBorderToView:view radius:radius position:0 isFTSHome:NO];
 
-    BOOL isDark = NO;
-    if (@available(iOS 13.0, *)) {
-        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
-    }
+    BOOL isDark = [config isDarkModeForViewController:vc];
     UIColor *targetBg = isDark
             ? [config colorFromHex:config.listCellDarkBgColor]
             : [config colorFromHex:config.listCellLightBgColor];
@@ -887,6 +875,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 }
 
 + (BOOL)wp_isCurrentDarkMode {
+    PluginConfig *config = [PluginConfig shared];
     if (@available(iOS 13.0, *)) {
         UIApplication *app = [UIApplication sharedApplication];
         for (UIScene *scene in app.connectedScenes) {
@@ -894,7 +883,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                 UIWindowScene *ws = (UIWindowScene *)scene;
                 for (UIWindow *window in ws.windows) {
                     if (window.isKeyWindow) {
-                        return window.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+                        return [config isDarkModeForViewController:window.rootViewController];
                     }
                 }
             }

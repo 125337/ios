@@ -213,6 +213,7 @@
 - (UIColor *)colorFromHex:(NSString *)hex;
 - (NSString *)hexFromColor:(UIColor *)color;
 - (BOOL)isDarkMode;
+- (BOOL)isDarkModeForViewController:(UIViewController *)vc;
 - (UIColor *)nameColor;
 - (UIColor *)timeColor;
 - (UIColor *)contentColor;

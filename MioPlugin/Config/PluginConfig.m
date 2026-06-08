@@ -806,6 +806,13 @@
     return NO;
 }
 
+- (BOOL)isDarkModeForViewController:(UIViewController *)vc {
+    if (@available(iOS 13.0, *)) {
+        return vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    }
+    return NO;
+}
+
 - (UIColor *)nameColor {
     if (!_customColorsEnabled) {
         return [UIColor colorWithRed:250.0/255.0 green:81.0/255.0 blue:81.0/255.0 alpha:1.0];

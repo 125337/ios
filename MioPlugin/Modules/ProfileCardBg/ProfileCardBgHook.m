@@ -435,10 +435,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 }
 
 + (BOOL)isDarkModeForVc:(UIViewController *)vc {
-    if (@available(iOS 13.0, *)) {
-        return vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
-    }
-    return NO;
+    return [[PluginConfig shared] isDarkModeForViewController:vc];
 }
 
 + (void)cleanNativeBgImageView:(UIView *)button {
