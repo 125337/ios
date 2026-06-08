@@ -100,9 +100,13 @@ static NSString *fontSizeForKey(NSString *key) {
                                       key:@"enableChatNameColor"
                                      isOn:config.enableChatNameColor
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
-        *ecy = [self addColorRowInGroup:expand title:@"浅色模式文字颜色" key:@"chatNameLightColor" value:config.senderTextColorHex cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"深色模式文字颜色" key:@"chatNameDarkColor" value:config.senderTextColorDarkHex cy:*ecy width:w];
+        *ecy = [self addDualColorRowInGroup:expand
+                                      title:@"聊天名字颜色"
+                                   lightKey:@"chatNameLightColor"
+                                    darkKey:@"chatNameDarkColor"
+                                   lightHex:config.senderTextColorHex
+                                    darkHex:config.senderTextColorDarkHex
+                                          cy:*ecy width:w];
     } cy:cy1 width:w];
 
     cy1 = [self addSeparatorInGroup:card1 cy:cy1 width:w];
@@ -129,9 +133,13 @@ static NSString *fontSizeForKey(NSString *key) {
                                       key:@"enableMomentsNameColor"
                                      isOn:config.enableMomentsNameColor
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
-        *ecy = [self addColorRowInGroup:expand title:@"浅色模式文字颜色" key:@"momentsNameLightColor" value:config.receiverTextColorHex cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"深色模式文字颜色" key:@"momentsNameDarkColor" value:config.receiverTextColorDarkHex cy:*ecy width:w];
+        *ecy = [self addDualColorRowInGroup:expand
+                                      title:@"朋友圈名字颜色"
+                                   lightKey:@"momentsNameLightColor"
+                                    darkKey:@"momentsNameDarkColor"
+                                   lightHex:config.receiverTextColorHex
+                                    darkHex:config.receiverTextColorDarkHex
+                                          cy:*ecy width:w];
     } cy:cy2 width:w];
 
     cy2 = [self addSeparatorInGroup:card2 cy:cy2 width:w];

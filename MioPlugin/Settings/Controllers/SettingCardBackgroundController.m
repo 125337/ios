@@ -177,18 +177,13 @@
                                              cy:*e3y width:w];
                 *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
 
-                *e3y = [self addColorRowInGroup:e3
-                                          title:@"浅色模式背景颜色"
-                                            key:@"cardBgCornerBgColor"
-                                          value:cfg.cardBgCornerBgColor
-                                             cy:*e3y width:w];
-                *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
-
-                *e3y = [self addColorRowInGroup:e3
-                                          title:@"深色模式背景颜色"
-                                            key:@"cardBgCornerDarkBgColor"
-                                          value:cfg.cardBgCornerDarkBgColor
-                                             cy:*e3y width:w];
+                *e3y = [self addDualColorRowInGroup:e3
+                                              title:@"卡片背景颜色"
+                                           lightKey:@"cardBgCornerBgColor"
+                                            darkKey:@"cardBgCornerDarkBgColor"
+                                           lightHex:cfg.cardBgCornerBgColor
+                                            darkHex:cfg.cardBgCornerDarkBgColor
+                                                  cy:*e3y width:w];
                 *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
 
                 CGFloat sw = cfg.cardBgStrokeWidth > 0 ? cfg.cardBgStrokeWidth : 2.0;

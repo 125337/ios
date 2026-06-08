@@ -108,13 +108,22 @@
             : @"{HH}:{mm}:{ss}";
         *ecy = [self addNavRowInGroup:expand title:@"自定义格式" subtitle:customFmtSub tag:200 action:@selector(onMessageTimeCustomFormatTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"发送方颜色" key:@"senderTextColorHex" value:config.senderTextColorHex cy:*ecy width:w];
+        *ecy = [self addDualColorRowInGroup:expand
+                                      title:@"发送方颜色"
+                                   lightKey:@"senderTextColorHex"
+                                    darkKey:@"senderTextColorDarkHex"
+                                   lightHex:config.senderTextColorHex
+                                    darkHex:config.senderTextColorDarkHex
+                                          cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"发送方颜色(深色)" key:@"senderTextColorDarkHex" value:config.senderTextColorDarkHex cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"接收方颜色" key:@"receiverTextColorHex" value:config.receiverTextColorHex cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addColorRowInGroup:expand title:@"接收方颜色(深色)" key:@"receiverTextColorDarkHex" value:config.receiverTextColorDarkHex cy:*ecy width:w];
+
+        *ecy = [self addDualColorRowInGroup:expand
+                                      title:@"接收方颜色"
+                                   lightKey:@"receiverTextColorHex"
+                                    darkKey:@"receiverTextColorDarkHex"
+                                   lightHex:config.receiverTextColorHex
+                                    darkHex:config.receiverTextColorDarkHex
+                                          cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"水平偏移" key:@"messageTimeOffsetX" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetX] hint:@"0" cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
