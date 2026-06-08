@@ -635,94 +635,17 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     // ─── 获取全表 section 数 ───
     NSInteger totalSections = [tableView numberOfSections];
 
-    // ─── 分支 A：> 3 个 section → 增强合并模式 ───
+    // ─── 分支 A：> 3 个 section → 降级为标准 per-section 模式 ───
     if (totalSections > 3) {
-        // ① 找有效 section
-        NSMutableArray *rowCounts = [NSMutableArray array];
-        for (NSInteger s = 0; s < totalSections; s++) {
-            [rowCounts addObject:@([tableView numberOfRowsInSection:s])];
-        }
-        NSInteger first = -1, last = -1;
-        for (NSInteger s = 0; s < totalSections; s++) {
-            if ([rowCounts[s] integerValue] > 0) {
-                if (first == -1) first = s;
-                last = s;
-            }
-        }
-        if (first == -1) {
-            [self wp_applyStandardCorner:cell
-                              tableView:tableView
-                              indexPath:indexPath
-                                section:section
-                                    row:row
-                                  total:rowInThisSection
-                           cornerRadius:radius
-                              isFTSHome:isFTSHome
-                              className:@"ContactsViewController"];
-            return;
-        }
-
-        // ② bVar1：前 3 个 section（first 之后的）是否全是 1 行
-        BOOL bVar1 = YES;
-        NSInteger bLimit = MIN(first + 3, last);
-        for (NSInteger s = first + 1; s <= bLimit; s++) {
-            if ([rowCounts[s] integerValue] != 1) { bVar1 = NO; break; }
-        }
-        if (!bVar1) {
-            [self wp_applyStandardCorner:cell
-                              tableView:tableView
-                              indexPath:indexPath
-                                section:section
-                                    row:row
-                                  total:rowInThisSection
-                           cornerRadius:radius
-                              isFTSHome:isFTSHome
-                              className:@"ContactsViewController"];
-            return;
-        }
-
-        // ③ 从后扫描连续单行 section，确定最后一个单行 section
-        NSInteger scan = last;
-        while (scan > first) {
-            if ([rowCounts[scan] integerValue] == 1) { scan--; } else break;
-        }
-        // scan 停的位置：
-        //   = first → first 之后全是单行 → 最后一个单行 = last
-        //   > first → 停在非单行 section → 最后一个单行 = scan
-        NSInteger lastOneRow = (scan == first) ? last : scan;
-
-        // ④ 四路分发
-        NSInteger ct = 0, bt = 2;
-        if (section == first) {
-            // 首个有效 section → per-section
-            if (rowInThisSection == 1)            { ct = 3; bt = 0; }
-            else if (row == 0)                     { ct = 1; bt = 1; }
-            else if (row == rowInThisSection - 1)  { ct = 2; bt = 3; }
-            else                                   { ct = 0; bt = 2; }
-        }
-        else if (section == lastOneRow && [rowCounts[section] integerValue] == 1) {
-            // 最后一个单行 section → 底角
-            ct = 2; bt = 3;
-        }
-        else if ([rowCounts[section] integerValue] == 1) {
-            // 中间单行 section → 无角
-            ct = 0; bt = 2;
-        }
-        else {
-            // 后续多行 section → per-section
-            if (row == 0)                       { ct = 1; bt = 1; }
-            else if (row == rowInThisSection - 1) { ct = 2; bt = 3; }
-            else                                  { ct = 0; bt = 2; }
-        }
-
-        // ⑤ 应用
-        cell.layer.cornerRadius = (ct == 0) ? 0 : radius;
-        cell.layer.maskedCorners = ct == 1 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner)
-                                 : ct == 2 ? (kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
-                                 : ct == 3 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner|
-                                              kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
-                                 : 0;
-        [self wp_applyBorderAndBg:cell radius:radius position:bt isFTSHome:isFTSHome];
+        [self wp_applyStandardCorner:cell
+                          tableView:tableView
+                          indexPath:indexPath
+                            section:section
+                                row:row
+                              total:rowInThisSection
+                       cornerRadius:radius
+                          isFTSHome:isFTSHome
+                          className:@"ContactsViewController"];
         return;
     }
 
