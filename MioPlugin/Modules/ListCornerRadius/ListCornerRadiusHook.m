@@ -443,18 +443,7 @@ static void _hooked_setBgImageView(id self, SEL _cmd, id imageView) {
     PluginConfig *config = [PluginConfig shared];
     if (!config.globalCornerRadiusEnabled) {
         _orig_setBgImageView(self, _cmd, imageView);
-        return;
     }
-
-    // ★ 检查是否在通讯录中 → 透明化 Section Header
-    UIViewController *vc = findParentViewController((UIView *)self);
-    if (vc && [NSStringFromClass([vc class]) isEqualToString:@"ContactsViewController"]) {
-        // 通讯录中 → 不设置背景图片 → Header 透明
-        return;
-    }
-
-    // 其他页面 → 正常设置背景
-    _orig_setBgImageView(self, _cmd, imageView);
 }
 
 static BOOL _wp_isTableViewClass(NSString *name) {
@@ -642,25 +631,6 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                             total:(NSInteger)rowInThisSection
                      cornerRadius:(NSInteger)radius
                          isFTSHome:(BOOL)isFTSHome {
-
-    // ★★★ 排查日志：打印通讯录 Section 结构 ★★★
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        WPLog(@"ListCornerRadius", @"=== 通讯录 Section 结构排查 ===");
-        NSInteger totalSecs = [tableView numberOfSections];
-        WPLog(@"ListCornerRadius", @"总 Section 数: %ld", (long)totalSecs);
-        for (NSInteger s = 0; s < MIN(10, totalSecs); s++) {
-            NSInteger rows = [tableView numberOfRowsInSection:s];
-            // 尝试从 dataSource 获取 header title
-            NSString *headerTitle = nil;
-            id<UITableViewDataSource> dataSource = tableView.dataSource;
-            if (dataSource && [dataSource respondsToSelector:@selector(tableView:titleForHeaderInSection:)]) {
-                headerTitle = [dataSource tableView:tableView titleForHeaderInSection:s];
-            }
-            WPLog(@"ListCornerRadius", @"Section %ld: %ld 行, Header: %@", (long)s, (long)rows, headerTitle ?: @"(无)");
-        }
-        WPLog(@"ListCornerRadius", @"=== 排查结束 ===");
-    });
 
     // ─── 分支 A：section > 3 → 标准 per-section ───
     if (section > 3) {
