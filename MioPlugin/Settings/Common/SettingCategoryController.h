@@ -27,6 +27,7 @@ Class SettingCategoryBaseClass(void);
 - (CGFloat)finishExpandContainer:(UIView *)container currentCy:(CGFloat)cy;
 - (CGFloat)addMasterSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on subBuilder:(void (^)(UIView *expand, CGFloat *ecy))subBuilder cy:(CGFloat)cy width:(CGFloat)w;
 - (void)switchChanged:(UISwitch *)sender;
+- (void)colorButtonTapped:(UIButton *)sender;
 - (void)buttonClicked:(NSString *)key;
 - (void)buildUI;
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection;
