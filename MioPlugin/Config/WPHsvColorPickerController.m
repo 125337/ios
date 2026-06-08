@@ -162,8 +162,10 @@ static NSInteger const kMaxHistory = 20;
     self.sbView.sbDidChange = ^(CGFloat saturation, CGFloat brightness) {
         __strong __typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
-        strongSelf.currentHsv.saturation = saturation;
-        strongSelf.currentHsv.brightness = brightness;
+        WPHsvColor hsv = strongSelf.currentHsv;
+        hsv.saturation = saturation;
+        hsv.brightness = brightness;
+        strongSelf.currentHsv = hsv;
         [strongSelf updateColorFromComponents];
     };
     [self.contentView addSubview:self.sbView];
