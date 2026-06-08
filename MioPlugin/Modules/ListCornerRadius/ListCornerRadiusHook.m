@@ -632,153 +632,72 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                      cornerRadius:(NSInteger)radius
                          isFTSHome:(BOOL)isFTSHome {
 
-    // ─── 分支 A：section > 3 → 标准 per-section ───
+    // ─── 分支 A：section > 3 → per-section ───
     if (section > 3) {
-        [self wp_applyStandardCorner:cell
-                          tableView:tableView
-                          indexPath:indexPath
-                            section:section
-                                row:row
-                              total:rowInThisSection
-                       cornerRadius:radius
-                          isFTSHome:isFTSHome
-                          className:@"ContactsViewController"];
+        [self wp_applyStandardCorner:cell tableView:tableView indexPath:indexPath
+                              section:section row:row total:rowInThisSection
+                         cornerRadius:radius isFTSHome:isFTSHome
+                            className:@"ContactsViewController"];
         return;
     }
 
-    // ─── 分支 B：section <= 3 → 特殊算法 ───
+    // ─── 分支 B：section 0-3 特殊算法 ───
 
-    // Step 1: 收集 Section 0-3 的行数
-    NSInteger totalSections = [tableView numberOfSections];
+    // 收集 Section 0-3 行数（不足补 0）
     NSMutableArray *rowCounts = [NSMutableArray array];
-    for (NSInteger s = 0; s < MIN(4, totalSections); s++) {
-        [rowCounts addObject:@([tableView numberOfRowsInSection:s])];
-    }
-    // 不足 4 个 section 的补 0
-    while (rowCounts.count < 4) {
-        [rowCounts addObject:@0];
+    for (NSInteger s = 0; s < 4; s++) {
+        [rowCounts addObject:@(s < [tableView numberOfSections]
+                              ? [tableView numberOfRowsInSection:s] : 0)];
     }
 
-    // Step 2: 检查 Section 0 行数（必须是 3 或 4 行）
-    NSInteger section0Rows = [rowCounts[0] integerValue];
-    if (section0Rows < 3 || section0Rows > 4) {
-        [self wp_applyStandardCorner:cell
-                          tableView:tableView
-                          indexPath:indexPath
-                            section:section
-                                row:row
-                              total:rowInThisSection
-                       cornerRadius:radius
-                          isFTSHome:isFTSHome
-                          className:@"ContactsViewController"];
+    // Section 0 行数必须 3-4 行
+    if ([rowCounts[0] integerValue] < 3 || [rowCounts[0] integerValue] > 4) {
+        [self wp_applyStandardCorner:cell tableView:tableView indexPath:indexPath
+                              section:section row:row total:rowInThisSection
+                         cornerRadius:radius isFTSHome:isFTSHome
+                            className:@"ContactsViewController"];
         return;
     }
 
-    // ★ Step 2.5: 检查 Section 0 和 Section 1 是否需要合并 ★
-    NSInteger section1Rows = [rowCounts[1] integerValue];
-    if (section0Rows == 4 && section1Rows == 3) {
-        // 合并 Section 0 和 Section 1
-        NSInteger ct = 0, bt = 2;
-
-        if (section == 0) {
-            if (row == 0) {
-                ct = 1; bt = 1;  // 顶角
-            } else if (row == rowInThisSection - 1) {
-                ct = 0; bt = 2;  // 末行 → 无角（和 Section 1 连在一起）
-            } else {
-                ct = 0; bt = 2;  // 中间行
-            }
-        }
-        else if (section == 1) {
-            if (row == 0) {
-                ct = 0; bt = 2;  // 首行 → 无角（和 Section 0 连在一起）
-            } else if (row == rowInThisSection - 1) {
-                ct = 2; bt = 3;  // 底角
-            } else {
-                ct = 0; bt = 2;  // 中间行
-            }
-        }
-        else {
-            // Section 2+ → 标准 per-section
-            [self wp_applyStandardCorner:cell
-                              tableView:tableView
-                              indexPath:indexPath
-                                section:section
-                                    row:row
-                                  total:rowInThisSection
-                           cornerRadius:radius
-                              isFTSHome:isFTSHome
-                              className:@"ContactsViewController"];
-            return;
-        }
-
-        cell.layer.cornerRadius = (ct == 0) ? 0 : radius;
-        cell.layer.maskedCorners = ct == 1 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner)
-                                     : ct == 2 ? (kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
-                                     : ct == 3 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner|
-                                                  kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
-                                     : 0;
-        [self wp_applyBorderAndBg:cell radius:radius position:bt isFTSHome:isFTSHome];
-        return;
-    }
-
-    // Step 3: bVar1 检测 - section 1/2/3 是否都是 1 行
+    // bVar1：section 1/2/3 是否都是 1 行
     BOOL bVar1 = ([rowCounts[1] integerValue] == 1 &&
                   [rowCounts[2] integerValue] == 1 &&
                   [rowCounts[3] integerValue] == 1);
 
     if (!bVar1) {
-        // 不满足条件 → 标准 per-section
-        [self wp_applyStandardCorner:cell
-                          tableView:tableView
-                          indexPath:indexPath
-                            section:section
-                                row:row
-                              total:rowInThisSection
-                       cornerRadius:radius
-                          isFTSHome:isFTSHome
-                          className:@"ContactsViewController"];
+        [self wp_applyStandardCorner:cell tableView:tableView indexPath:indexPath
+                              section:section row:row total:rowInThisSection
+                         cornerRadius:radius isFTSHome:isFTSHome
+                            className:@"ContactsViewController"];
         return;
     }
 
-    // Step 4: 半合并模式
-    // 找到最后一个单行 section（从后扫描）
-    NSInteger lastOneRowSection = 3;  // section 3 肯定是 1 行
-    for (NSInteger s = 3; s >= 1; s--) {
-        if ([rowCounts[s] integerValue] == 1) {
-            lastOneRowSection = s;
-            break;
-        }
-    }
+    // ─── 半合并模式（bVar1=true） ───
 
-    NSInteger ct = 0, bt = 2;  // ct = cornerType, bt = borderType
+    NSInteger ct = 0, bt = 2;  // cornerType / borderType
 
     if (section == 0) {
-        // ★ 修改：Section 0 末行无角（和后面连在一起）
-        if (rowInThisSection == 1) {
-            ct = 3; bt = 0;  // 只有 1 行 → 全角
-        } else if (row == 0) {
-            ct = 1; bt = 1;  // 首行 → 顶角
-        } else if (row == rowInThisSection - 1) {
-            ct = 0; bt = 2;  // 末行 → 无角 ★ 修改点
+        // Section 0：首行顶角，末行无角（和后面单行连一起）
+        if (row == 0) {
+            ct = 1; bt = 1;  // 顶角
         } else {
-            ct = 0; bt = 2;  // 中间行
+            ct = 0; bt = 2;  // 无角（末行/中间行都一样）
         }
-    } else if (section == lastOneRowSection) {
-        // 最后一个单行 section → 底角
+    } else if (section == 3) {
+        // Section 3：最后一个单行 → 底角
         ct = 2; bt = 3;
     } else {
-        // 中间单行 section → 无角
+        // Section 1/2：中间单行 → 无角
         ct = 0; bt = 2;
     }
 
-    // Step 5: 应用圆角和边框
+    // 应用圆角
     cell.layer.cornerRadius = (ct == 0) ? 0 : radius;
     cell.layer.maskedCorners = ct == 1 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner)
-                                 : ct == 2 ? (kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
-                                 : ct == 3 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner|
-                                              kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
-                                 : 0;
+                             : ct == 2 ? (kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
+                             : ct == 3 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner|
+                                          kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
+                             : 0;
     [self wp_applyBorderAndBg:cell radius:radius position:bt isFTSHome:isFTSHome];
 }
 
