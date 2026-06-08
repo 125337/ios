@@ -20,6 +20,7 @@ static CGFloat const kSBViewRatio = 0.85;    // S/B 面板占 contentView 宽度
 @property (nonatomic, strong) WPRGBAControl *rgbaControl;
 @property (nonatomic, strong) WPHexInputView *hexInput;
 @property (nonatomic, strong) WPColorPaletteView *colorPalette;
+- (void)loadHistoryColors;
 @end
 
 #pragma mark - 初始化
