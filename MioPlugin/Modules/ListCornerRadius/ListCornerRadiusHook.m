@@ -251,6 +251,248 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     cellView.layer.masksToBounds = YES;
 }
 
+// ★★★ [WPAuxiliaryHooks] MFWebMMBtn background color ★★★
+static void (*_orig_MFWebMMBtn_layoutSubviews)(id, SEL);
+static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
+    _orig_MFWebMMBtn_layoutSubviews(self, _cmd);
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.globalCornerRadiusEnabled) return;
+
+    UIViewController *vc = findParentViewController((UIView *)self);
+    if (!vc) return;
+    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
+
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    }
+
+    UIColor *targetBg = [config colorFromHex:config.listCellBgColor];
+    if (!targetBg) {
+        targetBg = isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor];
+    }
+    ((UIView *)self).backgroundColor = targetBg;
+}
+
+// ★★★ [WPAuxiliaryHooks] MFBannerBtn background color ★★★
+static void (*_orig_MFBannerBtn_layoutSubviews)(id, SEL);
+static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
+    _orig_MFBannerBtn_layoutSubviews(self, _cmd);
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.globalCornerRadiusEnabled) return;
+
+    UIViewController *vc = findParentViewController((UIView *)self);
+    if (!vc) return;
+    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
+
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    }
+
+    UIColor *targetBg = [config colorFromHex:config.listCellBgColor];
+    if (!targetBg) {
+        targetBg = isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor];
+    }
+    ((UIView *)self).backgroundColor = targetBg;
+}
+
+// ★★★ [WPAuxiliaryHooks] MainFrameSectionFoldView ★★★
+static void (*_orig_FoldView_layoutSubviews)(id, SEL);
+static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
+    _orig_FoldView_layoutSubviews(self, _cmd);
+
+    UIViewController *vc = findParentViewController((UIView *)self);
+    if (!vc) return;
+    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.globalCornerRadiusEnabled) return;
+
+    UIView *view = (UIView *)self;
+    NSInteger radius = (NSInteger)config.listCellCornerRadius;
+    if (radius == 0) radius = 18;
+
+    NSInteger margin = (NSInteger)config.listCellMargin;
+    if (margin == 0) margin = 9;
+
+    CGRect frame = view.frame;
+    CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
+    CGFloat newWidth = screenWidth - 2.0 * margin;
+    if (frame.origin.x != (CGFloat)margin || frame.size.width != newWidth) {
+        frame.origin.x = (CGFloat)margin;
+        frame.size.width = newWidth;
+        view.frame = frame;
+    }
+    view.autoresizingMask = UIViewAutoresizingNone;
+
+    if ([view respondsToSelector:@selector(isFolding)]) {
+        BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(view, @selector(isFolding));
+        if (folding) {
+            view.layer.cornerRadius = radius;
+            view.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
+                                     | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+        } else {
+            view.layer.cornerRadius = radius;
+            view.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+        }
+    } else {
+        view.layer.cornerRadius = radius;
+        view.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
+                                 | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+    }
+
+    view.layer.masksToBounds = YES;
+
+    [ListCornerRadiusHook applyBorderToView:view radius:radius position:0 isFTSHome:NO];
+
+    BOOL isDark = NO;
+    if (@available(iOS 13.0, *)) {
+        isDark = (vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    }
+    UIColor *targetBg = [config colorFromHex:config.listCellBgColor];
+    if (!targetBg) {
+        targetBg = isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor];
+    }
+    view.backgroundColor = targetBg;
+
+    for (UIView *subview in view.subviews) {
+        if ([NSStringFromClass([subview class]) isEqualToString:@"UIView"]) {
+            BOOL hasLabel = NO;
+            for (UIView *child in subview.subviews) {
+                if ([child isKindOfClass:[UILabel class]]) {
+                    hasLabel = YES;
+                    break;
+                }
+            }
+            if (!hasLabel) {
+                subview.backgroundColor = [UIColor clearColor];
+            }
+        }
+    }
+}
+
+// ★★★ [WPAuxiliaryHooks] MMUIButton list media corner ★★★
+static void (*_orig_MMUIButton_layoutSubviews)(id, SEL);
+static void _hooked_MMUIButton_layoutSubviews(id self, SEL _cmd) {
+    _orig_MMUIButton_layoutSubviews(self, _cmd);
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.globalCornerRadiusEnabled) return;
+
+    UIViewController *vc = findParentViewController((UIView *)self);
+    if (!vc) return;
+    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
+
+    if (config.listMediaCornerEnabled) {
+        UIView *view = (UIView *)self;
+        NSInteger radius = (NSInteger)config.listCellCornerRadius;
+        if (radius == 0) radius = 18;
+        view.layer.cornerRadius = radius;
+        view.layer.masksToBounds = YES;
+    }
+
+    if (config.listDisableLabelWidthAdjustment) {
+        UIView *view = (UIView *)self;
+        for (UIView *subview in view.subviews) {
+            if ([subview isKindOfClass:[UILabel class]]) {
+                UILabel *label = (UILabel *)subview;
+                [label sizeToFit];
+            }
+        }
+    }
+}
+
+// ★★★ [WPSessionSpacingHook] NewMainFrameVC header height ★★★
+static CGFloat (*_orig_NMFVC_heightForHeader)(id, SEL, id, NSInteger);
+static CGFloat _hooked_NMFVC_heightForHeader(id self, SEL _cmd, id tableView, NSInteger section) {
+    CGFloat height = _orig_NMFVC_heightForHeader(self, _cmd, tableView, section);
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.globalCornerRadiusEnabled) return height;
+
+    if (section == 1) {
+        NSInteger spacing = (NSInteger)config.listPinnedSessionTopSpacing;
+        height += (spacing > 0) ? spacing : 15;
+    } else if (section >= 2) {
+        NSInteger spacing = (NSInteger)config.listNormalSessionSpacing;
+        height += (spacing > 0) ? spacing : 15;
+    }
+    return height;
+}
+
+static id (*_orig_NMFVC_viewForHeader)(id, SEL, id, NSInteger);
+static id _hooked_NMFVC_viewForHeader(id self, SEL _cmd, id tableView, NSInteger section) {
+    PluginConfig *config = [PluginConfig shared];
+    if (config.globalCornerRadiusEnabled && section > 0) {
+        return [[UIView alloc] initWithFrame:CGRectZero];
+    }
+    return _orig_NMFVC_viewForHeader(self, _cmd, tableView, section);
+}
+
+static void (*_orig_setBgImageView)(id, SEL, id);
+static void _hooked_setBgImageView(id self, SEL _cmd, id imageView) {
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.globalCornerRadiusEnabled) {
+        _orig_setBgImageView(self, _cmd, imageView);
+    }
+}
+
+static BOOL _wp_isTableViewClass(NSString *name) {
+    return [name isEqualToString:@"MMTableView"] ||
+           [name isEqualToString:@"MMMainTableView"] ||
+           [name isEqualToString:@"MainFrameTableView"] ||
+           [name isEqualToString:@"TextStateProfileTableView"];
+}
+
+static BOOL _wp_isAllowedVC(NSString *name) {
+    return [name isEqualToString:@"NewMainFrameViewController"] ||
+           [name isEqualToString:@"BrandSessionViewController"] ||
+           [name isEqualToString:@"ChatBoxSessionListViewController"] ||
+           [name isEqualToString:@"OpenIMBrandContactListViewController"] ||
+           [name isEqualToString:@"ContactTagNewDetailViewController"] ||
+           [name isEqualToString:@"ChatRoomListViewController"] ||
+           [name isEqualToString:@"BrandServiceContactsViewController"];
+}
+
+static void (*_orig_UIView_layoutSubviews)(id, SEL);
+static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
+    _orig_UIView_layoutSubviews(self, _cmd);
+
+    PluginConfig *config = [PluginConfig shared];
+    if (!config.globalCornerRadiusEnabled) return;
+
+    if (![NSStringFromClass([self class]) isEqualToString:@"UIView"]) return;
+
+    UIView *view = (UIView *)self;
+
+    if (view.bounds.size.height < 1.0) return;
+
+    UIViewController *vc = findParentViewController(view);
+    if (!vc || !_wp_isAllowedVC(NSStringFromClass([vc class]))) return;
+
+    UIView *parent = view.superview;
+    if (!parent) return;
+
+    if (_wp_isTableViewClass(NSStringFromClass([parent class]))) {
+        view.backgroundColor = [UIColor clearColor];
+        return;
+    }
+
+    UIView *gp = parent.superview;
+    if (gp && _wp_isTableViewClass(NSStringFromClass([gp class]))) {
+        view.backgroundColor = [UIColor clearColor];
+    }
+}
+
 @implementation ListCornerRadiusHook
 
 + (void)initListCornerRadiusHook {
@@ -279,6 +521,51 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"ListCornerRadius", @"[OK] WCSearchBar::layoutSubviews");
     } else {
         WPLog(@"ListCornerRadius", @"[WARN] WCSearchBar class not found!");
+    }
+
+    // ★ WPAuxiliaryHooks Hooks — MFWebMMBtn, MFBannerBtn, FoldView, MMUIButton media corner
+    Class c1 = objc_getClass("MFWebMMBtn");
+    if (c1) {
+        MSHookMessageEx(c1, @selector(layoutSubviews),
+            (IMP)_hooked_MFWebMMBtn_layoutSubviews, (IMP *)&_orig_MFWebMMBtn_layoutSubviews);
+    }
+
+    Class c2 = objc_getClass("MFBannerBtn");
+    if (c2) {
+        MSHookMessageEx(c2, @selector(layoutSubviews),
+            (IMP)_hooked_MFBannerBtn_layoutSubviews, (IMP *)&_orig_MFBannerBtn_layoutSubviews);
+    }
+
+    Class c3 = objc_getClass("MainFrameSectionFoldView");
+    if (c3) {
+        MSHookMessageEx(c3, @selector(layoutSubviews),
+            (IMP)_hooked_FoldView_layoutSubviews, (IMP *)&_orig_FoldView_layoutSubviews);
+    }
+
+    // ★ MMUIButton Hook — 仅保留列表媒体圆角
+    Class c4 = objc_getClass("MMUIButton");
+    if (c4) {
+        MSHookMessageEx(c4, @selector(layoutSubviews),
+            (IMP)_hooked_MMUIButton_layoutSubviews, (IMP *)&_orig_MMUIButton_layoutSubviews);
+    }
+
+    // ★ WPSessionSpacingHook Hooks — UIView, NewMainFrameVC, MMTableSectionHeader
+    Class uiView = objc_getClass("UIView");
+    if (uiView) {
+        MSHookMessageEx(uiView, @selector(layoutSubviews),
+            (IMP)_hooked_UIView_layoutSubviews, (IMP *)&_orig_UIView_layoutSubviews);
+    }
+    Class nmfvc = objc_getClass("NewMainFrameViewController");
+    if (nmfvc) {
+        MSHookMessageEx(nmfvc, @selector(tableView:heightForHeaderInSection:),
+            (IMP)_hooked_NMFVC_heightForHeader, (IMP *)&_orig_NMFVC_heightForHeader);
+        MSHookMessageEx(nmfvc, @selector(tableView:viewForHeaderInSection:),
+            (IMP)_hooked_NMFVC_viewForHeader, (IMP *)&_orig_NMFVC_viewForHeader);
+    }
+    Class header = objc_getClass("MMTableSectionHeaderView");
+    if (header) {
+        MSHookMessageEx(header, @selector(setBackgroundImageView:),
+            (IMP)_hooked_setBgImageView, (IMP *)&_orig_setBgImageView);
     }
 
     [ProfileCardBgHook initCellHeightHook];
