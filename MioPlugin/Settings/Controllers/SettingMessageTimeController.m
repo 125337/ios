@@ -3,7 +3,6 @@
 #import "../../Modules/MessageTime/MessageTimeFormatEditorVC.h"
 
 @interface SettingMessageTimeController ()
-@property (nonatomic, strong) NSMutableArray *inputFields;
 @end
 
 @implementation SettingMessageTimeController
@@ -83,7 +82,6 @@
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
-    [self.inputFields removeAllObjects];
 
     PluginConfig *config = [PluginConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;

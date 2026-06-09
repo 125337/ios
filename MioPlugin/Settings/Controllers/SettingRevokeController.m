@@ -3,7 +3,6 @@
 #import "../../Modules/Revoke/RevokeFormatEditorVC.h"
 
 @interface SettingRevokeController ()
-@property (nonatomic, strong) NSMutableArray *inputFields;
 @end
 
 @implementation SettingRevokeController
@@ -18,7 +17,6 @@
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
-    [self.inputFields removeAllObjects];
 
     PluginConfig *config = [PluginConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;

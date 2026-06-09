@@ -6,7 +6,6 @@
 #import "../../Config/WPColors.h"
 
 @interface SettingRedEnvelopController ()
-@property (nonatomic, strong) NSMutableArray *inputFields;
 @end
 
 @implementation SettingRedEnvelopController
@@ -64,7 +63,6 @@
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
-    [self.inputFields removeAllObjects];
     self.masterSwitchKeys = [NSMutableSet set];
 
     PluginConfig *config = [PluginConfig shared];

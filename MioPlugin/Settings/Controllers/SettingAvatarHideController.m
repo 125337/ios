@@ -3,7 +3,6 @@
 #import "../../Core/LogManager.h"
 
 @interface SettingAvatarHideController ()
-@property (nonatomic, strong) NSMutableArray *inputFields;
 @end
 
 @implementation SettingAvatarHideController
@@ -18,7 +17,6 @@
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
-    [self.inputFields removeAllObjects];
 
     PluginConfig *config = [PluginConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;

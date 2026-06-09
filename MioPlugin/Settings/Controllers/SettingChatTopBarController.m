@@ -8,7 +8,6 @@
 #import <MobileCoreServices/MobileCoreServices.h>
 
 @interface SettingChatTopBarController () <PHPickerViewControllerDelegate>
-@property (nonatomic, strong) NSMutableArray *inputFields;
 @end
 
 #pragma mark - 数值输入弹窗描述（仅用于弹窗message，列表项不显示）
@@ -340,7 +339,6 @@ static NSString *keyForTag(NSInteger tag) {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
-    [self.inputFields removeAllObjects];
 
     PluginConfig *config = [PluginConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;

@@ -6,7 +6,6 @@
 #import <objc/runtime.h>
 
 @interface SettingGeneralFunctionController ()
-@property (nonatomic, strong) NSMutableArray *inputFields;
 @end
 
 @implementation SettingLayoutFunctionController
@@ -58,7 +57,6 @@
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
-    [self.inputFields removeAllObjects];
 
     PluginConfig *config = [PluginConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
