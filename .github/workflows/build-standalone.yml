@@ -52,7 +52,6 @@ jobs:
           MioPlugin/Modules/Revoke/RevokeFormatEditorVC.m \
           MioPlugin/Modules/RedEnvelop/RedEnvelopHook.m \
           MioPlugin/Modules/RedEnvelop/MioRedEnvelopTaskManager.m \
-          MioPlugin/Modules/Layout/TintHook.m \
           MioPlugin/Modules/Layout/UIPurifyHook.m \
           MioPlugin/Modules/Layout/UIAttachLayoutHook.m \
           MioPlugin/Modules/Unread/ClearUnreadHook.m \
