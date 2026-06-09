@@ -124,6 +124,8 @@
     y += 8;
 
     // ─── 卡片2：开启资料圆角 ───
+    y = [self addSectionHeader:@"资料卡圆角" y:y width:w];
+
     UIView *crnGroup = [self addTableGroupAtY:y width:w];
     CGFloat crny = 0;
 
