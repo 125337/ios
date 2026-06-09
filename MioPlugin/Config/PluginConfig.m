@@ -465,7 +465,6 @@
 
     // ========== 资料卡背景配置 ==========
     // 资料卡片美化（新 UI）
-    _cardBgBeautifyEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgBeautifyEnabled"]];
     _cardBgMaterialEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgMaterialEnabled"]];
     _cardBgCornerEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerEnabled"]];
     _cardBgCornerUseGlobal = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerUseGlobal"]];
@@ -707,7 +706,6 @@
 
     // ========== 资料卡背景配置 ==========
     // 资料卡片美化（新 UI）
-    [d setBool:_cardBgBeautifyEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgBeautifyEnabled"]];
     [d setBool:_cardBgMaterialEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgMaterialEnabled"]];
     [d setBool:_cardBgCornerEnabled forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerEnabled"]];
     [d setBool:_cardBgCornerUseGlobal forKey:[kPluginPrefix stringByAppendingString:@"CardBgCornerUseGlobal"]];

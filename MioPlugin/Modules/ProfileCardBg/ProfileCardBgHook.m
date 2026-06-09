@@ -13,7 +13,7 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     double result = _orig_heightForHeader(self, _cmd, tableView, section);
 
     PluginConfig *config = [PluginConfig shared];
-    if (!config.cardBgBeautifyEnabled) return result;
+    if (!config.cardBgMaterialEnabled) return result;
 
     if (section != 1) return result;
 
@@ -671,21 +671,12 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     [ProfileCardBgHook hideArrowQRInCell:button
                               shouldHide:config.myPageHideArrow];
 
-    // ☆ 通用守卫（提前到总开关之前，圆角/边距也需要）
+    // 通用守卫（提取为辅助方法）
     UIViewController *vc = [ProfileCardBgHook findMoreViewController:button];
     if (!vc) return;
     if (![ProfileCardBgHook hasHeadImageViewInView:button]) return;
     if (button.frame.size.height <= 50.0) return;
     BOOL isDark = [ProfileCardBgHook isDarkModeForVc:vc];
-
-    // ☆ 独立功能：资料圆角 + 边框 + 边距（不受总开关保护）
-    // handleMarginAdjustment 和 handleCornerAndQR 内部已有
-    // cardBgCornerEnabled 守卫，圆角关闭时不会做任何事。
-    [ProfileCardBgHook handleMarginAdjustment:button];
-    [ProfileCardBgHook handleCornerAndQR:button isDark:isDark];
-
-    // ★ 第1层：总开关守卫（素材/隐藏/背景图等需要）
-    if (!config.cardBgBeautifyEnabled) return;
 
     // ★ 场景路由：隐藏 vs 可见
     if (config.cardBgHidden) {
@@ -693,6 +684,10 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     } else if (config.cardBgMaterialEnabled || config.cardBgCornerEnabled) {
         [ProfileCardBgHook handleVisiblePath:button isDark:isDark];
     }
+
+    // 独立功能
+    [ProfileCardBgHook handleMarginAdjustment:button];
+    [ProfileCardBgHook handleCornerAndQR:button isDark:isDark];
 }
 
 #pragma mark - 方案 M：左右边距

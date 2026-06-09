@@ -176,7 +176,6 @@
 
 #pragma mark - 卡片背景
 // 资料卡片美化（新 UI）
-@property (nonatomic, assign) BOOL cardBgBeautifyEnabled;
 @property (nonatomic, assign) BOOL cardBgMaterialEnabled;
 @property (nonatomic, assign) BOOL cardBgCornerEnabled;
 @property (nonatomic, assign) BOOL cardBgCornerUseGlobal;

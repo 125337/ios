@@ -28,178 +28,167 @@
     CGFloat y = 8;
 
     // ════════════════════════════════════
-    // ★ 新增：资料卡片美化
+    // ★ 卡片背景
     // ════════════════════════════════════
-    y = [self addSectionHeader:@"资料卡片美化" y:y width:w];
+    y = [self addSectionHeader:@"卡片背景" y:y width:w];
 
-    UIView *newGroup = [self addTableGroupAtY:y width:w];
-    CGFloat ncy = 0;
+    // ─── 卡片1：使用背景素材 ───
+    UIView *bgGroup = [self addTableGroupAtY:y width:w];
+    CGFloat bgy = 0;
 
-    ncy = [self addMasterSwitchRowInGroup:newGroup
-                                    title:@"资料卡片美化"
-                                      key:@"cardBgBeautifyEnabled"
-                                     isOn:config.cardBgBeautifyEnabled
+    bgy = [self addMasterSwitchRowInGroup:bgGroup
+                                    title:@"使用背景素材"
+                                      key:@"cardBgMaterialEnabled"
+                                     isOn:config.cardBgMaterialEnabled
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
 
         PluginConfig *cfg = [PluginConfig shared];
 
-        // ─── 子手风琴1：使用背景素材 ───
-        *ecy = [self addMasterSwitchRowInGroup:expand
-                                         title:@"使用背景素材"
-                                           key:@"cardBgMaterialEnabled"
-                                          isOn:cfg.cardBgMaterialEnabled
-                                    subBuilder:^(UIView *e2, CGFloat *e2y) {
-
-            CGFloat sp = cfg.cardBgListSpacing > 0 ? cfg.cardBgListSpacing : 9.0;
-            *e2y = [self addInputRowInGroup:e2
-                                      title:@"列表向下间距"
-                                        key:@"cardBgListSpacing"
-                                      value:[NSString stringWithFormat:@"%.0f", sp]
-                                       hint:@"9"
-                                 alertTitle:@"设置列表向下间距"
-                               alertMessage:@"请输入间距值(1-550像素)"
-                                         cy:*e2y width:w];
-            *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
-
-            NSString *imgSub = cfg.cardBgImagePath.length > 0 ? @"已设置" : @"未设置";
-            *e2y = [self addNavRowInGroup:e2
-                                    title:@"背景图"
-                                  subtitle:imgSub
-                                      tag:200
-                                   action:@selector(onImageTap)
-                                       cy:*e2y width:w];
-            *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
-
-            NSArray *fillNames = @[@"填充模式", @"适应模式", @"拉伸填充"];
-            NSString *fillSub = (cfg.cardBgFillMode >= 0 && cfg.cardBgFillMode < (NSInteger)fillNames.count)
-                ? fillNames[cfg.cardBgFillMode] : @"填充模式";
-            *e2y = [self addNavRowInGroup:e2
-                                    title:@"背景填充模式"
-                                  subtitle:fillSub
-                                      tag:202
-                                   action:@selector(onFillModeTap)
-                                       cy:*e2y width:w];
-            *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
-
-            NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
-            NSString *alignSub = (cfg.cardBgAlignment >= 0 && cfg.cardBgAlignment < (NSInteger)alignNames.count)
-                ? alignNames[cfg.cardBgAlignment] : @"底部对齐";
-            *e2y = [self addNavRowInGroup:e2
-                                    title:@"对齐方式"
-                                  subtitle:alignSub
-                                      tag:207
-                                   action:@selector(onAlignmentTap)
-                                       cy:*e2y width:w];
-            *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
-
-            // ── 背景显示层级 ──
-            NSArray *layerNames = @[@"底层显示", @"顶层显示"];
-            NSString *layerSub = (cfg.cardBgLayer >= 0 && cfg.cardBgLayer < (NSInteger)layerNames.count)
-                ? layerNames[cfg.cardBgLayer] : @"底层显示";
-            *e2y = [self addNavRowInGroup:e2
-                                    title:@"背景显示层级"
-                                  subtitle:layerSub
-                                      tag:203
-                                   action:@selector(onLayerTap)
-                                       cy:*e2y width:w];
-            *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
-
-            // ── 背景 Y/X 偏移 ──
-            CGFloat oy = cfg.cardBgOffsetY;
-            *e2y = [self addInputRowInGroup:e2
-                                      title:@"背景Y轴偏移"
-                                        key:@"cardBgOffsetY"
-                                      value:oy != 0 ? [NSString stringWithFormat:@"%.0f", oy] : nil
-                                       hint:@"0"
-                                 alertTitle:@"设置背景Y轴偏移"
-                               alertMessage:@"请输入Y轴偏移值(-500~500像素)\n正值向上偏移，负值向下偏移"
-                                         cy:*e2y width:w];
-            *e2y = [self addSeparatorInGroup:e2 cy:*e2y width:w];
-
-            CGFloat ox = cfg.cardBgOffsetX;
-            *e2y = [self addInputRowInGroup:e2
-                                      title:@"背景X轴偏移"
-                                        key:@"cardBgOffsetX"
-                                      value:ox != 0 ? [NSString stringWithFormat:@"%.0f", ox] : nil
-                                       hint:@"0"
-                                 alertTitle:@"设置背景X轴偏移"
-                               alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
-                                         cy:*e2y width:w];
-        } cy:*ecy width:w];
+        CGFloat sp = cfg.cardBgListSpacing > 0 ? cfg.cardBgListSpacing : 9.0;
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"列表向下间距"
+                                    key:@"cardBgListSpacing"
+                                  value:[NSString stringWithFormat:@"%.0f", sp]
+                                   hint:@"9"
+                             alertTitle:@"设置列表向下间距"
+                           alertMessage:@"请输入间距值(1-550像素)"
+                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        // ─── 隐藏信息卡片（平铺开关，无子参数） ───
+        NSString *imgSub = cfg.cardBgImagePath.length > 0 ? @"已设置" : @"未设置";
+        *ecy = [self addNavRowInGroup:expand
+                                title:@"背景图"
+                              subtitle:imgSub
+                                  tag:200
+                               action:@selector(onImageTap)
+                                   cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        NSArray *fillNames = @[@"填充模式", @"适应模式", @"拉伸填充"];
+        NSString *fillSub = (cfg.cardBgFillMode >= 0 && cfg.cardBgFillMode < (NSInteger)fillNames.count)
+            ? fillNames[cfg.cardBgFillMode] : @"填充模式";
+        *ecy = [self addNavRowInGroup:expand
+                                title:@"背景填充模式"
+                              subtitle:fillSub
+                                  tag:202
+                               action:@selector(onFillModeTap)
+                                   cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
+        NSString *alignSub = (cfg.cardBgAlignment >= 0 && cfg.cardBgAlignment < (NSInteger)alignNames.count)
+            ? alignNames[cfg.cardBgAlignment] : @"底部对齐";
+        *ecy = [self addNavRowInGroup:expand
+                                title:@"对齐方式"
+                              subtitle:alignSub
+                                  tag:207
+                               action:@selector(onAlignmentTap)
+                                   cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        NSArray *layerNames = @[@"底层显示", @"顶层显示"];
+        NSString *layerSub = (cfg.cardBgLayer >= 0 && cfg.cardBgLayer < (NSInteger)layerNames.count)
+            ? layerNames[cfg.cardBgLayer] : @"底层显示";
+        *ecy = [self addNavRowInGroup:expand
+                                title:@"背景显示层级"
+                              subtitle:layerSub
+                                  tag:203
+                               action:@selector(onLayerTap)
+                                   cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        CGFloat oy = cfg.cardBgOffsetY;
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"背景Y轴偏移"
+                                    key:@"cardBgOffsetY"
+                                  value:oy != 0 ? [NSString stringWithFormat:@"%.0f", oy] : nil
+                                   hint:@"0"
+                             alertTitle:@"设置背景Y轴偏移"
+                           alertMessage:@"请输入Y轴偏移值(-500~500像素)\n正值向上偏移，负值向下偏移"
+                                     cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        CGFloat ox = cfg.cardBgOffsetX;
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"背景X轴偏移"
+                                    key:@"cardBgOffsetX"
+                                  value:ox != 0 ? [NSString stringWithFormat:@"%.0f", ox] : nil
+                                   hint:@"0"
+                             alertTitle:@"设置背景X轴偏移"
+                           alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
+                                     cy:*ecy width:w];
+
+    } cy:&bgy width:w];
+
+    y = [self finishGroup:bgGroup atY:y height:bgy];
+    y += 8;
+
+    // ─── 卡片2：开启资料圆角 ───
+    UIView *crnGroup = [self addTableGroupAtY:y width:w];
+    CGFloat crny = 0;
+
+    crny = [self addMasterSwitchRowInGroup:crnGroup
+                                     title:@"开启资料圆角"
+                                       key:@"cardBgCornerEnabled"
+                                      isOn:config.cardBgCornerEnabled
+                                subBuilder:^(UIView *expand, CGFloat *ecy) {
+
+        PluginConfig *c3 = [PluginConfig shared];
+
         *ecy = [self addSubSwitchRowInGroup:expand
-                                      title:@"隐藏信息卡片"
-                                        key:@"cardBgHidden"
-                                       isOn:cfg.cardBgHidden
+                                      title:@"使用全局配置"
+                                        key:@"cardBgCornerUseGlobal"
+                                       isOn:c3.cardBgCornerUseGlobal
                                          cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        // ─── 子手风琴3：开启资料圆角 ───
-        *ecy = [self addMasterSwitchRowInGroup:expand
-                                         title:@"开启资料圆角"
-                                           key:@"cardBgCornerEnabled"
-                                          isOn:cfg.cardBgCornerEnabled
-                                    subBuilder:^(UIView *e3, CGFloat *e3y) {
+        if (!c3.cardBgCornerUseGlobal) {
+            *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-            PluginConfig *c3 = [PluginConfig shared];
+            CGFloat cr = c3.cardBgCornerRadius > 0 ? c3.cardBgCornerRadius : 18.0;
+            *ecy = [self addInputRowInGroup:expand
+                                      title:@"圆角大小"
+                                        key:@"cardBgCornerRadius"
+                                      value:[NSString stringWithFormat:@"%.0f", cr]
+                                       hint:@"18"
+                                 alertTitle:@"设置圆角大小"
+                               alertMessage:@"请输入圆角大小(5-30像素)"
+                                         cy:*ecy width:w];
+            *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-            // ── 使用全局配置（平铺开关） ──
-            *e3y = [self addSubSwitchRowInGroup:e3
-                                          title:@"使用全局配置"
-                                            key:@"cardBgCornerUseGlobal"
-                                           isOn:c3.cardBgCornerUseGlobal
-                                             cy:*e3y width:w];
+            CGFloat cm = c3.cardBgCornerMargin > 0 ? c3.cardBgCornerMargin : 9.0;
+            *ecy = [self addInputRowInGroup:expand
+                                      title:@"边距大小"
+                                        key:@"cardBgCornerMargin"
+                                      value:[NSString stringWithFormat:@"%.0f", cm]
+                                       hint:@"9"
+                                 alertTitle:@"设置边距大小"
+                               alertMessage:@"请输入边距值(0-30像素)"
+                                         cy:*ecy width:w];
+            *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-            if (!c3.cardBgCornerUseGlobal) {
-                *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
+            *ecy = [self addColorRowInGroup:expand
+                          title:@"卡片背景颜色"
+                            key:@"cardBgCornerBgColor"
+                          value:c3.cardBgCornerBgColor
+                             cy:*ecy width:w
+                       darkKey:@"cardBgCornerDarkBgColor"
+                     darkValue:c3.cardBgCornerDarkBgColor];
+            *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-                CGFloat cr = cfg.cardBgCornerRadius > 0 ? cfg.cardBgCornerRadius : 18.0;
-                *e3y = [self addInputRowInGroup:e3
-                                          title:@"圆角大小"
-                                            key:@"cardBgCornerRadius"
-                                          value:[NSString stringWithFormat:@"%.0f", cr]
-                                           hint:@"18"
-                                     alertTitle:@"设置圆角大小"
-                                   alertMessage:@"请输入圆角大小(5-30像素)"
-                                             cy:*e3y width:w];
-                *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
+            CGFloat sw = c3.cardBgStrokeWidth > 0 ? c3.cardBgStrokeWidth : 2.0;
+            *ecy = [self addInputRowInGroup:expand
+                                      title:@"描边大小"
+                                        key:@"cardBgStrokeWidth"
+                                      value:[NSString stringWithFormat:@"%.1f", sw]
+                                       hint:@"2.0"
+                                 alertTitle:@"设置描边大小"
+                               alertMessage:@"请输入描边宽度(0.5-5.0)"
+                                         cy:*ecy width:w];
+        }
 
-                CGFloat cm = cfg.cardBgCornerMargin > 0 ? cfg.cardBgCornerMargin : 9.0;
-                *e3y = [self addInputRowInGroup:e3
-                                          title:@"边距大小"
-                                            key:@"cardBgCornerMargin"
-                                          value:[NSString stringWithFormat:@"%.0f", cm]
-                                           hint:@"9"
-                                     alertTitle:@"设置边距大小"
-                                   alertMessage:@"请输入边距值(0-30像素)"
-                                             cy:*e3y width:w];
-                *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
+    } cy:&crny width:w];
 
-                *e3y = [self addColorRowInGroup:e3
-                              title:@"卡片背景颜色"
-                                key:@"cardBgCornerBgColor"
-                              value:cfg.cardBgCornerBgColor
-                                 cy:*e3y width:w
-                           darkKey:@"cardBgCornerDarkBgColor"
-                         darkValue:cfg.cardBgCornerDarkBgColor];
-                *e3y = [self addSeparatorInGroup:e3 cy:*e3y width:w];
-
-                CGFloat sw = cfg.cardBgStrokeWidth > 0 ? cfg.cardBgStrokeWidth : 2.0;
-                *e3y = [self addInputRowInGroup:e3
-                                          title:@"描边大小"
-                                            key:@"cardBgStrokeWidth"
-                                          value:[NSString stringWithFormat:@"%.1f", sw]
-                                           hint:@"2.0"
-                                     alertTitle:@"设置描边大小"
-                                   alertMessage:@"请输入描边宽度(0.5-5.0)"
-                                             cy:*e3y width:w];
-            }
-        } cy:*ecy width:w];
-    } cy:ncy width:w];
-
-    y = [self finishGroup:newGroup atY:y height:ncy];
+    y = [self finishGroup:crnGroup atY:y height:crny];
     y += 8;
 
     // ════════════════════════════════════
@@ -210,6 +199,15 @@
     UIView *myGroup = [self addTableGroupAtY:y width:w];
     CGFloat mcy = 0;
 
+    // ★ 隐藏信息卡片（从上面移过来的）
+    mcy = [self addSubSwitchRowInGroup:myGroup
+                                 title:@"隐藏信息卡片"
+                                   key:@"cardBgHidden"
+                                  isOn:config.cardBgHidden
+                                    cy:mcy width:w];
+    mcy = [self addSeparatorInGroup:myGroup cy:mcy width:w];
+
+    // 隐藏状态
     mcy = [self addSubSwitchRowInGroup:myGroup
                                  title:@"隐藏状态"
                                    key:@"cardBgHideStateEnabled"
@@ -217,10 +215,11 @@
                                     cy:mcy width:w];
     mcy = [self addSeparatorInGroup:myGroup cy:mcy width:w];
 
+    // 隐藏箭码
     mcy = [self addSubSwitchRowInGroup:myGroup
-                             title:@"隐藏箭码"
-                               key:@"myPageHideArrow"
-                              isOn:config.myPageHideArrow
+                                 title:@"隐藏箭码"
+                                   key:@"myPageHideArrow"
+                                  isOn:config.myPageHideArrow
                                     cy:mcy width:w];
 
     y = [self finishGroup:myGroup atY:y height:mcy];
@@ -499,13 +498,12 @@
     if (!key) return;
 
     // ★ 新增：新 UI 的开关需要 rebuild UI（展开/折叠子项）
-    if ([key isEqualToString:@"cardBgBeautifyEnabled"]
-        || [key isEqualToString:@"cardBgMaterialEnabled"]
+    if ([key isEqualToString:@"cardBgMaterialEnabled"]
         || [key isEqualToString:@"cardBgCornerEnabled"]
         || [key isEqualToString:@"cardBgCornerUseGlobal"]
         || [key isEqualToString:@"cardBgHidden"]
         || [key isEqualToString:@"myPageHideArrow"]
-        || [key isEqualToString:@"cardBgHideStateEnabled"]) {   // ★ 新增
+        || [key isEqualToString:@"cardBgHideStateEnabled"]) {
         [self buildUI];
         return;
     }
