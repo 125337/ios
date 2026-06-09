@@ -105,30 +105,6 @@
                             cy:pcy width:w];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
-    NSString *ptStr = cfg.listPinnedSessionTopSpacing > 0
-        ? [NSString stringWithFormat:@"%.0f", cfg.listPinnedSessionTopSpacing] : nil;
-    pcy = [self addInputRowInGroup:paramGroup
-                         title:@"置顶会话距顶栏间距"
-                           key:@"listPinnedSessionTopSpacing"
-                         value:ptStr
-                          hint:@"15"
-                    alertTitle:@"设置置顶会话距顶部间距"
-                  alertMessage:@"请输入间距值(1-50像素)"
-                            cy:pcy width:w];
-    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
-
-    NSString *nsStr = cfg.listNormalSessionSpacing > 0
-        ? [NSString stringWithFormat:@"%.0f", cfg.listNormalSessionSpacing] : nil;
-    pcy = [self addInputRowInGroup:paramGroup
-                         title:@"普通会话距置顶会话间距"
-                           key:@"listNormalSessionSpacing"
-                         value:nsStr
-                          hint:@"15"
-                    alertTitle:@"设置普通会话距置顶会话间距"
-                  alertMessage:@"请输入间距值(1-50像素)"
-                            cy:pcy width:w];
-    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
-
     NSString *bwStr = cfg.listCellBorderWidth > 0
         ? [NSString stringWithFormat:@"%.1f", cfg.listCellBorderWidth] : nil;
     pcy = [self addInputRowInGroup:paramGroup

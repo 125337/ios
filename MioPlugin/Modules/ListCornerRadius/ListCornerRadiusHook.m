@@ -378,24 +378,6 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
 
 
-// ★★★ [WPSessionSpacingHook] NewMainFrameVC header height ★★★
-static CGFloat (*_orig_NMFVC_heightForHeader)(id, SEL, id, NSInteger);
-static CGFloat _hooked_NMFVC_heightForHeader(id self, SEL _cmd, id tableView, NSInteger section) {
-    CGFloat height = _orig_NMFVC_heightForHeader(self, _cmd, tableView, section);
-
-    PluginConfig *config = [PluginConfig shared];
-    if (!config.globalCornerRadiusEnabled) return height;
-
-    if (section == 1) {
-        NSInteger spacing = (NSInteger)config.listPinnedSessionTopSpacing;
-        height += (spacing > 0) ? spacing : 15;
-    } else if (section >= 2) {
-        NSInteger spacing = (NSInteger)config.listNormalSessionSpacing;
-        height += (spacing > 0) ? spacing : 15;
-    }
-    return height;
-}
-
 static id (*_orig_NMFVC_viewForHeader)(id, SEL, id, NSInteger);
 static id _hooked_NMFVC_viewForHeader(id self, SEL _cmd, id tableView, NSInteger section) {
     PluginConfig *config = [PluginConfig shared];
@@ -517,8 +499,6 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     }
     Class nmfvc = objc_getClass("NewMainFrameViewController");
     if (nmfvc) {
-        MSHookMessageEx(nmfvc, @selector(tableView:heightForHeaderInSection:),
-            (IMP)_hooked_NMFVC_heightForHeader, (IMP *)&_orig_NMFVC_heightForHeader);
         MSHookMessageEx(nmfvc, @selector(tableView:viewForHeaderInSection:),
             (IMP)_hooked_NMFVC_viewForHeader, (IMP *)&_orig_NMFVC_viewForHeader);
     }
