@@ -17,7 +17,6 @@
 @property (nonatomic, assign) BOOL hideEnterpriseBadge;
 @property (nonatomic, assign) BOOL enableJoker;
 @property (nonatomic, assign) BOOL enableGroupExitMonitor;
-@property (nonatomic, assign) BOOL customColorsEnabled;
 @property (nonatomic, assign) BOOL autoRedEnvelop;
 @property (nonatomic, assign) BOOL redEnvelopCatchMe;
 @property (nonatomic, assign) BOOL personalRedEnvelopEnable;
@@ -108,14 +107,6 @@
 @property (nonatomic, copy)   NSString *chatSeparatorIcon;           // 自定义分隔符图标路径
 @property (nonatomic, copy)   NSString *chatSeparatorGIF;            // 自定义分隔符GIF路径
 
-#pragma mark - 名字颜色设置
-@property (nonatomic, assign) BOOL enableChatNameColor;      // 启用聊天界面名称颜色
-@property (nonatomic, assign) BOOL enableChatNameSize;       // 启用聊天界面名称大小
-@property (nonatomic, assign) CGFloat chatNameFontSize;      // 聊天名称字体大小
-@property (nonatomic, assign) BOOL enableMomentsNameColor;   // 启用朋友圈名称颜色
-@property (nonatomic, assign) BOOL enableMomentsNameSize;    // 启用朋友圈名称大小
-@property (nonatomic, assign) CGFloat momentsNameFontSize;   // 朋友圈名称字体大小
-
 #pragma mark - 好友添加时间后缀
 @property (nonatomic, assign) BOOL showAddTimeSuffix;
 @property (nonatomic, copy) NSString *addTimeSuffixFormat;
@@ -125,17 +116,6 @@
 @property (nonatomic, copy) NSString *interceptNotifyTemplate;
 @property (nonatomic, copy) NSString *customNotifyFormat;
 @property (nonatomic, copy) NSString *revokeTemplate;
-// 名字颜色设置（聊天界面昵称颜色，与消息时间颜色独立）
-@property (nonatomic, copy) NSString *chatNameColorHex;
-@property (nonatomic, copy) NSString *chatNameColorDarkHex;
-@property (nonatomic, copy) NSString *momentsNameColorHex;
-@property (nonatomic, copy) NSString *momentsNameColorDarkHex;
-@property (nonatomic, copy) NSString *nameColorHex;
-@property (nonatomic, copy) NSString *timeColorHex;
-@property (nonatomic, copy) NSString *contentColorHex;
-@property (nonatomic, copy) NSString *darkNameColorHex;
-@property (nonatomic, copy) NSString *darkTimeColorHex;
-@property (nonatomic, copy) NSString *darkContentColorHex;
 #pragma mark - 通知撤回者
 #pragma mark - 附件布局
 @property (nonatomic, assign) BOOL attachLayoutEnabled;
@@ -210,9 +190,6 @@
 - (NSString *)hexFromColor:(UIColor *)color;
 - (BOOL)isDarkMode;
 - (BOOL)isDarkModeForViewController:(UIViewController *)vc;
-- (UIColor *)nameColor;
-- (UIColor *)timeColor;
-- (UIColor *)contentColor;
 - (NSString *)applyTemplate:(NSString *)tmpl time:(NSString *)time name:(NSString *)name content:(NSString *)content;
 - (NSString *)applyRevokeTemplate:(NSString *)tmpl name:(NSString *)name content:(NSString *)content createTime:(unsigned int)createTime;
 - (void)save;

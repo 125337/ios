@@ -1,7 +1,6 @@
 #import "../../Settings/Common/SettingCategoryController.h"
 #import "../../Settings/Common/SettingController.h"
 #import "../../Settings/Controllers/SettingChatTopBarController.h"
-#import "../../Settings/Controllers/SettingNameColorController.h"
 #import "../../Core/LogManager.h"
 
 @interface WPUIVC : SettingCategoryController
@@ -65,9 +64,6 @@
     switch (tag) {
         case 100:
             subVC = [[SettingChatTopBarController alloc] init];
-            break;
-        case 101:
-            subVC = [[SettingNameColorController alloc] init];
             break;
         case 102:
             subVC = [[NSClassFromString(@"WPUIAttachmentLayoutVC") alloc] init];

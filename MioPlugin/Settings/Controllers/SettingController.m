@@ -111,7 +111,6 @@
     CGFloat cy = 0;
     NSArray *modules = @[
         @"RevokeHook", @"防撤回",
-        @"TintHook", @"染色渲染",
         @"ClearUnreadHook", @"未读清零",
         @"HookEngine", @"Hook引擎",
         @"PluginConfig", @"配置中心"

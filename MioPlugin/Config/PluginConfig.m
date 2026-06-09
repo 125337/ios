@@ -18,12 +18,6 @@
     if (self) {
         _notifyFormat = [kDefaultNotifyFormat copy];
         _dateFormat = [kDefaultDateFormat copy];
-        _nameColorHex = [kDefaultNameColor copy];
-        _timeColorHex = [kDefaultTimeColor copy];
-        _contentColorHex = [kDefaultContentColor copy];
-        _darkNameColorHex = [kDefaultDarkNameColor copy];
-        _darkTimeColorHex = [kDefaultDarkTimeColor copy];
-        _darkContentColorHex = [kDefaultDarkContentColor copy];
         _interceptNotifyTemplate = [kDefaultInterceptTemplate copy];
         _customNotifyFormat = [kDefaultCustomNotifyFormat copy];
         _revokeTemplate = [kDefaultRevokeTemplate copy];
@@ -64,7 +58,6 @@
     _hideEnterpriseBadge = [d boolForKey:[kPluginPrefix stringByAppendingString:@"HideEnterpriseBadge"]];
     _enableJoker = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableJoker"]];
     _enableGroupExitMonitor = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableGroupExitMonitor"]];
-    _customColorsEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"CustomColorsEnabled"]];
     _autoRedEnvelop = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AutoRedEnvelop"]];
     _redEnvelopCatchMe = [d boolForKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopCatchMe"]];
     _personalRedEnvelopEnable = [d boolForKey:[kPluginPrefix stringByAppendingString:@"PersonalRedEnvelopEnable"]];
@@ -143,41 +136,6 @@
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"RevokeTemplate"]];
     if (v.length > 0) {
         _revokeTemplate = [v copy];
-    }
-
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"NameColorHex"]];
-    if (v.length > 0) {
-        _nameColorHex = [v copy];
-    }
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"TimeColorHex"]];
-    if (v.length > 0) {
-        _timeColorHex = [v copy];
-    }
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ContentColorHex"]];
-    if (v.length > 0) {
-        _contentColorHex = [v copy];
-    }
-
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatNameColorHex"]];
-    _chatNameColorHex = v.length > 0 ? [v copy] : @"#808080";
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatNameColorDarkHex"]];
-    _chatNameColorDarkHex = v.length > 0 ? [v copy] : @"#BFBFBF";
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MomentsNameColorHex"]];
-    _momentsNameColorHex = v.length > 0 ? [v copy] : @"#808080";
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"MomentsNameColorDarkHex"]];
-    _momentsNameColorDarkHex = v.length > 0 ? [v copy] : @"#BFBFBF";
-
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DarkNameColorHex"]];
-    if (v.length > 0) {
-        _darkNameColorHex = [v copy];
-    }
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DarkTimeColorHex"]];
-    if (v.length > 0) {
-        _darkTimeColorHex = [v copy];
-    }
-    v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"DarkContentColorHex"]];
-    if (v.length > 0) {
-        _darkContentColorHex = [v copy];
     }
 
     // 消息时间显示配置
@@ -286,14 +244,6 @@
     _avatarTapFeedback = [d boolForKey:[kPluginPrefix stringByAppendingString:@"AvatarTapFeedback"]];
     _showAddTime = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTime"]];
     _showGroupMemberCount = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowGroupMemberCount"]];
-    _enableChatNameColor = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableChatNameColor"]];
-    _enableChatNameSize = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableChatNameSize"]];
-    _chatNameFontSize = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatNameFontSize"]];
-    if (_chatNameFontSize == 0) _chatNameFontSize = 16.0;
-    _enableMomentsNameColor = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableMomentsNameColor"]];
-    _enableMomentsNameSize = [d boolForKey:[kPluginPrefix stringByAppendingString:@"EnableMomentsNameSize"]];
-    _momentsNameFontSize = [d floatForKey:[kPluginPrefix stringByAppendingString:@"MomentsNameFontSize"]];
-    if (_momentsNameFontSize == 0) _momentsNameFontSize = 16.0;
 
     _chatDisplayMode = [d integerForKey:[kPluginPrefix stringByAppendingString:@"ChatDisplayMode"]];
     if (_chatDisplayMode < 0 || _chatDisplayMode > 7) _chatDisplayMode = 3;
@@ -516,7 +466,6 @@
     [d setBool:_hideEnterpriseBadge forKey:[kPluginPrefix stringByAppendingString:@"HideEnterpriseBadge"]];
     [d setBool:_enableJoker forKey:[kPluginPrefix stringByAppendingString:@"EnableJoker"]];
     [d setBool:_enableGroupExitMonitor forKey:[kPluginPrefix stringByAppendingString:@"EnableGroupExitMonitor"]];
-    [d setBool:_customColorsEnabled forKey:[kPluginPrefix stringByAppendingString:@"CustomColorsEnabled"]];
     [d setBool:_autoRedEnvelop forKey:[kPluginPrefix stringByAppendingString:@"AutoRedEnvelop"]];
     [d setBool:_redEnvelopCatchMe forKey:[kPluginPrefix stringByAppendingString:@"RedEnvelopCatchMe"]];
     [d setBool:_personalRedEnvelopEnable forKey:[kPluginPrefix stringByAppendingString:@"PersonalRedEnvelopEnable"]];
@@ -565,17 +514,6 @@
     [d setBool:_autoConfirmTransferGroup forKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferGroup"]];
     [d setBool:_autoConfirmTransferAutoReply forKey:[kPluginPrefix stringByAppendingString:@"AutoConfirmTransferAutoReply"]];
 
-    [d setObject:_nameColorHex forKey:[kPluginPrefix stringByAppendingString:@"NameColorHex"]];
-    [d setObject:_timeColorHex forKey:[kPluginPrefix stringByAppendingString:@"TimeColorHex"]];
-    [d setObject:_contentColorHex forKey:[kPluginPrefix stringByAppendingString:@"ContentColorHex"]];
-    [d setObject:_darkNameColorHex forKey:[kPluginPrefix stringByAppendingString:@"DarkNameColorHex"]];
-    [d setObject:_darkTimeColorHex forKey:[kPluginPrefix stringByAppendingString:@"DarkTimeColorHex"]];
-    [d setObject:_darkContentColorHex forKey:[kPluginPrefix stringByAppendingString:@"DarkContentColorHex"]];
-    if (_chatNameColorHex) [d setObject:_chatNameColorHex forKey:[kPluginPrefix stringByAppendingString:@"ChatNameColorHex"]];
-    if (_chatNameColorDarkHex) [d setObject:_chatNameColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"ChatNameColorDarkHex"]];
-    if (_momentsNameColorHex) [d setObject:_momentsNameColorHex forKey:[kPluginPrefix stringByAppendingString:@"MomentsNameColorHex"]];
-    if (_momentsNameColorDarkHex) [d setObject:_momentsNameColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"MomentsNameColorDarkHex"]];
-
     [d setBool:_showMessageTime forKey:[kPluginPrefix stringByAppendingString:@"ShowMessageTime"]];
     [d setFloat:_messageTimeFontSize forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeFontSize"]];
     [d setBool:_messageTimeBoldFont forKey:[kPluginPrefix stringByAppendingString:@"MessageTimeBoldFont"]];
@@ -620,12 +558,6 @@
     [d setBool:_avatarTapFeedback forKey:[kPluginPrefix stringByAppendingString:@"AvatarTapFeedback"]];
     [d setBool:_showAddTime forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTime"]];
     [d setBool:_showGroupMemberCount forKey:[kPluginPrefix stringByAppendingString:@"ShowGroupMemberCount"]];
-    [d setBool:_enableChatNameColor forKey:[kPluginPrefix stringByAppendingString:@"EnableChatNameColor"]];
-    [d setBool:_enableChatNameSize forKey:[kPluginPrefix stringByAppendingString:@"EnableChatNameSize"]];
-    [d setFloat:_chatNameFontSize forKey:[kPluginPrefix stringByAppendingString:@"ChatNameFontSize"]];
-    [d setBool:_enableMomentsNameColor forKey:[kPluginPrefix stringByAppendingString:@"EnableMomentsNameColor"]];
-    [d setBool:_enableMomentsNameSize forKey:[kPluginPrefix stringByAppendingString:@"EnableMomentsNameSize"]];
-    [d setFloat:_momentsNameFontSize forKey:[kPluginPrefix stringByAppendingString:@"MomentsNameFontSize"]];
     [d setInteger:_chatDisplayMode forKey:[kPluginPrefix stringByAppendingString:@"ChatDisplayMode"]];
     [d setFloat:_chatAvatarSize forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarSize"]];
     [d setFloat:_chatAvatarSpacing forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarSpacing"]];
@@ -800,30 +732,6 @@
         return vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
     }
     return NO;
-}
-
-- (UIColor *)nameColor {
-    if (!_customColorsEnabled) {
-        return [UIColor colorWithRed:250.0/255.0 green:81.0/255.0 blue:81.0/255.0 alpha:1.0];
-    }
-    return [self colorFromHex:[self isDarkMode] ? _darkNameColorHex : _nameColorHex]
-        ?: [UIColor colorWithRed:250.0/255.0 green:81.0/255.0 blue:81.0/255.0 alpha:1.0];
-}
-
-- (UIColor *)timeColor {
-    if (!_customColorsEnabled) {
-        return [UIColor colorWithRed:250.0/255.0 green:81.0/255.0 blue:81.0/255.0 alpha:1.0];
-    }
-    return [self colorFromHex:[self isDarkMode] ? _darkTimeColorHex : _timeColorHex]
-        ?: [UIColor colorWithRed:250.0/255.0 green:81.0/255.0 blue:81.0/255.0 alpha:1.0];
-}
-
-- (UIColor *)contentColor {
-    if (!_customColorsEnabled) {
-        return [UIColor colorWithRed:153.0/255.0 green:153.0/255.0 blue:153.0/255.0 alpha:1.0];
-    }
-    return [self colorFromHex:[self isDarkMode] ? _darkContentColorHex : _contentColorHex]
-        ?: [UIColor colorWithRed:153.0/255.0 green:153.0/255.0 blue:153.0/255.0 alpha:1.0];
 }
 
 - (NSString *)applyTemplate:(NSString *)tmpl time:(NSString *)time name:(NSString *)name content:(NSString *)content {

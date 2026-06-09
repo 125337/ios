@@ -17,11 +17,4 @@ static NSString *const kDefaultRevokeTemplate = @"拦截到一条 {用户名}撤
 #pragma mark - 通知撤回者
 static NSString *const kDefaultNotifySenderTemplate = @"【捕抓到1条撤回消息】\n操作用户: {用户名}\n发送时间: {yyyy}-{MM}-{dd} {HH}:{mm}:{ss}\n撤回内容: {内容}\n\n撤回无效，消息已读并保存";
 
-static NSString *const kDefaultNameColor = @"#FA5151";
-static NSString *const kDefaultTimeColor = @"#FA5151";
-static NSString *const kDefaultContentColor = @"#999999";
-static NSString *const kDefaultDarkNameColor = @"#FF6B6B";
-static NSString *const kDefaultDarkTimeColor = @"#FF6B6B";
-static NSString *const kDefaultDarkContentColor = @"#BBBBBB";
-
 #endif
