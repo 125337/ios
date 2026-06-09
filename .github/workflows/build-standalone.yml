@@ -147,6 +147,11 @@ jobs:
               -framework Security \
               -framework AVFoundation \
               -framework UserNotifications \
+              -framework CoreGraphics \
+              -framework QuartzCore \
+              -framework ImageIO \
+              -framework PhotosUI \
+              -framework MobileCoreServices \
               -Wl,-S \
               -Wl,-x \
               -o build/Mio_arm64.dylib \
