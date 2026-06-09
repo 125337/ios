@@ -55,8 +55,6 @@ static UIViewController *findParentViewController(UIView *view) {
                                      radius:(CGFloat)radius
                                        type:(NSString *)type;
 
-+ (BOOL)wp_isCurrentDarkMode;
-
 @end
 
 static UIColor *wp_cellDefaultBgColor(BOOL isDark) {
@@ -813,24 +811,6 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     shape.frame = rect;
 
     return shape;
-}
-
-+ (BOOL)wp_isCurrentDarkMode {
-    PluginConfig *config = [PluginConfig shared];
-    if (@available(iOS 13.0, *)) {
-        UIApplication *app = [UIApplication sharedApplication];
-        for (UIScene *scene in app.connectedScenes) {
-            if ([scene isKindOfClass:[UIWindowScene class]]) {
-                UIWindowScene *ws = (UIWindowScene *)scene;
-                for (UIWindow *window in ws.windows) {
-                    if (window.isKeyWindow) {
-                        return [config isDarkModeForViewController:window.rootViewController];
-                    }
-                }
-            }
-        }
-    }
-    return NO;
 }
 
 + (void)install {
