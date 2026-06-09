@@ -93,7 +93,6 @@ jobs:
           MioPlugin/Settings/Controllers/SettingAvatarHideController.m \
           MioPlugin/Settings/Controllers/SettingChatTopBarController.m \
           MioPlugin/Settings/Controllers/ChatTopBarBlacklistEditorVC.m \
-          MioPlugin/Settings/Controllers/SettingNameColorController.m \
           MioPlugin/Settings/Controllers/SettingListCornerRadiusController.m \
           MioPlugin/Settings/Controllers/SettingCardBackgroundController.m \
           MioPlugin/Settings/Controllers/SettingCornerRadiusController.m \
