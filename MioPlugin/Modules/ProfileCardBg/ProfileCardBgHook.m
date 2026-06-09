@@ -857,10 +857,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         }
     } else {
         // ══════════════════════════════════════════
-        // 无素材：不做任何背景操作
-        // 不动 button.backgroundColor，保持原生导航栏白色
-        // 不动 m_bgImageView，避免破坏昵称显示导致"微信用户"
+        // 无素材 + 有圆角：清理原生白色背景，让 applyProfileCardCorner 设置的背景色透出
         // ══════════════════════════════════════════
+        if (config.cardBgCornerEnabled) {
+            [ProfileCardBgHook cleanNativeBgImageView:button];
+        }
     }
 
     // ★ 圆角 + 边框在外部由 handleCornerAndQR 统一处理
