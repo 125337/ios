@@ -18,10 +18,6 @@
     return self;
 }
 
-- (void)dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
-}
-
 #pragma mark - Setup
 
 - (void)setupSubviews {
@@ -416,24 +412,6 @@
             [self.separatorTextLabel sizeToFit];
         });
     }
-}
-
-- (void)updateFontSizes {
-    PluginConfig *config = [PluginConfig shared];
-    [self.titleLabel setFont:[UIFont systemFontOfSize:config.chatNicknameFontSize]];
-
-    CGFloat sepFontSize = MAX(8.0, MIN(config.chatSeparatorSize * 0.4, 16.0));
-    [self.separatorTextLabel setFont:[UIFont systemFontOfSize:sepFontSize weight:UIFontWeightMedium]];
-
-    [self setNeedsLayout];
-    [self layoutIfNeeded];
-}
-
-- (CGFloat)separatorTextWidth {
-    NSString *text = self.separatorTextLabel.text;
-    if (!text || text.length == 0) return 0;
-    CGFloat fontSize = self.separatorTextLabel.font.pointSize;
-    return [text sizeWithAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:fontSize weight:UIFontWeightMedium]}].width;
 }
 
 - (void)applyPositionOffset {

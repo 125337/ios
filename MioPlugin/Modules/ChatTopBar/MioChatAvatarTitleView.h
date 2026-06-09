@@ -23,6 +23,5 @@
 
 - (void)updateAvatars;
 - (void)applyPositionOffset;
-- (void)updateFontSizes;
 
 @end
