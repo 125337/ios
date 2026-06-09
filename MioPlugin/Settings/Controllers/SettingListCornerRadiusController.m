@@ -95,9 +95,9 @@
                                     key:@"listCellBorderWidth"
                                   value:bwStr
                                    hint:@"2.0"
+                              valueType:InputValueTypeNumber
                              alertTitle:@"设置边框宽度"
                            alertMessage:@"请输入边框宽度(0.5-5.0)"
-                              valueType:InputValueTypeNumber
                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
@@ -128,9 +128,9 @@
                                key:@"listCellCornerRadius"
                              value:crStr
                               hint:@"18"
+                         valueType:InputValueTypeNumber
                         alertTitle:@"设置列表圆角半径"
                       alertMessage:@"请输入圆角半径(5-30像素)"
-                         valueType:InputValueTypeNumber
                                 cy:acy width:w];
     acy = [self addSeparatorInGroup:appearGroup cy:acy width:w];
 
@@ -141,9 +141,9 @@
                                key:@"listCellMargin"
                              value:lmStr
                               hint:@"9"
+                         valueType:InputValueTypeNumber
                         alertTitle:@"设置Cell左右边距"
                       alertMessage:@"请输入边距值(0-30像素)"
-                         valueType:InputValueTypeNumber
                                 cy:acy width:w];
     acy = [self addSeparatorInGroup:appearGroup cy:acy width:w];
 
