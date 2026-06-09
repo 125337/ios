@@ -814,84 +814,49 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 + (void)handleVisiblePath:(UIView *)button isDark:(BOOL)isDark {
     PluginConfig *config = [PluginConfig shared];
     BOOL hasMaterial = config.cardBgMaterialEnabled;
+    BOOL hasImagePath = hasMaterial && config.cardBgImagePath.length > 0;
+    BOOL needCorner = config.cardBgCornerEnabled;
 
     // 确保可见
     button.hidden = NO;
 
-    // ══════════════════════════════════════════
-    // 有素材：设置背景
-    // ══════════════════════════════════════════
-    if (hasMaterial) {
-        // ── 检查是否有图片路径 ──
-        BOOL hasImagePath = config.cardBgImagePath.length > 0;
+    // ══════════════════════════════════════════════════════
+    // 阶段 1：Cleanup — 清理原生白色背景
+    // 条件：有实际素材（图片路径）或有圆角
+    // ══════════════════════════════════════════════════════
+    if (hasImagePath || needCorner) {
+        button.backgroundColor = [UIColor clearColor];
+        button.layer.backgroundColor = [UIColor clearColor].CGColor;
 
-        // 只有有图片路径时才清背景，否则保持原生
-        if (hasImagePath) {
-            button.backgroundColor = [UIColor clearColor];
-            button.layer.backgroundColor = [UIColor clearColor].CGColor;
-        }
+        [ProfileCardBgHook cleanNativeBgImageView:button];
 
-        button.layer.masksToBounds = NO;
-        button.layer.cornerRadius = 0;
-        button.layer.borderWidth = 0;
-
-        // 有图片路径时才清原生 bg
-        if (hasImagePath) {
-            [ProfileCardBgHook cleanNativeBgImageView:button];
-        }
-
-        // ★ 创建背景图 ★
-        [ProfileCardBgHook setupBackgroundMaterialInButton:button isDark:isDark];
-
-        // ★★★ FIX-WHITE（只有有图片时才执行）★★★
-        if (hasImagePath) {
-            for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
-                UIView *sub = button.subviews[i];
-                if (sub.tag == kProfileCardBgImageTag) continue;
-                if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
-                if ([ProfileCardBgHook isWhiteOrDynamicBackground:sub]) {
-                    sub.hidden = YES;
-                }
-            }
-        }
-    } else {
-        // ══════════════════════════════════════════
-        // 无素材 + 有圆角：清理按钮背景 + 原生白色 m_bgImageView + 白色子视图，应用背景色
-        // ══════════════════════════════════════════
-        if (config.cardBgCornerEnabled) {
-            // 清理按钮背景
-            button.backgroundColor = [UIColor clearColor];
-            button.layer.backgroundColor = [UIColor clearColor].CGColor;
-
-            // 清理原生白色 m_bgImageView
-            [ProfileCardBgHook cleanNativeBgImageView:button];
-
-            // ★★★ FIX-WHITE：隐藏 button 下的白色原生子视图 ★★★
-            for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
-                UIView *sub = button.subviews[i];
-                if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
-                if ([ProfileCardBgHook isWhiteOrDynamicBackground:sub]) {
-                    sub.hidden = YES;
-                }
-            }
-
-            // 应用背景色
-            UIColor *bgColor = nil;
-            if (config.cardBgCornerUseGlobal) {
-                bgColor = isDark
-                    ? [config colorFromHex:config.listCellDarkBgColor]
-                    : [config colorFromHex:config.listCellLightBgColor];
-            } else {
-                bgColor = [config colorFromHex:isDark
-                    ? config.cardBgCornerDarkBgColor : config.cardBgCornerBgColor];
-            }
-            if (bgColor) {
-                button.backgroundColor = bgColor;
+        // FIX-WHITE：隐藏 button 下的白色原生子视图
+        // （有素材路径跳过 kProfileCardBgImageTag，无素材路径无此 tag 跳过自然不生效）
+        for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
+            UIView *sub = button.subviews[i];
+            if (sub.tag == kProfileCardBgImageTag) continue;
+            if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
+            if ([ProfileCardBgHook isWhiteOrDynamicBackground:sub]) {
+                sub.hidden = YES;
             }
         }
     }
 
-    // ★ 圆角 + 边框在外部由 handleCornerAndQR 统一处理
+    // ══════════════════════════════════════════════════════
+    // 阶段 2：Material — 创建背景素材（重置 layer 为素材做准备）
+    // 条件：有素材（不论是否有图片路径）
+    // ══════════════════════════════════════════════════════
+    if (hasMaterial) {
+        button.layer.masksToBounds = NO;
+        button.layer.cornerRadius = 0;
+        button.layer.borderWidth = 0;
+
+        [ProfileCardBgHook setupBackgroundMaterialInButton:button isDark:isDark];
+    }
+
+    // ★ 阶段 3：Color — 背景色 + 圆角 + 边框
+    // 统一由 handleCornerAndQR → applyProfileCardCorner 处理
+    // 不在 handleVisiblePath 中设色，避免职责分散
 }
 
 + (void)initCellHeightHook {
