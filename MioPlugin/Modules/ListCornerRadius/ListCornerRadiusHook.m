@@ -376,36 +376,7 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
-// ★★★ [WPAuxiliaryHooks] MMUIButton list media corner ★★★
-static void (*_orig_MMUIButton_layoutSubviews)(id, SEL);
-static void _hooked_MMUIButton_layoutSubviews(id self, SEL _cmd) {
-    _orig_MMUIButton_layoutSubviews(self, _cmd);
 
-    PluginConfig *config = [PluginConfig shared];
-    if (!config.globalCornerRadiusEnabled) return;
-
-    UIViewController *vc = findParentViewController((UIView *)self);
-    if (!vc) return;
-    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
-
-    if (config.listMediaCornerEnabled) {
-        UIView *view = (UIView *)self;
-        NSInteger radius = (NSInteger)config.listCellCornerRadius;
-        if (radius == 0) radius = 18;
-        view.layer.cornerRadius = radius;
-        view.layer.masksToBounds = YES;
-    }
-
-    if (config.listDisableLabelWidthAdjustment) {
-        UIView *view = (UIView *)self;
-        for (UIView *subview in view.subviews) {
-            if ([subview isKindOfClass:[UILabel class]]) {
-                UILabel *label = (UILabel *)subview;
-                [label sizeToFit];
-            }
-        }
-    }
-}
 
 // ★★★ [WPSessionSpacingHook] NewMainFrameVC header height ★★★
 static CGFloat (*_orig_NMFVC_heightForHeader)(id, SEL, id, NSInteger);
@@ -536,13 +507,6 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (c3) {
         MSHookMessageEx(c3, @selector(layoutSubviews),
             (IMP)_hooked_FoldView_layoutSubviews, (IMP *)&_orig_FoldView_layoutSubviews);
-    }
-
-    // ★ MMUIButton Hook — 仅保留列表媒体圆角
-    Class c4 = objc_getClass("MMUIButton");
-    if (c4) {
-        MSHookMessageEx(c4, @selector(layoutSubviews),
-            (IMP)_hooked_MMUIButton_layoutSubviews, (IMP *)&_orig_MMUIButton_layoutSubviews);
     }
 
     // ★ WPSessionSpacingHook Hooks — UIView, NewMainFrameVC, MMTableSectionHeader

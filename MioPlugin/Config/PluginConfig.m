@@ -458,9 +458,6 @@
     NSString *cbcDark = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderColorDarkHex"]];
     _listCellBorderColorDarkHex = cbcDark.length > 0 ? cbcDark : @"#3A3A3C";
 
-    _listDisableLabelWidthAdjustment = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListDisableLabelWidthAdjustment"]];
-    _listMediaCornerEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListMediaCornerEnabled"]];
-
     _listProfileCardBorderEnabled = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderEnabled"]];
 
     CGFloat pcbw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderWidth"]];
@@ -710,8 +707,6 @@
     [d setFloat:_listCellBorderWidth forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderWidth"]];
     if (_listCellBorderColor) [d setObject:_listCellBorderColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderColor"]];
     if (_listCellBorderColorDarkHex) [d setObject:_listCellBorderColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderColorDarkHex"]];
-    [d setBool:_listDisableLabelWidthAdjustment forKey:[kPluginPrefix stringByAppendingString:@"ListDisableLabelWidthAdjustment"]];
-    [d setBool:_listMediaCornerEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListMediaCornerEnabled"]];
     
     [d setBool:_listProfileCardBorderEnabled forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderEnabled"]];
     [d setFloat:_listProfileCardBorderWidth forKey:[kPluginPrefix stringByAppendingString:@"ListProfileCardBorderWidth"]];

@@ -81,27 +81,6 @@
                                 cy:pcy width:w];
     pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
 
-    pcy = [self addSubSwitchRowInGroup:paramGroup
-                             title:@"媒体视图圆角"
-                               key:@"listMediaCornerEnabled"
-                              isOn:cfg.listMediaCornerEnabled
-                                cy:pcy width:w];
-    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
-
-    pcy = [self addSubSwitchRowInGroup:paramGroup
-                             title:@"媒体视图圆角"
-                               key:@"listMediaCornerEnabled"
-                              isOn:cfg.listMediaCornerEnabled
-                                cy:pcy width:w];
-    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
-
-    pcy = [self addSubSwitchRowInGroup:paramGroup
-                             title:@"禁用标签宽度调整"
-                               key:@"listDisableLabelWidthAdjustment"
-                              isOn:cfg.listDisableLabelWidthAdjustment
-                                cy:pcy width:w];
-    pcy = [self addSeparatorInGroup:paramGroup cy:pcy width:w];
-
     NSString *crStr = cfg.listCellCornerRadius > 0
         ? [NSString stringWithFormat:@"%.0f", cfg.listCellCornerRadius] : nil;
     pcy = [self addInputRowInGroup:paramGroup
@@ -224,8 +203,6 @@
         || [key isEqualToString:@"globalCornerDiscoverPageEnabled"]
         || [key isEqualToString:@"listSearchCornerRadius"]
         || [key isEqualToString:@"listCellBorder"]
-        || [key isEqualToString:@"listDisableLabelWidthAdjustment"]
-        || [key isEqualToString:@"listMediaCornerEnabled"]
         || [key isEqualToString:@"listProfileCardBorderEnabled"]) {
         [MioRestartHelper showRestartAlertFromVC:self];
     }
