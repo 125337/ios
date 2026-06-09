@@ -44,6 +44,7 @@ jobs:
           MioPlugin/Core/MioAlertHelper.m \
           MioPlugin/Core/MioRestartHelper.m \
           MioPlugin/Core/LogManager.m \
+          MioPlugin/Core/MioSubstrate.m \
           MioPlugin/Registry/HookRegistry.m \
           MioPlugin/Registry/FeatureModuleRegistry.m \
           MioPlugin/Registry/FeatureRegistry.m \
@@ -148,7 +149,6 @@ jobs:
               -framework UserNotifications \
               -Wl,-S \
               -Wl,-x \
-              -Wl,-undefined,dynamic_lookup \
               -o build/Mio_arm64.dylib \
               build/*.o
 
