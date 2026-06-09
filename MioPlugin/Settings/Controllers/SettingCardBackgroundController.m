@@ -186,7 +186,7 @@
                                          cy:*ecy width:w];
         }
 
-    } cy:&crny width:w];
+    } cy:crny width:w];
 
     y = [self finishGroup:crnGroup atY:y height:crny];
     y += 8;
