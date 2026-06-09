@@ -856,7 +856,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         }
     } else {
         // ══════════════════════════════════════════
-        // 无素材 + 有圆角：清理按钮背景 + 原生白色 m_bgImageView，应用背景色
+        // 无素材 + 有圆角：清理按钮背景 + 原生白色 m_bgImageView + 白色子视图，应用背景色
         // ══════════════════════════════════════════
         if (config.cardBgCornerEnabled) {
             // 清理按钮背景
@@ -865,6 +865,15 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
             // 清理原生白色 m_bgImageView
             [ProfileCardBgHook cleanNativeBgImageView:button];
+
+            // ★★★ FIX-WHITE：隐藏 button 下的白色原生子视图 ★★★
+            for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
+                UIView *sub = button.subviews[i];
+                if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
+                if ([ProfileCardBgHook isWhiteOrDynamicBackground:sub]) {
+                    sub.hidden = YES;
+                }
+            }
 
             // 应用背景色
             UIColor *bgColor = nil;
