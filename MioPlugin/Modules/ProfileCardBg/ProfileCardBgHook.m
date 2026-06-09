@@ -859,50 +859,35 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         // 无素材 + 有圆角：清理按钮背景 + 原生白色 m_bgImageView + 白色子视图，应用背景色
         // ══════════════════════════════════════════
         if (config.cardBgCornerEnabled) {
-            WPLog(@"CardBg", @"[BG] 无素材+圆角分支: cardBgCornerUseGlobal=%d, isDark=%d",
-                  config.cardBgCornerUseGlobal, isDark);
-
             // 清理按钮背景
             button.backgroundColor = [UIColor clearColor];
             button.layer.backgroundColor = [UIColor clearColor].CGColor;
-            WPLog(@"CardBg", @"[BG] 已清理 button 背景色");
 
             // 清理原生白色 m_bgImageView
             [ProfileCardBgHook cleanNativeBgImageView:button];
-            WPLog(@"CardBg", @"[BG] 已清理 m_bgImageView");
 
             // ★★★ FIX-WHITE：隐藏 button 下的白色原生子视图 ★★★
-            NSInteger hiddenCount = 0;
             for (NSInteger i = button.subviews.count - 1; i >= 0; i--) {
                 UIView *sub = button.subviews[i];
                 if ([ProfileCardBgHook isEssentialSubview:sub]) continue;
                 if ([ProfileCardBgHook isWhiteOrDynamicBackground:sub]) {
                     sub.hidden = YES;
-                    hiddenCount++;
                 }
             }
-            WPLog(@"CardBg", @"[BG] FIX-WHITE 隐藏了 %ld 个白色子视图", (long)hiddenCount);
 
             // 应用背景色
             UIColor *bgColor = nil;
-            NSString *colorHex = nil;
             if (config.cardBgCornerUseGlobal) {
-                colorHex = isDark ? config.listCellDarkBgColor : config.listCellLightBgColor;
-                bgColor = [config colorFromHex:colorHex];
-                WPLog(@"CardBg", @"[BG] 使用全局配置: hex=%@ (isDark=%d)", colorHex, isDark);
+                bgColor = isDark
+                    ? [config colorFromHex:config.listCellDarkBgColor]
+                    : [config colorFromHex:config.listCellLightBgColor];
             } else {
-                colorHex = isDark ? config.cardBgCornerDarkBgColor : config.cardBgCornerBgColor;
-                bgColor = [config colorFromHex:colorHex];
-                WPLog(@"CardBg", @"[BG] 使用独立配置: hex=%@ (isDark=%d)", colorHex, isDark);
+                bgColor = [config colorFromHex:isDark
+                    ? config.cardBgCornerDarkBgColor : config.cardBgCornerBgColor];
             }
             if (bgColor) {
                 button.backgroundColor = bgColor;
-                WPLog(@"CardBg", @"[BG] ✓ 已设置背景色: %@", colorHex);
-            } else {
-                WPLog(@"CardBg", @"[BG] ✗ 背景色为 nil，未设置 (hex=%@)", colorHex);
             }
-        } else {
-            WPLog(@"CardBg", @"[BG] 跳过: cardBgCornerEnabled=NO");
         }
     }
 
