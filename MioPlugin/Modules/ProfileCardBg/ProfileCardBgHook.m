@@ -587,10 +587,9 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
                 [ProfileCardBgHook configureBackgroundImageView:strongBg
                                                       inButton:strongButton];
             } else {
-                // fallback：无图片时设置背景色
+                // fallback：无图片时设置背景色（复用卡片圆角背景色）
                 PluginConfig *cfg = [PluginConfig shared];
-                BOOL isDark = [cfg isDarkMode];
-                UIColor *cardBg = [cfg colorFromHex:isDark ? cfg.listCardBgColorDarkHex : cfg.listCardBgColor];
+                UIColor *cardBg = [cfg colorFromHex:cfg.cardBgCornerBgColor];
                 if (cardBg) strongButton.backgroundColor = cardBg;
             }
         });

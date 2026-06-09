@@ -443,12 +443,6 @@
     NSString *dark = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCellDarkBgColor"]];
     _listCellDarkBgColor = dark.length > 0 ? dark : @"#1C1C1E";
 
-    NSString *cbg2 = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCardBgColor"]];
-    _listCardBgColor = cbg2.length > 0 ? cbg2 : @"#FFFFFF";
-
-    NSString *cbgDark = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ListCardBgColorDarkHex"]];
-    _listCardBgColorDarkHex = cbgDark.length > 0 ? cbgDark : @"#1C1C1E";
-
     CGFloat cbw = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderWidth"]];
     _listCellBorderWidth = (cbw > 0) ? cbw : 2.0;
 
@@ -702,8 +696,6 @@
     [d setFloat:_listNormalSessionSpacing forKey:[kPluginPrefix stringByAppendingString:@"ListNormalSessionSpacing"]];
     if (_listCellLightBgColor) [d setObject:_listCellLightBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellLightBgColor"]];
     if (_listCellDarkBgColor) [d setObject:_listCellDarkBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellDarkBgColor"]];
-    if (_listCardBgColor) [d setObject:_listCardBgColor forKey:[kPluginPrefix stringByAppendingString:@"ListCardBgColor"]];
-    if (_listCardBgColorDarkHex) [d setObject:_listCardBgColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"ListCardBgColorDarkHex"]];
     [d setFloat:_listCellBorderWidth forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderWidth"]];
     if (_listCellBorderColor) [d setObject:_listCellBorderColor forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderColor"]];
     if (_listCellBorderColorDarkHex) [d setObject:_listCellBorderColorDarkHex forKey:[kPluginPrefix stringByAppendingString:@"ListCellBorderColorDarkHex"]];
