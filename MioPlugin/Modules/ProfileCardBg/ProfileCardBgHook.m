@@ -583,6 +583,10 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
                 strongBg.alpha = 1.0;
                 strongBg.hidden = NO;
 
+                // ★ 清除 button 背景色，防止从图片边缘透出
+                strongButton.backgroundColor = [UIColor clearColor];
+                strongButton.layer.backgroundColor = [UIColor clearColor].CGColor;
+
                 // ★ 统一配置：此时 image 已存在，偏移能正确计算
                 [ProfileCardBgHook configureBackgroundImageView:strongBg
                                                       inButton:strongButton];
