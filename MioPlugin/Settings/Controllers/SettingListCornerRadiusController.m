@@ -156,44 +156,6 @@
     y = [self finishGroup:appearGroup atY:y height:acy];
     y += 8;
 
-    // ─── 卡片5：资料卡边框（手风琴） ───
-    UIView *pcBorderGroup = [self addTableGroupAtY:y width:w];
-    CGFloat pcy = 0;
-
-    pcy = [self addMasterSwitchRowInGroup:pcBorderGroup
-                                     title:@"资料卡边框"
-                                       key:@"listProfileCardBorderEnabled"
-                                      isOn:config.listProfileCardBorderEnabled
-                                subBuilder:^(UIView *expand, CGFloat *ecy) {
-        PluginConfig *c5 = [PluginConfig shared];
-
-        // 边框宽度
-        NSString *bwStr = c5.listProfileCardBorderWidth > 0
-            ? [NSString stringWithFormat:@"%.1f", c5.listProfileCardBorderWidth] : nil;
-        *ecy = [self addInputRowInGroup:expand
-                                  title:@"边框宽度"
-                                    key:@"listProfileCardBorderWidth"
-                                  value:bwStr
-                                   hint:@"2.0"
-                             alertTitle:@"设置资料卡边框宽度"
-                           alertMessage:@"请输入边框宽度(0.5-5.0)"
-                                     cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-
-        // 边框颜色（支持深色）
-        *ecy = [self addColorRowInGroup:expand
-                                  title:@"边框颜色"
-                                    key:@"listProfileCardBorderColor"
-                                  value:c5.listProfileCardBorderColor
-                                     cy:*ecy width:w
-                               darkKey:@"listProfileCardBorderColorDarkHex"
-                             darkValue:c5.listProfileCardBorderColorDarkHex];
-
-    } cy:pcy width:w];
-
-    y = [self finishGroup:pcBorderGroup atY:y height:pcy];
-    y += 8;
-
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
     WPLog(@"UI", @"[Sub] SettingListCornerRadiusController buildUI done");
@@ -216,8 +178,7 @@
     }
 
     // ★ 主开关手风琴（需要 rebuild 展开/折叠子项 + 重启生效）
-    if ([key isEqualToString:@"listCellBorder"]
-        || [key isEqualToString:@"listProfileCardBorderEnabled"]) {
+    if ([key isEqualToString:@"listCellBorder"]) {
         [self buildUI];
         [MioRestartHelper showRestartAlertFromVC:self];
         return;

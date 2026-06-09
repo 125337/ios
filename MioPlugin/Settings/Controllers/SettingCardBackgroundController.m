@@ -193,6 +193,44 @@
     y = [self finishGroup:crnGroup atY:y height:crny];
     y += 8;
 
+    // ─── 卡片3：资料卡边框（手风琴，依赖资料圆角开关） ───
+    UIView *pcBorderGroup = [self addTableGroupAtY:y width:w];
+    CGFloat pcbcy = 0;
+
+    pcbcy = [self addMasterSwitchRowInGroup:pcBorderGroup
+                                      title:@"资料卡边框"
+                                        key:@"listProfileCardBorderEnabled"
+                                       isOn:config.listProfileCardBorderEnabled
+                                 subBuilder:^(UIView *expand, CGFloat *ecy) {
+        PluginConfig *c5 = [PluginConfig shared];
+
+        // 边框宽度
+        NSString *bwStr = c5.listProfileCardBorderWidth > 0
+            ? [NSString stringWithFormat:@"%.1f", c5.listProfileCardBorderWidth] : nil;
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"边框宽度"
+                                    key:@"listProfileCardBorderWidth"
+                                  value:bwStr
+                                   hint:@"2.0"
+                             alertTitle:@"设置资料卡边框宽度"
+                           alertMessage:@"请输入边框宽度(0.5-5.0)"
+                                     cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+
+        // 边框颜色（支持深色）
+        *ecy = [self addColorRowInGroup:expand
+                                  title:@"边框颜色"
+                                    key:@"listProfileCardBorderColor"
+                                  value:c5.listProfileCardBorderColor
+                                     cy:*ecy width:w
+                               darkKey:@"listProfileCardBorderColorDarkHex"
+                             darkValue:c5.listProfileCardBorderColorDarkHex];
+
+    } cy:pcbcy width:w];
+
+    y = [self finishGroup:pcBorderGroup atY:y height:pcbcy];
+    y += 8;
+
     // ════════════════════════════════════
     // ★ 我的页面美化
     // ════════════════════════════════════
@@ -502,7 +540,8 @@
     // ★ 新增：新 UI 的开关需要 rebuild UI（展开/折叠子项）
     if ([key isEqualToString:@"cardBgMaterialEnabled"]
         || [key isEqualToString:@"cardBgCornerEnabled"]
-        || [key isEqualToString:@"cardBgCornerUseGlobal"]) {
+        || [key isEqualToString:@"cardBgCornerUseGlobal"]
+        || [key isEqualToString:@"listProfileCardBorderEnabled"]) {
         [self buildUI];
         return;
     }

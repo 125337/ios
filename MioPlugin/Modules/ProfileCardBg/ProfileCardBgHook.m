@@ -70,15 +70,6 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
             cell.backgroundColor = bgColor;
         }
 
-        CGFloat bw = config.listCellBorderWidth;
-        if (bw > 0) {
-            cell.layer.borderWidth = bw;
-            UIColor *borderColor = [config colorFromHex:config.listCellBorderColor];
-            cell.layer.borderColor = borderColor.CGColor;
-        } else {
-            cell.layer.borderWidth = 0;
-            cell.layer.borderColor = nil;
-        }
     } else {
         // ── 使用单独配置 ──
         NSInteger radius = (NSInteger)config.cardBgCornerRadius;
@@ -91,16 +82,24 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         if (bgColor) {
             cell.backgroundColor = bgColor;
         }
+    }
 
-        CGFloat bw = config.cardBgStrokeWidth;
+    // ★★★ 统一资料卡边框（依赖 cardBgCornerEnabled，此时已确认开启） ★★★
+    if (config.listProfileCardBorderEnabled) {
+        CGFloat bw = config.listProfileCardBorderWidth;
         if (bw > 0) {
             cell.layer.borderWidth = bw;
-            UIColor *strokeColor = [bgColor colorWithAlphaComponent:0.5];
-            cell.layer.borderColor = strokeColor.CGColor;
+            UIColor *borderColor = isDark
+                ? [config colorFromHex:config.listProfileCardBorderColorDarkHex]
+                : [config colorFromHex:config.listProfileCardBorderColor];
+            cell.layer.borderColor = borderColor.CGColor;
         } else {
             cell.layer.borderWidth = 0;
             cell.layer.borderColor = nil;
         }
+    } else {
+        cell.layer.borderWidth = 0;
+        cell.layer.borderColor = nil;
     }
 }
 
