@@ -3,32 +3,8 @@
 #import "../../Config/PluginConfig.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
-#import <stdarg.h>
 #import "../../Core/LogManager.h"
 #import <substrate.h>
-
-static void hookLog(NSString *format, ...) {
-    va_list args;
-    va_start(args, format);
-    NSString *content = [[NSString alloc] initWithFormat:format arguments:args];
-    va_end(args);
-    
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"MioPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"revoke.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-    }
 
 // ============================================================
 // 单 Hook 精简架构（参考微信优化 onNewSyncNotAddDBMessage）
