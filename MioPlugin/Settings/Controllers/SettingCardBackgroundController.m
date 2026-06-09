@@ -52,6 +52,7 @@
                                    hint:@"9"
                              alertTitle:@"设置列表向下间距"
                            alertMessage:@"请输入间距值(1-550像素)"
+                              valueType:InputValueTypeNumber
                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
@@ -105,6 +106,7 @@
                                    hint:@"0"
                              alertTitle:@"设置背景Y轴偏移"
                            alertMessage:@"请输入Y轴偏移值(-500~500像素)\n正值向上偏移，负值向下偏移"
+                              valueType:InputValueTypeNumber
                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
@@ -116,6 +118,7 @@
                                    hint:@"0"
                              alertTitle:@"设置背景X轴偏移"
                            alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
+                              valueType:InputValueTypeNumber
                                      cy:*ecy width:w];
 
     } cy:bgy width:w];
@@ -154,6 +157,7 @@
                                        hint:@"18"
                                  alertTitle:@"设置圆角大小"
                                alertMessage:@"请输入圆角大小(5-30像素)"
+                                  valueType:InputValueTypeNumber
                                          cy:*ecy width:w];
             *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
@@ -165,6 +169,7 @@
                                        hint:@"9"
                                  alertTitle:@"设置边距大小"
                                alertMessage:@"请输入边距值(0-30像素)"
+                                  valueType:InputValueTypeNumber
                                          cy:*ecy width:w];
             *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
@@ -185,6 +190,7 @@
                                        hint:@"2.0"
                                  alertTitle:@"设置描边大小"
                                alertMessage:@"请输入描边宽度(0.5-5.0)"
+                                  valueType:InputValueTypeNumber
                                          cy:*ecy width:w];
         }
 
@@ -214,6 +220,7 @@
                                    hint:@"2.0"
                              alertTitle:@"设置资料卡边框宽度"
                            alertMessage:@"请输入边框宽度(0.5-5.0)"
+                              valueType:InputValueTypeNumber
                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 

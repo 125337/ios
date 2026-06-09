@@ -2,6 +2,7 @@
 #import "WPCommonUI.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Settings/Common/SettingController.h"
+#import "../../Settings/Common/SettingCategoryController.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
@@ -185,10 +186,22 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
             if (newValue.length == 0 && hint.length > 0) {
                 newValue = hint;
             }
-            NSDecimalNumber *decimal = [NSDecimalNumber decimalNumberWithString:newValue];
-            [config setValue:decimal forKey:key];
+
+            // ★ 从 sender(cell) 获取 valueType
+            NSNumber *typeNum = objc_getAssociatedObject(sender, @"editValueType");
+            InputValueType valueType = typeNum ? [typeNum integerValue] : InputValueTypeNumber;
+
+            if (valueType == InputValueTypeText) {
+                // 文本类型：直接保存字符串
+                [config setValue:newValue forKey:key];
+            } else {
+                // 数值类型：转为 NSDecimalNumber 保存
+                NSDecimalNumber *decimal = [NSDecimalNumber decimalNumberWithString:newValue];
+                [config setValue:decimal forKey:key];
+            }
+
             [config save];
-            WPLog(@"Setting", @"[EDIT] %@ = %@", key, newValue);
+            WPLog(@"Setting", @"[EDIT] %@ = %@ (type=%ld)", key, newValue, (long)valueType);
             if (valueLabel) {
                 valueLabel.text = newValue.length > 0 ? newValue : hint ?: @"";
             }

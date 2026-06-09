@@ -300,17 +300,38 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 
 #pragma mark - Row: Input
 
-- (CGFloat)addInputRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value hint:(NSString *)hint cy:(CGFloat)cy width:(CGFloat)w {
-    return [self addInputRowInGroup:group title:title key:key value:value hint:hint alertTitle:nil alertMessage:nil cy:cy width:w];
+- (CGFloat)addInputRowInGroup:(UIView *)group
+                        title:(NSString *)title
+                          key:(NSString *)key
+                        value:(NSString *)value
+                         hint:(NSString *)hint
+                    valueType:(InputValueType)valueType
+                           cy:(CGFloat)cy
+                        width:(CGFloat)w
+{
+    return [self addInputRowInGroup:group title:title key:key value:value
+                               hint:hint valueType:valueType
+                         alertTitle:nil alertMessage:nil cy:cy width:w];
 }
 
-- (CGFloat)addInputRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value hint:(NSString *)hint alertTitle:(NSString *)alertTitle alertMessage:(NSString *)alertMessage cy:(CGFloat)cy width:(CGFloat)w {
+- (CGFloat)addInputRowInGroup:(UIView *)group
+                        title:(NSString *)title
+                          key:(NSString *)key
+                        value:(NSString *)value
+                         hint:(NSString *)hint
+                    valueType:(InputValueType)valueType
+                   alertTitle:(NSString *)alertTitle
+                 alertMessage:(NSString *)alertMessage
+                           cy:(CGFloat)cy
+                        width:(CGFloat)w
+{
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
         row[@"type"] = @"input";
         row[@"title"] = title;
         row[@"key"] = key;
+        row[@"valueType"] = @(valueType);
         if (value.length > 0) row[@"value"] = value;
         if (hint.length > 0) row[@"hint"] = hint;
         if (alertTitle.length > 0) row[@"alertTitle"] = alertTitle;
@@ -327,6 +348,7 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     if (hint) objc_setAssociatedObject(row, "editConfigHint", hint, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (alertTitle) objc_setAssociatedObject(row, "editTitle", alertTitle, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (alertMessage) objc_setAssociatedObject(row, "editMessage", alertMessage, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(row, @"editValueType", @(valueType), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     return cy + kRowH;
 }
 
@@ -948,6 +970,7 @@ static NSString *LightKeyForDarkKey(NSString *darkKey) {
         NSString *key = row[@"key"];
         NSString *title = row[@"alertTitle"] ?: row[@"title"];
         NSString *hint = row[@"hint"];
+        NSNumber *valueType = row[@"valueType"];
         Class handlerClass = objc_getClass("MioPluginSwitchHandler");
         id handler = [handlerClass performSelector:@selector(sharedInstance)];
         if (handler && [handler respondsToSelector:@selector(onEditRowTap:)]) {
@@ -956,6 +979,7 @@ static NSString *LightKeyForDarkKey(NSString *darkKey) {
             objc_setAssociatedObject(cell, "editTitle", title, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             objc_setAssociatedObject(cell, "editValueLabel", cell.detailTextLabel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             if (hint.length > 0) objc_setAssociatedObject(cell, "editConfigHint", hint, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            if (valueType) objc_setAssociatedObject(cell, @"editValueType", valueType, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             NSString *message = row[@"alertMessage"];
             if (message.length > 0) objc_setAssociatedObject(cell, @"editMessage", message, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 #pragma clang diagnostic push

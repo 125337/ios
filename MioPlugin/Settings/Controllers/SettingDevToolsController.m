@@ -105,7 +105,7 @@
     cy = [self addSeparatorInGroup:g1 cy:cy width:w];
 
     cy = [self addInputRowInGroup:g1 title:@"关键词过滤" key:@"nsLogKeywords"
-                               value:config.nsLogKeywords hint:@"留空则捕获全部" cy:cy width:w];
+                               value:config.nsLogKeywords hint:@"留空则捕获全部" valueType:InputValueTypeText cy:cy width:w];
 
     y = CGRectGetMaxY(g1.frame) + 12;
     y = [self addSectionHeader:@"导航监控 (VC抓取)" y:y width:w];

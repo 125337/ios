@@ -39,6 +39,7 @@
                                     key:@"placeholderTextText"
                                   value:config.placeholderTextText
                                    hint:@""
+                              valueType:InputValueTypeText
                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
@@ -57,6 +58,7 @@
                                     key:@"placeholderTextFontSize"
                                   value:fontSizeStr
                                    hint:@"14"
+                              valueType:InputValueTypeNumber
                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
@@ -76,6 +78,7 @@
                                     key:@"placeholderTextAlpha"
                                   value:alphaStr
                                    hint:@"1.0"
+                              valueType:InputValueTypeNumber
                                     cy:*ecy width:w];
     } cy:cy width:w];
 

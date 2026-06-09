@@ -51,7 +51,7 @@
         NSString *sub = config.notifySenderTemplate.length > 0 ? config.notifySenderTemplate : @"默认内容";
         *ecy = [self addNavRowInGroup:expand title:@"通知消息内容" subtitle:sub tag:200 action:@selector(onNotifyFormatTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"频率限制(秒)" key:@"notifySenderCooldown" value:[NSString stringWithFormat:@"%.0f", config.notifySenderCooldown] hint:@"0=不限制" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"频率限制(秒)" key:@"notifySenderCooldown" value:[NSString stringWithFormat:@"%.0f", config.notifySenderCooldown] hint:@"0=不限制" valueType:InputValueTypeNumber cy:*ecy width:w];
     } cy:cy2 width:w];
 
     y = [self finishGroup:group2 atY:y height:cy2];

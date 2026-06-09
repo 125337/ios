@@ -88,12 +88,12 @@
         *ecy = [self addSubSwitchRowInGroup:expand title:@"显示红包详情" key:@"redEnvelopeDetail" isOn:config.redEnvelopeDetail cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"延迟设置" cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"延迟时间" key:@"redEnvelopDelay" value:[NSString stringWithFormat:@"%u", config.redEnvelopDelay] hint:@"秒" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"延迟时间" key:@"redEnvelopDelay" value:[NSString stringWithFormat:@"%u", config.redEnvelopDelay] hint:@"秒" valueType:InputValueTypeNumber cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"过滤设置" cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"过滤红包关键词" key:@"redEnvelopTextFilterEnabled" isOn:config.redEnvelopTextFilterEnabled cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"关键词" key:@"redEnvelopTextFilter" value:config.redEnvelopTextFilter hint:@"逗号分隔，如: 拼多多,京东" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"关键词" key:@"redEnvelopTextFilter" value:config.redEnvelopTextFilter hint:@"逗号分隔，如: 拼多多,京东" valueType:InputValueTypeText cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"过滤不抢的群" key:@"redEnvelopGroupFilterEnabled" isOn:config.redEnvelopGroupFilterEnabled cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
@@ -108,7 +108,7 @@
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"群聊中也自动回复" key:@"redEnvelopAutoReplyInGroup" isOn:config.redEnvelopAutoReplyInGroup cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"回复内容" key:@"redEnvelopAutoReplyStr" value:config.redEnvelopAutoReplyStr hint:@"谢谢老板" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"回复内容" key:@"redEnvelopAutoReplyStr" value:config.redEnvelopAutoReplyStr hint:@"谢谢老板" valueType:InputValueTypeText cy:*ecy width:w];
 
         *ecy = [self addHintRowInGroup:expand text:@"关键词过滤: 红包消息中包含指定关键词则不抢\n群过滤: 指定群聊中不自动抢红包\n延迟时间建议设为 1-3 秒" cy:*ecy width:w];
     } cy:cy width:w];
@@ -139,14 +139,14 @@
         *ecy = [self addSubSwitchRowInGroup:expand title:@"群聊转账自动收款" key:@"autoConfirmTransferGroup" isOn:config.autoConfirmTransferGroup cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"安全设置" cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"确认延迟" key:@"autoConfirmTransferDelay" value:[NSString stringWithFormat:@"%u", config.autoConfirmTransferDelay] hint:@"秒" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"确认延迟" key:@"autoConfirmTransferDelay" value:[NSString stringWithFormat:@"%u", config.autoConfirmTransferDelay] hint:@"秒" valueType:InputValueTypeNumber cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"金额上限(分)" key:@"autoConfirmTransferMaxAmount" value:config.autoConfirmTransferMaxAmount > 0 ? [NSString stringWithFormat:@"%lld", config.autoConfirmTransferMaxAmount] : @"" hint:@"0=不限" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"金额上限(分)" key:@"autoConfirmTransferMaxAmount" value:config.autoConfirmTransferMaxAmount > 0 ? [NSString stringWithFormat:@"%lld", config.autoConfirmTransferMaxAmount] : @"" hint:@"0=不限" valueType:InputValueTypeNumber cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"收款后自动回复" cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"启用自动回复" key:@"autoConfirmTransferAutoReply" isOn:config.autoConfirmTransferAutoReply cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"回复内容" key:@"autoConfirmTransferAutoReplyStr" value:config.autoConfirmTransferAutoReplyStr hint:@"已收到款项，谢谢！" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"回复内容" key:@"autoConfirmTransferAutoReplyStr" value:config.autoConfirmTransferAutoReplyStr hint:@"已收到款项，谢谢！" valueType:InputValueTypeText cy:*ecy width:w];
 
         *ecy = [self addHintRowInGroup:expand text:@"自动收款: 收到转账后自动确认收款\n金额上限: 超过设定金额的转账不会自动收款\n延迟时间建议设为 1-3 秒" cy:*ecy width:w];
     } cy:cy2 width:w];

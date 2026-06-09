@@ -99,7 +99,7 @@
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addNavRowInGroup:expand title:@"显示位置" subtitle:[self positionName:config.messageTimePosition] tag:100 action:@selector(onMessageTimePositionTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"字体大小" key:@"messageTimeFontSize" value:[NSString stringWithFormat:@"%.1f", config.messageTimeFontSize] hint:@"7.0" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"字体大小" key:@"messageTimeFontSize" value:[NSString stringWithFormat:@"%.1f", config.messageTimeFontSize] hint:@"7.0" valueType:InputValueTypeNumber cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSwitchRowInGroup:expand title:@"粗体字体" desc:nil key:@"messageTimeBoldFont" isOn:config.messageTimeBoldFont cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
@@ -125,11 +125,11 @@
                                    darkKey:@"receiverTextColorDarkHex"
                                  darkValue:config.receiverTextColorDarkHex];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"水平偏移" key:@"messageTimeOffsetX" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetX] hint:@"0" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"水平偏移" key:@"messageTimeOffsetX" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetX] hint:@"0" valueType:InputValueTypeNumber cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"垂直偏移" key:@"messageTimeOffsetY" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetY] hint:@"0" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"垂直偏移" key:@"messageTimeOffsetY" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetY] hint:@"0" valueType:InputValueTypeNumber cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"气泡扩展宽度" key:@"messageTimeBubbleExtWidth" value:[NSString stringWithFormat:@"%.1f", config.messageTimeBubbleExtWidth] hint:@"0" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"气泡扩展宽度" key:@"messageTimeBubbleExtWidth" value:[NSString stringWithFormat:@"%.1f", config.messageTimeBubbleExtWidth] hint:@"0" valueType:InputValueTypeNumber cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSwitchRowInGroup:expand title:@"隐藏聊天时间分隔线" desc:nil key:@"hideChatTime" isOn:config.hideChatTime cy:*ecy width:w];
     } cy:cy width:w];

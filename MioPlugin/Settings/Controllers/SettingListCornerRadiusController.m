@@ -97,6 +97,7 @@
                                    hint:@"2.0"
                              alertTitle:@"设置边框宽度"
                            alertMessage:@"请输入边框宽度(0.5-5.0)"
+                              valueType:InputValueTypeNumber
                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
@@ -129,6 +130,7 @@
                               hint:@"18"
                         alertTitle:@"设置列表圆角半径"
                       alertMessage:@"请输入圆角半径(5-30像素)"
+                         valueType:InputValueTypeNumber
                                 cy:acy width:w];
     acy = [self addSeparatorInGroup:appearGroup cy:acy width:w];
 
@@ -141,6 +143,7 @@
                               hint:@"9"
                         alertTitle:@"设置Cell左右边距"
                       alertMessage:@"请输入边距值(0-30像素)"
+                         valueType:InputValueTypeNumber
                                 cy:acy width:w];
     acy = [self addSeparatorInGroup:appearGroup cy:acy width:w];
 

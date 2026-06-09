@@ -38,12 +38,14 @@
                                     key:@"attachLayoutColumns"
                                   value:config.attachLayoutColumns
                                    hint:@"5"
+                              valueType:InputValueTypeNumber
                                     cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"显示行数"
                                     key:@"attachLayoutRows"
                                   value:config.attachLayoutRows
                                    hint:@"2"
+                              valueType:InputValueTypeNumber
                                     cy:*ecy width:w];
     } cy:cy width:w];
 
