@@ -446,9 +446,9 @@
 
 - (void)onLeftAvatarTapped:(UITapGestureRecognizer *)gesture {
     if (!self.chatController) return;
-    id contact = ((id (*)(id, SEL))objc_msgSend)(self.chatController, NSSelectorFromString(@"GetContact"));
+    id contact = [self.chatController performSelector:NSSelectorFromString(@"GetContact")];
     if ([self.delegate respondsToSelector:@selector(avatarTitleView:didTapAvatarWithContact:avatarImage:sourceView:wxid:)]) {
-        NSString *wxid = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
+        NSString *wxid = [contact performSelector:NSSelectorFromString(@"m_nsUsrName")];
         [self.delegate avatarTitleView:self didTapAvatarWithContact:contact avatarImage:self.leftAvatarView.image sourceView:self.leftAvatarView wxid:wxid];
     }
 }
@@ -456,7 +456,7 @@
 - (void)onRightAvatarTapped:(UITapGestureRecognizer *)gesture {
     id selfContact = WXGetSelfContact();
     if ([self.delegate respondsToSelector:@selector(avatarTitleView:didTapAvatarWithContact:avatarImage:sourceView:wxid:)]) {
-        NSString *wxid = ((id (*)(id, SEL))objc_msgSend)(selfContact, NSSelectorFromString(@"m_nsUsrName"));
+        NSString *wxid = [selfContact performSelector:NSSelectorFromString(@"m_nsUsrName")];
         [self.delegate avatarTitleView:self didTapAvatarWithContact:selfContact avatarImage:self.rightAvatarView.image sourceView:self.rightAvatarView wxid:wxid];
     }
 }

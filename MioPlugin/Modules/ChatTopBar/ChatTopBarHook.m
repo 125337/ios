@@ -1,5 +1,6 @@
 #import "ChatTopBarHook.h"
 #import "MioChatAvatarTitleView.h"
+#import "CSContactInfoPopoverController.h"
 #import "../../Config/PluginConfig.h"
 #import "../../Config/Constants.h"
 #import "../../Core/LogManager.h"
@@ -28,16 +29,25 @@ didTapAvatarWithContact:(id)contact
         [generator impactOccurred];
     }
 
-    UIViewController *presentingVC = WPGetTopVCForPresentation();
-    if (!presentingVC) presentingVC = (UIViewController *)view.chatController;
-    if (!presentingVC) return;
+    CSContactInfoPopoverController *popover =
+        [[CSContactInfoPopoverController alloc] initWithContact:contact avatar:avatar];
 
-    // Push 微信原生联系人详情页，跳过自定义 CSContactInfoPopoverController
-    Class contactInfoVC = objc_getClass("ContactInfoViewController");
-    if (contactInfoVC) {
-        UIViewController *vc = [[contactInfoVC alloc] init];
-        [vc setValue:contact forKey:@"m_contact"];
-        [presentingVC.navigationController pushViewController:vc animated:YES];
+    popover.modalPresentationStyle = UIModalPresentationPopover;
+    popover.preferredContentSize = CGSizeMake(280, 400);
+
+    UIPopoverPresentationController *popPC = popover.popoverPresentationController;
+    popPC.sourceView = sourceView;
+    popPC.sourceRect = sourceView.bounds;
+    popPC.permittedArrowDirections = UIPopoverArrowDirectionAny;
+    popPC.backgroundColor = [UIColor whiteColor];
+    popPC.delegate = popover;
+
+    UIViewController *presentingVC = WPGetTopVCForPresentation();
+    if (!presentingVC) {
+        presentingVC = (UIViewController *)view.chatController;
+    }
+    if (presentingVC) {
+        [presentingVC presentViewController:popover animated:YES completion:nil];
     }
 }
 @end

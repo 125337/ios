@@ -75,6 +75,7 @@ jobs:
           MioPlugin/Modules/PlaceholderText/PlaceholderTextHook.m \
           MioPlugin/Modules/ChatTopBar/MioChatAvatarTitleView.m \
           MioPlugin/Modules/ChatTopBar/ChatTopBarHook.m \
+          MioPlugin/Modules/ChatTopBar/CSContactInfoPopoverController.m \
           MioPlugin/Modules/ChatTopBar/AvatarLoader.m \
           MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m \
           MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m \
