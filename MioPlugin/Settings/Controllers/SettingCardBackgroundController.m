@@ -118,7 +118,7 @@
                            alertMessage:@"请输入X轴偏移值(-500~500像素)\n正值向右偏移，负值向左偏移"
                                      cy:*ecy width:w];
 
-    } cy:&bgy width:w];
+    } cy:bgy width:w];
 
     y = [self finishGroup:bgGroup atY:y height:bgy];
     y += 8;
