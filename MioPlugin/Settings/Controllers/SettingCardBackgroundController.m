@@ -500,10 +500,7 @@
     // ★ 新增：新 UI 的开关需要 rebuild UI（展开/折叠子项）
     if ([key isEqualToString:@"cardBgMaterialEnabled"]
         || [key isEqualToString:@"cardBgCornerEnabled"]
-        || [key isEqualToString:@"cardBgCornerUseGlobal"]
-        || [key isEqualToString:@"cardBgHidden"]
-        || [key isEqualToString:@"myPageHideArrow"]
-        || [key isEqualToString:@"cardBgHideStateEnabled"]) {
+        || [key isEqualToString:@"cardBgCornerUseGlobal"]) {
         [self buildUI];
         return;
     }

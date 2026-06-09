@@ -663,11 +663,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 + (void)handleButtonLayout:(UIView *)button {
     PluginConfig *config = [PluginConfig shared];
 
-    // ☆ 独立功能：状态隐藏（不受总开关保护）
+    // ☆ 独立功能：状态隐藏
     [ProfileCardBgHook hideStateElementsInCell:button
                                    shouldHide:config.cardBgHideStateEnabled];
 
-    // ☆ 独立功能：箭码隐藏（不受总开关保护）
+    // ☆ 独立功能：箭码隐藏
     [ProfileCardBgHook hideArrowQRInCell:button
                               shouldHide:config.myPageHideArrow];
 
