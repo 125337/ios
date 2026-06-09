@@ -857,10 +857,29 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         }
     } else {
         // ══════════════════════════════════════════
-        // 无素材 + 有圆角：清理原生白色背景，让 applyProfileCardCorner 设置的背景色透出
+        // 无素材 + 有圆角：清理按钮背景 + 原生白色 m_bgImageView，应用背景色
         // ══════════════════════════════════════════
         if (config.cardBgCornerEnabled) {
+            // 清理按钮背景
+            button.backgroundColor = [UIColor clearColor];
+            button.layer.backgroundColor = [UIColor clearColor].CGColor;
+
+            // 清理原生白色 m_bgImageView
             [ProfileCardBgHook cleanNativeBgImageView:button];
+
+            // 应用背景色
+            UIColor *bgColor = nil;
+            if (config.cardBgCornerUseGlobal) {
+                bgColor = isDark
+                    ? [config colorFromHex:config.listCellDarkBgColor]
+                    : [config colorFromHex:config.listCellLightBgColor];
+            } else {
+                bgColor = [config colorFromHex:isDark
+                    ? config.cardBgCornerDarkBgColor : config.cardBgCornerBgColor];
+            }
+            if (bgColor) {
+                button.backgroundColor = bgColor;
+            }
         }
     }
 
