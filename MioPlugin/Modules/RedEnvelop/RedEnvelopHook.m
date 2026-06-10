@@ -1,4 +1,5 @@
 #import "RedEnvelopHook.h"
+#import "RedEnvelopConfig.h"
 #import "../../Config/PluginConfig.h"
 #import "MioRedEnvelopParam.h"
 #import "MioRedEnvelopTaskManager.h"

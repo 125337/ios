@@ -1,4 +1,5 @@
 #import "MessageTimeHook.h"
+#import "MessageTimeConfig.h"
 #import "../Revoke/RevokeConfig.h"
 #import "MessageTimeFormatParser.h"
 #import <substrate.h>
