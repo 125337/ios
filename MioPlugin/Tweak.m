@@ -17,7 +17,6 @@
 #import "Modules/PlaceholderText/PlaceholderTextConfig.h"
 #import "Modules/ListCornerRadius/ListCornerRadiusConfig.h"
 #import "Modules/ProfileCardBg/CardBgConfig.h"
-#import "Modules/DevTools/DevToolsConfig.h"
 #import "Modules/ListCornerRadius/ListCornerRadiusHook.h"
 #import "Modules/ProfileCardBg/ProfileCardBgHook.h"
 
@@ -44,7 +43,6 @@ static void MioPluginInitialize() {
             [ConfigManager registerModule:PlaceholderTextConfig.class];
             [ConfigManager registerModule:ListCornerRadiusConfig.class];
             [ConfigManager registerModule:CardBgConfig.class];
-            [ConfigManager registerModule:DevToolsConfig.class];
 
             // 加载所有配置
             [ConfigManager loadAll];
