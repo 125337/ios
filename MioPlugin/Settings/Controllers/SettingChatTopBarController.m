@@ -403,9 +403,9 @@ static NSString *keyForTag(NSInteger tag) {
         NSString *sepSub = @"未设置";
         if (config.chatSeparatorText.length > 0) {
             sepSub = [NSString stringWithFormat:@"文本: %@", config.chatSeparatorText];
-        } else if (config.chatSeparatorGIF.length > 0) {
+        } else if ([ChatTopBarConfig hasSeparatorGIFFile]) {
             sepSub = @"GIF动图";
-        } else if (config.chatSeparatorIcon.length > 0) {
+        } else if ([ChatTopBarConfig hasSeparatorIconFile]) {
             sepSub = @"静态图片";
         }
         *ecy = [self addNavRowInGroup:expand title:@"头像分隔符号" subtitle:sepSub tag:200 action:@selector(onAvatarSeparatorTap) cy:*ecy width:w];
@@ -505,8 +505,8 @@ static NSString *keyForTag(NSInteger tag) {
                 WPLog(@"Mio-Separator", @"    写入路径: %@", iconPath);
                 [pngData writeToFile:iconPath atomically:YES];
                 WPLog(@"Mio-Separator", @"    写入完成, data.length=%lu", (unsigned long)pngData.length);
-                config.chatSeparatorIcon = iconPath;
-                WPLog(@"Mio-Separator", @"    设置 chatSeparatorIcon = %@", iconPath);
+                // 文件已写入硬编码路径，不再需要存到 config
+                WPLog(@"Mio-Separator", @"    静态图标已保存到: %@", iconPath);
                 [ConfigManager saveAll];
                 WPLog(@"Mio-Separator", @"    调用 [ConfigManager saveAll]");
                 [picker dismissViewControllerAnimated:YES completion:^{
@@ -545,8 +545,8 @@ static NSString *keyForTag(NSInteger tag) {
                     WPLog(@"Mio-Separator", @"    复制GIF成功: %@", gifDestPath);
                 }
 
-                config.chatSeparatorGIF = gifDestPath;
-                WPLog(@"Mio-Separator", @"    设置 chatSeparatorGIF = %@", gifDestPath);
+                // 文件已写入硬编码路径，不再需要存到 config
+                WPLog(@"Mio-Separator", @"    GIF已保存到: %@", gifDestPath);
                 [ConfigManager saveAll];
                 WPLog(@"Mio-Separator", @"    调用 [ConfigManager saveAll]");
                 [picker dismissViewControllerAnimated:YES completion:^{
@@ -561,8 +561,7 @@ static NSString *keyForTag(NSInteger tag) {
 - (void)deleteAllSeparators {
     WPLog(@"Mio-Separator", @"deleteAllSeparators 被调用");
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
-    WPLog(@"Mio-Separator", @"  当前值: icon=%@, gif=%@, text=%@",
-          config.chatSeparatorIcon, config.chatSeparatorGIF, config.chatSeparatorText);
+    WPLog(@"Mio-Separator", @"  当前值: text=%@", config.chatSeparatorText);
 
     NSFileManager *fm = [NSFileManager defaultManager];
     NSString *miopngDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/Miopng"];
@@ -581,11 +580,7 @@ static NSString *keyForTag(NSInteger tag) {
         [fm removeItemAtPath:gifPath error:nil];
     }
 
-    // 清空配置
-    config.chatSeparatorIcon = nil;
-    WPLog(@"Mio-Separator", @"  设置 chatSeparatorIcon = nil");
-    config.chatSeparatorGIF = nil;
-    WPLog(@"Mio-Separator", @"  设置 chatSeparatorGIF = nil");
+    // 清空配置（只需清理文本，图标/GIF 已删除）
     config.chatSeparatorText = nil;
     WPLog(@"Mio-Separator", @"  设置 chatSeparatorText = nil");
     [ConfigManager saveAll];

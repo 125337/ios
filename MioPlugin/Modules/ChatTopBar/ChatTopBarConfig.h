@@ -65,11 +65,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// 聊天分隔符文本
 @property (nonatomic, copy, nullable) NSString *chatSeparatorText;
 
-/// 聊天分隔符图标
-@property (nonatomic, copy, nullable) NSString *chatSeparatorIcon;
-
-/// 聊天分隔符GIF
-@property (nonatomic, copy, nullable) NSString *chatSeparatorGIF;
+/// 判断是否存在图标分隔符文件
++ (BOOL)hasSeparatorIconFile;
+/// 判断是否存在 GIF 分隔符文件
++ (BOOL)hasSeparatorGIFFile;
+/// 获取图标分隔符文件的完整路径
++ (NSString *)separatorIconPath;
+/// 获取 GIF 分隔符文件的完整路径
++ (NSString *)separatorGIFPath;
 
 /// 是否有任意分隔符（文本/图标/GIF）
 - (BOOL)hasAnySeparator;

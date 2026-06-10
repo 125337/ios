@@ -47,8 +47,6 @@ static ChatTopBarConfig *_sharedInstance = nil;
         
         // NSString 类型
         [ConfigDescriptor stringItem:@"chatSeparatorText" default:@""],
-        [ConfigDescriptor stringItem:@"chatSeparatorIcon" default:nil],
-        [ConfigDescriptor stringItem:@"chatSeparatorGIF" default:nil],
         [ConfigDescriptor stringItem:@"chatAvatarBlacklist" default:nil],
         [ConfigDescriptor stringItem:@"chatGroupMemberCountSuffix" default:@"%u人"],
         [ConfigDescriptor stringItem:@"chatAddTimeSuffixFormat" default:@"%ld天"],
@@ -63,8 +61,24 @@ static ChatTopBarConfig *_sharedInstance = nil;
 
 - (BOOL)hasAnySeparator {
     return self.chatSeparatorText.length > 0
-        || self.chatSeparatorIcon.length > 0
-        || self.chatSeparatorGIF.length > 0;
+        || [ChatTopBarConfig hasSeparatorIconFile]
+        || [ChatTopBarConfig hasSeparatorGIFFile];
+}
+
++ (NSString *)separatorIconPath {
+    return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/Miopng/separator_icon.png"];
+}
+
++ (NSString *)separatorGIFPath {
+    return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/Miopng/separator_icon.gif"];
+}
+
++ (BOOL)hasSeparatorIconFile {
+    return [[NSFileManager defaultManager] fileExistsAtPath:[self separatorIconPath]];
+}
+
++ (BOOL)hasSeparatorGIFFile {
+    return [[NSFileManager defaultManager] fileExistsAtPath:[self separatorGIFPath]];
 }
 
 @end
