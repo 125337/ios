@@ -1,5 +1,7 @@
 #import "../Common/SettingController.h"
 #import "../../Modules/RedEnvelop/RedEnvelopConfig.h"
+#import "../../Modules/AutoTransfer/AutoTransferConfig.h"
+#import "../../Core/ConfigManager.h"
 #import "MioTweakGroupSelectsController.h"
 #import <objc/runtime.h>
 #import "../../Core/LogManager.h"
@@ -125,33 +127,34 @@
     y = [self addSectionHeader:@"自动收款" y:y width:w];
     UIView *group2 = [self addTableGroupAtY:y width:w];
     CGFloat cy2 = 0;
+    AutoTransferConfig *transferConfig = [AutoTransferConfig shared];
 
     cy2 = [self addMasterSwitchRowInGroup:group2
                                      title:@"启用自动收款"
                                        key:@"autoConfirmTransfer"
-                                      isOn:config.autoConfirmTransfer
+                                      isOn:transferConfig.autoConfirmTransfer
                                 subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSubSwitchRowInGroup:expand title:@"私聊转账自动收款" key:@"autoConfirmTransferPersonal" isOn:config.autoConfirmTransferPersonal cy:*ecy width:w];
+        *ecy = [self addSubSwitchRowInGroup:expand title:@"私聊转账自动收款" key:@"autoConfirmTransferPersonal" isOn:transferConfig.autoConfirmTransferPersonal cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSubSwitchRowInGroup:expand title:@"群聊转账自动收款" key:@"autoConfirmTransferGroup" isOn:config.autoConfirmTransferGroup cy:*ecy width:w];
+        *ecy = [self addSubSwitchRowInGroup:expand title:@"群聊转账自动收款" key:@"autoConfirmTransferGroup" isOn:transferConfig.autoConfirmTransferGroup cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"安全设置" cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"确认延迟" key:@"autoConfirmTransferDelay" value:[NSString stringWithFormat:@"%u", config.autoConfirmTransferDelay] hint:@"秒" valueType:InputValueTypeNumber cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"确认延迟" key:@"autoConfirmTransferDelay" value:[NSString stringWithFormat:@"%u", transferConfig.autoConfirmTransferDelay] hint:@"秒" valueType:InputValueTypeNumber cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"金额上限(分)" key:@"autoConfirmTransferMaxAmount" value:config.autoConfirmTransferMaxAmount > 0 ? [NSString stringWithFormat:@"%lld", config.autoConfirmTransferMaxAmount] : @"" hint:@"0=不限" valueType:InputValueTypeNumber cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"金额上限(分)" key:@"autoConfirmTransferMaxAmount" value:transferConfig.autoConfirmTransferMaxAmount > 0 ? [NSString stringWithFormat:@"%lld", transferConfig.autoConfirmTransferMaxAmount] : @"" hint:@"0=不限" valueType:InputValueTypeNumber cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"收款后自动回复" cy:*ecy width:w];
-        *ecy = [self addSubSwitchRowInGroup:expand title:@"启用自动回复" key:@"autoConfirmTransferAutoReply" isOn:config.autoConfirmTransferAutoReply cy:*ecy width:w];
+        *ecy = [self addSubSwitchRowInGroup:expand title:@"启用自动回复" key:@"autoConfirmTransferAutoReply" isOn:transferConfig.autoConfirmTransferAutoReply cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"回复内容" key:@"autoConfirmTransferAutoReplyStr" value:config.autoConfirmTransferAutoReplyStr hint:@"已收到款项，谢谢！" valueType:InputValueTypeText cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"回复内容" key:@"autoConfirmTransferAutoReplyStr" value:transferConfig.autoConfirmTransferAutoReplyStr hint:@"已收到款项，谢谢！" valueType:InputValueTypeText cy:*ecy width:w];
 
         *ecy = [self addHintRowInGroup:expand text:@"自动收款: 收到转账后自动确认收款\n金额上限: 超过设定金额的转账不会自动收款\n延迟时间建议设为 1-3 秒" cy:*ecy width:w];
     } cy:cy2 width:w];
 
     y = [self finishGroup:group2 atY:y height:cy2];
 
-    if (!config.autoConfirmTransfer) {
+    if (!transferConfig.autoConfirmTransfer) {
         UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(16, y, w - 32, 16)];
         hint.text = @"开启自动收款后可配置详细选项";
         hint.font = [UIFont systemFontOfSize:12];
