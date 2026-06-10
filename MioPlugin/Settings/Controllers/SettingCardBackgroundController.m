@@ -57,7 +57,7 @@
                                      cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-        NSString *imgSub = cfg.cardBgImagePath.length > 0 ? @"已设置" : @"未设置";
+        NSString *imgSub = [CardBgConfig hasBackgroundImage] ? @"已设置" : @"未设置";
         *ecy = [self addNavRowInGroup:expand
                                 title:@"背景图"
                               subtitle:imgSub
@@ -295,26 +295,12 @@
         [self pickImageForMode:101];
     }]];
 
-    if (config.cardBgImagePath.length > 0) {
+    if ([CardBgConfig hasBackgroundImage]) {
         [alert addAction:[UIAlertAction actionWithTitle:@"删除背景图"
                                                  style:UIAlertActionStyleDestructive
                                                handler:^(UIAlertAction *action) {
-            WPLog(@"CardBg-Diag", @"[PICKER] Deleting image path: %@", config.cardBgImagePath);
-            if (config.cardBgImagePath.length > 0) {
-                NSFileManager *fm = [NSFileManager defaultManager];
-                if ([fm fileExistsAtPath:config.cardBgImagePath]) {
-                    [fm removeItemAtPath:config.cardBgImagePath error:nil];
-                    WPLog(@"CardBg-Diag", @"[PICKER] Deleted image file from disk");
-                }
-            }
-            // 删除默认目录下的同名文件
-            NSString *bgDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-            bgDir = [bgDir stringByAppendingPathComponent:@"MioCardBackground"];
-            NSFileManager *fm = [NSFileManager defaultManager];
-            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBg.png"] error:nil];
-            [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBg.gif"] error:nil];
-            WPLog(@"CardBg-Diag", @"[PICKER] Removed default image files from MioCardBackground/");
-            config.cardBgImagePath = nil;
+            WPLog(@"CardBg-Diag", @"[PICKER] Deleting background image");
+            [CardBgConfig deleteBackgroundImage];
             [ConfigManager saveAll];
             [self buildUI];
         }]];
@@ -400,9 +386,8 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 BOOL written = [data writeToFile:targetPath atomically:YES];
                 WPLog(@"CardBg-Diag", @"[PICKER] GIF write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
-                config.cardBgImagePath = targetPath;
+                // 文件已写入硬编码路径，不再需要存到 config
                 [ConfigManager saveAll];
-                WPLog(@"CardBg-Diag", @"[PICKER] Saved config: cardBgImagePath=%@", targetPath);
                 WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
                 [picker dismissViewControllerAnimated:YES completion:^{
                     [self buildUI];
@@ -420,9 +405,8 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 BOOL written = [data writeToFile:targetPath atomically:YES];
                 WPLog(@"CardBg-Diag", @"[PICKER] Image write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
-                config.cardBgImagePath = targetPath;
+                // 文件已写入硬编码路径，不再需要存到 config
                 [ConfigManager saveAll];
-                WPLog(@"CardBg-Diag", @"[PICKER] Saved config: cardBgImagePath=%@", targetPath);
                 WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
                 [picker dismissViewControllerAnimated:YES completion:^{
                     [self buildUI];

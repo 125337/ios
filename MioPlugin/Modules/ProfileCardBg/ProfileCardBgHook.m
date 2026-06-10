@@ -188,27 +188,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
 + (UIImage *)loadBackgroundImageSync {
     WPLog(@"CardBg-Diag", @"[IMG-LOAD] Start");
-    CardBgConfig *config = [CardBgConfig shared];
-    NSString *imagePath = config.cardBgImagePath;
-    WPLog(@"CardBg-Diag", @"[IMG-LOAD] configPath=%@", imagePath ?: @"(nil)");
+    NSString *imagePath = [CardBgConfig backgroundImagePath];
+    WPLog(@"CardBg-Diag", @"[IMG-LOAD] imagePath=%@", imagePath ?: @"(nil)");
 
-    if (!imagePath || imagePath.length == 0) {
-        NSString *bgDir = [ProfileCardBgHook cardBackgroundDirectory];
-        NSFileManager *fm = [NSFileManager defaultManager];
-
-        NSString *gifPath = [bgDir stringByAppendingPathComponent:@"MioCardBg.gif"];
-        NSString *pngPath = [bgDir stringByAppendingPathComponent:@"MioCardBg.png"];
-
-        if ([fm fileExistsAtPath:gifPath]) {
-            imagePath = gifPath;
-        } else if ([fm fileExistsAtPath:pngPath]) {
-            imagePath = pngPath;
-        }
-        WPLog(@"CardBg-Diag", @"[IMG-LOAD] resolvedPath=%@", imagePath ?: @"(nil)");
-    }
-
-    if (!imagePath || imagePath.length == 0) {
-        WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: NIL (no path)");
+    if (!imagePath) {
+        WPLog(@"CardBg-Diag", @"[IMG-LOAD] No background image found on disk");
         return nil;
     }
 
@@ -326,24 +310,9 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
 + (void)loadBackgroundImageForImageView:(UIImageView *)imageView {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        CardBgConfig *config = [CardBgConfig shared];
-        NSString *imagePath = config.cardBgImagePath;
+        NSString *imagePath = [CardBgConfig backgroundImagePath];
 
-        if (!imagePath || imagePath.length == 0) {
-            NSString *bgDir = [[ProfileCardBgHook cardBackgroundDirectory] copy];
-            NSFileManager *fm = [NSFileManager defaultManager];
-
-            NSString *gifPath = [bgDir stringByAppendingPathComponent:@"MioCardBg.gif"];
-            NSString *pngPath = [bgDir stringByAppendingPathComponent:@"MioCardBg.png"];
-
-            if ([fm fileExistsAtPath:gifPath]) {
-                imagePath = gifPath;
-            } else if ([fm fileExistsAtPath:pngPath]) {
-                imagePath = pngPath;
-            }
-        }
-
-        if (!imagePath || imagePath.length == 0) return;
+        if (!imagePath) return;
 
         NSFileManager *fm = [NSFileManager defaultManager];
         if (![fm fileExistsAtPath:imagePath]) return;
@@ -822,7 +791,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 + (void)handleVisiblePath:(UIView *)button isDark:(BOOL)isDark {
     CardBgConfig *config = [CardBgConfig shared];
     BOOL hasMaterial = config.cardBgMaterialEnabled;
-    BOOL hasImagePath = hasMaterial && config.cardBgImagePath.length > 0;
+    BOOL hasImagePath = hasMaterial && [CardBgConfig hasBackgroundImage];
     BOOL needCorner = config.cardBgCornerEnabled;
 
     // 确保可见

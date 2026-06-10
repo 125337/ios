@@ -29,7 +29,6 @@ static CardBgConfig *_sharedInstance = nil;
         [ConfigDescriptor boolItem:@"cardBgHidden" default:@(NO)],
         [ConfigDescriptor boolItem:@"cardBgHideStateEnabled" default:@(NO)],
         [ConfigDescriptor floatItem:@"cardBgListSpacing" default:@(0)],
-        [ConfigDescriptor stringItem:@"cardBgImagePath" default:nil],
         [ConfigDescriptor integerItem:@"cardBgFillMode" default:@(0)],
         [ConfigDescriptor integerItem:@"cardBgAlignment" default:@(0)],
         [ConfigDescriptor integerItem:@"cardBgLayer" default:@(0)],
@@ -45,6 +44,38 @@ static CardBgConfig *_sharedInstance = nil;
         // ★ 箭码隐藏（从 ListCornerRadiusConfig 迁移）
         [ConfigDescriptor boolItem:@"cardBgHideArrow" default:@(NO)],
     ];
+}
+
++ (NSString *)backgroundImageDirectory {
+    NSString *docsDir = [NSSearchPathForDirectoriesInDomains(
+        NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    return [docsDir stringByAppendingPathComponent:@"MioCardBackground"];
+}
+
++ (NSString *)backgroundImagePath {
+    NSString *dir = [self backgroundImageDirectory];
+    NSFileManager *fm = [NSFileManager defaultManager];
+
+    // GIF 优先
+    NSString *gifPath = [dir stringByAppendingPathComponent:@"MioCardBg.gif"];
+    if ([fm fileExistsAtPath:gifPath]) return gifPath;
+
+    // 其次 PNG
+    NSString *pngPath = [dir stringByAppendingPathComponent:@"MioCardBg.png"];
+    if ([fm fileExistsAtPath:pngPath]) return pngPath;
+
+    return nil;
+}
+
++ (BOOL)hasBackgroundImage {
+    return [self backgroundImagePath] != nil;
+}
+
++ (void)deleteBackgroundImage {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [self backgroundImageDirectory];
+    [fm removeItemAtPath:[dir stringByAppendingPathComponent:@"MioCardBg.png"] error:nil];
+    [fm removeItemAtPath:[dir stringByAppendingPathComponent:@"MioCardBg.gif"] error:nil];
 }
 
 @end
