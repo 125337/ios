@@ -15,7 +15,7 @@
 #import "AttachLayoutConfig.h"
 
 // ═══════════════════════════════════════════════════════
-// 读取配置（统一使用 PluginConfig，保证与设置页面一致）
+// 读取配置（统一使用 AttachLayoutConfig，保证与设置页面一致）
 // ═══════════════════════════════════════════════════════
 static inline BOOL attachLayoutEnabled(void) {
     return [AttachLayoutConfig shared].attachLayoutEnabled;

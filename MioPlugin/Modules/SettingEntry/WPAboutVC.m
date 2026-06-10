@@ -62,7 +62,7 @@
     NSArray *archs = @[@[@"RedEnvelopHook", @"自动抢红包"],
                         @[@"PreventRecallHook", @"防撤回"],
                         @[@"HookEngine", @"Hook引擎"],
-                        @[@"PluginConfig", @"配置中心"]];
+                        @[@"MioPlugin", @"配置中心"]];
     for (NSUInteger i = 0; i < archs.count; i++) {
         if (i > 0) ay = [self addSeparatorInGroup:archGroup cy:ay width:w];
         UILabel *leftLabel = [[UILabel alloc] initWithFrame:CGRectMake(kPad, ay, (w - kPad * 2) / 2, kRowH)];

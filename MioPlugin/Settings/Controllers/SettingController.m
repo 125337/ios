@@ -113,7 +113,7 @@
         @"RevokeHook", @"防撤回",
         @"ClearUnreadHook", @"未读清零",
         @"HookEngine", @"Hook引擎",
-        @"PluginConfig", @"配置中心"
+        @"MioPlugin", @"配置中心"
     ];
 
     for (NSUInteger i = 0; i < modules.count; i += 2) {

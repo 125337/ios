@@ -27,7 +27,7 @@
     y += 20.0;
     y = [self buildEditorSectionAtY:y width:w];
 
-    // 加载已有黑名单（优先使用传入的 blacklist，fallback PluginConfig）
+    // 加载已有黑名单（优先使用传入的 blacklist，fallback ChatTopBarConfig）
     NSString *saved = self.blacklist;
     if (!saved.length) {
         saved = [ChatTopBarConfig shared].chatAvatarBlacklist;

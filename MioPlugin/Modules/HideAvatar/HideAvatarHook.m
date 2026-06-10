@@ -147,7 +147,7 @@ static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
         return ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
     }
 
-    // ── 查表: (聊天类型, isSender) → PluginConfig 对应属性 ──
+    // ── 查表: (聊天类型, isSender) → HideAvatarConfig 对应属性 ──
     BOOL shouldHide = NO;
 
     switch (_currentChatType) {

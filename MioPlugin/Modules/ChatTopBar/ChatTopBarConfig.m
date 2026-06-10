@@ -6,7 +6,6 @@
 //
 
 #import "ChatTopBarConfig.h"
-#import "ConfigDescriptor.h"
 
 @implementation ChatTopBarConfig
 
