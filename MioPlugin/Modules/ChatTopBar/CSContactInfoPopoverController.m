@@ -303,8 +303,8 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 - (void)handleProfileNavigation {
     if (!self.wxid) return;
 
-    // 通过 wxid 重新获取 contact，仅供跳转原生资料页使用
-    id contact = WXGetContactForWxid(self.wxid);
+    // 直接使用已持有的 contact 对象（参考实现使用 associatedObject 等价方案）
+    id contact = self.contact;
     if (!contact) return;
 
     Class contactInfoVCClass = objc_getClass("ContactInfoViewController");
