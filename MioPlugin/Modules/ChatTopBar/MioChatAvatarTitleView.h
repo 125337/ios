@@ -22,6 +22,5 @@
 @property (nonatomic, strong) UILabel     *titleLabel;
 
 - (void)updateAvatars;
-- (void)applyPositionOffset;
 
 @end

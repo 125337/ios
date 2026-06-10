@@ -1,28 +1,56 @@
-#import "MioChatAvatarTitleView.h"
-#import "ChatTopBarConfig.h"
-#import "../../Core/LogManager.h"
-#import "../../Core/ServiceHelper.h"
-#import "AvatarLoader.h"
-#import <objc/runtime.h>
-#import <objc/message.h>
+# MioChatAvatarTitleView 全面重构方案
 
-@implementation MioChatAvatarTitleView
+> 目标：将现有的"大锅烩式"代码拆分为职责独立的模块，各司其职，顺手修复图标/GIF 分隔符不可见 Bug
 
-// ============================================================
-// MARK: - 1. Init & Setup
-// ============================================================
+---
 
-- (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (self) {
-        self.backgroundColor = [UIColor clearColor];
-        self.clipsToBounds = YES;
-        [self setupSubviews];
-    }
-    return self;
-}
+## 1. 现有问题清单
 
+| # | 问题 | 严重度 | 说明 |
+|---|------|--------|------|
+| 1 | `layoutSubviews` 188 行做所有事 | 🔴 高 | 布局 + 状态管理 + 字体设置全部混在一起 |
+| 2 | `loadSeparatorIcon` 用 `dispatch_async` | 🔴 高 | 本地文件读取不需要异步，导致时序问题 |
+| 3 | `loadSeparatorIcon` 设 hidden/sizeToFit | 🔴 高 | 与 `layoutSubviews` 的 hidden 覆盖形成竞争 |
+| 4 | 图标/GIF 分隔符在布局中被强制隐藏 | 🔴 高 | L244 `separatorView.hidden = YES` 无条件执行 |
+| 5 | 图标/GIF 分隔符没有 frame | 🔴 高 | `layoutSubviews` 从未设置 `separatorView.frame` |
+| 6 | `updateAvatars` 末尾无 `setNeedsLayout` | 🟡 中 | 数据加载后布局未及时刷新 |
+| 7 | `setupSubviews` 和 `layoutSubviews` 重复设 font | 🟡 中 | titleLabel font 在两处都设置 |
+| 8 | `hasSeparator` 定义在顶部但只在 Mode 2/3 使用 | 🟢 低 | 变量作用域过大 |
+| 9 | `applyPositionOffset` 声明了但未实现 | 🟢 低 | Header 中有声明，.m 中无实现 |
+| 10 | Mode 0/1/4/5/6/7 重复写 separatorView hidden=YES | 🟢 低 | 8 个 mode 分支中 6 个都在重复隐藏分隔符组件 |
+
+---
+
+## 2. 重构后模块划分
+
+重构后的文件将分为 7 个清晰的职责模块：
+
+```
+┌────────────────────────────────────────────────┐
+│  1. Init & Setup         —— 创建 subview       │
+│  2. Mode Management      —— 显示/隐藏控制      │
+│  3. Layout               —— frame 计算         │
+│  4. Data Loading         —— 头像+分隔符加载    │
+│  5. Helpers              —— 纯计算辅助函数     │
+│  6. Gestures             —— 点击事件           │
+│  7. Public Methods       —— 外部调用入口       │
+└────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. 每个方法的单一职责定义
+
+### 3.1 `setupSubviews` — 只创建 subview
+
+**当前问题：** 在 setupSubviews 中读 config 设置 font 和 textColor，这些应该属于"数据"而非"初始化"。
+
+**改造后：**
+```objc
 - (void)setupSubviews {
+    self.backgroundColor = [UIColor clearColor];
+    self.clipsToBounds = YES;
+
     // leftAvatarView
     self.leftAvatarView = [self makeAvatarImageViewWithAction:@selector(onLeftAvatarTapped:)];
     [self addSubview:self.leftAvatarView];
@@ -43,43 +71,15 @@
     self.titleLabel = [self makeTitleLabel];
     [self addSubview:self.titleLabel];
 }
+```
 
-- (UIImageView *)makeAvatarImageViewWithAction:(SEL)action {
-    UIImageView *iv = [[UIImageView alloc] init];
-    iv.contentMode = UIViewContentModeScaleAspectFill;
-    iv.tag = 2;
-    iv.clipsToBounds = YES;
-    iv.userInteractionEnabled = YES;
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:action];
-    [iv addGestureRecognizer:tap];
-    return iv;
-}
+> 将 subview 的创建细节拆分为独立的工厂方法（makeAvatarImageViewWithAction: / makeSeparatorImageView / makeSeparatorLabel / makeTitleLabel），每个方法只负责创建一个 subview 的通用属性（contentMode、clipsToBounds、初始 hidden=YES 等）。**不涉及字体尺寸、颜色等根据 config 变化的值。**
 
-- (UIImageView *)makeSeparatorImageView {
-    UIImageView *iv = [[UIImageView alloc] init];
-    iv.contentMode = UIViewContentModeScaleAspectFill;
-    iv.userInteractionEnabled = YES;
-    iv.hidden = YES;
-    return iv;
-}
+### 3.2 `updateMode` — 新方法，只控制显示/隐藏
 
-- (UILabel *)makeSeparatorLabel {
-    UILabel *label = [[UILabel alloc] init];
-    label.hidden = YES;
-    return label;
-}
+**职责：** 根据 `chatDisplayMode` 和分隔符配置，决定每个 subview 的 hidden 状态。**不涉及任何 frame 计算。**
 
-- (UILabel *)makeTitleLabel {
-    UILabel *label = [[UILabel alloc] init];
-    label.numberOfLines = 1;
-    label.hidden = YES;
-    return label;
-}
-
-// ============================================================
-// MARK: - 2. Mode Management
-// ============================================================
-
+```objc
 - (void)updateMode {
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
     NSInteger mode = config.chatDisplayMode;
@@ -153,11 +153,13 @@
         }
     }
 }
+```
 
-// ============================================================
-// MARK: - 3. Layout
-// ============================================================
+### 3.3 `layoutSubviews` — 只做 frame 计算
 
+**职责：** 根据当前 mode，纯数学计算每个可见 subview 的 frame。**不设置 hidden，不设置 font，不设置 text。**
+
+```objc
 - (void)layoutSubviews {
     [super layoutSubviews];
     // ★ 不能在这里调用 updateMode！updateMode 由外部触发
@@ -221,7 +223,13 @@
             break;
     }
 }
+```
 
+> 每个 mode 的布局逻辑被拆分为独立的方法，避免一个巨无霸方法。
+
+#### 3.3.1 各 Mode 布局方法详细实现
+
+```objc
 // Mode 7：双方头像重叠
 - (void)layoutMode7WithTotalH:(CGFloat)totalH totalW:(CGFloat)totalW
                    avatarSize:(CGFloat)avatarSize avatarY:(CGFloat)avatarY
@@ -235,7 +243,9 @@
         avatarY + (avatarSize - smallSize), smallSize, smallSize);
     self.rightAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:smallSize];
 }
+```
 
+```objc
 // Mode 5：对方头像 + 名字在左侧
 - (void)layoutMode5WithTotalH:(CGFloat)totalH totalW:(CGFloat)totalW
                    avatarSize:(CGFloat)avatarSize avatarY:(CGFloat)avatarY
@@ -245,7 +255,6 @@
     CGFloat gap = 8.0;
 
     self.titleLabel.textAlignment = NSTextAlignmentLeft;
-    self.titleLabel.font = [UIFont systemFontOfSize:nameFontSize];
     self.titleLabel.frame = CGRectMake(
         (totalW - avatarSize - nameWidth - gap) * 0.5 + config.chatNicknameOffsetX,
         avatarY + (avatarSize - nameFontSize) * 0.5 - config.chatNicknameOffsetY,
@@ -256,7 +265,9 @@
         avatarY, avatarSize, avatarSize);
     self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
 }
+```
 
+```objc
 // Mode 6：对方头像 + 名字在右侧
 - (void)layoutMode6WithTotalH:(CGFloat)totalH totalW:(CGFloat)totalW
                    avatarSize:(CGFloat)avatarSize avatarY:(CGFloat)avatarY
@@ -270,13 +281,14 @@
     self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
 
     self.titleLabel.textAlignment = NSTextAlignmentRight;
-    self.titleLabel.font = [UIFont systemFontOfSize:nameFontSize];
     self.titleLabel.frame = CGRectMake(
         avatarX + avatarSize + gap + config.chatNicknameOffsetX,
         avatarY + (avatarSize - nameFontSize) * 0.5 - config.chatNicknameOffsetY,
         nameWidth, nameFontSize);
 }
+```
 
+```objc
 // Mode 0：自己头像居中 / Mode 4：自己头像+名字在下方
 - (void)layoutMode0Or4WithTotalH:(CGFloat)totalH totalW:(CGFloat)totalW
                       avatarSize:(CGFloat)avatarSize avatarY:(CGFloat)avatarY
@@ -290,14 +302,15 @@
 
     if (showName) {
         self.titleLabel.textAlignment = NSTextAlignmentCenter;
-        self.titleLabel.font = [UIFont systemFontOfSize:nameFontSize];
         self.titleLabel.frame = CGRectMake(
             0 + config.chatNicknameOffsetX,
             avatarY + avatarSize + 1 - config.chatNicknameOffsetY,
             totalW, nameFontSize);
     }
 }
+```
 
+```objc
 // Mode 1：对方头像居中
 - (void)layoutMode1WithTotalH:(CGFloat)totalH totalW:(CGFloat)totalW
                    avatarSize:(CGFloat)avatarSize avatarY:(CGFloat)avatarY
@@ -306,7 +319,9 @@
         (totalW - avatarSize) * 0.5, avatarY, avatarSize, avatarSize);
     self.leftAvatarView.layer.cornerRadius = [self calculateCornerRadiusForSize:avatarSize];
 }
+```
 
+```objc
 // Mode 2/3：双方头像（核心修复区域）
 - (void)layoutMode2Or3WithTotalH:(CGFloat)totalH totalW:(CGFloat)totalW
                       avatarSize:(CGFloat)avatarSize avatarY:(CGFloat)avatarY
@@ -371,139 +386,19 @@
     // 名字在下方（Mode 3 专用）
     if (showName) {
         self.titleLabel.textAlignment = NSTextAlignmentCenter;
-        self.titleLabel.font = [UIFont systemFontOfSize:nameFontSize];
         self.titleLabel.frame = CGRectMake(
             0 + config.chatNicknameOffsetX,
             avatarY + avatarSize + 1 - config.chatNicknameOffsetY,
             totalW, nameFontSize);
     }
 }
+```
 
-// ============================================================
-// MARK: - 4. Data Loading
-// ============================================================
+### 3.4 Separator 加载方法 — 只设置内容
 
-- (void)updateAvatars {
-    if (!self.chatController) return;
+**改造后职责：** 只加载图片/文本数据到对应的 view。**不设 hidden，不设 frame，不设 sizeToFit。**
 
-    ChatTopBarConfig *config = [ChatTopBarConfig shared];
-
-    // Get contact info
-    id contact = ((id (*)(id, SEL))objc_msgSend)(self.chatController, NSSelectorFromString(@"GetContact"));
-    if (!contact) return;
-
-    NSString *opponentWxid = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsUsrName"));
-    NSString *nickname = ((id (*)(id, SEL))objc_msgSend)(contact, NSSelectorFromString(@"m_nsNickName"));
-    NSString *selfWxid = [self getSelfWxid];
-
-    // Load avatars — pass contact for official accounts to get avatar URL
-    UIImage *opponentAvatar = [self loadAvatarWithPriorityForWxid:opponentWxid contact:contact];
-    UIImage *selfAvatar = [self loadAvatarWithPriorityForWxid:selfWxid contact:nil];
-
-    // Build title text
-    NSString *titleText = nickname ?: @"";
-    BOOL isGroup = [opponentWxid containsString:@"@chatroom"];
-
-    if (isGroup && config.showGroupMemberCount) {
-        id contactMgr = WXGetService(objc_getClass("CContactMgr"));
-        if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
-            unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), contact);
-            NSString *suffix = config.chatGroupMemberCountSuffix.length > 0
-                ? config.chatGroupMemberCountSuffix : @"%ld人";
-            titleText = [NSString stringWithFormat:@"%@%@",
-                nickname ?: @"",
-                [NSString stringWithFormat:suffix, (long)count]];
-        }
-    } else if (!isGroup && config.showAddTime) {
-        // Get add time — try m_uiAddCreateTime first, fallback to m_uiAddTime
-        unsigned int addTime = 0;
-        SEL addCreateSel = NSSelectorFromString(@"m_uiAddCreateTime");
-        if ([contact respondsToSelector:addCreateSel]) {
-            addTime = (unsigned int)((unsigned int (*)(id, SEL))objc_msgSend)(contact, addCreateSel);
-        }
-        if (addTime == 0 && [contact respondsToSelector:@selector(m_uiAddTime)]) {
-            addTime = (unsigned int)((unsigned int (*)(id, SEL))objc_msgSend)(contact, @selector(m_uiAddTime));
-        }
-        if (addTime > 0) {
-            NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-            NSTimeInterval diff = now - addTime;
-            if (diff > -86400) {
-                NSInteger days = (NSInteger)(diff / 86400.0);
-                NSString *suffix = config.chatAddTimeSuffixFormat.length > 0
-                        ? config.chatAddTimeSuffixFormat : @"%ld天";
-                titleText = [NSString stringWithFormat:@"%@%@",
-                    nickname ?: @"",
-                    [NSString stringWithFormat:suffix, (long)days]];
-            }
-        } else {
-            [self silentLoadContactExtInfo:contact];
-        }
-    }
-
-    // Load separator — GIF check merged into loadSeparatorIcon
-    if (![self loadSeparatorIcon]) {
-        [self loadSeparatorText];
-    }
-
-    // Set avatar images
-    self.leftAvatarView.image = opponentAvatar ?: [UIImage imageNamed:@"DefaultHead"];
-    self.rightAvatarView.image = selfAvatar ?: [UIImage imageNamed:@"DefaultHead"];
-    self.titleLabel.text = titleText;
-
-    // Set fonts (统一设置位置)
-    self.titleLabel.font = [UIFont systemFontOfSize:config.chatNicknameFontSize];
-    self.titleLabel.textColor = [UIColor grayColor];
-    CGFloat sepFontSize = MAX(8.0, MIN(config.chatSeparatorSize * 0.4, 16.0));
-    self.separatorTextLabel.font = [UIFont systemFontOfSize:sepFontSize weight:UIFontWeightMedium];
-    self.separatorTextLabel.textColor = [UIColor grayColor];
-
-    // 刷新模式状态 + 触发布局
-    [self updateMode];
-    [self setNeedsLayout];
-}
-
-- (NSString *)getSelfWxid {
-    id selfContact = WXGetSelfContact();
-    if (selfContact && [selfContact respondsToSelector:@selector(m_nsUsrName)]) {
-        return ((NSString *(*)(id, SEL))objc_msgSend)(selfContact, @selector(m_nsUsrName));
-    }
-    return @"";
-}
-
-#pragma mark - Avatar Loading
-
-- (UIImage *)loadAvatarWithPriorityForWxid:(NSString *)wxid contact:(id)contact {
-    return [[AvatarLoader shared] loadAvatarSyncForWxid:wxid contact:contact];
-}
-
-#pragma mark - Silent Contact ExtInfo Loading
-
-- (void)silentLoadContactExtInfo:(id)contact {
-    if (!contact) return;
-
-    Class contactInfoVCClass = objc_getClass("ContactInfoViewController");
-    if (!contactInfoVCClass) return;
-
-    id vc = [[contactInfoVCClass alloc] init];
-    if (!vc) return;
-
-    SEL setContactSel = NSSelectorFromString(@"setM_contact:");
-    if ([vc respondsToSelector:setContactSel]) {
-        ((void (*)(id, SEL, id))objc_msgSend)(vc, setContactSel, contact);
-    }
-
-    ((void (*)(id, SEL))objc_msgSend)(vc, @selector(viewDidLoad));
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [self updateAvatars];
-    });
-}
-
-// ============================================================
-// MARK: - Separator Loading
-// ============================================================
-
+```objc
 - (BOOL)loadSeparatorIcon {
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
 
@@ -532,57 +427,190 @@
     self.separatorView.image = nil;
     return NO;
 }
+```
 
+```objc
 - (void)loadSeparatorText {
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
     self.separatorTextLabel.text = config.chatSeparatorText.length > 0
         ? config.chatSeparatorText : nil;
 }
+```
+
+### 3.5 `updateAvatars` — 只加载数据 + 触发刷新
+
+```objc
+- (void)updateAvatars {
+    if (!self.chatController) return;
+
+    // ... 获取 contact、wxid、nickname、selfWxid（与现有代码逻辑完全一致）
+
+    // 加载头像图片
+    self.leftAvatarView.image = opponentAvatar ?: [UIImage imageNamed:@"DefaultHead"];
+    self.rightAvatarView.image = selfAvatar ?: [UIImage imageNamed:@"DefaultHead"];
+
+    // 加载分隔符内容（只设数据，不设状态）
+    if (![self loadSeparatorIcon]) {
+        [self loadSeparatorText];
+    }
+
+    // 构造名字文本
+    // ... 群人数 / 添加时间逻辑（与现有代码完全一致）
+    self.titleLabel.text = titleText;
+
+    // 刷新模式状态 + 触发布局
+    [self updateMode];
+    [self setNeedsLayout];
+}
+```
+
+### 3.6 `titleLabel` 字体统一设置位置
+
+**原则：字体只在一个地方设置。**
+
+在 `layoutSubviews` 的 `layoutMode2Or3WithTotalH:...`、`layoutMode5WithTotalH:...` 等方法中设置 font。
+
+或者在 `updateAvatars` 中设置（因为 font 通常根据 title 内容确定）：
+
+```objc
+// 在 updateAvatars 中设置
+self.titleLabel.font = [UIFont systemFontOfSize:config.chatNicknameFontSize];
+self.separatorTextLabel.font = [UIFont systemFontOfSize:MAX(8.0, MIN(config.chatSeparatorSize * 0.4, 16.0)) weight:UIFontWeightMedium];
+self.separatorTextLabel.textColor = [UIColor grayColor];
+```
+
+> 建议：在 `updateMode` 或 `updateAvatars` 中统一设置，因为它们是"数据刷新"的一部分。
+
+---
+
+## 4. 整体调用流程
+
+重构后，布局刷新的完整链路：
+
+```
+外部 hook（ChatTopBarHook）调用：
+  └→ [titleView updateAvatars]                   ① 入口
+       ├→ 读取 contact、wxid、图片              ② 数据加载
+       ├→ loadSeparatorIcon / loadSeparatorText  ③ 只设内容
+       ├→ 设置 label.image / .text               ④ 填充数据
+       ├→ [self updateMode]                      ⑤ 决定各 view 显示/隐藏
+       └→ [self setNeedsLayout]                  ⑥ 触发布局
+
+系统自动调用：
+  └→ [titleView layoutSubviews]                   ⑦ 纯 frame 计算
+       └→ 根据 mode 分发到对应 layoutModeX 方法    ⑧ 各模式独立计算
+```
+
+---
+
+## 5. 需删除的代码
+
+| 代码 | 位置 | 原因 |
+|------|------|------|
+| `[sv setHidden:YES]` | setupSubviews L56 | 不应在初始化时设 hidden，`updateMode` 统一管理 |
+| `[st setHidden:YES]` | setupSubviews L65 | 同上 |
+| `[tl setHidden:YES]` | setupSubviews L74 | 同上 |
+| `[tl setFont:...]` | setupSubviews L71 | 与其他位置重复，由 `updateAvatars` 统一设置 |
+| `[st setFont:...]` | setupSubviews L62-63 | 同上 |
+| `[st setTextColor:...]` | setupSubviews L64 | 同上 |
+| `applyPositionOffset` 声明 | MioChatAvatarTitleView.h L25 | 未实现，删除声明 |
+| `layoutSubviews` L91-L95 | 当前代码 | 移入 `updateMode` |
+| `layoutSubviews` 中所有的 hidden 设置 | 当前代码 | 全部移入 `updateMode` |
+| `layoutSubviews` 中所有的 font 设置 | 当前代码 | 全部移入 `updateAvatars` |
+| `loadSeparatorIcon` 中的 dispatch_async | 当前代码 L384, L399 | 不需要异步 |
+| `loadSeparatorIcon` 中的 hidden 和 sizeToFit | 当前代码 L389, L404-405 | 由 `updateMode` 和 `layoutSubviews` 管理 |
+| `loadSeparatorText` 中的 dispatch_async | 当前代码 L416 | 不需要异步 |
+| `loadSeparatorText` 中的 hidden 和 sizeToFit | 当前代码 L418-419 | 由 `updateMode` 和 `layoutSubviews` 管理 |
+
+---
+
+## 6. 完整文件结构（伪代码）
+
+```
+@implementation MioChatAvatarTitleView
+
+// ============================================================
+// MARK: - 1. Init & Setup
+// ============================================================
+- (instancetype)initWithFrame:...
+- (void)setupSubviews
+- (UIImageView *)makeAvatarImageViewWithAction:(SEL)action
+- (UIImageView *)makeSeparatorImageView
+- (UILabel *)makeSeparatorLabel
+- (UILabel *)makeTitleLabel
+
+// ============================================================
+// MARK: - 2. Mode Management
+// ============================================================
+- (void)updateMode
+
+// ============================================================
+// MARK: - 3. Layout (8 个独立方法)
+// ============================================================
+- (void)layoutSubviews    ← dispatch to mode-specific methods
+- (void)layoutMode7...
+- (void)layoutMode5...
+- (void)layoutMode6...
+- (void)layoutMode0Or4...
+- (void)layoutMode1...
+- (void)layoutMode2Or3... ← 核心修复区域，三选一
+
+// ============================================================
+// MARK: - 4. Data Loading
+// ============================================================
+- (void)updateAvatars     ← 入口：加载数据 + updateMode + setNeedsLayout
+- (NSString *)getSelfWxid
+- (UIImage *)loadAvatarWithPriorityForWxid:contact:
+- (BOOL)loadSeparatorIcon ← 同步，只设 image
+- (void)loadSeparatorText ← 同步，只设 text
+- (void)silentLoadContactExtInfo:
 
 // ============================================================
 // MARK: - 5. Helpers
 // ============================================================
-
-- (CGFloat)calculateCornerRadiusForSize:(CGFloat)size {
-    ChatTopBarConfig *config = [ChatTopBarConfig shared];
-    return size * 0.5 * (config.chatAvatarCornerRadius / 100.0);
-}
-
-- (CGFloat)calculateNameWidth {
-    ChatTopBarConfig *config = [ChatTopBarConfig shared];
-
-    NSString *text = self.titleLabel.text ?: @"";
-    if (text.length == 0) return 30.0;
-
-    UIFont *font = [UIFont systemFontOfSize:config.chatNicknameFontSize];
-    NSDictionary *attrs = @{NSFontAttributeName: font};
-    CGFloat textWidth = [text sizeWithAttributes:attrs].width;
-
-    CGFloat minW = self.bounds.size.width - config.chatAvatarSize - 20;
-    if (minW < 30.0) minW = 30.0;
-    return MAX(textWidth + 4.0, minW);
-}
+- (CGFloat)calculateCornerRadiusForSize:
+- (CGFloat)calculateNameWidth
 
 // ============================================================
 // MARK: - 6. Gestures
 // ============================================================
-
-- (void)onLeftAvatarTapped:(UITapGestureRecognizer *)gesture {
-    if (!self.chatController) return;
-    id contact = [(id)self.chatController performSelector:NSSelectorFromString(@"GetContact")];
-    if (!contact) return;
-    if ([self.delegate respondsToSelector:@selector(avatarTitleView:didTapAvatarWithContact:avatarImage:sourceView:wxid:)]) {
-        NSString *wxid = [contact performSelector:NSSelectorFromString(@"m_nsUsrName")];
-        [self.delegate avatarTitleView:self didTapAvatarWithContact:contact avatarImage:self.leftAvatarView.image sourceView:self.leftAvatarView wxid:wxid];
-    }
-}
-
-- (void)onRightAvatarTapped:(UITapGestureRecognizer *)gesture {
-    id selfContact = WXGetSelfContact();
-    if ([self.delegate respondsToSelector:@selector(avatarTitleView:didTapAvatarWithContact:avatarImage:sourceView:wxid:)]) {
-        NSString *wxid = [selfContact performSelector:NSSelectorFromString(@"m_nsUsrName")];
-        [self.delegate avatarTitleView:self didTapAvatarWithContact:selfContact avatarImage:self.rightAvatarView.image sourceView:self.rightAvatarView wxid:wxid];
-    }
-}
+- (void)onLeftAvatarTapped:
+- (void)onRightAvatarTapped:
 
 @end
+```
+
+---
+
+## 7. 修改步骤
+
+| 步骤 | 操作 | 涉及方法 | 行数变化 |
+|------|------|---------|---------|
+| 1 | 清理 setupSubviews | 移除 font/hidden 设置，抽取工厂方法 | 旧 53 行 → 新 30 行 |
+| 2 | 新建 updateMode | 从 layoutSubviews 中提取所有 hidden 逻辑 | 新增约 55 行 |
+| 3 | 拆分 layoutSubviews | 每个 mode 一个独立方法，Mode 2/3 三选一 | 旧 188 行 → 新 90 行（总计 8 方法） |
+| 4 | 简化 loadSeparatorIcon | 移除 dispatch_async/hidden/sizeToFit | 34 行 → 28 行 |
+| 5 | 简化 loadSeparatorText | 同上 | 10 行 → 4 行 |
+| 6 | 调整 updateAvatars | 末尾加 updateMode + setNeedsLayout, 加 font 设置 | 旧 64 行 → 新 70 行 |
+| 7 | 删除 applyPositionOffset 声明 | MioChatAvatarTitleView.h | -1 行 |
+| **合计** | | | **净减约 80 行** |
+
+---
+
+## 8. 验证清单
+
+| # | 测试场景 | 预期结果 |
+|---|---------|---------|
+| 1 | Mode 0（自己头像） | 右头像居中显示，无名字 |
+| 2 | Mode 1（对方头像） | 左头像居中显示，无名字 |
+| 3 | Mode 2（双方头像，无分隔符） | 两头像并排，中间为 avatarSpacing |
+| 4 | Mode 2 + 文本分隔符 | 两头像之间显示文本 |
+| 5 | Mode 2 + 图标分隔符 | 两头像之间显示图标（**修复点**） |
+| 6 | Mode 2 + GIF 分隔符 | 两头像之间播放 GIF（**修复点**） |
+| 7 | Mode 3（双方+名字） | 同上，名字在下方 |
+| 8 | Mode 4（自己+名字） | 头像居中，名字在下方 |
+| 9 | Mode 5（名字左+头像） | 名字在左侧，头像在右侧 |
+| 10 | Mode 6（头像左+名字） | 头像在左侧，名字在右侧 |
+| 11 | Mode 7（头像重叠） | 两头像在左侧重叠显示 |
+| 12 | 切换聊天 | updateAvatars 被调用，布局刷新 |
+| 13 | 清除分隔符后 | 分隔符消失，两头像间距恢复 |
