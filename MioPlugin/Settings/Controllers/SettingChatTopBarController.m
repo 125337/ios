@@ -160,6 +160,7 @@ static NSString *keyForTag(NSInteger tag) {
 #pragma mark - 头像分隔符号
 
 - (void)onAvatarSeparatorTap {
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"设置头像分隔符"
                                                                    message:nil
                                                             preferredStyle:UIAlertControllerStyleActionSheet];
