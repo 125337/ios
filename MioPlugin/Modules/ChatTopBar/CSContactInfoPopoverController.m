@@ -399,28 +399,11 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     return parts.count > 0 ? [parts componentsJoinedByString:@" "] : @"未设置";
 }
 
-/// 群主 wxid
+/// 群主昵称
 - (NSString *)groupOwnerValue {
-    // 优先使用 m_nsOwner（直接返回群主昵称）
     NSString *v = WXSafeStringGet(self.contact, @"m_nsOwner");
-    if (v) {
-        WPLog(@"Mio-Group", @"groupOwner via m_nsOwner=%@", v);
-        return v;
-    }
-    
-    // 降级方案：m_nsChatRoomOwner 返回 wxid，自行查询昵称
-    NSString *ownerWxid = WXSafeStringGet(self.contact, @"m_nsChatRoomOwner");
-    WPLog(@"Mio-Group", @"m_nsOwner=nil, m_nsChatRoomOwner=%@", ownerWxid);
-    if (ownerWxid) {
-        id ownerContact = WXGetContactForWxid(ownerWxid);
-        if (ownerContact) {
-            NSString *nick = WXSafeStringGet(ownerContact, @"m_nsNickName");
-            if (nick) return nick;
-        }
-        return ownerWxid; // 实在没有昵称就显示 wxid
-    }
-    
-    return @"未知";
+    WPLog(@"Mio-Group", @"groupOwner via m_nsOwner=%@", v);
+    return v ?: @"未知";
 }
 
 - (NSString *)groupMemberCountValue {
