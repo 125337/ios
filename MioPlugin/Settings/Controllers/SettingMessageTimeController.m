@@ -1,5 +1,6 @@
 #import "SettingMessageTimeController.h"
 #import "../../Modules/MessageTime/MessageTimeConfig.h"
+#import "../../Core/ConfigManager.h"
 #import "../../Modules/MessageTime/MessageTimeFormatEditorVC.h"
 
 @interface SettingMessageTimeController ()
