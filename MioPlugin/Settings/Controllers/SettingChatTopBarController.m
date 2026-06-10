@@ -248,7 +248,11 @@ static NSString *keyForTag(NSInteger tag) {
 - (void)onPickGIFImage {
     PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
     config.selectionLimit = 1;
-    config.filter = [PHPickerFilter imagesFilter];
+    if (@available(iOS 14, *)) {
+        config.filter = [PHPickerFilter animatedImagesFilter];
+    } else {
+        config.filter = [PHPickerFilter imagesFilter]; // fallback
+    }
 
     PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
     picker.delegate = self;
