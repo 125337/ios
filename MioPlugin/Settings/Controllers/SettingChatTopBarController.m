@@ -174,6 +174,7 @@ static NSString *keyForTag(NSInteger tag) {
 }
 
 - (void)onSeparatorTextInput {
+    WPLog(@"Mio-Separator", @"onSeparatorTextInput 被调用");
     UIAlertController *inputAlert = [UIAlertController alertControllerWithTitle:@"输入分隔文本"
                                                                         message:nil
                                                                  preferredStyle:UIAlertControllerStyleAlert];
@@ -181,19 +182,27 @@ static NSString *keyForTag(NSInteger tag) {
     [inputAlert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
         textField.placeholder = @"请输入分隔文本";
         textField.text = [PluginConfig shared].chatSeparatorText ?: @"";
+        WPLog(@"Mio-Separator", @"  当前分隔文本: %@", textField.text);
     }];
 
     [inputAlert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *text = inputAlert.textFields.firstObject.text ?: @"";
+        WPLog(@"Mio-Separator", @"  用户输入文本: %@", text);
         PluginConfig *config = [PluginConfig shared];
         config.chatSeparatorText = text;
+        WPLog(@"Mio-Separator", @"  设置 chatSeparatorText = %@", text);
         [config save];
+        WPLog(@"Mio-Separator", @"  调用 [config save]");
         [self buildUI];
+        WPLog(@"Mio-Separator", @"  调用 [self buildUI]");
     }]];
 
-    [inputAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [inputAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+        WPLog(@"Mio-Separator", @"  用户取消输入");
+    }]];
 
     [self presentViewController:inputAlert animated:YES completion:nil];
+    WPLog(@"Mio-Separator", @"  弹窗已显示");
 }
 
 - (void)onPickStaticImage {
@@ -432,7 +441,10 @@ static NSString *keyForTag(NSInteger tag) {
 #pragma mark - PHPickerViewControllerDelegate
 
 - (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
+    WPLog(@"Mio-Separator", @"picker didFinishPicking 被调用, results.count=%lu, picker.view.tag=%ld",
+          (unsigned long)results.count, (long)picker.view.tag);
     if (results.count == 0) {
+        WPLog(@"Mio-Separator", @"  results 为空，dismiss");
         [picker dismissViewControllerAnimated:YES completion:nil];
         return;
     }
@@ -441,27 +453,45 @@ static NSString *keyForTag(NSInteger tag) {
     PluginConfig *config = [PluginConfig shared];
 
     if (picker.view.tag == 100) {
+        WPLog(@"Mio-Separator", @"  tag=100 → 选择静态图片");
         [result.itemProvider loadObjectOfClass:[UIImage class] completionHandler:^(__kindof id<NSItemProviderReading> object, NSError *error) {
-            if (error || ![object isKindOfClass:[UIImage class]]) return;
+            if (error || ![object isKindOfClass:[UIImage class]]) {
+                WPLog(@"Mio-Separator", @"    加载图片失败: error=%@", error);
+                return;
+            }
             dispatch_async(dispatch_get_main_queue(), ^{
                 UIImage *image = (UIImage *)object;
+                WPLog(@"Mio-Separator", @"    图片加载成功: size=%.0fx%.0f", image.size.width, image.size.height);
                 NSData *pngData = UIImagePNGRepresentation(image);
                 NSString *iconPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/MioChatSeparatorIcon.png"];
+                WPLog(@"Mio-Separator", @"    写入路径: %@", iconPath);
                 [pngData writeToFile:iconPath atomically:YES];
+                WPLog(@"Mio-Separator", @"    写入完成, data.length=%lu", (unsigned long)pngData.length);
                 config.chatSeparatorIcon = iconPath;
+                WPLog(@"Mio-Separator", @"    设置 chatSeparatorIcon = %@", iconPath);
                 [config save];
+                WPLog(@"Mio-Separator", @"    调用 [config save]");
                 [picker dismissViewControllerAnimated:YES completion:^{
+                    WPLog(@"Mio-Separator", @"    dismiss 完成，调用 buildUI");
                     [self buildUI];
                 }];
             });
         }];
     } else if (picker.view.tag == 200) {
+        WPLog(@"Mio-Separator", @"  tag=200 → 选择GIF动图");
         [result.itemProvider loadFileRepresentationForTypeIdentifier:(__bridge NSString *)kUTTypeGIF completionHandler:^(NSURL *url, NSError *error) {
-            if (error || !url) return;
+            if (error || !url) {
+                WPLog(@"Mio-Separator", @"    加载GIF失败: error=%@", error);
+                return;
+            }
             dispatch_async(dispatch_get_main_queue(), ^{
+                WPLog(@"Mio-Separator", @"    GIF加载成功: url.path=%@", url.path);
                 config.chatSeparatorGIF = url.path;
+                WPLog(@"Mio-Separator", @"    设置 chatSeparatorGIF = %@", url.path);
                 [config save];
+                WPLog(@"Mio-Separator", @"    调用 [config save]");
                 [picker dismissViewControllerAnimated:YES completion:^{
+                    WPLog(@"Mio-Separator", @"    dismiss 完成，调用 buildUI");
                     [self buildUI];
                 }];
             });
@@ -470,16 +500,25 @@ static NSString *keyForTag(NSInteger tag) {
 }
 
 - (void)deleteAllSeparators {
+    WPLog(@"Mio-Separator", @"deleteAllSeparators 被调用");
     PluginConfig *config = [PluginConfig shared];
+    WPLog(@"Mio-Separator", @"  当前值: icon=%@, gif=%@, text=%@",
+          config.chatSeparatorIcon, config.chatSeparatorGIF, config.chatSeparatorText);
     config.chatSeparatorIcon = nil;
+    WPLog(@"Mio-Separator", @"  设置 chatSeparatorIcon = nil");
     config.chatSeparatorGIF = nil;
+    WPLog(@"Mio-Separator", @"  设置 chatSeparatorGIF = nil");
     config.chatSeparatorText = nil;
+    WPLog(@"Mio-Separator", @"  设置 chatSeparatorText = nil");
     [config save];
+    WPLog(@"Mio-Separator", @"  调用 [config save]");
 
     NSString *iconPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/MioChatSeparatorIcon.png"];
+    WPLog(@"Mio-Separator", @"  删除文件: %@", iconPath);
     [[NSFileManager defaultManager] removeItemAtPath:iconPath error:nil];
 
     [self buildUI];
+    WPLog(@"Mio-Separator", @"  调用 [self buildUI]");
 }
 
 @end

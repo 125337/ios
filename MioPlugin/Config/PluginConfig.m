@@ -272,10 +272,13 @@
     _chatNicknameOffsetX = [d floatForKey:[kPluginPrefix stringByAppendingString:@"ChatNicknameOffsetX"]];
 
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorText"]];
+    WPLog(@"Mio-Separator", @"loadDefaults: ChatSeparatorText raw=%@", v);
     if (v.length > 0) {
         _chatSeparatorText = [v copy];
+        WPLog(@"Mio-Separator", @"loadDefaults: _chatSeparatorText=%@", _chatSeparatorText);
     } else {
         _chatSeparatorText = @"";
+        WPLog(@"Mio-Separator", @"loadDefaults: _chatSeparatorText=(empty)");
     }
 
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatGroupMemberCountSuffix"]];
@@ -296,10 +299,18 @@
     if (v.length > 0) _chatAvatarBlacklist = [v copy];
     
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
-    if (v.length > 0) _chatSeparatorIcon = [v copy];
-    
+    WPLog(@"Mio-Separator", @"loadDefaults: ChatSeparatorIcon raw=%@", v);
+    if (v.length > 0) {
+        _chatSeparatorIcon = [v copy];
+        WPLog(@"Mio-Separator", @"loadDefaults: _chatSeparatorIcon=%@", _chatSeparatorIcon);
+    }
+
     v = [d stringForKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
-    if (v.length > 0) _chatSeparatorGIF = [v copy];
+    WPLog(@"Mio-Separator", @"loadDefaults: ChatSeparatorGIF raw=%@", v);
+    if (v.length > 0) {
+        _chatSeparatorGIF = [v copy];
+        WPLog(@"Mio-Separator", @"loadDefaults: _chatSeparatorGIF=%@", _chatSeparatorGIF);
+    }
     
     _showAddTimeSuffix = [d boolForKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     
@@ -569,8 +580,11 @@
     [d setFloat:_chatHorizontalOffset forKey:[kPluginPrefix stringByAppendingString:@"ChatHorizontalOffset"]];
     [d setFloat:_chatNicknameOffsetY forKey:[kPluginPrefix stringByAppendingString:@"ChatNicknameOffsetY"]];
     [d setFloat:_chatNicknameOffsetX forKey:[kPluginPrefix stringByAppendingString:@"ChatNicknameOffsetX"]];
+    WPLog(@"Mio-Separator", @"save: 开始保存分隔符配置");
+    WPLog(@"Mio-Separator", @"save: _chatSeparatorText=%@", _chatSeparatorText);
     if (_chatSeparatorText) {
         [d setObject:_chatSeparatorText forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorText"]];
+        WPLog(@"Mio-Separator", @"save: 已写入 ChatSeparatorText=%@", _chatSeparatorText);
     }
     if (_chatGroupMemberCountSuffix) {
         [d setObject:_chatGroupMemberCountSuffix forKey:[kPluginPrefix stringByAppendingString:@"ChatGroupMemberCountSuffix"]];
@@ -581,12 +595,17 @@
     if (_chatAvatarBlacklist) {
         [d setObject:_chatAvatarBlacklist forKey:[kPluginPrefix stringByAppendingString:@"ChatAvatarBlacklist"]];
     }
+    WPLog(@"Mio-Separator", @"save: _chatSeparatorIcon=%@", _chatSeparatorIcon);
     if (_chatSeparatorIcon) {
         [d setObject:_chatSeparatorIcon forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorIcon"]];
+        WPLog(@"Mio-Separator", @"save: 已写入 ChatSeparatorIcon=%@", _chatSeparatorIcon);
     }
+    WPLog(@"Mio-Separator", @"save: _chatSeparatorGIF=%@", _chatSeparatorGIF);
     if (_chatSeparatorGIF) {
         [d setObject:_chatSeparatorGIF forKey:[kPluginPrefix stringByAppendingString:@"ChatSeparatorGIF"]];
+        WPLog(@"Mio-Separator", @"save: 已写入 ChatSeparatorGIF=%@", _chatSeparatorGIF);
     }
+    WPLog(@"Mio-Separator", @"save: 分隔符配置保存完成");
     [d setBool:_showAddTimeSuffix forKey:[kPluginPrefix stringByAppendingString:@"ShowAddTimeSuffix"]];
     
     if (_addTimeSuffixFormat) {
