@@ -276,7 +276,7 @@ static NSString *keyForTag(NSInteger tag) {
     vc.blacklist = [ChatTopBarConfig shared].chatAvatarBlacklist;
     vc.saveBlock = ^(NSString *blacklist) {
         [ChatTopBarConfig shared].chatAvatarBlacklist = blacklist;
-        [[ChatTopBarConfig shared] save];
+        [ConfigManager saveAll];
     };
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
