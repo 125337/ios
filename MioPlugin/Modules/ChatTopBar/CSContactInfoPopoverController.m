@@ -6,23 +6,6 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 
-#pragma mark - KVC
-
-static id contactValueForKey(id contact, NSString *key) {
-    return WXContactValueForKey(contact, key);
-}
-
-static NSInteger contactIntForKey(id contact, NSString *key) {
-    if (!contact || !key) return 0;
-    NSNumber *n = (id)WXContactValueForKey(contact, key);
-    if (n && [n isKindOfClass:[NSNumber class]]) return [n integerValue];
-    return 0;
-}
-
-static BOOL contactRespondsTo(id contact, NSString *selName) {
-    return WXContactRespondsTo(contact, selName);
-}
-
 #pragma mark - 信息行（内容靠左，与标题保持6pt间距，支持多行）
 
 static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right) {
@@ -63,14 +46,14 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     UIImageView *_avatarView;
 }
 
-- (instancetype)initWithContact:(id)contact avatar:(UIImage *)avatar {
+- (instancetype)initWithWxid:(NSString *)wxid
+                    nickname:(NSString *)nickname
+                      avatar:(UIImage *)avatar {
     self = [super init];
     if (self) {
-        self.contact = contact;
+        self.wxid = wxid;
+        self.nickname = nickname ?: @"微信用户";
         self.avatarImage = avatar;
-        if (contact) {
-            self.wxid = contactValueForKey(contact, @"m_nsUsrName");
-        }
     }
     return self;
 }
@@ -131,7 +114,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     cy += 70;
 
     UILabel *nameLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, cy, cw, 24)];
-    nameLabel.text = contactValueForKey(self.contact, @"m_nsNickName") ?: @"微信用户";
+    nameLabel.text = self.nickname ?: @"微信用户";
     nameLabel.font = [UIFont boldSystemFontOfSize:18];
     nameLabel.textColor = WPT1();
     nameLabel.textAlignment = NSTextAlignmentCenter;
@@ -168,7 +151,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         return;
     }
 
-    [[AvatarLoader shared] loadAvatarForWxid:self.wxid contact:self.contact completion:^(UIImage *image) {
+    [[AvatarLoader shared] loadAvatarForWxid:self.wxid contact:nil completion:^(UIImage *image) {
         if (image) {
             imageView.image = image;
             self.avatarImage = image;
@@ -182,19 +165,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     WPLog(@"Mio-Preload", @"preloadAndRefreshAvatar START wxid=%@", self.wxid);
     __weak typeof(self) weakSelf = self;
 
-    WPLog(@"Mio-Preload", @"⏳ ContactInfoViewController 预加载（仿微信优化 silentLoadContactExtInfo）...");
-    Class contactInfoVCClass = objc_getClass("ContactInfoViewController");
-    if (contactInfoVCClass) {
-        id vc = [[contactInfoVCClass alloc] init];
-        if (vc) {
-            SEL setContactSel = NSSelectorFromString(@"setM_contact:");
-            if ([vc respondsToSelector:setContactSel]) {
-                ((void (*)(id, SEL, id))objc_msgSend)(vc, setContactSel, self.contact);
-            }
-            ((void (*)(id, SEL))objc_msgSend)(vc, @selector(viewDidLoad));
-            WPLog(@"Mio-Preload", @"  ContactInfoViewController.viewDidLoad 已调用");
-        }
-    }
+    // 公众号无需预加载 ContactInfoViewController，头像加载由 loadAvatarForImageView 通过 wxid 完成
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
@@ -205,7 +176,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
             return;
         }
 
-        [[AvatarLoader shared] loadAvatarForWxid:strongSelf.wxid contact:strongSelf.contact completion:^(UIImage *image) {
+        [[AvatarLoader shared] loadAvatarForWxid:strongSelf.wxid contact:nil completion:^(UIImage *image) {
             __strong typeof(weakSelf) innerSelf = weakSelf;
             if (innerSelf && image && innerSelf->_avatarView) {
                 WPLog(@"Mio-Preload", @"  ✅ AvatarLoader 成功 size=%.0fx%.0f", image.size.width, image.size.height);
@@ -323,7 +294,11 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 }
 
 - (void)handleProfileNavigation {
-    if (!self.contact) return;
+    if (!self.wxid) return;
+
+    // 通过 wxid 重新获取 contact，仅供跳转原生资料页使用
+    id contact = WXGetContactForWxid(self.wxid);
+    if (!contact) return;
 
     Class contactInfoVCClass = objc_getClass("ContactInfoViewController");
     if (!contactInfoVCClass) return;
@@ -333,7 +308,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 
     SEL setContactSel = NSSelectorFromString(@"setM_contact:");
     if ([contactInfoVC respondsToSelector:setContactSel]) {
-        ((void (*)(id, SEL, id))objc_msgSend)(contactInfoVC, setContactSel, self.contact);
+        ((void (*)(id, SEL, id))objc_msgSend)(contactInfoVC, setContactSel, contact);
     }
 
     __weak typeof(self) weakSelf = self;
@@ -367,55 +342,16 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 #pragma mark - 数据取值
 
 - (NSString *)valueForInfoKey:(NSString *)key {
-    if ([key isEqualToString:@"nickname"])       return contactValueForKey(self.contact, @"m_nsNickName") ?: @"";
+    if ([key isEqualToString:@"nickname"])       return self.nickname ?: @"";
     if ([key isEqualToString:@"wxid"])           return self.wxid ?: @"";
-    if ([key isEqualToString:@"remark"])         return [self remarkValue];
-    if ([key isEqualToString:@"gender"])         return [self genderValue];
-    if ([key isEqualToString:@"location"])       return [self locationValue];
-    if ([key isEqualToString:@"signature"])      return [self signatureValue];
-    if ([key isEqualToString:@"groupOwner"])     return [self groupOwnerValue];
+    if ([key isEqualToString:@"remark"])         return self.remark ?: @"未设置";
+    if ([key isEqualToString:@"gender"])         return self.gender ?: @"未知";
+    if ([key isEqualToString:@"location"])       return self.location ?: @"未设置";
+    if ([key isEqualToString:@"signature"])      return self.signature ?: @"未设置";
+    if ([key isEqualToString:@"groupOwner"])     return self.groupOwner ?: @"未知";
     if ([key isEqualToString:@"groupMemberCount"]) return [self groupMemberCountValue];
     if ([key isEqualToString:@"verifyStatus"])   return [self verifyStatusValue];
     return @"";
-}
-
-- (NSString *)remarkValue {
-    id remark = contactValueForKey(self.contact, @"m_nsRemark");
-    if (remark && [remark isKindOfClass:[NSString class]] && [(NSString *)remark length] > 0) return remark;
-    id remarkName = contactValueForKey(self.contact, @"m_nsRemarkName");
-    if (remarkName && [remarkName isKindOfClass:[NSString class]] && [(NSString *)remarkName length] > 0) return remarkName;
-    return @"未设置";
-}
-
-- (NSString *)genderValue {
-    if (!contactRespondsTo(self.contact, @"m_uiSex")) return @"未知";
-    NSInteger sex = contactIntForKey(self.contact, @"m_uiSex");
-    if (sex == 1) return @"男";
-    if (sex == 2) return @"女";
-    return @"未知";
-}
-
-- (NSString *)locationValue {
-    id province = contactValueForKey(self.contact, @"m_nsProvince");
-    id city = contactValueForKey(self.contact, @"m_nsCity");
-    NSString *p = (province && [province isKindOfClass:[NSString class]]) ? [province stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] : @"";
-    NSString *c = (city && [city isKindOfClass:[NSString class]]) ? [city stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] : @"";
-    if (p.length > 0 && c.length > 0) return [NSString stringWithFormat:@"%@ %@", p, c];
-    if (p.length > 0) return p;
-    if (c.length > 0) return c;
-    return @"未设置";
-}
-
-- (NSString *)signatureValue {
-    id sig = contactValueForKey(self.contact, @"m_nsSignature");
-    if (sig && [sig isKindOfClass:[NSString class]] && [(NSString *)sig length] > 0) return sig;
-    return @"未设置";
-}
-
-- (NSString *)groupOwnerValue {
-    NSString *owner = contactValueForKey(self.contact, @"m_nsOwner");
-    if (owner && owner.length > 0) return owner;
-    return @"未知";
 }
 
 - (NSString *)groupMemberCountValue {
@@ -426,21 +362,24 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         return [NSString stringWithFormat:@"%lu 人", (unsigned long)total];
     };
 
+    id contact = WXGetContactForWxid(self.wxid);
+    if (!contact) return @"未知";
+
     id contactMgr = WXGetService(objc_getClass("CContactMgr"));
     if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
-        unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), self.contact);
+        unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), contact);
         if (count > 0) {
-            return fmtWithAdmin(count, [self adminCountPart]);
+            return fmtWithAdmin(count, [self adminCountPartWithContact:contact]);
         }
     }
 
     SEL memListSel = NSSelectorFromString(@"m_nsChatRoomMemList");
-    if ([self.contact respondsToSelector:memListSel]) {
-        id memList = ((id (*)(id, SEL))objc_msgSend)(self.contact, memListSel);
+    if ([contact respondsToSelector:memListSel]) {
+        id memList = ((id (*)(id, SEL))objc_msgSend)(contact, memListSel);
         if (memList && [memList isKindOfClass:[NSString class]]) {
             NSArray *members = [(NSString *)memList componentsSeparatedByString:@";"];
             if (members.count > 0) {
-                return fmtWithAdmin(members.count, [self adminCountPart]);
+                return fmtWithAdmin(members.count, [self adminCountPartWithContact:contact]);
             }
         }
     }
@@ -448,11 +387,12 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     return @"未知";
 }
 
-- (NSString *)adminCountPart {
+- (NSString *)adminCountPartWithContact:(id)contact {
+    if (!contact) return nil;
     SEL adminListSel = NSSelectorFromString(@"m_nsChatRoomAdminList");
-    if (![self.contact respondsToSelector:adminListSel]) return nil;
+    if (![contact respondsToSelector:adminListSel]) return nil;
 
-    id adminList = ((id (*)(id, SEL))objc_msgSend)(self.contact, adminListSel);
+    id adminList = ((id (*)(id, SEL))objc_msgSend)(contact, adminListSel);
     if (!adminList || ![adminList isKindOfClass:[NSString class]]) return nil;
 
     NSArray *admins = [(NSString *)adminList componentsSeparatedByString:@";"];
@@ -462,8 +402,12 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 }
 
 - (NSString *)verifyStatusValue {
-    if (!contactRespondsTo(self.contact, @"m_uiVerifyFlag")) return @"未认证";
-    NSInteger flag = contactIntForKey(self.contact, @"m_uiVerifyFlag");
+    if (![self.wxid hasPrefix:@"gh_"]) return @"未知";
+    id contact = WXGetContactForWxid(self.wxid);
+    if (!contact) return @"未知";
+    SEL flagSel = NSSelectorFromString(@"m_uiVerifyFlag");
+    if (![contact respondsToSelector:flagSel]) return @"未认证";
+    NSInteger flag = (NSInteger)((NSInteger (*)(id, SEL))objc_msgSend)(contact, flagSel);
     return flag > 0 ? @"已认证" : @"未认证";
 }
 

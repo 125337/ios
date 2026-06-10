@@ -447,6 +447,7 @@
 - (void)onLeftAvatarTapped:(UITapGestureRecognizer *)gesture {
     if (!self.chatController) return;
     id contact = [(id)self.chatController performSelector:NSSelectorFromString(@"GetContact")];
+    if (!contact) return;
     if ([self.delegate respondsToSelector:@selector(avatarTitleView:didTapAvatarWithContact:avatarImage:sourceView:wxid:)]) {
         NSString *wxid = [contact performSelector:NSSelectorFromString(@"m_nsUsrName")];
         [self.delegate avatarTitleView:self didTapAvatarWithContact:contact avatarImage:self.leftAvatarView.image sourceView:self.leftAvatarView wxid:wxid];

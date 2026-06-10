@@ -14,7 +14,7 @@
 @interface MioChatAvatarTitleView : UIView
 
 @property (nonatomic, weak) id<MioChatAvatarTitleViewDelegate> delegate;
-@property (nonatomic, assign) BaseMsgContentViewController *chatController;
+@property (nonatomic, weak) BaseMsgContentViewController *chatController;
 @property (nonatomic, strong) UIImageView *leftAvatarView;
 @property (nonatomic, strong) UIImageView *rightAvatarView;
 @property (nonatomic, strong) UIImageView *separatorView;

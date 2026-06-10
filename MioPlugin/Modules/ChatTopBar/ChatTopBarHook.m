@@ -29,8 +29,13 @@ didTapAvatarWithContact:(id)contact
         [generator impactOccurred];
     }
 
+    // 在 contact 还存活时提取所有需要的数据
+    NSString *nickname = [contact performSelector:NSSelectorFromString(@"m_nsNickName")];
+
     CSContactInfoPopoverController *popover =
-        [[CSContactInfoPopoverController alloc] initWithContact:contact avatar:avatar];
+        [[CSContactInfoPopoverController alloc] initWithWxid:wxid
+                                                    nickname:nickname
+                                                      avatar:avatar];
 
     popover.modalPresentationStyle = UIModalPresentationPopover;
     popover.preferredContentSize = CGSizeMake(280, 400);

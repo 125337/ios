@@ -36,15 +36,3 @@ static inline NSString *WXContactHeadImageURL(id contact) {
     }
     return nil;
 }
-
-static inline id WXContactValueForKey(id contact, NSString *key) {
-    if (!contact) return nil;
-    SEL sel = NSSelectorFromString(key);
-    if (![contact respondsToSelector:sel]) return nil;
-    return ((id (*)(id, SEL))objc_msgSend)(contact, sel);
-}
-
-static inline BOOL WXContactRespondsTo(id contact, NSString *selName) {
-    if (!contact) return NO;
-    return [contact respondsToSelector:NSSelectorFromString(selName)];
-}

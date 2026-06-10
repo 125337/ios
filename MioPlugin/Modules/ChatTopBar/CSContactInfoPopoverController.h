@@ -3,11 +3,17 @@
 
 @interface CSContactInfoPopoverController : UIViewController <UIAdaptivePresentationControllerDelegate>
 
-@property (nonatomic, strong) id contact;                    // WeChat CContact 对象
-@property (nonatomic, strong) NSString *wxid;                // 微信号
-@property (nonatomic, strong) UIImage *avatarImage;          // 头像
+@property (nonatomic, strong) NSString *wxid;           // 微信号
+@property (nonatomic, strong) NSString *nickname;       // 昵称
+@property (nonatomic, strong) NSString *remark;         // 备注
+@property (nonatomic, strong) NSString *gender;         // 性别
+@property (nonatomic, strong) NSString *location;       // 地区
+@property (nonatomic, strong) NSString *signature;      // 签名
+@property (nonatomic, strong) NSString *groupOwner;     // 群主
+@property (nonatomic, strong) UIImage *avatarImage;     // 头像
 
-// 初始化（传入 contact + 头像）
-- (instancetype)initWithContact:(id)contact avatar:(UIImage *)avatar;
+- (instancetype)initWithWxid:(NSString *)wxid
+                    nickname:(NSString *)nickname
+                      avatar:(UIImage *)avatar;
 
 @end
