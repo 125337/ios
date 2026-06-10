@@ -6,11 +6,11 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 
-#pragma mark - 信息行（内容靠左，与标题保持6pt间距，支持多行）
+#pragma mark - 信息行（内容靠左，与标题保持3pt间距，支持多行）
 
 static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right) {
     CGFloat titleWidth = 60;
-    CGFloat spacing = 3;
+    CGFloat spacing = 2;
 
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, titleWidth, kRowH)];
     l.text = left;
@@ -226,8 +226,8 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 - (NSArray *)groupInfoItems {
     return @[
         @{@"label": @"群主",       @"key": @"groupOwner",      @"copiable": @YES},
-        @{@"label": @"群成员",     @"key": @"groupMemberCount", @"copiable": @NO},
-        @{@"label": @"群聊id",     @"key": @"wxid",            @"copiable": @YES},
+        @{@"label": @"成员",     @"key": @"groupMemberCount", @"copiable": @NO},
+        @{@"label": @"id",     @"key": @"wxid",            @"copiable": @YES},
         @{@"label": @"备注",       @"key": @"remark",          @"copiable": @YES},
     ];
 }
