@@ -678,7 +678,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
     // ☆ 独立功能：箭码隐藏
     [ProfileCardBgHook hideArrowQRInCell:button
-                              shouldHide:config.myPageHideArrow];
+                              shouldHide:[ListCornerRadiusConfig shared].myPageHideArrow];
 
     // 通用守卫（提取为辅助方法）
     UIViewController *vc = [ProfileCardBgHook findMoreViewController:button];
@@ -708,8 +708,9 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     if (!config.cardBgCornerEnabled) return;
 
     CGFloat margin = 0;
+    ListCornerRadiusConfig *listConfig = [ListCornerRadiusConfig shared];
     if (config.cardBgCornerUseGlobal) {
-        margin = config.listCellMargin;
+        margin = listConfig.listCellMargin;
     } else if (config.cardBgCornerMargin > 0) {
         margin = config.cardBgCornerMargin;
     }
@@ -717,7 +718,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
     WPLog(@"CardBg-Diag", @"[MARGIN] useGlobal=%d, margin=%.1f, cardBgCornerMargin=%.1f, listCellMargin=%.1f",
           config.cardBgCornerUseGlobal, margin,
-          config.cardBgCornerMargin, config.listCellMargin);
+          config.cardBgCornerMargin, listConfig.listCellMargin);
 
     if (margin <= 0) {
         WPLog(@"CardBg-Diag", @"[MARGIN] SKIP: margin=0 or disabled");
