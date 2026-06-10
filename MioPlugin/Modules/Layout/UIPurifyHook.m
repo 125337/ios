@@ -4,6 +4,7 @@
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <UIKit/UIKit.h>
 
 static IMP orig_separatorColor = NULL;
 static IMP orig_separatorStyle = NULL;
