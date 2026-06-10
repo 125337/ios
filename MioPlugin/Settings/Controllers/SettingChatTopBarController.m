@@ -182,11 +182,14 @@ static NSString *keyForTag(NSInteger tag) {
         [self onPickGIFImage];
     }]];
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"清除分隔符"
-                                             style:UIAlertActionStyleDestructive
-                                           handler:^(UIAlertAction *action) {
-        [self deleteAllSeparators];
-    }]];
+    // 只有设置了任意分隔符时才显示"清除分隔符"按钮
+    if ([config hasAnySeparator]) {
+        [alert addAction:[UIAlertAction actionWithTitle:@"清除分隔符"
+                                                 style:UIAlertActionStyleDestructive
+                                               handler:^(UIAlertAction *action) {
+            [self deleteAllSeparators];
+        }]];
+    }
 
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
 
@@ -395,7 +398,15 @@ static NSString *keyForTag(NSInteger tag) {
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addNavRowInGroup:expand title:@"头像显示模式" subtitle:[self avatarDisplayModeName:config.chatDisplayMode] tag:100 action:@selector(onAvatarDisplayModeTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        NSString *sepSub = config.chatSeparatorText.length > 0 ? config.chatSeparatorText : @"未设置";
+        // 副标题：优先显示文本，其次GIF，最后静态图片
+        NSString *sepSub = @"未设置";
+        if (config.chatSeparatorText.length > 0) {
+            sepSub = [NSString stringWithFormat:@"文本: %@", config.chatSeparatorText];
+        } else if (config.chatSeparatorGIF.length > 0) {
+            sepSub = @"GIF动图";
+        } else if (config.chatSeparatorIcon.length > 0) {
+            sepSub = @"静态图片";
+        }
         *ecy = [self addNavRowInGroup:expand title:@"头像分隔符号" subtitle:sepSub tag:200 action:@selector(onAvatarSeparatorTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addNavRowInGroup:expand title:@"管理显示黑名单" subtitle:@"" tag:300 action:@selector(onBlacklistTap) cy:*ecy width:w];

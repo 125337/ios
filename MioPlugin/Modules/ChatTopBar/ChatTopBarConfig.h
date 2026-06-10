@@ -71,6 +71,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// 聊天分隔符GIF
 @property (nonatomic, copy, nullable) NSString *chatSeparatorGIF;
 
+/// 是否有任意分隔符（文本/图标/GIF）
+- (BOOL)hasAnySeparator;
+
 /// 聊天头像黑名单
 @property (nonatomic, copy, nullable) NSString *chatAvatarBlacklist;
 

@@ -59,4 +59,12 @@ static ChatTopBarConfig *_sharedInstance = nil;
     return @"ChatTopBar_";
 }
 
+// MARK: - 便捷方法
+
+- (BOOL)hasAnySeparator {
+    return self.chatSeparatorText.length > 0
+        || self.chatSeparatorIcon.length > 0
+        || self.chatSeparatorGIF.length > 0;
+}
+
 @end

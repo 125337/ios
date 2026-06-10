@@ -88,7 +88,11 @@
     CGFloat halfSpacing = avatarSpacing * 0.5;
     CGFloat nameFontSize = config.chatNicknameFontSize;
 
-    BOOL hasSeparator = (config.chatSeparatorText.length > 0);
+    BOOL hasSeparator = (config.chatSeparatorText.length > 0)
+                 || (config.chatSeparatorIcon.length > 0
+                     && [[NSFileManager defaultManager] fileExistsAtPath:config.chatSeparatorIcon])
+                 || (config.chatSeparatorGIF.length > 0
+                     && [[NSFileManager defaultManager] fileExistsAtPath:config.chatSeparatorGIF]);
 
     // avatarY: mode 3(双方+名) 和 mode 4(自己+名) 偏上留空间
     CGFloat avatarY;
