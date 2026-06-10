@@ -6,7 +6,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 
-#pragma mark - 信息行（内容靠左，与标题保持3pt间距，支持多行）
+#pragma mark - 信息行（内容靠左，与标题保持2pt间距，支持多行）
 
 static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right) {
     CGFloat titleWidth = 40;
@@ -134,30 +134,19 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 #pragma mark - 头像加载
 
 - (void)loadAvatarForImageView:(UIImageView *)imageView {
-    WPLog(@"Mio-Avatar", @"loadAvatarForImageView START  wxid=%@", self.wxid);
-
     if (!self.wxid.length) {
-        WPLog(@"Mio-Avatar", @"❌ wxid 为空，使用默认头像");
         imageView.image = [UIImage imageNamed:@"DefaultHead"];
         return;
     }
 
     // 优先使用外部传入的 avatarImage（无论是否公众号）
     if (self.avatarImage) {
-        WPLog(@"Mio-Avatar", @"✅ 使用外部传入的 avatarImage（来源：聊天顶栏缓存）");
         imageView.image = self.avatarImage;
         return;
     }
 
     // 无外部缓存，继续原有逻辑（公众号会走到这里）
-    if ([self.wxid hasPrefix:@"gh_"]) {
-        WPLog(@"Mio-Avatar", @"⚠️ 公众号且无外部缓存，将使用 AvatarLoader 异步加载");
-    } else {
-        WPLog(@"Mio-Avatar", @"⚠️ 非公众号且无外部缓存，将使用 AvatarLoader 异步加载");
-    }
-
     [[AvatarLoader shared] loadAvatarForWxid:self.wxid contact:nil completion:^(UIImage *image) {
-        WPLog(@"Mio-Avatar", @"🎯 AvatarLoader 回调: image=%@", image ? @"成功" : @"失败");
         if (image) {
             imageView.image = image;
             self.avatarImage = image;
@@ -384,7 +373,6 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 /// 群主昵称
 - (NSString *)groupOwnerValue {
     NSString *v = WXSafeStringGet(self.contact, @"m_nsOwner");
-    WPLog(@"Mio-Group", @"groupOwner via m_nsOwner=%@", v);
     return v ?: @"未知";
 }
 
@@ -422,12 +410,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         NSArray *admins = [adminList componentsSeparatedByString:@";"];
         adminCount = admins.count;
     }
-    
-    // === 诊断日志 ===
-    WPLog(@"Mio-Group", @"memberCount=%lu (from %@), adminList=%@, adminCount=%lu",
-        (unsigned long)memberCount, contactMgr ? @"CContactMgr" : @"memList",
-        adminList ?: @"nil", (unsigned long)adminCount);
-    
+
     // === 格式化输出 ===
     if (adminCount > 0) {
         return [NSString stringWithFormat:@"群人员%lu人 管理员%lu人",
