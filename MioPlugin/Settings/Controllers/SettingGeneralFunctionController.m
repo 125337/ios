@@ -1,5 +1,6 @@
 #import "../Common/SettingController.h"
 #import "SettingMessageTimeController.h"
+#import "../../Modules/Revoke/RevokeConfig.h"
 #import "../../Modules/Unread/ClearUnreadConfig.h"
 #import "../../Modules/MessageTime/MessageTimeConfig.h"
 #import "../../Modules/Joker/JokerConfig.h"
@@ -98,7 +99,7 @@
                               title:@"启用一键已读消息"
                                desc:nil
                                 key:@"clearUnreadEnabled"
-                               isOn:config.clearUnreadEnabled
+                               isOn:[ClearUnreadConfig shared].clearUnreadEnabled
                                  cy:cy
                               width:w];
 
