@@ -1,6 +1,7 @@
 #import "MessageTimeHook.h"
 #import "MessageTimeConfig.h"
 #import "../Revoke/RevokeConfig.h"
+#import "../../Config/PluginConfig.h"
 #import "MessageTimeFormatParser.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -45,7 +46,7 @@ static dispatch_queue_t _logQueue(void) {
 }
 
 static void mtLog(NSString *content) {
-    if ([content hasPrefix:@"[DBG]"] && ![MessageTimeConfig shared].debugLogging) return;
+    if ([content hasPrefix:@"[DBG]"] && ![RevokeConfig shared].debugLogging) return;
     
     NSLog(@"[MioPlugin][MessageTime] %@", content);
     dispatch_async(_logQueue(), ^{
@@ -597,7 +598,7 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
     NSString *timeText = formatMessageTime(date,
                                             config.messageTimeCustomFormat,
-                                            [config isDarkMode],
+                                            [PluginConfig shared].isDarkMode,
                                             isSender,
                                             statusCode);
     if (!timeText) { label.hidden = YES; return; }
@@ -627,10 +628,10 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
         NSString *bgHex = isSender ? [MessageTimeConfig shared].senderBackgroundColorHex : [MessageTimeConfig shared].receiverBackgroundColorHex;
         NSString *bgDarkHex = isSender ? [MessageTimeConfig shared].senderBackgroundColorDarkHex : [MessageTimeConfig shared].receiverBackgroundColorDarkHex;
 
-        UIColor *lightTextColor = textHex.length ? [[MessageTimeConfig shared] colorFromHex:textHex] : nil;
-        UIColor *darkTextColor  = textDarkHex.length ? [[MessageTimeConfig shared] colorFromHex:textDarkHex] : nil;
-        UIColor *lightBgColor   = bgHex.length ? [[MessageTimeConfig shared] colorFromHex:bgHex] : nil;
-        UIColor *darkBgColor    = bgDarkHex.length ? [[MessageTimeConfig shared] colorFromHex:bgDarkHex] : nil;
+        UIColor *lightTextColor = textHex.length ? [[PluginConfig shared] colorFromHex:textHex] : nil;
+        UIColor *darkTextColor  = textDarkHex.length ? [[PluginConfig shared] colorFromHex:textDarkHex] : nil;
+        UIColor *lightBgColor   = bgHex.length ? [[PluginConfig shared] colorFromHex:bgHex] : nil;
+        UIColor *darkBgColor    = bgDarkHex.length ? [[PluginConfig shared] colorFromHex:bgDarkHex] : nil;
 
         if (!lightTextColor) lightTextColor = [UIColor colorWithWhite:0.5 alpha:1.0];
 
