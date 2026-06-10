@@ -1,5 +1,6 @@
 #import "../Common/SettingController.h"
 #import "../../Modules/Revoke/RevokeConfig.h"
+#import "../../Core/ConfigManager.h"
 #import "../../Modules/Revoke/RevokeFormatEditorVC.h"
 
 @interface SettingRevokeController ()
