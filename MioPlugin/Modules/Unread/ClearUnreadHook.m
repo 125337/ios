@@ -1,6 +1,5 @@
 #import "ClearUnreadHook.h"
 #import "ClearUnreadConfig.h"
-#import "../../Config/PluginConfig.h"
 #import "../../Config/Constants.h"
 #import <objc/runtime.h>
 #import <objc/message.h>

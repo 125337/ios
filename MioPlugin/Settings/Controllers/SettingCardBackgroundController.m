@@ -140,18 +140,16 @@
                                       isOn:config.cardBgCornerEnabled
                                 subBuilder:^(UIView *expand, CGFloat *ecy) {
 
-        CardBgConfig *c3 = [CardBgConfig shared];
-
         *ecy = [self addSubSwitchRowInGroup:expand
                                       title:@"使用全局配置"
                                         key:@"cardBgCornerUseGlobal"
-                                       isOn:c3.cardBgCornerUseGlobal
+                                       isOn:config.cardBgCornerUseGlobal
                                          cy:*ecy width:w];
 
-        if (!c3.cardBgCornerUseGlobal) {
+        if (!config.cardBgCornerUseGlobal) {
             *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-            CGFloat cr = c3.cardBgCornerRadius > 0 ? c3.cardBgCornerRadius : 18.0;
+            CGFloat cr = config.cardBgCornerRadius > 0 ? config.cardBgCornerRadius : 18.0;
             *ecy = [self addInputRowInGroup:expand
                                       title:@"圆角大小"
                                         key:@"cardBgCornerRadius"
@@ -163,7 +161,7 @@
                                          cy:*ecy width:w];
             *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-            CGFloat cm = c3.cardBgCornerMargin > 0 ? c3.cardBgCornerMargin : 9.0;
+            CGFloat cm = config.cardBgCornerMargin > 0 ? config.cardBgCornerMargin : 9.0;
             *ecy = [self addInputRowInGroup:expand
                                       title:@"边距大小"
                                         key:@"cardBgCornerMargin"
@@ -178,13 +176,13 @@
             *ecy = [self addColorRowInGroup:expand
                           title:@"卡片背景颜色"
                             key:@"cardBgCornerBgColor"
-                          value:c3.cardBgCornerBgColor
+                          value:config.cardBgCornerBgColor
                              cy:*ecy width:w
                        darkKey:@"cardBgCornerDarkBgColor"
-                     darkValue:c3.cardBgCornerDarkBgColor];
+                     darkValue:config.cardBgCornerDarkBgColor];
             *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
-            CGFloat sw = c3.cardBgStrokeWidth > 0 ? c3.cardBgStrokeWidth : 2.0;
+            CGFloat sw = config.cardBgStrokeWidth > 0 ? config.cardBgStrokeWidth : 2.0;
             *ecy = [self addInputRowInGroup:expand
                                       title:@"描边大小"
                                         key:@"cardBgStrokeWidth"

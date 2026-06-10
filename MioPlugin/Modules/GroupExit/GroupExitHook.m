@@ -1,6 +1,5 @@
 #import "GroupExitHook.h"
 #import "GroupExitConfig.h"
-#import "../../Config/PluginConfig.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"

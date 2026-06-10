@@ -1,6 +1,5 @@
 #import "../../Settings/Common/SettingCategoryController.h"
 #import "../Layout/UIPurifyConfig.h"
-#import "../../Config/PluginConfig.h"
 #import "../../Core/LogManager.h"
 
 @interface WPUIPurifyVC : SettingCategoryController

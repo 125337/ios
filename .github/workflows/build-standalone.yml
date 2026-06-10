@@ -32,10 +32,10 @@ jobs:
 
         for f in \
           MioPlugin/Tweak.m \
-          MioPlugin/Config/PluginConfig.m \
           MioPlugin/Config/WPColorUtil.m \
           MioPlugin/Core/ConfigDescriptor.m \
           MioPlugin/Core/ConfigManager.m \
+          MioPlugin/Core/WPUtility.m \
           MioPlugin/Modules/Revoke/RevokeConfig.m \
           MioPlugin/Modules/Unread/ClearUnreadConfig.m \
           MioPlugin/Modules/Joker/JokerConfig.m \

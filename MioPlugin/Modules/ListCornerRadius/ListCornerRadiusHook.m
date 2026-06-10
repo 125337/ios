@@ -1,6 +1,6 @@
 #import "ListCornerRadiusHook.h"
 #import "ListCornerRadiusConfig.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Core/WPUtility.h"
 #import "../../Config/WPColorUtil.h"
 #import "../../Core/LogManager.h"
 #import "../ProfileCardBg/ProfileCardBgHook.h"
@@ -208,7 +208,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             @"WCSearchController", nil];
     });
     if (![bgColorSkipList containsObject:className]) {
-        BOOL isDark = [[PluginConfig shared] isDarkModeForViewController:vc];
+        BOOL isDark = [WPUtility isDarkModeForViewController:vc];
         UIColor *customBg = isDark
             ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
             : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
@@ -276,7 +276,7 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    BOOL isDark = [[PluginConfig shared] isDarkModeForViewController:vc];
+    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
 
     UIColor *targetBg = isDark
             ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
@@ -301,7 +301,7 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    BOOL isDark = [[PluginConfig shared] isDarkModeForViewController:vc];
+    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
 
     UIColor *targetBg = isDark
             ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
@@ -363,7 +363,7 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
     [ListCornerRadiusHook applyBorderToView:view radius:radius position:0 isFTSHome:NO];
 
-    BOOL isDark = [[PluginConfig shared] isDarkModeForViewController:vc];
+    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
     UIColor *targetBg = isDark
             ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
             : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
@@ -685,7 +685,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     CGFloat borderWidth = config.listCellBorderWidth;
     if (borderWidth <= 0) borderWidth = 1.0;
 
-    BOOL isDark = [PluginConfig shared].isDarkMode;
+    BOOL isDark = [WPUtility isDarkMode];
 
     UIColor *borderColor = [WPColorUtil colorFromHexString:isDark ? config.listCellBorderColorDarkHex : config.listCellBorderColor];
     if (!borderColor) {

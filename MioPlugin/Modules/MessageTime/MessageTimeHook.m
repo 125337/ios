@@ -1,7 +1,7 @@
 #import "MessageTimeHook.h"
 #import "MessageTimeConfig.h"
 #import "../Revoke/RevokeConfig.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Core/WPUtility.h"
 #import "MessageTimeFormatParser.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -598,7 +598,7 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
     NSString *timeText = formatMessageTime(date,
                                             config.messageTimeCustomFormat,
-                                            [PluginConfig shared].isDarkMode,
+                                            [WPUtility isDarkMode],
                                             isSender,
                                             statusCode);
     if (!timeText) { label.hidden = YES; return; }
@@ -628,10 +628,10 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
         NSString *bgHex = isSender ? [MessageTimeConfig shared].senderBackgroundColorHex : [MessageTimeConfig shared].receiverBackgroundColorHex;
         NSString *bgDarkHex = isSender ? [MessageTimeConfig shared].senderBackgroundColorDarkHex : [MessageTimeConfig shared].receiverBackgroundColorDarkHex;
 
-        UIColor *lightTextColor = textHex.length ? [[PluginConfig shared] colorFromHex:textHex] : nil;
-        UIColor *darkTextColor  = textDarkHex.length ? [[PluginConfig shared] colorFromHex:textDarkHex] : nil;
-        UIColor *lightBgColor   = bgHex.length ? [[PluginConfig shared] colorFromHex:bgHex] : nil;
-        UIColor *darkBgColor    = bgDarkHex.length ? [[PluginConfig shared] colorFromHex:bgDarkHex] : nil;
+        UIColor *lightTextColor = textHex.length ? [WPUtility colorFromHex:textHex] : nil;
+        UIColor *darkTextColor  = textDarkHex.length ? [WPUtility colorFromHex:textDarkHex] : nil;
+        UIColor *lightBgColor   = bgHex.length ? [WPUtility colorFromHex:bgHex] : nil;
+        UIColor *darkBgColor    = bgDarkHex.length ? [WPUtility colorFromHex:bgDarkHex] : nil;
 
         if (!lightTextColor) lightTextColor = [UIColor colorWithWhite:0.5 alpha:1.0];
 
