@@ -355,50 +355,24 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 }
 
 - (NSString *)groupMemberCountValue {
-    NSString *(^fmtWithAdmin)(NSUInteger, NSString *) = ^(NSUInteger total, NSString *adminStr) {
-        if (adminStr.length) {
-            return [NSString stringWithFormat:@"群人员%lu人 %@", (unsigned long)total, adminStr];
-        }
-        return [NSString stringWithFormat:@"%lu 人", (unsigned long)total];
-    };
+    if (!self.chatRoomMemList.length) return @"未知";
 
-    id contact = WXGetContactForWxid(self.wxid);
-    if (!contact) return @"未知";
+    NSArray *members = [self.chatRoomMemList componentsSeparatedByString:@";"];
+    NSUInteger total = members.count;
 
-    id contactMgr = WXGetService(objc_getClass("CContactMgr"));
-    if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
-        unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getGroupMemberCountForContact:), contact);
-        if (count > 0) {
-            return fmtWithAdmin(count, [self adminCountPartWithContact:contact]);
+    // 管理员数量
+    NSString *adminPart = nil;
+    if (self.chatRoomAdminList.length) {
+        NSArray *admins = [self.chatRoomAdminList componentsSeparatedByString:@";"];
+        if (admins.count > 0) {
+            adminPart = [NSString stringWithFormat:@"管理员%lu人", (unsigned long)admins.count];
         }
     }
 
-    SEL memListSel = NSSelectorFromString(@"m_nsChatRoomMemList");
-    if ([contact respondsToSelector:memListSel]) {
-        id memList = ((id (*)(id, SEL))objc_msgSend)(contact, memListSel);
-        if (memList && [memList isKindOfClass:[NSString class]]) {
-            NSArray *members = [(NSString *)memList componentsSeparatedByString:@";"];
-            if (members.count > 0) {
-                return fmtWithAdmin(members.count, [self adminCountPartWithContact:contact]);
-            }
-        }
+    if (adminPart) {
+        return [NSString stringWithFormat:@"群人员%lu人 %@", (unsigned long)total, adminPart];
     }
-
-    return @"未知";
-}
-
-- (NSString *)adminCountPartWithContact:(id)contact {
-    if (!contact) return nil;
-    SEL adminListSel = NSSelectorFromString(@"m_nsChatRoomAdminList");
-    if (![contact respondsToSelector:adminListSel]) return nil;
-
-    id adminList = ((id (*)(id, SEL))objc_msgSend)(contact, adminListSel);
-    if (!adminList || ![adminList isKindOfClass:[NSString class]]) return nil;
-
-    NSArray *admins = [(NSString *)adminList componentsSeparatedByString:@";"];
-    if (admins.count == 0) return nil;
-
-    return [NSString stringWithFormat:@"管理员%lu人", (unsigned long)admins.count];
+    return [NSString stringWithFormat:@"%lu 人", (unsigned long)total];
 }
 
 - (NSString *)verifyStatusValue {

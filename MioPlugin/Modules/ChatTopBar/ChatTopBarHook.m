@@ -32,10 +32,43 @@ didTapAvatarWithContact:(id)contact
     // 在 contact 还存活时提取所有需要的数据
     NSString *nickname = [contact performSelector:NSSelectorFromString(@"m_nsNickName")];
 
+    // 备注
+    NSString *remark = [contact performSelector:NSSelectorFromString(@"m_nsContactRemark")];
+
+    // 性别（NSNumber → 文字）
+    id genderObj = [contact performSelector:NSSelectorFromString(@"m_nsGender")];
+    NSString *gender = @"未知";
+    if ([genderObj respondsToSelector:@selector(integerValue)]) {
+        NSInteger g = [genderObj integerValue];
+        gender = (g == 1) ? @"男" : (g == 2) ? @"女" : @"未知";
+    }
+
+    // 地区
+    NSString *location = [contact performSelector:NSSelectorFromString(@"m_nsLocation")];
+
+    // 签名/简介
+    NSString *signature = [contact performSelector:NSSelectorFromString(@"m_nsSignature")];
+
+    // 群主 wxid
+    NSString *groupOwner = [contact performSelector:NSSelectorFromString(@"m_nsChatRoomOwner")];
+
+    // 群成员列表（分号分隔的 wxid 字符串）
+    NSString *chatRoomMemList = [contact performSelector:NSSelectorFromString(@"m_nsChatRoomMemList")];
+
+    // 群管理员列表（分号分隔的 wxid 字符串）
+    NSString *chatRoomAdminList = [contact performSelector:NSSelectorFromString(@"m_nsChatRoomAdminList")];
+
     CSContactInfoPopoverController *popover =
         [[CSContactInfoPopoverController alloc] initWithWxid:wxid
                                                     nickname:nickname
                                                       avatar:avatar];
+    popover.remark = remark;
+    popover.gender = gender;
+    popover.location = location;
+    popover.signature = signature;
+    popover.groupOwner = groupOwner;
+    popover.chatRoomMemList = chatRoomMemList;
+    popover.chatRoomAdminList = chatRoomAdminList;
 
     popover.modalPresentationStyle = UIModalPresentationPopover;
     popover.preferredContentSize = CGSizeMake(280, 400);
