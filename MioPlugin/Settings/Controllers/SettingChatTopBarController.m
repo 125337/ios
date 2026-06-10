@@ -3,6 +3,7 @@
 #import "../../Config/PluginConfig.h"
 #import "../../Config/WPColors.h"
 #import "../../Config/Constants.h"
+#import "../../Core/LogManager.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import <PhotosUI/PhotosUI.h>
 #import <MobileCoreServices/MobileCoreServices.h>
