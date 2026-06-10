@@ -203,82 +203,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     }
     WPLog(@"CardBg-Diag", @"[IMG-LOAD] fileExists=YES, ext=%@", imagePath.pathExtension.lowercaseString);
 
-    NSString *ext = imagePath.pathExtension.lowercaseString;
-
-    if ([ext isEqualToString:@"gif"]) {
-        NSData *gifData = [NSData dataWithContentsOfFile:imagePath];
-        if (!gifData) {
-            WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: NIL (gifData nil for %@)", imagePath);
-            return nil;
-        }
-
-        CGImageSourceRef source = CGImageSourceCreateWithData(
-            (__bridge CFDataRef)gifData, NULL);
-        if (!source) {
-            WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: NIL (CGImageSourceCreateWithData failed)");
-            return nil;
-        }
-
-        size_t count = CGImageSourceGetCount(source);
-        WPLog(@"CardBg-Diag", @"[IMG-LOAD] GIF frameCount=%zu", count);
-        if (count < 2) {
-            CGImageRef cgImg = CGImageSourceCreateImageAtIndex(source, 0, NULL);
-            UIImage *result = cgImg ? [UIImage imageWithCGImage:cgImg] : nil;
-            if (cgImg) CGImageRelease(cgImg);
-            CFRelease(source);
-            WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: %@ (single-frame GIF, size=%.0fx%.0f)",
-                  result ? @"SUCCESS" : @"NIL", result.size.width, result.size.height);
-            return result;
-        }
-
-        NSMutableArray<UIImage *> *frames = [NSMutableArray array];
-        NSTimeInterval totalDuration = 0;
-        for (size_t i = 0; i < count; i++) {
-            CGImageRef frameImg = CGImageSourceCreateImageAtIndex(source, i, NULL);
-            if (frameImg) {
-                [frames addObject:[UIImage imageWithCGImage:frameImg]];
-                CGImageRelease(frameImg);
-
-                CFDictionaryRef props =
-                    CGImageSourceCopyPropertiesAtIndex(source, i, NULL);
-                if (props) {
-                    CFDictionaryRef gifDict = CFDictionaryGetValue(
-                        props, kCGImagePropertyGIFDictionary);
-                    if (gifDict) {
-                        CFNumberRef delayRef = CFDictionaryGetValue(
-                            gifDict, kCGImagePropertyGIFDelayTime);
-                        if (!delayRef) {
-                            delayRef = CFDictionaryGetValue(
-                                gifDict, kCGImagePropertyGIFUnclampedDelayTime);
-                        }
-                        NSTimeInterval delay = 0.1;
-                        if (delayRef) {
-                            CFNumberGetValue(delayRef, kCFNumberFloatType, &delay);
-                            if (delay < 0.02) delay = 0.1;
-                        }
-                        totalDuration += delay;
-                    }
-                    CFRelease(props);
-                }
-            }
-        }
-        CFRelease(source);
-
-        if (frames.count > 0) {
-            UIImage *result = [UIImage animatedImageWithImages:frames duration:totalDuration];
-            WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: %@ (animated GIF, %lu frames, dur=%.2f, size=%.0fx%.0f)",
-                  result ? @"SUCCESS" : @"NIL", (unsigned long)frames.count, totalDuration,
-                  result.size.width, result.size.height);
-            return result;
-        }
-        WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: NIL (GIF frames empty)");
-        return nil;
-    } else {
-        UIImage *result = [UIImage imageWithContentsOfFile:imagePath];
-        WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: %@ (static image, size=%.0fx%.0f)",
-              result ? @"SUCCESS" : @"NIL", result.size.width, result.size.height);
-        return result;
-    }
+    // 普通图片（PNG）
+    UIImage *result = [UIImage imageWithContentsOfFile:imagePath];
+    WPLog(@"CardBg-Diag", @"[IMG-LOAD] Result: %@ (static image, size=%.0fx%.0f)",
+          result ? @"SUCCESS" : @"NIL", result.size.width, result.size.height);
+    return result;
 }
 
 + (NSString *)cardBackgroundDirectory {
@@ -317,66 +246,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         NSFileManager *fm = [NSFileManager defaultManager];
         if (![fm fileExistsAtPath:imagePath]) return;
 
-        UIImage *resultImage = nil;
-        NSString *ext = imagePath.pathExtension.lowercaseString;
-
-        if ([ext isEqualToString:@"gif"]) {
-            NSData *gifData = [NSData dataWithContentsOfFile:imagePath];
-            if (gifData) {
-                CGImageSourceRef source = CGImageSourceCreateWithData(
-                    (__bridge CFDataRef)gifData, NULL);
-                if (source) {
-                    size_t count = CGImageSourceGetCount(source);
-                    if (count < 2) {
-                        CGImageRef cgImg = CGImageSourceCreateImageAtIndex(source, 0, NULL);
-                        resultImage = [UIImage imageWithCGImage:cgImg];
-                        CGImageRelease(cgImg);
-                        CFRelease(source);
-                    } else {
-                        NSMutableArray<UIImage *> *frames = [NSMutableArray array];
-                        NSTimeInterval totalDuration = 0;
-                        for (size_t i = 0; i < count; i++) {
-                            CGImageRef frameImg = CGImageSourceCreateImageAtIndex(source, i, NULL);
-                            if (frameImg) {
-                                [frames addObject:[UIImage imageWithCGImage:frameImg]];
-                                CGImageRelease(frameImg);
-
-                                CFDictionaryRef props =
-                                    CGImageSourceCopyPropertiesAtIndex(source, i, NULL);
-                                if (props) {
-                                    CFDictionaryRef gifDict = CFDictionaryGetValue(
-                                        props, kCGImagePropertyGIFDictionary);
-                                    if (gifDict) {
-                                        CFNumberRef delayRef = CFDictionaryGetValue(
-                                            gifDict, kCGImagePropertyGIFDelayTime);
-                                        if (!delayRef) {
-                                            delayRef = CFDictionaryGetValue(
-                                                gifDict,
-                                                kCGImagePropertyGIFUnclampedDelayTime);
-                                        }
-                                        NSTimeInterval delay = 0.1;
-                                        if (delayRef) {
-                                            CFNumberGetValue(delayRef,
-                                                kCFNumberFloatType, &delay);
-                                            if (delay < 0.02) delay = 0.1;
-                                        }
-                                        totalDuration += delay;
-                                    }
-                                    CFRelease(props);
-                                }
-                            }
-                        }
-                        CFRelease(source);
-                        if (frames.count > 0) {
-                            resultImage = [UIImage animatedImageWithImages:frames
-                                                            duration:totalDuration];
-                        }
-                    }
-                }
-            }
-        } else {
-            resultImage = [UIImage imageWithContentsOfFile:imagePath];
-        }
+        UIImage *resultImage = [UIImage imageWithContentsOfFile:imagePath];
 
         if (resultImage && imageView) {
             dispatch_async(dispatch_get_main_queue(), ^{

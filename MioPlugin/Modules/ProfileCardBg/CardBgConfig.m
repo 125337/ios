@@ -54,16 +54,8 @@ static CardBgConfig *_sharedInstance = nil;
 
 + (NSString *)backgroundImagePath {
     NSString *dir = [self backgroundImageDirectory];
-    NSFileManager *fm = [NSFileManager defaultManager];
-
-    // GIF 优先
-    NSString *gifPath = [dir stringByAppendingPathComponent:@"MioCardBg.gif"];
-    if ([fm fileExistsAtPath:gifPath]) return gifPath;
-
-    // 其次 PNG
     NSString *pngPath = [dir stringByAppendingPathComponent:@"MioCardBg.png"];
-    if ([fm fileExistsAtPath:pngPath]) return pngPath;
-
+    if ([[NSFileManager defaultManager] fileExistsAtPath:pngPath]) return pngPath;
     return nil;
 }
 
@@ -75,7 +67,6 @@ static CardBgConfig *_sharedInstance = nil;
     NSFileManager *fm = [NSFileManager defaultManager];
     NSString *dir = [self backgroundImageDirectory];
     [fm removeItemAtPath:[dir stringByAppendingPathComponent:@"MioCardBg.png"] error:nil];
-    [fm removeItemAtPath:[dir stringByAppendingPathComponent:@"MioCardBg.gif"] error:nil];
 }
 
 @end
