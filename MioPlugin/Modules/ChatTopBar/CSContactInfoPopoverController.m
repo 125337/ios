@@ -79,7 +79,6 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
             y = [self buildGroupInfoCardAtY:y width:w];
         } else if ([self.wxid hasPrefix:@"gh_"]) {
             y = [self buildOfficialAccountInfoCardAtY:y width:w];
-            [self preloadAndRefreshAvatar];
         } else {
             y = [self buildBasicInfoCardAtY:y width:w];
         }
@@ -166,32 +165,6 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
             imageView.image = [UIImage imageNamed:@"DefaultHead"];
         }
     }];
-}
-
-- (void)preloadAndRefreshAvatar {
-    WPLog(@"Mio-Preload", @"preloadAndRefreshAvatar START wxid=%@", self.wxid);
-    __weak typeof(self) weakSelf = self;
-
-    // 公众号无需预加载 ContactInfoViewController，头像加载由 loadAvatarForImageView 通过 wxid 完成
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf || !strongSelf.wxid) return;
-
-        if (strongSelf.avatarImage && strongSelf.avatarImage.size.width > 44) {
-            WPLog(@"Mio-Preload", @"  已有非占位头像，跳过下载");
-            return;
-        }
-
-        [[AvatarLoader shared] loadAvatarForWxid:strongSelf.wxid contact:nil completion:^(UIImage *image) {
-            __strong typeof(weakSelf) innerSelf = weakSelf;
-            if (innerSelf && image && innerSelf->_avatarView) {
-                WPLog(@"Mio-Preload", @"  ✅ AvatarLoader 成功 size=%.0fx%.0f", image.size.width, image.size.height);
-                innerSelf->_avatarView.image = image;
-                innerSelf.avatarImage = image;
-            }
-        }];
-    });
 }
 
 #pragma mark - 通用卡片构建
