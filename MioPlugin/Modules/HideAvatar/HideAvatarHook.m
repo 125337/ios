@@ -120,7 +120,7 @@ static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
 // ============================================================
 
 static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
-    PluginConfig *config = [PluginConfig shared];
+    HideAvatarConfig *config = [HideAvatarConfig shared];
 
     // ── 快速路径: 6 个配置全关 → 直接走原始 ──
     if (!config.hideC2COtherAvatar   &&

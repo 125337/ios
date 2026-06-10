@@ -262,7 +262,7 @@ static void hooked_CContact_setM_nsChatRoomMemList(id self, SEL _cmd, NSString *
         appReady = YES;
         WPLog(@"GroupExit", @"[GroupExitHook] appReady = YES");
         
-        if ([PluginConfig shared].enableGroupExitMonitor) {
+        if ([GroupExitConfig shared].enableGroupExitMonitor) {
             [self startMonitoring];
         }
     });

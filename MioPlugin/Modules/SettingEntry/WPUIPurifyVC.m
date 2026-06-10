@@ -18,7 +18,7 @@
         [v removeFromSuperview];
     }
 
-    PluginConfig *config = [PluginConfig shared];
+    UIPurifyConfig *config = [UIPurifyConfig shared];
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 

@@ -1,5 +1,5 @@
 #import "RevokeHandler.h"
-#import "../../Config/PluginConfig.h"
+#import "RevokeConfig.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
@@ -229,8 +229,6 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         return NO;
     }
 
-    PluginConfig *config = [PluginConfig shared];
-
     if ([self isSelfRevoke:revokeWrap]) {
         WPLog(@"Revoke", @"is self revoke, skip");
         return NO;
@@ -261,7 +259,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         }
     }
 
-    if (config.noTip) return YES;
+    if ([RevokeConfig shared].noTip) return YES;
 
     id messageMgr = WXGetService(objc_getClass("CMessageMgr"));
     if (!messageMgr) {
@@ -336,8 +334,8 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
 
     NSString *newMsgContent = nil;
     NSString *contentForTemplate = revokedContent ?: @"";
-    NSString *template = config.revokeTemplate.length > 0 ? config.revokeTemplate : kDefaultRevokeTemplate;
-    newMsgContent = [config applyRevokeTemplate:template name:fromUsrName content:contentForTemplate createTime:createTime];
+    NSString *template = [RevokeConfig shared].revokeTemplate.length > 0 ? [RevokeConfig shared].revokeTemplate : kDefaultRevokeTemplate;
+    newMsgContent = [[RevokeConfig shared] applyRevokeTemplate:template name:fromUsrName content:contentForTemplate createTime:createTime];
 
     WPLog(@"Revoke", @"newMsgContent=%@", newMsgContent);
 
@@ -345,16 +343,16 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
     WPLog(@"Revoke", @"result=%d", inserted);
 
     // ====== 通知撤回者 ======
-    if (config.notifySender && !config.noTip && inserted && fromUsrName.length > 0) {
+    if ([RevokeConfig shared].notifySender && ![RevokeConfig shared].noTip && inserted && fromUsrName.length > 0) {
         NSTimeInterval currentTime = [[NSDate date] timeIntervalSince1970];
         NSTimeInterval msgTime = (NSTimeInterval)createTime;
         NSTimeInterval elapsed = currentTime - msgTime;
-        double cooldown = config.notifySenderCooldown;
+        double cooldown = [RevokeConfig shared].notifySenderCooldown;
 
         if (cooldown <= 0 || elapsed <= cooldown) {
-            NSString *notifyText = config.notifySenderTemplate;
+            NSString *notifyText = [RevokeConfig shared].notifySenderTemplate;
             if (notifyText.length > 0) {
-                notifyText = [config applyRevokeTemplate:notifyText name:fromUsrName content:revokedContent ?: @"" createTime:createTime];
+                notifyText = [[RevokeConfig shared] applyRevokeTemplate:notifyText name:fromUsrName content:revokedContent ?: @"" createTime:createTime];
             }
             if (!notifyText.length) {
                 notifyText = [NSString stringWithFormat:@"【捕抓到1条撤回消息】\n操作用户: %@\n撤回内容: %@\n\n撤回无效，消息已读并保存", fromUsrName, revokedContent ?: @"未知内容"];

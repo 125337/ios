@@ -1,5 +1,5 @@
 #import "SettingListCornerRadiusController.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Modules/ListCornerRadius/ListCornerRadiusConfig.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioRestartHelper.h"
@@ -19,7 +19,7 @@
     }
     self.masterSwitchKeys = [NSMutableSet set];
 
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 
@@ -37,7 +37,7 @@
                                        key:@"globalCornerRadiusEnabled"
                                       isOn:config.globalCornerRadiusEnabled
                                 subBuilder:^(UIView *expand, CGFloat *ecy) {
-        PluginConfig *cfg = [PluginConfig shared];
+        ListCornerRadiusConfig *cfg = [ListCornerRadiusConfig shared];
 
         *ecy = [self addSubSwitchRowInGroup:expand
                                       title:@"我的页面"
@@ -85,7 +85,7 @@
                                        key:@"listCellBorder"
                                       isOn:config.listCellBorder
                                 subBuilder:^(UIView *expand, CGFloat *ecy) {
-        PluginConfig *c3 = [PluginConfig shared];
+        ListCornerRadiusConfig *c3 = [ListCornerRadiusConfig shared];
 
         // 边框宽度
         NSString *bwStr = c3.listCellBorderWidth > 0
@@ -119,7 +119,7 @@
     UIView *appearGroup = [self addTableGroupAtY:y width:w];
     CGFloat acy = 0;
 
-    PluginConfig *c4 = [PluginConfig shared];
+    ListCornerRadiusConfig *c4 = [ListCornerRadiusConfig shared];
 
     NSString *crStr = c4.listCellCornerRadius > 0
         ? [NSString stringWithFormat:@"%.0f", c4.listCellCornerRadius] : nil;

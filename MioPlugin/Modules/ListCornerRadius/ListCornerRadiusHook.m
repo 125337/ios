@@ -1,11 +1,26 @@
 #import "ListCornerRadiusHook.h"
-#import "../../Config/PluginConfig.h"
+#import "ListCornerRadiusConfig.h"
+#import "../../Config/WPColorUtil.h"
 #import "../../Core/LogManager.h"
 #import "../ProfileCardBg/ProfileCardBgHook.h"
 #import "../CornerResponsibility/CornerResponsibility.h"
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+
+static BOOL wp_isDarkMode(void) {
+    if (@available(iOS 13.0, *)) {
+        return UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    }
+    return NO;
+}
+
+static BOOL wp_isDarkModeForVC(UIViewController *vc) {
+    if (@available(iOS 13.0, *)) {
+        return vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    }
+    return NO;
+}
 
 static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
 static IMP _orig_WCSearchBar_layoutSubviews = NULL;
@@ -74,7 +89,7 @@ static NSString * const kDiscoverVCClassName       = @"FindFriendEntryViewContro
 static BOOL shouldApplyGlobalCorner(UIViewController *vc) {
     if (!vc) return NO;
 
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
 
     if (!config.globalCornerRadiusEnabled) return NO;
 
@@ -98,7 +113,7 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
         ((void (*)(id, SEL))_orig_WCSearchBar_layoutSubviews)(self, _cmd);
     }
 
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled || !config.listSearchCornerRadius) return;
 
     NSInteger radius = (NSInteger)config.listCellCornerRadius;  // ★ 复用 Cell 圆角半径
@@ -113,7 +128,7 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
 
 // ★★★ Cell Hook：列表圆角 + 分发到资料卡透明化 ★★★
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
 
     // ★ 列表圆角入口守卫：只看自己的开关 ★
     if (!config.globalCornerRadiusEnabled) {
@@ -194,8 +209,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     if (![bgColorSkipList containsObject:className]) {
         BOOL isDark = [config isDarkModeForViewController:vc];
         UIColor *customBg = isDark
-            ? [config colorFromHex:config.listCellDarkBgColor]
-            : [config colorFromHex:config.listCellLightBgColor];
+            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
+            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
         ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
     }
 
@@ -253,7 +268,7 @@ static void (*_orig_MFWebMMBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     _orig_MFWebMMBtn_layoutSubviews(self, _cmd);
 
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
 
     UIViewController *vc = findParentViewController((UIView *)self);
@@ -263,8 +278,8 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     BOOL isDark = [config isDarkModeForViewController:vc];
 
     UIColor *targetBg = isDark
-            ? [config colorFromHex:config.listCellDarkBgColor]
-            : [config colorFromHex:config.listCellLightBgColor];
+            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
+            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
     if (!targetBg) {
         targetBg = isDark
             ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
@@ -278,7 +293,7 @@ static void (*_orig_MFBannerBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     _orig_MFBannerBtn_layoutSubviews(self, _cmd);
 
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
 
     UIViewController *vc = findParentViewController((UIView *)self);
@@ -288,8 +303,8 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     BOOL isDark = [config isDarkModeForViewController:vc];
 
     UIColor *targetBg = isDark
-            ? [config colorFromHex:config.listCellDarkBgColor]
-            : [config colorFromHex:config.listCellLightBgColor];
+            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
+            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
     if (!targetBg) {
         targetBg = isDark
             ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
@@ -307,7 +322,7 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
 
     UIView *view = (UIView *)self;
@@ -349,8 +364,8 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
     BOOL isDark = [config isDarkModeForViewController:vc];
     UIColor *targetBg = isDark
-            ? [config colorFromHex:config.listCellDarkBgColor]
-            : [config colorFromHex:config.listCellLightBgColor];
+            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
+            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
     if (!targetBg) {
         targetBg = isDark
             ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
@@ -378,7 +393,7 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
 static id (*_orig_NMFVC_viewForHeader)(id, SEL, id, NSInteger);
 static id _hooked_NMFVC_viewForHeader(id self, SEL _cmd, id tableView, NSInteger section) {
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (config.globalCornerRadiusEnabled && section > 0) {
         return [[UIView alloc] initWithFrame:CGRectZero];
     }
@@ -387,7 +402,7 @@ static id _hooked_NMFVC_viewForHeader(id self, SEL _cmd, id tableView, NSInteger
 
 static void (*_orig_setBgImageView)(id, SEL, id);
 static void _hooked_setBgImageView(id self, SEL _cmd, id imageView) {
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) {
         _orig_setBgImageView(self, _cmd, imageView);
     }
@@ -414,7 +429,7 @@ static void (*_orig_UIView_layoutSubviews)(id, SEL);
 static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     _orig_UIView_layoutSubviews(self, _cmd);
 
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
 
     if (![NSStringFromClass([self class]) isEqualToString:@"UIView"]) return;
@@ -643,7 +658,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                      radius:(NSInteger)radius
                    position:(NSInteger)position
                   isFTSHome:(BOOL)isFTSHome {
-    PluginConfig *config = [PluginConfig shared];
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
 
     static NSString *kBorderCacheKey = @"com.mio.cornerBorderCache";
 
@@ -671,7 +686,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
     BOOL isDark = [config isDarkMode];
 
-    UIColor *borderColor = [config colorFromHex:isDark ? config.listCellBorderColorDarkHex : config.listCellBorderColor];
+    UIColor *borderColor = [WPColorUtil colorFromHexString:isDark ? config.listCellBorderColorDarkHex : config.listCellBorderColor];
     if (!borderColor) {
         borderColor = isDark
             ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]

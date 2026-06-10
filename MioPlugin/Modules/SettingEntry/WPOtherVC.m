@@ -1,5 +1,6 @@
 #import "../../Settings/Common/SettingCategoryController.h"
-#import "../../Config/PluginConfig.h"
+#import "../Revoke/RevokeConfig.h"
+#import "../Unread/ClearUnreadConfig.h"
 #import "../../Core/LogManager.h"
 #import "../Settings/Controllers/SettingDevToolsController.h"
 
@@ -19,7 +20,7 @@
         [v removeFromSuperview];
     }
 
-    PluginConfig *config = [PluginConfig shared];
+    RevokeConfig *config = [RevokeConfig shared];
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 
@@ -28,7 +29,7 @@
     UIView *msgGroup = [self addTableGroupAtY:y width:w];
     CGFloat mcy = 0;
     mcy = [self addSwitchRowInGroup:msgGroup title:@"一键已读" desc:nil
-                                key:@"clearUnreadEnabled" isOn:config.clearUnreadEnabled
+                                key:@"clearUnreadEnabled" isOn:[ClearUnreadConfig shared].clearUnreadEnabled
                                 cy:mcy width:w];
     y = [self finishGroup:msgGroup atY:y height:mcy];
 
@@ -37,15 +38,15 @@
     UIView *group = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
     cy = [self addSwitchRowInGroup:group title:@"调试日志" desc:nil
-                               key:@"debugLogging" isOn:config.debugLogging
+                               key:@"debugLogging" isOn:[RevokeConfig shared].debugLogging
                                cy:cy width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addSwitchRowInGroup:group title:@"隐藏内容" desc:nil
-                               key:@"hideContent" isOn:config.hideContent
+                               key:@"hideContent" isOn:[RevokeConfig shared].hideContent
                                cy:cy width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addSwitchRowInGroup:group title:@"免提示" desc:nil
-                               key:@"noTip" isOn:config.noTip
+                               key:@"noTip" isOn:[RevokeConfig shared].noTip
                                cy:cy width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addNavRowInGroup:group title:@"开发者工具" subtitle:@"NSLog监控、导航日志"

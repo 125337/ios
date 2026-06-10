@@ -20,7 +20,7 @@
     }
     self.masterSwitchKeys = [NSMutableSet set];
 
-    PluginConfig *config = [PluginConfig shared];
+    AttachLayoutConfig *config = [AttachLayoutConfig shared];
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 

@@ -1,5 +1,5 @@
 #import "../Common/SettingController.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Modules/Revoke/RevokeConfig.h"
 #import "../../Modules/Revoke/RevokeFormatEditorVC.h"
 
 @interface SettingRevokeController ()
@@ -18,7 +18,7 @@
         [v removeFromSuperview];
     }
 
-    PluginConfig *config = [PluginConfig shared];
+    RevokeConfig *config = [RevokeConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
 
@@ -60,11 +60,10 @@
 
 - (void)onRevokeFormatTap {
     RevokeFormatEditorVC *editor = [[RevokeFormatEditorVC alloc] init];
-    editor.initialFormat = [PluginConfig shared].revokeTemplate;
+    editor.initialFormat = [RevokeConfig shared].revokeTemplate;
     editor.saveBlock = [^(NSString *newFormat) {
-        PluginConfig *cfg = [PluginConfig shared];
-        cfg.revokeTemplate = newFormat;
-        [cfg save];
+        [RevokeConfig shared].revokeTemplate = newFormat;
+        [ConfigManager saveAll];
         [self buildUI];
     } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
@@ -74,11 +73,10 @@
 
 - (void)onNotifyFormatTap {
     RevokeFormatEditorVC *editor = [[RevokeFormatEditorVC alloc] init];
-    editor.initialFormat = [PluginConfig shared].notifySenderTemplate;
+    editor.initialFormat = [RevokeConfig shared].notifySenderTemplate;
     editor.saveBlock = [^(NSString *newFormat) {
-        PluginConfig *cfg = [PluginConfig shared];
-        cfg.notifySenderTemplate = newFormat;
-        [cfg save];
+        [RevokeConfig shared].notifySenderTemplate = newFormat;
+        [ConfigManager saveAll];
         [self buildUI];
     } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];

@@ -88,7 +88,7 @@
 
 - (void)buildUI {
     for (UIView *v in self.contentView.subviews) { [v removeFromSuperview]; }
-    PluginConfig *config = [PluginConfig shared];
+    DevToolsConfig *config = [DevToolsConfig shared];
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 

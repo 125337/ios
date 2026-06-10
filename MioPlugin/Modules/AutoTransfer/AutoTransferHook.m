@@ -103,7 +103,7 @@ static void pushLocalNotification(NSString *message) {
 }
 
 static void processTransferMessage(id wrap) {
-    PluginConfig *config = [PluginConfig shared];
+    AutoTransferConfig *config = [AutoTransferConfig shared];
     if (!config.autoConfirmTransfer) return;
     if (!wrap) return;
 
@@ -349,7 +349,7 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
         ((void (*)(id, SEL, id, id))orig_at_ConfirmTransferResponse)(self, _cmd, response, request);
     }
 
-    PluginConfig *config = [PluginConfig shared];
+    AutoTransferConfig *config = [AutoTransferConfig shared];
     if (!config.autoConfirmTransfer) return;
     if (!response) return;
 

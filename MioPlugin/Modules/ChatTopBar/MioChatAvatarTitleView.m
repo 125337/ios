@@ -1,5 +1,5 @@
 #import "MioChatAvatarTitleView.h"
-#import "../../Config/PluginConfig.h"
+#import "ChatTopBarConfig.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 #import "AvatarLoader.h"
@@ -21,7 +21,7 @@
 #pragma mark - Setup
 
 - (void)setupSubviews {
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
 
     // 1. leftAvatarView
     UIImageView *la = [[UIImageView alloc] init];
@@ -79,7 +79,7 @@
 - (void)layoutSubviews {
     [super layoutSubviews];
 
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     NSInteger mode = config.chatDisplayMode;
     CGFloat totalH = self.bounds.size.height;
     CGFloat totalW = self.bounds.size.width;
@@ -267,7 +267,7 @@
 - (void)updateAvatars {
     if (!self.chatController) return;
 
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
 
     // Get contact info
     id contact = ((id (*)(id, SEL))objc_msgSend)(self.chatController, NSSelectorFromString(@"GetContact"));
@@ -372,7 +372,7 @@
 #pragma mark - Separator
 
 - (BOOL)loadSeparatorIcon {
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
 
     // 1. 优先检查 GIF 文件路径
     NSString *gifPath = config.chatSeparatorGIF;
@@ -407,7 +407,7 @@
 }
 
 - (void)loadSeparatorText {
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     if (config.chatSeparatorText.length > 0) {
         dispatch_async(dispatch_get_main_queue(), ^{
             self.separatorTextLabel.text = config.chatSeparatorText;
@@ -418,12 +418,12 @@
 }
 
 - (CGFloat)calculateCornerRadiusForSize:(CGFloat)size {
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     return size * 0.5 * (config.chatAvatarCornerRadius / 100.0);
 }
 
 - (CGFloat)calculateNameWidth {
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
 
     NSString *text = self.titleLabel.text ?: @"";
     if (text.length == 0) return 30.0;

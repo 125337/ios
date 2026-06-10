@@ -18,7 +18,7 @@
         [v removeFromSuperview];
     }
 
-    PluginConfig *config = [PluginConfig shared];
+    HideAvatarConfig *config = [HideAvatarConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
 

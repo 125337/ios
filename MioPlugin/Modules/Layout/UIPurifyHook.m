@@ -1,5 +1,5 @@
 #import "UIPurifyHook.h"
-#import "../../Config/PluginConfig.h"
+#import "UIPurifyConfig.h"
 #import "../../Core/LogManager.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -10,21 +10,21 @@ static IMP orig_separatorStyle = NULL;
 static IMP orig_wcColor_seperatorColor = NULL;
 
 static UIColor *replaced_separatorColor(id self, SEL _cmd) {
-    if ([PluginConfig shared].hideSeparatorLine) {
+    if ([UIPurifyConfig shared].hideSeparatorLine) {
         return [UIColor clearColor];
     }
     return ((UIColor *(*)(id, SEL))orig_separatorColor)(self, _cmd);
 }
 
 static NSInteger replaced_separatorStyle(id self, SEL _cmd) {
-    if ([PluginConfig shared].hideSeparatorLine) {
+    if ([UIPurifyConfig shared].hideSeparatorLine) {
         return 0;
     }
     return ((NSInteger (*)(id, SEL))orig_separatorStyle)(self, _cmd);
 }
 
 static UIColor *replaced_wcColor_seperatorColor(id self, SEL _cmd) {
-    if ([PluginConfig shared].hideSeparatorLine) {
+    if ([UIPurifyConfig shared].hideSeparatorLine) {
         return [UIColor clearColor];
     }
     return ((UIColor *(*)(id, SEL))orig_wcColor_seperatorColor)(self, _cmd);
@@ -33,7 +33,7 @@ static UIColor *replaced_wcColor_seperatorColor(id self, SEL _cmd) {
 @implementation UIPurifyHook
 
 + (void)install {
-    PluginConfig *config = [PluginConfig shared];
+    UIPurifyConfig *config = [UIPurifyConfig shared];
     WPLog(@"UIPurify", @"UIPurifyHook install starting, hideSeparatorLine=%d", config.hideSeparatorLine);
 
     Class tableViewClass = objc_getClass("UITableView");

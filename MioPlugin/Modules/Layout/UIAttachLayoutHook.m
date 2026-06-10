@@ -12,25 +12,25 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <substrate.h>
-#import "../../Config/PluginConfig.h"
+#import "AttachLayoutConfig.h"
 
 // ═══════════════════════════════════════════════════════
 // 读取配置（统一使用 PluginConfig，保证与设置页面一致）
 // ═══════════════════════════════════════════════════════
 static inline BOOL attachLayoutEnabled(void) {
-    return [PluginConfig shared].attachLayoutEnabled;
+    return [AttachLayoutConfig shared].attachLayoutEnabled;
 }
 
 static inline NSInteger attachLayoutColumns(void) {
     // 微信优化默认值 = 5 (123456.c:5153)
-    NSString *val = [PluginConfig shared].attachLayoutColumns;
+    NSString *val = [AttachLayoutConfig shared].attachLayoutColumns;
     if (!val || val.length == 0) return 5;
     return [val integerValue];
 }
 
 static inline NSInteger attachLayoutRows(void) {
     // 微信优化默认值 = 2 (123456.c:5186)
-    NSString *val = [PluginConfig shared].attachLayoutRows;
+    NSString *val = [AttachLayoutConfig shared].attachLayoutRows;
     if (!val || val.length == 0) return 2;
     return [val integerValue];
 }

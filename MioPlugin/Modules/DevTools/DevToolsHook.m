@@ -1,7 +1,7 @@
 #import "DevToolsHook.h"
 #import "MioLogMonitor.h"
 #import "MioNavMonitor.h"
-#import "../../Config/PluginConfig.h"
+#import "DevToolsConfig.h"
 #import "../../Core/LogManager.h"
 
 @implementation DevToolsHook

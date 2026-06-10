@@ -1,6 +1,6 @@
 #import "SettingEntryHook.h"
 #import "WPCommonUI.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Core/ConfigManager.h"
 #import "../../Settings/Common/SettingController.h"
 #import "../../Settings/Common/SettingCategoryController.h"
 #import <objc/runtime.h>
@@ -144,10 +144,9 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     NSString *key = objc_getAssociatedObject(sender, "key");
     if (!key) return;
 
-    PluginConfig *config = [PluginConfig shared];
     @try {
-        [config setValue:@(sender.on) forKey:key];
-        [config save];
+        [ConfigManager setValue:@(sender.on) forKey:key];
+        [ConfigManager saveAll];
         WPLog(@"Setting", @"[SAVE] %@ = %@", key, sender.on ? @"ON" : @"OFF");
     } @catch (NSException *e) {
         WPLog(@"Setting", @"[ERR] save %@: %@ - %@", key, e.name, e.reason);
@@ -161,10 +160,9 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     NSString *hint = objc_getAssociatedObject(sender, "editConfigHint");
     if (!key || !title) return;
 
-    PluginConfig *config = [PluginConfig shared];
     NSString *currentValue = nil;
     @try {
-        id val = [config valueForKey:key];
+        id val = [ConfigManager valueForKey:key];
         if ([val isKindOfClass:[NSString class]]) currentValue = val;
         else if ([val isKindOfClass:[NSNumber class]]) currentValue = [val stringValue];
     } @catch (NSException *e) {}
@@ -193,14 +191,14 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 
             if (valueType == InputValueTypeText) {
                 // 文本类型：直接保存字符串
-                [config setValue:newValue forKey:key];
+                [ConfigManager setValue:newValue forKey:key];
             } else {
                 // 数值类型：转为 NSDecimalNumber 保存
                 NSDecimalNumber *decimal = [NSDecimalNumber decimalNumberWithString:newValue];
-                [config setValue:decimal forKey:key];
+                [ConfigManager setValue:decimal forKey:key];
             }
 
-            [config save];
+            [ConfigManager saveAll];
             WPLog(@"Setting", @"[EDIT] %@ = %@ (type=%ld)", key, newValue, (long)valueType);
             if (valueLabel) {
                 valueLabel.text = newValue.length > 0 ? newValue : hint ?: @"";

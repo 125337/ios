@@ -1,6 +1,6 @@
 #import "SettingCategoryController.h"
 #import "WPBorderLayer.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Core/ConfigManager.h"
 #import "../../Config/Constants.h"
 #import "../../Config/WPColors.h"
 #import "../../Config/WPColorPicker.h"
@@ -476,7 +476,7 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         tl.textColor = WPT1();
         [group addSubview:tl];
 
-        UIColor *color = [[PluginConfig shared] colorFromHex:value] ?: [UIColor grayColor];
+        UIColor *color = [WPColorUtil colorFromHexString:value] ?: [UIColor grayColor];
         UIButton *btn = [WPColorPicker makeColorButtonWithColor:color size:30];
         btn.frame = CGRectMake(gw - kCellHPadding - 36, cy + (kRowH - 30) / 2, 30, 30);
         objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -600,16 +600,15 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         return;
     }
 
-    PluginConfig *config = [PluginConfig shared];
     @try {
         WPLog(@"Config", @"[SAVE] Saving config: key=%@, value=%@", key, sender.on ? @"YES" : @"NO");
-        [config setValue:@(sender.on) forKey:key];
+        [ConfigManager setValue:@(sender.on) forKey:key];
         WPLog(@"Config", @"[OK] Config value after KVC: %d", sender.on);
     } @catch (NSException *e) {
         WPLog(@"Config", @"[WARN] Config save exception: %@ - %@", e.name, e.reason);
         return;
     }
-    [config save];
+    [ConfigManager saveAll];
     WPLog(@"Config", @"[OK] Config saved successfully for key: %@", key);
 
     for (UIView *sv in self.contentView.subviews) {
@@ -691,7 +690,6 @@ static NSString *LightKeyForDarkKey(NSString *darkKey) {
     NSString *key = objc_getAssociatedObject(sender, "key");
     if (!key) return;
 
-    PluginConfig *config = [PluginConfig shared];
     UIColor *currentColor = sender.backgroundColor ?: [UIColor grayColor];
 
     // ─── 判断是否有配对 ───
@@ -712,8 +710,8 @@ static NSString *LightKeyForDarkKey(NSString *darkKey) {
 
     // ★ 统一用双模式入口
     // 无配对时 lightKey=nil, darkKey=nil, 内部自动走单色模式
-    NSString *lightHex = lightKey ? [config valueForKey:lightKey] : [config hexFromColor:currentColor];
-    NSString *darkHex  = darkKey  ? [config valueForKey:darkKey]  : nil;
+    NSString *lightHex = lightKey ? [ConfigManager valueForKey:lightKey] : [WPColorUtil hexStringFromColor:currentColor];
+    NSString *darkHex  = darkKey  ? [ConfigManager valueForKey:darkKey]  : nil;
     BOOL activeIsLight = lightKey ? [key isEqualToString:lightKey] : YES;
 
     [WPColorPicker presentCustomPickerOnViewController:self
@@ -723,13 +721,13 @@ static NSString *LightKeyForDarkKey(NSString *darkKey) {
                                           sourceButton:sender
                                             onSelected:^(NSString *lHex, NSString *dHex) {
         if (lightKey) {
-            [config setValue:lHex forKey:lightKey];
+            [ConfigManager setValue:lHex forKey:lightKey];
         } else {
             // 单色 → 用 valueForKey: 直接设
-            [config setValue:dHex forKey:key];
+            [ConfigManager setValue:dHex forKey:key];
         }
-        if (darkKey)  [config setValue:dHex forKey:darkKey];
-        [config save];
+        if (darkKey)  [ConfigManager setValue:dHex forKey:darkKey];
+        [ConfigManager saveAll];
     }];
 }
 

@@ -1,6 +1,6 @@
 #import "RevokeHook.h"
 #import "RevokeHandler.h"
-#import "../../Config/PluginConfig.h"
+#import "RevokeConfig.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
@@ -31,7 +31,7 @@ static NSString *extractChatName(id obj) {
 static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
     WPLog(@"Revoke", @"[MioPlugin][Revoke] onNewSyncNotAddDBMessage called, arg1=%@", arg1);
     
-    if (![PluginConfig shared].preventRecall) {
+    if (![RevokeConfig shared].preventRecall) {
         if (orig_onNewSyncNotAddDBMessage)
             ((void (*)(id, SEL, id))orig_onNewSyncNotAddDBMessage)(self, _cmd, arg1);
         return;

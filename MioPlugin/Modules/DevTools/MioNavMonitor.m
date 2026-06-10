@@ -1,6 +1,6 @@
 #import "MioNavMonitor.h"
 #import <substrate.h>
-#import "../../Config/PluginConfig.h"
+#import "DevToolsConfig.h"
 #import "../../Core/LogManager.h"
 
 @interface MioNavMonitor (Private)

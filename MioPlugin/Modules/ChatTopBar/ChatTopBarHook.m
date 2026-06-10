@@ -1,7 +1,7 @@
 #import "ChatTopBarHook.h"
 #import "MioChatAvatarTitleView.h"
 #import "CSContactInfoPopoverController.h"
-#import "../../Config/PluginConfig.h"
+#import "ChatTopBarConfig.h"
 #import "../../Config/Constants.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
@@ -21,7 +21,7 @@ didTapAvatarWithContact:(id)contact
            avatarImage:(UIImage *)avatar
             sourceView:(UIView *)sourceView
                   wxid:(NSString *)wxid {
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     if (config.avatarTapFeedback) {
         UIImpactFeedbackGenerator *generator = [[UIImpactFeedbackGenerator alloc]
             initWithStyle:UIImpactFeedbackStyleLight];
@@ -64,7 +64,7 @@ static const void *kOriginalTitleViewKey = &kOriginalTitleViewKey;
 
 static BOOL isContactInBlacklist(NSString *contactID) {
     if (!contactID.length) return NO;
-    NSString *blacklist = [PluginConfig shared].chatAvatarBlacklist;
+    NSString *blacklist = [ChatTopBarConfig shared].chatAvatarBlacklist;
     if (!blacklist.length) return NO;
 
     NSArray *lines = [blacklist componentsSeparatedByString:@"\n"];
@@ -89,7 +89,7 @@ static NSString *getContactUsername(id vc) {
 }
 
 static MioChatAvatarTitleView *createTitleView(id vc) {
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     CGFloat width = config.chatTitleViewWidth > 0 ? config.chatTitleViewWidth : 210.0;
     MioChatAvatarTitleView *view = [[MioChatAvatarTitleView alloc]
                                     initWithFrame:CGRectMake(0, 0, width, 45)];
@@ -128,7 +128,7 @@ static void restoreOriginalTitleView(id vc) {
 static void hook_viewDidLoad(id self, SEL _cmd) {
     ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
 
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     if (!config.showChatAvatar) return;
 
     saveOriginalTitleViewIfNeeded(self);
@@ -146,7 +146,7 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
 static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
 
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     id currentTitle = [[self navigationItem] titleView];
 
     if (!config.showChatAvatar) {
@@ -179,7 +179,7 @@ static void hook_pushViewController(id self, SEL _cmd, id viewController, BOOL a
     Class msgCls = objc_getClass("BaseMsgContentViewController");
     if (!msgCls || ![viewController isKindOfClass:msgCls]) return;
 
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     if (!config.showChatAvatar) return;
 
     NSString *username = getContactUsername(viewController);

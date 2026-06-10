@@ -1,6 +1,6 @@
 #import "../../Settings/Common/SettingCategoryController.h"
 #import "WPCommonUI.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
 
 @interface WPBackupVC : SettingCategoryController
@@ -55,7 +55,7 @@
 
         UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil];
         UIAlertAction *confirm = [UIAlertAction actionWithTitle:@"确认重置" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
-            [[PluginConfig shared] resetAllConfig];
+            [ConfigManager resetAll];
             [self.navigationController popToRootViewControllerAnimated:YES];
 
             UILabel *toast = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 240, 50)];

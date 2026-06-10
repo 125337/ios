@@ -152,7 +152,7 @@ static void replaced_clickMenu(id self, SEL _cmd, id menuItem) {
 static void replaced_reloadMenuItems(id self, SEL _cmd) {
     if (orig_reloadMenuItems) ((void (*)(id, SEL))orig_reloadMenuItems)(self, _cmd);
 
-    if (![PluginConfig shared].clearUnreadEnabled) return;
+    if (![ClearUnreadConfig shared].clearUnreadEnabled) return;
 
     @try {
         Ivar dicIvar = class_getInstanceVariable([self class], "m_dicItems");

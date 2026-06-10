@@ -5,7 +5,8 @@
 // ============================================================
 
 #import "PlaceholderTextHook.h"
-#import "../../Config/PluginConfig.h"
+#import "PlaceholderTextConfig.h"
+#import "../../Config/WPColorUtil.h"
 #import "../../Core/LogManager.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -87,7 +88,7 @@ static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
     if (!isBaseMsgContentVC(parentVC)) return;
 
     // ⑤ 读取配置 (L26720-L26723)
-    PluginConfig *config = [PluginConfig shared];
+    PlaceholderTextConfig *config = [PlaceholderTextConfig shared];
     if (!config.placeholderTextEnabled) return;
 
     // ⑥ 占位文本内容 (L26726-L26733)
@@ -103,7 +104,7 @@ static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
 
     UIColor *color = nil;
     if (hexColor.length > 0) {
-        color = [config colorFromHex:hexColor];
+        color = [WPColorUtil colorFromHexString:hexColor];
     }
     if (!color) {
         // 没有设置颜色时使用默认灰色 + alpha

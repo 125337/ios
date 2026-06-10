@@ -1,5 +1,7 @@
 #import "SettingCardBackgroundController.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Modules/ProfileCardBg/CardBgConfig.h"
+#import "../../Modules/ListCornerRadius/ListCornerRadiusConfig.h"
+#import "../../Config/ConfigManager.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
@@ -23,7 +25,7 @@
     }
     self.masterSwitchKeys = [NSMutableSet set];
 
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 
@@ -42,7 +44,7 @@
                                      isOn:config.cardBgMaterialEnabled
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
 
-        PluginConfig *cfg = [PluginConfig shared];
+        CardBgConfig *cfg = [CardBgConfig shared];
 
         CGFloat sp = cfg.cardBgListSpacing > 0 ? cfg.cardBgListSpacing : 9.0;
         *ecy = [self addInputRowInGroup:expand
@@ -138,7 +140,7 @@
                                       isOn:config.cardBgCornerEnabled
                                 subBuilder:^(UIView *expand, CGFloat *ecy) {
 
-        PluginConfig *c3 = [PluginConfig shared];
+        CardBgConfig *c3 = [CardBgConfig shared];
 
         *ecy = [self addSubSwitchRowInGroup:expand
                                       title:@"使用全局配置"
@@ -208,7 +210,7 @@
                                         key:@"listProfileCardBorderEnabled"
                                        isOn:config.listProfileCardBorderEnabled
                                  subBuilder:^(UIView *expand, CGFloat *ecy) {
-        PluginConfig *c5 = [PluginConfig shared];
+        ListCornerRadiusConfig *c5 = [ListCornerRadiusConfig shared];
 
         // 边框宽度
         NSString *bwStr = c5.listProfileCardBorderWidth > 0
@@ -279,7 +281,7 @@
 #pragma mark - 背景图选择
 
 - (void)onImageTap {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景图"
                                                                    message:nil
                                                             preferredStyle:UIAlertControllerStyleActionSheet];
@@ -316,7 +318,7 @@
             [fm removeItemAtPath:[bgDir stringByAppendingPathComponent:@"MioCardBg.gif"] error:nil];
             WPLog(@"CardBg-Diag", @"[PICKER] Removed default image files from MioCardBackground/");
             config.cardBgImagePath = nil;
-            [config save];
+            [ConfigManager saveAll];
             [self buildUI];
         }]];
     }
@@ -356,7 +358,7 @@
     }
 
     PHPickerResult *result = results.firstObject;
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     NSInteger mode = picker.view.tag;
     BOOL isGif = (mode == 101);
 
@@ -402,7 +404,7 @@
                 BOOL written = [data writeToFile:targetPath atomically:YES];
                 WPLog(@"CardBg-Diag", @"[PICKER] GIF write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
                 config.cardBgImagePath = targetPath;
-                [config save];
+                [ConfigManager saveAll];
                 WPLog(@"CardBg-Diag", @"[PICKER] Saved config: cardBgImagePath=%@", targetPath);
                 WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
                 [picker dismissViewControllerAnimated:YES completion:^{
@@ -422,7 +424,7 @@
                 BOOL written = [data writeToFile:targetPath atomically:YES];
                 WPLog(@"CardBg-Diag", @"[PICKER] Image write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
                 config.cardBgImagePath = targetPath;
-                [config save];
+                [ConfigManager saveAll];
                 WPLog(@"CardBg-Diag", @"[PICKER] Saved config: cardBgImagePath=%@", targetPath);
                 WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
                 [picker dismissViewControllerAnimated:YES completion:^{
@@ -436,7 +438,7 @@
 #pragma mark - 背景填充模式
 
 - (void)onFillModeTap {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     NSArray *modeNames = @[@"填充模式", @"适应模式", @"拉伸填充"];
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景填充模式"
@@ -452,7 +454,7 @@
                                                  style:UIAlertActionStyleDefault
                                                handler:^(UIAlertAction *action) {
             config.cardBgFillMode = i;
-            [config save];
+            [ConfigManager saveAll];
             [self buildUI];
         }]];
     }
@@ -469,7 +471,7 @@
 #pragma mark - 背景显示层级
 
 - (void)onLayerTap {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     NSArray *layerNames = @[@"底层显示", @"顶层显示"];
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景显示层级"
@@ -485,7 +487,7 @@
                                                  style:UIAlertActionStyleDefault
                                                handler:^(UIAlertAction *action) {
             config.cardBgLayer = i;
-            [config save];
+            [ConfigManager saveAll];
             [self buildUI];
         }]];
     }
@@ -503,7 +505,7 @@
 #pragma mark - 对齐方式
 
 - (void)onAlignmentTap {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"对齐方式"
@@ -519,7 +521,7 @@
                                                  style:UIAlertActionStyleDefault
                                                handler:^(UIAlertAction *action) {
             config.cardBgAlignment = i;
-            [config save];
+            [ConfigManager saveAll];
             [self buildUI];
         }]];
     }

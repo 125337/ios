@@ -1,6 +1,9 @@
 #import "../Common/SettingController.h"
 #import "SettingMessageTimeController.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Modules/Unread/ClearUnreadConfig.h"
+#import "../../Modules/MessageTime/MessageTimeConfig.h"
+#import "../../Modules/Joker/JokerConfig.h"
+#import "../../Modules/GroupExit/GroupExitConfig.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
@@ -58,7 +61,6 @@
         [v removeFromSuperview];
     }
 
-    PluginConfig *config = [PluginConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
 
@@ -81,7 +83,7 @@
     UIView *group = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
 
-    NSString *revokeStatus = config.preventRecall ? @"已开启" : @"已关闭";
+    NSString *revokeStatus = [RevokeConfig shared].preventRecall ? @"已开启" : @"已关闭";
     cy = [self addNavRowInGroup:group
                            title:@"消息防撤回"
                         subtitle:revokeStatus
@@ -106,7 +108,7 @@
                               title:@"启用修改文字(小丑功能)"
                                desc:nil
                                 key:@"enableJoker"
-                               isOn:config.enableJoker
+                               isOn:[JokerConfig shared].enableJoker
                                  cy:cy
                               width:w];
 
@@ -116,13 +118,13 @@
                               title:@"启用退群检测"
                                desc:nil
                                 key:@"enableGroupExitMonitor"
-                               isOn:config.enableGroupExitMonitor
+                               isOn:[GroupExitConfig shared].enableGroupExitMonitor
                                  cy:cy
                               width:w];
 
     cy = [self addSeparatorInGroup:group cy:cy width:w];
 
-    NSString *timeStatus = config.showMessageTime ? @"已开启" : @"已关闭";
+    NSString *timeStatus = [MessageTimeConfig shared].showMessageTime ? @"已开启" : @"已关闭";
     cy = [self addNavRowInGroup:group
                              title:@"显示消息时间"
                           subtitle:timeStatus

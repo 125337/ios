@@ -1,5 +1,5 @@
 #import "SettingMessageTimeController.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Modules/MessageTime/MessageTimeConfig.h"
 #import "../../Modules/MessageTime/MessageTimeFormatEditorVC.h"
 
 @interface SettingMessageTimeController ()
@@ -34,7 +34,7 @@
         @"消息上方(靠近头像)", @"消息旁边(=气泡外)"
     ];
 
-    PluginConfig *config = [PluginConfig shared];
+    MessageTimeConfig *config = [MessageTimeConfig shared];
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"请选择时间标签的显示位置"
                                                                   message:nil
@@ -48,8 +48,8 @@
         [alert addAction:[UIAlertAction actionWithTitle:title
                                                  style:UIAlertActionStyleDefault
                                                handler:^(UIAlertAction *action) {
-            config.messageTimePosition = i;
-            [config save];
+            [MessageTimeConfig shared].messageTimePosition = i;
+            [ConfigManager saveAll];
             [self buildUI];
         }]];
     }
@@ -66,11 +66,10 @@
 
 - (void)onMessageTimeCustomFormatTap {
     MessageTimeFormatEditorVC *editor = [[MessageTimeFormatEditorVC alloc] init];
-    editor.initialFormat = [PluginConfig shared].messageTimeCustomFormat;
+    editor.initialFormat = [MessageTimeConfig shared].messageTimeCustomFormat;
     editor.saveBlock = [^(NSString *newFormat) {
-        PluginConfig *cfg = [PluginConfig shared];
-        cfg.messageTimeCustomFormat = newFormat;
-        [cfg save];
+        [MessageTimeConfig shared].messageTimeCustomFormat = newFormat;
+        [ConfigManager saveAll];
         [self buildUI];
     } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
@@ -83,7 +82,7 @@
         [v removeFromSuperview];
     }
 
-    PluginConfig *config = [PluginConfig shared];
+    MessageTimeConfig *config = [MessageTimeConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
 

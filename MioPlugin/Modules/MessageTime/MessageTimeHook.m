@@ -1,5 +1,5 @@
 #import "MessageTimeHook.h"
-#import "../../Config/PluginConfig.h"
+#import "../Revoke/RevokeConfig.h"
 #import "MessageTimeFormatParser.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -44,7 +44,7 @@ static dispatch_queue_t _logQueue(void) {
 }
 
 static void mtLog(NSString *content) {
-    if ([content hasPrefix:@"[DBG]"] && ![PluginConfig shared].debugLogging) return;
+    if ([content hasPrefix:@"[DBG]"] && ![MessageTimeConfig shared].debugLogging) return;
     
     NSLog(@"[MioPlugin][MessageTime] %@", content);
     dispatch_async(_logQueue(), ^{
@@ -463,7 +463,7 @@ static id repl_CommonMessageCellView_initWithViewModel(id self, SEL _cmd, id vie
     if (!result) return nil;
 
     id realSelf = result;
-    PluginConfig *config = [PluginConfig shared];
+    MessageTimeConfig *config = [MessageTimeConfig shared];
 
     UILabel *label = [[UILabel alloc] init];
     CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
@@ -521,7 +521,7 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     UIView *cv = (UIView *)self;
     UILabel *label = objc_getAssociatedObject(cv, @"msgTimeLabel");
 
-    if (![PluginConfig shared].showMessageTime) {
+    if (![MessageTimeConfig shared].showMessageTime) {
         if (label) { label.hidden = YES; }
         return;
     }
@@ -546,7 +546,7 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     if (!viewModel) { label.hidden = YES; return; }
 
     // 复合消息过滤（复刻 FUN_0003c628 — 照抄 FUN_0003a06c 行 34573-34582）
-    PluginConfig *config = [PluginConfig shared];
+    MessageTimeConfig *config = [MessageTimeConfig shared];
     NSInteger position = config.messageTimePosition;
     if (!shouldShowMessageTimeForSubViewModel(viewModel, position)) {
         label.hidden = YES;
@@ -605,8 +605,8 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     label.text = timeText;
 
     // 计算 label 尺寸（复刻 FUN_0003a06c 开头：textW+4, textH+4, clamp 30~88）
-    CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
-    UIFont *font = config.messageTimeBoldFont ? [UIFont boldSystemFontOfSize:fontSize] : [UIFont systemFontOfSize:fontSize];
+    CGFloat fontSize = [MessageTimeConfig shared].messageTimeFontSize > 0 ? [MessageTimeConfig shared].messageTimeFontSize : 7.0;
+    UIFont *font = [MessageTimeConfig shared].messageTimeBoldFont ? [UIFont boldSystemFontOfSize:fontSize] : [UIFont systemFontOfSize:fontSize];
     label.font = font;
 
     NSDictionary *attrs = @{NSFontAttributeName: font};
@@ -621,15 +621,15 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
 
     // 设置颜色（复刻反编译 FUN_0003b3b4 — sender/receiver × 亮/暗 四色）
     @try {
-        NSString *textHex = isSender ? config.senderTextColorHex : config.receiverTextColorHex;
-        NSString *textDarkHex = isSender ? config.senderTextColorDarkHex : config.receiverTextColorDarkHex;
-        NSString *bgHex = isSender ? config.senderBackgroundColorHex : config.receiverBackgroundColorHex;
-        NSString *bgDarkHex = isSender ? config.senderBackgroundColorDarkHex : config.receiverBackgroundColorDarkHex;
+        NSString *textHex = isSender ? [MessageTimeConfig shared].senderTextColorHex : [MessageTimeConfig shared].receiverTextColorHex;
+        NSString *textDarkHex = isSender ? [MessageTimeConfig shared].senderTextColorDarkHex : [MessageTimeConfig shared].receiverTextColorDarkHex;
+        NSString *bgHex = isSender ? [MessageTimeConfig shared].senderBackgroundColorHex : [MessageTimeConfig shared].receiverBackgroundColorHex;
+        NSString *bgDarkHex = isSender ? [MessageTimeConfig shared].senderBackgroundColorDarkHex : [MessageTimeConfig shared].receiverBackgroundColorDarkHex;
 
-        UIColor *lightTextColor = textHex.length ? [config colorFromHex:textHex] : nil;
-        UIColor *darkTextColor  = textDarkHex.length ? [config colorFromHex:textDarkHex] : nil;
-        UIColor *lightBgColor   = bgHex.length ? [config colorFromHex:bgHex] : nil;
-        UIColor *darkBgColor    = bgDarkHex.length ? [config colorFromHex:bgDarkHex] : nil;
+        UIColor *lightTextColor = textHex.length ? [[MessageTimeConfig shared] colorFromHex:textHex] : nil;
+        UIColor *darkTextColor  = textDarkHex.length ? [[MessageTimeConfig shared] colorFromHex:textDarkHex] : nil;
+        UIColor *lightBgColor   = bgHex.length ? [[MessageTimeConfig shared] colorFromHex:bgHex] : nil;
+        UIColor *darkBgColor    = bgDarkHex.length ? [[MessageTimeConfig shared] colorFromHex:bgDarkHex] : nil;
 
         if (!lightTextColor) lightTextColor = [UIColor colorWithWhite:0.5 alpha:1.0];
 
@@ -647,7 +647,7 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
         NSLog(@"[MioPlugin] updateNodeStatus color error: %@", ex);
     }
 
-    CGFloat cornerRadius = config.messageTimeCornerRadius > 0 ? config.messageTimeCornerRadius : 8.0;
+    CGFloat cornerRadius = [MessageTimeConfig shared].messageTimeCornerRadius > 0 ? [MessageTimeConfig shared].messageTimeCornerRadius : 8.0;
     label.layer.cornerRadius = cornerRadius;
 
     // 获取 contentView frame 用于定位
@@ -739,7 +739,7 @@ static void repl_ChatTimeCellView_layoutSubviews(id self, SEL _cmd) {
     if (orig_ChatTimeCellView_layoutSubviews) {
         orig_ChatTimeCellView_layoutSubviews(self, _cmd);
     }
-    if ([PluginConfig shared].hideChatTime) {
+    if ([MessageTimeConfig shared].hideChatTime) {
         [self setHidden:YES];
     }
 }
@@ -749,7 +749,7 @@ static CGFloat repl_ChatTimeViewModel_cellHeight(id self, SEL _cmd) {
     if (orig_ChatTimeViewModel_cellHeight) {
         h = orig_ChatTimeViewModel_cellHeight(self, _cmd);
     }
-    if ([PluginConfig shared].hideChatTime) {
+    if ([MessageTimeConfig shared].hideChatTime) {
         return 0.001;
     }
     return h;
@@ -761,7 +761,7 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
         origName = orig_CContact_m_nsNickName(self, _cmd);
     }
 
-    PluginConfig *config = [PluginConfig shared];
+    MessageTimeConfig *config = [MessageTimeConfig shared];
     if (!config.showAddTimeSuffix || !origName) return origName;
 
     unsigned int addTime = 0;
@@ -781,7 +781,7 @@ static NSString* repl_CContact_m_nsNickName(id self, SEL _cmd) {
 }
 
 static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
-    PluginConfig *config = [PluginConfig shared];
+    MessageTimeConfig *config = [MessageTimeConfig shared];
 
     if (config.showMessageTime && config.messageTimePosition == 7) {
         id viewModel = nil;
@@ -832,7 +832,7 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
     WPLog(@"MsgTime", @"Architecture: 仅hook updateNodeStatus计算时间文本，不碰cellForRow，避开VC转场崩溃");
     WPLog(@"MsgTime", @"========================================");
 
-    PluginConfig *config = [PluginConfig shared];
+    MessageTimeConfig *config = [MessageTimeConfig shared];
     WPLog(@"MsgTime", @"Config - showMessageTime: %d", config.showMessageTime);
     WPLog(@"MsgTime", @"Config - messageTimePosition: %ld", (long)config.messageTimePosition);
     WPLog(@"MsgTime", @"Config - messageTimeFontSize: %.1f", config.messageTimeFontSize);

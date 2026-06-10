@@ -30,7 +30,7 @@
 
 - (void)showGroupSelectController {
     WPLog(@"Setting", @"[GroupSelect] showGroupSelectController called");
-    PluginConfig *config = [PluginConfig shared];
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
     WPLog(@"Setting", @"[GroupSelect] config.redEnvelopGroupFilterList=%@", config.redEnvelopGroupFilterList);
     
     @try {
@@ -50,9 +50,9 @@
 #pragma mark - MioTweakGroupSelectsDelegate
 
 - (void)onGroupSelectReturn:(NSArray<NSString *> *)groupIds {
-    PluginConfig *config = [PluginConfig shared];
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
     config.redEnvelopGroupFilterList = groupIds;
-    [config save];
+    [ConfigManager saveAll];
     [self buildUI];
 }
 
@@ -65,7 +65,7 @@
     }
     self.masterSwitchKeys = [NSMutableSet set];
 
-    PluginConfig *config = [PluginConfig shared];
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
 

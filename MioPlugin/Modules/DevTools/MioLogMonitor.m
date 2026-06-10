@@ -1,5 +1,5 @@
 #import "MioLogMonitor.h"
-#import "../../Config/PluginConfig.h"
+#import "DevToolsConfig.h"
 #import "../../Core/LogManager.h"
 
 #import <fcntl.h>
@@ -80,7 +80,7 @@
 }
 
 - (NSArray<NSString *> *)filteredLogs {
-    PluginConfig *config = [PluginConfig shared];
+    DevToolsConfig *config = [DevToolsConfig shared];
     if (config.nsLogKeywords.length == 0) {
         return [self allLogs];
     }
@@ -209,7 +209,7 @@
         range:NSMakeRange(0, trimmed.length)];
     if (!match) return;
 
-    PluginConfig *config = [PluginConfig shared];
+    DevToolsConfig *config = [DevToolsConfig shared];
     if (config.nsLogKeywords.length > 0) {
         NSArray<NSString *> *keywords =
             [config.nsLogKeywords componentsSeparatedByString:@","];
@@ -241,7 +241,7 @@
         }
     }
 
-    if ([PluginConfig shared].nsLogLocalSave) {
+    if ([DevToolsConfig shared].nsLogLocalSave) {
         [self writeToFile:timestamped];
     }
 }

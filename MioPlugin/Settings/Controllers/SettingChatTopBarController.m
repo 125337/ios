@@ -1,6 +1,7 @@
 #import "SettingChatTopBarController.h"
 #import "ChatTopBarBlacklistEditorVC.h"
-#import "../../Config/PluginConfig.h"
+#import "../Modules/ChatTopBar/ChatTopBarConfig.h"
+#import "../../Config/ConfigManager.h"
 #import "../../Config/WPColors.h"
 #import "../../Config/Constants.h"
 #import "../../Core/LogManager.h"
@@ -55,7 +56,7 @@ static NSString *keyForTag(NSInteger tag) {
 
 /// 返回指定 key 对应的当前配置值（用于列表项 subtitle 显示）
 - (NSString *)subtitleForKey:(NSString *)key {
-    PluginConfig *c = [PluginConfig shared];
+    ChatTopBarConfig *c = [ChatTopBarConfig shared];
     CGFloat val = 0;
     if ([key isEqualToString:@"AvatarCornerRadius"])       val = c.chatAvatarCornerRadius;
     else if ([key isEqualToString:@"AvatarSize"])           val = c.chatAvatarSize;
@@ -102,7 +103,7 @@ static NSString *keyForTag(NSInteger tag) {
         @"显示双方头像(重叠)",
     ];
 
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     NSInteger currentMode = config.chatDisplayMode;
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"选择显示模式"
@@ -118,7 +119,7 @@ static NSString *keyForTag(NSInteger tag) {
                                                  style:UIAlertActionStyleDefault
                                                handler:^(UIAlertAction *action) {
             config.chatDisplayMode = i;
-            [config save];
+            [ConfigManager saveAll];
             [self buildUI];
         }]];
     }
@@ -182,18 +183,18 @@ static NSString *keyForTag(NSInteger tag) {
 
     [inputAlert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
         textField.placeholder = @"请输入分隔文本";
-        textField.text = [PluginConfig shared].chatSeparatorText ?: @"";
+        textField.text = [ChatTopBarConfig shared].chatSeparatorText ?: @"";
         WPLog(@"Mio-Separator", @"  当前分隔文本: %@", textField.text);
     }];
 
     [inputAlert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *text = inputAlert.textFields.firstObject.text ?: @"";
         WPLog(@"Mio-Separator", @"  用户输入文本: %@", text);
-        PluginConfig *config = [PluginConfig shared];
+        ChatTopBarConfig *config = [ChatTopBarConfig shared];
         config.chatSeparatorText = text;
         WPLog(@"Mio-Separator", @"  设置 chatSeparatorText = %@", text);
-        [config save];
-        WPLog(@"Mio-Separator", @"  调用 [config save]");
+        [ConfigManager saveAll];
+        WPLog(@"Mio-Separator", @"  调用 [ConfigManager saveAll]");
         [self buildUI];
         WPLog(@"Mio-Separator", @"  调用 [self buildUI]");
     }]];
@@ -231,7 +232,7 @@ static NSString *keyForTag(NSInteger tag) {
 #pragma mark - 后缀格式设置
 
 - (void)onAddTimeSuffixTap {
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"添加时间后缀格式"
                                                                    message:@"输入格式字符串，如 %%ld天"
                                                             preferredStyle:UIAlertControllerStyleAlert];
@@ -242,7 +243,7 @@ static NSString *keyForTag(NSInteger tag) {
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *text = alert.textFields.firstObject.text;
         config.chatAddTimeSuffixFormat = text.length > 0 ? text : nil;
-        [config save];
+        [ConfigManager saveAll];
         [self buildUI];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -250,7 +251,7 @@ static NSString *keyForTag(NSInteger tag) {
 }
 
 - (void)onGroupCountSuffixTap {
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"群成员数后缀格式"
                                                                    message:@"输入格式字符串，如 %%u人"
                                                             preferredStyle:UIAlertControllerStyleAlert];
@@ -261,7 +262,7 @@ static NSString *keyForTag(NSInteger tag) {
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *text = alert.textFields.firstObject.text;
         config.chatGroupMemberCountSuffix = text.length > 0 ? text : nil;
-        [config save];
+        [ConfigManager saveAll];
         [self buildUI];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -272,10 +273,10 @@ static NSString *keyForTag(NSInteger tag) {
 
 - (void)onBlacklistTap {
     ChatTopBarBlacklistEditorVC *vc = [[ChatTopBarBlacklistEditorVC alloc] init];
-    vc.blacklist = [PluginConfig shared].chatAvatarBlacklist;
+    vc.blacklist = [ChatTopBarConfig shared].chatAvatarBlacklist;
     vc.saveBlock = ^(NSString *blacklist) {
-        [PluginConfig shared].chatAvatarBlacklist = blacklist;
-        [[PluginConfig shared] save];
+        [ChatTopBarConfig shared].chatAvatarBlacklist = blacklist;
+        [[ChatTopBarConfig shared] save];
     };
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
@@ -297,7 +298,7 @@ static NSString *keyForTag(NSInteger tag) {
                                                             preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-        PluginConfig *cfg2 = [PluginConfig shared];
+        ChatTopBarConfig *cfg2 = [ChatTopBarConfig shared];
         CGFloat val = 0;
         if ([key isEqualToString:@"AvatarCornerRadius"])       val = cfg2.chatAvatarCornerRadius;
         else if ([key isEqualToString:@"AvatarSize"])           val = cfg2.chatAvatarSize;
@@ -320,7 +321,7 @@ static NSString *keyForTag(NSInteger tag) {
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *raw = alert.textFields.firstObject.text;
         NSString *text = (raw.length > 0) ? raw : cfg[@"placeholder"];
-        PluginConfig *c = [PluginConfig shared];
+        ChatTopBarConfig *c = [ChatTopBarConfig shared];
         if ([key isEqualToString:@"AvatarCornerRadius"])       c.chatAvatarCornerRadius = [text floatValue];
         else if ([key isEqualToString:@"AvatarSize"])           c.chatAvatarSize = [text floatValue];
         else if ([key isEqualToString:@"SeparatorSize"])        c.chatSeparatorSize = [text floatValue];
@@ -331,7 +332,7 @@ static NSString *keyForTag(NSInteger tag) {
         else if ([key isEqualToString:@"NicknameVerticalOffset"])  c.chatNicknameOffsetY = [text floatValue];
         else if ([key isEqualToString:@"NicknameHorizontalOffset"]) c.chatNicknameOffsetX = [text floatValue];
         else if ([key isEqualToString:@"ViewWidth"])            c.chatTitleViewWidth = [text floatValue];
-        [c save];
+        [ConfigManager saveAll];
         UILabel *valueLabel = objc_getAssociatedObject(sender, "editValueLabel");
         if (valueLabel) {
             valueLabel.text = [NSString stringWithFormat:@"%.0f", [text floatValue]];
@@ -350,7 +351,7 @@ static NSString *keyForTag(NSInteger tag) {
         [v removeFromSuperview];
     }
 
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 8;
 
@@ -451,7 +452,7 @@ static NSString *keyForTag(NSInteger tag) {
     }
 
     PHPickerResult *result = results.firstObject;
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
 
     if (picker.view.tag == 100) {
         WPLog(@"Mio-Separator", @"  tag=100 → 选择静态图片");
@@ -470,8 +471,8 @@ static NSString *keyForTag(NSInteger tag) {
                 WPLog(@"Mio-Separator", @"    写入完成, data.length=%lu", (unsigned long)pngData.length);
                 config.chatSeparatorIcon = iconPath;
                 WPLog(@"Mio-Separator", @"    设置 chatSeparatorIcon = %@", iconPath);
-                [config save];
-                WPLog(@"Mio-Separator", @"    调用 [config save]");
+                [ConfigManager saveAll];
+                WPLog(@"Mio-Separator", @"    调用 [ConfigManager saveAll]");
                 [picker dismissViewControllerAnimated:YES completion:^{
                     WPLog(@"Mio-Separator", @"    dismiss 完成，调用 buildUI");
                     [self buildUI];
@@ -489,8 +490,8 @@ static NSString *keyForTag(NSInteger tag) {
                 WPLog(@"Mio-Separator", @"    GIF加载成功: url.path=%@", url.path);
                 config.chatSeparatorGIF = url.path;
                 WPLog(@"Mio-Separator", @"    设置 chatSeparatorGIF = %@", url.path);
-                [config save];
-                WPLog(@"Mio-Separator", @"    调用 [config save]");
+                [ConfigManager saveAll];
+                WPLog(@"Mio-Separator", @"    调用 [ConfigManager saveAll]");
                 [picker dismissViewControllerAnimated:YES completion:^{
                     WPLog(@"Mio-Separator", @"    dismiss 完成，调用 buildUI");
                     [self buildUI];
@@ -502,7 +503,7 @@ static NSString *keyForTag(NSInteger tag) {
 
 - (void)deleteAllSeparators {
     WPLog(@"Mio-Separator", @"deleteAllSeparators 被调用");
-    PluginConfig *config = [PluginConfig shared];
+    ChatTopBarConfig *config = [ChatTopBarConfig shared];
     WPLog(@"Mio-Separator", @"  当前值: icon=%@, gif=%@, text=%@",
           config.chatSeparatorIcon, config.chatSeparatorGIF, config.chatSeparatorText);
     config.chatSeparatorIcon = nil;
@@ -511,8 +512,8 @@ static NSString *keyForTag(NSInteger tag) {
     WPLog(@"Mio-Separator", @"  设置 chatSeparatorGIF = nil");
     config.chatSeparatorText = nil;
     WPLog(@"Mio-Separator", @"  设置 chatSeparatorText = nil");
-    [config save];
-    WPLog(@"Mio-Separator", @"  调用 [config save]");
+    [ConfigManager saveAll];
+    WPLog(@"Mio-Separator", @"  调用 [ConfigManager saveAll]");
 
     NSString *iconPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/MioChatSeparatorIcon.png"];
     WPLog(@"Mio-Separator", @"  删除文件: %@", iconPath);

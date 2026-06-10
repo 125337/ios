@@ -1,5 +1,5 @@
 #import "../../Settings/Common/SettingCategoryController.h"
-#import "../../Config/PluginConfig.h"
+#import "../PlaceholderText/PlaceholderTextConfig.h"
 #import "../../Core/LogManager.h"
 #import "../../Config/WPColors.h"
 
@@ -20,7 +20,7 @@
     }
     self.masterSwitchKeys = [NSMutableSet set];
 
-    PluginConfig *config = [PluginConfig shared];
+    PlaceholderTextConfig *config = [PlaceholderTextConfig shared];
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 

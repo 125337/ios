@@ -59,7 +59,7 @@ static void replaced_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
 }
 
 static void processRedEnvelopMessage(id wrap) {
-    PluginConfig *config = [PluginConfig shared];
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
     if (!config.autoRedEnvelop) return;
 
     if (!wrap) return;
@@ -227,7 +227,7 @@ static void processRedEnvelopMessage(id wrap) {
 }
 
 static void handleHongbaoResponse(id res, id req) {
-    PluginConfig *config = [PluginConfig shared];
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
     if (!config.autoRedEnvelop) return;
 
     NSInteger cgiCmdid = 0;
@@ -539,7 +539,7 @@ static void replaced_DetailViewDidLoad(id self, SEL _cmd) {
         ((void (*)(id, SEL))orig_DetailViewDidLoad)(self, _cmd);
     }
 
-    PluginConfig *config = [PluginConfig shared];
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
     if (!config.redEnvelopeDetail) return;
 
     addDetailButtonIfNeeded(self);

@@ -1,9 +1,18 @@
 #import "ProfileCardBgHook.h"
-#import "../../Config/PluginConfig.h"
+#import "CardBgConfig.h"
+#import "../ListCornerRadius/ListCornerRadiusConfig.h"
+#import "../../Config/WPColorUtil.h"
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <substrate.h>
+
+static BOOL wp_isDarkModeForVC(UIViewController *vc) {
+    if (@available(iOS 13.0, *)) {
+        return vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    }
+    return NO;
+}
 
 static const NSInteger kProfileCardBgImageTag = 999902;
 
@@ -12,7 +21,7 @@ static double (*_orig_heightForHeader)(id, SEL, id, long long);
 static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long section) {
     double result = _orig_heightForHeader(self, _cmd, tableView, section);
 
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     if (!config.cardBgMaterialEnabled) return result;
 
     if (section != 1) return result;
@@ -46,7 +55,8 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 #pragma mark - 资料卡圆角
 
 + (void)applyProfileCardCorner:(UIView *)cell isDark:(BOOL)isDark {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
+    ListCornerRadiusConfig *listConfig = [ListCornerRadiusConfig shared];
 
     if (!config.cardBgCornerEnabled) {
         cell.layer.cornerRadius = 0;
@@ -58,14 +68,14 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
     if (config.cardBgCornerUseGlobal) {
         // ── 使用全局配置 ──
-        NSInteger radius = (NSInteger)config.listCellCornerRadius;
+        NSInteger radius = (NSInteger)listConfig.listCellCornerRadius;
         if (radius <= 0) radius = 18;
         cell.layer.cornerRadius = radius;
         cell.layer.masksToBounds = YES;
 
         UIColor *bgColor = isDark
-            ? [config colorFromHex:config.listCellDarkBgColor]
-            : [config colorFromHex:config.listCellLightBgColor];
+            ? [WPColorUtil colorFromHexString:listConfig.listCellDarkBgColor]
+            : [WPColorUtil colorFromHexString:listConfig.listCellLightBgColor];
         if (bgColor) {
             cell.backgroundColor = bgColor;
         }
@@ -77,7 +87,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         cell.layer.cornerRadius = radius;
         cell.layer.masksToBounds = YES;
 
-        UIColor *bgColor = [config colorFromHex:isDark
+        UIColor *bgColor = [WPColorUtil colorFromHexString:isDark
             ? config.cardBgCornerDarkBgColor : config.cardBgCornerBgColor];
         if (bgColor) {
             cell.backgroundColor = bgColor;
@@ -85,13 +95,13 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     }
 
     // ★★★ 统一资料卡边框（依赖 cardBgCornerEnabled，此时已确认开启） ★★★
-    if (config.listProfileCardBorderEnabled) {
-        CGFloat bw = config.listProfileCardBorderWidth;
+    if (listConfig.listProfileCardBorderEnabled) {
+        CGFloat bw = listConfig.listProfileCardBorderWidth;
         if (bw > 0) {
             cell.layer.borderWidth = bw;
             UIColor *borderColor = isDark
-                ? [config colorFromHex:config.listProfileCardBorderColorDarkHex]
-                : [config colorFromHex:config.listProfileCardBorderColor];
+                ? [WPColorUtil colorFromHexString:listConfig.listProfileCardBorderColorDarkHex]
+                : [WPColorUtil colorFromHexString:listConfig.listProfileCardBorderColor];
             cell.layer.borderColor = borderColor.CGColor;
         } else {
             cell.layer.borderWidth = 0;
@@ -177,7 +187,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
 + (UIImage *)loadBackgroundImageSync {
     WPLog(@"CardBg-Diag", @"[IMG-LOAD] Start");
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     NSString *imagePath = config.cardBgImagePath;
     WPLog(@"CardBg-Diag", @"[IMG-LOAD] configPath=%@", imagePath ?: @"(nil)");
 
@@ -315,7 +325,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
 + (void)loadBackgroundImageForImageView:(UIImageView *)imageView {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        PluginConfig *config = [PluginConfig shared];
+        CardBgConfig *config = [CardBgConfig shared];
         NSString *imagePath = config.cardBgImagePath;
 
         if (!imagePath || imagePath.length == 0) {
@@ -434,7 +444,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 }
 
 + (BOOL)isDarkModeForVc:(UIViewController *)vc {
-    return [[PluginConfig shared] isDarkModeForViewController:vc];
+    return wp_isDarkModeForVC(vc);
 }
 
 + (void)cleanNativeBgImageView:(UIView *)button {
@@ -489,7 +499,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
 + (CGFloat)calcImageAlignmentOffsetWithImageSize:(CGSize)imageSize
                                           inView:(UIView *)view {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     NSInteger fillMode = config.cardBgFillMode;
     NSInteger alignment = config.cardBgAlignment;
 
@@ -513,7 +523,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 }
 
 + (UIImageView *)createBackgroundImageViewInButton:(UIView *)button {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
 
     UIImageView *newBg = [[UIImageView alloc] init];
     newBg.tag = kProfileCardBgImageTag;
@@ -530,7 +540,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 /// imageView 必须已添加到 button 上
 + (void)configureBackgroundImageView:(UIImageView *)imageView
                             inButton:(UIView *)button {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
 
     // ── 裁剪：让 aspectFill 渲染超界部分透出，对齐偏移才能生效 ──
     imageView.clipsToBounds = NO;
@@ -587,8 +597,8 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
                                                       inButton:strongButton];
             } else {
                 // fallback：无图片时设置背景色（复用卡片圆角背景色）
-                PluginConfig *cfg = [PluginConfig shared];
-                UIColor *cardBg = [cfg colorFromHex:cfg.cardBgCornerBgColor];
+                CardBgConfig *cfg = [CardBgConfig shared];
+                UIColor *cardBg = [WPColorUtil colorFromHexString:cfg.cardBgCornerBgColor];
                 if (cardBg) strongButton.backgroundColor = cardBg;
             }
         });
@@ -597,7 +607,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
 + (void)setupBackgroundMaterialInButton:(UIView *)button
                                  isDark:(BOOL)isDark {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
 
     // ── 查找已有 bg ──
     UIImageView *bgImgView = [ProfileCardBgHook findBackgroundImageViewInButton:button];
@@ -660,7 +670,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 #pragma mark - ★ 核心：handleButtonLayout
 
 + (void)handleButtonLayout:(UIView *)button {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
 
     // ☆ 独立功能：状态隐藏
     [ProfileCardBgHook hideStateElementsInCell:button
@@ -692,7 +702,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 #pragma mark - 方案 M：左右边距
 
 + (void)handleMarginAdjustment:(UIView *)button {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
 
     // ★ 内部守卫：圆角未开启时不做边距调整
     if (!config.cardBgCornerEnabled) return;
@@ -753,7 +763,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 #pragma mark - 圆角 + QR 码隐藏
 
 + (void)handleCornerAndQR:(UIView *)button isDark:(BOOL)isDark {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     if (config.cardBgCornerEnabled) {
         [ProfileCardBgHook applyProfileCardCorner:button isDark:isDark];
     }
@@ -763,7 +773,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 #pragma mark - 隐藏路径
 
 + (void)handleHiddenPath:(UIView *)button isDark:(BOOL)isDark {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     BOOL hasMaterial = config.cardBgMaterialEnabled;
 
     // ── 共有清除：button 背景色 + 原生 bg ──
@@ -808,7 +818,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 #pragma mark - 可见态美化路径
 
 + (void)handleVisiblePath:(UIView *)button isDark:(BOOL)isDark {
-    PluginConfig *config = [PluginConfig shared];
+    CardBgConfig *config = [CardBgConfig shared];
     BOOL hasMaterial = config.cardBgMaterialEnabled;
     BOOL hasImagePath = hasMaterial && config.cardBgImagePath.length > 0;
     BOOL needCorner = config.cardBgCornerEnabled;
