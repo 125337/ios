@@ -1,4 +1,5 @@
 #import "PluginConfig.h"
+#import "../Core/ConfigManager.h"
 #import "../Modules/GroupExit/GroupExitHook.h"
 #import "../Core/LogManager.h"
 
