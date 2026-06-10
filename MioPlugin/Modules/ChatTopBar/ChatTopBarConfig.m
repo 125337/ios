@@ -61,24 +61,15 @@ static ChatTopBarConfig *_sharedInstance = nil;
 
 - (BOOL)hasAnySeparator {
     return self.chatSeparatorText.length > 0
-        || [ChatTopBarConfig hasSeparatorIconFile]
-        || [ChatTopBarConfig hasSeparatorGIFFile];
+        || [ChatTopBarConfig hasSeparatorIconFile];
 }
 
 + (NSString *)separatorIconPath {
     return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/Miopng/separator_icon.png"];
 }
 
-+ (NSString *)separatorGIFPath {
-    return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/Miopng/separator_icon.gif"];
-}
-
 + (BOOL)hasSeparatorIconFile {
     return [[NSFileManager defaultManager] fileExistsAtPath:[self separatorIconPath]];
-}
-
-+ (BOOL)hasSeparatorGIFFile {
-    return [[NSFileManager defaultManager] fileExistsAtPath:[self separatorGIFPath]];
 }
 
 @end

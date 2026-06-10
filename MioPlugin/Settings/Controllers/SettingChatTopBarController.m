@@ -177,12 +177,6 @@ static NSString *keyForTag(NSInteger tag) {
         [self onPickStaticImage];
     }]];
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"选择GIF动图"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *action) {
-        [self onPickGIFImage];
-    }]];
-
     // 只有设置了任意分隔符时才显示"清除分隔符"按钮
     if ([config hasAnySeparator]) {
         [alert addAction:[UIAlertAction actionWithTitle:@"清除分隔符"
@@ -242,17 +236,6 @@ static NSString *keyForTag(NSInteger tag) {
     PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
     picker.delegate = self;
     picker.view.tag = 100;
-    [self presentViewController:picker animated:YES completion:nil];
-}
-
-- (void)onPickGIFImage {
-    PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
-    config.selectionLimit = 1;
-    config.filter = [PHPickerFilter imagesFilter];
-
-    PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
-    picker.delegate = self;
-    picker.view.tag = 200;
     [self presentViewController:picker animated:YES completion:nil];
 }
 
@@ -399,12 +382,10 @@ static NSString *keyForTag(NSInteger tag) {
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addNavRowInGroup:expand title:@"头像显示模式" subtitle:[self avatarDisplayModeName:config.chatDisplayMode] tag:100 action:@selector(onAvatarDisplayModeTap) cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        // 副标题：优先显示文本，其次GIF，最后静态图片
+        // 副标题：优先显示文本，其次静态图片
         NSString *sepSub = @"未设置";
         if (config.chatSeparatorText.length > 0) {
             sepSub = [NSString stringWithFormat:@"文本: %@", config.chatSeparatorText];
-        } else if ([ChatTopBarConfig hasSeparatorGIFFile]) {
-            sepSub = @"GIF动图";
         } else if ([ChatTopBarConfig hasSeparatorIconFile]) {
             sepSub = @"静态图片";
         }
@@ -507,48 +488,6 @@ static NSString *keyForTag(NSInteger tag) {
                 WPLog(@"Mio-Separator", @"    写入完成, data.length=%lu", (unsigned long)pngData.length);
                 // 文件已写入硬编码路径，不再需要存到 config
                 WPLog(@"Mio-Separator", @"    静态图标已保存到: %@", iconPath);
-                [ConfigManager saveAll];
-                WPLog(@"Mio-Separator", @"    调用 [ConfigManager saveAll]");
-                [picker dismissViewControllerAnimated:YES completion:^{
-                    WPLog(@"Mio-Separator", @"    dismiss 完成，调用 buildUI");
-                    [self buildUI];
-                }];
-            });
-        }];
-    } else if (picker.view.tag == 200) {
-        WPLog(@"Mio-Separator", @"  tag=200 → 选择GIF动图");
-        [result.itemProvider loadFileRepresentationForTypeIdentifier:(__bridge NSString *)kUTTypeGIF completionHandler:^(NSURL *url, NSError *error) {
-            if (error || !url) {
-                WPLog(@"Mio-Separator", @"    加载GIF失败: error=%@", error);
-                return;
-            }
-            dispatch_async(dispatch_get_main_queue(), ^{
-                WPLog(@"Mio-Separator", @"    GIF加载成功: url.path=%@", url.path);
-
-                // 复制GIF到Miopng目录
-                NSString *miopngDir = [self ensureMiopngDirectory];
-                NSString *gifDestPath = [miopngDir stringByAppendingPathComponent:@"separator_icon.gif"];
-
-                NSFileManager *fm = [NSFileManager defaultManager];
-                NSError *copyError = nil;
-
-                // 如果目标文件已存在，先删除
-                if ([fm fileExistsAtPath:gifDestPath]) {
-                    [fm removeItemAtPath:gifDestPath error:nil];
-                }
-
-                // 复制文件到Miopng目录
-                BOOL success = [fm copyItemAtPath:url.path toPath:gifDestPath error:&copyError];
-                if (!success) {
-                    WPLog(@"Mio-Separator", @"    复制GIF失败: %@", copyError);
-                } else {
-                    WPLog(@"Mio-Separator", @"    复制GIF成功: %@", gifDestPath);
-                }
-
-                // 文件已写入硬编码路径，不再需要存到 config
-                WPLog(@"Mio-Separator", @"    GIF已保存到: %@", gifDestPath);
-                [ConfigManager saveAll];
-                WPLog(@"Mio-Separator", @"    调用 [ConfigManager saveAll]");
                 [picker dismissViewControllerAnimated:YES completion:^{
                     WPLog(@"Mio-Separator", @"    dismiss 完成，调用 buildUI");
                     [self buildUI];
@@ -573,14 +512,7 @@ static NSString *keyForTag(NSInteger tag) {
         [fm removeItemAtPath:iconPath error:nil];
     }
 
-    // 删除GIF文件
-    NSString *gifPath = [miopngDir stringByAppendingPathComponent:@"separator_icon.gif"];
-    if ([fm fileExistsAtPath:gifPath]) {
-        WPLog(@"Mio-Separator", @"  删除GIF文件: %@", gifPath);
-        [fm removeItemAtPath:gifPath error:nil];
-    }
-
-    // 清空配置（只需清理文本，图标/GIF 已删除）
+    // 清空配置（只需清理文本，静态图片已删除）
     config.chatSeparatorText = nil;
     WPLog(@"Mio-Separator", @"  设置 chatSeparatorText = nil");
     [ConfigManager saveAll];

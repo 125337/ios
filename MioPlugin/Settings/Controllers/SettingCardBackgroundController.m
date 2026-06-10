@@ -286,13 +286,7 @@
     [alert addAction:[UIAlertAction actionWithTitle:@"选择静态图片"
                                              style:UIAlertActionStyleDefault
                                            handler:^(UIAlertAction *action) {
-        [self pickImageForMode:100];
-    }]];
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"选择GIF动图"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *action) {
-        [self pickImageForMode:101];
+        [self pickImage];
     }]];
 
     if ([CardBgConfig hasBackgroundImage]) {
@@ -318,16 +312,13 @@
 
 #pragma mark - 图片选择器
 
-- (void)pickImageForMode:(NSInteger)mode {
-    PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
-    config.selectionLimit = 1;
+- (void)pickImage {
+    PHPickerConfiguration *phConfig = [[PHPickerConfiguration alloc] init];
+    phConfig.selectionLimit = 1;
+    phConfig.filter = [PHPickerFilter imagesFilter];
 
-    BOOL isGif = (mode == 101);
-    config.filter = isGif ? [PHPickerFilter imagesFilter] : [PHPickerFilter imagesFilter];
-
-    PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
+    PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:phConfig];
     picker.delegate = self;
-    picker.view.tag = mode;
     [self presentViewController:picker animated:YES completion:nil];
 }
 
@@ -341,11 +332,6 @@
     }
 
     PHPickerResult *result = results.firstObject;
-    CardBgConfig *config = [CardBgConfig shared];
-    NSInteger mode = picker.view.tag;
-    BOOL isGif = (mode == 101);
-
-    WPLog(@"CardBg-Diag", @"[PICKER] mode=%ld, isGif=%d", (long)mode, isGif);
 
     NSString *bgDir = [NSSearchPathForDirectoriesInDomains(
         NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
@@ -359,61 +345,30 @@
     }
 
     WPLog(@"CardBg-Diag", @"[PICKER] bgDir=%@", bgDir);
-    WPLog(@"CardBg-Diag", @"[PICKER] dirExists=%d", [fm fileExistsAtPath:bgDir]);
 
-    NSString *targetFile = isGif ? @"MioCardBg.gif" : @"MioCardBg.png";
-    NSString *altExt = isGif ? @"MioCardBg.png" : @"MioCardBg.gif";
-
-    NSString *targetPath = [bgDir stringByAppendingPathComponent:targetFile];
-    NSString *altPath = [bgDir stringByAppendingPathComponent:altExt];
+    // 只保存为 PNG（因为只支持静态图片选择）
+    NSString *targetPath = [bgDir stringByAppendingPathComponent:@"MioCardBg.png"];
 
     WPLog(@"CardBg-Diag", @"[PICKER] targetPath=%@", targetPath);
-    WPLog(@"CardBg-Diag", @"[PICKER] altPath=%@", altPath);
 
-    if ([fm fileExistsAtPath:altPath]) {
-        [fm removeItemAtPath:altPath error:nil];
-        WPLog(@"CardBg-Diag", @"[PICKER] Removed alt file: %@", altPath);
-    }
-
-    if (isGif) {
-        [result.itemProvider loadDataRepresentationForTypeIdentifier:@"com.compuserve.gif"
+    [result.itemProvider loadDataRepresentationForTypeIdentifier:@"public.image"
                                                completionHandler:^(NSData *data, NSError *error) {
-            if (error || !data) {
-                WPLog(@"CardBg-Diag", @"[PICKER] GIF load FAILED: error=%@", error ?: @"data nil");
-                return;
-            }
-            WPLog(@"CardBg-Diag", @"[PICKER] GIF data loaded, size=%lu bytes", (unsigned long)data.length);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                BOOL written = [data writeToFile:targetPath atomically:YES];
-                WPLog(@"CardBg-Diag", @"[PICKER] GIF write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
-                // 文件已写入硬编码路径，不再需要存到 config
-                [ConfigManager saveAll];
-                WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
-                [picker dismissViewControllerAnimated:YES completion:^{
-                    [self buildUI];
-                }];
-            });
+        if (error || !data) {
+            WPLog(@"CardBg-Diag", @"[PICKER] Image load FAILED: error=%@", error ?: @"data nil");
+            return;
+        }
+        WPLog(@"CardBg-Diag", @"[PICKER] Image data loaded, size=%lu bytes", (unsigned long)data.length);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            BOOL written = [data writeToFile:targetPath atomically:YES];
+            WPLog(@"CardBg-Diag", @"[PICKER] Image write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
+            // 文件已写入硬编码路径，不再需要存到 config
+            [ConfigManager saveAll];
+            WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
+            [picker dismissViewControllerAnimated:YES completion:^{
+                [self buildUI];
+            }];
         }];
-    } else {
-        [result.itemProvider loadDataRepresentationForTypeIdentifier:@"public.image"
-                                               completionHandler:^(NSData *data, NSError *error) {
-            if (error || !data) {
-                WPLog(@"CardBg-Diag", @"[PICKER] Image load FAILED: error=%@", error ?: @"data nil");
-                return;
-            }
-            WPLog(@"CardBg-Diag", @"[PICKER] Image data loaded, size=%lu bytes", (unsigned long)data.length);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                BOOL written = [data writeToFile:targetPath atomically:YES];
-                WPLog(@"CardBg-Diag", @"[PICKER] Image write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
-                // 文件已写入硬编码路径，不再需要存到 config
-                [ConfigManager saveAll];
-                WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
-                [picker dismissViewControllerAnimated:YES completion:^{
-                    [self buildUI];
-                }];
-            });
-        }];
-    }
+    }];
 }
 
 #pragma mark - 背景填充模式

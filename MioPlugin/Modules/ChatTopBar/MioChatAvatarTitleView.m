@@ -134,8 +134,7 @@
             self.rightAvatarView.hidden = NO;
 
             BOOL hasTextSep = config.chatSeparatorText.length > 0;
-            BOOL hasIconSep = [ChatTopBarConfig hasSeparatorGIFFile]
-                           || [ChatTopBarConfig hasSeparatorIconFile];
+            BOOL hasIconSep = [ChatTopBarConfig hasSeparatorIconFile];
 
             if (hasTextSep) {
                 self.separatorTextLabel.hidden = NO;
@@ -503,18 +502,6 @@
 // ============================================================
 
 - (BOOL)loadSeparatorIcon {
-    // 1. 优先检查 GIF 文件（硬编码路径）
-    NSString *gifPath = [ChatTopBarConfig separatorGIFPath];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:gifPath]) {
-        NSData *data = [NSData dataWithContentsOfFile:gifPath];
-        UIImage *gifImage = [UIImage imageWithData:data];
-        if (gifImage) {
-            self.separatorView.image = gifImage;
-            return YES;
-        }
-    }
-
-    // 2. 检查静态图标文件（硬编码路径）
     NSString *iconPath = [ChatTopBarConfig separatorIconPath];
     if ([[NSFileManager defaultManager] fileExistsAtPath:iconPath]) {
         NSData *data = [NSData dataWithContentsOfFile:iconPath];
@@ -524,7 +511,6 @@
             return YES;
         }
     }
-
     self.separatorView.image = nil;
     return NO;
 }
