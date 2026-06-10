@@ -426,48 +426,49 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 - (NSString *)groupMemberCountValue {
     id contact = self.contact;
     if (!contact) return @"未知";
-
-    // 优先通过 CContactMgr 获取成员数
+    
+    // === 成员数量 ===
+    // 方案一：优先通过 CContactMgr 获取（保留但不依赖）
+    NSUInteger memberCount = 0;
     id contactMgr = WXGetService(objc_getClass("CContactMgr"));
     if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
         unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(
             contactMgr, @selector(getGroupMemberCountForContact:), contact);
-        WPLog(@"Mio-Group", @"CContactMgr.getGroupMemberCount=%u", count);
         if (count > 0) {
-            // 尝试获取管理员数量（多种字段名兼容）
-            NSString *adminList = WXSafeStringGet(contact, @"m_nsChatRoomAdminList");
-            WPLog(@"Mio-Group", @"m_nsChatRoomAdminList via WXSafeStringGet=%@", adminList);
-            if (!adminList.length) {
-                // 降级：尝试从 m_nsChatRoomAdminList 的其他形式获取
-                // 某些微信版本中该字段可能存储在 ivar 中而非 property
-                SEL adminSel = NSSelectorFromString(@"m_nsChatRoomAdminList");
-                if ([contact respondsToSelector:adminSel]) {
-                    id adminVal = ((id (*)(id, SEL))objc_msgSend)(contact, adminSel);
-                    WPLog(@"Mio-Group", @"m_nsChatRoomAdminList via direct call=%@", adminVal);
-                    if ([adminVal isKindOfClass:[NSString class]]) {
-                        adminList = (NSString *)adminVal;
-                    }
-                }
-            }
-            if (adminList.length) {
-                NSArray *admins = [adminList componentsSeparatedByString:@";"];
-                WPLog(@"Mio-Group", @"admins.count=%lu", (unsigned long)admins.count);
-                return [NSString stringWithFormat:@"群人员%lu人 管理员%lu人",
-                        (unsigned long)count, (unsigned long)admins.count];
-            }
-            return [NSString stringWithFormat:@"%u 人", count];
+            memberCount = count;
         }
     }
-
-    // fallback: 手动解析成员列表
-    NSString *memList = WXSafeStringGet(contact, @"m_nsChatRoomMemList");
-    WPLog(@"Mio-Group", @"fallback m_nsChatRoomMemList=%@", memList);
-    if (memList.length) {
-        NSArray *members = [memList componentsSeparatedByString:@";"];
-        return [NSString stringWithFormat:@"群人员%lu人", (unsigned long)members.count];
+    
+    // 方案二：手动解析 m_nsChatRoomMemList（兜底）
+    if (memberCount == 0) {
+        NSString *memList = WXSafeStringGet(contact, @"m_nsChatRoomMemList");
+        if (memList.length) {
+            NSArray *members = [memList componentsSeparatedByString:@";"];
+            memberCount = members.count;
+        }
     }
-
-    return @"未知";
+    
+    if (memberCount == 0) return @"未知";
+    
+    // === 管理员数量 ===
+    NSUInteger adminCount = 0;
+    NSString *adminList = WXSafeStringGet(contact, @"m_nsChatRoomAdminList");
+    if (adminList.length) {
+        NSArray *admins = [adminList componentsSeparatedByString:@";"];
+        adminCount = admins.count;
+    }
+    
+    // === 诊断日志 ===
+    WPLog(@"Mio-Group", @"memberCount=%lu (from %@), adminList=%@, adminCount=%lu",
+        (unsigned long)memberCount, contactMgr ? @"CContactMgr" : @"memList",
+        adminList ?: @"nil", (unsigned long)adminCount);
+    
+    // === 格式化输出 ===
+    if (adminCount > 0) {
+        return [NSString stringWithFormat:@"群人员%lu人 管理员%lu人",
+                (unsigned long)memberCount, (unsigned long)adminCount];
+    }
+    return [NSString stringWithFormat:@"群人员%lu人", (unsigned long)memberCount];
 }
 
 - (NSString *)verifyStatusValue {
