@@ -1,7 +1,7 @@
 #import "SettingChatTopBarController.h"
 #import "ChatTopBarBlacklistEditorVC.h"
 #import "../Modules/ChatTopBar/ChatTopBarConfig.h"
-#import "../../Config/ConfigManager.h"
+#import "../../Core/ConfigManager.h"
 #import "../../Config/WPColors.h"
 #import "../../Config/Constants.h"
 #import "../../Core/LogManager.h"
