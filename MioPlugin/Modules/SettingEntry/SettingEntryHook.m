@@ -1,6 +1,7 @@
 #import "SettingEntryHook.h"
 #import "WPCommonUI.h"
 #import "../../Core/ConfigManager.h"
+#import "../../Config/Constants.h"
 #import "../../Settings/Common/SettingController.h"
 #import "../../Settings/Common/SettingCategoryController.h"
 #import <objc/runtime.h>
