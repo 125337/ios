@@ -253,10 +253,13 @@
     if (showName) {
         [self.titleLabel setFont:[UIFont systemFontOfSize:nameFontSize]];
         self.titleLabel.textAlignment = NSTextAlignmentCenter;
-        self.titleLabel.frame = CGRectMake(0, avatarY + avatarSize + 1, totalW, nameFontSize);
+        CGFloat offsetX = config.chatNicknameOffsetX;
+        CGFloat offsetY = config.chatNicknameOffsetY;
+        self.titleLabel.frame = CGRectMake(0 + offsetX,
+                                           avatarY + avatarSize + 1 - offsetY,
+                                           totalW,
+                                           nameFontSize);
     }
-
-    [self applyPositionOffset];
 }
 
 #pragma mark - Avatar Update
@@ -412,14 +415,6 @@
             [self.separatorTextLabel sizeToFit];
         });
     }
-}
-
-- (void)applyPositionOffset {
-    PluginConfig *config = [PluginConfig shared];
-    CGRect f = self.titleLabel.frame;
-    f.origin.x += config.chatNicknameOffsetX;
-    f.origin.y -= config.chatNicknameOffsetY;
-    self.titleLabel.frame = f;
 }
 
 - (CGFloat)calculateCornerRadiusForSize:(CGFloat)size {
