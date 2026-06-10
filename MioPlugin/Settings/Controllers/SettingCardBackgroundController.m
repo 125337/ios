@@ -208,7 +208,7 @@
     pcbcy = [self addMasterSwitchRowInGroup:pcBorderGroup
                                       title:@"资料卡边框"
                                         key:@"listProfileCardBorderEnabled"
-                                       isOn:config.listProfileCardBorderEnabled
+                                       isOn:[ListCornerRadiusConfig shared].listProfileCardBorderEnabled
                                  subBuilder:^(UIView *expand, CGFloat *ecy) {
         ListCornerRadiusConfig *c5 = [ListCornerRadiusConfig shared];
 
@@ -268,7 +268,7 @@
     mcy = [self addSubSwitchRowInGroup:myGroup
                                  title:@"隐藏箭码"
                                    key:@"myPageHideArrow"
-                                  isOn:config.myPageHideArrow
+                                  isOn:[ListCornerRadiusConfig shared].myPageHideArrow
                                     cy:mcy width:w];
 
     y = [self finishGroup:myGroup atY:y height:mcy];
