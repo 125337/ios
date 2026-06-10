@@ -9,7 +9,7 @@
 #pragma mark - 信息行（内容靠左，与标题保持3pt间距，支持多行）
 
 static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right) {
-    CGFloat titleWidth = 60;
+    CGFloat titleWidth = 40;
     CGFloat spacing = 2;
 
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, titleWidth, kRowH)];
