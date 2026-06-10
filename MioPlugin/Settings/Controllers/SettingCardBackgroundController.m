@@ -367,7 +367,7 @@
             [picker dismissViewControllerAnimated:YES completion:^{
                 [self buildUI];
             }];
-        }];
+        });
     }];
 }
 
