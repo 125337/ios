@@ -319,7 +319,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
     fromUsrName = displayName(fromUsrName) ?: @"对方";
 
     NSString *revokedContent = nil;
-    if (!config.hideContent) {
+    if (![RevokeConfig shared].hideContent) {
         revokedContent = digestForMsgWrap(revokedMsgWrap);
         if (!revokedContent.length) revokedContent = @"";
     } else {
