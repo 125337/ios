@@ -208,7 +208,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             @"WCSearchController", nil];
     });
     if (![bgColorSkipList containsObject:className]) {
-        BOOL isDark = [PluginConfig shared].isDarkModeForViewController(vc);
+        BOOL isDark = [[PluginConfig shared] isDarkModeForViewController:vc];
         UIColor *customBg = isDark
             ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
             : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
@@ -276,7 +276,7 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    BOOL isDark = [PluginConfig shared].isDarkModeForViewController(vc);
+    BOOL isDark = [[PluginConfig shared] isDarkModeForViewController:vc];
 
     UIColor *targetBg = isDark
             ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
@@ -301,7 +301,7 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    BOOL isDark = [PluginConfig shared].isDarkModeForViewController(vc);
+    BOOL isDark = [[PluginConfig shared] isDarkModeForViewController:vc];
 
     UIColor *targetBg = isDark
             ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
@@ -363,7 +363,7 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
     [ListCornerRadiusHook applyBorderToView:view radius:radius position:0 isFTSHome:NO];
 
-    BOOL isDark = [PluginConfig shared].isDarkModeForViewController(vc);
+    BOOL isDark = [[PluginConfig shared] isDarkModeForViewController:vc];
     UIColor *targetBg = isDark
             ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
             : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
