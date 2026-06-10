@@ -1,5 +1,5 @@
 #import "SettingDevToolsController.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Modules/DevTools/DevToolsConfig.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
 #import "../../Modules/DevTools/MioLogMonitor.h"

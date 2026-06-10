@@ -1,5 +1,5 @@
 #import "../Common/SettingController.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Modules/RedEnvelop/RedEnvelopConfig.h"
 #import "MioTweakGroupSelectsController.h"
 #import <objc/runtime.h>
 #import "../../Core/LogManager.h"

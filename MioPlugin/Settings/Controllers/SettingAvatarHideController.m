@@ -1,5 +1,5 @@
 #import "../Common/SettingController.h"
-#import "../../Config/PluginConfig.h"
+#import "../../Modules/HideAvatar/HideAvatarConfig.h"
 #import "../../Core/LogManager.h"
 
 @interface SettingAvatarHideController ()
