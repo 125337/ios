@@ -1,7 +1,7 @@
 #import "SettingCardBackgroundController.h"
 #import "../../Modules/ProfileCardBg/CardBgConfig.h"
 #import "../../Modules/ListCornerRadius/ListCornerRadiusConfig.h"
-#import "../../Config/ConfigManager.h"
+#import "../../Core/ConfigManager.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
