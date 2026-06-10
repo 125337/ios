@@ -95,13 +95,14 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     }
 
     // ★★★ 统一资料卡边框（依赖 cardBgCornerEnabled，此时已确认开启） ★★★
-    if (listConfig.listProfileCardBorderEnabled) {
-        CGFloat bw = listConfig.listProfileCardBorderWidth;
+    CardBgConfig *cardBgConfig = [CardBgConfig shared];
+    if (cardBgConfig.cardBgBorderEnabled) {
+        CGFloat bw = cardBgConfig.cardBgBorderWidth;
         if (bw > 0) {
             cell.layer.borderWidth = bw;
             UIColor *borderColor = isDark
-                ? [WPColorUtil colorFromHexString:listConfig.listProfileCardBorderColorDarkHex]
-                : [WPColorUtil colorFromHexString:listConfig.listProfileCardBorderColor];
+                ? [WPColorUtil colorFromHexString:cardBgConfig.cardBgBorderColorDarkHex]
+                : [WPColorUtil colorFromHexString:cardBgConfig.cardBgBorderColor];
             cell.layer.borderColor = borderColor.CGColor;
         } else {
             cell.layer.borderWidth = 0;
@@ -678,7 +679,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 
     // ☆ 独立功能：箭码隐藏
     [ProfileCardBgHook hideArrowQRInCell:button
-                              shouldHide:[ListCornerRadiusConfig shared].myPageHideArrow];
+                              shouldHide:[CardBgConfig shared].cardBgHideArrow];
 
     // 通用守卫（提取为辅助方法）
     UIViewController *vc = [ProfileCardBgHook findMoreViewController:button];

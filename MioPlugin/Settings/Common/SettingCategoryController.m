@@ -659,10 +659,10 @@ static NSDictionary *ColorPairMap(void) {
             
             // SettingListCornerRadiusController (新增暗色支持)
             @"listCellBorderColor": @"listCellBorderColorDarkHex",
-            @"listProfileCardBorderColor": @"listProfileCardBorderColorDarkHex",
-            
+
             // SettingCardBackgroundController
             @"cardBgCornerBgColor": @"cardBgCornerDarkBgColor",
+            @"cardBgBorderColor": @"cardBgBorderColorDarkHex",
             
             // SettingMessageTimeController (发送方)
             @"senderTextColorHex": @"senderTextColorDarkHex",

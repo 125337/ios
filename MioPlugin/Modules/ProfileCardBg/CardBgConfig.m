@@ -35,6 +35,15 @@ static CardBgConfig *_sharedInstance = nil;
         [ConfigDescriptor integerItem:@"cardBgLayer" default:@(0)],
         [ConfigDescriptor floatItem:@"cardBgOffsetY" default:@(0)],
         [ConfigDescriptor floatItem:@"cardBgOffsetX" default:@(0)],
+
+        // ★ 资料卡边框（从 ListCornerRadiusConfig 迁移）
+        [ConfigDescriptor boolItem:@"cardBgBorderEnabled" default:@(NO)],
+        [ConfigDescriptor floatItem:@"cardBgBorderWidth" default:@(2.0)],
+        [ConfigDescriptor stringItem:@"cardBgBorderColor" default:@"#E5E5E5"],
+        [ConfigDescriptor stringItem:@"cardBgBorderColorDarkHex" default:@"#3A3A3C"],
+
+        // ★ 箭码隐藏（从 ListCornerRadiusConfig 迁移）
+        [ConfigDescriptor boolItem:@"cardBgHideArrow" default:@(NO)],
     ];
 }
 

@@ -23,7 +23,6 @@ static ListCornerRadiusConfig *_sharedInstance = nil;
         [ConfigDescriptor boolItem:@"globalCornerContactsPageEnabled" default:@(NO)],
         [ConfigDescriptor boolItem:@"globalCornerDiscoverPageEnabled" default:@(NO)],
         [ConfigDescriptor boolItem:@"listSearchCornerRadius" default:@(NO)],
-        [ConfigDescriptor boolItem:@"myPageHideArrow" default:@(NO)],
         [ConfigDescriptor boolItem:@"listCellBorder" default:@(NO)],
         [ConfigDescriptor floatItem:@"listCellCornerRadius" default:@(18.0)],
         [ConfigDescriptor floatItem:@"listCellMargin" default:@(9.0)],
@@ -32,10 +31,6 @@ static ListCornerRadiusConfig *_sharedInstance = nil;
         [ConfigDescriptor floatItem:@"listCellBorderWidth" default:@(2.0)],
         [ConfigDescriptor stringItem:@"listCellBorderColor" default:@"#E5E5E5"],
         [ConfigDescriptor stringItem:@"listCellBorderColorDarkHex" default:@"#3A3A3C"],
-        [ConfigDescriptor boolItem:@"listProfileCardBorderEnabled" default:@(NO)],
-        [ConfigDescriptor floatItem:@"listProfileCardBorderWidth" default:@(2.0)],
-        [ConfigDescriptor stringItem:@"listProfileCardBorderColor" default:@"#E5E5E5"],
-        [ConfigDescriptor stringItem:@"listProfileCardBorderColorDarkHex" default:@"#3A3A3C"],
     ];
 }
 

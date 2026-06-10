@@ -1,6 +1,5 @@
 #import "SettingCardBackgroundController.h"
 #import "../../Modules/ProfileCardBg/CardBgConfig.h"
-#import "../../Modules/ListCornerRadius/ListCornerRadiusConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
@@ -205,17 +204,17 @@
 
     pcbcy = [self addMasterSwitchRowInGroup:pcBorderGroup
                                       title:@"资料卡边框"
-                                        key:@"listProfileCardBorderEnabled"
-                                       isOn:[ListCornerRadiusConfig shared].listProfileCardBorderEnabled
+                                        key:@"cardBgBorderEnabled"
+                                       isOn:[CardBgConfig shared].cardBgBorderEnabled
                                  subBuilder:^(UIView *expand, CGFloat *ecy) {
-        ListCornerRadiusConfig *c5 = [ListCornerRadiusConfig shared];
+        CardBgConfig *c5 = [CardBgConfig shared];
 
         // 边框宽度
-        NSString *bwStr = c5.listProfileCardBorderWidth > 0
-            ? [NSString stringWithFormat:@"%.1f", c5.listProfileCardBorderWidth] : nil;
+        NSString *bwStr = c5.cardBgBorderWidth > 0
+            ? [NSString stringWithFormat:@"%.1f", c5.cardBgBorderWidth] : nil;
         *ecy = [self addInputRowInGroup:expand
                                   title:@"边框宽度"
-                                    key:@"listProfileCardBorderWidth"
+                                    key:@"cardBgBorderWidth"
                                   value:bwStr
                                    hint:@"2.0"
                               valueType:InputValueTypeNumber
@@ -227,11 +226,11 @@
         // 边框颜色（支持深色）
         *ecy = [self addColorRowInGroup:expand
                                   title:@"边框颜色"
-                                    key:@"listProfileCardBorderColor"
-                                  value:c5.listProfileCardBorderColor
+                                    key:@"cardBgBorderColor"
+                                  value:c5.cardBgBorderColor
                                      cy:*ecy width:w
-                               darkKey:@"listProfileCardBorderColorDarkHex"
-                             darkValue:c5.listProfileCardBorderColorDarkHex];
+                               darkKey:@"cardBgBorderColorDarkHex"
+                             darkValue:c5.cardBgBorderColorDarkHex];
 
     } cy:pcbcy width:w];
 
@@ -265,8 +264,8 @@
     // 隐藏箭码
     mcy = [self addSubSwitchRowInGroup:myGroup
                                  title:@"隐藏箭码"
-                                   key:@"myPageHideArrow"
-                                  isOn:[ListCornerRadiusConfig shared].myPageHideArrow
+                                   key:@"cardBgHideArrow"
+                                  isOn:[CardBgConfig shared].cardBgHideArrow
                                     cy:mcy width:w];
 
     y = [self finishGroup:myGroup atY:y height:mcy];
@@ -548,7 +547,7 @@
     if ([key isEqualToString:@"cardBgMaterialEnabled"]
         || [key isEqualToString:@"cardBgCornerEnabled"]
         || [key isEqualToString:@"cardBgCornerUseGlobal"]
-        || [key isEqualToString:@"listProfileCardBorderEnabled"]) {
+        || [key isEqualToString:@"cardBgBorderEnabled"]) {
         [self buildUI];
         return;
     }

@@ -21,6 +21,15 @@
 @property (nonatomic, assign) CGFloat cardBgOffsetY;
 @property (nonatomic, assign) CGFloat cardBgOffsetX;
 
+// ★ 资料卡边框（从 ListCornerRadiusConfig 迁移）
+@property (nonatomic, assign) BOOL cardBgBorderEnabled;
+@property (nonatomic, assign) CGFloat cardBgBorderWidth;
+@property (nonatomic, copy) NSString *cardBgBorderColor;
+@property (nonatomic, copy) NSString *cardBgBorderColorDarkHex;
+
+// ★ 箭码隐藏（从 ListCornerRadiusConfig 迁移）
+@property (nonatomic, assign) BOOL cardBgHideArrow;
+
 + (instancetype)shared;
 
 @end
