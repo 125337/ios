@@ -46,13 +46,11 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     UIImageView *_avatarView;
 }
 
-- (instancetype)initWithWxid:(NSString *)wxid
-                    nickname:(NSString *)nickname
-                      avatar:(UIImage *)avatar {
+- (instancetype)initWithContact:(id)contact avatar:(UIImage *)avatar {
     self = [super init];
     if (self) {
-        self.wxid = wxid;
-        self.nickname = nickname ?: @"微信用户";
+        self.contact = contact;                    // strong property 存储（ARC 安全）
+        self.wxid = WXSafeStringGet(contact, @"m_nsUsrName");  // 提前提取 wxid
         self.avatarImage = avatar;
     }
     return self;
@@ -114,7 +112,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     cy += 70;
 
     UILabel *nameLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, cy, cw, 24)];
-    nameLabel.text = self.nickname ?: @"微信用户";
+    nameLabel.text = WXSafeStringGet(self.contact, @"m_nsNickName") ?: @"微信用户";
     nameLabel.font = [UIFont boldSystemFontOfSize:18];
     nameLabel.textColor = WPT1();
     nameLabel.textAlignment = NSTextAlignmentCenter;
@@ -342,37 +340,100 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 #pragma mark - 数据取值
 
 - (NSString *)valueForInfoKey:(NSString *)key {
-    if ([key isEqualToString:@"nickname"])       return self.nickname ?: @"";
-    if ([key isEqualToString:@"wxid"])           return self.wxid ?: @"";
-    if ([key isEqualToString:@"remark"])         return self.remark ?: @"未设置";
-    if ([key isEqualToString:@"gender"])         return self.gender ?: @"未知";
-    if ([key isEqualToString:@"location"])       return self.location ?: @"未设置";
-    if ([key isEqualToString:@"signature"])      return self.signature ?: @"未设置";
-    if ([key isEqualToString:@"groupOwner"])     return self.groupOwner ?: @"未知";
-    if ([key isEqualToString:@"groupMemberCount"]) return [self groupMemberCountValue];
-    if ([key isEqualToString:@"verifyStatus"])   return [self verifyStatusValue];
+    if ([key isEqualToString:@"nickname"]) {
+        return WXSafeStringGet(self.contact, @"m_nsNickName") ?: @"";
+    }
+    if ([key isEqualToString:@"wxid"]) {
+        return self.wxid ?: @"";
+    }
+    if ([key isEqualToString:@"remark"]) {
+        NSString *v = WXSafeStringGet(self.contact, @"m_nsContactRemark");
+        return v ?: @"未设置";
+    }
+    if ([key isEqualToString:@"gender"]) {
+        return [self genderValue];
+    }
+    if ([key isEqualToString:@"location"]) {
+        return [self locationValue];
+    }
+    if ([key isEqualToString:@"signature"]) {
+        NSString *v = WXSafeStringGet(self.contact, @"m_nsSignature");
+        return v ?: @"未设置";
+    }
+    if ([key isEqualToString:@"groupOwner"]) {
+        return [self groupOwnerValue];
+    }
+    if ([key isEqualToString:@"groupMemberCount"]) {
+        return [self groupMemberCountValue];
+    }
+    if ([key isEqualToString:@"verifyStatus"]) {
+        return [self verifyStatusValue];
+    }
     return @"";
 }
 
+#pragma mark - 从 contact 读取转换
+
+/// 性别（NSNumber → 文字）
+- (NSString *)genderValue {
+    NSInteger g = WXSafeIntegerGet(self.contact, @"m_nsGender", 0);
+    if (g == 1) return @"男";
+    if (g == 2) return @"女";
+    return @"未知";
+}
+
+/// 地区（组装国家/省/市）
+- (NSString *)locationValue {
+    id contact = self.contact;
+    if (!contact) return @"未设置";
+    
+    NSString *country = WXSafeStringGet(contact, @"m_nsCountry");
+    NSString *province = WXSafeStringGet(contact, @"m_nsProvince");
+    NSString *city = WXSafeStringGet(contact, @"m_nsCity");
+    
+    NSMutableArray *parts = [NSMutableArray array];
+    if (country.length) [parts addObject:country];
+    if (province.length) [parts addObject:province];
+    if (city.length) [parts addObject:city];
+    
+    return parts.count > 0 ? [parts componentsJoinedByString:@" "] : @"未设置";
+}
+
+/// 群主 wxid
+- (NSString *)groupOwnerValue {
+    NSString *v = WXSafeStringGet(self.contact, @"m_nsChatRoomOwner");
+    return v ?: @"未知";
+}
+
 - (NSString *)groupMemberCountValue {
-    if (!self.chatRoomMemList.length) return @"未知";
+    id contact = self.contact;
+    if (!contact) return @"未知";
 
-    NSArray *members = [self.chatRoomMemList componentsSeparatedByString:@";"];
-    NSUInteger total = members.count;
-
-    // 管理员数量
-    NSString *adminPart = nil;
-    if (self.chatRoomAdminList.length) {
-        NSArray *admins = [self.chatRoomAdminList componentsSeparatedByString:@";"];
-        if (admins.count > 0) {
-            adminPart = [NSString stringWithFormat:@"管理员%lu人", (unsigned long)admins.count];
+    // 优先通过 CContactMgr 获取成员数
+    id contactMgr = WXGetService(objc_getClass("CContactMgr"));
+    if (contactMgr && [contactMgr respondsToSelector:@selector(getGroupMemberCountForContact:)]) {
+        unsigned int count = (unsigned int)((unsigned int (*)(id, SEL, id))objc_msgSend)(
+            contactMgr, @selector(getGroupMemberCountForContact:), contact);
+        if (count > 0) {
+            // 尝试获取管理员数量
+            NSString *adminList = WXSafeStringGet(contact, @"m_nsChatRoomAdminList");
+            if (adminList.length) {
+                NSArray *admins = [adminList componentsSeparatedByString:@";"];
+                return [NSString stringWithFormat:@"群人员%lu人 管理员%lu人",
+                        (unsigned long)count, (unsigned long)admins.count];
+            }
+            return [NSString stringWithFormat:@"%u 人", count];
         }
     }
 
-    if (adminPart) {
-        return [NSString stringWithFormat:@"群人员%lu人 %@", (unsigned long)total, adminPart];
+    // fallback: 手动解析成员列表
+    NSString *memList = WXSafeStringGet(contact, @"m_nsChatRoomMemList");
+    if (memList.length) {
+        NSArray *members = [memList componentsSeparatedByString:@";"];
+        return [NSString stringWithFormat:@"群人员%lu人", (unsigned long)members.count];
     }
-    return [NSString stringWithFormat:@"%lu 人", (unsigned long)total];
+
+    return @"未知";
 }
 
 - (NSString *)verifyStatusValue {

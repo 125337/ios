@@ -36,3 +36,29 @@ static inline NSString *WXContactHeadImageURL(id contact) {
     }
     return nil;
 }
+
+// ======== 安全读取辅助函数（仿 WCRefine FUN_00b5f9c0 / FUN_00b63ecc） ========
+
+/// 安全读取 contact 的 NSString 字段，内部封装 respondsToSelector: 保护
+static inline NSString *WXSafeStringGet(id obj, NSString *key) {
+    if (!obj || !key.length) return nil;
+    SEL sel = NSSelectorFromString(key);
+    if (![obj respondsToSelector:sel]) return nil;
+    id value = ((id (*)(id, SEL))objc_msgSend)(obj, sel);
+    if ([value isKindOfClass:[NSString class]] && ((NSString *)value).length > 0) {
+        return (NSString *)value;
+    }
+    return nil;
+}
+
+/// 安全读取 contact 的 NSInteger 字段，内部封装 respondsToSelector: 保护，失败返回默认值
+static inline NSInteger WXSafeIntegerGet(id obj, NSString *key, NSInteger defaultValue) {
+    if (!obj || !key.length) return defaultValue;
+    SEL sel = NSSelectorFromString(key);
+    if (![obj respondsToSelector:sel]) return defaultValue;
+    id value = ((id (*)(id, SEL))objc_msgSend)(obj, sel);
+    if ([value respondsToSelector:@selector(integerValue)]) {
+        return [value integerValue];
+    }
+    return defaultValue;
+}
