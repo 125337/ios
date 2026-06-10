@@ -138,18 +138,25 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     WPLog(@"Mio-Avatar", @"loadAvatarForImageView START  wxid=%@", self.wxid);
 
     if (!self.wxid.length) {
-        WPLog(@"Mio-Avatar", @"❌ wxid 为空，使用默认头像");
+        WPLog(@"Mio-Avatar", @"wxid为空，使用默认头像");
         imageView.image = [UIImage imageNamed:@"DefaultHead"];
         return;
     }
 
     if (self.avatarImage && ![self.wxid hasPrefix:@"gh_"]) {
-        WPLog(@"Mio-Avatar", @"✅ 已有缓存 avatarImage");
+        WPLog(@"Mio-Avatar", @"✅ 使用外部传入的 avatarImage（非公众号）");
         imageView.image = self.avatarImage;
         return;
     }
 
+    if ([self.wxid hasPrefix:@"gh_"]) {
+        WPLog(@"Mio-Avatar", @"⚠️ 公众号：跳过外部缓存，将使用 AvatarLoader 异步加载");
+    } else {
+        WPLog(@"Mio-Avatar", @"⚠️ 非公众号且无外部缓存，将使用 AvatarLoader 异步加载");
+    }
+
     [[AvatarLoader shared] loadAvatarForWxid:self.wxid contact:nil completion:^(UIImage *image) {
+        WPLog(@"Mio-Avatar", @"🎯 AvatarLoader 回调: image=%@", image ? @"成功" : @"失败");
         if (image) {
             imageView.image = image;
             self.avatarImage = image;
@@ -401,21 +408,9 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 
 /// 群主昵称
 - (NSString *)groupOwnerValue {
-    // 1. 获取群主的 wxid
-    NSString *ownerWxid = WXSafeStringGet(self.contact, @"m_nsOwner");
-    WPLog(@"Mio-Group", @"groupOwnerWxid = %@", ownerWxid);
-    if (!ownerWxid.length) return @"未知";
-
-    // 2. 通过 wxid 获取对应的联系人对象
-    id ownerContact = WXGetContactForWxid(ownerWxid);
-    if (ownerContact) {
-        // 3. 从联系人对象中读取昵称
-        NSString *nickname = WXSafeStringGet(ownerContact, @"m_nsNickName");
-        if (nickname.length) return nickname;
-    }
-
-    // 4. 降级：返回 wxid（至少能看）
-    return ownerWxid;
+    NSString *v = WXSafeStringGet(self.contact, @"m_nsOwner");
+    WPLog(@"Mio-Group", @"groupOwner via m_nsOwner=%@", v);
+    return v ?: @"未知";
 }
 
 - (NSString *)groupMemberCountValue {
