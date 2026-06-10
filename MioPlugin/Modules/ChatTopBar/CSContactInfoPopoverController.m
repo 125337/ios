@@ -401,9 +401,21 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 
 /// 群主昵称
 - (NSString *)groupOwnerValue {
-    NSString *v = WXSafeStringGet(self.contact, @"m_nsOwner");
-    WPLog(@"Mio-Group", @"groupOwner via m_nsOwner=%@", v);
-    return v ?: @"未知";
+    // 1. 获取群主的 wxid
+    NSString *ownerWxid = WXSafeStringGet(self.contact, @"m_nsOwner");
+    WPLog(@"Mio-Group", @"groupOwnerWxid = %@", ownerWxid);
+    if (!ownerWxid.length) return @"未知";
+
+    // 2. 通过 wxid 获取对应的联系人对象
+    id ownerContact = WXGetContactForWxid(ownerWxid);
+    if (ownerContact) {
+        // 3. 从联系人对象中读取昵称
+        NSString *nickname = WXSafeStringGet(ownerContact, @"m_nsNickName");
+        if (nickname.length) return nickname;
+    }
+
+    // 4. 降级：返回 wxid（至少能看）
+    return ownerWxid;
 }
 
 - (NSString *)groupMemberCountValue {
