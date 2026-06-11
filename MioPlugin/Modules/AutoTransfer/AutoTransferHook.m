@@ -43,7 +43,7 @@ static void sendAutoReply(NSString *sessionUserName, NSString *replyText) {
                 return;
             }
 
-            id msg = [[msgWrapClass alloc] performSelector:@selector(initWithMsgType:) withObject:@(1)];
+            id msg = ((id (*)(id, SEL, long long))objc_msgSend)([msgWrapClass alloc], @selector(initWithMsgType:), 1LL);
             if (!msg) {
                 WPLog(@"AutoTransfer", @"[REPLY] 消息对象创建失败");
                 return;

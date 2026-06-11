@@ -110,7 +110,7 @@ static void processRedEnvelopMessage(id wrap) {
 
     BOOL isSender = fromUsr && selfUserName && [fromUsr isEqualToString:selfUserName];
     BOOL isGroupReceiver = fromUsr && [fromUsr containsString:@"@chatroom"];
-    BOOL isGroupSender = isSender && toUsr && [toUsr containsString:@"chatroom"];
+    BOOL isGroupSender = isSender && toUsr && [toUsr containsString:@"@chatroom"];
     BOOL isPersonalSender = isSender && !isGroupSender;
 
     BOOL shouldReceive = NO;
@@ -419,7 +419,7 @@ static void handleHongbaoResponse(id res, id req) {
                         return;
                     }
 
-                    id msg = [[msgWrapClass alloc] performSelector:@selector(initWithMsgType:) withObject:@(1)];
+                    id msg = ((id (*)(id, SEL, long long))objc_msgSend)([msgWrapClass alloc], @selector(initWithMsgType:), 1LL);
                     if (msg) {
                         @try {
                             [msg setValue:config.redEnvelopAutoReplyStr forKey:@"m_nsContent"];
