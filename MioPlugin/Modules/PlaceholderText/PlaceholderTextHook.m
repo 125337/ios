@@ -123,24 +123,13 @@ static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
 @implementation PlaceholderTextHook
 
 + (void)install {
-    WPLog(@"PlaceholderText", @"PlaceholderTextHook install");
+    HookTableItem items[] = {
+        {@"MMGrowTextView", @"layoutSubviews",
+            (IMP)hook_MMGrowTextView_layoutSubviews, (IMP *)&orig_MMGrowTextView_layoutSubviews},
+    };
 
-    // Hook MMGrowTextView.layoutSubviews
-    // 对齐原版: _objc_getClass("MMGrowTextView") + _MSHookMessageEx
-    Class growTextViewClass = objc_getClass("MMGrowTextView");
-    if (growTextViewClass) {
-        MSHookMessageEx(
-            growTextViewClass,
-            @selector(layoutSubviews),
-            (IMP)hook_MMGrowTextView_layoutSubviews,
-            (IMP *)&orig_MMGrowTextView_layoutSubviews
-        );
-        WPLog(@"PlaceholderText", @"[Hook] ✓ MMGrowTextView.layoutSubviews");
-    } else {
-        WPLog(@"PlaceholderText", @"[Hook] ✗ MMGrowTextView class not found");
-    }
-
-    WPLog(@"PlaceholderText", @"PlaceholderTextHook install complete");
+    [HookEngine installHookTable:@"PlaceholderText" items:items
+                           count:sizeof(items) / sizeof(items[0])];
 }
 
 @end

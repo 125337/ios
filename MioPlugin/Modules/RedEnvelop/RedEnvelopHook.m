@@ -584,49 +584,27 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
 @implementation RedEnvelopHook
 
 + (void)install {
-    WPLog(@"RedEnv", @"RedEnvelopHook install (v3 - 模块化架构)");
+    HookTableItem items[] = {
+        {@"CMessageMgr", @"onNewSyncAddMessage:",
+            (IMP)replaced_onNewSyncAddMessage, &orig_onNewSyncAddMessage},
+        {@"CMessageMgr", @"addMessageLibWithWrap:withVC:",
+            (IMP)replaced_addMessageLibWithWrap, &orig_addMessageLibWithWrap},
+        {@"CMessageMgr", @"onNewSyncNotAddDBMessage:",
+            (IMP)replaced_onNewSyncNotAddDBMessage, &orig_onNewSyncNotAddDBMessage},
+        {@"CMessageMgr", @"AddMsg:MsgWrap:",
+            (IMP)replaced_AddMsgMsgWrap, &orig_AddMsgMsgWrap},
+        {@"CMessageMgr", @"AsyncOnAddMsg:MsgWrap:",
+            (IMP)replaced_AsyncOnAddMsgMsgWrap, &orig_AsyncOnAddMsgMsgWrap},
+        {@"WCRedEnvelopesLogicMgr", @"OnWCToHongbaoCommonResponse:Request:",
+            (IMP)replaced_OnWCToHongbaoCommonResponse2, &orig_OnWCToHongbaoCommonResponse2},
+        {@"WCRedEnvelopesLogicMgr", @"OnWCToHongbaoCommonResponse:Request:WithType:",
+            (IMP)replaced_OnWCToHongbaoCommonResponse3, &orig_OnWCToHongbaoCommonResponse3},
+        {@"WCRedEnvelopesRedEnvelopesDetailViewController", @"viewDidLoad",
+            (IMP)replaced_DetailViewDidLoad, &orig_DetailViewDidLoad},
+    };
 
-    Class CMessageMgrClass = objc_getClass("CMessageMgr");
-    if (CMessageMgrClass) {
-        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncAddMessage:), (IMP)replaced_onNewSyncAddMessage, &orig_onNewSyncAddMessage);
-        WPLog(@"RedEnv", @"[+] onNewSyncAddMessage: hooked");
-
-        MSHookMessageEx(CMessageMgrClass, @selector(addMessageLibWithWrap:withVC:), (IMP)replaced_addMessageLibWithWrap, &orig_addMessageLibWithWrap);
-        if (orig_addMessageLibWithWrap) {
-            WPLog(@"RedEnv", @"[+] addMessageLibWithWrap:withVC: hooked");
-        } else {
-            MSHookMessageEx(CMessageMgrClass, @selector(addMessageLibWithWrap:WithVC:), (IMP)replaced_addMessageLibWithWrap, &orig_addMessageLibWithWrap);
-            if (orig_addMessageLibWithWrap) {
-                WPLog(@"RedEnv", @"[+] addMessageLibWithWrap:WithVC: hooked");
-            }
-        }
-
-        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncNotAddDBMessage:), (IMP)replaced_onNewSyncNotAddDBMessage, &orig_onNewSyncNotAddDBMessage);
-        WPLog(@"RedEnv", @"[+] onNewSyncNotAddDBMessage: hooked");
-
-        MSHookMessageEx(CMessageMgrClass, @selector(AddMsg:MsgWrap:), (IMP)replaced_AddMsgMsgWrap, &orig_AddMsgMsgWrap);
-        WPLog(@"RedEnv", @"[+] AddMsg:MsgWrap: hooked");
-
-        MSHookMessageEx(CMessageMgrClass, @selector(AsyncOnAddMsg:MsgWrap:), (IMP)replaced_AsyncOnAddMsgMsgWrap, &orig_AsyncOnAddMsgMsgWrap);
-        WPLog(@"RedEnv", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
-    }
-
-    Class LogicMgrClass = objc_getClass("WCRedEnvelopesLogicMgr");
-    if (LogicMgrClass) {
-        MSHookMessageEx(LogicMgrClass, @selector(OnWCToHongbaoCommonResponse:Request:), (IMP)replaced_OnWCToHongbaoCommonResponse2, &orig_OnWCToHongbaoCommonResponse2);
-        WPLog(@"RedEnv", @"[+] OnWCToHongbaoCommonResponse:Request: hooked");
-
-        MSHookMessageEx(LogicMgrClass, @selector(OnWCToHongbaoCommonResponse:Request:WithType:), (IMP)replaced_OnWCToHongbaoCommonResponse3, &orig_OnWCToHongbaoCommonResponse3);
-        WPLog(@"RedEnv", @"[+] OnWCToHongbaoCommonResponse:Request:WithType: hooked");
-    }
-
-    Class DetailVCClass = objc_getClass("WCRedEnvelopesRedEnvelopesDetailViewController");
-    if (DetailVCClass) {
-        MSHookMessageEx(DetailVCClass, @selector(viewDidLoad), (IMP)replaced_DetailViewDidLoad, &orig_DetailViewDidLoad);
-        WPLog(@"RedEnv", @"[+] WCRedEnvelopesRedEnvelopesDetailViewController viewDidLoad hooked");
-    }
-
-    WPLog(@"RedEnv", @"RedEnvelopHook install complete");
+    [HookEngine installHookTable:@"RedEnv" items:items
+                           count:sizeof(items) / sizeof(items[0])];
 }
 
 @end

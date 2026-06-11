@@ -701,25 +701,23 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 }
 
 + (void)initCellHeightHook {
-    Class tableMgrClass = objc_getClass("WCTableViewManager");
-    if (tableMgrClass) {
-        MSHookMessageEx(tableMgrClass,
-                        @selector(tableView:heightForHeaderInSection:),
-                        (IMP)_hooked_heightForHeader,
-                        (IMP *)&orig_heightForHeader);
-        WPLog(@"CardBg", @"[OK] WCTableViewManager::heightForHeaderInSection:");
-    } else {
-        WPLog(@"CardBg", @"[WARN] WCTableViewManager class not found!");
-    }
+    // 已合并到 install 方法
 }
 
 + (void)initProfileCardHook {
-    Class cls = objc_getClass("MMUIButton");
-    if (cls) {
-        MSHookMessageEx(cls, @selector(layoutSubviews),
-            (IMP)replaced_MMUIButton_layoutSubviews,
-            (IMP *)&orig_MMUIButton_layoutSubviews);
-    }
+    // 已合并到 install 方法
+}
+
++ (void)install {
+    HookTableItem items[] = {
+        {@"WCTableViewManager", @"tableView:heightForHeaderInSection:",
+            (IMP)_hooked_heightForHeader, (IMP *)&orig_heightForHeader},
+        {@"MMUIButton", @"layoutSubviews",
+            (IMP)replaced_MMUIButton_layoutSubviews, (IMP *)&orig_MMUIButton_layoutSubviews},
+    };
+
+    [HookEngine installHookTable:@"CardBg" items:items
+                           count:sizeof(items) / sizeof(items[0])];
 }
 
 @end

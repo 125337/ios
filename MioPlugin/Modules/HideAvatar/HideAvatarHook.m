@@ -188,43 +188,17 @@ static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
 @implementation HideAvatarHook
 
 + (void)install {
-    WPLog(@"HideAvatar", @"HideAvatarHook install (复刻微信优化 1.6.5 isShowHeadImage)");
-    Class cls;
+    HookTableItem items[] = {
+        {@"BaseMsgContentViewController", @"viewDidLoad",
+            (IMP)hook_viewDidLoad, &orig_BaseMsgContentVC_viewDidLoad},
+        {@"BaseMsgContentViewController", @"viewWillAppear:",
+            (IMP)hook_viewWillAppear, &orig_BaseMsgContentVC_viewWillAppear},
+        {@"CommonMessageViewModel", @"isShowHeadImage",
+            (IMP)hook_isShowHeadImage, &orig_CommonMessageVM_isShowHeadImage},
+    };
 
-    // ① Hook BaseMsgContentViewController.viewDidLoad → 首次进入触发分类
-    cls = objc_getClass("BaseMsgContentViewController");
-    if (cls) {
-        MSHookMessageEx(cls,
-            @selector(viewDidLoad),
-            (IMP)hook_viewDidLoad,
-            &orig_BaseMsgContentVC_viewDidLoad);
-        WPLog(@"HideAvatar", @"[Hook] ✓ BaseMsgContentViewController.viewDidLoad");
-    } else {
-        WPLog(@"HideAvatar", @"[Hook] ✗ BaseMsgContentViewController class not found");
-    }
-
-    // ② Hook BaseMsgContentViewController.viewWillAppear: → 切换聊天/后台切回触发分类
-    if (cls) {
-        MSHookMessageEx(cls,
-            @selector(viewWillAppear:),
-            (IMP)hook_viewWillAppear,
-            &orig_BaseMsgContentVC_viewWillAppear);
-        WPLog(@"HideAvatar", @"[Hook] ✓ BaseMsgContentViewController.viewWillAppear:");
-    }
-
-    // ③ Hook CommonMessageViewModel.isShowHeadImage → 核心决策 (每条消息调用)
-    cls = objc_getClass("CommonMessageViewModel");
-    if (cls) {
-        MSHookMessageEx(cls,
-            NSSelectorFromString(@"isShowHeadImage"),
-            (IMP)hook_isShowHeadImage,
-            &orig_CommonMessageVM_isShowHeadImage);
-        WPLog(@"HideAvatar", @"[Hook] ✓ CommonMessageViewModel.isShowHeadImage");
-    } else {
-        WPLog(@"HideAvatar", @"[Hook] ✗ CommonMessageViewModel class not found");
-    }
-
-    WPLog(@"HideAvatar", @"HideAvatarHook install complete");
+    [HookEngine installHookTable:@"HideAvatar" items:items
+                           count:sizeof(items) / sizeof(items[0])];
 }
 
 @end

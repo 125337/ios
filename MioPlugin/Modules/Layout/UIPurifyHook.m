@@ -201,29 +201,32 @@ static BOOL hook_MMDictConfig_enableDictation(id self, SEL _cmd) {
 
 + (void)install {
     UIPurifyConfig *config = [UIPurifyConfig shared];
-    WPLog(@"UIPurify", @"UIPurifyHook install starting, hideSeparatorLine=%d", config.hideSeparatorLine);
+    [_WPLogManager appendLineWithTag:@"UIPurify" content:[NSString stringWithFormat:@"install starting, hideSeparatorLine=%d", config.hideSeparatorLine]];
 
-    Class tableViewClass = objc_getClass("UITableView");
-    if (tableViewClass) {
-        MSHookMessageEx(tableViewClass, @selector(separatorColor), (IMP)replaced_separatorColor, &orig_separatorColor);
-        WPLog(@"UIPurify", @"[+] [UITableView separatorColor] hooked");
+    // ── 表驱动 Hook（普通 MSHookMessageEx）──
+    HookTableItem items[] = {
+        {@"UITableView", @"separatorColor",
+            (IMP)replaced_separatorColor, &orig_separatorColor},
+        {@"UITableView", @"separatorStyle",
+            (IMP)replaced_separatorStyle, &orig_separatorStyle},
+        {@"VoiceMessageCellView", @"layoutSubviews",
+            (IMP)hook_VoiceMsgCell_layoutSubviews, (IMP *)&orig_VoiceMsgCell_layoutSubviews},
+        {@"YYAsyncImageView", @"layoutSubviews",
+            (IMP)hook_YYAsyncImg_layoutSubviews, (IMP *)&orig_YYAsyncImg_layoutSubviews},
+        {@"MMGrowTextViewExtConfig", @"enableDictation",
+            (IMP)hook_MMDictConfig_enableDictation, (IMP *)&orig_MMDictConfig_enableDictation},
+    };
+    [HookEngine installHookTable:@"UIPurify" items:items
+                           count:sizeof(items) / sizeof(items[0])];
 
-        MSHookMessageEx(tableViewClass, @selector(separatorStyle), (IMP)replaced_separatorStyle, &orig_separatorStyle);
-        WPLog(@"UIPurify", @"[+] [UITableView separatorStyle] hooked");
-    } else {
-        WPLog(@"UIPurify", @"[-] UITableView class not found");
-    }
-
+    // ── WCColor 类方法 Hook（需要特殊处理 metaclass）──
     Class wcColorClass = objc_getClass("WCColor");
     if (wcColorClass) {
         Class wcColorMeta = object_getClass(wcColorClass);
         MSHookMessageEx(wcColorMeta, @selector(seperatorColor), (IMP)replaced_wcColor_seperatorColor, &orig_wcColor_seperatorColor);
-        WPLog(@"UIPurify", @"[+] [WCColor seperatorColor] hooked (class method on metaclass)");
-    } else {
-        WPLog(@"UIPurify", @"[-] WCColor class not found");
     }
 
-    // ── 拍一拍 ──
+    // ── 拍一拍（使用 purifySafeHook 避免父子类交叉污染）──
     Class appPatCellClass = objc_getClass("AppPatMessageCellView");
     Class appPatVMClass = objc_getClass("AppPatMessageViewModel");
     if (appPatCellClass && appPatVMClass) {
@@ -242,12 +245,9 @@ static BOOL hook_MMDictConfig_enableDictation(id self, SEL _cmd) {
         purifySafeHook(appPatVMClass, @selector(measure:),
                        (IMP)hook_AppPatVM_measure,
                        &orig_AppPatVM_measure);
-        WPLog(@"UIPurify", @"[+] AppPatMessageCellView/ViewModel hooked (5 methods, purifySafeHook)");
-    } else {
-        WPLog(@"UIPurify", @"[-] AppPatMessageCellView/ViewModel not found");
     }
 
-    // ── 撤回提示 ──
+    // ── 撤回提示（使用 purifySafeHook 避免父子类交叉污染）──
     Class sysMsgCellClass = objc_getClass("SystemMessageCellView");
     Class sysMsgVMClass = objc_getClass("SystemMessageViewModel");
     if (sysMsgCellClass && sysMsgVMClass) {
@@ -266,45 +266,7 @@ static BOOL hook_MMDictConfig_enableDictation(id self, SEL _cmd) {
         purifySafeHook(sysMsgVMClass, @selector(measure:),
                        (IMP)hook_SysMsgVM_measure,
                        &orig_SysMsgVM_measure);
-        WPLog(@"UIPurify", @"[+] SystemMessageCellView/ViewModel hooked (5 methods, purifySafeHook)");
-    } else {
-        WPLog(@"UIPurify", @"[-] SystemMessageCellView/ViewModel not found");
     }
-
-    // ── 语音红点和转文字 ──
-    Class voiceCellClass = objc_getClass("VoiceMessageCellView");
-    if (voiceCellClass) {
-        MSHookMessageEx(voiceCellClass, @selector(layoutSubviews),
-                        (IMP)hook_VoiceMsgCell_layoutSubviews,
-                        (IMP *)&orig_VoiceMsgCell_layoutSubviews);
-        WPLog(@"UIPurify", @"[+] VoiceMessageCellView layoutSubviews hooked");
-    } else {
-        WPLog(@"UIPurify", @"[-] VoiceMessageCellView not found");
-    }
-
-    // ── 聊天气泡背景 ──
-    Class yyImgClass = objc_getClass("YYAsyncImageView");
-    if (yyImgClass) {
-        MSHookMessageEx(yyImgClass, @selector(layoutSubviews),
-                        (IMP)hook_YYAsyncImg_layoutSubviews,
-                        (IMP *)&orig_YYAsyncImg_layoutSubviews);
-        WPLog(@"UIPurify", @"[+] YYAsyncImageView layoutSubviews hooked");
-    } else {
-        WPLog(@"UIPurify", @"[-] YYAsyncImageView not found");
-    }
-
-    // ── 禁用输入框听写 ──
-    Class dictConfigClass = objc_getClass("MMGrowTextViewExtConfig");
-    if (dictConfigClass) {
-        MSHookMessageEx(dictConfigClass, @selector(enableDictation),
-                        (IMP)hook_MMDictConfig_enableDictation,
-                        (IMP *)&orig_MMDictConfig_enableDictation);
-        WPLog(@"UIPurify", @"[+] MMGrowTextViewExtConfig enableDictation hooked");
-    } else {
-        WPLog(@"UIPurify", @"[-] MMGrowTextViewExtConfig not found");
-    }
-
-    WPLog(@"UIPurify", @"UIPurifyHook install complete");
 }
 
 @end

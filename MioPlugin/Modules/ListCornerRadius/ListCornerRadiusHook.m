@@ -434,70 +434,31 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 @implementation ListCornerRadiusHook
 
 + (void)initListCornerRadiusHook {
-    WPLog(@"ListCornerRadius", @"[INIT] Initializing ListCornerRadius hook...");
-    Class MMTableViewCellClass = objc_getClass("MMTableViewCell");
-    if (MMTableViewCellClass) {
-        MSHookMessageEx(
-            MMTableViewCellClass,
-            @selector(layoutSubviews),
-            (IMP)replaced_MMTableViewCell_layoutSubviews,
-            &orig_MMTableViewCell_layoutSubviews
-        );
-        WPLog(@"ListCornerRadius", @"[OK] MMTableViewCell::layoutSubviews");
-    } else {
-        WPLog(@"ListCornerRadius", @"[WARN] MMTableViewCell class not found!");
-    }
+    // 已合并到 install 方法
+}
 
-    Class WCSearchBarClass = objc_getClass("WCSearchBar");
-    if (WCSearchBarClass) {
-        MSHookMessageEx(
-            WCSearchBarClass,
-            @selector(layoutSubviews),
-            (IMP)replaced_WCSearchBar_layoutSubviews,
-            &orig_WCSearchBar_layoutSubviews
-        );
-        WPLog(@"ListCornerRadius", @"[OK] WCSearchBar::layoutSubviews");
-    } else {
-        WPLog(@"ListCornerRadius", @"[WARN] WCSearchBar class not found!");
-    }
++ (void)install {
+    HookTableItem items[] = {
+        {@"MMTableViewCell", @"layoutSubviews",
+            (IMP)replaced_MMTableViewCell_layoutSubviews, &orig_MMTableViewCell_layoutSubviews},
+        {@"WCSearchBar", @"layoutSubviews",
+            (IMP)replaced_WCSearchBar_layoutSubviews, &orig_WCSearchBar_layoutSubviews},
+        {@"MFWebMMBtn", @"layoutSubviews",
+            (IMP)_hooked_MFWebMMBtn_layoutSubviews, (IMP *)&orig_MFWebMMBtn_layoutSubviews},
+        {@"MFBannerBtn", @"layoutSubviews",
+            (IMP)_hooked_MFBannerBtn_layoutSubviews, (IMP *)&orig_MFBannerBtn_layoutSubviews},
+        {@"MainFrameSectionFoldView", @"layoutSubviews",
+            (IMP)_hooked_FoldView_layoutSubviews, (IMP *)&orig_FoldView_layoutSubviews},
+        {@"UIView", @"layoutSubviews",
+            (IMP)_hooked_UIView_layoutSubviews, (IMP *)&orig_UIView_layoutSubviews},
+        {@"NewMainFrameViewController", @"tableView:viewForHeaderInSection:",
+            (IMP)_hooked_NMFVC_viewForHeader, (IMP *)&orig_NMFVC_viewForHeader},
+        {@"MMTableSectionHeaderView", @"setBackgroundImageView:",
+            (IMP)_hooked_setBgImageView, (IMP *)&orig_setBgImageView},
+    };
 
-    // ★ WPAuxiliaryHooks Hooks — MFWebMMBtn, MFBannerBtn, FoldView, MMUIButton media corner
-    Class c1 = objc_getClass("MFWebMMBtn");
-    if (c1) {
-        MSHookMessageEx(c1, @selector(layoutSubviews),
-            (IMP)_hooked_MFWebMMBtn_layoutSubviews, (IMP *)&orig_MFWebMMBtn_layoutSubviews);
-    }
-
-    Class c2 = objc_getClass("MFBannerBtn");
-    if (c2) {
-        MSHookMessageEx(c2, @selector(layoutSubviews),
-            (IMP)_hooked_MFBannerBtn_layoutSubviews, (IMP *)&orig_MFBannerBtn_layoutSubviews);
-    }
-
-    Class c3 = objc_getClass("MainFrameSectionFoldView");
-    if (c3) {
-        MSHookMessageEx(c3, @selector(layoutSubviews),
-            (IMP)_hooked_FoldView_layoutSubviews, (IMP *)&orig_FoldView_layoutSubviews);
-    }
-
-    // ★ WPSessionSpacingHook Hooks — UIView, NewMainFrameVC, MMTableSectionHeader
-    Class uiView = objc_getClass("UIView");
-    if (uiView) {
-        MSHookMessageEx(uiView, @selector(layoutSubviews),
-            (IMP)_hooked_UIView_layoutSubviews, (IMP *)&orig_UIView_layoutSubviews);
-    }
-    Class nmfvc = objc_getClass("NewMainFrameViewController");
-    if (nmfvc) {
-        MSHookMessageEx(nmfvc, @selector(tableView:viewForHeaderInSection:),
-            (IMP)_hooked_NMFVC_viewForHeader, (IMP *)&orig_NMFVC_viewForHeader);
-    }
-    Class header = objc_getClass("MMTableSectionHeaderView");
-    if (header) {
-        MSHookMessageEx(header, @selector(setBackgroundImageView:),
-            (IMP)_hooked_setBgImageView, (IMP *)&orig_setBgImageView);
-    }
-
-    [ProfileCardBgHook initCellHeightHook];
+    [HookEngine installHookTable:@"ListCorner" items:items
+                           count:sizeof(items) / sizeof(items[0])];
 }
 
 + (void)wp_applyStandardCorner:(UIView *)cell

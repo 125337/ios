@@ -376,30 +376,21 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
 @implementation AutoTransferHook
 
 + (void)install {
-    WPLog(@"AutoTransfer", @"AutoTransferHook install");
+    HookTableItem items[] = {
+        {@"CMessageMgr", @"onNewSyncAddMessage:",
+            (IMP)replaced_at_onNewSyncAddMessage, &orig_onNewSyncAddMessage},
+        {@"CMessageMgr", @"onNewSyncNotAddDBMessage:",
+            (IMP)replaced_at_onNewSyncNotAddDBMessage, &orig_onNewSyncNotAddDBMessage},
+        {@"CMessageMgr", @"AddMsg:MsgWrap:",
+            (IMP)replaced_at_AddMsgMsgWrap, &orig_AddMsgMsgWrap},
+        {@"CMessageMgr", @"AsyncOnAddMsg:MsgWrap:",
+            (IMP)replaced_at_AsyncOnAddMsgMsgWrap, &orig_AsyncOnAddMsgMsgWrap},
+        {@"WCPayLogicMgr", @"insideCallBackOnConfirmTransferMoneyResponse:OnRequest:",
+            (IMP)replaced_at_ConfirmTransferResponse, &orig_ConfirmTransferResponse},
+    };
 
-    Class CMessageMgrClass = objc_getClass("CMessageMgr");
-    if (CMessageMgrClass) {
-        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncAddMessage:), (IMP)replaced_at_onNewSyncAddMessage, &orig_onNewSyncAddMessage);
-        WPLog(@"AutoTransfer", @"[+] onNewSyncAddMessage: hooked");
-
-        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncNotAddDBMessage:), (IMP)replaced_at_onNewSyncNotAddDBMessage, &orig_onNewSyncNotAddDBMessage);
-        WPLog(@"AutoTransfer", @"[+] onNewSyncNotAddDBMessage: hooked");
-
-        MSHookMessageEx(CMessageMgrClass, @selector(AddMsg:MsgWrap:), (IMP)replaced_at_AddMsgMsgWrap, &orig_AddMsgMsgWrap);
-        WPLog(@"AutoTransfer", @"[+] AddMsg:MsgWrap: hooked");
-
-        MSHookMessageEx(CMessageMgrClass, @selector(AsyncOnAddMsg:MsgWrap:), (IMP)replaced_at_AsyncOnAddMsgMsgWrap, &orig_AsyncOnAddMsgMsgWrap);
-        WPLog(@"AutoTransfer", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
-    }
-
-    Class PayLogicMgrClass = objc_getClass("WCPayLogicMgr");
-    if (PayLogicMgrClass) {
-        MSHookMessageEx(PayLogicMgrClass, @selector(insideCallBackOnConfirmTransferMoneyResponse:OnRequest:), (IMP)replaced_at_ConfirmTransferResponse, &orig_ConfirmTransferResponse);
-        WPLog(@"AutoTransfer", @"[+] insideCallBackOnConfirmTransferMoneyResponse:OnRequest: hooked");
-    }
-
-    WPLog(@"AutoTransfer", @"AutoTransferHook install complete");
+    [HookEngine installHookTable:@"AutoTransfer" items:items
+                           count:sizeof(items) / sizeof(items[0])];
 }
 
 @end

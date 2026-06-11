@@ -194,23 +194,15 @@ static void replaced_reloadMenuItems(id self, SEL _cmd) {
 @implementation ClearUnreadHook
 
 + (void)install {
-    WPLog(@"ClearUnread",@"[INFO] ClearUnreadHook install start");
+    HookTableItem items[] = {
+        {@"NewMainFrameRightTopMenuBtn", @"reloadMenuItems",
+            (IMP)replaced_reloadMenuItems, &orig_reloadMenuItems},
+        {@"RightTopMenuData", @"clickMenu:",
+            (IMP)replaced_clickMenu, &orig_clickMenu},
+    };
 
-    Class menuBtnClass = objc_getClass("NewMainFrameRightTopMenuBtn");
-    if (menuBtnClass) {
-        MSHookMessageEx(menuBtnClass, @selector(reloadMenuItems), (IMP)replaced_reloadMenuItems, &orig_reloadMenuItems);
-        WPLog(@"ClearUnread",@"[INFO] reloadMenuItems hooked");
-    }
-
-    Class menuDataClass = objc_getClass("RightTopMenuData");
-    if (menuDataClass) {
-        MSHookMessageEx(menuDataClass, @selector(clickMenu:), (IMP)replaced_clickMenu, &orig_clickMenu);
-        WPLog(@"ClearUnread",@"[INFO] clickMenu: hooked on RightTopMenuData");
-    } else {
-        WPLog(@"ClearUnread",@"[ERR] RightTopMenuData not found");
-    }
-
-    WPLog(@"ClearUnread",@"[INFO] ClearUnreadHook install complete");
+    [HookEngine installHookTable:@"ClearUnread" items:items
+                           count:sizeof(items) / sizeof(items[0])];
 }
 
 + (void)clearUnreadTapped {

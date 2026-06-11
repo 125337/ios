@@ -192,27 +192,19 @@ static void hook_pushViewController(id self, SEL _cmd, id viewController, BOOL a
 @implementation ChatTopBarHook
 
 + (void)install {
-    WPLog(@"ChatTopBar", @"ChatTopBarHook install");
     _popoverDelegate = [[MioPopoverHandler alloc] init];
 
-    Class cls = objc_getClass("BaseMsgContentViewController");
-    if (cls) {
-        MSHookMessageEx(cls, @selector(viewDidLoad),
-                        (IMP)hook_viewDidLoad,
-                        &orig_BaseMsgContentVC_viewDidLoad);
-        MSHookMessageEx(cls, @selector(viewWillAppear:),
-                        (IMP)hook_viewWillAppear,
-                        &orig_BaseMsgContentVC_viewWillAppear);
-        WPLog(@"ChatTopBar", @"[Hook] ✓ BaseMsgContentViewController");
-    }
+    HookTableItem items[] = {
+        {@"BaseMsgContentViewController", @"viewDidLoad",
+            (IMP)hook_viewDidLoad, &orig_BaseMsgContentVC_viewDidLoad},
+        {@"BaseMsgContentViewController", @"viewWillAppear:",
+            (IMP)hook_viewWillAppear, &orig_BaseMsgContentVC_viewWillAppear},
+        {@"UINavigationController", @"pushViewController:animated:",
+            (IMP)hook_pushViewController, &orig_UINavigationController_push},
+    };
 
-    Class navCls = objc_getClass("UINavigationController");
-    if (navCls) {
-        MSHookMessageEx(navCls, @selector(pushViewController:animated:),
-                        (IMP)hook_pushViewController,
-                        &orig_UINavigationController_push);
-        WPLog(@"ChatTopBar", @"[Hook] ✓ UINavigationController::pushViewController:animated:");
-    }
+    [HookEngine installHookTable:@"ChatTopBar" items:items
+                           count:sizeof(items) / sizeof(items[0])];
 }
 
 @end
