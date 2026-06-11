@@ -11,24 +11,6 @@
 static NSMutableSet *_processedTransferIds = nil;
 static NSMutableDictionary *_pendingTransferData = nil;
 
-static void atLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"MioPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"autotransfer.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-}
-
 static NSString *extractXMLValue(NSString *content, NSString *tagName) {
     NSString *pattern = [NSString stringWithFormat:@"<%@>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?</%@>", tagName, tagName];
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
@@ -77,8 +59,8 @@ static void sendAutoReply(NSString *sessionUserName, NSString *replyText) {
             }
 
             ((void(*)(id, SEL, id, id))objc_msgSend)(msgMgr, addMsgSel, sessionUserName, msg);
-            atLog([NSString stringWithFormat:
-                @"[REPLY] 自动回复已发送: %@ -> %@", replyText, sessionUserName]);
+            [_WPLogManager appendLineWithTag:@"AutoTransfer" content:[NSString stringWithFormat:
+                @"自动回复已发送: %@ -> %@", replyText, sessionUserName]];
         } @catch (NSException *e) {
             WPLog(@"AutoTransfer", @"[REPLY] 自动回复异常: %@", e);
         }
@@ -234,22 +216,23 @@ static void processTransferMessage(id wrap) {
 
     unsigned long long invalidTime = (unsigned long long)[invalidTimeStr longLongValue];
 
-    atLog([NSString stringWithFormat:@"[TRANSFER] 检测到转账: transferID=%@ from=%@ fee=%lld memo=%@ isGroup=%d",
-          transferID, fromUsr, feeAmount, payMemo, isGroup]);
+    [_WPLogManager appendLineWithTag:@"AutoTransfer" content:[NSString stringWithFormat:
+        @"检测到转账: transferID=%@ from=%@ fee=%lld memo=%@ isGroup=%d",
+        transferID, fromUsr, feeAmount, payMemo, isGroup]];
 
-    atLog([NSString stringWithFormat:
+    [_WPLogManager appendLineWithTag:@"AutoTransfer" content:[NSString stringWithFormat:
         @"[DEBUG] XML字段: total_fee=%@ feedesc=%@ paysubtype=%@ bubbletype=%@ invalidtime=%@",
         extractXMLValue(content, @"total_fee") ?: @"(nil)",
         extractXMLValue(content, @"feedesc") ?: @"(nil)",
         extractXMLValue(content, @"paysubtype") ?: @"(nil)",
         extractXMLValue(content, @"bubbletype") ?: @"(nil)",
-        extractXMLValue(content, @"invalidtime") ?: @"(nil)"]);
+        extractXMLValue(content, @"invalidtime") ?: @"(nil)"]];
 
-    atLog([NSString stringWithFormat:
+    [_WPLogManager appendLineWithTag:@"AutoTransfer" content:[NSString stringWithFormat:
         @"[DEBUG] ObjC属性: payInfoItem=%@ m_uiTransferAmount=%@ m_total_fee=%@",
         payInfoItem ? @"可用" : @"nil",
         payInfoItem ? [payInfoItem valueForKey:@"m_uiTransferAmount"] ?: @"(nil)" : @"(N/A)",
-        payInfoItem ? [payInfoItem valueForKey:@"m_total_fee"] ?: @"(nil)" : @"(N/A)"]);
+        payInfoItem ? [payInfoItem valueForKey:@"m_total_fee"] ?: @"(nil)" : @"(N/A)"]];
 
     WPLog(@"AutoTransfer", @"[DEBUG] 完整XML: %@", content);
 

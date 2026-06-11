@@ -6,26 +6,6 @@
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/WPUtility.h"
 
-#pragma mark - 工具函数
-
-static void groupExitLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"MioPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"groupexit.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
-}
-
 #pragma mark - 静态变量
 
 static NSMutableDictionary<NSString *, NSString *> *groupMemberSnapshots = nil;
@@ -129,17 +109,19 @@ static void checkMemberExit(id contact, NSString *newMemberList) {
         return;
     }
     
-    groupExitLog([NSString stringWithFormat:@"[GroupExit] %@ setter called, old=%@, new=%lu", 
-                  chatRoomName, 
-                  oldMemberList ? [NSString stringWithFormat:@"%lu", (unsigned long)oldMemberList.length] : @"nil",
-                  (unsigned long)newMemberList.length]);
+    [_WPLogManager appendLineWithTag:@"GroupExit" content:[NSString stringWithFormat:
+        @"%@ setter called, old=%@, new=%lu",
+        chatRoomName,
+        oldMemberList ? [NSString stringWithFormat:@"%lu", (unsigned long)oldMemberList.length] : @"nil",
+        (unsigned long)newMemberList.length]];
     
     if (oldMemberList && oldMemberList.length > 0) {
         NSArray *oldMembers = [oldMemberList componentsSeparatedByString:@";"];
         NSArray *newMembers = [newMemberList componentsSeparatedByString:@";"];
         
-        groupExitLog([NSString stringWithFormat:@"[GroupExit] %@ members: %lu -> %lu", 
-                      chatRoomName, (unsigned long)oldMembers.count, (unsigned long)newMembers.count]);
+        [_WPLogManager appendLineWithTag:@"GroupExit" content:[NSString stringWithFormat:
+            @"%@ members: %lu -> %lu",
+            chatRoomName, (unsigned long)oldMembers.count, (unsigned long)newMembers.count]];
         
         if (oldMembers.count > newMembers.count && newMembers.count > 0) {
             NSMutableSet *oldSet = [NSMutableSet setWithArray:oldMembers];
@@ -147,12 +129,14 @@ static void checkMemberExit(id contact, NSString *newMemberList) {
             [oldSet minusSet:newSet];
             
             if (oldSet.count > 0) {
-                groupExitLog([NSString stringWithFormat:@"[GroupExit] %@ exit detected, diff count=%lu", 
-                              chatRoomName, (unsigned long)oldSet.count]);
+                [_WPLogManager appendLineWithTag:@"GroupExit" content:[NSString stringWithFormat:
+                    @"%@ exit detected, diff count=%lu",
+                    chatRoomName, (unsigned long)oldSet.count]];
                 
                 for (NSString *exitUserId in oldSet) {
-                    groupExitLog([NSString stringWithFormat:@"[GroupExit] Processing exitUserId: '%@', length=%lu", 
-                                  exitUserId, (unsigned long)exitUserId.length]);
+                    [_WPLogManager appendLineWithTag:@"GroupExit" content:[NSString stringWithFormat:
+                        @"Processing exitUserId: '%@', length=%lu",
+                        exitUserId, (unsigned long)exitUserId.length]];
                     if (exitUserId.length == 0) {
                         WPLog(@"GroupExit", @"[GroupExit] Skipping empty exitUserId");
                         continue;
