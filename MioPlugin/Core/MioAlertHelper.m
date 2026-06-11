@@ -30,39 +30,39 @@ static void __walert_confirm_IMP(id self, SEL _cmd) {
     [_WPLogManager appendLineWithTag:@"Alert" content:@"CONFIRM CALLBACK FIRED (C IMP on WCUIAlertView)"];
 
     void(^confirmBlock)(NSString *) = objc_getAssociatedObject(self, &kWAlertConfirmBlockKey);
-    [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   self=%@ confirmBlock=%s", self, confirmBlock ? "YES" : "NO"]);
+    [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   self=%@ confirmBlock=%s", self, confirmBlock ? "YES" : "NO"]];
 
     // 获取输入文本
     NSString *input = nil;
     @try {
         input = [self valueForKeyPath:@"tipsVc.tipsTextView.text"];
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   tipsVc.tipsTextView.text = %@", input ?: @"(nil)"]);
+        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   tipsVc.tipsTextView.text = %@", input ?: @"(nil)"]];
     } @catch (NSException *e) {
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   tipsVc.textView error: %@", e]);
+        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   tipsVc.textView error: %@", e]];
     }
     if (!input || input.length == 0) {
         @try {
             input = [self valueForKeyPath:@"tipsVc.tipsTextField.text"];
-            [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   tipsVc.tipsTextField.text = %@", input ?: @"(nil)"]);
+            [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   tipsVc.tipsTextField.text = %@", input ?: @"(nil)"]];
         } @catch (NSException *e) {}
     }
     if (!input || input.length == 0) {
         SEL getText = NSSelectorFromString(@"getTextFieldText");
         if ([self respondsToSelector:getText]) {
             input = ((id(*)(id, SEL))objc_msgSend)(self, getText);
-            [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   getTextFieldText = %@", input ?: @"(nil)"]);
+            [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   getTextFieldText = %@", input ?: @"(nil)"]];
         }
     }
 
-    [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   FINAL input: [%@] len=%lu", input ?: @"(nil)", (unsigned long)(input ? input.length : 0)]);
+    [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   FINAL input: [%@] len=%lu", input ?: @"(nil)", (unsigned long)(input ? input.length : 0)]];
 
     if (input.length > 0 && confirmBlock) {
-        [_WPLogManager appendLineWithTag:@"Alert" content:@"   → calling confirmBlock...");
+        [_WPLogManager appendLineWithTag:@"Alert" content:@"   → calling confirmBlock..."];
         confirmBlock(input);
-        [_WPLogManager appendLineWithTag:@"Alert" content:@"   → confirmBlock returned ✅");
+        [_WPLogManager appendLineWithTag:@"Alert" content:@"   → confirmBlock returned"];
     } else {
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   ⚠️ skip: input=%lu confirm=%s",
-            (unsigned long)(input.length), confirmBlock ? "YES" : "NO"]);
+        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   skip: input=%lu confirm=%s",
+            (unsigned long)(input.length), confirmBlock ? "YES" : "NO"]];
     }
 }
 
@@ -107,10 +107,10 @@ static void walertEnsureCIMPInjected(Class alertClass) {
 
     @try {
         // ① alloc + init
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"① alloc+initWithTitle: Mio助手"]);
+        [_WPLogManager appendLineWithTag:@"Alert" content:@"alloc+initWithTitle: Mio助手"];
         WCUIAlertView *alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc], @selector(initWithTitle:message:), @"Mio助手", @"");
         if (!alert) { [_WPLogManager appendLineWithTag:@"Alert" content:@"init nil"]; return; }
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   alert=%@", alert]);
+        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   alert=%@", alert]];
 
         // ② textField
         SEL stfSel = NSSelectorFromString(@"showTextFieldWithMaxLen:");
