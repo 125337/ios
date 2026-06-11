@@ -4,6 +4,7 @@
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
+#import "../../Core/WPUtility.h"
 
 static NSString *trimText(NSString *text) {
     if (![text isKindOfClass:[NSString class]]) return nil;
@@ -114,78 +115,20 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         return NO;
     }
     
-    Class CMessageWrapClass = objc_getClass("CMessageWrap");
-    if (!CMessageWrapClass) {
-        WPLog(@"Revoke", @"CMessageWrap class not found");
-        return NO;
-    }
-
     @try {
-        id newWrap = ((id (*)(id, SEL, unsigned int))objc_msgSend)(
-            [CMessageWrapClass alloc], NSSelectorFromString(@"initWithMsgType:"), 0x2710);
-
-        if (!newWrap) {
-            WPLog(@"Revoke", @"failed to create CMessageWrap");
-            return NO;
-        }
-
-        NSString *fromUsr = nil;
-        NSString *toUsr = nil;
-
-        if (revokedMsgWrap) {
-            SEL fromSel = NSSelectorFromString(@"m_nsFromUsr");
-            if ([revokedMsgWrap respondsToSelector:fromSel])
-                fromUsr = ((id (*)(id, SEL))objc_msgSend)(revokedMsgWrap, fromSel);
-            
-            SEL toSel = NSSelectorFromString(@"m_nsToUsr");
-            if ([revokedMsgWrap respondsToSelector:toSel])
-                toUsr = ((id (*)(id, SEL))objc_msgSend)(revokedMsgWrap, toSel);
-        }
-
-        if (!fromUsr.length) fromUsr = session;
-        if (!toUsr.length) toUsr = session;
-
-        SEL setFromUsrSel = NSSelectorFromString(@"setM_nsFromUsr:");
-        if ([newWrap respondsToSelector:setFromUsrSel])
-            ((void (*)(id, SEL, id))objc_msgSend)(newWrap, setFromUsrSel, fromUsr);
-
-        SEL setToUsrSel = NSSelectorFromString(@"setM_nsToUsr:");
-        if ([newWrap respondsToSelector:setToUsrSel])
-            ((void (*)(id, SEL, id))objc_msgSend)(newWrap, setToUsrSel, toUsr);
-
-        SEL setStatusSel = NSSelectorFromString(@"setM_uiStatus:");
-        if ([newWrap respondsToSelector:setStatusSel])
-            ((void (*)(id, SEL, unsigned int))objc_msgSend)(newWrap, setStatusSel, 4);
-
-        SEL setContentSel = NSSelectorFromString(@"setM_nsContent:");
-        if ([newWrap respondsToSelector:setContentSel])
-            ((void (*)(id, SEL, id))objc_msgSend)(newWrap, setContentSel, tipText);
-
-        SEL setCreateTimeSel = NSSelectorFromString(@"setM_uiCreateTime:");
-        if ([newWrap respondsToSelector:setCreateTimeSel])
-            ((void (*)(id, SEL, unsigned int))objc_msgSend)(newWrap, setCreateTimeSel, createTime);
-
-        // ★ 标记为防撤回自定义提示，避免 HideRevokeHint 误隐藏
-        objc_setAssociatedObject(newWrap, "MioRevokeTipMark", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-        SEL addLocalMsgSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
-        if ([messageMgr respondsToSelector:addLocalMsgSel]) {
-            ((void (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)(
-                messageMgr, addLocalMsgSel, session, newWrap, YES, NO);
-            WPLog(@"Revoke", @"AddLocalMsg success (DK style)");
-            return YES;
-        }
-
-        SEL addSimpleSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
-        if ([messageMgr respondsToSelector:addSimpleSel]) {
-            ((void (*)(id, SEL, id, id))objc_msgSend)(messageMgr, addSimpleSel, session, newWrap);
-            WPLog(@"Revoke", @"AddLocalMsg simple success");
-            return YES;
-        }
-
-        WPLog(@"Revoke", @"no AddLocalMsg method found");
-        return NO;
+        id result = [WPUtility insertSystemTipMessageInSession:session
+                                                       content:tipText
+                                                        msgMgr:messageMgr
+                                                    createTime:createTime
+                                                       fromUsr:nil
+                                                         toUsr:nil
+                                                       msgWrap:revokedMsgWrap
+                                                   extraSetup:^(id newWrap) {
+            // ★ 标记为防撤回自定义提示，避免 HideRevokeHint 误隐藏
+            objc_setAssociatedObject(newWrap, "MioRevokeTipMark", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }];
         
+        return result != nil;
     } @catch (NSException *e) {
         WPLog(@"Revoke", @"exception: %@", e);
         return NO;

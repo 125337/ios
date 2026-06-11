@@ -4,6 +4,7 @@
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
+#import "../../Core/WPUtility.h"
 
 #pragma mark - 工具函数
 
@@ -79,63 +80,25 @@ static void insertExitNotification(NSString *chatRoomName, NSString *exitUserId,
     
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
-            Class msgWrapClass = objc_getClass("CMessageWrap");
-            if (!msgWrapClass) {
-                WPLog(@"GroupExit", @"[GroupExit] CMessageWrap class not found");
-                return;
-            }
-            
-            id msgWrap = ((id(*)(id, SEL, unsigned int))objc_msgSend)([msgWrapClass alloc], NSSelectorFromString(@"initWithMsgType:"), 0x2710);
-            if (!msgWrap) {
-                WPLog(@"GroupExit", @"[GroupExit] Failed to create CMessageWrap instance");
-                return;
-            }
-            
-            WPLog(@"GroupExit", @"[GroupExit] CMessageWrap created successfully");
-            
-            SEL setFromUsrSel = NSSelectorFromString(@"setM_nsFromUsr:");
-            if ([msgWrap respondsToSelector:setFromUsrSel])
-                ((void(*)(id, SEL, id))objc_msgSend)(msgWrap, setFromUsrSel, chatRoomName);
-            
-            SEL setToUsrSel = NSSelectorFromString(@"setM_nsToUsr:");
-            if ([msgWrap respondsToSelector:setToUsrSel])
-                ((void(*)(id, SEL, id))objc_msgSend)(msgWrap, setToUsrSel, chatRoomName);
-            
-            SEL setStatusSel = NSSelectorFromString(@"setM_uiStatus:");
-            if ([msgWrap respondsToSelector:setStatusSel])
-                ((void(*)(id, SEL, unsigned int))objc_msgSend)(msgWrap, setStatusSel, 4);
-            
-            SEL setContentSel = NSSelectorFromString(@"setM_nsContent:");
-            if ([msgWrap respondsToSelector:setContentSel])
-                ((void(*)(id, SEL, id))objc_msgSend)(msgWrap, setContentSel, msgContent);
-            
-            SEL setCreateTimeSel = NSSelectorFromString(@"setM_uiCreateTime:");
-            if ([msgWrap respondsToSelector:setCreateTimeSel])
-                ((void(*)(id, SEL, unsigned int))objc_msgSend)(msgWrap, setCreateTimeSel, (unsigned int)[[NSDate date] timeIntervalSince1970]);
-            
             id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
             if (!msgMgr) {
                 WPLog(@"GroupExit", @"[GroupExit] CMessageMgr is nil");
                 return;
             }
             
-            WPLog(@"GroupExit", @"[GroupExit] CMessageMgr found, calling AddLocalMsg...");
-            
-            SEL addLocalMsgSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
-            if ([msgMgr respondsToSelector:addLocalMsgSel]) {
-                ((void(*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)(msgMgr, addLocalMsgSel, chatRoomName, msgWrap, YES, NO);
+            id result = [WPUtility insertSystemTipMessageInSession:chatRoomName
+                                                           content:msgContent
+                                                            msgMgr:msgMgr
+                                                        createTime:0
+                                                           fromUsr:chatRoomName
+                                                             toUsr:chatRoomName
+                                                           msgWrap:nil
+                                                       extraSetup:nil];
+            if (result) {
                 WPLog(@"GroupExit", @"[GroupExit] ✅ Inserted notification: %@ left %@", nickname, chatRoomName);
-            } else {
-                SEL addSimpleSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
-                if ([msgMgr respondsToSelector:addSimpleSel]) {
-                    ((void(*)(id, SEL, id, id))objc_msgSend)(msgMgr, addSimpleSel, chatRoomName, msgWrap);
-                    WPLog(@"GroupExit", @"[GroupExit] ✅ Inserted notification (simple): %@ left %@", nickname, chatRoomName);
-                } else {
-                    WPLog(@"GroupExit", @"[GroupExit] No AddLocalMsg method found");
-                }
             }
         } @catch (NSException *e) {
-            WPLog(@"GroupExit", @"[GroupExit] Error inserting message: %@", e);
+            WPLog(@"GroupExit", @"[GroupExit] Exception: %@", e);
         }
     });
 }
