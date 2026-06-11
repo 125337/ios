@@ -12,11 +12,7 @@
 // ============================================================
 // MARK: - Constants
 // ============================================================
-static const NSInteger kTimeLabelTag           = 999999;
-static const unsigned int kSystemMessageType   = 10000;
 static const CGFloat kMinContentViewWidth      = 5.0;
-
-static Class s_CMessageWrapClass; // install 时初始化
 
 // ============================================================
 // MARK: - Configuration Table Entry
@@ -28,24 +24,6 @@ typedef struct {
     IMP replacement;
     IMP *original;
 } MTHookEntry;
-
-// ============================================================
-// MARK: - Label Management
-// ============================================================
-
-static UILabel *initTimeLabel(UIView *targetView) {
-    UILabel *label = objc_getAssociatedObject(targetView, @"msgTimeLabel");
-    if (!label) {
-        label = [[UILabel alloc] init];
-        label.tag = kTimeLabelTag;
-        label.userInteractionEnabled = NO;
-        label.textAlignment = NSTextAlignmentNatural;
-        objc_setAssociatedObject(targetView, @"msgTimeLabel", label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-    return label;
-}
-
-// Note: Formatter removed, using MessageTimeFormatParser now
 
 // ============================================================
 // MARK: - Color / Theme Helpers
