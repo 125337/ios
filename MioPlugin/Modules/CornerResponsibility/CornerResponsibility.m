@@ -5,14 +5,6 @@
 
 #import "CornerResponsibility.h"
 
-/// ========== 配置区：在此维护各模块的 VC 归属 ==========
-
-/// 资料卡片美化模块专属的 VC 类名列表
-/// ★ MoreViewController 不再归为资料卡模块，它的列表 Cell 由列表圆角模块处理。
-///   资料卡的识别在 handleButtonLayout 中通过 MMHeadImageView 子视图检查 + VC 类型检查完成。
-static NSString *const kProfileCardVCs[] = {
-};
-
 /// 列表圆角黑名单（不支持任何圆角的 VC 类名列表）
 /// 这些 VC 的页面还不适配圆角
 static NSString *const kSkipListVCs[] = {
@@ -69,23 +61,6 @@ static NSString *const kSkipPrefixList[] = {
     @"BubbleBox",
 };
 
-/// ========== 配置区结束 ==========
-
-/// 获取静态 NSSet（profileCardVCs）
-static NSSet *profileCardSet(void) {
-    static NSSet *set = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        NSMutableSet *mutableSet = [NSMutableSet set];
-        NSUInteger count = sizeof(kProfileCardVCs) / sizeof(kProfileCardVCs[0]);
-        for (NSUInteger i = 0; i < count; i++) {
-            [mutableSet addObject:kProfileCardVCs[i]];
-        }
-        set = [mutableSet copy];
-    });
-    return set;
-}
-
 /// 获取静态 NSSet（skipListVCs）
 static NSSet *skipListSet(void) {
     static NSSet *set = nil;
@@ -118,41 +93,24 @@ static BOOL isPrefixSkipped(NSString *cls) {
 
 @implementation CornerResponsibility
 
-+ (CornerModule)moduleForViewController:(UIViewController *)vc {
-    if (vc == nil) return kCornerModuleNone;
++ (BOOL)isListCornerResponsibleFor:(UIViewController *)vc {
+    if (vc == nil) return NO;
 
     NSString *cls = NSStringFromClass([vc class]);
-    if (cls.length == 0) return kCornerModuleNone;
+    if (cls.length == 0) return NO;
 
-    // 1. 资料卡片美化专属 VC
-    if ([profileCardSet() containsObject:cls]) {
-        return kCornerModuleProfileCard;
-    }
-
-    // 2. 前缀黑名单
+    // 1. 前缀黑名单
     if (isPrefixSkipped(cls)) {
-        return kCornerModuleNone;
+        return NO;
     }
 
-    // 3. 列表圆角黑名单（暂不支持圆角的页面）
+    // 2. 列表圆角黑名单（暂不支持圆角的页面）
     if ([skipListSet() containsObject:cls]) {
-        return kCornerModuleNone;
+        return NO;
     }
 
-    // 4. 默认都归列表圆角
-    return kCornerModuleList;
-}
-
-+ (BOOL)isListCornerResponsibleFor:(UIViewController *)vc {
-    return [self moduleForViewController:vc] == kCornerModuleList;
-}
-
-+ (BOOL)isProfileCardResponsibleFor:(UIViewController *)vc {
-    return [self moduleForViewController:vc] == kCornerModuleProfileCard;
-}
-
-+ (BOOL)isNoCornerResponsibleFor:(UIViewController *)vc {
-    return [self moduleForViewController:vc] == kCornerModuleNone;
+    // 3. 默认归列表圆角
+    return YES;
 }
 
 @end
