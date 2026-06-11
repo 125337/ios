@@ -10,17 +10,6 @@
 #import "../../Core/LogManager.h"
 
 // ============================================================
-// MARK: - Configuration Table Entry
-// ============================================================
-
-typedef struct {
-    const char *className;
-    const char *selName;
-    IMP replacement;
-    IMP *original;
-} MTHookEntry;
-
-// ============================================================
 // MARK: - Color / Theme Helpers
 // ============================================================
 
@@ -592,21 +581,6 @@ static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGFloat x, CGFloat
 }
 
 // ============================================================
-// MARK: - Hook Configuration Table
-// ============================================================
-
-static MTHookEntry g_hookTable[] = {
-    {"CommonMessageCellView",        "initWithViewModel:",                   (IMP)repl_CommonMessageCellView_initWithViewModel, (IMP*)&orig_CommonMessageCellView_initWithViewModel},
-    {"CommonMessageCellView",        "updateNodeStatus",                     (IMP)repl_CommonMessageCellView_updateNodeStatus, (IMP*)&orig_CommonMessageCellView_updateNodeStatus},
-    {"ChatTimeCellView",             "layoutSubviews",                       (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
-    {"ChatTimeViewModel",            "cellHeight",                           (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
-    {"CContact",                     "m_nsNickName",                         (IMP)repl_CContact_m_nsNickName,              (IMP*)&orig_CContact_m_nsNickName},
-    {"TextMessageCellView",          "setFrameForBgImageView:",              (IMP)repl_TextMsgCell_setFrameBgImg,          (IMP*)&orig_TextMsgCell_setFrameBgImg},
-};
-
-static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0]);
-
-// ============================================================
 // MARK: - Installation
 // ============================================================
 
@@ -614,44 +588,79 @@ static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0])
 
 + (void)install {
     WPLog(@"MsgTime", @"========================================");
-    WPLog(@"MsgTime", @"MessageTimeHook install - initWithViewModel(label) + updateNodeStatus(compute+layout) 参照锤子助手方案");
-    WPLog(@"MsgTime", @"Architecture: 仅hook updateNodeStatus计算时间文本，不碰cellForRow，避开VC转场崩溃");
+    WPLog(@"MsgTime", @"MessageTimeHook install");
     WPLog(@"MsgTime", @"========================================");
 
-    MessageTimeConfig *config = [MessageTimeConfig shared];
-    WPLog(@"MsgTime", @"Config - showMessageTime: %d", config.showMessageTime);
-    WPLog(@"MsgTime", @"Config - messageTimePosition: %ld", (long)config.messageTimePosition);
-    WPLog(@"MsgTime", @"Config - messageTimeFontSize: %.1f", config.messageTimeFontSize);
-    WPLog(@"MsgTime", @"Config - messageTimeFormat: %@", config.messageTimeFormat);
-    WPLog(@"MsgTime", @"Config - messageTimeOffsetX: %.2f", config.messageTimeOffsetX);
-    WPLog(@"MsgTime", @"Config - messageTimeOffsetY: %.2f", config.messageTimeOffsetY);
-
-    int hookedCount = 0;
-
-    for (int i = 0; i < g_hookTableCount; i++) {
-        MTHookEntry *entry = &g_hookTable[i];
-
-        Class cls = objc_getClass(entry->className);
-        if (!cls) {
-            WPLog(@"MsgTime", @"Class not found: %s, skipping", entry->className);
-            continue;
+    // 1. CommonMessageCellView.initWithViewModel:
+    {
+        Class cls = objc_getClass("CommonMessageCellView");
+        if (cls) {
+            MSHookMessageEx(cls, @selector(initWithViewModel:),
+                (IMP)repl_CommonMessageCellView_initWithViewModel, (IMP *)&orig_CommonMessageCellView_initWithViewModel);
+            WPLog(@"MsgTime", @"[Hook] ✓ CommonMessageCellView.initWithViewModel:");
+        } else {
+            WPLog(@"MsgTime", @"[Hook] ✗ CommonMessageCellView class not found");
         }
-
-        SEL sel = sel_registerName(entry->selName);
-        Method m = class_getInstanceMethod(cls, sel);
-        if (!m) {
-            WPLog(@"MsgTime", @"Method not found: %s - %s, skipping", entry->className, entry->selName);
-            continue;
-        }
-
-        MSHookMessageEx(cls, sel, entry->replacement, entry->original);
-
-        WPLog(@"MsgTime", @"Hooked %s - %s ✓", entry->className, entry->selName);
-        hookedCount++;
     }
 
-    WPLog(@"MsgTime", @"Hook table complete: %d/%d", hookedCount, g_hookTableCount);
-    WPLog(@"MsgTime", @"========================================");
+    // 2. CommonMessageCellView.updateNodeStatus
+    {
+        Class cls = objc_getClass("CommonMessageCellView");
+        if (cls) {
+            MSHookMessageEx(cls, @selector(updateNodeStatus),
+                (IMP)repl_CommonMessageCellView_updateNodeStatus, (IMP *)&orig_CommonMessageCellView_updateNodeStatus);
+            WPLog(@"MsgTime", @"[Hook] ✓ CommonMessageCellView.updateNodeStatus");
+        }
+    }
+
+    // 3. ChatTimeCellView.layoutSubviews
+    {
+        Class cls = objc_getClass("ChatTimeCellView");
+        if (cls) {
+            MSHookMessageEx(cls, @selector(layoutSubviews),
+                (IMP)repl_ChatTimeCellView_layoutSubviews, (IMP *)&orig_ChatTimeCellView_layoutSubviews);
+            WPLog(@"MsgTime", @"[Hook] ✓ ChatTimeCellView.layoutSubviews");
+        } else {
+            WPLog(@"MsgTime", @"[Hook] ✗ ChatTimeCellView class not found");
+        }
+    }
+
+    // 4. ChatTimeViewModel.cellHeight
+    {
+        Class cls = objc_getClass("ChatTimeViewModel");
+        if (cls) {
+            MSHookMessageEx(cls, @selector(cellHeight),
+                (IMP)repl_ChatTimeViewModel_cellHeight, (IMP *)&orig_ChatTimeViewModel_cellHeight);
+            WPLog(@"MsgTime", @"[Hook] ✓ ChatTimeViewModel.cellHeight");
+        } else {
+            WPLog(@"MsgTime", @"[Hook] ✗ ChatTimeViewModel class not found");
+        }
+    }
+
+    // 5. CContact.m_nsNickName
+    {
+        Class cls = objc_getClass("CContact");
+        if (cls) {
+            MSHookMessageEx(cls, @selector(m_nsNickName),
+                (IMP)repl_CContact_m_nsNickName, (IMP *)&orig_CContact_m_nsNickName);
+            WPLog(@"MsgTime", @"[Hook] ✓ CContact.m_nsNickName");
+        } else {
+            WPLog(@"MsgTime", @"[Hook] ✗ CContact class not found");
+        }
+    }
+
+    // 6. TextMessageCellView.setFrameForBgImageView:
+    {
+        Class cls = objc_getClass("TextMessageCellView");
+        if (cls) {
+            MSHookMessageEx(cls, @selector(setFrameForBgImageView:),
+                (IMP)repl_TextMsgCell_setFrameBgImg, (IMP *)&orig_TextMsgCell_setFrameBgImg);
+            WPLog(@"MsgTime", @"[Hook] ✓ TextMessageCellView.setFrameForBgImageView:");
+        } else {
+            WPLog(@"MsgTime", @"[Hook] ✗ TextMessageCellView class not found");
+        }
+    }
+
     WPLog(@"MsgTime", @"MessageTimeHook install complete");
     WPLog(@"MsgTime", @"========================================");
 }
