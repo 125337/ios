@@ -141,6 +141,59 @@ static CGSize hook_SysMsgVM_measure(id self, SEL _cmd, CGSize size) {
     return ((CGSize (*)(id, SEL, CGSize))_orig_SysMsgVM_measure)(self, _cmd, size);
 }
 
+#pragma mark - 语音红点和转文字 Hook 函数
+
+static void (*orig_VoiceMsgCell_layoutSubviews)(id, SEL) = NULL;
+static void hook_VoiceMsgCell_layoutSubviews(id self, SEL _cmd) {
+    orig_VoiceMsgCell_layoutSubviews(self, _cmd);
+    if ([UIPurifyConfig shared].hideVoiceRedDot) {
+        // 隐藏未读红点
+        UIView *unreadView = [self valueForKey:@"m_unreadImageView"];
+        [unreadView setHidden:YES];
+        // 隐藏"转文字"快捷按钮
+        UIView *transBtn = [self valueForKey:@"m_quickTransTipButton"];
+        [transBtn setHidden:YES];
+    }
+}
+
+#pragma mark - 聊天气泡背景 Hook 函数
+
+static void (*orig_YYAsyncImg_layoutSubviews)(id, SEL) = NULL;
+static void hook_YYAsyncImg_layoutSubviews(id self, SEL _cmd) {
+    orig_YYAsyncImg_layoutSubviews(self, _cmd);
+    if ([UIPurifyConfig shared].hideBubbleBackground) {
+        // 沿 superview 链向上查找 CommonMessageCellView
+        UIView *current = self;
+        while (true) {
+            UIView *superview = [current superview];
+            if (superview == nil) break;
+
+            if ([superview isKindOfClass:NSClassFromString(@"CommonMessageCellView")]) {
+                // 获取 cell 的背景图片视图
+                UIImageView *bgImgView = [superview getBgImageView];
+                if (bgImgView != nil) {
+                    // 确认 self 是 bgImgView 的后代视图
+                    if ([self isDescendantOfView:bgImgView]) {
+                        [self setAlpha:0.0]; // 透明
+                        break;
+                    }
+                }
+            }
+            current = superview;
+        }
+    }
+}
+
+#pragma mark - 禁用输入框听写 Hook 函数
+
+static BOOL (*orig_MMDictConfig_enableDictation)(id, SEL) = NULL;
+static BOOL hook_MMDictConfig_enableDictation(id self, SEL _cmd) {
+    if ([UIPurifyConfig shared].disableDictation) {
+        return NO;
+    }
+    return orig_MMDictConfig_enableDictation(self, _cmd);
+}
+
 @implementation UIPurifyHook
 
 + (void)install {
@@ -213,6 +266,39 @@ static CGSize hook_SysMsgVM_measure(id self, SEL _cmd, CGSize size) {
         WPLog(@"UIPurify", @"[+] SystemMessageCellView/ViewModel hooked (5 methods, purifySafeHook)");
     } else {
         WPLog(@"UIPurify", @"[-] SystemMessageCellView/ViewModel not found");
+    }
+
+    // ── 语音红点和转文字 ──
+    Class voiceCellClass = objc_getClass("VoiceMessageCellView");
+    if (voiceCellClass) {
+        MSHookMessageEx(voiceCellClass, @selector(layoutSubviews),
+                        (IMP)hook_VoiceMsgCell_layoutSubviews,
+                        (IMP *)&orig_VoiceMsgCell_layoutSubviews);
+        WPLog(@"UIPurify", @"[+] VoiceMessageCellView layoutSubviews hooked");
+    } else {
+        WPLog(@"UIPurify", @"[-] VoiceMessageCellView not found");
+    }
+
+    // ── 聊天气泡背景 ──
+    Class yyImgClass = objc_getClass("YYAsyncImageView");
+    if (yyImgClass) {
+        MSHookMessageEx(yyImgClass, @selector(layoutSubviews),
+                        (IMP)hook_YYAsyncImg_layoutSubviews,
+                        (IMP *)&orig_YYAsyncImg_layoutSubviews);
+        WPLog(@"UIPurify", @"[+] YYAsyncImageView layoutSubviews hooked");
+    } else {
+        WPLog(@"UIPurify", @"[-] YYAsyncImageView not found");
+    }
+
+    // ── 禁用输入框听写 ──
+    Class dictConfigClass = objc_getClass("MMGrowTextViewExtConfig");
+    if (dictConfigClass) {
+        MSHookMessageEx(dictConfigClass, @selector(enableDictation),
+                        (IMP)hook_MMDictConfig_enableDictation,
+                        (IMP *)&orig_MMDictConfig_enableDictation);
+        WPLog(@"UIPurify", @"[+] MMGrowTextViewExtConfig enableDictation hooked");
+    } else {
+        WPLog(@"UIPurify", @"[-] MMGrowTextViewExtConfig not found");
     }
 
     WPLog(@"UIPurify", @"UIPurifyHook install complete");
