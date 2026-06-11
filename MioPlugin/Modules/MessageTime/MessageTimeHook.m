@@ -281,28 +281,163 @@ static BOOL shouldShowMessageTimeForSubViewModel(id viewModel, NSInteger positio
     return (curIdx == targetIdx);
 }
 
+// ============================================================
+// MARK: - updateNodeStatus 辅助函数（长函数拆分）
+// ============================================================
+
+/// 从 cell 中安全获取 viewModel，支持多种 KVC key
+static id getViewModelFromCell(id cell) {
+    id viewModel = nil;
+    @try { viewModel = [cell valueForKey:@"m_viewModel"]; } @catch (...) {}
+    if (!viewModel) {
+        @try { viewModel = [cell valueForKey:@"viewModel"]; } @catch (...) {}
+    }
+    return viewModel;
+}
+
+/// 从 messageWrap 安全获取 createTime（uint）
+static unsigned int getCreateTimeFromWrap(id wrap) {
+    unsigned int createTime = 0;
+    @try {
+        if (wrap && [wrap respondsToSelector:NSSelectorFromString(@"m_uiCreateTime")]) {
+            createTime = ((unsigned int (*)(id, SEL))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiCreateTime"));
+        }
+    } @catch (...) {}
+    return createTime;
+}
+
+/// 计算时间标签尺寸，宽度 clamp 在 30~88 之间
+static CGSize computeLabelSize(NSString *text, UIFont *font) {
+    if (!text || !font) return CGSizeZero;
+    CGSize size = [text boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)
+                                      options:NSStringDrawingUsesLineFragmentOrigin
+                                   attributes:@{NSFontAttributeName: font}
+                                      context:nil].size;
+    size.width = MAX(30.0, MIN(size.width + 4.0, 88.0));
+    size.height = size.height + 4.0;
+    return size;
+}
+
+/// 从 cell 获取 contentView frame，转换到 cv 坐标系
+static CGRect getContentViewFrame(id cell, UIView *cv) {
+    CGRect cvFrame = CGRectZero;
+    UIView *contentView = nil;
+    @try { contentView = [cell valueForKey:@"m_contentView"]; } @catch (...) {}
+    if (!contentView) {
+        @try { contentView = [cell valueForKey:@"contentView"]; } @catch (...) {}
+    }
+    if (contentView && cv) {
+        cvFrame = contentView.superview
+            ? [cv convertRect:contentView.frame fromView:contentView.superview]
+            : contentView.frame;
+    }
+    if (CGRectEqualToRect(cvFrame, CGRectZero)) {
+        cvFrame = cv.bounds;
+    }
+    return cvFrame;
+}
+
+/// 从 cell 获取头像 frame
+static CGRect getAvatarFrame(id cell) {
+    CGRect avatarFrame = CGRectZero;
+    id avatarView = getAvatarView((UIView *)cell);
+    if (avatarView) {
+        avatarFrame = [(UIView *)avatarView frame];
+    }
+    return avatarFrame;
+}
+
+/// 根据位置编号计算 label.center（8 位置 + 偏移）
+/// position:
+///   0 = 头像上方, 1 = 头像下方, 2/7 = 消息旁边(气泡外),
+///   3 = 消息下方(远离头像), 4 = 消息下方(靠近头像),
+///   5 = 消息上方(远离头像), 6 = 消息上方(靠近头像)
+static CGPoint computeLabelCenter(CGSize labelSize, CGRect cViewFrame, CGRect avatarFrame,
+                                   NSInteger position, CGFloat offsetX, CGFloat offsetY,
+                                   BOOL isSender) {
+    CGPoint center = CGPointZero;
+    CGFloat halfW = labelSize.width / 2;
+    CGFloat halfH = labelSize.height / 2;
+    CGFloat cvLeft   = cViewFrame.origin.x;
+    CGFloat cvRight  = cViewFrame.origin.x + cViewFrame.size.width;
+    CGFloat cvBottom = cViewFrame.origin.y + cViewFrame.size.height;
+
+    switch (position) {
+        case 0: // 头像上方
+            if (!CGRectIsEmpty(avatarFrame)) {
+                center = CGPointMake(avatarFrame.origin.x + avatarFrame.size.width / 2,
+                                      avatarFrame.origin.y - halfH);
+            } else {
+                center = CGPointMake(isSender ? (cvLeft - halfW) : (cvRight + halfW),
+                                      cvBottom - halfH);
+            }
+            break;
+        case 1: // 头像下方
+            if (!CGRectIsEmpty(avatarFrame)) {
+                center = CGPointMake(avatarFrame.origin.x + avatarFrame.size.width / 2,
+                                      avatarFrame.origin.y + avatarFrame.size.height + halfH);
+            } else {
+                center = CGPointMake(isSender ? (cvLeft - halfW) : (cvRight + halfW),
+                                      cvBottom - halfH);
+            }
+            break;
+        case 2: // 消息旁边(气泡外，发送方靠右，接收方靠左)
+        case 7: // 同 case 2
+            center = CGPointMake(isSender ? (cvLeft - halfW) : (cvRight + halfW),
+                                  cvBottom - halfH);
+            break;
+        case 3: // 消息下方(远离头像)
+            center = CGPointMake(isSender ? (cvLeft + halfW) : (cvRight - halfW),
+                                  cvBottom + halfH);
+            break;
+        case 4: // 消息下方(靠近头像)
+            center = CGPointMake(isSender ? (cvRight - halfW) : (cvLeft + halfW),
+                                  cvBottom + halfH);
+            break;
+        case 5: // 消息上方(远离头像)
+            center = CGPointMake(isSender ? (cvLeft + halfW) : (cvRight - halfW),
+                                  CGRectGetMinY(cViewFrame) - halfH);
+            break;
+        case 6: // 消息上方(靠近头像)
+            center = CGPointMake(isSender ? (cvRight - halfW) : (cvLeft + halfW),
+                                  CGRectGetMinY(cViewFrame) - halfH);
+            break;
+        default: // 同 case 2/7
+            center = CGPointMake(isSender ? (cvLeft - halfW) : (cvRight + halfW),
+                                  cvBottom - halfH);
+            break;
+    }
+    center.x += isSender ? -offsetX : offsetX;
+    center.y -= offsetY;
+    return center;
+}
+
+/// 将 label 添加到目标 view，确保在最顶层
+static void addLabelToView(UILabel *label, UIView *view) {
+    if (label && view && ![label superview]) {
+        [view addSubview:label];
+    }
+}
+
 static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
+    // 0. 调用原方法
     if (orig_CommonMessageCellView_updateNodeStatus) {
         orig_CommonMessageCellView_updateNodeStatus(self, _cmd);
     }
 
     UIView *cv = (UIView *)self;
 
-    // ★ 在函数顶部获取一次 VC 和 isDark
-    UIViewController *vc = [WPUtility findParentViewController:cv];
-    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
-
+    // 1. 守卫：功能开关
     UILabel *label = objc_getAssociatedObject(cv, @"msgTimeLabel");
-
     if (![MessageTimeConfig shared].showMessageTime) {
         if (label) { label.hidden = YES; }
         return;
     }
-
     if (!label) return;
 
-    // 守卫：VC 转场期间（如外部分享唤起聊天选择器）跳过 KVO 访问
-    // 防止 valueForKey 触发微信布局管线 → async dispatch → presentingModalViewController crash
+    // 2. 守卫：VC 转场状态过滤
+    UIViewController *vc = [WPUtility findParentViewController:cv];
+    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
     UIResponder *r = cv.nextResponder;
     while (r && ![r isKindOfClass:[UIViewController class]]) r = r.nextResponder;
     if (r) {
@@ -313,12 +448,11 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
         }
     }
 
-    // 获取 viewModel → 直接从 messageWrap 计算时间文本（参照锤子助手方案，不依赖 cellForRow 缓存）
-    id viewModel = nil;
-    @try { viewModel = [cv valueForKey:@"m_viewModel"] ?: [cv valueForKey:@"viewModel"]; } @catch (NSException *e) {}
+    // 3. 数据提取：viewModel
+    id viewModel = getViewModelFromCell(cv);
     if (!viewModel) { label.hidden = YES; return; }
 
-    // 复合消息过滤（复刻 FUN_0003c628 — 照抄 FUN_0003a06c 行 34573-34582）
+    // 4. 复合消息过滤
     MessageTimeConfig *config = [MessageTimeConfig shared];
     NSInteger position = config.messageTimePosition;
     if (!shouldShowMessageTimeForSubViewModel(viewModel, position)) {
@@ -326,7 +460,7 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
         return;
     }
 
-    // === 直接从 messageWrap 计算时间文本（不依赖 cellForRow 预缓存） ===
+    // 5. 数据提取：messageWrap + createTime
     unsigned int createTime = 0;
     id messageWrap = nil;
     @try {
@@ -337,9 +471,7 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
             @try { messageWrap = [viewModel valueForKey:@"m_messageWrap"]; } @catch (...) {}
         }
         if (messageWrap) {
-            if ([messageWrap respondsToSelector:NSSelectorFromString(@"m_uiCreateTime")]) {
-                createTime = (unsigned int)[[messageWrap valueForKey:@"m_uiCreateTime"] unsignedIntValue];
-            }
+            createTime = getCreateTimeFromWrap(messageWrap);
         }
         if (createTime == 0 && [viewModel respondsToSelector:NSSelectorFromString(@"createTime")]) {
             @try { createTime = (unsigned int)[[viewModel valueForKey:@"createTime"] unsignedIntValue]; } @catch (...) {}
@@ -348,10 +480,10 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
 
     if (createTime == 0) { label.hidden = YES; return; }
 
+    // 6. 数据提取：isSender + fromUsr/toUsr
     BOOL isSender = NO;
     @try { isSender = [[viewModel valueForKey:@"isSender"] boolValue]; } @catch (NSException *e) {}
 
-    // 伪已读状态追踪
     NSString *fromUsr = nil, *toUsr = nil;
     if (messageWrap) {
         @try {
@@ -363,41 +495,32 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
             }
         } @catch (...) {}
     }
+
+    // 7. 伪已读状态计算
     NSString *sessionKey = chatSessionKey(fromUsr, toUsr);
     NSInteger statusCode = computeReadStatus(isSender, sessionKey, createTime);
 
+    // 8. 文本格式化
     NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
-    NSString *timeText = formatMessageTime(date,
-                                            config.messageTimeCustomFormat,
-                                            isDark,
-                                            isSender,
-                                            statusCode);
+    NSString *timeText = formatMessageTime(date, config.messageTimeCustomFormat, isDark, isSender, statusCode);
     if (!timeText) { label.hidden = YES; return; }
 
     label.hidden = NO;
     label.text = timeText;
 
-    // 计算 label 尺寸（复刻 FUN_0003a06c 开头：textW+4, textH+4, clamp 30~88）
-    CGFloat fontSize = [MessageTimeConfig shared].messageTimeFontSize > 0 ? [MessageTimeConfig shared].messageTimeFontSize : 7.0;
-    UIFont *font = [MessageTimeConfig shared].messageTimeBoldFont ? [UIFont boldSystemFontOfSize:fontSize] : [UIFont systemFontOfSize:fontSize];
+    // 9. 样式：字体 + 尺寸
+    CGFloat fontSize = config.messageTimeFontSize > 0 ? config.messageTimeFontSize : 7.0;
+    UIFont *font = config.messageTimeBoldFont ? [UIFont boldSystemFontOfSize:fontSize] : [UIFont systemFontOfSize:fontSize];
     label.font = font;
+    CGSize labelSize = computeLabelSize(timeText, font);
+    label.frame = CGRectMake(0, 0, labelSize.width, labelSize.height);
 
-    NSDictionary *attrs = @{NSFontAttributeName: font};
-    CGSize textSize = [timeText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)
-                                             options:NSStringDrawingUsesLineFragmentOrigin
-                                          attributes:attrs
-                                             context:nil].size;
-
-    CGFloat labelW = MAX(30.0, MIN(textSize.width + 4.0, 88.0));
-    CGFloat labelH = textSize.height + 4.0;
-    label.frame = CGRectMake(0, 0, labelW, labelH);
-
-    // 设置颜色（复刻反编译 FUN_0003b3b4 — sender/receiver × 亮/暗 四色）
+    // 10. 样式：颜色
     @try {
-        NSString *textHex = isSender ? [MessageTimeConfig shared].senderTextColorHex : [MessageTimeConfig shared].receiverTextColorHex;
-        NSString *textDarkHex = isSender ? [MessageTimeConfig shared].senderTextColorDarkHex : [MessageTimeConfig shared].receiverTextColorDarkHex;
-        NSString *bgHex = isSender ? [MessageTimeConfig shared].senderBackgroundColorHex : [MessageTimeConfig shared].receiverBackgroundColorHex;
-        NSString *bgDarkHex = isSender ? [MessageTimeConfig shared].senderBackgroundColorDarkHex : [MessageTimeConfig shared].receiverBackgroundColorDarkHex;
+        NSString *textHex = isSender ? config.senderTextColorHex : config.receiverTextColorHex;
+        NSString *textDarkHex = isSender ? config.senderTextColorDarkHex : config.receiverTextColorDarkHex;
+        NSString *bgHex = isSender ? config.senderBackgroundColorHex : config.receiverBackgroundColorHex;
+        NSString *bgDarkHex = isSender ? config.senderBackgroundColorDarkHex : config.receiverBackgroundColorDarkHex;
 
         UIColor *lightTextColor = textHex.length ? [WPUtility colorFromHex:textHex] : nil;
         UIColor *darkTextColor  = textDarkHex.length ? [WPUtility colorFromHex:textDarkHex] : nil;
@@ -409,110 +532,32 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
         UIColor *textColor = colorInLightMode(lightTextColor, darkTextColor, isDark);
         UIColor *bgColor   = colorInLightMode(lightBgColor, darkBgColor, isDark);
 
-        // 防御：确认是 UIColor 再设置，避免外部分享等场景 crash
-        if (textColor && [textColor isKindOfClass:[UIColor class]] && [label respondsToSelector:@selector(setTextColor:)]) {
+        if (textColor && [textColor isKindOfClass:[UIColor class]]) {
             label.textColor = textColor;
         }
-        if (bgColor && [bgColor isKindOfClass:[UIColor class]] && [label respondsToSelector:@selector(setBackgroundColor:)]) {
+        if (bgColor && [bgColor isKindOfClass:[UIColor class]]) {
             label.backgroundColor = bgColor;
         }
     } @catch (NSException *ex) {
         WPLog(@"MsgTime", @"[MioPlugin] updateNodeStatus color error: %@", ex);
     }
 
-    CGFloat cornerRadius = [MessageTimeConfig shared].messageTimeCornerRadius > 0 ? [MessageTimeConfig shared].messageTimeCornerRadius : 8.0;
+    // 11. 样式：圆角
+    CGFloat cornerRadius = config.messageTimeCornerRadius > 0 ? config.messageTimeCornerRadius : 8.0;
     label.layer.cornerRadius = cornerRadius;
 
-    // 直接从 CommonMessageCellView(self) 获取 contentView
-    id contentViewObj = nil;
-    @try { contentViewObj = [cv valueForKey:@"m_contentView"]; } @catch (...) {}
-    if (!contentViewObj) {
-        @try { contentViewObj = [cv valueForKey:@"contentView"]; } @catch (...) {}
-    }
-
-    // 将 contentView frame 转换到 cv 坐标系
-    CGRect contentFrame = CGRectZero;
-    if (contentViewObj) {
-        UIView *contentV = (UIView *)contentViewObj;
-        contentFrame = contentV.superview
-            ? [cv convertRect:contentV.frame fromView:contentV.superview]
-            : contentV.frame;
-    }
-
-    if (CGRectEqualToRect(contentFrame, CGRectZero)) {
-        contentFrame = cv.bounds; // cv 坐标系下的 bounds，等价但更精确
-    }
-
-    CGFloat cvLeft   = contentFrame.origin.x;
-    CGFloat cvRight  = contentFrame.origin.x + contentFrame.size.width;
-    CGFloat cvBottom = contentFrame.origin.y + contentFrame.size.height;
-
+    // 12. 布局：获取 frame
+    CGRect cViewFrame = getContentViewFrame(self, cv);
+    CGRect avatarFrame = getAvatarFrame(self);
     CGFloat offsetX = config.messageTimeOffsetX;
     CGFloat offsetY = config.messageTimeOffsetY;
 
-    // 获取头像 frame（position 0/1 需要）
-    id avatarView = getAvatarView(cv);
-    CGRect avatarFrame = avatarView ? [(UIView *)avatarView frame] : CGRectZero;
+    // 13. 布局：计算 center
+    CGPoint center = computeLabelCenter(labelSize, cViewFrame, avatarFrame, position, offsetX, offsetY, isSender);
+    label.center = center;
 
-    CGFloat cx = 0, cy = 0;
-
-    switch (position) {
-        case 0: { // 头像上方
-            if (!CGRectIsEmpty(avatarFrame)) {
-                cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
-                cy = avatarFrame.origin.y - labelH / 2;
-            } else {
-                cx = isSender ? (cvLeft - labelW / 2) : (cvRight + labelW / 2);
-                cy = cvBottom - labelH / 2;
-            }
-            break;
-        }
-        case 1: { // 头像下方
-            if (!CGRectIsEmpty(avatarFrame)) {
-                cx = avatarFrame.origin.x + avatarFrame.size.width / 2;
-                cy = avatarFrame.origin.y + avatarFrame.size.height + labelH / 2;
-            } else {
-                cx = isSender ? (cvLeft - labelW / 2) : (cvRight + labelW / 2);
-                cy = cvBottom - labelH / 2;
-            }
-            break;
-        }
-        case 2:
-        case 7: // 消息旁边(=气泡外)
-            cx = isSender ? (cvLeft - labelW / 2) : (cvRight + labelW / 2);
-            cy = cvBottom - labelH / 2;
-            break;
-        case 3: // 消息下方(远离头像)
-            cx = isSender ? (cvLeft + labelW / 2) : (cvRight - labelW / 2);
-            cy = cvBottom + labelH / 2;
-            break;
-        case 4: // 消息下方(靠近头像)
-            cx = isSender ? (cvRight - labelW / 2) : (cvLeft + labelW / 2);
-            cy = cvBottom + labelH / 2;
-            break;
-        case 5: // 消息上方(远离头像)
-            cx = isSender ? (cvLeft + labelW / 2) : (cvRight - labelW / 2);
-            cy = CGRectGetMinY(contentFrame) - labelH / 2;
-            break;
-        case 6: // 消息上方(靠近头像)
-            cx = isSender ? (cvRight - labelW / 2) : (cvLeft + labelW / 2);
-            cy = CGRectGetMinY(contentFrame) - labelH / 2;
-            break;
-        default: {
-            cx = isSender ? (cvLeft - labelW / 2) : (cvRight + labelW / 2);
-            cy = cvBottom - labelH / 2;
-            break;
-        }
-    }
-
-    if (offsetX != 0) cx += isSender ? -offsetX : offsetX;
-    if (offsetY != 0) cy -= offsetY;
-
-    label.center = CGPointMake(cx, cy);
-
-    if (![label superview]) {
-        [cv addSubview:label];
-    }
+    // 14. 添加到视图
+    addLabelToView(label, cv);
 }
 
 static void repl_ChatTimeCellView_layoutSubviews(id self, SEL _cmd) {
