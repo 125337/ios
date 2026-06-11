@@ -50,6 +50,13 @@
 
 + (UIColor *)dynamicColorWithLightHex:(NSString *)lightHex
                              darkHex:(NSString *)darkHex {
+    // ★★★ P1-12 崩溃修复：nil 防护 ★★★
+    if (!lightHex.length && !darkHex.length) {
+        return [UIColor clearColor];
+    }
+    if (!lightHex.length) lightHex = @"#FFFFFF";   // 浅色默认白色
+    if (!darkHex.length) darkHex = @"#1C1C1E";     // 深色默认黑色（iOS 标准暗色背景）
+
     if (@available(iOS 13.0, *)) {
         return [UIColor colorWithDynamicProvider:^UIColor * _Nonnull(UITraitCollection * _Nonnull traitCollection) {
             BOOL isDark = (traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);

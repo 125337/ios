@@ -44,7 +44,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     [ProfileCardBgHook handleButtonLayout:(UIView *)self];
 }
 
-// ★ P1-11 问题2: traitCollectionDidChange Hook — 暗黑模式切换时重新应用颜色
+// ★★★ P1-11 问题2 + P1-12 崩溃修复：traitCollectionDidChange Hook + 防重入 ★★★
 static IMP orig_MMUIButton_traitCollectionDidChange = NULL;
 static void replaced_MMUIButton_traitCollectionDidChange(id self, SEL _cmd, UITraitCollection *previousTraitCollection) {
     if (orig_MMUIButton_traitCollectionDidChange) {
@@ -56,14 +56,19 @@ static void replaced_MMUIButton_traitCollectionDidChange(id self, SEL _cmd, UITr
             // ★ 关键：检测暗黑模式是否发生了变化
             UITraitCollection *current = ((UIView *)self).traitCollection;
             if (previousTraitCollection.userInterfaceStyle != current.userInterfaceStyle) {
-                // 暗黑模式状态发生了变化 → 重新应用颜色
-                [ProfileCardBgHook handleButtonLayout:(UIView *)self];
+                // ★★★ P1-12 崩溃修复：避免在 initWithDynamicProvider block 执行期间触发 ★★★
+                if (!_wp_isHandlingButtonLayout) {
+                    [ProfileCardBgHook handleButtonLayout:(UIView *)self];
+                }
             }
         }
     }
 }
 
 @implementation ProfileCardBgHook
+
+// ★★★ P1-12 崩溃修复：重入锁，防止 handleButtonLayout 递归调用 ★★★
+static BOOL _wp_isHandlingButtonLayout = NO;
 
 #pragma mark - 资料卡圆角
 
@@ -517,6 +522,10 @@ static void replaced_MMUIButton_traitCollectionDidChange(id self, SEL _cmd, UITr
 #pragma mark - ★ 核心：handleButtonLayout
 
 + (void)handleButtonLayout:(UIView *)button {
+    // ★★★ P1-12 崩溃修复：重入守卫，防止递归调用 ★★★
+    if (_wp_isHandlingButtonLayout) return;
+    _wp_isHandlingButtonLayout = YES;
+
     CardBgConfig *config = [CardBgConfig shared];
 
     // ☆ 独立功能：状态隐藏
@@ -529,9 +538,9 @@ static void replaced_MMUIButton_traitCollectionDidChange(id self, SEL _cmd, UITr
 
     // 通用守卫（提取为辅助方法）
     UIViewController *vc = [ProfileCardBgHook findMoreViewController:button];
-    if (!vc) return;
-    if (![ProfileCardBgHook hasHeadImageViewInView:button]) return;
-    if (button.frame.size.height <= 50.0) return;
+    if (!vc) { _wp_isHandlingButtonLayout = NO; return; }
+    if (![ProfileCardBgHook hasHeadImageViewInView:button]) { _wp_isHandlingButtonLayout = NO; return; }
+    if (button.frame.size.height <= 50.0) { _wp_isHandlingButtonLayout = NO; return; }
     BOOL isDark = [WPUtility isDarkModeForViewController:vc];
 
     // ★ 场景路由：隐藏 vs 可见
@@ -544,6 +553,9 @@ static void replaced_MMUIButton_traitCollectionDidChange(id self, SEL _cmd, UITr
     // 独立功能
     [ProfileCardBgHook handleMarginAdjustment:button];
     [ProfileCardBgHook handleCornerAndQR:button isDark:isDark];
+
+    // ★★★ P1-12 崩溃修复：释放重入锁 ★★★
+    _wp_isHandlingButtonLayout = NO;
 }
 
 #pragma mark - 方案 M：左右边距
@@ -584,12 +596,25 @@ static void replaced_MMUIButton_traitCollectionDidChange(id self, SEL _cmd, UITr
           currentX, currentW, targetX, targetW, containerW,
           fabs(currentX - targetX), fabs(currentW - targetW));
 
-    // ★ 浮点比较防递归（只在这一个地方守卫）
-    if (fabs(currentX - targetX) > 0.5 || fabs(currentW - targetW) > 0.5) {
+    // ★★★ P1-12 崩溃修复：提高精度阈值到 1.0，且记录上次值防止振荡 ★★★
+    static CGFloat lastSetX = 0;
+    static CGFloat lastSetW = 0;
+
+    if (fabs(currentX - targetX) > 1.0 || fabs(currentW - targetW) > 1.0) {
+        // ★★★ 额外判断：与上次设的值比较，如果已经设过了就不再设 ★★★
+        if (fabs(currentX - lastSetX) < 0.5 && fabs(currentW - lastSetW) < 0.5) {
+            WPLog(@"CardBg-Diag", @"[MARGIN] SKIP: already set to target (anti-oscillation)");
+            return;  // frame 已经是我们设的值，阻止递归
+        }
+
         CGRect bf = button.frame;
         bf.origin.x = targetX;
         bf.size.width = targetW;
         button.frame = bf;
+
+        // ★★★ 记录本次设置的值 ★★★
+        lastSetX = targetX;
+        lastSetW = targetW;
 
         WPLog(@"CardBg-Diag", @"[MARGIN] APPLIED: frame=(%.1f,%.1f,%.1f,%.1f)",
               bf.origin.x, bf.origin.y, bf.size.width, bf.size.height);
@@ -605,6 +630,9 @@ static void replaced_MMUIButton_traitCollectionDidChange(id self, SEL _cmd, UITr
         }
     } else {
         WPLog(@"CardBg-Diag", @"[MARGIN] SKIP: already matches target");
+        // frame 已匹配，重置记录
+        lastSetX = 0;
+        lastSetW = 0;
     }
 }
 
