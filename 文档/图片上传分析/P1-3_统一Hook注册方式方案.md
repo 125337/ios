@@ -29,20 +29,27 @@
 在 `HookEngine.h` 中定义：
 
 ```objc
-/// Hook 表条目（Objective-C 风格）
-/// className  - 需要 Hook 的类名
-/// selName    - 需要 Hook 的方法名
+/// Hook 表条目（使用 const char *，避免 __unsafe_unretained NSString * 的野指针风险）
+/// className  - 需要 Hook 的类名（C 字符串，编译期常量）
+/// selName    - 需要 Hook 的方法名（C 字符串，编译期常量）
 /// replacement - 替换后的 IMP
 /// original   - 用于保存原始 IMP 的指针
 typedef struct {
-    NSString *className;
-    NSString *selName;
+    const char *className;
+    const char *selName;
     IMP replacement;
     IMP *original;
 } HookTableItem;
 ```
 
-使用 `NSString *` 而非 `const char *`，保持整个项目风格一致，且便于日志输出。
+使用 `const char *` 而非 `NSString *`，原因：
+
+| 方案 | 风险 |
+|------|------|
+| `const char *` | 编译期字符串常量存储在二进制数据段，永久有效，零风险 |
+| `__unsafe_unretained NSString *` | 如果误传入动态生成的 `NSString`，作用域结束后指针变野指针，**可能 crash** |
+
+所有调用方传入的都是编译期字符串字面量（如 `"MMTableViewCell"`、`"layoutSubviews"`），用 `const char *` 完全安全且性能更优。内部需要 `NSString` 输出日志时，用 `[NSString stringWithUTF8String:]` 临时转换即可。
 
 ### 核心方法
 
@@ -55,7 +62,7 @@ typedef struct {
 /// 
 /// 使用示例：
 ///   HookTableItem items[] = {
-///       {@"MMTableViewCell", @"layoutSubviews", (IMP)hooked_func, &orig_func},
+///       {"MMTableViewCell", "layoutSubviews", (IMP)hooked_func, &orig_func},
 ///   };
 ///   [HookEngine installHookTable:@"MyModule" items:items count:sizeof(items)/sizeof(items[0])];
 + (int)installHookTable:(NSString *)moduleName items:(HookTableItem *)items count:(int)count;
@@ -102,11 +109,11 @@ typedef struct {
 /// 
 /// 使用示例：
 ///   HookTableItem items[] = {
-///       {@"MMTableViewCell", @"layoutSubviews", (IMP)hooked_func, &orig_func},
+///       {"MMTableViewCell", "layoutSubviews", (IMP)hooked_func, &orig_func},
 ///   };
 typedef struct {
-    __unsafe_unretained NSString *className;
-    __unsafe_unretained NSString *selName;
+    const char *className;
+    const char *selName;
     IMP replacement;
     IMP *original;
 } HookTableItem;
@@ -179,25 +186,25 @@ typedef struct {
             continue;
         }
 
-        // 2. 获取类
-        Class cls = objc_getClass([item->className UTF8String]);
+        // 2. 获取类（className 是 const char *，直接使用）
+        Class cls = objc_getClass(item->className);
         if (!cls) {
-            WPLog(moduleName, @"[%d/%d] 类不存在: %@，跳过", i + 1, count, item->className);
+            WPLog(moduleName, @"[%d/%d] 类不存在: %s，跳过", i + 1, count, item->className);
             continue;
         }
 
-        // 3. 检查方法是否存在
-        SEL sel = sel_registerName([item->selName UTF8String]);
+        // 3. 检查方法是否存在（selName 是 const char *，直接使用）
+        SEL sel = sel_registerName(item->selName);
         Method method = class_getInstanceMethod(cls, sel);
         if (!method) {
-            WPLog(moduleName, @"[%d/%d] 方法不存在: %@ - %@，跳过", i + 1, count, item->className, item->selName);
+            WPLog(moduleName, @"[%d/%d] 方法不存在: %s - %s，跳过", i + 1, count, item->className, item->selName);
             continue;
         }
 
         // 4. 执行 Hook
         MSHookMessageEx(cls, sel, item->replacement, item->original);
 
-        WPLog(moduleName, @"[%d/%d] ✓ Hooked %@ - %@", i + 1, count, item->className, item->selName);
+        WPLog(moduleName, @"[%d/%d] ✓ Hooked %s - %s", i + 1, count, item->className, item->selName);
         hookedCount++;
     }
 
@@ -275,7 +282,7 @@ typedef struct {
 ```objc
 + (void)install {
     HookTableItem items[] = {
-        {@"MMGrowTextView", @"layoutSubviews",
+        {"MMGrowTextView", "layoutSubviews",
             (IMP)hook_MMGrowTextView_layoutSubviews, (IMP *)&_orig_MMGrowTextView_layoutSubviews},
     };
 
@@ -319,9 +326,9 @@ typedef struct {
 ```objc
 + (void)install {
     HookTableItem items[] = {
-        {@"NewMainFrameViewController", @"init",
+        {"NewMainFrameViewController", "init",
             (IMP)hooked_NewMainFrameViewController_init, &orig_NewMainFrameViewController_init},
-        {@"MMTableView", @"layoutSubviews",
+        {"MMTableView", "layoutSubviews",
             (IMP)hooked_MMTableView_layoutSubviews, &orig_MMTableView_layoutSubviews},
     };
 
@@ -365,17 +372,17 @@ typedef struct {
 ```objc
 + (void)install {
     HookTableItem items[] = {
-        {@"CMessageMgr", @"AddMsg:MsgWrap:",
+        {"CMessageMgr", "AddMsg:MsgWrap:",
             (IMP)replaced_at_AddMsgMsgWrap, &orig_at_AddMsgMsgWrap},
-        {@"CMessageMgr", @"AsyncOnAddMsg:MsgWrap:",
+        {"CMessageMgr", "AsyncOnAddMsg:MsgWrap:",
             (IMP)replaced_at_AsyncOnAddMsgMsgWrap, &orig_at_AsyncOnAddMsgMsgWrap},
-        {@"WCBaseTVMsgHandler", @"onNewSyncAddMessage:",
+        {"WCBaseTVMsgHandler", "onNewSyncAddMessage:",
             (IMP)replaced_at_onNewSyncAddMessage, &orig_at_onNewSyncAddMessage},
-        {@"MMNewSessionMgr", @"onNewSyncAddMessage:",
+        {"MMNewSessionMgr", "onNewSyncAddMessage:",
             (IMP)replaced_at_onNewSyncAddMessage2, &orig_at_onNewSyncAddMessage2},
-        {@"BaseMsgHandler", @"onNewSyncAddMessage:",
+        {"BaseMsgHandler", "onNewSyncAddMessage:",
             (IMP)replaced_at_onNewSyncAddMessage3, &orig_at_onNewSyncAddMessage3},
-        {@"CMessageMgr", @"onNewSyncAddMessage:",
+        {"CMessageMgr", "onNewSyncAddMessage:",
             (IMP)replaced_at_onNewSyncAddMessage4, &orig_at_onNewSyncAddMessage4},
     };
 
@@ -630,8 +637,8 @@ static HookTableItem g_hookTable[] = {
 // ============================================================
 
 typedef struct {
-    __unsafe_unretained NSString *className;
-    __unsafe_unretained NSString *selName;
+    const char *className;
+    const char *selName;
     IMP replacement;
     IMP *original;
 } HookTableItem;

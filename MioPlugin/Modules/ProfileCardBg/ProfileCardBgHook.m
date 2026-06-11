@@ -2,6 +2,7 @@
 #import "CardBgConfig.h"
 #import "../ListCornerRadius/ListCornerRadiusConfig.h"
 #import "../../Config/WPColorUtil.h"
+#import "../../Core/HookEngine.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/WPUtility.h"
 #import <objc/runtime.h>

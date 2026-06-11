@@ -3,6 +3,7 @@
 #import "CSContactInfoPopoverController.h"
 #import "ChatTopBarConfig.h"
 #import "../../Config/Constants.h"
+#import "../../Core/HookEngine.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 #import "../SettingEntry/WPCommonUI.h"

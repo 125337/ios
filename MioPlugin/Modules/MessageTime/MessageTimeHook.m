@@ -2,12 +2,13 @@
 #import "MessageTimeConfig.h"
 #import "../Revoke/RevokeConfig.h"
 #import "../../Core/WPUtility.h"
+#import "../../Core/HookEngine.h"
+#import "../../Core/LogManager.h"
 #import "MessageTimeFormatParser.h"
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
-#import "../../Core/LogManager.h"
 
 // ============================================================
 // MARK: - Configuration Table Entry

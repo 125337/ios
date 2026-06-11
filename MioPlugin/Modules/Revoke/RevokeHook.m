@@ -1,9 +1,10 @@
 #import "RevokeHook.h"
 #import "RevokeHandler.h"
 #import "RevokeConfig.h"
+#import "../../Core/HookEngine.h"
+#import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
-#import "../../Core/LogManager.h"
 #import <substrate.h>
 
 // ============================================================

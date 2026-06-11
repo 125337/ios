@@ -8,6 +8,7 @@
 #import "PlaceholderTextConfig.h"
 #import "../../Config/WPColorUtil.h"
 #import "../../Core/WPUtility.h"
+#import "../../Core/HookEngine.h"
 #import "../../Core/LogManager.h"
 #import <substrate.h>
 #import <objc/runtime.h>

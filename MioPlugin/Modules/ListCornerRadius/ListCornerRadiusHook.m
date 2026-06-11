@@ -2,6 +2,7 @@
 #import "ListCornerRadiusConfig.h"
 #import "../../Core/WPUtility.h"
 #import "../../Config/WPColorUtil.h"
+#import "../../Core/HookEngine.h"
 #import "../../Core/LogManager.h"
 #import "../ProfileCardBg/ProfileCardBgHook.h"
 #import "../CornerResponsibility/CornerResponsibility.h"

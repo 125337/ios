@@ -8,6 +8,7 @@
 
 #import "HideAvatarHook.h"
 #import "HideAvatarConfig.h"
+#import "../../Core/HookEngine.h"
 #import "../../Core/LogManager.h"
 #import <substrate.h>
 #import <objc/runtime.h>

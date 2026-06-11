@@ -1,11 +1,12 @@
 #import "ClearUnreadHook.h"
 #import "ClearUnreadConfig.h"
 #import "../../Config/Constants.h"
+#import "../../Core/HookEngine.h"
+#import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
-#import "../../Core/LogManager.h"
-#import "../../Core/ServiceHelper.h"
 #import <substrate.h>
 
 static IMP orig_reloadMenuItems = NULL;

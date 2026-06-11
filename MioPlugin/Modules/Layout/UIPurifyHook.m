@@ -1,5 +1,6 @@
 #import "UIPurifyHook.h"
 #import "UIPurifyConfig.h"
+#import "../../Core/HookEngine.h"
 #import "../../Core/LogManager.h"
 #import <substrate.h>
 #import <objc/runtime.h>
