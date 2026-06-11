@@ -1,6 +1,8 @@
 #import <Foundation/Foundation.h>
 #import "ConfigModule.h"
 
+NS_ASSUME_NONNULL_BEGIN
+
 @interface PlaceholderTextConfig : NSObject <ConfigModule>
 
 @property (nonatomic, assign) BOOL placeholderTextEnabled;
@@ -13,3 +15,5 @@
 + (instancetype)shared;
 
 @end
+
+NS_ASSUME_NONNULL_END

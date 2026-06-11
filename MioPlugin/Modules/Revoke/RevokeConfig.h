@@ -1,6 +1,8 @@
 #import <Foundation/Foundation.h>
-#import "../../Core/ConfigModule.h"
-#import "../../Config/Constants.h"
+#import "ConfigModule.h"
+#import "Constants.h"
+
+NS_ASSUME_NONNULL_BEGIN
 
 @interface RevokeConfig : NSObject <ConfigModule>
 
@@ -48,3 +50,5 @@
 - (NSString *)applyRevokeTemplate:(NSString *)tmpl name:(NSString *)name content:(NSString *)content createTime:(unsigned int)createTime;
 
 @end
+
+NS_ASSUME_NONNULL_END

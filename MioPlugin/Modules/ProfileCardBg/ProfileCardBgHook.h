@@ -49,6 +49,7 @@
 + (NSString *)cardBackgroundDirectory;
 
 // Hook 注册
++ (void)install;
 + (void)initCellHeightHook;
 + (void)initProfileCardHook;
 

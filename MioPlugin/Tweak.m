@@ -18,7 +18,6 @@
 #import "Modules/ListCornerRadius/ListCornerRadiusConfig.h"
 #import "Modules/ProfileCardBg/CardBgConfig.h"
 #import "Modules/ListCornerRadius/ListCornerRadiusHook.h"
-#import "Modules/ProfileCardBg/ProfileCardBgHook.h"
 
 __attribute__((constructor))
 static void MioPluginInitialize() {
@@ -48,10 +47,6 @@ static void MioPluginInitialize() {
             [ConfigManager loadAll];
 
             [HookRegistry installAllHooks];
-
-            // ★ 资料卡模块暂未通过 FeatureModuleRegistry 注册
-            // 待实现 +install 后可删除此行
-            [ProfileCardBgHook initProfileCardHook];
 
             NSLog(@"[MioPlugin] all hooks installed");
         }
