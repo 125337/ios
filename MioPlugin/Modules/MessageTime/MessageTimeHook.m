@@ -15,9 +15,6 @@
 static const NSInteger kTimeLabelTag           = 999999;
 static const unsigned int kSystemMessageType   = 10000;
 static const CGFloat kMinContentViewWidth      = 5.0;
-static const CGFloat kTimeLabelMaxYInset       = 2.0;
-static const CGFloat kStraddleFactor           = 0.5;
-static const CGFloat kMessageTimeBaseSpacing   = 2;
 
 static Class s_CMessageWrapClass; // install 时初始化
 
@@ -31,43 +28,6 @@ typedef struct {
     IMP replacement;
     IMP *original;
 } MTHookEntry;
-
-// ============================================================
-// MARK: - Logging
-// ============================================================
-
-static dispatch_queue_t _logQueue(void) {
-    static dispatch_queue_t q;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        q = dispatch_queue_create("com.mio.messagetime.log", DISPATCH_QUEUE_SERIAL);
-    });
-    return q;
-}
-
-static void mtLog(NSString *content) {
-    if ([content hasPrefix:@"[DBG]"] && ![RevokeConfig shared].debugLogging) return;
-    
-    NSLog(@"[MioPlugin][MessageTime] %@", content);
-    dispatch_async(_logQueue(), ^{
-        @try {
-            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-            NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"MioPlugin_Logs"];
-            [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-            NSString *filePath = [folderPath stringByAppendingPathComponent:@"messagetime.log"];
-            NSString *timestamp = [[NSDate date] description];
-            NSString *line = [NSString stringWithFormat:@"[%@] %@\n", timestamp, content];
-            NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-            if (handle) {
-                [handle seekToEndOfFile];
-                [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-                [handle closeFile];
-            } else {
-                [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            }
-        } @catch (NSException *e) {}
-    });
-}
 
 // ============================================================
 // MARK: - Label Management
@@ -130,12 +90,15 @@ static UIColor *colorInLightMode(UIColor *lightColor, UIColor *darkColor) {
 static id getCellView(id cell);
 static id getContentView(id cell);
 
-static CGRect contentFrameInCellView(id contentView, id cellView) {
+/// 将 contentView.frame 转换到 toView 坐标系
+/// @param contentView 内容视图（frame 所在视图）
+/// @param toView 目标坐标系视图（必须是 contentView.superview 或其祖先视图）
+static CGRect contentFrameInView(id contentView, id toView) {
     if (!contentView) return CGRectZero;
     UIView *cv = (UIView *)contentView;
     UIView *cvSuper = cv.superview;
-    if (cvSuper == (UIView *)cellView) return cv.frame;
-    if (cellView) return [(UIView *)cellView convertRect:cv.frame fromView:cvSuper];
+    if (cvSuper == (UIView *)toView) return cv.frame;
+    if (toView) return [(UIView *)toView convertRect:cv.frame fromView:cvSuper];
     return cv.frame;
 }
 
@@ -155,7 +118,7 @@ static BOOL detectIsSender(id cell, id cellView, id contentView, id wrap) {
         }
     }
     if (contentView && cellView) {
-        CGRect cfc = contentFrameInCellView(contentView, cellView);
+        CGRect cfc = contentFrameInView(contentView, cellView);
         return CGRectGetMidX(cfc) > [(UIView *)cellView frame].size.width / 2;
     }
     return NO;
@@ -218,21 +181,21 @@ static NSInteger computeReadStatus(BOOL isSender, NSString *sessionKey, unsigned
                 unsigned int storedMax = stored ? stored.unsignedIntValue : 0;
                 if (createTime > storedMax) {
                     tracker[sessionKey] = @(createTime);
-                    NSLog(@"[伪已读·追踪器] 接收方更新 stored_max: key=%@, old=%u, new=%u", sessionKey, storedMax, createTime);
+                    WPLog(@"MsgTime", @"[伪已读·追踪器] 接收方更新 stored_max: key=%@, old=%u, new=%u", sessionKey, storedMax, createTime);
                 } else {
-                    NSLog(@"[伪已读·追踪器] 接收方无需更新: key=%@, createTime=%u, stored=%u", sessionKey, createTime, storedMax);
+                    WPLog(@"MsgTime", @"[伪已读·追踪器] 接收方无需更新: key=%@, createTime=%u, stored=%u", sessionKey, createTime, storedMax);
                 }
             }
         } else {
-            NSLog(@"[伪已读·追踪器] 接收方 sessionKey 为空，跳过更新");
+            WPLog(@"MsgTime", @"[伪已读·追踪器] 接收方 sessionKey 为空，跳过更新");
         }
-        NSLog(@"[伪已读·状态] 接收方 → statusCode=2 (已读)");
+        WPLog(@"MsgTime", @"[伪已读·状态] 接收方 → statusCode=2 (已读)");
         return 2;
     }
 
     // ── 发送方路径（复刻 FUN_0003bb04 param_1!=0 分支，行 35392-35414）──
     if (!hasKey) {
-        NSLog(@"[伪已读·状态] 发送方 sessionKey 为空 → 保守返回 statusCode=1 (已送达)");
+        WPLog(@"MsgTime", @"[伪已读·状态] 发送方 sessionKey 为空 → 保守返回 statusCode=1 (已送达)");
         return 1;
     }
 
@@ -242,10 +205,10 @@ static NSInteger computeReadStatus(BOOL isSender, NSString *sessionKey, unsigned
         unsigned int storedMax = stored ? stored.unsignedIntValue : 0;
 
         if (createTime < storedMax) {
-            NSLog(@"[伪已读·状态] 发送方 → createTime(%u) < stored(%u) → statusCode=2 (已读)", createTime, storedMax);
+            WPLog(@"MsgTime", @"[伪已读·状态] 发送方 → createTime(%u) < stored(%u) → statusCode=2 (已读)", createTime, storedMax);
             return 2;
         }
-        NSLog(@"[伪已读·状态] 发送方 → createTime(%u) >= stored(%u) → statusCode=1 (已送达)", createTime, storedMax);
+        WPLog(@"MsgTime", @"[伪已读·状态] 发送方 → createTime(%u) >= stored(%u) → statusCode=1 (已送达)", createTime, storedMax);
         return 1;
     }
 }
@@ -646,23 +609,30 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
             label.backgroundColor = bgColor;
         }
     } @catch (NSException *ex) {
-        NSLog(@"[MioPlugin] updateNodeStatus color error: %@", ex);
+        WPLog(@"MsgTime", @"[MioPlugin] updateNodeStatus color error: %@", ex);
     }
 
     CGFloat cornerRadius = [MessageTimeConfig shared].messageTimeCornerRadius > 0 ? [MessageTimeConfig shared].messageTimeCornerRadius : 8.0;
     label.layer.cornerRadius = cornerRadius;
 
-    // 获取 contentView frame 用于定位
-    UIView *cell = cv;
-    while (cell && ![NSStringFromClass([cell class]) containsString:@"ChatTableViewCell"]) {
-        cell = [cell superview];
+    // 直接从 CommonMessageCellView(self) 获取 contentView
+    id contentViewObj = nil;
+    @try { contentViewObj = [cv valueForKey:@"m_contentView"]; } @catch (...) {}
+    if (!contentViewObj) {
+        @try { contentViewObj = [cv valueForKey:@"contentView"]; } @catch (...) {}
     }
-    CGRect cellFrame = cell ? [cell frame] : CGRectZero;
-    id contentViewObj = getContentView(cell);
-    CGRect contentFrame = contentFrameInCellView(contentViewObj, cv);
+
+    // 将 contentView frame 转换到 cv 坐标系
+    CGRect contentFrame = CGRectZero;
+    if (contentViewObj) {
+        UIView *contentV = (UIView *)contentViewObj;
+        contentFrame = contentV.superview
+            ? [cv convertRect:contentV.frame fromView:contentV.superview]
+            : contentV.frame;
+    }
+
     if (CGRectEqualToRect(contentFrame, CGRectZero)) {
-        contentFrame = cellFrame;
-        contentFrame.origin = CGPointZero;
+        contentFrame = cv.bounds; // cv 坐标系下的 bounds，等价但更精确
     }
 
     CGFloat cvLeft   = contentFrame.origin.x;
@@ -673,7 +643,7 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     CGFloat offsetY = config.messageTimeOffsetY;
 
     // 获取头像 frame（position 0/1 需要）
-    id avatarView = getAvatarView(cell);
+    id avatarView = getAvatarView(cv);
     CGRect avatarFrame = avatarView ? [(UIView *)avatarView frame] : CGRectZero;
 
     CGFloat cx = 0, cy = 0;
