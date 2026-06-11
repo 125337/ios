@@ -1,12 +1,11 @@
 #import "ClearUnreadHook.h"
 #import "ClearUnreadConfig.h"
 #import "../../Config/Constants.h"
-#import "../../Core/HookEngine.h"
-#import "../../Core/LogManager.h"
-#import "../../Core/ServiceHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
+#import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 #import <substrate.h>
 
 static IMP orig_reloadMenuItems = NULL;
@@ -195,15 +194,23 @@ static void replaced_reloadMenuItems(id self, SEL _cmd) {
 @implementation ClearUnreadHook
 
 + (void)install {
-    HookTableItem items[] = {
-        {@"NewMainFrameRightTopMenuBtn", @"reloadMenuItems",
-            (IMP)replaced_reloadMenuItems, &orig_reloadMenuItems},
-        {@"RightTopMenuData", @"clickMenu:",
-            (IMP)replaced_clickMenu, &orig_clickMenu},
-    };
+    WPLog(@"ClearUnread",@"[INFO] ClearUnreadHook install start");
 
-    [HookEngine installHookTable:@"ClearUnread" items:items
-                           count:sizeof(items) / sizeof(items[0])];
+    Class menuBtnClass = objc_getClass("NewMainFrameRightTopMenuBtn");
+    if (menuBtnClass) {
+        MSHookMessageEx(menuBtnClass, @selector(reloadMenuItems), (IMP)replaced_reloadMenuItems, &orig_reloadMenuItems);
+        WPLog(@"ClearUnread",@"[INFO] reloadMenuItems hooked");
+    }
+
+    Class menuDataClass = objc_getClass("RightTopMenuData");
+    if (menuDataClass) {
+        MSHookMessageEx(menuDataClass, @selector(clickMenu:), (IMP)replaced_clickMenu, &orig_clickMenu);
+        WPLog(@"ClearUnread",@"[INFO] clickMenu: hooked on RightTopMenuData");
+    } else {
+        WPLog(@"ClearUnread",@"[ERR] RightTopMenuData not found");
+    }
+
+    WPLog(@"ClearUnread",@"[INFO] ClearUnreadHook install complete");
 }
 
 + (void)clearUnreadTapped {

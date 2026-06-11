@@ -8,8 +8,6 @@
 //
 
 #import "UIAttachLayoutHook.h"
-#import "../../Core/HookEngine.h"
-#import "../../Core/LogManager.h"
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
@@ -128,17 +126,31 @@ static long hook_numberOfRows(id self, SEL _cmd) {
 @implementation UIAttachLayoutHook
 
 + (void)install {
-    HookTableItem items[] = {
-        {@"SelectAttachmentView", @"layoutSubviews",
-            (IMP)hook_SelectAttachmentView_layoutSubviews, (IMP *)&orig_SelectAttachmentView_layoutSubviews},
-        {@"SelectAttachmentViewController", @"numberOfCols",
-            (IMP)hook_numberOfCols, (IMP *)&orig_SelectAttachmentViewController_numberOfCols},
-        {@"SelectAttachmentViewController", @"numberOfRows",
-            (IMP)hook_numberOfRows, (IMP *)&orig_SelectAttachmentViewController_numberOfRows},
-    };
+    Class cls;
 
-    [HookEngine installHookTable:@"AttachLayout" items:items
-                           count:sizeof(items) / sizeof(items[0])];
+    // ① SelectAttachmentView.layoutSubviews
+    cls = objc_getClass("SelectAttachmentView");
+    if (cls) {
+        MSHookMessageEx(cls, sel_registerName("layoutSubviews"),
+                        (IMP)hook_SelectAttachmentView_layoutSubviews,
+                        (IMP *)&orig_SelectAttachmentView_layoutSubviews);
+    }
+
+    // ② SelectAttachmentViewController.numberOfCols
+    cls = objc_getClass("SelectAttachmentViewController");
+    if (cls) {
+        MSHookMessageEx(cls, sel_registerName("numberOfCols"),
+                        (IMP)hook_numberOfCols,
+                        (IMP *)&orig_SelectAttachmentViewController_numberOfCols);
+    }
+
+    // ③ SelectAttachmentViewController.numberOfRows
+    cls = objc_getClass("SelectAttachmentViewController");
+    if (cls) {
+        MSHookMessageEx(cls, sel_registerName("numberOfRows"),
+                        (IMP)hook_numberOfRows,
+                        (IMP *)&orig_SelectAttachmentViewController_numberOfRows);
+    }
 }
 
 @end

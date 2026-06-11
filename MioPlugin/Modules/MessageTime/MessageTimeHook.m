@@ -2,17 +2,23 @@
 #import "MessageTimeConfig.h"
 #import "../Revoke/RevokeConfig.h"
 #import "../../Core/WPUtility.h"
-#import "../../Core/HookEngine.h"
-#import "../../Core/LogManager.h"
 #import "MessageTimeFormatParser.h"
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
+#import "../../Core/LogManager.h"
 
 // ============================================================
 // MARK: - Configuration Table Entry
 // ============================================================
+
+typedef struct {
+    const char *className;
+    const char *selName;
+    IMP replacement;
+    IMP *original;
+} MTHookEntry;
 
 // ============================================================
 // MARK: - Color / Theme Helpers
@@ -589,20 +595,16 @@ static void repl_TextMsgCell_setFrameBgImg(id self, SEL _cmd, CGFloat x, CGFloat
 // MARK: - Hook Configuration Table
 // ============================================================
 
-static HookTableItem g_hookTable[] = {
-    {@"CommonMessageCellView", @"initWithViewModel:",
-        (IMP)repl_CommonMessageCellView_initWithViewModel, (IMP *)&orig_CommonMessageCellView_initWithViewModel},
-    {@"CommonMessageCellView", @"updateNodeStatus",
-        (IMP)repl_CommonMessageCellView_updateNodeStatus, (IMP *)&orig_CommonMessageCellView_updateNodeStatus},
-    {@"ChatTimeCellView", @"layoutSubviews",
-        (IMP)repl_ChatTimeCellView_layoutSubviews, (IMP *)&orig_ChatTimeCellView_layoutSubviews},
-    {@"ChatTimeViewModel", @"cellHeight",
-        (IMP)repl_ChatTimeViewModel_cellHeight, (IMP *)&orig_ChatTimeViewModel_cellHeight},
-    {@"CContact", @"m_nsNickName",
-        (IMP)repl_CContact_m_nsNickName, (IMP *)&orig_CContact_m_nsNickName},
-    {@"TextMessageCellView", @"setFrameForBgImageView:",
-        (IMP)repl_TextMsgCell_setFrameBgImg, (IMP *)&orig_TextMsgCell_setFrameBgImg},
+static MTHookEntry g_hookTable[] = {
+    {"CommonMessageCellView",        "initWithViewModel:",                   (IMP)repl_CommonMessageCellView_initWithViewModel, (IMP*)&orig_CommonMessageCellView_initWithViewModel},
+    {"CommonMessageCellView",        "updateNodeStatus",                     (IMP)repl_CommonMessageCellView_updateNodeStatus, (IMP*)&orig_CommonMessageCellView_updateNodeStatus},
+    {"ChatTimeCellView",             "layoutSubviews",                       (IMP)repl_ChatTimeCellView_layoutSubviews,    (IMP*)&orig_ChatTimeCellView_layoutSubviews},
+    {"ChatTimeViewModel",            "cellHeight",                           (IMP)repl_ChatTimeViewModel_cellHeight,        (IMP*)&orig_ChatTimeViewModel_cellHeight},
+    {"CContact",                     "m_nsNickName",                         (IMP)repl_CContact_m_nsNickName,              (IMP*)&orig_CContact_m_nsNickName},
+    {"TextMessageCellView",          "setFrameForBgImageView:",              (IMP)repl_TextMsgCell_setFrameBgImg,          (IMP*)&orig_TextMsgCell_setFrameBgImg},
 };
+
+static const int g_hookTableCount = sizeof(g_hookTable) / sizeof(g_hookTable[0]);
 
 // ============================================================
 // MARK: - Installation
@@ -611,12 +613,47 @@ static HookTableItem g_hookTable[] = {
 @implementation MessageTimeHook
 
 + (void)install {
-    MessageTimeConfig *config = [MessageTimeConfig shared];
-    [_WPLogManager appendLineWithTag:@"MsgTime" content:[NSString stringWithFormat:@"Config - showMessageTime: %d", config.showMessageTime]];
-    [_WPLogManager appendLineWithTag:@"MsgTime" content:[NSString stringWithFormat:@"Config - messageTimePosition: %ld", (long)config.messageTimePosition]];
+    WPLog(@"MsgTime", @"========================================");
+    WPLog(@"MsgTime", @"MessageTimeHook install - initWithViewModel(label) + updateNodeStatus(compute+layout) 参照锤子助手方案");
+    WPLog(@"MsgTime", @"Architecture: 仅hook updateNodeStatus计算时间文本，不碰cellForRow，避开VC转场崩溃");
+    WPLog(@"MsgTime", @"========================================");
 
-    [HookEngine installHookTable:@"MsgTime" items:g_hookTable
-                           count:sizeof(g_hookTable) / sizeof(g_hookTable[0])];
+    MessageTimeConfig *config = [MessageTimeConfig shared];
+    WPLog(@"MsgTime", @"Config - showMessageTime: %d", config.showMessageTime);
+    WPLog(@"MsgTime", @"Config - messageTimePosition: %ld", (long)config.messageTimePosition);
+    WPLog(@"MsgTime", @"Config - messageTimeFontSize: %.1f", config.messageTimeFontSize);
+    WPLog(@"MsgTime", @"Config - messageTimeFormat: %@", config.messageTimeFormat);
+    WPLog(@"MsgTime", @"Config - messageTimeOffsetX: %.2f", config.messageTimeOffsetX);
+    WPLog(@"MsgTime", @"Config - messageTimeOffsetY: %.2f", config.messageTimeOffsetY);
+
+    int hookedCount = 0;
+
+    for (int i = 0; i < g_hookTableCount; i++) {
+        MTHookEntry *entry = &g_hookTable[i];
+
+        Class cls = objc_getClass(entry->className);
+        if (!cls) {
+            WPLog(@"MsgTime", @"Class not found: %s, skipping", entry->className);
+            continue;
+        }
+
+        SEL sel = sel_registerName(entry->selName);
+        Method m = class_getInstanceMethod(cls, sel);
+        if (!m) {
+            WPLog(@"MsgTime", @"Method not found: %s - %s, skipping", entry->className, entry->selName);
+            continue;
+        }
+
+        MSHookMessageEx(cls, sel, entry->replacement, entry->original);
+
+        WPLog(@"MsgTime", @"Hooked %s - %s ✓", entry->className, entry->selName);
+        hookedCount++;
+    }
+
+    WPLog(@"MsgTime", @"Hook table complete: %d/%d", hookedCount, g_hookTableCount);
+    WPLog(@"MsgTime", @"========================================");
+    WPLog(@"MsgTime", @"MessageTimeHook install complete");
+    WPLog(@"MsgTime", @"========================================");
 }
 
 @end

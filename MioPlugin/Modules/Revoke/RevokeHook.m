@@ -1,10 +1,9 @@
 #import "RevokeHook.h"
 #import "RevokeHandler.h"
 #import "RevokeConfig.h"
-#import "../../Core/HookEngine.h"
-#import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import "../../Core/LogManager.h"
 #import <substrate.h>
 
 // ============================================================
@@ -71,15 +70,20 @@ static void replaced_onNewSyncNotAddDBMessage(id self, SEL _cmd, id arg1) {
 @implementation RevokeHook
 
 + (void)install {
-    HookTableItem items[] = {
-        {@"CMessageMgr", @"onNewSyncNotAddDBMessage:",
-            (IMP)replaced_onNewSyncNotAddDBMessage, &orig_onNewSyncNotAddDBMessage},
-    };
-
-    [HookEngine installHookTable:@"Revoke" items:items
-                           count:sizeof(items) / sizeof(items[0])];
+    WPLog(@"Revoke", @"[MioPlugin][RevokeHook] install start (single hook architecture)");
     
+    Class msgMgrCls = objc_getClass("CMessageMgr");
+    if (!msgMgrCls) {
+        WPLog(@"Revoke", @"[MioPlugin][RevokeHook] ✗ CMessageMgr class not found!");
+        return;
+    }
+    WPLog(@"Revoke", @"[MioPlugin][RevokeHook] CMessageMgr found: %@", msgMgrCls);
+    
+    MSHookMessageEx(msgMgrCls, @selector(onNewSyncNotAddDBMessage:), (IMP)replaced_onNewSyncNotAddDBMessage, &orig_onNewSyncNotAddDBMessage);
     g_hookSyncVerified = YES;
+    WPLog(@"Revoke", @"[MioPlugin][RevokeHook] ✓ onNewSyncNotAddDBMessage: hooked ★ SINGLE HOOK (ref: WXOptimizer)");
+    
+    WPLog(@"Revoke", @"[MioPlugin][RevokeHook] install complete: %@", g_hookSyncVerified ? @"✓ 1/1" : @"✗ FAILED");
 }
 
 + (BOOL)checkHookWithSeq:(int)seq {
