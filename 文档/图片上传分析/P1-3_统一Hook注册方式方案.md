@@ -111,6 +111,7 @@ typedef struct {
 ///   HookTableItem items[] = {
 ///       {"MMTableViewCell", "layoutSubviews", (IMP)hooked_func, &orig_func},
 ///   };
+
 typedef struct {
     const char *className;
     const char *selName;
@@ -425,18 +426,18 @@ for (int i = 0; i < g_hookTableCount; i++) {
 
 ```objc
 static HookTableItem g_hookTable[] = {
-    // 注意：className 从 "..." 改为 @"..."（NSString *）
-    {@"CommonMessageCellView", @"initWithViewModel:",
+    // 注意：使用 C 字符串 "" 而非 ObjC 字符串 @""
+    {"CommonMessageCellView", "initWithViewModel:",
         (IMP)repl_CommonMessageCellView_initWithViewModel, (IMP *)&orig_CommonMessageCellView_initWithViewModel},
-    {@"CommonMessageCellView", @"updateNodeStatus",
+    {"CommonMessageCellView", "updateNodeStatus",
         (IMP)repl_CommonMessageCellView_updateNodeStatus, (IMP *)&orig_CommonMessageCellView_updateNodeStatus},
-    {@"ChatTimeCellView", @"layoutSubviews",
+    {"ChatTimeCellView", "layoutSubviews",
         (IMP)repl_ChatTimeCellView_layoutSubviews, (IMP *)&orig_ChatTimeCellView_layoutSubviews},
-    {@"ChatTimeViewModel", @"cellHeight",
+    {"ChatTimeViewModel", "cellHeight",
         (IMP)repl_ChatTimeViewModel_cellHeight, (IMP *)&orig_ChatTimeViewModel_cellHeight},
-    {@"CContact", @"m_nsNickName",
+    {"CContact", "m_nsNickName",
         (IMP)repl_CContact_m_nsNickName, (IMP *)&orig_CContact_m_nsNickName},
-    {@"TextMessageCellView", @"setFrameForBgImageView:",
+    {"TextMessageCellView", "setFrameForBgImageView:",
         (IMP)repl_TextMsgCell_setFrameBgImg, (IMP *)&orig_TextMsgCell_setFrameBgImg},
 };
 
@@ -465,11 +466,11 @@ static HookTableItem g_hookTable[] = {
     }
 
     HookTableItem items[] = {
-        {@"CMessageMgr", @"AddMsg:MsgWrap:",
+        {"CMessageMgr", "AddMsg:MsgWrap:",
             (IMP)replaced_AddMsgMsgWrap, &orig_AddMsgMsgWrap},
-        {@"CMessageMgr", @"AsyncOnAddMsg:MsgWrap:",
+        {"CMessageMgr", "AsyncOnAddMsg:MsgWrap:",
             (IMP)replaced_AsyncOnAddMsgMsgWrap, &orig_AsyncOnAddMsgMsgWrap},
-        {@"WCBaseTVMsgHandler", @"onNewSyncAddMessage:",
+        {"WCBaseTVMsgHandler", "onNewSyncAddMessage:",
             (IMP)replaced_OnNewSyncAddMessage, &orig_OnNewSyncAddMessage},
         // ... 7 个更多条目
     };

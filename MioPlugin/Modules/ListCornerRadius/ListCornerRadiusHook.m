@@ -766,8 +766,4 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     return shape;
 }
 
-+ (void)install {
-    [self initListCornerRadiusHook];
-}
-
 @end
