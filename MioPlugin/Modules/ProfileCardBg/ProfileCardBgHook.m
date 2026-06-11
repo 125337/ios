@@ -44,6 +44,25 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     [ProfileCardBgHook handleButtonLayout:(UIView *)self];
 }
 
+// ★ P1-11 问题2: traitCollectionDidChange Hook — 暗黑模式切换时重新应用颜色
+static IMP orig_MMUIButton_traitCollectionDidChange = NULL;
+static void replaced_MMUIButton_traitCollectionDidChange(id self, SEL _cmd, UITraitCollection *previousTraitCollection) {
+    if (orig_MMUIButton_traitCollectionDidChange) {
+        ((void (*)(id, SEL, UITraitCollection *))orig_MMUIButton_traitCollectionDidChange)(self, _cmd, previousTraitCollection);
+    }
+
+    if (@available(iOS 13.0, *)) {
+        if (previousTraitCollection && self) {
+            // ★ 关键：检测暗黑模式是否发生了变化
+            UITraitCollection *current = ((UIView *)self).traitCollection;
+            if (previousTraitCollection.userInterfaceStyle != current.userInterfaceStyle) {
+                // 暗黑模式状态发生了变化 → 重新应用颜色
+                [ProfileCardBgHook handleButtonLayout:(UIView *)self];
+            }
+        }
+    }
+}
+
 @implementation ProfileCardBgHook
 
 #pragma mark - 资料卡圆角
@@ -67,12 +86,10 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         cell.layer.cornerRadius = radius;
         cell.layer.masksToBounds = YES;
 
-        UIColor *bgColor = isDark
-            ? [WPColorUtil colorFromHexString:listConfig.listCellDarkBgColor]
-            : [WPColorUtil colorFromHexString:listConfig.listCellLightBgColor];
-        if (bgColor) {
-            cell.backgroundColor = bgColor;
-        }
+        // ★ 动态颜色：自动跟随暗黑模式 ★
+        UIColor *bgColor = [WPUtility dynamicColorWithLightHex:listConfig.listCellLightBgColor
+                                                       darkHex:listConfig.listCellDarkBgColor];
+        cell.backgroundColor = bgColor;
 
     } else {
         // ── 使用单独配置 ──
@@ -81,11 +98,10 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         cell.layer.cornerRadius = radius;
         cell.layer.masksToBounds = YES;
 
-        UIColor *bgColor = [WPColorUtil colorFromHexString:isDark
-            ? config.cardBgCornerDarkBgColor : config.cardBgCornerBgColor];
-        if (bgColor) {
-            cell.backgroundColor = bgColor;
-        }
+        // ★ 动态颜色：自动跟随暗黑模式 ★
+        UIColor *bgColor = [WPUtility dynamicColorWithLightHex:config.cardBgCornerBgColor
+                                                       darkHex:config.cardBgCornerDarkBgColor];
+        cell.backgroundColor = bgColor;
     }
 
     // ★★★ 统一资料卡边框（依赖 cardBgCornerEnabled，此时已确认开启） ★★★
@@ -426,10 +442,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
                 [ProfileCardBgHook configureBackgroundImageView:strongBg
                                                       inButton:strongButton];
             } else {
-                // fallback：无图片时设置背景色（复用卡片圆角背景色）
+                // fallback：无图片时设置动态背景色
                 CardBgConfig *cfg = [CardBgConfig shared];
-                UIColor *cardBg = [WPColorUtil colorFromHexString:cfg.cardBgCornerBgColor];
-                if (cardBg) strongButton.backgroundColor = cardBg;
+                UIColor *cardBg = [WPUtility dynamicColorWithLightHex:cfg.cardBgCornerBgColor
+                                                              darkHex:cfg.cardBgCornerDarkBgColor];
+                strongButton.backgroundColor = cardBg;
             }
         });
     });
@@ -720,6 +737,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         MSHookMessageEx(cls, @selector(layoutSubviews),
             (IMP)replaced_MMUIButton_layoutSubviews,
             (IMP *)&orig_MMUIButton_layoutSubviews);
+
+        // ★ P1-11 问题2: traitCollectionDidChange hook
+        MSHookMessageEx(cls, @selector(traitCollectionDidChange:),
+            (IMP)replaced_MMUIButton_traitCollectionDidChange,
+            (IMP *)&orig_MMUIButton_traitCollectionDidChange);
     }
 }
 

@@ -2,6 +2,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "LogManager.h"
+#import "WPColorUtil.h"
 
 @implementation WPUtility
 
@@ -45,6 +46,30 @@
     if (!view) return NO;
     UIViewController *vc = [self findParentViewController:view];
     return vc ? [self isDarkModeForViewController:vc] : NO;
+}
+
++ (UIColor *)dynamicColorWithLightHex:(NSString *)lightHex
+                             darkHex:(NSString *)darkHex {
+    if (@available(iOS 13.0, *)) {
+        return [UIColor colorWithDynamicProvider:^UIColor * _Nonnull(UITraitCollection * _Nonnull traitCollection) {
+            BOOL isDark = (traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+            NSString *hex = isDark ? darkHex : lightHex;
+            UIColor *color = [WPColorUtil colorFromHexString:hex];
+            if (color) return color;
+            // fallback：暗黑模式自动变暗
+            if (isDark) {
+                UIColor *light = [WPColorUtil colorFromHexString:lightHex];
+                if (light) {
+                    CGFloat r=0, g=0, b=0, a=0;
+                    if ([light getRed:&r green:&g blue:&b alpha:&a]) {
+                        return [UIColor colorWithRed:r*0.3 green:g*0.3 blue:b*0.3 alpha:a];
+                    }
+                }
+            }
+            return [UIColor clearColor];
+        }];
+    }
+    return [WPColorUtil colorFromHexString:lightHex] ?: [UIColor clearColor];
 }
 
 + (UIViewController *)findParentViewController:(UIView *)view {

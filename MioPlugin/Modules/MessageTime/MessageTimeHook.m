@@ -10,28 +10,6 @@
 #import "../../Core/LogManager.h"
 
 // ============================================================
-// MARK: - Color / Theme Helpers
-// ============================================================
-
-static UIColor *autoDarkColor(UIColor *lightColor, BOOL isDark) {
-    if (!lightColor) return nil;
-    if (isDark) {
-        CGFloat r, g, b, a;
-        if ([lightColor getRed:&r green:&g blue:&b alpha:&a]) {
-            return [UIColor colorWithRed:MIN(r + 0.15, 1.0)
-                                   green:MIN(g + 0.15, 1.0)
-                                    blue:MIN(b + 0.15, 1.0)
-                                   alpha:a];
-        }
-    }
-    return lightColor;
-}
-
-static UIColor *colorInLightMode(UIColor *lightColor, UIColor *darkColor, BOOL isDark) {
-    return isDark ? (darkColor ?: autoDarkColor(lightColor, isDark)) : lightColor;
-}
-
-// ============================================================
 // MARK: - Coordinate Helpers
 // ============================================================
 
@@ -393,21 +371,24 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     label.frame = CGRectMake(0, 0, labelW, labelH);
 
     // 设置颜色（复刻反编译 FUN_0003b3b4 — sender/receiver × 亮/暗 四色）
+    // ★ P1-12: 使用动态颜色，自动跟随暗黑模式切换 ★
     @try {
         NSString *textHex = isSender ? [MessageTimeConfig shared].senderTextColorHex : [MessageTimeConfig shared].receiverTextColorHex;
         NSString *textDarkHex = isSender ? [MessageTimeConfig shared].senderTextColorDarkHex : [MessageTimeConfig shared].receiverTextColorDarkHex;
         NSString *bgHex = isSender ? [MessageTimeConfig shared].senderBackgroundColorHex : [MessageTimeConfig shared].receiverBackgroundColorHex;
         NSString *bgDarkHex = isSender ? [MessageTimeConfig shared].senderBackgroundColorDarkHex : [MessageTimeConfig shared].receiverBackgroundColorDarkHex;
 
-        UIColor *lightTextColor = textHex.length ? [WPUtility colorFromHex:textHex] : nil;
-        UIColor *darkTextColor  = textDarkHex.length ? [WPUtility colorFromHex:textDarkHex] : nil;
-        UIColor *lightBgColor   = bgHex.length ? [WPUtility colorFromHex:bgHex] : nil;
-        UIColor *darkBgColor    = bgDarkHex.length ? [WPUtility colorFromHex:bgDarkHex] : nil;
+        // 文字颜色：如果未配置则使用默认灰色
+        UIColor *textColor;
+        if (textHex.length) {
+            textColor = [WPUtility dynamicColorWithLightHex:textHex darkHex:textDarkHex];
+        } else {
+            // fallback：默认灰色
+            textColor = [UIColor colorWithWhite:0.5 alpha:1.0];
+        }
 
-        if (!lightTextColor) lightTextColor = [UIColor colorWithWhite:0.5 alpha:1.0];
-
-        UIColor *textColor = colorInLightMode(lightTextColor, darkTextColor, isDark);
-        UIColor *bgColor   = colorInLightMode(lightBgColor, darkBgColor, isDark);
+        // 背景颜色：如果未配置则为透明
+        UIColor *bgColor = bgHex.length ? [WPUtility dynamicColorWithLightHex:bgHex darkHex:bgDarkHex] : nil;
 
         // 防御：确认是 UIColor 再设置，避免外部分享等场景 crash
         if (textColor && [textColor isKindOfClass:[UIColor class]] && [label respondsToSelector:@selector(setTextColor:)]) {
