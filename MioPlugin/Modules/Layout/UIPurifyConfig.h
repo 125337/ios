@@ -1,6 +1,8 @@
 #import <Foundation/Foundation.h>
 #import "ConfigModule.h"
 
+NS_ASSUME_NONNULL_BEGIN
+
 @interface UIPurifyConfig : NSObject <ConfigModule>
 
 @property (nonatomic, assign) BOOL hideSeparatorLine;
@@ -13,3 +15,5 @@
 + (instancetype)shared;
 
 @end
+
+NS_ASSUME_NONNULL_END
