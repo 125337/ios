@@ -18,7 +18,7 @@ static JokerConfig *_sharedInstance = nil;
 
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
-        [ConfigDescriptor boolItem:@"enableJoker" default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"enableJoker" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 

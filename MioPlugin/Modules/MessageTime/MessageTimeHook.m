@@ -13,9 +13,9 @@
 // MARK: - Color / Theme Helpers
 // ============================================================
 
-static UIColor *autoDarkColor(UIColor *lightColor) {
+static UIColor *autoDarkColor(UIColor *lightColor, BOOL isDark) {
     if (!lightColor) return nil;
-    if ([WPUtility isDarkMode]) {
+    if (isDark) {
         CGFloat r, g, b, a;
         if ([lightColor getRed:&r green:&g blue:&b alpha:&a]) {
             return [UIColor colorWithRed:MIN(r + 0.15, 1.0)
@@ -27,8 +27,8 @@ static UIColor *autoDarkColor(UIColor *lightColor) {
     return lightColor;
 }
 
-static UIColor *colorInLightMode(UIColor *lightColor, UIColor *darkColor) {
-    return [WPUtility isDarkMode] ? (darkColor ?: autoDarkColor(lightColor)) : lightColor;
+static UIColor *colorInLightMode(UIColor *lightColor, UIColor *darkColor, BOOL isDark) {
+    return isDark ? (darkColor ?: autoDarkColor(lightColor, isDark)) : lightColor;
 }
 
 // ============================================================
@@ -59,26 +59,6 @@ static NSMutableDictionary<NSString *, NSNumber *> *_readStatusTracker(void) {
     return dict;
 }
 
-/// 获取当前用户微信 ID（用于过滤自身消息的 sync 回执）
-static NSString *getCurrentUserID(void) {
-    static NSString *userID;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        id contactMgr = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("CContactMgr"), sel_registerName("sharedContactMgr"));
-        if (!contactMgr) {
-            contactMgr = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("MMServiceCenter"), sel_registerName("defaultCenter"));
-            contactMgr = ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, sel_registerName("getService:"), objc_getClass("CContactMgr"));
-        }
-        if (contactMgr) {
-            id selfContact = ((id (*)(id, SEL))objc_msgSend)(contactMgr, sel_registerName("getSelfContact"));
-            if (selfContact) {
-                userID = ((id (*)(id, SEL))objc_msgSend)(selfContact, sel_registerName("m_nsUsrName"));
-            }
-        }
-    });
-    return userID;
-}
-
 /// 复刻 FUN_0003ba04: 从 m_nsFromUsr / m_nsToUsr 生成一致的会话追踪 key
 /// - 群聊: 返回 chatroom ID（m_nsFromUsr 或 m_nsToUsr 中含 "@chatroom" 的那个）
 /// - 单聊: 将两个用户名排序后 "A@B" 拼接，保证收发双方生成相同的 key
@@ -101,22 +81,12 @@ static NSString *chatSessionKey(NSString *fromUsr, NSString *toUsr) {
 /// @param isSender 消息是否为发送方
 /// @param sessionKey 复刻 FUN_0003ba04 生成的会话追踪 key
 /// @param createTime 消息的 m_uiCreateTime（时间戳）
-/// @param fromUsr 消息发送方 ID（用于过滤自身消息的 sync 回执）
 /// @return 2=已读, 1=已送达
-static NSInteger computeReadStatus(BOOL isSender, NSString *sessionKey, unsigned int createTime, NSString *fromUsr) {
+static NSInteger computeReadStatus(BOOL isSender, NSString *sessionKey, unsigned int createTime) {
     BOOL hasKey = (sessionKey.length > 0);
 
     // ── 接收方路径（复刻 FUN_0003bb04 param_1==0 分支，行 35362-35390）──
     if (!isSender) {
-        // 【修复】检查是否为自己消息的 sync 回执
-        // 当 fromUsr 等于当前用户自己的 ID 时，说明这条"接收"消息实际上是
-        // 自己发出去的同步回执，不应将其视为"对方已读"的证据
-        if (fromUsr && [fromUsr isEqualToString:getCurrentUserID()]) {
-            WPLog(@"MsgTime", @"[伪已读·追踪器] 跳过自身消息 sync 回执: fromUsr=%@", fromUsr);
-            WPLog(@"MsgTime", @"[伪已读·状态] 接收方(自身回执) → statusCode=1 (已送达)");
-            return 1;
-        }
-
         if (hasKey) {
             NSMutableDictionary *tracker = _readStatusTracker();
             @synchronized (tracker) {
@@ -317,6 +287,11 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
     }
 
     UIView *cv = (UIView *)self;
+
+    // ★ 在函数顶部获取一次 VC 和 isDark
+    UIViewController *vc = [WPUtility findParentViewController:cv];
+    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
+
     UILabel *label = objc_getAssociatedObject(cv, @"msgTimeLabel");
 
     if (![MessageTimeConfig shared].showMessageTime) {
@@ -389,12 +364,12 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
         } @catch (...) {}
     }
     NSString *sessionKey = chatSessionKey(fromUsr, toUsr);
-    NSInteger statusCode = computeReadStatus(isSender, sessionKey, createTime, fromUsr);
+    NSInteger statusCode = computeReadStatus(isSender, sessionKey, createTime);
 
     NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)createTime];
     NSString *timeText = formatMessageTime(date,
                                             config.messageTimeCustomFormat,
-                                            [WPUtility isDarkMode],
+                                            isDark,
                                             isSender,
                                             statusCode);
     if (!timeText) { label.hidden = YES; return; }
@@ -431,8 +406,8 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
 
         if (!lightTextColor) lightTextColor = [UIColor colorWithWhite:0.5 alpha:1.0];
 
-        UIColor *textColor = colorInLightMode(lightTextColor, darkTextColor);
-        UIColor *bgColor   = colorInLightMode(lightBgColor, darkBgColor);
+        UIColor *textColor = colorInLightMode(lightTextColor, darkTextColor, isDark);
+        UIColor *bgColor   = colorInLightMode(lightBgColor, darkBgColor, isDark);
 
         // 防御：确认是 UIColor 再设置，避免外部分享等场景 crash
         if (textColor && [textColor isKindOfClass:[UIColor class]] && [label respondsToSelector:@selector(setTextColor:)]) {

@@ -13,14 +13,24 @@
 /// @return 十六进制颜色字符串，如 "#FF0000"
 + (NSString *)hexFromColor:(UIColor *)color;
 
-/// 检测当前是否为暗黑模式
-/// @return YES 表示暗黑模式，NO 表示普通模式
-+ (BOOL)isDarkMode;
-
 /// 检测指定 ViewController 是否为暗黑模式
-/// @param vc UIViewController 对象
-/// @return YES 表示暗黑模式，NO 表示普通模式
+/// ⚠️ 所有 UI 相关检测都应优先使用此方法。
+/// @param vc 非空的 UIViewController 实例
+/// @return YES 表示暗黑模式
 + (BOOL)isDarkModeForViewController:(UIViewController *)vc;
+
+/// 检测当前环境是否为暗黑模式（仅用于非 UI 场景）
+/// ⚠️ 仅推荐在以下场景使用：
+///   - AppDelegate / 后台计算 / 非 UI 线程
+///   - 确实无法获取任何 VC 引用的纯工具方法
+/// @return YES 表示暗黑模式
++ (BOOL)isDarkModeForCurrentEnvironment;
+
+/// 从 UIView 推断所属 ViewController 并检测暗黑模式
+/// 简便方法：先查找 VC，再调用 isDarkModeForViewController:
+/// @param view 任意 UIView
+/// @return YES 表示暗黑模式，无法找到 VC 时返回 NO
++ (BOOL)isDarkModeForView:(UIView *)view;
 
 /// 在指定会话中插入一条系统提示消息（type=0x2710, status=4）
 /// @param session   会话ID（群聊或单聊的 userName）

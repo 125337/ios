@@ -13,9 +13,11 @@ typedef NS_ENUM(NSUInteger, ConfigValueType) {
 @property (nonatomic, assign) ConfigValueType type;
 @property (nonatomic, strong) id              defaultValue;
 
-+ (instancetype)boolItem:(NSString *)key default:(NSNumber *)defaultValue;
-+ (instancetype)integerItem:(NSString *)key default:(NSNumber *)defaultValue;
-+ (instancetype)floatItem:(NSString *)key default:(NSNumber *)defaultValue;
-+ (instancetype)stringItem:(NSString *)key default:(NSString *)defaultValue;
-+ (instancetype)arrayItem:(NSString *)key default:(NSArray *)defaultValue;
+/// 统一工厂方法
+/// @param key          配置键名
+/// @param type         值类型枚举
+/// @param defaultValue 默认值
++ (instancetype)itemWithKey:(NSString *)key
+                       type:(ConfigValueType)type
+                    default:(id)defaultValue;
 @end

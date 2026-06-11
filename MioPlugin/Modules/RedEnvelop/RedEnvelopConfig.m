@@ -18,19 +18,19 @@ static RedEnvelopConfig *_sharedInstance = nil;
 
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
-        [ConfigDescriptor boolItem:@"autoRedEnvelop" default:@(NO)],
-        [ConfigDescriptor boolItem:@"redEnvelopCatchMe" default:@(NO)],
-        [ConfigDescriptor boolItem:@"personalRedEnvelopEnable" default:@(NO)],
-        [ConfigDescriptor integerItem:@"redEnvelopDelay" default:@(0)],
-        [ConfigDescriptor boolItem:@"redEnvelopeDetail" default:@(NO)],
-        [ConfigDescriptor boolItem:@"redEnvelopTextFilterEnabled" default:@(NO)],
-        [ConfigDescriptor stringItem:@"redEnvelopTextFilter" default:@""],
-        [ConfigDescriptor boolItem:@"redEnvelopGroupFilterEnabled" default:@(NO)],
-        [ConfigDescriptor arrayItem:@"redEnvelopGroupFilterList" default:@[]],
-        [ConfigDescriptor boolItem:@"redEnvelopAutoReply" default:@(NO)],
-        [ConfigDescriptor boolItem:@"redEnvelopAutoReplyInGroup" default:@(NO)],
-        [ConfigDescriptor stringItem:@"redEnvelopAutoReplyStr" default:@"谢谢老板"],
-        [ConfigDescriptor arrayItem:@"redEnvelopBlackList" default:@[]],
+        [ConfigDescriptor itemWithKey:@"autoRedEnvelop" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"redEnvelopCatchMe" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"personalRedEnvelopEnable" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"redEnvelopDelay" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"redEnvelopeDetail" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"redEnvelopTextFilterEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"redEnvelopTextFilter" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"redEnvelopGroupFilterEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"redEnvelopGroupFilterList" type:ConfigValueTypeArray default:@[]],
+        [ConfigDescriptor itemWithKey:@"redEnvelopAutoReply" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"redEnvelopAutoReplyInGroup" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"redEnvelopAutoReplyStr" type:ConfigValueTypeString default:@"谢谢老板"],
+        [ConfigDescriptor itemWithKey:@"redEnvelopBlackList" type:ConfigValueTypeArray default:@[]],
     ];
 }
 

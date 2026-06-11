@@ -18,7 +18,7 @@ static ClearUnreadConfig *_sharedInstance = nil;
 
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
-        [ConfigDescriptor boolItem:@"clearUnreadEnabled" default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"clearUnreadEnabled" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 

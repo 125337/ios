@@ -277,10 +277,6 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     return NO;
 }
 
-+ (BOOL)isDarkModeForVc:(UIViewController *)vc {
-    return [WPUtility isDarkModeForViewController:vc];
-}
-
 + (void)cleanNativeBgImageView:(UIView *)button {
     Ivar bgIvar = class_getInstanceVariable([button class], "m_bgImageView");
     if (!bgIvar) return;
@@ -519,7 +515,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![ProfileCardBgHook hasHeadImageViewInView:button]) return;
     if (button.frame.size.height <= 50.0) return;
-    BOOL isDark = [ProfileCardBgHook isDarkModeForVc:vc];
+    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
 
     // ★ 场景路由：隐藏 vs 可见
     if (config.cardBgHidden) {

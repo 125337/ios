@@ -18,31 +18,31 @@ static CardBgConfig *_sharedInstance = nil;
 
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
-        [ConfigDescriptor boolItem:@"cardBgMaterialEnabled" default:@(NO)],
-        [ConfigDescriptor boolItem:@"cardBgCornerEnabled" default:@(NO)],
-        [ConfigDescriptor boolItem:@"cardBgCornerUseGlobal" default:@(NO)],
-        [ConfigDescriptor floatItem:@"cardBgCornerRadius" default:@(18.0)],
-        [ConfigDescriptor floatItem:@"cardBgCornerMargin" default:@(9.0)],
-        [ConfigDescriptor stringItem:@"cardBgCornerBgColor" default:@"#FFFFFF"],
-        [ConfigDescriptor stringItem:@"cardBgCornerDarkBgColor" default:@"#1C1C1E"],
-        [ConfigDescriptor floatItem:@"cardBgStrokeWidth" default:@(2.0)],
-        [ConfigDescriptor boolItem:@"cardBgHidden" default:@(NO)],
-        [ConfigDescriptor boolItem:@"cardBgHideStateEnabled" default:@(NO)],
-        [ConfigDescriptor floatItem:@"cardBgListSpacing" default:@(0)],
-        [ConfigDescriptor integerItem:@"cardBgFillMode" default:@(0)],
-        [ConfigDescriptor integerItem:@"cardBgAlignment" default:@(0)],
-        [ConfigDescriptor integerItem:@"cardBgLayer" default:@(0)],
-        [ConfigDescriptor floatItem:@"cardBgOffsetY" default:@(0)],
-        [ConfigDescriptor floatItem:@"cardBgOffsetX" default:@(0)],
+        [ConfigDescriptor itemWithKey:@"cardBgMaterialEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"cardBgCornerEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"cardBgCornerUseGlobal" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"cardBgCornerRadius" type:ConfigValueTypeFloat default:@(18.0)],
+        [ConfigDescriptor itemWithKey:@"cardBgCornerMargin" type:ConfigValueTypeFloat default:@(9.0)],
+        [ConfigDescriptor itemWithKey:@"cardBgCornerBgColor" type:ConfigValueTypeString default:@"#FFFFFF"],
+        [ConfigDescriptor itemWithKey:@"cardBgCornerDarkBgColor" type:ConfigValueTypeString default:@"#1C1C1E"],
+        [ConfigDescriptor itemWithKey:@"cardBgStrokeWidth" type:ConfigValueTypeFloat default:@(2.0)],
+        [ConfigDescriptor itemWithKey:@"cardBgHidden" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"cardBgHideStateEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"cardBgListSpacing" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"cardBgFillMode" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"cardBgAlignment" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"cardBgLayer" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"cardBgOffsetY" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"cardBgOffsetX" type:ConfigValueTypeFloat default:@(0)],
 
         // ★ 资料卡边框（从 ListCornerRadiusConfig 迁移）
-        [ConfigDescriptor boolItem:@"cardBgBorderEnabled" default:@(NO)],
-        [ConfigDescriptor floatItem:@"cardBgBorderWidth" default:@(2.0)],
-        [ConfigDescriptor stringItem:@"cardBgBorderColor" default:@"#E5E5E5"],
-        [ConfigDescriptor stringItem:@"cardBgBorderColorDarkHex" default:@"#3A3A3C"],
+        [ConfigDescriptor itemWithKey:@"cardBgBorderEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"cardBgBorderWidth" type:ConfigValueTypeFloat default:@(2.0)],
+        [ConfigDescriptor itemWithKey:@"cardBgBorderColor" type:ConfigValueTypeString default:@"#E5E5E5"],
+        [ConfigDescriptor itemWithKey:@"cardBgBorderColorDarkHex" type:ConfigValueTypeString default:@"#3A3A3C"],
 
         // ★ 箭码隐藏（从 ListCornerRadiusConfig 迁移）
-        [ConfigDescriptor boolItem:@"cardBgHideArrow" default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"cardBgHideArrow" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 

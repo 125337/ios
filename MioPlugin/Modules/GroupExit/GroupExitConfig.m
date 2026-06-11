@@ -19,7 +19,7 @@ static GroupExitConfig *_sharedInstance = nil;
 
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
-        [ConfigDescriptor boolItem:@"enableGroupExitMonitor" default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"enableGroupExitMonitor" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 

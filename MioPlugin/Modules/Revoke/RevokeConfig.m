@@ -32,30 +32,30 @@
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
         // 基础开关
-        [ConfigDescriptor boolItem:@"preventRecall" default:@(YES)],
-        [ConfigDescriptor boolItem:@"debugLogging" default:@(NO)],
-        [ConfigDescriptor boolItem:@"hideContent" default:@(NO)],
-        [ConfigDescriptor boolItem:@"noTip" default:@(NO)],
-        [ConfigDescriptor boolItem:@"bottomPosition" default:@(NO)],
-        [ConfigDescriptor boolItem:@"sendInterceptedContent" default:@(NO)],
-        [ConfigDescriptor boolItem:@"interceptNotifyEnabled" default:@(NO)],
-        [ConfigDescriptor boolItem:@"customNotifyEnabled" default:@(NO)],
-        [ConfigDescriptor boolItem:@"hideDiscoverBadge" default:@(NO)],
-        [ConfigDescriptor boolItem:@"hideEnterpriseBadge" default:@(NO)],
-        
+        [ConfigDescriptor itemWithKey:@"preventRecall" type:ConfigValueTypeBool default:@(YES)],
+        [ConfigDescriptor itemWithKey:@"debugLogging" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hideContent" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"noTip" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"bottomPosition" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"sendInterceptedContent" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"interceptNotifyEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"customNotifyEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hideDiscoverBadge" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hideEnterpriseBadge" type:ConfigValueTypeBool default:@(NO)],
+
         // 格式配置
-        [ConfigDescriptor stringItem:@"notifyFormat" default:kDefaultNotifyFormat],
-        [ConfigDescriptor stringItem:@"dateFormat" default:kDefaultDateFormat],
-        [ConfigDescriptor stringItem:@"customText" default:nil],
-        [ConfigDescriptor stringItem:@"interceptNotifyTemplate" default:kDefaultInterceptTemplate],
-        [ConfigDescriptor stringItem:@"customNotifyFormat" default:kDefaultCustomNotifyFormat],
-        [ConfigDescriptor stringItem:@"revokeTemplate" default:kDefaultRevokeTemplate],
-        
+        [ConfigDescriptor itemWithKey:@"notifyFormat" type:ConfigValueTypeString default:kDefaultNotifyFormat],
+        [ConfigDescriptor itemWithKey:@"dateFormat" type:ConfigValueTypeString default:kDefaultDateFormat],
+        [ConfigDescriptor itemWithKey:@"customText" type:ConfigValueTypeString default:nil],
+        [ConfigDescriptor itemWithKey:@"interceptNotifyTemplate" type:ConfigValueTypeString default:kDefaultInterceptTemplate],
+        [ConfigDescriptor itemWithKey:@"customNotifyFormat" type:ConfigValueTypeString default:kDefaultCustomNotifyFormat],
+        [ConfigDescriptor itemWithKey:@"revokeTemplate" type:ConfigValueTypeString default:kDefaultRevokeTemplate],
+
         // 通知撤回者
-        [ConfigDescriptor boolItem:@"notifySender" default:@(NO)],
-        [ConfigDescriptor stringItem:@"notifySenderTemplate" default:kDefaultNotifySenderTemplate],
-        [ConfigDescriptor floatItem:@"notifySenderCooldown" default:@(0.0)],
-        
+        [ConfigDescriptor itemWithKey:@"notifySender" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"notifySenderTemplate" type:ConfigValueTypeString default:kDefaultNotifySenderTemplate],
+        [ConfigDescriptor itemWithKey:@"notifySenderCooldown" type:ConfigValueTypeFloat default:@(0.0)],
+
         // sessionFormats 和 userFormats 使用 NSKeyedArchiver，不在 descriptors 中
     ];
 }

@@ -18,12 +18,12 @@ static PlaceholderTextConfig *_sharedInstance = nil;
 
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
-        [ConfigDescriptor boolItem:@"placeholderTextEnabled" default:@(NO)],
-        [ConfigDescriptor boolItem:@"placeholderTextBold" default:@(NO)],
-        [ConfigDescriptor stringItem:@"placeholderTextText" default:@""],
-        [ConfigDescriptor floatItem:@"placeholderTextFontSize" default:@(15.0)],
-        [ConfigDescriptor floatItem:@"placeholderTextAlpha" default:@(0.6)],
-        [ConfigDescriptor stringItem:@"placeholderTextColorHex" default:@"#808080"],
+        [ConfigDescriptor itemWithKey:@"placeholderTextEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"placeholderTextBold" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"placeholderTextText" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"placeholderTextFontSize" type:ConfigValueTypeFloat default:@(15.0)],
+        [ConfigDescriptor itemWithKey:@"placeholderTextAlpha" type:ConfigValueTypeFloat default:@(0.6)],
+        [ConfigDescriptor itemWithKey:@"placeholderTextColorHex" type:ConfigValueTypeString default:@"#808080"],
     ];
 }
 

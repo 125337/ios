@@ -27,7 +27,7 @@
             (int)(r * 255), (int)(g * 255), (int)(b * 255)];
 }
 
-+ (BOOL)isDarkMode {
++ (BOOL)isDarkModeForCurrentEnvironment {
     if (@available(iOS 13.0, *)) {
         return UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
     }
@@ -39,6 +39,12 @@
         return vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
     }
     return NO;
+}
+
++ (BOOL)isDarkModeForView:(UIView *)view {
+    if (!view) return NO;
+    UIViewController *vc = [self findParentViewController:view];
+    return vc ? [self isDarkModeForViewController:vc] : NO;
 }
 
 + (UIViewController *)findParentViewController:(UIView *)view {

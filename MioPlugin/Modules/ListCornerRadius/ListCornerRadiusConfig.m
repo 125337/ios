@@ -18,19 +18,19 @@ static ListCornerRadiusConfig *_sharedInstance = nil;
 
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
-        [ConfigDescriptor boolItem:@"globalCornerRadiusEnabled" default:@(NO)],
-        [ConfigDescriptor boolItem:@"globalCornerMyPageEnabled" default:@(NO)],
-        [ConfigDescriptor boolItem:@"globalCornerContactsPageEnabled" default:@(NO)],
-        [ConfigDescriptor boolItem:@"globalCornerDiscoverPageEnabled" default:@(NO)],
-        [ConfigDescriptor boolItem:@"listSearchCornerRadius" default:@(NO)],
-        [ConfigDescriptor boolItem:@"listCellBorder" default:@(NO)],
-        [ConfigDescriptor floatItem:@"listCellCornerRadius" default:@(18.0)],
-        [ConfigDescriptor floatItem:@"listCellMargin" default:@(9.0)],
-        [ConfigDescriptor stringItem:@"listCellLightBgColor" default:@"#FFFFFF"],
-        [ConfigDescriptor stringItem:@"listCellDarkBgColor" default:@"#1C1C1E"],
-        [ConfigDescriptor floatItem:@"listCellBorderWidth" default:@(2.0)],
-        [ConfigDescriptor stringItem:@"listCellBorderColor" default:@"#E5E5E5"],
-        [ConfigDescriptor stringItem:@"listCellBorderColorDarkHex" default:@"#3A3A3C"],
+        [ConfigDescriptor itemWithKey:@"globalCornerRadiusEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"globalCornerMyPageEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"globalCornerContactsPageEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"globalCornerDiscoverPageEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"listSearchCornerRadius" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"listCellBorder" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"listCellCornerRadius" type:ConfigValueTypeFloat default:@(18.0)],
+        [ConfigDescriptor itemWithKey:@"listCellMargin" type:ConfigValueTypeFloat default:@(9.0)],
+        [ConfigDescriptor itemWithKey:@"listCellLightBgColor" type:ConfigValueTypeString default:@"#FFFFFF"],
+        [ConfigDescriptor itemWithKey:@"listCellDarkBgColor" type:ConfigValueTypeString default:@"#1C1C1E"],
+        [ConfigDescriptor itemWithKey:@"listCellBorderWidth" type:ConfigValueTypeFloat default:@(2.0)],
+        [ConfigDescriptor itemWithKey:@"listCellBorderColor" type:ConfigValueTypeString default:@"#E5E5E5"],
+        [ConfigDescriptor itemWithKey:@"listCellBorderColorDarkHex" type:ConfigValueTypeString default:@"#3A3A3C"],
     ];
 }
 

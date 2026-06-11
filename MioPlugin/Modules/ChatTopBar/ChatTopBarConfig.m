@@ -25,31 +25,31 @@ static ChatTopBarConfig *_sharedInstance = nil;
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
         // BOOL 类型
-        [ConfigDescriptor boolItem:@"showChatAvatar" default:@(NO)],
-        [ConfigDescriptor boolItem:@"avatarTapFeedback" default:@(NO)],
-        [ConfigDescriptor boolItem:@"showAddTime" default:@(NO)],
-        [ConfigDescriptor boolItem:@"showGroupMemberCount" default:@(NO)],
-        
+        [ConfigDescriptor itemWithKey:@"showChatAvatar" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"avatarTapFeedback" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"showAddTime" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"showGroupMemberCount" type:ConfigValueTypeBool default:@(NO)],
+
         // NSInteger 类型
-        [ConfigDescriptor integerItem:@"chatDisplayMode" default:@(3)],
-        
+        [ConfigDescriptor itemWithKey:@"chatDisplayMode" type:ConfigValueTypeInteger default:@(3)],
+
         // CGFloat 类型
-        [ConfigDescriptor floatItem:@"chatAvatarSize" default:@(30.0)],
-        [ConfigDescriptor floatItem:@"chatAvatarSpacing" default:@(6.0)],
-        [ConfigDescriptor floatItem:@"chatAvatarCornerRadius" default:@(100.0)],
-        [ConfigDescriptor floatItem:@"chatNicknameFontSize" default:@(9.0)],
-        [ConfigDescriptor floatItem:@"chatSeparatorSize" default:@(30.0)],
-        [ConfigDescriptor floatItem:@"chatTitleViewWidth" default:@(210.0)],
-        [ConfigDescriptor floatItem:@"chatVerticalOffset" default:@(0)],
-        [ConfigDescriptor floatItem:@"chatHorizontalOffset" default:@(0)],
-        [ConfigDescriptor floatItem:@"chatNicknameOffsetY" default:@(0)],
-        [ConfigDescriptor floatItem:@"chatNicknameOffsetX" default:@(0)],
-        
+        [ConfigDescriptor itemWithKey:@"chatAvatarSize" type:ConfigValueTypeFloat default:@(30.0)],
+        [ConfigDescriptor itemWithKey:@"chatAvatarSpacing" type:ConfigValueTypeFloat default:@(6.0)],
+        [ConfigDescriptor itemWithKey:@"chatAvatarCornerRadius" type:ConfigValueTypeFloat default:@(100.0)],
+        [ConfigDescriptor itemWithKey:@"chatNicknameFontSize" type:ConfigValueTypeFloat default:@(9.0)],
+        [ConfigDescriptor itemWithKey:@"chatSeparatorSize" type:ConfigValueTypeFloat default:@(30.0)],
+        [ConfigDescriptor itemWithKey:@"chatTitleViewWidth" type:ConfigValueTypeFloat default:@(210.0)],
+        [ConfigDescriptor itemWithKey:@"chatVerticalOffset" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"chatHorizontalOffset" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"chatNicknameOffsetY" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"chatNicknameOffsetX" type:ConfigValueTypeFloat default:@(0)],
+
         // NSString 类型
-        [ConfigDescriptor stringItem:@"chatSeparatorText" default:@""],
-        [ConfigDescriptor stringItem:@"chatAvatarBlacklist" default:nil],
-        [ConfigDescriptor stringItem:@"chatGroupMemberCountSuffix" default:@"%u人"],
-        [ConfigDescriptor stringItem:@"chatAddTimeSuffixFormat" default:@"%ld天"],
+        [ConfigDescriptor itemWithKey:@"chatSeparatorText" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"chatAvatarBlacklist" type:ConfigValueTypeString default:nil],
+        [ConfigDescriptor itemWithKey:@"chatGroupMemberCountSuffix" type:ConfigValueTypeString default:@"%u人"],
+        [ConfigDescriptor itemWithKey:@"chatAddTimeSuffixFormat" type:ConfigValueTypeString default:@"%ld天"],
     ];
 }
 

@@ -660,7 +660,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     CGFloat borderWidth = config.listCellBorderWidth;
     if (borderWidth <= 0) borderWidth = 1.0;
 
-    BOOL isDark = [WPUtility isDarkMode];
+    BOOL isDark = [WPUtility isDarkModeForView:cell];
 
     UIColor *borderColor = [WPColorUtil colorFromHexString:isDark ? config.listCellBorderColorDarkHex : config.listCellBorderColor];
     if (!borderColor) {

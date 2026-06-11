@@ -18,9 +18,9 @@ static AttachLayoutConfig *_sharedInstance = nil;
 
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
-        [ConfigDescriptor boolItem:@"attachLayoutEnabled" default:@(NO)],
-        [ConfigDescriptor stringItem:@"attachLayoutColumns" default:nil],
-        [ConfigDescriptor stringItem:@"attachLayoutRows" default:nil],
+        [ConfigDescriptor itemWithKey:@"attachLayoutEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"attachLayoutColumns" type:ConfigValueTypeString default:nil],
+        [ConfigDescriptor itemWithKey:@"attachLayoutRows" type:ConfigValueTypeString default:nil],
     ];
 }
 

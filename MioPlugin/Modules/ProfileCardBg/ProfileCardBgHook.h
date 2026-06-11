@@ -9,7 +9,6 @@
 // ★ 通用辅助方法
 + (UIViewController *)findMoreViewController:(UIView *)view;
 + (BOOL)hasHeadImageViewInView:(UIView *)view;
-+ (BOOL)isDarkModeForVc:(UIViewController *)vc;
 + (void)cleanNativeBgImageView:(UIView *)button;
 + (BOOL)isEssentialSubview:(UIView *)sub;
 + (BOOL)isWhiteOrDynamicBackground:(UIView *)sub;

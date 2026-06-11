@@ -19,35 +19,35 @@ static MessageTimeConfig *_sharedInstance = nil;
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
         // 基本属性
-        [ConfigDescriptor boolItem:@"showMessageTime" default:@(NO)],
-        [ConfigDescriptor floatItem:@"messageTimeFontSize" default:@(7.0)],
-        [ConfigDescriptor boolItem:@"messageTimeBoldFont" default:@(NO)],
-        [ConfigDescriptor stringItem:@"messageTimeFormat" default:@"HH:mm:ss"],
-        [ConfigDescriptor stringItem:@"messageTimeCustomFormat" default:nil],
-        [ConfigDescriptor integerItem:@"messageTimePosition" default:@(1)],
-        [ConfigDescriptor floatItem:@"messageTimeOffsetX" default:@(0)],
-        [ConfigDescriptor floatItem:@"messageTimeOffsetY" default:@(0)],
-        [ConfigDescriptor stringItem:@"messageTimeTextColor" default:@"#999999"],
-        [ConfigDescriptor floatItem:@"messageTimeBubbleExtWidth" default:@(0)],
-        [ConfigDescriptor floatItem:@"messageTimeCornerRadius" default:@(0)],
-        [ConfigDescriptor boolItem:@"disableLabelWidthAdjustment" default:@(NO)],
-        
+        [ConfigDescriptor itemWithKey:@"showMessageTime" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"messageTimeFontSize" type:ConfigValueTypeFloat default:@(7.0)],
+        [ConfigDescriptor itemWithKey:@"messageTimeBoldFont" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"messageTimeFormat" type:ConfigValueTypeString default:@"HH:mm:ss"],
+        [ConfigDescriptor itemWithKey:@"messageTimeCustomFormat" type:ConfigValueTypeString default:nil],
+        [ConfigDescriptor itemWithKey:@"messageTimePosition" type:ConfigValueTypeInteger default:@(1)],
+        [ConfigDescriptor itemWithKey:@"messageTimeOffsetX" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"messageTimeOffsetY" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"messageTimeTextColor" type:ConfigValueTypeString default:@"#999999"],
+        [ConfigDescriptor itemWithKey:@"messageTimeBubbleExtWidth" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"messageTimeCornerRadius" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"disableLabelWidthAdjustment" type:ConfigValueTypeBool default:@(NO)],
+
         // 时间配色属性
-        [ConfigDescriptor stringItem:@"senderTextColorHex" default:@"#808080"],
-        [ConfigDescriptor stringItem:@"senderTextColorDarkHex" default:@"#BFBFBF"],
-        [ConfigDescriptor stringItem:@"senderBackgroundColorHex" default:@"#00000000"],
-        [ConfigDescriptor stringItem:@"senderBackgroundColorDarkHex" default:@"#00000000"],
-        [ConfigDescriptor stringItem:@"receiverTextColorHex" default:@"#808080"],
-        [ConfigDescriptor stringItem:@"receiverTextColorDarkHex" default:@"#BFBFBF"],
-        [ConfigDescriptor stringItem:@"receiverBackgroundColorHex" default:@"#00000000"],
-        [ConfigDescriptor stringItem:@"receiverBackgroundColorDarkHex" default:@"#00000000"],
-        
+        [ConfigDescriptor itemWithKey:@"senderTextColorHex" type:ConfigValueTypeString default:@"#808080"],
+        [ConfigDescriptor itemWithKey:@"senderTextColorDarkHex" type:ConfigValueTypeString default:@"#BFBFBF"],
+        [ConfigDescriptor itemWithKey:@"senderBackgroundColorHex" type:ConfigValueTypeString default:@"#00000000"],
+        [ConfigDescriptor itemWithKey:@"senderBackgroundColorDarkHex" type:ConfigValueTypeString default:@"#00000000"],
+        [ConfigDescriptor itemWithKey:@"receiverTextColorHex" type:ConfigValueTypeString default:@"#808080"],
+        [ConfigDescriptor itemWithKey:@"receiverTextColorDarkHex" type:ConfigValueTypeString default:@"#BFBFBF"],
+        [ConfigDescriptor itemWithKey:@"receiverBackgroundColorHex" type:ConfigValueTypeString default:@"#00000000"],
+        [ConfigDescriptor itemWithKey:@"receiverBackgroundColorDarkHex" type:ConfigValueTypeString default:@"#00000000"],
+
         // 好友添加时间
-        [ConfigDescriptor boolItem:@"showAddTimeSuffix" default:@(NO)],
-        [ConfigDescriptor stringItem:@"addTimeSuffixFormat" default:@"(yyyy-MM-dd)"],
-        
+        [ConfigDescriptor itemWithKey:@"showAddTimeSuffix" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"addTimeSuffixFormat" type:ConfigValueTypeString default:@"(yyyy-MM-dd)"],
+
         // 隐藏聊天时间分隔线
-        [ConfigDescriptor boolItem:@"hideChatTime" default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hideChatTime" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 

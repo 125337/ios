@@ -18,13 +18,13 @@ static AutoTransferConfig *_sharedInstance = nil;
 
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
-        [ConfigDescriptor boolItem:@"autoConfirmTransfer" default:@(NO)],
-        [ConfigDescriptor boolItem:@"autoConfirmTransferPersonal" default:@(NO)],
-        [ConfigDescriptor boolItem:@"autoConfirmTransferGroup" default:@(NO)],
-        [ConfigDescriptor integerItem:@"autoConfirmTransferDelay" default:@(0)],
-        [ConfigDescriptor integerItem:@"autoConfirmTransferMaxAmount" default:@(0)],
-        [ConfigDescriptor boolItem:@"autoConfirmTransferAutoReply" default:@(NO)],
-        [ConfigDescriptor stringItem:@"autoConfirmTransferAutoReplyStr" default:@"已收到款项，谢谢！"],
+        [ConfigDescriptor itemWithKey:@"autoConfirmTransfer" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"autoConfirmTransferPersonal" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"autoConfirmTransferGroup" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"autoConfirmTransferDelay" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"autoConfirmTransferMaxAmount" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"autoConfirmTransferAutoReply" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"autoConfirmTransferAutoReplyStr" type:ConfigValueTypeString default:@"已收到款项，谢谢！"],
     ];
 }
 

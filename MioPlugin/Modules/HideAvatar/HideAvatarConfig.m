@@ -18,12 +18,12 @@ static HideAvatarConfig *_sharedInstance = nil;
 
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
-        [ConfigDescriptor boolItem:@"hideC2COtherAvatar" default:@(NO)],
-        [ConfigDescriptor boolItem:@"hideC2CSelfAvatar" default:@(NO)],
-        [ConfigDescriptor boolItem:@"hideGroupOtherAvatar" default:@(NO)],
-        [ConfigDescriptor boolItem:@"hideGroupSelfAvatar" default:@(NO)],
-        [ConfigDescriptor boolItem:@"hideOAOtherAvatar" default:@(NO)],
-        [ConfigDescriptor boolItem:@"hideOASelfAvatar" default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hideC2COtherAvatar" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hideC2CSelfAvatar" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hideGroupOtherAvatar" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hideGroupSelfAvatar" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hideOAOtherAvatar" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hideOASelfAvatar" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 
