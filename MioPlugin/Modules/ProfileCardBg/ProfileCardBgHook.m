@@ -44,6 +44,9 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     [ProfileCardBgHook handleButtonLayout:(UIView *)self];
 }
 
+// ★★★ P1-12 崩溃修复：重入锁，防止 handleButtonLayout 递归调用 ★★★
+static BOOL _wp_isHandlingButtonLayout = NO;
+
 // ★★★ P1-11 问题2 + P1-12 崩溃修复：traitCollectionDidChange Hook + 防重入 ★★★
 static IMP orig_MMUIButton_traitCollectionDidChange = NULL;
 static void replaced_MMUIButton_traitCollectionDidChange(id self, SEL _cmd, UITraitCollection *previousTraitCollection) {
@@ -66,9 +69,6 @@ static void replaced_MMUIButton_traitCollectionDidChange(id self, SEL _cmd, UITr
 }
 
 @implementation ProfileCardBgHook
-
-// ★★★ P1-12 崩溃修复：重入锁，防止 handleButtonLayout 递归调用 ★★★
-static BOOL _wp_isHandlingButtonLayout = NO;
 
 #pragma mark - 资料卡圆角
 
