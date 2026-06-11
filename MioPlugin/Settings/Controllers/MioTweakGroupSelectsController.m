@@ -182,30 +182,7 @@ static void gsLog(NSString *content) {
 
 - (NSArray<NSString *> *)getSelectedGroupIds {
     if (!self.selectView) return @[];
-    
-    NSMutableArray<NSString *> *groupIds = [NSMutableArray array];
-    
-    // 优先从 allValues（contact 对象）提取 m_nsUsrName
-    for (id contact in [self.selectView.m_dicMultiSelect allValues]) {
-        if ([contact respondsToSelector:NSSelectorFromString(@"m_nsUsrName")]) {
-            NSString *usrName = ((NSString *(*)(id, SEL))objc_msgSend)(
-                contact, NSSelectorFromString(@"m_nsUsrName"));
-            if (usrName.length > 0) {
-                [groupIds addObject:usrName];
-            }
-        }
-    }
-    
-    // fallback：如果 values 方式取不到，退回到 keys 方式并过滤非 NSString
-    if (groupIds.count == 0) {
-        for (id key in [self.selectView.m_dicMultiSelect allKeys]) {
-            if ([key isKindOfClass:[NSString class]]) {
-                [groupIds addObject:(NSString *)key];
-            }
-        }
-    }
-    
-    return [groupIds copy];
+    return [self.selectView.m_dicMultiSelect allKeys];
 }
 
 - (void)onCancel {
@@ -217,13 +194,6 @@ static void gsLog(NSString *content) {
 
 - (void)onDone {
     NSArray<NSString *> *groupIds = [self getSelectedGroupIds];
-    
-    // 调试日志：确认保存的数据类型和数量
-    gsLog([NSString stringWithFormat:@"[DONE] 群过滤列表保存: %lu 个群", (unsigned long)groupIds.count]);
-    if (groupIds.count > 0) {
-        gsLog([NSString stringWithFormat:@"[DONE] items: %@", groupIds]);
-    }
-    
     if ([self.delegate respondsToSelector:@selector(onGroupSelectReturn:)]) {
         [self.delegate onGroupSelectReturn:groupIds];
     }

@@ -1,8 +1,6 @@
 #import <Foundation/Foundation.h>
 #import "ConfigModule.h"
 
-NS_ASSUME_NONNULL_BEGIN
-
 @interface AutoTransferConfig : NSObject <ConfigModule>
 
 @property (nonatomic, assign) BOOL autoConfirmTransfer;
@@ -16,5 +14,3 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)shared;
 
 @end
-
-NS_ASSUME_NONNULL_END

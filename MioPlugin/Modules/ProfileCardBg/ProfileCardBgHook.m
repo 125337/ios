@@ -709,11 +709,6 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
-+ (void)install {
-    [self initCellHeightHook];
-    [self initProfileCardHook];
-}
-
 + (void)initProfileCardHook {
     Class cls = objc_getClass("MMUIButton");
     if (cls) {
