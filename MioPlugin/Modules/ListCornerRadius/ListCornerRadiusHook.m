@@ -48,6 +48,15 @@ static IMP orig_WCSearchBar_layoutSubviews = NULL;
 
 @end
 
+static UIColor *wp_cellDefaultBgColor(BOOL isDark) {
+    if (@available(iOS 13.0, *)) {
+        if (isDark) {
+            return [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0];
+        }
+    }
+    return [UIColor whiteColor];
+}
+
 // ★★★ 全局开关过滤 ★★★
 static NSString * const kMyPageVCClassName        = @"MoreViewController";
 static NSString * const kContactsVCClassName       = @"ContactsViewController";
@@ -174,10 +183,11 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             @"WCSearchController", nil];
     });
     if (![bgColorSkipList containsObject:className]) {
-        // ★ 动态颜色：自动跟随暗黑模式 ★
-        UIColor *customBg = [WPUtility dynamicColorWithLightHex:config.listCellLightBgColor
-                                                        darkHex:config.listCellDarkBgColor];
-        ((UIView *)self).backgroundColor = customBg;
+        BOOL isDark = [WPUtility isDarkModeForViewController:vc];
+        UIColor *customBg = isDark
+            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
+            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
+        ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
     }
 
     // ★ corner 圆角设置（不需要 if 守卫！进入这里一定是因为 globalCornerRadiusEnabled==YES）★
@@ -241,9 +251,16 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    // ★ 动态颜色：自动跟随暗黑模式 ★
-    UIColor *targetBg = [WPUtility dynamicColorWithLightHex:config.listCellLightBgColor
-                                                    darkHex:config.listCellDarkBgColor];
+    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
+
+    UIColor *targetBg = isDark
+            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
+            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
+    if (!targetBg) {
+        targetBg = isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor];
+    }
     ((UIView *)self).backgroundColor = targetBg;
 }
 
@@ -259,9 +276,16 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    // ★ 动态颜色：自动跟随暗黑模式 ★
-    UIColor *targetBg = [WPUtility dynamicColorWithLightHex:config.listCellLightBgColor
-                                                    darkHex:config.listCellDarkBgColor];
+    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
+
+    UIColor *targetBg = isDark
+            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
+            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
+    if (!targetBg) {
+        targetBg = isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor];
+    }
     ((UIView *)self).backgroundColor = targetBg;
 }
 
@@ -314,9 +338,15 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
     [ListCornerRadiusHook applyBorderToView:view radius:radius position:0 isFTSHome:NO];
 
-    // ★ 动态颜色：自动跟随暗黑模式 ★
-    UIColor *targetBg = [WPUtility dynamicColorWithLightHex:config.listCellLightBgColor
-                                                    darkHex:config.listCellDarkBgColor];
+    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
+    UIColor *targetBg = isDark
+            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
+            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
+    if (!targetBg) {
+        targetBg = isDark
+            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+            : [UIColor whiteColor];
+    }
     view.backgroundColor = targetBg;
 
     for (UIView *subview in view.subviews) {
@@ -606,16 +636,12 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                   isFTSHome:(BOOL)isFTSHome {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
 
-    // ★ P1-11 问题1: isDark 提前计算，用于缓存键 ★
-    BOOL isDark = [WPUtility isDarkModeForView:cell];
-
     static NSString *kBorderCacheKey = @"com.mio.cornerBorderCache";
 
     NSString *existingCacheKey = objc_getAssociatedObject(cell, (__bridge const void *)kBorderCacheKey);
-    // ★ P1-11 问题1: 缓存键增加 isDark 维度 ★
-    NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-f%d-b%.1f-d%d",
+    NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-f%d-b%.1f",
                           (long)radius, (long)position, isFTSHome,
-                          config.listCellBorderWidth, isDark];
+                          config.listCellBorderWidth];
     if ([existingCacheKey isEqualToString:cacheKey]) return;
 
     NSArray *oldSublayers = [cell.layer.sublayers copy];
@@ -633,6 +659,8 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
     CGFloat borderWidth = config.listCellBorderWidth;
     if (borderWidth <= 0) borderWidth = 1.0;
+
+    BOOL isDark = [WPUtility isDarkModeForView:cell];
 
     UIColor *borderColor = [WPColorUtil colorFromHexString:isDark ? config.listCellBorderColorDarkHex : config.listCellBorderColor];
     if (!borderColor) {

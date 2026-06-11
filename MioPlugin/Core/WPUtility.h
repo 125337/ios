@@ -32,15 +32,6 @@
 /// @return YES 表示暗黑模式，无法找到 VC 时返回 NO
 + (BOOL)isDarkModeForView:(UIView *)view;
 
-/// 创建动态颜色（iOS 13+），自动跟随暗黑模式切换
-/// 适用于 UIView.backgroundColor、UILabel.textColor 等属性
-/// 不适用于 CALayer.borderColor、CAShapeLayer.strokeColor（CGColor 属性）
-/// @param lightHex 浅色模式颜色字符串（#RRGGBB 或 #RRGGBBAA）
-/// @param darkHex  深色模式颜色字符串（#RRGGBB 或 #RRGGBBAA），传 nil 则自动变暗
-/// @return 动态 UIColor 对象
-+ (UIColor *)dynamicColorWithLightHex:(NSString *)lightHex
-                             darkHex:(NSString *)darkHex;
-
 /// 在指定会话中插入一条系统提示消息（type=0x2710, status=4）
 /// @param session   会话ID（群聊或单聊的 userName）
 /// @param content   提示文本内容（纯文本，方法内部会处理成 WeChat 可识别的格式）
