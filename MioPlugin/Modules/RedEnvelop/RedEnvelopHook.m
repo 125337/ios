@@ -424,6 +424,28 @@ static void handleHongbaoResponse(id res, id req) {
                         @try {
                             [msg setValue:config.redEnvelopAutoReplyStr forKey:@"m_nsContent"];
                             [msg setValue:param.sessionUserName forKey:@"m_nsToUsr"];
+                            
+                            // ✅ 补充：获取当前用户 ID
+                            id contactMgr = WXGetService(objc_getClass("CContactMgr"));
+                            id selfContact = nil;
+                            NSString *selfUserName = nil;
+                            if ([contactMgr respondsToSelector:NSSelectorFromString(@"getSelfContact")]) {
+                                selfContact = ((id (*)(id, SEL, ...))objc_msgSend)(contactMgr, NSSelectorFromString(@"getSelfContact"));
+                            }
+                            if ([selfContact respondsToSelector:NSSelectorFromString(@"m_nsUsrName")]) {
+                                selfUserName = ((id (*)(id, SEL, ...))objc_msgSend)(selfContact, NSSelectorFromString(@"m_nsUsrName"));
+                            }
+                            
+                            // ✅ 设置发送方为当前用户
+                            if (selfUserName) {
+                                [msg setValue:selfUserName forKey:@"m_nsFromUsr"];
+                            }
+                            
+                            // ✅ 设置消息状态为"已发送"
+                            [msg setValue:@(4) forKey:@"m_uiStatus"];
+                            
+                            // ✅ 设置消息时间戳
+                            [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
                         } @catch (NSException *e) {
                             WPLog(@"RedEnv", @"[REPLY] 设置属性异常: %@ - %@", e.name, e.reason);
                         }

@@ -38,9 +38,9 @@ static inline NSInteger attachLayoutRows(void) {
 // ═══════════════════════════════════════════════════════
 // 原始 IMP 存储 (对齐 DAT_0013a8c0/c8/d0)
 // ═══════════════════════════════════════════════════════
-static IMP __orig_SelectAttachmentView_layoutSubviews = NULL;
-static IMP __orig_SelectAttachmentViewController_numberOfCols = NULL;
-static IMP __orig_SelectAttachmentViewController_numberOfRows = NULL;
+static IMP orig_SelectAttachmentView_layoutSubviews = NULL;
+static IMP orig_SelectAttachmentViewController_numberOfCols = NULL;
+static IMP orig_SelectAttachmentViewController_numberOfRows = NULL;
 
 // ═══════════════════════════════════════════════════════
 // Hook ①: SelectAttachmentView.layoutSubviews
@@ -49,7 +49,7 @@ static IMP __orig_SelectAttachmentViewController_numberOfRows = NULL;
 // ═══════════════════════════════════════════════════════
 static void hook_SelectAttachmentView_layoutSubviews(id self, SEL _cmd) {
     // Step 0: 调用原始 layoutSubviews
-    ((void (*)(id, SEL))__orig_SelectAttachmentView_layoutSubviews)(self, _cmd);
+    ((void (*)(id, SEL))orig_SelectAttachmentView_layoutSubviews)(self, _cmd);
 
     // Step 1: 检查功能是否开启
     if (!attachLayoutEnabled()) return;
@@ -103,7 +103,7 @@ static void hook_SelectAttachmentView_layoutSubviews(id self, SEL _cmd) {
 // ═══════════════════════════════════════════════════════
 static long hook_numberOfCols(id self, SEL _cmd) {
     if (!attachLayoutEnabled()) {
-        return ((long (*)(id, SEL))__orig_SelectAttachmentViewController_numberOfCols)(self, _cmd);
+        return ((long (*)(id, SEL))orig_SelectAttachmentViewController_numberOfCols)(self, _cmd);
     }
     return attachLayoutColumns();
 }
@@ -115,7 +115,7 @@ static long hook_numberOfCols(id self, SEL _cmd) {
 // ═══════════════════════════════════════════════════════
 static long hook_numberOfRows(id self, SEL _cmd) {
     if (!attachLayoutEnabled()) {
-        return ((long (*)(id, SEL))__orig_SelectAttachmentViewController_numberOfRows)(self, _cmd);
+        return ((long (*)(id, SEL))orig_SelectAttachmentViewController_numberOfRows)(self, _cmd);
     }
     return attachLayoutRows();
 }
@@ -133,7 +133,7 @@ static long hook_numberOfRows(id self, SEL _cmd) {
     if (cls) {
         MSHookMessageEx(cls, sel_registerName("layoutSubviews"),
                         (IMP)hook_SelectAttachmentView_layoutSubviews,
-                        (IMP *)&__orig_SelectAttachmentView_layoutSubviews);
+                        (IMP *)&orig_SelectAttachmentView_layoutSubviews);
     }
 
     // ② SelectAttachmentViewController.numberOfCols
@@ -141,7 +141,7 @@ static long hook_numberOfRows(id self, SEL _cmd) {
     if (cls) {
         MSHookMessageEx(cls, sel_registerName("numberOfCols"),
                         (IMP)hook_numberOfCols,
-                        (IMP *)&__orig_SelectAttachmentViewController_numberOfCols);
+                        (IMP *)&orig_SelectAttachmentViewController_numberOfCols);
     }
 
     // ③ SelectAttachmentViewController.numberOfRows
@@ -149,7 +149,7 @@ static long hook_numberOfRows(id self, SEL _cmd) {
     if (cls) {
         MSHookMessageEx(cls, sel_registerName("numberOfRows"),
                         (IMP)hook_numberOfRows,
-                        (IMP *)&__orig_SelectAttachmentViewController_numberOfRows);
+                        (IMP *)&orig_SelectAttachmentViewController_numberOfRows);
     }
 }
 

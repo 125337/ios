@@ -58,15 +58,15 @@ static void purifySafeHook(Class cls, SEL sel, IMP replacement, IMP *orig) {
 #pragma mark - 拍一拍 Hook 函数
 
 // ★ 拍一拍 _orig 指针
-static IMP _orig_AppPatCell_initWithViewModel = NULL;
-static IMP _orig_AppPatCell_layoutInternal = NULL;
-static IMP _orig_AppPatCell_canBeReused = NULL;
-static IMP _orig_AppPatCell_shouldLayoutIfNeeded = NULL;
-static IMP _orig_AppPatVM_measure = NULL;
+static IMP orig_AppPatCell_initWithViewModel = NULL;
+static IMP orig_AppPatCell_layoutInternal = NULL;
+static IMP orig_AppPatCell_canBeReused = NULL;
+static IMP orig_AppPatCell_shouldLayoutIfNeeded = NULL;
+static IMP orig_AppPatVM_measure = NULL;
 
 /// initWithViewModel: — 创建时隐藏
 static id hook_AppPatCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
-    id result = ((id (*)(id, SEL, id))_orig_AppPatCell_initWithViewModel)(self, _cmd, viewModel);
+    id result = ((id (*)(id, SEL, id))orig_AppPatCell_initWithViewModel)(self, _cmd, viewModel);
     if (result && [UIPurifyConfig shared].hidePatHint) {
         [result setHidden:YES];
         [result setFrame:[result frame]];  // 触发 setNeedsLayout
@@ -77,39 +77,39 @@ static id hook_AppPatCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
 /// layoutInternal — 跳过布局
 static void hook_AppPatCell_layoutInternal(id self, SEL _cmd) {
     if ([UIPurifyConfig shared].hidePatHint) return;
-    ((void (*)(id, SEL))_orig_AppPatCell_layoutInternal)(self, _cmd);
+    ((void (*)(id, SEL))orig_AppPatCell_layoutInternal)(self, _cmd);
 }
 
 /// canBeReused — 可复用
 static BOOL hook_AppPatCell_canBeReused(id self, SEL _cmd) {
     if ([UIPurifyConfig shared].hidePatHint) return YES;
-    return ((BOOL (*)(id, SEL))_orig_AppPatCell_canBeReused)(self, _cmd);
+    return ((BOOL (*)(id, SEL))orig_AppPatCell_canBeReused)(self, _cmd);
 }
 
 /// shouldLayoutIfNeeded — 不需要布局
 static BOOL hook_AppPatCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
     if ([UIPurifyConfig shared].hidePatHint) return NO;
-    return ((BOOL (*)(id, SEL))_orig_AppPatCell_shouldLayoutIfNeeded)(self, _cmd);
+    return ((BOOL (*)(id, SEL))orig_AppPatCell_shouldLayoutIfNeeded)(self, _cmd);
 }
 
 /// measure: — 返回零高度
 static CGSize hook_AppPatVM_measure(id self, SEL _cmd, CGSize size) {
     if ([UIPurifyConfig shared].hidePatHint) return CGSizeZero;
-    return ((CGSize (*)(id, SEL, CGSize))_orig_AppPatVM_measure)(self, _cmd, size);
+    return ((CGSize (*)(id, SEL, CGSize))orig_AppPatVM_measure)(self, _cmd, size);
 }
 
 #pragma mark - 撤回提示 Hook 函数
 
 // ★ 撤回提示 _orig 指针
-static IMP _orig_SysMsgCell_initWithViewModel = NULL;
-static IMP _orig_SysMsgCell_layoutInternal = NULL;
-static IMP _orig_SysMsgCell_canBeReused = NULL;
-static IMP _orig_SysMsgCell_shouldLayoutIfNeeded = NULL;
-static IMP _orig_SysMsgVM_measure = NULL;
+static IMP orig_SysMsgCell_initWithViewModel = NULL;
+static IMP orig_SysMsgCell_layoutInternal = NULL;
+static IMP orig_SysMsgCell_canBeReused = NULL;
+static IMP orig_SysMsgCell_shouldLayoutIfNeeded = NULL;
+static IMP orig_SysMsgVM_measure = NULL;
 
 /// initWithViewModel: — 创建时隐藏
 static id hook_SysMsgCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
-    id result = ((id (*)(id, SEL, id))_orig_SysMsgCell_initWithViewModel)(self, _cmd, viewModel);
+    id result = ((id (*)(id, SEL, id))orig_SysMsgCell_initWithViewModel)(self, _cmd, viewModel);
     if (result && [UIPurifyConfig shared].hideRevokeHint) {
         [result setHidden:YES];
         [result setFrame:[result frame]];
@@ -120,25 +120,25 @@ static id hook_SysMsgCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
 /// layoutInternal — 跳过布局
 static void hook_SysMsgCell_layoutInternal(id self, SEL _cmd) {
     if ([UIPurifyConfig shared].hideRevokeHint) return;
-    ((void (*)(id, SEL))_orig_SysMsgCell_layoutInternal)(self, _cmd);
+    ((void (*)(id, SEL))orig_SysMsgCell_layoutInternal)(self, _cmd);
 }
 
 /// canBeReused — 可复用
 static BOOL hook_SysMsgCell_canBeReused(id self, SEL _cmd) {
     if ([UIPurifyConfig shared].hideRevokeHint) return YES;
-    return ((BOOL (*)(id, SEL))_orig_SysMsgCell_canBeReused)(self, _cmd);
+    return ((BOOL (*)(id, SEL))orig_SysMsgCell_canBeReused)(self, _cmd);
 }
 
 /// shouldLayoutIfNeeded — 不需要布局
 static BOOL hook_SysMsgCell_shouldLayoutIfNeeded(id self, SEL _cmd) {
     if ([UIPurifyConfig shared].hideRevokeHint) return NO;
-    return ((BOOL (*)(id, SEL))_orig_SysMsgCell_shouldLayoutIfNeeded)(self, _cmd);
+    return ((BOOL (*)(id, SEL))orig_SysMsgCell_shouldLayoutIfNeeded)(self, _cmd);
 }
 
 /// measure: — 返回零高度
 static CGSize hook_SysMsgVM_measure(id self, SEL _cmd, CGSize size) {
     if ([UIPurifyConfig shared].hideRevokeHint) return CGSizeZero;
-    return ((CGSize (*)(id, SEL, CGSize))_orig_SysMsgVM_measure)(self, _cmd, size);
+    return ((CGSize (*)(id, SEL, CGSize))orig_SysMsgVM_measure)(self, _cmd, size);
 }
 
 #pragma mark - 语音红点和转文字 Hook 函数
@@ -229,19 +229,19 @@ static BOOL hook_MMDictConfig_enableDictation(id self, SEL _cmd) {
     if (appPatCellClass && appPatVMClass) {
         purifySafeHook(appPatCellClass, @selector(initWithViewModel:),
                        (IMP)hook_AppPatCell_initWithViewModel,
-                       &_orig_AppPatCell_initWithViewModel);
+                       &orig_AppPatCell_initWithViewModel);
         purifySafeHook(appPatCellClass, @selector(layoutInternal),
                        (IMP)hook_AppPatCell_layoutInternal,
-                       &_orig_AppPatCell_layoutInternal);
+                       &orig_AppPatCell_layoutInternal);
         purifySafeHook(appPatCellClass, @selector(canBeReused),
                        (IMP)hook_AppPatCell_canBeReused,
-                       &_orig_AppPatCell_canBeReused);
+                       &orig_AppPatCell_canBeReused);
         purifySafeHook(appPatCellClass, @selector(shouldLayoutIfNeeded),
                        (IMP)hook_AppPatCell_shouldLayoutIfNeeded,
-                       &_orig_AppPatCell_shouldLayoutIfNeeded);
+                       &orig_AppPatCell_shouldLayoutIfNeeded);
         purifySafeHook(appPatVMClass, @selector(measure:),
                        (IMP)hook_AppPatVM_measure,
-                       &_orig_AppPatVM_measure);
+                       &orig_AppPatVM_measure);
         WPLog(@"UIPurify", @"[+] AppPatMessageCellView/ViewModel hooked (5 methods, purifySafeHook)");
     } else {
         WPLog(@"UIPurify", @"[-] AppPatMessageCellView/ViewModel not found");
@@ -253,19 +253,19 @@ static BOOL hook_MMDictConfig_enableDictation(id self, SEL _cmd) {
     if (sysMsgCellClass && sysMsgVMClass) {
         purifySafeHook(sysMsgCellClass, @selector(initWithViewModel:),
                        (IMP)hook_SysMsgCell_initWithViewModel,
-                       &_orig_SysMsgCell_initWithViewModel);
+                       &orig_SysMsgCell_initWithViewModel);
         purifySafeHook(sysMsgCellClass, @selector(layoutInternal),
                        (IMP)hook_SysMsgCell_layoutInternal,
-                       &_orig_SysMsgCell_layoutInternal);
+                       &orig_SysMsgCell_layoutInternal);
         purifySafeHook(sysMsgCellClass, @selector(canBeReused),
                        (IMP)hook_SysMsgCell_canBeReused,
-                       &_orig_SysMsgCell_canBeReused);
+                       &orig_SysMsgCell_canBeReused);
         purifySafeHook(sysMsgCellClass, @selector(shouldLayoutIfNeeded),
                        (IMP)hook_SysMsgCell_shouldLayoutIfNeeded,
-                       &_orig_SysMsgCell_shouldLayoutIfNeeded);
+                       &orig_SysMsgCell_shouldLayoutIfNeeded);
         purifySafeHook(sysMsgVMClass, @selector(measure:),
                        (IMP)hook_SysMsgVM_measure,
-                       &_orig_SysMsgVM_measure);
+                       &orig_SysMsgVM_measure);
         WPLog(@"UIPurify", @"[+] SystemMessageCellView/ViewModel hooked (5 methods, purifySafeHook)");
     } else {
         WPLog(@"UIPurify", @"[-] SystemMessageCellView/ViewModel not found");

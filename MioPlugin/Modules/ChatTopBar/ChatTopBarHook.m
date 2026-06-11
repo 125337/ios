@@ -54,9 +54,9 @@ didTapAvatarWithContact:(id)contact
 }
 @end
 
-static IMP _orig_BaseMsgContentVC_viewDidLoad    = NULL;
-static IMP _orig_BaseMsgContentVC_viewWillAppear  = NULL;
-static IMP _orig_UINavigationController_push       = NULL;
+static IMP orig_BaseMsgContentVC_viewDidLoad    = NULL;
+static IMP orig_BaseMsgContentVC_viewWillAppear  = NULL;
+static IMP orig_UINavigationController_push       = NULL;
 
 static const void *kOriginalTitleViewKey = &kOriginalTitleViewKey;
 
@@ -126,7 +126,7 @@ static void restoreOriginalTitleView(id vc) {
 #pragma mark - Hooks
 
 static void hook_viewDidLoad(id self, SEL _cmd) {
-    ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
+    ((void (*)(id, SEL))orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
 
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
     if (!config.showChatAvatar) return;
@@ -144,7 +144,7 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
 }
 
 static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
-    ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
+    ((void (*)(id, SEL, BOOL))orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
 
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
     id currentTitle = [[self navigationItem] titleView];
@@ -173,7 +173,7 @@ static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
 }
 
 static void hook_pushViewController(id self, SEL _cmd, id viewController, BOOL animated) {
-    ((void (*)(id, SEL, id, BOOL))_orig_UINavigationController_push)
+    ((void (*)(id, SEL, id, BOOL))orig_UINavigationController_push)
         (self, _cmd, viewController, animated);
 
     Class msgCls = objc_getClass("BaseMsgContentViewController");
@@ -199,10 +199,10 @@ static void hook_pushViewController(id self, SEL _cmd, id viewController, BOOL a
     if (cls) {
         MSHookMessageEx(cls, @selector(viewDidLoad),
                         (IMP)hook_viewDidLoad,
-                        &_orig_BaseMsgContentVC_viewDidLoad);
+                        &orig_BaseMsgContentVC_viewDidLoad);
         MSHookMessageEx(cls, @selector(viewWillAppear:),
                         (IMP)hook_viewWillAppear,
-                        &_orig_BaseMsgContentVC_viewWillAppear);
+                        &orig_BaseMsgContentVC_viewWillAppear);
         WPLog(@"ChatTopBar", @"[Hook] ✓ BaseMsgContentViewController");
     }
 
@@ -210,7 +210,7 @@ static void hook_pushViewController(id self, SEL _cmd, id viewController, BOOL a
     if (navCls) {
         MSHookMessageEx(navCls, @selector(pushViewController:animated:),
                         (IMP)hook_pushViewController,
-                        &_orig_UINavigationController_push);
+                        &orig_UINavigationController_push);
         WPLog(@"ChatTopBar", @"[Hook] ✓ UINavigationController::pushViewController:animated:");
     }
 }

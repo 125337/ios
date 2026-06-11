@@ -3,23 +3,17 @@
 #import "../ListCornerRadius/ListCornerRadiusConfig.h"
 #import "../../Config/WPColorUtil.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/WPUtility.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <substrate.h>
 
-static BOOL wp_isDarkModeForVC(UIViewController *vc) {
-    if (@available(iOS 13.0, *)) {
-        return vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
-    }
-    return NO;
-}
-
 static const NSInteger kProfileCardBgImageTag = 999902;
 
-static double (*_orig_heightForHeader)(id, SEL, id, long long);
+static double (*orig_heightForHeader)(id, SEL, id, long long);
 
 static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long section) {
-    double result = _orig_heightForHeader(self, _cmd, tableView, section);
+    double result = orig_heightForHeader(self, _cmd, tableView, section);
 
     CardBgConfig *config = [CardBgConfig shared];
     if (!config.cardBgMaterialEnabled) return result;
@@ -42,10 +36,10 @@ static double _hooked_heightForHeader(id self, SEL _cmd, id tableView, long long
     return result;
 }
 
-static IMP _orig_MMUIButton_layoutSubviews = NULL;
+static IMP orig_MMUIButton_layoutSubviews = NULL;
 static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
-    if (_orig_MMUIButton_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMUIButton_layoutSubviews)(self, _cmd);
+    if (orig_MMUIButton_layoutSubviews) {
+        ((void (*)(id, SEL))orig_MMUIButton_layoutSubviews)(self, _cmd);
     }
     [ProfileCardBgHook handleButtonLayout:(UIView *)self];
 }
@@ -284,7 +278,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
 }
 
 + (BOOL)isDarkModeForVc:(UIViewController *)vc {
-    return wp_isDarkModeForVC(vc);
+    return [WPUtility isDarkModeForViewController:vc];
 }
 
 + (void)cleanNativeBgImageView:(UIView *)button {
@@ -712,7 +706,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         MSHookMessageEx(tableMgrClass,
                         @selector(tableView:heightForHeaderInSection:),
                         (IMP)_hooked_heightForHeader,
-                        (IMP *)&_orig_heightForHeader);
+                        (IMP *)&orig_heightForHeader);
         WPLog(@"CardBg", @"[OK] WCTableViewManager::heightForHeaderInSection:");
     } else {
         WPLog(@"CardBg", @"[WARN] WCTableViewManager class not found!");
@@ -724,7 +718,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     if (cls) {
         MSHookMessageEx(cls, @selector(layoutSubviews),
             (IMP)replaced_MMUIButton_layoutSubviews,
-            (IMP *)&_orig_MMUIButton_layoutSubviews);
+            (IMP *)&orig_MMUIButton_layoutSubviews);
     }
 }
 

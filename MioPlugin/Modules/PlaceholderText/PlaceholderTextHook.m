@@ -32,7 +32,7 @@ static NSString * const kDefaultColorHex = @"#808080";
 // MARK: - 原始 IMP 指针
 // ============================================================
 
-static IMP _orig_MMGrowTextView_layoutSubviews = NULL;
+static IMP orig_MMGrowTextView_layoutSubviews = NULL;
 
 // ============================================================
 // MARK: - 辅助函数: 验证是否为聊天界面
@@ -54,8 +54,8 @@ static BOOL isBaseMsgContentVC(UIViewController *vc) {
 
 static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
     // ① 调用原始 layoutSubviews (L26692)
-    if (_orig_MMGrowTextView_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMGrowTextView_layoutSubviews)(self, _cmd);
+    if (orig_MMGrowTextView_layoutSubviews) {
+        ((void (*)(id, SEL))orig_MMGrowTextView_layoutSubviews)(self, _cmd);
     }
 
     // ② 宽度安全检查 (L26693-L26696)
@@ -133,7 +133,7 @@ static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
             growTextViewClass,
             @selector(layoutSubviews),
             (IMP)hook_MMGrowTextView_layoutSubviews,
-            (IMP *)&_orig_MMGrowTextView_layoutSubviews
+            (IMP *)&orig_MMGrowTextView_layoutSubviews
         );
         WPLog(@"PlaceholderText", @"[Hook] ✓ MMGrowTextView.layoutSubviews");
     } else {

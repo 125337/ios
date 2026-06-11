@@ -9,22 +9,8 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 
-static BOOL wp_isDarkMode(void) {
-    if (@available(iOS 13.0, *)) {
-        return UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
-    }
-    return NO;
-}
-
-static BOOL wp_isDarkModeForVC(UIViewController *vc) {
-    if (@available(iOS 13.0, *)) {
-        return vc.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
-    }
-    return NO;
-}
-
-static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
-static IMP _orig_WCSearchBar_layoutSubviews = NULL;
+static IMP orig_MMTableViewCell_layoutSubviews = NULL;
+static IMP orig_WCSearchBar_layoutSubviews = NULL;
 
 @interface ListCornerRadiusHook ()
 
@@ -99,8 +85,8 @@ static BOOL shouldApplyGlobalCorner(UIViewController *vc) {
 }
 
 static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
-    if (_orig_WCSearchBar_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_WCSearchBar_layoutSubviews)(self, _cmd);
+    if (orig_WCSearchBar_layoutSubviews) {
+        ((void (*)(id, SEL))orig_WCSearchBar_layoutSubviews)(self, _cmd);
     }
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
@@ -122,16 +108,16 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     // ★ 列表圆角入口守卫：只看自己的开关 ★
     if (!config.globalCornerRadiusEnabled) {
-        if (_orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        if (orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
         return;
     }
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) {
-        if (_orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        if (orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
         return;
     }
@@ -139,16 +125,16 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     // ★ 模块责任查询：不属于列表圆角则跳过 ★
     if (![CornerResponsibility isListCornerResponsibleFor:vc]) {
-        if (_orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        if (orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
         return;
     }
 
     // ★★★ 全局开关过滤 ★★★
     if (!shouldApplyGlobalCorner(vc)) {
-        if (_orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        if (orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
         return;
     }
@@ -176,8 +162,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
 
     // ★ orig ★
-    if (_orig_MMTableViewCell_layoutSubviews) {
-        ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+    if (orig_MMTableViewCell_layoutSubviews) {
+        ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
 
     // ★ bgColor 设置 ★
@@ -254,9 +240,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 }
 
 // ★★★ [WPAuxiliaryHooks] MFWebMMBtn background color ★★★
-static void (*_orig_MFWebMMBtn_layoutSubviews)(id, SEL);
+static void (*orig_MFWebMMBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
-    _orig_MFWebMMBtn_layoutSubviews(self, _cmd);
+    orig_MFWebMMBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
@@ -279,9 +265,9 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
 }
 
 // ★★★ [WPAuxiliaryHooks] MFBannerBtn background color ★★★
-static void (*_orig_MFBannerBtn_layoutSubviews)(id, SEL);
+static void (*orig_MFBannerBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
-    _orig_MFBannerBtn_layoutSubviews(self, _cmd);
+    orig_MFBannerBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
@@ -304,9 +290,9 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
 }
 
 // ★★★ [WPAuxiliaryHooks] MainFrameSectionFoldView ★★★
-static void (*_orig_FoldView_layoutSubviews)(id, SEL);
+static void (*orig_FoldView_layoutSubviews)(id, SEL);
 static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
-    _orig_FoldView_layoutSubviews(self, _cmd);
+    orig_FoldView_layoutSubviews(self, _cmd);
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) return;
@@ -381,20 +367,20 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
 
 
-static id (*_orig_NMFVC_viewForHeader)(id, SEL, id, NSInteger);
+static id (*orig_NMFVC_viewForHeader)(id, SEL, id, NSInteger);
 static id _hooked_NMFVC_viewForHeader(id self, SEL _cmd, id tableView, NSInteger section) {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (config.globalCornerRadiusEnabled && section > 0) {
         return [[UIView alloc] initWithFrame:CGRectZero];
     }
-    return _orig_NMFVC_viewForHeader(self, _cmd, tableView, section);
+    return orig_NMFVC_viewForHeader(self, _cmd, tableView, section);
 }
 
-static void (*_orig_setBgImageView)(id, SEL, id);
+static void (*orig_setBgImageView)(id, SEL, id);
 static void _hooked_setBgImageView(id self, SEL _cmd, id imageView) {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) {
-        _orig_setBgImageView(self, _cmd, imageView);
+        orig_setBgImageView(self, _cmd, imageView);
     }
 }
 
@@ -415,9 +401,9 @@ static BOOL _wp_isAllowedVC(NSString *name) {
            [name isEqualToString:@"BrandServiceContactsViewController"];
 }
 
-static void (*_orig_UIView_layoutSubviews)(id, SEL);
+static void (*orig_UIView_layoutSubviews)(id, SEL);
 static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
-    _orig_UIView_layoutSubviews(self, _cmd);
+    orig_UIView_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
@@ -455,7 +441,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
             MMTableViewCellClass,
             @selector(layoutSubviews),
             (IMP)replaced_MMTableViewCell_layoutSubviews,
-            &_orig_MMTableViewCell_layoutSubviews
+            &orig_MMTableViewCell_layoutSubviews
         );
         WPLog(@"ListCornerRadius", @"[OK] MMTableViewCell::layoutSubviews");
     } else {
@@ -468,7 +454,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
             WCSearchBarClass,
             @selector(layoutSubviews),
             (IMP)replaced_WCSearchBar_layoutSubviews,
-            &_orig_WCSearchBar_layoutSubviews
+            &orig_WCSearchBar_layoutSubviews
         );
         WPLog(@"ListCornerRadius", @"[OK] WCSearchBar::layoutSubviews");
     } else {
@@ -479,36 +465,36 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     Class c1 = objc_getClass("MFWebMMBtn");
     if (c1) {
         MSHookMessageEx(c1, @selector(layoutSubviews),
-            (IMP)_hooked_MFWebMMBtn_layoutSubviews, (IMP *)&_orig_MFWebMMBtn_layoutSubviews);
+            (IMP)_hooked_MFWebMMBtn_layoutSubviews, (IMP *)&orig_MFWebMMBtn_layoutSubviews);
     }
 
     Class c2 = objc_getClass("MFBannerBtn");
     if (c2) {
         MSHookMessageEx(c2, @selector(layoutSubviews),
-            (IMP)_hooked_MFBannerBtn_layoutSubviews, (IMP *)&_orig_MFBannerBtn_layoutSubviews);
+            (IMP)_hooked_MFBannerBtn_layoutSubviews, (IMP *)&orig_MFBannerBtn_layoutSubviews);
     }
 
     Class c3 = objc_getClass("MainFrameSectionFoldView");
     if (c3) {
         MSHookMessageEx(c3, @selector(layoutSubviews),
-            (IMP)_hooked_FoldView_layoutSubviews, (IMP *)&_orig_FoldView_layoutSubviews);
+            (IMP)_hooked_FoldView_layoutSubviews, (IMP *)&orig_FoldView_layoutSubviews);
     }
 
     // ★ WPSessionSpacingHook Hooks — UIView, NewMainFrameVC, MMTableSectionHeader
     Class uiView = objc_getClass("UIView");
     if (uiView) {
         MSHookMessageEx(uiView, @selector(layoutSubviews),
-            (IMP)_hooked_UIView_layoutSubviews, (IMP *)&_orig_UIView_layoutSubviews);
+            (IMP)_hooked_UIView_layoutSubviews, (IMP *)&orig_UIView_layoutSubviews);
     }
     Class nmfvc = objc_getClass("NewMainFrameViewController");
     if (nmfvc) {
         MSHookMessageEx(nmfvc, @selector(tableView:viewForHeaderInSection:),
-            (IMP)_hooked_NMFVC_viewForHeader, (IMP *)&_orig_NMFVC_viewForHeader);
+            (IMP)_hooked_NMFVC_viewForHeader, (IMP *)&orig_NMFVC_viewForHeader);
     }
     Class header = objc_getClass("MMTableSectionHeaderView");
     if (header) {
         MSHookMessageEx(header, @selector(setBackgroundImageView:),
-            (IMP)_hooked_setBgImageView, (IMP *)&_orig_setBgImageView);
+            (IMP)_hooked_setBgImageView, (IMP *)&orig_setBgImageView);
     }
 
     [ProfileCardBgHook initCellHeightHook];

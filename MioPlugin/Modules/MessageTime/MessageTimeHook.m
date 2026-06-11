@@ -24,36 +24,22 @@ typedef struct {
 // MARK: - Color / Theme Helpers
 // ============================================================
 
-static BOOL isWeChatDarkMode() {
-    @try {
-        Class cls = objc_getClass("WCThemeMgr");
-        if (cls) {
-            id mgr = [cls performSelector:NSSelectorFromString(@"sharedInstance")];
-            if (mgr) {
-                NSString *theme = [mgr performSelector:NSSelectorFromString(@"currentTheme")];
-                if ([theme containsString:@"dark"] || [theme containsString:@"Dark"]) {
-                    return YES;
-                }
-            }
-        }
-    } @catch (NSException *e) {}
-    return NO;
-}
-
 static UIColor *autoDarkColor(UIColor *lightColor) {
     if (!lightColor) return nil;
-    CGFloat r, g, b, a;
-    if ([lightColor getRed:&r green:&g blue:&b alpha:&a]) {
-        return [UIColor colorWithRed:MIN(r + 0.15, 1.0)
-                               green:MIN(g + 0.15, 1.0)
-                                blue:MIN(b + 0.15, 1.0)
-                               alpha:a];
+    if ([WPUtility isDarkMode]) {
+        CGFloat r, g, b, a;
+        if ([lightColor getRed:&r green:&g blue:&b alpha:&a]) {
+            return [UIColor colorWithRed:MIN(r + 0.15, 1.0)
+                                   green:MIN(g + 0.15, 1.0)
+                                    blue:MIN(b + 0.15, 1.0)
+                                   alpha:a];
+        }
     }
     return lightColor;
 }
 
 static UIColor *colorInLightMode(UIColor *lightColor, UIColor *darkColor) {
-    return isWeChatDarkMode() ? (darkColor ?: autoDarkColor(lightColor)) : lightColor;
+    return [WPUtility isDarkMode] ? (darkColor ?: autoDarkColor(lightColor)) : lightColor;
 }
 
 // ============================================================

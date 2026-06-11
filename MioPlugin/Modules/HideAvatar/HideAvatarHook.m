@@ -32,9 +32,9 @@ static NSString  *_cachedUsername  = nil;  // 缓存去重 (FUN_0000776c L6024)
 // ============================================================
 // MARK: - Original IMPs
 // ============================================================
-static IMP _orig_BaseMsgContentVC_viewDidLoad      = NULL;
-static IMP _orig_BaseMsgContentVC_viewWillAppear    = NULL;
-static IMP _orig_CommonMessageVM_isShowHeadImage    = NULL;
+static IMP orig_BaseMsgContentVC_viewDidLoad      = NULL;
+static IMP orig_BaseMsgContentVC_viewWillAppear    = NULL;
+static IMP orig_CommonMessageVM_isShowHeadImage    = NULL;
 
 // ============================================================
 // MARK: - updateChatContext: 聊天类型分类 + 缓存去重 (对齐 FUN_0000776c L6006-L6055)
@@ -101,7 +101,7 @@ static void updateChatContext(id self) {
 // ============================================================
 
 static void hook_viewDidLoad(id self, SEL _cmd) {
-    ((void (*)(id, SEL))_orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
+    ((void (*)(id, SEL))orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
     WPLog(@"HideAvatar", @"viewDidLoad triggered");
     updateChatContext(self);
 }
@@ -111,7 +111,7 @@ static void hook_viewDidLoad(id self, SEL _cmd) {
 // ============================================================
 
 static void hook_viewWillAppear(id self, SEL _cmd, BOOL animated) {
-    ((void (*)(id, SEL, BOOL))_orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
+    ((void (*)(id, SEL, BOOL))orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
     updateChatContext(self);
 }
 
@@ -129,12 +129,12 @@ static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
         !config.hideGroupSelfAvatar  &&
         !config.hideOAOtherAvatar    &&
         !config.hideOASelfAvatar) {
-        return ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
+        return ((BOOL (*)(id, SEL))orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
     }
 
     // ── 聊天类型未知 → 不干预 ──
     if (_currentChatType == MOChatTypeUnknown) {
-        return ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
+        return ((BOOL (*)(id, SEL))orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
     }
 
     // ── 获取 isSender (FUN_000c6f20 → 反编译 L132851) ──
@@ -144,7 +144,7 @@ static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
         isSender = ((BOOL (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"isSender"));
     } @catch (NSException *e) {
         WPLog(@"HideAvatar", @"isShowHeadImage: isSender exception %@", e.reason);
-        return ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
+        return ((BOOL (*)(id, SEL))orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
     }
 
     // ── 查表: (聊天类型, isSender) → HideAvatarConfig 对应属性 ──
@@ -167,18 +167,18 @@ static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
             break;
 
         default:
-            return ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
+            return ((BOOL (*)(id, SEL))orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
     }
 
     WPLog(@"HideAvatar", @"isShowHeadImage called: chatType=%ld isSender=%d hide=%d orig=%d",
           (long)_currentChatType, isSender, shouldHide,
-          ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd));
+          ((BOOL (*)(id, SEL))orig_CommonMessageVM_isShowHeadImage)(self, _cmd));
 
     if (shouldHide) {
         return NO;  // ★ 隐藏头像 (对齐 FUN_000078bc L6127-L6128)
     }
 
-    return ((BOOL (*)(id, SEL))_orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
+    return ((BOOL (*)(id, SEL))orig_CommonMessageVM_isShowHeadImage)(self, _cmd);
 }
 
 // ============================================================
@@ -197,7 +197,7 @@ static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
         MSHookMessageEx(cls,
             @selector(viewDidLoad),
             (IMP)hook_viewDidLoad,
-            &_orig_BaseMsgContentVC_viewDidLoad);
+            &orig_BaseMsgContentVC_viewDidLoad);
         WPLog(@"HideAvatar", @"[Hook] ✓ BaseMsgContentViewController.viewDidLoad");
     } else {
         WPLog(@"HideAvatar", @"[Hook] ✗ BaseMsgContentViewController class not found");
@@ -208,7 +208,7 @@ static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
         MSHookMessageEx(cls,
             @selector(viewWillAppear:),
             (IMP)hook_viewWillAppear,
-            &_orig_BaseMsgContentVC_viewWillAppear);
+            &orig_BaseMsgContentVC_viewWillAppear);
         WPLog(@"HideAvatar", @"[Hook] ✓ BaseMsgContentViewController.viewWillAppear:");
     }
 
@@ -218,7 +218,7 @@ static BOOL hook_isShowHeadImage(id self, SEL _cmd) {
         MSHookMessageEx(cls,
             NSSelectorFromString(@"isShowHeadImage"),
             (IMP)hook_isShowHeadImage,
-            &_orig_CommonMessageVM_isShowHeadImage);
+            &orig_CommonMessageVM_isShowHeadImage);
         WPLog(@"HideAvatar", @"[Hook] ✓ CommonMessageViewModel.isShowHeadImage");
     } else {
         WPLog(@"HideAvatar", @"[Hook] ✗ CommonMessageViewModel class not found");

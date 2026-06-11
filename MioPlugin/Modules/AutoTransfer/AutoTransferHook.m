@@ -52,6 +52,28 @@ static void sendAutoReply(NSString *sessionUserName, NSString *replyText) {
             [msg setValue:replyText forKey:@"m_nsContent"];
             [msg setValue:sessionUserName forKey:@"m_nsToUsr"];
 
+            // ✅ 补充：获取当前用户 ID
+            id contactMgr = WXGetService(objc_getClass("CContactMgr"));
+            id selfContact = nil;
+            NSString *selfUserName = nil;
+            if ([contactMgr respondsToSelector:NSSelectorFromString(@"getSelfContact")]) {
+                selfContact = ((id (*)(id, SEL))objc_msgSend)(contactMgr, NSSelectorFromString(@"getSelfContact"));
+            }
+            if ([selfContact respondsToSelector:NSSelectorFromString(@"m_nsUsrName")]) {
+                selfUserName = ((id (*)(id, SEL))objc_msgSend)(selfContact, NSSelectorFromString(@"m_nsUsrName"));
+            }
+
+            // ✅ 设置发送方为当前用户（解决消息显示在错误一侧的问题）
+            if (selfUserName) {
+                [msg setValue:selfUserName forKey:@"m_nsFromUsr"];
+            }
+
+            // ✅ 设置消息状态为"已发送"（解决消息显示异常的问题）
+            [msg setValue:@(4) forKey:@"m_uiStatus"];
+
+            // ✅ 设置消息时间戳（解决消息排序问题）
+            [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
+
             SEL addMsgSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
             if (![msgMgr respondsToSelector:addMsgSel]) {
                 WPLog(@"AutoTransfer", @"[REPLY] AddMsg:MsgWrap:方法不可用");
@@ -292,44 +314,44 @@ static void processTransferMessage(id wrap) {
     });
 }
 
-static IMP orig_at_onNewSyncAddMessage = NULL;
-static IMP orig_at_onNewSyncNotAddDBMessage = NULL;
-static IMP orig_at_AddMsgMsgWrap = NULL;
-static IMP orig_at_AsyncOnAddMsgMsgWrap = NULL;
+static IMP orig_onNewSyncAddMessage = NULL;
+static IMP orig_onNewSyncNotAddDBMessage = NULL;
+static IMP orig_AddMsgMsgWrap = NULL;
+static IMP orig_AsyncOnAddMsgMsgWrap = NULL;
 
 static void replaced_at_onNewSyncAddMessage(id self, SEL _cmd, id wrap) {
-    if (orig_at_onNewSyncAddMessage) {
-        ((void (*)(id, SEL, id))orig_at_onNewSyncAddMessage)(self, _cmd, wrap);
+    if (orig_onNewSyncAddMessage) {
+        ((void (*)(id, SEL, id))orig_onNewSyncAddMessage)(self, _cmd, wrap);
     }
     processTransferMessage(wrap);
 }
 
 static void replaced_at_onNewSyncNotAddDBMessage(id self, SEL _cmd, id wrap) {
-    if (orig_at_onNewSyncNotAddDBMessage) {
-        ((void (*)(id, SEL, id))orig_at_onNewSyncNotAddDBMessage)(self, _cmd, wrap);
+    if (orig_onNewSyncNotAddDBMessage) {
+        ((void (*)(id, SEL, id))orig_onNewSyncNotAddDBMessage)(self, _cmd, wrap);
     }
     processTransferMessage(wrap);
 }
 
 static void replaced_at_AddMsgMsgWrap(id self, SEL _cmd, id fromUsr, id wrap) {
-    if (orig_at_AddMsgMsgWrap) {
-        ((void (*)(id, SEL, id, id))orig_at_AddMsgMsgWrap)(self, _cmd, fromUsr, wrap);
+    if (orig_AddMsgMsgWrap) {
+        ((void (*)(id, SEL, id, id))orig_AddMsgMsgWrap)(self, _cmd, fromUsr, wrap);
     }
     processTransferMessage(wrap);
 }
 
 static void replaced_at_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
-    if (orig_at_AsyncOnAddMsgMsgWrap) {
-        ((void (*)(id, SEL, id, id))orig_at_AsyncOnAddMsgMsgWrap)(self, _cmd, msg, wrap);
+    if (orig_AsyncOnAddMsgMsgWrap) {
+        ((void (*)(id, SEL, id, id))orig_AsyncOnAddMsgMsgWrap)(self, _cmd, msg, wrap);
     }
     processTransferMessage(wrap);
 }
 
-static IMP orig_at_ConfirmTransferResponse = NULL;
+static IMP orig_ConfirmTransferResponse = NULL;
 
 static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, id request) {
-    if (orig_at_ConfirmTransferResponse) {
-        ((void (*)(id, SEL, id, id))orig_at_ConfirmTransferResponse)(self, _cmd, response, request);
+    if (orig_ConfirmTransferResponse) {
+        ((void (*)(id, SEL, id, id))orig_ConfirmTransferResponse)(self, _cmd, response, request);
     }
 
     AutoTransferConfig *config = [AutoTransferConfig shared];
@@ -358,22 +380,22 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
 
     Class CMessageMgrClass = objc_getClass("CMessageMgr");
     if (CMessageMgrClass) {
-        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncAddMessage:), (IMP)replaced_at_onNewSyncAddMessage, &orig_at_onNewSyncAddMessage);
+        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncAddMessage:), (IMP)replaced_at_onNewSyncAddMessage, &orig_onNewSyncAddMessage);
         WPLog(@"AutoTransfer", @"[+] onNewSyncAddMessage: hooked");
 
-        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncNotAddDBMessage:), (IMP)replaced_at_onNewSyncNotAddDBMessage, &orig_at_onNewSyncNotAddDBMessage);
+        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncNotAddDBMessage:), (IMP)replaced_at_onNewSyncNotAddDBMessage, &orig_onNewSyncNotAddDBMessage);
         WPLog(@"AutoTransfer", @"[+] onNewSyncNotAddDBMessage: hooked");
 
-        MSHookMessageEx(CMessageMgrClass, @selector(AddMsg:MsgWrap:), (IMP)replaced_at_AddMsgMsgWrap, &orig_at_AddMsgMsgWrap);
+        MSHookMessageEx(CMessageMgrClass, @selector(AddMsg:MsgWrap:), (IMP)replaced_at_AddMsgMsgWrap, &orig_AddMsgMsgWrap);
         WPLog(@"AutoTransfer", @"[+] AddMsg:MsgWrap: hooked");
 
-        MSHookMessageEx(CMessageMgrClass, @selector(AsyncOnAddMsg:MsgWrap:), (IMP)replaced_at_AsyncOnAddMsgMsgWrap, &orig_at_AsyncOnAddMsgMsgWrap);
+        MSHookMessageEx(CMessageMgrClass, @selector(AsyncOnAddMsg:MsgWrap:), (IMP)replaced_at_AsyncOnAddMsgMsgWrap, &orig_AsyncOnAddMsgMsgWrap);
         WPLog(@"AutoTransfer", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
     }
 
     Class PayLogicMgrClass = objc_getClass("WCPayLogicMgr");
     if (PayLogicMgrClass) {
-        MSHookMessageEx(PayLogicMgrClass, @selector(insideCallBackOnConfirmTransferMoneyResponse:OnRequest:), (IMP)replaced_at_ConfirmTransferResponse, &orig_at_ConfirmTransferResponse);
+        MSHookMessageEx(PayLogicMgrClass, @selector(insideCallBackOnConfirmTransferMoneyResponse:OnRequest:), (IMP)replaced_at_ConfirmTransferResponse, &orig_ConfirmTransferResponse);
         WPLog(@"AutoTransfer", @"[+] insideCallBackOnConfirmTransferMoneyResponse:OnRequest: hooked");
     }
 
