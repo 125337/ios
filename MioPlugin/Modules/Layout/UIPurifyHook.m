@@ -169,8 +169,11 @@ static void hook_YYAsyncImg_layoutSubviews(id self, SEL _cmd) {
             if (superview == nil) break;
 
             if ([superview isKindOfClass:NSClassFromString(@"CommonMessageCellView")]) {
-                // 获取 cell 的背景图片视图
-                UIImageView *bgImgView = [superview getBgImageView];
+                // 获取 cell 的背景图片视图（微信私有方法）
+                UIImageView *bgImgView = nil;
+                if ([superview respondsToSelector:@selector(getBgImageView)]) {
+                    bgImgView = [superview performSelector:@selector(getBgImageView)];
+                }
                 if (bgImgView != nil) {
                     // 确认 self 是 bgImgView 的后代视图
                     if ([self isDescendantOfView:bgImgView]) {
