@@ -41,6 +41,19 @@
     return NO;
 }
 
++ (UIViewController *)findParentViewController:(UIView *)view {
+    if (!view) return nil;
+
+    UIResponder *responder = view;
+    while (responder) {
+        if ([responder isKindOfClass:[UIViewController class]]) {
+            return (UIViewController *)responder;
+        }
+        responder = [responder nextResponder];
+    }
+    return nil;
+}
+
 + (id)insertSystemTipMessageInSession:(NSString *)session
                               content:(NSString *)content
                                msgMgr:(id)msgMgr

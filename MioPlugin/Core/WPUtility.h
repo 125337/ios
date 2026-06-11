@@ -41,4 +41,10 @@
                               msgWrap:(id)msgWrap
                           extraSetup:(void (^)(id newWrap))extraSetup;
 
+/// 从 UIView 递归遍历 responder chain 查找所属的 UIViewController
+/// 使用 while 循环而非递归，避免栈溢出风险
+/// @param view 任意 UIView 实例
+/// @return 查找到的 UIViewController，若不存在则返回 nil
++ (UIViewController *)findParentViewController:(UIView *)view;
+
 @end

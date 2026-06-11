@@ -7,6 +7,7 @@
 #import "PlaceholderTextHook.h"
 #import "PlaceholderTextConfig.h"
 #import "../../Config/WPColorUtil.h"
+#import "../../Core/WPUtility.h"
 #import "../../Core/LogManager.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -32,22 +33,6 @@ static NSString * const kDefaultColorHex = @"#808080";
 // ============================================================
 
 static IMP _orig_MMGrowTextView_layoutSubviews = NULL;
-
-// ============================================================
-// MARK: - 辅助函数: 获取父 ViewController
-//         对齐 FUN_0002c284 中的 responder chain 遍历 (L26697-L26716)
-// ============================================================
-
-static UIViewController *_Nullable findParentViewController(UIView *view) {
-    UIResponder *responder = view;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) {
-            return (UIViewController *)responder;
-        }
-        responder = [responder nextResponder];
-    }
-    return nil;
-}
 
 // ============================================================
 // MARK: - 辅助函数: 验证是否为聊天界面
@@ -80,7 +65,7 @@ static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
     if (frame.size.width <= 50.0) return;
 
     // ③ 向上查找 UIViewController (L26697-L26716)
-    UIViewController *parentVC = findParentViewController((UIView *)self);
+    UIViewController *parentVC = [WPUtility findParentViewController:(UIView *)self];
     if (!parentVC) return;
 
     // ④ 验证调用来源: 必须来自 BaseMsgContentViewController (L26718)

@@ -26,17 +26,6 @@ static BOOL wp_isDarkModeForVC(UIViewController *vc) {
 static IMP _orig_MMTableViewCell_layoutSubviews = NULL;
 static IMP _orig_WCSearchBar_layoutSubviews = NULL;
 
-static UIViewController *findParentViewController(UIView *view) {
-    UIResponder *responder = view;
-    while (responder) {
-        if ([responder isKindOfClass:[UIViewController class]]) {
-            return (UIViewController *)responder;
-        }
-        responder = [responder nextResponder];
-    }
-    return nil;
-}
-
 @interface ListCornerRadiusHook ()
 
 + (void)wp_applyStandardCorner:(UIView *)cell
@@ -139,7 +128,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
-    UIViewController *vc = findParentViewController((UIView *)self);
+    UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) {
         if (_orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))_orig_MMTableViewCell_layoutSubviews)(self, _cmd);
@@ -272,7 +261,7 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
 
-    UIViewController *vc = findParentViewController((UIView *)self);
+    UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
@@ -297,7 +286,7 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
 
-    UIViewController *vc = findParentViewController((UIView *)self);
+    UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
@@ -319,7 +308,7 @@ static void (*_orig_FoldView_layoutSubviews)(id, SEL);
 static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     _orig_FoldView_layoutSubviews(self, _cmd);
 
-    UIViewController *vc = findParentViewController((UIView *)self);
+    UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
@@ -439,7 +428,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
     if (view.bounds.size.height < 1.0) return;
 
-    UIViewController *vc = findParentViewController(view);
+    UIViewController *vc = [WPUtility findParentViewController:view];
     if (!vc || !_wp_isAllowedVC(NSStringFromClass([vc class]))) return;
 
     UIView *parent = view.superview;
