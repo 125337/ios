@@ -122,18 +122,51 @@ static void processRedEnvelopMessage(id wrap) {
     WPLog(@"RedEnv", @"[STAT] from=%@ to=%@ self=%@ sender=%d groupRecv=%d groupSend=%d personalSend=%d catch=%d should=%d",
           fromUsr ?: @"-", toUsr ?: @"-", selfUserName ?: @"-", isSender, isGroupReceiver, isGroupSender, isPersonalSender, config.redEnvelopCatchMe, shouldReceive);
 
-    if (config.redEnvelopBlackList.count > 0) {
-        for (NSString *blackItem in config.redEnvelopBlackList) {
-            if ([fromUsr containsString:blackItem]) { shouldReceive = NO; break; }
+    // ★★★ 统一群黑名单过滤 ★★★
+    // 合并自原来的 redEnvelopBlackList + redEnvelopGroupFilterList
+    // 设计参考：锤子助手 isRedEnvelopGroupFiter（同一个数据源，对所有群消息生效）
+    //
+    // 匹配策略（根据消息方向自动选择正确字段）：
+    //   isGroupReceiver → 匹配 fromUsr（群 ID）
+    //   isGroupSender   → 匹配 toUsr（群 ID）
+    //   非群消息 → 不执行此过滤
+    //
+    if (config.redEnvelopGroupFilterEnabled && config.redEnvelopGroupFilterList.count > 0) {
+        NSString *sessionToCheck = nil;
+        NSString *directionTag = nil;
+        if (isGroupReceiver) {
+            sessionToCheck = fromUsr;
+            directionTag = @"RECV";
+        } else if (isGroupSender) {
+            sessionToCheck = toUsr;
+            directionTag = @"SEND";
         }
-    }
-
-    if (config.redEnvelopGroupFilterEnabled && config.redEnvelopGroupFilterList.count > 0 && isGroupReceiver) {
-        for (NSString *groupItem in config.redEnvelopGroupFilterList) {
-            if ([fromUsr containsString:groupItem] || [toUsr containsString:groupItem]) {
-                shouldReceive = NO;
-                WPLog(@"RedEnv", @"[FILTER] 群过滤命中: %@ 匹配 %@", fromUsr, groupItem);
-                break;
+        
+        if (sessionToCheck.length > 0) {
+            WPLog(@"RedEnv", @"[FILTER] [%@] 检查会话: %@ | 过滤列表(%lu项): %@",
+                  directionTag, sessionToCheck,
+                  (unsigned long)config.redEnvelopGroupFilterList.count,
+                  config.redEnvelopGroupFilterList);
+            
+            BOOL matched = NO;
+            for (id groupItem in config.redEnvelopGroupFilterList) {
+                // 防御性检查：确保过滤列表元素是 NSString
+                if (![groupItem isKindOfClass:[NSString class]]) {
+                    WPLog(@"RedEnv", @"[FILTER] ⚠ 过滤列表元素非 NSString: %@ (type=%@)",
+                          groupItem, NSStringFromClass([groupItem class]));
+                    continue;
+                }
+                if ([sessionToCheck isEqualToString:(NSString *)groupItem]) {
+                    shouldReceive = NO;
+                    matched = YES;
+                    WPLog(@"RedEnv", @"[FILTER] ✅ [%@] 群黑名单命中: %@ == %@",
+                          directionTag, sessionToCheck, groupItem);
+                    break;
+                }
+            }
+            
+            if (!matched) {
+                WPLog(@"RedEnv", @"[FILTER] ❌ [%@] 未命中黑名单: %@", directionTag, sessionToCheck);
             }
         }
     }
@@ -627,6 +660,31 @@ static void replaced_OnWCToHongbaoCommonResponse3(id self, SEL _cmd, id res, id 
     }
 
     WPLog(@"RedEnv", @"RedEnvelopHook install complete");
+    
+    // ★ 配置加载确认：验证群黑名单数据是否正确从 NSUserDefaults 恢复
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
+    WPLog(@"RedEnv", @"[CONFIG] groupFilterEnabled=%d filterList=%@ (count=%lu class=%@)",
+          config.redEnvelopGroupFilterEnabled,
+          config.redEnvelopGroupFilterList,
+          (unsigned long)config.redEnvelopGroupFilterList.count,
+          NSStringFromClass([config.redEnvelopGroupFilterList class]));
+
+    if (config.redEnvelopGroupFilterList.count > 0) {
+        id firstItem = config.redEnvelopGroupFilterList.firstObject;
+        WPLog(@"RedEnv", @"[CONFIG] 过滤列表元素类型: %@, isNSString=%d",
+              NSStringFromClass([firstItem class]),
+              [firstItem isKindOfClass:[NSString class]]);
+        
+        // 验证所有元素的类型
+        BOOL allString = YES;
+        for (id item in config.redEnvelopGroupFilterList) {
+            if (![item isKindOfClass:[NSString class]]) {
+                allString = NO;
+                break;
+            }
+        }
+        WPLog(@"RedEnv", @"[CONFIG] 全部元素均为 NSString: %@", allString ? @"✅ YES" : @"❌ NO");
+    }
 }
 
 @end

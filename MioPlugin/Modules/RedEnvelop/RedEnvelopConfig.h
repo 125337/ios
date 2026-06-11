@@ -17,7 +17,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL redEnvelopAutoReply;
 @property (nonatomic, assign) BOOL redEnvelopAutoReplyInGroup;
 @property (nonatomic, copy, nullable) NSString *redEnvelopAutoReplyStr;
-@property (nonatomic, copy, nullable) NSArray *redEnvelopBlackList;
+// redEnvelopBlackList 已删除 — 与 redEnvelopGroupFilterList 合并
 
 + (instancetype)shared;
 

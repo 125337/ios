@@ -218,10 +218,19 @@ static void gsLog(NSString *content) {
 - (void)onDone {
     NSArray<NSString *> *groupIds = [self getSelectedGroupIds];
     
-    // 调试日志：确认保存的数据类型和数量
-    gsLog([NSString stringWithFormat:@"[DONE] 群过滤列表保存: %lu 个群", (unsigned long)groupIds.count]);
+    // 日志：保存确认 + 类型验证
+    gsLog([NSString stringWithFormat:@"[DONE] 群黑名单保存: %lu 个群", (unsigned long)groupIds.count]);
     if (groupIds.count > 0) {
         gsLog([NSString stringWithFormat:@"[DONE] items: %@", groupIds]);
+        BOOL allString = YES;
+        for (id item in groupIds) {
+            if (![item isKindOfClass:[NSString class]]) {
+                allString = NO;
+                gsLog([NSString stringWithFormat:@"[DONE] ⚠ 发现非 NSString 元素: %@", item]);
+                break;
+            }
+        }
+        gsLog([NSString stringWithFormat:@"[DONE] 类型验证: %@", allString ? @"✅ 全部为 NSString" : @"❌ 存在非 NSString"]);
     }
     
     if ([self.delegate respondsToSelector:@selector(onGroupSelectReturn:)]) {
