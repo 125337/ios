@@ -61,7 +61,8 @@
                                                  subtitle:@"Cell圆角、边距、边框样式"
                                              sectionTitle:@"通用"
                                           controllerClass:[SettingListCornerRadiusController class]
-                                     hookInstallerClasses:@[[ListCornerRadiusHook class]]],
+                                     hookInstallerClasses:@[[ListCornerRadiusHook class],
+                                                            [ProfileCardBgHook class]]],
             [FeatureModuleDescriptor moduleWithIdentifier:@"layout"
                                                     title:@"界面布局"
                                                  subtitle:@"外观颜色、深色模式"

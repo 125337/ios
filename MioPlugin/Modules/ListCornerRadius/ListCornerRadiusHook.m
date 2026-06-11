@@ -497,7 +497,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
             (IMP)_hooked_setBgImageView, (IMP *)&orig_setBgImageView);
     }
 
-    [ProfileCardBgHook initCellHeightHook];
+    // ★ 已移交给 ProfileCardBgHook.install 自行管理，消除跨模块耦合
 }
 
 + (void)wp_applyStandardCorner:(UIView *)cell

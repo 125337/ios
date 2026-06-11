@@ -49,9 +49,8 @@ static void MioPluginInitialize() {
 
             [HookRegistry installAllHooks];
 
-            // ★ 资料卡模块暂未通过 FeatureModuleRegistry 注册
-            // 待实现 +install 后可删除此行
-            [ProfileCardBgHook initProfileCardHook];
+            // ★ ProfileCardBgHook 已通过 FeatureModuleRegistry 注册
+            // installAllHooks 会自动调用其 +install 方法，不再需要显式调用
 
             NSLog(@"[MioPlugin] all hooks installed");
         }
