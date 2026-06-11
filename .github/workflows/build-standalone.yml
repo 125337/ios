@@ -35,6 +35,7 @@ jobs:
           MioPlugin/Config/WPColorUtil.m \
           MioPlugin/Core/ConfigDescriptor.m \
           MioPlugin/Core/ConfigManager.m \
+          MioPlugin/Core/HookEngine.m \
           MioPlugin/Core/WPUtility.m \
           MioPlugin/Modules/Revoke/RevokeConfig.m \
           MioPlugin/Modules/Unread/ClearUnreadConfig.m \
