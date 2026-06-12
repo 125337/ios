@@ -26,6 +26,7 @@
 #import "../Modules/PlaceholderText/PlaceholderTextConfig.h"
 #import "../Modules/ListCornerRadius/ListCornerRadiusConfig.h"
 #import "../Modules/ProfileCardBg/CardBgConfig.h"
+#import "../Modules/FontLayout/FontLayoutConfig.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -43,6 +44,7 @@
 #import "../Modules/ListCornerRadius/ListCornerRadiusHook.h"
 #import "../Modules/ProfileCardBg/ProfileCardBgHook.h"
 #import "../Modules/SettingEntry/SettingEntryHook.h"
+#import "../Modules/FontLayout/FontLayoutHook.h"
 
 // ────── 设置页 Controller 的 import ──────
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
@@ -51,6 +53,7 @@
 #import "../Settings/Controllers/SettingLayoutFunctionController.h"
 #import "../Settings/Controllers/SettingRedEnvelopController.h"
 #import "../Settings/Controllers/SettingAboutController.h"
+#import "../Settings/Controllers/WPUILayoutSettingsVC.h"
 
 
 @implementation MioModuleDescriptor
@@ -206,6 +209,15 @@
                                                hookClasses:@[[ProfileCardBgHook class]]
                                            controllerClass:[SettingCardBackgroundController class]
                                                   subtitle:@"资料卡片背景自定义"
+                                             sectionTitle:@"通用"],
+            
+            // ──── 布局字号 ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"fontlayout"
+                                                    title:@"布局字号"
+                                               configClass:[FontLayoutConfig class]
+                                               hookClasses:@[[FontLayoutHook class]]
+                                           controllerClass:[WPUILayoutSettingsVC class]
+                                                  subtitle:@"全局/对话字号调整"
                                              sectionTitle:@"通用"],
             
             // ──── 关于 ────

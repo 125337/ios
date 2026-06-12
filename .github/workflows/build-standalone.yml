@@ -50,6 +50,7 @@ jobs:
           MioPlugin/Modules/PlaceholderText/PlaceholderTextConfig.m \
           MioPlugin/Modules/ListCornerRadius/ListCornerRadiusConfig.m \
           MioPlugin/Modules/ProfileCardBg/CardBgConfig.m \
+          MioPlugin/Modules/FontLayout/FontLayoutConfig.m \
           MioPlugin/Config/WPHueSlider.m \
           MioPlugin/Config/WPHueSlider.m \
           MioPlugin/Config/WPSaturationBrightnessView.m \
@@ -94,6 +95,7 @@ jobs:
           MioPlugin/Modules/ChatTopBar/AvatarLoader.m \
           MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m \
           MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m \
+          MioPlugin/Modules/FontLayout/FontLayoutHook.m \
           MioPlugin/Core/Utils/CornerResponsibility/CornerResponsibility.m \
           MioPlugin/Settings/Common/SettingCategoryController.m \
           MioPlugin/Settings/Common/WPBorderLayer.m \
@@ -110,6 +112,7 @@ jobs:
           MioPlugin/Settings/Controllers/SettingListCornerRadiusController.m \
           MioPlugin/Settings/Controllers/SettingCardBackgroundController.m \
           MioPlugin/Settings/Controllers/SettingCornerRadiusController.m \
+          MioPlugin/Settings/Controllers/WPUILayoutSettingsVC.m \
           MioPlugin/Settings/Controllers/MioTweakGroupSelectsController.m; do
           BASENAME=$(basename "$f" .m)
           OBJ_FILE="build/${BASENAME}.o"
@@ -143,6 +146,7 @@ jobs:
                 -IMioPlugin/Modules/ListCornerRadius \
                 -IMioPlugin/Modules/ProfileCardBg \
                 -IMioPlugin/Modules/CornerResponsibility \
+                -IMioPlugin/Modules/FontLayout \
                 -IMioPlugin/Settings/Common \
                 -IMioPlugin/Settings/Controllers \
                 -o "$OBJ_FILE" \

@@ -35,6 +35,7 @@
         @[@"界面简化", @(104)],
         @[@"界面净化", @(105)],
         @[@"隐藏头像", @(106)],
+        @[@"布局设置", @(107)],
     ];
 
     for (NSUInteger i = 0; i < items.count; i++) {
@@ -77,6 +78,9 @@
             break;
         case 106:
             subVC = [[SettingAvatarHideController alloc] init];
+            break;
+        case 107:
+            subVC = [[NSClassFromString(@"WPUILayoutSettingsVC") alloc] init];
             break;
     }
 
