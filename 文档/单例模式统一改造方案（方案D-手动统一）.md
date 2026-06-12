@@ -164,12 +164,13 @@ static SomeClass *_sharedInstance = nil;   // ★ 这行要删除
 
 ### 4.1 通用改造模式
 
-每个文件的改造操作完全相同，共 **3 步**：
+每个文件的改造操作完全相同，共 **4 处修改**：
 
-```
+```text
 第 1 步：删除文件级 static 变量声明行
 第 2 步：在 +shared 方法体内首行添加静态变量声明
-第 3 步：将 +shared 方法体内的 _sharedInstance 全部替换为 instance
+第 3 步：将 dispatch_once 块内的 _sharedInstance 替换为 instance
+第 4 步：将 return 行的 _sharedInstance 替换为 instance
 ```
 
 **操作前后的代码结构变化**（以通用模板说明）：
@@ -397,9 +398,7 @@ static GroupExitConfig *_sharedInstance = nil;         // ← 第 1 步：删除
 
 ```objc
 // GroupExitConfig.m — 改造后
-#import "GroupExitConfig.h"
-#import "GroupExitHook.m"  // ★ 确认：此文件在 @implementation 之前有 #import "GroupExitHook.h"
-// 改为：
+// ★ 原始文件已包含 #import "GroupExitHook.h"，保持不变
 #import "GroupExitConfig.h"
 #import "GroupExitHook.h"
 
@@ -419,8 +418,7 @@ static GroupExitConfig *_sharedInstance = nil;         // ← 第 1 步：删除
 + (NSString *)modulePrefix {
     return @"GroupExit_";
 }
-// ... 其余代码不变 ...
-```
+// ... 其余代码不变 ...```
 
 ---
 

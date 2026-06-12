@@ -1,5 +1,6 @@
 #import "HookRegistry.h"
-#import "FeatureModuleRegistry.h"
+#import "MioModuleRegistry.h"
+#import "MioModuleDescriptor.h"
 #import <objc/message.h>
 
 @implementation HookRegistry
@@ -7,13 +8,13 @@
 + (void)installAllHooks {
     NSLog(@"[MioPlugin][HookRegistry] installAllHooks start");
     NSMutableSet<Class> *installedClasses = [NSMutableSet set];
-    NSArray *modules = [FeatureModuleRegistry allModules];
+    NSArray *modules = [MioModuleRegistry allDescriptors];
     NSLog(@"[MioPlugin][HookRegistry] found %lu modules", (unsigned long)modules.count);
     
-    for (FeatureModuleDescriptor *module in modules) {
+    for (MioModuleDescriptor *module in modules) {
         NSLog(@"[MioPlugin][HookRegistry] processing module: %@ (%lu hooks)", 
-              module.identifier, (unsigned long)module.hookInstallerClasses.count);
-        for (Class hookClass in module.hookInstallerClasses) {
+              module.identifier, (unsigned long)module.hookClasses.count);
+        for (Class hookClass in module.hookClasses) {
             if (!hookClass) {
                 NSLog(@"[MioPlugin][HookRegistry] skip nil hookClass");
                 continue;
