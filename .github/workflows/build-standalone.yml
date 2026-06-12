@@ -94,7 +94,7 @@ jobs:
           MioPlugin/Modules/ChatTopBar/AvatarLoader.m \
           MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m \
           MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m \
-          MioPlugin/Modules/CornerResponsibility/CornerResponsibility.m \
+          MioPlugin/Core/Utils/CornerResponsibility/CornerResponsibility.m \
           MioPlugin/Settings/Common/SettingCategoryController.m \
           MioPlugin/Settings/Common/WPBorderLayer.m \
           MioPlugin/Settings/Controllers/SettingController.m \

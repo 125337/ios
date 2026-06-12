@@ -4,7 +4,7 @@
 #import "../../Config/WPColorUtil.h"
 #import "../../Core/LogManager.h"
 #import "../ProfileCardBg/ProfileCardBgHook.h"
-#import "../CornerResponsibility/CornerResponsibility.h"
+#import "../../Core/Utils/CornerResponsibility/CornerResponsibility.h"
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>

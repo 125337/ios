@@ -4,7 +4,6 @@
 #import <Foundation/Foundation.h>
 
 static NSString *const kPluginVersion = @"1.0.0";
-// kPluginPrefix 已移至 ConfigManager.h 统一管理
 static const unsigned int kSystemMsgType = 0x2710;
 
 static NSString *const kDefaultNotifyFormat = @"{time}\n「{name}」撤回了一条消息\n{content}";

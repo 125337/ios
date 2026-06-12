@@ -1,9 +1,9 @@
-Package: com.yourname.wechatplugin
+Package: com.mio.wechatplugin
 Name: Mio助手
 Depends: mobilesubstrate
 Version: 1.0.0
 Architecture: iphoneos-arm64
 Description: 微信增强插件 - 防撤回、红包提醒等功能
-Maintainer: Your Name
-Author: Your Name
+Maintainer: Mio Dev Team
+Author: Mio Dev Team
 Section: Tweaks
