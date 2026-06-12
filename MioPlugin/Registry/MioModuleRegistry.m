@@ -46,6 +46,7 @@
 
 // ────── 设置页 Controller 的 import ──────
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
+#import "../Settings/Controllers/SettingCardBackgroundController.h"
 
 // ────── 设置基类（多个 Controller 在同一文件声明） ──────
 #import "../Settings/Common/SettingController.h"   // 内含 SettingGeneralFunctionController 等 10 个声明
