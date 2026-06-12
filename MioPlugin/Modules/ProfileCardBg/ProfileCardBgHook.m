@@ -718,7 +718,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
-// ★★★ 新增：FeatureModuleRegistry 统一入口 ★★★
+// ProfileCardBgHook.install 入口（由 MioModuleRegistry 调用）
 + (void)install {
     // 1. Cell 高度 Hook（之前由 ListCornerRadiusHook 跨模块调用，现已移回）
     [self initCellHeightHook];
