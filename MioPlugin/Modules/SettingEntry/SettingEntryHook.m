@@ -3,6 +3,8 @@
 #import "../../Core/ConfigManager.h"
 #import "../../Config/Constants.h"
 #import "../../Settings/Controllers/SettingController.h"
+#import "../../Settings/Controllers/SettingGeneralFunctionController.h"
+#import "../../Settings/Controllers/SettingRedEnvelopController.h"
 #import "../../Settings/Common/SettingCategoryController.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
