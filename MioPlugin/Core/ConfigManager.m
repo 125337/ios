@@ -46,7 +46,7 @@ static NSMutableArray<Class<ConfigModule>> *s_registeredModules = nil;
             }
         }
         
-        // 特殊处理：NSKeyedArchiver 类型
+        // 扩展点：支持模块自定义归档（@optional 协议方法）
         if ([cls respondsToSelector:@selector(loadArchivedData)]) {
             [cls loadArchivedData];
         }
@@ -85,7 +85,7 @@ static NSMutableArray<Class<ConfigModule>> *s_registeredModules = nil;
             }
         }
         
-        // 特殊处理：NSKeyedArchiver 类型
+        // 扩展点：支持模块自定义归档（@optional 协议方法）
         if ([cls respondsToSelector:@selector(saveArchivedData)]) {
             [cls saveArchivedData];
         }
