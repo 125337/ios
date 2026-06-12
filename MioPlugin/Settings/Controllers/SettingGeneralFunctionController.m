@@ -1,5 +1,6 @@
-#import "../Common/SettingController.h"
+#import "SettingGeneralFunctionController.h"
 #import "SettingMessageTimeController.h"
+#import "SettingRevokeController.h"
 #import "../../Modules/Revoke/RevokeConfig.h"
 #import "../../Modules/Unread/ClearUnreadConfig.h"
 #import "../../Modules/MessageTime/MessageTimeConfig.h"
@@ -9,37 +10,10 @@
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 
-@interface SettingGeneralFunctionController ()
-@end
-
-@implementation SettingLayoutFunctionController
-
-- (void)onAvatarHideTap {
-    SettingAvatarHideController *vc = [[SettingAvatarHideController alloc] init];
-    [self.navigationController pushViewController:vc animated:YES];
-}
-
-@end
-
-@implementation SettingGeneralFunctionController {
-    BOOL _isLayoutPage;
-}
-
-- (instancetype)init {
-    self = [super init];
-    if (self) {
-        _isLayoutPage = [self isKindOfClass:[SettingLayoutFunctionController class]];
-    }
-    return self;
-}
+@implementation SettingGeneralFunctionController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    if (_isLayoutPage) {
-        self.title = @"界面布局";
-        [self buildUI];
-        return;
-    }
     self.title = @"通用功能";
 }
 
@@ -64,22 +38,6 @@
 
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
-
-    if (_isLayoutPage) {
-        // ===== 界面布局页 =====
-        UIView *group = [self addTableGroupAtY:y width:w];
-        CGFloat cy = 0;
-
-        cy = [self addNavRowInGroup:group
-                               title:@"隐藏头像"
-                            subtitle:@"私聊/群聊/公众号"
-                                 tag:500
-                              action:@selector(onAvatarHideTap)
-                                  cy:cy
-                               width:w];
-
-        y = [self finishGroup:group atY:y height:cy];
-    }
 
     UIView *group = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;

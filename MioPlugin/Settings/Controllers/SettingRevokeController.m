@@ -1,4 +1,4 @@
-#import "../Common/SettingController.h"
+#import "SettingRevokeController.h"
 #import "../../Modules/Revoke/RevokeConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Modules/Revoke/RevokeFormatEditorVC.h"

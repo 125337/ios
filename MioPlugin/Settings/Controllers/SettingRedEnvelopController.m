@@ -1,4 +1,4 @@
-#import "../Common/SettingController.h"
+#import "SettingRedEnvelopController.h"
 #import "../../Modules/RedEnvelop/RedEnvelopConfig.h"
 #import "../../Modules/AutoTransfer/AutoTransferConfig.h"
 #import "../../Core/ConfigManager.h"

@@ -98,7 +98,9 @@ jobs:
           MioPlugin/Settings/Common/SettingCategoryController.m \
           MioPlugin/Settings/Common/WPBorderLayer.m \
           MioPlugin/Settings/Controllers/SettingController.m \
+          MioPlugin/Settings/Controllers/SettingAboutController.m \
           MioPlugin/Settings/Controllers/SettingGeneralFunctionController.m \
+          MioPlugin/Settings/Controllers/SettingLayoutFunctionController.m \
           MioPlugin/Settings/Controllers/SettingMessageTimeController.m \
           MioPlugin/Settings/Controllers/SettingRevokeController.m \
           MioPlugin/Settings/Controllers/SettingRedEnvelopController.m \

@@ -1,4 +1,4 @@
-#import "../Common/SettingController.h"
+#import "SettingAvatarHideController.h"
 #import "../../Modules/HideAvatar/HideAvatarConfig.h"
 #import "../../Core/LogManager.h"
 
