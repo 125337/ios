@@ -1,6 +1,7 @@
 #import "WPUILayoutSettingsVC.h"
 #import "../../Modules/FontLayout/FontLayoutConfig.h"
 #import "../../Core/MioRestartHelper.h"
+#import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 
 static NSString *const kGlobalLayoutEnabled = @"globalLayoutEnabled";
@@ -8,8 +9,9 @@ static NSString *const kGlobalFontSize = @"globalFontSize";
 static NSString *const kChatLayoutEnabled = @"chatLayoutEnabled";
 static NSString *const kChatFontSize = @"chatFontSize";
 
+// 范围必须与 FontLayoutHook 中的验证范围一致 (10-16)
 static const CGFloat kMinFontSize = 10.0;
-static const CGFloat kMaxFontSize = 24.0;
+static const CGFloat kMaxFontSize = 16.0;
 
 @implementation WPUILayoutSettingsVC
 
@@ -105,6 +107,13 @@ static const CGFloat kMaxFontSize = 24.0;
 
     NSString *key = objc_getAssociatedObject(sender, "key");
     if (!key) return;
+
+    // 验证保存后的值
+    FontLayoutConfig *cfg = [FontLayoutConfig shared];
+    WPLog(@"FontLayout", @"[UI] switchChanged: key=%@ isOn=%d → globalOn=%d globalSize=%.0f chatOn=%d chatSize=%.0f",
+          key, sender.on,
+          cfg.globalLayoutEnabled, cfg.globalFontSize,
+          cfg.chatLayoutEnabled, cfg.chatFontSize);
 
     // 主开关变化 → 弹重启弹窗
     if ([key isEqualToString:kGlobalLayoutEnabled]
