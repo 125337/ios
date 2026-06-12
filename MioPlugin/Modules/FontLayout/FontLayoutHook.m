@@ -1,10 +1,11 @@
-// FontLayoutHook.m —— 修复版 v3
-// 核心改动：
-//   1. 先调原方法获取原始值 + 类型，创建同类型新值返回（解决类型不匹配）
-//   2. 扩展 ruleSet 匹配逻辑（hasSuffix + containsString 双重保险）
-//   3. 全量日志：记录所有 MMThemeManager 调用，方便调试
-//
-// 对应锤子助手：FUN_00753950 (MMThemeManager) + FUN_00753ce8 (CLocalInfo)
+// FontLayoutHook.m —— 修复版 v4（基于日志证据）
+
+// 修改说明：
+//   1. 不再检查具体属性名（allLevel/webLevel/chatLevel）
+//   2. 不再检查 _font_set 规则集
+//   3. 改为检查返回值是否为 NSArray + 第一个元素是否为数值
+//   4. 保持数组结构，只修改第一个元素（字号）
+//   5. 保持元素类型（NSNumber→NSNumber, NSString→NSString）
 
 #import "FontLayoutHook.h"
 #import "FontLayoutConfig.h"
@@ -12,57 +13,104 @@
 #import <substrate.h>
 #import <objc/runtime.h>
 
-#pragma mark - 辅助函数
+#pragma mark - 常量
 
-/// 根据原方法返回值的类型，创建同类型但带新 fontSize 的对象
-/// 这是与锤子助手的关键对齐点：
-///   锤子助手先调原方法获原始值 → mutableCopy → 修改 → 返回
-///   我们：调原方法获原始值 → 创建同类型新值 → 返回
-static id createValueWithFontSize(id originalValue, CGFloat fontSize) {
-    NSString *fontSizeStr = [NSString stringWithFormat:@"%.0f", fontSize];
+// 字号范围（与 UI 侧保持一致）
+static const CGFloat kMinFontSize = 10.0f;
+static const CGFloat kMaxFontSize = 16.0f;
 
-    if (originalValue == nil) {
-        return fontSizeStr;
-    }
-
-    NSString *className = NSStringFromClass([originalValue class]);
-
-    // NSString 子类 / NSCFString → 返回字符串
-    if ([className containsString:@"NSString"] ||
-        [className containsString:@"String"]) {
-        return fontSizeStr;
-    }
-
-    // NSNumber 子类 → 返回数字（匹配原方法类型）
-    if ([className containsString:@"NSNumber"] ||
-        [className containsString:@"__NSCFNumber"]) {
-        return @((NSInteger)fontSize);
-    }
-
-    // __NSCFString (Toll-Free Bridging) → 返回字符串
-    if ([className containsString:@"NSCFString"]) {
-        return fontSizeStr;
-    }
-
-    // 未知类型 → 默认返回字符串，并日志警告
-    WPLog(@"FontLayout",
-          @"[WARN] 未知返回值类型: %@, 默认返回字符串",
-          className);
-    return fontSizeStr;
+// 白名单规则集（只修改这些规则集中的字号）
+// 基于日志 v7 中实际出现的所有规则集
+// 以 # 前缀开头，可通过持续观察补充
+static NSSet *s_fontRuleSets(void) {
+    static NSSet *sets = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        sets = [NSSet setWithObjects:
+            @"#navigation_bar",         // 导航栏
+            @"#common_default",         // 通用默认
+            @"#input_tool_view_tool",   // 输入工具栏
+            @"#widget_tipsbar_base",    // Tipsbar 组件
+            @"#brand_timeline_view",    // 朋友圈品牌视图
+            nil];
+    });
+    return sets;
 }
 
-/// 检查 ruleSet 是否匹配字体规则集
-/// 锤子助手用 hasSuffix:@"_font_set"，但微信不同版本可能用不同命名，
-/// 这里用 hasSuffix + containsString 双重匹配
-static BOOL isFontRuleSet(NSString *ruleSet) {
-    if (ruleSet.length == 0) return NO;
-    // 精确后缀匹配（锤子助手方式）
-    if ([ruleSet hasSuffix:@"_font_set"]) return YES;
-    // 宽松匹配（兼容其他命名）
-    if ([ruleSet containsString:@"_font_set"]) return YES;
-    // 纯 font_set 匹配
-    if ([ruleSet isEqualToString:@"font_set"]) return YES;
+#pragma mark - 辅助函数
+
+/// 判断是否需要拦截此返回值
+/// 规则：必须是可变数组 + 第一个元素是数值（NSNumber 或数字字符串）
+/// @param originalResult 原方法返回值
+/// @param property 属性名（用于日志）
+/// @param ruleSet 规则集（用于日志）
+/// @param outSize 输出：原始字号值
+/// @param outElementType 输出：第一个元素的类型（NSNumber/NSString）
+/// @return YES=需要拦截
+static BOOL shouldIntercept(id originalResult,
+                            NSString *property,
+                            NSString *ruleSet,
+                            CGFloat *outSize,
+                            NSString **outElementType) {
+    // ── 检查是否为数组 ──
+    if (![originalResult isKindOfClass:[NSArray class]]) {
+        return NO;
+    }
+
+    NSArray *arr = (NSArray *)originalResult;
+    if (arr.count == 0) {
+        return NO;
+    }
+
+    // ── 可选的白名单检查 ──
+    // 如果规则集在白名单中，直接通过
+    BOOL inWhitelist = [s_fontRuleSets() containsObject:ruleSet];
+    if (!inWhitelist) {
+        // 如果不在白名单中，用宽松条件检查属性名是否含 "font"
+        NSString *lowerProperty = [property lowercaseString];
+        if (![lowerProperty containsString:@"font"]) {
+            return NO;  // 属性名不含 font，跳过
+        }
+    }
+
+    // ── 检查第一个元素是否为数值 ──
+    id firstObj = arr[0];
+
+    if ([firstObj isKindOfClass:[NSNumber class]]) {
+        *outSize = [firstObj floatValue];
+        *outElementType = @"NSNumber";
+        return YES;
+    }
+
+    if ([firstObj isKindOfClass:[NSString class]]) {
+        NSString *str = (NSString *)firstObj;
+        // 尝试解析为浮点数
+        NSScanner *scanner = [NSScanner scannerWithString:str];
+        float val;
+        if ([scanner scanFloat:&val] && [scanner isAtEnd]) {
+            *outSize = (CGFloat)val;
+            *outElementType = @"NSString";
+            return YES;
+        }
+    }
+
     return NO;
+}
+
+/// 创建新的第一个元素值（保持原类型）
+/// @param originalElement 原第一个元素
+/// @param newSize 目标字号
+/// @return 同类型的新值
+static id createNewValueForElement(id originalElement, CGFloat newSize) {
+    if ([originalElement isKindOfClass:[NSNumber class]]) {
+        // NSNumber → NSNumber
+        return @((NSInteger)newSize);
+    } else if ([originalElement isKindOfClass:[NSString class]]) {
+        // NSString → NSString
+        return [NSString stringWithFormat:@"%.0f", newSize];
+    }
+    // 未知类型 → 返回原值（不做修改）
+    return originalElement;
 }
 
 #pragma mark - Hook 1: MMThemeManager.getValueOfProperty:inRuleSet:
@@ -72,79 +120,63 @@ static id (*orig_getValueOfProperty_inRuleSet)(id, SEL, NSString *, NSString *);
 static id hook_getValueOfProperty_inRuleSet(id self, SEL _cmd,
                                              NSString *property,
                                              NSString *ruleSet) {
+    // ★ 第一步：先调原方法获取原始值 ★
+    id originalResult = orig_getValueOfProperty_inRuleSet(self, _cmd, property, ruleSet);
+
     FontLayoutConfig *config = [FontLayoutConfig shared];
     BOOL globalOn = config.globalLayoutEnabled;
     BOOL chatOn   = config.chatLayoutEnabled;
 
-    // ★★★ 关键：不管是否匹配，先调原方法获取原始值 ★★★
-    // 这样做是为了：
-    //   1. 知道原始返回值的类型（NSString / NSNumber / 其他）
-    //   2. 可以创建同类型的新值返回
-    //   3. 即使不匹配，也能记录日志
-    id originalResult = orig_getValueOfProperty_inRuleSet(self, _cmd, property, ruleSet);
-
-    // ── 调试日志：记录所有调用 ──
-    // 当任一布局开启时，记录所有 MMThemeManager 调用
-    if (globalOn || chatOn) {
-        // 只记录 font 相关的调用，避免日志刷屏
-        if (isFontRuleSet(ruleSet) ||
-            [property containsString:@"Level"] ||
-            [property containsString:@"Font"] ||
-            [property containsString:@"font"]) {
-            WPLog(@"FontLayout",
-                  @"[MMTM] property=%@ ruleSet=%@ origType=%@ origValue=%@",
-                  property, ruleSet,
-                  NSStringFromClass([originalResult class]),
-                  originalResult);
-        }
+    // ── 两个布局都未开启 → 直接返回 ──
+    if (!globalOn && !chatOn) {
+        return originalResult;
     }
 
-    // ── 布局匹配逻辑 ──
-    BOOL matched = NO;
-    CGFloat targetFontSize = 16.0f;
-    NSString *matchType = nil;
+    // ── 检查是否需要拦截 ──
+    CGFloat originalSize = 0;
+    NSString *elementType = nil;
 
-    if (globalOn || chatOn) {
-        // ── 全局布局匹配 ──
-        if (globalOn && isFontRuleSet(ruleSet)) {
-            if ([property isEqualToString:@"allLevel"]) {
-                matched = YES;
-                targetFontSize = config.globalFontSize;
-                matchType = @"global-allLevel";
-            } else if ([property isEqualToString:@"webLevel"]) {
-                matched = YES;
-                targetFontSize = config.globalFontSize;
-                matchType = @"global-webLevel";
-            }
-        }
-
-        // ── 对话布局匹配 ──
-        if (!matched && chatOn && isFontRuleSet(ruleSet)) {
-            if ([property isEqualToString:@"chatLevel"]) {
-                matched = YES;
-                targetFontSize = config.chatFontSize;
-                matchType = @"chat-chatLevel";
-            }
-        }
+    if (!shouldIntercept(originalResult, property, ruleSet,
+                         &originalSize, &elementType)) {
+        // 不需要拦截 → 返回原始值
+        return originalResult;
     }
 
-    if (matched) {
-        // 验证范围：10-16（与锤子助手一致）
-        if (targetFontSize >= 10.0f && targetFontSize <= 16.0f) {
-            id newValue = createValueWithFontSize(originalResult, targetFontSize);
-            WPLog(@"FontLayout",
-                  @"[MMTM] ⚡ HIT %@: %@ in %@ -> %.0f (type: %@)",
-                  matchType, property, ruleSet, targetFontSize,
-                  NSStringFromClass([newValue class]));
-            return newValue;
-        } else {
-            WPLog(@"FontLayout",
-                  @"[MMTM] ⚡ HIT %@ but fontSize %.0f out of range [10,16]",
-                  matchType, targetFontSize);
-        }
+    // ── 确定目标字号 ──
+    CGFloat targetSize = kMaxFontSize; // 默认 16
+
+    if (globalOn && chatOn) {
+        // 两个都开启 → 全局优先（可根据需求改为对话优先）
+        targetSize = config.globalFontSize;
+    } else if (globalOn) {
+        // 仅全局
+        targetSize = config.globalFontSize;
+    } else if (chatOn) {
+        // 仅对话
+        targetSize = config.chatFontSize;
     }
 
-    return originalResult;
+    // ── 范围验证 ──
+    if (targetSize < kMinFontSize || targetSize > kMaxFontSize) {
+        WPLog(@"FontLayout",
+              @"[SKIP] fontSize %.0f out of range [%.0f, %.0f]",
+              targetSize, kMinFontSize, kMaxFontSize);
+        return originalResult;
+    }
+
+    // ── 执行修改：保留数组结构，只改第一个元素 ──
+    NSMutableArray *modified = [(NSArray *)originalResult mutableCopy];
+    id newElement = createNewValueForElement(modified[0], targetSize);
+    modified[0] = newElement;
+
+    // ── 日志 ──
+    WPLog(@"FontLayout",
+          @"[MODIFY] %@ in %@ : %.0f → %.0f (type=%@, count=%lu)",
+          property, ruleSet,
+          originalSize, targetSize,
+          elementType, (unsigned long)modified.count);
+
+    return modified;
 }
 
 #pragma mark - Hook 2: CLocalInfo.m_uiGlobalFontLevel
@@ -155,18 +187,12 @@ static unsigned int hook_m_uiGlobalFontLevel(id self, SEL _cmd) {
     FontLayoutConfig *config = [FontLayoutConfig shared];
 
     if (config.globalLayoutEnabled || config.chatLayoutEnabled) {
-        unsigned int result = 1;
-        WPLog(@"FontLayout",
-              @"[CLocalInfo] m_uiGlobalFontLevel -> %u (大字模式, global=%d chat=%d)",
-              result, config.globalLayoutEnabled, config.chatLayoutEnabled);
-        return result;
+        // 大字模式激活，触发微信内置大字号体系
+        // （我们的 Hook-1 会在此基础上进一步精确控制具体字号）
+        return 1;
     }
 
-    unsigned int orig = orig_m_uiGlobalFontLevel(self, _cmd);
-    WPLog(@"FontLayout",
-          @"[CLocalInfo] m_uiGlobalFontLevel -> %u (原方法, 布局未开启)",
-          orig);
-    return orig;
+    return orig_m_uiGlobalFontLevel(self, _cmd);
 }
 
 #pragma mark - 安装入口
@@ -174,7 +200,7 @@ static unsigned int hook_m_uiGlobalFontLevel(id self, SEL _cmd) {
 @implementation FontLayoutHook
 
 + (void)install {
-    WPLog(@"FontLayout", @"=== FontLayoutHook Install Start ===");
+    WPLog(@"FontLayout", @"=== FontLayoutHook v4 Install Start ===");
 
     // ── 诊断：检查类和方法的可用性 ──
     Class mmThemeManager = objc_getClass("MMThemeManager");
@@ -183,51 +209,59 @@ static unsigned int hook_m_uiGlobalFontLevel(id self, SEL _cmd) {
     SEL selGetValue = @selector(getValueOfProperty:inRuleSet:);
     SEL selFontLevel = @selector(m_uiGlobalFontLevel);
 
-    Method mGetValue = mmThemeManager ? class_getInstanceMethod(mmThemeManager, selGetValue) : NULL;
-    Method mFontLevel = clocalInfo ? class_getInstanceMethod(clocalInfo, selFontLevel) : NULL;
+    Method mGetValue = mmThemeManager
+        ? class_getInstanceMethod(mmThemeManager, selGetValue) : NULL;
+    Method mFontLevel = clocalInfo
+        ? class_getInstanceMethod(clocalInfo, selFontLevel) : NULL;
 
-    WPLog(@"FontLayout", @"MMThemeManager: %@", mmThemeManager ? @"EXISTS" : @"NIL");
-    WPLog(@"FontLayout", @"CLocalInfo: %@", clocalInfo ? @"EXISTS" : @"NIL");
-    WPLog(@"FontLayout", @"getValueOfProperty:inRuleSet: method: %@", mGetValue ? @"EXISTS" : @"NIL");
-    WPLog(@"FontLayout", @"m_uiGlobalFontLevel method: %@", mFontLevel ? @"EXISTS" : @"NIL");
+    WPLog(@"FontLayout", @"MMThemeManager: %@",
+          mmThemeManager ? @"EXISTS" : @"NIL");
+    WPLog(@"FontLayout", @"getValueOfProperty:inRuleSet: method: %@",
+          mGetValue ? @"EXISTS" : @"NIL");
+    WPLog(@"FontLayout", @"CLocalInfo: %@",
+          clocalInfo ? @"EXISTS" : @"NIL");
+    WPLog(@"FontLayout", @"m_uiGlobalFontLevel method: %@",
+          mFontLevel ? @"EXISTS" : @"NIL");
 
     // ── 诊断：打印当前的配置值 ──
     FontLayoutConfig *cfg = [FontLayoutConfig shared];
-    WPLog(@"FontLayout", @"Config: globalOn=%d globalSize=%.0f chatOn=%d chatSize=%.0f",
+    WPLog(@"FontLayout",
+          @"Config: globalOn=%d globalSize=%.0f chatOn=%d chatSize=%.0f",
           cfg.globalLayoutEnabled, cfg.globalFontSize,
           cfg.chatLayoutEnabled, cfg.chatFontSize);
 
-    // ── 诊断：直接读取 NSUserDefaults 验证 ──
-    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
-    BOOL udGlobalOn = [ud boolForKey:@"FontLayout_globalLayoutEnabled"];
-    CGFloat udGlobalSize = [ud floatForKey:@"FontLayout_globalFontSize"];
-    BOOL udChatOn = [ud boolForKey:@"FontLayout_chatLayoutEnabled"];
-    CGFloat udChatSize = [ud floatForKey:@"FontLayout_chatFontSize"];
-    WPLog(@"FontLayout", @"[UD Direct] globalOn=%d globalSize=%.0f chatOn=%d chatSize=%.0f",
-          udGlobalOn, udGlobalSize, udChatOn, udChatSize);
+    // ── 诊断：打印白名单 ⚠️ 仅供调试，后续可以移除 ⚠️ ──
+    WPLog(@"FontLayout", @"FontRuleSet whitelist: %@",
+          [[s_fontRuleSets() allObjects] componentsJoinedByString:@", "]);
 
     // ── Hook 安装 ──
     if (mmThemeManager && mGetValue) {
         MSHookMessageEx(mmThemeManager, selGetValue,
                         (IMP)hook_getValueOfProperty_inRuleSet,
                         (IMP *)&orig_getValueOfProperty_inRuleSet);
-        WPLog(@"FontLayout", @"[+] MMThemeManager.getValueOfProperty:inRuleSet: HOOKED");
+        WPLog(@"FontLayout",
+              @"[+] MMThemeManager.getValueOfProperty:inRuleSet: HOOKED");
     } else {
-        WPLog(@"FontLayout", @"[-] MMThemeManager HOOK SKIPPED (class=%@ method=%@)",
-              mmThemeManager ? @"OK" : @"NIL", mGetValue ? @"OK" : @"NIL");
+        WPLog(@"FontLayout",
+              @"[-] MMThemeManager HOOK SKIPPED (class=%@ method=%@)",
+              mmThemeManager ? @"OK" : @"NIL",
+              mGetValue ? @"OK" : @"NIL");
     }
 
     if (clocalInfo && mFontLevel) {
         MSHookMessageEx(clocalInfo, selFontLevel,
                         (IMP)hook_m_uiGlobalFontLevel,
                         (IMP *)&orig_m_uiGlobalFontLevel);
-        WPLog(@"FontLayout", @"[+] CLocalInfo.m_uiGlobalFontLevel HOOKED");
+        WPLog(@"FontLayout",
+              @"[+] CLocalInfo.m_uiGlobalFontLevel HOOKED");
     } else {
-        WPLog(@"FontLayout", @"[-] CLocalInfo HOOK SKIPPED (class=%@ method=%@)",
-              clocalInfo ? @"OK" : @"NIL", mFontLevel ? @"OK" : @"NIL");
+        WPLog(@"FontLayout",
+              @"[-] CLocalInfo HOOK SKIPPED (class=%@ method=%@)",
+              clocalInfo ? @"OK" : @"NIL",
+              mFontLevel ? @"OK" : @"NIL");
     }
 
-    WPLog(@"FontLayout", @"=== FontLayoutHook Install Complete ===");
+    WPLog(@"FontLayout", @"=== FontLayoutHook v4 Install Complete ===");
 }
 
 @end
