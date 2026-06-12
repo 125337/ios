@@ -28,9 +28,4 @@
     ];
 }
 
-@dynamic globalLayoutEnabled;
-@dynamic globalFontSize;
-@dynamic chatLayoutEnabled;
-@dynamic chatFontSize;
-
 @end
