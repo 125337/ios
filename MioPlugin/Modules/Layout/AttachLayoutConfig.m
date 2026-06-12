@@ -2,14 +2,13 @@
 
 @implementation AttachLayoutConfig
 
-static AttachLayoutConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static AttachLayoutConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[AttachLayoutConfig alloc] init];
+        instance = [[AttachLayoutConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

@@ -2,14 +2,13 @@
 
 @implementation HideAvatarConfig
 
-static HideAvatarConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static HideAvatarConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[HideAvatarConfig alloc] init];
+        instance = [[HideAvatarConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

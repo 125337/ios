@@ -58,55 +58,127 @@ static void replaced_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
     processRedEnvelopMessage(wrap);
 }
 
-// ============================================================
-// MARK: - processRedEnvelopMessage 辅助函数（长函数拆分）
-// ============================================================
+static void processRedEnvelopMessage(id wrap) {
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
+    if (!config.autoRedEnvelop) return;
 
-/// 获取当前用户信息（selfContact + selfUserName）
-static NSDictionary *getSelfContactInfo(void) {
+    if (!wrap) return;
+
+    unsigned int msgType = 0;
+    if ([wrap respondsToSelector:NSSelectorFromString(@"m_uiMessageType")])
+        msgType = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
+    if (msgType != 49) return;
+
+    NSString *content = nil;
+    if ([wrap respondsToSelector:NSSelectorFromString(@"m_nsContent")])
+        content = ((id (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_nsContent"));
+
+    if (![content isKindOfClass:[NSString class]] || [content rangeOfString:@"wxpay://"].location == NSNotFound) return;
+
+    NSString *msgId = nil;
+    if ([wrap respondsToSelector:NSSelectorFromString(@"m_nsMsgId")])
+        msgId = ((id (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_nsMsgId"));
+    if ([wrap respondsToSelector:NSSelectorFromString(@"m_uiMesLocalID")]) {
+        unsigned int localId = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMesLocalID"));
+        if (localId > 0 && !msgId.length) msgId = [NSString stringWithFormat:@"%u", localId];
+    }
+
+    MioRedEnvelopTaskManager *taskMgr = [MioRedEnvelopTaskManager shared];
+
+    if (msgId.length > 0) {
+        if ([taskMgr isProcessed:msgId]) return;
+        [taskMgr markProcessed:msgId];
+    }
+
     id contactMgr = WXGetService(objc_getClass("CContactMgr"));
-    if (!contactMgr) return nil;
+    if (!contactMgr) return;
 
     id selfContact = nil;
     if ([contactMgr respondsToSelector:NSSelectorFromString(@"getSelfContact")])
         selfContact = ((id (*)(id, SEL, ...))objc_msgSend)(contactMgr, NSSelectorFromString(@"getSelfContact"));
-    if (!selfContact) return nil;
+    if (!selfContact) return;
 
-    NSString *selfUserName = nil;
-    if ([selfContact respondsToSelector:NSSelectorFromString(@"m_nsUsrName")])
-        selfUserName = ((id (*)(id, SEL, ...))objc_msgSend)(selfContact, NSSelectorFromString(@"m_nsUsrName"));
-
-    return @{@"contact": selfContact, @"userName": selfUserName ?: @""};
-}
-
-/// 判断消息方向
-/// 返回: isSender, isGroupReceiver, isGroupSender, isPersonalSender
-static NSDictionary *determineMessageDirection(id wrap, NSString *selfUserName) {
     NSString *fromUsr = nil;
     if ([wrap respondsToSelector:NSSelectorFromString(@"m_nsFromUsr")])
         fromUsr = ((id (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_nsFromUsr"));
     NSString *toUsr = nil;
     if ([wrap respondsToSelector:NSSelectorFromString(@"m_nsToUsr")])
         toUsr = ((id (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_nsToUsr"));
+    NSString *selfUserName = nil;
+    if ([selfContact respondsToSelector:NSSelectorFromString(@"m_nsUsrName")])
+        selfUserName = ((id (*)(id, SEL, ...))objc_msgSend)(selfContact, NSSelectorFromString(@"m_nsUsrName"));
 
     BOOL isSender = fromUsr && selfUserName && [fromUsr isEqualToString:selfUserName];
     BOOL isGroupReceiver = fromUsr && [fromUsr containsString:@"@chatroom"];
     BOOL isGroupSender = isSender && toUsr && [toUsr containsString:@"@chatroom"];
     BOOL isPersonalSender = isSender && !isGroupSender;
 
-    return @{@"isSender": @(isSender),
-             @"isGroupReceiver": @(isGroupReceiver),
-             @"isGroupSender": @(isGroupSender),
-             @"isPersonalSender": @(isPersonalSender),
-             @"fromUsr": fromUsr ?: @"",
-             @"toUsr": toUsr ?: @""};
-}
+    BOOL shouldReceive = NO;
+    if (isGroupReceiver) shouldReceive = YES;
+    else if (isGroupSender && config.redEnvelopCatchMe) shouldReceive = YES;
+    else if (!isGroupReceiver && !isSender && config.personalRedEnvelopEnable) shouldReceive = YES;
+    else if (isPersonalSender && config.redEnvelopCatchMe) shouldReceive = YES;
 
-/// 从 payInfoItem 提取 nativeUrl 并解析为字典
-static NSDictionary *parseRedEnvelopUrl(id payInfoItem, NSString *content) {
+    WPLog(@"RedEnv", @"[STAT] from=%@ to=%@ self=%@ sender=%d groupRecv=%d groupSend=%d personalSend=%d catch=%d should=%d",
+          fromUsr ?: @"-", toUsr ?: @"-", selfUserName ?: @"-", isSender, isGroupReceiver, isGroupSender, isPersonalSender, config.redEnvelopCatchMe, shouldReceive);
+
+    // ★★★ 统一群黑名单过滤 ★★★
+    // 合并自原来的 redEnvelopBlackList + redEnvelopGroupFilterList
+    // 设计参考：锤子助手 isRedEnvelopGroupFiter（同一个数据源，对所有群消息生效）
+    //
+    // 匹配策略（根据消息方向自动选择正确字段）：
+    //   isGroupReceiver → 匹配 fromUsr（群 ID）
+    //   isGroupSender   → 匹配 toUsr（群 ID）
+    //   非群消息 → 不执行此过滤
+    //
+    if (config.redEnvelopGroupFilterEnabled && config.redEnvelopGroupFilterList.count > 0) {
+        NSString *sessionToCheck = nil;
+        NSString *directionTag = nil;
+        if (isGroupReceiver) {
+            sessionToCheck = fromUsr;
+            directionTag = @"RECV";
+        } else if (isGroupSender) {
+            sessionToCheck = toUsr;
+            directionTag = @"SEND";
+        }
+        
+        if (sessionToCheck.length > 0) {
+            WPLog(@"RedEnv", @"[FILTER] [%@] 检查会话: %@ | 过滤列表(%lu项): %@",
+                  directionTag, sessionToCheck,
+                  (unsigned long)config.redEnvelopGroupFilterList.count,
+                  config.redEnvelopGroupFilterList);
+            
+            BOOL matched = NO;
+            for (id groupItem in config.redEnvelopGroupFilterList) {
+                // 防御性检查：确保过滤列表元素是 NSString
+                if (![groupItem isKindOfClass:[NSString class]]) {
+                    WPLog(@"RedEnv", @"[FILTER] ⚠ 过滤列表元素非 NSString: %@ (type=%@)",
+                          groupItem, NSStringFromClass([groupItem class]));
+                    continue;
+                }
+                if ([sessionToCheck isEqualToString:(NSString *)groupItem]) {
+                    shouldReceive = NO;
+                    matched = YES;
+                    WPLog(@"RedEnv", @"[FILTER] ✅ [%@] 群黑名单命中: %@ == %@",
+                          directionTag, sessionToCheck, groupItem);
+                    break;
+                }
+            }
+            
+            if (!matched) {
+                WPLog(@"RedEnv", @"[FILTER] ❌ [%@] 未命中黑名单: %@", directionTag, sessionToCheck);
+            }
+        }
+    }
+
+    if (!shouldReceive) return;
+
     NSString *nativeUrl = nil;
 
-    // 从 payInfoItem 提取
+    id payInfoItem = nil;
+    if ([wrap respondsToSelector:NSSelectorFromString(@"m_oWCPayInfoItem")])
+        payInfoItem = ((id (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_oWCPayInfoItem"));
+
     if (payInfoItem) {
         if ([payInfoItem respondsToSelector:NSSelectorFromString(@"m_c2cNativeUrl")])
             nativeUrl = ((id (*)(id, SEL, ...))objc_msgSend)(payInfoItem, NSSelectorFromString(@"m_c2cNativeUrl"));
@@ -115,9 +187,7 @@ static NSDictionary *parseRedEnvelopUrl(id payInfoItem, NSString *content) {
                 nativeUrl = ((id (*)(id, SEL, ...))objc_msgSend)(payInfoItem, NSSelectorFromString(@"m_nativeUrl"));
         }
     }
-
-    // 从 content 中提取
-    if (!nativeUrl.length && content) {
+    if (!nativeUrl.length) {
         NSRange wxpayRange = [content rangeOfString:@"wxpay://"];
         if (wxpayRange.location != NSNotFound) {
             NSUInteger bestEnd = NSNotFound;
@@ -129,10 +199,8 @@ static NSDictionary *parseRedEnvelopUrl(id payInfoItem, NSString *content) {
             nativeUrl = [content substringWithRange:NSMakeRange(wxpayRange.location, bestEnd - wxpayRange.location)];
         }
     }
+    if (!nativeUrl.length) return;
 
-    if (!nativeUrl.length) return nil;
-
-    // 解析 URL
     NSDictionary *nativeUrlDict = nil;
     Class WCBizUtilClass = objc_getClass("WCBizUtil");
     if (WCBizUtilClass && [WCBizUtilClass respondsToSelector:NSSelectorFromString(@"dictionaryWithDecodedComponets:separator:")]) {
@@ -143,155 +211,52 @@ static NSDictionary *parseRedEnvelopUrl(id payInfoItem, NSString *content) {
                 [nativeUrl substringFromIndex:prefix.length], @"&");
         }
     }
-
-    return nativeUrlDict;
-}
-
-/// 群黑名单过滤
-static BOOL checkGroupBlacklist(NSString *groupID, BOOL isGroupReceiver, BOOL isGroupSender) {
-    if (!isGroupReceiver && !isGroupSender) return NO; // 非群消息不过滤
-
-    RedEnvelopConfig *config = [RedEnvelopConfig shared];
-    if (!config.redEnvelopGroupFilterEnabled || config.redEnvelopGroupFilterList.count == 0) return NO;
-
-    NSString *sessionToCheck = isGroupReceiver ? groupID : (isGroupSender ? groupID : nil);
-    if (!sessionToCheck.length) return NO;
-
-    for (id groupItem in config.redEnvelopGroupFilterList) {
-        if (![groupItem isKindOfClass:[NSString class]]) continue;
-        if ([sessionToCheck isEqualToString:(NSString *)groupItem]) {
-            WPLog(@"RedEnv", @"[FILTER] 群黑名单命中: %@", sessionToCheck);
-            return YES;
-        }
-    }
-    return NO;
-}
-
-/// 关键词文本过滤
-static BOOL applyTextFilter(NSString *content) {
-    RedEnvelopConfig *config = [RedEnvelopConfig shared];
-    if (!config.redEnvelopTextFilterEnabled || !config.redEnvelopTextFilter.length) return NO;
-
-    NSArray *keywords = [config.redEnvelopTextFilter componentsSeparatedByString:@","];
-    for (NSString *kw in keywords) {
-        NSString *trimmed = [kw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        if (trimmed.length > 0 && [content containsString:trimmed]) {
-            WPLog(@"RedEnv", @"[FILTER] 关键词过滤命中: %@", trimmed);
-            return YES;
-        }
-    }
-    return NO;
-}
-
-/// 保存待处理红包参数并调度任务
-static void savePendingRedEnvelop(MioRedEnvelopParam *param, int delay) {
-    if (!param.sendId.length) {
-        WPLog(@"RedEnv", @"[WARN] sendId为空，跳过");
-        return;
-    }
-
-    MioRedEnvelopTaskManager *taskMgr = [MioRedEnvelopTaskManager shared];
-    [taskMgr savePendingParam:param];
-    WPLog(@"RedEnv", @"[SAVE] 已保存 pending param: sendId=%@", param.sendId);
-
-    [taskMgr startBackgroundKeepAlive];
-    WPLog(@"RedEnv", @"[DISPATCH] 准备查询: sendId=%@ delay=%d", param.sendId, delay);
-
-    [taskMgr addTaskWithParam:param delay:delay];
-}
-
-static void processRedEnvelopMessage(id wrap) {
-    // 1. 守卫：开关 + 消息类型
-    RedEnvelopConfig *config = [RedEnvelopConfig shared];
-    if (!config.autoRedEnvelop) return;
-    if (!wrap) return;
-
-    unsigned int msgType = 0;
-    if ([wrap respondsToSelector:NSSelectorFromString(@"m_uiMessageType")])
-        msgType = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
-    if (msgType != 49) return;
-
-    // 2. 守卫：内容检查
-    NSString *content = nil;
-    if ([wrap respondsToSelector:NSSelectorFromString(@"m_nsContent")])
-        content = ((id (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_nsContent"));
-    if (![content isKindOfClass:[NSString class]] || [content rangeOfString:@"wxpay://"].location == NSNotFound) return;
-
-    // 3. 去重检查
-    NSString *msgId = nil;
-    if ([wrap respondsToSelector:NSSelectorFromString(@"m_nsMsgId")])
-        msgId = ((id (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_nsMsgId"));
-    if ([wrap respondsToSelector:NSSelectorFromString(@"m_uiMesLocalID")]) {
-        unsigned int localId = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMesLocalID"));
-        if (localId > 0 && !msgId.length) msgId = [NSString stringWithFormat:@"%u", localId];
-    }
-    MioRedEnvelopTaskManager *taskMgr = [MioRedEnvelopTaskManager shared];
-    if (msgId.length > 0) {
-        if ([taskMgr isProcessed:msgId]) return;
-        [taskMgr markProcessed:msgId];
-    }
-
-    // 4. 获取用户信息
-    NSDictionary *contactInfo = getSelfContactInfo();
-    if (!contactInfo) return;
-    NSString *selfUserName = contactInfo[@"userName"];
-
-    // 5. 判断消息方向
-    NSDictionary *direction = determineMessageDirection(wrap, selfUserName);
-    BOOL isSender = [direction[@"isSender"] boolValue];
-    BOOL isGroupReceiver = [direction[@"isGroupReceiver"] boolValue];
-    BOOL isGroupSender = [direction[@"isGroupSender"] boolValue];
-    BOOL isPersonalSender = [direction[@"isPersonalSender"] boolValue];
-    NSString *fromUsr = direction[@"fromUsr"];
-    NSString *toUsr = direction[@"toUsr"];
-
-    // 6. 计算是否应该接收
-    BOOL shouldReceive = NO;
-    if (isGroupReceiver) shouldReceive = YES;
-    else if (isGroupSender && config.redEnvelopCatchMe) shouldReceive = YES;
-    else if (!isGroupReceiver && !isSender && config.personalRedEnvelopEnable) shouldReceive = YES;
-    else if (isPersonalSender && config.redEnvelopCatchMe) shouldReceive = YES;
-
-    WPLog(@"RedEnv", @"[STAT] from=%@ to=%@ self=%@ sender=%d groupRecv=%d groupSend=%d personalSend=%d catch=%d should=%d",
-          fromUsr ?: @"-", toUsr ?: @"-", selfUserName ?: @"-", isSender, isGroupReceiver, isGroupSender, isPersonalSender, config.redEnvelopCatchMe, shouldReceive);
-
-    // 7. 群黑名单过滤
-    NSString *groupID = isGroupReceiver ? fromUsr : (isGroupSender ? toUsr : nil);
-    if (checkGroupBlacklist(groupID, isGroupReceiver, isGroupSender)) {
-        shouldReceive = NO;
-    }
-    if (!shouldReceive) return;
-
-    // 8. 解析红包 URL
-    id payInfoItem = nil;
-    if ([wrap respondsToSelector:NSSelectorFromString(@"m_oWCPayInfoItem")])
-        payInfoItem = ((id (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_oWCPayInfoItem"));
-    NSDictionary *nativeUrlDict = parseRedEnvelopUrl(payInfoItem, content);
     if (!nativeUrlDict) {
-        WPLog(@"RedEnv", @"[WARN] 无法解析红包URL");
+        WPLog(@"RedEnv", @"[WARN] 无法解析nativeUrl: %@", [nativeUrl substringToIndex:MIN(nativeUrl.length, 100)]);
         return;
     }
 
-    // 9. 构造参数
     MioRedEnvelopParam *param = [[MioRedEnvelopParam alloc] init];
     param.msgType = nativeUrlDict[@"msgtype"] ?: @"";
     param.sendId = nativeUrlDict[@"sendid"] ?: @"";
     param.channelId = nativeUrlDict[@"channelid"] ?: @"";
-    param.nativeUrl = payInfoItem ? [payInfoItem valueForKey:@"m_c2cNativeUrl"] ?: [payInfoItem valueForKey:@"m_nativeUrl"] : @"";
+    param.nativeUrl = nativeUrl;
     param.sessionUserName = isGroupSender ? toUsr : fromUsr;
     param.sign = nativeUrlDict[@"sign"] ?: @"";
     param.isGroupSender = isGroupSender;
     param.wishing = nativeUrlDict[@"wishing"] ?: @"";
 
-    // 10. 关键词过滤
-    if (applyTextFilter(content)) return;
+    if (config.redEnvelopTextFilterEnabled && config.redEnvelopTextFilter.length > 0) {
+        NSArray *keywords = [config.redEnvelopTextFilter componentsSeparatedByString:@","];
+        for (NSString *kw in keywords) {
+            NSString *trimmed = [kw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            if (trimmed.length > 0 && [content containsString:trimmed]) {
+                shouldReceive = NO;
+                WPLog(@"RedEnv", @"[FILTER] 关键词过滤命中: %@", trimmed);
+                break;
+            }
+        }
+    }
 
-    // 11. 日志 + 保存 + 调度
+    if (!shouldReceive) return;
+
     WPLog(@"RedEnv", @"[HB] 红包参数: sendId=%@ sign=%@ channel=%@ msgType=%@ session=%@ isGroupSender=%d",
           param.sendId, [param.sign substringToIndex:MIN(param.sign.length, 16)], param.channelId, param.msgType, param.sessionUserName, param.isGroupSender);
 
+    if (!param.sendId.length) {
+        WPLog(@"RedEnv", @"[WARN] sendId为空，跳过");
+        return;
+    }
+
+    [taskMgr savePendingParam:param];
+    WPLog(@"RedEnv", @"[SAVE] 已保存 pending param: sendId=%@", param.sendId);
+
+    [taskMgr startBackgroundKeepAlive];
+
     int delay = (int)config.redEnvelopDelay;
-    savePendingRedEnvelop(param, delay);
+    WPLog(@"RedEnv", @"[DISPATCH] 准备查询: sendId=%@ delay=%d", param.sendId, delay);
+
+    [taskMgr addTaskWithParam:param delay:delay];
 }
 
 static void handleHongbaoResponse(id res, id req) {

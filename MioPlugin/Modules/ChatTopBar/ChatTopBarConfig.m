@@ -9,15 +9,13 @@
 
 @implementation ChatTopBarConfig
 
-// MARK: - 单例
-static ChatTopBarConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static ChatTopBarConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[ChatTopBarConfig alloc] init];
+        instance = [[ChatTopBarConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 // MARK: - ConfigModule 协议

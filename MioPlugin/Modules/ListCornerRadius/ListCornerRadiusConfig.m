@@ -2,14 +2,13 @@
 
 @implementation ListCornerRadiusConfig
 
-static ListCornerRadiusConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static ListCornerRadiusConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[ListCornerRadiusConfig alloc] init];
+        instance = [[ListCornerRadiusConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

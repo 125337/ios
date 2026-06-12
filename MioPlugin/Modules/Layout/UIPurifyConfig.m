@@ -2,14 +2,13 @@
 
 @implementation UIPurifyConfig
 
-static UIPurifyConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static UIPurifyConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[UIPurifyConfig alloc] init];
+        instance = [[UIPurifyConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

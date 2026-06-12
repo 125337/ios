@@ -2,14 +2,13 @@
 
 @implementation PlaceholderTextConfig
 
-static PlaceholderTextConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static PlaceholderTextConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[PlaceholderTextConfig alloc] init];
+        instance = [[PlaceholderTextConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

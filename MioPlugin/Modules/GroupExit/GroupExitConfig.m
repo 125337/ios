@@ -3,14 +3,13 @@
 
 @implementation GroupExitConfig
 
-static GroupExitConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static GroupExitConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[GroupExitConfig alloc] init];
+        instance = [[GroupExitConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

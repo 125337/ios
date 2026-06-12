@@ -2,14 +2,13 @@
 
 @implementation RedEnvelopConfig
 
-static RedEnvelopConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static RedEnvelopConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[RedEnvelopConfig alloc] init];
+        instance = [[RedEnvelopConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

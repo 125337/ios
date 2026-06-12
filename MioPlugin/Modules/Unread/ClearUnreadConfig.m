@@ -2,14 +2,13 @@
 
 @implementation ClearUnreadConfig
 
-static ClearUnreadConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static ClearUnreadConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[ClearUnreadConfig alloc] init];
+        instance = [[ClearUnreadConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

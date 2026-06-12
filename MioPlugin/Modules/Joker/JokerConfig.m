@@ -2,14 +2,13 @@
 
 @implementation JokerConfig
 
-static JokerConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static JokerConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[JokerConfig alloc] init];
+        instance = [[JokerConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

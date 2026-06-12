@@ -2,14 +2,13 @@
 
 @implementation CardBgConfig
 
-static CardBgConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static CardBgConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[CardBgConfig alloc] init];
+        instance = [[CardBgConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

@@ -2,14 +2,13 @@
 
 @implementation AutoTransferConfig
 
-static AutoTransferConfig *_sharedInstance = nil;
-
 + (instancetype)shared {
+    static AutoTransferConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[AutoTransferConfig alloc] init];
+        instance = [[AutoTransferConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {

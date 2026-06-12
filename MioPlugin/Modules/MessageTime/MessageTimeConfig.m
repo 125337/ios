@@ -1,15 +1,14 @@
 #import "MessageTimeConfig.h"
 
-static MessageTimeConfig *_sharedInstance = nil;
-
 @implementation MessageTimeConfig
 
 + (instancetype)shared {
+    static MessageTimeConfig *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _sharedInstance = [[MessageTimeConfig alloc] init];
+        instance = [[MessageTimeConfig alloc] init];
     });
-    return _sharedInstance;
+    return instance;
 }
 
 + (NSString *)modulePrefix {
