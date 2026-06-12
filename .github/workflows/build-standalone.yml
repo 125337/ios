@@ -63,7 +63,7 @@ jobs:
           MioPlugin/Core/LogManager.m \
           MioPlugin/Core/MioSubstrate.m \
           MioPlugin/Registry/HookRegistry.m \
-          MioPlugin/Registry/FeatureModuleRegistry.m \
+          MioPlugin/Registry/MioModuleRegistry.m \
           MioPlugin/Modules/Revoke/RevokeHandler.m \
           MioPlugin/Modules/Revoke/RevokeHook.m \
           MioPlugin/Modules/Revoke/RevokeFormatEditorVC.m \
