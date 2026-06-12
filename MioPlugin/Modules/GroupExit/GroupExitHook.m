@@ -109,19 +109,17 @@ static void checkMemberExit(id contact, NSString *newMemberList) {
         return;
     }
     
-    [_WPLogManager appendLineWithTag:@"GroupExit" content:[NSString stringWithFormat:
-        @"%@ setter called, old=%@, new=%lu",
+    WPLogDebug(@"GroupExit", @"%@ setter called, old=%@, new=%lu",
         chatRoomName,
         oldMemberList ? [NSString stringWithFormat:@"%lu", (unsigned long)oldMemberList.length] : @"nil",
-        (unsigned long)newMemberList.length]];
+        (unsigned long)newMemberList.length);
     
     if (oldMemberList && oldMemberList.length > 0) {
         NSArray *oldMembers = [oldMemberList componentsSeparatedByString:@";"];
         NSArray *newMembers = [newMemberList componentsSeparatedByString:@";"];
         
-        [_WPLogManager appendLineWithTag:@"GroupExit" content:[NSString stringWithFormat:
-            @"%@ members: %lu -> %lu",
-            chatRoomName, (unsigned long)oldMembers.count, (unsigned long)newMembers.count]];
+        WPLogDebug(@"GroupExit", @"%@ members: %lu -> %lu",
+            chatRoomName, (unsigned long)oldMembers.count, (unsigned long)newMembers.count);
         
         if (oldMembers.count > newMembers.count && newMembers.count > 0) {
             NSMutableSet *oldSet = [NSMutableSet setWithArray:oldMembers];
@@ -129,14 +127,12 @@ static void checkMemberExit(id contact, NSString *newMemberList) {
             [oldSet minusSet:newSet];
             
             if (oldSet.count > 0) {
-                [_WPLogManager appendLineWithTag:@"GroupExit" content:[NSString stringWithFormat:
-                    @"%@ exit detected, diff count=%lu",
-                    chatRoomName, (unsigned long)oldSet.count]];
+                WPLogDebug(@"GroupExit", @"%@ exit detected, diff count=%lu",
+                    chatRoomName, (unsigned long)oldSet.count);
                 
                 for (NSString *exitUserId in oldSet) {
-                    [_WPLogManager appendLineWithTag:@"GroupExit" content:[NSString stringWithFormat:
-                        @"Processing exitUserId: '%@', length=%lu",
-                        exitUserId, (unsigned long)exitUserId.length]];
+                    WPLogDebug(@"GroupExit", @"Processing exitUserId: '%@', length=%lu",
+                        exitUserId, (unsigned long)exitUserId.length);
                     if (exitUserId.length == 0) {
                         WPLog(@"GroupExit", @"[GroupExit] Skipping empty exitUserId");
                         continue;

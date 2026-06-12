@@ -27,42 +27,42 @@ static char kWAlertSimpleConfirmBlockKey;  // 无输入框确认弹窗的 block
 // 当按钮被点击，MRC 代码调用 objc_msgSend(alert, @selector(__walert_confirm))
 // alert = self, 可以通过 associated object 拿到 confirm block
 static void __walert_confirm_IMP(id self, SEL _cmd) {
-    [_WPLogManager appendLineWithTag:@"Alert" content:@"CONFIRM CALLBACK FIRED (C IMP on WCUIAlertView)"];
+    WPLogDebug(@"Alert", @"CONFIRM CALLBACK FIRED (C IMP on WCUIAlertView)");
 
     void(^confirmBlock)(NSString *) = objc_getAssociatedObject(self, &kWAlertConfirmBlockKey);
-    [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   self=%@ confirmBlock=%s", self, confirmBlock ? "YES" : "NO"]];
+    WPLogDebug(@"Alert", @"   self=%@ confirmBlock=%s", self, confirmBlock ? "YES" : "NO");
 
     // 获取输入文本
     NSString *input = nil;
     @try {
         input = [self valueForKeyPath:@"tipsVc.tipsTextView.text"];
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   tipsVc.tipsTextView.text = %@", input ?: @"(nil)"]];
+        WPLogDebug(@"Alert", @"   tipsVc.tipsTextView.text = %@", input ?: @"(nil)");
     } @catch (NSException *e) {
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   tipsVc.textView error: %@", e]];
+        WPLogDebug(@"Alert", @"   tipsVc.textView error: %@", e);
     }
     if (!input || input.length == 0) {
         @try {
             input = [self valueForKeyPath:@"tipsVc.tipsTextField.text"];
-            [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   tipsVc.tipsTextField.text = %@", input ?: @"(nil)"]];
+            WPLogDebug(@"Alert", @"   tipsVc.tipsTextField.text = %@", input ?: @"(nil)");
         } @catch (NSException *e) {}
     }
     if (!input || input.length == 0) {
         SEL getText = NSSelectorFromString(@"getTextFieldText");
         if ([self respondsToSelector:getText]) {
             input = ((id(*)(id, SEL))objc_msgSend)(self, getText);
-            [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   getTextFieldText = %@", input ?: @"(nil)"]];
+            WPLogDebug(@"Alert", @"   getTextFieldText = %@", input ?: @"(nil)");
         }
     }
 
-    [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   FINAL input: [%@] len=%lu", input ?: @"(nil)", (unsigned long)(input ? input.length : 0)]];
+    WPLogDebug(@"Alert", @"   FINAL input: [%@] len=%lu", input ?: @"(nil)", (unsigned long)(input ? input.length : 0));
 
     if (input.length > 0 && confirmBlock) {
-        [_WPLogManager appendLineWithTag:@"Alert" content:@"   → calling confirmBlock..."];
+        WPLogDebug(@"Alert", @"   → calling confirmBlock...");
         confirmBlock(input);
-        [_WPLogManager appendLineWithTag:@"Alert" content:@"   → confirmBlock returned"];
+        WPLogDebug(@"Alert", @"   → confirmBlock returned");
     } else {
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   skip: input=%lu confirm=%s",
-            (unsigned long)(input.length), confirmBlock ? "YES" : "NO"]];
+        WPLogDebug(@"Alert", @"   skip: input=%lu confirm=%s",
+            (unsigned long)(input.length), confirmBlock ? "YES" : "NO");
     }
 }
 
@@ -72,7 +72,7 @@ static void walertEnsureCIMPInjected(Class alertClass) {
     if ([alertClass instancesRespondToSelector:confirmSel]) return;
 
     class_addMethod(alertClass, confirmSel, (IMP)__walert_confirm_IMP, "v@:");
-    [_WPLogManager appendLineWithTag:@"Alert" content:@"__walert_confirm C IMP injected into WCUIAlertView"];
+    WPLogDebug(@"Alert", @"__walert_confirm C IMP injected into WCUIAlertView");
 
     // 第二个 IMP：简单确认回调（无输入框，纯 void(^)(void)）
     SEL simpleConfirmSel = NSSelectorFromString(@"__walert_simple_confirm");
@@ -80,7 +80,7 @@ static void walertEnsureCIMPInjected(Class alertClass) {
         void(^cb)(void) = objc_getAssociatedObject(_self, &kWAlertSimpleConfirmBlockKey);
         if (cb) cb();
     }), "v@:");
-    [_WPLogManager appendLineWithTag:@"Alert" content:@"__walert_simple_confirm C IMP injected into WCUIAlertView"];
+    WPLogDebug(@"Alert", @"__walert_simple_confirm C IMP injected into WCUIAlertView");
 }
 
 @implementation MioAlertHelper
@@ -90,8 +90,8 @@ static void walertEnsureCIMPInjected(Class alertClass) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         _alertClass = objc_getClass("WCUIAlertView");
-        [_WPLogManager appendLineWithTag:@"Alert" content:_alertClass ? @"WCUIAlertView class found"
-                              : @"WCUIAlertView class NOT found"];
+        WPLogDebug(@"Alert", _alertClass ? @"WCUIAlertView class found"
+                              : @"WCUIAlertView class NOT found");
     });
     return _alertClass;
 }
@@ -101,38 +101,38 @@ static void walertEnsureCIMPInjected(Class alertClass) {
 + (void)showInputAlertWithInitialText:(NSString *)text target:(id)target onConfirm:(void(^)(NSString *inputText))confirm {
     Class alertClass = [self alertClass];
     if (!alertClass) {
-        [_WPLogManager appendLineWithTag:@"Alert" content:@"WCUIAlertView not available — abort"];
+        WPLogDebug(@"Alert", @"WCUIAlertView not available — abort");
         return;
     }
 
     @try {
         // ① alloc + init
-        [_WPLogManager appendLineWithTag:@"Alert" content:@"alloc+initWithTitle: Mio助手"];
+        WPLogDebug(@"Alert", @"alloc+initWithTitle: Mio助手");
         WCUIAlertView *alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc], @selector(initWithTitle:message:), @"Mio助手", @"");
-        if (!alert) { [_WPLogManager appendLineWithTag:@"Alert" content:@"init nil"]; return; }
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"   alert=%@", alert]];
+        if (!alert) { WPLogDebug(@"Alert", @"init nil"); return; }
+        WPLogDebug(@"Alert", @"   alert=%@", alert);
 
         // ② textField
         SEL stfSel = NSSelectorFromString(@"showTextFieldWithMaxLen:");
         if ([alert respondsToSelector:stfSel]) {
             ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stfSel, 99999);
-            [_WPLogManager appendLineWithTag:@"Alert" content:@"showTextFieldWithMaxLen available"];
-        } else { [_WPLogManager appendLineWithTag:@"Alert" content:@"showTextFieldWithMaxLen NOT found"]; }
+            WPLogDebug(@"Alert", @"showTextFieldWithMaxLen available");
+        } else { WPLogDebug(@"Alert", @"showTextFieldWithMaxLen NOT found"); }
 
         // ③ pre-fill
         if (text.length > 0) {
             SEL dtfSel = NSSelectorFromString(@"setTextFieldDefaultText:");
             if ([alert respondsToSelector:dtfSel]) {
                 ((void(*)(id, SEL, id))objc_msgSend)(alert, dtfSel, text);
-                [_WPLogManager appendLineWithTag:@"Alert" content:@"setTextFieldDefaultText available"];
-            } else { [_WPLogManager appendLineWithTag:@"Alert" content:@"setTextFieldDefaultText NOT found"]; }
+                WPLogDebug(@"Alert", @"setTextFieldDefaultText available");
+            } else { WPLogDebug(@"Alert", @"setTextFieldDefaultText NOT found"); }
         }
 
         // ④ cancel
         SEL cancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
         if ([alert respondsToSelector:cancelSel]) {
             ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelSel, @"取消", target, NULL);
-            [_WPLogManager appendLineWithTag:@"Alert" content:@"addCancelBtnTitle available"];
+            WPLogDebug(@"Alert", @"addCancelBtnTitle available");
         }
 
         // ⑤ confirm: inject C IMP + addBtnTitle:target:sel:
@@ -145,17 +145,17 @@ static void walertEnsureCIMPInjected(Class alertClass) {
         if ([alert respondsToSelector:btnSel]) {
             // target = alert 自身，保证点击时 target 存活（alert 正在显示）
             ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btnSel, @"确定", alert, confirmSel);
-            [_WPLogManager appendLineWithTag:@"Alert" content:@"addBtnTitle:target:sel: (target=alert, sel=__walert_confirm) available"];
+            WPLogDebug(@"Alert", @"addBtnTitle:target:sel: (target=alert, sel=__walert_confirm) available");
         }
 
         // ⑥ show
         SEL showSel = NSSelectorFromString(@"show");
         if ([alert respondsToSelector:showSel]) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
-            [_WPLogManager appendLineWithTag:@"Alert" content:@"show available — alert displayed"];
+            WPLogDebug(@"Alert", @"show available — alert displayed");
         }
     } @catch (NSException *e) {
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"EXCEPTION: %@", e]];
+        WPLogDebug(@"Alert", @"EXCEPTION: %@", e);
     }
 }
 
@@ -178,10 +178,10 @@ static void walertEnsureCIMPInjected(Class alertClass) {
         SEL showSel = NSSelectorFromString(@"show");
         if ([alert respondsToSelector:showSel]) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
-            [_WPLogManager appendLineWithTag:@"Alert" content:@"tip shown: Mio助手"];
+            WPLogDebug(@"Alert", @"tip shown: Mio助手");
         }
     } @catch (NSException *e) {
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"tip error: %@", e]];
+        WPLogDebug(@"Alert", @"tip error: %@", e);
     }
 }
 
@@ -219,10 +219,10 @@ static void walertEnsureCIMPInjected(Class alertClass) {
         SEL showSel = NSSelectorFromString(@"show");
         if ([alert respondsToSelector:showSel]) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
-            [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"confirm shown: %@", confirmTitle]];
+            WPLogDebug(@"Alert", @"confirm shown: %@", confirmTitle);
         }
     } @catch (NSException *e) {
-        [_WPLogManager appendLineWithTag:@"Alert" content:[NSString stringWithFormat:@"confirm error: %@", e]];
+        WPLogDebug(@"Alert", @"confirm error: %@", e);
     }
 }
 

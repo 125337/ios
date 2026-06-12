@@ -81,8 +81,7 @@ static void sendAutoReply(NSString *sessionUserName, NSString *replyText) {
             }
 
             ((void(*)(id, SEL, id, id))objc_msgSend)(msgMgr, addMsgSel, sessionUserName, msg);
-            [_WPLogManager appendLineWithTag:@"AutoTransfer" content:[NSString stringWithFormat:
-                @"自动回复已发送: %@ -> %@", replyText, sessionUserName]];
+            WPLogDebug(@"AutoTransfer", @"自动回复已发送: %@ -> %@", replyText, sessionUserName);
         } @catch (NSException *e) {
             WPLog(@"AutoTransfer", @"[REPLY] 自动回复异常: %@", e);
         }
@@ -238,23 +237,21 @@ static void processTransferMessage(id wrap) {
 
     unsigned long long invalidTime = (unsigned long long)[invalidTimeStr longLongValue];
 
-    [_WPLogManager appendLineWithTag:@"AutoTransfer" content:[NSString stringWithFormat:
-        @"检测到转账: transferID=%@ from=%@ fee=%lld memo=%@ isGroup=%d",
-        transferID, fromUsr, feeAmount, payMemo, isGroup]];
+    WPLogDebug(@"AutoTransfer", @"检测到转账: transferID=%@ from=%@ fee=%lld memo=%@ isGroup=%d",
+        transferID, fromUsr, feeAmount, payMemo, isGroup);
 
-    [_WPLogManager appendLineWithTag:@"AutoTransfer" content:[NSString stringWithFormat:
-        @"[DEBUG] XML字段: total_fee=%@ feedesc=%@ paysubtype=%@ bubbletype=%@ invalidtime=%@",
+    WPLogDebug(@"AutoTransfer", @"[DEBUG] XML字段: total_fee=%@ feedesc=%@ paysubtype=%@ bubbletype=%@ invalidtime=%@",
         extractXMLValue(content, @"total_fee") ?: @"(nil)",
         extractXMLValue(content, @"feedesc") ?: @"(nil)",
         extractXMLValue(content, @"paysubtype") ?: @"(nil)",
         extractXMLValue(content, @"bubbletype") ?: @"(nil)",
-        extractXMLValue(content, @"invalidtime") ?: @"(nil)"]];
+        extractXMLValue(content, @"invalidtime") ?: @"(nil)");
 
-    [_WPLogManager appendLineWithTag:@"AutoTransfer" content:[NSString stringWithFormat:
-        @"[DEBUG] ObjC属性: payInfoItem=%@ m_uiTransferAmount=%@ m_total_fee=%@",
+    WPLogDebug(@"AutoTransfer", @"[DEBUG] ObjC属性: payInfoItem=%@ m_uiTransferAmount=%@ m_total_fee=%@",
         payInfoItem ? @"可用" : @"nil",
         payInfoItem ? [payInfoItem valueForKey:@"m_uiTransferAmount"] ?: @"(nil)" : @"(N/A)",
-        payInfoItem ? [payInfoItem valueForKey:@"m_total_fee"] ?: @"(nil)" : @"(N/A)"]];
+        payInfoItem ? [payInfoItem valueForKey:@"m_total_fee"] ?: @"(nil)" : @"(N/A)");
+
 
     WPLog(@"AutoTransfer", @"[DEBUG] 完整XML: %@", content);
 
