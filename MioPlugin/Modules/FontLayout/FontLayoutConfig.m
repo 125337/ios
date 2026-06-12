@@ -2,7 +2,18 @@
 
 @implementation FontLayoutConfig
 
-MIO_SINGLETON_IMPL(FontLayoutConfig)
+#pragma mark - Singleton
+
++ (instancetype)shared {
+    static FontLayoutConfig *instance = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        instance = [[FontLayoutConfig alloc] init];
+    });
+    return instance;
+}
+
+#pragma mark - ConfigModule Protocol
 
 + (NSString *)modulePrefix {
     return @"FontLayout_";
