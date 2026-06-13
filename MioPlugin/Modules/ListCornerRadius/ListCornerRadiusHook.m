@@ -114,6 +114,17 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
+    // ★ 防抖：左滑/快速滚动时跳过频繁的圆角重算 ★
+    static CFTimeInterval lastCall = 0;
+    CFTimeInterval now = CACurrentMediaTime();
+    if (now - lastCall < 0.033) {  // 33ms 内跳过（约 2 帧间隔）
+        if (orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
+    lastCall = now;
+
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) {
         if (orig_MMTableViewCell_layoutSubviews) {
