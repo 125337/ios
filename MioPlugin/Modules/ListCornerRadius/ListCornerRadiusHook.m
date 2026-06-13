@@ -125,6 +125,23 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
     lastCall = now;
 
+    // ★ 左滑检测：检查 UITableView 是否正在交互式滑动（如微信助手快捷菜单）★
+    // 左滑时修改 frame 会与 iOS UISwipeActionsConfiguration 冲突导致死循环
+    BOOL isSwiping = NO;
+    {
+        UIView *p = (UIView *)self;
+        while (p) {
+            if ([p isKindOfClass:[UITableView class]]) {
+                @try {
+                    id controller = [(UITableView *)p valueForKey:@"_swipeActionController"];
+                    isSwiping = (controller != nil);
+                } @catch (NSException *e) { /* KVC 安全忽略 */ }
+                break;
+            }
+            p = p.superview;
+        }
+    }
+
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) {
         if (orig_MMTableViewCell_layoutSubviews) {
@@ -152,9 +169,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
-    // ★ margin 代码（进入此处说明 globalCornerRadiusEnabled 已开启）★
+    // ★ margin 代码（左滑时跳过，不与 iOS UISwipeActionsConfiguration 冲突）★
     CGFloat margin = config.listCellMargin;
-    if (margin > 0) {
+    if (!isSwiping && margin > 0) {
         CGFloat currentX = cellView.frame.origin.x;
         UIView *superview = cellView.superview;
         CGFloat superX = superview ? superview.frame.origin.x : 0;
@@ -163,7 +180,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                                        : [UIScreen mainScreen].bounds.size.width;
         CGFloat targetW = containerW - 2.0 * margin;
         CGFloat currentW = cellView.frame.size.width;
-        // ★ 改造 A：浮点比较使用 fabs 阈值，精确匹配微信优化的整数运算行为
         if (fabs(currentX - targetX) > 0.5 || fabs(currentW - targetW) > 0.5) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
