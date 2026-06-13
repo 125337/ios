@@ -139,17 +139,22 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
-    // ★ margin 代码（只改 origin.x，不改 width，与微信优化一致）★
-    // 不改 width 则 bounds 不变，不触发额外 layoutSubviews，避免与 UISwipeActionsConfiguration 冲突
+    // ★ margin 代码（先调 orig 再做 frame 修改，避免与 iOS swipe 冲突）★
+    // 微信优化反编译证实：同时修改 origin.x 和 size.width，key 是先调 orig
     CGFloat margin = config.listCellMargin;
     if (margin > 0) {
         UIView *superview = cellView.superview;
         CGFloat superX = superview ? superview.frame.origin.x : 0;
         CGFloat targetX = (margin > superX) ? margin - superX : 0;
+        CGFloat containerW = superview ? superview.bounds.size.width
+                                       : [UIScreen mainScreen].bounds.size.width;
+        CGFloat targetW = containerW - 2.0 * margin;
         CGFloat currentX = cellView.frame.origin.x;
-        if (fabs(currentX - targetX) > 0.5) {
+        CGFloat currentW = cellView.frame.size.width;
+        if (fabs(currentX - targetX) > 0.5 || fabs(currentW - targetW) > 0.5) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
+            f.size.width = targetW;
             cellView.frame = f;
         }
     }
