@@ -125,72 +125,44 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
     lastCall = now;
 
-    // ★ 左滑检测：检查 UITableView 是否正在交互式滑动（如微信助手快捷菜单）★
-    // 左滑时修改 frame 会与 iOS UISwipeActionsConfiguration 冲突导致死循环
-    BOOL isSwiping = NO;
-    {
-        UIView *p = (UIView *)self;
-        while (p) {
-            if ([p isKindOfClass:[UITableView class]]) {
-                @try {
-                    id controller = [(UITableView *)p valueForKey:@"_swipeActionController"];
-                    isSwiping = (controller != nil);
-                } @catch (NSException *e) { /* KVC 安全忽略 */ }
-                break;
-            }
-            p = p.superview;
-        }
+    // ★ 微信优化方式：先调用 orig，再修改 frame（只改 origin.x，不改 width）★
+    // 不修改 width 则 bounds 不变，不会额外触发 layoutSubviews，
+    // 从而避免与 iOS UISwipeActionsConfiguration 左滑动画的布局循环冲突
+    if (orig_MMTableViewCell_layoutSubviews) {
+        ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) {
-        if (orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
         return;
     }
     NSString *className = NSStringFromClass([vc class]);
 
     // ★ 模块责任查询：不属于列表圆角则跳过 ★
     if (![CornerResponsibility isListCornerResponsibleFor:vc]) {
-        if (orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
         return;
     }
 
     // ★★★ 全局开关过滤 ★★★
     if (!shouldApplyGlobalCorner(vc)) {
-        if (orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
         return;
     }
 
     UIView *cellView = (UIView *)self;
 
-    // ★ margin 代码（左滑时跳过，不与 iOS UISwipeActionsConfiguration 冲突）★
+    // ★ margin 代码（只改 origin.x，不改 width，与微信优化一致）★
+    // 不改 width 则 bounds 不变，不触发额外 layoutSubviews，避免与 UISwipeActionsConfiguration 冲突
     CGFloat margin = config.listCellMargin;
-    if (!isSwiping && margin > 0) {
-        CGFloat currentX = cellView.frame.origin.x;
+    if (margin > 0) {
         UIView *superview = cellView.superview;
         CGFloat superX = superview ? superview.frame.origin.x : 0;
         CGFloat targetX = (margin > superX) ? margin - superX : 0;
-        CGFloat containerW = superview ? superview.bounds.size.width
-                                       : [UIScreen mainScreen].bounds.size.width;
-        CGFloat targetW = containerW - 2.0 * margin;
-        CGFloat currentW = cellView.frame.size.width;
-        if (fabs(currentX - targetX) > 0.5 || fabs(currentW - targetW) > 0.5) {
+        CGFloat currentX = cellView.frame.origin.x;
+        if (fabs(currentX - targetX) > 0.5) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
-            f.size.width = targetW;
             cellView.frame = f;
         }
-    }
-
-    // ★ orig ★
-    if (orig_MMTableViewCell_layoutSubviews) {
-        ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
 
     // ★ bgColor 设置 ★
