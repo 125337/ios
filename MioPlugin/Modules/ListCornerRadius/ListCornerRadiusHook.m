@@ -114,17 +114,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
-    // ★ 防抖：左滑/快速滚动时跳过频繁的圆角重算 ★
-    static CFTimeInterval lastCall = 0;
-    CFTimeInterval now = CACurrentMediaTime();
-    if (now - lastCall < 0.033) {  // 33ms 内跳过（约 2 帧间隔）
-        if (orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
-        return;
-    }
-    lastCall = now;
-
     // ★ 微信优化方式：先调用 orig，再修改 frame（只改 origin.x，不改 width）★
     // 不修改 width 则 bounds 不变，不会额外触发 layoutSubviews，
     // 从而避免与 iOS UISwipeActionsConfiguration 左滑动画的布局循环冲突
