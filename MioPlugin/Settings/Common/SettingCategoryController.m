@@ -112,6 +112,17 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     }
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    // 顶栏颜色与页面背景统一，pop 回微信页面时由 viewWillDisappear 恢复原样
+    WPApplyNavAppearance(self);
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    WPRestoreNavAppearance(self);
+}
+
 #pragma mark - Group (UITableView)
 
 - (UIView *)addTableGroupAtY:(CGFloat)y width:(CGFloat)w {

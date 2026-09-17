@@ -36,3 +36,10 @@ void WPDrawDisclosureArrow(UIView *card, CGFloat cy, CGFloat containerW, CGFloat
 /// 复刻微信优化 getChatConfirmationTopViewController — 遍历 UIWindow 层级找到 MMUIViewController 子类
 /// 避免直接 [self presentViewController:] 触发 iOS 17 presentingModalViewController 崩溃
 UIViewController *WPGetTopVCForPresentation(void);
+
+/// 统一导航栏外观：背景色与页面背景一致（WPBgColor），去底部阴影线
+/// 首次调用时自动保存当前导航栏 appearance（挂在 navBar 上）
+void WPApplyNavAppearance(UIViewController *vc);
+
+/// 恢复导航栏原始外观（viewWillDisappear 时调用，避免污染微信其他页面）
+void WPRestoreNavAppearance(UIViewController *vc);

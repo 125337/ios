@@ -37,6 +37,16 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     WPLog(@"Setting", @"[Entry] viewDidLoad done, defer UI to viewWillAppear");
 }
 
+static void pluginEntryViewWillDisappear(id self, SEL _cmd, BOOL animated) {
+    // 调用父类
+    Class uiVC = objc_getClass("UIViewController");
+    Method m = class_getInstanceMethod(uiVC, _cmd);
+    if (m) {
+        ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
+    }
+    WPRestoreNavAppearance((UIViewController *)self);
+}
+
 static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     WPLog(@"Setting", @"[Entry] viewWillAppear");
 
@@ -65,6 +75,9 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     }
 
     CGFloat w = vc.view.bounds.size.width;
+
+    // 顶栏颜色与页面背景统一（pop 时由 viewWillDisappear 恢复微信原样）
+    WPApplyNavAppearance(vc);
 
     // === 以下是 UI 创建逻辑（与原来完全一致，只是移到了 viewWillAppear） ===
     UIScrollView *sv = WPMakeSV(vc);
@@ -321,6 +334,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
                     if (entryClass) {
                         class_addMethod(entryClass, NSSelectorFromString(@"viewDidLoad"), (IMP)pluginEntryViewDidLoad, "v@:");
                         class_addMethod(entryClass, NSSelectorFromString(@"viewWillAppear:"), (IMP)pluginEntryViewWillAppear, "v@:B");
+                        class_addMethod(entryClass, NSSelectorFromString(@"viewWillDisappear:"), (IMP)pluginEntryViewWillDisappear, "v@:B");
                         objc_registerClassPair(entryClass);
                         WPLog(@"Setting", @"[Plugin] MioPluginEntryVC created");
                     } else {

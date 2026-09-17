@@ -238,3 +238,39 @@ UIViewController *WPGetTopVCForPresentation(void) {
     }
     return top;
 }
+
+#pragma mark - 导航栏外观统一
+
+static char kNavSavedStandardKey;
+static char kNavSavedScrollEdgeKey;
+
+void WPApplyNavAppearance(UIViewController *vc) {
+    UINavigationBar *navBar = vc.navigationController.navigationBar;
+    if (!navBar) return;
+
+    // 首次应用时保存原始外观（挂在共享 navBar 上，恢复后即清除）
+    if (!objc_getAssociatedObject(navBar, &kNavSavedStandardKey)) {
+        objc_setAssociatedObject(navBar, &kNavSavedStandardKey, navBar.standardAppearance, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(navBar, &kNavSavedScrollEdgeKey, navBar.scrollEdgeAppearance, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+
+    UINavigationBarAppearance *app = [[UINavigationBarAppearance alloc] init];
+    [app configureWithOpaqueBackground];
+    app.backgroundColor = WPBgColor();
+    app.shadowColor = [UIColor clearColor];
+    app.shadowImage = [[UIImage alloc] init];
+    navBar.standardAppearance = app;
+    navBar.scrollEdgeAppearance = app;
+}
+
+void WPRestoreNavAppearance(UIViewController *vc) {
+    UINavigationBar *navBar = vc.navigationController.navigationBar;
+    if (!navBar) return;
+
+    UINavigationBarAppearance *std = objc_getAssociatedObject(navBar, &kNavSavedStandardKey);
+    UINavigationBarAppearance *edge = objc_getAssociatedObject(navBar, &kNavSavedScrollEdgeKey);
+    if (std) navBar.standardAppearance = std;
+    if (edge) navBar.scrollEdgeAppearance = edge;
+    objc_setAssociatedObject(navBar, &kNavSavedStandardKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(navBar, &kNavSavedScrollEdgeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
