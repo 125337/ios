@@ -37,6 +37,17 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     WPLog(@"Setting", @"[Entry] viewDidLoad done, defer UI to viewWillAppear");
 }
 
+static void pluginEntryViewDidAppear(id self, SEL _cmd, BOOL animated) {
+    // 调用父类
+    Class uiVC = objc_getClass("UIViewController");
+    Method m = class_getInstanceMethod(uiVC, _cmd);
+    if (m) {
+        ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
+    }
+    // 兜底：若微信基类链在 viewWillAppear 之后重设了导航栏样式，这里再统一一次
+    WPApplyNavAppearance((UIViewController *)self);
+}
+
 static void pluginEntryViewWillDisappear(id self, SEL _cmd, BOOL animated) {
     // 调用父类
     Class uiVC = objc_getClass("UIViewController");
@@ -57,14 +68,19 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
     }
 
+    UIViewController *vc = (UIViewController *)self;
+
+    // 顶栏颜色与页面背景统一：不依赖 bounds，且在 viewDidAppear 还有兜底二次应用
+    WPApplyNavAppearance(vc);
+    WPLog(@"Setting", @"[Nav] entry apply: nav=%@ bar=%@",
+          vc.navigationController, vc.navigationController.navigationBar);
+
     // associated object 做一次性标记（runtime 级原子安全，无需 @synchronized）
     if (objc_getAssociatedObject(self, @"_entrySetupDone")) {
         WPLog(@"Setting", @"[Entry] viewWillAppear: already set up");
         return;
     }
     objc_setAssociatedObject(self, @"_entrySetupDone", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    UIViewController *vc = (UIViewController *)self;
 
     // bounds 检查
     if (vc.view.bounds.size.width < 1) {
@@ -75,9 +91,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     }
 
     CGFloat w = vc.view.bounds.size.width;
-
-    // 顶栏颜色与页面背景统一（pop 时由 viewWillDisappear 恢复微信原样）
-    WPApplyNavAppearance(vc);
 
     // === 以下是 UI 创建逻辑（与原来完全一致，只是移到了 viewWillAppear） ===
     UIScrollView *sv = WPMakeSV(vc);
@@ -334,6 +347,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
                     if (entryClass) {
                         class_addMethod(entryClass, NSSelectorFromString(@"viewDidLoad"), (IMP)pluginEntryViewDidLoad, "v@:");
                         class_addMethod(entryClass, NSSelectorFromString(@"viewWillAppear:"), (IMP)pluginEntryViewWillAppear, "v@:B");
+                        class_addMethod(entryClass, NSSelectorFromString(@"viewDidAppear:"), (IMP)pluginEntryViewDidAppear, "v@:B");
                         class_addMethod(entryClass, NSSelectorFromString(@"viewWillDisappear:"), (IMP)pluginEntryViewWillDisappear, "v@:B");
                         objc_registerClassPair(entryClass);
                         WPLog(@"Setting", @"[Plugin] MioPluginEntryVC created");
