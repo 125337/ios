@@ -61,7 +61,7 @@
     CGFloat ay = 0;
     NSArray *archs = @[@[@"RedEnvelopHook", @"自动抢红包"],
                         @[@"PreventRecallHook", @"防撤回"],
-                        @[@"HookEngine", @"Hook引擎"],
+                        @[@"MioSubstrate", @"Hook引擎"],
                         @[@"MioPlugin", @"配置中心"]];
     for (NSUInteger i = 0; i < archs.count; i++) {
         if (i > 0) ay = [self addSeparatorInGroup:archGroup cy:ay width:w];

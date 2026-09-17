@@ -52,7 +52,7 @@
     NSArray *modules = @[
         @"RevokeHook", @"防撤回",
         @"ClearUnreadHook", @"未读清零",
-        @"HookEngine", @"Hook引擎",
+        @"MioSubstrate", @"Hook引擎",
         @"MioPlugin", @"配置中心"
     ];
 
