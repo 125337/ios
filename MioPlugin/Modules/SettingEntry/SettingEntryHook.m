@@ -64,6 +64,26 @@ static void WPDumpViewTree(UIView *v, NSInteger depth, NSInteger maxDepth, NSMut
     }
 }
 
+/// 从截图取一个比例坐标点的像素色（返回 #RRGGBB）
+static NSString *WPSamplePixel(UIImage *img, float fx, float fy) {
+    CGImageRef cg = img.CGImage;
+    if (!cg) return @"nil";
+    size_t w = CGImageGetWidth(cg);
+    size_t h = CGImageGetHeight(cg);
+    unsigned char buf[4] = {0, 0, 0, 0};
+    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+    CGContextRef ctx = CGBitmapContextCreate(buf, 1, 1, 8, 4, cs,
+                                             kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    CGColorSpaceRelease(cs);
+    if (!ctx) return @"ctx-nil";
+    CGFloat px = fx * (CGFloat)w;
+    CGFloat py = (1.0f - fy) * (CGFloat)h; // CG 底左原点，UIKit fy 翻转
+    CGContextSetInterpolationQuality(ctx, kCGInterpolationNone);
+    CGContextDrawImage(ctx, CGRectMake(0.5 - px, 0.5 - py, (CGFloat)w, (CGFloat)h), cg);
+    CGContextRelease(ctx);
+    return [NSString stringWithFormat:@"#%02X%02X%02X", buf[0], buf[1], buf[2]];
+}
+
 static void pluginEntryViewDidAppear(id self, SEL _cmd, BOOL animated) {
     // 调用父类
     Class uiVC = objc_getClass("UIViewController");
@@ -74,13 +94,31 @@ static void pluginEntryViewDidAppear(id self, SEL _cmd, BOOL animated) {
     // 兜底：若微信基类链在 viewWillAppear 之后重设了导航栏样式，这里再统一一次
     WPApplyNavAppearance((UIViewController *)self);
 
-    // 诊断：延迟 1.5s 扫描 window 视图树，捕捉返回后叠加的主题/dim 层（class/alpha/bg）
+    // 诊断：延迟 1.5s 后（1）扫视图树（2）window 截图采样实际渲染像素色
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         UIWindow *window = ((UIViewController *)self).view.window;
         if (!window) return;
         NSMutableString *tree = [NSMutableString string];
         WPDumpViewTree(window, 0, 10, tree);
         WPLog(@"Setting", @"[Nav] window tree after appear:\n%@", tree);
+
+        // 截图取色：采样 nav 中部 / 页面顶部 / 中部 / 下部 / 底部的最终合成色
+        @try {
+            UIGraphicsBeginImageContextWithOptions(window.bounds.size, NO, 1.0);
+            [window drawViewHierarchyInRect:window.bounds afterScreenUpdates:YES];
+            UIImage *snap = UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+            if (snap) {
+                WPLog(@"Setting", @"[Nav] pixel samples: nav=%@ top=%@ mid=%@ low=%@ bottom=%@",
+                      WPSamplePixel(snap, 0.5f, 0.09f),
+                      WPSamplePixel(snap, 0.5f, 0.16f),
+                      WPSamplePixel(snap, 0.5f, 0.40f),
+                      WPSamplePixel(snap, 0.5f, 0.70f),
+                      WPSamplePixel(snap, 0.5f, 0.95f));
+            }
+        } @catch (NSException *e) {
+            WPLog(@"Setting", @"[Nav] snapshot err: %@", e);
+        }
     });
 }
 
