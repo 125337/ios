@@ -58,9 +58,15 @@ try {
         Write-Host "[1/4] 无代码改动，直接使用当前 HEAD 触发/获取构建" -ForegroundColor Yellow
     }
 
-    # ── 2. 推送 ──
-    & $Git push "https://${Token}@github.com/${RepoOwner}/${RepoName}.git" "HEAD:$Branch"
-    if ($LASTEXITCODE -ne 0) { Write-Host "[X] push 失败" -ForegroundColor Red; exit 1 }
+    # ── 2. 推送（网络抖动自动重试） ──
+    $Pushed = $false
+    foreach ($i in 1..3) {
+        & $Git push "https://${Token}@github.com/${RepoOwner}/${RepoName}.git" "HEAD:$Branch" 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { $Pushed = $true; break }
+        Write-Host "    push 失败（第 $i 次），5 秒后重试..." -ForegroundColor DarkGray
+        Start-Sleep -Seconds 5
+    }
+    if (-not $Pushed) { Write-Host "[X] push 连续失败（网络被重置），稍后重跑本脚本即可" -ForegroundColor Red; exit 1 }
     $Sha = (& $Git rev-parse HEAD).Trim()
     Write-Host "[2/4] 已推送: $Sha" -ForegroundColor Yellow
 
