@@ -93,6 +93,9 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     CGFloat w = vc.view.bounds.size.width;
 
     // === 以下是 UI 创建逻辑（与原来完全一致，只是移到了 viewWillAppear） ===
+    // 与子页面(SettingCategoryController)对齐：self.view 和 scrollView 都设 WPBgColor，
+    // 防止 scrollView 未完全覆盖时露出微信基类的主题背景色
+    vc.view.backgroundColor = WPBgColor();
     UIScrollView *sv = WPMakeSV(vc);
     [vc.view addSubview:sv];
 
