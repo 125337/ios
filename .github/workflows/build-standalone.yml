@@ -31,10 +31,8 @@ jobs:
         SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
 
         # 自动发现 MioPlugin 下所有 .m 源文件（新增文件无需修改本 workflow）
-        mapfile -t SOURCES < <(find MioPlugin -name '*.m' -type f | sort)
-        echo "Found ${#SOURCES[@]} source files"
-
-        for f in "${SOURCES[@]}"; do
+        # 注意：macOS 自带 bash 3.2 无 mapfile，用 while read 兼容写法
+        find MioPlugin -name '*.m' -type f | sort | while read -r f; do
           BASENAME=$(basename "$f" .m)
           OBJ_FILE="build/${BASENAME}.o"
           echo "Compiling: $f -> $OBJ_FILE"
