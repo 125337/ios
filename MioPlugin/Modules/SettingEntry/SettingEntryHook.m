@@ -46,6 +46,37 @@ static void pluginEntryViewDidAppear(id self, SEL _cmd, BOOL animated) {
     }
     // 兜底：若微信基类链在 viewWillAppear 之后重设了导航栏样式，这里再统一一次
     WPApplyNavAppearance((UIViewController *)self);
+
+    // 诊断：延迟 1.5s 扫描 window 视图树，捕捉返回后叠加的主题/dim 层（class/alpha/bg）
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        UIWindow *window = ((UIViewController *)self).view.window;
+        if (!window) return;
+        NSMutableString *tree = [NSMutableString string];
+        WPDumpViewTree(window, 0, 4, tree);
+        WPLog(@"Setting", @"[Nav] window tree after appear:\n%@", tree);
+    });
+}
+
+static void WPDumpViewTree(UIView *v, NSInteger depth, NSInteger maxDepth, NSMutableString *out) {
+    if (!v || depth > maxDepth) return;
+    NSMutableString *indent = [NSMutableString string];
+    for (NSInteger i = 0; i < depth; i++) [indent appendString:@"  "];
+    NSString *bg = @"-";
+    if ([v backgroundColor]) {
+        UIColor *c = [v backgroundColor];
+        CGFloat r, g, b, a;
+        if ([c getRed:&r green:&g blue:&b alpha:&a]) {
+            bg = [NSString stringWithFormat:@"(%.2f,%.2f,%.2f,%.2f)", r, g, b, a];
+        } else {
+            bg = @"<dynamic/pattern>";
+        }
+    }
+    [out appendFormat:@"%@%@ frame=%@ alpha=%.2f hidden=%d bg=%@\n",
+         indent, NSStringFromClass([v class]),
+         NSStringFromCGRect(v.frame), [v alpha], [v isHidden], bg];
+    for (UIView *sub in [v subviews]) {
+        WPDumpViewTree(sub, depth + 1, maxDepth, out);
+    }
 }
 
 static void pluginEntryViewWillDisappear(id self, SEL _cmd, BOOL animated) {
