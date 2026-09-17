@@ -30,90 +30,11 @@ jobs:
 
         SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
 
-        for f in \
-          MioPlugin/Tweak.m \
-          MioPlugin/Config/WPColorUtil.m \
-          MioPlugin/Core/ConfigDescriptor.m \
-          MioPlugin/Core/ConfigManager.m \
-          MioPlugin/Core/WPUtility.m \
-          MioPlugin/Modules/Revoke/RevokeConfig.m \
-          MioPlugin/Modules/Unread/ClearUnreadConfig.m \
-          MioPlugin/Modules/Joker/JokerConfig.m \
-          MioPlugin/Modules/GroupExit/GroupExitConfig.m \
-          MioPlugin/Modules/RedEnvelop/RedEnvelopConfig.m \
-          MioPlugin/Modules/AutoTransfer/AutoTransferConfig.m \
-          MioPlugin/Modules/ChatTopBar/ChatTopBarConfig.m \
-          MioPlugin/Modules/MessageTime/MessageTimeConfig.m \
-          MioPlugin/Modules/Layout/UIPurifyConfig.m \
-          MioPlugin/Modules/Layout/AttachLayoutConfig.m \
-          MioPlugin/Modules/HideAvatar/HideAvatarConfig.m \
-          MioPlugin/Modules/PlaceholderText/PlaceholderTextConfig.m \
-          MioPlugin/Modules/ListCornerRadius/ListCornerRadiusConfig.m \
-          MioPlugin/Modules/ProfileCardBg/CardBgConfig.m \
-          MioPlugin/Modules/FontLayout/FontLayoutConfig.m \
-          MioPlugin/Config/WPHueSlider.m \
-          MioPlugin/Config/WPHueSlider.m \
-          MioPlugin/Config/WPSaturationBrightnessView.m \
-          MioPlugin/Config/WPRGBAControl.m \
-          MioPlugin/Config/WPHexInputView.m \
-          MioPlugin/Config/WPColorPaletteView.m \
-          MioPlugin/Config/WPHsvColorPickerController.m \
-          MioPlugin/Config/WPColorPicker.m \
-          MioPlugin/Core/MioAlertHelper.m \
-          MioPlugin/Core/MioRestartHelper.m \
-          MioPlugin/Core/LogManager.m \
-          MioPlugin/Core/MioSubstrate.m \
-          MioPlugin/Registry/MioModuleRegistry.m \
-          MioPlugin/Modules/Revoke/RevokeHandler.m \
-          MioPlugin/Modules/Revoke/RevokeHook.m \
-          MioPlugin/Modules/Revoke/RevokeFormatEditorVC.m \
-          MioPlugin/Modules/RedEnvelop/RedEnvelopHook.m \
-          MioPlugin/Modules/RedEnvelop/MioRedEnvelopTaskManager.m \
-          MioPlugin/Modules/Layout/UIPurifyHook.m \
-          MioPlugin/Modules/Layout/UIAttachLayoutHook.m \
-          MioPlugin/Modules/Unread/ClearUnreadHook.m \
-          MioPlugin/Modules/SettingEntry/SettingEntryHook.m \
-          MioPlugin/Modules/SettingEntry/WPCommonUI.m \
-          MioPlugin/Modules/SettingEntry/WPOtherVC.m \
-          MioPlugin/Modules/SettingEntry/WPAboutVC.m \
-          MioPlugin/Modules/SettingEntry/WPBackupVC.m \
-          MioPlugin/Modules/SettingEntry/WPUIVC.m \
-          MioPlugin/Modules/SettingEntry/WPUIPurifyVC.m \
-          MioPlugin/Modules/SettingEntry/WPUIAttachmentLayoutVC.m \
-          MioPlugin/Modules/SettingEntry/WPUIPlaceholderTextVC.m \
-          MioPlugin/Modules/Joker/JokerHook.m \
-          MioPlugin/Modules/GroupExit/GroupExitHook.m \
-          MioPlugin/Modules/MessageTime/MessageTimeHook.m \
-          MioPlugin/Modules/MessageTime/MessageTimeFormatParser.m \
-          MioPlugin/Modules/MessageTime/MessageTimeFormatEditorVC.m \
-          MioPlugin/Modules/HideAvatar/HideAvatarHook.m \
-          MioPlugin/Modules/AutoTransfer/AutoTransferHook.m \
-          MioPlugin/Modules/PlaceholderText/PlaceholderTextHook.m \
-          MioPlugin/Modules/ChatTopBar/MioChatAvatarTitleView.m \
-          MioPlugin/Modules/ChatTopBar/ChatTopBarHook.m \
-          MioPlugin/Modules/ChatTopBar/CSContactInfoPopoverController.m \
-          MioPlugin/Modules/ChatTopBar/AvatarLoader.m \
-          MioPlugin/Modules/ListCornerRadius/ListCornerRadiusHook.m \
-          MioPlugin/Modules/ProfileCardBg/ProfileCardBgHook.m \
-          MioPlugin/Modules/FontLayout/FontLayoutHook.m \
-          MioPlugin/Core/Utils/CornerResponsibility/CornerResponsibility.m \
-          MioPlugin/Settings/Common/SettingCategoryController.m \
-          MioPlugin/Settings/Common/WPBorderLayer.m \
-          MioPlugin/Settings/Controllers/SettingController.m \
-          MioPlugin/Settings/Controllers/SettingAboutController.m \
-          MioPlugin/Settings/Controllers/SettingGeneralFunctionController.m \
-          MioPlugin/Settings/Controllers/SettingLayoutFunctionController.m \
-          MioPlugin/Settings/Controllers/SettingMessageTimeController.m \
-          MioPlugin/Settings/Controllers/SettingRevokeController.m \
-          MioPlugin/Settings/Controllers/SettingRedEnvelopController.m \
-          MioPlugin/Settings/Controllers/SettingAvatarHideController.m \
-          MioPlugin/Settings/Controllers/SettingChatTopBarController.m \
-          MioPlugin/Settings/Controllers/ChatTopBarBlacklistEditorVC.m \
-          MioPlugin/Settings/Controllers/SettingListCornerRadiusController.m \
-          MioPlugin/Settings/Controllers/SettingCardBackgroundController.m \
-          MioPlugin/Settings/Controllers/SettingCornerRadiusController.m \
-          MioPlugin/Settings/Controllers/WPUILayoutSettingsVC.m \
-          MioPlugin/Settings/Controllers/MioTweakGroupSelectsController.m; do
+        # 自动发现 MioPlugin 下所有 .m 源文件（新增文件无需修改本 workflow）
+        mapfile -t SOURCES < <(find MioPlugin -name '*.m' -type f | sort)
+        echo "Found ${#SOURCES[@]} source files"
+
+        for f in "${SOURCES[@]}"; do
           BASENAME=$(basename "$f" .m)
           OBJ_FILE="build/${BASENAME}.o"
           echo "Compiling: $f -> $OBJ_FILE"

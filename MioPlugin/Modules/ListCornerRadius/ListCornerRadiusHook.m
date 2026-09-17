@@ -114,49 +114,56 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         return;
     }
 
-    // ★ 微信优化方式：先调用 orig，再修改 frame（只改 origin.x，不改 width）★
-    // 不修改 width 则 bounds 不变，不会额外触发 layoutSubviews，
-    // 从而避免与 iOS UISwipeActionsConfiguration 左滑动画的布局循环冲突
-    if (orig_MMTableViewCell_layoutSubviews) {
-        ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-    }
-
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) {
+        if (orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
         return;
     }
     NSString *className = NSStringFromClass([vc class]);
 
     // ★ 模块责任查询：不属于列表圆角则跳过 ★
     if (![CornerResponsibility isListCornerResponsibleFor:vc]) {
+        if (orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
         return;
     }
 
     // ★★★ 全局开关过滤 ★★★
     if (!shouldApplyGlobalCorner(vc)) {
+        if (orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
         return;
     }
 
     UIView *cellView = (UIView *)self;
 
-    // ★ margin 代码（先调 orig 再做 frame 修改，避免与 iOS swipe 冲突）★
-    // 微信优化反编译证实：同时修改 origin.x 和 size.width，key 是先调 orig
+    // ★ margin 代码（进入此处说明 globalCornerRadiusEnabled 已开启）★
     CGFloat margin = config.listCellMargin;
     if (margin > 0) {
+        CGFloat currentX = cellView.frame.origin.x;
         UIView *superview = cellView.superview;
         CGFloat superX = superview ? superview.frame.origin.x : 0;
         CGFloat targetX = (margin > superX) ? margin - superX : 0;
         CGFloat containerW = superview ? superview.bounds.size.width
                                        : [UIScreen mainScreen].bounds.size.width;
         CGFloat targetW = containerW - 2.0 * margin;
-        CGFloat currentX = cellView.frame.origin.x;
         CGFloat currentW = cellView.frame.size.width;
+        // ★ 改造 A：浮点比较使用 fabs 阈值，精确匹配微信优化的整数运算行为
         if (fabs(currentX - targetX) > 0.5 || fabs(currentW - targetW) > 0.5) {
             CGRect f = cellView.frame;
             f.origin.x = targetX;
             f.size.width = targetW;
             cellView.frame = f;
         }
+    }
+
+    // ★ orig ★
+    if (orig_MMTableViewCell_layoutSubviews) {
+        ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
     }
 
     // ★ bgColor 设置 ★
