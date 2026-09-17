@@ -70,6 +70,18 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 
     UIViewController *vc = (UIViewController *)self;
 
+    // 每次出现都重设背景（微信主题系统可能在子页返回时改过 view/scrollView 颜色）+ 诊断日志
+    UIColor *resolved = [WPBackgroundColor() resolvedColorWithTraitCollection:vc.view.traitCollection];
+    WPLog(@"Setting", @"[Nav] entry appear: bg=%@ trait=%ld subviews=%lu",
+          resolved, (long)vc.view.traitCollection.userInterfaceStyle,
+          (unsigned long)vc.view.subviews.count);
+    vc.view.backgroundColor = WPBgColor();
+    for (UIView *sub in vc.view.subviews) {
+        if ([sub isKindOfClass:[UIScrollView class]]) {
+            sub.backgroundColor = WPBgColor();
+        }
+    }
+
     // 顶栏颜色与页面背景统一：不依赖 bounds，且在 viewDidAppear 还有兜底二次应用
     WPApplyNavAppearance(vc);
     WPLog(@"Setting", @"[Nav] entry apply: nav=%@ bar=%@",
