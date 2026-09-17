@@ -35,6 +35,17 @@ elseif (Test-Path "$env:ProgramFiles\Git\bin\git.exe") { $Git = "$env:ProgramFil
 elseif (Test-Path "$env:USERPROFILE\.local\share\MinGit\cmd\git.exe") { $Git = "$env:USERPROFILE\.local\share\MinGit\cmd\git.exe" }
 else { Write-Host "[X] 未找到 git，请先安装 Git for Windows 或 MinGit" -ForegroundColor Red; exit 1 }
 
+# git 调用封装：stderr 警告（如 CRLF 提示）不会中断脚本
+function Git-Safe {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $out = & $Git @args 2>&1
+        $out = @($out | ForEach-Object { "$_" }) | Where-Object { $_ -ne "" }
+    } finally { $ErrorActionPreference = $prev }
+    return ,@($out)
+}
+
 $Headers = @{
     Authorization = "token $Token"
     Accept        = "application/vnd.github+json"
@@ -48,26 +59,37 @@ try {
     Write-Host "========================================" -ForegroundColor Green
 
     # ── 1. 提交 ──
-    & $Git add -A
-    $Staged = (& $Git diff --cached --name-only) 2>$null
-    if ($Staged) {
+    [void](Git-Safe add -A)
+    $Staged = @(Git-Safe diff --cached --name-only)
+    if ($Staged.Count -gt 0) {
         if (-not $Message) { $Message = "build: $(Get-Date -Format 'yyyyMMdd_HHmmss')" }
-        & $Git commit -m $Message | Out-Null
+        [void](Git-Safe commit -m $Message)
         Write-Host "[1/4] 已提交: $Message" -ForegroundColor Yellow
     } else {
         Write-Host "[1/4] 无代码改动，直接使用当前 HEAD 触发/获取构建" -ForegroundColor Yellow
     }
 
-    # ── 2. 推送（网络抖动自动重试） ──
+    # ── 2. 推送（SSH 443 优先，被阻断时回退 token HTTPS，各重试） ──
     $Pushed = $false
     foreach ($i in 1..3) {
-        & $Git push "https://${Token}@github.com/${RepoOwner}/${RepoName}.git" "HEAD:$Branch" 2>&1 | Out-Null
+        [void](Git-Safe push origin "HEAD:$Branch")
         if ($LASTEXITCODE -eq 0) { $Pushed = $true; break }
-        Write-Host "    push 失败（第 $i 次），5 秒后重试..." -ForegroundColor DarkGray
+        Write-Host "    SSH push 失败（第 $i 次），重试..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 5
     }
-    if (-not $Pushed) { Write-Host "[X] push 连续失败（网络被重置），稍后重跑本脚本即可" -ForegroundColor Red; exit 1 }
-    $Sha = (& $Git rev-parse HEAD).Trim()
+    if (-not $Pushed) {
+        foreach ($i in 1..2) {
+            [void](Git-Safe push "https://${Token}@github.com/${RepoOwner}/${RepoName}.git" "HEAD:$Branch")
+            if ($LASTEXITCODE -eq 0) { $Pushed = $true; break }
+            Write-Host "    HTTPS push 失败（第 $i 次），重试..." -ForegroundColor DarkGray
+            Start-Sleep -Seconds 5
+        }
+    }
+    if (-not $Pushed) {
+        Write-Host "[X] push 均失败。可改用 API 提交: scripts\api_commit.ps1" -ForegroundColor Red
+        exit 1
+    }
+    $Sha = (Git-Safe rev-parse HEAD)[0].Trim()
     Write-Host "[2/4] 已推送: $Sha" -ForegroundColor Yellow
 
     # ── 3. 轮询构建状态 ──
@@ -94,7 +116,6 @@ try {
         } else {
             Write-Host "    [$i] 状态: $($Run.status)..." -ForegroundColor DarkGray
         }
-        $RunId = $Run.id
     }
     if (-not $RunId) { Write-Host "[X] 等待超时，请到 GitHub Actions 页面手动查看" -ForegroundColor Red; exit 1 }
 
