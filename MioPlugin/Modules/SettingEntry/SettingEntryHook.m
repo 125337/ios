@@ -74,7 +74,7 @@ static void pluginEntryViewDidAppear(id self, SEL _cmd, BOOL animated) {
         UIWindow *window = ((UIViewController *)self).view.window;
         if (!window) return;
         NSMutableString *tree = [NSMutableString string];
-        WPDumpViewTree(window, 0, 4, tree);
+        WPDumpViewTree(window, 0, 7, tree);
         WPLog(@"Setting", @"[Nav] window tree after appear:\n%@", tree);
     });
 }
