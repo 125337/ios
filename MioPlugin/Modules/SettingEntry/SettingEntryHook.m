@@ -39,8 +39,13 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
 
 static void WPDumpViewTree(UIView *v, NSInteger depth, NSInteger maxDepth, NSMutableString *out) {
     if (!v || depth > maxDepth) return;
-    NSMutableString *indent = [NSMutableString string];
-    for (NSInteger i = 0; i < depth; i++) [indent appendString:@"  "];
+    // 降噪：隐藏子树与已排除的微信浮窗/手势层只打一行
+    NSString *cls = NSStringFromClass([v class]);
+    if (depth > 0 && ([v isHidden] || [cls hasPrefix:@"Minimize"] || [cls isEqualToString:@"PJTouchTrackingView"])) {
+        [out appendFormat:@"%@%@ (hidden/浮窗, 子树省略)\n",
+             [@"  " stringByPaddingToLength:depth withString:@" " startingAtIndex:0], cls];
+        return;
+    }
     NSString *bg = @"-";
     if ([v backgroundColor]) {
         UIColor *c = [v backgroundColor];
@@ -52,8 +57,8 @@ static void WPDumpViewTree(UIView *v, NSInteger depth, NSInteger maxDepth, NSMut
         }
     }
     [out appendFormat:@"%@%@ frame=%@ alpha=%.2f hidden=%d bg=%@\n",
-         indent, NSStringFromClass([v class]),
-         NSStringFromCGRect(v.frame), [v alpha], [v isHidden], bg];
+         [@"  " stringByPaddingToLength:depth withString:@" " startingAtIndex:0],
+         cls, NSStringFromCGRect(v.frame), [v alpha], [v isHidden], bg];
     for (UIView *sub in [v subviews]) {
         WPDumpViewTree(sub, depth + 1, maxDepth, out);
     }
@@ -74,7 +79,7 @@ static void pluginEntryViewDidAppear(id self, SEL _cmd, BOOL animated) {
         UIWindow *window = ((UIViewController *)self).view.window;
         if (!window) return;
         NSMutableString *tree = [NSMutableString string];
-        WPDumpViewTree(window, 0, 7, tree);
+        WPDumpViewTree(window, 0, 10, tree);
         WPLog(@"Setting", @"[Nav] window tree after appear:\n%@", tree);
     });
 }
