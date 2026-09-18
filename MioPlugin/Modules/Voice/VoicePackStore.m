@@ -637,12 +637,9 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
                 object_setIvar(ext, lv[i], msg); // 回引 wrap（log19 真实 AddMsg 模板里有此回引）
             }
         } else if (strchr("cBsSiIlLqQ", enc[0])) {
+            // 对齐真实 AddMsg 模板：整型仅 format=4（VoiceTime/EndFlag/CancelFlag/ForwardFlag 真实入库时全为 0，管线后续回写）
             long long val = -1;
-            if ([lower containsString:@"voicelength"] || [lower containsString:@"duration"]) val = ms;          // XML voicelength 同语义(毫秒)
-            else if ([lower containsString:@"voicetime"]) val = ms / 1000;                                       // WCRefine: m_uiVoiceTime=秒
-            else if ([lower containsString:@"format"]) val = 4;                                                  // 4 = silk
-            else if ([lower containsString:@"endflag"]) val = 1;
-            else if ([lower containsString:@"forwardflag"]) val = 0;
+            if ([lower containsString:@"format"]) val = 4;                                                       // 4 = silk
             if (val < 0) continue;
             switch (enc[0]) {
                 case 'c': case 'B': *(signed char *)(base + off) = (signed char)val; break;
@@ -733,14 +730,18 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
         MioSetIntIvarIfExist(msg, "m_uiVoiceFormat", 4);            // 4 = silk
         MioSetIntIvarIfExist(msg, "m_uiVoiceEndFlag", 1);
         MioSetIntIvarIfExist(msg, "m_uiVoiceForwardFlag", 0);
-        // 真实发送 wrap 特征字段（log18 实测真实流程.AddMsg：imgStatus=1 bNew=1）
+        // 真实发送 wrap 特征字段（真实模板实测：imgStatus=1 downloadStatus=1 bNew=1。
+        // ★downloadStatus=1=音频已就绪，AddMsg 语音分支直接拾取上传；
+        //   =0 会被挂起等一个永远不会来的"就绪"信号 → 永远"发送中"（log19/21 实测）。
+        //   WCRefine report_E 解码更正：0x818fa0 的 MOVZ w2,#1 才是 setM_uiDownloadStatus: 实参）
         MioSetIntIvarIfExist(msg, "m_uiImgStatus", 1);
-        // ★downloadStatus 显式 0：=1 可能被发送侧当作"语音已就绪"而跳过上传（对照 WCRefine 做法）
-        MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 0);
+        MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 1);
         MioSetIntIvarIfExist(msg, "m_bNew", 1);
-        // XML 模板参照小微助手逆向结论（voiceformat="4" 数值型最小模板）
-        [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voiceformat=\"4\" forwardflag=\"0\" /></msg>", ms]
+        // XML 入库占位模板（真实流程 AddMsg 时 voicelength="0"，真实长度由发送管线解析后回写）
+        [msg setValue:@"<msg><voicemsg voicelength=\"0\" voiceformat=\"4\" forwardflag=\"0\" /></msg>"
                forKey:@"m_nsContent"];
+        // 真实模板 m_nsMsgSource 为空串非 nil
+        [msg setValue:@"" forKey:@"m_nsMsgSource"];
         WPLog(@"Voice", @"[Send] 构造语音: %lldms, wire %llu 字节", ms, wire.length);
 
         // 落盘时机对齐真实流程/WCRefine：入库前不写文件（localID 未定会产生 0.aud 孤儿文件），
@@ -799,31 +800,11 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             WPLog(@"Voice", @"[Send] 正式路径落盘%@: %@", MioWriteVoiceFile(wire, postPath) ? @"成功" : @"失败", postPath);
             MioSetIvarIfExist(msg, "m_nsVoicePath", postPath);
         } else {
-            WPLog(@"Voice", @"[Send] 未探测到正式路径，仅依赖 buffer");
+            WPLog(@"Voice", @"[Send] 未探测到正式路径，上传管线将无从读取文件");
         }
 
-        // ★文件就绪后的收尾信号（log19 卡点实锤：文件补写了但整份日志无一次 SaveMesVoice 调用
-        //   → 上传队列永不触发 → 永远"发送中"）。
-        // log18 实测：SaveMesVoice 第一参数=会话名（非文件路径）。顺序照抄 WCRefine：写文件→setM_nsVoicePath→SaveMesVoice
-        SEL saveSel = NSSelectorFromString(@"SaveMesVoice:MsgWrap:");
-        if ([msgMgr respondsToSelector:saveSel]) {
-            @try {
-                ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, saveSel, chatName, msg);
-                WPLog(@"Voice", @"[Send] SaveMesVoice 已调用 chat=%@", chatName);
-            } @catch (NSException *e) {
-                WPLog(@"Voice", @"[Send] SaveMesVoice 调用异常: %@ %@", e.name, e.reason);
-            }
-        } else {
-            WPLog(@"Voice", @"[Send] SaveMesVoice 不存在，跳过");
-        }
-        // 守卫式 Resend（WCRefine 收尾动作；本版本实测不存在该方法 → 自动跳过）
-        SEL resendSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
-        if ([msgMgr respondsToSelector:resendSel]) {
-            ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, resendSel, chatName, msg);
-            WPLog(@"Voice", @"[Send] ResendVoiceMsg 已调用");
-        } else {
-            WPLog(@"Voice", @"[Send] ResendVoiceMsg 本版本不存在，跳过");
-        }
+        // ★不再调用 SaveMesVoice/ResendVoiceMsg：真实语音从 AddMsg 到发出全程零次 SaveMesVoice
+        //   （log18/21 实测，它是收语音/同步落库用的）；downloadStatus=1 后 AddMsg 语音分支自行拾取上传
 
         WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
 
