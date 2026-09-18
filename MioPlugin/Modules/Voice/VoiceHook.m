@@ -244,6 +244,58 @@ static void hook_AddLocalMsg6(id self, SEL _cmd, id chatName, id wrap, long long
 }
 
 // Hook ⑥: CMessageMgr.AddMsg:MsgWrap:（RedEnv 已挂一层，substrate 链式不冲突）
+// ─── 语音管线取证（run 2023）：FileTL 实锤"边录边写"模型——AddMsg 是录音开始调用，
+//     松手后的"完成信号"才是上传队列启动开关。此组 hook 抓真实录音的完成调用序列 ───
+static void MioLogVoiceBrief(NSString *tag, id chatName, id wrap) {
+    @try {
+        if (!wrap) { WPLog(@"Voice", @"[%@] wrap=nil chat=%@", tag, chatName); return; }
+        id ext = nil;
+        Ivar hostIvar = class_getInstanceVariable(object_getClass(wrap), "m_extendInfoWithMsgType");
+        if (hostIvar) ext = object_getIvar(wrap, hostIvar);
+        id extEnd = ext ? [ext valueForKey:@"m_uiVoiceEndFlag"] : nil;
+        id extLen = ext ? [ext valueForKey:@"m_uiVoiceTime"] : nil;
+        id extData = ext ? [ext valueForKey:@"m_dtVoice"] : nil;
+        WPLog(@"Voice", @"[%@] chat=%@ localID=%@ status=%@ dl=%@ XML=%@ | 扩展: End=%@ VTime=%@ dt=%@",
+              tag, chatName,
+              [wrap valueForKey:@"m_uiMesLocalID"], [wrap valueForKey:@"m_uiStatus"],
+              [wrap valueForKey:@"m_uiDownloadStatus"], [wrap valueForKey:@"m_nsContent"],
+              extEnd, extLen,
+              extData ? [NSString stringWithFormat:@"%lu字节", (unsigned long)[(NSData *)extData length]] : @"nil");
+    } @catch (NSException *e) {
+        WPLog(@"Voice", @"[%@] 摘要异常: %@", tag, e.reason);
+    }
+}
+
+static IMP orig_UpdateVoiceMessage = NULL;
+static void hook_UpdateVoiceMessage(id self, SEL _cmd, id chatName, id wrap) {
+    @try { MioLogVoiceBrief(@"取证.UpdateVoiceMessage", chatName, wrap); } @catch (NSException *e) {}
+    ((void (*)(id, SEL, id, id))orig_UpdateVoiceMessage)(self, _cmd, chatName, wrap);
+}
+
+static IMP orig_UpdateVoiceMessageFT = NULL;
+static void hook_UpdateVoiceMessageFT(id self, SEL _cmd, id chatName, id wrap, long long fixTime) {
+    @try { MioLogVoiceBrief(@"取证.UpdateVoiceMessageFT", chatName, wrap); } @catch (NSException *e) {}
+    ((void (*)(id, SEL, id, id, long long))orig_UpdateVoiceMessageFT)(self, _cmd, chatName, wrap, fixTime);
+}
+
+static IMP orig_UpdateVoiceStatus = NULL;
+static void hook_UpdateVoiceStatus(id self, SEL _cmd, id chatName, long long localID, long long dl) {
+    @try { WPLog(@"Voice", @"[取证.UpdateVoiceStatus] chat=%@ localID=%lld dl=%lld", chatName, localID, dl); } @catch (NSException *e) {}
+    ((void (*)(id, SEL, id, long long, long long))orig_UpdateVoiceStatus)(self, _cmd, chatName, localID, dl);
+}
+
+static IMP orig_StopUploadRecordMsg = NULL;
+static void hook_StopUploadRecordMsg(id self, SEL _cmd, id chatName) {
+    @try { WPLog(@"Voice", @"[取证.StopUploadRecordMsg] chat=%@", chatName); } @catch (NSException *e) {}
+    ((void (*)(id, SEL, id))orig_StopUploadRecordMsg)(self, _cmd, chatName);
+}
+
+static IMP orig_StopUploadRecordMsgByUser = NULL;
+static void hook_StopUploadRecordMsgByUser(id self, SEL _cmd, id chatName) {
+    @try { WPLog(@"Voice", @"[取证.StopUploadRecordMsgByUser] chat=%@", chatName); } @catch (NSException *e) {}
+    ((void (*)(id, SEL, id))orig_StopUploadRecordMsgByUser)(self, _cmd, chatName);
+}
+
 static IMP orig_AddMsgMsgWrap = NULL;
 
 static void hook_AddMsgMsgWrap(id self, SEL _cmd, id chatName, id wrap) {
@@ -720,6 +772,33 @@ static void MioInstallFileProbe(void) {
                         (IMP)hook_AddMsgMsgWrap,
                         (IMP *)&orig_AddMsgMsgWrap);
         WPLog(@"Voice", @"[+] CMessageMgr AddMsg:MsgWrap: hooked (真实流程捕获)");
+
+        // 语音管线取证 hook（run 2023）：抓真实录音"松手完成"的调用序列
+        SEL uvSel = NSSelectorFromString(@"UpdateVoiceMessage:MsgWrap:");
+        if (class_getInstanceMethod(cls, uvSel)) {
+            MSHookMessageEx(cls, uvSel, (IMP)hook_UpdateVoiceMessage, (IMP *)&orig_UpdateVoiceMessage);
+            WPLog(@"Voice", @"[+] UpdateVoiceMessage:MsgWrap: hooked (语音取证)");
+        }
+        SEL uvftSel = NSSelectorFromString(@"UpdateVoiceMessage:MsgWrap:fixTime:");
+        if (class_getInstanceMethod(cls, uvftSel)) {
+            MSHookMessageEx(cls, uvftSel, (IMP)hook_UpdateVoiceMessageFT, (IMP *)&orig_UpdateVoiceMessageFT);
+            WPLog(@"Voice", @"[+] UpdateVoiceMessage:MsgWrap:fixTime: hooked (语音取证)");
+        }
+        SEL uvsSel = NSSelectorFromString(@"UpdateVoiceStatus:LocalID:DownloadStatus:");
+        if (class_getInstanceMethod(cls, uvsSel)) {
+            MSHookMessageEx(cls, uvsSel, (IMP)hook_UpdateVoiceStatus, (IMP *)&orig_UpdateVoiceStatus);
+            WPLog(@"Voice", @"[+] UpdateVoiceStatus:LocalID:DownloadStatus: hooked (语音取证)");
+        }
+        SEL surSel = NSSelectorFromString(@"StopUploadRecordMsg:");
+        if (class_getInstanceMethod(cls, surSel)) {
+            MSHookMessageEx(cls, surSel, (IMP)hook_StopUploadRecordMsg, (IMP *)&orig_StopUploadRecordMsg);
+            WPLog(@"Voice", @"[+] StopUploadRecordMsg: hooked (语音取证)");
+        }
+        SEL suruSel = NSSelectorFromString(@"StopUploadRecordMsgByUsername:");
+        if (class_getInstanceMethod(cls, suruSel)) {
+            MSHookMessageEx(cls, suruSel, (IMP)hook_StopUploadRecordMsgByUser, (IMP *)&orig_StopUploadRecordMsgByUser);
+            WPLog(@"Voice", @"[+] StopUploadRecordMsgByUsername: hooked (语音取证)");
+        }
     } else {
         WPLog(@"Voice", @"[-] CMessageMgr not found");
     }
