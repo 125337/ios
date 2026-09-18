@@ -527,8 +527,13 @@ static NSUInteger SilkStreamOffset(NSData *data) {
             if (ms > 0) [self setDurationMs:ms forRelPath:relPath]; // 缓存，列表也显示真实秒数
         }
         if (ms <= 0) ms = 1000; // 最终兜底 1 秒
-        MioSetIntIvarIfExist(msg, "m_iVoiceTime", ms / 1000);
-        [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voicformat=\"silk\" fromusername=\"%@\" tousername=\"%@\" downcount=\"0\"/></msg>", ms, selfUsr ?: @"", chatName]
+        // 版本兼容字段：旧版微信有这些 ivar，新版实测（147 ivar 全量）没有，写不进就跳过
+        MioSetIntIvarIfExist(msg, "m_uiVoiceTime", ms / 1000);      // 秒
+        MioSetIntIvarIfExist(msg, "m_uiVoiceFormat", 4);            // 4 = silk
+        MioSetIntIvarIfExist(msg, "m_uiVoiceEndFlag", 1);
+        MioSetIntIvarIfExist(msg, "m_uiVoiceForwardFlag", 0);
+        // XML 模板参照小微助手逆向结论（voiceformat="4" 数值型最小模板）
+        [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voiceformat=\"4\" forwardflag=\"0\" /></msg>", ms]
                forKey:@"m_nsContent"];
         WPLog(@"Voice", @"[Send] 构造语音: %lldms, silk %llu 字节", ms, data.length);
 
