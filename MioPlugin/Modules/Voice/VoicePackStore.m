@@ -214,30 +214,44 @@ static BOOL MioIsSystemPlayableExt(NSString *ext) {
 
 + (NSString *)importFileFromURL:(NSURL *)url toRelPath:(NSString *)relPath error:(NSError **)error {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *base = [self rootDirectory];
-    if (relPath.length > 0) base = [base stringByAppendingPathComponent:relPath];
-    NSString *dest = [base stringByAppendingPathComponent:url.lastPathComponent];
-    // 重名追加序号
-    NSString *name = url.lastPathComponent;
-    NSString *ext = name.pathExtension;
-    NSString *stem = ext.length > 0 ? [name stringByDeletingPathExtension] : name;
-    int seq = 1;
-    while ([fm fileExistsAtPath:dest]) {
-        NSString *newName = ext.length > 0 ? [NSString stringWithFormat:@"%@(%d).%@", stem, seq, ext] : [NSString stringWithFormat:@"%@(%d)", stem, seq];
-        dest = [base stringByAppendingPathComponent:newName];
-        seq++;
-    }
-    BOOL ok = [fm copyItemAtPath:url.path toPath:dest error:error];
-    if (ok) {
-        // 系统可识别音频自动探测时长
-        NSString *newRel = [self relPathForAbsPath:dest];
-        if (newRel && MioIsSystemPlayableExt(dest.pathExtension)) {
-            long long ms = [self probeDurationMsForFile:dest];
-            if (ms > 0) [self setDurationMs:ms forRelPath:newRel];
+    // 安全作用域授权：文件 App / iCloud 导入的 URL 必须先授权才能读（否则可能复制出 0 字节文件）
+    BOOL scoped = [url startAccessingSecurityScopedResource];
+    @try {
+        NSString *base = [self rootDirectory];
+        if (relPath.length > 0) base = [base stringByAppendingPathComponent:relPath];
+        NSString *dest = [base stringByAppendingPathComponent:url.lastPathComponent];
+        // 重名追加序号
+        NSString *name = url.lastPathComponent;
+        NSString *ext = name.pathExtension;
+        NSString *stem = ext.length > 0 ? [name stringByDeletingPathExtension] : name;
+        int seq = 1;
+        while ([fm fileExistsAtPath:dest]) {
+            NSString *newName = ext.length > 0 ? [NSString stringWithFormat:@"%@(%d).%@", stem, seq, ext] : [NSString stringWithFormat:@"%@(%d)", stem, seq];
+            dest = [base stringByAppendingPathComponent:newName];
+            seq++;
         }
-        return [self relPathForAbsPath:dest];
+        NSString *srcPath = url.path;
+        if (srcPath.length == 0) {
+            if (error) *error = [NSError errorWithDomain:@"MioVoice" code:5 userInfo:@{NSLocalizedDescriptionKey: @"无法访问所选文件（请确认文件已下载到本机）"}];
+            return nil;
+        }
+        BOOL ok = [fm copyItemAtPath:srcPath toPath:dest error:error];
+        if (ok) {
+            NSDictionary *attrs = [fm attributesOfItemAtPath:dest error:nil];
+            WPLog(@"Voice", @"[Import] 导入成功: %@ (%llu 字节, 授权=%d)", dest, attrs.fileSize ?: 0, scoped);
+            // 系统可识别音频自动探测时长
+            NSString *newRel = [self relPathForAbsPath:dest];
+            if (newRel && MioIsSystemPlayableExt(dest.pathExtension)) {
+                long long ms = [self probeDurationMsForFile:dest];
+                if (ms > 0) [self setDurationMs:ms forRelPath:newRel];
+            }
+            return [self relPathForAbsPath:dest];
+        }
+        WPLog(@"Voice", @"[Import] 导入失败: %@ -> %@, 原因: %@", srcPath, dest, error ? (*error).localizedDescription : @"未知");
+        return nil;
+    } @finally {
+        if (scoped) [url stopAccessingSecurityScopedResource];
     }
-    return nil;
 }
 
 #pragma mark - 元数据内部迁移/清理
@@ -361,6 +375,11 @@ static BOOL MioIsSystemPlayableExt(NSString *ext) {
         NSString *abs = [[self rootDirectory] stringByAppendingPathComponent:relPath];
         NSData *data = [NSData dataWithContentsOfFile:abs];
         if (data.length == 0) {
+            NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:abs error:nil];
+            WPLog(@"Voice", @"[Send] 读取失败: rel=%@ abs=%@ 存在=%d 大小=%llu",
+                  relPath, abs,
+                  [[NSFileManager defaultManager] fileExistsAtPath:abs],
+                  attrs.fileSize ?: 0);
             if (error) *error = [NSError errorWithDomain:@"MioVoice" code:11 userInfo:@{NSLocalizedDescriptionKey: @"音频文件为空或不可读"}];
             return NO;
         }
