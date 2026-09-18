@@ -49,10 +49,14 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable VoicePackItem *)itemForRelPath:(NSString *)relPath;
 
 #pragma mark - 发送
-/// 把语音包条目作为微信语音消息（type=34，imgBuf=原始音频数据）发送到会话
+/// 把语音包条目作为微信语音消息（type=34，byteBuffer=原始 silk 数据）发送到会话
 + (BOOL)sendVoiceAtRelPath:(NSString *)relPath
                     toChat:(NSString *)chatName
                      error:(NSError **)error;
+/// 解析 silk 文件真实时长（毫秒），解析失败返回 0
++ (long long)silkDurationMsForFile:(NSString *)path;
+/// 从 CMessageWrap 取语音数据 buffer（自动适配 m_nsImgBuf/m_byteBuffer 等版本差异）
++ (nullable NSData *)voiceDataFromWrap:(id)wrap;
 
 #pragma mark - 预览播放（系统格式：mp3/m4a/wav 等；silk 不支持预览）
 + (BOOL)isPreviewSupportedRelPath:(NSString *)relPath;

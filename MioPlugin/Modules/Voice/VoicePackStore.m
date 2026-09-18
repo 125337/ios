@@ -418,6 +418,39 @@ static BOOL MioIsSystemPlayableExt(NSString *ext) {
 
 #pragma mark - 发送
 
++ (long long)silkDurationMsForFile:(NSString *)path {
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (data.length < 20) return 0;
+    // 微信本地 silk 文件可能带 0x02 前缀
+    const uint8_t *raw = data.bytes;
+    if (raw[0] == 0x02 && data.length > 10 && memcmp(raw + 1, "#!SILK_V3", 9) == 0) {
+        data = [data subdataWithRange:NSMakeRange(1, data.length - 1)];
+    }
+    const uint8_t *b = data.bytes;
+    NSUInteger len = data.length;
+    if (len < 9 || memcmp(b, "#!SILK_V3", 9) != 0) return 0;
+    NSUInteger pos = 9;
+    long long frames = 0;
+    while (pos < len) {
+        uint8_t fsz = b[pos++];
+        if (fsz == 0) break;           // 结束帧
+        if (fsz > 250) return 0;       // 非法帧长（silk 单帧上限 250 字节）
+        if (pos + fsz > len) return 0; // 截断
+        pos += fsz;
+        frames++;
+        if (frames > 6000) break;      // 防御：超过 2 分钟停止计数
+    }
+    if (frames == 0) return 0;
+    return frames * 20; // 每帧固定 20ms
+}
+
++ (NSData *)voiceDataFromWrap:(id)wrap {
+    Ivar ivar = MioFindVoiceDataIvar(wrap);
+    if (!ivar) return nil;
+    id val = object_getIvar(wrap, ivar);
+    return [val isKindOfClass:[NSData class]] ? val : nil;
+}
+
 + (BOOL)sendVoiceAtRelPath:(NSString *)relPath toChat:(NSString *)chatName error:(NSError **)error {
     @try {
         if (relPath.length == 0 || chatName.length == 0) {
@@ -461,10 +494,15 @@ static BOOL MioIsSystemPlayableExt(NSString *ext) {
         [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
 
         long long ms = [self durationMsForRelPath:relPath];
-        if (ms <= 0) ms = 1000; // 兜底 1 秒，避免显示 0"
+        if (ms <= 0) {
+            ms = [self silkDurationMsForFile:abs]; // silk 逐帧解析真实时长
+            if (ms > 0) [self setDurationMs:ms forRelPath:relPath]; // 缓存，列表也显示真实秒数
+        }
+        if (ms <= 0) ms = 1000; // 最终兜底 1 秒
         MioSetIntIvarIfExist(msg, "m_iVoiceTime", ms / 1000);
-        [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" fromusername=\"%@\" tousername=\"%@\" downcount=\"0\"/></msg>", ms, selfUsr ?: @"", chatName]
+        [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voicformat=\"silk\" fromusername=\"%@\" tousername=\"%@\" downcount=\"0\"/></msg>", ms, selfUsr ?: @"", chatName]
                forKey:@"m_nsContent"];
+        WPLog(@"Voice", @"[Send] 构造语音: %lldms, silk %llu 字节", ms, data.length);
 
         ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addSel, chatName, msg);
         WPLog(@"Voice", @"[Send] 已发送语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, data.length / 1024.0);

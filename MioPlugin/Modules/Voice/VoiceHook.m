@@ -155,8 +155,8 @@ static void hook_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
         NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
         if (selfUsr.length > 0 && [fromUsr isEqualToString:selfUsr]) return;
 
-        NSData *imgBuf = [wrap valueForKey:@"m_nsImgBuf"];
-        if (![imgBuf isKindOfClass:[NSData class]] || imgBuf.length == 0) return;
+        NSData *imgBuf = [VoicePackStore voiceDataFromWrap:wrap];
+        if (imgBuf.length == 0) return;
 
         NSString *chatName = ([msg isKindOfClass:[NSString class]] && [msg length] > 0) ? msg : fromUsr;
         if (chatName.length == 0) return;
@@ -173,6 +173,10 @@ static void hook_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
 
         // 时长：解析消息 XML 的 voicelength（毫秒）
         NSString *content = [wrap valueForKey:@"m_nsContent"];
+        // 诊断：记录真实语音消息的 XML 样本（截断），用于对齐发送构造格式
+        if (content.length > 0) {
+            WPLog(@"Voice", @"[Include] 真实语音XML: %@", content.length > 260 ? [content substringToIndex:260] : content);
+        }
         NSString *rel = [VoicePackStore relPathForAbsPath:abs];
         long long ms = 0;
         if (content.length > 0) {
