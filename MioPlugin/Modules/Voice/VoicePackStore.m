@@ -657,7 +657,8 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             if ([lower containsString:@"dtvoice"] || [lower containsString:@"voicedata"]) {
                 object_setIvar(ext, lv[i], wire);
             } else if ([lower containsString:@"refmessagewrap"]) {
-                object_setIvar(ext, lv[i], msg); // 回引 wrap（WCRefine 模板同款）
+                // 回引 wrap 仅限 dtVoice 有数据的转发场景；真实录音模板 refMessageWrap=nil
+                if (wire) object_setIvar(ext, lv[i], msg);
             }
         } else if (strchr("cBsSiIlLqQ", enc[0])) {
             // WCRefine 转发模板（log29）：format=4 / VoiceTime=真实ms / EndFlag、ForwardFlag 由调用方指定
@@ -762,9 +763,9 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
         MioSetIntIvarIfExist(msg, "m_bNew", 1);
         MioSetIntIvarIfExist(msg, "m_bForward", 0);                 // 非转发
         [msg setValue:@"" forKey:@"m_nsMsgSource"];                 // ★真实录音=@""非nil
-        // XML：voicelength 填真实时长（真实模板为 0 占位、由上传管线重解析 silk 回填；
-        // 填真实值——管线若回填则覆盖，若不回填显示也正确）
-        [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voiceformat=\"4\" forwardflag=\"0\" /></msg>", ms]
+        // XML：voicelength=0 占位（★真实录音实测：入库时永远 0，时长由上传管线解析 silk 回填；
+        // 填非 0 值会破坏"新录音待上传"的特征组合）
+        [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"0\" voiceformat=\"4\" /></msg>"]
                forKey:@"m_nsContent"];
         WPLog(@"Voice", @"[Send] 构造语音(真实录音模板): %lldms, wire %llu 字节", ms, wire.length);
 
