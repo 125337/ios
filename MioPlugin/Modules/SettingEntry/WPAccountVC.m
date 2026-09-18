@@ -227,7 +227,10 @@ static void MioShowToast(UIViewController *vc, NSString *text) {
 
     // ── 用户信息 ──
     y = [self addSectionHeader:@"用户信息" y:y width:w];
-    UIView *userGroup = [self addTableGroupAtY:y width:w];
+    // 信息行为手工构建，不能用基类 addTableGroupAtY:（返回 UITableView，数据驱动，未注册行会被裁剪），
+    // 用 WPCommonUI 的白卡片工厂 WPMakeCard
+    UIView *userGroup = WPMakeCard(y, w);
+    [self.contentView addSubview:userGroup];
     CGFloat uy = 0;
     id contact = MioGetSelfContact();
     NSString *displayName = MioContactString(contact, "getContactDisplayName");
@@ -246,7 +249,8 @@ static void MioShowToast(UIViewController *vc, NSString *text) {
 
     // ── 应用信息 ──
     y = [self addSectionHeader:@"应用信息" y:y width:w];
-    UIView *appGroup = [self addTableGroupAtY:y width:w];
+    UIView *appGroup = WPMakeCard(y, w);
+    [self.contentView addSubview:appGroup];
     CGFloat ay = 0;
     NSBundle *bundle = [NSBundle mainBundle];
     NSString *appName = [bundle objectForInfoDictionaryKey:@"CFBundleDisplayName"];
@@ -271,7 +275,8 @@ static void MioShowToast(UIViewController *vc, NSString *text) {
     // ── 证书信息 ──
     y = [self addSectionHeader:@"证书信息" y:y width:w];
     if (profile) {
-        UIView *certGroup = [self addTableGroupAtY:y width:w];
+        UIView *certGroup = WPMakeCard(y, w);
+        [self.contentView addSubview:certGroup];
         CGFloat cy2 = 0;
         NSArray<NSArray<NSString *> *> *certRows = @[
             @[@"证书类型", MioCertTypeName(profile)],
@@ -291,7 +296,8 @@ static void MioShowToast(UIViewController *vc, NSString *text) {
         NSDictionary *ent = profile[@"Entitlements"];
         if ([ent isKindOfClass:[NSDictionary class]] && ent.count > 0) {
             y = [self addSectionHeader:@"证书权限" y:y width:w];
-            UIView *permGroup = [self addTableGroupAtY:y width:w];
+            UIView *permGroup = WPMakeCard(y, w);
+            [self.contentView addSubview:permGroup];
             CGFloat py = 0;
             NSArray<NSArray<NSString *> *> *permKeys = @[
                 @[@"aps-environment", @"推送权限"],
@@ -309,7 +315,8 @@ static void MioShowToast(UIViewController *vc, NSString *text) {
             y = [self finishGroup:permGroup atY:y height:py];
         }
     } else {
-        UIView *certGroup = [self addTableGroupAtY:y width:w];
+        UIView *certGroup = WPMakeCard(y, w);
+        [self.contentView addSubview:certGroup];
         CGFloat cy2 = [self addHintRowInGroup:certGroup text:@"未读取到证书信息（无 embedded.mobileprovision）" cy:0 width:w];
         y = [self finishGroup:certGroup atY:y height:cy2];
     }
