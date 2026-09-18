@@ -605,10 +605,11 @@ static void MioDumpSendAPIOnce(id msgMgr) {
 }
 
 /// 构造并挂载语音类型扩展对象（本版本 wrap 挂 m_extendInfoWithMsgType=<CExtendInfoOfVoiceMsg>。
-/// ★WCRefine 转发管线模板（log29 实测，能发出）：Format=4 / VoiceTime=真实ms / EndFlag=1 /
-///   ForwardFlag=1 / dtVoice=完整语音 NSData / refMessageWrap=wrap 回引。
+/// ★WCRefine 转发管线模板（log29 实测，能发出）：
+///   暂存消息: Format=4 / VoiceTime=ms / EndFlag=1 / ForwardFlag=1 / dtVoice=wire / refMessageWrap 回引
+///   正式消息: 同上但 EndFlag=0 / ForwardFlag=0（log29 第3次调用 localID=2616 的扩展实测）
 ///   log20 的 SEGV 是错塞 NSDate 所致（ivar 编码 @"NSData"），塞 NSData 类型匹配无风险）
-static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long long ms) {
+static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long long ms, long long endFlag, long long fwdFlag) {
     Class extCls = objc_getClass("CExtendInfoOfVoiceMsg");
     if (!extCls) { WPLog(@"Voice", @"[Send] CExtendInfoOfVoiceMsg 不存在"); return NO; }
     static BOOL listed = NO;
@@ -643,12 +644,12 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
                 object_setIvar(ext, lv[i], msg); // 回引 wrap（WCRefine 模板同款）
             }
         } else if (strchr("cBsSiIlLqQ", enc[0])) {
-            // WCRefine 转发模板（log29）：format=4 / VoiceTime=真实ms / EndFlag=1 / ForwardFlag=1 / CancelFlag=0
+            // WCRefine 转发模板（log29）：format=4 / VoiceTime=真实ms / EndFlag、ForwardFlag 由调用方指定
             long long val = -1;
             if ([lower containsString:@"format"]) val = 4;
             else if ([lower containsString:@"voicetime"]) val = ms;
-            else if ([lower containsString:@"endflag"]) val = 1;
-            else if ([lower containsString:@"forwardflag"]) val = 1;
+            else if ([lower containsString:@"endflag"]) val = endFlag;
+            else if ([lower containsString:@"forwardflag"]) val = fwdFlag;
             if (val < 0) continue;
             switch (enc[0]) {
                 case 'c': case 'B': *(signed char *)(base + off) = (signed char)val; break;
@@ -758,7 +759,7 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
 
         // ★挂载语音类型扩展（log18 实测根因：语音数据真实载体在 m_extendInfoWithMsgType，
         //   不挂扩展管线无数据可传 → 永远"发送中"）
-        BOOL extOK = MioAttachVoiceExtension(msg, wire, voicePath, ms);
+        BOOL extOK = MioAttachVoiceExtension(msg, wire, voicePath, ms, 1, 1);
 
         // 入库：★AddLocalMsg 链优先（WCRefine 同款：本地入库，不触发 AddMsg 发送管线，
         // 转发消息由下方 SaveMesVoice 接管触发）；AddMsg 仅兜底
@@ -809,14 +810,59 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             WPLog(@"Voice", @"[Send] 未探测到正式路径（SaveMesVoice 按 dtVoice 接管）");
         }
 
-        // ★WCRefine 转发管线核心（log29 实测）：SaveMesVoice 拿扩展 m_dtVoice(NSData)
-        //   写盘+登记上传；一条语音连续触发 3 次调用是管线内部行为，我们只管第 1 次的正确输入
+        // ★WCRefine 转发管线·暂存消息（log29 第1次调用，第2次是管线自动触发）：
+        //   SaveMesVoice 拿扩展 m_dtVoice(NSData) 写盘+登记上传
         SEL saveSel = NSSelectorFromString(@"SaveMesVoice:MsgWrap:");
         if ([msgMgr respondsToSelector:saveSel]) {
             ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, saveSel, chatName, msg);
-            WPLog(@"Voice", @"[Send] SaveMesVoice 已调 (WCRefine 转发管线, localID=%u)", MioWrapLocalIDOf(msg));
+            WPLog(@"Voice", @"[Send] SaveMesVoice 已调 (暂存消息, localID=%u)", MioWrapLocalIDOf(msg));
         } else {
             WPLog(@"Voice", @"[Send] SaveMesVoice 不可用!");
+        }
+
+        // ★阶段2：WCRefine"正式消息"（log29 第3次调用 localID=2616 实测模板）。
+        //   暂存消息 bForward=1/dl=0 只做登记，发送队列不拾取；真正发出的是这条：
+        //   bForward=0 / downloadStatus=9 / _m_nsBizCliMsgId="" / 扩展 EndFlag=0 ForwardFlag=0
+        //   → AddLocalMsg 入库 → SaveMesVoice → 发送队列拾取
+        {
+            id formal = ((id (*)(id, SEL, long long))objc_msgSend)([wrapClass alloc], @selector(initWithMsgType:), 34LL);
+            if (formal) {
+                [formal setValue:chatName forKey:@"m_nsToUsr"];
+                id fromUsr = [msg valueForKey:@"m_nsFromUsr"];
+                if ([fromUsr isKindOfClass:[NSString class]]) [formal setValue:fromUsr forKey:@"m_nsFromUsr"];
+                id content = [msg valueForKey:@"m_nsContent"];
+                if ([content isKindOfClass:[NSString class]]) [formal setValue:content forKey:@"m_nsContent"];
+                id ct = [msg valueForKey:@"m_uiCreateTime"];
+                if (ct) [formal setValue:ct forKey:@"m_uiCreateTime"];
+                [formal setValue:@(1) forKey:@"m_uiStatus"];
+                MioSetIntIvarIfExist(formal, "m_uiImgStatus", 1);
+                MioSetIntIvarIfExist(formal, "m_uiDownloadStatus", 9); // ★2616 实测=9（音频就绪本地可播）
+                MioSetIntIvarIfExist(formal, "m_bNew", 1);
+                MioSetIntIvarIfExist(formal, "m_bForward", 0);
+                MioSetIvarIfExist(formal, "_m_nsBizCliMsgId", @"");
+                BOOL extOK2 = MioAttachVoiceExtension(formal, wire, @"", ms, 0, 0);
+                BOOL ins2 = NO;
+                SEL al6 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
+                SEL al5 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:");
+                SEL al4 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
+                if ([msgMgr respondsToSelector:al6]) {
+                    ((void (*)(id, SEL, id, id, long long, long long))objc_msgSend)(msgMgr, al6, chatName, formal, 1LL, 0LL);
+                    ins2 = YES;
+                } else if ([msgMgr respondsToSelector:al5]) {
+                    ((void (*)(id, SEL, id, id, long long))objc_msgSend)(msgMgr, al5, chatName, formal, 1LL);
+                    ins2 = YES;
+                } else if ([msgMgr respondsToSelector:al4]) {
+                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, al4, chatName, formal);
+                    ins2 = YES;
+                }
+                WPLog(@"Voice", @"[Send] 正式消息入库%@ localID=%u 扩展=%d", ins2 ? @"成功" : @"失败", MioWrapLocalIDOf(formal), extOK2);
+                if (ins2 && [msgMgr respondsToSelector:saveSel]) {
+                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, saveSel, chatName, formal);
+                    WPLog(@"Voice", @"[Send] SaveMesVoice(正式消息) 已调 localID=%u", MioWrapLocalIDOf(formal));
+                }
+            } else {
+                WPLog(@"Voice", @"[Send] 正式消息构造失败!");
+            }
         }
 
         WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
