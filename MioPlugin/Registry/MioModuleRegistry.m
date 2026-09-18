@@ -27,6 +27,7 @@
 #import "../Modules/ListCornerRadius/ListCornerRadiusConfig.h"
 #import "../Modules/ProfileCardBg/CardBgConfig.h"
 #import "../Modules/FontLayout/FontLayoutConfig.h"
+#import "../Modules/AccountDetail/AccountConfig.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -229,6 +230,15 @@
                                                   subtitle:@"插件信息"
                                              sectionTitle:@"更多"],
             
+            // ──── 账户信息（纯信息页，无 Hook；入口在 MioPluginEntryVC 功能列表） ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"accountdetail"
+                                                    title:@"账户信息"
+                                               configClass:[AccountConfig class]
+                                               hookClasses:@[]
+                                           controllerClass:nil
+                                                  subtitle:@"账号/签名证书信息"
+                                             sectionTitle:@"系统"],
+
             // ──── 设置入口（无 Config + 无 Controller） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"settingentry"
                                                     title:@"插件入口"

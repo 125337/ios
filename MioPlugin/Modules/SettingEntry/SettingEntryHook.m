@@ -4,6 +4,7 @@
 #import "WPOtherVC.h"
 #import "WPBackupVC.h"
 #import "WPAboutVC.h"
+#import "WPAccountVC.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Config/Constants.h"
 #import "../../Settings/Controllers/SettingController.h"
@@ -37,53 +38,6 @@ static void pluginEntryViewDidLoad(id self, SEL _cmd) {
     WPLog(@"Setting", @"[Entry] viewDidLoad done, defer UI to viewWillAppear");
 }
 
-static void WPDumpViewTree(UIView *v, NSInteger depth, NSInteger maxDepth, NSMutableString *out) {
-    if (!v || depth > maxDepth) return;
-    // 降噪：隐藏子树与已排除的微信浮窗/手势层只打一行
-    NSString *cls = NSStringFromClass([v class]);
-    if (depth > 0 && ([v isHidden] || [cls hasPrefix:@"Minimize"] || [cls isEqualToString:@"PJTouchTrackingView"])) {
-        [out appendFormat:@"%@%@ (hidden/浮窗, 子树省略)\n",
-             [@"  " stringByPaddingToLength:depth withString:@" " startingAtIndex:0], cls];
-        return;
-    }
-    NSString *bg = @"-";
-    if ([v backgroundColor]) {
-        UIColor *c = [v backgroundColor];
-        CGFloat r, g, b, a;
-        if ([c getRed:&r green:&g blue:&b alpha:&a]) {
-            bg = [NSString stringWithFormat:@"(%.2f,%.2f,%.2f,%.2f)", r, g, b, a];
-        } else {
-            bg = @"<dynamic/pattern>";
-        }
-    }
-    [out appendFormat:@"%@%@ frame=%@ alpha=%.2f hidden=%d bg=%@\n",
-         [@"  " stringByPaddingToLength:depth withString:@" " startingAtIndex:0],
-         cls, NSStringFromCGRect(v.frame), [v alpha], [v isHidden], bg];
-    for (UIView *sub in [v subviews]) {
-        WPDumpViewTree(sub, depth + 1, maxDepth, out);
-    }
-}
-
-/// 从截图取一个比例坐标点的像素色（返回 #RRGGBB）
-static NSString *WPSamplePixel(UIImage *img, float fx, float fy) {
-    CGImageRef cg = img.CGImage;
-    if (!cg) return @"nil";
-    size_t w = CGImageGetWidth(cg);
-    size_t h = CGImageGetHeight(cg);
-    unsigned char buf[4] = {0, 0, 0, 0};
-    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
-    CGContextRef ctx = CGBitmapContextCreate(buf, 1, 1, 8, 4, cs,
-                                             kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
-    CGColorSpaceRelease(cs);
-    if (!ctx) return @"ctx-nil";
-    CGFloat px = fx * (CGFloat)w;
-    CGFloat py = (1.0f - fy) * (CGFloat)h; // CG 底左原点，UIKit fy 翻转
-    CGContextSetInterpolationQuality(ctx, kCGInterpolationNone);
-    CGContextDrawImage(ctx, CGRectMake(0.5 - px, 0.5 - py, (CGFloat)w, (CGFloat)h), cg);
-    CGContextRelease(ctx);
-    return [NSString stringWithFormat:@"#%02X%02X%02X", buf[0], buf[1], buf[2]];
-}
-
 static void pluginEntryViewDidAppear(id self, SEL _cmd, BOOL animated) {
     // 调用父类
     Class uiVC = objc_getClass("UIViewController");
@@ -91,35 +45,9 @@ static void pluginEntryViewDidAppear(id self, SEL _cmd, BOOL animated) {
     if (m) {
         ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
     }
-    // 兜底：若微信基类链在 viewWillAppear 之后重设了导航栏样式，这里再统一一次
+    // 兜底：pop 返回时子页 viewWillDisappear 恢复微信原样的时机晚于本页 viewWillAppear，
+    // 这里在 appear 完成后再统一一次，避免顶栏停留在微信原色
     WPApplyNavAppearance((UIViewController *)self);
-
-    // 诊断：延迟 1.5s 后（1）扫视图树（2）window 截图采样实际渲染像素色
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        UIWindow *window = ((UIViewController *)self).view.window;
-        if (!window) return;
-        NSMutableString *tree = [NSMutableString string];
-        WPDumpViewTree(window, 0, 10, tree);
-        WPLog(@"Setting", @"[Nav] window tree after appear:\n%@", tree);
-
-        // 截图取色：采样 nav 中部 / 页面顶部 / 中部 / 下部 / 底部的最终合成色
-        @try {
-            UIGraphicsBeginImageContextWithOptions(window.bounds.size, NO, 1.0);
-            [window drawViewHierarchyInRect:window.bounds afterScreenUpdates:YES];
-            UIImage *snap = UIGraphicsGetImageFromCurrentImageContext();
-            UIGraphicsEndImageContext();
-            if (snap) {
-                WPLog(@"Setting", @"[Nav] pixel samples: nav=%@ top=%@ mid=%@ low=%@ bottom=%@",
-                      WPSamplePixel(snap, 0.5f, 0.09f),
-                      WPSamplePixel(snap, 0.5f, 0.16f),
-                      WPSamplePixel(snap, 0.5f, 0.40f),
-                      WPSamplePixel(snap, 0.5f, 0.70f),
-                      WPSamplePixel(snap, 0.5f, 0.95f));
-            }
-        } @catch (NSException *e) {
-            WPLog(@"Setting", @"[Nav] snapshot err: %@", e);
-        }
-    });
 }
 
 static void pluginEntryViewWillDisappear(id self, SEL _cmd, BOOL animated) {
@@ -144,11 +72,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 
     UIViewController *vc = (UIViewController *)self;
 
-    // 每次出现都重设背景（微信主题系统可能在子页返回时改过 view/scrollView 颜色）+ 诊断日志
-    UIColor *resolved = [WPBackgroundColor() resolvedColorWithTraitCollection:vc.view.traitCollection];
-    WPLog(@"Setting", @"[Nav] entry appear: bg=%@ trait=%ld subviews=%lu",
-          resolved, (long)vc.view.traitCollection.userInterfaceStyle,
-          (unsigned long)vc.view.subviews.count);
+    // 每次出现都重设背景（微信主题系统可能在子页返回时改过 view/scrollView 颜色）
     vc.view.backgroundColor = WPBgColor();
     for (UIView *sub in vc.view.subviews) {
         if ([sub isKindOfClass:[UIScrollView class]]) {
@@ -156,14 +80,11 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         }
     }
 
-    // 顶栏颜色与页面背景统一：不依赖 bounds，且在 viewDidAppear 还有兜底二次应用
+    // 顶栏颜色与页面背景统一：viewWillAppear 应用一次，viewDidAppear 还有兜底二次应用
     WPApplyNavAppearance(vc);
-    WPLog(@"Setting", @"[Nav] entry apply: nav=%@ bar=%@",
-          vc.navigationController, vc.navigationController.navigationBar);
 
     // associated object 做一次性标记（runtime 级原子安全，无需 @synchronized）
     if (objc_getAssociatedObject(self, @"_entrySetupDone")) {
-        WPLog(@"Setting", @"[Entry] viewWillAppear: already set up");
         return;
     }
     objc_setAssociatedObject(self, @"_entrySetupDone", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -222,7 +143,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     UIView *listCard = WPMakeCard(y, w);
     CGFloat cy = 0;
 
-    NSArray *navItems = @[@[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
+    NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
     CGFloat scale = [UIScreen mainScreen].scale;
     for (NSUInteger i = 0; i < navItems.count; i++) {
         if (i > 0) {
@@ -342,6 +263,14 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     if ([self respondsToSelector:sel]) {
         ((void (*)(id, SEL, id))objc_msgSend)(self, sel, sender);
     }
+}
+
+- (void)openAccount:(id)sender {
+    UIViewController *vc = [self currentVCFrom:sender];
+    if (!vc) { WPLog(@"Setting", @"[Nav] openAccount: currentVC nil"); return; }
+    WPAccountVC *subVC = [[WPAccountVC alloc] init];
+    [vc.navigationController pushViewController:subVC animated:YES];
+    WPLog(@"Setting", @"[Nav] pushed WPAccountVC");
 }
 
 - (void)openCommon:(id)sender {
