@@ -14,6 +14,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL voicePackAttachmentEnabled;
 /// 收到的语音消息自动保存到「聊天纳入」目录（silk 原始数据）
 @property (nonatomic, assign) BOOL voicePackAutoIncludeEnabled;
+/// 长按聊天输入栏右下角「+」打开语音包选择页
+@property (nonatomic, assign) BOOL voicePackPlusLongPressEnabled;
 
 + (instancetype)shared;
 

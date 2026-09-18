@@ -58,6 +58,14 @@
                                 cy:cy
                              width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
+    cy = [self addSwitchRowInGroup:group
+                             title:@"长按加号打开语音包"
+                              desc:@"长按聊天输入栏右下角「+」打开语音包选择页，短按原功能不变"
+                               key:@"voicePackPlusLongPressEnabled"
+                              isOn:cfg.voicePackPlusLongPressEnabled
+                                cy:cy
+                             width:w];
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addNavRowInGroup:group
                           title:@"语音包管理"
                        subtitle:@"浏览 / 导入 / 收藏 / 重命名 / 删除"

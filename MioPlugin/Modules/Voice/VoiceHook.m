@@ -174,6 +174,82 @@ static void hook_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
 }
 
 // ═══════════════════════════════════════════════════════
+// Hook ③: BaseMsgContentViewController.viewWillLayoutSubviews
+//   — 探测聊天输入栏并挂「长按加号」手势（零布局改动）
+// ═══════════════════════════════════════════════════════
+
+static IMP orig_BMCC_viewWillLayoutSubviews = NULL;
+static char kPlusLongPressAttachedKey;
+
+/// 递归查找类名含 InputTool 的输入栏视图（微信各版本输入栏基类命名）
+static UIView *FindInputToolView(UIView *root) {
+    if (!root) return nil;
+    NSString *clsName = NSStringFromClass(root.class);
+    if ([clsName rangeOfString:@"InputTool" options:NSCaseInsensitiveSearch].location != NSNotFound
+        && [root isKindOfClass:[UIView class]]) {
+        return root;
+    }
+    for (UIView *sub in root.subviews) {
+        UIView *hit = FindInputToolView(sub);
+        if (hit) return hit;
+    }
+    return nil;
+}
+
+/// 沿响应链向上找宿主 ViewController
+static UIViewController *HostVCForView(UIView *view) {
+    UIResponder *r = view;
+    while (r) {
+        r = r.nextResponder;
+        if ([r isKindOfClass:[UIViewController class]]) return (UIViewController *)r;
+    }
+    return nil;
+}
+
+/// 递归收集（含深层）未隐藏的按钮，返回 minX 最大者（输入栏最右侧 = 加号）
+static UIButton *RightmostButton(UIView *root, UIView *container) {
+    UIButton *best = nil;
+    CGFloat bestX = -CGFLOAT_MAX;
+    NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:root];
+    while (stack.count > 0) {
+        UIView *v = stack.lastObject;
+        [stack removeLastObject];
+        if ([v isKindOfClass:[UIButton class]] && !v.hidden && v.alpha > 0.01) {
+            CGRect f = [container convertRect:v.bounds fromView:v];
+            if (f.origin.x > bestX) { bestX = f.origin.x; best = (UIButton *)v; }
+        }
+        for (UIView *sub in v.subviews) [stack addObject:sub];
+    }
+    return best;
+}
+
+static void AttachPlusLongPressIfNeeded(UIView *chatRoot) {
+    VoiceConfig *cfg = [VoiceConfig shared];
+    if (!cfg.voicePackEnabled || !cfg.voicePackPlusLongPressEnabled) return;
+    UIView *tool = FindInputToolView(chatRoot);
+    if (!tool) return;
+    if (objc_getAssociatedObject(tool, &kPlusLongPressAttachedKey)) return; // 已挂过（含输入栏重建后新实例）
+
+    UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc]
+        initWithTarget:[VoiceHook class] action:@selector(plusLongPressed:)];
+    lp.minimumPressDuration = 0.5;
+    lp.cancelsTouchesInView = NO; // 不干扰加号短按与输入栏其它手势
+    objc_setAssociatedObject(tool, &kPlusLongPressAttachedKey, lp, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [tool addGestureRecognizer:lp];
+    WPLog(@"Voice", @"[PlusLP] 长按手势已挂到输入栏: %@", NSStringFromClass(tool.class));
+}
+
+static void hook_BMCC_viewWillLayoutSubviews(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_BMCC_viewWillLayoutSubviews)(self, _cmd);
+    @try {
+        UIView *rootView = ((UIView *(*)(id, SEL))objc_msgSend)(self, @selector(view));
+        if (rootView) AttachPlusLongPressIfNeeded(rootView);
+    } @catch (NSException *e) {
+        // 布局高频路径，吞掉异常避免影响聊天页
+    }
+}
+
+// ═══════════════════════════════════════════════════════
 // +install
 // ═══════════════════════════════════════════════════════
 
@@ -203,6 +279,50 @@ static void hook_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
     WPLog(@"Voice", @"[Attach] 打开语音包选择页: %@", chat);
 }
 
++ (void)plusLongPressed:(UILongPressGestureRecognizer *)gr {
+    if (gr.state != UIGestureRecognizerStateBegan) return;
+    @try {
+        UIView *tool = gr.view;
+        if (!tool) return;
+
+        // 触摸点必须落在输入栏最右侧按钮（加号）附近
+        UIButton *plus = RightmostButton(tool, tool);
+        if (!plus) return;
+        CGPoint loc = [gr locationInView:tool];
+        CGRect zone = [tool convertRect:plus.bounds fromView:plus];
+        if (!CGRectContainsPoint(CGRectInset(zone, -10, -10), loc)) return;
+
+        // 宿主聊天页 → 当前会话名
+        UIViewController *host = HostVCForView(tool);
+        NSString *chat = nil;
+        if (host && [NSStringFromClass(host.class) containsString:@"BaseMsgContentViewController"]) {
+            Ivar ivar = class_getInstanceVariable(host.class, "m_nsCurrentChatUserName");
+            if (ivar) {
+                id val = object_getIvar(host, ivar);
+                if ([val isKindOfClass:[NSString class]] && [val length] > 0) chat = val;
+            }
+        }
+        if (chat.length == 0) chat = CurrentChatUserName();
+        if (chat.length == 0) {
+            WPShowToast(@"未识别到当前会话");
+            return;
+        }
+
+        WPVoicePackPickerVC *picker = [[WPVoicePackPickerVC alloc] initWithChatName:chat];
+        UINavigationController *nav = host.navigationController;
+        if (nav) {
+            [nav pushViewController:picker animated:YES];
+        } else {
+            UIViewController *top = TopPresentedVC([[UIApplication sharedApplication].windows.firstObject rootViewController]);
+            UINavigationController *wrap = [[UINavigationController alloc] initWithRootViewController:picker];
+            [top presentViewController:wrap animated:YES completion:nil];
+        }
+        WPLog(@"Voice", @"[PlusLP] 长按加号打开语音包: %@", chat);
+    } @catch (NSException *e) {
+        WPLog(@"Voice", @"[PlusLP] 异常: %@", e.reason);
+    }
+}
+
 + (void)install {
     Class cls;
 
@@ -226,6 +346,17 @@ static void hook_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
         WPLog(@"Voice", @"[+] CMessageMgr AsyncOnAddMsg:MsgWrap: hooked");
     } else {
         WPLog(@"Voice", @"[-] CMessageMgr not found");
+    }
+
+    // ③ 长按加号入口
+    cls = objc_getClass("BaseMsgContentViewController");
+    if (cls) {
+        MSHookMessageEx(cls, @selector(viewWillLayoutSubviews),
+                        (IMP)hook_BMCC_viewWillLayoutSubviews,
+                        (IMP *)&orig_BMCC_viewWillLayoutSubviews);
+        WPLog(@"Voice", @"[+] BaseMsgContentViewController viewWillLayoutSubviews hooked");
+    } else {
+        WPLog(@"Voice", @"[-] BaseMsgContentViewController not found");
     }
 }
 

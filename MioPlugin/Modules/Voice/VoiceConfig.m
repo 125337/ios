@@ -21,6 +21,7 @@
         [ConfigDescriptor itemWithKey:@"voicePackContinuousSendEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"voicePackAttachmentEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"voicePackAutoIncludeEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"voicePackPlusLongPressEnabled" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 
