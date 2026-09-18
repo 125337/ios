@@ -807,6 +807,15 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addLocal2, chatName, formal);
             WPLog(@"Voice", @"[Send] ②正式入库: localID=%u dl=9 扩展=%d", MioWrapLocalIDOf(formal), extOK2);
 
+            // ★写正式路径文件（WCRefine 反汇编管线④：SaveMesVoice 前文件必须已在盘上；
+            //   dl=9 时 SaveMesVoice 认为文件就绪不再代写——缺文件则登记无效→轮询不拾取）
+            {
+                NSString *fp = MioProbeVoicePath(formal, msgMgr);
+                if (fp.length > 0) {
+                    WPLog(@"Voice", @"[Send] 正式路径写文件%@: %@", MioWriteVoiceFile(wire, fp) ? @"成功" : @"失败", fp);
+                }
+            }
+
             // ── ③ 显式 SaveMesVoice(正式) ──
             if ([msgMgr respondsToSelector:saveSel]) {
                 ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, saveSel, chatName, formal);

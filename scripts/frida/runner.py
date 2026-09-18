@@ -11,9 +11,21 @@ CMD = r"C:\Users\20546\Desktop\ios_cc4BX\scripts\frida\cmd.txt"
 if os.path.exists(CMD):
     os.remove(CMD)
 
+# 动态解析 qy.xin 的 PID（-n 有歧义/identifier 不支持 attach）
+_target = "WeChat"
+try:
+    _ps = subprocess.check_output(["frida-ps", "-Uai"], text=True, errors="replace")
+    for _line in _ps.splitlines():
+        if "com.tencent.qy.xin" in _line:
+            _target = _line.split()[0]  # PID
+            break
+except Exception as e:
+    print("[runner] frida-ps 解析失败: %s" % e, flush=True)
+print("[runner] target=%s" % _target, flush=True)
+
 with open(LOG, "w", encoding="utf-8", errors="replace") as out:
     p = subprocess.Popen(
-        ["frida", "-U", "-n", "WeChat", "-l", SCRIPT],
+        ["frida", "-U", _target, "-l", SCRIPT],
         stdin=subprocess.PIPE,
         stdout=out,
         stderr=subprocess.STDOUT)

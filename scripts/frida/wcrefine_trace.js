@@ -64,4 +64,32 @@ if (!ObjC.available) {
         } catch (e) {}
     });
     console.log('[M] CMessageMgr 关键方法追踪就绪');
+
+    // ★微信上传/CDN 相关类追踪（找五步之外的上传注册调用）——异步装载避免脚本超时
+    var upTotal = 0;
+    setTimeout(function () {
+        var upCls = Object.keys(ObjC.classes).filter(function (c) {
+            return /upload|cdn/i.test(c) && !/^_/.test(c) && c.indexOf('WCRefine') !== 0;
+        });
+        console.log('[U] 上传/CDN 候选类数: ' + upCls.length);
+        upCls.forEach(function (cn) {
+            try {
+                var cls = ObjC.classes[cn];
+                var ms = cls.$ownMethods;
+                if (ms.length > 60) return; // 避免巨类刷屏
+                ms.forEach(function (m) {
+                    try {
+                        var imp = cls[m].implementation;
+                        Interceptor.attach(imp, {
+                            onEnter: function (args) {
+                                try { console.log('[U] ' + cn + ' ' + m); } catch (e) {}
+                            }
+                        });
+                        upTotal++;
+                    } catch (e) {}
+                });
+            } catch (e) {}
+        });
+        console.log('[U] 共 hook ' + upTotal + ' 个上传类方法（装载完成，可以发送了）');
+    }, 100);
 }
