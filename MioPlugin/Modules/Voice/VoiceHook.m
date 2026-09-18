@@ -2,6 +2,7 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <mach-o/dyld.h>
 #import <substrate.h>
 #import "VoiceConfig.h"
 #import "VoicePackStore.h"
@@ -76,6 +77,17 @@ static NSString *CurrentChatUserName(void) {
 // 真实语音发送流程捕获（诊断）：hook 微信真实录音发送链路，
 // 拿到真实 wrap 字段模板与调用顺序后照抄（log17 结论：猜接口不可行）
 // ═══════════════════════════════════════════════════════
+
+/// 打印当前线程调用栈 + WeChat 主二进制 ASLR slide
+/// （栈帧地址 - slide = 二进制内偏移，可与方法 IMP 表对照定位"谁调了 AddMsg"）
+static void MioLogCallStack(NSString *tag) {
+    @try {
+        intptr_t slide = (intptr_t)_dyld_get_image_vmaddr_slide(0);
+        NSArray<NSString *> *frames = [NSThread callStackSymbols];
+        WPLog(@"Voice", @"[%@] 栈 slide=%ld 帧数=%lu", tag, (long)slide, (unsigned long)frames.count);
+        for (NSString *f in frames) WPLog(@"Voice", @"[%@] %@", tag, f);
+    } @catch (NSException *e) {}
+}
 
 /// 读取 m_uiMesLocalID
 static unsigned int MioWrapLocalID(id wrap) {
@@ -174,7 +186,10 @@ static void hook_AddLocalMsg6(id self, SEL _cmd, id chatName, id wrap, long long
         }
         NSString *from = [wrap valueForKey:@"m_nsFromUsr"] ?: @"";
         WPLog(@"Voice", @"[真实流程] AddLocalMsg type=%u from=%@ chat=%@ fixTime=%lld notify=%lld", t, from, chatName, fixTime, notify);
-        if (t == 34) MioDumpVoiceWrap(wrap, @"真实流程.AddLocal");
+        if (t == 34) {
+            MioDumpVoiceWrap(wrap, @"真实流程.AddLocal");
+            MioLogCallStack(@"真实流程.AddLocal栈"); // 上溯调用者=微信真实发送入口
+        }
     } @catch (NSException *e) {}
     ((void (*)(id, SEL, id, id, long long, long long))orig_AddLocalMsg6)(self, _cmd, chatName, wrap, fixTime, notify);
 }
@@ -191,6 +206,7 @@ static void hook_AddMsgMsgWrap(id self, SEL _cmd, id chatName, id wrap) {
         if (t == 34) {
             WPLog(@"Voice", @"[真实流程] AddMsg chat=%@", chatName);
             MioDumpVoiceWrap(wrap, @"真实流程.AddMsg");
+            MioLogCallStack(@"真实流程.AddMsg栈"); // 上溯调用者=微信真实发送入口
         }
     } @catch (NSException *e) {}
     ((void (*)(id, SEL, id, id))orig_AddMsgMsgWrap)(self, _cmd, chatName, wrap);
