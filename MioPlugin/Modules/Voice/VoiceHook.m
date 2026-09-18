@@ -669,9 +669,10 @@ static void MioInstallFileProbe(void) {
         WPLog(@"Voice", @"[-] BaseMsgContentViewController not found");
     }
 
-    // ⑦ 取证探针：发送链方法 + 文件时间线（只打日志，不改业务）
-    MioInstallFileProbe();
-    MioInstallSendProbe();
+    // ⑦ 取证探针（已停用：log25/27 启动即崩，两版探针唯一共同变量是 FileProbe
+    //   hook 的 NSData/NSFileManager 高频方法——二分定位中，先全部不装）
+    // MioInstallFileProbe();
+    // MioInstallSendProbe();
 }
 
 @end
