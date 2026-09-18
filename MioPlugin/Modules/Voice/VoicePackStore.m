@@ -467,6 +467,82 @@ static NSUInteger SilkStreamOffset(NSData *data) {
     return [val isKindOfClass:[NSData class]] ? val : nil;
 }
 
+// ═══════════════════════════════════════════════════════
+// 运行时方法探测（微信版本间选择器名有差异，仿小微助手链路）
+// ═══════════════════════════════════════════════════════
+
+/// 在实例/类方法列表中按关键词与参数总数（含 self/_cmd）查找选择器，找不到返回 NULL
+static SEL MioFindMethodSel(Class cls, BOOL classMethod, NSArray<NSString *> *keywords, NSUInteger totalArgs) {
+    if (!cls) return NULL;
+    Class searchCls = classMethod ? object_getClass(cls) : cls;
+    unsigned int count = 0;
+    Method *list = class_copyMethodList(searchCls, &count);
+    SEL found = NULL;
+    for (unsigned int i = 0; i < count; i++) {
+        NSString *lower = NSStringFromSelector(method_getName(list[i])).lowercaseString;
+        for (NSString *k in keywords) {
+            if ([lower containsString:k]) {
+                if (method_getNumberOfArguments(list[i]) == totalArgs) found = method_getName(list[i]);
+                break;
+            }
+        }
+        if (found) break;
+    }
+    free(list);
+    return found;
+}
+
+/// 探测语音文件落盘路径（参照小微：getVoicePath → +getPathOfAudio: → getAudioFileName:LocalID:）
+/// 新消息 localID=0 时前两条路径即可用（微信录音流程本来就是先落盘后入库）
+static NSString *MioProbeVoicePath(id msg, id msgMgr) {
+    @try {
+        Class wrapCls = object_getClass(msg);
+        // 1) wrap 实例方法（如 getVoicePath）
+        SEL sel = MioFindMethodSel(wrapCls, NO, @[@"voicepath"], 2);
+        if (sel) {
+            NSString *p = ((id (*)(id, SEL))objc_msgSend)(msg, sel);
+            if ([p isKindOfClass:[NSString class]] && p.length > 0) {
+                WPLog(@"Voice", @"[Send] 语音路径: -%@ → %@", NSStringFromSelector(sel), p);
+                return p;
+            }
+        }
+        // 2) CMessageWrap 类方法（如 +getPathOfAudio:）
+        sel = MioFindMethodSel(wrapCls, YES, @[@"pathofaudio", @"pathofvoice", @"voicepath", @"audiopath"], 3);
+        if (sel) {
+            NSString *p = ((id (*)(id, SEL, id))objc_msgSend)(wrapCls, sel, msg);
+            if ([p isKindOfClass:[NSString class]] && p.length > 0) {
+                WPLog(@"Voice", @"[Send] 语音路径: +%@ → %@", NSStringFromSelector(sel), p);
+                return p;
+            }
+        }
+        // 3) CMessageMgr 实例方法（如 getAudioFileName:LocalID:；未入库时 localID=0）
+        if (msgMgr) {
+            SEL sel2 = MioFindMethodSel(object_getClass(msgMgr), NO, @[@"getaudiofilename"], 4);
+            if (sel2) {
+                unsigned int localID = 0;
+                Ivar iv = class_getInstanceVariable(wrapCls, "m_uiMesLocalID");
+                if (iv) localID = *(unsigned int *)((__bridge void *)msg + ivar_getOffset(iv));
+                NSString *p = ((id (*)(id, SEL, id, unsigned long long))objc_msgSend)(msgMgr, sel2, msg, (unsigned long long)localID);
+                if ([p isKindOfClass:[NSString class]] && p.length > 0) {
+                    WPLog(@"Voice", @"[Send] 语音路径: -%@ (localID=%u) → %@", NSStringFromSelector(sel2), localID, p);
+                    return p;
+                }
+            }
+        }
+    } @catch (NSException *e) {
+        WPLog(@"Voice", @"[Send] 语音路径探测异常: %@ %@", e.name, e.reason);
+    }
+    return nil;
+}
+
+/// 确保目录存在后写文件，返回是否成功
+static BOOL MioWriteVoiceFile(NSData *data, NSString *path) {
+    if (path.length == 0 || data.length == 0) return NO;
+    NSString *dir = [path stringByDeletingLastPathComponent];
+    if (dir.length > 0) [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    return [data writeToFile:path atomically:YES];
+}
+
 + (BOOL)sendVoiceAtRelPath:(NSString *)relPath toChat:(NSString *)chatName error:(NSError **)error {
     @try {
         if (relPath.length == 0 || chatName.length == 0) {
@@ -484,18 +560,24 @@ static NSUInteger SilkStreamOffset(NSData *data) {
             if (error) *error = [NSError errorWithDomain:@"MioVoice" code:11 userInfo:@{NSLocalizedDescriptionKey: @"音频文件为空或不可读"}];
             return NO;
         }
-        // 诊断：文件头 16 字节，用于确认 silk 格式
-        NSMutableString *hex = [NSMutableString string];
-        const uint8_t *hb = data.bytes;
-        for (NSUInteger i = 0; i < 16 && i < data.length; i++) [hex appendFormat:@"%02X ", hb[i]];
-        // 网络格式为纯 silk 流：剥离微信本地文件的 0x02 前缀
         NSUInteger off = SilkStreamOffset(data);
-        WPLog(@"Voice", @"[Send] 文件头: %@ silkOffset=%lu", hex, (unsigned long)off);
-        if (off > 0) data = [data subdataWithRange:NSMakeRange(off, data.length - off)];
-        else if (off == (NSUInteger)-1) {
+        if (off == (NSUInteger)-1) {
             if (error) *error = [NSError errorWithDomain:@"MioVoice" code:16 userInfo:@{NSLocalizedDescriptionKey: @"文件不是有效的 silk 格式"}];
             return NO;
         }
+        // 收发网络格式 = 0x02 + silk 流（聊天纳入原样保存的收到 buffer 均带 0x02 前缀，与微信本地文件一致）
+        NSData *wire = data;
+        if (off == 0) { // 纯 silk 流的包：补 0x02 前缀对齐微信格式
+            NSMutableData *m = [NSMutableData dataWithCapacity:data.length + 1];
+            const uint8_t pfx = 0x02;
+            [m appendBytes:&pfx length:1];
+            [m appendData:data];
+            wire = m;
+        }
+        NSMutableString *hex = [NSMutableString string];
+        const uint8_t *hb = wire.bytes;
+        for (NSUInteger i = 0; i < 16 && i < wire.length; i++) [hex appendFormat:@"%02X ", hb[i]];
+        WPLog(@"Voice", @"[Send] 发送格式头: %@", hex);
         Class wrapClass = objc_getClass("CMessageWrap");
         id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
         SEL addSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
@@ -514,11 +596,12 @@ static NSUInteger SilkStreamOffset(NSData *data) {
             if (error) *error = [NSError errorWithDomain:@"MioVoice" code:15 userInfo:@{NSLocalizedDescriptionKey: @"微信版本不兼容：未找到语音数据字段"}];
             return NO;
         }
-        object_setIvar(msg, dataIvar, data);
+        object_setIvar(msg, dataIvar, wire);
         [msg setValue:chatName forKey:@"m_nsToUsr"];
         NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
         if (selfUsr.length > 0) [msg setValue:selfUsr forKey:@"m_nsFromUsr"];
-        [msg setValue:@(4) forKey:@"m_uiStatus"];
+        // ★状态=1(待发送)：微信发送/上传队列才会拾取。写 4(已发送)会被队列跳过 → 假发（对方收不到）
+        [msg setValue:@(1) forKey:@"m_uiStatus"];
         [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
 
         long long ms = [self durationMsForRelPath:relPath];
@@ -535,10 +618,40 @@ static NSUInteger SilkStreamOffset(NSData *data) {
         // XML 模板参照小微助手逆向结论（voiceformat="4" 数值型最小模板）
         [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voiceformat=\"4\" forwardflag=\"0\" /></msg>", ms]
                forKey:@"m_nsContent"];
-        WPLog(@"Voice", @"[Send] 构造语音: %lldms, silk %llu 字节", ms, data.length);
+        WPLog(@"Voice", @"[Send] 构造语音: %lldms, wire %llu 字节", ms, wire.length);
 
-        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addSel, chatName, msg);
-        WPLog(@"Voice", @"[Send] 已发送语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, data.length / 1024.0);
+        // 仿小微：先把语音写到微信期望的落盘路径（录音流程本就是先落盘后入库，上传管线从文件读取）
+        NSString *voicePath = MioProbeVoicePath(msg, msgMgr);
+        if (voicePath.length > 0) {
+            WPLog(@"Voice", @"[Send] 语音落盘%@: %@", MioWriteVoiceFile(wire, voicePath) ? @"成功" : @"失败", voicePath);
+        } else {
+            WPLog(@"Voice", @"[Send] 未探测到语音路径方法，仅依赖 buffer");
+        }
+
+        // 入库+触发真实发送管线：优先 AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:（小微实测链），兜底 AddMsg
+        SEL localSel = MioFindMethodSel(object_getClass(msgMgr), NO, @[@"addlocalmsg"], 6);
+        if (localSel) {
+            ((void (*)(id, SEL, id, id, long long, long long))objc_msgSend)(msgMgr, localSel, chatName, msg, 1LL, 0LL);
+            WPLog(@"Voice", @"[Send] 入库: %@ (fixTime=1 notify=0)", NSStringFromSelector(localSel));
+        } else {
+            ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addSel, chatName, msg);
+            WPLog(@"Voice", @"[Send] 入库: AddMsg:MsgWrap: (兜底)");
+        }
+
+        // 入库后 localID 已分配：再探测一次路径，若文件名变化则补写一份（覆盖两种命名方案）
+        NSString *postPath = MioProbeVoicePath(msg, msgMgr);
+        if (postPath.length > 0 && ![postPath isEqualToString:voicePath]) {
+            WPLog(@"Voice", @"[Send] 入库后路径补写%@: %@", MioWriteVoiceFile(wire, postPath) ? @"成功" : @"失败", postPath);
+        }
+
+        WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
+
+        // 诊断：2 秒后观察状态流转（1=待发送 2=发送中 4=已发送），确认上传管线是否拾取
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            @try {
+                WPLog(@"Voice", @"[Send] 2s后状态=%@ localID=%@", [msg valueForKey:@"m_uiStatus"], [msg valueForKey:@"m_uiMesLocalID"]);
+            } @catch (NSException *e) {}
+        });
         [self addRecentRelPath:relPath];
         return YES;
     } @catch (NSException *e) {

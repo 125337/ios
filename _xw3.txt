@@ -1,0 +1,4425 @@
+﻿dylib: 8717136
+
+========================================================================
+SEL: SaveMesVoice:MsgWrap:
+selref 槽: ['0x806ed8']
+
+  ---- 引用点 @0x79E60 ----
+  0x00079D20  bl       #0x24c0a8
+  0x00079D24  tbz      w0, #0, #0x79e0c
+  0x00079D28  adrp     x0, #0x24e000
+  0x00079D2C  add      x0, x0, #0x2fc ; @0x24e2fc "CMessageMgr"
+  0x00079D30  bl       #0x24c078
+  0x00079D34  mov      x2, x0
+  0x00079D38  mov      x0, x21
+  0x00079D3C  mov      x1, x26
+  0x00079D40  bl       #0x24c0a8
+  0x00079D44  mov      x29, x29
+  0x00079D48  bl       #0x24c0e4
+  0x00079D4C  mov      x27, x0
+  0x00079D50  cbnz     x0, #0x79e24
+  0x00079D54  adrp     x0, #0x24d000
+  0x00079D58  add      x0, x0, #0x6d0 ; @0x24e6d0 "endFinderData"
+  0x00079D5C  bl       #0x24c078
+  0x00079D60  adrp     x8, #0x805000
+  0x00079D64  ldr      x1, [x8, #0xc0] ; @0x8050c0 "defaultCenter"
+  0x00079D68  bl       #0x24c0a8
+  0x00079D6C  mov      x29, x29
+  0x00079D70  bl       #0x24c0e4
+  0x00079D74  mov      x27, x0
+  0x00079D78  cbz      x0, #0x79e14
+  0x00079D7C  adrp     x0, #0x24e000
+  0x00079D80  add      x0, x0, #0x2fc ; @0x24e2fc "CMessageMgr"
+  0x00079D84  bl       #0x24c078
+  0x00079D88  mov      x2, x0
+  0x00079D8C  mov      x0, x27
+  0x00079D90  mov      x1, x26
+  0x00079D94  bl       #0x24c0a8
+  0x00079D98  mov      x29, x29
+  0x00079D9C  bl       #0x24c0e4
+  0x00079DA0  mov      x26, x0
+  0x00079DA4  b        #0x79e18
+  0x00079DA8  adrp     x0, #0x24d000
+  0x00079DAC  add      x0, x0, #0x6d0 ; @0x24e6d0 "endFinderData"
+  0x00079DB0  bl       #0x24c078
+  0x00079DB4  adrp     x8, #0x805000
+  0x00079DB8  ldr      x1, [x8, #0xc0] ; @0x8050c0 "defaultCenter"
+  0x00079DBC  bl       #0x24c0a8
+  0x00079DC0  mov      x29, x29
+  0x00079DC4  bl       #0x24c0e4
+  0x00079DC8  mov      x27, x0
+  0x00079DCC  cbz      x0, #0x79e08
+  0x00079DD0  adrp     x0, #0x24e000
+  0x00079DD4  add      x0, x0, #0xd31 ; @0x24ed31 "AudioSender"
+  0x00079DD8  bl       #0x24c078
+  0x00079DDC  mov      x2, x0
+  0x00079DE0  mov      x0, x27
+  0x00079DE4  mov      x1, x26
+  0x00079DE8  bl       #0x24c0a8
+  0x00079DEC  mov      x29, x29
+  0x00079DF0  bl       #0x24c0e4
+  0x00079DF4  mov      x28, x0
+  0x00079DF8  mov      x0, x27
+  0x00079DFC  bl       #0x24c0c0
+  0x00079E00  cbnz     x28, #0x79d0c
+  0x00079E04  b        #0x79e0c
+  0x00079E08  mov      x28, #0
+  0x00079E0C  mov      w23, #0
+  0x00079E10  b        #0x7a104
+  0x00079E14  mov      x26, #0
+  0x00079E18  mov      x0, x27
+  0x00079E1C  bl       #0x24c0c0
+  0x00079E20  mov      x27, x26
+  0x00079E24  mov      x0, x24
+  0x00079E28  mov      x1, x28
+  0x00079E2C  mov      x2, x20
+  0x00079E30  bl       #0x7aa00
+  0x00079E34  mov      x29, x29
+  0x00079E38  bl       #0x24c0e4
+  0x00079E3C  mov      x1, x0
+  0x00079E40  mov      x0, x19
+  0x00079E44  str      x1, [sp, #0x20]
+  0x00079E48  bl       #0x7adf0
+  0x00079E4C  cmp      x27, #0
+  0x00079E50  str      w0, [sp, #0x14]
+  0x00079E54  csinc    w8, w0, wzr, ne
+  0x00079E58  tbnz     w8, #0, #0x79e8c
+  0x00079E5C  adrp     x8, #0x806000
+  0x00079E60  ldr      x26, [x8, #0xed8] ; @0x805ed8 "getImageFor:isHD:"  <== REF
+  0x00079E64  mov      x0, x27
+  0x00079E68  ldr      x1, [sp, #0x48]
+  0x00079E6C  mov      x2, x26
+  0x00079E70  bl       #0x24c0a8
+  0x00079E74  cbz      w0, #0x79e8c
+  0x00079E78  mov      x0, x27
+  0x00079E7C  mov      x1, x26
+  0x00079E80  mov      x2, x20
+  0x00079E84  mov      x3, x24
+  0x00079E88  bl       #0x24c0a8
+  0x00079E8C  adrp     x8, #0x806000
+  0x00079E90  ldr      x26, [x8, #0xee0] ; @0x805ee0 "getOriginImageFor:isHD:"
+  0x00079E94  mov      x0, x28
+  0x00079E98  ldr      x1, [sp, #0x48]
+  0x00079E9C  mov      x2, x26
+  0x00079EA0  bl       #0x24c0a8
+  0x00079EA4  cbz      w0, #0x79f3c
+  0x00079EA8  mov      x0, x28
+  0x00079EAC  mov      x1, x26
+  0x00079EB0  mov      x2, x24
+  0x00079EB4  bl       #0x24c0a8
+  0x00079EB8  mov      x0, x24
+  0x00079EBC  mov      x1, x28
+  0x00079EC0  mov      x2, x20
+  0x00079EC4  bl       #0x7aa00
+  0x00079EC8  mov      x29, x29
+  0x00079ECC  bl       #0x24c0e4
+  0x00079ED0  mov      x26, x0
+  0x00079ED4  mov      x1, x23
+  0x00079ED8  bl       #0x24c0a8
+  0x00079EDC  cbz      x0, #0x79f34
+  0x00079EE0  adrp     x8, #0x7ac000
+  0x00079EE4  add      x8, x8, #0x920 ; @0x805920 "getOutputTime"
+  0x00079EE8  ldr      x9, [sp, #0x20]
+  0x00079EEC  cmp      x9, #0
+  0x00079EF0  csel     x2, x8, x9, eq
+  0x00079EF4  adrp     x8, #0x804000
+  0x00079EF8  ldr      x1, [x8, #0xfc8] ; @0x805fc8 "setRemindTimer:"
+  0x00079EFC  mov      x0, x26
+  0x00079F00  bl       #0x24c0a8
+  0x00079F04  tbnz     w0, #0, #0x79f34
+  0x00079F08  mov      x0, x19
+  0x00079F0C  mov      x1, x26
+  0x00079F10  bl       #0x7adf0
+  0x00079F14  ldr      w8, [sp, #0x14]
+  0x00079F18  orr      w8, w8, w0
+  0x00079F1C  str      w8, [sp, #0x14]
+  0x00079F20  mov      x0, x26
+  0x00079F24  bl       #0x24c0cc
+  0x00079F28  ldr      x0, [sp, #0x20]
+  0x00079F2C  bl       #0x24c0c0
+  0x00079F30  str      x26, [sp, #0x20]
+  0x00079F34  mov      x0, x26
+  0x00079F38  bl       #0x24c0c0
+  0x00079F3C  mov      x0, x24
+  0x00079F40  mov      x1, x19
+  0x00079F44  ldr      x2, [sp, #0x40]
+  0x00079F48  mov      x3, x25
+  0x00079F4C  bl       #0x7a2e0
+  0x00079F50  mov      x0, x24
+  0x00079F54  bl       #0x7af94
+  0x00079F58  mov      x29, x29
+  0x00079F5C  bl       #0x24c0e4
+  0x00079F60  mov      x22, x0
+  0x00079F64  cbz      x0, #0x79fb8
+  0x00079F68  adrp     x8, #0x806000
+  0x00079F6C  ldr      x25, [x8, #0xee8] ; @0x805ee8 "getThumbImageFor:"
+  0x00079F70  mov      x0, x22
+  0x00079F74  ldr      x1, [sp, #0x48]
+  0x00079F78  mov      x2, x25
+  0x00079F7C  bl       #0x24c0a8
+  0x00079F80  cbz      w0, #0x79fb8
+  0x00079F84  adrp     x8, #0x806000
+  0x00079F88  ldr      x1, [x8, #0xef0] ; @0x805ef0 "getThumbOrDefaultImageFor:"
+  0x00079F8C  mov      x0, x24
+  0x00079F90  bl       #0x24c0a8
+  0x00079F94  mov      x29, x29
+  0x00079F98  bl       #0x24c0e4
+  0x00079F9C  mov      x26, x0
+  0x00079FA0  mov      x0, x22
+  0x00079FA4  mov      x1, x25
+  0x00079FA8  mov      x2, x26
+  0x00079FAC  bl       #0x24c0a8
+  0x00079FB0  mov      x0, x26
+  0x00079FB4  bl       #0x24c0c0
+  0x00079FB8  mov      x0, x24
+  0x00079FBC  bl       #0x7af94
+  0x00079FC0  mov      x29, x29
+  0x00079FC4  bl       #0x24c0e4
+  0x00079FC8  mov      x26, x0
+  0x00079FCC  cbz      x0, #0x7a03c
+  0x00079FD0  adrp     x8, #0x806000
+  0x00079FD4  ldr      x25, [x8, #0xfa8] ; @0x805fa8 "getLastUserName"
+  0x00079FD8  mov      x0, x26
+  0x00079FDC  ldr      x1, [sp, #0x48]
+  0x00079FE0  mov      x2, x25
+  0x00079FE4  bl       #0x24c0a8
+  0x00079FE8  tbz      w0, #0, #0x7a03c
+  0x00079FEC  mov      x0, x26
+  0x00079FF0  mov      x1, x25
+  0x00079FF4  bl       #0x24c0a8
+  0x00079FF8  mov      x29, x29
+  0x00079FFC  bl       #0x24c0e4
+  0x0007A000  mov      x25, x0
+  0x0007A004  adrp     x8, #0x80f000
+  0x0007A008  ldr      x0, [x8, #0x80] ; @0x805080 "keyWindow"
+  0x0007A00C  ldr      x1, [sp, #0x28]
+  0x0007A010  bl       #0x24c0a8
+  0x0007A014  mov      x2, x0
+
+========================================================================
+SEL: ResendVoiceMsg:MsgWrap:
+selref 槽: ['0x805d98']
+
+  ---- 引用点 @0x197A8 ----
+  0x00019668  adrp     x3, #0x81e000
+  0x0001966C  add      x3, x3, #0x868
+  0x00019670  mov      x0, x21
+  0x00019674  ldr      x28, [sp, #0xb0]
+  0x00019678  mov      x1, x28
+  0x0001967C  bl       #0x24b934
+  0x00019680  adr      x2, #0x426c8
+  0x00019684  nop      
+  0x00019688  adrp     x3, #0x81e000
+  0x0001968C  add      x3, x3, #0x870
+  0x00019690  mov      x0, x21
+  0x00019694  ldr      x1, [sp, #0xc0]
+  0x00019698  bl       #0x24b934
+  0x0001969C  adr      x2, #0x427c8
+  0x000196A0  nop      
+  0x000196A4  adrp     x3, #0x81e000
+  0x000196A8  add      x3, x3, #0x878
+  0x000196AC  mov      x0, x21
+  0x000196B0  ldr      x1, [sp, #0xe0]
+  0x000196B4  bl       #0x24b934
+  0x000196B8  adr      x2, #0x4286c
+  0x000196BC  nop      
+  0x000196C0  adrp     x3, #0x81e000
+  0x000196C4  add      x3, x3, #0x880
+  0x000196C8  mov      x0, x21
+  0x000196CC  ldr      x1, [sp, #0xb8]
+  0x000196D0  bl       #0x24b934
+  0x000196D4  ldr      q0, [sp, #0x140]
+  0x000196D8  str      s0, [sp, #0x250]
+  0x000196DC  adr      x2, #0x4296c
+  0x000196E0  nop      
+  0x000196E4  add      x3, sp, #0x250
+  0x000196E8  mov      x0, x21
+  0x000196EC  mov      x1, x26
+  0x000196F0  bl       #0x24bba4
+  0x000196F4  ldr      q0, [sp, #0x140]
+  0x000196F8  str      s0, [sp, #0x250]
+  0x000196FC  adr      x2, #0x42970
+  0x00019700  nop      
+  0x00019704  add      x3, sp, #0x250
+  0x00019708  mov      x0, x21
+  0x0001970C  mov      x1, x24
+  0x00019710  bl       #0x24bba4
+  0x00019714  ldr      q0, [sp, #0x140]
+  0x00019718  str      s0, [sp, #0x250]
+  0x0001971C  adr      x2, #0x42974
+  0x00019720  nop      
+  0x00019724  add      x3, sp, #0x250
+  0x00019728  mov      x0, x21
+  0x0001972C  mov      x1, x23
+  0x00019730  bl       #0x24bba4
+  0x00019734  ldr      q0, [sp, #0x140]
+  0x00019738  str      s0, [sp, #0x250]
+  0x0001973C  adr      x2, #0x42a70
+  0x00019740  nop      
+  0x00019744  add      x3, sp, #0x250
+  0x00019748  mov      x0, x21
+  0x0001974C  mov      x1, x19
+  0x00019750  bl       #0x24bba4
+  0x00019754  ldr      q0, [sp, #0x130]
+  0x00019758  str      s0, [sp, #0x250]
+  0x0001975C  strb     wzr, [sp, #0x254]
+  0x00019760  adr      x2, #0x42b30
+  0x00019764  nop      
+  0x00019768  add      x3, sp, #0x250
+  0x0001976C  mov      x0, x21
+  0x00019770  mov      x1, x22
+  0x00019774  bl       #0x24bba4
+  0x00019778  adrp     x0, #0x24e000
+  0x0001977C  add      x0, x0, #0xd31 ; @0x24ed31 "AudioSender"
+  0x00019780  bl       #0x24c078
+  0x00019784  mov      x20, x0
+  0x00019788  adrp     x8, #0x805000
+  0x0001978C  ldr      x1, [x8, #0xd90] ; @0x805d90 "OnRecorderPart:Offset:Len:EndFlag:ForceDelete:Duration:"
+  0x00019790  adr      x2, #0x42d3c
+  0x00019794  nop      
+  0x00019798  adrp     x3, #0x81e000
+  0x0001979C  add      x3, x3, #0x888
+  0x000197A0  bl       #0x24b934
+  0x000197A4  adrp     x8, #0x805000
+  0x000197A8  ldr      x19, [x8, #0xd98] ; @0x805d98 "ResendVoiceMsg:MsgWrap:"  <== REF
+  0x000197AC  adr      x2, #0x42f10
+  0x000197B0  nop      
+  0x000197B4  adrp     x3, #0x81e000
+  0x000197B8  add      x3, x3, #0x890
+  0x000197BC  mov      x0, x20
+  0x000197C0  mov      x1, x19
+  0x000197C4  bl       #0x24b934
+  0x000197C8  adrp     x8, #0x805000
+  0x000197CC  ldr      x1, [x8, #0xda0] ; @0x805da0 "OnPartSent:ErrNo:"
+  0x000197D0  adr      x2, #0x42f98
+  0x000197D4  nop      
+  0x000197D8  adrp     x3, #0x81e000
+  0x000197DC  add      x3, x3, #0x898
+  0x000197E0  mov      x0, x20
+  0x000197E4  bl       #0x24b934
+  0x000197E8  adrp     x8, #0x805000
+  0x000197EC  ldr      x1, [x8, #0xda8] ; @0x805da8 "onCdnUploadFail:"
+  0x000197F0  adr      x2, #0x42fa4
+  0x000197F4  nop      
+  0x000197F8  adrp     x3, #0x81e000
+  0x000197FC  add      x3, x3, #0x8a0
+  0x00019800  mov      x0, x20
+  0x00019804  bl       #0x24b934
+  0x00019808  adrp     x0, #0x24e000
+  0x0001980C  add      x0, x0, #0xd3d ; @0x24ed3d "MMNewUploadVoiceMgr"
+  0x00019810  bl       #0x24c078
+  0x00019814  mov      x20, x0
+  0x00019818  adr      x2, #0x42fb0
+  0x0001981C  nop      
+  0x00019820  adrp     x3, #0x81e000
+  0x00019824  add      x3, x3, #0x8a8
+  0x00019828  mov      x1, x19
+  0x0001982C  bl       #0x24b934
+  0x00019830  adrp     x8, #0x805000
+  0x00019834  ldr      x21, [x8, #0xdb0] ; @0x805db0 "AddNewPart:LocalID:n64SvrID:Offset:Len:VoiceTime:CreateTime:EndFlag:CancelFlag:VoiceFormat:ForwardFlag:msgSource:chatName:"
+  0x00019838  adr      x2, #0x42fbc
+  0x0001983C  nop      
+  0x00019840  adrp     x3, #0x81e000
+  0x00019844  add      x3, x3, #0x8b0
+  0x00019848  mov      x0, x20
+  0x0001984C  mov      x1, x21
+  0x00019850  bl       #0x24b934
+  0x00019854  adrp     x8, #0x805000
+  0x00019858  ldr      x1, [x8, #0xdb8] ; @0x805db8 "startSend"
+  0x0001985C  adr      x2, #0x42fc8
+  0x00019860  nop      
+  0x00019864  adrp     x3, #0x81e000
+  0x00019868  add      x3, x3, #0x8b8
+  0x0001986C  mov      x0, x20
+  0x00019870  bl       #0x24b934
+  0x00019874  adrp     x0, #0x24e000
+  0x00019878  add      x0, x0, #0xd51 ; @0x24ed51 "UploadVoiceCDNMgr"
+  0x0001987C  bl       #0x24c078
+  0x00019880  mov      x20, x0
+  0x00019884  adr      x2, #0x42fd4
+  0x00019888  nop      
+  0x0001988C  adrp     x3, #0x81e000
+  0x00019890  add      x3, x3, #0x8c0
+  0x00019894  mov      x1, x19
+  0x00019898  bl       #0x24b934
+  0x0001989C  adr      x2, #0x42fe0
+  0x000198A0  nop      
+  0x000198A4  adrp     x3, #0x81e000
+  0x000198A8  add      x3, x3, #0x8c8
+  0x000198AC  mov      x0, x20
+  0x000198B0  mov      x1, x21
+  0x000198B4  bl       #0x24b934
+  0x000198B8  adrp     x8, #0x805000
+  0x000198BC  ldr      x1, [x8, #0xdc0] ; @0x805dc0 "handleSendVoiceFail:"
+  0x000198C0  adr      x2, #0x42fec
+  0x000198C4  nop      
+  0x000198C8  adrp     x3, #0x81e000
+  0x000198CC  add      x3, x3, #0x8d0
+  0x000198D0  mov      x0, x20
+  0x000198D4  bl       #0x24b934
+  0x000198D8  adrp     x8, #0x805000
+  0x000198DC  ldr      x1, [x8, #0xdc8] ; @0x805dc8 "handleUploadCDNFail:retryCgi:"
+  0x000198E0  adr      x2, #0x42ff8
+  0x000198E4  nop      
+  0x000198E8  adrp     x3, #0x81e000
+  0x000198EC  add      x3, x3, #0x8d8
+  0x000198F0  mov      x0, x20
+  0x000198F4  bl       #0x24b934
+  0x000198F8  adrp     x0, #0x24e000
+  0x000198FC  add      x0, x0, #0xd63 ; @0x24ed63 "FavoritesItem"
+  0x00019900  bl       #0x24c078
+  0x00019904  mov      x19, x0
+  0x00019908  adrp     x8, #0x805000
+  0x0001990C  ldr      x1, [x8, #0xdd0] ; @0x805dd0 "canBeForward"
+  0x00019910  adr      x2, #0x43004
+  0x00019914  nop      
+  0x00019918  adrp     x3, #0x81e000
+  0x0001991C  add      x3, x3, #0x8e0
+  0x00019920  bl       #0x24b934
+  0x00019924  adrp     x8, #0x805000
+  0x00019928  ldr      x1, [x8, #0xdd8] ; @0x805dd8 "canBeForwardWithMsg"
+  0x0001992C  adr      x2, #0x43074
+  0x00019930  nop      
+  0x00019934  adrp     x3, #0x81e000
+  0x00019938  add      x3, x3, #0x8e8
+  0x0001993C  mov      x0, x19
+  0x00019940  bl       #0x24b934
+  0x00019944  adrp     x8, #0x805000
+  0x00019948  ldr      x1, [x8, #0xde0] ; @0x805de0 "canBeForwardWithMsg:"
+  0x0001994C  adr      x2, #0x43130
+  0x00019950  nop      
+  0x00019954  adrp     x3, #0x81e000
+  0x00019958  add      x3, x3, #0x8f0
+  0x0001995C  mov      x0, x19
+
+  ---- 引用点 @0x79D10 ----
+  0x00079BD0  mov      w2, #0
+  0x00079BD4  bl       #0x24c0a8
+  0x00079BD8  mov      x29, x29
+  0x00079BDC  bl       #0x24c0e4
+  0x00079BE0  mov      x26, x0
+  0x00079BE4  adrp     x8, #0x806000
+  0x00079BE8  ldr      x1, [x8, #0xeb8] ; @0x806eb8 "setValue:forKey:"
+  0x00079BEC  adrp     x3, #0x7ae000
+  0x00079BF0  add      x3, x3, #0x2c0
+  0x00079BF4  mov      x0, x24
+  0x00079BF8  mov      x2, x26
+  0x00079BFC  bl       #0x24c0a8
+  0x00079C00  mov      x0, x26
+  0x00079C04  bl       #0x24c0c0
+  0x00079C08  adrp     x8, #0x806000
+  0x00079C0C  ldr      x26, [x8, #0xec0] ; @0x806ec0 "setM_bForward:"
+  0x00079C10  adrp     x8, #0x804000
+  0x00079C14  ldr      x1, [x8, #0xcd0] ; @0x806cd0 "setKey:"
+  0x00079C18  mov      x0, x24
+  0x00079C1C  str      x1, [sp, #0x48]
+  0x00079C20  mov      x2, x26
+  0x00079C24  bl       #0x24c0a8
+  0x00079C28  cbz      w0, #0x79c3c
+  0x00079C2C  mov      x0, x24
+  0x00079C30  mov      x1, x26
+  0x00079C34  mov      x2, x25
+  0x00079C38  bl       #0x24c0a8
+  0x00079C3C  adrp     x0, #0x24f000
+  0x00079C40  add      x0, x0, #0x4cf ; @0x24f4cf "MMNewSessionMgr"
+  0x00079C44  bl       #0x24c078
+  0x00079C48  mov      x2, x0
+  0x00079C4C  adrp     x8, #0x805000
+  0x00079C50  ldr      x26, [x8, #0xc8] ; @0x8060c8 "objectsForListAdapter:"
+  0x00079C54  mov      x0, x21
+  0x00079C58  mov      x1, x26
+  0x00079C5C  bl       #0x24c0a8
+  0x00079C60  mov      x29, x29
+  0x00079C64  bl       #0x24c0e4
+  0x00079C68  str      x0, [sp, #0x38]
+  0x00079C6C  cbz      x0, #0x79ca0
+  0x00079C70  adrp     x8, #0x806000
+  0x00079C74  ldr      x27, [x8, #0xec8] ; @0x806ec8 "GenSendMsgTime"
+  0x00079C78  ldr      x0, [sp, #0x38]
+  0x00079C7C  ldr      x1, [sp, #0x48]
+  0x00079C80  mov      x2, x27
+  0x00079C84  bl       #0x24c0a8
+  0x00079C88  cbz      w0, #0x79ca0
+  0x00079C8C  ldr      x0, [sp, #0x38]
+  0x00079C90  mov      x1, x27
+  0x00079C94  bl       #0x24c0a8
+  0x00079C98  mov      x2, x0
+  0x00079C9C  b        #0x79cac
+  0x00079CA0  mov      x0, #0
+  0x00079CA4  bl       #0x24c2e8
+  0x00079CA8  mov      x2, x0
+  0x00079CAC  adrp     x8, #0x806000
+  0x00079CB0  ldr      x1, [x8, #0xed0] ; @0x806ed0 "setM_uiCreateTime:"
+  0x00079CB4  mov      x0, x24
+  0x00079CB8  bl       #0x24c0a8
+  0x00079CBC  mov      x0, x24
+  0x00079CC0  mov      x1, x19
+  0x00079CC4  ldr      x2, [sp, #0x40]
+  0x00079CC8  mov      x3, x25
+  0x00079CCC  bl       #0x7a2e0
+  0x00079CD0  cbz      w28, #0x79ce0
+  0x00079CD4  cbz      w25, #0x79ce0
+  0x00079CD8  mov      x0, x24
+  0x00079CDC  bl       #0x7a6a8
+  0x00079CE0  adrp     x0, #0x24e000
+  0x00079CE4  add      x0, x0, #0xd31 ; @0x24fd31 "ackgroundImageView"
+  0x00079CE8  bl       #0x24c078
+  0x00079CEC  mov      x2, x0
+  0x00079CF0  mov      x0, x21
+  0x00079CF4  mov      x1, x26
+  0x00079CF8  bl       #0x24c0a8
+  0x00079CFC  mov      x29, x29
+  0x00079D00  bl       #0x24c0e4
+  0x00079D04  mov      x28, x0
+  0x00079D08  cbz      x0, #0x79da8
+  0x00079D0C  adrp     x8, #0x805000
+  0x00079D10  ldr      x2, [x8, #0xd98] ; @0x806d98 "setFrame:"  <== REF
+  0x00079D14  mov      x0, x28
+  0x00079D18  ldr      x1, [sp, #0x48]
+  0x00079D1C  str      x2, [sp, #0x18]
+  0x00079D20  bl       #0x24c0a8
+  0x00079D24  tbz      w0, #0, #0x79e0c
+  0x00079D28  adrp     x0, #0x24e000
+  0x00079D2C  add      x0, x0, #0x2fc ; @0x24f2fc "iveWXPayCgiTunnel"
+  0x00079D30  bl       #0x24c078
+  0x00079D34  mov      x2, x0
+  0x00079D38  mov      x0, x21
+  0x00079D3C  mov      x1, x26
+  0x00079D40  bl       #0x24c0a8
+  0x00079D44  mov      x29, x29
+  0x00079D48  bl       #0x24c0e4
+  0x00079D4C  mov      x27, x0
+  0x00079D50  cbnz     x0, #0x79e24
+  0x00079D54  adrp     x0, #0x24d000
+  0x00079D58  add      x0, x0, #0x6d0 ; @0x24f6d0 "noMsg"
+  0x00079D5C  bl       #0x24c078
+  0x00079D60  adrp     x8, #0x805000
+  0x00079D64  ldr      x1, [x8, #0xc0] ; @0x8060c0 "setSectionData:"
+  0x00079D68  bl       #0x24c0a8
+  0x00079D6C  mov      x29, x29
+  0x00079D70  bl       #0x24c0e4
+  0x00079D74  mov      x27, x0
+  0x00079D78  cbz      x0, #0x79e14
+  0x00079D7C  adrp     x0, #0x24e000
+  0x00079D80  add      x0, x0, #0x2fc ; @0x24f2fc "iveWXPayCgiTunnel"
+  0x00079D84  bl       #0x24c078
+  0x00079D88  mov      x2, x0
+  0x00079D8C  mov      x0, x27
+  0x00079D90  mov      x1, x26
+  0x00079D94  bl       #0x24c0a8
+  0x00079D98  mov      x29, x29
+  0x00079D9C  bl       #0x24c0e4
+  0x00079DA0  mov      x26, x0
+  0x00079DA4  b        #0x79e18
+  0x00079DA8  adrp     x0, #0x24d000
+  0x00079DAC  add      x0, x0, #0x6d0 ; @0x24f6d0 "noMsg"
+  0x00079DB0  bl       #0x24c078
+  0x00079DB4  adrp     x8, #0x805000
+  0x00079DB8  ldr      x1, [x8, #0xc0] ; @0x8060c0 "setSectionData:"
+  0x00079DBC  bl       #0x24c0a8
+  0x00079DC0  mov      x29, x29
+  0x00079DC4  bl       #0x24c0e4
+  0x00079DC8  mov      x27, x0
+  0x00079DCC  cbz      x0, #0x79e08
+  0x00079DD0  adrp     x0, #0x24e000
+  0x00079DD4  add      x0, x0, #0xd31 ; @0x24fd31 "ackgroundImageView"
+  0x00079DD8  bl       #0x24c078
+  0x00079DDC  mov      x2, x0
+  0x00079DE0  mov      x0, x27
+  0x00079DE4  mov      x1, x26
+  0x00079DE8  bl       #0x24c0a8
+  0x00079DEC  mov      x29, x29
+  0x00079DF0  bl       #0x24c0e4
+  0x00079DF4  mov      x28, x0
+  0x00079DF8  mov      x0, x27
+  0x00079DFC  bl       #0x24c0c0
+  0x00079E00  cbnz     x28, #0x79d0c
+  0x00079E04  b        #0x79e0c
+  0x00079E08  mov      x28, #0
+  0x00079E0C  mov      w23, #0
+  0x00079E10  b        #0x7a104
+  0x00079E14  mov      x26, #0
+  0x00079E18  mov      x0, x27
+  0x00079E1C  bl       #0x24c0c0
+  0x00079E20  mov      x27, x26
+  0x00079E24  mov      x0, x24
+  0x00079E28  mov      x1, x28
+  0x00079E2C  mov      x2, x20
+  0x00079E30  bl       #0x7aa00
+  0x00079E34  mov      x29, x29
+  0x00079E38  bl       #0x24c0e4
+  0x00079E3C  mov      x1, x0
+  0x00079E40  mov      x0, x19
+  0x00079E44  str      x1, [sp, #0x20]
+  0x00079E48  bl       #0x7adf0
+  0x00079E4C  cmp      x27, #0
+  0x00079E50  str      w0, [sp, #0x14]
+  0x00079E54  csinc    w8, w0, wzr, ne
+  0x00079E58  tbnz     w8, #0, #0x79e8c
+  0x00079E5C  adrp     x8, #0x806000
+  0x00079E60  ldr      x26, [x8, #0xed8] ; @0x806ed8 "SaveMesVoice:MsgWrap:"
+  0x00079E64  mov      x0, x27
+  0x00079E68  ldr      x1, [sp, #0x48]
+  0x00079E6C  mov      x2, x26
+  0x00079E70  bl       #0x24c0a8
+  0x00079E74  cbz      w0, #0x79e8c
+  0x00079E78  mov      x0, x27
+  0x00079E7C  mov      x1, x26
+  0x00079E80  mov      x2, x20
+  0x00079E84  mov      x3, x24
+  0x00079E88  bl       #0x24c0a8
+  0x00079E8C  adrp     x8, #0x806000
+  0x00079E90  ldr      x26, [x8, #0xee0] ; @0x806ee0 "addMessageToDB:"
+  0x00079E94  mov      x0, x28
+  0x00079E98  ldr      x1, [sp, #0x48]
+  0x00079E9C  mov      x2, x26
+  0x00079EA0  bl       #0x24c0a8
+  0x00079EA4  cbz      w0, #0x79f3c
+  0x00079EA8  mov      x0, x28
+  0x00079EAC  mov      x1, x26
+  0x00079EB0  mov      x2, x24
+  0x00079EB4  bl       #0x24c0a8
+  0x00079EB8  mov      x0, x24
+  0x00079EBC  mov      x1, x28
+  0x00079EC0  mov      x2, x20
+  0x00079EC4  bl       #0x7aa00
+
+  ---- 引用点 @0xC2034 ----
+  0x000C1EF4  adrp     x2, #0x7ae000
+  0x000C1EF8  add      x2, x2, #0x360
+  0x000C1EFC  adrp     x3, #0x7ae000
+  0x000C1F00  add      x3, x3, #0x380
+  0x000C1F04  mov      x1, x25
+  0x000C1F08  bl       #0x24c0a8
+  0x000C1F0C  mov      x29, x29
+  0x000C1F10  bl       #0x24c0e4
+  0x000C1F14  mov      x27, x0
+  0x000C1F18  mov      x0, x26
+  0x000C1F1C  bl       #0x24c0c0
+  0x000C1F20  adrp     x2, #0x7ae000
+  0x000C1F24  add      x2, x2, #0x3a0
+  0x000C1F28  adrp     x3, #0x7ae000
+  0x000C1F2C  add      x3, x3, #0x3c0
+  0x000C1F30  mov      x26, x27
+  0x000C1F34  mov      x0, x27
+  0x000C1F38  mov      x1, x25
+  0x000C1F3C  bl       #0x24c0a8
+  0x000C1F40  mov      x29, x29
+  0x000C1F44  bl       #0x24c0e4
+  0x000C1F48  mov      x25, x0
+  0x000C1F4C  mov      x0, x27
+  0x000C1F50  bl       #0x24c0c0
+  0x000C1F54  adrp     x8, #0x806000
+  0x000C1F58  ldr      x1, [x8, #0xfa0] ; @0x806fa0 "stringByDeletingLastPathComponent"
+  0x000C1F5C  mov      x0, x25
+  0x000C1F60  bl       #0x24c0a8
+  0x000C1F64  mov      x29, x29
+  0x000C1F68  bl       #0x24c0e4
+  0x000C1F6C  mov      x26, x0
+  0x000C1F70  adrp     x8, #0x804000
+  0x000C1F74  ldr      x1, [x8, #0xf88] ; @0x806f88 "getPathOfAudio:"
+  0x000C1F78  mov      x0, x24
+  0x000C1F7C  mov      x2, x25
+  0x000C1F80  mov      w3, #1
+  0x000C1F84  bl       #0x24c0a8
+  0x000C1F88  bl       #0x24bb68
+  0x000C1F8C  mov      x27, x0
+  0x000C1F90  adrp     x8, #0x806000
+  0x000C1F94  ldr      x1, [x8, #0xf28] ; @0x806f28 "setM_dtVoice:"
+  0x000C1F98  mov      x0, x20
+  0x000C1F9C  mov      x2, x24
+  0x000C1FA0  bl       #0x24c0a8
+  0x000C1FA4  mov      w8, #0x8889
+  0x000C1FA8  movk     w8, #0x8888, lsl #16
+  0x000C1FAC  umull    x8, w27, w8
+  0x000C1FB0  lsr      x8, x8, #0x23
+  0x000C1FB4  sub      w8, w8, w8, lsl #4
+  0x000C1FB8  add      w8, w27, w8
+  0x000C1FBC  mov      w9, #0x3e8
+  0x000C1FC0  mov      w10, #0x1388
+  0x000C1FC4  madd     w2, w8, w9, w10
+  0x000C1FC8  adrp     x8, #0x806000
+  0x000C1FCC  ldr      x1, [x8, #0xf08] ; @0x806f08 "setM_uiVoiceTime:"
+  0x000C1FD0  mov      x0, x20
+  0x000C1FD4  bl       #0x24c0a8
+  0x000C1FD8  adrp     x0, #0x7b5000
+  0x000C1FDC  add      x0, x0, #0x220
+  0x000C1FE0  bl       #0x24b940
+  0x000C1FE4  mov      x1, x22
+  0x000C1FE8  bl       #0x24c0a8
+  0x000C1FEC  mov      x29, x29
+  0x000C1FF0  bl       #0x24c0e4
+  0x000C1FF4  mov      x27, x0
+  0x000C1FF8  adrp     x0, #0x7b5000
+  0x000C1FFC  add      x0, x0, #0x260
+  0x000C2000  bl       #0x24b940
+  0x000C2004  mov      x2, x0
+  0x000C2008  mov      x0, x27
+  0x000C200C  mov      x1, x23
+  0x000C2010  bl       #0x24c0a8
+  0x000C2014  mov      x29, x29
+  0x000C2018  bl       #0x24c0e4
+  0x000C201C  mov      x22, x0
+  0x000C2020  mov      x0, x27
+  0x000C2024  bl       #0x24c0c0
+  0x000C2028  cbz      x22, #0xc2048
+  0x000C202C  ldr      x2, [x21, #0x30]
+  0x000C2030  adrp     x8, #0x805000
+  0x000C2034  ldr      x1, [x8, #0xd98] ; @0x806d98 "setFrame:"  <== REF
+  0x000C2038  mov      x0, x22
+  0x000C203C  mov      x3, x20
+  0x000C2040  bl       #0x24c0a8
+  0x000C2044  b        #0xc2084
+  0x000C2048  adrp     x8, #0x80f000
+  0x000C204C  ldr      x0, [x8, #0x60] ; @0x806060 "applicationDidBecomeActive:"
+  0x000C2050  adrp     x8, #0x805000
+  0x000C2054  ldr      x1, [x8, #0x138] ; @0x806138 "contacts"
+  0x000C2058  adrp     x2, #0x7b5000
+  0x000C205C  add      x2, x2, #0x280
+  0x000C2060  adrp     x3, #0x7b5000
+  0x000C2064  add      x3, x3, #0x2a0
+  0x000C2068  adrp     x4, #0x7ac000
+  0x000C206C  add      x4, x4, #0xc40
+  0x000C2070  adrp     x5, #0x2d2000
+  0x000C2074  add      x5, x5, #0xa80
+  0x000C2078  bl       #0x24c0a8
+  0x000C207C  mov      x29, x29
+  0x000C2080  bl       #0x24c168
+  0x000C2084  mov      x0, x22
+  0x000C2088  bl       #0x24c0c0
+  0x000C208C  mov      x0, x26
+  0x000C2090  bl       #0x24c0c0
+  0x000C2094  mov      x0, x25
+  0x000C2098  bl       #0x24c0c0
+  0x000C209C  mov      x0, x24
+  0x000C20A0  bl       #0x24c0c0
+  0x000C20A4  mov      x0, x19
+  0x000C20A8  bl       #0x24c0c0
+  0x000C20AC  mov      x0, x20
+  0x000C20B0  ldp      x29, x30, [sp, #0x50]
+  0x000C20B4  ldp      x20, x19, [sp, #0x40]
+  0x000C20B8  ldp      x22, x21, [sp, #0x30]
+  0x000C20BC  ldp      x24, x23, [sp, #0x20]
+  0x000C20C0  ldp      x26, x25, [sp, #0x10]
+  0x000C20C4  ldp      x28, x27, [sp], #0x60
+  0x000C20C8  b        #0x24c0c0
+  0x000C20CC  mov      x21, x0
+  0x000C20D0  mov      x0, x22
+  0x000C20D4  b        #0xc213c
+  0x000C20D8  b        #0xc2174
+  0x000C20DC  mov      x21, x0
+  0x000C20E0  b        #0xc2180
+  0x000C20E4  mov      x21, x0
+  0x000C20E8  mov      x0, x25
+  0x000C20EC  b        #0xc218c
+  0x000C20F0  mov      x21, x0
+  0x000C20F4  b        #0xc219c
+  0x000C20F8  mov      x21, x0
+  0x000C20FC  mov      x0, x24
+  0x000C2100  bl       #0x24c0c0
+  0x000C2104  b        #0xc2110
+  0x000C2108  b        #0xc210c
+  0x000C210C  mov      x21, x0
+  0x000C2110  mov      x0, x26
+  0x000C2114  b        #0xc218c
+  0x000C2118  mov      x21, x0
+  0x000C211C  mov      x0, x26
+  0x000C2120  bl       #0x24c0c0
+  0x000C2124  b        #0xc2198
+  0x000C2128  mov      x21, x0
+  0x000C212C  mov      x24, x19
+  0x000C2130  b        #0xc21a8
+  0x000C2134  mov      x21, x0
+  0x000C2138  mov      x0, x27
+  0x000C213C  bl       #0x24c0c0
+  0x000C2140  b        #0xc2178
+  0x000C2144  b        #0xc2174
+  0x000C2148  mov      x21, x0
+  0x000C214C  mov      x25, x26
+  0x000C2150  b        #0xc2180
+  0x000C2154  mov      x21, x0
+  0x000C2158  b        #0xc2188
+  0x000C215C  mov      x21, x0
+  0x000C2160  mov      x0, x26
+  0x000C2164  bl       #0x24c0c0
+  0x000C2168  b        #0xc21a8
+  0x000C216C  mov      x21, x0
+  0x000C2170  b        #0xc21a8
+  0x000C2174  mov      x21, x0
+  0x000C2178  mov      x0, x26
+  0x000C217C  bl       #0x24c0c0
+  0x000C2180  mov      x0, x25
+  0x000C2184  bl       #0x24c0c0
+  0x000C2188  mov      x0, x24
+  0x000C218C  bl       #0x24c0c0
+  0x000C2190  b        #0xc219c
+  0x000C2194  mov      x21, x0
+  0x000C2198  mov      x20, x24
+  0x000C219C  mov      x0, x19
+  0x000C21A0  bl       #0x24c0c0
+  0x000C21A4  mov      x24, x20
+  0x000C21A8  mov      x0, x24
+  0x000C21AC  bl       #0x24c0c0
+  0x000C21B0  mov      x0, x21
+  0x000C21B4  bl       #0x24ba90
+  0x000C21B8  ret      
+  0x000C21BC  adrp     x8, #0x813000
+  0x000C21C0  mov      w9, #1
+  0x000C21C4  str      w9, [x8, #0x9b8]
+  0x000C21C8  ldr      x0, [x0, #0x20]
+  0x000C21CC  adrp     x8, #0x805000
+  0x000C21D0  ldr      x1, [x8, #0xc88] ; @0x806c88 "initWithItems:timeRange:"
+  0x000C21D4  b        #0x24c0a8
+  0x000C21D8  adrp     x8, #0x813000
+  0x000C21DC  mov      w9, #2
+  0x000C21E0  str      w9, [x8, #0x9b8]
+  0x000C21E4  ldr      x0, [x0, #0x20]
+  0x000C21E8  adrp     x8, #0x805000
+
+  ---- 引用点 @0x16D628 ----
+  0x0016D4E8  bl       #0x24c0a8
+  0x0016D4EC  mov      x29, x29
+  0x0016D4F0  bl       #0x24c0e4
+  0x0016D4F4  mov      x24, x0
+  0x0016D4F8  mov      x0, x25
+  0x0016D4FC  bl       #0x24c0c0
+  0x0016D500  adrp     x8, #0x806000
+  0x0016D504  ldr      x1, [x8, #0xfa0] ; @0x806fa0 "stringByDeletingLastPathComponent"
+  0x0016D508  mov      x0, x24
+  0x0016D50C  bl       #0x24c0a8
+  0x0016D510  mov      x29, x29
+  0x0016D514  bl       #0x24c0e4
+  0x0016D518  mov      x25, x0
+  0x0016D51C  adrp     x21, #0x80f000
+  0x0016D520  ldr      x0, [x21, #8] ; @0x80f008 classref@objc_classrefs
+  0x0016D524  adrp     x8, #0x804000
+  0x0016D528  ldr      x19, [x8, #0xe90] ; @0x806e90 "setM_uiMessageType:"
+  0x0016D52C  mov      x1, x19
+  0x0016D530  bl       #0x24c0a8
+  0x0016D534  mov      x29, x29
+  0x0016D538  bl       #0x24c0e4
+  0x0016D53C  mov      x22, x0
+  0x0016D540  adrp     x8, #0x804000
+  0x0016D544  ldr      x1, [x8, #0xda0] ; @0x806da0 "setNetworkAccessAllowed:"
+  0x0016D548  mov      x2, x25
+  0x0016D54C  bl       #0x24c0a8
+  0x0016D550  mov      x23, x0
+  0x0016D554  mov      x0, x22
+  0x0016D558  bl       #0x24c0c0
+  0x0016D55C  tbnz     w23, #0, #0x16d59c
+  0x0016D560  ldr      x0, [x21, #8] ; @0x80f008 classref@objc_classrefs
+  0x0016D564  mov      x1, x19
+  0x0016D568  bl       #0x24c0a8
+  0x0016D56C  mov      x29, x29
+  0x0016D570  bl       #0x24c0e4
+  0x0016D574  mov      x19, x0
+  0x0016D578  adrp     x8, #0x804000
+  0x0016D57C  ldr      x1, [x8, #0xf70] ; @0x806f70 "stringByReplacingMatchesInString:options:range:withTemplate:"
+  0x0016D580  mov      x2, x25
+  0x0016D584  mov      w3, #1
+  0x0016D588  mov      x4, #0
+  0x0016D58C  mov      x5, #0
+  0x0016D590  bl       #0x24c0a8
+  0x0016D594  mov      x0, x19
+  0x0016D598  bl       #0x24c0c0
+  0x0016D59C  adrp     x8, #0x804000
+  0x0016D5A0  ldr      x1, [x8, #0xf88] ; @0x806f88 "getPathOfAudio:"
+  0x0016D5A4  mov      x0, x26
+  0x0016D5A8  mov      x2, x24
+  0x0016D5AC  mov      w3, #1
+  0x0016D5B0  bl       #0x24c0a8
+  0x0016D5B4  adrp     x8, #0x806000
+  0x0016D5B8  ldr      x19, [x8, #0xf28] ; @0x806f28 "setM_dtVoice:"
+  0x0016D5BC  mov      x0, x20
+  0x0016D5C0  mov      x1, x19
+  0x0016D5C4  mov      x2, x26
+  0x0016D5C8  bl       #0x24c0a8
+  0x0016D5CC  ldr      x21, [sp, #0x28]
+  0x0016D5D0  mov      x0, x21
+  0x0016D5D4  mov      x1, x19
+  0x0016D5D8  mov      x2, x26
+  0x0016D5DC  bl       #0x24c0a8
+  0x0016D5E0  mov      x0, x21
+  0x0016D5E4  mov      x1, x28
+  0x0016D5E8  mov      x2, x27
+  0x0016D5EC  bl       #0x24c0a8
+  0x0016D5F0  adrp     x0, #0x7b5000
+  0x0016D5F4  add      x0, x0, #0x260
+  0x0016D5F8  bl       #0x24b940
+  0x0016D5FC  mov      x2, x0
+  0x0016D600  ldr      x22, [sp, #0x20]
+  0x0016D604  mov      x0, x22
+  0x0016D608  ldr      x1, [sp, #0x10]
+  0x0016D60C  bl       #0x24c0a8
+  0x0016D610  mov      x29, x29
+  0x0016D614  bl       #0x24c0e4
+  0x0016D618  mov      x19, x0
+  0x0016D61C  ldr      x8, [sp, #0x30]
+  0x0016D620  ldr      x2, [x8, #0x30] ; @0x806030 "pushRegistry:didReceiveIncomingPushWithPayload:forType:withCompletionHandler:"
+  0x0016D624  adrp     x8, #0x805000
+  0x0016D628  ldr      x1, [x8, #0xd98] ; @0x806d98 "setFrame:"  <== REF
+  0x0016D62C  mov      x3, x20
+  0x0016D630  bl       #0x24c0a8
+  0x0016D634  mov      x0, x19
+  0x0016D638  bl       #0x24c0c0
+  0x0016D63C  mov      x0, x25
+  0x0016D640  bl       #0x24c0c0
+  0x0016D644  mov      x0, x24
+  0x0016D648  bl       #0x24c0c0
+  0x0016D64C  mov      x0, x26
+  0x0016D650  bl       #0x24c0c0
+  0x0016D654  ldr      x0, [sp, #0x18]
+  0x0016D658  bl       #0x24c0c0
+  0x0016D65C  mov      x0, x22
+  0x0016D660  bl       #0x24c0c0
+  0x0016D664  mov      x0, x21
+  0x0016D668  bl       #0x24c0c0
+  0x0016D66C  mov      x0, x20
+  0x0016D670  bl       #0x24c0c0
+  0x0016D674  ldr      x0, [sp, #0x38]
+  0x0016D678  ldp      x29, x30, [sp, #0x90]
+  0x0016D67C  ldp      x20, x19, [sp, #0x80]
+  0x0016D680  ldp      x22, x21, [sp, #0x70]
+  0x0016D684  ldp      x24, x23, [sp, #0x60]
+  0x0016D688  ldp      x26, x25, [sp, #0x50]
+  0x0016D68C  ldp      x28, x27, [sp, #0x40]
+  0x0016D690  add      sp, sp, #0xa0
+  0x0016D694  b        #0x24c0c0
+  0x0016D698  sub      sp, sp, #0x60
+  0x0016D69C  stp      x22, x21, [sp, #0x30]
+  0x0016D6A0  stp      x20, x19, [sp, #0x40]
+  0x0016D6A4  stp      x29, x30, [sp, #0x50]
+  0x0016D6A8  add      x29, sp, #0x50
+  0x0016D6AC  mov      x20, x3
+  0x0016D6B0  mov      x19, x2
+  0x0016D6B4  mov      x0, x2
+  0x0016D6B8  bl       #0x24c0cc
+  0x0016D6BC  mov      x0, x20
+  0x0016D6C0  bl       #0x24c0cc
+  0x0016D6C4  adr      x0, #0x24d71c
+  0x0016D6C8  nop      
+  0x0016D6CC  adrp     x1, #0x2d0000
+  0x0016D6D0  ldr      x1, [x1, #0x288]
+  0x0016D6D4  bl       #0x24bd3c
+  0x0016D6D8  mov      x21, x0
+  0x0016D6DC  adrp     x8, #0x804000
+  0x0016D6E0  ldr      x1, [x8, #0xfc8] ; @0x806fc8 "toMsgWrap"
+  0x0016D6E4  adrp     x2, #0x7ac000
+  0x0016D6E8  add      x2, x2, #0x920
+  0x0016D6EC  mov      x0, x20
+  0x0016D6F0  bl       #0x24c0a8
+  0x0016D6F4  tbnz     w0, #0, #0x16d758
+  0x0016D6F8  adrp     x8, #0x2d0000
+  0x0016D6FC  ldr      x8, [x8, #0x250] ; @0x806250 "updateNumberInternal:"
+  0x0016D700  str      x8, [sp]
+  0x0016D704  adrp     x8, #0x27d000
+  0x0016D708  ldr      d0, [x8, #0x280]
+  0x0016D70C  str      d0, [sp, #8]
+  0x0016D710  adr      x8, #0x16d784
+  0x0016D714  nop      
+  0x0016D718  adrp     x9, #0x7ab000
+  0x0016D71C  add      x9, x9, #0x870
+  0x0016D720  stp      x8, x9, [sp, #0x10]
+  0x0016D724  mov      x0, x20
+  0x0016D728  bl       #0x24c0cc
+  0x0016D72C  str      x20, [sp, #0x20]
+  0x0016D730  mov      x0, x19
+  0x0016D734  bl       #0x24c0cc
+  0x0016D738  str      x19, [sp, #0x28]
+  0x0016D73C  mov      x1, sp
+  0x0016D740  mov      x0, x21
+  0x0016D744  bl       #0x24bca0
+  0x0016D748  ldr      x0, [sp, #0x28]
+  0x0016D74C  bl       #0x24c0c0
+  0x0016D750  ldr      x0, [sp, #0x20]
+  0x0016D754  bl       #0x24c0c0
+  0x0016D758  mov      x0, x21
+  0x0016D75C  bl       #0x24c0c0
+  0x0016D760  mov      x0, x20
+  0x0016D764  bl       #0x24c0c0
+  0x0016D768  mov      x0, x19
+  0x0016D76C  bl       #0x24c0c0
+  0x0016D770  ldp      x29, x30, [sp, #0x50]
+  0x0016D774  ldp      x20, x19, [sp, #0x40]
+  0x0016D778  ldp      x22, x21, [sp, #0x30]
+  0x0016D77C  add      sp, sp, #0x60
+  0x0016D780  ret      
+  0x0016D784  sub      sp, sp, #0xa0
+  0x0016D788  stp      x28, x27, [sp, #0x40]
+  0x0016D78C  stp      x26, x25, [sp, #0x50]
+  0x0016D790  stp      x24, x23, [sp, #0x60]
+  0x0016D794  stp      x22, x21, [sp, #0x70]
+  0x0016D798  stp      x20, x19, [sp, #0x80]
+  0x0016D79C  stp      x29, x30, [sp, #0x90]
+  0x0016D7A0  add      x29, sp, #0x90
+  0x0016D7A4  mov      x26, x0
+  0x0016D7A8  adr      x0, #0x24e31d
+  0x0016D7AC  nop      
+  0x0016D7B0  bl       #0x24c078
+  0x0016D7B4  adrp     x8, #0x805000
+  0x0016D7B8  ldr      x1, [x8, #0x2b8] ; @0x8062b8 "unmaskNumber"
+  0x0016D7BC  mov      w2, #0
+  0x0016D7C0  bl       #0x24c0a8
+  0x0016D7C4  mov      x29, x29
+  0x0016D7C8  bl       #0x24c0e4
+  0x0016D7CC  mov      x19, x0
+  0x0016D7D0  adrp     x22, #0x7b2000
+  0x0016D7D4  add      x22, x22, #0xb00
+  0x0016D7D8  mov      x0, x22
+  0x0016D7DC  bl       #0x24b940
+
+  ---- 引用点 @0x16DC2C ----
+  0x0016DAEC  add      x2, x2, #0x3a0
+  0x0016DAF0  adrp     x3, #0x7ae000
+  0x0016DAF4  add      x3, x3, #0x3c0
+  0x0016DAF8  mov      x0, x26
+  0x0016DAFC  mov      x1, x21
+  0x0016DB00  bl       #0x24c0a8
+  0x0016DB04  mov      x29, x29
+  0x0016DB08  bl       #0x24c0e4
+  0x0016DB0C  mov      x25, x0
+  0x0016DB10  mov      x0, x26
+  0x0016DB14  bl       #0x24c0c0
+  0x0016DB18  adrp     x8, #0x806000
+  0x0016DB1C  ldr      x1, [x8, #0xfa0] ; @0x806fa0 "stringByDeletingLastPathComponent"
+  0x0016DB20  mov      x0, x25
+  0x0016DB24  bl       #0x24c0a8
+  0x0016DB28  mov      x29, x29
+  0x0016DB2C  bl       #0x24c0e4
+  0x0016DB30  mov      x20, x0
+  0x0016DB34  adrp     x19, #0x80f000
+  0x0016DB38  ldr      x0, [x19, #8] ; @0x80f008 classref@objc_classrefs
+  0x0016DB3C  adrp     x8, #0x804000
+  0x0016DB40  ldr      x21, [x8, #0xe90] ; @0x806e90 "setM_uiMessageType:"
+  0x0016DB44  mov      x1, x21
+  0x0016DB48  bl       #0x24c0a8
+  0x0016DB4C  mov      x29, x29
+  0x0016DB50  bl       #0x24c0e4
+  0x0016DB54  mov      x26, x0
+  0x0016DB58  adrp     x8, #0x804000
+  0x0016DB5C  ldr      x1, [x8, #0xda0] ; @0x806da0 "setNetworkAccessAllowed:"
+  0x0016DB60  mov      x2, x20
+  0x0016DB64  bl       #0x24c0a8
+  0x0016DB68  mov      x23, x0
+  0x0016DB6C  mov      x0, x26
+  0x0016DB70  bl       #0x24c0c0
+  0x0016DB74  tbnz     w23, #0, #0x16dbb4
+  0x0016DB78  ldr      x0, [x19, #8] ; @0x80f008 classref@objc_classrefs
+  0x0016DB7C  mov      x1, x21
+  0x0016DB80  bl       #0x24c0a8
+  0x0016DB84  mov      x29, x29
+  0x0016DB88  bl       #0x24c0e4
+  0x0016DB8C  mov      x21, x0
+  0x0016DB90  adrp     x8, #0x804000
+  0x0016DB94  ldr      x1, [x8, #0xf70] ; @0x806f70 "stringByReplacingMatchesInString:options:range:withTemplate:"
+  0x0016DB98  mov      x2, x20
+  0x0016DB9C  mov      w3, #1
+  0x0016DBA0  mov      x4, #0
+  0x0016DBA4  mov      x5, #0
+  0x0016DBA8  bl       #0x24c0a8
+  0x0016DBAC  mov      x0, x21
+  0x0016DBB0  bl       #0x24c0c0
+  0x0016DBB4  adrp     x8, #0x804000
+  0x0016DBB8  ldr      x1, [x8, #0xf88] ; @0x806f88 "getPathOfAudio:"
+  0x0016DBBC  mov      x0, x28
+  0x0016DBC0  mov      x2, x25
+  0x0016DBC4  mov      w3, #1
+  0x0016DBC8  bl       #0x24c0a8
+  0x0016DBCC  adrp     x8, #0x806000
+  0x0016DBD0  ldr      x1, [x8, #0xf28] ; @0x806f28 "setM_dtVoice:"
+  0x0016DBD4  ldr      x19, [sp, #0x28]
+  0x0016DBD8  mov      x0, x19
+  0x0016DBDC  mov      x2, x28
+  0x0016DBE0  bl       #0x24c0a8
+  0x0016DBE4  mov      x0, x19
+  0x0016DBE8  mov      x1, x24
+  0x0016DBEC  mov      x2, x27
+  0x0016DBF0  bl       #0x24c0a8
+  0x0016DBF4  adrp     x0, #0x7b5000
+  0x0016DBF8  add      x0, x0, #0x260
+  0x0016DBFC  bl       #0x24b940
+  0x0016DC00  mov      x2, x0
+  0x0016DC04  ldr      x23, [sp, #0x20]
+  0x0016DC08  mov      x0, x23
+  0x0016DC0C  ldr      x1, [sp, #0x10]
+  0x0016DC10  bl       #0x24c0a8
+  0x0016DC14  mov      x29, x29
+  0x0016DC18  bl       #0x24c0e4
+  0x0016DC1C  mov      x21, x0
+  0x0016DC20  ldr      x8, [sp, #0x30]
+  0x0016DC24  ldr      x2, [x8, #0x28] ; @0x806028 "userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:"
+  0x0016DC28  adrp     x8, #0x805000
+  0x0016DC2C  ldr      x1, [x8, #0xd98] ; @0x806d98 "setFrame:"  <== REF
+  0x0016DC30  mov      x3, x22
+  0x0016DC34  bl       #0x24c0a8
+  0x0016DC38  mov      x0, x21
+  0x0016DC3C  bl       #0x24c0c0
+  0x0016DC40  mov      x0, x20
+  0x0016DC44  bl       #0x24c0c0
+  0x0016DC48  mov      x0, x25
+  0x0016DC4C  bl       #0x24c0c0
+  0x0016DC50  mov      x0, x28
+  0x0016DC54  bl       #0x24c0c0
+  0x0016DC58  ldr      x0, [sp, #8]
+  0x0016DC5C  bl       #0x24c0c0
+  0x0016DC60  ldr      x0, [sp, #0x18]
+  0x0016DC64  bl       #0x24c0c0
+  0x0016DC68  mov      x0, x23
+  0x0016DC6C  bl       #0x24c0c0
+  0x0016DC70  mov      x0, x19
+  0x0016DC74  bl       #0x24c0c0
+  0x0016DC78  mov      x0, x22
+  0x0016DC7C  bl       #0x24c0c0
+  0x0016DC80  ldr      x0, [sp, #0x38]
+  0x0016DC84  ldp      x29, x30, [sp, #0x90]
+  0x0016DC88  ldp      x20, x19, [sp, #0x80]
+  0x0016DC8C  ldp      x22, x21, [sp, #0x70]
+  0x0016DC90  ldp      x24, x23, [sp, #0x60]
+  0x0016DC94  ldp      x26, x25, [sp, #0x50]
+  0x0016DC98  ldp      x28, x27, [sp, #0x40]
+  0x0016DC9C  add      sp, sp, #0xa0
+  0x0016DCA0  b        #0x24c0c0
+  0x0016DCA4  sub      sp, sp, #0x80
+  0x0016DCA8  stp      x28, x27, [sp, #0x20]
+  0x0016DCAC  stp      x26, x25, [sp, #0x30]
+  0x0016DCB0  stp      x24, x23, [sp, #0x40]
+  0x0016DCB4  stp      x22, x21, [sp, #0x50]
+  0x0016DCB8  stp      x20, x19, [sp, #0x60]
+  0x0016DCBC  stp      x29, x30, [sp, #0x70]
+  0x0016DCC0  add      x29, sp, #0x70
+  0x0016DCC4  mov      x20, x3
+  0x0016DCC8  mov      x19, x2
+  0x0016DCCC  mov      x0, x2
+  0x0016DCD0  bl       #0x24c0cc
+  0x0016DCD4  mov      x0, x20
+  0x0016DCD8  bl       #0x24c0cc
+  0x0016DCDC  cbz      x19, #0x16e050
+  0x0016DCE0  adrp     x8, #0x804000
+  0x0016DCE4  ldr      x1, [x8, #0xed0] ; @0x806ed0 "setM_uiCreateTime:"
+  0x0016DCE8  mov      x0, x19
+  0x0016DCEC  bl       #0x24c0a8
+  0x0016DCF0  cbz      x0, #0x16e050
+  0x0016DCF4  adr      x0, #0x24e5a1
+  0x0016DCF8  nop      
+  0x0016DCFC  bl       #0x24c078
+  0x0016DD00  adrp     x8, #0x808000
+  0x0016DD04  ldr      x1, [x8, #0xfc0] ; @0x806fc0 "getFavForawrdViewController"
+  0x0016DD08  bl       #0x24c0a8
+  0x0016DD0C  adrp     x8, #0x80a000
+  0x0016DD10  ldr      x1, [x8, #0xa68] ; @0x806a68 "hideScreenshotIndicator"
+  0x0016DD14  mov      w2, #0x22
+  0x0016DD18  bl       #0x24c0a8
+  0x0016DD1C  mov      x21, x0
+  0x0016DD20  adr      x0, #0x24e31d
+  0x0016DD24  nop      
+  0x0016DD28  bl       #0x24c078
+  0x0016DD2C  adrp     x8, #0x805000
+  0x0016DD30  ldr      x1, [x8, #0x2b8] ; @0x8062b8 "unmaskNumber"
+  0x0016DD34  mov      w2, #0
+  0x0016DD38  bl       #0x24c0a8
+  0x0016DD3C  mov      x29, x29
+  0x0016DD40  bl       #0x24c0e4
+  0x0016DD44  mov      x2, x0
+  0x0016DD48  adrp     x8, #0x806000
+  0x0016DD4C  ldr      x1, [x8, #0xe98] ; @0x806e98 "setM_nsFromUsr:"
+  0x0016DD50  mov      x0, x21
+  0x0016DD54  str      x2, [sp, #0x18]
+  0x0016DD58  bl       #0x24c0a8
+  0x0016DD5C  adrp     x8, #0x806000
+  0x0016DD60  ldr      x1, [x8, #0xea0] ; @0x806ea0 "setM_nsToUsr:"
+  0x0016DD64  mov      x0, x21
+  0x0016DD68  mov      x2, x20
+  0x0016DD6C  bl       #0x24c0a8
+  0x0016DD70  adrp     x8, #0x806000
+  0x0016DD74  ldr      x1, [x8, #0xf10] ; @0x806f10 "setM_uiVoiceFormat:"
+  0x0016DD78  mov      x0, x21
+  0x0016DD7C  mov      w2, #4
+  0x0016DD80  bl       #0x24c0a8
+  0x0016DD84  adrp     x8, #0x806000
+  0x0016DD88  ldr      x24, [x8, #0xf08] ; @0x806f08 "setM_uiVoiceTime:"
+  0x0016DD8C  mov      x0, x21
+  0x0016DD90  mov      x1, x24
+  0x0016DD94  mov      w2, #0x1388
+  0x0016DD98  bl       #0x24c0a8
+  0x0016DD9C  adrp     x8, #0x806000
+  0x0016DDA0  ldr      x1, [x8, #0xf18] ; @0x806f18 "setM_uiVoiceEndFlag:"
+  0x0016DDA4  mov      x0, x21
+  0x0016DDA8  mov      w2, #1
+  0x0016DDAC  bl       #0x24c0a8
+  0x0016DDB0  adrp     x8, #0x806000
+  0x0016DDB4  ldr      x1, [x8, #0xea8] ; @0x806ea8 "setM_nsContent:"
+  0x0016DDB8  adrp     x2, #0x7c0000
+  0x0016DDBC  add      x2, x2, #0x140
+  0x0016DDC0  mov      x0, x21
+  0x0016DDC4  bl       #0x24c0a8
+  0x0016DDC8  adr      x0, #0x250113
+  0x0016DDCC  nop      
+  0x0016DDD0  bl       #0x24c078
+  0x0016DDD4  adrp     x8, #0x806000
+  0x0016DDD8  ldr      x1, [x8, #0xe78] ; @0x806e78 "activeUserContext"
+  0x0016DDDC  bl       #0x24c0a8
+  0x0016DDE0  mov      x29, x29
+
+  ---- 引用点 @0x16DFF8 ----
+  0x0016DEB8  add      x3, x3, #0x3c0
+  0x0016DEBC  mov      x0, x28
+  0x0016DEC0  mov      x1, x27
+  0x0016DEC4  bl       #0x24c0a8
+  0x0016DEC8  mov      x29, x29
+  0x0016DECC  bl       #0x24c0e4
+  0x0016DED0  mov      x27, x0
+  0x0016DED4  mov      x0, x28
+  0x0016DED8  bl       #0x24c0c0
+  0x0016DEDC  adrp     x8, #0x806000
+  0x0016DEE0  ldr      x1, [x8, #0xfa0] ; @0x806fa0 "stringByDeletingLastPathComponent"
+  0x0016DEE4  mov      x0, x27
+  0x0016DEE8  bl       #0x24c0a8
+  0x0016DEEC  mov      x29, x29
+  0x0016DEF0  bl       #0x24c0e4
+  0x0016DEF4  mov      x28, x0
+  0x0016DEF8  adrp     x8, #0x80f000
+  0x0016DEFC  ldr      x0, [x8, #8] ; @0x806008 "virtualSwitchToUser:completion:"
+  0x0016DF00  adrp     x8, #0x804000
+  0x0016DF04  ldr      x1, [x8, #0xe90] ; @0x806e90 "setM_uiMessageType:"
+  0x0016DF08  bl       #0x24c0a8
+  0x0016DF0C  mov      x29, x29
+  0x0016DF10  bl       #0x24c0e4
+  0x0016DF14  mov      x22, x0
+  0x0016DF18  adrp     x8, #0x804000
+  0x0016DF1C  ldr      x1, [x8, #0xda0] ; @0x806da0 "setNetworkAccessAllowed:"
+  0x0016DF20  mov      x2, x28
+  0x0016DF24  bl       #0x24c0a8
+  0x0016DF28  tbnz     w0, #0, #0x16df4c
+  0x0016DF2C  adrp     x8, #0x804000
+  0x0016DF30  ldr      x1, [x8, #0xf70] ; @0x806f70 "stringByReplacingMatchesInString:options:range:withTemplate:"
+  0x0016DF34  mov      x0, x22
+  0x0016DF38  mov      x2, x28
+  0x0016DF3C  mov      w3, #1
+  0x0016DF40  mov      x4, #0
+  0x0016DF44  mov      x5, #0
+  0x0016DF48  bl       #0x24c0a8
+  0x0016DF4C  adrp     x8, #0x804000
+  0x0016DF50  ldr      x1, [x8, #0xf88] ; @0x806f88 "getPathOfAudio:"
+  0x0016DF54  mov      x0, x19
+  0x0016DF58  mov      x2, x27
+  0x0016DF5C  mov      w3, #1
+  0x0016DF60  bl       #0x24c0a8
+  0x0016DF64  adrp     x8, #0x805000
+  0x0016DF68  ldr      x1, [x8, #0x120] ; @0x806120 "onContactsModified:"
+  0x0016DF6C  adrp     x2, #0x7c0000
+  0x0016DF70  add      x2, x2, #0xe0
+  0x0016DF74  mov      x0, x21
+  0x0016DF78  bl       #0x24c0a8
+  0x0016DF7C  mov      x29, x29
+  0x0016DF80  bl       #0x24c0e4
+  0x0016DF84  mov      x25, x0
+  0x0016DF88  adrp     x8, #0x806000
+  0x0016DF8C  ldr      x26, [x8, #0xf28] ; @0x806f28 "setM_dtVoice:"
+  0x0016DF90  mov      x1, x26
+  0x0016DF94  mov      x2, x19
+  0x0016DF98  bl       #0x24c0a8
+  0x0016DF9C  mov      x0, x25
+  0x0016DFA0  mov      x1, x24
+  0x0016DFA4  mov      w2, #0x1388
+  0x0016DFA8  bl       #0x24c0a8
+  0x0016DFAC  mov      x0, x21
+  0x0016DFB0  mov      x1, x26
+  0x0016DFB4  mov      x2, x19
+  0x0016DFB8  bl       #0x24c0a8
+  0x0016DFBC  mov      x0, x21
+  0x0016DFC0  mov      x1, x24
+  0x0016DFC4  mov      w2, #0x1388
+  0x0016DFC8  bl       #0x24c0a8
+  0x0016DFCC  adr      x0, #0x24ed31
+  0x0016DFD0  nop      
+  0x0016DFD4  bl       #0x24c078
+  0x0016DFD8  mov      x2, x0
+  0x0016DFDC  mov      x0, x23
+  0x0016DFE0  ldr      x1, [sp, #8]
+  0x0016DFE4  bl       #0x24c0a8
+  0x0016DFE8  mov      x29, x29
+  0x0016DFEC  bl       #0x24c0e4
+  0x0016DFF0  mov      x24, x0
+  0x0016DFF4  adrp     x8, #0x805000
+  0x0016DFF8  ldr      x1, [x8, #0xd98] ; @0x806d98 "setFrame:"  <== REF
+  0x0016DFFC  mov      x2, x20
+  0x0016E000  mov      x3, x21
+  0x0016E004  bl       #0x24c0a8
+  0x0016E008  mov      x0, x24
+  0x0016E00C  bl       #0x24c0c0
+  0x0016E010  mov      x0, x25
+  0x0016E014  bl       #0x24c0c0
+  0x0016E018  mov      x0, x22
+  0x0016E01C  bl       #0x24c0c0
+  0x0016E020  mov      x0, x28
+  0x0016E024  bl       #0x24c0c0
+  0x0016E028  mov      x0, x27
+  0x0016E02C  bl       #0x24c0c0
+  0x0016E030  ldr      x0, [sp, #0x10]
+  0x0016E034  bl       #0x24c0c0
+  0x0016E038  mov      x0, x23
+  0x0016E03C  bl       #0x24c0c0
+  0x0016E040  ldr      x0, [sp, #0x18]
+  0x0016E044  bl       #0x24c0c0
+  0x0016E048  mov      x0, x21
+  0x0016E04C  bl       #0x24c0c0
+  0x0016E050  mov      x0, x20
+  0x0016E054  bl       #0x24c0c0
+  0x0016E058  mov      x0, x19
+  0x0016E05C  ldp      x29, x30, [sp, #0x70]
+  0x0016E060  ldp      x20, x19, [sp, #0x60]
+  0x0016E064  ldp      x22, x21, [sp, #0x50]
+  0x0016E068  ldp      x24, x23, [sp, #0x40]
+  0x0016E06C  ldp      x26, x25, [sp, #0x30]
+  0x0016E070  ldp      x28, x27, [sp, #0x20]
+  0x0016E074  add      sp, sp, #0x80
+  0x0016E078  b        #0x24c0c0
+  0x0016E07C  sub      sp, sp, #0x60
+  0x0016E080  stp      x22, x21, [sp, #0x30]
+  0x0016E084  stp      x20, x19, [sp, #0x40]
+  0x0016E088  stp      x29, x30, [sp, #0x50]
+  0x0016E08C  add      x29, sp, #0x50
+  0x0016E090  mov      x19, x3
+  0x0016E094  mov      x20, x2
+  0x0016E098  mov      x0, x3
+  0x0016E09C  bl       #0x24c0cc
+  0x0016E0A0  adrp     x8, #0x80f000
+  0x0016E0A4  ldr      x21, [x8, #0x78] ; @0x806078 "checkTimeAndPerformTask"
+  0x0016E0A8  adrp     x8, #0x80e000
+  0x0016E0AC  ldr      x0, [x8, #0xfc8] ; @0x806fc8 "toMsgWrap"
+  0x0016E0B0  adrp     x8, #0x804000
+  0x0016E0B4  ldr      x1, [x8, #0xdc0] ; @0x806dc0 "setOutputURL:"
+  0x0016E0B8  mov      x2, x20
+  0x0016E0BC  bl       #0x24c0a8
+  0x0016E0C0  mov      x29, x29
+  0x0016E0C4  bl       #0x24c0e4
+  0x0016E0C8  mov      x22, x0
+  0x0016E0CC  adrp     x8, #0x805000
+  0x0016E0D0  ldr      x1, [x8, #0x158] ; @0x806158 "setDisplayedResults:"
+  0x0016E0D4  fmov     d0, #1.00000000
+  0x0016E0D8  mov      x0, x21
+  0x0016E0DC  mov      x2, x22
+  0x0016E0E0  mov      w3, #1
+  0x0016E0E4  bl       #0x24c0a8
+  0x0016E0E8  mov      x29, x29
+  0x0016E0EC  bl       #0x24c0e4
+  0x0016E0F0  mov      x20, x0
+  0x0016E0F4  mov      x0, x22
+  0x0016E0F8  bl       #0x24c0c0
+  0x0016E0FC  adrp     x8, #0x80f000
+  0x0016E100  ldr      x0, [x8, #0x90] ; @0x806090 "application:performActionForShortcutItem:completionHandler:"
+  0x0016E104  adrp     x8, #0x805000
+  0x0016E108  ldr      x1, [x8, #0x268] ; @0x806268 "updateBalanceNumber"
+  0x0016E10C  bl       #0x24c0a8
+  0x0016E110  mov      x29, x29
+  0x0016E114  bl       #0x24c0e4
+  0x0016E118  mov      x21, x0
+  0x0016E11C  adrp     x8, #0x2d0000
+  0x0016E120  ldr      x8, [x8, #0x250] ; @0x806250 "updateNumberInternal:"
+  0x0016E124  str      x8, [sp, #8]
+  0x0016E128  adrp     x8, #0x27d000
+  0x0016E12C  ldr      d0, [x8, #0x280]
+  0x0016E130  adr      x8, #0x16e1c8
+  0x0016E134  nop      
+  0x0016E138  adrp     x9, #0x2d4000
+  0x0016E13C  add      x9, x9, #0x5f0
+  0x0016E140  str      d0, [sp, #0x10]
+  0x0016E144  stp      x8, x9, [sp, #0x18]
+  0x0016E148  str      x19, [sp, #0x28]
+  0x0016E14C  adrp     x8, #0x807000
+  0x0016E150  ldr      x22, [x8, #0xbe0] ; @0x806be0 "creationRequestForAsset"
+  0x0016E154  mov      x0, x19
+  0x0016E158  bl       #0x24c0cc
+  0x0016E15C  add      x3, sp, #8
+  0x0016E160  mov      x0, x21
+  0x0016E164  mov      x1, x22
+  0x0016E168  mov      x2, x20
+  0x0016E16C  bl       #0x24c0a8
+  0x0016E170  mov      x29, x29
+  0x0016E174  bl       #0x24c0e4
+  0x0016E178  mov      x22, x0
+  0x0016E17C  mov      x0, x21
+  0x0016E180  bl       #0x24c0c0
+  0x0016E184  adrp     x8, #0x805000
+  0x0016E188  ldr      x1, [x8, #0x2a0] ; @0x8062a0 "cachedModifyType"
+  0x0016E18C  mov      x0, x22
+  0x0016E190  bl       #0x24c0a8
+  0x0016E194  mov      x0, x22
+  0x0016E198  bl       #0x24c0c0
+  0x0016E19C  ldr      x0, [sp, #0x28]
+  0x0016E1A0  bl       #0x24c0c0
+  0x0016E1A4  mov      x0, x19
+  0x0016E1A8  bl       #0x24c0c0
+  0x0016E1AC  mov      x0, x20
+
+========================================================================
+SEL: AddMsg:MsgWrap:
+selref 槽: ['0x8056a8']
+
+  ---- 引用点 @0x16C78 ----
+  0x00016B38  bl       #0x24bba4
+  0x00016B3C  str      x27, [sp]
+  0x00016B40  add      x0, sp, #0x250
+  0x00016B44  mov      w1, #0x400
+  0x00016B48  mov      x2, x26
+  0x00016B4C  bl       #0x24c228
+  0x00016B50  adrp     x8, #0x805000
+  0x00016B54  ldr      x1, [x8, #0x668] ; @0x805668 "setCurrentChatRoom:"
+  0x00016B58  adr      x2, #0xffa0
+  0x00016B5C  nop      
+  0x00016B60  add      x3, sp, #0x250
+  0x00016B64  mov      x0, x21
+  0x00016B68  bl       #0x24bba4
+  0x00016B6C  ldr      q0, [sp, #0x110]
+  0x00016B70  str      s0, [sp, #0x250]
+  0x00016B74  strb     wzr, [sp, #0x254]
+  0x00016B78  adrp     x8, #0x805000
+  0x00016B7C  ldr      x1, [x8, #0x670] ; @0x805670 "extractUsernamesFromString:"
+  0x00016B80  adr      x2, #0x293fc
+  0x00016B84  nop      
+  0x00016B88  add      x3, sp, #0x250
+  0x00016B8C  mov      x0, x21
+  0x00016B90  bl       #0x24bba4
+  0x00016B94  adrp     x8, #0x805000
+  0x00016B98  ldr      x1, [x8, #0x678] ; @0x805678 "AddEmoticonMsg:MsgWrap:"
+  0x00016B9C  adr      x2, #0x296a4
+  0x00016BA0  nop      
+  0x00016BA4  adrp     x3, #0x81e000
+  0x00016BA8  add      x3, x3, #0xc0
+  0x00016BAC  mov      x0, x21
+  0x00016BB0  bl       #0x24b934
+  0x00016BB4  adrp     x8, #0x805000
+  0x00016BB8  ldr      x1, [x8, #0x680] ; @0x805680 "AsyncOnNotAddDBMessage:MsgWrap:"
+  0x00016BBC  adr      x2, #0x29b88
+  0x00016BC0  nop      
+  0x00016BC4  adrp     x3, #0x81e000
+  0x00016BC8  add      x3, x3, #0xc8
+  0x00016BCC  mov      x0, x21
+  0x00016BD0  bl       #0x24b934
+  0x00016BD4  adrp     x8, #0x805000
+  0x00016BD8  ldr      x1, [x8, #0x688] ; @0x805688 "HandleSvrCmd:MsgWrap:"
+  0x00016BDC  adr      x2, #0x2a1a8
+  0x00016BE0  nop      
+  0x00016BE4  adrp     x3, #0x81e000
+  0x00016BE8  add      x3, x3, #0xd0
+  0x00016BEC  mov      x0, x21
+  0x00016BF0  bl       #0x24b934
+  0x00016BF4  ldr      q0, [sp, #0x120]
+  0x00016BF8  str      s0, [sp, #0x250]
+  0x00016BFC  adrp     x8, #0x805000
+  0x00016C00  ldr      x1, [x8, #0x690] ; @0x805690 "getWAList"
+  0x00016C04  str      x1, [sp, #0x70]
+  0x00016C08  adr      x2, #0x2a9f0
+  0x00016C0C  nop      
+  0x00016C10  add      x3, sp, #0x250
+  0x00016C14  mov      x0, x21
+  0x00016C18  bl       #0x24bba4
+  0x00016C1C  ldr      q0, [sp, #0x130]
+  0x00016C20  str      s0, [sp, #0x250]
+  0x00016C24  strb     wzr, [sp, #0x254]
+  0x00016C28  adrp     x8, #0x805000
+  0x00016C2C  ldr      x1, [x8, #0x698] ; @0x805698 "showChangedStepInputWithMsg:"
+  0x00016C30  adr      x2, #0x2aac4
+  0x00016C34  nop      
+  0x00016C38  add      x3, sp, #0x250
+  0x00016C3C  mov      x0, x21
+  0x00016C40  bl       #0x24bba4
+  0x00016C44  ldr      q0, [sp, #0x130]
+  0x00016C48  str      s0, [sp, #0x250]
+  0x00016C4C  mov      w8, #0x40
+  0x00016C50  strb     w8, [sp, #0x254]
+  0x00016C54  strb     wzr, [sp, #0x255]
+  0x00016C58  adrp     x8, #0x805000
+  0x00016C5C  ldr      x1, [x8, #0x6a0] ; @0x8056a0 "changeStepOK:withMsg:"
+  0x00016C60  adr      x2, #0x2ac6c
+  0x00016C64  nop      
+  0x00016C68  add      x3, sp, #0x250
+  0x00016C6C  mov      x0, x21
+  0x00016C70  bl       #0x24bba4
+  0x00016C74  adrp     x8, #0x805000
+  0x00016C78  ldr      x1, [x8, #0x6a8] ; @0x8056a8 "AddMsg:MsgWrap:"  <== REF
+  0x00016C7C  adr      x2, #0x2ae70
+  0x00016C80  nop      
+  0x00016C84  adrp     x3, #0x81e000
+  0x00016C88  add      x3, x3, #0xd8
+  0x00016C8C  mov      x0, x21
+  0x00016C90  bl       #0x24b934
+  0x00016C94  adrp     x8, #0x805000
+  0x00016C98  ldr      x1, [x8, #0x6b0] ; @0x8056b0 "AsyncOnModMsg:MsgWrap:"
+  0x00016C9C  adr      x2, #0x2c8b8
+  0x00016CA0  nop      
+  0x00016CA4  adrp     x3, #0x81e000
+  0x00016CA8  add      x3, x3, #0xe0
+  0x00016CAC  mov      x0, x21
+  0x00016CB0  bl       #0x24b934
+  0x00016CB4  adrp     x8, #0x805000
+  0x00016CB8  ldr      x1, [x8, #0x6b8] ; @0x8056b8 "isChatStatusNotifyOpenForMsgWrap:"
+  0x00016CBC  adr      x2, #0x2c8c4
+  0x00016CC0  nop      
+  0x00016CC4  adrp     x3, #0x81e000
+  0x00016CC8  add      x3, x3, #0xe8
+  0x00016CCC  mov      x0, x21
+  0x00016CD0  bl       #0x24b934
+  0x00016CD4  adrp     x8, #0x805000
+  0x00016CD8  ldr      x1, [x8, #0x6c0] ; @0x8056c0 "AsyncOnAddMsg:MsgWrap:"
+  0x00016CDC  adr      x2, #0x2c9a4
+  0x00016CE0  nop      
+  0x00016CE4  adrp     x3, #0x81e000
+  0x00016CE8  add      x3, x3, #0xf0
+  0x00016CEC  mov      x0, x21
+  0x00016CF0  bl       #0x24b934
+  0x00016CF4  adrp     x0, #0x24e000
+  0x00016CF8  add      x0, x0, #0x632 ; @0x24e632 "WCDeviceStepObject"
+  0x00016CFC  bl       #0x24c078
+  0x00016D00  mov      x19, x0
+  0x00016D04  adrp     x8, #0x805000
+  0x00016D08  ldr      x21, [x8, #0x6c8] ; @0x8056c8 "m7StepCount"
+  0x00016D0C  adr      x2, #0x2f9e0
+  0x00016D10  nop      
+  0x00016D14  adrp     x3, #0x81e000
+  0x00016D18  add      x3, x3, #0xf8
+  0x00016D1C  mov      x1, x21
+  0x00016D20  bl       #0x24b934
+  0x00016D24  adrp     x8, #0x805000
+  0x00016D28  ldr      x23, [x8, #0x6d0] ; @0x8056d0 "hkStepCount"
+  0x00016D2C  adr      x2, #0x2fa40
+  0x00016D30  nop      
+  0x00016D34  adrp     x3, #0x81e000
+  0x00016D38  add      x3, x3, #0x100
+  0x00016D3C  mov      x0, x19
+  0x00016D40  mov      x1, x23
+  0x00016D44  bl       #0x24b934
+  0x00016D48  adrp     x0, #0x24e000
+  0x00016D4C  add      x0, x0, #0x645 ; @0x24e645 "UploadDeviceStepReq"
+  0x00016D50  bl       #0x24c078
+  0x00016D54  mov      x19, x0
+  0x00016D58  adr      x2, #0x2faa0
+  0x00016D5C  nop      
+  0x00016D60  adrp     x3, #0x81e000
+  0x00016D64  add      x3, x3, #0x108
+  0x00016D68  mov      x1, x21
+  0x00016D6C  bl       #0x24b934
+  0x00016D70  adr      x2, #0x2fafc
+  0x00016D74  nop      
+  0x00016D78  adrp     x3, #0x81e000
+  0x00016D7C  add      x3, x3, #0x110
+  0x00016D80  mov      x0, x19
+  0x00016D84  mov      x1, x23
+  0x00016D88  bl       #0x24b934
+  0x00016D8C  adrp     x0, #0x24e000
+  0x00016D90  add      x0, x0, #0x659 ; @0x24e659 "ScanQRCodeLogicController"
+  0x00016D94  bl       #0x24c078
+  0x00016D98  mov      x19, x0
+  0x00016D9C  adrp     x8, #0x805000
+  0x00016DA0  ldr      x1, [x8, #0x6d8] ; @0x8056d8 "onDetectCodesWithMarkDotInfoList:isCameraScan:"
+  0x00016DA4  adr      x2, #0x2fb58
+  0x00016DA8  nop      
+  0x00016DAC  adrp     x3, #0x81e000
+  0x00016DB0  add      x3, x3, #0x118
+  0x00016DB4  bl       #0x24b934
+  0x00016DB8  adrp     x8, #0x805000
+  0x00016DBC  ldr      x1, [x8, #0x6e0] ; @0x8056e0 "isEnableGoodCombine"
+  0x00016DC0  adr      x2, #0x2fbe0
+  0x00016DC4  nop      
+  0x00016DC8  adrp     x3, #0x81e000
+  0x00016DCC  add      x3, x3, #0x120
+  0x00016DD0  mov      x0, x19
+  0x00016DD4  bl       #0x24b934
+  0x00016DD8  adrp     x8, #0x805000
+  0x00016DDC  ldr      x1, [x8, #0x6e8] ; @0x8056e8 "isInScanSceneAndUseCameraScan"
+  0x00016DE0  adr      x2, #0x2fc38
+  0x00016DE4  nop      
+  0x00016DE8  adrp     x3, #0x81e000
+  0x00016DEC  add      x3, x3, #0x128
+  0x00016DF0  mov      x0, x19
+  0x00016DF4  bl       #0x24b934
+  0x00016DF8  adrp     x8, #0x805000
+  0x00016DFC  ldr      x1, [x8, #0x6f0] ; @0x8056f0 "shouldSendOfflineScanResultMessage"
+  0x00016E00  adr      x2, #0x2fc90
+  0x00016E04  nop      
+  0x00016E08  adrp     x3, #0x81e000
+  0x00016E0C  add      x3, x3, #0x130
+  0x00016E10  mov      x0, x19
+  0x00016E14  bl       #0x24b934
+  0x00016E18  adrp     x8, #0x805000
+  0x00016E1C  ldr      x1, [x8, #0x6f8] ; @0x8056f8 "openQRCodeOrWXCodeLandingPage:isShowMultiCodes:"
+  0x00016E20  adr      x2, #0x2fce8
+  0x00016E24  nop      
+  0x00016E28  adrp     x3, #0x81e000
+  0x00016E2C  add      x3, x3, #0x138
+
+  ---- 引用点 @0xA9288 ----
+  0x000A9148  mov      x0, x22
+  0x000A914C  mov      x2, x24
+  0x000A9150  bl       #0x24c0a8
+  0x000A9154  mov      x29, x29
+  0x000A9158  bl       #0x24c0e4
+  0x000A915C  mov      x23, x0
+  0x000A9160  mov      x0, x24
+  0x000A9164  bl       #0x24c0c0
+  0x000A9168  mov      x0, x22
+  0x000A916C  bl       #0x24c0c0
+  0x000A9170  b        #0xa917c
+  0x000A9174  adrp     x23, #0x7ac000
+  0x000A9178  add      x23, x23, #0x920
+  0x000A917C  mov      x0, x19
+  0x000A9180  bl       #0x24c0c0
+  0x000A9184  mov      x0, x23
+  0x000A9188  mov      x1, x21
+  0x000A918C  bl       #0x24c0a8
+  0x000A9190  cbz      x0, #0xa91b0
+  0x000A9194  adrp     x8, #0x80f000
+  0x000A9198  ldr      x0, [x8, #0x60] ; @0x80f060 classref@objc_classrefs
+  0x000A919C  ldr      x3, [x20, #0x28]
+  0x000A91A0  adrp     x8, #0x806000
+  0x000A91A4  ldr      x1, [x8, #0xe30]
+  0x000A91A8  mov      x2, x23
+  0x000A91AC  bl       #0x24c0a8
+  0x000A91B0  mov      x0, x23
+  0x000A91B4  ldp      x29, x30, [sp, #0x30]
+  0x000A91B8  ldp      x20, x19, [sp, #0x20]
+  0x000A91BC  ldp      x22, x21, [sp, #0x10]
+  0x000A91C0  ldp      x24, x23, [sp], #0x40
+  0x000A91C4  b        #0x24c0c0
+  0x000A91C8  mov      x20, x0
+  0x000A91CC  mov      x0, x24
+  0x000A91D0  bl       #0x24c0c0
+  0x000A91D4  b        #0xa91e4
+  0x000A91D8  b        #0xa91f0
+  0x000A91DC  mov      x20, x0
+  0x000A91E0  mov      x22, x23
+  0x000A91E4  mov      x0, x22
+  0x000A91E8  bl       #0x24c0c0
+  0x000A91EC  b        #0xa9200
+  0x000A91F0  mov      x20, x0
+  0x000A91F4  b        #0xa9200
+  0x000A91F8  mov      x20, x0
+  0x000A91FC  mov      x19, x23
+  0x000A9200  mov      x0, x19
+  0x000A9204  bl       #0x24c0c0
+  0x000A9208  mov      x0, x20
+  0x000A920C  bl       #0x24ba90
+  0x000A9210  stp      x22, x21, [sp, #-0x30]!
+  0x000A9214  stp      x20, x19, [sp, #0x10]
+  0x000A9218  stp      x29, x30, [sp, #0x20]
+  0x000A921C  add      x29, sp, #0x20
+  0x000A9220  ldp      x19, x20, [x0, #0x20]
+  0x000A9224  ldr      x21, [x0, #0x30]
+  0x000A9228  mov      x0, x19
+  0x000A922C  bl       #0x24c0cc
+  0x000A9230  mov      x0, x20
+  0x000A9234  bl       #0x24c0cc
+  0x000A9238  mov      x0, x21
+  0x000A923C  bl       #0x24c0cc
+  0x000A9240  adrp     x8, #0x80e000
+  0x000A9244  ldr      x0, [x8, #0xff8]
+  0x000A9248  adrp     x8, #0x804000
+  0x000A924C  ldr      x1, [x8, #0xea8]
+  0x000A9250  mov      w2, #1
+  0x000A9254  bl       #0x24c0a8
+  0x000A9258  mov      x29, x29
+  0x000A925C  bl       #0x24c0e4
+  0x000A9260  mov      x22, x0
+  0x000A9264  adrp     x1, #0x81f000
+  0x000A9268  add      x1, x1, #0x7c8
+  0x000A926C  mov      x0, x21
+  0x000A9270  mov      x2, x22
+  0x000A9274  mov      w3, #1
+  0x000A9278  bl       #0x24c0fc
+  0x000A927C  mov      x0, x22
+  0x000A9280  bl       #0x24c0c0
+  0x000A9284  adrp     x8, #0x805000
+  0x000A9288  ldr      x1, [x8, #0x6a8] ; @0x80f6a8 classref@objc_classrefs  <== REF
+  0x000A928C  mov      x0, x19
+  0x000A9290  mov      x2, x20
+  0x000A9294  mov      x3, x21
+  0x000A9298  bl       #0x24c0a8
+  0x000A929C  mov      x0, x21
+  0x000A92A0  bl       #0x24c0c0
+  0x000A92A4  mov      x0, x20
+  0x000A92A8  bl       #0x24c0c0
+  0x000A92AC  mov      x0, x19
+  0x000A92B0  ldp      x29, x30, [sp, #0x20]
+  0x000A92B4  ldp      x20, x19, [sp, #0x10]
+  0x000A92B8  ldp      x22, x21, [sp], #0x30
+  0x000A92BC  b        #0x24c0c0
+  0x000A92C0  mov      x1, x22
+  0x000A92C4  mov      x22, x0
+  0x000A92C8  mov      x0, x1
+  0x000A92CC  bl       #0x24c0c0
+  0x000A92D0  b        #0xa92d8
+  0x000A92D4  mov      x22, x0
+  0x000A92D8  mov      x0, x21
+  0x000A92DC  bl       #0x24c0c0
+  0x000A92E0  mov      x0, x20
+  0x000A92E4  bl       #0x24c0c0
+  0x000A92E8  mov      x0, x19
+  0x000A92EC  bl       #0x24c0c0
+  0x000A92F0  mov      x0, x22
+  0x000A92F4  bl       #0x24ba90
+  0x000A92F8  ret      
+  0x000A92FC  sub      sp, sp, #0xb0
+  0x000A9300  stp      x26, x25, [sp, #0x60]
+  0x000A9304  stp      x24, x23, [sp, #0x70]
+  0x000A9308  stp      x22, x21, [sp, #0x80]
+  0x000A930C  stp      x20, x19, [sp, #0x90]
+  0x000A9310  stp      x29, x30, [sp, #0xa0]
+  0x000A9314  add      x29, sp, #0xa0
+  0x000A9318  mov      x21, x3
+  0x000A931C  mov      x22, x2
+  0x000A9320  mov      x20, x1
+  0x000A9324  mov      x19, x0
+  0x000A9328  bl       #0x24c0cc
+  0x000A932C  mov      x0, x20
+  0x000A9330  bl       #0x24c0cc
+  0x000A9334  mov      x0, x19
+  0x000A9338  bl       #0x973a0
+  0x000A933C  cbz      w0, #0xa94c8
+  0x000A9340  adrp     x8, #0x804000
+  0x000A9344  ldr      x1, [x8, #0xed0]
+  0x000A9348  mov      x0, x20
+  0x000A934C  bl       #0x24c0a8
+  0x000A9350  cbz      x0, #0xa94c8
+  0x000A9354  adrp     x8, #0x80e000
+  0x000A9358  ldr      x0, [x8, #0xf58]
+  0x000A935C  adrp     x8, #0x807000
+  0x000A9360  ldr      x1, [x8, #0xb90]
+  0x000A9364  bl       #0x24c0a8
+  0x000A9368  mov      x29, x29
+  0x000A936C  bl       #0x24c0e4
+  0x000A9370  mov      x23, x0
+  0x000A9374  adrp     x8, #0x804000
+  0x000A9378  ldr      x1, [x8, #0xfc8]
+  0x000A937C  adrp     x2, #0x7b2000
+  0x000A9380  add      x2, x2, #0x240
+  0x000A9384  bl       #0x24c0a8
+  0x000A9388  mov      x24, x0
+  0x000A938C  mov      x0, x23
+  0x000A9390  bl       #0x24c0c0
+  0x000A9394  tbnz     w24, #0, #0xa94c8
+  0x000A9398  adrp     x8, #0x806000
+  0x000A939C  ldr      x1, [x8, #0xb78]
+  0x000A93A0  adrp     x2, #0x7b2000
+  0x000A93A4  add      x2, x2, #0x260
+  0x000A93A8  mov      x0, x19
+  0x000A93AC  mov      w3, #0x400
+  0x000A93B0  bl       #0x24c0a8
+  0x000A93B4  mov      x2, x0
+  0x000A93B8  mov      x8, #0x7fffffffffffffff
+  0x000A93BC  cmp      x0, x8
+  0x000A93C0  b.eq     #0xa94c8
+  0x000A93C4  mov      x3, x1
+  0x000A93C8  adrp     x8, #0x807000
+  0x000A93CC  ldr      x1, [x8, #0x10] ; @0x80f010 classref@objc_classrefs
+  0x000A93D0  mov      x0, x19
+  0x000A93D4  bl       #0x24c0a8
+  0x000A93D8  mov      x29, x29
+  0x000A93DC  bl       #0x24c0e4
+  0x000A93E0  mov      x23, x0
+  0x000A93E4  adrp     x8, #0x80e000
+  0x000A93E8  ldr      x24, [x8, #0xfb0]
+  0x000A93EC  adrp     x8, #0x807000
+  0x000A93F0  ldr      x26, [x8, #0xae8]
+  0x000A93F4  mov      x0, x20
+  0x000A93F8  mov      x1, x26
+  0x000A93FC  bl       #0x24c0a8
+  0x000A9400  mov      x25, x0
+  0x000A9404  mov      x0, x23
+  0x000A9408  mov      x1, x26
+  0x000A940C  bl       #0x24c0a8
+  0x000A9410  adrp     x8, #0x804000
+  0x000A9414  ldr      x1, [x8, #0xda8]
+  0x000A9418  stp      x22, x21, [sp, #0x10]
+  0x000A941C  stp      x25, x0, [sp]
+  0x000A9420  adrp     x2, #0x7b2000
+  0x000A9424  add      x2, x2, #0x280
+  0x000A9428  mov      x0, x24
+  0x000A942C  bl       #0x24c0a8
+  0x000A9430  mov      x29, x29
+  0x000A9434  bl       #0x24c0e4
+  0x000A9438  mov      x24, x0
+  0x000A943C  adrp     x8, #0x2d0000
+
+  ---- 引用点 @0x173A40 ----
+  0x00173900  ldr      x1, [x8, #0xa68]
+  0x00173904  bl       #0x24c0a8
+  0x00173908  mov      x20, x0
+  0x0017390C  adr      x0, #0x24e31d
+  0x00173910  nop      
+  0x00173914  bl       #0x24c078
+  0x00173918  adrp     x8, #0x805000
+  0x0017391C  ldr      x1, [x8, #0x2b8] ; @0x8052b8 "getLocalUsrName:"
+  0x00173920  mov      w2, #0
+  0x00173924  bl       #0x24c0a8
+  0x00173928  mov      x29, x29
+  0x0017392C  bl       #0x24c0e4
+  0x00173930  mov      x21, x0
+  0x00173934  adrp     x8, #0x806000
+  0x00173938  ldr      x1, [x8, #0xe98] ; @0x805e98 "imageData"
+  0x0017393C  mov      x0, x20
+  0x00173940  mov      x2, x21
+  0x00173944  bl       #0x24c0a8
+  0x00173948  adrp     x8, #0x806000
+  0x0017394C  ldr      x1, [x8, #0xea8] ; @0x805ea8 "getImageIfDownFail"
+  0x00173950  mov      x0, x20
+  0x00173954  mov      x2, x22
+  0x00173958  bl       #0x24c0a8
+  0x0017395C  mov      x0, x22
+  0x00173960  bl       #0x24c0c0
+  0x00173964  adrp     x8, #0x806000
+  0x00173968  ldr      x1, [x8, #0xea0] ; @0x805ea0 "maskedThumbImage"
+  0x0017396C  mov      x0, x20
+  0x00173970  mov      x2, x19
+  0x00173974  bl       #0x24c0a8
+  0x00173978  adrp     x8, #0x807000
+  0x0017397C  ldr      x1, [x8, #0x8d8] ; @0x8058d8 "useHighResolutionImageSize"
+  0x00173980  mov      x0, x20
+  0x00173984  mov      w2, #0xb
+  0x00173988  bl       #0x24c0a8
+  0x0017398C  adr      x0, #0x250113
+  0x00173990  nop      
+  0x00173994  bl       #0x24c078
+  0x00173998  adrp     x8, #0x806000
+  0x0017399C  ldr      x1, [x8, #0xe78] ; @0x805e78 "changeText2:"
+  0x001739A0  bl       #0x24c0a8
+  0x001739A4  mov      x29, x29
+  0x001739A8  bl       #0x24c0e4
+  0x001739AC  mov      x22, x0
+  0x001739B0  adr      x0, #0x24f4cf
+  0x001739B4  nop      
+  0x001739B8  bl       #0x24c078
+  0x001739BC  mov      x2, x0
+  0x001739C0  adrp     x8, #0x805000
+  0x001739C4  ldr      x23, [x8, #0xc8] ; @0x8050c8 "getService:"
+  0x001739C8  mov      x0, x22
+  0x001739CC  mov      x1, x23
+  0x001739D0  bl       #0x24c0a8
+  0x001739D4  mov      x29, x29
+  0x001739D8  bl       #0x24c0e4
+  0x001739DC  mov      x24, x0
+  0x001739E0  adrp     x8, #0x806000
+  0x001739E4  ldr      x1, [x8, #0xec8] ; @0x805ec8 "xiaoweiEditChatImage"
+  0x001739E8  bl       #0x24c0a8
+  0x001739EC  mov      x2, x0
+  0x001739F0  adrp     x8, #0x806000
+  0x001739F4  ldr      x1, [x8, #0xed0] ; @0x805ed0 "getImageFor:"
+  0x001739F8  mov      x0, x20
+  0x001739FC  bl       #0x24c0a8
+  0x00173A00  adrp     x8, #0x806000
+  0x00173A04  ldr      x1, [x8, #0xeb0] ; @0x805eb0 "getReferImage"
+  0x00173A08  mov      x0, x20
+  0x00173A0C  mov      w2, #1
+  0x00173A10  bl       #0x24c0a8
+  0x00173A14  adr      x0, #0x24e2fc
+  0x00173A18  nop      
+  0x00173A1C  bl       #0x24c078
+  0x00173A20  mov      x2, x0
+  0x00173A24  mov      x0, x22
+  0x00173A28  mov      x1, x23
+  0x00173A2C  bl       #0x24c0a8
+  0x00173A30  mov      x29, x29
+  0x00173A34  bl       #0x24c0e4
+  0x00173A38  mov      x23, x0
+  0x00173A3C  adrp     x8, #0x805000
+  0x00173A40  ldr      x1, [x8, #0x6a8] ; @0x8056a8 "AddMsg:MsgWrap:"  <== REF
+  0x00173A44  mov      x2, x19
+  0x00173A48  mov      x3, x20
+  0x00173A4C  bl       #0x24c0a8
+  0x00173A50  mov      x0, x19
+  0x00173A54  bl       #0x24c0c0
+  0x00173A58  mov      x0, x23
+  0x00173A5C  bl       #0x24c0c0
+  0x00173A60  mov      x0, x24
+  0x00173A64  bl       #0x24c0c0
+  0x00173A68  mov      x0, x22
+  0x00173A6C  bl       #0x24c0c0
+  0x00173A70  mov      x0, x21
+  0x00173A74  bl       #0x24c0c0
+  0x00173A78  mov      x0, x20
+  0x00173A7C  ldp      x29, x30, [sp, #0x30]
+  0x00173A80  ldp      x20, x19, [sp, #0x20]
+  0x00173A84  ldp      x22, x21, [sp, #0x10]
+  0x00173A88  ldp      x24, x23, [sp], #0x40
+  0x00173A8C  b        #0x24c0c0
+  0x00173A90  stp      x24, x23, [sp, #-0x40]!
+  0x00173A94  stp      x22, x21, [sp, #0x10]
+  0x00173A98  stp      x20, x19, [sp, #0x20]
+  0x00173A9C  stp      x29, x30, [sp, #0x30]
+  0x00173AA0  add      x29, sp, #0x30
+  0x00173AA4  mov      x19, x3
+  0x00173AA8  mov      x22, x2
+  0x00173AAC  mov      x0, x3
+  0x00173AB0  bl       #0x24c0cc
+  0x00173AB4  mov      x0, x22
+  0x00173AB8  bl       #0x24c0cc
+  0x00173ABC  adr      x0, #0x24e5a1
+  0x00173AC0  nop      
+  0x00173AC4  bl       #0x24c078
+  0x00173AC8  adrp     x8, #0x808000
+  0x00173ACC  ldr      x1, [x8, #0xfc0] ; @0x805fc0 "remindTimer"
+  0x00173AD0  bl       #0x24c0a8
+  0x00173AD4  adrp     x8, #0x80a000
+  0x00173AD8  ldr      x1, [x8, #0xa68] ; @0x805a68 "prepareOuputVideoWithCompletion:"
+  0x00173ADC  mov      w2, #0x2a
+  0x00173AE0  bl       #0x24c0a8
+  0x00173AE4  mov      x20, x0
+  0x00173AE8  adr      x0, #0x24e31d
+  0x00173AEC  nop      
+  0x00173AF0  bl       #0x24c078
+  0x00173AF4  adrp     x8, #0x805000
+  0x00173AF8  ldr      x1, [x8, #0x2b8] ; @0x8052b8 "getLocalUsrName:"
+  0x00173AFC  mov      w2, #0
+  0x00173B00  bl       #0x24c0a8
+  0x00173B04  mov      x29, x29
+  0x00173B08  bl       #0x24c0e4
+  0x00173B0C  mov      x21, x0
+  0x00173B10  adrp     x8, #0x806000
+  0x00173B14  ldr      x1, [x8, #0xe98] ; @0x805e98 "imageData"
+  0x00173B18  mov      x0, x20
+  0x00173B1C  mov      x2, x21
+  0x00173B20  bl       #0x24c0a8
+  0x00173B24  adrp     x8, #0x806000
+  0x00173B28  ldr      x1, [x8, #0xea8] ; @0x805ea8 "getImageIfDownFail"
+  0x00173B2C  mov      x0, x20
+  0x00173B30  mov      x2, x22
+  0x00173B34  bl       #0x24c0a8
+  0x00173B38  mov      x0, x22
+  0x00173B3C  bl       #0x24c0c0
+  0x00173B40  adrp     x8, #0x806000
+  0x00173B44  ldr      x1, [x8, #0xea0] ; @0x805ea0 "maskedThumbImage"
+  0x00173B48  mov      x0, x20
+  0x00173B4C  mov      x2, x19
+  0x00173B50  bl       #0x24c0a8
+  0x00173B54  adrp     x8, #0x807000
+  0x00173B58  ldr      x1, [x8, #0x8d8] ; @0x8058d8 "useHighResolutionImageSize"
+  0x00173B5C  mov      x0, x20
+  0x00173B60  mov      w2, #3
+  0x00173B64  bl       #0x24c0a8
+  0x00173B68  adr      x0, #0x250113
+  0x00173B6C  nop      
+  0x00173B70  bl       #0x24c078
+  0x00173B74  adrp     x8, #0x806000
+  0x00173B78  ldr      x1, [x8, #0xe78] ; @0x805e78 "changeText2:"
+  0x00173B7C  bl       #0x24c0a8
+  0x00173B80  mov      x29, x29
+  0x00173B84  bl       #0x24c0e4
+  0x00173B88  mov      x22, x0
+  0x00173B8C  adr      x0, #0x24f4cf
+  0x00173B90  nop      
+  0x00173B94  bl       #0x24c078
+  0x00173B98  mov      x2, x0
+  0x00173B9C  adrp     x8, #0x805000
+  0x00173BA0  ldr      x23, [x8, #0xc8] ; @0x8050c8 "getService:"
+  0x00173BA4  mov      x0, x22
+  0x00173BA8  mov      x1, x23
+  0x00173BAC  bl       #0x24c0a8
+  0x00173BB0  mov      x29, x29
+  0x00173BB4  bl       #0x24c0e4
+  0x00173BB8  mov      x24, x0
+  0x00173BBC  adrp     x8, #0x806000
+  0x00173BC0  ldr      x1, [x8, #0xec8] ; @0x805ec8 "xiaoweiEditChatImage"
+  0x00173BC4  bl       #0x24c0a8
+  0x00173BC8  mov      x2, x0
+  0x00173BCC  adrp     x8, #0x806000
+  0x00173BD0  ldr      x1, [x8, #0xed0] ; @0x805ed0 "getImageFor:"
+  0x00173BD4  mov      x0, x20
+  0x00173BD8  bl       #0x24c0a8
+  0x00173BDC  adrp     x8, #0x806000
+  0x00173BE0  ldr      x1, [x8, #0xeb0] ; @0x805eb0 "getReferImage"
+  0x00173BE4  mov      x0, x20
+  0x00173BE8  mov      w2, #1
+  0x00173BEC  bl       #0x24c0a8
+  0x00173BF0  adr      x0, #0x24e2fc
+  0x00173BF4  nop      
+
+  ---- 引用点 @0x173C1C ----
+  0x00173ADC  mov      w2, #0x2a
+  0x00173AE0  bl       #0x24c0a8
+  0x00173AE4  mov      x20, x0
+  0x00173AE8  adr      x0, #0x24e31d
+  0x00173AEC  nop      
+  0x00173AF0  bl       #0x24c078
+  0x00173AF4  adrp     x8, #0x805000
+  0x00173AF8  ldr      x1, [x8, #0x2b8] ; @0x8052b8 "getLocalUsrName:"
+  0x00173AFC  mov      w2, #0
+  0x00173B00  bl       #0x24c0a8
+  0x00173B04  mov      x29, x29
+  0x00173B08  bl       #0x24c0e4
+  0x00173B0C  mov      x21, x0
+  0x00173B10  adrp     x8, #0x806000
+  0x00173B14  ldr      x1, [x8, #0xe98] ; @0x805e98 "imageData"
+  0x00173B18  mov      x0, x20
+  0x00173B1C  mov      x2, x21
+  0x00173B20  bl       #0x24c0a8
+  0x00173B24  adrp     x8, #0x806000
+  0x00173B28  ldr      x1, [x8, #0xea8] ; @0x805ea8 "getImageIfDownFail"
+  0x00173B2C  mov      x0, x20
+  0x00173B30  mov      x2, x22
+  0x00173B34  bl       #0x24c0a8
+  0x00173B38  mov      x0, x22
+  0x00173B3C  bl       #0x24c0c0
+  0x00173B40  adrp     x8, #0x806000
+  0x00173B44  ldr      x1, [x8, #0xea0] ; @0x805ea0 "maskedThumbImage"
+  0x00173B48  mov      x0, x20
+  0x00173B4C  mov      x2, x19
+  0x00173B50  bl       #0x24c0a8
+  0x00173B54  adrp     x8, #0x807000
+  0x00173B58  ldr      x1, [x8, #0x8d8] ; @0x8058d8 "useHighResolutionImageSize"
+  0x00173B5C  mov      x0, x20
+  0x00173B60  mov      w2, #3
+  0x00173B64  bl       #0x24c0a8
+  0x00173B68  adr      x0, #0x250113
+  0x00173B6C  nop      
+  0x00173B70  bl       #0x24c078
+  0x00173B74  adrp     x8, #0x806000
+  0x00173B78  ldr      x1, [x8, #0xe78] ; @0x805e78 "changeText2:"
+  0x00173B7C  bl       #0x24c0a8
+  0x00173B80  mov      x29, x29
+  0x00173B84  bl       #0x24c0e4
+  0x00173B88  mov      x22, x0
+  0x00173B8C  adr      x0, #0x24f4cf
+  0x00173B90  nop      
+  0x00173B94  bl       #0x24c078
+  0x00173B98  mov      x2, x0
+  0x00173B9C  adrp     x8, #0x805000
+  0x00173BA0  ldr      x23, [x8, #0xc8] ; @0x8050c8 "getService:"
+  0x00173BA4  mov      x0, x22
+  0x00173BA8  mov      x1, x23
+  0x00173BAC  bl       #0x24c0a8
+  0x00173BB0  mov      x29, x29
+  0x00173BB4  bl       #0x24c0e4
+  0x00173BB8  mov      x24, x0
+  0x00173BBC  adrp     x8, #0x806000
+  0x00173BC0  ldr      x1, [x8, #0xec8] ; @0x805ec8 "xiaoweiEditChatImage"
+  0x00173BC4  bl       #0x24c0a8
+  0x00173BC8  mov      x2, x0
+  0x00173BCC  adrp     x8, #0x806000
+  0x00173BD0  ldr      x1, [x8, #0xed0] ; @0x805ed0 "getImageFor:"
+  0x00173BD4  mov      x0, x20
+  0x00173BD8  bl       #0x24c0a8
+  0x00173BDC  adrp     x8, #0x806000
+  0x00173BE0  ldr      x1, [x8, #0xeb0] ; @0x805eb0 "getReferImage"
+  0x00173BE4  mov      x0, x20
+  0x00173BE8  mov      w2, #1
+  0x00173BEC  bl       #0x24c0a8
+  0x00173BF0  adr      x0, #0x24e2fc
+  0x00173BF4  nop      
+  0x00173BF8  bl       #0x24c078
+  0x00173BFC  mov      x2, x0
+  0x00173C00  mov      x0, x22
+  0x00173C04  mov      x1, x23
+  0x00173C08  bl       #0x24c0a8
+  0x00173C0C  mov      x29, x29
+  0x00173C10  bl       #0x24c0e4
+  0x00173C14  mov      x23, x0
+  0x00173C18  adrp     x8, #0x805000
+  0x00173C1C  ldr      x1, [x8, #0x6a8] ; @0x8056a8 "AddMsg:MsgWrap:"  <== REF
+  0x00173C20  mov      x2, x19
+  0x00173C24  mov      x3, x20
+  0x00173C28  bl       #0x24c0a8
+  0x00173C2C  mov      x0, x19
+  0x00173C30  bl       #0x24c0c0
+  0x00173C34  mov      x0, x23
+  0x00173C38  bl       #0x24c0c0
+  0x00173C3C  mov      x0, x24
+  0x00173C40  bl       #0x24c0c0
+  0x00173C44  mov      x0, x22
+  0x00173C48  bl       #0x24c0c0
+  0x00173C4C  mov      x0, x21
+  0x00173C50  bl       #0x24c0c0
+  0x00173C54  mov      x0, x20
+  0x00173C58  ldp      x29, x30, [sp, #0x30]
+  0x00173C5C  ldp      x20, x19, [sp, #0x20]
+  0x00173C60  ldp      x22, x21, [sp, #0x10]
+  0x00173C64  ldp      x24, x23, [sp], #0x40
+  0x00173C68  b        #0x24c0c0
+  0x00173C6C  stp      d9, d8, [sp, #-0x70]!
+  0x00173C70  stp      x28, x27, [sp, #0x10]
+  0x00173C74  stp      x26, x25, [sp, #0x20]
+  0x00173C78  stp      x24, x23, [sp, #0x30]
+  0x00173C7C  stp      x22, x21, [sp, #0x40]
+  0x00173C80  stp      x20, x19, [sp, #0x50]
+  0x00173C84  stp      x29, x30, [sp, #0x60]
+  0x00173C88  add      x29, sp, #0x60
+  0x00173C8C  sub      sp, sp, #0x190
+  0x00173C90  mov      x20, x0
+  0x00173C94  adrp     x8, #0x2d0000
+  0x00173C98  ldr      x8, [x8, #0x270] ; @0x805270 "moveItemAtURL:toURL:error:"
+  0x00173C9C  ldr      x8, [x8] ; @0x805000 "initWithData:encoding:"
+  0x00173CA0  stur     x8, [x29, #-0x70]
+  0x00173CA4  bl       #0x24c0cc
+  0x00173CA8  bl       #0x24c144
+  0x00173CAC  adrp     x8, #0x81f000
+  0x00173CB0  ldrb     w9, [x8, #0xe29]
+  0x00173CB4  tbz      w9, #0, #0x173d00
+  0x00173CB8  mov      x0, x20
+  0x00173CBC  bl       #0x24c150
+  0x00173CC0  ldur     x8, [x29, #-0x70]
+  0x00173CC4  adrp     x9, #0x2d0000
+  0x00173CC8  ldr      x9, [x9, #0x270]
+  0x00173CCC  ldr      x9, [x9]
+  0x00173CD0  cmp      x9, x8
+  0x00173CD4  b.ne     #0x1742f0
+  0x00173CD8  mov      x0, x20
+  0x00173CDC  add      sp, sp, #0x190
+  0x00173CE0  ldp      x29, x30, [sp, #0x60]
+  0x00173CE4  ldp      x20, x19, [sp, #0x50]
+  0x00173CE8  ldp      x22, x21, [sp, #0x40]
+  0x00173CEC  ldp      x24, x23, [sp, #0x30]
+  0x00173CF0  ldp      x26, x25, [sp, #0x20]
+  0x00173CF4  ldp      x28, x27, [sp, #0x10]
+  0x00173CF8  ldp      d9, d8, [sp], #0x70
+  0x00173CFC  b        #0x24c0c0
+  0x00173D00  mov      w9, #1
+  0x00173D04  strb     w9, [x8, #0xe29]
+  0x00173D08  adrp     x19, #0x81f000
+  0x00173D0C  ldr      x8, [x19, #0xe30]
+  0x00173D10  add      x8, x8, #1
+  0x00173D14  str      x8, [x19, #0xe30]
+  0x00173D18  mov      x0, x20
+  0x00173D1C  bl       #0x24c150
+  0x00173D20  str      x20, [sp, #0x20]
+  0x00173D24  mov      x0, x20
+  0x00173D28  bl       #0x24c0c0
+  0x00173D2C  ldr      x8, [x19, #0xe30]
+  0x00173D30  str      x8, [sp, #0x18]
+  0x00173D34  adrp     x8, #0x80f000
+  0x00173D38  ldr      x0, [x8, #0x1a0] ; @0x8051a0 "finishWithStage:bytes:"
+  0x00173D3C  adrp     x8, #0x807000
+  0x00173D40  ldr      x1, [x8, #0x58] ; @0x805058 "wrap"
+  0x00173D44  bl       #0x24c0a8
+  0x00173D48  mov      x29, x29
+  0x00173D4C  bl       #0x24c0e4
+  0x00173D50  mov      x20, x0
+  0x00173D54  bl       #0x1742f4
+  0x00173D58  adrp     x0, #0x7bf000
+  0x00173D5C  add      x0, x0, #0xf20
+  0x00173D60  bl       #0x1745b0
+  0x00173D64  mov      x29, x29
+  0x00173D68  bl       #0x24c0e4
+  0x00173D6C  mov      x19, x0
+  0x00173D70  adrp     x8, #0x80a000
+  0x00173D74  ldr      x1, [x8, #0x4d8] ; @0x8054d8 "tableView:viewForHeaderInSection:"
+  0x00173D78  adrp     x2, #0x7bf000
+  0x00173D7C  add      x2, x2, #0xf40
+  0x00173D80  mov      x0, x20
+  0x00173D84  bl       #0x24c0a8
+  0x00173D88  mov      x24, x0
+  0x00173D8C  adrp     x8, #0x804000
+  0x00173D90  ldr      x21, [x8, #0xd20] ; @0x805d20 "layoutContentView"
+  0x00173D94  mov      x0, x19
+  0x00173D98  mov      x1, x21
+  0x00173D9C  bl       #0x24c0a8
+  0x00173DA0  adrp     x23, #0x80f000
+  0x00173DA4  str      x20, [sp, #0x28]
+  0x00173DA8  cbz      x0, #0x173dd0
+  0x00173DAC  mov      x0, x19
+  0x00173DB0  mov      x1, x21
+  0x00173DB4  bl       #0x24c0a8
+  0x00173DB8  cmp      x24, x0
+  0x00173DBC  b.hs     #0x173dd0
+  0x00173DC0  adrp     x8, #0x806000
+  0x00173DC4  ldr      x22, [x8, #0xb50] ; @0x805b50 "setIndexPath:"
+  0x00173DC8  str      x19, [sp, #0x38]
+  0x00173DCC  b        #0x17400c
+  0x00173DD0  str      x19, [sp]
+
+========================================================================
+SEL: AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:
+selref 槽: ['0x807b58']
+
+  ---- 引用点 @0x2A7E0 ----
+  0x0002A6A0  bl       #0x24c0a8
+  0x0002A6A4  mov      x29, x29
+  0x0002A6A8  bl       #0x24c0e4
+  0x0002A6AC  mov      x22, x0
+  0x0002A6B0  adrp     x8, #0x804000
+  0x0002A6B4  ldr      x1, [x8, #0xfc8] ; @0x804fc8 "isEqualToString:"
+  0x0002A6B8  mov      x2, x19
+  0x0002A6BC  bl       #0x24c0a8
+  0x0002A6C0  mov      x23, x0
+  0x0002A6C4  mov      x0, x22
+  0x0002A6C8  bl       #0x24c0c0
+  0x0002A6CC  mov      x0, x19
+  0x0002A6D0  bl       #0x24c0c0
+  0x0002A6D4  mov      x0, x27
+  0x0002A6D8  bl       #0x24c0c0
+  0x0002A6DC  mov      x0, x26
+  0x0002A6E0  bl       #0x24c0c0
+  0x0002A6E4  mov      x0, x25
+  0x0002A6E8  bl       #0x24c0c0
+  0x0002A6EC  tbz      w23, #0, #0x2a718
+  0x0002A6F0  mov      x23, #0
+  0x0002A6F4  b        #0x2a7a0
+  0x0002A6F8  mov      x0, x19
+  0x0002A6FC  bl       #0x24c0c0
+  0x0002A700  mov      x0, x27
+  0x0002A704  bl       #0x24c0c0
+  0x0002A708  mov      x0, x26
+  0x0002A70C  bl       #0x24c0c0
+  0x0002A710  mov      x0, x25
+  0x0002A714  bl       #0x24c0c0
+  0x0002A718  adrp     x8, #0x805000
+  0x0002A71C  ldr      x1, [x8, #0x838] ; @0x804838 classref@objc_const
+  0x0002A720  mov      x0, x25
+  0x0002A724  mov      x2, #0
+  0x0002A728  bl       #0x24c0a8
+  0x0002A72C  mov      x29, x29
+  0x0002A730  bl       #0x24c0e4
+  0x0002A734  mov      x23, x0
+  0x0002A738  cbz      x0, #0x2a798
+  0x0002A73C  adrp     x8, #0x807000
+  0x0002A740  ldr      x19, [x8, #0xb70] ; @0x804b70 "windows"
+  0x0002A744  adrp     x8, #0x804000
+  0x0002A748  ldr      x1, [x8, #0xcd0] ; @0x804cd0 "respondsToSelector:"
+  0x0002A74C  mov      x0, x23
+  0x0002A750  mov      x2, x19
+  0x0002A754  bl       #0x24c0a8
+  0x0002A758  cbz      w0, #0x2a768
+  0x0002A75C  mov      x0, x23
+  0x0002A760  mov      x1, x19
+  0x0002A764  bl       #0x24c0a8
+  0x0002A768  adrp     x8, #0x807000
+  0x0002A76C  ldr      x1, [x8, #0x8d8] ; @0x8048d8 classref@objc_const
+  0x0002A770  mov      x0, x23
+  0x0002A774  mov      w2, #0
+  0x0002A778  bl       #0x24c0a8
+  0x0002A77C  adrp     x8, #0x807000
+  0x0002A780  ldr      x1, [x8, #0x8e0] ; @0x8048e0 classref@objc_const
+  0x0002A784  mov      x0, x23
+  0x0002A788  mov      x2, #0
+  0x0002A78C  bl       #0x24c0a8
+  0x0002A790  mov      x0, x23
+  0x0002A794  bl       #0x24c0cc
+  0x0002A798  mov      x0, x23
+  0x0002A79C  bl       #0x24c0c0
+  0x0002A7A0  mov      x0, x25
+  0x0002A7A4  bl       #0x24c0c0
+  0x0002A7A8  ldr      x19, [sp, #0x18]
+  0x0002A7AC  adrp     x8, #0x81e000
+  0x0002A7B0  ldr      x8, [x8, #0xd0] ; @0x8040d0 classref@objc_const
+  0x0002A7B4  ldp      x2, x0, [sp, #0x20]
+  0x0002A7B8  mov      x1, x20
+  0x0002A7BC  mov      x3, x19
+  0x0002A7C0  blr      x8
+  0x0002A7C4  cbz      x23, #0x2a7fc
+  0x0002A7C8  adrp     x8, #0x804000
+  0x0002A7CC  ldr      x1, [x8, #0xed0] ; @0x804ed0 "length"
+  0x0002A7D0  mov      x0, x24
+  0x0002A7D4  bl       #0x24c0a8
+  0x0002A7D8  cbz      x0, #0x2a7fc
+  0x0002A7DC  adrp     x8, #0x807000
+  0x0002A7E0  ldr      x1, [x8, #0xb58] ; @0x804b58 "stringByAppendingPathComponent:"  <== REF
+  0x0002A7E4  ldr      x0, [sp, #0x28]
+  0x0002A7E8  mov      x2, x24
+  0x0002A7EC  mov      x3, x23
+  0x0002A7F0  mov      w4, #1
+  0x0002A7F4  mov      w5, #0
+  0x0002A7F8  bl       #0x24c0a8
+  0x0002A7FC  mov      x0, x24
+  0x0002A800  bl       #0x24c0c0
+  0x0002A804  mov      x0, x23
+  0x0002A808  bl       #0x24c0c0
+  0x0002A80C  mov      x0, x19
+  0x0002A810  bl       #0x24c0c0
+  0x0002A814  ldr      x0, [sp, #0x20]
+  0x0002A818  bl       #0x24c0c0
+  0x0002A81C  ldur     x8, [x29, #-0x60]
+  0x0002A820  adrp     x9, #0x2d0000
+  0x0002A824  ldr      x9, [x9, #0x270]
+  0x0002A828  ldr      x9, [x9]
+  0x0002A82C  cmp      x9, x8
+  0x0002A830  b.ne     #0x2a854
+  0x0002A834  ldp      x29, x30, [sp, #0x170]
+  0x0002A838  ldp      x20, x19, [sp, #0x160]
+  0x0002A83C  ldp      x22, x21, [sp, #0x150]
+  0x0002A840  ldp      x24, x23, [sp, #0x140]
+  0x0002A844  ldp      x26, x25, [sp, #0x130]
+  0x0002A848  ldp      x28, x27, [sp, #0x120]
+  0x0002A84C  add      sp, sp, #0x180
+  0x0002A850  ret      
+  0x0002A854  bl       #0x24baf0
+  0x0002A858  mov      x20, x0
+  0x0002A85C  mov      x0, x22
+  0x0002A860  bl       #0x24c0c0
+  0x0002A864  b        #0x2a8ec
+  0x0002A868  b        #0x2a99c
+  0x0002A86C  mov      x20, x0
+  0x0002A870  mov      x0, x22
+  0x0002A874  bl       #0x24c0c0
+  0x0002A878  b        #0x2a880
+  0x0002A87C  mov      x20, x0
+  0x0002A880  mov      x0, x19
+  0x0002A884  bl       #0x24c0c0
+  0x0002A888  b        #0x2a890
+  0x0002A88C  mov      x20, x0
+  0x0002A890  mov      x0, x24
+  0x0002A894  b        #0x2a9ac
+  0x0002A898  b        #0x2a958
+  0x0002A89C  mov      x19, x1
+  0x0002A8A0  mov      x20, x0
+  0x0002A8A4  mov      x0, x22
+  0x0002A8A8  bl       #0x24c0c0
+  0x0002A8AC  b        #0x2a8b8
+  0x0002A8B0  mov      x19, x1
+  0x0002A8B4  mov      x20, x0
+  0x0002A8B8  cmp      w19, #1
+  0x0002A8BC  b.ne     #0x2a8f4
+  0x0002A8C0  mov      x0, x20
+  0x0002A8C4  bl       #0x24c018
+  0x0002A8C8  bl       #0x24c03c
+  0x0002A8CC  mov      x19, #0
+  0x0002A8D0  ldr      x20, [sp, #8]
+  0x0002A8D4  b        #0x2a688
+  0x0002A8D8  mov      x20, x0
+  0x0002A8DC  mov      x0, x19
+  0x0002A8E0  b        #0x2a910
+  0x0002A8E4  b        #0x2a918
+  0x0002A8E8  mov      x20, x0
+  0x0002A8EC  mov      x0, x19
+  0x0002A8F0  bl       #0x24c0c0
+  0x0002A8F4  mov      x0, x27
+  0x0002A8F8  bl       #0x24c0c0
+  0x0002A8FC  b        #0x2a90c
+  0x0002A900  b        #0x2a960
+  0x0002A904  b        #0x2a99c
+  0x0002A908  mov      x20, x0
+  0x0002A90C  mov      x0, x26
+  0x0002A910  bl       #0x24c0c0
+  0x0002A914  b        #0x2a91c
+  0x0002A918  mov      x20, x0
+  0x0002A91C  mov      x0, x25
+  0x0002A920  b        #0x2a93c
+  0x0002A924  mov      x20, x0
+  0x0002A928  b        #0x2a9b8
+  0x0002A92C  mov      x20, x0
+  0x0002A930  b        #0x2a9c0
+  0x0002A934  mov      x20, x0
+  0x0002A938  mov      x0, x23
+  0x0002A93C  bl       #0x24c0c0
+  0x0002A940  b        #0x2a948
+  0x0002A944  mov      x20, x0
+  0x0002A948  mov      x0, x25
+  0x0002A94C  bl       #0x24c0c0
+  0x0002A950  mov      x0, x24
+  0x0002A954  b        #0x2a9d4
+  0x0002A958  mov      x20, x0
+  0x0002A95C  b        #0x2a9b0
+  0x0002A960  mov      x20, x0
+  0x0002A964  mov      x0, x19
+  0x0002A968  b        #0x2a9d4
+  0x0002A96C  mov      x20, x0
+  0x0002A970  mov      x0, x25
+  0x0002A974  bl       #0x24c0c0
+  0x0002A978  b        #0x2a9a0
+  0x0002A97C  b        #0x2a99c
+  0x0002A980  b        #0x2a99c
+  0x0002A984  str      x19, [sp, #0x18]
+  0x0002A988  mov      x20, x0
+  0x0002A98C  mov      x0, x24
+  0x0002A990  bl       #0x24c0c0
+  0x0002A994  mov      x0, x23
+
+  ---- 引用点 @0x30A8C ----
+  0x0003094C  ldr      x23, [x24, #0x280]
+  0x00030950  adrp     x8, #0x806000
+  0x00030954  ldr      x20, [x8, #0xe38] ; @0x806e38 "componentsSeparatedByString:"
+  0x00030958  adrp     x2, #0x7b2000
+  0x0003095C  add      x2, x2, #0xa0
+  0x00030960  ldr      x0, [sp, #0x28]
+  0x00030964  mov      x1, x20
+  0x00030968  bl       #0x24c0a8
+  0x0003096C  mov      x29, x29
+  0x00030970  bl       #0x24c0e4
+  0x00030974  mov      x21, x0
+  0x00030978  adrp     x22, #0x2d0000
+  0x0003097C  ldr      x22, [x22, #0x258]
+  0x00030980  ldr      x8, [x22]
+  0x00030984  cmp      x0, #0
+  0x00030988  csel     x2, x8, x0, eq
+  0x0003098C  adrp     x8, #0x808000
+  0x00030990  ldr      x25, [x8, #0x4b8] ; @0x8064b8 "p_batchDeleteSessions"
+  0x00030994  mov      x0, x23
+  0x00030998  mov      x1, x25
+  0x0003099C  bl       #0x24c0a8
+  0x000309A0  mov      x29, x29
+  0x000309A4  bl       #0x24c0e4
+  0x000309A8  mov      x27, x0
+  0x000309AC  mov      x0, x21
+  0x000309B0  bl       #0x24c0c0
+  0x000309B4  adrp     x2, #0x7b2000
+  0x000309B8  add      x2, x2, #0xa0
+  0x000309BC  ldr      x0, [sp, #0x30]
+  0x000309C0  mov      x1, x20
+  0x000309C4  bl       #0x24c0a8
+  0x000309C8  mov      x29, x29
+  0x000309CC  bl       #0x24c0e4
+  0x000309D0  mov      x20, x0
+  0x000309D4  ldr      x8, [x22]
+  0x000309D8  cmp      x0, #0
+  0x000309DC  csel     x23, x8, x0, eq
+  0x000309E0  mov      x0, x23
+  0x000309E4  bl       #0x24c0cc
+  0x000309E8  mov      x0, x20
+  0x000309EC  bl       #0x24c0c0
+  0x000309F0  adrp     x22, #0x80e000
+  0x000309F4  ldr      x0, [x22, #0xf58]
+  0x000309F8  mov      x1, x19
+  0x000309FC  ldr      x21, [sp, #0x38]
+  0x00030A00  bl       #0x24c0a8
+  0x00030A04  str      x27, [sp, #0xe8]
+  0x00030A08  str      x23, [sp, #0x60]
+  0x00030A0C  cbz      w0, #0x30dec
+  0x00030A10  str      x25, [sp, #0x18]
+  0x00030A14  movi     v0.16b, #0
+  0x00030A18  stp      q0, q0, [sp, #0x1b0]
+  0x00030A1C  stp      q0, q0, [sp, #0x190]
+  0x00030A20  mov      x0, x23
+  0x00030A24  bl       #0x24c0cc
+  0x00030A28  adrp     x8, #0x804000
+  0x00030A2C  ldr      x1, [x8, #0xb78] ; @0x806b78 "rangeOfString:options:"
+  0x00030A30  add      x2, sp, #0x190
+  0x00030A34  sub      x3, x29, #0xe0
+  0x00030A38  str      x1, [sp, #0x40]
+  0x00030A3C  mov      w4, #0x10
+  0x00030A40  bl       #0x24c0a8
+  0x00030A44  mov      x25, x0
+  0x00030A48  ldr      x20, [sp, #0xf0]
+  0x00030A4C  cbz      x0, #0x30dd4
+  0x00030A50  ldr      x8, [sp, #0x1a0]
+  0x00030A54  ldr      x22, [x8] ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x00030A58  adrp     x21, #0x24d000
+  0x00030A5C  add      x21, x21, #0x6d0 ; @0x24d6d0 "MMServiceCenter"
+  0x00030A60  str      x22, [sp, #0x58]
+  0x00030A64  mov      x28, #0
+  0x00030A68  adrp     x8, #0x805000
+  0x00030A6C  ldr      x8, [x8, #0xd8] ; @0x8060d8 "setDataObject:"
+  0x00030A70  str      x8, [sp, #0xf8]
+  0x00030A74  adrp     x8, #0x805000
+  0x00030A78  ldr      x9, [x8, #0xc0] ; @0x8060c0 "setSectionData:"
+  0x00030A7C  nop      
+  0x00030A80  ldr      x8, [x8, #0xc8] ; @0x8060c8 "objectsForListAdapter:"
+  0x00030A84  stp      x8, x9, [sp, #0xd8]
+  0x00030A88  adrp     x8, #0x807000
+  0x00030A8C  ldr      x8, [x8, #0xb58] ; @0x806b58 "prepareForBackground"  <== REF
+  0x00030A90  str      x8, [sp, #0xd0]
+  0x00030A94  adrp     x8, #0x806000
+  0x00030A98  ldr      x9, [x8, #0xe88] ; @0x806e88 "initWithMsgType:nsFromUsr:"
+  0x00030A9C  nop      
+  0x00030AA0  ldr      x8, [x8, #0xe90] ; @0x806e90 "setM_uiMessageType:"
+  0x00030AA4  stp      x8, x9, [sp, #0x98]
+  0x00030AA8  adrp     x8, #0x806000
+  0x00030AAC  ldr      x9, [x8, #0xe98] ; @0x806e98 "setM_nsFromUsr:"
+  0x00030AB0  nop      
+  0x00030AB4  ldr      x8, [x8, #0xea0] ; @0x806ea0 "setM_nsToUsr:"
+  0x00030AB8  stp      x8, x9, [sp, #0x88]
+  0x00030ABC  adrp     x8, #0x806000
+  0x00030AC0  ldr      x9, [x8, #0xe28] ; @0x806e28 "stringByReplacingOccurrencesOfString:withString:"
+  0x00030AC4  adrp     x8, #0x804000
+  0x00030AC8  ldr      x8, [x8, #0xda8] ; @0x806da8 "setDeliveryMode:"
+  0x00030ACC  stp      x8, x9, [sp, #0x78]
+  0x00030AD0  adrp     x8, #0x806000
+  0x00030AD4  ldr      x9, [x8, #0xea8] ; @0x806ea8 "setM_nsContent:"
+  0x00030AD8  nop      
+  0x00030ADC  ldr      x8, [x8, #0xed0] ; @0x806ed0 "setM_uiCreateTime:"
+  0x00030AE0  stp      x8, x9, [sp, #0x68]
+  0x00030AE4  ldr      x8, [sp, #0x1a0]
+  0x00030AE8  ldr      x8, [x8] ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x00030AEC  cmp      x8, x22
+  0x00030AF0  b.eq     #0x30afc
+  0x00030AF4  mov      x0, x23
+  0x00030AF8  bl       #0x24c048
+  0x00030AFC  ldr      x8, [sp, #0x198]
+  0x00030B00  ldr      x24, [x8, x28, lsl #3]
+  0x00030B04  mov      x0, x24
+  0x00030B08  mov      x1, x20
+  0x00030B0C  bl       #0x24c0a8
+  0x00030B10  cbz      x0, #0x30da8
+  0x00030B14  mov      x0, x27
+  0x00030B18  ldr      x1, [sp, #0xf8]
+  0x00030B1C  mov      x2, x24
+  0x00030B20  bl       #0x24c0a8
+  0x00030B24  tbnz     w0, #0, #0x30da8
+  0x00030B28  ldr      x19, [sp, #0x108]
+  0x00030B2C  mov      x0, x19
+  0x00030B30  bl       #0x24c0cc
+  0x00030B34  mov      x0, x24
+  0x00030B38  bl       #0x24c0cc
+  0x00030B3C  mov      x0, x19
+  0x00030B40  mov      x1, x20
+  0x00030B44  bl       #0x24c0a8
+  0x00030B48  cbz      x0, #0x30d98
+  0x00030B4C  mov      x0, x21
+  0x00030B50  bl       #0x24c078
+  0x00030B54  ldr      x1, [sp, #0xe0]
+  0x00030B58  bl       #0x24c0a8
+  0x00030B5C  mov      x29, x29
+  0x00030B60  bl       #0x24c0e4
+  0x00030B64  mov      x19, x0
+  0x00030B68  cbz      x0, #0x30d84
+  0x00030B6C  adrp     x0, #0x24e000
+  0x00030B70  add      x0, x0, #0x2fc ; @0x24e2fc "CMessageMgr"
+  0x00030B74  bl       #0x24c078
+  0x00030B78  mov      x2, x0
+  0x00030B7C  mov      x0, x19
+  0x00030B80  ldr      x1, [sp, #0xd8]
+  0x00030B84  bl       #0x24c0a8
+  0x00030B88  mov      x29, x29
+  0x00030B8C  bl       #0x24c0e4
+  0x00030B90  mov      x26, x0
+  0x00030B94  cbz      x0, #0x30d88
+  0x00030B98  mov      x0, x26
+  0x00030B9C  ldr      x1, [sp, #0xb8]
+  0x00030BA0  ldr      x2, [sp, #0xd0]
+  0x00030BA4  bl       #0x24c0a8
+  0x00030BA8  tbz      w0, #0, #0x30d88
+  0x00030BAC  adrp     x0, #0x24e000
+  0x00030BB0  add      x0, x0, #0x5a1 ; @0x24e5a1 "CMessageWrap"
+  0x00030BB4  bl       #0x24c078
+  0x00030BB8  bl       #0x24bfdc
+  0x00030BBC  ldr      x1, [sp, #0xa0]
+  0x00030BC0  mov      w2, #0x2712
+  0x00030BC4  ldr      x3, [sp, #0x108]
+  0x00030BC8  bl       #0x24c0a8
+  0x00030BCC  ldr      x1, [sp, #0x98]
+  0x00030BD0  mov      w2, #0x2712
+  0x00030BD4  mov      x27, x0
+  0x00030BD8  str      x0, [sp, #0xc8]
+  0x00030BDC  bl       #0x24c0a8
+  0x00030BE0  mov      x0, x27
+  0x00030BE4  ldr      x1, [sp, #0x90]
+  0x00030BE8  ldr      x2, [sp, #0x108]
+  0x00030BEC  bl       #0x24c0a8
+  0x00030BF0  mov      x0, x27
+  0x00030BF4  ldr      x1, [sp, #0x88]
+  0x00030BF8  ldr      x2, [sp, #0x108]
+  0x00030BFC  bl       #0x24c0a8
+  0x00030C00  adrp     x21, #0x80e000
+  0x00030C04  ldr      x8, [x21, #0xfb0]
+  0x00030C08  str      x8, [sp, #0xa8]
+  0x00030C0C  mov      x0, x24
+  0x00030C10  bl       #0x24c0cc
+  0x00030C14  bl       #0xb341c
+  0x00030C18  mov      x29, x29
+  0x00030C1C  bl       #0x24c0e4
+  0x00030C20  str      x0, [sp, #0xc0]
+  0x00030C24  ldr      x21, [x21, #0xfb0]
+  0x00030C28  cmp      x24, #0
+  0x00030C2C  adrp     x23, #0x7ac000
+  0x00030C30  add      x23, x23, #0x920
+  0x00030C34  csel     x0, x23, x24, eq
+  0x00030C38  ldr      x27, [sp, #0x80]
+  0x00030C3C  mov      x1, x27
+  0x00030C40  adrp     x20, #0x7b2000
+
+========================================================================
+SEL: initWithMsgType:nsFromUsr:
+selref 槽: ['0x806e88']
+
+  ---- 引用点 @0x30A98 ----
+  0x000309A8  mov      x27, x0
+  0x000309AC  mov      x0, x21
+  0x000309B0  bl       #0x24c0c0
+  0x000309B4  adrp     x2, #0x7b2000
+  0x000309B8  add      x2, x2, #0xa0
+  0x000309BC  ldr      x0, [sp, #0x30]
+  0x000309C0  mov      x1, x20
+  0x000309C4  bl       #0x24c0a8
+  0x000309C8  mov      x29, x29
+  0x000309CC  bl       #0x24c0e4
+  0x000309D0  mov      x20, x0
+  0x000309D4  ldr      x8, [x22]
+  0x000309D8  cmp      x0, #0
+  0x000309DC  csel     x23, x8, x0, eq
+  0x000309E0  mov      x0, x23
+  0x000309E4  bl       #0x24c0cc
+  0x000309E8  mov      x0, x20
+  0x000309EC  bl       #0x24c0c0
+  0x000309F0  adrp     x22, #0x80e000
+  0x000309F4  ldr      x0, [x22, #0xf58] ; @0x80ef58 classref@objc_classrefs
+  0x000309F8  mov      x1, x19
+  0x000309FC  ldr      x21, [sp, #0x38]
+  0x00030A00  bl       #0x24c0a8
+  0x00030A04  str      x27, [sp, #0xe8]
+  0x00030A08  str      x23, [sp, #0x60]
+  0x00030A0C  cbz      w0, #0x30dec
+  0x00030A10  str      x25, [sp, #0x18]
+  0x00030A14  movi     v0.16b, #0
+  0x00030A18  stp      q0, q0, [sp, #0x1b0]
+  0x00030A1C  stp      q0, q0, [sp, #0x190]
+  0x00030A20  mov      x0, x23
+  0x00030A24  bl       #0x24c0cc
+  0x00030A28  adrp     x8, #0x804000
+  0x00030A2C  ldr      x1, [x8, #0xb78] ; @0x804b78 "countByEnumeratingWithState:objects:count:"
+  0x00030A30  add      x2, sp, #0x190
+  0x00030A34  sub      x3, x29, #0xe0
+  0x00030A38  str      x1, [sp, #0x40]
+  0x00030A3C  mov      w4, #0x10
+  0x00030A40  bl       #0x24c0a8
+  0x00030A44  mov      x25, x0
+  0x00030A48  ldr      x20, [sp, #0xf0]
+  0x00030A4C  cbz      x0, #0x30dd4
+  0x00030A50  ldr      x8, [sp, #0x1a0]
+  0x00030A54  ldr      x22, [x8] ; @0x804000 classref@objc_const
+  0x00030A58  adrp     x21, #0x24d000
+  0x00030A5C  add      x21, x21, #0x6d0 ; @0x24d6d0 "MMServiceCenter"
+  0x00030A60  str      x22, [sp, #0x58]
+  0x00030A64  mov      x28, #0
+  0x00030A68  adrp     x8, #0x805000
+  0x00030A6C  ldr      x8, [x8, #0xd8] ; @0x8040d8 classref@objc_const
+  0x00030A70  str      x8, [sp, #0xf8]
+  0x00030A74  adrp     x8, #0x805000
+  0x00030A78  ldr      x9, [x8, #0xc0] ; @0x8040c0 classref@objc_const
+  0x00030A7C  nop      
+  0x00030A80  ldr      x8, [x8, #0xc8] ; @0x8040c8 classref@objc_const
+  0x00030A84  stp      x8, x9, [sp, #0xd8]
+  0x00030A88  adrp     x8, #0x807000
+  0x00030A8C  ldr      x8, [x8, #0xb58] ; @0x804b58 "stringByAppendingPathComponent:"
+  0x00030A90  str      x8, [sp, #0xd0]
+  0x00030A94  adrp     x8, #0x806000
+  0x00030A98  ldr      x9, [x8, #0xe88] ; @0x804e88 "copyNextSampleBuffer"  <== REF
+  0x00030A9C  nop      
+  0x00030AA0  ldr      x8, [x8, #0xe90] ; @0x804e90 "defaultManager"
+  0x00030AA4  stp      x8, x9, [sp, #0x98]
+  0x00030AA8  adrp     x8, #0x806000
+  0x00030AAC  ldr      x9, [x8, #0xe98] ; @0x804e98 "fileURLWithPath:"
+  0x00030AB0  nop      
+  0x00030AB4  ldr      x8, [x8, #0xea0] ; @0x804ea0 "initWithAsset:error:"
+  0x00030AB8  stp      x8, x9, [sp, #0x88]
+  0x00030ABC  adrp     x8, #0x806000
+  0x00030AC0  ldr      x9, [x8, #0xe28] ; @0x804e28 "videoCompositionLayerInstructionWithAssetTrack:"
+  0x00030AC4  adrp     x8, #0x804000
+  0x00030AC8  ldr      x8, [x8, #0xda8] ; @0x804da8 "stringWithFormat:"
+  0x00030ACC  stp      x8, x9, [sp, #0x78]
+  0x00030AD0  adrp     x8, #0x806000
+  0x00030AD4  ldr      x9, [x8, #0xea8] ; @0x804ea8 "numberWithBool:"
+  0x00030AD8  nop      
+  0x00030ADC  ldr      x8, [x8, #0xed0] ; @0x804ed0 "length"
+  0x00030AE0  stp      x8, x9, [sp, #0x68]
+  0x00030AE4  ldr      x8, [sp, #0x1a0]
+  0x00030AE8  ldr      x8, [x8] ; @0x804000 classref@objc_const
+  0x00030AEC  cmp      x8, x22
+  0x00030AF0  b.eq     #0x30afc
+  0x00030AF4  mov      x0, x23
+  0x00030AF8  bl       #0x24c048
+  0x00030AFC  ldr      x8, [sp, #0x198]
+  0x00030B00  ldr      x24, [x8, x28, lsl #3]
+  0x00030B04  mov      x0, x24
+  0x00030B08  mov      x1, x20
+  0x00030B0C  bl       #0x24c0a8
+  0x00030B10  cbz      x0, #0x30da8
+  0x00030B14  mov      x0, x27
+  0x00030B18  ldr      x1, [sp, #0xf8]
+  0x00030B1C  mov      x2, x24
+  0x00030B20  bl       #0x24c0a8
+  0x00030B24  tbnz     w0, #0, #0x30da8
+  0x00030B28  ldr      x19, [sp, #0x108]
+  0x00030B2C  mov      x0, x19
+  0x00030B30  bl       #0x24c0cc
+  0x00030B34  mov      x0, x24
+  0x00030B38  bl       #0x24c0cc
+  0x00030B3C  mov      x0, x19
+  0x00030B40  mov      x1, x20
+  0x00030B44  bl       #0x24c0a8
+  0x00030B48  cbz      x0, #0x30d98
+  0x00030B4C  mov      x0, x21
+  0x00030B50  bl       #0x24c078
+  0x00030B54  ldr      x1, [sp, #0xe0]
+  0x00030B58  bl       #0x24c0a8
+  0x00030B5C  mov      x29, x29
+  0x00030B60  bl       #0x24c0e4
+  0x00030B64  mov      x19, x0
+  0x00030B68  cbz      x0, #0x30d84
+  0x00030B6C  adrp     x0, #0x24e000
+  0x00030B70  add      x0, x0, #0x2fc ; @0x24e2fc "CMessageMgr"
+  0x00030B74  bl       #0x24c078
+  0x00030B78  mov      x2, x0
+  0x00030B7C  mov      x0, x19
+  0x00030B80  ldr      x1, [sp, #0xd8]
+  0x00030B84  bl       #0x24c0a8
+  0x00030B88  mov      x29, x29
+  0x00030B8C  bl       #0x24c0e4
+  0x00030B90  mov      x26, x0
+  0x00030B94  cbz      x0, #0x30d88
+  0x00030B98  mov      x0, x26
+  0x00030B9C  ldr      x1, [sp, #0xb8]
+  0x00030BA0  ldr      x2, [sp, #0xd0]
+  0x00030BA4  bl       #0x24c0a8
+  0x00030BA8  tbz      w0, #0, #0x30d88
+  0x00030BAC  adrp     x0, #0x24e000
+  0x00030BB0  add      x0, x0, #0x5a1 ; @0x24e5a1 "CMessageWrap"
+  0x00030BB4  bl       #0x24c078
+  0x00030BB8  bl       #0x24bfdc
+  0x00030BBC  ldr      x1, [sp, #0xa0]
+  0x00030BC0  mov      w2, #0x2712
+  0x00030BC4  ldr      x3, [sp, #0x108]
+  0x00030BC8  bl       #0x24c0a8
+  0x00030BCC  ldr      x1, [sp, #0x98]
+  0x00030BD0  mov      w2, #0x2712
+  0x00030BD4  mov      x27, x0
+  0x00030BD8  str      x0, [sp, #0xc8]
+  0x00030BDC  bl       #0x24c0a8
+  0x00030BE0  mov      x0, x27
+  0x00030BE4  ldr      x1, [sp, #0x90]
+  0x00030BE8  ldr      x2, [sp, #0x108]
+  0x00030BEC  bl       #0x24c0a8
+  0x00030BF0  mov      x0, x27
+  0x00030BF4  ldr      x1, [sp, #0x88]
+  0x00030BF8  ldr      x2, [sp, #0x108]
+  0x00030BFC  bl       #0x24c0a8
+
+  ---- 引用点 @0x79B14 ----
+  0x00079A24  mov      w8, #0x270f
+  0x00079A28  cmp      x0, x8
+  0x00079A2C  csel     x8, x0, x8, lo
+  0x00079A30  mov      w9, #0x3e8
+  0x00079A34  mul      w8, w8, w9
+  0x00079A38  mov      w9, #0xbf20
+  0x00079A3C  movk     w9, #2, lsl #16
+  0x00079A40  cmp      w8, w9
+  0x00079A44  csel     w24, w8, w9, lo
+  0x00079A48  cmp      w21, #0
+  0x00079A4C  csel     w21, w24, w21, eq
+  0x00079A50  b        #0x79ad0
+  0x00079A54  sub      w8, w24, #1
+  0x00079A58  mov      w9, #0x3e8
+  0x00079A5C  mul      w9, w24, w9
+  0x00079A60  cmp      w8, #0x3e7
+  0x00079A64  csel     w8, w9, w24, lo
+  0x00079A68  cbnz     w8, #0x79aac
+  0x00079A6C  cbz      x27, #0x79aac
+  0x00079A70  mov      w8, #0x1f40
+  0x00079A74  mul      x8, x27, x8
+  0x00079A78  mov      x9, #0x29a5
+  0x00079A7C  movk     x9, #0x6715, lsl #16
+  0x00079A80  movk     x9, #0x3e1f, lsl #32
+  0x00079A84  movk     x9, #0xaec3, lsl #48
+  0x00079A88  umulh    x8, x8, x9
+  0x00079A8C  lsr      x8, x8, #0xe
+  0x00079A90  mov      w9, #0xee80
+  0x00079A94  movk     w9, #0x36, lsl #16
+  0x00079A98  cmp      x8, x9
+  0x00079A9C  csel     x8, x8, x9, lo
+  0x00079AA0  cmp      w8, #0x3e8
+  0x00079AA4  mov      w9, #0x3e8
+  0x00079AA8  csel     w8, w8, w9, hi
+  0x00079AAC  mov      w9, #0xee80
+  0x00079AB0  movk     w9, #0x36, lsl #16
+  0x00079AB4  cmp      w8, w9
+  0x00079AB8  csel     w24, w8, w9, lo
+  0x00079ABC  cmp      w21, #0
+  0x00079AC0  csel     w21, w24, w21, eq
+  0x00079AC4  cbz      w28, #0x79aec
+  0x00079AC8  adrp     x8, #0x806000
+  0x00079ACC  ldr      x26, [x8, #0xe80] ; @0x806e80 "voiceForwardSeconds"
+  0x00079AD0  adrp     x22, #0x80e000
+  0x00079AD4  ldr      x0, [x10, #0xf58]
+  0x00079AD8  mov      x1, x26
+  0x00079ADC  bl       #0x24c0a8
+  0x00079AE0  cmp      x0, #0
+  0x00079AE4  csel     w21, w24, w21, gt
+  0x00079AE8  b        #0x79af0
+  0x00079AEC  adrp     x22, #0x80e000
+  0x00079AF0  cmp      w21, #0x3e8
+  0x00079AF4  mov      w8, #0x3e8
+  0x00079AF8  csel     w8, w21, w8, hi
+  0x00079AFC  str      x8, [sp, #0x40]
+  0x00079B00  adrp     x0, #0x24e000
+  0x00079B04  add      x0, x0, #0x5a1 ; @0x24e5a1 "CMessageWrap"
+  0x00079B08  bl       #0x24c078
+  0x00079B0C  bl       #0x24bfdc
+  0x00079B10  adrp     x8, #0x806000
+  0x00079B14  ldr      x1, [x8, #0xe88] ; @0x806e88 "initWithMsgType:nsFromUsr:"  <== REF
+  0x00079B18  mov      w2, #0x22
+  0x00079B1C  ldr      x3, [sp, #0x58]
+  0x00079B20  bl       #0x24c0a8
+  0x00079B24  mov      x24, x0
+  0x00079B28  adrp     x8, #0x806000
+  0x00079B2C  ldr      x1, [x8, #0xe90] ; @0x806e90 "setM_uiMessageType:"
+  0x00079B30  mov      w2, #0x22
+  0x00079B34  ldr      x21, [sp, #0x30]
+  0x00079B38  bl       #0x24c0a8
+  0x00079B3C  adrp     x8, #0x806000
+  0x00079B40  ldr      x1, [x8, #0xe98] ; @0x806e98 "setM_nsFromUsr:"
+  0x00079B44  mov      x0, x24
+  0x00079B48  ldr      x2, [sp, #0x58]
+  0x00079B4C  bl       #0x24c0a8
+  0x00079B50  adrp     x8, #0x806000
+  0x00079B54  ldr      x1, [x8, #0xea0] ; @0x806ea0 "setM_nsToUsr:"
+  0x00079B58  mov      x0, x24
+  0x00079B5C  mov      x2, x20
+  0x00079B60  bl       #0x24c0a8
+  0x00079B64  ldr      x0, [x22, #0xfb0] ; @0x80efb0 classref@objc_classrefs
+  0x00079B68  adrp     x8, #0x804000
+  0x00079B6C  ldr      x1, [x8, #0xda8] ; @0x806da8 "setDeliveryMode:"
+  0x00079B70  ldr      x8, [sp, #0x40]
+  0x00079B74  stp      x8, x25, [sp]
+  0x00079B78  adrp     x2, #0x7ae000
+  0x00079B7C  add      x2, x2, #0x2a0
+  0x00079B80  bl       #0x24c0a8
+  0x00079B84  mov      x29, x29
+  0x00079B88  bl       #0x24c0e4
+  0x00079B8C  mov      x26, x0
+  0x00079B90  adrp     x8, #0x806000
+  0x00079B94  ldr      x1, [x8, #0xea8] ; @0x806ea8 "setM_nsContent:"
+  0x00079B98  mov      x0, x24
+  0x00079B9C  mov      x2, x26
+  0x00079BA0  bl       #0x24c0a8
+  0x00079BA4  mov      x0, x26
+  0x00079BA8  bl       #0x24c0c0
+  0x00079BAC  adrp     x8, #0x806000
+  0x00079BB0  ldr      x1, [x8, #0xeb0] ; @0x806eb0 "setM_uiStatus:"
+  0x00079BB4  mov      x0, x24
+  0x00079BB8  mov      w2, #1
+  0x00079BBC  bl       #0x24c0a8
+  0x00079BC0  adrp     x8, #0x80e000
+  0x00079BC4  ldr      x0, [x8, #0xff8] ; @0x806ff8 "firstMatchInString:options:range:"
+  0x00079BC8  adrp     x8, #0x804000
+  0x00079BCC  ldr      x1, [x8, #0xf08] ; @0x806f08 "setM_uiVoiceTime:"
+  0x00079BD0  mov      w2, #0
+  0x00079BD4  bl       #0x24c0a8
+  0x00079BD8  mov      x29, x29
+  0x00079BDC  bl       #0x24c0e4
+  0x00079BE0  mov      x26, x0
+  0x00079BE4  adrp     x8, #0x806000
+  0x00079BE8  ldr      x1, [x8, #0xeb8] ; @0x806eb8 "setValue:forKey:"
+  0x00079BEC  adrp     x3, #0x7ae000
+  0x00079BF0  add      x3, x3, #0x2c0
+  0x00079BF4  mov      x0, x24
+  0x00079BF8  mov      x2, x26
+  0x00079BFC  bl       #0x24c0a8
+  0x00079C00  mov      x0, x26
+  0x00079C04  bl       #0x24c0c0
+  0x00079C08  adrp     x8, #0x806000
+  0x00079C0C  ldr      x26, [x8, #0xec0] ; @0x806ec0 "setM_bForward:"
+  0x00079C10  adrp     x8, #0x804000
+  0x00079C14  ldr      x1, [x8, #0xcd0] ; @0x806cd0 "setKey:"
+  0x00079C18  mov      x0, x24
+  0x00079C1C  str      x1, [sp, #0x48]
+  0x00079C20  mov      x2, x26
+  0x00079C24  bl       #0x24c0a8
+  0x00079C28  cbz      w0, #0x79c3c
+  0x00079C2C  mov      x0, x24
+  0x00079C30  mov      x1, x26
+  0x00079C34  mov      x2, x25
+  0x00079C38  bl       #0x24c0a8
+  0x00079C3C  adrp     x0, #0x24f000
+  0x00079C40  add      x0, x0, #0x4cf ; @0x24e4cf "View"
+  0x00079C44  bl       #0x24c078
+  0x00079C48  mov      x2, x0
+  0x00079C4C  adrp     x8, #0x805000
+  0x00079C50  ldr      x26, [x8, #0xc8] ; @0x8060c8 "objectsForListAdapter:"
+  0x00079C54  mov      x0, x21
+  0x00079C58  mov      x1, x26
+  0x00079C5C  bl       #0x24c0a8
+  0x00079C60  mov      x29, x29
+  0x00079C64  bl       #0x24c0e4
+  0x00079C68  str      x0, [sp, #0x38]
+  0x00079C6C  cbz      x0, #0x79ca0
+  0x00079C70  adrp     x8, #0x806000
+  0x00079C74  ldr      x27, [x8, #0xec8] ; @0x806ec8 "GenSendMsgTime"
+  0x00079C78  ldr      x0, [sp, #0x38]
+
+  ---- 引用点 @0xC1C9C ----
+  0x000C1BAC  mov      x19, x1
+  0x000C1BB0  ldr      x0, [x1, #0x20]
+  0x000C1BB4  bl       #0x24c0cc
+  0x000C1BB8  ldr      x0, [x19, #0x28]
+  0x000C1BBC  bl       #0x24c0cc
+  0x000C1BC0  ldr      x0, [x19, #0x30]
+  0x000C1BC4  bl       #0x24c0cc
+  0x000C1BC8  ldr      x0, [x19, #0x38]
+  0x000C1BCC  bl       #0x24c0cc
+  0x000C1BD0  ldr      x0, [x19, #0x40]
+  0x000C1BD4  bl       #0x24c0cc
+  0x000C1BD8  ldr      x0, [x19, #0x48]
+  0x000C1BDC  ldp      x29, x30, [sp, #0x10]
+  0x000C1BE0  ldp      x20, x19, [sp], #0x20
+  0x000C1BE4  b        #0x24c0cc
+  0x000C1BE8  stp      x20, x19, [sp, #-0x20]!
+  0x000C1BEC  stp      x29, x30, [sp, #0x10]
+  0x000C1BF0  add      x29, sp, #0x10
+  0x000C1BF4  mov      x19, x0
+  0x000C1BF8  ldr      x0, [x0, #0x20]
+  0x000C1BFC  adrp     x8, #0x804000
+  0x000C1C00  ldr      x1, [x8, #0xd20] ; @0x804d20 "count"
+  0x000C1C04  bl       #0x24c0a8
+  0x000C1C08  cbz      x0, #0xc1c38
+  0x000C1C0C  ldp      x2, x0, [x19, #0x20]
+  0x000C1C10  adrp     x8, #0x808000
+  0x000C1C14  ldr      x1, [x8, #0xac8] ; @0x804ac8 classref@objc_const
+  0x000C1C18  bl       #0x24c0a8
+  0x000C1C1C  ldr      x0, [x19, #0x28]
+  0x000C1C20  adrp     x8, #0x808000
+  0x000C1C24  ldr      x1, [x8, #0xad0] ; @0x804ad0 classref@objc_const
+  0x000C1C28  mov      w2, #5
+  0x000C1C2C  ldp      x29, x30, [sp, #0x10]
+  0x000C1C30  ldp      x20, x19, [sp], #0x20
+  0x000C1C34  b        #0x24c0a8
+  0x000C1C38  ldp      x29, x30, [sp, #0x10]
+  0x000C1C3C  ldp      x20, x19, [sp], #0x20
+  0x000C1C40  ret      
+  0x000C1C44  stp      x28, x27, [sp, #-0x60]!
+  0x000C1C48  stp      x26, x25, [sp, #0x10]
+  0x000C1C4C  stp      x24, x23, [sp, #0x20]
+  0x000C1C50  stp      x22, x21, [sp, #0x30]
+  0x000C1C54  stp      x20, x19, [sp, #0x40]
+  0x000C1C58  stp      x29, x30, [sp, #0x50]
+  0x000C1C5C  add      x29, sp, #0x50
+  0x000C1C60  mov      x21, x0
+  0x000C1C64  adrp     x0, #0x7b2000
+  0x000C1C68  add      x0, x0, #0xb00
+  0x000C1C6C  bl       #0x24b940
+  0x000C1C70  bl       #0x24bfdc
+  0x000C1C74  mov      x22, x0
+  0x000C1C78  ldr      x0, [x21, #0x20]
+  0x000C1C7C  adrp     x8, #0x807000
+  0x000C1C80  ldr      x25, [x8, #0x1f8] ; @0x8041f8 classref@objc_const
+  0x000C1C84  mov      x1, x25
+  0x000C1C88  bl       #0x24c0a8
+  0x000C1C8C  mov      x29, x29
+  0x000C1C90  bl       #0x24c0e4
+  0x000C1C94  mov      x19, x0
+  0x000C1C98  adrp     x8, #0x806000
+  0x000C1C9C  ldr      x20, [x8, #0xe88] ; @0x804e88 "copyNextSampleBuffer"  <== REF
+  0x000C1CA0  mov      x0, x22
+  0x000C1CA4  mov      x1, x20
+  0x000C1CA8  mov      w2, #0x22
+  0x000C1CAC  mov      x3, x19
+  0x000C1CB0  bl       #0x24c0a8
+  0x000C1CB4  mov      x24, x0
+  0x000C1CB8  mov      x0, x19
+  0x000C1CBC  bl       #0x24c0c0
+  0x000C1CC0  adrp     x0, #0x7b5000
+  0x000C1CC4  add      x0, x0, #0x220
+  0x000C1CC8  bl       #0x24b940
+  0x000C1CCC  adrp     x8, #0x805000
+  0x000C1CD0  ldr      x22, [x8, #0xc0] ; @0x8040c0 classref@objc_const
+  0x000C1CD4  mov      x1, x22
+  0x000C1CD8  bl       #0x24c0a8
+  0x000C1CDC  mov      x29, x29
+  0x000C1CE0  bl       #0x24c0e4
+  0x000C1CE4  mov      x26, x0
+  0x000C1CE8  adrp     x0, #0x7b5000
+  0x000C1CEC  add      x0, x0, #0x240
+  0x000C1CF0  bl       #0x24b940
+  0x000C1CF4  mov      x2, x0
+  0x000C1CF8  adrp     x8, #0x805000
+  0x000C1CFC  ldr      x23, [x8, #0xc8] ; @0x8040c8 classref@objc_const
+  0x000C1D00  mov      x0, x26
+  0x000C1D04  mov      x1, x23
+  0x000C1D08  bl       #0x24c0a8
+  0x000C1D0C  mov      x29, x29
+  0x000C1D10  bl       #0x24c0e4
+  0x000C1D14  mov      x19, x0
+  0x000C1D18  mov      x0, x26
+  0x000C1D1C  bl       #0x24c0c0
+  0x000C1D20  adrp     x0, #0x7b2000
+  0x000C1D24  add      x0, x0, #0xb00
+  0x000C1D28  bl       #0x24b940
+  0x000C1D2C  bl       #0x24bfdc
+  0x000C1D30  mov      x27, x0
+  0x000C1D34  ldr      x0, [x21, #0x20]
+  0x000C1D38  mov      x1, x25
+  0x000C1D3C  bl       #0x24c0a8
+  0x000C1D40  mov      x29, x29
+  0x000C1D44  bl       #0x24c0e4
+  0x000C1D48  mov      x26, x0
+  0x000C1D4C  mov      x0, x27
+  0x000C1D50  mov      x1, x20
+  0x000C1D54  mov      w2, #0x22
+  0x000C1D58  mov      x3, x26
+  0x000C1D5C  bl       #0x24c0a8
+  0x000C1D60  mov      x20, x0
+  0x000C1D64  mov      x0, x24
+  0x000C1D68  bl       #0x24c0c0
+  0x000C1D6C  mov      x0, x26
+  0x000C1D70  bl       #0x24c0c0
+  0x000C1D74  adrp     x8, #0x806000
+  0x000C1D78  ldr      x1, [x8, #0xf10] ; @0x804f10 "dismissViewControllerAnimated:completion:"
+  0x000C1D7C  mov      x24, x20
+  0x000C1D80  mov      x0, x20
+  0x000C1D84  mov      w2, #4
+  0x000C1D88  bl       #0x24c0a8
+  0x000C1D8C  ldr      x0, [x21, #0x20]
+  0x000C1D90  mov      x24, x20
+  0x000C1D94  mov      x1, x25
+  0x000C1D98  bl       #0x24c0a8
+  0x000C1D9C  mov      x29, x29
+  0x000C1DA0  bl       #0x24c0e4
+  0x000C1DA4  mov      x26, x0
+  0x000C1DA8  adrp     x8, #0x806000
+  0x000C1DAC  ldr      x1, [x8, #0xe98] ; @0x804e98 "fileURLWithPath:"
+  0x000C1DB0  mov      x0, x20
+  0x000C1DB4  mov      x2, x26
+  0x000C1DB8  bl       #0x24c0a8
+  0x000C1DBC  mov      x0, x26
+  0x000C1DC0  bl       #0x24c0c0
+  0x000C1DC4  ldr      x0, [x21, #0x38]
+  0x000C1DC8  adrp     x8, #0x808000
+  0x000C1DCC  ldr      x1, [x8, #0xb10] ; @0x804b10 classref@objc_const
+  0x000C1DD0  mov      x24, x20
+  0x000C1DD4  bl       #0x24c0a8
+  0x000C1DD8  mov      x29, x29
+  0x000C1DDC  bl       #0x24c0e4
+  0x000C1DE0  mov      x26, x0
+  0x000C1DE4  mov      x1, x25
+  0x000C1DE8  bl       #0x24c0a8
+  0x000C1DEC  mov      x29, x29
+  0x000C1DF0  bl       #0x24c0e4
+  0x000C1DF4  mov      x24, x0
+  0x000C1DF8  adrp     x8, #0x806000
+  0x000C1DFC  ldr      x1, [x8, #0xea0] ; @0x804ea0 "initWithAsset:error:"
+  0x000C1E00  mov      x0, x20
+
+  ---- 引用点 @0x16D23C ----
+  0x0016D14C  stp      x8, x9, [sp, #0x18]
+  0x0016D150  mov      x0, x20
+  0x0016D154  bl       #0x24c0cc
+  0x0016D158  str      x20, [sp, #0x28]
+  0x0016D15C  mov      x0, x21
+  0x0016D160  bl       #0x24c0cc
+  0x0016D164  str      x21, [sp, #0x30]
+  0x0016D168  mov      x0, x19
+  0x0016D16C  bl       #0x24c0cc
+  0x0016D170  str      x19, [sp, #0x38]
+  0x0016D174  add      x1, sp, #8
+  0x0016D178  mov      x0, x23
+  0x0016D17C  bl       #0x24bca0
+  0x0016D180  ldr      x0, [sp, #0x38]
+  0x0016D184  bl       #0x24c0c0
+  0x0016D188  ldr      x0, [sp, #0x30]
+  0x0016D18C  bl       #0x24c0c0
+  0x0016D190  ldr      x0, [sp, #0x28]
+  0x0016D194  bl       #0x24c0c0
+  0x0016D198  mov      x0, x23
+  0x0016D19C  bl       #0x24c0c0
+  0x0016D1A0  mov      x0, x22
+  0x0016D1A4  bl       #0x24c0c0
+  0x0016D1A8  mov      x0, x21
+  0x0016D1AC  bl       #0x24c0c0
+  0x0016D1B0  mov      x0, x20
+  0x0016D1B4  bl       #0x24c0c0
+  0x0016D1B8  mov      x0, x19
+  0x0016D1BC  bl       #0x24c0c0
+  0x0016D1C0  ldp      x29, x30, [sp, #0x70]
+  0x0016D1C4  ldp      x20, x19, [sp, #0x60]
+  0x0016D1C8  ldp      x22, x21, [sp, #0x50]
+  0x0016D1CC  ldp      x24, x23, [sp, #0x40]
+  0x0016D1D0  add      sp, sp, #0x80
+  0x0016D1D4  ret      
+  0x0016D1D8  sub      sp, sp, #0xa0
+  0x0016D1DC  stp      x28, x27, [sp, #0x40]
+  0x0016D1E0  stp      x26, x25, [sp, #0x50]
+  0x0016D1E4  stp      x24, x23, [sp, #0x60]
+  0x0016D1E8  stp      x22, x21, [sp, #0x70]
+  0x0016D1EC  stp      x20, x19, [sp, #0x80]
+  0x0016D1F0  stp      x29, x30, [sp, #0x90]
+  0x0016D1F4  add      x29, sp, #0x90
+  0x0016D1F8  mov      x22, x0
+  0x0016D1FC  adr      x0, #0x24e31d
+  0x0016D200  nop      
+  0x0016D204  bl       #0x24c078
+  0x0016D208  adrp     x8, #0x805000
+  0x0016D20C  ldr      x1, [x8, #0x2b8] ; @0x8052b8 "getLocalUsrName:"
+  0x0016D210  mov      w2, #0
+  0x0016D214  bl       #0x24c0a8
+  0x0016D218  mov      x29, x29
+  0x0016D21C  bl       #0x24c0e4
+  0x0016D220  mov      x21, x0
+  0x0016D224  adrp     x23, #0x7b2000
+  0x0016D228  add      x23, x23, #0xb00
+  0x0016D22C  mov      x0, x23
+  0x0016D230  bl       #0x24b940
+  0x0016D234  bl       #0x24bfdc
+  0x0016D238  adrp     x8, #0x806000
+  0x0016D23C  ldr      x1, [x8, #0xe88] ; @0x805e88 "getSilkAudio"  <== REF
+  0x0016D240  mov      w2, #0x22
+  0x0016D244  mov      x3, x21
+  0x0016D248  bl       #0x24c0a8
+  0x0016D24C  mov      x20, x0
+  0x0016D250  adrp     x8, #0x805000
+  0x0016D254  ldr      x1, [x8, #0x120] ; @0x805120 "valueForKey:"
+  0x0016D258  adrp     x2, #0x7c0000
+  0x0016D25C  add      x2, x2, #0xe0
+  0x0016D260  bl       #0x24c0a8
+  0x0016D264  mov      x29, x29
+  0x0016D268  bl       #0x24c0e4
+  0x0016D26C  str      x0, [sp, #0x28]
+  0x0016D270  adrp     x8, #0x806000
+  0x0016D274  ldr      x25, [x8, #0xea8] ; @0x805ea8 "getImageIfDownFail"
+  0x0016D278  adrp     x2, #0x7c0000
+  0x0016D27C  add      x2, x2, #0x100
+  0x0016D280  mov      x0, x20
+  0x0016D284  mov      x1, x25
+  0x0016D288  bl       #0x24c0a8
+  0x0016D28C  adr      x0, #0x250113
+  0x0016D290  nop      
+  0x0016D294  bl       #0x24c078
+  0x0016D298  adrp     x8, #0x806000
+  0x0016D29C  ldr      x1, [x8, #0xe78] ; @0x805e78 "changeText2:"
+  0x0016D2A0  bl       #0x24c0a8
+  0x0016D2A4  mov      x29, x29
+  0x0016D2A8  bl       #0x24c0e4
+  0x0016D2AC  mov      x19, x0
+  0x0016D2B0  adr      x0, #0x24f4cf
+  0x0016D2B4  nop      
+  0x0016D2B8  bl       #0x24c078
+  0x0016D2BC  mov      x2, x0
+  0x0016D2C0  adrp     x8, #0x805000
+  0x0016D2C4  ldr      x1, [x8, #0xc8] ; @0x8050c8 "getService:"
+  0x0016D2C8  str      x19, [sp, #0x20]
+  0x0016D2CC  mov      x0, x19
+  0x0016D2D0  str      x1, [sp, #0x10]
+  0x0016D2D4  bl       #0x24c0a8
+  0x0016D2D8  mov      x29, x29
+  0x0016D2DC  bl       #0x24c0e4
+  0x0016D2E0  adrp     x8, #0x806000
+  0x0016D2E4  ldr      x1, [x8, #0xec8] ; @0x805ec8 "xiaoweiEditChatImage"
+  0x0016D2E8  str      x0, [sp, #0x18]
+  0x0016D2EC  bl       #0x24c0a8
+  0x0016D2F0  mov      x2, x0
+  0x0016D2F4  adrp     x8, #0x806000
+  0x0016D2F8  ldr      x24, [x8, #0xed0] ; @0x805ed0 "getImageFor:"
+  0x0016D2FC  mov      x0, x20
+  0x0016D300  mov      x1, x24
+  0x0016D304  bl       #0x24c0a8
+  0x0016D308  adrp     x8, #0x806000
+  0x0016D30C  ldr      x1, [x8, #0xeb0] ; @0x805eb0 "getReferImage"
+  0x0016D310  mov      x0, x20
+  0x0016D314  mov      w2, #1
+  0x0016D318  bl       #0x24c0a8
+  0x0016D31C  adrp     x8, #0x80f000
+  0x0016D320  ldr      x0, [x8, #0x80] ; @0x805080 "keyWindow"
+  0x0016D324  ldr      x2, [x22, #0x20]
+  0x0016D328  adrp     x8, #0x805000
+  0x0016D32C  ldr      x1, [x8, #0x240] ; @0x805240 "dataWithContentsOfFile:"
+  0x0016D330  bl       #0x24c0a8
+  0x0016D334  mov      x29, x29
+  0x0016D338  bl       #0x24c0e4
+  0x0016D33C  mov      x26, x0
+  0x0016D340  ldr      x0, [x22, #0x28]
+  0x0016D344  adrp     x8, #0x807000
+  0x0016D348  ldr      x1, [x8, #0xa20] ; @0x805a20 "getParamsForMomentAlbumVideo:withDuration:encodeScene:"
+  0x0016D34C  bl       #0x24c0a8
+  0x0016D350  cmp      x0, #1
+  0x0016D354  csinc    x8, x0, xzr, gt
+  0x0016D358  cmp      x8, #0x3c
+  0x0016D35C  mov      w9, #0x3c
+  0x0016D360  csel     x8, x8, x9, lt
+  0x0016D364  mov      w9, #0x3e8
+  0x0016D368  mul      w27, w8, w9
+  0x0016D36C  adrp     x8, #0x80e000
+  0x0016D370  ldr      x0, [x8, #0xfb0] ; @0x805fb0 "launchWindow"
+  0x0016D374  adrp     x8, #0x804000
+  0x0016D378  ldr      x1, [x8, #0xda8] ; @0x805da8 "onCdnUploadFail:"
+  0x0016D37C  str      x27, [sp]
+  0x0016D380  adrp     x2, #0x7c0000
+  0x0016D384  add      x2, x2, #0x120
+  0x0016D388  bl       #0x24c0a8
+  0x0016D38C  mov      x29, x29
+  0x0016D390  bl       #0x24c0e4
+  0x0016D394  mov      x19, x0
+  0x0016D398  mov      x0, x20
+  0x0016D39C  mov      x1, x25
+  0x0016D3A0  mov      x2, x19
+
+========================================================================
+SEL: setM_dtVoice:
+selref 槽: ['0x806f28']
+
+  ---- 引用点 @0x7A4A0 ----
+  0x0007A3B0  bl       #0x24bfdc
+  0x0007A3B4  adrp     x8, #0x804000
+  0x0007A3B8  ldr      x1, [x8, #0xf98] ; @0x804f98 "init"
+  0x0007A3BC  mov      x23, #0
+  0x0007A3C0  bl       #0x24c0a8
+  0x0007A3C4  mov      x23, x0
+  0x0007A3C8  cbz      x0, #0x7a414
+  0x0007A3CC  adrp     x8, #0x806000
+  0x0007A3D0  ldr      x1, [x8, #0xf40] ; @0x804f40 "mediaType"
+  0x0007A3D4  mov      x0, x19
+  0x0007A3D8  mov      x2, x23
+  0x0007A3DC  bl       #0x24c0a8
+  0x0007A3E0  adrp     x8, #0x806000
+  0x0007A3E4  ldr      x21, [x8, #0xf48] ; @0x804f48 "removeItemAtPath:error:"
+  0x0007A3E8  mov      x0, x23
+  0x0007A3EC  mov      x1, x24
+  0x0007A3F0  mov      x2, x21
+  0x0007A3F4  bl       #0x24c0a8
+  0x0007A3F8  cbz      w0, #0x7a414
+  0x0007A3FC  mov      x0, x23
+  0x0007A400  mov      x1, x21
+  0x0007A404  mov      x2, x19
+  0x0007A408  bl       #0x24c0a8
+  0x0007A40C  b        #0x7a414
+  0x0007A410  mov      x23, #0
+  0x0007A414  mov      x0, x23
+  0x0007A418  bl       #0x24c0c0
+  0x0007A41C  mov      x0, x19
+  0x0007A420  bl       #0x24c0c0
+  0x0007A424  adrp     x8, #0x806000
+  0x0007A428  ldr      x27, [x8, #0xf08] ; @0x804f08 "numberWithInt:"
+  0x0007A42C  mov      x0, x19
+  0x0007A430  mov      x1, x27
+  0x0007A434  ldr      x2, [sp, #0x10]
+  0x0007A438  bl       #0x24c0a8
+  0x0007A43C  adrp     x8, #0x806000
+  0x0007A440  ldr      x25, [x8, #0xf10] ; @0x804f10 "dismissViewControllerAnimated:completion:"
+  0x0007A444  mov      x0, x19
+  0x0007A448  mov      x1, x25
+  0x0007A44C  mov      w2, #4
+  0x0007A450  bl       #0x24c0a8
+  0x0007A454  adrp     x8, #0x806000
+  0x0007A458  ldr      x24, [x8, #0xf18] ; @0x804f18 "objectForKeyedSubscript:"
+  0x0007A45C  mov      x0, x19
+  0x0007A460  mov      x1, x24
+  0x0007A464  mov      w2, #1
+  0x0007A468  bl       #0x24c0a8
+  0x0007A46C  adrp     x8, #0x806000
+  0x0007A470  ldr      x28, [x8, #0xf20] ; @0x804f20 "class"
+  0x0007A474  mov      x0, x19
+  0x0007A478  mov      x1, x28
+  0x0007A47C  mov      x2, x22
+  0x0007A480  bl       #0x24c0a8
+  0x0007A484  adrp     x8, #0x804000
+  0x0007A488  ldr      x26, [x8, #0xed0] ; @0x804ed0 "length"
+  0x0007A48C  mov      x0, x20
+  0x0007A490  mov      x1, x26
+  0x0007A494  bl       #0x24c0a8
+  0x0007A498  adrp     x21, #0x806000
+  0x0007A49C  cbz      x0, #0x7a4b0
+  0x0007A4A0  ldr      x1, [x21, #0xf28] ; @0x806f28 "setM_dtVoice:"  <== REF
+  0x0007A4A4  mov      x0, x19
+  0x0007A4A8  mov      x2, x20
+  0x0007A4AC  bl       #0x24c0a8
+  0x0007A4B0  mov      x0, x19
+  0x0007A4B4  bl       #0x7af94
+  0x0007A4B8  mov      x29, x29
+  0x0007A4BC  bl       #0x24c0e4
+  0x0007A4C0  mov      x23, x0
+  0x0007A4C4  cbz      x0, #0x7a60c
+  0x0007A4C8  mov      x0, x20
+  0x0007A4CC  mov      x1, x26
+  0x0007A4D0  bl       #0x24c0a8
+  0x0007A4D4  adrp     x8, #0x804000
+  0x0007A4D8  ldr      x26, [x8, #0xcd0] ; @0x804cd0 "respondsToSelector:"
+  0x0007A4DC  cbz      x0, #0x7a508
+  0x0007A4E0  ldr      x21, [x21, #0xf28] ; @0x806f28 "setM_dtVoice:"
+  0x0007A4E4  mov      x0, x23
+  0x0007A4E8  mov      x1, x26
+  0x0007A4EC  mov      x2, x21
+  0x0007A4F0  bl       #0x24c0a8
+  0x0007A4F4  cbz      w0, #0x7a508
+  0x0007A4F8  mov      x0, x23
+  0x0007A4FC  mov      x1, x21
+  0x0007A500  mov      x2, x20
+  0x0007A504  bl       #0x24c0a8
+  0x0007A508  mov      x0, x23
+  0x0007A50C  mov      x1, x26
+  0x0007A510  mov      x2, x27
+  0x0007A514  bl       #0x24c0a8
+  0x0007A518  cbz      w0, #0x7a52c
+  0x0007A51C  mov      x0, x23
+  0x0007A520  mov      x1, x27
+  0x0007A524  ldr      x2, [sp, #0x10]
+  0x0007A528  bl       #0x24c0a8
+  0x0007A52C  mov      x0, x23
+  0x0007A530  mov      x1, x26
+  0x0007A534  mov      x2, x28
+  0x0007A538  bl       #0x24c0a8
+  0x0007A53C  cbz      w0, #0x7a550
+  0x0007A540  mov      x0, x23
+  0x0007A544  mov      x1, x28
+  0x0007A548  mov      x2, x22
+  0x0007A54C  bl       #0x24c0a8
+  0x0007A550  mov      x0, x23
+  0x0007A554  mov      x1, x26
+  0x0007A558  mov      x2, x25
+  0x0007A55C  bl       #0x24c0a8
+  0x0007A560  cbz      w0, #0x7a574
+  0x0007A564  mov      x0, x23
+  0x0007A568  mov      x1, x25
+  0x0007A56C  mov      w2, #4
+  0x0007A570  bl       #0x24c0a8
+  0x0007A574  mov      x0, x23
+  0x0007A578  mov      x1, x26
+  0x0007A57C  mov      x2, x24
+  0x0007A580  bl       #0x24c0a8
+  0x0007A584  cbz      w0, #0x7a598
+  0x0007A588  mov      x0, x23
+  0x0007A58C  mov      x1, x24
+  0x0007A590  mov      w2, #1
+  0x0007A594  bl       #0x24c0a8
+  0x0007A598  adrp     x8, #0x80e000
+  0x0007A59C  ldr      x0, [x8, #0xfb0] ; @0x804fb0 "elementPath"
+  0x0007A5A0  adrp     x8, #0x804000
+  0x0007A5A4  ldr      x1, [x8, #0xda8] ; @0x804da8 "stringWithFormat:"
+  0x0007A5A8  ldr      x8, [sp, #0x10]
+  0x0007A5AC  stp      x8, x22, [sp]
+  0x0007A5B0  adrp     x2, #0x7ae000
+  0x0007A5B4  add      x2, x2, #0x2a0
+  0x0007A5B8  bl       #0x24c0a8
+  0x0007A5BC  mov      x29, x29
+  0x0007A5C0  bl       #0x24c0e4
+  0x0007A5C4  mov      x22, x0
+  0x0007A5C8  adrp     x8, #0x806000
+  0x0007A5CC  ldr      x1, [x8, #0xea8] ; @0x804ea8 "numberWithBool:"
+  0x0007A5D0  mov      x0, x19
+  0x0007A5D4  mov      x2, x22
+  0x0007A5D8  bl       #0x24c0a8
+  0x0007A5DC  adrp     x8, #0x806000
+  0x0007A5E0  ldr      x21, [x8, #0xf30] ; @0x804f30 "path"
+  0x0007A5E4  mov      x0, x23
+  0x0007A5E8  mov      x1, x26
+  0x0007A5EC  mov      x2, x21
+  0x0007A5F0  bl       #0x24c0a8
+  0x0007A5F4  cbz      w0, #0x7a604
+  0x0007A5F8  mov      x0, x23
+  0x0007A5FC  mov      x1, x21
+  0x0007A600  bl       #0x24c0a8
+  0x0007A604  mov      x0, x22
+
+  ---- 引用点 @0xC1F94 ----
+  0x000C1EA4  mov      x0, x24
+  0x000C1EA8  mov      x2, x25
+  0x000C1EAC  bl       #0x24c0a8
+  0x000C1EB0  mov      x29, x29
+  0x000C1EB4  bl       #0x24c0e4
+  0x000C1EB8  mov      x24, x0
+  0x000C1EBC  mov      x0, x25
+  0x000C1EC0  bl       #0x24c0c0
+  0x000C1EC4  adrp     x0, #0x7b2000
+  0x000C1EC8  add      x0, x0, #0xb00
+  0x000C1ECC  bl       #0x24b940
+  0x000C1ED0  adrp     x8, #0x806000
+  0x000C1ED4  ldr      x1, [x8, #0xf80] ; @0x806f80 "getPathOfMsgImg:"
+  0x000C1ED8  mov      x2, x20
+  0x000C1EDC  bl       #0x24c0a8
+  0x000C1EE0  mov      x29, x29
+  0x000C1EE4  bl       #0x24c0e4
+  0x000C1EE8  mov      x26, x0
+  0x000C1EEC  adrp     x8, #0x806000
+  0x000C1EF0  ldr      x25, [x8, #0xe28] ; @0x806e28 "stringByReplacingOccurrencesOfString:withString:"
+  0x000C1EF4  adrp     x2, #0x7ae000
+  0x000C1EF8  add      x2, x2, #0x360
+  0x000C1EFC  adrp     x3, #0x7ae000
+  0x000C1F00  add      x3, x3, #0x380
+  0x000C1F04  mov      x1, x25
+  0x000C1F08  bl       #0x24c0a8
+  0x000C1F0C  mov      x29, x29
+  0x000C1F10  bl       #0x24c0e4
+  0x000C1F14  mov      x27, x0
+  0x000C1F18  mov      x0, x26
+  0x000C1F1C  bl       #0x24c0c0
+  0x000C1F20  adrp     x2, #0x7ae000
+  0x000C1F24  add      x2, x2, #0x3a0
+  0x000C1F28  adrp     x3, #0x7ae000
+  0x000C1F2C  add      x3, x3, #0x3c0
+  0x000C1F30  mov      x26, x27
+  0x000C1F34  mov      x0, x27
+  0x000C1F38  mov      x1, x25
+  0x000C1F3C  bl       #0x24c0a8
+  0x000C1F40  mov      x29, x29
+  0x000C1F44  bl       #0x24c0e4
+  0x000C1F48  mov      x25, x0
+  0x000C1F4C  mov      x0, x27
+  0x000C1F50  bl       #0x24c0c0
+  0x000C1F54  adrp     x8, #0x806000
+  0x000C1F58  ldr      x1, [x8, #0xfa0] ; @0x806fa0 "stringByDeletingLastPathComponent"
+  0x000C1F5C  mov      x0, x25
+  0x000C1F60  bl       #0x24c0a8
+  0x000C1F64  mov      x29, x29
+  0x000C1F68  bl       #0x24c0e4
+  0x000C1F6C  mov      x26, x0
+  0x000C1F70  adrp     x8, #0x804000
+  0x000C1F74  ldr      x1, [x8, #0xf88] ; @0x806f88 "getPathOfAudio:"
+  0x000C1F78  mov      x0, x24
+  0x000C1F7C  mov      x2, x25
+  0x000C1F80  mov      w3, #1
+  0x000C1F84  bl       #0x24c0a8
+  0x000C1F88  bl       #0x24bb68
+  0x000C1F8C  mov      x27, x0
+  0x000C1F90  adrp     x8, #0x806000
+  0x000C1F94  ldr      x1, [x8, #0xf28] ; @0x806f28 "setM_dtVoice:"  <== REF
+  0x000C1F98  mov      x0, x20
+  0x000C1F9C  mov      x2, x24
+  0x000C1FA0  bl       #0x24c0a8
+  0x000C1FA4  mov      w8, #0x8889
+  0x000C1FA8  movk     w8, #0x8888, lsl #16
+  0x000C1FAC  umull    x8, w27, w8
+  0x000C1FB0  lsr      x8, x8, #0x23
+  0x000C1FB4  sub      w8, w8, w8, lsl #4
+  0x000C1FB8  add      w8, w27, w8
+  0x000C1FBC  mov      w9, #0x3e8
+  0x000C1FC0  mov      w10, #0x1388
+  0x000C1FC4  madd     w2, w8, w9, w10
+  0x000C1FC8  adrp     x8, #0x806000
+  0x000C1FCC  ldr      x1, [x8, #0xf08] ; @0x806f08 "setM_uiVoiceTime:"
+  0x000C1FD0  mov      x0, x20
+  0x000C1FD4  bl       #0x24c0a8
+  0x000C1FD8  adrp     x0, #0x7b5000
+  0x000C1FDC  add      x0, x0, #0x220
+  0x000C1FE0  bl       #0x24b940
+  0x000C1FE4  mov      x1, x22
+  0x000C1FE8  bl       #0x24c0a8
+  0x000C1FEC  mov      x29, x29
+  0x000C1FF0  bl       #0x24c0e4
+  0x000C1FF4  mov      x27, x0
+  0x000C1FF8  adrp     x0, #0x7b5000
+  0x000C1FFC  add      x0, x0, #0x260
+  0x000C2000  bl       #0x24b940
+  0x000C2004  mov      x2, x0
+  0x000C2008  mov      x0, x27
+  0x000C200C  mov      x1, x23
+  0x000C2010  bl       #0x24c0a8
+  0x000C2014  mov      x29, x29
+  0x000C2018  bl       #0x24c0e4
+  0x000C201C  mov      x22, x0
+  0x000C2020  mov      x0, x27
+  0x000C2024  bl       #0x24c0c0
+  0x000C2028  cbz      x22, #0xc2048
+  0x000C202C  ldr      x2, [x21, #0x30]
+  0x000C2030  adrp     x8, #0x805000
+  0x000C2034  ldr      x1, [x8, #0xd98] ; @0x806d98 "setFrame:"
+  0x000C2038  mov      x0, x22
+  0x000C203C  mov      x3, x20
+  0x000C2040  bl       #0x24c0a8
+  0x000C2044  b        #0xc2084
+  0x000C2048  adrp     x8, #0x80f000
+  0x000C204C  ldr      x0, [x8, #0x60] ; @0x806060 "applicationDidBecomeActive:"
+  0x000C2050  adrp     x8, #0x805000
+  0x000C2054  ldr      x1, [x8, #0x138] ; @0x806138 "contacts"
+  0x000C2058  adrp     x2, #0x7b5000
+  0x000C205C  add      x2, x2, #0x280
+  0x000C2060  adrp     x3, #0x7b5000
+  0x000C2064  add      x3, x3, #0x2a0
+  0x000C2068  adrp     x4, #0x7ac000
+  0x000C206C  add      x4, x4, #0xc40
+  0x000C2070  adrp     x5, #0x2d2000
+  0x000C2074  add      x5, x5, #0xa80
+  0x000C2078  bl       #0x24c0a8
+  0x000C207C  mov      x29, x29
+  0x000C2080  bl       #0x24c168
+  0x000C2084  mov      x0, x22
+  0x000C2088  bl       #0x24c0c0
+  0x000C208C  mov      x0, x26
+  0x000C2090  bl       #0x24c0c0
+  0x000C2094  mov      x0, x25
+  0x000C2098  bl       #0x24c0c0
+  0x000C209C  mov      x0, x24
+  0x000C20A0  bl       #0x24c0c0
+  0x000C20A4  mov      x0, x19
+  0x000C20A8  bl       #0x24c0c0
+  0x000C20AC  mov      x0, x20
+  0x000C20B0  ldp      x29, x30, [sp, #0x50]
+  0x000C20B4  ldp      x20, x19, [sp, #0x40]
+  0x000C20B8  ldp      x22, x21, [sp, #0x30]
+  0x000C20BC  ldp      x24, x23, [sp, #0x20]
+  0x000C20C0  ldp      x26, x25, [sp, #0x10]
+  0x000C20C4  ldp      x28, x27, [sp], #0x60
+  0x000C20C8  b        #0x24c0c0
+  0x000C20CC  mov      x21, x0
+  0x000C20D0  mov      x0, x22
+  0x000C20D4  b        #0xc213c
+  0x000C20D8  b        #0xc2174
+  0x000C20DC  mov      x21, x0
+  0x000C20E0  b        #0xc2180
+  0x000C20E4  mov      x21, x0
+  0x000C20E8  mov      x0, x25
+  0x000C20EC  b        #0xc218c
+  0x000C20F0  mov      x21, x0
+  0x000C20F4  b        #0xc219c
+  0x000C20F8  mov      x21, x0
+
+  ---- 引用点 @0x16D5B8 ----
+  0x0016D4C8  mov      x0, x24
+  0x0016D4CC  bl       #0x24c0c0
+  0x0016D4D0  adrp     x2, #0x7ae000
+  0x0016D4D4  add      x2, x2, #0x3a0
+  0x0016D4D8  adrp     x3, #0x7ae000
+  0x0016D4DC  add      x3, x3, #0x3c0
+  0x0016D4E0  mov      x0, x25
+  0x0016D4E4  mov      x1, x19
+  0x0016D4E8  bl       #0x24c0a8
+  0x0016D4EC  mov      x29, x29
+  0x0016D4F0  bl       #0x24c0e4
+  0x0016D4F4  mov      x24, x0
+  0x0016D4F8  mov      x0, x25
+  0x0016D4FC  bl       #0x24c0c0
+  0x0016D500  adrp     x8, #0x806000
+  0x0016D504  ldr      x1, [x8, #0xfa0] ; @0x806fa0 "stringByDeletingLastPathComponent"
+  0x0016D508  mov      x0, x24
+  0x0016D50C  bl       #0x24c0a8
+  0x0016D510  mov      x29, x29
+  0x0016D514  bl       #0x24c0e4
+  0x0016D518  mov      x25, x0
+  0x0016D51C  adrp     x21, #0x80f000
+  0x0016D520  ldr      x0, [x21, #8] ; @0x80f008 classref@objc_classrefs
+  0x0016D524  adrp     x8, #0x804000
+  0x0016D528  ldr      x19, [x8, #0xe90] ; @0x806e90 "setM_uiMessageType:"
+  0x0016D52C  mov      x1, x19
+  0x0016D530  bl       #0x24c0a8
+  0x0016D534  mov      x29, x29
+  0x0016D538  bl       #0x24c0e4
+  0x0016D53C  mov      x22, x0
+  0x0016D540  adrp     x8, #0x804000
+  0x0016D544  ldr      x1, [x8, #0xda0] ; @0x806da0 "setNetworkAccessAllowed:"
+  0x0016D548  mov      x2, x25
+  0x0016D54C  bl       #0x24c0a8
+  0x0016D550  mov      x23, x0
+  0x0016D554  mov      x0, x22
+  0x0016D558  bl       #0x24c0c0
+  0x0016D55C  tbnz     w23, #0, #0x16d59c
+  0x0016D560  ldr      x0, [x21, #8] ; @0x80f008 classref@objc_classrefs
+  0x0016D564  mov      x1, x19
+  0x0016D568  bl       #0x24c0a8
+  0x0016D56C  mov      x29, x29
+  0x0016D570  bl       #0x24c0e4
+  0x0016D574  mov      x19, x0
+  0x0016D578  adrp     x8, #0x804000
+  0x0016D57C  ldr      x1, [x8, #0xf70] ; @0x806f70 "stringByReplacingMatchesInString:options:range:withTemplate:"
+  0x0016D580  mov      x2, x25
+  0x0016D584  mov      w3, #1
+  0x0016D588  mov      x4, #0
+  0x0016D58C  mov      x5, #0
+  0x0016D590  bl       #0x24c0a8
+  0x0016D594  mov      x0, x19
+  0x0016D598  bl       #0x24c0c0
+  0x0016D59C  adrp     x8, #0x804000
+  0x0016D5A0  ldr      x1, [x8, #0xf88] ; @0x806f88 "getPathOfAudio:"
+  0x0016D5A4  mov      x0, x26
+  0x0016D5A8  mov      x2, x24
+  0x0016D5AC  mov      w3, #1
+  0x0016D5B0  bl       #0x24c0a8
+  0x0016D5B4  adrp     x8, #0x806000
+  0x0016D5B8  ldr      x19, [x8, #0xf28] ; @0x806f28 "setM_dtVoice:"  <== REF
+  0x0016D5BC  mov      x0, x20
+  0x0016D5C0  mov      x1, x19
+  0x0016D5C4  mov      x2, x26
+  0x0016D5C8  bl       #0x24c0a8
+  0x0016D5CC  ldr      x21, [sp, #0x28]
+  0x0016D5D0  mov      x0, x21
+  0x0016D5D4  mov      x1, x19
+  0x0016D5D8  mov      x2, x26
+  0x0016D5DC  bl       #0x24c0a8
+  0x0016D5E0  mov      x0, x21
+  0x0016D5E4  mov      x1, x28
+  0x0016D5E8  mov      x2, x27
+  0x0016D5EC  bl       #0x24c0a8
+  0x0016D5F0  adrp     x0, #0x7b5000
+  0x0016D5F4  add      x0, x0, #0x260
+  0x0016D5F8  bl       #0x24b940
+  0x0016D5FC  mov      x2, x0
+  0x0016D600  ldr      x22, [sp, #0x20]
+  0x0016D604  mov      x0, x22
+  0x0016D608  ldr      x1, [sp, #0x10]
+  0x0016D60C  bl       #0x24c0a8
+  0x0016D610  mov      x29, x29
+  0x0016D614  bl       #0x24c0e4
+  0x0016D618  mov      x19, x0
+  0x0016D61C  ldr      x8, [sp, #0x30]
+  0x0016D620  ldr      x2, [x8, #0x30] ; @0x806030 "pushRegistry:didReceiveIncomingPushWithPayload:forType:withCompletionHandler:"
+  0x0016D624  adrp     x8, #0x805000
+  0x0016D628  ldr      x1, [x8, #0xd98] ; @0x806d98 "setFrame:"
+  0x0016D62C  mov      x3, x20
+  0x0016D630  bl       #0x24c0a8
+  0x0016D634  mov      x0, x19
+  0x0016D638  bl       #0x24c0c0
+  0x0016D63C  mov      x0, x25
+  0x0016D640  bl       #0x24c0c0
+  0x0016D644  mov      x0, x24
+  0x0016D648  bl       #0x24c0c0
+  0x0016D64C  mov      x0, x26
+  0x0016D650  bl       #0x24c0c0
+  0x0016D654  ldr      x0, [sp, #0x18]
+  0x0016D658  bl       #0x24c0c0
+  0x0016D65C  mov      x0, x22
+  0x0016D660  bl       #0x24c0c0
+  0x0016D664  mov      x0, x21
+  0x0016D668  bl       #0x24c0c0
+  0x0016D66C  mov      x0, x20
+  0x0016D670  bl       #0x24c0c0
+  0x0016D674  ldr      x0, [sp, #0x38]
+  0x0016D678  ldp      x29, x30, [sp, #0x90]
+  0x0016D67C  ldp      x20, x19, [sp, #0x80]
+  0x0016D680  ldp      x22, x21, [sp, #0x70]
+  0x0016D684  ldp      x24, x23, [sp, #0x60]
+  0x0016D688  ldp      x26, x25, [sp, #0x50]
+  0x0016D68C  ldp      x28, x27, [sp, #0x40]
+  0x0016D690  add      sp, sp, #0xa0
+  0x0016D694  b        #0x24c0c0
+  0x0016D698  sub      sp, sp, #0x60
+  0x0016D69C  stp      x22, x21, [sp, #0x30]
+  0x0016D6A0  stp      x20, x19, [sp, #0x40]
+  0x0016D6A4  stp      x29, x30, [sp, #0x50]
+  0x0016D6A8  add      x29, sp, #0x50
+  0x0016D6AC  mov      x20, x3
+  0x0016D6B0  mov      x19, x2
+  0x0016D6B4  mov      x0, x2
+  0x0016D6B8  bl       #0x24c0cc
+  0x0016D6BC  mov      x0, x20
+  0x0016D6C0  bl       #0x24c0cc
+  0x0016D6C4  adr      x0, #0x24d71c
+  0x0016D6C8  nop      
+  0x0016D6CC  adrp     x1, #0x2d0000
+  0x0016D6D0  ldr      x1, [x1, #0x288]
+  0x0016D6D4  bl       #0x24bd3c
+  0x0016D6D8  mov      x21, x0
+  0x0016D6DC  adrp     x8, #0x804000
+  0x0016D6E0  ldr      x1, [x8, #0xfc8] ; @0x806fc8 "toMsgWrap"
+  0x0016D6E4  adrp     x2, #0x7ac000
+  0x0016D6E8  add      x2, x2, #0x920
+  0x0016D6EC  mov      x0, x20
+  0x0016D6F0  bl       #0x24c0a8
+  0x0016D6F4  tbnz     w0, #0, #0x16d758
+  0x0016D6F8  adrp     x8, #0x2d0000
+  0x0016D6FC  ldr      x8, [x8, #0x250] ; @0x806250 "updateNumberInternal:"
+  0x0016D700  str      x8, [sp]
+  0x0016D704  adrp     x8, #0x27d000
+  0x0016D708  ldr      d0, [x8, #0x280]
+  0x0016D70C  str      d0, [sp, #8]
+  0x0016D710  adr      x8, #0x16d784
+  0x0016D714  nop      
+  0x0016D718  adrp     x9, #0x7ab000
+  0x0016D71C  add      x9, x9, #0x870
+
+  ---- 引用点 @0x16DBD0 ----
+  0x0016DAE0  mov      x0, x20
+  0x0016DAE4  bl       #0x24c0c0
+  0x0016DAE8  adrp     x2, #0x7ae000
+  0x0016DAEC  add      x2, x2, #0x3a0
+  0x0016DAF0  adrp     x3, #0x7ae000
+  0x0016DAF4  add      x3, x3, #0x3c0
+  0x0016DAF8  mov      x0, x26
+  0x0016DAFC  mov      x1, x21
+  0x0016DB00  bl       #0x24c0a8
+  0x0016DB04  mov      x29, x29
+  0x0016DB08  bl       #0x24c0e4
+  0x0016DB0C  mov      x25, x0
+  0x0016DB10  mov      x0, x26
+  0x0016DB14  bl       #0x24c0c0
+  0x0016DB18  adrp     x8, #0x806000
+  0x0016DB1C  ldr      x1, [x8, #0xfa0] ; @0x806fa0 "stringByDeletingLastPathComponent"
+  0x0016DB20  mov      x0, x25
+  0x0016DB24  bl       #0x24c0a8
+  0x0016DB28  mov      x29, x29
+  0x0016DB2C  bl       #0x24c0e4
+  0x0016DB30  mov      x20, x0
+  0x0016DB34  adrp     x19, #0x80f000
+  0x0016DB38  ldr      x0, [x19, #8] ; @0x80f008 classref@objc_classrefs
+  0x0016DB3C  adrp     x8, #0x804000
+  0x0016DB40  ldr      x21, [x8, #0xe90] ; @0x806e90 "setM_uiMessageType:"
+  0x0016DB44  mov      x1, x21
+  0x0016DB48  bl       #0x24c0a8
+  0x0016DB4C  mov      x29, x29
+  0x0016DB50  bl       #0x24c0e4
+  0x0016DB54  mov      x26, x0
+  0x0016DB58  adrp     x8, #0x804000
+  0x0016DB5C  ldr      x1, [x8, #0xda0] ; @0x806da0 "setNetworkAccessAllowed:"
+  0x0016DB60  mov      x2, x20
+  0x0016DB64  bl       #0x24c0a8
+  0x0016DB68  mov      x23, x0
+  0x0016DB6C  mov      x0, x26
+  0x0016DB70  bl       #0x24c0c0
+  0x0016DB74  tbnz     w23, #0, #0x16dbb4
+  0x0016DB78  ldr      x0, [x19, #8] ; @0x80f008 classref@objc_classrefs
+  0x0016DB7C  mov      x1, x21
+  0x0016DB80  bl       #0x24c0a8
+  0x0016DB84  mov      x29, x29
+  0x0016DB88  bl       #0x24c0e4
+  0x0016DB8C  mov      x21, x0
+  0x0016DB90  adrp     x8, #0x804000
+  0x0016DB94  ldr      x1, [x8, #0xf70] ; @0x806f70 "stringByReplacingMatchesInString:options:range:withTemplate:"
+  0x0016DB98  mov      x2, x20
+  0x0016DB9C  mov      w3, #1
+  0x0016DBA0  mov      x4, #0
+  0x0016DBA4  mov      x5, #0
+  0x0016DBA8  bl       #0x24c0a8
+  0x0016DBAC  mov      x0, x21
+  0x0016DBB0  bl       #0x24c0c0
+  0x0016DBB4  adrp     x8, #0x804000
+  0x0016DBB8  ldr      x1, [x8, #0xf88] ; @0x806f88 "getPathOfAudio:"
+  0x0016DBBC  mov      x0, x28
+  0x0016DBC0  mov      x2, x25
+  0x0016DBC4  mov      w3, #1
+  0x0016DBC8  bl       #0x24c0a8
+  0x0016DBCC  adrp     x8, #0x806000
+  0x0016DBD0  ldr      x1, [x8, #0xf28] ; @0x806f28 "setM_dtVoice:"  <== REF
+  0x0016DBD4  ldr      x19, [sp, #0x28]
+  0x0016DBD8  mov      x0, x19
+  0x0016DBDC  mov      x2, x28
+  0x0016DBE0  bl       #0x24c0a8
+  0x0016DBE4  mov      x0, x19
+  0x0016DBE8  mov      x1, x24
+  0x0016DBEC  mov      x2, x27
+  0x0016DBF0  bl       #0x24c0a8
+  0x0016DBF4  adrp     x0, #0x7b5000
+  0x0016DBF8  add      x0, x0, #0x260
+  0x0016DBFC  bl       #0x24b940
+  0x0016DC00  mov      x2, x0
+  0x0016DC04  ldr      x23, [sp, #0x20]
+  0x0016DC08  mov      x0, x23
+  0x0016DC0C  ldr      x1, [sp, #0x10]
+  0x0016DC10  bl       #0x24c0a8
+  0x0016DC14  mov      x29, x29
+  0x0016DC18  bl       #0x24c0e4
+  0x0016DC1C  mov      x21, x0
+  0x0016DC20  ldr      x8, [sp, #0x30]
+  0x0016DC24  ldr      x2, [x8, #0x28] ; @0x806028 "userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:"
+  0x0016DC28  adrp     x8, #0x805000
+  0x0016DC2C  ldr      x1, [x8, #0xd98] ; @0x806d98 "setFrame:"
+  0x0016DC30  mov      x3, x22
+  0x0016DC34  bl       #0x24c0a8
+  0x0016DC38  mov      x0, x21
+  0x0016DC3C  bl       #0x24c0c0
+  0x0016DC40  mov      x0, x20
+  0x0016DC44  bl       #0x24c0c0
+  0x0016DC48  mov      x0, x25
+  0x0016DC4C  bl       #0x24c0c0
+  0x0016DC50  mov      x0, x28
+  0x0016DC54  bl       #0x24c0c0
+  0x0016DC58  ldr      x0, [sp, #8]
+  0x0016DC5C  bl       #0x24c0c0
+  0x0016DC60  ldr      x0, [sp, #0x18]
+  0x0016DC64  bl       #0x24c0c0
+  0x0016DC68  mov      x0, x23
+  0x0016DC6C  bl       #0x24c0c0
+  0x0016DC70  mov      x0, x19
+  0x0016DC74  bl       #0x24c0c0
+  0x0016DC78  mov      x0, x22
+  0x0016DC7C  bl       #0x24c0c0
+  0x0016DC80  ldr      x0, [sp, #0x38]
+  0x0016DC84  ldp      x29, x30, [sp, #0x90]
+  0x0016DC88  ldp      x20, x19, [sp, #0x80]
+  0x0016DC8C  ldp      x22, x21, [sp, #0x70]
+  0x0016DC90  ldp      x24, x23, [sp, #0x60]
+  0x0016DC94  ldp      x26, x25, [sp, #0x50]
+  0x0016DC98  ldp      x28, x27, [sp, #0x40]
+  0x0016DC9C  add      sp, sp, #0xa0
+  0x0016DCA0  b        #0x24c0c0
+  0x0016DCA4  sub      sp, sp, #0x80
+  0x0016DCA8  stp      x28, x27, [sp, #0x20]
+  0x0016DCAC  stp      x26, x25, [sp, #0x30]
+  0x0016DCB0  stp      x24, x23, [sp, #0x40]
+  0x0016DCB4  stp      x22, x21, [sp, #0x50]
+  0x0016DCB8  stp      x20, x19, [sp, #0x60]
+  0x0016DCBC  stp      x29, x30, [sp, #0x70]
+  0x0016DCC0  add      x29, sp, #0x70
+  0x0016DCC4  mov      x20, x3
+  0x0016DCC8  mov      x19, x2
+  0x0016DCCC  mov      x0, x2
+  0x0016DCD0  bl       #0x24c0cc
+  0x0016DCD4  mov      x0, x20
+  0x0016DCD8  bl       #0x24c0cc
+  0x0016DCDC  cbz      x19, #0x16e050
+  0x0016DCE0  adrp     x8, #0x804000
+  0x0016DCE4  ldr      x1, [x8, #0xed0] ; @0x806ed0 "setM_uiCreateTime:"
+  0x0016DCE8  mov      x0, x19
+  0x0016DCEC  bl       #0x24c0a8
+  0x0016DCF0  cbz      x0, #0x16e050
+  0x0016DCF4  adr      x0, #0x24e5a1
+  0x0016DCF8  nop      
+  0x0016DCFC  bl       #0x24c078
+  0x0016DD00  adrp     x8, #0x808000
+  0x0016DD04  ldr      x1, [x8, #0xfc0] ; @0x806fc0 "getFavForawrdViewController"
+  0x0016DD08  bl       #0x24c0a8
+  0x0016DD0C  adrp     x8, #0x80a000
+  0x0016DD10  ldr      x1, [x8, #0xa68] ; @0x806a68 "hideScreenshotIndicator"
+  0x0016DD14  mov      w2, #0x22
+  0x0016DD18  bl       #0x24c0a8
+  0x0016DD1C  mov      x21, x0
+  0x0016DD20  adr      x0, #0x24e31d
+  0x0016DD24  nop      
+  0x0016DD28  bl       #0x24c078
+  0x0016DD2C  adrp     x8, #0x805000
+  0x0016DD30  ldr      x1, [x8, #0x2b8] ; @0x8062b8 "unmaskNumber"
+  0x0016DD34  mov      w2, #0
+
+========================================================================
+SEL: setVoiceData:
+selref 槽: ['0x808c00']
+
+  ---- 引用点 @0xC5A3C ----
+  0x000C594C  mov      x22, #0
+  0x000C5950  adrp     x8, #0x806000
+  0x000C5954  ldr      x1, [x8, #0xfa8] ; @0x806fa8 "m_dtVoice"
+  0x000C5958  mov      x0, x21
+  0x000C595C  bl       #0x24c0a8
+  0x000C5960  mov      x29, x29
+  0x000C5964  bl       #0x24c0e4
+  0x000C5968  mov      x23, x0
+  0x000C596C  adrp     x8, #0x804000
+  0x000C5970  ldr      x24, [x8, #0xed0] ; @0x806ed0 "setM_uiCreateTime:"
+  0x000C5974  mov      x1, x24
+  0x000C5978  bl       #0x24c0a8
+  0x000C597C  cbnz     x0, #0xc59c0
+  0x000C5980  mov      x0, x22
+  0x000C5984  mov      x1, x24
+  0x000C5988  bl       #0x24c0a8
+  0x000C598C  cbz      x0, #0xc59c0
+  0x000C5990  adrp     x8, #0x80f000
+  0x000C5994  ldr      x0, [x8, #0x80] ; @0x806080 "performTaskOne:"
+  0x000C5998  adrp     x8, #0x805000
+  0x000C599C  ldr      x1, [x8, #0x240] ; @0x806240 "numWidth:"
+  0x000C59A0  mov      x2, x22
+  0x000C59A4  bl       #0x24c0a8
+  0x000C59A8  mov      x29, x29
+  0x000C59AC  bl       #0x24c0e4
+  0x000C59B0  mov      x26, x0
+  0x000C59B4  mov      x0, x23
+  0x000C59B8  bl       #0x24c0c0
+  0x000C59BC  mov      x23, x26
+  0x000C59C0  adrp     x8, #0x806000
+  0x000C59C4  ldr      x1, [x8, #0xef8] ; @0x806ef8 "m_uiVoiceTime"
+  0x000C59C8  mov      x0, x21
+  0x000C59CC  bl       #0x24c0a8
+  0x000C59D0  mov      x26, x0
+  0x000C59D4  mov      x0, x23
+  0x000C59D8  bl       #0x24c0cc
+  0x000C59DC  mov      x1, x24
+  0x000C59E0  bl       #0x24c0a8
+  0x000C59E4  cbz      x0, #0xc5b90
+  0x000C59E8  adrp     x0, #0x250000
+  0x000C59EC  add      x0, x0, #0x1f7 ; @0x2501f7 "SessionSelectController"
+  0x000C59F0  bl       #0x24c078
+  0x000C59F4  cbz      x0, #0xc5bc8
+  0x000C59F8  bl       #0x24bfdc
+  0x000C59FC  adrp     x8, #0x804000
+  0x000C5A00  ldr      x1, [x8, #0xf98] ; @0x806f98 "getAudioFileName:LocalID:"
+  0x000C5A04  bl       #0x24c0a8
+  0x000C5A08  mov      x24, x0
+  0x000C5A0C  adrp     x8, #0x80f000
+  0x000C5A10  ldr      x0, [x8, #0x3f8] ; @0x8063f8 "selectVideo"
+  0x000C5A14  adrp     x8, #0x804000
+  0x000C5A18  ldr      x1, [x8, #0xb60] ; @0x806b60 "handleDidBecomeActive"
+  0x000C5A1C  bl       #0x24c0a8
+  0x000C5A20  adrp     x28, #0x81d000
+  0x000C5A24  ldr      x8, [x28, #0xcd0]
+  0x000C5A28  str      x0, [x28, #0xcd0]
+  0x000C5A2C  mov      x0, x8
+  0x000C5A30  bl       #0x24c0c0
+  0x000C5A34  ldr      x0, [x28, #0xcd0]
+  0x000C5A38  adrp     x8, #0x808000
+  0x000C5A3C  ldr      x1, [x8, #0xc00] ; @0x806c00 "pathExtension"  <== REF
+  0x000C5A40  mov      x2, x23
+  0x000C5A44  bl       #0x24c0a8
+  0x000C5A48  ldr      x0, [x28, #0xcd0]
+  0x000C5A4C  adrp     x8, #0x808000
+  0x000C5A50  ldr      x1, [x8, #0xc08] ; @0x806c08 "errorWithDomain:code:userInfo:"
+  0x000C5A54  mov      x2, x26
+  0x000C5A58  bl       #0x24c0a8
+  0x000C5A5C  ldr      x2, [x28, #0xcd0]
+  0x000C5A60  adrp     x8, #0x806000
+  0x000C5A64  ldr      x27, [x8, #0xeb8] ; @0x806eb8 "setValue:forKey:"
+  0x000C5A68  adrp     x3, #0x7af000
+  0x000C5A6C  add      x3, x3, #0x460
+  0x000C5A70  mov      x0, x24
+  0x000C5A74  mov      x1, x27
+  0x000C5A78  bl       #0x24c0a8
+  0x000C5A7C  adrp     x8, #0x808000
+  0x000C5A80  ldr      x26, [x8, #0xc10] ; @0x806c10 "mutableCopy"
+  0x000C5A84  mov      x0, x24
+  0x000C5A88  mov      x1, x25
+  0x000C5A8C  mov      x2, x26
+  0x000C5A90  bl       #0x24c0a8
+  0x000C5A94  cbz      w0, #0xc5aa8
+  0x000C5A98  ldr      x2, [x28, #0xcd0]
+  0x000C5A9C  mov      x0, x24
+  0x000C5AA0  mov      x1, x26
+  0x000C5AA4  bl       #0x24c0a8
+  0x000C5AA8  adrp     x8, #0x80e000
+  0x000C5AAC  ldr      x0, [x8, #0xff8] ; @0x806ff8 "firstMatchInString:options:range:"
+  0x000C5AB0  adrp     x8, #0x804000
+  0x000C5AB4  ldr      x1, [x8, #0xea8] ; @0x806ea8 "setM_nsContent:"
+  0x000C5AB8  mov      w2, #1
+  0x000C5ABC  bl       #0x24c0a8
+  0x000C5AC0  mov      x29, x29
+  0x000C5AC4  bl       #0x24c0e4
+  0x000C5AC8  mov      x25, x0
+  0x000C5ACC  adrp     x3, #0x7b5000
+  0x000C5AD0  add      x3, x3, #0x940
+  0x000C5AD4  mov      x0, x24
+  0x000C5AD8  mov      x1, x27
+  0x000C5ADC  mov      x2, x25
+  0x000C5AE0  bl       #0x24c0a8
+  0x000C5AE4  mov      x0, x25
+  0x000C5AE8  bl       #0x24c0c0
+  0x000C5AEC  adrp     x8, #0x80f000
+  0x000C5AF0  ldr      x0, [x8, #0x60] ; @0x806060 "applicationDidBecomeActive:"
+  0x000C5AF4  adrp     x8, #0x805000
+  0x000C5AF8  ldr      x1, [x8, #0xf0] ; @0x8060f0 "objectForIndexPath:"
+  0x000C5AFC  bl       #0x24c0a8
+  0x000C5B00  mov      x29, x29
+  0x000C5B04  bl       #0x24c0e4
+  0x000C5B08  mov      x25, x0
+  0x000C5B0C  adrp     x0, #0x250000
+  0x000C5B10  add      x0, x0, #0xc37 ; @0x250c37 "MMUINavigationController"
+  0x000C5B14  bl       #0x24c078
+  0x000C5B18  cbnz     x0, #0xc5b30
+  0x000C5B1C  adrp     x8, #0x80f000
+  0x000C5B20  ldr      x0, [x8, #0xb8] ; @0x8060b8 "mmSearchBarTextDidChange:"
+  0x000C5B24  adrp     x8, #0x804000
+  0x000C5B28  ldr      x1, [x8, #0xf20] ; @0x806f20 "setM_uiVoiceForwardFlag:"
+  0x000C5B2C  bl       #0x24c0a8
+  0x000C5B30  bl       #0x24bfdc
+  0x000C5B34  adrp     x8, #0x807000
+  0x000C5B38  ldr      x1, [x8, #0x918] ; @0x806918 "autoSelectLivePhotoEnable"
+  0x000C5B3C  mov      x2, x24
+  0x000C5B40  bl       #0x24c0a8
+  0x000C5B44  mov      x27, x0
+  0x000C5B48  adrp     x8, #0x807000
+  0x000C5B4C  ldr      x1, [x8, #0x920] ; @0x806920 "friendHDMomentsEnable"
+  0x000C5B50  mov      x2, #0
+  0x000C5B54  bl       #0x24c0a8
+  0x000C5B58  adrp     x8, #0x805000
+  0x000C5B5C  ldr      x1, [x8, #0x98] ; @0x806098 "internalApplication:performActionForShortcutItem:completionHandler:"
+  0x000C5B60  mov      x0, x25
+  0x000C5B64  mov      x2, x27
+  0x000C5B68  mov      w3, #1
+  0x000C5B6C  mov      x4, #0
+  0x000C5B70  bl       #0x24c0a8
+  0x000C5B74  mov      x0, x27
+  0x000C5B78  bl       #0x24c0c0
+  0x000C5B7C  mov      x0, x25
+  0x000C5B80  bl       #0x24c0c0
+  0x000C5B84  mov      x0, x24
+  0x000C5B88  bl       #0x24c0c0
+  0x000C5B8C  b        #0xc5bc8
+  0x000C5B90  adrp     x8, #0x80f000
+  0x000C5B94  ldr      x0, [x8, #0x60] ; @0x806060 "applicationDidBecomeActive:"
+  0x000C5B98  adrp     x8, #0x805000
+  0x000C5B9C  ldr      x1, [x8, #0x138] ; @0x806138 "contacts"
+  0x000C5BA0  adrp     x2, #0x7b5000
+
+========================================================================
+SEL: voiceData
+selref 槽: ['0x805110']
+
+  ---- 引用点 @0x101C0 ----
+  0x000100D0  ldp      x22, x21, [sp, #0x10]
+  0x000100D4  add      sp, sp, #0x40
+  0x000100D8  ret      
+  0x000100DC  mov      x21, x0
+  0x000100E0  mov      x0, x20
+  0x000100E4  bl       #0x24c0c0
+  0x000100E8  b        #0x100f0
+  0x000100EC  mov      x21, x0
+  0x000100F0  mov      x0, x19
+  0x000100F4  bl       #0x24c0c0
+  0x000100F8  mov      x0, x21
+  0x000100FC  bl       #0x24ba90
+  0x00010100  stp      x29, x30, [sp, #-0x10]!
+  0x00010104  mov      x29, sp
+  0x00010108  adr      x1, #0x10100
+  0x0001010C  nop      
+  0x00010110  bl       #0x24c06c
+  0x00010114  mov      x29, x29
+  0x00010118  bl       #0x24c0e4
+  0x0001011C  ldp      x29, x30, [sp], #0x10
+  0x00010120  b        #0x24c00c
+  0x00010124  adr      x1, #0x10100
+  0x00010128  nop      
+  0x0001012C  mov      w3, #3
+  0x00010130  b        #0x24c0fc
+  0x00010134  stp      x22, x21, [sp, #-0x30]!
+  0x00010138  stp      x20, x19, [sp, #0x10]
+  0x0001013C  stp      x29, x30, [sp, #0x20]
+  0x00010140  add      x29, sp, #0x20
+  0x00010144  mov      x19, x2
+  0x00010148  mov      x21, x0
+  0x0001014C  mov      x0, x2
+  0x00010150  bl       #0x24c0cc
+  0x00010154  adrp     x8, #0x804000
+  0x00010158  ldr      x1, [x8, #0xed0] ; @0x804ed0 "length"
+  0x0001015C  mov      x0, x19
+  0x00010160  bl       #0x24c0a8
+  0x00010164  cbz      x0, #0x101b4
+  0x00010168  adrp     x8, #0x805000
+  0x0001016C  ldr      x20, [x8, #0x108] ; @0x804108 classref@objc_const
+  0x00010170  mov      x0, x21
+  0x00010174  mov      x1, x20
+  0x00010178  bl       #0x24c0a8
+  0x0001017C  mov      x29, x29
+  0x00010180  bl       #0x24c0e4
+  0x00010184  mov      x22, x0
+  0x00010188  bl       #0x24c0c0
+  0x0001018C  cbz      x22, #0x101bc
+  0x00010190  mov      x0, x21
+  0x00010194  mov      x1, x20
+  0x00010198  bl       #0x24c0a8
+  0x0001019C  mov      x29, x29
+  0x000101A0  bl       #0x24c0e4
+  0x000101A4  mov      x20, x0
+  0x000101A8  mov      x1, x19
+  0x000101AC  bl       #0x10250
+  0x000101B0  b        #0x10200
+  0x000101B4  mov      w21, #0
+  0x000101B8  b        #0x1020c
+  0x000101BC  adrp     x8, #0x805000
+  0x000101C0  ldr      x1, [x8, #0x110] ; @0x804110 classref@objc_const  <== REF
+  0x000101C4  mov      x0, x21
+  0x000101C8  bl       #0x24c0a8
+  0x000101CC  mov      x29, x29
+  0x000101D0  bl       #0x24c0e4
+  0x000101D4  mov      x20, x0
+  0x000101D8  adrp     x8, #0x805000
+  0x000101DC  ldr      x1, [x8, #0x118] ; @0x804118 classref@objc_const
+  0x000101E0  mov      x0, x21
+  0x000101E4  bl       #0x24c0a8
+  0x000101E8  mov      x1, x0
+  0x000101EC  mov      x0, x20
+  0x000101F0  mov      x2, x19
+  0x000101F4  mov      w3, #1
+  0x000101F8  mov      w4, #1
+  0x000101FC  bl       #0x797b4
+  0x00010200  mov      x21, x0
+  0x00010204  mov      x0, x20
+  0x00010208  bl       #0x24c0c0
+  0x0001020C  mov      x0, x19
+  0x00010210  bl       #0x24c0c0
+  0x00010214  mov      x0, x21
+  0x00010218  ldp      x29, x30, [sp, #0x20]
+  0x0001021C  ldp      x20, x19, [sp, #0x10]
+  0x00010220  ldp      x22, x21, [sp], #0x30
+  0x00010224  ret      
+  0x00010228  b        #0x1022c
+  0x0001022C  mov      x21, x0
+  0x00010230  mov      x0, x20
+  0x00010234  bl       #0x24c0c0
+  0x00010238  b        #0x10240
+  0x0001023C  mov      x21, x0
+  0x00010240  mov      x0, x19
+  0x00010244  bl       #0x24c0c0
+  0x00010248  mov      x0, x21
+  0x0001024C  bl       #0x24ba90
+  0x00010250  sub      sp, sp, #0x70
+  0x00010254  stp      x28, x27, [sp, #0x10]
+  0x00010258  stp      x26, x25, [sp, #0x20]
+  0x0001025C  stp      x24, x23, [sp, #0x30]
+  0x00010260  stp      x22, x21, [sp, #0x40]
+  0x00010264  stp      x20, x19, [sp, #0x50]
+  0x00010268  stp      x29, x30, [sp, #0x60]
+  0x0001026C  add      x29, sp, #0x60
+  0x00010270  mov      x20, x1
+  0x00010274  mov      x19, x0
+  0x00010278  bl       #0x24c0cc
+  0x0001027C  mov      x0, x20
+  0x00010280  bl       #0x24c0cc
+  0x00010284  mov      x0, x19
+  0x00010288  bl       #0x7b3bc
+  0x0001028C  mov      x29, x29
+  0x00010290  bl       #0x24c0e4
+  0x00010294  mov      x21, x0
+  0x00010298  bl       #0x7b5b0
+  0x0001029C  mov      x29, x29
+  0x000102A0  bl       #0x24c0e4
+  0x000102A4  mov      x22, x0
+  0x000102A8  adrp     x8, #0x804000
+  0x000102AC  ldr      x24, [x8, #0xed0] ; @0x804ed0 "length"
+  0x000102B0  mov      x1, x24
+  0x000102B4  bl       #0x24c0a8
+  0x000102B8  cbz      x0, #0x102e4
+  0x000102BC  adrp     x8, #0x80f000
+  0x000102C0  ldr      x0, [x8, #0x80] ; @0x804080 classref@objc_const
+  0x000102C4  adrp     x8, #0x805000
+  0x000102C8  ldr      x1, [x8, #0x240] ; @0x804240 classref@objc_const
+  0x000102CC  mov      x2, x22
+  0x000102D0  bl       #0x24c0a8
+  0x000102D4  mov      x29, x29
+  0x000102D8  bl       #0x24c0e4
+  0x000102DC  mov      x23, x0
+  0x000102E0  b        #0x102e8
+  0x000102E4  mov      x23, #0
+  0x000102E8  mov      x0, x23
+  0x000102EC  mov      x1, x24
+  0x000102F0  bl       #0x24c0a8
+  0x000102F4  cbz      x0, #0x1034c
+  0x000102F8  mov      x0, x20
+  0x000102FC  mov      x1, x24
+  0x00010300  bl       #0x24c0a8
+  0x00010304  cbz      x0, #0x1034c
+  0x00010308  adrp     x8, #0x805000
+  0x0001030C  ldr      x27, [x8, #0x120] ; @0x804120 classref@objc_const
+  0x00010310  adrp     x2, #0x7ae000
+  0x00010314  add      x2, x2, #0x3e0
+  0x00010318  mov      x0, x21
+  0x0001031C  mov      x1, x27
+  0x00010320  bl       #0x24c0a8
+  0x00010324  mov      x29, x29
+
+========================================================================
+CFSTRING/模板: <msg><voicemsg voicelength="%u" voiceformat="4" forwardflag="%u" /></msg>
+cfstring 槽: []  cstring: ['0x25011d']
+  (无引用点)
+
+========================================================================
+RANGE DUMP
+
+---- 发送函数头部(initWithMsgType区) (0x79A60-0x79BD0) ----
+  0x00079A60  cmp      w8, #0x3e7
+  0x00079A64  csel     w8, w9, w24, lo
+  0x00079A68  cbnz     w8, #0x79aac
+  0x00079A6C  cbz      x27, #0x79aac
+  0x00079A70  mov      w8, #0x1f40
+  0x00079A74  mul      x8, x27, x8
+  0x00079A78  mov      x9, #0x29a5
+  0x00079A7C  movk     x9, #0x6715, lsl #16
+  0x00079A80  movk     x9, #0x3e1f, lsl #32
+  0x00079A84  movk     x9, #0xaec3, lsl #48
+  0x00079A88  umulh    x8, x8, x9
+  0x00079A8C  lsr      x8, x8, #0xe
+  0x00079A90  mov      w9, #0xee80
+  0x00079A94  movk     w9, #0x36, lsl #16
+  0x00079A98  cmp      x8, x9
+  0x00079A9C  csel     x8, x8, x9, lo
+  0x00079AA0  cmp      w8, #0x3e8
+  0x00079AA4  mov      w9, #0x3e8
+  0x00079AA8  csel     w8, w8, w9, hi
+  0x00079AAC  mov      w9, #0xee80
+  0x00079AB0  movk     w9, #0x36, lsl #16
+  0x00079AB4  cmp      w8, w9
+  0x00079AB8  csel     w24, w8, w9, lo
+  0x00079ABC  cmp      w21, #0
+  0x00079AC0  csel     w21, w24, w21, eq
+  0x00079AC4  cbz      w28, #0x79aec
+  0x00079AC8  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x00079ACC  ldr      x26, [x8, #0xe80] ; @0x806e80 "voiceForwardSeconds"
+  0x00079AD0  adrp     x22, #0x80e000 ; @0x80e000 "commonInit"
+  0x00079AD4  ldr      x0, [x10, #0xf58]
+  0x00079AD8  mov      x1, x26
+  0x00079ADC  bl       #0x24c0a8
+  0x00079AE0  cmp      x0, #0
+  0x00079AE4  csel     w21, w24, w21, gt
+  0x00079AE8  b        #0x79af0
+  0x00079AEC  adrp     x22, #0x80e000 ; @0x80e000 "commonInit"
+  0x00079AF0  cmp      w21, #0x3e8
+  0x00079AF4  mov      w8, #0x3e8
+  0x00079AF8  csel     w8, w21, w8, hi
+  0x00079AFC  str      x8, [sp, #0x40]
+  0x00079B00  adrp     x0, #0x24e000
+  0x00079B04  add      x0, x0, #0x5a1 ; @0x24e5a1 "CMessageWrap"
+  0x00079B08  bl       #0x24c078
+  0x00079B0C  bl       #0x24bfdc
+  0x00079B10  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x00079B14  ldr      x1, [x8, #0xe88] ; @0x806e88 "initWithMsgType:nsFromUsr:"
+  0x00079B18  mov      w2, #0x22
+  0x00079B1C  ldr      x3, [sp, #0x58]
+  0x00079B20  bl       #0x24c0a8
+  0x00079B24  mov      x24, x0
+  0x00079B28  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x00079B2C  ldr      x1, [x8, #0xe90] ; @0x806e90 "setM_uiMessageType:"
+  0x00079B30  mov      w2, #0x22
+  0x00079B34  ldr      x21, [sp, #0x30]
+  0x00079B38  bl       #0x24c0a8
+  0x00079B3C  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x00079B40  ldr      x1, [x8, #0xe98] ; @0x806e98 "setM_nsFromUsr:"
+  0x00079B44  mov      x0, x24
+  0x00079B48  ldr      x2, [sp, #0x58]
+  0x00079B4C  bl       #0x24c0a8
+  0x00079B50  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x00079B54  ldr      x1, [x8, #0xea0] ; @0x806ea0 "setM_nsToUsr:"
+  0x00079B58  mov      x0, x24
+  0x00079B5C  mov      x2, x20
+  0x00079B60  bl       #0x24c0a8
+  0x00079B64  ldr      x0, [x22, #0xfb0]
+  0x00079B68  adrp     x8, #0x804000
+  0x00079B6C  ldr      x1, [x8, #0xda8] ; @0x804da8 "stringWithFormat:"
+  0x00079B70  ldr      x8, [sp, #0x40]
+  0x00079B74  stp      x8, x25, [sp]
+  0x00079B78  adrp     x2, #0x7ae000
+  0x00079B7C  add      x2, x2, #0x2a0
+  0x00079B80  bl       #0x24c0a8
+  0x00079B84  mov      x29, x29
+  0x00079B88  bl       #0x24c0e4
+  0x00079B8C  mov      x26, x0
+  0x00079B90  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x00079B94  ldr      x1, [x8, #0xea8] ; @0x806ea8 "setM_nsContent:"
+  0x00079B98  mov      x0, x24
+  0x00079B9C  mov      x2, x26
+  0x00079BA0  bl       #0x24c0a8
+  0x00079BA4  mov      x0, x26
+  0x00079BA8  bl       #0x24c0c0
+  0x00079BAC  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x00079BB0  ldr      x1, [x8, #0xeb0] ; @0x806eb0 "setM_uiStatus:"
+  0x00079BB4  mov      x0, x24
+  0x00079BB8  mov      w2, #1
+  0x00079BBC  bl       #0x24c0a8
+  0x00079BC0  adrp     x8, #0x80e000 ; @0x80e000 "commonInit"
+  0x00079BC4  ldr      x0, [x8, #0xff8]
+  0x00079BC8  adrp     x8, #0x804000
+  0x00079BCC  ldr      x1, [x8, #0xf08] ; @0x804f08 "numberWithInt:"
+
+---- helper 0x7aa00(wrap,mgr,x20) (0x7AA00-0x7AC80) ----
+  0x0007AA00  sub      sp, sp, #0x70
+  0x0007AA04  stp      x28, x27, [sp, #0x10]
+  0x0007AA08  stp      x26, x25, [sp, #0x20]
+  0x0007AA0C  stp      x24, x23, [sp, #0x30]
+  0x0007AA10  stp      x22, x21, [sp, #0x40]
+  0x0007AA14  stp      x20, x19, [sp, #0x50]
+  0x0007AA18  stp      x29, x30, [sp, #0x60]
+  0x0007AA1C  add      x29, sp, #0x60
+  0x0007AA20  mov      x21, x2
+  0x0007AA24  mov      x20, x1
+  0x0007AA28  mov      x19, x0
+  0x0007AA2C  bl       #0x24c0cc
+  0x0007AA30  mov      x0, x20
+  0x0007AA34  bl       #0x24c0cc
+  0x0007AA38  str      x21, [sp, #8]
+  0x0007AA3C  mov      x0, x21
+  0x0007AA40  bl       #0x24c0cc
+  0x0007AA44  adrp     x0, #0x24e000
+  0x0007AA48  add      x0, x0, #0x5a1 ; @0x24e5a1 "CMessageWrap"
+  0x0007AA4C  bl       #0x24c078
+  0x0007AA50  mov      x25, x0
+  0x0007AA54  adrp     x9, #0x804000
+  0x0007AA58  cbz      x19, #0x7aaa0
+  0x0007AA5C  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x0007AA60  ldr      x23, [x8, #0xf78] ; @0x806f78 "getVoicePath"
+  0x0007AA64  mov      x21, x9
+  0x0007AA68  ldr      x1, [x9, #0xcd0] ; @0x804cd0 "respondsToSelector:"
+  0x0007AA6C  mov      x22, #0
+  0x0007AA70  mov      x0, x19
+  0x0007AA74  mov      x2, x23
+  0x0007AA78  bl       #0x24c0a8
+  0x0007AA7C  cbz      w0, #0x7aaa4
+  0x0007AA80  mov      x0, x19
+  0x0007AA84  mov      x1, x23
+  0x0007AA88  bl       #0x24c0a8
+  0x0007AA8C  mov      x29, x29
+  0x0007AA90  bl       #0x24c0e4
+  0x0007AA94  mov      x22, x0
+  0x0007AA98  cbnz     x25, #0x7aaac
+  0x0007AA9C  b        #0x7aaf0
+  0x0007AAA0  mov      x21, x9
+  0x0007AAA4  mov      x22, #0
+  0x0007AAA8  cbz      x25, #0x7aaf0
+  0x0007AAAC  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x0007AAB0  ldr      x23, [x8, #0xf80] ; @0x806f80 "getPathOfMsgImg:"
+  0x0007AAB4  ldr      x1, [x21, #0xcd0]
+  0x0007AAB8  mov      x0, x25
+  0x0007AABC  mov      x2, x23
+  0x0007AAC0  bl       #0x24c0a8
+  0x0007AAC4  cbz      w0, #0x7aaf0
+  0x0007AAC8  mov      x0, x25
+  0x0007AACC  mov      x1, x23
+  0x0007AAD0  mov      x2, x19
+  0x0007AAD4  bl       #0x24c0a8
+  0x0007AAD8  mov      x29, x29
+  0x0007AADC  bl       #0x24c0e4
+  0x0007AAE0  mov      x23, x0
+  0x0007AAE4  mov      x0, x22
+  0x0007AAE8  bl       #0x24c0c0
+  0x0007AAEC  mov      x22, x23
+  0x0007AAF0  adrp     x28, #0x80e000 ; @0x80e000 "commonInit"
+  0x0007AAF4  ldr      x0, [x28, #0xfb0]
+  0x0007AAF8  adrp     x8, #0x804000
+  0x0007AAFC  ldr      x23, [x8, #0xf20] ; @0x804f20 "class"
+  0x0007AB00  mov      x1, x23
+  0x0007AB04  bl       #0x24c0a8
+  0x0007AB08  mov      x2, x0
+  0x0007AB0C  adrp     x8, #0x804000
+  0x0007AB10  ldr      x24, [x8, #0xf28] ; @0x804f28 "isKindOfClass:"
+  0x0007AB14  mov      x0, x22
+  0x0007AB18  mov      x1, x24
+  0x0007AB1C  bl       #0x24c0a8
+  0x0007AB20  cbz      w0, #0x7aba0
+  0x0007AB24  adrp     x8, #0x804000
+  0x0007AB28  ldr      x1, [x8, #0xed0] ; @0x804ed0 "length"
+  0x0007AB2C  mov      x0, x22
+  0x0007AB30  bl       #0x24c0a8
+  0x0007AB34  cbz      x0, #0x7aba0
+  0x0007AB38  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x0007AB3C  ldr      x27, [x8, #0xe28] ; @0x806e28 "stringByReplacingOccurrencesOfString:withString:"
+  0x0007AB40  adrp     x2, #0x7ae000
+  0x0007AB44  add      x2, x2, #0x360
+  0x0007AB48  adrp     x3, #0x7ae000
+  0x0007AB4C  add      x3, x3, #0x380
+  0x0007AB50  mov      x0, x22
+  0x0007AB54  mov      x1, x27
+  0x0007AB58  bl       #0x24c0a8
+  0x0007AB5C  mov      x29, x29
+  0x0007AB60  bl       #0x24c0e4
+  0x0007AB64  mov      x26, x0
+  0x0007AB68  adrp     x2, #0x7ae000
+  0x0007AB6C  add      x2, x2, #0x3a0
+  0x0007AB70  adrp     x3, #0x7ae000
+  0x0007AB74  add      x3, x3, #0x3c0
+  0x0007AB78  mov      x1, x27
+  0x0007AB7C  bl       #0x24c0a8
+  0x0007AB80  mov      x29, x29
+  0x0007AB84  bl       #0x24c0e4
+  0x0007AB88  mov      x27, x0
+  0x0007AB8C  mov      x0, x22
+  0x0007AB90  bl       #0x24c0c0
+  0x0007AB94  mov      x0, x26
+  0x0007AB98  bl       #0x24c0c0
+  0x0007AB9C  mov      x22, x27
+  0x0007ABA0  ldr      x0, [x28, #0xfb0]
+  0x0007ABA4  mov      x1, x23
+  0x0007ABA8  bl       #0x24c0a8
+  0x0007ABAC  mov      x2, x0
+  0x0007ABB0  mov      x0, x22
+  0x0007ABB4  mov      x1, x24
+  0x0007ABB8  bl       #0x24c0a8
+  0x0007ABBC  cbz      w0, #0x7abdc
+  0x0007ABC0  adrp     x8, #0x804000
+  0x0007ABC4  ldr      x1, [x8, #0xed0] ; @0x804ed0 "length"
+  0x0007ABC8  mov      x0, x22
+  0x0007ABCC  bl       #0x24c0a8
+  0x0007ABD0  cbz      x25, #0x7ac24
+  0x0007ABD4  cbz      x0, #0x7abe0
+  0x0007ABD8  b        #0x7ac24
+  0x0007ABDC  cbz      x25, #0x7ac24
+  0x0007ABE0  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x0007ABE4  ldr      x26, [x8, #0xf88] ; @0x806f88 "getPathOfAudio:"
+  0x0007ABE8  ldr      x1, [x21, #0xcd0]
+  0x0007ABEC  mov      x0, x25
+  0x0007ABF0  mov      x2, x26
+  0x0007ABF4  bl       #0x24c0a8
+  0x0007ABF8  cbz      w0, #0x7ac24
+  0x0007ABFC  mov      x0, x25
+  0x0007AC00  mov      x1, x26
+  0x0007AC04  mov      x2, x19
+  0x0007AC08  bl       #0x24c0a8
+  0x0007AC0C  mov      x29, x29
+  0x0007AC10  bl       #0x24c0e4
+  0x0007AC14  mov      x25, x0
+  0x0007AC18  mov      x0, x22
+  0x0007AC1C  bl       #0x24c0c0
+  0x0007AC20  mov      x22, x25
+  0x0007AC24  ldr      x0, [x28, #0xfb0]
+  0x0007AC28  mov      x1, x23
+  0x0007AC2C  bl       #0x24c0a8
+  0x0007AC30  mov      x2, x0
+  0x0007AC34  mov      x0, x22
+  0x0007AC38  mov      x1, x24
+  0x0007AC3C  bl       #0x24c0a8
+  0x0007AC40  cbz      w0, #0x7ac58
+  0x0007AC44  adrp     x8, #0x804000
+  0x0007AC48  ldr      x1, [x8, #0xed0] ; @0x804ed0 "length"
+  0x0007AC4C  mov      x0, x22
+  0x0007AC50  bl       #0x24c0a8
+  0x0007AC54  cbnz     x0, #0x7acb8
+  0x0007AC58  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x0007AC5C  ldr      x1, [x8, #0xf90] ; @0x806f90 "m_uiMesLocalID"
+  0x0007AC60  mov      x0, x19
+  0x0007AC64  bl       #0x24c0a8
+  0x0007AC68  mov      x25, x0
+  0x0007AC6C  cbz      w0, #0x7acb8
+  0x0007AC70  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x0007AC74  ldr      x26, [x8, #0xf98] ; @0x806f98 "getAudioFileName:LocalID:"
+  0x0007AC78  ldr      x1, [x21, #0xcd0]
+  0x0007AC7C  mov      x0, x20
+
+---- helper 0x7adf0 (0x7ADF0-0x7AEA0) ----
+  0x0007ADF0  stp      x26, x25, [sp, #-0x50]!
+  0x0007ADF4  stp      x24, x23, [sp, #0x10]
+  0x0007ADF8  stp      x22, x21, [sp, #0x20]
+  0x0007ADFC  stp      x20, x19, [sp, #0x30]
+  0x0007AE00  stp      x29, x30, [sp, #0x40]
+  0x0007AE04  add      x29, sp, #0x40
+  0x0007AE08  mov      x20, x1
+  0x0007AE0C  mov      x19, x0
+  0x0007AE10  bl       #0x24c0cc
+  0x0007AE14  mov      x0, x20
+  0x0007AE18  bl       #0x24c0cc
+  0x0007AE1C  adrp     x8, #0x804000
+  0x0007AE20  ldr      x22, [x8, #0xed0] ; @0x804ed0 "length"
+  0x0007AE24  mov      x0, x19
+  0x0007AE28  mov      x1, x22
+  0x0007AE2C  bl       #0x24c0a8
+  0x0007AE30  cbz      x0, #0x7af14
+  0x0007AE34  mov      x0, x20
+  0x0007AE38  mov      x1, x22
+  0x0007AE3C  bl       #0x24c0a8
+  0x0007AE40  cbz      x0, #0x7af14
+  0x0007AE44  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x0007AE48  ldr      x1, [x8, #0xfa0] ; @0x806fa0 "stringByDeletingLastPathComponent"
+  0x0007AE4C  mov      x0, x20
+  0x0007AE50  bl       #0x24c0a8
+  0x0007AE54  mov      x29, x29
+  0x0007AE58  bl       #0x24c0e4
+  0x0007AE5C  mov      x21, x0
+  0x0007AE60  mov      x1, x22
+  0x0007AE64  bl       #0x24c0a8
+  0x0007AE68  cbz      x0, #0x7aeec
+  0x0007AE6C  adrp     x25, #0x80f000
+  0x0007AE70  ldr      x0, [x25, #8]
+  0x0007AE74  adrp     x8, #0x804000
+  0x0007AE78  ldr      x22, [x8, #0xe90] ; @0x804e90 "defaultManager"
+  0x0007AE7C  mov      x1, x22
+  0x0007AE80  bl       #0x24c0a8
+  0x0007AE84  mov      x29, x29
+  0x0007AE88  bl       #0x24c0e4
+  0x0007AE8C  mov      x23, x0
+  0x0007AE90  adrp     x8, #0x804000
+  0x0007AE94  ldr      x1, [x8, #0xda0] ; @0x804da0 "fileExistsAtPath:"
+  0x0007AE98  mov      x2, x21
+  0x0007AE9C  bl       #0x24c0a8
+
+---- helper 0x7a2e0(wrap,x19,x40,x25) (0x7A2E0-0x7A3E0) ----
+  0x0007A2E0  sub      sp, sp, #0x80
+  0x0007A2E4  stp      x28, x27, [sp, #0x20]
+  0x0007A2E8  stp      x26, x25, [sp, #0x30]
+  0x0007A2EC  stp      x24, x23, [sp, #0x40]
+  0x0007A2F0  stp      x22, x21, [sp, #0x50]
+  0x0007A2F4  stp      x20, x19, [sp, #0x60]
+  0x0007A2F8  stp      x29, x30, [sp, #0x70]
+  0x0007A2FC  add      x29, sp, #0x70
+  0x0007A300  mov      x22, x3
+  0x0007A304  str      x2, [sp, #0x10]
+  0x0007A308  mov      x20, x1
+  0x0007A30C  mov      x19, x0
+  0x0007A310  bl       #0x24c0cc
+  0x0007A314  mov      x0, x20
+  0x0007A318  bl       #0x24c0cc
+  0x0007A31C  cbz      x19, #0x7a614
+  0x0007A320  mov      x0, x19
+  0x0007A324  bl       #0x24c0cc
+  0x0007A328  bl       #0x7af94
+  0x0007A32C  mov      x29, x29
+  0x0007A330  bl       #0x24c0e4
+  0x0007A334  mov      x21, x0
+  0x0007A338  bl       #0x24c0c0
+  0x0007A33C  cbnz     x21, #0x7a41c
+  0x0007A340  adrp     x0, #0x250000 ; @0x250000 "ext"
+  0x0007A344  add      x0, x0, #0x17a ; @0x25017a "CExtendInfoOfVoiceMsg"
+  0x0007A348  bl       #0x24c078
+  0x0007A34C  mov      x25, x0
+  0x0007A350  cbz      x0, #0x7a410
+  0x0007A354  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x0007A358  ldr      x26, [x8, #0xf38] ; @0x806f38 "CreateExtendInfoWithType:retExtendInfo:"
+  0x0007A35C  adrp     x8, #0x804000
+  0x0007A360  ldr      x24, [x8, #0xcd0] ; @0x804cd0 "respondsToSelector:"
+  0x0007A364  mov      x23, #0
+  0x0007A368  mov      x0, x25
+  0x0007A36C  mov      x1, x24
+  0x0007A370  mov      x2, x26
+  0x0007A374  bl       #0x24c0a8
+  0x0007A378  cbz      w0, #0x7a3a8
+  0x0007A37C  str      xzr, [sp, #0x18]
+  0x0007A380  mov      x23, #0
+  0x0007A384  add      x3, sp, #0x18
+  0x0007A388  mov      x0, x25
+  0x0007A38C  mov      x1, x26
+  0x0007A390  mov      w2, #0x22
+  0x0007A394  bl       #0x24c0a8
+  0x0007A398  ldr      x23, [sp, #0x18]
+  0x0007A39C  mov      x0, x23
+  0x0007A3A0  bl       #0x24c0cc
+  0x0007A3A4  cbnz     x23, #0x7a3cc
+  0x0007A3A8  mov      x23, #0
+  0x0007A3AC  mov      x0, x25
+  0x0007A3B0  bl       #0x24bfdc
+  0x0007A3B4  adrp     x8, #0x804000
+  0x0007A3B8  ldr      x1, [x8, #0xf98] ; @0x804f98 "init"
+  0x0007A3BC  mov      x23, #0
+  0x0007A3C0  bl       #0x24c0a8
+  0x0007A3C4  mov      x23, x0
+  0x0007A3C8  cbz      x0, #0x7a414
+  0x0007A3CC  adrp     x8, #0x806000 ; @0x806000 "internalSwitchToUser:completion:isVirtual:"
+  0x0007A3D0  ldr      x1, [x8, #0xf40] ; @0x806f40 "setM_extendInfoWithMsgType:"
+  0x0007A3D4  mov      x0, x19
+  0x0007A3D8  mov      x2, x23
+  0x0007A3DC  bl       #0x24c0a8

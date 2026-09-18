@@ -201,22 +201,22 @@ def find_refs(target_va, max_sites=3, win_before=45, win_after=80):
             if s["name"] in ("objc_selrefs",):
                 for c in decode_ptr(rd64(t) or 0):
                     st = rd_str(c) if c else None
-                    if st: return ' ; selref "%s"' % st
+                    if st: return ' ; @%s "%s"' % (hex(t), st)
             elif s["name"] in ("objc_classrefs", "objc_data", "objc_const"):
                 for c in decode_ptr(rd64(t) or 0):
                     if c:
                         cs = sec_at(c)
                         if cs and cs["name"] == "objc_classname":
-                            return ' ; class "%s"' % (rd_str(c) or "")
-                return ' ; classref@%s' % s["name"]
+                            return ' ; @%s class "%s"' % (hex(t), rd_str(c) or "")
+                return ' ; @%s classref@%s' % (hex(t), s["name"])
             elif s["name"] == "objc_cfstring":
                 raw = rd64(t)
                 for c in decode_ptr(raw or 0):
                     st = rd_str(c) if c else None
-                    if st: return ' ; cfstr "%s"' % st[:60]
+                    if st: return ' ; @%s cfstr "%s"' % (hex(t), st[:60])
             elif s["name"] in ("cstring", "objc_methname"):
                 st = rd_str(t)
-                if st: return ' ; "%s"' % st[:60]
+                if st: return ' ; @%s "%s"' % (hex(t), st[:60])
             return ""
         for ins in md.disasm(code[start - lo:end - lo], start):
             w = struct.unpack_from("<I", code, ins.address - lo)[0]
@@ -228,30 +228,98 @@ def find_refs(target_va, max_sites=3, win_before=45, win_after=80):
 
 # ---- 目标 ----
 TARGETS_SEL = [
-    "SSendVoiceMsg:toContactUsrName:",
-    "AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:",
-    "SaveMesVoice:MsgWrap:",
-    "ResendVoiceMsg:MsgWrap:",
-    "initWithMsgType:nsFromUsr:",
-    "setM_nsContent:",
-    "setVoiceData:",
+    ("SaveMesVoice:MsgWrap:", 8, 80, 110),
+    ("ResendVoiceMsg:MsgWrap:", 8, 80, 110),
+    ("AddMsg:MsgWrap:", 6, 80, 110),
+    ("AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:", 8, 80, 110),
+    ("initWithMsgType:nsFromUsr:", 4, 60, 90),
+    ("setM_dtVoice:", 4, 60, 90),
+    ("setVoiceData:", 4, 60, 90),
+    ("voiceData", 4, 60, 90),
 ]
 TPL = '<msg><voicemsg voicelength="%u" voiceformat="4" forwardflag="%u" /></msg>'
 
-for sel in TARGETS_SEL:
+for sel, maxs, wb, wa in TARGETS_SEL:
     print("\n" + "="*72)
     print("SEL:", sel)
     slots = selref_addr_for(sel)
     print("selref 槽: %s" % ([hex(s) for s in slots] or "未找到"))
     for s in slots[:2]:
-        find_refs(s, max_sites=2, win_before=40, win_after=70)
+        find_refs(s, max_sites=maxs, win_before=wb, win_after=wa)
 
 print("\n" + "="*72)
 print("CFSTRING/模板:", TPL)
 cfslots, strvas = cfstring_addr_for(TPL)
 print("cfstring 槽: %s  cstring: %s" % ([hex(x) for x in cfslots], [hex(x) for x in strvas]))
 for s in cfslots[:2]:
-    find_refs(s, max_sites=2, win_before=60, win_after=90)
+    find_refs(s, max_sites=4, win_before=300, win_after=300)
 for sv in strvas[:1]:
-    # cstring 直接引用（adrp+add 到字符串本体）
-    find_refs(sv, max_sites=1, win_before=60, win_after=90)
+    find_refs(sv, max_sites=2, win_before=300, win_after=300)
+
+# ---- 直接 dump 指定地址范围（辅助函数）----
+DUMP_RANGES = [
+    (0x7AC80, 0x7ADF0, "helper 0x7aa00 尾部"),
+    (0x7ADF0, 0x7AEA0, "helper 0x7adf0"),
+    (0x7A2E0, 0x7A3E0, "helper 0x7a2e0(wrap,x19,x40,x25)"),
+    (0x7A4A0, 0x7A620, "setM_dtVoice 引用处 0x7a4a0"),
+]
+print("\n" + "="*72)
+print("RANGE DUMP")
+for a in (0x7ae2a0, 0x7ae2c0, 0x7ae360, 0x7ae380, 0x7ae3a0, 0x7ae3c0, 0x7ae2fc):
+    print("STR @0x%x: %r" % (a, rd_str(a)))
+md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN)
+tlo, tfo = text["addr"], text["off"]
+code = BLOB[tfo:tfo + text["size"]]
+for a0, a1, label in DUMP_RANGES:
+    print("\n---- %s (0x%X-0x%X) ----" % (label, a0, a1))
+    # 窗口内 adrp 映射
+    rp = {}
+    for pc in range(a0, a1, 4):
+        w = struct.unpack_from("<I", code, pc - tlo)[0]
+        if (w & 0x9F000000) == 0x90000000:
+            rd = w & 0x1F
+            immlo = (w >> 29) & 3; immhi = (w >> 5) & 0x7FFFF
+            imm = (immhi << 2) | immlo
+            if imm & (1 << 20): imm -= (1 << 21)
+            rp[pc] = (rd, (pc & ~0xFFF) + (imm << 12))
+    def note_addr2(t):
+        s = sec_at(t)
+        if not s: return ""
+        if s["name"] in ("objc_selrefs",):
+            for c in decode_ptr(rd64(t) or 0):
+                st = rd_str(c) if c else None
+                if st: return ' ; @%s "%s"' % (hex(t), st)
+        elif s["name"] == "objc_cfstring":
+            for c in decode_ptr(rd64(t) or 0):
+                st = rd_str(c) if c else None
+                if st: return ' ; @%s cfstr "%s"' % (hex(t), st[:60])
+        elif s["name"] in ("cstring", "objc_methname"):
+            st = rd_str(t)
+            if st: return ' ; @%s "%s"' % (hex(t), st[:60])
+        return ""
+    for pc in range(a0, a1, 4):
+        w = struct.unpack_from("<I", code, pc - tlo)[0]
+        ann = ""
+        if (w & 0x9F000000) == 0x90000000:
+            rd = w & 0x1F
+            immlo = (w >> 29) & 3; immhi = (w >> 5) & 0x7FFFF
+            imm = (immhi << 2) | immlo
+            if imm & (1 << 20): imm -= (1 << 21)
+            page = (pc & ~0xFFF) + (imm << 12)
+            s = sec_at(page)
+            if s and s["name"] in ("objc_selrefs", "objc_cfstring", "cstring", "objc_methname"):
+                ann = note_addr2(page)
+        elif (w & 0xFF800000) == 0x91000000:
+            rn = (w >> 5) & 0x1F
+            for ppc, (rd, page) in sorted(rp.items()):
+                if rd == rn and ppc < pc:
+                    ann = note_addr2(page + ((w >> 10) & 0xFFF))
+            # 取最近的 adrp
+        elif (w & 0xFFC00000) == 0xF9400000:
+            rn = (w >> 5) & 0x1F
+            for ppc, (rd, page) in sorted(rp.items()):
+                if rd == rn and ppc < pc:
+                    ann = note_addr2(page + (((w >> 10) & 0xFFF) * 8))
+        for ins in md.disasm(code[pc - tlo:pc - tlo + 4], pc):
+            print("  0x%08X  %-8s %s%s" % (ins.address, ins.mnemonic, ins.op_str, ann))
+            break
