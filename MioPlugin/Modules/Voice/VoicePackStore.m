@@ -833,32 +833,34 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
                 WPLog(@"Voice", @"[Send] ⑤UpdateVoiceMessage 已调 (st=2, dl=1, 提交上传)");
             }
 
-            // ── ⑥ 上传触发（run 2031）：ResendVoiceMsg 需要活的 UploadVoiceCDNMgr 实例——
-            //   它不是 MMServiceCenter 注册 service（log44 实锤 getService 拿不到），
-            //   由 VoiceHook 的 TimerCheckUpload 钩子捕获微信自己的活实例
+            // ── ⑥ 上传登记+触发（run 2032）：
+            //   ⑥a AddNewPart(12参) 把任务登记进上传队列（WCRefine sendItem: 内部显式调用；
+            //      part 参数未证实类型，先传 chatName，hook 日志会打出 WCRefine 真实值供对照）
+            //   ⑥b ResendVoiceMsg(2参) 触发启动
             @try {
+                SEL anpSel = NSSelectorFromString(@"AddNewPart:LocalID:n64SvrID:Offset:Len:VoiceTime:CreateTime:EndFlag:CancelFlag:VoiceFormat:ForwardFlag:msgSource:");
                 SEL rvmSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
+                unsigned int fid = MioWrapLocalIDOf(formal);
+                unsigned int createTime = (unsigned int)[[NSDate date] timeIntervalSince1970];
+                id ct = [formal valueForKey:@"m_uiCreateTime"];
+                if (ct) createTime = [ct unsignedIntValue];
                 id mgrInst = MioGetUploadVoiceCDNMgr();
                 WPLog(@"Voice", @"[Send] ⑥活实例=%@ (nil=尚未捕获,等2s定时器)", mgrInst);
-                if (mgrInst && [mgrInst respondsToSelector:rvmSel]) {
+                if (mgrInst && [mgrInst respondsToSelector:anpSel] && [mgrInst respondsToSelector:rvmSel]) {
+                    ((void (*)(id, SEL, id, unsigned long, unsigned long, unsigned long, unsigned long,
+                              unsigned long, unsigned long, unsigned long, unsigned long, unsigned long,
+                              unsigned long, id))objc_msgSend)(mgrInst, anpSel,
+                        chatName, (unsigned long)fid, (unsigned long)0, (unsigned long)0,
+                        (unsigned long)wire.length, (unsigned long)ms, (unsigned long)createTime,
+                        (unsigned long)1, (unsigned long)0, (unsigned long)4, (unsigned long)0, @"");
+                    WPLog(@"Voice", @"[Send] ⑥a AddNewPart 已调 (lid=%u len=%lu ms=%lld)", fid, (unsigned long)wire.length, ms);
                     ((void (*)(id, SEL, id, id))objc_msgSend)(mgrInst, rvmSel, chatName, formal);
-                    WPLog(@"Voice", @"[Send] ⑥ResendVoiceMsg 已调 (上传触发)");
+                    WPLog(@"Voice", @"[Send] ⑥b ResendVoiceMsg 已调 (上传触发)");
                 } else {
-                    // 实例未捕获时 5s 后重试（定时器届时已跑过）
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        @try {
-                            id mgr2 = MioGetUploadVoiceCDNMgr();
-                            if (mgr2 && [mgr2 respondsToSelector:rvmSel]) {
-                                id f2 = formal; // 主线程闭包持有
-                                ((void (*)(id, SEL, id, id))objc_msgSend)(mgr2, rvmSel, chatName, f2);
-                                WPLog(@"Voice", @"[Send] ⑥ResendVoiceMsg 重试已调 (捕获实例)");
-                            }
-                        } @catch (NSException *e2) {}
-                    });
-                    WPLog(@"Voice", @"[Send] ⑥已排 5s 重试");
+                    WPLog(@"Voice", @"[Send] ⑥实例未捕获或方法缺失");
                 }
             } @catch (NSException *e) {
-                WPLog(@"Voice", @"[Send] ⑥ResendVoiceMsg 异常: %@", e.reason);
+                WPLog(@"Voice", @"[Send] ⑥异常: %@", e.reason);
             }
         }
         WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);

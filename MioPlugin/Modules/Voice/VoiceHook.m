@@ -104,22 +104,15 @@ static unsigned int MioWrapLocalID(id wrap) {
 // ═══════════════════════════════════════════════════════════════
 
 static IMP orig_UVM_AddNewPart = NULL;
+// ★log43 教训：part 参数类型未证实前禁止 object_getClass/%@ 解引用（EXC_BAD_ACCESS
+//   非 NSException，@try 拦不住）——全部按裸指针/整型打印，值模式判断类型
 static void hook_UVM_AddNewPart(id self, SEL _cmd, id part, unsigned long localID, unsigned long long svrID,
                                 unsigned long offset, unsigned long len, unsigned long voiceTime,
                                 unsigned long createTime, unsigned long endFlag, unsigned long cancelFlag,
                                 unsigned long voiceFormat, unsigned long forwardFlag, id msgSource) {
-    @try {
-        NSString *partDesc = @"";
-        if (part) {
-            Class pc = object_getClass(part);
-            partDesc = [NSString stringWithFormat:@"<%@ %p>", NSStringFromClass(pc), part];
-        }
-        WPLog(@"Voice", @"[Upload] AddNewPart mgr=%@ part=%@ localID=%lu svrID=%llu offset=%lu len=%lu voiceTime=%lu createTime=%lu end=%lu cancel=%lu format=%lu fwd=%lu src=%@",
-              NSStringFromClass(object_getClass(self)), partDesc, localID, svrID, offset, len,
-              voiceTime, createTime, endFlag, cancelFlag, voiceFormat, forwardFlag, msgSource);
-    } @catch (NSException *e) {
-        WPLog(@"Voice", @"[Upload] AddNewPart 日志异常: %@", e.reason);
-    }
+    WPLog(@"Voice", @"[Upload] AddNewPart mgr=%@ part=%p localID=%lu svrID=%llu offset=%lu len=%lu voiceTime=%lu createTime=%lu end=%lu cancel=%lu format=%lu fwd=%lu src=%p",
+          NSStringFromClass(object_getClass(self)), part, localID, svrID, offset, len,
+          voiceTime, createTime, endFlag, cancelFlag, voiceFormat, forwardFlag, msgSource);
     if (orig_UVM_AddNewPart)
         ((void (*)(id, SEL, id, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long,
                   unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, id))orig_UVM_AddNewPart)
@@ -915,12 +908,18 @@ static void MioInstallFileProbe(void) {
             WPLog(@"Voice", @"[+] IsRecordMsgUploading: hooked (语音取证)");
         }
 
-        // 语音上传管理器取证（run 2030）：只留 ResendVoiceMsg/startSend（2参/0参，签名安全）。
-        // AddNewPart 的 12 参 hook 已移除——签名若与真实不符转发时栈错乱，log43 WCRefine 闪退嫌疑源。
+        // 语音上传管理器取证（run 2032）：AddNewPart(纯指针打印防解引用崩溃) + ResendVoiceMsg + startSend
         NSArray *upMgrNames = @[@"UploadVoiceCDNMgr", @"MMNewUploadVoiceMgr"];
         for (NSString *mn in upMgrNames) {
             Class uc = objc_getClass(mn.UTF8String);
             if (!uc) { WPLog(@"Voice", @"[-] %@ 不存在", mn); continue; }
+            SEL anpSel = NSSelectorFromString(@"AddNewPart:LocalID:n64SvrID:Offset:Len:VoiceTime:CreateTime:EndFlag:CancelFlag:VoiceFormat:ForwardFlag:msgSource:");
+            if (class_getInstanceMethod(uc, anpSel)) {
+                MSHookMessageEx(uc, anpSel, (IMP)hook_UVM_AddNewPart, (IMP *)&orig_UVM_AddNewPart);
+                WPLog(@"Voice", @"[+] %@ AddNewPart hooked (上传取证)", mn);
+            } else {
+                WPLog(@"Voice", @"[-] %@ 无 AddNewPart", mn);
+            }
             SEL rvmSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
             if (class_getInstanceMethod(uc, rvmSel)) {
                 MSHookMessageEx(uc, rvmSel, (IMP)hook_UVM_Resend, (IMP *)&orig_UVM_Resend);
