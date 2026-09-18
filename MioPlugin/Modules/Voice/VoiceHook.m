@@ -16,22 +16,22 @@ static const NSInteger kVoicePackEntryTag = 952701; // 附件面板入口按钮 
 // 工具：从视图层级 / VC 栈里找指定类名的 ViewController
 // ═══════════════════════════════════════════════════════
 
-static UIViewController *FindVCOfClass(UIViewController *root, NSString *className) {
-    if (!root) return nil;
-    if ([NSStringFromClass(root.class) isEqualToString:className]) return root;
+static UIViewController *FindVCOfClass(UIViewController *root, Class targetCls) {
+    if (!root || !targetCls) return nil;
+    // isKindOfClass 沿继承链匹配（聊天页实际实例类是 ChatRoomViewController 等子类）
+    if ([root isKindOfClass:targetCls]) return root;
     for (UIViewController *child in root.childViewControllers) {
-        UIViewController *hit = FindVCOfClass(child, className);
+        UIViewController *hit = FindVCOfClass(child, targetCls);
         if (hit) return hit;
     }
     if ([root isKindOfClass:[UINavigationController class]]) {
         for (UIViewController *vc in [(UINavigationController *)root viewControllers]) {
-            if ([NSStringFromClass(vc.class) isEqualToString:className]) return vc;
-            UIViewController *hit = FindVCOfClass(vc, className);
+            UIViewController *hit = FindVCOfClass(vc, targetCls);
             if (hit) return hit;
         }
     }
     if (root.presentedViewController) {
-        return FindVCOfClass(root.presentedViewController, className);
+        return FindVCOfClass(root.presentedViewController, targetCls);
     }
     return nil;
 }
@@ -42,10 +42,10 @@ static UIViewController *TopPresentedVC(UIViewController *root) {
     return top;
 }
 
-/// 当前聊天会话名：从 BaseMsgContentViewController 的 m_nsCurrentChatUserName ivar 读取
+/// 当前聊天会话名：从聊天页（BaseMsgContentViewController 及其子类）的 m_nsCurrentChatUserName ivar 读取
 static NSString *CurrentChatUserName(void) {
     UIViewController *root = [[UIApplication sharedApplication].windows.firstObject rootViewController];
-    UIViewController *chatVC = FindVCOfClass(root, @"BaseMsgContentViewController");
+    UIViewController *chatVC = FindVCOfClass(root, objc_getClass("BaseMsgContentViewController"));
     if (!chatVC) return nil;
     Ivar ivar = class_getInstanceVariable(chatVC.class, "m_nsCurrentChatUserName");
     if (!ivar) return nil;
@@ -292,10 +292,11 @@ static void hook_BMCC_viewWillLayoutSubviews(id self, SEL _cmd) {
         CGRect zone = [tool convertRect:plus.bounds fromView:plus];
         if (!CGRectContainsPoint(CGRectInset(zone, -10, -10), loc)) return;
 
-        // 宿主聊天页 → 当前会话名
+        // 宿主聊天页 → 当前会话名（isKindOfClass 沿继承链判断，实例类可能是 ChatRoomViewController 等子类）
         UIViewController *host = HostVCForView(tool);
         NSString *chat = nil;
-        if (host && [NSStringFromClass(host.class) containsString:@"BaseMsgContentViewController"]) {
+        Class bmccCls = objc_getClass("BaseMsgContentViewController");
+        if (host && bmccCls && [host isKindOfClass:bmccCls]) {
             Ivar ivar = class_getInstanceVariable(host.class, "m_nsCurrentChatUserName");
             if (ivar) {
                 id val = object_getIvar(host, ivar);
@@ -304,6 +305,9 @@ static void hook_BMCC_viewWillLayoutSubviews(id self, SEL _cmd) {
         }
         if (chat.length == 0) chat = CurrentChatUserName();
         if (chat.length == 0) {
+            WPLog(@"Voice", @"[PlusLP] 会话识别失败: host=%@, ivar=%d",
+                  host ? NSStringFromClass(host.class) : @"nil",
+                  (host && class_getInstanceVariable(host.class, "m_nsCurrentChatUserName") != NULL));
             WPShowToast(@"未识别到当前会话");
             return;
         }
