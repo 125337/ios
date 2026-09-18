@@ -596,9 +596,10 @@ static void MioDumpSendAPIOnce(id msgMgr) {
     }
 }
 
-/// 构造并挂载语音类型扩展对象（★本版本微信语音数据真实载体：log18 实测真实发送 wrap 的
-/// m_byteBuffer 为空、m_extendInfoWithMsgType=<CExtendInfoOfVoiceMsg>，上传管线从扩展取数据。
-/// 扩展类字段名按运行时 ivar 清单自动匹配填值，清单会打进日志供后续轮次对齐）
+/// 构造并挂载语音类型扩展对象（本版本 wrap 挂 m_extendInfoWithMsgType=<CExtendInfoOfVoiceMsg>。
+/// 真实发送模板（log19 实测）：Format=4 / CancelFlag=0 / ForwardFlag=0 / refMessageWrap=wrap，
+/// 其余字段（dtVoice/voiceUrl/aesKey）为 nil。
+/// ★只填模板字段：log20 实测 dtVoice 塞 NSDate（编码是 NSData）会在 SaveMesVoice 内硬崩溃）
 static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long long ms) {
     Class extCls = objc_getClass("CExtendInfoOfVoiceMsg");
     if (!extCls) { WPLog(@"Voice", @"[Send] CExtendInfoOfVoiceMsg 不存在"); return NO; }
@@ -626,9 +627,9 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
         NSString *lower = [@(nm) lowercaseString];
         ptrdiff_t off = ivar_getOffset(lv[i]);
         if (enc[0] == '@') {
-            if ([lower containsString:@"dtvoice"] || [lower containsString:@"voicedate"]) {
-                object_setIvar(ext, lv[i], [NSDate date]);
-            } else if ([lower containsString:@"buffer"] || [lower containsString:@"imgbuf"] || [lower containsString:@"voicedata"]) {
+            // dtVoice 不填（真实流程实测 nil；ivar 编码是 NSData，log20 塞 NSDate
+            // 在 SaveMesVoice 内部被按 CFData 解引用 → SEGV 硬崩溃）
+            if ([lower containsString:@"buffer"] || [lower containsString:@"imgbuf"] || [lower containsString:@"voicedata"]) {
                 object_setIvar(ext, lv[i], wire); // 语音数据主体
             } else if ([lower containsString:@"path"] && path.length > 0) {
                 object_setIvar(ext, lv[i], path);
@@ -710,13 +711,9 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             if (error) *error = [NSError errorWithDomain:@"MioVoice" code:13 userInfo:@{NSLocalizedDescriptionKey: @"消息对象创建失败"}];
             return NO;
         }
-        // 语音数据字段：不同微信版本字段名不同，运行时探测（老版本 m_nsImgBuf）
-        Ivar dataIvar = MioFindVoiceDataIvar(msg);
-        if (!dataIvar) {
-            if (error) *error = [NSError errorWithDomain:@"MioVoice" code:15 userInfo:@{NSLocalizedDescriptionKey: @"微信版本不兼容：未找到语音数据字段"}];
-            return NO;
-        }
-        object_setIvar(msg, dataIvar, wire);
+        // ★数据纯文件链路：真实流程实测 m_byteBuffer 为 nil（log19 真实 wrap 无此字段值），
+        // 语音数据由正式路径文件承载（WCRefine 同款）。此处仅探测记录字段名，不再写 buffer
+        MioFindVoiceDataIvar(msg);
         [msg setValue:chatName forKey:@"m_nsToUsr"];
         MioSetIvarIfExist(msg, "m_nsChatName", chatName); // 真实消息带会话名字段（SaveMesVoice 可能依赖）
         NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
