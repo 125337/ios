@@ -599,6 +599,20 @@ static void MioDumpSendAPIOnce(id msgMgr) {
                   namedCls ? (class_getInstanceMethod(namedCls, s) != NULL) : NO,
                   [msgMgr respondsToSelector:s]);
         }
+        // 方法名清单（一次性）：voice/resend/upload/send 相关选择器，为发送队列触发方式留证据
+        unsigned int mcount = 0;
+        Method *mlist = namedCls ? class_copyMethodList(namedCls, &mcount) : NULL;
+        if (mlist) {
+            NSMutableArray<NSString *> *hits = [NSMutableArray array];
+            for (unsigned int i = 0; i < mcount; i++) {
+                NSString *n = NSStringFromSelector(method_getName(mlist[i]));
+                NSString *l = n.lowercaseString;
+                if ([l containsString:@"voice"] || [l containsString:@"resend"] ||
+                    [l containsString:@"upload"] || [l containsString:@"send"]) [hits addObject:n];
+            }
+            free(mlist);
+            WPLog(@"Voice", @"[API] CMessageMgr 语音/发送相关方法(%lu): %@", (unsigned long)hits.count, hits);
+        }
     } @catch (NSException *e) {
         WPLog(@"Voice", @"[API] 轻量确认异常: %@ %@", e.name, e.reason);
     }
@@ -824,8 +838,15 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
         //   暂存消息 bForward=1/dl=0 只做登记，发送队列不拾取；真正发出的是这条：
         //   bForward=0 / downloadStatus=9 / _m_nsBizCliMsgId="" / 扩展 EndFlag=0 ForwardFlag=0
         //   → AddLocalMsg 入库 → SaveMesVoice → 发送队列拾取
+        //
+        // ★log31 定位（run 2019 修复）：数据字段已与 WCRefine 2616 逐字段一致仍卡"发送中"，
+        //   根因 = 两次 AddLocalMsg 都用 notify=0 把"新消息通知→发送队列启动"关死了
+        //   （反汇编文档根因①；ResendVoiceMsg 本机不存在，无法走重发触发=根因⑤）。
+        //   WCRefine 用 2 参 AddLocalMsg 默认带通知 → 正式消息 notify 必须=1 唤醒发送队列。
+        __block id formalMsg = nil;
         {
             id formal = ((id (*)(id, SEL, long long))objc_msgSend)([wrapClass alloc], @selector(initWithMsgType:), 34LL);
+            formalMsg = formal;
             if (formal) {
                 [formal setValue:chatName forKey:@"m_nsToUsr"];
                 id fromUsr = [msg valueForKey:@"m_nsFromUsr"];
@@ -846,7 +867,8 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
                 SEL al5 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:");
                 SEL al4 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
                 if ([msgMgr respondsToSelector:al6]) {
-                    ((void (*)(id, SEL, id, id, long long, long long))objc_msgSend)(msgMgr, al6, chatName, formal, 1LL, 0LL);
+                    // ★notify=1：唤醒发送队列（log31 根因修复；暂存消息保持 notify=0 不惊动队列）
+                    ((void (*)(id, SEL, id, id, long long, long long))objc_msgSend)(msgMgr, al6, chatName, formal, 1LL, 1LL);
                     ins2 = YES;
                 } else if ([msgMgr respondsToSelector:al5]) {
                     ((void (*)(id, SEL, id, id, long long))objc_msgSend)(msgMgr, al5, chatName, formal, 1LL);
@@ -870,16 +892,20 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
         // 状态跟踪（SSendVoiceMsg 兜底已删：log16 确认本版本不存在该方法）
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             @try {
-                WPLog(@"Voice", @"[Send] 2s状态=%@ localID=%@", [msg valueForKey:@"m_uiStatus"], [msg valueForKey:@"m_uiMesLocalID"]);
+                WPLog(@"Voice", @"[Send] 2s 暂存状态=%@ localID=%@ | 正式状态=%@ localID=%@",
+                      [msg valueForKey:@"m_uiStatus"], [msg valueForKey:@"m_uiMesLocalID"],
+                      [formalMsg valueForKey:@"m_uiStatus"], [formalMsg valueForKey:@"m_uiMesLocalID"]);
             } @catch (NSException *e) {}
         });
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             @try {
                 NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:voicePath error:nil];
-                WPLog(@"Voice", @"[Send] 6s后状态=%@ localID=%@ 文件存在=%d 大小=%llu 扩展=%d",
+                NSString *formalPath = formalMsg ? MioProbeVoicePath(formalMsg, msgMgr) : @"";
+                WPLog(@"Voice", @"[Send] 6s 暂存状态=%@ localID=%@ 文件=%d/%llu | 正式状态=%@ localID=%@ 路径=%@ 文件=%d",
                       [msg valueForKey:@"m_uiStatus"], [msg valueForKey:@"m_uiMesLocalID"],
-                      [[NSFileManager defaultManager] fileExistsAtPath:voicePath],
-                      attrs.fileSize ?: 0, extOK ? 1 : 0);
+                      [[NSFileManager defaultManager] fileExistsAtPath:voicePath], attrs.fileSize ?: 0,
+                      [formalMsg valueForKey:@"m_uiStatus"], [formalMsg valueForKey:@"m_uiMesLocalID"],
+                      formalPath, [[NSFileManager defaultManager] fileExistsAtPath:formalPath]);
             } @catch (NSException *e) {}
         });
         [self addRecentRelPath:relPath];
