@@ -588,8 +588,10 @@ static void MioDumpSendAPIOnce(id msgMgr) {
               NSStringFromClass(instCls), NSStringFromClass(class_getSuperclass(instCls)),
               NSStringFromClass(namedCls));
         NSArray<NSString *> *known = @[@"AddMsg:MsgWrap:",
+                                       @"AddLocalMsg:MsgWrap:",
                                        @"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:",
                                        @"SaveMesVoice:MsgWrap:",
+                                       @"ResendMsg:MsgWrap:",
                                        @"addMessageToDB:",
                                        @"ResendVoiceMsg:MsgWrap:",
                                        @"SSendVoiceMsg:toContactUsrName:"];
@@ -837,12 +839,11 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
         // ★阶段2：WCRefine"正式消息"（log29 第3次调用 localID=2616 实测模板）。
         //   暂存消息 bForward=1/dl=0 只做登记，发送队列不拾取；真正发出的是这条：
         //   bForward=0 / downloadStatus=9 / _m_nsBizCliMsgId="" / 扩展 EndFlag=0 ForwardFlag=0
-        //   → AddLocalMsg 入库 → SaveMesVoice → 发送队列拾取
         //
-        // ★log31 定位（run 2019 修复）：数据字段已与 WCRefine 2616 逐字段一致仍卡"发送中"，
-        //   根因 = 两次 AddLocalMsg 都用 notify=0 把"新消息通知→发送队列启动"关死了
-        //   （反汇编文档根因①；ResendVoiceMsg 本机不存在，无法走重发触发=根因⑤）。
-        //   WCRefine 用 2 参 AddLocalMsg 默认带通知 → 正式消息 notify 必须=1 唤醒发送队列。
+        // ★log33 对比定位（run 2020）：数据字段逐字段一致仍卡"发送中"，与 WCRefine 的流程差异：
+        //   ① WCRefine 正式消息入库不走 6参 AddLocalMsg（hook 未触发）→ 用 2参 AddLocalMsg
+        //   ② WCRefine 正式消息只经历 1 次 SaveMesVoice（入库内部自动），我们调了 2 次
+        //   ③ WCRefine 反汇编管线结尾有 ResendVoiceMsg 强制拾取 → 本机真名 ResendMsg:MsgWrap:
         __block id formalMsg = nil;
         {
             id formal = ((id (*)(id, SEL, long long))objc_msgSend)([wrapClass alloc], @selector(initWithMsgType:), 34LL);
@@ -863,24 +864,39 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
                 MioSetIvarIfExist(formal, "_m_nsBizCliMsgId", @"");
                 BOOL extOK2 = MioAttachVoiceExtension(formal, wire, @"", ms, 0, 0);
                 BOOL ins2 = NO;
+                // ★log33 实锤（run 2020 对齐）：WCRefine 正式消息入库不触发 6参 AddLocalMsg hook，
+                //   其入库用的是 2参 AddLocalMsg:MsgWrap:（默认走完整新消息路径）。
+                //   2参优先 → 6参 notify=1 → 5参 兜底
+                SEL al4 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
                 SEL al6 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
                 SEL al5 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:");
-                SEL al4 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
-                if ([msgMgr respondsToSelector:al6]) {
-                    // ★notify=1：唤醒发送队列（log31 根因修复；暂存消息保持 notify=0 不惊动队列）
+                if ([msgMgr respondsToSelector:al4]) {
+                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, al4, chatName, formal);
+                    ins2 = YES;
+                    WPLog(@"Voice", @"[Send] 正式入库方法: AddLocalMsg(2参, WCRefine 同款)");
+                } else if ([msgMgr respondsToSelector:al6]) {
+                    // notify=1：唤醒发送队列（log32 实测 notify=1 仍卡 → 仅作兜底）
                     ((void (*)(id, SEL, id, id, long long, long long))objc_msgSend)(msgMgr, al6, chatName, formal, 1LL, 1LL);
                     ins2 = YES;
+                    WPLog(@"Voice", @"[Send] 正式入库方法: AddLocalMsg(6参, fixTime=1 notify=1)");
                 } else if ([msgMgr respondsToSelector:al5]) {
                     ((void (*)(id, SEL, id, id, long long))objc_msgSend)(msgMgr, al5, chatName, formal, 1LL);
                     ins2 = YES;
-                } else if ([msgMgr respondsToSelector:al4]) {
-                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, al4, chatName, formal);
-                    ins2 = YES;
+                    WPLog(@"Voice", @"[Send] 正式入库方法: AddLocalMsg(5参, fixTime=1)");
                 }
                 WPLog(@"Voice", @"[Send] 正式消息入库%@ localID=%u 扩展=%d", ins2 ? @"成功" : @"失败", MioWrapLocalIDOf(formal), extOK2);
-                if (ins2 && [msgMgr respondsToSelector:saveSel]) {
-                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, saveSel, chatName, formal);
-                    WPLog(@"Voice", @"[Send] SaveMesVoice(正式消息) 已调 localID=%u", MioWrapLocalIDOf(formal));
+                // ★不显式调 SaveMesVoice(正式)——log33 实锤：WCRefine 的正式消息只经历入库方法
+                //   内部的 1 次自动 SaveMesVoice，我们多调的第 2 次可能重置登记状态（log32 两调仍卡）。
+                //   ★队列触发：ResendMsg:MsgWrap: 本机存在（log32 方法清单），即反汇编文档
+                //   "ResendVoiceMsg 强制拾取"在本机的真名；守卫探测后调用
+                if (ins2) {
+                    SEL resendSel = NSSelectorFromString(@"ResendMsg:MsgWrap:");
+                    if ([msgMgr respondsToSelector:resendSel]) {
+                        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, resendSel, chatName, formal);
+                        WPLog(@"Voice", @"[Send] ResendMsg 已调 (强制队列拾取, localID=%u)", MioWrapLocalIDOf(formal));
+                    } else {
+                        WPLog(@"Voice", @"[Send] ResendMsg 不可用（跳过队列触发）");
+                    }
                 }
             } else {
                 WPLog(@"Voice", @"[Send] 正式消息构造失败!");
