@@ -61,7 +61,7 @@
     cy = [self addNavRowInGroup:group
                           title:@"语音包管理"
                        subtitle:@"浏览 / 导入 / 收藏 / 重命名 / 删除"
-                            tag:0
+                            tag:1  // 基类点击分发要求 tag != 0 才执行 action
                          action:@selector(openManager)
                              cy:cy
                           width:w];
