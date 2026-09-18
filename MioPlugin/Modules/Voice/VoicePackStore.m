@@ -840,6 +840,18 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
                     ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, uv, chatName, msg);
                     WPLog(@"Voice", @"[Send] 完成③UpdateVoiceMessage (status=2,dl=1) 已调");
                 }
+                // ④ dl→9（本地音频就绪：修复本地无声；run 2020 实测 dl=9 气泡可播）
+                MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 9);
+                if ([msgMgr respondsToSelector:uv]) {
+                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, uv, chatName, msg);
+                    WPLog(@"Voice", @"[Send] 完成④UpdateVoiceMessage (dl=9本地可播) 已调");
+                }
+                // ⑤ ResendMsg 强制队列拾取（status=2+文件就绪语境，与 run 2020 不同）
+                SEL resendSel3 = NSSelectorFromString(@"ResendMsg:MsgWrap:");
+                if ([msgMgr respondsToSelector:resendSel3]) {
+                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, resendSel3, chatName, msg);
+                    WPLog(@"Voice", @"[Send] ResendMsg 已调 (强制上传拾取)");
+                }
             } @catch (NSException *e) {
                 WPLog(@"Voice", @"[Send] 完成信号异常: %@", e.reason);
             }

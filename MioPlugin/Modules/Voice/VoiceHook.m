@@ -296,6 +296,40 @@ static void hook_StopUploadRecordMsgByUser(id self, SEL _cmd, id chatName) {
     ((void (*)(id, SEL, id))orig_StopUploadRecordMsgByUser)(self, _cmd, chatName);
 }
 
+// 发送结果回调取证（run 2025）：真实语音上传成功/失败走哪个回调
+static IMP orig_OnSendMessageSuccess = NULL;
+static void hook_OnSendMessageSuccess(id self, SEL _cmd, id arg) {
+    @try {
+        WPLog(@"Voice", @"[取证.OnSendMessageSuccess] 参数=%@ (%@)", arg, NSStringFromClass([arg class]));
+    } @catch (NSException *e) {}
+    ((void (*)(id, SEL, id))orig_OnSendMessageSuccess)(self, _cmd, arg);
+}
+
+static IMP orig_OnSendMessageFail = NULL;
+static void hook_OnSendMessageFail(id self, SEL _cmd, id arg) {
+    @try {
+        WPLog(@"Voice", @"[取证.OnSendMessageFail] 参数=%@ (%@)", arg, NSStringFromClass([arg class]));
+    } @catch (NSException *e) {}
+    ((void (*)(id, SEL, id))orig_OnSendMessageFail)(self, _cmd, arg);
+}
+
+static IMP orig_OnErrorBySender = NULL;
+static void hook_OnErrorBySender(id self, SEL _cmd, id arg, long long errNo) {
+    @try {
+        WPLog(@"Voice", @"[取证.OnErrorBySender] 参数=%@ errNo=%lld", arg, errNo);
+    } @catch (NSException *e) {}
+    ((void (*)(id, SEL, id, long long))orig_OnErrorBySender)(self, _cmd, arg, errNo);
+}
+
+static IMP orig_IsRecordMsgUploading = NULL;
+static BOOL hook_IsRecordMsgUploading(id self, SEL _cmd, id arg) {
+    BOOL r = ((BOOL (*)(id, SEL, id))orig_IsRecordMsgUploading)(self, _cmd, arg);
+    @try {
+        WPLog(@"Voice", @"[取证.IsRecordMsgUploading] 参数=%@ → %d", arg, r);
+    } @catch (NSException *e) {}
+    return r;
+}
+
 static IMP orig_AddMsgMsgWrap = NULL;
 
 static void hook_AddMsgMsgWrap(id self, SEL _cmd, id chatName, id wrap) {
@@ -798,6 +832,27 @@ static void MioInstallFileProbe(void) {
         if (class_getInstanceMethod(cls, suruSel)) {
             MSHookMessageEx(cls, suruSel, (IMP)hook_StopUploadRecordMsgByUser, (IMP *)&orig_StopUploadRecordMsgByUser);
             WPLog(@"Voice", @"[+] StopUploadRecordMsgByUsername: hooked (语音取证)");
+        }
+        // 发送结果回调取证（run 2025）
+        SEL osSuccSel = NSSelectorFromString(@"OnSendMessageSuccess:");
+        if (class_getInstanceMethod(cls, osSuccSel)) {
+            MSHookMessageEx(cls, osSuccSel, (IMP)hook_OnSendMessageSuccess, (IMP *)&orig_OnSendMessageSuccess);
+            WPLog(@"Voice", @"[+] OnSendMessageSuccess: hooked (语音取证)");
+        }
+        SEL osFailSel = NSSelectorFromString(@"OnSendMessageFail:");
+        if (class_getInstanceMethod(cls, osFailSel)) {
+            MSHookMessageEx(cls, osFailSel, (IMP)hook_OnSendMessageFail, (IMP *)&orig_OnSendMessageFail);
+            WPLog(@"Voice", @"[+] OnSendMessageFail: hooked (语音取证)");
+        }
+        SEL oerrSel = NSSelectorFromString(@"OnErrorBySender:ErrNo:");
+        if (class_getInstanceMethod(cls, oerrSel)) {
+            MSHookMessageEx(cls, oerrSel, (IMP)hook_OnErrorBySender, (IMP *)&orig_OnErrorBySender);
+            WPLog(@"Voice", @"[+] OnErrorBySender:ErrNo: hooked (语音取证)");
+        }
+        SEL isUpSel = NSSelectorFromString(@"IsRecordMsgUploading:");
+        if (class_getInstanceMethod(cls, isUpSel)) {
+            MSHookMessageEx(cls, isUpSel, (IMP)hook_IsRecordMsgUploading, (IMP *)&orig_IsRecordMsgUploading);
+            WPLog(@"Voice", @"[+] IsRecordMsgUploading: hooked (语音取证)");
         }
     } else {
         WPLog(@"Voice", @"[-] CMessageMgr not found");
