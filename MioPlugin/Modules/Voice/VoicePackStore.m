@@ -543,6 +543,46 @@ static BOOL MioWriteVoiceFile(NSData *data, NSString *path) {
     return [data writeToFile:path atomically:YES];
 }
 
+/// 沿继承链扫描方法（class_copyMethodList 只列本类方法，漏掉继承的），verbose 时打印全部命中
+static SEL MioFindMethodInChain(Class cls, NSArray<NSString *> *keywords, NSUInteger minArgs, BOOL verbose) {
+    SEL found = NULL;
+    int logged = 0;
+    for (Class c = cls; c != nil && c != [NSObject class]; c = class_getSuperclass(c)) {
+        unsigned int count = 0;
+        Method *list = class_copyMethodList(c, &count);
+        for (unsigned int i = 0; i < count; i++) {
+            NSString *name = NSStringFromSelector(method_getName(list[i]));
+            NSString *lower = name.lowercaseString;
+            for (NSString *k in keywords) {
+                if ([lower containsString:k]) {
+                    if (verbose && logged++ < 60) WPLog(@"Voice", @"[API] %@:: %@ (%u参)", class_getName(c), name, method_getNumberOfArguments(list[i]));
+                    if (!found && method_getNumberOfArguments(list[i]) >= minArgs) found = method_getName(list[i]);
+                    break;
+                }
+            }
+        }
+        free(list);
+    }
+    return found;
+}
+
+/// 一次性打印本版本语音发送相关 API（首个语音包时），确认真实接口名
+static void MioDumpSendAPIOnce(id msgMgr) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        WPLog(@"Voice", @"[API] ===== CMessageMgr 继承链 (addlocal/addmsg/resend/voice/upload/ssend) =====");
+        MioFindMethodInChain(object_getClass(msgMgr), @[@"addlocal", @"addmsg", @"resend", @"voice", @"upload", @"ssend"], 4, YES);
+        Class upCls = objc_getClass("MMNewUploadVoiceMgr");
+        id upMgr = upCls ? WXGetService(upCls) : nil;
+        if (upMgr) {
+            WPLog(@"Voice", @"[API] ===== MMNewUploadVoiceMgr =====");
+            MioFindMethodInChain(object_getClass(upMgr), @[@"voice", @"upload", @"resend", @"send"], 2, YES);
+        } else {
+            WPLog(@"Voice", @"[API] MMNewUploadVoiceMgr 不存在");
+        }
+    });
+}
+
 + (BOOL)sendVoiceAtRelPath:(NSString *)relPath toChat:(NSString *)chatName error:(NSError **)error {
     @try {
         if (relPath.length == 0 || chatName.length == 0) {
@@ -628,12 +668,38 @@ static BOOL MioWriteVoiceFile(NSData *data, NSString *path) {
             WPLog(@"Voice", @"[Send] 未探测到语音路径方法，仅依赖 buffer");
         }
 
-        // 入库+触发真实发送管线：优先 AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:（小微实测链），兜底 AddMsg
-        SEL localSel = MioFindMethodSel(object_getClass(msgMgr), NO, @[@"addlocalmsg"], 6);
-        if (localSel) {
-            ((void (*)(id, SEL, id, id, long long, long long))objc_msgSend)(msgMgr, localSel, chatName, msg, 1LL, 0LL);
-            WPLog(@"Voice", @"[Send] 入库: %@ (fixTime=1 notify=0)", NSStringFromSelector(localSel));
+        MioDumpSendAPIOnce(msgMgr); // 一次性 dump 本版本发送相关 API（诊断用）
+
+        // 入库：优先精确 AddLocalMsg（respondsToSelector 沿继承链查找，弥补 class_copyMethodList 查不到继承方法的盲区）
+        BOOL inserted = NO;
+        SEL addLocal6 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
+        SEL addLocal5 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:");
+        SEL addLocal4 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
+        if ([msgMgr respondsToSelector:addLocal6]) {
+            ((void (*)(id, SEL, id, id, long long, long long))objc_msgSend)(msgMgr, addLocal6, chatName, msg, 1LL, 0LL);
+            inserted = YES;
+            WPLog(@"Voice", @"[Send] 入库: AddLocalMsg(6参精确, fixTime=1 notify=0)");
+        } else if ([msgMgr respondsToSelector:addLocal5]) {
+            ((void (*)(id, SEL, id, id, long long))objc_msgSend)(msgMgr, addLocal5, chatName, msg, 1LL);
+            inserted = YES;
+            WPLog(@"Voice", @"[Send] 入库: AddLocalMsg(5参精确, fixTime=1)");
+        } else if ([msgMgr respondsToSelector:addLocal4]) {
+            ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addLocal4, chatName, msg);
+            inserted = YES;
+            WPLog(@"Voice", @"[Send] 入库: AddLocalMsg(4参精确)");
         } else {
+            SEL chainSel = MioFindMethodInChain(object_getClass(msgMgr), @[@"addlocalmsg"], 4, NO);
+            if (chainSel) {
+                Method m = class_getInstanceMethod(object_getClass(msgMgr), chainSel);
+                unsigned int argc = m ? method_getNumberOfArguments(m) : 0;
+                WPLog(@"Voice", @"[Send] 链上命中: %@ (%u参)", NSStringFromSelector(chainSel), argc);
+                if (argc == 6) ((void (*)(id, SEL, id, id, long long, long long))objc_msgSend)(msgMgr, chainSel, chatName, msg, 1LL, 0LL);
+                else if (argc == 5) ((void (*)(id, SEL, id, id, long long))objc_msgSend)(msgMgr, chainSel, chatName, msg, 1LL);
+                else ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, chainSel, chatName, msg);
+                inserted = YES;
+            }
+        }
+        if (!inserted) {
             ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addSel, chatName, msg);
             WPLog(@"Voice", @"[Send] 入库: AddMsg:MsgWrap: (兜底)");
         }
@@ -646,10 +712,29 @@ static BOOL MioWriteVoiceFile(NSData *data, NSString *path) {
 
         WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
 
-        // 诊断：2 秒后观察状态流转（1=待发送 2=发送中 4=已发送），确认上传管线是否拾取
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        // 兜底触发：3 秒后仍未发送 → 调 ResendVoiceMsg 模拟用户点重试；6 秒后再观察状态
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             @try {
-                WPLog(@"Voice", @"[Send] 2s后状态=%@ localID=%@", [msg valueForKey:@"m_uiStatus"], [msg valueForKey:@"m_uiMesLocalID"]);
+                NSNumber *st = [msg valueForKey:@"m_uiStatus"];
+                if (st.longLongValue != 4) {
+                    WPLog(@"Voice", @"[Send] 3s状态=%@，尝试 ResendVoiceMsg 触发上传", st);
+                    SEL resendSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
+                    if ([msgMgr respondsToSelector:resendSel]) {
+                        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, resendSel, chatName, msg);
+                        WPLog(@"Voice", @"[Send] ResendVoiceMsg 已调用");
+                    } else {
+                        WPLog(@"Voice", @"[Send] ResendVoiceMsg:MsgWrap: 不可用");
+                    }
+                } else {
+                    WPLog(@"Voice", @"[Send] 3s状态=4 已发送 ✓");
+                }
+            } @catch (NSException *e) {
+                WPLog(@"Voice", @"[Send] 重试异常: %@ %@", e.name, e.reason);
+            }
+        });
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            @try {
+                WPLog(@"Voice", @"[Send] 6s后状态=%@ localID=%@", [msg valueForKey:@"m_uiStatus"], [msg valueForKey:@"m_uiMesLocalID"]);
             } @catch (NSException *e) {}
         });
         [self addRecentRelPath:relPath];
