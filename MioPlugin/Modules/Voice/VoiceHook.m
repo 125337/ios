@@ -85,50 +85,68 @@ static unsigned int MioWrapLocalID(id wrap) {
     return *(unsigned int *)((__bridge void *)wrap + ivar_getOffset(iv));
 }
 
-/// 全量 dump 消息 wrap 的 ivar 值（一次消息一条，开销可忽略）
+/// 把对象全部 ivar 值追加到 out（对象类型打印内容/长度，整型按编码定长读）
+static unsigned int MioDumpIvarsInto(id obj, NSMutableString *out) {
+    unsigned int count = 0;
+    Class cls = object_getClass(obj);
+    Ivar *list = class_copyIvarList(cls, &count);
+    const void *base = (__bridge void *)obj;
+    for (unsigned int i = 0; i < count; i++) {
+        const char *nm = ivar_getName(list[i]);
+        const char *enc = ivar_getTypeEncoding(list[i]);
+        if (!nm || !enc) continue;
+        ptrdiff_t off = ivar_getOffset(list[i]);
+        NSString *piece = nil;
+        if (enc[0] == '@') {
+            id v = object_getIvar(obj, list[i]);
+            if ([v isKindOfClass:[NSString class]]) {
+                NSString *s = (NSString *)v;
+                if (s.length == 0) piece = @"\"\"";
+                else piece = [NSString stringWithFormat:@"\"%@\"(len=%lu)", s.length > 110 ? [s substringToIndex:110] : s, (unsigned long)s.length];
+            } else if ([v isKindOfClass:[NSData class]]) {
+                piece = [NSString stringWithFormat:@"NSData(%lu字节)", (unsigned long)[v length]];
+            } else if (v) {
+                piece = [NSString stringWithFormat:@"<%@>", NSStringFromClass(object_getClass(v))];
+            }
+        } else if (strchr("cBsSiIlLqQB", enc[0])) {
+            long long iv = 0;
+            switch (enc[0]) {
+                case 'c': case 'B': iv = *(signed char *)(base + off); break;
+                case 's': iv = *(short *)(base + off); break;
+                case 'S': iv = *(unsigned short *)(base + off); break;
+                case 'i': iv = *(int *)(base + off); break;
+                case 'I': iv = *(unsigned int *)(base + off); break;
+                case 'l': case 'q': iv = *(long long *)(base + off); break;
+                case 'L': case 'Q': iv = (long long)(*(unsigned long long *)(base + off)); break;
+                default: break;
+            }
+            piece = [NSString stringWithFormat:@"%lld", iv];
+        }
+        if (piece) [out appendFormat:@"\n  %@ = %@", @(nm), piece];
+    }
+    if (list) free(list);
+    return count;
+}
+
+/// 全量 dump 消息 wrap 的 ivar 值（一次消息一条，开销可忽略）；递归 dump 语音扩展对象
 static void MioDumpVoiceWrap(id wrap, NSString *tag) {
     if (!wrap) return;
     @try {
-        unsigned int count = 0;
-        Class cls = object_getClass(wrap);
-        Ivar *list = class_copyIvarList(cls, &count);
         NSMutableString *out = [NSMutableString string];
-        const void *base = (__bridge void *)wrap;
-        for (unsigned int i = 0; i < count; i++) {
-            const char *nm = ivar_getName(list[i]);
-            const char *enc = ivar_getTypeEncoding(list[i]);
-            if (!nm || !enc) continue;
-            ptrdiff_t off = ivar_getOffset(list[i]);
-            NSString *piece = nil;
-            if (enc[0] == '@') {
-                id v = object_getIvar(wrap, list[i]);
-                if ([v isKindOfClass:[NSString class]]) {
-                    NSString *s = (NSString *)v;
-                    if (s.length == 0) piece = @"\"\"";
-                    else piece = [NSString stringWithFormat:@"\"%@\"(len=%lu)", s.length > 110 ? [s substringToIndex:110] : s, (unsigned long)s.length];
-                } else if ([v isKindOfClass:[NSData class]]) {
-                    piece = [NSString stringWithFormat:@"NSData(%lu字节)", (unsigned long)[v length]];
-                } else if (v) {
-                    piece = [NSString stringWithFormat:@"<%@>", NSStringFromClass(object_getClass(v))];
-                }
-            } else if (strchr("cBsSiIlLqQB", enc[0])) {
-                long long iv = 0;
-                switch (enc[0]) {
-                    case 'c': case 'B': iv = *(signed char *)(base + off); break;
-                    case 's': iv = *(short *)(base + off); break;
-                    case 'S': iv = *(unsigned short *)(base + off); break;
-                    case 'i': iv = *(int *)(base + off); break;
-                    case 'I': iv = *(unsigned int *)(base + off); break;
-                    case 'l': case 'q': iv = *(long long *)(base + off); break;
-                    case 'L': case 'Q': iv = (long long)(*(unsigned long long *)(base + off)); break;
-                    default: break;
-                }
-                piece = [NSString stringWithFormat:@"%lld", iv];
+        unsigned int count = MioDumpIvarsInto(wrap, out);
+        WPLog(@"Voice", @"[%@] wrap<%@>(%u ivars):%@", tag, NSStringFromClass(object_getClass(wrap)), count, out);
+        // 语音类型扩展对象（本版本语音数据真实载体）
+        Ivar extIv = class_getInstanceVariable(object_getClass(wrap), "m_extendInfoWithMsgType");
+        if (extIv) {
+            id ext = object_getIvar(wrap, extIv);
+            if (ext) {
+                NSMutableString *eo = [NSMutableString string];
+                unsigned int ecnt = MioDumpIvarsInto(ext, eo);
+                WPLog(@"Voice", @"[%@] 扩展<%@>(%u ivars):%@", tag, NSStringFromClass(object_getClass(ext)), ecnt, eo);
+            } else {
+                WPLog(@"Voice", @"[%@] 扩展=nil", tag);
             }
-            if (piece) [out appendFormat:@"\n  %@ = %@", @(nm), piece];
         }
-        free(list);
-        WPLog(@"Voice", @"[%@] wrap(%u ivars):%@", tag, count, out);
     } @catch (NSException *e) {
         WPLog(@"Voice", @"[%@] dump异常: %@", tag, e.reason);
     }
