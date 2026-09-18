@@ -67,6 +67,13 @@ static NSInteger const kSectionFolder = 1;
     [self.table reloadData];
     self.title = self.currentRelPath.length > 0 ? self.currentRelPath.lastPathComponent : @"选择语音包";
     [self updateBackButton];
+    // 诊断：打印根目录绝对路径与当前目录下的文件清单，用于排查外部存储路径是否正确
+    if (self.currentRelPath.length == 0) {
+        NSString *root = [VoicePackStore rootDirectory];
+        NSArray<NSString *> *names = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:root error:nil];
+        WPLog(@"Voice", @"[Pick] 根目录: %@", root);
+        WPLog(@"Voice", @"[Pick] 根目录内容(%lu): %@", (unsigned long)names.count, names);
+    }
 }
 
 /// 子目录状态下用「返回上级」拦截导航返回（根目录恢复默认返回按钮）
