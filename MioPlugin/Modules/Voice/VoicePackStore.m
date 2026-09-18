@@ -418,29 +418,45 @@ static BOOL MioIsSystemPlayableExt(NSString *ext) {
 
 #pragma mark - 发送
 
+/// 按 silk 帧结构走完整条流，返回帧数（每帧 20ms）；结构非法返回 -1
+static long long SilkWalkFrames(const uint8_t *b, NSUInteger len, NSUInteger pos, int sizeBytes) {
+    long long frames = 0;
+    while (pos + sizeBytes <= len) {
+        long long fsz = (sizeBytes == 1) ? b[pos] : (b[pos] | (b[pos + 1] << 8)); // 2字节为小端
+        pos += sizeBytes;
+        if (fsz == 0) break;            // 结束帧
+        if (fsz > 250) return -1;       // 非法帧长（silk 单帧上限 250 字节）
+        if (pos + fsz > len) return -1; // 截断
+        pos += fsz;
+        frames++;
+        if (frames > 6000) return -1;   // 防御：超过 2 分钟
+    }
+    return (pos == len) ? frames : -1;  // 必须恰好走完整条流
+}
+
+/// 定位文件内的 silk 流起点（跳过微信本地文件的 0x02 前缀），失败返回 -1
+static NSUInteger SilkStreamOffset(NSData *data) {
+    const uint8_t *b = data.bytes;
+    NSUInteger len = data.length;
+    if (len < 9) return (NSUInteger)-1;
+    if (memcmp(b, "#!SILK_V3", 9) == 0) return 0;
+    if (len > 10 && b[0] == 0x02 && memcmp(b + 1, "#!SILK_V3", 9) == 0) return 1;
+    return (NSUInteger)-1;
+}
+
 + (long long)silkDurationMsForFile:(NSString *)path {
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (data.length < 20) return 0;
-    // 微信本地 silk 文件可能带 0x02 前缀
-    const uint8_t *raw = data.bytes;
-    if (raw[0] == 0x02 && data.length > 10 && memcmp(raw + 1, "#!SILK_V3", 9) == 0) {
-        data = [data subdataWithRange:NSMakeRange(1, data.length - 1)];
-    }
-    const uint8_t *b = data.bytes;
-    NSUInteger len = data.length;
-    if (len < 9 || memcmp(b, "#!SILK_V3", 9) != 0) return 0;
+    NSUInteger off = SilkStreamOffset(data);
+    if (off == (NSUInteger)-1) return 0;
+    const uint8_t *b = (const uint8_t *)data.bytes + off;
+    NSUInteger len = data.length - off;
     NSUInteger pos = 9;
-    long long frames = 0;
-    while (pos < len) {
-        uint8_t fsz = b[pos++];
-        if (fsz == 0) break;           // 结束帧
-        if (fsz > 250) return 0;       // 非法帧长（silk 单帧上限 250 字节）
-        if (pos + fsz > len) return 0; // 截断
-        pos += fsz;
-        frames++;
-        if (frames > 6000) break;      // 防御：超过 2 分钟停止计数
-    }
-    if (frames == 0) return 0;
+    if (pos < len && b[pos] == '\n') pos++; // 头部变体: #!SILK_V3\n
+    // 优先 2 字节小端帧长，其次 1 字节帧长
+    long long frames = SilkWalkFrames(b, len, pos, 2);
+    if (frames < 0) frames = SilkWalkFrames(b, len, pos, 1);
+    if (frames <= 0) return 0;
     return frames * 20; // 每帧固定 20ms
 }
 
@@ -466,6 +482,18 @@ static BOOL MioIsSystemPlayableExt(NSString *ext) {
                   [[NSFileManager defaultManager] fileExistsAtPath:abs],
                   attrs.fileSize ?: 0);
             if (error) *error = [NSError errorWithDomain:@"MioVoice" code:11 userInfo:@{NSLocalizedDescriptionKey: @"音频文件为空或不可读"}];
+            return NO;
+        }
+        // 诊断：文件头 16 字节，用于确认 silk 格式
+        NSMutableString *hex = [NSMutableString string];
+        const uint8_t *hb = data.bytes;
+        for (NSUInteger i = 0; i < 16 && i < data.length; i++) [hex appendFormat:@"%02X ", hb[i]];
+        // 网络格式为纯 silk 流：剥离微信本地文件的 0x02 前缀
+        NSUInteger off = SilkStreamOffset(data);
+        WPLog(@"Voice", @"[Send] 文件头: %@ silkOffset=%lu", hex, (unsigned long)off);
+        if (off > 0) data = [data subdataWithRange:NSMakeRange(off, data.length - off)];
+        else if (off == (NSUInteger)-1) {
+            if (error) *error = [NSError errorWithDomain:@"MioVoice" code:16 userInfo:@{NSLocalizedDescriptionKey: @"文件不是有效的 silk 格式"}];
             return NO;
         }
         Class wrapClass = objc_getClass("CMessageWrap");

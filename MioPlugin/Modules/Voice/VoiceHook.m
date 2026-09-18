@@ -150,10 +150,23 @@ static void hook_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
         }
         if (msgType != 34) return; // 仅语音消息
 
-        // 跳过自己发送的
         NSString *fromUsr = [wrap valueForKey:@"m_nsFromUsr"];
         NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
-        if (selfUsr.length > 0 && [fromUsr isEqualToString:selfUsr]) return;
+        BOOL selfSent = (selfUsr.length > 0 && [fromUsr isEqualToString:selfUsr]);
+
+        // 诊断：记录真实语音消息（含自己录制的）的 buffer 头部与 XML，用于对齐发送构造格式
+        @try {
+            NSData *realBuf = [VoicePackStore voiceDataFromWrap:wrap];
+            NSMutableString *hx = [NSMutableString string];
+            const uint8_t *rb = realBuf.bytes;
+            for (NSUInteger i = 0; i < 8 && i < realBuf.length; i++) [hx appendFormat:@"%02X ", rb[i]];
+            NSString *xml = [wrap valueForKey:@"m_nsContent"] ?: @"";
+            WPLog(@"Voice", @"[真实语音] self=%d buf=%lu字节 头=[%@] XML=%@",
+                  selfSent, (unsigned long)realBuf.length, hx,
+                  xml.length > 220 ? [xml substringToIndex:220] : xml);
+        } @catch (NSException *e) {}
+
+        if (selfSent) return; // 跳过自己发送的
 
         NSData *imgBuf = [VoicePackStore voiceDataFromWrap:wrap];
         if (imgBuf.length == 0) return;
