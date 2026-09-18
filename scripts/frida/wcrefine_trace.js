@@ -1,0 +1,67 @@
+// ═══════════════════════════════════════════════════════════════
+// wcrefine_trace.js — 追踪 WCRefine 语音包发送链路
+// 用法：微信打开后 runner.py wcrefine_trace.js，然后用户用 WCRefine 的
+//       语音包功能发一条，日志给出完整方法调用链和参数
+// ═══════════════════════════════════════════════════════════════
+'use strict';
+
+if (!ObjC.available) {
+    console.log('[!] ObjC 不可用');
+} else {
+    // 枚举 WCRefine 的语音包/发送相关类
+    var clsNames = Object.keys(ObjC.classes).filter(function (c) {
+        return c.indexOf('WCRefine') === 0 && /voice|send|pack|upload/i.test(c);
+    });
+    console.log('[W] WCRefine 语音相关类: ' + JSON.stringify(clsNames));
+
+    var total = 0;
+    clsNames.forEach(function (cn) {
+        var cls = ObjC.classes[cn];
+        var ms = cls.$ownMethods;
+        if (ms.length > 250) {
+            console.log('[W] ' + cn + ' 方法数 ' + ms.length + ' 过多，跳过');
+            return;
+        }
+        ms.forEach(function (m) {
+            try {
+                var imp = cls[m].implementation;
+                // ★只打方法名不打参数：参数可能是 int/CGRect 等原始值，
+                //   new ObjC.Object 解引用会崩（上次 638 方法挂参数摘要直接闪退的教训）
+                Interceptor.attach(imp, {
+                    onEnter: function (args) {
+                        try { console.log('[W] ' + cn + ' ' + m); } catch (e) {}
+                    }
+                });
+                total++;
+            } catch (e) {}
+        });
+    });
+    console.log('[W] 共 hook ' + total + ' 个方法。现在用 WCRefine 语音包发一条');
+
+    // CMessageMgr 关键方法保持追踪（对照 WCRefine 最终调用了什么）
+    var MGR = ObjC.classes.CMessageMgr;
+    var PAT = /AddMsg:MsgWrap:|AddLocalMsg|SaveMesVoice|ResendMsg|UpdateVoiceMessage|UpdateVoiceStatus/;
+    MGR.$ownMethods.forEach(function (m) {
+        if (!PAT.test(m)) return;
+        try {
+            var imp = MGR[m].implementation;
+            Interceptor.attach(imp, {
+                onEnter: function (args) {
+                    try {
+                        var line = '[M] ' + m;
+                        try {
+                            var w = new ObjC.Object(args[3]);
+                            if (w.$className === 'CMessageWrap') {
+                                var v = w.$ivars;
+                                line += ' wrap{lid=' + v['m_uiMesLocalID'] + ' st=' + v['m_uiStatus'] +
+                                        ' dl=' + v['m_uiDownloadStatus'] + ' fw=' + v['m_bForward'] + '}';
+                            }
+                        } catch (e) {}
+                        console.log(line);
+                    } catch (e) {}
+                }
+            });
+        } catch (e) {}
+    });
+    console.log('[M] CMessageMgr 关键方法追踪就绪');
+}
