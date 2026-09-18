@@ -295,76 +295,87 @@ if (!ObjC.available) {
         } catch (e) { return 'ERR: ' + e.stack; }
     };
 
-    // ─────────── 分步发送（崩溃点定位）───────────
+    // ─────────── 分步发送（主队列调度版，防 JS 线程崩溃）───────────
     globalThis._st = null; // {mgr, chatNs, wrap}
+    globalThis._st1result = '未执行';
     globalThis.sendStep1 = function (chat, from, rel, ms, dl) {
-        try {
-            var cfg = { chat: chat, from: from, rel: rel, ms: ms,
-                        dl: dl !== undefined ? dl : 9, dtVoice: 1, refWrap: 0 };
-            var center = ObjC.classes.MMServiceCenter.defaultCenter();
-            var mgr = center.getService_(ObjC.classes.CMessageMgr);
-            var data = ObjC.classes.NSData.dataWithContentsOfFile_(packDir() + '/' + cfg.rel);
-            if (!data || data.isNull()) return 'read-fail';
-            if (data.bytes().readU8() !== 0x02) {
-                var pfx = Memory.alloc(1); pfx.writeU8(0x02);
-                var m = ObjC.classes.NSMutableData.data();
-                m.appendBytes_length_(pfx, 1);
-                m.appendData_(data);
-                data = m;
-            }
-            var wrap = ObjC.classes.CMessageWrap.alloc().initWithMsgType_(34);
-            wrap.setValue_forKey_(cfg.chat, 'm_nsToUsr');
-            wrap.setValue_forKey_(cfg.from, 'm_nsFromUsr');
-            wrap.setValue_forKey_(1, 'm_uiStatus');
-            wrap.setValue_forKey_('', 'm_nsMsgSource');
-            wrap.setValue_forKey_('<msg><voicemsg voicelength="' + cfg.ms + '" voiceformat="4" /></msg>', 'm_nsContent');
-            wrap.setValue_forKey_(parseInt(Date.now() / 1000), 'm_uiCreateTime');
-            wrap.setValue_forKey_(cfg.dl, 'm_uiDownloadStatus');
-            wrap.setValue_forKey_(0, 'm_bForward');
-            wrap.setValue_forKey_(1, 'm_bNew');
-            wrap.setValue_forKey_(1, 'm_uiImgStatus');
-            var ext = ObjC.classes.CExtendInfoOfVoiceMsg.alloc().init();
-            ext.setValue_forKey_(4, 'm_uiVoiceFormat');
-            ext.setValue_forKey_(cfg.ms, 'm_uiVoiceTime');
-            ext.setValue_forKey_(0, 'm_uiVoiceEndFlag');
-            ext.setValue_forKey_(0, 'm_uiVoiceForwardFlag');
-            ext.setValue_forKey_(data, 'm_dtVoice');
-            wrap.setValue_forKey_(ext, 'm_extendInfoWithMsgType');
+        ObjC.schedule(ObjC.mainQueue, function () {
+            try {
+                var cfg = { chat: chat, from: from, rel: rel, ms: ms,
+                            dl: dl !== undefined ? dl : 9, dtVoice: 1, refWrap: 0 };
+                var center = ObjC.classes.MMServiceCenter.defaultCenter();
+                var mgr = center.getService_(ObjC.classes.CMessageMgr);
+                var data = ObjC.classes.NSData.dataWithContentsOfFile_(packDir() + '/' + cfg.rel);
+                if (!data || data.isNull()) { globalThis._st1result = 'read-fail'; return; }
+                if (data.bytes().readU8() !== 0x02) {
+                    var pfx = Memory.alloc(1); pfx.writeU8(0x02);
+                    var m = ObjC.classes.NSMutableData.data();
+                    m.appendBytes_length_(pfx, 1);
+                    m.appendData_(data);
+                    data = m;
+                }
+                var wrap = ObjC.classes.CMessageWrap.alloc().initWithMsgType_(34);
+                wrap.setValue_forKey_(cfg.chat, 'm_nsToUsr');
+                wrap.setValue_forKey_(cfg.from, 'm_nsFromUsr');
+                wrap.setValue_forKey_(1, 'm_uiStatus');
+                wrap.setValue_forKey_('', 'm_nsMsgSource');
+                wrap.setValue_forKey_('<msg><voicemsg voicelength="' + cfg.ms + '" voiceformat="4" /></msg>', 'm_nsContent');
+                wrap.setValue_forKey_(parseInt(Date.now() / 1000), 'm_uiCreateTime');
+                wrap.setValue_forKey_(cfg.dl, 'm_uiDownloadStatus');
+                wrap.setValue_forKey_(0, 'm_bForward');
+                wrap.setValue_forKey_(1, 'm_bNew');
+                wrap.setValue_forKey_(1, 'm_uiImgStatus');
+                var ext = ObjC.classes.CExtendInfoOfVoiceMsg.alloc().init();
+                ext.setValue_forKey_(4, 'm_uiVoiceFormat');
+                ext.setValue_forKey_(cfg.ms, 'm_uiVoiceTime');
+                ext.setValue_forKey_(0, 'm_uiVoiceEndFlag');
+                ext.setValue_forKey_(0, 'm_uiVoiceForwardFlag');
+                ext.setValue_forKey_(data, 'm_dtVoice');
+                wrap.setValue_forKey_(ext, 'm_extendInfoWithMsgType');
 
-            var msgSend4 = new NativeFunction(Module.getGlobalExportByName('objc_msgSend'),
-                'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-            var sel_registerName = new NativeFunction(Module.getGlobalExportByName('sel_registerName'),
-                'pointer', ['pointer']);
-            var chatNs = ObjC.classes.NSString.stringWithString_(cfg.chat);
-            msgSend4(mgr.$handle, sel_registerName(Memory.allocUtf8String('AddLocalMsg:MsgWrap:')),
-                     chatNs.$handle, wrap.$handle);
-            var lid = wrap.$ivars['m_uiMesLocalID'];
-            var p = null;
-            try { p = ObjC.classes.CMessageWrap.getPathOfAudio_(wrap).toString(); } catch (e) {}
-            var wok = 0;
-            if (p) { wok = data.writeToFile_atomically_(p, true) ? 1 : 0; }
-            globalThis._st = { mgr: mgr, chatNs: chatNs, wrap: wrap, path: p };
-            return 'step1 ok lid=' + lid + ' file=' + p + ' writeOk=' + wok;
-        } catch (e) { return 'ERR1: ' + e.stack; }
+                var msgSend4 = new NativeFunction(Module.getGlobalExportByName('objc_msgSend'),
+                    'void', ['pointer', 'pointer', 'pointer', 'pointer']);
+                var sel_registerName = new NativeFunction(Module.getGlobalExportByName('sel_registerName'),
+                    'pointer', ['pointer']);
+                var chatNs = ObjC.classes.NSString.stringWithString_(cfg.chat);
+                msgSend4(mgr.$handle, sel_registerName(Memory.allocUtf8String('AddLocalMsg:MsgWrap:')),
+                         chatNs.$handle, wrap.$handle);
+                var lid = wrap.$ivars['m_uiMesLocalID'];
+                var p = null;
+                try { p = ObjC.classes.CMessageWrap.getPathOfAudio_(wrap).toString(); } catch (e) {}
+                var wok = 0;
+                if (p) { wok = data.writeToFile_atomically_(p, true) ? 1 : 0; }
+                globalThis._st = { mgr: mgr, chatNs: chatNs, wrap: wrap, path: p };
+                globalThis._st1result = 'step1 ok lid=' + lid + ' file=' + p + ' writeOk=' + wok;
+            } catch (e) { globalThis._st1result = 'ERR1: ' + e.stack; }
+        });
+        return '已调度到主队列，2 秒后执行 st1() 读结果';
     };
-    globalThis.sendStep2 = function () {
-        try {
-            var st = globalThis._st;
-            if (!st) return '先执行 sendStep1';
-            var msgSend4 = new NativeFunction(Module.getGlobalExportByName('objc_msgSend'),
-                'void', ['pointer', 'pointer', 'pointer', 'pointer']);
-            var sel_registerName = new NativeFunction(Module.getGlobalExportByName('sel_registerName'),
-                'pointer', ['pointer']);
-            msgSend4(st.mgr.$handle, sel_registerName(Memory.allocUtf8String('SaveMesVoice:MsgWrap:')),
-                     st.chatNs.$handle, st.wrap.$handle);
-            console.log('[step2] SaveMesVoice 存活');
-            st.wrap.setValue_forKey_(2, 'm_uiStatus');
-            st.wrap.setValue_forKey_(1, 'm_uiDownloadStatus');
-            msgSend4(st.mgr.$handle, sel_registerName(Memory.allocUtf8String('UpdateVoiceMessage:MsgWrap:')),
-                     st.chatNs.$handle, st.wrap.$handle);
-            return 'step2 ok (SMS+提交完成)';
-        } catch (e) { return 'ERR2: ' + e.stack; }
+    globalThis.st1 = function () { return globalThis._st1result; };
+
+    // ─────────── 堆扫描拿活实例 + 一键触发上传 ───────────
+    globalThis.grab = function () {
+        var a = ObjC.chooseSync(ObjC.classes.UploadVoiceCDNMgr);
+        var b = ObjC.classes.MMNewUploadVoiceMgr ? ObjC.chooseSync(ObjC.classes.MMNewUploadVoiceMgr) : [];
+        return { cdn实例数: a.length, newMgr实例数: b.length };
     };
+    globalThis._t2result = '未执行';
+    globalThis.trySend = function (chat) {
+        ObjC.schedule(ObjC.mainQueue, function () {
+            try {
+                var st = globalThis._st;
+                if (!st) { globalThis._t2result = '先执行 sendStep1'; return; }
+                var a = ObjC.chooseSync(ObjC.classes.UploadVoiceCDNMgr);
+                if (!a.length) { globalThis._t2result = '堆上无实例'; return; }
+                var mgr = a[0];
+                var chatNs = ObjC.classes.NSString.stringWithString_(chat || st.chatNs.toString());
+                mgr.ResendVoiceMsg_MsgWrap_(chatNs, st.wrap);
+                globalThis._t2result = 'ResendVoiceMsg 已调 on ' + mgr;
+            } catch (e) { globalThis._t2result = 'ERR2: ' + e.stack; }
+        });
+        return '已调度，2 秒后执行 t2() 读结果';
+    };
+    globalThis.t2 = function () { return globalThis._t2result; };
 
     // ─────────── RPC ───────────
     rpc.exports = {
