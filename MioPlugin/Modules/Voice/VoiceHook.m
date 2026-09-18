@@ -50,7 +50,7 @@ static NSString *CurrentChatUserName(void) {
     Ivar ivar = class_getInstanceVariable(chatVC.class, "m_nsCurrentChatUserName");
     if (!ivar) return nil;
     id val = object_getIvar(chatVC, ivar);
-    return ([val isKindOfClass:[NSString class]] && val.length > 0) ? val : nil;
+    return ([val isKindOfClass:[NSString class]] && [val length] > 0) ? val : nil;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -112,30 +112,6 @@ static void hook_SelectAttachmentView_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
-+ (void)attachEntryTapped:(UIButton *)sender {
-    NSString *chat = CurrentChatUserName();
-    if (chat.length == 0) {
-        WPShowToast(@"未识别到当前会话");
-        return;
-    }
-    UIViewController *root = [[UIApplication sharedApplication].windows.firstObject rootViewController];
-    UIViewController *top = TopPresentedVC(root);
-    UINavigationController *nav = nil;
-    if ([top isKindOfClass:[UINavigationController class]]) {
-        nav = (UINavigationController *)top;
-    } else if (top.navigationController) {
-        nav = top.navigationController;
-    }
-    WPVoicePackPickerVC *picker = [[WPVoicePackPickerVC alloc] initWithChatName:chat];
-    if (nav) {
-        [nav pushViewController:picker animated:YES];
-    } else {
-        UINavigationController *wrap = [[UINavigationController alloc] initWithRootViewController:picker];
-        [top presentViewController:wrap animated:YES completion:nil];
-    }
-    WPLog(@"Voice", @"[Attach] 打开语音包选择页: %@", chat);
-}
-
 // ═══════════════════════════════════════════════════════
 // Hook ②: CMessageMgr.AsyncOnAddMsg:MsgWrap: — 自动纳入收到的语音
 // ═══════════════════════════════════════════════════════
@@ -163,7 +139,7 @@ static void hook_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
         NSData *imgBuf = [wrap valueForKey:@"m_nsImgBuf"];
         if (![imgBuf isKindOfClass:[NSData class]] || imgBuf.length == 0) return;
 
-        NSString *chatName = ([msg isKindOfClass:[NSString class]] && msg.length > 0) ? msg : fromUsr;
+        NSString *chatName = ([msg isKindOfClass:[NSString class]] && [msg length] > 0) ? msg : fromUsr;
         if (chatName.length == 0) return;
 
         // 聊天纳入/<会话>/<时间戳>.silk
@@ -202,6 +178,30 @@ static void hook_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
 // ═══════════════════════════════════════════════════════
 
 @implementation VoiceHook
+
++ (void)attachEntryTapped:(UIButton *)sender {
+    NSString *chat = CurrentChatUserName();
+    if (chat.length == 0) {
+        WPShowToast(@"未识别到当前会话");
+        return;
+    }
+    UIViewController *root = [[UIApplication sharedApplication].windows.firstObject rootViewController];
+    UIViewController *top = TopPresentedVC(root);
+    UINavigationController *nav = nil;
+    if ([top isKindOfClass:[UINavigationController class]]) {
+        nav = (UINavigationController *)top;
+    } else if (top.navigationController) {
+        nav = top.navigationController;
+    }
+    WPVoicePackPickerVC *picker = [[WPVoicePackPickerVC alloc] initWithChatName:chat];
+    if (nav) {
+        [nav pushViewController:picker animated:YES];
+    } else {
+        UINavigationController *wrap = [[UINavigationController alloc] initWithRootViewController:picker];
+        [top presentViewController:wrap animated:YES completion:nil];
+    }
+    WPLog(@"Voice", @"[Attach] 打开语音包选择页: %@", chat);
+}
 
 + (void)install {
     Class cls;
