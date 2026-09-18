@@ -829,6 +829,35 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
                 ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, updVM, chatName, formal);
                 WPLog(@"Voice", @"[Send] ⑤UpdateVoiceMessage 已调 (st=2, dl=1, 提交上传)");
             }
+
+            // ── ⑥ 上传登记试探：AddNewPart(12参, run 2029)──
+            //   语音上传体系 = UploadVoiceCDNMgr/MMNewUploadVoiceMgr，AddNewPart 是登记入口
+            //   （hook 在 VoiceHook：WCRefine 发送时会打真实参数供对照修正）
+            @try {
+                SEL anpSel = NSSelectorFromString(@"AddNewPart:LocalID:n64SvrID:Offset:Len:VoiceTime:CreateTime:EndFlag:CancelFlag:VoiceFormat:ForwardFlag:msgSource:");
+                unsigned int fid = MioWrapLocalIDOf(formal);
+                unsigned int createTime = (unsigned int)[[NSDate date] timeIntervalSince1970];
+                id ct = [formal valueForKey:@"m_uiCreateTime"];
+                if (ct) createTime = [ct unsignedIntValue];
+                for (NSString *mn in @[@"UploadVoiceCDNMgr", @"MMNewUploadVoiceMgr"]) {
+                    Class uc = objc_getClass(mn.UTF8String);
+                    Class centerCls = objc_getClass("MMServiceCenter");
+                    if (!uc || !centerCls) continue;
+                    id center2 = ((id (*)(id, SEL))objc_msgSend)(centerCls, @selector(defaultCenter));
+                    if (!center2) continue;
+                    id mgrInst = ((id (*)(id, SEL, id))objc_msgSend)(center2, @selector(getService:), uc);
+                    if (!mgrInst || ![mgrInst respondsToSelector:anpSel]) continue;
+                    ((void (*)(id, SEL, id, unsigned long, unsigned long, unsigned long, unsigned long,
+                              unsigned long, unsigned long, unsigned long, unsigned long, unsigned long,
+                              unsigned long, id))objc_msgSend)(mgrInst, anpSel,
+                        chatName, (unsigned long)fid, (unsigned long)0, (unsigned long)0,
+                        (unsigned long)wire.length, (unsigned long)ms, (unsigned long)createTime,
+                        (unsigned long)1, (unsigned long)0, (unsigned long)4, (unsigned long)0, @"");
+                    WPLog(@"Voice", @"[Send] ⑥AddNewPart 已调 (%@, lid=%u, len=%lu, ms=%lld)", mn, fid, (unsigned long)wire.length, ms);
+                }
+            } @catch (NSException *e) {
+                WPLog(@"Voice", @"[Send] ⑥AddNewPart 异常: %@", e.reason);
+            }
         }
         WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
         [self addRecentRelPath:relPath];

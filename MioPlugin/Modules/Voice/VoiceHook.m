@@ -97,6 +97,51 @@ static unsigned int MioWrapLocalID(id wrap) {
     return *(unsigned int *)((__bridge void *)wrap + ivar_getOffset(iv));
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 语音上传管理器取证（run 2029）：UploadVoiceCDNMgr / MMNewUploadVoiceMgr
+// 的 AddNewPart(12参, 上传任务登记入口) + ResendVoiceMsg + startSend
+// 目的：抓 WCRefine 发送时的 AddNewPart 真实参数值，dylib 照抄调用
+// ═══════════════════════════════════════════════════════════════
+
+static IMP orig_UVM_AddNewPart = NULL;
+static void hook_UVM_AddNewPart(id self, SEL _cmd, id part, unsigned long localID, unsigned long long svrID,
+                                unsigned long offset, unsigned long len, unsigned long voiceTime,
+                                unsigned long createTime, unsigned long endFlag, unsigned long cancelFlag,
+                                unsigned long voiceFormat, unsigned long forwardFlag, id msgSource) {
+    @try {
+        NSString *partDesc = @"";
+        if (part) {
+            Class pc = object_getClass(part);
+            partDesc = [NSString stringWithFormat:@"<%@ %p>", NSStringFromClass(pc), part];
+        }
+        WPLog(@"Voice", @"[Upload] AddNewPart mgr=%@ part=%@ localID=%lu svrID=%llu offset=%lu len=%lu voiceTime=%lu createTime=%lu end=%lu cancel=%lu format=%lu fwd=%lu src=%@",
+              NSStringFromClass(object_getClass(self)), partDesc, localID, svrID, offset, len,
+              voiceTime, createTime, endFlag, cancelFlag, voiceFormat, forwardFlag, msgSource);
+    } @catch (NSException *e) {
+        WPLog(@"Voice", @"[Upload] AddNewPart 日志异常: %@", e.reason);
+    }
+    if (orig_UVM_AddNewPart)
+        ((void (*)(id, SEL, id, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long,
+                  unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, id))orig_UVM_AddNewPart)
+            (self, _cmd, part, localID, svrID, offset, len, voiceTime, createTime, endFlag, cancelFlag,
+             voiceFormat, forwardFlag, msgSource);
+}
+
+static IMP orig_UVM_Resend = NULL;
+static void hook_UVM_Resend(id self, SEL _cmd, id chatName, id wrap) {
+    @try {
+        WPLog(@"Voice", @"[Upload] ResendVoiceMsg mgr=%@ chat=%@ localID=%u",
+              NSStringFromClass(object_getClass(self)), chatName, MioWrapLocalID(wrap));
+    } @catch (NSException *e) {}
+    if (orig_UVM_Resend) ((void (*)(id, SEL, id, id))orig_UVM_Resend)(self, _cmd, chatName, wrap);
+}
+
+static IMP orig_UVM_StartSend = NULL;
+static void hook_UVM_StartSend(id self, SEL _cmd) {
+    @try { WPLog(@"Voice", @"[Upload] startSend mgr=%@", NSStringFromClass(object_getClass(self))); } @catch (NSException *e) {}
+    if (orig_UVM_StartSend) ((void (*)(id, SEL))orig_UVM_StartSend)(self, _cmd);
+}
+
 // ═══════════════════════════════════════════════════════
 // Audio 目录时间线（零 hook 风险：主动枚举，不 hook 任何文件 API）
 // 真实语音的音频文件在 AddMsg 前已由录音线程写好，AddMsg 后微信必然
@@ -853,6 +898,30 @@ static void MioInstallFileProbe(void) {
         if (class_getInstanceMethod(cls, isUpSel)) {
             MSHookMessageEx(cls, isUpSel, (IMP)hook_IsRecordMsgUploading, (IMP *)&orig_IsRecordMsgUploading);
             WPLog(@"Voice", @"[+] IsRecordMsgUploading: hooked (语音取证)");
+        }
+
+        // 语音上传管理器取证（run 2029）：AddNewPart/ResendVoiceMsg/startSend
+        NSArray *upMgrNames = @[@"UploadVoiceCDNMgr", @"MMNewUploadVoiceMgr"];
+        for (NSString *mn in upMgrNames) {
+            Class uc = objc_getClass(mn.UTF8String);
+            if (!uc) { WPLog(@"Voice", @"[-] %@ 不存在", mn); continue; }
+            SEL anpSel = NSSelectorFromString(@"AddNewPart:LocalID:n64SvrID:Offset:Len:VoiceTime:CreateTime:EndFlag:CancelFlag:VoiceFormat:ForwardFlag:msgSource:");
+            if (class_getInstanceMethod(uc, anpSel)) {
+                MSHookMessageEx(uc, anpSel, (IMP)hook_UVM_AddNewPart, (IMP *)&orig_UVM_AddNewPart);
+                WPLog(@"Voice", @"[+] %@ AddNewPart hooked (上传取证)", mn);
+            } else {
+                WPLog(@"Voice", @"[-] %@ 无 AddNewPart", mn);
+            }
+            SEL rvmSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
+            if (class_getInstanceMethod(uc, rvmSel)) {
+                MSHookMessageEx(uc, rvmSel, (IMP)hook_UVM_Resend, (IMP *)&orig_UVM_Resend);
+                WPLog(@"Voice", @"[+] %@ ResendVoiceMsg hooked (上传取证)", mn);
+            }
+            SEL ssSel = NSSelectorFromString(@"startSend");
+            if (class_getInstanceMethod(uc, ssSel)) {
+                MSHookMessageEx(uc, ssSel, (IMP)hook_UVM_StartSend, (IMP *)&orig_UVM_StartSend);
+                WPLog(@"Voice", @"[+] %@ startSend hooked (上传取证)", mn);
+            }
         }
     } else {
         WPLog(@"Voice", @"[-] CMessageMgr not found");

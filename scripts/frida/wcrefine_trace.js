@@ -91,5 +91,31 @@ if (!ObjC.available) {
             } catch (e) {}
         });
         console.log('[U] 共 hook ' + upTotal + ' 个上传类方法（装载完成，可以发送了）');
+
+        // ★语音上传管理器：全部方法名枚举（找"添加任务"入口）+ readyUploadItems 返回值 dump
+        ['UploadVoiceCDNMgr', 'MMNewUploadVoiceMgr'].forEach(function (cn) {
+            var cls = ObjC.classes[cn];
+            if (!cls) { console.log('[V] ' + cn + ' 不存在'); return; }
+            console.log('[V] ' + cn + ' 方法表:\n  ' + cls.$ownMethods.join('\n  '));
+            try {
+                var rm = cls['- readyUploadItems'];
+                if (rm) {
+                    Interceptor.attach(rm.implementation, {
+                        onLeave: function (ret) {
+                            try {
+                                var o = new ObjC.Object(ret);
+                                var n = o.count ? o.count() : -1;
+                                var parts = [];
+                                for (var i = 0; i < n && i < 8; i++) {
+                                    try { parts.push(String(o.objectAtIndex_(i)).substring(0, 50)); } catch (e) {}
+                                }
+                                console.log('[V] readyUploadItems → ' + n + ' 项: [' + parts.join(' ; ') + ']');
+                            } catch (e) { console.log('[V] ready dump err: ' + e); }
+                        }
+                    });
+                    console.log('[V] readyUploadItems 返回值追踪已挂');
+                }
+            } catch (e) { console.log('[V] ready hook err: ' + e); }
+        });
     }, 100);
 }
