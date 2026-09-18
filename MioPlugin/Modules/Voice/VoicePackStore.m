@@ -566,55 +566,93 @@ static SEL MioFindMethodInChain(Class cls, NSArray<NSString *> *keywords, NSUInt
     return found;
 }
 
-/// SSendVoiceMsg:toContactUsrName: 归属类缓存（全类扫描结果）
+/// SSendVoiceMsg:toContactUsrName: 归属类缓存（后台扫描结果）
 static Class _clsSSendVoice = nil;
 
-/// 一次性诊断：本版本语音发送 API 真实归属（首个语音包时执行）
+/// 一次性诊断（崩溃安全版，log15 教训）：
+/// ① 轻量确认：直接用命名类 objc_getClass("CMessageMgr") 查已知选择器（log15 证实
+///    object_getClass(msgMgr) 上 5 个已知方法全部查不到，实例类疑似服务代理/转发类），
+///    同时打印 msgMgr 实例真实类名，双路对照解谜
+/// ② 后台扫描：log15 两次实测主线程全量扫描 11.4 万类×5 选择器后被系统杀进程（watchdog），
+///    故移到后台队列，且先按类名关键词过滤（NSStringFromClass 不触发类实现，开销极低），
+///    只对命中类做方法查找（57 万次查找降为千次级）
 static void MioDumpSendAPIOnce(id msgMgr) {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        // ① CMessageMgr 链上已知选择器逐一确认（与 respondsToSelector 同款查找逻辑）
-        Class mcls = object_getClass(msgMgr);
+    static BOOL started = NO;
+    if (started) return;
+    started = YES;
+
+    // ① 轻量确认（纯查询，主线程安全）
+    @try {
+        Class namedCls = objc_getClass("CMessageMgr");
+        Class instCls = object_getClass(msgMgr);
+        WPLog(@"Voice", @"[API] msgMgr实例类=%@ super=%@ | 命名类=%@",
+              NSStringFromClass(instCls), NSStringFromClass(class_getSuperclass(instCls)),
+              NSStringFromClass(namedCls));
         NSArray<NSString *> *known = @[@"AddMsg:MsgWrap:",
                                        @"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:",
                                        @"SaveMesVoice:MsgWrap:",
                                        @"ResendVoiceMsg:MsgWrap:",
                                        @"SSendVoiceMsg:toContactUsrName:"];
         for (NSString *n in known) {
-            WPLog(@"Voice", @"[API] CMessageMgr.%@ → %d", n, class_getInstanceMethod(mcls, NSSelectorFromString(n)) != NULL);
+            SEL s = NSSelectorFromString(n);
+            WPLog(@"Voice", @"[API] %@ → 命名类=%d 实例响应=%d", n,
+                  namedCls ? (class_getInstanceMethod(namedCls, s) != NULL) : NO,
+                  [msgMgr respondsToSelector:s]);
         }
-        // ② 全类扫描：定位真实语音管线（录音/发送/重试）的归属类
-        unsigned int ncls = 0;
-        Class *classes = objc_copyClassList(&ncls);
-        if (!classes) { WPLog(@"Voice", @"[API] 类列表为空"); return; }
-        WPLog(@"Voice", @"[API] 已加载类总数=%u", ncls);
-        SEL sSSend = NSSelectorFromString(@"SSendVoiceMsg:toContactUsrName:");
-        SEL sRes2  = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
-        SEL sRes1  = NSSelectorFromString(@"ResendVoiceMsg:");
-        SEL sRec   = NSSelectorFromString(@"OnRecorderPart:Offset:Len:EndFlag:ForceDelete:Duration:");
-        SEL sPart  = NSSelectorFromString(@"OnPartSent:ErrNo:");
-        NSMutableArray *oSSend = [NSMutableArray array], *oRes2 = [NSMutableArray array], *oRes1 = [NSMutableArray array],
-                       *oRec = [NSMutableArray array], *oPart = [NSMutableArray array], *mgrs = [NSMutableArray array];
-        for (unsigned int i = 0; i < ncls; i++) {
-            Class c = classes[i];
-            if (class_getInstanceMethod(c, sSSend)) { [oSSend addObject:NSStringFromClass(c)]; if (!_clsSSendVoice) _clsSSendVoice = c; }
-            if (class_getInstanceMethod(c, sRes2)) [oRes2 addObject:NSStringFromClass(c)];
-            if (class_getInstanceMethod(c, sRes1)) [oRes1 addObject:NSStringFromClass(c)];
-            if (class_getInstanceMethod(c, sRec))  [oRec addObject:NSStringFromClass(c)];
-            if (class_getInstanceMethod(c, sPart)) [oPart addObject:NSStringFromClass(c)];
-            if (mgrs.count < 60) {
-                NSString *nm = NSStringFromClass(c);
-                if ([nm rangeOfString:@"Voice" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-                    [nm rangeOfString:@"Audio" options:NSCaseInsensitiveSearch].location != NSNotFound) [mgrs addObject:nm];
+    } @catch (NSException *e) {
+        WPLog(@"Voice", @"[API] 轻量确认异常: %@ %@", e.name, e.reason);
+    }
+
+    // ② 后台扫描定位真实语音发送管线归属类
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        @try {
+            @autoreleasepool {
+                unsigned int ncls = 0;
+                Class *classes = objc_copyClassList(&ncls);
+                if (!classes) { WPLog(@"Voice", @"[API] 类列表为空"); return; }
+                WPLog(@"Voice", @"[API] 后台扫描开始: 类总数=%u", ncls);
+                // 第一步：仅类名过滤（不触发方法表实现）
+                NSMutableArray<Class *> *candidates = [NSMutableArray array];
+                for (unsigned int i = 0; i < ncls; i++) {
+                    @autoreleasepool {
+                        NSString *nm = NSStringFromClass(classes[i]);
+                        if ([nm rangeOfString:@"voice" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                            [nm rangeOfString:@"audio" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                            [nm rangeOfString:@"sendmsg" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                            [nm rangeOfString:@"message" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                            [nm rangeOfString:@"recorder" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                            [candidates addObject:classes[i]];
+                        }
+                    }
+                }
+                WPLog(@"Voice", @"[API] 类名命中候选 %lu 个", (unsigned long)candidates.count);
+                // 第二步：只对候选类做方法查找
+                SEL sSSend = NSSelectorFromString(@"SSendVoiceMsg:toContactUsrName:");
+                SEL sRes2  = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
+                SEL sRes1  = NSSelectorFromString(@"ResendVoiceMsg:");
+                SEL sRec   = NSSelectorFromString(@"OnRecorderPart:Offset:Len:EndFlag:ForceDelete:Duration:");
+                SEL sPart  = NSSelectorFromString(@"OnPartSent:ErrNo:");
+                NSMutableArray *oSSend = [NSMutableArray array], *oRes2 = [NSMutableArray array], *oRes1 = [NSMutableArray array],
+                               *oRec = [NSMutableArray array], *oPart = [NSMutableArray array];
+                for (Class c in candidates) {
+                    @autoreleasepool {
+                        if (class_getInstanceMethod(c, sSSend)) { [oSSend addObject:NSStringFromClass(c)]; if (!_clsSSendVoice) _clsSSendVoice = c; }
+                        if (class_getInstanceMethod(c, sRes2)) [oRes2 addObject:NSStringFromClass(c)];
+                        if (class_getInstanceMethod(c, sRes1)) [oRes1 addObject:NSStringFromClass(c)];
+                        if (class_getInstanceMethod(c, sRec))  [oRec addObject:NSStringFromClass(c)];
+                        if (class_getInstanceMethod(c, sPart)) [oPart addObject:NSStringFromClass(c)];
+                    }
+                }
+                free(classes);
+                WPLog(@"Voice", @"[API] SSendVoiceMsg:toContactUsrName: 归属(%lu): %@", (unsigned long)oSSend.count, oSSend);
+                WPLog(@"Voice", @"[API] ResendVoiceMsg:MsgWrap: 归属(%lu): %@", (unsigned long)oRes2.count, oRes2);
+                WPLog(@"Voice", @"[API] ResendVoiceMsg: 归属(%lu): %@", (unsigned long)oRes1.count, oRes1);
+                WPLog(@"Voice", @"[API] OnRecorderPart:... 归属(%lu): %@", (unsigned long)oRec.count, oRec);
+                WPLog(@"Voice", @"[API] OnPartSent:ErrNo: 归属(%lu): %@", (unsigned long)oPart.count, oPart);
             }
+        } @catch (NSException *e) {
+            WPLog(@"Voice", @"[API] 后台扫描异常: %@ %@", e.name, e.reason);
         }
-        WPLog(@"Voice", @"[API] SSendVoiceMsg:toContactUsrName: 归属(%lu): %@", (unsigned long)oSSend.count, oSSend);
-        WPLog(@"Voice", @"[API] ResendVoiceMsg:MsgWrap: 归属(%lu): %@", (unsigned long)oRes2.count, oRes2);
-        WPLog(@"Voice", @"[API] ResendVoiceMsg: 归属(%lu): %@", (unsigned long)oRes1.count, oRes1);
-        WPLog(@"Voice", @"[API] OnRecorderPart:... 归属(%lu): %@", (unsigned long)oRec.count, oRec);
-        WPLog(@"Voice", @"[API] OnPartSent:ErrNo: 归属(%lu): %@", (unsigned long)oPart.count, oPart);
-        WPLog(@"Voice", @"[API] Voice/Audio 类(%lu): %@", (unsigned long)mgrs.count, mgrs);
-        free(classes);
     });
 }
 
