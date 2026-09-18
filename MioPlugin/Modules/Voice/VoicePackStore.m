@@ -26,6 +26,57 @@ static void MioSetIvarIfExist(id obj, const char *ivarName, id value) {
     free(list);
 }
 
+/// 安全写入整型 ivar（按类型编码定长写入，避免 object_setIvar 写 NSNumber 指针越界）
+static void MioSetIntIvarIfExist(id obj, const char *ivarName, long long value) {
+    if (!obj || !ivarName) return;
+    Ivar ivar = class_getInstanceVariable(object_getClass(obj), ivarName);
+    if (!ivar) return;
+    const char *enc = ivar_getTypeEncoding(ivar);
+    if (!enc) return;
+    char *base = (__bridge void *)obj;
+    ptrdiff_t off = ivar_getOffset(ivar);
+    switch (enc[0]) {
+        case 'c': case 'B': *(signed char *)(base + off) = (signed char)value; break;
+        case 'i': *(int *)(base + off) = (int)value; break;
+        case 'I': *(unsigned int *)(base + off) = (unsigned int)value; break;
+        case 's': *(short *)(base + off) = (short)value; break;
+        case 'S': *(unsigned short *)(base + off) = (unsigned short)value; break;
+        case 'l': case 'q': *(long long *)(base + off) = value; break;
+        case 'L': case 'Q': *(unsigned long long *)(base + off) = (unsigned long long)value; break;
+        default: break; // 非整型字段跳过
+    }
+}
+
+/// 探测 CMessageWrap 的语音数据 ivar：不同微信版本字段名不同（老版本 m_nsImgBuf）
+/// 规则：名字含 imgbuf / voicedata / voicebuf（不区分大小写）且类型为对象
+static Ivar MioFindVoiceDataIvar(id msg) {
+    if (!msg) return NULL;
+    static Ivar cached = NULL;
+    static BOOL probed = NO;
+    if (probed) return cached;
+    unsigned int count = 0;
+    Ivar *list = class_copyIvarList(object_getClass(msg), &count);
+    NSMutableArray *names = [NSMutableArray array];
+    for (unsigned int i = 0; i < count; i++) {
+        const char *n = ivar_getName(list[i]);
+        if (!n) continue;
+        NSString *name = @(n);
+        [names addObject:name];
+        const char *enc = ivar_getTypeEncoding(list[i]);
+        if (!enc || enc[0] != '@') continue; // 仅对象类型
+        NSString *lower = name.lowercaseString;
+        if ([lower containsString:@"imgbuf"] || [lower containsString:@"voicedata"] || [lower containsString:@"voicebuf"]) {
+            cached = list[i];
+            WPLog(@"Voice", @"[Send] 语音数据字段命中: %@", name);
+            break;
+        }
+    }
+    free(list);
+    if (!cached) WPLog(@"Voice", @"[Send] 未命中语音数据字段, CMessageWrap ivars(%u): %@", count, names);
+    probed = YES;
+    return cached;
+}
+
 /// 从 XML 内容提取 voicelength="数字"（毫秒）
 static long long MioParseVoiceLengthMs(NSString *content) {
     if (content.length == 0) return 0;
@@ -395,7 +446,13 @@ static BOOL MioIsSystemPlayableExt(NSString *ext) {
             if (error) *error = [NSError errorWithDomain:@"MioVoice" code:13 userInfo:@{NSLocalizedDescriptionKey: @"消息对象创建失败"}];
             return NO;
         }
-        [msg setValue:data forKey:@"m_nsImgBuf"];
+        // 语音数据字段：不同微信版本字段名不同，运行时探测（老版本 m_nsImgBuf）
+        Ivar dataIvar = MioFindVoiceDataIvar(msg);
+        if (!dataIvar) {
+            if (error) *error = [NSError errorWithDomain:@"MioVoice" code:15 userInfo:@{NSLocalizedDescriptionKey: @"微信版本不兼容：未找到语音数据字段"}];
+            return NO;
+        }
+        object_setIvar(msg, dataIvar, data);
         [msg setValue:chatName forKey:@"m_nsToUsr"];
         NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
         if (selfUsr.length > 0) [msg setValue:selfUsr forKey:@"m_nsFromUsr"];
@@ -404,7 +461,7 @@ static BOOL MioIsSystemPlayableExt(NSString *ext) {
 
         long long ms = [self durationMsForRelPath:relPath];
         if (ms <= 0) ms = 1000; // 兜底 1 秒，避免显示 0"
-        MioSetIvarIfExist(msg, "m_iVoiceTime", @(ms / 1000));
+        MioSetIntIvarIfExist(msg, "m_iVoiceTime", ms / 1000);
         [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" fromusername=\"%@\" tousername=\"%@\" downcount=\"0\"/></msg>", ms, selfUsr ?: @"", chatName]
                forKey:@"m_nsContent"];
 
