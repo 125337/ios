@@ -833,9 +833,10 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
                 WPLog(@"Voice", @"[Send] ⑤UpdateVoiceMessage 已调 (st=2, dl=1, 提交上传)");
             }
 
-            // ── ⑥ 上传登记+触发（run 2032）：
-            //   ⑥a AddNewPart(12参) 把任务登记进上传队列（WCRefine sendItem: 内部显式调用；
-            //      part 参数未证实类型，先传 chatName，hook 日志会打出 WCRefine 真实值供对照）
+            // ── ⑥ 上传登记+触发（run 2033）：
+            //   ⑥a AddNewPart(12参)——part 参数改为正式音频文件路径
+            //   （UploadVoiceCDNMgr 有 loadDataFromAudioFile:，part 高概率是路径而非 chatName；
+            //     AddNewPart 的 hook 已移除——12参签名不符会让 WCRefine 崩，见 log47）
             //   ⑥b ResendVoiceMsg(2参) 触发启动
             @try {
                 SEL anpSel = NSSelectorFromString(@"AddNewPart:LocalID:n64SvrID:Offset:Len:VoiceTime:CreateTime:EndFlag:CancelFlag:VoiceFormat:ForwardFlag:msgSource:");
@@ -846,14 +847,15 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
                 if (ct) createTime = [ct unsignedIntValue];
                 id mgrInst = MioGetUploadVoiceCDNMgr();
                 WPLog(@"Voice", @"[Send] ⑥活实例=%@ (nil=尚未捕获,等2s定时器)", mgrInst);
+                NSString *formalPath = MioProbeVoicePath(formal, msgMgr);
                 if (mgrInst && [mgrInst respondsToSelector:anpSel] && [mgrInst respondsToSelector:rvmSel]) {
                     ((void (*)(id, SEL, id, unsigned long, unsigned long, unsigned long, unsigned long,
                               unsigned long, unsigned long, unsigned long, unsigned long, unsigned long,
                               unsigned long, id))objc_msgSend)(mgrInst, anpSel,
-                        chatName, (unsigned long)fid, (unsigned long)0, (unsigned long)0,
+                        formalPath, (unsigned long)fid, (unsigned long)0, (unsigned long)0,
                         (unsigned long)wire.length, (unsigned long)ms, (unsigned long)createTime,
                         (unsigned long)1, (unsigned long)0, (unsigned long)4, (unsigned long)0, @"");
-                    WPLog(@"Voice", @"[Send] ⑥a AddNewPart 已调 (lid=%u len=%lu ms=%lld)", fid, (unsigned long)wire.length, ms);
+                    WPLog(@"Voice", @"[Send] ⑥a AddNewPart 已调 (part=路径 lid=%u len=%lu ms=%lld)", fid, (unsigned long)wire.length, ms);
                     ((void (*)(id, SEL, id, id))objc_msgSend)(mgrInst, rvmSel, chatName, formal);
                     WPLog(@"Voice", @"[Send] ⑥b ResendVoiceMsg 已调 (上传触发)");
                 } else {
