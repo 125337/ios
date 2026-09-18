@@ -612,7 +612,7 @@ static void MioDumpSendAPIOnce(id msgMgr) {
                 if (!classes) { WPLog(@"Voice", @"[API] 类列表为空"); return; }
                 WPLog(@"Voice", @"[API] 后台扫描开始: 类总数=%u", ncls);
                 // 第一步：仅类名过滤（不触发方法表实现）
-                NSMutableArray<Class *> *candidates = [NSMutableArray array];
+                NSMutableArray *candidates = [NSMutableArray array];
                 for (unsigned int i = 0; i < ncls; i++) {
                     @autoreleasepool {
                         NSString *nm = NSStringFromClass(classes[i]);
