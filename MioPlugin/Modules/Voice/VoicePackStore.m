@@ -659,6 +659,7 @@ static void MioDumpSendAPIOnce(id msgMgr) {
         }
         object_setIvar(msg, dataIvar, wire);
         [msg setValue:chatName forKey:@"m_nsToUsr"];
+        MioSetIvarIfExist(msg, "m_nsChatName", chatName); // 真实消息带会话名字段（SaveMesVoice 可能依赖）
         NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
         if (selfUsr.length > 0) [msg setValue:selfUsr forKey:@"m_nsFromUsr"];
         // ★状态=1(待发送)：微信发送/上传队列才会拾取。写 4(已发送)会被队列跳过 → 假发（对方收不到）

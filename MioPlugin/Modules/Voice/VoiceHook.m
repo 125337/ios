@@ -73,6 +73,112 @@ static NSString *CurrentChatUserName(void) {
 }
 
 // ═══════════════════════════════════════════════════════
+// 真实语音发送流程捕获（诊断）：hook 微信真实录音发送链路，
+// 拿到真实 wrap 字段模板与调用顺序后照抄（log17 结论：猜接口不可行）
+// ═══════════════════════════════════════════════════════
+
+/// 读取 m_uiMesLocalID
+static unsigned int MioWrapLocalID(id wrap) {
+    if (!wrap) return 0;
+    Ivar iv = class_getInstanceVariable(object_getClass(wrap), "m_uiMesLocalID");
+    if (!iv) return 0;
+    return *(unsigned int *)((__bridge void *)wrap + ivar_getOffset(iv));
+}
+
+/// 全量 dump 消息 wrap 的 ivar 值（一次消息一条，开销可忽略）
+static void MioDumpVoiceWrap(id wrap, NSString *tag) {
+    if (!wrap) return;
+    @try {
+        unsigned int count = 0;
+        Class cls = object_getClass(wrap);
+        Ivar *list = class_copyIvarList(cls, &count);
+        NSMutableString *out = [NSMutableString string];
+        const void *base = (__bridge void *)wrap;
+        for (unsigned int i = 0; i < count; i++) {
+            const char *nm = ivar_getName(list[i]);
+            const char *enc = ivar_getTypeEncoding(list[i]);
+            if (!nm || !enc) continue;
+            ptrdiff_t off = ivar_getOffset(list[i]);
+            NSString *piece = nil;
+            if (enc[0] == '@') {
+                id v = object_getIvar(wrap, list[i]);
+                if ([v isKindOfClass:[NSString class]]) {
+                    NSString *s = (NSString *)v;
+                    if (s.length == 0) piece = @"\"\"";
+                    else piece = [NSString stringWithFormat:@"\"%@\"(len=%lu)", s.length > 110 ? [s substringToIndex:110] : s, (unsigned long)s.length];
+                } else if ([v isKindOfClass:[NSData class]]) {
+                    piece = [NSString stringWithFormat:@"NSData(%lu字节)", (unsigned long)[v length]];
+                } else if (v) {
+                    piece = [NSString stringWithFormat:@"<%@>", NSStringFromClass(v.class)];
+                }
+            } else if (strchr("cBsSiIlLqQB", enc[0])) {
+                long long iv = 0;
+                switch (enc[0]) {
+                    case 'c': case 'B': iv = *(signed char *)(base + off); break;
+                    case 's': iv = *(short *)(base + off); break;
+                    case 'S': iv = *(unsigned short *)(base + off); break;
+                    case 'i': iv = *(int *)(base + off); break;
+                    case 'I': iv = *(unsigned int *)(base + off); break;
+                    case 'l': case 'q': iv = *(long long *)(base + off); break;
+                    case 'L': case 'Q': iv = (long long)(*(unsigned long long *)(base + off)); break;
+                    default: break;
+                }
+                piece = [NSString stringWithFormat:@"%lld", iv];
+            }
+            if (piece) [out appendFormat:@"\n  %@ = %@", @(nm), piece];
+        }
+        free(list);
+        WPLog(@"Voice", @"[%@] wrap(%u ivars):%@", tag, count, out);
+    } @catch (NSException *e) {
+        WPLog(@"Voice", @"[%@] dump异常: %@", tag, e.reason);
+    }
+}
+
+// Hook ④: CMessageMgr.SaveMesVoice:MsgWrap:（真实录音发送会经过，若本版本仍在用）
+static IMP orig_SaveMesVoiceMsgWrap = NULL;
+
+static void hook_SaveMesVoiceMsgWrap(id self, SEL _cmd, id path, id wrap) {
+    WPLog(@"Voice", @"[真实流程] SaveMesVoice 进入 path=%@", path);
+    MioDumpVoiceWrap(wrap, @"真实流程.SaveMes入口");
+    ((void (*)(id, SEL, id, id))orig_SaveMesVoiceMsgWrap)(self, _cmd, path, wrap);
+    WPLog(@"Voice", @"[真实流程] SaveMesVoice 返回 localID=%u", MioWrapLocalID(wrap));
+    MioDumpVoiceWrap(wrap, @"真实流程.SaveMes出口");
+}
+
+// Hook ⑤: CMessageMgr.AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:（本地入库主路径）
+static IMP orig_AddLocalMsg6 = NULL;
+
+static void hook_AddLocalMsg6(id self, SEL _cmd, id chatName, id wrap, long long fixTime, long long notify) {
+    @try {
+        unsigned int t = 0;
+        if ([wrap respondsToSelector:NSSelectorFromString(@"m_uiMessageType")]) {
+            t = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
+        }
+        NSString *from = [wrap valueForKey:@"m_nsFromUsr"] ?: @"";
+        WPLog(@"Voice", @"[真实流程] AddLocalMsg type=%u from=%@ chat=%@ fixTime=%lld notify=%lld", t, from, chatName, fixTime, notify);
+        if (t == 34) MioDumpVoiceWrap(wrap, @"真实流程.AddLocal");
+    } @catch (NSException *e) {}
+    ((void (*)(id, SEL, id, id, long long, long long))orig_AddLocalMsg6)(self, _cmd, chatName, wrap, fixTime, notify);
+}
+
+// Hook ⑥: CMessageMgr.AddMsg:MsgWrap:（RedEnv 已挂一层，substrate 链式不冲突）
+static IMP orig_AddMsgMsgWrap = NULL;
+
+static void hook_AddMsgMsgWrap(id self, SEL _cmd, id chatName, id wrap) {
+    @try {
+        unsigned int t = 0;
+        if ([wrap respondsToSelector:NSSelectorFromString(@"m_uiMessageType")]) {
+            t = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
+        }
+        if (t == 34) {
+            WPLog(@"Voice", @"[真实流程] AddMsg chat=%@", chatName);
+            MioDumpVoiceWrap(wrap, @"真实流程.AddMsg");
+        }
+    } @catch (NSException *e) {}
+    ((void (*)(id, SEL, id, id))orig_AddMsgMsgWrap)(self, _cmd, chatName, wrap);
+}
+
+// ═══════════════════════════════════════════════════════
 // Hook ①: SelectAttachmentView.layoutSubviews — 附件面板末尾加「语音包」入口
 // ═══════════════════════════════════════════════════════
 
@@ -166,7 +272,10 @@ static void hook_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
                   xml.length > 220 ? [xml substringToIndex:220] : xml);
         } @catch (NSException *e) {}
 
-        if (selfSent) return; // 跳过自己发送的
+        if (selfSent) {
+            MioDumpVoiceWrap(wrap, @"真实语音.self全字段"); // 自己录的真实语音：全量 dump 字段模板
+            return;
+        }
 
         NSData *imgBuf = [VoicePackStore voiceDataFromWrap:wrap];
         if (imgBuf.length == 0) return;
@@ -374,13 +483,28 @@ static void hook_BMCC_viewWillLayoutSubviews(id self, SEL _cmd) {
         WPLog(@"Voice", @"[-] SelectAttachmentView not found");
     }
 
-    // ② 自动纳入语音
+    // ② 自动纳入语音 + ④⑤⑥ 真实发送流程捕获
     cls = objc_getClass("CMessageMgr");
     if (cls) {
         MSHookMessageEx(cls, @selector(AsyncOnAddMsg:MsgWrap:),
                         (IMP)hook_AsyncOnAddMsgMsgWrap,
                         (IMP *)&orig_AsyncOnAddMsgMsgWrap);
         WPLog(@"Voice", @"[+] CMessageMgr AsyncOnAddMsg:MsgWrap: hooked");
+
+        MSHookMessageEx(cls, NSSelectorFromString(@"SaveMesVoice:MsgWrap:"),
+                        (IMP)hook_SaveMesVoiceMsgWrap,
+                        (IMP *)&orig_SaveMesVoiceMsgWrap);
+        WPLog(@"Voice", @"[+] CMessageMgr SaveMesVoice:MsgWrap: hooked (真实流程捕获)");
+
+        MSHookMessageEx(cls, NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:"),
+                        (IMP)hook_AddLocalMsg6,
+                        (IMP *)&orig_AddLocalMsg6);
+        WPLog(@"Voice", @"[+] CMessageMgr AddLocalMsg(6参) hooked (真实流程捕获)");
+
+        MSHookMessageEx(cls, NSSelectorFromString(@"AddMsg:MsgWrap:"),
+                        (IMP)hook_AddMsgMsgWrap,
+                        (IMP *)&orig_AddMsgMsgWrap);
+        WPLog(@"Voice", @"[+] CMessageMgr AddMsg:MsgWrap: hooked (真实流程捕获)");
     } else {
         WPLog(@"Voice", @"[-] CMessageMgr not found");
     }
