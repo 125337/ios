@@ -47,8 +47,8 @@ static void MioSetIntIvarIfExist(id obj, const char *ivarName, long long value) 
     }
 }
 
-/// 探测 CMessageWrap 的语音数据 ivar：不同微信版本字段名不同（老版本 m_nsImgBuf）
-/// 规则：名字含 imgbuf / voicedata / voicebuf（不区分大小写）且类型为对象
+/// 探测 CMessageWrap 的语音数据 ivar：不同微信版本字段名不同
+/// （老版本 m_nsImgBuf，新版实测为 m_byteBuffer —— MioPlugin(9).log 全量 ivar 确认）
 static Ivar MioFindVoiceDataIvar(id msg) {
     if (!msg) return NULL;
     static Ivar cached = NULL;
@@ -65,7 +65,8 @@ static Ivar MioFindVoiceDataIvar(id msg) {
         const char *enc = ivar_getTypeEncoding(list[i]);
         if (!enc || enc[0] != '@') continue; // 仅对象类型
         NSString *lower = name.lowercaseString;
-        if ([lower containsString:@"imgbuf"] || [lower containsString:@"voicedata"] || [lower containsString:@"voicebuf"]) {
+        if ([lower isEqualToString:@"m_bytebuffer"] ||
+            [lower containsString:@"imgbuf"] || [lower containsString:@"voicedata"] || [lower containsString:@"voicebuf"]) {
             cached = list[i];
             WPLog(@"Voice", @"[Send] 语音数据字段命中: %@", name);
             break;
