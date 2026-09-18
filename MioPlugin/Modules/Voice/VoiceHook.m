@@ -42,15 +42,34 @@ static UIViewController *TopPresentedVC(UIViewController *root) {
     return top;
 }
 
-/// 当前聊天会话名：从聊天页（BaseMsgContentViewController 及其子类）的 m_nsCurrentChatUserName ivar 读取
-static NSString *CurrentChatUserName(void) {
-    UIViewController *root = [[UIApplication sharedApplication].windows.firstObject rootViewController];
-    UIViewController *chatVC = FindVCOfClass(root, objc_getClass("BaseMsgContentViewController"));
+/// 从聊天页 VC 取当前会话名：优先 [self GetContact] → [contact m_nsUsrName]
+/// （本版本微信验证可行，HideAvatar 同路径），兜底读 m_nsCurrentChatUserName ivar
+static NSString *ChatNameFromChatVC(UIViewController *chatVC) {
     if (!chatVC) return nil;
+    SEL getContact = NSSelectorFromString(@"GetContact");
+    SEL getUsrName = NSSelectorFromString(@"m_nsUsrName");
+    if ([chatVC respondsToSelector:getContact]) {
+        @try {
+            id contact = ((id (*)(id, SEL))objc_msgSend)(chatVC, getContact);
+            if (contact && [contact respondsToSelector:getUsrName]) {
+                id name = ((id (*)(id, SEL))objc_msgSend)(contact, getUsrName);
+                if ([name isKindOfClass:[NSString class]] && [name length] > 0) return name;
+            }
+        } @catch (NSException *e) {
+            WPLog(@"Voice", @"[ChatName] GetContact 异常: %@", e.reason);
+        }
+    }
     Ivar ivar = class_getInstanceVariable(chatVC.class, "m_nsCurrentChatUserName");
     if (!ivar) return nil;
     id val = object_getIvar(chatVC, ivar);
     return ([val isKindOfClass:[NSString class]] && [val length] > 0) ? val : nil;
+}
+
+/// 当前聊天会话名：从窗口里的聊天页（BaseMsgContentViewController 及其子类）读取
+static NSString *CurrentChatUserName(void) {
+    UIViewController *root = [[UIApplication sharedApplication].windows.firstObject rootViewController];
+    UIViewController *chatVC = FindVCOfClass(root, objc_getClass("BaseMsgContentViewController"));
+    return ChatNameFromChatVC(chatVC);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -297,17 +316,14 @@ static void hook_BMCC_viewWillLayoutSubviews(id self, SEL _cmd) {
         NSString *chat = nil;
         Class bmccCls = objc_getClass("BaseMsgContentViewController");
         if (host && bmccCls && [host isKindOfClass:bmccCls]) {
-            Ivar ivar = class_getInstanceVariable(host.class, "m_nsCurrentChatUserName");
-            if (ivar) {
-                id val = object_getIvar(host, ivar);
-                if ([val isKindOfClass:[NSString class]] && [val length] > 0) chat = val;
-            }
+            chat = ChatNameFromChatVC(host);
         }
         if (chat.length == 0) chat = CurrentChatUserName();
         if (chat.length == 0) {
-            WPLog(@"Voice", @"[PlusLP] 会话识别失败: host=%@, ivar=%d",
+            SEL getContact = NSSelectorFromString(@"GetContact");
+            WPLog(@"Voice", @"[PlusLP] 会话识别失败: host=%@, GetContact=%d",
                   host ? NSStringFromClass(host.class) : @"nil",
-                  (host && class_getInstanceVariable(host.class, "m_nsCurrentChatUserName") != NULL));
+                  host ? [host respondsToSelector:getContact] : NO);
             WPShowToast(@"未识别到当前会话");
             return;
         }
