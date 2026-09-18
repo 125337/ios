@@ -64,6 +64,7 @@ jobs:
                 -IMioPlugin/Modules/ChatTopBar \
                 -IMioPlugin/Modules/ListCornerRadius \
                 -IMioPlugin/Modules/ProfileCardBg \
+                -IMioPlugin/Modules/Voice \
                 -IMioPlugin/Modules/CornerResponsibility \
                 -IMioPlugin/Modules/FontLayout \
                 -IMioPlugin/Settings/Common \
@@ -81,6 +82,7 @@ jobs:
               -framework Foundation \
               -framework Security \
               -framework AVFoundation \
+              -framework CoreMedia \
               -framework UserNotifications \
               -framework CoreGraphics \
               -framework QuartzCore \

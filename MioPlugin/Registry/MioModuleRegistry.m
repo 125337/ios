@@ -28,6 +28,7 @@
 #import "../Modules/ProfileCardBg/CardBgConfig.h"
 #import "../Modules/FontLayout/FontLayoutConfig.h"
 #import "../Modules/AccountDetail/AccountConfig.h"
+#import "../Modules/Voice/VoiceConfig.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -46,6 +47,7 @@
 #import "../Modules/ProfileCardBg/ProfileCardBgHook.h"
 #import "../Modules/SettingEntry/SettingEntryHook.h"
 #import "../Modules/FontLayout/FontLayoutHook.h"
+#import "../Modules/Voice/VoiceHook.h"
 
 // ────── 设置页 Controller 的 import ──────
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
@@ -230,6 +232,15 @@
                                                   subtitle:@"插件信息"
                                              sectionTitle:@"更多"],
             
+            // ──── 语音包（入口在 MioPluginEntryVC 功能列表；hook: 附件面板入口 + 自动纳入语音） ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"voice"
+                                                    title:@"语音包"
+                                               configClass:[VoiceConfig class]
+                                               hookClasses:@[[VoiceHook class]]
+                                           controllerClass:nil
+                                                  subtitle:@"语音消息伪装发送"
+                                             sectionTitle:@"更多"],
+
             // ──── 账户信息（纯信息页，无 Hook；入口在 MioPluginEntryVC 功能列表） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"accountdetail"
                                                     title:@"账户信息"

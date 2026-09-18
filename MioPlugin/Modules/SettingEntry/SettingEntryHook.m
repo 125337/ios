@@ -5,6 +5,7 @@
 #import "WPBackupVC.h"
 #import "WPAboutVC.h"
 #import "WPAccountVC.h"
+#import "../Voice/WPVoicePackSettingsVC.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Config/Constants.h"
 #import "../../Settings/Controllers/SettingController.h"
@@ -143,7 +144,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     UIView *listCard = WPMakeCard(y, w);
     CGFloat cy = 0;
 
-    NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
+    NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
     CGFloat scale = [UIScreen mainScreen].scale;
     for (NSUInteger i = 0; i < navItems.count; i++) {
         if (i > 0) {
@@ -271,6 +272,14 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     WPAccountVC *subVC = [[WPAccountVC alloc] init];
     [vc.navigationController pushViewController:subVC animated:YES];
     WPLog(@"Setting", @"[Nav] pushed WPAccountVC");
+}
+
+- (void)openVoice:(id)sender {
+    UIViewController *vc = [self currentVCFrom:sender];
+    if (!vc) { WPLog(@"Setting", @"[Nav] openVoice: currentVC nil"); return; }
+    WPVoicePackSettingsVC *subVC = [[WPVoicePackSettingsVC alloc] init];
+    [vc.navigationController pushViewController:subVC animated:YES];
+    WPLog(@"Setting", @"[Nav] pushed WPVoicePackSettingsVC");
 }
 
 - (void)openCommon:(id)sender {

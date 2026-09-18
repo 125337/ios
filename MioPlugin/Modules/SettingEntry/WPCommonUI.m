@@ -239,6 +239,47 @@ UIViewController *WPGetTopVCForPresentation(void) {
     return top;
 }
 
+#pragma mark - 轻量 toast
+
+void WPShowToast(NSString *message) {
+    if (message.length == 0) return;
+    UIWindow *window = nil;
+    for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        for (UIWindow *w in scene.windows) {
+            if (w.isKeyWindow) { window = w; break; }
+        }
+        if (window) break;
+    }
+    if (!window) window = [[UIApplication sharedApplication].windows firstObject];
+    if (!window) return;
+
+    UILabel *label = [[UILabel alloc] init];
+    label.text = message;
+    label.font = [UIFont systemFontOfSize:13];
+    label.textColor = UIColor.whiteColor;
+    label.textAlignment = NSTextAlignmentCenter;
+    label.numberOfLines = 0;
+    [label sizeToFit];
+
+    UIView *toast = [[UIView alloc] initWithFrame:CGRectMake((window.bounds.size.width - label.frame.size.width - 24) / 2,
+                                                             window.bounds.size.height * 0.45,
+                                                             label.frame.size.width + 24,
+                                                             label.frame.size.height + 16)];
+    toast.backgroundColor = [UIColor colorWithWhite:0 alpha:0.78];
+    toast.layer.cornerRadius = 8;
+    toast.layer.masksToBounds = YES;
+    label.frame = CGRectMake(12, 8, label.frame.size.width, label.frame.size.height);
+    [toast addSubview:label];
+    [window addSubview:toast];
+    toast.alpha = 0;
+    [UIView animateWithDuration:0.2 animations:^{ toast.alpha = 1; }];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [UIView animateWithDuration:0.25 animations:^{ toast.alpha = 0; }
+                         completion:^(BOOL finished) { [toast removeFromSuperview]; }];
+    });
+}
+
 #pragma mark - 导航栏外观统一
 
 static char kNavSavedStandardKey;

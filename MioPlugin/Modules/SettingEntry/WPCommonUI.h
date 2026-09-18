@@ -37,6 +37,9 @@ void WPDrawDisclosureArrow(UIView *card, CGFloat cy, CGFloat containerW, CGFloat
 /// 避免直接 [self presentViewController:] 触发 iOS 17 presentingModalViewController 崩溃
 UIViewController *WPGetTopVCForPresentation(void);
 
+/// 轻量 toast：黑底圆角 label 挂 window，1.5 秒后淡出（全局唯一实现，各页面复用）
+void WPShowToast(NSString *message);
+
 /// 统一导航栏外观：背景色与页面背景一致（WPBgColor），去底部阴影线
 /// 首次调用时自动保存当前导航栏 appearance（挂在 navBar 上）
 void WPApplyNavAppearance(UIViewController *vc);

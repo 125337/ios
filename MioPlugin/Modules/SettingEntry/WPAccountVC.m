@@ -154,45 +154,7 @@ static NSDictionary *MioReadProvisioningProfile(void) {
     return [plist isKindOfClass:[NSDictionary class]] ? plist : nil;
 }
 
-/// 轻量 toast（不依赖微信私有 HUD 类）
-static void MioShowToast(UIViewController *vc, NSString *text) {
-    UIWindow *window = vc.view.window;
-    if (!window) {
-        for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
-            if (![scene isKindOfClass:[UIWindowScene class]]) continue;
-            for (UIWindow *w in scene.windows) {
-                if (w.isKeyWindow) { window = w; break; }
-            }
-            if (window) break;
-        }
-    }
-    if (!window) return;
-
-    UILabel *label = [[UILabel alloc] init];
-    label.text = text;
-    label.font = [UIFont systemFontOfSize:13];
-    label.textColor = UIColor.whiteColor;
-    label.textAlignment = NSTextAlignmentCenter;
-    label.numberOfLines = 0;
-    [label sizeToFit];
-
-    UIView *toast = [[UIView alloc] initWithFrame:CGRectMake((window.bounds.size.width - label.frame.size.width - 24) / 2,
-                                                             window.bounds.size.height * 0.45,
-                                                             label.frame.size.width + 24,
-                                                             label.frame.size.height + 16)];
-    toast.backgroundColor = [UIColor colorWithWhite:0 alpha:0.78];
-    toast.layer.cornerRadius = 8;
-    toast.layer.masksToBounds = YES;
-    label.frame = CGRectMake(12, 8, label.frame.size.width, label.frame.size.height);
-    [toast addSubview:label];
-    [window addSubview:toast];
-    toast.alpha = 0;
-    [UIView animateWithDuration:0.2 animations:^{ toast.alpha = 1; }];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [UIView animateWithDuration:0.25 animations:^{ toast.alpha = 0; }
-                         completion:^(BOOL finished) { [toast removeFromSuperview]; }];
-    });
-}
+/// 轻量 toast 已提取为 WPCommonUI 的 WPShowToast（全局唯一实现）
 
 #pragma mark - 页面
 
@@ -403,7 +365,7 @@ static void MioShowToast(UIViewController *vc, NSString *text) {
     NSString *title = objc_getAssociatedObject(sender, "copyTitle");
     if (text.length == 0) return;
     [UIPasteboard generalPasteboard].string = text;
-    MioShowToast(self, [NSString stringWithFormat:@"已复制%@: %@", title ?: @"", text]);
+    WPShowToast([NSString stringWithFormat:@"已复制%@: %@", title ?: @"", text]);
 }
 
 #pragma mark 动作
@@ -411,7 +373,7 @@ static void MioShowToast(UIViewController *vc, NSString *text) {
 /// 账号状态：跳转腾讯卫士小程序。微信"小程序口令"机制：复制链接后粘贴到聊天/搜索框即直达
 - (void)openTencentGuardian {
     [UIPasteboard generalPasteboard].string = @"#小程序://腾讯卫士/NgEPUfJ9RorXGKd";
-    MioShowToast(self, @"小程序口令已复制，粘贴到聊天或搜索框即可打开腾讯卫士");
+    WPShowToast(@"小程序口令已复制，粘贴到聊天或搜索框即可打开腾讯卫士");
 }
 
 #pragma mark 证书权限
