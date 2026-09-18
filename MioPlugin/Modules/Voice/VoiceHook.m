@@ -109,7 +109,7 @@ static void MioDumpVoiceWrap(id wrap, NSString *tag) {
                 } else if ([v isKindOfClass:[NSData class]]) {
                     piece = [NSString stringWithFormat:@"NSData(%lu字节)", (unsigned long)[v length]];
                 } else if (v) {
-                    piece = [NSString stringWithFormat:@"<%@>", NSStringFromClass(v.class)];
+                    piece = [NSString stringWithFormat:@"<%@>", NSStringFromClass(object_getClass(v))];
                 }
             } else if (strchr("cBsSiIlLqQB", enc[0])) {
                 long long iv = 0;
