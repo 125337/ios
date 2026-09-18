@@ -488,91 +488,79 @@ static void hook_BMCC_viewWillLayoutSubviews(id self, SEL _cmd) {
 }
 
 // ═══════════════════════════════════════════════════════
-// 取证探针 A：CMessageMgr 发送链方法清单 + 只打日志 hook
-// （真实语音 AddMsg 之后"踢一脚"的方法 = 探针命中者，时间线看时间戳）
+// 取证探针 A（精简手写版）：6 个发送链方法，只打日志
+// （批量版按"参数个数分类"生成签名不匹配的替换函数 → 参数转发寄存器垃圾被当对象 → SEGV，
+//   加上 DB 僵尸语音消息每次启动触发重发扫描 → 崩溃循环（log25 根因），整个机制已废弃。
+//   ObjC 没有"任意签名通用转发"的安全捷径，探针只取证，全部手写签名。
+//   三段式：先调原实现 → @try 打一行日志（只打 sel 名，不格式化参数）→ 返回原实现结果）
 // ═══════════════════════════════════════════════════════
 
-static NSMutableDictionary<NSString *, NSValue *> *g_probeOrig = nil;
-
-/// 解析方法签名：返回除 self/_cmd 外的对象参数个数（0-3 可通用 hook）；
-/// 非 void 返回或含非对象参数 → -1（仅记录清单，不 hook，避免签名不匹配崩溃）
-static int MioProbeObjArgCount(const char *enc) {
-    if (!enc || enc[0] != 'v') return -1;
-    int i = 1, objArgs = 0, order = 0;
-    while (enc[i]) {
-        while (enc[i] >= '0' && enc[i] <= '9') i++; // 跳过帧偏移数字
-        char c = enc[i];
-        if (!c) break;
-        i++;
-        if (c == '@') { if (order >= 2) objArgs++; order++; } // order 0=self 1=_cmd 2+=参数
-        else if (c == ':') { }
-        else return -1;
-    }
-    return (objArgs <= 3) ? objArgs : -1;
+static void (*g_origResendMsg)(id, SEL, id, id);
+static id probe_ResendMsg(id self, SEL _cmd, id a1, id a2) {
+    id r = (id)g_origResendMsg(self, _cmd, a1, a2);
+    @try { WPLog(@"Voice", @"[SendProbe] ▶ ResendMsg:MsgWrap:"); } @catch (NSException *e) {}
+    return r;
 }
 
-static void MioProbeFire(SEL _cmd) {
-    WPLog(@"Voice", @"[SendProbe] ▶ %@", NSStringFromSelector(_cmd));
+static void (*g_origSendMsg)(id, SEL, id, id);
+static id probe_SendMsg(id self, SEL _cmd, id a1, id a2) {
+    id r = (id)g_origSendMsg(self, _cmd, a1, a2);
+    @try { WPLog(@"Voice", @"[SendProbe] ▶ sendMsg:toContactUsrName:"); } @catch (NSException *e) {}
+    return r;
 }
 
-static void probe_h0(id self, SEL _cmd) {
-    MioProbeFire(_cmd);
-    IMP o = [[g_probeOrig objectForKey:NSStringFromSelector(_cmd)] pointerValue];
-    if (o) ((void (*)(id, SEL))o)(self, _cmd);
+static void (*g_origSendSuccess)(id, SEL, id);
+static id probe_SendSuccess(id self, SEL _cmd, id a1) {
+    id r = (id)g_origSendSuccess(self, _cmd, a1);
+    @try { WPLog(@"Voice", @"[SendProbe] ▶ OnSendMessageSuccess:"); } @catch (NSException *e) {}
+    return r;
 }
-static void probe_h1(id self, SEL _cmd, id a1) {
-    MioProbeFire(_cmd);
-    IMP o = [[g_probeOrig objectForKey:NSStringFromSelector(_cmd)] pointerValue];
-    if (o) ((void (*)(id, SEL, id))o)(self, _cmd, a1);
+
+static void (*g_origSendFail)(id, SEL, id);
+static id probe_SendFail(id self, SEL _cmd, id a1) {
+    id r = (id)g_origSendFail(self, _cmd, a1);
+    @try { WPLog(@"Voice", @"[SendProbe] ▶ OnSendMessageFail:"); } @catch (NSException *e) {}
+    return r;
 }
-static void probe_h2(id self, SEL _cmd, id a1, id a2) {
-    MioProbeFire(_cmd);
-    IMP o = [[g_probeOrig objectForKey:NSStringFromSelector(_cmd)] pointerValue];
-    if (o) ((void (*)(id, SEL, id, id))o)(self, _cmd, a1, a2);
+
+static void (*g_origSentBySender)(id, SEL, id);
+static id probe_SentBySender(id self, SEL _cmd, id a1) {
+    id r = (id)g_origSentBySender(self, _cmd, a1);
+    @try { WPLog(@"Voice", @"[SendProbe] ▶ OnMessageSentBySender:"); } @catch (NSException *e) {}
+    return r;
 }
-static void probe_h3(id self, SEL _cmd, id a1, id a2, id a3) {
-    MioProbeFire(_cmd);
-    IMP o = [[g_probeOrig objectForKey:NSStringFromSelector(_cmd)] pointerValue];
-    if (o) ((void (*)(id, SEL, id, id, id))o)(self, _cmd, a1, a2, a3);
+
+static void (*g_origResendAll)(id, SEL);
+static id probe_ResendAll(id self, SEL _cmd) {
+    WPLog(@"Voice", @"[SendProbe] ▶ reSendAllMsgFromNotificationDone (启动重发扫描)"); // 先打日志：orig 可能耗时长
+    id r = (id)g_origResendAll(self, _cmd);
+    return r;
 }
 
 static void MioInstallSendProbe(void) {
-    @try {
-        Class cls = objc_getClass("CMessageMgr");
-        if (!cls) return;
-        static dispatch_once_t once;
-        dispatch_once(&once, ^{
-            g_probeOrig = [NSMutableDictionary new];
-            unsigned int count = 0;
-            Method *list = class_copyMethodList(cls, &count);
-            NSMutableString *names = [NSMutableString stringWithFormat:@"[SendProbe] CMessageMgr 方法总数(%u)，命中 Send/Resend/Upload/Retry:", count];
-            int hooked = 0;
-            NSArray *already = @[@"AddMsg:MsgWrap:", @"AsyncOnAddMsg:MsgWrap:", @"SaveMesVoice:MsgWrap:",
-                                 @"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:"];
-            for (unsigned int i = 0; i < count; i++) {
-                SEL sel = method_getName(list[i]);
-                NSString *name = NSStringFromSelector(sel);
-                NSString *lower = name.lowercaseString;
-                if (![lower containsString:@"send"] && ![lower containsString:@"resend"] &&
-                    ![lower containsString:@"upload"] && ![lower containsString:@"retry"]) continue;
-                int n = MioProbeObjArgCount(method_getTypeEncoding(list[i]));
-                [names appendFormat:@"\n  %@ [%d对象参%s]", name, n, (n >= 0 && !([already containsObject:name])) ? ",已hook" : ",仅记录"];
-                if (n < 0 || [already containsObject:name]) continue;
-                void *hookFn = (n == 0 ? (void *)probe_h0 : n == 1 ? (void *)probe_h1 : n == 2 ? (void *)probe_h2 : (void *)probe_h3);
-                IMP orig = NULL;
-                MSHookMessageEx(cls, sel, (IMP)hookFn, &orig);
-                if (orig) {
-                    [g_probeOrig setObject:[NSValue valueWithPointer:orig] forKey:name];
-                    hooked++;
-                }
-            }
-            if (list) free(list);
-            WPLog(@"Voice", @"%@", names);
-            WPLog(@"Voice", @"[SendProbe] 只打日志探针安装完成: %d 个（录真实语音后看 ▶ 序列）", hooked);
-        });
-    } @catch (NSException *e) {
-        WPLog(@"Voice", @"[SendProbe] 安装异常: %@", e.reason);
+    Class cls = objc_getClass("CMessageMgr");
+    if (!cls) { WPLog(@"Voice", @"[SendProbe] CMessageMgr not found"); return; }
+    struct ProbeEntry { const char *name; void *hook; IMP *orig; };
+    struct ProbeEntry probes[] = {
+        {"ResendMsg:MsgWrap:", (void *)probe_ResendMsg, (IMP *)&g_origResendMsg},
+        {"sendMsg:toContactUsrName:", (void *)probe_SendMsg, (IMP *)&g_origSendMsg},
+        {"OnSendMessageSuccess:", (void *)probe_SendSuccess, (IMP *)&g_origSendSuccess},
+        {"OnSendMessageFail:", (void *)probe_SendFail, (IMP *)&g_origSendFail},
+        {"OnMessageSentBySender:", (void *)probe_SentBySender, (IMP *)&g_origSentBySender},
+        {"reSendAllMsgFromNotificationDone", (void *)probe_ResendAll, (IMP *)&g_origResendAll},
+    };
+    int ok = 0;
+    for (NSUInteger i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
+        SEL sel = NSSelectorFromString(@(probes[i].name));
+        if (!class_getInstanceMethod(cls, sel)) {
+            WPLog(@"Voice", @"[SendProbe] [-] %@ 不存在，跳过", @(probes[i].name));
+            continue;
+        }
+        MSHookMessageEx(cls, sel, (IMP)probes[i].hook, probes[i].orig);
+        WPLog(@"Voice", @"[SendProbe] [+] %@ hooked (只打日志)", @(probes[i].name));
+        ok++;
     }
+    WPLog(@"Voice", @"[SendProbe] 手写探针安装完成: %d/6（录真实语音后看 ▶ 序列，AddMsg 之后第一个▶即踢队列动作）", ok);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -596,6 +584,14 @@ static BOOL probe_FMCreate(id self, SEL _cmd, id path, id data, id attrs) {
     return g_origFMCreate(self, _cmd, path, data, attrs);
 }
 
+static BOOL (*g_origFMCopy)(id, SEL, id, id, id);
+static BOOL probe_FMCopy(id self, SEL _cmd, id src, id dst, id err) {
+    if ([src isKindOfClass:[NSString class]] && ([src containsString:@"/Audio/"] || [dst containsString:@"/Audio/"])) {
+        WPLog(@"Voice", @"[FileProbe] copy: %@ → %@", src, dst);
+    }
+    return g_origFMCopy(self, _cmd, src, dst, err);
+}
+
 static BOOL (*g_origDataWrite)(id, SEL, id, unsigned long, id);
 static BOOL probe_DataWrite(id self, SEL _cmd, id path, unsigned long opt, id err) {
     if ([path isKindOfClass:[NSString class]] && [path containsString:@"/Audio/"]) {
@@ -610,12 +606,13 @@ static void MioInstallFileProbe(void) {
         if (fm) {
             MSHookMessageEx(fm, @selector(moveItemAtPath:toPath:error:), (IMP)probe_FMMove, (IMP *)&g_origFMMove);
             MSHookMessageEx(fm, @selector(createFileAtPath:contents:attributes:), (IMP)probe_FMCreate, (IMP *)&g_origFMCreate);
+            MSHookMessageEx(fm, @selector(copyItemAtPath:toPath:error:), (IMP)probe_FMCopy, (IMP *)&g_origFMCopy);
         }
         Class dataCls = objc_getClass("NSData");
         if (dataCls) {
             MSHookMessageEx(dataCls, @selector(writeToFile:options:error:), (IMP)probe_DataWrite, (IMP *)&g_origDataWrite);
         }
-        WPLog(@"Voice", @"[FileProbe] 文件时间线探针安装完成 (move/create/dataWrite, 过滤/Audio/)");
+        WPLog(@"Voice", @"[FileProbe] 文件时间线探针安装完成 (move/create/copy/dataWrite, 过滤/Audio/)");
     } @catch (NSException *e) {
         WPLog(@"Voice", @"[FileProbe] 安装异常: %@", e.reason);
     }
