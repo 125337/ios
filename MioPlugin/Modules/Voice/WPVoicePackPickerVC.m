@@ -166,6 +166,7 @@ static NSInteger const kSectionFolder = 1;
         [self reloadAll];
         return;
     }
+    WPLog(@"Voice", @"[Pick] 点击文件: section=%ld, rel=%@", (long)indexPath.section, it.relPath);
     [self sendItem:it];
 }
 
@@ -189,6 +190,15 @@ static NSInteger const kSectionFolder = 1;
         WPShowToast(@"未识别到当前会话");
         return;
     }
+    // 收藏/最近元数据可能残留已不存在的文件，先校验再发送
+    if ([VoicePackStore itemForRelPath:it.relPath] == nil) {
+        WPLog(@"Voice", @"[Pick] 条目已失效（文件不存在）: %@，刷新列表", it.relPath);
+        WPShowToast(@"文件不存在，列表已刷新");
+        [self rebuildQuickItems];
+        self.folderItems = [[VoicePackStore listItemsInRelPath:self.currentRelPath] ?: @[] copy];
+        [self.table reloadData];
+        return;
+    }
     NSError *err = nil;
     if ([VoicePackStore sendVoiceAtRelPath:it.relPath toChat:self.chatName error:&err]) {
         WPShowToast([NSString stringWithFormat:@"已发送「%@」", it.name]);
@@ -199,6 +209,7 @@ static NSInteger const kSectionFolder = 1;
         }
     } else {
         WPShowToast(err.localizedDescription ?: @"发送失败");
+        if (err.code == 11) [self reloadAll]; // 文件读取失败也刷新，清掉失效条目
     }
 }
 
