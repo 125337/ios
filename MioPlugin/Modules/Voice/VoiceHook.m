@@ -97,6 +97,55 @@ static unsigned int MioWrapLocalID(id wrap) {
     return *(unsigned int *)((__bridge void *)wrap + ivar_getOffset(iv));
 }
 
+// ═══════════════════════════════════════════════════════
+// Audio 目录时间线（零 hook 风险：主动枚举，不 hook 任何文件 API）
+// 真实语音的音频文件在 AddMsg 前已由录音线程写好，AddMsg 后微信必然
+// 做了"改名/复制为 localID.aud"的动作——定时枚举目录抓这个模式
+// ═══════════════════════════════════════════════════════
+
+static void MioProbeAudioDir(NSString *tag, NSString *dir) {
+    @try {
+        NSArray<NSString *> *names = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:nil];
+        NSMutableString *out = [NSMutableString string];
+        for (NSString *n in names) {
+            if ([n hasPrefix:@"."]) continue;
+            NSDictionary *a = [[NSFileManager defaultManager] attributesOfItemAtPath:[dir stringByAppendingPathComponent:n] error:nil];
+            [out appendFormat:@"\n  %@ (%llu字节)", n, (unsigned long long)(a.fileSize ?: 0)];
+        }
+        WPLog(@"Voice", @"[%@] %@:%@", tag, dir.lastPathComponent, out);
+    } @catch (NSException *e) {}
+}
+
+/// AddMsg 返回后调用（此时 localID 已回填）：立即枚举 + 后台 0.5~7s 定时枚举
+static void MioScheduleAudioTimeline(id wrap) {
+    @try {
+        unsigned int localID = MioWrapLocalID(wrap);
+        if (localID == 0) { WPLog(@"Voice", @"[FileTL] localID=0 跳过"); return; }
+        Class wrapCls = object_getClass(wrap);
+        SEL sel = NSSelectorFromString(@"getPathOfAudio:");
+        if (![wrapCls respondsToSelector:sel]) {
+            WPLog(@"Voice", @"[FileTL] +getPathOfAudio: 不可用, localID=%u", localID);
+            return;
+        }
+        NSString *path = ((id (*)(id, SEL, id))objc_msgSend)(wrapCls, sel, wrap);
+        if (![path isKindOfClass:[NSString class]] || path.length == 0) return;
+        NSString *dir = [path stringByDeletingLastPathComponent];
+        WPLog(@"Voice", @"[FileTL] localID=%u 正式路径=%@", localID, path);
+        MioProbeAudioDir(@"FileTL.t0", dir);
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            const double marks[] = {0.5, 1.0, 2.0, 4.0, 7.0};
+            double prev = 0;
+            for (int i = 0; i < 5; i++) {
+                [NSThread sleepForTimeInterval:marks[i] - prev];
+                prev = marks[i];
+                MioProbeAudioDir([NSString stringWithFormat:@"FileTL.t%.1fs", marks[i]], dir);
+            }
+        });
+    } @catch (NSException *e) {
+        WPLog(@"Voice", @"[FileTL] 异常: %@", e.reason);
+    }
+}
+
 /// 把对象全部 ivar 值追加到 out（对象类型打印内容/长度，整型按编码定长读）
 static unsigned int MioDumpIvarsInto(id obj, NSMutableString *out) {
     unsigned int count = 0;
@@ -198,8 +247,8 @@ static void hook_AddLocalMsg6(id self, SEL _cmd, id chatName, id wrap, long long
 static IMP orig_AddMsgMsgWrap = NULL;
 
 static void hook_AddMsgMsgWrap(id self, SEL _cmd, id chatName, id wrap) {
+    unsigned int t = 0;
     @try {
-        unsigned int t = 0;
         if ([wrap respondsToSelector:NSSelectorFromString(@"m_uiMessageType")]) {
             t = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
         }
@@ -210,6 +259,7 @@ static void hook_AddMsgMsgWrap(id self, SEL _cmd, id chatName, id wrap) {
         }
     } @catch (NSException *e) {}
     ((void (*)(id, SEL, id, id))orig_AddMsgMsgWrap)(self, _cmd, chatName, wrap);
+    if (t == 34) MioScheduleAudioTimeline(wrap); // orig 后 localID 已回填，抓文件改名模式
 }
 
 // ═══════════════════════════════════════════════════════
