@@ -632,6 +632,8 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
                 object_setIvar(ext, lv[i], wire); // 语音数据主体
             } else if ([lower containsString:@"path"] && path.length > 0) {
                 object_setIvar(ext, lv[i], path);
+            } else if ([lower containsString:@"refmessagewrap"]) {
+                object_setIvar(ext, lv[i], msg); // 回引 wrap（log19 真实 AddMsg 模板里有此回引）
             }
         } else if (strchr("cBsSiIlLqQ", enc[0])) {
             long long val = -1;
@@ -734,23 +736,19 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
         MioSetIntIvarIfExist(msg, "m_uiVoiceFormat", 4);            // 4 = silk
         MioSetIntIvarIfExist(msg, "m_uiVoiceEndFlag", 1);
         MioSetIntIvarIfExist(msg, "m_uiVoiceForwardFlag", 0);
-        // 真实发送 wrap 特征字段（log18 实测真实流程.AddMsg：imgStatus=1 downloadStatus=1 bNew=1）
+        // 真实发送 wrap 特征字段（log18 实测真实流程.AddMsg：imgStatus=1 bNew=1）
         MioSetIntIvarIfExist(msg, "m_uiImgStatus", 1);
-        MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 1);
+        // ★downloadStatus 显式 0：=1 可能被发送侧当作"语音已就绪"而跳过上传（对照 WCRefine 做法）
+        MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 0);
         MioSetIntIvarIfExist(msg, "m_bNew", 1);
         // XML 模板参照小微助手逆向结论（voiceformat="4" 数值型最小模板）
         [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voiceformat=\"4\" forwardflag=\"0\" /></msg>", ms]
                forKey:@"m_nsContent"];
         WPLog(@"Voice", @"[Send] 构造语音: %lldms, wire %llu 字节", ms, wire.length);
 
-        // 仿小微：先把语音写到微信期望的落盘路径（录音流程本就是先落盘后入库，上传管线从文件读取）
-        NSString *voicePath = MioProbeVoicePath(msg, msgMgr);
-        if (voicePath.length > 0) {
-            WPLog(@"Voice", @"[Send] 语音落盘%@: %@", MioWriteVoiceFile(wire, voicePath) ? @"成功" : @"失败", voicePath);
-            MioSetIvarIfExist(msg, "m_nsVoicePath", voicePath); // 正式路径写回 wrap（WCRefine 同款）
-        } else {
-            WPLog(@"Voice", @"[Send] 未探测到语音路径方法，仅依赖 buffer");
-        }
+        // 落盘时机对齐真实流程/WCRefine：入库前不写文件（localID 未定会产生 0.aud 孤儿文件），
+        // 正式路径在入库拿到 localID 后一次写入（见下方"正式路径落盘"段）
+        NSString *voicePath = @"";
 
         MioDumpSendAPIOnce(msgMgr); // 一次性 dump 本版本发送相关 API（诊断用）
 
@@ -759,7 +757,7 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
         BOOL extOK = MioAttachVoiceExtension(msg, wire, voicePath, ms);
 
         // 入库：真实流程走 AddMsg:MsgWrap:（log18 捕获：真实录音发送调用的是 AddMsg，
-        // localID 由管线后补；SaveMesVoice 第一个参数实为会话名，外部传路径无效，已废弃）
+        // localID 由管线后补；SaveMesVoice 在入库+落盘之后调用，见下方收尾段）
         BOOL inserted = NO;
         if ([msgMgr respondsToSelector:addSel]) {
             ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addSel, chatName, msg);
@@ -797,10 +795,37 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             }
         }
 
-        // 入库后 localID 已分配：再探测一次路径，若文件名变化则补写一份（覆盖两种命名方案）
+        // ★入库后 localID 已分配：探测正式路径 → 写文件 → 写回 m_nsVoicePath（真实流程顺序：先落盘后登记）
         NSString *postPath = MioProbeVoicePath(msg, msgMgr);
-        if (postPath.length > 0 && ![postPath isEqualToString:voicePath]) {
-            WPLog(@"Voice", @"[Send] 入库后路径补写%@: %@", MioWriteVoiceFile(wire, postPath) ? @"成功" : @"失败", postPath);
+        if (postPath.length > 0) {
+            voicePath = postPath;
+            WPLog(@"Voice", @"[Send] 正式路径落盘%@: %@", MioWriteVoiceFile(wire, postPath) ? @"成功" : @"失败", postPath);
+            MioSetIvarIfExist(msg, "m_nsVoicePath", postPath);
+        } else {
+            WPLog(@"Voice", @"[Send] 未探测到正式路径，仅依赖 buffer");
+        }
+
+        // ★文件就绪后的收尾信号（log19 卡点实锤：文件补写了但整份日志无一次 SaveMesVoice 调用
+        //   → 上传队列永不触发 → 永远"发送中"）。
+        // log18 实测：SaveMesVoice 第一参数=会话名（非文件路径）。顺序照抄 WCRefine：写文件→setM_nsVoicePath→SaveMesVoice
+        SEL saveSel = NSSelectorFromString(@"SaveMesVoice:MsgWrap:");
+        if ([msgMgr respondsToSelector:saveSel]) {
+            @try {
+                ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, saveSel, chatName, msg);
+                WPLog(@"Voice", @"[Send] SaveMesVoice 已调用 chat=%@", chatName);
+            } @catch (NSException *e) {
+                WPLog(@"Voice", @"[Send] SaveMesVoice 调用异常: %@ %@", e.name, e.reason);
+            }
+        } else {
+            WPLog(@"Voice", @"[Send] SaveMesVoice 不存在，跳过");
+        }
+        // 守卫式 Resend（WCRefine 收尾动作；本版本实测不存在该方法 → 自动跳过）
+        SEL resendSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
+        if ([msgMgr respondsToSelector:resendSel]) {
+            ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, resendSel, chatName, msg);
+            WPLog(@"Voice", @"[Send] ResendVoiceMsg 已调用");
+        } else {
+            WPLog(@"Voice", @"[Send] ResendVoiceMsg 本版本不存在，跳过");
         }
 
         WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
