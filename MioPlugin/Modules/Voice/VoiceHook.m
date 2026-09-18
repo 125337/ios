@@ -142,6 +142,21 @@ static void hook_UVM_StartSend(id self, SEL _cmd) {
     if (orig_UVM_StartSend) ((void (*)(id, SEL))orig_UVM_StartSend)(self, _cmd);
 }
 
+// ★保存活的 UploadVoiceCDNMgr 实例（TimerCheckUpload 每 2 秒跑，微信启动即有）
+//   它不是 MMServiceCenter 注册 service，getService 拿不到（log44 实锤），只能这样捕获
+static id g_uploadCDNMgr = nil;
+static IMP orig_UVM_TimerCheck = NULL;
+static void hook_UVM_TimerCheck(id self, SEL _cmd) {
+    if (!g_uploadCDNMgr) {
+        g_uploadCDNMgr = self;
+        WPLog(@"Voice", @"[Upload] 已捕获 UploadVoiceCDNMgr 活实例 %p", self);
+    }
+    if (orig_UVM_TimerCheck) ((void (*)(id, SEL))orig_UVM_TimerCheck)(self, _cmd);
+}
+
+/// 供 VoicePackStore 发送侧获取活的上传管理器实例
+id MioGetUploadVoiceCDNMgr(void) { return g_uploadCDNMgr; }
+
 // ═══════════════════════════════════════════════════════
 // Audio 目录时间线（零 hook 风险：主动枚举，不 hook 任何文件 API）
 // 真实语音的音频文件在 AddMsg 前已由录音线程写好，AddMsg 后微信必然
@@ -915,6 +930,12 @@ static void MioInstallFileProbe(void) {
             if (class_getInstanceMethod(uc, ssSel)) {
                 MSHookMessageEx(uc, ssSel, (IMP)hook_UVM_StartSend, (IMP *)&orig_UVM_StartSend);
                 WPLog(@"Voice", @"[+] %@ startSend hooked (上传取证)", mn);
+            }
+            // TimerCheckUpload：每 2 秒定时轮询，用于捕获活实例
+            SEL tcSel = NSSelectorFromString(@"TimerCheckUpload");
+            if ([mn isEqualToString:@"UploadVoiceCDNMgr"] && class_getInstanceMethod(uc, tcSel)) {
+                MSHookMessageEx(uc, tcSel, (IMP)hook_UVM_TimerCheck, (IMP *)&orig_UVM_TimerCheck);
+                WPLog(@"Voice", @"[+] %@ TimerCheckUpload hooked (活实例捕获)", mn);
             }
         }
     } else {
