@@ -806,30 +806,39 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             }
         }
 
-        // ★模拟"录音完成"（run 2023，log36 FileTL 实锤边录边写模型）：
-        //   真实流程 = AddMsg(录音开始, EndFlag=0, voicelength=0) → 边录边写 {localID}.aud
-        //   → 松手完成：EndFlag→1 + voicelength 回填 + 通知 DB → 上传队列拾取。
-        //   我们的数据已在 {localID}.aud（上方补写完成），现在补发"完成"信号
+        // ★复刻真实"录音完成"三连（run 2024，log37 取证实锤 2652 的精确序列）：
+        //   ① UpdateVoiceMessage:MsgWrap:fixTime:  (dl=1, voicelength=0, End=0, VTime=0)
+        //   ② UpdateVoiceMessage:MsgWrap:          (dl=9, voicelength=ms, 扩展VTime=ms) ← 时长回填+dl→9
+        //   ③ UpdateVoiceMessage:MsgWrap:          (status=2, dl=1) ← 提交上传队列
+        //   注：EndFlag 全程=0；文件由录音器边录边写（我们已一次性补写完成）
         if (inserted) {
             @try {
-                // 1) 扩展 EndFlag=1（录音结束标志）
-                Ivar hostIvar = class_getInstanceVariable(object_getClass(msg), "m_extendInfoWithMsgType");
-                id ext = hostIvar ? object_getIvar(msg, hostIvar) : nil;
-                if (ext) MioSetIntIvarIfExist(ext, "m_uiVoiceEndFlag", 1);
-                // 2) XML voicelength 回填真实时长（完成时微信自己会做的事）
+                SEL uvFT = NSSelectorFromString(@"UpdateVoiceMessage:MsgWrap:fixTime:");
+                SEL uv = NSSelectorFromString(@"UpdateVoiceMessage:MsgWrap:");
+                // ① 录音中状态确认（保持 AddMsg 时字段：dl=1 / voicelength=0 / End=0 / VTime=0）
+                if ([msgMgr respondsToSelector:uvFT]) {
+                    ((void (*)(id, SEL, id, id, long long))objc_msgSend)(msgMgr, uvFT, chatName, msg, 1LL);
+                    WPLog(@"Voice", @"[Send] 完成①UpdateVoiceMessage:fixTime 已调");
+                }
+                // ② 时长回填 + dl→9 + 扩展VTime=毫秒
                 [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voiceformat=\"4\" /></msg>", ms]
                        forKey:@"m_nsContent"];
-                // 3) 通知 DB：UpdateVoiceMessage（"松手完成"的头号候选，本构建同时在取证验证）
-                SEL uvSel = NSSelectorFromString(@"UpdateVoiceMessage:MsgWrap:");
-                if ([msgMgr respondsToSelector:uvSel]) {
-                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, uvSel, chatName, msg);
-                    WPLog(@"Voice", @"[Send] UpdateVoiceMessage 已调 (录音完成信号)");
+                MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 9);
+                {
+                    Ivar hostIvar2 = class_getInstanceVariable(object_getClass(msg), "m_extendInfoWithMsgType");
+                    id ext2 = hostIvar2 ? object_getIvar(msg, hostIvar2) : nil;
+                    if (ext2) MioSetIntIvarIfExist(ext2, "m_uiVoiceTime", ms); // ★扩展VTime=毫秒
                 }
-                // 4) ResendMsg 队列拾取兜底
-                SEL resendSel2 = NSSelectorFromString(@"ResendMsg:MsgWrap:");
-                if ([msgMgr respondsToSelector:resendSel2]) {
-                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, resendSel2, chatName, msg);
-                    WPLog(@"Voice", @"[Send] ResendMsg 已调 (队列拾取)");
+                if ([msgMgr respondsToSelector:uv]) {
+                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, uv, chatName, msg);
+                    WPLog(@"Voice", @"[Send] 完成②UpdateVoiceMessage (dl=9,时长回填) 已调");
+                }
+                // ③ status→2 + dl→1（提交上传）
+                [msg setValue:@(2) forKey:@"m_uiStatus"];
+                MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 1);
+                if ([msgMgr respondsToSelector:uv]) {
+                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, uv, chatName, msg);
+                    WPLog(@"Voice", @"[Send] 完成③UpdateVoiceMessage (status=2,dl=1) 已调");
                 }
             } @catch (NSException *e) {
                 WPLog(@"Voice", @"[Send] 完成信号异常: %@", e.reason);
