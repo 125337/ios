@@ -566,22 +566,21 @@ static SEL MioFindMethodInChain(Class cls, NSArray<NSString *> *keywords, NSUInt
     return found;
 }
 
-/// SSendVoiceMsg:toContactUsrName: 归属类缓存（后台扫描结果）
-static Class _clsSSendVoice = nil;
+/// 读取 m_uiMesLocalID（uint ivar 定长读）
+static unsigned int MioReadLocalID(id msg) {
+    if (!msg) return 0;
+    Ivar iv = class_getInstanceVariable(object_getClass(msg), "m_uiMesLocalID");
+    if (!iv) return 0;
+    return *(unsigned int *)((__bridge void *)msg + ivar_getOffset(iv));
+}
 
-/// 一次性诊断（崩溃安全版，log15 教训）：
-/// ① 轻量确认：直接用命名类 objc_getClass("CMessageMgr") 查已知选择器（log15 证实
-///    object_getClass(msgMgr) 上 5 个已知方法全部查不到，实例类疑似服务代理/转发类），
-///    同时打印 msgMgr 实例真实类名，双路对照解谜
-/// ② 后台扫描：log15 两次实测主线程全量扫描 11.4 万类×5 选择器后被系统杀进程（watchdog），
-///    故移到后台队列，且先按类名关键词过滤（NSStringFromClass 不触发类实现，开销极低），
-///    只对命中类做方法查找（57 万次查找降为千次级）
+/// 一次性诊断（仅轻量确认；★禁止全类扫描：
+/// log15 主线程扫描、log16 后台扫描均在枚举 11.4 万类后 ~2s 进程死亡，
+/// 疑似微信防护击杀类枚举行为，主线程/后台线程都一样）
 static void MioDumpSendAPIOnce(id msgMgr) {
-    static BOOL started = NO;
-    if (started) return;
-    started = YES;
-
-    // ① 轻量确认（纯查询，主线程安全）
+    static BOOL once = NO;
+    if (once) return;
+    once = YES;
     @try {
         Class namedCls = objc_getClass("CMessageMgr");
         Class instCls = object_getClass(msgMgr);
@@ -591,6 +590,7 @@ static void MioDumpSendAPIOnce(id msgMgr) {
         NSArray<NSString *> *known = @[@"AddMsg:MsgWrap:",
                                        @"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:",
                                        @"SaveMesVoice:MsgWrap:",
+                                       @"addMessageToDB:",
                                        @"ResendVoiceMsg:MsgWrap:",
                                        @"SSendVoiceMsg:toContactUsrName:"];
         for (NSString *n in known) {
@@ -602,58 +602,6 @@ static void MioDumpSendAPIOnce(id msgMgr) {
     } @catch (NSException *e) {
         WPLog(@"Voice", @"[API] 轻量确认异常: %@ %@", e.name, e.reason);
     }
-
-    // ② 后台扫描定位真实语音发送管线归属类
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        @try {
-            @autoreleasepool {
-                unsigned int ncls = 0;
-                Class *classes = objc_copyClassList(&ncls);
-                if (!classes) { WPLog(@"Voice", @"[API] 类列表为空"); return; }
-                WPLog(@"Voice", @"[API] 后台扫描开始: 类总数=%u", ncls);
-                // 第一步：仅类名过滤（不触发方法表实现）
-                NSMutableArray *candidates = [NSMutableArray array];
-                for (unsigned int i = 0; i < ncls; i++) {
-                    @autoreleasepool {
-                        NSString *nm = NSStringFromClass(classes[i]);
-                        if ([nm rangeOfString:@"voice" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-                            [nm rangeOfString:@"audio" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-                            [nm rangeOfString:@"sendmsg" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-                            [nm rangeOfString:@"message" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-                            [nm rangeOfString:@"recorder" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                            [candidates addObject:classes[i]];
-                        }
-                    }
-                }
-                WPLog(@"Voice", @"[API] 类名命中候选 %lu 个", (unsigned long)candidates.count);
-                // 第二步：只对候选类做方法查找
-                SEL sSSend = NSSelectorFromString(@"SSendVoiceMsg:toContactUsrName:");
-                SEL sRes2  = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
-                SEL sRes1  = NSSelectorFromString(@"ResendVoiceMsg:");
-                SEL sRec   = NSSelectorFromString(@"OnRecorderPart:Offset:Len:EndFlag:ForceDelete:Duration:");
-                SEL sPart  = NSSelectorFromString(@"OnPartSent:ErrNo:");
-                NSMutableArray *oSSend = [NSMutableArray array], *oRes2 = [NSMutableArray array], *oRes1 = [NSMutableArray array],
-                               *oRec = [NSMutableArray array], *oPart = [NSMutableArray array];
-                for (Class c in candidates) {
-                    @autoreleasepool {
-                        if (class_getInstanceMethod(c, sSSend)) { [oSSend addObject:NSStringFromClass(c)]; if (!_clsSSendVoice) _clsSSendVoice = c; }
-                        if (class_getInstanceMethod(c, sRes2)) [oRes2 addObject:NSStringFromClass(c)];
-                        if (class_getInstanceMethod(c, sRes1)) [oRes1 addObject:NSStringFromClass(c)];
-                        if (class_getInstanceMethod(c, sRec))  [oRec addObject:NSStringFromClass(c)];
-                        if (class_getInstanceMethod(c, sPart)) [oPart addObject:NSStringFromClass(c)];
-                    }
-                }
-                free(classes);
-                WPLog(@"Voice", @"[API] SSendVoiceMsg:toContactUsrName: 归属(%lu): %@", (unsigned long)oSSend.count, oSSend);
-                WPLog(@"Voice", @"[API] ResendVoiceMsg:MsgWrap: 归属(%lu): %@", (unsigned long)oRes2.count, oRes2);
-                WPLog(@"Voice", @"[API] ResendVoiceMsg: 归属(%lu): %@", (unsigned long)oRes1.count, oRes1);
-                WPLog(@"Voice", @"[API] OnRecorderPart:... 归属(%lu): %@", (unsigned long)oRec.count, oRec);
-                WPLog(@"Voice", @"[API] OnPartSent:ErrNo: 归属(%lu): %@", (unsigned long)oPart.count, oPart);
-            }
-        } @catch (NSException *e) {
-            WPLog(@"Voice", @"[API] 后台扫描异常: %@ %@", e.name, e.reason);
-        }
-    });
 }
 
 + (BOOL)sendVoiceAtRelPath:(NSString *)relPath toChat:(NSString *)chatName error:(NSError **)error {
@@ -743,24 +691,41 @@ static void MioDumpSendAPIOnce(id msgMgr) {
 
         MioDumpSendAPIOnce(msgMgr); // 一次性 dump 本版本发送相关 API（诊断用）
 
-        // 入库：优先精确 AddLocalMsg（respondsToSelector 沿继承链查找，弥补 class_copyMethodList 查不到继承方法的盲区）
+        // ★仿小微链路第一步：SaveMesVoice:path MsgWrap:（log16 已确认本版本存在，命名类=1）
+        // 小微在 AddLocalMsg 之前调用它——负责语音文件处理/时长补算/发送管线准备，
+        // 这是 AddLocalMsg 单独调用时上传管线不拾取（一直"发送中"）的缺失环节
         BOOL inserted = NO;
+        SEL saveSel = NSSelectorFromString(@"SaveMesVoice:MsgWrap:");
+        if (voicePath.length > 0 && [msgMgr respondsToSelector:saveSel]) {
+            @try {
+                ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, saveSel, voicePath, msg);
+                unsigned int lid = MioReadLocalID(msg);
+                WPLog(@"Voice", @"[Send] SaveMesVoice 已调用 path=%@ localID=%u", voicePath, lid);
+                if (lid != 0) inserted = YES; // SaveMesVoice 已完成入库，跳过 AddLocalMsg 防重复
+            } @catch (NSException *e) {
+                WPLog(@"Voice", @"[Send] SaveMesVoice 异常: %@ %@", e.name, e.reason);
+            }
+        } else {
+            WPLog(@"Voice", @"[Send] SaveMesVoice 跳过 (path=%@ resp=%d)，直接 AddLocalMsg", voicePath, [msgMgr respondsToSelector:saveSel]);
+        }
+
+        // 入库：优先精确 AddLocalMsg（respondsToSelector 沿继承链查找，弥补 class_copyMethodList 查不到继承方法的盲区）
         SEL addLocal6 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
         SEL addLocal5 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:");
         SEL addLocal4 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
-        if ([msgMgr respondsToSelector:addLocal6]) {
+        if (!inserted && [msgMgr respondsToSelector:addLocal6]) {
             ((void (*)(id, SEL, id, id, long long, long long))objc_msgSend)(msgMgr, addLocal6, chatName, msg, 1LL, 0LL);
             inserted = YES;
             WPLog(@"Voice", @"[Send] 入库: AddLocalMsg(6参精确, fixTime=1 notify=0)");
-        } else if ([msgMgr respondsToSelector:addLocal5]) {
+        } else if (!inserted && [msgMgr respondsToSelector:addLocal5]) {
             ((void (*)(id, SEL, id, id, long long))objc_msgSend)(msgMgr, addLocal5, chatName, msg, 1LL);
             inserted = YES;
             WPLog(@"Voice", @"[Send] 入库: AddLocalMsg(5参精确, fixTime=1)");
-        } else if ([msgMgr respondsToSelector:addLocal4]) {
+        } else if (!inserted && [msgMgr respondsToSelector:addLocal4]) {
             ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addLocal4, chatName, msg);
             inserted = YES;
             WPLog(@"Voice", @"[Send] 入库: AddLocalMsg(4参精确)");
-        } else {
+        } else if (!inserted) {
             SEL chainSel = MioFindMethodInChain(object_getClass(msgMgr), @[@"addlocalmsg"], 4, NO);
             if (chainSel) {
                 Method m = class_getInstanceMethod(object_getClass(msgMgr), chainSel);
@@ -785,30 +750,11 @@ static void MioDumpSendAPIOnce(id msgMgr) {
 
         WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
 
-        // 兜底触发：2 秒后仍未发送 → 直接调真实语音发送入口 SSendVoiceMsg（全类扫描定位的归属类）
+        // 状态跟踪（SSendVoiceMsg 兜底已删：log16 确认本版本不存在该方法）
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             @try {
-                NSNumber *st = [msg valueForKey:@"m_uiStatus"];
-                if (st.longLongValue == 4) {
-                    WPLog(@"Voice", @"[Send] 2s状态=4 已发送 ✓");
-                    return;
-                }
-                WPLog(@"Voice", @"[Send] 2s状态=%@，尝试 SSendVoiceMsg 真实发送", st);
-                if (_clsSSendVoice) {
-                    id svc = WXGetService(_clsSSendVoice);
-                    SEL sendSel = NSSelectorFromString(@"SSendVoiceMsg:toContactUsrName:");
-                    if (svc && [svc respondsToSelector:sendSel]) {
-                        ((void (*)(id, SEL, id, id))objc_msgSend)(svc, sendSel, msg, chatName);
-                        WPLog(@"Voice", @"[Send] SSendVoiceMsg 已调用 (owner=%@)", NSStringFromClass(_clsSSendVoice));
-                    } else {
-                        WPLog(@"Voice", @"[Send] owner=%@ 实例或方法不可用", NSStringFromClass(_clsSSendVoice));
-                    }
-                } else {
-                    WPLog(@"Voice", @"[Send] 全类扫描未找到 SSendVoiceMsg 归属类");
-                }
-            } @catch (NSException *e) {
-                WPLog(@"Voice", @"[Send] 真实发送异常: %@ %@", e.name, e.reason);
-            }
+                WPLog(@"Voice", @"[Send] 2s状态=%@ localID=%@", [msg valueForKey:@"m_uiStatus"], [msg valueForKey:@"m_uiMesLocalID"]);
+            } @catch (NSException *e) {}
         });
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             @try {
