@@ -752,25 +752,22 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             if (ms > 0) [self setDurationMs:ms forRelPath:relPath]; // 缓存，列表也显示真实秒数
         }
         if (ms <= 0) ms = 1000; // 最终兜底 1 秒
-        // ═══★真实录音管线复刻（run 2021，log23 真实录音 AddMsg 输入模板）═══
-        // 用户按住说话 100% 能发出，其 AddMsg 输入实测：localID=0 / dl=1（音频就绪）/
-        // m_nsMsgSource=@""（非nil）/ 扩展 VoiceTime=0、EndFlag=0、dtVoice=nil / bForward=0；
-        // 音频文件在 AddMsg 前已在盘上（localID=0 → 0.aud），AddMsg 内部完成
-        // 入库+改名+上传任务。log18 时代 AddMsg 卡死的根因=没提前写音频文件。
+        // ═══★路径B复刻（run 2026）：WCRefine 转发路径反汇编 + log33 实测 ═══
+        //   AddMsg(完整入口) → 文件就位 → SaveMesVoice → ResendVoiceMsg。
+        //   ★dl=9（本地数据就绪）是 AddMsg 创建上传任务的前提——run 2021~2025 全部
+        //   用 dl=1（录音中语义）入库，AddMsg 从未建过上传任务，这是卡死根因。
         MioSetIntIvarIfExist(msg, "m_uiVoiceFormat", 4);            // 4 = silk
         MioSetIntIvarIfExist(msg, "m_uiImgStatus", 1);
-        MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 1);         // ★真实录音=1（音频就绪）
+        MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 9);         // ★9=数据就绪（可播+待上传）
         MioSetIntIvarIfExist(msg, "m_bNew", 1);
-        MioSetIntIvarIfExist(msg, "m_bForward", 0);                 // 非转发
-        [msg setValue:@"" forKey:@"m_nsMsgSource"];                 // ★真实录音=@""非nil
-        // XML：voicelength=0 占位（★真实录音实测：入库时永远 0，时长由上传管线解析 silk 回填；
-        // 填非 0 值会破坏"新录音待上传"的特征组合）
-        [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"0\" voiceformat=\"4\" /></msg>"]
+        MioSetIntIvarIfExist(msg, "m_bForward", 0);                 // 非转发标志（WCRefine 2633 同款）
+        [msg setValue:@"" forKey:@"m_nsMsgSource"];                 // 空串非nil（真实模板）
+        // XML：voicelength=真实时长（转发语义：数据完整带时长）
+        [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voiceformat=\"4\" /></msg>", ms]
                forKey:@"m_nsContent"];
-        WPLog(@"Voice", @"[Send] 构造语音(真实录音模板): %lldms, wire %llu 字节", ms, wire.length);
+        WPLog(@"Voice", @"[Send] 构造语音(路径B/dl=9): %lldms, wire %llu 字节", ms, wire.length);
 
-        // ★提前写 0.aud（真实录音顺序：AddMsg 前 localID=0 → 路径即 .../0.aud，
-        //   AddMsg 内部改名 {localID}.aud 并创建上传任务）
+        // 0.aud 预写（双保险；AddMsg 后 localID 定了再补写正式路径）
         NSString *voicePath = MioProbeVoicePath(msg, msgMgr); // localID=0 → 0.aud
         if (voicePath.length > 0) {
             WPLog(@"Voice", @"[Send] 0.aud 预写%@: %@", MioWriteVoiceFile(wire, voicePath) ? @"成功" : @"失败", voicePath);
@@ -780,8 +777,8 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
 
         MioDumpSendAPIOnce(msgMgr); // 一次性 dump 本版本发送相关 API（诊断用）
 
-        // 挂语音类型扩展——真实录音模板：VoiceTime=0 / EndFlag=0 / dtVoice=nil（数据走文件）
-        BOOL extOK = MioAttachVoiceExtension(msg, nil, @"", 0, 0, 0);
+        // 挂语音类型扩展——WCRefine 2633 模板：dtVoice=wire / VTime=ms / End=0 / 回引wrap
+        BOOL extOK = MioAttachVoiceExtension(msg, wire, @"", ms, 0, 0);
 
         // ★入库+发送触发一步到位：AddMsg:MsgWrap:（真实录音的唯一入口，log28 栈实测：
         //   录音结束回调直接调它，内部完成 localID 分配 / 0.aud 改名 / 上传任务创建）
@@ -806,54 +803,23 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             }
         }
 
-        // ★复刻真实"录音完成"三连（run 2024，log37 取证实锤 2652 的精确序列）：
-        //   ① UpdateVoiceMessage:MsgWrap:fixTime:  (dl=1, voicelength=0, End=0, VTime=0)
-        //   ② UpdateVoiceMessage:MsgWrap:          (dl=9, voicelength=ms, 扩展VTime=ms) ← 时长回填+dl→9
-        //   ③ UpdateVoiceMessage:MsgWrap:          (status=2, dl=1) ← 提交上传队列
-        //   注：EndFlag 全程=0；文件由录音器边录边写（我们已一次性补写完成）
+        // ★路径B收尾（run 2026）：SaveMesVoice 观测（AddMsg 内部若自动调了会有
+        //   [真实流程] SaveMesVoice 进入 日志；未自动调则这里显式补一发——WCRefine
+        //   转发路径的登记步骤）+ ResendMsg 强制队列拾取
         if (inserted) {
             @try {
-                SEL uvFT = NSSelectorFromString(@"UpdateVoiceMessage:MsgWrap:fixTime:");
-                SEL uv = NSSelectorFromString(@"UpdateVoiceMessage:MsgWrap:");
-                // ① 录音中状态确认（保持 AddMsg 时字段：dl=1 / voicelength=0 / End=0 / VTime=0）
-                if ([msgMgr respondsToSelector:uvFT]) {
-                    ((void (*)(id, SEL, id, id, long long))objc_msgSend)(msgMgr, uvFT, chatName, msg, 1LL);
-                    WPLog(@"Voice", @"[Send] 完成①UpdateVoiceMessage:fixTime 已调");
+                SEL saveSel2 = NSSelectorFromString(@"SaveMesVoice:MsgWrap:");
+                if ([msgMgr respondsToSelector:saveSel2]) {
+                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, saveSel2, chatName, msg);
+                    WPLog(@"Voice", @"[Send] SaveMesVoice 已调 (路径B登记)");
                 }
-                // ② 时长回填 + dl→9 + 扩展VTime=毫秒
-                [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voiceformat=\"4\" /></msg>", ms]
-                       forKey:@"m_nsContent"];
-                MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 9);
-                {
-                    Ivar hostIvar2 = class_getInstanceVariable(object_getClass(msg), "m_extendInfoWithMsgType");
-                    id ext2 = hostIvar2 ? object_getIvar(msg, hostIvar2) : nil;
-                    if (ext2) MioSetIntIvarIfExist(ext2, "m_uiVoiceTime", ms); // ★扩展VTime=毫秒
-                }
-                if ([msgMgr respondsToSelector:uv]) {
-                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, uv, chatName, msg);
-                    WPLog(@"Voice", @"[Send] 完成②UpdateVoiceMessage (dl=9,时长回填) 已调");
-                }
-                // ③ status→2 + dl→1（提交上传）
-                [msg setValue:@(2) forKey:@"m_uiStatus"];
-                MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 1);
-                if ([msgMgr respondsToSelector:uv]) {
-                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, uv, chatName, msg);
-                    WPLog(@"Voice", @"[Send] 完成③UpdateVoiceMessage (status=2,dl=1) 已调");
-                }
-                // ④ dl→9（本地音频就绪：修复本地无声；run 2020 实测 dl=9 气泡可播）
-                MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 9);
-                if ([msgMgr respondsToSelector:uv]) {
-                    ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, uv, chatName, msg);
-                    WPLog(@"Voice", @"[Send] 完成④UpdateVoiceMessage (dl=9本地可播) 已调");
-                }
-                // ⑤ ResendMsg 强制队列拾取（status=2+文件就绪语境，与 run 2020 不同）
                 SEL resendSel3 = NSSelectorFromString(@"ResendMsg:MsgWrap:");
                 if ([msgMgr respondsToSelector:resendSel3]) {
                     ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, resendSel3, chatName, msg);
                     WPLog(@"Voice", @"[Send] ResendMsg 已调 (强制上传拾取)");
                 }
             } @catch (NSException *e) {
-                WPLog(@"Voice", @"[Send] 完成信号异常: %@", e.reason);
+                WPLog(@"Voice", @"[Send] 路径B收尾异常: %@", e.reason);
             }
         }
 
