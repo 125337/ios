@@ -900,18 +900,12 @@ static void MioInstallFileProbe(void) {
             WPLog(@"Voice", @"[+] IsRecordMsgUploading: hooked (语音取证)");
         }
 
-        // 语音上传管理器取证（run 2029）：AddNewPart/ResendVoiceMsg/startSend
+        // 语音上传管理器取证（run 2030）：只留 ResendVoiceMsg/startSend（2参/0参，签名安全）。
+        // AddNewPart 的 12 参 hook 已移除——签名若与真实不符转发时栈错乱，log43 WCRefine 闪退嫌疑源。
         NSArray *upMgrNames = @[@"UploadVoiceCDNMgr", @"MMNewUploadVoiceMgr"];
         for (NSString *mn in upMgrNames) {
             Class uc = objc_getClass(mn.UTF8String);
             if (!uc) { WPLog(@"Voice", @"[-] %@ 不存在", mn); continue; }
-            SEL anpSel = NSSelectorFromString(@"AddNewPart:LocalID:n64SvrID:Offset:Len:VoiceTime:CreateTime:EndFlag:CancelFlag:VoiceFormat:ForwardFlag:msgSource:");
-            if (class_getInstanceMethod(uc, anpSel)) {
-                MSHookMessageEx(uc, anpSel, (IMP)hook_UVM_AddNewPart, (IMP *)&orig_UVM_AddNewPart);
-                WPLog(@"Voice", @"[+] %@ AddNewPart hooked (上传取证)", mn);
-            } else {
-                WPLog(@"Voice", @"[-] %@ 无 AddNewPart", mn);
-            }
             SEL rvmSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
             if (class_getInstanceMethod(uc, rvmSel)) {
                 MSHookMessageEx(uc, rvmSel, (IMP)hook_UVM_Resend, (IMP *)&orig_UVM_Resend);
