@@ -495,45 +495,45 @@ static void hook_BMCC_viewWillLayoutSubviews(id self, SEL _cmd) {
 //   三段式：先调原实现 → @try 打一行日志（只打 sel 名，不格式化参数）→ 返回原实现结果）
 // ═══════════════════════════════════════════════════════
 
-static void (*g_origResendMsg)(id, SEL, id, id);
+static id (*g_origResendMsg)(id, SEL, id, id);
 static id probe_ResendMsg(id self, SEL _cmd, id a1, id a2) {
-    id r = (id)g_origResendMsg(self, _cmd, a1, a2);
+    id r = g_origResendMsg(self, _cmd, a1, a2);
     @try { WPLog(@"Voice", @"[SendProbe] ▶ ResendMsg:MsgWrap:"); } @catch (NSException *e) {}
     return r;
 }
 
-static void (*g_origSendMsg)(id, SEL, id, id);
+static id (*g_origSendMsg)(id, SEL, id, id);
 static id probe_SendMsg(id self, SEL _cmd, id a1, id a2) {
-    id r = (id)g_origSendMsg(self, _cmd, a1, a2);
+    id r = g_origSendMsg(self, _cmd, a1, a2);
     @try { WPLog(@"Voice", @"[SendProbe] ▶ sendMsg:toContactUsrName:"); } @catch (NSException *e) {}
     return r;
 }
 
-static void (*g_origSendSuccess)(id, SEL, id);
+static id (*g_origSendSuccess)(id, SEL, id);
 static id probe_SendSuccess(id self, SEL _cmd, id a1) {
-    id r = (id)g_origSendSuccess(self, _cmd, a1);
+    id r = g_origSendSuccess(self, _cmd, a1);
     @try { WPLog(@"Voice", @"[SendProbe] ▶ OnSendMessageSuccess:"); } @catch (NSException *e) {}
     return r;
 }
 
-static void (*g_origSendFail)(id, SEL, id);
+static id (*g_origSendFail)(id, SEL, id);
 static id probe_SendFail(id self, SEL _cmd, id a1) {
-    id r = (id)g_origSendFail(self, _cmd, a1);
+    id r = g_origSendFail(self, _cmd, a1);
     @try { WPLog(@"Voice", @"[SendProbe] ▶ OnSendMessageFail:"); } @catch (NSException *e) {}
     return r;
 }
 
-static void (*g_origSentBySender)(id, SEL, id);
+static id (*g_origSentBySender)(id, SEL, id);
 static id probe_SentBySender(id self, SEL _cmd, id a1) {
-    id r = (id)g_origSentBySender(self, _cmd, a1);
+    id r = g_origSentBySender(self, _cmd, a1);
     @try { WPLog(@"Voice", @"[SendProbe] ▶ OnMessageSentBySender:"); } @catch (NSException *e) {}
     return r;
 }
 
-static void (*g_origResendAll)(id, SEL);
+static id (*g_origResendAll)(id, SEL);
 static id probe_ResendAll(id self, SEL _cmd) {
     WPLog(@"Voice", @"[SendProbe] ▶ reSendAllMsgFromNotificationDone (启动重发扫描)"); // 先打日志：orig 可能耗时长
-    id r = (id)g_origResendAll(self, _cmd);
+    id r = g_origResendAll(self, _cmd);
     return r;
 }
 
