@@ -832,6 +832,10 @@ static void MioInstallFileProbe(void) {
     }
 
     // ② 自动纳入语音 + ④⑤⑥ 真实发送流程捕获
+    // ★run 2035：取证 hook 全部受 NSUserDefaults MioPlugin_Voice_ForensicsHooks 控制
+    //  （默认关=干净模式）——崩溃二分法：干净模式还崩=崩在功能路径，再逐组开回
+    BOOL forensics = [[NSUserDefaults standardUserDefaults] boolForKey:@"MioPlugin_Voice_ForensicsHooks"];
+    WPLog(@"Voice", @"[+] 语音取证 hook 开关: %@", forensics ? @"开" : @"关（干净模式）");
     cls = objc_getClass("CMessageMgr");
     if (cls) {
         MSHookMessageEx(cls, @selector(AsyncOnAddMsg:MsgWrap:),
@@ -839,6 +843,7 @@ static void MioInstallFileProbe(void) {
                         (IMP *)&orig_AsyncOnAddMsgMsgWrap);
         WPLog(@"Voice", @"[+] CMessageMgr AsyncOnAddMsg:MsgWrap: hooked");
 
+        if (forensics) {
         MSHookMessageEx(cls, NSSelectorFromString(@"SaveMesVoice:MsgWrap:"),
                         (IMP)hook_SaveMesVoiceMsgWrap,
                         (IMP *)&orig_SaveMesVoiceMsgWrap);
@@ -880,7 +885,7 @@ static void MioInstallFileProbe(void) {
             MSHookMessageEx(cls, suruSel, (IMP)hook_StopUploadRecordMsgByUser, (IMP *)&orig_StopUploadRecordMsgByUser);
             WPLog(@"Voice", @"[+] StopUploadRecordMsgByUsername: hooked (语音取证)");
         }
-        // 发送结果回调取证（run 2025）
+        // 发送结果回调取证（run 2034）
         SEL osSuccSel = NSSelectorFromString(@"OnSendMessageSuccess:");
         if (class_getInstanceMethod(cls, osSuccSel)) {
             MSHookMessageEx(cls, osSuccSel, (IMP)hook_OnSendMessageSuccess, (IMP *)&orig_OnSendMessageSuccess);
@@ -901,25 +906,26 @@ static void MioInstallFileProbe(void) {
             MSHookMessageEx(cls, isUpSel, (IMP)hook_IsRecordMsgUploading, (IMP *)&orig_IsRecordMsgUploading);
             WPLog(@"Voice", @"[+] IsRecordMsgUploading: hooked (语音取证)");
         }
+        } // end forensics
 
-        // 语音上传管理器取证（run 2033）：AddNewPart 的 12 参 hook 已移除——签名与真实
-        // 不符导致 MSHook 转发崩溃（log47：WCRefine 发送必崩），且崩溃丢日志抓不到参数。
-        // 保留 ResendVoiceMsg/startSend/TimerCheckUpload（签名简单安全）。
+        // 语音上传管理器取证（run 2035）：受 forensics 开关控制
         NSArray *upMgrNames = @[@"UploadVoiceCDNMgr", @"MMNewUploadVoiceMgr"];
         for (NSString *mn in upMgrNames) {
             Class uc = objc_getClass(mn.UTF8String);
             if (!uc) { WPLog(@"Voice", @"[-] %@ 不存在", mn); continue; }
-            SEL rvmSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
-            if (class_getInstanceMethod(uc, rvmSel)) {
-                MSHookMessageEx(uc, rvmSel, (IMP)hook_UVM_Resend, (IMP *)&orig_UVM_Resend);
-                WPLog(@"Voice", @"[+] %@ ResendVoiceMsg hooked (上传取证)", mn);
+            if (forensics) {
+                SEL rvmSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
+                if (class_getInstanceMethod(uc, rvmSel)) {
+                    MSHookMessageEx(uc, rvmSel, (IMP)hook_UVM_Resend, (IMP *)&orig_UVM_Resend);
+                    WPLog(@"Voice", @"[+] %@ ResendVoiceMsg hooked (上传取证)", mn);
+                }
+                SEL ssSel = NSSelectorFromString(@"startSend");
+                if (class_getInstanceMethod(uc, ssSel)) {
+                    MSHookMessageEx(uc, ssSel, (IMP)hook_UVM_StartSend, (IMP *)&orig_UVM_StartSend);
+                    WPLog(@"Voice", @"[+] %@ startSend hooked (上传取证)", mn);
+                }
             }
-            SEL ssSel = NSSelectorFromString(@"startSend");
-            if (class_getInstanceMethod(uc, ssSel)) {
-                MSHookMessageEx(uc, ssSel, (IMP)hook_UVM_StartSend, (IMP *)&orig_UVM_StartSend);
-                WPLog(@"Voice", @"[+] %@ startSend hooked (上传取证)", mn);
-            }
-            // TimerCheckUpload：每 2 秒定时轮询，用于捕获活实例
+            // TimerCheckUpload：活实例捕获（功能必需，不受开关控制）
             SEL tcSel = NSSelectorFromString(@"TimerCheckUpload");
             if ([mn isEqualToString:@"UploadVoiceCDNMgr"] && class_getInstanceMethod(uc, tcSel)) {
                 MSHookMessageEx(uc, tcSel, (IMP)hook_UVM_TimerCheck, (IMP *)&orig_UVM_TimerCheck);
