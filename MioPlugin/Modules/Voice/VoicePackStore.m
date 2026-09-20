@@ -108,6 +108,8 @@ static NSString * const kPrefDurations = @"MioPlugin_Voice_Durations";   // {rel
 static NSString * const kPrefFavorites = @"MioPlugin_Voice_Favorites";   // [relPath]
 static NSString * const kPrefRecents   = @"MioPlugin_Voice_Recents";     // [relPath]
 
+NSString * const MioVoicePreviewDidFinishNotification = @"MioVoicePreviewDidFinish";
+
 /// 支持预览/探测的音频扩展名
 static BOOL MioIsSystemPlayableExt(NSString *ext) {
     static NSArray *exts = nil;
@@ -117,6 +119,122 @@ static BOOL MioIsSystemPlayableExt(NSString *ext) {
     for (NSString *e in exts) if ([ext isEqualToString:e]) return YES;
     return NO;
 }
+
+// ═══════════════════════════════════════════════════════
+// silk 试听解码（对齐 WCR反编译 FUN_008f437c：借微信自带 MJSilkCodec）
+// ═══════════════════════════════════════════════════════
+
+/// 微信 silk 编解码类可用性（守卫 selector，防版本差异）
+static BOOL MioSilkCodecAvailable(void) {
+    static dispatch_once_t once;
+    static BOOL ok = NO;
+    dispatch_once(&once, ^{
+        Class c = objc_getClass("MJSilkCodec");
+        ok = c != nil && ([c respondsToSelector:NSSelectorFromString(@"decodeToAudioDataFromSilkData:")]
+                       || [c respondsToSelector:NSSelectorFromString(@"decodeToPCMFromSilkData:")]);
+        WPLog(@"Voice", @"[Preview] MJSilkCodec 可用=%d (audioSel=%d pcmSel=%d)", (int)ok,
+              (int)(c && [c respondsToSelector:NSSelectorFromString(@"decodeToAudioDataFromSilkData:")]),
+              (int)(c && [c respondsToSelector:NSSelectorFromString(@"decodeToPCMFromSilkData:")]));
+    });
+    return ok;
+}
+
+/// silk 家族扩展名（微信 wire 格式；amr/spx 本插件不做转码）
+static BOOL MioIsSilkFamilyExt(NSString *ext) {
+    ext = [ext lowercaseString];
+    return [ext isEqualToString:@"aud"] || [ext isEqualToString:@"silk"] || [ext isEqualToString:@"slk"];
+}
+
+/// 裸 PCM → WAV 容器（微信 silk 标准：24kHz 单声道 16bit；RIFF 44 字节头）
+static NSData *MioWrapWavFromPCM(NSData *pcm, UInt32 sampleRate) {
+    if (pcm.length == 0 || pcm.length % 2 != 0 || pcm.length > 0x10000000) return nil;
+    UInt32 dataLen = (UInt32)pcm.length;
+    UInt16 channels = 1, bitsPerSample = 16;
+    UInt32 byteRate = sampleRate * channels * bitsPerSample / 8;
+    UInt16 blockAlign = channels * bitsPerSample / 8;
+    uint8_t hdr[44];
+    memcpy(hdr, "RIFF", 4);
+    UInt32 riffSize = 36 + dataLen;  memcpy(hdr + 4,  &riffSize, 4);
+    memcpy(hdr + 8, "WAVE", 4);
+    memcpy(hdr + 12, "fmt ", 4);
+    UInt32 fmtSize = 16;             memcpy(hdr + 16, &fmtSize, 4);
+    UInt16 audioFmt = 1;             memcpy(hdr + 20, &audioFmt, 2); // PCM
+    memcpy(hdr + 22, &channels, 2);
+    memcpy(hdr + 24, &sampleRate, 4);
+    memcpy(hdr + 28, &byteRate, 4);
+    memcpy(hdr + 30, &blockAlign, 2);
+    memcpy(hdr + 32, &bitsPerSample, 2);
+    memcpy(hdr + 36, "data", 4);
+    memcpy(hdr + 40, &dataLen, 4);
+    NSMutableData *wav = [NSMutableData dataWithCapacity:44 + dataLen];
+    [wav appendBytes:hdr length:44];
+    [wav appendData:pcm];
+    return wav;
+}
+
+/// silk wire 数据 → 系统可播音频数据（对齐 WCR：候选=剥0x02前缀+原始；双 selector 依次尝试）
+static NSData *MioDecodeSilkToPlayable(NSData *wire) {
+    if (wire.length == 0) return nil;
+    Class codec = objc_getClass("MJSilkCodec");
+    if (!codec || !MioSilkCodecAvailable()) {
+        WPLog(@"Voice", @"[Preview] MJSilkCodec 不可用");
+        return nil;
+    }
+    SEL audioSel = NSSelectorFromString(@"decodeToAudioDataFromSilkData:");
+    SEL pcmSel = NSSelectorFromString(@"decodeToPCMFromSilkData:");
+    BOOL hasAudio = [codec respondsToSelector:audioSel];
+    BOOL hasPCM = [codec respondsToSelector:pcmSel];
+
+    NSMutableArray<NSData *> *candidates = [NSMutableArray array];
+    if (wire.length > 1) {
+        NSData *stripped = [wire subdataWithRange:NSMakeRange(1, wire.length - 1)]; // 剥 0x02 wire 前缀
+        if (![stripped isEqualToData:wire]) [candidates addObject:stripped];
+    }
+    [candidates addObject:wire];
+
+    for (NSData *cand in candidates) {
+        if (hasAudio) {
+            @try {
+                NSData *out = ((NSData *(*)(id, SEL, id))objc_msgSend)(codec, audioSel, cand);
+                if ([out isKindOfClass:[NSData class]] && out.length > 0) {
+                    // 输出可能是 wav/mp3/m4a 容器——用 AVAudioPlayer 试初始化验证可直接播
+                    AVAudioPlayer *t = [[AVAudioPlayer alloc] initWithData:out error:nil];
+                    if (t) {
+                        WPLog(@"Voice", @"[Preview] decodeToAudioData 成功 (%lu bytes)", (unsigned long)out.length);
+                        return out;
+                    }
+                }
+            } @catch (NSException *e) {
+                WPLog(@"Voice", @"[Preview] decodeToAudioData 异常: %@", e.reason);
+            }
+        }
+        if (hasPCM) {
+            @try {
+                NSData *pcm = ((NSData *(*)(id, SEL, id))objc_msgSend)(codec, pcmSel, cand);
+                if ([pcm isKindOfClass:[NSData class]] && pcm.length > 0) {
+                    NSData *wav = MioWrapWavFromPCM(pcm, 24000);
+                    if (wav) {
+                        WPLog(@"Voice", @"[Preview] decodeToPCM→WAV 成功 (%lu bytes, 24kHz)", (unsigned long)pcm.length);
+                        return wav;
+                    }
+                }
+            } @catch (NSException *e) {
+                WPLog(@"Voice", @"[Preview] decodeToPCM 异常: %@", e.reason);
+            }
+        }
+    }
+    return nil;
+}
+
+/// 试听自然播完回调 → 复位播放器 + 发通知刷新 UI
+@interface MioVoicePreviewFinishDelegate : NSObject <AVAudioPlayerDelegate>
+@end
+@implementation MioVoicePreviewFinishDelegate
+- (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
+    [VoicePackStore previewStop];
+    [[NSNotificationCenter defaultCenter] postNotificationName:MioVoicePreviewDidFinishNotification object:nil];
+}
+@end
 
 // ═══════════════════════════════════════════════════════
 // VoicePackItem
@@ -878,31 +996,62 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
 #pragma mark - 预览播放
 
 static AVAudioPlayer *_previewPlayer = nil;
+static MioVoicePreviewFinishDelegate *_previewFinishDelegate = nil;
 
 + (BOOL)isPreviewSupportedRelPath:(NSString *)relPath {
     if (relPath.length == 0) return NO;
     NSString *abs = [[self rootDirectory] stringByAppendingPathComponent:relPath];
-    return MioIsSystemPlayableExt(abs.pathExtension);
+    if (MioIsSystemPlayableExt(abs.pathExtension)) return YES;
+    // silk 家族（微信 wire 格式）：按扩展名或文件头识别，前提是 MJSilkCodec 可用
+    if (!MioSilkCodecAvailable()) return NO;
+    NSString *ext = abs.pathExtension.lowercaseString;
+    if (ext.length > 0 && MioIsSilkFamilyExt(ext)) return YES;
+    // 未知扩展名：嗅探文件头（0x02 wire 前缀 或 #!SILK 魔数）
+    @try {
+        NSDictionary *attr = [[NSFileManager defaultManager] attributesOfItemAtPath:abs error:nil];
+        unsigned long long sz = [attr fileSize];
+        if (sz < 10) return NO;
+        NSUInteger len = (NSUInteger)MIN((unsigned long long)16, sz);
+        NSData *head = [NSData dataWithContentsOfFile:abs options:NSDataReadingUncached length:len];
+        if (!head) return NO;
+        const UInt8 *b = head.bytes;
+        if (head.length >= 7 && memcmp(b, "#!SILK", 6) == 0) return YES;
+        if (head.length >= 8 && b[0] == 0x02 && memcmp(b + 1, "#!SILK", 6) == 0) return YES;
+    } @catch (NSException *e) {}
+    return NO;
 }
 
 + (BOOL)previewPlayAtRelPath:(NSString *)relPath {
     @try {
         [self previewStop];
         NSString *abs = [[self rootDirectory] stringByAppendingPathComponent:relPath];
-        if (!MioIsSystemPlayableExt(abs.pathExtension)) return NO; // silk 等格式不支持系统预览
         NSData *data = [NSData dataWithContentsOfFile:abs];
         if (data.length == 0) return NO;
+        if (!MioIsSystemPlayableExt(abs.pathExtension)) {
+            data = MioDecodeSilkToPlayable(data); // silk：借微信 MJSilkCodec 解码（WCRefine 方案）
+            if (!data) {
+                WPLog(@"Voice", @"[Preview] silk 解码失败: %@", relPath);
+                return NO;
+            }
+        }
+        // 固定扬声器外放（聊天页会话可能配置为听筒路由）
+        [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
+        [[AVAudioSession sharedInstance] setActive:YES error:nil];
         NSError *err = nil;
         AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithData:data error:&err];
         if (!player) {
             WPLog(@"Voice", @"[Preview] 初始化失败: %@", err.localizedDescription);
             return NO;
         }
+        if (!_previewFinishDelegate) _previewFinishDelegate = [[MioVoicePreviewFinishDelegate alloc] init];
+        player.delegate = _previewFinishDelegate;
         _previewPlayer = player;
         [player prepareToPlay];
         [player play];
+        WPLog(@"Voice", @"[Preview] 播放: %@ (%.1fKB, %.1fs)", relPath, data.length / 1024.0, player.duration);
         return YES;
     } @catch (NSException *e) {
+        WPLog(@"Voice", @"[Preview] 播放异常: %@", e.reason);
         return NO;
     }
 }

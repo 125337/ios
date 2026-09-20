@@ -15,6 +15,7 @@ static NSInteger const kSectionFolder = 1;
 @property (nonatomic, strong) NSArray<VoicePackItem *> *folderItems; // 当前目录
 @property (nonatomic, strong) NSArray<VoicePackItem *> *quickItems;  // 收藏+最近去重
 @property (nonatomic, strong) NSMutableArray<NSString *> *dirStack;  // 子目录栈（relPath）
+@property (nonatomic, strong) id previewFinishObserver;              // 试听自然播完通知
 @end
 
 @implementation WPVoicePackPickerVC
@@ -31,6 +32,11 @@ static NSInteger const kSectionFolder = 1;
     [super viewDidLoad];
     [VoicePackStore ensureRootDirectoryExists];
     self.view.backgroundColor = WPBgColor();
+    // 试听自然播完 → 复位可见 cell 的播放按钮
+    __weak typeof(self) ws = self;
+    _previewFinishObserver = [[NSNotificationCenter defaultCenter]
+        addObserverForName:MioVoicePreviewDidFinishNotification object:nil queue:[NSOperationQueue mainQueue]
+        usingBlock:^(NSNotification *note) { [ws refreshPreviewButtons]; }];
 
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat h = [UIScreen mainScreen].bounds.size.height;
@@ -57,6 +63,10 @@ static NSInteger const kSectionFolder = 1;
     [super viewWillDisappear:animated];
     WPRestoreNavAppearance(self);
     [VoicePackStore previewStop];
+}
+
+- (void)dealloc {
+    if (_previewFinishObserver) [[NSNotificationCenter defaultCenter] removeObserver:_previewFinishObserver];
 }
 
 #pragma mark 数据
@@ -136,11 +146,24 @@ static NSInteger const kSectionFolder = 1;
         cell.detailTextLabel.text = @"文件夹";
         cell.imageView.image = [UIImage systemImageNamed:@"folder.fill"];
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        cell.accessoryView = nil;
     } else {
         long long ms = [VoicePackStore durationMsForRelPath:it.relPath];
         cell.detailTextLabel.text = ms > 0 ? [NSString stringWithFormat:@"%lld KB · %lld 秒", it.fileSize / 1024, ms / 1000] : [NSString stringWithFormat:@"%lld KB", it.fileSize / 1024];
         cell.imageView.image = [UIImage systemImageNamed:@"waveform"];
         cell.accessoryType = UITableViewCellAccessoryNone;
+        // 试听按钮（系统格式 + silk 均支持）
+        UIButton *pb = (UIButton *)cell.accessoryView;
+        if (![pb isKindOfClass:[UIButton class]]) {
+            pb = [UIButton buttonWithType:UIButtonTypeSystem];
+            pb.frame = CGRectMake(0, 0, 40, 40);
+            [pb addTarget:self action:@selector(previewButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+            cell.accessoryView = pb;
+        }
+        pb.hidden = ![VoicePackStore isPreviewSupportedRelPath:it.relPath];
+        BOOL playing = [VoicePackStore previewIsPlayingRelPath:it.relPath];
+        [pb setImage:[UIImage systemImageNamed:playing ? @"stop.circle.fill" : @"play.circle"] forState:UIControlStateNormal];
+        pb.tintColor = WPAccent();
     }
     cell.imageView.tintColor = [VoicePackStore isFavoriteRelPath:it.relPath] ? WPAccent() : WPT2();
     return cell;
@@ -174,7 +197,41 @@ static NSInteger const kSectionFolder = 1;
         return;
     }
     WPLog(@"Voice", @"[Pick] 点击文件: section=%ld, rel=%@", (long)indexPath.section, it.relPath);
+    [VoicePackStore previewStop]; // 发送前停掉试听
     [self sendItem:it];
+}
+
+#pragma mark 试听
+
+- (void)previewButtonTapped:(UIButton *)sender {
+    // 通过按钮所属 cell 反查条目
+    UIView *v = sender;
+    while (v && ![v isKindOfClass:[UITableViewCell class]]) v = v.superview;
+    NSIndexPath *ip = [self.table indexPathForCell:(UITableViewCell *)v];
+    if (!ip) return;
+    VoicePackItem *it = ip.section == kSectionQuick ? self.quickItems[ip.row] : self.folderItems[ip.row];
+    if (!it || it.isDirectory) return;
+    if ([VoicePackStore previewIsPlayingRelPath:it.relPath]) {
+        [VoicePackStore previewStop];
+        [sender setImage:[UIImage systemImageNamed:@"play.circle"] forState:UIControlStateNormal];
+        return;
+    }
+    if ([VoicePackStore previewPlayAtRelPath:it.relPath]) {
+        [sender setImage:[UIImage systemImageNamed:@"stop.circle.fill"] forState:UIControlStateNormal];
+        WPLog(@"Voice", @"[Pick] 试听: %@", it.relPath);
+    } else {
+        WPShowToast(@"试听失败");
+    }
+}
+
+/// 试听自然播完 → 把可见 cell 的按钮复位为播放态
+- (void)refreshPreviewButtons {
+    for (UITableViewCell *cell in [self.table visibleCells]) {
+        UIButton *pb = (UIButton *)cell.accessoryView;
+        if ([pb isKindOfClass:[UIButton class]]) {
+            [pb setImage:[UIImage systemImageNamed:@"play.circle"] forState:UIControlStateNormal];
+        }
+    }
 }
 
 #pragma mark 目录导航（侧滑返回上层）

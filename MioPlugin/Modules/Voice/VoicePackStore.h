@@ -58,9 +58,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// 从 CMessageWrap 取语音数据 buffer（自动适配 m_nsImgBuf/m_byteBuffer 等版本差异）
 + (nullable NSData *)voiceDataFromWrap:(id)wrap;
 
-#pragma mark - 预览播放（系统格式：mp3/m4a/wav 等；silk 不支持预览）
+#pragma mark - 预览播放（系统格式 + silk：借微信自带 MJSilkCodec 解码，WCRefine 方案）
+/// 试听自然播放结束时发出（object 为 nil）；用户手动 stop 不发
+extern NSString * const MioVoicePreviewDidFinishNotification;
 + (BOOL)isPreviewSupportedRelPath:(NSString *)relPath;
-+ (BOOL)previewPlayAtRelPath:(NSString *)relPath;   // 返回 NO 表示格式不支持
++ (BOOL)previewPlayAtRelPath:(NSString *)relPath;   // 返回 NO 表示格式不支持/解码失败
 + (BOOL)previewIsPlayingRelPath:(NSString *)relPath;
 + (void)previewStop;
 

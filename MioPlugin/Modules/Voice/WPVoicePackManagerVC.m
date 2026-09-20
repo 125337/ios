@@ -108,7 +108,7 @@
     cell.imageView.image = [UIImage systemImageNamed:it.isDirectory ? @"folder.fill" : @"waveform"];
     cell.imageView.tintColor = [VoicePackStore isFavoriteRelPath:it.relPath] ? WPAccent() : WPT2();
     cell.accessoryType = it.isDirectory ? UITableViewCellAccessoryDisclosureIndicator : UITableViewCellAccessoryNone;
-    // play 按钮显隐：仅系统可播放格式显示
+    // play 按钮显隐：系统格式 + silk（借微信 MJSilkCodec）均支持预览
     for (UIView *sv in cell.contentView.subviews) {
         if ([sv isKindOfClass:[UIButton class]] && sv.tag == 2000) {
             sv.hidden = it.isDirectory || ![VoicePackStore isPreviewSupportedRelPath:it.relPath];
@@ -180,7 +180,7 @@
         if ([VoicePackStore previewPlayAtRelPath:it.relPath]) {
             [sender setImage:[UIImage systemImageNamed:@"stop.fill"] forState:UIControlStateNormal];
         } else {
-            WPShowToast(@"此格式不支持预览（silk 等）");
+            WPShowToast(@"试听失败");
         }
     }
 }
