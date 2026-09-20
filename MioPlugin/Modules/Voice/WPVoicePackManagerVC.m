@@ -123,6 +123,10 @@
     for (UIView *sv in cell.contentView.subviews) {
         if ([sv isKindOfClass:[UIButton class]] && sv.tag == 2000) {
             sv.hidden = it.isDirectory || ![VoicePackStore isPreviewSupportedRelPath:it.relPath];
+            // 图标按条目播放状态刷新（WCR previewingPath 方案）
+            BOOL playing = [VoicePackStore previewIsPlayingRelPath:it.relPath];
+            UIButton *pb = (UIButton *)sv;
+            [pb setImage:[UIImage systemImageNamed:playing ? @"stop.fill" : @"play.fill"] forState:UIControlStateNormal];
             break;
         }
     }
@@ -184,16 +188,13 @@
     NSIndexPath *ip = [self.table indexPathForCell:(UITableViewCell *)v];
     if (!ip || ip.row >= self.items.count) return;
     VoicePackItem *it = self.items[ip.row];
+    // WCR 方案：按条目判断；点其他条目直接切换，点正在播的条目停止
     if ([VoicePackStore previewIsPlayingRelPath:it.relPath]) {
         [VoicePackStore previewStop];
-        [sender setImage:[UIImage systemImageNamed:@"play.fill"] forState:UIControlStateNormal];
     } else {
-        if ([VoicePackStore previewPlayAtRelPath:it.relPath]) {
-            [sender setImage:[UIImage systemImageNamed:@"stop.fill"] forState:UIControlStateNormal];
-        } else {
-            WPShowToast(@"试听失败");
-        }
+        [VoicePackStore previewPlayAtRelPath:it.relPath]; // 失败由 FailNotification 回滚 + toast
     }
+    [self.table reloadData];
 }
 
 - (void)showAddMenu {

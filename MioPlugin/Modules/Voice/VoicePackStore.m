@@ -234,8 +234,11 @@ static NSData *MioDecodeSilkToPlayable(NSData *wire) {
 @end
 @implementation MioVoicePreviewFinishDelegate
 - (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
-    [VoicePackStore previewStop];
-    [[NSNotificationCenter defaultCenter] postNotificationName:MioVoicePreviewDidFinishNotification object:nil];
+    // AVAudioPlayer 委托不保证主线程——回主队列再动共享状态（否则与播放路径竞态：晚到的 nil 会漏停正在响的 player）
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [VoicePackStore previewStop];
+        [[NSNotificationCenter defaultCenter] postNotificationName:MioVoicePreviewDidFinishNotification object:nil];
+    });
 }
 @end
 
@@ -999,6 +1002,7 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
 #pragma mark - 预览播放
 
 static AVAudioPlayer *_previewPlayer = nil;
+static NSString *_previewPlayingRelPath = nil; // WCR previewingPath：按条目跟踪正在试听的文件
 static MioVoicePreviewFinishDelegate *_previewFinishDelegate = nil;
 static NSInteger _previewGeneration = 0; // 异步播放代际号：新请求/stop 会使旧请求的主队列回调失效
 
@@ -1072,7 +1076,10 @@ static NSInteger _previewGeneration = 0; // 异步播放代际号：新请求/st
                         }
                         if (!_previewFinishDelegate) _previewFinishDelegate = [[MioVoicePreviewFinishDelegate alloc] init];
                         player.delegate = _previewFinishDelegate;
+                        // ★ WCR 方案：替换前在主队列停掉旧播放（主队列串行，保证绝不漏停）
+                        [_previewPlayer stop];
                         _previewPlayer = player;
+                        _previewPlayingRelPath = relPath;
                         [player prepareToPlay];
                         [player play];
                         WPLog(@"Voice", @"[Preview] 播放: %@ (%.1fKB, %.1fs)", relPath, data.length / 1024.0, player.duration);
@@ -1092,7 +1099,8 @@ static NSInteger _previewGeneration = 0; // 异步播放代际号：新请求/st
 }
 
 + (BOOL)previewIsPlayingRelPath:(NSString *)relPath {
-    return _previewPlayer.isPlaying;
+    // 按条目跟踪（WCR previewingPath）：只有“正在响的文件 == 该条目”才算播放中
+    return _previewPlayer.isPlaying && [_previewPlayingRelPath isEqualToString:relPath];
 }
 
 + (void)previewStop {
@@ -1100,6 +1108,7 @@ static NSInteger _previewGeneration = 0; // 异步播放代际号：新请求/st
         _previewGeneration++; // 使在途异步播放回调失效
         [_previewPlayer stop];
         _previewPlayer = nil;
+        _previewPlayingRelPath = nil;
     } @catch (NSException *e) {}
 }
 

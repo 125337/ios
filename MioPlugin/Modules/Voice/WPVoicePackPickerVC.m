@@ -37,7 +37,7 @@ static NSInteger const kSectionFolder = 1;
     __weak typeof(self) ws = self;
     _previewFinishObserver = [[NSNotificationCenter defaultCenter]
         addObserverForName:MioVoicePreviewDidFinishNotification object:nil queue:[NSOperationQueue mainQueue]
-        usingBlock:^(NSNotification *note) { [ws refreshPreviewButtons]; }];
+        usingBlock:^(NSNotification *note) { [ws.table reloadData]; }];
     _previewFailObserver = [[NSNotificationCenter defaultCenter]
         addObserverForName:MioVoicePreviewDidFailNotification object:nil queue:[NSOperationQueue mainQueue]
         usingBlock:^(NSNotification *note) { [ws.table reloadData]; }];
@@ -216,27 +216,13 @@ static NSInteger const kSectionFolder = 1;
     if (!ip) return;
     VoicePackItem *it = ip.section == kSectionQuick ? self.quickItems[ip.row] : self.folderItems[ip.row];
     if (!it || it.isDirectory) return;
+    // WCR 方案：按条目判断；点其他条目直接切换（解码后主队列停旧播新），点正在播的条目停止
     if ([VoicePackStore previewIsPlayingRelPath:it.relPath]) {
         [VoicePackStore previewStop];
-        [sender setImage:[UIImage systemImageNamed:@"play.circle"] forState:UIControlStateNormal];
-        return;
-    }
-    if ([VoicePackStore previewPlayAtRelPath:it.relPath]) {
-        [sender setImage:[UIImage systemImageNamed:@"stop.circle.fill"] forState:UIControlStateNormal];
-        WPLog(@"Voice", @"[Pick] 试听: %@", it.relPath);
     } else {
-        WPShowToast(@"试听失败");
+        [VoicePackStore previewPlayAtRelPath:it.relPath];
     }
-}
-
-/// 试听自然播完 → 把可见 cell 的按钮复位为播放态
-- (void)refreshPreviewButtons {
-    for (UITableViewCell *cell in [self.table visibleCells]) {
-        UIButton *pb = (UIButton *)cell.accessoryView;
-        if ([pb isKindOfClass:[UIButton class]]) {
-            [pb setImage:[UIImage systemImageNamed:@"play.circle"] forState:UIControlStateNormal];
-        }
-    }
+    [self.table reloadData]; // 图标统一由 cellForRow 按条目状态刷新
 }
 
 #pragma mark 目录导航（侧滑返回上层）
