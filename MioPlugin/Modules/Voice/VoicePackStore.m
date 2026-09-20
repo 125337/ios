@@ -15,43 +15,6 @@ extern void WPShowToast(NSString *message);
 // C 安全工具
 // ═══════════════════════════════════════════════════════
 
-/// 仅当对象存在同名 ivar 时才写入（防御不同微信版本字段差异）
-static void MioSetIvarIfExist(id obj, const char *ivarName, id value) {
-    if (!obj || !ivarName) return;
-    Class cls = object_getClass(obj);
-    unsigned int count = 0;
-    Ivar *list = class_copyIvarList(cls, &count);
-    for (unsigned int i = 0; i < count; i++) {
-        const char *name = ivar_getName(list[i]);
-        if (name && strcmp(name, ivarName) == 0) {
-            object_setIvar(obj, list[i], value);
-            break;
-        }
-    }
-    free(list);
-}
-
-/// 安全写入整型 ivar（按类型编码定长写入，避免 object_setIvar 写 NSNumber 指针越界）
-static void MioSetIntIvarIfExist(id obj, const char *ivarName, long long value) {
-    if (!obj || !ivarName) return;
-    Ivar ivar = class_getInstanceVariable(object_getClass(obj), ivarName);
-    if (!ivar) return;
-    const char *enc = ivar_getTypeEncoding(ivar);
-    if (!enc) return;
-    char *base = (__bridge void *)obj;
-    ptrdiff_t off = ivar_getOffset(ivar);
-    switch (enc[0]) {
-        case 'c': case 'B': *(signed char *)(base + off) = (signed char)value; break;
-        case 'i': *(int *)(base + off) = (int)value; break;
-        case 'I': *(unsigned int *)(base + off) = (unsigned int)value; break;
-        case 's': *(short *)(base + off) = (short)value; break;
-        case 'S': *(unsigned short *)(base + off) = (unsigned short)value; break;
-        case 'l': case 'q': *(long long *)(base + off) = value; break;
-        case 'L': case 'Q': *(unsigned long long *)(base + off) = (unsigned long long)value; break;
-        default: break; // 非整型字段跳过
-    }
-}
-
 /// 探测 CMessageWrap 的语音数据 ivar：不同微信版本字段名不同
 /// （老版本 m_nsImgBuf，新版实测为 m_byteBuffer —— MioPlugin(9).log 全量 ivar 确认）
 static Ivar MioFindVoiceDataIvar(id msg) {
@@ -81,19 +44,6 @@ static Ivar MioFindVoiceDataIvar(id msg) {
     if (!cached) WPLog(@"Voice", @"[Send] 未命中语音数据字段, CMessageWrap ivars(%u): %@", count, names);
     probed = YES;
     return cached;
-}
-
-/// 从 XML 内容提取 voicelength="数字"（毫秒）
-static long long MioParseVoiceLengthMs(NSString *content) {
-    if (content.length == 0) return 0;
-    NSRange head = [content rangeOfString:@"voicelength=\""];
-    if (head.location == NSNotFound) return 0;
-    NSUInteger start = NSMaxRange(head);
-    if (start >= content.length) return 0;
-    NSUInteger end = [content rangeOfString:@"\"" options:0 range:NSMakeRange(start, content.length - start)].location;
-    if (end == NSNotFound || end <= start) return 0;
-    NSString *num = [content substringWithRange:NSMakeRange(start, end - start)];
-    return (long long)[num longLongValue];
 }
 
 /// NSUserDefaults 存取小工具
@@ -580,27 +530,6 @@ static NSUInteger SilkStreamOffset(NSData *data) {
 // 运行时方法探测（微信版本间选择器名有差异，仿小微助手链路）
 // ═══════════════════════════════════════════════════════
 
-/// 在实例/类方法列表中按关键词与参数总数（含 self/_cmd）查找选择器，找不到返回 NULL
-static SEL MioFindMethodSel(Class cls, BOOL classMethod, NSArray<NSString *> *keywords, NSUInteger totalArgs) {
-    if (!cls) return NULL;
-    Class searchCls = classMethod ? object_getClass(cls) : cls;
-    unsigned int count = 0;
-    Method *list = class_copyMethodList(searchCls, &count);
-    SEL found = NULL;
-    for (unsigned int i = 0; i < count; i++) {
-        NSString *lower = NSStringFromSelector(method_getName(list[i])).lowercaseString;
-        for (NSString *k in keywords) {
-            if ([lower containsString:k]) {
-                if (method_getNumberOfArguments(list[i]) == totalArgs) found = method_getName(list[i]);
-                break;
-            }
-        }
-        if (found) break;
-    }
-    free(list);
-    return found;
-}
-
 /// 读取 m_uiMesLocalID（日志用）
 static unsigned int MioWrapLocalIDOf(id wrap) {
     if (!wrap) return 0;
@@ -609,78 +538,12 @@ static unsigned int MioWrapLocalIDOf(id wrap) {
     return *(unsigned int *)((__bridge void *)wrap + ivar_getOffset(iv));
 }
 
-/// 探测语音文件落盘路径（参照小微：getVoicePath → +getPathOfAudio: → getAudioFileName:LocalID:）
-/// 新消息 localID=0 时前两条路径即可用（微信录音流程本来就是先落盘后入库）
-static NSString *MioProbeVoicePath(id msg, id msgMgr) {
-    @try {
-        Class wrapCls = object_getClass(msg);
-        // 1) wrap 实例方法（如 getVoicePath）
-        SEL sel = MioFindMethodSel(wrapCls, NO, @[@"voicepath"], 2);
-        if (sel) {
-            NSString *p = ((id (*)(id, SEL))objc_msgSend)(msg, sel);
-            if ([p isKindOfClass:[NSString class]] && p.length > 0) {
-                WPLog(@"Voice", @"[Send] 语音路径: -%@ → %@", NSStringFromSelector(sel), p);
-                return p;
-            }
-        }
-        // 2) CMessageWrap 类方法（如 +getPathOfAudio:）
-        sel = MioFindMethodSel(wrapCls, YES, @[@"pathofaudio", @"pathofvoice", @"voicepath", @"audiopath"], 3);
-        if (sel) {
-            NSString *p = ((id (*)(id, SEL, id))objc_msgSend)(wrapCls, sel, msg);
-            if ([p isKindOfClass:[NSString class]] && p.length > 0) {
-                WPLog(@"Voice", @"[Send] 语音路径: +%@ → %@", NSStringFromSelector(sel), p);
-                return p;
-            }
-        }
-        // 3) CMessageMgr 实例方法（如 getAudioFileName:LocalID:；未入库时 localID=0）
-        if (msgMgr) {
-            SEL sel2 = MioFindMethodSel(object_getClass(msgMgr), NO, @[@"getaudiofilename"], 4);
-            if (sel2) {
-                unsigned int localID = 0;
-                Ivar iv = class_getInstanceVariable(wrapCls, "m_uiMesLocalID");
-                if (iv) localID = *(unsigned int *)((__bridge void *)msg + ivar_getOffset(iv));
-                NSString *p = ((id (*)(id, SEL, id, unsigned long long))objc_msgSend)(msgMgr, sel2, msg, (unsigned long long)localID);
-                if ([p isKindOfClass:[NSString class]] && p.length > 0) {
-                    WPLog(@"Voice", @"[Send] 语音路径: -%@ (localID=%u) → %@", NSStringFromSelector(sel2), localID, p);
-                    return p;
-                }
-            }
-        }
-    } @catch (NSException *e) {
-        WPLog(@"Voice", @"[Send] 语音路径探测异常: %@ %@", e.name, e.reason);
-    }
-    return nil;
-}
-
 /// 确保目录存在后写文件，返回是否成功
 static BOOL MioWriteVoiceFile(NSData *data, NSString *path) {
     if (path.length == 0 || data.length == 0) return NO;
     NSString *dir = [path stringByDeletingLastPathComponent];
     if (dir.length > 0) [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     return [data writeToFile:path atomically:YES];
-}
-
-/// 沿继承链扫描方法（class_copyMethodList 只列本类方法，漏掉继承的），verbose 时打印全部命中
-static SEL MioFindMethodInChain(Class cls, NSArray<NSString *> *keywords, NSUInteger minArgs, BOOL verbose) {
-    SEL found = NULL;
-    int logged = 0;
-    for (Class c = cls; c != nil && c != [NSObject class]; c = class_getSuperclass(c)) {
-        unsigned int count = 0;
-        Method *list = class_copyMethodList(c, &count);
-        for (unsigned int i = 0; i < count; i++) {
-            NSString *name = NSStringFromSelector(method_getName(list[i]));
-            NSString *lower = name.lowercaseString;
-            for (NSString *k in keywords) {
-                if ([lower containsString:k]) {
-                    if (verbose && logged++ < 60) WPLog(@"Voice", @"[API] %@:: %@ (%u参)", NSStringFromClass(c), name, method_getNumberOfArguments(list[i]));
-                    if (!found && method_getNumberOfArguments(list[i]) >= minArgs) found = method_getName(list[i]);
-                    break;
-                }
-            }
-        }
-        free(list);
-    }
-    return found;
 }
 
 /// 一次性诊断（仅轻量确认；★禁止全类扫描：
