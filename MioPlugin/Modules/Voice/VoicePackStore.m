@@ -145,7 +145,7 @@ static BOOL MioIsSilkFamilyExt(NSString *ext) {
     return [ext isEqualToString:@"aud"] || [ext isEqualToString:@"silk"] || [ext isEqualToString:@"slk"];
 }
 
-/// 裸 PCM → WAV 容器（微信 silk 标准：24kHz 单声道 16bit；RIFF 44 字节头）
+/// 裸 PCM → WAV 容器（MJSilkCodec 输出：16kHz 单声道 16bit；RIFF 44 字节头）
 static NSData *MioWrapWavFromPCM(NSData *pcm, UInt32 sampleRate) {
     if (pcm.length == 0 || pcm.length % 2 != 0 || pcm.length > 0x10000000) return nil;
     UInt32 dataLen = (UInt32)pcm.length;
@@ -212,9 +212,9 @@ static NSData *MioDecodeSilkToPlayable(NSData *wire) {
             @try {
                 NSData *pcm = ((NSData *(*)(id, SEL, id))objc_msgSend)(codec, pcmSel, cand);
                 if ([pcm isKindOfClass:[NSData class]] && pcm.length > 0) {
-                    NSData *wav = MioWrapWavFromPCM(pcm, 24000);
+                    NSData *wav = MioWrapWavFromPCM(pcm, 16000); // MJSilkCodec 实测输出 16kHz（24kHz 会 1.5 倍速）
                     if (wav) {
-                        WPLog(@"Voice", @"[Preview] decodeToPCM→WAV 成功 (%lu bytes, 24kHz)", (unsigned long)pcm.length);
+                        WPLog(@"Voice", @"[Preview] decodeToPCM→WAV 成功 (%lu bytes, 16kHz)", (unsigned long)pcm.length);
                         return wav;
                     }
                 }
