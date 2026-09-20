@@ -1012,7 +1012,7 @@ static MioVoicePreviewFinishDelegate *_previewFinishDelegate = nil;
         unsigned long long sz = [attr fileSize];
         if (sz < 10) return NO;
         NSUInteger len = (NSUInteger)MIN((unsigned long long)16, sz);
-        NSData *head = [NSData dataWithContentsOfFile:abs options:NSDataReadingUncached length:len];
+        NSData *head = [NSData dataWithContentsOfFile:abs options:NSDataReadingUncached length:len error:nil];
         if (!head) return NO;
         const UInt8 *b = head.bytes;
         if (head.length >= 7 && memcmp(b, "#!SILK", 6) == 0) return YES;
