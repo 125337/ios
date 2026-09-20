@@ -734,7 +734,6 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             return NO;
         }
         // (旧 msg 构造段已删除，新构造见下方 run 2036 段)
-
         long long ms = [self durationMsForRelPath:relPath];
         if (ms <= 0) {
             ms = [self silkDurationMsForFile:abs]; // silk 逐帧解析真实时长
@@ -866,7 +865,6 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
         } else {
             WPLog(@"Voice", @"[Send] AudioSender ResendVoiceMsg 不可用——消息已入库待轮询");
         }
-        WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
         WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
         [self addRecentRelPath:relPath];
         return YES;
