@@ -162,8 +162,8 @@ static NSData *MioWrapWavFromPCM(NSData *pcm, UInt32 sampleRate) {
     memcpy(hdr + 22, &channels, 2);
     memcpy(hdr + 24, &sampleRate, 4);
     memcpy(hdr + 28, &byteRate, 4);
-    memcpy(hdr + 30, &blockAlign, 2);
-    memcpy(hdr + 32, &bitsPerSample, 2);
+    memcpy(hdr + 32, &blockAlign, 2);      // 32-33（曾误写 +30 覆盖 byteRate 高位 → 'fmt?' 错误）
+    memcpy(hdr + 34, &bitsPerSample, 2);   // 34-35
     memcpy(hdr + 36, "data", 4);
     memcpy(hdr + 40, &dataLen, 4);
     NSMutableData *wav = [NSMutableData dataWithCapacity:44 + dataLen];
