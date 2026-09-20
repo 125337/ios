@@ -109,6 +109,7 @@ static NSString * const kPrefFavorites = @"MioPlugin_Voice_Favorites";   // [rel
 static NSString * const kPrefRecents   = @"MioPlugin_Voice_Recents";     // [relPath]
 
 NSString * const MioVoicePreviewDidFinishNotification = @"MioVoicePreviewDidFinish";
+NSString * const MioVoicePreviewDidFailNotification = @"MioVoicePreviewDidFail";
 
 /// 支持预览/探测的音频扩展名
 static BOOL MioIsSystemPlayableExt(NSString *ext) {
@@ -997,6 +998,7 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
 
 static AVAudioPlayer *_previewPlayer = nil;
 static MioVoicePreviewFinishDelegate *_previewFinishDelegate = nil;
+static NSInteger _previewGeneration = 0; // 异步播放代际号：新请求/stop 会使旧请求的主队列回调失效
 
 + (BOOL)isPreviewSupportedRelPath:(NSString *)relPath {
     if (relPath.length == 0) return NO;
@@ -1021,33 +1023,67 @@ static MioVoicePreviewFinishDelegate *_previewFinishDelegate = nil;
     @try {
         [self previewStop];
         NSString *abs = [[self rootDirectory] stringByAppendingPathComponent:relPath];
-        NSData *data = [NSData dataWithContentsOfFile:abs];
-        if (data.length == 0) return NO;
-        if (!MioIsSystemPlayableExt(abs.pathExtension)) {
-            data = MioDecodeSilkToPlayable(data); // silk：借微信 MJSilkCodec 解码（WCRefine 方案）
-            if (!data) {
-                WPLog(@"Voice", @"[Preview] silk 解码失败: %@", relPath);
-                return NO;
+        BOOL systemPlayable = MioIsSystemPlayableExt(abs.pathExtension);
+        _previewGeneration++;
+        NSInteger gen = _previewGeneration;
+        // WCR 方案：global 队列解码（silk 解码带 temp 缓存）→ 主队列播放，避免主线程卡顿
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            @try {
+                NSData *data = nil;
+                if (systemPlayable) {
+                    data = [NSData dataWithContentsOfFile:abs];
+                } else {
+                    // 解码结果缓存：NSTmp/MioVoicePreviewCache/<文件名>_<mtime>.wav
+                    NSString *cacheDir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"MioVoicePreviewCache"];
+                    [[NSFileManager defaultManager] createDirectoryAtPath:cacheDir withIntermediateDirectories:YES attributes:nil error:nil];
+                    unsigned long long mtime = [[[NSFileManager defaultManager] attributesOfItemAtPath:abs error:nil] modificationDate].timeIntervalSince1970;
+                    NSString *cachePath = [[cacheDir stringByAppendingPathComponent:abs.lastPathComponent] stringByAppendingFormat:@"_%llu.wav", mtime];
+                    if ([[NSFileManager defaultManager] fileExistsAtPath:cachePath]) {
+                        data = [NSData dataWithContentsOfFile:cachePath];
+                    }
+                    if (!data) {
+                        NSData *raw = [NSData dataWithContentsOfFile:abs];
+                        data = raw.length ? MioDecodeSilkToPlayable(raw) : nil;
+                        if (data) [data writeToFile:cachePath atomically:YES];
+                    }
+                }
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (gen != _previewGeneration) return; // 已被更新的播放/stop 取代
+                    @try {
+                        if (!data || data.length == 0) {
+                            WPLog(@"Voice", @"[Preview] 解码失败: %@", relPath);
+                            WPShowToast(@"试听失败");
+                            [[NSNotificationCenter defaultCenter] postNotificationName:MioVoicePreviewDidFailNotification object:nil];
+                            return;
+                        }
+                        // 固定扬声器外放（聊天页会话可能配置为听筒路由）
+                        [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
+                        [[AVAudioSession sharedInstance] setActive:YES error:nil];
+                        NSError *err = nil;
+                        AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithData:data error:&err];
+                        if (!player) {
+                            WPLog(@"Voice", @"[Preview] 初始化失败: %@", err.localizedDescription);
+                            WPShowToast(@"试听失败");
+                            [[NSNotificationCenter defaultCenter] postNotificationName:MioVoicePreviewDidFailNotification object:nil];
+                            return;
+                        }
+                        if (!_previewFinishDelegate) _previewFinishDelegate = [[MioVoicePreviewFinishDelegate alloc] init];
+                        player.delegate = _previewFinishDelegate;
+                        _previewPlayer = player;
+                        [player prepareToPlay];
+                        [player play];
+                        WPLog(@"Voice", @"[Preview] 播放: %@ (%.1fKB, %.1fs)", relPath, data.length / 1024.0, player.duration);
+                    } @catch (NSException *e) {
+                        WPLog(@"Voice", @"[Preview] 播放异常: %@", e.reason);
+                    }
+                });
+            } @catch (NSException *e) {
+                WPLog(@"Voice", @"[Preview] 解码异常: %@", e.reason);
             }
-        }
-        // 固定扬声器外放（聊天页会话可能配置为听筒路由）
-        [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
-        [[AVAudioSession sharedInstance] setActive:YES error:nil];
-        NSError *err = nil;
-        AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithData:data error:&err];
-        if (!player) {
-            WPLog(@"Voice", @"[Preview] 初始化失败: %@", err.localizedDescription);
-            return NO;
-        }
-        if (!_previewFinishDelegate) _previewFinishDelegate = [[MioVoicePreviewFinishDelegate alloc] init];
-        player.delegate = _previewFinishDelegate;
-        _previewPlayer = player;
-        [player prepareToPlay];
-        [player play];
-        WPLog(@"Voice", @"[Preview] 播放: %@ (%.1fKB, %.1fs)", relPath, data.length / 1024.0, player.duration);
-        return YES;
+        });
+        return YES; // 已提交异步播放；失败经 MioVoicePreviewDidFailNotification 回滚 UI
     } @catch (NSException *e) {
-        WPLog(@"Voice", @"[Preview] 播放异常: %@", e.reason);
+        WPLog(@"Voice", @"[Preview] 提交异常: %@", e.reason);
         return NO;
     }
 }
@@ -1058,6 +1094,7 @@ static MioVoicePreviewFinishDelegate *_previewFinishDelegate = nil;
 
 + (void)previewStop {
     @try {
+        _previewGeneration++; // 使在途异步播放回调失效
         [_previewPlayer stop];
         _previewPlayer = nil;
     } @catch (NSException *e) {}

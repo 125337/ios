@@ -9,6 +9,7 @@
 @property (nonatomic, copy) NSString *currentRelPath; // nil = root
 @property (nonatomic, strong) NSMutableArray<VoicePackItem *> *items;
 @property (nonatomic, assign) BOOL selecting;
+@property (nonatomic, strong) id previewFailObserver; // 试听异步失败通知
 @end
 
 @implementation WPVoicePackManagerVC
@@ -36,6 +37,12 @@
 
     [self reloadItems];
 
+    // 试听异步失败 → 刷新列表复位播放按钮
+    __weak typeof(self) ws = self;
+    self.previewFailObserver = [[NSNotificationCenter defaultCenter]
+        addObserverForName:MioVoicePreviewDidFailNotification object:nil queue:[NSOperationQueue mainQueue]
+        usingBlock:^(NSNotification *note) { [ws reloadItems]; }];
+
     UIBarButtonItem *addBtn = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd target:self action:@selector(showAddMenu)];
     self.navigationItem.rightBarButtonItem = addBtn;
 }
@@ -50,6 +57,10 @@
     [super viewWillDisappear:animated];
     WPRestoreNavAppearance(self);
     [VoicePackStore previewStop];
+}
+
+- (void)dealloc {
+    if (_previewFailObserver) [[NSNotificationCenter defaultCenter] removeObserver:_previewFailObserver];
 }
 
 #pragma mark 数据

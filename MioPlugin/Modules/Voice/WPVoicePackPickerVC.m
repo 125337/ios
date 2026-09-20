@@ -16,6 +16,7 @@ static NSInteger const kSectionFolder = 1;
 @property (nonatomic, strong) NSArray<VoicePackItem *> *quickItems;  // 收藏+最近去重
 @property (nonatomic, strong) NSMutableArray<NSString *> *dirStack;  // 子目录栈（relPath）
 @property (nonatomic, strong) id previewFinishObserver;              // 试听自然播完通知
+@property (nonatomic, strong) id previewFailObserver;                // 试听异步失败通知
 @end
 
 @implementation WPVoicePackPickerVC
@@ -32,11 +33,14 @@ static NSInteger const kSectionFolder = 1;
     [super viewDidLoad];
     [VoicePackStore ensureRootDirectoryExists];
     self.view.backgroundColor = WPBgColor();
-    // 试听自然播完 → 复位可见 cell 的播放按钮
+    // 试听自然播完/异步失败 → 复位可见 cell 的播放按钮
     __weak typeof(self) ws = self;
     _previewFinishObserver = [[NSNotificationCenter defaultCenter]
         addObserverForName:MioVoicePreviewDidFinishNotification object:nil queue:[NSOperationQueue mainQueue]
         usingBlock:^(NSNotification *note) { [ws refreshPreviewButtons]; }];
+    _previewFailObserver = [[NSNotificationCenter defaultCenter]
+        addObserverForName:MioVoicePreviewDidFailNotification object:nil queue:[NSOperationQueue mainQueue]
+        usingBlock:^(NSNotification *note) { [ws.table reloadData]; }];
 
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat h = [UIScreen mainScreen].bounds.size.height;
@@ -67,6 +71,7 @@ static NSInteger const kSectionFolder = 1;
 
 - (void)dealloc {
     if (_previewFinishObserver) [[NSNotificationCenter defaultCenter] removeObserver:_previewFinishObserver];
+    if (_previewFailObserver) [[NSNotificationCenter defaultCenter] removeObserver:_previewFailObserver];
 }
 
 #pragma mark 数据

@@ -61,6 +61,8 @@ NS_ASSUME_NONNULL_BEGIN
 #pragma mark - 预览播放（系统格式 + silk：借微信自带 MJSilkCodec 解码，WCRefine 方案）
 /// 试听自然播放结束时发出（object 为 nil）；用户手动 stop 不发
 extern NSString * const MioVoicePreviewDidFinishNotification;
+/// 异步解码/播放失败时发出（object 为 nil）；UI 应复位播放按钮
+extern NSString * const MioVoicePreviewDidFailNotification;
 + (BOOL)isPreviewSupportedRelPath:(NSString *)relPath;
 + (BOOL)previewPlayAtRelPath:(NSString *)relPath;   // 返回 NO 表示格式不支持/解码失败
 + (BOOL)previewIsPlayingRelPath:(NSString *)relPath;
