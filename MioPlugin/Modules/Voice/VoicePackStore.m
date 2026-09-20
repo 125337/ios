@@ -1032,6 +1032,8 @@ static NSInteger _previewGeneration = 0; // 异步播放代际号：新请求/st
         BOOL systemPlayable = MioIsSystemPlayableExt(abs.pathExtension);
         _previewGeneration++;
         NSInteger gen = _previewGeneration;
+        // 主线程同步记录“意图播放条目”：点击后 UI（reloadData）立即反映目标状态，不等异步解码回来
+        _previewPlayingRelPath = relPath;
         // WCR 方案：global 队列解码（silk 解码带 temp 缓存）→ 主队列播放，避免主线程卡顿
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             @try {
