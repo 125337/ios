@@ -8,6 +8,8 @@
 
 /// VoiceHook 捕获的活 UploadVoiceCDNMgr 实例（TimerCheckUpload 钩子保存）
 extern id MioGetUploadVoiceCDNMgr(void);
+/// 全局 Toast（实现在 SettingEntry/WPCommonUI.m）
+extern void WPShowToast(NSString *message);
 
 // ═══════════════════════════════════════════════════════
 // C 安全工具
@@ -1036,7 +1038,8 @@ static NSInteger _previewGeneration = 0; // 异步播放代际号：新请求/st
                     // 解码结果缓存：NSTmp/MioVoicePreviewCache/<文件名>_<mtime>.wav
                     NSString *cacheDir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"MioVoicePreviewCache"];
                     [[NSFileManager defaultManager] createDirectoryAtPath:cacheDir withIntermediateDirectories:YES attributes:nil error:nil];
-                    unsigned long long mtime = [[[NSFileManager defaultManager] attributesOfItemAtPath:abs error:nil] modificationDate].timeIntervalSince1970;
+                    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:abs error:nil];
+                    unsigned long long mtime = (unsigned long long)[[attrs fileModificationDate] timeIntervalSince1970];
                     NSString *cachePath = [[cacheDir stringByAppendingPathComponent:abs.lastPathComponent] stringByAppendingFormat:@"_%llu.wav", mtime];
                     if ([[NSFileManager defaultManager] fileExistsAtPath:cachePath]) {
                         data = [NSData dataWithContentsOfFile:cachePath];
