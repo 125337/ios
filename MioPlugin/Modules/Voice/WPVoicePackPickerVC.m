@@ -3,20 +3,22 @@
 #import "VoicePackStore.h"
 #import "../SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
+#import <AVFoundation/AVFoundation.h>
 
 // 分区 0=收藏+最近 1=当前目录
 static NSInteger const kSectionQuick = 0;
 static NSInteger const kSectionFolder = 1;
 
-@interface WPVoicePackPickerVC () <UITableViewDelegate, UITableViewDataSource>
+@interface WPVoicePackPickerVC () <UITableViewDelegate, UITableViewDataSource, AVAudioPlayerDelegate>
 @property (nonatomic, copy) NSString *chatName;
 @property (nonatomic, copy) NSString *currentRelPath;
 @property (nonatomic, strong) UITableView *table;
 @property (nonatomic, strong) NSArray<VoicePackItem *> *folderItems; // 当前目录
 @property (nonatomic, strong) NSArray<VoicePackItem *> *quickItems;  // 收藏+最近去重
 @property (nonatomic, strong) NSMutableArray<NSString *> *dirStack;  // 子目录栈（relPath）
-@property (nonatomic, strong) id previewFinishObserver;              // 试听自然播完通知
-@property (nonatomic, strong) id previewFailObserver;                // 试听异步失败通知
+// WCR 架构：播放器与播放状态由页面自持（previewingPath 在开播时落定）
+@property (nonatomic, strong) AVAudioPlayer *previewPlayer;
+@property (nonatomic, copy) NSString *previewingPath;
 @end
 
 @implementation WPVoicePackPickerVC
@@ -33,14 +35,6 @@ static NSInteger const kSectionFolder = 1;
     [super viewDidLoad];
     [VoicePackStore ensureRootDirectoryExists];
     self.view.backgroundColor = WPBgColor();
-    // 试听自然播完/异步失败 → 复位可见 cell 的播放按钮
-    __weak typeof(self) ws = self;
-    _previewFinishObserver = [[NSNotificationCenter defaultCenter]
-        addObserverForName:MioVoicePreviewDidFinishNotification object:nil queue:[NSOperationQueue mainQueue]
-        usingBlock:^(NSNotification *note) { [ws.table reloadData]; }];
-    _previewFailObserver = [[NSNotificationCenter defaultCenter]
-        addObserverForName:MioVoicePreviewDidFailNotification object:nil queue:[NSOperationQueue mainQueue]
-        usingBlock:^(NSNotification *note) { [ws.table reloadData]; }];
 
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat h = [UIScreen mainScreen].bounds.size.height;
@@ -66,12 +60,11 @@ static NSInteger const kSectionFolder = 1;
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     WPRestoreNavAppearance(self);
-    [VoicePackStore previewStop];
+    [self stopPreviewPlayback];
 }
 
 - (void)dealloc {
-    if (_previewFinishObserver) [[NSNotificationCenter defaultCenter] removeObserver:_previewFinishObserver];
-    if (_previewFailObserver) [[NSNotificationCenter defaultCenter] removeObserver:_previewFailObserver];
+    [_previewPlayer stop];
 }
 
 #pragma mark 数据
@@ -166,7 +159,8 @@ static NSInteger const kSectionFolder = 1;
             cell.accessoryView = pb;
         }
         pb.hidden = ![VoicePackStore isPreviewSupportedRelPath:it.relPath];
-        BOOL playing = [VoicePackStore previewIsPlayingRelPath:it.relPath];
+        // WCR：图标由 previewingPath 派生（开播时落定，rebuild 时刷新）
+        BOOL playing = [self.previewingPath isEqualToString:it.relPath];
         [pb setImage:[UIImage systemImageNamed:playing ? @"stop.circle.fill" : @"play.circle"] forState:UIControlStateNormal];
         pb.tintColor = WPAccent();
     }
@@ -202,27 +196,73 @@ static NSInteger const kSectionFolder = 1;
         return;
     }
     WPLog(@"Voice", @"[Pick] 点击文件: section=%ld, rel=%@", (long)indexPath.section, it.relPath);
-    [VoicePackStore previewStop]; // 发送前停掉试听
+    [self stopPreviewPlayback]; // 发送前停掉试听
     [self sendItem:it];
 }
 
-#pragma mark 试听
+#pragma mark 试听（WCR 架构：previewPlayer/previewingPath 自持）
+
+/// 对齐 WCR stopPreviewPlayback：停播 + 清状态 + 刷新列表
+- (void)stopPreviewPlayback {
+    [_previewPlayer stop];
+    _previewPlayer = nil;
+    _previewingPath = nil;
+    [_table reloadData];
+}
+
+/// 对齐 WCR previewItem:：异步解码 → 主队列停旧播新，状态在开播时落定
+- (void)previewItem:(VoicePackItem *)it {
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSData *data = [VoicePackStore previewPlayableDataForRelPath:it.relPath];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!data.length) {
+                WPLog(@"Voice", @"[Preview] 解码失败: %@", it.relPath);
+                WPShowToast(@"试听失败");
+                return;
+            }
+            // 固定扬声器外放（聊天页会话可能配置为听筒路由）
+            [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
+            [[AVAudioSession sharedInstance] setActive:YES error:nil];
+            NSError *err = nil;
+            AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithData:data error:&err];
+            if (!player) {
+                WPLog(@"Voice", @"[Preview] 初始化失败: %@", err.localizedDescription);
+                WPShowToast(@"试听失败");
+                return;
+            }
+            // ★ WCR：替换前在主队列停掉旧播放（主队列串行，绝不漏停）
+            [_previewPlayer stop];
+            player.delegate = self;
+            _previewPlayer = player;
+            _previewingPath = it.relPath;
+            [player prepareToPlay];
+            [player play];
+            WPLog(@"Voice", @"[Pick] 试听: %@ (%.1fKB, %.1fs)", it.relPath, data.length / 1024.0, player.duration);
+            [_table reloadData];
+        });
+    });
+}
+
+// AVAudioPlayer 委托不保证主线程——回主队列再动共享状态
+- (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self stopPreviewPlayback];
+    });
+}
 
 - (void)previewButtonTapped:(UIButton *)sender {
-    // 通过按钮所属 cell 反查条目
+    // 通过按钮所属 cell 反查条目（WCR：点正在播的停，点别的切）
     UIView *v = sender;
     while (v && ![v isKindOfClass:[UITableViewCell class]]) v = v.superview;
     NSIndexPath *ip = [self.table indexPathForCell:(UITableViewCell *)v];
     if (!ip) return;
     VoicePackItem *it = ip.section == kSectionQuick ? self.quickItems[ip.row] : self.folderItems[ip.row];
     if (!it || it.isDirectory) return;
-    // WCR 方案：按条目判断；点其他条目直接切换（解码后主队列停旧播新），点正在播的条目停止
-    if ([VoicePackStore previewIsPlayingRelPath:it.relPath]) {
-        [VoicePackStore previewStop];
+    if ([_previewingPath isEqualToString:it.relPath]) {
+        [self stopPreviewPlayback];
     } else {
-        [VoicePackStore previewPlayAtRelPath:it.relPath];
+        [self previewItem:it];
     }
-    [self.table reloadData]; // 图标统一由 cellForRow 按条目状态刷新
 }
 
 #pragma mark 目录导航（侧滑返回上层）

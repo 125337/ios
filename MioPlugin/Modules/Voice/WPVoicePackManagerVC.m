@@ -3,13 +3,16 @@
 #import "VoicePackStore.h"
 #import "../SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
+#import <AVFoundation/AVFoundation.h>
 
-@interface WPVoicePackManagerVC () <UITableViewDelegate, UITableViewDataSource, UIDocumentPickerDelegate>
+@interface WPVoicePackManagerVC () <UITableViewDelegate, UITableViewDataSource, UIDocumentPickerDelegate, AVAudioPlayerDelegate>
 @property (nonatomic, strong) UITableView *table;
 @property (nonatomic, copy) NSString *currentRelPath; // nil = root
 @property (nonatomic, strong) NSMutableArray<VoicePackItem *> *items;
 @property (nonatomic, assign) BOOL selecting;
-@property (nonatomic, strong) id previewFailObserver; // 试听异步失败通知
+// WCR 架构：播放器与播放状态由页面自持（previewingPath 在开播时落定）
+@property (nonatomic, strong) AVAudioPlayer *previewPlayer;
+@property (nonatomic, copy) NSString *previewingPath;
 @end
 
 @implementation WPVoicePackManagerVC
@@ -37,12 +40,6 @@
 
     [self reloadItems];
 
-    // 试听异步失败 → 刷新列表复位播放按钮
-    __weak typeof(self) ws = self;
-    self.previewFailObserver = [[NSNotificationCenter defaultCenter]
-        addObserverForName:MioVoicePreviewDidFailNotification object:nil queue:[NSOperationQueue mainQueue]
-        usingBlock:^(NSNotification *note) { [ws reloadItems]; }];
-
     UIBarButtonItem *addBtn = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd target:self action:@selector(showAddMenu)];
     self.navigationItem.rightBarButtonItem = addBtn;
 }
@@ -56,11 +53,11 @@
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     WPRestoreNavAppearance(self);
-    [VoicePackStore previewStop];
+    [self stopPreviewPlayback];
 }
 
 - (void)dealloc {
-    if (_previewFailObserver) [[NSNotificationCenter defaultCenter] removeObserver:_previewFailObserver];
+    [_previewPlayer stop];
 }
 
 #pragma mark 数据
@@ -123,8 +120,8 @@
     for (UIView *sv in cell.contentView.subviews) {
         if ([sv isKindOfClass:[UIButton class]] && sv.tag == 2000) {
             sv.hidden = it.isDirectory || ![VoicePackStore isPreviewSupportedRelPath:it.relPath];
-            // 图标按条目播放状态刷新（WCR previewingPath 方案）
-            BOOL playing = [VoicePackStore previewIsPlayingRelPath:it.relPath];
+            // WCR：图标由 previewingPath 派生（开播时落定，reload 时刷新）
+            BOOL playing = [_previewingPath isEqualToString:it.relPath];
             UIButton *pb = (UIButton *)sv;
             [pb setImage:[UIImage systemImageNamed:playing ? @"stop.fill" : @"play.fill"] forState:UIControlStateNormal];
             break;
@@ -143,6 +140,7 @@
     UIContextualAction *deleteAction = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"删除" handler:^(UIContextualAction *act, UIView *src, void(^complete)(BOOL)) {
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"删除" message:[NSString stringWithFormat:@"确认删除「%@」？", it.name] preferredStyle:UIAlertControllerStyleActionSheet];
         [alert addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+            [ws stopPreviewPlayback]; // 防止正在播放被删除的文件
             NSError *err = nil;
             if ([VoicePackStore deleteItemAtRelPath:it.relPath error:&err]) {
                 WPShowToast(@"已删除");
@@ -182,19 +180,68 @@
 
 #pragma mark 动作
 
+#pragma mark 试听（WCR 架构：previewPlayer/previewingPath 自持）
+
+/// 对齐 WCR stopPreviewPlayback：停播 + 清状态 + 刷新列表
+- (void)stopPreviewPlayback {
+    [_previewPlayer stop];
+    _previewPlayer = nil;
+    _previewingPath = nil;
+    [_table reloadData];
+}
+
+/// 对齐 WCR previewItem:：异步解码 → 主队列停旧播新，状态在开播时落定
+- (void)previewItem:(VoicePackItem *)it {
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSData *data = [VoicePackStore previewPlayableDataForRelPath:it.relPath];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!data.length) {
+                WPLog(@"Voice", @"[Preview] 解码失败: %@", it.relPath);
+                WPShowToast(@"试听失败");
+                return;
+            }
+            [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
+            [[AVAudioSession sharedInstance] setActive:YES error:nil];
+            NSError *err = nil;
+            AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithData:data error:&err];
+            if (!player) {
+                WPLog(@"Voice", @"[Preview] 初始化失败: %@", err.localizedDescription);
+                WPShowToast(@"试听失败");
+                return;
+            }
+            // ★ WCR：替换前在主队列停掉旧播放（主队列串行，绝不漏停）
+            [_previewPlayer stop];
+            player.delegate = self;
+            _previewPlayer = player;
+            _previewingPath = it.relPath;
+            [player prepareToPlay];
+            [player play];
+            WPLog(@"Voice", @"[Preview] 播放: %@ (%.1fKB, %.1fs)", it.relPath, data.length / 1024.0, player.duration);
+            [_table reloadData];
+        });
+    });
+}
+
+// AVAudioPlayer 委托不保证主线程——回主队列再动共享状态
+- (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self stopPreviewPlayback];
+    });
+}
+
 - (void)playButtonTapped:(UIButton *)sender {
     UIView *v = sender;
     while (v && ![v isKindOfClass:[UITableViewCell class]]) v = v.superview;
     NSIndexPath *ip = [self.table indexPathForCell:(UITableViewCell *)v];
     if (!ip || ip.row >= self.items.count) return;
     VoicePackItem *it = self.items[ip.row];
-    // WCR 方案：按条目判断；点其他条目直接切换，点正在播的条目停止
-    if ([VoicePackStore previewIsPlayingRelPath:it.relPath]) {
-        [VoicePackStore previewStop];
+    if (!it || it.isDirectory) return;
+    // WCR：点正在播的停，点别的切
+    if ([_previewingPath isEqualToString:it.relPath]) {
+        [self stopPreviewPlayback];
     } else {
-        [VoicePackStore previewPlayAtRelPath:it.relPath]; // 失败由 FailNotification 回滚 + toast
+        [self previewItem:it];
     }
-    [self.table reloadData];
 }
 
 - (void)showAddMenu {
@@ -249,6 +296,7 @@
         [ws reloadItems];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+        [ws stopPreviewPlayback]; // 防止正在播放被删除的文件
         NSError *err = nil;
         if ([VoicePackStore deleteItemAtRelPath:it.relPath error:&err]) {
             WPShowToast(@"已删除");
@@ -270,6 +318,7 @@
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         NSString *name = alert.textFields.firstObject.text;
         NSError *err = nil;
+        [ws stopPreviewPlayback]; // 防止正在播放被重命名的文件
         if ([VoicePackStore renameItemAtRelPath:it.relPath toName:name error:&err]) {
             WPShowToast(@"已重命名");
             [ws reloadItems];

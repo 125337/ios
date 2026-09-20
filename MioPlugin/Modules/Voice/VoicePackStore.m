@@ -110,9 +110,6 @@ static NSString * const kPrefDurations = @"MioPlugin_Voice_Durations";   // {rel
 static NSString * const kPrefFavorites = @"MioPlugin_Voice_Favorites";   // [relPath]
 static NSString * const kPrefRecents   = @"MioPlugin_Voice_Recents";     // [relPath]
 
-NSString * const MioVoicePreviewDidFinishNotification = @"MioVoicePreviewDidFinish";
-NSString * const MioVoicePreviewDidFailNotification = @"MioVoicePreviewDidFail";
-
 /// 支持预览/探测的音频扩展名
 static BOOL MioIsSystemPlayableExt(NSString *ext) {
     static NSArray *exts = nil;
@@ -228,19 +225,6 @@ static NSData *MioDecodeSilkToPlayable(NSData *wire) {
     }
     return nil;
 }
-
-/// 试听自然播完回调 → 复位播放器 + 发通知刷新 UI
-@interface MioVoicePreviewFinishDelegate : NSObject <AVAudioPlayerDelegate>
-@end
-@implementation MioVoicePreviewFinishDelegate
-- (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
-    // AVAudioPlayer 委托不保证主线程——回主队列再动共享状态（否则与播放路径竞态：晚到的 nil 会漏停正在响的 player）
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [VoicePackStore previewStop];
-        [[NSNotificationCenter defaultCenter] postNotificationName:MioVoicePreviewDidFinishNotification object:nil];
-    });
-}
-@end
 
 // ═══════════════════════════════════════════════════════
 // VoicePackItem
@@ -366,7 +350,6 @@ static NSData *MioDecodeSilkToPlayable(NSData *wire) {
             prefSetObject(durs, kPrefDurations);
         }
         [self migrateMetaForRelPath:relPath toRelPath:newRel];
-        [self previewStop]; // 防止正在播放被删除路径的文件
     }
     return ok;
 }
@@ -374,7 +357,6 @@ static NSData *MioDecodeSilkToPlayable(NSData *wire) {
 + (BOOL)deleteItemAtRelPath:(NSString *)relPath error:(NSError **)error {
     if (relPath.length == 0) return NO;
     NSString *abs = [[self rootDirectory] stringByAppendingPathComponent:relPath];
-    [self previewStop];
     BOOL ok = [[NSFileManager defaultManager] removeItemAtPath:abs error:error];
     if (ok) {
         // 清理该路径及其子路径的元数据
@@ -999,12 +981,7 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
     }
 }
 
-#pragma mark - 预览播放
-
-static AVAudioPlayer *_previewPlayer = nil;
-static NSString *_previewPlayingRelPath = nil; // WCR previewingPath：按条目跟踪正在试听的文件
-static MioVoicePreviewFinishDelegate *_previewFinishDelegate = nil;
-static NSInteger _previewGeneration = 0; // 异步播放代际号：新请求/stop 会使旧请求的主队列回调失效
+#pragma mark - 预览解码（WCR 架构：播放器/状态在 VC，Store 只负责解码）
 
 + (BOOL)isPreviewSupportedRelPath:(NSString *)relPath {
     if (relPath.length == 0) return NO;
@@ -1025,93 +1002,34 @@ static NSInteger _previewGeneration = 0; // 异步播放代际号：新请求/st
     return NO;
 }
 
-+ (BOOL)previewPlayAtRelPath:(NSString *)relPath {
-    @try {
-        [self previewStop];
-        NSString *abs = [[self rootDirectory] stringByAppendingPathComponent:relPath];
-        BOOL systemPlayable = MioIsSystemPlayableExt(abs.pathExtension);
-        _previewGeneration++;
-        NSInteger gen = _previewGeneration;
-        // 主线程同步记录“意图播放条目”：点击后 UI（reloadData）立即反映目标状态，不等异步解码回来
-        _previewPlayingRelPath = relPath;
-        // WCR 方案：global 队列解码（silk 解码带 temp 缓存）→ 主队列播放，避免主线程卡顿
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-            @try {
-                NSData *data = nil;
-                if (systemPlayable) {
-                    data = [NSData dataWithContentsOfFile:abs];
-                } else {
-                    // 解码结果缓存：NSTmp/MioVoicePreviewCache/<文件名>_<mtime>.wav
-                    NSString *cacheDir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"MioVoicePreviewCache"];
-                    [[NSFileManager defaultManager] createDirectoryAtPath:cacheDir withIntermediateDirectories:YES attributes:nil error:nil];
-                    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:abs error:nil];
-                    unsigned long long mtime = (unsigned long long)[[attrs fileModificationDate] timeIntervalSince1970];
-                    NSString *cachePath = [[cacheDir stringByAppendingPathComponent:abs.lastPathComponent] stringByAppendingFormat:@"_%llu.wav", mtime];
-                    if ([[NSFileManager defaultManager] fileExistsAtPath:cachePath]) {
-                        data = [NSData dataWithContentsOfFile:cachePath];
-                    }
-                    if (!data) {
-                        NSData *raw = [NSData dataWithContentsOfFile:abs];
-                        data = raw.length ? MioDecodeSilkToPlayable(raw) : nil;
-                        if (data) [data writeToFile:cachePath atomically:YES];
-                    }
-                }
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (gen != _previewGeneration) return; // 已被更新的播放/stop 取代
-                    @try {
-                        if (!data || data.length == 0) {
-                            WPLog(@"Voice", @"[Preview] 解码失败: %@", relPath);
-                            WPShowToast(@"试听失败");
-                            [[NSNotificationCenter defaultCenter] postNotificationName:MioVoicePreviewDidFailNotification object:nil];
-                            return;
-                        }
-                        // 固定扬声器外放（聊天页会话可能配置为听筒路由）
-                        [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
-                        [[AVAudioSession sharedInstance] setActive:YES error:nil];
-                        NSError *err = nil;
-                        AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithData:data error:&err];
-                        if (!player) {
-                            WPLog(@"Voice", @"[Preview] 初始化失败: %@", err.localizedDescription);
-                            WPShowToast(@"试听失败");
-                            [[NSNotificationCenter defaultCenter] postNotificationName:MioVoicePreviewDidFailNotification object:nil];
-                            return;
-                        }
-                        if (!_previewFinishDelegate) _previewFinishDelegate = [[MioVoicePreviewFinishDelegate alloc] init];
-                        player.delegate = _previewFinishDelegate;
-                        // ★ WCR 方案：替换前在主队列停掉旧播放（主队列串行，保证绝不漏停）
-                        [_previewPlayer stop];
-                        _previewPlayer = player;
-                        _previewPlayingRelPath = relPath;
-                        [player prepareToPlay];
-                        [player play];
-                        WPLog(@"Voice", @"[Preview] 播放: %@ (%.1fKB, %.1fs)", relPath, data.length / 1024.0, player.duration);
-                    } @catch (NSException *e) {
-                        WPLog(@"Voice", @"[Preview] 播放异常: %@", e.reason);
-                    }
-                });
-            } @catch (NSException *e) {
-                WPLog(@"Voice", @"[Preview] 解码异常: %@", e.reason);
-            }
-        });
-        return YES; // 已提交异步播放；失败经 MioVoicePreviewDidFailNotification 回滚 UI
-    } @catch (NSException *e) {
-        WPLog(@"Voice", @"[Preview] 提交异常: %@", e.reason);
-        return NO;
+/// 取可播放音频数据（须在后台队列调用）：系统格式直读；silk 解码 + temp 缓存
++ (NSData *)previewPlayableDataForRelPath:(NSString *)relPath {
+    if (relPath.length == 0) return nil;
+    NSString *abs = [[self rootDirectory] stringByAppendingPathComponent:relPath];
+    if (MioIsSystemPlayableExt(abs.pathExtension)) return [NSData dataWithContentsOfFile:abs];
+    if (!MioSilkCodecAvailable()) return nil;
+    NSString *ext = abs.pathExtension.lowercaseString;
+    if (!(ext.length > 0 && MioIsSilkFamilyExt(ext))) {
+        // 未知扩展名：嗅探 silk 文件头
+        NSData *head = [NSData dataWithContentsOfFile:abs options:NSDataReadingUncached error:nil];
+        if (!head) return nil;
+        const UInt8 *b = head.bytes;
+        BOOL silk = (head.length >= 7 && memcmp(b, "#!SILK", 6) == 0)
+                 || (head.length >= 8 && b[0] == 0x02 && memcmp(b + 1, "#!SILK", 6) == 0);
+        if (!silk) return nil;
     }
-}
-
-+ (BOOL)previewIsPlayingRelPath:(NSString *)relPath {
-    // 按条目跟踪（WCR previewingPath）：只有“正在响的文件 == 该条目”才算播放中
-    return _previewPlayer.isPlaying && [_previewPlayingRelPath isEqualToString:relPath];
-}
-
-+ (void)previewStop {
-    @try {
-        _previewGeneration++; // 使在途异步播放回调失效
-        [_previewPlayer stop];
-        _previewPlayer = nil;
-        _previewPlayingRelPath = nil;
-    } @catch (NSException *e) {}
+    // 解码结果缓存：NSTmp/MioVoicePreviewCache/<文件名>_<mtime>.wav
+    NSString *cacheDir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"MioVoicePreviewCache"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:cacheDir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:abs error:nil];
+    unsigned long long mtime = (unsigned long long)[[attrs fileModificationDate] timeIntervalSince1970];
+    NSString *cachePath = [[cacheDir stringByAppendingPathComponent:abs.lastPathComponent] stringByAppendingFormat:@"_%llu.wav", mtime];
+    NSData *cached = [NSData dataWithContentsOfFile:cachePath];
+    if (cached) return cached;
+    NSData *raw = [NSData dataWithContentsOfFile:abs];
+    NSData *data = raw.length ? MioDecodeSilkToPlayable(raw) : nil;
+    if (data) [data writeToFile:cachePath atomically:YES];
+    return data;
 }
 
 @end

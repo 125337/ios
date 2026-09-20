@@ -58,15 +58,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// 从 CMessageWrap 取语音数据 buffer（自动适配 m_nsImgBuf/m_byteBuffer 等版本差异）
 + (nullable NSData *)voiceDataFromWrap:(id)wrap;
 
-#pragma mark - 预览播放（系统格式 + silk：借微信自带 MJSilkCodec 解码，WCRefine 方案）
-/// 试听自然播放结束时发出（object 为 nil）；用户手动 stop 不发
-extern NSString * const MioVoicePreviewDidFinishNotification;
-/// 异步解码/播放失败时发出（object 为 nil）；UI 应复位播放按钮
-extern NSString * const MioVoicePreviewDidFailNotification;
+#pragma mark - 预览解码（系统格式 + silk：借微信自带 MJSilkCodec 解码，WCRefine 方案）
+// WCR 架构：播放器与播放状态（previewPlayer/previewingPath）由页面 VC 自持，Store 只负责解码
+/// 取可播放音频数据（系统格式直读；silk 解码并带 temp 缓存）。耗时操作，必须在后台队列调用
++ (nullable NSData *)previewPlayableDataForRelPath:(NSString *)relPath;
 + (BOOL)isPreviewSupportedRelPath:(NSString *)relPath;
-+ (BOOL)previewPlayAtRelPath:(NSString *)relPath;   // 返回 NO 表示格式不支持/解码失败
-+ (BOOL)previewIsPlayingRelPath:(NSString *)relPath;
-+ (void)previewStop;
 
 @end
 
