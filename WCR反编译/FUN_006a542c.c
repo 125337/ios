@@ -1,0 +1,21 @@
+// FUN_006a542c @ 006a542c
+
+void FUN_006a542c(undefined8 param_1,long param_2)
+
+{
+  ulong uVar1;
+  ulong local_18;
+  
+  local_18 = 0;
+  _objc_storeStrong(&local_18,param_1);
+  if ((local_18 != 0) && (param_2 != 0)) {
+    uVar1 = local_18;
+    (*(code *)PTR__objc_msgSend_02578628)(local_18,PTR_s_respondsToSelector__026ca818,param_2);
+    if ((uVar1 & 1) != 0) {
+      (*(code *)PTR__objc_msgSend_02578628)(local_18,param_2);
+    }
+  }
+  _objc_storeStrong(&local_18,0);
+  return;
+}
+

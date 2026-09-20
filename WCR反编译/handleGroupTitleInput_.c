@@ -1,0 +1,109 @@
+// handleGroupTitleInput: @ 01c7e3f8
+
+/* Function Stack Size: 0x18 bytes */
+
+void WCRefinePluginHubGroupManagerViewController::handleGroupTitleInput_
+               (ID param_1,SEL param_2,ID param_3)
+
+{
+  bool bVar1;
+  cfstringStruct *pcVar2;
+  undefined *puVar3;
+  cfstringStruct *pcVar4;
+  ID IVar5;
+  cfstringStruct *local_68;
+  ID local_58;
+  undefined4 local_4c;
+  cfstringStruct *local_48;
+  bool local_39;
+  cfstringStruct *local_38;
+  cfstringStruct *local_30;
+  cfstringStruct *local_28;
+  SEL local_20;
+  ID local_18;
+  
+  local_28 = (cfstringStruct *)0x0;
+  local_20 = param_2;
+  local_18 = param_1;
+  _objc_storeStrong(&local_28,param_3);
+  pcVar2 = local_28;
+  (*(code *)PTR__objc_msgSend_02578628)(local_28,PTR_s_text_0269ce68);
+  _objc_retainAutoreleasedReturnValue();
+  puVar3 = PTR__OBJC_CLASS___NSString_026cdfe8;
+  (*(code *)PTR__objc_msgSend_02578628)(PTR__OBJC_CLASS___NSString_026cdfe8,PTR_s_class_0269cd60);
+  pcVar4 = pcVar2;
+  (*(code *)PTR__objc_msgSend_02578628)(pcVar2,PTR_s_isKindOfClass__0269cd68,puVar3);
+  local_39 = false;
+  bVar1 = ((ulong)pcVar4 & 1) == 0;
+  if (bVar1) {
+    local_68 = &::cf___;
+  }
+  else {
+    local_68 = local_28;
+    (*(code *)PTR__objc_msgSend_02578628)(local_28,PTR_s_text_0269ce68);
+    _objc_retainAutoreleasedReturnValue();
+    local_38 = local_68;
+  }
+  local_39 = !bVar1;
+  (*(code *)PTR__objc_retain_02578638)();
+  local_30 = local_68;
+  if ((local_39 & 1U) != 0) {
+    (*(code *)PTR__objc_release_02578630)(local_38);
+  }
+  (*(code *)PTR__objc_release_02578630)(pcVar2);
+  pcVar2 = local_30;
+  puVar3 = PTR__OBJC_CLASS___NSCharacterSet_026ce078;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___NSCharacterSet_026ce078,
+             PTR_s_whitespaceAndNewlineCharacterSet_0269d0b8);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(pcVar2,PTR_s_stringByTrimmingCharactersInSet__0269d0c0);
+  _objc_retainAutoreleasedReturnValue();
+  local_48 = pcVar2;
+  (*(code *)PTR__objc_release_02578630)(puVar3);
+  pcVar2 = local_48;
+  (*(code *)PTR__objc_msgSend_02578628)(local_48,PTR_s_length_0269cca0);
+  if (pcVar2 == (cfstringStruct *)0x0) {
+    (*(code *)PTR__objc_msgSend_02578628)
+              (PTR_WCRefineHelper_026ce000,PTR_s_showModernToast__0269ce78,&cf_R_TyN_Nzz);
+    local_4c = 1;
+  }
+  else {
+    IVar5 = local_18;
+    (*(code *)PTR__objc_msgSend_02578628)(local_18,PTR_s_editingGroup_026c27f8);
+    _objc_retainAutoreleasedReturnValue();
+    local_58 = IVar5;
+    (*(code *)PTR__objc_msgSend_02578628)(local_18,PTR_s_setEditingGroup__026c27e0,0);
+    if (local_58 == 0) {
+      puVar3 = PTR_WCRefinePluginHubManager_026ce800;
+      (*(code *)PTR__objc_msgSend_02578628)
+                (PTR_WCRefinePluginHubManager_026ce800,PTR_s_sharedInstance_0269cd30);
+      _objc_retainAutoreleasedReturnValue();
+      (*(code *)PTR__objc_msgSend_02578628)();
+      _objc_unsafeClaimAutoreleasedReturnValue();
+      (*(code *)PTR__objc_release_02578630)(puVar3);
+    }
+    else {
+      puVar3 = PTR_WCRefinePluginHubManager_026ce800;
+      (*(code *)PTR__objc_msgSend_02578628)
+                (PTR_WCRefinePluginHubManager_026ce800,PTR_s_sharedInstance_0269cd30);
+      _objc_retainAutoreleasedReturnValue();
+      IVar5 = local_58;
+      (*(code *)PTR__objc_msgSend_02578628)(local_58,PTR_s_objectForKeyedSubscript__0269d098,&cf_id)
+      ;
+      _objc_retainAutoreleasedReturnValue();
+      (*(code *)PTR__objc_msgSend_02578628)
+                (puVar3,PTR_s_renameGroupWithIdentifier_title__026c2800,IVar5,local_48);
+      (*(code *)PTR__objc_release_02578630)(IVar5);
+      (*(code *)PTR__objc_release_02578630)(puVar3);
+    }
+    (*(code *)PTR__objc_msgSend_02578628)(local_18,PTR_s_reloadTableData_0269dca8);
+    _objc_storeStrong(&local_58,0);
+    local_4c = 0;
+  }
+  _objc_storeStrong(&local_48);
+  _objc_storeStrong(&local_30,0);
+  _objc_storeStrong(&local_28,0);
+  return;
+}
+

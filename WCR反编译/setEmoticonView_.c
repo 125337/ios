@@ -1,0 +1,11 @@
+// setEmoticonView: @ 01c375a8
+
+/* Function Stack Size: 0x18 bytes */
+
+void WCRNameplateLibraryCell::setEmoticonView_(ID param_1,SEL param_2,ID param_3)
+
+{
+  _objc_storeStrong(param_1 + (long)_emoticonView,param_3);
+  return;
+}
+

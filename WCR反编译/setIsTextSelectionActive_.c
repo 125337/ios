@@ -1,0 +1,11 @@
+// setIsTextSelectionActive: @ 0090cad0
+
+/* Function Stack Size: 0x14 bytes */
+
+void LogFloatingBall::setIsTextSelectionActive_(ID param_1,SEL param_2,bool param_3)
+
+{
+  *(byte *)(param_1 + (long)_isTextSelectionActive) = (byte)param_3 & 1;
+  return;
+}
+

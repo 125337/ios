@@ -1,0 +1,10 @@
+// pageSheet @ 0169a4a8
+
+/* Function Stack Size: 0x10 bytes */
+
+ID WCRWordSegPickerController::pageSheet(ID param_1,SEL param_2)
+
+{
+  return *(ID *)(param_1 + (long)_pageSheet);
+}
+

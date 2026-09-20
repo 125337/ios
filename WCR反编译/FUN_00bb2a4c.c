@@ -1,0 +1,113 @@
+// FUN_00bb2a4c @ 00bb2a4c
+
+void FUN_00bb2a4c(undefined8 param_1)
+
+{
+  undefined4 *puVar1;
+  undefined8 *puVar2;
+  long lVar3;
+  undefined8 *puVar4;
+  undefined *puVar5;
+  undefined4 uVar6;
+  code *UNRECOVERED_JUMPTABLE;
+  undefined8 auStack_260 [4];
+  undefined1 auStack_240 [48];
+  undefined1 *local_210;
+  undefined8 *local_208;
+  undefined8 *local_200;
+  long local_1f8;
+  undefined8 *local_1f0;
+  undefined *local_1e8;
+  undefined4 local_1dc;
+  undefined4 *local_1d8;
+  undefined8 *local_1d0;
+  undefined4 local_1c8;
+  undefined4 local_1c4;
+  undefined *local_1c0;
+  undefined4 local_1b4;
+  undefined *local_1b0;
+  undefined4 local_1a4;
+  undefined *local_1a0;
+  undefined4 local_194;
+  undefined *local_190;
+  undefined4 local_184;
+  undefined *local_180;
+  undefined4 local_174;
+  undefined *local_170;
+  undefined4 local_164;
+  undefined *local_160;
+  undefined4 local_154;
+  undefined *local_150;
+  undefined4 local_144;
+  undefined8 local_140 [31];
+  undefined4 local_44;
+  int local_34;
+  undefined *local_30;
+  undefined8 local_28;
+  
+  local_1f0 = local_140;
+  local_28 = *(undefined8 *)PTR____stack_chk_guard_02578670;
+  local_1e8 = &DAT_0271e020;
+  local_30 = &DAT_0271e020;
+  local_1dc = 0x54e3;
+  local_34 = 0x54e3;
+  local_1f8 = 1;
+  local_210 = auStack_240;
+  local_200 = auStack_260 + 2;
+  local_208 = auStack_260;
+  FUN_00e9c4e4();
+  _objc_retainAutoreleasedReturnValue();
+  uVar6 = local_1dc;
+  puVar5 = local_1e8;
+  puVar4 = local_1f0;
+  lVar3 = local_1f8;
+  *local_200 = param_1;
+  puVar1 = (undefined4 *)((long)auStack_260 - (lVar3 * 4 + 0xfU & 0xfffffffffffffff0));
+  puVar2 = (undefined8 *)((long)puVar1 - (lVar3 * 8 + 0xfU & 0xfffffffffffffff0));
+  local_1d8 = puVar1;
+  local_1d0 = puVar2;
+  *puVar1 = 0x26582a8d;
+  *puVar2 = puVar1;
+  UNRECOVERED_JUMPTABLE = *(code **)(puVar4[0x22] + (long)local_34 * 8);
+  puVar4[0x20] = puVar5;
+  local_44 = 0x54e4;
+  puVar4[0x1e] = &DAT_027bebe8;
+  puVar4[0x1c] = &DAT_027bebf8;
+  puVar4[0x1a] = &DAT_027bec08;
+  puVar4[0x18] = &DAT_027bec18;
+  puVar4[0x16] = &DAT_027bec28;
+  puVar4[0x14] = &DAT_027bec38;
+  puVar4[0x12] = &DAT_027bec48;
+  puVar4[0x10] = &DAT_027bec58;
+  puVar4[0xe] = &DAT_027bec68;
+  puVar4[0xc] = &DAT_027bec78;
+  puVar4[10] = &DAT_027bec88;
+  puVar4[8] = &DAT_027bec98;
+  puVar4[6] = &DAT_027beca8;
+  puVar4[4] = &DAT_027becb8;
+  puVar4[2] = &DAT_027becc8;
+  *puVar4 = puVar5;
+  local_1c8 = 0x54fc;
+  local_144 = 0x54fc;
+  local_150 = puVar5;
+  local_154 = 0x54fc;
+  local_160 = puVar5;
+  local_164 = 0x54fc;
+  local_170 = puVar5;
+  local_174 = 0x54fc;
+  local_180 = puVar5;
+  local_184 = 0x54fc;
+  local_190 = puVar5;
+  local_194 = 0x54fc;
+  local_1a0 = puVar5;
+  local_1a4 = 0x54fc;
+  local_1b0 = puVar5;
+  local_1b4 = 0x54fc;
+  local_1c0 = puVar5;
+  local_1c4 = uVar6;
+                    /* WARNING: Could not recover jumptable at 0x00bb2c9c. Too many branches */
+                    /* WARNING: Treating indirect jump as call */
+  (*UNRECOVERED_JUMPTABLE)();
+  return;
+}
+

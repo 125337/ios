@@ -1,0 +1,9 @@
+// _$s8WCRefine23WCRSuperFloatBallWindowC11triggerMode33_93C36077D9AF8FD0E34435AC7780023ALLSivpfi @ 021a1dac
+
+undefined8
+__s8WCRefine23WCRSuperFloatBallWindowC11triggerMode33_93C36077D9AF8FD0E34435AC7780023ALLSivpfi(void)
+
+{
+  return 0;
+}
+

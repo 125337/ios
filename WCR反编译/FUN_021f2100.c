@@ -1,0 +1,9 @@
+// FUN_021f2100 @ 021f2100
+
+void FUN_021f2100(long param_1)
+
+{
+  _swift_release(*(undefined8 *)(param_1 + 0x28));
+  return;
+}
+

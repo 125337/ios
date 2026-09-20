@@ -1,0 +1,96 @@
+// addTelegramDemo @ 01e329b0
+
+/* Function Stack Size: 0x10 bytes */
+
+void WCRefineSuperFloatURLSchemeViewController::addTelegramDemo(ID param_1,SEL param_2)
+
+{
+  undefined *puVar1;
+  undefined *puVar2;
+  ID IVar3;
+  undefined *puVar4;
+  undefined *local_98;
+  undefined *local_78;
+  undefined *local_70;
+  SEL local_68;
+  ID local_60;
+  cfstringStruct *local_58;
+  cfstringStruct *local_50;
+  cfstringStruct *local_48;
+  cfstringStruct *local_40;
+  cfstringStruct *local_38;
+  cfstringStruct *local_30;
+  cfstringStruct *local_28;
+  undefined *local_20;
+  long local_18;
+  
+  local_18 = *(long *)PTR____stack_chk_guard_02578670;
+  local_68 = param_2;
+  local_60 = param_1;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR_WCRefineHelper_026ce000,PTR_s_triggerHapticFeedback_0269dc78);
+  puVar1 = PTR_WCRSuperFloatProfileStore_026cee48;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR_WCRSuperFloatProfileStore_026cee48,PTR_s_urlSchemes_026b1a10);
+  _objc_retainAutoreleasedReturnValue();
+  puVar2 = puVar1;
+  (*(code *)PTR__objc_msgSend_02578628)();
+  local_98 = puVar2;
+  if (puVar2 == (undefined *)0x0) {
+    local_78 = PTR__OBJC_CLASS___NSMutableArray_026ce088;
+    (*(code *)PTR__objc_msgSend_02578628)
+              (PTR__OBJC_CLASS___NSMutableArray_026ce088,PTR_s_array_0269d158);
+    _objc_retainAutoreleasedReturnValue();
+    local_98 = local_78;
+  }
+  (*(code *)PTR__objc_retain_02578638)();
+  local_70 = local_98;
+  if (puVar2 == (undefined *)0x0) {
+    (*(code *)PTR__objc_release_02578630)(local_78);
+  }
+  (*(code *)PTR__objc_release_02578630)(puVar2);
+  (*(code *)PTR__objc_release_02578630)(puVar1);
+  IVar3 = local_60;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (local_60,PTR_s_schemeList_containsURL__026c6308,local_70,
+             &cf_tg___resolve_domain_wcrefine);
+  puVar1 = local_70;
+  if ((IVar3 & 1) == 0) {
+    local_58 = &cf_title;
+    local_38 = &cf__wcrefine;
+    local_50 = &cf_url;
+    local_30 = &cf_tg___resolve_domain_wcrefine;
+    local_48 = &cf_icon;
+    local_28 = &cf_icons_outlined_link;
+    local_40 = &cf_enabled;
+    puVar2 = PTR__OBJC_CLASS___NSNumber_026ce038;
+    (*(code *)PTR__objc_msgSend_02578628)
+              (PTR__OBJC_CLASS___NSNumber_026ce038,PTR_s_numberWithBool__0269ce60,1);
+    _objc_retainAutoreleasedReturnValue();
+    puVar4 = PTR__OBJC_CLASS___NSDictionary_026ce090;
+    local_20 = puVar2;
+    (*(code *)PTR__objc_msgSend_02578628)
+              (PTR__OBJC_CLASS___NSDictionary_026ce090,
+               PTR_s_dictionaryWithObjects_forKeys_co_0269d528,&local_38,&local_58,4);
+    _objc_retainAutoreleasedReturnValue();
+    (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_insertObject_atIndex__0269eac0,puVar4,0);
+    (*(code *)PTR__objc_release_02578630)(puVar4);
+    (*(code *)PTR__objc_release_02578630)(puVar2);
+    (*(code *)PTR__objc_msgSend_02578628)
+              (PTR_WCRSuperFloatProfileStore_026cee48,PTR_s_setURLSchemes__026c5b48,local_70);
+    (*(code *)PTR__objc_msgSend_02578628)(local_60,PTR_s_notifyChanged_026b43a0);
+    (*(code *)PTR__objc_msgSend_02578628)
+              (PTR_WCRefineHelper_026ce000,PTR_s_showModernToast__0269ce78,&cf__mRo_yS_Ty_);
+  }
+  else {
+    (*(code *)PTR__objc_msgSend_02578628)
+              (PTR_WCRefineHelper_026ce000,PTR_s_showModernToast__0269ce78,&cf_o_y__WRh_N);
+  }
+  _objc_storeStrong(&local_70,0);
+  if (*(long *)PTR____stack_chk_guard_02578670 - local_18 == 0) {
+    return;
+  }
+                    /* WARNING: Subroutine does not return */
+  ___stack_chk_fail(*(long *)PTR____stack_chk_guard_02578670 - local_18);
+}
+

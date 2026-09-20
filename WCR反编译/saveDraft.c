@@ -1,0 +1,11 @@
+// saveDraft @ 01c482d8
+
+/* Function Stack Size: 0x10 bytes */
+
+void WCRefineNameplateSpecialUserDetailViewController::saveDraft(ID param_1,SEL param_2)
+
+{
+  (*(code *)PTR__objc_msgSend_02578628)(param_1,PTR_s_persistDraftShowingToast__026c1bc0,1);
+  return;
+}
+

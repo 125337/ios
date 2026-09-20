@@ -1,0 +1,12 @@
+// setSortOrderBarButtonItem: @ 01b328dc
+
+/* Function Stack Size: 0x18 bytes */
+
+void WCRefineKeywordAlertHistoryViewController::setSortOrderBarButtonItem_
+               (ID param_1,SEL param_2,ID param_3)
+
+{
+  _objc_storeStrong(param_1 + (long)_sortOrderBarButtonItem,param_3);
+  return;
+}
+

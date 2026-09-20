@@ -1,0 +1,39 @@
+// wcrGrouping_sortedItems: @ 003610dc
+
+/* Function Stack Size: 0x18 bytes */
+
+ID WCRGroupingSessionListViewController::wcrGrouping_sortedItems_(ID param_1,SEL param_2,ID param_3)
+
+{
+  ID IVar1;
+  ID IVar2;
+  ID IVar3;
+  long local_40;
+  long local_28;
+  SEL local_20;
+  ID local_18;
+  
+  local_28 = 0;
+  local_20 = param_2;
+  local_18 = param_1;
+  _objc_storeStrong(&local_28,param_3);
+  IVar1 = local_18;
+  (*(code *)PTR__objc_msgSend_02578628)(local_18,PTR_s_groupId_0269ea88);
+  _objc_retainAutoreleasedReturnValue();
+  if (local_28 == 0) {
+    local_40 = *(long *)PTR____NSArray0___02578280;
+  }
+  else {
+    local_40 = local_28;
+  }
+  IVar2 = local_18;
+  (*(code *)PTR__objc_msgSend_02578628)(local_18,PTR_s_sortMode_026a26b0);
+  IVar3 = IVar1;
+  FUN_003599ec(IVar1,local_40,IVar2);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_release_02578630)(IVar1);
+  _objc_storeStrong(&local_28,0);
+  _objc_autoreleaseReturnValue();
+  return IVar3;
+}
+

@@ -1,0 +1,39 @@
+// isDate:sameDayAs: @ 01f1237c
+
+/* Function Stack Size: 0x20 bytes */
+
+bool WCRefineToDoStore::isDate_sameDayAs_(ID param_1,SEL param_2,ID param_3,ID param_4)
+
+{
+  undefined *puVar1;
+  undefined *puVar2;
+  long local_38;
+  long local_30;
+  SEL local_28;
+  ID local_20;
+  byte local_11;
+  
+  local_30 = 0;
+  local_28 = param_2;
+  local_20 = param_1;
+  _objc_storeStrong(&local_30,param_3);
+  local_38 = 0;
+  _objc_storeStrong(&local_38,param_4);
+  if ((local_30 == 0) || (local_38 == 0)) {
+    local_11 = 0;
+  }
+  else {
+    puVar1 = PTR__OBJC_CLASS___NSCalendar_026ce070;
+    (*(code *)PTR__objc_msgSend_02578628)
+              (PTR__OBJC_CLASS___NSCalendar_026ce070,PTR_s_currentCalendar_0269cfa0);
+    _objc_retainAutoreleasedReturnValue();
+    puVar2 = puVar1;
+    (*(code *)PTR__objc_msgSend_02578628)();
+    local_11 = (byte)puVar2 & 1;
+    (*(code *)PTR__objc_release_02578630)(puVar1);
+  }
+  _objc_storeStrong(&local_38);
+  _objc_storeStrong(&local_30,0);
+  return local_11 & 1;
+}
+

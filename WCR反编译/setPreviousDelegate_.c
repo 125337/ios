@@ -1,0 +1,11 @@
+// setPreviousDelegate: @ 009d81cc
+
+/* Function Stack Size: 0x18 bytes */
+
+void WCRAnonAtSheetKeyboardBinder::setPreviousDelegate_(ID param_1,SEL param_2,ID param_3)
+
+{
+  _objc_storeWeak(param_1 + 0x18,param_3);
+  return;
+}
+

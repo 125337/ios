@@ -1,0 +1,12 @@
+// FUN_008606f0 @ 008606f0
+
+void FUN_008606f0(void)
+
+{
+  _objc_retainAutoreleaseReturnValue
+            (&
+             cf__function___if_window_WCRProfile_return_functionpost_a__try_window_webkit_messageHandlers_wcrProfile_postMessage__action_String_a________catch_e____window_WCRProfile__tap_post_avatar_function___post__avatar____qrcode_function___post__qrcode____arrow_function___post__arrow____profile_function___post__profile_____document_addEventListener__click__function_ev__varel_ev_target_while_el__el___document__vara_el_getAttribute___el_getAttribute__data_wcr_action____el_getAttribute__data_wcr____if_a__ev_preventDefault___ev_stopPropagation___post_a__return_el_el_parentElement___true______
+            );
+  return;
+}
+

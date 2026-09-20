@@ -1,0 +1,193 @@
+// sanitizedSessionStatsBoardPages:mode:allowEmpty: @ 0212f900
+
+/* WARNING: Restarted to delay deadcode elimination for space: stack */
+/* Function Stack Size: 0x24 bytes */
+
+ID WCRefineConfig::sanitizedSessionStatsBoardPages_mode_allowEmpty_
+             (ID param_1,SEL param_2,ID param_3,long_long param_4,bool param_5)
+
+{
+  bool bVar1;
+  undefined *puVar2;
+  undefined *puVar3;
+  ulong uVar4;
+  long lVar5;
+  ulong uVar6;
+  undefined *local_2f8;
+  ulong local_2d0;
+  ulong local_2c8;
+  ulong local_2a0;
+  undefined *local_258;
+  undefined *local_250;
+  undefined *local_210;
+  undefined1 auStack_200 [8];
+  long local_1f8;
+  long *local_1f0;
+  ulong local_1c0;
+  ulong local_1b8;
+  undefined *local_1b0;
+  undefined1 auStack_1a8 [8];
+  long local_1a0;
+  long *local_198;
+  ulong local_168;
+  undefined *local_160;
+  byte local_151;
+  long_long local_150;
+  ulong local_148;
+  SEL local_140;
+  undefined *local_138;
+  undefined *local_130;
+  undefined1 auStack_128 [128];
+  undefined1 auStack_a8 [128];
+  long local_28;
+  
+  local_28 = *(long *)PTR____stack_chk_guard_02578670;
+  local_148 = 0;
+  local_140 = param_2;
+  local_138 = (undefined *)param_1;
+  _objc_storeStrong(&local_148,param_3);
+  local_151 = (byte)param_5;
+  puVar2 = PTR__OBJC_CLASS___NSMutableArray_026ce088;
+  local_150 = param_4;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___NSMutableArray_026ce088,PTR_s_array_0269d158);
+  _objc_retainAutoreleasedReturnValue();
+  local_160 = puVar2;
+  _memset(auStack_1a8,0,0x40);
+  puVar2 = local_138;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (local_138,PTR_s_sessionStatsBoardCatalogForMode__026c51b8,local_150);
+  _objc_retainAutoreleasedReturnValue();
+  local_250 = puVar2;
+  (*(code *)PTR__objc_msgSend_02578628)();
+  if (local_250 != (undefined *)0x0) {
+    lVar5 = *local_198;
+    local_258 = (undefined *)0x0;
+    do {
+      do {
+        if (*local_198 - lVar5 != 0) {
+          _objc_enumerationMutation(*local_198 - lVar5,puVar2);
+        }
+        uVar6 = *(ulong *)(local_1a0 + (long)local_258 * 8);
+        local_168 = uVar6;
+        (*(code *)PTR__objc_msgSend_02578628)(uVar6,PTR_s_objectForKeyedSubscript__0269d098,&cf_id);
+        _objc_retainAutoreleasedReturnValue();
+        puVar3 = PTR__OBJC_CLASS___NSString_026cdfe8;
+        (*(code *)PTR__objc_msgSend_02578628)
+                  (PTR__OBJC_CLASS___NSString_026cdfe8,PTR_s_class_0269cd60);
+        uVar4 = uVar6;
+        (*(code *)PTR__objc_msgSend_02578628)(uVar6,PTR_s_isKindOfClass__0269cd68,puVar3);
+        (*(code *)PTR__objc_release_02578630)(uVar6);
+        puVar3 = local_160;
+        if ((uVar4 & 1) != 0) {
+          uVar4 = local_168;
+          (*(code *)PTR__objc_msgSend_02578628)
+                    (local_168,PTR_s_objectForKeyedSubscript__0269d098,&cf_id);
+          _objc_retainAutoreleasedReturnValue();
+          (*(code *)PTR__objc_msgSend_02578628)(puVar3,PTR_s_addObject__0269d180);
+          (*(code *)PTR__objc_release_02578630)(uVar4);
+        }
+        local_258 = local_258 + 1;
+      } while (local_258 < local_250);
+      local_250 = puVar2;
+      (*(code *)PTR__objc_msgSend_02578628)
+                (puVar2,PTR_s_countByEnumeratingWithState_obje_0269cd58,auStack_1a8,auStack_a8,0x10)
+      ;
+      local_258 = (undefined *)0x0;
+    } while (local_250 != (undefined *)0x0);
+  }
+  (*(code *)PTR__objc_release_02578630)(puVar2);
+  puVar2 = PTR__OBJC_CLASS___NSMutableArray_026ce088;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___NSMutableArray_026ce088,PTR_s_array_0269d158);
+  _objc_retainAutoreleasedReturnValue();
+  uVar4 = local_148;
+  puVar3 = PTR__OBJC_CLASS___NSArray_026cdfe0;
+  local_1b0 = puVar2;
+  (*(code *)PTR__objc_msgSend_02578628)(PTR__OBJC_CLASS___NSArray_026cdfe0,PTR_s_class_0269cd60);
+  (*(code *)PTR__objc_msgSend_02578628)(uVar4,PTR_s_isKindOfClass__0269cd68,puVar3);
+  if ((uVar4 & 1) == 0) {
+    local_2a0 = *(ulong *)PTR____NSArray0___02578280;
+  }
+  else {
+    local_2a0 = local_148;
+  }
+  (*(code *)PTR__objc_retain_02578638)();
+  local_1b8 = local_2a0;
+  _memset(auStack_200,0,0x40);
+  uVar4 = local_1b8;
+  (*(code *)PTR__objc_retain_02578638)();
+  local_2c8 = uVar4;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (uVar4,PTR_s_countByEnumeratingWithState_obje_0269cd58,auStack_200,auStack_128,0x10);
+  if (local_2c8 != 0) {
+    lVar5 = *local_1f0;
+    local_2d0 = 0;
+    do {
+      do {
+        if (*local_1f0 - lVar5 != 0) {
+          _objc_enumerationMutation(*local_1f0 - lVar5,uVar4);
+        }
+        uVar6 = *(ulong *)(local_1f8 + local_2d0 * 8);
+        puVar2 = PTR__OBJC_CLASS___NSString_026cdfe8;
+        local_1c0 = uVar6;
+        (*(code *)PTR__objc_msgSend_02578628)
+                  (PTR__OBJC_CLASS___NSString_026cdfe8,PTR_s_class_0269cd60);
+        (*(code *)PTR__objc_msgSend_02578628)(uVar6,PTR_s_isKindOfClass__0269cd68,puVar2);
+        if ((((uVar6 & 1) != 0) &&
+            (puVar2 = local_160,
+            (*(code *)PTR__objc_msgSend_02578628)
+                      (local_160,PTR_s_containsObject__0269cbb8,local_1c0), ((ulong)puVar2 & 1) != 0
+            )) && (puVar2 = local_1b0,
+                  (*(code *)PTR__objc_msgSend_02578628)
+                            (local_1b0,PTR_s_containsObject__0269cbb8,local_1c0),
+                  ((ulong)puVar2 & 1) == 0)) {
+          (*(code *)PTR__objc_msgSend_02578628)(local_1b0,PTR_s_addObject__0269d180,local_1c0);
+        }
+        local_2d0 = local_2d0 + 1;
+      } while (local_2d0 < local_2c8);
+      local_2c8 = uVar4;
+      (*(code *)PTR__objc_msgSend_02578628)
+                (uVar4,PTR_s_countByEnumeratingWithState_obje_0269cd58,auStack_200,auStack_128,0x10)
+      ;
+      local_2d0 = 0;
+    } while (local_2c8 != 0);
+  }
+  (*(code *)PTR__objc_release_02578630)(uVar4);
+  puVar2 = local_1b0;
+  (*(code *)PTR__objc_msgSend_02578628)(local_1b0,PTR_s_count_0269cfe0);
+  if (puVar2 == (undefined *)0x0) {
+    bVar1 = (local_151 & 1) == 0;
+    if (bVar1) {
+      local_2f8 = local_138;
+      (*(code *)PTR__objc_msgSend_02578628)
+                (local_138,PTR_s_sessionStatsDefaultBoardPagesFor_026ca3e0,local_150);
+      _objc_retainAutoreleasedReturnValue();
+      local_210 = local_2f8;
+    }
+    else {
+      local_2f8 = *(undefined **)PTR____NSArray0___02578280;
+    }
+    (*(code *)PTR__objc_retain_02578638)();
+    local_130 = local_2f8;
+    if (bVar1) {
+      (*(code *)PTR__objc_release_02578630)(local_210);
+    }
+  }
+  else {
+    puVar2 = local_1b0;
+    (*(code *)PTR__objc_msgSend_02578628)(local_1b0,PTR_s_copy_0269d150);
+    local_130 = puVar2;
+  }
+  _objc_storeStrong(&local_1b8);
+  _objc_storeStrong(&local_1b0,0);
+  _objc_storeStrong(&local_160,0);
+  _objc_storeStrong(&local_148,0);
+  if (*(long *)PTR____stack_chk_guard_02578670 == local_28) {
+    _objc_autoreleaseReturnValue(0);
+    return (ID)local_130;
+  }
+                    /* WARNING: Subroutine does not return */
+  ___stack_chk_fail();
+}
+

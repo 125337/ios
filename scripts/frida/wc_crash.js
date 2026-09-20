@@ -37,6 +37,17 @@ console.log("[+] Native 异常处理器已安装");
 // 2. hook UploadVoiceCDNMgr ResendVoiceMsg（已知触发点，纯指针日志）
 const Mgr = ObjC.classes.UploadVoiceCDNMgr;
 if (Mgr) {
+    const anp = Mgr['- AddNewPart:LocalID:n64SvrID:Offset:Len:VoiceTime:CreateTime:EndFlag:CancelFlag:VoiceFormat:ForwardFlag:msgSource:'];
+    if (anp) {
+        Interceptor.attach(anp.implementation, {
+            onEnter: function (args) {
+                console.log("[PRE-CRASH] AddNewPart part=" + args[2] +
+                    " lid=" + args[3] + " svr=" + args[4] + " off=" + args[5] +
+                    " len=" + args[6] + " vt=" + args[7] + " ct=" + args[8]);
+            }
+        });
+        console.log("[+] AddNewPart 监控已挂");
+    }
     const rm = Mgr['- ResendVoiceMsg:MsgWrap:'];
     if (rm) {
         Interceptor.attach(rm.implementation, {

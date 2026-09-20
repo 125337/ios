@@ -1,0 +1,11 @@
+// setGrow: @ 00fe81c4
+
+/* Function Stack Size: 0x18 bytes */
+
+void WCRInputBoxTextUndoEntry::setGrow_(ID param_1,SEL param_2,ID param_3)
+
+{
+  _objc_storeWeak(param_1 + 8,param_3);
+  return;
+}
+

@@ -1,0 +1,54 @@
+// FUN_01640044 @ 01640044
+
+byte FUN_01640044(undefined8 param_1)
+
+{
+  ulong uVar1;
+  byte local_28;
+  ulong local_20;
+  byte local_11;
+  
+  local_20 = 0;
+  _objc_storeStrong(&local_20,param_1);
+  uVar1 = local_20;
+  (*(code *)PTR__objc_msgSend_02578628)(local_20,PTR_s_length_0269cca0);
+  if (uVar1 == 0) {
+    local_11 = 0;
+  }
+  else {
+    uVar1 = local_20;
+    (*(code *)PTR__objc_msgSend_02578628)(local_20,PTR_s_isEqualToString__0269ccc8,&cf_hl);
+    local_28 = 1;
+    if ((uVar1 & 1) == 0) {
+      uVar1 = local_20;
+      (*(code *)PTR__objc_msgSend_02578628)(local_20,PTR_s_isEqualToString__0269ccc8,&cf_WYX);
+      local_28 = 1;
+      if ((uVar1 & 1) == 0) {
+        uVar1 = local_20;
+        (*(code *)PTR__objc_msgSend_02578628)(local_20,PTR_s_isEqualToString__0269ccc8,&cf_OCR);
+        local_28 = 1;
+        if ((uVar1 & 1) == 0) {
+          uVar1 = local_20;
+          (*(code *)PTR__objc_msgSend_02578628)(local_20,PTR_s_isEqualToString__0269ccc8,&cf__);
+          local_28 = 1;
+          if ((uVar1 & 1) == 0) {
+            uVar1 = local_20;
+            (*(code *)PTR__objc_msgSend_02578628)(local_20,PTR_s_isEqualToString__0269ccc8,&cf_4lpS)
+            ;
+            local_28 = 1;
+            if ((uVar1 & 1) == 0) {
+              uVar1 = local_20;
+              (*(code *)PTR__objc_msgSend_02578628)(local_20,PTR_s_isEqualToString__0269ccc8,&cf_4V)
+              ;
+              local_28 = (byte)uVar1;
+            }
+          }
+        }
+      }
+    }
+    local_11 = local_28 & 1;
+  }
+  _objc_storeStrong(&local_20,0);
+  return local_11 & 1;
+}
+

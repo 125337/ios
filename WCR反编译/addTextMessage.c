@@ -1,0 +1,37 @@
+// addTextMessage @ 01d18d08
+
+/* Function Stack Size: 0x10 bytes */
+
+void WCRefineQuickReplyListViewController::addTextMessage(ID param_1,SEL param_2)
+
+{
+  undefined *puVar1;
+  undefined *local_50;
+  undefined4 local_48;
+  undefined4 local_44;
+  code *local_40;
+  undefined *local_38;
+  undefined1 auStack_30 [8];
+  undefined1 auStack_28 [8];
+  SEL local_20;
+  ID local_18;
+  
+  local_20 = param_2;
+  local_18 = param_1;
+  _objc_initWeak(auStack_28,param_1);
+  puVar1 = PTR_WCRefineHelper_026ce000;
+  local_50 = PTR___NSConcreteStackBlock_02578660;
+  local_48 = 0xc2000000;
+  local_44 = 0;
+  local_40 = FUN_01d18e18;
+  local_38 = &DAT_02589100;
+  _objc_copyWeak(auStack_30,auStack_28);
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0,puVar1,PTR_s_presentPageSheetMultilineInputWi_026ab118,&cf_e_gmo_,0,&cf_eQ_wcVYe_gQ_,
+             &::cf___,&local_50);
+  _objc_unsafeClaimAutoreleasedReturnValue(puVar1);
+  _objc_destroyWeak(auStack_30);
+  _objc_destroyWeak(auStack_28);
+  return;
+}
+

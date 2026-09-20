@@ -1,0 +1,98 @@
+// FUN_001dfb54 @ 001dfb54
+
+long FUN_001dfb54(double param_1,double param_2,double param_3,double param_4,undefined8 param_5,
+                 undefined8 param_6)
+
+{
+  ulong uVar1;
+  long lVar2;
+  double dVar3;
+  double dVar4;
+  double dVar5;
+  ulong local_1d8;
+  ulong local_1d0;
+  undefined1 auStack_138 [8];
+  long local_130;
+  long *local_128;
+  long local_f8;
+  double local_f0;
+  double local_e8;
+  double local_e0;
+  double local_d8;
+  ulong local_c0;
+  undefined8 local_b8;
+  ulong local_b0;
+  undefined1 auStack_a8 [128];
+  long local_28;
+  
+  local_28 = *(long *)PTR____stack_chk_guard_02578670;
+  local_b0 = 0;
+  _objc_storeStrong(&local_b0,param_5);
+  local_b8 = 0;
+  _objc_storeStrong(&local_b8,param_6);
+  uVar1 = local_b0;
+  (*(code *)PTR__objc_msgSend_02578628)(local_b0,PTR_s_count_0269cfe0);
+  local_c0 = uVar1;
+  (*(code *)PTR__objc_msgSend_02578628)(local_b8,PTR_s_bounds_026ca548);
+  local_c0 = (local_c0 * 0x1f + (long)param_3) * 0x1f + (long)param_4;
+  lVar2 = local_c0 * 0x1f;
+  local_f0 = param_1;
+  local_e8 = param_2;
+  local_e0 = param_3;
+  local_d8 = param_4;
+  FUN_001dac54();
+  param_4 = param_4 * 10.0;
+  local_c0 = lVar2 + (long)param_4;
+  lVar2 = local_c0 * 0x1f;
+  FUN_001e2514();
+  dVar4 = 10.0;
+  param_4 = param_4 * 10.0;
+  local_c0 = lVar2 + (long)param_4;
+  _memset(auStack_138,0,0x40);
+  uVar1 = local_b0;
+  (*(code *)PTR__objc_retain_02578638)();
+  local_1d0 = uVar1;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (uVar1,PTR_s_countByEnumeratingWithState_obje_0269cd58,auStack_138,auStack_a8,0x10);
+  if (local_1d0 != 0) {
+    lVar2 = *local_128;
+    local_1d8 = 0;
+    do {
+      do {
+        dVar3 = param_4;
+        dVar5 = dVar4;
+        if (*local_128 - lVar2 != 0) {
+          _objc_enumerationMutation(*local_128 - lVar2,uVar1);
+          dVar3 = param_4;
+          dVar5 = dVar4;
+        }
+        param_4 = param_1;
+        dVar4 = param_2;
+        local_f8 = *(long *)(local_130 + local_1d8 * 8);
+        local_c0 = local_f8 + local_c0 * 0x1f;
+        FUN_001e25f4(local_f8,local_b8);
+        local_c0 = (((local_c0 * 0x1f + (long)dVar3) * 0x1f + (long)dVar5) * 0x1f + (long)dVar4) *
+                   0x1f + (long)param_4;
+        local_1d8 = local_1d8 + 1;
+        param_2 = dVar5;
+        param_1 = dVar3;
+      } while (local_1d8 < local_1d0);
+      local_1d0 = uVar1;
+      (*(code *)PTR__objc_msgSend_02578628)
+                (uVar1,PTR_s_countByEnumeratingWithState_obje_0269cd58,auStack_138,auStack_a8,0x10);
+      local_1d8 = 0;
+      param_2 = dVar5;
+      param_1 = dVar3;
+    } while (local_1d0 != 0);
+  }
+  (*(code *)PTR__objc_release_02578630)(uVar1);
+  uVar1 = local_c0;
+  _objc_storeStrong(&local_b8);
+  _objc_storeStrong(&local_b0,0);
+  if (*(long *)PTR____stack_chk_guard_02578670 - local_28 == 0) {
+    return uVar1;
+  }
+                    /* WARNING: Subroutine does not return */
+  ___stack_chk_fail(*(long *)PTR____stack_chk_guard_02578670 - local_28);
+}
+

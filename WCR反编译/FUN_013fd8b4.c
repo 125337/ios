@@ -1,0 +1,111 @@
+// FUN_013fd8b4 @ 013fd8b4
+
+void FUN_013fd8b4(undefined8 param_1,undefined8 param_2)
+
+{
+  uint uVar1;
+  undefined4 *local_260 [2];
+  undefined4 local_250 [4];
+  undefined1 auStack_240 [16];
+  undefined1 auStack_230 [16];
+  undefined1 auStack_220 [16];
+  undefined1 auStack_210 [16];
+  undefined1 auStack_200 [16];
+  uint local_1f0 [8];
+  undefined **local_1d0;
+  undefined8 local_1c8;
+  undefined8 local_1c0;
+  undefined *local_1b8;
+  undefined8 local_1b0;
+  uint *local_1a8;
+  undefined1 *local_1a0;
+  undefined1 *local_198;
+  undefined1 *local_190;
+  undefined1 *local_188;
+  undefined1 *local_180;
+  undefined4 *local_178;
+  undefined4 **local_170;
+  undefined4 local_164;
+  undefined *local_160;
+  undefined4 local_154;
+  undefined *local_150;
+  undefined4 local_144;
+  undefined *local_140;
+  undefined4 local_134;
+  undefined *local_130;
+  undefined4 local_124;
+  undefined *local_120;
+  undefined4 local_114;
+  undefined *local_110;
+  undefined4 local_104;
+  undefined *local_100;
+  undefined *local_f0;
+  undefined *local_e0 [2];
+  undefined *local_d0;
+  undefined *local_c0;
+  undefined *local_b0;
+  undefined *local_a0;
+  undefined *local_90;
+  undefined *local_80;
+  undefined *local_70;
+  undefined *local_60;
+  undefined *local_50;
+  undefined4 local_44;
+  undefined *local_40;
+  undefined4 local_34;
+  undefined *local_30;
+  undefined8 local_28;
+  
+  local_1d0 = local_e0;
+  local_28 = *(undefined8 *)PTR____stack_chk_guard_02578670;
+  local_1b8 = &DAT_0281ff00;
+  local_30 = &DAT_0281ff00;
+  local_34 = 0x7a9b;
+  local_1b0 = 1;
+  local_1a8 = local_1f0;
+  local_1a0 = auStack_200;
+  local_198 = auStack_210;
+  local_190 = auStack_220;
+  local_188 = auStack_230;
+  local_180 = auStack_240;
+  uVar1 = (DAT_0281cd08 ^ 0xd8c2a424) + (DAT_0281cd0c ^ 0xc3e5abf6);
+  local_1f0[0] = (uVar1 & 0x23e0eea7) + 0x12ccdec5 + ~(uVar1 & 0x2c0ce84) & 0xb7195aef;
+  local_260[0] = local_250;
+  local_170 = local_260;
+  local_250[0] = 0x8d83c260;
+  local_40 = &DAT_0281ff00;
+  local_44 = 0x7a9c;
+  local_50 = &DAT_028b47d8;
+  local_60 = &DAT_028b47e8;
+  local_70 = &DAT_028b47f8;
+  local_80 = &DAT_028b4808;
+  local_90 = &DAT_028b4818;
+  local_a0 = &DAT_028b4828;
+  local_b0 = &DAT_028b4838;
+  local_c0 = &DAT_028b4848;
+  local_d0 = &DAT_028b4858;
+  local_e0[0] = &DAT_028b4868;
+  local_f0 = &DAT_028b4878;
+  local_100 = &DAT_0281ff00;
+  local_104 = 0x7aae;
+  local_110 = &DAT_0281ff00;
+  local_114 = 0x7aae;
+  local_120 = &DAT_0281ff00;
+  local_124 = 0x7aae;
+  local_130 = &DAT_0281ff00;
+  local_134 = 0x7aae;
+  local_140 = &DAT_0281ff00;
+  local_144 = 0x7aae;
+  local_150 = &DAT_0281ff00;
+  local_154 = 0x7aae;
+  local_160 = &DAT_0281ff00;
+  local_164 = 0x7a9b;
+  local_1c8 = param_1;
+  local_1c0 = param_2;
+  local_178 = local_260[0];
+                    /* WARNING: Could not recover jumptable at 0x013fdb58. Too many branches */
+                    /* WARNING: Treating indirect jump as call */
+  (*DAT_0285d3d8)();
+  return;
+}
+

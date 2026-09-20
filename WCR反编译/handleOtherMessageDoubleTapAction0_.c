@@ -1,0 +1,22 @@
+// handleOtherMessageDoubleTapAction0: @ 01a45a88
+
+/* Function Stack Size: 0x18 bytes */
+
+void WCRefineGeneralFunctionViewController::handleOtherMessageDoubleTapAction0_
+               (ID param_1,SEL param_2,ID param_3)
+
+{
+  undefined8 local_28;
+  SEL local_20;
+  ID local_18;
+  
+  local_28 = 0;
+  local_20 = param_2;
+  local_18 = param_1;
+  _objc_storeStrong(&local_28,param_3);
+  (*(code *)PTR__objc_msgSend_02578628)
+            (local_18,PTR_s_handleMessageDoubleTapActionWith_026bc998,0,1);
+  _objc_storeStrong(&local_28,0);
+  return;
+}
+

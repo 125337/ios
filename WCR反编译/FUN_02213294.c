@@ -1,0 +1,426 @@
+// FUN_02213294 @ 02213294
+
+/* WARNING: Type propagation algorithm not settling */
+
+void FUN_02213294(undefined8 *param_1,double param_2,undefined8 param_3,undefined8 param_4,
+                 undefined8 param_5,undefined8 param_6,undefined8 param_7,undefined8 param_8)
+
+{
+  char *pcVar1;
+  char *pcVar2;
+  char *pcVar3;
+  double dVar4;
+  double dVar5;
+  double dVar6;
+  undefined8 uVar7;
+  undefined8 uVar8;
+  undefined8 uVar9;
+  code *pcVar10;
+  long lVar11;
+  long lVar12;
+  undefined *puVar13;
+  double dVar14;
+  double dVar15;
+  undefined8 uVar16;
+  undefined8 uVar17;
+  undefined8 uVar18;
+  undefined8 uVar19;
+  undefined8 uVar20;
+  undefined8 uVar21;
+  undefined8 auStack_4a0 [2];
+  double adStack_490 [2];
+  undefined1 auStack_480 [12];
+  uint local_474;
+  undefined8 local_470;
+  undefined8 local_468;
+  undefined8 local_460;
+  undefined8 local_458;
+  undefined8 *local_450;
+  undefined8 local_448;
+  undefined8 local_440;
+  undefined8 local_438;
+  undefined8 local_430;
+  uint local_424;
+  undefined8 local_420;
+  undefined8 local_418;
+  undefined8 local_410;
+  undefined8 local_408;
+  undefined1 local_3fc;
+  long *local_3f8;
+  undefined *local_3f0;
+  undefined *local_3e8;
+  double local_3e0;
+  long local_3d8;
+  long local_3c0;
+  long local_3b8;
+  undefined *local_3b0;
+  double *local_3a8;
+  undefined8 *local_3a0;
+  undefined *local_398;
+  double local_390;
+  undefined1 *local_388;
+  long local_380;
+  double local_378;
+  undefined8 *local_370;
+  char *local_368;
+  char *local_360;
+  char *local_358;
+  long local_350;
+  long local_348;
+  long local_340;
+  ulong local_338;
+  undefined1 *local_330;
+  undefined8 local_328;
+  undefined8 local_320;
+  undefined8 local_318;
+  ulong local_310;
+  long local_308;
+  double *local_300;
+  double *local_2f8;
+  undefined8 *local_2f0;
+  double *local_2e8;
+  double local_2e0;
+  undefined8 local_2d8;
+  undefined8 local_2d0;
+  undefined8 local_2c8;
+  double *local_2c0;
+  undefined *local_2b8;
+  long local_2b0;
+  double local_2a8;
+  double local_2a0;
+  double local_298;
+  double local_290;
+  double local_288;
+  double local_280;
+  double local_278;
+  double local_270;
+  undefined8 local_268;
+  double local_260;
+  undefined8 local_258;
+  undefined8 local_250;
+  undefined8 local_248;
+  undefined8 local_240;
+  undefined8 local_238;
+  undefined8 local_230;
+  undefined8 local_228;
+  double local_220;
+  long local_218;
+  long local_210;
+  long local_208;
+  long local_200;
+  char local_1f8;
+  undefined8 local_1f0;
+  long local_1e8;
+  undefined8 local_1e0;
+  undefined8 local_1d8;
+  undefined8 local_1d0;
+  undefined1 local_1c8;
+  undefined8 local_1c0;
+  undefined8 local_1b8;
+  undefined8 local_1b0;
+  undefined8 local_1a8;
+  byte local_1a0;
+  double local_198;
+  double local_190;
+  double local_188;
+  double local_180;
+  double local_178;
+  undefined8 local_170;
+  double local_168;
+  long local_160;
+  long local_158 [3];
+  double local_140;
+  double local_138;
+  double local_130;
+  double local_128;
+  double local_120;
+  double local_118;
+  double local_110;
+  double local_108 [3];
+  double local_f0;
+  double local_e8;
+  double local_e0;
+  double local_d8;
+  double local_d0;
+  undefined8 local_c8;
+  double local_c0;
+  undefined8 local_b8;
+  undefined8 local_b0;
+  undefined8 local_a8;
+  double local_a0;
+  undefined8 uStack_98;
+  undefined8 local_90;
+  undefined8 uStack_88;
+  undefined1 auStack_80 [40];
+  undefined8 local_58;
+  undefined8 local_50;
+  undefined8 local_48;
+  undefined8 local_40;
+  byte local_38;
+  
+  local_368 = "Fatal error";
+  local_360 = "Range requires lowerBound <= upperBound";
+  local_358 = "Swift/arm64e-apple-ios.swiftinterface";
+  uStack_98 = 0;
+  local_a0 = 0.0;
+  uStack_88 = 0;
+  local_90 = 0;
+  local_b8 = 0;
+  local_b0 = 0;
+  local_a8 = 0;
+  local_f0 = 0.0;
+  local_110 = 0.0;
+  local_130 = 0.0;
+  local_138 = 0.0;
+  local_140 = 0.0;
+  local_160 = 0;
+  local_198 = 0.0;
+  local_370 = param_1;
+  local_328 = param_6;
+  local_320 = param_7;
+  local_318 = param_8;
+  local_2e0 = param_2;
+  local_2d8 = param_3;
+  local_2d0 = param_4;
+  local_2c8 = param_5;
+  _memset(&local_1c0,0,0x21);
+  local_1e0 = 0;
+  local_1d8 = 0;
+  local_1d0 = 0;
+  local_1c8 = 0;
+  local_208 = 0;
+  local_220 = 0.0;
+  local_270 = 0.0;
+  local_268 = 0;
+  lVar11 = 0;
+  local_350 = 0;
+  __s7SwiftUI18RoundedCornerStyleOMa();
+  local_340 = *(long *)(lVar11 + -8);
+  local_338 = *(long *)(local_340 + 0x40) + 0xfU & 0xfffffffffffffff0;
+  lVar12 = local_350;
+  local_348 = lVar11;
+  (*(code *)PTR____chkstk_darwin_02578668)();
+  lVar11 = -local_338;
+  local_330 = auStack_480 + lVar11;
+  __s7SwiftUI16RoundedRectangleVMa();
+  local_310 = *(long *)(*(long *)(lVar12 + -8) + 0x40) + 0xfU & 0xfffffffffffffff0;
+  dVar15 = local_2e0;
+  uVar16 = local_2d8;
+  uVar18 = local_2d0;
+  uVar17 = local_2c8;
+  uVar19 = local_328;
+  uVar20 = local_320;
+  uVar21 = local_318;
+  (*(code *)PTR____chkstk_darwin_02578668)();
+  lVar11 = (long)(auStack_480 + lVar11) - local_310;
+  local_2f0 = &local_c8;
+  lVar12 = lVar11;
+  local_308 = lVar11;
+  local_c8 = uVar21;
+  local_b8 = uVar19;
+  local_b0 = uVar20;
+  local_a8 = uVar21;
+  local_a0 = dVar15;
+  uStack_98 = uVar16;
+  local_90 = uVar18;
+  uStack_88 = uVar17;
+  FUN_021b0958();
+  local_2f8 = &local_d8;
+  dVar14 = local_2e0;
+  local_d8 = dVar15;
+  FUN_021b0994(local_2e0,local_2d8,local_2d0,local_2c8);
+  local_300 = &local_e0;
+  local_e0 = dVar14;
+  FUN_021c8058();
+  local_2b8 = PTR___s12CoreGraphics7CGFloatVN_02578ba0;
+  local_2b0 = lVar12;
+  __ss3minyxx_xtSLRzlF(&local_d0,local_2f8,local_300);
+  local_e8 = local_d0 * 0.5;
+  __ss3minyxx_xtSLRzlF(&local_c0,local_2f0,&local_e8,local_2b8,local_2b0);
+  local_2a8 = local_c0;
+  local_f0 = local_c0;
+  local_2e8 = local_108 + 1;
+  local_290 = 0.0;
+  local_108[1] = 0.0;
+  dVar15 = local_2e0;
+  FUN_021b0958(local_2e0,local_2d8,local_2d0,local_2c8);
+  local_298 = 2.0;
+  local_108[0] = dVar15 - local_2a8 * 2.0;
+  __ss3maxyxx_xtSLRzlF(local_108 + 2,local_2e8,local_108,local_2b8,local_2b0);
+  local_2a0 = local_108[2];
+  local_110 = local_108[2];
+  local_2c0 = &local_120;
+  local_120 = local_290;
+  dVar15 = local_2e0;
+  FUN_021b0994(local_2e0,local_2d8,local_2d0,local_2c8);
+  local_128 = dVar15 - local_2a8 * local_298;
+  __ss3maxyxx_xtSLRzlF(&local_118,local_2c0,&local_128,local_2b8,local_2b0);
+  lVar12 = local_308;
+  local_288 = local_118;
+  local_130 = local_118;
+  local_280 = local_2a8 * DAT_02323e20;
+  local_278 = local_2a0 * local_298 + local_118 * local_298 + local_280 * 4.0;
+  local_140 = local_278;
+  local_138 = local_280;
+  if (local_278 <= local_290) {
+    (**(code **)(local_340 + 0x68))
+              (local_330,
+               *(undefined4 *)PTR___s7SwiftUI18RoundedCornerStyleO10continuousyA2CmFWC_02578848,
+               local_348);
+    __s7SwiftUI16RoundedRectangleV12cornerRadius5styleAC12CoreGraphics7CGFloatV_AA0C11CornerStyleOtcfC
+              (lVar12,local_2a8,local_330);
+    __s7SwiftUI16RoundedRectangleV4path2inAA4PathVSo6CGRectV_tF
+              (&local_58,local_2e0,local_2d8,local_2d0,local_2c8);
+    local_470 = local_58;
+    local_468 = local_50;
+    local_460 = local_48;
+    local_458 = local_40;
+    local_474 = (uint)local_38;
+    FUN_022198dc(local_308);
+    local_420 = local_470;
+    local_418 = local_468;
+    local_410 = local_460;
+    local_408 = local_458;
+    local_3fc = (undefined1)local_474;
+  }
+  else {
+    local_158[1] = 0xb4;
+    local_378 = local_278 / 5.5;
+    if (0x7fe < ((ulong)local_378 >> 0x34 & 0x7ff)) {
+                    /* WARNING: Does not return */
+      pcVar10 = (code *)SoftwareBreakpoint(1,0x2213aa8);
+      (*pcVar10)();
+    }
+    if (local_378 <= -9.223372036854778e+18) {
+                    /* WARNING: Does not return */
+      pcVar10 = (code *)SoftwareBreakpoint(1,0x2213aac);
+      (*pcVar10)();
+    }
+    if (9.223372036854776e+18 <= local_378) {
+                    /* WARNING: Does not return */
+      pcVar10 = (code *)SoftwareBreakpoint(1,0x2213ab0);
+      (*pcVar10)();
+    }
+    local_158[0] = (long)local_378;
+    __ss3maxyxx_xtSLRzlF
+              (local_158 + 2,local_158 + 1,local_158,PTR___sSiN_025789d8,PTR___sSiSLsWP_025789e8);
+    local_380 = local_158[2];
+    local_160 = local_158[2];
+    local_3a0 = &local_170;
+    local_170 = local_320;
+    dVar15 = local_2e0;
+    FUN_021b0958(local_2e0,local_2d8,local_2d0,local_2c8);
+    local_3a8 = &local_180;
+    dVar14 = local_2e0;
+    local_180 = dVar15;
+    FUN_021b0994(local_2e0,local_2d8,local_2d0,local_2c8);
+    local_398 = PTR___s12CoreGraphics7CGFloatVN_02578ba0;
+    local_188 = dVar14;
+    __ss3minyxx_xtSLRzlF
+              (&local_178,local_3a8,&local_188,PTR___s12CoreGraphics7CGFloatVN_02578ba0,local_2b0);
+    local_190 = local_178 * DAT_0232c6c8;
+    __ss3minyxx_xtSLRzlF(&local_168,local_3a0,&local_190,local_398,local_2b0);
+    local_390 = local_168;
+    local_198 = local_168;
+    local_388 = auStack_80;
+    __s7SwiftUI4PathVACycfC();
+    _memcpy(&local_1c0,local_388,0x21);
+    pcVar3 = local_358;
+    pcVar2 = local_360;
+    pcVar1 = local_368;
+    if (local_380 < 0) {
+      *(undefined1 *)(lVar11 + -0x20) = 2;
+      *(char **)(lVar11 + -0x18) = "work/LocalAuthentication";
+      *(undefined4 *)(lVar11 + -0x10) = 0;
+      __ss17_assertionFailure__4file4line5flagss5NeverOs12StaticStringV_A2HSus6UInt32VtF
+                (pcVar1,0xb,2,pcVar2,0x27,2,pcVar3,0x25);
+                    /* WARNING: Does not return */
+      pcVar10 = (code *)SoftwareBreakpoint(1,0x221378c);
+      (*pcVar10)();
+    }
+    local_1f0 = 0;
+    local_1e8 = local_380;
+    puVar13 = &DAT_028c71e8;
+    FUN_021c77d4(&DAT_028c71e8,&DAT_0233bde0);
+    local_3b0 = puVar13;
+    FUN_021fb2d8();
+    __sSlss16IndexingIteratorVyxG0B0RtzrlE04makeB0ACyF(&local_1e0,local_3b0,puVar13);
+    dVar15 = local_168;
+    while( true ) {
+      puVar13 = &DAT_028c71f8;
+      FUN_021c77d4(&DAT_028c71f8,&DAT_0233b1b0);
+      __ss16IndexingIteratorV4next7ElementQzSgyF(&local_200);
+      local_3b8 = local_200;
+      if (local_1f8 == '\x01') break;
+      local_3c0 = local_200;
+      local_3d8 = local_200;
+      local_208 = local_200;
+      local_3f8 = &local_210;
+      local_210 = local_200;
+      FUN_021fb08c();
+      local_3f0 = PTR___sSiN_025789d8;
+      local_3e8 = puVar13;
+      FUN_021c91ec(local_3f8);
+      dVar15 = local_278 * dVar15;
+      local_218 = local_380;
+      local_3e0 = dVar15;
+      FUN_021c91ec(&local_218,local_3f0,local_3e8);
+      dVar6 = local_280;
+      dVar5 = local_2a0;
+      dVar4 = local_2a8;
+      uVar17 = local_2c8;
+      uVar18 = local_2d0;
+      uVar16 = local_2d8;
+      dVar14 = local_2e0;
+      dVar15 = local_3e0 / dVar15;
+      local_220 = dVar15;
+      *(double *)(lVar11 + -0x10) = local_288;
+      FUN_02213ab0(&local_260,dVar15,dVar14,uVar16,uVar18,uVar17,dVar5,dVar4,dVar6);
+      uVar9 = local_228;
+      uVar8 = local_230;
+      uVar7 = local_238;
+      uVar21 = local_240;
+      uVar20 = local_248;
+      uVar19 = local_250;
+      uVar17 = local_258;
+      dVar15 = local_260;
+      uVar18 = local_318;
+      uVar16 = local_320;
+      dVar14 = local_390;
+      *(undefined8 *)(lVar11 + -0x20) = local_328;
+      *(undefined8 *)(lVar11 + -0x18) = uVar16;
+      *(undefined8 *)(lVar11 + -0x10) = uVar18;
+      *(double *)(lVar11 + -8) = dVar14;
+      FUN_02214480(dVar15,uVar17,uVar19,uVar20,uVar21,uVar7,uVar8,uVar9);
+      local_270 = dVar15;
+      local_268 = uVar17;
+      if (local_3d8 == 0) {
+        __s7SwiftUI4PathV4move2toySo7CGPointV_tF(dVar15,uVar17);
+      }
+      else {
+        __s7SwiftUI4PathV7addLine2toySo7CGPointV_tF(dVar15,uVar17);
+      }
+    }
+    local_450 = &local_1c0;
+    __s7SwiftUI4PathV12closeSubpathyyF(0);
+    local_448 = local_1c0;
+    local_440 = local_1b8;
+    local_438 = local_1b0;
+    local_430 = local_1a8;
+    local_424 = (uint)local_1a0;
+    FUN_02219938();
+    FUN_022199d4(local_450);
+    local_420 = local_448;
+    local_418 = local_440;
+    local_410 = local_438;
+    local_408 = local_430;
+    local_3fc = (undefined1)local_424;
+  }
+  *local_370 = local_420;
+  local_370[1] = local_418;
+  local_370[2] = local_410;
+  local_370[3] = local_408;
+  *(undefined1 *)(local_370 + 4) = local_3fc;
+  return;
+}
+

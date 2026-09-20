@@ -1,0 +1,88 @@
+// refreshContentTextColorsForCurrentInterfaceStyle @ 01e7bc34
+
+/* Function Stack Size: 0x10 bytes */
+
+void WCRefineToDoCardView::refreshContentTextColorsForCurrentInterfaceStyle(ID param_1,SEL param_2)
+
+{
+  ID IVar1;
+  ID IVar2;
+  undefined *puVar3;
+  ulong uVar4;
+  long lVar5;
+  ulong uVar6;
+  ulong local_140;
+  ulong local_138;
+  ulong local_108;
+  undefined1 auStack_100 [8];
+  long local_f8;
+  long *local_f0;
+  ulong local_c0;
+  SEL local_b8;
+  ID local_b0;
+  undefined1 auStack_a8 [128];
+  long local_28;
+  
+  local_28 = *(long *)PTR____stack_chk_guard_02578670;
+  local_b8 = param_2;
+  local_b0 = param_1;
+  _memset(auStack_100,0,0x40);
+  IVar1 = local_b0;
+  (*(code *)PTR__objc_msgSend_02578628)(local_b0,PTR_s_itemsStack_026c6eb0);
+  _objc_retainAutoreleasedReturnValue();
+  IVar2 = IVar1;
+  (*(code *)PTR__objc_msgSend_02578628)();
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_release_02578630)(IVar1);
+  local_138 = IVar2;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (IVar2,PTR_s_countByEnumeratingWithState_obje_0269cd58,auStack_100,auStack_a8,0x10);
+  if (local_138 != 0) {
+    lVar5 = *local_f0;
+    local_140 = 0;
+    do {
+      do {
+        if (*local_f0 - lVar5 != 0) {
+          _objc_enumerationMutation(*local_f0 - lVar5,IVar2);
+        }
+        uVar6 = *(ulong *)(local_f8 + local_140 * 8);
+        local_c0 = uVar6;
+        _objc_getAssociatedObject(uVar6,&DAT_028e4810);
+        _objc_retainAutoreleasedReturnValue();
+        puVar3 = PTR__OBJC_CLASS___UILabel_026cdfb8;
+        local_108 = uVar6;
+        (*(code *)PTR__objc_msgSend_02578628)
+                  (PTR__OBJC_CLASS___UILabel_026cdfb8,PTR_s_class_0269cd60);
+        (*(code *)PTR__objc_msgSend_02578628)(uVar6,PTR_s_isKindOfClass__0269cd68,puVar3);
+        uVar4 = local_c0;
+        if ((uVar6 & 1) == 0) {
+          puVar3 = PTR__OBJC_CLASS___UILabel_026cdfb8;
+          (*(code *)PTR__objc_msgSend_02578628)
+                    (PTR__OBJC_CLASS___UILabel_026cdfb8,PTR_s_class_0269cd60);
+          (*(code *)PTR__objc_msgSend_02578628)(uVar4,PTR_s_isKindOfClass__0269cd68,puVar3);
+          if ((uVar4 & 1) != 0) {
+            (*(code *)PTR__objc_msgSend_02578628)
+                      (local_b0,PTR_s_applyCurrentTextColorToLabel__026c6ff8,local_c0);
+          }
+        }
+        else {
+          (*(code *)PTR__objc_msgSend_02578628)
+                    (local_b0,PTR_s_applyCurrentTextColorToLabel__026c6ff8,local_108);
+        }
+        _objc_storeStrong(&local_108,0);
+        local_140 = local_140 + 1;
+      } while (local_140 < local_138);
+      local_138 = IVar2;
+      (*(code *)PTR__objc_msgSend_02578628)
+                (IVar2,PTR_s_countByEnumeratingWithState_obje_0269cd58,auStack_100,auStack_a8,0x10);
+      local_140 = 0;
+    } while (local_138 != 0);
+  }
+  (*(code *)PTR__objc_release_02578630)(IVar2);
+  if (*(long *)PTR____stack_chk_guard_02578670 - local_28 == 0) {
+    return;
+  }
+                    /* WARNING: Subroutine does not return */
+  ___stack_chk_fail(*(long *)PTR____stack_chk_guard_02578670 - local_28);
+}
+

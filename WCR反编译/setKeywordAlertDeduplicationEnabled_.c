@@ -1,0 +1,12 @@
+// setKeywordAlertDeduplicationEnabled: @ 01fe1874
+
+/* Function Stack Size: 0x14 bytes */
+
+void WCRefineConfig::setKeywordAlertDeduplicationEnabled_(ID param_1,SEL param_2,bool param_3)
+
+{
+  (*(code *)PTR__objc_msgSend_02578628)
+            (param_1,PTR_s_setKeywordAlertDeduplicationRule_026bf010,(param_3 & 1) != 0);
+  return;
+}
+

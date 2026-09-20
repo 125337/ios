@@ -1,0 +1,28 @@
+// FUN_007fb9b4 @ 007fb9b4
+
+ulong FUN_007fb9b4(void)
+
+{
+  undefined *puVar1;
+  undefined *puVar2;
+  undefined *puVar3;
+  undefined *puVar4;
+  
+  puVar1 = PTR__OBJC_CLASS___NSThread_026ce0a8;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___NSThread_026ce0a8,PTR_s_currentThread_026a11e0);
+  _objc_retainAutoreleasedReturnValue();
+  puVar2 = puVar1;
+  (*(code *)PTR__objc_msgSend_02578628)();
+  _objc_retainAutoreleasedReturnValue();
+  puVar3 = puVar2;
+  (*(code *)PTR__objc_msgSend_02578628)();
+  _objc_retainAutoreleasedReturnValue();
+  puVar4 = puVar3;
+  (*(code *)PTR__objc_msgSend_02578628)();
+  (*(code *)PTR__objc_release_02578630)(puVar3);
+  (*(code *)PTR__objc_release_02578630)(puVar2);
+  (*(code *)PTR__objc_release_02578630)(puVar1);
+  return (ulong)puVar4 & 0xffffffff;
+}
+

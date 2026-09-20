@@ -1,0 +1,54 @@
+// showCornerRadiusInputAlert @ 018c0220
+
+/* Function Stack Size: 0x10 bytes */
+
+void __thiscall
+WCRefineChatTimeViewController::showCornerRadiusInputAlert
+          (WCRefineChatTimeViewController *this,ID param_1,SEL param_2)
+
+{
+  undefined *puVar1;
+  char *pcVar2;
+  double in_d0;
+  char *local_38;
+  undefined *local_30;
+  double local_28;
+  SEL local_20;
+  ID local_18;
+  
+  puVar1 = PTR_WCRefineConfig_026cdf58;
+  local_20 = param_2;
+  local_18 = param_1;
+  (*(code *)PTR__objc_msgSend_02578628)(PTR_WCRefineConfig_026cdf58,PTR_s_shared_0269cad0);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  (*(code *)PTR__objc_release_02578630)(puVar1);
+  local_28 = in_d0;
+  if (in_d0 == 0.0) {
+    local_28 = 8.0;
+  }
+  puVar1 = PTR__OBJC_CLASS___NSString_026cdfe8;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___NSString_026cdfe8,PTR_s_stringWithFormat__0269cca8,&cf___1f);
+  _objc_retainAutoreleasedReturnValue();
+  pcVar2 = "WCUIAlertView";
+  local_30 = puVar1;
+  _objc_getClass();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  local_38 = pcVar2;
+  (*(code *)PTR__objc_msgSend_02578628)(pcVar2,PTR_s_showTextFieldWithMaxLen__0269e5e0,10);
+  (*(code *)PTR__objc_msgSend_02578628)(local_38,PTR_s_setTextFieldDefaultText__0269fd98,local_30);
+  (*(code *)PTR__objc_msgSend_02578628)
+            (local_38,PTR_s_addCancelBtnTitle_target_sel__0269d268,&cf_Sm,local_18,
+             PTR_s_alertCancel_026b2910);
+  (*(code *)PTR__objc_msgSend_02578628)
+            (local_38,PTR_s_addBtnTitle_target_sel__0269d278,&cf_nx_,local_18,
+             PTR_s_alertConfirmCornerRadius__026b3038);
+  (*(code *)PTR__objc_msgSend_02578628)(local_18,PTR_s_setCurrentAlert__026aa348,local_38);
+  (*(code *)PTR__objc_msgSend_02578628)(local_38,PTR_s_show_0269d280);
+  _objc_storeStrong(&local_38);
+  _objc_storeStrong(&local_30,0);
+  return;
+}
+

@@ -1,0 +1,66 @@
+// wcrActivateProvider: @ 017d8148
+
+/* Function Stack Size: 0x18 bytes */
+
+void WCRefineAISettingsViewController::wcrActivateProvider_(ID param_1,SEL param_2,ID param_3)
+
+{
+  undefined *puVar1;
+  ulong uVar2;
+  undefined *local_38;
+  undefined4 local_2c;
+  ulong local_28;
+  SEL local_20;
+  ID local_18;
+  
+  local_28 = 0;
+  local_20 = param_2;
+  local_18 = param_1;
+  _objc_storeStrong(&local_28,param_3);
+  if (local_28 == 0) {
+    local_2c = 1;
+  }
+  else {
+    puVar1 = PTR_WCRefineAIStore_026ce048;
+    (*(code *)PTR__objc_msgSend_02578628)(PTR_WCRefineAIStore_026ce048,PTR_s_shared_0269cad0);
+    _objc_retainAutoreleasedReturnValue();
+    uVar2 = local_28;
+    local_38 = puVar1;
+    (*(code *)PTR__objc_msgSend_02578628)(local_28,PTR_s_supportsChat_026aad10);
+    if ((uVar2 & 1) != 0) {
+      uVar2 = local_28;
+      (*(code *)PTR__objc_msgSend_02578628)(local_28,PTR_s_providerID_0269d480);
+      _objc_retainAutoreleasedReturnValue();
+      (*(code *)PTR__objc_msgSend_02578628)(local_38,PTR_s_setCurrentChatProviderID__026b5318);
+      (*(code *)PTR__objc_release_02578630)(uVar2);
+    }
+    uVar2 = local_28;
+    (*(code *)PTR__objc_msgSend_02578628)(local_28,PTR_s_supportsImage_026aad18);
+    if ((uVar2 & 1) != 0) {
+      uVar2 = local_28;
+      (*(code *)PTR__objc_msgSend_02578628)(local_28,PTR_s_providerID_0269d480);
+      _objc_retainAutoreleasedReturnValue();
+      (*(code *)PTR__objc_msgSend_02578628)(local_38,PTR_s_setCurrentImageProviderID__026b5320);
+      (*(code *)PTR__objc_release_02578630)(uVar2);
+    }
+    uVar2 = local_28;
+    (*(code *)PTR__objc_msgSend_02578628)(local_28,PTR_s_supportsVideo_026aad20);
+    if ((uVar2 & 1) != 0) {
+      uVar2 = local_28;
+      (*(code *)PTR__objc_msgSend_02578628)(local_28,PTR_s_providerID_0269d480);
+      _objc_retainAutoreleasedReturnValue();
+      (*(code *)PTR__objc_msgSend_02578628)(local_38,PTR_s_setCurrentVideoProviderID__026b5328);
+      (*(code *)PTR__objc_release_02578630)(uVar2);
+    }
+    uVar2 = local_28;
+    (*(code *)PTR__objc_msgSend_02578628)(local_28,PTR_s_providerID_0269d480);
+    _objc_retainAutoreleasedReturnValue();
+    (*(code *)PTR__objc_msgSend_02578628)(local_18,PTR_s_setEditingProviderID__026b5218);
+    (*(code *)PTR__objc_release_02578630)(uVar2);
+    _objc_storeStrong(&local_38,0);
+    local_2c = 0;
+  }
+  _objc_storeStrong(&local_28,0);
+  return;
+}
+

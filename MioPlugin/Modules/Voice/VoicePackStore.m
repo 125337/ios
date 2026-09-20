@@ -733,21 +733,7 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             if (error) *error = [NSError errorWithDomain:@"MioVoice" code:12 userInfo:@{NSLocalizedDescriptionKey: @"微信消息接口不可用"}];
             return NO;
         }
-        id msg = ((id (*)(id, SEL, long long))objc_msgSend)([wrapClass alloc], @selector(initWithMsgType:), 34LL);
-        if (!msg) {
-            if (error) *error = [NSError errorWithDomain:@"MioVoice" code:13 userInfo:@{NSLocalizedDescriptionKey: @"消息对象创建失败"}];
-            return NO;
-        }
-        // ★数据纯文件链路：真实流程实测 m_byteBuffer 为 nil（log19 真实 wrap 无此字段值），
-        // 语音数据由正式路径文件承载（WCRefine 同款）。此处仅探测记录字段名，不再写 buffer
-        MioFindVoiceDataIvar(msg);
-        [msg setValue:chatName forKey:@"m_nsToUsr"];
-        MioSetIvarIfExist(msg, "m_nsChatName", chatName); // 真实消息带会话名字段（SaveMesVoice 可能依赖）
-        NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
-        if (selfUsr.length > 0) [msg setValue:selfUsr forKey:@"m_nsFromUsr"];
-        // ★状态=1(待发送)：微信发送/上传队列才会拾取。写 4(已发送)会被队列跳过 → 假发（对方收不到）
-        [msg setValue:@(1) forKey:@"m_uiStatus"];
-        [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
+        // (旧 msg 构造段已删除，新构造见下方 run 2036 段)
 
         long long ms = [self durationMsForRelPath:relPath];
         if (ms <= 0) {
@@ -755,116 +741,132 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             if (ms > 0) [self setDurationMs:ms forRelPath:relPath]; // 缓存，列表也显示真实秒数
         }
         if (ms <= 0) ms = 1000; // 最终兜底 1 秒
-        // ═══★WCRefine 运行时实测五步序列（Frida 抓取，run 2027）═══
-        // 源自 WCRefineVoicePackSender + sendItem:toChatName:completion: 的运行时追踪：
-        // ① 暂存: AddLocalMsg(2参) 入库 (dl=0 fw=1 扩展End=1/Fwd=1 dtVoice) → 内部自动 SaveMesVoice×2
-        // ② 正式: AddLocalMsg(2参) 入库 (dl=9 fw=0 扩展End=0/Fwd=0 dtVoice _m_nsBizCliMsgId="")
-        // ③ 显式 SaveMesVoice(正式)
-        // ④ 正式 wrap: st 1→2、dl 9→1
-        // ⑤ UpdateVoiceMessage:MsgWrap: → 提交上传
-        // 完全独立实现（只调微信自己的 API，不依赖 WCRefine）。
-        // 历史教训：run 2020 缺⑤提交、run 2024/2025 缺①暂存流程+dl=9路径——五步缺一不发。
+        // ═══★WCRefine 反编译逐行复刻（run 2036，源：WCR反编译/FUN_008dee38.c）═══
+        // 单消息: dl=9 fw=1 VoiceEndFlag=1/ForwardFlag=1 VoiceTime=毫秒 dtVoice=数据
+        // → CMessageMgr AddLocalMsg(2参) → CUtility 路径(3级fallback) → 写文件
+        // → setM_nsVoicePath → SaveMesVoice×1 → [AudioSender ResendVoiceMsg:MsgWrap:] 触发上传
+        // ★wrap 用官方语音 setter（setM_dtVoice: 等内部自动处理扩展），不手动挂扩展对象
+        // ★无 UpdateVoiceMessage、无暂存消息、无 AddNewPart
+        NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
+        if (selfUsr.length == 0) selfUsr = @"";
+
+        id msg = nil;
+        SEL init2Sel = NSSelectorFromString(@"initWithMsgType:nsFromUsr:");
+        if ([wrapClass instancesRespondToSelector:init2Sel]) {
+            msg = ((id (*)(id, SEL, long long, id))objc_msgSend)([wrapClass alloc], init2Sel, 34LL, selfUsr);
+        }
+        if (!msg && [wrapClass instancesRespondToSelector:@selector(initWithMsgType:)]) {
+            msg = ((id (*)(id, SEL, long long))objc_msgSend)([wrapClass alloc], @selector(initWithMsgType:), 34LL);
+        }
+        if (!msg) {
+            if (error) *error = [NSError errorWithDomain:@"MioVoice" code:13 userInfo:@{NSLocalizedDescriptionKey: @"消息对象创建失败"}];
+            return NO;
+        }
+        ((void (*)(id, SEL, unsigned int))objc_msgSend)(msg, @selector(setM_uiMessageType:), 34U);
+        ((void (*)(id, SEL, id))objc_msgSend)(msg, @selector(setM_nsFromUsr:), selfUsr);
+        ((void (*)(id, SEL, id))objc_msgSend)(msg, @selector(setM_nsToUsr:), chatName);
+        // createTime：MMNewSessionMgr GenSendMsgTimeWithChatName（守卫，fallback time）
+        unsigned int createTime = (unsigned int)[[NSDate date] timeIntervalSince1970];
+        Class smCls = objc_getClass("MMNewSessionMgr");
+        if (smCls) {
+            id sm = WXGetService(smCls);
+            SEL gswc = NSSelectorFromString(@"GenSendMsgTimeWithChatName:");
+            if (sm && [sm respondsToSelector:gswc]) {
+                createTime = ((unsigned int (*)(id, SEL, id))objc_msgSend)(sm, gswc, chatName);
+            }
+        }
+        ((void (*)(id, SEL, unsigned int))objc_msgSend)(msg, @selector(setM_uiCreateTime:), createTime);
+        ((void (*)(id, SEL, unsigned int))objc_msgSend)(msg, @selector(setM_uiStatus:), 1U);
+        ((void (*)(id, SEL, unsigned int))objc_msgSend)(msg, @selector(setM_uiDownloadStatus:), 9U);
+        ((void (*)(id, SEL, BOOL))objc_msgSend)(msg, @selector(setM_bForward:), YES);
+        ((void (*)(id, SEL, unsigned int))objc_msgSend)(msg, @selector(setM_uiVoiceTime:), (unsigned int)ms);
+        ((void (*)(id, SEL, unsigned int))objc_msgSend)(msg, @selector(setM_uiVoiceFormat:), 4U);
+        ((void (*)(id, SEL, unsigned int))objc_msgSend)(msg, @selector(setM_uiVoiceEndFlag:), 1U);
+        ((void (*)(id, SEL, unsigned int))objc_msgSend)(msg, @selector(setM_uiVoiceForwardFlag:), 1U);
+        SEL dtSel = NSSelectorFromString(@"setM_dtVoice:");
+        if ([msg respondsToSelector:dtSel]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(msg, dtSel, wire);
+            WPLog(@"Voice", @"[Send] setM_dtVoice: 官方setter已用 (%lu字节)", (unsigned long)wire.length);
+        } else {
+            BOOL extOK = MioAttachVoiceExtension(msg, wire, @"", ms, 1, 1);
+            WPLog(@"Voice", @"[Send] wrap无setM_dtVoice: → 手动扩展挂载=%d", extOK);
+        }
+        [msg setValue:[NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%llu\" voiceformat=\"4\" forwardflag=\"0\" /></msg>", (unsigned long long)ms]
+               forKey:@"m_nsContent"];
+        SEL cancelSel = NSSelectorFromString(@"setM_uiVoiceCancelFlag:");
+        if ([msg respondsToSelector:cancelSel]) {
+            ((void (*)(id, SEL, unsigned int))objc_msgSend)(msg, cancelSel, 0U);
+        }
         MioDumpSendAPIOnce(msgMgr);
 
-        SEL addLocal2 = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
-        SEL saveSel = NSSelectorFromString(@"SaveMesVoice:MsgWrap:");
-        SEL updVM = NSSelectorFromString(@"UpdateVoiceMessage:MsgWrap:");
-        NSString *xml = [NSString stringWithFormat:@"<msg><voicemsg voicelength=\"%lld\" voiceformat=\"4\" forwardflag=\"0\" /></msg>", ms];
-
-        // ── ① 暂存消息（fw=1 / dl=0 / 扩展End=1 Fwd=1）──
-        MioSetIntIvarIfExist(msg, "m_uiVoiceFormat", 4);
-        MioSetIntIvarIfExist(msg, "m_uiImgStatus", 1);
-        MioSetIntIvarIfExist(msg, "m_uiDownloadStatus", 0);
-        MioSetIntIvarIfExist(msg, "m_bNew", 1);
-        MioSetIntIvarIfExist(msg, "m_bForward", 1);
-        [msg setValue:@"" forKey:@"m_nsMsgSource"];
-        [msg setValue:xml forKey:@"m_nsContent"];
-        BOOL extOK = MioAttachVoiceExtension(msg, wire, @"", ms, 1, 1);
-        WPLog(@"Voice", @"[Send] ①暂存构造: 扩展=%d", extOK);
-
-        if (![msgMgr respondsToSelector:addLocal2]) {
+        // service 实例：CMessageMgr + AudioSender（★上传触发在 AudioSender 类上，同为 service）
+        Class audioSenderCls = objc_getClass("AudioSender");
+        id audioSender = audioSenderCls ? WXGetService(audioSenderCls) : nil;
+        SEL addLocal2Sel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
+        SEL saveSel2 = NSSelectorFromString(@"SaveMesVoice:MsgWrap:");
+        SEL rvmSel2 = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
+        if (![msgMgr respondsToSelector:addLocal2Sel]) {
             if (error) *error = [NSError errorWithDomain:@"MioVoice" code:12 userInfo:@{NSLocalizedDescriptionKey: @"AddLocalMsg(2参) 不可用"}];
             return NO;
         }
-        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addLocal2, chatName, msg);
-        WPLog(@"Voice", @"[Send] ①暂存入库: AddLocalMsg(2参) localID=%u（内部自动 SaveMesVoice×2）", MioWrapLocalIDOf(msg));
-
-        // ── ② 正式消息（fw=0 / dl=9 / 扩展End=0 Fwd=0）──
-        id formal = ((id (*)(id, SEL, long long))objc_msgSend)([wrapClass alloc], @selector(initWithMsgType:), 34LL);
-        if (!formal) {
-            WPLog(@"Voice", @"[Send] ②正式构造失败!");
-        } else {
-            [formal setValue:chatName forKey:@"m_nsToUsr"];
-            if (selfUsr.length > 0) [formal setValue:selfUsr forKey:@"m_nsFromUsr"];
-            [formal setValue:@(1) forKey:@"m_uiStatus"];
-            [formal setValue:@"" forKey:@"m_nsMsgSource"];
-            [formal setValue:xml forKey:@"m_nsContent"];
-            [formal setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
-            MioSetIntIvarIfExist(formal, "m_uiVoiceFormat", 4);
-            MioSetIntIvarIfExist(formal, "m_uiImgStatus", 1);
-            MioSetIntIvarIfExist(formal, "m_uiDownloadStatus", 9);
-            MioSetIntIvarIfExist(formal, "m_bNew", 1);
-            MioSetIntIvarIfExist(formal, "m_bForward", 0);
-            MioSetIvarIfExist(formal, "_m_nsBizCliMsgId", @"");
-            BOOL extOK2 = MioAttachVoiceExtension(formal, wire, @"", ms, 0, 0);
-            ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addLocal2, chatName, formal);
-            WPLog(@"Voice", @"[Send] ②正式入库: localID=%u dl=9 扩展=%d", MioWrapLocalIDOf(formal), extOK2);
-
-            // ★写正式路径文件（WCRefine 反汇编管线④：SaveMesVoice 前文件必须已在盘上；
-            //   dl=9 时 SaveMesVoice 认为文件就绪不再代写——缺文件则登记无效→轮询不拾取）
-            {
-                NSString *fp = MioProbeVoicePath(formal, msgMgr);
-                if (fp.length > 0) {
-                    WPLog(@"Voice", @"[Send] 正式路径写文件%@: %@", MioWriteVoiceFile(wire, fp) ? @"成功" : @"失败", fp);
-                }
-            }
-
-            // ── ③ 显式 SaveMesVoice(正式) ──
-            if ([msgMgr respondsToSelector:saveSel]) {
-                ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, saveSel, chatName, formal);
-                WPLog(@"Voice", @"[Send] ③SaveMesVoice(正式) 已调");
-            }
-
-            // ── ④⑤ st 1→2、dl 9→1 → UpdateVoiceMessage 提交上传 ──
-            if ([msgMgr respondsToSelector:updVM]) {
-                [formal setValue:@(2) forKey:@"m_uiStatus"];
-                MioSetIntIvarIfExist(formal, "m_uiDownloadStatus", 1);
-                ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, updVM, chatName, formal);
-                WPLog(@"Voice", @"[Send] ⑤UpdateVoiceMessage 已调 (st=2, dl=1, 提交上传)");
-            }
-
-            // ── ⑥ 上传登记+触发（run 2033）：
-            //   ⑥a AddNewPart(12参)——part 参数改为正式音频文件路径
-            //   （UploadVoiceCDNMgr 有 loadDataFromAudioFile:，part 高概率是路径而非 chatName；
-            //     AddNewPart 的 hook 已移除——12参签名不符会让 WCRefine 崩，见 log47）
-            //   ⑥b ResendVoiceMsg(2参) 触发启动
-            @try {
-                SEL anpSel = NSSelectorFromString(@"AddNewPart:LocalID:n64SvrID:Offset:Len:VoiceTime:CreateTime:EndFlag:CancelFlag:VoiceFormat:ForwardFlag:msgSource:");
-                SEL rvmSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
-                unsigned int fid = MioWrapLocalIDOf(formal);
-                unsigned int createTime = (unsigned int)[[NSDate date] timeIntervalSince1970];
-                id ct = [formal valueForKey:@"m_uiCreateTime"];
-                if (ct) createTime = [ct unsignedIntValue];
-                id mgrInst = MioGetUploadVoiceCDNMgr();
-                WPLog(@"Voice", @"[Send] ⑥活实例=%@ (nil=尚未捕获,等2s定时器)", mgrInst);
-                NSString *formalPath = MioProbeVoicePath(formal, msgMgr);
-                if (mgrInst && [mgrInst respondsToSelector:anpSel] && [mgrInst respondsToSelector:rvmSel]) {
-                    ((void (*)(id, SEL, id, unsigned long, unsigned long, unsigned long, unsigned long,
-                              unsigned long, unsigned long, unsigned long, unsigned long, unsigned long,
-                              unsigned long, id))objc_msgSend)(mgrInst, anpSel,
-                        formalPath, (unsigned long)fid, (unsigned long)0, (unsigned long)0,
-                        (unsigned long)wire.length, (unsigned long)ms, (unsigned long)createTime,
-                        (unsigned long)1, (unsigned long)0, (unsigned long)4, (unsigned long)0, @"");
-                    WPLog(@"Voice", @"[Send] ⑥a AddNewPart 已调 (part=路径 lid=%u len=%lu ms=%lld)", fid, (unsigned long)wire.length, ms);
-                    ((void (*)(id, SEL, id, id))objc_msgSend)(mgrInst, rvmSel, chatName, formal);
-                    WPLog(@"Voice", @"[Send] ⑥b ResendVoiceMsg 已调 (上传触发)");
-                } else {
-                    WPLog(@"Voice", @"[Send] ⑥实例未捕获或方法缺失");
-                }
-            } @catch (NSException *e) {
-                WPLog(@"Voice", @"[Send] ⑥异常: %@", e.reason);
-            }
+        if (!audioSender || ![audioSender respondsToSelector:rvmSel2]) {
+            WPLog(@"Voice", @"[Send] AudioSender 不可用 (cls=%@ inst=%@)——仍尝试发送",
+                  audioSenderCls ? @"存在" : @"缺失", audioSender);
         }
+
+        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addLocal2Sel, chatName, msg);
+        unsigned int lid = MioWrapLocalIDOf(msg);
+        WPLog(@"Voice", @"[Send] AddLocalMsg(2参) 入库 localID=%u", lid);
+
+        // 路径三级 fallback（照抄反编译：CUtility → getAudioFileName → getVoicePath）
+        NSString *apath = nil;
+        Class cuCls = objc_getClass("CUtility");
+        SEL gpSel = NSSelectorFromString(@"GetPathOfMesAudio:LocalID:DocPath:");
+        SEL gdSel = NSSelectorFromString(@"GetDocPath");
+        if (cuCls && [cuCls respondsToSelector:gpSel] && [cuCls respondsToSelector:gdSel]) {
+            id docPath = ((id (*)(id, SEL))objc_msgSend)(cuCls, gdSel);
+            apath = ((id (*)(id, SEL, id, unsigned long, id))objc_msgSend)(cuCls, gpSel, chatName, (unsigned long)lid, docPath);
+            WPLog(@"Voice", @"[Send] CUtility路径: %@", apath);
+        }
+        if (apath.length == 0 && [msgMgr respondsToSelector:@selector(getAudioFileName:LocalID:)]) {
+            apath = ((id (*)(id, SEL, id, unsigned long))objc_msgSend)(msgMgr, @selector(getAudioFileName:LocalID:), chatName, (unsigned long)lid);
+            WPLog(@"Voice", @"[Send] getAudioFileName路径: %@", apath);
+        }
+        if (apath.length == 0 && [msg respondsToSelector:@selector(getVoicePath)]) {
+            apath = ((id (*)(id, SEL))objc_msgSend)(msg, @selector(getVoicePath));
+            WPLog(@"Voice", @"[Send] getVoicePath路径: %@", apath);
+        }
+        if (apath.length == 0) {
+            WPLog(@"Voice", @"[Send] 路径计算全部失败");
+            if (error) *error = [NSError errorWithDomain:@"MioVoice" code:15 userInfo:@{NSLocalizedDescriptionKey: @"语音路径计算失败"}];
+            return NO;
+        }
+        // 目录 + 写文件（照抄反编译：writeToFile → 文件存在检查，失败则整体失败）
+        [[NSFileManager defaultManager] createDirectoryAtPath:[apath stringByDeletingLastPathComponent]
+                                  withIntermediateDirectories:YES attributes:nil error:nil];
+        BOOL wok = [wire writeToFile:apath atomically:YES];
+        BOOL fexist = [[NSFileManager defaultManager] fileExistsAtPath:apath];
+        WPLog(@"Voice", @"[Send] 写文件%@ 存在=%d: %@", wok ? @"成功" : @"失败", fexist, apath);
+        if (!wok || !fexist) {
+            if (error) *error = [NSError errorWithDomain:@"MioVoice" code:15 userInfo:@{NSLocalizedDescriptionKey: @"音频文件写入失败"}];
+            return NO;
+        }
+        SEL vnSel = NSSelectorFromString(@"setM_nsVoicePath:");
+        if ([msg respondsToSelector:vnSel]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(msg, vnSel, apath);
+            WPLog(@"Voice", @"[Send] setM_nsVoicePath 已调");
+        }
+        if ([msgMgr respondsToSelector:saveSel2]) {
+            ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, saveSel2, chatName, msg);
+            WPLog(@"Voice", @"[Send] SaveMesVoice 已调 (单次)");
+        }
+        if (audioSender && [audioSender respondsToSelector:rvmSel2]) {
+            ((void (*)(id, SEL, id, id))objc_msgSend)(audioSender, rvmSel2, chatName, msg);
+            WPLog(@"Voice", @"[Send] AudioSender ResendVoiceMsg 已调 (上传触发)");
+        } else {
+            WPLog(@"Voice", @"[Send] AudioSender ResendVoiceMsg 不可用——消息已入库待轮询");
+        }
+        WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
         WPLog(@"Voice", @"[Send] 已提交语音包条目: %@ -> %@ (%.1fKB)", relPath, chatName, wire.length / 1024.0);
         [self addRecentRelPath:relPath];
         return YES;

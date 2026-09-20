@@ -1,0 +1,53 @@
+// enabledForScene: @ 01c2df88
+
+/* Function Stack Size: 0x18 bytes */
+
+bool WCRefineNameplateBeautifyViewController::enabledForScene_
+               (ID param_1,SEL param_2,long_long param_3)
+
+{
+  undefined *puVar1;
+  undefined *local_38;
+  long_long local_30;
+  SEL local_28;
+  ID local_20;
+  byte local_11;
+  
+  puVar1 = PTR_WCRefineConfig_026cdf58;
+  local_30 = param_3;
+  local_28 = param_2;
+  local_20 = param_1;
+  (*(code *)PTR__objc_msgSend_02578628)(PTR_WCRefineConfig_026cdf58,PTR_s_shared_0269cad0);
+  _objc_retainAutoreleasedReturnValue();
+  local_38 = puVar1;
+  if (local_30 == 0) {
+    (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_nameplateHomeEnabled_026ae800);
+    local_11 = (byte)puVar1 & 1;
+  }
+  else if (local_30 == 1) {
+    (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_nameplateChatEnabled_026ae808);
+    local_11 = (byte)puVar1 & 1;
+  }
+  else if (local_30 == 2) {
+    (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_nameplateContactsEnabled_026ae810);
+    local_11 = (byte)puVar1 & 1;
+  }
+  else if (local_30 == 3) {
+    (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_nameplateMomentsEnabled_026ae818);
+    local_11 = (byte)puVar1 & 1;
+  }
+  else if (local_30 == 4) {
+    (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_nameplateChatTopBarEnabled_026ae820);
+    local_11 = (byte)puVar1 & 1;
+  }
+  else if (local_30 == 5) {
+    (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_nameplateHomeOnlineEnabled_026ae828);
+    local_11 = (byte)puVar1 & 1;
+  }
+  else {
+    local_11 = 0;
+  }
+  _objc_storeStrong(&local_38,0);
+  return local_11 & 1;
+}
+

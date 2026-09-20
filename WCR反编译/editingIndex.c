@@ -1,0 +1,10 @@
+// editingIndex @ 01e37afc
+
+/* Function Stack Size: 0x10 bytes */
+
+long_long WCRefineSuperFloatURLSchemeViewController::editingIndex(ID param_1,SEL param_2)
+
+{
+  return *(long_long *)(param_1 + (long)_editingIndex);
+}
+

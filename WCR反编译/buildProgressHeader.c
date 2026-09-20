@@ -1,0 +1,272 @@
+// buildProgressHeader @ 019f9444
+
+/* Function Stack Size: 0x10 bytes */
+
+void WCRefineFriendRelationCheckViewController::buildProgressHeader(ID param_1,SEL param_2)
+
+{
+  undefined *puVar1;
+  ID IVar2;
+  undefined *puVar3;
+  undefined *puVar4;
+  undefined *puVar5;
+  undefined *puVar6;
+  undefined *puVar7;
+  undefined *puVar8;
+  undefined *puVar9;
+  undefined *puVar10;
+  undefined *puVar11;
+  undefined *puVar12;
+  undefined *puVar13;
+  undefined *puVar14;
+  undefined *puVar15;
+  undefined *puVar16;
+  undefined *puVar17;
+  undefined *puVar18;
+  undefined *puVar19;
+  undefined *puVar20;
+  undefined *puVar21;
+  undefined *puVar22;
+  undefined *puVar23;
+  undefined *puVar24;
+  undefined *puVar25;
+  undefined *puVar26;
+  undefined *puVar27;
+  undefined *puVar28;
+  undefined *puVar29;
+  undefined *puVar30;
+  undefined8 uVar31;
+  undefined8 uVar32;
+  undefined8 uVar33;
+  undefined8 in_d2;
+  undefined *local_e0;
+  undefined *local_d8;
+  undefined *local_d0 [5];
+  undefined8 local_a8;
+  undefined8 local_a0;
+  undefined8 local_90;
+  undefined *local_88;
+  SEL local_80;
+  ID local_78;
+  undefined *local_70;
+  undefined *local_68;
+  undefined *local_60;
+  undefined *local_58;
+  undefined *local_50;
+  undefined *local_48;
+  undefined *local_40;
+  undefined *local_38;
+  undefined *local_30;
+  long local_28;
+  
+  local_28 = *(long *)PTR____stack_chk_guard_02578670;
+  puVar1 = PTR__OBJC_CLASS___UIView_026cdfd8;
+  local_80 = param_2;
+  local_78 = param_1;
+  _objc_alloc();
+  IVar2 = local_78;
+  (*(code *)PTR__objc_msgSend_02578628)(local_78,PTR_s_view_026cabd8);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  uVar33 = 0;
+  uVar32 = 0;
+  uVar31 = 0x4060800000000000;
+  FUN_019f9fa8();
+  local_a8 = uVar32;
+  local_a0 = uVar33;
+  local_90 = uVar31;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (uVar32,uVar33,in_d2,uVar31,puVar1,PTR_s_initWithFrame__026ca6e8);
+  local_88 = puVar1;
+  (*(code *)PTR__objc_release_02578630)(IVar2);
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_setAutoresizingMask__026ca878);
+  puVar1 = PTR__OBJC_CLASS___UILabel_026cdfb8;
+  _objc_alloc_init();
+  local_d0[0] = puVar1;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_setTag__026caa80,DAT_02339e18);
+  (*(code *)PTR__objc_msgSend_02578628)
+            (local_d0[0],PTR_s_setTranslatesAutoresizingMaskInt_0269cde8,0);
+  puVar1 = PTR__OBJC_CLASS___UIFont_026cdfc0;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0x4030000000000000,*(undefined8 *)PTR__UIFontWeightMedium_02578150,
+             PTR__OBJC_CLASS___UIFont_026cdfc0,PTR_s_systemFontOfSize_weight__026cab60);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_setFont__026ca958);
+  (*(code *)PTR__objc_release_02578630)(puVar1);
+  puVar1 = PTR__OBJC_CLASS___UIColor_026cdf78;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___UIColor_026cdf78,PTR_s_labelColor_026ca778);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_setTextColor__026caa98);
+  (*(code *)PTR__objc_release_02578630)(puVar1);
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_setNumberOfLines__026ca9d8,2);
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_addSubview__026ca4c0,local_d0[0]);
+  puVar1 = PTR__OBJC_CLASS___UIProgressView_026ce858;
+  _objc_alloc();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  local_d8 = puVar1;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_setTag__026caa80,DAT_02339e20);
+  (*(code *)PTR__objc_msgSend_02578628)(local_d8,PTR_s_setTranslatesAutoresizingMaskInt_0269cde8,0);
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_addSubview__026ca4c0,local_d8);
+  puVar1 = PTR__OBJC_CLASS___UILabel_026cdfb8;
+  _objc_alloc_init();
+  local_e0 = puVar1;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_setTag__026caa80,DAT_02339e28);
+  (*(code *)PTR__objc_msgSend_02578628)(local_e0,PTR_s_setTranslatesAutoresizingMaskInt_0269cde8,0);
+  puVar1 = PTR__OBJC_CLASS___UIFont_026cdfc0;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0x402a000000000000,PTR__OBJC_CLASS___UIFont_026cdfc0,PTR_s_systemFontOfSize__0269cc50);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(local_e0,PTR_s_setFont__026ca958);
+  (*(code *)PTR__objc_release_02578630)(puVar1);
+  puVar1 = PTR__OBJC_CLASS___UIColor_026cdf78;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___UIColor_026cdf78,PTR_s_secondaryLabelColor_026a1020);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(local_e0,PTR_s_setTextColor__026caa98);
+  (*(code *)PTR__objc_release_02578630)(puVar1);
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_addSubview__026ca4c0,local_e0);
+  puVar1 = PTR__OBJC_CLASS___NSLayoutConstraint_026ce030;
+  puVar3 = local_d0[0];
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_leadingAnchor_0269ce20);
+  _objc_retainAutoreleasedReturnValue();
+  puVar4 = local_88;
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_leadingAnchor_0269ce20);
+  _objc_retainAutoreleasedReturnValue();
+  puVar5 = puVar3;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0x4034000000000000,puVar3,PTR_s_constraintEqualToAnchor_constant_0269ce18);
+  _objc_retainAutoreleasedReturnValue();
+  puVar6 = local_d0[0];
+  local_70 = puVar5;
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_trailingAnchor_0269cf88);
+  _objc_retainAutoreleasedReturnValue();
+  puVar7 = local_88;
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_trailingAnchor_0269cf88);
+  _objc_retainAutoreleasedReturnValue();
+  puVar8 = puVar6;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0xc034000000000000,puVar6,PTR_s_constraintEqualToAnchor_constant_0269ce18);
+  _objc_retainAutoreleasedReturnValue();
+  puVar9 = local_d0[0];
+  local_68 = puVar8;
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_topAnchor_0269ce30);
+  _objc_retainAutoreleasedReturnValue();
+  puVar10 = local_88;
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_topAnchor_0269ce30);
+  _objc_retainAutoreleasedReturnValue();
+  puVar11 = puVar9;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0x4030000000000000,puVar9,PTR_s_constraintEqualToAnchor_constant_0269ce18);
+  _objc_retainAutoreleasedReturnValue();
+  puVar12 = local_d8;
+  local_60 = puVar11;
+  (*(code *)PTR__objc_msgSend_02578628)(local_d8,PTR_s_leadingAnchor_0269ce20);
+  _objc_retainAutoreleasedReturnValue();
+  puVar13 = local_d0[0];
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_leadingAnchor_0269ce20);
+  _objc_retainAutoreleasedReturnValue();
+  puVar14 = puVar12;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar12,PTR_s_constraintEqualToAnchor__0269ce08);
+  _objc_retainAutoreleasedReturnValue();
+  puVar15 = local_d8;
+  local_58 = puVar14;
+  (*(code *)PTR__objc_msgSend_02578628)(local_d8,PTR_s_trailingAnchor_0269cf88);
+  _objc_retainAutoreleasedReturnValue();
+  puVar16 = local_d0[0];
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_trailingAnchor_0269cf88);
+  _objc_retainAutoreleasedReturnValue();
+  puVar17 = puVar15;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar15,PTR_s_constraintEqualToAnchor__0269ce08);
+  _objc_retainAutoreleasedReturnValue();
+  puVar18 = local_d8;
+  local_50 = puVar17;
+  (*(code *)PTR__objc_msgSend_02578628)(local_d8,PTR_s_topAnchor_0269ce30);
+  _objc_retainAutoreleasedReturnValue();
+  puVar19 = local_d0[0];
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_bottomAnchor_0269ce38);
+  _objc_retainAutoreleasedReturnValue();
+  puVar20 = puVar18;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0x4028000000000000,puVar18,PTR_s_constraintEqualToAnchor_constant_0269ce18);
+  _objc_retainAutoreleasedReturnValue();
+  puVar21 = local_e0;
+  local_48 = puVar20;
+  (*(code *)PTR__objc_msgSend_02578628)(local_e0,PTR_s_leadingAnchor_0269ce20);
+  _objc_retainAutoreleasedReturnValue();
+  puVar22 = local_d0[0];
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_leadingAnchor_0269ce20);
+  _objc_retainAutoreleasedReturnValue();
+  puVar23 = puVar21;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar21,PTR_s_constraintEqualToAnchor__0269ce08);
+  _objc_retainAutoreleasedReturnValue();
+  puVar24 = local_e0;
+  local_40 = puVar23;
+  (*(code *)PTR__objc_msgSend_02578628)(local_e0,PTR_s_trailingAnchor_0269cf88);
+  _objc_retainAutoreleasedReturnValue();
+  puVar25 = local_d0[0];
+  (*(code *)PTR__objc_msgSend_02578628)(local_d0[0],PTR_s_trailingAnchor_0269cf88);
+  _objc_retainAutoreleasedReturnValue();
+  puVar26 = puVar24;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar24,PTR_s_constraintEqualToAnchor__0269ce08);
+  _objc_retainAutoreleasedReturnValue();
+  puVar27 = local_e0;
+  local_38 = puVar26;
+  (*(code *)PTR__objc_msgSend_02578628)(local_e0,PTR_s_topAnchor_0269ce30);
+  _objc_retainAutoreleasedReturnValue();
+  puVar28 = local_d8;
+  (*(code *)PTR__objc_msgSend_02578628)(local_d8,PTR_s_bottomAnchor_0269ce38);
+  _objc_retainAutoreleasedReturnValue();
+  puVar29 = puVar27;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0x4024000000000000,puVar27,PTR_s_constraintEqualToAnchor_constant_0269ce18);
+  _objc_retainAutoreleasedReturnValue();
+  puVar30 = PTR__OBJC_CLASS___NSArray_026cdfe0;
+  local_30 = puVar29;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___NSArray_026cdfe0,PTR_s_arrayWithObjects_count__0269cc70,&local_70,9);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(puVar1,PTR_s_activateConstraints__0269ce58);
+  (*(code *)PTR__objc_release_02578630)(puVar30);
+  (*(code *)PTR__objc_release_02578630)(puVar29);
+  (*(code *)PTR__objc_release_02578630)(puVar28);
+  (*(code *)PTR__objc_release_02578630)(puVar27);
+  (*(code *)PTR__objc_release_02578630)(puVar26);
+  (*(code *)PTR__objc_release_02578630)(puVar25);
+  (*(code *)PTR__objc_release_02578630)(puVar24);
+  (*(code *)PTR__objc_release_02578630)(puVar23);
+  (*(code *)PTR__objc_release_02578630)(puVar22);
+  (*(code *)PTR__objc_release_02578630)(puVar21);
+  (*(code *)PTR__objc_release_02578630)(puVar20);
+  (*(code *)PTR__objc_release_02578630)(puVar19);
+  (*(code *)PTR__objc_release_02578630)(puVar18);
+  (*(code *)PTR__objc_release_02578630)(puVar17);
+  (*(code *)PTR__objc_release_02578630)(puVar16);
+  (*(code *)PTR__objc_release_02578630)(puVar15);
+  (*(code *)PTR__objc_release_02578630)(puVar14);
+  (*(code *)PTR__objc_release_02578630)(puVar13);
+  (*(code *)PTR__objc_release_02578630)(puVar12);
+  (*(code *)PTR__objc_release_02578630)(puVar11);
+  (*(code *)PTR__objc_release_02578630)(puVar10);
+  (*(code *)PTR__objc_release_02578630)(puVar9);
+  (*(code *)PTR__objc_release_02578630)(puVar8);
+  (*(code *)PTR__objc_release_02578630)(puVar7);
+  (*(code *)PTR__objc_release_02578630)(puVar6);
+  (*(code *)PTR__objc_release_02578630)(puVar5);
+  (*(code *)PTR__objc_release_02578630)(puVar4);
+  (*(code *)PTR__objc_release_02578630)(puVar3);
+  (*(code *)PTR__objc_msgSend_02578628)(local_78,PTR_s_setProgressHeader__026bb430,local_88);
+  (*(code *)PTR__objc_msgSend_02578628)(local_78,PTR_s_setProgressNameLabel__026bb438,local_d0[0]);
+  (*(code *)PTR__objc_msgSend_02578628)(local_78,PTR_s_setProgressBar__026bb440,local_d8);
+  (*(code *)PTR__objc_msgSend_02578628)(local_78,PTR_s_setProgressCountLabel__026bb448,local_e0);
+  _objc_storeStrong(&local_e0);
+  _objc_storeStrong(&local_d8,0);
+  _objc_storeStrong(local_d0,0);
+  _objc_storeStrong(&local_88,0);
+  if (*(long *)PTR____stack_chk_guard_02578670 - local_28 != 0) {
+                    /* WARNING: Subroutine does not return */
+    ___stack_chk_fail(*(long *)PTR____stack_chk_guard_02578670 - local_28);
+  }
+  return;
+}
+

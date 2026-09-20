@@ -1,0 +1,23 @@
+// resetSettingsButtonIcon @ 01c88fa0
+
+/* Function Stack Size: 0x10 bytes */
+
+void WCRefinePluginContainerSettingsViewController::resetSettingsButtonIcon(ID param_1,SEL param_2)
+
+{
+  undefined *puVar1;
+  
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR_WCRefinePluginIconCatalog_026ce4e0,PTR_s_resetCustomizationForItemID__026c2a00,
+             &cf_hub_settings);
+  puVar1 = PTR_WCRefineConfig_026cdf58;
+  (*(code *)PTR__objc_msgSend_02578628)(PTR_WCRefineConfig_026cdf58,PTR_s_shared_0269cad0);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  (*(code *)PTR__objc_release_02578630)(puVar1);
+  (*(code *)PTR__objc_msgSend_02578628)(param_1,PTR_s_reloadTableData_0269dca8);
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR_WCRefineHelper_026ce000,PTR_s_showModernToast__0269ce78,&cf__b_YVh);
+  return;
+}
+

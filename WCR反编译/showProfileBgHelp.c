@@ -1,0 +1,278 @@
+// showProfileBgHelp @ 01cde258
+
+/* Function Stack Size: 0x10 bytes */
+
+void WCRefineProfileCardBeautifyViewController::showProfileBgHelp(ID param_1,SEL param_2)
+
+{
+  char *pcVar1;
+  undefined *puVar2;
+  undefined *puVar3;
+  undefined *puVar4;
+  undefined *puVar5;
+  undefined *puVar6;
+  undefined *puVar7;
+  undefined *puVar8;
+  undefined *puVar9;
+  undefined *puVar10;
+  undefined *puVar11;
+  undefined *puVar12;
+  undefined *puVar13;
+  undefined *puVar14;
+  undefined *puVar15;
+  undefined *puVar16;
+  undefined *puVar17;
+  undefined *puVar18;
+  undefined *puVar19;
+  undefined *puVar20;
+  undefined *puVar21;
+  undefined *puVar22;
+  undefined *puVar23;
+  undefined *puVar24;
+  undefined *puVar25;
+  undefined *puVar26;
+  undefined *puVar27;
+  undefined *puVar28;
+  undefined *puVar29;
+  undefined *puVar30;
+  double dVar31;
+  char *local_b0;
+  undefined *local_a8;
+  undefined *local_a0;
+  undefined *local_98;
+  undefined *local_90;
+  char *local_88;
+  SEL local_80;
+  ID local_78;
+  undefined *local_70;
+  undefined *local_68;
+  undefined *local_60;
+  undefined *local_58;
+  undefined *local_50;
+  undefined *local_48;
+  undefined *local_40;
+  undefined *local_38;
+  undefined *local_30;
+  long local_28;
+  
+  local_28 = *(long *)PTR____stack_chk_guard_02578670;
+  local_80 = param_2;
+  local_78 = param_1;
+  (*(code *)PTR__objc_msgSend_02578628)(param_1,PTR_s_triggerHapticFeedback_0269dc78);
+  pcVar1 = "MMPageSheetConfig";
+  _objc_getClass();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  local_88 = pcVar1;
+  (*(code *)PTR__objc_msgSend_02578628)(pcVar1,PTR_s_setTitle__0269cef0,&cf__O_u__R);
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_setNavLeftStyle__026aa730,2);
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_setEnableEdgeSlideToClose__026aa738,1);
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_setEnableDragToClose__026aa740,1);
+  (*(code *)PTR__objc_msgSend_02578628)(local_88,PTR_s_setIsAllowTapBgMaskToClose__026aa748,1);
+  puVar2 = PTR__OBJC_CLASS___UIViewController_026cdf80;
+  _objc_alloc_init();
+  puVar3 = PTR__OBJC_CLASS___UIView_026cdfd8;
+  local_90 = puVar2;
+  _objc_alloc();
+  (*(code *)PTR__objc_msgSend_02578628)
+            (*(undefined8 *)PTR__CGRectZero_025782f0,*(undefined8 *)(PTR__CGRectZero_025782f0 + 8),
+             *(undefined8 *)(PTR__CGRectZero_025782f0 + 0x10),
+             *(undefined8 *)(PTR__CGRectZero_025782f0 + 0x18));
+  puVar2 = PTR__OBJC_CLASS___UIColor_026cdf78;
+  local_98 = puVar3;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___UIColor_026cdf78,PTR_s_systemBackgroundColor_0269e9b8);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(local_98,PTR_s_setBackgroundColor__026ca888);
+  (*(code *)PTR__objc_release_02578630)(puVar2);
+  puVar2 = PTR__OBJC_CLASS___UIScrollView_026ce1a0;
+  _objc_alloc_init();
+  local_a0 = puVar2;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar2,PTR_s_setTranslatesAutoresizingMaskInt_0269cde8,0);
+  puVar2 = PTR__OBJC_CLASS___UIColor_026cdf78;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___UIColor_026cdf78,PTR_s_clearColor_026ca568);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_setBackgroundColor__026ca888);
+  (*(code *)PTR__objc_release_02578630)(puVar2);
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_setShowsVerticalScrollIndicator__026caa68,1);
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_setShowsHorizontalScrollIndicato_0269f108,0);
+  (*(code *)PTR__objc_msgSend_02578628)(local_98,PTR_s_addSubview__026ca4c0,local_a0);
+  puVar2 = PTR__OBJC_CLASS___UILabel_026cdfb8;
+  _objc_alloc_init();
+  local_a8 = puVar2;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar2,PTR_s_setTranslatesAutoresizingMaskInt_0269cde8,0);
+  (*(code *)PTR__objc_msgSend_02578628)(local_a8,PTR_s_setText__026caa88,&::cf_newline_s_);
+  puVar2 = PTR__OBJC_CLASS___UIFont_026cdfc0;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0x402c000000000000,PTR__OBJC_CLASS___UIFont_026cdfc0,PTR_s_systemFontOfSize__0269cc50);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(local_a8,PTR_s_setFont__026ca958);
+  (*(code *)PTR__objc_release_02578630)(puVar2);
+  dVar31 = 1.0;
+  puVar2 = PTR__OBJC_CLASS___UIColor_026cdf78;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0x3fe3333333333333,PTR__OBJC_CLASS___UIColor_026cdf78,
+             PTR_s_colorWithRed_green_blue_alpha__0269cc48);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(local_a8,PTR_s_setTextColor__026caa98);
+  (*(code *)PTR__objc_release_02578630)(puVar2);
+  (*(code *)PTR__objc_msgSend_02578628)(local_a8,PTR_s_setNumberOfLines__026ca9d8);
+  (*(code *)PTR__objc_msgSend_02578628)(local_a8,PTR_s_setTextAlignment__026caa90,0);
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_addSubview__026ca4c0,local_a8);
+  puVar2 = PTR__OBJC_CLASS___NSLayoutConstraint_026ce030;
+  puVar3 = local_a0;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_topAnchor_0269ce30);
+  _objc_retainAutoreleasedReturnValue();
+  puVar4 = local_98;
+  (*(code *)PTR__objc_msgSend_02578628)(local_98,PTR_s_topAnchor_0269ce30);
+  _objc_retainAutoreleasedReturnValue();
+  puVar5 = puVar3;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar3,PTR_s_constraintEqualToAnchor__0269ce08);
+  _objc_retainAutoreleasedReturnValue();
+  puVar6 = local_a0;
+  local_70 = puVar5;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_leadingAnchor_0269ce20);
+  _objc_retainAutoreleasedReturnValue();
+  puVar7 = local_98;
+  (*(code *)PTR__objc_msgSend_02578628)(local_98,PTR_s_leadingAnchor_0269ce20);
+  _objc_retainAutoreleasedReturnValue();
+  puVar8 = puVar6;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar6,PTR_s_constraintEqualToAnchor__0269ce08);
+  _objc_retainAutoreleasedReturnValue();
+  puVar9 = local_a0;
+  local_68 = puVar8;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_trailingAnchor_0269cf88);
+  _objc_retainAutoreleasedReturnValue();
+  puVar10 = local_98;
+  (*(code *)PTR__objc_msgSend_02578628)(local_98,PTR_s_trailingAnchor_0269cf88);
+  _objc_retainAutoreleasedReturnValue();
+  puVar11 = puVar9;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar9,PTR_s_constraintEqualToAnchor__0269ce08);
+  _objc_retainAutoreleasedReturnValue();
+  puVar12 = local_a0;
+  local_60 = puVar11;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_bottomAnchor_0269ce38);
+  _objc_retainAutoreleasedReturnValue();
+  puVar13 = local_98;
+  (*(code *)PTR__objc_msgSend_02578628)(local_98,PTR_s_bottomAnchor_0269ce38);
+  _objc_retainAutoreleasedReturnValue();
+  puVar14 = puVar12;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar12,PTR_s_constraintEqualToAnchor__0269ce08);
+  _objc_retainAutoreleasedReturnValue();
+  puVar15 = local_a8;
+  local_58 = puVar14;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a8,PTR_s_topAnchor_0269ce30);
+  _objc_retainAutoreleasedReturnValue();
+  puVar16 = local_a0;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_topAnchor_0269ce30);
+  _objc_retainAutoreleasedReturnValue();
+  puVar17 = puVar15;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar15,PTR_s_constraintEqualToAnchor_constant_0269ce18);
+  _objc_retainAutoreleasedReturnValue();
+  puVar18 = local_a8;
+  local_50 = puVar17;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a8,PTR_s_leadingAnchor_0269ce20);
+  _objc_retainAutoreleasedReturnValue();
+  puVar19 = local_a0;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_leadingAnchor_0269ce20);
+  _objc_retainAutoreleasedReturnValue();
+  puVar20 = puVar18;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0x4034000000000000,puVar18,PTR_s_constraintEqualToAnchor_constant_0269ce18);
+  _objc_retainAutoreleasedReturnValue();
+  puVar21 = local_a8;
+  local_48 = puVar20;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a8,PTR_s_trailingAnchor_0269cf88);
+  _objc_retainAutoreleasedReturnValue();
+  puVar22 = local_a0;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_trailingAnchor_0269cf88);
+  _objc_retainAutoreleasedReturnValue();
+  puVar23 = puVar21;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar21,PTR_s_constraintEqualToAnchor_constant_0269ce18);
+  _objc_retainAutoreleasedReturnValue();
+  puVar24 = local_a8;
+  local_40 = puVar23;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a8,PTR_s_bottomAnchor_0269ce38);
+  _objc_retainAutoreleasedReturnValue();
+  puVar25 = local_a0;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_bottomAnchor_0269ce38);
+  _objc_retainAutoreleasedReturnValue();
+  puVar26 = puVar24;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (0xc034000000000000,puVar24,PTR_s_constraintEqualToAnchor_constant_0269ce18);
+  _objc_retainAutoreleasedReturnValue();
+  puVar27 = local_a8;
+  local_38 = puVar26;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a8,PTR_s_widthAnchor_0269ce40);
+  _objc_retainAutoreleasedReturnValue();
+  puVar28 = local_a0;
+  (*(code *)PTR__objc_msgSend_02578628)(local_a0,PTR_s_widthAnchor_0269ce40);
+  _objc_retainAutoreleasedReturnValue();
+  puVar29 = puVar27;
+  (*(code *)PTR__objc_msgSend_02578628)(puVar27,PTR_s_constraintEqualToAnchor_constant_0269ce18);
+  _objc_retainAutoreleasedReturnValue();
+  puVar30 = PTR__OBJC_CLASS___NSArray_026cdfe0;
+  local_30 = puVar29;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___NSArray_026cdfe0,PTR_s_arrayWithObjects_count__0269cc70,&local_70,9);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)(puVar2,PTR_s_activateConstraints__0269ce58);
+  (*(code *)PTR__objc_release_02578630)(puVar30);
+  (*(code *)PTR__objc_release_02578630)(puVar29);
+  (*(code *)PTR__objc_release_02578630)(puVar28);
+  (*(code *)PTR__objc_release_02578630)(puVar27);
+  (*(code *)PTR__objc_release_02578630)(puVar26);
+  (*(code *)PTR__objc_release_02578630)(puVar25);
+  (*(code *)PTR__objc_release_02578630)(puVar24);
+  (*(code *)PTR__objc_release_02578630)(puVar23);
+  (*(code *)PTR__objc_release_02578630)(puVar22);
+  (*(code *)PTR__objc_release_02578630)(puVar21);
+  (*(code *)PTR__objc_release_02578630)(puVar20);
+  (*(code *)PTR__objc_release_02578630)(puVar19);
+  (*(code *)PTR__objc_release_02578630)(puVar18);
+  (*(code *)PTR__objc_release_02578630)(puVar17);
+  (*(code *)PTR__objc_release_02578630)(puVar16);
+  (*(code *)PTR__objc_release_02578630)(puVar15);
+  (*(code *)PTR__objc_release_02578630)(puVar14);
+  (*(code *)PTR__objc_release_02578630)(puVar13);
+  (*(code *)PTR__objc_release_02578630)(puVar12);
+  (*(code *)PTR__objc_release_02578630)(puVar11);
+  (*(code *)PTR__objc_release_02578630)(puVar10);
+  (*(code *)PTR__objc_release_02578630)(puVar9);
+  (*(code *)PTR__objc_release_02578630)(puVar8);
+  (*(code *)PTR__objc_release_02578630)(puVar7);
+  (*(code *)PTR__objc_release_02578630)(puVar6);
+  (*(code *)PTR__objc_release_02578630)(puVar5);
+  (*(code *)PTR__objc_release_02578630)(puVar4);
+  (*(code *)PTR__objc_release_02578630)(puVar3);
+  (*(code *)PTR__objc_msgSend_02578628)(local_90,PTR_s_setView__026aa750,local_98);
+  pcVar1 = "MMPageSheetAdapter";
+  _objc_getClass();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  local_b0 = pcVar1;
+  (*(code *)PTR__objc_msgSend_02578628)(pcVar1,PTR_s_setPageSheetConfig__026aa758,local_88);
+  (*(code *)PTR__objc_msgSend_02578628)(local_b0,PTR_s_setHostViewController__026a58c8,local_90);
+  puVar2 = PTR__OBJC_CLASS___UIScreen_026cdf70;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (PTR__OBJC_CLASS___UIScreen_026cdf70,PTR_s_mainScreen_026ca7b0);
+  _objc_retainAutoreleasedReturnValue();
+  (*(code *)PTR__objc_msgSend_02578628)();
+  (*(code *)PTR__objc_msgSend_02578628)
+            ((dVar31 * 3.0) / 5.0,local_b0,PTR_s_setContentHeight__026aa760);
+  (*(code *)PTR__objc_release_02578630)(puVar2);
+  (*(code *)PTR__objc_msgSend_02578628)(local_b0,PTR_s_showWithAnimated__0269e5a8,1);
+  _objc_storeStrong(&local_b0);
+  _objc_storeStrong(&local_a8,0);
+  _objc_storeStrong(&local_a0,0);
+  _objc_storeStrong(&local_98,0);
+  _objc_storeStrong(&local_90,0);
+  _objc_storeStrong(&local_88,0);
+  if (*(long *)PTR____stack_chk_guard_02578670 - local_28 != 0) {
+                    /* WARNING: Subroutine does not return */
+    ___stack_chk_fail(*(long *)PTR____stack_chk_guard_02578670 - local_28);
+  }
+  return;
+}
+

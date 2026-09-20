@@ -1,0 +1,29 @@
+// menuAvatarEdgeFill @ 01610e20
+
+/* Function Stack Size: 0x10 bytes */
+
+bool WCRSuperFloatProfileStore::menuAvatarEdgeFill(ID param_1,SEL param_2)
+
+{
+  int local_2c;
+  ID local_28;
+  SEL local_20;
+  ID local_18;
+  
+  local_20 = param_2;
+  local_18 = param_1;
+  (*(code *)PTR__objc_msgSend_02578628)
+            (param_1,PTR_s_currentValueForKey__026b1898,&cf_menuAvatarEdgeFill);
+  _objc_retainAutoreleasedReturnValue();
+  local_28 = param_1;
+  if (param_1 == 0) {
+    local_2c = 1;
+  }
+  else {
+    (*(code *)PTR__objc_msgSend_02578628)(param_1,PTR_s_boolValue_026ca540);
+    local_2c = (int)param_1;
+  }
+  _objc_storeStrong(&local_28,0);
+  return (uint)(local_2c != 0);
+}
+

@@ -1,0 +1,23 @@
+// FUN_000365c8 @ 000365c8
+
+void FUN_000365c8(void)
+
+{
+  undefined *puVar1;
+  
+  if (0 < DAT_028c7b30) {
+    DAT_028c7b30 = DAT_028c7b30 + -1;
+  }
+  if ((DAT_028c7b30 < 1) &&
+     (DAT_028c7b30 = 0, DAT_028c7b38 != *(long *)PTR__UIBackgroundTaskInvalid_02578100)) {
+    puVar1 = PTR__OBJC_CLASS___UIApplication_026ce010;
+    (*(code *)PTR__objc_msgSend_02578628)
+              (PTR__OBJC_CLASS___UIApplication_026ce010,PTR_s_sharedApplication_026caaf8);
+    _objc_retainAutoreleasedReturnValue();
+    (*(code *)PTR__objc_msgSend_02578628)();
+    (*(code *)PTR__objc_release_02578630)(puVar1);
+    DAT_028c7b38 = *(long *)PTR__UIBackgroundTaskInvalid_02578100;
+  }
+  return;
+}
+

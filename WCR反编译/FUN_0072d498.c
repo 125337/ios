@@ -1,0 +1,30 @@
+// FUN_0072d498 @ 0072d498
+
+void FUN_0072d498(ulong param_1,undefined8 param_2)
+
+{
+  ulong uVar1;
+  ulong local_28;
+  undefined8 local_20;
+  ulong local_18;
+  
+  local_20 = param_2;
+  local_18 = param_1;
+  (*(code *)PTR__objc_retain_02578638)();
+  local_28 = param_1;
+  _objc_msgSend(param_1,PTR_s_respondsToSelector__026ca818,PTR_s_msgWrap_0269d078);
+  if ((param_1 & 1) != 0) {
+    uVar1 = local_28;
+    _objc_msgSend(local_28,PTR_s_msgWrap_0269d078);
+    _objc_retainAutoreleasedReturnValue();
+    FUN_0072f2ac();
+    (*(code *)PTR__objc_release_02578630)(uVar1);
+  }
+  uVar1 = local_18;
+  (*DAT_028cc448)(local_18,local_20);
+  _objc_retainAutoreleasedReturnValue();
+  _objc_storeStrong(&local_28,0);
+  _objc_autoreleaseReturnValue(uVar1);
+  return;
+}
+
