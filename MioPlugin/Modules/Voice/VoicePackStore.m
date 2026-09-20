@@ -1008,11 +1008,7 @@ static MioVoicePreviewFinishDelegate *_previewFinishDelegate = nil;
     if (ext.length > 0 && MioIsSilkFamilyExt(ext)) return YES;
     // 未知扩展名：嗅探文件头（0x02 wire 前缀 或 #!SILK 魔数）
     @try {
-        NSDictionary *attr = [[NSFileManager defaultManager] attributesOfItemAtPath:abs error:nil];
-        unsigned long long sz = [attr fileSize];
-        if (sz < 10) return NO;
-        NSUInteger len = (NSUInteger)MIN((unsigned long long)16, sz);
-        NSData *head = [NSData dataWithContentsOfFile:abs options:NSDataReadingUncached length:len error:nil];
+        NSData *head = [NSData dataWithContentsOfFile:abs options:NSDataReadingUncached error:nil];
         if (!head) return NO;
         const UInt8 *b = head.bytes;
         if (head.length >= 7 && memcmp(b, "#!SILK", 6) == 0) return YES;
