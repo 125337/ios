@@ -232,7 +232,7 @@
                                                   subtitle:@"插件信息"
                                              sectionTitle:@"更多"],
             
-            // ──── 语音包（入口在 MioPluginEntryVC 功能列表；hook: 附件面板入口 + 自动纳入语音） ────
+            // ──── 语音包（入口在 MioPluginEntryVC 功能列表；hook: 自动纳入语音 + 长按加号） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"voice"
                                                     title:@"语音包"
                                                configClass:[VoiceConfig class]

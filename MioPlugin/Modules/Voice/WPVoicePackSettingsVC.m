@@ -43,14 +43,6 @@
                              width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addSwitchRowInGroup:group
-                             title:@"聊天工具附件入口"
-                              desc:@"附件面板末尾增加「语音包」入口"
-                               key:@"voicePackAttachmentEnabled"
-                              isOn:cfg.voicePackAttachmentEnabled
-                                cy:cy
-                             width:w];
-    cy = [self addSeparatorInGroup:group cy:cy width:w];
-    cy = [self addSwitchRowInGroup:group
                              title:@"自动纳入收到的语音"
                               desc:@"收到的语音消息自动保存到「聊天纳入」目录"
                                key:@"voicePackAutoIncludeEnabled"

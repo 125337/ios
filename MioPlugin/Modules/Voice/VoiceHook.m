@@ -11,8 +11,6 @@
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
 
-static const NSInteger kVoicePackEntryTag = 952701; // 附件面板入口按钮 tag
-
 // ═══════════════════════════════════════════════════════
 // 工具：从视图层级 / VC 栈里找指定类名的 ViewController
 // ═══════════════════════════════════════════════════════
@@ -266,7 +264,7 @@ static void MioDumpVoiceWrap(id wrap, NSString *tag) {
     }
 }
 
-// Hook ④: CMessageMgr.SaveMesVoice:MsgWrap:（真实录音发送会经过，若本版本仍在用）
+// Hook ③: CMessageMgr.SaveMesVoice:MsgWrap:（真实录音发送会经过，若本版本仍在用）
 static IMP orig_SaveMesVoiceMsgWrap = NULL;
 
 static void hook_SaveMesVoiceMsgWrap(id self, SEL _cmd, id path, id wrap) {
@@ -277,7 +275,7 @@ static void hook_SaveMesVoiceMsgWrap(id self, SEL _cmd, id path, id wrap) {
     MioDumpVoiceWrap(wrap, @"真实流程.SaveMes出口");
 }
 
-// Hook ⑤: CMessageMgr.AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:（本地入库主路径）
+// Hook ④: CMessageMgr.AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:（本地入库主路径）
 static IMP orig_AddLocalMsg6 = NULL;
 
 static void hook_AddLocalMsg6(id self, SEL _cmd, id chatName, id wrap, long long fixTime, long long notify) {
@@ -296,7 +294,7 @@ static void hook_AddLocalMsg6(id self, SEL _cmd, id chatName, id wrap, long long
     ((void (*)(id, SEL, id, id, long long, long long))orig_AddLocalMsg6)(self, _cmd, chatName, wrap, fixTime, notify);
 }
 
-// Hook ⑥: CMessageMgr.AddMsg:MsgWrap:（RedEnv 已挂一层，substrate 链式不冲突）
+// Hook ⑤: CMessageMgr.AddMsg:MsgWrap:（RedEnv 已挂一层，substrate 链式不冲突）
 // ─── 语音管线取证（run 2023）：FileTL 实锤"边录边写"模型——AddMsg 是录音开始调用，
 //     松手后的"完成信号"才是上传队列启动开关。此组 hook 抓真实录音的完成调用序列 ───
 static void MioLogVoiceBrief(NSString *tag, id chatName, id wrap) {
@@ -396,66 +394,7 @@ static void hook_AddMsgMsgWrap(id self, SEL _cmd, id chatName, id wrap) {
 }
 
 // ═══════════════════════════════════════════════════════
-// Hook ①: SelectAttachmentView.layoutSubviews — 附件面板末尾加「语音包」入口
-// ═══════════════════════════════════════════════════════
-
-static IMP orig_SelectAttachmentView_layoutSubviews = NULL;
-
-static void hook_SelectAttachmentView_layoutSubviews(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_SelectAttachmentView_layoutSubviews)(self, _cmd);
-    @try {
-        VoiceConfig *cfg = [VoiceConfig shared];
-        if (!cfg.voicePackEnabled || !cfg.voicePackAttachmentEnabled) return;
-
-        Ivar ivar = class_getInstanceVariable([self class], "_scrollView");
-        if (!ivar) return;
-        UIScrollView *sv = object_getIvar(self, ivar);
-        if (!sv) return;
-
-        // 已存在则跳过
-        if ([sv viewWithTag:kVoicePackEntryTag]) return;
-
-        // 找最后一个按钮作为布局基准
-        UIButton *last = nil;
-        CGFloat maxX = 0;
-        for (UIView *v in sv.subviews) {
-            if ([v isKindOfClass:[UIButton class]] && v.tag != kVoicePackEntryTag) {
-                if (CGRectGetMaxX(v.frame) > maxX) { maxX = CGRectGetMaxX(v.frame); last = (UIButton *)v; }
-            }
-        }
-        if (!last) return;
-
-        CGFloat w = last.frame.size.width;
-        CGFloat h = last.frame.size.height;
-        CGFloat x = CGRectGetMaxX(last.frame) + 8;
-        CGFloat y = last.frame.origin.y;
-        if (x + w > sv.bounds.size.width) { // 换行
-            x = last.frame.origin.x;
-            y = CGRectGetMaxY(last.frame) + 12;
-        }
-
-        UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
-        btn.tag = kVoicePackEntryTag;
-        btn.frame = CGRectMake(x, y, w, h);
-        btn.backgroundColor = [UIColor colorWithWhite:0.94 alpha:1.0];
-        btn.layer.cornerRadius = 8;
-        btn.layer.masksToBounds = YES;
-        btn.layer.borderWidth = 1.0 / [UIScreen mainScreen].scale;
-        btn.layer.borderColor = [UIColor colorWithWhite:0.82 alpha:1.0].CGColor;
-        btn.titleLabel.font = [UIFont systemFontOfSize:12];
-        btn.titleLabel.lineBreakMode = NSLineBreakByCharWrapping;
-        [btn setTitle:@"语音包" forState:UIControlStateNormal];
-        [btn setTitleColor:[UIColor colorWithWhite:0.35 alpha:1.0] forState:UIControlStateNormal];
-        [btn addTarget:[VoiceHook class] action:@selector(attachEntryTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [sv addSubview:btn];
-        WPLog(@"Voice", @"[Attach] 附件面板语音包入口已添加");
-    } @catch (NSException *e) {
-        WPLog(@"Voice", @"[Attach] 入口添加异常: %@", e.reason);
-    }
-}
-
-// ═══════════════════════════════════════════════════════
-// Hook ②: CMessageMgr.AsyncOnAddMsg:MsgWrap: — 自动纳入收到的语音
+// Hook ①: CMessageMgr.AsyncOnAddMsg:MsgWrap: — 自动纳入收到的语音
 // ═══════════════════════════════════════════════════════
 
 static IMP orig_AsyncOnAddMsgMsgWrap = NULL;
@@ -536,7 +475,7 @@ static void hook_AsyncOnAddMsgMsgWrap(id self, SEL _cmd, id msg, id wrap) {
 }
 
 // ═══════════════════════════════════════════════════════
-// Hook ③: MMInputToolView 生命周期 — 长按加号入口（WCRefine 方案完整复刻）
+// Hook ②: MMInputToolView 生命周期 — 长按加号入口（WCRefine 方案完整复刻）
 //   手势直接挂到「加号按钮本体」（_attachmentButton ivar 直取 → 智能扫描兜底），
 //   不再挂整个输入栏做触摸位置过滤。幂等安装器：view↔gesture 配对跟踪，
 //   按钮实例变化自动换绑；开关关闭主动摘除手势；handler 内二次校验开关 +
@@ -695,30 +634,6 @@ static void hook_ITV_didMoveToWindow(id self, SEL _cmd) {
 // ═══════════════════════════════════════════════════════
 
 @implementation VoiceHook
-
-+ (void)attachEntryTapped:(UIButton *)sender {
-    NSString *chat = CurrentChatUserName();
-    if (chat.length == 0) {
-        WPShowToast(@"未识别到当前会话");
-        return;
-    }
-    UIViewController *root = [[UIApplication sharedApplication].windows.firstObject rootViewController];
-    UIViewController *top = TopPresentedVC(root);
-    UINavigationController *nav = nil;
-    if ([top isKindOfClass:[UINavigationController class]]) {
-        nav = (UINavigationController *)top;
-    } else if (top.navigationController) {
-        nav = top.navigationController;
-    }
-    WPVoicePackPickerVC *picker = [[WPVoicePackPickerVC alloc] initWithChatName:chat];
-    if (nav) {
-        [nav pushViewController:picker animated:YES];
-    } else {
-        UINavigationController *wrap = [[UINavigationController alloc] initWithRootViewController:picker];
-        [top presentViewController:wrap animated:YES completion:nil];
-    }
-    WPLog(@"Voice", @"[Attach] 打开语音包选择页: %@", chat);
-}
 
 /// 手势处理器（对齐 WCR FUN_008cd918 WCRVPHandlePlusLongPress:）
 /// 手势挂在加号按钮本体上，无需再做触摸位置过滤
@@ -908,18 +823,7 @@ static void MioInstallFileProbe(void) {
 + (void)install {
     Class cls;
 
-    // ① 附件面板入口
-    cls = objc_getClass("SelectAttachmentView");
-    if (cls) {
-        MSHookMessageEx(cls, sel_registerName("layoutSubviews"),
-                        (IMP)hook_SelectAttachmentView_layoutSubviews,
-                        (IMP *)&orig_SelectAttachmentView_layoutSubviews);
-        WPLog(@"Voice", @"[+] SelectAttachmentView layoutSubviews hooked");
-    } else {
-        WPLog(@"Voice", @"[-] SelectAttachmentView not found");
-    }
-
-    // ② 自动纳入语音 + ④⑤⑥ 真实发送流程捕获
+    // ① 自动纳入语音 + ③④⑤ 真实发送流程捕获
     // ★run 2035：取证 hook 全部受 NSUserDefaults MioPlugin_Voice_ForensicsHooks 控制
     //  （默认关=干净模式）——崩溃二分法：干净模式还崩=崩在功能路径，再逐组开回
     BOOL forensics = [[NSUserDefaults standardUserDefaults] boolForKey:@"MioPlugin_Voice_ForensicsHooks"];
@@ -1024,7 +928,7 @@ static void MioInstallFileProbe(void) {
         WPLog(@"Voice", @"[-] CMessageMgr not found");
     }
 
-    // ③ 长按加号入口（WCRefine 方案：手势挂加号按钮本体，MMInputToolView 生命周期驱动幂等安装器）
+    // ② 长按加号入口（WCRefine 方案：手势挂加号按钮本体，MMInputToolView 生命周期驱动幂等安装器）
     cls = objc_getClass("MMInputToolView");
     if (cls) {
         SEL lsSel = @selector(layoutSubviews);
