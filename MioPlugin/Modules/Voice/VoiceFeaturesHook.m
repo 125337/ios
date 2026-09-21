@@ -11,24 +11,27 @@
 
 // ═══════════════════════════════════════════════════════════════
 // 语音功能 Hook（2026-09-22，WCR 反编译逐条复刻，非猜测）
-//  ① voiceFakeDuration     CMessageWrap m_uiVoiceTime getter/setter
+//  ① voiceFakeDuration     UploadVoiceWrap setM_uiVoiceTime:（发送端写假秒数；本版本 CMessageWrap 无 m_uiVoiceTime）
 //  ② voiceAutoToText       VoiceMessageCellView init+onAppear → 翻译
 //  ③ voiceDragProgress     VoiceMessageCellView 4 hook + pan 手势 + 浮层
-//  ④ voiceAutoSpeed        canShowPlayRateButton + onBeginPlayingMsg + 触感吞除
-//  ⑤ voiceBackgroundPlay   MinimizeViewController onAbsorbFloatingViewTap
+//  ④ voiceAutoSpeed        canShowPlayRateButton + 点击入口 orig 后 0.3s 自动倍速 + 触感吞除
+//                          （本版本无 onBeginPlayingMsg:autoPlayEnable:，点击入口为等价触发时机）
+//  ⑤ voiceBackgroundPlay   4 个点击入口（onClick/responseUserClick）→ onMinimize 后台悬浮
+//                          + MinimizeViewController onAbsorbFloatingViewTap（WCR FUN_01f55590）
 //  ⑥ voiceCallPlay         WCAudioModuleMgr 4 hook + AVAudioSession 通话判定
 //  ⑦ voiceForward          ForwardMessageLogicController 3 hook + 原生长按菜单转发项
 // 全部反射 + respondsToSelector 保护；开关关闭时直通 orig 零干预
 // ═══════════════════════════════════════════════════════════════
 
-static IMP orig_CW_voiceTime = NULL;        // m_uiVoiceTime getter
-static IMP orig_CW_setVoiceTime = NULL;     // setM_uiVoiceTime:
+static IMP orig_UVW_setVoiceTime = NULL;    // UploadVoiceWrap setM_uiVoiceTime:（① 假秒数）
 static IMP orig_VMC_init = NULL;            // VoiceMessageCellView initWithMessageWrap:contact:chat:
 static IMP orig_VMC_onAppear = NULL;        // onAppear
 static IMP orig_VMC_didMoveToWindow = NULL; // didMoveToWindow
 static IMP orig_VMC_layoutContentView = NULL; // layoutContentView
-static IMP orig_VMC_onBegin = NULL;         // onBeginPlayingMsg:autoPlayEnable:
-static IMP orig_VMC_onEnd = NULL;           // onEndPlayingMsg:autoPlayEnable:
+static IMP orig_VMC_onClick = NULL;         // ④⑤ onClick
+static IMP orig_VMC_onClickArg = NULL;      // ④⑤ onClick:
+static IMP orig_VMC_respClick = NULL;       // ④⑤ responseUserClick
+static IMP orig_VMC_respClickArg = NULL;    // ④⑤ responseUserClick:
 static IMP orig_VM_canShowRate = NULL;      // VoiceMessageViewModel canShowPlayRateButton
 static IMP orig_UI_impact = NULL;           // UIImpactFeedbackGenerator impactOccurred
 static IMP orig_UI_impactInt = NULL;        // impactOccurredWithIntensity:
@@ -43,6 +46,7 @@ static IMP orig_FMLC_listToContact = NULL;  // ForwardMsgList:ToContact:
 static IMP orig_VMC_filteredMenu = NULL;    // VoiceMessageCellView filteredMenuItems:（⑦ 原生菜单）
 
 static int g_autoRateGuard = 0;             // ④ 自动倍速点击期间吞触感
+static int g_bgGuard = 0;                   // ⑤ onMinimize 触发期间防递归（WCR DAT_028e48c1）
 
 // assoc keys（WCR 的 DAT_028ce0xx / DAT_028e3bxx 等价物）
 static char kVFVMCInitFlag;      // ② init 已走过
@@ -54,6 +58,7 @@ static char kVFHaptic;           // ③ 触感生成器
 static char kVFOverlay;          // ③ 浮层 view
 static char kVFStubFlag;         // ⑦ 替身 wrap 标记（WCR DAT_028ce018）
 static char kVFRealWrapKey;      // ⑦ ForwardMessageLogicController → 真语音 wrap（WCR DAT_028ce013）
+static char kVFMinTs;            // ⑤ 点击转后台防重时间戳 NSNumber（WCR DAT_028e48c2）
 
 static VoiceFeaturesHook *g_vfInstance = nil;
 
@@ -776,35 +781,18 @@ static void VFTryAutoTranslate(UIView *cellView) {
 // hook 函数
 // ═══════════════════════════════════════════════════════════════
 
-// ── ① 假秒数 ──
-static unsigned int hook_CW_voiceTime(id self, SEL _cmd) {
-    unsigned int v = orig_CW_voiceTime ? ((unsigned int (*)(id, SEL))orig_CW_voiceTime)(self, _cmd) : 0;
-    @try {
-        NSInteger sec = [VoiceConfig shared].voiceFakeDuration;
-        if (sec > 0) {
-            NSString *wxid = VFSelfWxid();
-            NSString *from = VFStr(self, NSSelectorFromString(@"m_nsFromUsr"));
-            if (wxid.length > 0 && [from isEqualToString:wxid]) {
-                if (sec < 1) sec = 1;
-                if (sec > 600) sec = 600;
-                return (unsigned int)(sec * 1000);
-            }
-        }
-    } @catch (NSException *e) {}
-    return v;
+// ── ① 假秒数（WCR FUN_008f2e74/008f4084：挂在 UploadVoiceWrap setM_uiVoiceTime:，发送端写入）──
+static unsigned int VFFakeVoiceMs(unsigned int ms) {
+    NSInteger sec = [VoiceConfig shared].voiceFakeDuration;
+    if (sec <= 0) return ms > 60000 ? 60000 : ms;   // 开关关：WCR 仍 clamp 到 60000
+    if (sec < 1) sec = 1;
+    if (sec > 600) sec = 600;
+    return (unsigned int)(sec * 1000);
 }
 
-static void hook_CW_setVoiceTime_(id self, SEL _cmd, unsigned int ms) {
-    unsigned int v = ms;
-    @try {
-        NSInteger sec = [VoiceConfig shared].voiceFakeDuration;
-        if (sec > 0) {
-            if (sec < 1) sec = 1;
-            if (sec > 600) sec = 600;
-            v = (unsigned int)(sec * 1000);
-        }
-    } @catch (NSException *e) {}
-    if (orig_CW_setVoiceTime) ((void (*)(id, SEL, unsigned int))orig_CW_setVoiceTime)(self, _cmd, v);
+static void hook_UVW_setVoiceTime_(id self, SEL _cmd, unsigned int ms) {
+    unsigned int v = VFFakeVoiceMs(ms);
+    if (orig_UVW_setVoiceTime) ((void (*)(id, SEL, unsigned int))orig_UVW_setVoiceTime)(self, _cmd, v);
 }
 
 // ── ② VoiceMessageCellView init / onAppear ──
@@ -865,16 +853,64 @@ static void VFMaybeAutoRate(UIView *cell) {
     });
 }
 
-static void hook_VMC_onBegin(id self, SEL _cmd, id arg1, long long arg2) {
-    if (orig_VMC_onBegin) ((void (*)(id, SEL, id, long long))orig_VMC_onBegin)(self, _cmd, arg1, arg2);
-    if (!VFIsVMC(self)) return;
-    @try { VFOverlayHide(self); VFMaybeAutoRate(self); } @catch (NSException *e) {}
+// ── ⑤ 点击转后台（WCR FUN_01f55590：返回 YES 吞掉 orig 点击，转 onMinimize 悬浮播放）──
+static BOOL VFClickToMinimize(id cell) {
+    if (![VoiceConfig shared].voiceBackgroundPlayEnabled) return NO;
+    if (g_bgGuard) return NO;                       // 我们触发的 onMinimize 内部再进点击 → 放行
+    if (!VFIsVMC(cell)) return NO;
+    // 正在播放才转后台（WCR FUN_01f56270：viewModel isPlaying）
+    id vm = VFValueKey(cell, @"viewModel");
+    SEL isPlaying = NSSelectorFromString(@"isPlaying");
+    if (!vm || ![vm respondsToSelector:isPlaying] || !VFBool(vm, isPlaying, NO)) return NO;
+    SEL minimize = NSSelectorFromString(@"onMinimize");
+    if (![cell respondsToSelector:minimize]) return NO;
+    // 0.35s 防重（WCR assoc NSNumber 时间戳）；窗口内吞掉点击但不重复触发
+    NSDate *now = [NSDate date];
+    NSNumber *last = objc_getAssociatedObject(cell, &kVFMinTs);
+    if (last && now.timeIntervalSinceReferenceDate - last.doubleValue < 0.35) return YES;
+    objc_setAssociatedObject(cell, &kVFMinTs, @(now.timeIntervalSinceReferenceDate), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    g_bgGuard = 1;
+    @try { ((void (*)(id, SEL))objc_msgSend)(cell, minimize); }
+    @catch (NSException *e) { WPLog(@"VoiceFeat", @"[BgPlay] onMinimize 异常 %@", e.reason); }
+    g_bgGuard = 0;
+    WPLog(@"VoiceFeat", @"[BgPlay] 点击→onMinimize 后台播放");
+    return YES;
 }
 
-static void hook_VMC_onEnd(id self, SEL _cmd, id arg1, long long arg2) {
-    if (orig_VMC_onEnd) ((void (*)(id, SEL, id, long long))orig_VMC_onEnd)(self, _cmd, arg1, arg2);
-    if (!VFIsVMC(self)) return;
-    @try { VFOverlayHide(self); } @catch (NSException *e) {}
+// ── ④⑤ 点击入口（WCR hookVoiceClickEntriesInClass: 挂 4 个；未吞时 orig 后触发自动倍速）──
+static void VFClickCommon(id self, SEL _cmd, IMP orig, BOOL isVMC) {
+    if (!VFClickToMinimize(self)) {
+        if (orig) ((void (*)(id, SEL))orig)(self, _cmd);
+        if (isVMC) {
+            @try { VFOverlayHide(self); VFMaybeAutoRate(self); } @catch (NSException *e) {}
+        }
+    }
+}
+
+static void hook_VMC_onClick_(id self, SEL _cmd) {
+    VFClickCommon(self, _cmd, orig_VMC_onClick, VFIsVMC(self));
+}
+
+static void hook_VMC_onClickArg_(id self, SEL _cmd, id arg) {
+    if (!VFClickToMinimize(self)) {
+        if (orig_VMC_onClickArg) ((void (*)(id, SEL, id))orig_VMC_onClickArg)(self, _cmd, arg);
+        if (VFIsVMC(self)) {
+            @try { VFOverlayHide(self); VFMaybeAutoRate(self); } @catch (NSException *e) {}
+        }
+    }
+}
+
+static void hook_VMC_respClick_(id self, SEL _cmd) {
+    VFClickCommon(self, _cmd, orig_VMC_respClick, VFIsVMC(self));
+}
+
+static void hook_VMC_respClickArg_(id self, SEL _cmd, id arg) {
+    if (!VFClickToMinimize(self)) {
+        if (orig_VMC_respClickArg) ((void (*)(id, SEL, id))orig_VMC_respClickArg)(self, _cmd, arg);
+        if (VFIsVMC(self)) {
+            @try { VFOverlayHide(self); VFMaybeAutoRate(self); } @catch (NSException *e) {}
+        }
+    }
 }
 
 // ── ④ canShowPlayRateButton ──
@@ -931,12 +967,13 @@ static BOOL hook_WAM_canSetActive(id self, SEL _cmd, id scene, id group) {
 }
 
 static BOOL hook_WAM_mixList(id self, SEL _cmd, id list) {
-    if (VFIsWAM(self) && [VoiceConfig shared].voiceCallPlayEnabled) return YES;
+    // WCR FUN_01fa01fc 无 self 检查（类方法 hook 的 self 是 Class 对象，不能做 isKindOfClass）
+    if ([VoiceConfig shared].voiceCallPlayEnabled) return YES;
     return orig_WAM_mixList ? ((BOOL (*)(id, SEL, id))orig_WAM_mixList)(self, _cmd, list) : NO;
 }
 
 static BOOL hook_WAM_mixModule(id self, SEL _cmd, id module) {
-    if (VFIsWAM(self) && [VoiceConfig shared].voiceCallPlayEnabled) return YES;
+    if ([VoiceConfig shared].voiceCallPlayEnabled) return YES;
     return orig_WAM_mixModule ? ((BOOL (*)(id, SEL, id))orig_WAM_mixModule)(self, _cmd, module) : NO;
 }
 
@@ -962,7 +999,7 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
 + (void)install {
     WPLog(@"VoiceFeat", @"install 开始");
     [self hookVoiceCell];
-    [self hookWrapTime];
+    [self hookUploadVoiceTime];
     [self hookFeedback];
     [self hookMinimize];
     [self hookAudioModule];
@@ -1004,9 +1041,11 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
     // ③ 生命周期 + ⑦ 长按挂载
     VF_HOOK(cellCls, "didMoveToWindow", hook_VMC_didMoveToWindow, orig_VMC_didMoveToWindow);
     VF_HOOK(cellCls, "layoutContentView", hook_VMC_layoutContentView, orig_VMC_layoutContentView);
-    // ③④ onBegin/onEnd（合并 hook：③播放状态 + ④自动倍速）
-    VF_HOOK(cellCls, "onBeginPlayingMsg:autoPlayEnable:", hook_VMC_onBegin, orig_VMC_onBegin);
-    VF_HOOK(cellCls, "onEndPlayingMsg:autoPlayEnable:", hook_VMC_onEnd, orig_VMC_onEnd);
+    // ④⑤ 点击入口（WCR hookVoiceClickEntriesInClass: 同款 4 个，逐个存在性检查）
+    VF_HOOK(cellCls, "onClick", hook_VMC_onClick_, orig_VMC_onClick);
+    VF_HOOK(cellCls, "onClick:", hook_VMC_onClickArg_, orig_VMC_onClickArg);
+    VF_HOOK(cellCls, "responseUserClick", hook_VMC_respClick_, orig_VMC_respClick);
+    VF_HOOK(cellCls, "responseUserClick:", hook_VMC_respClickArg_, orig_VMC_respClickArg);
     // ④ 倍速按钮显示
     Class vmCls = objc_getClass("VoiceMessageViewModel");
     if (vmCls) VF_HOOK(vmCls, "canShowPlayRateButton", hook_VM_canShowRate, orig_VM_canShowRate);
@@ -1025,11 +1064,11 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
     }
 }
 
-+ (void)hookWrapTime {
-    Class wrapCls = objc_getClass("CMessageWrap");
-    if (!wrapCls) return;
-    VF_HOOK(wrapCls, "m_uiVoiceTime", hook_CW_voiceTime, orig_CW_voiceTime);
-    VF_HOOK(wrapCls, "setM_uiVoiceTime:", hook_CW_setVoiceTime_, orig_CW_setVoiceTime);
++ (void)hookUploadVoiceTime {
+    // ① 假秒数：本版本 CMessageWrap 无 m_uiVoiceTime（SKIP 实证），WCR 实际挂在发送端 UploadVoiceWrap
+    Class uvw = objc_getClass("UploadVoiceWrap");
+    if (!uvw) { WPLog(@"VoiceFeat", @"UploadVoiceWrap 不存在，跳过假秒数 hook"); return; }
+    VF_HOOK(uvw, "setM_uiVoiceTime:", hook_UVW_setVoiceTime_, orig_UVW_setVoiceTime);
 }
 
 + (void)hookFeedback {
