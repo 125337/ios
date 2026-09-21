@@ -495,14 +495,6 @@ static unsigned int MioWrapLocalIDOf(id wrap) {
     return *(unsigned int *)((__bridge void *)wrap + ivar_getOffset(iv));
 }
 
-/// 确保目录存在后写文件，返回是否成功
-static BOOL MioWriteVoiceFile(NSData *data, NSString *path) {
-    if (path.length == 0 || data.length == 0) return NO;
-    NSString *dir = [path stringByDeletingLastPathComponent];
-    if (dir.length > 0) [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
-    return [data writeToFile:path atomically:YES];
-}
-
 /// 一次性诊断（仅轻量确认；★禁止全类扫描：
 /// log15 主线程扫描、log16 后台扫描均在枚举 11.4 万类后 ~2s 进程死亡，
 /// 疑似微信防护击杀类枚举行为，主线程/后台线程都一样）
