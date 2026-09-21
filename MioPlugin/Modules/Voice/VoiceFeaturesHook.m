@@ -497,6 +497,17 @@ static id VFCellWrap(UIView *cell) {
     return wrap;
 }
 
+/// 取 cell responder 链上第一个 UIViewController（WCR FUN_008b6c68 同款 = 聊天页）
+/// 菜单弹出瞬间全局 topVC 是菜单宿主，从它 present 会被吞；WCR 就是从 cell 链取聊天页
+static UIViewController *VFVCFromResponderChain(UIView *view) {
+    UIResponder *r = view.nextResponder;
+    while (r) {
+        if ([r isKindOfClass:[UIViewController class]]) return (UIViewController *)r;
+        r = r.nextResponder;
+    }
+    return nil;
+}
+
 static void VFStartForwardFromCell(UIView *cell) {
     @try {
         if (![VoiceConfig shared].voiceForwardEnabled) return;
@@ -520,7 +531,8 @@ static void VFStartForwardFromCell(UIView *cell) {
         Class fmgCls = NSClassFromString(@"ForwardMessageMgr");
         id svc = VFService(fmgCls);
         SEL fwd = NSSelectorFromString(@"forwardMessage:fromViewController:");
-        UIViewController *topVC = WPGetTopVCForPresentation();
+        UIViewController *topVC = VFVCFromResponderChain(cell) ?: WPGetTopVCForPresentation();
+        WPLog(@"VoiceFeat", @"[Fwd] fromVC=%@", NSStringFromClass([topVC class]));
         if (!svc || !fmgCls || ![svc respondsToSelector:fwd] || !topVC) {
             WPShowToast(@"当前微信版本不支持语音转发");
             return;
