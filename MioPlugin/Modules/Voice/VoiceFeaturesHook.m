@@ -501,7 +501,14 @@ static void VFStartForwardFromCell(UIView *cell) {
     @try {
         if (![VoiceConfig shared].voiceForwardEnabled) return;
         id wrap = VFCellWrap(cell);
-        if (!wrap || !VFIsVoiceMsg(wrap)) return;
+        if (!wrap) {
+            WPLog(@"VoiceFeat", @"[Fwd] 菜单转发中止：cell 取不到 wrap (cell=%@)", NSStringFromClass([cell class]));
+            return;
+        }
+        if (!VFIsVoiceMsg(wrap)) {
+            WPLog(@"VoiceFeat", @"[Fwd] 菜单转发中止：非语音消息 type=%u", VFMsgType(wrap));
+            return;
+        }
         NSData *data = VFVoiceData(wrap);
         if (!data) {
             WPLog(@"VoiceFeat", @"[Fwd] 语音数据为空 resolvedPath=%@ localID=%u dt=%@",
@@ -531,9 +538,13 @@ static void VFStartForwardFromCell(UIView *cell) {
 //    VoiceMessageCellView filteredMenuItems:；同小丑 JokerHook 的 MMMenuItem 模式）
 // ═══════════════════════════════════════════════════════════════
 
-/// 菜单项 action：注册到 VoiceMessageCellView 的 vfMenuForward（self = cellView）
-static void vfMenuForward_IMP(id self, SEL _cmd) {
+/// 菜单项 action：注册到 VoiceMessageCellView 的 vfMenuForward:（self = cellView，sender 由菜单传入）
+/// 对齐 WCR FUN_008adfc0：带冒号 SEL + 三参 IMP（types v@:@）
+static void vfMenuForwardAction_IMP(id self, SEL _cmd, id sender) {
+    WPLog(@"VoiceFeat", @"[Fwd] 菜单点击 self=%@ sender=%@",
+          NSStringFromClass([(id)self class]), sender ? NSStringFromClass([sender class]) : @"nil");
     if ([self isKindOfClass:[UIView class]]) VFStartForwardFromCell((UIView *)self);
+    else WPLog(@"VoiceFeat", @"[Fwd] 菜单点击 self 非 UIView，忽略");
 }
 
 /// 去重（WCR FUN_008b526c 等价）：菜单里已有「转发/Forward」标题的项则不追加
@@ -565,7 +576,7 @@ static id hook_VMC_filteredMenu(id self, SEL _cmd, id filterArg) {
         if (!mmItemCls || ![mmItemCls instancesRespondToSelector:initSel]) return items;
         NSString *icon = [NSString stringWithUTF8String:"share_filled"];  // WCR 图标名
         id mmItem = ((id (*)(id, SEL, id, id, SEL))objc_msgSend)(
-            [mmItemCls alloc], initSel, @"转发", icon, NSSelectorFromString(@"vfMenuForward"));
+            [mmItemCls alloc], initSel, @"转发", icon, NSSelectorFromString(@"vfMenuForward:"));
         if (!mmItem) return items;
         NSMutableArray *newItems = [items mutableCopy];
         [newItems addObject:mmItem];
@@ -999,9 +1010,9 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
     if (menuSel) {
         MSHookMessageEx(cellCls, menuSel, (IMP)hook_VMC_filteredMenu, &orig_VMC_filteredMenu);
         WPLog(@"VoiceFeat", @"hook OK: %s (转发菜单项)", fm ? "filteredMenuItems:" : "operationMenuItems");
-        SEL act = NSSelectorFromString(@"vfMenuForward");
+        SEL act = NSSelectorFromString(@"vfMenuForward:");
         if (![cellCls instancesRespondToSelector:act]) {
-            class_addMethod(cellCls, act, (IMP)vfMenuForward_IMP, "v@:");
+            class_addMethod(cellCls, act, (IMP)vfMenuForwardAction_IMP, "v@:@");
         }
     } else {
         WPLog(@"VoiceFeat", @"hook SKIP: 语音 cell 无 filteredMenuItems:/operationMenuItems");
