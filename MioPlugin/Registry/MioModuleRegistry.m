@@ -48,6 +48,7 @@
 #import "../Modules/SettingEntry/SettingEntryHook.h"
 #import "../Modules/FontLayout/FontLayoutHook.h"
 #import "../Modules/Voice/VoiceHook.h"
+#import "../Modules/Voice/VoiceFeaturesHook.h"
 
 // ────── 设置页 Controller 的 import ──────
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
@@ -236,7 +237,7 @@
             [MioModuleDescriptor descriptorWithIdentifier:@"voice"
                                                     title:@"语音包"
                                                configClass:[VoiceConfig class]
-                                               hookClasses:@[[VoiceHook class]]
+                                               hookClasses:@[[VoiceHook class], [VoiceFeaturesHook class]]
                                            controllerClass:nil
                                                   subtitle:@"语音消息伪装发送"
                                              sectionTitle:@"更多"],
