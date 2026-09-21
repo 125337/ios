@@ -208,7 +208,7 @@ static BOOL VFSendVoiceDataToChat(NSData *data, unsigned int ms, NSString *chatN
 
     Class wrapCls = objc_getClass("CMessageWrap");
     if (!wrapCls) return NO;
-    CMessageWrap *wrap = nil;
+    id wrap = nil;
     SEL init2 = NSSelectorFromString(@"initWithMsgType:nsFromUsr:");
     if ([wrapCls instancesRespondToSelector:init2]) {
         wrap = [[wrapCls alloc] initWithMsgType:0x22 nsFromUsr:wxid];
@@ -328,7 +328,7 @@ static NSString *VFContactName(id contact) {
 static id VFMakeStubWrap(id realWrap) {
     Class wrapCls = objc_getClass("CMessageWrap");
     if (!wrapCls || ![wrapCls instancesRespondToSelector:@selector(initWithMsgType:)]) return nil;
-    CMessageWrap *stub = [[wrapCls alloc] initWithMsgType:1];
+    id stub = [[wrapCls alloc] initWithMsgType:1];
     if (!stub) return nil;
     NSString *from = VFStr(realWrap, NSSelectorFromString(@"m_nsFromUsr"));
     NSString *to = VFStr(realWrap, NSSelectorFromString(@"m_nsToUsr"));
