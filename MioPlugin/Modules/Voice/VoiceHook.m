@@ -456,23 +456,56 @@ static id MioVPWrapFromCellView(id cellView) {
     return nil;
 }
 
-/// 落盘文件兜底（对齐 WCR FUN_008db4b4）：getVoicePath → m_nsVoicePath →
-/// m_nsMsgDataPath → m_nsFilePath，取第一个存在的文件
+/// 语音文件路径解析（对齐 WCR FUN_008dbac8）：微信的 m_nsVoicePath 是相对路径
+/// 且可能无扩展名 → 拼 Application Support / Home / 原样，无扩展名补
+/// .aud/.silk/.slk/.amr/.mp3/.wav/.m4a，返回第一个真实存在的文件
+static NSString *MioVPResolveVoiceFileAbsPath(NSString *raw) {
+    NSString *p = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (p.length == 0) return nil;
+    NSMutableArray *cands = [NSMutableArray array];
+    if ([p hasPrefix:@"/"]) {
+        [cands addObject:p];
+    } else {
+        NSString *appSupport = [NSSearchPathForDirectoriesInDomains(9 /*ApplicationSupport*/, 1 /*User*/, YES) firstObject];
+        if (appSupport.length > 0) [cands addObject:[appSupport stringByAppendingPathComponent:p]];
+        [cands addObject:[NSHomeDirectory() stringByAppendingPathComponent:p]];
+        [cands addObject:p];
+    }
+    if (p.pathExtension.length == 0) {
+        NSMutableArray *withExt = [NSMutableArray array];
+        for (NSString *c in cands) {
+            for (NSString *ext in @[@"aud", @"silk", @"slk", @"amr", @"mp3", @"wav", @"m4a"]) {
+                NSString *ce = [c stringByAppendingPathExtension:ext];
+                if (ce) [withExt addObject:ce];
+            }
+        }
+        [cands addObjectsFromArray:withExt];
+    }
+    NSFileManager *fm = [NSFileManager defaultManager];
+    for (NSString *c in cands) {
+        BOOL isDir = NO;
+        if ([fm fileExistsAtPath:c isDirectory:&isDir] && !isDir) return c;
+    }
+    return nil;
+}
+
+/// 落盘文件兜底（对齐 WCR FUN_008db4b4 + FUN_008da2c4）：getVoicePath →
+/// m_nsVoicePath → m_nsMsgDataPath → m_nsFilePath，路径经 MioVPResolveVoiceFileAbsPath
+/// 解析后读文件
 static NSData *MioVPVoiceFileDataFromWrap(id wrap) {
     @try {
         SEL gv = NSSelectorFromString(@"getVoicePath");
         if ([wrap respondsToSelector:gv]) {
             NSString *p = ((NSString *(*)(id, SEL))objc_msgSend)(wrap, gv);
-            if ([p isKindOfClass:[NSString class]] && p.length > 0 &&
-                [[NSFileManager defaultManager] fileExistsAtPath:p]) {
-                return [NSData dataWithContentsOfFile:p];
-            }
+            NSString *abs = MioVPResolveVoiceFileAbsPath(
+                [p isKindOfClass:[NSString class]] ? p : @"");
+            if (abs) return [NSData dataWithContentsOfFile:abs];
         }
         for (NSString *key in @[@"m_nsVoicePath", @"m_nsMsgDataPath", @"m_nsFilePath"]) {
             NSString *p = [wrap valueForKey:key];
-            if ([p isKindOfClass:[NSString class]] && p.length > 0 &&
-                [[NSFileManager defaultManager] fileExistsAtPath:p]) {
-                return [NSData dataWithContentsOfFile:p];
+            if ([p isKindOfClass:[NSString class]]) {
+                NSString *abs = MioVPResolveVoiceFileAbsPath(p);
+                if (abs) return [NSData dataWithContentsOfFile:abs];
             }
         }
     } @catch (NSException *e) {}
@@ -541,7 +574,16 @@ static void mioVoiceInclude_IMP(id self, SEL _cmd) {
         NSData *data = [VoicePackStore voiceDataFromWrap:wrap];
         if (data.length == 0) data = MioVPVoiceFileDataFromWrap(wrap);
         if (data.length == 0) {
-            WPLog(@"Voice", @"[IncludeLP] 语音数据为空（可能未下载）localID=%u", MioWrapLocalID(wrap));
+            // 诊断：字段状态 + 原始路径，便于下一轮定位
+            @try {
+                WPLog(@"Voice", @"[IncludeLP] 语音数据为空 localID=%u voicePath=%@ msgDataPath=%@ filePath=%@",
+                      MioWrapLocalID(wrap),
+                      ((NSString *)[wrap valueForKey:@"m_nsVoicePath"]) ?: @"(空)",
+                      ((NSString *)[wrap valueForKey:@"m_nsMsgDataPath"]) ?: @"(空)",
+                      ((NSString *)[wrap valueForKey:@"m_nsFilePath"]) ?: @"(空)");
+            } @catch (NSException *e) {
+                WPLog(@"Voice", @"[IncludeLP] 语音数据为空 localID=%u", MioWrapLocalID(wrap));
+            }
             WPShowToast(@"语音未下载，暂不能纳入");
             return;
         }

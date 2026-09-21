@@ -15,13 +15,14 @@ extern void WPShowToast(NSString *message);
 // C 安全工具
 // ═══════════════════════════════════════════════════════
 
-/// 探测 CMessageWrap 的语音数据 ivar：不同微信版本字段名不同
-/// （老版本 m_nsImgBuf，新版实测为 m_byteBuffer —— MioPlugin(9).log 全量 ivar 确认）
-static Ivar MioFindVoiceDataIvar(id msg) {
-    if (!msg) return NULL;
-    static Ivar cached = NULL;
+/// 收集 CMessageWrap 全部语音数据 ivar 候选（m_dtVoice/m_byteBuffer/m_nsImgBuf 等；
+/// 收发两端填充的字段不同，读取时取第一个非空的——对齐 WCR FUN_008da2c4 语义）
+static NSMutableArray<NSValue *> *MioVoiceDataIvars(id msg) {
+    static NSMutableArray *cached = nil;
     static BOOL probed = NO;
     if (probed) return cached;
+    probed = YES;
+    NSMutableArray *arr = [NSMutableArray array];
     unsigned int count = 0;
     Ivar *list = class_copyIvarList(object_getClass(msg), &count);
     NSMutableArray *names = [NSMutableArray array];
@@ -36,14 +37,18 @@ static Ivar MioFindVoiceDataIvar(id msg) {
         if ([lower isEqualToString:@"m_bytebuffer"] ||
             [lower containsString:@"dtvoice"] || [lower containsString:@"imgbuf"] ||
             [lower containsString:@"voicedata"] || [lower containsString:@"voicebuf"]) {
-            cached = list[i];
-            WPLog(@"Voice", @"[Send] 语音数据字段命中: %@", name);
-            break;
+            [arr addObject:[NSValue valueWithPointer:list[i]]];
         }
     }
     free(list);
-    if (!cached) WPLog(@"Voice", @"[Send] 未命中语音数据字段, CMessageWrap ivars(%u): %@", count, names);
-    probed = YES;
+    if (arr.count == 0) {
+        WPLog(@"Voice", @"[Send] 未命中语音数据字段, CMessageWrap ivars(%u): %@", count, names);
+    } else {
+        NSMutableArray *ns = [NSMutableArray array];
+        for (NSValue *v in arr) [ns addObject:@(ivar_getName((Ivar)[v pointerValue]))];
+        WPLog(@"Voice", @"[Voice] 语音数据字段候选(%lu): %@", (unsigned long)ns.count, ns);
+    }
+    cached = arr;
     return cached;
 }
 
@@ -559,10 +564,12 @@ static NSUInteger SilkStreamOffset(NSData *data) {
 }
 
 + (NSData *)voiceDataFromWrap:(id)wrap {
-    Ivar ivar = MioFindVoiceDataIvar(wrap);
-    if (!ivar) return nil;
-    id val = object_getIvar(wrap, ivar);
-    return [val isKindOfClass:[NSData class]] ? val : nil;
+    if (!wrap) return nil;
+    for (NSValue *v in MioVoiceDataIvars(wrap)) {
+        id val = object_getIvar(wrap, (Ivar)[v pointerValue]);
+        if ([val isKindOfClass:[NSData class]] && [(NSData *)val length] > 0) return val;
+    }
+    return nil;
 }
 
 // ═══════════════════════════════════════════════════════
