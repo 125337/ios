@@ -19,7 +19,7 @@
     return @[
         [ConfigDescriptor itemWithKey:@"voicePackEnabled" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"voicePackContinuousSendEnabled" type:ConfigValueTypeBool default:@(NO)],
-        [ConfigDescriptor itemWithKey:@"voicePackAutoIncludeEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"voicePackIncludeLongPressEnabled" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"voicePackPlusLongPressEnabled" type:ConfigValueTypeBool default:@(NO)],
     ];
 }

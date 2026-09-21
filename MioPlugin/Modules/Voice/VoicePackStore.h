@@ -31,11 +31,14 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)deleteItemAtRelPath:(NSString *)relPath error:(NSError **)error;
 /// 从文件 App 导入（拷贝）到目标目录；返回新条目的 relPath
 + (nullable NSString *)importFileFromURL:(NSURL *)url toRelPath:(nullable NSString *)relPath error:(NSError **)error;
+/// 导入语音原始数据到语音包根目录（长按聊天语音纳入；对齐 WCR importVoiceData：
+/// 名字清洗 → 无扩展名补 .silk → 重名自动 (2)/(3) → atomic 写）。成功返回新条目 relPath
++ (nullable NSString *)importVoiceData:(NSData *)data preferredName:(NSString *)name error:(NSError **)error;
 /// 按名称排序的条目排序比较
 + (NSComparator)itemComparator;
 
 #pragma mark - 时长缓存（毫秒）
-/// 记录时长（自动纳入时从消息 XML 解析；导入时用 AVURLAsset 探测）
+/// 记录时长（纳入/导入时探测：silk 帧走解析，系统格式走 AVURLAsset）
 + (void)setDurationMs:(long long)ms forRelPath:(NSString *)relPath;
 /// 读取时长；无缓存且是系统可识别音频时自动探测并缓存；无法确定返回 0
 + (long long)durationMsForRelPath:(NSString *)relPath;

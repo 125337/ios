@@ -10,8 +10,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL voicePackEnabled;
 /// 连续发送：选择页发送后不关闭，可继续发送
 @property (nonatomic, assign) BOOL voicePackContinuousSendEnabled;
-/// 收到的语音消息自动保存到「聊天纳入」目录（silk 原始数据）
-@property (nonatomic, assign) BOOL voicePackAutoIncludeEnabled;
+/// 长按聊天里的语音消息纳入语音包（WCR 式，存语音包根目录）
+@property (nonatomic, assign) BOOL voicePackIncludeLongPressEnabled;
 /// 长按聊天输入栏右下角「+」打开语音包选择页
 @property (nonatomic, assign) BOOL voicePackPlusLongPressEnabled;
 

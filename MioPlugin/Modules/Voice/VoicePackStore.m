@@ -34,7 +34,8 @@ static Ivar MioFindVoiceDataIvar(id msg) {
         if (!enc || enc[0] != '@') continue; // 仅对象类型
         NSString *lower = name.lowercaseString;
         if ([lower isEqualToString:@"m_bytebuffer"] ||
-            [lower containsString:@"imgbuf"] || [lower containsString:@"voicedata"] || [lower containsString:@"voicebuf"]) {
+            [lower containsString:@"dtvoice"] || [lower containsString:@"imgbuf"] ||
+            [lower containsString:@"voicedata"] || [lower containsString:@"voicebuf"]) {
             cached = list[i];
             WPLog(@"Voice", @"[Send] 语音数据字段命中: %@", name);
             break;
@@ -363,6 +364,44 @@ static NSData *MioDecodeSilkToPlayable(NSData *wire) {
     } @finally {
         if (scoped) [url stopAccessingSecurityScopedResource];
     }
+}
+
++ (NSString *)importVoiceData:(NSData *)data preferredName:(NSString *)name error:(NSError **)error {
+    if (data.length == 0) {
+        if (error) *error = [NSError errorWithDomain:@"MioVoice" code:6 userInfo:@{NSLocalizedDescriptionKey: @"语音数据为空"}];
+        return nil;
+    }
+    // 名字清洗（对齐 WCR FUN_008d9760）：去路径分隔符等非法字符，去首尾空白
+    NSString *clean = [name stringByReplacingOccurrencesOfString:@"/" withString:@""];
+    clean = [clean stringByReplacingOccurrencesOfString:@":" withString:@""];
+    clean = [clean stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (clean.length == 0) clean = @"voice_silk"; // 对齐 WCR 默认名
+    if (clean.pathExtension.length == 0) clean = [clean stringByAppendingString:@".silk"]; // 对齐 WCR：补扩展名
+
+    NSString *base = [self rootDirectory];
+    [[NSFileManager defaultManager] createDirectoryAtPath:base withIntermediateDirectories:YES attributes:nil error:nil];
+    // 重名自动序号（对齐 WCR uniquePathInDirectory:preferredName:）
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *ext = clean.pathExtension;
+    NSString *stem = [clean stringByDeletingPathExtension];
+    NSString *dest = [base stringByAppendingPathComponent:clean];
+    int seq = 1;
+    while ([fm fileExistsAtPath:dest]) {
+        dest = [base stringByAppendingPathComponent:[NSString stringWithFormat:@"%@(%d).%@", stem, seq, ext]];
+        seq++;
+    }
+    NSError *wErr = nil;
+    if (![data writeToFile:dest options:NSDataWritingAtomic error:&wErr]) {
+        WPLog(@"Voice", @"[Include] 写入失败: %@, 原因: %@", dest, wErr.localizedDescription);
+        if (error) *error = wErr ?: [NSError errorWithDomain:@"MioVoice" code:7 userInfo:@{NSLocalizedDescriptionKey: @"写入文件失败"}];
+        return nil;
+    }
+    NSString *rel = [self relPathForAbsPath:dest] ?: clean;
+    // silk 时长缓存（解析失败不影响纳入）
+    long long ms = [self silkDurationMsForFile:dest];
+    if (ms > 0) [self setDurationMs:ms forRelPath:rel];
+    WPLog(@"Voice", @"[Include] 已纳入: %@ (%.1fKB, %lldms)", rel, data.length / 1024.0, ms);
+    return rel;
 }
 
 #pragma mark - 元数据内部迁移/清理
