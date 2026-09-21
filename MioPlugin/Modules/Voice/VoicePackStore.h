@@ -18,8 +18,6 @@ NS_ASSUME_NONNULL_BEGIN
 #pragma mark - 目录
 /// 语音包根目录：Documents/Mio助手/语音包
 + (NSString *)rootDirectory;
-/// 聊天纳入目录：Documents/Mio助手/语音包/聊天纳入
-+ (NSString *)chatIncludeDirectory;
 + (void)ensureRootDirectoryExists;
 + (nullable NSString *)relPathForAbsPath:(NSString *)absPath;
 
@@ -31,9 +29,6 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)deleteItemAtRelPath:(NSString *)relPath error:(NSError **)error;
 /// 从文件 App 导入（拷贝）到目标目录；返回新条目的 relPath
 + (nullable NSString *)importFileFromURL:(NSURL *)url toRelPath:(nullable NSString *)relPath error:(NSError **)error;
-/// 导入语音原始数据到语音包根目录（长按聊天语音纳入；对齐 WCR importVoiceData：
-/// 名字清洗 → 无扩展名补 .silk → 重名自动 (2)/(3) → atomic 写）。成功返回新条目 relPath
-+ (nullable NSString *)importVoiceData:(NSData *)data preferredName:(NSString *)name error:(NSError **)error;
 /// 按名称排序的条目排序比较
 + (NSComparator)itemComparator;
 
@@ -58,8 +53,6 @@ NS_ASSUME_NONNULL_BEGIN
                      error:(NSError **)error;
 /// 解析 silk 文件真实时长（毫秒），解析失败返回 0
 + (long long)silkDurationMsForFile:(NSString *)path;
-/// 从 CMessageWrap 取语音数据 buffer（自动适配 m_nsImgBuf/m_byteBuffer 等版本差异）
-+ (nullable NSData *)voiceDataFromWrap:(id)wrap;
 
 #pragma mark - 预览解码（系统格式 + silk：借微信自带 MJSilkCodec 解码，WCRefine 方案）
 // WCR 架构：播放器与播放状态（previewPlayer/previewingPath）由页面 VC 自持，Store 只负责解码

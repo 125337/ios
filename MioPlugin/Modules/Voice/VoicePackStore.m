@@ -15,43 +15,6 @@ extern void WPShowToast(NSString *message);
 // C 安全工具
 // ═══════════════════════════════════════════════════════
 
-/// 收集 CMessageWrap 全部语音数据 ivar 候选（m_dtVoice/m_byteBuffer/m_nsImgBuf 等；
-/// 收发两端填充的字段不同，读取时取第一个非空的——对齐 WCR FUN_008da2c4 语义）
-static NSMutableArray<NSValue *> *MioVoiceDataIvars(id msg) {
-    static NSMutableArray *cached = nil;
-    static BOOL probed = NO;
-    if (probed) return cached;
-    probed = YES;
-    NSMutableArray *arr = [NSMutableArray array];
-    unsigned int count = 0;
-    Ivar *list = class_copyIvarList(object_getClass(msg), &count);
-    NSMutableArray *names = [NSMutableArray array];
-    for (unsigned int i = 0; i < count; i++) {
-        const char *n = ivar_getName(list[i]);
-        if (!n) continue;
-        NSString *name = @(n);
-        [names addObject:name];
-        const char *enc = ivar_getTypeEncoding(list[i]);
-        if (!enc || enc[0] != '@') continue; // 仅对象类型
-        NSString *lower = name.lowercaseString;
-        if ([lower isEqualToString:@"m_bytebuffer"] ||
-            [lower containsString:@"dtvoice"] || [lower containsString:@"imgbuf"] ||
-            [lower containsString:@"voicedata"] || [lower containsString:@"voicebuf"]) {
-            [arr addObject:[NSValue valueWithPointer:list[i]]];
-        }
-    }
-    free(list);
-    if (arr.count == 0) {
-        WPLog(@"Voice", @"[Send] 未命中语音数据字段, CMessageWrap ivars(%u): %@", count, names);
-    } else {
-        NSMutableArray *ns = [NSMutableArray array];
-        for (NSValue *v in arr) [ns addObject:@(ivar_getName((Ivar)[v pointerValue]))];
-        WPLog(@"Voice", @"[Voice] 语音数据字段候选(%lu): %@", (unsigned long)ns.count, ns);
-    }
-    cached = arr;
-    return cached;
-}
-
 /// NSUserDefaults 存取小工具
 static id prefObject(NSString *key) {
     return [[NSUserDefaults standardUserDefaults] objectForKey:key];
@@ -202,16 +165,11 @@ static NSData *MioDecodeSilkToPlayable(NSData *wire) {
     return [docs stringByAppendingPathComponent:@"Mio助手/语音包"];
 }
 
-+ (NSString *)chatIncludeDirectory {
-    return [[self rootDirectory] stringByAppendingPathComponent:@"聊天纳入"];
-}
-
 + (void)ensureRootDirectoryExists {
     NSFileManager *fm = [NSFileManager defaultManager];
-    for (NSString *dir in @[[self rootDirectory], [self chatIncludeDirectory]]) {
-        if (![fm fileExistsAtPath:dir]) {
-            [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
-        }
+    NSString *dir = [self rootDirectory];
+    if (![fm fileExistsAtPath:dir]) {
+        [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     }
 }
 
@@ -371,44 +329,6 @@ static NSData *MioDecodeSilkToPlayable(NSData *wire) {
     }
 }
 
-+ (NSString *)importVoiceData:(NSData *)data preferredName:(NSString *)name error:(NSError **)error {
-    if (data.length == 0) {
-        if (error) *error = [NSError errorWithDomain:@"MioVoice" code:6 userInfo:@{NSLocalizedDescriptionKey: @"语音数据为空"}];
-        return nil;
-    }
-    // 名字清洗（对齐 WCR FUN_008d9760）：去路径分隔符等非法字符，去首尾空白
-    NSString *clean = [name stringByReplacingOccurrencesOfString:@"/" withString:@""];
-    clean = [clean stringByReplacingOccurrencesOfString:@":" withString:@""];
-    clean = [clean stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (clean.length == 0) clean = @"voice_silk"; // 对齐 WCR 默认名
-    if (clean.pathExtension.length == 0) clean = [clean stringByAppendingString:@".silk"]; // 对齐 WCR：补扩展名
-
-    NSString *base = [self rootDirectory];
-    [[NSFileManager defaultManager] createDirectoryAtPath:base withIntermediateDirectories:YES attributes:nil error:nil];
-    // 重名自动序号（对齐 WCR uniquePathInDirectory:preferredName:）
-    NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *ext = clean.pathExtension;
-    NSString *stem = [clean stringByDeletingPathExtension];
-    NSString *dest = [base stringByAppendingPathComponent:clean];
-    int seq = 1;
-    while ([fm fileExistsAtPath:dest]) {
-        dest = [base stringByAppendingPathComponent:[NSString stringWithFormat:@"%@(%d).%@", stem, seq, ext]];
-        seq++;
-    }
-    NSError *wErr = nil;
-    if (![data writeToFile:dest options:NSDataWritingAtomic error:&wErr]) {
-        WPLog(@"Voice", @"[Include] 写入失败: %@, 原因: %@", dest, wErr.localizedDescription);
-        if (error) *error = wErr ?: [NSError errorWithDomain:@"MioVoice" code:7 userInfo:@{NSLocalizedDescriptionKey: @"写入文件失败"}];
-        return nil;
-    }
-    NSString *rel = [self relPathForAbsPath:dest] ?: clean;
-    // silk 时长缓存（解析失败不影响纳入）
-    long long ms = [self silkDurationMsForFile:dest];
-    if (ms > 0) [self setDurationMs:ms forRelPath:rel];
-    WPLog(@"Voice", @"[Include] 已纳入: %@ (%.1fKB, %lldms)", rel, data.length / 1024.0, ms);
-    return rel;
-}
-
 #pragma mark - 元数据内部迁移/清理
 
 + (void)migrateMetaForRelPath:(NSString *)oldRel toRelPath:(NSString *)newRel {
@@ -561,15 +481,6 @@ static NSUInteger SilkStreamOffset(NSData *data) {
     if (frames < 0) frames = SilkWalkFrames(b, len, pos, 1);
     if (frames <= 0) return 0;
     return frames * 20; // 每帧固定 20ms
-}
-
-+ (NSData *)voiceDataFromWrap:(id)wrap {
-    if (!wrap) return nil;
-    for (NSValue *v in MioVoiceDataIvars(wrap)) {
-        id val = object_getIvar(wrap, (Ivar)[v pointerValue]);
-        if ([val isKindOfClass:[NSData class]] && [(NSData *)val length] > 0) return val;
-    }
-    return nil;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -728,7 +639,7 @@ static BOOL MioAttachVoiceExtension(id msg, NSData *wire, NSString *path, long l
             if (error) *error = [NSError errorWithDomain:@"MioVoice" code:16 userInfo:@{NSLocalizedDescriptionKey: @"文件不是有效的 silk 格式"}];
             return NO;
         }
-        // 收发网络格式 = 0x02 + silk 流（聊天纳入原样保存的收到 buffer 均带 0x02 前缀，与微信本地文件一致）
+        // 收发网络格式 = 0x02 + silk 流（微信本地文件/收到的 buffer 均带 0x02 前缀）
         NSData *wire = data;
         if (off == 0) { // 纯 silk 流的包：补 0x02 前缀对齐微信格式
             NSMutableData *m = [NSMutableData dataWithCapacity:data.length + 1];

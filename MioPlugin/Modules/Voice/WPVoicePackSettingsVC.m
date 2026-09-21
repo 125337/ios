@@ -43,14 +43,6 @@
                              width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addSwitchRowInGroup:group
-                             title:@"长按语音消息纳入"
-                              desc:@"长按语音消息，点菜单「纳入语音包」并改名入库（WCRefine 方案）"
-                               key:@"voicePackIncludeLongPressEnabled"
-                              isOn:cfg.voicePackIncludeLongPressEnabled
-                                cy:cy
-                             width:w];
-    cy = [self addSeparatorInGroup:group cy:cy width:w];
-    cy = [self addSwitchRowInGroup:group
                              title:@"长按加号打开语音包"
                               desc:@"长按聊天输入栏右下角「+」打开语音包选择页，短按原功能不变"
                                key:@"voicePackPlusLongPressEnabled"
@@ -67,7 +59,7 @@
                           width:w];
     y = [self finishGroup:group atY:y height:0];
 
-    [self addSectionFooter:@"语音包目录：Documents/Mio助手/语音包\n长按聊天里的语音消息可纳入语音包（silk 原始数据，发送兼容性最好）；\n导入 mp3/m4a/wav 等常见格式可直接预览，伪装语音发送以实际兼容性为准。"
+    [self addSectionFooter:@"语音包目录：Documents/Mio助手/语音包\n导入 mp3/m4a/wav 等常见格式可直接预览，伪装语音发送以实际兼容性为准。"
                          y:y + 4
                       width:w];
 }
