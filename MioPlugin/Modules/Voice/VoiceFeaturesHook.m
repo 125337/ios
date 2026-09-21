@@ -17,7 +17,7 @@
 //  ④ voiceAutoSpeed        canShowPlayRateButton + onBeginPlayingMsg + 触感吞除
 //  ⑤ voiceBackgroundPlay   MinimizeViewController onAbsorbFloatingViewTap
 //  ⑥ voiceCallPlay         WCAudioModuleMgr 4 hook + AVAudioSession 通话判定
-//  ⑦ voiceForward          ForwardMessageLogicController 3 hook + 长按入口
+//  ⑦ voiceForward          ForwardMessageLogicController 3 hook + 原生长按菜单转发项
 // 全部反射 + respondsToSelector 保护；开关关闭时直通 orig 零干预
 // ═══════════════════════════════════════════════════════════════
 
@@ -40,6 +40,7 @@ static IMP orig_WAM_interrupt = NULL;       // isAudioModuleInterrupt:
 static IMP orig_FMLC_forwardMsg = NULL;     // ForwardMessageLogicController forwardMessage:
 static IMP orig_FMLC_msgToContact = NULL;   // ForwardMsg:ToContact:
 static IMP orig_FMLC_listToContact = NULL;  // ForwardMsgList:ToContact:
+static IMP orig_VMC_filteredMenu = NULL;    // VoiceMessageCellView filteredMenuItems:（⑦ 原生菜单）
 
 static int g_autoRateGuard = 0;             // ④ 自动倍速点击期间吞触感
 
@@ -51,7 +52,6 @@ static char kVFDurationCache;    // ③ 时长缓存 NSNumber
 static char kVFDragging;         // ③ 拖动中
 static char kVFHaptic;           // ③ 触感生成器
 static char kVFOverlay;          // ③ 浮层 view
-static char kVFLongPress;        // ⑦ 长按手势
 static char kVFStubFlag;         // ⑦ 替身 wrap 标记（WCR DAT_028ce018）
 static char kVFRealWrapKey;      // ⑦ ForwardMessageLogicController → 真语音 wrap（WCR DAT_028ce013）
 
@@ -526,19 +526,53 @@ static void VFStartForwardFromCell(UIView *cell) {
     }
 }
 
-static void VFEnsureLongPress(UIView *cell) {
-    if (![VoiceConfig shared].voiceForwardEnabled) {
-        UILongPressGestureRecognizer *old = objc_getAssociatedObject(cell, &kVFLongPress);
-        if (old) { [cell removeGestureRecognizer:old]; objc_setAssociatedObject(cell, &kVFLongPress, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
-        return;
+// ═══════════════════════════════════════════════════════════════
+// ⑦ 原生长按菜单追加「转发」（WCR FUN_008ad5e0 实锤：MSHookMessageEx
+//    VoiceMessageCellView filteredMenuItems:；同小丑 JokerHook 的 MMMenuItem 模式）
+// ═══════════════════════════════════════════════════════════════
+
+/// 菜单项 action：注册到 VoiceMessageCellView 的 vfMenuForward（self = cellView）
+static void vfMenuForward_IMP(id self, SEL _cmd) {
+    if ([self isKindOfClass:[UIView class]]) VFStartForwardFromCell((UIView *)self);
+}
+
+/// 去重（WCR FUN_008b526c 等价）：菜单里已有「转发/Forward」标题的项则不追加
+static BOOL VFMenuHasForwardItem(NSArray *items) {
+    SEL ts = NSSelectorFromString(@"title");
+    for (id it in items) {
+        if (![it respondsToSelector:ts]) continue;
+        NSString *t = nil;
+        @try { t = ((id (*)(id, SEL))objc_msgSend)(it, ts); } @catch (NSException *e) {}
+        if ([t isKindOfClass:[NSString class]] &&
+            ([t containsString:@"转发"] || [t containsString:@"Forward"])) return YES;
     }
-    UILongPressGestureRecognizer *lp = objc_getAssociatedObject(cell, &kVFLongPress);
-    if (!lp) {
-        lp = [[UILongPressGestureRecognizer alloc] initWithTarget:g_vfInstance action:@selector(vfVoiceLongPressed:)];
-        lp.minimumPressDuration = 0.6;
-        lp.cancelsTouchesInView = NO;
-        [cell addGestureRecognizer:lp];
-        objc_setAssociatedObject(cell, &kVFLongPress, lp, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return NO;
+}
+
+static id hook_VMC_filteredMenu(id self, SEL _cmd, id filterArg) {
+    id items = orig_VMC_filteredMenu
+        ? ((id (*)(id, SEL, id))orig_VMC_filteredMenu)(self, _cmd, filterArg)
+        : filterArg;
+    @try {
+        if (![VoiceConfig shared].voiceForwardEnabled) return items;
+        if (!VFIsVMC(self)) return items;
+        id wrap = VFCellWrap(self);
+        if (!wrap || !VFIsVoiceMsg(wrap)) return items;   // WCR FUN_008b4eac + FUN_008b50d8
+        if (![items isKindOfClass:[NSArray class]]) items = @[];
+        if (VFMenuHasForwardItem(items)) return items;    // WCR FUN_008b526c
+        Class mmItemCls = objc_getClass("MMMenuItem");
+        SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
+        if (!mmItemCls || ![mmItemCls instancesRespondToSelector:initSel]) return items;
+        NSString *icon = [NSString stringWithUTF8String:"share_filled"];  // WCR 图标名
+        id mmItem = ((id (*)(id, SEL, id, id, SEL))objc_msgSend)(
+            [mmItemCls alloc], initSel, @"转发", icon, NSSelectorFromString(@"vfMenuForward"));
+        if (!mmItem) return items;
+        NSMutableArray *newItems = [items mutableCopy];
+        [newItems addObject:mmItem];
+        return newItems;
+    } @catch (NSException *e) {
+        WPLog(@"VoiceFeat", @"[Fwd] 菜单 hook 异常: %@", e.reason);
+        return items;
     }
 }
 
@@ -773,7 +807,6 @@ static void hook_VMC_didMoveToWindow(id self, SEL _cmd) {
         UIView *cell = self;
         if (cell.window == nil) { VFOverlayHide(cell); return; }
         VFSetupPan(cell);
-        VFEnsureLongPress(cell);
     } @catch (NSException *e) {}
 }
 
@@ -784,7 +817,6 @@ static void hook_VMC_layoutContentView(id self, SEL _cmd) {
         UIView *cell = self;
         if (cell.window == nil) return;
         VFSetupPan(cell);
-        VFEnsureLongPress(cell);
     } @catch (NSException *e) {}
 }
 
@@ -899,7 +931,6 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
 
 @interface VoiceFeaturesHook () <UIGestureRecognizerDelegate>
 - (void)vfpsHandlePan:(UIPanGestureRecognizer *)gr;
-- (void)vfVoiceLongPressed:(UILongPressGestureRecognizer *)gr;
 @end
 
 @implementation VoiceFeaturesHook
@@ -959,6 +990,22 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
     // ④ 倍速按钮显示
     Class vmCls = objc_getClass("VoiceMessageViewModel");
     if (vmCls) VF_HOOK(vmCls, "canShowPlayRateButton", hook_VM_canShowRate, orig_VM_canShowRate);
+    // ⑦ 原生长按菜单追加「转发」（WCR 挂载点 filteredMenuItems:；小丑同款 MMMenuItem）
+    SEL fmi = NSSelectorFromString(@"filteredMenuItems:");
+    SEL omi = NSSelectorFromString(@"operationMenuItems");
+    Method fm = class_getInstanceMethod(cellCls, fmi);
+    Method om = fm ? NULL : class_getInstanceMethod(cellCls, omi);
+    SEL menuSel = fm ? fmi : (om ? omi : NULL);
+    if (menuSel) {
+        MSHookMessageEx(cellCls, menuSel, (IMP)hook_VMC_filteredMenu, &orig_VMC_filteredMenu);
+        WPLog(@"VoiceFeat", @"hook OK: %s (转发菜单项)", fm ? "filteredMenuItems:" : "operationMenuItems");
+        SEL act = NSSelectorFromString(@"vfMenuForward");
+        if (![cellCls instancesRespondToSelector:act]) {
+            class_addMethod(cellCls, act, (IMP)vfMenuForward_IMP, "v@:");
+        }
+    } else {
+        WPLog(@"VoiceFeat", @"hook SKIP: 语音 cell 无 filteredMenuItems:/operationMenuItems");
+    }
 }
 
 + (void)hookWrapTime {
@@ -1065,38 +1112,6 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
             VFOverlayHide(cell);
             break;
         }
-    }
-}
-
-- (void)vfVoiceLongPressed:(UILongPressGestureRecognizer *)gr {
-    if (gr.state != UIGestureRecognizerStateBegan) return;
-    @try {
-        if (![VoiceConfig shared].voiceForwardEnabled) return;
-        UIView *cell = gr.view;
-        if (!cell) return;
-        UIImpactFeedbackGenerator *haptic = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
-        [haptic impactOccurred];
-        id wrap = VFCellWrap(cell);
-        NSData *data = wrap ? VFVoiceData(wrap) : nil;
-        if (!data) {
-            WPShowToast(@"语音数据不存在，请先播放语音后再转发");
-            return;
-        }
-        UIViewController *top = WPGetTopVCForPresentation();
-        if (!top) return;
-        UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"语音操作"
-                                                                      message:[NSString stringWithFormat:@"转发这条语音（%u 秒）", (unsigned)(VFRealDurationMS(wrap) / 1000)]
-                                                               preferredStyle:UIAlertControllerStyleActionSheet];
-        __weak UIView *weakCell = cell;
-        [sheet addAction:[UIAlertAction actionWithTitle:@"转发语音" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-            UIView *strongCell = weakCell;
-            if (strongCell) VFStartForwardFromCell(strongCell);
-        }]];
-        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        if (sheet.popoverPresentationController) sheet.popoverPresentationController.sourceView = cell;
-        [top presentViewController:sheet animated:YES completion:nil];
-    } @catch (NSException *e) {
-        WPLog(@"VoiceFeat", @"[Fwd] 长按异常: %@", e.reason);
     }
 }
 
