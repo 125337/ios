@@ -394,20 +394,17 @@ static void hook_AddMsgMsgWrap(id self, SEL _cmd, id chatName, id wrap) {
 }
 
 // ═══════════════════════════════════════════════════════
-// Hook ①: 长按聊天语音消息 → 纳入语音包（WCRefine 方案完整复刻）
-//   单个长按手势挂在聊天消息表格上（由 Hook ② 的 MMInputToolView 生命周期
-//   驱动点安装，加号与消息表格同属聊天页）。触发链：命中 cell → wrap 提取
-//   （对齐 WCR FUN_008d80cc：viewModel.messageWrap → msgWrap → m_msgWrap）→
-//   类型门 type=34 → 数据提取（对齐 FUN_008da2c4：wrap buffer 优先，落盘文件
-//   兜底 FUN_008db4b4）→ 改名确认弹窗（对齐 presentVoiceIncludeFlowFrom：默认名
-//   预填，最长 80 字符）→ importVoiceData 保存（根目录 / 重名去重 / 补 .silk /
-//   atomic 写）。
-//   手势参数对齐 WCR ensureLongPressGestureForView:handler:：cancelsTouchesInView
-//   =NO（不干扰微信原生长按菜单）、allowableMovement=12.0、view↔gesture 幂等配对
+// Hook ①: 长按语音消息 → 菜单项「纳入语音包」（小丑按钮同款机制）
+//   照抄 JokerHook：hook VoiceMessageCellView 的 operationMenuItems 追加
+//   MMMenuItem（initWithTitle:svgName:action:，action 为 class_addMethod 注册到
+//   cell 类的方法）；handler 里 m_viewModel → m_messageWrap 取 wrap（Joker
+//   验证过的本版本链路）→ type=34 门 → haptic → 数据提取（wrap buffer 优先，
+//   落盘文件兜底对齐 WCR FUN_008da2c4/FUN_008db4b4）→ 改名确认弹窗（对齐
+//   presentVoiceIncludeFlowFrom：默认名预填，最长 80 字符）→ importVoiceData
+//   保存（根目录 / 重名去重 / 补 .silk / atomic 写）
 // ═══════════════════════════════════════════════════════
 
-static char kMioVPTVGestureKey;      // 表格 → 已挂长按手势（配对跟踪）
-static char kMioVPIncludeOneShotKey; // 表格 → one-shot 防重入标记
+static IMP orig_VoiceCell_operationMenuItems = NULL;
 
 /// 开关检查：总开关 && 长按纳入开关
 static BOOL MioVPIncludeLongPressActive(void) {
@@ -431,17 +428,16 @@ static id MioVPIvarObjectValue(id obj, const char *name) {
     return object_getIvar(obj, iv);
 }
 
-/// wrap 提取链（对齐 WCR FUN_008d80cc）：cell.viewModel.messageWrap →
-/// viewModel.msgWrap → viewModel.m_msgWrap → cell.m_msgWrap
-static id MioVPWrapFromCellView(UITableViewCell *cell) {
-    if (!cell) return nil;
+/// wrap 提取：m_viewModel → m_messageWrap 为 Joker 验证过的本版本链路；
+/// 选择器/ivar 兜底对齐 WCR FUN_008d80cc
+static id MioVPWrapFromCellView(id cellView) {
+    if (!cellView) return nil;
     id wrap = nil;
     id vm = nil;
-    if ([cell respondsToSelector:@selector(viewModel)]) {
-        vm = ((id (*)(id, SEL))objc_msgSend)(cell, @selector(viewModel));
-    }
+    @try { vm = [cellView valueForKey:@"m_viewModel"]; } @catch (NSException *e) {}
     if (vm) {
-        if ([vm respondsToSelector:@selector(messageWrap)]) {
+        @try { wrap = [vm valueForKey:@"m_messageWrap"]; } @catch (NSException *e) {}
+        if (!wrap && [vm respondsToSelector:@selector(messageWrap)]) {
             wrap = ((id (*)(id, SEL))objc_msgSend)(vm, @selector(messageWrap));
         }
         if (!wrap && [vm respondsToSelector:@selector(msgWrap)]) {
@@ -449,21 +445,10 @@ static id MioVPWrapFromCellView(UITableViewCell *cell) {
         }
         if (!wrap) wrap = MioVPIvarObjectValue(vm, "m_msgWrap");
     }
-    if (!wrap) wrap = MioVPIvarObjectValue(cell, "m_msgWrap");
+    if (!wrap) @try { wrap = [cellView valueForKey:@"m_messageWrap"]; } @catch (NSException *e) {}
+    if (!wrap) wrap = MioVPIvarObjectValue(cellView, "m_msgWrap");
     if ([wrap isKindOfClass:objc_getClass("CMessageWrap")]) return wrap;
     return nil;
-}
-
-/// 语音 cell 外观判定（对齐 WCR isVoiceMessageCell_ @01f688a0）：视图类名含
-/// "Voice"，递归查子树；仅用于 wrap 提取失败时的诊断提示
-static BOOL MioVPViewHasVoiceClass(UIView *root, int depth) {
-    if (!root || depth > 6) return NO;
-    NSString *cls = NSStringFromClass(root.class);
-    if ([cls containsString:@"Voice"]) return YES;
-    for (UIView *sub in root.subviews) {
-        if (MioVPViewHasVoiceClass(sub, depth + 1)) return YES;
-    }
-    return NO;
 }
 
 /// 落盘文件兜底（对齐 WCR FUN_008db4b4）：getVoicePath → m_nsVoicePath →
@@ -497,49 +482,71 @@ static NSString *MioVoiceTimestampName(void) {
     return s.length > 0 ? s : [NSString stringWithFormat:@"%lld", (long long)[[NSDate date] timeIntervalSince1970]];
 }
 
-/// 在视图层级里找面积最大的 UITableView（聊天消息表格）
-static UITableView *MioVPFindChatTableView(UIView *root) {
-    if ([root isKindOfClass:[UITableView class]]) return (UITableView *)root;
-    UITableView *best = nil;
-    CGFloat bestArea = 0;
-    for (UIView *sub in root.subviews) {
-        UITableView *t = MioVPFindChatTableView(sub);
-        if (t) {
-            CGFloat area = t.bounds.size.width * t.bounds.size.height;
-            if (area > bestArea) { bestArea = area; best = t; }
+// 菜单 hook：VoiceMessageCellView.operationMenuItems 追加「纳入语音包」
+static id hooked_VoiceCell_operationMenuItems(id self, SEL _cmd) {
+    NSMutableArray *items = nil;
+    if (orig_VoiceCell_operationMenuItems) {
+        items = ((id(*)(id, SEL))orig_VoiceCell_operationMenuItems)(self, _cmd);
+    }
+    if (!items) items = [NSMutableArray array];
+    if (!MioVPIncludeLongPressActive()) return items;
+
+    NSMutableArray *newItems = [items mutableCopy];
+    Class mmItemClass = objc_getClass("MMMenuItem");
+    if (mmItemClass) {
+        @try {
+            // 照抄 JokerHook / WCR：initWithTitle:svgName:action:，action 参数是 SEL
+            SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
+            if (![mmItemClass instancesRespondToSelector:initSel]) {
+                WPLog(@"Voice", @"[IncludeLP] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
+            } else {
+                SEL actionSEL = sel_registerName("mioVoiceInclude");
+                NSString *iconName = [NSString stringWithUTF8String:"expression"];
+                id mmItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
+                    [mmItemClass alloc], initSel, @"纳入语音包", iconName, actionSEL);
+                if (mmItem) {
+                    [newItems addObject:mmItem];
+                    WPLog(@"Voice", @"[IncludeLP] ✅ MMMenuItem: 纳入语音包");
+                }
+            }
+        } @catch (NSException *e) {
+            WPLog(@"Voice", @"[IncludeLP] ❌ MMMenuItem create: %@", e);
         }
     }
-    return best;
+    return newItems;
 }
 
-/// 幂等安装器（对齐 WCR ensureLongPressGestureForView:handler:）：view↔gesture
-/// 配对跟踪；开关关闭主动摘除
-static void MioVPEnsureChatIncludeLongPress(UIViewController *hostVC) {
-    if (!hostVC || !hostVC.viewIfLoaded) return;
-    UITableView *tv = MioVPFindChatTableView(hostVC.view);
-    if (!tv) return;
-
-    UILongPressGestureRecognizer *g = objc_getAssociatedObject(tv, &kMioVPTVGestureKey);
-    if (!MioVPIncludeLongPressActive()) {
-        // 开关关闭：主动摘除（对齐 WCR 关闭路径）
-        if ([g isKindOfClass:[UILongPressGestureRecognizer class]]) {
-            [tv removeGestureRecognizer:g];
-            objc_setAssociatedObject(tv, &kMioVPTVGestureKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+// 菜单 action（注册到 VoiceMessageCellView，self = 语音 cell 视图；
+// 对齐 WCR FUN_008d9bc0：haptic → 配置门 → wrap → 数据 → 弹窗）
+static void mioVoiceInclude_IMP(id self, SEL _cmd) {
+    @try {
+        id wrap = MioVPWrapFromCellView(self);
+        unsigned int t = MioWrapMessageTypeOf(wrap);
+        if (t != 34) {
+            WPLog(@"Voice", @"[IncludeLP] 非语音消息 type=%u，忽略", t);
+            return;
         }
-        return;
+
+        // 触觉反馈（对齐 WCR FUN_008d9bc0 首步 triggerHapticFeedback）
+        UIImpactFeedbackGenerator *haptic =
+            [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+        [haptic impactOccurred];
+
+        // 数据提取（对齐 FUN_008da2c4：wrap buffer 优先 → 落盘文件兜底）
+        NSData *data = [VoicePackStore voiceDataFromWrap:wrap];
+        if (data.length == 0) data = MioVPVoiceFileDataFromWrap(wrap);
+        if (data.length == 0) {
+            WPLog(@"Voice", @"[IncludeLP] 语音数据为空（可能未下载）localID=%u", MioWrapLocalID(wrap));
+            WPShowToast(@"语音未下载，暂不能纳入");
+            return;
+        }
+
+        NSString *defName = [NSString stringWithFormat:@"语音_%@", MioVoiceTimestampName()];
+        WPLog(@"Voice", @"[IncludeLP] 触发纳入弹窗 (%lu 字节)", (unsigned long)data.length);
+        [VoiceHook presentIncludeAlertWithData:data defaultName:defName];
+    } @catch (NSException *e) {
+        WPLog(@"Voice", @"[IncludeLP] 异常: %@", e.reason);
     }
-    if (![g isKindOfClass:[UILongPressGestureRecognizer class]]) {
-        g = [[UILongPressGestureRecognizer alloc] initWithTarget:[VoiceHook class]
-                                                          action:@selector(vpChatIncludeLongPressed:)];
-        g.minimumPressDuration = 0.5;
-        g.cancelsTouchesInView = NO;  // 不干扰微信原生长按菜单（对齐 WCR）
-        g.allowableMovement = 12.0;   // 对齐 WCR setAllowableMovement:12.0
-        objc_setAssociatedObject(tv, &kMioVPTVGestureKey, g, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [tv addGestureRecognizer:g];
-        WPLog(@"Voice", @"[IncludeLP] 长按手势已挂到聊天表格: %@ / %@",
-              NSStringFromClass(hostVC.class), NSStringFromClass(tv.class));
-    }
-    g.enabled = YES;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -683,11 +690,7 @@ static void MioVPEnsurePlusLongPress(UIView *toolView) {
 static void hook_ITV_layoutSubviews(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_ITV_layoutSubviews)(self, _cmd);
     @try {
-        if (![self isKindOfClass:[UIView class]]) return;
-        MioVPEnsurePlusLongPress((UIView *)self);
-        // ① 长按语音纳入：同一驱动点顺带安装聊天表格手势（toolView 布局时聊天页已就绪）
-        UIViewController *host = HostVCForView((UIView *)self);
-        if (host) MioVPEnsureChatIncludeLongPress(host);
+        if ([self isKindOfClass:[UIView class]]) MioVPEnsurePlusLongPress((UIView *)self);
     } @catch (NSException *e) {}
 }
 
@@ -695,10 +698,9 @@ static void hook_ITV_layoutSubviews(id self, SEL _cmd) {
 static void hook_ITV_didMoveToWindow(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_ITV_didMoveToWindow)(self, _cmd);
     @try {
-        if (![self isKindOfClass:[UIView class]] || !((UIView *)self).window) return;
-        MioVPEnsurePlusLongPress((UIView *)self);
-        UIViewController *host = HostVCForView((UIView *)self);
-        if (host) MioVPEnsureChatIncludeLongPress(host);
+        if ([self isKindOfClass:[UIView class]] && ((UIView *)self).window) {
+            MioVPEnsurePlusLongPress((UIView *)self);
+        }
     } @catch (NSException *e) {}
 }
 
@@ -763,65 +765,6 @@ static void hook_ITV_didMoveToWindow(id self, SEL _cmd) {
         WPLog(@"Voice", @"[PlusLP] 长按加号打开语音包: %@", chat);
     } @catch (NSException *e) {
         WPLog(@"Voice", @"[PlusLP] 异常: %@", e.reason);
-    }
-}
-
-// 手势处理器（对齐 WCR FUN_008d9bc0 纳入处理函数）
-+ (void)vpChatIncludeLongPressed:(UILongPressGestureRecognizer *)gr {
-    if (gr.state != UIGestureRecognizerStateBegan) return;
-    @try {
-        if (!MioVPIncludeLongPressActive()) return; // handler 内二次校验
-        UITableView *tv = (UITableView *)gr.view;
-        if (![tv isKindOfClass:[UITableView class]]) return;
-
-        // one-shot 防重入 + 0.5s 自动复位（对齐 WCR one-shot 模式）
-        NSNumber *fired = objc_getAssociatedObject(tv, &kMioVPIncludeOneShotKey);
-        if (fired.boolValue) return;
-        objc_setAssociatedObject(tv, &kMioVPIncludeOneShotKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            objc_setAssociatedObject(tv, &kMioVPIncludeOneShotKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        });
-
-        // 命中消息 cell
-        CGPoint p = [gr locationInView:tv];
-        NSIndexPath *ip = [tv indexPathForRowAtPoint:p];
-        if (!ip) return;
-        UITableViewCell *cell = [tv cellForRowAtIndexPath:ip];
-        if (!cell) return;
-
-        // wrap 提取 + 类型门（仅语音消息 type=34）
-        id wrap = MioVPWrapFromCellView(cell);
-        unsigned int t = MioWrapMessageTypeOf(wrap);
-        if (t != 34) {
-            if (!wrap && MioVPViewHasVoiceClass(cell, 0)) {
-                // 看起来是语音 cell 但提取失败：给出诊断提示（其余静默忽略）
-                WPLog(@"Voice", @"[IncludeLP] 语音 cell 但 wrap 提取失败: %@",
-                      NSStringFromClass(cell.class));
-                WPShowToast(@"语音识别失败（cell 结构不匹配）");
-            }
-            return;
-        }
-
-        // 触觉反馈（对齐 WCR triggerHapticFeedback）
-        UIImpactFeedbackGenerator *haptic =
-            [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
-        [haptic impactOccurred];
-
-        // 数据提取（对齐 FUN_008da2c4：wrap buffer 优先 → 落盘文件兜底）
-        NSData *data = [VoicePackStore voiceDataFromWrap:wrap];
-        if (data.length == 0) data = MioVPVoiceFileDataFromWrap(wrap);
-        if (data.length == 0) {
-            WPLog(@"Voice", @"[IncludeLP] 语音数据为空（可能未下载）localID=%u", MioWrapLocalID(wrap));
-            WPShowToast(@"语音未下载，暂不能纳入");
-            return;
-        }
-
-        NSString *defName = [NSString stringWithFormat:@"语音_%@", MioVoiceTimestampName()];
-        WPLog(@"Voice", @"[IncludeLP] 触发纳入弹窗 (%lu 字节)", (unsigned long)data.length);
-        [self presentIncludeAlertWithData:data defaultName:defName];
-    } @catch (NSException *e) {
-        WPLog(@"Voice", @"[IncludeLP] 异常: %@", e.reason);
     }
 }
 
@@ -993,8 +936,8 @@ static void MioInstallFileProbe(void) {
 + (void)install {
     Class cls;
 
-    // ③④⑤ 真实发送流程捕获（① 长按语音纳入 / ② 长按加号是手势方案，
-    //   由 ② 的 MMInputToolView 生命周期驱动点安装，无需 MSHook）
+    // ③④⑤ 真实发送流程捕获（① 长按语音纳入是菜单项方案、② 长按加号是手势方案，
+    //   均不走 MSHook CMessageMgr 路径）
     // ★run 2035：取证 hook 全部受 NSUserDefaults MioPlugin_Voice_ForensicsHooks 控制
     //  （默认关=干净模式）——崩溃二分法：干净模式还崩=崩在功能路径，再逐组开回
     BOOL forensics = [[NSUserDefaults standardUserDefaults] boolForKey:@"MioPlugin_Voice_ForensicsHooks"];
@@ -1094,8 +1037,29 @@ static void MioInstallFileProbe(void) {
         WPLog(@"Voice", @"[-] CMessageMgr not found");
     }
 
-    // ①② 长按手势安装驱动点（WCRefine 方案：MMInputToolView 生命周期驱动幂等安装器，
-    //   同时驱动 ① 聊天表格长按纳入手势与 ② 加号按钮长按手势）
+    // ① 长按语音消息纳入（小丑按钮同款机制：VoiceMessageCellView.operationMenuItems
+    //   追加 MMMenuItem，action 注册到 cell 类上）
+    Class voiceCellCls = objc_getClass("VoiceMessageCellView");
+    if (voiceCellCls) {
+        SEL mioSel = NSSelectorFromString(@"mioVoiceInclude");
+        if (!class_addMethod(voiceCellCls, mioSel, (IMP)mioVoiceInclude_IMP, "v@:")) {
+            Method m = class_getInstanceMethod(voiceCellCls, mioSel);
+            if (m) method_setImplementation(m, (IMP)mioVoiceInclude_IMP);
+        }
+        SEL menuSel = NSSelectorFromString(@"operationMenuItems");
+        Method existingMenu = class_getInstanceMethod(voiceCellCls, menuSel);
+        if (existingMenu) {
+            orig_VoiceCell_operationMenuItems = method_getImplementation(existingMenu);
+            method_setImplementation(existingMenu, (IMP)hooked_VoiceCell_operationMenuItems);
+            WPLog(@"Voice", @"[+] VoiceMessageCellView operationMenuItems hooked (纳入语音包菜单项)");
+        } else {
+            WPLog(@"Voice", @"[-] VoiceMessageCellView operationMenuItems 不存在");
+        }
+    } else {
+        WPLog(@"Voice", @"[-] VoiceMessageCellView not found");
+    }
+
+    // ② 长按加号手势驱动点（WCRefine 方案：MMInputToolView 生命周期驱动幂等安装器）
     cls = objc_getClass("MMInputToolView");
     if (cls) {
         SEL lsSel = @selector(layoutSubviews);

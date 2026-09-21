@@ -44,7 +44,7 @@
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addSwitchRowInGroup:group
                              title:@"长按语音消息纳入"
-                              desc:@"长按聊天里的语音消息，改名后纳入语音包（WCRefine 方案）"
+                              desc:@"长按语音消息，点菜单「纳入语音包」并改名入库（WCRefine 方案）"
                                key:@"voicePackIncludeLongPressEnabled"
                               isOn:cfg.voicePackIncludeLongPressEnabled
                                 cy:cy
