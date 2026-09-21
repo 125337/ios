@@ -11,6 +11,11 @@
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
 
+/// 改名确认弹窗（定义在 @implementation；供上方 C 函数 mioVoiceInclude_IMP 调用）
+@interface VoiceHook (MioVoiceIncludePrivate)
++ (void)presentIncludeAlertWithData:(NSData *)data defaultName:(NSString *)defName;
+@end
+
 // ═══════════════════════════════════════════════════════
 // 工具：从视图层级 / VC 栈里找指定类名的 ViewController
 // ═══════════════════════════════════════════════════════
@@ -707,10 +712,6 @@ static void hook_ITV_didMoveToWindow(id self, SEL _cmd) {
 // ═══════════════════════════════════════════════════════
 // +install
 // ═══════════════════════════════════════════════════════
-
-@interface VoiceHook ()
-+ (void)presentIncludeAlertWithData:(NSData *)data defaultName:(NSString *)defName;
-@end
 
 @implementation VoiceHook
 
