@@ -162,28 +162,78 @@ static unsigned int VFCalcSilkMs(NSData *data) {
     return (unsigned int)(frames * 20);
 }
 
-// ─────────── 语音数据/时长（WCR FUN_008b6dec / FUN_008c38d0 内 RealDurationMS 逻辑） ───────────
+// ─────────── 语音数据/时长（WCR FUN_008b6dec / FUN_008b792c / FUN_008b80a8 精读复刻） ───────────
 
-/// wrap 的语音数据：m_dtVoice 优先，getVoicePath 文件兜底（未播放的收到语音两处都空 → nil）
+/// 轻量 sanitize（WCR FUN_008b7d64 等价：去首尾空白/换行）
+static NSString *VFCleanPath(NSString *p) {
+    if (p.length == 0) return p;
+    return [p stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+}
+
+/// getVoicePath 候选展开（WCR FUN_008b80a8）：原路径优先；无扩展名时追加 aud/amr/silk/spx/opus
+static NSArray<NSString *> *VFVoicePathCandidates(NSString *rawPath) {
+    NSString *p = VFCleanPath(rawPath);
+    if (p.length == 0) return @[];
+    NSMutableArray<NSString *> *cands = [NSMutableArray arrayWithObject:p];
+    if ([p pathExtension].length == 0) {
+        for (NSString *ext in @[@"aud", @"amr", @"silk", @"spx", @"opus"]) {
+            [cands addObject:[p stringByAppendingPathExtension:ext]];
+        }
+    }
+    return cands;
+}
+
+/// 解析语音文件真实路径（WCR FUN_008b792c + FUN_008b6dec fallback）：
+/// ① getVoicePath 候选逐个验证（存在且非目录）；② 全部未命中 → GetPathOfMesAudio(GetChatName, m_uiMesLocalID, GetDocPath)
+/// （已播放语音的真实落盘 = <Doc>/<chatName>/<localID>.aud，getVoicePath 可能为空或指向不存在路径）
+static NSString *VFResolveVoicePath(id wrap) {
+    if (!wrap) return nil;
+    NSFileManager *fm = [NSFileManager defaultManager];
+    SEL gp = NSSelectorFromString(@"getVoicePath");
+    if ([wrap respondsToSelector:gp]) {
+        for (NSString *cand in VFVoicePathCandidates(VFStr(wrap, gp))) {
+            BOOL isDir = NO;
+            if ([fm fileExistsAtPath:cand isDirectory:&isDir] && !isDir) return cand;
+        }
+    }
+    SEL chatNameSel = NSSelectorFromString(@"GetChatName");
+    SEL localIdSel = NSSelectorFromString(@"m_uiMesLocalID");
+    if (![wrap respondsToSelector:chatNameSel] || ![wrap respondsToSelector:localIdSel]) return nil;
+    Class cu = objc_getClass("CUtility");
+    SEL getPath = NSSelectorFromString(@"GetPathOfMesAudio:LocalID:DocPath:");
+    SEL getDoc = NSSelectorFromString(@"GetDocPath");
+    if (!cu || ![cu respondsToSelector:getPath] || ![cu respondsToSelector:getDoc]) return nil;
+    NSString *chatName = VFCleanPath(VFStr(wrap, chatNameSel));
+    unsigned int lid = VFUInt(wrap, localIdSel, 0);
+    if (chatName.length == 0 || lid == 0) return nil;
+    NSString *doc = ((id (*)(id, SEL))objc_msgSend)(cu, getDoc);
+    NSString *p2 = VFCleanPath(((id (*)(id, SEL, id, unsigned int, id))objc_msgSend)(cu, getPath, chatName, lid, doc));
+    if (p2.length == 0) return nil;
+    BOOL isDir2 = NO;
+    if ([fm fileExistsAtPath:p2 isDirectory:&isDir2] && !isDir2) return p2;
+    return nil;
+}
+
+/// wrap 的语音数据（WCR FUN_008b6dec）：m_dtVoice 优先 → 解析路径读文件（未播放的收到语音两处都空 → nil）
 static NSData *VFVoiceData(id wrap) {
     if (!wrap) return nil;
     id dt = VFValueKey(wrap, @"m_dtVoice");
     if ([dt isKindOfClass:[NSData class]] && [(NSData *)dt length] > 0) return dt;
-    NSString *path = VFStr(wrap, NSSelectorFromString(@"getVoicePath"));
-    if (path.length > 0 && [[NSFileManager defaultManager] fileExistsAtPath:path]) {
+    NSString *path = VFResolveVoicePath(wrap);
+    if (path.length > 0) {
         // CI clang 无 dataWithContentsOfFile:options:length:error: 重载 → 整文件读（语音文件小）
         NSData *d = [NSData dataWithContentsOfFile:path options:0 error:nil];
+        if (d.length == 0) d = [NSData dataWithContentsOfFile:path];
         if (d.length > 0) return d;
     }
     return nil;
 }
 
-/// 语音真实时长 ms：文件 SILK 解析 → m_dtVoice SILK 解析 → m_uiVoiceTime
+/// 语音真实时长 ms：解析路径文件 SILK → m_dtVoice SILK → m_uiVoiceTime
 static unsigned int VFRealDurationMS(id wrap) {
     if (!wrap) return 0;
-    SEL gp = NSSelectorFromString(@"getVoicePath");
-    NSString *path = VFStr(wrap, gp);
-    if (path.length > 0 && [[NSFileManager defaultManager] fileExistsAtPath:path]) {
+    NSString *path = VFResolveVoicePath(wrap);
+    if (path.length > 0) {
         NSData *d = [NSData dataWithContentsOfFile:path options:0 error:nil];
         unsigned int ms = VFCalcSilkMs(d);
         if (ms > 0) return ms;
@@ -454,6 +504,9 @@ static void VFStartForwardFromCell(UIView *cell) {
         if (!wrap || !VFIsVoiceMsg(wrap)) return;
         NSData *data = VFVoiceData(wrap);
         if (!data) {
+            WPLog(@"VoiceFeat", @"[Fwd] 语音数据为空 resolvedPath=%@ localID=%u dt=%@",
+                  VFResolveVoicePath(wrap), VFUInt(wrap, NSSelectorFromString(@"m_uiMesLocalID"), 0),
+                  VFValueKey(wrap, @"m_dtVoice"));
             WPShowToast(@"语音数据不存在，请先播放语音后再转发");
             return;
         }
