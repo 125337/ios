@@ -489,12 +489,37 @@ static NSString *MioVPResolveVoiceFileAbsPath(NSString *raw) {
     return nil;
 }
 
+/// Mio 扩展兜底：在 GetPathOfAppData 的父目录里找文件名含 localID 的真实文件
+/// （应对 .dat 为 0 字节占位 / 缺失但 .aud 等变体存在的情况）；取最大的非目录条目
+static NSString *MioVPScanAppDataDirForLocalID(NSString *appDataPath, unsigned int localID) {
+    if (localID == 0 || appDataPath.length == 0) return nil;
+    NSString *parent = [appDataPath stringByDeletingLastPathComponent];
+    if (parent.length == 0) return nil;
+    NSArray *kids = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:parent error:nil];
+    if (kids.count == 0) return nil;
+    NSString *needle = [NSString stringWithFormat:@"%u", localID];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *best = nil;
+    unsigned long long bestSize = 0;
+    for (NSString *k in kids) {
+        if (![k containsString:needle]) continue;
+        NSString *cand = [parent stringByAppendingPathComponent:k];
+        BOOL isDir = NO;
+        if (![fm fileExistsAtPath:cand isDirectory:&isDir] || isDir) continue;
+        NSDictionary *at = [fm attributesOfItemAtPath:cand error:nil];
+        unsigned long long sz = at ? at.fileSize : 0;
+        if (sz > bestSize) { bestSize = sz; best = cand; }
+    }
+    return bestSize > 0 ? best : nil;
+}
+
 /// 落盘文件兜底（对齐 WCR FUN_008db4b4 + FUN_008d9bc0 第二级 FUN_008da7a4）：
 /// 第一级 getVoicePath/m_nsVoicePath/... 全空时（收到的语音消息内存 wrap 常见），
 /// 调 +[CMessageWrap GetPathOfAppData:]（微信自己定位已下载文件的机制），
 /// 路径统一经 MioVPResolveVoiceFileAbsPath 解析后读文件
 static NSData *MioVPVoiceFileDataFromWrap(id wrap) {
     NSString *abs = nil;
+    NSString *appDataPath = nil;
     @try {
         // 第一级（WCR FUN_008db4b4）：getVoicePath → m_nsVoicePath → m_nsMsgDataPath → m_nsFilePath
         SEL gv = NSSelectorFromString(@"getVoicePath");
@@ -513,14 +538,13 @@ static NSData *MioVPVoiceFileDataFromWrap(id wrap) {
             }
         }
         // 第二级（WCR FUN_008d9bc0 → FUN_008da7a4）：+GetPathOfAppData: → 扩展路径字段
-        if (!abs) {
-            Class wrapCls = objc_getClass("CMessageWrap");
-            SEL gp = NSSelectorFromString(@"GetPathOfAppData:");
-            if (wrapCls && [wrapCls respondsToSelector:gp]) {
-                NSString *p = ((NSString *(*)(id, SEL, id))objc_msgSend)(wrapCls, gp, wrap);
-                if ([p isKindOfClass:[NSString class]]) abs = MioVPResolveVoiceFileAbsPath(p);
-            }
+        Class wrapCls = objc_getClass("CMessageWrap");
+        SEL gp = NSSelectorFromString(@"GetPathOfAppData:");
+        if (wrapCls && [wrapCls respondsToSelector:gp]) {
+            NSString *p = ((NSString *(*)(id, SEL, id))objc_msgSend)(wrapCls, gp, wrap);
+            if ([p isKindOfClass:[NSString class]] && p.length > 0) appDataPath = p;
         }
+        if (!abs && appDataPath) abs = MioVPResolveVoiceFileAbsPath(appDataPath);
         if (!abs) {
             for (NSString *key in @[@"m_nsMsgDataPath", @"m_nsFilePath", @"m_nsAppFilePath",
                                     @"m_nsAttachDataPath", @"m_nsAppMediaUrl"]) {
@@ -531,6 +555,8 @@ static NSData *MioVPVoiceFileDataFromWrap(id wrap) {
                 }
             }
         }
+        // 第三级（Mio 扩展）：AppData 父目录扫 localID 真实文件
+        if (!abs && appDataPath) abs = MioVPScanAppDataDirForLocalID(appDataPath, MioWrapLocalID(wrap));
     } @catch (NSException *e) {}
     if (!abs) return nil;
     NSData *d = [NSData dataWithContentsOfFile:abs options:NSDataReadingMappedIfSafe error:nil];
@@ -600,23 +626,49 @@ static void mioVoiceInclude_IMP(id self, SEL _cmd) {
         NSData *data = [VoicePackStore voiceDataFromWrap:wrap];
         if (data.length == 0) data = MioVPVoiceFileDataFromWrap(wrap);
         if (data.length == 0) {
-            // 诊断：字段状态 + GetPathOfAppData 返回值，便于下一轮定位
+            // 诊断增强：getVoicePath 原始值 + GetPathOfAppData 文件状态 + 父目录内容
             @try {
+                SEL gv = NSSelectorFromString(@"getVoicePath");
+                NSString *gvRaw = [wrap respondsToSelector:gv]
+                    ? (((id(*)(id, SEL))objc_msgSend)(wrap, gv) ?: @"(nil)")
+                    : @"(无getVoicePath)";
                 NSString *appDataPath = @"(类方法不存在)";
+                unsigned long long datSize = 0;
+                BOOL datExists = NO, datIsDir = NO;
                 Class wrapCls = objc_getClass("CMessageWrap");
                 SEL gp = NSSelectorFromString(@"GetPathOfAppData:");
                 if (wrapCls && [wrapCls respondsToSelector:gp]) {
-                    appDataPath = ((NSString *(*)(id, SEL, id))objc_msgSend)(wrapCls, gp, wrap) ?: @"(nil)";
+                    NSString *p = ((NSString *(*)(id, SEL, id))objc_msgSend)(wrapCls, gp, wrap);
+                    appDataPath = [p isKindOfClass:[NSString class]] ? p : @"(nil)";
                 }
-                WPLog(@"Voice", @"[IncludeLP] 语音数据为空 localID=%u voicePath=%@ msgDataPath=%@ GetPathOfAppData=%@",
-                      MioWrapLocalID(wrap),
+                if (appDataPath.length > 0 && ![appDataPath hasPrefix:@"("]) {
+                    datExists = [[NSFileManager defaultManager] fileExistsAtPath:appDataPath isDirectory:&datIsDir];
+                    if (datExists && !datIsDir) {
+                        NSDictionary *at = [[NSFileManager defaultManager] attributesOfItemAtPath:appDataPath error:nil];
+                        datSize = at ? at.fileSize : 0;
+                    }
+                    WPLog(@"Voice", @"[IncludeLP] GetPathOfAppData=%@ 存在=%d 目录=%d 大小=%llu",
+                          appDataPath, (int)datExists, (int)datIsDir, datSize);
+                    NSString *parent = [appDataPath stringByDeletingLastPathComponent];
+                    NSArray *kids = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:parent error:nil];
+                    NSMutableArray *desc = [NSMutableArray array];
+                    for (NSString *k in kids) {
+                        if (desc.count >= 8) break;
+                        NSDictionary *at = [[NSFileManager defaultManager]
+                                            attributesOfItemAtPath:[parent stringByAppendingPathComponent:k] error:nil];
+                        [desc addObject:[NSString stringWithFormat:@"%@(%llu)", k, at ? at.fileSize : 0]];
+                    }
+                    WPLog(@"Voice", @"[IncludeLP] AppData 父目录前%lu项: %@", (unsigned long)desc.count, desc);
+                }
+                WPLog(@"Voice", @"[IncludeLP] 语音数据为空 localID=%u getVoicePath=%@ voicePath=%@ msgDataPath=%@",
+                      MioWrapLocalID(wrap), gvRaw,
                       ((NSString *)[wrap valueForKey:@"m_nsVoicePath"]) ?: @"(空)",
-                      ((NSString *)[wrap valueForKey:@"m_nsMsgDataPath"]) ?: @"(空)",
-                      appDataPath);
+                      ((NSString *)[wrap valueForKey:@"m_nsMsgDataPath"]) ?: @"(空)");
             } @catch (NSException *e) {
-                WPLog(@"Voice", @"[IncludeLP] 语音数据为空 localID=%u", MioWrapLocalID(wrap));
+                WPLog(@"Voice", @"[IncludeLP] 语音数据为空 localID=%u 诊断异常=%@",
+                      MioWrapLocalID(wrap), e.reason);
             }
-            WPShowToast(@"语音未下载，暂不能纳入");
+            WPShowToast(@"语音未下载，请先播放后再纳入");
             return;
         }
 
