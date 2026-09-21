@@ -20,6 +20,14 @@
         [ConfigDescriptor itemWithKey:@"voicePackEnabled" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"voicePackContinuousSendEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"voicePackPlusLongPressEnabled" type:ConfigValueTypeBool default:@(NO)],
+        // ── 语音功能 ──
+        [ConfigDescriptor itemWithKey:@"voiceForwardEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"voiceFakeDuration" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"voiceAutoToTextEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"voiceDragProgressEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"voiceAutoSpeedEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"voiceBackgroundPlayEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"voiceCallPlayEnabled" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 
