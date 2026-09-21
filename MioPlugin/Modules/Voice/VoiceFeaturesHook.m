@@ -112,18 +112,16 @@ static NSString *VFSelfWxid(void) {
 
 static id VFService(Class cls) {
     if (!cls) return nil;
-    // 优先 MMContext currentContext getService:（WCR 主路径）
+    // MMContext currentContext getService:（WCR 唯一路径，已实证）
     Class mmctx = objc_getClass("MMContext");
-    if (mmctx && [mmctx respondsToSelector:@selector(currentContext)]) {
-        @try {
-            id ctx = ((id (*)(id, SEL))objc_msgSend)(mmctx, @selector(currentContext));
-            if (ctx && [ctx respondsToSelector:@selector(getService:)]) {
-                id svc = ((id (*)(id, SEL, Class))objc_msgSend)(ctx, @selector(getService:), cls);
-                if (svc) return svc;
-            }
-        } @catch (NSException *e) {}
-    }
-    return WXGetService(cls); // fallback MMServiceCenter
+    if (!mmctx || ![mmctx respondsToSelector:@selector(currentContext)]) return nil;
+    @try {
+        id ctx = ((id (*)(id, SEL))objc_msgSend)(mmctx, @selector(currentContext));
+        if (ctx && [ctx respondsToSelector:@selector(getService:)]) {
+            return ((id (*)(id, SEL, Class))objc_msgSend)(ctx, @selector(getService:), cls);
+        }
+    } @catch (NSException *e) {}
+    return nil;
 }
 
 /// 语音类型判定（WCR FUN_008b50d8：IsVoiceMsg 优先，m_uiMessageType==0x22 兜底）
@@ -279,10 +277,10 @@ static BOOL VFSendVoiceDataToChat(NSData *data, unsigned int ms, NSString *chatN
     if ([wrap respondsToSelector:setTo]) ((void (*)(id, SEL, id))objc_msgSend)(wrap, setTo, chatName);
 
     unsigned int ct = 0;
-    id msgMgr0 = WXGetService(objc_getClass("CMessageMgr"));
+    id msgMgr = VFService(objc_getClass("CMessageMgr"));
     SEL genTime = NSSelectorFromString(@"GenSendMsgTimeWithChatName:");
-    if (msgMgr0 && [msgMgr0 respondsToSelector:genTime]) {
-        @try { ct = ((unsigned int (*)(id, SEL, id))objc_msgSend)(msgMgr0, genTime, chatName); } @catch (NSException *e) {}
+    if (msgMgr && [msgMgr respondsToSelector:genTime]) {
+        @try { ct = ((unsigned int (*)(id, SEL, id))objc_msgSend)(msgMgr, genTime, chatName); } @catch (NSException *e) {}
     }
     if (ct == 0) ct = (unsigned int)[[NSDate date] timeIntervalSince1970];
 
@@ -302,7 +300,6 @@ static BOOL VFSendVoiceDataToChat(NSData *data, unsigned int ms, NSString *chatN
     SEL setContent = NSSelectorFromString(@"setM_nsContent:");
     if ([wrap respondsToSelector:setContent]) ((void (*)(id, SEL, id))objc_msgSend)(wrap, setContent, xml);
 
-    id msgMgr = msgMgr0 ?: VFService(objc_getClass("CMessageMgr"));
     id audioSender = VFService(objc_getClass("AudioSender"));
     SEL addLocal = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
     SEL resend = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
@@ -531,7 +528,7 @@ static void VFStartForwardFromCell(UIView *cell) {
         Class fmgCls = NSClassFromString(@"ForwardMessageMgr");
         id svc = VFService(fmgCls);
         SEL fwd = NSSelectorFromString(@"forwardMessage:fromViewController:");
-        UIViewController *topVC = VFVCFromResponderChain(cell) ?: WPGetTopVCForPresentation();
+        UIViewController *topVC = VFVCFromResponderChain(cell);
         WPLog(@"VoiceFeat", @"[Fwd] fromVC=%@", NSStringFromClass([topVC class]));
         if (!svc || !fmgCls || ![svc respondsToSelector:fwd] || !topVC) {
             WPShowToast(@"当前微信版本不支持语音转发");
@@ -1013,21 +1010,18 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
     // ④ 倍速按钮显示
     Class vmCls = objc_getClass("VoiceMessageViewModel");
     if (vmCls) VF_HOOK(vmCls, "canShowPlayRateButton", hook_VM_canShowRate, orig_VM_canShowRate);
-    // ⑦ 原生长按菜单追加「转发」（WCR 挂载点 filteredMenuItems:；小丑同款 MMMenuItem）
+    // ⑦ 原生长按菜单追加「转发」（WCR 挂载点 filteredMenuItems:，已实证）
     SEL fmi = NSSelectorFromString(@"filteredMenuItems:");
-    SEL omi = NSSelectorFromString(@"operationMenuItems");
     Method fm = class_getInstanceMethod(cellCls, fmi);
-    Method om = fm ? NULL : class_getInstanceMethod(cellCls, omi);
-    SEL menuSel = fm ? fmi : (om ? omi : NULL);
-    if (menuSel) {
-        MSHookMessageEx(cellCls, menuSel, (IMP)hook_VMC_filteredMenu, &orig_VMC_filteredMenu);
-        WPLog(@"VoiceFeat", @"hook OK: %s (转发菜单项)", fm ? "filteredMenuItems:" : "operationMenuItems");
+    if (fm) {
+        MSHookMessageEx(cellCls, fmi, (IMP)hook_VMC_filteredMenu, &orig_VMC_filteredMenu);
+        WPLog(@"VoiceFeat", @"hook OK: filteredMenuItems: (转发菜单项)");
         SEL act = NSSelectorFromString(@"vfMenuForward:");
         if (![cellCls instancesRespondToSelector:act]) {
             class_addMethod(cellCls, act, (IMP)vfMenuForwardAction_IMP, "v@:@");
         }
     } else {
-        WPLog(@"VoiceFeat", @"hook SKIP: 语音 cell 无 filteredMenuItems:/operationMenuItems");
+        WPLog(@"VoiceFeat", @"hook SKIP: 语音 cell 无 filteredMenuItems:");
     }
 }
 
