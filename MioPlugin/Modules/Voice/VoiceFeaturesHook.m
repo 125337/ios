@@ -210,10 +210,12 @@ static BOOL VFSendVoiceDataToChat(NSData *data, unsigned int ms, NSString *chatN
     if (!wrapCls) return NO;
     id wrap = nil;
     SEL init2 = NSSelectorFromString(@"initWithMsgType:nsFromUsr:");
+    SEL init1 = NSSelectorFromString(@"initWithMsgType:");
+    id allocd = ((id (*)(id, SEL))objc_msgSend)(wrapCls, @selector(alloc));
     if ([wrapCls instancesRespondToSelector:init2]) {
-        wrap = [[wrapCls alloc] initWithMsgType:0x22 nsFromUsr:wxid];
-    } else if ([wrapCls instancesRespondToSelector:@selector(initWithMsgType:)]) {
-        wrap = [[wrapCls alloc] initWithMsgType:0x22];
+        wrap = ((id (*)(id, SEL, unsigned int, id))objc_msgSend)(allocd, init2, 0x22, wxid);
+    } else if ([wrapCls instancesRespondToSelector:init1]) {
+        wrap = ((id (*)(id, SEL, unsigned int))objc_msgSend)(allocd, init1, 0x22);
     }
     if (!wrap) { WPLog(@"VoiceFeat", @"[Fwd] CMessageWrap 合成失败"); return NO; }
 
@@ -327,8 +329,9 @@ static NSString *VFContactName(id contact) {
 /// 合成替身 wrap（WCR FUN_008bcaa4：msgType=1 文本、nsContent=" "、assoc 标记）
 static id VFMakeStubWrap(id realWrap) {
     Class wrapCls = objc_getClass("CMessageWrap");
-    if (!wrapCls || ![wrapCls instancesRespondToSelector:@selector(initWithMsgType:)]) return nil;
-    id stub = [[wrapCls alloc] initWithMsgType:1];
+    if (!wrapCls || ![wrapCls instancesRespondToSelector:NSSelectorFromString(@"initWithMsgType:")]) return nil;
+    id allocd = ((id (*)(id, SEL))objc_msgSend)(wrapCls, @selector(alloc));
+    id stub = ((id (*)(id, SEL, unsigned int))objc_msgSend)(allocd, NSSelectorFromString(@"initWithMsgType:"), 1);
     if (!stub) return nil;
     NSString *from = VFStr(realWrap, NSSelectorFromString(@"m_nsFromUsr"));
     NSString *to = VFStr(realWrap, NSSelectorFromString(@"m_nsToUsr"));
@@ -809,10 +812,11 @@ static void hook_Min_absorbTap(id self, SEL _cmd) {
 // ── ⑥ 通话播放 ──
 static BOOL VFInCall(void) {
     @try {
+        // CI SDK 头文件缺 VoiceChat/VideoChat 常量 → 直接用官方字面量值
         NSString *cat = AVAudioSession.sharedInstance.category;
-        return [cat isEqualToString:AVAudioSessionCategoryPlayAndRecord] ||
-               [cat isEqualToString:AVAudioSessionCategoryVoiceChat] ||
-               [cat isEqualToString:AVAudioSessionCategoryVideoChat];
+        return [cat isEqualToString:@"playandrecord"] ||
+               [cat isEqualToString:@"voicechat"] ||
+               [cat isEqualToString:@"videochat"];
     } @catch (NSException *e) { return NO; }
 }
 
