@@ -80,9 +80,15 @@ void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSStr
 #pragma mark - 微信原生箭头捕获
 
 // 运行时捕获微信 cell 的 accessory 箭头图，供所有行复用（与 WCR 借用微信 cell 框架同源的视觉）
+#import <string.h>
+#import <stdlib.h>
+
 static UIImage *g_wcArrowImage = nil;
 static IMP orig_UICTV_setAV = NULL;
 static IMP orig_MMTV_setAV = NULL;
+static IMP orig_UICTV_setAT = NULL;
+static IMP orig_MMTV_setAT = NULL;
+static int g_atProbeLeft = 3;   // setAccessoryType 探测剩余次数（探完自动摘 hook，零常驻开销）
 
 // 捕获条件：UIImage 且尺寸像箭头（窄长小图）；命中后记录日志（含尝试取资源名，便于后续直接 imageNamed）
 static void wpTryCaptureArrowImage(UIView *av) {
@@ -116,6 +122,49 @@ static void hook_MMTV_setAV(id self, SEL _cmd, UIView *av) {
     if (orig_MMTV_setAV) ((void (*)(id, SEL, UIView *))orig_MMTV_setAV)(self, _cmd, av);
 }
 
+// ── setAccessoryType: 探测：微信箭头若走系统 chevron（type=3）则确认（无图可借，矢量即同款）──
+// 注意：实参是 enum（int，走 w 寄存器），hook 签名必须用 int，用 NSInteger 读高位可能是脏数据
+static void wpProbeAccessoryType(id self, SEL _cmd, int type, IMP *origP) {
+    if (type == 3 && g_atProbeLeft > 0) {   // UITableViewCellAccessoryDisclosureIndicator
+        g_atProbeLeft--;
+        WPLog(@"CommonUI", @"[WCArrow] setAccessoryType=Disclosure on %@", NSStringFromClass([self class]));
+        if (g_atProbeLeft == 0) {
+            Class mm = objc_getClass("MMTableViewCell");
+            Class base = objc_getClass("UITableViewCell");
+            if (*origP) {
+                if (mm) { Method m = class_getInstanceMethod(mm, @selector(setAccessoryType:)); if (m) method_setImplementation(m, *origP); }
+                if (base) { Method m = class_getInstanceMethod(base, @selector(setAccessoryType:)); if (m) method_setImplementation(m, *origP); }
+                *origP = NULL;
+                WPLog(@"CommonUI", @"[WCArrow] setAccessoryType 探测完成，hook 已摘除");
+            }
+        }
+    }
+}
+
+static void hook_UICTV_setAT(id self, SEL _cmd, int type) {
+    wpProbeAccessoryType(self, _cmd, type, &orig_UICTV_setAT);
+    if (orig_UICTV_setAT) ((void (*)(id, SEL, int))orig_UICTV_setAT)(self, _cmd, type);
+}
+
+static void hook_MMTV_setAT(id self, SEL _cmd, int type) {
+    wpProbeAccessoryType(self, _cmd, type, &orig_MMTV_setAT);
+    if (orig_MMTV_setAT) ((void (*)(id, SEL, int))orig_MMTV_setAT)(self, _cmd, type);
+}
+
+// dump 类方法表里 arrow/accessory/indicator 相关方法（一次性诊断）
+static void wpDumpArrowMethods(Class cls, const char *clsName) {
+    if (!cls) return;
+    unsigned int count = 0;
+    Method *list = class_copyMethodList(cls, &count);
+    for (unsigned int i = 0; i < count; i++) {
+        const char *name = sel_getName(method_getName(list[i]));
+        if (strstr(name, "ccessor") || strstr(name, "rrow") || strstr(name, "ndicator")) {
+            WPLog(@"CommonUI", @"[WCArrow] %s 方法: %s", clsName, name);
+        }
+    }
+    free(list);
+}
+
 void WPInstallWCArrowCapture(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -138,6 +187,20 @@ void WPInstallWCArrowCapture(void) {
                 WPLog(@"CommonUI", @"[WCArrow] hook UITableViewCell setAccessoryView: OK");
             }
         }
+
+        // setAccessoryType: 探测（3 次后自动摘除）——确认微信箭头是否走系统 chevron
+        if (mm) {
+            Method m = class_getInstanceMethod(mm, @selector(setAccessoryType:));
+            if (m) orig_MMTV_setAT = method_setImplementation(m, (IMP)hook_MMTV_setAT);
+        }
+        if (base) {
+            Method m = class_getInstanceMethod(base, @selector(setAccessoryType:));
+            if (m) orig_UICTV_setAT = method_setImplementation(m, (IMP)hook_UICTV_setAT);
+        }
+
+        // 一次性 dump：找微信 cell 体系里箭头相关的方法名
+        wpDumpArrowMethods(mm, "MMTableViewCell");
+        wpDumpArrowMethods(objc_getClass("WCTableViewNormalCellManager"), "WCTableViewNormalCellManager");
     });
 }
 
