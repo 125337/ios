@@ -264,6 +264,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         CGFloat cr = cellView.layer.cornerRadius;
         NSUInteger mc = cellView.layer.maskedCorners;
         for (UIView *sub in cellView.subviews) {
+            // 分隔线类 1px 小视图不参与切角：强设 r=15 圆角会把线两端削断
+            if (CGRectGetHeight(sub.frame) <= 2.0 || CGRectGetWidth(sub.frame) <= 2.0) continue;
             sub.layer.cornerRadius = cr;
             sub.layer.maskedCorners = mc;
             sub.layer.masksToBounds = YES;
