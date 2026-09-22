@@ -1,48 +1,17 @@
 #import "CSContactInfoPopoverController.h"
 #import "WPCommonUI.h"
+#import "../../Settings/Common/WPWeChatTable.h"
 #import "../../Core/LogManager.h"
-#import "../../Core/ServiceHelper.h"
 #import "AvatarLoader.h"
+#import "../../Core/ServiceHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
-#pragma mark - 信息行（内容靠左，与标题保持2pt间距，支持多行）
-
-static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *left, NSString *right) {
-    CGFloat titleWidth = 40;
-    CGFloat spacing = 2;
-
-    UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, titleWidth, kRowH)];
-    l.text = left;
-    l.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
-    l.textColor = WPT2();
-    [card addSubview:l];
-
-    CGFloat contentX = kPad + titleWidth + spacing;
-    CGFloat contentW = cw - contentX - kPad;
-    UIFont *contentFont = [UIFont systemFontOfSize:14];
-
-    CGRect textRect = [right boundingRectWithSize:CGSizeMake(contentW, CGFLOAT_MAX)
-                                          options:NSStringDrawingUsesLineFragmentOrigin
-                                       attributes:@{NSFontAttributeName: contentFont}
-                                          context:nil];
-    CGFloat textHeight = ceil(textRect.size.height);
-    CGFloat rowHeight = MAX(kRowH, textHeight + 10);
-
-    UILabel *r = [[UILabel alloc] initWithFrame:CGRectMake(contentX, cy, contentW, rowHeight)];
-    r.text = right;
-    r.font = contentFont;
-    r.textColor = WPT1();
-    r.textAlignment = NSTextAlignmentLeft;
-    r.numberOfLines = 0;
-    r.lineBreakMode = NSLineBreakByWordWrapping;
-    [card addSubview:r];
-
-    return rowHeight;
-}
+// 联系人信息弹窗：微信引擎渲染（引擎统一定论——禁止自绘列表项/分割线）。
+// 头像区为 tableHeaderView 自绘卡（与入口页 hero 同款），信息行走微信原生 NavCell
+// （与基类 addInfoRowInGroup 同款：tap 回调带行载荷，点击复制 + toast）。
 
 @implementation CSContactInfoPopoverController {
-    UIScrollView *_scrollView;
     UIImageView *_avatarView;
 }
 
@@ -65,36 +34,24 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     [super viewDidLoad];
 
     CGFloat w = self.preferredContentSize.width;
+    CGFloat h = self.preferredContentSize.height;
+    if (w < 1) w = self.view.bounds.size.width;
+    if (h < 1) h = self.view.bounds.size.height;
 
-    _scrollView = WPMakeSV(self);
-    _scrollView.alwaysBounceVertical = YES;
-    [self.view addSubview:_scrollView];
+    // === 微信引擎表（弹窗内自布局：无导航栏，frame 覆盖整个 view）===
+    WPWeChatTable *wc = [WPWeChatTable tableForVC:self];
+    if (!wc) return;   // 引擎不可用则页面空白（与全站策略一致：无兜底）
+    UITableView *tv = wc.tableView;
+    tv.frame = CGRectMake(0, 0, w, h);
+    tv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    tv.backgroundColor = WPBgColor();
 
-    CGFloat y = 12;
-
-    y = [self buildAvatarCardAtY:y width:w];
-
-    if (self.wxid) {
-        if ([self.wxid containsString:@"@chatroom"]) {
-            y = [self buildGroupInfoCardAtY:y width:w];
-        } else if ([self.wxid hasPrefix:@"gh_"]) {
-            y = [self buildOfficialAccountInfoCardAtY:y width:w];
-        } else {
-            y = [self buildBasicInfoCardAtY:y width:w];
-        }
-    } else {
-        y = [self buildBasicInfoCardAtY:y width:w];
-    }
-
-    _scrollView.contentSize = CGSizeMake(w, y + 12);
-}
-
-#pragma mark - 头像卡片
-
-- (CGFloat)buildAvatarCardAtY:(CGFloat)y width:(CGFloat)w {
-    UIView *card = WPMakeCard(y, w);
+    // === 头像区作 tableHeaderView（自绘卡，点击头像跳资料页）===
+    UIView *headerWrap = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 158)];
+    headerWrap.backgroundColor = [UIColor clearColor];
+    UIView *card = WPMakeCard(8, w);
     CGFloat cw = w - kPad * 2;
-    CGFloat cy = 20;
+    CGFloat cy = 16;
 
     UIImageView *avatarView = [[UIImageView alloc] initWithFrame:CGRectMake((cw - 60) / 2, cy, 60, 60)];
     avatarView.layer.cornerRadius = 30;
@@ -102,7 +59,6 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     avatarView.contentMode = UIViewContentModeScaleAspectFill;
     avatarView.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1.0];
     avatarView.userInteractionEnabled = YES;
-    avatarView.tag = 1000;
     _avatarView = avatarView;
     [self loadAvatarForImageView:avatarView];
     UITapGestureRecognizer *avatarTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(onAvatarTapped:)];
@@ -124,11 +80,70 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     wxidLabel.textColor = WPT2();
     wxidLabel.textAlignment = NSTextAlignmentCenter;
     [card addSubview:wxidLabel];
-    cy += 24;
 
-    CGRect f = card.frame; f.size.height = cy; card.frame = f;
-    [_scrollView addSubview:card];
-    return y + cy + 8;
+    CGRect f = card.frame; f.size.height = cy + 24; card.frame = f;
+    [headerWrap addSubview:card];
+    // UIKit 已知要求：tableHeaderView.frame 修改后需重新赋值才会重算内容区布局
+    tv.tableHeaderView = headerWrap;
+    headerWrap.frame = CGRectMake(0, 0, w, 158);
+    tv.tableHeaderView = headerWrap;
+
+    // === 信息 section（基本信息/群聊信息/公众号信息）===
+    NSArray *items;
+    NSString *secTitle;
+    if ([self.wxid containsString:@"@chatroom"]) {
+        items = [self groupInfoItems];     secTitle = @"群聊信息";
+    } else if ([self.wxid hasPrefix:@"gh_"]) {
+        items = [self officialAccountInfoItems]; secTitle = @"公众号信息";
+    } else {
+        items = [self basicInfoItems];     secTitle = @"基本信息";
+    }
+
+    WPWGroup *g = [wc addGroup];
+    [g wpSetHeader:secTitle footer:nil];
+    for (NSUInteger i = 0; i < items.count; i++) {
+        NSDictionary *item = items[i];
+        NSString *value = [self valueForInfoKey:item[@"key"]];
+        id cell = WPWCNavCell(@selector(wpInfoTap:), self, item[@"label"], value);
+        if (cell) {
+            NSDictionary *row = @{@"label": item[@"label"] ?: @"",
+                                  @"key": item[@"key"] ?: @"",
+                                  @"copiable": item[@"copiable"] ?: @NO,
+                                  @"copyText": value ?: @""};
+            objc_setAssociatedObject(cell, "wprow", row, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            @try { [(id)cell setValue:row forKey:@"userInfo"]; } @catch (NSException *e) {}
+            [g addCell:cell];
+        }
+    }
+
+    [self.view addSubview:tv];
+    [wc reloadAsync];
+}
+
+#pragma mark - 信息行点击（与基类 wpWCTapRow copy 分支同款）
+
+- (void)wpInfoTap:(id)arg {
+    id row = nil;
+    if (arg) {
+        @try {
+            id ui = [arg valueForKey:@"userInfo"];
+            if ([ui isKindOfClass:[NSDictionary class]]) row = ui;
+        } @catch (NSException *e) {}
+        if (!row) row = objc_getAssociatedObject(arg, "wprow");
+    }
+    if (![row isKindOfClass:[NSDictionary class]]) return;
+    if (![row[@"copiable"] boolValue]) return;
+
+    NSString *text = row[@"copyText"];
+    if (!text.length) return;
+
+    [UIPasteboard generalPasteboard].string = text;
+    WPShowToast([NSString stringWithFormat:@"已复制%@: %@", row[@"label"] ?: @"", text]);
+
+    UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc]
+        initWithStyle:UIImpactFeedbackStyleLight];
+    [gen prepare];
+    [gen impactOccurred];
 }
 
 #pragma mark - 头像加载
@@ -156,44 +171,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     }];
 }
 
-#pragma mark - 通用卡片构建
-
-- (CGFloat)buildCardWithItems:(NSArray *)items sectionTitle:(NSString *)title atY:(CGFloat)y width:(CGFloat)w {
-    [_scrollView addSubview:WPMakeSectionHeader(title, y, w)];
-    y += 32;
-
-    UIView *card = WPMakeCard(y, w);
-    CGFloat cw = w - kPad * 2;
-    CGFloat cy = 0;
-
-    for (NSUInteger i = 0; i < items.count; i++) {
-        if (i > 0) {
-            WPAddSep(card, cy, cw);
-        }
-        NSDictionary *item = items[i];
-        NSString *value = [self valueForInfoKey:item[@"key"]];
-        CGFloat rowH = WPAddInfoRowLeft(card, cy, cw, item[@"label"], value);
-
-        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-        btn.frame = CGRectMake(0, cy, cw, rowH);
-        objc_setAssociatedObject(btn, "infoKey", item[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(btn, "copiable", item[@"copiable"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [btn addTarget:self action:@selector(onInfoRowTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [card addSubview:btn];
-
-        cy += rowH;
-    }
-
-    CGRect f = card.frame; f.size.height = cy; card.frame = f;
-    [_scrollView addSubview:card];
-    return y + cy + 8;
-}
-
-#pragma mark - 基本信息卡片
-
-- (CGFloat)buildBasicInfoCardAtY:(CGFloat)y width:(CGFloat)w {
-    return [self buildCardWithItems:[self basicInfoItems] sectionTitle:@"基本信息" atY:y width:w];
-}
+#pragma mark - 信息项定义
 
 - (NSArray *)basicInfoItems {
     return @[
@@ -206,12 +184,6 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     ];
 }
 
-#pragma mark - 群聊信息卡片
-
-- (CGFloat)buildGroupInfoCardAtY:(CGFloat)y width:(CGFloat)w {
-    return [self buildCardWithItems:[self groupInfoItems] sectionTitle:@"群聊信息" atY:y width:w];
-}
-
 - (NSArray *)groupInfoItems {
     return @[
         @{@"label": @"群主",       @"key": @"groupOwner",      @"copiable": @YES},
@@ -219,12 +191,6 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         @{@"label": @"id",     @"key": @"wxid",            @"copiable": @YES},
         @{@"label": @"备注",       @"key": @"remark",          @"copiable": @YES},
     ];
-}
-
-#pragma mark - 公众号信息卡片
-
-- (CGFloat)buildOfficialAccountInfoCardAtY:(CGFloat)y width:(CGFloat)w {
-    return [self buildCardWithItems:[self officialAccountInfoItems] sectionTitle:@"公众号信息" atY:y width:w];
 }
 
 - (NSArray *)officialAccountInfoItems {
@@ -235,25 +201,6 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
         @{@"label": @"地区",       @"key": @"location",      @"copiable": @YES},
         @{@"label": @"简介",       @"key": @"signature",     @"copiable": @YES},
     ];
-}
-
-#pragma mark - 点击信息行
-
-- (void)onInfoRowTapped:(UIButton *)btn {
-    NSString *key = objc_getAssociatedObject(btn, "infoKey");
-    NSNumber *copiable = objc_getAssociatedObject(btn, "copiable");
-    if (!copiable.boolValue) return;
-
-    NSString *text = [self valueForInfoKey:key];
-    if (!text.length) return;
-
-    [UIPasteboard generalPasteboard].string = text;
-    [self showCopySuccessToast];
-
-    UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc]
-        initWithStyle:UIImpactFeedbackStyleLight];
-    [gen prepare];
-    [gen impactOccurred];
 }
 
 #pragma mark - 头像点击 → 跳转资料页
@@ -357,16 +304,16 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 - (NSString *)locationValue {
     id contact = self.contact;
     if (!contact) return @"未设置";
-    
+
     NSString *country = WXSafeStringGet(contact, @"m_nsCountry");
     NSString *province = WXSafeStringGet(contact, @"m_nsProvince");
     NSString *city = WXSafeStringGet(contact, @"m_nsCity");
-    
+
     NSMutableArray *parts = [NSMutableArray array];
     if (country.length) [parts addObject:country];
     if (province.length) [parts addObject:province];
     if (city.length) [parts addObject:city];
-    
+
     return parts.count > 0 ? [parts componentsJoinedByString:@" "] : @"未设置";
 }
 
@@ -379,7 +326,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
 - (NSString *)groupMemberCountValue {
     id contact = self.contact;
     if (!contact) return @"未知";
-    
+
     // === 成员数量 ===
     // 方案一：优先通过 CContactMgr 获取（保留但不依赖）
     NSUInteger memberCount = 0;
@@ -391,7 +338,7 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
             memberCount = count;
         }
     }
-    
+
     // 方案二：手动解析 m_nsChatRoomMemList（兜底）
     if (memberCount == 0) {
         NSString *memList = WXSafeStringGet(contact, @"m_nsChatRoomMemList");
@@ -400,9 +347,9 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
             memberCount = members.count;
         }
     }
-    
+
     if (memberCount == 0) return @"未知";
-    
+
     // === 管理员数量 ===
     NSUInteger adminCount = 0;
     NSString *adminList = WXSafeStringGet(contact, @"m_nsChatRoomAdminList");
@@ -427,32 +374,6 @@ static CGFloat WPAddInfoRowLeft(UIView *card, CGFloat cy, CGFloat cw, NSString *
     if (![contact respondsToSelector:flagSel]) return @"未认证";
     NSInteger flag = (NSInteger)((NSInteger (*)(id, SEL))objc_msgSend)(contact, flagSel);
     return flag > 0 ? @"已认证" : @"未认证";
-}
-
-#pragma mark - Copy Toast
-
-- (void)showCopySuccessToast {
-    UILabel *toast = [[UILabel alloc] init];
-    toast.text = @"已复制";
-    toast.textAlignment = NSTextAlignmentCenter;
-    toast.font = [UIFont systemFontOfSize:14];
-    toast.textColor = [UIColor whiteColor];
-    toast.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.7];
-    toast.layer.cornerRadius = 6;
-    toast.clipsToBounds = YES;
-    [toast sizeToFit];
-    CGFloat tw = toast.frame.size.width + 20;
-    CGFloat th = toast.frame.size.height + 10;
-    toast.frame = CGRectMake((self.view.bounds.size.width - tw) * 0.5, self.view.bounds.size.height * 0.8, tw, th);
-    [self.view addSubview:toast];
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [UIView animateWithDuration:0.3 animations:^{
-            toast.alpha = 0;
-        } completion:^(BOOL finished) {
-            [toast removeFromSuperview];
-        }];
-    });
 }
 
 @end

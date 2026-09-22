@@ -8,7 +8,6 @@
 #import "../Voice/WPVoicePackSettingsVC.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Config/Constants.h"
-#import "../../Settings/Controllers/SettingController.h"
 #import "../../Settings/Controllers/SettingGeneralFunctionController.h"
 #import "../../Settings/Controllers/SettingRedEnvelopController.h"
 #import <objc/runtime.h>
@@ -379,9 +378,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         WPLog(@"Setting", @"SettingEntryHook install");
-
-        // 微信原生箭头捕获 hook（供设置页行箭头/子行层级标记复用微信图）
-        WPInstallWCArrowCapture();
 
         Class pluginsMgrClass = objc_getClass("WCPluginsMgr");
         if (pluginsMgrClass) {

@@ -150,8 +150,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
-    // ★ margin 代码（进入此处说明 globalCornerRadiusEnabled 已开启）★
-    CGFloat margin = config.listCellMargin;
+    // ★ margin：Mio 页面写死 15（不读用户配置），微信页面走用户配置 ★
+    CGFloat margin = mioOwn ? 15.0 : config.listCellMargin;
     if (margin > 0) {
         CGFloat currentX = cellView.frame.origin.x;
         UIView *superview = cellView.superview;
@@ -199,9 +199,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
     }
 
-    // ★ corner 圆角设置（不需要 if 守卫！进入这里一定是因为 globalCornerRadiusEnabled==YES）★
-    NSInteger cornerRadius = (NSInteger)config.listCellCornerRadius;
-    if (cornerRadius == 0) cornerRadius = 18;
+    // ★ corner 圆角：Mio 页面写死 15（不读用户配置），微信页面走用户配置 ★
+    NSInteger cornerRadius = mioOwn ? 15 : (NSInteger)config.listCellCornerRadius;
+    if (!mioOwn && cornerRadius == 0) cornerRadius = 18;
 
     BOOL isContacts = [className isEqualToString:@"ContactsViewController"];
     BOOL isFTSHome = [className isEqualToString:@"FTSHomeViewController"];

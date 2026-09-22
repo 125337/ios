@@ -1,5 +1,4 @@
 #import "../../Settings/Common/SettingCategoryController.h"
-#import "../../Settings/Controllers/SettingController.h"
 #import "../../Settings/Controllers/SettingChatTopBarController.h"
 #import "../../Settings/Controllers/SettingAvatarHideController.h"
 #import "../../Core/LogManager.h"
