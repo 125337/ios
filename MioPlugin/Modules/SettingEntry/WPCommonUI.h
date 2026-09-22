@@ -37,6 +37,9 @@ void WPDrawDisclosureArrow(UIView *card, CGFloat cy, CGFloat containerW, CGFloat
 /// 箭头同样优先用微信原生图，回退矢量绘制；需配合标题右移 14pt 使用
 void WPDrawSubItemArrow(UIView *card, CGFloat cy, CGFloat x);
 
+/// 构造子行层级箭头视图（12 x kRowH 容器，箭头垂直居中），供 cell 复用场景打 tag 管理
+UIView *WPMakeSubItemArrowView(void);
+
 /// 运行时捕获的微信原生箭头图（hook MMTableViewCell/UITableViewCell setAccessoryView: 得到）
 /// 用户打开过任何带箭头的微信页面后可用；未捕获返回 nil
 UIImage *WPWCArrowImage(void);

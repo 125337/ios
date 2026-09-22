@@ -179,17 +179,19 @@ void WPDrawDisclosureArrow(UIView *card, CGFloat cy, CGFloat containerW, CGFloat
     [card.layer addSublayer:arrow];
 }
 
-void WPDrawSubItemArrow(UIView *card, CGFloat cy, CGFloat x) {
-    CGFloat arrowCY = cy + kRowH / 2;
-
+UIView *WPMakeSubItemArrowView(void) {
     UIImage *wcImg = WPWCArrowImage();
+    UIView *holder = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 12, kRowH)];
+    holder.userInteractionEnabled = NO;
+    CGFloat arrowCY = kRowH / 2;
+
     if (wcImg) {
         CGFloat iw = wcImg.size.width, ih = wcImg.size.height;
         UIImageView *iv = [[UIImageView alloc] initWithImage:wcImg];
-        iv.frame = CGRectMake(x, arrowCY - ih / 2, iw, ih);
+        iv.frame = CGRectMake(2, arrowCY - ih / 2, iw, ih);
         iv.userInteractionEnabled = NO;
-        [card addSubview:iv];
-        return;
+        [holder addSubview:iv];
+        return holder;
     }
 
     // 回退：小号矢量 chevron（5.5x9，1.5pt 线宽，比右侧大箭头更轻）
@@ -205,8 +207,15 @@ void WPDrawSubItemArrow(UIView *card, CGFloat cy, CGFloat x) {
     arrow.lineWidth = 1.5;
     arrow.lineCap = kCALineCapRound;
     arrow.lineJoin = kCALineJoinRound;
-    arrow.frame = CGRectMake(x, arrowCY - arrowH / 2, arrowW + 2, arrowH);
-    [card.layer addSublayer:arrow];
+    arrow.frame = CGRectMake(0, arrowCY - arrowH / 2, arrowW + 2, arrowH);
+    [holder.layer addSublayer:arrow];
+    return holder;
+}
+
+void WPDrawSubItemArrow(UIView *card, CGFloat cy, CGFloat x) {
+    UIView *v = WPMakeSubItemArrowView();
+    v.frame = CGRectMake(x, cy, v.frame.size.width, kRowH);
+    [card addSubview:v];
 }
 
 void WPAddNavRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSString *action, id target) {

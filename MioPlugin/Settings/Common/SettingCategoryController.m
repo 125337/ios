@@ -288,6 +288,7 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         row[@"title"] = title;
         row[@"key"] = key;
         row[@"isOn"] = @(on);
+        if (objc_getAssociatedObject(group, "isSubContainer")) row[@"isSub"] = @YES;
         [rowsForTable(table) addObject:row];
         return cy + kRowH;
     }
@@ -344,6 +345,7 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         row[@"title"] = title;
         row[@"key"] = key;
         row[@"valueType"] = @(valueType);
+        if (objc_getAssociatedObject(group, "isSubContainer")) row[@"isSub"] = @YES;
         if (value.length > 0) row[@"value"] = value;
         if (hint.length > 0) row[@"hint"] = hint;
         if (alertTitle.length > 0) row[@"alertTitle"] = alertTitle;
@@ -609,8 +611,11 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 
     if (on && subBuilder) {
         if ([group isKindOfClass:[UITableView class]]) {
+            // 表格路径：子行构建期间临时标记子容器，让子行 row 带上 isSub（见 cellSwitch/cellInput）
+            objc_setAssociatedObject(group, "isSubContainer", @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             CGFloat ecy = 0;
             subBuilder(group, &ecy);
+            objc_setAssociatedObject(group, "isSubContainer", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             resultCy = cy + kRowH + ecy;
             WPLog(@"Config", @"[MASTER] 子功能已展开 (UITableView): key=%@, ecy=%.1f, resultCy=%.1f", key, ecy, resultCy);
         } else {
@@ -821,6 +826,19 @@ static NSString *LightKeyForDarkKey(NSString *darkKey) {
     UISwitch *sw = (UISwitch *)cell.accessoryView;
     sw.on = [row[@"isOn"] boolValue];
     objc_setAssociatedObject(sw, "key", row[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    // 子配置层级标记（先清复用残留，缩进用系统 indentationLevel 保证不被布局重置）
+    UIView *oldMark = [cell viewWithTag:887];
+    [oldMark removeFromSuperview];
+    cell.indentationLevel = 0;
+    cell.indentationWidth = 14;
+    if ([row[@"isSub"] boolValue]) {
+        UIView *mark = WPMakeSubItemArrowView();
+        mark.tag = 887;
+        mark.frame = CGRectMake(14, 0, mark.frame.size.width, kRowH);
+        [cell.contentView addSubview:mark];
+        cell.indentationLevel = 1;
+    }
     return cell;
 }
 
@@ -948,6 +966,19 @@ static NSString *LightKeyForDarkKey(NSString *darkKey) {
     NSString *value = row[@"value"];
     NSString *hint = row[@"hint"];
     cell.detailTextLabel.text = (value.length > 0) ? value : hint;
+
+    // 子配置层级标记（先清复用残留，缩进用系统 indentationLevel 保证不被布局重置）
+    UIView *oldMark = [cell viewWithTag:887];
+    [oldMark removeFromSuperview];
+    cell.indentationLevel = 0;
+    cell.indentationWidth = 14;
+    if ([row[@"isSub"] boolValue]) {
+        UIView *mark = WPMakeSubItemArrowView();
+        mark.tag = 887;
+        mark.frame = CGRectMake(14, 0, mark.frame.size.width, kRowH);
+        [cell.contentView addSubview:mark];
+        cell.indentationLevel = 1;
+    }
     return cell;
 }
 
