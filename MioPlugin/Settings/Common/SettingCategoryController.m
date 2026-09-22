@@ -302,8 +302,8 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 - (void)wpRunInputFlow:(NSDictionary *)row {
     NSString *key = row[@"key"];
     if (![key isKindOfClass:[NSString class]] || key.length == 0) return;
-    NSString *title = [row[@"alertTitle"] isKindOfClass:[NSString class]] && row[@"alertTitle"].length > 0
-        ? row[@"alertTitle"] : row[@"title"];
+    NSString *at = row[@"alertTitle"];
+    NSString *title = ([at isKindOfClass:[NSString class]] && at.length > 0) ? at : row[@"title"];
     NSString *hint = row[@"hint"];
     NSInteger valueType = [row[@"valueType"] integerValue];
 
