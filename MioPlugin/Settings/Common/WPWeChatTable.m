@@ -205,21 +205,13 @@ id WPWCSwitchCell(SEL sel, id target, NSString *title, BOOL on) {
 }
 
 id WPWCNavCell(SEL sel, id target, NSString *title, NSString *rightValue) {
-    // WCDUMP 实证：normalCellForSel:target:title:rightValue:accessoryType: 是
+    // 方法表实证：normalCellForSel:target:title:rightValue:accessoryType: 是
     // WCTableViewNormalCellManager 的类方法（WCTableViewCellManager 没有它）；
     // 旧实现找错类 → 永远返回 nil → rows=0 → contentSize 只有 21pt 空隙。
     Class ncls = objc_getClass("WCTableViewNormalCellManager");
     SEL s = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:accessoryType:");
-    if (ncls && [ncls respondsToSelector:s]) {
-        return ((id (*)(id, SEL, SEL, id, id, id, long))objc_msgSend)(ncls, s, sel, target, title, rightValue ?: @"", (long)1);
-    }
-    // 兜底：WCTableViewCellManager 的无箭头版（WCDUMP 实证存在）
-    Class cls = objc_getClass("WCTableViewCellManager");
-    SEL s2 = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:");
-    if (cls && [cls respondsToSelector:s2]) {
-        return ((id (*)(id, SEL, SEL, id, id, id))objc_msgSend)(cls, s2, sel, target, title, rightValue ?: @"");
-    }
-    return nil;
+    if (!ncls || ![ncls respondsToSelector:s]) return nil;
+    return ((id (*)(id, SEL, SEL, id, id, id, long))objc_msgSend)(ncls, s, sel, target, title, rightValue ?: @"", (long)1);
 }
 
 id WPWCViewCell(SEL sel, id target, NSString *title, UIView *view) {

@@ -284,7 +284,6 @@ static const CGFloat kCellHPadding = 16.0;
                        placeholder:(hint ?: @"")
                           keyboard:(valueType == InputValueTypeNumber) ? UIKeyboardTypeNumbersAndPunctuation : UIKeyboardTypeDefault
                             secure:NO
-                            target:self
                         onConfirm:^(NSString *inputText) {
         NSString *nv = inputText ?: @"";
         if (nv.length == 0 && hint.length > 0) nv = hint;

@@ -95,73 +95,6 @@ static _WAlertAnchor *walertAnchor(void) {
     return kWAlertAnchor;
 }
 
-// 按候选列表探测按钮注册 API（不同微信版本命名不一），返回命中的 SEL，未命中返回 NULL
-static SEL walertProbeSelector(id alert, const char *const candidates[], NSInteger count) {
-    for (NSInteger i = 0; i < count; i++) {
-        SEL s = NSSelectorFromString(@(candidates[i]));
-        if ([alert respondsToSelector:s]) return s;
-    }
-    return NULL;
-}
-
-// 一次性 dump WCUIAlertView 全部实例方法（候选全 miss 时定位真实按钮 API）
-static void walertDumpMethods(Class cls) {
-    static BOOL dumped = NO;
-    if (dumped) return;
-    dumped = YES;
-    unsigned int count = 0;
-    Method *list = class_copyMethodList(cls, &count);
-    NSMutableArray *names = [NSMutableArray array];
-    for (unsigned int i = 0; i < count; i++) {
-        [names addObject:NSStringFromSelector(method_getName(list[i]))];
-    }
-    free(list);
-    WPLog(@"Alert", @"[WCDUMP] WCUIAlertView 实例方法(%u): %@", count, [names componentsJoinedByString:@" | "]);
-}
-
-// ============ show 后按钮直挂（第二道保险）============
-// 若微信 target/sel 分发仍不可达，遍历弹窗视图树找 title 匹配的 UIButton
-// 直接 addTarget。target=锚点（永不释放），SEL 已注入锚点类。
-
-static void walertCollectButtons(UIView *root, NSMutableArray<UIButton *> *out) {
-    if ([root isKindOfClass:[UIButton class]]) [out addObject:(UIButton *)root];
-    for (UIView *sub in root.subviews) walertCollectButtons(sub, out);
-}
-
-// titles 与 selNames 一一对应
-static void walertDirectHookButtons(id alert, id target, NSArray<NSString *> *titles, NSArray<NSString *> *selNames) {
-    UIView *rootView = nil;
-    if ([alert isKindOfClass:[UIView class]]) rootView = (UIView *)alert;
-    if (!rootView) {
-        @try {
-            id tipsVc = [alert valueForKey:@"tipsVc"];
-            if ([tipsVc isKindOfClass:[UIViewController class]]) rootView = [(UIViewController *)tipsVc view];
-        } @catch (NSException *e) {}
-    }
-    NSMutableArray<UIButton *> *btns = [NSMutableArray array];
-    if (rootView) walertCollectButtons(rootView, btns);
-
-    NSMutableArray *descs = [NSMutableArray array];
-    for (UIButton *b in btns) {
-        [descs addObject:[NSString stringWithFormat:@"%@[%@]", NSStringFromClass([b class]),
-                          [b titleForState:UIControlStateNormal] ?: @""]];
-    }
-    WPLog(@"Alert", @"[BTNHOOK] 视图树按钮(%lu) 起点=%@: %@", (unsigned long)btns.count,
-          rootView ? NSStringFromClass([rootView class]) : @"nil",
-          btns.count ? [descs componentsJoinedByString:@" | "] : @"无");
-
-    for (UIButton *b in btns) {
-        NSString *t = [b titleForState:UIControlStateNormal] ?: @"";
-        for (NSUInteger i = 0; i < titles.count && i < selNames.count; i++) {
-            if ([t isEqualToString:titles[i]]) {
-                SEL s = NSSelectorFromString(selNames[i]);
-                [b addTarget:target action:s forControlEvents:UIControlEventTouchUpInside];
-                WPLog(@"Alert", @"[BTNHOOK] 直挂 \"%@\" -> %@", t, selNames[i]);
-            }
-        }
-    }
-}
-
 @implementation MioAlertHelper
 
 + (Class)alertClass {
@@ -198,31 +131,12 @@ static void walertDirectHookButtons(id alert, id target, NSArray<NSString *> *ti
 
 #pragma mark - 文本输入弹窗
 
-+ (void)showInputAlertWithInitialText:(NSString *)text target:(id)target onConfirm:(void(^)(NSString *inputText))confirm {
-    [self showInputAlertWithInitialText:text message:@"" target:target onConfirm:confirm];
-}
-
-+ (void)showInputAlertWithInitialText:(NSString *)text
-                              message:(NSString *)message
-                               target:(id)target
-                            onConfirm:(void(^)(NSString *inputText))confirm {
-    [self showInputAlert:@"Mio助手"
-                 message:message
-             initialText:text
-             placeholder:nil
-                keyboard:UIKeyboardTypeDefault
-                  secure:NO
-                  target:target
-              onConfirm:confirm];
-}
-
 + (void)showInputAlert:(NSString *)title
                message:(NSString *)message
            initialText:(NSString *)initialText
            placeholder:(NSString *)placeholder
               keyboard:(UIKeyboardType)keyboardType
                 secure:(BOOL)secure
-                target:(id)target
             onConfirm:(void(^)(NSString *inputText))confirm {
     @try {
         WCUIAlertView *alert = [self createAlertWithTitle:title message:message];
@@ -255,44 +169,29 @@ static void walertDirectHookButtons(id alert, id target, NSArray<NSString *> *ti
         }
 
         // ③ 取消：no-op selector，target=锚点（WCR 同款 target=VC 模式）
-        static const char *const kCancelSels[] = {
-            "addCancelBtnTitle:target:sel:", "addCancleBtnTitle:target:sel:",
-            "addCancelTitle:target:sel:", "addCancelButtonTitle:target:sel:",
-        };
-        SEL cancelProbe = walertProbeSelector(alert, kCancelSels, 4);
-        SEL cancelHook = NSSelectorFromString(@"__walert_cancel");
-        if (cancelProbe) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelProbe, @"取消", anchor, cancelHook);
+        SEL cancelAPI = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
+        if ([alert respondsToSelector:cancelAPI]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelAPI, @"取消", anchor,
+                NSSelectorFromString(@"__walert_cancel"));
         } else {
-            WPLog(@"Alert", @"取消按钮 API 未命中候选（跳过取消注册）");
-            walertDumpMethods([alert class]);
+            WPLog(@"Alert", @"!!! addCancelBtnTitle:target:sel: 不存在，取消按钮未注册");
         }
 
         // ④ 确定：target=锚点（WCR 同款；锚点永不释放 + currentAlert 持有弹窗）
-        SEL confirmSel = NSSelectorFromString(@"__walert_confirm");
-        static const char *const kConfirmSels[] = {
-            "addBtnTitle:target:sel:", "addOneBtnTitle:target:sel:",
-            "addButtonTitle:target:sel:", "addOKBtnTitle:target:sel:",
-            "addOkBtnTitle:target:sel:", "addConfirmBtnTitle:target:sel:",
-            "addBtnWithTitle:target:sel:", "addBtn:target:sel:",
-        };
-        SEL confirmProbe = walertProbeSelector(alert, kConfirmSels, 8);
-        if (confirmProbe) {
-            WPLog(@"Alert", @"确定按钮注册: %@ target=anchor", NSStringFromSelector(confirmProbe));
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, confirmProbe, @"确定", anchor, confirmSel);
+        SEL confirmAPI = NSSelectorFromString(@"addBtnTitle:target:sel:");
+        if ([alert respondsToSelector:confirmAPI]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, confirmAPI, @"确定", anchor,
+                NSSelectorFromString(@"__walert_confirm"));
         } else {
-            WPLog(@"Alert", @"!!! 确定 API 未命中任何候选，dump WCUIAlertView 方法表");
-            walertDumpMethods([alert class]);
+            WPLog(@"Alert", @"!!! addBtnTitle:target:sel: 不存在，确定按钮未注册");
         }
 
-        // ⑤ show；随后直挂「确定」按钮（第二道保险）
+        // ⑤ show（回调经微信 target/sel 分发至锚点，(84).log 实证可达；
+        //    勿再直挂 UIButton——双通道会导致回调触发两次）
         SEL showSel = NSSelectorFromString(@"show");
         if ([alert respondsToSelector:showSel]) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
         }
-        dispatch_async(dispatch_get_main_queue(), ^{
-            walertDirectHookButtons(alert, anchor, @[@"确定", @"OK"], @[@"__walert_confirm"]);
-        });
     } @catch (NSException *e) {
         WPLogDebug(@"Alert", @"input alert EXCEPTION: %@", e);
     }
@@ -337,9 +236,6 @@ static void walertDirectHookButtons(id alert, id target, NSArray<NSString *> *ti
         if ([alert respondsToSelector:showSel]) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
         }
-        dispatch_async(dispatch_get_main_queue(), ^{
-            walertDirectHookButtons(alert, anchor, titles, menuSelNames);
-        });
     } @catch (NSException *e) {
         WPLogDebug(@"Alert", @"menu alert EXCEPTION: %@", e);
     }
@@ -400,9 +296,6 @@ static void walertDirectHookButtons(id alert, id target, NSArray<NSString *> *ti
         if ([alert respondsToSelector:showSel]) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
         }
-        dispatch_async(dispatch_get_main_queue(), ^{
-            walertDirectHookButtons(alert, anchor, @[confirmTitle ?: @"确定"], @[@"__walert_simple_confirm"]);
-        });
     } @catch (NSException *e) {
         WPLogDebug(@"Alert", @"confirm error: %@", e);
     }

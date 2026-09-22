@@ -261,7 +261,6 @@
                        placeholder:@"文件夹名称"
                           keyboard:UIKeyboardTypeDefault
                             secure:NO
-                            target:self
                          onConfirm:^(NSString *inputText) {
         NSString *name = inputText;
         NSError *err = nil;
@@ -319,7 +318,6 @@
                        placeholder:nil
                           keyboard:UIKeyboardTypeDefault
                             secure:NO
-                            target:self
                          onConfirm:^(NSString *inputText) {
         NSString *name = inputText;
         NSError *err = nil;

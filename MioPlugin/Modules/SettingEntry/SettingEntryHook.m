@@ -235,7 +235,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
                                        ? UIKeyboardTypeNumbersAndPunctuation
                                        : UIKeyboardTypeDefault
                             secure:NO
-                            target:self
                         onConfirm:^(NSString *input) {
         NSString *newValue = input ?: @"";
         @try {

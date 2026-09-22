@@ -179,7 +179,6 @@ static NSString *keyForTag(NSInteger tag) {
                        placeholder:@"请输入分隔文本"
                           keyboard:UIKeyboardTypeDefault
                             secure:NO
-                            target:self
                          onConfirm:^(NSString *inputText) {
         NSString *text = inputText ?: @"";
         WPLog(@"Mio-Separator", @"  用户输入文本: %@", text);
@@ -217,7 +216,6 @@ static NSString *keyForTag(NSInteger tag) {
                        placeholder:@"%ld天"
                           keyboard:UIKeyboardTypeDefault
                             secure:NO
-                            target:self
                          onConfirm:^(NSString *inputText) {
         config.chatAddTimeSuffixFormat = inputText.length > 0 ? inputText : nil;
         [ConfigManager saveAll];
@@ -234,7 +232,6 @@ static NSString *keyForTag(NSInteger tag) {
                        placeholder:@"%u人"
                           keyboard:UIKeyboardTypeDefault
                             secure:NO
-                            target:self
                          onConfirm:^(NSString *inputText) {
         config.chatGroupMemberCountSuffix = inputText.length > 0 ? inputText : nil;
         [ConfigManager saveAll];
@@ -287,7 +284,6 @@ static NSString *keyForTag(NSInteger tag) {
                        placeholder:cfg[@"placeholder"]
                           keyboard:UIKeyboardTypeNumbersAndPunctuation
                             secure:NO
-                            target:self
                          onConfirm:^(NSString *inputText) {
         NSString *raw = inputText;
         NSString *text = (raw.length > 0) ? raw : cfg[@"placeholder"];

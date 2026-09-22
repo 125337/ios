@@ -40,7 +40,6 @@
                            placeholder:@"6位数字密码"
                               keyboard:UIKeyboardTypeNumberPad
                                 secure:YES
-                                target:self
                             onConfirm:^(NSString *input) {
             NSString *pwd = [input stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
             if (pwd.length != 6) {
