@@ -12,6 +12,16 @@
 /// @param confirm 确认回调，返回用户输入的文本
 + (void)showInputAlertWithInitialText:(NSString *)text target:(id)target onConfirm:(void(^)(NSString *inputText))confirm;
 
+/// 文本输入弹窗（style:1，带输入框，自定义描述文案）
+/// @param text 预填文本内容
+/// @param message 弹窗描述文案
+/// @param target cancelAction 的目标对象（WCUIAlertView 需要非 nil target）
+/// @param confirm 确认回调，返回用户输入的文本
++ (void)showInputAlertWithInitialText:(NSString *)text
+                              message:(NSString *)message
+                               target:(id)target
+                            onConfirm:(void(^)(NSString *inputText))confirm;
+
 /// 纯提示弹窗（无输入框，带"我知道了"按钮关闭）
 /// @param message 提示内容
 + (void)showTipAlert:(NSString *)message;

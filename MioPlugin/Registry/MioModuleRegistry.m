@@ -29,6 +29,7 @@
 #import "../Modules/FontLayout/FontLayoutConfig.h"
 #import "../Modules/AccountDetail/AccountConfig.h"
 #import "../Modules/Voice/VoiceConfig.h"
+#import "../Modules/Privacy/PrivacyConfig.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -58,6 +59,7 @@
 #import "../Settings/Controllers/SettingRedEnvelopController.h"
 #import "../Settings/Controllers/SettingAboutController.h"
 #import "../Settings/Controllers/WPUILayoutSettingsVC.h"
+#import "../Settings/Controllers/SettingPageLockController.h"
 
 
 @implementation MioModuleDescriptor
@@ -241,6 +243,15 @@
                                            controllerClass:nil
                                                   subtitle:@"语音消息伪装发送"
                                              sectionTitle:@"更多"],
+
+            // ──── 隐私保护（卡片在通用功能页；功能 hook 后续接入） ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"privacy"
+                                                    title:@"隐私保护"
+                                               configClass:[PrivacyConfig class]
+                                               hookClasses:@[]
+                                           controllerClass:[SettingGeneralFunctionController class]
+                                                  subtitle:@"加密/模糊/保活/页面上锁"
+                                             sectionTitle:@"通用"],
 
             // ──── 账户信息（纯信息页，无 Hook；入口在 MioPluginEntryVC 功能列表） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"accountdetail"

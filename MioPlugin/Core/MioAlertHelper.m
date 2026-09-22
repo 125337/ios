@@ -99,6 +99,13 @@ static void walertEnsureCIMPInjected(Class alertClass) {
 #pragma mark - 文本输入弹窗
 
 + (void)showInputAlertWithInitialText:(NSString *)text target:(id)target onConfirm:(void(^)(NSString *inputText))confirm {
+    [self showInputAlertWithInitialText:text message:@"" target:target onConfirm:confirm];
+}
+
++ (void)showInputAlertWithInitialText:(NSString *)text
+                              message:(NSString *)message
+                               target:(id)target
+                            onConfirm:(void(^)(NSString *inputText))confirm {
     Class alertClass = [self alertClass];
     if (!alertClass) {
         WPLogDebug(@"Alert", @"WCUIAlertView not available — abort");
@@ -108,7 +115,7 @@ static void walertEnsureCIMPInjected(Class alertClass) {
     @try {
         // ① alloc + init
         WPLogDebug(@"Alert", @"alloc+initWithTitle: Mio助手");
-        WCUIAlertView *alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc], @selector(initWithTitle:message:), @"Mio助手", @"");
+        WCUIAlertView *alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc], @selector(initWithTitle:message:), @"Mio助手", message ?: @"");
         if (!alert) { WPLogDebug(@"Alert", @"init nil"); return; }
         WPLogDebug(@"Alert", @"   alert=%@", alert);
 
