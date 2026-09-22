@@ -27,7 +27,7 @@
         UILabel *nameLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 24, w, 30)];
         nameLabel.text = @"Mio助手";
         nameLabel.font = [UIFont systemFontOfSize:22 weight:UIFontWeightBold];
-        nameLabel.textColor = WPAccent();
+        nameLabel.textColor = WPAccentColor();
         nameLabel.textAlignment = NSTextAlignmentCenter;
         [heroView addSubview:nameLabel];
 
@@ -41,7 +41,7 @@
         UILabel *descLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 84, w - 40, 34)];
         descLabel.text = @"模块化微信插件，支持自动抢红包、防撤回等功能";
         descLabel.font = [UIFont systemFontOfSize:13];
-        descLabel.textColor = WPT3();
+        descLabel.textColor = WPTextTertiaryColor();
         descLabel.textAlignment = NSTextAlignmentCenter;
         descLabel.numberOfLines = 2;
         [heroView addSubview:descLabel];
