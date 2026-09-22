@@ -1,6 +1,7 @@
 #import "SettingMessageTimeController.h"
 #import "../../Modules/MessageTime/MessageTimeConfig.h"
 #import "../../Core/ConfigManager.h"
+#import "../../Core/MioAlertHelper.h"
 #import "../../Modules/MessageTime/MessageTimeFormatEditorVC.h"
 
 @interface SettingMessageTimeController ()
@@ -37,32 +38,20 @@
 
     MessageTimeConfig *config = [MessageTimeConfig shared];
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"请选择时间标签的显示位置"
-                                                                  message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
     for (NSInteger i = 0; i < (NSInteger)positionNames.count; i++) {
         NSString *title = positionNames[i];
         if (i == config.messageTimePosition) {
             title = [NSString stringWithFormat:@"✓ %@", title];
         }
-        [alert addAction:[UIAlertAction actionWithTitle:title
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *action) {
-            [MessageTimeConfig shared].messageTimePosition = i;
-            [ConfigManager saveAll];
-            [self buildUI];
-        }]];
+        [titles addObject:title];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-
-    [self presentViewController:alert animated:YES completion:nil];
+    [MioAlertHelper showMenuAlert:@"请选择时间标签的显示位置" buttons:titles onButton:^(NSInteger index) {
+        config.messageTimePosition = index;
+        [ConfigManager saveAll];
+        [self buildUI];
+    }];
 }
 
 - (void)onMessageTimeCustomFormatTap {

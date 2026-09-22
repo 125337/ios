@@ -2,6 +2,7 @@
 #import "WPCommonUI.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioAlertHelper.h"
 
 @interface WPBackupVC : SettingCategoryController
 @end
@@ -49,12 +50,9 @@
 
 - (void)buttonClicked:(NSString *)key {
     if ([key isEqualToString:@"backup_reset"]) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"确认重置"
-                                                                       message:@"所有插件配置将被清空，此操作不可恢复。"
-                                                                preferredStyle:UIAlertControllerStyleAlert];
-
-        UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil];
-        UIAlertAction *confirm = [UIAlertAction actionWithTitle:@"确认重置" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+        [MioAlertHelper showConfirmAlert:@"所有插件配置将被清空，此操作不可恢复。"
+                            confirmTitle:@"确认重置"
+                              onConfirm:^{
             [ConfigManager resetAll];
             [self.navigationController popToRootViewControllerAnimated:YES];
 
@@ -72,10 +70,6 @@
                 [toast removeFromSuperview];
             });
         }];
-
-        [alert addAction:cancel];
-        [alert addAction:confirm];
-        [self presentViewController:alert animated:YES completion:nil];
         WPLog(@"UI", @"[Backup] reset dialog shown");
         return;
     }

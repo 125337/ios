@@ -33,13 +33,17 @@
         [MioAlertHelper showTipAlert:@"修改文字功能已启用\n长按文本/转账消息即可修改\n长按钱包余额可修改"];
     }
 
-    // 微信加密：开启后弹出6位密码输入框
+    // 微信加密：开启后弹出6位密码输入框（密码打点 + 数字键盘，与全项目统一走 WCUIAlertView）
     if ([key isEqualToString:@"privacyEncryptEnabled"] && sender.on) {
         NSString *current = [PrivacyConfig shared].privacyEncryptPassword ?: @"";
-        [MioAlertHelper showInputAlertWithInitialText:current
-                                              message:@"请输入6位数密码"
-                                               target:self
-                                            onConfirm:^(NSString *input) {
+        [MioAlertHelper showInputAlert:@"微信加密"
+                               message:@"请输入6位数密码"
+                           initialText:current
+                           placeholder:@"6位数字密码"
+                              keyboard:UIKeyboardTypeNumberPad
+                                secure:YES
+                                target:self
+                            onConfirm:^(NSString *input) {
             NSString *pwd = [input stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
             if (pwd.length != 6) {
                 [MioAlertHelper showTipAlert:@"密码必须为6位"];

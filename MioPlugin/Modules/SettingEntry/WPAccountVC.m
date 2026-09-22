@@ -2,6 +2,7 @@
 #import "WPCommonUI.h"
 #import "../AccountDetail/AccountConfig.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioAlertHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <sys/sysctl.h>
@@ -408,15 +409,8 @@ static NSDictionary *MioReadProvisioningProfile(void) {
         NSInteger d = part.integerValue;
         if (d > 0 && d == days) {
             NSString *dateStr = MioFormatProfileDate(expire);
-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"证书到期提醒"
-                                                                           message:[NSString stringWithFormat:@"签名证书将在 %ld 天后过期\n(%@)", (long)days, dateStr]
-                                                                    preferredStyle:UIAlertControllerStyleAlert];
-            [alert addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                UIViewController *top = WPGetTopVCForPresentation();
-                if (top && !top.presentedViewController) {
-                    [top presentViewController:alert animated:YES completion:nil];
-                }
+                [MioAlertHelper showTipAlert:[NSString stringWithFormat:@"签名证书将在 %ld 天后过期\n(%@)", (long)days, dateStr] buttonTitle:@"知道了"];
             });
             break;
         }

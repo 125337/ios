@@ -1,4 +1,5 @@
 #import "MioRestartHelper.h"
+#import "MioAlertHelper.h"
 #import <UIKit/UIKit.h>
 
 @interface UIApplication (Private)
@@ -10,24 +11,11 @@
 + (void)showRestartAlertFromVC:(UIViewController *)vc {
     if (!vc) return;
 
-    UIAlertController *alert = [UIAlertController
-        alertControllerWithTitle:@"提示"
-                         message:@"设置已保存，重启生效"
-                  preferredStyle:UIAlertControllerStyleAlert];
-
-    [alert addAction:[UIAlertAction
-        actionWithTitle:@"稍后重启"
-                  style:UIAlertActionStyleCancel
-                handler:nil]];
-
-    [alert addAction:[UIAlertAction
-        actionWithTitle:@"立即重启"
-                  style:UIAlertActionStyleDefault
-                handler:^(UIAlertAction *action) {
-                    [self restartWeChat];
-                }]];
-
-    [vc presentViewController:alert animated:YES completion:nil];
+    [MioAlertHelper showConfirmAlert:@"设置已保存，重启生效"
+                        confirmTitle:@"立即重启"
+                          onConfirm:^{
+        [self restartWeChat];
+    }];
 }
 
 + (void)restartWeChat {

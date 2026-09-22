@@ -14,6 +14,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
+#import "../../Core/MioAlertHelper.h"
 #import "../../Settings/Controllers/SettingCornerRadiusController.h"
 
 // 仿微信优化做法：不在 viewDidLoad 里创建 UI（view bounds 可能为 (0,0,0,0)），
@@ -211,26 +212,23 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     } @catch (NSException *e) {}
 
     NSString *message = objc_getAssociatedObject(sender, @"editMessage");
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
-                                                                   message:message
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-        textField.text = currentValue ?: @"";
-        textField.placeholder = hint ?: @"";
-        textField.clearButtonMode = UITextFieldViewModeWhileEditing;
-    }];
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        NSString *newValue = alert.textFields.firstObject.text ?: @"";
+    NSNumber *typeNum = objc_getAssociatedObject(sender, @"editValueType");
+    InputValueType valueType = typeNum ? [typeNum integerValue] : InputValueTypeNumber;
+    [MioAlertHelper showInputAlert:title
+                           message:message ?: @""
+                       initialText:currentValue ?: @""
+                       placeholder:hint ?: @""
+                          keyboard:(valueType == InputValueTypeNumber)
+                                       ? UIKeyboardTypeNumbersAndPunctuation
+                                       : UIKeyboardTypeDefault
+                            secure:NO
+                            target:self
+                        onConfirm:^(NSString *input) {
+        NSString *newValue = input ?: @"";
         @try {
             if (newValue.length == 0 && hint.length > 0) {
                 newValue = hint;
             }
-
-            // ★ 从 sender(cell) 获取 valueType
-            NSNumber *typeNum = objc_getAssociatedObject(sender, @"editValueType");
-            InputValueType valueType = typeNum ? [typeNum integerValue] : InputValueTypeNumber;
 
             if (valueType == InputValueTypeText) {
                 // 文本类型：直接保存字符串
@@ -249,12 +247,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         } @catch (NSException *e) {
             WPLog(@"Setting", @"[ERR] save %@: %@ - %@", key, e.name, e.reason);
         }
-    }]];
-
-    UIViewController *topVC = WPGetTopVCForPresentation();
-    if (topVC) {
-        [topVC presentViewController:alert animated:YES completion:nil];
-    }
+    }];
 }
 
 - (void)onNavigate:(UIButton *)sender {

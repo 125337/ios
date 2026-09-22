@@ -2,6 +2,7 @@
 #import "../../Config/WPColors.h"
 #import "../../Config/Constants.h"
 #import "../Modules/ChatTopBar/ChatTopBarConfig.h"
+#import "../../Core/MioAlertHelper.h"
 
 @interface ChatTopBarBlacklistEditorVC () <UITextViewDelegate>
 @property (nonatomic, strong) UIScrollView *scrollView;
@@ -169,16 +170,11 @@
 - (void)restoreAction {
     [self.editorView resignFirstResponder];
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"清空黑名单"
-                                                                   message:@"确定要清空所有黑名单内容吗？"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"清空"
-                                              style:UIAlertActionStyleDestructive
-                                            handler:^(UIAlertAction *action) {
+    [MioAlertHelper showConfirmAlert:@"确定要清空所有黑名单内容吗？"
+                        confirmTitle:@"清空"
+                          onConfirm:^{
         self.editorView.text = @"";
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
+    }];
 }
 
 - (void)saveAction {

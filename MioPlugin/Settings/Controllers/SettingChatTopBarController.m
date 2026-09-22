@@ -5,6 +5,7 @@
 #import "../../Config/WPColors.h"
 #import "../../Config/Constants.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioAlertHelper.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import <PhotosUI/PhotosUI.h>
 #import <MobileCoreServices/MobileCoreServices.h>
@@ -129,87 +130,58 @@ static NSString *keyForTag(NSInteger tag) {
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
     NSInteger currentMode = config.chatDisplayMode;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"选择显示模式"
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-
+    NSMutableArray<NSString *> *modeTitles = [NSMutableArray array];
     for (NSInteger i = 0; i < (NSInteger)modeNames.count; i++) {
         NSString *title = modeNames[i];
         if (i == currentMode) {
             title = [NSString stringWithFormat:@"✓ %@", title];
         }
-        [alert addAction:[UIAlertAction actionWithTitle:title
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *action) {
-            config.chatDisplayMode = i;
-            [ConfigManager saveAll];
-            [self buildUI];
-        }]];
+        [modeTitles addObject:title];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-
-    [self presentViewController:alert animated:YES completion:nil];
+    [MioAlertHelper showMenuAlert:@"选择显示模式" buttons:modeTitles onButton:^(NSInteger index) {
+        config.chatDisplayMode = index;
+        [ConfigManager saveAll];
+        [self buildUI];
+    }];
 }
 
 #pragma mark - 头像分隔符号
 
 - (void)onAvatarSeparatorTap {
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"设置头像分隔符"
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"输入文本"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *action) {
-        [self onSeparatorTextInput];
-    }]];
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"选择静态图片"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *action) {
-        [self onPickStaticImage];
-    }]];
-
+    NSMutableArray<NSString *> *buttons = [NSMutableArray arrayWithObjects:@"输入文本", @"选择静态图片", nil];
     // 只有设置了任意分隔符时才显示"清除分隔符"按钮
     if ([config hasAnySeparator]) {
-        [alert addAction:[UIAlertAction actionWithTitle:@"清除分隔符"
-                                                 style:UIAlertActionStyleDestructive
-                                               handler:^(UIAlertAction *action) {
+        [buttons addObject:@"清除分隔符"];
+    }
+
+    [MioAlertHelper showMenuAlert:@"设置头像分隔符" buttons:buttons onButton:^(NSInteger index) {
+        if (index == 0) {
+            [self onSeparatorTextInput];
+        } else if (index == 1) {
+            [self onPickStaticImage];
+        } else if (index == 2) {
             [self deleteAllSeparators];
-        }]];
-    }
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-
-    [self presentViewController:alert animated:YES completion:nil];
+        }
+    }];
 }
 
 - (void)onSeparatorTextInput {
     WPLog(@"Mio-Separator", @"onSeparatorTextInput 被调用");
-    UIAlertController *inputAlert = [UIAlertController alertControllerWithTitle:@"输入分隔文本"
-                                                                        message:nil
-                                                                 preferredStyle:UIAlertControllerStyleAlert];
+    NSString *initialText = [ChatTopBarConfig shared].chatSeparatorText ?: @"";
+    WPLog(@"Mio-Separator", @"  当前分隔文本: %@", initialText);
 
-    [inputAlert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-        textField.placeholder = @"请输入分隔文本";
-        textField.text = [ChatTopBarConfig shared].chatSeparatorText ?: @"";
-        WPLog(@"Mio-Separator", @"  当前分隔文本: %@", textField.text);
-    }];
-
-    [inputAlert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        NSString *text = inputAlert.textFields.firstObject.text ?: @"";
+    [MioAlertHelper showInputAlert:@"输入分隔文本"
+                           message:@""
+                       initialText:initialText
+                       placeholder:@"请输入分隔文本"
+                          keyboard:UIKeyboardTypeDefault
+                            secure:NO
+                            target:self
+                         onConfirm:^(NSString *inputText) {
+        NSString *text = inputText ?: @"";
         WPLog(@"Mio-Separator", @"  用户输入文本: %@", text);
         ChatTopBarConfig *config = [ChatTopBarConfig shared];
         config.chatSeparatorText = text;
@@ -218,13 +190,8 @@ static NSString *keyForTag(NSInteger tag) {
         WPLog(@"Mio-Separator", @"  调用 [ConfigManager saveAll]");
         [self buildUI];
         WPLog(@"Mio-Separator", @"  调用 [self buildUI]");
-    }]];
+    }];
 
-    [inputAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
-        WPLog(@"Mio-Separator", @"  用户取消输入");
-    }]];
-
-    [self presentViewController:inputAlert animated:YES completion:nil];
     WPLog(@"Mio-Separator", @"  弹窗已显示");
 }
 
@@ -243,40 +210,34 @@ static NSString *keyForTag(NSInteger tag) {
 
 - (void)onAddTimeSuffixTap {
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"添加时间后缀格式"
-                                                                   message:@"输入格式字符串，如 %%ld天"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-        textField.placeholder = @"%ld天";
-        textField.text = config.chatAddTimeSuffixFormat ?: @"";
-    }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        NSString *text = alert.textFields.firstObject.text;
-        config.chatAddTimeSuffixFormat = text.length > 0 ? text : nil;
+    [MioAlertHelper showInputAlert:@"添加时间后缀格式"
+                           message:@"输入格式字符串，如 %ld天"
+                       initialText:(config.chatAddTimeSuffixFormat ?: @"")
+                       placeholder:@"%ld天"
+                          keyboard:UIKeyboardTypeDefault
+                            secure:NO
+                            target:self
+                         onConfirm:^(NSString *inputText) {
+        config.chatAddTimeSuffixFormat = inputText.length > 0 ? inputText : nil;
         [ConfigManager saveAll];
         [self buildUI];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [self presentViewController:alert animated:YES completion:nil];
+    }];
 }
 
 - (void)onGroupCountSuffixTap {
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"群成员数后缀格式"
-                                                                   message:@"输入格式字符串，如 %%u人"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-        textField.placeholder = @"%u人";
-        textField.text = config.chatGroupMemberCountSuffix ?: @"";
-    }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        NSString *text = alert.textFields.firstObject.text;
-        config.chatGroupMemberCountSuffix = text.length > 0 ? text : nil;
+    [MioAlertHelper showInputAlert:@"群成员数后缀格式"
+                           message:@"输入格式字符串，如 %u人"
+                       initialText:(config.chatGroupMemberCountSuffix ?: @"")
+                       placeholder:@"%u人"
+                          keyboard:UIKeyboardTypeDefault
+                            secure:NO
+                            target:self
+                         onConfirm:^(NSString *inputText) {
+        config.chatGroupMemberCountSuffix = inputText.length > 0 ? inputText : nil;
         [ConfigManager saveAll];
         [self buildUI];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [self presentViewController:alert animated:YES completion:nil];
+    }];
 }
 
 #pragma mark - 管理显示黑名单
@@ -303,33 +264,31 @@ static NSString *keyForTag(NSInteger tag) {
     NSDictionary *cfg = numericInputConfig()[key];
     if (!cfg) return;
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:cfg[@"title"]
-                                                                   message:cfg[@"desc"]
-                                                            preferredStyle:UIAlertControllerStyleAlert];
+    UILabel *valueLabel = objc_getAssociatedObject(sender, "editValueLabel");
 
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-        ChatTopBarConfig *cfg2 = [ChatTopBarConfig shared];
-        CGFloat val = 0;
-        if ([key isEqualToString:@"AvatarCornerRadius"])       val = cfg2.chatAvatarCornerRadius;
-        else if ([key isEqualToString:@"AvatarSize"])           val = cfg2.chatAvatarSize;
-        else if ([key isEqualToString:@"SeparatorSize"])        val = cfg2.chatSeparatorSize;
-        else if ([key isEqualToString:@"NicknameFontSize"])     val = cfg2.chatNicknameFontSize;
-        else if ([key isEqualToString:@"AvatarSpacing"])        val = cfg2.chatAvatarSpacing;
-        else if ([key isEqualToString:@"VerticalOffset"])       val = cfg2.chatVerticalOffset;
-        else if ([key isEqualToString:@"HorizontalOffset"])     val = cfg2.chatHorizontalOffset;
-        else if ([key isEqualToString:@"NicknameVerticalOffset"])  val = cfg2.chatNicknameOffsetY;
-        else if ([key isEqualToString:@"NicknameHorizontalOffset"]) val = cfg2.chatNicknameOffsetX;
-        else if ([key isEqualToString:@"ViewWidth"])            val = cfg2.chatTitleViewWidth;
+    ChatTopBarConfig *cfg2 = [ChatTopBarConfig shared];
+    CGFloat val = 0;
+    if ([key isEqualToString:@"AvatarCornerRadius"])       val = cfg2.chatAvatarCornerRadius;
+    else if ([key isEqualToString:@"AvatarSize"])           val = cfg2.chatAvatarSize;
+    else if ([key isEqualToString:@"SeparatorSize"])        val = cfg2.chatSeparatorSize;
+    else if ([key isEqualToString:@"NicknameFontSize"])     val = cfg2.chatNicknameFontSize;
+    else if ([key isEqualToString:@"AvatarSpacing"])        val = cfg2.chatAvatarSpacing;
+    else if ([key isEqualToString:@"VerticalOffset"])       val = cfg2.chatVerticalOffset;
+    else if ([key isEqualToString:@"HorizontalOffset"])     val = cfg2.chatHorizontalOffset;
+    else if ([key isEqualToString:@"NicknameVerticalOffset"])  val = cfg2.chatNicknameOffsetY;
+    else if ([key isEqualToString:@"NicknameHorizontalOffset"]) val = cfg2.chatNicknameOffsetX;
+    else if ([key isEqualToString:@"ViewWidth"])            val = cfg2.chatTitleViewWidth;
+    NSString *initialText = (val != 0) ? [NSString stringWithFormat:@"%.0f", val] : @"";
 
-        textField.placeholder = cfg[@"placeholder"];
-        if (val != 0) {
-            textField.text = [NSString stringWithFormat:@"%.0f", val];
-        }
-        textField.keyboardType = UIKeyboardTypeNumbersAndPunctuation;
-    }];
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        NSString *raw = alert.textFields.firstObject.text;
+    [MioAlertHelper showInputAlert:cfg[@"title"]
+                           message:cfg[@"desc"]
+                       initialText:initialText
+                       placeholder:cfg[@"placeholder"]
+                          keyboard:UIKeyboardTypeNumbersAndPunctuation
+                            secure:NO
+                            target:self
+                         onConfirm:^(NSString *inputText) {
+        NSString *raw = inputText;
         NSString *text = (raw.length > 0) ? raw : cfg[@"placeholder"];
         ChatTopBarConfig *c = [ChatTopBarConfig shared];
         if ([key isEqualToString:@"AvatarCornerRadius"])       c.chatAvatarCornerRadius = [text floatValue];
@@ -343,15 +302,10 @@ static NSString *keyForTag(NSInteger tag) {
         else if ([key isEqualToString:@"NicknameHorizontalOffset"]) c.chatNicknameOffsetX = [text floatValue];
         else if ([key isEqualToString:@"ViewWidth"])            c.chatTitleViewWidth = [text floatValue];
         [ConfigManager saveAll];
-        UILabel *valueLabel = objc_getAssociatedObject(sender, "editValueLabel");
         if (valueLabel) {
             valueLabel.text = [NSString stringWithFormat:@"%.0f", [text floatValue]];
         }
-    }]];
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    [self presentViewController:alert animated:YES completion:nil];
+    }];
 }
 
 #pragma mark - Build UI

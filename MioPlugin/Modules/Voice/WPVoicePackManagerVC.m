@@ -3,6 +3,7 @@
 #import "VoicePackStore.h"
 #import "../SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioAlertHelper.h"
 #import <AVFoundation/AVFoundation.h>
 
 @interface WPVoicePackManagerVC () <UITableViewDelegate, UITableViewDataSource, UIDocumentPickerDelegate, AVAudioPlayerDelegate>
@@ -138,8 +139,10 @@
     __weak typeof(self) ws = self;
 
     UIContextualAction *deleteAction = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"删除" handler:^(UIContextualAction *act, UIView *src, void(^complete)(BOOL)) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"删除" message:[NSString stringWithFormat:@"确认删除「%@」？", it.name] preferredStyle:UIAlertControllerStyleActionSheet];
-        [alert addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+        complete(YES); // 滑动行先复原
+        [MioAlertHelper showConfirmAlert:[NSString stringWithFormat:@"确认删除「%@」？", it.name]
+                            confirmTitle:@"删除"
+                              onConfirm:^{
             [ws stopPreviewPlayback]; // 防止正在播放被删除的文件
             NSError *err = nil;
             if ([VoicePackStore deleteItemAtRelPath:it.relPath error:&err]) {
@@ -148,11 +151,7 @@
             } else {
                 WPShowToast([NSString stringWithFormat:@"删除失败: %@", err.localizedDescription]);
             }
-            complete(YES);
-        }]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) { complete(NO); }]];
-        UIViewController *top = WPGetTopVCForPresentation();
-        if (top) [top presentViewController:alert animated:YES completion:nil];
+        }];
     }];
 
     UIContextualAction *favAction = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:([VoicePackStore isFavoriteRelPath:it.relPath] ? @"取消收藏" : @"收藏") handler:^(UIContextualAction *act, UIView *src, void(^complete)(BOOL)) {
@@ -245,21 +244,26 @@
 }
 
 - (void)showAddMenu {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil message:nil preferredStyle:UIAlertControllerStyleActionSheet];
-    [alert addAction:[UIAlertAction actionWithTitle:@"新建文件夹" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { [self newFolder]; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"从文件 App 导入" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { [self importFromFiles]; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    UIViewController *top = WPGetTopVCForPresentation();
-    if (top) [top presentViewController:alert animated:YES completion:nil];
+    [MioAlertHelper showMenuAlert:nil buttons:@[@"新建文件夹", @"从文件 App 导入"] onButton:^(NSInteger index) {
+        if (index == 0) {
+            [self newFolder];
+        } else if (index == 1) {
+            [self importFromFiles];
+        }
+    }];
 }
 
 - (void)newFolder {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"新建文件夹" message:nil preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) { tf.placeholder = @"文件夹名称"; }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     __weak typeof(self) ws = self;
-    [alert addAction:[UIAlertAction actionWithTitle:@"创建" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        NSString *name = alert.textFields.firstObject.text;
+    [MioAlertHelper showInputAlert:@"新建文件夹"
+                           message:@""
+                       initialText:@""
+                       placeholder:@"文件夹名称"
+                          keyboard:UIKeyboardTypeDefault
+                            secure:NO
+                            target:self
+                         onConfirm:^(NSString *inputText) {
+        NSString *name = inputText;
         NSError *err = nil;
         if ([VoicePackStore createFolderNamed:name inRelPath:ws.currentRelPath error:&err]) {
             WPShowToast(@"已创建");
@@ -267,9 +271,7 @@
         } else {
             WPShowToast(err.localizedDescription ?: @"创建失败");
         }
-    }]];
-    UIViewController *top = WPGetTopVCForPresentation();
-    if (top) [top presentViewController:alert animated:YES completion:nil];
+    }];
 }
 
 - (void)importFromFiles {
@@ -286,37 +288,40 @@
 }
 
 - (void)showItemActions:(VoicePackItem *)it {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:it.name message:nil preferredStyle:UIAlertControllerStyleActionSheet];
     __weak typeof(self) ws = self;
-    [alert addAction:[UIAlertAction actionWithTitle:@"重命名" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        [ws renameItem:it];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:([VoicePackStore isFavoriteRelPath:it.relPath] ? @"取消收藏" : @"收藏") style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        [VoicePackStore toggleFavoriteForRelPath:it.relPath];
-        [ws reloadItems];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
-        [ws stopPreviewPlayback]; // 防止正在播放被删除的文件
-        NSError *err = nil;
-        if ([VoicePackStore deleteItemAtRelPath:it.relPath error:&err]) {
-            WPShowToast(@"已删除");
+    NSString *favTitle = [VoicePackStore isFavoriteRelPath:it.relPath] ? @"取消收藏" : @"收藏";
+    [MioAlertHelper showMenuAlert:it.name
+                          buttons:@[@"重命名", favTitle, @"删除"]
+                         onButton:^(NSInteger index) {
+        if (index == 0) {
+            [ws renameItem:it];
+        } else if (index == 1) {
+            [VoicePackStore toggleFavoriteForRelPath:it.relPath];
             [ws reloadItems];
-        } else {
-            WPShowToast(err.localizedDescription ?: @"删除失败");
+        } else if (index == 2) {
+            [ws stopPreviewPlayback]; // 防止正在播放被删除的文件
+            NSError *err = nil;
+            if ([VoicePackStore deleteItemAtRelPath:it.relPath error:&err]) {
+                WPShowToast(@"已删除");
+                [ws reloadItems];
+            } else {
+                WPShowToast(err.localizedDescription ?: @"删除失败");
+            }
         }
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    UIViewController *top = WPGetTopVCForPresentation();
-    if (top) [top presentViewController:alert animated:YES completion:nil];
+    }];
 }
 
 - (void)renameItem:(VoicePackItem *)it {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"重命名" message:nil preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) { tf.text = it.name; }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     __weak typeof(self) ws = self;
-    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        NSString *name = alert.textFields.firstObject.text;
+    [MioAlertHelper showInputAlert:@"重命名"
+                           message:@""
+                       initialText:it.name
+                       placeholder:nil
+                          keyboard:UIKeyboardTypeDefault
+                            secure:NO
+                            target:self
+                         onConfirm:^(NSString *inputText) {
+        NSString *name = inputText;
         NSError *err = nil;
         [ws stopPreviewPlayback]; // 防止正在播放被重命名的文件
         if ([VoicePackStore renameItemAtRelPath:it.relPath toName:name error:&err]) {
@@ -325,9 +330,7 @@
         } else {
             WPShowToast(err.localizedDescription ?: @"重命名失败");
         }
-    }]];
-    UIViewController *top = WPGetTopVCForPresentation();
-    if (top) [top presentViewController:alert animated:YES completion:nil];
+    }];
 }
 
 #pragma mark UIDocumentPickerDelegate

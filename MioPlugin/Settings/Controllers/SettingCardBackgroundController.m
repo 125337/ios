@@ -1,6 +1,7 @@
 #import "SettingCardBackgroundController.h"
 #import "../../Modules/ProfileCardBg/CardBgConfig.h"
 #import "../../Core/ConfigManager.h"
+#import "../../Core/MioAlertHelper.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
@@ -279,35 +280,22 @@
 
 - (void)onImageTap {
     CardBgConfig *config = [CardBgConfig shared];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景图"
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"选择静态图片"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *action) {
-        [self pickImage];
-    }]];
-
+    NSMutableArray<NSString *> *buttons = [NSMutableArray arrayWithObject:@"选择静态图片"];
     if ([CardBgConfig hasBackgroundImage]) {
-        [alert addAction:[UIAlertAction actionWithTitle:@"删除背景图"
-                                                 style:UIAlertActionStyleDestructive
-                                               handler:^(UIAlertAction *action) {
+        [buttons addObject:@"删除背景图"];
+    }
+
+    [MioAlertHelper showMenuAlert:@"背景图" buttons:buttons onButton:^(NSInteger index) {
+        if (index == 0) {
+            [self pickImage];
+        } else if (index == 1) {
             WPLog(@"CardBg-Diag", @"[PICKER] Deleting background image");
             [CardBgConfig deleteBackgroundImage];
             [ConfigManager saveAll];
             [self buildUI];
-        }]];
-    }
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(
-            self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-    [self presentViewController:alert animated:YES completion:nil];
+        }
+    }];
 }
 
 #pragma mark - 图片选择器
@@ -377,31 +365,20 @@
     CardBgConfig *config = [CardBgConfig shared];
     NSArray *modeNames = @[@"填充模式", @"适应模式", @"拉伸填充"];
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景填充模式"
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
     for (NSInteger i = 0; i < (NSInteger)modeNames.count; i++) {
         NSString *title = modeNames[i];
         if (i == config.cardBgFillMode) {
             title = [NSString stringWithFormat:@"✓ %@", title];
         }
-        [alert addAction:[UIAlertAction actionWithTitle:title
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *action) {
-            config.cardBgFillMode = i;
-            [ConfigManager saveAll];
-            [self buildUI];
-        }]];
+        [titles addObject:title];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-    [self presentViewController:alert animated:YES completion:nil];
+    [MioAlertHelper showMenuAlert:@"背景填充模式" buttons:titles onButton:^(NSInteger index) {
+        config.cardBgFillMode = index;
+        [ConfigManager saveAll];
+        [self buildUI];
+    }];
 }
 
 #pragma mark - 背景显示层级
@@ -410,32 +387,20 @@
     CardBgConfig *config = [CardBgConfig shared];
     NSArray *layerNames = @[@"底层显示", @"顶层显示"];
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景显示层级"
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
     for (NSInteger i = 0; i < (NSInteger)layerNames.count; i++) {
         NSString *title = layerNames[i];
         if (i == config.cardBgLayer) {
             title = [NSString stringWithFormat:@"✓ %@", title];
         }
-        [alert addAction:[UIAlertAction actionWithTitle:title
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *action) {
-            config.cardBgLayer = i;
-            [ConfigManager saveAll];
-            [self buildUI];
-        }]];
+        [titles addObject:title];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(
-            self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-    [self presentViewController:alert animated:YES completion:nil];
+    [MioAlertHelper showMenuAlert:@"背景显示层级" buttons:titles onButton:^(NSInteger index) {
+        config.cardBgLayer = index;
+        [ConfigManager saveAll];
+        [self buildUI];
+    }];
 }
 
 #pragma mark - 对齐方式
@@ -444,32 +409,20 @@
     CardBgConfig *config = [CardBgConfig shared];
     NSArray *alignNames = @[@"底部对齐", @"居中对齐", @"顶部对齐"];
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"对齐方式"
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
     for (NSInteger i = 0; i < (NSInteger)alignNames.count; i++) {
         NSString *title = alignNames[i];
         if (i == config.cardBgAlignment) {
             title = [NSString stringWithFormat:@"✓ %@", title];
         }
-        [alert addAction:[UIAlertAction actionWithTitle:title
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *action) {
-            config.cardBgAlignment = i;
-            [ConfigManager saveAll];
-            [self buildUI];
-        }]];
+        [titles addObject:title];
     }
 
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    if (@available(iOS 13.0, *)) {
-        alert.popoverPresentationController.sourceView = self.view;
-        alert.popoverPresentationController.sourceRect = CGRectMake(
-            self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-    }
-    [self presentViewController:alert animated:YES completion:nil];
+    [MioAlertHelper showMenuAlert:@"对齐方式" buttons:titles onButton:^(NSInteger index) {
+        config.cardBgAlignment = index;
+        [ConfigManager saveAll];
+        [self buildUI];
+    }];
 }
 
 
