@@ -9,6 +9,7 @@
 #import "../../Modules/GroupExit/GroupExitConfig.h"
 #import "../../Modules/Privacy/PrivacyConfig.h"
 #import "../../Core/MioAlertHelper.h"
+#import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 
