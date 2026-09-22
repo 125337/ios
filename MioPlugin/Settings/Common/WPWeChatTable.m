@@ -188,8 +188,15 @@ static void wpDumpClassMethods(Class cls, const char *clsName, BOOL meta) {
 }
 
 - (void)addCell:(id)cellMgr {
-    if (!cellMgr || !self.sectionMgr) return;
+    if (!cellMgr || !self.sectionMgr) {
+        WPLog(@"WCTable", @"[WCTable] addCell 跳过: cell=%@ sec=%@", cellMgr ? @"ok" : @"nil", self.sectionMgr ? @"ok" : @"nil");
+        return;
+    }
     ((void (*)(id, SEL, id))objc_msgSend)(self.sectionMgr, NSSelectorFromString(@"addCell:"), cellMgr);
+    SEL gc = NSSelectorFromString(@"getCellCount");
+    if ([self.sectionMgr respondsToSelector:gc]) {
+        WPLog(@"WCTable", @"[WCTable] addCell: cellCount=%lu", (unsigned long)((unsigned long (*)(id, SEL))objc_msgSend)(self.sectionMgr, gc));
+    }
 }
 
 @end
@@ -204,17 +211,19 @@ id WPWCSwitchCell(SEL sel, id target, NSString *title, BOOL on) {
 }
 
 id WPWCNavCell(SEL sel, id target, NSString *title, NSString *rightValue) {
-    Class cls = objc_getClass("WCTableViewCellManager");
-    // accessoryType=1 = 右箭头（WCR 触发行/微信设置行同款）
-    SEL s = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:accessoryType:");
-    if (cls && [cls respondsToSelector:s]) {
-        return ((id (*)(id, SEL, SEL, id, id, id, long))objc_msgSend)(cls, s, sel, target, title, rightValue ?: @"", (long)1);
-    }
-    // 兜底：WCTableViewNormalCellManager init
+    // WCDUMP 实证：normalCellForSel:target:title:rightValue:accessoryType: 是
+    // WCTableViewNormalCellManager 的类方法（WCTableViewCellManager 没有它）；
+    // 旧实现找错类 → 永远返回 nil → rows=0 → contentSize 只有 21pt 空隙。
     Class ncls = objc_getClass("WCTableViewNormalCellManager");
-    SEL ni = NSSelectorFromString(@"initWithSel:target:title:rightValue:accessoryType:");
-    if (ncls && [ncls instancesRespondToSelector:ni]) {
-        return ((id (*)(id, SEL, SEL, id, id, id, long))objc_msgSend)([[ncls alloc] init], ni, sel, target, title, rightValue ?: @"", (long)1);
+    SEL s = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:accessoryType:");
+    if (ncls && [ncls respondsToSelector:s]) {
+        return ((id (*)(id, SEL, SEL, id, id, id, long))objc_msgSend)(ncls, s, sel, target, title, rightValue ?: @"", (long)1);
+    }
+    // 兜底：WCTableViewCellManager 的无箭头版（WCDUMP 实证存在）
+    Class cls = objc_getClass("WCTableViewCellManager");
+    SEL s2 = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:");
+    if (cls && [cls respondsToSelector:s2]) {
+        return ((id (*)(id, SEL, SEL, id, id, id))objc_msgSend)(cls, s2, sel, target, title, rightValue ?: @"");
     }
     return nil;
 }
