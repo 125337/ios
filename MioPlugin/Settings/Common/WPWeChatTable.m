@@ -71,33 +71,58 @@ static void wpDumpClassMethods(Class cls, const char *clsName, BOOL meta) {
     [self dumpFrameworkMethodsOnce];
 
     Class mgrCls = objc_getClass("WCTableViewManager");
-    UITableView *tv = [[UITableView alloc] initWithFrame:vc.view.bounds style:UITableViewStyleGrouped];
-    tv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    tv.backgroundColor = [UIColor clearColor];
-    tv.separatorInset = UIEdgeInsetsZero;
-
     id mgr = nil;
-    // init 签名探测：若本微信版本提供 initWithTableView:（hostTableView 关联），优先使用
-    SEL initTV = NSSelectorFromString(@"initWithTableView:");
-    if ([mgrCls instancesRespondToSelector:initTV]) {
-        mgr = ((id (*)(id, SEL, id))objc_msgSend)([[mgrCls alloc] init], initTV, tv);
-        WPLog(@"WCTable", @"[WCTable] WCTableViewManager 走 initWithTableView:");
+    UITableView *tv = nil;
+
+    // === WCR 实证（buildPluginPageForGroup_ 反编译还原）===
+    // manager 不是被动 dataSource：WCR 用 initWithFrame:style: 初始化 manager（内部自建 UITableView
+    // 并持有），再通过 tableView getter 取表、setFrame、最后 addSubview。
+    // 旧实现（自建表 + 外部 tv.dataSource=mgr）manager 内部状态缺失 → numberOfSections 恒 0 → 空白页。
+    SEL ifs = NSSelectorFromString(@"initWithFrame:style:");
+    if ([mgrCls instancesRespondToSelector:ifs]) {
+        id alloced = ((id (*)(id, SEL))objc_msgSend)(mgrCls, NSSelectorFromString(@"alloc"));
+        mgr = ((id (*)(id, SEL, CGRect, long))objc_msgSend)(alloced, ifs, CGRectZero, (long)UITableViewStyleGrouped);
+        WPLog(@"WCTable", @"[WCTable] manager 走 initWithFrame:style:（WCR 同款，内部自建表）");
     } else {
         mgr = [[mgrCls alloc] init];
-        WPLog(@"WCTable", @"[WCTable] WCTableViewManager 走 plain init（无 initWithTableView:）");
+        WPLog(@"WCTable", @"[WCTable] manager 走 plain init（无 initWithFrame:style:）");
     }
     if (!mgr) {
         WPLog(@"WCTable", @"[WCTable] manager 创建失败，回退旧引擎");
         return nil;
     }
-    // 数据源能力校验：manager 必须自己实现 numberOfRows（即它就是 UITableViewDataSource）
+
+    // WCR 实证：tableView getter 取 manager 自建的表
+    SEL tvg = NSSelectorFromString(@"tableView");
+    if ([mgr respondsToSelector:tvg]) {
+        tv = ((id (*)(id, SEL))objc_msgSend)(mgr, tvg);
+    }
+    if ([tv isKindOfClass:[UITableView class]]) {
+        tv.frame = vc.view.bounds;
+        tv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        tv.backgroundColor = [UIColor clearColor];
+        tv.separatorInset = UIEdgeInsetsZero;
+        WPLog(@"WCTable", @"[WCTable] 取 manager 自建表成功: %@", tv);
+    } else {
+        // 兜底：manager 无 tableView getter（版本差异）→ 自建表外部接线（旧行为）
+        tv = [[UITableView alloc] initWithFrame:vc.view.bounds style:UITableViewStyleGrouped];
+        tv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        tv.backgroundColor = [UIColor clearColor];
+        tv.separatorInset = UIEdgeInsetsZero;
+        tv.dataSource = mgr;
+        tv.delegate = mgr;
+        WPLog(@"WCTable", @"[WCTable] manager 无自建表，兜底自建+接线: %@", tv);
+    }
+
+    // 数据源能力校验
     SEL nos = NSSelectorFromString(@"tableView:numberOfRowsInSection:");
     if (![mgr respondsToSelector:nos]) {
         WPLog(@"WCTable", @"[WCTable] manager 不响应 tableView:numberOfRowsInSection:，回退旧引擎");
         return nil;
     }
-    tv.dataSource = mgr;
-    tv.delegate = mgr; // delegate 方法可选，不响应也不崩
+    // manager 自建表路径也保险设一遍（幂等）
+    if (tv.dataSource != mgr) tv.dataSource = mgr;
+    if (tv.delegate != mgr) tv.delegate = mgr;
 
     WPWeChatTable *t = [[self alloc] init];
     t.wcManager = mgr;
