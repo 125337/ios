@@ -32,8 +32,6 @@ static const int kWAlertMenuSlots = 12;
 // alert = self, 可以通过 associated object 拿到 confirm block
 // 注意：空输入也回调（传空串），输入校验由调用方负责 —— 统一弹窗后的契约
 static void __walert_confirm_IMP(id self, SEL _cmd) {
-    WPLogDebug(@"Alert", @"CONFIRM CALLBACK FIRED (C IMP on WCUIAlertView)");
-
     void(^confirmBlock)(NSString *) = objc_getAssociatedObject(self, &kWAlertConfirmBlockKey);
 
     // 获取输入文本：tipsVc.tipsTextView → tipsVc.tipsTextField → getTextFieldText
@@ -53,10 +51,11 @@ static void __walert_confirm_IMP(id self, SEL _cmd) {
         }
     }
 
+    // 回调触发 + 读值一并打日志（闭环：既证明分发通了，也证明输入读到了）
+    WPLog(@"Alert", @"CONFIRM CALLBACK FIRED input=%@ block=%@", input ?: @"<nil>",
+          confirmBlock ? @"yes" : @"no");
     if (confirmBlock) {
         confirmBlock(input ?: @"");
-    } else {
-        WPLogDebug(@"Alert", @"confirm block missing — skipped");
     }
 }
 
@@ -116,6 +115,52 @@ static void walertDumpMethods(Class cls) {
     }
     free(list);
     WPLog(@"Alert", @"[WCDUMP] WCUIAlertView 实例方法(%u): %@", count, [names componentsJoinedByString:@" | "]);
+}
+
+// ============ show 后按钮直挂（绕过微信版本的按钮分发差异）============
+// (80).log 实证：addBtnTitle:target:sel: 注册成功但微信点击不回调 target/sel
+// （「确定按钮注册」日志在而 CONFIRM CALLBACK FIRED 不在 → 分发机制失联）。
+// 修复：show 之后（主队列异步，等微信把按钮挂上视图树）递归遍历弹窗视图树，
+// 找 title 匹配的 UIButton 直接 addTarget 注入 sel。IMP 是注入的 C 方法（永久有效）。
+// target=alert 与微信自身设计一致（弹窗存活期内安全）。
+
+static void walertCollectButtons(UIView *root, NSMutableArray<UIButton *> *out) {
+    if ([root isKindOfClass:[UIButton class]]) [out addObject:(UIButton *)root];
+    for (UIView *sub in root.subviews) walertCollectButtons(sub, out);
+}
+
+// titles 与 selNames 一一对应
+static void walertDirectHookButtons(id alert, NSArray<NSString *> *titles, NSArray<NSString *> *selNames) {
+    UIView *rootView = nil;
+    if ([alert isKindOfClass:[UIView class]]) rootView = (UIView *)alert;
+    if (!rootView) {
+        @try {
+            id tipsVc = [alert valueForKey:@"tipsVc"];
+            if ([tipsVc isKindOfClass:[UIViewController class]]) rootView = [(UIViewController *)tipsVc view];
+        } @catch (NSException *e) {}
+    }
+    NSMutableArray<UIButton *> *btns = [NSMutableArray array];
+    if (rootView) walertCollectButtons(rootView, btns);
+
+    NSMutableArray *descs = [NSMutableArray array];
+    for (UIButton *b in btns) {
+        [descs addObject:[NSString stringWithFormat:@"%@[%@]", NSStringFromClass([b class]),
+                          [b titleForState:UIControlStateNormal] ?: @""]];
+    }
+    WPLog(@"Alert", @"[BTNHOOK] 视图树按钮(%lu) 起点=%@: %@", (unsigned long)btns.count,
+          rootView ? NSStringFromClass([rootView class]) : @"nil",
+          btns.count ? [descs componentsJoinedByString:@" | "] : @"无");
+
+    for (UIButton *b in btns) {
+        NSString *t = [b titleForState:UIControlStateNormal] ?: @"";
+        for (NSUInteger i = 0; i < titles.count && i < selNames.count; i++) {
+            if ([t isEqualToString:titles[i]]) {
+                SEL s = NSSelectorFromString(selNames[i]);
+                [b addTarget:alert action:s forControlEvents:UIControlEventTouchUpInside];
+                WPLog(@"Alert", @"[BTNHOOK] 直挂 \"%@\" -> %@", t, selNames[i]);
+            }
+        }
+    }
 }
 
 @implementation MioAlertHelper
@@ -241,11 +286,14 @@ static void walertDumpMethods(Class cls) {
             walertDumpMethods([alert class]);
         }
 
-        // ⑤ show
+        // ⑤ show；随后直挂「确定」按钮（(80).log 实证微信 addBtnTitle:target:sel: 注册在但不回调）
         SEL showSel = NSSelectorFromString(@"show");
         if ([alert respondsToSelector:showSel]) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
         }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            walertDirectHookButtons(alert, @[@"确定", @"OK"], @[@"__walert_confirm"]);
+        });
     } @catch (NSException *e) {
         WPLogDebug(@"Alert", @"input alert EXCEPTION: %@", e);
     }
@@ -263,12 +311,14 @@ static void walertDumpMethods(Class cls) {
         walertEnsureCIMPInjected([alert class]);
         SEL btnSel = NSSelectorFromString(@"addBtnTitle:target:sel:");
         NSMutableArray *blocks = [NSMutableArray array];
+        NSMutableArray *menuSelNames = [NSMutableArray array];
         for (NSInteger i = 0; i < (NSInteger)titles.count && i < kWAlertMenuSlots; i++) {
             NSInteger captured = i;
             void(^b)(void) = ^{
                 if (onButton) onButton(captured);
             };
             [blocks addObject:b];
+            [menuSelNames addObject:[NSString stringWithFormat:@"__walert_menu_%d", (int)captured]];
             if ([alert respondsToSelector:btnSel]) {
                 SEL menuSel = NSSelectorFromString([NSString stringWithFormat:@"__walert_menu_%d", (int)captured]);
                 ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btnSel, titles[i], alert, menuSel);
@@ -285,6 +335,9 @@ static void walertDumpMethods(Class cls) {
         if ([alert respondsToSelector:showSel]) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
         }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            walertDirectHookButtons(alert, titles, menuSelNames);
+        });
     } @catch (NSException *e) {
         WPLogDebug(@"Alert", @"menu alert EXCEPTION: %@", e);
     }
@@ -345,6 +398,9 @@ static void walertDumpMethods(Class cls) {
         if ([alert respondsToSelector:showSel]) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
         }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            walertDirectHookButtons(alert, @[confirmTitle ?: @"确定"], @[@"__walert_simple_confirm"]);
+        });
     } @catch (NSException *e) {
         WPLogDebug(@"Alert", @"confirm error: %@", e);
     }

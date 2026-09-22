@@ -110,13 +110,13 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     CGFloat y = 8;
 
     UIView *heroCard = WPMakeCard(y, w);
-    CGFloat hy = 10;
+    CGFloat hy = 24;
 
-    UIView *avatar = [[UIView alloc] initWithFrame:CGRectMake((w - kPad * 2) / 2 - 28, hy, 56, 56)];
+    UIView *avatar = [[UIView alloc] initWithFrame:CGRectMake((w - kPad * 2) / 2 - 40, hy, 80, 80)];
     avatar.backgroundColor = [UIColor colorWithRed:0.851 green:0.851 blue:0.859 alpha:1.0];
-    avatar.layer.cornerRadius = 28;
+    avatar.layer.cornerRadius = 40;
     [heroCard addSubview:avatar];
-    hy += 62;
+    hy += 88;
 
     UILabel *heroName = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 28)];
     heroName.text = @"Mio助手";
@@ -124,7 +124,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     heroName.textColor = WPAccent();
     heroName.textAlignment = NSTextAlignmentCenter;
     [heroCard addSubview:heroName];
-    hy += 30;
+    hy += 36;
 
     UILabel *heroVer = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 18)];
     heroVer.text = [NSString stringWithFormat:@"v%@", kPluginVersion];
@@ -132,7 +132,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     heroVer.textColor = [UIColor colorWithRed:0.400 green:0.800 blue:0.451 alpha:1.0];
     heroVer.textAlignment = NSTextAlignmentCenter;
     [heroCard addSubview:heroVer];
-    hy += 22;
+    hy += 28;
 
     CGRect hcf = heroCard.frame; hcf.size.height = hy; heroCard.frame = hcf;
 
@@ -140,9 +140,9 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     WPWeChatTable *wc = [WPWeChatTable tableForVC:vc];
     if (wc) {
         CGFloat headW = [UIScreen mainScreen].bounds.size.width;
-        // hero 卡包一层容器作 tableHeaderView
-        UIView *headerWrap = [[UIView alloc] initWithFrame:CGRectMake(0, 0, headW, hy + 6)];
-        heroCard.frame = CGRectMake(kPad, 0, headW - kPad * 2, hy);
+        // hero 卡包一层容器作 tableHeaderView；顶部 8px 间隔与子页面 y=8 起步对齐
+        UIView *headerWrap = [[UIView alloc] initWithFrame:CGRectMake(0, 0, headW, hy + 14)];
+        heroCard.frame = CGRectMake(kPad, 8, headW - kPad * 2, hy);
         [headerWrap addSubview:heroCard];
         wc.tableView.tableHeaderView = headerWrap;
 
