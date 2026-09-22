@@ -170,6 +170,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         wc.tableView.tableFooterView = wfooter;
 
         [vc.view addSubview:wc.tableView];
+        [wc reloadAsync]; // addSection: 数据已就绪，延迟双刷兜底首帧时序
         WPLog(@"Setting", @"[Entry] 微信引擎列表完成 (header=%@)", NSStringFromClass([headerWrap class]));
         return;
     }

@@ -198,6 +198,8 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     self.wcLastGroup = nil;
     self.wcPendingHeader = nil;
     [self.view addSubview:self.wcTable.tableView];
+    // 数据由后续 buildUI 同步填充，此处延迟 reload 兜底（首帧 layout 早于 buildUI 时表会空一帧）
+    [self.wcTable reloadAsync];
     WPLog(@"WCTable", @"[WCTABLE] 引擎表已重建: %@", self.wcTable.tableView);
 }
 

@@ -112,13 +112,14 @@ static void wpDumpClassMethods(Class cls, const char *clsName, BOOL meta) {
     id sec = [[secCls alloc] init];
     if (!sec) return nil;
 
-    // 优先走 getAllSections 数组直接追加（纯数据操作，零副作用；WCR reload 前建好全部 section 同款）
-    NSMutableArray *all = ((id (*)(id, SEL))objc_msgSend)(self.wcManager, NSSelectorFromString(@"getAllSections"));
-    if ([all isKindOfClass:[NSMutableArray class]]) {
-        [all addObject:sec];
-    } else {
-        ((void (*)(id, SEL, id))objc_msgSend)(self.wcManager, NSSelectorFromString(@"addSection:"), sec);
-        WPLog(@"WCTable", @"[WCTable] getAllSections 不可用，走 addSection:");
+    // WCR 实证正道：无条件走 addSection:。
+    // 教训：getAllSections 返回的是内部数组副本/不同步视图，addObject 不进 manager 状态
+    // （contentSize{0,0} 空白页实证），addSection: 才是 WCR 反编译 addSectionTo_ 同款。
+    ((void (*)(id, SEL, id))objc_msgSend)(self.wcManager, NSSelectorFromString(@"addSection:"), sec);
+    SEL cs = NSSelectorFromString(@"getSectionCount");
+    if ([self.wcManager respondsToSelector:cs]) {
+        unsigned long cnt = ((unsigned long (*)(id, SEL))objc_msgSend)(self.wcManager, cs);
+        WPLog(@"WCTable", @"[WCTable] addGroup: sectionCount=%lu", cnt);
     }
     WPWGroup *g = [[WPWGroup alloc] init];
     g.sectionMgr = sec;
@@ -127,12 +128,24 @@ static void wpDumpClassMethods(Class cls, const char *clsName, BOOL meta) {
 
 - (void)reload {
     if (self.wcManager) {
-        SEL s = NSSelectorFromString(@"reloadAllSections");
+        // 方法表实证：WCTableViewManager 是 reloadTableView（不存在 reloadAllSections）
+        SEL s = NSSelectorFromString(@"reloadTableView");
         if ([self.wcManager respondsToSelector:s]) {
             ((void (*)(id, SEL))objc_msgSend)(self.wcManager, s);
         }
     }
     [self.tableView reloadData];
+}
+
+// 延迟 reload：排到当前 runloop 之后执行（buildUI/addGroup 与建表同步连续，
+// async 必然排在数据填充完成后），连刷两次覆盖 heightFor 布局陈旧
+- (void)reloadAsync {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self reload];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self reload];
+        });
+    });
 }
 
 @end

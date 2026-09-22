@@ -18,8 +18,9 @@
 + (BOOL)available;                                 // 关键类判空（决定走微信引擎还是旧渲染）
 + (void)dumpFrameworkMethodsOnce;                  // 一次性方法表 dump（确认 init 签名等，供后续精化）
 + (instancetype)tableForVC:(UIViewController *)vc; // 建表 + 建 manager + dataSource/delegate 接线（不 addSubview，调用方自行添加）
-- (id)addGroup;                                    // 建 section 并挂到 manager，返回 WPWGroup 手柄
-- (void)reload;                                    // reloadAllSections + reloadData
+- (id)addGroup;                                    // 建 section（addSection:）并挂到 manager，返回 WPWGroup 手柄
+- (void)reload;                                    // reloadTableView + reloadData 双保险
+- (void)reloadAsync;                               // 延迟 reload：排到当前 runloop 后（数据填充完成）连刷两次
 @end
 
 // 组手柄：包装 WCTableViewSectionManager（故意不继承 UIView，误用 addSubview 时立即暴露而非静默错布局）
