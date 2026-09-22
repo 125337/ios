@@ -7,8 +7,62 @@
 #import "../../Config/WPColorUtil.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import <objc/runtime.h>
+#import <objc/message.h>
+#import <malloc/malloc.h>
 #import <QuartzCore/QuartzCore.h>
 #import "../../Core/LogManager.h"
+#import "WPWeChatTable.h"
+#import "../../Core/MioAlertHelper.h"
+
+// 微信引擎 switch 回调 trampoline：每行独立 selector（wpSw_<key>_<hash>），共享 IMP 从 _cmd 反解行身份。
+// 回调入参按反编译实证处理：响应 isOn 的对象（handleSettingEntrySwitch_ 直接 [arg isOn]）；
+// 若传入的是 cellManager 则顺带取 userInfo 载荷。ABI 兜底：纯整数（BOOL 走 w 寄存器）按 p&1 处理。
+static void wpWCSwitchTramp(id self, SEL _cmd, id arg) {
+    @autoreleasepool {
+        NSString *selName = NSStringFromSelector(_cmd);
+        // 反解 "wpSw_<hash>_<原始key>"：剥前缀后去掉第一段纯数字哈希
+        NSString *key = selName;
+        if ([selName hasPrefix:@"wpSw_"]) {
+            key = [selName substringFromIndex:5];
+            NSRange r = [key rangeOfString:@"_"];
+            if (r.location != NSNotFound && r.location > 0 && r.location <= 20) {
+                key = [key substringFromIndex:r.location + 1];
+            }
+        }
+        id row = nil;
+        BOOL on = NO, haveOn = NO;
+        if (arg) {
+            uintptr_t p = (uintptr_t)arg;
+            if (p <= 0x1000) {
+                on = (BOOL)(p & 1);
+                haveOn = YES;
+            } else if (malloc_size((const void *)p) > 0) {
+                if ([arg isKindOfClass:[UISwitch class]]) {
+                    on = [(UISwitch *)arg isOn];
+                    haveOn = YES;
+                } else if ([arg respondsToSelector:@selector(isOn)]) {
+                    on = (BOOL)((BOOL (*)(id, SEL))objc_msgSend)(arg, @selector(isOn));
+                    haveOn = YES;
+                }
+                if (!haveOn || ![arg isKindOfClass:[UISwitch class]]) {
+                    @try {
+                        id ui = [arg valueForKey:@"userInfo"];
+                        if ([ui isKindOfClass:[NSDictionary class]]) row = ui;
+                    } @catch (NSException *e) {}
+                    if (!row) row = objc_getAssociatedObject(arg, "wprow");
+                }
+            }
+        }
+        WPLog(@"WCTable", @"[WCSW] 回调: selKey=%@ rowKey=%@ on=%d(have=%d) arg=%@",
+              key,
+              ([row isKindOfClass:[NSDictionary class]] ? row[@"key"] : @"无"),
+              on, haveOn, arg ? NSStringFromClass([arg class]) : @"nil");
+        if ([self respondsToSelector:@selector(wpHandleSwitchKey:row:on:haveOn:)]) {
+            ((void (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)(self,
+                @selector(wpHandleSwitchKey:row:on:haveOn:), key, row, on, haveOn);
+        }
+    }
+}
 
 static void configLog(NSString *content) {
     @try {
@@ -80,6 +134,11 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 @end
 
 @interface SettingCategoryController () <UITableViewDelegate, UITableViewDataSource>
+// 微信引擎状态（wcTable 非 nil = 走微信渲染；关键类缺失时保持 nil 走旧 UITableView 渲染）
+@property (nonatomic, strong) WPWeChatTable *wcTable;
+@property (nonatomic, strong) WPWGroup *wcLastGroup;                 // 最近一个组（hint/footer 挂靠）
+@property (nonatomic, copy) NSString *wcPendingHeader;               // addSectionHeader 暂存，建组时消费
+@property (nonatomic, strong) NSMutableDictionary *wcExpandState;    // 手风琴展开状态 key→@(expanded)，默认收起（WCR 同款）
 @end
 
 @implementation SettingCategoryController
@@ -106,7 +165,12 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         [self.scrollView addSubview:self.contentView];
 
         self.masterSwitchKeys = [NSMutableSet set];
-        WPLog(@"Config", @"[UI] SettingCategoryController viewDidLoad 完成");
+        self.wcExpandState = [NSMutableDictionary dictionary];
+
+        // 微信引擎：四大关键类齐全即建表接管渲染（失败自动保持 nil，走旧 UITableView 渲染）
+        [self wpRebuildWeChatTable];
+
+        WPLog(@"Config", @"[UI] SettingCategoryController viewDidLoad 完成 (微信引擎=%d)", self.wcTable != nil);
     } @catch (NSException *e) {
         WPLog(@"Config", @"[UI] SettingCategoryController viewDidLoad 异常: %@ - %@", e.name, e.reason);
     }
@@ -123,9 +187,186 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     WPRestoreNavAppearance(self);
 }
 
+#pragma mark - WeChat Engine Helpers
+
+// 重建微信引擎表（首次进入 / 总开关切换 / 手风琴展开收起 / 输入保存后均走这里）
+- (void)wpRebuildWeChatTable {
+    if (![WPWeChatTable available]) return;
+    [self.wcTable.tableView removeFromSuperview];
+    self.wcTable = [WPWeChatTable tableForVC:self];
+    if (!self.wcTable) return;
+    self.wcLastGroup = nil;
+    self.wcPendingHeader = nil;
+    [self.view addSubview:self.wcTable.tableView];
+    WPLog(@"WCTable", @"[WCTABLE] 引擎表已重建: %@", self.wcTable.tableView);
+}
+
+// 为配置 key 注册动态 switch 回调 selector（wpSw_<hash>_<原始key>，IMP 共享 wpWCSwitchTramp）。
+// 用「哈希_」前缀防碰撞，原始 key 原样进 selector（sel_registerName 接受任意非空 C 字符串），
+// trampoline 反解时只剥掉第一段纯数字哈希，保证带 . _ - 的配置键原样还原。
+- (SEL)wpRegisterSwitchSelectorForKey:(NSString *)key {
+    NSString *name = [NSString stringWithFormat:@"wpSw_%lu_%@", (unsigned long)key.hash, key];
+    SEL s = NSSelectorFromString(name);
+    if (!class_getInstanceMethod([self class], s)) {
+        class_addMethod([self class], s, (IMP)wpWCSwitchTramp, "v@:@");
+    }
+    return s;
+}
+
+// switch 回调落地：写配置；总开关 key 触发整页重建
+- (void)wpHandleSwitchKey:(NSString *)key row:(id)row on:(BOOL)on haveOn:(BOOL)haveOn {
+    NSString *cfgKey = key;
+    if ([row isKindOfClass:[NSDictionary class]] && [row[@"key"] isKindOfClass:[NSString class]]) {
+        cfgKey = row[@"key"];
+    }
+    if (cfgKey.length == 0) return;
+    if (!haveOn) {
+        // 拿不到真实开关值：按当前配置取反
+        @try {
+            id cur = [ConfigManager valueForKey:cfgKey];
+            on = ![cur boolValue];
+        } @catch (NSException *e) {
+            on = YES;
+        }
+    }
+    @try {
+        [ConfigManager setValue:@(on) forKey:cfgKey];
+        [ConfigManager saveAll];
+    } @catch (NSException *e) {
+        WPLog(@"Config", @"[WCSW] 写配置失败 key=%@ err=%@", cfgKey, e);
+        return;
+    }
+    WPLog(@"Config", @"[WCSW] %@ = %@", cfgKey, on ? @"ON" : @"OFF");
+
+    if ([self.masterSwitchKeys containsObject:cfgKey]) {
+        self.wcExpandState[cfgKey] = @NO; // 关闭总开关时复位为收起（WCR 同款）
+        [self wpRebuildWeChatTable];
+        [self buildUI];
+    }
+}
+
+// 微信引擎 tap 回调统一入口：入参 = cellManager（反编译实证），userInfo/wprow 载荷取行描述
+- (void)wpWCTapRow:(id)arg {
+    id row = nil;
+    if (arg) {
+        @try {
+            id ui = [arg valueForKey:@"userInfo"];
+            if ([ui isKindOfClass:[NSDictionary class]]) row = ui;
+        } @catch (NSException *e) {}
+        if (!row) row = objc_getAssociatedObject(arg, "wprow");
+    }
+    if (![row isKindOfClass:[NSDictionary class]]) {
+        WPLog(@"WCTable", @"[WCTAP] 未识别回调载荷 arg=%@", arg ? NSStringFromClass([arg class]) : @"nil");
+        return;
+    }
+    NSString *type = row[@"type"];
+    WPLog(@"WCTable", @"[WCTAP] type=%@ key=%@", type, row[@"key"]);
+
+    if ([type isEqualToString:@"nav"]) {
+        NSString *actionStr = row[@"action"];
+        if (actionStr.length == 0) return;
+        SEL action = NSSelectorFromString(actionStr);
+        if (![self respondsToSelector:action]) return;
+        if ([actionStr hasSuffix:@":"]) {
+            UIButton *dummy = [UIButton buttonWithType:UIButtonTypeCustom];
+            dummy.tag = [row[@"tag"] integerValue];
+            ((void (*)(id, SEL, id))objc_msgSend)(self, action, dummy);
+        } else {
+            ((void (*)(id, SEL))objc_msgSend)(self, action);
+        }
+    } else if ([type isEqualToString:@"button"]) {
+        if ([self respondsToSelector:@selector(buttonClicked:)]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(self, @selector(buttonClicked:), row[@"key"]);
+        }
+    } else if ([type isEqualToString:@"input"]) {
+        [self wpRunInputFlow:row];
+    } else if ([type isEqualToString:@"colorTap"]) {
+        // rightView 包装失败时的兜底：模拟色块按钮打开取色器
+        UIButton *dummy = [UIButton buttonWithType:UIButtonTypeCustom];
+        objc_setAssociatedObject(dummy, "key", row[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if ([self respondsToSelector:@selector(colorButtonTapped:)]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(self, @selector(colorButtonTapped:), dummy);
+        }
+    } else if ([type isEqualToString:@"trigger"]) {
+        // 手风琴展开/收起触发行（WCR 同款：翻转状态 + 整页重建）
+        NSString *k = row[@"key"];
+        BOOL now = ![self.wcExpandState[k] boolValue];
+        self.wcExpandState[k] = @(now);
+        WPLog(@"WCTable", @"[WCTAP] 手风琴 %@ -> %@", k, now ? @"展开" : @"收起");
+        [self wpRebuildWeChatTable];
+        [self buildUI];
+    }
+}
+
+// 输入行流程（MioAlertHelper 直连，保存后整页重建以反显新值）
+- (void)wpRunInputFlow:(NSDictionary *)row {
+    NSString *key = row[@"key"];
+    if (![key isKindOfClass:[NSString class]] || key.length == 0) return;
+    NSString *title = [row[@"alertTitle"] isKindOfClass:[NSString class]] && row[@"alertTitle"].length > 0
+        ? row[@"alertTitle"] : row[@"title"];
+    NSString *hint = row[@"hint"];
+    NSInteger valueType = [row[@"valueType"] integerValue];
+
+    NSString *currentValue = @"";
+    @try {
+        id v = [ConfigManager valueForKey:key];
+        if ([v isKindOfClass:[NSString class]]) currentValue = v;
+        else if ([v isKindOfClass:[NSNumber class]]) currentValue = [(NSNumber *)v stringValue];
+    } @catch (NSException *e) {}
+
+    WPLog(@"WCTable", @"[WCEDIT] 打开输入弹窗 key=%@ 当前=%@", key, currentValue);
+    [MioAlertHelper showInputAlert:title
+                           message:(row[@"alertMessage"] ?: @"")
+                       initialText:currentValue ?: @""
+                       placeholder:(hint ?: @"")
+                          keyboard:(valueType == InputValueTypeNumber) ? UIKeyboardTypeNumbersAndPunctuation : UIKeyboardTypeDefault
+                            secure:NO
+                            target:self
+                        onConfirm:^(NSString *inputText) {
+        NSString *nv = inputText ?: @"";
+        if (nv.length == 0 && hint.length > 0) nv = hint;
+        @try {
+            if (valueType == InputValueTypeText) {
+                [ConfigManager setValue:nv forKey:key];
+            } else {
+                [ConfigManager setValue:[NSDecimalNumber decimalNumberWithString:nv] forKey:key];
+            }
+            [ConfigManager saveAll];
+            WPLog(@"Config", @"[WCEDIT] %@ = %@", key, nv);
+        } @catch (NSException *e) {
+            WPLog(@"Config", @"[WCEDIT] 保存失败 key=%@ err=%@", key, e);
+            return;
+        }
+        [self wpRebuildWeChatTable];
+        [self buildUI];
+    }];
+}
+
+// 给 cellManager 挂行描述载荷（KVC userInfo 优先 = 微信框架官方通道，assoc 兜底）
+static void wpAttachRow(id cellMgr, NSDictionary *row) {
+    if (!cellMgr) return;
+    objc_setAssociatedObject(cellMgr, "wprow", row, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    @try {
+        [(id)cellMgr setValue:row forKey:@"userInfo"];
+    } @catch (NSException *e) {
+        WPLog(@"WCTable", @"[WCTABLE] userInfo KVC 失败（已用 assoc 兜底）: %@", e.name);
+    }
+}
+
 #pragma mark - Group (UITableView)
 
 - (UIView *)addTableGroupAtY:(CGFloat)y width:(CGFloat)w {
+    // 微信引擎：返回 WPWGroup 手柄（后续 addXxxRowInGroup 逐个 addCell:）
+    if (self.wcTable) {
+        WPWGroup *g = [self.wcTable addGroup];
+        if (!g) return nil;
+        if (self.wcPendingHeader.length > 0) {
+            [g wpSetHeader:self.wcPendingHeader footer:nil];
+            self.wcPendingHeader = nil;
+        }
+        self.wcLastGroup = g;
+        return (UIView *)g;
+    }
     CGFloat cardW = w - kPad * 2;
     UITableView *table = [[UITableView alloc] initWithFrame:CGRectMake(kPad, y, cardW, 0)
                                                       style:UITableViewStylePlain];
@@ -151,6 +392,10 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 }
 
 - (CGFloat)finishGroup:(UIView *)group atY:(CGFloat)y height:(CGFloat)h {
+    if ([group isKindOfClass:[WPWGroup class]]) {
+        // 微信引擎：section 已挂 manager，行高由微信自理，无布局收尾
+        return y + 8;
+    }
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSInteger rowCount = rowsForTable(table).count;
@@ -170,6 +415,11 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 #pragma mark - Section Header / Footer
 
 - (CGFloat)addSectionHeader:(NSString *)text y:(CGFloat)y width:(CGFloat)w {
+    // 微信引擎：section 头（WCR setHeaderTitle: 同款），建组时消费
+    if (self.wcTable) {
+        self.wcPendingHeader = text;
+        return y + 32;
+    }
     UILabel *l = WPMakeSectionHeader(text, y, w);
     l.text = text.uppercaseString;
     CGRect f = l.frame;
@@ -181,6 +431,11 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 }
 
 - (CGFloat)addSectionFooter:(NSString *)text y:(CGFloat)y width:(CGFloat)w {
+    // 微信引擎：组 footer（WCR setFooterTitle: 同款），挂最近一个组
+    if (self.wcTable) {
+        [self.wcLastGroup wpSetHeader:nil footer:text];
+        return y + 20;
+    }
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(kPad, y, w - kPad * 2, 0)];
     l.text = text;
     l.font = [UIFont systemFontOfSize:12];
@@ -194,6 +449,22 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 #pragma mark - Row: Nav
 
 - (CGFloat)addNavRowInGroup:(UIView *)group title:(NSString *)title subtitle:(NSString *)subtitle tag:(NSInteger)tag action:(SEL)action cy:(CGFloat)cy width:(CGFloat)w {
+    // 微信引擎：NormalCell accessoryType=1（微信原生右箭头）
+    if ([group isKindOfClass:[WPWGroup class]]) {
+        WPWGroup *g = (WPWGroup *)group;
+        NSDictionary *row = @{@"type": @"nav",
+                              @"title": title ?: @"",
+                              @"tag": @(tag),
+                              @"action": NSStringFromSelector(action)};
+        id cell = WPWCNavCell(@selector(wpWCTapRow:), self, title, subtitle);
+        if (cell) {
+            wpAttachRow(cell, row);
+            [g addCell:cell];
+            return cy + kRowH;
+        }
+        WPLog(@"WCTable", @"[WCTABLE] navCell 构造失败，该行缺失: %@", title);
+        return cy + kRowH;
+    }
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
@@ -236,6 +507,21 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 #pragma mark - Row: Switch
 
 - (CGFloat)addSwitchRowInGroup:(UIView *)group title:(NSString *)title desc:(NSString *)desc key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w {
+    // 微信引擎：switchCell（微信原生开关，回调走 wpSw_ 动态 selector trampoline）
+    if ([group isKindOfClass:[WPWGroup class]]) {
+        WPWGroup *g = (WPWGroup *)group;
+        NSDictionary *row = @{@"type": @"switch",
+                              @"title": title ?: @"",
+                              @"key": key ?: @""};
+        id cell = WPWCSwitchCell([self wpRegisterSwitchSelectorForKey:key], self, title, on);
+        if (cell) {
+            wpAttachRow(cell, row);
+            [g addCell:cell];
+        } else {
+            WPLog(@"WCTable", @"[WCTABLE] switchCell 构造失败，该行缺失: %@", title);
+        }
+        return cy + kRowH;
+    }
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
@@ -281,6 +567,21 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 #pragma mark - Row: Sub-Switch
 
 - (CGFloat)addSubSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w {
+    // 微信引擎：子开关行 = switchCell（WCR 同款无前置小箭头，层级由缩进语义弱化）
+    if ([group isKindOfClass:[WPWGroup class]]) {
+        WPWGroup *g = (WPWGroup *)group;
+        NSDictionary *row = @{@"type": @"switch",
+                              @"title": title ?: @"",
+                              @"key": key ?: @""};
+        id cell = WPWCSwitchCell([self wpRegisterSwitchSelectorForKey:key], self, title, on);
+        if (cell) {
+            wpAttachRow(cell, row);
+            [g addCell:cell];
+        } else {
+            WPLog(@"WCTable", @"[WCTABLE] subSwitchCell 构造失败，该行缺失: %@", title);
+        }
+        return cy + kRowH;
+    }
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
@@ -338,6 +639,24 @@ static NSMutableArray *rowsForTable(UITableView *table) {
                            cy:(CGFloat)cy
                         width:(CGFloat)w
 {
+    // 微信引擎：NavCell（右值 = 当前值/占位提示，accessoryType=1），点击走 wpRunInputFlow
+    if ([group isKindOfClass:[WPWGroup class]]) {
+        WPWGroup *g = (WPWGroup *)group;
+        NSMutableDictionary *row = [NSMutableDictionary dictionary];
+        row[@"type"] = @"input";
+        row[@"title"] = title ?: @"";
+        row[@"key"] = key ?: @"";
+        row[@"valueType"] = @(valueType);
+        if (hint.length > 0) row[@"hint"] = hint;
+        if (alertTitle.length > 0) row[@"alertTitle"] = alertTitle;
+        if (alertMessage.length > 0) row[@"alertMessage"] = alertMessage;
+        id cell = WPWCNavCell(@selector(wpWCTapRow:), self, title, (value.length > 0) ? value : hint);
+        if (cell) {
+            wpAttachRow(cell, row);
+            [g addCell:cell];
+        }
+        return cy + kRowH;
+    }
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
@@ -382,6 +701,11 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 #pragma mark - Row: Hint
 
 - (CGFloat)addHintRowInGroup:(UIView *)group text:(NSString *)text cy:(CGFloat)cy width:(CGFloat)w {
+    // 微信引擎：提示行 → 组 footer（微信原生小灰字，WCR 同款）
+    if ([group isKindOfClass:[WPWGroup class]]) {
+        [(WPWGroup *)group wpSetHeader:nil footer:text];
+        return cy + 20;
+    }
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
@@ -403,6 +727,19 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 #pragma mark - Row: Button
 
 - (CGFloat)addButtonRowInGroup:(UIView *)group title:(NSString *)title hint:(NSString *)hint key:(NSString *)key cy:(CGFloat)cy width:(CGFloat)w {
+    // 微信引擎：NavCell（点击走 buttonClicked:key）
+    if ([group isKindOfClass:[WPWGroup class]]) {
+        WPWGroup *g = (WPWGroup *)group;
+        NSDictionary *row = @{@"type": @"button",
+                              @"title": title ?: @"",
+                              @"key": key ?: @""};
+        id cell = WPWCNavCell(@selector(wpWCTapRow:), self, title, hint);
+        if (cell) {
+            wpAttachRow(cell, row);
+            [g addCell:cell];
+        }
+        return cy + kRowH;
+    }
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
@@ -451,6 +788,11 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 #pragma mark - Row: Sub-Section Label
 
 - (CGFloat)addSubSectionLabelInGroup:(UIView *)group text:(NSString *)text cy:(CGFloat)cy width:(CGFloat)w {
+    // 微信引擎：组内小标题暂无对应 API，跳过（纯装饰；后续可用独立 section header 精化）
+    if ([group isKindOfClass:[WPWGroup class]]) {
+        WPLog(@"WCTable", @"[WCTABLE] subLabel 行已跳过（微信引擎暂不支持组内小标题）: %@", text);
+        return cy;
+    }
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
@@ -479,6 +821,62 @@ static NSMutableArray *rowsForTable(UITableView *table) {
                         width:(CGFloat)w
                      darkKey:(NSString *)darkKey
                    darkValue:(NSString *)darkValue {
+    // 微信引擎：自定义视图行（WCR 颜色行同款 normalCellForSel:target:title:rightView:，色块按钮自理）
+    if ([group isKindOfClass:[WPWGroup class]]) {
+        WPWGroup *g = (WPWGroup *)group;
+        CGFloat cvW = w;
+        UIView *cv = [[UIView alloc] initWithFrame:CGRectMake(0, 0, cvW, kRowH)];
+        cv.backgroundColor = [UIColor clearColor];
+
+        UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, 4, cvW - kCellHPadding - 80, kRowH - 8)];
+        tl.text = title;
+        tl.font = [UIFont systemFontOfSize:15];
+        tl.textColor = WPT1();
+        [cv addSubview:tl];
+
+        if (darkKey == nil) {
+            UIColor *color = [WPColorUtil colorFromHexString:value] ?: [UIColor grayColor];
+            UIButton *btn = [WPColorPicker makeColorButtonWithColor:color size:30];
+            btn.frame = CGRectMake(cvW - kCellHPadding - 36, (kRowH - 30) / 2, 30, 30);
+            objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+            [cv addSubview:btn];
+        } else {
+            CGFloat btnSize = 24;
+            CGFloat gap = 8;
+            UIColor *darkColor = [[WPColorUtil class] colorFromHexString:darkValue] ?: [UIColor darkGrayColor];
+            UIButton *darkBtn = [WPColorPicker makeColorButtonWithColor:darkColor size:30];
+            CGFloat darkX = cvW - kCellHPadding - btnSize - 4;
+            darkBtn.frame = CGRectMake(darkX, (kRowH - btnSize) / 2, btnSize, btnSize);
+            objc_setAssociatedObject(darkBtn, "key", darkKey, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            [darkBtn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+            [cv addSubview:darkBtn];
+
+            UIColor *lightColor = [[WPColorUtil class] colorFromHexString:value] ?: [UIColor whiteColor];
+            UIButton *lightBtn = [WPColorPicker makeColorButtonWithColor:lightColor size:30];
+            lightBtn.frame = CGRectMake(darkX - gap - btnSize, darkBtn.frame.origin.y, btnSize, btnSize);
+            objc_setAssociatedObject(lightBtn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            [lightBtn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+            [cv addSubview:lightBtn];
+        }
+
+        id cell = WPWCViewCell((SEL)0, self, @"", cv);
+        if (cell) {
+            [g addCell:cell];
+            return cy + kRowH;
+        }
+        // 兜底：rightView 包装不可用 → NavCell + colorTap 行（右值显示当前色值）
+        WPLog(@"WCTable", @"[WCTABLE] viewCell 不可用，颜色行走 NavCell 兜底: %@", title);
+        NSDictionary *row = @{@"type": @"colorTap",
+                              @"title": title ?: @"",
+                              @"key": key ?: @""};
+        id fb = WPWCNavCell(@selector(wpWCTapRow:), self, title, value);
+        if (fb) {
+            wpAttachRow(fb, row);
+            [g addCell:fb];
+        }
+        return cy + kRowH;
+    }
     if ([group isKindOfClass:[UITableView class]]) {
         UITableView *table = (UITableView *)group;
         NSMutableDictionary *row = [NSMutableDictionary dictionary];
@@ -551,7 +949,7 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 #pragma mark - Separator (no-op for UITableView, native handles it)
 
 - (CGFloat)addSeparatorInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w {
-    if ([group isKindOfClass:[UITableView class]]) {
+    if ([group isKindOfClass:[WPWGroup class]] || [group isKindOfClass:[UITableView class]]) {
         return cy;
     }
 
@@ -568,7 +966,8 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 #pragma mark - Expand Container (deprecated for UITableView — sub-rows are cells)
 
 - (UIView *)addExpandContainerInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w {
-    if ([group isKindOfClass:[UITableView class]]) {
+    if ([group isKindOfClass:[WPWGroup class]] || [group isKindOfClass:[UITableView class]]) {
+        // 微信引擎/表格路径：子行直接成为 cell，无独立容器
         return group;
     }
     CGFloat gw = w - kPad * 2;
@@ -592,7 +991,7 @@ static NSMutableArray *rowsForTable(UITableView *table) {
 }
 
 - (CGFloat)finishExpandContainer:(UIView *)container currentCy:(CGFloat)cy {
-    if ([container isKindOfClass:[UITableView class]]) {
+    if ([container isKindOfClass:[WPWGroup class]] || [container isKindOfClass:[UITableView class]]) {
         return cy;
     }
     CGRect f = container.frame;
@@ -610,7 +1009,23 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     CGFloat resultCy = [self addSwitchRowInGroup:group title:title desc:nil key:key isOn:on cy:cy width:w];
 
     if (on && subBuilder) {
-        if ([group isKindOfClass:[UITableView class]]) {
+        if ([group isKindOfClass:[WPWGroup class]]) {
+            // 微信引擎手风琴（WCR addSceneSection 同款）：展开/收起触发行 + 展开时才构建子行 + 整页重建
+            BOOL expanded = [self.wcExpandState[key] boolValue]; // 默认收起
+            WPWGroup *g = (WPWGroup *)group;
+            NSDictionary *trow = @{@"type": @"trigger", @"key": key ?: @""};
+            id trig = WPWCNavCell(@selector(wpWCTapRow:), self, expanded ? @"收起" : @"展开", nil);
+            if (trig) {
+                wpAttachRow(trig, trow);
+                [g addCell:trig];
+            }
+            if (expanded) {
+                CGFloat ecy = 0;
+                subBuilder(group, &ecy);
+                resultCy = cy + kRowH * 2 + ecy;
+            }
+            WPLog(@"Config", @"[MASTER] WCR手风琴: key=%@, expanded=%d", key, expanded);
+        } else if ([group isKindOfClass:[UITableView class]]) {
             // 表格路径：子行构建期间临时标记子容器，让子行 row 带上 isSub（见 cellSwitch/cellInput）
             objc_setAssociatedObject(group, "isSubContainer", @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             CGFloat ecy = 0;

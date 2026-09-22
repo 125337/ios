@@ -16,6 +16,7 @@
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Settings/Controllers/SettingCornerRadiusController.h"
+#import "../../Settings/Common/WPWeChatTable.h"
 
 // 仿微信优化做法：不在 viewDidLoad 里创建 UI（view bounds 可能为 (0,0,0,0)），
 // 改在 viewWillAppear 里创建 —— 此时 view 已在 window 中，bounds 正确。
@@ -136,6 +137,44 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     hy += 28;
 
     CGRect hcf = heroCard.frame; hcf.size.height = hy; heroCard.frame = hcf;
+
+    // === 微信引擎：功能列表交给微信原生渲染（WCR 同款 NormalCell accessoryType=1，箭头是微信自家图） ===
+    WPWeChatTable *wc = [WPWeChatTable tableForVC:vc];
+    if (wc) {
+        CGFloat headW = [UIScreen mainScreen].bounds.size.width;
+        // hero 卡包一层容器作 tableHeaderView
+        UIView *headerWrap = [[UIView alloc] initWithFrame:CGRectMake(0, 0, headW, hy + 8)];
+        heroCard.frame = CGRectMake(kPad, 0, headW - kPad * 2, hy);
+        [headerWrap addSubview:heroCard];
+        wc.tableView.tableHeaderView = headerWrap;
+
+        WPWGroup *g = [wc addGroup];
+        [g wpSetHeader:@"功能列表" footer:nil];
+        NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
+        for (NSUInteger i = 0; i < navItems.count; i++) {
+            id cell = WPWCNavCell(NSSelectorFromString(@"wpEntryNavTap:"),
+                                  [MioPluginSwitchHandler sharedInstance],
+                                  navItems[i][0], nil);
+            if (cell) {
+                objc_setAssociatedObject(cell, "action", navItems[i][1], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                [g addCell:cell];
+            }
+        }
+
+        UILabel *wfooter = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, headW, 50)];
+        wfooter.text = @"Mio助手 v2.0.0";
+        wfooter.font = [UIFont systemFontOfSize:12];
+        wfooter.textColor = WPT3();
+        wfooter.textAlignment = NSTextAlignmentCenter;
+        wfooter.numberOfLines = 2;
+        wc.tableView.tableFooterView = wfooter;
+
+        [vc.view addSubview:wc.tableView];
+        WPLog(@"Setting", @"[Entry] 微信引擎列表完成 (header=%@)", NSStringFromClass([headerWrap class]));
+        return;
+    }
+
+    // === 旧手动路径（微信 cell 框架缺失时兜底） ===
     [sv addSubview:heroCard];
     y += hy + 8;
 
@@ -334,6 +373,10 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 }
 
 - (UIViewController *)currentVCFrom:(id)sender {
+    // 微信引擎回调传入的是 cellManager（非视图），走顶层 VC 兜底
+    if (![sender isKindOfClass:[UIView class]]) {
+        return WPGetTopVCForPresentation();
+    }
     UIResponder *responder = (UIResponder *)sender;
     while (responder) {
         if ([responder isKindOfClass:[UIViewController class]]) {
@@ -342,6 +385,17 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         responder = [responder nextResponder];
     }
     return nil;
+}
+
+// 微信引擎入口列表回调：入参 = cellManager（反编译实证），action 名挂在 assoc "action"
+- (void)wpEntryNavTap:(id)arg {
+    NSString *action = objc_getAssociatedObject(arg, "action");
+    WPLog(@"Setting", @"[Entry] wpEntryNavTap: action=%@ arg=%@", action, arg ? NSStringFromClass([arg class]) : @"nil");
+    if (!action) return;
+    SEL sel = NSSelectorFromString(action);
+    if ([self respondsToSelector:sel]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(self, sel, arg);
+    }
 }
 
 @end
