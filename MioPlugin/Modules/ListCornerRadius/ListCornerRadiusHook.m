@@ -106,14 +106,6 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
 
-    // ★ 列表圆角入口守卫：只看自己的开关 ★
-    if (!config.globalCornerRadiusEnabled) {
-        if (orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
-        return;
-    }
-
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) {
         if (orig_MMTableViewCell_layoutSubviews) {
@@ -123,16 +115,33 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
     NSString *className = NSStringFromClass([vc class]);
 
-    // ★ 模块责任查询：不属于列表圆角则跳过 ★
-    if (![CornerResponsibility isListCornerResponsibleFor:vc]) {
+    // ★ Mio 自己的设置页强制圆角：微信引擎迁移后 cell 是微信原生直角样式，
+    //   而 globalCornerRadiusEnabled 默认关——Mio 页面（MioPlugin*/WP*/SettingCategoryController 子类）
+    //   绕过下方三道守卫，微信原生页面行为不变
+    static Class scCls = nil;
+    static dispatch_once_t scOnceToken;
+    dispatch_once(&scOnceToken, ^{ scCls = NSClassFromString(@"SettingCategoryController"); });
+    BOOL mioOwn = [className hasPrefix:@"MioPlugin"] || [className hasPrefix:@"WP"]
+                  || (scCls && [vc isKindOfClass:scCls]);
+
+    // ★ 列表圆角入口守卫：只看自己的开关（Mio 页面除外）
+    if (!mioOwn && !config.globalCornerRadiusEnabled) {
         if (orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
         return;
     }
 
-    // ★★★ 全局开关过滤 ★★★
-    if (!shouldApplyGlobalCorner(vc)) {
+    // ★ 模块责任查询：不属于列表圆角则跳过（Mio 页面除外）
+    if (!mioOwn && ![CornerResponsibility isListCornerResponsibleFor:vc]) {
+        if (orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
+
+    // ★★★ 全局开关过滤（Mio 页面除外）★★★
+    if (!mioOwn && !shouldApplyGlobalCorner(vc)) {
         if (orig_MMTableViewCell_layoutSubviews) {
             ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
         }
