@@ -246,6 +246,29 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     // ★ 非 MoreVC 资料卡 Cell 的正常收尾 ★
     cellView.layer.masksToBounds = YES;
+
+    // ★ WCR 同款增强（仅 Mio 页面启用，微信原生页面行为不变）：
+    //   ① selectedBackgroundView 清透明——WCR FUN_000bfc1c 实证，防止点击时直角高亮破相
+    //   ② 子视图 layer 同步切角——WCR FUN_00797918 实证，遍历 cell.subviews 逐个设
+    //      cornerRadius/maskedCorners/masksToBounds，防内部直角背景盖住圆角
+    if (mioOwn) {
+        UITableViewCell *tc = (UITableViewCell *)self;
+        if ([tc respondsToSelector:@selector(selectedBackgroundView)]) {
+            UIView *selBg = tc.selectedBackgroundView;
+            if (selBg) {
+                selBg.backgroundColor = [UIColor clearColor];
+                selBg.alpha = 0.0;
+                selBg.hidden = YES;
+            }
+        }
+        CGFloat cr = cellView.layer.cornerRadius;
+        NSUInteger mc = cellView.layer.maskedCorners;
+        for (UIView *sub in cellView.subviews) {
+            sub.layer.cornerRadius = cr;
+            sub.layer.maskedCorners = mc;
+            sub.layer.masksToBounds = YES;
+        }
+    }
 }
 
 // ★★★ [WPAuxiliaryHooks] MFWebMMBtn background color ★★★
