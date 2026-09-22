@@ -194,48 +194,38 @@
                                          cy:*ecy width:w];
         }
 
+        // ─── 资料卡边框（并入本卡片：子开关，开=展开边框子行；嵌套手风琴） ───
+        *ecy = [self addMasterSwitchRowInGroup:expand
+                                         title:@"资料卡边框"
+                                           key:@"cardBgBorderEnabled"
+                                          isOn:[CardBgConfig shared].cardBgBorderEnabled
+                                    subBuilder:^(UIView *expand2, CGFloat *ecy2) {
+            CardBgConfig *c5 = [CardBgConfig shared];
+
+            NSString *bwStr = c5.cardBgBorderWidth > 0
+                ? [NSString stringWithFormat:@"%.1f", c5.cardBgBorderWidth] : nil;
+            *ecy2 = [self addInputRowInGroup:expand2
+                                      title:@"边框宽度"
+                                        key:@"cardBgBorderWidth"
+                                      value:bwStr
+                                       hint:@"2.0"
+                                  valueType:InputValueTypeNumber
+                                 alertTitle:@"设置资料卡边框宽度"
+                               alertMessage:@"请输入边框宽度(0.5-5.0)"
+                                         cy:*ecy2 width:w];
+
+            *ecy2 = [self addColorRowInGroup:expand2
+                                      title:@"边框颜色"
+                                        key:@"cardBgBorderColor"
+                                      value:c5.cardBgBorderColor
+                                         cy:*ecy2 width:w
+                                   darkKey:@"cardBgBorderColorDarkHex"
+                                 darkValue:c5.cardBgBorderColorDarkHex];
+        } cy:*ecy width:w];
+
     } cy:crny width:w];
 
     y = [self finishGroup:crnGroup atY:y height:crny];
-    y += 8;
-
-    // ─── 卡片3：资料卡边框（手风琴，依赖资料圆角开关） ───
-    UIView *pcBorderGroup = [self addTableGroupAtY:y width:w];
-    CGFloat pcbcy = 0;
-
-    pcbcy = [self addMasterSwitchRowInGroup:pcBorderGroup
-                                      title:@"资料卡边框"
-                                        key:@"cardBgBorderEnabled"
-                                       isOn:[CardBgConfig shared].cardBgBorderEnabled
-                                 subBuilder:^(UIView *expand, CGFloat *ecy) {
-        CardBgConfig *c5 = [CardBgConfig shared];
-
-        // 边框宽度
-        NSString *bwStr = c5.cardBgBorderWidth > 0
-            ? [NSString stringWithFormat:@"%.1f", c5.cardBgBorderWidth] : nil;
-        *ecy = [self addInputRowInGroup:expand
-                                  title:@"边框宽度"
-                                    key:@"cardBgBorderWidth"
-                                  value:bwStr
-                                   hint:@"2.0"
-                              valueType:InputValueTypeNumber
-                             alertTitle:@"设置资料卡边框宽度"
-                           alertMessage:@"请输入边框宽度(0.5-5.0)"
-                                     cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-
-        // 边框颜色（支持深色）
-        *ecy = [self addColorRowInGroup:expand
-                                  title:@"边框颜色"
-                                    key:@"cardBgBorderColor"
-                                  value:c5.cardBgBorderColor
-                                     cy:*ecy width:w
-                               darkKey:@"cardBgBorderColorDarkHex"
-                             darkValue:c5.cardBgBorderColorDarkHex];
-
-    } cy:pcbcy width:w];
-
-    y = [self finishGroup:pcBorderGroup atY:y height:pcbcy];
     y += 8;
 
     // ════════════════════════════════════

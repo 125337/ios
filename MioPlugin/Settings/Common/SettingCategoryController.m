@@ -88,6 +88,7 @@ static const CGFloat kCellHPadding = 16.0;
 @property (nonatomic, strong) WPWeChatTable *wcTable;
 @property (nonatomic, strong) WPWGroup *wcLastGroup;                 // 最近一个组（hint/footer 挂靠）
 @property (nonatomic, copy) NSString *wcPendingHeader;               // addSectionHeader 暂存，建组时消费
+@property (nonatomic, assign) BOOL wpBuildingSubRows;                // 手风琴展开构建中（子配置行标题加「空格+↑」前缀）
 @end
 
 // 全站唯一渲染引擎 = 微信引擎（WCR 同款）。旧 UITableView/手绘引擎已删除；
@@ -366,7 +367,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
                           @"title": title ?: @"",
                           @"tag": @(tag),
                           @"action": NSStringFromSelector(action)};
-    id cell = WPWCNavCell(@selector(wpWCTapRow:), self, title, subtitle);
+    id cell = WPWCNavCell(@selector(wpWCTapRow:), self, [self wpSubTitle:title], subtitle);
     if (cell) {
         wpAttachRow(cell, row);
         [g addCell:cell];
@@ -384,7 +385,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     NSDictionary *row = @{@"type": @"switch",
                           @"title": title ?: @"",
                           @"key": key ?: @""};
-    id cell = WPWCSwitchCell([self wpRegisterSwitchSelectorForKey:key], self, title, on);
+    id cell = WPWCSwitchCell([self wpRegisterSwitchSelectorForKey:key], self, [self wpSubTitle:title], on);
     if (cell) {
         wpAttachRow(cell, row);
         [g addCell:cell];
@@ -410,7 +411,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
                           @"title": title ?: @"",
                           @"copyText": copyText ?: @"",
                           @"copyTitle": title ?: @""};
-    id cell = WPWCNavCell(@selector(wpWCTapRow:), self, title, value);
+    id cell = WPWCNavCell(@selector(wpWCTapRow:), self, [self wpSubTitle:title], value);
     if (cell) {
         wpAttachRow(cell, row);
         [g addCell:cell];
@@ -458,7 +459,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     if (hint.length > 0) row[@"hint"] = hint;
     if (alertTitle.length > 0) row[@"alertTitle"] = alertTitle;
     if (alertMessage.length > 0) row[@"alertMessage"] = alertMessage;
-    id cell = WPWCNavCell(@selector(wpWCTapRow:), self, title, (value.length > 0) ? value : hint);
+    id cell = WPWCNavCell(@selector(wpWCTapRow:), self, [self wpSubTitle:title], (value.length > 0) ? value : hint);
     if (cell) {
         wpAttachRow(cell, row);
         [g addCell:cell];
@@ -486,7 +487,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     NSDictionary *row = @{@"type": @"button",
                           @"title": title ?: @"",
                           @"key": key ?: @""};
-    id cell = WPWCNavCell(@selector(wpWCTapRow:), self, title, hint);
+    id cell = WPWCNavCell(@selector(wpWCTapRow:), self, [self wpSubTitle:title], hint);
     if (cell) {
         wpAttachRow(cell, row);
         [g addCell:cell];
@@ -549,7 +550,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
         [cv addSubview:lightBtn];
     }
 
-    id cell = WPWCViewCell((SEL)0, self, title, cv);
+    id cell = WPWCViewCell((SEL)0, self, [self wpSubTitle:title], cv);
     if (cell) {
         [g addCell:cell];
         return cy + kRowH;
@@ -559,7 +560,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     NSDictionary *row = @{@"type": @"colorTap",
                           @"title": title ?: @"",
                           @"key": key ?: @""};
-    id fb = WPWCNavCell(@selector(wpWCTapRow:), self, title, value);
+    id fb = WPWCNavCell(@selector(wpWCTapRow:), self, [self wpSubTitle:title], value);
     if (fb) {
         wpAttachRow(fb, row);
         [g addCell:fb];
@@ -576,19 +577,32 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 
 #pragma mark - Master Switch（手风琴：状态 = 总开关状态）
 
+// 手风琴展开期间构建的行 = 子配置：标题统一加「空格+↑」前缀（视觉归属上方的总开关）。
+// row 载荷里存原始标题（弹窗标题/日志不受前缀影响），仅 cell 显示串加前缀。
+- (NSString *)wpSubTitle:(NSString *)title {
+    if (!self.wpBuildingSubRows) return title;
+    NSString *t = title ?: @"";
+    if (t.length == 0 || [t hasPrefix:@"↑"] || [t hasPrefix:@" ↑"]) return t; // 防重复前缀
+    return [@" ↑" stringByAppendingString:t];
+}
+
 - (CGFloat)addMasterSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on subBuilder:(void (^)(UIView *expand, CGFloat *ecy))subBuilder cy:(CGFloat)cy width:(CGFloat)w {
     [self.masterSwitchKeys addObject:key];
     WPLog(@"Config", @"[MASTER] 注册 masterSwitchKey=%@, isOn=%d, masterKeys当前=%@", key, on, self.masterSwitchKeys);
 
     CGFloat resultCy = [self addSwitchRowInGroup:group title:title desc:nil key:key isOn:on cy:cy width:w];
 
-    // 开即展开、关即收起：无独立「展开/收起」触发行，总开关为唯一入口
+    // 开即展开、关即收起：无独立「展开/收起」触发行，总开关为唯一入口。
+    // 展开期间置 wpBuildingSubRows（保存/恢复以支持嵌套手风琴，如防撤回页子开关）
+    BOOL prevSub = self.wpBuildingSubRows;
+    self.wpBuildingSubRows = YES;
     if (on && subBuilder && [group isKindOfClass:[WPWGroup class]]) {
         CGFloat ecy = 0;
         subBuilder(group, &ecy);
         resultCy = cy + kRowH + ecy;
         WPLog(@"Config", @"[MASTER] 手风琴已展开: key=%@, ecy=%.1f", key, ecy);
     }
+    self.wpBuildingSubRows = prevSub;
 
     return resultCy;
 }

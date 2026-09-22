@@ -178,6 +178,8 @@ static BOOL WPWCHasClass(NSString *name) {
 - (void)wpSetHeader:(NSString *)header footer:(NSString *)footer {
     if (!self.sectionMgr) return;
     if (header.length > 0) {
+        // 卡片标题统一前补两空格（视觉上不贴左，全站生效；footer 不受影响）
+        header = [@"  " stringByAppendingString:header];
         ((void (*)(id, SEL, id))objc_msgSend)(self.sectionMgr, NSSelectorFromString(@"setHeaderTitle:"), header);
     }
     if (footer.length > 0) {

@@ -28,7 +28,7 @@
     // ════════════════════════════════════
     y = [self addSectionHeader:@"全局圆角" y:y width:w];
 
-    // ─── 卡片1：主页圆角（手风琴） ───
+    // ─── 卡片1：主页圆角（手风琴：页面开关 + 外观配置，开即展开） ───
     UIView *globalGroup = [self addTableGroupAtY:y width:w];
     CGFloat gcy = 0;
 
@@ -44,39 +44,64 @@
                                         key:@"globalCornerMyPageEnabled"
                                        isOn:cfg.globalCornerMyPageEnabled
                                          cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         *ecy = [self addSubSwitchRowInGroup:expand
                                       title:@"联系人页面"
                                         key:@"globalCornerContactsPageEnabled"
                                        isOn:cfg.globalCornerContactsPageEnabled
                                          cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         *ecy = [self addSubSwitchRowInGroup:expand
                                       title:@"发现页面"
                                         key:@"globalCornerDiscoverPageEnabled"
                                        isOn:cfg.globalCornerDiscoverPageEnabled
                                          cy:*ecy width:w];
+
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"搜索框圆角"
+                                        key:@"listSearchCornerRadius"
+                                       isOn:cfg.listSearchCornerRadius
+                                         cy:*ecy width:w];
+
+        // ── 外观配置（原独立卡片并入主页圆角子配置） ──
+        NSString *crStr = cfg.listCellCornerRadius > 0
+            ? [NSString stringWithFormat:@"%.0f", cfg.listCellCornerRadius] : nil;
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"Cell圆角半径"
+                                    key:@"listCellCornerRadius"
+                                  value:crStr
+                                   hint:@"18"
+                              valueType:InputValueTypeNumber
+                             alertTitle:@"设置列表圆角半径"
+                           alertMessage:@"请输入圆角半径(5-30像素)"
+                                     cy:*ecy width:w];
+
+        NSString *lmStr = cfg.listCellMargin > 0
+            ? [NSString stringWithFormat:@"%.0f", cfg.listCellMargin] : nil;
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"Cell左右边距"
+                                    key:@"listCellMargin"
+                                  value:lmStr
+                                   hint:@"9"
+                              valueType:InputValueTypeNumber
+                             alertTitle:@"设置Cell左右边距"
+                           alertMessage:@"请输入边距值(0-30像素)"
+                                     cy:*ecy width:w];
+
+        // Cell 背景色（浅色+深色双预览）
+        *ecy = [self addColorRowInGroup:expand
+                                  title:@"Cell背景色"
+                                    key:@"listCellLightBgColor"
+                                  value:cfg.listCellLightBgColor
+                                     cy:*ecy width:w
+                               darkKey:@"listCellDarkBgColor"
+                             darkValue:cfg.listCellDarkBgColor];
     } cy:gcy width:w];
 
     y = [self finishGroup:globalGroup atY:y height:gcy];
     y += 8;
 
-    // ─── 卡片2：搜索框圆角（普通开关） ───
-    UIView *searchGroup = [self addTableGroupAtY:y width:w];
-    CGFloat scy = 0;
-
-    scy = [self addSubSwitchRowInGroup:searchGroup
-                                 title:@"搜索框圆角"
-                                   key:@"listSearchCornerRadius"
-                                  isOn:config.listSearchCornerRadius
-                                    cy:scy width:w];
-
-    y = [self finishGroup:searchGroup atY:y height:scy];
-    y += 8;
-
-    // ─── 卡片3：Cell 边框（手风琴） ───
+    // ─── 卡片2：Cell 边框（手风琴） ───
     UIView *borderGroup = [self addTableGroupAtY:y width:w];
     CGFloat bocy = 0;
 
@@ -99,7 +124,6 @@
                              alertTitle:@"设置边框宽度"
                            alertMessage:@"请输入边框宽度(0.5-5.0)"
                                      cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         // 边框颜色（支持深色）
         *ecy = [self addColorRowInGroup:expand
@@ -113,50 +137,6 @@
     } cy:bocy width:w];
 
     y = [self finishGroup:borderGroup atY:y height:bocy];
-    y += 8;
-
-    // ─── 卡片4：Cell 外观（平铺，无主开关） ───
-    UIView *appearGroup = [self addTableGroupAtY:y width:w];
-    CGFloat acy = 0;
-
-    ListCornerRadiusConfig *c4 = [ListCornerRadiusConfig shared];
-
-    NSString *crStr = c4.listCellCornerRadius > 0
-        ? [NSString stringWithFormat:@"%.0f", c4.listCellCornerRadius] : nil;
-    acy = [self addInputRowInGroup:appearGroup
-                             title:@"Cell圆角半径"
-                               key:@"listCellCornerRadius"
-                             value:crStr
-                              hint:@"18"
-                         valueType:InputValueTypeNumber
-                        alertTitle:@"设置列表圆角半径"
-                      alertMessage:@"请输入圆角半径(5-30像素)"
-                                cy:acy width:w];
-    acy = [self addSeparatorInGroup:appearGroup cy:acy width:w];
-
-    NSString *lmStr = c4.listCellMargin > 0
-        ? [NSString stringWithFormat:@"%.0f", c4.listCellMargin] : nil;
-    acy = [self addInputRowInGroup:appearGroup
-                             title:@"Cell左右边距"
-                               key:@"listCellMargin"
-                             value:lmStr
-                              hint:@"9"
-                         valueType:InputValueTypeNumber
-                        alertTitle:@"设置Cell左右边距"
-                      alertMessage:@"请输入边距值(0-30像素)"
-                                cy:acy width:w];
-    acy = [self addSeparatorInGroup:appearGroup cy:acy width:w];
-
-    // Cell 背景色（浅色+深色双预览）
-    acy = [self addColorRowInGroup:appearGroup
-                             title:@"Cell背景色"
-                               key:@"listCellLightBgColor"
-                             value:c4.listCellLightBgColor
-                                cy:acy width:w
-                          darkKey:@"listCellDarkBgColor"
-                        darkValue:c4.listCellDarkBgColor];
-
-    y = [self finishGroup:appearGroup atY:y height:acy];
     y += 8;
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
