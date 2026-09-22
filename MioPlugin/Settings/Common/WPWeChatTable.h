@@ -16,7 +16,6 @@
 @property (nonatomic, strong) UITableView *tableView;
 
 + (BOOL)available;                                 // 关键类判空（决定走微信引擎还是旧渲染）
-+ (void)dumpFrameworkMethodsOnce;                  // 一次性方法表 dump（确认 init 签名等，供后续精化）
 + (instancetype)tableForVC:(UIViewController *)vc; // 建表 + 建 manager + dataSource/delegate 接线（不 addSubview，调用方自行添加）
 - (id)addGroup;                                    // 建 section（addSection:）并挂到 manager，返回 WPWGroup 手柄
 - (void)reload;                                    // reloadTableView + reloadData 双保险

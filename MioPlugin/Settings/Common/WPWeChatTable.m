@@ -7,36 +7,6 @@ static BOOL WPWCHasClass(NSString *name) {
     return objc_getClass(name.UTF8String) != nil;
 }
 
-// 一次性 dump 微信 cell 框架四大类的方法表（确认 init 签名 / 高度 / reload 等 API，供后续精化）
-static void wpDumpClassMethods(Class cls, const char *clsName, BOOL meta) {
-    if (!cls) {
-        WPLog(@"WCTable", @"[WCDUMP] %@ = nil（本微信版本不存在）", [NSString stringWithUTF8String:clsName]);
-        return;
-    }
-    Class target = meta ? object_getClass(cls) : cls;
-    unsigned int count = 0;
-    Method *list = class_copyMethodList(target, &count);
-    NSMutableArray *names = [NSMutableArray array];
-    for (unsigned int i = 0; i < count; i++) {
-        NSString *n = NSStringFromSelector(method_getName(list[i]));
-        // 过滤噪音：只留 init/section/cell/reload/height/header/footer/accessory/right/switch/normal 相关
-        if ([n rangeOfString:@"init"].location == 0 ||
-            [n rangeOfString:@"ection"].location != NSNotFound ||
-            [n rangeOfString:@"ell"].location != NSNotFound ||
-            [n rangeOfString:@"reload"].location != NSNotFound ||
-            [n rangeOfString:@"eight"].location != NSNotFound ||
-            [n rangeOfString:@"itle"].location != NSNotFound ||
-            [n rangeOfString:@"ccessory"].location != NSNotFound ||
-            [n rangeOfString:@"right"].location != NSNotFound ||
-            [n rangeOfString:@"witch"].location != NSNotFound ||
-            [n rangeOfString:@"ormal"].location != NSNotFound) {
-            [names addObject:n];
-        }
-    }
-    free(list);
-    WPLog(@"WCTable", @"[WCDUMP] %@ (%u 个命中): %@", [NSString stringWithUTF8String:clsName], (unsigned)names.count, [names componentsJoinedByString:@" | "]);
-}
-
 @implementation WPWeChatTable
 
 + (BOOL)available {
@@ -55,20 +25,8 @@ static void wpDumpClassMethods(Class cls, const char *clsName, BOOL meta) {
     return ok;
 }
 
-+ (void)dumpFrameworkMethodsOnce {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        WPLog(@"WCTable", @"[WCDUMP] === 微信 cell 框架方法表 ===");
-        wpDumpClassMethods(objc_getClass("WCTableViewManager"), "WCTableViewManager", NO);
-        wpDumpClassMethods(objc_getClass("WCTableViewSectionManager"), "WCTableViewSectionManager", NO);
-        wpDumpClassMethods(objc_getClass("WCTableViewCellManager"), "WCTableViewCellManager", YES);   // 类方法
-        wpDumpClassMethods(objc_getClass("WCTableViewNormalCellManager"), "WCTableViewNormalCellManager", YES);
-    });
-}
-
 + (instancetype)tableForVC:(UIViewController *)vc {
     if (![self available]) return nil;
-    [self dumpFrameworkMethodsOnce];
 
     Class mgrCls = objc_getClass("WCTableViewManager");
     id mgr = nil;
@@ -137,55 +95,11 @@ static void wpDumpClassMethods(Class cls, const char *clsName, BOOL meta) {
     if (tv.dataSource != mgr) tv.dataSource = mgr;
     if (tv.delegate != mgr) tv.delegate = mgr;
 
-    [self installCellClassProbeOnce];
-
     WPWeChatTable *t = [[self alloc] init];
     t.wcManager = mgr;
     t.tableView = tv;
     WPLog(@"WCTable", @"[WCTable] 表+manager 就绪: mgr=%@ tv=%@", NSStringFromClass(object_getClass(mgr)), tv);
     return t;
-}
-
-// 一次性 cell 类名探测：swizzle WCTableViewManager 的 willDisplayCell（方法表实证存在），
-// 打印每行 cell 真实类名——定位 switch cell 是否 MMTableViewCell 子类（ListCornerRadius 圆角缺失嫌疑）
-static IMP orig_WCTVM_willDisplay = NULL;
-+ (void)installCellClassProbeOnce {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        Class mgrCls = objc_getClass("WCTableViewManager");
-        SEL s = NSSelectorFromString(@"tableView:willDisplayCell:forRowAtIndexPath:");
-        Method m = mgrCls ? class_getInstanceMethod(mgrCls, s) : NULL;
-        if (!m) {
-            WPLog(@"WCTable", @"[WCCELL] WCTableViewManager 无 willDisplayCell，探测跳过");
-            return;
-        }
-        orig_WCTVM_willDisplay = method_setImplementation(m, (IMP)probe_WCTVM_willDisplay);
-        WPLog(@"WCTable", @"[WCCELL] cell 类名探测已安装（30 条配额）");
-    });
-}
-
-static void probe_WCTVM_willDisplay(id self, SEL _cmd, UITableView *tv, UITableViewCell *cell, NSIndexPath *ip) {
-    if (orig_WCTVM_willDisplay) {
-        ((void (*)(id, SEL, id, id, id))orig_WCTVM_willDisplay)(self, _cmd, tv, cell, ip);
-    }
-    static NSInteger dumpCount = 0;
-    if (dumpCount < 30) {
-        dumpCount++;
-        WPLog(@"WCTable", @"[WCCELL] sec=%ld row=%ld cell=%@ super=%@ frame=%@",
-              (long)ip.section, (long)ip.row, NSStringFromClass([cell class]),
-              NSStringFromClass([cell superclass]), NSStringFromCGRect(cell.frame));
-        if (dumpCount >= 30) {
-            // 配额用尽自动摘除，恢复原实现（零常驻开销）
-            Class mgrCls = objc_getClass("WCTableViewManager");
-            SEL s = NSSelectorFromString(@"tableView:willDisplayCell:forRowAtIndexPath:");
-            Method m = class_getInstanceMethod(mgrCls, s);
-            if (m && orig_WCTVM_willDisplay) {
-                method_setImplementation(m, orig_WCTVM_willDisplay);
-                orig_WCTVM_willDisplay = NULL;
-                WPLog(@"WCTable", @"[WCCELL] 探测配额用尽，已摘除");
-            }
-        }
-    }
 }
 
 - (id)addGroup {
@@ -198,11 +112,6 @@ static void probe_WCTVM_willDisplay(id self, SEL _cmd, UITableView *tv, UITableV
     // 教训：getAllSections 返回的是内部数组副本/不同步视图，addObject 不进 manager 状态
     // （contentSize{0,0} 空白页实证），addSection: 才是 WCR 反编译 addSectionTo_ 同款。
     ((void (*)(id, SEL, id))objc_msgSend)(self.wcManager, NSSelectorFromString(@"addSection:"), sec);
-    SEL cs = NSSelectorFromString(@"getSectionCount");
-    if ([self.wcManager respondsToSelector:cs]) {
-        unsigned long cnt = ((unsigned long (*)(id, SEL))objc_msgSend)(self.wcManager, cs);
-        WPLog(@"WCTable", @"[WCTable] addGroup: sectionCount=%lu", cnt);
-    }
     WPWGroup *g = [[WPWGroup alloc] init];
     g.sectionMgr = sec;
     return g;
@@ -282,10 +191,6 @@ static void probe_WCTVM_willDisplay(id self, SEL _cmd, UITableView *tv, UITableV
         return;
     }
     ((void (*)(id, SEL, id))objc_msgSend)(self.sectionMgr, NSSelectorFromString(@"addCell:"), cellMgr);
-    SEL gc = NSSelectorFromString(@"getCellCount");
-    if ([self.sectionMgr respondsToSelector:gc]) {
-        WPLog(@"WCTable", @"[WCTable] addCell: cellCount=%lu", (unsigned long)((unsigned long (*)(id, SEL))objc_msgSend)(self.sectionMgr, gc));
-    }
 }
 
 @end
