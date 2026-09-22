@@ -3,8 +3,6 @@
 #import <AVFoundation/AVFoundation.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
-#import <string.h>
-#import <stdlib.h>
 #import <substrate.h>
 #import "VoiceConfig.h"
 #import "../SettingEntry/WPCommonUI.h"
@@ -20,9 +18,9 @@
 //                          （本版本无 onBeginPlayingMsg:autoPlayEnable:，点击入口为等价触发时机）
 //  ⑤ voiceBackgroundPlay   4 个点击入口（onClick/responseUserClick）→ onMinimize 后台悬浮
 //                          + MinimizeViewController onAbsorbFloatingViewTap（WCR FUN_01f55590）
-//  ⑥ voiceCallPlay         WCAudioModuleMgr：canSetActive 4 变体（探测实证）→ 通话中 YES +
-//                          canMix 类方法（冒号 selector 修正）→ YES + isAudioModuleInterrupt → NO
-//                          + 运行时探测 + 前 5 次调用栈抓取
+//  ⑥ voiceCallPlay         WCAudioModuleMgr 7 hook（run 2072 探测实证 + 真机验证有效）：
+//                          canSetActive 4 变体 通话中→YES、canMix 类方法（冒号 selector）→YES、
+//                          isAudioModuleInterrupt → NO
 //  ⑦ voiceForward          ForwardMessageLogicController 3 hook + 原生长按菜单转发项
 // 全部反射 + respondsToSelector 保护；开关关闭时直通 orig 零干预
 // ═══════════════════════════════════════════════════════════════
@@ -44,8 +42,8 @@ static IMP orig_WAM_cas1 = NULL;            // canSetActiveWithScene:（run 2072
 static IMP orig_WAM_cas2 = NULL;            // canSetActiveWithScene:mixList:
 static IMP orig_WAM_cas3 = NULL;            // canSetActiveWithScene:groupName:identifier:
 static IMP orig_WAM_cas4 = NULL;            // canSetActiveWithScene:groupName:identifier:mixList:
-static IMP orig_WAM_mixList = NULL;         // 类方法 audioModule.canMixWithAudioList:
-static IMP orig_WAM_mixModule = NULL;       // 类方法 audioList.canMixWithAudioModule:
+static IMP orig_WAM_mixList = NULL;         // 类方法 audioModule:canMixWithAudioList:
+static IMP orig_WAM_mixModule = NULL;       // 类方法 audioList:canMixWithAudioModule:
 static IMP orig_WAM_interrupt = NULL;       // isAudioModuleInterrupt:
 static IMP orig_FMLC_forwardMsg = NULL;     // ForwardMessageLogicController forwardMessage:
 static IMP orig_FMLC_msgToContact = NULL;   // ForwardMsg:ToContact:
@@ -973,55 +971,6 @@ static BOOL VFInCall(void) {
     } @catch (NSException *e) { return NO; }
 }
 
-// ── ⑥ 运行时探测：本版本 canSetActiveWithScene:groupName: 在 WCAudioModuleMgr 上不存在（SKIP 实证），
-//    「通话中禁止播放」的真实 gate 挪到了别的类 → 一次性 dump 运行时方法表定位，供下轮精确 hook ──
-static dispatch_once_t g_callProbeOnce;
-static int g_callBtCount = 0;
-
-static void VFProbeDumpClass(Class cls, const char *name, BOOL isMeta, BOOL broadFilter) {
-    unsigned int mCount = 0;
-    Method *methods = class_copyMethodList(cls, &mCount);
-    for (unsigned int j = 0; j < mCount; j++) {
-        const char *sn = sel_getName(method_getName(methods[j]));
-        BOOL hit = strstr(sn, "canSetActive") || strstr(sn, "nterupt") || strstr(sn, "nterrupt") ||
-                   (broadFilter && (strstr(sn, "cene") || strstr(sn, "ixWith")));
-        if (hit) WPLog(@"VoiceFeat", @"[CallPlay] 探测 %s%s %s", name, isMeta ? " 类方法" : "", sn);
-    }
-    if (methods) free(methods);
-}
-
-static void VFProbeCallPlayGates(void) {
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        WPLog(@"VoiceFeat", @"[CallPlay] === 音频方法探测开始 ===");
-        @try {
-            unsigned int count = 0;
-            Class *classes = objc_copyClassList(&count);
-            if (classes) {
-                WPLog(@"VoiceFeat", @"[CallPlay] 运行时类总数 %u", count);
-                for (unsigned int i = 0; i < count; i++) {
-                    const char *name = class_getName(classes[i]);
-                    BOOL audioCls = strstr(name, "Audio") || strstr(name, "Voice") ||
-                                    strstr(name, "Call") || strstr(name, "Voip") ||
-                                    strstr(name, "VoIP") || strstr(name, "Player") ||
-                                    strstr(name, "Session") || strstr(name, "Module");
-                    if (audioCls) {
-                        VFProbeDumpClass(classes[i], name, NO, YES);
-                        VFProbeDumpClass(object_getClass(classes[i]), name, YES, YES);
-                    } else {
-                        // 非音频类只扫罕见 token（canSetActive / nterrupt），控制日志量
-                        VFProbeDumpClass(classes[i], name, NO, NO);
-                        VFProbeDumpClass(object_getClass(classes[i]), name, YES, NO);
-                    }
-                }
-                free(classes);
-            }
-        } @catch (NSException *e) {
-            WPLog(@"VoiceFeat", @"[CallPlay] 探测异常 %@", e.reason);
-        }
-        WPLog(@"VoiceFeat", @"[CallPlay] === 音频方法探测结束 ===");
-    });
-}
-
 // run 2072 真机探测实证：本版本 WCAudioModuleMgr 无 canSetActiveWithScene:groupName:（WCR 挂的 2 参版不存在），
 // 实际存在 4 个变体。语义沿用 WCR FUN_01f9fe60：开关开 + 通话中 → 直接 YES 不调 orig
 static BOOL hook_WAM_cas1(id self, SEL _cmd, id scene) {
@@ -1059,7 +1008,7 @@ static BOOL hook_WAM_cas4(id self, SEL _cmd, id scene, id group, id ident, id mi
 static BOOL hook_WAM_mixList(id self, SEL _cmd, id list) {
     // WCR FUN_01fa01fc 无 self 检查（类方法 hook 的 self 是 Class 对象，不能做 isKindOfClass）
     if ([VoiceConfig shared].voiceCallPlayEnabled) {
-        WPLog(@"VoiceFeat", @"[CallPlay] audioModule.canMixWithAudioList: → YES");
+        WPLog(@"VoiceFeat", @"[CallPlay] audioModule:canMixWithAudioList: → YES");
         return YES;
     }
     return orig_WAM_mixList ? ((BOOL (*)(id, SEL, id))orig_WAM_mixList)(self, _cmd, list) : NO;
@@ -1067,7 +1016,7 @@ static BOOL hook_WAM_mixList(id self, SEL _cmd, id list) {
 
 static BOOL hook_WAM_mixModule(id self, SEL _cmd, id module) {
     if ([VoiceConfig shared].voiceCallPlayEnabled) {
-        WPLog(@"VoiceFeat", @"[CallPlay] audioList.canMixWithAudioModule: → YES");
+        WPLog(@"VoiceFeat", @"[CallPlay] audioList:canMixWithAudioModule: → YES");
         return YES;
     }
     return orig_WAM_mixModule ? ((BOOL (*)(id, SEL, id))orig_WAM_mixModule)(self, _cmd, module) : NO;
@@ -1076,19 +1025,7 @@ static BOOL hook_WAM_mixModule(id self, SEL _cmd, id module) {
 static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
     // WCR FUN_01f9fff4：无 self 检查，开关开一律 NO 且不调 orig
     if ([VoiceConfig shared].voiceCallPlayEnabled) {
-        // 一次性触发运行时探测（后台线程 dump，不阻塞音频路径）
-        dispatch_once(&g_callProbeOnce, ^{ VFProbeCallPlayGates(); });
-        // 前 5 次抓真实调用栈：确认谁在咨询 module、失败路径的 gate 在上游哪一层
-        if (g_callBtCount < 5) {
-            g_callBtCount++;
-            NSArray *bt = [NSThread callStackSymbols];
-            NSMutableString *frames = [NSMutableString string];
-            NSInteger max = bt.count < 15 ? (NSInteger)bt.count : 15;
-            for (NSInteger i = 2; i < max; i++) [frames appendFormat:@"\n  %@", bt[i]];
-            WPLog(@"VoiceFeat", @"[CallPlay] isAudioModuleInterrupt → NO (调用栈#%d)%@", g_callBtCount, frames);
-        } else {
-            WPLog(@"VoiceFeat", @"[CallPlay] isAudioModuleInterrupt → NO");
-        }
+        WPLog(@"VoiceFeat", @"[CallPlay] isAudioModuleInterrupt → NO");
         return NO;
     }
     return orig_WAM_interrupt ? ((BOOL (*)(id, SEL, id))orig_WAM_interrupt)(self, _cmd, arg) : YES;
