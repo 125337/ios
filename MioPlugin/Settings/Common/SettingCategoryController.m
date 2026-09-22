@@ -241,7 +241,8 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     WPLog(@"Config", @"[WCSW] %@ = %@", cfgKey, on ? @"ON" : @"OFF");
 
     if ([self.masterSwitchKeys containsObject:cfgKey]) {
-        self.wcExpandState[cfgKey] = @NO; // 关闭总开关时复位为收起（WCR 同款）
+        // 总开关联动展开/收起：打开时自动展开子功能，关闭时收起（用户期望开启即展开，无需再点触发行）
+        self.wcExpandState[cfgKey] = @(on);
         [self wpRebuildWeChatTable];
         [self buildUI];
     }

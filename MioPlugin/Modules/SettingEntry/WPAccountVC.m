@@ -286,7 +286,9 @@ static NSDictionary *MioReadProvisioningProfile(void) {
 
     // ── 提示规则 ──
     y = [self addSectionHeader:@"提示规则" y:y width:w];
-    UIView *ruleGroup = [self addTableGroupAtY:y width:w];
+    // 统一用 WPMakeCard 自绘卡片（与其他卡片一致）；addTableGroupAtY 生成的 UITableView 可被拖动且会覆盖其他卡片
+    UIView *ruleGroup = WPMakeCard(y, w);
+    [self.contentView addSubview:ruleGroup];
     CGFloat ry = 0;
     AccountConfig *cfg = [AccountConfig shared];
     ry = [self addSwitchRowInGroup:ruleGroup title:@"到期提示" desc:@"打开本页时检查证书有效期" key:@"certExpireAlertEnabled" isOn:cfg.certExpireAlertEnabled cy:ry width:w];
