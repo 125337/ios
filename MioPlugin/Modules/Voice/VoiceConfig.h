@@ -16,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 // ── 语音功能（UI 先行，功能逻辑后续接入） ──
 /// 启用语音转发
 @property (nonatomic, assign) BOOL voiceForwardEnabled;
-/// 自定义语音秒数：只影响自己发出语音的显示秒数，0 = 未启用（0-600）
+/// 自定义语音秒数：只影响自己发出语音的显示秒数，0 = 未启用（0-60，微信端上限 60 秒）
 @property (nonatomic, assign) NSInteger voiceFakeDuration;
 /// 语音自动转文字
 @property (nonatomic, assign) BOOL voiceAutoToTextEnabled;

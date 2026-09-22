@@ -782,11 +782,12 @@ static void VFTryAutoTranslate(UIView *cellView) {
 // ═══════════════════════════════════════════════════════════════
 
 // ── ① 假秒数（WCR FUN_008f2e74/008f4084：挂在 UploadVoiceWrap setM_uiVoiceTime:，发送端写入）──
+// 微信端语音秒数上限 60（WCR 同样被 60 封顶），故配置上限 60
 static unsigned int VFFakeVoiceMs(unsigned int ms) {
     NSInteger sec = [VoiceConfig shared].voiceFakeDuration;
     if (sec <= 0) return ms > 60000 ? 60000 : ms;   // 开关关：WCR 仍 clamp 到 60000
     if (sec < 1) sec = 1;
-    if (sec > 600) sec = 600;
+    if (sec > 60) sec = 60;
     return (unsigned int)(sec * 1000);
 }
 
@@ -858,12 +859,16 @@ static BOOL VFClickToMinimize(id cell) {
     if (![VoiceConfig shared].voiceBackgroundPlayEnabled) return NO;
     if (g_bgGuard) return NO;                       // 我们触发的 onMinimize 内部再进点击 → 放行
     if (!VFIsVMC(cell)) return NO;
-    // 正在播放才转后台（WCR FUN_01f56270：viewModel isPlaying）
+    // WCR 极性（FUN_01f56270 返回 isPlaying；FUN_01f55590 中 R==0→minimize、R!=0→orig）：
+    // 未播放 → 转后台悬浮播放；正在播放 → 放行（正常暂停）。vm 缺失时 WCR 同样走 minimize。
     id vm = VFValueKey(cell, @"viewModel");
     SEL isPlaying = NSSelectorFromString(@"isPlaying");
-    if (!vm || ![vm respondsToSelector:isPlaying] || !VFBool(vm, isPlaying, NO)) return NO;
+    if (vm && [vm respondsToSelector:isPlaying] && VFBool(vm, isPlaying, NO)) return NO;
     SEL minimize = NSSelectorFromString(@"onMinimize");
-    if (![cell respondsToSelector:minimize]) return NO;
+    if (![cell respondsToSelector:minimize]) {
+        WPLog(@"VoiceFeat", @"[BgPlay] cell 无 onMinimize，放行");
+        return NO;
+    }
     // 0.35s 防重（WCR assoc NSNumber 时间戳）；窗口内吞掉点击但不重复触发
     NSDate *now = [NSDate date];
     NSNumber *last = objc_getAssociatedObject(cell, &kVFMinTs);
@@ -962,23 +967,36 @@ static BOOL VFInCall(void) {
 }
 
 static BOOL hook_WAM_canSetActive(id self, SEL _cmd, id scene, id group) {
-    if (VFIsWAM(self) && VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) return YES; // WCR：不调 orig
+    if (VFIsWAM(self) && VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
+        WPLog(@"VoiceFeat", @"[CallPlay] canSetActive 通话中放行");
+        return YES; // WCR：不调 orig
+    }
     return orig_WAM_canSetActive ? ((BOOL (*)(id, SEL, id, id))orig_WAM_canSetActive)(self, _cmd, scene, group) : NO;
 }
 
 static BOOL hook_WAM_mixList(id self, SEL _cmd, id list) {
     // WCR FUN_01fa01fc 无 self 检查（类方法 hook 的 self 是 Class 对象，不能做 isKindOfClass）
-    if ([VoiceConfig shared].voiceCallPlayEnabled) return YES;
+    if ([VoiceConfig shared].voiceCallPlayEnabled) {
+        WPLog(@"VoiceFeat", @"[CallPlay] audioModule.canMixWithAudioList: → YES");
+        return YES;
+    }
     return orig_WAM_mixList ? ((BOOL (*)(id, SEL, id))orig_WAM_mixList)(self, _cmd, list) : NO;
 }
 
 static BOOL hook_WAM_mixModule(id self, SEL _cmd, id module) {
-    if ([VoiceConfig shared].voiceCallPlayEnabled) return YES;
+    if ([VoiceConfig shared].voiceCallPlayEnabled) {
+        WPLog(@"VoiceFeat", @"[CallPlay] audioList.canMixWithAudioModule: → YES");
+        return YES;
+    }
     return orig_WAM_mixModule ? ((BOOL (*)(id, SEL, id))orig_WAM_mixModule)(self, _cmd, module) : NO;
 }
 
 static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
-    if (VFIsWAM(self) && [VoiceConfig shared].voiceCallPlayEnabled) return NO; // WCR：不调 orig
+    // WCR FUN_01f9fff4：无 self 检查，开关开一律 NO 且不调 orig
+    if ([VoiceConfig shared].voiceCallPlayEnabled) {
+        WPLog(@"VoiceFeat", @"[CallPlay] isAudioModuleInterrupt → NO");
+        return NO;
+    }
     return orig_WAM_interrupt ? ((BOOL (*)(id, SEL, id))orig_WAM_interrupt)(self, _cmd, arg) : YES;
 }
 

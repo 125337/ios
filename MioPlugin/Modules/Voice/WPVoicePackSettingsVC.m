@@ -79,7 +79,7 @@
                               hint:@"0"
                          valueType:InputValueTypeNumber
                         alertTitle:@"自定义语音秒数"
-                      alertMessage:@"只修改自己发出的语音的显示秒数，不改变真实的语音时长。\n请输入0-600秒，0表示未启用"
+                      alertMessage:@"只修改自己发出的语音的显示秒数，不改变真实的语音时长。\n请输入0-60秒，0表示未启用"
                                 cy:vcy
                               width:w];
     vcy = [self addSwitchRowInGroup:voiceGroup
@@ -105,7 +105,7 @@
                               width:w];
     vcy = [self addSwitchRowInGroup:voiceGroup
                               title:@"语音自动背景播放"
-                               desc:nil
+                               desc:@"开启后：点击语音气泡转入悬浮窗后台播放；正在播放时点击则暂停"
                                 key:@"voiceBackgroundPlayEnabled"
                                isOn:cfg.voiceBackgroundPlayEnabled
                                  cy:vcy
