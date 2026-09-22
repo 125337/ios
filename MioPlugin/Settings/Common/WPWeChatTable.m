@@ -226,8 +226,40 @@ static void probe_WCTVM_willDisplay(id self, SEL _cmd, UITableView *tv, UITableV
         [self reload];
         dispatch_async(dispatch_get_main_queue(), ^{
             [self reload];
+            [self normalizeTopInset];
         });
     });
+}
+
+// 顶栏双重避让修复：frame 已手动定位导航栏下方（tableForVC top），但微信基类 VC 会在
+// push 完成周期内又把 adjustedContentInset.top 设为导航栏高度（(82).log 实证：建表时
+// inset={0,0,0,0}，0.4s 后变 {97.67,0,34,0} → 内容被整体推下去一个导航栏高度，
+// hero 卡悬空）。此处强制归一；微信可能多次回写，故 0/0.15/0.45s 三次兜底。
+- (void)normalizeTopInset {
+    [self wpApplyInsetFix];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ [self wpApplyInsetFix]; });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.45 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ [self wpApplyInsetFix]; });
+}
+
+- (void)wpApplyInsetFix {
+    UITableView *tv = self.tableView;
+    if (![tv isKindOfClass:[UITableView class]]) return;
+    if (@available(iOS 11.0, *)) {
+        if (tv.contentInsetAdjustmentBehavior != UIScrollViewContentInsetAdjustmentNever) {
+            tv.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+        }
+    }
+    UIEdgeInsets inset = tv.contentInset;
+    CGFloat offset = tv.contentOffset.y;
+    // inset.top 被回写 / offset 为负（未滚动却被 inset 推下去）才修；用户滚动中（offset>0）不动
+    if (fabs(inset.top) > 0.5 || offset < -0.5) {
+        tv.contentInset = UIEdgeInsetsZero;
+        if (tv.contentOffset.y < -0.5) tv.contentOffset = CGPointZero;
+        WPLog(@"WCTable", @"[WCTable] [INSET] 顶栏 inset 归一: inset.top=%.2f→0 offset=%.2f→%.2f",
+              inset.top, offset, tv.contentOffset.y);
+    }
 }
 
 @end

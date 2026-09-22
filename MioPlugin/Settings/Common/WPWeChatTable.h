@@ -21,6 +21,7 @@
 - (id)addGroup;                                    // 建 section（addSection:）并挂到 manager，返回 WPWGroup 手柄
 - (void)reload;                                    // reloadTableView + reloadData 双保险
 - (void)reloadAsync;                               // 延迟 reload：排到当前 runloop 后（数据填充完成）连刷两次
+- (void)normalizeTopInset;                         // 顶栏 inset 归一（修微信基类回写 adjustedContentInset.top 致内容下推一个导航栏高）
 @end
 
 // 组手柄：包装 WCTableViewSectionManager（故意不继承 UIView，误用 addSubview 时立即暴露而非静默错布局）

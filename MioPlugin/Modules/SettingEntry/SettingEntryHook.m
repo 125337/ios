@@ -187,6 +187,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             UITableView *t = wc.tableView;
+            [wc normalizeTopInset]; // 读日志前再归一一次，验证微信是否在更晚时机回写
             WPLog(@"Setting", @"[Entry][LAYOUT] tv.frame=%@ inset=%@ adjInset=%@ offset=%@ contentSize=%@",
                   NSStringFromCGRect(t.frame), NSStringFromUIEdgeInsets(t.contentInset),
                   NSStringFromUIEdgeInsets(t.adjustedContentInset),
