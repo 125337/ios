@@ -98,11 +98,24 @@ static void wpDumpClassMethods(Class cls, const char *clsName, BOOL meta) {
         tv = ((id (*)(id, SEL))objc_msgSend)(mgr, tvg);
     }
     if ([tv isKindOfClass:[UITableView class]]) {
-        tv.frame = vc.view.bounds;
+        // 顶栏偏移修复：MMUIViewController 的 view 是全屏布局，表必须从导航栏底部开始
+        CGFloat top = 0;
+        UINavigationController *nav = vc.navigationController;
+        if (nav && !nav.navigationBarHidden && nav.navigationBar.superview) {
+            CGRect nf = nav.navigationBar.frame;
+            top = nf.origin.y + nf.size.height;
+        } else {
+            if (@available(iOS 11.0, *)) top = vc.view.safeAreaInsets.top;
+        }
+        if (top < 1) top = 64; // view 未挂 window 时 safeArea 为 0，兜底导航栏高度
+        CGFloat totalH = vc.view.bounds.size.height - top;
+        if (totalH < 100) totalH = vc.view.bounds.size.height;
+        tv.frame = CGRectMake(0, top, vc.view.bounds.size.width, totalH);
         tv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         tv.backgroundColor = [UIColor clearColor];
         tv.separatorInset = UIEdgeInsetsZero;
-        WPLog(@"WCTable", @"[WCTable] 取 manager 自建表成功: %@", tv);
+        if (@available(iOS 11.0, *)) tv.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+        WPLog(@"WCTable", @"[WCTable] 取 manager 自建表成功: top=%.0f %@", top, tv);
     } else {
         // 兜底：manager 无 tableView getter（版本差异）→ 自建表外部接线（旧行为）
         tv = [[UITableView alloc] initWithFrame:vc.view.bounds style:UITableViewStyleGrouped];
@@ -124,11 +137,55 @@ static void wpDumpClassMethods(Class cls, const char *clsName, BOOL meta) {
     if (tv.dataSource != mgr) tv.dataSource = mgr;
     if (tv.delegate != mgr) tv.delegate = mgr;
 
+    [self installCellClassProbeOnce];
+
     WPWeChatTable *t = [[self alloc] init];
     t.wcManager = mgr;
     t.tableView = tv;
     WPLog(@"WCTable", @"[WCTable] 表+manager 就绪: mgr=%@ tv=%@", NSStringFromClass(object_getClass(mgr)), tv);
     return t;
+}
+
+// 一次性 cell 类名探测：swizzle WCTableViewManager 的 willDisplayCell（方法表实证存在），
+// 打印每行 cell 真实类名——定位 switch cell 是否 MMTableViewCell 子类（ListCornerRadius 圆角缺失嫌疑）
+static IMP orig_WCTVM_willDisplay = NULL;
++ (void)installCellClassProbeOnce {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class mgrCls = objc_getClass("WCTableViewManager");
+        SEL s = NSSelectorFromString(@"tableView:willDisplayCell:forRowAtIndexPath:");
+        Method m = mgrCls ? class_getInstanceMethod(mgrCls, s) : NULL;
+        if (!m) {
+            WPLog(@"WCTable", @"[WCCELL] WCTableViewManager 无 willDisplayCell，探测跳过");
+            return;
+        }
+        orig_WCTVM_willDisplay = method_setImplementation(m, (IMP)probe_WCTVM_willDisplay);
+        WPLog(@"WCTable", @"[WCCELL] cell 类名探测已安装（30 条配额）");
+    });
+}
+
+static void probe_WCTVM_willDisplay(id self, SEL _cmd, UITableView *tv, UITableViewCell *cell, NSIndexPath *ip) {
+    if (orig_WCTVM_willDisplay) {
+        ((void (*)(id, SEL, id, id, id))orig_WCTVM_willDisplay)(self, _cmd, tv, cell, ip);
+    }
+    static NSInteger dumpCount = 0;
+    if (dumpCount < 30) {
+        dumpCount++;
+        WPLog(@"WCTable", @"[WCCELL] sec=%ld row=%ld cell=%@ super=%@ frame=%@",
+              (long)ip.section, (long)ip.row, NSStringFromClass([cell class]),
+              NSStringFromClass([cell superclass]), NSStringFromCGRect(cell.frame));
+        if (dumpCount >= 30) {
+            // 配额用尽自动摘除，恢复原实现（零常驻开销）
+            Class mgrCls = objc_getClass("WCTableViewManager");
+            SEL s = NSSelectorFromString(@"tableView:willDisplayCell:forRowAtIndexPath:");
+            Method m = class_getInstanceMethod(mgrCls, s);
+            if (m && orig_WCTVM_willDisplay) {
+                method_setImplementation(m, orig_WCTVM_willDisplay);
+                orig_WCTVM_willDisplay = NULL;
+                WPLog(@"WCTable", @"[WCCELL] 探测配额用尽，已摘除");
+            }
+        }
+    }
 }
 
 - (id)addGroup {
