@@ -20,8 +20,9 @@
 //                          （本版本无 onBeginPlayingMsg:autoPlayEnable:，点击入口为等价触发时机）
 //  ⑤ voiceBackgroundPlay   4 个点击入口（onClick/responseUserClick）→ onMinimize 后台悬浮
 //                          + MinimizeViewController onAbsorbFloatingViewTap（WCR FUN_01f55590）
-//  ⑥ voiceCallPlay         WCAudioModuleMgr isAudioModuleInterrupt: → NO + AVAudioSession 通话判定
-//                          + 运行时探测（canSetActive 真实 gate 定位）+ 前 5 次调用栈抓取
+//  ⑥ voiceCallPlay         WCAudioModuleMgr：canSetActive 4 变体（探测实证）→ 通话中 YES +
+//                          canMix 类方法（冒号 selector 修正）→ YES + isAudioModuleInterrupt → NO
+//                          + 运行时探测 + 前 5 次调用栈抓取
 //  ⑦ voiceForward          ForwardMessageLogicController 3 hook + 原生长按菜单转发项
 // 全部反射 + respondsToSelector 保护；开关关闭时直通 orig 零干预
 // ═══════════════════════════════════════════════════════════════
@@ -39,7 +40,10 @@ static IMP orig_VM_canShowRate = NULL;      // VoiceMessageViewModel canShowPlay
 static IMP orig_UI_impact = NULL;           // UIImpactFeedbackGenerator impactOccurred
 static IMP orig_UI_impactInt = NULL;        // impactOccurredWithIntensity:
 static IMP orig_Min_absorbTap = NULL;       // MinimizeViewController onAbsorbFloatingViewTap
-static IMP orig_WAM_canSetActive = NULL;    // WCAudioModuleMgr canSetActiveWithScene:groupName:
+static IMP orig_WAM_cas1 = NULL;            // canSetActiveWithScene:（run 2072 探测实证的 4 个变体）
+static IMP orig_WAM_cas2 = NULL;            // canSetActiveWithScene:mixList:
+static IMP orig_WAM_cas3 = NULL;            // canSetActiveWithScene:groupName:identifier:
+static IMP orig_WAM_cas4 = NULL;            // canSetActiveWithScene:groupName:identifier:mixList:
 static IMP orig_WAM_mixList = NULL;         // 类方法 audioModule.canMixWithAudioList:
 static IMP orig_WAM_mixModule = NULL;       // 类方法 audioList.canMixWithAudioModule:
 static IMP orig_WAM_interrupt = NULL;       // isAudioModuleInterrupt:
@@ -1018,12 +1022,38 @@ static void VFProbeCallPlayGates(void) {
     });
 }
 
-static BOOL hook_WAM_canSetActive(id self, SEL _cmd, id scene, id group) {
+// run 2072 真机探测实证：本版本 WCAudioModuleMgr 无 canSetActiveWithScene:groupName:（WCR 挂的 2 参版不存在），
+// 实际存在 4 个变体。语义沿用 WCR FUN_01f9fe60：开关开 + 通话中 → 直接 YES 不调 orig
+static BOOL hook_WAM_cas1(id self, SEL _cmd, id scene) {
     if (VFIsWAM(self) && VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
-        WPLog(@"VoiceFeat", @"[CallPlay] canSetActive 通话中放行");
-        return YES; // WCR：不调 orig
+        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene: 通话中放行");
+        return YES;
     }
-    return orig_WAM_canSetActive ? ((BOOL (*)(id, SEL, id, id))orig_WAM_canSetActive)(self, _cmd, scene, group) : NO;
+    return orig_WAM_cas1 ? ((BOOL (*)(id, SEL, id))orig_WAM_cas1)(self, _cmd, scene) : NO;
+}
+
+static BOOL hook_WAM_cas2(id self, SEL _cmd, id scene, id mixList) {
+    if (VFIsWAM(self) && VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
+        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene:mixList: 通话中放行");
+        return YES;
+    }
+    return orig_WAM_cas2 ? ((BOOL (*)(id, SEL, id, id))orig_WAM_cas2)(self, _cmd, scene, mixList) : NO;
+}
+
+static BOOL hook_WAM_cas3(id self, SEL _cmd, id scene, id group, id ident) {
+    if (VFIsWAM(self) && VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
+        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene:groupName:identifier: 通话中放行");
+        return YES;
+    }
+    return orig_WAM_cas3 ? ((BOOL (*)(id, SEL, id, id, id))orig_WAM_cas3)(self, _cmd, scene, group, ident) : NO;
+}
+
+static BOOL hook_WAM_cas4(id self, SEL _cmd, id scene, id group, id ident, id mixList) {
+    if (VFIsWAM(self) && VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
+        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene:groupName:identifier:mixList: 通话中放行");
+        return YES;
+    }
+    return orig_WAM_cas4 ? ((BOOL (*)(id, SEL, id, id, id, id))orig_WAM_cas4)(self, _cmd, scene, group, ident, mixList) : NO;
 }
 
 static BOOL hook_WAM_mixList(id self, SEL _cmd, id list) {
@@ -1169,9 +1199,14 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
 + (void)hookAudioModule {
     Class wam = objc_getClass("WCAudioModuleMgr");
     if (!wam) { WPLog(@"VoiceFeat", @"WCAudioModuleMgr 不存在，跳过通话播放 hooks"); return; }
-    VF_HOOK(wam, "canSetActiveWithScene:groupName:", hook_WAM_canSetActive, orig_WAM_canSetActive);
-    VF_HOOK_META(wam, "audioModule.canMixWithAudioList:", hook_WAM_mixList, orig_WAM_mixList);
-    VF_HOOK_META(wam, "audioList.canMixWithAudioModule:", hook_WAM_mixModule, orig_WAM_mixModule);
+    // run 2072 真机探测实证的 4 个 canSetActive 变体（2 参版 groupName: 不存在，WCR 也挂不上）
+    VF_HOOK(wam, "canSetActiveWithScene:", hook_WAM_cas1, orig_WAM_cas1);
+    VF_HOOK(wam, "canSetActiveWithScene:mixList:", hook_WAM_cas2, orig_WAM_cas2);
+    VF_HOOK(wam, "canSetActiveWithScene:groupName:identifier:", hook_WAM_cas3, orig_WAM_cas3);
+    VF_HOOK(wam, "canSetActiveWithScene:groupName:identifier:mixList:", hook_WAM_cas4, orig_WAM_cas4);
+    // 关键修正：真实 selector 是冒号分隔（此前按 PTR 命名误写成带点导致 SKIP，WCR 挂的就是冒号版）
+    VF_HOOK_META(wam, "audioModule:canMixWithAudioList:", hook_WAM_mixList, orig_WAM_mixList);
+    VF_HOOK_META(wam, "audioList:canMixWithAudioModule:", hook_WAM_mixModule, orig_WAM_mixModule);
     VF_HOOK(wam, "isAudioModuleInterrupt:", hook_WAM_interrupt, orig_WAM_interrupt);
 }
 
