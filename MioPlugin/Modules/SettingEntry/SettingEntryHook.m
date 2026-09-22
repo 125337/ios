@@ -110,29 +110,29 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     CGFloat y = 8;
 
     UIView *heroCard = WPMakeCard(y, w);
-    CGFloat hy = 24;
+    CGFloat hy = 10;
 
-    UIView *avatar = [[UIView alloc] initWithFrame:CGRectMake((w - kPad * 2) / 2 - 40, hy, 80, 80)];
+    UIView *avatar = [[UIView alloc] initWithFrame:CGRectMake((w - kPad * 2) / 2 - 28, hy, 56, 56)];
     avatar.backgroundColor = [UIColor colorWithRed:0.851 green:0.851 blue:0.859 alpha:1.0];
-    avatar.layer.cornerRadius = 40;
+    avatar.layer.cornerRadius = 28;
     [heroCard addSubview:avatar];
-    hy += 88;
+    hy += 62;
 
-    UILabel *heroName = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 30)];
+    UILabel *heroName = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 28)];
     heroName.text = @"Mio助手";
     heroName.font = [UIFont systemFontOfSize:22 weight:UIFontWeightBold];
     heroName.textColor = WPAccent();
     heroName.textAlignment = NSTextAlignmentCenter;
     [heroCard addSubview:heroName];
-    hy += 34;
+    hy += 30;
 
-    UILabel *heroVer = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 20)];
+    UILabel *heroVer = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 18)];
     heroVer.text = [NSString stringWithFormat:@"v%@", kPluginVersion];
     heroVer.font = [UIFont systemFontOfSize:13];
     heroVer.textColor = [UIColor colorWithRed:0.400 green:0.800 blue:0.451 alpha:1.0];
     heroVer.textAlignment = NSTextAlignmentCenter;
     [heroCard addSubview:heroVer];
-    hy += 28;
+    hy += 22;
 
     CGRect hcf = heroCard.frame; hcf.size.height = hy; heroCard.frame = hcf;
 
@@ -141,7 +141,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     if (wc) {
         CGFloat headW = [UIScreen mainScreen].bounds.size.width;
         // hero 卡包一层容器作 tableHeaderView
-        UIView *headerWrap = [[UIView alloc] initWithFrame:CGRectMake(0, 0, headW, hy + 8)];
+        UIView *headerWrap = [[UIView alloc] initWithFrame:CGRectMake(0, 0, headW, hy + 6)];
         heroCard.frame = CGRectMake(kPad, 0, headW - kPad * 2, hy);
         [headerWrap addSubview:heroCard];
         wc.tableView.tableHeaderView = headerWrap;

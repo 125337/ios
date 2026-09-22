@@ -68,6 +68,10 @@ static void walertEnsureCIMPInjected(Class alertClass) {
     class_addMethod(alertClass, confirmSel, (IMP)__walert_confirm_IMP, "v@:");
     WPLogDebug(@"Alert", @"__walert_confirm C IMP injected into WCUIAlertView");
 
+    // 取消按钮回调：no-op（注册真实 selector，避免 NULL sel 在 MRC 侧吞掉按钮分发）
+    SEL cancelHookSel = NSSelectorFromString(@"__walert_cancel");
+    class_addMethod(alertClass, cancelHookSel, imp_implementationWithBlock(^(id _self) {}), "v@:");
+
     // 第二个 IMP：简单确认回调（无输入框，纯 void(^)(void)）
     SEL simpleConfirmSel = NSSelectorFromString(@"__walert_simple_confirm");
     class_addMethod(alertClass, simpleConfirmSel, imp_implementationWithBlock(^(id _self) {
@@ -88,6 +92,30 @@ static void walertEnsureCIMPInjected(Class alertClass) {
         }), "v@:");
     }
     WPLogDebug(@"Alert", @"menu IMPs injected into WCUIAlertView");
+}
+
+// 按候选列表探测按钮注册 API（不同微信版本命名不一），返回命中的 SEL，未命中返回 NULL
+static SEL walertProbeSelector(id alert, const char *const candidates[], NSInteger count) {
+    for (NSInteger i = 0; i < count; i++) {
+        SEL s = NSSelectorFromString(@(candidates[i]));
+        if ([alert respondsToSelector:s]) return s;
+    }
+    return NULL;
+}
+
+// 一次性 dump WCUIAlertView 全部实例方法（候选全 miss 时定位真实按钮 API）
+static void walertDumpMethods(Class cls) {
+    static BOOL dumped = NO;
+    if (dumped) return;
+    dumped = YES;
+    unsigned int count = 0;
+    Method *list = class_copyMethodList(cls, &count);
+    NSMutableArray *names = [NSMutableArray array];
+    for (unsigned int i = 0; i < count; i++) {
+        [names addObject:NSStringFromSelector(method_getName(list[i]))];
+    }
+    free(list);
+    WPLog(@"Alert", @"[WCDUMP] WCUIAlertView 实例方法(%u): %@", count, [names componentsJoinedByString:@" | "]);
 }
 
 @implementation MioAlertHelper
@@ -178,22 +206,39 @@ static void walertEnsureCIMPInjected(Class alertClass) {
             }
         }
 
-        // ③ 取消
-        SEL cancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
-        if ([alert respondsToSelector:cancelSel]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelSel, @"取消", target, NULL);
+        // ③ 取消：真实 no-op selector（target=alert 自身保证存活；NULL sel 曾疑致按钮分发异常）
+        static const char *const kCancelSels[] = {
+            "addCancelBtnTitle:target:sel:", "addCancleBtnTitle:target:sel:",
+            "addCancelTitle:target:sel:", "addCancelButtonTitle:target:sel:",
+        };
+        SEL cancelProbe = walertProbeSelector(alert, kCancelSels, 4);
+        SEL cancelHook = NSSelectorFromString(@"__walert_cancel");
+        if (cancelProbe) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelProbe, @"取消", alert, cancelHook);
+        } else {
+            WPLog(@"Alert", @"取消按钮 API 未命中候选（跳过取消注册）");
+            walertDumpMethods([alert class]);
         }
 
-        // ④ 确定：C IMP + associated block
+        // ④ 确定：C IMP + associated block；多候选探测注册 API（addBtnTitle 曾疑似不存在致回调失联）
         walertEnsureCIMPInjected([alert class]);
         if (confirm) {
             objc_setAssociatedObject(alert, &kWAlertConfirmBlockKey, [confirm copy], OBJC_ASSOCIATION_COPY_NONATOMIC);
         }
         SEL confirmSel = NSSelectorFromString(@"__walert_confirm");
-        SEL btnSel = NSSelectorFromString(@"addBtnTitle:target:sel:");
-        if ([alert respondsToSelector:btnSel]) {
-            // target = alert 自身，保证点击时 target 存活（alert 正在显示）
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btnSel, @"确定", alert, confirmSel);
+        static const char *const kConfirmSels[] = {
+            "addBtnTitle:target:sel:", "addOneBtnTitle:target:sel:",
+            "addButtonTitle:target:sel:", "addOKBtnTitle:target:sel:",
+            "addOkBtnTitle:target:sel:", "addConfirmBtnTitle:target:sel:",
+            "addBtnWithTitle:target:sel:", "addBtn:target:sel:",
+        };
+        SEL confirmProbe = walertProbeSelector(alert, kConfirmSels, 8);
+        if (confirmProbe) {
+            WPLog(@"Alert", @"确定按钮注册: %@ -> __walert_confirm", NSStringFromSelector(confirmProbe));
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, confirmProbe, @"确定", alert, confirmSel);
+        } else {
+            WPLog(@"Alert", @"!!! 确定 API 未命中任何候选，dump WCUIAlertView 方法表");
+            walertDumpMethods([alert class]);
         }
 
         // ⑤ show
