@@ -6,7 +6,6 @@
 #import "../../Config/Constants.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
-#import "../../Modules/SettingEntry/WPCommonUI.h"
 #import <PhotosUI/PhotosUI.h>
 #import <MobileCoreServices/MobileCoreServices.h>
 
@@ -142,6 +141,7 @@ static NSString *keyForTag(NSInteger tag) {
     [MioAlertHelper showMenuAlert:@"选择显示模式" buttons:modeTitles onButton:^(NSInteger index) {
         config.chatDisplayMode = index;
         [ConfigManager saveAll];
+        [self wpRebuildWeChatTable];
         [self buildUI];
     }];
 }
@@ -188,6 +188,7 @@ static NSString *keyForTag(NSInteger tag) {
         WPLog(@"Mio-Separator", @"  设置 chatSeparatorText = %@", text);
         [ConfigManager saveAll];
         WPLog(@"Mio-Separator", @"  调用 [ConfigManager saveAll]");
+        [self wpRebuildWeChatTable];
         [self buildUI];
         WPLog(@"Mio-Separator", @"  调用 [self buildUI]");
     }];
@@ -220,6 +221,7 @@ static NSString *keyForTag(NSInteger tag) {
                          onConfirm:^(NSString *inputText) {
         config.chatAddTimeSuffixFormat = inputText.length > 0 ? inputText : nil;
         [ConfigManager saveAll];
+        [self wpRebuildWeChatTable];
         [self buildUI];
     }];
 }
@@ -236,6 +238,7 @@ static NSString *keyForTag(NSInteger tag) {
                          onConfirm:^(NSString *inputText) {
         config.chatGroupMemberCountSuffix = inputText.length > 0 ? inputText : nil;
         [ConfigManager saveAll];
+        [self wpRebuildWeChatTable];
         [self buildUI];
     }];
 }
@@ -263,8 +266,6 @@ static NSString *keyForTag(NSInteger tag) {
 
     NSDictionary *cfg = numericInputConfig()[key];
     if (!cfg) return;
-
-    UILabel *valueLabel = objc_getAssociatedObject(sender, "editValueLabel");
 
     ChatTopBarConfig *cfg2 = [ChatTopBarConfig shared];
     CGFloat val = 0;
@@ -302,19 +303,14 @@ static NSString *keyForTag(NSInteger tag) {
         else if ([key isEqualToString:@"NicknameHorizontalOffset"]) c.chatNicknameOffsetX = [text floatValue];
         else if ([key isEqualToString:@"ViewWidth"])            c.chatTitleViewWidth = [text floatValue];
         [ConfigManager saveAll];
-        if (valueLabel) {
-            valueLabel.text = [NSString stringWithFormat:@"%.0f", [text floatValue]];
-        }
+        [self wpRebuildWeChatTable];
+        [self buildUI];
     }];
 }
 
 #pragma mark - Build UI
 
 - (void)buildUI {
-    for (UIView *v in self.contentView.subviews) {
-        [v removeFromSuperview];
-    }
-
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 8;
@@ -329,13 +325,9 @@ static NSString *keyForTag(NSInteger tag) {
                                      isOn:config.showChatAvatar
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addSwitchRowInGroup:expand title:@"头像点击反馈" desc:nil key:@"avatarTapFeedback" isOn:config.avatarTapFeedback cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSwitchRowInGroup:expand title:@"显示添加时间" desc:nil key:@"showAddTime" isOn:config.showAddTime cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSwitchRowInGroup:expand title:@"显示群聊人数" desc:nil key:@"showGroupMemberCount" isOn:config.showGroupMemberCount cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addNavRowInGroup:expand title:@"头像显示模式" subtitle:[self avatarDisplayModeName:config.chatDisplayMode] tag:100 action:@selector(onAvatarDisplayModeTap) cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         // 副标题：优先显示文本，其次静态图片
         NSString *sepSub = @"未设置";
         if (config.chatSeparatorText.length > 0) {
@@ -344,16 +336,15 @@ static NSString *keyForTag(NSInteger tag) {
             sepSub = @"静态图片";
         }
         *ecy = [self addNavRowInGroup:expand title:@"头像分隔符号" subtitle:sepSub tag:200 action:@selector(onAvatarSeparatorTap) cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addNavRowInGroup:expand title:@"管理显示黑名单" subtitle:@"" tag:300 action:@selector(onBlacklistTap) cy:*ecy width:w];
     } cy:cy1 width:w];
 
     y = [self finishGroup:card1 atY:y height:cy1];
 
-    // ========== Card 2: 外观数值设置 ==========
-    UIView *card2 = WPMakeCard(y, w);
+    // ========== Card 2: 外观数值设置（微信引擎：NavCell，右值 = 当前值，点击弹输入） ==========
+    [self addSectionHeader:@"外观数值设置" y:y width:w];
+    UIView *card2 = [self addTableGroupAtY:y width:w];
     CGFloat cy2 = 0;
-    CGFloat scale2 = [UIScreen mainScreen].scale;
 
     NSString *addTimeSuffixSub = config.chatAddTimeSuffixFormat.length > 0 ? config.chatAddTimeSuffixFormat : @"%ld天";
     NSString *groupCountSuffixSub = config.chatGroupMemberCountSuffix.length > 0 ? config.chatGroupMemberCountSuffix : @"%ld人";
@@ -374,40 +365,17 @@ static NSString *keyForTag(NSInteger tag) {
 
     for (NSUInteger i = 0; i < card2Items.count; i++) {
         NSDictionary *item = card2Items[i];
-        if (i > 0) {
-            WPAddSep(card2, cy2, w);
-            cy2 = round((cy2 + 1.0 / scale2) * scale2) / scale2;
-        }
         NSString *showVal = item[@"value"] ?: [self subtitleForKey:item[@"key"]];
-        UIButton *row = WPAddEditableRowWithArrow(card2, cy2, w, item[@"title"], showVal, self);
-        [row removeTarget:self action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
-        row.tag = [item[@"tag"] integerValue];
         SEL action = item[@"action"] ? NSSelectorFromString(item[@"action"]) : @selector(onNumericRowTap:);
-        [row addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
-        cy2 += kRowH;
+        cy2 = [self addNavRowInGroup:card2 title:item[@"title"] subtitle:showVal tag:[item[@"tag"] integerValue] action:action cy:cy2 width:w];
     }
 
-    CGRect c2f = card2.frame; c2f.size.height = cy2; card2.frame = c2f;
-    [self.contentView addSubview:card2];
-    y += cy2 + 8;
+    y = [self finishGroup:card2 atY:y height:cy2];
 
     // ========== Card 3: 视图宽度 ==========
-    UIView *card3 = WPMakeCard(y, w);
-    CGFloat cy3 = 0;
-
-    NSString *vwVal = [self subtitleForKey:@"ViewWidth"];
-    UIButton *vwRow = WPAddEditableRowWithArrow(card3, cy3, w, @"视图宽度", vwVal, self);
-    [vwRow removeTarget:self action:@selector(onEditRowTap:) forControlEvents:UIControlEventTouchUpInside];
-    vwRow.tag = 1010;
-    [vwRow addTarget:self action:@selector(onNumericRowTap:) forControlEvents:UIControlEventTouchUpInside];
-    cy3 += kRowH;
-
-    CGRect c3f = card3.frame; c3f.size.height = cy3; card3.frame = c3f;
-    [self.contentView addSubview:card3];
-    y += cy3 + 8;
-
-    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
-    self.scrollView.contentSize = CGSizeMake(w, y + 40);
+    UIView *card3 = [self addTableGroupAtY:y width:w];
+    CGFloat cy3 = [self addNavRowInGroup:card3 title:@"视图宽度" subtitle:[self subtitleForKey:@"ViewWidth"] tag:1010 action:@selector(onNumericRowTap:) cy:0 width:w];
+    y = [self finishGroup:card3 atY:y height:cy3];
 }
 
 #pragma mark - PHPickerViewControllerDelegate
@@ -444,6 +412,7 @@ static NSString *keyForTag(NSInteger tag) {
                 WPLog(@"Mio-Separator", @"    静态图标已保存到: %@", iconPath);
                 [picker dismissViewControllerAnimated:YES completion:^{
                     WPLog(@"Mio-Separator", @"    dismiss 完成，调用 buildUI");
+                    [self wpRebuildWeChatTable];
                     [self buildUI];
                 }];
             });
@@ -472,6 +441,7 @@ static NSString *keyForTag(NSInteger tag) {
     [ConfigManager saveAll];
     WPLog(@"Mio-Separator", @"  调用 [ConfigManager saveAll]");
 
+    [self wpRebuildWeChatTable];
     [self buildUI];
     WPLog(@"Mio-Separator", @"  调用 [self buildUI]");
 }

@@ -16,35 +16,21 @@
 }
 
 - (void)buildUI {
-    for (UIView *v in self.contentView.subviews) {
-        [v removeFromSuperview];
-    }
-
     CGFloat w = self.view.bounds.size.width;
-    CGFloat y = 8;
 
-    y = [self addSectionHeader:@"重置插件配置" y:y width:w];
+    [self addSectionHeader:@"重置插件配置" y:0 width:w];
 
-    UIView *group = [self addTableGroupAtY:y width:w];
+    UIView *group = [self addTableGroupAtY:0 width:w];
     CGFloat cy = 0;
 
-    UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy + 12, w - kPad * 4, 60)];
-    hint.text = @"此操作将清除本插件的所有配置，\n包括消息时间、防撤回、红包等全部设置。\n操作后插件将恢复如初装状态。";
-    hint.font = [UIFont systemFontOfSize:13];
-    hint.textColor = WPT2();
-    hint.numberOfLines = 0;
-    [group addSubview:hint];
-    cy += 84;
+    cy = [self addHintRowInGroup:group text:@"此操作将清除本插件的所有配置，\n包括消息时间、防撤回、红包等全部设置。\n操作后插件将恢复如初装状态。" cy:cy width:w];
 
     cy = [self addButtonRowInGroup:group title:@"重置所有配置"
                               hint:@"此操作不可撤销"
                                key:@"backup_reset"
                                 cy:cy width:w];
 
-    y = [self finishGroup:group atY:y height:cy];
-
-    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
-    self.scrollView.contentSize = CGSizeMake(w, y + 40);
+    [self finishGroup:group atY:0 height:cy];
     WPLog(@"UI", @"[Backup] buildUI done");
 }
 

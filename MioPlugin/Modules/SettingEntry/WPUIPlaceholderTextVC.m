@@ -85,16 +85,9 @@
     y = [self finishGroup:group atY:y height:cy];
 
     if (!config.placeholderTextEnabled) {
-        UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(16, y, w - 32, 16)];
-        hint.text = @"开启后可自定义输入框占位文本样式";
-        hint.font = [UIFont systemFontOfSize:12];
-        hint.textColor = WPTextTertiaryColor();
-        [self.contentView addSubview:hint];
-        y += 20;
+        y = [self addSectionFooter:@"开启后可自定义输入框占位文本样式" y:y width:w];
     }
 
-    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
-    self.scrollView.contentSize = CGSizeMake(w, y + 40);
     WPLog(@"UI", @"[Sub] WPUIPlaceholderTextVC buildUI done");
 }
 

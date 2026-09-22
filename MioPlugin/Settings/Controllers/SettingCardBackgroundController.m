@@ -429,19 +429,12 @@
 
 #pragma mark - switchChanged
 
-- (void)switchChanged:(UISwitch *)sender {
-    [super switchChanged:sender];
-
-    NSString *key = objc_getAssociatedObject(sender, "key");
-    if (!key) return;
-
-    // ★ 新增：新 UI 的开关需要 rebuild UI（展开/折叠子项）
-    if ([key isEqualToString:@"cardBgMaterialEnabled"]
-        || [key isEqualToString:@"cardBgCornerEnabled"]
-        || [key isEqualToString:@"cardBgCornerUseGlobal"]
-        || [key isEqualToString:@"cardBgBorderEnabled"]) {
+// 微信引擎开关落地钩子（替代旧 UISwitch switchChanged: 入口；
+// master key（Material/Corner/Border）已由基类整页重建，这里只补子开关的联动重建）
+- (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on {
+    if ([key isEqualToString:@"cardBgCornerUseGlobal"]) {
+        [self wpRebuildWeChatTable];
         [self buildUI];
-        return;
     }
 }
 

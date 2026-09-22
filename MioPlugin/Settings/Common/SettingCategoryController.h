@@ -8,6 +8,9 @@ typedef NS_ENUM(NSInteger, InputValueType) {
 
 Class SettingCategoryBaseClass(void);
 
+// 全站唯一渲染引擎 = 微信引擎（WPWeChatTable 反射封装 WCTableViewManager，WCR 同款）。
+// 旧 UITableView/手绘引擎已删除；scrollView/contentView 仅作遗留壳保留（不再承载行渲染）。
+// y/cy/width 等布局参数在微信引擎下仅为兼容签名保留，传 0 即可。
 @interface SettingCategoryController : UIViewController
 @property (nonatomic, strong) UIScrollView *scrollView;
 @property (nonatomic, strong) UIView *contentView;
@@ -21,6 +24,8 @@ Class SettingCategoryBaseClass(void);
 - (CGFloat)addNavRowInGroup:(UIView *)group title:(NSString *)title subtitle:(NSString *)subtitle tag:(NSInteger)tag action:(SEL)action cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addSwitchRowInGroup:(UIView *)group title:(NSString *)title desc:(NSString *)desc key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addSubSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w;
+- (CGFloat)addInfoRowInGroup:(UIView *)group title:(NSString *)title rightValue:(NSString *)value copyText:(nullable NSString *)copyText cy:(CGFloat)cy width:(CGFloat)w;
+
 - (CGFloat)addInputRowInGroup:(UIView *)group
                         title:(NSString *)title
                           key:(NSString *)key
@@ -45,17 +50,11 @@ Class SettingCategoryBaseClass(void);
 - (CGFloat)addSubSectionLabelInGroup:(UIView *)group text:(NSString *)text cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addColorRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w darkKey:(nullable NSString *)darkKey darkValue:(nullable NSString *)darkValue;
 - (CGFloat)addSeparatorInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w;
-- (UIView *)addExpandContainerInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w;
-- (CGFloat)finishExpandContainer:(UIView *)container currentCy:(CGFloat)cy;
 - (CGFloat)addMasterSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on subBuilder:(void (^)(UIView *expand, CGFloat *ecy))subBuilder cy:(CGFloat)cy width:(CGFloat)w;
 - (void)switchChanged:(UISwitch *)sender;
 - (void)colorButtonTapped:(UIButton *)sender;
 - (void)buttonClicked:(NSString *)key;
 - (void)buildUI;
-- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection;
-@end
-
-@interface UIView (ExpandHelper)
-@property (nonatomic, assign) BOOL isExpanded;
-- (void)setExpanded:(BOOL)expanded animated:(BOOL)animated;
+/// 微信引擎开关落地后的钩子（每页可重写：如提示重启生效）
+- (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on;
 @end

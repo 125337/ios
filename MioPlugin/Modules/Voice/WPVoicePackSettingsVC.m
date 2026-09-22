@@ -126,13 +126,10 @@
 
 #pragma mark - Switch Events
 
-- (void)switchChanged:(UISwitch *)sender {
-    [super switchChanged:sender];
-
-    NSString *key = objc_getAssociatedObject(sender, "key");
-    if (!key) return;
+// 微信引擎开关落地钩子（替代旧 UISwitch switchChanged: 入口）
+- (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on {
     // 自动倍数播放：开启时提示重启微信（复用 MioRestartHelper）
-    if ([key isEqualToString:@"voiceAutoSpeedEnabled"] && sender.on) {
+    if ([key isEqualToString:@"voiceAutoSpeedEnabled"] && on) {
         [MioRestartHelper showRestartAlertFromVC:self];
     }
 }

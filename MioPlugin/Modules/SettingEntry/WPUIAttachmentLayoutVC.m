@@ -52,16 +52,9 @@
     y = [self finishGroup:group atY:y height:cy];
 
     if (!config.attachLayoutEnabled) {
-        UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(16, y, w - 32, 16)];
-        hint.text = @"开启附件布局优化后可配置详细选项";
-        hint.font = [UIFont systemFontOfSize:12];
-        hint.textColor = WPTextTertiaryColor();
-        [self.contentView addSubview:hint];
-        y += 20;
+        y = [self addSectionFooter:@"开启附件布局优化后可配置详细选项" y:y width:w];
     }
 
-    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
-    self.scrollView.contentSize = CGSizeMake(w, y + 40);
     WPLog(@"UI", @"[Sub] WPUIAttachmentLayoutVC buildUI done");
 }
 

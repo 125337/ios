@@ -1,3 +1,7 @@
+// 账户信息页 - 用户信息/应用信息/签名证书/到期提醒
+// 功能参考逆向 WCRefine 2.1-2「账户信息」页 (AccountDetailViewController)
+// 渲染：全微信引擎（基类 WPWGroup 行方法；信息行=NavCell 右值，点击复制）
+
 #import "WPAccountVC.h"
 #import "WPCommonUI.h"
 #import "../AccountDetail/AccountConfig.h"
@@ -155,8 +159,6 @@ static NSDictionary *MioReadProvisioningProfile(void) {
     return [plist isKindOfClass:[NSDictionary class]] ? plist : nil;
 }
 
-/// 轻量 toast 已提取为 WPCommonUI 的 WPShowToast（全局唯一实现）
-
 #pragma mark - 页面
 
 @interface WPAccountVC ()
@@ -177,43 +179,31 @@ static NSDictionary *MioReadProvisioningProfile(void) {
     [self checkCertExpireAlertIfNeeded];
 }
 
-#pragma mark UI 构建
+#pragma mark UI 构建（全微信引擎：组 = WPWGroup，信息行 = NavCell 右值，点击信息行复制）
 
 - (void)buildUI {
-    for (UIView *v in self.contentView.subviews) {
-        [v removeFromSuperview];
-    }
-
-    CGFloat w = self.view.bounds.size.width;
-    CGFloat y = 8;
     NSDictionary *profile = self.profile;
 
     // ── 用户信息 ──
-    y = [self addSectionHeader:@"用户信息" y:y width:w];
-    // 信息行为手工构建，不能用基类 addTableGroupAtY:（返回 UITableView，数据驱动，未注册行会被裁剪），
-    // 用 WPCommonUI 的白卡片工厂 WPMakeCard
-    UIView *userGroup = WPMakeCard(y, w);
-    [self.contentView addSubview:userGroup];
+    [self addSectionHeader:@"用户信息" y:0 width:0];
+    UIView *userGroup = [self addTableGroupAtY:0 width:0];
     CGFloat uy = 0;
     id contact = MioGetSelfContact();
     NSString *displayName = MioContactString(contact, "getContactDisplayName");
     NSString *alias = MioContactString(contact, "m_nsAliasName");
     NSString *usrName = MioContactString(contact, "m_nsUsrName");
-    uy = [self addInfoRow:userGroup title:@"微信名" value:displayName ?: @"-" cy:uy width:w copyTitle:@"微信名"];
-    uy = [self addSeparatorInGroup:userGroup cy:uy width:w];
+    uy = [self addInfoRowInGroup:userGroup title:@"微信名" rightValue:displayName ?: @"-" copyText:displayName cy:uy width:0];
     if (alias.length > 0) {
-        uy = [self addInfoRow:userGroup title:@"微信号" value:alias cy:uy width:w copyTitle:@"微信号"];
-        uy = [self addSeparatorInGroup:userGroup cy:uy width:w];
+        uy = [self addInfoRowInGroup:userGroup title:@"微信号" rightValue:alias copyText:alias cy:uy width:0];
     }
-    uy = [self addInfoRow:userGroup title:@"WXID" value:usrName ?: @"-" cy:uy width:w copyTitle:@"WXID"];
-    uy = [self addSeparatorInGroup:userGroup cy:uy width:w];
-    uy = [self addArrowRow:userGroup title:@"账号状态" value:@"腾讯卫士查看" cy:uy width:w action:@selector(openTencentGuardian)];
-    y = [self finishGroup:userGroup atY:y height:uy];
+    uy = [self addInfoRowInGroup:userGroup title:@"WXID" rightValue:usrName ?: @"-" copyText:usrName cy:uy width:0];
+    uy = [self addNavRowInGroup:userGroup title:@"账号状态" subtitle:@"微信官方检测" tag:0 action:@selector(openTencentGuardian) cy:uy width:0];
+    [self addHintRowInGroup:userGroup text:@"点击信息行可复制对应内容" cy:uy width:0];
+    [self finishGroup:userGroup atY:0 height:0];
 
     // ── 应用信息 ──
-    y = [self addSectionHeader:@"应用信息" y:y width:w];
-    UIView *appGroup = WPMakeCard(y, w);
-    [self.contentView addSubview:appGroup];
+    [self addSectionHeader:@"应用信息" y:0 width:0];
+    UIView *appGroup = [self addTableGroupAtY:0 width:0];
     CGFloat ay = 0;
     NSBundle *bundle = [NSBundle mainBundle];
     NSString *appName = [bundle objectForInfoDictionaryKey:@"CFBundleDisplayName"];
@@ -230,16 +220,14 @@ static NSDictionary *MioReadProvisioningProfile(void) {
         @[@"设备标识", MioDeviceModelName()],
     ];
     for (NSUInteger i = 0; i < appRows.count; i++) {
-        if (i > 0) ay = [self addSeparatorInGroup:appGroup cy:ay width:w];
-        ay = [self addInfoRow:appGroup title:appRows[i][0] value:appRows[i][1] cy:ay width:w copyTitle:nil];
+        ay = [self addInfoRowInGroup:appGroup title:appRows[i][0] rightValue:appRows[i][1] copyText:nil cy:ay width:0];
     }
-    y = [self finishGroup:appGroup atY:y height:ay];
+    [self finishGroup:appGroup atY:0 height:0];
 
     // ── 证书信息 ──
-    y = [self addSectionHeader:@"证书信息" y:y width:w];
     if (profile) {
-        UIView *certGroup = WPMakeCard(y, w);
-        [self.contentView addSubview:certGroup];
+        [self addSectionHeader:@"证书信息" y:0 width:0];
+        UIView *certGroup = [self addTableGroupAtY:0 width:0];
         CGFloat cy2 = 0;
         NSArray<NSArray<NSString *> *> *certRows = @[
             @[@"证书类型", MioCertTypeName(profile)],
@@ -250,17 +238,15 @@ static NSDictionary *MioReadProvisioningProfile(void) {
             @[@"允许设备", MioAllowedDevicesText(profile)],
         ];
         for (NSUInteger i = 0; i < certRows.count; i++) {
-            if (i > 0) cy2 = [self addSeparatorInGroup:certGroup cy:cy2 width:w];
-            cy2 = [self addInfoRow:certGroup title:certRows[i][0] value:certRows[i][1] cy:cy2 width:w copyTitle:nil];
+            cy2 = [self addInfoRowInGroup:certGroup title:certRows[i][0] rightValue:certRows[i][1] copyText:nil cy:cy2 width:0];
         }
-        y = [self finishGroup:certGroup atY:y height:cy2];
+        [self finishGroup:certGroup atY:0 height:0];
 
         // ── 证书权限（Entitlements）──
         NSDictionary *ent = profile[@"Entitlements"];
         if ([ent isKindOfClass:[NSDictionary class]] && ent.count > 0) {
-            y = [self addSectionHeader:@"证书权限" y:y width:w];
-            UIView *permGroup = WPMakeCard(y, w);
-            [self.contentView addSubview:permGroup];
+            [self addSectionHeader:@"证书权限" y:0 width:0];
+            UIView *permGroup = [self addTableGroupAtY:0 width:0];
             CGFloat py = 0;
             NSArray<NSArray<NSString *> *> *permKeys = @[
                 @[@"aps-environment", @"推送权限"],
@@ -271,28 +257,24 @@ static NSDictionary *MioReadProvisioningProfile(void) {
                 @[@"com.apple.developer.usernotifications.communication", @"Communication权限"],
             ];
             for (NSUInteger i = 0; i < permKeys.count; i++) {
-                if (i > 0) py = [self addSeparatorInGroup:permGroup cy:py width:w];
                 NSString *status = [self permissionStatusTextForKey:permKeys[i][0] entitlements:ent];
-                py = [self addInfoRow:permGroup title:permKeys[i][1] value:status cy:py width:w copyTitle:nil];
+                py = [self addInfoRowInGroup:permGroup title:permKeys[i][1] rightValue:status copyText:nil cy:py width:0];
             }
-            y = [self finishGroup:permGroup atY:y height:py];
+            [self finishGroup:permGroup atY:0 height:0];
         }
     } else {
-        UIView *certGroup = WPMakeCard(y, w);
-        [self.contentView addSubview:certGroup];
-        CGFloat cy2 = [self addHintRowInGroup:certGroup text:@"未读取到证书信息（无 embedded.mobileprovision）" cy:0 width:w];
-        y = [self finishGroup:certGroup atY:y height:cy2];
+        [self addSectionHeader:@"证书信息" y:0 width:0];
+        UIView *certGroup = [self addTableGroupAtY:0 width:0];
+        [self addHintRowInGroup:certGroup text:@"未读取到证书信息（无 embedded.mobileprovision）" cy:0 width:0];
+        [self finishGroup:certGroup atY:0 height:0];
     }
 
     // ── 提示规则 ──
-    y = [self addSectionHeader:@"提示规则" y:y width:w];
-    // 统一用 WPMakeCard 自绘卡片（与其他卡片一致）；addTableGroupAtY 生成的 UITableView 可被拖动且会覆盖其他卡片
-    UIView *ruleGroup = WPMakeCard(y, w);
-    [self.contentView addSubview:ruleGroup];
+    [self addSectionHeader:@"提示规则" y:0 width:0];
+    UIView *ruleGroup = [self addTableGroupAtY:0 width:0];
     CGFloat ry = 0;
     AccountConfig *cfg = [AccountConfig shared];
-    ry = [self addSwitchRowInGroup:ruleGroup title:@"到期提示" desc:@"打开本页时检查证书有效期" key:@"certExpireAlertEnabled" isOn:cfg.certExpireAlertEnabled cy:ry width:w];
-    ry = [self addSeparatorInGroup:ruleGroup cy:ry width:w];
+    ry = [self addSwitchRowInGroup:ruleGroup title:@"到期提示" desc:nil key:@"certExpireAlertEnabled" isOn:cfg.certExpireAlertEnabled cy:ry width:0];
     ry = [self addInputRowInGroup:ruleGroup
                             title:@"证书到期提醒"
                               key:@"certExpireAlertDays"
@@ -302,73 +284,11 @@ static NSDictionary *MioReadProvisioningProfile(void) {
                        alertTitle:@"证书到期提醒"
                      alertMessage:@"请输入到期前需要提示的日期，多个日期用 @ 隔开\n如 30@18@7@3，到期前 30、18、7、3 天时分别提示"
                                cy:ry
-                            width:w];
-    y = [self finishGroup:ruleGroup atY:y height:ry];
+                            width:0];
+    [self addHintRowInGroup:ruleGroup text:@"到期前按设定天数各提示一次" cy:ry width:0];
+    [self finishGroup:ruleGroup atY:0 height:0];
 
-    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
-    self.scrollView.contentSize = CGSizeMake(w, y + 40);
     WPLog(@"Setting", @"[Sub] WPAccountVC buildUI done");
-}
-
-#pragma mark 行构建
-
-/// 信息行：左标题 + 右值；copyTitle 非空时整行可点击复制
-- (CGFloat)addInfoRow:(UIView *)group title:(NSString *)title value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w copyTitle:(NSString *)copyTitle {
-    return [self addInfoRow:group title:title value:value cy:cy width:w copyTitle:copyTitle rightInset:0];
-}
-
-/// 带右侧内缩版本（箭头行用，rightInset 为箭头预留空间）
-- (CGFloat)addInfoRow:(UIView *)group title:(NSString *)title value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w copyTitle:(NSString *)copyTitle rightInset:(CGFloat)rightInset {
-    CGFloat gw = w - kPad * 2;
-    CGFloat valueX = kPad + 110;
-    CGFloat valueW = gw - kPad - rightInset - valueX;
-
-    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kPad, cy, 110, kRowH)];
-    tl.text = title;
-    tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = WPT1();
-    tl.adjustsFontSizeToFitWidth = YES;
-    tl.minimumScaleFactor = 0.7;
-    [group addSubview:tl];
-
-    UILabel *vl = [[UILabel alloc] initWithFrame:CGRectMake(valueX, cy, valueW, kRowH)];
-    vl.text = value ?: @"-";
-    vl.font = [UIFont systemFontOfSize:13];
-    vl.textColor = WPT2();
-    vl.textAlignment = NSTextAlignmentRight;
-    vl.numberOfLines = 1;
-    vl.adjustsFontSizeToFitWidth = YES;
-    vl.minimumScaleFactor = 0.6;
-    [group addSubview:vl];
-
-    if (copyTitle.length > 0) {
-        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-        btn.frame = CGRectMake(0, cy, gw, kRowH);
-        objc_setAssociatedObject(btn, "copyText", value ?: @"", OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(btn, "copyTitle", copyTitle, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [btn addTarget:self action:@selector(copyRowTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [group addSubview:btn];
-    }
-    return cy + kRowH;
-}
-
-/// 箭头行：左标题 + 右值 + ">" + 整行点击
-- (CGFloat)addArrowRow:(UIView *)group title:(NSString *)title value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w action:(SEL)action {
-    CGFloat cy2 = [self addInfoRow:group title:title value:value cy:cy width:w copyTitle:nil rightInset:20];
-    WPDrawDisclosureArrow(group, cy, w - kPad * 2, kPad);
-    UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-    btn.frame = CGRectMake(0, cy, w - kPad * 2, kRowH);
-    [btn addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
-    [group addSubview:btn];
-    return cy2;
-}
-
-- (void)copyRowTapped:(UIButton *)sender {
-    NSString *text = objc_getAssociatedObject(sender, "copyText");
-    NSString *title = objc_getAssociatedObject(sender, "copyTitle");
-    if (text.length == 0) return;
-    [UIPasteboard generalPasteboard].string = text;
-    WPShowToast([NSString stringWithFormat:@"已复制%@: %@", title ?: @"", text]);
 }
 
 #pragma mark 动作

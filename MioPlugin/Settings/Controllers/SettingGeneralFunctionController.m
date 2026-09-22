@@ -25,16 +25,14 @@
     [self buildUI];
 }
 
-- (void)switchChanged:(UISwitch *)sender {
-    [super switchChanged:sender];
-
-    NSString *key = objc_getAssociatedObject(sender, "key");
-    if ([key isEqualToString:@"enableJoker"] && sender.on) {
+// 微信引擎开关落地钩子（替代旧 UISwitch switchChanged: 入口）
+- (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on {
+    if ([key isEqualToString:@"enableJoker"] && on) {
         [MioAlertHelper showTipAlert:@"修改文字功能已启用\n长按文本/转账消息即可修改\n长按钱包余额可修改"];
     }
 
     // 微信加密：开启后弹出6位密码输入框（密码打点 + 数字键盘，与全项目统一走 WCUIAlertView）
-    if ([key isEqualToString:@"privacyEncryptEnabled"] && sender.on) {
+    if ([key isEqualToString:@"privacyEncryptEnabled"] && on) {
         NSString *current = [PrivacyConfig shared].privacyEncryptPassword ?: @"";
         [MioAlertHelper showInputAlert:@"微信加密"
                                message:@"请输入6位数密码"

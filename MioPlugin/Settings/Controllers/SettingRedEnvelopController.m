@@ -116,12 +116,7 @@
     y = [self finishGroup:group atY:y height:cy];
 
     if (!config.autoRedEnvelop) {
-        UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(16, y, w - 32, 16)];
-        hint.text = @"开启自动抢红包后可配置详细选项";
-        hint.font = [UIFont systemFontOfSize:12];
-        hint.textColor = WPTextTertiaryColor();
-        [self.contentView addSubview:hint];
-        y += 20;
+        [self addSectionFooter:@"开启自动抢红包后可配置详细选项" y:y width:w];
     }
 
     y = [self addSectionHeader:@"自动收款" y:y width:w];
@@ -155,16 +150,10 @@
     y = [self finishGroup:group2 atY:y height:cy2];
 
     if (!transferConfig.autoConfirmTransfer) {
-        UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(16, y, w - 32, 16)];
-        hint.text = @"开启自动收款后可配置详细选项";
-        hint.font = [UIFont systemFontOfSize:12];
-        hint.textColor = WPTextTertiaryColor();
-        [self.contentView addSubview:hint];
-        y += 20;
+        [self addSectionFooter:@"开启自动收款后可配置详细选项" y:y width:w];
     }
 
-    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
-    self.scrollView.contentSize = CGSizeMake(w, y + 40);
+    WPLog(@"UI", @"[Sub] SettingRedEnvelopController buildUI done");
 }
 
 @end

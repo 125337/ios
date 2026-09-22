@@ -164,12 +164,8 @@
     WPLog(@"UI", @"[Sub] SettingListCornerRadiusController buildUI done");
 }
 
-- (void)switchChanged:(UISwitch *)sender {
-    [super switchChanged:sender];
-
-    NSString *key = objc_getAssociatedObject(sender, "key");
-    if (!key) return;
-
+// 微信引擎开关落地钩子（基类 wpHandleSwitchKey 每次开关后调用；旧 UISwitch switchChanged: 入口已废弃）
+- (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on {
     // ★ 需要重启的开关（值变化后需重启微信才能生效）
     if ([key isEqualToString:@"globalCornerRadiusEnabled"]
         || [key isEqualToString:@"globalCornerMyPageEnabled"]
@@ -180,9 +176,8 @@
         return;
     }
 
-    // ★ 主开关手风琴（需要 rebuild 展开/折叠子项 + 重启生效）
+    // ★ 主开关手风琴（基类已对 master key 整页重建，这里只需重启提醒）
     if ([key isEqualToString:@"listCellBorder"]) {
-        [self buildUI];
         [MioRestartHelper showRestartAlertFromVC:self];
         return;
     }

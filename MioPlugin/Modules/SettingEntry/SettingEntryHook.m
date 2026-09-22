@@ -106,8 +106,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     // 与子页面(SettingCategoryController)对齐：self.view 和 scrollView 都设 WPBgColor，
     // 防止 scrollView 未完全覆盖时露出微信基类的主题背景色
     vc.view.backgroundColor = WPBgColor();
-    UIScrollView *sv = WPMakeSV(vc);
-    [vc.view addSubview:sv];
 
     CGFloat y = 8;
 
@@ -175,42 +173,8 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         return;
     }
 
-    // === 旧手动路径（微信 cell 框架缺失时兜底） ===
-    [sv addSubview:heroCard];
-    y += hy + 8;
-
-    [sv addSubview:WPMakeSectionHeader(@"功能列表", y, w)];
-    y += 32;
-
-    UIView *listCard = WPMakeCard(y, w);
-    CGFloat cy = 0;
-
-    NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
-    CGFloat scale = [UIScreen mainScreen].scale;
-    for (NSUInteger i = 0; i < navItems.count; i++) {
-        if (i > 0) {
-            WPAddSep(listCard, cy, w);
-            cy = round((cy + 1.0 / scale) * scale) / scale;
-        }
-        WPAddNavRow(listCard, cy, w, navItems[i][0], navItems[i][1], [MioPluginSwitchHandler sharedInstance]);
-        cy += kRowH;
-    }
-
-    CGRect lcf = listCard.frame; lcf.size.height = cy; listCard.frame = lcf;
-    [sv addSubview:listCard];
-    y += cy + 8;
-
-    UILabel *footer = [[UILabel alloc] initWithFrame:CGRectMake(0, y, w, 50)];
-    footer.text = @"Mio助手 v2.0.0";
-    footer.font = [UIFont systemFontOfSize:12];
-    footer.textColor = WPT3();
-    footer.textAlignment = NSTextAlignmentCenter;
-    footer.numberOfLines = 2;
-    [sv addSubview:footer];
-    y += 60;
-
-    sv.contentSize = CGSizeMake(w, y);
-    WPLog(@"Setting", @"[Entry] setup complete (via viewWillAppear)");
+    // 旧兜底路径已删除：微信 cell 框架缺失时入口页无法渲染（与子页面策略一致）
+    WPLog(@"Setting", @"[Entry] 微信 cell 框架缺失，入口页无法渲染（旧兜底已移除）");
 }
 
 @implementation MioPluginSwitchHandler
