@@ -199,7 +199,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
                 WPLog(@"Setting", @"[Entry][LAYOUT] secHeader0=%@ sec0=%@ row0=%@",
                       NSStringFromCGRect([t rectForHeaderInSection:0]),
                       NSStringFromCGRect([t rectForSection:0]),
-                      [t numberOfSectionsInTableView:t] > 0 && [t numberOfRowsInSection:0] > 0
+                      [t numberOfSections] > 0 && [t numberOfRowsInSection:0] > 0
                           ? NSStringFromCGRect([t rectForRowAtIndexPath:r0]) : @"无行");
             } @catch (NSException *e) {
                 WPLog(@"Setting", @"[Entry][LAYOUT] rect 读取异常: %@", e.reason);
