@@ -58,8 +58,9 @@
     }
 
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
-    CGFloat y = 0;
+    CGFloat y = 8;
 
+    y = [self addSectionHeader:@"常用功能" y:y width:w];
     UIView *group = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
 
@@ -186,12 +187,9 @@
     pcy = [self addSeparatorInGroup:pGroup cy:pcy width:w];
 
     // 4. 指定页面上锁 → 二级页面
-    NSInteger lockCount = [self privacyLockEnabledCount];
     pcy = [self addNavRowInGroup:pGroup
                            title:@"指定页面上锁"
-                        subtitle:lockCount > 0
-                                     ? [NSString stringWithFormat:@"已开启 %ld 项", (long)lockCount]
-                                     : @"未开启"
+                        subtitle:nil
                               tag:900
                            action:@selector(onPageLockTap)
                                cy:pcy
@@ -201,20 +199,6 @@
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
-}
-
-- (NSInteger)privacyLockEnabledCount {
-    PrivacyConfig *c = [PrivacyConfig shared];
-    NSInteger n = 0;
-    if (c.privacyLockMyPayEnabled) n++;
-    if (c.privacyLockMyFavoriteEnabled) n++;
-    if (c.privacyLockMyMomentEnabled) n++;
-    if (c.privacyLockMyChannelsEnabled) n++;
-    if (c.privacyLockMyPluginEnabled) n++;
-    if (c.privacyLockMySettingEnabled) n++;
-    if (c.privacyLockMomentEnabled) n++;
-    if (c.privacyLockChannelsEnabled) n++;
-    return n;
 }
 
 - (void)onPageLockTap {

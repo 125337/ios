@@ -1,0 +1,519 @@
+{"app_name":"WeChat","timestamp":"2026-09-22 17:06:23.00 +0800","app_version":"8.0.60","slice_uuid":"C1DC4CA2-7E6E-3BBA-B9D7-3078C56F9386","build_version":"8.0.60.35","bundleID":"com.tencent.qy.xin","duration_ms":"66162","share_with_app_devs":0,"is_first_party":0,"bug_type":"142","os_version":"iPhone OS 17.2.1 (21C66)","roots_installed":0,"incident_id":"A4CB8E52-C388-466B-A1E6-711DA9D779EF","name":"WeChat"}
+Date/Time:        2026-09-22 17:05:14.853 +0800
+End time:         2026-09-22 17:06:21.015 +0800
+OS Version:       iPhone OS 17.2.1 (Build 21C66)
+Architecture:     arm64e
+Report Version:   44
+Incident Identifier: A4CB8E52-C388-466B-A1E6-711DA9D779EF
+
+Data Source:      Microstackshots
+Shared Cache:     8998E155-D9D8-37E3-98A4-53F83286FD45 slid base address 0x186414000, slide 0x6414000
+
+Command:          WeChat
+Path:             /private/var/containers/Bundle/Application/F410DE11-5014-4809-8DDD-92173978AF39/WeChat.app/WeChat
+Identifier:       com.tencent.qy.xin
+Version:          8.0.60 (8.0.60.35)
+Is First Party:   No
+Beta Identifier:  1C2598EA-B2A9-4ABA-AAE9-F08E952CA905
+Resource Coalition ID: 1139
+On Behalf Of:     1 sample WeChat [21183]
+Architecture:     arm64
+Parent:           UNKNOWN [1]
+PID:              21183
+
+Event:            wakeups
+Action taken:     none
+Wakeups:          45001 wakeups over the last 66 seconds (680 wakeups per second average), exceeding limit of 150 wakeups per second over 300 seconds
+Wakeups limit:    45000
+Limit duration:   300s
+Wakeups caused:   45001
+Wakeups duration: 66s
+Duration:         66.16s
+Duration Sampled: 60.51s
+Steps:            19
+
+Hardware model:   iPhone16,1
+Active cpus:      6
+HW page size:     16384
+VM page size:     16384
+
+Advisory levels:  Battery -> 1, User -> 3, ThermalPressure -> 0, Combined -> 1
+Free disk space:  19.05 GB/238.29 GB, low space threshold 150 MB
+Vnodes Available: 56.57% (15840/28000, 14000 allocated, 14000 soft limit)
+
+Preferred User Language: zh-Hans-CN, zh-Hant-CN
+Country Code:     CN
+Keyboards:        com.baidu.inputMethod.keyboard, zh_Hans-Pinyin Pinyin-Simplified
+OS Cryptex File Extents: 4
+
+Heaviest stack for the target process:
+  12  ??? (libsystem_pthread.dylib + 6672) [0x1f81cfa10]
+  11  ??? (libsystem_pthread.dylib + 9428) [0x1f81d04d4]
+  8   ??? (Foundation + 720354) [0x18d1fbde2]
+  8   ??? (WeChat + 317452542) [0x117acf0fe]
+  8   ??? (WeChat + 236449924) [0x112d8f084]
+  8   ??? (CoreFoundation + 209372) [0x18e1e51dc]
+  8   ??? (CoreFoundation + 210040) [0x18e1e5478]
+  4   ??? (CoreFoundation + 211476) [0x18e1e5a14]
+  3   ??? (CoreFoundation + 219932) [0x18e1e7b1c]
+  3   ??? (libsystem_kernel.dylib + 3176) [0x1d5910c68]
+  3   ??? (libsystem_kernel.dylib + 3624) [0x1d5910e28]
+  3   ??? (libsystem_kernel.dylib + 4472) [0x1d5911178]
+
+
+Powerstats for:   WeChat [21183]
+UUID:             C1DC4CA2-7E6E-3BBA-B9D7-3078C56F9386
+Path:             /private/var/containers/Bundle/Application/F410DE11-5014-4809-8DDD-92173978AF39/WeChat.app/WeChat
+Identifier:       com.tencent.qy.xin
+Version:          8.0.60 (8.0.60.35)
+Is First Party:   No
+Beta Identifier:  1C2598EA-B2A9-4ABA-AAE9-F08E952CA905
+Resource Coalition ID: 1139
+On Behalf Of:     1 sample WeChat [21183]
+Architecture:     arm64
+Parent:           UNKNOWN [1]
+UID:              501
+Footprint:        240.27 MB -> 654.28 MB (+414.02 MB) (max 689.08 MB )
+Pageins:          24866 pages
+Start time:       2026-09-22 17:05:18.110 +0800
+End time:         2026-09-22 17:06:18.625 +0800
+Num samples:      19 (100%)
+Primary state:    5 samples Frontmost App, Non-Suppressed, Kernel mode, Effective Thread QoS Default, Requested Thread QoS Default, Override Thread QoS Unspecified
+User Activity:    0 samples Idle, 19 samples Active
+Power Source:     19 samples on Battery, 0 samples on AC
+  12  ??? (libsystem_pthread.dylib + 6672) [0x1f81cfa10]
+    11  ??? (libsystem_pthread.dylib + 9428) [0x1f81d04d4]
+      8   ??? (Foundation + 720354) [0x18d1fbde2]
+        8   ??? (WeChat + 317452542) [0x117acf0fe]
+          8   ??? (WeChat + 236449924) [0x112d8f084]
+            8   ??? (CoreFoundation + 209372) [0x18e1e51dc]
+              8   ??? (CoreFoundation + 210040) [0x18e1e5478]
+                4   ??? (CoreFoundation + 211476) [0x18e1e5a14]
+                  3   ??? (CoreFoundation + 219932) [0x18e1e7b1c]
+                    3   ??? (libsystem_kernel.dylib + 3176) [0x1d5910c68]
+                      3   ??? (libsystem_kernel.dylib + 3624) [0x1d5910e28]
+                        3   ??? (libsystem_kernel.dylib + 4472) [0x1d5911178]
+                  1   ??? (libdispatch.dylib + 174948) [0x1961cfb64]
+                    1   <User mode>
+                3   ??? (CoreFoundation + 212512) [0x18e1e5e20]
+                  3   ??? (CoreFoundation + 215016) [0x18e1e67e8]
+                    3   ??? (CoreFoundation + 220512) [0x18e1e7d60]
+                      3   ??? (CoreFoundation + 220708) [0x18e1e7e24]
+                        2   ??? (QuartzCore + 193636) [0x18f7ed464]
+                          2   ??? (QuartzCore + 204736) [0x18f7effc0]
+                            2   ??? (QuartzCore + 206004) [0x18f7f04b4]
+                              1   ??? (QuartzCore + 193230) [0x18f7ed2ce]
+                                1   ??? (WeChat + 311842510) [0x1175756ce]
+                                  1   ??? (WeChat + 311877817) [0x11757e0b9]
+                                    1   ??? (WeChat + 156403237) [0x10e138625]
+                                      1   ??? (WeChat + 21258876) [0x10605627c]
+                                        1   ??? (WeChat + 266313788) [0x114a0a03c]
+                                          1   ??? (libobjc.A.dylib + 43512) [0x1865069f8]
+                                            1   ??? (WeChat + 273376440) [0x1150c64b8]
+                                              1   ??? (WeChat + 273445624) [0x1150d72f8]
+                                                1   ??? (WeChat + 27616372) [0x106666474]
+                                                  1   <User mode>
+                              1   ??? (QuartzCore + 193228) [0x18f7ed2cc]
+                                1   ??? (CoreFoundation + 1517904) [0x18e324950]
+                                  1   ??? (WeChat + 311047688) [0x1174b3608]
+                                    1   <User mode>
+                        1   ??? (libsystem_kernel.dylib + 4736) [0x1d5911280]
+                          1   <User mode>
+                1   ??? (CoreFoundation + 211096) [0x18e1e5898]
+                  1   ??? (CoreFoundation + 215900) [0x18e1e6b5c]
+                    1   ??? (CoreFoundation + 222120) [0x18e1e83a8]
+                      1   ??? (CoreFoundation + 225580) [0x18e1e912c]
+                        1   ??? (Foundation + 993594) [0x18d23e93a]
+                          1   ??? (WeChat + 317131534) [0x117a80b0e]
+                            1   ??? (WeChat + 236458102) [0x112d91076]
+                              1   ??? (WeChat + 156390918) [0x10e135606]
+                                1   ??? (WeChat + 21253856) [0x106054ee0]
+                                  1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 1616516) [0x124156a84]
+                                    1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5537116) [0x124513d5c]
+                                      1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4069944) [0x1243ada38]
+                                        1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 1191832) [0x1240eef98]
+                                          1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 1340204) [0x12411332c]
+                                            1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 1340700) [0x12411351c]
+                                              1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 1352636) [0x1241163bc]
+                                                1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4108720) [0x1243b71b0]
+                                                  1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4252532) [0x1243da374]
+                                                    1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 1651094) [0x12415f196]
+                                                      1   ??? (WeChat + 236702642) [0x112dccbb2]
+                                                        1   ??? (WeChat + 236702950) [0x112dccce6]
+                                                          1   ??? (WeChat + 236703766) [0x112dcd016]
+                                                            1   ??? (WeChat + 236435758) [0x112d8b92e]
+                                                              1   ??? (WeChat + 236607962) [0x112db59da]
+                                                                1   ??? (WeChat + 236456734) [0x112d90b1e]
+                                                                  1   ??? (WeChat + 236457546) [0x112d90e4a]
+                                                                    1   ??? (WeChat + 236458674) [0x112d912b2]
+                                                                      1   ??? (WeChat + 236458102) [0x112d91076]
+                                                                        1   ??? (WeChat + 156390918) [0x10e135606]
+                                                                          1   ??? (WeChat + 21253892) [0x106054f04]
+                                                                            1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 1616516) [0x124156a84]
+                                                                              1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5537116) [0x124513d5c]
+                                                                                1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4069676) [0x1243ad92c]
+                                                                                  1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 7449188) [0x1246e6a64]
+                                                                                    1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5383652) [0x1244ee5e4]
+                                                                                      1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5384176) [0x1244ee7f0]
+                                                                                        1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5413272) [0x1244f5998]
+                                                                                          1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5565248) [0x12451ab40]
+                                                                                            1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5396492) [0x1244f180c]
+                                                                                              1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4449176) [0x12440a398]
+                                                                                                1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4473560) [0x1244102d8]
+                                                                                                  1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5088252) [0x1244a63fc]
+                                                                                                    1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5108256) [0x1244ab220]
+                                                                                                      1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5135948) [0x1244b1e4c]
+                                                                                                        1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4881528) [0x124473c78]
+                                                                                                          1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5055856) [0x12449e570]
+                                                                                                            1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4859264) [0x12446e580]
+                                                                                                              1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4881528) [0x124473c78]
+                                                                                                                1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5055856) [0x12449e570]
+                                                                                                                  1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4858212) [0x12446e164]
+                                                                                                                    1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4895348) [0x124477274]
+                                                                                                                      1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4911812) [0x12447b2c4]
+                                                                                                                        1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4958856) [0x124486a88]
+                                                                                                                          1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4960120) [0x124486f78]
+                                                                                                                            1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4968588) [0x12448908c]
+                                                                                                                              1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5007116) [0x12449270c]
+                                                                                                                                1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4935224) [0x124480e38]
+                                                                                                                                  1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5015544) [0x1244947f8]
+                                                                                                                                    1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4924552) [0x12447e488]
+                                                                                                                                      1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4935224) [0x124480e38]
+                                                                                                                                        1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5022816) [0x124496460]
+                                                                                                                                          1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4943680) [0x124482f40]
+                                                                                                                                            1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4958128) [0x1244867b0]
+                                                                                                                                              1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4958792) [0x124486a48]
+                                                                                                                                                1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4960120) [0x124486f78]
+                                                                                                                                                  1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4968036) [0x124488e64]
+                                                                                                                                                    1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4962264) [0x1244877d8]
+                                                                                                                                                      1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4971052) [0x124489a2c]
+                                                                                                                                                        1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5015544) [0x1244947f8]
+                                                                                                                                                          1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4925656) [0x12447e8d8]
+                                                                                                                                                            1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5011292) [0x12449375c]
+                                                                                                                                                              1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5022816) [0x124496460]
+                                                                                                                                                                1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4943680) [0x124482f40]
+                                                                                                                                                                  1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4958128) [0x1244867b0]
+                                                                                                                                                                    1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4958856) [0x124486a88]
+                                                                                                                                                                      1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4960144) [0x124486f90]
+                                                                                                                                                                        1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4965236) [0x124488374]
+                                                                                                                                                                          1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4977252) [0x12448b264]
+                                                                                                                                                                            1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4943680) [0x124482f40]
+                                                                                                                                                                              1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4958128) [0x1244867b0]
+                                                                                                                                                                                1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4958792) [0x124486a48]
+                                                                                                                                                                                  1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4960120) [0x124486f78]
+                                                                                                                                                                                    1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4968588) [0x12448908c]
+                                                                                                                                                                                      1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5007116) [0x12449270c]
+                                                                                                                                                                                        1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 4935224) [0x124480e38]
+                                                                                                                                                                                          1   ??? (<4F00C8AC-321C-3D1F-9590-50236B728D21> + 5025880) [0x124497058]
+                                                                                                                                                                                            1   <Non-Frontmost App, User mode>
+      2   ??? (WeChat + 273429184) [0x1150d32c0]
+        2   ??? (libsystem_c.dylib + 40504) [0x1961f5e38]
+          2   ??? (libsystem_kernel.dylib + 6520) [0x1d5911978]
+      1   ??? (WeChat + 273430288) [0x1150d3710]
+        1   ??? (WeChat + 273340632) [0x1150bd8d8]
+          1   ??? (WeChat + 273340744) [0x1150bd948]
+            1   <Non-Frontmost App, User mode>
+    1   ??? (libsystem_pthread.dylib + 9429) [0x1f81d04d5]
+      1   ??? (WeChat + 266178633) [0x1149e9049]
+        1   ??? (WeChat + 266188708) [0x1149eb7a4]
+          1   ??? (libsystem_kernel.dylib + 60756) [0x1d591ed54]
+            1   <Non-Frontmost App, User mode, Effective Thread QoS Background>
+  5   ??? (dyld + 24014) [0x1b0f1edce]
+    5   ??? (WeChat + 145161400) [0x10d67fcb8]
+      5   ??? (UIKitCore + 2276456) [0x190608c68]
+        5   ??? (UIKitCore + 2278956) [0x19060962c]
+          5   ??? (GraphicsServices + 13560) [0x1d17664f8]
+            5   ??? (CoreFoundation + 210040) [0x18e1e5478]
+              4   ??? (CoreFoundation + 211096) [0x18e1e5898]
+                2   ??? (CoreFoundation + 215996) [0x18e1e6bbc]
+                  2   ??? (CoreFoundation + 222120) [0x18e1e83a8]
+                    2   ??? (CoreFoundation + 225580) [0x18e1e912c]
+                      1   ??? (FrontBoardServices + 41848) [0x1a664c378]
+                        1   ??? (FrontBoardServices + 42144) [0x1a664c4a0]
+                          1   ??? (FrontBoardServices + 42272) [0x1a664c520]
+                            1   ??? (libdispatch.dylib + 32072) [0x1961acd48]
+                              1   ??? (libdispatch.dylib + 17152) [0x1961a9300]
+                                1   ??? (FrontBoardServices + 57528) [0x1a66500b8]
+                                  1   ??? (FrontBoardServices + 57756) [0x1a665019c]
+                                    1   ??? (FrontBoardServices + 58112) [0x1a6650300]
+                                      1   ??? (FrontBoardServices + 58804) [0x1a66505b4]
+                                        1   ??? (UIKitCore + 1274116) [0x190514104]
+                                          1   ??? (UIKitCore + 1274564) [0x1905142c4]
+                                            1   ??? (UIKitCore + 1274964) [0x190514454]
+                                              1   ??? (UIKitCore + 4964520) [0x1908990a8]
+                                                1   ??? (UIKitCore + 1278672) [0x1905152d0]
+                                                  1   ??? (UIKitCore + 1279520) [0x190515620]
+                                                    1   ??? (UIKitCore + 1281432) [0x190515d98]
+                                                      1   ??? (UIKitCore + 1281648) [0x190515e70]
+                                                        1   ??? (UIKitCore + 1282420) [0x190516174]
+                                                          1   ??? (UIKitCore + 1284964) [0x190516b64]
+                                                            1   ??? (UIKitCore + 1286192) [0x190517030]
+                                                              1   ??? (UIKitCore + 2761520) [0x19067f330]
+                                                                1   ??? (UIKitCore + 1621112) [0x190568c78]
+                                                                  1   ??? (UIKitCore + 1626746) [0x19056a27a]
+                                                                    1   ??? (WeChat + 51939152) [0x107d98750]
+                                                                      1   ??? (<5505C2B3-7C30-395A-A1DD-ACFCB9916BDA> + 5536524) [0x133eafb0c]
+                                                                        1   ??? (<F9D0D612-59C0-3280-8356-C90F16B73F80> + 60724316) [0x13260145c]
+                                                                          1   ??? (<3B413BB3-1F64-3ED0-B709-3E226AFBF727> + 3589544) [0x12e31c5a8]
+                                                                            1   ??? (<B695279A-A614-30CB-B8E4-259D5CF48295> + 6570536) [0x12db80228]
+                                                                              1   ??? (<1F1223AD-E9B2-3A0E-8CF8-D022E1E7B5E6> + 8379488) [0x12c471c60]
+                                                                                1   ??? (<1F1223AD-E9B2-3A0E-8CF8-D022E1E7B5E6> + 7868166) [0x12c3f4f06]
+                                                                                  1   ??? (WeChat + 59585962) [0x1084e35aa]
+                                                                                    1   ??? (WeChat + 59586198) [0x1084e3696]
+                                                                                      1   ??? (WeChat + 59554730) [0x1084dbbaa]
+                                                                                        1   ??? (WeChat + 59541598) [0x1084d885e]
+                                                                                          1   ??? (WeChat + 58461614) [0x1083d0dae]
+                                                                                            1   ??? (WeChat + 28648230) [0x106762326]
+                                                                                              1   ??? (WeChat + 28580414) [0x106751a3e]
+                                                                                                1   ??? (WeChat + 90468322) [0x10a256fe2]
+                                                                                                  1   ??? (WeChat + 282913074) [0x1159de932]
+                                                                                                    1   ??? (WeChat + 283228242) [0x115a2b852]
+                                                                                                      1   ??? (WeChat + 283224366) [0x115a2a92e]
+                                                                                                        1   ??? (WeChat + 283180310) [0x115a1fd16]
+                                                                                                          1   ??? (WeChat + 283227502) [0x115a2b56e]
+                                                                                                            1   ??? (WeChat + 283229206) [0x115a2bc16]
+                                                                                                              1   ??? (WeChat + 283724298) [0x115aa4a0a]
+                                                                                                                1   ??? (WeChat + 283724642) [0x115aa4b62]
+                                                                                                                  1   ??? (WeChat + 283568050) [0x115a7e7b2]
+                                                                                                                    1   ??? (WeChat + 283568226) [0x115a7e862]
+                                                                                                                      1   ??? (WeChat + 283568626) [0x115a7e9f2]
+                                                                                                                        1   ??? (WeChat + 283501798) [0x115a6e4e6]
+                                                                                                                          1   ??? (WeChat + 283331102) [0x115a44a1e]
+                                                                                                                            1   ??? (WeChat + 283332192) [0x115a44e60]
+                                                                                                                              1   ??? (WeChat + 284737288) [0x115b9bf08]
+                                                                                                                                1   ??? (WeChat + 284737872) [0x115b9c150]
+                                                                                                                                  1   ??? (WeChat + 284457100) [0x115b5788c]
+                                                                                                                                    1   ??? (WeChat + 284131420) [0x115b0805c]
+                                                                                                                                      1   ??? (WeChat + 284136996) [0x115b09624]
+                                                                                                                                        1   ??? (WeChat + 284396264) [0x115b48ae8]
+                                                                                                                                          1   ??? (WeChat + 284736712) [0x115b9bcc8]
+                                                                                                                                            1   ??? (WeChat + 284736528) [0x115b9bc10]
+                                                                                                                                              1   ??? (WeChat + 284736304) [0x115b9bb30]
+                                                                                                                                                1   ??? (WeChat + 284537248) [0x115b6b1a0]
+                                                                                                                                                  1   ??? (WeChat + 284735152) [0x115b9b6b0]
+                                                                                                                                                    1   ??? (WeChat + 284737288) [0x115b9bf08]
+                                                                                                                                                      1   ??? (WeChat + 284737872) [0x115b9c150]
+                                                                                                                                                        1   ??? (WeChat + 284457100) [0x115b5788c]
+                                                                                                                                                          1   ??? (WeChat + 284131420) [0x115b0805c]
+                                                                                                                                                            1   ??? (WeChat + 284138592) [0x115b09c60]
+                                                                                                                                                              1   ??? (WeChat + 284501832) [0x115b62748]
+                                                                                                                                                                1   ??? (WeChat + 284331752) [0x115b38ee8]
+                                                                                                                                                                  1   ??? (WeChat + 284331156) [0x115b38c94]
+                                                                                                                                                                    1   ??? (WeChat + 284686228) [0x115b8f794]
+                                                                                                                                                                      1   ??? (WeChat + 273510668) [0x1150e710c]
+                                                                                                                                                                        1   ??? (WeChat + 273759016) [0x115123b28]
+                                                                                                                                                                          1   <on behalf of WeChat [21183], User mode, Effective Thread QoS User Interactive, Requested Thread QoS User Interactive>
+                      1   ??? (UIKitCore + 696208) [0x190486f90]
+                        1   ??? (UIKitCore + 696020) [0x190486ed4]
+                          1   ??? (UIKitCore + 698340) [0x1904877e4]
+                            1   ??? (UIKitCore + 699596) [0x190487ccc]
+                              1   ??? (QuartzCore + 416484) [0x18f823ae4]
+                                1   ??? (QuartzCore + 417340) [0x18f823e3c]
+                                  1   ??? (QuartzCore + 445280) [0x18f82ab60]
+                                    1   ??? (QuartzCore + 419376) [0x18f824630]
+                                      1   ??? (QuartzCore + 420520) [0x18f824aa8]
+                                        1   ??? (UIKitCore + 207228) [0x19040f97c]
+                                          1   ??? (<5505C2B3-7C30-395A-A1DD-ACFCB9916BDA> + 16573332) [0x134936394]
+                                            1   ??? (<B695279A-A614-30CB-B8E4-259D5CF48295> + 1807200) [0x12d6f5360]
+                                              1   ??? (<B695279A-A614-30CB-B8E4-259D5CF48295> + 704052) [0x12d5e7e34]
+                                                1   ??? (<545C1F22-DB76-3FD7-892E-8AF7CBF54AED> + 6793046) [0x12acd2756]
+                                                  1   ??? (WeChat + 300575924) [0x116ab6cb4]
+                                                    1   ??? (UIKitCore + 2641460) [0x190661e34]
+                                                      1   ??? (UIKitCore + 2642764) [0x19066234c]
+                                                        1   ??? (UIKitCore + 2649600) [0x190663e00]
+                                                          1   ??? (UIKitCore + 2651520) [0x190664580]
+                                                            1   ??? (UIKitCore + 268912) [0x19041ea70]
+                                                              1   ??? (UIKitCore + 219692) [0x190412a2c]
+                                                                1   ??? (QuartzCore + 420520) [0x18f824aa8]
+                                                                  1   ??? (UIKitCore + 207228) [0x19040f97c]
+                                                                    1   ??? (<5505C2B3-7C30-395A-A1DD-ACFCB9916BDA> + 6600248) [0x133fb3638]
+                                                                      1   ??? (<5505C2B3-7C30-395A-A1DD-ACFCB9916BDA> + 6190566) [0x133f4f5e6]
+                                                                        1   ??? (WeChat + 58574110) [0x1083ec51e]
+                                                                          1   ??? (WeChat + 58618516) [0x1083f7294]
+                                                                            1   ??? (<F441B603-FC1F-324C-AB69-174DBCD37ED2> + 60664) [0x136352cf8]
+                                                                              1   ??? (<5505C2B3-7C30-395A-A1DD-ACFCB9916BDA> + 4403608) [0x133d9b198]
+                                                                                1   ??? (<1F1223AD-E9B2-3A0E-8CF8-D022E1E7B5E6> + 7922388) [0x12c4022d4]
+                                                                                  1   ??? (<1F1223AD-E9B2-3A0E-8CF8-D022E1E7B5E6> + 7714572) [0x12c3cf70c]
+                                                                                    1   ??? (CoreFoundation + 1237932) [0x18e2e03ac]
+                                                                                      1   <User mode, Effective Thread QoS User Interactive, Requested Thread QoS User Interactive>
+                2   ??? (CoreFoundation + 215900) [0x18e1e6b5c]
+                  2   ??? (CoreFoundation + 222120) [0x18e1e83a8]
+                    2   ??? (CoreFoundation + 225580) [0x18e1e912c]
+                      1   ??? (JavaScriptCore + 338884) [0x1a3c8abc4]
+                        1   ??? (JavaScriptCore + 335092) [0x1a3c89cf4]
+                          1   ??? (WebKit + 12249016) [0x1a3a907b8]
+                            1   ??? (WebKit + 12247916) [0x1a3a9036c]
+                              1   ??? (WebKit + 7525028) [0x1a360f2a4]
+                                1   ??? (WebKit + 12268496) [0x1a3a953d0]
+                                  1   ??? (WebKit + 11174784) [0x1a398a380]
+                                    1   ??? (WebKit + 7172396) [0x1a35b912c]
+                                      1   ??? (WebKit + 7173996) [0x1a35b976c]
+                                        1   ??? (WebKit + 5125354) [0x1a33c54ea]
+                                          1   ??? (WeChat + 298707074) [0x1168ee882]
+                                            1   ??? (WeChat + 134099693) [0x10cbf32ed]
+                                              1   ??? (WeChat + 145068313) [0x10d669119]
+                                                1   ??? (WeChat + 145068781) [0x10d6692ed]
+                                                  1   ??? (WeChat + 266420041) [0x114a23f49]
+                                                    1   ??? (WeChat + 266421149) [0x114a2439d]
+                                                      1   ??? (WeChat + 266446980) [0x114a2a884]
+                                                        1   ??? (libsystem_c.dylib + 23724) [0x1961f1cac]
+                                                          1   ??? (libsystem_c.dylib + 6344) [0x1961ed8c8]
+                                                            1   ??? (libsystem_c.dylib + 9228) [0x1961ee40c]
+                                                              1   <Non-Frontmost App, User mode, Effective Thread QoS Background, Requested Thread QoS User Interactive>
+                      1   ??? (UIKitCore + 696208) [0x190486f90]
+                        1   ??? (UIKitCore + 696020) [0x190486ed4]
+                          1   ??? (UIKitCore + 698340) [0x1904877e4]
+                            1   ??? (UIKitCore + 699596) [0x190487ccc]
+                              1   ??? (QuartzCore + 416484) [0x18f823ae4]
+                                1   ??? (QuartzCore + 417340) [0x18f823e3c]
+                                  1   ??? (QuartzCore + 445292) [0x18f82ab6c]
+                                    1   ??? (QuartzCore + 650952) [0x18f85cec8]
+                                      1   ??? (QuartzCore + 2639748) [0x18fa42784]
+                                        1   ??? (QuartzCore + 651660) [0x18f85d18c]
+                                          1   ??? (QuartzCore + 654236) [0x18f85db9c]
+                                            1   ??? (ImageIO + 1217296) [0x193fc1310]
+                                              1   ??? (ImageIO + 1222044) [0x193fc259c]
+                                                1   ??? (ImageIO + 1168184) [0x193fb5338]
+                                                  1   ??? (ImageIO + 226224) [0x193ecf3b0]
+                                                    1   ??? (ImageIO + 230436) [0x193ed0424]
+                                                      1   ??? (ImageIO + 235540) [0x193ed1814]
+                                                        1   ??? (CMPhoto + 161384) [0x1b2bc8668]
+                                                          1   ??? (CMPhoto + 161524) [0x1b2bc86f4]
+                                                            1   ??? (CMPhoto + 42140) [0x1b2bab49c]
+                                                              1   ??? (CMPhoto + 256452) [0x1b2bdf9c4]
+                                                                1   ??? (CMPhoto + 257632) [0x1b2bdfe60]
+                                                                  1   ??? (CMPhoto + 264480) [0x1b2be1920]
+                                                                    1   ??? (VideoToolbox + 540996) [0x19ea14144]
+                                                                      1   ??? (VideoToolbox + 2297144) [0x19ebc0d38]
+                                                                        1   ??? (VideoToolbox + 3442452) [0x19ecd8714]
+                                                                          1   ??? (VideoToolbox + 3447032) [0x19ecd98f8]
+                                                                            1   ??? (Metal + 310724) [0x18dde6dc4]
+                                                                              1   ??? (libdispatch.dylib + 79540) [0x1961b86b4]
+                                                                                1   ??? (libdispatch.dylib + 17152) [0x1961a9300]
+                                                                                  1   ??? (Metal + 30856) [0x18dda2888]
+                                                                                    1   ??? (Metal + 31384) [0x18dda2a98]
+                                                                                      1   ??? (IOGPU + 19312) [0x204819b70]
+                                                                                        1   ??? (IOGPU + 19704) [0x204819cf8]
+                                                                                          1   ??? (IOKit + 208484) [0x196c36e64]
+                                                                                            1   <User mode, Effective Thread QoS User Interactive, Requested Thread QoS User Interactive>
+              1   ??? (CoreFoundation + 212124) [0x18e1e5c9c]
+                1   ??? (CoreFoundation + 224388) [0x18e1e8c84]
+                  1   ??? (CoreFoundation + 708756) [0x18e25f094]
+                    1   ??? (CoreFoundation + 709612) [0x18e25f3ec]
+                      1   ??? (Foundation + 7634318) [0x18d893d8e]
+                        1   ??? (WeChat + 317296434) [0x117aa8f32]
+                          1   ??? (WeChat + 55126314) [0x1080a292a]
+                            1   ??? (WeChat + 316905946) [0x117a499da]
+                              1   ??? (WeChat + 317601118) [0x117af355e]
+                                1   ??? (WeChat + 53748498) [0x107f52312]
+                                  1   ??? (WeChat + 316905946) [0x117a499da]
+                                    1   ??? (WeChat + 317601118) [0x117af355e]
+                                      1   ??? (WeChat + 58699122) [0x10840ad72]
+                                        1   ??? (WeChat + 316905946) [0x117a499da]
+                                          1   ??? (WeChat + 317601118) [0x117af355e]
+                                            1   ??? (WeChat + 58654172) [0x1083ffddc]
+                                              1   ??? (<5505C2B3-7C30-395A-A1DD-ACFCB9916BDA> + 3468876) [0x133cb6e4c]
+                                                1   ??? (<F9D0D612-59C0-3280-8356-C90F16B73F80> + 59918464) [0x13253c880]
+                                                  1   ??? (<B695279A-A614-30CB-B8E4-259D5CF48295> + 1895736) [0x12d70ad38]
+                                                    1   ??? (<B695279A-A614-30CB-B8E4-259D5CF48295> + 2935712) [0x12d808ba0]
+                                                      1   ??? (<B695279A-A614-30CB-B8E4-259D5CF48295> + 2939253) [0x12d809975]
+                                                        1   ??? (WeChat + 55122580) [0x1080a1a94]
+                                                          1   ??? (<5505C2B3-7C30-395A-A1DD-ACFCB9916BDA> + 3929188) [0x133d27464]
+                                                            1   ??? (<B695279A-A614-30CB-B8E4-259D5CF48295> + 803161) [0x12d600159]
+                                                              1   ??? (WeChat + 1674709) [0x104da8dd5]
+                                                                1   ??? (WeChat + 1487056) [0x104d7b0d0]
+                                                                  1   ??? (<5505C2B3-7C30-395A-A1DD-ACFCB9916BDA> + 4181948) [0x133d64fbc]
+                                                                    1   ??? (<3B413BB3-1F64-3ED0-B709-3E226AFBF727> + 1690356) [0x12e14caf4]
+                                                                      1   ??? (<1F1223AD-E9B2-3A0E-8CF8-D022E1E7B5E6> + 8167792) [0x12c43e170]
+                                                                        1   ??? (<1F1223AD-E9B2-3A0E-8CF8-D022E1E7B5E6> + 8168460) [0x12c43e40c]
+                                                                          1   ??? (<1F1223AD-E9B2-3A0E-8CF8-D022E1E7B5E6> + 7716320) [0x12c3cfde0]
+                                                                            1   ??? (Foundation + 1309756) [0x18d28bc3c]
+                                                                              1   ??? (CoreFoundation + 361160) [0x18e20a2c8]
+                                                                                1   ??? (CoreFoundation + 361664) [0x18e20a4c0]
+                                                                                  1   ??? (CoreFoundation + 361920) [0x18e20a5c0]
+                                                                                    1   ??? (CoreFoundation + 362280) [0x18e20a728]
+                                                                                      1   ??? (CoreFoundation + 303516) [0x18e1fc19c]
+                                                                                        1   ??? (CoreFoundation + 1238040) [0x18e2e0418]
+                                                                                          1   <User mode, Effective Thread QoS User Interactive, Requested Thread QoS User Interactive>
+  2   ??? (libsystem_pthread.dylib + 6660) [0x1f81cfa04]
+    2   ??? (libsystem_pthread.dylib + 6500) [0x1f81cf964]
+      2   ??? (libdispatch.dylib + 92280) [0x1961bb878]
+        2   ??? (libdispatch.dylib + 94212) [0x1961bc004]
+          2   ??? (libdispatch.dylib + 50116) [0x1961b13c4]
+            2   ??? (libdispatch.dylib + 47252) [0x1961b0894]
+              2   ??? (libdispatch.dylib + 17152) [0x1961a9300]
+                2   ??? (libdispatch.dylib + 9898) [0x1961a76aa]
+                  2   ??? (WeChat + 316704242) [0x117a185f2]
+                    1   ??? (WeChat + 14416790) [0x1059cfb96]
+                      1   ??? (WeChat + 14418330) [0x1059d019a]
+                        1   ??? (WeChat + 14423598) [0x1059d162e]
+                          1   ??? (WeChat + 58924570) [0x108441e1a]
+                            1   ??? (WeChat + 58906930) [0x10843d932]
+                              1   ??? (WeChat + 58910470) [0x10843e706]
+                                1   ??? (WeChat + 28594774) [0x106755256]
+                                  1   ??? (WeChat + 28656506) [0x10676437a]
+                                    1   ??? (WeChat + 28661302) [0x106765636]
+                                      1   ??? (WeChat + 28661952) [0x1067658c0]
+                                        1   ??? (CoreFoundation + 439432) [0x18e21d488]
+                                          1   ??? (libcache.dylib + 9636) [0x211def5a4]
+                                            1   ??? (libcache.dylib + 11432) [0x211defca8]
+                                              1   ??? (libcache.dylib + 6500) [0x211dee964]
+                                                1   <Non-Frontmost App, User mode, Effective Thread QoS Background, Requested Thread QoS User Initiated>
+                    1   ??? (WeChat + 8498206) [0x10542ac1e]
+                      1   ??? (WeChat + 63599662) [0x1088b742e]
+                        1   ??? (WeChat + 8227742) [0x1053e8b9e]
+                          1   ??? (WeChat + 8242068) [0x1053ec394]
+                            1   ??? (CoreFoundation + 1517904) [0x18e324950]
+                              1   ??? (CoreFoundation + 203702) [0x18e1e3bb6]
+                                1   ??? (WeChat + 317624344) [0x117af9018]
+                                  1   ??? (CoreFoundation + 200788) [0x18e1e3054]
+                                    1   ??? (CoreFoundation + 201260) [0x18e1e322c]
+                                      1   ??? (CoreFoundation + 202644) [0x18e1e3794]
+                                        1   ??? (<545C1F22-DB76-3FD7-892E-8AF7CBF54AED> + 7439478) [0x12ad70476]
+                                          1   ??? (WeChat + 45273084) [0x10773cffc]
+                                            1   ??? (Foundation + 241268) [0x18d186e74]
+                                              1   ??? (CoreFoundation + 375688) [0x18e20db88]
+                                                1   ??? (CoreFoundation + 377664) [0x18e20e340]
+                                                  1   ??? (CoreFoundation + 1622488) [0x18e33e1d8]
+                                                    1   ??? (CoreFoundation + 1624524) [0x18e33e9cc]
+                                                      1   ??? (CoreFoundation + 428276) [0x18e21a8f4]
+                                                        1   ??? (CoreFoundation + 448324) [0x18e21f744]
+                                                          1   ??? (CoreFoundation + 448980) [0x18e21f9d4]
+                                                            1   ??? (CoreFoundation + 451236) [0x18e2202a4]
+                                                              1   ??? (CoreFoundation + 451480) [0x18e220398]
+                                                                1   ??? (CoreFoundation + 452140) [0x18e22062c]
+                                                                  1   ??? (CoreFoundation + 34896) [0x18e1ba850]
+                                                                    1   ??? (CoreFoundation + 39120) [0x18e1bb8d0]
+                                                                      1   <Non-Frontmost App, User mode, Effective Thread QoS Background, Requested Thread QoS User Initiated>
+
+  Binary Images:
+           0x104c10000 -                ???  com.tencent.qy.xin 8.0.60 (8.0.60.35) <C1DC4CA2-7E6E-3BBA-B9D7-3078C56F9386>  /private/var/containers/Bundle/Application/F410DE11-5014-4809-8DDD-92173978AF39/WeChat.app/WeChat
+           0x123fcc000 -                ???  ???                                   <4F00C8AC-321C-3D1F-9590-50236B728D21>
+           0x12a658000 -                ???  ???                                   <545C1F22-DB76-3FD7-892E-8AF7CBF54AED>
+           0x12bc74000 -                ???  ???                                   <1F1223AD-E9B2-3A0E-8CF8-D022E1E7B5E6>
+           0x12d53c000 -                ???  ???                                   <B695279A-A614-30CB-B8E4-259D5CF48295>
+           0x12dfb0000 -                ???  ???                                   <3B413BB3-1F64-3ED0-B709-3E226AFBF727>
+           0x12ec18000 -                ???  ???                                   <F9D0D612-59C0-3280-8356-C90F16B73F80>
+           0x133968000 -                ???  ???                                   <5505C2B3-7C30-395A-A1DD-ACFCB9916BDA>
+           0x136344000 -                ???  ???                                   <F441B603-FC1F-324C-AB69-174DBCD37ED2>
+           0x1864fc000 -        0x186549fe0  libobjc.A.dylib                       <98C1E5B8-C56E-3B9C-9783-B0FEF8F999EE>  /usr/lib/libobjc.A.dylib
+           0x18d14c000 -        0x18dcabfff  Foundation                            <C52A9630-60F1-3D48-A6C3-50A20DE78C6A>  /System/Library/Frameworks/Foundation.framework/Foundation
+           0x18dd9b000 -        0x18dfaafff  Metal                                 <8092CD07-6A8D-3415-A8F7-C840E44805B8>  /System/Library/Frameworks/Metal.framework/Metal
+           0x18e1b2000 -        0x18e6defff  CoreFoundation                        <BE405D8A-5464-37A3-A17E-1068DB404B23>  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation
+           0x18f7be000 -        0x18fb5ffff  QuartzCore                            <32B5A8E6-AC13-3BE9-A6B4-AF6309173F95>  /System/Library/Frameworks/QuartzCore.framework/QuartzCore
+           0x1903dd000 -        0x191eb2fff  UIKitCore                             <99AD2A31-9360-369F-9C0B-A7A0AF33E2E7>  /System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore
+           0x193e98000 -        0x194314fff  ImageIO                               <804378B1-31EB-3938-85C1-EECD09038AA0>  /System/Library/Frameworks/ImageIO.framework/ImageIO
+           0x1961a5000 -        0x1961ebfff  libdispatch.dylib                     <D023C07E-DCBD-3728-8E6F-5DDC6D3BEE25>  /usr/lib/system/libdispatch.dylib
+           0x1961ec000 -        0x196269ff3  libsystem_c.dylib                     <6E5A7692-C1E9-35AD-B20B-C307991DF11C>  /usr/lib/system/libsystem_c.dylib
+           0x196c04000 -        0x196cc6fff  IOKit                                 <F5369613-C587-3FC1-B85B-023931EC8DB6>  /System/Library/Frameworks/IOKit.framework/Versions/A/IOKit
+           0x19e990000 -        0x19edb4fff  VideoToolbox                          <94770C6A-8F34-323A-9E91-C4171A367E57>  /System/Library/Frameworks/VideoToolbox.framework/VideoToolbox
+           0x1a2ee2000 -        0x1a3c37fff  WebKit                                <83B99481-3EA7-3037-A07F-03D9DCF3A12A>  /System/Library/Frameworks/WebKit.framework/WebKit
+           0x1a3c38000 -        0x1a5316fbf  JavaScriptCore                        <D1F52CDA-68D2-304D-9A52-54BDC911BBF5>  /System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore
+           0x1a6642000 -        0x1a6705fff  FrontBoardServices                    <2A9AD616-07B6-3527-98CA-BFF90D2365BA>  /System/Library/PrivateFrameworks/FrontBoardServices.framework/FrontBoardServices
+           0x1b0f19000 -        0x1b0fa0b5b  dyld                                  <630C2209-DFD7-3C72-B0A9-E856C560F123>  /usr/lib/dyld
+           0x1b2ba1000 -        0x1b2c96fff  CMPhoto                               <B4B8A9D3-7315-3DFB-A644-AA57DB6BDDC0>  /System/Library/PrivateFrameworks/CMPhoto.framework/CMPhoto
+           0x1d1763000 -        0x1d176bfff  GraphicsServices                      <7D6F670C-0E4B-3215-8B4E-599EF1AB9ED2>  /System/Library/PrivateFrameworks/GraphicsServices.framework/GraphicsServices
+           0x1d5910000 -        0x1d5948fef  libsystem_kernel.dylib                <55F2CC41-2488-37BD-BB95-EA2FFD7611AE>  /usr/lib/system/libsystem_kernel.dylib
+           0x1f81ce000 -        0x1f81d9ff3  libsystem_pthread.dylib               <E9AE8DCF-C2B6-35D7-AF24-E008B8034E31>  /usr/lib/system/libsystem_pthread.dylib
+           0x204815000 -        0x20484cfff  IOGPU                                 <8B9E129A-2610-35A8-9216-D2E223B04C79>  /System/Library/PrivateFrameworks/IOGPU.framework/IOGPU
+           0x211ded000 -        0x211df2ffb  libcache.dylib                        <9878D9C9-4F77-3101-9315-629FF0AD848B>  /usr/lib/system/libcache.dylib
