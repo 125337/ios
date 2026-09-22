@@ -353,6 +353,9 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     dispatch_once(&onceToken, ^{
         WPLog(@"Setting", @"SettingEntryHook install");
 
+        // 微信原生箭头捕获 hook（供设置页行箭头/子行层级标记复用微信图）
+        WPInstallWCArrowCapture();
+
         Class pluginsMgrClass = objc_getClass("WCPluginsMgr");
         if (pluginsMgrClass) {
             WPLog(@"Setting", @"[Plugin] WCPluginsMgr found");

@@ -1,5 +1,6 @@
 #import "WPCommonUI.h"
 #import <QuartzCore/QuartzCore.h>
+#import "../../Core/LogManager.h"
 
 /// UISwitch block 回调桥接（MRC 安全）
 @interface _WPBlockSwitchTarget : NSObject
@@ -76,10 +77,93 @@ void WPAddSwitchRow(UIView *card, CGFloat cy, CGFloat cw, NSString *title, NSStr
 
 #pragma mark - 公共箭头
 
+#pragma mark - 微信原生箭头捕获
+
+// 运行时捕获微信 cell 的 accessory 箭头图，供所有行复用（与 WCR 借用微信 cell 框架同源的视觉）
+static UIImage *g_wcArrowImage = nil;
+static IMP orig_UICTV_setAV = NULL;
+static IMP orig_MMTV_setAV = NULL;
+
+// 捕获条件：UIImage 且尺寸像箭头（窄长小图）；命中后记录日志（含尝试取资源名，便于后续直接 imageNamed）
+static void wpTryCaptureArrowImage(UIView *av) {
+    if (!av || g_wcArrowImage) return;
+    if (![av isKindOfClass:[UIImageView class]]) {
+        for (UIView *sv in av.subviews) {
+            WPLog(@"CommonUI", @"[WCArrow] accessory 子视图: %@", NSStringFromClass([sv class]));
+        }
+        return;
+    }
+    UIImage *img = [(UIImageView *)av image];
+    if (!img) return;
+    CGFloat iw = img.size.width, ih = img.size.height;
+    if (iw < 4 || iw > 16 || ih < 8 || ih > 24) {
+        WPLog(@"CommonUI", @"[WCArrow] accessory 图片尺寸不像箭头 (%gx%g) 跳过", iw, ih);
+        return;
+    }
+    g_wcArrowImage = img;
+    NSString *nm = nil;
+    @try { nm = [img valueForKey:@"_imageName"]; } @catch (NSException *e) {}
+    WPLog(@"CommonUI", @"[WCArrow] 捕获微信箭头 %gx%g@%dx name=%@", iw, ih, (int)img.scale, nm);
+}
+
+static void hook_UICTV_setAV(id self, SEL _cmd, UIView *av) {
+    wpTryCaptureArrowImage(av);
+    if (orig_UICTV_setAV) ((void (*)(id, SEL, UIView *))orig_UICTV_setAV)(self, _cmd, av);
+}
+
+static void hook_MMTV_setAV(id self, SEL _cmd, UIView *av) {
+    wpTryCaptureArrowImage(av);
+    if (orig_MMTV_setAV) ((void (*)(id, SEL, UIView *))orig_MMTV_setAV)(self, _cmd, av);
+}
+
+void WPInstallWCArrowCapture(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class mm = objc_getClass("MMTableViewCell");
+        if (mm) {
+            Method m = class_getInstanceMethod(mm, @selector(setAccessoryView:));
+            if (m) {
+                orig_MMTV_setAV = method_setImplementation(m, (IMP)hook_MMTV_setAV);
+                WPLog(@"CommonUI", @"[WCArrow] hook MMTableViewCell setAccessoryView: OK");
+            }
+        } else {
+            WPLog(@"CommonUI", @"[WCArrow] MMTableViewCell 不存在");
+        }
+        // 基类兜底：微信 cell 子类若未重写 setAccessoryView:，会落到 UITableViewCell 基类
+        Class base = objc_getClass("UITableViewCell");
+        if (base) {
+            Method m = class_getInstanceMethod(base, @selector(setAccessoryView:));
+            if (m) {
+                orig_UICTV_setAV = method_setImplementation(m, (IMP)hook_UICTV_setAV);
+                WPLog(@"CommonUI", @"[WCArrow] hook UITableViewCell setAccessoryView: OK");
+            }
+        }
+    });
+}
+
+UIImage *WPWCArrowImage(void) {
+    return g_wcArrowImage;
+}
+
+#pragma mark - 箭头绘制
+
 void WPDrawDisclosureArrow(UIView *card, CGFloat cy, CGFloat containerW, CGFloat rightPadding) {
+    CGFloat arrowCY = cy + kRowH / 2;
+
+    // 优先：微信原生箭头图（运行时捕获）
+    UIImage *wcImg = WPWCArrowImage();
+    if (wcImg) {
+        CGFloat iw = wcImg.size.width, ih = wcImg.size.height;
+        UIImageView *iv = [[UIImageView alloc] initWithImage:wcImg];
+        iv.frame = CGRectMake(containerW - rightPadding - iw, arrowCY - ih / 2, iw, ih);
+        iv.userInteractionEnabled = NO;
+        [card addSubview:iv];
+        return;
+    }
+
+    // 回退：CAShapeLayer 矢量绘制
     CGFloat arrowW = 7, arrowH = 11;
     CGFloat arrowX = containerW - rightPadding - arrowW - 3;
-    CGFloat arrowCY = cy + kRowH / 2;
     CAShapeLayer *arrow = [CAShapeLayer layer];
     UIBezierPath *path = [UIBezierPath bezierPath];
     [path moveToPoint:CGPointMake(1, 0)];
@@ -92,6 +176,36 @@ void WPDrawDisclosureArrow(UIView *card, CGFloat cy, CGFloat containerW, CGFloat
     arrow.lineCap = kCALineCapRound;
     arrow.lineJoin = kCALineJoinRound;
     arrow.frame = CGRectMake(arrowX, arrowCY - arrowH / 2, arrowW + 2, arrowH);
+    [card.layer addSublayer:arrow];
+}
+
+void WPDrawSubItemArrow(UIView *card, CGFloat cy, CGFloat x) {
+    CGFloat arrowCY = cy + kRowH / 2;
+
+    UIImage *wcImg = WPWCArrowImage();
+    if (wcImg) {
+        CGFloat iw = wcImg.size.width, ih = wcImg.size.height;
+        UIImageView *iv = [[UIImageView alloc] initWithImage:wcImg];
+        iv.frame = CGRectMake(x, arrowCY - ih / 2, iw, ih);
+        iv.userInteractionEnabled = NO;
+        [card addSubview:iv];
+        return;
+    }
+
+    // 回退：小号矢量 chevron（5.5x9，1.5pt 线宽，比右侧大箭头更轻）
+    CGFloat arrowW = 5.5, arrowH = 9;
+    CAShapeLayer *arrow = [CAShapeLayer layer];
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    [path moveToPoint:CGPointMake(1, 0)];
+    [path addLineToPoint:CGPointMake(arrowW, arrowH / 2)];
+    [path addLineToPoint:CGPointMake(1, arrowH)];
+    arrow.path = path.CGPath;
+    arrow.strokeColor = [UIColor colorWithRed:0.78 green:0.78 blue:0.80 alpha:1.0].CGColor;
+    arrow.fillColor = [UIColor clearColor].CGColor;
+    arrow.lineWidth = 1.5;
+    arrow.lineCap = kCALineCapRound;
+    arrow.lineJoin = kCALineJoinRound;
+    arrow.frame = CGRectMake(x, arrowCY - arrowH / 2, arrowW + 2, arrowH);
     [card.layer addSublayer:arrow];
 }
 

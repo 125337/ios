@@ -292,12 +292,13 @@ static NSMutableArray *rowsForTable(UITableView *table) {
         return cy + kRowH;
     }
 
-    CGFloat gw = w - kPad * 2;
+    CGFloat gw = w - kCellHPadding * 2;
     UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, cy, gw - kCellHPadding * 2 - 70, kRowH)];
     tl.text = title;
     tl.font = [UIFont systemFontOfSize:15];
     tl.textColor = WPT1();
     [group addSubview:tl];
+    [self applySubItemMark:group label:tl cy:cy];
 
     UISwitch *sw = [[UISwitch alloc] init];
     sw.on = on;
@@ -355,6 +356,19 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     id handler = [handlerClass performSelector:@selector(sharedInstance)];
     NSString *displayValue = (value && value.length > 0) ? value : hint;
     UIButton *row = WPAddEditableRowWithArrow(group, cy, w, title, displayValue, handler);
+    // 手风琴子行：前置层级箭头 + 标题右移（WPAddEditableRowWithArrow 内部标题 x 与 kCellHPadding 同为 16）
+    if (objc_getAssociatedObject(group, "isSubContainer")) {
+        WPDrawSubItemArrow(group, cy, kCellHPadding);
+        for (UIView *v in group.subviews) {
+            if ([v isKindOfClass:[UILabel class]] && v.frame.origin.y == cy && v.frame.origin.x <= kCellHPadding + 1) {
+                CGRect f = v.frame;
+                f.origin.x = kCellHPadding + 14;
+                f.size.width -= 14;
+                v.frame = f;
+                break;
+            }
+        }
+    }
     objc_setAssociatedObject(row, "editConfigKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (hint) objc_setAssociatedObject(row, "editConfigHint", hint, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (alertTitle) objc_setAssociatedObject(row, "editTitle", alertTitle, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -559,8 +573,20 @@ static NSMutableArray *rowsForTable(UITableView *table) {
     UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, cy, gw, 0)];
     container.backgroundColor = WPCardBg();
     [container setExpanded:YES animated:NO];
+    // 标记为手风琴子容器：后续加入的行自动带层级箭头（见 addSubSwitchRowInGroup/addInputRowInGroup）
+    objc_setAssociatedObject(container, "isSubContainer", @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [group addSubview:container];
     return container;
+}
+
+// 子行层级标记：容器是手风琴展开容器时，画前置箭头并把标题右移 14pt
+- (void)applySubItemMark:(UIView *)group label:(UILabel *)tl cy:(CGFloat)cy {
+    if (!objc_getAssociatedObject(group, "isSubContainer")) return;
+    WPDrawSubItemArrow(group, cy, kCellHPadding);
+    CGRect f = tl.frame;
+    f.origin.x += 14;
+    f.size.width -= 14;
+    tl.frame = f;
 }
 
 - (CGFloat)finishExpandContainer:(UIView *)container currentCy:(CGFloat)cy {
