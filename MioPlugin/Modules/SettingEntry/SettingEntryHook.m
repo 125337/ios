@@ -139,12 +139,25 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     // === 微信引擎：功能列表交给微信原生渲染（WCR 同款 NormalCell accessoryType=1，箭头是微信自家图） ===
     WPWeChatTable *wc = [WPWeChatTable tableForVC:vc];
     if (wc) {
-        CGFloat headW = [UIScreen mainScreen].bounds.size.width;
+        UITableView *tv = wc.tableView;
+        // headW 必须跟表实际宽度（[UIScreen] 硬编码在表宽变化时会让 header 错位重排）
+        CGFloat headW = tv.bounds.size.width > 1 ? tv.bounds.size.width : vc.view.bounds.size.width;
+        WPLog(@"Setting", @"[Entry][LAYOUT] 建 header: tv.width=%.1f headW=%.1f hy=%.1f kPad=%.1f",
+              tv.bounds.size.width, headW, hy, kPad);
+
         // hero 卡包一层容器作 tableHeaderView；顶部 8px 间隔与子页面 y=8 起步对齐
         UIView *headerWrap = [[UIView alloc] initWithFrame:CGRectMake(0, 0, headW, hy + 14)];
         heroCard.frame = CGRectMake(kPad, 8, headW - kPad * 2, hy);
+        heroCard.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         [headerWrap addSubview:heroCard];
-        wc.tableView.tableHeaderView = headerWrap;
+        // UIKit 已知要求：tableHeaderView.frame 修改后需重新赋值才会重算内容区布局
+        headerWrap.frame = CGRectMake(0, 0, headW, hy + 14);
+        tv.tableHeaderView = headerWrap;
+        headerWrap.frame = CGRectMake(0, 0, headW, hy + 14);
+        tv.tableHeaderView = headerWrap;
+        WPLog(@"Setting", @"[Entry][LAYOUT] tableHeaderView 已设: wrap=%@ 读回=%@",
+              NSStringFromCGRect(headerWrap.frame),
+              tv.tableHeaderView ? NSStringFromCGRect(tv.tableHeaderView.frame) : @"nil");
 
         WPWGroup *g = [wc addGroup];
         [g wpSetHeader:@"功能列表" footer:nil];
@@ -169,6 +182,30 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
 
         [vc.view addSubview:wc.tableView];
         [wc reloadAsync]; // addSection: 数据已就绪，延迟双刷兜底首帧时序
+
+        // 布局诊断：延迟读回最终几何，量化 hero 上方间距的每一层来源
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            UITableView *t = wc.tableView;
+            WPLog(@"Setting", @"[Entry][LAYOUT] tv.frame=%@ inset=%@ adjInset=%@ offset=%@ contentSize=%@",
+                  NSStringFromCGRect(t.frame), NSStringFromUIEdgeInsets(t.contentInset),
+                  NSStringFromUIEdgeInsets(t.adjustedContentInset),
+                  NSStringFromCGPoint(t.contentOffset), NSStringFromCGSize(t.contentSize));
+            WPLog(@"Setting", @"[Entry][LAYOUT] tableHeaderView=%@ heroCard屏幕位置=%@",
+                  t.tableHeaderView ? NSStringFromCGRect(t.tableHeaderView.frame) : @"nil",
+                  NSStringFromCGRect([heroCard convertRect:heroCard.bounds toView:nil]));
+            @try {
+                NSIndexPath *r0 = [NSIndexPath indexPathForRow:0 inSection:0];
+                WPLog(@"Setting", @"[Entry][LAYOUT] secHeader0=%@ sec0=%@ row0=%@",
+                      NSStringFromCGRect([t rectForHeaderInSection:0]),
+                      NSStringFromCGRect([t rectForSection:0]),
+                      [t numberOfSectionsInTableView:t] > 0 && [t numberOfRowsInSection:0] > 0
+                          ? NSStringFromCGRect([t rectForRowAtIndexPath:r0]) : @"无行");
+            } @catch (NSException *e) {
+                WPLog(@"Setting", @"[Entry][LAYOUT] rect 读取异常: %@", e.reason);
+            }
+        });
+
         WPLog(@"Setting", @"[Entry] 微信引擎列表完成 (header=%@)", NSStringFromClass([headerWrap class]));
         return;
     }
