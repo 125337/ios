@@ -21,6 +21,9 @@
 //  ⑥ voiceCallPlay         WCAudioModuleMgr 7 hook（run 2072 探测实证 + 真机验证有效）：
 //                          canSetActive 4 变体 通话中→YES、canMix 类方法（冒号 selector）→YES、
 //                          isAudioModuleInterrupt → NO
+//                          09-22 两例 wakeups_resource 实证：canMix/interrupt 无通话门控时全天候
+//                          改写音频仲裁（普通播放一次拦截 20 次 canMix），音频管线并存唤醒暴涨被杀
+//                          → 全部 7 hook 统一加 VFInCall() 门控（通话中 category=voicechat，不影响已验证功能）
 //  ⑦ voiceForward          ForwardMessageLogicController 3 hook + 原生长按菜单转发项
 // 全部反射 + respondsToSelector 保护；开关关闭时直通 orig 零干预
 // ═══════════════════════════════════════════════════════════════
@@ -1007,7 +1010,8 @@ static BOOL hook_WAM_cas4(id self, SEL _cmd, id scene, id group, id ident, id mi
 
 static BOOL hook_WAM_mixList(id self, SEL _cmd, id list) {
     // WCR FUN_01fa01fc 无 self 检查（类方法 hook 的 self 是 Class 对象，不能做 isKindOfClass）
-    if ([VoiceConfig shared].voiceCallPlayEnabled) {
+    // 加 VFInCall() 门控：与 canSetActive 同语义，非通话期不改写仲裁（wakeups 治理）
+    if (VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
         WPLog(@"VoiceFeat", @"[CallPlay] audioModule:canMixWithAudioList: → YES");
         return YES;
     }
@@ -1015,7 +1019,7 @@ static BOOL hook_WAM_mixList(id self, SEL _cmd, id list) {
 }
 
 static BOOL hook_WAM_mixModule(id self, SEL _cmd, id module) {
-    if ([VoiceConfig shared].voiceCallPlayEnabled) {
+    if (VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
         WPLog(@"VoiceFeat", @"[CallPlay] audioList:canMixWithAudioModule: → YES");
         return YES;
     }
@@ -1023,8 +1027,8 @@ static BOOL hook_WAM_mixModule(id self, SEL _cmd, id module) {
 }
 
 static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
-    // WCR FUN_01f9fff4：无 self 检查，开关开一律 NO 且不调 orig
-    if ([VoiceConfig shared].voiceCallPlayEnabled) {
+    // WCR FUN_01f9fff4：无 self 检查；加 VFInCall() 门控，非通话期走 orig（wakeups 治理）
+    if (VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
         WPLog(@"VoiceFeat", @"[CallPlay] isAudioModuleInterrupt → NO");
         return NO;
     }
