@@ -88,7 +88,9 @@ static IMP orig_UICTV_setAV = NULL;
 static IMP orig_MMTV_setAV = NULL;
 static IMP orig_UICTV_setAT = NULL;
 static IMP orig_MMTV_setAT = NULL;
+static IMP orig_MMTV_layoutSV = NULL;
 static int g_atProbeLeft = 3;   // setAccessoryType 探测剩余次数（探完自动摘 hook，零常驻开销）
+static int g_svDumpLeft = 10;   // 子视图树 dump 剩余次数（每 cell 类一次，探完自动摘 hook）
 
 // 捕获条件：UIImage 且尺寸像箭头（窄长小图）；命中后记录日志（含尝试取资源名，便于后续直接 imageNamed）
 static void wpTryCaptureArrowImage(UIView *av) {
@@ -165,6 +167,64 @@ static void wpDumpArrowMethods(Class cls, const char *clsName) {
     free(list);
 }
 
+// ── 子视图树 dump：微信箭头若由 MMTableViewCell 内部渲染（不走系统 accessory API），
+//    只有这条路能看到箭头真身（UIImageView+图 / UILabel+字符 / 自绘类）──
+// 触发条件：contentView 右侧 48pt 内存在 5~24pt 小视图（箭头几何特征），每实例只 dump 一次
+static void wpDumpViewTree(UIView *v, int depth, NSString *path) {
+    if (!v || depth > 4) return;
+    NSString *info = @"";
+    if ([v isKindOfClass:[UILabel class]]) {
+        UILabel *l = (UILabel *)v;
+        info = [NSString stringWithFormat:@" text='%@' font=%g", l.text ?: @"", l.font.pointSize];
+    } else if ([v isKindOfClass:[UIImageView class]]) {
+        UIImage *img = [(UIImageView *)v image];
+        if (img) {
+            NSString *nm = nil;
+            @try { nm = [img valueForKey:@"_imageName"]; } @catch (NSException *e) {}
+            info = [NSString stringWithFormat:@" img=%gx%g@%dx name=%@", img.size.width, img.size.height, (int)img.scale, nm ?: @"?"];
+        } else {
+            info = @" img=nil";
+        }
+    }
+    WPLog(@"CommonUI", @"[WCArrow] tree%@ %@%@ frame=%@", path, NSStringFromClass([v class]), info, NSStringFromCGRect(v.frame));
+    int i = 0;
+    for (UIView *sv in v.subviews) {
+        wpDumpViewTree(sv, depth + 1, [NSString stringWithFormat:@"%@.%d", path, i++]);
+    }
+}
+
+static void hook_MMTV_layoutSV(id self, SEL _cmd) {
+    if (orig_MMTV_layoutSV) ((void (*)(id, SEL))orig_MMTV_layoutSV)(self, _cmd);
+    if (g_svDumpLeft <= 0) return;
+    UITableViewCell *cell = (UITableViewCell *)self;
+    UIView *cv = cell.contentView;
+    CGFloat cw = cv.frame.size.width;
+    if (cw < 200) return;
+    BOOL hit = NO;
+    for (UIView *sv in cv.subviews) {
+        CGRect f = sv.frame;
+        if (f.size.width >= 5 && f.size.width <= 24 && f.size.height >= 5 && f.size.height <= 26
+            && f.origin.x > cw - 48 && f.origin.y >= 0) { hit = YES; break; }
+    }
+    if (!hit) return;
+    if (objc_getAssociatedObject(self, "wp_svdump")) return;
+    objc_setAssociatedObject(self, "wp_svdump", @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    g_svDumpLeft--;
+    WPLog(@"CommonUI", @"[WCArrow] === cell dump %@ ===", NSStringFromClass([self class]));
+    wpDumpViewTree(cv, 0, @"");
+    if (g_svDumpLeft == 0) {
+        Class mm = objc_getClass("MMTableViewCell");
+        if (mm && orig_MMTV_layoutSV) {
+            Method m = class_getInstanceMethod(mm, @selector(layoutSubviews));
+            if (m) {
+                method_setImplementation(m, orig_MMTV_layoutSV);
+                orig_MMTV_layoutSV = NULL;
+                WPLog(@"CommonUI", @"[WCArrow] 子视图树探测完成，hook 已摘除");
+            }
+        }
+    }
+}
+
 void WPInstallWCArrowCapture(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -201,6 +261,16 @@ void WPInstallWCArrowCapture(void) {
         // 一次性 dump：找微信 cell 体系里箭头相关的方法名
         wpDumpArrowMethods(mm, "MMTableViewCell");
         wpDumpArrowMethods(objc_getClass("WCTableViewNormalCellManager"), "WCTableViewNormalCellManager");
+
+        // 子视图树 dump 探测：MMTableViewCell 内部若自绘箭头，只有这条路能看清真身
+        // （ListCornerRadius 已实证 MMTableViewCell 重写了 layoutSubviews，hook 只影响它自己）
+        if (mm) {
+            Method m = class_getInstanceMethod(mm, @selector(layoutSubviews));
+            if (m) {
+                orig_MMTV_layoutSV = method_setImplementation(m, (IMP)hook_MMTV_layoutSV);
+                WPLog(@"CommonUI", @"[WCArrow] hook MMTableViewCell layoutSubviews OK (子视图树探测)");
+            }
+        }
     });
 }
 
