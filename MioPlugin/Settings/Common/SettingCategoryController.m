@@ -514,46 +514,42 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
                         width:(CGFloat)w
                      darkKey:(NSString *)darkKey
                    darkValue:(NSString *)darkValue {
-    // 自定义视图行（WCR 颜色行同款 normalCellForSel:target:title:rightView:，色块按钮自理）
+    // WCR 同款（addColorCellToSection 反编译实证）：title 传给微信原生 label 渲染，
+    // rightView 只挂小色块预览容器。禁止整行自绘——整宽 rightView 会被微信
+    // 布局算法按 width 定位（x=cellW-width-margin 变负值），文字被推出左边界。
     WPWGroup *g = (WPWGroup *)group;
     if (![g isKindOfClass:[WPWGroup class]]) return cy;
-    CGFloat cvW = w > 0 ? w : [UIScreen mainScreen].bounds.size.width;
+
+    BOOL dual = (darkKey != nil);
+    CGFloat cvW = dual ? 58 : 34;
     UIView *cv = [[UIView alloc] initWithFrame:CGRectMake(0, 0, cvW, kRowH)];
     cv.backgroundColor = [UIColor clearColor];
 
-    UILabel *tl = [[UILabel alloc] initWithFrame:CGRectMake(kCellHPadding, 4, cvW - kCellHPadding - 80, kRowH - 8)];
-    tl.text = title;
-    tl.font = [UIFont systemFontOfSize:15];
-    tl.textColor = WPT1();
-    [cv addSubview:tl];
-
-    if (darkKey == nil) {
+    if (!dual) {
         UIColor *color = [WPColorUtil colorFromHexString:value] ?: [UIColor grayColor];
         UIButton *btn = [WPColorPicker makeColorButtonWithColor:color size:30];
-        btn.frame = CGRectMake(cvW - kCellHPadding - 36, (kRowH - 30) / 2, 30, 30);
+        btn.frame = CGRectMake(2, (kRowH - 30) / 2, 30, 30);
         objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
         [cv addSubview:btn];
     } else {
         CGFloat btnSize = 24;
-        CGFloat gap = 8;
         UIColor *darkColor = [[WPColorUtil class] colorFromHexString:darkValue] ?: [UIColor darkGrayColor];
-        UIButton *darkBtn = [WPColorPicker makeColorButtonWithColor:darkColor size:30];
-        CGFloat darkX = cvW - kCellHPadding - btnSize - 4;
-        darkBtn.frame = CGRectMake(darkX, (kRowH - btnSize) / 2, btnSize, btnSize);
+        UIButton *darkBtn = [WPColorPicker makeColorButtonWithColor:darkColor size:btnSize];
+        darkBtn.frame = CGRectMake(cvW - 4 - btnSize, (kRowH - btnSize) / 2, btnSize, btnSize);
         objc_setAssociatedObject(darkBtn, "key", darkKey, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [darkBtn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
         [cv addSubview:darkBtn];
 
         UIColor *lightColor = [[WPColorUtil class] colorFromHexString:value] ?: [UIColor whiteColor];
-        UIButton *lightBtn = [WPColorPicker makeColorButtonWithColor:lightColor size:30];
-        lightBtn.frame = CGRectMake(darkX - gap - btnSize, darkBtn.frame.origin.y, btnSize, btnSize);
+        UIButton *lightBtn = [WPColorPicker makeColorButtonWithColor:lightColor size:btnSize];
+        lightBtn.frame = CGRectMake(darkBtn.frame.origin.x - 6 - btnSize, darkBtn.frame.origin.y, btnSize, btnSize);
         objc_setAssociatedObject(lightBtn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [lightBtn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
         [cv addSubview:lightBtn];
     }
 
-    id cell = WPWCViewCell((SEL)0, self, @"", cv);
+    id cell = WPWCViewCell((SEL)0, self, title, cv);
     if (cell) {
         [g addCell:cell];
         return cy + kRowH;
