@@ -18,6 +18,8 @@ Class SettingCategoryBaseClass(void);
 @property (nonatomic, strong) NSMutableSet<NSString *> *masterSwitchKeys;
 
 - (UIView *)addTableGroupAtY:(CGFloat)y width:(CGFloat)w;
+/// 重建微信引擎表（变更回调后先调此方法再调 buildUI，避免向旧 manager 重复加行）
+- (void)wpRebuildWeChatTable;
 - (CGFloat)finishGroup:(UIView *)group atY:(CGFloat)y height:(CGFloat)h;
 - (CGFloat)addSectionHeader:(NSString *)text y:(CGFloat)y width:(CGFloat)w;
 - (CGFloat)addSectionFooter:(NSString *)text y:(CGFloat)y width:(CGFloat)w;
