@@ -1241,6 +1241,12 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
 }
 
 + (void)hookAudioModule {
+    // 【已停用】通话播语音仲裁 hook（WCAudioModuleMgr 7 hook）——涉嫌通话场景闪退，整体停用：
+    // canSetActiveWithScene 4 变体 + audioModule:canMixWithAudioList: + audioList:canMixWithAudioModule: + isAudioModuleInterrupt:
+    // 恢复方法：去掉下面的 return; 即可原样挂回
+    WPLog(@"VoiceFeat", @"[CallPlay] 通话播语音仲裁 hook 已停用（callplay-disabled）");
+    return;
+#if 0
     Class wam = objc_getClass("WCAudioModuleMgr");
     if (!wam) { WPLog(@"VoiceFeat", @"WCAudioModuleMgr 不存在，跳过通话播放 hooks"); return; }
     // run 2072 真机探测实证的 4 个 canSetActive 变体（2 参版 groupName: 不存在，WCR 也挂不上）
@@ -1255,6 +1261,7 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
     // install 期标记（区别于首次触发时的 dispatch_once 标记）：没有这行=设备上跑的不是诊断包，
     // [CallPlay] 日志的缺席就无从判读（旧包同样一行不打印， absence 证据不成立）
     WPLog(@"VoiceFeat", @"[CallPlay] 诊断版 callplay-diag-v2 仲裁 hook 挂载完成（7 hook，install 期标记）");
+#endif
 }
 
 + (void)hookForwardLogic {
