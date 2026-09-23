@@ -5,11 +5,14 @@
 
 // 构建版本标记：随启动日志输出，用于鉴别真机装的包。Mach-O 段按 16KB 对齐，小改动可能
 // 不改变 dylib 字节数（曾出现两版同为 865,680），字节数鉴别法在小版本间会失灵，以日志为准
-#define MIO_BUILD_TAG @"build-0924-container"
+#define MIO_BUILD_TAG @"build-0924-insetwatch"
 
 static BOOL WPWCHasClass(NSString *name) {
     return objc_getClass(name.UTF8String) != nil;
 }
+
+// KVO 观察者保活锚点：观察者不产生 retain，本对象必须由外部持有才能活着收回调
+static char kWPWTableOwnerKey;
 
 @interface WPWeChatTable ()
 @property (nonatomic, assign) BOOL wpInsetWatchInstalled;   // adjustedContentInset KVO 已挂
@@ -36,11 +39,10 @@ static void *kWPInsetKVOContext = &kWPInsetKVOContext;
 }
 
 // WCR 同款容器布局（pluginPageTableWithFrame_style_ + buildPluginPageForGroup_ 反编译实证）：
-// 表不直接挂 VC.view，装进容器内 y=0，容器 setFrame 到导航栏下方。结构免疫微信 inset 回写：
-// ① 安全区按 frame 几何传播，表在容器内 y=0 → 表自身 top 安全区恒 0，即使 behavior 被改回
-//    automatic，系统也算不出导航栏高度（WCR 生产验证的免疫核心）
-// ② 微信基类回写 inset 打的是直接挂 VC.view 的表（(82).log 实证），容器是普通 UIView 非
-//    UIScrollView、表非直接子视图 → 都不在打击面（WCR 内层表同样结构，真机无此问题）
+// 表不直接挂 VC.view，装进容器内 y=0，容器 setFrame 到导航栏下方。
+// 注意（(88).log 定论）：容器并不能免疫微信 inset 回写——加载期 [INSET] 在容器就绪后照样触发，
+// 回写会穿透容器打在内层表；容器的价值是几何定位（表 y=0 + 容器 y=top），inset 对抗靠
+// normalizeTopInset 的 KVO 安全网（主防线）
 static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **outContainer) {
     // 顶栏偏移：MMUIViewController 的 view 是全屏布局，容器必须从导航栏底部开始
     CGFloat top = 0;
@@ -124,6 +126,11 @@ static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **
     t.wcManager = mgr;
     t.tableView = tv;
     t.containerView = container;
+    // 生命周期保活（(88).log 定论）：入口页挂载方是局部变量，无人强持有本对象 → reloadAsync 的
+    // dispatch_after 尾巴（0.45s）跑完即 dealloc → KVO 观察者随 dealloc 摘除 → 后台切回的晚到
+    // inset 回写无人纠正，hero 被推下一个导航栏高。关联到 containerView：容器挂在 VC.view 上活
+    // 多久，安全网活多久（基类 self.wcTable 强持有路径此处为双保险，无副作用）
+    objc_setAssociatedObject(container, &kWPWTableOwnerKey, t, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     WPLog(@"WCTable", @"[WCTable] 表+manager 就绪: mgr=%@ tv=%@", NSStringFromClass(object_getClass(mgr)), tv);
     return t;
 }
@@ -166,8 +173,8 @@ static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **
     });
 }
 
-// inset 安全网（保留）：容器结构（WCR 同款）下微信回写理论上够不到表，此方法幂等无害。
-// 若真机日志再现 [INSET-KVO]，说明回写穿透了容器（遍历为递归而非直接子视图），需回查打击面
+// inset 安全网（主防线，(88).log 定论）：容器结构挡不住微信回写——加载期 [INSET] 在容器就绪后
+// 照样触发，实锤回写穿透容器打在内层表。此方法幂等无害，靠 KVO 持续对抗任意时机的晚到回写
 - (void)normalizeTopInset {
     [self wpInstallInsetWatch];
     [self wpApplyInsetFixFromKVO:NO];
@@ -179,19 +186,23 @@ static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **
 
 // KVO 持续兜底：微信回写 inset 的时机不定（push 完成周期、后台切回、safeArea 变化都可能），
 // 时序兜底（0/0.15/0.45s）覆盖不到「去别的 APP 几分钟再回来」这种晚到的回写。表 frame 为
-// 手动定位，任何非 0 top inset 都是多余避让，故监听 adjustedContentInset 一变就归一
-// （幂等收敛：归一后不再写 → KVO 不再触发，不会循环）。
+// 手动定位，任何非 0 top inset 都是多余避让，故监听 inset 一变就归一。
+// 双 keyPath：contentInset=微信直接写 inset 的路径；(88).log 加载期回写伴随 offset=-97.67，
+// 两个属性都可能是回写入口，任一变化都触发归一（幂等收敛：归一后不再写 → 不再触发，不会循环）。
+// 注意：观察者不产生 retain，本对象必须活着才能收回调——生命周期由 tableForVC 里的
+// containerView 关联保证（曾因入口页局部变量无人持有，0.45s 后 dealloc 静默摘除观察者）
 - (void)wpInstallInsetWatch {
     if (self.wpInsetWatchInstalled) return;
     UITableView *tv = self.tableView;
     if (![tv isKindOfClass:[UITableView class]]) return;
-    if (@available(iOS 11.0, *)) {
-        @try {
+    @try {
+        [tv addObserver:self forKeyPath:@"contentInset" options:NSKeyValueObservingOptionNew context:kWPInsetKVOContext];
+        if (@available(iOS 11.0, *)) {
             [tv addObserver:self forKeyPath:@"adjustedContentInset" options:NSKeyValueObservingOptionNew context:kWPInsetKVOContext];
-            self.wpInsetWatchInstalled = YES;
-        } @catch (NSException *e) {
-            WPLog(@"WCTable", @"[WCTable] [INSET] KVO 挂载失败: %@", e);
         }
+        self.wpInsetWatchInstalled = YES;
+    } @catch (NSException *e) {
+        WPLog(@"WCTable", @"[WCTable] [INSET] KVO 挂载失败: %@", e);
     }
 }
 
@@ -206,9 +217,15 @@ static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **
 
 - (void)dealloc {
     if (self.wpInsetWatchInstalled) {
+        UITableView *tv = self.tableView;
         @try {
-            [(UITableView *)self.tableView removeObserver:self forKeyPath:@"adjustedContentInset" context:kWPInsetKVOContext];
+            [tv removeObserver:self forKeyPath:@"contentInset" context:kWPInsetKVOContext];
         } @catch (NSException *e) {}
+        if (@available(iOS 11.0, *)) {
+            @try {
+                [tv removeObserver:self forKeyPath:@"adjustedContentInset" context:kWPInsetKVOContext];
+            } @catch (NSException *e) {}
+        }
     }
 }
 
@@ -219,16 +236,18 @@ static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **
         if (tv.contentInsetAdjustmentBehavior != UIScrollViewContentInsetAdjustmentNever) {
             tv.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
         }
-    }
-    UIEdgeInsets inset = tv.contentInset;
-    CGFloat offset = tv.contentOffset.y;
-    // inset.top 被回写 / offset 为负（未滚动却被 inset 推下去）才修；用户滚动中（offset>0）不动
-    if (fabs(inset.top) > 0.5 || offset < -0.5) {
-        tv.contentInset = UIEdgeInsetsZero;
-        if (tv.contentOffset.y < -0.5) tv.contentOffset = CGPointZero;
-        WPLog(@"WCTable", @"[WCTable] [INSET%@] 顶栏 inset 归一: inset.top=%.2f→0 offset=%.2f→%.2f",
-              fromKVO ? @"-KVO" : @"",
-              inset.top, offset, tv.contentOffset.y);
+        // 条件读 adjustedContentInset 而非 contentInset：前者是真实下推量（含 behavior/safeArea
+        // 贡献），两条回写路径都能命中；修正动作写 contentInset（adjusted 为只读）
+        UIEdgeInsets inset = tv.adjustedContentInset;
+        CGFloat offset = tv.contentOffset.y;
+        // inset.top 被回写 / offset 为负（未滚动却被 inset 推下去）才修；用户滚动中（offset>0）不动
+        if (fabs(inset.top) > 0.5 || offset < -0.5) {
+            tv.contentInset = UIEdgeInsetsZero;
+            if (tv.contentOffset.y < -0.5) tv.contentOffset = CGPointZero;
+            WPLog(@"WCTable", @"[WCTable] [INSET%@] 顶栏 inset 归一: inset.top=%.2f→0 offset=%.2f→%.2f",
+                  fromKVO ? @"-KVO" : @"",
+                  inset.top, offset, tv.contentOffset.y);
+        }
     }
 }
 

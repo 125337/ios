@@ -14,7 +14,7 @@
 @interface WPWeChatTable : NSObject
 @property (nonatomic, strong) id wcManager;      // WCTableViewManager 实例
 @property (nonatomic, strong) UITableView *tableView;
-@property (nonatomic, strong) UIView *containerView; // WCR 同款容器：表装容器内 y=0，容器定位导航栏下方（结构免疫微信 inset 回写）；挂载用这个而不是 tableView
+@property (nonatomic, strong) UIView *containerView; // WCR 同款容器：表装容器内 y=0，容器定位导航栏下方；挂载用这个而不是 tableView（注：容器挡不住微信 inset 回写，对抗靠 KVO 安全网）
 
 + (BOOL)available;                                 // 关键类判空（决定走微信引擎还是旧渲染）
 + (instancetype)tableForVC:(UIViewController *)vc; // 建表 + 建 manager + dataSource/delegate 接线（不 addSubview，调用方自行添加）
