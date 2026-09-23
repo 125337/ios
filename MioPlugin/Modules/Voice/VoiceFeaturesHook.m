@@ -1251,6 +1251,9 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
     VF_HOOK_META(wam, "audioModule:canMixWithAudioList:", hook_WAM_mixList, orig_WAM_mixList);
     VF_HOOK_META(wam, "audioList:canMixWithAudioModule:", hook_WAM_mixModule, orig_WAM_mixModule);
     VF_HOOK(wam, "isAudioModuleInterrupt:", hook_WAM_interrupt, orig_WAM_interrupt);
+    // install 期标记（区别于首次触发时的 dispatch_once 标记）：没有这行=设备上跑的不是诊断包，
+    // [CallPlay] 日志的缺席就无从判读（旧包同样一行不打印， absence 证据不成立）
+    WPLog(@"VoiceFeat", @"[CallPlay] 诊断版 callplay-diag-v2 仲裁 hook 挂载完成（7 hook，install 期标记）");
 }
 
 + (void)hookForwardLogic {
