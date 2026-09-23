@@ -147,15 +147,15 @@ static const CGFloat kCellHPadding = 16.0;
         WPLog(@"WCTable", @"[WCTABLE] 微信 cell 框架不可用，本页无法渲染（旧引擎已移除，无兜底）");
         return;
     }
-    [self.wcTable.tableView removeFromSuperview];
+    [self.wcTable.containerView removeFromSuperview];
     self.wcTable = [WPWeChatTable tableForVC:self];
     if (!self.wcTable) return;
     self.wcLastGroup = nil;
     self.wcPendingHeader = nil;
-    [self.view addSubview:self.wcTable.tableView];
+    [self.view addSubview:self.wcTable.containerView];
     // 数据由后续 buildUI 同步填充，此处延迟 reload 兜底（首帧 layout 早于 buildUI 时表会空一帧）
     [self.wcTable reloadAsync];
-    WPLog(@"WCTable", @"[WCTABLE] 引擎表已重建: %@", self.wcTable.tableView);
+    WPLog(@"WCTable", @"[WCTABLE] 引擎表已重建: %@", self.wcTable.containerView);
 }
 
 // 为配置 key 注册动态 switch 回调 selector（wpSw_<hash>_<原始key>，IMP 共享 wpWCSwitchTramp）。

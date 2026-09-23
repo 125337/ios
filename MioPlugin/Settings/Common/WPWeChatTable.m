@@ -3,6 +3,10 @@
 #import <objc/runtime.h>
 #import "../../Core/LogManager.h"
 
+// 构建版本标记：随启动日志输出，用于鉴别真机装的包。Mach-O 段按 16KB 对齐，小改动可能
+// 不改变 dylib 字节数（曾出现两版同为 865,680），字节数鉴别法在小版本间会失灵，以日志为准
+#define MIO_BUILD_TAG @"build-0923-container"
+
 static BOOL WPWCHasClass(NSString *name) {
     return objc_getClass(name.UTF8String) != nil;
 }
@@ -23,12 +27,45 @@ static void *kWPInsetKVOContext = &kWPInsetKVOContext;
           && WPWCHasClass(@"WCTableViewSectionManager")
           && WPWCHasClass(@"WCTableViewCellManager")
           && WPWCHasClass(@"WCTableViewNormalCellManager");
-        WPLog(@"WCTable", @"[WCTable] 框架可用性: %d（Mgr=%d Sec=%d Cell=%d Normal=%d）",
-              ok,
+        WPLog(@"WCTable", @"[WCTable] 框架可用性: %d build=%@（Mgr=%d Sec=%d Cell=%d Normal=%d）",
+              ok, MIO_BUILD_TAG,
               WPWCHasClass(@"WCTableViewManager"), WPWCHasClass(@"WCTableViewSectionManager"),
               WPWCHasClass(@"WCTableViewCellManager"), WPWCHasClass(@"WCTableViewNormalCellManager"));
     });
     return ok;
+}
+
+// WCR 同款容器布局（pluginPageTableWithFrame_style_ + buildPluginPageForGroup_ 反编译实证）：
+// 表不直接挂 VC.view，装进容器内 y=0，容器 setFrame 到导航栏下方。结构免疫微信 inset 回写：
+// ① 安全区按 frame 几何传播，表在容器内 y=0 → 表自身 top 安全区恒 0，即使 behavior 被改回
+//    automatic，系统也算不出导航栏高度（WCR 生产验证的免疫核心）
+// ② 微信基类回写 inset 打的是直接挂 VC.view 的表（(82).log 实证），容器是普通 UIView 非
+//    UIScrollView、表非直接子视图 → 都不在打击面（WCR 内层表同样结构，真机无此问题）
+static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **outContainer) {
+    // 顶栏偏移：MMUIViewController 的 view 是全屏布局，容器必须从导航栏底部开始
+    CGFloat top = 0;
+    UINavigationController *nav = vc.navigationController;
+    if (nav && !nav.navigationBarHidden && nav.navigationBar.superview) {
+        CGRect nf = nav.navigationBar.frame;
+        top = nf.origin.y + nf.size.height;
+    } else {
+        if (@available(iOS 11.0, *)) top = vc.view.safeAreaInsets.top;
+    }
+    if (top < 1) top = 64; // view 未挂 window 时 safeArea 为 0，兜底导航栏高度
+    CGFloat totalH = vc.view.bounds.size.height - top;
+    if (totalH < 100) totalH = vc.view.bounds.size.height;
+
+    UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, top, vc.view.bounds.size.width, totalH)];
+    container.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    container.backgroundColor = [UIColor clearColor];
+    tv.frame = CGRectMake(0, 0, vc.view.bounds.size.width, totalH);
+    tv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    tv.backgroundColor = [UIColor clearColor];
+    tv.separatorInset = UIEdgeInsetsZero;
+    if (@available(iOS 11.0, *)) tv.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    [container addSubview:tv];
+    if (outContainer) *outContainer = container;
+    WPLog(@"WCTable", @"[WCTable] 容器结构就绪（WCR 同款）: top=%.0f tv=%@", top, tv);
 }
 
 + (instancetype)tableForVC:(UIViewController *)vc {
@@ -61,34 +98,16 @@ static void *kWPInsetKVOContext = &kWPInsetKVOContext;
     if ([mgr respondsToSelector:tvg]) {
         tv = ((id (*)(id, SEL))objc_msgSend)(mgr, tvg);
     }
+    UIView *container = nil;
     if ([tv isKindOfClass:[UITableView class]]) {
-        // 顶栏偏移修复：MMUIViewController 的 view 是全屏布局，表必须从导航栏底部开始
-        CGFloat top = 0;
-        UINavigationController *nav = vc.navigationController;
-        if (nav && !nav.navigationBarHidden && nav.navigationBar.superview) {
-            CGRect nf = nav.navigationBar.frame;
-            top = nf.origin.y + nf.size.height;
-        } else {
-            if (@available(iOS 11.0, *)) top = vc.view.safeAreaInsets.top;
-        }
-        if (top < 1) top = 64; // view 未挂 window 时 safeArea 为 0，兜底导航栏高度
-        CGFloat totalH = vc.view.bounds.size.height - top;
-        if (totalH < 100) totalH = vc.view.bounds.size.height;
-        tv.frame = CGRectMake(0, top, vc.view.bounds.size.width, totalH);
-        tv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        tv.backgroundColor = [UIColor clearColor];
-        tv.separatorInset = UIEdgeInsetsZero;
-        if (@available(iOS 11.0, *)) tv.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
-        WPLog(@"WCTable", @"[WCTable] 取 manager 自建表成功: top=%.0f %@", top, tv);
+        wpLayoutInContainer(tv, vc, &container);
     } else {
         // 兜底：manager 无 tableView getter（版本差异）→ 自建表外部接线（旧行为）
         tv = [[UITableView alloc] initWithFrame:vc.view.bounds style:UITableViewStyleGrouped];
-        tv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        tv.backgroundColor = [UIColor clearColor];
-        tv.separatorInset = UIEdgeInsetsZero;
         tv.dataSource = mgr;
         tv.delegate = mgr;
         WPLog(@"WCTable", @"[WCTable] manager 无自建表，兜底自建+接线: %@", tv);
+        wpLayoutInContainer(tv, vc, &container);
     }
 
     // 数据源能力校验
@@ -104,6 +123,7 @@ static void *kWPInsetKVOContext = &kWPInsetKVOContext;
     WPWeChatTable *t = [[self alloc] init];
     t.wcManager = mgr;
     t.tableView = tv;
+    t.containerView = container;
     WPLog(@"WCTable", @"[WCTable] 表+manager 就绪: mgr=%@ tv=%@", NSStringFromClass(object_getClass(mgr)), tv);
     return t;
 }
@@ -146,17 +166,15 @@ static void *kWPInsetKVOContext = &kWPInsetKVOContext;
     });
 }
 
-// 顶栏双重避让修复：frame 已手动定位导航栏下方（tableForVC top），但微信基类 VC 会在
-// push 完成周期内又把 adjustedContentInset.top 设为导航栏高度（(82).log 实证：建表时
-// inset={0,0,0,0}，0.4s 后变 {97.67,0,34,0} → 内容被整体推下去一个导航栏高度，
-// hero 卡悬空）。此处强制归一；微信可能多次回写，故 0/0.15/0.45s 三次兜底。
+// inset 安全网（保留）：容器结构（WCR 同款）下微信回写理论上够不到表，此方法幂等无害。
+// 若真机日志再现 [INSET-KVO]，说明回写穿透了容器（遍历为递归而非直接子视图），需回查打击面
 - (void)normalizeTopInset {
     [self wpInstallInsetWatch];
-    [self wpApplyInsetFix];
+    [self wpApplyInsetFixFromKVO:NO];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ [self wpApplyInsetFix]; });
+                   dispatch_get_main_queue(), ^{ [self wpApplyInsetFixFromKVO:NO]; });
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.45 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ [self wpApplyInsetFix]; });
+                   dispatch_get_main_queue(), ^{ [self wpApplyInsetFixFromKVO:NO]; });
 }
 
 // KVO 持续兜底：微信回写 inset 的时机不定（push 完成周期、后台切回、safeArea 变化都可能），
@@ -180,7 +198,7 @@ static void *kWPInsetKVOContext = &kWPInsetKVOContext;
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey, id> *)change context:(void *)context {
     if (context == kWPInsetKVOContext) {
         // 排到下个 runloop 再修：避免在微信布局周期内改 scrollView 属性
-        dispatch_async(dispatch_get_main_queue(), ^{ [self wpApplyInsetFix]; });
+        dispatch_async(dispatch_get_main_queue(), ^{ [self wpApplyInsetFixFromKVO:YES]; });
         return;
     }
     [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
@@ -194,7 +212,7 @@ static void *kWPInsetKVOContext = &kWPInsetKVOContext;
     }
 }
 
-- (void)wpApplyInsetFix {
+- (void)wpApplyInsetFixFromKVO:(BOOL)fromKVO {
     UITableView *tv = self.tableView;
     if (![tv isKindOfClass:[UITableView class]]) return;
     if (@available(iOS 11.0, *)) {
@@ -208,7 +226,8 @@ static void *kWPInsetKVOContext = &kWPInsetKVOContext;
     if (fabs(inset.top) > 0.5 || offset < -0.5) {
         tv.contentInset = UIEdgeInsetsZero;
         if (tv.contentOffset.y < -0.5) tv.contentOffset = CGPointZero;
-        WPLog(@"WCTable", @"[WCTable] [INSET] 顶栏 inset 归一: inset.top=%.2f→0 offset=%.2f→%.2f",
+        WPLog(@"WCTable", @"[WCTable] [INSET%@] 顶栏 inset 归一: inset.top=%.2f→0 offset=%.2f→%.2f",
+              fromKVO ? @"-KVO" : @"",
               inset.top, offset, tv.contentOffset.y);
     }
 }
