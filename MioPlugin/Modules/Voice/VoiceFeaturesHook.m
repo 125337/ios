@@ -963,76 +963,178 @@ static void hook_Min_absorbTap(id self, SEL _cmd) {
     if (orig_Min_absorbTap) ((void (*)(id, SEL))orig_Min_absorbTap)(self, _cmd);
 }
 
-// ── ⑥ 通话播放 ──
-static BOOL VFInCall(void) {
+// ── ⑥ 通话播放（诊断版 callplay-diag-v2：闪退排查全量日志，问题闭环后撤）──
+// 排查目标：①仲裁 hook 被谁/在哪个线程触发（音频回调线程跑 XPC/文件 IO 是闪退高危源）
+//           ②改写后 orig 链路抛的 ObjC 异常（@try 兜住落盘，不再直接崩）
+//           ③重入深度（仲裁链自触发 → 栈溢出型崩溃线索）
+static NSString *VFThreadTag(void) {
+    if ([NSThread isMainThread]) return @"main";
+    NSString *n = NSThread.currentThread.name;
+    if (n.length > 0) return [NSString stringWithFormat:@"th<%@>", n];
+    return [NSString stringWithFormat:@"th<%p>", (void *)NSThread.currentThread];
+}
+
+static NSString *VFCPDump(id obj) {
+    if (!obj) return @"(nil)";
     @try {
-        // CI SDK 头文件缺 VoiceChat/VideoChat 常量 → 直接用官方字面量值
-        NSString *cat = AVAudioSession.sharedInstance.category;
-        return [cat isEqualToString:@"playandrecord"] ||
-               [cat isEqualToString:@"voicechat"] ||
-               [cat isEqualToString:@"videochat"];
-    } @catch (NSException *e) { return NO; }
+        NSString *d = [obj description];
+        if (d.length > 100) d = [d substringToIndex:100];
+        return d;
+    } @catch (NSException *e) { return @"(desc异常)"; }
+}
+
+static NSString *VFCPCategory(void) {
+    @try { return AVAudioSession.sharedInstance.category; }
+    @catch (NSException *e) {
+        WPLog(@"VoiceFeat", @"[CallPlay] ⚠️ 读 category 异常: %@ th=%@", e.reason, VFThreadTag());
+        return nil;
+    }
+}
+
+static BOOL VFInCall(void) {
+    // CI SDK 头文件缺 VoiceChat/VideoChat 常量 → 直接用官方字面量值
+    NSString *cat = VFCPCategory();
+    return [cat isEqualToString:@"playandrecord"] ||
+           [cat isEqualToString:@"voicechat"] ||
+           [cat isEqualToString:@"videochat"];
+}
+
+static NSInteger g_callPlayDepth = 0;
+static dispatch_once_t g_cpDiagOnce;
+
+// 统一门控+诊断日志：返回 -1=走 orig / 1=改写（各 hook 自映射 YES/NO）
+// 三因子（isWAM/category/开关）+线程+入参全量落盘；非通话期也记——触发频率与线程上下文正是排查线索
+static NSInteger VFCallPlayGate(id self, BOOL checkWAM, const char *api, id arg0) {
+    dispatch_once(&g_cpDiagOnce, ^{
+        WPLog(@"VoiceFeat", @"[CallPlay] 诊断版 callplay-diag-v2 就绪（仲裁 hook 全量日志）");
+    });
+    NSString *cat = VFCPCategory();
+    BOOL inCall = [cat isEqualToString:@"playandrecord"] ||
+                  [cat isEqualToString:@"voicechat"] ||
+                  [cat isEqualToString:@"videochat"];
+    BOOL enabled = [VoiceConfig shared].voiceCallPlayEnabled;
+    BOOL isWAM = YES;
+    if (checkWAM) {
+        @try { isWAM = VFIsWAM(self); }
+        @catch (NSException *e) {
+            WPLog(@"VoiceFeat", @"[CallPlay] ⚠️ %s VFIsWAM 异常 %@ self类=%@ th=%@",
+                  api, e.reason, object_getClassName(self), VFThreadTag());
+            isWAM = NO;
+        }
+    }
+    BOOL hit = isWAM && inCall && enabled;
+    if (g_callPlayDepth > 3) {
+        WPLog(@"VoiceFeat", @"[CallPlay] ⚠️⚠️ %s 重入过深 depth=%ld（仲裁链自触发嫌疑）th=%@",
+              api, (long)g_callPlayDepth, VFThreadTag());
+    }
+    WPLog(@"VoiceFeat", @"[CallPlay] %s wam=%d cat=%@ inCall=%d en=%d depth=%ld arg=%@ → %@ th=%@",
+          api, isWAM, cat ?: @"(nil)", inCall, enabled, (long)g_callPlayDepth,
+          VFCPDump(arg0), hit ? @"改写" : @"orig", VFThreadTag());
+    return hit ? 1 : -1;
 }
 
 // run 2072 真机探测实证：本版本 WCAudioModuleMgr 无 canSetActiveWithScene:groupName:（WCR 挂的 2 参版不存在），
 // 实际存在 4 个变体。语义沿用 WCR FUN_01f9fe60：开关开 + 通话中 → 直接 YES 不调 orig
 static BOOL hook_WAM_cas1(id self, SEL _cmd, id scene) {
-    if (VFIsWAM(self) && VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
-        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene: 通话中放行");
-        return YES;
-    }
-    return orig_WAM_cas1 ? ((BOOL (*)(id, SEL, id))orig_WAM_cas1)(self, _cmd, scene) : NO;
+    g_callPlayDepth++;
+    @try {
+        if (VFCallPlayGate(self, YES, "canSetActiveWithScene:", scene) == 1) return YES;
+        BOOL r = orig_WAM_cas1 ? ((BOOL (*)(id, SEL, id))orig_WAM_cas1)(self, _cmd, scene) : NO;
+        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene: orig=%d th=%@", r, VFThreadTag());
+        return r;
+    } @catch (NSException *e) {
+        WPLog(@"VoiceFeat", @"[CallPlay] ⚠️⚠️ canSetActiveWithScene: orig 链异常 %@: %@ th=%@", e.name, e.reason, VFThreadTag());
+        return NO;
+    } @finally { g_callPlayDepth--; }
 }
 
 static BOOL hook_WAM_cas2(id self, SEL _cmd, id scene, id mixList) {
-    if (VFIsWAM(self) && VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
-        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene:mixList: 通话中放行");
-        return YES;
-    }
-    return orig_WAM_cas2 ? ((BOOL (*)(id, SEL, id, id))orig_WAM_cas2)(self, _cmd, scene, mixList) : NO;
+    g_callPlayDepth++;
+    @try {
+        if (VFCallPlayGate(self, YES, "canSetActiveWithScene:mixList:", scene) == 1) return YES;
+        BOOL r = orig_WAM_cas2 ? ((BOOL (*)(id, SEL, id, id))orig_WAM_cas2)(self, _cmd, scene, mixList) : NO;
+        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene:mixList: orig=%d th=%@", r, VFThreadTag());
+        return r;
+    } @catch (NSException *e) {
+        WPLog(@"VoiceFeat", @"[CallPlay] ⚠️⚠️ canSetActiveWithScene:mixList: orig 链异常 %@: %@ th=%@", e.name, e.reason, VFThreadTag());
+        return NO;
+    } @finally { g_callPlayDepth--; }
 }
 
 static BOOL hook_WAM_cas3(id self, SEL _cmd, id scene, id group, id ident) {
-    if (VFIsWAM(self) && VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
-        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene:groupName:identifier: 通话中放行");
-        return YES;
-    }
-    return orig_WAM_cas3 ? ((BOOL (*)(id, SEL, id, id, id))orig_WAM_cas3)(self, _cmd, scene, group, ident) : NO;
+    g_callPlayDepth++;
+    @try {
+        if (VFCallPlayGate(self, YES, "canSetActiveWithScene:groupName:identifier:", scene) == 1) return YES;
+        BOOL r = orig_WAM_cas3 ? ((BOOL (*)(id, SEL, id, id, id))orig_WAM_cas3)(self, _cmd, scene, group, ident) : NO;
+        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene:groupName:identifier: orig=%d th=%@", r, VFThreadTag());
+        return r;
+    } @catch (NSException *e) {
+        WPLog(@"VoiceFeat", @"[CallPlay] ⚠️⚠️ canSetActiveWithScene:groupName:identifier: orig 链异常 %@: %@ th=%@", e.name, e.reason, VFThreadTag());
+        return NO;
+    } @finally { g_callPlayDepth--; }
 }
 
 static BOOL hook_WAM_cas4(id self, SEL _cmd, id scene, id group, id ident, id mixList) {
-    if (VFIsWAM(self) && VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
-        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene:groupName:identifier:mixList: 通话中放行");
-        return YES;
-    }
-    return orig_WAM_cas4 ? ((BOOL (*)(id, SEL, id, id, id, id))orig_WAM_cas4)(self, _cmd, scene, group, ident, mixList) : NO;
+    g_callPlayDepth++;
+    @try {
+        if (VFCallPlayGate(self, YES, "canSetActiveWithScene:groupName:identifier:mixList:", scene) == 1) return YES;
+        BOOL r = orig_WAM_cas4 ? ((BOOL (*)(id, SEL, id, id, id, id))orig_WAM_cas4)(self, _cmd, scene, group, ident, mixList) : NO;
+        WPLog(@"VoiceFeat", @"[CallPlay] canSetActiveWithScene:groupName:identifier:mixList: orig=%d th=%@", r, VFThreadTag());
+        return r;
+    } @catch (NSException *e) {
+        WPLog(@"VoiceFeat", @"[CallPlay] ⚠️⚠️ canSetActiveWithScene:groupName:identifier:mixList: orig 链异常 %@: %@ th=%@", e.name, e.reason, VFThreadTag());
+        return NO;
+    } @finally { g_callPlayDepth--; }
 }
 
 static BOOL hook_WAM_mixList(id self, SEL _cmd, id list) {
     // WCR FUN_01fa01fc 无 self 检查（类方法 hook 的 self 是 Class 对象，不能做 isKindOfClass）
-    // 加 VFInCall() 门控：与 canSetActive 同语义，非通话期不改写仲裁（wakeups 治理）
-    if (VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
-        WPLog(@"VoiceFeat", @"[CallPlay] audioModule:canMixWithAudioList: → YES");
-        return YES;
-    }
-    return orig_WAM_mixList ? ((BOOL (*)(id, SEL, id))orig_WAM_mixList)(self, _cmd, list) : NO;
+    g_callPlayDepth++;
+    @try {
+        if (VFCallPlayGate(self, NO, "audioModule:canMixWithAudioList:", list) == 1) {
+            WPLog(@"VoiceFeat", @"[CallPlay] audioModule:canMixWithAudioList: → YES(改写) th=%@", VFThreadTag());
+            return YES;
+        }
+        BOOL r = orig_WAM_mixList ? ((BOOL (*)(id, SEL, id))orig_WAM_mixList)(self, _cmd, list) : NO;
+        WPLog(@"VoiceFeat", @"[CallPlay] audioModule:canMixWithAudioList: orig=%d th=%@", r, VFThreadTag());
+        return r;
+    } @catch (NSException *e) {
+        WPLog(@"VoiceFeat", @"[CallPlay] ⚠️⚠️ audioModule:canMixWithAudioList: orig 链异常 %@: %@ th=%@", e.name, e.reason, VFThreadTag());
+        return NO;
+    } @finally { g_callPlayDepth--; }
 }
 
 static BOOL hook_WAM_mixModule(id self, SEL _cmd, id module) {
-    if (VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
-        WPLog(@"VoiceFeat", @"[CallPlay] audioList:canMixWithAudioModule: → YES");
-        return YES;
-    }
-    return orig_WAM_mixModule ? ((BOOL (*)(id, SEL, id))orig_WAM_mixModule)(self, _cmd, module) : NO;
+    g_callPlayDepth++;
+    @try {
+        if (VFCallPlayGate(self, NO, "audioList:canMixWithAudioModule:", module) == 1) {
+            WPLog(@"VoiceFeat", @"[CallPlay] audioList:canMixWithAudioModule: → YES(改写) th=%@", VFThreadTag());
+            return YES;
+        }
+        BOOL r = orig_WAM_mixModule ? ((BOOL (*)(id, SEL, id))orig_WAM_mixModule)(self, _cmd, module) : NO;
+        WPLog(@"VoiceFeat", @"[CallPlay] audioList:canMixWithAudioModule: orig=%d th=%@", r, VFThreadTag());
+        return r;
+    } @catch (NSException *e) {
+        WPLog(@"VoiceFeat", @"[CallPlay] ⚠️⚠️ audioList:canMixWithAudioModule: orig 链异常 %@: %@ th=%@", e.name, e.reason, VFThreadTag());
+        return NO;
+    } @finally { g_callPlayDepth--; }
 }
 
 static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
-    // WCR FUN_01f9fff4：无 self 检查；加 VFInCall() 门控，非通话期走 orig（wakeups 治理）
-    if (VFInCall() && [VoiceConfig shared].voiceCallPlayEnabled) {
-        WPLog(@"VoiceFeat", @"[CallPlay] isAudioModuleInterrupt → NO");
-        return NO;
-    }
-    return orig_WAM_interrupt ? ((BOOL (*)(id, SEL, id))orig_WAM_interrupt)(self, _cmd, arg) : YES;
+    // WCR FUN_01f9fff4：无 self 检查
+    g_callPlayDepth++;
+    @try {
+        if (VFCallPlayGate(self, NO, "isAudioModuleInterrupt:", arg) == 1) {
+            WPLog(@"VoiceFeat", @"[CallPlay] isAudioModuleInterrupt: → NO(改写，不中断) th=%@", VFThreadTag());
+            return NO;
+        }
+        BOOL r = orig_WAM_interrupt ? ((BOOL (*)(id, SEL, id))orig_WAM_interrupt)(self, _cmd, arg) : YES;
+        WPLog(@"VoiceFeat", @"[CallPlay] isAudioModuleInterrupt: orig=%d th=%@", r, VFThreadTag());
+        return r;
+    } @catch (NSException *e) {
+        WPLog(@"VoiceFeat", @"[CallPlay] ⚠️⚠️ isAudioModuleInterrupt: orig 链异常 %@: %@ th=%@", e.name, e.reason, VFThreadTag());
+        return YES;
+    } @finally { g_callPlayDepth--; }
 }
 
 // ═══════════════════════════════════════════════════════════════
