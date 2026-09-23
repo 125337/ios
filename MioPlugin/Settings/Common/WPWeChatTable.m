@@ -7,6 +7,12 @@ static BOOL WPWCHasClass(NSString *name) {
     return objc_getClass(name.UTF8String) != nil;
 }
 
+@interface WPWeChatTable ()
+@property (nonatomic, assign) BOOL wpInsetWatchInstalled;   // adjustedContentInset KVO 已挂
+@end
+
+static void *kWPInsetKVOContext = &kWPInsetKVOContext;
+
 @implementation WPWeChatTable
 
 + (BOOL)available {
@@ -145,11 +151,47 @@ static BOOL WPWCHasClass(NSString *name) {
 // inset={0,0,0,0}，0.4s 后变 {97.67,0,34,0} → 内容被整体推下去一个导航栏高度，
 // hero 卡悬空）。此处强制归一；微信可能多次回写，故 0/0.15/0.45s 三次兜底。
 - (void)normalizeTopInset {
+    [self wpInstallInsetWatch];
     [self wpApplyInsetFix];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ [self wpApplyInsetFix]; });
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.45 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ [self wpApplyInsetFix]; });
+}
+
+// KVO 持续兜底：微信回写 inset 的时机不定（push 完成周期、后台切回、safeArea 变化都可能），
+// 时序兜底（0/0.15/0.45s）覆盖不到「去别的 APP 几分钟再回来」这种晚到的回写。表 frame 为
+// 手动定位，任何非 0 top inset 都是多余避让，故监听 adjustedContentInset 一变就归一
+// （幂等收敛：归一后不再写 → KVO 不再触发，不会循环）。
+- (void)wpInstallInsetWatch {
+    if (self.wpInsetWatchInstalled) return;
+    UITableView *tv = self.tableView;
+    if (![tv isKindOfClass:[UITableView class]]) return;
+    if (@available(iOS 11.0, *)) {
+        @try {
+            [tv addObserver:self forKeyPath:@"adjustedContentInset" options:NSKeyValueObservingOptionNew context:kWPInsetKVOContext];
+            self.wpInsetWatchInstalled = YES;
+        } @catch (NSException *e) {
+            WPLog(@"WCTable", @"[WCTable] [INSET] KVO 挂载失败: %@", e);
+        }
+    }
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey, id> *)change context:(void *)context {
+    if (context == kWPInsetKVOContext) {
+        // 排到下个 runloop 再修：避免在微信布局周期内改 scrollView 属性
+        dispatch_async(dispatch_get_main_queue(), ^{ [self wpApplyInsetFix]; });
+        return;
+    }
+    [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+}
+
+- (void)dealloc {
+    if (self.wpInsetWatchInstalled) {
+        @try {
+            [(UITableView *)self.tableView removeObserver:self forKeyPath:@"adjustedContentInset" context:kWPInsetKVOContext];
+        } @catch (NSException *e) {}
+    }
 }
 
 - (void)wpApplyInsetFix {
