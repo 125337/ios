@@ -30,6 +30,8 @@ static dispatch_source_t g_heatTimer = nil;
 static _Atomic (const char *) g_lastHookKey = NULL;   // key 为字面量，指针全程稳定
 static int g_crashFd = -1;                            // 崩溃日志专用 fd，install 期打开持到进程死
 
+static NSString *WPLogFilePath(void);   // 前置声明：定义在本文件下方
+
 // signal handler：只允许 async-signal-safe 调用（write），手拼不调 snprintf
 static void WPCrashSignalHandler(int sig) {
     if (g_crashFd >= 0) {
