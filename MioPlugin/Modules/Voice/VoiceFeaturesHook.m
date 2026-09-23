@@ -1005,6 +1005,7 @@ static dispatch_once_t g_cpDiagOnce;
 // 统一门控+诊断日志：返回 -1=走 orig / 1=改写（各 hook 自映射 YES/NO）
 // 三因子（isWAM/category/开关）+线程+入参全量落盘；非通话期也记——触发频率与线程上下文正是排查线索
 static NSInteger VFCallPlayGate(id self, BOOL checkWAM, const char *api, id arg0) {
+    WPHeatTick("WAM.arbitration");
     dispatch_once(&g_cpDiagOnce, ^{
         WPLog(@"VoiceFeat", @"[CallPlay] 诊断版 callplay-diag-v2 就绪（仲裁 hook 全量日志）");
     });

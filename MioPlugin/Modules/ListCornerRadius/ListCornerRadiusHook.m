@@ -85,6 +85,7 @@ static BOOL shouldApplyGlobalCorner(UIViewController *vc) {
 }
 
 static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
+    WPHeatTick("WCSearchBar.layoutSubviews");
     if (orig_WCSearchBar_layoutSubviews) {
         ((void (*)(id, SEL))orig_WCSearchBar_layoutSubviews)(self, _cmd);
     }
@@ -104,6 +105,7 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
 
 // ★★★ Cell Hook：列表圆角 + 分发到资料卡透明化 ★★★
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
+    WPHeatTick("MMTableViewCell.layoutSubviews");
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
@@ -276,6 +278,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 // ★★★ [WPAuxiliaryHooks] MFWebMMBtn background color ★★★
 static void (*orig_MFWebMMBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
+    WPHeatTick("MFWebMMBtn.layoutSubviews");
     orig_MFWebMMBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
@@ -301,6 +304,7 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
 // ★★★ [WPAuxiliaryHooks] MFBannerBtn background color ★★★
 static void (*orig_MFBannerBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
+    WPHeatTick("MFBannerBtn.layoutSubviews");
     orig_MFBannerBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
@@ -326,6 +330,7 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
 // ★★★ [WPAuxiliaryHooks] MainFrameSectionFoldView ★★★
 static void (*orig_FoldView_layoutSubviews)(id, SEL);
 static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
+    WPHeatTick("FoldView.layoutSubviews");
     orig_FoldView_layoutSubviews(self, _cmd);
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
@@ -437,12 +442,16 @@ static BOOL _wp_isAllowedVC(NSString *name) {
 
 static void (*orig_UIView_layoutSubviews)(id, SEL);
 static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
+    WPHeatTick("UIView.layoutSubviews(基类hook)");
     orig_UIView_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
 
-    if (![NSStringFromClass([self class]) isEqualToString:@"UIView"]) return;
+    // wakeups 优化（原实现每次布局都 NSStringFromClass 字符串分配）：指针比对零分配，语义不变（精确匹配 UIView 基类）
+    static Class g_nsViewCls;
+    if (!g_nsViewCls) g_nsViewCls = objc_getClass("UIView");
+    if ([self class] != g_nsViewCls) return;
 
     UIView *view = (UIView *)self;
 
@@ -454,14 +463,17 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     UIView *parent = view.superview;
     if (!parent) return;
 
+    // wakeups 优化：幂等赋值——backgroundColor 赋值即 CA 脏标记，布局期内反复赋同值会搅动提交循环
     if (_wp_isTableViewClass(NSStringFromClass([parent class]))) {
-        view.backgroundColor = [UIColor clearColor];
+        if (![view.backgroundColor isEqual:[UIColor clearColor]])
+            view.backgroundColor = [UIColor clearColor];
         return;
     }
 
     UIView *gp = parent.superview;
     if (gp && _wp_isTableViewClass(NSStringFromClass([gp class]))) {
-        view.backgroundColor = [UIColor clearColor];
+        if (![view.backgroundColor isEqual:[UIColor clearColor]])
+            view.backgroundColor = [UIColor clearColor];
     }
 }
 

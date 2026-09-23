@@ -531,6 +531,7 @@ static void MioVPEnsurePlusLongPress(UIView *toolView) {
 
 // 驱动点 1：layoutSubviews（对齐 WCR FUN_008cd3f8）
 static void hook_ITV_layoutSubviews(id self, SEL _cmd) {
+    WPHeatTick("MMInputToolView.layoutSubviews");
     ((void (*)(id, SEL))orig_ITV_layoutSubviews)(self, _cmd);
     @try {
         if ([self isKindOfClass:[UIView class]]) MioVPEnsurePlusLongPress((UIView *)self);

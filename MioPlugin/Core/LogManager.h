@@ -46,3 +46,8 @@
 + (void)appendLineWithTag:(NSString *)tag content:(NSString *)line;
 
 @end
+
+/// 热度计（唤醒排查，2026-09-24）：热路径 hook 只做原子计数（无字符串/无文件IO，零开销），
+/// 每 5 秒汇总打点一条 [Heat] 速率日志（谁在烧唤醒一目了然）。排查闭环后摘除调用点。
+/// 用法：hook 入口调用 WPHeatTick("模块.方法");  key 必须是字符串字面量（指针需全程稳定）。
+extern void WPHeatTick(const char *key);

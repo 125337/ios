@@ -120,6 +120,7 @@ static id (*orig_getValueOfProperty_inRuleSet)(id, SEL, NSString *, NSString *);
 static id hook_getValueOfProperty_inRuleSet(id self, SEL _cmd,
                                              NSString *property,
                                              NSString *ruleSet) {
+    WPHeatTick("FontLayout.getValueOfProperty");
     // ★ 第一步：先调原方法获取原始值 ★
     id originalResult = orig_getValueOfProperty_inRuleSet(self, _cmd, property, ruleSet);
 
