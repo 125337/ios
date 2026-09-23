@@ -53,6 +53,7 @@ static BOOL isBaseMsgContentVC(UIViewController *vc) {
 // ============================================================
 
 static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
+    WPHeatTick("Placeholder.GrowTextView.layout");
     // ① 调用原始 layoutSubviews (L26692)
     if (orig_MMGrowTextView_layoutSubviews) {
         ((void (*)(id, SEL))orig_MMGrowTextView_layoutSubviews)(self, _cmd);

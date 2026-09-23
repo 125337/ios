@@ -121,63 +121,71 @@ static id hook_getValueOfProperty_inRuleSet(id self, SEL _cmd,
                                              NSString *property,
                                              NSString *ruleSet) {
     WPHeatTick("FontLayout.getValueOfProperty");
-    // ★ 第一步：先调原方法获取原始值 ★
+    // ★ 第一步：先调原方法获取原始值（orig 段不包 try：微信内部异常让其走崩溃取证记录）★
     id originalResult = orig_getValueOfProperty_inRuleSet(self, _cmd, property, ruleSet);
 
-    FontLayoutConfig *config = [FontLayoutConfig shared];
-    BOOL globalOn = config.globalLayoutEnabled;
-    BOOL chatOn   = config.chatLayoutEnabled;
+    // ★ 处理段包 try：配置全关时本 hook 是纯 pass-through，异常时回退原值不破坏微信 ★
+    @try {
+        FontLayoutConfig *config = [FontLayoutConfig shared];
+        BOOL globalOn = config.globalLayoutEnabled;
+        BOOL chatOn   = config.chatLayoutEnabled;
 
-    // ── 两个布局都未开启 → 直接返回 ──
-    if (!globalOn && !chatOn) {
-        return originalResult;
-    }
+        // ── 两个布局都未开启 → 直接返回 ──
+        if (!globalOn && !chatOn) {
+            return originalResult;
+        }
 
-    // ── 检查是否需要拦截 ──
-    CGFloat originalSize = 0;
-    NSString *elementType = nil;
+        // ── 检查是否需要拦截 ──
+        CGFloat originalSize = 0;
+        NSString *elementType = nil;
 
-    if (!shouldIntercept(originalResult, property, ruleSet,
-                         &originalSize, &elementType)) {
-        // 不需要拦截 → 返回原始值
-        return originalResult;
-    }
+        if (!shouldIntercept(originalResult, property, ruleSet,
+                             &originalSize, &elementType)) {
+            // 不需要拦截 → 返回原始值
+            return originalResult;
+        }
 
-    // ── 确定目标字号 ──
-    CGFloat targetSize = kMaxFontSize; // 默认 16
+        // ── 确定目标字号 ──
+        CGFloat targetSize = kMaxFontSize; // 默认 16
 
-    if (globalOn && chatOn) {
-        // 两个都开启 → 全局优先（可根据需求改为对话优先）
-        targetSize = config.globalFontSize;
-    } else if (globalOn) {
-        // 仅全局
-        targetSize = config.globalFontSize;
-    } else if (chatOn) {
-        // 仅对话
-        targetSize = config.chatFontSize;
-    }
+        if (globalOn && chatOn) {
+            // 两个都开启 → 全局优先（可根据需求改为对话优先）
+            targetSize = config.globalFontSize;
+        } else if (globalOn) {
+            // 仅全局
+            targetSize = config.globalFontSize;
+        } else if (chatOn) {
+            // 仅对话
+            targetSize = config.chatFontSize;
+        }
 
-    // ── 范围验证 ──
-    if (targetSize < kMinFontSize || targetSize > kMaxFontSize) {
+        // ── 范围验证 ──
+        if (targetSize < kMinFontSize || targetSize > kMaxFontSize) {
+            WPLog(@"FontLayout",
+                  @"[SKIP] fontSize %.0f out of range [%.0f, %.0f]",
+                  targetSize, kMinFontSize, kMaxFontSize);
+            return originalResult;
+        }
+
+        // ── 执行修改：保留数组结构，只改第一个元素 ──
+        NSMutableArray *modified = [(NSArray *)originalResult mutableCopy];
+        id newElement = createNewValueForElement(modified[0], targetSize);
+        modified[0] = newElement;
+
+        // ── 日志 ──
         WPLog(@"FontLayout",
-              @"[SKIP] fontSize %.0f out of range [%.0f, %.0f]",
-              targetSize, kMinFontSize, kMaxFontSize);
+              @"[MODIFY] %@ in %@ : %.0f → %.0f (type=%@, count=%lu)",
+              property, ruleSet,
+              originalSize, targetSize,
+              elementType, (unsigned long)modified.count);
+
+        return modified;
+    } @catch (NSException *e) {
+        WPLog(@"FontLayout",
+              @"⚠️⚠️ getValueOfProperty 处理段异常: %@ reason=%@ prop=%@ ruleSet=%@",
+              e.name, e.reason, property, ruleSet);
         return originalResult;
     }
-
-    // ── 执行修改：保留数组结构，只改第一个元素 ──
-    NSMutableArray *modified = [(NSArray *)originalResult mutableCopy];
-    id newElement = createNewValueForElement(modified[0], targetSize);
-    modified[0] = newElement;
-
-    // ── 日志 ──
-    WPLog(@"FontLayout",
-          @"[MODIFY] %@ in %@ : %.0f → %.0f (type=%@, count=%lu)",
-          property, ruleSet,
-          originalSize, targetSize,
-          elementType, (unsigned long)modified.count);
-
-    return modified;
 }
 
 #pragma mark - Hook 2: CLocalInfo.m_uiGlobalFontLevel
@@ -185,14 +193,18 @@ static id hook_getValueOfProperty_inRuleSet(id self, SEL _cmd,
 static unsigned int (*orig_m_uiGlobalFontLevel)(id, SEL);
 
 static unsigned int hook_m_uiGlobalFontLevel(id self, SEL _cmd) {
-    FontLayoutConfig *config = [FontLayoutConfig shared];
-
-    if (config.globalLayoutEnabled || config.chatLayoutEnabled) {
-        // 大字模式激活，触发微信内置大字号体系
-        // （我们的 Hook-1 会在此基础上进一步精确控制具体字号）
-        return 1;
+    WPHeatTick("FontLayout.m_uiGlobalFontLevel");
+    @try {
+        FontLayoutConfig *config = [FontLayoutConfig shared];
+        if (config.globalLayoutEnabled || config.chatLayoutEnabled) {
+            // 大字模式激活，触发微信内置大字号体系
+            // （我们的 Hook-1 会在此基础上进一步精确控制具体字号）
+            return 1;
+        }
+    } @catch (NSException *e) {
+        WPLog(@"FontLayout",
+              @"⚠️⚠️ m_uiGlobalFontLevel 异常: %@ reason=%@", e.name, e.reason);
     }
-
     return orig_m_uiGlobalFontLevel(self, _cmd);
 }
 

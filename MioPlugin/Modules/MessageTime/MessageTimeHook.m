@@ -561,6 +561,7 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
 }
 
 static void repl_ChatTimeCellView_layoutSubviews(id self, SEL _cmd) {
+    WPHeatTick("MsgTime.ChatTimeCell.layout");
     if (orig_ChatTimeCellView_layoutSubviews) {
         orig_ChatTimeCellView_layoutSubviews(self, _cmd);
     }

@@ -5,7 +5,7 @@
 
 // 构建版本标记：随启动日志输出，用于鉴别真机装的包。Mach-O 段按 16KB 对齐，小改动可能
 // 不改变 dylib 字节数（曾出现两版同为 865,680），字节数鉴别法在小版本间会失灵，以日志为准
-#define MIO_BUILD_TAG @"build-0924-insetwatch"
+#define MIO_BUILD_TAG @"build-0924-crashlog"
 
 static BOOL WPWCHasClass(NSString *name) {
     return objc_getClass(name.UTF8String) != nil;

@@ -442,7 +442,7 @@ static BOOL _wp_isAllowedVC(NSString *name) {
 
 static void (*orig_UIView_layoutSubviews)(id, SEL);
 static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
-    WPHeatTick("UIView.layoutSubviews(基类hook)");
+    WPHeatTick("UIView.layoutSubviews(base-hook)");
     orig_UIView_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
