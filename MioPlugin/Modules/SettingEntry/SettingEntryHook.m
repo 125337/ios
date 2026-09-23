@@ -174,7 +174,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         wfooter.numberOfLines = 2;
         wc.tableView.tableFooterView = wfooter;
 
-        [vc.view addSubview:wc.tableView];
+        [vc.view addSubview:wc.containerView]; // WCR 同款容器挂载：表在容器内 y=0，容器定位导航栏下方；直接挂 tableView 会成 y=0 全屏，hero 顶进导航栏
         [wc reloadAsync]; // addSection: 数据已就绪，延迟双刷兜底首帧时序；normalizeTopInset 挂尾部修 inset 回写
 
         WPLog(@"Setting", @"[Entry] 微信引擎列表完成 (header=%@)", NSStringFromClass([headerWrap class]));
