@@ -174,13 +174,13 @@ static void MioShowLockScreen(void) {
     CGFloat W = host.bounds.size.width;
     CGFloat H = host.bounds.size.height;
     CGFloat b = W / 5.0f;                                    // 键钮直径 = 屏宽/5
-    // 视觉居中：标题露出 25 + 键盘(4b+60) + 提示露出 55 → 视觉块高 4b+140
-    // （WCR 原式预留 150 会使整体偏上 60pt）
-    CGFloat kbY = (H - (b * 4.0f + 90.0f)) / 2.0f;           // 键盘起始 y
+    // 垂直布局（各元素独立不重叠，整块视觉居中）：
+    // 标题25 + 间距25 + 圆点15 + 间距35 + 键盘(4b+60) + 间距30 + 提示20 = 4b+210
+    CGFloat topY = (H - (b * 4.0f + 210.0f)) / 2.0f;         // 块顶（标题 y）
+    CGFloat kbY = topY + 100.0f;                             // 键盘第一行顶
 
     // 标题
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 220, 50)];
-    title.center = CGPointMake(W / 2.0f, kbY);
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, topY, W, 25)];
     title.text = @"请输入密码";
     title.textColor = [UIColor whiteColor];
     title.textAlignment = NSTextAlignmentCenter;
@@ -188,14 +188,13 @@ static void MioShowLockScreen(void) {
     [host addSubview:title];
 
     // 6 位空心圆点（容器 tag 100，圆点 tag 1-6）
-    UIView *dots = [[UIView alloc] initWithFrame:CGRectMake(0, 0, b * 3.0f - 20.0f, 30.0f)];
-    dots.center = CGPointMake(W / 2.0f,
-                              title.frame.origin.y + title.frame.size.height + 40.0f);
+    UIView *dots = [[UIView alloc] initWithFrame:CGRectMake(0, 0, b * 3.0f - 20.0f, 15.0f)];
+    dots.center = CGPointMake(W / 2.0f, topY + 50.0f + 7.5f);
     dots.tag = 100;
     [host addSubview:dots];
     CGFloat gap = (dots.bounds.size.width - 6.0f * 15.0f) / 5.0f;
     for (NSInteger i = 0; i < 6; i++) {
-        UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(i * (15.0f + gap), 7.5f, 15.0f, 15.0f)];
+        UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(i * (15.0f + gap), 0, 15.0f, 15.0f)];
         dot.layer.cornerRadius = 7.5f;
         dot.layer.borderColor = [UIColor whiteColor].CGColor;
         dot.layer.borderWidth = 1.0f;
@@ -216,7 +215,7 @@ static void MioShowLockScreen(void) {
         }
         UIButton *bio = [UIButton buttonWithType:UIButtonTypeCustom];
         bio.frame = CGRectMake(0, 0, 40.0f, 40.0f);
-        bio.center = CGPointMake(W / 2.0f, kbY - 40.0f);
+        bio.center = CGPointMake(W / 2.0f, topY - 40.0f);
         [bio setImage:[UIImage systemImageNamed:faceID ? @"faceid" : @"touchid"]
              forState:UIControlStateNormal];
         bio.tintColor = [UIColor whiteColor];
@@ -258,8 +257,7 @@ static void MioShowLockScreen(void) {
     [host addSubview:zero];
 
     // 底部提示
-    UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, W - 40.0f, 30.0f)];
-    hint.center = CGPointMake(W / 2.0f, zero.frame.origin.y + zero.frame.size.height + 40.0f);
+    UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(0, kbY + (b * 4.0f + 60.0f) + 30.0f, W, 20)];
     hint.text = @"请输入6位数字密码解锁";
     hint.textColor = [UIColor colorWithWhite:0.7f alpha:1.0f];
     hint.textAlignment = NSTextAlignmentCenter;
