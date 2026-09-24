@@ -2,12 +2,23 @@
 
 @implementation KeywordAlertEngine
 
+/// 换行分隔的多行关键词文本 → 非空词条数组。
+/// 非正则词条额外支持逗号（半/全角）、顿号分隔；正则词条（/…/ 或 ／…／ 包裹）保持完整不拆。
 + (NSArray<NSString *> *)parseKeywordList:(NSString *)text {
     if (![text isKindOfClass:[NSString class]] || text.length == 0) return @[];
     NSMutableArray *result = [NSMutableArray array];
     for (NSString *line in [text componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]]) {
         NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        if (trimmed.length > 0) [result addObject:trimmed];
+        if (trimmed.length == 0) continue;
+        if ([self regexPatternFromKeyword:trimmed] != nil) {
+            [result addObject:trimmed];
+            continue;
+        }
+        NSCharacterSet *separators = [NSCharacterSet characterSetWithCharactersInString:@",，、"];
+        for (NSString *part in [trimmed componentsSeparatedByCharactersInSet:separators]) {
+            NSString *p = [part stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            if (p.length > 0) [result addObject:p];
+        }
     }
     return [result copy];
 }

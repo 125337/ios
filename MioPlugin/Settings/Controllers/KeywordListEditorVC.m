@@ -22,7 +22,7 @@
     CGFloat w = self.view.bounds.size.width;
 
     UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(20, 16, w - 40, 60)];
-    hint.text = @"一行一个词条\n用 /…/ 或 ／…／ 包裹表示正则，如 /测试|开会/\n含 \\ 的词条整体按正则处理，如 \\d{4}";
+    hint.text = @"一行一个词条，也可用逗号、顿号分隔\n用 /…/ 或 ／…／ 包裹表示正则，如 /测试|开会/（正则内逗号不拆分）\n含 \\ 的词条整体按正则处理，如 \\d{4}";
     hint.font = [UIFont systemFontOfSize:13];
     hint.textColor = [UIColor secondaryLabelColor];
     hint.numberOfLines = 0;
@@ -41,7 +41,7 @@
     self.editorView.text = self.initialText ?: @"";
     [self.view addSubview:self.editorView];
 
-    WPLog(@"KeywordAlert", @"[EDITOR] 打开编辑器: %@ 初始 %lu 行", self.title, (unsigned long)[self nonEmptyLineCount]);
+    WPLog(@"KeywordAlert", @"[EDITOR] 打开编辑器: %@ 初始 %lu 个词条", self.title, (unsigned long)[self nonEmptyLineCount]);
 }
 
 - (void)closeAction {
@@ -49,7 +49,7 @@
 }
 
 - (void)saveAction {
-    WPLog(@"KeywordAlert", @"[EDITOR] 保存: %@ %lu 行", self.title, (unsigned long)[self nonEmptyLineCount]);
+    WPLog(@"KeywordAlert", @"[EDITOR] 保存: %@ %lu 个词条", self.title, (unsigned long)[self nonEmptyLineCount]);
     if (self.saveBlock) {
         self.saveBlock(self.editorView.text ?: @"");
     }

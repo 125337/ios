@@ -24,6 +24,8 @@
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    // 微信引擎表每次重建后再添加行，防止 pop 返回时行叠加
+    [self wpRebuildWeChatTable];
     [self buildUI];
 }
 

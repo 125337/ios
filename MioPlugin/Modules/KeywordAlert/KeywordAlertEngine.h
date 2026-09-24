@@ -7,7 +7,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// / keywordAlertContent:matchesKeyword: 以及禁用词豁免逻辑。
 @interface KeywordAlertEngine : NSObject
 
-/// 换行分隔的多行关键词文本 → trim 后的非空词条数组
+/// 多行关键词文本 → 非空词条数组。换行分隔；非正则词条额外支持逗号（半/全角）、顿号分隔；
+/// 正则词条（/…/ 或 ／…／ 包裹，或含 \）保持完整不拆
 + (NSArray<NSString *> *)parseKeywordList:(nullable NSString *)text;
 
 /// 提取正则 pattern：/…/ 或 ／…／ 包裹（长度≥3）取内部；pattern 为 nil 且词条含 \ 时整体作 pattern。

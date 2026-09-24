@@ -149,6 +149,11 @@ static void processKeywordAlertMessage(id wrap) {
         BOOL isGroup = [fromUsr containsString:@"@chatroom"];
         NSString *session = fromUsr;
         NSString *sender = isGroup ? kaGroupSenderFromContent(rawContent) : fromUsr;
+        if (isGroup && sender.length == 0) {
+            // 部分版本群消息 content 无 "wxid:\n" 前缀，回退运行时探测（属性缺失时为 nil，安全）
+            sender = kaMsgString(wrap, "m_nsRealChatUsr");
+            WPLogDebug(@"KeywordAlert", @"群消息无内容前缀，m_nsRealChatUsr=%@", sender ?: @"(null)");
+        }
         NSString *displayContent = rawContent;
         if (isGroup && sender.length > 0) {
             NSRange nl = [rawContent rangeOfString:@"\n"];
