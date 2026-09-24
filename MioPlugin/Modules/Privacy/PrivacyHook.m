@@ -179,20 +179,20 @@ static void MioHandleDidBecomeActive(void) {
 
 #pragma mark - ③ 指定页面上锁
 
-/// 真机确认的页面类名 → 配置 key（用户 2026-09-24 真机抓取提供）
-/// 注意：朋友圈页面（发现→朋友圈）/ 视频号页面（发现→视频号）两个子开关的类名
-/// 尚未真机确认，暂不接运行时，等确认后补进此表
+/// 真机确认的页面类名 → 配置 key（用户 2026-09-24 真机抓取提供，二轮更正后的 8 项全量映射）
 static NSDictionary<NSString *, NSString *> *MioPageLockMap(void) {
     static NSDictionary *m = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         m = @{
-            @"WCPayMainViewControllerV2":             @"privacyLockMyPayEnabled",
-            @"MyFavoritesViewController":             @"privacyLockMyFavoriteEnabled",
-            @"WCTimeLineViewController":              @"privacyLockMyMomentEnabled",
-            @"WCFinderFullFeedFollowViewController":  @"privacyLockMyChannelsEnabled",
-            @"WCPluginsViewController":               @"privacyLockMyPluginEnabled",
-            @"NewSettingViewController":              @"privacyLockMySettingEnabled",
+            @"WCPayMainViewControllerV2":                  @"privacyLockMyPayEnabled",
+            @"MyFavoritesViewController":                  @"privacyLockMyFavoriteEnabled",
+            @"WCStoryAlbumViewController":                 @"privacyLockMyMomentEnabled",   // 我朋友圈页（个人相册）
+            @"WCTimeLineViewController":                   @"privacyLockMomentEnabled",     // 朋友圈页面（发现→朋友圈 feed）
+            @"WCFinderStreamProfileHeaderViewController":  @"privacyLockMyChannelsEnabled", // 我视频号页（个人主页）
+            @"WCFinderFullFeedFollowViewController":       @"privacyLockChannelsEnabled",   // 视频号页面（发现→视频号 feed）
+            @"WCPluginsViewController":                    @"privacyLockMyPluginEnabled",
+            @"NewSettingViewController":                   @"privacyLockMySettingEnabled",
         };
     });
     return m;
