@@ -136,6 +136,10 @@ static void processKeywordAlertMessage(id wrap) {
                 [_kaProcessedMsgIds addObject:msgId];
                 if (_kaProcessedMsgIds.count > 2000) [_kaProcessedMsgIds removeAllObjects];
             }
+        } else {
+            // 无 msgId/mesLocalID 的消息（如 type=10002 系统事件）无法去重，直接跳过防重复提醒
+            WPLogDebug(@"KeywordAlert", @"skip: 无 msgId type=%u", msgType);
+            return;
         }
 
         NSString *fromUsr = kaMsgString(wrap, "m_nsFromUsr") ?: @"";
