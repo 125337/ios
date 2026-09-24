@@ -67,10 +67,13 @@ static void MioShowCover(void) {
     if (!window) {
         window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
     }
-    window.backgroundColor = [UIColor blackColor];
+    BOOL blurOnly = (!cfg.privacyEncryptEnabled && cfg.privacyBlurEnabled);
+    // WCR 差异：加密遮罩纯黑（showBackgroundPrivacyCover blackColor）；后台模糊为
+    // 毛玻璃——黑底会透出来把毛玻璃染成纯黑，故仅模糊时窗口背景必须透明
+    window.backgroundColor = blurOnly ? [UIColor clearColor] : [UIColor blackColor];
     window.windowLevel = UIWindowLevelStatusBar + 1001.0; // WCR: statusBar + 1001
 
-    if (!cfg.privacyEncryptEnabled && cfg.privacyBlurEnabled) {
+    if (blurOnly) {
         UIBlurEffect *blur = [UIBlurEffect effectWithStyle:UIBlurEffectStyleRegular];
         UIVisualEffectView *blurView = [[UIVisualEffectView alloc] initWithEffect:blur];
         blurView.frame = window.bounds;
@@ -129,7 +132,20 @@ static void MioPresentAppLockAlert(void) {
 
 static void MioHandleDidBecomeActive(void) {
     PrivacyConfig *cfg = [PrivacyConfig shared];
-    if (!g_coverWindow) return;
+    if (!g_coverWindow) {
+        // 冷启动（划掉微信重开）：无遮罩且从未解锁 → 首次进微信即验证
+        // （WCR presentLockScreenIfNeeded：isEncryptionEnabled && !hasUnlockedSuccessfully 即弹锁）
+        if (cfg.privacyEncryptEnabled && cfg.privacyEncryptPassword.length > 0 && !g_lastUnlockDate) {
+            MioShowCover();
+            dispatch_async(dispatch_get_main_queue(), ^{
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{
+                    MioPresentAppLockAlert();
+                });
+            });
+        }
+        return;
+    }
 
     if (cfg.privacyEncryptEnabled && cfg.privacyEncryptPassword.length > 0) {
         BOOL withinGrace = NO;
