@@ -16,6 +16,7 @@
 #import "../Modules/Unread/ClearUnreadConfig.h"
 #import "../Modules/Joker/JokerConfig.h"
 #import "../Modules/GroupExit/GroupExitConfig.h"
+#import "../Modules/KeywordAlert/KeywordAlertConfig.h"
 #import "../Modules/RedEnvelop/RedEnvelopConfig.h"
 #import "../Modules/AutoTransfer/AutoTransferConfig.h"
 #import "../Modules/ChatTopBar/ChatTopBarConfig.h"
@@ -36,6 +37,7 @@
 #import "../Modules/Unread/ClearUnreadHook.h"
 #import "../Modules/Joker/JokerHook.h"
 #import "../Modules/GroupExit/GroupExitHook.h"
+#import "../Modules/KeywordAlert/KeywordAlertHook.h"
 #import "../Modules/RedEnvelop/RedEnvelopHook.h"
 #import "../Modules/AutoTransfer/AutoTransferHook.h"
 #import "../Modules/ChatTopBar/ChatTopBarHook.h"
@@ -61,6 +63,7 @@
 #import "../Settings/Controllers/SettingAboutController.h"
 #import "../Settings/Controllers/WPUILayoutSettingsVC.h"
 #import "../Settings/Controllers/SettingPageLockController.h"
+#import "../Settings/Controllers/SettingKeywordAlertController.h"
 
 
 @implementation MioModuleDescriptor
@@ -140,6 +143,14 @@
                                                hookClasses:@[[MessageTimeHook class]]
                                            controllerClass:[SettingGeneralFunctionController class]
                                                   subtitle:@"自定义消息时间显示"
+                                             sectionTitle:@"通用"],
+
+            [MioModuleDescriptor descriptorWithIdentifier:@"keywordalert"
+                                                    title:@"关键词提醒"
+                                               configClass:[KeywordAlertConfig class]
+                                               hookClasses:@[[KeywordAlertHook class]]
+                                           controllerClass:[SettingGeneralFunctionController class]
+                                                  subtitle:@"命中关键词横幅/通知提醒"
                                              sectionTitle:@"通用"],
             
             // ──── 自动抢红包 ────

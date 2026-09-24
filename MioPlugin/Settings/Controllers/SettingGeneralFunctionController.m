@@ -8,6 +8,8 @@
 #import "../../Modules/Joker/JokerConfig.h"
 #import "../../Modules/GroupExit/GroupExitConfig.h"
 #import "../../Modules/Privacy/PrivacyConfig.h"
+#import "../../Modules/KeywordAlert/KeywordAlertConfig.h"
+#import "SettingKeywordAlertController.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
@@ -112,6 +114,17 @@
                           subtitle:timeStatus
                                tag:300
                             action:@selector(onMessageTimeSettingTap)
+                                cy:cy
+                             width:w];
+
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+
+    NSString *kaStatus = [KeywordAlertConfig shared].keywordAlertEnabled ? @"已开启" : @"已关闭";
+    cy = [self addNavRowInGroup:group
+                             title:@"关键词提醒"
+                          subtitle:kaStatus
+                               tag:500
+                            action:@selector(onKeywordAlertTap)
                                 cy:cy
                              width:w];
 
@@ -241,6 +254,12 @@
 
 - (void)onRevokeSettingTap {
     SettingRevokeController *vc = [[SettingRevokeController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
+- (void)onKeywordAlertTap {
+    WPLog(@"Setting", @"[Nav] pushed SettingKeywordAlertController");
+    SettingKeywordAlertController *vc = [[SettingKeywordAlertController alloc] init];
     [self.navigationController pushViewController:vc animated:YES];
 }
 
