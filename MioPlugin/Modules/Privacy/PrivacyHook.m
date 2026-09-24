@@ -35,6 +35,7 @@ static UIWindow *g_coverWindow = nil;      // 遮罩窗（加密/模糊）
 static NSDate *g_lastUnlockDate = nil;     // 加密解锁基准（宽限判定）
 static BOOL g_verifying = NO;              // 弹窗防重入
 static NSMutableDictionary *g_pageUnlockByKey = nil; // 页面锁保护窗：类名 → 解锁时刻
+static BOOL g_pageVerifying = NO;          // 页面锁验证中（拦截期间忽略重复进入请求）
 static BOOL g_installed = NO;
 
 #pragma mark - ①② 遮罩窗（微信加密 / 后台模糊）
@@ -194,10 +195,12 @@ static BOOL MioPageInUnlockWindow(NSString *clsName) {
     return ([NSDate date].timeIntervalSince1970 - t.doubleValue) <= (double)protect;
 }
 
-/// 页面锁验证：设备生物识别（WCR 页面锁走 LAContext authenticateBeforeEnable_，
-/// 与微信加密的 6 位密码完全独立）；生物识别不可用时兜底设备锁屏密码
-static void MioPresentPageLockBiometric(UIViewController *host, NSString *clsName) {
-    WPLog(@"Privacy", @"[PageLock] 拦截锁定页: %@", clsName);
+/// 页面锁验证（WCR 语义：先验证再进入，不通过则不进入）。验证走设备生物识别
+/// （WCR 页面锁走 LAContext，与微信加密的 6 位密码完全独立）；生物识别不可用时
+/// 兜底设备锁屏密码。通过 → 记录保护窗并放行 push；不通过 → 停留当前页。
+static void MioVerifyPageLockThenPush(UINavigationController *nav, SEL pushSel,
+                                      UIViewController *vc, BOOL animated, NSString *clsName) {
+    WPLog(@"Privacy", @"[PageLock] 拦截锁定页，先验证再进入: %@", clsName);
     LAContext *ctx = [LAContext new];
     ctx.localizedFallbackTitle = @"输入设备密码";
     NSError *err = nil;
@@ -209,16 +212,14 @@ static void MioPresentPageLockBiometric(UIViewController *host, NSString *clsNam
         localizedReason:@"验证以进入该页面"
                   reply:^(BOOL ok, NSError *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
+            g_pageVerifying = NO;
             if (ok) {
                 // WCR markUnlockedForKey_：解锁成功记录时刻，保护窗内免重复验证
                 g_pageUnlockByKey[clsName] = @([NSDate date].timeIntervalSince1970);
-                WPLog(@"Privacy", @"[PageLock] 验证通过: %@", clsName);
+                WPLog(@"Privacy", @"[PageLock] 验证通过，进入: %@", clsName);
+                ((void (*)(id, SEL, UIViewController *, BOOL))orig_Nav_push)(nav, pushSel, vc, animated);
             } else {
-                WPLog(@"Privacy", @"[PageLock] 验证未通过，弹回: %@ (%@)", clsName, e.localizedDescription);
-                UINavigationController *nav = host.navigationController;
-                if (nav && nav.viewControllers.count > 1) {
-                    [nav popViewControllerAnimated:YES];
-                }
+                WPLog(@"Privacy", @"[PageLock] 验证未通过，不进入: %@ (%@)", clsName, e.localizedDescription);
             }
         });
     }];
@@ -232,14 +233,12 @@ static void hook_Nav_push(id self, SEL _cmd, UIViewController *vc, BOOL animated
         if (key) {
             NSString *clsName = NSStringFromClass(vc.class);
             if (!MioPageInUnlockWindow(clsName)) {
-                ((void (*)(id, SEL, UIViewController *, BOOL))orig_Nav_push)(self, _cmd, vc, animated);
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
-                               dispatch_get_main_queue(), ^{
-                    UIViewController *top = ((UIViewController * (*)(id, SEL))objc_msgSend)(self, @selector(topViewController));
-                    if (top && [NSStringFromClass(top.class) isEqualToString:clsName]) {
-                        MioPresentPageLockBiometric(top, clsName);
-                    }
-                });
+                if (g_pageVerifying) { // 验证中：忽略重复的锁定页进入请求
+                    WPLog(@"Privacy", @"[PageLock] 验证中，忽略重复请求: %@", clsName);
+                    return;
+                }
+                g_pageVerifying = YES;
+                MioVerifyPageLockThenPush(self, _cmd, vc, animated, clsName);
                 return;
             }
             WPLog(@"Privacy", @"[PageLock] 保护窗内放行: %@", clsName);
