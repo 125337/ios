@@ -81,13 +81,28 @@ static NSString *kaDisplayNameForWxid(NSString *wxid) {
     @synchronized (_kaDisplayNameCache) { cached = _kaDisplayNameCache[wxid]; }
     if (cached) return cached;
 
+    // 查联系人：先走 WXGetContactForWxid（getContactByUserName:），
+    // 失败则回退 WCR 同款 getContactByName:（方法名因微信版本而异，诊断日志可见实际路径）
     id contact = WXGetContactForWxid(wxid);
+    const char *via = "getContactByUserName";
+    if (!contact) {
+        id mgr = WXGetService(objc_getClass("CContactMgr"));
+        SEL sel = NSSelectorFromString(@"getContactByName:");
+        if (mgr && [mgr respondsToSelector:sel]) {
+            contact = ((id (*)(id, SEL, id))objc_msgSend)(mgr, sel, wxid);
+            via = "getContactByName";
+        }
+    }
+
     NSString *name = nil;
     if (contact) {
         name = WXSafeStringGet(contact, @"m_nsDisplayName"); // 群内昵称（属性缺失时为 nil，安全回退）
         if (name.length == 0) name = WXSafeStringGet(contact, @"m_nsRemark");
         if (name.length == 0) name = WXSafeStringGet(contact, @"m_nsNickName");
     }
+    // 诊断：每个 wxid 只打一次（后续命中缓存），可见查询路径与结果
+    WPLogDebug(@"KeywordAlert", @"[NAME] wxid=%@ via=%s contact=%d name=%@",
+          wxid, via, contact != nil, name ?: @"(nil)");
     NSString *result = (name.length > 0 && ![name isEqualToString:wxid]) ? name : wxid;
     @synchronized (_kaDisplayNameCache) {
         if (_kaDisplayNameCache.count > 500) [_kaDisplayNameCache removeAllObjects];
