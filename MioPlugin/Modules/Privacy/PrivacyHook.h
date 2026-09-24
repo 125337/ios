@@ -3,9 +3,10 @@
 //  MioPlugin
 //
 //  隐私保护运行时（WCR 反编译复刻）：
-//  ① 微信加密：启动/切回前台需验证 6 位密码（宽限 15 秒，对齐 WCR encryptionTimeout 默认值）
-//  ② 后台模糊：失去焦点时盖全屏遮罩窗（WCR showBackgroundPrivacyCover 同款：全屏 UIWindow +
-//     windowLevel = statusBar + 1001；加密开启纯黑，仅模糊时叠加毛玻璃）
+//  ① 微信加密：启动/切回前台需验证 6 位密码（离开时刻起 5-60 秒保护窗内免验证，默认 15；
+//     可选 FaceID/TouchID 先行验证，失败落密码键盘）
+//  ② 后台模糊：失去焦点时毛玻璃（UIBlurEffectStyleLight）贴应用 keyWindow 内层，
+//     alpha 按 WCR mappedBlurAlpha 映射（0.9 基础 + 半量叠加，100 度触顶 1.0）
 //  ③ 指定页面上锁：hook UINavigationController::pushViewController:animated:，按真机确认的
 //     页面类名匹配；解锁后按 privacyPageLockUnlockTime 秒保护窗免重复验证（WCR PageLockGuard
 //     markUnlockedForKey_ 同语义）
@@ -23,9 +24,6 @@ NS_ASSUME_NONNULL_BEGIN
 @interface PrivacyHook : NSObject
 
 + (void)install;
-
-/// 当前是否处于锁定/遮罩状态（预留查询）
-+ (BOOL)isLockScreenPresented;
 
 @end
 

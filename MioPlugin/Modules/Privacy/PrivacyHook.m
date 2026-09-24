@@ -19,7 +19,7 @@
 //  - WCRefinePageLockGuard::markUnlockedForKey_：lastUnlockByKey[time] 保护窗免重复验证
 //  - WCRefineBackgroundKeepAlive::ensureAudioPlaying：setCategory Playback+mixWithOthers +
 //    silentPlayer 静音播放器保活；backgroundKeepAliveInterval 心跳周期
-//  Mio 差异：保护时间/面部识别开关为 Mio 设置项；未复刻 WCR 的连续失败锁定与双击重置密码。
+//  Mio 差异：保护时间(5-60秒)/面部识别开关为 Mio 设置项；未复刻 WCR 的连续失败锁定与双击重置密码。
 //
 
 #import "PrivacyHook.h"
@@ -100,7 +100,6 @@ static void MioShowCover(void) {
     window.hidden = NO;
     [window makeKeyAndVisible];
     g_coverWindow = window;
-    WPLog(@"Privacy", @"[Encrypt] 黑遮罩已盖");
 }
 
 static void MioHideCover(void) {
@@ -109,7 +108,6 @@ static void MioHideCover(void) {
     g_coverWindow = nil;
     w.hidden = YES;
     w.rootViewController = nil;
-    WPLog(@"Privacy", @"[Encrypt] 黑遮罩已摘");
 }
 
 /// 锁屏宿主 VC：数字键/生物识别钮的 target（桥接到文件内 C 函数）
@@ -153,7 +151,6 @@ static void MioTeardownLockWindow(void) {
     w.hidden = YES;
     w.rootViewController = nil; // 顺带释放键盘 UI 与输入状态载体
     g_enteredCode = nil;
-    WPLog(@"Privacy", @"[Encrypt] 锁屏窗已释放");
 }
 
 /// 解锁（WCR unlockApp：hasUnlockedSuccessfully=YES、lastBackgroundTime=now、释放锁窗）
@@ -263,9 +260,6 @@ static void MioShowLockScreen(void) {
     hint.textAlignment = NSTextAlignmentCenter;
     hint.font = [UIFont systemFontOfSize:14.0f];
     [host addSubview:hint];
-
-    WPLog(@"Privacy", @"[Encrypt] 锁屏键盘已展示（bio=%d faceID=%d）",
-          cfg.privacyEncryptBiometricEnabled, faceID);
 }
 
 /// 输满 6 位后的比对（WCR numberButtonTapped_ 的 100ms 延迟块）
@@ -274,7 +268,6 @@ static void MioVerifyEnteredCode(void) {
     NSString *input = [g_enteredCode copy];
     NSString *pwd = [PrivacyConfig shared].privacyEncryptPassword ?: @"";
     if (pwd.length == 6 && [input isEqualToString:pwd]) {
-        WPLog(@"Privacy", @"[Encrypt] 密码解锁成功");
         MioUnlockApp();
     } else {
         WPLog(@"Privacy", @"[Encrypt] 密码错误，清空重输");
@@ -323,7 +316,6 @@ static void MioAuthenticateWithBiometrics(void) {
         dispatch_async(dispatch_get_main_queue(), ^{
             g_biometricAuthenticating = NO;
             if (ok) {
-                WPLog(@"Privacy", @"[Encrypt] 生物识别解锁成功");
                 MioUnlockApp();
             } else {
                 WPLog(@"Privacy", @"[Encrypt] 生物识别失败，落密码键盘 (%@)", e.localizedDescription);
@@ -375,13 +367,8 @@ static void MioHandleDidBecomeActive(void) {
         NSTimeInterval away = -[g_lastResignDate timeIntervalSinceNow];
         withinGrace = (away < (NSTimeInterval)prot); // WCR: away < timeoutInterval
     }
-    WPLog(@"Privacy", @"[Encrypt] 回前台判定：unlocked=%d away=%.1fs prot=%ld → %@",
-          g_hasUnlocked,
-          g_lastResignDate ? -[g_lastResignDate timeIntervalSinceNow] : -1.0,
-          (long)prot, withinGrace ? @"免验证" : @"需验证");
     if (withinGrace) {
         MioHideCover();
-        WPLog(@"Privacy", @"[Encrypt] 保护时间(%ld s)内回前台，免验证", (long)prot);
         return;
     }
     // 超时/冷启动：重置解锁态弹锁（锁窗盖在黑遮罩上，随后摘遮罩）
@@ -428,7 +415,6 @@ static void MioApplyFrost(void) {
                         options:UIViewAnimationOptionBeginFromCurrentState
                      animations:^{ g_frostView.alpha = MioFrostAlpha(); }
                      completion:nil];
-    WPLog(@"Privacy", @"[Blur] 毛玻璃已盖（degree=%ld）", (long)[PrivacyConfig shared].privacyBlurDegree);
 }
 
 static void MioRemoveFrost(void) {
@@ -439,7 +425,6 @@ static void MioRemoveFrost(void) {
                         options:UIViewAnimationOptionBeginFromCurrentState
                      animations:^{ v.alpha = 0.0f; }
                      completion:^(BOOL finished) { [v removeFromSuperview]; }];
-    WPLog(@"Privacy", @"[Blur] 毛玻璃已摘");
 }
 
 #pragma mark - ③ 指定页面上锁
@@ -635,7 +620,6 @@ static void MioStartKeepAlive(void) {
             }];
             [[NSRunLoop mainRunLoop] addTimer:g_kaTimer forMode:NSRunLoopCommonModes];
         });
-        WPLog(@"Privacy", @"[KeepAlive] 启动（周期 %ld s）", (long)interval);
     } @catch (NSException *e) {
         WPLog(@"Privacy", @"[KeepAlive] 启动异常: %@", e.reason);
         MioNotifyKeepAliveBroken();
@@ -649,7 +633,6 @@ static void MioStopKeepAlive(void) {
         [[UIApplication sharedApplication] endBackgroundTask:g_kaTask];
         g_kaTask = UIBackgroundTaskInvalid;
     }
-    WPLog(@"Privacy", @"[KeepAlive] 停止");
 }
 
 #pragma mark - 生命周期通知回调
@@ -671,10 +654,6 @@ static void MioOnWillResignActive(void) {
         g_lastResignDate = [NSDate date];
         if (!g_coverWindow) MioShowCover();
     }
-}
-
-static void MioOnDidEnterBackground(void) {
-    // 无额外动作：保活与毛玻璃已在 resign 盖好；预留给后台清理
 }
 
 static void MioOnDidBecomeActive(void) {
@@ -705,7 +684,6 @@ static void MioOnDidBecomeActive(void) {
         Method m = class_getInstanceMethod(navCls, pushSel);
         if (m) {
             MSHookMessageEx(navCls, pushSel, (IMP)hook_Nav_push, (IMP *)&orig_Nav_push);
-            WPLog(@"Privacy", @"[PageLock] UINavigationController::pushViewController:animated: hooked");
         } else {
             WPLog(@"Privacy", @"[PageLock] push 方法未找到，页面锁未生效");
         }
@@ -719,16 +697,9 @@ static void MioOnDidBecomeActive(void) {
     id o2 = [nc addObserverForName:UIApplicationDidBecomeActiveNotification
                             object:nil queue:nil
                         usingBlock:^(NSNotification *note) { MioOnDidBecomeActive(); }];
-    id o3 = [nc addObserverForName:UIApplicationDidEnterBackgroundNotification
-                            object:nil queue:nil
-                        usingBlock:^(NSNotification *note) { MioOnDidEnterBackground(); }];
-    (void)o1; (void)o2; (void)o3;
+    (void)o1; (void)o2;
 
     WPLog(@"Privacy", @"[PrivacyHook] install complete（加密+模糊+页面锁+保活）");
-}
-
-+ (BOOL)isLockScreenPresented {
-    return (g_coverWindow != nil || g_lockWindow != nil);
 }
 
 @end
