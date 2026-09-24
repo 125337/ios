@@ -4,6 +4,7 @@
 #import "KeywordAlertPresenter.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
+#import "../../Core/ConfigManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
