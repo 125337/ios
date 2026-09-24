@@ -142,8 +142,7 @@
                                      isOn:pc.privacyBlurEnabled
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         PrivacyConfig *c = [PrivacyConfig shared];
-        NSString *val = c.privacyBlurDegree > 0
-            ? [NSString stringWithFormat:@"%ld", (long)c.privacyBlurDegree] : nil;
+        NSString *val = [NSString stringWithFormat:@"%ld", (long)c.privacyBlurDegree];
         *ecy = [self addInputRowInGroup:expand
                                   title:@"模糊度"
                                     key:@"privacyBlurDegree"
@@ -165,8 +164,7 @@
                                      isOn:pc.privacyKeepAliveEnabled
                                subBuilder:^(UIView *expand, CGFloat *ecy) {
         PrivacyConfig *c = [PrivacyConfig shared];
-        NSString *val = c.privacyKeepAliveInterval > 0
-            ? [NSString stringWithFormat:@"%ld", (long)c.privacyKeepAliveInterval] : nil;
+        NSString *val = [NSString stringWithFormat:@"%ld", (long)c.privacyKeepAliveInterval];
         *ecy = [self addInputRowInGroup:expand
                                   title:@"保活周期"
                                     key:@"privacyKeepAliveInterval"

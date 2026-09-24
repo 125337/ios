@@ -24,8 +24,8 @@
     y = [self addSectionHeader:@"解锁设置" y:y width:w];
     UIView *unlockGroup = [self addTableGroupAtY:y width:w];
     CGFloat ucy = 0;
-    NSString *timeVal = cfg.privacyPageLockUnlockTime > 0
-        ? [NSString stringWithFormat:@"%ld", (long)cfg.privacyPageLockUnlockTime] : nil;
+    // 数字输入行一律显示存储值：0 是有效显式值（关保护窗），不能当"未设置"吞成 hint
+    NSString *timeVal = [NSString stringWithFormat:@"%ld", (long)cfg.privacyPageLockUnlockTime];
     ucy = [self addInputRowInGroup:unlockGroup
                              title:@"解锁时间保护"
                                key:@"privacyPageLockUnlockTime"
