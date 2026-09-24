@@ -71,14 +71,37 @@ static NSString *kaSelfWxid(void) {
     return cached;
 }
 
-/// 备注优先、昵称兜底的展示名
+/// 显示名（群内昵称 > 备注 > 昵称），带缓存避免每条消息重复查联系人表
+static NSMutableDictionary<NSString *, NSString *> *_kaDisplayNameCache = nil;
+
 static NSString *kaDisplayNameForWxid(NSString *wxid) {
     if (!wxid.length) return nil;
+    if (!_kaDisplayNameCache) _kaDisplayNameCache = [NSMutableDictionary dictionary];
+    NSString *cached = nil;
+    @synchronized (_kaDisplayNameCache) { cached = _kaDisplayNameCache[wxid]; }
+    if (cached) return cached;
+
     id contact = WXGetContactForWxid(wxid);
-    if (!contact) return nil;
-    NSString *remark = WXSafeStringGet(contact, @"m_nsRemark");
-    if (remark.length > 0) return remark;
-    return WXSafeStringGet(contact, @"m_nsNickName");
+    NSString *name = nil;
+    if (contact) {
+        name = WXSafeStringGet(contact, @"m_nsDisplayName"); // 群内昵称（属性缺失时为 nil，安全回退）
+        if (name.length == 0) name = WXSafeStringGet(contact, @"m_nsRemark");
+        if (name.length == 0) name = WXSafeStringGet(contact, @"m_nsNickName");
+    }
+    NSString *result = (name.length > 0 && ![name isEqualToString:wxid]) ? name : wxid;
+    @synchronized (_kaDisplayNameCache) {
+        if (_kaDisplayNameCache.count > 500) [_kaDisplayNameCache removeAllObjects];
+        _kaDisplayNameCache[wxid] = result;
+    }
+    return result;
+}
+
+/// 日志展示用：显示名(wxid)；查不到名字时原样输出 wxid
+static NSString *kaLogNameForWxid(NSString *wxid) {
+    if (!wxid.length) return @"-";
+    NSString *name = kaDisplayNameForWxid(wxid);
+    if (!name.length || [name isEqualToString:wxid]) return wxid;
+    return [NSString stringWithFormat:@"%@(%@)", name, wxid];
 }
 
 /// 群消息内容形如 "senderWxid:\n正文"，拆出发送者与正文
@@ -156,7 +179,7 @@ static void processKeywordAlertMessage(id wrap) {
         if (isGroup && sender.length == 0) {
             // 部分版本群消息 content 无 "wxid:\n" 前缀，回退运行时探测（属性缺失时为 nil，安全）
             sender = kaMsgString(wrap, "m_nsRealChatUsr");
-            WPLogDebug(@"KeywordAlert", @"群消息无内容前缀，m_nsRealChatUsr=%@", sender ?: @"(null)");
+            WPLogDebug(@"KeywordAlert", @"群消息无内容前缀，m_nsRealChatUsr=%@", sender ? kaLogNameForWxid(sender) : @"(null)");
         }
         NSString *displayContent = rawContent;
         if (isGroup && sender.length > 0) {
@@ -167,7 +190,7 @@ static void processKeywordAlertMessage(id wrap) {
         }
 
         WPLogDebug(@"KeywordAlert", @"msg type=%u msgId=%@ from=%@ to=%@ isGroup=%d sender=%@",
-              msgType, msgId, fromUsr, toUsr, isGroup, sender);
+              msgType, msgId, kaLogNameForWxid(fromUsr), toUsr, isGroup, kaLogNameForWxid(sender));
 
         // 会话范围过滤：仅群聊 / 仅私聊（都开或都关 = 全部）；指定群范围只约束群聊
         BOOL groupOnly = config.keywordAlertGroupOnlyEnabled;
@@ -210,7 +233,7 @@ static void processKeywordAlertMessage(id wrap) {
             return;
         }
         WPLog(@"KeywordAlert", @"[HIT] msgId=%@ session=%@ sender=%@ 命中=%@",
-              msgId, session, sender ?: @"-", matched);
+              msgId, kaLogNameForWxid(session), kaLogNameForWxid(sender), matched);
 
         // 禁用词豁免（WCR 规则：删掉禁用词命中区间后仍命中关键词 → 保留）
         if (disabled.count > 0) {
