@@ -128,13 +128,16 @@ static void MioHandleDidBecomeActive(void) {
     if (!g_coverWindow) return; // 没盖遮罩（两个开关都关）无需处理
 
     if (cfg.privacyEncryptEnabled && cfg.privacyEncryptPassword.length > 0) {
-        // 宽限判定：距上次解锁 ≤ 15s 直接放行
-        NSTimeInterval sinceUnlock = g_lastUnlockDate
-            ? -[g_lastUnlockDate timeIntervalSinceNow] : NSTimeIntervalMax;
-        if (sinceUnlock <= kUnlockGraceSeconds) {
+        // 宽限判定：距上次解锁 ≤ 15s 直接放行（从未解锁过不免验）
+        BOOL withinGrace = NO;
+        if (g_lastUnlockDate) {
+            NSTimeInterval sinceUnlock = -[g_lastUnlockDate timeIntervalSinceNow];
+            withinGrace = (sinceUnlock <= kUnlockGraceSeconds);
+        }
+        if (withinGrace) {
             g_lastUnlockDate = [NSDate date];
             MioHideCover();
-            WPLog(@"Privacy", @"[Encrypt] 宽限期内免验证（%.1fs）", sinceUnlock);
+            WPLog(@"Privacy", @"[Encrypt] 宽限期内免验证");
             return;
         }
         // 主队列稍等一拍，等遮罩窗布局稳定后再弹（冷启动场景）
