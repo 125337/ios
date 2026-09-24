@@ -18,6 +18,7 @@
 #import "PrivacyHook.h"
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
+#import <LocalAuthentication/LocalAuthentication.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <substrate.h>
@@ -92,31 +93,6 @@ static void MioHideCover(void) {
     w.hidden = YES;
     w.rootViewController = nil;
     WPLog(@"Privacy", @"[Cover] 遮罩已摘");
-}
-
-/// 在指定宿主上弹 6 位密码验证；错误重弹。onPass 验证通过回调（主线程）
-static void MioPresentVerifyAlert(UIViewController *host, NSString *title, void (^onPass)(void)) {
-    if (!host) return;
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
-                                                                  message:@"请输入 6 位密码"
-                                                           preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-        tf.secureTextEntry = YES;
-        tf.keyboardType = UIKeyboardTypeNumberPad;
-        tf.placeholder = @"6位数字密码";
-    }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"解锁" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        NSString *input = alert.textFields.firstObject.text ?: @"";
-        NSString *pwd = [PrivacyConfig shared].privacyEncryptPassword ?: @"";
-        if (pwd.length > 0 && [input isEqualToString:pwd]) {
-            WPLog(@"Privacy", @"[Verify] 解锁成功（%@）", title);
-            if (onPass) onPass();
-        } else {
-            WPLog(@"Privacy", @"[Verify] 密码错误（%@），重新验证", title);
-            MioPresentVerifyAlert(host, title, onPass);
-        }
-    }]];
-    [host presentViewController:alert animated:YES completion:nil];
 }
 
 /// 应用级加密验证：错误重弹直到正确或取消（取消保持遮罩）
@@ -217,18 +193,41 @@ static BOOL MioPageInUnlockWindow(NSString *clsName) {
     return ([NSDate date].timeIntervalSince1970 - t.doubleValue) <= (double)protect;
 }
 
-static void MioPresentPageLockAlert(UIViewController *host, NSString *clsName) {
+/// 页面锁验证：设备生物识别（WCR 页面锁走 LAContext authenticateBeforeEnable_，
+/// 与微信加密的 6 位密码完全独立）；生物识别不可用时兜底设备锁屏密码
+static void MioPresentPageLockBiometric(UIViewController *host, NSString *clsName) {
     WPLog(@"Privacy", @"[PageLock] 拦截锁定页: %@", clsName);
-    MioPresentVerifyAlert(host, @"页面上锁", ^{
-        // WCR markUnlockedForKey_：解锁成功记录时刻，保护窗内免重复验证
-        g_pageUnlockByKey[clsName] = @([NSDate date].timeIntervalSince1970);
-    });
+    LAContext *ctx = [LAContext new];
+    ctx.localizedFallbackTitle = @"输入设备密码";
+    NSError *err = nil;
+    LAPolicy policy = LAPolicyDeviceOwnerAuthentication; // 兜底：设备锁屏密码
+    if ([ctx canEvaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics error:&err]) {
+        policy = LAPolicyDeviceOwnerAuthenticationWithBiometrics;
+    }
+    [ctx evaluatePolicy:policy
+        localizedReason:@"验证以进入该页面"
+                  reply:^(BOOL ok, NSError *e) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (ok) {
+                // WCR markUnlockedForKey_：解锁成功记录时刻，保护窗内免重复验证
+                g_pageUnlockByKey[clsName] = @([NSDate date].timeIntervalSince1970);
+                WPLog(@"Privacy", @"[PageLock] 验证通过: %@", clsName);
+            } else {
+                WPLog(@"Privacy", @"[PageLock] 验证未通过，弹回: %@ (%@)", clsName, e.localizedDescription);
+                UINavigationController *nav = host.navigationController;
+                if (nav && nav.viewControllers.count > 1) {
+                    [nav popViewControllerAnimated:YES];
+                }
+            }
+        });
+    }];
 }
 
 // UINavigationController::pushViewController:animated: hook（低频导航路径，零热路径风险）
+// 页面锁与微信加密完全解耦：只看各子开关，验证走设备生物识别
 static void hook_Nav_push(id self, SEL _cmd, UIViewController *vc, BOOL animated) {
-    if (vc && [PrivacyConfig shared].privacyEncryptPassword.length > 0) {
-        NSString *key = MioPageLockKeyForVC(vc);
+    if (vc) {
+        NSString *key = MioPageLockKeyForVC(vc); // 内部含子开关开启判定
         if (key) {
             NSString *clsName = NSStringFromClass(vc.class);
             if (!MioPageInUnlockWindow(clsName)) {
@@ -237,7 +236,7 @@ static void hook_Nav_push(id self, SEL _cmd, UIViewController *vc, BOOL animated
                                dispatch_get_main_queue(), ^{
                     UIViewController *top = ((UIViewController * (*)(id, SEL))objc_msgSend)(self, @selector(topViewController));
                     if (top && [NSStringFromClass(top.class) isEqualToString:clsName]) {
-                        MioPresentPageLockAlert(top, clsName);
+                        MioPresentPageLockBiometric(top, clsName);
                     }
                 });
                 return;
