@@ -180,7 +180,8 @@ static NSString *MioPageLockKeyForVC(UIViewController *vc) {
     NSString *clsName = NSStringFromClass(vc.class);
     NSString *key = MioPageLockMap()[clsName];
     if (!key) return nil;
-    return [[PrivacyConfig shared] valueForKey:key] ? key : nil;
+    // valueForKey: 对 BOOL 属性返回 NSNumber（NO 也是非 nil 对象），必须取 boolValue
+    return [[[PrivacyConfig shared] valueForKey:key] boolValue] ? key : nil;
 }
 
 /// 页面锁保护窗内？（WCR PageLockGuard isWithinProtectionWindowForKey_ 同语义）
