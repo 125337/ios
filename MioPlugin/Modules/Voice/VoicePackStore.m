@@ -6,11 +6,6 @@
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
 
-/// VoiceHook 捕获的活 UploadVoiceCDNMgr 实例（TimerCheckUpload 钩子保存）
-extern id MioGetUploadVoiceCDNMgr(void);
-/// 全局 Toast（实现在 SettingEntry/WPCommonUI.m）
-extern void WPShowToast(NSString *message);
-
 // ═══════════════════════════════════════════════════════
 // C 安全工具
 // ═══════════════════════════════════════════════════════

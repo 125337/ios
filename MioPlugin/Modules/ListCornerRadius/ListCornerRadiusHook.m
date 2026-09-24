@@ -85,7 +85,6 @@ static BOOL shouldApplyGlobalCorner(UIViewController *vc) {
 }
 
 static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
-    WPHeatTick("WCSearchBar.layoutSubviews");
     if (orig_WCSearchBar_layoutSubviews) {
         ((void (*)(id, SEL))orig_WCSearchBar_layoutSubviews)(self, _cmd);
     }
@@ -105,7 +104,6 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
 
 // ★★★ Cell Hook：列表圆角 + 分发到资料卡透明化 ★★★
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
-    WPHeatTick("MMTableViewCell.layoutSubviews");
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
@@ -278,7 +276,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 // ★★★ [WPAuxiliaryHooks] MFWebMMBtn background color ★★★
 static void (*orig_MFWebMMBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
-    WPHeatTick("MFWebMMBtn.layoutSubviews");
     orig_MFWebMMBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
@@ -304,7 +301,6 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
 // ★★★ [WPAuxiliaryHooks] MFBannerBtn background color ★★★
 static void (*orig_MFBannerBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
-    WPHeatTick("MFBannerBtn.layoutSubviews");
     orig_MFBannerBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
@@ -330,7 +326,6 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
 // ★★★ [WPAuxiliaryHooks] MainFrameSectionFoldView ★★★
 static void (*orig_FoldView_layoutSubviews)(id, SEL);
 static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
-    WPHeatTick("FoldView.layoutSubviews");
     orig_FoldView_layoutSubviews(self, _cmd);
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
@@ -442,7 +437,6 @@ static BOOL _wp_isAllowedVC(NSString *name) {
 
 static void (*orig_UIView_layoutSubviews)(id, SEL);
 static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
-    WPHeatTick("UIView.layoutSubviews(base-hook)");
     orig_UIView_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];

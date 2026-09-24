@@ -2,17 +2,15 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
-#import <mach-o/dyld.h>
 #import <substrate.h>
 #import "VoiceConfig.h"
-#import "VoicePackStore.h"
 #import "WPVoicePackPickerVC.h"
 #import "../SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
 
-// ═══════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════
 // 工具：从视图层级 / VC 栈里找指定类名的 ViewController
-// ═══════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════
 
 static UIViewController *FindVCOfClass(UIViewController *root, Class targetCls) {
     if (!root || !targetCls) return nil;
@@ -70,329 +68,7 @@ static NSString *CurrentChatUserName(void) {
     return ChatNameFromChatVC(chatVC);
 }
 
-// ═══════════════════════════════════════════════════════
-// 真实语音发送流程捕获（诊断）：hook 微信真实录音发送链路，
-// 拿到真实 wrap 字段模板与调用顺序后照抄（log17 结论：猜接口不可行）
-// ═══════════════════════════════════════════════════════
-
-/// 打印当前线程调用栈 + WeChat 主二进制 ASLR slide
-/// （栈帧地址 - slide = 二进制内偏移，可与方法 IMP 表对照定位"谁调了 AddMsg"）
-static void MioLogCallStack(NSString *tag) {
-    @try {
-        intptr_t slide = (intptr_t)_dyld_get_image_vmaddr_slide(0);
-        NSArray<NSString *> *frames = [NSThread callStackSymbols];
-        WPLog(@"Voice", @"[%@] 栈 slide=%ld 帧数=%lu", tag, (long)slide, (unsigned long)frames.count);
-        for (NSString *f in frames) WPLog(@"Voice", @"[%@] %@", tag, f);
-    } @catch (NSException *e) {}
-}
-
-/// 读取 m_uiMesLocalID
-static unsigned int MioWrapLocalID(id wrap) {
-    if (!wrap) return 0;
-    Ivar iv = class_getInstanceVariable(object_getClass(wrap), "m_uiMesLocalID");
-    if (!iv) return 0;
-    return *(unsigned int *)((__bridge void *)wrap + ivar_getOffset(iv));
-}
-
-// ═══════════════════════════════════════════════════════════════
-// 语音上传管理器取证（run 2029）：UploadVoiceCDNMgr / MMNewUploadVoiceMgr
-// 的 AddNewPart(12参, 上传任务登记入口) + ResendVoiceMsg + startSend
-// 目的：抓 WCRefine 发送时的 AddNewPart 真实参数值，dylib 照抄调用
-// ═══════════════════════════════════════════════════════════════
-
-static IMP orig_UVM_AddNewPart = NULL;
-// ★log43 教训：part 参数类型未证实前禁止 object_getClass/%@ 解引用（EXC_BAD_ACCESS
-//   非 NSException，@try 拦不住）——全部按裸指针/整型打印，值模式判断类型
-static void hook_UVM_AddNewPart(id self, SEL _cmd, id part, unsigned long localID, unsigned long long svrID,
-                                unsigned long offset, unsigned long len, unsigned long voiceTime,
-                                unsigned long createTime, unsigned long endFlag, unsigned long cancelFlag,
-                                unsigned long voiceFormat, unsigned long forwardFlag, id msgSource) {
-    WPLog(@"Voice", @"[Upload] AddNewPart mgr=%@ part=%p localID=%lu svrID=%llu offset=%lu len=%lu voiceTime=%lu createTime=%lu end=%lu cancel=%lu format=%lu fwd=%lu src=%p",
-          NSStringFromClass(object_getClass(self)), part, localID, svrID, offset, len,
-          voiceTime, createTime, endFlag, cancelFlag, voiceFormat, forwardFlag, msgSource);
-    if (orig_UVM_AddNewPart)
-        ((void (*)(id, SEL, id, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long,
-                  unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, id))orig_UVM_AddNewPart)
-            (self, _cmd, part, localID, svrID, offset, len, voiceTime, createTime, endFlag, cancelFlag,
-             voiceFormat, forwardFlag, msgSource);
-}
-
-static IMP orig_UVM_Resend = NULL;
-static void hook_UVM_Resend(id self, SEL _cmd, id chatName, id wrap) {
-    @try {
-        WPLog(@"Voice", @"[Upload] ResendVoiceMsg mgr=%@ chat=%@ localID=%u",
-              NSStringFromClass(object_getClass(self)), chatName, MioWrapLocalID(wrap));
-    } @catch (NSException *e) {}
-    if (orig_UVM_Resend) ((void (*)(id, SEL, id, id))orig_UVM_Resend)(self, _cmd, chatName, wrap);
-}
-
-static IMP orig_UVM_StartSend = NULL;
-static void hook_UVM_StartSend(id self, SEL _cmd) {
-    @try { WPLog(@"Voice", @"[Upload] startSend mgr=%@", NSStringFromClass(object_getClass(self))); } @catch (NSException *e) {}
-    if (orig_UVM_StartSend) ((void (*)(id, SEL))orig_UVM_StartSend)(self, _cmd);
-}
-
-// ★保存活的 UploadVoiceCDNMgr 实例（TimerCheckUpload 每 2 秒跑，微信启动即有）
-//   它不是 MMServiceCenter 注册 service，getService 拿不到（log44 实锤），只能这样捕获
-static id g_uploadCDNMgr = nil;
-static IMP orig_UVM_TimerCheck = NULL;
-static void hook_UVM_TimerCheck(id self, SEL _cmd) {
-    if (!g_uploadCDNMgr) {
-        g_uploadCDNMgr = self;
-        WPLog(@"Voice", @"[Upload] 已捕获 UploadVoiceCDNMgr 活实例 %p", self);
-    }
-    if (orig_UVM_TimerCheck) ((void (*)(id, SEL))orig_UVM_TimerCheck)(self, _cmd);
-}
-
-/// 供 VoicePackStore 发送侧获取活的上传管理器实例
-id MioGetUploadVoiceCDNMgr(void) { return g_uploadCDNMgr; }
-
-// ═══════════════════════════════════════════════════════
-// Audio 目录时间线（零 hook 风险：主动枚举，不 hook 任何文件 API）
-// 真实语音的音频文件在 AddMsg 前已由录音线程写好，AddMsg 后微信必然
-// 做了"改名/复制为 localID.aud"的动作——定时枚举目录抓这个模式
-// ═══════════════════════════════════════════════════════
-
-static void MioProbeAudioDir(NSString *tag, NSString *dir) {
-    @try {
-        NSArray<NSString *> *names = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:nil];
-        NSMutableString *out = [NSMutableString string];
-        for (NSString *n in names) {
-            if ([n hasPrefix:@"."]) continue;
-            NSDictionary *a = [[NSFileManager defaultManager] attributesOfItemAtPath:[dir stringByAppendingPathComponent:n] error:nil];
-            [out appendFormat:@"\n  %@ (%llu字节)", n, (unsigned long long)(a.fileSize ?: 0)];
-        }
-        WPLog(@"Voice", @"[%@] %@:%@", tag, dir.lastPathComponent, out);
-    } @catch (NSException *e) {}
-}
-
-/// AddMsg 返回后调用（此时 localID 已回填）：立即枚举 + 后台 0.5~7s 定时枚举
-static void MioScheduleAudioTimeline(id wrap) {
-    @try {
-        unsigned int localID = MioWrapLocalID(wrap);
-        if (localID == 0) { WPLog(@"Voice", @"[FileTL] localID=0 跳过"); return; }
-        Class wrapCls = object_getClass(wrap);
-        SEL sel = NSSelectorFromString(@"getPathOfAudio:");
-        if (![wrapCls respondsToSelector:sel]) {
-            WPLog(@"Voice", @"[FileTL] +getPathOfAudio: 不可用, localID=%u", localID);
-            return;
-        }
-        NSString *path = ((id (*)(id, SEL, id))objc_msgSend)(wrapCls, sel, wrap);
-        if (![path isKindOfClass:[NSString class]] || path.length == 0) return;
-        NSString *dir = [path stringByDeletingLastPathComponent];
-        WPLog(@"Voice", @"[FileTL] localID=%u 正式路径=%@", localID, path);
-        MioProbeAudioDir(@"FileTL.t0", dir);
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-            const double marks[] = {0.5, 1.0, 2.0, 4.0, 7.0};
-            double prev = 0;
-            for (int i = 0; i < 5; i++) {
-                [NSThread sleepForTimeInterval:marks[i] - prev];
-                prev = marks[i];
-                MioProbeAudioDir([NSString stringWithFormat:@"FileTL.t%.1fs", marks[i]], dir);
-            }
-        });
-    } @catch (NSException *e) {
-        WPLog(@"Voice", @"[FileTL] 异常: %@", e.reason);
-    }
-}
-
-/// 把对象全部 ivar 值追加到 out（对象类型打印内容/长度，整型按编码定长读）
-static unsigned int MioDumpIvarsInto(id obj, NSMutableString *out) {
-    unsigned int count = 0;
-    Class cls = object_getClass(obj);
-    Ivar *list = class_copyIvarList(cls, &count);
-    const void *base = (__bridge void *)obj;
-    for (unsigned int i = 0; i < count; i++) {
-        const char *nm = ivar_getName(list[i]);
-        const char *enc = ivar_getTypeEncoding(list[i]);
-        if (!nm || !enc) continue;
-        ptrdiff_t off = ivar_getOffset(list[i]);
-        NSString *piece = nil;
-        if (enc[0] == '@') {
-            id v = object_getIvar(obj, list[i]);
-            if ([v isKindOfClass:[NSString class]]) {
-                NSString *s = (NSString *)v;
-                if (s.length == 0) piece = @"\"\"";
-                else piece = [NSString stringWithFormat:@"\"%@\"(len=%lu)", s.length > 110 ? [s substringToIndex:110] : s, (unsigned long)s.length];
-            } else if ([v isKindOfClass:[NSData class]]) {
-                piece = [NSString stringWithFormat:@"NSData(%lu字节)", (unsigned long)[v length]];
-            } else if (v) {
-                piece = [NSString stringWithFormat:@"<%@>", NSStringFromClass(object_getClass(v))];
-            }
-        } else if (strchr("cBsSiIlLqQB", enc[0])) {
-            long long iv = 0;
-            switch (enc[0]) {
-                case 'c': case 'B': iv = *(signed char *)(base + off); break;
-                case 's': iv = *(short *)(base + off); break;
-                case 'S': iv = *(unsigned short *)(base + off); break;
-                case 'i': iv = *(int *)(base + off); break;
-                case 'I': iv = *(unsigned int *)(base + off); break;
-                case 'l': case 'q': iv = *(long long *)(base + off); break;
-                case 'L': case 'Q': iv = (long long)(*(unsigned long long *)(base + off)); break;
-                default: break;
-            }
-            piece = [NSString stringWithFormat:@"%lld", iv];
-        }
-        if (piece) [out appendFormat:@"\n  %@ = %@", @(nm), piece];
-    }
-    if (list) free(list);
-    return count;
-}
-
-/// 全量 dump 消息 wrap 的 ivar 值（一次消息一条，开销可忽略）；递归 dump 语音扩展对象
-static void MioDumpVoiceWrap(id wrap, NSString *tag) {
-    if (!wrap) return;
-    @try {
-        NSMutableString *out = [NSMutableString string];
-        unsigned int count = MioDumpIvarsInto(wrap, out);
-        WPLog(@"Voice", @"[%@] wrap<%@>(%u ivars):%@", tag, NSStringFromClass(object_getClass(wrap)), count, out);
-        // 语音类型扩展对象（本版本语音数据真实载体）
-        Ivar extIv = class_getInstanceVariable(object_getClass(wrap), "m_extendInfoWithMsgType");
-        if (extIv) {
-            id ext = object_getIvar(wrap, extIv);
-            if (ext) {
-                NSMutableString *eo = [NSMutableString string];
-                unsigned int ecnt = MioDumpIvarsInto(ext, eo);
-                WPLog(@"Voice", @"[%@] 扩展<%@>(%u ivars):%@", tag, NSStringFromClass(object_getClass(ext)), ecnt, eo);
-            } else {
-                WPLog(@"Voice", @"[%@] 扩展=nil", tag);
-            }
-        }
-    } @catch (NSException *e) {
-        WPLog(@"Voice", @"[%@] dump异常: %@", tag, e.reason);
-    }
-}
-
-// Hook ③: CMessageMgr.SaveMesVoice:MsgWrap:（真实录音发送会经过，若本版本仍在用）
-static IMP orig_SaveMesVoiceMsgWrap = NULL;
-
-static void hook_SaveMesVoiceMsgWrap(id self, SEL _cmd, id path, id wrap) {
-    WPLog(@"Voice", @"[真实流程] SaveMesVoice 进入 path=%@", path);
-    MioDumpVoiceWrap(wrap, @"真实流程.SaveMes入口");
-    ((void (*)(id, SEL, id, id))orig_SaveMesVoiceMsgWrap)(self, _cmd, path, wrap);
-    WPLog(@"Voice", @"[真实流程] SaveMesVoice 返回 localID=%u", MioWrapLocalID(wrap));
-    MioDumpVoiceWrap(wrap, @"真实流程.SaveMes出口");
-}
-
-// Hook ④: CMessageMgr.AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:（本地入库主路径）
-static IMP orig_AddLocalMsg6 = NULL;
-
-static void hook_AddLocalMsg6(id self, SEL _cmd, id chatName, id wrap, long long fixTime, long long notify) {
-    @try {
-        unsigned int t = 0;
-        if ([wrap respondsToSelector:NSSelectorFromString(@"m_uiMessageType")]) {
-            t = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
-        }
-        NSString *from = [wrap valueForKey:@"m_nsFromUsr"] ?: @"";
-        WPLog(@"Voice", @"[真实流程] AddLocalMsg type=%u from=%@ chat=%@ fixTime=%lld notify=%lld", t, from, chatName, fixTime, notify);
-        if (t == 34) {
-            MioDumpVoiceWrap(wrap, @"真实流程.AddLocal");
-            MioLogCallStack(@"真实流程.AddLocal栈"); // 上溯调用者=微信真实发送入口
-        }
-    } @catch (NSException *e) {}
-    ((void (*)(id, SEL, id, id, long long, long long))orig_AddLocalMsg6)(self, _cmd, chatName, wrap, fixTime, notify);
-}
-
-// Hook ⑤: CMessageMgr.AddMsg:MsgWrap:（RedEnv 已挂一层，substrate 链式不冲突）
-// ─── 语音管线取证（run 2023）：FileTL 实锤"边录边写"模型——AddMsg 是录音开始调用，
-//     松手后的"完成信号"才是上传队列启动开关。此组 hook 抓真实录音的完成调用序列 ───
-static void MioLogVoiceBrief(NSString *tag, id chatName, id wrap) {
-    @try {
-        if (!wrap) { WPLog(@"Voice", @"[%@] wrap=nil chat=%@", tag, chatName); return; }
-        id ext = nil;
-        Ivar hostIvar = class_getInstanceVariable(object_getClass(wrap), "m_extendInfoWithMsgType");
-        if (hostIvar) ext = object_getIvar(wrap, hostIvar);
-        id extEnd = ext ? [ext valueForKey:@"m_uiVoiceEndFlag"] : nil;
-        id extLen = ext ? [ext valueForKey:@"m_uiVoiceTime"] : nil;
-        id extData = ext ? [ext valueForKey:@"m_dtVoice"] : nil;
-        WPLog(@"Voice", @"[%@] chat=%@ localID=%@ status=%@ dl=%@ XML=%@ | 扩展: End=%@ VTime=%@ dt=%@",
-              tag, chatName,
-              [wrap valueForKey:@"m_uiMesLocalID"], [wrap valueForKey:@"m_uiStatus"],
-              [wrap valueForKey:@"m_uiDownloadStatus"], [wrap valueForKey:@"m_nsContent"],
-              extEnd, extLen,
-              extData ? [NSString stringWithFormat:@"%lu字节", (unsigned long)[(NSData *)extData length]] : @"nil");
-    } @catch (NSException *e) {
-        WPLog(@"Voice", @"[%@] 摘要异常: %@", tag, e.reason);
-    }
-}
-
-static IMP orig_UpdateVoiceMessage = NULL;
-static void hook_UpdateVoiceMessage(id self, SEL _cmd, id chatName, id wrap) {
-    @try { MioLogVoiceBrief(@"取证.UpdateVoiceMessage", chatName, wrap); } @catch (NSException *e) {}
-    ((void (*)(id, SEL, id, id))orig_UpdateVoiceMessage)(self, _cmd, chatName, wrap);
-}
-
-static IMP orig_UpdateVoiceMessageFT = NULL;
-static void hook_UpdateVoiceMessageFT(id self, SEL _cmd, id chatName, id wrap, long long fixTime) {
-    @try { MioLogVoiceBrief(@"取证.UpdateVoiceMessageFT", chatName, wrap); } @catch (NSException *e) {}
-    ((void (*)(id, SEL, id, id, long long))orig_UpdateVoiceMessageFT)(self, _cmd, chatName, wrap, fixTime);
-}
-
-static IMP orig_UpdateVoiceStatus = NULL;
-static void hook_UpdateVoiceStatus(id self, SEL _cmd, id chatName, long long localID, long long dl) {
-    @try { WPLog(@"Voice", @"[取证.UpdateVoiceStatus] chat=%@ localID=%lld dl=%lld", chatName, localID, dl); } @catch (NSException *e) {}
-    ((void (*)(id, SEL, id, long long, long long))orig_UpdateVoiceStatus)(self, _cmd, chatName, localID, dl);
-}
-
-static IMP orig_StopUploadRecordMsg = NULL;
-static void hook_StopUploadRecordMsg(id self, SEL _cmd, id chatName) {
-    @try { WPLog(@"Voice", @"[取证.StopUploadRecordMsg] chat=%@", chatName); } @catch (NSException *e) {}
-    ((void (*)(id, SEL, id))orig_StopUploadRecordMsg)(self, _cmd, chatName);
-}
-
-static IMP orig_StopUploadRecordMsgByUser = NULL;
-static void hook_StopUploadRecordMsgByUser(id self, SEL _cmd, id chatName) {
-    @try { WPLog(@"Voice", @"[取证.StopUploadRecordMsgByUser] chat=%@", chatName); } @catch (NSException *e) {}
-    ((void (*)(id, SEL, id))orig_StopUploadRecordMsgByUser)(self, _cmd, chatName);
-}
-
-// 发送结果回调取证（run 2034）：★参数类型未证实，全部 %p 零解引用
-// （%@/[arg class] 对非对象参数 = EXC_BAD_ACCESS，AddNewPart hook 同款教训；
-//   这些回调在 ResendVoiceMsg 启动上传后被调，崩溃栈 read@0x4 与之吻合）
-static IMP orig_OnSendMessageSuccess = NULL;
-static void hook_OnSendMessageSuccess(id self, SEL _cmd, id arg) {
-    WPLog(@"Voice", @"[Upload] OnSendMessageSuccess mgr=%@ arg=%p", NSStringFromClass(object_getClass(self)), arg);
-    if (orig_OnSendMessageSuccess) ((void (*)(id, SEL, id))orig_OnSendMessageSuccess)(self, _cmd, arg);
-}
-
-static IMP orig_OnSendMessageFail = NULL;
-static void hook_OnSendMessageFail(id self, SEL _cmd, id arg) {
-    WPLog(@"Voice", @"[Upload] OnSendMessageFail mgr=%@ arg=%p", NSStringFromClass(object_getClass(self)), arg);
-    if (orig_OnSendMessageFail) ((void (*)(id, SEL, id))orig_OnSendMessageFail)(self, _cmd, arg);
-}
-
-static IMP orig_OnErrorBySender = NULL;
-static void hook_OnErrorBySender(id self, SEL _cmd, id arg, long long errNo) {
-    WPLog(@"Voice", @"[Upload] OnErrorBySender mgr=%@ arg=%p errNo=%lld", NSStringFromClass(object_getClass(self)), arg, errNo);
-    if (orig_OnErrorBySender) ((void (*)(id, SEL, id, long long))orig_OnErrorBySender)(self, _cmd, arg, errNo);
-}
-
-static IMP orig_IsRecordMsgUploading = NULL;
-static BOOL hook_IsRecordMsgUploading(id self, SEL _cmd, id arg) {
-    BOOL r = orig_IsRecordMsgUploading ? ((BOOL (*)(id, SEL, id))orig_IsRecordMsgUploading)(self, _cmd, arg) : NO;
-    WPLog(@"Voice", @"[Upload] IsRecordMsgUploading mgr=%@ arg=%p → %d", NSStringFromClass(object_getClass(self)), arg, r);
-    return r;
-}
-
-static IMP orig_AddMsgMsgWrap = NULL;
-
-static void hook_AddMsgMsgWrap(id self, SEL _cmd, id chatName, id wrap) {
-    unsigned int t = 0;
-    @try {
-        if ([wrap respondsToSelector:NSSelectorFromString(@"m_uiMessageType")]) {
-            t = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
-        }
-        if (t == 34) {
-            WPLog(@"Voice", @"[真实流程] AddMsg chat=%@", chatName);
-            MioDumpVoiceWrap(wrap, @"真实流程.AddMsg");
-            MioLogCallStack(@"真实流程.AddMsg栈"); // 上溯调用者=微信真实发送入口
-        }
-    } @catch (NSException *e) {}
-    ((void (*)(id, SEL, id, id))orig_AddMsgMsgWrap)(self, _cmd, chatName, wrap);
-    if (t == 34) MioScheduleAudioTimeline(wrap); // orig 后 localID 已回填，抓文件改名模式
-}
-
-// ═══════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════
 // Hook ①: MMInputToolView 生命周期 — 长按加号入口（WCRefine 方案完整复刻）
 //   手势直接挂到「加号按钮本体」（_attachmentButton ivar 直取 → 智能扫描兜底），
 //   不再挂整个输入栏做触摸位置过滤。幂等安装器：view↔gesture 配对跟踪，
@@ -400,7 +76,7 @@ static void hook_AddMsgMsgWrap(id self, SEL _cmd, id chatName, id wrap) {
 //   one-shot 防重入 + 触觉反馈。
 //   对齐 WCR反编译：FUN_008d1600(安装器) / FUN_008d3bd0(按钮解析) /
 //   FUN_008cd918(WCRVPHandlePlusLongPress:) / FUN_008d6fe8(one-shot 复位)
-// ═══════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════
 
 static IMP orig_ITV_layoutSubviews = NULL;
 static IMP orig_ITV_didMoveToWindow = NULL;
@@ -531,7 +207,6 @@ static void MioVPEnsurePlusLongPress(UIView *toolView) {
 
 // 驱动点 1：layoutSubviews（对齐 WCR FUN_008cd3f8）
 static void hook_ITV_layoutSubviews(id self, SEL _cmd) {
-    WPHeatTick("MMInputToolView.layoutSubviews");
     ((void (*)(id, SEL))orig_ITV_layoutSubviews)(self, _cmd);
     @try {
         if ([self isKindOfClass:[UIView class]]) MioVPEnsurePlusLongPress((UIView *)self);
@@ -548,9 +223,9 @@ static void hook_ITV_didMoveToWindow(id self, SEL _cmd) {
     } @catch (NSException *e) {}
 }
 
-// ═══════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════
 // +install
-// ═══════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════
 
 @implementation VoiceHook
 
@@ -610,106 +285,6 @@ static void hook_ITV_didMoveToWindow(id self, SEL _cmd) {
 
 + (void)install {
     Class cls;
-
-    // 真实发送流程取证捕获（长按加号入口是手势方案，不走 MSHook CMessageMgr 路径）
-    // ★run 2035：取证 hook 全部受 NSUserDefaults MioPlugin_Voice_ForensicsHooks 控制
-    //  （默认关=干净模式）——崩溃二分法：干净模式还崩=崩在功能路径，再逐组开回
-    BOOL forensics = [[NSUserDefaults standardUserDefaults] boolForKey:@"MioPlugin_Voice_ForensicsHooks"];
-    WPLog(@"Voice", @"[+] 语音取证 hook 开关: %@", forensics ? @"开" : @"关（干净模式）");
-    cls = objc_getClass("CMessageMgr");
-    if (cls) {
-        if (forensics) {
-        MSHookMessageEx(cls, NSSelectorFromString(@"SaveMesVoice:MsgWrap:"),
-                        (IMP)hook_SaveMesVoiceMsgWrap,
-                        (IMP *)&orig_SaveMesVoiceMsgWrap);
-        WPLog(@"Voice", @"[+] CMessageMgr SaveMesVoice:MsgWrap: hooked (真实流程捕获)");
-
-        MSHookMessageEx(cls, NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:"),
-                        (IMP)hook_AddLocalMsg6,
-                        (IMP *)&orig_AddLocalMsg6);
-        WPLog(@"Voice", @"[+] CMessageMgr AddLocalMsg(6参) hooked (真实流程捕获)");
-
-        MSHookMessageEx(cls, NSSelectorFromString(@"AddMsg:MsgWrap:"),
-                        (IMP)hook_AddMsgMsgWrap,
-                        (IMP *)&orig_AddMsgMsgWrap);
-        WPLog(@"Voice", @"[+] CMessageMgr AddMsg:MsgWrap: hooked (真实流程捕获)");
-
-        // 语音管线取证 hook（run 2023）：抓真实录音"松手完成"的调用序列
-        SEL uvSel = NSSelectorFromString(@"UpdateVoiceMessage:MsgWrap:");
-        if (class_getInstanceMethod(cls, uvSel)) {
-            MSHookMessageEx(cls, uvSel, (IMP)hook_UpdateVoiceMessage, (IMP *)&orig_UpdateVoiceMessage);
-            WPLog(@"Voice", @"[+] UpdateVoiceMessage:MsgWrap: hooked (语音取证)");
-        }
-        SEL uvftSel = NSSelectorFromString(@"UpdateVoiceMessage:MsgWrap:fixTime:");
-        if (class_getInstanceMethod(cls, uvftSel)) {
-            MSHookMessageEx(cls, uvftSel, (IMP)hook_UpdateVoiceMessageFT, (IMP *)&orig_UpdateVoiceMessageFT);
-            WPLog(@"Voice", @"[+] UpdateVoiceMessage:MsgWrap:fixTime: hooked (语音取证)");
-        }
-        SEL uvsSel = NSSelectorFromString(@"UpdateVoiceStatus:LocalID:DownloadStatus:");
-        if (class_getInstanceMethod(cls, uvsSel)) {
-            MSHookMessageEx(cls, uvsSel, (IMP)hook_UpdateVoiceStatus, (IMP *)&orig_UpdateVoiceStatus);
-            WPLog(@"Voice", @"[+] UpdateVoiceStatus:LocalID:DownloadStatus: hooked (语音取证)");
-        }
-        SEL surSel = NSSelectorFromString(@"StopUploadRecordMsg:");
-        if (class_getInstanceMethod(cls, surSel)) {
-            MSHookMessageEx(cls, surSel, (IMP)hook_StopUploadRecordMsg, (IMP *)&orig_StopUploadRecordMsg);
-            WPLog(@"Voice", @"[+] StopUploadRecordMsg: hooked (语音取证)");
-        }
-        SEL suruSel = NSSelectorFromString(@"StopUploadRecordMsgByUsername:");
-        if (class_getInstanceMethod(cls, suruSel)) {
-            MSHookMessageEx(cls, suruSel, (IMP)hook_StopUploadRecordMsgByUser, (IMP *)&orig_StopUploadRecordMsgByUser);
-            WPLog(@"Voice", @"[+] StopUploadRecordMsgByUsername: hooked (语音取证)");
-        }
-        // 发送结果回调取证（run 2034）
-        SEL osSuccSel = NSSelectorFromString(@"OnSendMessageSuccess:");
-        if (class_getInstanceMethod(cls, osSuccSel)) {
-            MSHookMessageEx(cls, osSuccSel, (IMP)hook_OnSendMessageSuccess, (IMP *)&orig_OnSendMessageSuccess);
-            WPLog(@"Voice", @"[+] OnSendMessageSuccess: hooked (语音取证)");
-        }
-        SEL osFailSel = NSSelectorFromString(@"OnSendMessageFail:");
-        if (class_getInstanceMethod(cls, osFailSel)) {
-            MSHookMessageEx(cls, osFailSel, (IMP)hook_OnSendMessageFail, (IMP *)&orig_OnSendMessageFail);
-            WPLog(@"Voice", @"[+] OnSendMessageFail: hooked (语音取证)");
-        }
-        SEL oerrSel = NSSelectorFromString(@"OnErrorBySender:ErrNo:");
-        if (class_getInstanceMethod(cls, oerrSel)) {
-            MSHookMessageEx(cls, oerrSel, (IMP)hook_OnErrorBySender, (IMP *)&orig_OnErrorBySender);
-            WPLog(@"Voice", @"[+] OnErrorBySender:ErrNo: hooked (语音取证)");
-        }
-        SEL isUpSel = NSSelectorFromString(@"IsRecordMsgUploading:");
-        if (class_getInstanceMethod(cls, isUpSel)) {
-            MSHookMessageEx(cls, isUpSel, (IMP)hook_IsRecordMsgUploading, (IMP *)&orig_IsRecordMsgUploading);
-            WPLog(@"Voice", @"[+] IsRecordMsgUploading: hooked (语音取证)");
-        }
-        } // end forensics
-
-        // 语音上传管理器取证（run 2035）：受 forensics 开关控制
-        NSArray *upMgrNames = @[@"UploadVoiceCDNMgr", @"MMNewUploadVoiceMgr"];
-        for (NSString *mn in upMgrNames) {
-            Class uc = objc_getClass(mn.UTF8String);
-            if (!uc) { WPLog(@"Voice", @"[-] %@ 不存在", mn); continue; }
-            if (forensics) {
-                SEL rvmSel = NSSelectorFromString(@"ResendVoiceMsg:MsgWrap:");
-                if (class_getInstanceMethod(uc, rvmSel)) {
-                    MSHookMessageEx(uc, rvmSel, (IMP)hook_UVM_Resend, (IMP *)&orig_UVM_Resend);
-                    WPLog(@"Voice", @"[+] %@ ResendVoiceMsg hooked (上传取证)", mn);
-                }
-                SEL ssSel = NSSelectorFromString(@"startSend");
-                if (class_getInstanceMethod(uc, ssSel)) {
-                    MSHookMessageEx(uc, ssSel, (IMP)hook_UVM_StartSend, (IMP *)&orig_UVM_StartSend);
-                    WPLog(@"Voice", @"[+] %@ startSend hooked (上传取证)", mn);
-                }
-            }
-            // TimerCheckUpload：活实例捕获（功能必需，不受开关控制）
-            SEL tcSel = NSSelectorFromString(@"TimerCheckUpload");
-            if ([mn isEqualToString:@"UploadVoiceCDNMgr"] && class_getInstanceMethod(uc, tcSel)) {
-                MSHookMessageEx(uc, tcSel, (IMP)hook_UVM_TimerCheck, (IMP *)&orig_UVM_TimerCheck);
-                WPLog(@"Voice", @"[+] %@ TimerCheckUpload hooked (活实例捕获)", mn);
-            }
-        }
-    } else {
-        WPLog(@"Voice", @"[-] CMessageMgr not found");
-    }
 
     // ① 长按加号手势驱动点（WCRefine 方案：MMInputToolView 生命周期驱动幂等安装器）
     cls = objc_getClass("MMInputToolView");

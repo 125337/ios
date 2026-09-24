@@ -120,7 +120,6 @@ static id (*orig_getValueOfProperty_inRuleSet)(id, SEL, NSString *, NSString *);
 static id hook_getValueOfProperty_inRuleSet(id self, SEL _cmd,
                                              NSString *property,
                                              NSString *ruleSet) {
-    WPHeatTick("FontLayout.getValueOfProperty");
     // ★ 第一步：先调原方法获取原始值（orig 段不包 try：微信内部异常让其走崩溃取证记录）★
     id originalResult = orig_getValueOfProperty_inRuleSet(self, _cmd, property, ruleSet);
 
@@ -193,7 +192,6 @@ static id hook_getValueOfProperty_inRuleSet(id self, SEL _cmd,
 static unsigned int (*orig_m_uiGlobalFontLevel)(id, SEL);
 
 static unsigned int hook_m_uiGlobalFontLevel(id self, SEL _cmd) {
-    WPHeatTick("FontLayout.m_uiGlobalFontLevel");
     @try {
         FontLayoutConfig *config = [FontLayoutConfig shared];
         if (config.globalLayoutEnabled || config.chatLayoutEnabled) {

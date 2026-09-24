@@ -76,7 +76,6 @@ static id hook_AppPatCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
 
 /// layoutInternal — 跳过布局
 static void hook_AppPatCell_layoutInternal(id self, SEL _cmd) {
-    WPHeatTick("UIPurify.AppPatCell.layout");
     if ([UIPurifyConfig shared].hidePatHint) return;
     ((void (*)(id, SEL))orig_AppPatCell_layoutInternal)(self, _cmd);
 }
@@ -120,7 +119,6 @@ static id hook_SysMsgCell_initWithViewModel(id self, SEL _cmd, id viewModel) {
 
 /// layoutInternal — 跳过布局
 static void hook_SysMsgCell_layoutInternal(id self, SEL _cmd) {
-    WPHeatTick("UIPurify.SysMsgCell.layout");
     if ([UIPurifyConfig shared].hideRevokeHint) return;
     ((void (*)(id, SEL))orig_SysMsgCell_layoutInternal)(self, _cmd);
 }
@@ -147,7 +145,6 @@ static CGSize hook_SysMsgVM_measure(id self, SEL _cmd, CGSize size) {
 
 static void (*orig_VoiceMsgCell_layoutSubviews)(id, SEL) = NULL;
 static void hook_VoiceMsgCell_layoutSubviews(id self, SEL _cmd) {
-    WPHeatTick("UIPurify.VoiceMsgCell.layoutSubviews");
     orig_VoiceMsgCell_layoutSubviews(self, _cmd);
     if ([UIPurifyConfig shared].hideVoiceRedDot) {
         // 隐藏未读红点
@@ -163,7 +160,6 @@ static void hook_VoiceMsgCell_layoutSubviews(id self, SEL _cmd) {
 
 static void (*orig_YYAsyncImg_layoutSubviews)(id, SEL) = NULL;
 static void hook_YYAsyncImg_layoutSubviews(id self, SEL _cmd) {
-    WPHeatTick("UIPurify.YYAsyncImg.layoutSubviews");
     orig_YYAsyncImg_layoutSubviews(self, _cmd);
     if ([UIPurifyConfig shared].hideBubbleBackground) {
         // 沿 superview 链向上查找 CommonMessageCellView
