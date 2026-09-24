@@ -156,7 +156,7 @@
                                    hint:@"15"
                               valueType:InputValueTypeNumber
                              alertTitle:@"设置保护时间"
-                           alertMessage:@"请输入保护时间(秒)\n距离开该时间内回前台免验证"
+                           alertMessage:@"保护时间(5-60秒)\n保护时间是指退出微信后，多长时间不需要重新验证"
                                      cy:*ecy
                                   width:w];
     } cy:pcy width:w];

@@ -174,7 +174,9 @@ static void MioShowLockScreen(void) {
     CGFloat W = host.bounds.size.width;
     CGFloat H = host.bounds.size.height;
     CGFloat b = W / 5.0f;                                    // 键钮直径 = 屏宽/5
-    CGFloat kbY = (H - (b * 4.0f + 60.0f) - 150.0f) / 2.0f;  // 键盘起始 y（预留 150 给标题）
+    // 视觉居中：标题露出 25 + 键盘(4b+60) + 提示露出 55 → 视觉块高 4b+140
+    // （WCR 原式预留 150 会使整体偏上 60pt）
+    CGFloat kbY = (H - (b * 4.0f + 90.0f)) / 2.0f;           // 键盘起始 y
 
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 220, 50)];
@@ -368,12 +370,17 @@ static void MioHandleDidBecomeActive(void) {
     if (g_biometricAuthenticating) return; // 系统识别弹窗进行中（WCR 同款守卫）
 
     NSInteger prot = cfg.privacyEncryptProtectionTime;
-    if (prot < 0) prot = 15;
+    if (prot < 5) prot = 5;    // 最低 5 秒：保证宽限兜底，避免每次回前台都弹锁
+    if (prot > 60) prot = 60;
     BOOL withinGrace = NO;
     if (g_hasUnlocked && g_lastResignDate) {
         NSTimeInterval away = -[g_lastResignDate timeIntervalSinceNow];
         withinGrace = (away < (NSTimeInterval)prot); // WCR: away < timeoutInterval
     }
+    WPLog(@"Privacy", @"[Encrypt] 回前台判定：unlocked=%d away=%.1fs prot=%ld → %@",
+          g_hasUnlocked,
+          g_lastResignDate ? -[g_lastResignDate timeIntervalSinceNow] : -1.0,
+          (long)prot, withinGrace ? @"免验证" : @"需验证");
     if (withinGrace) {
         MioHideCover();
         WPLog(@"Privacy", @"[Encrypt] 保护时间(%ld s)内回前台，免验证", (long)prot);
