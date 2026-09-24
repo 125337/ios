@@ -26,6 +26,9 @@ static void processKeywordAlertMessage(id wrap);
 /// 从批量入口参数中提取 CMessageWrap 并送入处理（免打扰会话走批量路径，单条入口收不到）
 static void kaProcessBatchObj(id obj) {
     if (!obj) return;
+    // 指针合理性防护：批量入口部分参数可能是 BOOL 等非对象值，对野指针发消息会直接崩
+    uintptr_t p = (uintptr_t)obj;
+    if (p < 0x1000 || (p & 0x7) != 0) return;
     static Class wrapCls = Nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ wrapCls = objc_getClass("CMessageWrap"); });
@@ -34,15 +37,16 @@ static void kaProcessBatchObj(id obj) {
     }
 }
 
-static void replaced_ka_batchMsg(id self, SEL _cmd, id a1, id a2, id a3) {
+/// 按 SEL 名取批量入口的原始 IMP
+static IMP kaOrigImpForCmd(SEL _cmd) {
     NSValue *origV = nil;
     @synchronized (_kaOrigImps) {
         origV = _kaOrigImps[NSStringFromSelector(_cmd)];
     }
-    if (origV) {
-        IMP orig = (IMP)[origV pointerValue];
-        ((void (*)(id, SEL, id, id, id))orig)(self, _cmd, a1, a2, a3);
-    }
+    return origV ? (IMP)[origV pointerValue] : NULL;
+}
+
+static void kaBatchProcessArgs(id a1, id a2) {
     @try {
         kaProcessBatchObj(a1);
         kaProcessBatchObj(a2);
@@ -55,6 +59,20 @@ static void replaced_ka_batchMsg(id self, SEL _cmd, id a1, id a2, id a3) {
     } @catch (NSException *e) {
         WPLog(@"KeywordAlert", @"[BATCH] 处理异常: %@ - %@", e.name, e.reason);
     }
+}
+
+// 替换函数必须与原方法签名严格一致（参数个数不同走不同 IMP），否则调用即崩（109 日志闪退根因）
+static void replaced_ka_batch2(id self, SEL _cmd, id a1, id a2) {
+    IMP orig = kaOrigImpForCmd(_cmd);
+    if (orig) ((void (*)(id, SEL, id, id))orig)(self, _cmd, a1, a2);
+    kaBatchProcessArgs(a1, a2);
+}
+
+static void replaced_ka_batch3(id self, SEL _cmd, id a1, id a2, id a3) {
+    IMP orig = kaOrigImpForCmd(_cmd);
+    if (orig) ((void (*)(id, SEL, id, id, id))orig)(self, _cmd, a1, a2, a3);
+    // a3 可能是 BOOL 等非对象参数，不做提取，仅原样转发
+    kaBatchProcessArgs(a1, a2);
 }
 
 static void replaced_ka_onNewSyncAddMessage(id self, SEL _cmd, id wrap) {
@@ -406,11 +424,24 @@ static void processKeywordAlertMessage(id wrap) {
                 continue;
             }
             if (strstr(name, "AsyncOnAddMsg") || strstr(name, "OnAddMsg:")) {
+                // 实锤打印真实签名：参数个数（去掉 self/_cmd）与返回类型编码
+                unsigned int totalArgs = method_getNumberOfArguments(methodList[i]); // 含 self/_cmd
+                int nArgs = (int)totalArgs - 2;
+                char *retEnc = method_copyReturnType(methodList[i]);
+                NSString *retStr = retEnc ? [NSString stringWithUTF8String:retEnc] : @"?";
+                if (retEnc) free(retEnc);
+                // 替换函数只提供 2/3 参且原方法返回 void 的版本；签名不匹配挂上去调用即崩（109 闪退根因），宁可不挂
+                BOOL isVoid = [retStr isEqualToString:@"v"];
+                if (!isVoid || (nArgs != 2 && nArgs != 3)) {
+                    WPLog(@"KeywordAlert", @"[BATCH] 跳过 %s (参数%d 返回%@ 签名不安全)", name, nArgs, retStr);
+                    continue;
+                }
                 if (!_kaOrigImps) _kaOrigImps = [NSMutableDictionary dictionary];
                 _kaOrigImps[n] = [NSValue valueWithPointer:method_getImplementation(methodList[i])];
-                MSHookMessageEx(CMessageMgrClass, sel, (IMP)replaced_ka_batchMsg, NULL);
+                MSHookMessageEx(CMessageMgrClass, sel,
+                                nArgs == 2 ? (IMP)replaced_ka_batch2 : (IMP)replaced_ka_batch3, NULL);
                 batchHooked++;
-                WPLog(@"KeywordAlert", @"[+] %s hooked (批量入口)", name);
+                WPLog(@"KeywordAlert", @"[+] %s hooked (批量入口 %d参)", name, nArgs);
             }
         }
         free(methodList);
