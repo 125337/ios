@@ -18,7 +18,44 @@ static IMP orig_ka_AsyncOnAddMsgMsgWrap = NULL;
 
 static NSMutableSet *_kaProcessedMsgIds = nil;
 
+/// 批量/会话级消息入口的原始 IMP（SEL 名 → 原实现）
+static NSMutableDictionary<NSString *, NSValue *> *_kaOrigImps = nil;
+
 static void processKeywordAlertMessage(id wrap);
+
+/// 从批量入口参数中提取 CMessageWrap 并送入处理（免打扰会话走批量路径，单条入口收不到）
+static void kaProcessBatchObj(id obj) {
+    if (!obj) return;
+    static Class wrapCls = Nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ wrapCls = objc_getClass("CMessageWrap"); });
+    if (wrapCls && [obj isKindOfClass:wrapCls]) {
+        processKeywordAlertMessage(obj);
+    }
+}
+
+static void replaced_ka_batchMsg(id self, SEL _cmd, id a1, id a2, id a3) {
+    NSValue *origV = nil;
+    @synchronized (_kaOrigImps) {
+        origV = _kaOrigImps[NSStringFromSelector(_cmd)];
+    }
+    if (origV) {
+        IMP orig = (IMP)[origV pointerValue];
+        ((void (*)(id, SEL, id, id, id))orig)(self, _cmd, a1, a2, a3);
+    }
+    @try {
+        kaProcessBatchObj(a1);
+        kaProcessBatchObj(a2);
+        if ([a1 isKindOfClass:[NSDictionary class]]) {
+            // WCR 同款：批量入口参数为 会话→消息 的字典（见 WCR FUN_004d5280）
+            for (id v in [(NSDictionary *)a1 allValues]) {
+                kaProcessBatchObj(v);
+            }
+        }
+    } @catch (NSException *e) {
+        WPLog(@"KeywordAlert", @"[BATCH] 处理异常: %@ - %@", e.name, e.reason);
+    }
+}
 
 static void replaced_ka_onNewSyncAddMessage(id self, SEL _cmd, id wrap) {
     if (orig_ka_onNewSyncAddMessage) ((void (*)(id, SEL, id))orig_ka_onNewSyncAddMessage)(self, _cmd, wrap);
@@ -95,6 +132,15 @@ static NSString *kaDisplayNameForWxid(NSString *wxid) {
     }
 
     NSString *name = nil;
+    if (contact) {
+        // 校验返回的联系人确实是目标（getContactByName: 对个别群 ID 会返回错误对象，
+        // 实测 48551701903@chatroom 查出过成员"小涵饱饱"）
+        NSString *contactUsr = WXSafeStringGet(contact, @"m_nsUsrName");
+        if (contactUsr.length > 0 && ![contactUsr isEqualToString:wxid]) {
+            WPLogDebug(@"KeywordAlert", @"[NAME] wxid=%@ 查询结果不匹配(%@)，丢弃", wxid, contactUsr);
+            contact = nil;
+        }
+    }
     if (contact) {
         name = WXSafeStringGet(contact, @"m_nsDisplayName"); // 群内昵称（属性缺失时为 nil，安全回退）
         if (name.length == 0) name = WXSafeStringGet(contact, @"m_nsRemark");
@@ -341,6 +387,34 @@ static void processKeywordAlertMessage(id wrap) {
 
         MSHookMessageEx(CMessageMgrClass, @selector(AsyncOnAddMsg:MsgWrap:), (IMP)replaced_ka_AsyncOnAddMsgMsgWrap, &orig_ka_AsyncOnAddMsgMsgWrap);
         WPLog(@"KeywordAlert", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
+
+        // 运行时探测批量/会话级消息入口（免打扰会话不走单条入口；WCR 反编译确认存在
+        // AsyncOnAddMsgForSession:... / AsyncOnAddMsgListForSession:... 等方法，完整签名因版本而异，
+        // 故不写死，统一探测挂载，日志打印实际方法名）
+        unsigned int methodCount = 0;
+        Method *methodList = class_copyMethodList(CMessageMgrClass, &methodCount);
+        NSUInteger batchHooked = 0;
+        for (unsigned int i = 0; i < methodCount; i++) {
+            SEL sel = method_getName(methodList[i]);
+            const char *name = sel_getName(sel);
+            NSString *n = [NSString stringWithUTF8String:name];
+            // 排除已单独挂载的入口
+            if ([n isEqualToString:@"onNewSyncAddMessage:"] ||
+                [n isEqualToString:@"onNewSyncNotAddDBMessage:"] ||
+                [n isEqualToString:@"AddMsg:MsgWrap:"] ||
+                [n isEqualToString:@"AsyncOnAddMsg:MsgWrap:"]) {
+                continue;
+            }
+            if (strstr(name, "AsyncOnAddMsg") || strstr(name, "OnAddMsg:")) {
+                if (!_kaOrigImps) _kaOrigImps = [NSMutableDictionary dictionary];
+                _kaOrigImps[n] = [NSValue valueWithPointer:method_getImplementation(methodList[i])];
+                MSHookMessageEx(CMessageMgrClass, sel, (IMP)replaced_ka_batchMsg, NULL);
+                batchHooked++;
+                WPLog(@"KeywordAlert", @"[+] %s hooked (批量入口)", name);
+            }
+        }
+        free(methodList);
+        WPLog(@"KeywordAlert", @"[BATCH] 批量入口共挂载 %lu 个", (unsigned long)batchHooked);
     } else {
         WPLog(@"KeywordAlert", @"[WARN] CMessageMgr 未找到，Hook 未生效");
     }
