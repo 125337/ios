@@ -31,7 +31,6 @@
 #import <substrate.h>
 #import <UserNotifications/UserNotifications.h>
 #import "PrivacyConfig.h"
-#import "../../Core/LogManager.h"
 
 static IMP orig_Nav_push = NULL;           // UINavigationController::pushViewController:animated:
 
@@ -270,7 +269,6 @@ static void MioVerifyEnteredCode(void) {
     if (pwd.length == 6 && [input isEqualToString:pwd]) {
         MioUnlockApp();
     } else {
-        WPLog(@"Privacy", @"[Encrypt] 密码错误，清空重输");
         [g_enteredCode setString:@""];
         UIView *dots = [g_lockWindow.rootViewController.view viewWithTag:100];
         for (NSInteger t = 1; t <= 6; t++) {
@@ -318,7 +316,6 @@ static void MioAuthenticateWithBiometrics(void) {
             if (ok) {
                 MioUnlockApp();
             } else {
-                WPLog(@"Privacy", @"[Encrypt] 生物识别失败，落密码键盘 (%@)", e.localizedDescription);
                 MioShowLockScreen();
             }
         });
@@ -473,7 +470,6 @@ static BOOL MioPageInUnlockWindow(NSString *clsName) {
 /// 兜底设备锁屏密码。通过 → 记录保护窗并放行 push；不通过 → 停留当前页。
 static void MioVerifyPageLockThenPush(UINavigationController *nav, SEL pushSel,
                                       UIViewController *vc, BOOL animated, NSString *clsName) {
-    WPLog(@"Privacy", @"[PageLock] 拦截锁定页，先验证再进入: %@", clsName);
     LAContext *ctx = [LAContext new];
     ctx.localizedFallbackTitle = @"输入设备密码";
     NSError *err = nil;
@@ -489,10 +485,7 @@ static void MioVerifyPageLockThenPush(UINavigationController *nav, SEL pushSel,
             if (ok) {
                 // WCR markUnlockedForKey_：解锁成功记录时刻，保护窗内免重复验证
                 g_pageUnlockByKey[clsName] = @([NSDate date].timeIntervalSince1970);
-                WPLog(@"Privacy", @"[PageLock] 验证通过，进入: %@", clsName);
                 ((void (*)(id, SEL, UIViewController *, BOOL))orig_Nav_push)(nav, pushSel, vc, animated);
-            } else {
-                WPLog(@"Privacy", @"[PageLock] 验证未通过，不进入: %@ (%@)", clsName, e.localizedDescription);
             }
         });
     }];
@@ -506,15 +499,11 @@ static void hook_Nav_push(id self, SEL _cmd, UIViewController *vc, BOOL animated
         if (key) {
             NSString *clsName = NSStringFromClass(vc.class);
             if (!MioPageInUnlockWindow(clsName)) {
-                if (g_pageVerifying) { // 验证中：忽略重复的锁定页进入请求
-                    WPLog(@"Privacy", @"[PageLock] 验证中，忽略重复请求: %@", clsName);
-                    return;
-                }
+                if (g_pageVerifying) return; // 验证中：忽略重复的锁定页进入请求
                 g_pageVerifying = YES;
                 MioVerifyPageLockThenPush(self, _cmd, vc, animated, clsName);
                 return;
             }
-            WPLog(@"Privacy", @"[PageLock] 保护窗内放行: %@", clsName);
         }
     }
     ((void (*)(id, SEL, UIViewController *, BOOL))orig_Nav_push)(self, _cmd, vc, animated);
@@ -572,7 +561,6 @@ static void MioKeepAliveHeartbeat(void) {
         BOOL ok = [g_silentPlayer play];
         if (!ok) {
             g_kaFailCount++;
-            WPLog(@"Privacy", @"[KeepAlive] 心跳恢复失败（%ld 次）", (long)g_kaFailCount);
             if (g_kaFailCount >= 3) {
                 MioNotifyKeepAliveBroken();
                 g_kaFailCount = 0;
@@ -621,7 +609,6 @@ static void MioStartKeepAlive(void) {
             [[NSRunLoop mainRunLoop] addTimer:g_kaTimer forMode:NSRunLoopCommonModes];
         });
     } @catch (NSException *e) {
-        WPLog(@"Privacy", @"[KeepAlive] 启动异常: %@", e.reason);
         MioNotifyKeepAliveBroken();
     }
 }
@@ -684,8 +671,6 @@ static void MioOnDidBecomeActive(void) {
         Method m = class_getInstanceMethod(navCls, pushSel);
         if (m) {
             MSHookMessageEx(navCls, pushSel, (IMP)hook_Nav_push, (IMP *)&orig_Nav_push);
-        } else {
-            WPLog(@"Privacy", @"[PageLock] push 方法未找到，页面锁未生效");
         }
     }
 
@@ -698,8 +683,6 @@ static void MioOnDidBecomeActive(void) {
                             object:nil queue:nil
                         usingBlock:^(NSNotification *note) { MioOnDidBecomeActive(); }];
     (void)o1; (void)o2;
-
-    WPLog(@"Privacy", @"[PrivacyHook] install complete（加密+模糊+页面锁+保活）");
 }
 
 @end
