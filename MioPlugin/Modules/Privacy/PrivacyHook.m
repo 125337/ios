@@ -394,12 +394,16 @@ static void MioHandleDidBecomeActive(void) {
 
 #pragma mark - ② 后台模糊（WCR WCRefineBackgroundBlur：毛玻璃贴应用窗口，无遮罩窗）
 
-/// 模糊度（0-100，默认 80）→ 毛玻璃透明度（WCR backgroundBlurIntensity 同款直映射）
+/// 模糊度（1-100，默认 80）→ 毛玻璃透明度
+/// （WCR mappedBlurAlpha 同款映射：0.9 基础 + 半量叠加，100 度恰好触顶 1.0；80 度 → 0.98）
 static CGFloat MioFrostAlpha(void) {
     NSInteger d = [PrivacyConfig shared].privacyBlurDegree;
     if (d <= 0) d = 80;
     if (d > 100) d = 100;
-    return d / 100.0f;
+    double t = ((double)(d - 1) * 20.0 / 99.0 + 80.0) / 100.0; // → [0.8, 1.0]
+    double a = 0.9 + (t - 0.8) * 0.5;
+    if (a > 1.0) a = 1.0;
+    return (CGFloat)a;
 }
 
 static void MioApplyFrost(void) {
