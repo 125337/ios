@@ -50,6 +50,7 @@
 #import "../Modules/FontLayout/FontLayoutHook.h"
 #import "../Modules/Voice/VoiceHook.h"
 #import "../Modules/Voice/VoiceFeaturesHook.h"
+#import "../Modules/Privacy/PrivacyHook.h"
 
 // ────── 设置页 Controller 的 import ──────
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
@@ -244,11 +245,11 @@
                                                   subtitle:@"语音消息伪装发送"
                                              sectionTitle:@"更多"],
 
-            // ──── 隐私保护（卡片在通用功能页；功能 hook 后续接入） ────
+            // ──── 隐私保护（卡片在通用功能页；加密+后台模糊运行时已接，页面锁/保活后续） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"privacy"
                                                     title:@"隐私保护"
                                                configClass:[PrivacyConfig class]
-                                               hookClasses:@[]
+                                               hookClasses:@[[PrivacyHook class]]
                                            controllerClass:[SettingGeneralFunctionController class]
                                                   subtitle:@"加密/模糊/保活/页面上锁"
                                              sectionTitle:@"通用"],
