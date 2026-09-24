@@ -226,10 +226,12 @@ static void MioShowLockScreen(void) {
     }
 
     // 3x4 圆形数字键盘（1-9 + 0 在第 4 行第 2 列，iOS 锁屏布局，无删除键）
+    // WCR showLockScreen.c:482：x 起点 = centerX - 键盘总宽(3b+40)/2，键盘块以屏宽居中
+    CGFloat kbX = W / 2.0f - (b * 3.0f + 40.0f) / 2.0f;
     NSArray<NSString *> *titles = @[@"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"];
     for (NSInteger i = 0; i < 9; i++) {
         UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-        btn.frame = CGRectMake(W / 2.0f - b / 2.0f + (b + 20.0f) * (i % 3),
+        btn.frame = CGRectMake(kbX + (b + 20.0f) * (i % 3),
                                kbY + (b + 20.0f) * (i / 3), b, b);
         [btn setTitle:titles[i] forState:UIControlStateNormal];
         btn.titleLabel.font = [UIFont systemFontOfSize:b / 2.0f];
