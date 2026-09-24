@@ -5,14 +5,21 @@
 //  微信加密 + 后台模糊 + 指定页面上锁 + 后台保活 运行时。
 //
 //  WCR 反编译依据（WCR反编译/ 目录）：
-//  - handleWillResignActive：encryptionEnabled → 记录 lastBackgroundTime + showBackgroundPrivacyCover
-//  - showBackgroundPrivacyCover：全屏 UIWindow（windowScene 优先）+ 黑背景 + level=statusBar+1001
+//  - EncryptionLock::handleWillResignActive：encryptionEnabled → 记录 lastBackgroundTime + 黑遮罩
+//  - EncryptionLock::handleWillEnterForeground：已解锁 && 距离开 < 保护时间(默认15s) → 免验证摘遮罩；
+//    否则重置解锁态 → presentLockScreenIfNeeded（先自动生物识别，失败落密码键盘）
+//  - EncryptionLock::setupLockWindow：clear 窗 + 深色毛玻璃(UIBlurEffectStyleDark)铺底，level=statusBar+1000
+//  - EncryptionLock::showLockScreen：标题 + 6 空心圆点(白描边直径15) + 3x4 圆形数字键盘(直径=屏宽/5、
+//    间距20、0 在第4行第2列) + FaceID/TouchID 圆钮(40x40 位于圆点上方40) + 底部提示(白字14)；
+//    numberButtonTapped_：输满 6 位 100ms 后比对，对 → unlockApp，错 → 清空圆点
+//  - WCRefineBackgroundBlur：handleMoveToBackground → scheduleApplyBlur(100ms) → applyBlurIfNeeded：
+//    毛玻璃(UIBlurEffectStyleLight)直接贴应用 keyWindow 内层，alpha=模糊度/100，无独立遮罩窗
+//    （黑色遮罩窗仅加密功能使用：showBackgroundPrivacyCover，level=statusBar+1001）
 //  - unlockApp：验证通过 → hasUnlockedSuccessfully=YES、lastBackgroundTime=now、释放锁窗
-//  - encryptionTimeout 默认 0xF=15 秒（切回免重输宽限）
 //  - WCRefinePageLockGuard::markUnlockedForKey_：lastUnlockByKey[time] 保护窗免重复验证
 //  - WCRefineBackgroundKeepAlive::ensureAudioPlaying：setCategory Playback+mixWithOthers +
 //    silentPlayer 静音播放器保活；backgroundKeepAliveInterval 心跳周期
-//  Mio 差异：WCR 遮罩纯黑；Mio"后台模糊"独立开关，未开加密时毛玻璃按模糊度调浓度。
+//  Mio 差异：保护时间/面部识别开关为 Mio 设置项；未复刻 WCR 的连续失败锁定与双击重置密码。
 //
 
 #import "PrivacyHook.h"
@@ -26,68 +33,74 @@
 #import "PrivacyConfig.h"
 #import "../../Core/LogManager.h"
 
-/// 解锁宽限（秒）：didBecomeActive 时距上次解锁 ≤ 宽限免重输（WCR encryptionTimeout 默认 15s）
-static const NSTimeInterval kUnlockGraceSeconds = 15.0;
-
 static IMP orig_Nav_push = NULL;           // UINavigationController::pushViewController:animated:
 
-static UIWindow *g_coverWindow = nil;      // 遮罩窗（加密/模糊）
-static NSDate *g_lastUnlockDate = nil;     // 加密解锁基准（宽限判定）
-static BOOL g_verifying = NO;              // 弹窗防重入
+// 微信加密状态（WCR EncryptionLock 同名状态）
+static UIWindow *g_coverWindow = nil;        // 黑色隐私遮罩（仅加密功能，resign 盖）
+static UIWindow *g_lockWindow = nil;         // 锁屏窗（深色毛玻璃 + 数字键盘）
+static NSDate *g_lastResignDate = nil;       // 宽限基准：离开/解锁时刻（WCR lastBackgroundTime）
+static BOOL g_hasUnlocked = NO;              // WCR hasUnlockedSuccessfully
+static BOOL g_biometricAuthenticating = NO;  // 系统 FaceID/TouchID 弹窗进行中
+static BOOL g_biometricAttempted = NO;       // 本次锁定周期已自动试过生物识别
+static NSMutableString *g_enteredCode = nil; // 键盘已输入的密码
+
+// 后台模糊状态（WCR WCRefineBackgroundBlur：毛玻璃贴应用窗口，无独立遮罩窗）
+static UIVisualEffectView *g_frostView = nil;
+
 static NSMutableDictionary *g_pageUnlockByKey = nil; // 页面锁保护窗：类名 → 解锁时刻
 static BOOL g_pageVerifying = NO;          // 页面锁验证中（拦截期间忽略重复进入请求）
 static BOOL g_installed = NO;
 
-#pragma mark - ①② 遮罩窗（微信加密 / 后台模糊）
+static void MioNumberTapped(UIButton *btn);   // 锁屏键盘按钮回调（MioLockPadController 转发）
+static void MioBiometricTapped(void);
 
-/// 模糊度（0-100，默认 80）→ 遮罩不透明度（0.45~1.0）
-static CGFloat MioCoverAlpha(void) {
-    NSInteger d = [PrivacyConfig shared].privacyBlurDegree;
-    if (d <= 0) d = 80;
-    if (d > 100) d = 100;
-    return 0.45f + 0.55f * (d / 100.0f);
+/// 密码是否可用（6 位数字才允许锁，防止改密码时误设短密码导致永远解不开）
+static BOOL MioEncryptPasswordValid(void) {
+    return [PrivacyConfig shared].privacyEncryptPassword.length == 6;
 }
 
-static void MioShowCover(void) {
-    if (g_coverWindow) return;
-    PrivacyConfig *cfg = [PrivacyConfig shared];
+#pragma mark - ① 微信加密（黑遮罩 + 锁屏键盘）
 
-    UIWindow *window = nil;
-    UIScene *scene = nil;
+/// 前台 scene（windowScene 优先，WCR 同款）
+static UIWindowScene *MioForegroundScene(void) {
     for (UIScene *s in [UIApplication sharedApplication].connectedScenes) {
         if (s.activationState == UISceneActivationStateForegroundActive ||
             s.activationState == UISceneActivationStateForegroundInactive) {
-            scene = s;
-            break;
+            if ([s isKindOfClass:[UIWindowScene class]]) return (UIWindowScene *)s;
         }
     }
-    if ([scene isKindOfClass:[UIWindowScene class]]) {
-        window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+    return nil;
+}
+
+/// 应用 keyWindow（后台模糊毛玻璃的宿主）
+static UIWindow *MioKeyWindow(void) {
+    for (UIScene *s in [UIApplication sharedApplication].connectedScenes) {
+        if (s.activationState != UISceneActivationStateForegroundActive &&
+            s.activationState != UISceneActivationStateForegroundInactive) continue;
+        if (![s isKindOfClass:[UIWindowScene class]]) continue;
+        UIWindowScene *ws = (UIWindowScene *)s;
+        for (UIWindow *w in ws.windows) if (w.isKeyWindow) return w;
+        for (UIWindow *w in ws.windows) if (!w.hidden && w.alpha > 0.01f) return w;
     }
+    return nil;
+}
+
+/// 加密黑遮罩（WCR showBackgroundPrivacyCover：黑底独立窗；后台模糊不走此路径）
+static void MioShowCover(void) {
+    if (g_coverWindow) return;
+    UIWindow *window = nil;
+    UIWindowScene *scene = MioForegroundScene();
+    if (scene) window = [[UIWindow alloc] initWithWindowScene:scene];
     if (!window) {
         window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
     }
-    BOOL blurOnly = (!cfg.privacyEncryptEnabled && cfg.privacyBlurEnabled);
-    // WCR 差异：加密遮罩纯黑（showBackgroundPrivacyCover blackColor）；后台模糊为
-    // 毛玻璃——黑底会透出来把毛玻璃染成纯黑，故仅模糊时窗口背景必须透明
-    window.backgroundColor = blurOnly ? [UIColor clearColor] : [UIColor blackColor];
+    window.backgroundColor = [UIColor blackColor];
     window.windowLevel = UIWindowLevelStatusBar + 1001.0; // WCR: statusBar + 1001
-
-    if (blurOnly) {
-        UIBlurEffect *blur = [UIBlurEffect effectWithStyle:UIBlurEffectStyleRegular];
-        UIVisualEffectView *blurView = [[UIVisualEffectView alloc] initWithEffect:blur];
-        blurView.frame = window.bounds;
-        blurView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        blurView.alpha = MioCoverAlpha();
-        [window addSubview:blurView];
-    }
-
     window.rootViewController = [UIViewController new];
     window.hidden = NO;
     [window makeKeyAndVisible];
     g_coverWindow = window;
-    WPLog(@"Privacy", @"[Cover] 遮罩已盖（encrypt=%d blur=%d degree=%ld）",
-          cfg.privacyEncryptEnabled, cfg.privacyBlurEnabled, (long)cfg.privacyBlurDegree);
+    WPLog(@"Privacy", @"[Encrypt] 黑遮罩已盖");
 }
 
 static void MioHideCover(void) {
@@ -96,78 +109,326 @@ static void MioHideCover(void) {
     g_coverWindow = nil;
     w.hidden = YES;
     w.rootViewController = nil;
-    WPLog(@"Privacy", @"[Cover] 遮罩已摘");
+    WPLog(@"Privacy", @"[Encrypt] 黑遮罩已摘");
 }
 
-/// 应用级加密验证：错误重弹直到正确或取消（取消保持遮罩）
-static void MioPresentAppLockAlert(void) {
-    if (g_verifying || !g_coverWindow) return;
-    UIViewController *host = g_coverWindow.rootViewController;
-    if (!host) return;
-    g_verifying = YES;
+/// 锁屏宿主 VC：数字键/生物识别钮的 target（桥接到文件内 C 函数）
+@interface MioLockPadController : UIViewController
+@end
+@implementation MioLockPadController
+- (void)mioNumberTapped:(UIButton *)sender { MioNumberTapped(sender); }
+- (void)mioBiometricTapped:(UIButton *)sender { MioBiometricTapped(); }
+@end
 
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"微信已加密"
-                                                                  message:@"请输入 6 位密码解锁"
-                                                           preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-        tf.secureTextEntry = YES;
-        tf.keyboardType = UIKeyboardTypeNumberPad;
-        tf.placeholder = @"6位数字密码";
-    }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"解锁" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        g_verifying = NO;
-        NSString *input = alert.textFields.firstObject.text ?: @"";
-        NSString *pwd = [PrivacyConfig shared].privacyEncryptPassword ?: @"";
-        if (pwd.length > 0 && [input isEqualToString:pwd]) {
-            g_lastUnlockDate = [NSDate date]; // WCR unlockApp: lastBackgroundTime = now
-            MioHideCover();
-            WPLog(@"Privacy", @"[Encrypt] 解锁成功");
-        } else {
-            WPLog(@"Privacy", @"[Encrypt] 密码错误，重新验证");
-            MioPresentAppLockAlert();
-        }
-    }]];
-    [host presentViewController:alert animated:YES completion:nil];
+/// 锁屏窗（WCR setupLockWindow：clear 窗 + 深色毛玻璃铺底，level=statusBar+1000）
+static void MioSetupLockWindow(void) {
+    if (g_lockWindow) return;
+    UIWindow *window = nil;
+    UIWindowScene *scene = MioForegroundScene();
+    if (scene) window = [[UIWindow alloc] initWithWindowScene:scene];
+    if (!window) {
+        window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    }
+    window.backgroundColor = [UIColor clearColor];
+    window.windowLevel = UIWindowLevelStatusBar + 1002.0; // WCR: statusBar + 1000（取高一号保证盖过黑遮罩）
+
+    MioLockPadController *pad = [MioLockPadController new];
+    pad.view.backgroundColor = [UIColor clearColor];
+    UIVisualEffectView *blur = [[UIVisualEffectView alloc]
+        initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleDark]];
+    blur.frame = window.bounds;
+    blur.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [pad.view addSubview:blur];
+
+    window.rootViewController = pad;
+    window.hidden = NO;
+    [window makeKeyAndVisible];
+    g_lockWindow = window;
 }
 
-static void MioHandleDidBecomeActive(void) {
-    PrivacyConfig *cfg = [PrivacyConfig shared];
-    if (!g_coverWindow) {
-        // 冷启动（划掉微信重开）：无遮罩且从未解锁 → 首次进微信即验证
-        // （WCR presentLockScreenIfNeeded：isEncryptionEnabled && !hasUnlockedSuccessfully 即弹锁）
-        if (cfg.privacyEncryptEnabled && cfg.privacyEncryptPassword.length > 0 && !g_lastUnlockDate) {
-            MioShowCover();
-            dispatch_async(dispatch_get_main_queue(), ^{
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
-                               dispatch_get_main_queue(), ^{
-                    MioPresentAppLockAlert();
-                });
-            });
-        }
-        return;
+static void MioTeardownLockWindow(void) {
+    if (!g_lockWindow) return;
+    UIWindow *w = g_lockWindow;
+    g_lockWindow = nil;
+    w.hidden = YES;
+    w.rootViewController = nil; // 顺带释放键盘 UI 与输入状态载体
+    g_enteredCode = nil;
+    WPLog(@"Privacy", @"[Encrypt] 锁屏窗已释放");
+}
+
+/// 解锁（WCR unlockApp：hasUnlockedSuccessfully=YES、lastBackgroundTime=now、释放锁窗）
+static void MioUnlockApp(void) {
+    g_hasUnlocked = YES;
+    g_lastResignDate = [NSDate date];
+    g_biometricAttempted = NO;
+    MioTeardownLockWindow();
+}
+
+/// 密码键盘 UI（WCR showLockScreen 全参数复刻）
+static void MioShowLockScreen(void) {
+    if (!g_lockWindow.rootViewController) return;
+    UIView *host = g_lockWindow.rootViewController.view;
+    if (!host || [host viewWithTag:100]) return; // 已在展示
+
+    g_enteredCode = [NSMutableString string];
+    CGFloat W = host.bounds.size.width;
+    CGFloat H = host.bounds.size.height;
+    CGFloat b = W / 5.0f;                                    // 键钮直径 = 屏宽/5
+    CGFloat kbY = (H - (b * 4.0f + 60.0f) - 150.0f) / 2.0f;  // 键盘起始 y（预留 150 给标题）
+
+    // 标题
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 220, 50)];
+    title.center = CGPointMake(W / 2.0f, kbY);
+    title.text = @"请输入密码";
+    title.textColor = [UIColor whiteColor];
+    title.textAlignment = NSTextAlignmentCenter;
+    title.font = [UIFont systemFontOfSize:18.0f];
+    [host addSubview:title];
+
+    // 6 位空心圆点（容器 tag 100，圆点 tag 1-6）
+    UIView *dots = [[UIView alloc] initWithFrame:CGRectMake(0, 0, b * 3.0f - 20.0f, 30.0f)];
+    dots.center = CGPointMake(W / 2.0f,
+                              title.frame.origin.y + title.frame.size.height + 40.0f);
+    dots.tag = 100;
+    [host addSubview:dots];
+    CGFloat gap = (dots.bounds.size.width - 6.0f * 15.0f) / 5.0f;
+    for (NSInteger i = 0; i < 6; i++) {
+        UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(i * (15.0f + gap), 7.5f, 15.0f, 15.0f)];
+        dot.layer.cornerRadius = 7.5f;
+        dot.layer.borderColor = [UIColor whiteColor].CGColor;
+        dot.layer.borderWidth = 1.0f;
+        dot.backgroundColor = [UIColor clearColor];
+        dot.tag = i + 1;
+        [dots addSubview:dot];
     }
 
-    if (cfg.privacyEncryptEnabled && cfg.privacyEncryptPassword.length > 0) {
-        BOOL withinGrace = NO;
-        if (g_lastUnlockDate) {
-            NSTimeInterval sinceUnlock = -[g_lastUnlockDate timeIntervalSinceNow];
-            withinGrace = (sinceUnlock <= kUnlockGraceSeconds);
+    // FaceID/TouchID 圆钮（开关开启且设备支持时展示，位于圆点上方 40）
+    PrivacyConfig *cfg = [PrivacyConfig shared];
+    BOOL faceID = NO;
+    if (cfg.privacyEncryptBiometricEnabled) {
+        LAContext *ctx = [LAContext new];
+        NSError *err = nil;
+        if ([ctx canEvaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics error:&err] &&
+            ctx.biometryType == LABiometryTypeFaceID) {
+            faceID = YES;
         }
-        if (withinGrace) {
-            g_lastUnlockDate = [NSDate date];
-            MioHideCover();
-            WPLog(@"Privacy", @"[Encrypt] 宽限期内免验证");
-            return;
+        UIButton *bio = [UIButton buttonWithType:UIButtonTypeCustom];
+        bio.frame = CGRectMake(0, 0, 40.0f, 40.0f);
+        bio.center = CGPointMake(W / 2.0f, kbY - 40.0f);
+        [bio setImage:[UIImage systemImageNamed:faceID ? @"faceid" : @"touchid"]
+             forState:UIControlStateNormal];
+        bio.tintColor = [UIColor whiteColor];
+        bio.backgroundColor = [UIColor colorWithWhite:1.0f alpha:0.15f];
+        bio.layer.cornerRadius = 20.0f;
+        [bio addTarget:g_lockWindow.rootViewController action:@selector(mioBiometricTapped:)
+              forControlEvents:UIControlEventTouchUpInside];
+        [host addSubview:bio];
+    }
+
+    // 3x4 圆形数字键盘（1-9 + 0 在第 4 行第 2 列，iOS 锁屏布局，无删除键）
+    NSArray<NSString *> *titles = @[@"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"];
+    for (NSInteger i = 0; i < 9; i++) {
+        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+        btn.frame = CGRectMake(W / 2.0f - b / 2.0f + (b + 20.0f) * (i % 3),
+                               kbY + (b + 20.0f) * (i / 3), b, b);
+        [btn setTitle:titles[i] forState:UIControlStateNormal];
+        btn.titleLabel.font = [UIFont systemFontOfSize:b / 2.0f];
+        [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        btn.backgroundColor = [UIColor colorWithWhite:1.0f alpha:0.15f];
+        btn.layer.cornerRadius = b / 2.0f;
+        btn.tag = i + 1;
+        [btn addTarget:g_lockWindow.rootViewController action:@selector(mioNumberTapped:)
+              forControlEvents:UIControlEventTouchUpInside];
+        [host addSubview:btn];
+    }
+    UIButton *zero = [UIButton buttonWithType:UIButtonTypeCustom];
+    zero.frame = CGRectMake(W / 2.0f - b / 2.0f, kbY + (b + 20.0f) * 3.0f, b, b);
+    [zero setTitle:@"0" forState:UIControlStateNormal];
+    zero.titleLabel.font = [UIFont systemFontOfSize:b / 2.0f];
+    [zero setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    zero.backgroundColor = [UIColor colorWithWhite:1.0f alpha:0.15f];
+    zero.layer.cornerRadius = b / 2.0f;
+    zero.tag = 0;
+    [zero addTarget:g_lockWindow.rootViewController action:@selector(mioNumberTapped:)
+          forControlEvents:UIControlEventTouchUpInside];
+    [host addSubview:zero];
+
+    // 底部提示
+    UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, W - 40.0f, 30.0f)];
+    hint.center = CGPointMake(W / 2.0f, zero.frame.origin.y + zero.frame.size.height + 40.0f);
+    hint.text = @"请输入6位数字密码解锁";
+    hint.textColor = [UIColor colorWithWhite:0.7f alpha:1.0f];
+    hint.textAlignment = NSTextAlignmentCenter;
+    hint.font = [UIFont systemFontOfSize:14.0f];
+    [host addSubview:hint];
+
+    WPLog(@"Privacy", @"[Encrypt] 锁屏键盘已展示（bio=%d faceID=%d）",
+          cfg.privacyEncryptBiometricEnabled, faceID);
+}
+
+/// 输满 6 位后的比对（WCR numberButtonTapped_ 的 100ms 延迟块）
+static void MioVerifyEnteredCode(void) {
+    if (!g_lockWindow) return;
+    NSString *input = [g_enteredCode copy];
+    NSString *pwd = [PrivacyConfig shared].privacyEncryptPassword ?: @"";
+    if (pwd.length == 6 && [input isEqualToString:pwd]) {
+        WPLog(@"Privacy", @"[Encrypt] 密码解锁成功");
+        MioUnlockApp();
+    } else {
+        WPLog(@"Privacy", @"[Encrypt] 密码错误，清空重输");
+        [g_enteredCode setString:@""];
+        UIView *dots = [g_lockWindow.rootViewController.view viewWithTag:100];
+        for (NSInteger t = 1; t <= 6; t++) {
+            [dots viewWithTag:t].backgroundColor = [UIColor clearColor];
         }
+    }
+}
+
+static void MioNumberTapped(UIButton *btn) {
+    if (!g_enteredCode || g_enteredCode.length >= 6) return;
+    UIImpactFeedbackGenerator *haptic =
+        [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+    [haptic impactOccurred]; // WCR playTapticFeedback
+
+    [g_enteredCode appendFormat:@"%ld", (long)btn.tag];
+    UIView *dot = [g_lockWindow.rootViewController.view viewWithTag:g_enteredCode.length];
+    dot.backgroundColor = [UIColor whiteColor];
+    if (g_enteredCode.length == 6) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), // WCR 100ms
+                       dispatch_get_main_queue(), ^{ MioVerifyEnteredCode(); });
+    }
+}
+
+/// 生物识别自动尝试（WCR authenticateWithBiometrics：成功直接解锁，失败落键盘）
+static void MioAuthenticateWithBiometrics(void) {
+    if (g_biometricAuthenticating) return;
+    g_biometricAuthenticating = YES;
+    g_biometricAttempted = YES;
+
+    LAContext *ctx = [LAContext new];
+    ctx.localizedFallbackTitle = @"";
+    NSError *err = nil;
+    if (![ctx canEvaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics error:&err]) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-                MioPresentAppLockAlert();
-            });
+            g_biometricAuthenticating = NO;
+            MioShowLockScreen();
         });
         return;
     }
-    MioHideCover(); // 未开加密（仅模糊）：直接摘
+    [ctx evaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics
+        localizedReason:@"验证以解锁微信"
+                  reply:^(BOOL ok, NSError *e) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            g_biometricAuthenticating = NO;
+            if (ok) {
+                WPLog(@"Privacy", @"[Encrypt] 生物识别解锁成功");
+                MioUnlockApp();
+            } else {
+                WPLog(@"Privacy", @"[Encrypt] 生物识别失败，落密码键盘 (%@)", e.localizedDescription);
+                MioShowLockScreen();
+            }
+        });
+    }];
+}
+
+static void MioBiometricTapped(void) {
+    UIImpactFeedbackGenerator *haptic =
+        [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+    [haptic impactOccurred];
+    g_biometricAttempted = NO; // WCR biometricButtonTapped_：重置标记后重试
+    MioAuthenticateWithBiometrics();
+}
+
+/// 按需弹锁（WCR presentLockScreenIfNeeded：先自动生物识别，失败落键盘）
+static void MioPresentLockScreenIfNeeded(void) {
+    PrivacyConfig *cfg = [PrivacyConfig shared];
+    if (!cfg.privacyEncryptEnabled || !MioEncryptPasswordValid()) return;
+    if (g_hasUnlocked || g_biometricAuthenticating) return;
+
+    MioSetupLockWindow();
+    if (cfg.privacyEncryptBiometricEnabled && !g_biometricAttempted) {
+        MioAuthenticateWithBiometrics();
+    } else {
+        MioShowLockScreen();
+    }
+}
+
+/// 回前台（WCR handleWillEnterForeground 语义：已解锁 && 距离开 < 保护时间 → 免验证只摘遮罩；
+/// 否则重置解锁态弹锁。冷启动从未解锁 → 首次进微信即验证。基准是"离开时刻"，
+/// 解锁后再用一段时间切后台会重新计时，普通短暂切后台不会误弹）
+static void MioHandleDidBecomeActive(void) {
+    PrivacyConfig *cfg = [PrivacyConfig shared];
+
+    if (!cfg.privacyEncryptEnabled || !MioEncryptPasswordValid()) {
+        MioHideCover(); // 未开加密（仅模糊）：直接摘黑遮罩
+        return;
+    }
+    if (g_biometricAuthenticating) return; // 系统识别弹窗进行中（WCR 同款守卫）
+
+    NSInteger prot = cfg.privacyEncryptProtectionTime;
+    if (prot < 0) prot = 15;
+    BOOL withinGrace = NO;
+    if (g_hasUnlocked && g_lastResignDate) {
+        NSTimeInterval away = -[g_lastResignDate timeIntervalSinceNow];
+        withinGrace = (away < (NSTimeInterval)prot); // WCR: away < timeoutInterval
+    }
+    if (withinGrace) {
+        MioHideCover();
+        WPLog(@"Privacy", @"[Encrypt] 保护时间(%ld s)内回前台，免验证", (long)prot);
+        return;
+    }
+    // 超时/冷启动：重置解锁态弹锁（锁窗盖在黑遮罩上，随后摘遮罩）
+    BOOL wasUnlocked = g_hasUnlocked;
+    g_hasUnlocked = NO;
+    if (wasUnlocked) g_biometricAttempted = NO; // WCR：曾解锁才重置生物识别尝试标记
+    MioPresentLockScreenIfNeeded();
+    MioHideCover();
+}
+
+#pragma mark - ② 后台模糊（WCR WCRefineBackgroundBlur：毛玻璃贴应用窗口，无遮罩窗）
+
+/// 模糊度（0-100，默认 80）→ 毛玻璃透明度（WCR backgroundBlurIntensity 同款直映射）
+static CGFloat MioFrostAlpha(void) {
+    NSInteger d = [PrivacyConfig shared].privacyBlurDegree;
+    if (d <= 0) d = 80;
+    if (d > 100) d = 100;
+    return d / 100.0f;
+}
+
+static void MioApplyFrost(void) {
+    if (![PrivacyConfig shared].privacyBlurEnabled) return;
+    UIWindow *w = MioKeyWindow();
+    if (!w) return;
+
+    if (!g_frostView) {
+        g_frostView = [[UIVisualEffectView alloc]
+            initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleLight]];
+        g_frostView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    }
+    g_frostView.frame = w.bounds;
+    if (g_frostView.superview != w) {
+        [g_frostView removeFromSuperview];
+        g_frostView.alpha = 0.0f;
+        [w addSubview:g_frostView];
+    }
+    [w bringSubviewToFront:g_frostView];
+    g_frostView.clipsToBounds = YES;
+    [UIView animateWithDuration:0.25f delay:0.0f
+                        options:UIViewAnimationOptionBeginFromCurrentState
+                     animations:^{ g_frostView.alpha = MioFrostAlpha(); }
+                     completion:nil];
+    WPLog(@"Privacy", @"[Blur] 毛玻璃已盖（degree=%ld）", (long)[PrivacyConfig shared].privacyBlurDegree);
+}
+
+static void MioRemoveFrost(void) {
+    if (!g_frostView) return;
+    UIVisualEffectView *v = g_frostView;
+    g_frostView = nil;
+    [UIView animateWithDuration:0.25f delay:0.0f
+                        options:UIViewAnimationOptionBeginFromCurrentState
+                     animations:^{ v.alpha = 0.0f; }
+                     completion:^(BOOL finished) { [v removeFromSuperview]; }];
+    WPLog(@"Privacy", @"[Blur] 毛玻璃已摘");
 }
 
 #pragma mark - ③ 指定页面上锁
@@ -388,20 +649,28 @@ static void MioOnWillResignActive(void) {
     // 后台保活：进后台即启动（与加密/模糊互不影响）
     if (cfg.privacyKeepAliveEnabled) MioStartKeepAlive();
 
-    // 遮罩：加密 或 模糊 任一开启即盖
-    if (!g_coverWindow && (cfg.privacyEncryptEnabled || cfg.privacyBlurEnabled)) {
-        MioShowCover();
+    // 后台模糊：毛玻璃贴应用窗口（WCR scheduleApplyBlur 延迟 100ms 同款，离开后再盖避免可见闪烁）
+    if (cfg.privacyBlurEnabled) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{ MioApplyFrost(); });
+    }
+
+    // 加密：记录离开时刻（宽限基准）+ 盖黑遮罩（WCR handleWillResignActive；识别弹窗期间不盖）
+    if (cfg.privacyEncryptEnabled && !g_biometricAuthenticating && MioEncryptPasswordValid()) {
+        g_lastResignDate = [NSDate date];
+        if (!g_coverWindow) MioShowCover();
     }
 }
 
 static void MioOnDidEnterBackground(void) {
-    // 无额外动作：保活与遮罩已在 resign 盖好；预留给后台清理
+    // 无额外动作：保活与毛玻璃已在 resign 盖好；预留给后台清理
 }
 
 static void MioOnDidBecomeActive(void) {
     PrivacyConfig *cfg = [PrivacyConfig shared];
 
-    // 回前台：停保活
+    // 回前台：摘毛玻璃 + 停保活 + 加密宽限/弹锁判定
+    MioRemoveFrost();
     if (cfg.privacyKeepAliveEnabled) MioStopKeepAlive();
 
     MioHandleDidBecomeActive();
@@ -448,7 +717,7 @@ static void MioOnDidBecomeActive(void) {
 }
 
 + (BOOL)isLockScreenPresented {
-    return (g_coverWindow != nil);
+    return (g_coverWindow != nil || g_lockWindow != nil);
 }
 
 @end

@@ -124,14 +124,42 @@
     CGFloat pcy = 0;
     PrivacyConfig *pc = [PrivacyConfig shared];
 
-    // 1. 微信加密（开启后弹 6 位密码输入框，见 switchChanged）
-    pcy = [self addSwitchRowInGroup:pGroup
-                              title:@"微信加密"
-                               desc:nil
-                                key:@"privacyEncryptEnabled"
-                               isOn:pc.privacyEncryptEnabled
-                                 cy:pcy
-                              width:w];
+    // 1. 微信加密（手风琴：开启弹 6 位密码输入框见 wpAfterSwitchChanged，展开修改密码/面部识别/保护时间）
+    pcy = [self addMasterSwitchRowInGroup:pGroup
+                                    title:@"微信加密"
+                                      key:@"privacyEncryptEnabled"
+                                     isOn:pc.privacyEncryptEnabled
+                               subBuilder:^(UIView *expand, CGFloat *ecy) {
+        PrivacyConfig *c = [PrivacyConfig shared];
+        NSString *pwd = c.privacyEncryptPassword ?: @"";
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"修改解锁密码"
+                                    key:@"privacyEncryptPassword"
+                                  value:pwd
+                                   hint:@"6位数字"
+                              valueType:InputValueTypeNumber
+                             alertTitle:@"修改解锁密码"
+                           alertMessage:@"请输入6位数密码"
+                                     cy:*ecy
+                                  width:w];
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"面部识别解锁"
+                                        key:@"privacyEncryptBiometricEnabled"
+                                       isOn:c.privacyEncryptBiometricEnabled
+                                         cy:*ecy
+                                      width:w];
+        NSString *prot = [NSString stringWithFormat:@"%ld", (long)c.privacyEncryptProtectionTime];
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"设置保护时间"
+                                    key:@"privacyEncryptProtectionTime"
+                                  value:prot
+                                   hint:@"15"
+                              valueType:InputValueTypeNumber
+                             alertTitle:@"设置保护时间"
+                           alertMessage:@"请输入保护时间(秒)\n距离开该时间内回前台免验证"
+                                     cy:*ecy
+                                  width:w];
+    } cy:pcy width:w];
 
     pcy = [self addSeparatorInGroup:pGroup cy:pcy width:w];
 

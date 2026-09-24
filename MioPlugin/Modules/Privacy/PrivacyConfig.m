@@ -19,6 +19,8 @@
     return @[
         [ConfigDescriptor itemWithKey:@"privacyEncryptEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"privacyEncryptPassword" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"privacyEncryptBiometricEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"privacyEncryptProtectionTime" type:ConfigValueTypeInteger default:@(15)],
         [ConfigDescriptor itemWithKey:@"privacyBlurEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"privacyBlurDegree" type:ConfigValueTypeInteger default:@(80)],
         [ConfigDescriptor itemWithKey:@"privacyKeepAliveEnabled" type:ConfigValueTypeBool default:@(NO)],

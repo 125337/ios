@@ -10,6 +10,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL privacyEncryptEnabled;
 /// 微信加密密码（6位）
 @property (nonatomic, copy) NSString *privacyEncryptPassword;
+/// 面部识别解锁（开启后弹锁先自动试 FaceID/TouchID，失败落密码键盘）
+@property (nonatomic, assign) BOOL privacyEncryptBiometricEnabled;
+/// 设置保护时间（秒，默认15：距离开时刻 ≤ 该值回前台免验证，0 = 每次都验证）
+@property (nonatomic, assign) NSInteger privacyEncryptProtectionTime;
 /// 后台模糊
 @property (nonatomic, assign) BOOL privacyBlurEnabled;
 /// 模糊度（默认80，数值越高模糊效果越高）
