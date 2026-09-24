@@ -252,7 +252,7 @@ static void hook_Nav_push(id self, SEL _cmd, UIViewController *vc, BOOL animated
 
 static NSTimer *g_kaTimer = nil;
 static AVAudioPlayer *g_silentPlayer = nil;
-static UIBackgroundTaskIdentifier g_kaTask = UIBackgroundTaskInvalid;
+static UIBackgroundTaskIdentifier g_kaTask; // install 时置为 UIBackgroundTaskInvalid
 static NSInteger g_kaFailCount = 0;
 
 /// 生成 0.5s 静音 wav（8kHz 8bit mono），落 Caches 复用
@@ -401,6 +401,7 @@ static void MioOnDidBecomeActive(void) {
     g_installed = YES;
 
     g_pageUnlockByKey = [NSMutableDictionary dictionary];
+    g_kaTask = UIBackgroundTaskInvalid;
 
     // ③ 页面锁：UINavigationController::pushViewController:animated:（低频导航 hook）
     Class navCls = objc_getClass("UINavigationController");
