@@ -48,7 +48,7 @@ static NSDictionary *syncContextForSendId(NSString *sendId) {
 }
 
 /// 抢到红包后按用户配置把统计信息同步到目标窗口
-static void syncRedEnvelopResult(NSInteger amountFen, NSString *sendId) {
+static void syncRedEnvelopResult(NSInteger amountFen, NSString *sendId, NSInteger totalAmountFen, NSInteger totalNum) {
     RedEnvelopConfig *config = [RedEnvelopConfig shared];
     NSInteger mode = config.redEnvelopSyncMode;
     if (mode == 0) return;
@@ -76,8 +76,12 @@ static void syncRedEnvelopResult(NSInteger amountFen, NSString *sendId) {
     NSString *srcLine = isGroup
         ? [NSString stringWithFormat:@"来源: 群聊「%@」", sessionName]
         : [NSString stringWithFormat:@"来源: 私聊（%@）", sessionName];
-    NSString *text = [NSString stringWithFormat:@"🧧 抢到红包 %.2f元\n%@\n发送者: %@\n累计: %ld个 / %.2f元",
-                      amountFen / 100.0, srcLine, senderName,
+    NSString *amountLine = totalAmountFen > 0
+        ? [NSString stringWithFormat:@"🧧 抢到红包 %.2f元（红包总额 %.2f元/%ld个）",
+           amountFen / 100.0, totalAmountFen / 100.0, (long)totalNum]
+        : [NSString stringWithFormat:@"🧧 抢到红包 %.2f元", amountFen / 100.0];
+    NSString *text = [NSString stringWithFormat:@"%@\n%@\n发送者: %@\n累计: %ld个 / %.2f元",
+                      amountLine, srcLine, senderName,
                       (long)_statTotalCount, _statTotalAmount / 100.0];
 
     WPLog(@"RedEnv", @"[SYNC] 同步红包信息 -> %@ (mode=%ld) 金额=%ld分", target, (long)mode, (long)amountFen);
@@ -402,7 +406,7 @@ static void handleHongbaoResponse(id res, id req) {
                       amount / 100.0, nickName, wishing,
                       totalAmountVal / 100.0, (long)totalNum,
                       (long)_statTotalCount, _statTotalAmount / 100.0);
-                syncRedEnvelopResult(amount, sendId);
+                syncRedEnvelopResult(amount, sendId, totalAmountVal, totalNum);
             } else if (receiveStatus == 2) {
                 WPLog(@"RedEnv", @"[STAT] 红包已被领取");
             } else if (hbStatus == 4) {

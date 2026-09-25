@@ -57,7 +57,10 @@
     void (^select)(NSInteger) = ^(NSInteger mode) {
         config.redEnvelopSyncMode = mode;
         [ConfigManager saveAll];
-        [self buildUI];
+        // 等 action sheet 完全退场再重建页面，否则重建被 dismiss 动画吞掉，行值不刷新
+        [self dismissViewControllerAnimated:YES completion:^{
+            dispatch_async(dispatch_get_main_queue(), ^{ [self buildUI]; });
+        }];
     };
     [sheet addAction:[UIAlertAction actionWithTitle:@"不同步" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { select(0); }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"同步到个人窗口" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { select(1); }]];
@@ -83,7 +86,9 @@
         config.redEnvelopSyncCustomTarget = input;
         config.redEnvelopSyncMode = 4;
         [ConfigManager saveAll];
-        [self buildUI];
+        [self dismissViewControllerAnimated:YES completion:^{
+            dispatch_async(dispatch_get_main_queue(), ^{ [self buildUI]; });
+        }];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];

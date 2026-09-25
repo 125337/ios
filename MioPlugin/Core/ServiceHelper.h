@@ -114,6 +114,17 @@ static inline void WXSendTextMessage(NSString *text, NSString *sessionName) {
 static inline NSString *WXDisplayNameForWxid(NSString *wxid) {
     if (!wxid.length) return wxid;
     id contact = WXGetContactForWxid(wxid);
+    if (!contact) {
+        // 部分 wxid（尤其群 ID）getContactByUserName: 查不到，回退 getContactByName:（实测群名可查出）
+        id mgr = WXGetService(objc_getClass("CContactMgr"));
+        SEL sel = NSSelectorFromString(@"getContactByName:");
+        if (mgr && [mgr respondsToSelector:sel]) {
+            id c2 = ((id (*)(id, SEL, id))objc_msgSend)(mgr, sel, wxid);
+            // 校验返回的确实是目标联系人（getContactByName: 对个别 ID 会返回错误对象）
+            NSString *chk = WXSafeStringGet(c2, @"m_nsUsrName");
+            if (chk.length > 0 && [chk isEqualToString:wxid]) contact = c2;
+        }
+    }
     NSString *remark = WXSafeStringGet(contact, @"m_nsRemark");
     if (remark.length) return remark;
     NSString *nick = WXSafeStringGet(contact, @"m_nsNickName");
