@@ -15,8 +15,21 @@ static id _kaRecordDelegate = nil;       // 本插件通知 delegate（强持有
          withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
     NSString *ident = notification.request.identifier;
     if ([ident hasPrefix:@"mio.keywordAlert."]) {
-        WPLog(@"KeywordAlert", @"[NOTIFY] 前台: 通知静默进通知中心 id=%@", ident);
-        completionHandler(UNNotificationPresentationOptionList);
+        // iOS 把 Inactive（刚切走/双开另一边/界面过渡）也算前台，会调 willPresent：
+        // Active=正在看微信，自绘横幅负责，通知静默进中心；
+        // Inactive=用户不在看，必须交系统弹横幅（112 日志：inactive 时静默导致横幅丢失）
+        BOOL active = [UIApplication sharedApplication].applicationState == UIApplicationStateActive;
+        if (active) {
+            WPLog(@"KeywordAlert", @"[NOTIFY] 前台使用中: 通知静默进通知中心 id=%@", ident);
+            completionHandler(UNNotificationPresentationOptionList);
+        } else {
+            WPLog(@"KeywordAlert", @"[NOTIFY] 非Active(inactive): 交系统弹横幅 id=%@", ident);
+            if (@available(iOS 14.0, *)) {
+                completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionSound);
+            } else {
+                completionHandler(UNNotificationPresentationOptionAlert | UNNotificationPresentationOptionSound);
+            }
+        }
         return;
     }
     // 非本插件通知：透传微信原 delegate
