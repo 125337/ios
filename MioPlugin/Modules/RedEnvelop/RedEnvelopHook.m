@@ -15,6 +15,75 @@ static NSInteger _statTotalCount = 0;
 static NSInteger _statTotalAmount = 0;
 static NSMutableSet *_countedSendIds = nil;
 
+/// 红包同步上下文：sendId -> 会话信息（响应回来时才知道抢到多少钱，消息进来时才知道来源，两段拼一起）
+/// @{@"session": wxid, @"sessionName": 显示名, @"senderName": 群内发送者显示名, @"isGroup": @(BOOL)}
+static NSMutableDictionary<NSString *, NSDictionary *> *_syncCtxMap = nil;
+
+static void syncSaveContext(NSString *sendId, NSString *sessionWxid, BOOL isGroup, NSString *groupSenderWxid) {
+    if (!sendId.length) return;
+    if (!_syncCtxMap) _syncCtxMap = [NSMutableDictionary dictionary];
+    NSString *sessionName = WXDisplayNameForWxid(sessionWxid);
+    // 群红包发送者从消息内容前缀（"wxid:\n..."）解析；私聊发送者即对方本人
+    NSString *senderName = isGroup
+        ? (groupSenderWxid.length ? WXDisplayNameForWxid(groupSenderWxid) : sessionName)
+        : sessionName;
+    NSDictionary *ctx = @{@"session": sessionWxid ?: @"",
+                          @"sessionName": sessionName ?: @"",
+                          @"senderName": senderName ?: @"",
+                          @"isGroup": @(isGroup)};
+    @synchronized (_syncCtxMap) {
+        if (_syncCtxMap.count > 100) {  // 防膨胀：超限清最早的一半
+            NSArray *keys = _syncCtxMap.allKeys;
+            for (NSUInteger i = 0; i < keys.count / 2; i++) [_syncCtxMap removeObjectForKey:keys[i]];
+        }
+        _syncCtxMap[sendId] = ctx;
+    }
+}
+
+static NSDictionary *syncContextForSendId(NSString *sendId) {
+    if (!sendId.length) return nil;
+    @synchronized (_syncCtxMap) {
+        return _syncCtxMap[sendId];
+    }
+}
+
+/// 抢到红包后按用户配置把统计信息同步到目标窗口
+static void syncRedEnvelopResult(NSInteger amountFen, NSString *sendId) {
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
+    NSInteger mode = config.redEnvelopSyncMode;
+    if (mode == 0) return;
+
+    NSString *target = nil;
+    if (mode == 1) {  // 个人窗口 = 发给自己的会话
+        target = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
+    } else if (mode == 2) {
+        target = @"filehelper";
+    } else if (mode == 3) {  // 当前窗口 = 红包来源会话
+        target = syncContextForSendId(sendId)[@"session"];
+    } else if (mode == 4) {
+        target = config.redEnvelopSyncCustomTarget;
+    }
+    if (!target.length) {
+        WPLog(@"RedEnv", @"[SYNC] 同步目标为空 (mode=%ld)，跳过", (long)mode);
+        return;
+    }
+
+    NSDictionary *ctx = syncContextForSendId(sendId);
+    BOOL isGroup = ctx[@"isGroup"] ? [ctx[@"isGroup"] boolValue] : NO;
+    NSString *sessionName = ctx[@"sessionName"] ?: @"未知会话";
+    NSString *senderName = ctx[@"senderName"] ?: @"-";
+
+    NSString *srcLine = isGroup
+        ? [NSString stringWithFormat:@"来源: 群聊「%@」", sessionName]
+        : [NSString stringWithFormat:@"来源: 私聊（%@）", sessionName];
+    NSString *text = [NSString stringWithFormat:@"🧧 抢到红包 %.2f元\n%@\n发送者: %@\n累计: %ld个 / %.2f元",
+                      amountFen / 100.0, srcLine, senderName,
+                      (long)_statTotalCount, _statTotalAmount / 100.0];
+
+    WPLog(@"RedEnv", @"[SYNC] 同步红包信息 -> %@ (mode=%ld) 金额=%ld分", target, (long)mode, (long)amountFen);
+    WXSendTextMessage(text, target);
+}
+
 static IMP orig_onNewSyncAddMessage = NULL;
 static IMP orig_addMessageLibWithWrap = NULL;
 static IMP orig_onNewSyncNotAddDBMessage = NULL;
@@ -248,6 +317,19 @@ static void processRedEnvelopMessage(id wrap) {
         return;
     }
 
+    // 红包同步上下文：记录来源会话/发送者，等领取响应回来拼统计信息
+    BOOL redEnvInGroup = param.isGroupSender || (fromUsr && [fromUsr containsString:@"@chatroom"]);
+    NSString *groupSenderWxid = nil;
+    if (redEnvInGroup && !param.isGroupSender) {
+        // 群消息内容前缀 "wxid:\n<红包>" → 真实发送者 wxid
+        NSRange sep = [content rangeOfString:@":\n"];
+        if (sep.location != NSNotFound && sep.location > 0 && sep.location < 200) {
+            NSString *candidate = [content substringToIndex:sep.location];
+            if (candidate.length <= 64) groupSenderWxid = candidate;
+        }
+    }
+    syncSaveContext(param.sendId, param.sessionUserName, redEnvInGroup, groupSenderWxid);
+
     [taskMgr savePendingParam:param];
     WPLog(@"RedEnv", @"[SAVE] 已保存 pending param: sendId=%@", param.sendId);
 
@@ -320,6 +402,7 @@ static void handleHongbaoResponse(id res, id req) {
                       amount / 100.0, nickName, wishing,
                       totalAmountVal / 100.0, (long)totalNum,
                       (long)_statTotalCount, _statTotalAmount / 100.0);
+                syncRedEnvelopResult(amount, sendId);
             } else if (receiveStatus == 2) {
                 WPLog(@"RedEnv", @"[STAT] 红包已被领取");
             } else if (hbStatus == 4) {

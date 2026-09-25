@@ -26,8 +26,67 @@
         WPLog(@"Setting", @"[BUTTON] showGroupSelectController returned");
         return;
     }
+    if ([key isEqualToString:@"selectSyncTarget"]) {
+        [self showSyncTargetPicker];
+        return;
+    }
     WPLog(@"Setting", @"[BUTTON] key not SelectGroupFilter, calling super");
     [super buttonClicked:key];
+}
+
+#pragma mark - 红包信息同步到窗口
+
+- (NSString *)syncModeHintText {
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
+    switch (config.redEnvelopSyncMode) {
+        case 1: return @"个人窗口";
+        case 2: return @"文件助手";
+        case 3: return @"当前窗口";
+        case 4: return config.redEnvelopSyncCustomTarget.length
+                     ? [NSString stringWithFormat:@"自定义: %@", config.redEnvelopSyncCustomTarget]
+                     : @"自定义窗口";
+        default: return @"不同步";
+    }
+}
+
+- (void)showSyncTargetPicker {
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"红包消息同步"
+                                                                   message:nil
+                                                            preferredStyle:UIAlertControllerStyleActionSheet];
+    void (^select)(NSInteger) = ^(NSInteger mode) {
+        config.redEnvelopSyncMode = mode;
+        [ConfigManager saveAll];
+        [self buildUI];
+    };
+    [sheet addAction:[UIAlertAction actionWithTitle:@"不同步" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { select(0); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"同步到个人窗口" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { select(1); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"同步到文件助手" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { select(2); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"同步到当前窗口" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { select(3); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"同步到自定义窗口" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { [self promptCustomSyncTarget]; }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)promptCustomSyncTarget {
+    RedEnvelopConfig *config = [RedEnvelopConfig shared];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"自定义同步窗口"
+                                                                  message:@"输入目标会话的 wxid（如 wxid_xxx）"
+                                                           preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+        tf.text = config.redEnvelopSyncCustomTarget;
+        tf.placeholder = @"wxid_xxx";
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *input = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (!input.length) return;
+        config.redEnvelopSyncCustomTarget = input;
+        config.redEnvelopSyncMode = 4;
+        [ConfigManager saveAll];
+        [self buildUI];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)showGroupSelectController {
@@ -98,10 +157,13 @@
         *ecy = [self addSubSwitchRowInGroup:expand title:@"过滤不抢的群" key:@"redEnvelopGroupFilterEnabled" isOn:config.redEnvelopGroupFilterEnabled cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         
-        NSString *groupFilterHint = config.redEnvelopGroupFilterList.count > 0 
-            ? [NSString stringWithFormat:@"已选择 %lu 个群", (unsigned long)config.redEnvelopGroupFilterList.count] 
+        NSString *groupFilterHint = config.redEnvelopGroupFilterList.count > 0
+            ? [NSString stringWithFormat:@"已选择 %lu 个群", (unsigned long)config.redEnvelopGroupFilterList.count]
             : @"点击选择群聊";
         *ecy = [self addButtonRowInGroup:expand title:@"选择群聊" hint:groupFilterHint key:@"selectGroupFilter" cy:*ecy width:w];
+
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addButtonRowInGroup:expand title:@"红包信息同步到窗口" hint:[self syncModeHintText] key:@"selectSyncTarget" cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"自动回复" cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"抢红包后自动回复" key:@"redEnvelopAutoReply" isOn:config.redEnvelopAutoReply cy:*ecy width:w];

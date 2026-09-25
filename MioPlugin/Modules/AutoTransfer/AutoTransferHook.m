@@ -28,64 +28,8 @@ static NSString *extractXMLValue(NSString *content, NSString *tagName) {
 }
 
 static void sendAutoReply(NSString *sessionUserName, NSString *replyText) {
-    if (!replyText.length || !sessionUserName.length) return;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        @try {
-            id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
-            if (!msgMgr) {
-                WPLog(@"AutoTransfer", @"[REPLY] CMessageMgr不可用，无法发送自动回复");
-                return;
-            }
-
-            Class msgWrapClass = objc_getClass("CMessageWrap");
-            if (!msgWrapClass) {
-                WPLog(@"AutoTransfer", @"[REPLY] CMessageWrap类不可用，无法发送自动回复");
-                return;
-            }
-
-            id msg = ((id (*)(id, SEL, long long))objc_msgSend)([msgWrapClass alloc], @selector(initWithMsgType:), 1LL);
-            if (!msg) {
-                WPLog(@"AutoTransfer", @"[REPLY] 消息对象创建失败");
-                return;
-            }
-
-            [msg setValue:replyText forKey:@"m_nsContent"];
-            [msg setValue:sessionUserName forKey:@"m_nsToUsr"];
-
-            // ✅ 补充：获取当前用户 ID
-            id contactMgr = WXGetService(objc_getClass("CContactMgr"));
-            id selfContact = nil;
-            NSString *selfUserName = nil;
-            if ([contactMgr respondsToSelector:NSSelectorFromString(@"getSelfContact")]) {
-                selfContact = ((id (*)(id, SEL))objc_msgSend)(contactMgr, NSSelectorFromString(@"getSelfContact"));
-            }
-            if ([selfContact respondsToSelector:NSSelectorFromString(@"m_nsUsrName")]) {
-                selfUserName = ((id (*)(id, SEL))objc_msgSend)(selfContact, NSSelectorFromString(@"m_nsUsrName"));
-            }
-
-            // ✅ 设置发送方为当前用户（解决消息显示在错误一侧的问题）
-            if (selfUserName) {
-                [msg setValue:selfUserName forKey:@"m_nsFromUsr"];
-            }
-
-            // ✅ 设置消息状态为"已发送"（解决消息显示异常的问题）
-            [msg setValue:@(4) forKey:@"m_uiStatus"];
-
-            // ✅ 设置消息时间戳（解决消息排序问题）
-            [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
-
-            SEL addMsgSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
-            if (![msgMgr respondsToSelector:addMsgSel]) {
-                WPLog(@"AutoTransfer", @"[REPLY] AddMsg:MsgWrap:方法不可用");
-                return;
-            }
-
-            ((void(*)(id, SEL, id, id))objc_msgSend)(msgMgr, addMsgSel, sessionUserName, msg);
-            WPLogDebug(@"AutoTransfer", @"自动回复已发送: %@ -> %@", replyText, sessionUserName);
-        } @catch (NSException *e) {
-            WPLog(@"AutoTransfer", @"[REPLY] 自动回复异常: %@", e);
-        }
-    });
+    // 发送逻辑统一走 ServiceHelper（与红包统计同步共用）
+    WXSendTextMessage(replyText, sessionUserName);
 }
 
 static void pushLocalNotification(NSString *message) {

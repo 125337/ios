@@ -29,6 +29,8 @@
         [ConfigDescriptor itemWithKey:@"redEnvelopAutoReply" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"redEnvelopAutoReplyInGroup" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"redEnvelopAutoReplyStr" type:ConfigValueTypeString default:@"谢谢老板"],
+        [ConfigDescriptor itemWithKey:@"redEnvelopSyncMode" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"redEnvelopSyncCustomTarget" type:ConfigValueTypeString default:@""],
         // redEnvelopBlackList 已删除 — 与 redEnvelopGroupFilterList 合并
     ];
 }
