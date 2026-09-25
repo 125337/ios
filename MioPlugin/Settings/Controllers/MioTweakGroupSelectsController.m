@@ -37,10 +37,13 @@
 @property (copy, nonatomic) NSString *titleText;
 @property (assign, nonatomic) BOOL hasReturned;
 - (void)handleOfficialDoneButtonClick;
+- (void)refreshRightButton;
 @end
 
 static void *kMioPickerBridgeKey = &kMioPickerBridgeKey;
 static IMP gOrigOnClickMakeSureButton = NULL;
+static IMP gOrigUpdateRightMakeSureButton = NULL;
+static IMP gOrigViewDidLayoutSubviews = NULL;
 
 // 微信原生"完成"按钮点击的 hook：有 bridge 且未返回 → 走我们的提取逻辑；否则走原实现
 static void mioPickerDoneImp(id self, SEL _cmd) {
@@ -54,6 +57,27 @@ static void mioPickerDoneImp(id self, SEL _cmd) {
     if (gOrigOnClickMakeSureButton) {
         ((void (*)(id, SEL))gOrigOnClickMakeSureButton)(self, _cmd);
     }
+}
+
+// 微信原生 updateRightMakeSureButton hook：先走原实现，再对我们 bridge 的实例重写按钮标题
+// （微信原生标题会拼上 selectMaxCount，NSUIntegerMax 截断显示成 4294967295，WCR 同款用 完成(N) 覆盖）
+static void mioUpdateRightButtonImp(id self, SEL _cmd) {
+    if (gOrigUpdateRightMakeSureButton) {
+        ((void (*)(id, SEL))gOrigUpdateRightMakeSureButton)(self, _cmd);
+    }
+    id bridge = objc_getAssociatedObject(self, kMioPickerBridgeKey);
+    if (bridge && ![bridge isKindOfClass:[MioTweakGroupSelectsController class]]) bridge = nil;
+    if (bridge && ![bridge hasReturned]) [bridge refreshRightButton];
+}
+
+// viewDidLayoutSubviews hook：覆盖初始显示时机（WCR 同款 refreshLayoutIfNeeded 里的 refreshRightButton）
+static void mioViewDidLayoutSubviewsImp(id self, SEL _cmd) {
+    if (gOrigViewDidLayoutSubviews) {
+        ((void (*)(id, SEL))gOrigViewDidLayoutSubviews)(self, _cmd);
+    }
+    id bridge = objc_getAssociatedObject(self, kMioPickerBridgeKey);
+    if (bridge && ![bridge isKindOfClass:[MioTweakGroupSelectsController class]]) bridge = nil;
+    if (bridge && ![bridge hasReturned]) [bridge refreshRightButton];
 }
 
 static void mioRegisterPickerHook(void) {
@@ -72,6 +96,17 @@ static void mioRegisterPickerHook(void) {
         }
         gOrigOnClickMakeSureButton = method_setImplementation(m, (IMP)mioPickerDoneImp);
         WPLog(@"GroupPicker", @"onClickMakeSureButton hooked");
+
+        Method up = class_getInstanceMethod(cls, NSSelectorFromString(@"updateRightMakeSureButton"));
+        if (up) {
+            gOrigUpdateRightMakeSureButton = method_setImplementation(up, (IMP)mioUpdateRightButtonImp);
+            WPLog(@"GroupPicker", @"updateRightMakeSureButton hooked");
+        }
+        Method lay = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
+        if (lay) {
+            gOrigViewDidLayoutSubviews = method_setImplementation(lay, (IMP)mioViewDidLayoutSubviewsImp);
+            WPLog(@"GroupPicker", @"viewDidLayoutSubviews hooked");
+        }
     });
 }
 
@@ -180,6 +215,38 @@ static void mioRegisterPickerHook(void) {
     };
     if ([NSThread isMainThread]) notify();
     else dispatch_async(dispatch_get_main_queue(), notify);
+}
+
+// WCR 同款 refreshRightButton：把完成按钮标题重写为 完成(N)（N=已选数），
+// 去掉微信原生标题里拼的 selectMaxCount（NSUIntegerMax 会显示成 4294967295）
+- (void)refreshRightButton {
+    UIViewController *picker = self.pickerController;
+    if (!picker) return;
+    UIButton *btn = nil;
+    @try {
+        btn = [picker valueForKey:@"m_rightMakeSureButton"];
+    } @catch (NSException *e) {}
+    if (![btn isKindOfClass:[UIButton class]]) return;
+
+    NSUInteger count = [self extractSelectedGroupIds].count;
+    NSString *title = count > 0
+        ? [NSString stringWithFormat:@"完成(%lu)", (unsigned long)count]
+        : @"完成";
+    [btn setTitle:title forState:UIControlStateNormal];
+    [btn setTitle:title forState:UIControlStateHighlighted];
+    [btn setTitle:title forState:UIControlStateDisabled];
+    [btn setTitle:title forState:UIControlStateSelected];
+
+    // 尺寸自适应（WCR 同款思路：宽 46-80），保持右缘与垂直中心不变
+    CGRect old = btn.frame;
+    if (CGRectIsEmpty(old)) return;
+    [btn sizeToFit];
+    CGRect f = btn.frame;
+    CGFloat w = MIN(MAX(f.size.width, 46), 80);
+    f.size.width = w;
+    f.origin.x = old.origin.x + old.size.width - w;
+    f.origin.y = old.origin.y + (old.size.height - f.size.height) / 2.0;
+    btn.frame = f;
 }
 
 // WCR 同款：KVC 取 m_dicMultiSelect，优先 allValuesInOrder/allValues（value 为 contact，取 m_nsUsrName），
