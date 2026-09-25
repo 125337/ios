@@ -86,12 +86,58 @@ static UIWindow *_bannerWindow = nil;
     }];
 }
 
-#pragma mark - 后台系统通知
+#pragma mark - 系统通知
+
+static id _kaOrigNotifyDelegate = nil;   // 微信原有通知 delegate（透传用）
+static KARecordDelegate *_kaRecordDelegate = nil;
+
+// iOS 默认：App 在前台时收到通知不展示（不弹横幅）。接管 delegate 后，本插件通知
+// 前台静默进通知中心（自绘横幅负责前台可见性），微信原有 delegate 行为透传不受影响。
+@interface KARecordDelegate : NSObject <UNUserNotificationCenterDelegate>
+@end
+
+@implementation KARecordDelegate
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+       willPresentNotification:(UNNotification *)notification
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
+    NSString *ident = notification.request.identifier;
+    if ([ident hasPrefix:@"mio.keywordAlert."]) {
+        WPLog(@"KeywordAlert", @"[NOTIFY] 前台: 通知静默进通知中心 id=%@", ident);
+        completionHandler(UNNotificationPresentationOptionList);
+        return;
+    }
+    // 非本插件通知：透传微信原 delegate
+    if (_kaOrigNotifyDelegate &&
+        [_kaOrigNotifyDelegate respondsToSelector:@selector(userNotificationCenter:willPresentNotification:withCompletionHandler:)]) {
+        [(id<UNUserNotificationCenterDelegate>)_kaOrigNotifyDelegate
+            userNotificationCenter:center
+            willPresentNotification:notification
+            withCompletionHandler:completionHandler];
+    } else {
+        completionHandler(UNNotificationPresentationOptionNone);
+    }
+}
+@end
 
 + (void)postSystemNotificationWithTitle:(NSString *)title
                                    body:(NSString *)body
                              identifier:(NSString *)identifier {
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        // 保存并替换 delegate（weak 属性，需自行强持有），同时打一次授权诊断日志
+        _kaOrigNotifyDelegate = center.delegate;
+        _kaRecordDelegate = [KARecordDelegate new];
+        center.delegate = _kaRecordDelegate;
+        WPLog(@"KeywordAlert", @"[NOTIFY] delegate 已接管 (原delegate=%@)",
+              _kaOrigNotifyDelegate ? NSStringFromClass([_kaOrigNotifyDelegate class]) : @"无");
+        [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
+            WPLog(@"KeywordAlert", @"[NOTIFY] 授权状态=%ld 通知中心显示=%ld 锁屏显示=%ld",
+                  (long)settings.authorizationStatus,
+                  (long)settings.notificationCenterSetting,
+                  (long)settings.lockScreenSetting);
+        }];
+    });
     [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound)
                           completionHandler:^(BOOL granted, NSError *err) {
         if (!granted) {

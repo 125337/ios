@@ -352,24 +352,25 @@ static void processKeywordAlertMessage(id wrap) {
                 WPLog(@"KeywordAlert", @"[HISTORY] 写入异常: %@ - %@", e.name, e.reason);
             }
 
-            // 提醒：前台横幅 / 后台系统通知
+            // 提醒：前台自绘横幅 + 系统通知无条件投递（前台由 delegate 静默进通知中心，
+            // inactive/后台由 iOS 展示系统横幅；不按前后台二选一，避免 inactive 时两头都落空）
             BOOL appActive = [UIApplication sharedApplication].applicationState == UIApplicationStateActive;
+            NSString *body = [NSString stringWithFormat:@"%@: %@", senderName, preview];
             if (appActive) {
                 if ([KeywordAlertConfig shared].keywordAlertBannerEnabled) {
                     NSString *title = [NSString stringWithFormat:@"%@%@", isGroup ? @"[群] " : @"", sessionName];
-                    NSString *body = [NSString stringWithFormat:@"%@: %@", senderName, preview];
                     [KeywordAlertPresenter showBannerWithTitle:title body:body];
                 } else {
-                    WPLogDebug(@"KeywordAlert", @"前台但横幅未开启，跳过展示 msgId=%@", msgId);
+                    WPLogDebug(@"KeywordAlert", @"前台但横幅未开启，跳过自绘横幅 msgId=%@", msgId);
                 }
             } else {
-                if ([KeywordAlertConfig shared].keywordAlertNotifyEnabled) {
-                    NSString *ident = [NSString stringWithFormat:@"mio.keywordAlert.%@", msgId ?: [[NSUUID UUID] UUIDString]];
-                    NSString *body = [NSString stringWithFormat:@"%@: %@", senderName, preview];
-                    [KeywordAlertPresenter postSystemNotificationWithTitle:sessionName body:body identifier:ident];
-                } else {
-                    WPLogDebug(@"KeywordAlert", @"后台但通知未开启，跳过展示 msgId=%@", msgId);
-                }
+                WPLog(@"KeywordAlert", @"[BANNER] 非前台，跳过自绘横幅（交给系统通知） msgId=%@", msgId);
+            }
+            if ([KeywordAlertConfig shared].keywordAlertNotifyEnabled) {
+                NSString *ident = [NSString stringWithFormat:@"mio.keywordAlert.%@", msgId ?: [[NSUUID UUID] UUIDString]];
+                [KeywordAlertPresenter postSystemNotificationWithTitle:sessionName body:body identifier:ident];
+            } else {
+                WPLogDebug(@"KeywordAlert", @"系统通知未开启，跳过 msgId=%@", msgId);
             }
         });
     }
