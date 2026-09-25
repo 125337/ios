@@ -89,7 +89,7 @@ static UIWindow *_bannerWindow = nil;
 #pragma mark - 系统通知
 
 static id _kaOrigNotifyDelegate = nil;   // 微信原有通知 delegate（透传用）
-static KARecordDelegate *_kaRecordDelegate = nil;
+static id _kaRecordDelegate = nil;       // 本插件通知 delegate（强持有，center.delegate 是 weak）
 
 // iOS 默认：App 在前台时收到通知不展示（不弹横幅）。接管 delegate 后，本插件通知
 // 前台静默进通知中心（自绘横幅负责前台可见性），微信原有 delegate 行为透传不受影响。
