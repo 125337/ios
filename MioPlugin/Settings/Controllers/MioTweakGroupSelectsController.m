@@ -95,18 +95,42 @@ static void gsLog(NSString *content) {
     }
 }
 
-- (void)viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
-    [self preSelectGroups];
-}
-
 - (void)setupNavigationBar {
     self.title = self.titleText;
-    
+
+    // 微信 WCNavigationBar 对非 MMUIViewController 宿主主题渲染异常（顶栏黑底），
+    // 手动恢复浅色外观（与微信原生选择页一致）
+    [self fixNavigationBarAppearance];
+
     UIBarButtonItem *cancelItem = [[UIBarButtonItem alloc] initWithTitle:@"取消" style:UIBarButtonItemStylePlain target:self action:@selector(onCancel)];
     self.navigationItem.leftBarButtonItem = cancelItem;
-    
+
     [self updateRightBarButton];
+}
+
+- (void)fixNavigationBarAppearance {
+    UINavigationBar *nav = self.navigationController.navigationBar;
+    if (!nav) return;
+    UIColor *bg = [UIColor colorWithRed:239/255.0 green:239/255.0 blue:244/255.0 alpha:1.0];
+    if (@available(iOS 13.0, *)) {
+        UINavigationBarAppearance *app = [[UINavigationBarAppearance alloc] init];
+        [app configureWithOpaqueBackground];
+        app.backgroundColor = bg;
+        [app setTitleTextAttributes:@{NSForegroundColorAttributeName: [UIColor blackColor]}];
+        nav.standardAppearance = app;
+        nav.scrollEdgeAppearance = app;
+    } else {
+        nav.barTintColor = bg;
+        [nav setTitleTextAttributes:@{NSForegroundColorAttributeName: [UIColor blackColor]}];
+    }
+    nav.translucent = NO;
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    // push 过程中微信可能重设导航主题，出场时再修一次
+    [self fixNavigationBarAppearance];
+    [self preSelectGroups];
 }
 
 - (void)updateRightBarButton {
