@@ -197,7 +197,8 @@
         vc.delegate = self;
         WPLog(@"Setting", @"[KeywordAlert] 打开群范围选择 (当前 %lu 个)",
               (unsigned long)(config.keywordAlertSelectedGroups ?: @[]).count);
-        [self.navigationController pushViewController:vc animated:YES];
+        // WCR 同款：直接 present 微信原生半屏多选群聊页（不自建壳，导航栏由微信管理）
+        [vc presentFromViewController:self];
     } @catch (NSException *e) {
         WPLog(@"Setting", @"[KeywordAlert] 群选择页异常: %@ - %@", e.name, e.reason);
     }

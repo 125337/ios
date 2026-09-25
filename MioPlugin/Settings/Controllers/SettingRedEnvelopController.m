@@ -113,8 +113,9 @@
         WPLog(@"Setting", @"[GroupSelect] vc created: %@", vc);
         vc.delegate = self;
         WPLog(@"Setting", @"[GroupSelect] delegate set");
-        [self.navigationController pushViewController:vc animated:YES];
-        WPLog(@"Setting", @"[GroupSelect] pushViewController called");
+        // WCR 同款：直接 present 微信原生半屏多选群聊页（不自建壳，导航栏由微信管理）
+        [vc presentFromViewController:self];
+        WPLog(@"Setting", @"[GroupSelect] presentFromViewController called");
     } @catch (NSException *e) {
         WPLog(@"Setting", @"[GroupSelect] exception: %@", e);
     }

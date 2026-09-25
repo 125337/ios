@@ -3,6 +3,18 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 
+// ===== 仿 WCR WCRefineChatRoomPicker 实现 =====
+// WCR 的群选择器不自绘导航栏：直接 present 微信原生 MultiSelectChatRoomHalfScreenViewController
+// （半屏多选群聊页），导航栏/外观由微信自己的 VC 管理，顶栏天然正常。
+// 关键机制（逆向 WCR 得到）：
+//   1. init 签名 initWithTipWord:choiseSessionWord:chatroomSessionWord:rightButtonWord:
+//      rightButtonLightColor:rightButtonDarkColor:selectedUserNameList:selectMaxCount:
+//      countExceedTipWord:forceLightMode:canSelectOpenIM:
+//   2. bridge 对象经 KVC 设为其 m_delegate，同时挂关联对象（hook 里据此识别我们的实例）
+//   3. swizzle onClickMakeSureButton（完成按钮），有关联对象才拦截，不影响微信原生场景
+//   4. 完成时 KVC 取 m_dicMultiSelect 提取已选 wxid，doClickCloseWithNeedAnimated:action: 关页
+//   5. delegate 回调 onSelectedOrCancelContact:isSelected: / onHalfScreenPageDidClose:action:
+
 static void gsLog(NSString *content) {
     @try {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
@@ -21,263 +33,209 @@ static void gsLog(NSString *content) {
     } @catch (NSException *e) {}
 }
 
-@interface ContactSelectView : UIView {
-    id _delegate;
-    BOOL _m_bMultiSelect;
-    BOOL _m_bShowHistoryGroup;
-    BOOL _m_bShowRadarCreateRoom;
-    unsigned int _m_uiGroupScene;
-    NSMutableDictionary *_m_dicMultiSelect;
-}
-@property (nonatomic, assign) unsigned int m_uiGroupScene;
-@property (nonatomic, assign) BOOL m_bMultiSelect;
-@property (nonatomic, assign) BOOL m_bShowHistoryGroup;
-@property (nonatomic, assign) BOOL m_bShowRadarCreateRoom;
-@property (nonatomic, retain) NSMutableDictionary *m_dicMultiSelect;
-- (id)initWithFrame:(CGRect)frame delegate:(id)delegate;
-- (void)initData:(unsigned int)scene;
-- (void)initView;
-- (void)addSelect:(id)contact;
-- (void)removeSelect:(id)contact;
-- (unsigned long long)getTotalSelectCount;
+// 微信原生半屏多选群聊选择器（仅声明编译所需的 init 签名）
+@interface MultiSelectChatRoomHalfScreenViewController : UIViewController
+- (instancetype)initWithTipWord:(NSString *)tipWord
+              choiseSessionWord:(NSString *)choiseSessionWord
+            chatroomSessionWord:(NSString *)chatroomSessionWord
+                rightButtonWord:(NSString *)rightButtonWord
+         rightButtonLightColor:(UIColor *)rightButtonLightColor
+          rightButtonDarkColor:(UIColor *)rightButtonDarkColor
+           selectedUserNameList:(NSArray<NSString *> *)selectedUserNameList
+                 selectMaxCount:(NSUInteger)selectMaxCount
+             countExceedTipWord:(NSString *)countExceedTipWord
+                  forceLightMode:(BOOL)forceLightMode
+                 canSelectOpenIM:(BOOL)canSelectOpenIM;
 @end
 
-@protocol ContactSelectViewDelegate <NSObject>
-- (void)onSelectContact:(id)arg1;
-@optional
-- (UIViewController *)getViewController;
-@end
-
-@interface MioTweakGroupSelectsController () <ContactSelectViewDelegate> {
-    id _helper;
-}
-@property (strong, nonatomic) ContactSelectView *selectView;
+@interface MioTweakGroupSelectsController ()
+@property (strong, nonatomic) UIViewController *pickerController;
 @property (strong, nonatomic) NSArray<NSString *> *selectedGroups;
 @property (copy, nonatomic) NSString *titleText;
+@property (assign, nonatomic) BOOL hasReturned;
+- (void)handleOfficialDoneButtonClick;
 @end
+
+static void *kMioPickerBridgeKey = &kMioPickerBridgeKey;
+static IMP gOrigOnClickMakeSureButton = NULL;
+
+// 微信原生"完成"按钮点击的 hook：有 bridge 且未返回 → 走我们的提取逻辑；否则走原实现
+static void mioPickerDoneImp(id self, SEL _cmd) {
+    id bridge = objc_getAssociatedObject(self, kMioPickerBridgeKey);
+    if (bridge && ![bridge isKindOfClass:[MioTweakGroupSelectsController class]]) bridge = nil;
+    if (bridge && ![bridge hasReturned]) {
+        [bridge handleOfficialDoneButtonClick];
+        return;
+    }
+    if (gOrigOnClickMakeSureButton) {
+        ((void (*)(id, SEL))gOrigOnClickMakeSureButton)(self, _cmd);
+    }
+}
+
+static void mioRegisterPickerHook(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class cls = objc_getClass("MultiSelectChatRoomHalfScreenViewController");
+        if (!cls) {
+            gsLog(@"[GroupPicker] MultiSelectChatRoomHalfScreenViewController not found!");
+            return;
+        }
+        SEL sel = NSSelectorFromString(@"onClickMakeSureButton");
+        Method m = class_getInstanceMethod(cls, sel);
+        if (!m) {
+            gsLog(@"[GroupPicker] onClickMakeSureButton method not found!");
+            return;
+        }
+        gOrigOnClickMakeSureButton = method_setImplementation(m, (IMP)mioPickerDoneImp);
+        gsLog(@"[GroupPicker] onClickMakeSureButton hooked");
+    });
+}
 
 @implementation MioTweakGroupSelectsController
 
-- (void)dealloc {
-}
-
 - (instancetype)initWithSelectedGroups:(NSArray<NSString *> *)selectedGroups title:(NSString *)title {
-    gsLog(@"[GroupSelect] initWithSelectedGroups called");
-    if (self = [super initWithNibName:nil bundle:nil]) {
-        _selectedGroups = (selectedGroups ?: @[]);
+    if (self = [super init]) {
+        _selectedGroups = selectedGroups ?: @[];
         _titleText = [(title ?: @"选择群聊") copy];
-        gsLog([NSString stringWithFormat:@"[GroupSelect] _selectedGroups=%@, _titleText=%@", _selectedGroups, _titleText]);
-        Class helperClass = objc_getClass("MMUIViewController");
-        if (helperClass) {
-            _helper = [[helperClass alloc] init];
-            gsLog(@"[GroupSelect] _helper created");
-        }
     }
     return self;
 }
 
-- (void)viewDidLoad {
-    gsLog(@"[GroupSelect] viewDidLoad called");
-    [super viewDidLoad];
-    self.view.backgroundColor = [UIColor colorWithRed:239/255.0 green:239/255.0 blue:244/255.0 alpha:1.0];
-    self.edgesForExtendedLayout = UIRectEdgeNone;
-    [self setupNavigationBar];
-    gsLog(@"[GroupSelect] setupNavigationBar done");
-    [self setupSelectView];
-    gsLog(@"[GroupSelect] setupSelectView done");
-}
+- (void)presentFromViewController:(UIViewController *)hostViewController {
+    if (!hostViewController) return;
+    mioRegisterPickerHook();
 
-- (void)viewDidLayoutSubviews {
-    [super viewDidLayoutSubviews];
-    if (self.selectView) {
-        CGRect frame = self.view.bounds;
-        self.selectView.frame = frame;
-    }
-}
-
-- (void)setupNavigationBar {
-    self.title = self.titleText;
-
-    // 微信 WCNavigationBar 对非 MMUIViewController 宿主主题渲染异常（顶栏黑底），
-    // 手动恢复浅色外观（与微信原生选择页一致）
-    [self fixNavigationBarAppearance];
-
-    UIBarButtonItem *cancelItem = [[UIBarButtonItem alloc] initWithTitle:@"取消" style:UIBarButtonItemStylePlain target:self action:@selector(onCancel)];
-    self.navigationItem.leftBarButtonItem = cancelItem;
-
-    [self updateRightBarButton];
-}
-
-- (void)fixNavigationBarAppearance {
-    UINavigationBar *nav = self.navigationController.navigationBar;
-    if (!nav) return;
-    UIColor *bg = [UIColor colorWithRed:239/255.0 green:239/255.0 blue:244/255.0 alpha:1.0];
-    if (@available(iOS 13.0, *)) {
-        UINavigationBarAppearance *app = [[UINavigationBarAppearance alloc] init];
-        [app configureWithOpaqueBackground];
-        app.backgroundColor = bg;
-        [app setTitleTextAttributes:@{NSForegroundColorAttributeName: [UIColor blackColor]}];
-        nav.standardAppearance = app;
-        nav.scrollEdgeAppearance = app;
-    } else {
-        nav.barTintColor = bg;
-        [nav setTitleTextAttributes:@{NSForegroundColorAttributeName: [UIColor blackColor]}];
-    }
-    nav.translucent = NO;
-}
-
-- (void)viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
-    // push 过程中微信可能重设导航主题，出场时再修一次
-    [self fixNavigationBarAppearance];
-    [self preSelectGroups];
-}
-
-- (void)updateRightBarButton {
-    NSUInteger count = [self getSelectedCount];
-    NSString *title = count > 0 ? [NSString stringWithFormat:@"确定(%lu)", (unsigned long)count] : @"确定";
-    UIBarButtonItem *doneItem = [[UIBarButtonItem alloc] initWithTitle:title style:UIBarButtonItemStyleDone target:self action:@selector(onDone)];
-    self.navigationItem.rightBarButtonItem = doneItem;
-}
-
-- (void)setupSelectView {
-    gsLog(@"[GroupSelect] setupSelectView start");
-    Class selectViewClass = objc_getClass("ContactSelectView");
-    gsLog([NSString stringWithFormat:@"[GroupSelect] ContactSelectView class=%@", selectViewClass]);
-    if (!selectViewClass) {
-        gsLog(@"[GroupSelect] ContactSelectView class not found!");
-        UILabel *errorLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 100, self.view.bounds.size.width - 40, 40)];
-        errorLabel.text = @"无法加载群选择器";
-        errorLabel.textAlignment = NSTextAlignmentCenter;
-        errorLabel.textColor = [UIColor grayColor];
-        [self.view addSubview:errorLabel];
+    Class cls = objc_getClass("MultiSelectChatRoomHalfScreenViewController");
+    if (!cls) {
+        gsLog(@"[GroupPicker] MultiSelectChatRoomHalfScreenViewController not found!");
         return;
     }
-    
+
+    self.hasReturned = NO;
+    UIViewController *picker = [[cls alloc] initWithTipWord:self.titleText
+                                          choiseSessionWord:@"最近会话"
+                                        chatroomSessionWord:@"所有群聊"
+                                            rightButtonWord:@"完成"
+                                     rightButtonLightColor:[UIColor colorWithRed:7/255.0 green:193/255.0 blue:96/255.0 alpha:1.0]
+                                      rightButtonDarkColor:[UIColor colorWithRed:7/255.0 green:193/255.0 blue:96/255.0 alpha:1.0]
+                                       selectedUserNameList:self.selectedGroups
+                                             selectMaxCount:9999
+                                         countExceedTipWord:@"选择的群聊数量已达上限"
+                                              forceLightMode:NO
+                                             canSelectOpenIM:NO];
+    if (!picker) return;
+    self.pickerController = picker;
+    gsLog([NSString stringWithFormat:@"[GroupPicker] picker created, preselected=%lu", (unsigned long)self.selectedGroups.count]);
+
+    // bridge 挂到 picker：hook 里按关联对象取回；微信 VC 经 m_delegate 回调选中/关闭事件
+    objc_setAssociatedObject(picker, kMioPickerBridgeKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     @try {
-        CGRect frame = self.view.bounds;
-        self.selectView = [[selectViewClass alloc] initWithFrame:frame delegate:self];
-        self.selectView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        gsLog([NSString stringWithFormat:@"[GroupSelect] ContactSelectView created: %@", self.selectView]);
-        
-        self.selectView.m_uiGroupScene = 5;
-        self.selectView.m_bMultiSelect = YES;
-        [self.selectView initData:5];
-        self.selectView.m_bShowHistoryGroup = NO;
-        self.selectView.m_bShowRadarCreateRoom = NO;
-        [self.selectView initView];
-        
-        [self.view addSubview:self.selectView];
-        gsLog(@"[GroupSelect] selectView added to self.view");
+        [picker setValue:self forKey:@"m_delegate"];
     } @catch (NSException *e) {
-        gsLog([NSString stringWithFormat:@"[GroupSelect] exception in setupSelectView: %@", e]);
+        gsLog([NSString stringWithFormat:@"[GroupPicker] set m_delegate failed: %@", e]);
     }
+
+    // WCR 同款：沿 presentedViewController 链找最顶层宿主
+    UIViewController *top = hostViewController;
+    while (top.presentedViewController) top = top.presentedViewController;
+
+    // WCR 同款：半屏 presentation 配置（两种签名 respondsToSelector 探测）
+    SEL cfg2 = NSSelectorFromString(@"configPresentationCustomWithViewController:resetPresentedViewFrame:");
+    SEL cfg1 = NSSelectorFromString(@"configPresentationCustomWithViewController:");
+    if ([picker respondsToSelector:cfg2]) {
+        ((void (*)(id, SEL, id, BOOL))objc_msgSend)(picker, cfg2, top, YES);
+    } else if ([picker respondsToSelector:cfg1]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(picker, cfg1, top);
+    }
+
+    [top presentViewController:picker animated:YES completion:nil];
+    gsLog(@"[GroupPicker] presented");
 }
 
-- (void)preSelectGroups {
-    if (!self.selectView || self.selectedGroups.count == 0) return;
-    
-    Class serviceCenterClass = objc_getClass("MMServiceCenter");
-    if (!serviceCenterClass) return;
-    
-    id center = ((id (*)(id, SEL))objc_msgSend)(serviceCenterClass, NSSelectorFromString(@"defaultCenter"));
-    if (!center) return;
-    
-    Class contactMgrClass = objc_getClass("CContactMgr");
-    if (!contactMgrClass) return;
-    
-    id contactMgr = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), contactMgrClass);
-    if (!contactMgr) return;
-    
-    for (NSString *groupId in self.selectedGroups) {
-        id contact = ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, NSSelectorFromString(@"getContactByName:"), groupId);
-        if (contact) {
-            [self.selectView addSelect:contact];
+#pragma mark - 完成按钮（hook 入口）
+
+- (void)handleOfficialDoneButtonClick {
+    if (self.hasReturned) return;
+    self.hasReturned = YES;
+    gsLog(@"[GroupPicker] done clicked");
+
+    NSArray<NSString *> *result = [self extractSelectedGroupIds];
+    gsLog([NSString stringWithFormat:@"[GroupPicker] extracted %lu ids: %@", (unsigned long)result.count, result]);
+
+    UIViewController *picker = self.pickerController;
+    SEL closeSel = NSSelectorFromString(@"doClickCloseWithNeedAnimated:action:");
+    if (picker && [picker respondsToSelector:closeSel]) {
+        ((void (*)(id, SEL, BOOL, long long))objc_msgSend)(picker, closeSel, YES, 1);
+    } else if (picker) {
+        [picker dismissViewControllerAnimated:YES completion:nil];
+    }
+    [self cleanup];
+
+    void (^notify)(void) = ^{
+        if ([self.delegate respondsToSelector:@selector(onGroupSelectReturn:)]) {
+            [self.delegate onGroupSelectReturn:result];
+        }
+    };
+    if ([NSThread isMainThread]) notify();
+    else dispatch_async(dispatch_get_main_queue(), notify);
+}
+
+// WCR 同款：KVC 取 m_dicMultiSelect，优先 allValuesInOrder/allValues（value 为 contact，取 m_nsUsrName），
+// 提取不到退回 keys（key 即 wxid）
+- (NSArray<NSString *> *)extractSelectedGroupIds {
+    id dic = nil;
+    @try {
+        dic = [self.pickerController valueForKey:@"m_dicMultiSelect"];
+    } @catch (NSException *e) {}
+    NSMutableArray<NSString *> *ids = [NSMutableArray array];
+    if (!dic) return ids;
+
+    NSArray *values = nil;
+    SEL orderSel = NSSelectorFromString(@"allValuesInOrder");
+    if ([dic respondsToSelector:orderSel]) {
+        values = ((NSArray *(*)(id, SEL))objc_msgSend)(dic, orderSel);
+    } else if ([dic respondsToSelector:@selector(allValues)]) {
+        values = [dic allValues];
+    }
+    for (id contact in values) {
+        NSString *name = nil;
+        if ([contact isKindOfClass:[NSString class]]) {
+            name = contact;
+        } else if ([contact respondsToSelector:@selector(m_nsUsrName)]) {
+            name = ((NSString *(*)(id, SEL))objc_msgSend)(contact, @selector(m_nsUsrName));
+        }
+        if ([name isKindOfClass:[NSString class]] && name.length > 0) [ids addObject:name];
+    }
+    if (ids.count == 0 && [dic respondsToSelector:@selector(allKeys)]) {
+        for (id key in [dic allKeys]) {
+            if ([key isKindOfClass:[NSString class]]) [ids addObject:(NSString *)key];
         }
     }
-    
-    [self updateRightBarButton];
+    return [ids copy];
 }
 
-- (NSUInteger)getSelectedCount {
-    if (!self.selectView) return 0;
-    return (NSUInteger)[self.selectView.m_dicMultiSelect count];
+#pragma mark - MultiSelectChatRoomHalfScreenViewController 回调
+
+- (void)onSelectedOrCancelContact:(id)contact isSelected:(BOOL)isSelected {
+    // 微信原生会刷新按钮状态，无需处理
 }
 
-- (NSArray<NSString *> *)getSelectedGroupIds {
-    if (!self.selectView) return @[];
-    
-    NSMutableArray<NSString *> *groupIds = [NSMutableArray array];
-    
-    // 优先从 allValues（contact 对象）提取 m_nsUsrName
-    for (id contact in [self.selectView.m_dicMultiSelect allValues]) {
-        if ([contact respondsToSelector:NSSelectorFromString(@"m_nsUsrName")]) {
-            NSString *usrName = ((NSString *(*)(id, SEL))objc_msgSend)(
-                contact, NSSelectorFromString(@"m_nsUsrName"));
-            if (usrName.length > 0) {
-                [groupIds addObject:usrName];
-            }
+- (void)onHalfScreenPageDidClose:(id)page action:(long long)action {
+    gsLog([NSString stringWithFormat:@"[GroupPicker] page closed, action=%lld, hasReturned=%d", action, self.hasReturned]);
+    if (!self.hasReturned) {
+        // 未点完成就关闭（取消/下滑）
+        if ([self.delegate respondsToSelector:@selector(onGroupSelectCancel)]) {
+            [self.delegate onGroupSelectCancel];
         }
+        [self cleanup];
     }
-    
-    // fallback：如果 values 方式取不到，退回到 keys 方式并过滤非 NSString
-    if (groupIds.count == 0) {
-        for (id key in [self.selectView.m_dicMultiSelect allKeys]) {
-            if ([key isKindOfClass:[NSString class]]) {
-                [groupIds addObject:(NSString *)key];
-            }
-        }
-    }
-    
-    return [groupIds copy];
 }
 
-- (void)onCancel {
-    if ([self.delegate respondsToSelector:@selector(onGroupSelectCancel)]) {
-        [self.delegate onGroupSelectCancel];
+- (void)cleanup {
+    if (self.pickerController) {
+        objc_setAssociatedObject(self.pickerController, kMioPickerBridgeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    [self.navigationController popViewControllerAnimated:YES];
-}
-
-- (void)onDone {
-    NSArray<NSString *> *groupIds = [self getSelectedGroupIds];
-    
-    // 日志：保存确认 + 类型验证
-    gsLog([NSString stringWithFormat:@"[DONE] 群黑名单保存: %lu 个群", (unsigned long)groupIds.count]);
-    if (groupIds.count > 0) {
-        gsLog([NSString stringWithFormat:@"[DONE] items: %@", groupIds]);
-        BOOL allString = YES;
-        for (id item in groupIds) {
-            if (![item isKindOfClass:[NSString class]]) {
-                allString = NO;
-                gsLog([NSString stringWithFormat:@"[DONE] ⚠ 发现非 NSString 元素: %@", item]);
-                break;
-            }
-        }
-        gsLog([NSString stringWithFormat:@"[DONE] 类型验证: %@", allString ? @"✅ 全部为 NSString" : @"❌ 存在非 NSString"]);
-    }
-    
-    if ([self.delegate respondsToSelector:@selector(onGroupSelectReturn:)]) {
-        [self.delegate onGroupSelectReturn:groupIds];
-    }
-    [self.navigationController popViewControllerAnimated:YES];
-}
-
-#pragma mark - ContactSelectViewDelegate
-
-- (void)onSelectContact:(id)contact {
-    [self updateRightBarButton];
-}
-
-- (UIViewController *)getViewController {
-    return self;
-}
-
-- (id)forwardingTargetForSelector:(SEL)aSelector {
-    if (_helper && [_helper respondsToSelector:aSelector]) {
-        return _helper;
-    }
-    return nil;
+    self.pickerController = nil;
 }
 
 @end
