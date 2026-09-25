@@ -1,6 +1,37 @@
 #import "KeywordAlertPresenter.h"
 #import "../../Core/LogManager.h"
 
+static id _kaOrigNotifyDelegate = nil;   // 微信原有通知 delegate（透传用）
+static id _kaRecordDelegate = nil;       // 本插件通知 delegate（强持有，center.delegate 是 weak）
+
+// iOS 默认：App 在前台时收到通知不展示（不弹横幅）。接管 delegate 后，本插件通知
+// 前台静默进通知中心（自绘横幅负责前台可见性），微信原有 delegate 行为透传不受影响。
+@interface KARecordDelegate : NSObject <UNUserNotificationCenterDelegate>
+@end
+
+@implementation KARecordDelegate
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+       willPresentNotification:(UNNotification *)notification
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
+    NSString *ident = notification.request.identifier;
+    if ([ident hasPrefix:@"mio.keywordAlert."]) {
+        WPLog(@"KeywordAlert", @"[NOTIFY] 前台: 通知静默进通知中心 id=%@", ident);
+        completionHandler(UNNotificationPresentationOptionList);
+        return;
+    }
+    // 非本插件通知：透传微信原 delegate
+    if (_kaOrigNotifyDelegate &&
+        [_kaOrigNotifyDelegate respondsToSelector:@selector(userNotificationCenter:willPresentNotification:withCompletionHandler:)]) {
+        [(id<UNUserNotificationCenterDelegate>)_kaOrigNotifyDelegate
+            userNotificationCenter:center
+            willPresentNotification:notification
+            withCompletionHandler:completionHandler];
+    } else {
+        completionHandler(UNNotificationPresentationOptionNone);
+    }
+}
+@end
+
 @implementation KeywordAlertPresenter
 
 #pragma mark - 前台横幅
@@ -87,37 +118,6 @@ static UIWindow *_bannerWindow = nil;
 }
 
 #pragma mark - 系统通知
-
-static id _kaOrigNotifyDelegate = nil;   // 微信原有通知 delegate（透传用）
-static id _kaRecordDelegate = nil;       // 本插件通知 delegate（强持有，center.delegate 是 weak）
-
-// iOS 默认：App 在前台时收到通知不展示（不弹横幅）。接管 delegate 后，本插件通知
-// 前台静默进通知中心（自绘横幅负责前台可见性），微信原有 delegate 行为透传不受影响。
-@interface KARecordDelegate : NSObject <UNUserNotificationCenterDelegate>
-@end
-
-@implementation KARecordDelegate
-- (void)userNotificationCenter:(UNUserNotificationCenter *)center
-       willPresentNotification:(UNNotification *)notification
-         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
-    NSString *ident = notification.request.identifier;
-    if ([ident hasPrefix:@"mio.keywordAlert."]) {
-        WPLog(@"KeywordAlert", @"[NOTIFY] 前台: 通知静默进通知中心 id=%@", ident);
-        completionHandler(UNNotificationPresentationOptionList);
-        return;
-    }
-    // 非本插件通知：透传微信原 delegate
-    if (_kaOrigNotifyDelegate &&
-        [_kaOrigNotifyDelegate respondsToSelector:@selector(userNotificationCenter:willPresentNotification:withCompletionHandler:)]) {
-        [(id<UNUserNotificationCenterDelegate>)_kaOrigNotifyDelegate
-            userNotificationCenter:center
-            willPresentNotification:notification
-            withCompletionHandler:completionHandler];
-    } else {
-        completionHandler(UNNotificationPresentationOptionNone);
-    }
-}
-@end
 
 + (void)postSystemNotificationWithTitle:(NSString *)title
                                    body:(NSString *)body
