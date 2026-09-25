@@ -22,8 +22,8 @@
               choiseSessionWord:(NSString *)choiseSessionWord
             chatroomSessionWord:(NSString *)chatroomSessionWord
                 rightButtonWord:(NSString *)rightButtonWord
-         rightButtonLightColor:(UIColor *)rightButtonLightColor
-          rightButtonDarkColor:(UIColor *)rightButtonDarkColor
+         rightButtonLightColor:(NSString *)rightButtonLightColor
+          rightButtonDarkColor:(NSString *)rightButtonDarkColor
            selectedUserNameList:(NSArray<NSString *> *)selectedUserNameList
                  selectMaxCount:(NSUInteger)selectMaxCount
              countExceedTipWord:(NSString *)countExceedTipWord
@@ -97,13 +97,15 @@ static void mioRegisterPickerHook(void) {
 
     self.hasReturned = NO;
     // 参数为 Frida 抓取的 WCR 实测可用值（selectMaxCount=NSUIntegerMax 不限制、tipWord 传空，
-    // 之前自定义参数 9999/非空 tipWord 会导致微信 init 内部 access violation 闪退）
+    // 之前自定义参数 9999/非空 tipWord 会导致微信 init 内部 access violation 闪退）。
+    // 注意：两个颜色参数必须是十六进制颜色字符串（如 #07C160），微信内部会对其调 length 解析；
+    // 传 UIColor 会在 present 时 getRightMakeSureColor 里 unrecognized selector 闪退
     UIViewController *picker = [[cls alloc] initWithTipWord:@""
                                           choiseSessionWord:@"已选群聊"
                                         chatroomSessionWord:@"群聊"
                                             rightButtonWord:@"完成"
-                                     rightButtonLightColor:[UIColor colorWithRed:7/255.0 green:193/255.0 blue:96/255.0 alpha:1.0]
-                                      rightButtonDarkColor:[UIColor colorWithRed:7/255.0 green:193/255.0 blue:96/255.0 alpha:1.0]
+                                     rightButtonLightColor:@"#07C160"
+                                      rightButtonDarkColor:@"#07C160"
                                        selectedUserNameList:self.selectedGroups
                                              selectMaxCount:NSUIntegerMax
                                          countExceedTipWord:@"已达到可选上限"
