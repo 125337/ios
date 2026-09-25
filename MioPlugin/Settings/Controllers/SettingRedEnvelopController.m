@@ -57,9 +57,13 @@
     void (^select)(NSInteger) = ^(NSInteger mode) {
         config.redEnvelopSyncMode = mode;
         [ConfigManager saveAll];
-        // 等 action sheet 完全退场再重建页面，否则重建被 dismiss 动画吞掉，行值不刷新
+        // 等 action sheet 完全退场后重建（与 wpHandleSwitchKey 同款组合：
+        // 只调 buildUI 行进旧表引擎不刷新，必须先 wpRebuildWeChatTable 重建表容器）
         [self dismissViewControllerAnimated:YES completion:^{
-            dispatch_async(dispatch_get_main_queue(), ^{ [self buildUI]; });
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self wpRebuildWeChatTable];
+                [self buildUI];
+            });
         }];
     };
     [sheet addAction:[UIAlertAction actionWithTitle:@"不同步" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { select(0); }]];
@@ -87,7 +91,10 @@
         config.redEnvelopSyncMode = 4;
         [ConfigManager saveAll];
         [self dismissViewControllerAnimated:YES completion:^{
-            dispatch_async(dispatch_get_main_queue(), ^{ [self buildUI]; });
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self wpRebuildWeChatTable];
+                [self buildUI];
+            });
         }];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -119,6 +126,8 @@
     RedEnvelopConfig *config = [RedEnvelopConfig shared];
     config.redEnvelopGroupFilterList = groupIds;
     [ConfigManager saveAll];
+    // 与 wpHandleSwitchKey 同款组合：只 buildUI 行进旧表，引擎表不重载 hint 不刷新
+    [self wpRebuildWeChatTable];
     [self buildUI];
 }
 
