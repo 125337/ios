@@ -112,15 +112,17 @@ static void mioRegisterPickerHook(void) {
     }
 
     self.hasReturned = NO;
-    UIViewController *picker = [[cls alloc] initWithTipWord:self.titleText
-                                          choiseSessionWord:@"最近会话"
-                                        chatroomSessionWord:@"所有群聊"
+    // 参数为 Frida 抓取的 WCR 实测可用值（selectMaxCount=NSUIntegerMax 不限制、tipWord 传空，
+    // 之前自定义参数 9999/非空 tipWord 会导致微信 init 内部 access violation 闪退）
+    UIViewController *picker = [[cls alloc] initWithTipWord:@""
+                                          choiseSessionWord:@"已选群聊"
+                                        chatroomSessionWord:@"群聊"
                                             rightButtonWord:@"完成"
                                      rightButtonLightColor:[UIColor colorWithRed:7/255.0 green:193/255.0 blue:96/255.0 alpha:1.0]
                                       rightButtonDarkColor:[UIColor colorWithRed:7/255.0 green:193/255.0 blue:96/255.0 alpha:1.0]
                                        selectedUserNameList:self.selectedGroups
-                                             selectMaxCount:9999
-                                         countExceedTipWord:@"选择的群聊数量已达上限"
+                                             selectMaxCount:NSUIntegerMax
+                                         countExceedTipWord:@"已达到可选上限"
                                               forceLightMode:NO
                                              canSelectOpenIM:NO];
     if (!picker) return;
