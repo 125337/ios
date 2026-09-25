@@ -44,6 +44,7 @@ static void *kMioPickerBridgeKey = &kMioPickerBridgeKey;
 static IMP gOrigOnClickMakeSureButton = NULL;
 static IMP gOrigUpdateRightMakeSureButton = NULL;
 static IMP gOrigViewDidLayoutSubviews = NULL;
+static IMP gOrigDidSelectContact = NULL;
 
 // 微信原生"完成"按钮点击的 hook：有 bridge 且未返回 → 走我们的提取逻辑；否则走原实现
 static void mioPickerDoneImp(id self, SEL _cmd) {
@@ -80,6 +81,16 @@ static void mioViewDidLayoutSubviewsImp(id self, SEL _cmd) {
     if (bridge && ![bridge hasReturned]) [bridge refreshRightButton];
 }
 
+// didSelectContact: hook：每次点选/取消后刷新完成按钮（WCR 同款，覆盖取消选人到 0 时原生不刷新标题/禁用按钮的路径）
+static void mioDidSelectContactImp(id self, SEL _cmd, id contact) {
+    if (gOrigDidSelectContact) {
+        ((void (*)(id, SEL, id))gOrigDidSelectContact)(self, _cmd, contact);
+    }
+    id bridge = objc_getAssociatedObject(self, kMioPickerBridgeKey);
+    if (bridge && ![bridge isKindOfClass:[MioTweakGroupSelectsController class]]) bridge = nil;
+    if (bridge && ![bridge hasReturned]) [bridge refreshRightButton];
+}
+
 static void mioRegisterPickerHook(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -106,6 +117,11 @@ static void mioRegisterPickerHook(void) {
         if (lay) {
             gOrigViewDidLayoutSubviews = method_setImplementation(lay, (IMP)mioViewDidLayoutSubviewsImp);
             WPLog(@"GroupPicker", @"viewDidLayoutSubviews hooked");
+        }
+        Method dsc = class_getInstanceMethod(cls, NSSelectorFromString(@"didSelectContact:"));
+        if (dsc) {
+            gOrigDidSelectContact = method_setImplementation(dsc, (IMP)mioDidSelectContactImp);
+            WPLog(@"GroupPicker", @"didSelectContact: hooked");
         }
     });
 }
@@ -232,6 +248,9 @@ static void mioRegisterPickerHook(void) {
     NSString *title = count > 0
         ? [NSString stringWithFormat:@"完成(%lu)", (unsigned long)count]
         : @"完成";
+    // WCR 同款：0 个选择也强制保持可按，允许保存空选择（即清空过滤列表）
+    [btn setEnabled:YES];
+    [btn setAlpha:1.0];
     [btn setTitle:title forState:UIControlStateNormal];
     [btn setTitle:title forState:UIControlStateHighlighted];
     [btn setTitle:title forState:UIControlStateDisabled];
