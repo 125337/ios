@@ -62,8 +62,17 @@ static BOOL mioInviteUserToChatRoom(NSString *userName, NSString *roomId) {
         return NO;
     }
 
-    // 微信 UI 流程传的就是 CContact 对象数组
+    // 微信 UI 流程传的就是 CContact 对象数组；getContactByUserName: 查不到时回退 getContactByName:（带校验）
     id contact = WXGetContactForWxid(userName);
+    if (!contact) {
+        id mgr = WXGetService(objc_getClass("CContactMgr"));
+        SEL selBN = NSSelectorFromString(@"getContactByName:");
+        if (mgr && [mgr respondsToSelector:selBN]) {
+            id c2 = ((id (*)(id, SEL, id))objc_msgSend)(mgr, selBN, userName);
+            NSString *chk = WXSafeStringGet(c2, @"m_nsUsrName");
+            if (chk.length > 0 && [chk isEqualToString:userName]) contact = c2;
+        }
+    }
     if (!contact) {
         WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] 拿不到联系人对象: %@", userName);
         return NO;
