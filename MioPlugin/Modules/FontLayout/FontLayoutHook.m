@@ -12,6 +12,7 @@
 #import "../../Core/LogManager.h"
 #import <substrate.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
 
 #pragma mark - 常量
 
