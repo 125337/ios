@@ -62,15 +62,15 @@ static BOOL shouldIntercept(id originalResult,
         return NO;
     }
 
-    // ── 可选的白名单检查 ──
-    // 如果规则集在白名单中，直接通过
-    BOOL inWhitelist = [s_fontRuleSets() containsObject:ruleSet];
-    if (!inWhitelist) {
-        // 如果不在白名单中，用宽松条件检查属性名是否含 "font"
-        NSString *lowerProperty = [property lowercaseString];
-        if (![lowerProperty containsString:@"font"]) {
-            return NO;  // 属性名不含 font，跳过
-        }
+    // ── 属性名级过滤（138.log 实锤修复）──
+    // 旧逻辑"规则集在白名单内就放行"会把 #widget_tipsbar_base 里的 cell_height(48)/
+    // icon_main_width(48) 和 #input_tool_view_tool 里的 contentInset(6)/edgeInset(5) 等
+    // 尺寸属性也改成目标字号，直接破坏布局——主题规则集里的属性不全是字号。
+    // 统一收紧为：属性名必须含 "font" 才拦截（真字号属性 titleview_fontsize/
+    // common_font_small_size/tool_view_fontSize 全命中；inset/width/height/margin 全排除）。
+    NSString *lowerProperty = [property lowercaseString];
+    if (![lowerProperty containsString:@"font"]) {
+        return NO;  // 属性名不含 font，跳过
     }
 
     // ── 检查第一个元素是否为数值 ──
