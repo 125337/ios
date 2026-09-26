@@ -147,6 +147,15 @@ static const CGFloat kCellHPadding = 16.0;
         WPLog(@"WCTable", @"[WCTABLE] 微信 cell 框架不可用，本页无法渲染（旧引擎已移除，无兜底）");
         return;
     }
+    // 保存滚动位置：WCR reloadTableData 复用同一 manager 只 reload，UITableView 不重置
+    // contentOffset；我们是整表重建（新 tableView offset 归零），需显式保存/恢复，
+    // 否则滑到底部切手风琴/输入保存后整页跳回顶部
+    CGPoint savedOffset = CGPointZero;
+    BOOL needRestore = NO;
+    if (self.wcTable.tableView) {
+        savedOffset = self.wcTable.tableView.contentOffset;
+        needRestore = savedOffset.y > 0.5;
+    }
     [self.wcTable.containerView removeFromSuperview];
     self.wcTable = [WPWeChatTable tableForVC:self];
     if (!self.wcTable) return;
@@ -155,6 +164,21 @@ static const CGFloat kCellHPadding = 16.0;
     [self.view addSubview:self.wcTable.containerView];
     // 数据由后续 buildUI 同步填充，此处延迟 reload 兜底（首帧 layout 早于 buildUI 时表会空一帧）
     [self.wcTable reloadAsync];
+    if (needRestore) {
+        UITableView *newTV = self.wcTable.tableView;
+        __weak typeof(self) wself = self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong typeof(wself) sself = wself;
+            if (!sself.wcTable || sself.wcTable.tableView != newTV) return;  // 期间又重建过
+            // reloadAsync 两连刷已排在本块之前执行完；强制布局拿到真实 contentSize 后恢复
+            [newTV layoutIfNeeded];
+            CGFloat maxOffset = MAX(0, newTV.contentSize.height - newTV.bounds.size.height + newTV.adjustedContentInset.bottom);
+            CGPoint p = savedOffset;
+            p.y = MIN(p.y, maxOffset);
+            if (p.y > 0.5) [newTV setContentOffset:p animated:NO];
+            WPLog(@"WCTable", @"[WCTABLE] 恢复滚动位置 y=%.1f (max=%.1f)", p.y, maxOffset);
+        });
+    }
     WPLog(@"WCTable", @"[WCTABLE] 引擎表已重建: %@", self.wcTable.containerView);
 }
 
