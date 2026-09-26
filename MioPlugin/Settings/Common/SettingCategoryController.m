@@ -147,9 +147,17 @@ static const CGFloat kCellHPadding = 16.0;
         WPLog(@"WCTable", @"[WCTABLE] 微信 cell 框架不可用，本页无法渲染（旧引擎已移除，无兜底）");
         return;
     }
-    // 保存滚动位置：WCR reloadTableData 复用同一 manager 只 reload，UITableView 不重置
-    // contentOffset；我们是整表重建（新 tableView offset 归零），需显式保存/恢复，
-    // 否则滑到底部切手风琴/输入保存后整页跳回顶部
+    // WCR reloadTableData 同款复用路径：manager/tableView 原地保留，只 clearAllSection 清空
+    // sections，随后 buildUI 重填、reloadAsync 刷新（async 排队晚于本 runloop 的同步填充）。
+    // 同一 tableView 意味着 contentOffset 天然保留（WCR 切手风琴不跳顶的根源）、无空帧、
+    // 无容器交换。所有调用方均遵循「本方法后必接 buildUI」约定（已全量核查 20 处）。
+    if (self.wcTable && [self.wcTable clearSectionsForReuse]) {
+        self.wcLastGroup = nil;
+        self.wcPendingHeader = nil;
+        [self.wcTable reloadAsync];
+        return;
+    }
+    // 保存滚动位置：仅剩首次建表后的兜底整表重建路径需要（复用路径同表不重建天然不丢）
     CGPoint savedOffset = CGPointZero;
     BOOL needRestore = NO;
     UIView *oldContainer = nil;

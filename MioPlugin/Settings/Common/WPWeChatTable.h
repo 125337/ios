@@ -2,7 +2,9 @@
 
 // 微信 cell 框架反射封装层 —— 让微信原生渲染 Mio 设置页（行箭头/开关/分组视觉全部由微信提供，WCR 同款）
 // API 定论来源：WCRefine2.1-2.dylib 字符串 + 反编译实证：
-//   WCTableViewManager:        init / addSection: / getAllSections / reloadAllSections
+//   WCTableViewManager:        init / addSection: / clearAllSection（原生清空，WCR reloadTableData
+//                              开头 [self.manager clearAllSection] 三处实证；WCR 无实现文件 → 非category）
+//                              / getAllSections / reloadTableView（8.0.60 方法表实证，无 reloadAllSections）
 //   WCTableViewSectionManager: init / setHeaderTitle: / setFooterTitle: / addCell:
 //   WCTableViewCellManager:    +switchCellForSel:target:title:on:
 //                              +normalCellForSel:target:title:rightValue:accessoryType:
@@ -19,6 +21,8 @@
 + (BOOL)available;                                 // 关键类判空（决定走微信引擎还是旧渲染）
 + (instancetype)tableForVC:(UIViewController *)vc; // 建表 + 建 manager + dataSource/delegate 接线（不 addSubview，调用方自行添加）
 - (id)addGroup;                                    // 建 section（addSection:）并挂到 manager，返回 WPWGroup 手柄
+- (BOOL)clearSectionsForReuse;                     // WCR reloadTableData 同款：clearAllSection 清空 sections，
+                                                   // manager/tableView 原地保留（offset 不丢、无空帧）；NO = 方法缺失走整表重建
 - (void)reload;                                    // reloadTableView + reloadData 双保险
 - (void)reloadAsync;                               // 延迟 reload：排到当前 runloop 后（数据填充完成）连刷两次
 - (void)normalizeTopInset;                         // 顶栏 inset 归一（修微信基类回写 adjustedContentInset.top 致内容下推一个导航栏高）

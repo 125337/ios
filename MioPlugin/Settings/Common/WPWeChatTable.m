@@ -150,6 +150,22 @@ static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **
     return g;
 }
 
+// WCR reloadTableData 同款复用入口：manager/tableView 原地保留，只清空 sections 待 buildUI 重填。
+// clearAllSection 为微信原生方法——WCR dylib 字符串表含此 selector（无参，单数 Section），反编译目录
+// 5 万文件中无 clearAllSection.c（WCR 自实现方法均有对应文件）→ 非 category；WCR 在 8.0.60 正常
+// 工作且无守卫直调 → 方法必然存在。respondsToSelector 守卫仅防极端版本差异，缺失时回退整表重建。
+- (BOOL)clearSectionsForReuse {
+    if (!self.wcManager) return NO;
+    SEL s = NSSelectorFromString(@"clearAllSection");
+    if (![self.wcManager respondsToSelector:s]) {
+        WPLog(@"WCTable", @"[WCTABLE] clearAllSection 不可用（版本差异），回退整表重建");
+        return NO;
+    }
+    ((void (*)(id, SEL))objc_msgSend)(self.wcManager, s);
+    WPLog(@"WCTable", @"[WCTABLE] 复用模式: clearAllSection 完成（WCR reloadTableData 同款）");
+    return YES;
+}
+
 - (void)reload {
     if (self.wcManager) {
         // 方法表实证：WCTableViewManager 是 reloadTableView（不存在 reloadAllSections）
