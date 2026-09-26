@@ -51,61 +51,32 @@ static void pushLocalNotification(NSString *title, NSString *message) {
 
 #pragma mark - 定额自动拉群（WCR 同款 FixedInvite）
 
-/// 微信原生拉人进群（8.0.60 方法表 Frida 实锤）：
-/// AddGroupMember:memberList:desp:historyInfo: 直接加人；InviteGroupMember:withMemberList: 邀请制兜底
-/// memberList 必须传 CContact 对象（传 wxid 字符串微信内部读 ivar 会直接 SIGSEGV，实测）
+/// 微信原生拉人进群 —— 逐行复刻 WCR FUN_01135a40：
+/// 仅用 InviteGroupMember:withMemberList:，memberList 直接传原始 wxid 字符串数组
+/// （WCR 不查 CContact 对象、无 desp/historyInfo 参数、无预检）
 static BOOL mioInviteUserToChatRoom(NSString *userName, NSString *roomId) {
-    if (!userName.length || ![roomId hasSuffix:@"@chatroom"]) return NO;
-    id grpMgr = WXGetService(objc_getClass("CGroupMgr"));
-    if (!grpMgr) {
+    // WCR 同款三条前置校验：房间必须 @chatroom 结尾；用户非空且不是群 ID
+    if (!roomId.length || ![roomId hasSuffix:@"@chatroom"]) return NO;
+    if (!userName.length || [userName hasSuffix:@"@chatroom"]) return NO;
+
+    Class mmServiceCenter = objc_getClass("MMServiceCenter");
+    Class groupMgrClass = objc_getClass("CGroupMgr");
+    if (!mmServiceCenter || !groupMgrClass) {
+        WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] MMServiceCenter/CGroupMgr 类不存在");
+        return NO;
+    }
+    id grpMgr = WXGetService(groupMgrClass);
+    SEL invSel = NSSelectorFromString(@"InviteGroupMember:withMemberList:");
+    if (!grpMgr || ![grpMgr respondsToSelector:invSel]) {
         WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] CGroupMgr 服务不可用 (room=%@ user=%@)", roomId, userName);
         return NO;
     }
 
-    // 微信 UI 流程传的就是 CContact 对象数组；getContactByUserName: 查不到时回退 getContactByName:（带校验）
-    id contact = WXGetContactForWxid(userName);
-    if (!contact) {
-        id mgr = WXGetService(objc_getClass("CContactMgr"));
-        SEL selBN = NSSelectorFromString(@"getContactByName:");
-        if (mgr && [mgr respondsToSelector:selBN]) {
-            id c2 = ((id (*)(id, SEL, id))objc_msgSend)(mgr, selBN, userName);
-            NSString *chk = WXSafeStringGet(c2, @"m_nsUsrName");
-            if (chk.length > 0 && [chk isEqualToString:userName]) contact = c2;
-        }
-    }
-    if (!contact) {
-        WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] 拿不到联系人对象: %@", userName);
-        return NO;
-    }
-
-    SEL addSel = NSSelectorFromString(@"AddGroupMember:memberList:desp:historyInfo:");
-    if ([grpMgr respondsToSelector:addSel]) {
-        WPLog(@"AutoTransfer", @"[FixedInvite] 调用前: AddGroupMember room=%@ user=%@", roomId, userName);
-        @try {
-            ((void (*)(id, SEL, id, id, id, id))objc_msgSend)(grpMgr, addSel, roomId, @[contact], @"", nil);
-            WPLog(@"AutoTransfer", @"[FixedInvite] 已调用 AddGroupMember room=%@ user=%@", roomId, userName);
-            return YES;
-        } @catch (NSException *e) {
-            WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] AddGroupMember 异常: %@", e);
-            return NO;
-        }
-    }
-
-    SEL invSel = NSSelectorFromString(@"InviteGroupMember:withMemberList:");
-    if ([grpMgr respondsToSelector:invSel]) {
-        WPLog(@"AutoTransfer", @"[FixedInvite] 调用前: InviteGroupMember room=%@ user=%@", roomId, userName);
-        @try {
-            ((void (*)(id, SEL, id, id))objc_msgSend)(grpMgr, invSel, roomId, @[contact]);
-            WPLog(@"AutoTransfer", @"[FixedInvite] 已调用 InviteGroupMember room=%@ user=%@", roomId, userName);
-            return YES;
-        } @catch (NSException *e) {
-            WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] InviteGroupMember 异常: %@", e);
-            return NO;
-        }
-    }
-
-    WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] CGroupMgr 无可用拉人接口 (room=%@ user=%@)", roomId, userName);
-    return NO;
+    WPLog(@"AutoTransfer", @"[FixedInvite] 调用前: InviteGroupMember room=%@ user=%@", roomId, userName);
+    NSArray *memberList = [NSArray arrayWithObjects:userName, nil];
+    BOOL ok = ((BOOL (*)(id, SEL, id, id))objc_msgSend)(grpMgr, invSel, roomId, memberList);
+    WPLog(@"AutoTransfer", @"[FixedInvite] InviteGroupMember 返回 %d (room=%@ user=%@)", ok, roomId, userName);
+    return ok;
 }
 
 /// 单笔转账金额等于档位金额 → 把转账人拉进对应群
@@ -131,12 +102,16 @@ static void processFixedInvite(long long feeAmount, NSString *fromUsr, BOOL isGr
         if (![room isKindOfClass:[NSString class]] || ![room hasSuffix:@"@chatroom"]) continue;
 
         WPLog(@"AutoTransfer", @"[FixedInvite] 定额命中: %.2f元 -> %@ (from=%@)", feeAmount / 100.0, room, fromUsr);
-        BOOL ok = mioInviteUserToChatRoom(fromUsr, room);
-        if (ok) {
-            NSString *nick = WXDisplayNameForWxid(fromUsr);
-            pushLocalNotification(@"定额拉群",
-                [NSString stringWithFormat:@"已将 %@ 拉进群聊（%.2f元）", nick, feeAmount / 100.0]);
-        }
+        // 消息同步回调在后台线程；对齐 WCR 实际调用链（主线程）后再拉群
+        dispatch_async(dispatch_get_main_queue(), ^{
+            BOOL ok = mioInviteUserToChatRoom(fromUsr, room);
+            WPLog(@"AutoTransfer", @"[FixedInvite] 拉群结果: %d (room=%@ user=%@)", ok, room, fromUsr);
+            if (ok) {
+                NSString *nick = WXDisplayNameForWxid(fromUsr);
+                pushLocalNotification(@"定额拉群",
+                    [NSString stringWithFormat:@"已将 %@ 拉进群聊（%.2f元）", nick, feeAmount / 100.0]);
+            }
+        });
         break;  // 单笔转账最多命中一档
     }
 }
