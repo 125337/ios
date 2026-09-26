@@ -208,9 +208,20 @@ static unsigned int hook_m_uiGlobalFontLevel(id self, SEL _cmd) {
 
 #pragma mark - 安装入口
 
+static BOOL g_fontHooksInstalled = NO;
+
 @implementation FontLayoutHook
 
 + (void)install {
+    [self installIfNeeded];
+}
+
+// ★ scene-create 看门狗优化（0x8BADF00D：启动 CPU 配额 6.96s 耗尽即被 SIGKILL）：
+//   getValueOfProperty:inRuleSet: 是微信主题系统热路径（实测启动期 8000-19000 次/2s），
+//   双开关全关时 hook 体仅 pass-through，但 trampoline + 单例 + 属性读的空转照烧 CPU。
+//   全关时不安装；设置页打开开关后经 wpHandleSwitchKey → installIfNeeded 惰性补装。
++ (void)installIfNeeded {
+    if (g_fontHooksInstalled) return;
     WPLog(@"FontLayout", @"=== FontLayoutHook v4 Install Start ===");
 
     // ── 诊断：检查类和方法的可用性 ──
@@ -245,6 +256,12 @@ static unsigned int hook_m_uiGlobalFontLevel(id self, SEL _cmd) {
     WPLog(@"FontLayout", @"FontRuleSet whitelist: %@",
           [[s_fontRuleSets() allObjects] componentsJoinedByString:@", "]);
 
+    // ── 双开关全关 → 不安装（惰性补装机制见 installIfNeeded 注释）──
+    if (!cfg.globalLayoutEnabled && !cfg.chatLayoutEnabled) {
+        WPLog(@"FontLayout", @"[SKIP] 全局/对话布局均未开启，跳过 hook 安装（开关打开时惰性补装）");
+        return;
+    }
+
     // ── Hook 安装 ──
     if (mmThemeManager && mGetValue) {
         MSHookMessageEx(mmThemeManager, selGetValue,
@@ -272,6 +289,7 @@ static unsigned int hook_m_uiGlobalFontLevel(id self, SEL _cmd) {
               mFontLevel ? @"OK" : @"NIL");
     }
 
+    g_fontHooksInstalled = YES;
     WPLog(@"FontLayout", @"=== FontLayoutHook v4 Install Complete ===");
 }
 

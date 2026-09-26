@@ -473,7 +473,12 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
 @implementation ListCornerRadiusHook
 
+static BOOL g_cornerBaseHooksInstalled = NO;   // MMTableViewCell 等基础 hook（Mio 页面强制圆角依赖，无条件装）
+static BOOL g_uiViewBaseHookInstalled = NO;    // UIView 基类 hook（全 app 热路径，按开关惰性安装）
+
 + (void)initListCornerRadiusHook {
+    if (g_cornerBaseHooksInstalled) return;
+    g_cornerBaseHooksInstalled = YES;
     WPLog(@"ListCornerRadius", @"[INIT] Initializing ListCornerRadius hook...");
     Class MMTableViewCellClass = objc_getClass("MMTableViewCell");
     if (MMTableViewCellClass) {
@@ -520,12 +525,9 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
             (IMP)_hooked_FoldView_layoutSubviews, (IMP *)&orig_FoldView_layoutSubviews);
     }
 
-    // ★ WPSessionSpacingHook Hooks — UIView, NewMainFrameVC, MMTableSectionHeader
-    Class uiView = objc_getClass("UIView");
-    if (uiView) {
-        MSHookMessageEx(uiView, @selector(layoutSubviews),
-            (IMP)_hooked_UIView_layoutSubviews, (IMP *)&orig_UIView_layoutSubviews);
-    }
+    // ★ WPSessionSpacingHook Hooks — NewMainFrameVC, MMTableSectionHeader
+    //   （UIView 基类 layoutSubviews 是全 app 热路径，拆到 installUIViewBaseHookIfNeeded 按开关惰性安装）
+    [self installUIViewBaseHookIfNeeded];
     Class nmfvc = objc_getClass("NewMainFrameViewController");
     if (nmfvc) {
         MSHookMessageEx(nmfvc, @selector(tableView:viewForHeaderInSection:),
@@ -844,8 +846,32 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     return shape;
 }
 
-+ (void)install {
+// ★ scene-create 看门狗优化（0x8BADF00D：启动 CPU 配额 6.96s 耗尽即被 SIGKILL）：
+//   UIView 基类 layoutSubviews 是全 app 热路径（实测启动期 550-4000 次/2s，每个 view 每次
+//   布局都要过 trampoline + 单例 + 配置读），而 hook 体首行就是 globalCornerRadiusEnabled
+//   检查——开关关闭时是纯空转。改为按开关惰性安装：启动关闭 → 不装；设置页打开开关后
+//   经 wpHandleSwitchKey → installIfNeeded 补装。
++ (void)installUIViewBaseHookIfNeeded {
+    if (g_uiViewBaseHookInstalled) return;
+    if (![ListCornerRadiusConfig shared].globalCornerRadiusEnabled) {
+        WPLog(@"ListCornerRadius", @"[SKIP] 列表圆角未开启，跳过 UIView 基类 hook（开关打开时惰性补装）");
+        return;
+    }
+    Class uiView = objc_getClass("UIView");
+    if (!uiView) return;
+    MSHookMessageEx(uiView, @selector(layoutSubviews),
+        (IMP)_hooked_UIView_layoutSubviews, (IMP *)&orig_UIView_layoutSubviews);
+    g_uiViewBaseHookInstalled = YES;
+    WPLog(@"ListCornerRadius", @"[OK] UIView::layoutSubviews(base-hook, 惰性安装)");
+}
+
++ (void)installIfNeeded {
     [self initListCornerRadiusHook];
+    [self installUIViewBaseHookIfNeeded];
+}
+
++ (void)install {
+    [self installIfNeeded];
 }
 
 @end

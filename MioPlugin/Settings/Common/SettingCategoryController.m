@@ -12,6 +12,8 @@
 #import "../../Core/LogManager.h"
 #import "WPWeChatTable.h"
 #import "../../Core/MioAlertHelper.h"
+#import "../../Modules/FontLayout/FontLayoutHook.h"
+#import "../../Modules/ListCornerRadius/ListCornerRadiusHook.h"
 
 // 微信引擎 switch 回调 trampoline：每行独立 selector（wpSw_<key>_<hash>），共享 IMP 从 _cmd 反解行身份。
 // 回调入参按反编译实证处理：响应 isOn 的对象（handleSettingEntrySwitch_ 直接 [arg isOn]）；
@@ -234,6 +236,14 @@ static const CGFloat kCellHPadding = 16.0;
         return;
     }
     WPLog(@"Config", @"[WCSW] %@ = %@", cfgKey, on ? @"ON" : @"OFF");
+
+    // ★ 惰性 hook 安装（scene-create 看门狗 CPU 优化）：FontLayout 的主题热路径 hook 与
+    //   ListCornerRadius 的 UIView 基类 hook 在启动时按开关门禁跳过安装，开关在这里打开时补装
+    if ([cfgKey isEqualToString:@"globalLayoutEnabled"] || [cfgKey isEqualToString:@"chatLayoutEnabled"]) {
+        [FontLayoutHook installIfNeeded];
+    } else if ([cfgKey isEqualToString:@"globalCornerRadiusEnabled"]) {
+        [ListCornerRadiusHook installIfNeeded];
+    }
 
     if ([self.masterSwitchKeys containsObject:cfgKey]) {
         // 手风琴状态 = 总开关状态：开即展开子行，关即收起（整页重建时按 isOn 决定是否构建子行）
