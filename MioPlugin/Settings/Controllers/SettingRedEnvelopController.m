@@ -5,9 +5,15 @@
 #import "MioTweakGroupSelectsController.h"
 #import <objc/runtime.h>
 #import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
+#import "../../Core/MioAlertHelper.h"
 #import "../../Config/WPColors.h"
 
 @interface SettingRedEnvelopController ()
+// 定额拉群规则编辑状态：群选择器回调时区分是红包群过滤还是拉群规则目标
+@property (nonatomic, assign) BOOL invitePickerMode;
+@property (nonatomic, assign) NSInteger pendingInviteRuleIndex;  // -1 = 新增规则
+@property (nonatomic, assign) double pendingInviteAmount;        // 元
 @end
 
 @implementation SettingRedEnvelopController
@@ -28,6 +34,10 @@
     }
     if ([key isEqualToString:@"selectSyncTarget"]) {
         [self showSyncTargetPicker];
+        return;
+    }
+    if ([key isEqualToString:@"fixedInviteRules"]) {
+        [self showFixedInviteRuleMenu];
         return;
     }
     WPLog(@"Setting", @"[BUTTON] key not SelectGroupFilter, calling super");
@@ -121,9 +131,167 @@
     }
 }
 
+#pragma mark - 定额自动拉群规则（WCR 同款 FixedInvite）
+
+- (NSString *)fixedInviteRulesHint {
+    AutoTransferConfig *config = [AutoTransferConfig shared];
+    NSUInteger n = config.autoTransferFixedInviteRules.count;
+    return n > 0 ? [NSString stringWithFormat:@"已设置 %lu 条规则", (unsigned long)n] : @"点击配置规则";
+}
+
+- (NSString *)fixedInviteRuleSummary:(NSDictionary *)rule {
+    double amount = [rule[@"amount"] doubleValue];
+    NSString *room = rule[@"inviteChatRoom"];
+    if (![room isKindOfClass:[NSString class]]) room = @"";
+    NSString *roomName = room.length ? (WXDisplayNameForWxid(room) ?: room) : @"未选择群";
+    return [NSString stringWithFormat:@"¥%g → %@", amount, roomName];
+}
+
+- (void)showFixedInviteRuleMenu {
+    AutoTransferConfig *config = [AutoTransferConfig shared];
+    NSArray *rules = config.autoTransferFixedInviteRules ?: @[];
+    NSMutableArray<NSString *> *buttons = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *tags = [NSMutableArray array];  // >=0 规则下标，-1 新增，-2 清空
+    for (NSUInteger i = 0; i < rules.count; i++) {
+        [buttons addObject:[NSString stringWithFormat:@"%lu. %@", (unsigned long)(i + 1), [self fixedInviteRuleSummary:rules[i]]]];
+        [tags addObject:@((NSInteger)i)];
+    }
+    [buttons addObject:@"＋ 新增规则"];
+    [tags addObject:@((NSInteger)-1)];
+    if (rules.count > 0) {
+        [buttons addObject:@"清空所有规则"];
+        [tags addObject:@((NSInteger)-2)];
+    }
+    [MioAlertHelper showMenuAlert:@"定额自动拉群规则\n（单笔转账金额=档位金额时拉人进群）"
+                           buttons:buttons
+                         onButton:^(NSInteger index) {
+        NSInteger tag = [tags[index] integerValue];
+        if (tag == -1) {
+            [self promptAddInviteRule];
+        } else if (tag == -2) {
+            config.autoTransferFixedInviteRules = @[];
+            [ConfigManager saveAll];
+            [self wpRebuildWeChatTable];
+            [self buildUI];
+        } else {
+            [self showInviteRuleActions:tag];
+        }
+    }];
+}
+
+- (void)showInviteRuleActions:(NSInteger)ruleIndex {
+    AutoTransferConfig *config = [AutoTransferConfig shared];
+    NSArray *rules = config.autoTransferFixedInviteRules ?: @[];
+    if (ruleIndex < 0 || ruleIndex >= (NSInteger)rules.count) return;
+    NSDictionary *rule = rules[ruleIndex];
+    [MioAlertHelper showMenuAlert:[self fixedInviteRuleSummary:rule]
+                           buttons:@[@"编辑金额", @"更换群聊", @"删除该规则"]
+                         onButton:^(NSInteger index) {
+        switch (index) {
+            case 0: [self promptEditInviteRuleAmount:ruleIndex]; break;
+            case 1: [self launchInviteRuleGroupPickerForRuleIndex:ruleIndex]; break;
+            case 2: {
+                NSMutableArray *arr = [rules mutableCopy];
+                [arr removeObjectAtIndex:ruleIndex];
+                config.autoTransferFixedInviteRules = arr;
+                [ConfigManager saveAll];
+                [self wpRebuildWeChatTable];
+                [self buildUI];
+                break;
+            }
+            default: break;
+        }
+    }];
+}
+
+- (void)promptAddInviteRule {
+    AutoTransferConfig *config = [AutoTransferConfig shared];
+    if (config.autoTransferFixedInviteRules.count >= 10) {
+        [MioAlertHelper showTipAlert:@"最多设置 10 条规则"];
+        return;
+    }
+    [MioAlertHelper showInputAlert:@"新增规则" message:@"输入档位金额（元）\n单笔转账金额等于该金额时自动拉群"
+                       initialText:nil placeholder:@"如 50" keyboard:UIKeyboardTypeNumbersAndPunctuation secure:NO
+                        onConfirm:^(NSString *inputText) {
+        double amount = [inputText doubleValue];
+        if (amount <= 0) return;
+        [self launchInviteRuleGroupPickerForNewRuleWithAmount:amount];
+    }];
+}
+
+- (void)promptEditInviteRuleAmount:(NSInteger)ruleIndex {
+    AutoTransferConfig *config = [AutoTransferConfig shared];
+    NSArray *rules = config.autoTransferFixedInviteRules ?: @[];
+    if (ruleIndex < 0 || ruleIndex >= (NSInteger)rules.count) return;
+    NSDictionary *rule = rules[ruleIndex];
+    [MioAlertHelper showInputAlert:@"编辑金额" message:@"输入档位金额（元）"
+                       initialText:[NSString stringWithFormat:@"%g", [rule[@"amount"] doubleValue]]
+                       placeholder:@"如 50" keyboard:UIKeyboardTypeNumbersAndPunctuation secure:NO
+                        onConfirm:^(NSString *inputText) {
+        double amount = [inputText doubleValue];
+        if (amount <= 0) return;
+        NSMutableArray *arr = [rules mutableCopy];
+        arr[ruleIndex] = @{@"amount": @(amount), @"inviteChatRoom": rule[@"inviteChatRoom"] ?: @""};
+        config.autoTransferFixedInviteRules = arr;
+        [ConfigManager saveAll];
+        [self wpRebuildWeChatTable];
+        [self buildUI];
+    }];
+}
+
+- (void)launchInviteRuleGroupPickerForNewRuleWithAmount:(double)amount {
+    self.invitePickerMode = YES;
+    self.pendingInviteRuleIndex = -1;
+    self.pendingInviteAmount = amount;
+    MioTweakGroupSelectsController *vc = [[MioTweakGroupSelectsController alloc]
+        initWithSelectedGroups:@[] title:@"选择拉进哪个群"];
+    vc.delegate = self;
+    [vc presentFromViewController:self];
+}
+
+- (void)launchInviteRuleGroupPickerForRuleIndex:(NSInteger)ruleIndex {
+    AutoTransferConfig *config = [AutoTransferConfig shared];
+    NSArray *rules = config.autoTransferFixedInviteRules ?: @[];
+    if (ruleIndex < 0 || ruleIndex >= (NSInteger)rules.count) return;
+    NSDictionary *rule = rules[ruleIndex];
+    NSString *room = rule[@"inviteChatRoom"];
+    if (![room isKindOfClass:[NSString class]]) room = @"";
+    self.invitePickerMode = YES;
+    self.pendingInviteRuleIndex = ruleIndex;
+    self.pendingInviteAmount = [rule[@"amount"] doubleValue];
+    MioTweakGroupSelectsController *vc = [[MioTweakGroupSelectsController alloc]
+        initWithSelectedGroups:(room.length ? @[room] : @[]) title:@"更换拉群目标"];
+    vc.delegate = self;
+    [vc presentFromViewController:self];
+}
+
 #pragma mark - MioTweakGroupSelectsDelegate
 
 - (void)onGroupSelectReturn:(NSArray<NSString *> *)groupIds {
+    if (self.invitePickerMode) {
+        self.invitePickerMode = NO;
+        NSInteger idx = self.pendingInviteRuleIndex;
+        double amount = self.pendingInviteAmount;
+        self.pendingInviteRuleIndex = -1;
+        self.pendingInviteAmount = 0;
+
+        NSString *room = groupIds.firstObject ?: @"";
+        if (!room.length) return;  // 未选群视为取消，不保存
+
+        AutoTransferConfig *config = [AutoTransferConfig shared];
+        NSMutableArray *arr = [config.autoTransferFixedInviteRules mutableCopy] ?: [NSMutableArray array];
+        NSDictionary *rule = @{@"amount": @(amount), @"inviteChatRoom": room};
+        if (idx >= 0 && idx < (NSInteger)arr.count) {
+            arr[idx] = rule;
+        } else {
+            [arr addObject:rule];
+        }
+        config.autoTransferFixedInviteRules = arr;
+        [ConfigManager saveAll];
+        [self wpRebuildWeChatTable];
+        [self buildUI];
+        return;
+    }
     RedEnvelopConfig *config = [RedEnvelopConfig shared];
     config.redEnvelopGroupFilterList = groupIds;
     [ConfigManager saveAll];
@@ -133,6 +301,9 @@
 }
 
 - (void)onGroupSelectCancel {
+    self.invitePickerMode = NO;
+    self.pendingInviteRuleIndex = -1;
+    self.pendingInviteAmount = 0;
 }
 
 - (void)buildUI {
@@ -221,7 +392,12 @@
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"回复内容" key:@"autoConfirmTransferAutoReplyStr" value:transferConfig.autoConfirmTransferAutoReplyStr hint:@"已收到款项，谢谢！" valueType:InputValueTypeText cy:*ecy width:w];
 
-        *ecy = [self addHintRowInGroup:expand text:@"自动收款: 收到转账后自动确认收款\n金额上限: 超过设定金额的转账不会自动收款\n延迟时间建议设为 1-3 秒" cy:*ecy width:w];
+        *ecy = [self addSubSectionLabelInGroup:expand text:@"定额自动拉群" cy:*ecy width:w];
+        *ecy = [self addSubSwitchRowInGroup:expand title:@"启用定额自动拉群" key:@"autoTransferFixedInviteEnabled" isOn:transferConfig.autoTransferFixedInviteEnabled cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addButtonRowInGroup:expand title:@"拉群规则" hint:[self fixedInviteRulesHint] key:@"fixedInviteRules" cy:*ecy width:w];
+
+        *ecy = [self addHintRowInGroup:expand text:@"自动收款: 收到转账后自动确认收款\n金额上限: 超过设定金额的转账不会自动收款\n延迟时间建议设为 1-3 秒\n定额拉群: 单笔转账金额=档位金额时, 自动把转账人拉进指定群(与自动收款开关互不影响)" cy:*ecy width:w];
     } cy:cy2 width:w];
 
     y = [self finishGroup:group2 atY:y height:cy2];

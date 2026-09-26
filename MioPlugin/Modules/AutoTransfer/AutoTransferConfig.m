@@ -24,6 +24,8 @@
         [ConfigDescriptor itemWithKey:@"autoConfirmTransferMaxAmount" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"autoConfirmTransferAutoReply" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"autoConfirmTransferAutoReplyStr" type:ConfigValueTypeString default:@"已收到款项，谢谢！"],
+        [ConfigDescriptor itemWithKey:@"autoTransferFixedInviteEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"autoTransferFixedInviteRules" type:ConfigValueTypeArray default:@[]],
     ];
 }
 

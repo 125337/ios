@@ -32,13 +32,13 @@ static void sendAutoReply(NSString *sessionUserName, NSString *replyText) {
     WXSendTextMessage(replyText, sessionUserName);
 }
 
-static void pushLocalNotification(NSString *message) {
+static void pushLocalNotification(NSString *title, NSString *message) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         @try {
             if (@available(iOS 10.0, *)) {
                 UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
                 UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
-                content.title = @"自动收款";
+                content.title = title ?: @"自动收款";
                 content.body = message ?: @"转账已自动确认收款";
                 content.sound = [UNNotificationSound defaultSound];
                 UNTimeIntervalNotificationTrigger *trigger = [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:0.5 repeats:NO];
@@ -49,9 +49,72 @@ static void pushLocalNotification(NSString *message) {
     });
 }
 
+#pragma mark - 定额自动拉群（WCR 同款 FixedInvite）
+
+/// 微信原生拉人进群：CGroupMgr InviteGroupMember/AddGroupMember（与 WCR 踢人用的 DeleteGroupMember:withMemberList:scene: 同族接口）
+static BOOL mioInviteUserToChatRoom(NSString *userName, NSString *roomId) {
+    if (!userName.length || ![roomId hasSuffix:@"@chatroom"]) return NO;
+    id grpMgr = WXGetService(objc_getClass("CGroupMgr"));
+    if (!grpMgr) {
+        WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] CGroupMgr 服务不可用 (room=%@ user=%@)", roomId, userName);
+        return NO;
+    }
+    NSArray<NSString *> *candidates = @[
+        @"InviteGroupMember:withMemberList:scene:",
+        @"AddGroupMember:withMemberList:scene:",
+    ];
+    for (NSString *selName in candidates) {
+        SEL sel = NSSelectorFromString(selName);
+        if (![grpMgr respondsToSelector:sel]) continue;
+        @try {
+            ((void (*)(id, SEL, id, id, unsigned long))objc_msgSend)(grpMgr, sel, roomId, @[userName], (unsigned long)1);
+            WPLog(@"AutoTransfer", @"[FixedInvite] 已调用 %@ room=%@ user=%@", selName, roomId, userName);
+            return YES;
+        } @catch (NSException *e) {
+            WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] %@ 异常: %@", selName, e);
+            return NO;
+        }
+    }
+    WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] CGroupMgr 无可用拉人接口 (room=%@ user=%@)", roomId, userName);
+    return NO;
+}
+
+/// 单笔转账金额等于档位金额 → 把转账人拉进对应群
+static void processFixedInvite(long long feeAmount, NSString *fromUsr, BOOL isGroup) {
+    if (feeAmount <= 0 || !fromUsr.length) return;
+    if (isGroup) {
+        WPLog(@"AutoTransfer", @"[FixedInvite] 群聊转账不触发拉群 (fee=%lld分)", feeAmount);
+        return;
+    }
+    id selfContact = WXGetSelfContact();
+    NSString *selfName = WXSafeStringGet(selfContact, @"m_nsUsrName");
+    if (selfName.length && [fromUsr isEqualToString:selfName]) return;
+
+    AutoTransferConfig *config = [AutoTransferConfig shared];
+    NSArray<NSDictionary *> *rules = config.autoTransferFixedInviteRules;
+    if (rules.count == 0) return;
+
+    for (NSDictionary *rule in rules) {
+        double amountYuan = [rule[@"amount"] doubleValue];
+        NSString *room = rule[@"inviteChatRoom"];
+        long long ruleCents = (long long)(amountYuan * 100.0 + 0.5);
+        if (ruleCents <= 0 || ruleCents != feeAmount) continue;
+        if (![room isKindOfClass:[NSString class]] || ![room hasSuffix:@"@chatroom"]) continue;
+
+        WPLog(@"AutoTransfer", @"[FixedInvite] 定额命中: %.2f元 -> %@ (from=%@)", feeAmount / 100.0, room, fromUsr);
+        BOOL ok = mioInviteUserToChatRoom(fromUsr, room);
+        if (ok) {
+            NSString *nick = WXDisplayNameForWxid(fromUsr);
+            pushLocalNotification(@"定额拉群",
+                [NSString stringWithFormat:@"已将 %@ 拉进群聊（%.2f元）", nick, feeAmount / 100.0]);
+        }
+        break;  // 单笔转账最多命中一档
+    }
+}
+
 static void processTransferMessage(id wrap) {
     AutoTransferConfig *config = [AutoTransferConfig shared];
-    if (!config.autoConfirmTransfer) return;
+    if (!config.autoConfirmTransfer && !config.autoTransferFixedInviteEnabled) return;
     if (!wrap) return;
 
     unsigned int msgType = 0;
@@ -117,8 +180,11 @@ static void processTransferMessage(id wrap) {
     BOOL isGroup = [fromUsr containsString:@"@chatroom"] || [toUsr containsString:@"@chatroom"];
     NSString *sessionUserName = isGroup ? fromUsr : fromUsr;
 
-    if (isGroup && !config.autoConfirmTransferGroup) return;
-    if (!isGroup && !config.autoConfirmTransferPersonal) return;
+    // 私聊/群聊开关只约束自动收款；定额拉群独立生效
+    if (config.autoConfirmTransfer) {
+        if (isGroup && !config.autoConfirmTransferGroup) return;
+        if (!isGroup && !config.autoConfirmTransferPersonal) return;
+    }
 
     long long feeAmount = 0;
 
@@ -174,7 +240,13 @@ static void processTransferMessage(id wrap) {
 
     WPLog(@"AutoTransfer", @"[FEE] 最终金额: %lld分=%.2f元", feeAmount, feeAmount / 100.0);
 
-    if (config.autoConfirmTransferMaxAmount > 0 && feeAmount > config.autoConfirmTransferMaxAmount) {
+    // ★ 定额自动拉群（WCR 同款）：金额命中档位 → 拉转账人进指定群
+    // 不受自动收款开关/私聊群聊开关/金额上限约束，只看 fixedInviteEnabled 与规则表
+    if (config.autoTransferFixedInviteEnabled) {
+        processFixedInvite(feeAmount, fromUsr, isGroup);
+    }
+
+    if (config.autoConfirmTransfer && config.autoConfirmTransferMaxAmount > 0 && feeAmount > config.autoConfirmTransferMaxAmount) {
         WPLog(@"AutoTransfer", @"[SKIP] 超过金额上限: %lld > %lld", feeAmount, config.autoConfirmTransferMaxAmount);
         return;
     }
@@ -215,6 +287,7 @@ static void processTransferMessage(id wrap) {
     NSUInteger delay = config.autoConfirmTransferDelay;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         @try {
+            if (!config.autoConfirmTransfer) return;
             WPLog(@"AutoTransfer", @"[CONFIRM] 使用方案A: 直接调用ConfirmTransferMoney:");
             Class requestClass = objc_getClass("WCPayConfirmTransferRequest");
             if (!requestClass) {
@@ -248,7 +321,7 @@ static void processTransferMessage(id wrap) {
             }
 
             NSString *notifyMsg = [NSString stringWithFormat:@"已收款 %.2f元", feeAmount / 100.0];
-            pushLocalNotification(notifyMsg);
+            pushLocalNotification(@"自动收款", notifyMsg);
         } @catch (NSException *e) {
             WPLog(@"AutoTransfer", @"[ERROR] 确认收款异常: %@", e);
         }
@@ -310,7 +383,7 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
     if (fee > 0) {
         NSString *msg = [NSString stringWithFormat:@"已收款 %.2f%@ 来自%@", fee / 100.0, feeType, payer];
         WPLog(@"AutoTransfer", @"[OK] 自动收款成功(回调): %@", msg);
-        pushLocalNotification(msg);
+        pushLocalNotification(@"自动收款", msg);
     }
 }
 
