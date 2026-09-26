@@ -51,7 +51,8 @@ static void pushLocalNotification(NSString *title, NSString *message) {
 
 #pragma mark - 定额自动拉群（WCR 同款 FixedInvite）
 
-/// 微信原生拉人进群：CGroupMgr InviteGroupMember/AddGroupMember（与 WCR 踢人用的 DeleteGroupMember:withMemberList:scene: 同族接口）
+/// 微信原生拉人进群（8.0.60 方法表 Frida 实锤）：
+/// AddGroupMember:memberList:desp:historyInfo: 直接加人；InviteGroupMember:withMemberList: 邀请制兜底
 static BOOL mioInviteUserToChatRoom(NSString *userName, NSString *roomId) {
     if (!userName.length || ![roomId hasSuffix:@"@chatroom"]) return NO;
     id grpMgr = WXGetService(objc_getClass("CGroupMgr"));
@@ -59,22 +60,41 @@ static BOOL mioInviteUserToChatRoom(NSString *userName, NSString *roomId) {
         WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] CGroupMgr 服务不可用 (room=%@ user=%@)", roomId, userName);
         return NO;
     }
-    NSArray<NSString *> *candidates = @[
-        @"InviteGroupMember:withMemberList:scene:",
-        @"AddGroupMember:withMemberList:scene:",
-    ];
-    for (NSString *selName in candidates) {
-        SEL sel = NSSelectorFromString(selName);
-        if (![grpMgr respondsToSelector:sel]) continue;
+
+    // 已在群内则不重复拉
+    SEL selIn = NSSelectorFromString(@"IsUsrInChatRoom:Usr:");
+    if ([grpMgr respondsToSelector:selIn]) {
+        BOOL already = ((BOOL (*)(id, SEL, id, id))objc_msgSend)(grpMgr, selIn, roomId, userName);
+        if (already) {
+            WPLog(@"AutoTransfer", @"[FixedInvite] %@ 已在群 %@ 内，跳过", userName, roomId);
+            return YES;
+        }
+    }
+
+    SEL addSel = NSSelectorFromString(@"AddGroupMember:memberList:desp:historyInfo:");
+    if ([grpMgr respondsToSelector:addSel]) {
         @try {
-            ((void (*)(id, SEL, id, id, unsigned long))objc_msgSend)(grpMgr, sel, roomId, @[userName], (unsigned long)1);
-            WPLog(@"AutoTransfer", @"[FixedInvite] 已调用 %@ room=%@ user=%@", selName, roomId, userName);
+            ((void (*)(id, SEL, id, id, id, id))objc_msgSend)(grpMgr, addSel, roomId, @[userName], @"", nil);
+            WPLog(@"AutoTransfer", @"[FixedInvite] 已调用 AddGroupMember room=%@ user=%@", roomId, userName);
             return YES;
         } @catch (NSException *e) {
-            WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] %@ 异常: %@", selName, e);
+            WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] AddGroupMember 异常: %@", e);
             return NO;
         }
     }
+
+    SEL invSel = NSSelectorFromString(@"InviteGroupMember:withMemberList:");
+    if ([grpMgr respondsToSelector:invSel]) {
+        @try {
+            ((void (*)(id, SEL, id, id))objc_msgSend)(grpMgr, invSel, roomId, @[userName]);
+            WPLog(@"AutoTransfer", @"[FixedInvite] 已调用 InviteGroupMember room=%@ user=%@", roomId, userName);
+            return YES;
+        } @catch (NSException *e) {
+            WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] InviteGroupMember 异常: %@", e);
+            return NO;
+        }
+    }
+
     WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] CGroupMgr 无可用拉人接口 (room=%@ user=%@)", roomId, userName);
     return NO;
 }
