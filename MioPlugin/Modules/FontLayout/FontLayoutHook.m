@@ -12,7 +12,6 @@
 #import "../../Core/LogManager.h"
 #import <substrate.h>
 #import <objc/runtime.h>
-#import <objc/message.h>
 
 #pragma mark - 常量
 
@@ -209,26 +208,9 @@ static unsigned int hook_m_uiGlobalFontLevel(id self, SEL _cmd) {
 
 #pragma mark - 安装入口
 
-static BOOL g_fontHooksInstalled = NO;
-
 @implementation FontLayoutHook
 
 + (void)install {
-    // WCR Bootstrap 同款引导（WCRLayoutSizeBootstrapLoader 复刻）：看门狗只管 scene-create 启动窗口
-    // （CPU 配额 ~7s），启动期不装热路径 hook，延迟到主队列 8s 后再执行 installIfNeeded——
-    // 开关常开也不占启动配额；开关手动打开仍经 wpHandleSwitchKey 即时装（installIfNeeded 幂等防重）。
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [self installIfNeeded];
-    });
-}
-
-// ★ scene-create 看门狗优化（0x8BADF00D：启动 CPU 配额 6.96s 耗尽即被 SIGKILL）：
-//   getValueOfProperty:inRuleSet: 是微信主题系统热路径（实测启动期 8000-19000 次/2s），
-//   双开关全关时 hook 体仅 pass-through，但 trampoline + 单例 + 属性读的空转照烧 CPU。
-//   全关时不安装；设置页打开开关后经 wpHandleSwitchKey → installIfNeeded 惰性补装。
-+ (void)installIfNeeded {
-    if (g_fontHooksInstalled) return;
     WPLog(@"FontLayout", @"=== FontLayoutHook v4 Install Start ===");
 
     // ── 诊断：检查类和方法的可用性 ──
@@ -263,12 +245,6 @@ static BOOL g_fontHooksInstalled = NO;
     WPLog(@"FontLayout", @"FontRuleSet whitelist: %@",
           [[s_fontRuleSets() allObjects] componentsJoinedByString:@", "]);
 
-    // ── 双开关全关 → 不安装（惰性补装机制见 installIfNeeded 注释）──
-    if (!cfg.globalLayoutEnabled && !cfg.chatLayoutEnabled) {
-        WPLog(@"FontLayout", @"[SKIP] 全局/对话布局均未开启，跳过 hook 安装（开关打开时惰性补装）");
-        return;
-    }
-
     // ── Hook 安装 ──
     if (mmThemeManager && mGetValue) {
         MSHookMessageEx(mmThemeManager, selGetValue,
@@ -296,69 +272,7 @@ static BOOL g_fontHooksInstalled = NO;
               mFontLevel ? @"OK" : @"NIL");
     }
 
-    g_fontHooksInstalled = YES;
     WPLog(@"FontLayout", @"=== FontLayoutHook v4 Install Complete ===");
-}
-
-#pragma mark - 立即生效（WCR applyLayoutSizeRefreshNow 同款）
-
-// WCR _WCRLayoutSizeRefreshWeChatUI 同款：借微信自身的"语言切换"全局刷新链路强制全微信重绘，
-// 配合 [MMTextWidth clear] 清文本测量缓存——字号/布局变更无需重启微信立即生效。
-// 全程 objc_getClass + respondsToSelector 守卫（CI 无微信头文件，类一律 id + objc_msgSend 强转），
-// 任一环缺失静默跳过，绝不崩溃。
-+ (void)applyLayoutRefreshNow {
-    Class mmContext = objc_getClass("MMContext");
-    SEL selCurrentContext = NSSelectorFromString(@"currentContext");
-    SEL selGetService = NSSelectorFromString(@"getService:");
-    id ctx = (mmContext && [(id)mmContext respondsToSelector:selCurrentContext])
-        ? ((id (*)(id, SEL))objc_msgSend)((id)mmContext, selCurrentContext) : nil;
-
-    // ── 1. 重设当前语言（触发微信全局 UI 刷新流程；shouldChangeMainF=NO 不真切语言）──
-    if (ctx && [ctx respondsToSelector:selGetService]) {
-        Class mmLanguageMgr = objc_getClass("MMLanguageMgr");
-        SEL selGetCurLanguage = NSSelectorFromString(@"getCurLanguage");
-        SEL selSetCurLanguage = NSSelectorFromString(@"setCurLanguage:shouldChangeMainF:");
-        if (mmLanguageMgr) {
-            id langMgr = ((id (*)(id, SEL, id))objc_msgSend)(ctx, selGetService, mmLanguageMgr);
-            if (langMgr
-                && [langMgr respondsToSelector:selGetCurLanguage]
-                && [langMgr respondsToSelector:selSetCurLanguage]) {
-                id lang = ((id (*)(id, SEL))objc_msgSend)(langMgr, selGetCurLanguage);
-                ((void (*)(id, SEL, id, BOOL))objc_msgSend)(langMgr, selSetCurLanguage, lang, NO);
-            }
-        }
-
-        // ── 2. 清翻译缓存（TranslateSnsMgr / TranslateMsgMgr.changeLanguageAndCleanAllCache）──
-        for (NSString *name in @[@"TranslateSnsMgr", @"TranslateMsgMgr"]) {
-            Class svc = objc_getClass(name.UTF8String);
-            if (!svc) continue;
-            id obj = ((id (*)(id, SEL, id))objc_msgSend)(ctx, selGetService, svc);
-            SEL selClean = NSSelectorFromString(@"changeLanguageAndCleanAllCache");
-            if (obj && [obj respondsToSelector:selClean]) {
-                ((void (*)(id, SEL))objc_msgSend)(obj, selClean);
-            }
-        }
-    }
-
-    // ── 3. 清文本测量缓存（WCR FUN_00431fb0 同款；不清会导致字号变了气泡高度按旧值算）──
-    Class mmTextWidth = objc_getClass("MMTextWidth");
-    SEL selClear = NSSelectorFromString(@"clear");
-    if (mmTextWidth && [(id)mmTextWidth respondsToSelector:selClear]) {
-        ((void (*)(id, SEL))objc_msgSend)((id)mmTextWidth, selClear);
-    }
-
-    // ── 4. 全局刷新所有 VC（CAppViewControllerManager.refreshLanguage:3，WCR 同款参数 3）──
-    Class cAppVCMgr = objc_getClass("CAppViewControllerManager");
-    SEL selGetAppVCMgr = NSSelectorFromString(@"getAppViewControllerManager");
-    SEL selRefreshLanguage = NSSelectorFromString(@"refreshLanguage:");
-    if (cAppVCMgr && [(id)cAppVCMgr respondsToSelector:selGetAppVCMgr]) {
-        id mgr = ((id (*)(id, SEL))objc_msgSend)((id)cAppVCMgr, selGetAppVCMgr);
-        if (mgr && [mgr respondsToSelector:selRefreshLanguage]) {
-            ((void (*)(id, SEL, NSInteger))objc_msgSend)(mgr, selRefreshLanguage, 3);
-        }
-    }
-
-    WPLog(@"FontLayout", @"[REFRESH] 立即生效完成（语言链路刷新 + MMTextWidth clear，WCR 同款）");
 }
 
 @end
