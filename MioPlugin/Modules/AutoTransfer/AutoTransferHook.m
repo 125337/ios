@@ -53,6 +53,7 @@ static void pushLocalNotification(NSString *title, NSString *message) {
 
 /// 微信原生拉人进群（8.0.60 方法表 Frida 实锤）：
 /// AddGroupMember:memberList:desp:historyInfo: 直接加人；InviteGroupMember:withMemberList: 邀请制兜底
+/// memberList 必须传 CContact 对象（传 wxid 字符串微信内部读 ivar 会直接 SIGSEGV，实测）
 static BOOL mioInviteUserToChatRoom(NSString *userName, NSString *roomId) {
     if (!userName.length || ![roomId hasSuffix:@"@chatroom"]) return NO;
     id grpMgr = WXGetService(objc_getClass("CGroupMgr"));
@@ -61,20 +62,18 @@ static BOOL mioInviteUserToChatRoom(NSString *userName, NSString *roomId) {
         return NO;
     }
 
-    // 已在群内则不重复拉
-    SEL selIn = NSSelectorFromString(@"IsUsrInChatRoom:Usr:");
-    if ([grpMgr respondsToSelector:selIn]) {
-        BOOL already = ((BOOL (*)(id, SEL, id, id))objc_msgSend)(grpMgr, selIn, roomId, userName);
-        if (already) {
-            WPLog(@"AutoTransfer", @"[FixedInvite] %@ 已在群 %@ 内，跳过", userName, roomId);
-            return YES;
-        }
+    // 微信 UI 流程传的就是 CContact 对象数组
+    id contact = WXGetContactForWxid(userName);
+    if (!contact) {
+        WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] 拿不到联系人对象: %@", userName);
+        return NO;
     }
 
     SEL addSel = NSSelectorFromString(@"AddGroupMember:memberList:desp:historyInfo:");
     if ([grpMgr respondsToSelector:addSel]) {
+        WPLog(@"AutoTransfer", @"[FixedInvite] 调用前: AddGroupMember room=%@ user=%@", roomId, userName);
         @try {
-            ((void (*)(id, SEL, id, id, id, id))objc_msgSend)(grpMgr, addSel, roomId, @[userName], @"", nil);
+            ((void (*)(id, SEL, id, id, id, id))objc_msgSend)(grpMgr, addSel, roomId, @[contact], @"", nil);
             WPLog(@"AutoTransfer", @"[FixedInvite] 已调用 AddGroupMember room=%@ user=%@", roomId, userName);
             return YES;
         } @catch (NSException *e) {
@@ -85,8 +84,9 @@ static BOOL mioInviteUserToChatRoom(NSString *userName, NSString *roomId) {
 
     SEL invSel = NSSelectorFromString(@"InviteGroupMember:withMemberList:");
     if ([grpMgr respondsToSelector:invSel]) {
+        WPLog(@"AutoTransfer", @"[FixedInvite] 调用前: InviteGroupMember room=%@ user=%@", roomId, userName);
         @try {
-            ((void (*)(id, SEL, id, id))objc_msgSend)(grpMgr, invSel, roomId, @[userName]);
+            ((void (*)(id, SEL, id, id))objc_msgSend)(grpMgr, invSel, roomId, @[contact]);
             WPLog(@"AutoTransfer", @"[FixedInvite] 已调用 InviteGroupMember room=%@ user=%@", roomId, userName);
             return YES;
         } @catch (NSException *e) {
