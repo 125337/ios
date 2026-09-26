@@ -213,7 +213,13 @@ static BOOL g_fontHooksInstalled = NO;
 @implementation FontLayoutHook
 
 + (void)install {
-    [self installIfNeeded];
+    // WCR Bootstrap 同款引导（WCRLayoutSizeBootstrapLoader 复刻）：看门狗只管 scene-create 启动窗口
+    // （CPU 配额 ~7s），启动期不装热路径 hook，延迟到主队列 8s 后再执行 installIfNeeded——
+    // 开关常开也不占启动配额；开关手动打开仍经 wpHandleSwitchKey 即时装（installIfNeeded 幂等防重）。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self installIfNeeded];
+    });
 }
 
 // ★ scene-create 看门狗优化（0x8BADF00D：启动 CPU 配额 6.96s 耗尽即被 SIGKILL）：
