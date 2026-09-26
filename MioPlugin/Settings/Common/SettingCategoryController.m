@@ -152,24 +152,32 @@ static const CGFloat kCellHPadding = 16.0;
     // 否则滑到底部切手风琴/输入保存后整页跳回顶部
     CGPoint savedOffset = CGPointZero;
     BOOL needRestore = NO;
-    if (self.wcTable.tableView) {
-        savedOffset = self.wcTable.tableView.contentOffset;
-        needRestore = savedOffset.y > 0.5;
+    UIView *oldContainer = nil;
+    if (self.wcTable) {
+        if (self.wcTable.tableView) {
+            savedOffset = self.wcTable.tableView.contentOffset;
+            needRestore = savedOffset.y > 0.5;
+        }
+        oldContainer = self.wcTable.containerView;
     }
-    [self.wcTable.containerView removeFromSuperview];
+    // 立即摘旧挂新会闪一帧空表（新表要等 reloadAsync 才有内容）。
+    // 对齐 WCR reloadTableData 观感：新表后台建好、buildUI 填完、reload 跑完后，
+    // 再与旧表同帧原子替换（本 runloop 内完成，无空帧）
     self.wcTable = [WPWeChatTable tableForVC:self];
     if (!self.wcTable) return;
     self.wcLastGroup = nil;
     self.wcPendingHeader = nil;
-    [self.view addSubview:self.wcTable.containerView];
     // 数据由后续 buildUI 同步填充，此处延迟 reload 兜底（首帧 layout 早于 buildUI 时表会空一帧）
     [self.wcTable reloadAsync];
-    if (needRestore) {
-        UITableView *newTV = self.wcTable.tableView;
-        __weak typeof(self) wself = self;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            __strong typeof(wself) sself = wself;
-            if (!sself.wcTable || sself.wcTable.tableView != newTV) return;  // 期间又重建过
+    UITableView *newTV = self.wcTable.tableView;
+    UIView *newContainer = self.wcTable.containerView;
+    __weak typeof(self) wself = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        __strong typeof(wself) sself = wself;
+        if (!sself.wcTable || sself.wcTable.tableView != newTV) return;  // 期间又重建过，交棒给最后一次
+        [oldContainer removeFromSuperview];  // 同帧摘旧挂新：无空帧不闪
+        [sself.view addSubview:newContainer];
+        if (needRestore) {
             // reloadAsync 两连刷已排在本块之前执行完；强制布局拿到真实 contentSize 后恢复
             [newTV layoutIfNeeded];
             CGFloat maxOffset = MAX(0, newTV.contentSize.height - newTV.bounds.size.height + newTV.adjustedContentInset.bottom);
@@ -177,9 +185,9 @@ static const CGFloat kCellHPadding = 16.0;
             p.y = MIN(p.y, maxOffset);
             if (p.y > 0.5) [newTV setContentOffset:p animated:NO];
             WPLog(@"WCTable", @"[WCTABLE] 恢复滚动位置 y=%.1f (max=%.1f)", p.y, maxOffset);
-        });
-    }
-    WPLog(@"WCTable", @"[WCTABLE] 引擎表已重建: %@", self.wcTable.containerView);
+        }
+    });
+    WPLog(@"WCTable", @"[WCTABLE] 引擎表已重建(延迟挂载): %@", newContainer);
 }
 
 // 为配置 key 注册动态 switch 回调 selector（wpSw_<hash>_<原始key>，IMP 共享 wpWCSwitchTramp）。
