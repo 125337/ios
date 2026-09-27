@@ -12,13 +12,13 @@
 //   Hook-3 RoomContentLogicController getMemeberCountLabel
 //       → 对话开关开且值有效时 label.font = [UIFont mediumSystemFontOfSize:值+1]。
 //   生效时机：启动直接安装（无延迟）；开关全关时跳过安装，设置页开开关即时补装（幂等）。
-//   立即生效：applyLayoutRefreshNow = 清文本测量缓存 + 语言切换链路全局重绘（Mio fcde36e
-//       已实测验证的 WCR 同款链路，锤子 doChangeCSS 同构）。
+//   立即生效链路已移除（141/142.log 实测 step4 取 CAppViewControllerManager 不稳），改为
+//   设置页开关变化后弹统一重启弹窗（MioRestartHelper）。
 //
 // 日志约定（全流程排查；热路径全部一次性记录，状态变化才打印，避免刷屏——
 // 实测 140.log 中 [MODIFY] 18 秒刷 8256 条 ≈ 460 条/秒，为日志文件 IO 开销）：
 //   [INSTALL] 安装链路   [SKIP] 跳过安装   [QUERY] #font_set 属性首见留痕
-//   [MODIFY] 值变化时替换 [LEVEL] 字体等级锁 [APPLY] 立即生效各步
+//   [MODIFY] 值变化时替换 [LEVEL] 字体等级锁
 
 #import "FontLayoutHook.h"
 #import "FontLayoutConfig.h"
@@ -58,31 +58,6 @@ static BOOL FLShouldLog(NSString *prefix, NSString *key, NSString *marker) {
 
 static BOOL wpValidFontSize(CGFloat v) {
     return v >= kMinFontSize && v <= kMaxFontSize;
-}
-
-/// 服务获取：MMContext currentContext getService: 优先，MMServiceCenter defaultCenter 兜底
-/// （141.log 实证：CAppViewControllerManager 走 MMContext 取不到，step4 失效；
-///   WXGetService/ServiceHelper.h 同款 MMServiceCenter 模式在 CGroupMgr 上已实证可用）
-static id FLService(Class cls) {
-    if (!cls) return nil;
-    @try {
-        Class mmctx = objc_getClass("MMContext");
-        if (mmctx && [mmctx respondsToSelector:@selector(currentContext)]) {
-            id ctx = ((id (*)(id, SEL))objc_msgSend)(mmctx, @selector(currentContext));
-            if (ctx && [ctx respondsToSelector:@selector(getService:)]) {
-                id svc = ((id (*)(id, SEL, Class))objc_msgSend)(ctx, @selector(getService:), cls);
-                if (svc) return svc;
-            }
-        }
-        Class sc = objc_getClass("MMServiceCenter");
-        if (sc && [sc respondsToSelector:@selector(defaultCenter)]) {
-            id center = ((id (*)(id, SEL))objc_msgSend)(sc, @selector(defaultCenter));
-            if (center && [center respondsToSelector:@selector(getService:)]) {
-                return ((id (*)(id, SEL, Class))objc_msgSend)(center, @selector(getService:), cls);
-            }
-        }
-    } @catch (NSException *e) {}
-    return nil;
 }
 
 #pragma mark - Hook 1: MMThemeManager.getValueOfProperty:inRuleSet:
@@ -209,63 +184,9 @@ static id hook_getMemeberCountLabel(id self, SEL _cmd) {
     return label;
 }
 
-#pragma mark - 立即生效（WCR/锤子 doChangeCSS 同款链路）
-
-static void FLApplyRefreshNow(void) {
-    @try {
-        // 1) 清微信文本测量缓存
-        Class widthCls = objc_getClass("MMTextWidth");
-        BOOL cleared = NO;
-        if (widthCls && [widthCls respondsToSelector:@selector(clear)]) {
-            ((void (*)(id, SEL))objc_msgSend)(widthCls, @selector(clear));
-            cleared = YES;
-        }
-        WPLog(@"FontLayout", @"[APPLY] step1 清测量缓存: MMTextWidth=%@ clear=%d",
-              widthCls ? @"OK" : @"NIL", cleared);
-
-        // 2) 借微信语言切换链路触发全局刷新
-        id langMgr = FLService(objc_getClass("MMLanguageMgr"));
-        SEL setLangSel = NSSelectorFromString(@"setCurLanguage:shouldChangeMainF:");
-        BOOL langOK = langMgr && [langMgr respondsToSelector:setLangSel];
-        if (langOK) {
-            ((void (*)(id, SEL, int, BOOL))objc_msgSend)(langMgr, setLangSel, 0, NO);
-        }
-        WPLog(@"FontLayout", @"[APPLY] step2 MMLanguageMgr=%@ setCurLanguage=%d",
-              langMgr ? @"OK" : @"NIL", langOK);
-
-        // 3) 清翻译缓存（锤子 doChangeCSS 同款）
-        SEL cleanSel = NSSelectorFromString(@"changeLanguageAndCleanAllCache");
-        id snsMgr = FLService(objc_getClass("TranslateSnsMgr"));
-        BOOL snsOK = snsMgr && [snsMgr respondsToSelector:cleanSel];
-        if (snsOK) ((void (*)(id, SEL))objc_msgSend)(snsMgr, cleanSel);
-        id msgMgr = FLService(objc_getClass("TranslateMsgMgr"));
-        BOOL msgOK = msgMgr && [msgMgr respondsToSelector:cleanSel];
-        if (msgOK) ((void (*)(id, SEL))objc_msgSend)(msgMgr, cleanSel);
-        WPLog(@"FontLayout", @"[APPLY] step3 翻译缓存清理: Sns=%d Msg=%d", snsOK, msgOK);
-
-        // 4) 全微信 VC 重绘
-        id appMgr = FLService(objc_getClass("CAppViewControllerManager"));
-        SEL refreshSel = NSSelectorFromString(@"refreshLanguage:");
-        BOOL refreshOK = appMgr && [appMgr respondsToSelector:refreshSel];
-        if (refreshOK) {
-            ((void (*)(id, SEL, int))objc_msgSend)(appMgr, refreshSel, 3);
-        }
-        WPLog(@"FontLayout", @"[APPLY] step4 CAppViewControllerManager=%@ refreshLanguage:3=%d",
-              appMgr ? @"OK" : @"NIL", refreshOK);
-
-        WPLog(@"FontLayout", @"[APPLY] 立即生效刷新完成");
-    } @catch (NSException *e) {
-        WPLog(@"FontLayout", @"applyLayoutRefreshNow 异常: %@ %@", e.name, e.reason);
-    }
-}
-
 #pragma mark - 安装（启动直接安装，开关全关跳过；设置页开关即时补装幂等）
 
 @implementation FontLayoutHook
-
-+ (void)applyLayoutRefreshNow {
-    FLApplyRefreshNow();
-}
 
 + (void)install {
     WPLog(@"FontLayout", @"=== FontLayoutHook 锤子同款版 install（直接安装，无延迟）===");

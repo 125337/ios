@@ -2,14 +2,13 @@
 #import "../../Modules/FontLayout/FontLayoutConfig.h"
 #import "../../Modules/FontLayout/FontLayoutHook.h"
 #import "../../Core/LogManager.h"
-#import "../../Core/MioAlertHelper.h"
+#import "../../Core/MioRestartHelper.h"
 #import <objc/runtime.h>
 
 static NSString *const kGlobalLayoutEnabled = @"globalLayoutEnabled";
 static NSString *const kGlobalFontSize = @"globalFontSize";
 static NSString *const kChatLayoutEnabled = @"chatLayoutEnabled";
 static NSString *const kChatFontSize = @"chatFontSize";
-static NSString *const kApplyNowKey = @"applyNow";
 
 // 字号限幅（锤子助手同款语义：#font_set 下的 alllevel/webLevel/chatLevel 固定值替换 10-16）
 static const CGFloat kMinFontSize = 10;
@@ -100,20 +99,6 @@ static BOOL wpFontSizeValid(CGFloat v) {
 
     y = [self finishGroup:group2 atY:y height:cy];
 
-    // ═════════════════════════════
-    // Section 3: 立即生效
-    // ═════════════════════════════
-    y = [self addSectionHeader:@"生效" y:y width:w];
-
-    UIView *group3 = [self addTableGroupAtY:y width:w];
-    cy = [self addButtonRowInGroup:group3
-                             title:@"立即生效"
-                              hint:@"修改字号后点击，无需重启微信"
-                               key:kApplyNowKey
-                                cy:0
-                             width:w];
-    y = [self finishGroup:group3 atY:y height:cy];
-
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
@@ -132,26 +117,11 @@ static BOOL wpFontSizeValid(CGFloat v) {
           cfg.globalLayoutEnabled, cfg.globalFontSize,
           cfg.chatLayoutEnabled, cfg.chatFontSize);
 
-    // 开关即时补装 hook（幂等；启动期 [SKIP] 的此时装上）
+    // 开关即时补装 hook（幂等；启动期 [SKIP] 的此时装上；重启后由启动 install 全量接管）
     [FontLayoutHook notifySwitchChanged];
 
-    // 锤子 doChangeCSS 同款：开关后询问立即生效
-    [MioAlertHelper showConfirmAlert:@"是否立即生效？\n（无需重启微信，全站界面重绘）"
-                        confirmTitle:@"立即生效"
-                          onConfirm:^{
-        [FontLayoutHook applyLayoutRefreshNow];
-    }];
-}
-
-#pragma mark - 按钮回调
-
-- (void)buttonClicked:(NSString *)key {
-    if ([key isEqualToString:kApplyNowKey]) {
-        WPLog(@"FontLayout", @"[UI] 立即生效按钮点击");
-        [FontLayoutHook notifySwitchChanged];
-        [FontLayoutHook applyLayoutRefreshNow];
-        [MioAlertHelper showTipAlert:@"已生效"];
-    }
+    // 复用统一重启弹窗：设置已保存，重启生效
+    [MioRestartHelper showRestartAlertFromVC:self];
 }
 
 @end
