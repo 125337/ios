@@ -1,7 +1,6 @@
 #import "WPUILayoutSettingsVC.h"
 #import "../../Modules/FontLayout/FontLayoutConfig.h"
 #import "../../Modules/FontLayout/FontLayoutHook.h"
-#import "../../Core/LogManager.h"
 #import "../../Core/MioRestartHelper.h"
 #import <objc/runtime.h>
 
@@ -110,12 +109,6 @@ static BOOL wpFontSizeValid(CGFloat v) {
         && ![key isEqualToString:kChatLayoutEnabled]) {
         return;
     }
-
-    FontLayoutConfig *cfg = [FontLayoutConfig shared];
-    WPLog(@"FontLayout", @"[UI] switchChanged: key=%@ on=%d → globalOn=%d globalSize=%.0f chatOn=%d chatSize=%.0f",
-          key, on,
-          cfg.globalLayoutEnabled, cfg.globalFontSize,
-          cfg.chatLayoutEnabled, cfg.chatFontSize);
 
     // 开关即时补装 hook（幂等；启动期 [SKIP] 的此时装上；重启后由启动 install 全量接管）
     [FontLayoutHook notifySwitchChanged];

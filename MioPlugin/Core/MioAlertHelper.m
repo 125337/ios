@@ -60,8 +60,6 @@ static _WAlertAnchor *walertAnchor(void) {
                         }
                     }
                 }
-                WPLog(@"Alert", @"CONFIRM CALLBACK FIRED input=%@ block=%@", input ?: @"<nil>",
-                      a.confirmBlock ? @"yes" : @"no");
                 if (a.confirmBlock) a.confirmBlock(input ?: @"");
             }), "v@:");
 
@@ -73,7 +71,6 @@ static _WAlertAnchor *walertAnchor(void) {
         class_addMethod([_WAlertAnchor class], NSSelectorFromString(@"__walert_simple_confirm"),
             imp_implementationWithBlock(^(id _self) {
                 void(^cb)(void) = ((_WAlertAnchor *)_self).simpleBlock;
-                WPLog(@"Alert", @"SIMPLE CONFIRM FIRED block=%@", cb ? @"yes" : @"no");
                 if (cb) cb();
             }), "v@:");
 
@@ -83,7 +80,6 @@ static _WAlertAnchor *walertAnchor(void) {
             SEL menuSel = NSSelectorFromString([NSString stringWithFormat:@"__walert_menu_%d", idx]);
             class_addMethod([_WAlertAnchor class], menuSel, imp_implementationWithBlock(^(id _self) {
                 NSArray *blocks = ((_WAlertAnchor *)_self).menuBlocks;
-                WPLog(@"Alert", @"MENU FIRED idx=%d blocks=%lu", idx, (unsigned long)blocks.count);
                 if (idx < (int)blocks.count) {
                     void(^b)(void) = blocks[idx];
                     if (b) b();
