@@ -133,7 +133,9 @@ static id hook_getMemeberCountLabel(id self, SEL _cmd) {
         CGFloat v = config.chatFontSize;
         if (config.chatLayoutEnabled && wpValidFontSize(v)
             && [label isKindOfClass:[UILabel class]]) {
-            UIFont *font = [UIFont mediumSystemFontOfSize:v + 1.0];
+            // CI SDK 无 mediumSystemFontOfSize: 声明，走 objc_msgSend
+            SEL medSel = NSSelectorFromString(@"mediumSystemFontOfSize:");
+            UIFont *font = ((UIFont *(*)(id, SEL, CGFloat))objc_msgSend)([UIFont class], medSel, v + 1.0);
             if (font) ((UILabel *)label).font = font;
         }
     } @catch (NSException *e) {
@@ -144,7 +146,7 @@ static id hook_getMemeberCountLabel(id self, SEL _cmd) {
 
 #pragma mark - 立即生效（WCR/锤子 doChangeCSS 同款链路）
 
-+ (void)applyLayoutRefreshNow {
+static void FLApplyRefreshNow(void) {
     @try {
         // 1) 清微信文本测量缓存
         Class widthCls = objc_getClass("MMTextWidth");
@@ -186,6 +188,10 @@ static id hook_getMemeberCountLabel(id self, SEL _cmd) {
 #pragma mark - 安装（WCR 同款延迟引导，过启动看门狗窗口）
 
 @implementation FontLayoutHook
+
++ (void)applyLayoutRefreshNow {
+    FLApplyRefreshNow();
+}
 
 + (void)install {
     // 启动 +8 秒主队列空闲后执行（看门狗窗口已过）；开关全关时不装
