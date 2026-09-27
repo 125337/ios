@@ -14,15 +14,13 @@
 
 #pragma mark - C 辅助函数（定义在使用点之前）
 
-/// 获取当前登录账号 CContact（MMServiceCenter getService: → getSelfContact）
+/// 获取当前登录账号 CContact（WXGetService → getSelfContact）
 static id MioGetSelfContact(void) {
-    id center = [objc_getClass("MMServiceCenter") performSelector:NSSelectorFromString(@"defaultCenter")];
-    if (!center) return nil;
     // 兼容不同微信版本：CContactMgr / CContactStorage 均暴露 getSelfContact
     for (NSString *svcName in @[@"CContactMgr", @"CContactStorage"]) {
         Class svc = objc_getClass(svcName.UTF8String);
         if (!svc) continue;
-        id svcObj = ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), svc);
+        id svcObj = WXGetService(svc);
         SEL sel = NSSelectorFromString(@"getSelfContact");
         if (svcObj && [svcObj respondsToSelector:sel]) {
             id contact = ((id (*)(id, SEL))objc_msgSend)(svcObj, sel);

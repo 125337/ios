@@ -3,12 +3,29 @@
 #import "LogManager.h"
 
 static inline id WXGetService(Class serviceClass) {
+    if (!serviceClass) return nil;
+    // ① MMContext currentContext getService:（WCR 同款，8.0.60 实证可用）
+    Class mmctx = objc_getClass("MMContext");
+    if (mmctx && [mmctx respondsToSelector:@selector(currentContext)]) {
+        id ctx = ((id (*)(id, SEL))objc_msgSend)(mmctx, @selector(currentContext));
+        if (ctx && [ctx respondsToSelector:@selector(getService:)]) {
+            id svc = ((id (*)(id, SEL, Class))objc_msgSend)(ctx, @selector(getService:), serviceClass);
+            if (svc) return svc;
+        }
+    }
+    // ② MMServiceCenter defaultCenter 兜底。
+    // 教训（144.log 看门狗定论）：8.0.60 原生 MMServiceCenter 无 defaultCenter 类方法，
+    // 无守卫直调每次抛 NSInvalidArgumentException（栈展开毫秒级开销），消息补同步风暴时
+    // 每条消息 3-6 次调用 → 秒级 CPU，耗穿 scene-create 看门狗 7.16s 配额。
+    // 此方法此前一直可用是因其他插件（WCR/锤子）可能添加过该方法；移除后依赖暴露。
     Class sc = objc_getClass("MMServiceCenter");
-    if (!sc) return nil;
-    id center = ((id (*)(id, SEL))objc_msgSend)(sc, NSSelectorFromString(@"defaultCenter"));
-    if (!center) return nil;
-    if (![center respondsToSelector:NSSelectorFromString(@"getService:")]) return nil;
-    return ((id (*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService:"), serviceClass);
+    if (sc && [sc respondsToSelector:@selector(defaultCenter)]) {
+        id center = ((id (*)(id, SEL))objc_msgSend)(sc, @selector(defaultCenter));
+        if (center && [center respondsToSelector:@selector(getService:)]) {
+            return ((id (*)(id, SEL, Class))objc_msgSend)(center, @selector(getService:), serviceClass);
+        }
+    }
+    return nil;
 }
 
 static inline id WXGetContactForWxid(NSString *wxid) {

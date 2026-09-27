@@ -59,10 +59,9 @@ static BOOL mioInviteUserToChatRoom(NSString *userName, NSString *roomId) {
     if (!roomId.length || ![roomId hasSuffix:@"@chatroom"]) return NO;
     if (!userName.length || [userName hasSuffix:@"@chatroom"]) return NO;
 
-    Class mmServiceCenter = objc_getClass("MMServiceCenter");
     Class groupMgrClass = objc_getClass("CGroupMgr");
-    if (!mmServiceCenter || !groupMgrClass) {
-        WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] MMServiceCenter/CGroupMgr 类不存在");
+    if (!groupMgrClass) {
+        WPLog(@"AutoTransfer", @"[FixedInvite] [ERROR] CGroupMgr 类不存在");
         return NO;
     }
     id grpMgr = WXGetService(groupMgrClass);
