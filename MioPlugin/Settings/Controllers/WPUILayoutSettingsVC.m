@@ -9,9 +9,16 @@ static NSString *const kGlobalFontSize = @"globalFontSize";
 static NSString *const kChatLayoutEnabled = @"chatLayoutEnabled";
 static NSString *const kChatFontSize = @"chatFontSize";
 
-// 范围必须与 FontLayoutHook 中的验证范围一致 (10-16)
-static const CGFloat kMinFontSize = 10.0;
-static const CGFloat kMaxFontSize = 16.0;
+// 布局缩放倍率限幅（必须与 FontLayoutHook 中一致；WCR LayoutSize 同款语义：原始值 × 倍率）
+static const CGFloat kMinScale = 0.7;
+static const CGFloat kMaxScale = 1.4;
+
+/// 旧配置迁移：历史版本存字号 px（10-16），超限视为旧值按 /16 归一为倍率（14 → 0.875）
+static CGFloat wpNormalizedScale(CGFloat v) {
+    if (v > kMaxScale) return (v > 3.0) ? v / 16.0 : 1.0;
+    if (v < kMinScale) return 1.0;
+    return v;
+}
 
 @implementation WPUILayoutSettingsVC
 
@@ -39,8 +46,7 @@ static const CGFloat kMaxFontSize = 16.0;
     CGFloat cy = 0;
 
     BOOL globalOn = [[ConfigManager valueForKey:kGlobalLayoutEnabled] boolValue];
-    CGFloat globalFontSize = [[ConfigManager valueForKey:kGlobalFontSize] floatValue];
-    if (globalFontSize < kMinFontSize) globalFontSize = 16;
+    CGFloat globalFontSize = wpNormalizedScale([[ConfigManager valueForKey:kGlobalFontSize] floatValue]);
 
     [self.masterSwitchKeys addObject:kGlobalLayoutEnabled];
     cy = [self addMasterSwitchRowInGroup:group1
@@ -50,13 +56,13 @@ static const CGFloat kMaxFontSize = 16.0;
                               subBuilder:^(UIView *expand, CGFloat *ecy) {
         if (globalOn) {
             *ecy = [self addInputRowInGroup:expand
-                                      title:@"全局字号(px)"
+                                      title:@"全局布局缩放倍率"
                                         key:kGlobalFontSize
-                                      value:[NSString stringWithFormat:@"%.0f", globalFontSize]
-                                       hint:@"16"
+                                      value:[NSString stringWithFormat:@"%.1f", globalFontSize]
+                                       hint:@"1.0"
                                   valueType:InputValueTypeNumber
-                                 alertTitle:@"设置全局字号"
-                               alertMessage:[NSString stringWithFormat:@"请输入字号(%.0f-%.0f)", kMinFontSize, kMaxFontSize]
+                                 alertTitle:@"设置全局布局缩放"
+                               alertMessage:[NSString stringWithFormat:@"请输入缩放倍率(%.1f-%.1f)\n所有界面元素尺寸×倍率等比缩放", kMinScale, kMaxScale]
                                          cy:*ecy width:w];
         }
     }                                    cy:cy width:w];
@@ -72,8 +78,7 @@ static const CGFloat kMaxFontSize = 16.0;
     cy = 0;
 
     BOOL chatOn = [[ConfigManager valueForKey:kChatLayoutEnabled] boolValue];
-    CGFloat chatFontSize = [[ConfigManager valueForKey:kChatFontSize] floatValue];
-    if (chatFontSize < kMinFontSize) chatFontSize = 16;
+    CGFloat chatFontSize = wpNormalizedScale([[ConfigManager valueForKey:kChatFontSize] floatValue]);
 
     [self.masterSwitchKeys addObject:kChatLayoutEnabled];
     cy = [self addMasterSwitchRowInGroup:group2
@@ -83,13 +88,13 @@ static const CGFloat kMaxFontSize = 16.0;
                               subBuilder:^(UIView *expand, CGFloat *ecy) {
         if (chatOn) {
             *ecy = [self addInputRowInGroup:expand
-                                      title:@"对话字号(px)"
+                                      title:@"对话布局缩放倍率"
                                         key:kChatFontSize
-                                      value:[NSString stringWithFormat:@"%.0f", chatFontSize]
-                                       hint:@"16"
+                                      value:[NSString stringWithFormat:@"%.1f", chatFontSize]
+                                       hint:@"1.0"
                                   valueType:InputValueTypeNumber
-                                 alertTitle:@"设置对话字号"
-                               alertMessage:[NSString stringWithFormat:@"请输入字号(%.0f-%.0f)", kMinFontSize, kMaxFontSize]
+                                 alertTitle:@"设置对话布局缩放"
+                               alertMessage:[NSString stringWithFormat:@"请输入缩放倍率(%.1f-%.1f)\n所有界面元素尺寸×倍率等比缩放", kMinScale, kMaxScale]
                                          cy:*ecy width:w];
         }
     }                                    cy:cy width:w];

@@ -15,9 +15,9 @@
 
 #pragma mark - 常量
 
-// 字号范围（与 UI 侧保持一致）
-static const CGFloat kMinFontSize = 10.0f;
-static const CGFloat kMaxFontSize = 16.0f;
+// 布局缩放倍率限幅（WCR LayoutSize 同款语义：主题数值属性原始值 × 倍率等比缩放，支持小数）
+static const CGFloat kMinScale = 0.7f;
+static const CGFloat kMaxScale = 1.4f;
 
 // 白名单规则集（只修改这些规则集中的字号）
 // 基于日志 v7 中实际出现的所有规则集
@@ -62,15 +62,14 @@ static BOOL shouldIntercept(id originalResult,
         return NO;
     }
 
-    // ── 属性名级过滤（138.log 实锤修复）──
-    // 旧逻辑"规则集在白名单内就放行"会把 #widget_tipsbar_base 里的 cell_height(48)/
-    // icon_main_width(48) 和 #input_tool_view_tool 里的 contentInset(6)/edgeInset(5) 等
-    // 尺寸属性也改成目标字号，直接破坏布局——主题规则集里的属性不全是字号。
-    // 统一收紧为：属性名必须含 "font" 才拦截（真字号属性 titleview_fontsize/
-    // common_font_small_size/tool_view_fontSize 全命中；inset/width/height/margin 全排除）。
-    NSString *lowerProperty = [property lowercaseString];
-    if (![lowerProperty containsString:@"font"]) {
-        return NO;  // 属性名不含 font，跳过
+    // ── 作用域判定：白名单规则集内全部放行（布局语义下这些规则集的尺寸/字号都要等比缩放），
+    //    白名单外要求属性名含 "font"（避免误伤无关属性）──
+    BOOL inWhitelist = [s_fontRuleSets() containsObject:ruleSet];
+    if (!inWhitelist) {
+        NSString *lowerProperty = [property lowercaseString];
+        if (![lowerProperty containsString:@"font"]) {
+            return NO;  // 属性名不含 font，跳过
+        }
     }
 
     // ── 检查第一个元素是否为数值 ──
@@ -97,17 +96,15 @@ static BOOL shouldIntercept(id originalResult,
     return NO;
 }
 
-/// 创建新的第一个元素值（保持原类型）
+/// 创建新的第一个元素值（保持原类型）：原始值 × 缩放倍率（WCR LayoutSize 等比缩放语义）
 /// @param originalElement 原第一个元素
-/// @param newSize 目标字号
+/// @param scale 缩放倍率
 /// @return 同类型的新值
-static id createNewValueForElement(id originalElement, CGFloat newSize) {
+static id createNewValueForElement(id originalElement, CGFloat scale) {
     if ([originalElement isKindOfClass:[NSNumber class]]) {
-        // NSNumber → NSNumber
-        return @((NSInteger)newSize);
+        return @([originalElement doubleValue] * scale);
     } else if ([originalElement isKindOfClass:[NSString class]]) {
-        // NSString → NSString
-        return [NSString stringWithFormat:@"%.0f", newSize];
+        return [NSString stringWithFormat:@"%.1f", [originalElement doubleValue] * scale];
     }
     // 未知类型 → 返回原值（不做修改）
     return originalElement;
@@ -144,38 +141,34 @@ static id hook_getValueOfProperty_inRuleSet(id self, SEL _cmd,
             return originalResult;
         }
 
-        // ── 确定目标字号 ──
-        CGFloat targetSize = kMaxFontSize; // 默认 16
-
+        // ── 计算缩放倍率（WCR LayoutSize 同款：原始值 × 倍率等比缩放，非固定替换）──
+        CGFloat scale = 1.0;
         if (globalOn && chatOn) {
-            // 两个都开启 → 全局优先（可根据需求改为对话优先）
-            targetSize = config.globalFontSize;
+            // 两个都开启 → 全局优先
+            scale = config.globalFontSize;
         } else if (globalOn) {
-            // 仅全局
-            targetSize = config.globalFontSize;
+            scale = config.globalFontSize;
         } else if (chatOn) {
-            // 仅对话
-            targetSize = config.chatFontSize;
+            scale = config.chatFontSize;
+        }
+        // 旧配置迁移：历史版本存的是字号 px（10-16），超限即视为旧值按 /16 归一为倍率（14 → 0.875）
+        if (scale > kMaxScale) {
+            scale = (scale > 3.0) ? scale / 16.0 : 1.0;
+        }
+        if (scale < kMinScale) {
+            scale = 1.0;
         }
 
-        // ── 范围验证 ──
-        if (targetSize < kMinFontSize || targetSize > kMaxFontSize) {
-            WPLog(@"FontLayout",
-                  @"[SKIP] fontSize %.0f out of range [%.0f, %.0f]",
-                  targetSize, kMinFontSize, kMaxFontSize);
-            return originalResult;
-        }
-
-        // ── 执行修改：保留数组结构，只改第一个元素 ──
+        // ── 执行等比缩放：保留数组结构，只改第一个元素 ──
         NSMutableArray *modified = [(NSArray *)originalResult mutableCopy];
-        id newElement = createNewValueForElement(modified[0], targetSize);
+        id newElement = createNewValueForElement(modified[0], scale);
         modified[0] = newElement;
 
         // ── 日志 ──
         WPLog(@"FontLayout",
-              @"[MODIFY] %@ in %@ : %.0f → %.0f (type=%@, count=%lu)",
+              @"[MODIFY] %@ in %@ : %.1f × %.2f = %.1f (type=%@, count=%lu)",
               property, ruleSet,
-              originalSize, targetSize,
+              originalSize, scale, originalSize * scale,
               elementType, (unsigned long)modified.count);
 
         return modified;
