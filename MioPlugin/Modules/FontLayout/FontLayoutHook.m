@@ -15,9 +15,10 @@
 //   立即生效：applyLayoutRefreshNow = 清文本测量缓存 + 语言切换链路全局重绘（Mio fcde36e
 //       已实测验证的 WCR 同款链路，锤子 doChangeCSS 同构）。
 //
-// 日志约定（全流程排查）：
-//   [INSTALL] 安装链路   [SKIP] 跳过安装   [QUERY] #font_set 查询留痕
-//   [MODIFY] 实际替换    [LEVEL] 字体等级锁 [APPLY] 立即生效各步
+// 日志约定（全流程排查；热路径全部一次性记录，状态变化才打印，避免刷屏——
+// 实测 140.log 中 [MODIFY] 18 秒刷 8256 条 ≈ 460 条/秒，为日志文件 IO 开销）：
+//   [INSTALL] 安装链路   [SKIP] 跳过安装   [QUERY] #font_set 属性首见留痕
+//   [MODIFY] 值变化时替换 [LEVEL] 字体等级锁 [APPLY] 立即生效各步
 
 #import "FontLayoutHook.h"
 #import "FontLayoutConfig.h"
@@ -39,6 +40,20 @@ static const CGFloat kMaxFontSize = 16.0;
 
 static BOOL sHooksInstalled = NO;
 static BOOL sLevelLockLogged = NO;
+
+// 热路径日志去重：key -> 上次打印的标记，状态变化才允许再打印
+static NSMutableDictionary<NSString *, NSString *> *sLogState = nil;
+static dispatch_once_t sLogStateOnce;
+
+static BOOL FLShouldLog(NSString *key, NSString *marker) {
+    dispatch_once(&sLogStateOnce, ^{ sLogState = [NSMutableDictionary dictionary]; });
+    @synchronized (sLogState) {
+        NSString *last = sLogState[key];
+        if (last && [last isEqualToString:marker]) return NO;
+        sLogState[key] = marker;
+        return YES;
+    }
+}
 
 static BOOL wpValidFontSize(CGFloat v) {
     return v >= kMinFontSize && v <= kMaxFontSize;
@@ -77,17 +92,19 @@ static id hook_getValueOfProperty_inRuleSet(id self, SEL _cmd,
         // 锤子同款：规则集精确匹配 #font_set，其余一律直通
         if (![kFontRuleSet isEqualToString:ruleSet]) return originalResult;
 
-        // ── [QUERY] #font_set 查询全量留痕（低频调用，排查属性名/命中情况用）──
-        NSString *kind = originalResult ? NSStringFromClass([originalResult class]) : @"nil";
-        NSString *firstDesc = nil;
-        if ([originalResult isKindOfClass:[NSArray class]]
-            && [(NSArray *)originalResult count] > 0) {
-            id first = [(NSArray *)originalResult objectAtIndex:0];
-            firstDesc = [NSString stringWithFormat:@"%@(%@)",
-                         first, NSStringFromClass([first class])];
+        // ── [QUERY] 属性首见留痕（一次性；后续同属性查询不再打印）──
+        if (FLShouldLog(@"seen:", property, @"1")) {
+            NSString *kind = originalResult ? NSStringFromClass([originalResult class]) : @"nil";
+            NSString *firstDesc = nil;
+            if ([originalResult isKindOfClass:[NSArray class]]
+                && [(NSArray *)originalResult count] > 0) {
+                id first = [(NSArray *)originalResult objectAtIndex:0];
+                firstDesc = [NSString stringWithFormat:@"%@(%@)",
+                             first, NSStringFromClass([first class])];
+            }
+            WPLog(@"FontLayout", @"[QUERY] prop=%@ result=%@ first=%@ globalOn=%d chatOn=%d",
+                  property, kind, firstDesc ?: @"empty", globalOn, chatOn);
         }
-        WPLog(@"FontLayout", @"[QUERY] prop=%@ result=%@ first=%@ globalOn=%d chatOn=%d",
-              property, kind, firstDesc ?: @"empty", globalOn, chatOn);
 
         // ── 分支命中与取值 ──
         NSString *valueStr = nil;
@@ -96,34 +113,35 @@ static id hook_getValueOfProperty_inRuleSet(id self, SEL _cmd,
                 || [kPropWebLevel isEqualToString:property])) {
             if (wpValidFontSize(config.globalFontSize)) {
                 valueStr = [NSString stringWithFormat:@"%.0f", config.globalFontSize];
-            } else {
+            } else if (FLShouldLog(@"invalid:", property, @"1")) {
                 WPLog(@"FontLayout", @"[QUERY] %@ 命中但全局字号无效: %.2f",
                       property, config.globalFontSize);
             }
         } else if (chatOn && [kPropChatLevel isEqualToString:property]) {
             if (wpValidFontSize(config.chatFontSize)) {
                 valueStr = [NSString stringWithFormat:@"%.0f", config.chatFontSize];
-            } else {
+            } else if (FLShouldLog(@"invalid:", property, @"1")) {
                 WPLog(@"FontLayout", @"[QUERY] %@ 命中但对话字号无效: %.2f",
                       property, config.chatFontSize);
             }
-        } else {
-            WPLog(@"FontLayout", @"[QUERY] prop=%@ 未命中任何分支（期望 alllevel/webLevel/chatLevel）",
-                  property);
         }
         if (!valueStr) return originalResult;
 
         // 防御：原返回值为空数组时 replaceObjectAtIndex:0 会崩（锤子无此守卫，Mio 加上）
         if (![originalResult isKindOfClass:[NSArray class]]
             || [(NSArray *)originalResult count] == 0) {
-            WPLog(@"FontLayout", @"[QUERY] %@ 返回值非数组或为空(%@)，放弃替换",
-                  property, kind);
+            if (FLShouldLog(@"empty:", property, @"1")) {
+                WPLog(@"FontLayout", @"[QUERY] %@ 返回值非数组或为空，放弃替换", property);
+            }
             return originalResult;
         }
 
         NSMutableArray *modified = [(NSArray *)originalResult mutableCopy];
         [modified replaceObjectAtIndex:0 withObject:valueStr];
-        WPLog(@"FontLayout", @"[MODIFY] %@ in %@ -> %@", property, ruleSet, valueStr);
+        // 值变化才打印（同值重复替换不刷屏）
+        if (FLShouldLog(@"mod:", property, valueStr)) {
+            WPLog(@"FontLayout", @"[MODIFY] %@ in %@ -> %@", property, ruleSet, valueStr);
+        }
         return modified;
     } @catch (NSException *e) {
         WPLog(@"FontLayout", @"getValueOfProperty 异常: %@ %@ prop=%@ ruleSet=%@",
@@ -168,7 +186,9 @@ static id hook_getMemeberCountLabel(id self, SEL _cmd) {
             UIFont *font = ((UIFont *(*)(id, SEL, CGFloat))objc_msgSend)([UIFont class], medSel, v + 1.0);
             if (font) {
                 ((UILabel *)label).font = font;
-                WPLog(@"FontLayout", @"[MODIFY] memberCountLabel font -> %.0f+1", v);
+                if (FLShouldLog(@"member", [NSString stringWithFormat:@"%.0f", v])) {
+                    WPLog(@"FontLayout", @"[MODIFY] memberCountLabel font -> %.0f+1", v);
+                }
             }
         }
     } @catch (NSException *e) {
