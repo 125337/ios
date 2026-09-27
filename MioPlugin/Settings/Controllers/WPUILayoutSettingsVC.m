@@ -1,23 +1,22 @@
 #import "WPUILayoutSettingsVC.h"
 #import "../../Modules/FontLayout/FontLayoutConfig.h"
-#import "../../Core/MioRestartHelper.h"
+#import "../../Modules/FontLayout/FontLayoutHook.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioAlertHelper.h"
 #import <objc/runtime.h>
 
 static NSString *const kGlobalLayoutEnabled = @"globalLayoutEnabled";
 static NSString *const kGlobalFontSize = @"globalFontSize";
 static NSString *const kChatLayoutEnabled = @"chatLayoutEnabled";
 static NSString *const kChatFontSize = @"chatFontSize";
+static NSString *const kApplyNowKey = @"applyNow";
 
-// 布局缩放倍率限幅（必须与 FontLayoutHook 中一致；WCR LayoutSize 同款语义：原始值 × 倍率）
-static const CGFloat kMinScale = 0.7;
-static const CGFloat kMaxScale = 1.4;
+// 字号限幅（锤子助手同款语义：#font_set 下的 alllevel/webLevel/chatLevel 固定值替换 10-16）
+static const CGFloat kMinFontSize = 10;
+static const CGFloat kMaxFontSize = 16;
 
-/// 旧配置迁移：历史版本存字号 px（10-16），超限视为旧值按 /16 归一为倍率（14 → 0.875）
-static CGFloat wpNormalizedScale(CGFloat v) {
-    if (v > kMaxScale) return (v > 3.0) ? v / 16.0 : 1.0;
-    if (v < kMinScale) return 1.0;
-    return v;
+static BOOL wpFontSizeValid(CGFloat v) {
+    return v >= kMinFontSize && v <= kMaxFontSize;
 }
 
 @implementation WPUILayoutSettingsVC
@@ -46,7 +45,7 @@ static CGFloat wpNormalizedScale(CGFloat v) {
     CGFloat cy = 0;
 
     BOOL globalOn = [[ConfigManager valueForKey:kGlobalLayoutEnabled] boolValue];
-    CGFloat globalFontSize = wpNormalizedScale([[ConfigManager valueForKey:kGlobalFontSize] floatValue]);
+    CGFloat globalSize = [[ConfigManager valueForKey:kGlobalFontSize] floatValue];
 
     [self.masterSwitchKeys addObject:kGlobalLayoutEnabled];
     cy = [self addMasterSwitchRowInGroup:group1
@@ -56,13 +55,13 @@ static CGFloat wpNormalizedScale(CGFloat v) {
                               subBuilder:^(UIView *expand, CGFloat *ecy) {
         if (globalOn) {
             *ecy = [self addInputRowInGroup:expand
-                                      title:@"全局布局缩放倍率"
+                                      title:@"全局布局字号"
                                         key:kGlobalFontSize
-                                      value:[NSString stringWithFormat:@"%.1f", globalFontSize]
-                                       hint:@"1.0"
+                                      value:wpFontSizeValid(globalSize) ? [NSString stringWithFormat:@"%.0f", globalSize] : @""
+                                       hint:@"10-16"
                                   valueType:InputValueTypeNumber
-                                 alertTitle:@"设置全局布局缩放"
-                               alertMessage:[NSString stringWithFormat:@"请输入缩放倍率(%.1f-%.1f)\n所有界面元素尺寸×倍率等比缩放", kMinScale, kMaxScale]
+                                 alertTitle:@"设置全局布局字号"
+                               alertMessage:@"请输入字号(10-16)\n数值越小全局界面字号越小"
                                          cy:*ecy width:w];
         }
     }                                    cy:cy width:w];
@@ -78,7 +77,7 @@ static CGFloat wpNormalizedScale(CGFloat v) {
     cy = 0;
 
     BOOL chatOn = [[ConfigManager valueForKey:kChatLayoutEnabled] boolValue];
-    CGFloat chatFontSize = wpNormalizedScale([[ConfigManager valueForKey:kChatFontSize] floatValue]);
+    CGFloat chatSize = [[ConfigManager valueForKey:kChatFontSize] floatValue];
 
     [self.masterSwitchKeys addObject:kChatLayoutEnabled];
     cy = [self addMasterSwitchRowInGroup:group2
@@ -88,42 +87,69 @@ static CGFloat wpNormalizedScale(CGFloat v) {
                               subBuilder:^(UIView *expand, CGFloat *ecy) {
         if (chatOn) {
             *ecy = [self addInputRowInGroup:expand
-                                      title:@"对话布局缩放倍率"
+                                      title:@"对话布局字号"
                                         key:kChatFontSize
-                                      value:[NSString stringWithFormat:@"%.1f", chatFontSize]
-                                       hint:@"1.0"
+                                      value:wpFontSizeValid(chatSize) ? [NSString stringWithFormat:@"%.0f", chatSize] : @""
+                                       hint:@"10-16"
                                   valueType:InputValueTypeNumber
-                                 alertTitle:@"设置对话布局缩放"
-                               alertMessage:[NSString stringWithFormat:@"请输入缩放倍率(%.1f-%.1f)\n所有界面元素尺寸×倍率等比缩放", kMinScale, kMaxScale]
+                                 alertTitle:@"设置对话布局字号"
+                               alertMessage:@"请输入字号(10-16)\n数值越小聊天界面字号越小"
                                          cy:*ecy width:w];
         }
     }                                    cy:cy width:w];
 
     y = [self finishGroup:group2 atY:y height:cy];
 
+    // ═════════════════════════════
+    // Section 3: 立即生效
+    // ═════════════════════════════
+    y = [self addSectionHeader:@"生效" y:y width:w];
+
+    UIView *group3 = [self addTableGroupAtY:y width:w];
+    cy = [self addButtonRowInGroup:group3
+                             title:@"立即生效"
+                              hint:@"修改字号后点击，无需重启微信"
+                               key:kApplyNowKey
+                                cy:0
+                             width:w];
+    y = [self finishGroup:group3 atY:y height:cy];
+
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
 
-#pragma mark - 开关回调
+#pragma mark - 开关回调（微信引擎入口）
 
-- (void)switchChanged:(UISwitch *)sender {
-    [super switchChanged:sender];
+- (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on {
+    if (![key isEqualToString:kGlobalLayoutEnabled]
+        && ![key isEqualToString:kChatLayoutEnabled]) {
+        return;
+    }
 
-    NSString *key = objc_getAssociatedObject(sender, "key");
-    if (!key) return;
-
-    // 验证保存后的值
     FontLayoutConfig *cfg = [FontLayoutConfig shared];
-    WPLog(@"FontLayout", @"[UI] switchChanged: key=%@ isOn=%d → globalOn=%d globalSize=%.0f chatOn=%d chatSize=%.0f",
-          key, sender.on,
+    WPLog(@"FontLayout", @"[UI] switchChanged: key=%@ on=%d → globalOn=%d globalSize=%.0f chatOn=%d chatSize=%.0f",
+          key, on,
           cfg.globalLayoutEnabled, cfg.globalFontSize,
           cfg.chatLayoutEnabled, cfg.chatFontSize);
 
-    // 主开关变化 → 弹重启弹窗
-    if ([key isEqualToString:kGlobalLayoutEnabled]
-        || [key isEqualToString:kChatLayoutEnabled]) {
-        [MioRestartHelper showRestartAlertFromVC:self];
+    // 开关即时补装 hook（幂等；启动期 [SKIP] 的此时装上）
+    [FontLayoutHook notifySwitchChanged];
+
+    // 锤子 doChangeCSS 同款：开关后询问立即生效
+    [MioAlertHelper showConfirmAlert:@"是否立即生效？\n（无需重启微信，全站界面重绘）"
+                        confirmTitle:@"立即生效"
+                          onConfirm:^{
+        [FontLayoutHook applyLayoutRefreshNow];
+    }];
+}
+
+#pragma mark - 按钮回调
+
+- (void)buttonClicked:(NSString *)key {
+    if ([key isEqualToString:kApplyNowKey]) {
+        [FontLayoutHook notifySwitchChanged];
+        [FontLayoutHook applyLayoutRefreshNow];
+        [MioAlertHelper showTipAlert:@"已生效"];
     }
 }
 
