@@ -7,6 +7,7 @@
 #import "../AccountDetail/AccountConfig.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
+#import "../../Core/ServiceHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <sys/sysctl.h>
