@@ -11,11 +11,13 @@
 //       这是锤子敢用固定值替换而不毁布局的关键）。
 //   Hook-3 RoomContentLogicController getMemeberCountLabel
 //       → 对话开关开且值有效时 label.font = [UIFont mediumSystemFontOfSize:值+1]。
-//   注：锤子还 hook 了 CContactMgr getContactList:contactType:，但其挂在其 enableAllowYourSelf
-//       功能上，与布局无关，Mio 不搬。
-//   生效时机：WCR/锤子同款延迟安装（启动 +8s 过看门狗窗口），设置页开关即时补装（幂等）。
+//   生效时机：启动直接安装（无延迟）；开关全关时跳过安装，设置页开开关即时补装（幂等）。
 //   立即生效：applyLayoutRefreshNow = 清文本测量缓存 + 语言切换链路全局重绘（Mio fcde36e
 //       已实测验证的 WCR 同款链路，锤子 doChangeCSS 同构）。
+//
+// 日志约定（全流程排查）：
+//   [INSTALL] 安装链路   [SKIP] 跳过安装   [QUERY] #font_set 查询留痕
+//   [MODIFY] 实际替换    [LEVEL] 字体等级锁 [APPLY] 立即生效各步
 
 #import "FontLayoutHook.h"
 #import "FontLayoutConfig.h"
@@ -36,6 +38,7 @@ static const CGFloat kMinFontSize = 10.0;
 static const CGFloat kMaxFontSize = 16.0;
 
 static BOOL sHooksInstalled = NO;
+static BOOL sLevelLockLogged = NO;
 
 static BOOL wpValidFontSize(CGFloat v) {
     return v >= kMinFontSize && v <= kMaxFontSize;
@@ -74,30 +77,53 @@ static id hook_getValueOfProperty_inRuleSet(id self, SEL _cmd,
         // 锤子同款：规则集精确匹配 #font_set，其余一律直通
         if (![kFontRuleSet isEqualToString:ruleSet]) return originalResult;
 
+        // ── [QUERY] #font_set 查询全量留痕（低频调用，排查属性名/命中情况用）──
+        NSString *kind = originalResult ? NSStringFromClass([originalResult class]) : @"nil";
+        NSString *firstDesc = nil;
+        if ([originalResult isKindOfClass:[NSArray class]]
+            && [(NSArray *)originalResult count] > 0) {
+            id first = [(NSArray *)originalResult objectAtIndex:0];
+            firstDesc = [NSString stringWithFormat:@"%@(%@)",
+                         first, NSStringFromClass([first class])];
+        }
+        WPLog(@"FontLayout", @"[QUERY] prop=%@ result=%@ first=%@ globalOn=%d chatOn=%d",
+              property, kind, firstDesc ?: @"empty", globalOn, chatOn);
+
+        // ── 分支命中与取值 ──
         NSString *valueStr = nil;
         if (globalOn
             && ([kPropAllLevel isEqualToString:property]
                 || [kPropWebLevel isEqualToString:property])) {
             if (wpValidFontSize(config.globalFontSize)) {
                 valueStr = [NSString stringWithFormat:@"%.0f", config.globalFontSize];
+            } else {
+                WPLog(@"FontLayout", @"[QUERY] %@ 命中但全局字号无效: %.2f",
+                      property, config.globalFontSize);
             }
         } else if (chatOn && [kPropChatLevel isEqualToString:property]) {
             if (wpValidFontSize(config.chatFontSize)) {
                 valueStr = [NSString stringWithFormat:@"%.0f", config.chatFontSize];
+            } else {
+                WPLog(@"FontLayout", @"[QUERY] %@ 命中但对话字号无效: %.2f",
+                      property, config.chatFontSize);
             }
+        } else {
+            WPLog(@"FontLayout", @"[QUERY] prop=%@ 未命中任何分支（期望 alllevel/webLevel/chatLevel）",
+                  property);
         }
         if (!valueStr) return originalResult;
 
         // 防御：原返回值为空数组时 replaceObjectAtIndex:0 会崩（锤子无此守卫，Mio 加上）
         if (![originalResult isKindOfClass:[NSArray class]]
             || [(NSArray *)originalResult count] == 0) {
+            WPLog(@"FontLayout", @"[QUERY] %@ 返回值非数组或为空(%@)，放弃替换",
+                  property, kind);
             return originalResult;
         }
 
         NSMutableArray *modified = [(NSArray *)originalResult mutableCopy];
         [modified replaceObjectAtIndex:0 withObject:valueStr];
-        WPLog(@"FontLayout", @"[MODIFY] %@ in %@ -> %@",
-              property, ruleSet, valueStr);
+        WPLog(@"FontLayout", @"[MODIFY] %@ in %@ -> %@", property, ruleSet, valueStr);
         return modified;
     } @catch (NSException *e) {
         WPLog(@"FontLayout", @"getValueOfProperty 异常: %@ %@ prop=%@ ruleSet=%@",
@@ -114,6 +140,10 @@ static unsigned int hook_m_uiGlobalFontLevel(id self, SEL _cmd) {
     @try {
         FontLayoutConfig *config = [FontLayoutConfig shared];
         if (config.globalLayoutEnabled || config.chatLayoutEnabled) {
+            if (!sLevelLockLogged) {
+                sLevelLockLogged = YES;
+                WPLog(@"FontLayout", @"[LEVEL] m_uiGlobalFontLevel 锁 1 生效（首次调用）");
+            }
             return 1;
         }
     } @catch (NSException *e) {
@@ -136,7 +166,10 @@ static id hook_getMemeberCountLabel(id self, SEL _cmd) {
             // CI SDK 无 mediumSystemFontOfSize: 声明，走 objc_msgSend
             SEL medSel = NSSelectorFromString(@"mediumSystemFontOfSize:");
             UIFont *font = ((UIFont *(*)(id, SEL, CGFloat))objc_msgSend)([UIFont class], medSel, v + 1.0);
-            if (font) ((UILabel *)label).font = font;
+            if (font) {
+                ((UILabel *)label).font = font;
+                WPLog(@"FontLayout", @"[MODIFY] memberCountLabel font -> %.0f+1", v);
+            }
         }
     } @catch (NSException *e) {
         WPLog(@"FontLayout", @"getMemeberCountLabel 异常: %@ %@", e.name, e.reason);
@@ -150,34 +183,43 @@ static void FLApplyRefreshNow(void) {
     @try {
         // 1) 清微信文本测量缓存
         Class widthCls = objc_getClass("MMTextWidth");
+        BOOL cleared = NO;
         if (widthCls && [widthCls respondsToSelector:@selector(clear)]) {
             ((void (*)(id, SEL))objc_msgSend)(widthCls, @selector(clear));
+            cleared = YES;
         }
+        WPLog(@"FontLayout", @"[APPLY] step1 清测量缓存: MMTextWidth=%@ clear=%d",
+              widthCls ? @"OK" : @"NIL", cleared);
 
         // 2) 借微信语言切换链路触发全局刷新
         id langMgr = FLService(objc_getClass("MMLanguageMgr"));
         SEL setLangSel = NSSelectorFromString(@"setCurLanguage:shouldChangeMainF:");
-        if (langMgr && [langMgr respondsToSelector:setLangSel]) {
+        BOOL langOK = langMgr && [langMgr respondsToSelector:setLangSel];
+        if (langOK) {
             ((void (*)(id, SEL, int, BOOL))objc_msgSend)(langMgr, setLangSel, 0, NO);
         }
+        WPLog(@"FontLayout", @"[APPLY] step2 MMLanguageMgr=%@ setCurLanguage=%d",
+              langMgr ? @"OK" : @"NIL", langOK);
 
         // 3) 清翻译缓存（锤子 doChangeCSS 同款）
         SEL cleanSel = NSSelectorFromString(@"changeLanguageAndCleanAllCache");
         id snsMgr = FLService(objc_getClass("TranslateSnsMgr"));
-        if (snsMgr && [snsMgr respondsToSelector:cleanSel]) {
-            ((void (*)(id, SEL))objc_msgSend)(snsMgr, cleanSel);
-        }
+        BOOL snsOK = snsMgr && [snsMgr respondsToSelector:cleanSel];
+        if (snsOK) ((void (*)(id, SEL))objc_msgSend)(snsMgr, cleanSel);
         id msgMgr = FLService(objc_getClass("TranslateMsgMgr"));
-        if (msgMgr && [msgMgr respondsToSelector:cleanSel]) {
-            ((void (*)(id, SEL))objc_msgSend)(msgMgr, cleanSel);
-        }
+        BOOL msgOK = msgMgr && [msgMgr respondsToSelector:cleanSel];
+        if (msgOK) ((void (*)(id, SEL))objc_msgSend)(msgMgr, cleanSel);
+        WPLog(@"FontLayout", @"[APPLY] step3 翻译缓存清理: Sns=%d Msg=%d", snsOK, msgOK);
 
         // 4) 全微信 VC 重绘
         id appMgr = FLService(objc_getClass("CAppViewControllerManager"));
         SEL refreshSel = NSSelectorFromString(@"refreshLanguage:");
-        if (appMgr && [appMgr respondsToSelector:refreshSel]) {
+        BOOL refreshOK = appMgr && [appMgr respondsToSelector:refreshSel];
+        if (refreshOK) {
             ((void (*)(id, SEL, int))objc_msgSend)(appMgr, refreshSel, 3);
         }
+        WPLog(@"FontLayout", @"[APPLY] step4 CAppViewControllerManager=%@ refreshLanguage:3=%d",
+              appMgr ? @"OK" : @"NIL", refreshOK);
 
         WPLog(@"FontLayout", @"[APPLY] 立即生效刷新完成");
     } @catch (NSException *e) {
@@ -185,7 +227,7 @@ static void FLApplyRefreshNow(void) {
     }
 }
 
-#pragma mark - 安装（WCR 同款延迟引导，过启动看门狗窗口）
+#pragma mark - 安装（启动直接安装，开关全关跳过；设置页开关即时补装幂等）
 
 @implementation FontLayoutHook
 
@@ -194,17 +236,21 @@ static void FLApplyRefreshNow(void) {
 }
 
 + (void)install {
-    // 启动 +8 秒主队列空闲后执行（看门狗窗口已过）；开关全关时不装
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [FontLayoutHook installIfNeeded];
-    });
+    WPLog(@"FontLayout", @"=== FontLayoutHook 锤子同款版 install（直接安装，无延迟）===");
+    [FontLayoutHook installIfNeeded];
 }
 
 + (void)installIfNeeded {
-    if (sHooksInstalled) return;
+    if (sHooksInstalled) {
+        WPLog(@"FontLayout", @"[INSTALL] hooks 已安装，跳过重复安装");
+        return;
+    }
 
     FontLayoutConfig *config = [FontLayoutConfig shared];
+    WPLog(@"FontLayout", @"[INSTALL] 配置: globalOn=%d globalSize=%.2f chatOn=%d chatSize=%.2f",
+          config.globalLayoutEnabled, config.globalFontSize,
+          config.chatLayoutEnabled, config.chatFontSize);
+
     if (!config.globalLayoutEnabled && !config.chatLayoutEnabled) {
         WPLog(@"FontLayout", @"[SKIP] 全局/对话布局均未开启，跳过 hook 安装");
         return;
@@ -213,6 +259,8 @@ static void FLApplyRefreshNow(void) {
     Class mmThemeManager = objc_getClass("MMThemeManager");
     Class clocalInfo     = objc_getClass("CLocalInfo");
     Class roomContent    = objc_getClass("RoomContentLogicController");
+    WPLog(@"FontLayout", @"[INSTALL] 类探测: MMThemeManager=%d CLocalInfo=%d RoomContentLogicController=%d",
+          mmThemeManager ? 1 : 0, clocalInfo ? 1 : 0, roomContent ? 1 : 0);
 
     SEL selGetValue    = NSSelectorFromString(@"getValueOfProperty:inRuleSet:");
     SEL selFontLevel   = NSSelectorFromString(@"m_uiGlobalFontLevel");
@@ -221,32 +269,48 @@ static void FLApplyRefreshNow(void) {
     Method m1 = mmThemeManager ? class_getInstanceMethod(mmThemeManager, selGetValue) : NULL;
     Method m2 = clocalInfo     ? class_getInstanceMethod(clocalInfo, selFontLevel) : NULL;
     Method m3 = roomContent    ? class_getInstanceMethod(roomContent, selMemberLabel) : NULL;
+    WPLog(@"FontLayout", @"[INSTALL] 方法探测: getValue=%d fontLevel=%d memberLabel=%d",
+          m1 ? 1 : 0, m2 ? 1 : 0, m3 ? 1 : 0);
 
     if (mmThemeManager && m1) {
         MSHookMessageEx(mmThemeManager, selGetValue,
                         (IMP)hook_getValueOfProperty_inRuleSet,
                         (IMP *)&orig_getValueOfProperty_inRuleSet);
+        WPLog(@"FontLayout", @"[INSTALL] HOOKED MMThemeManager getValueOfProperty:inRuleSet:");
+    } else {
+        WPLog(@"FontLayout", @"[INSTALL] SKIP MMThemeManager (class=%d method=%d)",
+              mmThemeManager ? 1 : 0, m1 ? 1 : 0);
     }
     if (clocalInfo && m2) {
         MSHookMessageEx(clocalInfo, selFontLevel,
                         (IMP)hook_m_uiGlobalFontLevel,
                         (IMP *)&orig_m_uiGlobalFontLevel);
+        WPLog(@"FontLayout", @"[INSTALL] HOOKED CLocalInfo m_uiGlobalFontLevel");
+    } else {
+        WPLog(@"FontLayout", @"[INSTALL] SKIP CLocalInfo (class=%d method=%d)",
+              clocalInfo ? 1 : 0, m2 ? 1 : 0);
     }
     if (roomContent && m3) {
         MSHookMessageEx(roomContent, selMemberLabel,
                         (IMP)hook_getMemeberCountLabel,
                         (IMP *)&orig_getMemeberCountLabel);
+        WPLog(@"FontLayout", @"[INSTALL] HOOKED RoomContentLogicController getMemeberCountLabel");
+    } else {
+        WPLog(@"FontLayout", @"[INSTALL] SKIP RoomContentLogicController (class=%d method=%d)",
+              roomContent ? 1 : 0, m3 ? 1 : 0);
     }
 
     sHooksInstalled = YES;
-    WPLog(@"FontLayout", @"[INSTALL] hooks: theme=%d fontLevel=%d memberLabel=%d",
+    WPLog(@"FontLayout", @"[INSTALL] 安装完成: theme=%d fontLevel=%d memberLabel=%d",
           (mmThemeManager && m1) ? 1 : 0,
           (clocalInfo && m2) ? 1 : 0,
           (roomContent && m3) ? 1 : 0);
 }
 
 + (void)notifySwitchChanged {
-    // 设置页开关变化即时补装（installIfNeeded 幂等守卫防重）
+    FontLayoutConfig *config = [FontLayoutConfig shared];
+    WPLog(@"FontLayout", @"[INSTALL] notifySwitchChanged: globalOn=%d chatOn=%d installed=%d",
+          config.globalLayoutEnabled, config.chatLayoutEnabled, sHooksInstalled);
     [FontLayoutHook installIfNeeded];
 }
 

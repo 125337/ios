@@ -147,6 +147,7 @@ static BOOL wpFontSizeValid(CGFloat v) {
 
 - (void)buttonClicked:(NSString *)key {
     if ([key isEqualToString:kApplyNowKey]) {
+        WPLog(@"FontLayout", @"[UI] 立即生效按钮点击");
         [FontLayoutHook notifySwitchChanged];
         [FontLayoutHook applyLayoutRefreshNow];
         [MioAlertHelper showTipAlert:@"已生效"];
