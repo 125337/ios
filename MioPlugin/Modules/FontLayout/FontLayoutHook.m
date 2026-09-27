@@ -45,12 +45,13 @@ static BOOL sLevelLockLogged = NO;
 static NSMutableDictionary<NSString *, NSString *> *sLogState = nil;
 static dispatch_once_t sLogStateOnce;
 
-static BOOL FLShouldLog(NSString *key, NSString *marker) {
+static BOOL FLShouldLog(NSString *prefix, NSString *key, NSString *marker) {
     dispatch_once(&sLogStateOnce, ^{ sLogState = [NSMutableDictionary dictionary]; });
     @synchronized (sLogState) {
-        NSString *last = sLogState[key];
+        NSString *k = [prefix stringByAppendingString:key];
+        NSString *last = sLogState[k];
         if (last && [last isEqualToString:marker]) return NO;
-        sLogState[key] = marker;
+        sLogState[k] = marker;
         return YES;
     }
 }
@@ -186,7 +187,7 @@ static id hook_getMemeberCountLabel(id self, SEL _cmd) {
             UIFont *font = ((UIFont *(*)(id, SEL, CGFloat))objc_msgSend)([UIFont class], medSel, v + 1.0);
             if (font) {
                 ((UILabel *)label).font = font;
-                if (FLShouldLog(@"member", [NSString stringWithFormat:@"%.0f", v])) {
+                if (FLShouldLog(@"member:", @"label", [NSString stringWithFormat:@"%.0f", v])) {
                     WPLog(@"FontLayout", @"[MODIFY] memberCountLabel font -> %.0f+1", v);
                 }
             }
