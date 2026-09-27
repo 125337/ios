@@ -60,15 +60,26 @@ static BOOL wpValidFontSize(CGFloat v) {
     return v >= kMinFontSize && v <= kMaxFontSize;
 }
 
-/// MMContext currentContext getService:（WCR 唯一路径，Mio 已实证）
+/// 服务获取：MMContext currentContext getService: 优先，MMServiceCenter defaultCenter 兜底
+/// （141.log 实证：CAppViewControllerManager 走 MMContext 取不到，step4 失效；
+///   WXGetService/ServiceHelper.h 同款 MMServiceCenter 模式在 CGroupMgr 上已实证可用）
 static id FLService(Class cls) {
     if (!cls) return nil;
-    Class mmctx = objc_getClass("MMContext");
-    if (!mmctx || ![mmctx respondsToSelector:@selector(currentContext)]) return nil;
     @try {
-        id ctx = ((id (*)(id, SEL))objc_msgSend)(mmctx, @selector(currentContext));
-        if (ctx && [ctx respondsToSelector:@selector(getService:)]) {
-            return ((id (*)(id, SEL, Class))objc_msgSend)(ctx, @selector(getService:), cls);
+        Class mmctx = objc_getClass("MMContext");
+        if (mmctx && [mmctx respondsToSelector:@selector(currentContext)]) {
+            id ctx = ((id (*)(id, SEL))objc_msgSend)(mmctx, @selector(currentContext));
+            if (ctx && [ctx respondsToSelector:@selector(getService:)]) {
+                id svc = ((id (*)(id, SEL, Class))objc_msgSend)(ctx, @selector(getService:), cls);
+                if (svc) return svc;
+            }
+        }
+        Class sc = objc_getClass("MMServiceCenter");
+        if (sc && [sc respondsToSelector:@selector(defaultCenter)]) {
+            id center = ((id (*)(id, SEL))objc_msgSend)(sc, @selector(defaultCenter));
+            if (center && [center respondsToSelector:@selector(getService:)]) {
+                return ((id (*)(id, SEL, Class))objc_msgSend)(center, @selector(getService:), cls);
+            }
         }
     } @catch (NSException *e) {}
     return nil;
