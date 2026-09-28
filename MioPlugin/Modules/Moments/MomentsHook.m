@@ -10,6 +10,7 @@
 // 防重入标志：触发后置位，500ms 后主线程清零（WCR FUN_017a7970 同款防抖窗口）
 static volatile BOOL gPyqHandling = NO;
 static IMP orig_pyq_textChange = NULL;
+static int gPyqLogCount = 0;   // 取证日志：仅前 3 次输出，避免刷屏
 
 // 半屏弹出朋友圈（WCR WCRefineClearSessionHook::mainFrameViewController +
 // FUN_01e4a928 halfScreen 分支同款，全部 respondsToSelector 守卫）
@@ -62,36 +63,62 @@ static void MioOpenMomentsHalfScreen(UIViewController *host) {
     }
 }
 
-// 输入变化垫片：先调原实现，再检测 pyq（WCR FUN_017a7970 同款流程）
+// 输入变化垫片：先调原实现，再检测 pyq（WCR FUN_017a7970 同款流程：
+// 检测 MMGrowTextView 自身的 text，而非 textView 参数）
 static void hooked_pyq_textChange(id self, SEL _cmd, id textView) {
     if (orig_pyq_textChange) {
         ((void(*)(id, SEL, id))orig_pyq_textChange)(self, _cmd, textView);
     }
     @try {
+        // 取证日志（仅前 3 次）：确认垫片被调用、参数形态、开关状态、文本内容
+        if (gPyqLogCount < 3) {
+            gPyqLogCount++;
+            NSString *selfText = @"(no text sel)";
+            SEL textSel = NSSelectorFromString(@"text");
+            if ([self respondsToSelector:textSel]) {
+                id t = ((id(*)(id, SEL))objc_msgSend)(self, textSel);
+                selfText = [t isKindOfClass:[NSString class]] ? t
+                          : [NSString stringWithFormat:@"<%@>", NSStringFromClass([t class] ?: [NSObject class])];
+            }
+            WPLog(@"Moments", @"[Pyq] fired(%d) self=%@ tv=%@ enable=%d text=%@",
+                  gPyqLogCount, NSStringFromClass([self class]),
+                  textView ? NSStringFromClass([textView class]) : @"nil",
+                  [MomentsConfig shared].convenientMomentsEnabled ? 1 : 0, selfText);
+        }
         if (gPyqHandling) return;
-        if (![MomentsConfig shared].convenientMomentsEnabled) return;
-        if (![textView isKindOfClass:[UITextView class]]) return;
-        UITextView *tv = (UITextView *)textView;
-        NSString *text = [tv text] ?: @"";
+        MomentsConfig *cfg = [MomentsConfig shared];
+        if (!cfg.convenientMomentsEnabled) return;
+        // 取 self.text（WCR 同款：MMGrowTextView 自身文本）
+        SEL textSel = NSSelectorFromString(@"text");
+        if (![self respondsToSelector:textSel]) return;
+        id rawText = ((id(*)(id, SEL))objc_msgSend)(self, textSel);
+        if (![rawText isKindOfClass:[NSString class]]) return;
+        NSString *text = rawText;
         if (text.length == 0) return;
         // trim 空白（WCR FUN_017b0dd8 同款）
         text = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (![text isEqualToString:@"pyq"]) return;
 
         gPyqHandling = YES;
-        // 清空输入：GrowTextView 本体与内部 textView 双清（均带守卫）
-        if ([self respondsToSelector:NSSelectorFromString(@"setText:")]) {
-            ((void(*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"setText:"), @"");
+        WPLog(@"Moments", @"[Pyq] matched, opening moments");
+        // 清空输入（WCR 同款：self setText，带守卫）
+        SEL setSel = NSSelectorFromString(@"setText:");
+        if ([self respondsToSelector:setSel]) {
+            ((void(*)(id, SEL, id))objc_msgSend)(self, setSel, @"");
         }
-        [tv setText:@""];
+        // 参数若是 UITextView 也清（内部 textView 与 GrowTextView 文本可能不同步）
+        if ([textView isKindOfClass:[UITextView class]]) {
+            [(UITextView *)textView setText:@""];
+        }
 
-        // 宿主：responder 链上最近的 VC（聊天页）
+        // 宿主：从 self（MMGrowTextView）沿 responder 链找最近的 VC（聊天页）
         UIViewController *host = nil;
-        UIResponder *r = (UIResponder *)tv;
+        UIResponder *r = (UIResponder *)self;
         while (r) {
             if ([r isKindOfClass:[UIViewController class]]) { host = (UIViewController *)r; break; }
             r = [r nextResponder];
         }
+        WPLog(@"Moments", @"[Pyq] host=%@", host ? NSStringFromClass([host class]) : @"nil");
 
         dispatch_async(dispatch_get_main_queue(), ^{
             MioOpenMomentsHalfScreen(host);
