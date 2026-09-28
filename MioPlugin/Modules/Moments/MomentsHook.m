@@ -9,8 +9,24 @@
 
 // 防重入标志：触发后置位，500ms 后主线程清零（WCR FUN_017a7970 同款防抖窗口）
 static volatile BOOL gPyqHandling = NO;
-static IMP orig_pyq_textChange = NULL;
-static int gPyqLogCount = 0;   // 取证日志：仅前 3 次输出，避免刷屏
+static IMP orig_pyq_didChange = NULL;    // textViewDidChange:
+static IMP orig_pyq_selChange = NULL;    // textViewDidChangeSelection:
+static IMP orig_tv_setDelegate = NULL;   // UITextView setDelegate:（探测）
+static int gPyqLogCount = 0;    // 取证日志：仅前 3 次
+static int gSelLogCount = 0;    // SelectionChange 探测：仅前 3 次
+static int gDelLogCount = 0;    // delegate 探针：仅前 5 次
+
+// 判断方法是否为类自身实现（非父类继承），替代 method_getClass（CI SDK 无声明）
+static BOOL MioClassOwnsMethod(Class cls, SEL sel) {
+    unsigned int count = 0;
+    Method *list = class_copyMethodList(cls, &count);
+    BOOL owns = NO;
+    for (unsigned int i = 0; i < count; i++) {
+        if (method_getName(list[i]) == sel) { owns = YES; break; }
+    }
+    free(list);
+    return owns;
+}
 
 // 半屏弹出朋友圈（WCR WCRefineClearSessionHook::mainFrameViewController +
 // FUN_01e4a928 halfScreen 分支同款，全部 respondsToSelector 守卫）
@@ -65,9 +81,9 @@ static void MioOpenMomentsHalfScreen(UIViewController *host) {
 
 // 输入变化垫片：先调原实现，再检测 pyq（WCR FUN_017a7970 同款流程：
 // 检测 MMGrowTextView 自身的 text，而非 textView 参数）
-static void hooked_pyq_textChange(id self, SEL _cmd, id textView) {
-    if (orig_pyq_textChange) {
-        ((void(*)(id, SEL, id))orig_pyq_textChange)(self, _cmd, textView);
+static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
+    if (orig_pyq_didChange) {
+        ((void(*)(id, SEL, id))orig_pyq_didChange)(self, _cmd, textView);
     }
     @try {
         // 取证日志（仅前 3 次）：确认垫片被调用、参数形态、开关状态、文本内容
@@ -131,22 +147,121 @@ static void hooked_pyq_textChange(id self, SEL _cmd, id textView) {
     }
 }
 
-// 安装：MMGrowTextView textViewDidChange:（153 包实测唯一有效挂载点）
-static void MioInstallPyqHook(void) {
-    SEL sel = NSSelectorFromString(@"textViewDidChange:");
-    Class cls = objc_getClass("MMGrowTextView");
-    if (!cls) {
+// textViewDidChangeSelection: 探测垫片：打字时光标移动必触发，
+// 用于判定 MMGrowTextView 是否为活 delegate（仅日志，不拦截）
+static void hooked_pyq_selChange(id self, SEL _cmd, id textView) {
+    if (orig_pyq_selChange) {
+        ((void(*)(id, SEL, id))orig_pyq_selChange)(self, _cmd, textView);
+    }
+    if (gSelLogCount < 3) {
+        gSelLogCount++;
+        WPLog(@"Moments", @"[Pyq] selChg(%d) self=%@ tv=%@",
+              gSelLogCount, NSStringFromClass([self class]),
+              textView ? NSStringFromClass([textView class]) : @"nil");
+    }
+}
+
+// UITextView setDelegate: 轻探针：实锤聊天页输入框的 delegate 究竟是谁
+// （垫片极轻：仅类名判断，只对 GrowTextView/InputTool 系 delegate 打日志）
+static void hooked_tv_setDelegate(id self, SEL _cmd, id delegate) {
+    if (orig_tv_setDelegate) {
+        ((void(*)(id, SEL, id))orig_tv_setDelegate)(self, _cmd, delegate);
+    }
+    if (delegate && gDelLogCount < 5) {
+        NSString *cn = NSStringFromClass([delegate class]);
+        if ([cn containsString:@"GrowTextView"] || [cn containsString:@"InputTool"] ||
+            [cn containsString:@"TextView"]) {
+            gDelLogCount++;
+            WPLog(@"Moments", @"[Pyq] delegate(%d) tv=%@ -> %@",
+                  gDelLogCount, NSStringFromClass([self class]), cn);
+        }
+    }
+}
+
+// 安装：MMGrowTextView textViewDidChange:（WCR MSHookMessageEx 同款位置）+
+// textViewDidChangeSelection: 探测 + UITextView setDelegate: 探针 + 继承链结构日志
+static void MioInstallPyqHooks(void) {
+    SEL didSel = NSSelectorFromString(@"textViewDidChange:");
+    SEL selSel = NSSelectorFromString(@"textViewDidChangeSelection:");
+    Class growCls = objc_getClass("MMGrowTextView");
+    if (!growCls) {
         WPLog(@"Moments", @"[Pyq] SKIP: MMGrowTextView NOT found");
         return;
     }
-    Method m = class_getInstanceMethod(cls, sel);
-    if (!m) {
-        WPLog(@"Moments", @"[Pyq] SKIP: textViewDidChange: NOT found");
-        return;
+
+    // 继承链结构日志：实锤两个 delegate 方法的实现层
+    Class c = growCls;
+    int depth = 0;
+    while (c && depth < 6) {
+        BOOL ownDid = MioClassOwnsMethod(c, didSel);
+        BOOL ownSel = MioClassOwnsMethod(c, selSel);
+        WPLog(@"Moments", @"[Pyq] chain[%d] %@ own(didChange)=%d own(selChange)=%d",
+              depth, NSStringFromClass(c), ownDid, ownSel);
+        if ([c isSubclassOfClass:[UITextView class]] && c != [UITextView class] &&
+            [c superclass] == [UITextView class]) break;   // 链到 UITextView 前一级为止
+        c = [c superclass];
+        depth++;
     }
-    orig_pyq_textChange = method_getImplementation(m);
-    method_setImplementation(m, (IMP)hooked_pyq_textChange);
-    WPLog(@"Moments", @"[Pyq] MMGrowTextView.textViewDidChange: hooked");
+
+    // 主探测：textViewDidChange:（WCR 同款）
+    Method m1 = class_getInstanceMethod(growCls, didSel);
+    if (m1) {
+        orig_pyq_didChange = method_getImplementation(m1);
+        method_setImplementation(m1, (IMP)hooked_pyq_didChange);
+        WPLog(@"Moments", @"[Pyq] MMGrowTextView.textViewDidChange: hooked");
+    } else {
+        WPLog(@"Moments", @"[Pyq] SKIP: textViewDidChange: NOT found");
+    }
+
+    // 辅探测：textViewDidChangeSelection:（光标移动必触发）
+    Method m2 = class_getInstanceMethod(growCls, selSel);
+    if (m2) {
+        orig_pyq_selChange = method_getImplementation(m2);
+        method_setImplementation(m2, (IMP)hooked_pyq_selChange);
+        WPLog(@"Moments", @"[Pyq] MMGrowTextView.textViewDidChangeSelection: hooked");
+    } else {
+        WPLog(@"Moments", @"[Pyq] SKIP: textViewDidChangeSelection: NOT found");
+    }
+
+    // delegate 探针：UITextView setDelegate:（轻垫片，仅命中日志）
+    Class tvCls = [UITextView class];
+    Method m3 = class_getInstanceMethod(tvCls, NSSelectorFromString(@"setDelegate:"));
+    if (m3) {
+        orig_tv_setDelegate = method_getImplementation(m3);
+        method_setImplementation(m3, (IMP)hooked_tv_setDelegate);
+        WPLog(@"Moments", @"[Pyq] UITextView.setDelegate: probe hooked");
+    }
+}
+
+// 重挂自检：微信晚到的初始化可能覆盖 IMP，20s/45s 检查并恢复
+static void MioRehookCheck(int round) {
+    SEL didSel = NSSelectorFromString(@"textViewDidChange:");
+    SEL selSel = NSSelectorFromString(@"textViewDidChangeSelection:");
+    SEL delSel = NSSelectorFromString(@"setDelegate:");
+    int fixed = 0;
+
+    Class growCls = objc_getClass("MMGrowTextView");
+    if (growCls) {
+        Method m1 = class_getInstanceMethod(growCls, didSel);
+        if (m1 && method_getImplementation(m1) != (IMP)hooked_pyq_didChange) {
+            orig_pyq_didChange = method_getImplementation(m1);
+            method_setImplementation(m1, (IMP)hooked_pyq_didChange);
+            fixed++;
+        }
+        Method m2 = class_getInstanceMethod(growCls, selSel);
+        if (m2 && method_getImplementation(m2) != (IMP)hooked_pyq_selChange) {
+            orig_pyq_selChange = method_getImplementation(m2);
+            method_setImplementation(m2, (IMP)hooked_pyq_selChange);
+            fixed++;
+        }
+    }
+    Method m3 = class_getInstanceMethod([UITextView class], delSel);
+    if (m3 && method_getImplementation(m3) != (IMP)hooked_tv_setDelegate) {
+        orig_tv_setDelegate = method_getImplementation(m3);
+        method_setImplementation(m3, (IMP)hooked_tv_setDelegate);
+        fixed++;
+    }
+    WPLog(@"Moments", @"[Pyq] rehook check(%d) fixed=%d", round, fixed);
 }
 
 #pragma mark - 安装
@@ -162,7 +277,12 @@ static void MioInstallPyqHook(void) {
 
 + (void)install {
     WPLog(@"Moments", @"[MomentsHook] install start");
-    MioInstallPyqHook();
+    MioInstallPyqHooks();
+    // 重挂自检（防微信晚到初始化覆盖 IMP）
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ MioRehookCheck(1); });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(45 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ MioRehookCheck(2); });
     WPLog(@"Moments", @"[MomentsHook] install complete");
 }
 
