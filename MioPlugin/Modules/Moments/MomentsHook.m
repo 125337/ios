@@ -11,13 +11,6 @@
 static volatile BOOL gPyqHandling = NO;
 static IMP orig_pyq_textChange = NULL;
 
-// 关闭按钮回调：沿 presentedViewController 链找到顶层并 dismiss
-+ (void)wpCloseMomentsSheet:(UIBarButtonItem *)sender {
-    UIViewController *top = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (top.presentedViewController) top = top.presentedViewController;
-    [top dismissViewControllerAnimated:YES completion:nil];
-}
-
 // 半屏弹出朋友圈（WCR WCRefineClearSessionHook::mainFrameViewController +
 // FUN_01e4a928 halfScreen 分支同款，全部 respondsToSelector 守卫）
 static void MioOpenMomentsHalfScreen(UIViewController *host) {
@@ -132,6 +125,13 @@ static void MioInstallPyqHook(void) {
 #pragma mark - 安装
 
 @implementation MomentsHook
+
+// 关闭按钮回调：沿 presentedViewController 链找到顶层并 dismiss
++ (void)wpCloseMomentsSheet:(UIBarButtonItem *)sender {
+    UIViewController *top = [UIApplication sharedApplication].keyWindow.rootViewController;
+    while (top.presentedViewController) top = top.presentedViewController;
+    [top dismissViewControllerAnimated:YES completion:nil];
+}
 
 + (void)install {
     WPLog(@"Moments", @"[MomentsHook] install start");
