@@ -31,51 +31,52 @@ static BOOL MioClassOwnsMethod(Class cls, SEL sel) {
     return owns;
 }
 
-// 半屏弹出朋友圈（WCR WCRefineClearSessionHook::mainFrameViewController +
-// FUN_01e4a928 halfScreen 分支同款，全部 respondsToSelector 守卫）
-static void MioOpenMomentsHalfScreen(UIViewController *host) {
-    // 1. 取现成 NewMainFrameViewController（微信主 tab 结构维护的实例，绝不 alloc init）
-    id mvc = nil;
-    Class appCls = objc_getClass("MicroMessengerAppDelegate");
-    SEL giSel = NSSelectorFromString(@"GlobalInstance");
-    if (appCls && [(id)appCls respondsToSelector:giSel]) {
-        id app = ((id(*)(id, SEL))objc_msgSend)((id)appCls, giSel);
-        if ([app respondsToSelector:@selector(valueForKey:)]) {
-            id mgr = ((id(*)(id, SEL, id))objc_msgSend)(app, @selector(valueForKey:), @"m_appViewControllerMgr");
-            SEL gnmSel = NSSelectorFromString(@"getNewMainFrameViewController");
-            if (mgr && [mgr respondsToSelector:gnmSel]) {
-                mvc = ((id(*)(id, SEL))objc_msgSend)(mgr, gnmSel);
-            }
-        }
-    }
-    if (![mvc isKindOfClass:[UIViewController class]]) {
-        WPLog(@"Moments", @"[Pyq] NewMainFrameViewController NOT available");
-        return;
-    }
-
-    // 2. 包 Nav + PageSheet 半屏 present（WCR FUN_01e4a928 halfScreen=1 同款）
+// 打开朋友圈半屏（WCR onOpenWCTimeline / FUN_017a65f0 同款实证）：
+// WCTimeLineViewController 裸建（朋友圈页面类，WCR 原样 alloc init）→ 包
+// UINavigationController → 微信自家半屏组件 MMPageSheetAdapter 弹出（0.7 屏高，
+// 边缘滑/拖拽/点背景均可关闭）。绝不取现成 NewMainFrameViewController——
+// 那是微信首页聊天列表 VC，从主界面结构拽出来会导致弹出首页且整屏失灵
+static void MioOpenTimelinePageSheet(void) {
     @try {
-        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:mvc];
-        nav.modalPresentationStyle = UIModalPresentationPageSheet;
-        if (@available(iOS 15.0, *)) {
-            UISheetPresentationController *sheet = nav.sheetPresentationController;
-            if (sheet) {
-                sheet.detents = @[UISheetPresentationControllerDetent.largeDetent];
-                sheet.prefersGrabberVisible = YES;
-            }
+        Class tlCls = NSClassFromString(@"WCTimeLineViewController");
+        if (!tlCls) {
+            WPLog(@"Moments", @"[Pyq] WCTimeLineViewController NOT found");
+            return;
         }
-        // 左上角关闭按钮（present 出来的 nav 无返回键，WCR 同款补关闭途径）
-        UIBarButtonItem *close = [[UIBarButtonItem alloc]
-            initWithBarButtonSystemItem:UIBarButtonSystemItemClose
-                                 target:[MomentsHook class]
-                                 action:@selector(wpCloseMomentsSheet:)];
-        ((UIViewController *)mvc).navigationItem.leftBarButtonItem = close;
+        id tlvc = [[tlCls alloc] init];
+        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:tlvc];
 
-        if (host) {
-            [host presentViewController:nav animated:YES completion:nil];
-            WPLog(@"Moments", @"[Pyq] moments half-screen opened");
+        // 微信自家半屏组件（WCR 同款三关闭途径全开）
+        Class cfgCls = objc_getClass("MMPageSheetConfig");
+        Class adpCls = objc_getClass("MMPageSheetAdapter");
+        SEL edgeSel = NSSelectorFromString(@"setEnableEdgeSlideToClose:");
+        SEL dragSel = NSSelectorFromString(@"setEnableDragToClose:");
+        SEL tapBgSel = NSSelectorFromString(@"setIsAllowTapBgMaskToClose:");
+        SEL setCfgSel = NSSelectorFromString(@"setPageSheetConfig:");
+        SEL setHostSel = NSSelectorFromString(@"setHostViewController:");
+        SEL setHSel = NSSelectorFromString(@"setContentHeight:");
+        SEL showSel = NSSelectorFromString(@"showWithAnimated:");
+        if (cfgCls && adpCls
+            && [(id)cfgCls instancesRespondToSelector:edgeSel]
+            && [(id)cfgCls instancesRespondToSelector:dragSel]
+            && [(id)cfgCls instancesRespondToSelector:tapBgSel]
+            && [(id)adpCls instancesRespondToSelector:setCfgSel]
+            && [(id)adpCls instancesRespondToSelector:setHostSel]
+            && [(id)adpCls instancesRespondToSelector:setHSel]
+            && [(id)adpCls instancesRespondToSelector:showSel]) {
+            id cfg = [[cfgCls alloc] init];
+            ((void(*)(id, SEL, BOOL))objc_msgSend)(cfg, edgeSel, YES);
+            ((void(*)(id, SEL, BOOL))objc_msgSend)(cfg, dragSel, YES);
+            ((void(*)(id, SEL, BOOL))objc_msgSend)(cfg, tapBgSel, YES);
+            id adp = [[adpCls alloc] init];
+            ((void(*)(id, SEL, id))objc_msgSend)(adp, setCfgSel, cfg);
+            ((void(*)(id, SEL, id))objc_msgSend)(adp, setHostSel, nav);
+            double h = [UIScreen mainScreen].bounds.size.height * 0.7;
+            ((void(*)(id, SEL, double))objc_msgSend)(adp, setHSel, h);
+            ((void(*)(id, SEL, BOOL))objc_msgSend)(adp, showSel, YES);
+            WPLog(@"Moments", @"[Pyq] timeline page-sheet shown (h=%.0f)", h);
         } else {
-            WPLog(@"Moments", @"[Pyq] no host VC, skip open");
+            WPLog(@"Moments", @"[Pyq] MMPageSheetAdapter NOT available");
         }
     } @catch (NSException *e) {
         WPLog(@"Moments", @"[Pyq] open error: %@", e);
@@ -129,18 +130,9 @@ static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
             [(UITextView *)textView setText:@""];
         }
 
-        // 宿主：从 self 沿 responder 链找最近的 VC（聊天页）
-        UIViewController *host = nil;
-        UIResponder *r = ([self isKindOfClass:[UIResponder class]] ? (UIResponder *)self : nil)
-                         ?: ([textView isKindOfClass:[UIResponder class]] ? (UIResponder *)textView : nil);
-        while (r) {
-            if ([r isKindOfClass:[UIViewController class]]) { host = (UIViewController *)r; break; }
-            r = [r nextResponder];
-        }
-        WPLog(@"Moments", @"[Pyq] host=%@", host ? NSStringFromClass([host class]) : @"nil");
-
+        // 打开朋友圈半屏（WCR 同款，无需宿主 VC）
         dispatch_async(dispatch_get_main_queue(), ^{
-            MioOpenMomentsHalfScreen(host);
+            MioOpenTimelinePageSheet();
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{ gPyqHandling = NO; });
         });
@@ -293,13 +285,6 @@ static void MioRehookCheck(int round) {
 #pragma mark - 安装
 
 @implementation MomentsHook
-
-// 关闭按钮回调：沿 presentedViewController 链找到顶层并 dismiss
-+ (void)wpCloseMomentsSheet:(UIBarButtonItem *)sender {
-    UIViewController *top = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (top.presentedViewController) top = top.presentedViewController;
-    [top dismissViewControllerAnimated:YES completion:nil];
-}
 
 + (void)install {
     WPLog(@"Moments", @"[MomentsHook] install start");
