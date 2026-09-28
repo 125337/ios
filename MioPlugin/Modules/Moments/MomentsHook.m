@@ -1,4 +1,4 @@
-#import "MomentsHook.h"
+﻿#import "MomentsHook.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -1003,6 +1003,27 @@ static void MioFakeDLFirst(id self, SEL _cmd, id p1, BOOL p2, NSArray *datas, id
     if (gOrigFirst) gOrigFirst(self, _cmd, p1, p2, datas, p5, p6, p7, p8, p9);
 }
 
+// 缓存填充路径（头文件 WCTimelineMgr.h 实证）：首屏走本地缓存不经过网络回调
+//（172.log 实证 src=dl 为 0），updateDataHead/PrePage/Tail 才是缓存数据的入口。
+// 无参方法：先 orig 填充列表，再遍历 timelineDataList 注入。
+typedef void (*MioDL0Orig)(id, SEL);
+static MioDL0Orig gOrigUDHead = NULL, gOrigUDPre = NULL, gOrigUDTail = NULL;
+
+static void MioFakeDLUDHead(id self, SEL _cmd) {
+    if (gOrigUDHead) gOrigUDHead(self, _cmd);
+    MioFakeAutoApplyArray(((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList")), "dl");
+}
+
+static void MioFakeDLUDPre(id self, SEL _cmd) {
+    if (gOrigUDPre) gOrigUDPre(self, _cmd);
+    MioFakeAutoApplyArray(((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList")), "dl");
+}
+
+static void MioFakeDLUDTail(id self, SEL _cmd) {
+    if (gOrigUDTail) gOrigUDTail(self, _cmd);
+    MioFakeAutoApplyArray(((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList")), "dl");
+}
+
 // 不强制返回类型：垫片末句透传 orig，ARM64 x0 返回值天然透传，任何类型安全；
 // 头文件 dump 工具返回类型全写 id 不可信，真实编码打进日志供诊断
 static BOOL MioFakeHookMethod(Method m, IMP newImp, IMP *origOut, NSString **retCodeOut) {
@@ -1022,13 +1043,13 @@ static BOOL MioFakeHookMethod(Method m, IMP newImp, IMP *origOut, NSString **ret
 static void MioInstallFakeDataLayerHooks(void) {
     Class mgr = objc_getClass("WCTimelineMgr");
     if (!mgr) {
-        WPLog(@"Moments", @"[FakeLike] data-layer hooks 0/4 (WCTimelineMgr not found)");
+        WPLog(@"Moments", @"[FakeLike] data-layer hooks 0/7 (WCTimelineMgr not found)");
         return;
     }
     unsigned int n = 0;
     Method *list = class_copyMethodList(mgr, &n);
     if (!list) {
-        WPLog(@"Moments", @"[FakeLike] data-layer hooks 0/4 (no method list)");
+        WPLog(@"Moments", @"[FakeLike] data-layer hooks 0/7 (no method list)");
         return;
     }
     int installed = 0;
@@ -1048,10 +1069,19 @@ static void MioInstallFakeDataLayerHooks(void) {
         } else if (!gOrigFirst && [nm hasPrefix:@"onFirstPageUpdated:dataChanged:"] &&
                    MioFakeHookMethod(list[i], (IMP)MioFakeDLFirst, (IMP *)&gOrigFirst, &rc)) {
             installed++; [hit appendFormat:@" first(%@)", rc];
+        } else if (!gOrigUDHead && [nm isEqualToString:@"updateDataHead"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLUDHead, (IMP *)&gOrigUDHead, &rc)) {
+            installed++; [hit appendFormat:@" udHead(%@)", rc];
+        } else if (!gOrigUDPre && [nm isEqualToString:@"updateDataPrePage"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLUDPre, (IMP *)&gOrigUDPre, &rc)) {
+            installed++; [hit appendFormat:@" udPre(%@)", rc];
+        } else if (!gOrigUDTail && [nm isEqualToString:@"updateDataTail"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLUDTail, (IMP *)&gOrigUDTail, &rc)) {
+            installed++; [hit appendFormat:@" udTail(%@)", rc];
         }
     }
     free(list);
-    WPLog(@"Moments", @"[FakeLike] data-layer hooks installed %d/4:%@", installed, hit);
+    WPLog(@"Moments", @"[FakeLike] data-layer hooks installed %d/7:%@", installed, hit);
 }
 
 #pragma mark - 安装
