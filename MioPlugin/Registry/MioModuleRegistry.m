@@ -31,6 +31,7 @@
 #import "../Modules/AccountDetail/AccountConfig.h"
 #import "../Modules/Voice/VoiceConfig.h"
 #import "../Modules/Privacy/PrivacyConfig.h"
+#import "../Modules/Moments/MomentsConfig.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -64,6 +65,7 @@
 #import "../Settings/Controllers/WPUILayoutSettingsVC.h"
 #import "../Settings/Controllers/SettingPageLockController.h"
 #import "../Settings/Controllers/SettingKeywordAlertController.h"
+#import "../Settings/Controllers/SettingMomentsController.h"
 
 
 @implementation MioModuleDescriptor
@@ -238,6 +240,15 @@
                                                   subtitle:@"全局/对话字号调整"
                                              sectionTitle:@"通用"],
             
+            // ──── 朋友圈（UI 先行，hook 后续接入） ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"moments"
+                                                    title:@"朋友圈"
+                                               configClass:[MomentsConfig class]
+                                               hookClasses:@[]
+                                           controllerClass:[SettingMomentsController class]
+                                                  subtitle:@"便捷浏览/高清/伪集赞"
+                                             sectionTitle:@"通用"],
+
             // ──── 关于 ────
             [MioModuleDescriptor descriptorWithIdentifier:@"about"
                                                     title:@"关于"

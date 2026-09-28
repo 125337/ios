@@ -10,6 +10,7 @@
 #import "../../Config/Constants.h"
 #import "../../Settings/Controllers/SettingGeneralFunctionController.h"
 #import "../../Settings/Controllers/SettingRedEnvelopController.h"
+#import "../../Settings/Controllers/SettingMomentsController.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
@@ -76,6 +77,7 @@ static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
             @{ @"title": @"界面定制", @"action": @"openUI:", @"kw": @"界面 定制 主题 ui" },
             @{ @"title": @"圆角美化", @"action": @"openCorner:", @"kw": @"圆角 美化 corner" },
             @{ @"title": @"红包设置", @"action": @"openRedEnvelop:", @"kw": @"红包 抢红包 收款 转账 拉群" },
+            @{ @"title": @"朋友圈", @"action": @"openMoments:", @"kw": @"朋友圈 pyq 时刻 moments 集赞" },
             @{ @"title": @"其他功能", @"action": @"openOther:", @"kw": @"其他 other" },
             @{ @"title": @"备份", @"action": @"openBackup:", @"kw": @"备份 恢复 backup" },
             @{ @"title": @"关于", @"action": @"openAbout:", @"kw": @"关于 版本 about" },
@@ -105,6 +107,13 @@ static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
             @{ @"title": @"拉群规则", @"vc": @"SettingFixedInviteRulesController", @"cat": @"自动抢红包", @"kw": @"拉群 规则 定额" },
             @{ @"title": @"红包推送提示", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"红包 通知 推送 提示" },
             @{ @"title": @"收款推送提示", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"收款 通知 推送 提示" },
+            // --- 朋友圈 ---
+            @{ @"title": @"便捷朋友圈", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"朋友圈 便捷 半屏 pyq" },
+            @{ @"title": @"高清朋友圈", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"朋友圈 高清 清晰" },
+            @{ @"title": @"朋友圈伪集赞", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"伪集赞 点赞 评论 朋友圈" },
+            @{ @"title": @"设置点赞数量", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"点赞 数量 伪集赞" },
+            @{ @"title": @"设置评论数量", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"评论 数量 伪集赞" },
+            @{ @"title": @"编辑评论文本", @"vc": @"SettingMomentCommentsController", @"cat": @"朋友圈功能", @"kw": @"评论 文本 编辑" },
             // --- 界面定制 ---
             @{ @"title": @"修改全局布局", @"vc": @"WPUILayoutSettingsVC", @"cat": @"界面定制", @"kw": @"全局 布局 字号 缩放 倍率 字体 大小" },
             @{ @"title": @"修改对话布局", @"vc": @"WPUILayoutSettingsVC", @"cat": @"界面定制", @"kw": @"对话 聊天 布局 字号 缩放 倍率" },
@@ -147,7 +156,7 @@ static void wpEntryBuildRows(WPWeChatTable *wc, NSString *keyword) {
 
     if (kw.length == 0) {
         [g wpSetHeader:@"功能列表" footer:nil];
-        NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
+        NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"红包设置", @"openRedEnvelop:"], @[@"朋友圈", @"openMoments:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
         for (NSUInteger i = 0; i < navItems.count; i++) {
             id cell = WPWCNavCell(NSSelectorFromString(@"wpEntryNavTap:"),
                                   handler,
@@ -459,6 +468,15 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     subVC.categoryName = @"自动抢红包";
     [vc.navigationController pushViewController:subVC animated:YES];
     WPLog(@"Setting", @"[Nav] pushed SettingRedEnvelopController");
+}
+
+- (void)openMoments:(id)sender {
+    UIViewController *vc = [self currentVCFrom:sender];
+    if (!vc) { WPLog(@"Setting", @"[Nav] openMoments: currentVC nil"); return; }
+    SettingMomentsController *subVC = [[SettingMomentsController alloc] init];
+    subVC.categoryName = @"朋友圈功能";
+    [vc.navigationController pushViewController:subVC animated:YES];
+    WPLog(@"Setting", @"[Nav] pushed SettingMomentsController");
 }
 
 - (void)openOther:(id)sender {
