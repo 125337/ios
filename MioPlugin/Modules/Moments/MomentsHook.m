@@ -31,9 +31,26 @@ static BOOL MioClassOwnsMethod(Class cls, SEL sel) {
     return owns;
 }
 
-// 150ms 布局修补（WCR FUN_017afcc8 同款意图/时序）：半屏容器中 adapter 可能把
-// nav.view 顶部下移一个安全区高度，导致朋友圈标题上方露出一截容器白底；
-// 将 nav.view 顶满容器（y=0、高度=容器高）消除白条
+// 递归找第一个 UIScrollView（深度限制 4 层）
+static UIScrollView *MioFindFirstScroll(UIView *root, int depth) {
+    if (!root || depth > 4) return nil;
+    for (UIView *sub in root.subviews) {
+        if ([sub isKindOfClass:[UIScrollView class]]) return (UIScrollView *)sub;
+    }
+    for (UIView *sub in root.subviews) {
+        UIScrollView *r = MioFindFirstScroll(sub, depth + 1);
+        if (r) return r;
+    }
+    return nil;
+}
+
+// 150ms 布局修补（WCR FUN_017afcc8 同款意图/时序）：
+// 1) nav.view 顶满半屏容器（y=0、高度=容器高）——adapter 会把 nav 顶部下移，
+//    标题上方露出一截容器白底；
+// 2) 标题下方空隙探测修补（159 日志实证 nav 顶满后标题下仍有 ~41pt 空隙）：
+//    A. 根 VC view 整体下移 → 拉回顶满
+//    B. 根 view 一级高子视图（包装层）整体下移 → 拉回顶满
+//    C. 滚动视图 contentInset/offset 富余 → 负 additionalSafeAreaInsets 抵消/归位
 static void MioPatchTimelineLayout(UINavigationController *nav) {
     UIView *v = nav.view;
     UIView *parent = v.superview;
@@ -47,6 +64,62 @@ static void MioPatchTimelineLayout(UINavigationController *nav) {
         v.frame = CGRectMake(0, 0, pf.size.width, pf.size.height);
         [v layoutIfNeeded];
         WPLog(@"Moments", @"[Pyq] patched nav frame -> (0,0,%.0f,%.0f)", pf.size.width, pf.size.height);
+    }
+
+    UIViewController *rootVC = nav.viewControllers.firstObject;
+    UIView *rv = rootVC.view;
+    if (!rv) return;
+    CGFloat navH = v.bounds.size.height;
+    WPLog(@"Moments", @"[Pyq] root=%@ rv=(%.0f,%.0f,%.0f,%.0f) navH=%.0f",
+          NSStringFromClass([rootVC class]), rv.frame.origin.x, rv.frame.origin.y,
+          rv.frame.size.width, rv.frame.size.height, navH);
+    NSArray *subs = rv.subviews;
+    for (NSUInteger i = 0; i < subs.count && i < 3; i++) {
+        UIView *sub = subs[i];
+        WPLog(@"Moments", @"[Pyq] rv.sub[%lu] %@ (%.0f,%.0f,%.0f,%.0f)",
+              (unsigned long)i, NSStringFromClass([sub class]),
+              sub.frame.origin.x, sub.frame.origin.y, sub.frame.size.width, sub.frame.size.height);
+    }
+
+    // A) 根 view 整体下移 → 拉回顶满
+    if (rv.frame.origin.y > 1) {
+        CGFloat dy = rv.frame.origin.y;
+        rv.frame = CGRectMake(0, 0, v.bounds.size.width, navH);
+        [rv layoutIfNeeded];
+        WPLog(@"Moments", @"[Pyq] gap fix A: root pulled up %.0f", dy);
+        return;
+    }
+
+    // B) 根 view 一级高子视图（包装层）整体下移 → 拉回顶满
+    for (UIView *sub in subs) {
+        CGRect sf = sub.frame;
+        if (sf.origin.y >= 30 && sf.origin.y <= 60 &&
+            sf.size.width >= rv.bounds.size.width - 1 &&
+            sf.size.height >= navH - 100) {
+            WPLog(@"Moments", @"[Pyq] gap fix B: %@ y=%.0f -> 0",
+                  NSStringFromClass([sub class]), sf.origin.y);
+            sub.frame = CGRectMake(0, 0, rv.bounds.size.width, navH);
+            [sub layoutIfNeeded];
+            return;
+        }
+    }
+
+    // C) 滚动视图 inset/offset 富余 → 抵消/归位
+    UIScrollView *sv = MioFindFirstScroll(rv, 0);
+    if (sv) {
+        UIEdgeInsets adj = sv.adjustedContentInset;
+        WPLog(@"Moments", @"[Pyq] scroll=%@ adjTop=%.0f offset=%.0f frame=(%.0f,%.0f,%.0f,%.0f)",
+              NSStringFromClass([sv class]), adj.top, sv.contentOffset.y,
+              sv.frame.origin.x, sv.frame.origin.y, sv.frame.size.width, sv.frame.size.height);
+        if (adj.top > 46) {
+            CGFloat gap = adj.top - 44;
+            rootVC.additionalSafeAreaInsets = UIEdgeInsetsMake(-gap, 0, 0, 0);
+            WPLog(@"Moments", @"[Pyq] gap fix C1: inset -%.0f", gap);
+        }
+        if (sv.contentOffset.y < -1) {
+            sv.contentOffset = CGPointMake(0, -adj.top);
+            WPLog(@"Moments", @"[Pyq] gap fix C2: offset reset to %.0f", -adj.top);
+        }
     }
 }
 
