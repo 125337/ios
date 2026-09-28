@@ -425,9 +425,8 @@ static void handleHongbaoResponse(id res, id req) {
                       totalAmountVal / 100.0, (long)totalNum,
                       (long)_statTotalCount, _statTotalAmount / 100.0);
                 if (config.redEnvelopNotify) {
-                    // 响应里的 nickName 常为空（接口不一定回传），兜底用消息侧上下文记录的发送人
-                    NSDictionary *ctx = syncContextForSendId(sendId);
-                    NSString *sender = nickName.length ? nickName : ctx[@"senderName"];
+                    // 发送人取消息侧上下文（响应 JSON 的 nickName 字段常为空，不可靠）
+                    NSString *sender = syncContextForSendId(sendId)[@"senderName"];
                     pushLocalNotification(@"抢红包",
                         [NSString stringWithFormat:@"抢到 %.2f元 来自%@", amount / 100.0,
                          sender.length ? sender : @"未知发送人"]);
