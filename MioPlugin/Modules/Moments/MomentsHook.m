@@ -1003,12 +1003,17 @@ static void MioFakeDLFirst(id self, SEL _cmd, id p1, BOOL p2, NSArray *datas, id
     if (gOrigFirst) gOrigFirst(self, _cmd, p1, p2, datas, p5, p6, p7, p8, p9);
 }
 
-static BOOL MioFakeHookMethod(Method m, IMP newImp, IMP *origOut) {
+// 不强制返回类型：垫片末句透传 orig，ARM64 x0 返回值天然透传，任何类型安全；
+// 头文件 dump 工具返回类型全写 id 不可信，真实编码打进日志供诊断
+static BOOL MioFakeHookMethod(Method m, IMP newImp, IMP *origOut, NSString **retCodeOut) {
     if (!m || !newImp || *origOut) return NO;
-    char *ret = method_copyReturnType(m);
-    BOOL isVoid = (ret && ret[0] == 'v');
-    if (ret) free(ret);
-    if (!isVoid) return NO;
+    if (retCodeOut) {
+        char *ret = method_copyReturnType(m);
+        if (ret) {
+            *retCodeOut = [NSString stringWithUTF8String:ret];
+            free(ret);
+        }
+    }
     *origOut = method_getImplementation(m);
     method_setImplementation(m, newImp);
     return YES;
@@ -1030,18 +1035,19 @@ static void MioInstallFakeDataLayerHooks(void) {
     NSMutableString *hit = [NSMutableString string];
     for (unsigned int i = 0; i < n; i++) {
         NSString *nm = NSStringFromSelector(method_getName(list[i]));
+        NSString *rc = nil;
         if (!gOrigMod && [nm isEqualToString:@"modifyDataItem:notify:"] &&
-            MioFakeHookMethod(list[i], (IMP)MioFakeDLMod, (IMP *)&gOrigMod)) {
-            installed++; [hit appendFormat:@" mod"];
+            MioFakeHookMethod(list[i], (IMP)MioFakeDLMod, (IMP *)&gOrigMod, &rc)) {
+            installed++; [hit appendFormat:@" mod(%@)", rc];
         } else if (!gOrigPre && [nm hasPrefix:@"onPrePageUpdated:datas:"] &&
-                   MioFakeHookMethod(list[i], (IMP)MioFakeDLPre, (IMP *)&gOrigPre)) {
-            installed++; [hit appendFormat:@" pre"];
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLPre, (IMP *)&gOrigPre, &rc)) {
+            installed++; [hit appendFormat:@" pre(%@)", rc];
         } else if (!gOrigNext && [nm hasPrefix:@"onNextPageUpdated:datas:"] &&
-                   MioFakeHookMethod(list[i], (IMP)MioFakeDLNext, (IMP *)&gOrigNext)) {
-            installed++; [hit appendFormat:@" next"];
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLNext, (IMP *)&gOrigNext, &rc)) {
+            installed++; [hit appendFormat:@" next(%@)", rc];
         } else if (!gOrigFirst && [nm hasPrefix:@"onFirstPageUpdated:dataChanged:"] &&
-                   MioFakeHookMethod(list[i], (IMP)MioFakeDLFirst, (IMP *)&gOrigFirst)) {
-            installed++; [hit appendFormat:@" first"];
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLFirst, (IMP *)&gOrigFirst, &rc)) {
+            installed++; [hit appendFormat:@" first(%@)", rc];
         }
     }
     free(list);
