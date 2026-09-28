@@ -97,6 +97,18 @@ static id MioFindVCUpChain(UIResponder *start, NSString *clsName) {
     return nil;
 }
 
+// 判断方法是否为类自身实现（非父类继承），替代 method_getClass（CI SDK 无声明）
+static BOOL MioClassOwnsMethod(Class cls, SEL sel) {
+    unsigned int count = 0;
+    Method *list = class_copyMethodList(cls, &count);
+    BOOL owns = NO;
+    for (unsigned int i = 0; i < count; i++) {
+        if (method_getName(list[i]) == sel) { owns = YES; break; }
+    }
+    free(list);
+    return owns;
+}
+
 #pragma mark - 伪集赞
 
 static IMP orig_WCDataItem_likeUsers = NULL;
@@ -275,8 +287,7 @@ static void MioInstallFakeLikeHook(Class dataItemCls) {
     }
     IMP origImp = method_getImplementation(m);
     const char *enc = method_getTypeEncoding(m);
-    Class ownerCls = method_getClass(m);
-    BOOL ownerIsTarget = [NSStringFromClass(ownerCls) isEqualToString:NSStringFromClass(dataItemCls)];
+    BOOL ownerIsTarget = MioClassOwnsMethod(dataItemCls, sel);
     if (ownerIsTarget) {
         orig_WCDataItem_likeUsers = method_setImplementation(m, (IMP)hooked_WCDataItem_likeUsers);
     } else {
@@ -288,7 +299,7 @@ static void MioInstallFakeLikeHook(Class dataItemCls) {
         orig_WCDataItem_likeUsers = origImp;
     }
     WPLog(@"Moments", @"[FakeLike] WCDataItem likeUsers hooked (owner=%s, override=%d)",
-          class_getName(ownerCls), !ownerIsTarget);
+          ownerIsTarget ? "self" : "super", !ownerIsTarget);
 }
 
 #pragma mark - 便捷朋友圈（pyq 快速打开）
@@ -410,11 +421,11 @@ static void MioScanAndHookHD(void) {
         if (nm[0] == 'W' && strncmp(nm, "WP", 2) == 0) continue;
         Method m1 = class_getInstanceMethod(c, s1);
         Method m2 = class_getInstanceMethod(c, s2);
-        if (m1 && method_getClass(m1) == c && !orig_hd_1) {
+        if (m1 && MioClassOwnsMethod(c, s1) && !orig_hd_1) {
             orig_hd_1 = method_setImplementation(m1, (IMP)hooked_hd_setHD);
             [hitNames addObject:[NSString stringWithFormat:@"%s(hd)", nm]];
         }
-        if (m2 && method_getClass(m2) == c && !orig_hd_2) {
+        if (m2 && MioClassOwnsMethod(c, s2) && !orig_hd_2) {
             orig_hd_2 = method_setImplementation(m2, (IMP)hooked_hd_setOrigin);
             [hitNames addObject:[NSString stringWithFormat:@"%s(origin)", nm]];
         }
