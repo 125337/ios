@@ -710,12 +710,14 @@ static id MioFakeMakeUser(NSString *nick, NSString *content) {
     return u;
 }
 
-// 假赞数组（每条 item 会话内稳定：associated 缓存；8~28 随机）
+// 假赞数组（每条 item 会话内稳定：associated 缓存；数量读子配置 fakeLikeCount，钳 0~10000）
 static NSArray *MioFakeLikersForItem(id item) {
     NSArray *cached = objc_getAssociatedObject(item, &kFakeLikArrKey);
     if (cached) return cached;
+    NSInteger n = [MomentsConfig shared].fakeLikeCount;
+    if (n < 0) n = 0;
+    if (n > 10000) n = 10000;
     NSMutableArray *arr = [NSMutableArray array];
-    NSInteger n = 8 + (NSInteger)arc4random_uniform(21);
     for (NSInteger i = 0; i < n; i++) {
         id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)], nil);
         if (u) [arr addObject:u];
@@ -724,15 +726,21 @@ static NSArray *MioFakeLikersForItem(id item) {
     return arr;
 }
 
-// 假评数组（2~5 随机，同缓存策略）
+// 假评数组（数量读子配置 fakeCommentCount，钳 0~300；文本读 fakeCommentTexts 随机取用，空则回退内置池；同缓存策略）
 static NSArray *MioFakeCommentsForItem(id item) {
     NSArray *cached = objc_getAssociatedObject(item, &kFakeCmtArrKey);
     if (cached) return cached;
+    MomentsConfig *cfg = [MomentsConfig shared];
+    NSInteger n = cfg.fakeCommentCount;
+    if (n < 0) n = 0;
+    if (n > 300) n = 300;
+    NSArray<NSString *> *texts = (cfg.fakeCommentTexts.count > 0) ? cfg.fakeCommentTexts : nil;
     NSMutableArray *arr = [NSMutableArray array];
-    NSInteger n = 2 + (NSInteger)arc4random_uniform(4);
     for (NSInteger i = 0; i < n; i++) {
-        id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)],
-                               kFakeCommentTexts[arc4random_uniform(kFakeCommentTextCount)]);
+        NSString *text = texts
+            ? texts[arc4random_uniform((u_int32_t)texts.count)]
+            : kFakeCommentTexts[arc4random_uniform(kFakeCommentTextCount)];
+        id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)], text);
         if (u) [arr addObject:u];
     }
     objc_setAssociatedObject(item, &kFakeCmtArrKey, arr, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
