@@ -57,7 +57,7 @@ static void pluginEntryViewWillDisappear(id self, SEL _cmd, BOOL animated) {
     Class uiVC = objc_getClass("UIViewController");
     Method m = class_getInstanceMethod(uiVC, _cmd);
     if (m) {
-        ((void (*)(id, SEL))method_getImplementation(m))(self, _cmd, animated);
+        ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
     }
     WPRestoreNavAppearance((UIViewController *)self);
 }
