@@ -537,14 +537,6 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     return cy + kRowH;
 }
 
-#pragma mark - Row: Sub-Section Label
-
-- (CGFloat)addSubSectionLabelInGroup:(UIView *)group text:(NSString *)text cy:(CGFloat)cy width:(CGFloat)w {
-    // 组内小标题暂无对应 API，跳过（纯装饰；后续可用独立 section header 精化）
-    WPLog(@"WCTable", @"[WCTABLE] subLabel 行已跳过（微信引擎暂不支持组内小标题）: %@", text);
-    return cy;
-}
-
 #pragma mark - Row: Color
 
 - (CGFloat)addColorRowInGroup:(UIView *)group
