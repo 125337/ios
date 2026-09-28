@@ -62,14 +62,16 @@ static void pluginEntryViewWillDisappear(id self, SEL _cmd, BOOL animated) {
     WPRestoreNavAppearance((UIViewController *)self);
 }
 
-// ===== 搜索注册表：一级页挂 action（复用 openXxx:），二级页挂 vcClass（wpSearchOpen: 反射 push）=====
+// ===== 搜索注册表：一级页挂 action（复用 openXxx:）；二级页/功能项挂 vcClass（wpSearchOpen: 反射 push）=====
+// 条目两级：页面条目（title=页面名）+ 功能项条目（title=页面内功能行名），同一页面可出现多次，cat 显示归属页
 static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
     static NSArray *items = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         items = @[
+            // --- 一级页面 ---
             @{ @"title": @"账户信息", @"action": @"openAccount:", @"kw": @"账户 信息 余额 account" },
-            @{ @"title": @"语音包", @"action": @"openVoice:", @"kw": @"语音 转发 voice" },
+            @{ @"title": @"语音包", @"action": @"openVoice:", @"kw": @"语音包 语音 转发 voice" },
             @{ @"title": @"常用功能", @"action": @"openCommon:", @"kw": @"常用 通用 common" },
             @{ @"title": @"界面定制", @"action": @"openUI:", @"kw": @"界面 定制 主题 ui" },
             @{ @"title": @"圆角美化", @"action": @"openCorner:", @"kw": @"圆角 美化 corner" },
@@ -77,16 +79,56 @@ static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
             @{ @"title": @"其他功能", @"action": @"openOther:", @"kw": @"其他 other" },
             @{ @"title": @"备份", @"action": @"openBackup:", @"kw": @"备份 恢复 backup" },
             @{ @"title": @"关于", @"action": @"openAbout:", @"kw": @"关于 版本 about" },
-            @{ @"title": @"关键词提醒", @"vc": @"SettingKeywordAlertController", @"cat": @"常用功能", @"kw": @"关键词 提醒 keyword" },
-            @{ @"title": @"指定页面上锁", @"vc": @"SettingPageLockController", @"cat": @"常用功能", @"kw": @"上锁 锁 密码 面容 指纹 pagelock" },
-            @{ @"title": @"防撤回设置", @"vc": @"SettingRevokeController", @"cat": @"常用功能", @"kw": @"防撤回 撤回 revoke" },
-            @{ @"title": @"消息时间", @"vc": @"SettingMessageTimeController", @"cat": @"常用功能", @"kw": @"消息 时间" },
-            @{ @"title": @"布局设置", @"vc": @"WPUILayoutSettingsVC", @"cat": @"界面定制", @"kw": @"字体 布局 font layout" },
-            @{ @"title": @"聊天顶部栏", @"vc": @"SettingChatTopBarController", @"cat": @"界面定制", @"kw": @"顶部 聊天 顶栏" },
+            // --- 常用功能 ---
+            @{ @"title": @"关键词提醒", @"vc": @"SettingKeywordAlertController", @"cat": @"常用功能", @"kw": @"关键词 提醒 keyword 命中 弹窗" },
+            @{ @"title": @"指定页面上锁", @"vc": @"SettingPageLockController", @"cat": @"常用功能", @"kw": @"上锁 锁 密码 面容 指纹 pagelock 生物识别" },
+            @{ @"title": @"消息防撤回", @"vc": @"SettingRevokeController", @"cat": @"常用功能", @"kw": @"防撤回 撤回 revoke 提示" },
+            @{ @"title": @"通知撤回者", @"vc": @"SettingRevokeController", @"cat": @"常用功能", @"kw": @"撤回 通知 谁 通知者" },
+            @{ @"title": @"自定义撤回消息显示", @"vc": @"SettingRevokeController", @"cat": @"常用功能", @"kw": @"撤回 格式 显示 自定义" },
+            @{ @"title": @"消息时间", @"vc": @"SettingMessageTimeController", @"cat": @"常用功能", @"kw": @"消息 时间 显示 msgtime" },
+            @{ @"title": @"启用一键已读消息", @"vc": @"SettingGeneralFunctionController", @"cat": @"通用功能", @"kw": @"已读 一键 读 read" },
+            @{ @"title": @"启用修改文字(小丑功能)", @"vc": @"SettingGeneralFunctionController", @"cat": @"通用功能", @"kw": @"小丑 修改 文字 joker" },
+            @{ @"title": @"启用退群检测", @"vc": @"SettingGeneralFunctionController", @"cat": @"通用功能", @"kw": @"退群 群 检测" },
+            @{ @"title": @"修改解锁密码", @"vc": @"SettingGeneralFunctionController", @"cat": @"通用功能", @"kw": @"密码 解锁 加密" },
+            // --- 红包设置 ---
+            @{ @"title": @"启用自动抢红包", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"抢红包 红包 自动" },
+            @{ @"title": @"红包信息同步到窗口", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"红包 同步 窗口 转发" },
+            @{ @"title": @"显示红包详情", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"红包 详情" },
+            @{ @"title": @"抢红包后自动回复", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"红包 回复 谢谢" },
+            @{ @"title": @"过滤红包关键词", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"红包 过滤 关键词 拼多多" },
+            @{ @"title": @"过滤不抢的群", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"红包 过滤 群 黑名单" },
+            @{ @"title": @"启用自动收款", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"收款 转账 确认 到账" },
+            @{ @"title": @"私聊转账自动收款", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"收款 转账 私聊" },
+            @{ @"title": @"群聊转账自动收款", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"收款 转账 群聊" },
+            @{ @"title": @"收款后自动回复", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"收款 回复" },
+            @{ @"title": @"启用定额自动拉群", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"拉群 定额 转账 群 档位" },
+            @{ @"title": @"拉群规则", @"vc": @"SettingFixedInviteRulesController", @"cat": @"自动抢红包", @"kw": @"拉群 规则 定额" },
+            @{ @"title": @"红包推送提示", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"红包 通知 推送 提示" },
+            @{ @"title": @"收款推送提示", @"vc": @"SettingRedEnvelopController", @"cat": @"红包设置", @"kw": @"收款 通知 推送 提示" },
+            // --- 界面定制 ---
+            @{ @"title": @"修改全局布局", @"vc": @"WPUILayoutSettingsVC", @"cat": @"界面定制", @"kw": @"全局 布局 字号 缩放 倍率 字体 大小" },
+            @{ @"title": @"修改对话布局", @"vc": @"WPUILayoutSettingsVC", @"cat": @"界面定制", @"kw": @"对话 聊天 布局 字号 缩放 倍率" },
+            @{ @"title": @"布局设置", @"vc": @"WPUILayoutSettingsVC", @"cat": @"界面定制", @"kw": @"布局 字体 font layout" },
+            @{ @"title": @"聊天顶部栏", @"vc": @"SettingChatTopBarController", @"cat": @"界面定制", @"kw": @"顶部 聊天 顶栏 头像" },
+            @{ @"title": @"显示聊天头像", @"vc": @"SettingChatTopBarController", @"cat": @"界面定制", @"kw": @"聊天 头像 显示" },
+            @{ @"title": @"显示群聊人数", @"vc": @"SettingChatTopBarController", @"cat": @"界面定制", @"kw": @"群聊 人数 显示" },
+            @{ @"title": @"管理显示黑名单", @"vc": @"SettingChatTopBarController", @"cat": @"界面定制", @"kw": @"黑名单 顶部 显示" },
             @{ @"title": @"隐藏头像", @"vc": @"SettingAvatarHideController", @"cat": @"界面定制", @"kw": @"头像 隐藏 avatar" },
+            @{ @"title": @"UI净化", @"vc": @"WPUIPurifyVC", @"cat": @"界面定制", @"kw": @"净化 气泡 分隔线 听写 purify" },
+            @{ @"title": @"隐藏聊天气泡背景", @"vc": @"WPUIPurifyVC", @"cat": @"界面定制", @"kw": @"气泡 背景 隐藏 净化" },
+            @{ @"title": @"禁用输入框听写", @"vc": @"WPUIPurifyVC", @"cat": @"界面定制", @"kw": @"听写 输入 禁用 麦克风" },
+            @{ @"title": @"输入框占位文本", @"vc": @"WPUIPlaceholderTextVC", @"cat": @"界面定制", @"kw": @"占位 输入框 文本 提示 placeholder" },
+            @{ @"title": @"附件布局优化", @"vc": @"WPUIAttachmentLayoutVC", @"cat": @"界面定制", @"kw": @"附件 布局 图片 列数" },
+            // --- 圆角美化 ---
             @{ @"title": @"列表圆角", @"vc": @"SettingListCornerRadiusController", @"cat": @"圆角美化", @"kw": @"列表 圆角 corner" },
             @{ @"title": @"卡片背景", @"vc": @"SettingCardBackgroundController", @"cat": @"圆角美化", @"kw": @"卡片 背景 card" },
-            @{ @"title": @"拉群规则", @"vc": @"SettingFixedInviteRulesController", @"cat": @"自动抢红包", @"kw": @"拉群 规则 定额" },
+            @{ @"title": @"开启资料圆角", @"vc": @"SettingCardBackgroundController", @"cat": @"圆角美化", @"kw": @"资料 圆角 头像" },
+            @{ @"title": @"隐藏信息卡片", @"vc": @"SettingCardBackgroundController", @"cat": @"圆角美化", @"kw": @"卡片 信息 隐藏" },
+            // --- 其他功能 ---
+            @{ @"title": @"调试日志", @"vc": @"WPOtherVC", @"cat": @"其他功能", @"kw": @"调试 日志 debug" },
+            @{ @"title": @"隐藏内容", @"vc": @"WPOtherVC", @"cat": @"其他功能", @"kw": @"隐藏 内容" },
+            @{ @"title": @"免提示", @"vc": @"WPOtherVC", @"cat": @"其他功能", @"kw": @"免提示 提示 弹窗" },
+            @{ @"title": @"重置所有配置", @"vc": @"WPBackupVC", @"cat": @"备份", @"kw": @"重置 配置 恢复出厂" },
         ];
     });
     return items;
