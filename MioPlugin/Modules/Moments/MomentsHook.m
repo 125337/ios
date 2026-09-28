@@ -2,6 +2,7 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <stdlib.h>
 #import "../../Core/LogManager.h"
 #import "MomentsConfig.h"
 
@@ -259,6 +260,309 @@ static void MioRehookCheck(int round) {
     WPLog(@"Moments", @"[Pyq] rehook check(%d) fixed=%d", round, fixed);
 }
 
+#pragma mark - 高清朋友圈（WCR 同款机制：ActionSheet 注入 + 强制原图重开选图器）
+
+// WCR 证据链：hook WCTimeLineViewController configDataReportForActionSheet: 注入
+// 「选择高清照片/视频」按钮（WCActionSheetItem + setEventAction: + addButtonWithItem:atIndex:，
+// buttonTitleList 防重）→ 点击 dismiss 后 200ms 置总闸并重开选图器（KVC 链
+// poster/m_poster/timelinePoster/postSessionController 找发图页，showImagePicker 系
+// 逐级降级，WCTimelineRouterHelper 7 参兜底）→ MMAssetTimeLineConfig 的
+// compressQuality/shouldCompressLongImage 等压缩判断被改写返 0 → 选图器输出原图
+// → viewDidPopOrDismiss: 清总闸（WCR ResetFlow 同位）
+
+static volatile BOOL gHDPending = NO;   // HD 会话总闸（WCR DAT_028c9ee0/e1 同位）
+static IMP orig_hd_configSheet = NULL;  // configDataReportForActionSheet: 原实现
+static IMP orig_hd_popDismiss = NULL;   // viewDidPopOrDismiss: 原实现（清窗点）
+
+static BOOL MioHDEnabled(void) {
+    return [MomentsConfig shared].hdMomentsEnabled;
+}
+
+// WCR FUN_0033eb94 同款反射 setter：NSSelectorFromString + respondsToSelector 守卫
+static void MioHDSetB(id obj, NSString *selName, BOOL val) {
+    if (!obj) return;
+    SEL sel = NSSelectorFromString(selName);
+    if (![obj respondsToSelector:sel]) return;
+    ((void(*)(id, SEL, BOOL))objc_msgSend)(obj, sel, val);
+}
+
+static void MioHDSetN(id obj, NSString *selName, NSInteger val) {
+    if (!obj) return;
+    SEL sel = NSSelectorFromString(selName);
+    if (![obj respondsToSelector:sel]) return;
+    ((void(*)(id, SEL, NSInteger))objc_msgSend)(obj, sel, val);
+}
+
+// WCR FUN_0033e618 同款：对发图页对象执行强制原图配置（15 项 setter 全序列）
+static void MioApplyHDOptions(id poster) {
+    if (!poster) return;
+    MioHDSetB(poster, @"setCanSendOriginalImage:", YES);
+    MioHDSetB(poster, @"setCanSendOriginImage:", YES);
+    MioHDSetB(poster, @"setIsOpenSendOriginVideo:", YES);
+    MioHDSetB(poster, @"setCanSendVideoMessage:", YES);
+    MioHDSetB(poster, @"setCanSendMultiImage:", YES);
+    MioHDSetB(poster, @"setButtonEnableAfterSend:", YES);
+    MioHDSetB(poster, @"setIsNotShowVideoSizeAlertView:", YES);
+    MioHDSetB(poster, @"setHideOriginButton:", NO);
+    MioHDSetB(poster, @"setForceSendOriginalImage:", YES);   // 强制原图（WCR 实锤）
+    MioHDSetB(poster, @"setShowSkipBtn:", NO);
+    MioHDSetB(poster, @"setCanSendMultiVideo:", NO);
+    MioHDSetB(poster, @"setCanHybridSendAsset:", NO);
+    MioHDSetB(poster, @"setNeedThumbImage:", NO);
+    MioHDSetB(poster, @"setIsWAVideoCompressed:", NO);
+    MioHDSetB(poster, @"setVideoDirectToEditMode:", NO);
+    MioHDSetB(poster, @"setImageDirectToEditMode:", NO);
+    MioHDSetB(poster, @"setM_isJustReturnMMAsset:", NO);
+    MioHDSetB(poster, @"setIsCamera:", NO);
+    MioHDSetN(poster, @"setPreviewEditScene:", 4);
+    MioHDSetN(poster, @"setCompressType:", 1);
+    MioHDSetN(poster, @"setMaxImageCount:", 9);
+    MioHDSetN(poster, @"setVideoQualityType:", 1);
+}
+
+// WCR FUN_0033a3a4 同款：取 sheet 的 buttonTitleList（防重 + 注入位置）
+static NSArray *MioHDSheetTitles(id sheet) {
+    SEL listSel = NSSelectorFromString(@"buttonTitleList");
+    if (![sheet respondsToSelector:listSel]) return nil;
+    @try {
+        id list = ((id(*)(id, SEL))objc_msgSend)(sheet, listSel);
+        if ([list isKindOfClass:[NSArray class]]) return list;
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[HD] titleList error: %@", e);
+    }
+    return nil;
+}
+
+// WCR FUN_0033acac 主路径同款：对 vc/poster 逐级降级调 showImagePicker 系重开选图器
+static BOOL MioHDTryShowPicker(id obj) {
+    if (!obj) return NO;
+    struct { const char *sel; int argc; } cands[] = {
+        {"showImagePicker:showsCameraButtonInPicker:showsCameraButtonAtBottom:shareInfo:", 4},
+        {"showImagePicker:showsCameraButtonInPicker:showsCameraButtonAtBottom:", 3},
+        {"showImagePicker:", 1},
+    };
+    for (int i = 0; i < 3; i++) {
+        SEL sel = NSSelectorFromString(@(cands[i].sel));
+        if (![obj respondsToSelector:sel]) continue;
+        switch (cands[i].argc) {
+            case 4: ((void(*)(id, SEL, id, id, id, id))objc_msgSend)(obj, sel, nil, nil, nil, nil); break;
+            case 3: ((void(*)(id, SEL, id, id, id))objc_msgSend)(obj, sel, nil, nil, nil); break;
+            case 1: ((void(*)(id, SEL, id))objc_msgSend)(obj, sel, nil); break;
+        }
+        return YES;
+    }
+    return NO;
+}
+
+// WCR FUN_0033d694 同款：KVC 链找发图页（poster/m_poster/timelinePoster/postSessionController）
+static id MioHDFindPoster(id vc) {
+    NSArray *keys = @[@"poster", @"m_poster", @"timelinePoster", @"m_timelinePoster",
+                      @"postSessionController", @"m_postSessionController"];
+    for (NSString *k in keys) {
+        SEL sel = NSSelectorFromString(k);
+        if (![vc respondsToSelector:sel]) continue;
+        @try {
+            id p = ((id(*)(id, SEL))objc_msgSend)(vc, sel);
+            if (p && p != vc) return p;
+        } @catch (NSException *e) {
+        }
+    }
+    return nil;
+}
+
+// WCR FUN_0033acac 兜底同款：WCTimelineRouterHelper 7 参路由重开选图器
+static void MioHDRouterReopen(id vc, id poster) {
+    Class routerCls = objc_getClass("WCTimelineRouterHelper");
+    SEL routeSel = NSSelectorFromString(@"showImagePickerWithPickerScene:sourceType:showsCameraButtonInPicker:showsCameraButtonAtBottom:customOptionsBlock:delegate:fromViewController:");
+    if (!routerCls || ![routerCls respondsToSelector:routeSel]) return;
+    NSInteger scene = 1;   // WCR：候选全失败则 1
+    if (poster) {
+        NSArray *keys = @[@"getPickerScene", @"pickerScene", @"routePickerViewEnterScene",
+                          @"albumPickerEnterScene", @"startSourceScene", @"fromSourceScene"];
+        for (NSString *k in keys) {
+            SEL sel = NSSelectorFromString(k);
+            if (![poster respondsToSelector:sel]) continue;
+            @try {
+                id v = ((id(*)(id, SEL))objc_msgSend)(poster, sel);
+                NSInteger n = [v respondsToSelector:@selector(integerValue)] ? [v integerValue] : 0;
+                if (n >= 1) { scene = n; break; }
+            } @catch (NSException *e) {
+            }
+        }
+    }
+    void (^optBlock)(id) = ^(id opt) {
+        // WCR FUN_0033e0e0：对配置对象 setIsCamera:0 + 强制原图全序列
+        MioHDSetB(opt, @"setIsCamera:", NO);
+        MioApplyHDOptions(opt);
+    };
+    ((void(*)(id, SEL, NSInteger, NSInteger, BOOL, BOOL, void(^)(id), id, id))objc_msgSend)
+        (routerCls, routeSel, scene, 0, NO, NO, optBlock, poster ?: vc, vc);
+}
+
+// 点击「选择高清照片/视频」→ 200ms 后置总闸并重开选图器（WCR FUN_0033a85c 同款时序）
+static void MioHDReopenPicker(id vc) {
+    gHDPending = YES;
+    id poster = MioHDFindPoster(vc);
+    MioApplyHDOptions(poster ?: vc);
+    if (MioHDTryShowPicker(vc) || MioHDTryShowPicker(poster)) return;
+    MioHDRouterReopen(vc, poster);
+    // 超时兜底：异常路径下防总闸残留（正常由 viewDidPopOrDismiss 清窗）
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(600 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (gHDPending) gHDPending = NO;
+    });
+}
+
+// WCR FUN_0033cd10 同款垫片：先原实现，再注入按钮（开关守卫 + 全反射）
+static void hooked_hd_configSheet(id self, SEL _cmd, id sheet) {
+    if (orig_hd_configSheet) {
+        ((void(*)(id, SEL, id))orig_hd_configSheet)(self, _cmd, sheet);
+    }
+    if (!MioHDEnabled() || !sheet) return;
+    @try {
+        if (![sheet isKindOfClass:objc_getClass("WCTimelineActionSheet")]) return;
+        NSArray *titles = MioHDSheetTitles(sheet);
+        if (titles) {
+            for (NSString *t in titles) {
+                if ([t isKindOfClass:[NSString class]] &&
+                    ([t isEqualToString:@"选择高清照片/视频"] || [t containsString:@"高清照片"])) {
+                    return;   // 防重（WCR 同款：title 精确/包含匹配）
+                }
+            }
+        }
+        Class itemCls = objc_getClass("WCActionSheetItem");
+        SEL initSel = NSSelectorFromString(@"initWithTitle:");
+        SEL actSel = NSSelectorFromString(@"setEventAction:");
+        SEL addSel = NSSelectorFromString(@"addButtonWithItem:atIndex:");
+        if (!itemCls || ![itemCls instancesRespondToSelector:initSel]
+            || ![itemCls instancesRespondToSelector:actSel]
+            || ![sheet respondsToSelector:addSel]) {
+            WPLog(@"Moments", @"[HD] ActionSheet API NOT available");
+            return;
+        }
+        __weak id wvc = self;
+        __weak id wsheet = sheet;
+        id item = ((id(*)(id, SEL, id))objc_msgSend)([itemCls alloc], initSel, @"选择高清照片/视频");
+        if (!item) return;
+        ((void(*)(id, SEL, id))objc_msgSend)(item, actSel, ^{
+            // WCR FUN_0033a85c：dismiss → 200ms → 置总闸 + 重开选图器
+            id sv = wsheet;
+            if ([sv respondsToSelector:NSSelectorFromString(@"dismissWithClickedButtonIndex:animated:")]) {
+                ((void(*)(id, SEL, NSInteger, BOOL))objc_msgSend)(sv, NSSelectorFromString(@"dismissWithClickedButtonIndex:animated:"), (NSInteger)-1, YES);
+            }
+            id vv = wvc;
+            if (!vv) return;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                @try {
+                    MioHDReopenPicker(vv);
+                } @catch (NSException *e) {
+                    gHDPending = NO;
+                    WPLog(@"Moments", @"[HD] reopen error: %@", e);
+                }
+            });
+        });
+        NSInteger idx = titles ? (NSInteger)[titles count] : 0;   // WCR：addButtonWithItem:atIndex:[items count]
+        ((void(*)(id, SEL, id, NSInteger))objc_msgSend)(sheet, addSel, item, idx);
+        WPLog(@"Moments", @"[HD] button injected at %ld", (long)idx);
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[HD] inject error: %@", e);
+    }
+}
+
+// WCR FUN_0053d0f4 同位清窗：发布页 pop/发布完成 → 关总闸（ResetFlow 同位）
+static void hooked_hd_popDismiss(id self, SEL _cmd, BOOL animated) {
+    if (orig_hd_popDismiss) {
+        ((void(*)(id, SEL, BOOL))orig_hd_popDismiss)(self, _cmd, animated);
+    }
+    gHDPending = NO;
+}
+
+// 压缩判断 getter 改写（WCR c94c 族同款：带窗强返 0，关窗透传原实现）
+#define MIO_HD_GETTER_MAX 4
+static struct { SEL sel; IMP orig; } gHDGetters[MIO_HD_GETTER_MAX];
+static int gHDGetterCount = 0;
+
+static IMP MioHDGetterOrig(SEL cmd) {
+    for (int i = 0; i < gHDGetterCount; i++) {
+        if (gHDGetters[i].sel == cmd) return gHDGetters[i].orig;
+    }
+    return NULL;
+}
+
+static float hooked_hd_cfgFloat(id self, SEL _cmd) {
+    if (gHDPending) return 0.0f;
+    IMP orig = MioHDGetterOrig(_cmd);
+    return orig ? ((float(*)(id, SEL))orig)(self, _cmd) : 0.0f;
+}
+static BOOL hooked_hd_cfgBool(id self, SEL _cmd) {
+    if (gHDPending) return NO;
+    IMP orig = MioHDGetterOrig(_cmd);
+    return orig ? ((BOOL(*)(id, SEL))orig)(self, _cmd) : NO;
+}
+static NSInteger hooked_hd_cfgInt(id self, SEL _cmd) {
+    if (gHDPending) return 0;
+    IMP orig = MioHDGetterOrig(_cmd);
+    return orig ? ((NSInteger(*)(id, SEL))orig)(self, _cmd) : 0;
+}
+
+// 安装 MMAssetTimeLineConfig 压缩 getter 改写（按运行时返回类型分流，WCR c94c 族同位）
+static void MioInstallHDConfigHooks(void) {
+    Class cfgCls = objc_getClass("MMAssetTimeLineConfig");
+    if (!cfgCls) {
+        WPLog(@"Moments", @"[HD] MMAssetTimeLineConfig NOT found");
+        return;
+    }
+    NSArray *getters = @[@"compressQuality", @"shouldCompressLongImage", @"imageSizeLimit"];
+    int n = 0;
+    for (NSString *name in getters) {
+        SEL sel = NSSelectorFromString(name);
+        Method m = class_getInstanceMethod(cfgCls, sel);
+        if (!m) continue;
+        char *ret = method_copyReturnType(m);
+        IMP newImp = NULL;
+        if (ret && (ret[0] == 'f' || ret[0] == 'd')) newImp = (IMP)hooked_hd_cfgFloat;
+        else if (ret && (ret[0] == 'c' || ret[0] == 'B')) newImp = (IMP)hooked_hd_cfgBool;
+        else if (ret && (ret[0] == 'q' || ret[0] == 'i' || ret[0] == 'l' || ret[0] == 'I')) newImp = (IMP)hooked_hd_cfgInt;
+        if (ret) free(ret);
+        if (!newImp || gHDGetterCount >= MIO_HD_GETTER_MAX) continue;
+        gHDGetters[gHDGetterCount].sel = sel;
+        gHDGetters[gHDGetterCount].orig = method_getImplementation(m);
+        gHDGetterCount++;
+        method_setImplementation(m, newImp);
+        n++;
+    }
+    WPLog(@"Moments", @"[HD] MMAssetTimeLineConfig getters hooked: %d", n);
+}
+
+static void MioInstallHDHooks(void) {
+    Class tlCls = objc_getClass("WCTimeLineViewController");
+    if (!tlCls) {
+        WPLog(@"Moments", @"[HD] SKIP: WCTimeLineViewController NOT found");
+        return;
+    }
+    // 1) ActionSheet 配置点 → 注入按钮
+    SEL cfgSel = NSSelectorFromString(@"configDataReportForActionSheet:");
+    Method m1 = class_getInstanceMethod(tlCls, cfgSel);
+    if (m1) {
+        orig_hd_configSheet = method_getImplementation(m1);
+        method_setImplementation(m1, (IMP)hooked_hd_configSheet);
+        WPLog(@"Moments", @"[HD] configDataReportForActionSheet: hooked");
+    }
+    // 2) 发布页关闭 → 清总闸
+    Class commitCls = objc_getClass("WCNewCommitViewController");
+    if (commitCls) {
+        SEL popSel = NSSelectorFromString(@"viewDidPopOrDismiss:");
+        Method m2 = class_getInstanceMethod(commitCls, popSel);
+        if (m2) {
+            orig_hd_popDismiss = method_getImplementation(m2);
+            method_setImplementation(m2, (IMP)hooked_hd_popDismiss);
+        }
+    }
+    // 3) 压缩 getter 改写
+    MioInstallHDConfigHooks();
+}
+
 #pragma mark - 安装
 
 @implementation MomentsHook
@@ -266,6 +570,7 @@ static void MioRehookCheck(int round) {
 + (void)install {
     WPLog(@"Moments", @"[MomentsHook] install start");
     MioInstallPyqHooks();
+    MioInstallHDHooks();
     // 重挂自检（防微信晚到初始化覆盖 IMP）
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ MioRehookCheck(1); });
