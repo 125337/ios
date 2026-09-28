@@ -10,26 +10,10 @@
 // 防重入标志：触发后置位，500ms 后主线程清零（WCR FUN_017a7970 同款防抖窗口）
 static volatile BOOL gPyqHandling = NO;
 static IMP orig_pyq_didChange = NULL;    // textViewDidChange:（MMGrowTextView 主探测）
-static IMP orig_pyq_selChange = NULL;    // textViewDidChangeSelection:
 static IMP orig_tv_setDelegate = NULL;   // UITextView setDelegate:（动态挂载器）
 static IMP orig_pyq_dyn1 = NULL;         // 动态 delegate 类的 textViewDidChange: 原实现
 static IMP orig_pyq_dyn2 = NULL;
 static Class gDynCls1 = NULL, gDynCls2 = NULL;
-static int gPyqLogCount = 0;    // 取证日志：仅前 3 次
-static int gSelLogCount = 0;    // SelectionChange 探测：仅前 3 次
-static int gDelLogCount = 0;    // delegate 探针：仅前 10 次
-
-// 判断方法是否为类自身实现（非父类继承），替代 method_getClass（CI SDK 无声明）
-static BOOL MioClassOwnsMethod(Class cls, SEL sel) {
-    unsigned int count = 0;
-    Method *list = class_copyMethodList(cls, &count);
-    BOOL owns = NO;
-    for (unsigned int i = 0; i < count; i++) {
-        if (method_getName(list[i]) == sel) { owns = YES; break; }
-    }
-    free(list);
-    return owns;
-}
 
 // 递归找第一个 UIScrollView（深度限制 4 层）
 static UIScrollView *MioFindFirstScroll(UIView *root, int depth) {
@@ -44,105 +28,44 @@ static UIScrollView *MioFindFirstScroll(UIView *root, int depth) {
     return nil;
 }
 
-// 150ms 布局修补（WCR FUN_017afcc8 同款意图/时序）：
-// 1) nav.view 顶满半屏容器（y=0、高度=容器高）——adapter 会把 nav 顶部下移，
-//    标题上方露出一截容器白底；
-// 2) 标题下方空隙探测修补（159 日志实证 nav 顶满后标题下仍有 ~41pt 空隙）：
-//    A. 根 VC view 整体下移 → 拉回顶满
-//    B. 根 view 一级高子视图（包装层）整体下移 → 拉回顶满
-//    C. 滚动视图 contentInset/offset 富余 → 负 additionalSafeAreaInsets 抵消/归位
+// 150ms 布局修补（WCR FUN_017afcc8 同款时序 + 162 日志实证的三处全屏残留修正）：
+// 全屏规格的 WCTimeLine 页面装进 0.7 屏高半屏容器后：
+// 1) adapter 把 nav 放 y=40，顶部露一截容器白底 → nav.view 顶满容器（158 实证必需）
+// 2) 顶部盖板（UIImageView 120 / UIView 98 = 54 状态栏+44 导航栏的全屏规格）不透明
+//    压在内容上层，盖住 44~98 区间的帖子 → 收缩到 44（162 实证必需）
+// 3) 表格 contentInset.top=98（全屏规格，behavior=.never 安全区不叠加）→ 压到 44，
+//    自然静止位变 -44，滑动松手不回弹；UIKit 改 inset 时会自动补偿 offset（162 六次
+//    实证），无需手动拨。微信数据加载会在 150~600ms 间重置 inset/盖板，由外层
+//    600ms/1.5s 复查兜住；修补幂等，重复执行无副作用
 static void MioPatchTimelineLayout(UINavigationController *nav) {
     UIView *v = nav.view;
     UIView *parent = v.superview;
     if (!v.window || !parent) return;
     CGRect pf = parent.bounds;
-    CGRect f = v.frame;
-    WPLog(@"Moments", @"[Pyq] patch before nav=(%.0f,%.0f,%.0f,%.0f) parent=%@ bounds=%.0fx%.0f",
-          f.origin.x, f.origin.y, f.size.width, f.size.height,
-          NSStringFromClass([parent class]), pf.size.width, pf.size.height);
-    if (f.origin.y != 0 || f.size.height != pf.size.height) {
+    if (v.frame.origin.y != 0 || v.frame.size.height != pf.size.height) {
         v.frame = CGRectMake(0, 0, pf.size.width, pf.size.height);
         [v layoutIfNeeded];
-        WPLog(@"Moments", @"[Pyq] patched nav frame -> (0,0,%.0f,%.0f)", pf.size.width, pf.size.height);
     }
 
     UIViewController *rootVC = nav.viewControllers.firstObject;
     UIView *rv = rootVC.view;
     if (!rv) return;
-    CGFloat navH = v.bounds.size.height;
-    WPLog(@"Moments", @"[Pyq] root=%@ rv=(%.0f,%.0f,%.0f,%.0f) navH=%.0f",
-          NSStringFromClass([rootVC class]), rv.frame.origin.x, rv.frame.origin.y,
-          rv.frame.size.width, rv.frame.size.height, navH);
-    NSArray *subs = rv.subviews;
-    for (NSUInteger i = 0; i < subs.count && i < 3; i++) {
-        UIView *sub = subs[i];
-        WPLog(@"Moments", @"[Pyq] rv.sub[%lu] %@ (%.0f,%.0f,%.0f,%.0f)",
-              (unsigned long)i, NSStringFromClass([sub class]),
-              sub.frame.origin.x, sub.frame.origin.y, sub.frame.size.width, sub.frame.size.height);
-    }
 
-    // A) 根 view 整体下移 → 拉回顶满
-    if (rv.frame.origin.y > 1) {
-        CGFloat dy = rv.frame.origin.y;
-        rv.frame = CGRectMake(0, 0, v.bounds.size.width, navH);
-        [rv layoutIfNeeded];
-        WPLog(@"Moments", @"[Pyq] gap fix A: root pulled up %.0f", dy);
-        return;
-    }
-
-    // B) 根 view 一级高子视图（包装层）整体下移 → 拉回顶满
-    for (UIView *sub in subs) {
-        CGRect sf = sub.frame;
-        if (sf.origin.y >= 30 && sf.origin.y <= 60 &&
-            sf.size.width >= rv.bounds.size.width - 1 &&
-            sf.size.height >= navH - 100) {
-            WPLog(@"Moments", @"[Pyq] gap fix B: %@ y=%.0f -> 0",
-                  NSStringFromClass([sub class]), sf.origin.y);
-            sub.frame = CGRectMake(0, 0, rv.bounds.size.width, navH);
-            [sub layoutIfNeeded];
-            return;
-        }
-    }
-
-    // 顶部盖板收缩（WCR FUN_017afcc8 第一分支同款意图）：全屏布局的顶部盖板
-    // 高度含状态栏（161 实测：UIView 98 = 54 状态栏 + 44 导航栏、UIImageView 120），
-    // 若位于内容上层，半屏导航栏仅 44 → 多出部分盖在内容上形成白条；统一收缩到 44
-    for (UIView *sub in subs) {
+    // 顶部盖板收缩：y=0、全宽、高 90~200 的为全屏规格盖板（状态栏+导航栏），统一压到 44
+    for (UIView *sub in rv.subviews) {
         CGRect sf = sub.frame;
         if (sf.origin.y == 0 && sf.size.height >= 90 && sf.size.height <= 200 &&
             sf.size.width >= rv.bounds.size.width - 1) {
-            WPLog(@"Moments", @"[Pyq] cover shrink %@ %.0f -> 44",
-                  NSStringFromClass([sub class]), sf.size.height);
             sub.frame = CGRectMake(0, 0, sf.size.width, 44);
         }
     }
 
-    // C) 滚动视图 inset/offset 修补（159-161 四轮实证链）：
-    //    - additionalSafeAreaInsets 负附加被钳 0 不传导（161：600ms 后 adjTop 仍 98）
-    //    - 只把 offset 拨到 -44 而不动 inset 也没用：①顶部 98/120 高的不透明盖板
-    //      压在表格上层，44~98 区间的帖子被盖住；②自然静止位 = -adjustedContentInset.top，
-    //      inset 98 不改则用户一松手就回弹到 -98，空隙复现
-    //    → C1 直接把原始 contentInset.top 压到 44（半屏导航栏高），自然静止位随之
-    //      变 -44；C2 offset 归位仅在用户未触摸时执行，拖拽中不打断（inset 已修，
-    //      松手自然停在 -44）
+    // 表格顶部 inset 全屏残留（98）压到 44（半屏导航栏高）
     UIScrollView *sv = MioFindFirstScroll(rv, 0);
-    if (sv) {
-        UIEdgeInsets adj = sv.adjustedContentInset;
-        WPLog(@"Moments", @"[Pyq] scroll=%@ adjTop=%.0f rawTop=%.0f safeTop=%.0f offset=%.0f frame=(%.0f,%.0f,%.0f,%.0f)",
-              NSStringFromClass([sv class]), adj.top, sv.contentInset.top, sv.safeAreaInsets.top,
-              sv.contentOffset.y,
-              sv.frame.origin.x, sv.frame.origin.y, sv.frame.size.width, sv.frame.size.height);
-        if (sv.contentInset.top > 46) {   // 98 = 全屏规格（54 状态栏+44 导航栏），半屏只需 44
-            UIEdgeInsets ci = sv.contentInset;
-            WPLog(@"Moments", @"[Pyq] gap fix C1: rawTop %.0f -> 44", ci.top);
-            ci.top = 44;
-            sv.contentInset = ci;
-        }
-        if (adj.top > 46 && !sv.dragging && !sv.decelerating) {
-            CGFloat oldOff = sv.contentOffset.y;
-            sv.contentOffset = CGPointMake(0, -44);
-            WPLog(@"Moments", @"[Pyq] gap fix C2: offset %.0f -> -44", oldOff);
-        }
+    if (sv && sv.contentInset.top > 46) {
+        UIEdgeInsets ci = sv.contentInset;
+        ci.top = 44;
+        sv.contentInset = ci;
     }
 }
 
@@ -190,8 +113,8 @@ static void MioOpenTimelinePageSheet(void) {
             ((void(*)(id, SEL, double))objc_msgSend)(adp, setHSel, h);
             ((void(*)(id, SEL, BOOL))objc_msgSend)(adp, showSel, YES);
             WPLog(@"Moments", @"[Pyq] timeline page-sheet shown (h=%.0f)", h);
-            // 布局修补（WCR FUN_017afcc8 同款 150ms 时序；600ms/1.5s 复查两次，
-            // 防微信数据加载后重置 inset/盖板；修补函数幂等，重复执行无副作用）
+            // 布局修补：150ms（WCR FUN_017afcc8 同款时序）+ 600ms/1.5s 复查
+            //（162 实证：微信数据加载会在 150~600ms 间重置 inset/盖板）
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{ MioPatchTimelineLayout(nav); });
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
@@ -215,7 +138,6 @@ static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
     else if (gDynCls2 && [self isMemberOfClass:gDynCls2]) orig = orig_pyq_dyn2;
     if (orig) ((void(*)(id, SEL, id))orig)(self, _cmd, textView);
     @try {
-        // 取文本（self.text 优先，textView.text 兜底）
         NSString *text = nil;
         SEL textSel = NSSelectorFromString(@"text");
         if ([self respondsToSelector:textSel]) {
@@ -224,15 +146,6 @@ static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
         }
         if (!text && [textView isKindOfClass:[UITextView class]]) {
             text = [(UITextView *)textView text];
-        }
-        // 取证日志（仅前 3 次）：确认垫片被调用、参数形态、开关状态、文本内容
-        if (gPyqLogCount < 3) {
-            gPyqLogCount++;
-            WPLog(@"Moments", @"[Pyq] fired(%d) self=%@ tv=%@ enable=%d text=%@",
-                  gPyqLogCount, NSStringFromClass([self class]),
-                  textView ? NSStringFromClass([textView class]) : @"nil",
-                  [MomentsConfig shared].convenientMomentsEnabled ? 1 : 0,
-                  text ?: @"(none)");
         }
         if (gPyqHandling) return;
         MomentsConfig *cfg = [MomentsConfig shared];
@@ -243,7 +156,6 @@ static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
         if (![text isEqualToString:@"pyq"]) return;
 
         gPyqHandling = YES;
-        WPLog(@"Moments", @"[Pyq] matched, opening moments");
         // 清空输入（self setText 优先，textView setText 兜底，均带守卫）
         SEL setSel = NSSelectorFromString(@"setText:");
         if ([self respondsToSelector:setSel]) {
@@ -252,7 +164,6 @@ static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
         if ([textView isKindOfClass:[UITextView class]]) {
             [(UITextView *)textView setText:@""];
         }
-
         // 打开朋友圈半屏（WCR 同款，无需宿主 VC）
         dispatch_async(dispatch_get_main_queue(), ^{
             MioOpenTimelinePageSheet();
@@ -265,23 +176,8 @@ static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
     }
 }
 
-// textViewDidChangeSelection: 探测垫片：打字时光标移动必触发，
-// 用于判定 MMGrowTextView 是否为活 delegate（仅日志，不拦截）
-static void hooked_pyq_selChange(id self, SEL _cmd, id textView) {
-    if (orig_pyq_selChange) {
-        ((void(*)(id, SEL, id))orig_pyq_selChange)(self, _cmd, textView);
-    }
-    if (gSelLogCount < 3) {
-        gSelLogCount++;
-        WPLog(@"Moments", @"[Pyq] selChg(%d) self=%@ tv=%@",
-              gSelLogCount, NSStringFromClass([self class]),
-              textView ? NSStringFromClass([textView class]) : @"nil");
-    }
-}
-
 // UITextView setDelegate: 动态挂载器：微信系输入框的 delegate 设给谁，
-// 就实时把 pyq 垫片挂到那个 delegate 类的 textViewDidChange: 上（幂等防重）。
-// 同时放宽日志：delegate 类全打（上限 10 条）
+// 就实时把 pyq 垫片挂到那个 delegate 类的 textViewDidChange: 上（幂等防重）
 static void hooked_tv_setDelegate(id self, SEL _cmd, id delegate) {
     if (orig_tv_setDelegate) {
         ((void(*)(id, SEL, id))orig_tv_setDelegate)(self, _cmd, delegate);
@@ -292,14 +188,7 @@ static void hooked_tv_setDelegate(id self, SEL _cmd, id delegate) {
         // 只关注微信输入框系 textView（聊天输入/搜索等）
         if (![tvCn hasPrefix:@"MM"] && ![tvCn containsString:@"GrowTextView"]) return;
         Class dCls = [delegate class];
-        NSString *dCn = NSStringFromClass(dCls);
-        if (gDelLogCount < 10) {
-            gDelLogCount++;
-            WPLog(@"Moments", @"[Pyq] delegate(%d) tv=%@ -> %@",
-                  gDelLogCount, tvCn, dCn);
-        }
-        // MMGrowTextView 主探测已挂；其余 delegate 类动态挂（幂等）
-        if (dCls == objc_getClass("MMGrowTextView")) return;
+        if (dCls == objc_getClass("MMGrowTextView")) return;   // 主探测已挂
         SEL didSel = NSSelectorFromString(@"textViewDidChange:");
         Method m = class_getInstanceMethod(dCls, didSel);
         if (!m || method_getImplementation(m) == (IMP)hooked_pyq_didChange) return;
@@ -313,38 +202,21 @@ static void hooked_tv_setDelegate(id self, SEL _cmd, id delegate) {
             return;   // 两个动态槽已满
         }
         method_setImplementation(m, (IMP)hooked_pyq_didChange);
-        WPLog(@"Moments", @"[Pyq] dyn-hook %@.textViewDidChange: (tv=%@)", dCn, tvCn);
+        WPLog(@"Moments", @"[Pyq] dyn-hook %@.textViewDidChange:", NSStringFromClass(dCls));
     } @catch (NSException *e) {
         WPLog(@"Moments", @"[Pyq] setDelegate probe error: %@", e);
     }
 }
 
 // 安装：MMGrowTextView textViewDidChange:（WCR MSHookMessageEx 同款位置）+
-// textViewDidChangeSelection: 探测 + UITextView setDelegate: 探针 + 继承链结构日志
+// UITextView setDelegate: 动态挂载器
 static void MioInstallPyqHooks(void) {
     SEL didSel = NSSelectorFromString(@"textViewDidChange:");
-    SEL selSel = NSSelectorFromString(@"textViewDidChangeSelection:");
     Class growCls = objc_getClass("MMGrowTextView");
     if (!growCls) {
         WPLog(@"Moments", @"[Pyq] SKIP: MMGrowTextView NOT found");
         return;
     }
-
-    // 继承链结构日志：实锤两个 delegate 方法的实现层
-    Class c = growCls;
-    int depth = 0;
-    while (c && depth < 6) {
-        BOOL ownDid = MioClassOwnsMethod(c, didSel);
-        BOOL ownSel = MioClassOwnsMethod(c, selSel);
-        WPLog(@"Moments", @"[Pyq] chain[%d] %@ own(didChange)=%d own(selChange)=%d",
-              depth, NSStringFromClass(c), ownDid, ownSel);
-        if ([c isSubclassOfClass:[UITextView class]] && c != [UITextView class] &&
-            [c superclass] == [UITextView class]) break;   // 链到 UITextView 前一级为止
-        c = [c superclass];
-        depth++;
-    }
-
-    // 主探测：textViewDidChange:（WCR 同款）
     Method m1 = class_getInstanceMethod(growCls, didSel);
     if (m1) {
         orig_pyq_didChange = method_getImplementation(m1);
@@ -354,17 +226,6 @@ static void MioInstallPyqHooks(void) {
         WPLog(@"Moments", @"[Pyq] SKIP: textViewDidChange: NOT found");
     }
 
-    // 辅探测：textViewDidChangeSelection:（光标移动必触发）
-    Method m2 = class_getInstanceMethod(growCls, selSel);
-    if (m2) {
-        orig_pyq_selChange = method_getImplementation(m2);
-        method_setImplementation(m2, (IMP)hooked_pyq_selChange);
-        WPLog(@"Moments", @"[Pyq] MMGrowTextView.textViewDidChangeSelection: hooked");
-    } else {
-        WPLog(@"Moments", @"[Pyq] SKIP: textViewDidChangeSelection: NOT found");
-    }
-
-    // delegate 探针：UITextView setDelegate:（轻垫片，仅命中日志）
     Class tvCls = [UITextView class];
     Method m3 = class_getInstanceMethod(tvCls, NSSelectorFromString(@"setDelegate:"));
     if (m3) {
@@ -377,7 +238,6 @@ static void MioInstallPyqHooks(void) {
 // 重挂自检：微信晚到的初始化可能覆盖 IMP，20s/45s 检查并恢复
 static void MioRehookCheck(int round) {
     SEL didSel = NSSelectorFromString(@"textViewDidChange:");
-    SEL selSel = NSSelectorFromString(@"textViewDidChangeSelection:");
     SEL delSel = NSSelectorFromString(@"setDelegate:");
     int fixed = 0;
 
@@ -387,12 +247,6 @@ static void MioRehookCheck(int round) {
         if (m1 && method_getImplementation(m1) != (IMP)hooked_pyq_didChange) {
             orig_pyq_didChange = method_getImplementation(m1);
             method_setImplementation(m1, (IMP)hooked_pyq_didChange);
-            fixed++;
-        }
-        Method m2 = class_getInstanceMethod(growCls, selSel);
-        if (m2 && method_getImplementation(m2) != (IMP)hooked_pyq_selChange) {
-            orig_pyq_selChange = method_getImplementation(m2);
-            method_setImplementation(m2, (IMP)hooked_pyq_selChange);
             fixed++;
         }
     }
