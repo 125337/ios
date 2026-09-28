@@ -1,4 +1,4 @@
-﻿﻿#import "WPWeChatTable.h"
+﻿#import "WPWeChatTable.h"
 #import <objc/message.h>
 #import <objc/runtime.h>
 #import "../../Core/LogManager.h"
