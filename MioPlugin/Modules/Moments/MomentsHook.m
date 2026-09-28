@@ -262,13 +262,19 @@ static void MioRehookCheck(int round) {
 
 #pragma mark - 高清朋友圈（WCR 同款机制：ActionSheet 注入 + 强制原图重开选图器）
 
-// WCR 证据链：hook WCTimeLineViewController configDataReportForActionSheet: 注入
-// 「选择高清照片/视频」按钮（WCActionSheetItem + setEventAction: + addButtonWithItem:atIndex:，
-// buttonTitleList 防重）→ 点击 dismiss 后 200ms 置总闸并重开选图器（KVC 链
-// poster/m_poster/timelinePoster/postSessionController 找发图页，showImagePicker 系
-// 逐级降级，WCTimelineRouterHelper 7 参兜底）→ MMAssetTimeLineConfig 的
-// compressQuality/shouldCompressLongImage 等压缩判断被改写返 0 → 选图器输出原图
-// → viewDidPopOrDismiss: 清总闸（WCR ResetFlow 同位）
+// WCR 证据链（FUN_0033c69c 安装器反编译实锤）：hook WCTimeLineViewController
+// configDataReportForActionSheet: 注入「选择高清照片/视频」按钮（WCActionSheetItem +
+// setEventAction: + addButtonWithItem:atIndex:，buttonTitleList 防重）→ 点击 dismiss 后
+// 200ms 置总闸并重开选图器（KVC 链 poster/m_poster/... 找发图页，showImagePicker 系逐级
+// 降级，WCTimelineRouterHelper 7 参兜底）→ 画质生效层 = 4 类 14 个能力/限制 getter 改写
+// （MMImagePickerManagerOptionObj 8 + MMAssetInfo 2 + MMConfigMgr 1 + MMImagePickerController 3）：
+// 能力类返 1（canSendOriginalImage/forceSendOriginalImage/isOpenSendOriginVideo/
+// isNotShowVideoSizeAlertView/canSendOriginImage）、限制类返 0（hideOriginButton/
+// m_isJustReturnMMAsset/isWAVideoCompressed/isExceededOriginFileSizeLimit）、大小限制返
+// NSUIntegerMax（originLimitSize/getInputLimitVideoSize）、uiMaxVideoDuration 返 18000；
+// → 选图器默认原图 + 原图不受文件大小限制 → viewDidPopOrDismiss: 清总闸（ResetFlow 同位）。
+// 注意：WCR 不碰 MMAssetTimeLineConfig（此前误挂 compressQuality 等与压缩决策无关，画质不达标根因）；
+// MMAssetPickerController 的 4 个 UI hook 为 WCR 原图按钮挪位装饰，与画质无关，不抄
 
 static volatile BOOL gHDPending = NO;   // HD 会话总闸（WCR DAT_028c9ee0/e1 同位）
 static IMP orig_hd_configSheet = NULL;  // configDataReportForActionSheet: 原实现
@@ -403,7 +409,8 @@ static void MioHDRouterReopen(id vc, id poster) {
 static void MioHDReopenPicker(id vc) {
     gHDPending = YES;
     id poster = MioHDFindPoster(vc);
-    MioApplyHDOptions(poster ?: vc);
+    // WCR 主路径（FUN_0033a85c）无 setter 注入：15 项配置只经 RouterHelper 的
+    // customOptionsBlock（FUN_0033e0e0）打在选图选项对象上，此处对齐不重复打
     if (MioHDTryShowPicker(vc) || MioHDTryShowPicker(poster)) return;
     MioHDRouterReopen(vc, poster);
     // 超时兜底：异常路径下防总闸残留（正常由 viewDidPopOrDismiss 清窗）
@@ -478,61 +485,87 @@ static void hooked_hd_popDismiss(id self, SEL _cmd, BOOL animated) {
     gHDPending = NO;
 }
 
-// 压缩判断 getter 改写（WCR c94c 族同款：带窗强返 0，关窗透传原实现）
-#define MIO_HD_GETTER_MAX 4
-static struct { SEL sel; IMP orig; } gHDGetters[MIO_HD_GETTER_MAX];
-static int gHDGetterCount = 0;
+// ===== 画质生效层：4 类 14 个能力/限制 getter 改写（WCR FUN_0033c69c 安装器逐函数反编译实锤）=====
+// 带窗（gHDPending）：能力类返 1、限制类返 0、大小限制返 NSUIntegerMax、时长上限返 18000；
+// 关窗透传原实现（防普通发图误伤）。每条目用 imp_implementationWithBlock 独立生成垫片，
+// 自持各自 orig——canSendOriginalImage/hideOriginButton 同名挂在 OptionObj 与 PickerController
+// 两个类上，独立 block 才不会串 orig（查表式垫片会拿错类的原实现）。
 
-static IMP MioHDGetterOrig(SEL cmd) {
-    for (int i = 0; i < gHDGetterCount; i++) {
-        if (gHDGetters[i].sel == cmd) return gHDGetters[i].orig;
-    }
-    return NULL;
+typedef struct {
+    const char *cls;
+    const char *sel;
+    long long winVal;   // 窗口内返回值（BOOL: 0/1；整型直传；-1 = NSUIntegerMax 无限制）
+} MioHDGetterSpec;
+
+static MioHDGetterSpec gHDGetterSpecs[] = {
+    // MMImagePickerManagerOptionObj（选图器选项对象，8 个）
+    {"MMImagePickerManagerOptionObj", "m_isJustReturnMMAsset", 0},
+    {"MMImagePickerManagerOptionObj", "isWAVideoCompressed", 0},
+    {"MMImagePickerManagerOptionObj", "uiMaxVideoDuration", 18000},
+    {"MMImagePickerManagerOptionObj", "canSendOriginalImage", 1},
+    {"MMImagePickerManagerOptionObj", "forceSendOriginalImage", 1},
+    {"MMImagePickerManagerOptionObj", "hideOriginButton", 0},
+    {"MMImagePickerManagerOptionObj", "isOpenSendOriginVideo", 1},
+    {"MMImagePickerManagerOptionObj", "isNotShowVideoSizeAlertView", 1},
+    // MMAssetInfo（资产信息：原图文件大小限制，2 个）
+    {"MMAssetInfo", "isExceededOriginFileSizeLimit", 0},
+    {"MMAssetInfo", "originLimitSize", -1},
+    // MMConfigMgr（全局配置：视频大小限制，1 个）
+    {"MMConfigMgr", "getInputLimitVideoSize", -1},
+    // MMImagePickerController（选图器 VC，3 个）
+    {"MMImagePickerController", "canSendOriginImage", 1},
+    {"MMImagePickerController", "canSendOriginalImage", 1},
+    {"MMImagePickerController", "hideOriginButton", 0},
+};
+static const int gHDGetterSpecCount = (int)(sizeof(gHDGetterSpecs) / sizeof(gHDGetterSpecs[0]));
+
+// 首见命中日志：确认压缩/能力查询真的经过被改写的 getter（去重，不刷屏）
+static void MioHDLogGetterHit(int idx) {
+    static volatile BOOL logged[16];
+    if (idx < 0 || idx >= gHDGetterSpecCount || logged[idx]) return;
+    logged[idx] = YES;
+    WPLog(@"Moments", @"[HD] getter %s on %s intercepted",
+          gHDGetterSpecs[idx].sel, gHDGetterSpecs[idx].cls);
 }
 
-static float hooked_hd_cfgFloat(id self, SEL _cmd) {
-    if (gHDPending) return 0.0f;
-    IMP orig = MioHDGetterOrig(_cmd);
-    return orig ? ((float(*)(id, SEL))orig)(self, _cmd) : 0.0f;
-}
-static BOOL hooked_hd_cfgBool(id self, SEL _cmd) {
-    if (gHDPending) return NO;
-    IMP orig = MioHDGetterOrig(_cmd);
-    return orig ? ((BOOL(*)(id, SEL))orig)(self, _cmd) : NO;
-}
-static NSInteger hooked_hd_cfgInt(id self, SEL _cmd) {
-    if (gHDPending) return 0;
-    IMP orig = MioHDGetterOrig(_cmd);
-    return orig ? ((NSInteger(*)(id, SEL))orig)(self, _cmd) : 0;
-}
-
-// 安装 MMAssetTimeLineConfig 压缩 getter 改写（按运行时返回类型分流，WCR c94c 族同位）
-static void MioInstallHDConfigHooks(void) {
-    Class cfgCls = objc_getClass("MMAssetTimeLineConfig");
-    if (!cfgCls) {
-        WPLog(@"Moments", @"[HD] MMAssetTimeLineConfig NOT found");
-        return;
-    }
-    NSArray *getters = @[@"compressQuality", @"shouldCompressLongImage", @"imageSizeLimit"];
-    int n = 0;
-    for (NSString *name in getters) {
-        SEL sel = NSSelectorFromString(name);
-        Method m = class_getInstanceMethod(cfgCls, sel);
+static void MioHDInstallGetterHooks(void) {
+    int ok = 0;
+    for (int i = 0; i < gHDGetterSpecCount; i++) {
+        MioHDGetterSpec *sp = &gHDGetterSpecs[i];
+        Class cls = objc_getClass(sp->cls);
+        if (!cls) continue;
+        SEL sel = NSSelectorFromString(@(sp->sel));
+        Method m = class_getInstanceMethod(cls, sel);
         if (!m) continue;
+        IMP orig = method_getImplementation(m);
         char *ret = method_copyReturnType(m);
         IMP newImp = NULL;
-        if (ret && (ret[0] == 'f' || ret[0] == 'd')) newImp = (IMP)hooked_hd_cfgFloat;
-        else if (ret && (ret[0] == 'c' || ret[0] == 'B')) newImp = (IMP)hooked_hd_cfgBool;
-        else if (ret && (ret[0] == 'q' || ret[0] == 'i' || ret[0] == 'l' || ret[0] == 'I')) newImp = (IMP)hooked_hd_cfgInt;
+        if (ret && (ret[0] == 'c' || ret[0] == 'B')) {
+            BOOL winB = (sp->winVal != 0);
+            newImp = imp_implementationWithBlock(^BOOL(id self) {
+                if (gHDPending) { MioHDLogGetterHit(i); return winB; }
+                return ((BOOL(*)(id, SEL))orig)(self, sel);
+            });
+        } else if (ret && (ret[0] == 'q' || ret[0] == 'l' || ret[0] == 'i'
+                        || ret[0] == 'I' || ret[0] == 'Q')) {
+            long long w = sp->winVal;
+            newImp = imp_implementationWithBlock(^long long(id self) {
+                if (gHDPending) { MioHDLogGetterHit(i); return w; }
+                return ((long long(*)(id, SEL))orig)(self, sel);
+            });
+        } else if (ret && (ret[0] == 'f' || ret[0] == 'd')) {
+            double w = (double)sp->winVal;
+            newImp = imp_implementationWithBlock(^double(id self) {
+                if (gHDPending) { MioHDLogGetterHit(i); return w; }
+                return ((double(*)(id, SEL))orig)(self, sel);
+            });
+        }
         if (ret) free(ret);
-        if (!newImp || gHDGetterCount >= MIO_HD_GETTER_MAX) continue;
-        gHDGetters[gHDGetterCount].sel = sel;
-        gHDGetters[gHDGetterCount].orig = method_getImplementation(m);
-        gHDGetterCount++;
+        if (!newImp) continue;
         method_setImplementation(m, newImp);
-        n++;
+        ok++;
     }
-    WPLog(@"Moments", @"[HD] MMAssetTimeLineConfig getters hooked: %d", n);
+    WPLog(@"Moments", @"[HD] quality getter hooks installed: %d/%d", ok, gHDGetterSpecCount);
 }
 
 static void MioInstallHDHooks(void) {
@@ -559,8 +592,8 @@ static void MioInstallHDHooks(void) {
             method_setImplementation(m2, (IMP)hooked_hd_popDismiss);
         }
     }
-    // 3) 压缩 getter 改写
-    MioInstallHDConfigHooks();
+    // 3) 画质生效层：4 类 14 个能力/限制 getter 改写
+    MioHDInstallGetterHooks();
 }
 
 #pragma mark - 安装
