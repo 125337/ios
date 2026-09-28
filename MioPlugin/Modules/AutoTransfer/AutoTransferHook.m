@@ -249,11 +249,6 @@ static void processTransferMessage(id wrap) {
         processFixedInvite(feeAmount, fromUsr, isGroup);
     }
 
-    if (config.autoConfirmTransfer && config.autoConfirmTransferMaxAmount > 0 && feeAmount > config.autoConfirmTransferMaxAmount) {
-        WPLog(@"AutoTransfer", @"[SKIP] 超过金额上限: %lld > %lld", feeAmount, config.autoConfirmTransferMaxAmount);
-        return;
-    }
-
     unsigned long long invalidTime = (unsigned long long)[invalidTimeStr longLongValue];
 
     WPLogDebug(@"AutoTransfer", @"检测到转账: transferID=%@ from=%@ fee=%lld memo=%@ isGroup=%d",

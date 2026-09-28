@@ -172,9 +172,11 @@
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"抢私聊红包" key:@"personalRedEnvelopEnable" isOn:config.personalRedEnvelopEnable cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addButtonRowInGroup:expand title:@"红包信息同步到窗口" hint:[self syncModeHintText] key:@"selectSyncTarget" cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"显示红包详情" key:@"redEnvelopeDetail" isOn:config.redEnvelopeDetail cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSubSwitchRowInGroup:expand title:@"抢红包成功通知" key:@"redEnvelopNotify" isOn:config.redEnvelopNotify cy:*ecy width:w];
+        *ecy = [self addSubSwitchRowInGroup:expand title:@"推送提示" key:@"redEnvelopNotify" isOn:config.redEnvelopNotify cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"延迟设置" cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"延迟时间" key:@"redEnvelopDelay" value:[NSString stringWithFormat:@"%u", config.redEnvelopDelay] hint:@"秒" valueType:InputValueTypeNumber cy:*ecy width:w];
@@ -199,9 +201,6 @@
                 : @"点击选择群聊";
             *ecy2 = [self addButtonRowInGroup:expand2 title:@"选择群聊" hint:groupFilterHint key:@"selectGroupFilter" cy:*ecy2 width:w];
         } cy:*ecy width:w];
-
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addButtonRowInGroup:expand title:@"红包信息同步到窗口" hint:[self syncModeHintText] key:@"selectSyncTarget" cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"自动回复" cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"抢红包后自动回复" key:@"redEnvelopAutoReply" isOn:config.redEnvelopAutoReply cy:*ecy width:w];
@@ -234,12 +233,10 @@
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"群聊转账自动收款" key:@"autoConfirmTransferGroup" isOn:transferConfig.autoConfirmTransferGroup cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSubSwitchRowInGroup:expand title:@"收款成功通知" key:@"autoConfirmTransferNotify" isOn:transferConfig.autoConfirmTransferNotify cy:*ecy width:w];
+        *ecy = [self addSubSwitchRowInGroup:expand title:@"推送提示" key:@"autoConfirmTransferNotify" isOn:transferConfig.autoConfirmTransferNotify cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"安全设置" cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"确认延迟" key:@"autoConfirmTransferDelay" value:[NSString stringWithFormat:@"%u", transferConfig.autoConfirmTransferDelay] hint:@"秒" valueType:InputValueTypeNumber cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"金额上限(分)" key:@"autoConfirmTransferMaxAmount" value:transferConfig.autoConfirmTransferMaxAmount > 0 ? [NSString stringWithFormat:@"%lld", transferConfig.autoConfirmTransferMaxAmount] : @"" hint:@"0=不限" valueType:InputValueTypeNumber cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"收款后自动回复" cy:*ecy width:w];
         // 子开关：启用自动回复（开=展开回复内容，关=收起；嵌套手风琴）
@@ -261,7 +258,7 @@
             *ecy2 = [self addButtonRowInGroup:expand2 title:@"拉群规则" hint:[self fixedInviteRulesHint] key:@"fixedInviteRules" cy:*ecy2 width:w];
         } cy:*ecy width:w];
 
-        *ecy = [self addHintRowInGroup:expand text:@"自动收款: 收到转账后自动确认收款\n金额上限: 超过设定金额的转账不会自动收款\n延迟时间建议设为 1-3 秒\n定额拉群: 单笔转账金额=档位金额时, 自动把转账人拉进指定群(与自动收款开关互不影响)" cy:*ecy width:w];
+        *ecy = [self addHintRowInGroup:expand text:@"自动收款: 收到转账后自动确认收款\n延迟时间建议设为 1-3 秒\n定额拉群: 单笔转账金额=档位金额时, 自动把转账人拉进指定群(与自动收款开关互不影响)" cy:*ecy width:w];
     } cy:cy2 width:w];
 
     y = [self finishGroup:group2 atY:y height:cy2];

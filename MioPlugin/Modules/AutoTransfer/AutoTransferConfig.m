@@ -21,7 +21,6 @@
         [ConfigDescriptor itemWithKey:@"autoConfirmTransferPersonal" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"autoConfirmTransferGroup" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"autoConfirmTransferDelay" type:ConfigValueTypeInteger default:@(0)],
-        [ConfigDescriptor itemWithKey:@"autoConfirmTransferMaxAmount" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"autoConfirmTransferAutoReply" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"autoConfirmTransferAutoReplyStr" type:ConfigValueTypeString default:@"已收到款项，谢谢！"],
         [ConfigDescriptor itemWithKey:@"autoConfirmTransferNotify" type:ConfigValueTypeBool default:@(YES)],

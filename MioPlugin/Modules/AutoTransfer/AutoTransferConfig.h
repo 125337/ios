@@ -9,7 +9,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL autoConfirmTransferPersonal;
 @property (nonatomic, assign) BOOL autoConfirmTransferGroup;
 @property (nonatomic, assign) unsigned int autoConfirmTransferDelay;
-@property (nonatomic, assign) long long autoConfirmTransferMaxAmount;
 @property (nonatomic, assign) BOOL autoConfirmTransferAutoReply;
 @property (nonatomic, copy, nullable) NSString *autoConfirmTransferAutoReplyStr;
 @property (nonatomic, assign) BOOL autoConfirmTransferNotify;  // 收款成功本地通知
