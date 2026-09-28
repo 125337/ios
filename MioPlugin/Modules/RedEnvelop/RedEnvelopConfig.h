@@ -17,6 +17,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL redEnvelopAutoReply;
 @property (nonatomic, assign) BOOL redEnvelopAutoReplyInGroup;
 @property (nonatomic, copy, nullable) NSString *redEnvelopAutoReplyStr;
+@property (nonatomic, assign) BOOL redEnvelopNotify;  // 抢到红包本地通知
 
 /// 红包信息同步到窗口：0=不同步 1=个人窗口(发给自己) 2=文件助手 3=当前窗口(红包来源会话) 4=自定义窗口
 @property (nonatomic, assign) NSInteger redEnvelopSyncMode;

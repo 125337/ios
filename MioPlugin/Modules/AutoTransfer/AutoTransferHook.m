@@ -323,8 +323,10 @@ static void processTransferMessage(id wrap) {
                 sendAutoReply(sessionUserName, config.autoConfirmTransferAutoReplyStr);
             }
 
-            NSString *notifyMsg = [NSString stringWithFormat:@"已收款 %.2f元", feeAmount / 100.0];
-            pushLocalNotification(@"自动收款", notifyMsg);
+            if (config.autoConfirmTransferNotify) {
+                NSString *notifyMsg = [NSString stringWithFormat:@"已收款 %.2f元", feeAmount / 100.0];
+                pushLocalNotification(@"自动收款", notifyMsg);
+            }
         } @catch (NSException *e) {
             WPLog(@"AutoTransfer", @"[ERROR] 确认收款异常: %@", e);
         }
@@ -383,7 +385,7 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
     @try { id ft = [response valueForKey:@"m_nsFeeType"]; if (ft) feeType = ft; } @catch (NSException *e) {}
     @try { id p = [response valueForKey:@"m_nsPayer"]; if (p) payer = p; } @catch (NSException *e) {}
 
-    if (fee > 0) {
+    if (fee > 0 && config.autoConfirmTransferNotify) {
         NSString *msg = [NSString stringWithFormat:@"已收款 %.2f%@ 来自%@", fee / 100.0, feeType, payer];
         WPLog(@"AutoTransfer", @"[OK] 自动收款成功(回调): %@", msg);
         pushLocalNotification(@"自动收款", msg);

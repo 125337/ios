@@ -7,6 +7,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
+#import <UserNotifications/UserNotifications.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 #import <substrate.h>
@@ -14,6 +15,23 @@
 static NSInteger _statTotalCount = 0;
 static NSInteger _statTotalAmount = 0;
 static NSMutableSet *_countedSendIds = nil;
+
+static void pushLocalNotification(NSString *title, NSString *message) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        @try {
+            if (@available(iOS 10.0, *)) {
+                UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+                UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
+                content.title = title ?: @"抢红包";
+                content.body = message ?: @"";
+                content.sound = [UNNotificationSound defaultSound];
+                UNTimeIntervalNotificationTrigger *trigger = [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:0.5 repeats:NO];
+                UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:@"RedEnvelop" content:content trigger:trigger];
+                [center addNotificationRequest:request withCompletionHandler:nil];
+            }
+        } @catch (NSException *e) {}
+    });
+}
 
 /// 红包同步上下文：sendId -> 会话信息（响应回来时才知道抢到多少钱，消息进来时才知道来源，两段拼一起）
 /// @{@"session": wxid, @"sessionName": 显示名, @"senderName": 群内发送者显示名, @"isGroup": @(BOOL)}
@@ -406,6 +424,11 @@ static void handleHongbaoResponse(id res, id req) {
                       amount / 100.0, nickName, wishing,
                       totalAmountVal / 100.0, (long)totalNum,
                       (long)_statTotalCount, _statTotalAmount / 100.0);
+                if (config.redEnvelopNotify) {
+                    pushLocalNotification(@"抢红包",
+                        [NSString stringWithFormat:@"抢到 %.2f元 来自%@", amount / 100.0,
+                         nickName.length ? nickName : @"未知发送人"]);
+                }
                 syncRedEnvelopResult(amount, sendId, totalAmountVal, totalNum);
             } else if (receiveStatus == 2) {
                 WPLog(@"RedEnv", @"[STAT] 红包已被领取");

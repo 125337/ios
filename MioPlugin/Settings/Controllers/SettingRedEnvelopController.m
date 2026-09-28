@@ -173,6 +173,8 @@
         *ecy = [self addSubSwitchRowInGroup:expand title:@"抢私聊红包" key:@"personalRedEnvelopEnable" isOn:config.personalRedEnvelopEnable cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"显示红包详情" key:@"redEnvelopeDetail" isOn:config.redEnvelopeDetail cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addSubSwitchRowInGroup:expand title:@"抢红包成功通知" key:@"redEnvelopNotify" isOn:config.redEnvelopNotify cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"延迟设置" cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"延迟时间" key:@"redEnvelopDelay" value:[NSString stringWithFormat:@"%u", config.redEnvelopDelay] hint:@"秒" valueType:InputValueTypeNumber cy:*ecy width:w];
@@ -231,6 +233,8 @@
         *ecy = [self addSubSwitchRowInGroup:expand title:@"私聊转账自动收款" key:@"autoConfirmTransferPersonal" isOn:transferConfig.autoConfirmTransferPersonal cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addSubSwitchRowInGroup:expand title:@"群聊转账自动收款" key:@"autoConfirmTransferGroup" isOn:transferConfig.autoConfirmTransferGroup cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addSubSwitchRowInGroup:expand title:@"收款成功通知" key:@"autoConfirmTransferNotify" isOn:transferConfig.autoConfirmTransferNotify cy:*ecy width:w];
 
         *ecy = [self addSubSectionLabelInGroup:expand text:@"安全设置" cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"确认延迟" key:@"autoConfirmTransferDelay" value:[NSString stringWithFormat:@"%u", transferConfig.autoConfirmTransferDelay] hint:@"秒" valueType:InputValueTypeNumber cy:*ecy width:w];
