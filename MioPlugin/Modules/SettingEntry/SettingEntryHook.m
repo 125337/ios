@@ -57,9 +57,97 @@ static void pluginEntryViewWillDisappear(id self, SEL _cmd, BOOL animated) {
     Class uiVC = objc_getClass("UIViewController");
     Method m = class_getInstanceMethod(uiVC, _cmd);
     if (m) {
-        ((void (*)(id, SEL, BOOL))method_getImplementation(m))(self, _cmd, animated);
+        ((void (*)(id, SEL))method_getImplementation(m))(self, _cmd, animated);
     }
     WPRestoreNavAppearance((UIViewController *)self);
+}
+
+// ===== 搜索注册表：一级页挂 action（复用 openXxx:），二级页挂 vcClass（wpSearchOpen: 反射 push）=====
+static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
+    static NSArray *items = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        items = @[
+            @{ @"title": @"账户信息", @"action": @"openAccount:", @"kw": @"账户 信息 余额 account" },
+            @{ @"title": @"语音包", @"action": @"openVoice:", @"kw": @"语音 转发 voice" },
+            @{ @"title": @"常用功能", @"action": @"openCommon:", @"kw": @"常用 通用 common" },
+            @{ @"title": @"界面定制", @"action": @"openUI:", @"kw": @"界面 定制 主题 ui" },
+            @{ @"title": @"圆角美化", @"action": @"openCorner:", @"kw": @"圆角 美化 corner" },
+            @{ @"title": @"红包设置", @"action": @"openRedEnvelop:", @"kw": @"红包 抢红包 收款 转账 拉群" },
+            @{ @"title": @"其他功能", @"action": @"openOther:", @"kw": @"其他 other" },
+            @{ @"title": @"备份", @"action": @"openBackup:", @"kw": @"备份 恢复 backup" },
+            @{ @"title": @"关于", @"action": @"openAbout:", @"kw": @"关于 版本 about" },
+            @{ @"title": @"关键词提醒", @"vc": @"SettingKeywordAlertController", @"cat": @"常用功能", @"kw": @"关键词 提醒 keyword" },
+            @{ @"title": @"指定页面上锁", @"vc": @"SettingPageLockController", @"cat": @"常用功能", @"kw": @"上锁 锁 密码 面容 指纹 pagelock" },
+            @{ @"title": @"防撤回设置", @"vc": @"SettingRevokeController", @"cat": @"常用功能", @"kw": @"防撤回 撤回 revoke" },
+            @{ @"title": @"消息时间", @"vc": @"SettingMessageTimeController", @"cat": @"常用功能", @"kw": @"消息 时间" },
+            @{ @"title": @"布局设置", @"vc": @"WPUILayoutSettingsVC", @"cat": @"界面定制", @"kw": @"字体 布局 font layout" },
+            @{ @"title": @"聊天顶部栏", @"vc": @"SettingChatTopBarController", @"cat": @"界面定制", @"kw": @"顶部 聊天 顶栏" },
+            @{ @"title": @"隐藏头像", @"vc": @"SettingAvatarHideController", @"cat": @"界面定制", @"kw": @"头像 隐藏 avatar" },
+            @{ @"title": @"列表圆角", @"vc": @"SettingListCornerRadiusController", @"cat": @"圆角美化", @"kw": @"列表 圆角 corner" },
+            @{ @"title": @"卡片背景", @"vc": @"SettingCardBackgroundController", @"cat": @"圆角美化", @"kw": @"卡片 背景 card" },
+            @{ @"title": @"拉群规则", @"vc": @"SettingFixedInviteRulesController", @"cat": @"自动抢红包", @"kw": @"拉群 规则 定额" },
+        ];
+    });
+    return items;
+}
+
+// 填充入口页功能行（keyword 为空 = 完整功能列表；非空 = 搜索结果）。复用模式重建，搜索输入变化时反复调用
+static void wpEntryBuildRows(WPWeChatTable *wc, NSString *keyword) {
+    if (!wc) return;
+    if (![wc clearSectionsForReuse]) {
+        WPLog(@"Setting", @"[Entry] [SEARCH] clearSectionsForReuse 不可用，放弃重建");
+        return;
+    }
+    WPWGroup *g = [wc addGroup];
+    id handler = [MioPluginSwitchHandler sharedInstance];
+    NSString *kw = [keyword stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].lowercaseString;
+
+    if (kw.length == 0) {
+        [g wpSetHeader:@"功能列表" footer:nil];
+        NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
+        for (NSUInteger i = 0; i < navItems.count; i++) {
+            id cell = WPWCNavCell(NSSelectorFromString(@"wpEntryNavTap:"),
+                                  handler,
+                                  navItems[i][0], nil);
+            if (cell) {
+                objc_setAssociatedObject(cell, "action", navItems[i][1], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                [g addCell:cell];
+            }
+        }
+    } else {
+        [g wpSetHeader:@"搜索结果" footer:@"点击结果直达对应设置页"];
+        NSUInteger hits = 0;
+        for (NSDictionary *item in WPEntrySearchItems()) {
+            NSString *title = item[@"title"];
+            BOOL match = [title.lowercaseString containsString:kw];
+            if (!match) {
+                for (NSString *k in [item[@"kw"] componentsSeparatedByString:@" "]) {
+                    if (k.length && [k.lowercaseString containsString:kw]) { match = YES; break; }
+                }
+            }
+            if (!match) continue;
+            hits++;
+            NSString *right = item[@"cat"];
+            id cell = WPWCNavCell(NSSelectorFromString(@"wpEntryNavTap:"), handler, title, right.length ? right : nil);
+            if (!cell) continue;
+            if ([item[@"action"] length]) {
+                objc_setAssociatedObject(cell, "action", item[@"action"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            } else {
+                objc_setAssociatedObject(cell, "action", @"wpSearchOpen:", OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(cell, "vcClass", item[@"vc"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(cell, "categoryName", item[@"cat"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+            [g addCell:cell];
+        }
+        if (hits == 0) {
+            // action 未挂 → wpEntryNavTap 直接 return，纯提示行不可跳转
+            id cell = WPWCNavCell(NSSelectorFromString(@"wpEntryNavTap:"), handler,
+                                  [NSString stringWithFormat:@"未找到与“%@”相关的功能", keyword], nil);
+            if (cell) [g addCell:cell];
+        }
+    }
+    [wc reloadAsync];
 }
 
 static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
@@ -147,24 +235,35 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         heroCard.frame = CGRectMake(kPad, 8, headW - kPad * 2, hy);
         heroCard.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         [headerWrap addSubview:heroCard];
+
+        // 搜索卡片：hero 下方，输入实时过滤功能列表，点击结果直达页面
+        CGFloat sy = 8 + hy + 10;
+        UIView *searchCard = WPMakeCard(sy, headW);
+        searchCard.frame = CGRectMake(kPad, sy, headW - kPad * 2, 44);
+        UITextField *searchField = [[UITextField alloc] initWithFrame:CGRectMake(12, 0, headW - kPad * 2 - 24, 44)];
+        searchField.placeholder = @"搜索功能";
+        searchField.font = [UIFont systemFontOfSize:15];
+        searchField.clearButtonMode = UITextFieldViewModeWhileEditing;
+        searchField.returnKeyType = UIReturnKeyDone;
+        searchField.autocorrectionType = UITextAutocorrectionTypeNo;
+        objc_setAssociatedObject(searchField, "wcTable", wc, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [searchField addTarget:[MioPluginSwitchHandler sharedInstance]
+                        action:@selector(searchTextChanged:)
+              forControlEvents:UIControlEventEditingChanged];
+        [searchField addTarget:[MioPluginSwitchHandler sharedInstance]
+                        action:@selector(searchFieldDone:)
+              forControlEvents:UIControlEventEditingDidEndOnExit];
+        [searchCard addSubview:searchField];
+        [headerWrap addSubview:searchCard];
+        CGFloat headH = sy + 44 + 10;
+
         // UIKit 已知要求：tableHeaderView.frame 修改后需重新赋值才会重算内容区布局
-        headerWrap.frame = CGRectMake(0, 0, headW, hy + 14);
+        headerWrap.frame = CGRectMake(0, 0, headW, headH);
         tv.tableHeaderView = headerWrap;
-        headerWrap.frame = CGRectMake(0, 0, headW, hy + 14);
+        headerWrap.frame = CGRectMake(0, 0, headW, headH);
         tv.tableHeaderView = headerWrap;
 
-        WPWGroup *g = [wc addGroup];
-        [g wpSetHeader:@"功能列表" footer:nil];
-        NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"红包设置", @"openRedEnvelop:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"], @[@"关于", @"openAbout:"]];
-        for (NSUInteger i = 0; i < navItems.count; i++) {
-            id cell = WPWCNavCell(NSSelectorFromString(@"wpEntryNavTap:"),
-                                  [MioPluginSwitchHandler sharedInstance],
-                                  navItems[i][0], nil);
-            if (cell) {
-                objc_setAssociatedObject(cell, "action", navItems[i][1], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                [g addCell:cell];
-            }
-        }
+        wpEntryBuildRows(wc, nil); // 首次填充功能列表行（搜索重建走同一入口）
 
         UILabel *wfooter = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, headW, 50)];
         wfooter.text = @"Mio助手 v2.0.0";
@@ -175,7 +274,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         wc.tableView.tableFooterView = wfooter;
 
         [vc.view addSubview:wc.containerView]; // WCR 同款容器挂载：表在容器内 y=0，容器定位导航栏下方；直接挂 tableView 会成 y=0 全屏，hero 顶进导航栏
-        [wc reloadAsync]; // addSection: 数据已就绪，延迟双刷兜底首帧时序；normalizeTopInset 挂尾部修 inset 回写
+        // 行数据填充 + 延迟双刷已由 wpEntryBuildRows 内的 reloadAsync 完成（async 排队在 addSubview 之后）
 
         WPLog(@"Setting", @"[Entry] 微信引擎列表完成 (header=%@)", NSStringFromClass([headerWrap class]));
         return;
@@ -368,6 +467,37 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     if ([self respondsToSelector:sel]) {
         ((void (*)(id, SEL, id))objc_msgSend)(self, sel, arg);
     }
+}
+
+#pragma mark - 入口页搜索
+
+- (void)searchTextChanged:(UITextField *)tf {
+    WPWeChatTable *wc = objc_getAssociatedObject(tf, "wcTable");
+    if (!wc) return;
+    wpEntryBuildRows(wc, tf.text ?: @"");
+}
+
+- (void)searchFieldDone:(UITextField *)tf {
+    [tf resignFirstResponder];
+}
+
+// 搜索结果二级页跳转：cellManager 挂 vcClass（类名）/categoryName，反射创建后 push
+- (void)wpSearchOpen:(id)arg {
+    NSString *clsName = objc_getAssociatedObject(arg, "vcClass");
+    if (!clsName.length) return;
+    Class cls = objc_getClass(clsName.UTF8String);
+    if (!cls) {
+        WPLog(@"Setting", @"[Search] class not found: %@", clsName);
+        return;
+    }
+    UIViewController *vc = [[cls alloc] init];
+    NSString *cat = objc_getAssociatedObject(arg, "categoryName");
+    if (cat.length && [vc respondsToSelector:@selector(setCategoryName:)]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(vc, NSSelectorFromString(@"setCategoryName:"), cat);
+    }
+    UIViewController *top = WPGetTopVCForPresentation();
+    [top.navigationController pushViewController:vc animated:YES];
+    WPLog(@"Setting", @"[Search] pushed %@", clsName);
 }
 
 @end
