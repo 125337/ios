@@ -112,13 +112,14 @@ static void MioPatchTimelineLayout(UINavigationController *nav) {
               NSStringFromClass([sv class]), adj.top, sv.contentOffset.y,
               sv.frame.origin.x, sv.frame.origin.y, sv.frame.size.width, sv.frame.size.height);
         if (adj.top > 46) {
+            // 全屏布局残留：inset 顶部多算了状态栏高度（160 实测 98 = 44 导航栏 + 54 状态栏）
             CGFloat gap = adj.top - 44;
             rootVC.additionalSafeAreaInsets = UIEdgeInsetsMake(-gap, 0, 0, 0);
-            WPLog(@"Moments", @"[Pyq] gap fix C1: inset -%.0f", gap);
-        }
-        if (sv.contentOffset.y < -1) {
-            sv.contentOffset = CGPointMake(0, -adj.top);
-            WPLog(@"Moments", @"[Pyq] gap fix C2: offset reset to %.0f", -adj.top);
+            CGFloat oldOff = sv.contentOffset.y;
+            // offset 必须显式归位到 -44（内容顶边贴导航栏下缘）：
+            // 160 实测改 inset 不会联动 offset，旧 C2 误用改前 inset 等于没动
+            sv.contentOffset = CGPointMake(0, -44);
+            WPLog(@"Moments", @"[Pyq] gap fix C: inset -%.0f, offset %.0f -> -44", gap, oldOff);
         }
     }
 }
@@ -167,8 +168,11 @@ static void MioOpenTimelinePageSheet(void) {
             ((void(*)(id, SEL, double))objc_msgSend)(adp, setHSel, h);
             ((void(*)(id, SEL, BOOL))objc_msgSend)(adp, showSel, YES);
             WPLog(@"Moments", @"[Pyq] timeline page-sheet shown (h=%.0f)", h);
-            // 150ms 后布局修补（WCR FUN_017afcc8 同款时序）
+            // 布局修补（WCR FUN_017afcc8 同款 150ms 时序；600ms 复查一次，
+            // 防微信数据加载后重置 offset；修补函数幂等，重复执行无副作用）
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{ MioPatchTimelineLayout(nav); });
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{ MioPatchTimelineLayout(nav); });
         } else {
             WPLog(@"Moments", @"[Pyq] MMPageSheetAdapter NOT available");
