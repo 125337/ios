@@ -1,4 +1,4 @@
-﻿﻿# Fetch latest successful artifact for current master head sha, verify new-build strings, deploy.
+﻿# Fetch latest successful artifact for current master head sha, verify new-build strings, deploy.
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
