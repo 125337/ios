@@ -38,7 +38,7 @@ Remove-Item $tmp -Recurse -Force
 $b = [IO.File]::ReadAllBytes("$Root\dist\Mio_arm64.dylib")
 $s = [Text.Encoding]::ASCII.GetString($b)
 $miss = @()
-foreach ($t in @("build-0929-fldl", "likeUsers", "data-layer hooks", "WCUserComment")) {
+foreach ($t in @("build-0929-fldl2", "likeUsers", "data-layer hooks", "WCUserComment")) {
     $hit = $s.Contains($t)
     Write-Host ("check " + $t + " -> " + $(if ($hit) { "HIT" } else { "MISS" }))
     if (-not $hit) { $miss += $t }

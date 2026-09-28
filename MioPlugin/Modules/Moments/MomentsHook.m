@@ -815,7 +815,7 @@ static BOOL MioFakeSetCount(id item, NSString *setterName, long long v) {
 // 写回执行（自愈式）：探测上次注入的假对象是否仍在 item 数组内——服务端刷新会整体覆盖
 // likeUsers/commentUsers（169.log 实证假评显示后即消失），覆盖即丢假数据，丢失的维度
 // 重新注入、仍在的维度跳过防重复累积。四 setter 齐全才写（缺一即数组/计数不一致=崩溃源）
-static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts) {
+static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const char *src) {
     SEL sLU = NSSelectorFromString(@"setLikeUsers:");
     SEL sCU = NSSelectorFromString(@"setCommentUsers:");
     SEL sLC = NSSelectorFromString(@"setLikeCount:");
@@ -847,8 +847,8 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts) {
         }
         if (gFakeLogCount < 5) {
             gFakeLogCount++;
-            WPLog(@"Moments", @"[FakeLike] write-back likes +%ld (%s, cls %@)",
-                  (long)fakes.count, MioFakeFriendPool().count ? "friends" : "builtin", NSStringFromClass([item class]));
+            WPLog(@"Moments", @"[FakeLike] write-back likes +%ld (%s, src=%s, cls %@)",
+                  (long)fakes.count, MioFakeFriendPool().count ? "friends" : "builtin", src, NSStringFromClass([item class]));
         }
     }
 
@@ -868,8 +868,8 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts) {
         }
         if (gFakeLogCount < 5) {
             gFakeLogCount++;
-            WPLog(@"Moments", @"[FakeLike] write-back comments +%ld (%s, cls %@)",
-                  (long)fakes.count, MioFakeFriendPool().count ? "friends" : "builtin", NSStringFromClass([item class]));
+            WPLog(@"Moments", @"[FakeLike] write-back comments +%ld (%s, src=%s, cls %@)",
+                  (long)fakes.count, MioFakeFriendPool().count ? "friends" : "builtin", src, NSStringFromClass([item class]));
         }
     }
 }
@@ -877,7 +877,7 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts) {
 // 双门（本人帖 + 已赞）通过后自愈式写回。getter 触发器与数据层预注入共用：
 // 门 A=userName==我方 wxid；门 B=原生 likeFlag 优先（WCR FUN_00545778 实证），
 // 回退扫原生 likeUsers 找我方 wxid。取 raw 一律走安装期原生 IMP（防 getter 递归）。
-static void MioFakeAutoApplyItem(id item) {
+static void MioFakeAutoApplyItem(id item, const char *src) {
     @try {
         MomentsConfig *cfg = [MomentsConfig shared];
         if (!cfg.fakeLikeEnabled) return;
@@ -907,19 +907,19 @@ static void MioFakeAutoApplyItem(id item) {
             id v = ((id(*)(id, SEL))gFakeOrigCU)(item, @selector(commentUsers));
             if ([v isKindOfClass:[NSArray class]]) rawCmts = v;
         }
-        MioFakeWriteBack(item, rawLikes, rawCmts);
+        MioFakeWriteBack(item, rawLikes, rawCmts, src);
     } @catch (NSException *e) {
         WPLog(@"Moments", @"[FakeLike] auto-apply error: %@", e);
     }
 }
 
 // 批量应用（WCR FUN_005581fc 同款：datas 数组里 isKindOfClass:WCDataItem 才应用）
-static void MioFakeAutoApplyArray(NSArray *datas) {
+static void MioFakeAutoApplyArray(NSArray *datas, const char *src) {
     if (![datas isKindOfClass:[NSArray class]]) return;
     Class itemCls = objc_getClass("WCDataItem");
     if (!itemCls) return;
     for (id it in datas) {
-        if ([it isKindOfClass:itemCls]) MioFakeAutoApplyItem(it);
+        if ([it isKindOfClass:itemCls]) MioFakeAutoApplyItem(it, src);
     }
 }
 
@@ -954,7 +954,7 @@ static void MioInstallFakeLikeHooks(void) {
                 @try {
                     MomentsConfig *cfg = [MomentsConfig shared];
                     if (cfg.fakeLikeEnabled && MioFakeGateOwnPost(self)) {
-                        MioFakeAutoApplyItem(self);                       // 双门+写回（自愈）
+                        MioFakeAutoApplyItem(self, "fb");                 // 双门+写回（自愈兜底）
                         return ((id(*)(id, SEL))orig)(self, sel);         // 返回写回后的数组
                     }
                 } @catch (NSException *e) {
@@ -984,22 +984,22 @@ static MioDL7Orig gOrigPre = NULL, gOrigNext = NULL;
 static MioDL10Orig gOrigFirst = NULL;
 
 static void MioFakeDLMod(id self, SEL _cmd, id item, BOOL notify) {
-    MioFakeAutoApplyItem(item);
+    MioFakeAutoApplyItem(item, "dl");
     if (gOrigMod) gOrigMod(self, _cmd, item, notify);
 }
 
 static void MioFakeDLPre(id self, SEL _cmd, id p1, NSArray *datas, id p4, unsigned int p5, id p6) {
-    MioFakeAutoApplyArray(datas);
+    MioFakeAutoApplyArray(datas, "dl");
     if (gOrigPre) gOrigPre(self, _cmd, p1, datas, p4, p5, p6);
 }
 
 static void MioFakeDLNext(id self, SEL _cmd, id p1, NSArray *datas, id p4, unsigned int p5, id p6) {
-    MioFakeAutoApplyArray(datas);
+    MioFakeAutoApplyArray(datas, "dl");
     if (gOrigNext) gOrigNext(self, _cmd, p1, datas, p4, p5, p6);
 }
 
 static void MioFakeDLFirst(id self, SEL _cmd, id p1, BOOL p2, NSArray *datas, id p5, unsigned int p6, id p7, id p8, id p9) {
-    MioFakeAutoApplyArray(datas);
+    MioFakeAutoApplyArray(datas, "dl");
     if (gOrigFirst) gOrigFirst(self, _cmd, p1, p2, datas, p5, p6, p7, p8, p9);
 }
 
