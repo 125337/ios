@@ -20,9 +20,6 @@
         [ConfigDescriptor itemWithKey:@"convenientMomentsEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"hdMomentsEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"fakeLikeEnabled" type:ConfigValueTypeBool default:@(NO)],
-        [ConfigDescriptor itemWithKey:@"fakeLikeCount" type:ConfigValueTypeInteger default:@(10)],
-        [ConfigDescriptor itemWithKey:@"fakeCommentCount" type:ConfigValueTypeInteger default:@(3)],
-        [ConfigDescriptor itemWithKey:@"fakeCommentTexts" type:ConfigValueTypeArray default:@[]],
     ];
 }
 

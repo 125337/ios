@@ -1,7 +1,8 @@
 # 通过 API 提交单个/多个文件更新到 master
 param(
     [Parameter(Mandatory=$true)][string[]]$Paths,     # 要更新/新增的文件路径（相对仓库根）
-    [Parameter(Mandatory=$true)][string]$Message
+    [Parameter(Mandatory=$true)][string]$Message,
+    [string[]]$DeletePaths                            # 要删除的文件路径（相对仓库根，可选）
 )
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -21,6 +22,11 @@ foreach ($p in $Paths) {
         -Body (@{ content = $b64; encoding = "base64" } | ConvertTo-Json) -ContentType "application/json"
     $entries += @{ path = $p; mode = "100644"; type = "blob"; sha = $r.sha }
     Write-Host "blob: $p"
+}
+foreach ($p in $DeletePaths) {
+    # sha = null 表示删除该路径（git trees API 约定）
+    $entries += @{ path = $p; mode = "100644"; type = "blob"; sha = $null }
+    Write-Host "delete: $p"
 }
 
 $Tree = Invoke-RestMethod "$Api/git/trees" -Method Post -Headers $H `

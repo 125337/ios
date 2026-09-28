@@ -110,10 +110,7 @@ static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
             // --- 朋友圈 ---
             @{ @"title": @"便捷朋友圈", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"朋友圈 便捷 半屏 pyq" },
             @{ @"title": @"高清朋友圈", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"朋友圈 高清 清晰" },
-            @{ @"title": @"朋友圈伪集赞", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"伪集赞 点赞 评论 朋友圈" },
-            @{ @"title": @"设置点赞数量", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"点赞 数量 伪集赞" },
-            @{ @"title": @"设置评论数量", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"评论 数量 伪集赞" },
-            @{ @"title": @"编辑评论文本", @"vc": @"SettingMomentCommentsController", @"cat": @"朋友圈功能", @"kw": @"评论 文本 编辑" },
+            @{ @"title": @"朋友圈伪集赞", @"vc": @"SettingMomentsController", @"cat": @"朋友圈功能", @"kw": @"伪集赞 点赞 评论 朋友圈 数量 文本" },
             // --- 界面定制 ---
             @{ @"title": @"修改全局布局", @"vc": @"WPUILayoutSettingsVC", @"cat": @"界面定制", @"kw": @"全局 布局 字号 缩放 倍率 字体 大小" },
             @{ @"title": @"修改对话布局", @"vc": @"WPUILayoutSettingsVC", @"cat": @"界面定制", @"kw": @"对话 聊天 布局 字号 缩放 倍率" },
