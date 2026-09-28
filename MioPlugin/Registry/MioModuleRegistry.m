@@ -32,6 +32,7 @@
 #import "../Modules/Voice/VoiceConfig.h"
 #import "../Modules/Privacy/PrivacyConfig.h"
 #import "../Modules/Moments/MomentsConfig.h"
+#import "../Modules/Moments/MomentsHook.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -240,11 +241,11 @@
                                                   subtitle:@"全局/对话字号调整"
                                              sectionTitle:@"通用"],
             
-            // ──── 朋友圈（UI 先行，hook 后续接入） ────
+            // ──── 朋友圈（伪集赞/pyq 触发/高清原图） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"moments"
                                                     title:@"朋友圈"
                                                configClass:[MomentsConfig class]
-                                               hookClasses:@[]
+                                               hookClasses:@[[MomentsHook class]]
                                            controllerClass:[SettingMomentsController class]
                                                   subtitle:@"便捷浏览/高清/伪集赞"
                                              sectionTitle:@"通用"],
