@@ -104,22 +104,44 @@ static void MioPatchTimelineLayout(UINavigationController *nav) {
         }
     }
 
-    // C) 滚动视图 inset/offset 富余 → 抵消/归位
+    // 顶部盖板收缩（WCR FUN_017afcc8 第一分支同款意图）：全屏布局的顶部盖板
+    // 高度含状态栏（161 实测：UIView 98 = 54 状态栏 + 44 导航栏、UIImageView 120），
+    // 若位于内容上层，半屏导航栏仅 44 → 多出部分盖在内容上形成白条；统一收缩到 44
+    for (UIView *sub in subs) {
+        CGRect sf = sub.frame;
+        if (sf.origin.y == 0 && sf.size.height >= 90 && sf.size.height <= 200 &&
+            sf.size.width >= rv.bounds.size.width - 1) {
+            WPLog(@"Moments", @"[Pyq] cover shrink %@ %.0f -> 44",
+                  NSStringFromClass([sub class]), sf.size.height);
+            sub.frame = CGRectMake(0, 0, sf.size.width, 44);
+        }
+    }
+
+    // C) 滚动视图 inset/offset 修补（159-161 四轮实证链）：
+    //    - additionalSafeAreaInsets 负附加被钳 0 不传导（161：600ms 后 adjTop 仍 98）
+    //    - 只把 offset 拨到 -44 而不动 inset 也没用：①顶部 98/120 高的不透明盖板
+    //      压在表格上层，44~98 区间的帖子被盖住；②自然静止位 = -adjustedContentInset.top，
+    //      inset 98 不改则用户一松手就回弹到 -98，空隙复现
+    //    → C1 直接把原始 contentInset.top 压到 44（半屏导航栏高），自然静止位随之
+    //      变 -44；C2 offset 归位仅在用户未触摸时执行，拖拽中不打断（inset 已修，
+    //      松手自然停在 -44）
     UIScrollView *sv = MioFindFirstScroll(rv, 0);
     if (sv) {
         UIEdgeInsets adj = sv.adjustedContentInset;
-        WPLog(@"Moments", @"[Pyq] scroll=%@ adjTop=%.0f offset=%.0f frame=(%.0f,%.0f,%.0f,%.0f)",
-              NSStringFromClass([sv class]), adj.top, sv.contentOffset.y,
+        WPLog(@"Moments", @"[Pyq] scroll=%@ adjTop=%.0f rawTop=%.0f safeTop=%.0f offset=%.0f frame=(%.0f,%.0f,%.0f,%.0f)",
+              NSStringFromClass([sv class]), adj.top, sv.contentInset.top, sv.safeAreaInsets.top,
+              sv.contentOffset.y,
               sv.frame.origin.x, sv.frame.origin.y, sv.frame.size.width, sv.frame.size.height);
-        if (adj.top > 46) {
-            // 全屏布局残留：inset 顶部多算了状态栏高度（160 实测 98 = 44 导航栏 + 54 状态栏）
-            CGFloat gap = adj.top - 44;
-            rootVC.additionalSafeAreaInsets = UIEdgeInsetsMake(-gap, 0, 0, 0);
+        if (sv.contentInset.top > 46) {   // 98 = 全屏规格（54 状态栏+44 导航栏），半屏只需 44
+            UIEdgeInsets ci = sv.contentInset;
+            WPLog(@"Moments", @"[Pyq] gap fix C1: rawTop %.0f -> 44", ci.top);
+            ci.top = 44;
+            sv.contentInset = ci;
+        }
+        if (adj.top > 46 && !sv.dragging && !sv.decelerating) {
             CGFloat oldOff = sv.contentOffset.y;
-            // offset 必须显式归位到 -44（内容顶边贴导航栏下缘）：
-            // 160 实测改 inset 不会联动 offset，旧 C2 误用改前 inset 等于没动
             sv.contentOffset = CGPointMake(0, -44);
-            WPLog(@"Moments", @"[Pyq] gap fix C: inset -%.0f, offset %.0f -> -44", gap, oldOff);
+            WPLog(@"Moments", @"[Pyq] gap fix C2: offset %.0f -> -44", oldOff);
         }
     }
 }
@@ -168,11 +190,13 @@ static void MioOpenTimelinePageSheet(void) {
             ((void(*)(id, SEL, double))objc_msgSend)(adp, setHSel, h);
             ((void(*)(id, SEL, BOOL))objc_msgSend)(adp, showSel, YES);
             WPLog(@"Moments", @"[Pyq] timeline page-sheet shown (h=%.0f)", h);
-            // 布局修补（WCR FUN_017afcc8 同款 150ms 时序；600ms 复查一次，
-            // 防微信数据加载后重置 offset；修补函数幂等，重复执行无副作用）
+            // 布局修补（WCR FUN_017afcc8 同款 150ms 时序；600ms/1.5s 复查两次，
+            // 防微信数据加载后重置 inset/盖板；修补函数幂等，重复执行无副作用）
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{ MioPatchTimelineLayout(nav); });
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{ MioPatchTimelineLayout(nav); });
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{ MioPatchTimelineLayout(nav); });
         } else {
             WPLog(@"Moments", @"[Pyq] MMPageSheetAdapter NOT available");
