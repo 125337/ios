@@ -9,12 +9,15 @@
 
 // 防重入标志：触发后置位，500ms 后主线程清零（WCR FUN_017a7970 同款防抖窗口）
 static volatile BOOL gPyqHandling = NO;
-static IMP orig_pyq_didChange = NULL;    // textViewDidChange:
+static IMP orig_pyq_didChange = NULL;    // textViewDidChange:（MMGrowTextView 主探测）
 static IMP orig_pyq_selChange = NULL;    // textViewDidChangeSelection:
-static IMP orig_tv_setDelegate = NULL;   // UITextView setDelegate:（探测）
+static IMP orig_tv_setDelegate = NULL;   // UITextView setDelegate:（动态挂载器）
+static IMP orig_pyq_dyn1 = NULL;         // 动态 delegate 类的 textViewDidChange: 原实现
+static IMP orig_pyq_dyn2 = NULL;
+static Class gDynCls1 = NULL, gDynCls2 = NULL;
 static int gPyqLogCount = 0;    // 取证日志：仅前 3 次
 static int gSelLogCount = 0;    // SelectionChange 探测：仅前 3 次
-static int gDelLogCount = 0;    // delegate 探针：仅前 5 次
+static int gDelLogCount = 0;    // delegate 探针：仅前 10 次
 
 // 判断方法是否为类自身实现（非父类继承），替代 method_getClass（CI SDK 无声明）
 static BOOL MioClassOwnsMethod(Class cls, SEL sel) {
@@ -79,37 +82,37 @@ static void MioOpenMomentsHalfScreen(UIViewController *host) {
     }
 }
 
-// 输入变化垫片：先调原实现，再检测 pyq（WCR FUN_017a7970 同款流程：
-// 检测 MMGrowTextView 自身的 text，而非 textView 参数）
+// 输入变化垫片（主 + 动态 delegate 类共用）：先调对应原实现，再检测 pyq。
+// 文本来源双兼容：self 有 text 用 self.text（WCR FUN_017a7970 同款），
+// 否则用 textView 参数的 text（动态 delegate 可能是无 text 的 VC/容器）
 static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
-    if (orig_pyq_didChange) {
-        ((void(*)(id, SEL, id))orig_pyq_didChange)(self, _cmd, textView);
-    }
+    IMP orig = orig_pyq_didChange;
+    if (gDynCls1 && [self isMemberOfClass:gDynCls1]) orig = orig_pyq_dyn1;
+    else if (gDynCls2 && [self isMemberOfClass:gDynCls2]) orig = orig_pyq_dyn2;
+    if (orig) ((void(*)(id, SEL, id))orig)(self, _cmd, textView);
     @try {
+        // 取文本（self.text 优先，textView.text 兜底）
+        NSString *text = nil;
+        SEL textSel = NSSelectorFromString(@"text");
+        if ([self respondsToSelector:textSel]) {
+            id t = ((id(*)(id, SEL))objc_msgSend)(self, textSel);
+            if ([t isKindOfClass:[NSString class]]) text = t;
+        }
+        if (!text && [textView isKindOfClass:[UITextView class]]) {
+            text = [(UITextView *)textView text];
+        }
         // 取证日志（仅前 3 次）：确认垫片被调用、参数形态、开关状态、文本内容
         if (gPyqLogCount < 3) {
             gPyqLogCount++;
-            NSString *selfText = @"(no text sel)";
-            SEL textSel = NSSelectorFromString(@"text");
-            if ([self respondsToSelector:textSel]) {
-                id t = ((id(*)(id, SEL))objc_msgSend)(self, textSel);
-                selfText = [t isKindOfClass:[NSString class]] ? t
-                          : [NSString stringWithFormat:@"<%@>", NSStringFromClass([t class] ?: [NSObject class])];
-            }
             WPLog(@"Moments", @"[Pyq] fired(%d) self=%@ tv=%@ enable=%d text=%@",
                   gPyqLogCount, NSStringFromClass([self class]),
                   textView ? NSStringFromClass([textView class]) : @"nil",
-                  [MomentsConfig shared].convenientMomentsEnabled ? 1 : 0, selfText);
+                  [MomentsConfig shared].convenientMomentsEnabled ? 1 : 0,
+                  text ?: @"(none)");
         }
         if (gPyqHandling) return;
         MomentsConfig *cfg = [MomentsConfig shared];
         if (!cfg.convenientMomentsEnabled) return;
-        // 取 self.text（WCR 同款：MMGrowTextView 自身文本）
-        SEL textSel = NSSelectorFromString(@"text");
-        if (![self respondsToSelector:textSel]) return;
-        id rawText = ((id(*)(id, SEL))objc_msgSend)(self, textSel);
-        if (![rawText isKindOfClass:[NSString class]]) return;
-        NSString *text = rawText;
         if (text.length == 0) return;
         // trim 空白（WCR FUN_017b0dd8 同款）
         text = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -117,19 +120,19 @@ static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
 
         gPyqHandling = YES;
         WPLog(@"Moments", @"[Pyq] matched, opening moments");
-        // 清空输入（WCR 同款：self setText，带守卫）
+        // 清空输入（self setText 优先，textView setText 兜底，均带守卫）
         SEL setSel = NSSelectorFromString(@"setText:");
         if ([self respondsToSelector:setSel]) {
             ((void(*)(id, SEL, id))objc_msgSend)(self, setSel, @"");
         }
-        // 参数若是 UITextView 也清（内部 textView 与 GrowTextView 文本可能不同步）
         if ([textView isKindOfClass:[UITextView class]]) {
             [(UITextView *)textView setText:@""];
         }
 
-        // 宿主：从 self（MMGrowTextView）沿 responder 链找最近的 VC（聊天页）
+        // 宿主：从 self 沿 responder 链找最近的 VC（聊天页）
         UIViewController *host = nil;
-        UIResponder *r = (UIResponder *)self;
+        UIResponder *r = ([self isKindOfClass:[UIResponder class]] ? (UIResponder *)self : nil)
+                         ?: ([textView isKindOfClass:[UIResponder class]] ? (UIResponder *)textView : nil);
         while (r) {
             if ([r isKindOfClass:[UIViewController class]]) { host = (UIViewController *)r; break; }
             r = [r nextResponder];
@@ -161,20 +164,43 @@ static void hooked_pyq_selChange(id self, SEL _cmd, id textView) {
     }
 }
 
-// UITextView setDelegate: 轻探针：实锤聊天页输入框的 delegate 究竟是谁
-// （垫片极轻：仅类名判断，只对 GrowTextView/InputTool 系 delegate 打日志）
+// UITextView setDelegate: 动态挂载器：微信系输入框的 delegate 设给谁，
+// 就实时把 pyq 垫片挂到那个 delegate 类的 textViewDidChange: 上（幂等防重）。
+// 同时放宽日志：delegate 类全打（上限 10 条）
 static void hooked_tv_setDelegate(id self, SEL _cmd, id delegate) {
     if (orig_tv_setDelegate) {
         ((void(*)(id, SEL, id))orig_tv_setDelegate)(self, _cmd, delegate);
     }
-    if (delegate && gDelLogCount < 5) {
-        NSString *cn = NSStringFromClass([delegate class]);
-        if ([cn containsString:@"GrowTextView"] || [cn containsString:@"InputTool"] ||
-            [cn containsString:@"TextView"]) {
+    if (!delegate) return;
+    @try {
+        NSString *tvCn = NSStringFromClass([self class]);
+        // 只关注微信输入框系 textView（聊天输入/搜索等）
+        if (![tvCn hasPrefix:@"MM"] && ![tvCn containsString:@"GrowTextView"]) return;
+        Class dCls = [delegate class];
+        NSString *dCn = NSStringFromClass(dCls);
+        if (gDelLogCount < 10) {
             gDelLogCount++;
             WPLog(@"Moments", @"[Pyq] delegate(%d) tv=%@ -> %@",
-                  gDelLogCount, NSStringFromClass([self class]), cn);
+                  gDelLogCount, tvCn, dCn);
         }
+        // MMGrowTextView 主探测已挂；其余 delegate 类动态挂（幂等）
+        if (dCls == objc_getClass("MMGrowTextView")) return;
+        SEL didSel = NSSelectorFromString(@"textViewDidChange:");
+        Method m = class_getInstanceMethod(dCls, didSel);
+        if (!m || method_getImplementation(m) == (IMP)hooked_pyq_didChange) return;
+        if (dCls == gDynCls1 || dCls == gDynCls2) return;   // 已挂过
+        IMP origImp = method_getImplementation(m);
+        if (!gDynCls1) {
+            gDynCls1 = dCls; orig_pyq_dyn1 = origImp;
+        } else if (!gDynCls2) {
+            gDynCls2 = dCls; orig_pyq_dyn2 = origImp;
+        } else {
+            return;   // 两个动态槽已满
+        }
+        method_setImplementation(m, (IMP)hooked_pyq_didChange);
+        WPLog(@"Moments", @"[Pyq] dyn-hook %@.textViewDidChange: (tv=%@)", dCn, tvCn);
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[Pyq] setDelegate probe error: %@", e);
     }
 }
 
