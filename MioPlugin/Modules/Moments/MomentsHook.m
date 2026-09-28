@@ -613,7 +613,7 @@ static void MioInstallHDHooks(void) {
 
 static NSString *gFakeMyWxId = nil;      // 懒解析缓存（CContactMgr.getSelfContact.userName）
 static volatile int gFakeLogCount = 0;   // 首见式日志限流（防逐条刷屏）
-static char kFakeDoneKey;   // 写回完成标记（每 item 进程内一次，保证数据稳定）
+static char kFakeLikeAppliedKey, kFakeCmtAppliedKey;   // 各维度已注入假对象集合（NSSet 指针身份，供自愈探测）
 
 // WCR 内置昵称池（dylib __ustring 池同款风格摘录）
 static NSString * const kFakeLikeNames[] = {
@@ -678,21 +678,91 @@ static BOOL MioFakeGateOwnPost(id item) {
     return [poster isEqualToString:my];
 }
 
-// 造 WCUserComment（WCR 同款类）：username=假 wxid、nickName=池内随机；评论追加 content
-static id MioFakeMakeUser(NSString *nick, NSString *content) {
+// 好友池（WCR FUN_0054e77c 同款：getAllContactUserName 枚举 → 过滤非本人/@chatroom/
+// 公众号/群聊/插件，仅 m_uiType∈{1,2} 真人好友；进程级缓存。空池回退内置昵称池）
+static NSArray *MioFakeFriendPool(void) {
+    static NSArray *gPool;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        @try {
+            Class mgrCls = objc_getClass("CContactMgr");
+            id mgr = mgrCls ? WXGetService(mgrCls) : nil;
+            SEL allSel = NSSelectorFromString(@"getAllContactUserName");
+            SEL byNameSel = NSSelectorFromString(@"getContactByName:");
+            if (!mgr || ![mgr respondsToSelector:allSel] || ![mgr respondsToSelector:byNameSel]) return;
+            id all = ((id(*)(id, SEL))objc_msgSend)(mgr, allSel);
+            NSArray *names = nil;
+            if ([all isKindOfClass:[NSSet class]]) names = [(NSSet *)all allObjects];
+            else if ([all isKindOfClass:[NSArray class]]) names = all;
+            if (names.count == 0) return;
+            NSString *my = MioFakeMyWxId();
+            NSMutableArray *pool = [NSMutableArray array];
+            for (NSString *un in names) {
+                if (![un isKindOfClass:[NSString class]] || un.length == 0) continue;
+                if (my && [un isEqualToString:my]) continue;
+                if ([un containsString:@"@chatroom"]) continue;
+                id ct = ((id(*)(id, SEL, id))objc_msgSend)(mgr, byNameSel, un);
+                if (!ct) continue;
+                SEL brandSel = NSSelectorFromString(@"isBrandContact");
+                if ([ct respondsToSelector:brandSel] && ((BOOL(*)(id, SEL))objc_msgSend)(ct, brandSel)) continue;
+                SEL roomSel = NSSelectorFromString(@"isChatroom");
+                if ([ct respondsToSelector:roomSel] && ((BOOL(*)(id, SEL))objc_msgSend)(ct, roomSel)) continue;
+                SEL plugSel = NSSelectorFromString(@"m_isPlugin");
+                if ([ct respondsToSelector:plugSel]) {
+                    @try { if (((BOOL(*)(id, SEL))objc_msgSend)(ct, plugSel)) continue; } @catch (NSException *e) {}
+                }
+                SEL typeSel = NSSelectorFromString(@"m_uiType");
+                if ([ct respondsToSelector:typeSel]) {
+                    @try {
+                        unsigned int t = (unsigned int)((unsigned long(*)(id, SEL))objc_msgSend)(ct, typeSel);
+                        if (t != 1 && t != 2) continue;
+                    } @catch (NSException *e) {}
+                }
+                [pool addObject:un];
+            }
+            gPool = [pool copy];
+        } @catch (NSException *e) {
+            WPLog(@"Moments", @"[FakeLike] friend pool error: %@", e);
+        }
+        if (gFakeLogCount < 5) {
+            gFakeLogCount++;
+            WPLog(@"Moments", @"[FakeLike] friend pool built: %lu contacts%s",
+                  (unsigned long)gPool.count, gPool.count ? "" : " (fallback builtin)");
+        }
+    });
+    return gPool;
+}
+
+// 造 WCUserComment（WCR FUN_0054c0ac 同款：真好友 wxid + getContactByName 解析昵称，
+// setType:1 / setIsRichText:1 / setCreateTime:；头像由微信按 wxid 正常管线加载）
+static id MioFakeMakeCommentUser(NSString *wxid, NSString *nickFallback, NSString *content) {
     Class ucls = objc_getClass("WCUserComment");
-    if (!ucls) return nil;
+    if (!ucls || wxid.length == 0) return nil;
     id u = [[ucls alloc] init];
     if (!u) return nil;
-    NSString *fakeWxid = [NSString stringWithFormat:@"wxid_fake%08u", (unsigned)arc4random()];
+    NSString *nick = nil;
+    Class mgrCls = objc_getClass("CContactMgr");
+    id mgr = mgrCls ? WXGetService(mgrCls) : nil;
+    SEL byNameSel = NSSelectorFromString(@"getContactByName:");
+    if (mgr && [mgr respondsToSelector:byNameSel]) {
+        id ct = ((id(*)(id, SEL, id))objc_msgSend)(mgr, byNameSel, wxid);
+        nick = MioFakeGetStr(ct, @[@"m_nsNickName", @"nickName", @"nickname"]);
+    }
+    if (nick.length == 0) nick = nickFallback.length > 0 ? nickFallback : wxid;
     for (NSString *sn in @[@"setUsername:", @"setUserName:"]) {
         SEL sel = NSSelectorFromString(sn);
-        if ([u respondsToSelector:sel]) { ((void(*)(id, SEL, id))objc_msgSend)(u, sel, fakeWxid); break; }
+        if ([u respondsToSelector:sel]) { ((void(*)(id, SEL, id))objc_msgSend)(u, sel, wxid); break; }
     }
-    for (NSString *sn in @[@"setNickName:", @"setNickname:"]) {
+    for (NSString *sn in @[@"setNickname:", @"setNickName:"]) {
         SEL sel = NSSelectorFromString(sn);
         if ([u respondsToSelector:sel]) { ((void(*)(id, SEL, id))objc_msgSend)(u, sel, nick); break; }
     }
+    SEL typeSel = NSSelectorFromString(@"setType:");
+    if ([u respondsToSelector:typeSel]) ((void(*)(id, SEL, long long))objc_msgSend)(u, typeSel, 1);
+    SEL richSel = NSSelectorFromString(@"setIsRichText:");
+    if ([u respondsToSelector:richSel]) ((void(*)(id, SEL, BOOL))objc_msgSend)(u, richSel, YES);
+    SEL timeSel = NSSelectorFromString(@"setCreateTime:");
+    if ([u respondsToSelector:timeSel]) ((void(*)(id, SEL, int))objc_msgSend)(u, timeSel, (int)[NSDate date].timeIntervalSince1970);
     if (content) {
         for (NSString *sn in @[@"setContent:", @"setContentStr:"]) {
             SEL sel = NSSelectorFromString(sn);
@@ -700,6 +770,27 @@ static id MioFakeMakeUser(NSString *nick, NSString *content) {
         }
     }
     return u;
+}
+
+// 造一个假人：好友池随机取（真头像真昵称）；池空回退内置昵称池 + wxid_fake*
+static id MioFakeMakeOne(NSString *content) {
+    NSArray *pool = MioFakeFriendPool();
+    if (pool.count > 0) {
+        NSString *wxid = pool[arc4random_uniform((u_int32_t)pool.count)];
+        return MioFakeMakeCommentUser(wxid, nil, content);
+    }
+    return MioFakeMakeCommentUser(
+        [NSString stringWithFormat:@"wxid_fake%08u", (unsigned)arc4random()],
+        kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)], content);
+}
+
+// 已注入假对象是否仍在 item 数组内（NSSet 指针身份探测，O(n)）
+static BOOL MioFakeStillApplied(NSSet *applied, NSArray *arr) {
+    if (applied.count == 0) return NO;
+    for (id obj in arr) {
+        if ([applied member:obj]) return YES;
+    }
+    return NO;
 }
 
 // 守卫式 setter 写回（WCR 同款方案：假数据合并进 item 本体，数组与计数一次写平，
@@ -718,7 +809,9 @@ static BOOL MioFakeSetCount(id item, NSString *setterName, long long v) {
     @catch (NSException *e) { return NO; }
 }
 
-// 写回执行：四 setter 齐全才写（缺一即数组/计数不一致=崩溃源），数量读子配置
+// 写回执行（自愈式）：探测上次注入的假对象是否仍在 item 数组内——服务端刷新会整体覆盖
+// likeUsers/commentUsers（169.log 实证假评显示后即消失），覆盖即丢假数据，丢失的维度
+// 重新注入、仍在的维度跳过防重复累积。四 setter 齐全才写（缺一即数组/计数不一致=崩溃源）
 static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts) {
     SEL sLU = NSSelectorFromString(@"setLikeUsers:");
     SEL sCU = NSSelectorFromString(@"setCommentUsers:");
@@ -735,35 +828,53 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts) {
     MomentsConfig *cfg = [MomentsConfig shared];
     NSInteger nLike = cfg.fakeLikeCount; if (nLike < 0) nLike = 0; if (nLike > 10000) nLike = 10000;
     NSInteger nCmt  = cfg.fakeCommentCount; if (nCmt < 0) nCmt = 0; if (nCmt > 300) nCmt = 300;
-    NSMutableArray *likes = [NSMutableArray arrayWithArray:rawLikes];
-    NSMutableArray *cmts  = [NSMutableArray arrayWithArray:rawCmts];
-    for (NSInteger i = 0; i < nLike; i++) {
-        id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)], nil);
-        if (u) [likes addObject:u];
-    }
     NSArray<NSString *> *texts = (cfg.fakeCommentTexts.count > 0) ? cfg.fakeCommentTexts : nil;
-    for (NSInteger i = 0; i < nCmt; i++) {
-        NSString *text = texts ? texts[arc4random_uniform((u_int32_t)texts.count)]
-                               : kFakeCommentTexts[arc4random_uniform(kFakeCommentTextCount)];
-        id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)], text);
-        if (u) [cmts addObject:u];
+
+    // 赞维度：假赞缺失才重注入
+    if (nLike > 0 && !MioFakeStillApplied(objc_getAssociatedObject(item, &kFakeLikeAppliedKey), rawLikes)) {
+        NSMutableArray *likes = [NSMutableArray arrayWithArray:rawLikes];
+        NSMutableSet *fakes = [NSMutableSet set];
+        for (NSInteger i = 0; i < nLike; i++) {
+            id u = MioFakeMakeOne(nil);
+            if (u) { [likes addObject:u]; [fakes addObject:u]; }
+        }
+        if (MioFakeSetObj(item, @"setLikeUsers:", likes) &&
+            MioFakeSetCount(item, @"setLikeCount:", (long long)likes.count)) {
+            objc_setAssociatedObject(item, &kFakeLikeAppliedKey, [fakes copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        if (gFakeLogCount < 5) {
+            gFakeLogCount++;
+            WPLog(@"Moments", @"[FakeLike] write-back likes +%ld (%s, cls %@)",
+                  (long)fakes.count, MioFakeFriendPool().count ? "friends" : "builtin", NSStringFromClass([item class]));
+        }
     }
-    BOOL u1 = MioFakeSetObj(item, @"setLikeUsers:", likes);
-    BOOL u2 = MioFakeSetObj(item, @"setCommentUsers:", cmts);
-    BOOL c1 = MioFakeSetCount(item, @"setLikeCount:", (long long)likes.count);
-    BOOL c2 = MioFakeSetCount(item, @"setCommentCount:", (long long)cmts.count);
-    if (gFakeLogCount < 5) {
-        gFakeLogCount++;
-        WPLog(@"Moments", @"[FakeLike] write-back %@: +%ld likers +%ld comments (setters %d%d%d%d, cls %@)",
-              MioFakeGetStr(item, @[@"userName", @"username"]) ?: @"?",
-              (long)(likes.count - (NSInteger)rawLikes.count), (long)(cmts.count - (NSInteger)rawCmts.count),
-              u1, u2, c1, c2, NSStringFromClass([item class]));
+
+    // 评论维度：假评缺失才重注入
+    if (nCmt > 0 && !MioFakeStillApplied(objc_getAssociatedObject(item, &kFakeCmtAppliedKey), rawCmts)) {
+        NSMutableArray *cmts = [NSMutableArray arrayWithArray:rawCmts];
+        NSMutableSet *fakes = [NSMutableSet set];
+        for (NSInteger i = 0; i < nCmt; i++) {
+            NSString *text = texts ? texts[arc4random_uniform((u_int32_t)texts.count)]
+                                   : kFakeCommentTexts[arc4random_uniform(kFakeCommentTextCount)];
+            id u = MioFakeMakeOne(text);
+            if (u) { [cmts addObject:u]; [fakes addObject:u]; }
+        }
+        if (MioFakeSetObj(item, @"setCommentUsers:", cmts) &&
+            MioFakeSetCount(item, @"setCommentCount:", (long long)cmts.count)) {
+            objc_setAssociatedObject(item, &kFakeCmtAppliedKey, [fakes copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        if (gFakeLogCount < 5) {
+            gFakeLogCount++;
+            WPLog(@"Moments", @"[FakeLike] write-back comments +%ld (%s, cls %@)",
+                  (long)fakes.count, MioFakeFriendPool().count ? "friends" : "builtin", NSStringFromClass([item class]));
+        }
     }
 }
 
 static void MioInstallFakeLikeHooks(void) {
-    // 只挂 likeUsers/commentUsers 两个 getter 作触发器：双门通过 → 一次性写回 item 本体，
-    // getter 本身透传（WCR 写回方案）。计数 getter 不挂：写回已同步 setLikeCount/setCommentCount
+    // 只挂 likeUsers/commentUsers 两个 getter 作触发器：双门通过 → 自愈式写回 item 本体
+    //（假数据被服务端刷新覆盖则重注入），getter 本身透传（WCR 写回方案）。
+    // 计数 getter 不挂：写回已同步 setLikeCount/setCommentCount
     int ok = 0, total = 0;
     for (NSString *cn in @[@"WCDataItem", @"WCTimeLineDataItem"]) {
         Class cls = objc_getClass(cn.UTF8String);
@@ -789,7 +900,6 @@ static void MioInstallFakeLikeHooks(void) {
                 @try {
                     MomentsConfig *cfg = [MomentsConfig shared];
                     if (!cfg.fakeLikeEnabled) return origArr;
-                    if (objc_getAssociatedObject(self, &kFakeDoneKey)) return origArr;
                     if (!MioFakeGateOwnPost(self)) return origArr;
                     // 门 B：原生 likeFlag 优先（WCR FUN_00545778 实证），回退扫原生 likeUsers 找我方 wxid
                     BOOL liked = NO;
@@ -812,7 +922,6 @@ static void MioInstallFakeLikeHooks(void) {
                     NSArray *rawCmts  = origCU ? ((id(*)(id, SEL))origCU)(self, @selector(commentUsers)) : @[];
                     if (![rawLikes isKindOfClass:[NSArray class]]) rawLikes = @[];
                     if (![rawCmts isKindOfClass:[NSArray class]]) rawCmts = @[];
-                    objc_setAssociatedObject(self, &kFakeDoneKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                     MioFakeWriteBack(self, rawLikes, rawCmts);
                     return ((id(*)(id, SEL))orig)(self, sel);   // 返回写回后的数组，本轮渲染即生效
                 } @catch (NSException *e) {
