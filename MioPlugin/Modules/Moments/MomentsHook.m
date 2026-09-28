@@ -1,10 +1,11 @@
-﻿#import "MomentsHook.h"
+﻿﻿#import "MomentsHook.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <stdlib.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
+#import "../SettingEntry/WPCommonUI.h"
 #import "MomentsConfig.h"
 
 #pragma mark - 便捷朋友圈（WCR 同款机制，触发词 pyq）
@@ -1084,6 +1085,67 @@ static void MioInstallFakeDataLayerHooks(void) {
     WPLog(@"Moments", @"[FakeLike] data-layer hooks installed %d/7:%@", installed, hit);
 }
 
+// ===== App 激活主动刷新（WCR FUN_00551580 同款复刻）=====
+// 根因定论（173.log + WCR 反编译 FUN_00551580/FUN_005512e0/FUN_00551994）：朋友圈首屏走本地
+// 缓存、不经网络回调，src=dl 恒为 0；WCR 靠 didBecomeActive 时主动调 WCFacade 的
+// beginTimeline + updateTimelineHead（头文件 WCFacade.h L416/L429 实锤）制造数据刷新，
+// 数据流经 WCTimelineMgr 回调 → 数据层挂点在用户打开朋友圈前命中注入 → 假赞随微信持久化
+// 进缓存，下次打开即命中。节流取 WCR 钳位区间（61~3600s，FUN_00551868）中值 300s 固定。
+static NSTimeInterval gFakeLastActiveRefresh = 0;
+
+// 顶 VC 链是否在朋友圈页面（WCR FUN_00554fd4 同款：WCTimeLine/WCCommentDetail 在栈即跳过，
+// 避免与用户正在浏览的刷新叠加导致列表跳动）
+static BOOL MioFakeVCCoveringTimeline(void) {
+    UIViewController *vc = WPGetTopVCForPresentation();
+    int depth = 0;
+    while (vc && depth++ < 16) {
+        NSString *cls = NSStringFromClass(vc.class);
+        if ([cls containsString:@"WCTimeLine"] || [cls containsString:@"WCCommentDetail"]) return YES;
+        vc = vc.parentViewController;
+    }
+    return NO;
+}
+
+static void MioFakeActiveRefresh(void) {
+    @try {
+        MomentsConfig *cfg = [MomentsConfig shared];
+        if (!cfg.fakeLikeEnabled) return;
+        if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
+        if (MioFakeVCCoveringTimeline()) return;
+        NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+        if (gFakeLastActiveRefresh > 0 && now - gFakeLastActiveRefresh < 300) return;
+        id facade = WXGetService(objc_getClass("WCFacade"));
+        if (!facade) {
+            WPLog(@"Moments", @"[FakeLike] active-refresh: WCFacade unavailable");
+            return;
+        }
+        gFakeLastActiveRefresh = now;   // WCR 同款：取到 facade 才记账
+        SEL begin = NSSelectorFromString(@"beginTimeline");
+        if ([facade respondsToSelector:begin]) {
+            ((void(*)(id, SEL))objc_msgSend)(facade, begin);
+        }
+        SEL head = NSSelectorFromString(@"updateTimelineHead");
+        if ([facade respondsToSelector:head]) {
+            ((void(*)(id, SEL))objc_msgSend)(facade, head);
+            WPLog(@"Moments", @"[FakeLike] active-refresh: updateTimelineHead fired (t=%.0f)", now);
+        } else {
+            WPLog(@"Moments", @"[FakeLike] active-refresh: WCFacade lacks updateTimelineHead");
+        }
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[FakeLike] active-refresh error: %@", e);
+    }
+}
+
+static void MioFakeInstallActiveRefresh(void) {
+    // 回前台触发（PrivacyHook 同款通知监听，零 hook）
+    [[NSNotificationCenter defaultCenter]
+        addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil
+        usingBlock:^(NSNotification *note) { MioFakeActiveRefresh(); }];
+    // 冷启动补偿：install 早于首次 didBecomeActive 通知时也能在服务就绪后刷一次
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ MioFakeActiveRefresh(); });
+}
+
 #pragma mark - 安装
 
 @implementation MomentsHook
@@ -1094,6 +1156,7 @@ static void MioInstallFakeDataLayerHooks(void) {
     MioInstallHDHooks();
     MioInstallFakeLikeHooks();
     MioInstallFakeDataLayerHooks();
+    MioFakeInstallActiveRefresh();
     // 重挂自检（防微信晚到初始化覆盖 IMP）
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ MioRehookCheck(1); });

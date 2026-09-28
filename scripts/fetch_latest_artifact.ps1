@@ -1,4 +1,4 @@
-﻿# Fetch latest successful artifact for current master head sha, verify new-build strings, deploy.
+﻿﻿# Fetch latest successful artifact for current master head sha, verify new-build strings, deploy.
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -38,7 +38,7 @@ Remove-Item $tmp -Recurse -Force
 $b = [IO.File]::ReadAllBytes("$Root\dist\Mio_arm64.dylib")
 $s = [Text.Encoding]::ASCII.GetString($b)
 $miss = @()
-foreach ($t in @("build-0929-fldl4", "likeUsers", "data-layer hooks", "WCUserComment")) {
+foreach ($t in @("build-0929-fldl5", "likeUsers", "data-layer hooks", "updateTimelineHead")) {
     $hit = $s.Contains($t)
     Write-Host ("check " + $t + " -> " + $(if ($hit) { "HIT" } else { "MISS" }))
     if (-not $hit) { $miss += $t }
