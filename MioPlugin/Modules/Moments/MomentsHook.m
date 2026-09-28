@@ -4,6 +4,7 @@
 #import <objc/message.h>
 #import <stdlib.h>
 #import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
 #import "MomentsConfig.h"
 
 #pragma mark - 便捷朋友圈（WCR 同款机制，触发词 pyq）
@@ -646,22 +647,24 @@ static NSString *MioFakeGetStr(id obj, NSArray *selNames) {
     return nil;
 }
 
-// 我的 wxid（CContactMgr getSelfContact 同款稳定路径，懒解析 + 缓存）
+// 我的 wxid（WXGetSelfContact 两级服务策略：MMContext 主路径 + 守卫兜底；
+// CContact 自身字段为 m_nsUsrName。懒解析 + 缓存，失败 30s 冷却防刷屏）
 static NSString *MioFakeMyWxId(void) {
     if (gFakeMyWxId) return gFakeMyWxId;
+    static NSTimeInterval gFakeMyWxIdLastFail = 0;
+    NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+    if (now - gFakeMyWxIdLastFail < 30) return nil;
     @try {
-        Class ctrCls = objc_getClass("MMServiceCenter");
-        Class mgrCls = objc_getClass("CContactMgr");
-        if (!ctrCls || !mgrCls) return nil;
-        id center = ((id(*)(id, SEL))objc_msgSend)(ctrCls, NSSelectorFromString(@"defaultCenter"));
-        id mgr = center ? ((id(*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService"), mgrCls) : nil;
-        id selfContact = mgr ? ((id(*)(id, SEL))objc_msgSend)(mgr, NSSelectorFromString(@"getSelfContact")) : nil;
-        NSString *wxid = MioFakeGetStr(selfContact, @[@"userName", @"username"]);
+        id selfContact = WXGetSelfContact();
+        NSString *wxid = MioFakeGetStr(selfContact, @[@"m_nsUsrName", @"userName", @"username"]);
         if (wxid.length > 0) {
             gFakeMyWxId = wxid;
             WPLog(@"Moments", @"[FakeLike] myWxId resolved: %@", wxid);
+        } else {
+            gFakeMyWxIdLastFail = now;
         }
     } @catch (NSException *e) {
+        gFakeMyWxIdLastFail = now;
         WPLog(@"Moments", @"[FakeLike] myWxId error: %@", e);
     }
     return gFakeMyWxId;
@@ -675,13 +678,20 @@ static BOOL MioFakeGateOwnPost(id item) {
     return [poster isEqualToString:my];
 }
 
-// 门 B：我已点赞（WCR 默认触发模式；fakes 全部 wxid_fake* 前缀，扫增强数组不误判）
+// 门 B：我已点赞（WCR 同款默认触发模式）。优先 item 原生 likeFlag（微信自维护，
+// WCR FUN_00545778 实证），回退扫 likeUsers 找我方 wxid；fakes 全 wxid_fake* 前缀不误判
 static BOOL MioFakeGateLiked(id item, NSArray *likeUsers) {
-    NSString *my = MioFakeMyWxId();
-    if (!my) return NO;
+    if (!MioFakeMyWxId()) return NO;
+    SEL lfSel = NSSelectorFromString(@"likeFlag");
+    if ([item respondsToSelector:lfSel]) {
+        @try {
+            if (((BOOL(*)(id, SEL))objc_msgSend)(item, lfSel)) return YES;
+        } @catch (NSException *e) {
+        }
+    }
     for (id u in likeUsers) {
-        NSString *un = MioFakeGetStr(u, @[@"username", @"userName"]);
-        if ([un isEqualToString:my]) return YES;
+        NSString *un = MioFakeGetStr(u, @[@"username", @"userName", @"m_nsUsrName"]);
+        if ([un isEqualToString:MioFakeMyWxId()]) return YES;
     }
     return NO;
 }
