@@ -614,6 +614,9 @@ static void MioInstallHDHooks(void) {
 static NSString *gFakeMyWxId = nil;      // 懒解析缓存（CContactMgr.getSelfContact.userName）
 static volatile int gFakeLogCount = 0;   // 首见式日志限流（防逐条刷屏）
 static char kFakeLikeAppliedKey, kFakeCmtAppliedKey;   // 各维度已注入假对象集合（NSSet 指针身份，供自愈探测）
+// WCDataItem 原生 likeUsers/commentUsers IMP（安装期在 hook 前解析；AutoApply 取 raw
+// 统一直调原生 IMP——若走 [item likeUsers] 会经已 hook 的 getter 垫片引发无限递归）
+static IMP gFakeOrigLU = NULL, gFakeOrigCU = NULL;
 
 // WCR 内置昵称池（dylib __ustring 池同款风格摘录）
 static NSString * const kFakeLikeNames[] = {
@@ -871,14 +874,70 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts) {
     }
 }
 
+// 双门（本人帖 + 已赞）通过后自愈式写回。getter 触发器与数据层预注入共用：
+// 门 A=userName==我方 wxid；门 B=原生 likeFlag 优先（WCR FUN_00545778 实证），
+// 回退扫原生 likeUsers 找我方 wxid。取 raw 一律走安装期原生 IMP（防 getter 递归）。
+static void MioFakeAutoApplyItem(id item) {
+    @try {
+        MomentsConfig *cfg = [MomentsConfig shared];
+        if (!cfg.fakeLikeEnabled) return;
+        if (!MioFakeGateOwnPost(item)) return;
+        BOOL liked = NO;
+        SEL lfSel = NSSelectorFromString(@"likeFlag");
+        if ([item respondsToSelector:lfSel]) {
+            @try { liked = ((BOOL(*)(id, SEL))objc_msgSend)(item, lfSel); } @catch (NSException *e) {}
+        }
+        if (!liked && gFakeOrigLU) {
+            NSArray *lu = ((id(*)(id, SEL))gFakeOrigLU)(item, @selector(likeUsers));
+            NSString *my = MioFakeMyWxId();
+            if ([lu isKindOfClass:[NSArray class]] && my) {
+                for (id u in lu) {
+                    NSString *un = MioFakeGetStr(u, @[@"username", @"userName", @"m_nsUsrName"]);
+                    if ([un isEqualToString:my]) { liked = YES; break; }
+                }
+            }
+        }
+        if (!liked) return;
+        NSArray *rawLikes = @[], *rawCmts = @[];
+        if (gFakeOrigLU) {
+            id v = ((id(*)(id, SEL))gFakeOrigLU)(item, @selector(likeUsers));
+            if ([v isKindOfClass:[NSArray class]]) rawLikes = v;
+        }
+        if (gFakeOrigCU) {
+            id v = ((id(*)(id, SEL))gFakeOrigCU)(item, @selector(commentUsers));
+            if ([v isKindOfClass:[NSArray class]]) rawCmts = v;
+        }
+        MioFakeWriteBack(item, rawLikes, rawCmts);
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[FakeLike] auto-apply error: %@", e);
+    }
+}
+
+// 批量应用（WCR FUN_005581fc 同款：datas 数组里 isKindOfClass:WCDataItem 才应用）
+static void MioFakeAutoApplyArray(NSArray *datas) {
+    if (![datas isKindOfClass:[NSArray class]]) return;
+    Class itemCls = objc_getClass("WCDataItem");
+    if (!itemCls) return;
+    for (id it in datas) {
+        if ([it isKindOfClass:itemCls]) MioFakeAutoApplyItem(it);
+    }
+}
+
 static void MioInstallFakeLikeHooks(void) {
-    // 只挂 likeUsers/commentUsers 两个 getter 作触发器：双门通过 → 自愈式写回 item 本体
-    //（假数据被服务端刷新覆盖则重注入），getter 本身透传（WCR 写回方案）。
-    // 计数 getter 不挂：写回已同步 setLikeCount/setCommentCount
+    // 主注入 = 数据层四挂点（WCTimelineMgr，见 MioInstallFakeDataLayerHooks，WCR 同款：
+    // item 落地即写回，头像与正文同步加载）；getter 触发器降级为自愈兜底（服务端覆盖后
+    // 渲染路径重注入）。getter 本身透传，双门逻辑收敛进 MioFakeAutoApplyItem。
     int ok = 0, total = 0;
     for (NSString *cn in @[@"WCDataItem", @"WCTimeLineDataItem"]) {
         Class cls = objc_getClass(cn.UTF8String);
         if (!cls) continue;
+        // hook 前解析原生 getter IMP（AutoApply 取 raw 共用；只认 WCDataItem 本体，170.log 实证 item 类即它）
+        if ([cn isEqualToString:@"WCDataItem"] && !gFakeOrigLU) {
+            Method mLU = class_getInstanceMethod(cls, NSSelectorFromString(@"likeUsers"));
+            Method mCU = class_getInstanceMethod(cls, NSSelectorFromString(@"commentUsers"));
+            if (mLU) gFakeOrigLU = method_getImplementation(mLU);
+            if (mCU) gFakeOrigCU = method_getImplementation(mCU);
+        }
         for (int i = 0; i < 2; i++) {
             const char *selName = (i == 0) ? "likeUsers" : "commentUsers";
             SEL sel = NSSelectorFromString(@(selName));
@@ -890,50 +949,103 @@ static void MioInstallFakeLikeHooks(void) {
             if (!isArr) continue;
             total++;
             IMP orig = method_getImplementation(m);
-            // 安装期解析同类原生 likeUsers/commentUsers IMP（block 内直调 orig，避免自递归）
-            Method mLU = class_getInstanceMethod(cls, NSSelectorFromString(@"likeUsers"));
-            Method mCU = class_getInstanceMethod(cls, NSSelectorFromString(@"commentUsers"));
-            IMP origLU = mLU ? method_getImplementation(mLU) : NULL;
-            IMP origCU = mCU ? method_getImplementation(mCU) : NULL;
             IMP newImp = imp_implementationWithBlock(^id(id self) {
                 id origArr = ((id(*)(id, SEL))orig)(self, sel);
                 @try {
                     MomentsConfig *cfg = [MomentsConfig shared];
-                    if (!cfg.fakeLikeEnabled) return origArr;
-                    if (!MioFakeGateOwnPost(self)) return origArr;
-                    // 门 B：原生 likeFlag 优先（WCR FUN_00545778 实证），回退扫原生 likeUsers 找我方 wxid
-                    BOOL liked = NO;
-                    SEL lfSel = NSSelectorFromString(@"likeFlag");
-                    if ([self respondsToSelector:lfSel]) {
-                        @try { liked = ((BOOL(*)(id, SEL))objc_msgSend)(self, lfSel); } @catch (NSException *e) {}
+                    if (cfg.fakeLikeEnabled && MioFakeGateOwnPost(self)) {
+                        MioFakeAutoApplyItem(self);                       // 双门+写回（自愈）
+                        return ((id(*)(id, SEL))orig)(self, sel);         // 返回写回后的数组
                     }
-                    if (!liked && origLU) {
-                        NSArray *lu = ((id(*)(id, SEL))origLU)(self, @selector(likeUsers));
-                        NSString *my = MioFakeMyWxId();
-                        if ([lu isKindOfClass:[NSArray class]] && my) {
-                            for (id u in lu) {
-                                NSString *un = MioFakeGetStr(u, @[@"username", @"userName", @"m_nsUsrName"]);
-                                if ([un isEqualToString:my]) { liked = YES; break; }
-                            }
-                        }
-                    }
-                    if (!liked) return origArr;
-                    NSArray *rawLikes = origLU ? ((id(*)(id, SEL))origLU)(self, @selector(likeUsers)) : @[];
-                    NSArray *rawCmts  = origCU ? ((id(*)(id, SEL))origCU)(self, @selector(commentUsers)) : @[];
-                    if (![rawLikes isKindOfClass:[NSArray class]]) rawLikes = @[];
-                    if (![rawCmts isKindOfClass:[NSArray class]]) rawCmts = @[];
-                    MioFakeWriteBack(self, rawLikes, rawCmts);
-                    return ((id(*)(id, SEL))orig)(self, sel);   // 返回写回后的数组，本轮渲染即生效
                 } @catch (NSException *e) {
                     WPLog(@"Moments", @"[FakeLike] trigger error: %@", e);
-                    return origArr;
                 }
+                return origArr;
             });
             method_setImplementation(m, newImp);
             ok++;
         }
     }
     WPLog(@"Moments", @"[FakeLike] trigger hooks installed %d/%d", ok, total);
+}
+
+// ===== 数据层预注入（WCR FUN_005474f4 实锤挂点，头像慢根因修复：WCR 在数据落地时注入，
+// 头像与正文图同步入队；旧版渲染路径 getter 才注入，头像入队晚一个渲染周期）=====
+// WCTimelineMgr 四个数据回调 + WCCommentDetailViewControllerFB 评论详情页。
+// 垫片参数表照抄 WCR 垫片（FUN_00549550/5495fc/49714/4982c 反编译：datas 数组位于
+// onPre/onNext 第 2 参、onFirst 第 3 参、modify 单 item）。方法名运行时前缀匹配
+// （Ghidra PTR 名有截断，selector 全名以 runtime 为准），返回类型 void 才挂。
+
+typedef void (*MioDLModOrig)(id, SEL, id, BOOL);
+typedef void (*MioDL7Orig)(id, SEL, id, id, id, unsigned int, id);
+typedef void (*MioDL10Orig)(id, SEL, id, BOOL, id, id, unsigned int, id, id, id);
+static MioDLModOrig gOrigMod = NULL;
+static MioDL7Orig gOrigPre = NULL, gOrigNext = NULL;
+static MioDL10Orig gOrigFirst = NULL;
+
+static void MioFakeDLMod(id self, SEL _cmd, id item, BOOL notify) {
+    MioFakeAutoApplyItem(item);
+    if (gOrigMod) gOrigMod(self, _cmd, item, notify);
+}
+
+static void MioFakeDLPre(id self, SEL _cmd, id p1, NSArray *datas, id p4, unsigned int p5, id p6) {
+    MioFakeAutoApplyArray(datas);
+    if (gOrigPre) gOrigPre(self, _cmd, p1, datas, p4, p5, p6);
+}
+
+static void MioFakeDLNext(id self, SEL _cmd, id p1, NSArray *datas, id p4, unsigned int p5, id p6) {
+    MioFakeAutoApplyArray(datas);
+    if (gOrigNext) gOrigNext(self, _cmd, p1, datas, p4, p5, p6);
+}
+
+static void MioFakeDLFirst(id self, SEL _cmd, id p1, BOOL p2, NSArray *datas, id p5, unsigned int p6, id p7, id p8, id p9) {
+    MioFakeAutoApplyArray(datas);
+    if (gOrigFirst) gOrigFirst(self, _cmd, p1, p2, datas, p5, p6, p7, p8, p9);
+}
+
+static BOOL MioFakeHookMethod(Method m, IMP newImp, IMP *origOut) {
+    if (!m || !newImp || *origOut) return NO;
+    char *ret = method_copyReturnType(m);
+    BOOL isVoid = (ret && ret[0] == 'v');
+    if (ret) free(ret);
+    if (!isVoid) return NO;
+    *origOut = method_getImplementation(m);
+    method_setImplementation(m, newImp);
+    return YES;
+}
+
+static void MioInstallFakeDataLayerHooks(void) {
+    Class mgr = objc_getClass("WCTimelineMgr");
+    if (!mgr) {
+        WPLog(@"Moments", @"[FakeLike] data-layer hooks 0/4 (WCTimelineMgr not found)");
+        return;
+    }
+    unsigned int n = 0;
+    Method *list = class_copyMethodList(mgr, &n);
+    if (!list) {
+        WPLog(@"Moments", @"[FakeLike] data-layer hooks 0/4 (no method list)");
+        return;
+    }
+    int installed = 0;
+    NSMutableString *hit = [NSMutableString string];
+    for (unsigned int i = 0; i < n; i++) {
+        NSString *nm = NSStringFromSelector(method_getName(list[i]));
+        if (!gOrigMod && [nm isEqualToString:@"modifyDataItem:notify:"] &&
+            MioFakeHookMethod(list[i], (IMP)MioFakeDLMod, (IMP *)&gOrigMod)) {
+            installed++; [hit appendFormat:@" mod"];
+        } else if (!gOrigPre && [nm hasPrefix:@"onPrePageUpdated:datas:"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLPre, (IMP *)&gOrigPre)) {
+            installed++; [hit appendFormat:@" pre"];
+        } else if (!gOrigNext && [nm hasPrefix:@"onNextPageUpdated:datas:"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLNext, (IMP *)&gOrigNext)) {
+            installed++; [hit appendFormat:@" next"];
+        } else if (!gOrigFirst && [nm hasPrefix:@"onFirstPageUpdated:dataChanged:"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLFirst, (IMP *)&gOrigFirst)) {
+            installed++; [hit appendFormat:@" first"];
+        }
+    }
+    free(list);
+    WPLog(@"Moments", @"[FakeLike] data-layer hooks installed %d/4:%@", installed, hit);
 }
 
 #pragma mark - 安装
@@ -945,6 +1057,7 @@ static void MioInstallFakeLikeHooks(void) {
     MioInstallPyqHooks();
     MioInstallHDHooks();
     MioInstallFakeLikeHooks();
+    MioInstallFakeDataLayerHooks();
     // 重挂自检（防微信晚到初始化覆盖 IMP）
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ MioRehookCheck(1); });
