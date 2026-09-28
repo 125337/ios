@@ -613,7 +613,7 @@ static void MioInstallHDHooks(void) {
 
 static NSString *gFakeMyWxId = nil;      // 懒解析缓存（CContactMgr.getSelfContact.userName）
 static volatile int gFakeLogCount = 0;   // 首见式日志限流（防逐条刷屏）
-static char kFakeLikArrKey, kFakeCmtArrKey;
+static char kFakeDoneKey;   // 写回完成标记（每 item 进程内一次，保证数据稳定）
 
 // WCR 内置昵称池（dylib __ustring 池同款风格摘录）
 static NSString * const kFakeLikeNames[] = {
@@ -678,24 +678,6 @@ static BOOL MioFakeGateOwnPost(id item) {
     return [poster isEqualToString:my];
 }
 
-// 门 B：我已点赞（WCR 同款默认触发模式）。优先 item 原生 likeFlag（微信自维护，
-// WCR FUN_00545778 实证），回退扫 likeUsers 找我方 wxid；fakes 全 wxid_fake* 前缀不误判
-static BOOL MioFakeGateLiked(id item, NSArray *likeUsers) {
-    if (!MioFakeMyWxId()) return NO;
-    SEL lfSel = NSSelectorFromString(@"likeFlag");
-    if ([item respondsToSelector:lfSel]) {
-        @try {
-            if (((BOOL(*)(id, SEL))objc_msgSend)(item, lfSel)) return YES;
-        } @catch (NSException *e) {
-        }
-    }
-    for (id u in likeUsers) {
-        NSString *un = MioFakeGetStr(u, @[@"username", @"userName", @"m_nsUsrName"]);
-        if ([un isEqualToString:MioFakeMyWxId()]) return YES;
-    }
-    return NO;
-}
-
 // 造 WCUserComment（WCR 同款类）：username=假 wxid、nickName=池内随机；评论追加 content
 static id MioFakeMakeUser(NSString *nick, NSString *content) {
     Class ucls = objc_getClass("WCUserComment");
@@ -720,129 +702,129 @@ static id MioFakeMakeUser(NSString *nick, NSString *content) {
     return u;
 }
 
-// 假赞数组（每条 item 会话内稳定：associated 缓存；数量读子配置 fakeLikeCount，钳 0~10000）
-static NSArray *MioFakeLikersForItem(id item) {
-    NSArray *cached = objc_getAssociatedObject(item, &kFakeLikArrKey);
-    if (cached) return cached;
-    NSInteger n = [MomentsConfig shared].fakeLikeCount;
-    if (n < 0) n = 0;
-    if (n > 10000) n = 10000;
-    NSMutableArray *arr = [NSMutableArray array];
-    for (NSInteger i = 0; i < n; i++) {
-        id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)], nil);
-        if (u) [arr addObject:u];
-    }
-    objc_setAssociatedObject(item, &kFakeLikArrKey, arr, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return arr;
+// 守卫式 setter 写回（WCR 同款方案：假数据合并进 item 本体，数组与计数一次写平，
+// 渲染/详情页/持久化等所有原生路径看到的数据天然一致，getter 层零改动不产生临时数组）
+static BOOL MioFakeSetObj(id item, NSString *setterName, id value) {
+    SEL sel = NSSelectorFromString(setterName);
+    if (![item respondsToSelector:sel]) return NO;
+    @try { ((void(*)(id, SEL, id))objc_msgSend)(item, sel, value); return YES; }
+    @catch (NSException *e) { return NO; }
 }
 
-// 假评数组（数量读子配置 fakeCommentCount，钳 0~300；文本读 fakeCommentTexts 随机取用，空则回退内置池；同缓存策略）
-static NSArray *MioFakeCommentsForItem(id item) {
-    NSArray *cached = objc_getAssociatedObject(item, &kFakeCmtArrKey);
-    if (cached) return cached;
+static BOOL MioFakeSetCount(id item, NSString *setterName, long long v) {
+    SEL sel = NSSelectorFromString(setterName);
+    if (![item respondsToSelector:sel]) return NO;
+    @try { ((void(*)(id, SEL, unsigned long long))objc_msgSend)(item, sel, (unsigned long long)v); return YES; }
+    @catch (NSException *e) { return NO; }
+}
+
+// 写回执行：四 setter 齐全才写（缺一即数组/计数不一致=崩溃源），数量读子配置
+static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts) {
+    SEL sLU = NSSelectorFromString(@"setLikeUsers:");
+    SEL sCU = NSSelectorFromString(@"setCommentUsers:");
+    SEL sLC = NSSelectorFromString(@"setLikeCount:");
+    SEL sCC = NSSelectorFromString(@"setCommentCount:");
+    if (![item respondsToSelector:sLU] || ![item respondsToSelector:sCU] ||
+        ![item respondsToSelector:sLC] || ![item respondsToSelector:sCC]) {
+        if (gFakeLogCount < 5) {
+            gFakeLogCount++;
+            WPLog(@"Moments", @"[FakeLike] setters incomplete on %@, skip", NSStringFromClass([item class]));
+        }
+        return;
+    }
     MomentsConfig *cfg = [MomentsConfig shared];
-    NSInteger n = cfg.fakeCommentCount;
-    if (n < 0) n = 0;
-    if (n > 300) n = 300;
-    NSArray<NSString *> *texts = (cfg.fakeCommentTexts.count > 0) ? cfg.fakeCommentTexts : nil;
-    NSMutableArray *arr = [NSMutableArray array];
-    for (NSInteger i = 0; i < n; i++) {
-        NSString *text = texts
-            ? texts[arc4random_uniform((u_int32_t)texts.count)]
-            : kFakeCommentTexts[arc4random_uniform(kFakeCommentTextCount)];
-        id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)], text);
-        if (u) [arr addObject:u];
+    NSInteger nLike = cfg.fakeLikeCount; if (nLike < 0) nLike = 0; if (nLike > 10000) nLike = 10000;
+    NSInteger nCmt  = cfg.fakeCommentCount; if (nCmt < 0) nCmt = 0; if (nCmt > 300) nCmt = 300;
+    NSMutableArray *likes = [NSMutableArray arrayWithArray:rawLikes];
+    NSMutableArray *cmts  = [NSMutableArray arrayWithArray:rawCmts];
+    for (NSInteger i = 0; i < nLike; i++) {
+        id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)], nil);
+        if (u) [likes addObject:u];
     }
-    objc_setAssociatedObject(item, &kFakeCmtArrKey, arr, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return arr;
-}
-
-static void MioFakeLogAugment(id item, NSInteger likes, NSInteger comments) {
-    if (gFakeLogCount >= 5) return;
-    gFakeLogCount++;
-    WPLog(@"Moments", @"[FakeLike] augment %@: +%ld likers +%ld comments (item cls %@)",
-          MioFakeGetStr(item, @[@"userName", @"username"]) ?: @"?",
-          (long)likes, (long)comments, NSStringFromClass([item class]));
+    NSArray<NSString *> *texts = (cfg.fakeCommentTexts.count > 0) ? cfg.fakeCommentTexts : nil;
+    for (NSInteger i = 0; i < nCmt; i++) {
+        NSString *text = texts ? texts[arc4random_uniform((u_int32_t)texts.count)]
+                               : kFakeCommentTexts[arc4random_uniform(kFakeCommentTextCount)];
+        id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)], text);
+        if (u) [cmts addObject:u];
+    }
+    BOOL u1 = MioFakeSetObj(item, @"setLikeUsers:", likes);
+    BOOL u2 = MioFakeSetObj(item, @"setCommentUsers:", cmts);
+    BOOL c1 = MioFakeSetCount(item, @"setLikeCount:", (long long)likes.count);
+    BOOL c2 = MioFakeSetCount(item, @"setCommentCount:", (long long)cmts.count);
+    if (gFakeLogCount < 5) {
+        gFakeLogCount++;
+        WPLog(@"Moments", @"[FakeLike] write-back %@: +%ld likers +%ld comments (setters %d%d%d%d, cls %@)",
+              MioFakeGetStr(item, @[@"userName", @"username"]) ?: @"?",
+              (long)(likes.count - (NSInteger)rawLikes.count), (long)(cmts.count - (NSInteger)rawCmts.count),
+              u1, u2, c1, c2, NSStringFromClass([item class]));
+    }
 }
 
 static void MioInstallFakeLikeHooks(void) {
-    struct { const char *sel; BOOL isCount; } specs[] = {
-        {"likeUsers", NO}, {"likeCount", YES}, {"commentUsers", NO}, {"commentCount", YES},
-    };
+    // 只挂 likeUsers/commentUsers 两个 getter 作触发器：双门通过 → 一次性写回 item 本体，
+    // getter 本身透传（WCR 写回方案）。计数 getter 不挂：写回已同步 setLikeCount/setCommentCount
     int ok = 0, total = 0;
     for (NSString *cn in @[@"WCDataItem", @"WCTimeLineDataItem"]) {
         Class cls = objc_getClass(cn.UTF8String);
         if (!cls) continue;
-        for (int i = 0; i < (int)(sizeof(specs) / sizeof(specs[0])); i++) {
-            SEL sel = NSSelectorFromString(@(specs[i].sel));
+        for (int i = 0; i < 2; i++) {
+            const char *selName = (i == 0) ? "likeUsers" : "commentUsers";
+            SEL sel = NSSelectorFromString(@(selName));
             Method m = class_getInstanceMethod(cls, sel);
             if (!m) continue;
+            char *ret = method_copyReturnType(m);
+            BOOL isArr = (ret && ret[0] == '@');
+            if (ret) free(ret);
+            if (!isArr) continue;
             total++;
             IMP orig = method_getImplementation(m);
-            char *ret = method_copyReturnType(m);
-            IMP newImp = NULL;
-            if (!specs[i].isCount && ret && ret[0] == '@') {
-                BOOL isCmt = [@(specs[i].sel) hasPrefix:@"comment"];
-                newImp = imp_implementationWithBlock(^id(id self) {
-                    id origArr = ((id(*)(id, SEL))orig)(self, sel);
-                    @try {
-                        MomentsConfig *cfg = [MomentsConfig shared];
-                        if (!cfg.fakeLikeEnabled) return origArr;
-                        NSArray *origList = [origArr isKindOfClass:[NSArray class]] ? origArr : @[];
-                        if (!MioFakeGateOwnPost(self)) return origArr;
-                        if (isCmt) {
-                            // 门 B 经 likeUsers（消息发点赞后 self 必在赞列表；fakes 无我方 wxid 不误判）
-                            SEL luSel = NSSelectorFromString(@"likeUsers");
-                            NSArray *lu = [self respondsToSelector:luSel]
-                                ? ((id(*)(id, SEL))objc_msgSend)(self, luSel) : nil;
-                            if (!MioFakeGateLiked(self, [lu isKindOfClass:[NSArray class]] ? lu : @[])) return origArr;
-                            NSArray *fakes = MioFakeCommentsForItem(self);
-                            if (!fakes.count) return origArr;
-                            MioFakeLogAugment(self, -1, (NSInteger)fakes.count);
-                            NSMutableArray *mm = [NSMutableArray arrayWithArray:origList];
-                            [mm addObjectsFromArray:fakes];
-                            return mm;
+            // 安装期解析同类原生 likeUsers/commentUsers IMP（block 内直调 orig，避免自递归）
+            Method mLU = class_getInstanceMethod(cls, NSSelectorFromString(@"likeUsers"));
+            Method mCU = class_getInstanceMethod(cls, NSSelectorFromString(@"commentUsers"));
+            IMP origLU = mLU ? method_getImplementation(mLU) : NULL;
+            IMP origCU = mCU ? method_getImplementation(mCU) : NULL;
+            IMP newImp = imp_implementationWithBlock(^id(id self) {
+                id origArr = ((id(*)(id, SEL))orig)(self, sel);
+                @try {
+                    MomentsConfig *cfg = [MomentsConfig shared];
+                    if (!cfg.fakeLikeEnabled) return origArr;
+                    if (objc_getAssociatedObject(self, &kFakeDoneKey)) return origArr;
+                    if (!MioFakeGateOwnPost(self)) return origArr;
+                    // 门 B：原生 likeFlag 优先（WCR FUN_00545778 实证），回退扫原生 likeUsers 找我方 wxid
+                    BOOL liked = NO;
+                    SEL lfSel = NSSelectorFromString(@"likeFlag");
+                    if ([self respondsToSelector:lfSel]) {
+                        @try { liked = ((BOOL(*)(id, SEL))objc_msgSend)(self, lfSel); } @catch (NSException *e) {}
+                    }
+                    if (!liked && origLU) {
+                        NSArray *lu = ((id(*)(id, SEL))origLU)(self, @selector(likeUsers));
+                        NSString *my = MioFakeMyWxId();
+                        if ([lu isKindOfClass:[NSArray class]] && my) {
+                            for (id u in lu) {
+                                NSString *un = MioFakeGetStr(u, @[@"username", @"userName", @"m_nsUsrName"]);
+                                if ([un isEqualToString:my]) { liked = YES; break; }
+                            }
                         }
-                        if (!MioFakeGateLiked(self, origList)) return origArr;
-                        NSArray *fakes = MioFakeLikersForItem(self);
-                        if (!fakes.count) return origArr;
-                        MioFakeLogAugment(self, (NSInteger)fakes.count, -1);
-                        NSMutableArray *mm = [NSMutableArray arrayWithArray:origList];
-                        [mm addObjectsFromArray:fakes];
-                        return mm;
-                    } @catch (NSException *e) {
-                        WPLog(@"Moments", @"[FakeLike] getter error: %@", e);
-                        return origArr;
                     }
-                });
-            } else if (specs[i].isCount && ret &&
-                       (ret[0] == 'q' || ret[0] == 'l' || ret[0] == 'i' || ret[0] == 'I' || ret[0] == 'Q')) {
-                BOOL isLike = [@(specs[i].sel) hasPrefix:@"like"];   // block 不能捕获局部数组，先取标量
-                newImp = imp_implementationWithBlock(^long long(id self) {
-                    long long origV = ((long long(*)(id, SEL))orig)(self, sel);
-                    @try {
-                        MomentsConfig *cfg = [MomentsConfig shared];
-                        if (!cfg.fakeLikeEnabled) return origV;
-                        if (!MioFakeGateOwnPost(self)) return origV;
-                        // 门 B 统一经 likeUsers getter（增强数组内 fakes 无我方 wxid）
-                        SEL luSel = NSSelectorFromString(@"likeUsers");
-                        NSArray *lu = [self respondsToSelector:luSel]
-                            ? ((id(*)(id, SEL))objc_msgSend)(self, luSel) : nil;
-                        if (!MioFakeGateLiked(self, [lu isKindOfClass:[NSArray class]] ? lu : @[])) return origV;
-                        NSArray *fakes = isLike ? MioFakeLikersForItem(self) : MioFakeCommentsForItem(self);
-                        return origV + (long long)fakes.count;
-                    } @catch (NSException *e) {
-                        return origV;
-                    }
-                });
-            }
-            if (ret) free(ret);
-            if (!newImp) continue;
+                    if (!liked) return origArr;
+                    NSArray *rawLikes = origLU ? ((id(*)(id, SEL))origLU)(self, @selector(likeUsers)) : @[];
+                    NSArray *rawCmts  = origCU ? ((id(*)(id, SEL))origCU)(self, @selector(commentUsers)) : @[];
+                    if (![rawLikes isKindOfClass:[NSArray class]]) rawLikes = @[];
+                    if (![rawCmts isKindOfClass:[NSArray class]]) rawCmts = @[];
+                    objc_setAssociatedObject(self, &kFakeDoneKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                    MioFakeWriteBack(self, rawLikes, rawCmts);
+                    return ((id(*)(id, SEL))orig)(self, sel);   // 返回写回后的数组，本轮渲染即生效
+                } @catch (NSException *e) {
+                    WPLog(@"Moments", @"[FakeLike] trigger error: %@", e);
+                    return origArr;
+                }
+            });
             method_setImplementation(m, newImp);
             ok++;
         }
     }
-    WPLog(@"Moments", @"[FakeLike] getter hooks installed %d/%d", ok, total);
+    WPLog(@"Moments", @"[FakeLike] trigger hooks installed %d/%d", ok, total);
 }
 
 #pragma mark - 安装
