@@ -31,6 +31,25 @@ static BOOL MioClassOwnsMethod(Class cls, SEL sel) {
     return owns;
 }
 
+// 150ms 布局修补（WCR FUN_017afcc8 同款意图/时序）：半屏容器中 adapter 可能把
+// nav.view 顶部下移一个安全区高度，导致朋友圈标题上方露出一截容器白底；
+// 将 nav.view 顶满容器（y=0、高度=容器高）消除白条
+static void MioPatchTimelineLayout(UINavigationController *nav) {
+    UIView *v = nav.view;
+    UIView *parent = v.superview;
+    if (!v.window || !parent) return;
+    CGRect pf = parent.bounds;
+    CGRect f = v.frame;
+    WPLog(@"Moments", @"[Pyq] patch before nav=(%.0f,%.0f,%.0f,%.0f) parent=%@ bounds=%.0fx%.0f",
+          f.origin.x, f.origin.y, f.size.width, f.size.height,
+          NSStringFromClass([parent class]), pf.size.width, pf.size.height);
+    if (f.origin.y != 0 || f.size.height != pf.size.height) {
+        v.frame = CGRectMake(0, 0, pf.size.width, pf.size.height);
+        [v layoutIfNeeded];
+        WPLog(@"Moments", @"[Pyq] patched nav frame -> (0,0,%.0f,%.0f)", pf.size.width, pf.size.height);
+    }
+}
+
 // 打开朋友圈半屏（WCR onOpenWCTimeline / FUN_017a65f0 同款实证）：
 // WCTimeLineViewController 裸建（朋友圈页面类，WCR 原样 alloc init）→ 包
 // UINavigationController → 微信自家半屏组件 MMPageSheetAdapter 弹出（0.7 屏高，
@@ -75,6 +94,9 @@ static void MioOpenTimelinePageSheet(void) {
             ((void(*)(id, SEL, double))objc_msgSend)(adp, setHSel, h);
             ((void(*)(id, SEL, BOOL))objc_msgSend)(adp, showSel, YES);
             WPLog(@"Moments", @"[Pyq] timeline page-sheet shown (h=%.0f)", h);
+            // 150ms 后布局修补（WCR FUN_017afcc8 同款时序）
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{ MioPatchTimelineLayout(nav); });
         } else {
             WPLog(@"Moments", @"[Pyq] MMPageSheetAdapter NOT available");
         }
