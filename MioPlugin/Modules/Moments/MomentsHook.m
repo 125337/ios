@@ -1129,11 +1129,7 @@ static void MioAutoLikeEnqueueItem(id item, const char *src) {
     if (!cfg.autoLikeEnabled) return;
     Class itemCls = objc_getClass("WCDataItem");
     if (!itemCls || ![item isKindOfClass:itemCls]) return;
-    if (MioAutoLikeAlreadyLiked(item)) {
-        // 诊断期打印：若某帖未赞却再没被尝试，先查这里是否 likeFlag 误判
-        WPLog(@"Moments", @"[AutoLike] likeFlag=1 (%s) key %@", src, MioAutoLikeKey(item) ?: @"?");
-        return;
-    }
+    if (MioAutoLikeAlreadyLiked(item)) return;
     NSString *key = MioAutoLikeKey(item);
     if (key.length == 0) {
         WPLog(@"Moments", @"[AutoLike] FAIL (%s): empty key (tid/itemID both nil)", src);
