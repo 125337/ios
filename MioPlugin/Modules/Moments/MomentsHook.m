@@ -919,6 +919,10 @@ static void MioFakeAutoApplyArray(NSArray *datas, const char *src) {
     if (![datas isKindOfClass:[NSArray class]]) return;
     Class itemCls = objc_getClass("WCDataItem");
     if (!itemCls) return;
+    // dl 到达诊断（176.log：fired 后无 src=dl，须区分"回调没来"还是"来了没命中门"）
+    unsigned long raw = datas.count, hitCls = 0;
+    for (id it in datas) if ([it isKindOfClass:itemCls]) hitCls++;
+    WPLog(@"Moments", @"[FakeLike] dl-arrive (%s): raw=%lu wcitem=%lu", src, raw, hitCls);
     for (id it in datas) {
         if ([it isKindOfClass:itemCls]) MioFakeAutoApplyItem(it, src);
     }
