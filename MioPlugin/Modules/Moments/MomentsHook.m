@@ -1052,7 +1052,11 @@ static BOOL MioAutoLikePerform(id item) {
     // 返回类型感知：B/c=BOOL 判成败；@=对象只打日志（BOOL 不能当 id 解引用，会崩）；v=无返回
     char ret = 'v';
     Method m = class_getInstanceMethod([facade class], like);
-    if (m) ret = method_getReturnType(m)[0];
+    if (m) {
+        char rbuf[8] = {0};
+        method_getReturnType(m, rbuf, sizeof(rbuf));
+        ret = rbuf[0];
+    }
     if (ret == 'B' || ret == 'c') {
         BOOL ok = ((BOOL(*)(id, SEL, id, id, id))objc_msgSend)(facade, like, item, user, nil);
         if (!ok) {
