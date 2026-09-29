@@ -924,6 +924,11 @@ static void MioFakeAutoApplyArray(NSArray *datas, const char *src) {
     }
 }
 
+// install 期日志早于文件日志窗口必然丢失（174.log 定论），安装结果存全局，
+// 由 install 的 30s 补打任务在日志窗口内重放
+static NSString *gFakeTriggerSummary = nil;
+static NSString *gFakeDLInstallSummary = nil;
+
 static void MioInstallFakeLikeHooks(void) {
     // 主注入 = 数据层四挂点（WCTimelineMgr，见 MioInstallFakeDataLayerHooks，WCR 同款：
     // item 落地即写回，头像与正文同步加载）；getter 触发器降级为自愈兜底（服务端覆盖后
@@ -967,6 +972,7 @@ static void MioInstallFakeLikeHooks(void) {
             ok++;
         }
     }
+    gFakeTriggerSummary = [NSString stringWithFormat:@"%d/%d", ok, total];
     WPLog(@"Moments", @"[FakeLike] trigger hooks installed %d/%d", ok, total);
 }
 
@@ -1082,6 +1088,7 @@ static void MioInstallFakeDataLayerHooks(void) {
         }
     }
     free(list);
+    gFakeDLInstallSummary = [NSString stringWithFormat:@"%d/7:%@", installed, hit];
     WPLog(@"Moments", @"[FakeLike] data-layer hooks installed %d/7:%@", installed, hit);
 }
 
@@ -1177,6 +1184,12 @@ static void MioFakeInstallActiveRefresh(void) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(45 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ MioRehookCheck(2); });
     WPLog(@"Moments", @"[MomentsHook] install complete");
+    // install 期日志在文件窗口开之前必然丢失：30s 后（appReady 已过、窗口已开）补打安装摘要
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(30 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        WPLog(@"Moments", @"[FakeLike] install summary: triggers %@, data-layer %@, active-refresh=on",
+              gFakeTriggerSummary, gFakeDLInstallSummary);
+    });
 }
 
 @end
