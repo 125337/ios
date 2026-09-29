@@ -683,12 +683,16 @@ static BOOL MioFakeGateOwnPost(id item) {
     return [poster isEqualToString:my];
 }
 
-// 好友池（WCR FUN_0054e77c 同款：getAllContactUserName 枚举 → 过滤非本人/@chatroom/
-// 公众号/群聊/插件，仅 m_uiType∈{1,2} 真人好友；进程级缓存。空池回退内置昵称池）
+// 好友池（WCR FUN_0054e77c 配方 + 8.0.60 适配：getAllContactUserName 枚举 → 命名空间硬
+// 过滤。8.0.60 CContact 已无 m_uiType/isChatroom/m_isPlugin（头文件实证，WCR 旧过滤字段
+// 全部静默失效，公众号/企业微信/系统账号漏进池子=179.log 用户实证），改按 wxid 命名空间
+// 排除：gh_=公众号、@openim=企业微信、@chatroom=群聊、系统账号黑名单，另保留
+// isBrandContact（8.0.60 仍存在）兜底；进程级缓存。空池回退内置昵称池）
 static NSArray *MioFakeFriendPool(void) {
     static NSArray *gPool;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
+        long nGh = 0, nOpenim = 0, nSys = 0, nBrand = 0, nRoom = 0, scanned = 0;
         @try {
             Class mgrCls = objc_getClass("CContactMgr");
             id mgr = mgrCls ? WXGetService(mgrCls) : nil;
@@ -701,28 +705,22 @@ static NSArray *MioFakeFriendPool(void) {
             else if ([all isKindOfClass:[NSArray class]]) names = all;
             if (names.count == 0) return;
             NSString *my = MioFakeMyWxId();
+            NSSet *sysIds = [NSSet setWithArray:@[
+                @"weixin", @"filehelper", @"newsapp", @"fmessage", @"qmessage",
+                @"qqmail", @"tmessage", @"medianote", @"floatbottle", @"blogapp"]];
             NSMutableArray *pool = [NSMutableArray array];
             for (NSString *un in names) {
                 if (![un isKindOfClass:[NSString class]] || un.length == 0) continue;
+                scanned++;
                 if (my && [un isEqualToString:my]) continue;
-                if ([un containsString:@"@chatroom"]) continue;
+                if ([un containsString:@"@chatroom"]) { nRoom++; continue; }
+                if ([un hasPrefix:@"gh_"]) { nGh++; continue; }              // 公众号
+                if ([un containsString:@"@openim"]) { nOpenim++; continue; } // 企业微信联系人
+                if ([sysIds containsObject:un]) { nSys++; continue; }        // 微信团队等系统账号
                 id ct = ((id(*)(id, SEL, id))objc_msgSend)(mgr, byNameSel, un);
                 if (!ct) continue;
                 SEL brandSel = NSSelectorFromString(@"isBrandContact");
-                if ([ct respondsToSelector:brandSel] && ((BOOL(*)(id, SEL))objc_msgSend)(ct, brandSel)) continue;
-                SEL roomSel = NSSelectorFromString(@"isChatroom");
-                if ([ct respondsToSelector:roomSel] && ((BOOL(*)(id, SEL))objc_msgSend)(ct, roomSel)) continue;
-                SEL plugSel = NSSelectorFromString(@"m_isPlugin");
-                if ([ct respondsToSelector:plugSel]) {
-                    @try { if (((BOOL(*)(id, SEL))objc_msgSend)(ct, plugSel)) continue; } @catch (NSException *e) {}
-                }
-                SEL typeSel = NSSelectorFromString(@"m_uiType");
-                if ([ct respondsToSelector:typeSel]) {
-                    @try {
-                        unsigned int t = (unsigned int)((unsigned long(*)(id, SEL))objc_msgSend)(ct, typeSel);
-                        if (t != 1 && t != 2) continue;
-                    } @catch (NSException *e) {}
-                }
+                if ([ct respondsToSelector:brandSel] && ((BOOL(*)(id, SEL))objc_msgSend)(ct, brandSel)) { nBrand++; continue; }
                 [pool addObject:un];
             }
             gPool = [pool copy];
@@ -731,8 +729,9 @@ static NSArray *MioFakeFriendPool(void) {
         }
         if (gFakeLogCount < 5) {
             gFakeLogCount++;
-            WPLog(@"Moments", @"[FakeLike] friend pool built: %lu contacts%s",
-                  (unsigned long)gPool.count, gPool.count ? "" : " (fallback builtin)");
+            WPLog(@"Moments", @"[FakeLike] friend pool: %lu kept (scanned %lu, gh_=%ld openim=%ld sys=%ld brand=%ld room=%ld)%s",
+                  (unsigned long)(gPool ? gPool.count : 0), (unsigned long)scanned,
+                  nGh, nOpenim, nSys, nBrand, nRoom, (gPool.count ? "" : " (fallback builtin)"));
         }
     });
     return gPool;
@@ -1147,6 +1146,33 @@ static BOOL MioFakeVCCoveringTimeline(void) {
     return NO;
 }
 
+// timelineDataList 全量扫描注入（WCR FUN_005512e0 同源思路）：数据回调只送"最新增量"，
+// 旧本人帖不在其中（178.log 实锤 70 条回调 item 全 rejectA 而 fb 渲染能命中），对管理器
+// 持有的全量列表直接写回。tag 区分首扫（dl-list，请求前扫既有列表）与重扫（dl-list2，
+// 回包落地后扫刷新后列表）
+static void MioFakeScanTimelineList(id facade, const char *tag) {
+    @try {
+        SEL gtm = NSSelectorFromString(@"getTimelineMgr");
+        id mgr = nil;
+        if ([facade respondsToSelector:gtm]) {
+            mgr = ((id(*)(id, SEL))objc_msgSend)(facade, gtm);
+        }
+        if (!mgr) mgr = WXGetService(objc_getClass("WCTimelineMgr"));
+        SEL tdl = NSSelectorFromString(@"timelineDataList");
+        if (mgr && [mgr respondsToSelector:tdl]) {
+            NSArray *list = ((id(*)(id, SEL))objc_msgSend)(mgr, tdl);
+            if ([list isKindOfClass:[NSArray class]]) {
+                WPLog(@"Moments", @"[FakeLike] dl-list scan (%s): %lu items", tag, (unsigned long)list.count);
+                MioFakeAutoApplyArray(list, tag);
+            }
+        } else {
+            WPLog(@"Moments", @"[FakeLike] dl-list scan: timelineDataList unavailable");
+        }
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[FakeLike] dl-list scan error: %@", e);
+    }
+}
+
 static void MioFakeActiveRefresh(const char *reason) {
     @try {
         MomentsConfig *cfg = [MomentsConfig shared];
@@ -1174,25 +1200,8 @@ static void MioFakeActiveRefresh(const char *reason) {
             return;
         }
         gFakeLastActiveRefresh = now;   // WCR 同款：取到 facade 才记账
-        // 全量兜底（WCR FUN_005512e0 同源思路）：数据回调只送"最新增量"，旧本人帖不在其中
-        //（178.log 实锤 70 条回调 item 全 rejectA 而 fb 渲染能命中），直接对 timelineDataList
-        // 全量写回，假数据在打开朋友圈前落地，头像随缓存提前加载
-        SEL gtm = NSSelectorFromString(@"getTimelineMgr");
-        id mgr = nil;
-        if ([facade respondsToSelector:gtm]) {
-            mgr = ((id(*)(id, SEL))objc_msgSend)(facade, gtm);
-        }
-        if (!mgr) mgr = WXGetService(objc_getClass("WCTimelineMgr"));
-        SEL tdl = NSSelectorFromString(@"timelineDataList");
-        if (mgr && [mgr respondsToSelector:tdl]) {
-            NSArray *list = ((id(*)(id, SEL))objc_msgSend)(mgr, tdl);
-            if ([list isKindOfClass:[NSArray class]]) {
-                WPLog(@"Moments", @"[FakeLike] dl-list scan: %lu items", (unsigned long)list.count);
-                MioFakeAutoApplyArray(list, "dl-list");
-            }
-        } else {
-            WPLog(@"Moments", @"[FakeLike] dl-list scan: timelineDataList unavailable");
-        }
+        // 全量兜底首扫：请求前扫既有列表（热激活时列表尚有上次会话数据，WCR FUN_005512e0 同序）
+        MioFakeScanTimelineList(facade, "dl-list");
         SEL begin = NSSelectorFromString(@"beginTimeline");
         if ([facade respondsToSelector:begin]) {
             ((void(*)(id, SEL))objc_msgSend)(facade, begin);
@@ -1201,6 +1210,12 @@ static void MioFakeActiveRefresh(const char *reason) {
         if ([facade respondsToSelector:head]) {
             ((void(*)(id, SEL))objc_msgSend)(facade, head);
             WPLog(@"Moments", @"[FakeLike] active-refresh: updateTimelineHead fired (%s, t=%.0f)", reason, now);
+            // 回包落地后二次全量（179.log 实证：冷启动请求与回包同秒，首扫 0 items——
+            // 回包经数据层回调写入列表需数秒，延迟重扫才能覆盖刷新后全量含旧本人帖）
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                MioFakeScanTimelineList(facade, "dl-list2");
+            });
         } else {
             WPLog(@"Moments", @"[FakeLike] active-refresh: WCFacade lacks updateTimelineHead");
         }
