@@ -23,6 +23,9 @@
         [ConfigDescriptor itemWithKey:@"fakeLikeCount" type:ConfigValueTypeInteger default:@(10)],
         [ConfigDescriptor itemWithKey:@"fakeCommentCount" type:ConfigValueTypeInteger default:@(3)],
         [ConfigDescriptor itemWithKey:@"fakeCommentTexts" type:ConfigValueTypeArray default:@[]],
+        [ConfigDescriptor itemWithKey:@"autoLikeEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"autoLikeInterval" type:ConfigValueTypeInteger default:@(5)],
+        [ConfigDescriptor itemWithKey:@"autoLikeRefreshInterval" type:ConfigValueTypeInteger default:@(60)],
     ];
 }
 

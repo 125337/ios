@@ -73,6 +73,19 @@
         *ecy = [self addButtonRowInGroup:expand title:@"编辑评论文本" hint:[self commentCountHint] key:@"editCommentTexts" cy:*ecy width:w];
     } cy:cy width:w];
 
+    // 子开关：朋友圈自动点赞（开=展开子配置，关=收起；手风琴，总开关唯一入口）
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+    cy = [self addMasterSwitchRowInGroup:group
+                                   title:@"朋友圈自动点赞"
+                                     key:@"autoLikeEnabled"
+                                    isOn:config.autoLikeEnabled
+                              subBuilder:^(UIView *expand, CGFloat *ecy) {
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"操作间隔" key:@"autoLikeInterval" value:[NSString stringWithFormat:@"%ld", (long)config.autoLikeInterval] hint:@"5" valueType:InputValueTypeNumber alertTitle:@"操作间隔" alertMessage:@"自动点赞间隔秒数(3-300)" cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"刷新间隔" key:@"autoLikeRefreshInterval" value:[NSString stringWithFormat:@"%ld", (long)config.autoLikeRefreshInterval] hint:@"60" valueType:InputValueTypeNumber alertTitle:@"刷新间隔" alertMessage:@"不在朋友圈页面时，隔多少秒刷新一次朋友圈" cy:*ecy width:w];
+    } cy:cy width:w];
+
     y = [self finishGroup:group atY:y height:cy];
 
     [self addSectionFooter:@"伪集赞: 自定义朋友圈收到的点赞与评论数量\n评论文本按设置的数量随机取用" y:y width:w];
