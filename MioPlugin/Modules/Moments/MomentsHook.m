@@ -1135,6 +1135,23 @@ static void MioAutoLikeEnqueueItem(id item, const char *src) {
         WPLog(@"Moments", @"[AutoLike] FAIL (%s): empty key (tid/itemID both nil)", src);
         return;
     }
+    // 广告帖排除（WCR FUN_00574940/FUN_00573ad4 实锤：advertiseInfo 非空即拦）
+    @try {
+        if ([item respondsToSelector:@selector(advertiseInfo)]) {
+            id adv = [item valueForKey:@"advertiseInfo"];
+            if (adv) {
+                WPLog(@"Moments", @"[AutoLike] skip (%s) key %@: advertise post", src, key);
+                return;
+            }
+        }
+    } @catch (NSException *e) {}
+    // 黑名单（WCR TargetMode=2 语义：发帖人在黑名单中不点赞）
+    NSString *user = MioAutoLikeKvcString(item, @"username")
+                     ?: MioAutoLikeKvcString(item, @"sourceUserName");
+    if (user.length > 0 && [[MomentsConfig shared].autoLikeBlocklist containsObject:user]) {
+        WPLog(@"Moments", @"[AutoLike] skip (%s) key %@: user %@ in blocklist", src, key, user);
+        return;
+    }
     if ([gAutoLikeDone containsObject:key] || [gAutoLikePending containsObject:key]) return;
     [gAutoLikePending addObject:key];
     [gAutoLikeQueue addObject:item];
