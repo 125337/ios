@@ -302,7 +302,7 @@ static void MioHDSetN(id obj, NSString *selName, NSInteger val) {
     ((void(*)(id, SEL, NSInteger))objc_msgSend)(obj, sel, val);
 }
 
-// WCR FUN_0033e618 同款：对发图页对象执行强制原图配置（15 项 setter 全序列）
+// WCR FUN_0033e618 同款：对发图页对象执行强制原图配置（能力开/限制关全序列）
 static void MioApplyHDOptions(id poster) {
     if (!poster) return;
     MioHDSetB(poster, @"setCanSendOriginalImage:", YES);
@@ -412,7 +412,7 @@ static void MioHDRouterReopen(id vc, id poster) {
 static void MioHDReopenPicker(id vc) {
     gHDPending = YES;
     id poster = MioHDFindPoster(vc);
-    // WCR 主路径（FUN_0033a85c）无 setter 注入：15 项配置只经 RouterHelper 的
+    // WCR 主路径（FUN_0033a85c）无 setter 注入：强制原图配置只经 RouterHelper 的
     // customOptionsBlock（FUN_0033e0e0）打在选图选项对象上，此处对齐不重复打
     if (MioHDTryShowPicker(vc) || MioHDTryShowPicker(poster)) return;
     MioHDRouterReopen(vc, poster);
@@ -607,7 +607,7 @@ static void MioInstallHDHooks(void) {
 // 停留期间按帖缓存不闪变）。门=本人帖或已赞帖（likeFlag=1）。假人全部取自 feed 采集的真
 // 好友池（冻结后使用，池未冻结不注入——无头像假人是废弃兜底，已删）。
 
-static NSString *gFakeMyWxId = nil;      // 懒解析缓存（CContactMgr.getSelfContact.userName）
+static NSString *gFakeMyWxId = nil;      // 懒解析缓存（WXGetSelfContact → m_nsUsrName，失败 30s 冷却）
 static volatile int gFakeLogCount = 0;   // 首见式日志限流（防逐条刷屏）
 static char kFakeLikeAppliedKey, kFakeCmtAppliedKey;   // 各维度已注入假对象集合（NSSet 指针身份，供自愈探测）
 // WCDataItem 原生 likeUsers/commentUsers IMP（安装期在 hook 前解析；AutoApply 取 raw
