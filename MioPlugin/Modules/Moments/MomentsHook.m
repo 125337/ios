@@ -754,17 +754,91 @@ static id MioFakeMakeCommentUser(NSString *wxid, NSString *nickFallback, NSStrin
     return u;
 }
 
-// 造一个假人：好友池按 (seed + idx*stride) 确定性取（同帖同种子→服务端覆盖后重注入
-// 产生相同组合，180.log Q3 防闪变）；池空回退内置昵称池 + wxid_fake*
-static id MioFakeMakeOne(NSString *content, unsigned int seed, NSInteger idx, unsigned int stride) {
-    NSArray *pool = MioFakeFriendPool();
-    u_int32_t k = seed + (unsigned)idx * stride;
-    if (pool.count > 0) {
-        return MioFakeMakeCommentUser(pool[k % (unsigned)pool.count], nil, content);
+// 帖子稳定 key（WCR FUN_00546750 同款三级：tid 优先 → u:发帖人_t:创建时间 → 兜底 nil
+// 不缓存。WCR 兜底 p:%p 指针地址=闪变源，Mio 弃用——拿不到稳定 key 宁可每次随机）
+static NSString *MioFakePostKey(id item) {
+    NSString *tid = MioFakeGetStr(item, @[@"m_nsTimelineObjectID", @"timelineObjectID",
+                                          @"tid", @"objectID", @"m_nsObjectID"]);
+    if (tid.length > 0) return [@"tid_" stringByAppendingString:tid];
+    NSString *user = MioFakeGetStr(item, @[@"username", @"userName", @"m_nsUsrName"]);
+    unsigned long long t = 0;
+    for (NSString *tn in @[@"createTime", @"m_uiCreateTime", @"m_ullCreateTime", @"timestamp"]) {
+        SEL ts = NSSelectorFromString(tn);
+        if (![item respondsToSelector:ts]) continue;
+        @try {
+            t = ((unsigned long long(*)(id, SEL))objc_msgSend)(item, ts);
+        } @catch (NSException *e) {}
+        if (t > 0) break;
     }
-    return MioFakeMakeCommentUser(
-        [NSString stringWithFormat:@"wxid_fake%08u", k],
-        kFakeLikeNames[k % (u_int32_t)kFakeLikeNameCount], content);
+    if (user.length > 0 && t > 0) return [NSString stringWithFormat:@"u:%@_t:%llu", user, t];
+    return nil;
+}
+
+// 假数据按帖缓存（WCR FUN_0054e064/FUN_00556a24 链同款）：内存字典 + NSUserDefaults 落盘
+//（NSKeyedArchiver，WCR 落盘名=WCRefineMomentsFakeLike/CommentAdditionsCache），value=随机
+// 生成一次的假数组。命中即复用同一批 → 服务端刷新换新 item 对象也不换人：防闪变+每帖
+// 不同（181.log 正解，替代已证伪的按帖种子方案）
+static NSMutableDictionary *gFakeLikeCache = nil;
+static NSMutableDictionary *gFakeCmtCache = nil;
+
+static NSMutableDictionary *MioFakeCacheMem(BOOL isLike) {
+    if (isLike) return gFakeLikeCache ?: (gFakeLikeCache = [NSMutableDictionary dictionary]);
+    return gFakeCmtCache ?: (gFakeCmtCache = [NSMutableDictionary dictionary]);
+}
+
+static NSArray *MioFakeCacheFetch(NSString *key, BOOL isLike) {
+    if (key.length == 0) return nil;
+    id v = MioFakeCacheMem(isLike)[key];
+    if ([v isKindOfClass:[NSArray class]] && [(NSArray *)v count] > 0) return v;
+    NSString *dk = [(isLike ? @"MioFakeLike|" : @"MioFakeCmt|") stringByAppendingString:key];
+    NSData *d = [[NSUserDefaults standardUserDefaults] dataForKey:dk];
+    if (d) {
+        @try {
+            NSArray *arr = [NSKeyedUnarchiver unarchiveObjectWithData:d];
+            if ([arr isKindOfClass:[NSArray class]] && arr.count > 0) { MioFakeCacheMem(isLike)[key] = arr; return arr; }
+        } @catch (NSException *e) {}
+    }
+    return nil;
+}
+
+static void MioFakeCacheStore(NSString *key, BOOL isLike, NSArray *arr) {
+    if (key.length == 0 || arr.count == 0) return;
+    MioFakeCacheMem(isLike)[key] = arr;
+    @try {
+        NSData *d = [NSKeyedArchiver archivedDataWithRootObject:arr requiringSecureCoding:NO error:nil];
+        [[NSUserDefaults standardUserDefaults] setObject:d
+                                                  forKey:[(isLike ? @"MioFakeLike|" : @"MioFakeCmt|") stringByAppendingString:key]];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+    } @catch (NSException *e) {}
+}
+
+// 生成一批假数据（WCR FUN_0054cb60 同款）：好友池纯随机，假赞抽一删一防同人重复
+//（仅缓存未命中时调用一次，生成即按帖落盘 → 此后同一批），假评允许同人不同文案
+static NSArray *MioFakeGenerateBatch(BOOL isLike, NSInteger n, NSArray<NSString *> *texts) {
+    NSArray *pool = MioFakeFriendPool();
+    NSMutableArray *cand = (pool.count > 0 && isLike) ? [pool mutableCopy] : nil;
+    NSMutableArray *out = [NSMutableArray array];
+    NSArray<NSString *> *tx = (texts.count > 0) ? texts : nil;
+    u_int32_t nT = tx ? (u_int32_t)tx.count : (u_int32_t)kFakeCommentTextCount;
+    for (NSInteger i = 0; i < n; i++) {
+        NSString *wxid;
+        NSString *nick = nil;
+        if (cand.count > 0) {
+            u_int32_t pick = arc4random_uniform((u_int32_t)cand.count);
+            wxid = cand[pick];
+            [cand removeObjectAtIndex:pick];
+        } else if (pool.count > 0) {
+            wxid = pool[arc4random_uniform((u_int32_t)pool.count)];
+        } else {
+            wxid = [NSString stringWithFormat:@"wxid_fake%08u", arc4random()];
+            nick = kFakeLikeNames[arc4random_uniform((u_int32_t)kFakeLikeNameCount)];
+        }
+        NSString *text = (!isLike && nT > 0) ? (tx ? tx[arc4random_uniform(nT)]
+                                                   : kFakeCommentTexts[arc4random_uniform(nT)]) : nil;
+        id u = MioFakeMakeCommentUser(wxid, nick, text);
+        if (u) [out addObject:u];
+    }
+    return out;
 }
 
 // 已注入假对象是否仍在 item 数组内（NSSet 指针身份探测，O(n)）
@@ -812,26 +886,20 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const
     NSInteger nLike = cfg.fakeLikeCount; if (nLike < 0) nLike = 0; if (nLike > 10000) nLike = 10000;
     NSInteger nCmt  = cfg.fakeCommentCount; if (nCmt < 0) nCmt = 0; if (nCmt > 300) nCmt = 300;
     NSArray<NSString *> *texts = (cfg.fakeCommentTexts.count > 0) ? cfg.fakeCommentTexts : nil;
-    // 按帖播种（我方 wxid 全部相同，须加 createTime 区分；createTime 是服务端值跨刷新稳定，
-    // 同帖重注入产出同一批假人 → 180.log Q3 服务端覆盖后闪变根治）
-    unsigned int seed = 0;
-    SEL cts = NSSelectorFromString(@"createTime");
-    if ([item respondsToSelector:cts]) {
-        @try { seed = (unsigned int)((unsigned long(*)(id, SEL))objc_msgSend)(item, cts); } @catch (NSException *e) {}
-    }
-    NSString *postUser = MioFakeGetStr(item, @[@"username", @"userName", @"m_nsUsrName"]);
-    for (NSUInteger i = 0; i < postUser.length; i++) seed = seed * 31u + (unsigned)[postUser characterAtIndex:i];
+    NSString *postKey = MioFakePostKey(item);
     NSArray *pool = MioFakeFriendPool();
     NSInteger nLikeEff = (pool.count > 0 && nLike > (NSInteger)pool.count) ? (NSInteger)pool.count : nLike;
 
-    // 赞维度：假赞缺失才重注入
+    // 赞维度：假赞缺失才重注入；假人取自按帖缓存（WCR 同款：随机一次→落盘→永远同一批）
     if (nLikeEff > 0 && !MioFakeStillApplied(objc_getAssociatedObject(item, &kFakeLikeAppliedKey), rawLikes)) {
-        NSMutableArray *likes = [NSMutableArray arrayWithArray:rawLikes];
-        NSMutableSet *fakes = [NSMutableSet set];
-        for (NSInteger i = 0; i < nLikeEff; i++) {
-            id u = MioFakeMakeOne(nil, seed, i, 7919u);
-            if (u) { [likes addObject:u]; [fakes addObject:u]; }
+        NSArray *add = MioFakeCacheFetch(postKey, YES);
+        if (!add) {
+            add = MioFakeGenerateBatch(YES, nLikeEff, nil);
+            MioFakeCacheStore(postKey, YES, add);
         }
+        NSMutableArray *likes = [NSMutableArray arrayWithArray:rawLikes];
+        [likes addObjectsFromArray:add];
+        NSMutableSet *fakes = [NSMutableSet setWithArray:add];
         if (MioFakeSetObj(item, @"setLikeUsers:", likes) &&
             MioFakeSetCount(item, @"setLikeCount:", (long long)likes.count)) {
             objc_setAssociatedObject(item, &kFakeLikeAppliedKey, [fakes copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -843,17 +911,16 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const
         }
     }
 
-    // 评论维度：假评缺失才重注入（人与文案同一套种子，跨维度不同步长避免赞评同一人）
+    // 评论维度：假评缺失才重注入；同按帖缓存复用（WCR 假评=选人+选文案各随机一次）
     if (nCmt > 0 && !MioFakeStillApplied(objc_getAssociatedObject(item, &kFakeCmtAppliedKey), rawCmts)) {
-        NSMutableArray *cmts = [NSMutableArray arrayWithArray:rawCmts];
-        NSMutableSet *fakes = [NSMutableSet set];
-        u_int32_t nTexts = texts ? (u_int32_t)texts.count : (u_int32_t)kFakeCommentTextCount;
-        for (NSInteger i = 0; i < nCmt; i++) {
-            u_int32_t k = seed + (unsigned)i * 104729u;
-            NSString *text = texts ? texts[k % nTexts] : kFakeCommentTexts[k % nTexts];
-            id u = MioFakeMakeOne(text, seed, i, 104729u);
-            if (u) { [cmts addObject:u]; [fakes addObject:u]; }
+        NSArray *add = MioFakeCacheFetch(postKey, NO);
+        if (!add) {
+            add = MioFakeGenerateBatch(NO, nCmt, texts);
+            MioFakeCacheStore(postKey, NO, add);
         }
+        NSMutableArray *cmts = [NSMutableArray arrayWithArray:rawCmts];
+        [cmts addObjectsFromArray:add];
+        NSMutableSet *fakes = [NSMutableSet setWithArray:add];
         if (MioFakeSetObj(item, @"setCommentUsers:", cmts) &&
             MioFakeSetCount(item, @"setCommentCount:", (long long)cmts.count)) {
             objc_setAssociatedObject(item, &kFakeCmtAppliedKey, [fakes copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -889,12 +956,9 @@ static void MioFakeAutoApplyItem(id item, const char *src) {
             }
             WPLog(@"Moments", @"[FakeLike] dl-item (%s): user=%@ likeFlag=%d", src, un, lf ? 1 : 0);
         }
-        if (!MioFakeGateOwnPost(item)) {
-            if (src && src[0] == 'd' && strncmp(src, "dl-list", 7) != 0 && gFakeDLLogCount < 60) {
-                WPLog(@"Moments", @"[FakeLike] dl-rejectA (%s): user=%@", src, un);
-            }
-            return;
-        }
+        // WCR FUN_00555580 同款门：likeFlag=1（已点赞的任何人的帖）或本人帖（OwnPostsAuto
+        // Enable 恒开）。181.log 用户实证：给别人帖子点赞也要出假赞
+        BOOL isMy = MioFakeGateOwnPost(item);
         BOOL liked = NO;
         SEL lfSel = NSSelectorFromString(@"likeFlag");
         if ([item respondsToSelector:lfSel]) {
@@ -905,14 +969,14 @@ static void MioFakeAutoApplyItem(id item, const char *src) {
             NSString *my = MioFakeMyWxId();
             if ([lu isKindOfClass:[NSArray class]] && my) {
                 for (id u in lu) {
-                    NSString *un = MioFakeGetStr(u, @[@"username", @"userName", @"m_nsUsrName"]);
-                    if ([un isEqualToString:my]) { liked = YES; break; }
+                    NSString *luName = MioFakeGetStr(u, @[@"username", @"userName", @"m_nsUsrName"]);
+                    if ([luName isEqualToString:my]) { liked = YES; break; }
                 }
             }
         }
-        if (!liked) {
+        if (!isMy && !liked) {
             if (src && src[0] == 'd' && strncmp(src, "dl-list", 7) != 0 && gFakeDLLogCount < 60) {
-                WPLog(@"Moments", @"[FakeLike] dl-rejectB (%s): user=%@", src, un);
+                WPLog(@"Moments", @"[FakeLike] dl-reject (%s): user=%@ (not mine, not liked)", src, un);
             }
             return;
         }
