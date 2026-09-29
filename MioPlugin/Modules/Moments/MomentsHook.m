@@ -599,19 +599,13 @@ static void MioInstallHDHooks(void) {
     MioHDInstallGetterHooks();
 }
 
-#pragma mark - 伪集赞（WCR 同款机制：WCDataItem getter 层增强，仅本人朋友圈生效）
+#pragma mark - 伪集赞（对齐 WCR 2.1.8：数据层写回 + 会话字典 + viewDidAppear 重摇）
 
-// WCR 证据链（FUN_00545778 核心应用 + FUN_00555580 自动应用层反编译实锤）：
-// 读原 likeUsers/commentUsers → 生成假赞/假评（WCUserComment：username/nickName/content）
-// → NSMutableArray(orig) addObjectsFromArray:(fake) → setLikeUsers:/setLikeCount:/
-//   setCommentUsers:/setCommentCount: 写回 → reloadTableData；re-entrancy 守卫包 setter。
-// Mio 等价实现走 getter 层（不动原 item，读时增强 + associated 缓存保证会话内稳定）：
-// 固定内置行为（无子配置）：仅「本人发出 且 我已点赞」的帖子生效（WCR 默认模式
-// 「需要集赞的朋友圈点赞后生效」——self 出现在原 likeUsers 即已点赞，FUN_0054b750 同款判定）；
-// 赞 8~28 随机、评 2~5 随机，昵称/评论取内置池。假数据只在读路径：点赞/评论请求只上报
-// self 的 wxid，不携带全量数组，无泄漏面。开关关闭时 getter 原样透传，下次渲染即还原。
-// 类名双候选（WCDataItem 主 / WCTimeLineDataItem 兜底），逐条 class_getInstanceMethod
-// 判存在才挂（CI 无微信头文件，全反射 + respondsToSelector 守卫）。
+// 架构（演进实锤见 project_memory fldl11~17）：数据层 7 挂点主注入（WCTimelineMgr 四回调 +
+// 三缓存填充路径，item 落地即写回）+ 渲染 getter 触发器自愈兜底（服务端覆盖丢假数据后
+// 重注入）+ WCTimeLineViewController viewDidAppear 清空会话字典（每次进朋友圈重摇新一批，
+// 停留期间按帖缓存不闪变）。门=本人帖或已赞帖（likeFlag=1）。假人全部取自 feed 采集的真
+// 好友池（冻结后使用，池未冻结不注入——无头像假人是废弃兜底，已删）。
 
 static NSString *gFakeMyWxId = nil;      // 懒解析缓存（CContactMgr.getSelfContact.userName）
 static volatile int gFakeLogCount = 0;   // 首见式日志限流（防逐条刷屏）
@@ -620,17 +614,7 @@ static char kFakeLikeAppliedKey, kFakeCmtAppliedKey;   // 各维度已注入假�
 // 统一直调原生 IMP——若走 [item likeUsers] 会经已 hook 的 getter 垫片引发无限递归）
 static IMP gFakeOrigLU = NULL, gFakeOrigCU = NULL;
 
-// WCR 内置昵称池（dylib __ustring 池同款风格摘录）
-static NSString * const kFakeLikeNames[] = {
-    @"二狗哥哥的iPhone", @"懒癌晚期已弃疗", @"肉的理想白菜命", @"点赞有惊喜Surprise",
-    @"王者内测专用机", @"吃鸡内测专用机", @"生日快乐鸭", @"看到请还钱",
-    @"神一样的男人", @"一直被模仿从未被超越", @"祝自己生日快乐", @"别放弃治疗",
-    @"叙利亚打工中", @"对方正在输入", @"诺基亚N72", @"摩托罗拉328C",
-    @"买菜必涨价超级加倍", @"我是颜值主播不露脸", @"克克克克业业", @"今日还钱打99折",
-};
-static const int kFakeLikeNameCount = (int)(sizeof(kFakeLikeNames) / sizeof(kFakeLikeNames[0]));
-
-// WCR 内置评论池（dylib 伪集赞预设同款摘录）
+// WCR 内置评论池（dylib 伪集赞预设同款摘录）：用户未配置 fakeCommentTexts 时回退
 static NSString * const kFakeCommentTexts[] = {
     @"好看", @"厉害了", @"收藏了", @"学习了", @"赞啦宝宝", @"支持一下",
     @"来啦", @"绝绝子", @"太棒了", @"我什么时候能像你一样优秀",
@@ -699,8 +683,9 @@ static void MioFakeHarvestFeedFriend(NSString *un) {
     [gFakeFeedFriends addObject:un];
 }
 
-// 好友池=采集集快照，冻结在首次凑满 8 人时（冻结保证后续重注入假人组合稳定，配合按帖
-// 播种防服务端覆盖后重注入闪变成另一批）；未冻结前返回 nil（调用方回退内置昵称池）
+// 好友池=采集集快照，冻结在首次凑满 8 人时（冻结保证重注入时假人组合稳定；随机选人
+// 按 WCR 2.1.8 FUN_0054cb60 同款 arc4random，防闪变靠按帖会话缓存）。未冻结前返回
+// nil（调用方不注入——无头像假人兜底已删，180.log 实证假人池混入官方账号）
 static NSArray *MioFakeFriendPool(void) {
     static NSArray *gPool;
     static BOOL logged = NO;
@@ -720,7 +705,7 @@ static NSArray *MioFakeFriendPool(void) {
 // 182.log 评论不显示根源：评论 type=1 被当赞渲染丢弃，且缺 commentID=评论渲染/diff 的 key。
 // 183.log 仍丢条根源：同秒生成 createTime 全等+同文案 → WCUserComment isEqual 合并 →
 // UI 去重后 3 条只显示 1-2 条（WCR 把 createTime 做成入参逐条错开，33283 行实锤））
-static id MioFakeMakeCommentUser(NSString *wxid, NSString *nickFallback, NSString *content, BOOL isComment, int cTime) {
+static id MioFakeMakeCommentUser(NSString *wxid, NSString *content, BOOL isComment, int cTime) {
     Class ucls = objc_getClass("WCUserComment");
     if (!ucls || wxid.length == 0) return nil;
     id u = [[ucls alloc] init];
@@ -733,7 +718,7 @@ static id MioFakeMakeCommentUser(NSString *wxid, NSString *nickFallback, NSStrin
         id ct = ((id(*)(id, SEL, id))objc_msgSend)(mgr, byNameSel, wxid);
         nick = MioFakeGetStr(ct, @[@"m_nsNickName", @"nickName", @"nickname"]);
     }
-    if (nick.length == 0) nick = nickFallback.length > 0 ? nickFallback : wxid;
+    if (nick.length == 0) nick = wxid;
     for (NSString *sn in @[@"setUsername:", @"setUserName:"]) {
         SEL sel = NSSelectorFromString(sn);
         if ([u respondsToSelector:sel]) { ((void(*)(id, SEL, id))objc_msgSend)(u, sel, wxid); break; }
@@ -809,10 +794,12 @@ static void MioFakeCacheStore(NSString *key, BOOL isLike, NSArray *arr) {
 //（假评抽删实证=FUN_0056ede4 内 removeObjectAtIndex；仅缓存未命中时调用一次，生成即
 // 存会话字典 → 此后同一批）。183.log 丢条修复：评论 createTime 逐条错开（now-i*61-随机，
 // 同帖绝不相同，对齐 WCR FUN_00571210 createTime 入参逐条错开），文案也同帖抽一删一——
-// 同秒+同文案 → WCUserComment isEqual 合并 → UI 只显示 1-2 条
+// 同秒+同文案 → WCUserComment isEqual 合并 → UI 只显示 1-2 条。
+// 假人只来自冻结好友池（调用方 MioFakeWriteBack 保证池已冻结；无头像假人 wxid_fake
+// 兜底是废弃方案已删——180.log 实证假人池混入官方账号）
 static NSArray *MioFakeGenerateBatch(BOOL isLike, NSInteger n, NSArray<NSString *> *texts) {
     NSArray *pool = MioFakeFriendPool();
-    NSMutableArray *cand = (pool.count > 0) ? [pool mutableCopy] : nil;
+    NSMutableArray *cand = [pool mutableCopy];
     NSMutableArray *out = [NSMutableArray array];
     NSArray<NSString *> *tx = (texts.count > 0) ? texts : nil;
     u_int32_t nT = tx ? (u_int32_t)tx.count : (u_int32_t)kFakeCommentTextCount;
@@ -820,16 +807,12 @@ static NSArray *MioFakeGenerateBatch(BOOL isLike, NSInteger n, NSArray<NSString 
     int now = (int)[NSDate date].timeIntervalSince1970;
     for (NSInteger i = 0; i < n; i++) {
         NSString *wxid;
-        NSString *nick = nil;
         if (cand.count > 0) {
             u_int32_t pick = arc4random_uniform((u_int32_t)cand.count);
             wxid = cand[pick];
             [cand removeObjectAtIndex:pick];
-        } else if (pool.count > 0) {
-            wxid = pool[arc4random_uniform((u_int32_t)pool.count)];
         } else {
-            wxid = [NSString stringWithFormat:@"wxid_fake%08u", arc4random()];
-            nick = kFakeLikeNames[arc4random_uniform((u_int32_t)kFakeLikeNameCount)];
+            wxid = pool[arc4random_uniform((u_int32_t)pool.count)];
         }
         int cTime = now - (int)(i * 61) - (int)arc4random_uniform(60);
         NSString *text = nil;
@@ -842,7 +825,7 @@ static NSArray *MioFakeGenerateBatch(BOOL isLike, NSInteger n, NSArray<NSString 
                 text = tx ? tx[arc4random_uniform(nT)] : kFakeCommentTexts[arc4random_uniform(nT)];
             }
         }
-        id u = MioFakeMakeCommentUser(wxid, nick, text, !isLike, cTime);
+        id u = MioFakeMakeCommentUser(wxid, text, !isLike, cTime);
         if (u) [out addObject:u];
     }
     return out;
@@ -895,7 +878,8 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const
     NSArray<NSString *> *texts = (cfg.fakeCommentTexts.count > 0) ? cfg.fakeCommentTexts : nil;
     NSString *postKey = MioFakePostKey(item);
     NSArray *pool = MioFakeFriendPool();
-    NSInteger nLikeEff = (pool.count > 0 && nLike > (NSInteger)pool.count) ? (NSInteger)pool.count : nLike;
+    if (pool.count == 0) return;   // 池未冻结不注入（无头像假人兜底已删；池冻结后由数据层回调/fb 触发器自然补上）
+    NSInteger nLikeEff = (nLike > (NSInteger)pool.count) ? (NSInteger)pool.count : nLike;
 
     // 赞维度：假赞缺失才重注入；假人取自按帖会话缓存（随机一次→存字典→本次停留同一批）
     if (nLikeEff > 0 && !MioFakeStillApplied(objc_getAssociatedObject(item, &kFakeLikeAppliedKey), rawLikes)) {
@@ -913,8 +897,8 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const
         }
         if (gFakeLogCount < 40) {   // 40：覆盖 dl-list 全量扫描多个本人帖 + fb 兜底，防额度被先耗尽吞掉关键证据
             gFakeLogCount++;
-            WPLog(@"Moments", @"[FakeLike] write-back likes +%ld (%s, src=%s, cls %@)",
-                  (long)fakes.count, MioFakeFriendPool().count ? "friends" : "builtin", src, NSStringFromClass([item class]));
+            WPLog(@"Moments", @"[FakeLike] write-back likes +%ld (src=%s, cls %@)",
+                  (long)fakes.count, src, NSStringFromClass([item class]));
         }
     }
 
@@ -934,8 +918,8 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const
         }
         if (gFakeLogCount < 40) {
             gFakeLogCount++;
-            WPLog(@"Moments", @"[FakeLike] write-back comments +%ld (%s, src=%s, cls %@)",
-                  (long)fakes.count, MioFakeFriendPool().count ? "friends" : "builtin", src, NSStringFromClass([item class]));
+            WPLog(@"Moments", @"[FakeLike] write-back comments +%ld (src=%s, cls %@)",
+                  (long)fakes.count, src, NSStringFromClass([item class]));
         }
     }
 }
@@ -994,16 +978,9 @@ static void MioFakeAutoApplyItem(id item, const char *src) {
 
 // 批量应用（WCR FUN_005581fc 同款：datas 数组里 isKindOfClass:WCDataItem 才应用）
 static void MioFakeAutoApplyArray(NSArray *datas, const char *src) {
-    if (![datas isKindOfClass:[NSArray class]]) {
-        WPLog(@"Moments", @"[FakeLike] dl-arrive skip: not-array (%@)", NSStringFromClass([datas class]));
-        return;
-    }
+    if (![datas isKindOfClass:[NSArray class]]) return;
     Class itemCls = objc_getClass("WCDataItem");
     if (!itemCls) return;
-    // dl 到达诊断（176.log：fired 后无 src=dl，须区分"回调没来"还是"来了没命中门"）
-    unsigned long raw = datas.count, hitCls = 0;
-    for (id it in datas) if ([it isKindOfClass:itemCls]) hitCls++;
-    WPLog(@"Moments", @"[FakeLike] dl-arrive (%s): raw=%lu wcitem=%lu", src, raw, hitCls);
     for (id it in datas) {
         if ([it isKindOfClass:itemCls]) MioFakeAutoApplyItem(it, src);
     }
