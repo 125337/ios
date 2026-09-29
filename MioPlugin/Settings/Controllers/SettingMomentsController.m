@@ -94,6 +94,8 @@
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"操作间隔" key:@"autoLikeInterval" value:[NSString stringWithFormat:@"%ld", (long)config.autoLikeInterval] hint:@"5" valueType:InputValueTypeNumber alertTitle:@"操作间隔" alertMessage:@"自动点赞间隔秒数(3-300)" cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"单轮上限" key:@"autoLikeMaxPerSession" value:[NSString stringWithFormat:@"%ld", (long)config.autoLikeMaxPerSession] hint:@"20" valueType:InputValueTypeNumber alertTitle:@"单轮上限" alertMessage:@"连续点赞达到该数量后暂停60秒再继续(2-500)" cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"刷新间隔" key:@"autoLikeRefreshInterval" value:[NSString stringWithFormat:@"%ld", (long)config.autoLikeRefreshInterval] hint:@"60" valueType:InputValueTypeNumber alertTitle:@"刷新间隔" alertMessage:@"不在朋友圈页面时，隔多少秒刷新一次朋友圈" cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addButtonRowInGroup:expand title:@"点赞黑名单" hint:[self blocklistCountHint] key:@"editAutoLikeBlocklist" cy:*ecy width:w];

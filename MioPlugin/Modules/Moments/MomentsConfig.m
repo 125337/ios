@@ -26,6 +26,7 @@
         [ConfigDescriptor itemWithKey:@"autoLikeEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"autoLikeInterval" type:ConfigValueTypeInteger default:@(5)],
         [ConfigDescriptor itemWithKey:@"autoLikeRefreshInterval" type:ConfigValueTypeInteger default:@(60)],
+        [ConfigDescriptor itemWithKey:@"autoLikeMaxPerSession" type:ConfigValueTypeInteger default:@(20)],
         [ConfigDescriptor itemWithKey:@"autoLikeBlocklist" type:ConfigValueTypeArray default:@[]],
     ];
 }

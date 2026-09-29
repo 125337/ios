@@ -999,6 +999,9 @@ static NSMutableSet *gAutoLikeDone = nil;        // 已处理 key（WCR DAT_0298
 static BOOL gAutoLikeRunning = NO;               // 调度器运行守卫（WCR DAT_0298f238[0]）
 static NSTimeInterval gAutoLikeLastRefresh = 0;  // 上次主动刷新时间（WCR DAT_0298f248）
 static BOOL gAutoLikeTickScheduled = NO;         // 刷新循环重排守卫（WCR DAT_0298f260）
+static long gAutoLikeCount = 0;                  // 本会话已赞数（单轮上限计数）
+static NSTimeInterval gAutoLikeSessionStart = 0; // 会话起点（首赞置位，冷却结束重置）
+static BOOL gAutoLikeCooling = NO;               // 单轮上限冷却守卫（WCR MaxPerSession 语义真实生效版）
 
 static BOOL MioFakeVCCoveringTimeline(void);    // 定义在伪集赞 active-refresh 段
 
@@ -1027,6 +1030,14 @@ static BOOL MioAutoLikeAlreadyLiked(id item) {
 }
 
 static void MioAutoLikeSchedule(void);
+
+// 单轮上限钳位（WCR MaxPerSession UI 实锤：默认20钳[2,500]；2.1.8 引擎零引用是摆设，Mio 实现为真实生效）
+static long MioAutoLikeMaxClamped(void) {
+    long v = [MomentsConfig shared].autoLikeMaxPerSession;
+    if (v < 2) v = 2;
+    if (v > 500) v = 500;
+    return v;
+}
 
 // 单帖执行点赞（WCR FUN_00575474 实锤：likeFlag 检查 → username?:sourceUserName + itemID
 // 空判 → WCFacade respondsToSelector(likeObject:ofUser:source:) → 调用 + setLikeFlag:1）。
@@ -1086,6 +1097,26 @@ static void MioAutoLikeConsume(void) {
         return;
     }
     if (gAutoLikeQueue.count == 0) return;
+    // 单轮上限：连续赞满 N 条冷却 60 秒后清零续赞（冷却期间 cooling 守卫挡住 Schedule 并发）
+    long maxPer = MioAutoLikeMaxClamped();
+    if (gAutoLikeCount >= maxPer) {
+        NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+        if (now - gAutoLikeSessionStart < 60) {
+            gAutoLikeCooling = YES;
+            WPLog(@"Moments", @"[AutoLike] session limit %ld reached, cooling 60s (queue %lu)",
+                  maxPer, (unsigned long)gAutoLikeQueue.count);
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                gAutoLikeCooling = NO;
+                gAutoLikeCount = 0;
+                gAutoLikeSessionStart = [NSDate date].timeIntervalSince1970;
+                MioAutoLikeSchedule();
+            });
+            return;
+        }
+        gAutoLikeSessionStart = now;
+        gAutoLikeCount = 0;
+    }
     id item = gAutoLikeQueue.firstObject;
     [gAutoLikeQueue removeObjectAtIndex:0];
     NSString *key = MioAutoLikeKey(item);
@@ -1094,6 +1125,8 @@ static void MioAutoLikeConsume(void) {
         @try {
             if (MioAutoLikePerform(item)) {
                 [gAutoLikeDone addObject:key];
+                if (gAutoLikeCount == 0) gAutoLikeSessionStart = [NSDate date].timeIntervalSince1970;
+                gAutoLikeCount++;
             }
             // 失败不入 done：下轮刷新循环 timelineDataList 扫描会重新入队重试（60s 起步，
             // 频率受刷新间隔约束，无风控压力），FAIL 日志留痕
@@ -1106,7 +1139,7 @@ static void MioAutoLikeConsume(void) {
 
 // 调度（WCR FUN_0057399c 实锤：运行守卫 + 队列非空才排；delay=操作间隔钳位，主队列串行）
 static void MioAutoLikeSchedule(void) {
-    if (gAutoLikeRunning) return;
+    if (gAutoLikeRunning || gAutoLikeCooling) return;
     if (gAutoLikeQueue.count == 0) return;
     gAutoLikeRunning = YES;
     MomentsConfig *cfg = [MomentsConfig shared];
