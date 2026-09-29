@@ -952,17 +952,6 @@ static void MioFakeAutoApplyItem(id item, const char *src) {
         // 数据层采集真好友（180.log 定论：feed 只含真好友帖+广告 gh_，比联系人库枚举精确）
         NSString *un = MioFakeGetStr(item, @[@"username", @"userName", @"m_nsUsrName"]);
         MioFakeHarvestFeedFriend(un);
-        // dl 到达诊断（177.log：dl-arrive 4 次共 40 item 零写回，须看每条是谁的帖、门为何没过）
-        // dl-list（全量扫描）来源不逐条打日志：绝大多数是非本人帖，60 条限频会被刷满
-        if (src && src[0] == 'd' && strncmp(src, "dl-list", 7) != 0 && gFakeDLLogCount < 60) {
-            gFakeDLLogCount++;
-            BOOL lf = NO;
-            SEL lfSel = NSSelectorFromString(@"likeFlag");
-            if ([item respondsToSelector:lfSel]) {
-                @try { lf = ((BOOL(*)(id, SEL))objc_msgSend)(item, lfSel); } @catch (NSException *e) {}
-            }
-            WPLog(@"Moments", @"[FakeLike] dl-item (%s): user=%@ likeFlag=%d", src, un, lf ? 1 : 0);
-        }
         // WCR FUN_00555580 同款门：likeFlag=1（已点赞的任何人的帖）或本人帖（OwnPostsAuto
         // Enable 恒开）。181.log 用户实证：给别人帖子点赞也要出假赞
         BOOL isMy = MioFakeGateOwnPost(item);
@@ -983,7 +972,8 @@ static void MioFakeAutoApplyItem(id item, const char *src) {
         }
         if (!isMy && !liked) {
             if (src && src[0] == 'd' && strncmp(src, "dl-list", 7) != 0 && gFakeDLLogCount < 60) {
-                WPLog(@"Moments", @"[FakeLike] dl-reject (%s): user=%@ (not mine, not liked)", src, un);
+                gFakeDLLogCount++;
+                WPLog(@"Moments", @"[FakeLike] dl-reject (%s): user=%@ likeFlag=%d (not mine, not liked)", src, un, liked ? 1 : 0);
             }
             return;
         }
