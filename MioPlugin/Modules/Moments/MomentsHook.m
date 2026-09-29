@@ -878,10 +878,23 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const
 // 双门（本人帖 + 已赞）通过后自愈式写回。getter 触发器与数据层预注入共用：
 // 门 A=userName==我方 wxid；门 B=原生 likeFlag 优先（WCR FUN_00545778 实证），
 // 回退扫原生 likeUsers 找我方 wxid。取 raw 一律走安装期原生 IMP（防 getter 递归）。
+static int gFakeDLLogCount = 0;
+
 static void MioFakeAutoApplyItem(id item, const char *src) {
     @try {
         MomentsConfig *cfg = [MomentsConfig shared];
         if (!cfg.fakeLikeEnabled) return;
+        // dl 到达诊断（177.log：dl-arrive 4 次共 40 item 零写回，须看每条是谁的帖、门为何没过）
+        if (src && src[0] == 'd' && gFakeDLLogCount < 60) {
+            gFakeDLLogCount++;
+            NSString *un = MioFakeGetStr(item, @[@"username", @"userName", @"m_nsUsrName"]);
+            BOOL lf = NO;
+            SEL lfSel = NSSelectorFromString(@"likeFlag");
+            if ([item respondsToSelector:lfSel]) {
+                @try { lf = ((BOOL(*)(id, SEL))objc_msgSend)(item, lfSel); } @catch (NSException *e) {}
+            }
+            WPLog(@"Moments", @"[FakeLike] dl-item (%s): user=%@ likeFlag=%d", src, un, lf ? 1 : 0);
+        }
         if (!MioFakeGateOwnPost(item)) return;
         BOOL liked = NO;
         SEL lfSel = NSSelectorFromString(@"likeFlag");
