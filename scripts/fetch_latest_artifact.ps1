@@ -38,7 +38,7 @@ Remove-Item $tmp -Recurse -Force
 $b = [IO.File]::ReadAllBytes("$Root\dist\Mio_arm64.dylib")
 $s = [Text.Encoding]::ASCII.GetString($b)
 $miss = @()
-foreach ($t in @("build-0929-fldl14", "likeUsers", "MioFakeLike|", "dl-list scan")) {
+foreach ($t in @("build-0929-fldl15", "session cache reset", "viewDidAppear reset hook installed", "dl-list scan")) {
     $hit = $s.Contains($t)
     Write-Host ("check " + $t + " -> " + $(if ($hit) { "HIT" } else { "MISS" }))
     if (-not $hit) { $miss += $t }

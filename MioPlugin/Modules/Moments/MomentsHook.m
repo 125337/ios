@@ -715,9 +715,10 @@ static NSArray *MioFakeFriendPool(void) {
     return gPool;
 }
 
-// 造 WCUserComment（WCR FUN_0054c0ac 同款：真好友 wxid + getContactByName 解析昵称，
-// setType:1 / setIsRichText:1 / setCreateTime:；头像由微信按 wxid 正常管线加载）
-static id MioFakeMakeCommentUser(NSString *wxid, NSString *nickFallback, NSString *content) {
+// 造 WCUserComment（WCR 2.1.8 实锤分流：假赞 FUN_0056e164 内 setType:1+setIsRichText:1
+// 无 commentID；假评 FUN_00571210 setType:2+setCommentID:"WCRefine_%ld" 无 isRichText。
+// 182.log 评论不显示根源：评论 type=1 被当赞渲染丢弃，且缺 commentID=评论渲染/diff 的 key）
+static id MioFakeMakeCommentUser(NSString *wxid, NSString *nickFallback, NSString *content, BOOL isComment) {
     Class ucls = objc_getClass("WCUserComment");
     if (!ucls || wxid.length == 0) return nil;
     id u = [[ucls alloc] init];
@@ -740,9 +741,17 @@ static id MioFakeMakeCommentUser(NSString *wxid, NSString *nickFallback, NSStrin
         if ([u respondsToSelector:sel]) { ((void(*)(id, SEL, id))objc_msgSend)(u, sel, nick); break; }
     }
     SEL typeSel = NSSelectorFromString(@"setType:");
-    if ([u respondsToSelector:typeSel]) ((void(*)(id, SEL, long long))objc_msgSend)(u, typeSel, 1);
-    SEL richSel = NSSelectorFromString(@"setIsRichText:");
-    if ([u respondsToSelector:richSel]) ((void(*)(id, SEL, BOOL))objc_msgSend)(u, richSel, YES);
+    if ([u respondsToSelector:typeSel]) ((void(*)(id, SEL, long long))objc_msgSend)(u, typeSel, isComment ? 2 : 1);
+    if (isComment) {
+        SEL cidSel = NSSelectorFromString(@"setCommentID:");
+        if ([u respondsToSelector:cidSel]) {
+            ((void(*)(id, SEL, id))objc_msgSend)(u, cidSel,
+                [NSString stringWithFormat:@"Mio_%u", arc4random()]);
+        }
+    } else {
+        SEL richSel = NSSelectorFromString(@"setIsRichText:");
+        if ([u respondsToSelector:richSel]) ((void(*)(id, SEL, BOOL))objc_msgSend)(u, richSel, YES);
+    }
     SEL timeSel = NSSelectorFromString(@"setCreateTime:");
     if ([u respondsToSelector:timeSel]) ((void(*)(id, SEL, int))objc_msgSend)(u, timeSel, (int)[NSDate date].timeIntervalSince1970);
     if (content) {
@@ -774,49 +783,32 @@ static NSString *MioFakePostKey(id item) {
     return nil;
 }
 
-// 假数据按帖缓存（WCR FUN_0054e064/FUN_00556a24 链同款）：内存字典 + NSUserDefaults 落盘
-//（NSKeyedArchiver，WCR 落盘名=WCRefineMomentsFakeLike/CommentAdditionsCache），value=随机
-// 生成一次的假数组。命中即复用同一批 → 服务端刷新换新 item 对象也不换人：防闪变+每帖
-// 不同（181.log 正解，替代已证伪的按帖种子方案）
+// 假数据按帖会话缓存（WCR 2.1.8 FUN_00577df8 RefreshEachOpen 开启路径同款：只写静态内存
+// 字典不落盘，进入朋友圈页 viewDidAppear 清空 → 同一次停留内按帖复用不闪变，每次进入
+// 重摇新一批人。WCR 的 NSUserDefaults 永久落盘是 RefreshEachOpen 关闭行为=永远同一批，
+// 182.log 用户明确不要）
 static NSMutableDictionary *gFakeLikeCache = nil;
 static NSMutableDictionary *gFakeCmtCache = nil;
 
-static NSMutableDictionary *MioFakeCacheMem(BOOL isLike) {
-    if (isLike) return gFakeLikeCache ?: (gFakeLikeCache = [NSMutableDictionary dictionary]);
-    return gFakeCmtCache ?: (gFakeCmtCache = [NSMutableDictionary dictionary]);
-}
-
 static NSArray *MioFakeCacheFetch(NSString *key, BOOL isLike) {
     if (key.length == 0) return nil;
-    id v = MioFakeCacheMem(isLike)[key];
-    if ([v isKindOfClass:[NSArray class]] && [(NSArray *)v count] > 0) return v;
-    NSString *dk = [(isLike ? @"MioFakeLike|" : @"MioFakeCmt|") stringByAppendingString:key];
-    NSData *d = [[NSUserDefaults standardUserDefaults] dataForKey:dk];
-    if (d) {
-        @try {
-            NSArray *arr = [NSKeyedUnarchiver unarchiveObjectWithData:d];
-            if ([arr isKindOfClass:[NSArray class]] && arr.count > 0) { MioFakeCacheMem(isLike)[key] = arr; return arr; }
-        } @catch (NSException *e) {}
-    }
-    return nil;
+    id v = (isLike ? gFakeLikeCache : gFakeCmtCache)[key];
+    return ([v isKindOfClass:[NSArray class]] && [(NSArray *)v count] > 0) ? v : nil;
 }
 
 static void MioFakeCacheStore(NSString *key, BOOL isLike, NSArray *arr) {
     if (key.length == 0 || arr.count == 0) return;
-    MioFakeCacheMem(isLike)[key] = arr;
-    @try {
-        NSData *d = [NSKeyedArchiver archivedDataWithRootObject:arr requiringSecureCoding:NO error:nil];
-        [[NSUserDefaults standardUserDefaults] setObject:d
-                                                  forKey:[(isLike ? @"MioFakeLike|" : @"MioFakeCmt|") stringByAppendingString:key]];
-        [[NSUserDefaults standardUserDefaults] synchronize];
-    } @catch (NSException *e) {}
+    if (isLike && !gFakeLikeCache) gFakeLikeCache = [NSMutableDictionary dictionary];
+    if (!isLike && !gFakeCmtCache) gFakeCmtCache = [NSMutableDictionary dictionary];
+    (isLike ? gFakeLikeCache : gFakeCmtCache)[key] = arr;
 }
 
-// 生成一批假数据（WCR FUN_0054cb60 同款）：好友池纯随机，假赞抽一删一防同人重复
-//（仅缓存未命中时调用一次，生成即按帖落盘 → 此后同一批），假评允许同人不同文案
+// 生成一批假数据（WCR 2.1.8 同款）：好友池纯随机，赞/评都抽一删一防同批同人
+//（假评抽删实证=FUN_0056ede4 内 removeObjectAtIndex；仅缓存未命中时调用一次，生成即
+// 存会话字典 → 此后同一批）
 static NSArray *MioFakeGenerateBatch(BOOL isLike, NSInteger n, NSArray<NSString *> *texts) {
     NSArray *pool = MioFakeFriendPool();
-    NSMutableArray *cand = (pool.count > 0 && isLike) ? [pool mutableCopy] : nil;
+    NSMutableArray *cand = (pool.count > 0) ? [pool mutableCopy] : nil;
     NSMutableArray *out = [NSMutableArray array];
     NSArray<NSString *> *tx = (texts.count > 0) ? texts : nil;
     u_int32_t nT = tx ? (u_int32_t)tx.count : (u_int32_t)kFakeCommentTextCount;
@@ -835,7 +827,7 @@ static NSArray *MioFakeGenerateBatch(BOOL isLike, NSInteger n, NSArray<NSString 
         }
         NSString *text = (!isLike && nT > 0) ? (tx ? tx[arc4random_uniform(nT)]
                                                    : kFakeCommentTexts[arc4random_uniform(nT)]) : nil;
-        id u = MioFakeMakeCommentUser(wxid, nick, text);
+        id u = MioFakeMakeCommentUser(wxid, nick, text, !isLike);
         if (u) [out addObject:u];
     }
     return out;
@@ -890,7 +882,7 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const
     NSArray *pool = MioFakeFriendPool();
     NSInteger nLikeEff = (pool.count > 0 && nLike > (NSInteger)pool.count) ? (NSInteger)pool.count : nLike;
 
-    // 赞维度：假赞缺失才重注入；假人取自按帖缓存（WCR 同款：随机一次→落盘→永远同一批）
+    // 赞维度：假赞缺失才重注入；假人取自按帖会话缓存（随机一次→存字典→本次停留同一批）
     if (nLikeEff > 0 && !MioFakeStillApplied(objc_getAssociatedObject(item, &kFakeLikeAppliedKey), rawLikes)) {
         NSArray *add = MioFakeCacheFetch(postKey, YES);
         if (!add) {
@@ -911,7 +903,7 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const
         }
     }
 
-    // 评论维度：假评缺失才重注入；同按帖缓存复用（WCR 假评=选人+选文案各随机一次）
+    // 评论维度：假评缺失才重注入；同会话字典复用（WCR 假评=选人+选文案各随机一次）
     if (nCmt > 0 && !MioFakeStillApplied(objc_getAssociatedObject(item, &kFakeCmtAppliedKey), rawCmts)) {
         NSArray *add = MioFakeCacheFetch(postKey, NO);
         if (!add) {
@@ -1062,6 +1054,28 @@ static void MioInstallFakeLikeHooks(void) {
     }
     gFakeTriggerSummary = [NSString stringWithFormat:@"%d/%d", ok, total];
     WPLog(@"Moments", @"[FakeLike] trigger hooks installed %d/%d", ok, total);
+    // 每次进入朋友圈重摇（WCR 2.1.8 FUN_00567a08 同款：WCTimeLineViewController viewDidAppear
+    // 清空赞/评会话字典 → 本次停留按帖稳定不闪变，每次进入重新随机新一批人）
+    Class tlVC = objc_getClass("WCTimeLineViewController");
+    if (tlVC) {
+        Method mVD = class_getInstanceMethod(tlVC, NSSelectorFromString(@"viewDidAppear:"));
+        if (mVD) {
+            IMP origVD = method_getImplementation(mVD);
+            IMP newVD = imp_implementationWithBlock(^(id self, BOOL animated) {
+                ((void(*)(id, SEL, BOOL))origVD)(self, NSSelectorFromString(@"viewDidAppear:"), animated);
+                MomentsConfig *cfg = [MomentsConfig shared];
+                if (cfg.fakeLikeEnabled) {
+                    gFakeLikeCache = nil;
+                    gFakeCmtCache = nil;
+                    WPLog(@"Moments", @"[FakeLike] session cache reset (viewDidAppear)");
+                }
+            });
+            method_setImplementation(mVD, newVD);
+            WPLog(@"Moments", @"[FakeLike] viewDidAppear reset hook installed");
+        }
+    } else {
+        WPLog(@"Moments", @"[FakeLike] WCTimeLineViewController not found, reset hook skipped");
+    }
 }
 
 // ===== 数据层预注入（WCR FUN_005474f4 实锤挂点，头像慢根因修复：WCR 在数据落地时注入，
