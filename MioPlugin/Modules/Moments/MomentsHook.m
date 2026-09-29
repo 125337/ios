@@ -895,7 +895,13 @@ static void MioFakeAutoApplyItem(id item, const char *src) {
             }
             WPLog(@"Moments", @"[FakeLike] dl-item (%s): user=%@ likeFlag=%d", src, un, lf ? 1 : 0);
         }
-        if (!MioFakeGateOwnPost(item)) return;
+        if (!MioFakeGateOwnPost(item)) {
+            if (src && src[0] == 'd' && gFakeDLLogCount < 60) {
+                WPLog(@"Moments", @"[FakeLike] dl-rejectA (%s): user=%@", src,
+                      MioFakeGetStr(item, @[@"username", @"userName", @"m_nsUsrName"]));
+            }
+            return;
+        }
         BOOL liked = NO;
         SEL lfSel = NSSelectorFromString(@"likeFlag");
         if ([item respondsToSelector:lfSel]) {
@@ -911,7 +917,13 @@ static void MioFakeAutoApplyItem(id item, const char *src) {
                 }
             }
         }
-        if (!liked) return;
+        if (!liked) {
+            if (src && src[0] == 'd' && gFakeDLLogCount < 60) {
+                WPLog(@"Moments", @"[FakeLike] dl-rejectB (%s): user=%@", src,
+                      MioFakeGetStr(item, @[@"username", @"userName", @"m_nsUsrName"]));
+            }
+            return;
+        }
         NSArray *rawLikes = @[], *rawCmts = @[];
         if (gFakeOrigLU) {
             id v = ((id(*)(id, SEL))gFakeOrigLU)(item, @selector(likeUsers));
@@ -929,7 +941,10 @@ static void MioFakeAutoApplyItem(id item, const char *src) {
 
 // 批量应用（WCR FUN_005581fc 同款：datas 数组里 isKindOfClass:WCDataItem 才应用）
 static void MioFakeAutoApplyArray(NSArray *datas, const char *src) {
-    if (![datas isKindOfClass:[NSArray class]]) return;
+    if (![datas isKindOfClass:[NSArray class]]) {
+        WPLog(@"Moments", @"[FakeLike] dl-arrive skip: not-array (%@)", NSStringFromClass([datas class]));
+        return;
+    }
     Class itemCls = objc_getClass("WCDataItem");
     if (!itemCls) return;
     // dl 到达诊断（176.log：fired 后无 src=dl，须区分"回调没来"还是"来了没命中门"）
@@ -1013,17 +1028,17 @@ static void MioFakeDLMod(id self, SEL _cmd, id item, BOOL notify) {
 }
 
 static void MioFakeDLPre(id self, SEL _cmd, id p1, NSArray *datas, id p4, unsigned int p5, id p6) {
-    MioFakeAutoApplyArray(datas, "dl");
+    MioFakeAutoApplyArray(datas, "dl-pre");
     if (gOrigPre) gOrigPre(self, _cmd, p1, datas, p4, p5, p6);
 }
 
 static void MioFakeDLNext(id self, SEL _cmd, id p1, NSArray *datas, id p4, unsigned int p5, id p6) {
-    MioFakeAutoApplyArray(datas, "dl");
+    MioFakeAutoApplyArray(datas, "dl-next");
     if (gOrigNext) gOrigNext(self, _cmd, p1, datas, p4, p5, p6);
 }
 
 static void MioFakeDLFirst(id self, SEL _cmd, id p1, BOOL p2, NSArray *datas, id p5, unsigned int p6, id p7, id p8, id p9) {
-    MioFakeAutoApplyArray(datas, "dl");
+    MioFakeAutoApplyArray(datas, "dl-first");
     if (gOrigFirst) gOrigFirst(self, _cmd, p1, p2, datas, p5, p6, p7, p8, p9);
 }
 
@@ -1035,17 +1050,17 @@ static MioDL0Orig gOrigUDHead = NULL, gOrigUDPre = NULL, gOrigUDTail = NULL;
 
 static void MioFakeDLUDHead(id self, SEL _cmd) {
     if (gOrigUDHead) gOrigUDHead(self, _cmd);
-    MioFakeAutoApplyArray(((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList")), "dl");
+    MioFakeAutoApplyArray(((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList")), "dl-udHead");
 }
 
 static void MioFakeDLUDPre(id self, SEL _cmd) {
     if (gOrigUDPre) gOrigUDPre(self, _cmd);
-    MioFakeAutoApplyArray(((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList")), "dl");
+    MioFakeAutoApplyArray(((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList")), "dl-udPre");
 }
 
 static void MioFakeDLUDTail(id self, SEL _cmd) {
     if (gOrigUDTail) gOrigUDTail(self, _cmd);
-    MioFakeAutoApplyArray(((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList")), "dl");
+    MioFakeAutoApplyArray(((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList")), "dl-udTail");
 }
 
 // 不强制返回类型：垫片末句透传 orig，ARM64 x0 返回值天然透传，任何类型安全；
