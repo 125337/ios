@@ -30,6 +30,23 @@
         [self.navigationController pushViewController:vc animated:YES];
         return;
     }
+    if ([key isEqualToString:@"editAutoCmtScope"]) {
+        SettingMomentBlocklistController *vc = [[SettingMomentBlocklistController alloc] init];
+        vc.pageTitle = @"评论生效范围";
+        vc.configKey = @"autoCommentContacts";
+        vc.pickerTitle = @"选择评论好友";
+        vc.footerText = @"仅对选中的好友发的朋友圈自动评论\n未选择时对全部好友生效\n点击好友可移除";
+        [self.navigationController pushViewController:vc animated:YES];
+        return;
+    }
+    if ([key isEqualToString:@"editAutoCmtTexts"]) {
+        SettingMomentCommentsController *vc = [[SettingMomentCommentsController alloc] init];
+        vc.textsKey = @"autoCommentTexts";
+        vc.pageTitle = @"自动评论内容";
+        vc.footerText = @"自动评论时从列表随机取用\n列表为空时不评论";
+        [self.navigationController pushViewController:vc animated:YES];
+        return;
+    }
     [super buttonClicked:key];
 }
 
@@ -49,6 +66,16 @@
 - (NSString *)blocklistCountHint {
     NSUInteger n = [MomentsConfig shared].autoLikeBlocklist.count;
     return n > 0 ? [NSString stringWithFormat:@"已添加 %lu 人", (unsigned long)n] : @"点击添加";
+}
+
+- (NSString *)cmtScopeCountHint {
+    NSUInteger n = [MomentsConfig shared].autoCommentContacts.count;
+    return n > 0 ? [NSString stringWithFormat:@"已选 %lu 人", (unsigned long)n] : @"全部好友";
+}
+
+- (NSString *)cmtTextCountHint {
+    NSUInteger n = [MomentsConfig shared].autoCommentTexts.count;
+    return n > 0 ? [NSString stringWithFormat:@"已设置 %lu 条", (unsigned long)n] : @"点击编辑（空则不评论）";
 }
 
 - (void)buildUI {
@@ -101,9 +128,26 @@
         *ecy = [self addButtonRowInGroup:expand title:@"点赞黑名单" hint:[self blocklistCountHint] key:@"editAutoLikeBlocklist" cy:*ecy width:w];
     } cy:cy width:w];
 
+    // 子开关：朋友圈自动评论（开=展开子配置，关=收起；手风琴，总开关唯一入口）
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+    cy = [self addMasterSwitchRowInGroup:group
+                                   title:@"朋友圈自动评论"
+                                     key:@"autoCommentEnabled"
+                                    isOn:config.autoCommentEnabled
+                              subBuilder:^(UIView *expand, CGFloat *ecy) {
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addButtonRowInGroup:expand title:@"生效范围" hint:[self cmtScopeCountHint] key:@"editAutoCmtScope" cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"操作间隔" key:@"autoCommentInterval" value:[NSString stringWithFormat:@"%ld", (long)config.autoCommentInterval] hint:@"10" valueType:InputValueTypeNumber alertTitle:@"操作间隔" alertMessage:@"自动评论间隔秒数(3-300)" cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addButtonRowInGroup:expand title:@"评论内容" hint:[self cmtTextCountHint] key:@"editAutoCmtTexts" cy:*ecy width:w];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"刷新间隔" key:@"autoCommentRefreshInterval" value:[NSString stringWithFormat:@"%ld", (long)config.autoCommentRefreshInterval] hint:@"180" valueType:InputValueTypeNumber alertTitle:@"刷新间隔" alertMessage:@"不在朋友圈页面时，隔多少秒刷新一次朋友圈(评论)" cy:*ecy width:w];
+    } cy:cy width:w];
+
     y = [self finishGroup:group atY:y height:cy];
 
-    [self addSectionFooter:@"伪集赞: 自定义朋友圈收到的点赞与评论数量\n评论文本按设置的数量随机取用\n自动点赞: 广告帖与黑名单好友不发赞" y:y width:w];
+    [self addSectionFooter:@"伪集赞: 自定义朋友圈收到的点赞与评论数量\n评论文本按设置的数量随机取用\n自动点赞: 广告帖与黑名单好友不发赞\n自动评论: 广告帖与自己的帖子不评论" y:y width:w];
 }
 
 @end

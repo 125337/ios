@@ -16,6 +16,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) NSInteger autoLikeRefreshInterval;   // 不在朋友圈页时的刷新间隔（秒）
 @property (nonatomic, assign) NSInteger autoLikeMaxPerSession;     // 单轮点赞上限（赞满冷却60秒再续）
 @property (nonatomic, copy) NSArray<NSString *> *autoLikeBlocklist;    // 自动点赞黑名单（wxid，命中不点赞）
+@property (nonatomic, assign) BOOL autoCommentEnabled;             // 朋友圈自动评论总开关
+@property (nonatomic, assign) NSInteger autoCommentInterval;       // 评论操作间隔（秒）
+@property (nonatomic, assign) NSInteger autoCommentRefreshInterval; // 不在朋友圈页时的评论刷新间隔（秒）
+@property (nonatomic, copy) NSArray<NSString *> *autoCommentTexts;     // 自动评论内容池（随机取用，空则不评论）
+@property (nonatomic, copy) NSArray<NSString *> *autoCommentContacts;  // 自动评论生效范围（wxid 白名单，空=全部好友）
 
 + (instancetype)shared;
 

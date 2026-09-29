@@ -7,9 +7,23 @@ static const NSInteger kMaxComments = 20;
 
 @implementation SettingMomentCommentsController
 
+- (NSString *)listKey {
+    return self.textsKey ?: @"fakeCommentTexts";
+}
+
+- (NSArray<NSString *> *)currentTexts {
+    id v = [[MomentsConfig shared] valueForKey:[self listKey]];
+    return [v isKindOfClass:[NSArray class]] ? v : @[];
+}
+
+- (void)saveTexts:(NSArray<NSString *> *)texts {
+    [[MomentsConfig shared] setValue:texts forKey:[self listKey]];
+    [ConfigManager saveAll];
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"评论文本";
+    self.title = self.pageTitle ?: @"评论文本";
     // 不在此处 buildUI：viewWillAppear 统一重建，避免同表叠行
 }
 
@@ -46,8 +60,7 @@ static const NSInteger kMaxComments = 20;
 }
 
 - (void)showCommentActions:(NSInteger)index {
-    MomentsConfig *config = [MomentsConfig shared];
-    NSArray *texts = config.fakeCommentTexts ?: @[];
+    NSArray *texts = [self currentTexts];
     if (index < 0 || index >= (NSInteger)texts.count) return;
     NSString *text = texts[index];
     [MioAlertHelper showMenuAlert:(text.length ? text : @"评论")
@@ -59,13 +72,12 @@ static const NSInteger kMaxComments = 20;
 }
 
 - (void)promptAddComment {
-    MomentsConfig *config = [MomentsConfig shared];
-    if ((NSInteger)config.fakeCommentTexts.count >= kMaxComments) {
+    if ((NSInteger)[self currentTexts].count >= kMaxComments) {
         [MioAlertHelper showTipAlert:[NSString stringWithFormat:@"最多设置 %ld 条评论", (long)kMaxComments]];
         return;
     }
     [MioAlertHelper showInputAlert:@"新增评论"
-                           message:@"伪集赞时随机取用"
+                           message:@"使用时随机取用"
                        initialText:nil
                        placeholder:@"输入评论内容"
                           keyboard:UIKeyboardTypeDefault
@@ -73,20 +85,18 @@ static const NSInteger kMaxComments = 20;
                         onConfirm:^(NSString *input) {
         NSString *text = [input stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (!text.length) return;
-        NSMutableArray *arr = [config.fakeCommentTexts mutableCopy] ?: [NSMutableArray array];
+        NSMutableArray *arr = [[self currentTexts] mutableCopy] ?: [NSMutableArray array];
         [arr addObject:text];
-        config.fakeCommentTexts = arr;
-        [ConfigManager saveAll];
+        [self saveTexts:arr];
         [self reloadTable];
     }];
 }
 
 - (void)promptEditComment:(NSInteger)index {
-    MomentsConfig *config = [MomentsConfig shared];
-    NSArray *texts = config.fakeCommentTexts ?: @[];
+    NSArray *texts = [self currentTexts];
     if (index < 0 || index >= (NSInteger)texts.count) return;
     [MioAlertHelper showInputAlert:@"编辑评论"
-                           message:@"伪集赞时随机取用"
+                           message:@"使用时随机取用"
                        initialText:texts[index]
                        placeholder:@"输入评论内容"
                           keyboard:UIKeyboardTypeDefault
@@ -96,19 +106,16 @@ static const NSInteger kMaxComments = 20;
         if (!text.length) return;
         NSMutableArray *arr = [texts mutableCopy];
         arr[index] = text;
-        config.fakeCommentTexts = arr;
-        [ConfigManager saveAll];
+        [self saveTexts:arr];
         [self reloadTable];
     }];
 }
 
 - (void)deleteComment:(NSInteger)index {
-    MomentsConfig *config = [MomentsConfig shared];
-    NSMutableArray *arr = [config.fakeCommentTexts mutableCopy];
+    NSMutableArray *arr = [[self currentTexts] mutableCopy];
     if (index < 0 || index >= (NSInteger)arr.count) return;
     [arr removeObjectAtIndex:index];
-    config.fakeCommentTexts = arr;
-    [ConfigManager saveAll];
+    [self saveTexts:arr];
     [self reloadTable];
 }
 
@@ -116,9 +123,7 @@ static const NSInteger kMaxComments = 20;
     [MioAlertHelper showConfirmAlert:@"确定清空所有评论文本？"
                         confirmTitle:@"清空"
                            onConfirm:^{
-        MomentsConfig *config = [MomentsConfig shared];
-        config.fakeCommentTexts = @[];
-        [ConfigManager saveAll];
+        [self saveTexts:@[]];
         [self reloadTable];
     }];
 }
@@ -128,8 +133,7 @@ static const NSInteger kMaxComments = 20;
 - (void)buildUI {
     self.masterSwitchKeys = [NSMutableSet set];
 
-    MomentsConfig *config = [MomentsConfig shared];
-    NSArray *texts = config.fakeCommentTexts ?: @[];
+    NSArray *texts = [self currentTexts];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
 
@@ -161,7 +165,7 @@ static const NSInteger kMaxComments = 20;
     }
     y = [self finishGroup:group2 atY:y height:cy2];
 
-    [self addSectionFooter:@"伪集赞时按设置的评论数量从列表随机取用" y:y width:w];
+    [self addSectionFooter:(self.footerText ?: @"伪集赞时按设置的评论数量从列表随机取用") y:y width:w];
 }
 
 @end

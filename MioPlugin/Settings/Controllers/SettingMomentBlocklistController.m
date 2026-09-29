@@ -9,9 +9,23 @@
 
 @implementation SettingMomentBlocklistController
 
+- (NSString *)listKey {
+    return self.configKey ?: @"autoLikeBlocklist";
+}
+
+- (NSArray<NSString *> *)currentList {
+    id v = [[MomentsConfig shared] valueForKey:[self listKey]];
+    return [v isKindOfClass:[NSArray class]] ? v : @[];
+}
+
+- (void)saveList:(NSArray<NSString *> *)list {
+    [[MomentsConfig shared] setValue:list forKey:[self listKey]];
+    [ConfigManager saveAll];
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"点赞黑名单";
+    self.title = self.pageTitle ?: @"点赞黑名单";
     // 不在此处 buildUI：viewWillAppear 统一重建，避免同表叠行
 }
 
@@ -44,12 +58,11 @@
     }
     self.masterSwitchKeys = [NSMutableSet set];
 
-    MomentsConfig *config = [MomentsConfig shared];
-    NSArray<NSString *> *list = config.autoLikeBlocklist ?: @[];
+    NSArray<NSString *> *list = [self currentList];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 0;
 
-    y = [self addSectionHeader:@"黑名单好友" y:y width:w];
+    y = [self addSectionHeader:[NSString stringWithFormat:@"%@（%lu）", self.title ?: @"名单", (unsigned long)list.count] y:y width:w];
     UIView *group = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
 
@@ -62,23 +75,21 @@
     }
     y = [self finishGroup:group atY:y height:cy];
 
-    [self addSectionFooter:@"黑名单中的好友发的朋友圈不参与自动点赞\n点击好友可移除" y:y width:w];
+    [self addSectionFooter:(self.footerText ?: @"点击好友可移除") y:y width:w];
 }
 
-#pragma mark - 黑名单操作
+#pragma mark - 名单操作
 
 - (void)showBlockActions:(NSInteger)index {
-    MomentsConfig *config = [MomentsConfig shared];
-    NSArray<NSString *> *list = config.autoLikeBlocklist ?: @[];
+    NSArray<NSString *> *list = [self currentList];
     if (index < 0 || index >= (NSInteger)list.count) return;
     NSString *wxid = list[index];
-    [MioAlertHelper showConfirmAlert:[NSString stringWithFormat:@"将 %@ 移出点赞黑名单？", WXDisplayNameForWxid(wxid)]
+    [MioAlertHelper showConfirmAlert:[NSString stringWithFormat:@"将 %@ 移出%@？", WXDisplayNameForWxid(wxid), self.title ?: @"名单"]
                         confirmTitle:@"移出"
                           onConfirm:^{
-        NSMutableArray *arr = [config.autoLikeBlocklist mutableCopy] ?: [NSMutableArray array];
+        NSMutableArray *arr = [[self currentList] mutableCopy] ?: [NSMutableArray array];
         if (index < (NSInteger)arr.count) [arr removeObjectAtIndex:index];
-        config.autoLikeBlocklist = arr;
-        [ConfigManager saveAll];
+        [self saveList:arr];
         [self reloadTable];
     }];
 }
@@ -113,7 +124,7 @@
         [picker setValue:@YES forKey:@"m_bKeepCurViewAfterSelect"];
         [picker setValue:@NO forKey:@"m_onlyChatRoom"];
         [picker setValue:@YES forKey:@"m_bIgnoreChatRoom"];
-        [picker setValue:@"添加黑名单好友" forKey:@"customTitle"];
+        [picker setValue:(self.pickerTitle ?: @"添加好友") forKey:@"customTitle"];
     } @catch (NSException *e) {
         WPLog(@"Moments", @"[Blocklist] picker KVC error: %@", e);
     }
@@ -139,8 +150,7 @@
         return;
     }
     if (![contacts isKindOfClass:[NSArray class]]) contacts = @[];
-    MomentsConfig *config = [MomentsConfig shared];
-    NSMutableArray *merged = [config.autoLikeBlocklist mutableCopy] ?: [NSMutableArray array];
+    NSMutableArray *merged = [[self currentList] mutableCopy] ?: [NSMutableArray array];
     NSInteger added = 0;
     for (id it in contacts) {
         NSString *wxid = nil;
@@ -157,10 +167,9 @@
         [merged addObject:trim];
         added++;
     }
-    config.autoLikeBlocklist = merged;
-    [ConfigManager saveAll];
-    WPLog(@"Moments", @"[Blocklist] picked %lu, added %ld, total %lu",
-          (unsigned long)contacts.count, (long)added, (unsigned long)merged.count);
+    [self saveList:merged];
+    WPLog(@"Moments", @"[Blocklist] picked %lu, added %ld, total %lu (%@)",
+          (unsigned long)contacts.count, (long)added, (unsigned long)merged.count, [self listKey]);
     [self reloadTable];
 }
 

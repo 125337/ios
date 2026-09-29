@@ -28,6 +28,11 @@
         [ConfigDescriptor itemWithKey:@"autoLikeRefreshInterval" type:ConfigValueTypeInteger default:@(60)],
         [ConfigDescriptor itemWithKey:@"autoLikeMaxPerSession" type:ConfigValueTypeInteger default:@(20)],
         [ConfigDescriptor itemWithKey:@"autoLikeBlocklist" type:ConfigValueTypeArray default:@[]],
+        [ConfigDescriptor itemWithKey:@"autoCommentEnabled" type:ConfigValueTypeBool default:@NO],
+        [ConfigDescriptor itemWithKey:@"autoCommentInterval" type:ConfigValueTypeInteger default:@(10)],
+        [ConfigDescriptor itemWithKey:@"autoCommentRefreshInterval" type:ConfigValueTypeInteger default:@(180)],
+        [ConfigDescriptor itemWithKey:@"autoCommentTexts" type:ConfigValueTypeArray default:@[]],
+        [ConfigDescriptor itemWithKey:@"autoCommentContacts" type:ConfigValueTypeArray default:@[]],
     ];
 }
 

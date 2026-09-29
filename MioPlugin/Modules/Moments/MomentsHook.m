@@ -1163,6 +1163,11 @@ static void MioAutoLikeEnqueueItem(id item, const char *src) {
     Class itemCls = objc_getClass("WCDataItem");
     if (!itemCls || ![item isKindOfClass:itemCls]) return;
     if (MioAutoLikeAlreadyLiked(item)) return;
+    // 自己发的不点赞（WCR FUN_00573f38 skipOwn 实锤）
+    NSString *selfWxid = MioSelfWxid();
+    NSString *lkUser = MioAutoLikeKvcString(item, @"username")
+                       ?: MioAutoLikeKvcString(item, @"sourceUserName");
+    if (lkUser.length > 0 && selfWxid.length > 0 && [lkUser isEqualToString:selfWxid]) return;
     NSString *key = MioAutoLikeKey(item);
     if (key.length == 0) {
         WPLog(@"Moments", @"[AutoLike] FAIL (%s): empty key (tid/itemID both nil)", src);
@@ -1199,6 +1204,190 @@ static void MioAutoLikeEnqueueArray(NSArray *datas, const char *src) {
     for (id it in datas) MioAutoLikeEnqueueItem(it, src);
 }
 
+// 自己 wxid（WCR FUN_0056b564 实锤 fallback：SettingUtil getCurUsrName 类方法）
+static NSString *MioSelfWxid(void) {
+    @try {
+        Class cls = objc_getClass("SettingUtil");
+        SEL sel = NSSelectorFromString(@"getCurUsrName");
+        if (cls && [cls respondsToSelector:sel]) {
+            return ((NSString *(*)(id, SEL))objc_msgSend)(cls, sel);
+        }
+    } @catch (NSException *e) {}
+    return nil;
+}
+
+// ===== 朋友圈自动评论引擎（WCR kind=1 实锤：独立队列套件 &DAT_0298f1a8[1]/f198/f188/f238，
+// 与点赞完全分离；执行链 FUN_005753dc→FUN_005758e8：WCCommentItem genCommentObject →
+// WCFacade commentObject:ForAd:extraInfo:{@Scene:@3}）=====
+static NSMutableArray *gAcmtQueue = nil;
+static NSMutableSet *gAcmtPending = nil, *gAcmtDone = nil;
+static BOOL gAcmtRunning = NO;
+static NSTimeInterval gAcmtLastRefresh = 0;
+
+// 评论内容随机（WCR FUN_00575f28 实锤随机取用；Mio 池空不评论——发好友可见内容必须用户自配，
+// 不学 WCR 内置文案池）
+static NSString *MioAcmtRandomText(void) {
+    NSArray *texts = [MomentsConfig shared].autoCommentTexts;
+    if (texts.count == 0) return nil;
+    return texts[arc4random_uniform((u_int32_t)texts.count)];
+}
+
+// 操作间隔钳位（WCR momentsAutoCommentInterval 同款 [3,300]，Mio 默认 10）
+static long MioAcmtIntervalClamped(void) {
+    long d = [MomentsConfig shared].autoCommentInterval;
+    if (d < 3) d = 3;
+    if (d > 300) d = 300;
+    return d;
+}
+
+// 后台刷新间隔钳位（WCR refresh 同款 [60,3600]，Mio 默认 180）
+static long MioAcmtRefreshIntervalClamped(void) {
+    long iv = [MomentsConfig shared].autoCommentRefreshInterval;
+    if (iv < 60) iv = 60;
+    if (iv > 3600) iv = 3600;
+    return iv;
+}
+
+// 已评论过检测（WCR 缺失项，Mio 补齐：commentUsers.username==我方 wxid 为服务端持久态，
+// 防重启后内存 done 清空导致旧帖重评）
+static BOOL MioAcmtAlreadyCommented(id item, NSString *selfWxid) {
+    if (selfWxid.length == 0) return NO;
+    @try {
+        NSArray *cmts = [item valueForKey:@"commentUsers"];
+        if (![cmts isKindOfClass:[NSArray class]]) return NO;
+        for (id c in cmts) {
+            if (![c respondsToSelector:@selector(username)]) continue;
+            NSString *u = ((NSString *(*)(id, SEL))objc_msgSend)(c, @selector(username));
+            if ([u isKindOfClass:[NSString class]] && [u isEqualToString:selfWxid]) return YES;
+        }
+    } @catch (NSException *e) {}
+    return NO;
+}
+
+// 执行评论（WCR FUN_005758e8 实锤全链：内容判空 → itemID/username 判空 →
+// WCCommentItem genCommentObject:content:ref:source:SnsEmojiInfoObj:（头文件 L66）→
+// WCFacade commentObject:ForAd:extraInfo:（头文件 L523）+ extraInfo{@Scene:@3}）
+static BOOL MioAcmtPerform(id item) {
+    NSString *content = MioAcmtRandomText();
+    if (content.length == 0) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL: no comment texts configured");
+        return NO;
+    }
+    NSString *key = MioAutoLikeKey(item);
+    NSString *itemID = MioAutoLikeKvcString(item, @"itemID");
+    NSString *user = MioAutoLikeKvcString(item, @"username")
+                     ?: MioAutoLikeKvcString(item, @"sourceUserName");
+    if (itemID.length == 0 || user.length == 0) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL (%@): missing itemID/user", key);
+        return NO;
+    }
+    Class cmtCls = objc_getClass("WCCommentItem");
+    SEL gen = NSSelectorFromString(@"genCommentObject:content:ref:source:SnsEmojiInfoObj:");
+    if (!cmtCls || ![cmtCls respondsToSelector:gen]) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL: WCCommentItem lacks genCommentObject");
+        return NO;
+    }
+    id comment = ((id(*)(id, SEL, id, id, id, id, id))objc_msgSend)(cmtCls, gen, item, content, nil, nil, nil);
+    if (!comment) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL (%@): genCommentObject nil", key);
+        return NO;
+    }
+    id facade = WXGetService(objc_getClass("WCFacade"));
+    SEL cm = NSSelectorFromString(@"commentObject:ForAd:extraInfo:");
+    if (!facade || ![facade respondsToSelector:cm]) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL: WCFacade lacks commentObject:ForAd:extraInfo:");
+        return NO;
+    }
+    NSDictionary *extra = @{@"WCMomentsInteractionExtraInfoKey_Scene": @3};
+    @try {
+        id ret = ((id(*)(id, SEL, id, id, id))objc_msgSend)(facade, cm, comment, item, extra);
+        WPLog(@"Moments", @"[AutoCmt] commented %@ (user %@) content=%@", key, user, content);
+        return (ret != nil);
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL (%@): %@", key, e);
+        return NO;
+    }
+}
+
+// 消费（WCR FUN_00575078 kind=1 路径同构：取队首→执行→入 done→续排；评论无单轮上限）
+static void MioAcmtSchedule(void);
+
+static void MioAcmtConsume(void) {
+    gAcmtRunning = NO;
+    MomentsConfig *cfg = [MomentsConfig shared];
+    if (!cfg.autoCommentEnabled) {
+        [gAcmtQueue removeAllObjects];
+        [gAcmtPending removeAllObjects];
+        WPLog(@"Moments", @"[AutoCmt] consume: disabled, queue cleared");
+        return;
+    }
+    if (gAcmtQueue.count == 0) return;
+    id item = gAcmtQueue.firstObject;
+    [gAcmtQueue removeObjectAtIndex:0];
+    NSString *key = MioAutoLikeKey(item);
+    if (key.length > 0) [gAcmtPending removeObject:key];
+    if (key.length > 0 && ![gAcmtDone containsObject:key]) {
+        @try {
+            if (MioAcmtPerform(item)) [gAcmtDone addObject:key];
+            // 失败不入 done：下轮刷新 timelineDataList 补扫重试（180s 起步，无风控压力）
+        } @catch (NSException *e) {
+            WPLog(@"Moments", @"[AutoCmt] perform error: %@", e);
+        }
+    }
+    if (gAcmtQueue.count > 0) MioAcmtSchedule();
+}
+
+// 调度（WCR FUN_0057399c kind=1 同构：运行守卫 + 队列非空才排，delay=评论操作间隔）
+static void MioAcmtSchedule(void) {
+    if (gAcmtRunning) return;
+    if (gAcmtQueue.count == 0) return;
+    gAcmtRunning = YES;
+    long d = MioAcmtIntervalClamped();
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(d * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ MioAcmtConsume(); });
+}
+
+// 单帖入队（WCR 过滤链 kind=1 路径：gate → 类检查 → skipOwn → 生效范围 → 广告 → 已评/去重）
+static void MioAcmtEnqueueItem(id item, const char *src) {
+    if (!gAcmtQueue) {
+        gAcmtQueue = [NSMutableArray array];
+        gAcmtPending = [NSMutableSet set];
+        gAcmtDone = [NSMutableSet set];
+    }
+    MomentsConfig *cfg = [MomentsConfig shared];
+    if (!cfg.autoCommentEnabled) return;
+    Class itemCls = objc_getClass("WCDataItem");
+    if (!itemCls || ![item isKindOfClass:itemCls]) return;
+    NSString *key = MioAutoLikeKey(item);
+    if (key.length == 0) return;
+    // 自己发的不评论（WCR FUN_00573f38 skipOwn 实锤）
+    NSString *selfWxid = MioSelfWxid();
+    NSString *user = MioAutoLikeKvcString(item, @"username")
+                     ?: MioAutoLikeKvcString(item, @"sourceUserName");
+    if (user.length > 0 && selfWxid.length > 0 && [user isEqualToString:selfWxid]) return;
+    // 生效范围：白名单非空仅评论选中好友（WCR TargetMode=1 语义；空=全部好友）
+    NSArray *scope = cfg.autoCommentContacts;
+    if (scope.count > 0 && (user.length == 0 || ![scope containsObject:user])) return;
+    // 广告帖排除（过滤链 kind 共用 advertiseInfo 门）
+    @try {
+        if ([item respondsToSelector:@selector(advertiseInfo)] && [item valueForKey:@"advertiseInfo"]) return;
+    } @catch (NSException *e) {}
+    // 防重复评论（服务端持久态；WCR 缺失，Mio 补齐）
+    if (MioAcmtAlreadyCommented(item, selfWxid)) return;
+    if ([gAcmtDone containsObject:key] || [gAcmtPending containsObject:key]) return;
+    [gAcmtPending addObject:key];
+    [gAcmtQueue addObject:item];
+    WPLog(@"Moments", @"[AutoCmt] enqueue (%s) key %@ queue=%lu",
+          src, key, (unsigned long)gAcmtQueue.count);
+    MioAcmtSchedule();
+}
+
+// 数组入队（WCR FUN_00572d68 kind=1 同构）
+static void MioAcmtEnqueueArray(NSArray *datas, const char *src) {
+    if (![datas isKindOfClass:[NSArray class]]) return;
+    for (id it in datas) MioAcmtEnqueueItem(it, src);
+}
+
 // 刷新循环当前间隔（WCR FUN_00572a6c 钳位 60~3600）
 static long MioAutoLikeRefreshIntervalClamped(void) {
     MomentsConfig *cfg = [MomentsConfig shared];
@@ -1209,19 +1398,25 @@ static long MioAutoLikeRefreshIntervalClamped(void) {
 }
 
 // 刷新 tick（WCR FUN_00572784 判定链实锤：gate → 前台 → 不在朋友圈页 → 队列空 →
-// 距上次≥间隔 → timelineDataList 补入队 + beginTimeline + updateTimelineHead）
+// 距上次≥间隔 → timelineDataList 补入队 + beginTimeline + updateTimelineHead；
+// 双引擎改造：点赞(60s 默认)/评论(180s 默认)各自节流记账，任一到期即拉新，一次刷新服务两者）
 static void MioAutoLikeRefreshTick(void) {
     MomentsConfig *cfg = [MomentsConfig shared];
-    if (!cfg.autoLikeEnabled) return;
+    BOOL likeOn = cfg.autoLikeEnabled;
+    BOOL cmtOn = cfg.autoCommentEnabled;
+    if (!likeOn && !cmtOn) return;
     if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
     if (MioFakeVCCoveringTimeline()) return;
-    if (gAutoLikeRunning || gAutoLikeQueue.count > 0) return;
-    long iv = MioAutoLikeRefreshIntervalClamped();
     NSTimeInterval now = [NSDate date].timeIntervalSince1970;
-    if (gAutoLikeLastRefresh > 0 && now - gAutoLikeLastRefresh < iv) return;
+    BOOL likeNeed = likeOn && !gAutoLikeRunning && gAutoLikeQueue.count == 0
+                    && (gAutoLikeLastRefresh <= 0 || now - gAutoLikeLastRefresh >= MioAutoLikeRefreshIntervalClamped());
+    BOOL cmtNeed = cmtOn && !gAcmtRunning && gAcmtQueue.count == 0
+                   && (gAcmtLastRefresh <= 0 || now - gAcmtLastRefresh >= MioAcmtRefreshIntervalClamped());
+    if (!likeNeed && !cmtNeed) return;
     id facade = WXGetService(objc_getClass("WCFacade"));
     if (!facade) return;
-    gAutoLikeLastRefresh = now;   // WCR 同款：取到 facade 才记账
+    if (likeNeed) gAutoLikeLastRefresh = now;   // WCR 同款：取到 facade 才记账
+    if (cmtNeed) gAcmtLastRefresh = now;
     // 已加载未处理的 item 补入队（WCR FUN_005724e4 timelineDataList → 逐 item 入队）
     @try {
         SEL gtm = NSSelectorFromString(@"getTimelineMgr");
@@ -1230,7 +1425,10 @@ static void MioAutoLikeRefreshTick(void) {
         SEL tdl = NSSelectorFromString(@"timelineDataList");
         if (mgr && [mgr respondsToSelector:tdl]) {
             NSArray *list = ((id(*)(id, SEL))objc_msgSend)(mgr, tdl);
-            if ([list isKindOfClass:[NSArray class]]) MioAutoLikeEnqueueArray(list, "al-list");
+            if ([list isKindOfClass:[NSArray class]]) {
+                if (likeOn) MioAutoLikeEnqueueArray(list, "al-list");
+                if (cmtOn) MioAcmtEnqueueArray(list, "ac-list");
+            }
         }
     } @catch (NSException *e) {
         WPLog(@"Moments", @"[AutoLike] list scan error: %@", e);
@@ -1240,10 +1438,17 @@ static void MioAutoLikeRefreshTick(void) {
     SEL head = NSSelectorFromString(@"updateTimelineHead");
     if ([facade respondsToSelector:head]) {
         ((void(*)(id, SEL))objc_msgSend)(facade, head);
-        WPLog(@"Moments", @"[AutoLike] bg refresh fired (t=%.0f, iv=%ld)", now, iv);
+        WPLog(@"Moments", @"[AutoLike] bg refresh fired (t=%.0f, likeNeed=%d cmtNeed=%d)", now, likeNeed, cmtNeed);
     } else {
         WPLog(@"Moments", @"[AutoLike] bg refresh: WCFacade lacks updateTimelineHead");
     }
+}
+
+// 重排周期：两引擎刷新间隔取小者（tick 高频醒，节流靠各引擎时间戳）
+static long MioRefreshTickMinInterval(void) {
+    long a = MioAutoLikeRefreshIntervalClamped();
+    long b = MioAcmtRefreshIntervalClamped();
+    return a < b ? a : b;
 }
 
 // 重排调度（WCR FUN_00572220/FUN_00576918 实锤：防重入守卫 + 下限 15s + 每轮执行后
@@ -1256,7 +1461,7 @@ static void MioAutoLikeScheduleTick(double delay) {
                    dispatch_get_main_queue(), ^{
         gAutoLikeTickScheduled = NO;
         MioAutoLikeRefreshTick();
-        MioAutoLikeScheduleTick((double)MioAutoLikeRefreshIntervalClamped());
+        MioAutoLikeScheduleTick((double)MioRefreshTickMinInterval());
     });
 }
 
@@ -1266,10 +1471,10 @@ static void MioAutoLikeInstallRefreshLoop(void) {
         addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil
         usingBlock:^(NSNotification *note) {
             MioAutoLikeRefreshTick();
-            MioAutoLikeScheduleTick((double)MioAutoLikeRefreshIntervalClamped());
+            MioAutoLikeScheduleTick((double)MioRefreshTickMinInterval());
         }];
     MioAutoLikeScheduleTick(20.0);   // WCR 首轮 20s（0x4034000000000000 实锤）
-    WPLog(@"Moments", @"[AutoLike] refresh loop installed (first tick 20s)");
+    WPLog(@"Moments", @"[AutoLike] refresh loop installed (first tick 20s, like+cmt)");
 }
 
 // install 期日志早于文件日志窗口必然丢失（174.log 定论），安装结果存全局，
@@ -1363,24 +1568,28 @@ static MioDL10Orig gOrigFirst = NULL;
 static void MioFakeDLMod(id self, SEL _cmd, id item, BOOL notify) {
     MioFakeAutoApplyItem(item, "dl");
     MioAutoLikeEnqueueItem(item, "al-dl");
+    MioAcmtEnqueueItem(item, "ac-dl");
     if (gOrigMod) gOrigMod(self, _cmd, item, notify);
 }
 
 static void MioFakeDLPre(id self, SEL _cmd, id p1, NSArray *datas, id p4, unsigned int p5, id p6) {
     MioFakeAutoApplyArray(datas, "dl-pre");
     MioAutoLikeEnqueueArray(datas, "al-dl-pre");
+    MioAcmtEnqueueArray(datas, "ac-dl-pre");
     if (gOrigPre) gOrigPre(self, _cmd, p1, datas, p4, p5, p6);
 }
 
 static void MioFakeDLNext(id self, SEL _cmd, id p1, NSArray *datas, id p4, unsigned int p5, id p6) {
     MioFakeAutoApplyArray(datas, "dl-next");
     MioAutoLikeEnqueueArray(datas, "al-dl-next");
+    MioAcmtEnqueueArray(datas, "ac-dl-next");
     if (gOrigNext) gOrigNext(self, _cmd, p1, datas, p4, p5, p6);
 }
 
 static void MioFakeDLFirst(id self, SEL _cmd, id p1, BOOL p2, NSArray *datas, id p5, unsigned int p6, id p7, id p8, id p9) {
     MioFakeAutoApplyArray(datas, "dl-first");
     MioAutoLikeEnqueueArray(datas, "al-dl-first");
+    MioAcmtEnqueueArray(datas, "ac-dl-first");
     if (gOrigFirst) gOrigFirst(self, _cmd, p1, p2, datas, p5, p6, p7, p8, p9);
 }
 
@@ -1395,6 +1604,7 @@ static void MioFakeDLUDHead(id self, SEL _cmd) {
     NSArray *list = ((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList"));
     MioFakeAutoApplyArray(list, "dl-udHead");
     MioAutoLikeEnqueueArray(list, "al-udHead");
+    MioAcmtEnqueueArray(list, "ac-udHead");
 }
 
 static void MioFakeDLUDPre(id self, SEL _cmd) {
@@ -1402,6 +1612,7 @@ static void MioFakeDLUDPre(id self, SEL _cmd) {
     NSArray *list = ((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList"));
     MioFakeAutoApplyArray(list, "dl-udPre");
     MioAutoLikeEnqueueArray(list, "al-udPre");
+    MioAcmtEnqueueArray(list, "ac-udPre");
 }
 
 static void MioFakeDLUDTail(id self, SEL _cmd) {
@@ -1409,6 +1620,7 @@ static void MioFakeDLUDTail(id self, SEL _cmd) {
     NSArray *list = ((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList"));
     MioFakeAutoApplyArray(list, "dl-udTail");
     MioAutoLikeEnqueueArray(list, "al-udTail");
+    MioAcmtEnqueueArray(list, "ac-udTail");
 }
 
 // 不强制返回类型：垫片末句透传 orig，ARM64 x0 返回值天然透传，任何类型安全；
