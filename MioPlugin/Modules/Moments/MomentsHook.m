@@ -1006,7 +1006,8 @@ static BOOL MioFakeVCCoveringTimeline(void);    // 定义在伪集赞 active-ref
 static NSString *MioAutoLikeKvcString(id item, NSString *key) {
     @try {
         id v = [item valueForKey:key];
-        if ([v isKindOfClass:[NSString class]] && v.length > 0) return v;
+        if (![v isKindOfClass:[NSString class]]) return nil;
+        return (NSString *)v;
     } @catch (NSException *e) {}
     return nil;
 }
