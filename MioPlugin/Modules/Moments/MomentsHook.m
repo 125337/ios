@@ -1029,28 +1029,45 @@ static BOOL MioAutoLikeAlreadyLiked(id item) {
 static void MioAutoLikeSchedule(void);
 
 // 单帖执行点赞（WCR FUN_00575474 实锤：likeFlag 检查 → username?:sourceUserName + itemID
-// 空判 → WCFacade respondsToSelector(likeObject:ofUser:source:) → 调用 + setLikeFlag:1）
-static void MioAutoLikePerform(id item) {
+// 空判 → WCFacade respondsToSelector(likeObject:ofUser:source:) → 调用 + setLikeFlag:1）。
+// 返回 NO 表示未成功，key 不入 done，等下轮刷新重试；FAIL 日志留痕定位
+static BOOL MioAutoLikePerform(id item) {
     NSString *user = MioAutoLikeKvcString(item, @"username")
                      ?: MioAutoLikeKvcString(item, @"sourceUserName");
     NSString *itemID = MioAutoLikeKvcString(item, @"itemID");
     if (user.length == 0 || itemID.length == 0) {
-        WPLog(@"Moments", @"[AutoLike] skip: missing user/itemID");
-        return;
+        WPLog(@"Moments", @"[AutoLike] FAIL %@: missing user(%@)/itemID", itemID ?: @"?", user);
+        return NO;
     }
     id facade = WXGetService(objc_getClass("WCFacade"));
     if (!facade) {
-        WPLog(@"Moments", @"[AutoLike] skip: WCFacade unavailable");
-        return;
+        WPLog(@"Moments", @"[AutoLike] FAIL %@: WCFacade unavailable", itemID);
+        return NO;
     }
     SEL like = NSSelectorFromString(@"likeObject:ofUser:source:");
     if (![facade respondsToSelector:like]) {
-        WPLog(@"Moments", @"[AutoLike] skip: WCFacade lacks likeObject:ofUser:source:");
-        return;
+        WPLog(@"Moments", @"[AutoLike] FAIL %@: WCFacade lacks likeObject:ofUser:source:", itemID);
+        return NO;
     }
-    ((void(*)(id, SEL, id, id, id))objc_msgSend)(facade, like, item, user, nil);
+    // 返回类型感知：B/c=BOOL 判成败；@=对象只打日志（BOOL 不能当 id 解引用，会崩）；v=无返回
+    char ret = 'v';
+    Method m = class_getInstanceMethod([facade class], like);
+    if (m) ret = method_getReturnType(m)[0];
+    if (ret == 'B' || ret == 'c') {
+        BOOL ok = ((BOOL(*)(id, SEL, id, id, id))objc_msgSend)(facade, like, item, user, nil);
+        if (!ok) {
+            WPLog(@"Moments", @"[AutoLike] FAIL %@ (user %@): likeObject returned NO", itemID, user);
+            return NO;
+        }
+    } else if (ret == '@') {
+        id r = ((id(*)(id, SEL, id, id, id))objc_msgSend)(facade, like, item, user, nil);
+        WPLog(@"Moments", @"[AutoLike] likeObject ret=%@", r);
+    } else {
+        ((void(*)(id, SEL, id, id, id))objc_msgSend)(facade, like, item, user, nil);
+    }
     [item setValue:@1 forKey:@"likeFlag"];   // WCR setLikeFlag:1（本地防重复）
     WPLog(@"Moments", @"[AutoLike] liked %@ (user %@)", itemID, user);
+    return YES;
 }
 
 // 消费一轮（WCR FUN_00575078 实锤：开关关→清空队列与 pending；否则取队首→pending 移除→
@@ -1071,8 +1088,11 @@ static void MioAutoLikeConsume(void) {
     if (key.length > 0) [gAutoLikePending removeObject:key];
     if (key.length > 0 && ![gAutoLikeDone containsObject:key]) {
         @try {
-            MioAutoLikePerform(item);
-            [gAutoLikeDone addObject:key];
+            if (MioAutoLikePerform(item)) {
+                [gAutoLikeDone addObject:key];
+            }
+            // 失败不入 done：下轮刷新循环 timelineDataList 扫描会重新入队重试（60s 起步，
+            // 频率受刷新间隔约束，无风控压力），FAIL 日志留痕
         } @catch (NSException *e) {
             WPLog(@"Moments", @"[AutoLike] perform error: %@", e);
         }
@@ -1105,9 +1125,16 @@ static void MioAutoLikeEnqueueItem(id item, const char *src) {
     if (!cfg.autoLikeEnabled) return;
     Class itemCls = objc_getClass("WCDataItem");
     if (!itemCls || ![item isKindOfClass:itemCls]) return;
-    if (MioAutoLikeAlreadyLiked(item)) return;
+    if (MioAutoLikeAlreadyLiked(item)) {
+        // 诊断期打印：若某帖未赞却再没被尝试，先查这里是否 likeFlag 误判
+        WPLog(@"Moments", @"[AutoLike] likeFlag=1 (%s) key %@", src, MioAutoLikeKey(item) ?: @"?");
+        return;
+    }
     NSString *key = MioAutoLikeKey(item);
-    if (key.length == 0) return;
+    if (key.length == 0) {
+        WPLog(@"Moments", @"[AutoLike] FAIL (%s): empty key (tid/itemID both nil)", src);
+        return;
+    }
     if ([gAutoLikeDone containsObject:key] || [gAutoLikePending containsObject:key]) return;
     [gAutoLikePending addObject:key];
     [gAutoLikeQueue addObject:item];
