@@ -1039,6 +1039,8 @@ static long MioAutoLikeMaxClamped(void) {
     return v;
 }
 
+static NSString *MioSelfWxid(void);   // 定义在评论引擎区（点赞/评论共用 skipOwn）
+
 // 单帖执行点赞（WCR FUN_00575474 实锤：likeFlag 检查 → username?:sourceUserName + itemID
 // 空判 → WCFacade respondsToSelector(likeObject:ofUser:source:) → 调用 + setLikeFlag:1）。
 // 返回 NO 表示未成功，key 不入 done，等下轮刷新重试；FAIL 日志留痕定位
