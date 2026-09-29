@@ -132,7 +132,12 @@
 
 // 选中结果处理（WCR FUN_01c81c48 + wcr_sanitizeContactUsernames 同款语义）：
 // 元素 NSString 直取 / contact 对象取 m_nsUsrName；trim、去空、滤 @chatroom；与现名单合并去重
+// 微信 performCallback 调用线程未证实，UI/存储操作统一归主线程
 - (void)handlePickedContacts:(NSArray *)contacts {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self handlePickedContacts:contacts]; });
+        return;
+    }
     if (![contacts isKindOfClass:[NSArray class]]) contacts = @[];
     MomentsConfig *config = [MomentsConfig shared];
     NSMutableArray *merged = [config.autoLikeBlocklist mutableCopy] ?: [NSMutableArray array];
