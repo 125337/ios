@@ -717,8 +717,10 @@ static NSArray *MioFakeFriendPool(void) {
 
 // 造 WCUserComment（WCR 2.1.8 实锤分流：假赞 FUN_0056e164 内 setType:1+setIsRichText:1
 // 无 commentID；假评 FUN_00571210 setType:2+setCommentID:"WCRefine_%ld" 无 isRichText。
-// 182.log 评论不显示根源：评论 type=1 被当赞渲染丢弃，且缺 commentID=评论渲染/diff 的 key）
-static id MioFakeMakeCommentUser(NSString *wxid, NSString *nickFallback, NSString *content, BOOL isComment) {
+// 182.log 评论不显示根源：评论 type=1 被当赞渲染丢弃，且缺 commentID=评论渲染/diff 的 key。
+// 183.log 仍丢条根源：同秒生成 createTime 全等+同文案 → WCUserComment isEqual 合并 →
+// UI 去重后 3 条只显示 1-2 条（WCR 把 createTime 做成入参逐条错开，33283 行实锤））
+static id MioFakeMakeCommentUser(NSString *wxid, NSString *nickFallback, NSString *content, BOOL isComment, int cTime) {
     Class ucls = objc_getClass("WCUserComment");
     if (!ucls || wxid.length == 0) return nil;
     id u = [[ucls alloc] init];
@@ -746,14 +748,14 @@ static id MioFakeMakeCommentUser(NSString *wxid, NSString *nickFallback, NSStrin
         SEL cidSel = NSSelectorFromString(@"setCommentID:");
         if ([u respondsToSelector:cidSel]) {
             ((void(*)(id, SEL, id))objc_msgSend)(u, cidSel,
-                [NSString stringWithFormat:@"Mio_%u", arc4random()]);
+                [NSString stringWithFormat:@"Mio_%u_%d", arc4random(), cTime]);
         }
     } else {
         SEL richSel = NSSelectorFromString(@"setIsRichText:");
         if ([u respondsToSelector:richSel]) ((void(*)(id, SEL, BOOL))objc_msgSend)(u, richSel, YES);
     }
     SEL timeSel = NSSelectorFromString(@"setCreateTime:");
-    if ([u respondsToSelector:timeSel]) ((void(*)(id, SEL, int))objc_msgSend)(u, timeSel, (int)[NSDate date].timeIntervalSince1970);
+    if ([u respondsToSelector:timeSel]) ((void(*)(id, SEL, int))objc_msgSend)(u, timeSel, cTime);
     if (content) {
         for (NSString *sn in @[@"setContent:", @"setContentStr:"]) {
             SEL sel = NSSelectorFromString(sn);
@@ -805,13 +807,17 @@ static void MioFakeCacheStore(NSString *key, BOOL isLike, NSArray *arr) {
 
 // 生成一批假数据（WCR 2.1.8 同款）：好友池纯随机，赞/评都抽一删一防同批同人
 //（假评抽删实证=FUN_0056ede4 内 removeObjectAtIndex；仅缓存未命中时调用一次，生成即
-// 存会话字典 → 此后同一批）
+// 存会话字典 → 此后同一批）。183.log 丢条修复：评论 createTime 逐条错开（now-i*61-随机，
+// 同帖绝不相同，对齐 WCR FUN_00571210 createTime 入参逐条错开），文案也同帖抽一删一——
+// 同秒+同文案 → WCUserComment isEqual 合并 → UI 只显示 1-2 条
 static NSArray *MioFakeGenerateBatch(BOOL isLike, NSInteger n, NSArray<NSString *> *texts) {
     NSArray *pool = MioFakeFriendPool();
     NSMutableArray *cand = (pool.count > 0) ? [pool mutableCopy] : nil;
     NSMutableArray *out = [NSMutableArray array];
     NSArray<NSString *> *tx = (texts.count > 0) ? texts : nil;
     u_int32_t nT = tx ? (u_int32_t)tx.count : (u_int32_t)kFakeCommentTextCount;
+    NSMutableArray *txCand = tx ? [tx mutableCopy] : nil;
+    int now = (int)[NSDate date].timeIntervalSince1970;
     for (NSInteger i = 0; i < n; i++) {
         NSString *wxid;
         NSString *nick = nil;
@@ -825,9 +831,18 @@ static NSArray *MioFakeGenerateBatch(BOOL isLike, NSInteger n, NSArray<NSString 
             wxid = [NSString stringWithFormat:@"wxid_fake%08u", arc4random()];
             nick = kFakeLikeNames[arc4random_uniform((u_int32_t)kFakeLikeNameCount)];
         }
-        NSString *text = (!isLike && nT > 0) ? (tx ? tx[arc4random_uniform(nT)]
-                                                   : kFakeCommentTexts[arc4random_uniform(nT)]) : nil;
-        id u = MioFakeMakeCommentUser(wxid, nick, text, !isLike);
+        int cTime = now - (int)(i * 61) - (int)arc4random_uniform(60);
+        NSString *text = nil;
+        if (!isLike) {
+            if (txCand.count > 0) {
+                u_int32_t p = arc4random_uniform((u_int32_t)txCand.count);
+                text = txCand[p];
+                [txCand removeObjectAtIndex:p];
+            } else if (nT > 0) {
+                text = tx ? tx[arc4random_uniform(nT)] : kFakeCommentTexts[arc4random_uniform(nT)];
+            }
+        }
+        id u = MioFakeMakeCommentUser(wxid, nick, text, !isLike, cTime);
         if (u) [out addObject:u];
     }
     return out;
