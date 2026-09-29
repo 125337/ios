@@ -3,6 +3,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <stdlib.h>
+#import <string.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 #import "../SettingEntry/WPCommonUI.h"
@@ -846,7 +847,7 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const
             MioFakeSetCount(item, @"setLikeCount:", (long long)likes.count)) {
             objc_setAssociatedObject(item, &kFakeLikeAppliedKey, [fakes copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
-        if (gFakeLogCount < 5) {
+        if (gFakeLogCount < 40) {   // 40：覆盖 dl-list 全量扫描多个本人帖 + fb 兜底，防额度被先耗尽吞掉关键证据
             gFakeLogCount++;
             WPLog(@"Moments", @"[FakeLike] write-back likes +%ld (%s, src=%s, cls %@)",
                   (long)fakes.count, MioFakeFriendPool().count ? "friends" : "builtin", src, NSStringFromClass([item class]));
@@ -867,7 +868,7 @@ static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const
             MioFakeSetCount(item, @"setCommentCount:", (long long)cmts.count)) {
             objc_setAssociatedObject(item, &kFakeCmtAppliedKey, [fakes copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
-        if (gFakeLogCount < 5) {
+        if (gFakeLogCount < 40) {
             gFakeLogCount++;
             WPLog(@"Moments", @"[FakeLike] write-back comments +%ld (%s, src=%s, cls %@)",
                   (long)fakes.count, MioFakeFriendPool().count ? "friends" : "builtin", src, NSStringFromClass([item class]));
@@ -885,7 +886,8 @@ static void MioFakeAutoApplyItem(id item, const char *src) {
         MomentsConfig *cfg = [MomentsConfig shared];
         if (!cfg.fakeLikeEnabled) return;
         // dl 到达诊断（177.log：dl-arrive 4 次共 40 item 零写回，须看每条是谁的帖、门为何没过）
-        if (src && src[0] == 'd' && gFakeDLLogCount < 60) {
+        // dl-list（全量扫描）来源不逐条打日志：绝大多数是非本人帖，60 条限频会被刷满
+        if (src && src[0] == 'd' && strncmp(src, "dl-list", 7) != 0 && gFakeDLLogCount < 60) {
             gFakeDLLogCount++;
             NSString *un = MioFakeGetStr(item, @[@"username", @"userName", @"m_nsUsrName"]);
             BOOL lf = NO;
@@ -896,7 +898,7 @@ static void MioFakeAutoApplyItem(id item, const char *src) {
             WPLog(@"Moments", @"[FakeLike] dl-item (%s): user=%@ likeFlag=%d", src, un, lf ? 1 : 0);
         }
         if (!MioFakeGateOwnPost(item)) {
-            if (src && src[0] == 'd' && gFakeDLLogCount < 60) {
+            if (src && src[0] == 'd' && strncmp(src, "dl-list", 7) != 0 && gFakeDLLogCount < 60) {
                 WPLog(@"Moments", @"[FakeLike] dl-rejectA (%s): user=%@", src,
                       MioFakeGetStr(item, @[@"username", @"userName", @"m_nsUsrName"]));
             }
@@ -1172,6 +1174,25 @@ static void MioFakeActiveRefresh(const char *reason) {
             return;
         }
         gFakeLastActiveRefresh = now;   // WCR 同款：取到 facade 才记账
+        // 全量兜底（WCR FUN_005512e0 同源思路）：数据回调只送"最新增量"，旧本人帖不在其中
+        //（178.log 实锤 70 条回调 item 全 rejectA 而 fb 渲染能命中），直接对 timelineDataList
+        // 全量写回，假数据在打开朋友圈前落地，头像随缓存提前加载
+        SEL gtm = NSSelectorFromString(@"getTimelineMgr");
+        id mgr = nil;
+        if ([facade respondsToSelector:gtm]) {
+            mgr = ((id(*)(id, SEL))objc_msgSend)(facade, gtm);
+        }
+        if (!mgr) mgr = WXGetService(objc_getClass("WCTimelineMgr"));
+        SEL tdl = NSSelectorFromString(@"timelineDataList");
+        if (mgr && [mgr respondsToSelector:tdl]) {
+            NSArray *list = ((id(*)(id, SEL))objc_msgSend)(mgr, tdl);
+            if ([list isKindOfClass:[NSArray class]]) {
+                WPLog(@"Moments", @"[FakeLike] dl-list scan: %lu items", (unsigned long)list.count);
+                MioFakeAutoApplyArray(list, "dl-list");
+            }
+        } else {
+            WPLog(@"Moments", @"[FakeLike] dl-list scan: timelineDataList unavailable");
+        }
         SEL begin = NSSelectorFromString(@"beginTimeline");
         if ([facade respondsToSelector:begin]) {
             ((void(*)(id, SEL))objc_msgSend)(facade, begin);
