@@ -1106,17 +1106,30 @@ static BOOL MioFakeVCCoveringTimeline(void) {
     return NO;
 }
 
-static void MioFakeActiveRefresh(void) {
+static void MioFakeActiveRefresh(const char *reason) {
     @try {
         MomentsConfig *cfg = [MomentsConfig shared];
-        if (!cfg.fakeLikeEnabled) return;
-        if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
-        if (MioFakeVCCoveringTimeline()) return;
+        if (!cfg.fakeLikeEnabled) {
+            WPLog(@"Moments", @"[FakeLike] active-refresh skipped (%s, fakeLike=NO)", reason);
+            return;
+        }
+        if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
+            WPLog(@"Moments", @"[FakeLike] active-refresh skipped (%s, not active)", reason);
+            return;
+        }
+        if (MioFakeVCCoveringTimeline()) {
+            WPLog(@"Moments", @"[FakeLike] active-refresh skipped (%s, timeline VC on screen)", reason);
+            return;
+        }
         NSTimeInterval now = [NSDate date].timeIntervalSince1970;
-        if (gFakeLastActiveRefresh > 0 && now - gFakeLastActiveRefresh < 300) return;
+        if (gFakeLastActiveRefresh > 0 && now - gFakeLastActiveRefresh < 300) {
+            WPLog(@"Moments", @"[FakeLike] active-refresh skipped (%s, throttled, %.0fs left)",
+                  reason, 300 - (now - gFakeLastActiveRefresh));
+            return;
+        }
         id facade = WXGetService(objc_getClass("WCFacade"));
         if (!facade) {
-            WPLog(@"Moments", @"[FakeLike] active-refresh: WCFacade unavailable");
+            WPLog(@"Moments", @"[FakeLike] active-refresh: WCFacade unavailable (%s)", reason);
             return;
         }
         gFakeLastActiveRefresh = now;   // WCR 同款：取到 facade 才记账
@@ -1127,7 +1140,7 @@ static void MioFakeActiveRefresh(void) {
         SEL head = NSSelectorFromString(@"updateTimelineHead");
         if ([facade respondsToSelector:head]) {
             ((void(*)(id, SEL))objc_msgSend)(facade, head);
-            WPLog(@"Moments", @"[FakeLike] active-refresh: updateTimelineHead fired (t=%.0f)", now);
+            WPLog(@"Moments", @"[FakeLike] active-refresh: updateTimelineHead fired (%s, t=%.0f)", reason, now);
         } else {
             WPLog(@"Moments", @"[FakeLike] active-refresh: WCFacade lacks updateTimelineHead");
         }
@@ -1140,10 +1153,11 @@ static void MioFakeInstallActiveRefresh(void) {
     // 回前台触发（PrivacyHook 同款通知监听，零 hook）
     [[NSNotificationCenter defaultCenter]
         addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil
-        usingBlock:^(NSNotification *note) { MioFakeActiveRefresh(); }];
+        usingBlock:^(NSNotification *note) { MioFakeActiveRefresh("fg"); }];
+    WPLog(@"Moments", @"[FakeLike] active-refresh listener installed");
     // 冷启动补偿：install 早于首次 didBecomeActive 通知时也能在服务就绪后刷一次
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ MioFakeActiveRefresh(); });
+                   dispatch_get_main_queue(), ^{ MioFakeActiveRefresh("coldstart"); });
 }
 
 #pragma mark - 安装
