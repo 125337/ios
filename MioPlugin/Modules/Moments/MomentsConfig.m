@@ -37,6 +37,7 @@
         [ConfigDescriptor itemWithKey:@"detailedTimeFormat" type:ConfigValueTypeString default:@"yyyy-MM-dd HH:mm:ss (RT)"],
         [ConfigDescriptor itemWithKey:@"tailEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"tailAppId" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"tailCustomInput" type:ConfigValueTypeString default:@""],   // 自定义输入弹窗预填值（仅跟随用户手输，与预设点选解耦）
         [ConfigDescriptor itemWithKey:@"tailPresets" type:ConfigValueTypeArray default:@[]],
     ];
 }

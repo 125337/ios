@@ -2,11 +2,13 @@
 #import "../../Modules/Moments/MomentsConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioAlertHelper.h"
 
 // 朋友圈小尾巴设置页（微信引擎渲染）
 // 卡片1 总开关（开启后才显示卡片2/卡片3）
-// 卡片2 默认尾巴：显示当前选择，点击弹输入框自定义 Appid
-// 卡片3 预设列表（含固定项"无小尾巴"）：点击选中，选中项标"使用中"
+// 卡片2 默认尾巴：当前选择（tailAppId 命中预设显示预设名）+ 自定义输入弹窗
+//   （预填只跟随用户手输值 tailCustomInput，与预设点选解耦；手输保存同时写两键）
+// 卡片3 预设列表（含固定项"无小尾巴"）：只显示昵称，点击选中标"使用中"
 @implementation SettingMomentTailController
 
 - (void)viewDidLoad {
@@ -42,7 +44,26 @@
     if ([key isEqualToString:@"tailEnabled"]) [self reloadTable];
 }
 
-#pragma mark - 预设点选
+#pragma mark - 自定义输入/预设点选
+
+// 自定义输入弹窗：预填只跟随用户手输值（tailCustomInput），与预设点选（tailAppId）解耦
+- (void)onCustomInput {
+    [MioAlertHelper showInputAlert:@"自定义尾巴"
+                           message:@"输入 Appid\n留空表示无小尾巴\n也可在下方预设列表中点选"
+                       initialText:([MomentsConfig shared].tailCustomInput ?: @"")
+                       placeholder:@"输入Appid"
+                          keyboard:UIKeyboardTypeDefault
+                            secure:NO
+                        onConfirm:^(NSString *inputText) {
+        NSString *v = [inputText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
+        MomentsConfig *config = [MomentsConfig shared];
+        config.tailCustomInput = v;
+        config.tailAppId = v;
+        [ConfigManager saveAll];
+        WPLog(@"Moments", @"[Tail] 手输尾巴 -> %@", v.length ? v : @"(无)");
+        [self reloadTable];
+    }];
+}
 
 - (void)onPickNone {
     [self applyTailAppId:@""];
@@ -98,16 +119,15 @@
                                 cy:cy2
                              width:w];
     cy2 = [self addSeparatorInGroup:group2 cy:cy2 width:w];
-    cy2 = [self addInputRowInGroup:group2
-                             title:@"自定义输入AppID"
-                               key:@"tailAppId"
-                             value:nil
-                              hint:@"输入Appid"
-                         valueType:InputValueTypeText
-                        alertTitle:@"自定义尾巴"
-                      alertMessage:@"输入 Appid\n留空表示无小尾巴\n也可在下方预设列表中点选"
-                                cy:cy2
-                             width:w];
+    // 输入行改 nav 行 + 自定义弹窗：预填只跟随用户手输值（tailCustomInput），
+    // 基类 addInputRowInGroup 按 key 读 tailAppId 预填会带进预设点选值，故弃用
+    cy2 = [self addNavRowInGroup:group2
+                           title:@"自定义输入AppID"
+                        subtitle:@"输入Appid"
+                             tag:0
+                          action:@selector(onCustomInput)
+                              cy:cy2
+                           width:w];
     y = [self finishGroup:group2 atY:y height:cy2];
 
     // 卡片3：预设列表（固定项"无小尾巴" + 内置/自定义预设，标题带总数统计）

@@ -25,6 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *detailedTimeFormat;          // 详细时间格式串（NSDateFormatter，空回落默认）
 @property (nonatomic, assign) BOOL tailEnabled;                    // 朋友圈小尾巴总开关
 @property (nonatomic, copy) NSString *tailAppId;                   // 默认尾巴 Appid（空=无小尾巴）
+@property (nonatomic, copy) NSString *tailCustomInput;             // 自定义输入弹窗预填值（仅跟随用户手输，与预设点选解耦）
 @property (nonatomic, copy) NSArray<NSDictionary *> *tailPresets;  // 预设列表（元素 {name, appId}）
 
 + (instancetype)shared;
