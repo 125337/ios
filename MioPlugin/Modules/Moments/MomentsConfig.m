@@ -354,7 +354,7 @@
 // 生效预设：config 存了自定义列表用之，否则回落内置
 - (NSArray<NSDictionary *> *)effectiveTailPresets {
     NSArray *v = self.tailPresets;
-    return (v.count > 0) ? v : [self builtinTailPresets];
+    return (v.count > 0) ? v : [MomentsConfig builtinTailPresets];
 }
 
 // 当前尾巴显示名：appid 匹配预设显示预设名，否则显示 appid 原文；空=无
