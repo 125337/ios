@@ -1266,22 +1266,11 @@ static BOOL MioAcmtAlreadyCommented(id item, NSString *selfWxid) {
     return NO;
 }
 
-// 8.0.60 杀后台根因修复：WCCommentItem genCommentObject 内部读 item.commentStartTime
-//（WCR 时代旧字段），8.0.60 WCDataItem 已删 → unrecognized selector → 未捕获 abort。
-// 运行时补空实现（返回 nil）；若微信恢复该属性则不覆盖。
-static void MioAcmtInstallCommentStartTimeShim(void) {
-    Class cls = objc_getClass("WCDataItem");
-    SEL sel = NSSelectorFromString(@"commentStartTime");
-    if (!cls || [cls instancesRespondToSelector:sel]) return;
-    IMP imp = imp_implementationWithBlock(^(id _self) { return nil; });
-    class_addMethod(cls, sel, imp, "@@:");
-    WPLog(@"Moments", @"[AutoCmt] commentStartTime shim installed (WCDataItem 缺属性补空)");
-}
-
-// 未知 selector 兜底网（build-0930-acmtfix2）：旧评论/广告链路读一批已删除的 WCDataItem 旧属性
-//（已实证 commentStartTime、adViewId，stub 簇同源），且异常展开期间微信 C++ 析构会二次抛异常
-// 直接 terminate，@try 挡不住（acmtfix1 真机实证）。拦截 methodSignatureForSelector:（原生给不出
-// 签名时返回最小空签名 @@:）+ 补 forwardInvocation: 空实现 → 未知 selector 一律返回 nil/0 断根。
+// 未知 selector 兜底网（build-0930-acmtfix2，acmtfix4 起同时取代 commentStartTime shim）：
+// 旧评论/广告链路读一批已删除的 WCDataItem 旧属性（已实证 commentStartTime、adViewId，stub 簇
+// 同源），且异常展开期间微信 C++ 析构会二次抛异常直接 terminate，@try 挡不住（acmtfix1 真机实证）。
+// 拦截 methodSignatureForSelector:（原生给不出签名时返回最小空签名 @@:）+ 补 forwardInvocation:
+// 空实现 → 未知 selector 一律返回 nil/0 断根。
 static void MioAcmtInstallDataItemSelectorNet(NSString *clsName) {
     Class cls = objc_getClass(clsName.UTF8String);
     if (!cls) return;
@@ -1517,8 +1506,7 @@ static void MioAutoLikeScheduleTick(double delay) {
 
 // 刷新循环安装（WCR FUN_0056783c/00567964 实锤：启动 20s 首轮 + didBecomeActive 触发）
 static void MioAutoLikeInstallRefreshLoop(void) {
-    MioAcmtInstallCommentStartTimeShim();   // 8.0.60 杀后台修复，评论链路前置垫片
-    MioAcmtInstallDataItemSelectorNet(@"WCDataItem");        // 未知 selector 兜底网（adViewId 实证）
+    MioAcmtInstallDataItemSelectorNet(@"WCDataItem");        // 未知 selector 兜底网（commentStartTime/adViewId 实证）
     MioAcmtInstallDataItemSelectorNet(@"WCTimeLineDataItem"); // 防御：timeline 数据同类
     [[NSNotificationCenter defaultCenter]
         addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil
