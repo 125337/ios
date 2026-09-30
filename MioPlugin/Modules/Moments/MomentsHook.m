@@ -1872,7 +1872,7 @@ static NSString *MioFormatSegment(NSDateFormatter *fmt, NSString *seg, NSDate *d
 }
 
 // 格式化（WCR FUN_00557bdc/FUN_00556100 同款：zh_CN locale + 本地时区；
-// 格式串空/空白回落默认；__RT_ 占位符渲染时替换为相对时间——WCR 默认格式即 "yyyy-MM-dd HH:mm:ss __RT_"）
+// 格式串空/空白回落默认；(RT) 占位符渲染时替换为相对时间，如 (1小时前)）
 static NSString *MioDetailedTimeString(unsigned int ts) {
     static NSDateFormatter *fmt = nil;
     static dispatch_once_t once;
@@ -1883,11 +1883,11 @@ static NSString *MioDetailedTimeString(unsigned int ts) {
     });
     NSString *pattern = [[MomentsConfig shared].detailedTimeFormat
         stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (pattern.length == 0) pattern = @"yyyy-MM-dd HH:mm:ss __RT_";
+    if (pattern.length == 0) pattern = @"yyyy-MM-dd HH:mm:ss (RT)";
     NSDate *date = [NSDate dateWithTimeIntervalSince1970:ts];
-    NSString *RT = @"__RT_";
+    NSString *RT = @"(RT)";
     if ([pattern containsString:RT]) {
-        // __RT_ 占位：按 token 拆段逐段格式化，段间插入相对时间（仅第一个 token 生效，其余移除防乱码）
+        // (RT) 占位：按 token 拆段逐段格式化，段间插入相对时间（仅第一个 token 生效，其余移除防乱码）
         NSArray<NSString *> *parts = [pattern componentsSeparatedByString:RT];
         NSMutableString *out = [NSMutableString string];
         [out appendString:MioFormatSegment(fmt, parts[0], date)];

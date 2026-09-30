@@ -153,7 +153,7 @@
                                     isOn:config.detailedTimeEnabled
                               subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"时间格式" key:@"detailedTimeFormat" value:(config.detailedTimeFormat ?: @"yyyy-MM-dd HH:mm:ss __RT_") hint:@"yyyy-MM-dd HH:mm:ss __RT_" valueType:InputValueTypeText alertTitle:@"时间格式" alertMessage:@"NSDateFormatter 格式串\nyyyy=年 MM=月 dd=日\nHH=时 mm=分 ss=秒\n可插入 __RT_ 显示相对时间\n渲染为带括号形式 (N小时前)\n例: yyyy-MM-dd HH:mm:ss __RT_\n留空使用默认格式" cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"时间格式" key:@"detailedTimeFormat" value:(config.detailedTimeFormat ?: @"yyyy-MM-dd HH:mm:ss (RT)") hint:@"yyyy-MM-dd HH:mm:ss (RT)" valueType:InputValueTypeText alertTitle:@"时间格式" alertMessage:@"NSDateFormatter 格式串\nyyyy=年 MM=月 dd=日\nHH=时 mm=分 ss=秒\n可插入 (RT) 显示相对时间\n渲染为带括号形式 (N小时前)\n例: yyyy-MM-dd HH:mm:ss (RT)\n留空使用默认格式" cy:*ecy width:w];
     } cy:cy width:w];
 
     y = [self finishGroup:group atY:y height:cy];
