@@ -21,6 +21,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) NSInteger autoCommentRefreshInterval; // 不在朋友圈页时的评论刷新间隔（秒）
 @property (nonatomic, copy) NSArray<NSString *> *autoCommentTexts;     // 自动评论内容池（随机取用，空则不评论）
 @property (nonatomic, copy) NSArray<NSString *> *autoCommentContacts;  // 自动评论生效范围（wxid 白名单，空=全部好友）
+@property (nonatomic, assign) BOOL detailedTimeEnabled;            // 朋友圈详细时间（时间行显示绝对时间）
+@property (nonatomic, copy) NSString *detailedTimeFormat;          // 详细时间格式串（NSDateFormatter，空回落默认）
 
 + (instancetype)shared;
 

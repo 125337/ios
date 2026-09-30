@@ -1835,6 +1835,80 @@ static void MioFakeInstallActiveRefresh(void) {
                    dispatch_get_main_queue(), ^{ MioFakeActiveRefresh("coldstart"); });
 }
 
+#pragma mark - 朋友圈详细时间（WCR FUN_00555a70 同款机制）
+
+// hook WCTimeLineCellView updateWithDataItem:actionAreaVM:（WCR MSHookMessageEx 同款挂点）：
+// orig 正常渲染相对时间（"1小时前"）后，把 m_timeLabel 写回为 createtime 绝对时间，
+// 再调 fitTimeLableLineElements 让行高适配（WCR 同款收尾，仅实际改写文本后调用）。
+// createtime 在 8.0.60 实为 uint32 时间戳（WCR FUN_00556010 直接以返回值作 uint 用），非 NSNumber
+static IMP orig_tl_updateItem = NULL;
+
+// 格式化（WCR FUN_00557bdc 同款：zh_CN locale + 本地时区；格式串空/空白回落默认）
+static NSString *MioDetailedTimeString(unsigned int ts) {
+    static NSDateFormatter *fmt = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        fmt = [[NSDateFormatter alloc] init];
+        fmt.locale = [NSLocale localeWithLocaleIdentifier:@"zh_CN"];
+        fmt.timeZone = [NSTimeZone localTimeZone];
+    });
+    NSString *pattern = [[MomentsConfig shared].detailedTimeFormat
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (pattern.length == 0) pattern = @"yyyy-MM-dd HH:mm:ss";
+    @synchronized (fmt) {
+        if (![fmt.dateFormat isEqualToString:pattern]) fmt.dateFormat = pattern;
+        return [fmt stringFromDate:[NSDate dateWithTimeIntervalSince1970:ts]];
+    }
+}
+
+static void MioApplyDetailedTime(id cell, id dataItem) {
+    @try {
+        if (![MomentsConfig shared].detailedTimeEnabled) return;
+        SEL lblSel = NSSelectorFromString(@"m_timeLabel");
+        if (![cell respondsToSelector:lblSel]) return;
+        UILabel *label = ((id(*)(id, SEL))objc_msgSend)(cell, lblSel);
+        if (![label isKindOfClass:[UILabel class]]) return;
+        if (!dataItem) return;
+        SEL ctSel = NSSelectorFromString(@"createtime");
+        if (![dataItem respondsToSelector:ctSel]) return;
+        unsigned int ts = ((unsigned int(*)(id, SEL))objc_msgSend)(dataItem, ctSel);
+        if (ts == 0) return;
+        NSString *s = MioDetailedTimeString(ts);
+        if (s.length == 0 || [s isEqualToString:label.text]) return;
+        label.text = s;
+        // 行高适配（方法名实为 Lable 非 Label，8.0.60 头文件与 WCR 实证一致）
+        SEL fitSel = NSSelectorFromString(@"fitTimeLableLineElements");
+        if ([cell respondsToSelector:fitSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(cell, fitSel);
+        }
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[DTime] apply error: %@", e);
+    }
+}
+
+static void hooked_tl_updateItem(id self, SEL _cmd, id dataItem, id areaVM) {
+    id r = ((id(*)(id, SEL, id, id))orig_tl_updateItem)(self, _cmd, dataItem, areaVM);
+    MioApplyDetailedTime(self, dataItem);
+    return r;
+}
+
+static void MioInstallDetailedTimeHook(void) {
+    Class cls = objc_getClass("WCTimeLineCellView");
+    if (!cls) {
+        WPLog(@"Moments", @"[DTime] SKIP: WCTimeLineCellView NOT found");
+        return;
+    }
+    SEL sel = NSSelectorFromString(@"updateWithDataItem:actionAreaVM:");
+    Method m = class_getInstanceMethod(cls, sel);
+    if (!m) {
+        WPLog(@"Moments", @"[DTime] SKIP: updateWithDataItem:actionAreaVM: NOT found");
+        return;
+    }
+    orig_tl_updateItem = method_getImplementation(m);
+    method_setImplementation(m, (IMP)hooked_tl_updateItem);
+    WPLog(@"Moments", @"[DTime] WCTimeLineCellView updateWithDataItem:actionAreaVM: hooked");
+}
+
 #pragma mark - 安装
 
 @implementation MomentsHook
@@ -1843,6 +1917,7 @@ static void MioFakeInstallActiveRefresh(void) {
     WPLog(@"Moments", @"[MomentsHook] install start");
     MioInstallPyqHooks();
     MioInstallHDHooks();
+    MioInstallDetailedTimeHook();
     MioInstallFakeLikeHooks();
     MioInstallFakeDataLayerHooks();
     MioFakeInstallActiveRefresh();

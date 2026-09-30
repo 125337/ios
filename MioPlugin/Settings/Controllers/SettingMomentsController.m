@@ -145,9 +145,20 @@
         *ecy = [self addInputRowInGroup:expand title:@"刷新间隔" key:@"autoCommentRefreshInterval" value:[NSString stringWithFormat:@"%ld", (long)config.autoCommentRefreshInterval] hint:@"180" valueType:InputValueTypeNumber alertTitle:@"刷新间隔" alertMessage:@"不在朋友圈页面时，隔多少秒刷新一次朋友圈(评论)" cy:*ecy width:w];
     } cy:cy width:w];
 
+    // 子开关：朋友圈详细时间（开=时间行显示绝对时间替代"1小时前"类相对时间）
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+    cy = [self addMasterSwitchRowInGroup:group
+                                   title:@"朋友圈详细时间"
+                                     key:@"detailedTimeEnabled"
+                                    isOn:config.detailedTimeEnabled
+                              subBuilder:^(UIView *expand, CGFloat *ecy) {
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand title:@"时间格式" key:@"detailedTimeFormat" value:(config.detailedTimeFormat ?: @"yyyy-MM-dd HH:mm:ss") hint:@"yyyy-MM-dd HH:mm:ss" valueType:InputValueTypeText alertTitle:@"时间格式" alertMessage:@"NSDateFormatter 格式串\nyyyy=年 MM=月 dd=日\nHH=时 mm=分 ss=秒\n例: M月d日 HH:mm 或 yyyy/MM/dd\n留空使用默认格式" cy:*ecy width:w];
+    } cy:cy width:w];
+
     y = [self finishGroup:group atY:y height:cy];
 
-    [self addSectionFooter:@"伪集赞: 自定义朋友圈收到的点赞与评论数量\n评论文本按设置的数量随机取用\n自动点赞: 广告帖与黑名单好友不发赞\n自动评论: 广告帖与自己的帖子不评论" y:y width:w];
+    [self addSectionFooter:@"伪集赞: 自定义朋友圈收到的点赞与评论数量\n评论文本按设置的数量随机取用\n自动点赞: 广告帖与黑名单好友不发赞\n自动评论: 广告帖与自己的帖子不评论\n详细时间: 时间行显示绝对时间\n设置后需重进朋友圈生效" y:y width:w];
 }
 
 @end
