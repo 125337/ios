@@ -1,6 +1,7 @@
 #import "SettingMomentsController.h"
 #import "SettingMomentCommentsController.h"
 #import "SettingMomentBlocklistController.h"
+#import "SettingMomentTailController.h"
 #import "../../Modules/Moments/MomentsConfig.h"
 #import "../../Core/MioAlertHelper.h"
 
@@ -48,6 +49,19 @@
         return;
     }
     [super buttonClicked:key];
+}
+
+// 入口：朋友圈小尾巴二级页
+- (void)onMomentTailTap {
+    SettingMomentTailController *vc = [[SettingMomentTailController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
+- (NSString *)tailEntrySubtitle {
+    MomentsConfig *config = [MomentsConfig shared];
+    if (!config.tailEnabled) return @"未开启";
+    NSString *appId = config.tailAppId ?: @"";
+    return (appId.length > 0) ? [NSString stringWithFormat:@"已开启 · %@", [config tailDisplayName]] : @"已开启";
 }
 
 // 便捷朋友圈开启后弹使用提示（页级开关钩子）
@@ -156,9 +170,19 @@
         *ecy = [self addInputRowInGroup:expand title:@"时间格式" key:@"detailedTimeFormat" value:(config.detailedTimeFormat ?: @"yyyy-MM-dd HH:mm:ss (RT)") hint:@"yyyy-MM-dd HH:mm:ss (RT)" valueType:InputValueTypeText alertTitle:@"时间格式" alertMessage:@"NSDateFormatter 格式串\nyyyy=年 MM=月 dd=日\nHH=时 mm=分 ss=秒\n可插入 (RT) 显示相对时间\n渲染为带括号形式 (N小时前)\n例: yyyy-MM-dd HH:mm:ss (RT)\n留空使用默认格式" cy:*ecy width:w];
     } cy:cy width:w];
 
+    // 入口：朋友圈小尾巴（二级页：总开关 / 默认尾巴 / 预设列表）
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+    cy = [self addNavRowInGroup:group
+                          title:@"朋友圈小尾巴"
+                       subtitle:[self tailEntrySubtitle]
+                            tag:0
+                         action:@selector(onMomentTailTap)
+                             cy:cy
+                          width:w];
+
     y = [self finishGroup:group atY:y height:cy];
 
-    [self addSectionFooter:@"伪集赞: 自定义朋友圈收到的点赞与评论数量\n评论文本按设置的数量随机取用\n自动点赞: 广告帖与黑名单好友不发赞\n自动评论: 广告帖与自己的帖子不评论\n详细时间: 时间行显示绝对时间\n设置后需重进朋友圈生效" y:y width:w];
+    [self addSectionFooter:@"伪集赞: 自定义朋友圈收到的点赞与评论数量\n评论文本按设置的数量随机取用\n自动点赞: 广告帖与黑名单好友不发赞\n自动评论: 广告帖与自己的帖子不评论\n详细时间: 时间行显示绝对时间\n小尾巴: 发朋友圈携带自定义来源\n设置后需重进朋友圈生效" y:y width:w];
 }
 
 @end

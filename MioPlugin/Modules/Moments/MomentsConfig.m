@@ -35,7 +35,23 @@
         [ConfigDescriptor itemWithKey:@"autoCommentContacts" type:ConfigValueTypeArray default:@[]],
         [ConfigDescriptor itemWithKey:@"detailedTimeEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"detailedTimeFormat" type:ConfigValueTypeString default:@"yyyy-MM-dd HH:mm:ss (RT)"],
+        [ConfigDescriptor itemWithKey:@"tailEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"tailAppId" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"tailPresets" type:ConfigValueTypeArray default:@[]],
     ];
+}
+
+// 当前尾巴显示名：appid 匹配预设显示预设名，否则显示 appid 原文；空=无
+- (NSString *)tailDisplayName {
+    NSString *appId = self.tailAppId ?: @"";
+    if (appId.length == 0) return @"无";
+    for (NSDictionary *p in self.tailPresets) {
+        if ([p isKindOfClass:[NSDictionary class]] && [appId isEqualToString:p[@"appId"]]) {
+            NSString *name = p[@"name"];
+            if ([name isKindOfClass:[NSString class]] && name.length > 0) return name;
+        }
+    }
+    return appId;
 }
 
 @end

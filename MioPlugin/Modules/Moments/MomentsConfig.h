@@ -23,8 +23,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSArray<NSString *> *autoCommentContacts;  // 自动评论生效范围（wxid 白名单，空=全部好友）
 @property (nonatomic, assign) BOOL detailedTimeEnabled;            // 朋友圈详细时间（时间行显示绝对时间）
 @property (nonatomic, copy) NSString *detailedTimeFormat;          // 详细时间格式串（NSDateFormatter，空回落默认）
+@property (nonatomic, assign) BOOL tailEnabled;                    // 朋友圈小尾巴总开关
+@property (nonatomic, copy) NSString *tailAppId;                   // 默认尾巴 Appid（空=无小尾巴）
+@property (nonatomic, copy) NSArray<NSDictionary *> *tailPresets;  // 预设列表（元素 {name, appId}）
 
 + (instancetype)shared;
+- (NSString *)tailDisplayName;   // 当前尾巴显示名（无/预设名/appid）
 
 @end
 
