@@ -1278,6 +1278,33 @@ static void MioAcmtInstallCommentStartTimeShim(void) {
     WPLog(@"Moments", @"[AutoCmt] commentStartTime shim installed (WCDataItem 缺属性补空)");
 }
 
+// 未知 selector 兜底网（build-0930-acmtfix2）：旧评论/广告链路读一批已删除的 WCDataItem 旧属性
+//（已实证 commentStartTime、adViewId，stub 簇同源），且异常展开期间微信 C++ 析构会二次抛异常
+// 直接 terminate，@try 挡不住（acmtfix1 真机实证）。拦截 methodSignatureForSelector:（原生给不出
+// 签名时返回最小空签名 @@:）+ 补 forwardInvocation: 空实现 → 未知 selector 一律返回 nil/0 断根。
+static void MioAcmtInstallDataItemSelectorNet(NSString *clsName) {
+    Class cls = objc_getClass(clsName.UTF8String);
+    if (!cls) return;
+    SEL msSel = @selector(methodSignatureForSelector:);
+    Method m = class_getInstanceMethod(cls, msSel);
+    if (!m) return;
+    __block NSMethodSignature *(*orig)(id, SEL, SEL) =
+        (NSMethodSignature *(*)(id, SEL, SEL))method_getImplementation(m);
+    id msBlock = ^(id _self, SEL aSel) {
+        NSMethodSignature *sig = orig(_self, @selector(methodSignatureForSelector:), aSel);
+        if (sig) return sig;
+        return [NSMethodSignature signatureWithObjCTypes:"@@:"];
+    };
+    class_replaceMethod(cls, msSel, imp_implementationWithBlock(msBlock), "@:@:");
+    // forwardInvocation: WCDataItem 无自有实现（NSObject 也不实现），addMethod 即可；已存在则不动
+    SEL fiSel = @selector(forwardInvocation:);
+    if (!class_getInstanceMethod(cls, fiSel)) {
+        id fiBlock = ^(id _self, NSInvocation *inv) { };
+        class_addMethod(cls, fiSel, imp_implementationWithBlock(fiBlock), "v@:@");
+    }
+    WPLog(@"Moments", @"[AutoCmt] unknown-selector net installed on %@", clsName);
+}
+
 // 执行评论（WCR FUN_005758e8 实锤全链：内容判空 → itemID/username 判空 →
 // WCCommentItem genCommentObject:content:ref:source:SnsEmojiInfoObj:（头文件 L66）→
 // WCFacade commentObject:ForAd:extraInfo:（头文件 L523）+ extraInfo{@Scene:@3}）
@@ -1488,6 +1515,8 @@ static void MioAutoLikeScheduleTick(double delay) {
 // 刷新循环安装（WCR FUN_0056783c/00567964 实锤：启动 20s 首轮 + didBecomeActive 触发）
 static void MioAutoLikeInstallRefreshLoop(void) {
     MioAcmtInstallCommentStartTimeShim();   // 8.0.60 杀后台修复，评论链路前置垫片
+    MioAcmtInstallDataItemSelectorNet(@"WCDataItem");        // 未知 selector 兜底网（adViewId 实证）
+    MioAcmtInstallDataItemSelectorNet(@"WCTimeLineDataItem"); // 防御：timeline 数据同类
     [[NSNotificationCenter defaultCenter]
         addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil
         usingBlock:^(NSNotification *note) {
