@@ -1886,7 +1886,7 @@ static void MioApplyDetailedTime(id cell, id dataItem) {
     }
 }
 
-static void hooked_tl_updateItem(id self, SEL _cmd, id dataItem, id areaVM) {
+static id hooked_tl_updateItem(id self, SEL _cmd, id dataItem, id areaVM) {
     id r = ((id(*)(id, SEL, id, id))orig_tl_updateItem)(self, _cmd, dataItem, areaVM);
     MioApplyDetailedTime(self, dataItem);
     return r;
