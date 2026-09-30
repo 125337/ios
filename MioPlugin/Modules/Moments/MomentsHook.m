@@ -1892,7 +1892,7 @@ static NSString *MioDetailedTimeString(unsigned int ts) {
         NSMutableString *out = [NSMutableString string];
         [out appendString:MioFormatSegment(fmt, parts[0], date)];
         for (NSUInteger i = 1; i < parts.count; i++) {
-            if (i == 1) [out appendString:MioRelativeTimeString(ts, date)];
+            if (i == 1) [out appendFormat:@"(%@)", MioRelativeTimeString(ts, date)]; // 相对时间带括号展示
             [out appendString:MioFormatSegment(fmt, parts[i], date)];
         }
         return out;
