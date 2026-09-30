@@ -116,9 +116,27 @@
 
     if (!config.tailEnabled) return;
 
+    NSArray<NSDictionary *> *presets = [config effectiveTailPresets];
+
+    // 自愈：历史版本基类空输入 fallback 会把 hint 文案"输入Appid"写进 tailAppId，
+    // 进页面发现未注册值一律清空（tail5 起输入流程已拦截，正常不会再产生未注册值）
+    if (config.tailAppId.length > 0) {
+        BOOL registered = NO;
+        for (NSDictionary *p in presets) {
+            if ([p isKindOfClass:[NSDictionary class]] && [config.tailAppId isEqualToString:p[@"appId"]]) {
+                registered = YES;
+                break;
+            }
+        }
+        if (!registered) {
+            WPLog(@"Moments", @"[Tail] 清理未注册 tailAppId: %@", config.tailAppId);
+            config.tailAppId = @"";
+            [ConfigManager saveAll];
+        }
+    }
+
     NSString *currentName = [config tailDisplayName];
     BOOL noneSelected = (config.tailAppId.length == 0);
-    NSArray<NSDictionary *> *presets = [config effectiveTailPresets];
 
     // 卡片2：默认尾巴（当前选择 / 自定义输入 AppID 两个独立行）
     // 输入行右值恒显 hint，不反显 tailAppId——预设点选不联动到输入行；
