@@ -58,4 +58,6 @@ Class SettingCategoryBaseClass(void);
 - (void)buildUI;
 /// 微信引擎开关落地后的钩子（每页可重写：如提示重启生效）
 - (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on;
+/// 输入行点击流程（弹窗→保存→重建；子类可重写拦截做校验）
+- (void)wpRunInputFlow:(NSDictionary *)row;
 @end
