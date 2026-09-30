@@ -49,7 +49,8 @@
 }
 
 - (void)onPickPreset:(UIButton *)sender {
-    NSArray<NSDictionary *> *presets = [MomentsConfig shared].tailPresets;
+    // 与卡片3渲染同源：effectiveTailPresets（自定义列表优先，回落内置 304 项）
+    NSArray<NSDictionary *> *presets = [MomentsConfig shared].effectiveTailPresets;
     NSInteger idx = sender.tag;
     if (idx < 0 || idx >= (NSInteger)presets.count) return;
     NSDictionary *p = presets[idx];
@@ -82,24 +83,32 @@
 
     NSString *currentName = [config tailDisplayName];
     BOOL noneSelected = (config.tailAppId.length == 0);
+    NSArray<NSDictionary *> *presets = [config effectiveTailPresets];
 
-    // 卡片2：默认尾巴（当前选择 + 自定义输入 Appid）
+    // 卡片2：默认尾巴（当前选择 / 自定义输入 AppID 两个独立行）
     y = [self addSectionHeader:@"默认尾巴" y:y width:w];
     UIView *group2 = [self addTableGroupAtY:y width:w];
-    CGFloat cy2 = [self addInputRowInGroup:group2
-                                     title:@"默认尾巴"
-                                       key:@"tailAppId"
-                                     value:currentName
-                                      hint:@"输入Appid"
-                                 valueType:InputValueTypeText
-                                alertTitle:@"自定义尾巴"
-                              alertMessage:@"输入 Appid\n留空表示无小尾巴\n也可在下方预设列表中点选"
-                                      cy:0
-                                   width:w];
+    CGFloat cy2 = 0;
+    cy2 = [self addInfoRowInGroup:group2
+                             title:@"当前选择"
+                        rightValue:currentName
+                          copyText:nil
+                                cy:cy2
+                             width:w];
+    cy2 = [self addSeparatorInGroup:group2 cy:cy2 width:w];
+    cy2 = [self addInputRowInGroup:group2
+                             title:@"自定义输入AppID"
+                               key:@"tailAppId"
+                             value:(config.tailAppId.length > 0 ? config.tailAppId : @"未自定义")
+                              hint:@"输入Appid"
+                         valueType:InputValueTypeText
+                        alertTitle:@"自定义尾巴"
+                      alertMessage:@"输入 Appid\n留空表示无小尾巴\n也可在下方预设列表中点选"
+                                cy:cy2
+                             width:w];
     y = [self finishGroup:group2 atY:y height:cy2];
 
-    // 卡片3：预设列表（固定项"无小尾巴" + 预设，标题带总数统计）
-    NSArray<NSDictionary *> *presets = config.tailPresets;
+    // 卡片3：预设列表（固定项"无小尾巴" + 内置/自定义预设，标题带总数统计）
     y = [self addSectionHeader:[NSString stringWithFormat:@"预设列表（%lu）", (unsigned long)(presets.count + 1)] y:y width:w];
     UIView *group3 = [self addTableGroupAtY:y width:w];
     CGFloat cy3 = 0;
