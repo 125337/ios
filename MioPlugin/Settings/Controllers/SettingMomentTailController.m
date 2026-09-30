@@ -86,6 +86,8 @@
     NSArray<NSDictionary *> *presets = [config effectiveTailPresets];
 
     // 卡片2：默认尾巴（当前选择 / 自定义输入 AppID 两个独立行）
+    // 输入行右值恒显 hint，不反显 tailAppId——预设点选不联动到输入行；
+    // 仅当用户手动输入的 appid 命中预设时，"当前选择"行才显示对应预设名
     y = [self addSectionHeader:@"默认尾巴" y:y width:w];
     UIView *group2 = [self addTableGroupAtY:y width:w];
     CGFloat cy2 = 0;
@@ -99,7 +101,7 @@
     cy2 = [self addInputRowInGroup:group2
                              title:@"自定义输入AppID"
                                key:@"tailAppId"
-                             value:(config.tailAppId.length > 0 ? config.tailAppId : @"未自定义")
+                             value:nil
                               hint:@"输入Appid"
                          valueType:InputValueTypeText
                         alertTitle:@"自定义尾巴"
@@ -128,13 +130,14 @@
         if (![appId isKindOfClass:[NSString class]]) appId = @"";
         BOOL selected = [config.tailAppId isEqualToString:appId];
         cy3 = [self addSeparatorInGroup:group3 cy:cy3 width:w];
+        // 只显示昵称；选中项标"使用中"，不展示 appid
         cy3 = [self addNavRowInGroup:group3
                                title:name
-                            subtitle:(selected ? @"使用中" : appId)
+                            subtitle:(selected ? @"使用中" : @"")
                                  tag:(NSInteger)i
                               action:@selector(onPickPreset:)
                                   cy:cy3
-                               width:w];
+                                   width:w];
     }
     y = [self finishGroup:group3 atY:y height:cy3];
 
