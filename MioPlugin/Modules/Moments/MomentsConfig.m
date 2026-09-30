@@ -34,7 +34,7 @@
         [ConfigDescriptor itemWithKey:@"autoCommentTexts" type:ConfigValueTypeArray default:@[]],
         [ConfigDescriptor itemWithKey:@"autoCommentContacts" type:ConfigValueTypeArray default:@[]],
         [ConfigDescriptor itemWithKey:@"detailedTimeEnabled" type:ConfigValueTypeBool default:@(NO)],
-        [ConfigDescriptor itemWithKey:@"detailedTimeFormat" type:ConfigValueTypeString default:@"yyyy-MM-dd HH:mm:ss"],
+        [ConfigDescriptor itemWithKey:@"detailedTimeFormat" type:ConfigValueTypeString default:@"yyyy-MM-dd HH:mm:ss __RT_"],
     ];
 }
 

@@ -1843,7 +1843,36 @@ static void MioFakeInstallActiveRefresh(void) {
 // createtime 在 8.0.60 实为 uint32 时间戳（WCR FUN_00556010 直接以返回值作 uint 用），非 NSNumber
 static IMP orig_tl_updateItem = NULL;
 
-// 格式化（WCR FUN_00557bdc 同款：zh_CN locale + 本地时区；格式串空/空白回落默认）
+// 相对时间（WCR FUN_00556a14 同款分支：刚刚/N分钟前/N小时前/昨天/N天前）
+static NSString *MioRelativeTimeString(unsigned int ts, NSDate *date) {
+    NSDate *now = [NSDate date];
+    NSTimeInterval interval = [now timeIntervalSinceDate:date];
+    if (interval < 0) interval = 0; // 未来时间按 0 算（WCR max(0,·) 同款）
+    static NSCalendar *cal = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cal = [NSCalendar currentCalendar]; });
+    NSInteger dayDiff = [[cal components:NSCalendarUnitDay
+                                fromDate:[cal startOfDayForDate:date]
+                                  toDate:[cal startOfDayForDate:now]
+                                 options:0] day];
+    if (dayDiff < 1) {
+        if (interval < 60) return @"刚刚";
+        if (interval < 3600) return [NSString stringWithFormat:@"%d分钟前", (int)(interval / 60)];
+        return [NSString stringWithFormat:@"%d小时前", (int)(interval / 3600)];
+    }
+    if (dayDiff == 1) return @"昨天";
+    return [NSString stringWithFormat:@"%d天前", (int)dayDiff];
+}
+
+// 按单段 pattern 格式化（空段返回空串，避免空 pattern 异常）
+static NSString *MioFormatSegment(NSDateFormatter *fmt, NSString *seg, NSDate *date) {
+    if (seg.length == 0) return @"";
+    if (![fmt.dateFormat isEqualToString:seg]) fmt.dateFormat = seg;
+    return [fmt stringFromDate:date] ?: @"";
+}
+
+// 格式化（WCR FUN_00557bdc/FUN_00556100 同款：zh_CN locale + 本地时区；
+// 格式串空/空白回落默认；__RT_ 占位符渲染时替换为相对时间——WCR 默认格式即 "yyyy-MM-dd HH:mm:ss __RT_"）
 static NSString *MioDetailedTimeString(unsigned int ts) {
     static NSDateFormatter *fmt = nil;
     static dispatch_once_t once;
@@ -1854,11 +1883,21 @@ static NSString *MioDetailedTimeString(unsigned int ts) {
     });
     NSString *pattern = [[MomentsConfig shared].detailedTimeFormat
         stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (pattern.length == 0) pattern = @"yyyy-MM-dd HH:mm:ss";
-    @synchronized (fmt) {
-        if (![fmt.dateFormat isEqualToString:pattern]) fmt.dateFormat = pattern;
-        return [fmt stringFromDate:[NSDate dateWithTimeIntervalSince1970:ts]];
+    if (pattern.length == 0) pattern = @"yyyy-MM-dd HH:mm:ss __RT_";
+    NSDate *date = [NSDate dateWithTimeIntervalSince1970:ts];
+    NSString *RT = @"__RT_";
+    if ([pattern containsString:RT]) {
+        // __RT_ 占位：按 token 拆段逐段格式化，段间插入相对时间（仅第一个 token 生效，其余移除防乱码）
+        NSArray<NSString *> *parts = [pattern componentsSeparatedByString:RT];
+        NSMutableString *out = [NSMutableString string];
+        [out appendString:MioFormatSegment(fmt, parts[0], date)];
+        for (NSUInteger i = 1; i < parts.count; i++) {
+            if (i == 1) [out appendString:MioRelativeTimeString(ts, date)];
+            [out appendString:MioFormatSegment(fmt, parts[i], date)];
+        }
+        return out;
     }
+    return MioFormatSegment(fmt, pattern, date);
 }
 
 static void MioApplyDetailedTime(id cell, id dataItem) {
