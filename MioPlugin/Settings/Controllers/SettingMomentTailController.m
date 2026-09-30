@@ -1,6 +1,5 @@
-#import <UIKit/UIKit.h>
+#import "SettingMomentTailController.h"
 #import <objc/runtime.h>
-#import "../Common/SettingCategoryController.h"
 #import "../../Modules/Moments/MomentsConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
