@@ -1346,8 +1346,11 @@ static BOOL MioAcmtPerform(id item) {
         return NO;
     }
     NSDictionary *extra = @{@"WCMomentsInteractionExtraInfoKey_Scene": @3};
+    // ForAd 参数必须传 nil（WCR FUN_005336a0 L9008 实锤：msgSend(facade, sel, comment, 0, extra)）。
+    // 该参数是给广告对象用的：8.0.60 的 facade 会对它读 adViewId 等广告属性（WCDataItem 已删），
+    // 传 item 必炸 unrecognized selector；消息到 nil 永远安全返回 0。genCommentObject 才收 item。
     @try {
-        id ret = ((id(*)(id, SEL, id, id, id))objc_msgSend)(facade, cm, comment, item, extra);
+        id ret = ((id(*)(id, SEL, id, id, id))objc_msgSend)(facade, cm, comment, nil, extra);
         WPLog(@"Moments", @"[AutoCmt] commented %@ (user %@) content=%@", key, user, content);
         return (ret != nil);
     } @catch (NSException *e) {
