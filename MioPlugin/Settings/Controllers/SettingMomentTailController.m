@@ -1,5 +1,4 @@
 #import "SettingMomentTailController.h"
-#import <objc/runtime.h>
 #import "../../Modules/Moments/MomentsConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
@@ -37,10 +36,9 @@
     [self reloadTable];
 }
 
-// 卡片1 开关切换后重建，显隐卡片2/卡片3（普通开关不走基类的 masterSwitch 重建路径）
-- (void)switchChanged:(UISwitch *)sender {
-    [super switchChanged:sender];
-    NSString *key = objc_getAssociatedObject(sender, "key");
+// 卡片1 开关切换后重建，显隐卡片2/卡片3
+// 注意：微信引擎开关回调走 wpHandleSwitchKey → wpAfterSwitchChanged（switchChanged: 已不被引擎触发）
+- (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on {
     if ([key isEqualToString:@"tailEnabled"]) [self reloadTable];
 }
 
