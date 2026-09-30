@@ -1266,6 +1266,18 @@ static BOOL MioAcmtAlreadyCommented(id item, NSString *selfWxid) {
     return NO;
 }
 
+// 8.0.60 杀后台根因修复：WCCommentItem genCommentObject 内部读 item.commentStartTime
+//（WCR 时代旧字段），8.0.60 WCDataItem 已删 → unrecognized selector → 未捕获 abort。
+// 运行时补空实现（返回 nil）；若微信恢复该属性则不覆盖。
+static void MioAcmtInstallCommentStartTimeShim(void) {
+    Class cls = objc_getClass("WCDataItem");
+    SEL sel = NSSelectorFromString(@"commentStartTime");
+    if (!cls || [cls instancesRespondToSelector:sel]) return;
+    IMP imp = imp_implementationWithBlock(^(id _self) { return nil; });
+    class_addMethod(cls, sel, imp, "@@:");
+    WPLog(@"Moments", @"[AutoCmt] commentStartTime shim installed (WCDataItem 缺属性补空)");
+}
+
 // 执行评论（WCR FUN_005758e8 实锤全链：内容判空 → itemID/username 判空 →
 // WCCommentItem genCommentObject:content:ref:source:SnsEmojiInfoObj:（头文件 L66）→
 // WCFacade commentObject:ForAd:extraInfo:（头文件 L523）+ extraInfo{@Scene:@3}）
@@ -1289,7 +1301,13 @@ static BOOL MioAcmtPerform(id item) {
         WPLog(@"Moments", @"[AutoCmt] FAIL: WCCommentItem lacks genCommentObject");
         return NO;
     }
-    id comment = ((id(*)(id, SEL, id, id, id, id, id))objc_msgSend)(cmtCls, gen, item, content, nil, nil, nil);
+    id comment = nil;
+    @try {
+        comment = ((id(*)(id, SEL, id, id, id, id, id))objc_msgSend)(cmtCls, gen, item, content, nil, nil, nil);
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL (%@): genCommentObject %@", key, e);
+        return NO;
+    }
     if (!comment) {
         WPLog(@"Moments", @"[AutoCmt] FAIL (%@): genCommentObject nil", key);
         return NO;
@@ -1469,6 +1487,7 @@ static void MioAutoLikeScheduleTick(double delay) {
 
 // 刷新循环安装（WCR FUN_0056783c/00567964 实锤：启动 20s 首轮 + didBecomeActive 触发）
 static void MioAutoLikeInstallRefreshLoop(void) {
+    MioAcmtInstallCommentStartTimeShim();   // 8.0.60 杀后台修复，评论链路前置垫片
     [[NSNotificationCenter defaultCenter]
         addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil
         usingBlock:^(NSNotification *note) {
