@@ -24,6 +24,7 @@ Class SettingCategoryBaseClass(void);
 - (CGFloat)addSectionHeader:(NSString *)text y:(CGFloat)y width:(CGFloat)w;
 - (CGFloat)addSectionFooter:(NSString *)text y:(CGFloat)y width:(CGFloat)w;
 - (CGFloat)addNavRowInGroup:(UIView *)group title:(NSString *)title subtitle:(NSString *)subtitle tag:(NSInteger)tag action:(SEL)action cy:(CGFloat)cy width:(CGFloat)w;
+- (CGFloat)addNavRowInGroup:(UIView *)group title:(NSString *)title subtitle:(NSString *)subtitle icon:(nullable UIImage *)icon tag:(NSInteger)tag action:(SEL)action cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addSwitchRowInGroup:(UIView *)group title:(NSString *)title desc:(NSString *)desc key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addSubSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addInfoRowInGroup:(UIView *)group title:(NSString *)title rightValue:(NSString *)value copyText:(nullable NSString *)copyText cy:(CGFloat)cy width:(CGFloat)w;
