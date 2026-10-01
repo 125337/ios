@@ -5,7 +5,7 @@
 
 // 构建版本标记：随启动日志输出，用于鉴别真机装的包。Mach-O 段按 16KB 对齐，小改动可能
 // 不改变 dylib 字节数（曾出现两版同为 865,680），字节数鉴别法在小版本间会失灵，以日志为准
-#define MIO_BUILD_TAG @"build-1001-tail14"
+#define MIO_BUILD_TAG @"build-1001-tail15"
 
 static BOOL WPWCHasClass(NSString *name) {
     return objc_getClass(name.UTF8String) != nil;
@@ -310,22 +310,6 @@ id WPWCNavCell(SEL sel, id target, NSString *title, NSString *rightValue) {
     SEL s = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:accessoryType:");
     if (!ncls || ![ncls respondsToSelector:s]) return nil;
     return ((id (*)(id, SEL, SEL, id, id, id, long))objc_msgSend)(ncls, s, sel, target, title, rightValue ?: @"", (long)1);
-}
-
-id WPWCNavCellWithImage(SEL sel, id target, NSString *title, NSString *rightValue, UIImage *leftImage) {
-    // 头文件实证（WCTableViewCellManager.h L69）：normalCellForSel:target:leftImage:title:badge:rightValue:
-    // rightImage:withRightRedDot:selected: —— 左图标 + 右值 + 箭头同款布局；
-    // badge/rightImage/redDot/selected 全空即纯图标行。子类 WCTableViewNormalCellManager 继承类方法，
-    // 实际宿主类以 respondsToSelector 探测为准（accessoryType 变体曾发现头文件归属与运行时不符）
-    SEL s = NSSelectorFromString(@"normalCellForSel:target:leftImage:title:badge:rightValue:rightImage:withRightRedDot:selected:");
-    Class classes[2] = { objc_getClass("WCTableViewNormalCellManager"), objc_getClass("WCTableViewCellManager") };
-    for (int i = 0; i < 2; i++) {
-        if (classes[i] && [classes[i] respondsToSelector:s]) {
-            return ((id (*)(id, SEL, SEL, id, UIImage *, id, id, id, id, BOOL, BOOL))objc_msgSend)(
-                classes[i], s, sel, target, leftImage, title, nil, rightValue ?: @"", nil, NO, NO);
-        }
-    }
-    return nil;
 }
 
 id WPWCViewCell(SEL sel, id target, NSString *title, UIView *view) {

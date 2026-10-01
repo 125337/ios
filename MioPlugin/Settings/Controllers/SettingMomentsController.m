@@ -7,38 +7,6 @@
 
 @implementation SettingMomentsController
 
-// 朋友圈入口同款黑白光圈图标（SVG 48x48 直录：外圆 r20 + 内圆 r7 + 8 条叶片线，stroke 4 圆角，#333）
-static UIImage *MioMomentsGlyphImage(CGFloat size) {
-    UIGraphicsImageRendererFormat *fmt = [[UIGraphicsImageRendererFormat alloc] init];
-    fmt.scale = [UIScreen mainScreen].scale;
-    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size) format:fmt];
-    return [r imageWithActions:^(UIGraphicsImageRendererContext *rc) {
-        CGContextRef c = rc.CGContext;
-        CGContextScaleCTM(c, size / 48.0, size / 48.0);
-        CGContextSetStrokeColorWithColor(c, [UIColor colorWithWhite:0.2 alpha:1].CGColor);
-        CGContextSetLineWidth(c, 4.0);
-        CGContextSetLineCap(c, kCGLineCapRound);
-        CGContextSetLineJoin(c, kCGLineJoinRound);
-        CGContextStrokeEllipseInRect(c, CGRectMake(4, 4, 40, 40));   // 外圆
-        CGContextStrokeEllipseInRect(c, CGRectMake(17, 17, 14, 14)); // 内圆
-        CGPoint blades[8][2] = {
-            {{31, 7}, {31, 24}},
-            {{16.6357, 6.63599}, {30.7779, 20.7781}},
-            {{7, 17}, {24, 17}},
-            {{20.3643, 17.636}, {6.22212, 31.7781}},
-            {{17, 25}, {17, 42}},
-            {{17.6357, 27.636}, {31.7779, 41.7781}},
-            {{24, 31}, {42, 31}},
-            {{42.3643, 16.636}, {28.2221, 30.7781}},
-        };
-        for (int i = 0; i < 8; i++) {
-            CGContextMoveToPoint(c, blades[i][0].x, blades[i][0].y);
-            CGContextAddLineToPoint(c, blades[i][1].x, blades[i][1].y);
-            CGContextStrokePath(c);
-        }
-    }];
-}
-
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"朋友圈";
@@ -202,12 +170,11 @@ static UIImage *MioMomentsGlyphImage(CGFloat size) {
         *ecy = [self addInputRowInGroup:expand title:@"时间格式" key:@"detailedTimeFormat" value:(config.detailedTimeFormat ?: @"yyyy-MM-dd HH:mm:ss (RT)") hint:@"yyyy-MM-dd HH:mm:ss (RT)" valueType:InputValueTypeText alertTitle:@"时间格式" alertMessage:@"NSDateFormatter 格式串\nyyyy=年 MM=月 dd=日\nHH=时 mm=分 ss=秒\n可插入 (RT) 显示相对时间\n渲染为带括号形式 (N小时前)\n例: yyyy-MM-dd HH:mm:ss (RT)\n留空使用默认格式" cy:*ecy width:w];
     } cy:cy width:w];
 
-    // 入口：朋友圈小尾巴（二级页：总开关 / 默认尾巴 / 预设列表）——左侧挂黑白光圈图标
+    // 入口：朋友圈小尾巴（二级页：总开关 / 默认尾巴 / 预设列表）
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addNavRowInGroup:group
                           title:@"朋友圈小尾巴"
                        subtitle:[self tailEntrySubtitle]
-                           icon:MioMomentsGlyphImage(25)
                             tag:0
                          action:@selector(onMomentTailTap)
                              cy:cy

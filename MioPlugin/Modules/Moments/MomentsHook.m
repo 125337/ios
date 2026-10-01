@@ -2037,6 +2037,39 @@ static IMP orig_commit_initText = NULL;
 static IMP orig_commit_viewDidAppear = NULL;
 static IMP orig_commit_reloadData = NULL;
 
+// 朋友圈入口同款黑白光圈图标（SVG 48x48 直录：外圆 r20 + 内圆 r7 + 8 条叶片线，stroke 4 圆角，#333）
+static UIImage *MioMomentsGlyphImage(CGFloat size) {
+    UIGraphicsImageRendererFormat *fmt = [[UIGraphicsImageRendererFormat alloc] init];
+    fmt.scale = [UIScreen mainScreen].scale;
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size) format:fmt];
+    return [r imageWithActions:^(UIGraphicsImageRendererContext *rc) {
+        CGContextRef c = rc.CGContext;
+        CGContextScaleCTM(c, size / 48.0, size / 48.0);
+        CGContextSetStrokeColorWithColor(c, [UIColor colorWithWhite:0.2 alpha:1].CGColor);
+        CGContextSetLineWidth(c, 4.0);
+        CGContextSetLineCap(c, kCGLineCapRound);
+        CGContextSetLineJoin(c, kCGLineJoinRound);
+        CGContextStrokeEllipseInRect(c, CGRectMake(4, 4, 40, 40));   // 外圆
+        CGContextStrokeEllipseInRect(c, CGRectMake(17, 17, 14, 14)); // 内圆
+        CGPoint blades[8][2] = {
+            {{31, 7}, {31, 24}},
+            {{16.6357, 6.63599}, {30.7779, 20.7781}},
+            {{7, 17}, {24, 17}},
+            {{20.3643, 17.636}, {6.22212, 31.7781}},
+            {{17, 25}, {17, 42}},
+            {{17.6357, 27.636}, {31.7779, 41.7781}},
+            {{24, 31}, {42, 31}},
+            {{42.3643, 16.636}, {28.2221, 30.7781}},
+        };
+        for (int i = 0; i < 8; i++) {
+            CGContextMoveToPoint(c, blades[i][0].x, blades[i][0].y);
+            CGContextAddLineToPoint(c, blades[i][1].x, blades[i][1].y);
+            CGContextStrokePath(c);
+        }
+    }];
+}
+static UIImage *gMioTailGlyph = nil; // 图标不可变，绘制一次复用
+
 // cell 右值：本次优先（「本次无」/名字），否则默认（"默认: 名字"）
 static NSString *MioTailCellRightValue(void) {
     MomentsConfig *cfg = [MomentsConfig shared];
@@ -2083,6 +2116,8 @@ static void MioTailSyncCommitCell(id vc) {
         if (![sec0 respondsToSelector:allCellsSel]) return;
         Class cellCls = objc_getClass("WCTableViewCellManager");
         SEL mkSel = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:");
+        // 图标变体（WCTableViewCellManager.h L69 头文件实证）：左侧光圈图标 + 右值，微信发现页管理同款布局
+        SEL mkIconSel = NSSelectorFromString(@"normalCellForSel:target:leftImage:title:badge:rightValue:rightImage:withRightRedDot:selected:");
         SEL clickSel = NSSelectorFromString(@"mioOnTailCell:");
         SEL addSel = NSSelectorFromString(@"addCell:");
         if (!cellCls || ![cellCls respondsToSelector:mkSel] || ![sec0 respondsToSelector:addSel]) {
@@ -2107,9 +2142,20 @@ static void MioTailSyncCommitCell(id vc) {
                 }
             }
         }
-        // 注入新 cell（右值=当前生效状态）
-        id cell = ((id(*)(id, SEL, SEL, id, id, id))objc_msgSend)((id)cellCls, mkSel,
-            clickSel, vc, @"小尾巴", MioTailCellRightValue());
+        // 注入新 cell（右值=当前生效状态）；优先图标构造器（宿主类以探测为准），缺失回退普通构造
+        if (!gMioTailGlyph) gMioTailGlyph = MioMomentsGlyphImage(25);
+        id cell = nil;
+        Class iconCls[2] = { objc_getClass("WCTableViewNormalCellManager"), cellCls };
+        for (int i = 0; i < 2 && !cell; i++) {
+            if (iconCls[i] && [iconCls[i] respondsToSelector:mkIconSel]) {
+                cell = ((id(*)(id, SEL, SEL, id, UIImage *, id, id, id, id, BOOL, BOOL))objc_msgSend)(iconCls[i],
+                    mkIconSel, clickSel, vc, gMioTailGlyph, @"小尾巴", nil, MioTailCellRightValue(), nil, NO, NO);
+            }
+        }
+        if (!cell) {
+            cell = ((id(*)(id, SEL, SEL, id, id, id))objc_msgSend)((id)cellCls, mkSel,
+                clickSel, vc, @"小尾巴", MioTailCellRightValue());
+        }
         objc_setAssociatedObject(vc, &kMioTailCommitCellKey, cell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         ((void(*)(id, SEL, id))objc_msgSend)(sec0, addSel, cell);
         // manager 级刷新（不经过 VC reloadData hook，无递归）

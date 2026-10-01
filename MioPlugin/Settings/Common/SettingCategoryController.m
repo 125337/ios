@@ -417,26 +417,6 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     return cy + kRowH;
 }
 
-// 带左侧图标变体：微信发现页管理同款（icon=nil 时与无图变体同构）
-- (CGFloat)addNavRowInGroup:(UIView *)group title:(NSString *)title subtitle:(NSString *)subtitle icon:(UIImage *)icon tag:(NSInteger)tag action:(SEL)action cy:(CGFloat)cy width:(CGFloat)w {
-    WPWGroup *g = (WPWGroup *)group;
-    if (![g isKindOfClass:[WPWGroup class]]) return cy;
-    NSDictionary *row = @{@"type": @"nav",
-                          @"title": title ?: @"",
-                          @"tag": @(tag),
-                          @"action": NSStringFromSelector(action)};
-    id cell = icon
-        ? WPWCNavCellWithImage(@selector(wpWCTapRow:), self, [self wpSubTitle:title], subtitle, icon)
-        : WPWCNavCell(@selector(wpWCTapRow:), self, [self wpSubTitle:title], subtitle);
-    if (cell) {
-        wpAttachRow(cell, row);
-        [g addCell:cell];
-        return cy + kRowH;
-    }
-    WPLog(@"WCTable", @"[WCTABLE] navCell(图标) 构造失败，该行缺失: %@", title);
-    return cy + kRowH;
-}
-
 #pragma mark - Row: Switch
 
 - (CGFloat)addSwitchRowInGroup:(UIView *)group title:(NSString *)title desc:(NSString *)desc key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w {
