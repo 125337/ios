@@ -253,7 +253,8 @@ static NSString *MioSchedCopyMedia(id item, NSString *dir, NSInteger idx, BOOL *
 // 深遍历树，字符串值命中 pathMap 的替换为自留拷贝路径（WCR applyArchivedMediaPathsToDataItem 同款语义）
 static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map) {
     if ([obj isKindOfClass:[NSDictionary class]]) {
-        NSMutableDictionary *out = [NSMutableDictionary dictionaryWithCapacity:obj.count];
+        NSDictionary *d = obj;
+        NSMutableDictionary *out = [NSMutableDictionary dictionaryWithCapacity:d.count];
         for (id k in obj) {
             id v = MioSchedRewritePaths(obj[k], map);
             if (v) out[k] = v;
@@ -261,7 +262,8 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
         return out;
     }
     if ([obj isKindOfClass:[NSArray class]]) {
-        NSMutableArray *out = [NSMutableArray arrayWithCapacity:obj.count];
+        NSArray *a = obj;
+        NSMutableArray *out = [NSMutableArray arrayWithCapacity:a.count];
         for (id v in obj) {
             id nv = MioSchedRewritePaths(v, map);
             if (nv) [out addObject:nv];
