@@ -2049,7 +2049,12 @@ static NSString *MioTailCellRightValue(void) {
         MioTailNameForAppId(cfg, appId) ?: appId];
 }
 
-// 注入/补注「小尾巴」cell 到发帖页第一 section（WCR FUN_005d8d4c 同款）
+// 注入/补注「小尾巴」cell 到发帖页第一 section（WCR FUN_005d8d4c 同款思路）。
+// 防重用引用级查重：注入的 cell manager 挂 VC 关联（RETAIN——sections 重建后原 cell 被微信释放，
+// 若用 ASSIGN 会悬挂，containsObject 直接崩）。不查 cell title：WCTableViewCellManager 无 m_title
+// 属性（8.0.60 头文件实证，title 在 _cellConfig 内部），曾因查重失效致双入口
+static char kMioTailCommitCellKey;
+
 static void MioTailSyncCommitCell(id vc) {
     @try {
         if (!vc || ![MomentsConfig shared].tailEnabled) return;
@@ -2069,20 +2074,12 @@ static void MioTailSyncCommitCell(id vc) {
         if (cnt == 0) return;
         id sec0 = ((id(*)(id, SEL, long))objc_msgSend)(mgr, atSel, 0);
         if (!sec0) return;
-        // 防重：section0 已有「小尾巴」cell 则不再注入（WCR FUN_005d9510 title 查重同款）
-        NSArray *cells = nil;
         SEL allCellsSel = NSSelectorFromString(@"getAllCells");
-        if ([sec0 respondsToSelector:allCellsSel]) {
-            cells = ((id(*)(id, SEL))objc_msgSend)(sec0, allCellsSel);
-        } else {
-            @try { cells = [sec0 valueForKey:@"m_cells"]; } @catch (NSException *e) { cells = nil; }
-        }
-        SEL titleSel = NSSelectorFromString(@"m_title");
-        for (id c in cells) {
-            if (![c respondsToSelector:titleSel]) continue;
-            NSString *t = ((id(*)(id, SEL))objc_msgSend)(c, titleSel);
-            if ([t isEqualToString:@"小尾巴"]) return;
-        }
+        if (![sec0 respondsToSelector:allCellsSel]) return;
+        NSArray *cells = ((id(*)(id, SEL))objc_msgSend)(sec0, allCellsSel);
+        // 引用级防重：上次注入的 cell 还在 sections 里 → 已注入
+        id injected = objc_getAssociatedObject(vc, &kMioTailCommitCellKey);
+        if (injected && [cells containsObject:injected]) return;
         // 构造 cell（WCTableViewCellManager 类方法，8.0.60 头文件实证）
         Class cellCls = objc_getClass("WCTableViewCellManager");
         SEL mkSel = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:");
@@ -2095,6 +2092,7 @@ static void MioTailSyncCommitCell(id vc) {
             clickSel, vc, @"小尾巴", MioTailCellRightValue());
         SEL addSel = NSSelectorFromString(@"addCell:");
         if (![sec0 respondsToSelector:addSel]) return;
+        objc_setAssociatedObject(vc, &kMioTailCommitCellKey, cell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         ((void(*)(id, SEL, id))objc_msgSend)(sec0, addSel, cell);
         // manager 级刷新（不经过 VC reloadData hook，无递归）
         SEL rtvSel = NSSelectorFromString(@"reloadTableView");
