@@ -1981,10 +1981,6 @@ static id hooked_uploadTask_appInfo(id self, SEL _cmd) {
         }
         appId = [appId stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        WPLog(@"Moments", @"[Tail] appInfo resolve: has=%d val=%@ def=%@ -> %@",
-              [MomentsConfig tailHasPostSession],
-              [MomentsConfig tailPostSessionAppId] ?: @"(nil)",
-              cfg.tailAppId ?: @"(nil)", appId.length ? appId : @"(空)");
         if (appId.length == 0) {
             return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
         }
@@ -1997,29 +1993,20 @@ static id hooked_uploadTask_appInfo(id self, SEL _cmd) {
         id info = [[appInfoCls alloc] init];
         ((void(*)(id, SEL, id))objc_msgSend)(info, NSSelectorFromString(@"setAppID:"), appId);
         ((void(*)(id, SEL, id))objc_msgSend)(info, NSSelectorFromString(@"setAppName:"), name);
-        WPLog(@"Moments", @"[Tail] WCUploadTask.appInfo -> %@ (%@)", name, appId);
         return info;
     } @catch (NSException *e) {
-        WPLog(@"Moments", @"[Tail] apply error: %@", e);
         return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
     }
 }
 
 static void MioInstallTailHook(void) {
     Class cls = objc_getClass("WCUploadTask");
-    if (!cls) {
-        WPLog(@"Moments", @"[Tail] SKIP: WCUploadTask NOT found");
-        return;
-    }
+    if (!cls) return;
     SEL sel = NSSelectorFromString(@"appInfo");
     Method m = class_getInstanceMethod(cls, sel);
-    if (!m) {
-        WPLog(@"Moments", @"[Tail] SKIP: appInfo NOT found");
-        return;
-    }
+    if (!m) return;
     orig_uploadTask_appInfo = method_getImplementation(m);
     method_setImplementation(m, (IMP)hooked_uploadTask_appInfo);
-    WPLog(@"Moments", @"[Tail] WCUploadTask appInfo hooked");
 }
 
 #pragma mark - 发帖页单次选择（WCR PostSession 同款机制）
@@ -2028,7 +2015,7 @@ static void MioInstallTailHook(void) {
 // initWithTextType/reloadData/viewDidAppear: 及 ivar m_tableViewManager 均存在）：
 // - 4 个 init：orig 后重置 PostSession（WCR FUN_005d7d10/df8/f44/8060 同款，新发帖会话回默认）
 // - viewDidAppear: / reloadData：注入「小尾巴」cell（WCR FUN_005d81a4/8148 → 005d8d4c 同款，
-//   title 查重防重复注入；不 hook addSection: 宽域兜底——reloadData 重建 sections 后 sync 会补注）
+//   先删旧再注入防重复；不 hook addSection: 宽域兜底——reloadData 重建 sections 后 sync 会补注）
 // - class_addMethod 点击回调：present 选择页（SettingMomentTailController postSessionMode）
 static IMP orig_commit_init = NULL;
 static IMP orig_commit_initImages = NULL;
@@ -2121,16 +2108,12 @@ static void MioTailSyncCommitCell(id vc) {
         SEL mkIconSel = NSSelectorFromString(@"normalCellForSel:target:leftImage:title:badge:rightValue:rightImage:withRightRedDot:selected:");
         SEL clickSel = NSSelectorFromString(@"mioOnTailCell:");
         SEL addSel = NSSelectorFromString(@"addCell:");
-        if (!cellCls || ![cellCls respondsToSelector:mkSel] || ![sec0 respondsToSelector:addSel]) {
-            WPLog(@"Moments", @"[Tail] SKIP: normalCellForSel:target:title:rightValue: NOT found");
-            return;
-        }
+        if (!cellCls || ![cellCls respondsToSelector:mkSel] || ![sec0 respondsToSelector:addSel]) return;
         // 先删旧注入 cell（右值跟随 PostSession 实时刷新）
         id injected = objc_getAssociatedObject(vc, &kMioTailCommitCellKey);
         SEL cellCntSel = NSSelectorFromString(@"getCellCount");
         SEL cellAtSel = NSSelectorFromString(@"getCellAt:");
         SEL removeAtSel = NSSelectorFromString(@"removeCellAt:");
-        BOOL removed = NO;
         if (injected && [sec0 respondsToSelector:cellCntSel]
             && [sec0 respondsToSelector:cellAtSel] && [sec0 respondsToSelector:removeAtSel]) {
             NSUInteger n = ((NSUInteger(*)(id, SEL))objc_msgSend)(sec0, cellCntSel);
@@ -2138,7 +2121,6 @@ static void MioTailSyncCommitCell(id vc) {
                 id c = ((id(*)(id, SEL, long))objc_msgSend)(sec0, cellAtSel, (long)i);
                 if (c == injected) {
                     ((void(*)(id, SEL, long))objc_msgSend)(sec0, removeAtSel, (long)i);
-                    removed = YES;
                     break;
                 }
             }
@@ -2162,10 +2144,7 @@ static void MioTailSyncCommitCell(id vc) {
         // manager 级刷新（不经过 VC reloadData hook，无递归）
         SEL rtvSel = NSSelectorFromString(@"reloadTableView");
         if ([mgr respondsToSelector:rtvSel]) ((void(*)(id, SEL))objc_msgSend)(mgr, rtvSel);
-        WPLog(@"Moments", @"[Tail] 发帖页小尾巴 cell %s (right=%@)",
-              removed ? "已刷新" : "已注入", MioTailCellRightValue());
     } @catch (NSException *e) {
-        WPLog(@"Moments", @"[Tail] sync cell error: %@", e);
     }
 }
 
@@ -2177,16 +2156,12 @@ static void hooked_commit_syncTailCell(id self, SEL _cmd) {
 // cell 点击回调（WCR WCRefineOnMomentsTailCell: → FUN_005dabb8 同款：resignInput → modal nav 包选择页）
 static void hooked_commit_tailCellClicked(id self, SEL _cmd, id cellMgr) {
     @try {
-        WPLog(@"Moments", @"[Tail] 发帖页入口点击");
         if (![MomentsConfig shared].tailEnabled) {
             WPShowToast(@"小尾巴已关闭");
             return;
         }
         Class pickerCls = objc_getClass("SettingMomentTailController");
-        if (!pickerCls) {
-            WPLog(@"Moments", @"[Tail] SKIP: SettingMomentTailController NOT found");
-            return;
-        }
+        if (!pickerCls) return;
         SEL riSel = NSSelectorFromString(@"resignInput");
         if ([self respondsToSelector:riSel]) ((void(*)(id, SEL))objc_msgSend)(self, riSel);
         id picker = [[pickerCls alloc] init];
@@ -2208,7 +2183,6 @@ static void hooked_commit_tailCellClicked(id self, SEL _cmd, id cellMgr) {
                 NSSelectorFromString(@"presentViewController:animated:completion:"), nav, YES, nil);
         }
     } @catch (NSException *e) {
-        WPLog(@"Moments", @"[Tail] open picker error: %@", e);
     }
 }
 
@@ -2247,10 +2221,7 @@ static id hooked_commit_reloadData(id self, SEL _cmd) {
 
 static void MioInstallTailCommitHooks(void) {
     Class cls = objc_getClass("WCNewCommitViewController");
-    if (!cls) {
-        WPLog(@"Moments", @"[Tail] SKIP: WCNewCommitViewController NOT found");
-        return;
-    }
+    if (!cls) return;
     // 点击回调挂到发帖页（WCR class_addMethod 同款）
     class_addMethod(cls, NSSelectorFromString(@"mioOnTailCell:"),
                     (IMP)hooked_commit_tailCellClicked, "v@:@");
@@ -2258,24 +2229,20 @@ static void MioInstallTailCommitHooks(void) {
     class_addMethod(cls, NSSelectorFromString(@"mioSyncTailCell"),
                     (IMP)hooked_commit_syncTailCell, "v@:");
 
-    struct { const char *sel; IMP hook; IMP *orig; const char *tag; } items[] = {
-        { "init",                        (IMP)hooked_commit_init,        &orig_commit_init,        "init" },
-        { "initWithImages:contacts:",    (IMP)hooked_commit_initImages,  &orig_commit_initImages,  "initWithImages:contacts:" },
-        { "initWithSightDraft:",         (IMP)hooked_commit_initSight,   &orig_commit_initSight,   "initWithSightDraft:" },
-        { "initWithTextType",            (IMP)hooked_commit_initText,    &orig_commit_initText,    "initWithTextType" },
-        { "viewDidAppear:",              (IMP)hooked_commit_viewDidAppear, &orig_commit_viewDidAppear, "viewDidAppear:" },
-        { "reloadData",                  (IMP)hooked_commit_reloadData,  &orig_commit_reloadData,  "reloadData" },
+    struct { const char *sel; IMP hook; IMP *orig; } items[] = {
+        { "init",                        (IMP)hooked_commit_init,        &orig_commit_init        },
+        { "initWithImages:contacts:",    (IMP)hooked_commit_initImages,  &orig_commit_initImages  },
+        { "initWithSightDraft:",         (IMP)hooked_commit_initSight,   &orig_commit_initSight   },
+        { "initWithTextType",            (IMP)hooked_commit_initText,    &orig_commit_initText    },
+        { "viewDidAppear:",              (IMP)hooked_commit_viewDidAppear, &orig_commit_viewDidAppear },
+        { "reloadData",                  (IMP)hooked_commit_reloadData,  &orig_commit_reloadData  },
     };
     for (NSUInteger i = 0; i < sizeof(items) / sizeof(items[0]); i++) {
         SEL sel = NSSelectorFromString([NSString stringWithUTF8String:items[i].sel]);
         Method m = class_getInstanceMethod(cls, sel);
-        if (!m) {
-            WPLog(@"Moments", @"[Tail] commit hook SKIP: %s NOT found", items[i].tag);
-            continue;
-        }
+        if (!m) continue;
         *items[i].orig = method_getImplementation(m);
         method_setImplementation(m, items[i].hook);
-        WPLog(@"Moments", @"[Tail] WCNewCommitViewController %s hooked", items[i].tag);
     }
 }
 

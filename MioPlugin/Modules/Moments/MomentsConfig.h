@@ -29,7 +29,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (instancetype)shared;
 - (NSString *)tailDisplayName;   // 当前尾巴显示名（无/预设名/appid）
-+ (NSArray<NSDictionary *> *)builtinTailPresets;   // 内置预设（按 appId 去重）
 - (NSArray<NSDictionary *> *)effectiveTailPresets; // 生效预设（自定义优先，空回落内置）
 
 // 发帖页单次选择（PostSession，内存态不落盘，WCR _WCRMomentsTail* 同款）
