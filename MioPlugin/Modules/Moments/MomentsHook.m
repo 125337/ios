@@ -1981,6 +1981,10 @@ static id hooked_uploadTask_appInfo(id self, SEL _cmd) {
         }
         appId = [appId stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        WPLog(@"Moments", @"[Tail] appInfo resolve: has=%d val=%@ def=%@ -> %@",
+              [MomentsConfig tailHasPostSession],
+              [MomentsConfig tailPostSessionAppId] ?: @"(nil)",
+              cfg.tailAppId ?: @"(nil)", appId.length ? appId : @"(空)");
         if (appId.length == 0) {
             return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
         }
@@ -2049,10 +2053,11 @@ static NSString *MioTailCellRightValue(void) {
         MioTailNameForAppId(cfg, appId) ?: appId];
 }
 
-// 注入/补注「小尾巴」cell 到发帖页第一 section（WCR FUN_005d8d4c 同款思路）。
-// 防重用引用级查重：注入的 cell manager 挂 VC 关联（RETAIN——sections 重建后原 cell 被微信释放，
-// 若用 ASSIGN 会悬挂，containsObject 直接崩）。不查 cell title：WCTableViewCellManager 无 m_title
-// 属性（8.0.60 头文件实证，title 在 _cellConfig 内部），曾因查重失效致双入口
+// 注入/刷新「小尾巴」cell 到发帖页第一 section（WCR FUN_005d8d4c 同款思路）。
+// 每次先删旧注入 cell 再注入新的（右值实时跟随 PostSession；也天然防重）。
+// 不查 cell title：WCTableViewCellManager 无 m_title 属性（8.0.60 头文件实证，title 在
+// _cellConfig 内部），曾因查重失效致双入口。旧 cell 挂 VC 关联（RETAIN——sections 重建后原
+// cell 被微信释放，ASSIGN 会悬挂，getCellAt 比较指针会崩）
 static char kMioTailCommitCellKey;
 
 static void MioTailSyncCommitCell(id vc) {
@@ -2076,28 +2081,42 @@ static void MioTailSyncCommitCell(id vc) {
         if (!sec0) return;
         SEL allCellsSel = NSSelectorFromString(@"getAllCells");
         if (![sec0 respondsToSelector:allCellsSel]) return;
-        NSArray *cells = ((id(*)(id, SEL))objc_msgSend)(sec0, allCellsSel);
-        // 引用级防重：上次注入的 cell 还在 sections 里 → 已注入
-        id injected = objc_getAssociatedObject(vc, &kMioTailCommitCellKey);
-        if (injected && [cells containsObject:injected]) return;
-        // 构造 cell（WCTableViewCellManager 类方法，8.0.60 头文件实证）
         Class cellCls = objc_getClass("WCTableViewCellManager");
         SEL mkSel = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:");
         SEL clickSel = NSSelectorFromString(@"mioOnTailCell:");
-        if (!cellCls || ![cellCls respondsToSelector:mkSel]) {
+        SEL addSel = NSSelectorFromString(@"addCell:");
+        if (!cellCls || ![cellCls respondsToSelector:mkSel] || ![sec0 respondsToSelector:addSel]) {
             WPLog(@"Moments", @"[Tail] SKIP: normalCellForSel:target:title:rightValue: NOT found");
             return;
         }
+        // 先删旧注入 cell（右值跟随 PostSession 实时刷新）
+        id injected = objc_getAssociatedObject(vc, &kMioTailCommitCellKey);
+        SEL cellCntSel = NSSelectorFromString(@"getCellCount");
+        SEL cellAtSel = NSSelectorFromString(@"getCellAt:");
+        SEL removeAtSel = NSSelectorFromString(@"removeCellAt:");
+        BOOL removed = NO;
+        if (injected && [sec0 respondsToSelector:cellCntSel]
+            && [sec0 respondsToSelector:cellAtSel] && [sec0 respondsToSelector:removeAtSel]) {
+            NSUInteger n = ((NSUInteger(*)(id, SEL))objc_msgSend)(sec0, cellCntSel);
+            for (NSUInteger i = 0; i < n; i++) {
+                id c = ((id(*)(id, SEL, long))objc_msgSend)(sec0, cellAtSel, (long)i);
+                if (c == injected) {
+                    ((void(*)(id, SEL, long))objc_msgSend)(sec0, removeAtSel, (long)i);
+                    removed = YES;
+                    break;
+                }
+            }
+        }
+        // 注入新 cell（右值=当前生效状态）
         id cell = ((id(*)(id, SEL, SEL, id, id, id))objc_msgSend)((id)cellCls, mkSel,
             clickSel, vc, @"小尾巴", MioTailCellRightValue());
-        SEL addSel = NSSelectorFromString(@"addCell:");
-        if (![sec0 respondsToSelector:addSel]) return;
         objc_setAssociatedObject(vc, &kMioTailCommitCellKey, cell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         ((void(*)(id, SEL, id))objc_msgSend)(sec0, addSel, cell);
         // manager 级刷新（不经过 VC reloadData hook，无递归）
         SEL rtvSel = NSSelectorFromString(@"reloadTableView");
         if ([mgr respondsToSelector:rtvSel]) ((void(*)(id, SEL))objc_msgSend)(mgr, rtvSel);
-        WPLog(@"Moments", @"[Tail] 发帖页小尾巴 cell 已注入 (right=%@)", MioTailCellRightValue());
+        WPLog(@"Moments", @"[Tail] 发帖页小尾巴 cell %s (right=%@)",
+              removed ? "已刷新" : "已注入", MioTailCellRightValue());
     } @catch (NSException *e) {
         WPLog(@"Moments", @"[Tail] sync cell error: %@", e);
     }
