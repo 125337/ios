@@ -353,6 +353,7 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
         // 媒体自留拷贝（防发帖页 dismiss 后 tmp 清理，WCR 同款）：
         // ① dataItem.contentObj.mediaList 子树全扫路径字符串 ② task.mediaList(WCUploadMedia).mediaSourcePath
         NSMutableDictionary<NSString *, NSString *> *pathMap = [NSMutableDictionary dictionary];
+        double t0 = [NSDate date].timeIntervalSince1970;
         NSUInteger copied = MioSchedCollectMediaPaths(mediaList, dir, 0, pathMap);
 
         NSArray *taskMedias = nil;
@@ -374,10 +375,13 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
 
         if (mediaCount > 0 && copied == 0) {
             MioSchedDeleteTaskDir(taskId);
-            WPLog(@"Moments", @"[Sched] capture aborted: %lu medias all unreadable, fallback to native publish", (unsigned long)mediaCount);
+            WPLog(@"Moments", @"[Sched] capture aborted: %lu medias all unreadable, fallback to native publish (collect cost=%.0fms main=%d)",
+                  (unsigned long)mediaCount, ([NSDate date].timeIntervalSince1970 - t0) * 1000, [NSThread isMainThread]);
             WPShowToast(@"媒体读取失败，已按正常发表");
             return NO; // 残缺任务必假成功（tail23 实证），宁可放行
         }
+        WPLog(@"Moments", @"[Sched] capture media done: mediaCount=%lu copied=%lu cost=%.0fms main=%d",
+              (unsigned long)mediaCount, (unsigned long)copied, ([NSDate date].timeIntervalSince1970 - t0) * 1000, [NSThread isMainThread]);
 
         // 自留路径写回：contentObj 深替换（WCR applyArchivedMediaPathsToDataItem 同款）+ mediaSourcePath
         if (pathMap.count > 0) {
