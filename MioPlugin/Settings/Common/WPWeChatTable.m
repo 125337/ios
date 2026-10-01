@@ -321,7 +321,7 @@ id WPWCNavCellWithImage(SEL sel, id target, NSString *title, NSString *rightValu
     Class classes[2] = { objc_getClass("WCTableViewNormalCellManager"), objc_getClass("WCTableViewCellManager") };
     for (int i = 0; i < 2; i++) {
         if (classes[i] && [classes[i] respondsToSelector:s]) {
-            return ((id (*)(id, SEL, SEL, id, UIImage *, id, id, id, BOOL, BOOL))objc_msgSend)(
+            return ((id (*)(id, SEL, SEL, id, UIImage *, id, id, id, id, BOOL, BOOL))objc_msgSend)(
                 classes[i], s, sel, target, leftImage, title, nil, rightValue ?: @"", nil, NO, NO);
         }
     }
