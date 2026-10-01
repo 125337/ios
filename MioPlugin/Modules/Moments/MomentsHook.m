@@ -1,4 +1,4 @@
-﻿#import "MomentsHook.h"
+#import "MomentsHook.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -2122,9 +2122,15 @@ static void MioTailSyncCommitCell(id vc) {
     }
 }
 
+// 选择页主动推送的刷新入口（applyPostSessionAppId 后立即调用，右值即时更新）
+static void hooked_commit_syncTailCell(id self, SEL _cmd) {
+    MioTailSyncCommitCell(self);
+}
+
 // cell 点击回调（WCR WCRefineOnMomentsTailCell: → FUN_005dabb8 同款：resignInput → modal nav 包选择页）
 static void hooked_commit_tailCellClicked(id self, SEL _cmd, id cellMgr) {
     @try {
+        WPLog(@"Moments", @"[Tail] 发帖页入口点击");
         if (![MomentsConfig shared].tailEnabled) {
             WPShowToast(@"小尾巴已关闭");
             return;
@@ -2201,6 +2207,9 @@ static void MioInstallTailCommitHooks(void) {
     // 点击回调挂到发帖页（WCR class_addMethod 同款）
     class_addMethod(cls, NSSelectorFromString(@"mioOnTailCell:"),
                     (IMP)hooked_commit_tailCellClicked, "v@:@");
+    // 单次选择后选择页主动推送的刷新入口（不依赖 dismiss→reloadData 回调链）
+    class_addMethod(cls, NSSelectorFromString(@"mioSyncTailCell"),
+                    (IMP)hooked_commit_syncTailCell, "v@:");
 
     struct { const char *sel; IMP hook; IMP *orig; const char *tag; } items[] = {
         { "init",                        (IMP)hooked_commit_init,        &orig_commit_init,        "init" },

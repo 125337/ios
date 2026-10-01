@@ -76,6 +76,10 @@
     }
     WPLog(@"Moments", @"[Tail] 本次尾巴 -> %@", v.length ? v : @"(无)");
     [self reloadTable];
+    // 主动推送刷新发帖页 cell 右值（不依赖 dismiss→reloadData 回调链，根治右值陈旧）
+    UIViewController *t = self.mioCommitTarget;
+    SEL sync = NSSelectorFromString(@"mioSyncTailCell");
+    if (t && [t respondsToSelector:sync]) ((void(*)(id, SEL))objc_msgSend)(t, sync);
 }
 
 // 卡片1 开关切换后重建，显隐卡片2/卡片3
