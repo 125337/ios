@@ -92,214 +92,6 @@ static _WAlertAnchor *walertAnchor(void) {
     return kWAlertAnchor;
 }
 
-@implementation MioAlertHelper
-
-+ (Class)alertClass {
-    static Class _alertClass = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        _alertClass = objc_getClass("WCUIAlertView");
-        WPLogDebug(@"Alert", _alertClass ? @"WCUIAlertView class found"
-                              : @"WCUIAlertView class NOT found");
-    });
-    return _alertClass;
-}
-
-// 取内部输入框（showTextFieldWithMaxLen: 创建的单行 field）
-+ (UITextField *)textFieldInsideAlert:(id)alert {
-    @try {
-        id v = [alert valueForKeyPath:@"tipsVc.tipsTextField"];
-        if ([v isKindOfClass:[UITextField class]]) return v;
-    } @catch (NSException *e) {}
-    @try {
-        id v = [alert valueForKeyPath:@"tipsVc.tipsTextView"];
-        if ([v isKindOfClass:[UITextField class]]) return v;
-    } @catch (NSException *e) {}
-    return nil;
-}
-
-+ (WCUIAlertView *)createAlertWithTitle:(NSString *)title message:(NSString *)message {
-    Class alertClass = [self alertClass];
-    if (!alertClass) return nil;
-    WCUIAlertView *alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc],
-        @selector(initWithTitle:message:), title ?: @"Mio助手", message ?: @"");
-    return alert;
-}
-
-#pragma mark - 文本输入弹窗
-
-+ (void)showInputAlert:(NSString *)title
-               message:(NSString *)message
-           initialText:(NSString *)initialText
-           placeholder:(NSString *)placeholder
-              keyboard:(UIKeyboardType)keyboardType
-                secure:(BOOL)secure
-            onConfirm:(void(^)(NSString *inputText))confirm {
-    @try {
-        WCUIAlertView *alert = [self createAlertWithTitle:title message:message];
-        if (!alert) { WPLogDebug(@"Alert", @"WCUIAlertView unavailable — input alert aborted"); return; }
-
-        _WAlertAnchor *anchor = walertAnchor();
-        anchor.currentAlert = alert;                 // WCR setCurrentAlert 同款：强持有防释放
-        anchor.confirmBlock = confirm ? [confirm copy] : nil;
-
-        // ① 输入框
-        SEL stfSel = NSSelectorFromString(@"showTextFieldWithMaxLen:");
-        if ([alert respondsToSelector:stfSel]) {
-            ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stfSel, 99999);
-        }
-
-        // ② 反向配置输入框：预填/占位/键盘/密码打点
-        UITextField *field = [self textFieldInsideAlert:alert];
-        if (field) {
-            field.text = initialText ?: @"";
-            if (placeholder.length > 0) field.placeholder = placeholder;
-            if (keyboardType != UIKeyboardTypeDefault) field.keyboardType = keyboardType;
-            field.secureTextEntry = secure;
-            field.clearButtonMode = UITextFieldViewModeWhileEditing;
-        } else if (initialText.length > 0) {
-            // KVC 直取失败的兜底：走微信自身的预填方法
-            SEL dtfSel = NSSelectorFromString(@"setTextFieldDefaultText:");
-            if ([alert respondsToSelector:dtfSel]) {
-                ((void(*)(id, SEL, id))objc_msgSend)(alert, dtfSel, initialText);
-            }
-        }
-
-        // ③ 取消：no-op selector，target=锚点（WCR 同款 target=VC 模式）
-        SEL cancelAPI = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
-        if ([alert respondsToSelector:cancelAPI]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelAPI, @"取消", anchor,
-                NSSelectorFromString(@"__walert_cancel"));
-        } else {
-            WPLog(@"Alert", @"!!! addCancelBtnTitle:target:sel: 不存在，取消按钮未注册");
-        }
-
-        // ④ 确定：target=锚点（WCR 同款；锚点永不释放 + currentAlert 持有弹窗）
-        SEL confirmAPI = NSSelectorFromString(@"addBtnTitle:target:sel:");
-        if ([alert respondsToSelector:confirmAPI]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, confirmAPI, @"确定", anchor,
-                NSSelectorFromString(@"__walert_confirm"));
-        } else {
-            WPLog(@"Alert", @"!!! addBtnTitle:target:sel: 不存在，确定按钮未注册");
-        }
-
-        // ⑤ show（回调经微信 target/sel 分发至锚点，(84).log 实证可达；
-        //    勿再直挂 UIButton——双通道会导致回调触发两次）
-        SEL showSel = NSSelectorFromString(@"show");
-        if ([alert respondsToSelector:showSel]) {
-            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
-        }
-    } @catch (NSException *e) {
-        WPLogDebug(@"Alert", @"input alert EXCEPTION: %@", e);
-    }
-}
-
-#pragma mark - 菜单弹窗
-
-+ (void)showMenuAlert:(NSString *)message
-              buttons:(NSArray<NSString *> *)titles
-             onButton:(void(^)(NSInteger index))onButton {
-    @try {
-        WCUIAlertView *alert = [self createAlertWithTitle:nil message:message];
-        if (!alert) return;
-
-        _WAlertAnchor *anchor = walertAnchor();
-        anchor.currentAlert = alert;
-
-        SEL btnSel = NSSelectorFromString(@"addBtnTitle:target:sel:");
-        NSMutableArray *blocks = [NSMutableArray array];
-        NSMutableArray *menuSelNames = [NSMutableArray array];
-        for (NSInteger i = 0; i < (NSInteger)titles.count && i < kWAlertMenuSlots; i++) {
-            NSInteger captured = i;
-            void(^b)(void) = ^{
-                if (onButton) onButton(captured);
-            };
-            [blocks addObject:b];
-            [menuSelNames addObject:[NSString stringWithFormat:@"__walert_menu_%d", (int)captured]];
-            if ([alert respondsToSelector:btnSel]) {
-                SEL menuSel = NSSelectorFromString([NSString stringWithFormat:@"__walert_menu_%d", (int)captured]);
-                ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btnSel, titles[i], anchor, menuSel);
-            }
-        }
-        anchor.menuBlocks = [blocks copy];
-
-        SEL cancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
-        if ([alert respondsToSelector:cancelSel]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelSel, @"取消", anchor,
-                NSSelectorFromString(@"__walert_cancel"));
-        }
-
-        SEL showSel = NSSelectorFromString(@"show");
-        if ([alert respondsToSelector:showSel]) {
-            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
-        }
-    } @catch (NSException *e) {
-        WPLogDebug(@"Alert", @"menu alert EXCEPTION: %@", e);
-    }
-}
-
-#pragma mark - 纯提示弹窗
-
-+ (void)showTipAlert:(NSString *)message {
-    [self showTipAlert:message buttonTitle:@"我知道了"];
-}
-
-+ (void)showTipAlert:(NSString *)message buttonTitle:(NSString *)buttonTitle {
-    @try {
-        WCUIAlertView *alert = [self createAlertWithTitle:@"Mio助手" message:message];
-        if (!alert) return;
-        SEL cancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
-        if ([alert respondsToSelector:cancelSel]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelSel, buttonTitle ?: @"我知道了",
-                walertAnchor(), NSSelectorFromString(@"__walert_cancel"));
-        }
-        SEL showSel = NSSelectorFromString(@"show");
-        if ([alert respondsToSelector:showSel]) {
-            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
-        }
-    } @catch (NSException *e) {
-        WPLogDebug(@"Alert", @"tip error: %@", e);
-    }
-}
-
-#pragma mark - 确认弹窗（双按钮：取消 + 确认）
-
-+ (void)showConfirmAlert:(NSString *)message
-            confirmTitle:(NSString *)confirmTitle
-               onConfirm:(void(^)(void))onConfirm {
-    @try {
-        WCUIAlertView *alert = [self createAlertWithTitle:@"Mio助手" message:message];
-        if (!alert) return;
-
-        _WAlertAnchor *anchor = walertAnchor();
-        anchor.currentAlert = alert;
-        anchor.simpleBlock = onConfirm ? [onConfirm copy] : nil;
-
-        // 取消按钮
-        SEL cancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
-        if ([alert respondsToSelector:cancelSel]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelSel, @"取消", anchor,
-                NSSelectorFromString(@"__walert_cancel"));
-        }
-
-        // 确认按钮 → target=锚点
-        SEL simpleConfirmSel = NSSelectorFromString(@"__walert_simple_confirm");
-        SEL btnSel = NSSelectorFromString(@"addBtnTitle:target:sel:");
-        if ([alert respondsToSelector:btnSel]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btnSel, confirmTitle, anchor, simpleConfirmSel);
-        }
-
-        SEL showSel = NSSelectorFromString(@"show");
-        if ([alert respondsToSelector:showSel]) {
-            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
-        }
-    } @catch (NSException *e) {
-        WPLogDebug(@"Alert", @"confirm error: %@", e);
-    }
-}
-
-@end
-
 #pragma mark - 日期时间选择面板（WCRMomentsScheduledDatePickerPanel 同款还原）
 
 // 六轮 年/月/日/时/分/秒 + 底部弹出面板（逐项对应 WCR 反编译：
@@ -527,6 +319,210 @@ static UIWindow *MioAlertKeyWindow(void) {
 }
 
 @implementation MioAlertHelper
+
++ (Class)alertClass {
+    static Class _alertClass = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        _alertClass = objc_getClass("WCUIAlertView");
+        WPLogDebug(@"Alert", _alertClass ? @"WCUIAlertView class found"
+                              : @"WCUIAlertView class NOT found");
+    });
+    return _alertClass;
+}
+
+// 取内部输入框（showTextFieldWithMaxLen: 创建的单行 field）
++ (UITextField *)textFieldInsideAlert:(id)alert {
+    @try {
+        id v = [alert valueForKeyPath:@"tipsVc.tipsTextField"];
+        if ([v isKindOfClass:[UITextField class]]) return v;
+    } @catch (NSException *e) {}
+    @try {
+        id v = [alert valueForKeyPath:@"tipsVc.tipsTextView"];
+        if ([v isKindOfClass:[UITextField class]]) return v;
+    } @catch (NSException *e) {}
+    return nil;
+}
+
++ (WCUIAlertView *)createAlertWithTitle:(NSString *)title message:(NSString *)message {
+    Class alertClass = [self alertClass];
+    if (!alertClass) return nil;
+    WCUIAlertView *alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertClass alloc],
+        @selector(initWithTitle:message:), title ?: @"Mio助手", message ?: @"");
+    return alert;
+}
+
+#pragma mark - 文本输入弹窗
+
++ (void)showInputAlert:(NSString *)title
+               message:(NSString *)message
+           initialText:(NSString *)initialText
+           placeholder:(NSString *)placeholder
+              keyboard:(UIKeyboardType)keyboardType
+                secure:(BOOL)secure
+            onConfirm:(void(^)(NSString *inputText))confirm {
+    @try {
+        WCUIAlertView *alert = [self createAlertWithTitle:title message:message];
+        if (!alert) { WPLogDebug(@"Alert", @"WCUIAlertView unavailable — input alert aborted"); return; }
+
+        _WAlertAnchor *anchor = walertAnchor();
+        anchor.currentAlert = alert;                 // WCR setCurrentAlert 同款：强持有防释放
+        anchor.confirmBlock = confirm ? [confirm copy] : nil;
+
+        // ① 输入框
+        SEL stfSel = NSSelectorFromString(@"showTextFieldWithMaxLen:");
+        if ([alert respondsToSelector:stfSel]) {
+            ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stfSel, 99999);
+        }
+
+        // ② 反向配置输入框：预填/占位/键盘/密码打点
+        UITextField *field = [self textFieldInsideAlert:alert];
+        if (field) {
+            field.text = initialText ?: @"";
+            if (placeholder.length > 0) field.placeholder = placeholder;
+            if (keyboardType != UIKeyboardTypeDefault) field.keyboardType = keyboardType;
+            field.secureTextEntry = secure;
+            field.clearButtonMode = UITextFieldViewModeWhileEditing;
+        } else if (initialText.length > 0) {
+            // KVC 直取失败的兜底：走微信自身的预填方法
+            SEL dtfSel = NSSelectorFromString(@"setTextFieldDefaultText:");
+            if ([alert respondsToSelector:dtfSel]) {
+                ((void(*)(id, SEL, id))objc_msgSend)(alert, dtfSel, initialText);
+            }
+        }
+
+        // ③ 取消：no-op selector，target=锚点（WCR 同款 target=VC 模式）
+        SEL cancelAPI = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
+        if ([alert respondsToSelector:cancelAPI]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelAPI, @"取消", anchor,
+                NSSelectorFromString(@"__walert_cancel"));
+        } else {
+            WPLog(@"Alert", @"!!! addCancelBtnTitle:target:sel: 不存在，取消按钮未注册");
+        }
+
+        // ④ 确定：target=锚点（WCR 同款；锚点永不释放 + currentAlert 持有弹窗）
+        SEL confirmAPI = NSSelectorFromString(@"addBtnTitle:target:sel:");
+        if ([alert respondsToSelector:confirmAPI]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, confirmAPI, @"确定", anchor,
+                NSSelectorFromString(@"__walert_confirm"));
+        } else {
+            WPLog(@"Alert", @"!!! addBtnTitle:target:sel: 不存在，确定按钮未注册");
+        }
+
+        // ⑤ show（回调经微信 target/sel 分发至锚点，(84).log 实证可达；
+        //    勿再直挂 UIButton——双通道会导致回调触发两次）
+        SEL showSel = NSSelectorFromString(@"show");
+        if ([alert respondsToSelector:showSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
+        }
+    } @catch (NSException *e) {
+        WPLogDebug(@"Alert", @"input alert EXCEPTION: %@", e);
+    }
+}
+
+#pragma mark - 菜单弹窗
+
++ (void)showMenuAlert:(NSString *)message
+              buttons:(NSArray<NSString *> *)titles
+             onButton:(void(^)(NSInteger index))onButton {
+    @try {
+        WCUIAlertView *alert = [self createAlertWithTitle:nil message:message];
+        if (!alert) return;
+
+        _WAlertAnchor *anchor = walertAnchor();
+        anchor.currentAlert = alert;
+
+        SEL btnSel = NSSelectorFromString(@"addBtnTitle:target:sel:");
+        NSMutableArray *blocks = [NSMutableArray array];
+        NSMutableArray *menuSelNames = [NSMutableArray array];
+        for (NSInteger i = 0; i < (NSInteger)titles.count && i < kWAlertMenuSlots; i++) {
+            NSInteger captured = i;
+            void(^b)(void) = ^{
+                if (onButton) onButton(captured);
+            };
+            [blocks addObject:b];
+            [menuSelNames addObject:[NSString stringWithFormat:@"__walert_menu_%d", (int)captured]];
+            if ([alert respondsToSelector:btnSel]) {
+                SEL menuSel = NSSelectorFromString([NSString stringWithFormat:@"__walert_menu_%d", (int)captured]);
+                ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btnSel, titles[i], anchor, menuSel);
+            }
+        }
+        anchor.menuBlocks = [blocks copy];
+
+        SEL cancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
+        if ([alert respondsToSelector:cancelSel]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelSel, @"取消", anchor,
+                NSSelectorFromString(@"__walert_cancel"));
+        }
+
+        SEL showSel = NSSelectorFromString(@"show");
+        if ([alert respondsToSelector:showSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
+        }
+    } @catch (NSException *e) {
+        WPLogDebug(@"Alert", @"menu alert EXCEPTION: %@", e);
+    }
+}
+
+#pragma mark - 纯提示弹窗
+
++ (void)showTipAlert:(NSString *)message {
+    [self showTipAlert:message buttonTitle:@"我知道了"];
+}
+
++ (void)showTipAlert:(NSString *)message buttonTitle:(NSString *)buttonTitle {
+    @try {
+        WCUIAlertView *alert = [self createAlertWithTitle:@"Mio助手" message:message];
+        if (!alert) return;
+        SEL cancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
+        if ([alert respondsToSelector:cancelSel]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelSel, buttonTitle ?: @"我知道了",
+                walertAnchor(), NSSelectorFromString(@"__walert_cancel"));
+        }
+        SEL showSel = NSSelectorFromString(@"show");
+        if ([alert respondsToSelector:showSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
+        }
+    } @catch (NSException *e) {
+        WPLogDebug(@"Alert", @"tip error: %@", e);
+    }
+}
+
+#pragma mark - 确认弹窗（双按钮：取消 + 确认）
+
++ (void)showConfirmAlert:(NSString *)message
+            confirmTitle:(NSString *)confirmTitle
+               onConfirm:(void(^)(void))onConfirm {
+    @try {
+        WCUIAlertView *alert = [self createAlertWithTitle:@"Mio助手" message:message];
+        if (!alert) return;
+
+        _WAlertAnchor *anchor = walertAnchor();
+        anchor.currentAlert = alert;
+        anchor.simpleBlock = onConfirm ? [onConfirm copy] : nil;
+
+        // 取消按钮
+        SEL cancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
+        if ([alert respondsToSelector:cancelSel]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelSel, @"取消", anchor,
+                NSSelectorFromString(@"__walert_cancel"));
+        }
+
+        // 确认按钮 → target=锚点
+        SEL simpleConfirmSel = NSSelectorFromString(@"__walert_simple_confirm");
+        SEL btnSel = NSSelectorFromString(@"addBtnTitle:target:sel:");
+        if ([alert respondsToSelector:btnSel]) {
+            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btnSel, confirmTitle, anchor, simpleConfirmSel);
+        }
+
+        SEL showSel = NSSelectorFromString(@"show");
+        if ([alert respondsToSelector:showSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
+        }
+    } @catch (NSException *e) {
+        WPLogDebug(@"Alert", @"confirm error: %@", e);
+    }
+}
 
 + (void)showDateTimePickerPanel:(NSString *)title
                     initialDate:(NSDate *)initialDate
