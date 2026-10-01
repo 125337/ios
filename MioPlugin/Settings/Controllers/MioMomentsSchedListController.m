@@ -246,7 +246,7 @@
 - (void)buttonClicked:(NSString *)key {
     if (![key isKindOfClass:[NSString class]]) return;
     NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
-    NSString *prefix = key.componentsSeparatedByString(@"_").firstObject;
+    NSString *prefix = [key componentsSeparatedByString:@"_"].firstObject;
     NSString *taskId = (key.length > prefix.length + 1) ? [key substringFromIndex:prefix.length + 1] : nil;
     if (taskId.length == 0) return;
     NSUInteger idx = [tasks indexOfObjectPassingTest:^BOOL(NSDictionary *d, NSUInteger i, BOOL *stop) {
