@@ -2,6 +2,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "LogManager.h"
+#import "../Modules/SettingEntry/WPCommonUI.h"
 
 // ==================== WCUIAlertView 本地声明 ====================
 @interface WCUIAlertView : NSObject
@@ -297,6 +298,8 @@ static _WAlertAnchor *walertAnchor(void) {
     }
 }
 
+@end
+
 #pragma mark - 日期时间选择面板（WCRMomentsScheduledDatePickerPanel 同款还原）
 
 // 六轮 年/月/日/时/分/秒 + 底部弹出面板（逐项对应 WCR 反编译：
@@ -522,6 +525,8 @@ static UIWindow *MioAlertKeyWindow(void) {
     }
     return [UIApplication sharedApplication].keyWindow; // 旧系统兜底
 }
+
+@implementation MioAlertHelper
 
 + (void)showDateTimePickerPanel:(NSString *)title
                     initialDate:(NSDate *)initialDate
