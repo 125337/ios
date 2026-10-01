@@ -280,12 +280,21 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
     @try {
         if (![MomentsConfig shared].schedEnabled) return NO;
         NSDate *pending = [self schedPendingFireDate];
-        if (!pending) return NO;
+        if (!pending) {
+            WPLog(@"Moments", @"[Sched] capture skip: no pending fireDate (session lost?)");
+            return NO;
+        }
         double fireAt = pending.timeIntervalSince1970;
         double now = [NSDate date].timeIntervalSince1970;
         [self schedSetPendingFireDate:nil]; // 一进拦截先清标记（防循环，恢复发布走原生）
-        if (fireAt < now + kMioSchedMinLeadSeconds) return NO; // 已过期：放行照常发
-        if (!task) return NO;
+        if (fireAt < now + kMioSchedMinLeadSeconds) {
+            WPLog(@"Moments", @"[Sched] capture skip: fireAt %.0f too close to now %.0f", fireAt, now);
+            return NO; // 已过期：放行照常发
+        }
+        if (!task) {
+            WPLog(@"Moments", @"[Sched] capture skip: nil task");
+            return NO;
+        }
 
         NSArray *exist = [[MomentsScheduler shared] allTasks];
         int active = 0;
@@ -301,7 +310,10 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
         // tail26 frida 实锤：addUploadTask: 的参数就是 WCDataItem 本体（desc 含 username/createtime），
         // 非发帖数据项（其它业务的 DataItem）放行
         Class diCls = objc_getClass("WCDataItem");
-        if (!diCls || ![task isKindOfClass:diCls]) return NO;
+        if (!diCls || ![task isKindOfClass:diCls]) {
+            WPLog(@"Moments", @"[Sched] capture skip: param cls=%@ not WCDataItem", NSStringFromClass([task class]));
+            return NO;
+        }
 
         NSString *taskId = [[NSUUID UUID] UUIDString];
         NSString *dir = [self taskDir:taskId];
