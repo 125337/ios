@@ -364,10 +364,10 @@ static NSString *MioSchedCopyMedia(id item, NSString *dir, NSInteger idx, BOOL *
 static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload) {
     Class taskCls = objc_getClass("WCUploadTask");
     Class mediaCls = objc_getClass("WCMediaItem");
-    if (!taskCls || !mediaCls) return NO;
+    if (!taskCls || !mediaCls) { WPLog(@"Moments", @"[Sched] publish refused: WCUploadTask/WCMediaItem class missing"); return NO; }
 
     id newTask = [[taskCls alloc] init];
-    if (!newTask) return NO;
+    if (!newTask) { WPLog(@"Moments", @"[Sched] publish refused: WCUploadTask alloc failed"); return NO; }
     void (^set)(NSString *, id) = ^(NSString *prop, id v) {
         ((void(*)(id, SEL, id))objc_msgSend)(newTask, NSSelectorFromString(prop), v);
     };
@@ -396,10 +396,13 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload) {
         }
         [newMediaList addObject:mi];
     }
+    if (medias.count > 0 && newMediaList.count == 0) {
+        WPLog(@"Moments", @"[Sched] publish warn: %lu medias in payload but none rebuilt (data files lost)", (unsigned long)medias.count);
+    }
 
     int type = [payload[@"type"] intValue];
     if (type == 1 && newMediaList.count == 0) type = contentDesc.length > 0 ? 2 : 1; // 媒体全失效回落文字，仍无文字则失败
-    if (type == 1 && newMediaList.count == 0) return NO;
+    if (type == 1 && newMediaList.count == 0) { WPLog(@"Moments", @"[Sched] publish refused: type=1 with no media and empty text"); return NO; }
 
     set(@"setContentDesc:", contentDesc);
     set(@"setType:", @(type));
@@ -415,15 +418,15 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload) {
     // 发布链（WCR 同款实证）：MMContext currentContext → getService:WCFacade → uploadMgr → addUploadTask:
     Class ctxCls = objc_getClass("MMContext");
     Class facadeCls = objc_getClass("WCFacade");
-    if (!ctxCls || !facadeCls) return NO;
+    if (!ctxCls || !facadeCls) { WPLog(@"Moments", @"[Sched] publish refused: MMContext/WCFacade class missing"); return NO; }
     id ctx = ((id(*)(id, SEL))objc_msgSend)((id)ctxCls, NSSelectorFromString(@"currentContext"));
-    if (!ctx) return NO;
+    if (!ctx) { WPLog(@"Moments", @"[Sched] publish refused: currentContext nil"); return NO; }
     id facade = ((id(*)(id, SEL, id))objc_msgSend)(ctx, NSSelectorFromString(@"getService:"), facadeCls);
-    if (!facade) return NO;
+    if (!facade) { WPLog(@"Moments", @"[Sched] publish refused: WCFacade service nil"); return NO; }
     id uploadMgr = ((id(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"uploadMgr"));
-    if (!uploadMgr) return NO;
+    if (!uploadMgr) { WPLog(@"Moments", @"[Sched] publish refused: uploadMgr nil"); return NO; }
     SEL addSel = NSSelectorFromString(@"addUploadTask:");
-    if (![uploadMgr respondsToSelector:addSel]) return NO;
+    if (![uploadMgr respondsToSelector:addSel]) { WPLog(@"Moments", @"[Sched] publish refused: no addUploadTask: selector"); return NO; }
     ((void(*)(id, SEL, id))objc_msgSend)(uploadMgr, addSel, newTask);
     WPLog(@"Moments", @"[Sched] published id=%@", t[@"id"]);
     return YES;
@@ -481,8 +484,17 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload) {
             // 发布（读归档 → 重建 task → 原生链）
             NSString *dir = [[MomentsScheduler schedRootDir] stringByAppendingPathComponent:t[@"id"] ?: @""];
             NSData *pd = [NSData dataWithContentsOfFile:[dir stringByAppendingPathComponent:@"payload.archived"]];
-            NSDictionary *payload = pd ? (NSDictionary *)[NSKeyedUnarchiver unarchiveObjectWithData:pd] : nil;
-            BOOL ok = [payload isKindOfClass:[NSDictionary class]] && MioSchedPublishTask(t, payload);
+            NSDictionary *payload = nil;
+            if (!pd) {
+                WPLog(@"Moments", @"[Sched] publish FAILED id=%@: payload.archived missing", t[@"id"]);
+            } else {
+                payload = (NSDictionary *)[NSKeyedUnarchiver unarchiveObjectWithData:pd];
+                if (![payload isKindOfClass:[NSDictionary class]]) {
+                    payload = nil;
+                    WPLog(@"Moments", @"[Sched] publish FAILED id=%@: payload unarchive invalid", t[@"id"]);
+                }
+            }
+            BOOL ok = (payload != nil) && MioSchedPublishTask(t, payload);
 
             if (ok) {
                 int mode = [t[@"scheduleMode"] intValue];

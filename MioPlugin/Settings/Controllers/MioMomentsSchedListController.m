@@ -27,10 +27,10 @@
 #pragma mark - 状态文案
 
 - (NSString *)stateTextForDict:(NSDictionary *)t {
-    if (![t[@"enabled"] boolValue]) return @"已停用";
     NSString *st = t[@"state"] ?: @"";
+    if ([st isEqualToString:@"triggered"]) return @"已发表"; // triggered 恒为停用态，需优先于「已停用」展示
+    if (![t[@"enabled"] boolValue]) return @"已停用";
     if ([st isEqualToString:@"firing"]) return @"发布中";
-    if ([st isEqualToString:@"triggered"]) return @"已完成";
     if ([st isEqualToString:@"failed"]) return @"失败";
     return @"等待发表";
 }
@@ -254,13 +254,19 @@
         return;
     }
     if ([prefix isEqualToString:@"toggle"]) {
+        // 已发表的单次任务不允许复活（曾致同一任务二次发布）
+        if ([t[@"state"] isEqualToString:@"triggered"]) {
+            WPShowToast(@"该任务已发表");
+            return;
+        }
         NSMutableArray *ts = [tasks mutableCopy];
         NSMutableDictionary *nt = [ts[idx] mutableCopy];
-        nt[@"enabled"] = @(![nt[@"enabled"] boolValue]);
-        if ([nt[@"enabled"] boolValue]) nt[@"state"] = @"pending";
+        BOOL toEnable = ![nt[@"enabled"] boolValue];
+        nt[@"enabled"] = @(toEnable);
+        if (toEnable && [nt[@"state"] isEqualToString:@"failed"]) nt[@"state"] = @"pending"; // 仅失败任务可启用复活
         ts[idx] = nt;
         [[MomentsScheduler shared] saveTasks:ts];
-        WPShowToast([nt[@"enabled"] boolValue] ? @"已启用" : @"已停用");
+        WPShowToast(toEnable ? @"已启用" : @"已停用");
         [self reloadTable];
         return;
     }
