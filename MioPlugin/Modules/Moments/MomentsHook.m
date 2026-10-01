@@ -2091,8 +2091,8 @@ static void MioTailSyncCommitCell(id vc) {
             WPLog(@"Moments", @"[Tail] SKIP: normalCellForSel:target:title:rightValue: NOT found");
             return;
         }
-        id cell = ((id(*)(id, SEL, id, id, id, id))objc_msgSend)((id)cellCls, mkSel,
-            (id)clickSel, vc, @"小尾巴", MioTailCellRightValue());
+        id cell = ((id(*)(id, SEL, SEL, id, id, id))objc_msgSend)((id)cellCls, mkSel,
+            clickSel, vc, @"小尾巴", MioTailCellRightValue());
         SEL addSel = NSSelectorFromString(@"addCell:");
         if (![sec0 respondsToSelector:addSel]) return;
         ((void(*)(id, SEL, id))objc_msgSend)(sec0, addSel, cell);
