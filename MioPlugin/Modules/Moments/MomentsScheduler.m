@@ -208,7 +208,7 @@ static NSString *MioSchedCopyFile(NSString *src, NSString *dstPath) {
 // 拷贝单个媒体对象的数据文件+预览图（发帖页 dismiss 后临时文件会被清理，必须自留拷贝，WCR 同款）
 // outPrev 传出预览拷贝路径（可缺失）；返回数据拷贝路径，nil=该媒体无效
 // 探测链（WCMediaItem.h 头文件实证）：发表瞬间主文件可能尚未落盘，按存在性逐级兜底
-static NSString *MioSchedCopyMedia(id item, NSString *dir, NSInteger idx, BOOL *outSight, NSString **outPrev) {
+static NSString *MioSchedCopyMedia(id item, NSString *dir, NSInteger idx, BOOL *outSight, NSString **outPrev, NSMutableDictionary *pathMap) {
     *outSight = NO;
     *outPrev = nil;
     SEL dataSels[] = { NSSelectorFromString(@"pathForData"), NSSelectorFromString(@"tmpPathForData"),
@@ -228,23 +228,51 @@ static NSString *MioSchedCopyMedia(id item, NSString *dir, NSInteger idx, BOOL *
         int sn = (int)(sizeof(sightSels) / sizeof(sightSels[0]));
         for (int i = 0; i < sn && !dataPath; i++) {
             if (![item respondsToSelector:sightSels[i]]) continue;
-            dataPath = MioSchedCopyFile(((id(*)(id, SEL))objc_msgSend)(item, sightSels[i]),
-                                        [dir stringByAppendingFormat:@"sight_%ld.dat", (long)idx]);
+            NSString *src = ((id(*)(id, SEL))objc_msgSend)(item, sightSels[i]);
+            dataPath = MioSchedCopyFile(src, [dir stringByAppendingFormat:@"sight_%ld.dat", (long)idx]);
+            if (dataPath && src.length) pathMap[src] = dataPath;
         }
     } else {
         int dn = (int)(sizeof(dataSels) / sizeof(dataSels[0]));
         for (int i = 0; i < dn && !dataPath; i++) {
             if (![item respondsToSelector:dataSels[i]]) continue;
-            dataPath = MioSchedCopyFile(((id(*)(id, SEL))objc_msgSend)(item, dataSels[i]),
-                                        [dir stringByAppendingFormat:@"data_%ld.dat", (long)idx]);
+            NSString *src = ((id(*)(id, SEL))objc_msgSend)(item, dataSels[i]);
+            dataPath = MioSchedCopyFile(src, [dir stringByAppendingFormat:@"data_%ld.dat", (long)idx]);
+            if (dataPath && src.length) pathMap[src] = dataPath;
         }
     }
     for (int i = 0; i < 2 && !*outPrev; i++) {
         if (![item respondsToSelector:prevSels[i]]) continue;
-        *outPrev = MioSchedCopyFile(((id(*)(id, SEL))objc_msgSend)(item, prevSels[i]),
-                                    [dir stringByAppendingFormat:@"prev_%ld.dat", (long)idx]);
+        NSString *src = ((id(*)(id, SEL))objc_msgSend)(item, prevSels[i]);
+        *outPrev = MioSchedCopyFile(src, [dir stringByAppendingFormat:@"prev_%ld.dat", (long)idx]);
+        if (*outPrev && src.length) pathMap[src] = *outPrev;
     }
     return dataPath;
+}
+
+// 深遍历树，字符串值命中 pathMap 的替换为自留拷贝路径（WCR applyArchivedMediaPathsToDataItem 同款语义）
+static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map) {
+    if ([obj isKindOfClass:[NSDictionary class]]) {
+        NSMutableDictionary *out = [NSMutableDictionary dictionaryWithCapacity:obj.count];
+        for (id k in obj) {
+            id v = MioSchedRewritePaths(obj[k], map);
+            if (v) out[k] = v;
+        }
+        return out;
+    }
+    if ([obj isKindOfClass:[NSArray class]]) {
+        NSMutableArray *out = [NSMutableArray arrayWithCapacity:obj.count];
+        for (id v in obj) {
+            id nv = MioSchedRewritePaths(v, map);
+            if (nv) [out addObject:nv];
+        }
+        return out;
+    }
+    if ([obj isKindOfClass:[NSString class]]) {
+        NSString *rep = map[obj];
+        return rep ?: obj;
+    }
+    return obj;
 }
 
 + (BOOL)captureUploadTask:(id)task {
@@ -272,35 +300,38 @@ static NSString *MioSchedCopyMedia(id item, NSString *dir, NSInteger idx, BOOL *
         // 原帖字段抽取（WCUploadTask 头文件实证：contentDesc/type/isPrivate/locationInfo/withUserList/extBean 均存在）
         SEL cdSel = NSSelectorFromString(@"contentDesc");
         SEL typeSel = NSSelectorFromString(@"type");
-        SEL cidSel = NSSelectorFromString(@"clientID");
         SEL privSel = NSSelectorFromString(@"isPrivate");
         SEL locSel = NSSelectorFromString(@"locationInfo");
         SEL withSel = NSSelectorFromString(@"withUserList");
         SEL extSel = NSSelectorFromString(@"extBean");
         SEL mlSel = NSSelectorFromString(@"mediaList");
-        SEL showTypeSel = NSSelectorFromString(@"contentDescShowType");
-        SEL sceneSel = NSSelectorFromString(@"contentDescScene");
-        SEL srcSel = NSSelectorFromString(@"postSource");
 
         NSString *contentDesc = @"";
         if ([task respondsToSelector:cdSel]) {
             id v = ((id(*)(id, SEL))objc_msgSend)(task, cdSel);
             if ([v isKindOfClass:[NSString class]]) contentDesc = v;
         }
-        // 原帖 task 是微信发帖页构造的完整对象：type/clientID 等保真存档，发布原样回填（自猜字段已被实测打脸）
+        // 原帖 task 是微信发帖页构造的完整对象：type 保真存档，发布原样回填（自猜字段已被实测打脸）
         id typeVal = ([task respondsToSelector:typeSel]) ? ((id(*)(id, SEL))objc_msgSend)(task, typeSel) : nil;
-        id cidVal = ([task respondsToSelector:cidSel]) ? ((id(*)(id, SEL))objc_msgSend)(task, cidSel) : nil;
-        id showTypeVal = ([task respondsToSelector:showTypeSel]) ? ((id(*)(id, SEL))objc_msgSend)(task, showTypeSel) : nil;
-        id sceneVal = ([task respondsToSelector:sceneSel]) ? ((id(*)(id, SEL))objc_msgSend)(task, sceneSel) : nil;
-        id srcVal = ([task respondsToSelector:srcSel]) ? ((id(*)(id, SEL))objc_msgSend)(task, srcSel) : nil;
         id privVal = ([task respondsToSelector:privSel]) ? ((id(*)(id, SEL))objc_msgSend)(task, privSel) : nil;
         id locVal = ([task respondsToSelector:locSel]) ? ((id(*)(id, SEL))objc_msgSend)(task, locSel) : nil;
         id withVal = ([task respondsToSelector:withSel]) ? ((id(*)(id, SEL))objc_msgSend)(task, withSel) : nil;
         id extVal = ([task respondsToSelector:extSel]) ? ((id(*)(id, SEL))objc_msgSend)(task, extSel) : nil;
 
-        // 媒体拷贝（WCR FUN_0058b544 同款：拦截时自留拷贝防 dismiss 清理）
+        // 发帖数据本体是 WCDataItem（WCR WCRefineMomentsMonitor 实证）：task.dataItem 保真归档，
+        // 发布端解档后 setDataItem: 回灌，addUploadTask 流水线才认
+        SEL diSel = NSSelectorFromString(@"dataItem");
+        id dataItem = ([task respondsToSelector:diSel]) ? ((id(*)(id, SEL))objc_msgSend)(task, diSel) : nil;
+        if (!dataItem) {
+            WPLog(@"Moments", @"[Sched] capture aborted: task has no dataItem, fallback to native publish");
+            WPShowToast(@"该帖子类型暂不支持定时");
+            return NO;
+        }
+
+        // 媒体拷贝（WCR FUN_0058b544 同款：拦截时自留拷贝防 dismiss 清理），同时收集 src→dst 路径映射
         NSString *taskId = [[NSUUID UUID] UUIDString];
         NSString *dir = [self taskDir:taskId];
+        NSMutableDictionary<NSString *, NSString *> *pathMap = [NSMutableDictionary dictionary];
         NSMutableArray<NSDictionary *> *mediaDicts = [NSMutableArray array];
         NSInteger origMediaCount = 0;
         if ([task respondsToSelector:mlSel]) {
@@ -311,7 +342,7 @@ static NSString *MioSchedCopyMedia(id item, NSString *dir, NSInteger idx, BOOL *
                 for (id item in ml) {
                     BOOL isSight = NO;
                     NSString *prevPath = nil;
-                    NSString *dp = MioSchedCopyMedia(item, dir, idx, &isSight, &prevPath);
+                    NSString *dp = MioSchedCopyMedia(item, dir, idx, &isSight, &prevPath, pathMap);
                     if (!dp) {
                         WPLog(@"Moments", @"[Sched] media %ld copy failed, skip", (long)idx);
                         idx++;
@@ -334,15 +365,29 @@ static NSString *MioSchedCopyMedia(id item, NSString *dir, NSInteger idx, BOOL *
         // 无媒体且无文字 → 无效不接管（放行让微信正常报错）
         if (mediaDicts.count == 0 && contentDesc.length == 0) return NO;
 
+        // dataItem 的 contentObj 深遍历回写自留拷贝路径（WCR applyArchivedMediaPathsToDataItem 同款）
+        if (pathMap.count > 0) {
+            id contentObj = nil;
+            @try {
+                contentObj = [dataItem valueForKey:@"contentObj"] ?: [dataItem valueForKey:@"content"];
+            } @catch (NSException *e) {
+                contentObj = nil;
+            }
+            if (contentObj) {
+                id rewritten = MioSchedRewritePaths(contentObj, pathMap);
+                @try {
+                    [dataItem setValue:rewritten forKey:@"contentObj"];
+                } @catch (NSException *e) {
+                    WPLog(@"Moments", @"[Sched] contentObj rewrite failed: %@", e.name);
+                }
+            }
+        }
+
         // payload 归档（NSKeyedArchiver：NSString/NSData/原 task 附属对象，发布端原样恢复）
         NSMutableDictionary *payload = [NSMutableDictionary dictionary];
         payload[@"type"] = typeVal ?: @(mediaDicts.count > 0 ? 1 : 2); // 原帖 type 保真；缺失时才按媒体数推断
         payload[@"contentDesc"] = contentDesc;
         payload[@"medias"] = mediaDicts;
-        if (cidVal) payload[@"clientID"] = cidVal;
-        if (showTypeVal) payload[@"contentDescShowType"] = showTypeVal;
-        if (sceneVal) payload[@"contentDescScene"] = sceneVal;
-        if (srcVal) payload[@"postSource"] = srcVal;
         if (privVal) payload[@"isPrivate"] = privVal;
         if (locVal) payload[@"locationInfo"] = locVal;
         if (withVal) payload[@"withUserList"] = withVal;
@@ -351,6 +396,15 @@ static NSString *MioSchedCopyMedia(id item, NSString *dir, NSInteger idx, BOOL *
         if (!payloadData || ![payloadData writeToFile:[dir stringByAppendingPathComponent:@"payload.archived"] atomically:YES]) {
             MioSchedDeleteTaskDir(taskId);
             WPShowToast(@"定时任务创建失败");
+            return NO;
+        }
+
+        // dataItem 归档（发帖数据本体，WCR 同款；NSKeyedArchiver 原样保真）
+        NSData *diData = [NSKeyedArchiver archivedDataWithRootObject:dataItem requiringSecureCoding:NO error:nil];
+        if (!diData || ![diData writeToFile:[dir stringByAppendingPathComponent:@"dataitem.archived"] atomically:YES]) {
+            MioSchedDeleteTaskDir(taskId);
+            WPLog(@"Moments", @"[Sched] capture aborted: dataItem archive failed");
+            WPShowToast(@"该帖子类型暂不支持定时");
             return NO;
         }
 
@@ -391,7 +445,8 @@ static NSString *MioSchedCopyMedia(id item, NSString *dir, NSInteger idx, BOOL *
 
 // 重建 WCUploadTask → 原生发布链（MMContext→WCFacade→uploadMgr→addUploadTask:）
 // 此刻发帖页会话为空（capture 时已清标记），不会触发自家 hook 自拦截
-static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload) {
+static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload, NSString *dir) {
+    @try {
     Class taskCls = objc_getClass("WCUploadTask");
     Class mediaCls = objc_getClass("WCMediaItem");
     if (!taskCls || !mediaCls) { WPLog(@"Moments", @"[Sched] publish refused: WCUploadTask/WCMediaItem class missing"); return NO; }
@@ -399,7 +454,8 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload) {
     id newTask = [[taskCls alloc] init];
     if (!newTask) { WPLog(@"Moments", @"[Sched] publish refused: WCUploadTask alloc failed"); return NO; }
     void (^set)(NSString *, id) = ^(NSString *prop, id v) {
-        ((void(*)(id, SEL, id))objc_msgSend)(newTask, NSSelectorFromString(prop), v);
+        SEL s = NSSelectorFromString(prop);
+        if ([newTask respondsToSelector:s]) ((void(*)(id, SEL, id))objc_msgSend)(newTask, s, v);
     };
 
     NSString *contentDesc = payload[@"contentDesc"] ?: @"";
@@ -431,23 +487,33 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload) {
         return NO;
     }
 
-    // 字段回填：type/clientID/postSource 等为原帖保真值（capture 端存档），禁止自猜
-    id typeVal = payload[@"type"] ?: @(medias.count > 0 ? 1 : 2);
+    // 字段回填：仅设已验证安全的表面字段；发布数据本体走 dataItem（tail24 深字段实测引发微信内部 BAD_ACCESS）
     set(@"setContentDesc:", contentDesc);
-    set(@"setType:", typeVal);
-    set(@"setClientID:", payload[@"clientID"] ?: [[NSUUID UUID] UUIDString]);
-    set(@"setCreateTime:", @([NSDate date].timeIntervalSince1970)); // 发布时刻重新生成，不沿用原帖时间
-    set(@"setPostSource:", payload[@"postSource"] ?: @1);
+    set(@"setType:", payload[@"type"] ?: @(medias.count > 0 ? 1 : 2));
+    set(@"setPostSource:", @1);
     set(@"setIsSyncToWeibo:", @0);
     set(@"setIsSyncToFacebook:", @0);
-    if (payload[@"contentDescShowType"]) set(@"setContentDescShowType:", payload[@"contentDescShowType"]);
-    if (payload[@"contentDescScene"]) set(@"setContentDescScene:", payload[@"contentDescScene"]);
     if (newMediaList.count > 0) set(@"setMediaList:", newMediaList);
     if (payload[@"isPrivate"]) set(@"setIsPrivate:", payload[@"isPrivate"]);
     if (payload[@"locationInfo"]) set(@"setLocationInfo:", payload[@"locationInfo"]);
     if (payload[@"withUserList"]) set(@"setWithUserList:", payload[@"withUserList"]);
     if (payload[@"extBean"]) set(@"setExtBean:", payload[@"extBean"]);
-    WPLog(@"Moments", @"[Sched] publish task: type=%@ medias=%lu text=%lu", typeVal, (unsigned long)newMediaList.count, (unsigned long)contentDesc.length);
+
+    // 发帖数据本体：解档原帖 WCDataItem（路径已在 capture 时回写为自留拷贝），回灌 task
+    NSString *diFile = [dir stringByAppendingPathComponent:@"dataitem.archived"];
+    NSData *diData = [NSData dataWithContentsOfFile:diFile];
+    if (!diData) {
+        WPLog(@"Moments", @"[Sched] publish refused: dataitem.archived missing");
+        return NO;
+    }
+    id dataItem = [NSKeyedUnarchiver unarchiveObjectWithData:diData];
+    if (!dataItem) {
+        WPLog(@"Moments", @"[Sched] publish refused: dataItem unarchive invalid");
+        return NO;
+    }
+    set(@"setDataItem:", dataItem);
+    WPLog(@"Moments", @"[Sched] publish task: type=%@ medias=%lu text=%lu withDataItem=YES",
+          payload[@"type"] ?: @"?", (unsigned long)newMediaList.count, (unsigned long)contentDesc.length);
 
     // 发布链（WCR 同款实证）：MMContext currentContext → getService:WCFacade → uploadMgr → addUploadTask:
     Class ctxCls = objc_getClass("MMContext");
@@ -464,6 +530,10 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload) {
     ((void(*)(id, SEL, id))objc_msgSend)(uploadMgr, addSel, newTask);
     WPLog(@"Moments", @"[Sched] published id=%@", t[@"id"]);
     return YES;
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[Sched] publish EXCEPTION: %@", e);
+        return NO;
+    }
 }
 
 #pragma mark - tick 状态机（主线程，实例方法）
@@ -528,7 +598,7 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload) {
                     WPLog(@"Moments", @"[Sched] publish FAILED id=%@: payload unarchive invalid", t[@"id"]);
                 }
             }
-            BOOL ok = (payload != nil) && MioSchedPublishTask(t, payload);
+            BOOL ok = (payload != nil) && MioSchedPublishTask(t, payload, dir);
 
             if (ok) {
                 int mode = [t[@"scheduleMode"] intValue];
