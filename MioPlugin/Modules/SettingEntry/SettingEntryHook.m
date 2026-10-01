@@ -314,7 +314,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         wpEntryBuildRows(wc, nil); // 首次填充功能列表行（搜索重建走同一入口）
 
         UILabel *wfooter = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, headW, 50)];
-        wfooter.text = @"Mio助手 v2.0.0";
+        wfooter.text = [NSString stringWithFormat:@"Mio助手 v%@", kPluginVersion];
         wfooter.font = [UIFont systemFontOfSize:12];
         wfooter.textColor = WPT3();
         wfooter.textAlignment = NSTextAlignmentCenter;

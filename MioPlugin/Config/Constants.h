@@ -3,7 +3,8 @@
 
 #import <Foundation/Foundation.h>
 
-static NSString *const kPluginVersion = @"1.0.0";
+// 插件版本唯一源：所有显示处与 control（CI 构建时自动同步）均读这里，改版本只改这一行
+static NSString *const kPluginVersion = @"2.0.0";
 static const unsigned int kSystemMsgType = 0x2710;
 
 static NSString *const kDefaultNotifyFormat = @"{time}\n「{name}」撤回了一条消息\n{content}";

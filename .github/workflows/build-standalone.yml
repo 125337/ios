@@ -16,6 +16,12 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Sync control version from Constants.h
+      run: |
+        VER=$(sed -n 's/.*kPluginVersion = @"\(.*\)";/\1/p' MioPlugin/Config/Constants.h)
+        sed -i '' "s/^Version:.*/Version: $VER/" MioPlugin/control
+        echo "control Version synced -> $VER"
+
     - name: Setup Xcode
       uses: maxim-lobanov/setup-xcode@v1
       with:

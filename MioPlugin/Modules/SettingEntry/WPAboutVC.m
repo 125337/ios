@@ -32,7 +32,7 @@
         [heroView addSubview:nameLabel];
 
         UILabel *verLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 58, w, 20)];
-        verLabel.text = @"v2.0.0";
+        verLabel.text = [NSString stringWithFormat:@"v%@", kPluginVersion];
         verLabel.font = [UIFont systemFontOfSize:13];
         verLabel.textColor = [UIColor colorWithRed:0.400 green:0.800 blue:0.451 alpha:1.0];
         verLabel.textAlignment = NSTextAlignmentCenter;
