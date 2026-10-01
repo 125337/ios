@@ -1948,6 +1948,64 @@ static void MioInstallDetailedTimeHook(void) {
     WPLog(@"Moments", @"[DTime] WCTimeLineCellView updateWithDataItem:actionAreaVM: hooked");
 }
 
+#pragma mark - 朋友圈小尾巴（WCR FUN_005d7810 同款机制）
+
+// hook -[WCUploadTask appInfo]（WCR MSHookMessageEx 同款挂点，替换实现 FUN_005d7a30 同款）：
+// 微信发朋友圈时以 task.appInfo 声明来源应用，随 SnsObject 的 appinfo 字段编入（即"来自 XXX"尾巴）。
+// 开关开且 tailAppId 已注册（匹配生效预设）时返回自定义 WCAppInfo{appID, appName}，
+// 否则一律走原实现（WCR 未注册→orig 同款）。8.0.60 头文件交叉验证：
+// WCUploadTask -appInfo、WCAppInfo -init/-setAppID:/-setAppName: 均存在
+static IMP orig_uploadTask_appInfo = NULL;
+
+static id hooked_uploadTask_appInfo(id self, SEL _cmd) {
+    @try {
+        MomentsConfig *cfg = [MomentsConfig shared];
+        NSString *appId = [cfg.tailAppId stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (!cfg.tailEnabled || appId.length == 0) {
+            return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
+        }
+        // 未注册视为无尾巴（WCR isRegisteredAppID: 校验同款；输入端已完美匹配+自愈，此处兜底）
+        NSString *name = nil;
+        for (NSDictionary *p in [cfg effectiveTailPresets]) {
+            if ([p isKindOfClass:[NSDictionary class]] && [appId isEqualToString:p[@"appId"]]) {
+                NSString *n = p[@"name"];
+                if ([n isKindOfClass:[NSString class]] && n.length > 0) name = n;
+                break;
+            }
+        }
+        if (!name) return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
+
+        Class appInfoCls = objc_getClass("WCAppInfo");
+        if (!appInfoCls) return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
+        id info = [[appInfoCls alloc] init];
+        ((void(*)(id, SEL, id))objc_msgSend)(info, NSSelectorFromString(@"setAppID:"), appId);
+        ((void(*)(id, SEL, id))objc_msgSend)(info, NSSelectorFromString(@"setAppName:"), name);
+        WPLog(@"Moments", @"[Tail] WCUploadTask.appInfo -> %@ (%@)", name, appId);
+        return info;
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[Tail] apply error: %@", e);
+        return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
+    }
+}
+
+static void MioInstallTailHook(void) {
+    Class cls = objc_getClass("WCUploadTask");
+    if (!cls) {
+        WPLog(@"Moments", @"[Tail] SKIP: WCUploadTask NOT found");
+        return;
+    }
+    SEL sel = NSSelectorFromString(@"appInfo");
+    Method m = class_getInstanceMethod(cls, sel);
+    if (!m) {
+        WPLog(@"Moments", @"[Tail] SKIP: appInfo NOT found");
+        return;
+    }
+    orig_uploadTask_appInfo = method_getImplementation(m);
+    method_setImplementation(m, (IMP)hooked_uploadTask_appInfo);
+    WPLog(@"Moments", @"[Tail] WCUploadTask appInfo hooked");
+}
+
 #pragma mark - 安装
 
 @implementation MomentsHook
@@ -1957,6 +2015,7 @@ static void MioInstallDetailedTimeHook(void) {
     MioInstallPyqHooks();
     MioInstallHDHooks();
     MioInstallDetailedTimeHook();
+    MioInstallTailHook();
     MioInstallFakeLikeHooks();
     MioInstallFakeDataLayerHooks();
     MioFakeInstallActiveRefresh();
