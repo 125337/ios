@@ -174,8 +174,11 @@ static double MioSchedNextFireAt(NSDictionary *t, double now) {
 }
 - (void)removeTaskWithId:(NSString *)taskId {
     NSMutableArray *ts = [[self allTasks] mutableCopy];
-    [ts removeObjectsMatchingPredicate:[NSPredicate predicateWithFormat:@"id == %@", taskId]];
-    [self saveTasks:ts];
+    NSMutableArray *kept = [NSMutableArray array];
+    for (NSDictionary *d in ts) {
+        if (![d[@"id"] isEqualToString:taskId]) [kept addObject:d];
+    }
+    [self saveTasks:kept];
     MioSchedDeleteTaskDir(taskId);
 }
 - (void)removeAllTasks {
@@ -453,9 +456,10 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSDictionary *payload) {
         NSUInteger fireIdx = NSNotFound;
         for (NSUInteger i = 0; i < ts.count; i++) {
             NSDictionary *t = ts[i];
-            if ([t[@"enabled"] boolValue]
-                && [[t[@"state"] ?: @""] isEqualToString:@"pending"]
-                && [t[@"fireAt"] doubleValue] <= now) {
+            BOOL enabled = [t[@"enabled"] boolValue];
+            NSString *st = t[@"state"] ?: @"";
+            double fireAt = [t[@"fireAt"] doubleValue];
+            if (enabled && [st isEqualToString:@"pending"] && fireAt <= now) {
                 fireIdx = i;
                 break;
             }
