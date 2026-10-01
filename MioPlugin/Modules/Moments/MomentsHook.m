@@ -6,6 +6,7 @@
 #import <string.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
+#import "../../Core/MioAlertHelper.h"
 #import "../SettingEntry/WPCommonUI.h"
 #import "MomentsConfig.h"
 #import "MomentsScheduler.h"
@@ -2352,37 +2353,22 @@ static void hooked_commit_syncSchedCell(id self, SEL _cmd) {
     MioSchedSyncCommitCell(self);
 }
 
-// 时间选择弹窗：UIAlertController + 内嵌 UIDatePicker（wheels），确定后写会话并刷新 cell
+// 时间选择弹窗：统一走 MioAlertHelper 自建卡片（确定后写会话并刷新 cell）
 static void MioSchedPresentDatePicker(id vc) {
-    UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"选择定时发送时间"
-                                                                message:nil
-                                                         preferredStyle:UIAlertControllerStyleAlert];
-    [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) { tf.hidden = YES; }]; // 撑高预算
-    UIDatePicker *dp = [[UIDatePicker alloc] init];
-    if (@available(iOS 13.4, *)) dp.preferredDatePickerStyle = UIDatePickerStyleWheels;
-    dp.datePickerMode = UIDatePickerModeDateAndTime;
-    dp.minimumDate = [NSDate dateWithTimeIntervalSinceNow:60];
-    dp.minuteInterval = 1;
-    dp.translatesAutoresizingMaskIntoConstraints = NO;
-    [ac.view addSubview:dp];
-    [dp.topAnchor constraintEqualToAnchor:ac.view.topAnchor constant:56].active = YES;
-    [dp.leadingAnchor constraintEqualToAnchor:ac.view.leadingAnchor constant:10].active = YES;
-    [dp.trailingAnchor constraintEqualToAnchor:ac.view.trailingAnchor constant:-10].active = YES;
-    [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        [MomentsScheduler schedSetPendingFireDate:dp.date];
+    [MioAlertHelper showDatePickerAlert:@"选择定时发送时间"
+                            initialDate:nil
+                            minimumDate:[NSDate dateWithTimeIntervalSinceNow:60]
+                                 onPick:^(NSDate *date) {
+        [MomentsScheduler schedSetPendingFireDate:date];
         NSDateFormatter *f = [[NSDateFormatter alloc] init];
         f.dateFormat = @"MM-dd HH:mm";
-        WPShowToast([NSString stringWithFormat:@"将于 %@ 定时发送", [f stringFromDate:dp.date]]);
+        WPShowToast([NSString stringWithFormat:@"将于 %@ 定时发送", [f stringFromDate:date]]);
         SEL sync = NSSelectorFromString(@"mioSyncSchedCell");
         if ([vc respondsToSelector:sync]) ((void(*)(id, SEL))objc_msgSend)(vc, sync);
-    }]];
-    [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    if ([vc respondsToSelector:@selector(presentViewController:animated:completion:)]) {
-        [vc presentViewController:ac animated:YES completion:nil];
-    }
+    }];
 }
 
-// cell 点击回调：未设定直接选时间；已设定出 ActionSheet（重新选择/取消定时）
+// cell 点击回调：未设定直接选时间；已设定出菜单（重新选择/取消定时）
 static void hooked_commit_schedCellClicked(id self, SEL _cmd, id cellMgr) {
     @try {
         if (![MomentsConfig shared].schedEnabled) {
@@ -2395,22 +2381,20 @@ static void hooked_commit_schedCellClicked(id self, SEL _cmd, id cellMgr) {
             MioSchedPresentDatePicker(self);
             return;
         }
-        UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"定时发送"
-                                                                        message:MioSchedCellRightValue()
-                                                                 preferredStyle:UIAlertControllerStyleActionSheet];
-        [sheet addAction:[UIAlertAction actionWithTitle:@"重新选择时间" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            MioSchedPresentDatePicker(self);
-        }]];
-        [sheet addAction:[UIAlertAction actionWithTitle:@"取消定时（立即照常发表）" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
-            [MomentsScheduler schedSetPendingFireDate:nil];
-            WPShowToast(@"已取消定时，发表将立即发出");
-            SEL sync = NSSelectorFromString(@"mioSyncSchedCell");
-            if ([self respondsToSelector:sync]) ((void(*)(id, SEL))objc_msgSend)(self, sync);
-        }]];
-        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        if ([self respondsToSelector:@selector(presentViewController:animated:completion:)]) {
-            [self presentViewController:sheet animated:YES completion:nil];
-        }
+        [MioAlertHelper showMenuAlert:[NSString stringWithFormat:@"定时发送 · %@", MioSchedCellRightValue()]
+                              buttons:@[@"重新选择时间", @"取消定时（立即照常发表）"]
+                             onButton:^(NSInteger index) {
+            if (index == 0) {
+                MioSchedPresentDatePicker(self);
+                return;
+            }
+            if (index == 1) {
+                [MomentsScheduler schedSetPendingFireDate:nil];
+                WPShowToast(@"已取消定时，发表将立即发出");
+                SEL sync = NSSelectorFromString(@"mioSyncSchedCell");
+                if ([self respondsToSelector:sync]) ((void(*)(id, SEL))objc_msgSend)(self, sync);
+            }
+        }];
     } @catch (NSException *e) {
     }
 }

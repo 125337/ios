@@ -1,5 +1,6 @@
 #import "MioMomentsSchedListController.h"
 #import "../../Modules/Moments/MomentsConfig.h"
+#import "../../Core/MioAlertHelper.h"
 
 // 朋友圈定时发送任务列表页（微信引擎渲染；数据源 MomentsScheduler）
 // 每任务一组：预览/状态 + 循环模式选择 + 改期/启停/删除；单次与循环任务均可改期（改后循环任务当轮生效，下轮按模式重排）
@@ -99,24 +100,15 @@
 
 - (void)runReschedForTask:(NSDictionary *)t {
     if (![t isKindOfClass:[NSDictionary class]]) return;
-    UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"修改发表时间"
-                                                                message:nil
-                                                         preferredStyle:UIAlertControllerStyleAlert];
-    [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) { tf.hidden = YES; }];
-    UIDatePicker *dp = [[UIDatePicker alloc] init];
-    if (@available(iOS 13.4, *)) dp.preferredDatePickerStyle = UIDatePickerStyleWheels;
-    dp.datePickerMode = UIDatePickerModeDateAndTime;
-    dp.minuteInterval = 1;
-    dp.date = [NSDate dateWithTimeIntervalSince1970:[t[@"fireAt"] doubleValue] ?: ([[NSDate date] timeIntervalSince1970] + 300)];
-    dp.minimumDate = [NSDate date];
-    dp.translatesAutoresizingMaskIntoConstraints = NO;
-    [ac.view addSubview:dp];
-    [dp.topAnchor constraintEqualToAnchor:ac.view.topAnchor constant:56].active = YES;
-    [dp.leadingAnchor constraintEqualToAnchor:ac.view.leadingAnchor constant:10].active = YES;
-    [dp.trailingAnchor constraintEqualToAnchor:ac.view.trailingAnchor constant:-10].active = YES;
-    __weak typeof(self) wself = self;
     NSString *taskId = t[@"id"];
-    [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+    double cur = [t[@"fireAt"] doubleValue];
+    NSDate *initial = (cur > 0) ? [NSDate dateWithTimeIntervalSince1970:cur]
+                                : [NSDate dateWithTimeIntervalSinceNow:300];
+    __weak typeof(self) wself = self;
+    [MioAlertHelper showDatePickerAlert:@"修改发表时间"
+                            initialDate:initial
+                            minimumDate:nil
+                                 onPick:^(NSDate *date) {
         __strong typeof(wself) sself = wself;
         if (!sself) return;
         NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
@@ -126,16 +118,14 @@
         }];
         if (idx == NSNotFound) return;
         NSMutableDictionary *nt = [ts[idx] mutableCopy];
-        nt[@"fireAt"] = @(dp.date.timeIntervalSince1970);
+        nt[@"fireAt"] = @(date.timeIntervalSince1970);
         nt[@"state"] = @"pending"; // 改期即复活（failed/triggered 任务改期可重跑）
         nt[@"enabled"] = @YES;
         ts[idx] = nt;
         [[MomentsScheduler shared] saveTasks:ts];
         WPShowToast(@"已修改发表时间");
         [sself reloadTable];
-    }]];
-    [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [self presentViewController:ac animated:YES completion:nil];
+    }];
 }
 
 #pragma mark - 循环模式（两级 ActionSheet）
@@ -145,33 +135,42 @@
     NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
     if (idx < 0 || idx >= (NSInteger)tasks.count) return;
     NSDictionary *t = tasks[idx];
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"循环模式"
-                                                                    message:[MomentsScheduler repeatSummaryForDict:t]
-                                                             preferredStyle:UIAlertControllerStyleActionSheet];
     __weak typeof(self) wself = self;
-    void (^apply)(int) = ^(int mode) {
+    [MioAlertHelper showMenuAlert:[NSString stringWithFormat:@"循环模式 · 当前：%@",
+                                       [MomentsScheduler repeatSummaryForDict:t]]
+                          buttons:@[@"单次", @"每天", @"每 N 小时", @"每 N 分钟", @"每周", @"每月", @"循环间隔"]
+                         onButton:^(NSInteger index) {
         __strong typeof(wself) sself = wself;
         if (!sself) return;
-        [sself applyLoopMode:mode toIndex:idx];
-    };
-    [sheet addAction:[UIAlertAction actionWithTitle:@"单次" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { apply(0); }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"每天" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { apply(1); }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"每 N 小时" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        [wself presentIntervalSheet:@"每小时隔" titles:@[@"每 1 小时", @"每 2 小时", @"每 3 小时", @"每 6 小时", @"每 12 小时"]
-                            values:@[@1, @2, @3, @6, @12] key:@"intervalHours" mode:2 index:idx];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"每 N 分钟" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        [wself presentIntervalSheet:@"每分钟隔" titles:@[@"每 15 分钟", @"每 30 分钟", @"每 45 分钟"]
-                            values:@[@15, @30, @45] key:@"intervalMinutes" mode:3 index:idx];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"每周" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { apply(4); }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"每月" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { apply(5); }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"循环间隔" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        [wself presentIntervalSheet:@"循环间隔" titles:@[@"每 60 分钟", @"每 2 小时", @"每 6 小时", @"每 1 天"]
-                            values:@[@60, @120, @360, @1440] key:@"loopIntervalMinutes" mode:6 index:idx];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [self presentViewController:sheet animated:YES completion:nil];
+        switch (index) {
+            case 0: [sself applyLoopMode:0 toIndex:idx]; break;
+            case 1: [sself applyLoopMode:1 toIndex:idx]; break;
+            case 2: [sself presentIntervalSheet:@"每小时隔"
+                                        titles:@[@"每 1 小时", @"每 2 小时", @"每 3 小时", @"每 6 小时", @"每 12 小时"]
+                                         values:@[@1, @2, @3, @6, @12]
+                                            key:@"intervalHours"
+                                           mode:2
+                                          index:idx];
+                    break;
+            case 3: [sself presentIntervalSheet:@"每分钟隔"
+                                        titles:@[@"每 15 分钟", @"每 30 分钟", @"每 45 分钟"]
+                                         values:@[@15, @30, @45]
+                                            key:@"intervalMinutes"
+                                           mode:3
+                                          index:idx];
+                    break;
+            case 4: [sself applyLoopMode:4 toIndex:idx]; break;
+            case 5: [sself applyLoopMode:5 toIndex:idx]; break;
+            case 6: [sself presentIntervalSheet:@"循环间隔"
+                                        titles:@[@"每 60 分钟", @"每 2 小时", @"每 6 小时", @"每 1 天"]
+                                         values:@[@60, @120, @360, @1440]
+                                            key:@"loopIntervalMinutes"
+                                           mode:6
+                                          index:idx];
+                    break;
+            default: break; // 取消
+        }
+    }];
 }
 
 // 间隔档位二级选择（mode 2/3/6）
@@ -180,22 +179,18 @@
     NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
     if (idx < 0 || idx >= (NSInteger)tasks.count) return;
     NSDictionary *t = tasks[idx];
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:title
-                                                                    message:[MomentsScheduler repeatSummaryForDict:t]
-                                                             preferredStyle:UIAlertControllerStyleActionSheet];
     __weak typeof(self) wself = self;
-    [values enumerateObjectsUsingBlock:^(NSNumber *v, NSUInteger i, BOOL *stop) {
-        [sheet addAction:[UIAlertAction actionWithTitle:titles[i] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            __strong typeof(wself) sself = wself;
-            if (!sself) return;
-            [sself updateTask:idx withBlock:^(NSMutableDictionary *nt) {
-                nt[@"scheduleMode"] = @(mode);
-                nt[key] = v;
-            }];
-        }]];
+    [MioAlertHelper showMenuAlert:[NSString stringWithFormat:@"%@ · 当前：%@",
+                                       title, [MomentsScheduler repeatSummaryForDict:t]]
+                          buttons:titles
+                         onButton:^(NSInteger index) {
+        __strong typeof(wself) sself = wself;
+        if (!sself || index >= (NSInteger)values.count) return;
+        [sself updateTask:idx withBlock:^(NSMutableDictionary *nt) {
+            nt[@"scheduleMode"] = @(mode);
+            nt[key] = values[index];
+        }];
     }];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [self presentViewController:sheet animated:YES completion:nil];
 }
 
 - (void)applyLoopMode:(int)mode toIndex:(NSInteger)idx {
@@ -271,19 +266,16 @@
         return;
     }
     if ([prefix isEqualToString:@"del"]) {
-        UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"删除定时任务"
-                                                                    message:(t[@"preview"] ?: @"")
-                                                             preferredStyle:UIAlertControllerStyleAlert];
         __weak typeof(self) wself = self;
-        [ac addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+        [MioAlertHelper showConfirmAlert:[NSString stringWithFormat:@"删除定时任务？\n%@", (t[@"preview"] ?: @"")]
+                            confirmTitle:@"删除"
+                               onConfirm:^{
             __strong typeof(wself) sself = wself;
             if (!sself) return;
             [[MomentsScheduler shared] removeTaskWithId:taskId];
             WPShowToast(@"已删除");
             [sself reloadTable];
-        }]];
-        [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        [self presentViewController:ac animated:YES completion:nil];
+        }];
         return;
     }
 }

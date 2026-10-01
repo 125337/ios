@@ -297,4 +297,125 @@ static _WAlertAnchor *walertAnchor(void) {
     }
 }
 
+#pragma mark - 日期时间选择弹窗（自建卡片，不依赖 WCUIAlertView 内部结构）
+
+static UIWindow *MioAlertKeyWindow(void) {
+    for (UIWindowScene *sc in [UIApplication sharedApplication].connectedScenes) {
+        if (sc.activationState != UISceneActivationStateForegroundActive) continue;
+        for (UIWindow *w in sc.windows) {
+            if (w.isKeyWindow) return w;
+        }
+        return sc.windows.firstObject;
+    }
+    return [UIApplication sharedApplication].keyWindow; // 旧系统兜底
+}
+
+static const NSInteger kMioDatePickerTag = 0x4D494F44; // 'MIOD' 防重复弹出标记
+
++ (UIColor *)mioDynamicLight:(UIColor *)light dark:(UIColor *)dark {
+    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
+        return (tc.userInterfaceStyle == UIUserInterfaceStyleDark) ? dark : light;
+    }];
+}
+
++ (void)showDatePickerAlert:(NSString *)title
+                initialDate:(NSDate *)initialDate
+                minimumDate:(NSDate *)minimumDate
+                     onPick:(void(^)(NSDate *date))onPick {
+    @try {
+        UIWindow *window = MioAlertKeyWindow();
+        if (!window) { WPLogDebug(@"Alert", @"no key window — date picker aborted"); return; }
+
+        // 防重复：先移除同 tag 旧弹层
+        for (UIView *old in [window.subviews copy]) {
+            if (old.tag == kMioDatePickerTag) [old removeFromSuperview];
+        }
+
+        CGFloat cardW = 280;
+        CGFloat pickerH = 216;
+        CGFloat btnH = 44;
+        CGFloat cardH = 48 + pickerH + btnH;
+
+        UIView *dim = [[UIView alloc] initWithFrame:window.bounds];
+        dim.tag = kMioDatePickerTag;
+        dim.backgroundColor = [UIColor colorWithWhite:0 alpha:0.45];
+        dim.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+
+        UIView *card = [[UIView alloc] initWithFrame:CGRectMake(0, 0, cardW, cardH)];
+        card.center = CGPointMake(CGRectGetMidX(window.bounds), CGRectGetMidY(window.bounds));
+        card.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin
+                              | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+        card.layer.cornerRadius = 14;
+        card.layer.masksToBounds = YES;
+        card.backgroundColor = [self mioDynamicLight:[UIColor whiteColor]
+                                                dark:[UIColor colorWithRed:0.17 green:0.17 blue:0.18 alpha:1]];
+        [dim addSubview:card];
+
+        UILabel *lb = [[UILabel alloc] initWithFrame:CGRectMake(12, 18, cardW - 24, 22)];
+        lb.text = title ?: @"选择时间";
+        lb.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+        lb.textAlignment = NSTextAlignmentCenter;
+        lb.textColor = [self mioDynamicLight:[UIColor colorWithRed:0.1 green:0.1 blue:0.1 alpha:1]
+                                        dark:[UIColor whiteColor]];
+        lb.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        [card addSubview:lb];
+
+        UIDatePicker *dp = [[UIDatePicker alloc] initWithFrame:CGRectMake(10, 48, cardW - 20, pickerH)];
+        if (@available(iOS 13.4, *)) dp.preferredDatePickerStyle = UIDatePickerStyleWheels;
+        dp.datePickerMode = UIDatePickerModeDateAndTime;
+        dp.minuteInterval = 1;
+        dp.date = initialDate ?: [NSDate date];
+        if (minimumDate) dp.minimumDate = minimumDate;
+        dp.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        [card addSubview:dp];
+
+        // 按钮行（iOS 原生 alert 风格：细分隔线 + 取消/确定等宽）
+        CGFloat btnY = 48 + pickerH;
+        UIView *hline = [[UIView alloc] initWithFrame:CGRectMake(0, btnY, cardW, 0.5)];
+        hline.backgroundColor = [self mioDynamicLight:[UIColor colorWithWhite:0.78 alpha:1]
+                                                 dark:[UIColor colorWithWhite:0.25 alpha:1]];
+        hline.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        [card addSubview:hline];
+        UIView *vline = [[UIView alloc] initWithFrame:CGRectMake(cardW / 2, btnY, 0.5, btnH)];
+        vline.backgroundColor = hline.backgroundColor;
+        [card addSubview:vline];
+
+        UIButton *cancel = [UIButton buttonWithType:UIButtonTypeSystem];
+        cancel.frame = CGRectMake(0, btnY, cardW / 2, btnH);
+        cancel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
+        [cancel setTitle:@"取消" forState:UIControlStateNormal];
+        cancel.titleLabel.font = [UIFont systemFontOfSize:17];
+        [cancel addTarget:dim action:@selector(removeFromSuperview) forControlEvents:UIControlEventTouchUpInside];
+        [card addSubview:cancel];
+
+        UIButton *ok = [UIButton buttonWithType:UIButtonTypeSystem];
+        ok.frame = CGRectMake(cardW / 2, btnY, cardW / 2, btnH);
+        ok.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
+        [ok setTitle:@"确定" forState:UIControlStateNormal];
+        ok.titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+        // 确定回调经 associated block 分发（__datePickTapped:），回调后关闭弹层
+        void (^pickBlock)(NSDate *) = onPick ? [onPick copy] : nil;
+        objc_setAssociatedObject(ok, @selector(showDatePickerAlert:initialDate:minimumDate:onPick:), ^{
+            if (pickBlock) pickBlock(dp.date);
+            [dim removeFromSuperview];
+        }, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        [ok addTarget:self action:@selector(__datePickTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [card addSubview:ok];
+
+        // 点空白处关闭
+        [dim addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:dim action:@selector(removeFromSuperview)]];
+
+        dim.alpha = 0;
+        [window addSubview:dim];
+        [UIView animateWithDuration:0.2 animations:^{ dim.alpha = 1; }];
+    } @catch (NSException *e) {
+        WPLogDebug(@"Alert", @"date picker EXCEPTION: %@", e);
+    }
+}
+
++ (void)__datePickTapped:(UIButton *)sender {
+    void (^cb)(void) = objc_getAssociatedObject(sender, @selector(showDatePickerAlert:initialDate:minimumDate:onPick:));
+    if (cb) cb();
+}
+
 @end

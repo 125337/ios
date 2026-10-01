@@ -45,4 +45,14 @@
             confirmTitle:(NSString *)confirmTitle
                onConfirm:(void(^)(void))onConfirm;
 
+/// 日期时间选择弹窗（自建居中卡片 + UIDatePicker wheels，直接加 window 层）
+/// @param title 弹窗标题
+/// @param initialDate 初始选中时间（可空=当前时间）
+/// @param minimumDate 可选最早时间（可空）
+/// @param onPick 确定回调（主线程）；点取消不回调
++ (void)showDatePickerAlert:(NSString *)title
+                initialDate:(NSDate *)initialDate
+                minimumDate:(NSDate *)minimumDate
+                     onPick:(void(^)(NSDate *date))onPick;
+
 @end
