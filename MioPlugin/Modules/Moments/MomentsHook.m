@@ -2092,7 +2092,7 @@ static void MioTailSyncCommitCell(id vc) {
             return;
         }
         id cell = ((id(*)(id, SEL, id, id, id, id))objc_msgSend)((id)cellCls, mkSel,
-            clickSel, vc, @"小尾巴", MioTailCellRightValue());
+            (id)clickSel, vc, @"小尾巴", MioTailCellRightValue());
         SEL addSel = NSSelectorFromString(@"addCell:");
         if (![sec0 respondsToSelector:addSel]) return;
         ((void(*)(id, SEL, id))objc_msgSend)(sec0, addSel, cell);
