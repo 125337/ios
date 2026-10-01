@@ -8,6 +8,7 @@
 #import "../../Core/ServiceHelper.h"
 #import "../SettingEntry/WPCommonUI.h"
 #import "MomentsConfig.h"
+#import "MomentsScheduler.h"
 
 #pragma mark - 便捷朋友圈（WCR 同款机制，触发词 pyq）
 
@@ -2186,36 +2187,45 @@ static void hooked_commit_tailCellClicked(id self, SEL _cmd, id cellMgr) {
     }
 }
 
-// 4 个 init：orig 后重置 PostSession（WCR 同款：新建发帖页=新会话）
+// 4 个 init：orig 后重置 PostSession + 定时会话（WCR 同款：新建发帖页=新会话）
 static id hooked_commit_init(id self, SEL _cmd) {
     id r = ((id(*)(id, SEL))orig_commit_init)(self, _cmd);
     [MomentsConfig tailResetPostSession];
+    [MomentsScheduler schedSetPendingFireDate:nil];
     return r;
 }
 static id hooked_commit_initImages(id self, SEL _cmd, id a1, id a2) {
     id r = ((id(*)(id, SEL, id, id))orig_commit_initImages)(self, _cmd, a1, a2);
     [MomentsConfig tailResetPostSession];
+    [MomentsScheduler schedSetPendingFireDate:nil];
     return r;
 }
 static id hooked_commit_initSight(id self, SEL _cmd, id a1) {
     id r = ((id(*)(id, SEL, id))orig_commit_initSight)(self, _cmd, a1);
     [MomentsConfig tailResetPostSession];
+    [MomentsScheduler schedSetPendingFireDate:nil];
     return r;
 }
 static id hooked_commit_initText(id self, SEL _cmd) {
     id r = ((id(*)(id, SEL))orig_commit_initText)(self, _cmd);
     [MomentsConfig tailResetPostSession];
+    [MomentsScheduler schedSetPendingFireDate:nil];
     return r;
 }
+
+static void MioTailSyncCommitCell(id vc); // 前置声明（定义在下方小尾巴区块）
+static void MioSchedSyncCommitCell(id vc); // 前置声明（定义在下方定时区块）
 
 static void hooked_commit_viewDidAppear(id self, SEL _cmd, BOOL animated) {
     ((void(*)(id, SEL, BOOL))orig_commit_viewDidAppear)(self, _cmd, animated);
     MioTailSyncCommitCell(self);
+    MioSchedSyncCommitCell(self);
 }
 
 static id hooked_commit_reloadData(id self, SEL _cmd) {
     id r = ((id(*)(id, SEL))orig_commit_reloadData)(self, _cmd);
     MioTailSyncCommitCell(self);
+    MioSchedSyncCommitCell(self);
     return r;
 }
 
@@ -2246,6 +2256,175 @@ static void MioInstallTailCommitHooks(void) {
     }
 }
 
+#pragma mark - 定时发送（WCR MomentsScheduled 同款：发帖页 cell + addUploadTask 拦截）
+
+// 拦截 -[WCUploadMgr addUploadTask:]（WCR 同款挂点）：发帖页点发表 → 微信构建 WCUploadTask 提交。
+// 发帖页已设定定时时间（PostSession 同款内存会话）且开关开 → capture 转定时任务（不调原实现，
+// 帖子不立即发出）；返回 nil（WCR 实证同款，调用方容忍）。tick 发布时重新走本方法但会话为空 → 放行
+static IMP orig_uploadMgr_addTask = NULL;
+
+static id hooked_uploadMgr_addTask(id self, SEL _cmd, id task) {
+    @try {
+        if ([MomentsScheduler captureUploadTask:task]) {
+            WPLog(@"Moments", @"[Sched] addUploadTask captured -> scheduled task");
+            return nil;
+        }
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[Sched] capture threw: %@", e);
+    }
+    return ((id(*)(id, SEL, id))orig_uploadMgr_addTask)(self, _cmd, task);
+}
+
+static void MioInstallSchedAddTaskHook(void) {
+    Class cls = objc_getClass("WCUploadMgr");
+    if (!cls) return;
+    SEL sel = NSSelectorFromString(@"addUploadTask:");
+    Method m = class_getInstanceMethod(cls, sel);
+    if (!m) return;
+    orig_uploadMgr_addTask = method_getImplementation(m);
+    method_setImplementation(m, (IMP)hooked_uploadMgr_addTask);
+}
+
+// ── 发帖页「定时发送」cell（小尾巴同款注入模式：先删旧再注入防重复）──
+static char kMioSchedCommitCellKey;
+
+static NSString *MioSchedCellRightValue(void) {
+    NSDate *d = [MomentsScheduler schedPendingFireDate];
+    if (!d) return @"关闭";
+    NSDateFormatter *f = [[NSDateFormatter alloc] init];
+    f.dateFormat = @"MM-dd HH:mm";
+    return [f stringFromDate:d];
+}
+
+static void MioSchedSyncCommitCell(id vc) {
+    @try {
+        if (!vc || ![MomentsConfig shared].schedEnabled) return;
+        id mgr = nil;
+        SEL mgrSel = NSSelectorFromString(@"m_tableViewManager");
+        if ([vc respondsToSelector:mgrSel]) {
+            mgr = ((id(*)(id, SEL))objc_msgSend)(vc, mgrSel);
+        } else {
+            @try { mgr = [vc valueForKey:@"m_tableViewManager"]; } @catch (NSException *e) { mgr = nil; }
+        }
+        if (!mgr) return;
+        SEL cntSel = NSSelectorFromString(@"getSectionCount");
+        SEL atSel = NSSelectorFromString(@"getSectionAt:");
+        if (![mgr respondsToSelector:cntSel] || ![mgr respondsToSelector:atSel]) return;
+        NSUInteger cnt = ((NSUInteger(*)(id, SEL))objc_msgSend)(mgr, cntSel);
+        if (cnt == 0) return;
+        id sec0 = ((id(*)(id, SEL, long))objc_msgSend)(mgr, atSel, 0);
+        if (!sec0) return;
+        SEL allCellsSel = NSSelectorFromString(@"getAllCells");
+        if (![sec0 respondsToSelector:allCellsSel]) return;
+        Class cellCls = objc_getClass("WCTableViewCellManager");
+        SEL mkSel = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:");
+        SEL clickSel = NSSelectorFromString(@"mioOnSchedCell:");
+        SEL addSel = NSSelectorFromString(@"addCell:");
+        if (!cellCls || ![cellCls respondsToSelector:mkSel] || ![sec0 respondsToSelector:addSel]) return;
+        // 先删旧注入 cell（右值跟随会话实时刷新）
+        id injected = objc_getAssociatedObject(vc, &kMioSchedCommitCellKey);
+        SEL cellCntSel = NSSelectorFromString(@"getCellCount");
+        SEL cellAtSel = NSSelectorFromString(@"getCellAt:");
+        SEL removeAtSel = NSSelectorFromString(@"removeCellAt:");
+        if (injected && [sec0 respondsToSelector:cellCntSel]
+            && [sec0 respondsToSelector:cellAtSel] && [sec0 respondsToSelector:removeAtSel]) {
+            NSUInteger n = ((NSUInteger(*)(id, SEL))objc_msgSend)(sec0, cellCntSel);
+            for (NSUInteger i = 0; i < n; i++) {
+                id c = ((id(*)(id, SEL, long))objc_msgSend)(sec0, cellAtSel, (long)i);
+                if (c == injected) {
+                    ((void(*)(id, SEL, long))objc_msgSend)(sec0, removeAtSel, (long)i);
+                    break;
+                }
+            }
+        }
+        id cell = ((id(*)(id, SEL, SEL, id, id, id))objc_msgSend)((id)cellCls, mkSel,
+            clickSel, vc, @"定时发送", MioSchedCellRightValue());
+        objc_setAssociatedObject(vc, &kMioSchedCommitCellKey, cell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        ((void(*)(id, SEL, id))objc_msgSend)(sec0, addSel, cell);
+        SEL rtvSel = NSSelectorFromString(@"reloadTableView");
+        if ([mgr respondsToSelector:rtvSel]) ((void(*)(id, SEL))objc_msgSend)(mgr, rtvSel);
+    } @catch (NSException *e) {
+    }
+}
+
+// 选择页主动推送的刷新入口（设定/取消时间后立即调用，右值即时更新）
+static void hooked_commit_syncSchedCell(id self, SEL _cmd) {
+    MioSchedSyncCommitCell(self);
+}
+
+// 时间选择弹窗：UIAlertController + 内嵌 UIDatePicker（wheels），确定后写会话并刷新 cell
+static void MioSchedPresentDatePicker(id vc) {
+    UIAlertController *ac = [UIAlertController alertControllerWithTitle:@"选择定时发送时间"
+                                                                message:nil
+                                                         preferredStyle:UIAlertControllerStyleAlert];
+    [ac addTextFieldWithConfigurationHandler:^(UITextField *tf) { tf.hidden = YES; }]; // 撑高预算
+    UIDatePicker *dp = [[UIDatePicker alloc] init];
+    if (@available(iOS 13.4, *)) dp.preferredDatePickerStyle = UIDatePickerStyleWheels;
+    dp.datePickerMode = UIDatePickerModeDateAndTime;
+    dp.minimumDate = [NSDate dateWithTimeIntervalSinceNow:60];
+    dp.minuteInterval = 1;
+    dp.translatesAutoresizingMaskIntoConstraints = NO;
+    [ac.view addSubview:dp];
+    [dp.topAnchor constraintEqualToAnchor:ac.view.topAnchor constant:56].active = YES;
+    [dp.leadingAnchor constraintEqualToAnchor:ac.view.leadingAnchor constant:10].active = YES;
+    [dp.trailingAnchor constraintEqualToAnchor:ac.view.trailingAnchor constant:-10].active = YES;
+    [ac addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [MomentsScheduler schedSetPendingFireDate:dp.date];
+        NSDateFormatter *f = [[NSDateFormatter alloc] init];
+        f.dateFormat = @"MM-dd HH:mm";
+        WPShowToast([NSString stringWithFormat:@"将于 %@ 定时发送", [f stringFromDate:dp.date]]);
+        SEL sync = NSSelectorFromString(@"mioSyncSchedCell");
+        if ([vc respondsToSelector:sync]) ((void(*)(id, SEL))objc_msgSend)(vc, sync);
+    }]];
+    [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    if ([vc respondsToSelector:@selector(presentViewController:animated:completion:)]) {
+        [vc presentViewController:ac animated:YES completion:nil];
+    }
+}
+
+// cell 点击回调：未设定直接选时间；已设定出 ActionSheet（重新选择/取消定时）
+static void hooked_commit_schedCellClicked(id self, SEL _cmd, id cellMgr) {
+    @try {
+        if (![MomentsConfig shared].schedEnabled) {
+            WPShowToast(@"定时发送已关闭");
+            return;
+        }
+        SEL riSel = NSSelectorFromString(@"resignInput");
+        if ([self respondsToSelector:riSel]) ((void(*)(id, SEL))objc_msgSend)(self, riSel);
+        if (![MomentsScheduler schedPendingFireDate]) {
+            MioSchedPresentDatePicker(self);
+            return;
+        }
+        UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"定时发送"
+                                                                        message:MioSchedCellRightValue()
+                                                                 preferredStyle:UIAlertControllerStyleActionSheet];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"重新选择时间" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            MioSchedPresentDatePicker(self);
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消定时（立即照常发表）" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+            [MomentsScheduler schedSetPendingFireDate:nil];
+            WPShowToast(@"已取消定时，发表将立即发出");
+            SEL sync = NSSelectorFromString(@"mioSyncSchedCell");
+            if ([self respondsToSelector:sync]) ((void(*)(id, SEL))objc_msgSend)(self, sync);
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        if ([self respondsToSelector:@selector(presentViewController:animated:completion:)]) {
+            [self presentViewController:sheet animated:YES completion:nil];
+        }
+    } @catch (NSException *e) {
+    }
+}
+
+static void MioInstallSchedCommitHooks(void) {
+    Class cls = objc_getClass("WCNewCommitViewController");
+    if (!cls) return;
+    // 点击回调 + 刷新入口挂到发帖页（小尾巴同款 class_addMethod）
+    class_addMethod(cls, NSSelectorFromString(@"mioOnSchedCell:"),
+                    (IMP)hooked_commit_schedCellClicked, "v@:@");
+    class_addMethod(cls, NSSelectorFromString(@"mioSyncSchedCell"),
+                    (IMP)hooked_commit_syncSchedCell, "v@:");
+}
+
 #pragma mark - 安装
 
 @implementation MomentsHook
@@ -2257,6 +2436,9 @@ static void MioInstallTailCommitHooks(void) {
     MioInstallDetailedTimeHook();
     MioInstallTailHook();
     MioInstallTailCommitHooks();
+    MioInstallSchedAddTaskHook();
+    MioInstallSchedCommitHooks();
+    [[MomentsScheduler shared] start];
     MioInstallFakeLikeHooks();
     MioInstallFakeDataLayerHooks();
     MioFakeInstallActiveRefresh();

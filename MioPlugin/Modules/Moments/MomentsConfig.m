@@ -38,6 +38,7 @@
         [ConfigDescriptor itemWithKey:@"tailEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"tailAppId" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"tailPresets" type:ConfigValueTypeArray default:@[]],
+        [ConfigDescriptor itemWithKey:@"schedEnabled" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 

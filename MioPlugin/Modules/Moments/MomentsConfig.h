@@ -26,6 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL tailEnabled;                    // 朋友圈小尾巴总开关
 @property (nonatomic, copy) NSString *tailAppId;                   // 默认尾巴 Appid（空=无小尾巴）
 @property (nonatomic, copy) NSArray<NSDictionary *> *tailPresets;  // 预设列表（元素 {name, appId}）
+@property (nonatomic, assign) BOOL schedEnabled;                   // 朋友圈定时发送总开关
 
 + (instancetype)shared;
 - (NSString *)tailDisplayName;   // 当前尾巴显示名（无/预设名/appid）
