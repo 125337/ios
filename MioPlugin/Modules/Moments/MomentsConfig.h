@@ -25,13 +25,19 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *detailedTimeFormat;          // 详细时间格式串（NSDateFormatter，空回落默认）
 @property (nonatomic, assign) BOOL tailEnabled;                    // 朋友圈小尾巴总开关
 @property (nonatomic, copy) NSString *tailAppId;                   // 默认尾巴 Appid（空=无小尾巴）
-@property (nonatomic, copy) NSString *tailCustomInput;             // 自定义输入弹窗预填值（仅跟随用户手输，与预设点选解耦）
 @property (nonatomic, copy) NSArray<NSDictionary *> *tailPresets;  // 预设列表（元素 {name, appId}）
 
 + (instancetype)shared;
 - (NSString *)tailDisplayName;   // 当前尾巴显示名（无/预设名/appid）
 + (NSArray<NSDictionary *> *)builtinTailPresets;   // 内置预设（按 appId 去重）
 - (NSArray<NSDictionary *> *)effectiveTailPresets; // 生效预设（自定义优先，空回落内置）
+
+// 发帖页单次选择（PostSession，内存态不落盘，WCR _WCRMomentsTail* 同款）
+// has 与值分离：「本次无」= has=YES 且值为空串（WCR onPickNone 实证，此时不回落默认尾巴）
++ (void)tailSetPostSessionAppId:(NSString *)appId;  // 非空=本次用此尾巴；空串=本次明确无尾巴
++ (void)tailResetPostSession;                       // 清除会话（新建发帖页时重置回默认）
++ (BOOL)tailHasPostSession;                         // 本次会话是否存在（含「本次无」）
++ (NSString *)tailPostSessionAppId;                 // 会话值（has=YES 时有意义，可能为空串）
 
 @end
 

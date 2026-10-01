@@ -37,7 +37,6 @@
         [ConfigDescriptor itemWithKey:@"detailedTimeFormat" type:ConfigValueTypeString default:@"yyyy-MM-dd HH:mm:ss (RT)"],
         [ConfigDescriptor itemWithKey:@"tailEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"tailAppId" type:ConfigValueTypeString default:@""],
-        [ConfigDescriptor itemWithKey:@"tailCustomInput" type:ConfigValueTypeString default:@""],   // 自定义输入弹窗预填值（仅跟随用户手输，与预设点选解耦）
         [ConfigDescriptor itemWithKey:@"tailPresets" type:ConfigValueTypeArray default:@[]],
     ];
 }
@@ -369,6 +368,45 @@
         }
     }
     return appId;
+}
+
+#pragma mark - 发帖页单次选择（PostSession）
+
+// 内存态会话：nil=无会话；非 nil（可空串）=有会话。UI 线程写、上传线程读（appInfo hook），
+// 不可变 NSString + 锁保护指针替换；读出的引用本身安全（不可变串不会被原地改）
+static NSString *gTailPostSessionAppId = nil;
+
+static NSLock *MioTailPostSessionLock(void) {
+    static NSLock *lock = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ lock = [[NSLock alloc] init]; });
+    return lock;
+}
+
++ (void)tailSetPostSessionAppId:(NSString *)appId {
+    [MioTailPostSessionLock() lock];
+    gTailPostSessionAppId = [appId copy];
+    [MioTailPostSessionLock() unlock];
+}
+
++ (void)tailResetPostSession {
+    [MioTailPostSessionLock() lock];
+    gTailPostSessionAppId = nil;
+    [MioTailPostSessionLock() unlock];
+}
+
++ (BOOL)tailHasPostSession {
+    [MioTailPostSessionLock() lock];
+    BOOL has = (gTailPostSessionAppId != nil);
+    [MioTailPostSessionLock() unlock];
+    return has;
+}
+
++ (NSString *)tailPostSessionAppId {
+    [MioTailPostSessionLock() lock];
+    NSString *v = gTailPostSessionAppId;
+    [MioTailPostSessionLock() unlock];
+    return v;
 }
 
 @end

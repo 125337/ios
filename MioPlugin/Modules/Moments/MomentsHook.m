@@ -1952,28 +1952,40 @@ static void MioInstallDetailedTimeHook(void) {
 
 // hook -[WCUploadTask appInfo]（WCR MSHookMessageEx 同款挂点，替换实现 FUN_005d7a30 同款）：
 // 微信发朋友圈时以 task.appInfo 声明来源应用，随 SnsObject 的 appinfo 字段编入（即"来自 XXX"尾巴）。
-// 开关开且 tailAppId 已注册（匹配生效预设）时返回自定义 WCAppInfo{appID, appName}，
-// 否则一律走原实现（WCR 未注册→orig 同款）。8.0.60 头文件交叉验证：
+// 生效值：发帖页单次选择（PostSession）优先，回落默认 tailAppId（WCR FUN_005d835c 同款优先级）。
+// 未注册一律走原实现（WCR isRegisteredAppID: 校验同款）。8.0.60 头文件交叉验证：
 // WCUploadTask -appInfo、WCAppInfo -init/-setAppID:/-setAppName: 均存在
 static IMP orig_uploadTask_appInfo = NULL;
+
+// appid → 预设名（未注册返回 nil；WCR nameForAppID: 同款语义）
+static NSString *MioTailNameForAppId(MomentsConfig *cfg, NSString *appId) {
+    for (NSDictionary *p in [cfg effectiveTailPresets]) {
+        if ([p isKindOfClass:[NSDictionary class]] && [appId isEqualToString:p[@"appId"]]) {
+            NSString *n = p[@"name"];
+            if ([n isKindOfClass:[NSString class]] && n.length > 0) return n;
+        }
+    }
+    return nil;
+}
 
 static id hooked_uploadTask_appInfo(id self, SEL _cmd) {
     @try {
         MomentsConfig *cfg = [MomentsConfig shared];
-        NSString *appId = [cfg.tailAppId stringByTrimmingCharactersInSet:
+        // PostSession 优先（has 与值分离：「本次无」= has 且值为空 → 直接 orig，不回落默认，
+        // WCR FUN_005d835c 同款）；默认分支 gate 总开关（总开关关=整体不生效）
+        NSString *appId = nil;
+        if ([MomentsConfig tailHasPostSession]) {
+            appId = [MomentsConfig tailPostSessionAppId] ?: @"";
+        } else if (cfg.tailEnabled) {
+            appId = cfg.tailAppId;
+        }
+        appId = [appId stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        if (!cfg.tailEnabled || appId.length == 0) {
+        if (appId.length == 0) {
             return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
         }
-        // 未注册视为无尾巴（WCR isRegisteredAppID: 校验同款；输入端已完美匹配+自愈，此处兜底）
-        NSString *name = nil;
-        for (NSDictionary *p in [cfg effectiveTailPresets]) {
-            if ([p isKindOfClass:[NSDictionary class]] && [appId isEqualToString:p[@"appId"]]) {
-                NSString *n = p[@"name"];
-                if ([n isKindOfClass:[NSString class]] && n.length > 0) name = n;
-                break;
-            }
-        }
+        // 未注册视为无尾巴（输入端已完美匹配+自愈，此处兜底）
+        NSString *name = MioTailNameForAppId(cfg, appId);
         if (!name) return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
 
         Class appInfoCls = objc_getClass("WCAppInfo");
@@ -2006,6 +2018,194 @@ static void MioInstallTailHook(void) {
     WPLog(@"Moments", @"[Tail] WCUploadTask appInfo hooked");
 }
 
+#pragma mark - 发帖页单次选择（WCR PostSession 同款机制）
+
+// hook WCNewCommitViewController（8.0.60 头文件实证：init/initWithImages:contacts:/initWithSightDraft:/
+// initWithTextType/reloadData/viewDidAppear: 及 ivar m_tableViewManager 均存在）：
+// - 4 个 init：orig 后重置 PostSession（WCR FUN_005d7d10/df8/f44/8060 同款，新发帖会话回默认）
+// - viewDidAppear: / reloadData：注入「小尾巴」cell（WCR FUN_005d81a4/8148 → 005d8d4c 同款，
+//   title 查重防重复注入；不 hook addSection: 宽域兜底——reloadData 重建 sections 后 sync 会补注）
+// - class_addMethod 点击回调：present 选择页（SettingMomentTailController postSessionMode）
+static IMP orig_commit_init = NULL;
+static IMP orig_commit_initImages = NULL;
+static IMP orig_commit_initSight = NULL;
+static IMP orig_commit_initText = NULL;
+static IMP orig_commit_viewDidAppear = NULL;
+static IMP orig_commit_reloadData = NULL;
+
+// cell 右值：本次优先（「本次无」/名字），否则默认（"默认: 名字"）
+static NSString *MioTailCellRightValue(void) {
+    MomentsConfig *cfg = [MomentsConfig shared];
+    if ([MomentsConfig tailHasPostSession]) {
+        NSString *v = [[MomentsConfig tailPostSessionAppId] ?: @""
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (v.length == 0) return @"本次无";
+        return MioTailNameForAppId(cfg, v) ?: v;
+    }
+    NSString *appId = [cfg.tailAppId stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (appId.length == 0) return @"默认: 无";
+    return [NSString stringWithFormat:@"默认: %@",
+        MioTailNameForAppId(cfg, appId) ?: appId];
+}
+
+// 注入/补注「小尾巴」cell 到发帖页第一 section（WCR FUN_005d8d4c 同款）
+static void MioTailSyncCommitCell(id vc) {
+    @try {
+        if (!vc || ![MomentsConfig shared].tailEnabled) return;
+        // 取 m_tableViewManager（getter 优先，KVC 兜底；WCR FUN_005d9250 同款）
+        id mgr = nil;
+        SEL mgrSel = NSSelectorFromString(@"m_tableViewManager");
+        if ([vc respondsToSelector:mgrSel]) {
+            mgr = ((id(*)(id, SEL))objc_msgSend)(vc, mgrSel);
+        } else {
+            @try { mgr = [vc valueForKey:@"m_tableViewManager"]; } @catch (NSException *e) { mgr = nil; }
+        }
+        if (!mgr) return;
+        SEL cntSel = NSSelectorFromString(@"getSectionCount");
+        SEL atSel = NSSelectorFromString(@"getSectionAt:");
+        if (![mgr respondsToSelector:cntSel] || ![mgr respondsToSelector:atSel]) return;
+        NSUInteger cnt = ((NSUInteger(*)(id, SEL))objc_msgSend)(mgr, cntSel);
+        if (cnt == 0) return;
+        id sec0 = ((id(*)(id, SEL, long))objc_msgSend)(mgr, atSel, 0);
+        if (!sec0) return;
+        // 防重：section0 已有「小尾巴」cell 则不再注入（WCR FUN_005d9510 title 查重同款）
+        NSArray *cells = nil;
+        SEL allCellsSel = NSSelectorFromString(@"getAllCells");
+        if ([sec0 respondsToSelector:allCellsSel]) {
+            cells = ((id(*)(id, SEL))objc_msgSend)(sec0, allCellsSel);
+        } else {
+            @try { cells = [sec0 valueForKey:@"m_cells"]; } @catch (NSException *e) { cells = nil; }
+        }
+        SEL titleSel = NSSelectorFromString(@"m_title");
+        for (id c in cells) {
+            if (![c respondsToSelector:titleSel]) continue;
+            NSString *t = ((id(*)(id, SEL))objc_msgSend)(c, titleSel);
+            if ([t isEqualToString:@"小尾巴"]) return;
+        }
+        // 构造 cell（WCTableViewCellManager 类方法，8.0.60 头文件实证）
+        Class cellCls = objc_getClass("WCTableViewCellManager");
+        SEL mkSel = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:");
+        SEL clickSel = NSSelectorFromString(@"mioOnTailCell:");
+        if (!cellCls || ![cellCls respondsToSelector:mkSel]) {
+            WPLog(@"Moments", @"[Tail] SKIP: normalCellForSel:target:title:rightValue: NOT found");
+            return;
+        }
+        id cell = ((id(*)(id, SEL, id, id, id, id))objc_msgSend)((id)cellCls, mkSel,
+            clickSel, vc, @"小尾巴", MioTailCellRightValue());
+        SEL addSel = NSSelectorFromString(@"addCell:");
+        if (![sec0 respondsToSelector:addSel]) return;
+        ((void(*)(id, SEL, id))objc_msgSend)(sec0, addSel, cell);
+        // manager 级刷新（不经过 VC reloadData hook，无递归）
+        SEL rtvSel = NSSelectorFromString(@"reloadTableView");
+        if ([mgr respondsToSelector:rtvSel]) ((void(*)(id, SEL))objc_msgSend)(mgr, rtvSel);
+        WPLog(@"Moments", @"[Tail] 发帖页小尾巴 cell 已注入 (right=%@)", MioTailCellRightValue());
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[Tail] sync cell error: %@", e);
+    }
+}
+
+// cell 点击回调（WCR WCRefineOnMomentsTailCell: → FUN_005dabb8 同款：resignInput → modal nav 包选择页）
+static void hooked_commit_tailCellClicked(id self, SEL _cmd, id cellMgr) {
+    @try {
+        if (![MomentsConfig shared].tailEnabled) {
+            WPShowToast(@"小尾巴已关闭");
+            return;
+        }
+        Class pickerCls = objc_getClass("SettingMomentTailController");
+        if (!pickerCls) {
+            WPLog(@"Moments", @"[Tail] SKIP: SettingMomentTailController NOT found");
+            return;
+        }
+        SEL riSel = NSSelectorFromString(@"resignInput");
+        if ([self respondsToSelector:riSel]) ((void(*)(id, SEL))objc_msgSend)(self, riSel);
+        id picker = [[pickerCls alloc] init];
+        SEL psmSel = NSSelectorFromString(@"setPostSessionMode:");
+        if ([picker respondsToSelector:psmSel]) {
+            ((void(*)(id, SEL, BOOL))objc_msgSend)(picker, psmSel, YES);
+        }
+        // dismiss 后刷新发帖页显示（WCR onPick block 同款：调 reloadData → sync 重建 cell）
+        SEL sctSel = NSSelectorFromString(@"setMioCommitTarget:");
+        if ([picker respondsToSelector:sctSel]) {
+            ((void(*)(id, SEL, id))objc_msgSend)(picker, sctSel, self);
+        }
+        Class navCls = objc_getClass("MMUINavigationController") ?: [UINavigationController class];
+        id nav = [[navCls alloc] initWithRootViewController:picker];
+        ((void(*)(id, SEL, long))objc_msgSend)(nav,
+            NSSelectorFromString(@"setModalPresentationStyle:"), (long)1);
+        if ([self respondsToSelector:@selector(presentViewController:animated:completion:)]) {
+            ((void(*)(id, SEL, id, BOOL, id))objc_msgSend)(self,
+                NSSelectorFromString(@"presentViewController:animated:completion:"), nav, YES, nil);
+        }
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[Tail] open picker error: %@", e);
+    }
+}
+
+// 4 个 init：orig 后重置 PostSession（WCR 同款：新建发帖页=新会话）
+static id hooked_commit_init(id self, SEL _cmd) {
+    id r = ((id(*)(id, SEL))orig_commit_init)(self, _cmd);
+    [MomentsConfig tailResetPostSession];
+    return r;
+}
+static id hooked_commit_initImages(id self, SEL _cmd, id a1, id a2) {
+    id r = ((id(*)(id, SEL, id, id))orig_commit_initImages)(self, _cmd, a1, a2);
+    [MomentsConfig tailResetPostSession];
+    return r;
+}
+static id hooked_commit_initSight(id self, SEL _cmd, id a1) {
+    id r = ((id(*)(id, SEL, id))orig_commit_initSight)(self, _cmd, a1);
+    [MomentsConfig tailResetPostSession];
+    return r;
+}
+static id hooked_commit_initText(id self, SEL _cmd) {
+    id r = ((id(*)(id, SEL))orig_commit_initText)(self, _cmd);
+    [MomentsConfig tailResetPostSession];
+    return r;
+}
+
+static void hooked_commit_viewDidAppear(id self, SEL _cmd, BOOL animated) {
+    ((void(*)(id, SEL, BOOL))orig_commit_viewDidAppear)(self, _cmd, animated);
+    MioTailSyncCommitCell(self);
+}
+
+static id hooked_commit_reloadData(id self, SEL _cmd) {
+    id r = ((id(*)(id, SEL))orig_commit_reloadData)(self, _cmd);
+    MioTailSyncCommitCell(self);
+    return r;
+}
+
+static void MioInstallTailCommitHooks(void) {
+    Class cls = objc_getClass("WCNewCommitViewController");
+    if (!cls) {
+        WPLog(@"Moments", @"[Tail] SKIP: WCNewCommitViewController NOT found");
+        return;
+    }
+    // 点击回调挂到发帖页（WCR class_addMethod 同款）
+    class_addMethod(cls, NSSelectorFromString(@"mioOnTailCell:"),
+                    (IMP)hooked_commit_tailCellClicked, "v@:@");
+
+    struct { const char *sel; IMP hook; IMP *orig; const char *tag; } items[] = {
+        { "init",                        (IMP)hooked_commit_init,        &orig_commit_init,        "init" },
+        { "initWithImages:contacts:",    (IMP)hooked_commit_initImages,  &orig_commit_initImages,  "initWithImages:contacts:" },
+        { "initWithSightDraft:",         (IMP)hooked_commit_initSight,   &orig_commit_initSight,   "initWithSightDraft:" },
+        { "initWithTextType",            (IMP)hooked_commit_initText,    &orig_commit_initText,    "initWithTextType" },
+        { "viewDidAppear:",              (IMP)hooked_commit_viewDidAppear, &orig_commit_viewDidAppear, "viewDidAppear:" },
+        { "reloadData",                  (IMP)hooked_commit_reloadData,  &orig_commit_reloadData,  "reloadData" },
+    };
+    for (NSUInteger i = 0; i < sizeof(items) / sizeof(items[0]); i++) {
+        SEL sel = NSSelectorFromString([NSString stringWithUTF8String:items[i].sel]);
+        Method m = class_getInstanceMethod(cls, sel);
+        if (!m) {
+            WPLog(@"Moments", @"[Tail] commit hook SKIP: %s NOT found", items[i].tag);
+            continue;
+        }
+        *items[i].orig = method_getImplementation(m);
+        method_setImplementation(m, items[i].hook);
+        WPLog(@"Moments", @"[Tail] WCNewCommitViewController %s hooked", items[i].tag);
+    }
+}
+
 #pragma mark - 安装
 
 @implementation MomentsHook
@@ -2016,6 +2216,7 @@ static void MioInstallTailHook(void) {
     MioInstallHDHooks();
     MioInstallDetailedTimeHook();
     MioInstallTailHook();
+    MioInstallTailCommitHooks();
     MioInstallFakeLikeHooks();
     MioInstallFakeDataLayerHooks();
     MioFakeInstallActiveRefresh();
