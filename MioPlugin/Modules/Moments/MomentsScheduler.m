@@ -17,6 +17,13 @@
 
 @implementation MomentsScheduler
 
++ (instancetype)shared {
+    static MomentsScheduler *inst = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ inst = [[MomentsScheduler alloc] init]; });
+    return inst;
+}
+
 static NSString * const kMioSchedTasksKey = @"com.mio.moments.scheduled.tasks.v1";
 static const double kMioSchedMinLeadSeconds = 30;      // fireDate 距今下限（WCR 同款）
 static const int    kMioSchedMaxTasks = 999;           // 活跃任务上限（WCR 同款）
