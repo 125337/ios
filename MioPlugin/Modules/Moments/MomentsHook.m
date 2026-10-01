@@ -2037,7 +2037,8 @@ static IMP orig_commit_initText = NULL;
 static IMP orig_commit_viewDidAppear = NULL;
 static IMP orig_commit_reloadData = NULL;
 
-// 朋友圈入口同款黑白光圈图标（SVG 48x48 直录：外圆 r20 + 内圆 r7 + 8 条叶片线，stroke 4 圆角，#333）
+// 朋友圈入口同款光圈图标（SVG 48x48 直录：外圆 r20 + 内圆 r7 + 8 条叶片线，stroke 4 圆角）
+// 颜色/线宽按发帖页官方图标实测调淡调细：灰 #7C7C7C + stroke 2.5（25pt 下约 1.3pt），融合官方观感
 static UIImage *MioMomentsGlyphImage(CGFloat size) {
     UIGraphicsImageRendererFormat *fmt = [[UIGraphicsImageRendererFormat alloc] init];
     fmt.scale = [UIScreen mainScreen].scale;
@@ -2045,8 +2046,8 @@ static UIImage *MioMomentsGlyphImage(CGFloat size) {
     return [r imageWithActions:^(UIGraphicsImageRendererContext *rc) {
         CGContextRef c = rc.CGContext;
         CGContextScaleCTM(c, size / 48.0, size / 48.0);
-        CGContextSetStrokeColorWithColor(c, [UIColor colorWithWhite:0.2 alpha:1].CGColor);
-        CGContextSetLineWidth(c, 4.0);
+        CGContextSetStrokeColorWithColor(c, [UIColor colorWithWhite:0.486 alpha:1].CGColor); // #7C7C7C
+        CGContextSetLineWidth(c, 2.5);
         CGContextSetLineCap(c, kCGLineCapRound);
         CGContextSetLineJoin(c, kCGLineJoinRound);
         CGContextStrokeEllipseInRect(c, CGRectMake(4, 4, 40, 40));   // 外圆
