@@ -105,10 +105,9 @@
     NSDate *initial = (cur > 0) ? [NSDate dateWithTimeIntervalSince1970:cur]
                                 : [NSDate dateWithTimeIntervalSinceNow:300];
     __weak typeof(self) wself = self;
-    [MioAlertHelper showDatePickerAlert:@"修改发表时间"
-                            initialDate:initial
-                            minimumDate:nil
-                                 onPick:^(NSDate *date) {
+    [MioAlertHelper showDateTimePickerPanel:@"修改发表时间"
+                                initialDate:initial
+                                     onPick:^(NSDate *date) {
         __strong typeof(wself) sself = wself;
         if (!sself) return;
         NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];

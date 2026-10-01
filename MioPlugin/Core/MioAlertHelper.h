@@ -45,14 +45,13 @@
             confirmTitle:(NSString *)confirmTitle
                onConfirm:(void(^)(void))onConfirm;
 
-/// 日期时间选择弹窗（自建居中卡片 + UIDatePicker wheels，直接加 window 层）
-/// @param title 弹窗标题
-/// @param initialDate 初始选中时间（可空=当前时间）
-/// @param minimumDate 可选最早时间（可空）
-/// @param onPick 确定回调（主线程）；点取消不回调
-+ (void)showDatePickerAlert:(NSString *)title
-                initialDate:(NSDate *)initialDate
-                minimumDate:(NSDate *)minimumDate
-                     onPick:(void(^)(NSDate *date))onPick;
+/// 日期时间选择面板（WCR 同款：底部弹出 + 六轮 年/月/日/时/分/秒 + 右上绿色确定）
+/// 确定时内建校验：至少 1 分钟后、至多 1 年内，超限 toast 不回调
+/// @param title 面板标题（左上角，如 @"选择发送时间"）
+/// @param initialDate 初始选中时间（可空=5 分钟后）
+/// @param onPick 确定回调（主线程，date 已过校验）；点遮罩关闭不回调
++ (void)showDateTimePickerPanel:(NSString *)title
+                    initialDate:(nullable NSDate *)initialDate
+                         onPick:(void(^)(NSDate *date))onPick;
 
 @end

@@ -2291,7 +2291,7 @@ static char kMioSchedCommitCellKey;
 
 static NSString *MioSchedCellRightValue(void) {
     NSDate *d = [MomentsScheduler schedPendingFireDate];
-    if (!d) return @"关闭";
+    if (!d) return @"不定时";
     NSDateFormatter *f = [[NSDateFormatter alloc] init];
     f.dateFormat = @"MM-dd HH:mm";
     return [f stringFromDate:d];
@@ -2353,12 +2353,11 @@ static void hooked_commit_syncSchedCell(id self, SEL _cmd) {
     MioSchedSyncCommitCell(self);
 }
 
-// 时间选择弹窗：统一走 MioAlertHelper 自建卡片（确定后写会话并刷新 cell）
+// 时间选择面板：WCR 同款底部弹出六轮选择器（确定时内建 ≥1 分钟 / ≤1 年校验）
 static void MioSchedPresentDatePicker(id vc) {
-    [MioAlertHelper showDatePickerAlert:@"选择定时发送时间"
-                            initialDate:nil
-                            minimumDate:[NSDate dateWithTimeIntervalSinceNow:60]
-                                 onPick:^(NSDate *date) {
+    [MioAlertHelper showDateTimePickerPanel:@"选择发送时间"
+                                initialDate:nil
+                                     onPick:^(NSDate *date) {
         [MomentsScheduler schedSetPendingFireDate:date];
         NSDateFormatter *f = [[NSDateFormatter alloc] init];
         f.dateFormat = @"MM-dd HH:mm";

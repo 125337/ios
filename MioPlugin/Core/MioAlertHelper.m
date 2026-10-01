@@ -297,7 +297,220 @@ static _WAlertAnchor *walertAnchor(void) {
     }
 }
 
-#pragma mark - 日期时间选择弹窗（自建卡片，不依赖 WCUIAlertView 内部结构）
+#pragma mark - 日期时间选择面板（WCRMomentsScheduledDatePickerPanel 同款还原）
+
+// 六轮 年/月/日/时/分/秒 + 底部弹出面板（逐项对应 WCR 反编译：
+// 行高 34、列宽 max(w-36,240)/6、systemFont 17 居中 + 单位后缀、年月联动当月天数、
+// 确定校验 >=60s 且 <=31622400s、0.25s 弹入）
+static const NSInteger kMioPanelTag = 0x4D494F50; // 'MIOP' 防重复弹出标记
+static const double kMioPanelHeight = 310;        // WCR 固定面板高（不含底部安全区）
+
+@interface _MioSchedPickerPanel : UIView <UIPickerViewDataSource, UIPickerViewDelegate>
+@property (nonatomic, strong) NSCalendar *calendar;
+@property (nonatomic, strong) UIPickerView *picker;
+@property (nonatomic, copy) void(^onPick)(NSDate *);
+@property (nonatomic, assign) NSInteger minYear, maxYear;
+@property (nonatomic, assign) NSInteger selYear, selMonth, selDay, selHour, selMinute, selSecond;
+@end
+
+@implementation _MioSchedPickerPanel
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.backgroundColor = [UIColor whiteColor];
+        if (@available(iOS 13.0, *)) {
+            self.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
+                return (tc.userInterfaceStyle == UIUserInterfaceStyleDark)
+                    ? [UIColor colorWithRed:0.11 green:0.11 blue:0.12 alpha:1] : [UIColor whiteColor];
+            }];
+        }
+        _calendar = [[NSCalendar currentCalendar] copy];
+        NSDate *now = [NSDate date];
+        NSDateComponents *c = [_calendar components:NSCalendarUnitYear fromDate:now];
+        _minYear = (NSInteger)c.year;
+        _maxYear = _minYear + 5;
+
+        // 顶栏：左标题 右绿色确定（WCR 同款）
+        UILabel *lb = [[UILabel alloc] initWithFrame:CGRectMake(16, 12, frame.size.width - 32 - 60, 22)];
+        lb.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+        lb.textColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
+            return (tc.userInterfaceStyle == UIUserInterfaceStyleDark)
+                ? [UIColor whiteColor] : [UIColor colorWithRed:0.1 green:0.1 blue:0.1 alpha:1];
+        }];
+        lb.tag = 0x544C4241; // 供 showDateTimePickerPanel 设置标题
+        [self addSubview:lb];
+
+        UIButton *ok = [UIButton buttonWithType:UIButtonTypeSystem];
+        ok.frame = CGRectMake(frame.size.width - 76, 8, 60, 30);
+        [ok setTitle:@"确定" forState:UIControlStateNormal];
+        [ok setTitleColor:[UIColor colorWithRed:0.035 green:0.733 blue:0.027 alpha:1] forState:UIControlStateNormal]; // 微信绿 #09BB07
+        ok.titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+        [ok addTarget:self action:@selector(onConfirm) forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:ok];
+
+        CGFloat pickerY = 44;
+        _picker = [[UIPickerView alloc] initWithFrame:CGRectMake(0, pickerY, frame.size.width, frame.size.height - pickerY)];
+        _picker.dataSource = self;
+        _picker.delegate = self;
+        [_picker setShowsSelectionIndicator:YES];
+        [self addSubview:_picker];
+    }
+    return self;
+}
+
+// 当月天数（WCR wcr_daysInMonth 同款：rangeOfUnit:Day inUnit:Month）
+- (NSInteger)daysInMonth {
+    NSDateComponents *c = [[NSDateComponents alloc] init];
+    c.year = self.selYear;
+    c.month = self.selMonth;
+    c.day = 1;
+    NSDate *d = [self.calendar dateFromComponents:c];
+    if (!d) return 30;
+    NSRange r = [self.calendar rangeOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitMonth forDate:d];
+    return r.length > 0 ? (NSInteger)r.length : 30;
+}
+
+// 初始定位（WCR wcr_setDate_ 同款：nil→now+300s，逐组件 clamp 后 selectRow）
+- (void)applyDate:(NSDate *)date {
+    NSDate *src = date ?: [NSDate dateWithTimeIntervalSinceNow:300];
+    NSDateComponents *c = [self.calendar components:NSCalendarUnitYear|NSCalendarUnitMonth|NSCalendarUnitDay
+                                                    |NSCalendarUnitHour|NSCalendarUnitMinute|NSCalendarUnitSecond
+                                           fromDate:src];
+    NSInteger y = (NSInteger)c.year;
+    if (y > self.maxYear) y = self.maxYear;
+    if (y < self.minYear) y = self.minYear;
+    self.selYear = y;
+    self.selMonth = MIN(12, MAX(1, (NSInteger)c.month));
+    self.selDay = MIN([self daysInMonth], MAX(1, (NSInteger)c.day));
+    self.selHour = MIN(23, MAX(0, (NSInteger)c.hour));
+    self.selMinute = MIN(59, MAX(0, (NSInteger)c.minute));
+    self.selSecond = MIN(59, MAX(0, (NSInteger)c.second));
+
+    [self.picker selectRow:(self.selYear - self.minYear) inComponent:0 animated:NO];
+    [self.picker selectRow:(self.selMonth - 1) inComponent:1 animated:NO];
+    [self.picker selectRow:(self.selDay - 1) inComponent:2 animated:NO];
+    [self.picker selectRow:self.selHour inComponent:3 animated:NO];
+    [self.picker selectRow:self.selMinute inComponent:4 animated:NO];
+    [self.picker selectRow:self.selSecond inComponent:5 animated:NO];
+}
+
+// 合成选中时间（WCR wcr_selectedDate 同款：NSDateComponents → calendar date，失败回落 now）
+- (NSDate *)selectedDate {
+    NSDateComponents *c = [[NSDateComponents alloc] init];
+    c.year = self.selYear;
+    c.month = self.selMonth;
+    c.day = MIN([self daysInMonth], self.selDay);
+    c.hour = self.selHour;
+    c.minute = self.selMinute;
+    c.second = self.selSecond;
+    NSDate *d = [self.calendar dateFromComponents:c];
+    return d ?: [NSDate date];
+}
+
+// 确定（WCR onConfirm 同款校验：<60s toast；>31622400s toast；通过→onPick）
+- (void)onConfirm {
+    NSDate *d = [self selectedDate];
+    double delta = [d timeIntervalSinceNow];
+    if (delta < 60.0) {
+        WPShowToast(@"定时时间至少为 1 分钟后");
+        return;
+    }
+    if (delta > 31622400.0) {
+        WPShowToast(@"定时时间不能超过一年");
+        return;
+    }
+    void (^cb)(NSDate *) = self.onPick;
+    void (^dismiss)(void) = ^{ [self.superview removeFromSuperview]; }; // superview=dim
+    if (cb) cb(d);
+    dismiss();
+}
+
+#pragma mark - UIPickerViewDataSource / Delegate
+
+- (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView { return 6; }
+
+- (NSInteger)pickerView:(UIPickerView *)pickerView numberOfRowsInComponent:(NSInteger)component {
+    switch (component) {
+        case 0: return self.maxYear - self.minYear + 1;
+        case 1: return 12;
+        case 2: return [self daysInMonth];
+        case 3: return 24;
+        case 4: return 60;
+        case 5: return 60;
+        default: return 0;
+    }
+}
+
+- (CGFloat)pickerView:(UIPickerView *)pickerView rowHeightForComponent:(NSInteger)component { return 34.0; }
+
+- (CGFloat)pickerView:(UIPickerView *)pickerView widthForComponent:(NSInteger)component {
+    CGFloat w = self.bounds.size.width;
+    if (w < 1.0) w = 1.0;
+    CGFloat usable = w - 36.0;
+    if (usable < 240.0) usable = 240.0;
+    return usable / 6.0;
+}
+
+- (NSString *)unitSuffixForComponent:(NSInteger)component {
+    static NSArray *units = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ units = @[@"年", @"月", @"日", @"时", @"分", @"秒"]; });
+    return (component >= 0 && component < 6) ? units[component] : @"";
+}
+
+// 行标题（WCR wcr_pickerTitleForRow 同款：%02ld 年 / %ld 月 ...，年为两位显示）
+- (NSString *)titleForRow:(NSInteger)row component:(NSInteger)component {
+    NSInteger v = 0;
+    switch (component) {
+        case 0: v = self.minYear + row; return [NSString stringWithFormat:@"%02ld", (long)(v % 100)];
+        case 1: v = row + 1; break;
+        case 2: v = row + 1; break;
+        case 3: v = row; return [NSString stringWithFormat:@"%02ld", (long)v];
+        case 4: v = row; return [NSString stringWithFormat:@"%02ld", (long)v];
+        case 5: v = row; return [NSString stringWithFormat:@"%02ld", (long)v];
+        default: return @"-";
+    }
+    return [NSString stringWithFormat:@"%ld", (long)v];
+}
+
+- (UIView *)pickerView:(UIPickerView *)pickerView viewForRow:(NSInteger)row forComponent:(NSInteger)component reusingView:(UIView *)view {
+    UILabel *lb = ([view isKindOfClass:[UILabel class]]) ? (UILabel *)view : [[UILabel alloc] init];
+    lb.textAlignment = NSTextAlignmentCenter;
+    lb.font = [UIFont systemFontOfSize:17 weight:UIFontWeightRegular];
+    lb.adjustsFontSizeToFitWidth = YES;
+    lb.minimumScaleFactor = 0.7;
+    lb.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
+    lb.lineBreakMode = NSLineBreakByCharWrapping;
+    lb.textColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
+        return (tc.userInterfaceStyle == UIUserInterfaceStyleDark)
+            ? [UIColor whiteColor] : [UIColor colorWithRed:0.1 green:0.1 blue:0.1 alpha:1];
+    }];
+    lb.text = [NSString stringWithFormat:@"%@%@", [self titleForRow:row component:component],
+                                                  [self unitSuffixForComponent:component]];
+    return lb;
+}
+
+// 年/月变化联动当月天数（WCR didSelectRow 同款：日 clamp + reloadComponent(2) + selectRow）
+- (void)pickerView:(UIPickerView *)pickerView didSelectRow:(NSInteger)row inComponent:(NSInteger)component {
+    switch (component) {
+        case 0: self.selYear = self.minYear + row; break;
+        case 1: self.selMonth = row + 1; break;
+        case 2: self.selDay = row + 1; break;
+        case 3: self.selHour = row; break;
+        case 4: self.selMinute = row; break;
+        case 5: self.selSecond = row; break;
+        default: break;
+    }
+    if (component < 2) {
+        NSInteger dim = [self daysInMonth];
+        if (self.selDay > dim) self.selDay = dim;
+        [pickerView reloadComponent:2];
+        [pickerView selectRow:(self.selDay - 1) inComponent:2 animated:NO];
+    }
+}
+
+@end
 
 static UIWindow *MioAlertKeyWindow(void) {
     for (UIWindowScene *sc in [UIApplication sharedApplication].connectedScenes) {
@@ -310,112 +523,48 @@ static UIWindow *MioAlertKeyWindow(void) {
     return [UIApplication sharedApplication].keyWindow; // 旧系统兜底
 }
 
-static const NSInteger kMioDatePickerTag = 0x4D494F44; // 'MIOD' 防重复弹出标记
-
-+ (UIColor *)mioDynamicLight:(UIColor *)light dark:(UIColor *)dark {
-    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
-        return (tc.userInterfaceStyle == UIUserInterfaceStyleDark) ? dark : light;
-    }];
-}
-
-+ (void)showDatePickerAlert:(NSString *)title
-                initialDate:(NSDate *)initialDate
-                minimumDate:(NSDate *)minimumDate
-                     onPick:(void(^)(NSDate *date))onPick {
++ (void)showDateTimePickerPanel:(NSString *)title
+                    initialDate:(NSDate *)initialDate
+                         onPick:(void(^)(NSDate *date))onPick {
     @try {
         UIWindow *window = MioAlertKeyWindow();
-        if (!window) { WPLogDebug(@"Alert", @"no key window — date picker aborted"); return; }
+        if (!window) { WPLogDebug(@"Alert", @"no key window — picker panel aborted"); return; }
 
         // 防重复：先移除同 tag 旧弹层
         for (UIView *old in [window.subviews copy]) {
-            if (old.tag == kMioDatePickerTag) [old removeFromSuperview];
+            if (old.tag == kMioPanelTag) [old removeFromSuperview];
         }
 
-        CGFloat cardW = 280;
-        CGFloat pickerH = 216;
-        CGFloat btnH = 44;
-        CGFloat cardH = 48 + pickerH + btnH;
+        CGFloat safeBottom = window.safeAreaInsets.bottom;
+        CGFloat panelH = kMioPanelHeight + safeBottom;
+        CGFloat hostH = window.bounds.size.height;
 
         UIView *dim = [[UIView alloc] initWithFrame:window.bounds];
-        dim.tag = kMioDatePickerTag;
-        dim.backgroundColor = [UIColor colorWithWhite:0 alpha:0.45];
+        dim.tag = kMioPanelTag;
+        dim.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
         dim.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 
-        UIView *card = [[UIView alloc] initWithFrame:CGRectMake(0, 0, cardW, cardH)];
-        card.center = CGPointMake(CGRectGetMidX(window.bounds), CGRectGetMidY(window.bounds));
-        card.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin
-                              | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
-        card.layer.cornerRadius = 14;
-        card.layer.masksToBounds = YES;
-        card.backgroundColor = [self mioDynamicLight:[UIColor whiteColor]
-                                                dark:[UIColor colorWithRed:0.17 green:0.17 blue:0.18 alpha:1]];
-        [dim addSubview:card];
-
-        UILabel *lb = [[UILabel alloc] initWithFrame:CGRectMake(12, 18, cardW - 24, 22)];
+        _MioSchedPickerPanel *panel = [[_MioSchedPickerPanel alloc] initWithFrame:CGRectMake(0, 0, window.bounds.size.width, panelH)];
+        UILabel *lb = (UILabel *)[panel viewWithTag:0x544C4241];
         lb.text = title ?: @"选择时间";
-        lb.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
-        lb.textAlignment = NSTextAlignmentCenter;
-        lb.textColor = [self mioDynamicLight:[UIColor colorWithRed:0.1 green:0.1 blue:0.1 alpha:1]
-                                        dark:[UIColor whiteColor]];
-        lb.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-        [card addSubview:lb];
+        panel.onPick = onPick ? [onPick copy] : nil;
+        [panel applyDate:initialDate];
 
-        UIDatePicker *dp = [[UIDatePicker alloc] initWithFrame:CGRectMake(10, 48, cardW - 20, pickerH)];
-        if (@available(iOS 13.4, *)) dp.preferredDatePickerStyle = UIDatePickerStyleWheels;
-        dp.datePickerMode = UIDatePickerModeDateAndTime;
-        dp.minuteInterval = 1;
-        dp.date = initialDate ?: [NSDate date];
-        if (minimumDate) dp.minimumDate = minimumDate;
-        dp.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-        [card addSubview:dp];
-
-        // 按钮行（iOS 原生 alert 风格：细分隔线 + 取消/确定等宽）
-        CGFloat btnY = 48 + pickerH;
-        UIView *hline = [[UIView alloc] initWithFrame:CGRectMake(0, btnY, cardW, 0.5)];
-        hline.backgroundColor = [self mioDynamicLight:[UIColor colorWithWhite:0.78 alpha:1]
-                                                 dark:[UIColor colorWithWhite:0.25 alpha:1]];
-        hline.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-        [card addSubview:hline];
-        UIView *vline = [[UIView alloc] initWithFrame:CGRectMake(cardW / 2, btnY, 0.5, btnH)];
-        vline.backgroundColor = hline.backgroundColor;
-        [card addSubview:vline];
-
-        UIButton *cancel = [UIButton buttonWithType:UIButtonTypeSystem];
-        cancel.frame = CGRectMake(0, btnY, cardW / 2, btnH);
-        cancel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
-        [cancel setTitle:@"取消" forState:UIControlStateNormal];
-        cancel.titleLabel.font = [UIFont systemFontOfSize:17];
-        [cancel addTarget:dim action:@selector(removeFromSuperview) forControlEvents:UIControlEventTouchUpInside];
-        [card addSubview:cancel];
-
-        UIButton *ok = [UIButton buttonWithType:UIButtonTypeSystem];
-        ok.frame = CGRectMake(cardW / 2, btnY, cardW / 2, btnH);
-        ok.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
-        [ok setTitle:@"确定" forState:UIControlStateNormal];
-        ok.titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
-        // 确定回调经 associated block 分发（__datePickTapped:），回调后关闭弹层
-        void (^pickBlock)(NSDate *) = onPick ? [onPick copy] : nil;
-        objc_setAssociatedObject(ok, @selector(showDatePickerAlert:initialDate:minimumDate:onPick:), ^{
-            if (pickBlock) pickBlock(dp.date);
-            [dim removeFromSuperview];
-        }, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        [ok addTarget:self action:@selector(__datePickTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [card addSubview:ok];
-
-        // 点空白处关闭
+        // 遮罩点击关闭；panel 点击不透传（挡住手势）
         [dim addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:dim action:@selector(removeFromSuperview)]];
+        [panel addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:nil action:NULL]];
 
-        dim.alpha = 0;
+        [dim addSubview:panel];
+        panel.frame = CGRectMake(0, hostH, window.bounds.size.width, panelH); // 初始在屏外
         [window addSubview:dim];
-        [UIView animateWithDuration:0.2 animations:^{ dim.alpha = 1; }];
-    } @catch (NSException *e) {
-        WPLogDebug(@"Alert", @"date picker EXCEPTION: %@", e);
-    }
-}
 
-+ (void)__datePickTapped:(UIButton *)sender {
-    void (^cb)(void) = objc_getAssociatedObject(sender, @selector(showDatePickerAlert:initialDate:minimumDate:onPick:));
-    if (cb) cb();
+        // 底部弹入（WCR presentInView 同款 0.25s 动画）
+        [UIView animateWithDuration:0.25 animations:^{
+            panel.frame = CGRectMake(0, hostH - panelH, window.bounds.size.width, panelH);
+        }];
+    } @catch (NSException *e) {
+        WPLogDebug(@"Alert", @"picker panel EXCEPTION: %@", e);
+    }
 }
 
 @end
