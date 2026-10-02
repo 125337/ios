@@ -517,11 +517,17 @@ static void SGReloadStrip(id vc, SGHomeSnapshot *snap) {
     if (!strip) return;
     NSMutableArray *titles = [NSMutableArray array];
     for (SessionGroupsTab *t in snap.tabs) [titles addObject:t.title];
-    [strip reloadTabTitles:[titles copy]];
-    [strip updateBadges:snap.tabUnread redDots:snap.tabRedDot];
+    // WCR reloadTabs 同构（Misc_part19.c:7255-7268）：重建按钮前先把条选中态同步到持久化
+    // 选中组——否则 reload 时 refreshAppearance 按旧 _selectedIndex 摆指示器（闪回旧 tab）
     SessionGroupsTab *sel = SGSelectedTab(snap.tabs);
     NSInteger idx = 0;
     for (NSUInteger t = 0; t < snap.tabs.count; t++) if (snap.tabs[t] == sel) { idx = (NSInteger)t; break; }
+    if (strip.selectedIndex != idx) {
+        [strip setSelectedIndex:idx velocity:0 animated:NO];
+    }
+    [strip reloadTabTitles:[titles copy]];
+    [strip updateBadges:snap.tabUnread redDots:snap.tabRedDot];
+    // 兜底：tab 数量变化导致重建前同步越界未生效时，重建后再补一次
     if (strip.selectedIndex != idx) {
         [strip setSelectedIndex:idx velocity:0 animated:NO];
     }
@@ -529,7 +535,7 @@ static void SGReloadStrip(id vc, SGHomeSnapshot *snap) {
 
 #pragma mark - 切组
 
-// FUN_007f320c 提交链：持久化 → 触感 → 失效快照 → 无动画 reloadData → 条动画（Misc.c:21326-21446）
+// FUN_007f320c 提交链（FUN__part13.c:18524-18703）：持久化 → 条弹簧动画 → 触感 → 异步 reload
 static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animated) {
     if (!SGActive(vc)) return;
     UITableView *table = SGMainTableView(vc);
@@ -539,11 +545,17 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
     if (idx < 0 || idx >= (NSInteger)tabs.count) return;
     SessionGroupsTab *tab = tabs[idx];
 
-    // 记忆选中组（homeTelegramGroupingSelectedTabId，Misc_part21.c:41181）
+    // 1) 记忆选中组（homeTelegramGroupingSelectedTabId，Misc_part21.c:41181）
     [[NSUserDefaults standardUserDefaults] setObject:tab.tabId forKey:kSGSelectedTabKey];
 
+    // 2) 条选中态先走弹簧动画（FUN_007f320c:18634-18636 在 reload 之前）。旧顺序是先同步
+    //    reloadData——SGReloadStrip 用旧 _selectedIndex 重建条，指示器先闪回旧 tab 再硬跳
+    //    新 tab，弹簧动画被吞（"秒切回全部又秒切到私聊"）
+    SessionGroupsStripView *strip = objc_getAssociatedObject(vc, kSGAssocStrip);
+    if (strip) [strip setSelectedIndex:idx velocity:velocity animated:animated];
+
+    // 3) 切组触感（FUN_007f4808 紧随条动画之后；Misc_part4.c:1755-1784：1→Soft 2→Medium 3→Heavy）
     SessionGroupsConfig *cfg = [SessionGroupsConfig shared];
-    // 切组触感（triggerHapticFeedbackWithIndex:，Misc_part4.c:1755-1784：1→Soft 2→Medium 3→Heavy）
     if (cfg.sgSwitchHaptic > 0 && @available(iOS 10.0, *)) {
         UIImpactFeedbackStyle style = UIImpactFeedbackStyleLight;   // index==1 → style 3(Soft)
         if (cfg.sgSwitchHaptic == 2) style = UIImpactFeedbackStyleMedium; // index==2 → style 1(Medium)
@@ -552,15 +564,15 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
         [gen impactOccurred];
     }
 
+    // 4) 异步 reload（FUN_007f320c:18687-18703 dispatch_after → main queue）：让弹簧起手帧
+    //    先落屏，表格重建开销不打断动画；弱引用防 vc 已销毁时对孤儿表格 reloadData
     SGInvalidateSnapshot(vc);
-    [UIView performWithoutAnimation:^{
-        [table reloadData];
-    }];
-
-    SessionGroupsStripView *strip = objc_getAssociatedObject(vc, kSGAssocStrip);
-    if (strip) {
-        [strip setSelectedIndex:idx velocity:velocity animated:animated];
-    }
+    __weak UITableView *weakTable = table;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UITableView *t = weakTable;
+        if (!t) return;
+        [UIView performWithoutAnimation:^{ [t reloadData]; }];
+    });
     WPLog(@"SG", @"[SgHook] select tab %ld (%@)", (long)idx, tab.tabId);
 }
 
