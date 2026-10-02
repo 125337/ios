@@ -100,11 +100,12 @@
             cls, s, NSSelectorFromString(@"onTaskCellTapped:"), self,
             (t[@"preview"] ?: @"（无预览）"), [self fireDateTextForDict:t], nil, (long)1);
         if (cell) {
+            // cellConfig = WCTableViewCellNormalConfig 对象（非字典，tail40 字典注入静默无效）：
+            // leftConfig.detail=标题下第二行（构造器 detail: 参数落这），rightConfig.detail=箭头左侧文字
             @try {
                 id cfg = [cell valueForKey:@"cellConfig"];
-                if ([cfg isKindOfClass:[NSMutableDictionary class]]) {
-                    [(NSMutableDictionary *)cfg setObject:[self stateTextForDict:t] forKey:@"rightValue"];
-                }
+                id rc = [cfg respondsToSelector:@selector(rightConfig)] ? [cfg valueForKey:@"rightConfig"] : nil;
+                if (rc) [rc setValue:[self stateTextForDict:t] forKey:@"detail"];
             } @catch (NSException *e) {}
             [self finishTaskCell:cell index:si];
             return cell;
