@@ -23,6 +23,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL sgFilterPinned;          // 过滤置顶聊天
 @property (nonatomic, assign) BOOL sgFilterDuplicate;       // 过滤重复联系人
 
+// 外观颜色（浅/深色双 hex，空 = 未自定义跟随默认；hook 暂未接入）
+@property (nonatomic, copy) NSString *sgBgColor;            // 自定义背景色
+@property (nonatomic, copy) NSString *sgBgColorDark;
+@property (nonatomic, copy) NSString *sgIndicatorColor;     // 指示器颜色
+@property (nonatomic, copy) NSString *sgIndicatorColorDark;
+@property (nonatomic, copy) NSString *sgTextColor;          // 默认文本颜色
+@property (nonatomic, copy) NSString *sgTextColorDark;
+@property (nonatomic, copy) NSString *sgHighlightColor;     // 高亮文本颜色
+@property (nonatomic, copy) NSString *sgHighlightColorDark;
+
 + (instancetype)shared;
 
 @end

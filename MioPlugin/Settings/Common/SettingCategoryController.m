@@ -729,6 +729,12 @@ static NSDictionary *ColorPairMap(void) {
 
             // SettingMessageTimeController (接收方)
             @"receiverTextColorHex": @"receiverTextColorDarkHex",
+
+            // SessionGroupsVC 外观颜色
+            @"sgBgColor": @"sgBgColorDark",
+            @"sgIndicatorColor": @"sgIndicatorColorDark",
+            @"sgTextColor": @"sgTextColorDark",
+            @"sgHighlightColor": @"sgHighlightColorDark",
         };
     });
     return map;

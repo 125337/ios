@@ -71,25 +71,6 @@
                                cy:cy
                             width:w];
 
-    // 标题字号（WCR titleFontSize 同款链路：自定义开关 + 数值 12-20，越界回落 17）
-    cy = [self addSwitchRowInGroup:g2
-                             title:@"自定义标题字号"
-                              desc:@"关闭时跟随微信原生昵称字号 17"
-                               key:@"sgTitleFontCustom"
-                              isOn:config.sgTitleFontCustom
-                                cy:cy
-                             width:w];
-    cy = [self addInputRowInGroup:g2
-                            title:@"标题字号"
-                              key:@"sgTitleFontSize"
-                            value:[NSString stringWithFormat:@"%.0f", config.sgTitleFontSize]
-                             hint:@"17"
-                        valueType:InputValueTypeNumber
-                       alertTitle:@"标题字号"
-                     alertMessage:@"范围 12-20，越界按 17 显示（对应 WCR 钳位语义）"
-                               cy:cy
-                            width:w];
-
     // 全屏滑动切换（开关，展开：反向行驶 / 循环滑动）
     cy = [self addMasterSwitchRowInGroup:g2
                                    title:@"全屏滑动切换"
@@ -171,18 +152,88 @@
 
     y = [self finishGroup:g2 atY:y height:cy];
 
-    // ──── 卡片3：分组管理（子页面入口） ────
-    y = [self addSectionHeader:@"分组管理" y:y width:w];
+    // ──── 卡片3：外观颜色 ────
+    y = [self addSectionHeader:@"外观颜色" y:y width:w];
     UIView *g3 = [self addTableGroupAtY:y width:w];
     cy = 0;
-    cy = [self addNavRowInGroup:g3
+
+    // 自定义背景色（浅色+深色双预览，点击弹颜色选择器）
+    cy = [self addColorRowInGroup:g3
+                            title:@"自定义背景色"
+                              key:@"sgBgColor"
+                            value:config.sgBgColor ?: @""
+                               cy:cy
+                            width:w
+                          darkKey:@"sgBgColorDark"
+                        darkValue:config.sgBgColorDark ?: @""];
+    cy = [self addSeparatorInGroup:g3 cy:cy width:w];
+
+    // 指示器颜色
+    cy = [self addColorRowInGroup:g3
+                            title:@"指示器颜色"
+                              key:@"sgIndicatorColor"
+                            value:config.sgIndicatorColor ?: @""
+                               cy:cy
+                            width:w
+                          darkKey:@"sgIndicatorColorDark"
+                        darkValue:config.sgIndicatorColorDark ?: @""];
+    cy = [self addSeparatorInGroup:g3 cy:cy width:w];
+
+    // 默认文本颜色
+    cy = [self addColorRowInGroup:g3
+                            title:@"默认文本颜色"
+                              key:@"sgTextColor"
+                            value:config.sgTextColor ?: @""
+                               cy:cy
+                            width:w
+                          darkKey:@"sgTextColorDark"
+                        darkValue:config.sgTextColorDark ?: @""];
+    cy = [self addSeparatorInGroup:g3 cy:cy width:w];
+
+    // 高亮文本颜色
+    cy = [self addColorRowInGroup:g3
+                            title:@"高亮文本颜色"
+                              key:@"sgHighlightColor"
+                            value:config.sgHighlightColor ?: @""
+                               cy:cy
+                            width:w
+                          darkKey:@"sgHighlightColorDark"
+                        darkValue:config.sgHighlightColorDark ?: @""];
+    cy = [self addSeparatorInGroup:g3 cy:cy width:w];
+
+    // 自定义标题字号（自"外观与位置"移入；hook 已存在，照常生效）
+    cy = [self addSwitchRowInGroup:g3
+                             title:@"自定义标题字号"
+                              desc:@"关闭时跟随微信原生昵称字号 17"
+                               key:@"sgTitleFontCustom"
+                              isOn:config.sgTitleFontCustom
+                                cy:cy
+                             width:w];
+    cy = [self addInputRowInGroup:g3
+                            title:@"标题字号"
+                              key:@"sgTitleFontSize"
+                            value:[NSString stringWithFormat:@"%.0f", config.sgTitleFontSize]
+                             hint:@"17"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"标题字号"
+                     alertMessage:@"范围 12-20，越界按 17 显示（对应 WCR 钳位语义）"
+                               cy:cy
+                            width:w];
+
+    y = [self finishGroup:g3 atY:y height:cy];
+
+    // ──── 卡片4：分组管理（子页面入口） ────
+    y = [self addSectionHeader:@"分组管理" y:y width:w];
+    UIView *g4 = [self addTableGroupAtY:y width:w];
+    cy = 0;
+    cy = [self addNavRowInGroup:g4
                           title:@"分组管理"
                        subtitle:nil
                             tag:0
                          action:@selector(openGroupManager)
                              cy:cy
                           width:w];
-    y = [self finishGroup:g3 atY:y height:cy];
+    y = [self finishGroup:g4 atY:y height:cy];
 
     WPLog(@"UI", @"[Sub] SessionGroupsVC buildUI done");
 }

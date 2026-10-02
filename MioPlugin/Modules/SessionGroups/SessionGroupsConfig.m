@@ -33,6 +33,14 @@
         [ConfigDescriptor itemWithKey:@"sgFoldGroupNoRedDot" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sgFilterPinned" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sgFilterDuplicate" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"sgBgColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"sgBgColorDark" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"sgIndicatorColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"sgIndicatorColorDark" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"sgTextColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"sgTextColorDark" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"sgHighlightColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"sgHighlightColorDark" type:ConfigValueTypeString default:@""],
     ];
 }
 
