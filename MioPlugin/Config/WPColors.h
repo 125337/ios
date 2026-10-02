@@ -21,10 +21,13 @@ static UIColor *WPSeparatorColorDark(void) {
 
 #pragma mark - Background Colors
 
+// 页面底色 = 微信主题色（WCR 同款取样法：读微信 WCTableViewManager 自建表的背景色，
+// 实现在 WPCommonUI.m；深浅色由微信主题机制决定，不再用 iOS 系统语义色）
+extern UIColor *WPWeChatPageColor(void);
+
 __attribute__((unused))
 static UIColor *WPBackgroundColor(void) {
-    if (@available(iOS 13.0, *)) return [UIColor systemGroupedBackgroundColor];
-    return [UIColor colorWithRed:0.949 green:0.949 blue:0.969 alpha:1.0];
+    return WPWeChatPageColor();
 }
 
 __attribute__((unused))

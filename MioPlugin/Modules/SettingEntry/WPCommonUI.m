@@ -11,6 +11,31 @@ Class WPGetBaseClass(void) {
     return objc_getClass("UIViewController");
 }
 
+// 微信页面底色取样（WCR +[WCRefineHelper backgroundColor] 反编译同款：0xfdaff0 =
+// tableManageWithViewFrame: → tableView → backgroundColor 链）：
+// 现场实例化微信 WCTableViewManager（initWithFrame:style: 内部自建 UITableView，WCR/本项目双实证），
+// 读它自建表的背景色——色值由微信主题体系写，深浅色跟随微信而非 iOS 系统，与原生设置页同源。
+// 不缓存：微信主题运行时可切（随 iOS 深色联动），每次现取，WCR 同款无缓存。
+UIColor *WPWeChatPageColor(void) {
+    Class mgrCls = objc_getClass("WCTableViewManager");
+    if (mgrCls) {
+        SEL ifs = NSSelectorFromString(@"initWithFrame:style:");
+        id mgr = nil;
+        if ([mgrCls instancesRespondToSelector:ifs]) {
+            mgr = ((id (*)(id, SEL, CGRect, long))objc_msgSend)(
+                (id)mgrCls, ifs, CGRectZero, (long)UITableViewStyleGrouped);
+        } else {
+            mgr = ((id (*)(id, SEL))objc_msgSend)((id)mgrCls, NSSelectorFromString(@"init"));
+        }
+        id tv = mgr ? ((id (*)(id, SEL))objc_msgSend)(mgr, NSSelectorFromString(@"tableView")) : nil;
+        if ([tv isKindOfClass:[UITableView class]]) {
+            UIColor *c = ((id (*)(id, SEL))objc_msgSend)(tv, NSSelectorFromString(@"backgroundColor"));
+            if (c) return c;
+        }
+    }
+    return [UIColor systemGroupedBackgroundColor]; // 版本差异兜底（微信表格类不可用时）
+}
+
 UIView *WPMakeCard(CGFloat top, CGFloat w) {
     UIView *c = [[UIView alloc] initWithFrame:CGRectMake(kPad, top, w - kPad * 2, 0)];
     c.backgroundColor = WPCardBg();
