@@ -409,6 +409,12 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
                 if (![w isKindOfClass:objc_getClass("WCMediaItem")]) continue;
                 NSString *sp = MioSchedCallPathMethod(w, @selector(pathForExistData))
                             ?: MioSchedCallPathMethod(w, @selector(pathForData))
+                            // 视频族（08:55:32 dump 实锤：视频帖照片族路径全 miss，sight 族才是视频落盘位）
+                            ?: MioSchedCallPathMethod(w, @selector(pathForSightData))
+                            ?: MioSchedCallPathMethod(w, @selector(tempPathForSightData))
+                            ?: MioSchedCallPathMethod(w, @selector(pathForAttachVideoData))
+                            ?: MioSchedCallPathMethod(w, @selector(getTempVideoPath))
+                            ?: MioSchedCallPathMethod(w, @selector(getFormatVideoPath))
                             ?: MioSchedCallPathMethod(w, @selector(pathForPreview));
                 if (![sp isKindOfClass:[NSString class]] || !MioSchedLooksLikeSandboxPath(sp) || pathMap[sp]) continue;
                 NSString *ext = sp.pathExtension.length ? [NSString stringWithFormat:@".%@", sp.pathExtension] : @"";
@@ -420,6 +426,23 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
                 if (wi < taskMedias.count) {
                     @try { [taskMedias[wi] setValue:cp forKey:@"mediaSourcePath"]; } @catch (NSException *e) {}
                 }
+            }
+        }
+
+        // buffer 兜底（08:55:32 dump 实锤：视频帖 capture 时刻 task.buffer=NSConcreteData 持真实数据，
+        // 解档后 buffer=nil 不走 NSCoding——必须 capture 期落盘。>64KB 阈值防把缩略图当媒体写）。
+        // 扩展名取 pathForMedia 尾巴（视频 (null).mp4 → mp4），默认 mp4。
+        for (NSUInteger bi = 0; bi < taskMedias.count; bi++) {
+            if (bi < mediaFiles.count && [mediaFiles[bi] isKindOfClass:[NSString class]]) continue;
+            NSData *buf = nil;
+            @try { buf = [taskMedias[bi] valueForKey:@"buffer"]; } @catch (NSException *e) {}
+            if (![buf isKindOfClass:[NSData class]] || buf.length <= 65536) continue;
+            NSString *dst = [dir stringByAppendingFormat:@"media_%lu.mp4", (unsigned long)bi];
+            if ([buf writeToFile:dst atomically:YES]) {
+                mediaFiles[bi] = dst;
+                copied++;
+                @try { [taskMedias[bi] setValue:dst forKey:@"mediaSourcePath"]; } @catch (NSException *e) {}
+                WPLog(@"Moments", @"[Sched] buffer fallback: media_%lu.mp4 (%lu bytes)", (unsigned long)bi, (unsigned long)buf.length);
             }
         }
 
