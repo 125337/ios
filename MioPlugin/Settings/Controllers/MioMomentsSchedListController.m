@@ -1,12 +1,17 @@
 #import "MioMomentsSchedListController.h"
 #import "../../Modules/Moments/MomentsConfig.h"
 #import "../../Core/MioAlertHelper.h"
+#import <objc/message.h>
 
-// 朋友圈定时发送任务列表页（微信引擎渲染；数据源 MomentsScheduler）
-// 每任务一组：预览/状态 + 循环模式选择 + 改期/启停/删除；单次与循环任务均可改期（改后循环任务当轮生效，下轮按模式重排）
-@implementation MioMomentsSchedListController {
-    NSInteger _editingIdx; // 当前改期任务索引
-}
+// 朋友圈定时任务列表页（WCR 同款紧凑布局）：
+// 每任务两行——导航行（预览左 / 状态右 + 箭头，点击弹底部操作单）+
+// 信息行（发表时间 + 循环模式摘要）；旧版每任务 5 行（循环/改期/启停/删除平铺）太占位已废弃。
+// 操作单 = 微信原生 WCActionSheet（MMUIWindow 底部弹层，WCR 同款视觉）：
+//   addButtonWithTitle:eventAction: 传 block（WCR FUN__part10 实锤 NSConcreteStackBlock），
+//   showInView: 传当前 VC view（WCR FUN__part11 同款 respondsToSelector 守卫），
+//   删除走 addDestructiveButtonWithTitle:eventAction:（红字）；
+//   WCActionSheet 类缺失时回退 MioAlertHelper showMenuAlert（微信 alert 菜单）
+@implementation MioMomentsSchedListController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
@@ -35,7 +40,15 @@
     return @"等待发表";
 }
 
-#pragma mark - UI
+- (NSString *)fireDateTextForDict:(NSDictionary *)t {
+    double fireAt = [t[@"fireAt"] doubleValue];
+    if (fireAt <= 0) return @"-";
+    NSDateFormatter *f = [[NSDateFormatter alloc] init];
+    f.dateFormat = @"M月dd日 HH:mm";
+    return [f stringFromDate:[NSDate dateWithTimeIntervalSince1970:fireAt]];
+}
+
+#pragma mark - UI（WCR 同款：单分组，每任务两行）
 
 - (void)buildUI {
     for (UIView *v in self.contentView.subviews) {
@@ -44,56 +57,150 @@
     self.masterSwitchKeys = [NSMutableSet set];
 
     NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
-    // 逆序展示（新任务在上），tag 用原始索引定位
-    CGFloat y = 0;
-    CGFloat w = 0;
-
-    y = [self addSectionHeader:[NSString stringWithFormat:@"定时任务（%lu）", (unsigned long)tasks.count] y:y width:w];
+    [self addSectionHeader:@"定时任务" y:0 width:0];
     if (tasks.count == 0) {
-        [self addSectionFooter:@"发朋友圈时在发帖页点「定时发送」选择时间\n照常点发表后即转为定时任务" y:y width:w];
+        [self addSectionFooter:@"发朋友圈时在发帖页点「定时发送」选择时间\n照常点发表后即转为定时任务" y:0 width:0];
         return;
     }
 
+    UIView *group = [self addTableGroupAtY:0 width:0];
+    CGFloat cy = 0;
+    // 逆序展示（新任务在上），tag 用原始索引定位
     for (NSInteger si = (NSInteger)tasks.count - 1; si >= 0; si--) {
         NSDictionary *t = tasks[si];
         if (![t isKindOfClass:[NSDictionary class]]) continue;
         NSString *taskId = t[@"id"] ?: @"";
         if (taskId.length == 0) continue;
 
-        y = [self addSectionHeader:
-            [NSString stringWithFormat:@"%@ · %@",
-                [MomentsScheduler formatFireDate:[t[@"fireAt"] doubleValue]],
-                [self stateTextForDict:t]] y:y width:w];
-        UIView *group = [self addTableGroupAtY:y width:w];
-        CGFloat cy = 0;
-
+        cy = [self addNavRowInGroup:group
+                              title:(t[@"preview"] ?: @"（无预览）")
+                           subtitle:[self stateTextForDict:t]
+                                tag:si
+                             action:@selector(onTaskTap:)
+                                 cy:cy
+                              width:0];
         cy = [self addInfoRowInGroup:group
-                               title:(t[@"preview"] ?: @"（无预览）")
+                               title:[NSString stringWithFormat:@"%@ 发表", [self fireDateTextForDict:t]]
                           rightValue:[MomentsScheduler repeatSummaryForDict:t]
                             copyText:nil
                                   cy:cy
-                               width:w];
-        cy = [self addSeparatorInGroup:group cy:cy width:w];
-        cy = [self addNavRowInGroup:group
-                              title:@"循环模式"
-                           subtitle:@"点击切换 单次/每天/每周/每月/间隔"
-                                tag:si
-                             action:@selector(onLoopTap:)
-                                 cy:cy
-                              width:w];
-        cy = [self addSeparatorInGroup:group cy:cy width:w];
-        cy = [self addButtonRowInGroup:group title:@"改期" hint:@"修改发表时间"
-                                     key:[NSString stringWithFormat:@"resched_%@", taskId] cy:cy width:w];
-        cy = [self addSeparatorInGroup:group cy:cy width:w];
-        cy = [self addButtonRowInGroup:group title:([t[@"enabled"] boolValue] ? @"停用" : @"启用")
-                                     hint:nil
-                                     key:[NSString stringWithFormat:@"toggle_%@", taskId] cy:cy width:w];
-        cy = [self addSeparatorInGroup:group cy:cy width:w];
-        cy = [self addButtonRowInGroup:group title:@"删除" hint:@"删除任务及其内容"
-                                     key:[NSString stringWithFormat:@"del_%@", taskId] cy:cy width:w];
-        y = [self finishGroup:group atY:y height:cy];
+                               width:0];
+        if (si > 0) cy = [self addSeparatorInGroup:group cy:cy width:0];
     }
-    [self addSectionFooter:@"等待中的任务按 15 秒粒度轮询触发\n完成/失败的任务保留 1 天后自动清理" y:y width:w];
+    [self finishGroup:group atY:0 height:cy];
+    [self addSectionFooter:@"点任务可设循环：间隔多次、共发几次。次数到了自动停。\n微信需保持运行，被系统结束后无法到点触发。" y:0 width:0];
+}
+
+#pragma mark - 任务操作单（微信原生 WCActionSheet 底部弹层）
+
+- (void)onTaskTap:(UIButton *)sender {
+    NSInteger idx = sender.tag;
+    NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
+    if (idx < 0 || idx >= (NSInteger)tasks.count) return;
+    NSDictionary *t = tasks[idx];
+    NSString *preview = t[@"preview"] ?: @"定时任务";
+    BOOL enabled = [t[@"enabled"] boolValue];
+
+    Class sheetCls = objc_getClass("WCActionSheet");
+    SEL initSel = NSSelectorFromString(@"initWithTitle:cancelButtonTitle:");
+    SEL addSel = NSSelectorFromString(@"addButtonWithTitle:eventAction:");
+    SEL desSel = NSSelectorFromString(@"addDestructiveButtonWithTitle:eventAction:");
+    SEL showSel = NSSelectorFromString(@"showInView:");
+    if (!sheetCls || ![sheetCls instancesRespondToSelector:initSel]
+        || ![sheetCls instancesRespondToSelector:addSel]
+        || ![sheetCls instancesRespondToSelector:showSel]) {
+        [self showFallbackMenuForTask:t index:idx];
+        return;
+    }
+    id sheet = ((id(*)(id, SEL, id, id))objc_msgSend)((id)[sheetCls alloc], initSel, preview, @"取消");
+    if (!sheet) {
+        [self showFallbackMenuForTask:t index:idx];
+        return;
+    }
+    __weak typeof(self) wself = self;
+
+    // block 必须 copy：WeChat 按钮异步持有，栈块不拷会被释放（WCR 同款 _objc_retainBlock）
+    void (^toggleBlock)(void) = [^{
+        __strong typeof(wself) sself = wself;
+        [sself toggleTaskAtIndex:idx];
+    } copy];
+    void (^reschedBlock)(void) = [^{
+        __strong typeof(wself) sself = wself;
+        [sself runReschedForTask:t];
+    } copy];
+    void (^loopBlock)(void) = [^{
+        __strong typeof(wself) sself = wself;
+        [sself onLoopTap:sender];
+    } copy];
+    void (^delBlock)(void) = [^{
+        __strong typeof(wself) sself = wself;
+        [sself confirmDeleteTaskAtIndex:idx];
+    } copy];
+
+    ((void(*)(id, SEL, id, id))objc_msgSend)(sheet, addSel, enabled ? @"暂停任务" : @"继续任务", toggleBlock);
+    ((void(*)(id, SEL, id, id))objc_msgSend)(sheet, addSel, @"修改时间", reschedBlock);
+    ((void(*)(id, SEL, id, id))objc_msgSend)(sheet, addSel, @"循环发布", loopBlock);
+    if ([sheet respondsToSelector:desSel]) {
+        ((void(*)(id, SEL, id, id))objc_msgSend)(sheet, desSel, @"删除任务", delBlock);
+    } else {
+        ((void(*)(id, SEL, id, id))objc_msgSend)(sheet, addSel, @"删除任务", delBlock);
+    }
+    ((void(*)(id, SEL, id))objc_msgSend)(sheet, showSel, self.view); // WCR 同款：showInView: 传 VC view
+}
+
+// WCActionSheet 缺失时的兜底（微信 alert 菜单，同款四项）
+- (void)showFallbackMenuForTask:(NSDictionary *)t index:(NSInteger)idx {
+    BOOL enabled = [t[@"enabled"] boolValue];
+    __weak typeof(self) wself = self;
+    [MioAlertHelper showMenuAlert:(t[@"preview"] ?: @"定时任务")
+                          buttons:@[enabled ? @"暂停任务" : @"继续任务", @"修改时间", @"循环发布", @"删除任务"]
+                         onButton:^(NSInteger index) {
+        __strong typeof(wself) sself = wself;
+        if (!sself) return;
+        if (index == 0) [sself toggleTaskAtIndex:idx];
+        else if (index == 1) [sself runReschedForTask:t];
+        else if (index == 2) [sself onLoopTap:nil];
+        else if (index == 3) [sself confirmDeleteTaskAtIndex:idx];
+    }];
+}
+
+#pragma mark - 操作单动作
+
+// 暂停/继续（已发表的单次任务不允许复活——曾致同一任务二次发布）
+- (void)toggleTaskAtIndex:(NSInteger)idx {
+    NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
+    if (idx < 0 || idx >= (NSInteger)tasks.count) return;
+    if ([tasks[idx][@"state"] isEqualToString:@"triggered"]) {
+        WPShowToast(@"该任务已发表");
+        return;
+    }
+    NSMutableArray *ts = [tasks mutableCopy];
+    NSMutableDictionary *nt = [ts[idx] mutableCopy];
+    BOOL toEnable = ![nt[@"enabled"] boolValue];
+    nt[@"enabled"] = @(toEnable);
+    if (toEnable && [nt[@"state"] isEqualToString:@"failed"]) nt[@"state"] = @"pending"; // 仅失败任务可启用复活
+    ts[idx] = nt;
+    [[MomentsScheduler shared] saveTasks:ts];
+    WPShowToast(toEnable ? @"已启用" : @"已停用");
+    [self reloadTable];
+}
+
+- (void)confirmDeleteTaskAtIndex:(NSInteger)idx {
+    NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
+    if (idx < 0 || idx >= (NSInteger)tasks.count) return;
+    NSDictionary *t = tasks[idx];
+    NSString *taskId = t[@"id"] ?: @"";
+    if (taskId.length == 0) return;
+    __weak typeof(self) wself = self;
+    [MioAlertHelper showConfirmAlert:[NSString stringWithFormat:@"删除定时任务？\n%@", (t[@"preview"] ?: @"")]
+                        confirmTitle:@"删除"
+                           onConfirm:^{
+        __strong typeof(wself) sself = wself;
+        if (!sself) return;
+        [[MomentsScheduler shared] removeTaskWithId:taskId];
+        WPShowToast(@"已删除");
+        [sself reloadTable];
+    }];
 }
 
 #pragma mark - 改期
@@ -233,56 +340,6 @@
     [[MomentsScheduler shared] saveTasks:ts];
     WPShowToast([NSString stringWithFormat:@"已切换：%@", [MomentsScheduler repeatSummaryForDict:nt]]);
     [self reloadTable];
-}
-
-#pragma mark - 按钮回调
-
-- (void)buttonClicked:(NSString *)key {
-    if (![key isKindOfClass:[NSString class]]) return;
-    NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
-    NSString *prefix = [key componentsSeparatedByString:@"_"].firstObject;
-    NSString *taskId = (key.length > prefix.length + 1) ? [key substringFromIndex:prefix.length + 1] : nil;
-    if (taskId.length == 0) return;
-    NSUInteger idx = [tasks indexOfObjectPassingTest:^BOOL(NSDictionary *d, NSUInteger i, BOOL *stop) {
-        return [d[@"id"] isEqualToString:taskId];
-    }];
-    if (idx == NSNotFound) return;
-    NSDictionary *t = tasks[idx];
-
-    if ([prefix isEqualToString:@"resched"]) {
-        [self runReschedForTask:t];
-        return;
-    }
-    if ([prefix isEqualToString:@"toggle"]) {
-        // 已发表的单次任务不允许复活（曾致同一任务二次发布）
-        if ([t[@"state"] isEqualToString:@"triggered"]) {
-            WPShowToast(@"该任务已发表");
-            return;
-        }
-        NSMutableArray *ts = [tasks mutableCopy];
-        NSMutableDictionary *nt = [ts[idx] mutableCopy];
-        BOOL toEnable = ![nt[@"enabled"] boolValue];
-        nt[@"enabled"] = @(toEnable);
-        if (toEnable && [nt[@"state"] isEqualToString:@"failed"]) nt[@"state"] = @"pending"; // 仅失败任务可启用复活
-        ts[idx] = nt;
-        [[MomentsScheduler shared] saveTasks:ts];
-        WPShowToast(toEnable ? @"已启用" : @"已停用");
-        [self reloadTable];
-        return;
-    }
-    if ([prefix isEqualToString:@"del"]) {
-        __weak typeof(self) wself = self;
-        [MioAlertHelper showConfirmAlert:[NSString stringWithFormat:@"删除定时任务？\n%@", (t[@"preview"] ?: @"")]
-                            confirmTitle:@"删除"
-                               onConfirm:^{
-            __strong typeof(wself) sself = wself;
-            if (!sself) return;
-            [[MomentsScheduler shared] removeTaskWithId:taskId];
-            WPShowToast(@"已删除");
-            [sself reloadTable];
-        }];
-        return;
-    }
 }
 
 @end
