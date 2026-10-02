@@ -19,13 +19,13 @@ Class WPGetBaseClass(void) {
 UIColor *WPWeChatPageColor(void) {
     Class mgrCls = objc_getClass("WCTableViewManager");
     if (mgrCls) {
+        id alloced = ((id (*)(id, SEL))objc_msgSend)((id)mgrCls, NSSelectorFromString(@"alloc"));
         SEL ifs = NSSelectorFromString(@"initWithFrame:style:");
         id mgr = nil;
-        if ([mgrCls instancesRespondToSelector:ifs]) {
-            mgr = ((id (*)(id, SEL, CGRect, long))objc_msgSend)(
-                (id)mgrCls, ifs, CGRectZero, (long)UITableViewStyleGrouped);
-        } else {
-            mgr = ((id (*)(id, SEL))objc_msgSend)((id)mgrCls, NSSelectorFromString(@"init"));
+        if (alloced && [mgrCls instancesRespondToSelector:ifs]) {
+            mgr = ((id (*)(id, SEL, CGRect, long))objc_msgSend)(alloced, ifs, CGRectZero, (long)UITableViewStyleGrouped);
+        } else if (alloced) {
+            mgr = ((id (*)(id, SEL))objc_msgSend)(alloced, NSSelectorFromString(@"init"));
         }
         id tv = mgr ? ((id (*)(id, SEL))objc_msgSend)(mgr, NSSelectorFromString(@"tableView")) : nil;
         if ([tv isKindOfClass:[UITableView class]]) {
