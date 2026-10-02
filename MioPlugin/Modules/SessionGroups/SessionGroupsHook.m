@@ -905,44 +905,58 @@ static void hook_reloadAll(id self, SEL _cmd) {
     if (SGActive(self)) SGScheduleRefresh(self);
 }
 
-// 插入/删除：关动画透传 + 刷新（wcrGrouping_.c:4419-4616）
+// 插入/删除 hook：WCR 同款（wcrGrouping_.c:4463-4578）
+// 关键教训：deleteSessionCell:atSection:withUser: 真实签名为 (unsigned int row, long long section, id user)，
+// 前两个参数是整数。hook 绝不能把 x2/x3 当对象接——错位消息派发时编译器对 x2 做 objc_retain 会
+// retain 垃圾指针 → SIGSEGV（退群闪退根因，probe_segv 实测 lr=0x4c8c4）
 static void hook_insertSessionCell(id self, SEL _cmd, NSArray *indexes) {
-    if (SGActive(self) && SGMainTableView(self) && orig_insertSessionCell) {
-        [UIView performWithoutAnimation:^{
-            ((void (*)(id, SEL, id))orig_insertSessionCell)(self, _cmd, indexes);
-        }];
-        SGScheduleRefresh(self);
+    if (!SGActive(self) || !orig_insertSessionCell) {
+        if (orig_insertSessionCell) ((void (*)(id, SEL, id))orig_insertSessionCell)(self, _cmd, indexes);
         return;
     }
-    if (orig_insertSessionCell) ((void (*)(id, SEL, id))orig_insertSessionCell)(self, _cmd, indexes);
+    SGScheduleRefresh(self); // WCR: scheduleRefreshForTrigger 先行
+    // WCR: 读 disableTableAnimation → YES → 原实现 → 恢复旧值（wcrGrouping_.c:4443-4456 同款包裹）
+    SEL dis = NSSelectorFromString(@"disableTableAnimation");
+    SEL setDis = NSSelectorFromString(@"setDisableTableAnimation:");
+    BOOL prev = NO;
+    if ([self respondsToSelector:dis]) prev = ((BOOL (*)(id, SEL))objc_msgSend)(self, dis);
+    if ([self respondsToSelector:setDis]) ((void (*)(id, SEL, BOOL))objc_msgSend)(self, setDis, YES);
+    ((void (*)(id, SEL, id))orig_insertSessionCell)(self, _cmd, indexes);
+    if ([self respondsToSelector:setDis]) ((void (*)(id, SEL, BOOL))objc_msgSend)(self, setDis, prev);
 }
 
 static void hook_deleteSessionCell(id self, SEL _cmd, NSArray *indexes) {
-    if (SGActive(self) && SGMainTableView(self) && orig_deleteSessionCell) {
-        [UIView performWithoutAnimation:^{
-            ((void (*)(id, SEL, id))orig_deleteSessionCell)(self, _cmd, indexes);
-        }];
-        SGScheduleRefresh(self);
+    if (!SGActive(self) || !orig_deleteSessionCell) {
+        if (orig_deleteSessionCell) ((void (*)(id, SEL, id))orig_deleteSessionCell)(self, _cmd, indexes);
         return;
     }
-    if (orig_deleteSessionCell) ((void (*)(id, SEL, id))orig_deleteSessionCell)(self, _cmd, indexes);
+    SGScheduleRefresh(self); // WCR: scheduleRefreshForTrigger 先行
+    // WCR: 读 disableTableAnimation → YES → 原实现 → 恢复旧值（wcrGrouping_.c:4496-4509）
+    SEL dis = NSSelectorFromString(@"disableTableAnimation");
+    SEL setDis = NSSelectorFromString(@"setDisableTableAnimation:");
+    BOOL prev = NO;
+    if ([self respondsToSelector:dis]) prev = ((BOOL (*)(id, SEL))objc_msgSend)(self, dis);
+    if ([self respondsToSelector:setDis]) ((void (*)(id, SEL, BOOL))objc_msgSend)(self, setDis, YES);
+    ((void (*)(id, SEL, id))orig_deleteSessionCell)(self, _cmd, indexes);
+    if ([self respondsToSelector:setDis]) ((void (*)(id, SEL, BOOL))objc_msgSend)(self, setDis, prev);
 }
 
-// 只刷新不透传（WCR 同款：wcrGrouping_.c:4523-4539/4549-4578）
-static void hook_insertRow(id self, SEL _cmd, long row) {
+// 只刷新不透传（WCR 同款：wcrGrouping_.c:4523-4539）
+static void hook_insertRow(id self, SEL _cmd, unsigned int row) {
     if (SGActive(self)) {
         SGScheduleRefresh(self);
         return;
     }
-    if (orig_insertRow) ((void (*)(id, SEL, long))orig_insertRow)(self, _cmd, row);
+    if (orig_insertRow) ((void (*)(id, SEL, unsigned int))orig_insertRow)(self, _cmd, row);
 }
 
-static void hook_deleteSessionCellAt(id self, SEL _cmd, id cellData, NSInteger section, NSString *username) {
+// WCR 同款签名（wcrGrouping_.c:4549-4578）：(unsigned int row, long long section, id user)，x2/x3 为整数
+static void hook_deleteSessionCellAt(id self, SEL _cmd, unsigned int row, long long section, id user) {
     if (SGActive(self)) {
         SGScheduleRefresh(self);
         return;
     }
-    if (orig_deleteSessionCellAt) ((void (*)(id, SEL, id, NSInteger, id))orig_deleteSessionCellAt)(self, _cmd, cellData, section, username);
+    if (orig_deleteSessionCellAt) ((void (*)(id, SEL, unsigned int, long long, id))orig_deleteSessionCellAt)(self, _cmd, row, section, user);
 }
 
 #pragma mark - 安装
