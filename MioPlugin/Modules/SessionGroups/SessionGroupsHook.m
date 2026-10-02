@@ -37,6 +37,7 @@ static NSString * const kSGSelectedTabKey = @"mio_sg_selected_tab_id";
 // 关联对象键用自指指针（objc_*AssociatedObject 要求 const void *，不能用 NSString）
 static const void *kSGAssocSnapshot = &kSGAssocSnapshot;
 static const void *kSGAssocStrip    = &kSGAssocStrip;
+static const void *kSGAssocHeaderCell = &kSGAssocHeaderCell;
 static const void *kSGAssocRefresh  = &kSGAssocRefresh;
 static const void *kSGAssocPan      = &kSGAssocPan;
 
@@ -714,16 +715,23 @@ static id hook_viewForHeader(id self, SEL _cmd, UITableView *tableView, NSIntege
                 CGFloat w = tableView.bounds.size.width;
                 CGFloat h = [SessionGroupsStripView preferredHeight];
                 [strip setFrame:CGRectMake(0, 0, w, h)];
-                UITableViewCell *cell = [[objc_getClass("MMTableViewCell") alloc]
-                    initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+                // WCR FUN_007ec688 同款：header cell 关联缓存复用。每次新建 cell 会让微信
+                // layout 反复拆建 _UITableViewCellSeparatorView（实测 dump #1 无线、#2 cell
+                // 消失、#3 才有线），缓存后 separator 生命周期稳定
+                UITableViewCell *cell = objc_getAssociatedObject(self, kSGAssocHeaderCell);
+                if (!cell) {
+                    cell = [[objc_getClass("MMTableViewCell") alloc]
+                        initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+                    // 全宽底线三件套（WCR dump sepInset=(0,0) 全宽；实测只设 separatorInset 会被
+                    // MMTableViewCell 按 layoutMargins(16pt) 重排成 (16,43.7 377x0.3)，必须 margins 链路清零）
+                    cell.separatorInset = UIEdgeInsetsZero;
+                    cell.layoutMargins = UIEdgeInsetsZero;
+                    cell.preservesSuperviewLayoutMargins = NO;
+                    cell.backgroundColor = UIColor.clearColor;
+                    [cell.contentView addSubview:strip];
+                    objc_setAssociatedObject(self, kSGAssocHeaderCell, cell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                }
                 cell.frame = CGRectMake(0, 0, w, h);
-                // 全宽底线三件套（WCR dump sepInset=(0,0) 全宽；实测只设 separatorInset 会被
-                // MMTableViewCell 按 layoutMargins(16pt) 重排成 (16,43.7 377x0.3)，必须 margins 链路清零）
-                cell.separatorInset = UIEdgeInsetsZero;
-                cell.layoutMargins = UIEdgeInsetsZero;
-                cell.preservesSuperviewLayoutMargins = NO;
-                cell.backgroundColor = UIColor.clearColor;
-                [cell.contentView addSubview:strip];
                 SGReloadStrip(self, snap);
                 return cell;
             }
