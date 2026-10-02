@@ -729,6 +729,10 @@ static id hook_viewForHeader(id self, SEL _cmd, UITableView *tableView, NSIntege
                     cell.preservesSuperviewLayoutMargins = NO;
                     cell.backgroundColor = UIColor.clearColor;
                     [cell.contentView addSubview:strip];
+                    // separator 上色不在本函数做：手动 alloc 的 cell 绕过了微信的"首页卡片头
+                    // 容器"包装（WCR 靠 markHeaderView + MainFrameTableView.layoutSubviews
+                    // hook 让微信包它的裸 UIView，包装时微信顺手上色），这里只负责把 cell 建
+                    // 好，上色由 SessionGroupsStripView.layoutSubviews 每次布局补
                     objc_setAssociatedObject(self, kSGAssocHeaderCell, cell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 }
                 cell.frame = CGRectMake(0, 0, w, h);
