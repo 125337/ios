@@ -88,10 +88,31 @@
     [self addSectionFooter:@"点任务可设循环：间隔多次、共发几次。次数到了自动停。\n微信需保持运行，被系统结束后无法到点触发。" y:0 width:0];
 }
 
-// 两行任务行：title=预览（粗体第一行）detail=时间 · 状态（灰色第二行）；userInfo 携带任务索引
+// 两行任务行：title=预览（粗体第一行）detail=时间（灰色第二行），状态注入 cellConfig
+// 的 rightValue（箭头左侧，WCR 同款）；userInfo 携带任务索引
 - (id)makeTaskCellForTask:(NSDictionary *)t index:(NSInteger)si {
-    Class cls = objc_getClass("WCTableViewCellManager");
-    SEL s = NSSelectorFromString(@"normalCellForSel:target:title:detail:");
+    // WCTableViewNormalCellManager（现代族）：title:detail 两行 + accessoryType 右箭头，
+    // 构造器无 rightValue 参——cellConfig 键名沿用选择器参数名，KVC 补参
+    Class cls = objc_getClass("WCTableViewNormalCellManager");
+    SEL s = NSSelectorFromString(@"normalCellForSel:target:title:detail:imageName:accessoryType:");
+    if (cls && [cls respondsToSelector:s]) {
+        id cell = ((id(*)(id, SEL, id, id, id, id, id, long))objc_msgSend)(
+            cls, s, NSSelectorFromString(@"onTaskCellTapped:"), self,
+            (t[@"preview"] ?: @"（无预览）"), [self fireDateTextForDict:t], nil, (long)1);
+        if (cell) {
+            @try {
+                id cfg = [cell valueForKey:@"cellConfig"];
+                if ([cfg isKindOfClass:[NSMutableDictionary class]]) {
+                    [(NSMutableDictionary *)cfg setObject:[self stateTextForDict:t] forKey:@"rightValue"];
+                }
+            } @catch (NSException *e) {}
+            [self finishTaskCell:cell index:si];
+            return cell;
+        }
+    }
+    // 旧族回退：WCTableViewCellManager title:detail 两行（状态留在第二行）
+    cls = objc_getClass("WCTableViewCellManager");
+    s = NSSelectorFromString(@"normalCellForSel:target:title:detail:");
     if (!cls || ![cls respondsToSelector:s]) return nil;
     NSString *detail = [NSString stringWithFormat:@"%@ · %@",
                             [self fireDateTextForDict:t], [self stateTextForDict:t]];
@@ -99,11 +120,15 @@
         cls, s, NSSelectorFromString(@"onTaskCellTapped:"), self,
         (t[@"preview"] ?: @"（无预览）"), detail);
     if (!cell) return nil;
+    [self finishTaskCell:cell index:si];
+    return cell;
+}
+
+- (void)finishTaskCell:(id)cell index:(NSInteger)si {
     SEL hs = NSSelectorFromString(@"setFCellHeight:");
     if ([cell respondsToSelector:hs]) ((void(*)(id, SEL, double))objc_msgSend)(cell, hs, 60.0);
     SEL us = NSSelectorFromString(@"setUserInfo:");
     if ([cell respondsToSelector:us]) ((void(*)(id, SEL, id))objc_msgSend)(cell, us, @(si));
-    return cell;
 }
 
 // 点击回调（微信传入 cellManager，userInfo=任务索引）
