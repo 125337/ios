@@ -1268,32 +1268,44 @@ static BOOL MioAcmtAlreadyCommented(id item, NSString *selfWxid) {
     return NO;
 }
 
-// 未知 selector 兜底网（build-0930-acmtfix2，acmtfix4 起同时取代 commentStartTime shim）：
-// 旧评论/广告链路读一批已删除的 WCDataItem 旧属性（已实证 commentStartTime、adViewId，stub 簇
-// 同源），且异常展开期间微信 C++ 析构会二次抛异常直接 terminate，@try 挡不住（acmtfix1 真机实证）。
-// 拦截 methodSignatureForSelector:（原生给不出签名时返回最小空签名 @@:）+ 补 forwardInvocation:
-// 空实现 → 未知 selector 一律返回 nil/0 断根。
+// 未知 selector 兜底网 v2（sgbadge3）：v1 对"原生给不出签名"的消息伪造 @@: 空签名——
+// 退出群聊时微信删群消息链上带 block 参数的转发消息按 @@: 构造 NSInvocation，参数错位
+// objc_retain 到野指针 SIGSEGV（WeChat-2026-10-03-045114.ips 实锤：objc_retain ←
+// Mio_arm64-2.dylib ← NSInvocation invoke）。v2 改 resolve 白名单：实证已删除属性在转发
+// 开始前补 IMP（返回 nil，x0=0 对 BOOL/int/指针全等 0），消息直接命中不走转发；其余
+// selector 原样透传，methodSignatureForSelector 不再伪造
+static NSSet *MioAcmtStubbedProps(void) {
+    static NSSet *set;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ set = [NSSet setWithArray:@[ @"commentStartTime", @"adViewId" ]]; });
+    return set;
+}
+
 static void MioAcmtInstallDataItemSelectorNet(NSString *clsName) {
     Class cls = objc_getClass(clsName.UTF8String);
     if (!cls) return;
-    SEL msSel = @selector(methodSignatureForSelector:);
-    Method m = class_getInstanceMethod(cls, msSel);
+    // +resolveInstanceMethod: 是类方法，替换必须落在 metaclass 上
+    SEL riSel = @selector(resolveInstanceMethod:);
+    Class meta = object_getClass(cls);
+    Method m = class_getInstanceMethod(meta, riSel);
     if (!m) return;
-    __block NSMethodSignature *(*orig)(id, SEL, SEL) =
-        (NSMethodSignature *(*)(id, SEL, SEL))method_getImplementation(m);
-    id msBlock = ^(id _self, SEL aSel) {
-        NSMethodSignature *sig = orig(_self, @selector(methodSignatureForSelector:), aSel);
-        if (sig) return sig;
-        return [NSMethodSignature signatureWithObjCTypes:"@@:"];
+    __block BOOL (*orig)(id, SEL, SEL) = (void *)method_getImplementation(m);
+    id riBlock = ^BOOL(id _self, SEL aSel) {
+        if ([MioAcmtStubbedProps() containsObject:NSStringFromSelector(aSel)]) {
+            class_addMethod((Class)_self, aSel,
+                            imp_implementationWithBlock(^(id self_){ return nil; }), "@@:");
+            return YES;
+        }
+        return orig(_self, riSel, aSel);
     };
-    class_replaceMethod(cls, msSel, imp_implementationWithBlock(msBlock), "@:@:");
-    // forwardInvocation: WCDataItem 无自有实现（NSObject 也不实现），addMethod 即可；已存在则不动
+    class_replaceMethod(meta, riSel, imp_implementationWithBlock(riBlock), "B@:@");
+    // forwardInvocation: 真实签名下真走到转发的消息静默吞（v1 行为保留，无参数错位风险）
     SEL fiSel = @selector(forwardInvocation:);
     if (!class_getInstanceMethod(cls, fiSel)) {
         id fiBlock = ^(id _self, NSInvocation *inv) { };
         class_addMethod(cls, fiSel, imp_implementationWithBlock(fiBlock), "v@:@");
     }
-    WPLog(@"Moments", @"[AutoCmt] unknown-selector net installed on %@", clsName);
+    WPLog(@"Moments", @"[AutoCmt] selector net v2 (resolve-stub) installed on %@", clsName);
 }
 
 // 执行评论（WCR FUN_005758e8 实锤全链：内容判空 → itemID/username 判空 →
