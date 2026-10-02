@@ -915,14 +915,11 @@ static void hook_insertSessionCell(id self, SEL _cmd, NSArray *indexes) {
         return;
     }
     SGScheduleRefresh(self); // WCR: scheduleRefreshForTrigger 先行
-    // WCR: 读 disableTableAnimation → YES → 原实现 → 恢复旧值（wcrGrouping_.c:4443-4456 同款包裹）
-    SEL dis = NSSelectorFromString(@"disableTableAnimation");
-    SEL setDis = NSSelectorFromString(@"setDisableTableAnimation:");
-    BOOL prev = NO;
-    if ([self respondsToSelector:dis]) prev = ((BOOL (*)(id, SEL))objc_msgSend)(self, dis);
-    if ([self respondsToSelector:setDis]) ((void (*)(id, SEL, BOOL))objc_msgSend)(self, setDis, YES);
-    ((void (*)(id, SEL, id))orig_insertSessionCell)(self, _cmd, indexes);
-    if ([self respondsToSelector:setDis]) ((void (*)(id, SEL, BOOL))objc_msgSend)(self, setDis, prev);
+    // 注意：不能用 WCR 的 setDisableTableAnimation: 包裹——8.0.60 该属性是 id 类型
+    // （NewMainFrameViewController.h:83），传 BOOL 会被 setter 当对象 retain(0x1) 崩溃
+    [UIView performWithoutAnimation:^{
+        ((void (*)(id, SEL, id))orig_insertSessionCell)(self, _cmd, indexes);
+    }];
 }
 
 static void hook_deleteSessionCell(id self, SEL _cmd, NSArray *indexes) {
@@ -931,14 +928,9 @@ static void hook_deleteSessionCell(id self, SEL _cmd, NSArray *indexes) {
         return;
     }
     SGScheduleRefresh(self); // WCR: scheduleRefreshForTrigger 先行
-    // WCR: 读 disableTableAnimation → YES → 原实现 → 恢复旧值（wcrGrouping_.c:4496-4509）
-    SEL dis = NSSelectorFromString(@"disableTableAnimation");
-    SEL setDis = NSSelectorFromString(@"setDisableTableAnimation:");
-    BOOL prev = NO;
-    if ([self respondsToSelector:dis]) prev = ((BOOL (*)(id, SEL))objc_msgSend)(self, dis);
-    if ([self respondsToSelector:setDis]) ((void (*)(id, SEL, BOOL))objc_msgSend)(self, setDis, YES);
-    ((void (*)(id, SEL, id))orig_deleteSessionCell)(self, _cmd, indexes);
-    if ([self respondsToSelector:setDis]) ((void (*)(id, SEL, BOOL))objc_msgSend)(self, setDis, prev);
+    [UIView performWithoutAnimation:^{
+        ((void (*)(id, SEL, id))orig_deleteSessionCell)(self, _cmd, indexes);
+    }];
 }
 
 // 只刷新不透传（WCR 同款：wcrGrouping_.c:4523-4539）
