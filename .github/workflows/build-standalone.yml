@@ -84,7 +84,6 @@ jobs:
               -isysroot "$SDK_PATH" \
               -target arm64-apple-ios14.0 \
               -dynamiclib \
-              -Wl,-undefined,dynamic_lookup \
               -framework UIKit \
               -framework Foundation \
               -framework Security \

@@ -6,15 +6,13 @@ typedef NS_ENUM(NSInteger, InputValueType) {
     InputValueTypeText         // 文本字符串
 };
 
-// 微信基类：仅编译期声明接口，符号由 dyld 在注入环境绑定（链接配 -Wl,-undefined,dynamic_lookup）。
-// 自带 presentingModalViewController 等全套微信老 API 契约（WCR 同款路线，根治分享拉起闪退）。
-@interface MMUIViewController : UIViewController
-@end
-
 // 全站唯一渲染引擎 = 微信引擎（WPWeChatTable 反射封装 WCTableViewManager，WCR 同款）。
 // 旧 UITableView/手绘引擎已删除；scrollView/contentView 仅作遗留壳保留（不再承载行渲染）。
 // y/cy/width 等布局参数在微信引擎下仅为兼容签名保留，传 0 即可。
-@interface SettingCategoryController : MMUIViewController
+// 注意：基类必须是 UIViewController——静态继承微信主程序类（MMUIViewController）在全能签
+// 注入下 dyld 绑定不到主程序 ObjC 类符号，微信启动即崩（tail30 实证）。兼容契约改由
+// UIViewController(MioMMCompat) category 提供，见 .m。
+@interface SettingCategoryController : UIViewController
 @property (nonatomic, strong) UIScrollView *scrollView;
 @property (nonatomic, strong) UIView *contentView;
 @property (nonatomic, copy) NSString *categoryName;

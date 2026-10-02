@@ -95,6 +95,20 @@ static const CGFloat kCellHPadding = 16.0;
 // scrollView/contentView 仅作遗留壳保留（子类清理代码对其操作为无害 no-op）。
 @implementation SettingCategoryController
 
+#pragma mark - 微信老 API 兼容（crash_any reason 实锤：外部分享拉起时，微信会对导航栈顶 VC 调
+// presentingModalViewController（iOS5 废弃接口）；微信原生页面基类 MMUIViewController 有兼容实现，
+// 我们的 UIViewController 子类没有 → unrecognized selector → 分享必崩。presentModal/dismissModal
+// 是同族老 API，一并垫上。WCR/锤子助手同款原则：自定义 VC 不继承微信类，契约自己垫。）
+- (UIViewController *)presentingModalViewController {
+    return [self presentedViewController];
+}
+- (void)presentModalViewController:(UIViewController *)viewController animated:(BOOL)animated {
+    [self presentViewController:viewController animated:animated completion:nil];
+}
+- (void)dismissModalViewControllerAnimated:(BOOL)animated {
+    [self dismissViewControllerAnimated:animated completion:nil];
+}
+
 - (void)viewDidLoad {
     WPLog(@"Config", @"[UI] SettingCategoryController viewDidLoad");
     @try {
