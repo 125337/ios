@@ -10,6 +10,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) NSInteger sgSwitchHaptic;     // 切组触感 0无 1轻微 2中度 3强烈
 @property (nonatomic, assign) NSInteger sgIndicator;        // 指示器 0无 1胶囊 2线条 3圆点
 @property (nonatomic, assign) CGFloat sgCapsuleRadius;      // 胶囊圆角 0-16（0=默认半高圆角）
+@property (nonatomic, assign) BOOL sgTitleFontCustom;       // 自定义标题字号开关（WCR homeTelegramGroupingCustomTitleFont）
+@property (nonatomic, assign) CGFloat sgTitleFontSize;      // 自定义标题字号 12-20，越界回落 17
 @property (nonatomic, assign) BOOL sgFullscreenSwipe;       // 全屏滑动切换
 @property (nonatomic, assign) BOOL sgSwipeReverse;          // 反向行驶
 @property (nonatomic, assign) BOOL sgSwipeLoop;             // 循环滑动

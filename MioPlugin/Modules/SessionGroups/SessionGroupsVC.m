@@ -71,6 +71,25 @@
                                cy:cy
                             width:w];
 
+    // 标题字号（WCR titleFontSize 同款链路：自定义开关 + 数值 12-20，越界回落 17）
+    cy = [self addSwitchRowInGroup:g2
+                             title:@"自定义标题字号"
+                              desc:@"关闭时跟随微信原生昵称字号 17"
+                               key:@"sgTitleFontCustom"
+                              isOn:config.sgTitleFontCustom
+                                cy:cy
+                             width:w];
+    cy = [self addInputRowInGroup:g2
+                            title:@"标题字号"
+                              key:@"sgTitleFontSize"
+                            value:[NSString stringWithFormat:@"%.0f", config.sgTitleFontSize]
+                             hint:@"17"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"标题字号"
+                     alertMessage:@"范围 12-20，越界按 17 显示（对应 WCR 钳位语义）"
+                               cy:cy
+                            width:w];
+
     // 全屏滑动切换（开关，展开：反向行驶 / 循环滑动）
     cy = [self addMasterSwitchRowInGroup:g2
                                    title:@"全屏滑动切换"

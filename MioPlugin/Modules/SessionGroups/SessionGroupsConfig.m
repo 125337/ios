@@ -21,6 +21,8 @@
         [ConfigDescriptor itemWithKey:@"sgSwitchHaptic" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"sgIndicator" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"sgCapsuleRadius" type:ConfigValueTypeFloat default:@(0.0)],
+        [ConfigDescriptor itemWithKey:@"sgTitleFontCustom" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"sgTitleFontSize" type:ConfigValueTypeFloat default:@(17.0)],
         [ConfigDescriptor itemWithKey:@"sgFullscreenSwipe" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sgSwipeReverse" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sgSwipeLoop" type:ConfigValueTypeBool default:@(NO)],

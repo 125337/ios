@@ -102,7 +102,14 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
     [_badgeViews removeAllObjects];
     _styleIndicator = [self wcrIndicatorStyle];
 
-    CGFloat fontSize = 17.0; // WCR 默认 homeNicknameFontSize 17（Misc_part19.c:4953-4961）
+    // 字号链路 = WCR titleFontSize（Misc_part19.c:4986-5030）：
+    // 自定义开关开 → 自定义值（钳位 12~20，越界回落）；关 → 回落微信原生列表昵称字号 17
+    CGFloat fontSize = 17.0;
+    SessionGroupsConfig *fontCfg = [SessionGroupsConfig shared];
+    if (fontCfg.sgTitleFontCustom) {
+        CGFloat v = fontCfg.sgTitleFontSize;
+        if (v >= 12.0 && v <= 20.0) fontSize = v; // WCR 钳位语义 Misc_part19.c:5010-5024
+    }
     NSMutableArray<UIButton *> *btns = [NSMutableArray array];
     for (NSInteger i = 0; i < (NSInteger)titles.count; i++) {
         UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom]; // type 0，Misc_part19.c:7319
