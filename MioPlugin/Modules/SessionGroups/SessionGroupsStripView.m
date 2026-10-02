@@ -1,5 +1,6 @@
 #import "SessionGroupsStripView.h"
 #import "SessionGroupsConfig.h"
+#import <objc/message.h>
 
 static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.c:7922-8020
 
@@ -102,13 +103,22 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
     [_badgeViews removeAllObjects];
     _styleIndicator = [self wcrIndicatorStyle];
 
-    // 字号链路 = WCR titleFontSize（Misc_part19.c:4986-5030）：
-    // 自定义开关开 → 自定义值（钳位 12~20，越界回落）；关 → 回落微信原生列表昵称字号 17
+    // 字号链路 = WCR titleFontSize（Misc_part19.c:4986-5030 + homeNicknameFontSize 4918-4980）：
+    // 1) 自定义开关开 → 自定义值（钳位 12~20，越界回落，Misc_part19.c:5010-5024）
+    // 2) 关 → [UIFont dynamicLength:17]（微信私有动态字体 API，跟随"设置→通用→字体大小"，
+    //    selector 实证自 WCR dylib 字符串；调用与 >1.0 守卫同 Misc_part19.c:4933-4954）
+    // 3) 微信私有 API 不存在 → 17
     CGFloat fontSize = 17.0;
     SessionGroupsConfig *fontCfg = [SessionGroupsConfig shared];
     if (fontCfg.sgTitleFontCustom) {
         CGFloat v = fontCfg.sgTitleFontSize;
-        if (v >= 12.0 && v <= 20.0) fontSize = v; // WCR 钳位语义 Misc_part19.c:5010-5024
+        if (v >= 12.0 && v <= 20.0) fontSize = v;
+    } else {
+        SEL dynLen = NSSelectorFromString(@"dynamicLength:");
+        if ([UIFont respondsToSelector:dynLen]) {
+            double scaled = ((double (*)(id, SEL, double))objc_msgSend)([UIFont class], dynLen, 17.0);
+            if (scaled > 1.0) fontSize = scaled;
+        }
     }
     NSMutableArray<UIButton *> *btns = [NSMutableArray array];
     for (NSInteger i = 0; i < (NSInteger)titles.count; i++) {
