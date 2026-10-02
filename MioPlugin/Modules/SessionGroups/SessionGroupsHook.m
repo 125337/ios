@@ -40,6 +40,7 @@ static const void *kSGAssocStrip    = &kSGAssocStrip;
 static const void *kSGAssocHeaderCell = &kSGAssocHeaderCell;
 static const void *kSGAssocRefresh  = &kSGAssocRefresh;
 static const void *kSGAssocPan      = &kSGAssocPan;
+static const void *kSGAssocPanDlg   = &kSGAssocPanDlg;
 
 static IMP orig_numberOfSections      = NULL;
 static IMP orig_numberOfRows          = NULL;
@@ -77,6 +78,13 @@ static BOOL SGActive(id vc);
 - (void)sgHandlePan:(UIPanGestureRecognizer *)pan;
 @end
 static SGHomeGestureSink *sGestureSink = nil;
+
+// 滑动切换手势仲裁 delegate（WCR Misc.c:43447-43879 WCRTGSwipeSwitchDelegate 同构）
+// 赢表格滚动 pan 的关键：中央区要求表格系 pan 先失败（横滑时表格不可横滚必 fail → 我们接管；
+// 竖滑表格 pan 直接成功 → 让位），shouldBegin 门闩横向占优 1.2 倍 + 条区放行 + 边缘 60pt 排除
+@interface SGSwipeSwitchDelegate : NSObject
+- (instancetype)initWithVC:(id)vc;
+@end
 
 #pragma mark - 快照模型
 
@@ -486,12 +494,20 @@ static SessionGroupsStripView *SGEnsureStrip(id vc, UITableView *table) {
         };
         objc_setAssociatedObject(vc, kSGAssocStrip, strip, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    // 全屏滑动手势挂主表（FUN__part13.c:16571-16853；挂载点 WCR 未逐行证实，取主 tableView）
+    // 全屏滑动手势（WCR 007f9e0c 同款）：挂 vc.view 根视图 + 仲裁 delegate + cancels=YES +
+    // 单指。此前挂 table 且无 delegate，表格 pan 先识别压死本手势 → "划不动"
     if ([SessionGroupsConfig shared].sgFullscreenSwipe && !objc_getAssociatedObject(vc, kSGAssocPan)) {
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:sGestureSink action:@selector(sgHandlePan:)];
-        pan.cancelsTouchesInView = NO;
-        [table addGestureRecognizer:pan];
+        pan.cancelsTouchesInView = YES;
+        pan.delaysTouchesBegan = NO;
+        pan.delaysTouchesEnded = NO;
+        pan.maximumNumberOfTouches = 1;
+        SGSwipeSwitchDelegate *dlg = [[SGSwipeSwitchDelegate alloc] initWithVC:vc];
+        pan.delegate = dlg; // UIGestureRecognizer.delegate 是 assign，delegate 必须自持（assoc 保活）
+        UIView *host = [vc view];
+        if (host) [host addGestureRecognizer:pan];
         objc_setAssociatedObject(vc, kSGAssocPan, pan, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(vc, kSGAssocPanDlg, dlg, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     return strip;
 }
@@ -552,11 +568,11 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
 
 @implementation SGHomeGestureSink
 - (void)sgHandlePan:(UIPanGestureRecognizer *)pan {
-    UITableView *table = (UITableView *)pan.view;
-    if (![table isKindOfClass:UITableView.class]) return;
-    // 经响应链找到持有该表的 NMFVC
+    // 手势挂 vc.view 根视图（WCR 同款），经响应链找 NMFVC，再取主表做位移参照
+    UIView *host = pan.view;
+    if (!host) return;
     id vc = nil;
-    UIResponder *r = table.nextResponder;
+    UIResponder *r = host.nextResponder;
     while (r) {
         if (SGIsMainFrameVC(r)) { vc = r; break; }
         r = r.nextResponder;
@@ -568,8 +584,9 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
     SessionGroupsStripView *strip = objc_getAssociatedObject(vc, kSGAssocStrip);
     if (!strip || strip.tabCount < 2) return;
 
+    UITableView *table = SGMainTableView(vc);
+    if (!table) return;
     CGPoint trans = [pan translationInView:table];
-    CGFloat dx = trans.x;
     CGFloat vel = [pan velocityInView:table].x;
 
     if (pan.state == UIGestureRecognizerStateChanged) {
@@ -602,6 +619,69 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
         [strip cancelPreview];
         if (commit) SGSelectTabIndex(vc, idx, vel, YES);
     }
+}
+@end
+
+#pragma mark - 滑动切换仲裁 delegate（WCR WCRTGSwipeSwitchDelegate 同构）
+
+@implementation SGSwipeSwitchDelegate {
+    __weak id _vc;
+}
+- (instancetype)initWithVC:(id)vc {
+    if ((self = [super init])) _vc = vc;
+    return self;
+}
+
+// Misc.c:43447 gestureRecognizerShouldBegin:
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)ges {
+    id vc = _vc;
+    if (!vc || ![ges isKindOfClass:UIPanGestureRecognizer.class]) return NO;
+    UIView *view = ges.view;
+    if (!view) return NO;
+    UIPanGestureRecognizer *pan = (UIPanGestureRecognizer *)ges;
+    CGPoint vel = [pan velocityInView:view];
+    CGPoint trans = [pan translationInView:view];
+    // 横向占优门闩：横（速度或位移）必须 > 竖×1.2，否则让表格滚动（16766-16772 同参）
+    CGFloat ax = fabs(vel.x) > 1.0 ? vel.x : trans.x;
+    CGFloat ay = fabs(vel.y) > 1.0 ? vel.y : trans.y;
+    if (fabs(ax) <= fabs(ay) * 1.2) return NO;
+    // 条区域内直接开始（Misc.c locationInView:strip + CGRectContainsPoint）
+    SessionGroupsStripView *strip = objc_getAssociatedObject(vc, kSGAssocStrip);
+    if (strip && CGRectContainsPoint(strip.bounds, [pan locationInView:strip])) return YES;
+    if (![SessionGroupsConfig shared].sgFullscreenSwipe) return NO;
+    // 边缘 60pt 排除，让位系统侧滑返回（Misc.c: local_b8 < 60 || width-60 < local_b8 → NO）
+    CGFloat w = view.bounds.size.width;
+    CGPoint loc = [pan locationInView:view];
+    if (loc.x < 60.0 || loc.x > w - 60.0) return NO;
+    // 编辑态（多选/搜索编辑）不抢手势（Misc.c: isEditing 检查）
+    if ([vc respondsToSelector:@selector(isEditing)] && [(id)vc isEditing]) return NO;
+    return YES;
+}
+
+// Misc.c:43661 shouldRecognizeSimultaneouslyWithGestureRecognizer:
+// 只对条内子 pan（条的横向滚动）放同时识别，其余（表格滚动 pan）一律互斥
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)ges shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    id vc = _vc;
+    if (!vc) return NO;
+    SessionGroupsStripView *strip = objc_getAssociatedObject(vc, kSGAssocStrip);
+    return strip && [other isKindOfClass:UIPanGestureRecognizer.class] && other.view &&
+           [other.view isDescendantOfView:strip];
+}
+
+// Misc.c:43725 shouldBeRequiredToFailByGestureRecognizer:
+// 中央区要求表格系 pan 先失败：横滑时表格无法横滚必 fail → 我们接管；竖滑表格 pan 成功 →
+// 我们不出局也不抢（shouldBegin 已挡）；边缘 60pt 不设要求 → 系统侧滑返回优先
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)ges shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)other {
+    id vc = _vc;
+    if (!vc) return NO;
+    UITableView *table = SGMainTableView(vc);
+    if (!table || ![other isKindOfClass:UIPanGestureRecognizer.class]) return NO;
+    BOOL tablePan = (other == table.panGestureRecognizer) ||
+                    (other.view && [other.view isDescendantOfView:table]);
+    if (!tablePan) return NO;
+    CGFloat w = ges.view ? ges.view.bounds.size.width : 0;
+    CGPoint loc = [ges locationInView:ges.view];
+    return loc.x > 60.0 && loc.x < w - 60.0;
 }
 @end
 
