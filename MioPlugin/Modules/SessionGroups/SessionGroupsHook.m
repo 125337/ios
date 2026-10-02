@@ -367,7 +367,10 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
                     if (bucket == t) {
                         // 折叠群不红点：红点标记会话不计入（Misc_part6.c:10508-10531）
                         if (!redDotFlag || !cfg.sgFoldGroupNoRedDot) {
-                            unreadPerTab[t] = @([unreadPerTab[t] integerValue] + 1);
+                            // WCR 累加的是未读条数之和，非会话数（unreadCountForTab_ 10530：
+                            // local_200 += m_uUnReadCount）。按会话 +1 会把"3条消息2个人"
+                            // 算成 2，WCR 是 1+2=3
+                            unreadPerTab[t] = @([unreadPerTab[t] integerValue] + (NSInteger)unread);
                         }
                     }
                 }
