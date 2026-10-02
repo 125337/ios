@@ -33,6 +33,8 @@
 #import "../Modules/Privacy/PrivacyConfig.h"
 #import "../Modules/Moments/MomentsConfig.h"
 #import "../Modules/Moments/MomentsHook.h"
+#import "../Modules/SessionGroups/SessionGroupsConfig.h"
+#import "../Modules/SessionGroups/SessionGroupsVC.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -233,6 +235,14 @@
                                              sectionTitle:@"通用"],
             
             // ──── 布局字号 ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"sessiongroups"
+                                                    title:@"首页电报分组"
+                                               configClass:[SessionGroupsConfig class]
+                                               hookClasses:@[]
+                                           controllerClass:[SessionGroupsVC class]
+                                                  subtitle:@"会话列表电报式分组栏（UI）"
+                                             sectionTitle:@"通用"],
+
             [MioModuleDescriptor descriptorWithIdentifier:@"fontlayout"
                                                     title:@"布局字号"
                                                configClass:[FontLayoutConfig class]
