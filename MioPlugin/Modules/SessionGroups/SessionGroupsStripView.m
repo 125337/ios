@@ -195,9 +195,9 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
     if (last) contentW = MAX(last.frame.origin.x + last.frame.size.width + 4.0, W);
     _scrollView.contentSize = CGSizeMake(contentW, H);
     [self layoutBadges];
-    if (!_indicatorView.hidden) {
-        [self applyIndicatorFrame:[self frameOfSelectedButton] withAnimation:NO velocity:0];
-    }
+    // 指示器无条件重算（Frida 实证：refreshAppearance 时按钮 frame 为零会把 hidden 置 YES，
+    // 若此处被 hidden 门闩挡住则永远无法恢复——hidden 门闩已移除）
+    [self applyIndicatorFrame:[self frameOfSelectedButton] withAnimation:NO velocity:0];
 }
 
 - (CGFloat)widthForButton:(UIButton *)btn {
