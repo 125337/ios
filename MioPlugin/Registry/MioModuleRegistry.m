@@ -35,6 +35,7 @@
 #import "../Modules/Moments/MomentsHook.h"
 #import "../Modules/SessionGroups/SessionGroupsConfig.h"
 #import "../Modules/SessionGroups/SessionGroupsVC.h"
+#import "../Modules/SessionGroups/SessionGroupsHook.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -238,9 +239,9 @@
             [MioModuleDescriptor descriptorWithIdentifier:@"sessiongroups"
                                                     title:@"首页电报分组"
                                                configClass:[SessionGroupsConfig class]
-                                               hookClasses:@[]
+                                               hookClasses:@[[SessionGroupsHook class]]
                                            controllerClass:[SessionGroupsVC class]
-                                                  subtitle:@"会话列表电报式分组栏（UI）"
+                                                  subtitle:@"会话列表电报式分组栏"
                                              sectionTitle:@"通用"],
 
             [MioModuleDescriptor descriptorWithIdentifier:@"fontlayout"
