@@ -93,21 +93,17 @@ static const CGFloat kCellHPadding = 16.0;
 
 // 全站唯一渲染引擎 = 微信引擎（WCR 同款）。旧 UITableView/手绘引擎已删除；
 // scrollView/contentView 仅作遗留壳保留（子类清理代码对其操作为无害 no-op）。
-@implementation SettingCategoryController
-
-#pragma mark - 微信老 API 兼容（crash_any reason 实锤：外部分享拉起时，微信会对导航栈顶 VC 调
-// presentingModalViewController（iOS5 废弃接口）；微信原生页面基类 MMUIViewController 有兼容实现，
-// 我们的 UIViewController 子类没有 → unrecognized selector → 分享必崩。presentModal/dismissModal
-// 是同族老 API，一并垫上。WCR/锤子助手同款原则：自定义 VC 不继承微信类，契约自己垫。）
+// 微信老 API 兼容（tail31 08:23 实锤：分享握手代码无条件对导航栈顶 VC 调 presentingModalViewController
+//（iOS5 前的老接口，UIKit 从未有过），受害页不止我们的页面——微信自家 WCPluginsViewController 同样
+// unrecognized selector 闪退。category 补在 UIViewController 上，一次覆盖全部受害类；MMUIViewController
+// 自带实现，方法查找先命中类自身，行为不变。WCR/锤子助手同款原则：不继承微信类，契约自己垫。）
+@implementation UIViewController (MioMMCompat)
 - (UIViewController *)presentingModalViewController {
     return [self presentedViewController];
 }
-- (void)presentModalViewController:(UIViewController *)viewController animated:(BOOL)animated {
-    [self presentViewController:viewController animated:animated completion:nil];
-}
-- (void)dismissModalViewControllerAnimated:(BOOL)animated {
-    [self dismissViewControllerAnimated:animated completion:nil];
-}
+@end
+
+@implementation SettingCategoryController
 
 - (void)viewDidLoad {
     WPLog(@"Config", @"[UI] SettingCategoryController viewDidLoad");

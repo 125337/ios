@@ -219,6 +219,18 @@ static BOOL MioSchedLooksLikeSandboxPath(NSString *s) {
            [s containsString:@"/Library/"];
 }
 
+// 安全调用无参路径计算方法（WCMediaItem.pathForData 族 / WCUploadMedia.pathForMedia）：
+// 微信这些方法对未赋值字段会拼出 ".../(null)" 字符串，拷贝前靠 fileExists 把关
+static NSString *MioSchedCallPathMethod(id obj, SEL sel) {
+    if (!obj || ![obj respondsToSelector:sel]) return nil;
+    id v = nil;
+    @try {
+        id (*send)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
+        v = send(obj, sel);
+    } @catch (NSException *e) { return nil; }
+    return [v isKindOfClass:[NSString class]] ? v : nil;
+}
+
 // mediaList 子树全扫：路径字符串 → 拷自留 → pathMap（WCR FUN_010c894c 同款语义：媒体项内
 // 路径逐个回填；mediaList 为数组、元素为路径键值对 dict、live 子结构递归）。返回成功拷贝数
 static NSUInteger MioSchedCollectMediaPaths(id obj, NSString *dir, NSUInteger seq, NSMutableDictionary *pathMap) {
@@ -362,21 +374,57 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
             if ([v isKindOfClass:[NSArray class]]) taskMedias = v;
         } @catch (NSException *e) {}
         if (taskMedias.count > mediaCount) mediaCount = taskMedias.count;
-        for (id m in taskMedias) {
+
+        // tail32 媒体采集级联（08:22 dump 实锤：带图帖 capture 时刻 mediaSourcePath=nil、
+        // pathForMedia=.../wc/sc/(null)（文件名槽位未赋值）、buffer=_NSInlineData 仅小块——
+        // 真实源文件在 WechatPrivate，靠 WCMediaItem/WCUploadMedia 计算路径逐级定位，存在性把关）
+        for (NSUInteger mi = 0; mi < taskMedias.count; mi++) {
+            id m = taskMedias[mi];
+            if (![m isKindOfClass:objc_getClass("WCUploadMedia")]) continue;
             NSString *sp = nil;
             @try { sp = [m valueForKey:@"mediaSourcePath"]; } @catch (NSException *e) {}
+            if (![sp isKindOfClass:[NSString class]] || sp.length == 0)
+                sp = MioSchedCallPathMethod(m, @selector(pathForMedia));
             if (![sp isKindOfClass:[NSString class]] || !MioSchedLooksLikeSandboxPath(sp) || pathMap[sp]) continue;
             NSString *ext = sp.pathExtension.length ? [NSString stringWithFormat:@".%@", sp.pathExtension] : @"";
             NSString *dst = [dir stringByAppendingFormat:@"media_%lu%@", (unsigned long)pathMap.count, ext];
             NSString *cp = MioSchedCopyFile(sp, dst);
             if (!cp) WPLog(@"Moments", @"[Sched] media copy failed: %@", sp.lastPathComponent);
-            else { pathMap[sp] = cp; copied++; }
+            else {
+                pathMap[sp] = cp; copied++;
+                @try { [m setValue:cp forKey:@"mediaSourcePath"]; } @catch (NSException *e) {}
+            }
+        }
+        // WCMediaItem 计算路径兜底（contentObj.mediaList 与 task.mediaList 按下标配对，
+        // 拷到即回填 task 侧 mediaSourcePath，发布时上传管线从自留副本取数）
+        if ([mediaList isKindOfClass:[NSArray class]]) {
+            NSArray *wms = (NSArray *)mediaList;
+            for (NSUInteger wi = 0; wi < wms.count; wi++) {
+                id w = wms[wi];
+                if (![w isKindOfClass:objc_getClass("WCMediaItem")]) continue;
+                NSString *sp = MioSchedCallPathMethod(w, @selector(pathForExistData))
+                            ?: MioSchedCallPathMethod(w, @selector(pathForData))
+                            ?: MioSchedCallPathMethod(w, @selector(pathForPreview));
+                if (![sp isKindOfClass:[NSString class]] || !MioSchedLooksLikeSandboxPath(sp) || pathMap[sp]) continue;
+                NSString *ext = sp.pathExtension.length ? [NSString stringWithFormat:@".%@", sp.pathExtension] : @"";
+                NSString *dst = [dir stringByAppendingFormat:@"media_%lu%@", (unsigned long)pathMap.count, ext];
+                NSString *cp = MioSchedCopyFile(sp, dst);
+                if (!cp) { WPLog(@"Moments", @"[Sched] wmedia copy failed: %@", sp); continue; }
+                pathMap[sp] = cp; copied++;
+                if (wi < taskMedias.count) {
+                    @try { [taskMedias[wi] setValue:cp forKey:@"mediaSourcePath"]; } @catch (NSException *e) {}
+                }
+            }
         }
 
         if (mediaCount > 0 && copied == 0) {
             MioSchedDeleteTaskDir(taskId);
-            WPLog(@"Moments", @"[Sched] capture aborted: %lu medias all unreadable, fallback to native publish (collect cost=%.0fms main=%d)",
-                  (unsigned long)mediaCount, ([NSDate date].timeIntervalSince1970 - t0) * 1000, [NSThread isMainThread]);
+            NSData *buf0 = nil;
+            @try { buf0 = [taskMedias[0] valueForKey:@"buffer"]; } @catch (NSException *e) {}
+            WPLog(@"Moments", @"[Sched] capture aborted: %lu medias all unreadable (buf0=%@ len=%lu collect cost=%.0fms main=%d)",
+                  (unsigned long)mediaCount, buf0 ? NSStringFromClass([buf0 class]) : @"nil",
+                  (unsigned long)(buf0 ? buf0.length : 0),
+                  ([NSDate date].timeIntervalSince1970 - t0) * 1000, [NSThread isMainThread]);
             WPShowToast(@"媒体读取失败，已按正常发表");
             return NO; // 残缺任务必假成功（tail23 实证），宁可放行
         }
