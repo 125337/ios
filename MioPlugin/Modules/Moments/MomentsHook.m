@@ -2266,13 +2266,8 @@ static IMP orig_uploadMgr_addTask = NULL;
 
 static id hooked_uploadMgr_addTask(id self, SEL _cmd, id task) {
     @try {
-        if ([MomentsScheduler captureUploadTask:task]) {
-            WPLog(@"Moments", @"[Sched] addUploadTask captured -> scheduled task");
-            return nil;
-        }
-    } @catch (NSException *e) {
-        WPLog(@"Moments", @"[Sched] capture threw: %@", e);
-    }
+        if ([MomentsScheduler captureUploadTask:task]) return nil;
+    } @catch (NSException *e) {}
     return ((id(*)(id, SEL, id))orig_uploadMgr_addTask)(self, _cmd, task);
 }
 

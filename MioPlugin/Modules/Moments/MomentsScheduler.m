@@ -3,7 +3,6 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "MomentsConfig.h"
-#import "../../Core/LogManager.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 
 // ─────────────────────────────────────────────────────────────
@@ -79,20 +78,12 @@ static void MioSchedDeleteTaskDir(NSString *taskId) {
     NSString *root = [MomentsScheduler schedRootDir];
     NSString *d = [root stringByAppendingPathComponent:taskId];
     // 防越权删除：仅删 MioSched 一级子目录
-    if (taskId.length > 0 && [d stringByDeletingLastPathComponent] &&
-        [[d stringByDeletingLastPathComponent] isEqualToString:root]) {
+    if ([[d stringByDeletingLastPathComponent] isEqualToString:root]) {
         [[NSFileManager defaultManager] removeItemAtPath:d error:nil];
     }
 }
 
 #pragma mark - 工具
-
-+ (NSString *)formatFireDate:(double)fireAt {
-    if (fireAt <= 0) return @"-";
-    NSDateFormatter *f = [[NSDateFormatter alloc] init];
-    f.dateFormat = @"MM-dd HH:mm";
-    return [f stringFromDate:[NSDate dateWithTimeIntervalSince1970:fireAt]];
-}
 
 // 循环模式摘要（scheduleMode：0 单次 1 每天 2 每N小时 3 每N分钟 4 每周 5 每月 6 循环间隔）
 + (NSString *)repeatSummaryForDict:(NSDictionary *)t {
@@ -192,11 +183,6 @@ static double MioSchedNextFireAt(NSDictionary *t, double now) {
     [self saveTasks:kept];
     MioSchedDeleteTaskDir(taskId);
 }
-- (void)removeAllTasks {
-    [self saveTasks:@[]];
-    [[NSFileManager defaultManager] removeItemAtPath:[MomentsScheduler schedRootDir] error:nil];
-    [[NSFileManager defaultManager] createDirectoryAtPath:[MomentsScheduler schedRootDir] withIntermediateDirectories:YES attributes:nil error:nil];
-}
 
 #pragma mark - 拦截：抽取 WCUploadTask → 拷媒体 → 建任务
 
@@ -253,10 +239,7 @@ static NSUInteger MioSchedCollectMediaPaths(id obj, NSString *dir, NSUInteger se
         NSString *ext = src.pathExtension.length ? [NSString stringWithFormat:@".%@", src.pathExtension] : @"";
         NSString *dst = [dir stringByAppendingFormat:@"media_%lu%@", (unsigned long)seq, ext];
         NSString *cp = MioSchedCopyFile(src, dst);
-        if (!cp) {
-            WPLog(@"Moments", @"[Sched] media copy failed: %@", src.lastPathComponent);
-            return 0;
-        }
+        if (!cp) return 0;
         pathMap[src] = cp;
         return 1;
     }
@@ -294,21 +277,14 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
     @try {
         if (![MomentsConfig shared].schedEnabled) return NO;
         NSDate *pending = [self schedPendingFireDate];
-        if (!pending) {
-            WPLog(@"Moments", @"[Sched] capture skip: no pending fireDate (session lost?)");
-            return NO;
-        }
+        if (!pending) return NO;
         double fireAt = pending.timeIntervalSince1970;
         double now = [NSDate date].timeIntervalSince1970;
         [self schedSetPendingFireDate:nil]; // 一进拦截先清标记（防循环，恢复发布走原生）
         if (fireAt < now + kMioSchedMinLeadSeconds) {
-            WPLog(@"Moments", @"[Sched] capture skip: fireAt %.0f too close to now %.0f", fireAt, now);
             return NO; // 已过期：放行照常发
         }
-        if (!task) {
-            WPLog(@"Moments", @"[Sched] capture skip: nil task");
-            return NO;
-        }
+        if (!task) return NO;
 
         NSArray *exist = [[MomentsScheduler shared] allTasks];
         int active = 0;
@@ -324,10 +300,7 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
         // tail28 生产日志实锤（MioPlugin(14).log L144）：addUploadTask: 参数是 WCUploadTask 本体
         //（dataItem/contentDesc/mediaList 全在 task 上）；其它类型放行
         Class utCls = objc_getClass("WCUploadTask");
-        if (!utCls || ![task isKindOfClass:utCls]) {
-            WPLog(@"Moments", @"[Sched] capture skip: param cls=%@ not WCUploadTask", NSStringFromClass([task class]));
-            return NO;
-        }
+        if (!utCls || ![task isKindOfClass:utCls]) return NO;
 
         NSString *taskId = [[NSUUID UUID] UUIDString];
         NSString *dir = [self taskDir:taskId];
@@ -339,7 +312,6 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
         } @catch (NSException *e) { dataItem = nil; }
         if (!dataItem) {
             MioSchedDeleteTaskDir(taskId);
-            WPLog(@"Moments", @"[Sched] capture aborted: task.dataItem nil, fallback to native publish");
             WPShowToast(@"该帖子类型暂不支持定时");
             return NO; // 无 dataItem 的任务不可定时，放行走原生
         }
@@ -365,7 +337,6 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
         // 媒体自留拷贝（防发帖页 dismiss 后 tmp 清理，WCR 同款）：
         // ① dataItem.contentObj.mediaList 子树全扫路径字符串 ② task.mediaList(WCUploadMedia).mediaSourcePath
         NSMutableDictionary<NSString *, NSString *> *pathMap = [NSMutableDictionary dictionary];
-        double t0 = [NSDate date].timeIntervalSince1970;
         NSUInteger copied = MioSchedCollectMediaPaths(mediaList, dir, 0, pathMap);
 
         NSArray *taskMedias = nil;
@@ -393,8 +364,7 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
             NSString *ext = sp.pathExtension.length ? [NSString stringWithFormat:@".%@", sp.pathExtension] : @"";
             NSString *dst = [dir stringByAppendingFormat:@"media_%lu%@", (unsigned long)pathMap.count, ext];
             NSString *cp = MioSchedCopyFile(sp, dst);
-            if (!cp) WPLog(@"Moments", @"[Sched] media copy failed: %@", sp.lastPathComponent);
-            else {
+            if (cp) {
                 pathMap[sp] = cp; copied++;
                 if (mi < mediaFiles.count) mediaFiles[mi] = cp;
                 @try { [m setValue:cp forKey:@"mediaSourcePath"]; } @catch (NSException *e) {}
@@ -420,7 +390,7 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
                 NSString *ext = sp.pathExtension.length ? [NSString stringWithFormat:@".%@", sp.pathExtension] : @"";
                 NSString *dst = [dir stringByAppendingFormat:@"media_%lu%@", (unsigned long)pathMap.count, ext];
                 NSString *cp = MioSchedCopyFile(sp, dst);
-                if (!cp) { WPLog(@"Moments", @"[Sched] wmedia copy failed: %@", sp); continue; }
+                if (!cp) continue;
                 pathMap[sp] = cp; copied++;
                 if (wi < mediaFiles.count) mediaFiles[wi] = cp;
                 if (wi < taskMedias.count) {
@@ -442,23 +412,14 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
                 mediaFiles[bi] = dst;
                 copied++;
                 @try { [taskMedias[bi] setValue:dst forKey:@"mediaSourcePath"]; } @catch (NSException *e) {}
-                WPLog(@"Moments", @"[Sched] buffer fallback: media_%lu.mp4 (%lu bytes)", (unsigned long)bi, (unsigned long)buf.length);
             }
         }
 
         if (mediaCount > 0 && copied == 0) {
             MioSchedDeleteTaskDir(taskId);
-            NSData *buf0 = nil;
-            @try { buf0 = [taskMedias[0] valueForKey:@"buffer"]; } @catch (NSException *e) {}
-            WPLog(@"Moments", @"[Sched] capture aborted: %lu medias all unreadable (buf0=%@ len=%lu collect cost=%.0fms main=%d)",
-                  (unsigned long)mediaCount, buf0 ? NSStringFromClass([buf0 class]) : @"nil",
-                  (unsigned long)(buf0 ? buf0.length : 0),
-                  ([NSDate date].timeIntervalSince1970 - t0) * 1000, [NSThread isMainThread]);
             WPShowToast(@"媒体读取失败，已按正常发表");
             return NO; // 残缺任务必假成功（tail23 实证），宁可放行
         }
-        WPLog(@"Moments", @"[Sched] capture media done: mediaCount=%lu copied=%lu cost=%.0fms main=%d",
-              (unsigned long)mediaCount, (unsigned long)copied, ([NSDate date].timeIntervalSince1970 - t0) * 1000, [NSThread isMainThread]);
 
         // 自留路径写回：contentObj 深替换（WCR applyArchivedMediaPathsToDataItem 同款）+ mediaSourcePath
         if (pathMap.count > 0) {
@@ -466,9 +427,7 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
                 id rewritten = MioSchedRewritePaths(contentObj, pathMap);
                 @try {
                     [dataItem setValue:rewritten forKey:@"contentObj"];
-                } @catch (NSException *e) {
-                    WPLog(@"Moments", @"[Sched] contentObj rewrite failed: %@", e.name);
-                }
+                } @catch (NSException *e) {}
             }
             for (id m in taskMedias) {
                 NSString *sp = nil;
@@ -484,7 +443,6 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
         NSData *tData = [NSKeyedArchiver archivedDataWithRootObject:task requiringSecureCoding:NO error:nil];
         if (!tData || ![tData writeToFile:[dir stringByAppendingPathComponent:@"task.archived"] atomically:YES]) {
             MioSchedDeleteTaskDir(taskId);
-            WPLog(@"Moments", @"[Sched] capture aborted: task archive failed");
             WPShowToast(@"该帖子类型暂不支持定时");
             return NO;
         }
@@ -520,10 +478,8 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
         NSDateFormatter *f = [[NSDateFormatter alloc] init];
         f.dateFormat = @"HH:mm";
         WPShowToast([NSString stringWithFormat:@"已加入定时发送 %@ 发表", [f stringFromDate:pending]]);
-        WPLog(@"Moments", @"[Sched] task created id=%@ fireAt=%.0f medias=%lu copied=%lu", taskId, fireAt, (unsigned long)mediaCount, (unsigned long)copied);
         return YES; // 接管：本次不发表（原生 addUploadTask 不执行，原生链不跑）
     } @catch (NSException *e) {
-        WPLog(@"Moments", @"[Sched] capture error: %@", e);
         return NO;
     }
 }
@@ -536,23 +492,16 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSString *dir) {
     @try {
         NSString *tFile = [dir stringByAppendingPathComponent:@"task.archived"];
         NSData *tData = [NSData dataWithContentsOfFile:tFile];
-        if (!tData) {
-            WPLog(@"Moments", @"[Sched] publish refused: task.archived missing");
-            return NO;
-        }
+        if (!tData) return NO;
         id task = [NSKeyedUnarchiver unarchiveObjectWithData:tData];
         Class utCls = objc_getClass("WCUploadTask");
-        if (!task || !utCls || ![task isKindOfClass:utCls]) {
-            WPLog(@"Moments", @"[Sched] publish refused: task unarchive invalid");
-            return NO;
-        }
+        if (!task || !utCls || ![task isKindOfClass:utCls]) return NO;
 
         // tail33：解档后 WCUploadMedia.mediaSourcePath=nil（08:39:45 dump 实证，NSCoding 未还原；
         // 且发帖页 dismiss 后 WechatPrivate 原文件已被清理）→ 上传管线无源 → 发送失败。
         // 发布前把 capture 自留副本按序号回填给上传管线。
         NSArray *saved = [NSArray arrayWithContentsOfFile:[dir stringByAppendingPathComponent:@"paths.plist"]];
         if (saved.count > 0) {
-            NSUInteger applied = 0;
             NSArray *tms = nil;
             @try { tms = [task valueForKey:@"mediaList"]; } @catch (NSException *e) {}
             if ([tms isKindOfClass:[NSArray class]]) {
@@ -560,28 +509,25 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSString *dir) {
                     NSString *p = saved[i];
                     if (![p isKindOfClass:[NSString class]] || p.length == 0) continue;
                     if (![[NSFileManager defaultManager] fileExistsAtPath:p]) continue;
-                    @try { [(id)tms[i] setValue:p forKey:@"mediaSourcePath"]; applied++; } @catch (NSException *e) {}
+                    @try { [(id)tms[i] setValue:p forKey:@"mediaSourcePath"]; } @catch (NSException *e) {}
                 }
             }
-            WPLog(@"Moments", @"[Sched] publish media reapply: %lu/%lu", (unsigned long)applied, (unsigned long)saved.count);
         }
 
         Class ctxCls = objc_getClass("MMContext");
         Class facadeCls = objc_getClass("WCFacade");
-        if (!ctxCls || !facadeCls) { WPLog(@"Moments", @"[Sched] publish refused: MMContext/WCFacade class missing"); return NO; }
+        if (!ctxCls || !facadeCls) return NO;
         id ctx = ((id(*)(id, SEL))objc_msgSend)((id)ctxCls, NSSelectorFromString(@"currentContext"));
-        if (!ctx) { WPLog(@"Moments", @"[Sched] publish refused: currentContext nil"); return NO; }
+        if (!ctx) return NO;
         id facade = ((id(*)(id, SEL, id))objc_msgSend)(ctx, NSSelectorFromString(@"getService:"), facadeCls);
-        if (!facade) { WPLog(@"Moments", @"[Sched] publish refused: WCFacade service nil"); return NO; }
+        if (!facade) return NO;
         id uploadMgr = ((id(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"uploadMgr"));
-        if (!uploadMgr) { WPLog(@"Moments", @"[Sched] publish refused: uploadMgr nil"); return NO; }
+        if (!uploadMgr) return NO;
         SEL addSel = NSSelectorFromString(@"addUploadTask:");
-        if (![uploadMgr respondsToSelector:addSel]) { WPLog(@"Moments", @"[Sched] publish refused: no addUploadTask: selector"); return NO; }
+        if (![uploadMgr respondsToSelector:addSel]) return NO;
         ((void(*)(id, SEL, id))objc_msgSend)(uploadMgr, addSel, task);
-        WPLog(@"Moments", @"[Sched] published id=%@ withTask=YES", t[@"id"]);
         return YES;
     } @catch (NSException *e) {
-        WPLog(@"Moments", @"[Sched] publish EXCEPTION: %@", e);
         return NO;
     }
 }
@@ -589,12 +535,12 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSString *dir) {
 #pragma mark - tick 状态机（主线程，实例方法）
 
 - (void)tick {
+    if (![MomentsConfig shared].schedEnabled) return;
+    // 重入守卫放 @try 外：中途异常也必须复位，否则定时引擎永久静默失效
+    static BOOL ticking = NO;
+    if (ticking) return;
+    ticking = YES;
     @try {
-        if (![MomentsConfig shared].schedEnabled) return;
-        static BOOL ticking = NO;
-        if (ticking) return;
-        ticking = YES;
-
         double now = [NSDate date].timeIntervalSince1970;
         NSMutableArray *ts = [[self allTasks] mutableCopy];
         BOOL dirty = NO;
@@ -657,17 +603,15 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSString *dir) {
             } else {
                 t[@"state"] = @"failed";
                 WPShowToast(@"定时朋友圈发布失败");
-                WPLog(@"Moments", @"[Sched] publish FAILED id=%@", t[@"id"]);
             }
             ts[fireIdx] = t;
             dirty = YES;
         }
 
         if (dirty) [self saveTasks:ts];
-        ticking = NO;
     } @catch (NSException *e) {
-        WPLog(@"Moments", @"[Sched] tick error: %@", e);
     }
+    ticking = NO;
 }
 
 #pragma mark - 引擎启动
@@ -684,7 +628,6 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSString *dir) {
                                                  selector:@selector(tick)
                                                      name:UIApplicationDidBecomeActiveNotification
                                                    object:nil];
-        WPLog(@"Moments", @"[Sched] engine started (15s tick)");
     });
 }
 

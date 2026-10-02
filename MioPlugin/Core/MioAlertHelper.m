@@ -1,7 +1,6 @@
 #import "MioAlertHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
-#import "LogManager.h"
 #import "../Modules/SettingEntry/WPCommonUI.h"
 
 // ==================== WCUIAlertView 本地声明 ====================
@@ -87,7 +86,6 @@ static _WAlertAnchor *walertAnchor(void) {
                 }
             }), "v@:");
         }
-        WPLogDebug(@"Alert", @"anchor IMPs injected (WCR mode: target=anchor + currentAlert)");
     });
     return kWAlertAnchor;
 }
@@ -332,8 +330,6 @@ static UIWindow *MioAlertKeyWindow(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         _alertClass = objc_getClass("WCUIAlertView");
-        WPLogDebug(@"Alert", _alertClass ? @"WCUIAlertView class found"
-                              : @"WCUIAlertView class NOT found");
     });
     return _alertClass;
 }
@@ -370,7 +366,7 @@ static UIWindow *MioAlertKeyWindow(void) {
             onConfirm:(void(^)(NSString *inputText))confirm {
     @try {
         WCUIAlertView *alert = [self createAlertWithTitle:title message:message];
-        if (!alert) { WPLogDebug(@"Alert", @"WCUIAlertView unavailable — input alert aborted"); return; }
+        if (!alert) return;
 
         _WAlertAnchor *anchor = walertAnchor();
         anchor.currentAlert = alert;                 // WCR setCurrentAlert 同款：强持有防释放
@@ -403,8 +399,6 @@ static UIWindow *MioAlertKeyWindow(void) {
         if ([alert respondsToSelector:cancelAPI]) {
             ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelAPI, @"取消", anchor,
                 NSSelectorFromString(@"__walert_cancel"));
-        } else {
-            WPLog(@"Alert", @"!!! addCancelBtnTitle:target:sel: 不存在，取消按钮未注册");
         }
 
         // ④ 确定：target=锚点（WCR 同款；锚点永不释放 + currentAlert 持有弹窗）
@@ -412,8 +406,6 @@ static UIWindow *MioAlertKeyWindow(void) {
         if ([alert respondsToSelector:confirmAPI]) {
             ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, confirmAPI, @"确定", anchor,
                 NSSelectorFromString(@"__walert_confirm"));
-        } else {
-            WPLog(@"Alert", @"!!! addBtnTitle:target:sel: 不存在，确定按钮未注册");
         }
 
         // ⑤ show（回调经微信 target/sel 分发至锚点，(84).log 实证可达；
@@ -423,7 +415,6 @@ static UIWindow *MioAlertKeyWindow(void) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
         }
     } @catch (NSException *e) {
-        WPLogDebug(@"Alert", @"input alert EXCEPTION: %@", e);
     }
 }
 
@@ -467,7 +458,6 @@ static UIWindow *MioAlertKeyWindow(void) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
         }
     } @catch (NSException *e) {
-        WPLogDebug(@"Alert", @"menu alert EXCEPTION: %@", e);
     }
 }
 
@@ -491,7 +481,6 @@ static UIWindow *MioAlertKeyWindow(void) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
         }
     } @catch (NSException *e) {
-        WPLogDebug(@"Alert", @"tip error: %@", e);
     }
 }
 
@@ -527,7 +516,6 @@ static UIWindow *MioAlertKeyWindow(void) {
             ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
         }
     } @catch (NSException *e) {
-        WPLogDebug(@"Alert", @"confirm error: %@", e);
     }
 }
 
@@ -536,7 +524,7 @@ static UIWindow *MioAlertKeyWindow(void) {
                          onPick:(void(^)(NSDate *date))onPick {
     @try {
         UIWindow *window = MioAlertKeyWindow();
-        if (!window) { WPLogDebug(@"Alert", @"no key window — picker panel aborted"); return; }
+        if (!window) return;
 
         // 防重复：先移除同 tag 旧弹层
         for (UIView *old in [window.subviews copy]) {
@@ -571,7 +559,6 @@ static UIWindow *MioAlertKeyWindow(void) {
             panel.frame = CGRectMake(0, hostH - panelH, window.bounds.size.width, panelH);
         }];
     } @catch (NSException *e) {
-        WPLogDebug(@"Alert", @"picker panel EXCEPTION: %@", e);
     }
 }
 

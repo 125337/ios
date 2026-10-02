@@ -29,14 +29,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<NSDictionary *> *)allTasks;
 - (void)saveTasks:(NSArray<NSDictionary *> *)tasks;
 - (void)removeTaskWithId:(NSString *)taskId;        // 连同 payload 目录一并删除
-- (void)removeAllTasks;
 
 + (NSString *)schedRootDir;                         // Application Support/MioSched
 + (double)nextFireAtForTask:(NSDictionary *)t fromTime:(double)now; // 循环任务下一轮时间（列表页改循环模式用）
 
 #pragma mark - 工具
 
-+ (NSString *)formatFireDate:(double)fireAt;        // 列表显示用（MM-dd HH:mm）
 + (NSString *)repeatSummaryForDict:(NSDictionary *)t; // 循环模式摘要（单次/每天 HH:mm/...）
 
 @end
