@@ -365,12 +365,20 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
                     // 未读入桶：scope 1→私聊 2→群聊 其余→其他（snapshot friend/chatRoom/other 三桶语义）
                     NSUInteger bucket = (scope == 1) ? 1 : (scope == 2 ? 2 : 3);
                     if (bucket == t) {
-                        // 折叠群不红点：红点标记会话不计入（Misc_part6.c:10508-10531）
+                        // 折叠群不红点：红点标记会话不计入数字（Misc_part6.c:10512-10523 config
+                        // 开 → FUN_01576b80 查会话红点属性 → 命中不计）
                         if (!redDotFlag || !cfg.sgFoldGroupNoRedDot) {
                             // WCR 累加的是未读条数之和，非会话数（unreadCountForTab_ 10530：
                             // local_200 += m_uUnReadCount）。按会话 +1 会把"3条消息2个人"
                             // 算成 2，WCR 是 1+2=3
                             unreadPerTab[t] = @([unreadPerTab[t] integerValue] + (NSInteger)unread);
+                        }
+                        // 组红点信号（WCR 双值模式：setUnreadCount:/setHasRedDotUnread: 双
+                        // setter FUN__part6.c:45216-45219，快捷球 refreshBallBadge 45659-45668
+                        // 同款 count==0 用红点）：组内存在免打扰且有未读的会话。显示端优先级
+                        // 数字 > 红点（Misc_part19.c:7581 officialUnreadBadgeViewWithCount:）
+                        if (redDotFlag && ![dotPerTab[t] boolValue]) {
+                            [dotPerTab replaceObjectAtIndex:t withObject:@(YES)];
                         }
                     }
                 }
