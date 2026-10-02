@@ -1,4 +1,5 @@
 #import "MioMomentsSchedListController.h"
+#import "../Common/WPWeChatTable.h"
 #import "../../Modules/Moments/MomentsConfig.h"
 #import "../../Core/MioAlertHelper.h"
 #import <objc/message.h>
@@ -94,7 +95,7 @@
     if (!cls || ![cls respondsToSelector:s]) return nil;
     NSString *detail = [NSString stringWithFormat:@"%@ · %@",
                             [self fireDateTextForDict:t], [self stateTextForDict:t]];
-    id cell = ((id(*)(id, SEL, id, id, id, id))objc_msgSend)(
+    id cell = ((id(*)(id, SEL, SEL, id, id, id))objc_msgSend)(
         cls, s, NSSelectorFromString(@"onTaskCellTapped:"), self,
         (t[@"preview"] ?: @"（无预览）"), detail);
     if (!cell) return nil;
