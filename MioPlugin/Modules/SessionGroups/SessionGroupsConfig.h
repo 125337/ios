@@ -23,13 +23,17 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL sgFilterPinned;          // 过滤置顶聊天
 @property (nonatomic, assign) BOOL sgFilterDuplicate;       // 过滤重复联系人
 
-// 外观颜色（浅/深色双 hex，空 = 未自定义跟随默认；hook 暂未接入）
+// 外观颜色（浅/深色双 hex，空 = 未自定义跟随默认；对齐 WCR homeTelegramGrouping* 配置族）
+@property (nonatomic, assign) BOOL sgBgColorCustom;         // 启用自定义背景色
 @property (nonatomic, copy) NSString *sgBgColor;            // 自定义背景色
 @property (nonatomic, copy) NSString *sgBgColorDark;
+@property (nonatomic, assign) BOOL sgIndicatorColorCustom;  // 启用自定义指示器颜色
 @property (nonatomic, copy) NSString *sgIndicatorColor;     // 指示器颜色
 @property (nonatomic, copy) NSString *sgIndicatorColorDark;
+@property (nonatomic, assign) BOOL sgTextColorCustom;       // 启用自定义默认文本颜色
 @property (nonatomic, copy) NSString *sgTextColor;          // 默认文本颜色
 @property (nonatomic, copy) NSString *sgTextColorDark;
+@property (nonatomic, assign) BOOL sgHighlightColorCustom;  // 启用自定义高亮文本颜色
 @property (nonatomic, copy) NSString *sgHighlightColor;     // 高亮文本颜色
 @property (nonatomic, copy) NSString *sgHighlightColorDark;
 

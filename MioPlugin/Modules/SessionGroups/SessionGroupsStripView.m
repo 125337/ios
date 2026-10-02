@@ -1,5 +1,6 @@
 #import "SessionGroupsStripView.h"
 #import "SessionGroupsConfig.h"
+#import "../../Config/WPColorUtil.h"
 #import <objc/message.h>
 
 static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.c:7922-8020
@@ -81,18 +82,69 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
     return NO;
 }
 
+// 深浅色取对应 hex，空/非法回 fallback（对齐 WCR colorFromHex:fallback:，Misc_part19.c FUN_01ef0c74）
+- (UIColor *)colorFromConfigLight:(NSString *)lightKey dark:(NSString *)darkKey fallback:(UIColor *)fallback {
+    SessionGroupsConfig *cfg = [SessionGroupsConfig shared];
+    NSString *hex = [self isDarkMode] ? [cfg valueForKey:darkKey] : [cfg valueForKey:lightKey];
+    if (hex.length == 0) return fallback;
+    UIColor *c = [WPColorUtil colorFromHexString:hex];
+    return c ?: fallback;
+}
+
+// 卡片背景：WCR resolvedCardColor（Misc_part19.c:5137-5242）默认链是主题 cellBackgroundColor
+// （fallback systemBackgroundColor），等价于透出微信首页原生底色 → 默认 clear；启用自定义后覆盖
+- (UIColor *)resolvedCardColor {
+    SessionGroupsConfig *cfg = [SessionGroupsConfig shared];
+    if (cfg.sgBgColorCustom) {
+        return [self colorFromConfigLight:@"sgBgColor" dark:@"sgBgColorDark" fallback:UIColor.clearColor];
+    }
+    return UIColor.clearColor;
+}
+
 - (UIColor *)resolvedIndicatorColor {
-    // 线条/圆点 → 主题 Brand，回退 #07C160（Misc_part19.c:5293-5314）
+    SessionGroupsConfig *cfg = [SessionGroupsConfig shared];
+    if (cfg.sgIndicatorColorCustom) {
+        return [self colorFromConfigLight:@"sgIndicatorColor" dark:@"sgIndicatorColorDark"
+                                 fallback:[self defaultIndicatorColor]];
+    }
+    return [self defaultIndicatorColor];
+}
+
+// 指示器默认：胶囊 → 浅 #666666 0x47 / 深 #FFFFFF 0x33；线条/圆点 → Brand（Misc_part19.c:5293-5331）
+- (UIColor *)defaultIndicatorColor {
     if (_styleIndicator == 1 || _styleIndicator == 2) return [self wcrBrandColor];
-    // 胶囊 → 浅 #666666 0x47 / 深 #FFFFFF 0x33（Misc_part19.c:5317-5331 hex 回退串）
     return [self isDarkMode] ? [UIColor colorWithWhite:1.0 alpha:0x33 / 255.0]
                              : [UIColor colorWithWhite:0x66 / 255.0 alpha:0x47 / 255.0];
 }
 
-- (UIColor *)resolvedTextColorSelected {
+// 未选中文字：WCR resolvedTextColor 默认 浅 labelColor / 深白（Misc_part19.c:5393-5481）
+- (UIColor *)resolvedTextColor {
+    SessionGroupsConfig *cfg = [SessionGroupsConfig shared];
+    if (cfg.sgTextColorCustom) {
+        return [self colorFromConfigLight:@"sgTextColor" dark:@"sgTextColorDark"
+                                 fallback:[self defaultTextColor]];
+    }
+    return [self defaultTextColor];
+}
+
+- (UIColor *)defaultTextColor {
+    return [self isDarkMode] ? [UIColor colorWithWhite:1.0 alpha:0.72] : UIColor.labelColor;
+}
+
+// 选中文字：WCR resolvedHighlightColor 默认恒白（Misc_part19.c:5491-5560）。胶囊模式灰底白字照搬；
+// 线条/圆点模式白色在浅底不可见，沿用 Brand（WCR 渲染处 highlight 同样服务于可读性）
+- (UIColor *)resolvedHighlightColor {
+    SessionGroupsConfig *cfg = [SessionGroupsConfig shared];
+    if (cfg.sgHighlightColorCustom) {
+        return [self colorFromConfigLight:@"sgHighlightColor" dark:@"sgHighlightColorDark"
+                                 fallback:[self defaultHighlightColor]];
+    }
+    return [self defaultHighlightColor];
+}
+
+- (UIColor *)defaultHighlightColor {
     if (_styleIndicator == 1 || _styleIndicator == 2) return [self wcrBrandColor];
-    return [self isDarkMode] ? UIColor.whiteColor
-                             : [UIColor colorWithWhite:0.1 alpha:1.0];
+    return UIColor.whiteColor;
 }
 
 #pragma mark - 构建 Tab
@@ -150,17 +202,18 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
 }
 
 - (void)applySelectionColors {
-    BOOL dark = [self isDarkMode];
     for (NSInteger i = 0; i < (NSInteger)_tabButtons.count; i++) {
         UIButton *btn = _tabButtons[i];
         BOOL selected = (i == _selectedIndex);
-        [btn setTitleColor:selected ? [self resolvedTextColorSelected] : (dark ? [UIColor colorWithWhite:1.0 alpha:0.72] : [UIColor colorWithWhite:0.0 alpha:0.72])
+        // WCR setSelectedTabId 消费处（Misc_part19.c:7808-7812）：选中→Highlight、未选中→Text
+        [btn setTitleColor:selected ? [self resolvedHighlightColor] : [self resolvedTextColor]
                   forState:UIControlStateNormal];
     }
 }
 
 - (void)refreshAppearance {
     _styleIndicator = [self wcrIndicatorStyle];
+    _cardBackgroundView.backgroundColor = [self resolvedCardColor]; // WCR applyAppearance，Misc_part19.c:5601-5654
     [self applySelectionColors];
     _indicatorView.backgroundColor = [self resolvedIndicatorColor];
     if (_styleIndicator == 3) {
@@ -170,6 +223,16 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
         [self applyIndicatorFrame:[self frameOfSelectedButton] withAnimation:NO velocity:0];
     }
     [self setNeedsLayout];
+}
+
+// 深浅色切换时重取颜色（WCR traitCollectionDidChange→applyAppearance，Misc_part19.c:5656+）
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if (@available(iOS 12.0, *)) {
+        if (self.traitCollection.userInterfaceStyle != previousTraitCollection.userInterfaceStyle) {
+            [self refreshAppearance];
+        }
+    }
 }
 
 - (void)layoutButtons {
