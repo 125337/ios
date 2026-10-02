@@ -378,6 +378,10 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
         // tail32 媒体采集级联（08:22 dump 实锤：带图帖 capture 时刻 mediaSourcePath=nil、
         // pathForMedia=.../wc/sc/(null)（文件名槽位未赋值）、buffer=_NSInlineData 仅小块——
         // 真实源文件在 WechatPrivate，靠 WCMediaItem/WCUploadMedia 计算路径逐级定位，存在性把关）
+        // 媒体序号 → 自留副本路径（落盘 paths.plist；publish 解档后回填 mediaSourcePath，
+        // 不依赖 WCUploadMedia 的 NSCoding——08:39:45 dump 实证解档后 mediaSourcePath=nil）
+        NSMutableArray *mediaFiles = [NSMutableArray arrayWithCapacity:taskMedias.count];
+        for (NSUInteger i = 0; i < taskMedias.count; i++) [mediaFiles addObject:NSNull.null];
         for (NSUInteger mi = 0; mi < taskMedias.count; mi++) {
             id m = taskMedias[mi];
             if (![m isKindOfClass:objc_getClass("WCUploadMedia")]) continue;
@@ -392,6 +396,7 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
             if (!cp) WPLog(@"Moments", @"[Sched] media copy failed: %@", sp.lastPathComponent);
             else {
                 pathMap[sp] = cp; copied++;
+                if (mi < mediaFiles.count) mediaFiles[mi] = cp;
                 @try { [m setValue:cp forKey:@"mediaSourcePath"]; } @catch (NSException *e) {}
             }
         }
@@ -411,6 +416,7 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
                 NSString *cp = MioSchedCopyFile(sp, dst);
                 if (!cp) { WPLog(@"Moments", @"[Sched] wmedia copy failed: %@", sp); continue; }
                 pathMap[sp] = cp; copied++;
+                if (wi < mediaFiles.count) mediaFiles[wi] = cp;
                 if (wi < taskMedias.count) {
                     @try { [taskMedias[wi] setValue:cp forKey:@"mediaSourcePath"]; } @catch (NSException *e) {}
                 }
@@ -459,6 +465,7 @@ static id MioSchedRewritePaths(id obj, NSDictionary<NSString *, NSString *> *map
             WPShowToast(@"该帖子类型暂不支持定时");
             return NO;
         }
+        [mediaFiles writeToFile:[dir stringByAppendingPathComponent:@"paths.plist"] atomically:YES];
 
         // 预览文本（列表显示；按 UTF-16 截断，最多切坏 emoji 显示无害）
         NSString *preview = nil;
@@ -515,6 +522,25 @@ static BOOL MioSchedPublishTask(NSDictionary *t, NSString *dir) {
         if (!task || !utCls || ![task isKindOfClass:utCls]) {
             WPLog(@"Moments", @"[Sched] publish refused: task unarchive invalid");
             return NO;
+        }
+
+        // tail33：解档后 WCUploadMedia.mediaSourcePath=nil（08:39:45 dump 实证，NSCoding 未还原；
+        // 且发帖页 dismiss 后 WechatPrivate 原文件已被清理）→ 上传管线无源 → 发送失败。
+        // 发布前把 capture 自留副本按序号回填给上传管线。
+        NSArray *saved = [NSArray arrayWithContentsOfFile:[dir stringByAppendingPathComponent:@"paths.plist"]];
+        if (saved.count > 0) {
+            NSUInteger applied = 0;
+            NSArray *tms = nil;
+            @try { tms = [task valueForKey:@"mediaList"]; } @catch (NSException *e) {}
+            if ([tms isKindOfClass:[NSArray class]]) {
+                for (NSUInteger i = 0; i < saved.count && i < tms.count; i++) {
+                    NSString *p = saved[i];
+                    if (![p isKindOfClass:[NSString class]] || p.length == 0) continue;
+                    if (![[NSFileManager defaultManager] fileExistsAtPath:p]) continue;
+                    @try { [(id)tms[i] setValue:p forKey:@"mediaSourcePath"]; applied++; } @catch (NSException *e) {}
+                }
+            }
+            WPLog(@"Moments", @"[Sched] publish media reapply: %lu/%lu", (unsigned long)applied, (unsigned long)saved.count);
         }
 
         Class ctxCls = objc_getClass("MMContext");
