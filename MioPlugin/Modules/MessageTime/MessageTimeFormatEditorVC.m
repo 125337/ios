@@ -1,4 +1,5 @@
 #import "MessageTimeFormatEditorVC.h"
+#import "../../Config/WPColors.h"
 #import "MessageTimeFormatParser.h"
 
 // 复刻微信优化 1.6.5 CSTimeFormatEditorViewController
