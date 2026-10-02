@@ -32,10 +32,11 @@
 // ─────────────────────────────────────────────────────────────
 
 static NSString * const kSGSelectedTabKey = @"mio_sg_selected_tab_id";
-static NSString * const kSGAssocSnapshot  = @"mio_sg_snapshot";
-static NSString * const kSGAssocStrip     = @"mio_sg_strip";
-static NSString * const kSGAssocRefresh   = @"mio_sg_refresh_pending";
-static NSString * const kSGAssocPan       = @"mio_sg_pan";
+// 关联对象键用自指指针（objc_*AssociatedObject 要求 const void *，不能用 NSString）
+static const void *kSGAssocSnapshot = &kSGAssocSnapshot;
+static const void *kSGAssocStrip    = &kSGAssocStrip;
+static const void *kSGAssocRefresh  = &kSGAssocRefresh;
+static const void *kSGAssocPan      = &kSGAssocPan;
 
 static IMP orig_numberOfSections      = NULL;
 static IMP orig_numberOfRows          = NULL;
