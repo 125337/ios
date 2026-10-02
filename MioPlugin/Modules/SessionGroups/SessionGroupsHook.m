@@ -588,6 +588,7 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
     if (!table) return;
     CGPoint trans = [pan translationInView:table];
     CGFloat vel = [pan velocityInView:table].x;
+    CGFloat dx = trans.x;
 
     if (pan.state == UIGestureRecognizerStateChanged) {
         // dir = (Δx<0)?+1:-1；反向则取反（FUN__part13.c:16698-16705）
