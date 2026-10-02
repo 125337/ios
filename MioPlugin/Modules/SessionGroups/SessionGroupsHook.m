@@ -25,7 +25,9 @@
 //  - 行重映射:           WCRGroupingSnapshot.hiddenOriginalRowsBySection（头文件）+ wcrGrouping_.c:5481+
 //  - 增量保护:           insertSessionCell 等关动画透传+刷新（wcrGrouping_.c:4419-4616）；insertRow:/deleteSessionCell: 只刷新不透传
 //  - reloadData 无动画:  Misc.c:21388-21389
-//  - 头部接管:           Misc_part19.c:4618-4655 + wcrGrouping_.c:5133-5224；高度 44（Misc_part19.c:5673-5679）
+//  - 头部接管:           置顶区 section(0) header；接管谓词 FUN_003b53f4（FUN__part6.c:55286）要求
+//                        section != targetSection 且 pinnedAreaTakenOver（快照字段即"置顶区被接管"）；
+//                        targetSection 只是条目渲染 section（wcrGrouping_.c:4667）；高度 44（Misc_part19.c:5673-5679）
 //  - 滑动手势:           FUN__part13.c:16571-16853（dir 取反/循环/分母 max(W*0.35,100)/阈值 50·12+450·800）
 //  - 触感映射:           Misc_part4.c:1755-1784（1→Soft(3) 2→Medium(1) 3→Heavy(2)）
 //  - 记忆选中:           homeTelegramGroupingSelectedTabId（Misc_part21.c:41181；RememberSelection 缺省开 41215）
@@ -698,12 +700,14 @@ static void hook_didEndDisplaying(id self, SEL _cmd, UITableView *tableView, UIT
     if (orig_didEndDisplaying) ((void (*)(id, SEL, id, id, id))orig_didEndDisplaying)(self, _cmd, tableView, cell, indexPath);
 }
 
-// 分组条 = 目标 section header 接管（Misc_part19.c:4618-4655 + wcrGrouping_.c:5133-5224）
+// 分组条 = 置顶区 section header 接管（WCR 实证：FUN_003b53f4 接管谓词 FUN__part6.c:55286 要求
+// section != targetSection 且 pinnedAreaTakenOver；快照字段 pinnedAreaTakenOver/pinnedSessionSignature
+// 即"置顶区被接管"。条必须压在置顶会话上方 → 取 section 0；targetSection 只负责分组条目渲染）
 static id hook_viewForHeader(id self, SEL _cmd, UITableView *tableView, NSInteger section) {
     if (SG_CAN_FILTER(self, tableView) && orig_viewForHeader) {
         @try {
             SGHomeSnapshot *snap = SGEnsureSnapshot(self, tableView);
-            if (snap && section == snap.targetSection) {
+            if (snap && section == 0) {
                 SessionGroupsStripView *strip = SGEnsureStrip(self, tableView);
                 [strip setFrame:CGRectMake(0, 0, tableView.bounds.size.width, [SessionGroupsStripView preferredHeight])];
                 UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.bounds.size.width, [SessionGroupsStripView preferredHeight])];
@@ -725,7 +729,7 @@ static CGFloat hook_heightForHeader(id self, SEL _cmd, UITableView *tableView, N
     if (SG_CAN_FILTER(self, tableView) && orig_heightForHeader) {
         @try {
             SGHomeSnapshot *snap = SGEnsureSnapshot(self, tableView);
-            if (snap && section == snap.targetSection) {
+            if (snap && section == 0) {
                 return [SessionGroupsStripView preferredHeight]; // 44，Misc_part19.c:5673-5679
             }
         } @catch (NSException *e) {}
