@@ -1,4 +1,5 @@
 #import "RevokeFormatEditorVC.h"
+#import "../../Config/WPColors.h"
 
 static NSString *const kDefaultRevokeEditorTemplate = @"拦截到一条 {用户名}撤回的消息\n发送时间：{yyyy}-{MM}-{dd} {HH}:{mm}:{ss}\n内容：{内容}";
 
@@ -32,7 +33,7 @@ static NSArray<NSString *> *_tokenDescs(void) {
     [super viewDidLoad];
 
     self.title = @"撤回消息显示";
-    self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
+    self.view.backgroundColor = WPBackgroundColor();
 
     [self setupNavBar];
     [self setupScrollView];

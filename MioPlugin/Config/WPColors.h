@@ -11,14 +11,6 @@ static UIColor *WPSeparatorColor(void) {
     return [UIColor colorWithWhite:0.0 alpha:0.08];
 }
 
-__attribute__((unused))
-static UIColor *WPSeparatorColorDark(void) {
-    if ([UIPurifyConfig shared].hideSeparatorLine) {
-        return [UIColor clearColor];
-    }
-    return [UIColor colorWithWhite:1.0 alpha:0.08];
-}
-
 #pragma mark - Background Colors
 
 // 页面底色 = 微信主题色（WCR 同款取样法：读微信 WCTableViewManager 自建表的背景色，
@@ -61,16 +53,4 @@ static UIColor *WPTextTertiaryColor(void) {
 __attribute__((unused))
 static UIColor *WPAccentColor(void) {
     return [UIColor colorWithRed:0.200 green:0.780 blue:0.349 alpha:1.0];
-}
-
-__attribute__((unused))
-static UIColor *WPSwitchOnColor(void) {
-    return [UIColor colorWithRed:0.341 green:0.780 blue:0.302 alpha:1.0];
-}
-
-#pragma mark - Card Border
-
-__attribute__((unused))
-static UIColor *WPCardBorderColor(void) {
-    return WPSeparatorColor();
 }

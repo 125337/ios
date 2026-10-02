@@ -1,4 +1,5 @@
 #import "KeywordListEditorVC.h"
+#import "../../Config/WPColors.h"
 #import "../../Core/LogManager.h"
 #import "../../Modules/KeywordAlert/KeywordAlertEngine.h"
 
@@ -12,7 +13,7 @@
     [super viewDidLoad];
 
     self.title = self.editorTitle ?: @"关键词列表";
-    self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
+    self.view.backgroundColor = WPBackgroundColor();
 
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
         initWithTitle:@"关闭" style:UIBarButtonItemStylePlain target:self action:@selector(closeAction)];

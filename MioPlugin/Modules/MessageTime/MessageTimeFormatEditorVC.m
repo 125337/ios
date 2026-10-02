@@ -55,8 +55,8 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
     // 复刻 viewDidLoad: 导航标题
     self.title = @"自定义时间格式";
 
-    // 背景色（复刻微信优化 groupTableViewBackground）
-    self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
+    // 背景色（微信主题色，与全站页面统一）
+    self.view.backgroundColor = WPBackgroundColor();
 
     [self setupNavBar];
     [self setupScrollView];

@@ -9,7 +9,6 @@
 #define WPT2() WPTextSecondaryColor()
 #define WPT3() WPTextTertiaryColor()
 #define WPAccent() WPAccentColor()
-#define WPSwOn() WPSwitchOnColor()
 #define WPSepColor() WPSeparatorColor()
 
 extern const CGFloat kPad;    // 插件页面统一边距（写死 15，不读用户配置）

@@ -16,24 +16,20 @@ Class WPGetBaseClass(void) {
 // 现场实例化微信 WCTableViewManager（initWithFrame:style: 内部自建 UITableView，WCR/本项目双实证），
 // 读它自建表的背景色——色值由微信主题体系写，深浅色跟随微信而非 iOS 系统，与原生设置页同源。
 // 不缓存：微信主题运行时可切（随 iOS 深色联动），每次现取，WCR 同款无缓存。
+// 无兜底色（WCR 同款零守卫风格）：objc_msgSend 对 nil 全程安全，仅保留防崩溃的版本守卫，
+// 类缺失场景下返回 nil——该环境下插件页面本就不可用。
 UIColor *WPWeChatPageColor(void) {
     Class mgrCls = objc_getClass("WCTableViewManager");
-    if (mgrCls) {
-        id alloced = ((id (*)(id, SEL))objc_msgSend)((id)mgrCls, NSSelectorFromString(@"alloc"));
-        SEL ifs = NSSelectorFromString(@"initWithFrame:style:");
-        id mgr = nil;
-        if (alloced && [mgrCls instancesRespondToSelector:ifs]) {
-            mgr = ((id (*)(id, SEL, CGRect, long))objc_msgSend)(alloced, ifs, CGRectZero, (long)UITableViewStyleGrouped);
-        } else if (alloced) {
-            mgr = ((id (*)(id, SEL))objc_msgSend)(alloced, NSSelectorFromString(@"init"));
-        }
-        id tv = mgr ? ((id (*)(id, SEL))objc_msgSend)(mgr, NSSelectorFromString(@"tableView")) : nil;
-        if ([tv isKindOfClass:[UITableView class]]) {
-            UIColor *c = ((id (*)(id, SEL))objc_msgSend)(tv, NSSelectorFromString(@"backgroundColor"));
-            if (c) return c;
-        }
-    }
-    return [UIColor systemGroupedBackgroundColor]; // 版本差异兜底（微信表格类不可用时）
+    SEL ifs = NSSelectorFromString(@"initWithFrame:style:");
+    id alloced = ((id (*)(id, SEL))objc_msgSend)((id)mgrCls, NSSelectorFromString(@"alloc"));
+    id mgr = [mgrCls instancesRespondToSelector:ifs]
+        ? ((id (*)(id, SEL, CGRect, long))objc_msgSend)(alloced, ifs, CGRectZero, (long)UITableViewStyleGrouped)
+        : ((id (*)(id, SEL))objc_msgSend)(alloced, NSSelectorFromString(@"init"));
+    SEL tvg = NSSelectorFromString(@"tableView");
+    id tv = (mgr && [mgr respondsToSelector:tvg]) ? ((id (*)(id, SEL))objc_msgSend)(mgr, tvg) : nil;
+    return [tv isKindOfClass:[UITableView class]]
+        ? ((id (*)(id, SEL))objc_msgSend)(tv, NSSelectorFromString(@"backgroundColor"))
+        : nil;
 }
 
 UIView *WPMakeCard(CGFloat top, CGFloat w) {

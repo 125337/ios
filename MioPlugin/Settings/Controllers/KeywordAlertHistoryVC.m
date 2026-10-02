@@ -1,4 +1,5 @@
 #import "KeywordAlertHistoryVC.h"
+#import "../../Config/WPColors.h"
 #import "../../Modules/KeywordAlert/KeywordAlertConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
@@ -14,7 +15,7 @@
     [super viewDidLoad];
 
     self.title = @"提醒历史";
-    self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
+    self.view.backgroundColor = WPBackgroundColor();
 
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
         initWithTitle:@"清空" style:UIBarButtonItemStylePlain target:self action:@selector(clearAction)];

@@ -16,7 +16,7 @@
     [super viewDidLoad];
 
     self.title = @"管理显示黑名单";
-    self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
+    self.view.backgroundColor = WPBackgroundColor();
 
     [self setupNavBar];
     [self setupScrollView];

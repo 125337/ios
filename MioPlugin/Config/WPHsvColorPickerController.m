@@ -1,4 +1,5 @@
 #import "WPHsvColorPickerController.h"
+#import "WPColors.h"
 #import "WPHueSlider.h"
 #import "WPSaturationBrightnessView.h"
 #import "WPRGBAControl.h"
@@ -63,7 +64,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
+    self.view.backgroundColor = WPBackgroundColor();
     self.title = @"颜色选择";
 
     [self setupNavigationBar];
