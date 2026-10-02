@@ -310,9 +310,16 @@ static const double kMioPanelHeight = 310;        // WCR 固定面板高（不�
 static UIWindow *MioAlertKeyWindow(void) {
     for (UIWindowScene *sc in [UIApplication sharedApplication].connectedScenes) {
         if (sc.activationState != UISceneActivationStateForegroundActive) continue;
-        for (UIWindow *w in sc.windows) {
+        // 只认常驻主窗口（level ≤ Normal）。alert/toast 等浮层自带 UIWindow 且会抢 key
+        // （WCUIAlertView setRequestKeyWindow: 实锤）：菜单里点"重新选择时间"时 key 是
+        // alert 临时窗口，面板挂进去随 alert 关闭整窗销毁 → 弹出即秒收（tail35 修复）
+        UIWindow *normalFirst = nil;
+        for (UIWindow *w in sc.windows) { // back-to-front，主窗口在最前
+            if (w.windowLevel > UIWindowLevelNormal) continue;
             if (w.isKeyWindow) return w;
+            if (!normalFirst) normalFirst = w;
         }
+        if (normalFirst) return normalFirst;
         return sc.windows.firstObject;
     }
     return [UIApplication sharedApplication].keyWindow; // 旧系统兜底
