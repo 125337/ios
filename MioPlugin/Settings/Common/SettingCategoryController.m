@@ -610,6 +610,43 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     return cy + kRowH;
 }
 
+#pragma mark - Segment
+
+// WCR addSegmentCellTo:title:items:index:action:width: 同款（Misc_part19.c 01ee7d64 反编译实证）：
+// 系统 UISegmentedControl 挂微信原生 rightView 行（normalCellForSel:target:title:rightView:，sel 传 0），
+// 选中态显示在控件上，ValueChanged 直写配置，无需 rebuild
+- (CGFloat)addSegmentRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key names:(NSArray<NSString *> *)names index:(NSInteger)index cy:(CGFloat)cy width:(CGFloat)w {
+    WPWGroup *g = (WPWGroup *)group;
+    if (![g isKindOfClass:[WPWGroup class]]) return cy;
+
+    CGFloat segW = names.count * 44.0 + 14.0;
+    UISegmentedControl *seg = [[UISegmentedControl alloc] initWithItems:names];
+    seg.frame = CGRectMake(0, 0, segW, 30.0);
+    seg.selectedSegmentIndex = MAX(0, MIN(index, (NSInteger)names.count - 1));
+    objc_setAssociatedObject(seg, "wpSegKey", key ?: @"", OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [seg addTarget:self action:@selector(wpSegmentChanged:) forControlEvents:UIControlEventValueChanged];
+
+    UIView *cv = [[UIView alloc] initWithFrame:CGRectMake(0, 0, segW, kRowH)];
+    cv.backgroundColor = [UIColor clearColor];
+    seg.center = CGPointMake(segW / 2.0, kRowH / 2.0);
+    [cv addSubview:seg];
+
+    id cell = WPWCViewCell((SEL)0, self, [self wpSubTitle:title], cv);
+    if (cell) {
+        [g addCell:cell];
+    } else {
+        WPLog(@"WCTable", @"[WCTABLE] viewCell 不可用，segment 行缺失: %@", title);
+    }
+    return cy + kRowH;
+}
+
+- (void)wpSegmentChanged:(UISegmentedControl *)seg {
+    NSString *key = objc_getAssociatedObject(seg, "wpSegKey");
+    if (key.length == 0) return;
+    [ConfigManager setValue:@(seg.selectedSegmentIndex) forKey:key];
+    [ConfigManager saveAll];
+}
+
 #pragma mark - Separator
 
 - (CGFloat)addSeparatorInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w {

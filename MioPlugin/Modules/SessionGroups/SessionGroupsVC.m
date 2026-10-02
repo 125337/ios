@@ -41,23 +41,23 @@
     UIView *g2 = [self addTableGroupAtY:y width:w];
     cy = 0;
 
-    // 切组触感（选择器）
-    cy = [self addNavRowInGroup:g2
-                          title:@"切组触感"
-                       subtitle:[self hapticName:config.sgSwitchHaptic]
-                            tag:0
-                         action:@selector(onHapticTap)
-                             cy:cy
-                          width:w];
+    // 切组触感（分段选择，WCR 同款）
+    cy = [self addSegmentRowInGroup:g2
+                              title:@"切组触感"
+                                key:@"sgSwitchHaptic"
+                              names:@[@"无", @"轻微", @"中度", @"强烈"]
+                              index:config.sgSwitchHaptic
+                                 cy:cy
+                              width:w];
 
-    // 指示器（选择器）
-    cy = [self addNavRowInGroup:g2
-                          title:@"指示器"
-                       subtitle:[self indicatorName:config.sgIndicator]
-                            tag:0
-                         action:@selector(onIndicatorTap)
-                             cy:cy
-                          width:w];
+    // 指示器（分段选择，WCR 同款）
+    cy = [self addSegmentRowInGroup:g2
+                              title:@"指示器"
+                                key:@"sgIndicator"
+                              names:@[@"无", @"胶囊", @"线条", @"圆点"]
+                              index:config.sgIndicator
+                                 cy:cy
+                              width:w];
 
     // 胶囊圆角（输入框弹窗，0-16，默认 0 = 半高圆角）
     cy = [self addInputRowInGroup:g2
@@ -170,56 +170,11 @@
 
 #pragma mark - 名称映射
 
-- (NSString *)hapticName:(NSInteger)mode {
-    NSArray *names = @[@"无", @"轻微", @"中度", @"强烈"];
-    if (mode < 0 || mode >= (NSInteger)names.count) return names[0];
-    return names[mode];
-}
-
-- (NSString *)indicatorName:(NSInteger)mode {
-    NSArray *names = @[@"无", @"胶囊", @"线条", @"圆点"];
-    if (mode < 0 || mode >= (NSInteger)names.count) return names[0];
-    return names[mode];
-}
-
 - (NSString *)radiusText:(CGFloat)radius {
     if (radius == (NSInteger)radius) {
         return [NSString stringWithFormat:@"%ld", (long)radius];
     }
     return [NSString stringWithFormat:@"%.1f", radius];
-}
-
-#pragma mark - 选择器弹窗
-
-- (void)onHapticTap {
-    [self showPicker:@"切组触感"
-           currentIndex:[SessionGroupsConfig shared].sgSwitchHaptic
-                  names:@[@"无", @"轻微", @"中度", @"强烈"]
-                 pickKey:@"sgSwitchHaptic"];
-}
-
-- (void)onIndicatorTap {
-    [self showPicker:@"指示器"
-           currentIndex:[SessionGroupsConfig shared].sgIndicator
-                  names:@[@"无", @"胶囊", @"线条", @"圆点"]
-                 pickKey:@"sgIndicator"];
-}
-
-- (void)showPicker:(NSString *)title currentIndex:(NSInteger)current names:(NSArray<NSString *> *)names pickKey:(NSString *)key {
-    NSMutableArray<NSString *> *titles = [NSMutableArray array];
-    for (NSInteger i = 0; i < (NSInteger)names.count; i++) {
-        NSString *t = names[i];
-        if (i == current) t = [NSString stringWithFormat:@"✓ %@", t];
-        [titles addObject:t];
-    }
-
-    [MioAlertHelper showMenuAlert:title buttons:titles onButton:^(NSInteger index) {
-        if (index < 0 || index >= (NSInteger)names.count) return;
-        [ConfigManager setValue:@(index) forKey:key];
-        [ConfigManager saveAll];
-        [self wpRebuildWeChatTable];
-        [self buildUI];
-    }];
 }
 
 #pragma mark - 数值输入（范围钳制）
