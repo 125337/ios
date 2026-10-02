@@ -305,12 +305,19 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
     }
 
     // 分类 + 未读/红点统计（unreadCountForTab 语义，Misc_part6.c:10285-10570）
+    // 隐藏行必须 [tab][section] 二维分桶！WCR hiddenOriginalRowsBySection 是
+    // NSDictionary<section, rows>（WCRGroupingSnapshot.h:12 + 空快照 __NSDictionary0__
+    // FUN__part6.c:51190 + dump 处 keys 遍历/objectForKeyedSubscript 55002-55035）。
+    // 曾按 tab 一维混入所有 section 行号再复制给每个 section → 置顶区(section 0)被
+    // 套上其他 section 的行号（混合集必含 0）→ 置顶会话在所有非 all 分组消失
     NSMutableSet *seenUser = [NSMutableSet set];
-    NSMutableArray<NSMutableArray<NSNumber *> *> *hiddenPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
+    NSMutableArray<NSMutableArray<NSMutableArray<NSNumber *> *> *> *hiddenPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
     NSMutableArray<NSNumber *> *unreadPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
     NSMutableArray<NSNumber *> *dotPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
     for (NSUInteger t = 0; t < tabs.count; t++) {
-        [hiddenPerTab addObject:[NSMutableArray array]];
+        NSMutableArray<NSMutableArray<NSNumber *> *> *perSection = [NSMutableArray arrayWithCapacity:sections];
+        for (NSInteger s = 0; s < sections; s++) [perSection addObject:[NSMutableArray array]];
+        [hiddenPerTab addObject:perSection];
         [unreadPerTab addObject:@(0)]; // all 组恒 0（Misc_part6.c:10348-10353）
         [dotPerTab addObject:@(NO)];
     }
@@ -345,7 +352,7 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
                 BOOL keep = SGMatchesTab(sess, username, scope, tab, cfg);
                 if (cfg.sgFilterDuplicate && dup) keep = NO;
                 if (!keep) {
-                    [hiddenPerTab[t] addObject:@(r)];
+                    [hiddenPerTab[t][s] addObject:@(r)]; // 记入本 section 的桶（WCR BySection 语义）
                 } else if (t > 0 && unread > 0) {
                     // 未读入桶：scope 1→私聊 2→群聊 其余→其他（snapshot friend/chatRoom/other 三桶语义）
                     NSUInteger bucket = (scope == 1) ? 1 : (scope == 2 ? 2 : 3);
@@ -365,12 +372,12 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
     }
     if (targetSection < 0) targetSection = 0;
 
-    // 选中组的隐藏行
+    // 选中组的隐藏行（每 section 取自己的桶）
     SessionGroupsTab *sel = SGSelectedTab(tabs);
     NSUInteger selIdx = 0;
     for (NSUInteger t = 0; t < tabs.count; t++) if (tabs[t] == sel) { selIdx = t; break; }
     for (NSInteger s = 0; s < sections; s++) {
-        [hidden addObject:[hiddenPerTab[selIdx] sortedArrayUsingSelector:@selector(compare:)]];
+        [hidden addObject:[hiddenPerTab[selIdx][s] sortedArrayUsingSelector:@selector(compare:)]];
     }
 
     snap.origCounts = [counts copy];
