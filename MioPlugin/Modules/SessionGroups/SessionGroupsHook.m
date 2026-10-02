@@ -717,7 +717,11 @@ static id hook_viewForHeader(id self, SEL _cmd, UITableView *tableView, NSIntege
                 UITableViewCell *cell = [[objc_getClass("MMTableViewCell") alloc]
                     initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
                 cell.frame = CGRectMake(0, 0, w, h);
-                cell.separatorInset = UIEdgeInsetsZero; // 全宽底线，WCR dump sepInset=(0,0)
+                // 全宽底线三件套（WCR dump sepInset=(0,0) 全宽；实测只设 separatorInset 会被
+                // MMTableViewCell 按 layoutMargins(16pt) 重排成 (16,43.7 377x0.3)，必须 margins 链路清零）
+                cell.separatorInset = UIEdgeInsetsZero;
+                cell.layoutMargins = UIEdgeInsetsZero;
+                cell.preservesSuperviewLayoutMargins = NO;
                 cell.backgroundColor = UIColor.clearColor;
                 [cell.contentView addSubview:strip];
                 SGReloadStrip(self, snap);
