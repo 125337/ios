@@ -703,19 +703,25 @@ static void hook_didEndDisplaying(id self, SEL _cmd, UITableView *tableView, UIT
 // 分组条 = 置顶区 section header 接管（WCR 实证：FUN_003b53f4 接管谓词 FUN__part6.c:55286 要求
 // section != targetSection 且 pinnedAreaTakenOver；快照字段 pinnedAreaTakenOver/pinnedSessionSignature
 // 即"置顶区被接管"。条必须压在置顶会话上方 → 取 section 0；targetSection 只负责分组条目渲染）
+// 条容器 = MMTableViewCell（WCR FUN_007ec688 + Frida dump 实证：strip 在 cell.contentView，
+// cell 身份让微信原生画全宽底线 _UITableViewCellSeparatorView(0,43.7 393x0.3) 并自带背景管理）
 static id hook_viewForHeader(id self, SEL _cmd, UITableView *tableView, NSInteger section) {
     if (SG_CAN_FILTER(self, tableView) && orig_viewForHeader) {
         @try {
             SGHomeSnapshot *snap = SGEnsureSnapshot(self, tableView);
             if (snap && section == 0) {
                 SessionGroupsStripView *strip = SGEnsureStrip(self, tableView);
-                [strip setFrame:CGRectMake(0, 0, tableView.bounds.size.width, [SessionGroupsStripView preferredHeight])];
-                UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.bounds.size.width, [SessionGroupsStripView preferredHeight])];
-                container.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-                container.backgroundColor = UIColor.clearColor;
-                [container addSubview:strip];
+                CGFloat w = tableView.bounds.size.width;
+                CGFloat h = [SessionGroupsStripView preferredHeight];
+                [strip setFrame:CGRectMake(0, 0, w, h)];
+                UITableViewCell *cell = [[objc_getClass("MMTableViewCell") alloc]
+                    initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+                cell.frame = CGRectMake(0, 0, w, h);
+                cell.separatorInset = UIEdgeInsetsZero; // 全宽底线，WCR dump sepInset=(0,0)
+                cell.backgroundColor = UIColor.clearColor;
+                [cell.contentView addSubview:strip];
                 SGReloadStrip(self, snap);
-                return container;
+                return cell;
             }
         } @catch (NSException *e) {
             WPLog(@"SG", @"[SgHook] header err=%@", e);
