@@ -225,16 +225,6 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
     [self setNeedsLayout];
 }
 
-// 深浅色切换时重取颜色（WCR traitCollectionDidChange→applyAppearance，Misc_part19.c:5656+）
-- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
-    [super traitCollectionDidChange:previousTraitCollection];
-    if (@available(iOS 12.0, *)) {
-        if (self.traitCollection.userInterfaceStyle != previousTraitCollection.userInterfaceStyle) {
-            [self refreshAppearance];
-        }
-    }
-}
-
 - (void)layoutButtons {
     if (_tabButtons.count == 0) return;
     CGFloat W = self.bounds.size.width;
