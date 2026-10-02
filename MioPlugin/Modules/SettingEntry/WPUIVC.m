@@ -36,7 +36,6 @@
         @[@"界面净化", @(105)],
         @[@"隐藏头像", @(106)],
         @[@"布局设置", @(107)],
-        @[@"会话列表", @(108)],
     ];
 
     for (NSUInteger i = 0; i < items.count; i++) {
@@ -53,6 +52,19 @@
     }
 
     y = [self finishGroup:group atY:y height:cy];
+
+    // ──── 卡片：会话列表 ────
+    y = [self addSectionHeader:@"会话列表" y:y width:w];
+    UIView *sgGroup = [self addTableGroupAtY:y width:w];
+    CGFloat sgCy = 0;
+    sgCy = [self addNavRowInGroup:sgGroup
+                            title:@"首页电报分组"
+                         subtitle:nil
+                              tag:108
+                           action:@selector(navigateTo:)
+                               cy:sgCy
+                            width:w];
+    y = [self finishGroup:sgGroup atY:y height:sgCy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
