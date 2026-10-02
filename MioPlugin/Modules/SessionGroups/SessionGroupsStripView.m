@@ -52,23 +52,6 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
     return self;
 }
 
-// 宿主 header cell 的原生 separator 由微信包装机制才会上色；手动 alloc 的 cell 绕过了该
-// 机制（backgroundColor=nil 透明不可见）。每次布局给补上：cell.superview 即表格，直接取
-// 其 separatorColor（微信动态色，深浅色自适应），位置宽度均为原生默认全宽
-- (void)layoutSubviews {
-    [super layoutSubviews];
-    UIView *content = self.superview;
-    UIView *cell = content.superview;
-    UITableView *table = cell.superview;
-    if ([cell isKindOfClass:[UITableViewCell class]] && [table isKindOfClass:[UITableView class]]) {
-        for (UIView *v in cell.subviews) {
-            if ([NSStringFromClass(v.class) containsString:@"SeparatorView"]) {
-                v.backgroundColor = [(UITableView *)table separatorColor];
-            }
-        }
-    }
-}
-
 - (NSInteger)tabCount {
     return (NSInteger)_tabButtons.count;
 }
@@ -391,6 +374,19 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
 - (void)layoutSubviews {
     [super layoutSubviews];
     [self layoutButtons];
+    // 宿主 header cell 的原生 separator 由微信"首页卡片头容器"包装机制才会上色；手动 alloc
+    // 的 cell 绕过了该机制（backgroundColor=nil 透明不可见）。每次布局补上：strip →
+    // contentView → cell → table，cell.superview 即表格，取其 separatorColor（微信动态色）
+    UIView *content = self.superview;
+    UIView *cell = content.superview;
+    UITableView *table = cell.superview;
+    if ([cell isKindOfClass:[UITableViewCell class]] && [table isKindOfClass:[UITableView class]]) {
+        for (UIView *v in cell.subviews) {
+            if ([NSStringFromClass(v.class) containsString:@"SeparatorView"]) {
+                v.backgroundColor = [(UITableView *)table separatorColor];
+            }
+        }
+    }
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
