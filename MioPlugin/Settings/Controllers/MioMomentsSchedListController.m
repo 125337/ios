@@ -4,13 +4,13 @@
 #import <objc/message.h>
 
 // 朋友圈定时任务列表页（WCR 同款紧凑布局）：
-// 每任务两行——导航行（预览左 / 状态右 + 箭头，点击弹底部操作单）+
-// 信息行（发表时间 + 循环模式摘要）；旧版每任务 5 行（循环/改期/启停/删除平铺）太占位已废弃。
+// 每任务独立一张卡，卡内一行两行式 cell（WCTableViewCellManager title:detail:——
+// 预览粗体第一行 / 时间·状态灰色第二行），点击弹底部操作单。
 // 操作单 = 微信原生 WCActionSheet（MMUIWindow 底部弹层，WCR 同款视觉）：
 //   addButtonWithTitle:eventAction: 传 block（WCR FUN__part10 实锤 NSConcreteStackBlock），
 //   showInView: 传当前 VC view（WCR FUN__part11 同款 respondsToSelector 守卫），
 //   删除走 addDestructiveButtonWithTitle:eventAction:（红字）；
-//   WCActionSheet 类缺失时回退 MioAlertHelper showMenuAlert（微信 alert 菜单）
+//   title:detail: 构造器缺失时行回退 WPWCNavCell、单缺失时操作单回退 showMenuAlert
 @implementation MioMomentsSchedListController
 
 - (void)viewDidLoad {
@@ -48,7 +48,7 @@
     return [f stringFromDate:[NSDate dateWithTimeIntervalSince1970:fireAt]];
 }
 
-#pragma mark - UI（WCR 同款：单分组，每任务两行）
+#pragma mark - UI（WCR 同款：每任务一卡，卡内一行——预览在上 / 时间·状态灰色第二行，点击弹操作单）
 
 - (void)buildUI {
     for (UIView *v in self.contentView.subviews) {
@@ -63,41 +63,60 @@
         return;
     }
 
-    UIView *group = [self addTableGroupAtY:0 width:0];
-    CGFloat cy = 0;
-    // 逆序展示（新任务在上），tag 用原始索引定位
+    // 每任务独立分组（多任务=多卡片）；行 = WCTableViewCellManager title:detail: 两行布局
+    // （switch desc 同族先例：detail 渲染为标题下方灰字；点击回调入参=cellManager，
+    //   userInfo 带任务索引——WPWeChatTable.h 回调契约实证）
     for (NSInteger si = (NSInteger)tasks.count - 1; si >= 0; si--) {
         NSDictionary *t = tasks[si];
         if (![t isKindOfClass:[NSDictionary class]]) continue;
         NSString *taskId = t[@"id"] ?: @"";
         if (taskId.length == 0) continue;
 
-        cy = [self addNavRowInGroup:group
-                              title:(t[@"preview"] ?: @"（无预览）")
-                           subtitle:[self stateTextForDict:t]
-                                tag:si
-                             action:@selector(onTaskTap:)
-                                 cy:cy
-                              width:0];
-        cy = [self addInfoRowInGroup:group
-                               title:[NSString stringWithFormat:@"%@ 发表", [self fireDateTextForDict:t]]
-                          rightValue:[MomentsScheduler repeatSummaryForDict:t]
-                            copyText:nil
-                                  cy:cy
-                               width:0];
-        if (si > 0) cy = [self addSeparatorInGroup:group cy:cy width:0];
+        UIView *group = [self addTableGroupAtY:0 width:0];
+        id cell = [self makeTaskCellForTask:t index:si];
+        if (cell) {
+            [(WPWGroup *)group addCell:cell];
+        } else {
+            // detail 构造器缺失回退：单行导航行（预览左 / 状态右 + 箭头）
+            id nav = WPWCNavCell(@selector(wpWCTapRow:), self,
+                                 (t[@"preview"] ?: @"（无预览）"), [self stateTextForDict:t]);
+            if (nav) [(WPWGroup *)group addCell:nav];
+        }
+        [self finishGroup:group atY:0 height:0];
     }
-    [self finishGroup:group atY:0 height:cy];
     [self addSectionFooter:@"点任务可设循环：间隔多次、共发几次。次数到了自动停。\n微信需保持运行，被系统结束后无法到点触发。" y:0 width:0];
+}
+
+// 两行任务行：title=预览（粗体第一行）detail=时间 · 状态（灰色第二行）；userInfo 携带任务索引
+- (id)makeTaskCellForTask:(NSDictionary *)t index:(NSInteger)si {
+    Class cls = objc_getClass("WCTableViewCellManager");
+    SEL s = NSSelectorFromString(@"normalCellForSel:target:title:detail:");
+    if (!cls || ![cls respondsToSelector:s]) return nil;
+    NSString *detail = [NSString stringWithFormat:@"%@ · %@",
+                            [self fireDateTextForDict:t], [self stateTextForDict:t]];
+    id cell = ((id(*)(id, SEL, id, id, id, id))objc_msgSend)(
+        cls, s, NSSelectorFromString(@"onTaskCellTapped:"), self,
+        (t[@"preview"] ?: @"（无预览）"), detail);
+    if (!cell) return nil;
+    SEL hs = NSSelectorFromString(@"setFCellHeight:");
+    if ([cell respondsToSelector:hs]) ((void(*)(id, SEL, double))objc_msgSend)(cell, hs, 60.0);
+    SEL us = NSSelectorFromString(@"setUserInfo:");
+    if ([cell respondsToSelector:us]) ((void(*)(id, SEL, id))objc_msgSend)(cell, us, @(si));
+    return cell;
+}
+
+// 点击回调（微信传入 cellManager，userInfo=任务索引）
+- (void)onTaskCellTapped:(id)cellMgr {
+    NSInteger idx = 0;
+    @try { idx = [[cellMgr valueForKey:@"userInfo"] integerValue]; } @catch (NSException *e) {}
+    NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
+    if (idx < 0 || idx >= (NSInteger)tasks.count) return;
+    [self showTaskSheetForTask:tasks[idx] index:idx];
 }
 
 #pragma mark - 任务操作单（微信原生 WCActionSheet 底部弹层）
 
-- (void)onTaskTap:(UIButton *)sender {
-    NSInteger idx = sender.tag;
-    NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
-    if (idx < 0 || idx >= (NSInteger)tasks.count) return;
-    NSDictionary *t = tasks[idx];
+- (void)showTaskSheetForTask:(NSDictionary *)t index:(NSInteger)idx {
     NSString *preview = t[@"preview"] ?: @"定时任务";
     BOOL enabled = [t[@"enabled"] boolValue];
 
@@ -130,7 +149,7 @@
     } copy];
     void (^loopBlock)(void) = [^{
         __strong typeof(wself) sself = wself;
-        [sself onLoopTap:sender];
+        [sself onLoopMenuAtIndex:idx];
     } copy];
     void (^delBlock)(void) = [^{
         __strong typeof(wself) sself = wself;
@@ -159,7 +178,7 @@
         if (!sself) return;
         if (index == 0) [sself toggleTaskAtIndex:idx];
         else if (index == 1) [sself runReschedForTask:t];
-        else if (index == 2) [sself onLoopTap:nil];
+        else if (index == 2) [sself onLoopMenuAtIndex:idx];
         else if (index == 3) [sself confirmDeleteTaskAtIndex:idx];
     }];
 }
@@ -236,8 +255,7 @@
 
 #pragma mark - 循环模式（两级 ActionSheet）
 
-- (void)onLoopTap:(UIButton *)sender {
-    NSInteger idx = sender.tag;
+- (void)onLoopMenuAtIndex:(NSInteger)idx {
     NSArray<NSDictionary *> *tasks = [[MomentsScheduler shared] allTasks];
     if (idx < 0 || idx >= (NSInteger)tasks.count) return;
     NSDictionary *t = tasks[idx];
