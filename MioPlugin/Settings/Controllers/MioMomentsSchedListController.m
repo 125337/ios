@@ -96,7 +96,7 @@
     Class cls = objc_getClass("WCTableViewNormalCellManager");
     SEL s = NSSelectorFromString(@"normalCellForSel:target:title:detail:imageName:accessoryType:");
     if (cls && [cls respondsToSelector:s]) {
-        id cell = ((id(*)(id, SEL, id, id, id, id, id, long))objc_msgSend)(
+        id cell = ((id(*)(id, SEL, SEL, id, id, id, id, long))objc_msgSend)(
             cls, s, NSSelectorFromString(@"onTaskCellTapped:"), self,
             (t[@"preview"] ?: @"（无预览）"), [self fireDateTextForDict:t], nil, (long)1);
         if (cell) {
