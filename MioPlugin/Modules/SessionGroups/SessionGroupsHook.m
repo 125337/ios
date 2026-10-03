@@ -72,8 +72,13 @@ static IMP orig_deleteSessionCellAt   = NULL;
 static IMP orig_logicGetSession       = NULL; // 仅捕获 IMP 用于枚举，不替换
 static IMP orig_tableLayout           = NULL; // MainFrameTableView.layoutSubviews（unstick 用）
 
-// header cell 标记 tag（WCR tag 0x7f149 同语义；"SG01"）——unstick 时从 tableView.subviews 定位
+// header cell 标记 tag（WCR tag 0x7f149 同语义；"SG01"）——创建时标记，调试可辨识
 #define SG_HEADER_CELL_TAG 0x53303031
+
+// header cell 弱引用缓存：hook_viewForHeader 出口赋值，SGUnstickHeader 直接读，免去
+// layoutSubviews 热路径的 table.subviews 遍历。微信首页只有一个 MainFrameTableView，
+// 单例缓存足够；weak 保证 cell 销毁后自动置 nil，无悬垂指针
+static __weak UITableViewCell *sHeaderHostCell = nil;
 
 static BOOL sInstalled = NO;
 static NSHashTable *sSeenVCs = nil; // weak，记录出现过的 NMFVC
@@ -977,6 +982,7 @@ static id hook_viewForHeader(id self, SEL _cmd, UITableView *tableView, NSIntege
                 }
                 cell.frame = CGRectMake(0, 0, w, h);
                 SGReloadStrip(self, snap);
+                sHeaderHostCell = cell; // 创建+复用两条路径都在此出口刷新缓存，防止复用实例更替后缓存陈旧
                 return cell;
             }
         } @catch (NSException *e) {
@@ -1086,35 +1092,31 @@ static void hook_deleteSessionCellAt(id self, SEL _cmd, unsigned int row, long l
 #pragma mark - 安装
 
 // header 去粘滞（WCR WCRefineHomeHeaderUnstick unstickIfNeededOnTableView: 同款，Misc_part4.c:1970-2264）：
-// plain tableView 的 section header 会 sticky 悬停钉顶；WCR 在每次 layoutSubviews 后把标记的
+// plain tableView 的 section header 会 sticky 悬停钉顶；WCR 在每次 layoutSubviews 后把
 // header 容器 frame 用 rectForHeaderInSection: 的内容坐标理论位置摆回去 → header 跟随内容
 // 滚动（下拉时被导航栏裁掉，与"写在内容上"一致）。Mio 的 cell 未被微信包装（直接在
-// subviews，tag 定位），省略 WCR 的容器识别与 isHoldingAtViewportTop 分支。
+// subviews），host 由 sHeaderHostCell 缓存直读（hook_viewForHeader 出口赋值），无 subviews 遍历。
 // sticky 钉顶会与微信「Windows 已登录」浮层提示条同位重叠（sgbadge17d 实测），unstick 才是
 // WCR 真实行为（此前"WCR 同款钉顶"为误判，sgbadge8 误删本机制）
 static void SGUnstickHeader(UITableView *table) {
+    UITableViewCell *host = sHeaderHostCell;
+    if (!host) return;                              // 未接管：weak 空，立即返回
+    if (![host isDescendantOfView:table]) return;   // 归属检查：其他 table 触发的 layout 跳过（孤儿 view 亦为 NO）
     CGRect target = [table rectForHeaderInSection:0];
     if (target.size.height <= 0) return;
-    for (UIView *v in table.subviews) {
-        UIView *host = nil;
-        if (v.tag == SG_HEADER_CELL_TAG) {
-            host = v;                       // 直接 subview
-        } else if ([v isKindOfClass:[UIView class]] && v.subviews.count == 1) {
-            UIView *only = v.subviews.firstObject;
-            if (only.tag == SG_HEADER_CELL_TAG) host = v; // 微信包装容器（WCR isHomeCardHeaderContainer 同形）
-        }
-        if (!host) continue;
-        if (fabs(host.frame.origin.y - target.origin.y) > 0.5 ||
-            fabs(host.frame.size.height - target.size.height) > 0.5) {
-            host.frame = target;
-        }
+    // 只在 frame 真不一致时才写，避免高频空写触发多余布局
+    CGRect f = host.frame;
+    if (fabs(f.origin.y - target.origin.y) < 0.5 &&
+        fabs(f.size.height - target.size.height) < 0.5) {
+        return;
     }
+    host.frame = target;
 }
 
 static void hook_tableLayoutSubviews(UITableView *table, SEL _cmd) {
     if (orig_tableLayout) ((void (*)(id, SEL))orig_tableLayout)(table, _cmd);
     @try {
-        SGUnstickHeader(table); // 未接管时 subviews 无本 tag，自然空操作
+        SGUnstickHeader(table); // 未接管时 weak 缓存为 nil，立即空操作
     } @catch (NSException *e) {
         WPLog(@"SG", @"[SgHook] unstick err=%@", e);
     }
