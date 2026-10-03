@@ -322,7 +322,11 @@ static NSString *sCacheRaw = nil;
     }
     NSInteger np = pos + delta;
     if (pos < 0 || np < 0 || np >= (NSInteger)visIdx.count) return;
-    [tabs exchangeObjectsAtIndexes:visIdx[pos].integerValue withObject:visIdx[np].integerValue];
+    NSInteger from = visIdx[pos].integerValue;
+    NSInteger to = visIdx[np].integerValue;
+    SessionGroupsTab *tmp = tabs[from];
+    tabs[from] = tabs[to];
+    tabs[to] = tmp;
     [self saveTabs:tabs];
 }
 
