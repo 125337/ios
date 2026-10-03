@@ -298,13 +298,15 @@ static BOOL SGActive(id vc) {
     return [SideGroupsConfig shared].sdEnabled;
 }
 
-// 条接管 = 电报分组开，或侧边分组选了「+列表内」位置（XOS XZYCLG「列表内」横条语义，
-// Mio 直接复用电报分组条形态）
+// 条接管显隐（XOS 单一位置模式语义）：侧边分组开启时由「分组显示位置」全权决定——
+// 纯侧栏（右侧/左侧）= 条不显示（侧栏取代条）；「+列表内」= 条与侧栏共存。
+// 侧边分组关闭时回落电报分组总开关。
 static BOOL SGWantsStrip(id vc) {
-    if ([SessionGroupsConfig shared].sgEnabled) return YES;
     SideGroupsConfig *sd = [SideGroupsConfig shared];
-    return sd.sdEnabled &&
-           (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList);
+    if (sd.sdEnabled) {
+        return sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList;
+    }
+    return [SessionGroupsConfig shared].sgEnabled;
 }
 
 static SessionGroupsTab *SGSelectedTab(NSArray<SessionGroupsTab *> *tabs) {
