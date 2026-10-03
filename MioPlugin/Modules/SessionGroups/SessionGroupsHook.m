@@ -31,9 +31,11 @@
 //  - 滑动手势:           FUN__part13.c:16571-16853（dir 取反/循环/分母 max(W*0.35,100)/阈值 50·12+450·800）
 //  - 触感映射:           Misc_part4.c:1755-1784（1→Soft(3) 2→Medium(1) 3→Heavy(2)）
 //  - 记忆选中:           homeTelegramGroupingSelectedTabId（Misc_part21.c:41181；RememberSelection 缺省开 41215）
+//  - 分组持久化:         homeTelegramGroupingTabs 字典数组（Misc_part6.c:4436/5124；ensureTabsLoaded 4325-4440）
+//  - kind3 匹配:         session:matchesTab:（Misc_part6.c:8537-8800；m_uLastTime >1e12 则 /1000，窗口 [0, days*86400]）
+//  - 目录去重:           isDuplicateOfTab（Misc_part6.c:4925-5040）+ availableQuickAddTabs（7513-7660）
 // ─────────────────────────────────────────────────────────────
 
-static NSString * const kSGSelectedTabKey = @"mio_sg_selected_tab_id";
 // 关联对象键用自指指针（objc_*AssociatedObject 要求 const void *，不能用 NSString）
 static const void *kSGAssocSnapshot = &kSGAssocSnapshot;
 static const void *kSGAssocStrip    = &kSGAssocStrip;
@@ -129,6 +131,16 @@ static BOOL SGIsTopOf(id session) {
     return NO;
 }
 
+// kind3 时间窗基准（Misc_part6.c:8537-8800）：m_uLastTime 秒级，>1e12 视为毫秒 /1000
+static NSTimeInterval SGLastTimeOf(id session) {
+    if (SGResponds(session, @selector(m_uLastTime))) {
+        NSUInteger t = ((NSUInteger (*)(id, SEL))objc_msgSend)(session, @selector(m_uLastTime));
+        if (t > 1000000000000ULL) t /= 1000;
+        return (NSTimeInterval)t;
+    }
+    return 0;
+}
+
 static id SGContactOf(id session, NSString *username) {
     if (SGResponds(session, @selector(m_contact))) {
         id c = ((id (*)(id, SEL))objc_msgSend)(session, @selector(m_contact));
@@ -199,11 +211,20 @@ static NSUInteger SGDetermineScope(id session, NSString *username) {
     return contact ? 1 : 0;
 }
 
-// session:matchesTab: kind0/kind1 路径（Misc_part6.c:8596-8790）；scope 由调用方预算传入
+// session:matchesTab: kind0/kind1/kind3 路径（Misc_part6.c:8596-8790）；scope 由调用方预算传入
 static BOOL SGMatchesTab(id session, NSString *username, NSUInteger scope, SessionGroupsTab *tab, SessionGroupsConfig *cfg) {
     if (tab.kind == 0) {
         if (cfg.sgFilterPinned && SGIsTopOf(session)) return NO;
         return YES;
+    }
+    if (tab.kind == 3) {
+        // 最近 N 天（Misc_part6.c:8537-8800 kind3 路径）：tab 自带天数优先，回落全局 sgRecentDays
+        if (cfg.sgFilterPinned && SGIsTopOf(session)) return NO;
+        NSInteger days = tab.recentDays > 0 ? tab.recentDays : (cfg.sgRecentDays > 0 ? cfg.sgRecentDays : 3);
+        NSTimeInterval last = SGLastTimeOf(session);
+        if (last <= 0) return NO;
+        NSTimeInterval dt = [NSDate date].timeIntervalSince1970 - last;
+        return dt >= 0 && dt <= (NSTimeInterval)days * 86400.0;
     }
     if (tab.kind != 1) return NO;
 
@@ -254,11 +275,13 @@ static BOOL SGActive(id vc) {
 }
 
 static SessionGroupsTab *SGSelectedTab(NSArray<SessionGroupsTab *> *tabs) {
-    NSString *tid = [[NSUserDefaults standardUserDefaults] stringForKey:kSGSelectedTabKey];
-    if (tid.length) {
-        for (SessionGroupsTab *t in tabs) if ([t.tabId isEqualToString:tid]) return t;
+    if ([SessionGroupsConfig shared].sgRememberSelection) {
+        NSString *tid = [SessionGroupsTab persistedSelectedTabId];
+        if (tid.length) {
+            for (SessionGroupsTab *t in tabs) if ([t.tabId isEqualToString:tid]) return t;
+        }
     }
-    return tabs.firstObject; // 缺省回 "all"（Misc_part6.c:4444-4462）
+    return tabs.firstObject; // 缺省回第一组（Misc_part6.c:4444-4462）；未开记忆选中同样落首组
 }
 
 #pragma mark - 快照构建
@@ -279,7 +302,7 @@ static NSString *SGSignature(id vc, UITableView *table) {
         }
         [parts addObject:[NSString stringWithFormat:@"%ld", (long)c]];
     }
-    [parts addObject:SGSelectedTab([SessionGroupsTab defaultTabs]).tabId];
+    [parts addObject:SGSelectedTab([SessionGroupsTab visibleTabs]).tabId];
     [parts addObject:cfg.sgFilterPinned ? @"p1" : @"p0"];
     [parts addObject:cfg.sgFilterDuplicate ? @"d1" : @"d0"];
     return [parts componentsJoinedByString:@"|"];
@@ -290,7 +313,8 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
 
     SGHomeSnapshot *snap = [[SGHomeSnapshot alloc] init];
     SessionGroupsConfig *cfg = [SessionGroupsConfig shared];
-    NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab defaultTabs];
+    // 分组条数据源 = 管理页维护的可见分组（disabled 过滤后；空回落默认四组）
+    NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
     snap.tabs = tabs;
 
     NSInteger sections = ((NSInteger (*)(id, SEL, id))orig_numberOfSections)(vc, @selector(numberOfSectionsInTableView:), table);
@@ -361,26 +385,26 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
                 if (cfg.sgFilterDuplicate && dup) keep = NO;
                 if (!keep) {
                     [hiddenPerTab[t][s] addObject:@(r)]; // 记入本 section 的桶（WCR BySection 语义）
-                } else if (t > 0 && unread > 0) {
-                    // 未读入桶：scope 1→私聊 2→群聊 其余→其他（snapshot friend/chatRoom/other 三桶语义）
-                    NSUInteger bucket = (scope == 1) ? 1 : (scope == 2 ? 2 : 3);
-                    if (bucket == t) {
-                        // 折叠群不红点：红点标记会话不计入数字（Misc_part6.c:10512-10523 config
-                        // 开 → FUN_01576b80 查会话红点属性 → 命中不计）
-                        if (!redDotFlag || !cfg.sgFoldGroupNoRedDot) {
-                            // WCR 累加的是未读条数之和，非会话数（unreadCountForTab_ 10530：
-                            // local_200 += m_uUnReadCount）。按会话 +1 会把"3条消息2个人"
-                            // 算成 2，WCR 是 1+2=3
-                            unreadPerTab[t] = @([unreadPerTab[t] integerValue] + (NSInteger)unread);
-                        }
-                        // 组红点信号（WCR 双值模式：setUnreadCount:/setHasRedDotUnread: 双
-                        // setter FUN__part6.c:45216-45219，快捷球 refreshBallBadge 45659-45668
-                        // 同款 count==0 用红点）：组内存在免打扰且有未读的会话。显示端优先级
-                        // 数字 > 红点（Misc_part19.c:7581 officialUnreadBadgeViewWithCount:）
-                        if (redDotFlag && ![dotPerTab[t] boolValue]) {
-                            [dotPerTab replaceObjectAtIndex:t withObject:@(YES)];
-                        }
-                    }
+                    continue;
+                }
+                if (tab.kind == 0) continue; // all 组未读恒 0（Misc_part6.c:10348-10353）
+                if (unread == 0) continue;
+                // 逐组独立统计（unreadCountForTab 按 tab 遍历会话的语义；旧实现按默认
+                // tab 序号 1/2/3 硬编码桶，自定义分组下序号与 scope 不再对齐）
+                // 折叠群不红点：红点标记会话不计入数字（Misc_part6.c:10512-10523 config
+                // 开 → FUN_01576b80 查会话红点属性 → 命中不计）
+                if (!redDotFlag || !cfg.sgFoldGroupNoRedDot) {
+                    // WCR 累加的是未读条数之和，非会话数（unreadCountForTab_ 10530：
+                    // local_200 += m_uUnReadCount）。按会话 +1 会把"3条消息2个人"
+                    // 算成 2，WCR 是 1+2=3
+                    unreadPerTab[t] = @([unreadPerTab[t] integerValue] + (NSInteger)unread);
+                }
+                // 组红点信号（WCR 双值模式：setUnreadCount:/setHasRedDotUnread: 双
+                // setter FUN__part6.c:45216-45219，快捷球 refreshBallBadge 45659-45668
+                // 同款 count==0 用红点）：组内存在免打扰且有未读的会话。显示端优先级
+                // 数字 > 红点（Misc_part19.c:7581 officialUnreadBadgeViewWithCount:）
+                if (redDotFlag && ![dotPerTab[t] boolValue]) {
+                    [dotPerTab replaceObjectAtIndex:t withObject:@(YES)];
                 }
             }
         }
@@ -552,12 +576,12 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
     UITableView *table = SGMainTableView(vc);
     if (!table) return;
 
-    NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab defaultTabs];
+    NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
     if (idx < 0 || idx >= (NSInteger)tabs.count) return;
     SessionGroupsTab *tab = tabs[idx];
 
     // 1) 记忆选中组（homeTelegramGroupingSelectedTabId，Misc_part21.c:41181）
-    [[NSUserDefaults standardUserDefaults] setObject:tab.tabId forKey:kSGSelectedTabKey];
+    [SessionGroupsTab setPersistedSelectedTabId:tab.tabId];
 
     // 2) 条选中态先走弹簧动画（FUN_007f320c:18634-18636 在 reload 之前）。旧顺序是先同步
     //    reloadData——SGReloadStrip 用旧 _selectedIndex 重建条，指示器先闪回旧 tab 再硬跳
