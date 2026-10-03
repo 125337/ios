@@ -14,6 +14,20 @@
 - (NSString *)getTextFieldText;
 @end
 
+// ==================== WCActionSheet 本地声明（微信原生底部 action sheet） ====================
+// WCActionSheet : MMUIWindow，自带 window 挂载，showInView: 呈现；WCR 菜单形态同款
+// （WCR_2.1.8_export\groups\Misc_part18.c:40714+ 实证 alloc+initWithTitle: →
+//   setValue:forKey:buttonTitleList → showInView:vc.view；委托回调为经典
+//   actionSheet:clickedButtonAtIndex:，Misc 索引表 0001583c 等多处实现）
+@interface WCActionSheet : NSObject
+- (id)initWithTitle:(NSString *)title;
+- (void)setDelegate:(id)delegate;
+- (void)addButtonWithTitle:(NSString *)title;
+- (void)addDestructiveButtonWithTitle:(NSString *)title;
+- (void)setCancelButtonTitle:(NSString *)title;
+- (void)showInView:(UIView *)view;
+@end
+
 // ==================== WCR 同款锚点：target 必须是长生命周期对象 ====================
 // WCR 反编译（presentTextAlertTitle:.../showCornerRadiusInputAlert）实证其用法：
 //   addBtnTitle:@"确定" target:self(VC) sel:...  +  [self setCurrentAlert:alert]
@@ -33,9 +47,6 @@
 @end
 
 static _WAlertAnchor *kWAlertAnchor = nil;
-
-// 菜单弹窗最多按钮数（含动态菜单的现有调用点最多 7 项）
-static const int kWAlertMenuSlots = 12;
 
 static _WAlertAnchor *walertAnchor(void) {
     static dispatch_once_t onceToken;
@@ -74,18 +85,16 @@ static _WAlertAnchor *walertAnchor(void) {
                 if (cb) cb();
             }), "v@:");
 
-        // 菜单弹窗：__walert_menu_0 ~ __walert_menu_11
-        for (int i = 0; i < kWAlertMenuSlots; i++) {
-            int idx = i;
-            SEL menuSel = NSSelectorFromString([NSString stringWithFormat:@"__walert_menu_%d", idx]);
-            class_addMethod([_WAlertAnchor class], menuSel, imp_implementationWithBlock(^(id _self) {
+        // WCActionSheet 委托分发（经典 UIActionSheet 契约）：取消键/遮罩不计入
+        // menuBlocks 索引空间（0..n-1 为菜单项，cancel 由 sheet 自行路由），越界即忽略
+        class_addMethod([_WAlertAnchor class], NSSelectorFromString(@"actionSheet:clickedButtonAtIndex:"),
+            imp_implementationWithBlock(^(id _self, id sheet, long idx) {
                 NSArray *blocks = ((_WAlertAnchor *)_self).menuBlocks;
-                if (idx < (int)blocks.count) {
+                if (idx >= 0 && idx < (long)blocks.count) {
                     void(^b)(void) = blocks[idx];
                     if (b) b();
                 }
-            }), "v@:");
-        }
+            }), "v@:@q");
     });
     return kWAlertAnchor;
 }
@@ -418,46 +427,75 @@ static UIWindow *MioAlertKeyWindow(void) {
     }
 }
 
-#pragma mark - 菜单弹窗
+#pragma mark - 菜单选择器（微信原生 WCActionSheet，底部弹出，WCR 同款形态）
 
 + (void)showMenuAlert:(NSString *)message
               buttons:(NSArray<NSString *> *)titles
              onButton:(void(^)(NSInteger index))onButton {
+    [self showMenuAlert:message buttons:titles destructive:nil onButton:onButton];
+}
+
++ (void)showMenuAlert:(NSString *)message
+              buttons:(NSArray<NSString *> *)titles
+          destructive:(NSArray<NSNumber *> *)destructiveIndexes
+             onButton:(void(^)(NSInteger index))onButton {
     @try {
-        WCUIAlertView *alert = [self createAlertWithTitle:nil message:message];
-        if (!alert) return;
+        Class sheetCls = objc_getClass("WCActionSheet");
+        if (!sheetCls) {
+            WPLog(@"UI", @"[MioAlertHelper] WCActionSheet 类不存在，菜单未弹出");
+            return;
+        }
+        id sheet = ((id(*)(id, SEL))objc_msgSend)((id)sheetCls, NSSelectorFromString(@"alloc"));
+        sheet = ((id(*)(id, SEL, id))objc_msgSend)(sheet, NSSelectorFromString(@"initWithTitle:"), message);
+        if (!sheet) return;
 
         _WAlertAnchor *anchor = walertAnchor();
-        anchor.currentAlert = alert;
+        anchor.currentAlert = sheet;            // 强持有防释放（同 alert 路径）
 
-        SEL btnSel = NSSelectorFromString(@"addBtnTitle:target:sel:");
+        SEL delSel = NSSelectorFromString(@"setDelegate:");
+        if ([sheet respondsToSelector:delSel]) {
+            ((void(*)(id, SEL, id))objc_msgSend)(sheet, delSel, anchor);
+        }
+
+        // 菜单项按传入顺序落索引 0..n-1；destructive 走红色删除态（addDestructiveButtonWithTitle:）
+        SEL addSel = NSSelectorFromString(@"addButtonWithTitle:");
+        SEL desSel = NSSelectorFromString(@"addDestructiveButtonWithTitle:");
+        NSMutableSet *desSet = destructiveIndexes.count ? [NSMutableSet setWithArray:destructiveIndexes] : nil;
         NSMutableArray *blocks = [NSMutableArray array];
-        NSMutableArray *menuSelNames = [NSMutableArray array];
-        for (NSInteger i = 0; i < (NSInteger)titles.count && i < kWAlertMenuSlots; i++) {
+        for (NSInteger i = 0; i < (NSInteger)titles.count; i++) {
             NSInteger captured = i;
-            void(^b)(void) = ^{
+            [blocks addObject:^{
                 if (onButton) onButton(captured);
-            };
-            [blocks addObject:b];
-            [menuSelNames addObject:[NSString stringWithFormat:@"__walert_menu_%d", (int)captured]];
-            if ([alert respondsToSelector:btnSel]) {
-                SEL menuSel = NSSelectorFromString([NSString stringWithFormat:@"__walert_menu_%d", (int)captured]);
-                ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btnSel, titles[i], anchor, menuSel);
-            }
+            }];
+            SEL use = (desSet && [desSet containsObject:@(i)] && [sheet respondsToSelector:desSel]) ? desSel : addSel;
+            ((void(*)(id, SEL, id))objc_msgSend)(sheet, use, titles[i]);
         }
         anchor.menuBlocks = [blocks copy];
 
-        SEL cancelSel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
-        if ([alert respondsToSelector:cancelSel]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancelSel, @"取消", anchor,
-                NSSelectorFromString(@"__walert_cancel"));
+        // 取消键追加在菜单项之后（索引 n），委托回调按越界忽略；兼容单参/双参两个 API
+        SEL cancelSel = NSSelectorFromString(@"setCancelButtonTitle:");
+        if (![sheet respondsToSelector:cancelSel]) {
+            cancelSel = NSSelectorFromString(@"setCancelButtonTitle:eventAction:");
+        }
+        if ([sheet respondsToSelector:cancelSel]) {
+            if (cancelSel == NSSelectorFromString(@"setCancelButtonTitle:eventAction:")) {
+                ((void(*)(id, SEL, id, id))objc_msgSend)(sheet, cancelSel, @"取消", nil);
+            } else {
+                ((void(*)(id, SEL, id))objc_msgSend)(sheet, cancelSel, @"取消");
+            }
         }
 
-        SEL showSel = NSSelectorFromString(@"show");
-        if ([alert respondsToSelector:showSel]) {
-            ((void(*)(id, SEL))objc_msgSend)(alert, showSel);
+        // 呈现：WCR 同款 showInView:（顶 VC.view；sheet 自带 window 挂载，不依赖 present）
+        SEL showSel = NSSelectorFromString(@"showInView:");
+        if ([sheet respondsToSelector:showSel]) {
+            UIViewController *top = WPGetTopVCForPresentation();
+            UIView *host = top.view ?: UIApplication.sharedApplication.keyWindow;
+            if (host) {
+                ((void(*)(id, SEL, id))objc_msgSend)(sheet, showSel, host);
+            }
         }
     } @catch (NSException *e) {
+        WPLog(@"UI", @"[MioAlertHelper] showMenuAlert 异常: %@", e);
     }
 }
 

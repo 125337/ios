@@ -23,12 +23,18 @@
                 secure:(BOOL)secure
             onConfirm:(void(^)(NSString *inputText))confirm;
 
-/// 菜单弹窗（替代 UIAlertControllerStyleActionSheet，按钮纵向排列，自动带「取消」）
-/// @param message 菜单标题（可为空）
-/// @param titles 按钮文字数组（最多 12 个）
-/// @param onButton 点击回调，index 为按钮下标
+/// 菜单选择器（微信原生 WCActionSheet，底部弹出形态，WCR 同款；自动带「取消」）
+/// @param message 菜单标题（sheet 顶部灰色小字，可为空）
+/// @param titles 按钮文字数组
+/// @param onButton 点击回调，index 为 titles 下标；点「取消」/遮罩不回调
 + (void)showMenuAlert:(NSString *)message
               buttons:(NSArray<NSString *> *)titles
+             onButton:(void(^)(NSInteger index))onButton;
+
+/// 同上，destructiveIndexes 指定显示为红色删除态的按钮下标（可空）
++ (void)showMenuAlert:(NSString *)message
+              buttons:(NSArray<NSString *> *)titles
+          destructive:(nullable NSArray<NSNumber *> *)destructiveIndexes
              onButton:(void(^)(NSInteger index))onButton;
 
 /// 纯提示弹窗（无输入框，带"我知道了"按钮关闭）

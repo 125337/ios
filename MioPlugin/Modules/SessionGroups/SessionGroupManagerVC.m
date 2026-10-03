@@ -156,11 +156,16 @@
 
     NSMutableArray<NSString *> *buttons = [NSMutableArray arrayWithObject:@"重命名"];
     [buttons addObject:tab.disabled ? @"启用" : @"停用"];
-    if (tab.removable) [buttons addObject:@"删除分组"];
+    NSArray<NSNumber *> *des = nil;
+    if (tab.removable) {
+        [buttons addObject:@"删除分组"];
+        des = @[@2]; // 删除走红色删除态（WCR 同款）
+    }
     // WCR kind2（联动分组）额外的「编辑关联/选成员」依赖其自定义分组生态，不做
 
     [MioAlertHelper showMenuAlert:tab.title
                           buttons:buttons
+                      destructive:des
                          onButton:^(NSInteger index) {
         if (index == 0) {
             [self renameFlowForTab:tab];
