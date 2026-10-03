@@ -755,14 +755,14 @@ static void SGSideRailLayoutPass(UITableView *table) {
     [host bringSubviewToFront:rail]; // 侧栏保持最上层
 
     // 目录数据 = 跳过 all 组行
-    NSInteger off = (snap.tabs.count && snap.tabs[0].kind == 0) ? 1 : 0;
+    NSInteger dirOff = (snap.tabs.count && snap.tabs[0].kind == 0) ? 1 : 0;
     NSMutableArray<NSString *> *dirTitles = [NSMutableArray array];
-    for (NSUInteger t = (NSUInteger)off; t < snap.tabs.count; t++) [dirTitles addObject:snap.tabs[t].title ?: @""];
-    NSArray<NSNumber *> *dirCounts = off < (NSInteger)snap.tabSessionCounts.count
-        ? [snap.tabSessionCounts subarrayWithRange:NSMakeRange((NSUInteger)off, snap.tabSessionCounts.count - (NSUInteger)off)]
+    for (NSUInteger t = (NSUInteger)dirOff; t < snap.tabs.count; t++) [dirTitles addObject:snap.tabs[t].title ?: @""];
+    NSArray<NSNumber *> *dirCounts = dirOff < (NSInteger)snap.tabSessionCounts.count
+        ? [snap.tabSessionCounts subarrayWithRange:NSMakeRange((NSUInteger)dirOff, snap.tabSessionCounts.count - (NSUInteger)dirOff)]
         : @[];
-    NSArray<NSNumber *> *dirUnread = off < (NSInteger)snap.tabUnread.count
-        ? [snap.tabUnread subarrayWithRange:NSMakeRange((NSUInteger)off, snap.tabUnread.count - (NSUInteger)off)]
+    NSArray<NSNumber *> *dirUnread = dirOff < (NSInteger)snap.tabUnread.count
+        ? [snap.tabUnread subarrayWithRange:NSMakeRange((NSUInteger)dirOff, snap.tabUnread.count - (NSUInteger)dirOff)]
         : @[];
     [dir reloadGroups:dirTitles counts:dirCounts unread:dirUnread];
 }
