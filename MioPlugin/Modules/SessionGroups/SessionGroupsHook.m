@@ -870,7 +870,10 @@ static CGFloat hook_heightForHeader(id self, SEL _cmd, UITableView *tableView, N
         @try {
             SGHomeSnapshot *snap = SGEnsureSnapshot(self, tableView);
             if (snap && section == 0) {
-                return [SessionGroupsStripView preferredHeight]; // 44，Misc_part19.c:5673-5679
+                // WCR 实测（probe_wcr_tree 2026-10-03，com.tencent.wx）：rectForHeader0=(0,45.3 393x0)
+                // —— heightForHeader 报 0，plain header 因此不产生 sticky、不占布局，cell 44 高由
+                // WCR 自持并靠 layoutSubviews 摆回（Misc_part4.c:1970-2264）。这里对齐返回 0
+                return 0;
             }
         } @catch (NSException *e) {}
     }
@@ -967,7 +970,7 @@ static void hook_deleteSessionCellAt(id self, SEL _cmd, unsigned int row, long l
 // subviews，tag 定位），省略 WCR 的容器识别与 isHoldingAtViewportTop 分支
 static void SGUnstickHeader(UITableView *table) {
     CGRect target = [table rectForHeaderInSection:0];
-    if (target.size.height <= 0) return;
+    CGFloat h = [SessionGroupsStripView preferredHeight];
     for (UIView *v in table.subviews) {
         UIView *host = nil;
         if (v.tag == SG_HEADER_CELL_TAG) {
@@ -977,9 +980,13 @@ static void SGUnstickHeader(UITableView *table) {
             if (only.tag == SG_HEADER_CELL_TAG) host = v; // 微信包装容器（WCR isHomeCardHeaderContainer 同形）
         }
         if (!host) continue;
-        if (fabs(host.frame.origin.y - target.origin.y) > 0.5 ||
-            fabs(host.frame.size.height - target.size.height) > 0.5) {
-            host.frame = target;
+        // WCR 实测：rectForHeader0 高 0（heightForHeader 报 0），cell 44 高自持 ——
+        // y 摆回 rect.origin.y；若 UITableView 把 0 高 header 的 view 压扁则恢复 44 高
+        BOOL yOff = fabs(host.frame.origin.y - target.origin.y) > 0.5;
+        BOOL hOff = fabs(host.frame.size.height - h) > 0.5;
+        if (yOff || hOff) {
+            host.frame = CGRectMake(target.origin.x, target.origin.y,
+                                    host.frame.size.width, h);
         }
     }
 }
