@@ -5,6 +5,7 @@
 #import "SessionGroupManagerVC.h"
 #import "../SideGroups/SideGroupsConfig.h"
 #import "../SideGroups/SideGroupsRailView.h"
+#import "../SideGroups/SideGroupsDirView.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../SettingEntry/WPCommonUI.h"
@@ -50,6 +51,7 @@ static const void *kSGAssocRefresh  = &kSGAssocRefresh;
 static const void *kSGAssocPan      = &kSGAssocPan;
 static const void *kSGAssocPanDlg   = &kSGAssocPanDlg;
 static const void *kSGAssocRail     = &kSGAssocRail;     // 侧边分组栏（挂 vc）
+static const void *kSGAssocDir      = &kSGAssocDir;      // 侧边分组列表内目录页（挂 vc）
 static const void *kSGAssocRailNative = &kSGAssocRailNative; // 列表原生 frame（挂 table，NSValue）
 static const void *kSGAssocRailWanted = &kSGAssocRailWanted; // 上轮让位 frame（挂 table，区分自触发与原生变更）
 
@@ -120,6 +122,7 @@ static SGHomeGestureSink *sGestureSink = nil;
 @property (nonatomic, strong) NSArray<SessionGroupsTab *> *tabs;
 @property (nonatomic, strong) NSArray<NSNumber *> *tabUnread;              // 每组未读数（all 恒 0）
 @property (nonatomic, strong) NSArray<NSNumber *> *tabRedDot;
+@property (nonatomic, strong) NSArray<NSNumber *> *tabSessionCounts;       // 每组会话数（侧边分组目录页用）
 @end
 @implementation SGHomeSnapshot
 @end
@@ -379,12 +382,14 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
     NSMutableArray<NSMutableArray<NSMutableArray<NSNumber *> *> *> *hiddenPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
     NSMutableArray<NSNumber *> *unreadPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
     NSMutableArray<NSNumber *> *dotPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
+    NSMutableArray<NSNumber *> *countPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
     for (NSUInteger t = 0; t < tabs.count; t++) {
         NSMutableArray<NSMutableArray<NSNumber *> *> *perSection = [NSMutableArray arrayWithCapacity:sections];
         for (NSInteger s = 0; s < sections; s++) [perSection addObject:[NSMutableArray array]];
         [hiddenPerTab addObject:perSection];
         [unreadPerTab addObject:@(0)]; // all 组恒 0（Misc_part6.c:10348-10353）
         [dotPerTab addObject:@(NO)];
+        [countPerTab addObject:@(0)];
     }
 
     NSInteger targetSection = -1;
@@ -420,6 +425,7 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
                     [hiddenPerTab[t][s] addObject:@(r)]; // 记入本 section 的桶（WCR BySection 语义）
                     continue;
                 }
+                countPerTab[t] = @([countPerTab[t] integerValue] + 1); // 每组会话数（目录页 XOS「未读 · 15」同语义）
                 if (tab.kind == 0) continue; // all 组未读恒 0（Misc_part6.c:10348-10353）
                 if (unread == 0) continue;
                 // 逐组独立统计（unreadCountForTab 按 tab 遍历会话的语义；旧实现按默认
@@ -461,6 +467,7 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
     snap.targetSection = targetSection;
     snap.tabUnread = [unreadPerTab copy];
     snap.tabRedDot = [dotPerTab copy];
+    snap.tabSessionCounts = [countPerTab copy];
     snap.signature = SGSignature(vc, table);
     return snap;
 }
@@ -609,12 +616,17 @@ static void SGReloadStrip(id vc, SGHomeSnapshot *snap) {
 
 #pragma mark - 侧边分组（XOS XZYCLG 移植：FUN_0020a174 侧栏挂载+列表 frame 让位）
 
-// 关闭时还原：摘侧栏 + 恢复列表原生 frame
+// 关闭时还原：摘侧栏/目录页 + 恢复列表原生 frame
 static void SGRemoveSideRail(id vc, UITableView *table) {
     SideGroupsRailView *rail = objc_getAssociatedObject(vc, kSGAssocRail);
     if (rail) {
         [rail removeFromSuperview];
         objc_setAssociatedObject(vc, kSGAssocRail, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    SideGroupsDirView *dir = objc_getAssociatedObject(vc, kSGAssocDir);
+    if (dir) {
+        [dir removeFromSuperview];
+        objc_setAssociatedObject(vc, kSGAssocDir, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
     if (nativeV && !CGRectEqualToRect(table.frame, [nativeV CGRectValue])) {
@@ -705,6 +717,54 @@ static void SGSideRailLayoutPass(UITableView *table) {
     NSInteger idx = 0;
     for (NSUInteger t = 0; t < snap.tabs.count; t++) if (snap.tabs[t] == sel) { idx = (NSInteger)t; break; }
     if (rail.selectedIndex != idx) rail.selectedIndex = idx;
+
+    // ── 列表内目录页（XOS「+列表内」形态）：选中「全部」组时列表区显示分组目录， ──
+    //    点行切入该组；显示条件 = 位置含列表内 && 当前选中组是 all（kind==0）
+    BOOL wantDir = (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList)
+                   && snap.tabs.count > 0 && sel.kind == 0;
+    SideGroupsDirView *dir = objc_getAssociatedObject(vc, kSGAssocDir);
+    if (!wantDir) {
+        if (dir) dir.hidden = YES;
+        return;
+    }
+    if (!dir) {
+        dir = [[SideGroupsDirView alloc] initWithFrame:CGRectZero];
+        __weak id weakVC = vc;
+        dir.onSelectIndex = ^(NSInteger rowIdx) {
+            NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
+            NSInteger off = (tabs.count && tabs[0].kind == 0) ? 1 : 0;
+            SGSelectTabIndex(weakVC, rowIdx + off, 0, YES); // 目录行跳过 all 组行
+        };
+        dir.onLongPressIndex = ^(NSInteger rowIdx) {
+            NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
+            NSInteger off = (tabs.count && tabs[0].kind == 0) ? 1 : 0;
+            NSInteger tIdx = rowIdx + off;
+            if (tIdx < 0 || tIdx >= (NSInteger)tabs.count) return;
+            SGDispatchLongPress(weakVC, tabs[tIdx]);
+        };
+        objc_setAssociatedObject(vc, kSGAssocDir, dir, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (dir.superview != host) {
+        [dir removeFromSuperview];
+        [host addSubview:dir];
+    }
+    dir.backgroundColor = table.backgroundColor; // 跟随列表底色（明暗主题一致）
+    dir.frame = [table.superview convertRect:table.frame toView:host]; // 占据让位后的列表区
+    dir.hidden = NO;
+    [host bringSubviewToFront:dir];
+    [host bringSubviewToFront:rail]; // 侧栏保持最上层
+
+    // 目录数据 = 跳过 all 组行
+    NSInteger off = (snap.tabs.count && snap.tabs[0].kind == 0) ? 1 : 0;
+    NSMutableArray<NSString *> *dirTitles = [NSMutableArray array];
+    for (NSUInteger t = (NSUInteger)off; t < snap.tabs.count; t++) [dirTitles addObject:snap.tabs[t].title ?: @""];
+    NSArray<NSNumber *> *dirCounts = off < (NSInteger)snap.tabSessionCounts.count
+        ? [snap.tabSessionCounts subarrayWithRange:NSMakeRange((NSUInteger)off, snap.tabSessionCounts.count - (NSUInteger)off)]
+        : @[];
+    NSArray<NSNumber *> *dirUnread = off < (NSInteger)snap.tabUnread.count
+        ? [snap.tabUnread subarrayWithRange:NSMakeRange((NSUInteger)off, snap.tabUnread.count - (NSUInteger)off)]
+        : @[];
+    [dir reloadGroups:dirTitles counts:dirCounts unread:dirUnread];
 }
 
 #pragma mark - 切组
