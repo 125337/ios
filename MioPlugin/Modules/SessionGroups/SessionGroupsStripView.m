@@ -91,14 +91,21 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
     return c ?: fallback;
 }
 
-// 卡片背景：WCR resolvedCardColor（Misc_part19.c:5137-5242）默认链是主题 cellBackgroundColor
-// （fallback systemBackgroundColor），等价于透出微信首页原生底色 → 默认 clear；启用自定义后覆盖
+// 卡片背景：WCR resolvedCardColor（Misc_part19.c:5137-5242）默认链 = corner 未启用 →
+// [WCRefineOfficialTheme colorNamed:@"cellBackgroundColor" fallback:systemBackgroundColor]。
+// 必须是不透明实体底：table section header 有 sticky 悬停特性，滚动悬停时实体底遮挡
+// 滚过的行（clearColor 会透出下方内容，视觉上条与列表"重叠"）
 - (UIColor *)resolvedCardColor {
     SessionGroupsConfig *cfg = [SessionGroupsConfig shared];
     if (cfg.sgBgColorCustom) {
-        return [self colorFromConfigLight:@"sgBgColor" dark:@"sgBgColorDark" fallback:UIColor.clearColor];
+        return [self colorFromConfigLight:@"sgBgColor" dark:@"sgBgColorDark" fallback:[self defaultCardColor]];
     }
-    return UIColor.clearColor;
+    return [self defaultCardColor];
+}
+
+// WCR 主题色 cellBackgroundColor 的 fallback 语义：浅=白 深=黑，与微信首页 cell 底一致
+- (UIColor *)defaultCardColor {
+    return UIColor.systemBackgroundColor;
 }
 
 - (UIColor *)resolvedIndicatorColor {
