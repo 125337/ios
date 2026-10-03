@@ -16,6 +16,11 @@
 // → 首页 hook 自动刷新，本页无需额外通知。
 @implementation SessionGroupManagerVC
 
+// 弹窗形态（WCR presentFromViewController:halfScreen:1 同款）的左上「关闭」
+- (void)sgCloseModal:(id)sender {
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"分组管理";

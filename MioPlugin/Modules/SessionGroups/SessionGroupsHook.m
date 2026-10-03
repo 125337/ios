@@ -76,7 +76,7 @@ static NSHashTable *sSeenVCs = nil; // weak，记录出现过的 NMFVC
 static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animated);
 static void SGDispatchLongPress(id vc, SessionGroupsTab *tab);
 static void SGShowLongPressMenu(id vc, SessionGroupsTab *tab);
-static void SGOpenGroupManager(id vc);
+static void SGOpenGroupManager(void);
 static BOOL SGIsMainFrameVC(id vc);
 static UITableView *SGMainTableView(id vc);
 static BOOL SGActive(id vc);
@@ -626,18 +626,31 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
 
 #pragma mark - 长按动作（WCR FUN_007f7044 执行器 FUN__part13.c:19926-20070 + FUN_007f7854 菜单，Mio 裁剪版）
 
-// 打开分组管理（WCR action 2 同语义：进入分组管理页）。
-// 走首页现有导航栈 push（与设置入口同路径，微信引擎表在裸 modal 容器下主线程
-// 卡死——Frida 实证 viewDidAppear 后死锁被杀）；push 自带返回按钮，无需关闭按钮
-static void SGOpenGroupManager(id vc) {
-    if (!vc) return;
-    UINavigationController *nav = [(UIViewController *)vc navigationController];
-    if (!nav) {
-        WPLog(@"SG", @"[SgHook] home has no navigationController, skip open manager");
-        return;
-    }
+// 打开分组管理（WCR action 2 = presentFromViewController:halfScreen:1 弹窗形态，
+// FUN_01ee62a0 half=1 分支：裸 UINavigationController + pageSheet + iOS15 largeDetent
+// + root VC 左上关闭按钮）。
+// 注意：从长按菜单回调发起时，调用方（SGShowLongPressMenu）负责延迟到 WCActionSheet
+// dismiss 动画结束——sheet 回调内同步 present，两转场并发冲突 → 弹窗被回滚/死锁
+// （WCR 菜单是自绘视图 removeFromSuperview 收场，无此冲突，故可直接 present）
+static void SGOpenGroupManager(void) {
+    UIViewController *top = [UIApplication sharedApplication].keyWindow.rootViewController;
+    while (top.presentedViewController) top = top.presentedViewController;
+    if (!top) return;
     SessionGroupManagerVC *mgr = [[SessionGroupManagerVC alloc] init];
-    [nav pushViewController:mgr animated:YES];
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:mgr];
+    nav.modalPresentationStyle = UIModalPresentationPageSheet;
+    if (@available(iOS 15.0, *)) {
+        UISheetPresentationController *sheet = nav.sheetPresentationController;
+        if (sheet) {
+            sheet.detents = @[UISheetPresentationControllerDetent.largeDetent];
+            sheet.prefersScrollingExpandsWhenScrolledToEdge = YES;
+        }
+    }
+    UIBarButtonItem *close = [[UIBarButtonItem alloc] initWithTitle:@"关闭"
+                                style:UIBarButtonItemStylePlain
+                               target:mgr action:@selector(sgCloseModal:)];
+    mgr.navigationItem.leftBarButtonItem = close;
+    [top presentViewController:nav animated:YES completion:nil];
 }
 
 // 长按菜单（FUN_007f7854：menuLongPressActions + runtimeTitle，tab.title 空则「分组」）
@@ -653,7 +666,12 @@ static void SGShowLongPressMenu(id vc, SessionGroupsTab *tab) {
         if (index < 0 || index >= (NSInteger)actions.count) return;
         NSInteger act = actions[index].integerValue;
         switch (act) {
-            case 2: SGOpenGroupManager(vc); break;
+            case 2:
+                // WCActionSheet dismiss 动画（0.3s）走完再 present：回调内同步 present
+                // 与 sheet 收起转场并发冲突（WCR 自绘菜单无此问题）
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{ SGOpenGroupManager(); });
+                break;
             case 5: {
                 BOOL nv = !tab.hidePinned;
                 [SessionGroupsTab setHidePinned:nv forTabId:tab.tabId];
@@ -689,8 +707,8 @@ static void SGDispatchLongPress(id vc, SessionGroupsTab *tab) {
         WPShowToast(nv ? @"已隐藏置顶会话" : @"已显示置顶会话");
         return;
     }
-    // 默认 2：打开分组管理
-    SGOpenGroupManager(vc);
+    // 默认 2：打开分组管理（长按直达路径无 sheet 收起上下文，可直接 present）
+    SGOpenGroupManager();
 }
 
 #pragma mark - 滑动手势（FUN__part13.c:16571-16853）
