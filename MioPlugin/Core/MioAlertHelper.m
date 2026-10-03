@@ -1,4 +1,5 @@
 #import "MioAlertHelper.h"
+#import "LogManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../Modules/SettingEntry/WPCommonUI.h"
