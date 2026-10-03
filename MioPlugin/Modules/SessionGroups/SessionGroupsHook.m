@@ -76,7 +76,7 @@ static NSHashTable *sSeenVCs = nil; // weak，记录出现过的 NMFVC
 static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animated);
 static void SGDispatchLongPress(id vc, SessionGroupsTab *tab);
 static void SGShowLongPressMenu(id vc, SessionGroupsTab *tab);
-static void SGOpenGroupManager(void);
+static void SGOpenGroupManager(id vc);
 static BOOL SGIsMainFrameVC(id vc);
 static UITableView *SGMainTableView(id vc);
 static BOOL SGActive(id vc);
@@ -84,7 +84,6 @@ static BOOL SGActive(id vc);
 // 手势落点（不给微信类 addMethod，用独立 sink 对象）
 @interface SGHomeGestureSink : NSObject
 - (void)sgHandlePan:(UIPanGestureRecognizer *)pan;
-- (void)sgClosePresentedNav:(id)sender;
 @end
 static SGHomeGestureSink *sGestureSink = nil;
 
@@ -627,19 +626,18 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
 
 #pragma mark - 长按动作（WCR FUN_007f7044 执行器 FUN__part13.c:19926-20070 + FUN_007f7854 菜单，Mio 裁剪版）
 
-// 打开分组管理（WCR action 2：present 分组管理页）。独立 present 无返回栈，
-// 包 UINavigationController 并加左上「完成」关闭（经 sink 单例 dismiss）
-static void SGOpenGroupManager(void) {
-    UIViewController *top = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (top.presentedViewController) top = top.presentedViewController;
-    if (!top) return;
+// 打开分组管理（WCR action 2 同语义：进入分组管理页）。
+// 走首页现有导航栈 push（与设置入口同路径，微信引擎表在裸 modal 容器下主线程
+// 卡死——Frida 实证 viewDidAppear 后死锁被杀）；push 自带返回按钮，无需关闭按钮
+static void SGOpenGroupManager(id vc) {
+    if (!vc) return;
+    UINavigationController *nav = [(UIViewController *)vc navigationController];
+    if (!nav) {
+        WPLog(@"SG", @"[SgHook] home has no navigationController, skip open manager");
+        return;
+    }
     SessionGroupManagerVC *mgr = [[SessionGroupManagerVC alloc] init];
-    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:mgr];
-    UIBarButtonItem *done = [[UIBarButtonItem alloc] initWithTitle:@"完成"
-                                style:UIBarButtonItemStylePlain
-                               target:sGestureSink action:@selector(sgClosePresentedNav:)];
-    mgr.navigationItem.leftBarButtonItem = done;
-    [top presentViewController:nav animated:YES completion:nil];
+    [nav pushViewController:mgr animated:YES];
 }
 
 // 长按菜单（FUN_007f7854：menuLongPressActions + runtimeTitle，tab.title 空则「分组」）
@@ -655,7 +653,7 @@ static void SGShowLongPressMenu(id vc, SessionGroupsTab *tab) {
         if (index < 0 || index >= (NSInteger)actions.count) return;
         NSInteger act = actions[index].integerValue;
         switch (act) {
-            case 2: SGOpenGroupManager(); break;
+            case 2: SGOpenGroupManager(vc); break;
             case 5: {
                 BOOL nv = !tab.hidePinned;
                 [SessionGroupsTab setHidePinned:nv forTabId:tab.tabId];
@@ -692,18 +690,12 @@ static void SGDispatchLongPress(id vc, SessionGroupsTab *tab) {
         return;
     }
     // 默认 2：打开分组管理
-    SGOpenGroupManager();
+    SGOpenGroupManager(vc);
 }
 
 #pragma mark - 滑动手势（FUN__part13.c:16571-16853）
 
 @implementation SGHomeGestureSink
-// 「完成」关闭独立 present 的分组管理（UIBarButtonItem 单参 target-action）
-- (void)sgClosePresentedNav:(id)sender {
-    UIViewController *top = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (top.presentedViewController) top = top.presentedViewController;
-    [top dismissViewControllerAnimated:YES completion:nil];
-}
 - (void)sgHandlePan:(UIPanGestureRecognizer *)pan {
     // 手势挂 vc.view 根视图（WCR 同款），经响应链找 NMFVC，再取主表做位移参照
     UIView *host = pan.view;
