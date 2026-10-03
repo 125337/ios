@@ -870,10 +870,11 @@ static CGFloat hook_heightForHeader(id self, SEL _cmd, UITableView *tableView, N
         @try {
             SGHomeSnapshot *snap = SGEnsureSnapshot(self, tableView);
             if (snap && section == 0) {
-                // WCR 实测（probe_wcr_tree 2026-10-03，com.tencent.wx）：rectForHeader0=(0,45.3 393x0)
-                // —— heightForHeader 报 0，plain header 因此不产生 sticky、不占布局，cell 44 高由
-                // WCR 自持并靠 layoutSubviews 摆回（Misc_part4.c:1970-2264）。这里对齐返回 0
-                return 0;
+                // WCR 静态实测 heightForHeader 报 0（probe_wcr_tree rectForHeader0=393x0），但 WCR 的
+                // cell 是 FUN_007ec688 hook 里主动 addSubview 的，不依赖 header 机制。我们曾对齐返回 0
+                // （sgbadge10），实测 iOS 直接跳过 viewForHeaderInSection 调用 → 条消失（probe_qy_tree
+                // DUMP#1 子树无 cell）。故保留 44：header 占布局 + SGUnstickHeader 摆 y 实现跟随滚动
+                return [SessionGroupsStripView preferredHeight];
             }
         } @catch (NSException *e) {}
     }
