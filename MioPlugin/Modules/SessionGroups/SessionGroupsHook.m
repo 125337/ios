@@ -29,7 +29,8 @@
 //  - 增量保护:           insertSessionCell 等关动画透传+刷新（wcrGrouping_.c:4419-4616）；insertRow:/deleteSessionCell: 只刷新不透传
 //  - reloadData 无动画:  Misc.c:21388-21389
 //  - 头部接管:           直接接管 section(0) header（hook viewForHeader/heightForHeader，section==0
-//                        且快照生效时返回分组条 cell，高 44；sticky 钉顶由系统 header 机制实现）。
+//                        且快照生效时返回分组条 cell，高 44；SGUnstickHeader 去粘滞让条跟随内容
+//                        滚动，避免与微信「Windows 已登录」浮层提示条同位重叠）
 //                        WCR 侧为 FUN_003b53f4 谓词（FUN__part6.c:55286）+ 主动 addSubview，机制不同仅语义对齐
 //  - 滑动手势:           FUN__part13.c:16571-16853（dir 取反/循环/分母 max(W*0.35,100)/阈值 50·12+450·800）
 //  - 触感映射:           Misc_part4.c:1755-1784（1→Soft(3) 2→Medium(1) 3→Heavy(2)）
@@ -69,6 +70,10 @@ static IMP orig_deleteSessionCell     = NULL;
 static IMP orig_insertRow             = NULL;
 static IMP orig_deleteSessionCellAt   = NULL;
 static IMP orig_logicGetSession       = NULL; // 仅捕获 IMP 用于枚举，不替换
+static IMP orig_tableLayout           = NULL; // MainFrameTableView.layoutSubviews（unstick 用）
+
+// header cell 标记 tag（WCR tag 0x7f149 同语义；"SG01"）——unstick 时从 tableView.subviews 定位
+#define SG_HEADER_CELL_TAG 0x53303031
 
 static BOOL sInstalled = NO;
 static NSHashTable *sSeenVCs = nil; // weak，记录出现过的 NMFVC
@@ -963,6 +968,7 @@ static id hook_viewForHeader(id self, SEL _cmd, UITableView *tableView, NSIntege
                     cell.layoutMargins = UIEdgeInsetsZero;
                     cell.preservesSuperviewLayoutMargins = NO;
                     cell.backgroundColor = UIColor.clearColor;
+                    cell.tag = SG_HEADER_CELL_TAG;
                     [cell.contentView addSubview:strip];
                     // separator 上色不在本函数做：手动 alloc 的 cell 绕过了微信给原生 header
                     // 的包装与上色链路（cell 不经过微信的 header 复用/包装流程），这里只负责
@@ -986,11 +992,9 @@ static CGFloat hook_heightForHeader(id self, SEL _cmd, UITableView *tableView, N
         @try {
             SGHomeSnapshot *snap = SGEnsureSnapshot(self, tableView);
             if (snap && section == 0) {
-                // WCR 静态 dump 里 heightForHeader 报 0 且其 cell 主动 addSubview（probe_wcr_tree
-                // rectForHeader0=393x0）。我们曾对齐返回 0（sgbadge10），实测 iOS 直接跳过
-                // viewForHeaderInSection 调用 → 条消失（probe_qy_tree DUMP#1 子树无 cell）。
-                // 产品预期是条钉在屏幕顶端（sticky），会话列表从条下方滚过（WCR 同款钉顶）→
-                // 保留 44 占位 + 不透明背景（sgbadge8），sticky 是想要的系统行为
+                // 高度保持 44 占位（iOS 高度为 0 会跳过 viewForHeaderInSection 调用 → 条消失，
+                // sgbadge10 实测）。钉顶由 SGUnstickHeader 去粘滞（跟随内容滚动，WCR unstick
+                // 同款），避免与微信「Windows 已登录」浮层提示条同位重叠
                 return [SessionGroupsStripView preferredHeight];
             }
         } @catch (NSException *e) {}
@@ -1081,6 +1085,41 @@ static void hook_deleteSessionCellAt(id self, SEL _cmd, unsigned int row, long l
 
 #pragma mark - 安装
 
+// header 去粘滞（WCR WCRefineHomeHeaderUnstick unstickIfNeededOnTableView: 同款，Misc_part4.c:1970-2264）：
+// plain tableView 的 section header 会 sticky 悬停钉顶；WCR 在每次 layoutSubviews 后把标记的
+// header 容器 frame 用 rectForHeaderInSection: 的内容坐标理论位置摆回去 → header 跟随内容
+// 滚动（下拉时被导航栏裁掉，与"写在内容上"一致）。Mio 的 cell 未被微信包装（直接在
+// subviews，tag 定位），省略 WCR 的容器识别与 isHoldingAtViewportTop 分支。
+// sticky 钉顶会与微信「Windows 已登录」浮层提示条同位重叠（sgbadge17d 实测），unstick 才是
+// WCR 真实行为（此前"WCR 同款钉顶"为误判，sgbadge8 误删本机制）
+static void SGUnstickHeader(UITableView *table) {
+    CGRect target = [table rectForHeaderInSection:0];
+    if (target.size.height <= 0) return;
+    for (UIView *v in table.subviews) {
+        UIView *host = nil;
+        if (v.tag == SG_HEADER_CELL_TAG) {
+            host = v;                       // 直接 subview
+        } else if ([v isKindOfClass:[UIView class]] && v.subviews.count == 1) {
+            UIView *only = v.subviews.firstObject;
+            if (only.tag == SG_HEADER_CELL_TAG) host = v; // 微信包装容器（WCR isHomeCardHeaderContainer 同形）
+        }
+        if (!host) continue;
+        if (fabs(host.frame.origin.y - target.origin.y) > 0.5 ||
+            fabs(host.frame.size.height - target.size.height) > 0.5) {
+            host.frame = target;
+        }
+    }
+}
+
+static void hook_tableLayoutSubviews(UITableView *table, SEL _cmd) {
+    if (orig_tableLayout) ((void (*)(id, SEL))orig_tableLayout)(table, _cmd);
+    @try {
+        SGUnstickHeader(table); // 未接管时 subviews 无本 tag，自然空操作
+    } @catch (NSException *e) {
+        WPLog(@"SG", @"[SgHook] unstick err=%@", e);
+    }
+}
+
 static void SGHook(Class cls, SEL sel, IMP newIMP, IMP *origOut) {
     Method m = class_getInstanceMethod(cls, sel);
     if (!m) {
@@ -1153,6 +1192,15 @@ static void SGHook(Class cls, SEL sel, IMP newIMP, IMP *origOut) {
 
     #undef HOOK
     #undef CAPTURE
+
+    // header 去粘滞：swizzle MainFrameTableView.layoutSubviews（WCR installMainFrameTableHookIfNeeded
+    // 同款，Misc_part4.c:2274-2363；类缺失时跳过，functionality 降级为原生 sticky）
+    Class tableCls = objc_getClass("MainFrameTableView");
+    if (tableCls) {
+        SGHook(tableCls, @selector(layoutSubviews), (IMP)hook_tableLayoutSubviews, &orig_tableLayout);
+    } else {
+        WPLog(@"SG", @"[SgHook] MainFrameTableView not found, header will stick");
+    }
 
     WPLog(@"SG", @"[SgHook] installed on NewMainFrameViewController");
 }
