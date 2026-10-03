@@ -35,7 +35,6 @@
         [ConfigDescriptor itemWithKey:@"sgFilterDuplicate" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sgTabs" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"sgRecentDays" type:ConfigValueTypeInteger default:@(3)],
-        [ConfigDescriptor itemWithKey:@"sgRememberSelection" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"sgBgColorCustom" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sgBgColor" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"sgBgColorDark" type:ConfigValueTypeString default:@""],

@@ -24,7 +24,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL sgFilterDuplicate;       // 过滤重复联系人
 @property (nonatomic, copy) NSString *sgTabs;               // 分组列表 JSON 数组（空 = 默认四组），由分组管理页维护
 @property (nonatomic, assign) NSInteger sgRecentDays;       // 最近会话缺省天数 1-30（kind3 分组未自带天数时的回落值）
-@property (nonatomic, assign) BOOL sgRememberSelection;     // 记忆选中分组（WCR homeTelegramGroupingRememberSelection，缺省开）
 
 // 外观颜色（浅/深色双 hex，空 = 未自定义跟随默认；对齐 WCR homeTelegramGrouping* 配置族）
 @property (nonatomic, assign) BOOL sgBgColorCustom;         // 启用自定义背景色

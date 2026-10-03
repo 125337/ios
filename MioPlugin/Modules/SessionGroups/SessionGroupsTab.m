@@ -1,8 +1,9 @@
 #import "SessionGroupsTab.h"
 #import "../../Core/ConfigManager.h"
 
-// 选中组持久化键（原 SessionGroupsHook 内 static，管理页删除分组/恢复默认也要回落选中，收编到模型层）
-static NSString * const kSGSelectedTabKey = @"mio_sg_selected_tab_id";
+// 当前选中组（原 NSUserDefaults 持久化「记忆选中」，功能删除后改为会话内内存态：
+// 切组仍需选中状态渲染指示器，但每次启动微信回落第一组，不跨启动记忆）
+static NSString *sSelectedTabId = nil;
 
 // storedTabs 缓存：SGSignature 每次行渲染都会取 tabs，逐次 JSON 反序列化不可接受。
 // 以 raw 串为键（比较远轻于解析）；仅主线程访问（UI + hook 回调均在主线程），无锁
@@ -185,8 +186,8 @@ static NSString *sCacheRaw = nil;
     [m removeObject:target];
     [self saveTabs:m];
     // 删的是选中组 → 选中回落可见第一组（WCR 同款）
-    if ([[self persistedSelectedTabId] isEqualToString:tabId]) {
-        [self setPersistedSelectedTabId:[self visibleTabs].firstObject.tabId];
+    if ([[self currentSelectedTabId] isEqualToString:tabId]) {
+        [self setCurrentSelectedTabId:[self visibleTabs].firstObject.tabId];
     }
 }
 
@@ -222,7 +223,7 @@ static NSString *sCacheRaw = nil;
 + (void)resetToDefaults {
     // WCR resetToDefaults（7484-7503）：tabs=defaultTabs、selectedTabId=all、persist
     [self saveTabs:[self defaultTabs]];
-    [self setPersistedSelectedTabId:@"all"];
+    [self setCurrentSelectedTabId:@"all"];
 }
 
 + (BOOL)isDuplicateOfTab:(SessionGroupsTab *)tab inTabs:(NSArray<SessionGroupsTab *> *)tabs {
@@ -330,16 +331,14 @@ static NSString *sCacheRaw = nil;
     [self saveTabs:tabs];
 }
 
-#pragma mark - 选中组记忆
+#pragma mark - 当前选中组（仅会话内，不落盘）
 
-+ (NSString *)persistedSelectedTabId {
-    return [[NSUserDefaults standardUserDefaults] stringForKey:kSGSelectedTabKey];
++ (NSString *)currentSelectedTabId {
+    return sSelectedTabId;
 }
 
-+ (void)setPersistedSelectedTabId:(NSString *)tabId {
-    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    if (tabId.length) [d setObject:tabId forKey:kSGSelectedTabKey];
-    else [d removeObjectForKey:kSGSelectedTabKey];
++ (void)setCurrentSelectedTabId:(NSString *)tabId {
+    sSelectedTabId = tabId.length ? [tabId copy] : nil;
 }
 
 #pragma mark - 右值文案（WCR detailText，Misc_part6.c:3523-3642）

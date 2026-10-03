@@ -57,10 +57,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setHidePinned:(BOOL)hidePinned forTabId:(NSString *)tabId;              // 长按动作 5 落点
 + (void)shiftVisibleTabId:(NSString *)tabId by:(NSInteger)delta;                // 长按动作 8/9：可见序列内移动
 
-#pragma mark - 选中组记忆（WCR homeTelegramGroupingSelectedTabId，Misc_part21.c:41181）
+#pragma mark - 当前选中组（仅会话内有效，不跨启动记忆；启动回落第一组）
 
-+ (nullable NSString *)persistedSelectedTabId;
-+ (void)setPersistedSelectedTabId:(nullable NSString *)tabId;
++ (nullable NSString *)currentSelectedTabId;
++ (void)setCurrentSelectedTabId:(nullable NSString *)tabId;
 
 /// 列表右值说明文案（WCR detailText Misc_part6.c:3523-3642）
 /// recentFallback：kind3 且 tab 未自带天数时的全局缺省（sgRecentDays）

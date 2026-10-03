@@ -9,7 +9,7 @@
 // Misc_part18.c:65831-66672 + Misc_part19.c:12-1000）：
 //   分组列表（store.tabs 全量含停用，右值=detailText，点击弹菜单：重命名/停用启用/删除）
 //   添加分组（内置目录按 isDuplicate 去重后呈现）
-//   行为（记忆选中 switch + 最近会话天数输入[1,30]）
+//   行为（最近会话天数输入[1-30]，仅作用于「最近」分组）
 //   恢复默认（确认弹窗 → resetToDefaults）
 // WCR 的排序页（WCRTGTabReorderViewController）/长按菜单风格/新建自定义分组依赖其
 // 分组生态，不做。Store 变更经 ConfigManager saveAll → NSUserDefaultsDidChangeNotification
@@ -71,13 +71,6 @@
     y = [self addSectionHeader:@"行为" y:y width:w];
     UIView *g3 = [self addTableGroupAtY:y width:w];
     cy = 0;
-    cy = [self addSwitchRowInGroup:g3
-                             title:@"记忆选中"
-                              desc:nil
-                               key:@"sgRememberSelection"
-                              isOn:config.sgRememberSelection
-                                cy:cy
-                             width:w];
     cy = [self addInputRowInGroup:g3
                             title:@"最近会话天数"
                               key:@"sgRecentDays"
@@ -89,6 +82,7 @@
                                cy:cy
                             width:w];
     y = [self finishGroup:g3 atY:y height:cy];
+    y = [self addSectionFooter:@"该天数仅作用于「最近」分组" y:y width:w];
 
     // ──── 恢复默认（WCR buildResetSection：确认弹窗 → resetToDefaults） ────
     y = [self addSectionHeader:@"恢复默认" y:y width:w];

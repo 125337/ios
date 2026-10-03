@@ -34,7 +34,7 @@
 //                        WCR 侧为 FUN_003b53f4 谓词（FUN__part6.c:55286）+ 主动 addSubview，机制不同仅语义对齐
 //  - 滑动手势:           FUN__part13.c:16571-16853（dir 取反/循环/分母 max(W*0.35,100)/阈值 50·12+450·800）
 //  - 触感映射:           Misc_part4.c:1755-1784（1→Soft(3) 2→Medium(1) 3→Heavy(2)）
-//  - 记忆选中:           homeTelegramGroupingSelectedTabId（Misc_part21.c:41181；RememberSelection 缺省开 41215）
+//  - 选中组:             homeTelegramGroupingSelectedTabId（Misc_part21.c:41181；Mio 仅会话内记忆，不落盘）
 //  - 分组持久化:         homeTelegramGroupingTabs 字典数组（Misc_part6.c:4436/5124；ensureTabsLoaded 4325-4440）
 //  - kind3 匹配:         session:matchesTab:（Misc_part6.c:8537-8800；m_uLastTime >1e12 则 /1000，窗口 [0, days*86400]）
 //  - 目录去重:           isDuplicateOfTab（Misc_part6.c:4925-5040）+ availableQuickAddTabs（7513-7660）
@@ -292,13 +292,11 @@ static BOOL SGActive(id vc) {
 }
 
 static SessionGroupsTab *SGSelectedTab(NSArray<SessionGroupsTab *> *tabs) {
-    if ([SessionGroupsConfig shared].sgRememberSelection) {
-        NSString *tid = [SessionGroupsTab persistedSelectedTabId];
-        if (tid.length) {
-            for (SessionGroupsTab *t in tabs) if ([t.tabId isEqualToString:tid]) return t;
-        }
+    NSString *tid = [SessionGroupsTab currentSelectedTabId];
+    if (tid.length) {
+        for (SessionGroupsTab *t in tabs) if ([t.tabId isEqualToString:tid]) return t;
     }
-    return tabs.firstObject; // 缺省回第一组（Misc_part6.c:4444-4462）；未开记忆选中同样落首组
+    return tabs.firstObject; // 无选中记录时回落第一组（WCR Misc_part6.c:4444-4462；启动即此分支）
 }
 
 #pragma mark - 快照构建
@@ -575,7 +573,7 @@ static void SGReloadStrip(id vc, SGHomeSnapshot *snap) {
     if (!strip) return;
     NSMutableArray *titles = [NSMutableArray array];
     for (SessionGroupsTab *t in snap.tabs) [titles addObject:t.title];
-    // WCR reloadTabs 同构（Misc_part19.c:7255-7268）：重建按钮前先把条选中态同步到持久化
+    // WCR reloadTabs 同构（Misc_part19.c:7255-7268）：重建按钮前先把条选中态同步到当前
     // 选中组——否则 reload 时 refreshAppearance 按旧 _selectedIndex 摆指示器（闪回旧 tab）
     SessionGroupsTab *sel = SGSelectedTab(snap.tabs);
     NSInteger idx = 0;
@@ -603,8 +601,8 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
     if (idx < 0 || idx >= (NSInteger)tabs.count) return;
     SessionGroupsTab *tab = tabs[idx];
 
-    // 1) 记忆选中组（homeTelegramGroupingSelectedTabId，Misc_part21.c:41181）
-    [SessionGroupsTab setPersistedSelectedTabId:tab.tabId];
+    // 1) 当前选中组（仅会话内内存态，不跨启动）
+    [SessionGroupsTab setCurrentSelectedTabId:tab.tabId];
 
     // 2) 条选中态先走弹簧动画（FUN_007f320c:18634-18636 在 reload 之前）。旧顺序是先同步
     //    reloadData——SGReloadStrip 用旧 _selectedIndex 重建条，指示器先闪回旧 tab 再硬跳
