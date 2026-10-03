@@ -3,6 +3,8 @@
 #import "SessionGroupsTab.h"
 #import "SessionGroupsStripView.h"
 #import "SessionGroupManagerVC.h"
+#import "../SideGroups/SideGroupsConfig.h"
+#import "../SideGroups/SideGroupsRailView.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../SettingEntry/WPCommonUI.h"
@@ -47,6 +49,9 @@ static const void *kSGAssocHeaderCell = &kSGAssocHeaderCell;
 static const void *kSGAssocRefresh  = &kSGAssocRefresh;
 static const void *kSGAssocPan      = &kSGAssocPan;
 static const void *kSGAssocPanDlg   = &kSGAssocPanDlg;
+static const void *kSGAssocRail     = &kSGAssocRail;     // 侧边分组栏（挂 vc）
+static const void *kSGAssocRailNative = &kSGAssocRailNative; // 列表原生 frame（挂 table，NSValue）
+static const void *kSGAssocRailWanted = &kSGAssocRailWanted; // 上轮让位 frame（挂 table，区分自触发与原生变更）
 
 static IMP orig_numberOfSections      = NULL;
 static IMP orig_numberOfRows          = NULL;
@@ -285,10 +290,21 @@ static UITableView *SGMainTableView(id vc) {
     return nil;
 }
 
-// active（对应 wcrGrouping_active，wcrGrouping_.c:2586-2677，去云控保留本地开关）
+// active（对应 wcrGrouping_active，wcrGrouping_.c:2586-2677；Mio 扩展：侧边分组独立开关
+// 与电报分组共用同一分组引擎，任一开启即激活快照/过滤）
 static BOOL SGActive(id vc) {
     if (!SGIsMainFrameVC(vc)) return NO;
-    return [SessionGroupsConfig shared].sgEnabled;
+    if ([SessionGroupsConfig shared].sgEnabled) return YES;
+    return [SideGroupsConfig shared].sdEnabled;
+}
+
+// 条接管 = 电报分组开，或侧边分组选了「+列表内」位置（XOS XZYCLG「列表内」横条语义，
+// Mio 直接复用电报分组条形态）
+static BOOL SGWantsStrip(id vc) {
+    if ([SessionGroupsConfig shared].sgEnabled) return YES;
+    SideGroupsConfig *sd = [SideGroupsConfig shared];
+    return sd.sdEnabled &&
+           (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList);
 }
 
 static SessionGroupsTab *SGSelectedTab(NSArray<SessionGroupsTab *> *tabs) {
@@ -587,6 +603,106 @@ static void SGReloadStrip(id vc, SGHomeSnapshot *snap) {
     if (strip.selectedIndex != idx) {
         [strip setSelectedIndex:idx velocity:0 animated:NO];
     }
+}
+
+#pragma mark - 侧边分组（XOS XZYCLG 移植：FUN_0020a174 侧栏挂载+列表 frame 让位）
+
+// 关闭时还原：摘侧栏 + 恢复列表原生 frame
+static void SGRemoveSideRail(id vc, UITableView *table) {
+    SideGroupsRailView *rail = objc_getAssociatedObject(vc, kSGAssocRail);
+    if (rail) {
+        [rail removeFromSuperview];
+        objc_setAssociatedObject(vc, kSGAssocRail, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
+    if (nativeV && !CGRectEqualToRect(table.frame, [nativeV CGRectValue])) {
+        table.frame = [nativeV CGRectValue];
+    }
+    objc_setAssociatedObject(table, kSGAssocRailNative, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(table, kSGAssocRailWanted, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+// MainFrameTableView.layoutSubviews 收尾调用（对齐 XOS FUN_0020a174 在每次布局后重摆侧栏）：
+// 1) 原生帧追踪（区分微信原生变更 vs 自己上轮写帧，防双重让位/布局风暴）
+// 2) 让位帧写回：左模式 x+=w/width-=w，右模式 width-=w（0.5pt 阈值防空写）
+// 3) 侧栏定位（左 minX / 右 maxX-w，X 微调）+ 配置签名应用 + 快照数据同步
+static void SGSideRailLayoutPass(UITableView *table) {
+    id vc = nil;
+    for (id seen in sSeenVCs) {
+        if (SGIsMainFrameVC(seen) && SGMainTableView(seen) == table) { vc = seen; break; }
+    }
+    if (!vc) return;
+    SideGroupsConfig *sd = [SideGroupsConfig shared];
+    if (!sd.sdEnabled) {
+        SGRemoveSideRail(vc, table);
+        return;
+    }
+
+    // ── 原生帧追踪 ──
+    CGRect cur = table.frame;
+    NSValue *lastWantedV = objc_getAssociatedObject(table, kSGAssocRailWanted);
+    NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
+    CGRect native = nativeV ? [nativeV CGRectValue] : cur;
+    if (!lastWantedV || !CGRectEqualToRect(cur, [lastWantedV CGRectValue])) {
+        native = cur; // 与上轮让位帧不一致 → 微信原生布局变更，重捕获
+    }
+    objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:native], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    // ── 让位帧计算（XOS FUN__part4.c:19995-20060 同语义；参数钳位同设置项范围） ──
+    CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
+    CGFloat off = MIN(MAX(sd.sdRailXOffset, -30), 30);
+    BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
+    CGRect want = native;
+    CGRect railFrame; // table.superview 坐标系
+    if (left) {
+        want.origin.x = native.origin.x + w;
+        want.size.width = native.size.width - w;
+        railFrame = CGRectMake(native.origin.x + off, native.origin.y, w, native.size.height);
+    } else {
+        want.size.width = native.size.width - w;
+        railFrame = CGRectMake(native.origin.x + native.size.width - w + off, native.origin.y, w, native.size.height);
+    }
+    if (want.size.width < 100) return; // 极窄屏保护，宁可不出侧栏
+    if (fabs(cur.origin.x - want.origin.x) > 0.5 || fabs(cur.size.width - want.size.width) > 0.5) {
+        table.frame = want; // 写帧触发下一轮 layout；下轮 cur==want 走跳过分支
+    }
+    objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    // ── 侧栏挂载与定位 ──
+    SideGroupsRailView *rail = objc_getAssociatedObject(vc, kSGAssocRail);
+    if (!rail) {
+        rail = [[SideGroupsRailView alloc] initWithFrame:CGRectZero];
+        __weak id weakVC = vc;
+        rail.onSelectIndex = ^(NSInteger idx) {
+            SGSelectTabIndex(weakVC, idx, 0, YES);
+        };
+        rail.onLongPressIndex = ^(NSInteger idx) {
+            NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
+            if (idx < 0 || idx >= (NSInteger)tabs.count) return;
+            SGDispatchLongPress(weakVC, tabs[idx]);
+        };
+        objc_setAssociatedObject(vc, kSGAssocRail, rail, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    UIView *host = [vc view];
+    if (!host) return;
+    if (rail.superview != host) {
+        [rail removeFromSuperview];
+        [host addSubview:rail];
+    }
+    [host bringSubviewToFront:rail];
+    rail.frame = [table.superview convertRect:railFrame toView:host];
+    [rail applyConfig];
+
+    // ── 数据同步（标题/角标/选中态，快照签名缓存，热路径开销同条刷新） ──
+    SGHomeSnapshot *snap = SGEnsureSnapshot(vc, table);
+    if (!snap) return;
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
+    for (SessionGroupsTab *t in snap.tabs) [titles addObject:t.title ?: @""];
+    [rail reloadTitles:titles badges:snap.tabUnread];
+    SessionGroupsTab *sel = SGSelectedTab(snap.tabs);
+    NSInteger idx = 0;
+    for (NSUInteger t = 0; t < snap.tabs.count; t++) if (snap.tabs[t] == sel) { idx = (NSInteger)t; break; }
+    if (rail.selectedIndex != idx) rail.selectedIndex = idx;
 }
 
 #pragma mark - 切组
@@ -953,7 +1069,14 @@ static id hook_viewForHeader(id self, SEL _cmd, UITableView *tableView, NSIntege
     if (SG_CAN_FILTER(self, tableView) && orig_viewForHeader) {
         @try {
             SGHomeSnapshot *snap = SGEnsureSnapshot(self, tableView);
-            if (snap && section == 0) {
+            if (snap && section == 0 && !SGWantsStrip(self)) {
+                // 条已不需要（电报分组关/侧边改纯侧栏）：清接管缓存，回落原生 header
+                UITableViewCell *stale = objc_getAssociatedObject(self, kSGAssocHeaderCell);
+                if (stale) [stale removeFromSuperview];
+                objc_setAssociatedObject(self, kSGAssocHeaderCell, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                sHeaderHostCell = nil;
+            }
+            if (snap && section == 0 && SGWantsStrip(self)) {
                 SessionGroupsStripView *strip = SGEnsureStrip(self, tableView);
                 CGFloat w = tableView.bounds.size.width;
                 CGFloat h = [SessionGroupsStripView preferredHeight];
@@ -995,7 +1118,7 @@ static CGFloat hook_heightForHeader(id self, SEL _cmd, UITableView *tableView, N
     if (SG_CAN_FILTER(self, tableView) && orig_heightForHeader) {
         @try {
             SGHomeSnapshot *snap = SGEnsureSnapshot(self, tableView);
-            if (snap && section == 0) {
+            if (snap && section == 0 && SGWantsStrip(self)) {
                 // 高度保持 44 占位（iOS 高度为 0 会跳过 viewForHeaderInSection 调用 → 条消失，
                 // sgbadge10 实测）。钉顶由 SGUnstickHeader 去粘滞（跟随内容滚动，WCR unstick
                 // 同款），避免与微信「Windows 已登录」浮层提示条同位重叠
@@ -1115,6 +1238,7 @@ static void hook_tableLayoutSubviews(UITableView *table, SEL _cmd) {
     if (orig_tableLayout) ((void (*)(id, SEL))orig_tableLayout)(table, _cmd);
     @try {
         SGUnstickHeader(table); // 未接管时 weak 缓存为 nil，立即空操作
+        SGSideRailLayoutPass(table); // 侧边分组让位/定位（非主表或未启用时为空操作）
     } @catch (NSException *e) {
         WPLog(@"SG", @"[SgHook] unstick err=%@", e);
     }

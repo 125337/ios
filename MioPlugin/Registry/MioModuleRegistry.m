@@ -36,6 +36,8 @@
 #import "../Modules/SessionGroups/SessionGroupsConfig.h"
 #import "../Modules/SessionGroups/SessionGroupsVC.h"
 #import "../Modules/SessionGroups/SessionGroupsHook.h"
+#import "../Modules/SideGroups/SideGroupsConfig.h"
+#import "../Modules/SideGroups/SideGroupsVC.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -242,6 +244,15 @@
                                                hookClasses:@[[SessionGroupsHook class]]
                                            controllerClass:[SessionGroupsVC class]
                                                   subtitle:@"会话列表电报式分组栏"
+                                             sectionTitle:@"通用"],
+
+            // ──── 首页侧边分组（复用 SessionGroupsHook 分组引擎，无独立 Hook） ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"sidegroups"
+                                                    title:@"首页侧边分组"
+                                               configClass:[SideGroupsConfig class]
+                                               hookClasses:@[]
+                                           controllerClass:[SideGroupsVC class]
+                                                  subtitle:@"会话列表侧边分组栏"
                                              sectionTitle:@"通用"],
 
             [MioModuleDescriptor descriptorWithIdentifier:@"fontlayout"

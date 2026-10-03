@@ -2,6 +2,7 @@
 #import "../../Settings/Controllers/SettingChatTopBarController.h"
 #import "../../Settings/Controllers/SettingAvatarHideController.h"
 #import "../SessionGroups/SessionGroupsVC.h"
+#import "../SideGroups/SideGroupsVC.h"
 #import "../../Core/LogManager.h"
 
 @interface WPUIVC : SettingCategoryController
@@ -64,6 +65,13 @@
                            action:@selector(navigateTo:)
                                cy:sgCy
                             width:w];
+    sgCy = [self addNavRowInGroup:sgGroup
+                            title:@"首页侧边分组"
+                         subtitle:nil
+                              tag:109
+                           action:@selector(navigateTo:)
+                               cy:sgCy
+                            width:w];
     y = [self finishGroup:sgGroup atY:y height:sgCy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
@@ -97,6 +105,9 @@
             break;
         case 108:
             subVC = [[SessionGroupsVC alloc] init];
+            break;
+        case 109:
+            subVC = [[SideGroupsVC alloc] init];
             break;
     }
 
