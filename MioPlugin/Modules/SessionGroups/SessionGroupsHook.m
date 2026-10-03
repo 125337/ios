@@ -25,9 +25,9 @@
 //  - 行重映射:           WCRGroupingSnapshot.hiddenOriginalRowsBySection（头文件）+ wcrGrouping_.c:5481+
 //  - 增量保护:           insertSessionCell 等关动画透传+刷新（wcrGrouping_.c:4419-4616）；insertRow:/deleteSessionCell: 只刷新不透传
 //  - reloadData 无动画:  Misc.c:21388-21389
-//  - 头部接管:           置顶区 section(0) header；接管谓词 FUN_003b53f4（FUN__part6.c:55286）要求
-//                        section != targetSection 且 pinnedAreaTakenOver（快照字段即"置顶区被接管"）；
-//                        targetSection 只是条目渲染 section（wcrGrouping_.c:4667）；高度 44（Misc_part19.c:5673-5679）
+//  - 头部接管:           直接接管 section(0) header（hook viewForHeader/heightForHeader，section==0
+//                        且快照生效时返回分组条 cell，高 44；sticky 钉顶由系统 header 机制实现）。
+//                        WCR 侧为 FUN_003b53f4 谓词（FUN__part6.c:55286）+ 主动 addSubview，机制不同仅语义对齐
 //  - 滑动手势:           FUN__part13.c:16571-16853（dir 取反/循环/分母 max(W*0.35,100)/阈值 50·12+450·800）
 //  - 触感映射:           Misc_part4.c:1755-1784（1→Soft(3) 2→Medium(1) 3→Heavy(2)）
 //  - 记忆选中:           homeTelegramGroupingSelectedTabId（Misc_part21.c:41181；RememberSelection 缺省开 41215）
@@ -840,10 +840,9 @@ static id hook_viewForHeader(id self, SEL _cmd, UITableView *tableView, NSIntege
                     cell.preservesSuperviewLayoutMargins = NO;
                     cell.backgroundColor = UIColor.clearColor;
                     [cell.contentView addSubview:strip];
-                    // separator 上色不在本函数做：手动 alloc 的 cell 绕过了微信的"首页卡片头
-                    // 容器"包装（WCR 靠 markHeaderView + MainFrameTableView.layoutSubviews
-                    // hook 让微信包它的裸 UIView，包装时微信顺手上色），这里只负责把 cell 建
-                    // 好，上色由 SessionGroupsStripView.layoutSubviews 每次布局补
+                    // separator 上色不在本函数做：手动 alloc 的 cell 绕过了微信给原生 header
+                    // 的包装与上色链路（cell 不经过微信的 header 复用/包装流程），这里只负责
+                    // 把 cell 建好，上色由 SessionGroupsStripView.layoutSubviews 每次布局补
                     objc_setAssociatedObject(self, kSGAssocHeaderCell, cell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 }
                 cell.frame = CGRectMake(0, 0, w, h);
@@ -866,8 +865,8 @@ static CGFloat hook_heightForHeader(id self, SEL _cmd, UITableView *tableView, N
                 // WCR 静态 dump 里 heightForHeader 报 0 且其 cell 主动 addSubview（probe_wcr_tree
                 // rectForHeader0=393x0）。我们曾对齐返回 0（sgbadge10），实测 iOS 直接跳过
                 // viewForHeaderInSection 调用 → 条消失（probe_qy_tree DUMP#1 子树无 cell）。
-                // 且产品预期就是钉顶（条固定在置顶会话上方，WCR 同为钉顶）→ 保留 44 占位 +
-                // 不透明背景（sgbadge8），sticky 是想要的系统行为
+                // 产品预期是条钉在屏幕顶端（sticky），会话列表从条下方滚过（WCR 同款钉顶）→
+                // 保留 44 占位 + 不透明背景（sgbadge8），sticky 是想要的系统行为
                 return [SessionGroupsStripView preferredHeight];
             }
         } @catch (NSException *e) {}
