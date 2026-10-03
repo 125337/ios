@@ -46,7 +46,7 @@
                               width:w];
     }
     y = [self finishGroup:g1 atY:y height:cy];
-    y = [self addSectionFooter:@"点击分组可重命名、停用或删除" y:y width:w];
+    y = [self addSectionFooter:@"点击分组可重命名、停用、设置长按动作或删除" y:y width:w];
 
     // ──── 添加分组（WCR buildAddSection：目录按 isDuplicateOfTab 去重） ────
     y = [self addSectionHeader:@"添加分组" y:y width:w];
@@ -156,10 +156,11 @@
 
     NSMutableArray<NSString *> *buttons = [NSMutableArray arrayWithObject:@"重命名"];
     [buttons addObject:tab.disabled ? @"启用" : @"停用"];
+    [buttons addObject:@"长按动作"];
     NSArray<NSNumber *> *des = nil;
     if (tab.removable) {
         [buttons addObject:@"删除分组"];
-        des = @[@2]; // 删除走红色删除态（WCR 同款）
+        des = @[@3]; // 删除走红色删除态（WCR 同款）
     }
     // WCR kind2（联动分组）额外的「编辑关联/选成员」依赖其自定义分组生态，不做
 
@@ -172,10 +173,29 @@
         } else if (index == 1) {
             [SessionGroupsTab setTabId:tab.tabId disabled:!tab.disabled];
             [self reloadAfterStoreChange];
-        } else if (index == 2 && tab.removable) {
+        } else if (index == 2) {
+            [self chooseLongPressFlowForTab:tab];
+        } else if (index == 3 && tab.removable) {
             [SessionGroupsTab removeTabId:tab.tabId];
             [self reloadAfterStoreChange];
         }
+    }];
+}
+
+// 长按动作选择（WCR chooseLongPressForTab，Misc_part19.c:468-596）：当前项标 ✓，选完持久化
+- (void)chooseLongPressFlowForTab:(SessionGroupsTab *)tab {
+    NSArray<NSNumber *> *actions = [SessionGroupsTab pickerLongPressActionsForTab:tab];
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
+    for (NSNumber *a in actions) {
+        NSString *t = [SessionGroupsTab titleForLongPressAction:a.integerValue tab:tab];
+        if (a.integerValue == tab.longPressAction) t = [t stringByAppendingString:@" ✓"];
+        [titles addObject:t];
+    }
+    [MioAlertHelper showMenuAlert:@"长按动作"
+                          buttons:titles
+                         onButton:^(NSInteger index) {
+        if (index < 0 || index >= (NSInteger)actions.count) return;
+        [SessionGroupsTab setLongPressAction:actions[index].integerValue forTabId:tab.tabId];
     }];
 }
 

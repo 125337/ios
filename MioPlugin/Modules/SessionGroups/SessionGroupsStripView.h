@@ -13,6 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface SessionGroupsStripView : UIView
 
 @property (nonatomic, copy) void (^onSelectIndex)(NSInteger index);
+@property (nonatomic, copy) void (^onLongPressIndex)(NSInteger index); // 长按动作（WCR wcrGrouping_handleHomeItemLongPress，wcrGrouping_.c:8807）
 @property (nonatomic, assign) NSInteger selectedIndex;
 
 + (CGFloat)preferredHeight;

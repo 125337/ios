@@ -51,7 +51,7 @@ static NSString *sCacheRaw = nil;
 #pragma mark - 序列化（dictionaryRepresentation/tabWithDictionary: Misc_part6.c:2973-3513）
 
 - (NSDictionary *)dictionaryRepresentation {
-    // Mio 仅 7 键（WCR 13 键中的 members/linkedGroupIds 等生态字段不涉及）
+    // Mio 仅 9 键（WCR 13 键中的 members/linkedGroupIds 等生态字段不涉及）
     NSMutableDictionary *d = [NSMutableDictionary dictionary];
     if (self.tabId.length) d[@"tabId"] = self.tabId;
     if (self.title.length) d[@"title"] = self.title;
@@ -60,6 +60,8 @@ static NSString *sCacheRaw = nil;
     d[@"recentDays"] = @(self.recentDays);
     d[@"removable"] = @(self.removable);
     d[@"disabled"] = @(self.disabled);
+    d[@"longPressAction"] = @(self.longPressAction);
+    d[@"hidePinned"] = @(self.hidePinned);
     return d;
 }
 
@@ -97,6 +99,14 @@ static NSString *sCacheRaw = nil;
 
     id disV = d[@"disabled"];
     t.disabled = [disV isKindOfClass:NSNumber.class] ? [disV boolValue] : NO;
+
+    // 长按动作：范围 [0,6] 之外回落 0（跟随默认，WCR setLongPressAction 6623 同款边界）
+    id lpV = d[@"longPressAction"];
+    NSInteger lp = [lpV isKindOfClass:NSNumber.class] ? [lpV integerValue] : 0;
+    t.longPressAction = (lp >= 0 && lp <= 6) ? lp : 0;
+
+    id hpV = d[@"hidePinned"];
+    t.hidePinned = [hpV isKindOfClass:NSNumber.class] ? [hpV boolValue] : NO;
     return t;
 }
 
@@ -222,6 +232,98 @@ static NSString *sCacheRaw = nil;
         return YES;
     }
     return NO;
+}
+
+#pragma mark - 长按动作（WCR Misc_part6.c:6238-6660 / FUN_007f7044 执行器，Mio 裁剪版）
+
++ (NSInteger)defaultLongPressActionForTab:(SessionGroupsTab *)tab {
+    // WCR：kind0→1(分组面板) kind2→3(联动) else→2；Mio 1/3 生态不做，统一 → 2
+    return 2;
+}
+
++ (NSInteger)resolvedLongPressActionForTab:(SessionGroupsTab *)tab {
+    // WCR resolvedLongPressActionForTab（6279）：0=跟随默认
+    if (tab.longPressAction != 0) return tab.longPressAction;
+    return [self defaultLongPressActionForTab:tab];
+}
+
++ (NSString *)titleForLongPressAction:(NSInteger)action tab:(SessionGroupsTab *)tab {
+    // WCR titleForLongPressAction:tab:（6314）：0→「跟随（%@）」
+    if (action == 0) {
+        return [NSString stringWithFormat:@"跟随（%@）",
+                [self runtimeTitleForLongPressAction:[self defaultLongPressActionForTab:tab] tab:tab]];
+    }
+    return [self runtimeTitleForLongPressAction:action tab:tab];
+}
+
++ (NSString *)runtimeTitleForLongPressAction:(NSInteger)action tab:(SessionGroupsTab *)tab {
+    // WCR runtimeTitleForLongPressAction（6407）：action5 依 tab.hidePinned 显隐
+    switch (action) {
+        case 2: return @"打开分组管理";
+        case 5: return tab.hidePinned ? @"显示置顶" : @"隐藏置顶";
+        case 6: return @"弹出长按菜单";
+        case 7: return @"停用分组";
+        case 8: return @"左移分组";
+        case 9: return @"右移分组";
+        case 4: return @"无操作";
+        default: return @"长按动作";
+    }
+}
+
++ (NSArray<NSNumber *> *)pickerLongPressActionsForTab:(SessionGroupsTab *)tab {
+    // WCR pickerLongPressActionsForTab（6448，[0,1,2,(3 if kind2),5,6,4]）裁剪：1/3 生态不做
+    return @[@0, @2, @5, @6, @4];
+}
+
++ (NSArray<NSNumber *> *)menuLongPressActionsForTab:(SessionGroupsTab *)tab {
+    // WCR menuLongPressActionsForTab（6532，[1,2,3,5,4,8,9]）裁剪：面板/联动去掉，补 7 停用
+    return @[@2, @5, @7, @8, @9];
+}
+
++ (void)setLongPressAction:(NSInteger)action forTabId:(NSString *)tabId {
+    // WCR setLongPressAction:forTabId:（6623）：范围 [0,6] 且持久化
+    if (!tabId.length || action < 0 || action > 6) return;
+    NSArray<SessionGroupsTab *> *tabs = [self storedTabs];
+    for (SessionGroupsTab *t in tabs) {
+        if ([t.tabId isEqualToString:tabId]) {
+            if (t.longPressAction == action) return;
+            t.longPressAction = action;
+            [self saveTabs:tabs];
+            return;
+        }
+    }
+}
+
++ (void)setHidePinned:(BOOL)hidePinned forTabId:(NSString *)tabId {
+    if (!tabId.length) return;
+    NSArray<SessionGroupsTab *> *tabs = [self storedTabs];
+    for (SessionGroupsTab *t in tabs) {
+        if ([t.tabId isEqualToString:tabId]) {
+            if (t.hidePinned == hidePinned) return;
+            t.hidePinned = hidePinned;
+            [self saveTabs:tabs];
+            return;
+        }
+    }
+}
+
++ (void)shiftVisibleTabId:(NSString *)tabId by:(NSInteger)delta {
+    // WCR shiftVisibleTabId:by:（FUN_007f7044 内 8/9 分支）：可见序列内移动，越界静默。
+    // storedTabs 中停用组穿插其间，交换两个可见位的数组下标即得目标可见序
+    if (!tabId.length || delta == 0) return;
+    NSMutableArray<SessionGroupsTab *> *tabs = [[self storedTabs] mutableCopy];
+    NSMutableArray<NSNumber *> *visIdx = [NSMutableArray array];
+    for (NSInteger i = 0; i < (NSInteger)tabs.count; i++) {
+        if (!tabs[i].disabled) [visIdx addObject:@(i)];
+    }
+    NSInteger pos = -1;
+    for (NSInteger v = 0; v < (NSInteger)visIdx.count; v++) {
+        if ([tabs[visIdx[v].integerValue].tabId isEqualToString:tabId]) { pos = v; break; }
+    }
+    NSInteger np = pos + delta;
+    if (pos < 0 || np < 0 || np >= (NSInteger)visIdx.count) return;
+    [tabs exchangeObjectsAtIndexes:visIdx[pos].integerValue withObject:visIdx[np].integerValue];
+    [self saveTabs:tabs];
 }
 
 #pragma mark - 选中组记忆

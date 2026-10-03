@@ -2,7 +2,10 @@
 #import "SessionGroupsConfig.h"
 #import "SessionGroupsTab.h"
 #import "SessionGroupsStripView.h"
+#import "SessionGroupManagerVC.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioAlertHelper.h"
+#import "../SettingEntry/WPCommonUI.h"
 #import <UIKit/UIKit.h>
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -71,6 +74,9 @@ static BOOL sInstalled = NO;
 static NSHashTable *sSeenVCs = nil; // weak，记录出现过的 NMFVC
 
 static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animated);
+static void SGDispatchLongPress(id vc, SessionGroupsTab *tab);
+static void SGShowLongPressMenu(id vc, SessionGroupsTab *tab);
+static void SGOpenGroupManager(void);
 static BOOL SGIsMainFrameVC(id vc);
 static UITableView *SGMainTableView(id vc);
 static BOOL SGActive(id vc);
@@ -78,6 +84,7 @@ static BOOL SGActive(id vc);
 // 手势落点（不给微信类 addMethod，用独立 sink 对象）
 @interface SGHomeGestureSink : NSObject
 - (void)sgHandlePan:(UIPanGestureRecognizer *)pan;
+- (void)sgClosePresentedNav:(id)sender;
 @end
 static SGHomeGestureSink *sGestureSink = nil;
 
@@ -214,12 +221,12 @@ static NSUInteger SGDetermineScope(id session, NSString *username) {
 // session:matchesTab: kind0/kind1/kind3 路径（Misc_part6.c:8596-8790）；scope 由调用方预算传入
 static BOOL SGMatchesTab(id session, NSString *username, NSUInteger scope, SessionGroupsTab *tab, SessionGroupsConfig *cfg) {
     if (tab.kind == 0) {
-        if (cfg.sgFilterPinned && SGIsTopOf(session)) return NO;
+        if ((cfg.sgFilterPinned || tab.hidePinned) && SGIsTopOf(session)) return NO;
         return YES;
     }
     if (tab.kind == 3) {
         // 最近 N 天（Misc_part6.c:8537-8800 kind3 路径）：tab 自带天数优先，回落全局 sgRecentDays
-        if (cfg.sgFilterPinned && SGIsTopOf(session)) return NO;
+        if ((cfg.sgFilterPinned || tab.hidePinned) && SGIsTopOf(session)) return NO;
         NSInteger days = tab.recentDays > 0 ? tab.recentDays : (cfg.sgRecentDays > 0 ? cfg.sgRecentDays : 3);
         NSTimeInterval last = SGLastTimeOf(session);
         if (last <= 0) return NO;
@@ -228,8 +235,9 @@ static BOOL SGMatchesTab(id session, NSString *username, NSUInteger scope, Sessi
     }
     if (tab.kind != 1) return NO;
 
-    // 置顶过滤（homeTelegramGroupingFilterPinned，Misc_part6.c:8946-8958）
-    if (cfg.sgFilterPinned && SGIsTopOf(session)) return NO;
+    // 置顶过滤：全局 sgFilterPinned 或本组 hidePinned（长按动作 5 落点，homeTelegramGroupingFilterPinned
+    // Misc_part6.c:8946-8958 + tab.hidePinned per-tab 开关）
+    if ((cfg.sgFilterPinned || tab.hidePinned) && SGIsTopOf(session)) return NO;
 
     // effectiveScopeMaskForTab：other 组补公众号位 bit2(4)（Misc_part6.c:7886-7913）
     NSUInteger eff = tab.scopeMask;
@@ -527,6 +535,12 @@ static SessionGroupsStripView *SGEnsureStrip(id vc, UITableView *table) {
         strip.onSelectIndex = ^(NSInteger idx) {
             SGSelectTabIndex(weakVC, idx, 0, YES);
         };
+        // 长按动作（WCR handleHomeItemLongPress 同构）：index → 可见组 → 执行器分发
+        strip.onLongPressIndex = ^(NSInteger idx) {
+            NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
+            if (idx < 0 || idx >= (NSInteger)tabs.count) return;
+            SGDispatchLongPress(weakVC, tabs[idx]);
+        };
         objc_setAssociatedObject(vc, kSGAssocStrip, strip, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     // 全屏滑动手势（WCR 007f9e0c 同款）：挂 vc.view 根视图 + 仲裁 delegate + cancels=YES +
@@ -611,9 +625,85 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
     WPLog(@"SG", @"[SgHook] select tab %ld (%@)", (long)idx, tab.tabId);
 }
 
+#pragma mark - 长按动作（WCR FUN_007f7044 执行器 FUN__part13.c:19926-20070 + FUN_007f7854 菜单，Mio 裁剪版）
+
+// 打开分组管理（WCR action 2：present 分组管理页）。独立 present 无返回栈，
+// 包 UINavigationController 并加左上「完成」关闭（经 sink 单例 dismiss）
+static void SGOpenGroupManager(void) {
+    UIViewController *top = [UIApplication sharedApplication].keyWindow.rootViewController;
+    while (top.presentedViewController) top = top.presentedViewController;
+    if (!top) return;
+    SessionGroupManagerVC *mgr = [[SessionGroupManagerVC alloc] init];
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:mgr];
+    UIBarButtonItem *done = [[UIBarButtonItem alloc] initWithTitle:@"完成"
+                                style:UIBarButtonItemStylePlain
+                               target:sGestureSink action:@selector(sgClosePresentedNav:)];
+    mgr.navigationItem.leftBarButtonItem = done;
+    [top presentViewController:nav animated:YES completion:nil];
+}
+
+// 长按菜单（FUN_007f7854：menuLongPressActions + runtimeTitle，tab.title 空则「分组」）
+static void SGShowLongPressMenu(id vc, SessionGroupsTab *tab) {
+    NSArray<NSNumber *> *actions = [SessionGroupsTab menuLongPressActionsForTab:tab];
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
+    for (NSNumber *a in actions) {
+        [titles addObject:[SessionGroupsTab runtimeTitleForLongPressAction:a.integerValue tab:tab]];
+    }
+    [MioAlertHelper showMenuAlert:(tab.title.length ? tab.title : @"分组")
+                          buttons:titles
+                         onButton:^(NSInteger index) {
+        if (index < 0 || index >= (NSInteger)actions.count) return;
+        NSInteger act = actions[index].integerValue;
+        switch (act) {
+            case 2: SGOpenGroupManager(); break;
+            case 5: {
+                BOOL nv = !tab.hidePinned;
+                [SessionGroupsTab setHidePinned:nv forTabId:tab.tabId];
+                WPShowToast(nv ? @"已隐藏置顶会话" : @"已显示置顶会话");
+                break;
+            }
+            case 7:
+                [SessionGroupsTab setTabId:tab.tabId disabled:YES];
+                WPShowToast(@"已停用分组");
+                break;
+            case 8:
+                [SessionGroupsTab shiftVisibleTabId:tab.tabId by:-1];
+                WPShowToast(@"已左移");
+                break;
+            case 9:
+                [SessionGroupsTab shiftVisibleTabId:tab.tabId by:1];
+                WPShowToast(@"已右移");
+                break;
+        }
+    }];
+}
+
+// 执行器分发（FUN_007f7044：!vc||!tab||action==4 直接返回；1/3 为 WCR 生态动作，Mio 裁剪）
+static void SGDispatchLongPress(id vc, SessionGroupsTab *tab) {
+    if (!vc || !tab) return;
+    NSInteger action = [SessionGroupsTab resolvedLongPressActionForTab:tab];
+    if (action == 4) return; // 无操作
+    if (action == 6) { SGShowLongPressMenu(vc, tab); return; }
+    if (action == 5) {
+        // 切换置顶过滤（setHidePinned:forTabId: 取反 + toast）
+        BOOL nv = !tab.hidePinned;
+        [SessionGroupsTab setHidePinned:nv forTabId:tab.tabId];
+        WPShowToast(nv ? @"已隐藏置顶会话" : @"已显示置顶会话");
+        return;
+    }
+    // 默认 2：打开分组管理
+    SGOpenGroupManager();
+}
+
 #pragma mark - 滑动手势（FUN__part13.c:16571-16853）
 
 @implementation SGHomeGestureSink
+// 「完成」关闭独立 present 的分组管理（UIBarButtonItem 单参 target-action）
+- (void)sgClosePresentedNav:(id)sender {
+    UIViewController *top = [UIApplication sharedApplication].keyWindow.rootViewController;
+    while (top.presentedViewController) top = top.presentedViewController;
+    [top dismissViewControllerAnimated:YES completion:nil];
+}
 - (void)sgHandlePan:(UIPanGestureRecognizer *)pan {
     // 手势挂 vc.view 根视图（WCR 同款），经响应链找 NMFVC，再取主表做位移参照
     UIView *host = pan.view;

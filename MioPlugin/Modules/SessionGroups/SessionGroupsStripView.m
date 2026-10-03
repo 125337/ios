@@ -186,6 +186,8 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
         btn.titleLabel.font = [UIFont systemFontOfSize:fontSize weight:UIFontWeightMedium];
         [btn setTitle:titles[i] forState:UIControlStateNormal];
         [btn addTarget:self action:@selector(handleTap:) forControlEvents:UIControlEventTouchUpInside];
+        UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
+        [btn addGestureRecognizer:lp];
         [_scrollView addSubview:btn];
         [btns addObject:btn];
     }
@@ -429,6 +431,14 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
 - (void)handleTap:(UIButton *)sender {
     if ((NSInteger)sender.tag == _selectedIndex) return;
     if (self.onSelectIndex) self.onSelectIndex((NSInteger)sender.tag);
+}
+
+// 长按动作入口（WCR wcrGrouping_handleHomeItemLongPress，wcrGrouping_.c:8807）：按住 tab 触发
+- (void)handleLongPress:(UILongPressGestureRecognizer *)gr {
+    if (gr.state != UIGestureRecognizerStateBegan) return;
+    UIView *v = gr.view;
+    if (![v isKindOfClass:[UIButton class]]) return;
+    if (self.onLongPressIndex) self.onLongPressIndex((NSInteger)((UIButton *)v).tag);
 }
 
 - (void)layoutSubviews {
