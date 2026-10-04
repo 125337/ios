@@ -14,7 +14,7 @@
     self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
     if (self) {
         self.backgroundColor = UIColor.clearColor;
-        self.selectionStyle = UITableViewCellSelectionStyleDefault;
+        self.selectionStyle = UITableViewCellSelectionStyleNone; // 组头不做点击高亮，反馈靠箭头方向
         self.contentView.backgroundColor = UIColor.clearColor;
 
         _titleLabel = [self sdMakeLabel:13];
