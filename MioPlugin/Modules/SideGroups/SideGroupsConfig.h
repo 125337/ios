@@ -20,9 +20,14 @@ typedef NS_ENUM(NSInteger, SDSidePosition) {
 @property (nonatomic, assign) BOOL sdEnabled;               // 启动首页侧边分组（总开关）
 @property (nonatomic, assign) NSInteger sdPosition;         // 分组显示位置 SDSidePosition
 @property (nonatomic, assign) CGFloat sdRailWidth;          // 侧栏宽度 40-90，默认 54（XOS rail 宽）
-@property (nonatomic, assign) CGFloat sdRailFontSize;       // 按钮字号 9-20，默认 12
+@property (nonatomic, assign) CGFloat sdRailFontSize;       // 自定义字号 9-20，默认 12（rail 与目录共用）
+@property (nonatomic, assign) BOOL sdFontCustom;            // 自定义字号开关：关 → 跟随微信字体大小（dynamicLength）
 @property (nonatomic, assign) CGFloat sdRailXOffset;        // X 微调 -30~30（XOS applySideRailLeftXOffset:rightXOffset:）
 @property (nonatomic, assign) BOOL sdShowUnreadBadge;       // 显示未读角标
+
+// 字号解析（对齐电报 SessionGroupsStripView 链路）：自定义开 → sdRailFontSize（钳 9-20）；
+// 关 → 微信 [UIFont dynamicLength:base] 跟随微信字体大小；私有 API 缺失 → base
++ (CGFloat)resolveFontSize:(CGFloat)base;
 
 // 会话过滤/统计（侧边独立一套，不与电报分组共享；两模块轮着用免重调。
 // 引擎取值规则：电报分组开 → 用 sg*，仅侧边开 → 用 sd*，双开跟随 sg*）

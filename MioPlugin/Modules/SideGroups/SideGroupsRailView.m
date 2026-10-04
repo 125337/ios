@@ -48,17 +48,16 @@
 - (UIColor *)sdDefaultSel { return [UIColor colorWithWhite:1 alpha:0.28]; }
 
 - (CGFloat)sdFontSize {
-    CGFloat f = [SideGroupsConfig shared].sdRailFontSize;
-    return MIN(MAX(f, 9), 20);
+    return [SideGroupsConfig resolveFontSize:12];
 }
 
 #pragma mark - 配置应用（签名比对）
 
 - (void)applyConfig {
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
-    NSString *sig = [NSString stringWithFormat:@"%d|%.1f|%.1f|%d|%@|%@|%@|%@|%@",
+    NSString *sig = [NSString stringWithFormat:@"%d|%.1f|%.1f|%d|%d|%@|%@|%@|%@|%@",
                      (int)cfg.sdPosition, cfg.sdRailWidth, cfg.sdRailFontSize,
-                     (int)cfg.sdShowUnreadBadge,
+                     (int)cfg.sdFontCustom, (int)cfg.sdShowUnreadBadge,
                      cfg.sdRailSelColorCustom ? cfg.sdRailSelColor : @"",
                      cfg.sdRailSelColorCustom ? cfg.sdRailSelColorDark : @"",
                      cfg.sdRailTextColorCustom ? cfg.sdRailTextColor : @"",

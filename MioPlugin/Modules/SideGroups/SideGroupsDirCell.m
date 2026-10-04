@@ -1,4 +1,5 @@
 #import "SideGroupsDirCell.h"
+#import "SideGroupsConfig.h"
 #import "../../Core/WPUtility.h"
 
 @interface SideGroupsDirCell ()
@@ -47,6 +48,9 @@
 }
 
 - (void)configureTitle:(NSString *)title count:(NSUInteger)count unread:(NSUInteger)unread expanded:(BOOL)expanded {
+    // 字号每次现取（自定义开关/微信动态字号变化生效于下次重建；复用 cell 不残留旧字号）
+    self.titleLabel.font = [UIFont systemFontOfSize:[SideGroupsConfig resolveFontSize:13]];
+    self.countLabel.font = [UIFont systemFontOfSize:[SideGroupsConfig resolveFontSize:12]];
     self.titleLabel.text = title ?: @"";
     self.countLabel.text = [NSString stringWithFormat:@"· %lu", (unsigned long)count];
     self.chevronView.image = [UIImage systemImageNamed:expanded ? @"chevron.down" : @"chevron.right"];
