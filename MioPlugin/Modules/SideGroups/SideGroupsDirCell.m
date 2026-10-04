@@ -1,0 +1,91 @@
+#import "SideGroupsDirCell.h"
+#import "../../Core/WPUtility.h"
+
+static const CGFloat kSDDirRowHeight = 48.0; // 与 hook_heightForRow 目录行高一致
+
+@interface SideGroupsDirCell ()
+@property (nonatomic, strong) UILabel *titleLabel;
+@property (nonatomic, strong) UILabel *countLabel;
+@property (nonatomic, strong) UILabel *badgeLabel;
+@property (nonatomic, strong) UILabel *chevronLabel;
+@end
+
+@implementation SideGroupsDirCell
+
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
+    self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
+    if (self) {
+        self.backgroundColor = UIColor.clearColor;
+        self.selectionStyle = UITableViewCellSelectionStyleDefault;
+        self.contentView.backgroundColor = UIColor.clearColor;
+
+        _titleLabel = [self sdMakeLabel:16];
+        _countLabel = [self sdMakeLabel:14];
+        _badgeLabel = [self sdMakeLabel:11];
+        _badgeLabel.textAlignment = NSTextAlignmentCenter;
+        _badgeLabel.textColor = UIColor.whiteColor;
+        _badgeLabel.backgroundColor = [UIColor colorWithRed:1 green:0.23 blue:0.19 alpha:1];
+        _badgeLabel.layer.cornerRadius = 8;
+        _badgeLabel.layer.masksToBounds = YES;
+        _badgeLabel.hidden = YES;
+        _chevronLabel = [self sdMakeLabel:18];
+        _chevronLabel.text = @"›";
+
+        UILongPressGestureRecognizer *lp =
+            [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(sdLongPress:)];
+        [self addGestureRecognizer:lp];
+    }
+    return self;
+}
+
+- (UILabel *)sdMakeLabel:(CGFloat)size {
+    UILabel *l = [[UILabel alloc] initWithFrame:CGRectZero];
+    l.font = [UIFont systemFontOfSize:size];
+    l.backgroundColor = UIColor.clearColor;
+    [self.contentView addSubview:l];
+    return l;
+}
+
+- (void)configureTitle:(NSString *)title count:(NSUInteger)count unread:(NSUInteger)unread {
+    self.titleLabel.text = title ?: @"";
+    self.countLabel.text = [NSString stringWithFormat:@"· %lu", (unsigned long)count];
+    UILabel *badge = self.badgeLabel;
+    badge.text = unread > 99 ? @"99+" : (unread > 0 ? [NSString stringWithFormat:@"%lu", (unsigned long)unread] : @"");
+    badge.hidden = badge.text.length == 0;
+    if (!badge.hidden) [badge sizeToFit];
+    [self setNeedsLayout];
+}
+
+// 行外观跟随明暗主题（每次布局现取，无额外配置项）
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    BOOL dark = [WPUtility isDarkModeForView:self];
+    self.titleLabel.textColor = dark ? UIColor.whiteColor : [UIColor colorWithRed:0.1 green:0.1 blue:0.1 alpha:1];
+    self.countLabel.textColor = dark ? [UIColor colorWithWhite:1 alpha:0.55] : [UIColor colorWithWhite:0 alpha:0.45];
+    self.chevronLabel.textColor = dark ? [UIColor colorWithWhite:1 alpha:0.3] : [UIColor colorWithWhite:0 alpha:0.25];
+
+    CGFloat W = self.contentView.bounds.size.width;
+    CGFloat H = self.contentView.bounds.size.height;
+    if (W <= 0 || H <= 0) return;
+
+    UILabel *badge = self.badgeLabel;
+    CGFloat bw = 0;
+    if (!badge.hidden) {
+        bw = MAX(16, badge.frame.size.width + 8);
+        badge.frame = CGRectMake(W - 14 - 14 - 8 - bw, (H - 16) / 2.0, bw, 16);
+    }
+    self.chevronLabel.frame = CGRectMake(W - 14 - 14, (H - 22) / 2.0, 14, 22);
+
+    UILabel *title = self.titleLabel;
+    CGSize ts = [title sizeThatFits:CGSizeMake(CGFLOAT_MAX, 20)];
+    title.frame = CGRectMake(20, (H - 20) / 2.0, MIN(ts.width, W * 0.6), 20);
+    UILabel *count = self.countLabel;
+    CGSize cs = [count sizeThatFits:CGSizeMake(CGFLOAT_MAX, 18)];
+    count.frame = CGRectMake(CGRectGetMaxX(title.frame) + 6, (H - 18) / 2.0, cs.width + 2, 18);
+}
+
+- (void)sdLongPress:(UILongPressGestureRecognizer *)g {
+    if (g.state == UIGestureRecognizerStateBegan && self.onLongPress) self.onLongPress();
+}
+
+@end

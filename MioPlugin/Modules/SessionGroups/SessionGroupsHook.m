@@ -5,7 +5,7 @@
 #import "SessionGroupManagerVC.h"
 #import "../SideGroups/SideGroupsConfig.h"
 #import "../SideGroups/SideGroupsRailView.h"
-#import "../SideGroups/SideGroupsDirView.h"
+#import "../SideGroups/SideGroupsDirCell.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../SettingEntry/WPCommonUI.h"
@@ -51,7 +51,6 @@ static const void *kSGAssocRefresh  = &kSGAssocRefresh;
 static const void *kSGAssocPan      = &kSGAssocPan;
 static const void *kSGAssocPanDlg   = &kSGAssocPanDlg;
 static const void *kSGAssocRail     = &kSGAssocRail;     // 侧边分组栏（挂 vc）
-static const void *kSGAssocDir      = &kSGAssocDir;      // 侧边分组列表内目录页（挂 vc）
 static const void *kSGAssocRailNative = &kSGAssocRailNative; // 列表原生 frame（挂 table，NSValue）
 static const void *kSGAssocRailWanted = &kSGAssocRailWanted; // 上轮让位 frame（挂 table，区分自触发与原生变更）
 
@@ -123,6 +122,7 @@ static SGHomeGestureSink *sGestureSink = nil;
 @property (nonatomic, strong) NSArray<NSNumber *> *tabUnread;              // 每组未读数（all 恒 0）
 @property (nonatomic, strong) NSArray<NSNumber *> *tabRedDot;
 @property (nonatomic, strong) NSArray<NSNumber *> *tabSessionCounts;       // 每组会话数（侧边分组目录页用）
+@property (nonatomic, assign) NSInteger dirRows;                           // 列表内目录行数（section 0 前置注入，「+列表内」且选中 all 组时 >0）
 @end
 @implementation SGHomeSnapshot
 @end
@@ -301,14 +301,10 @@ static BOOL SGActive(id vc) {
     return [SideGroupsConfig shared].sdEnabled;
 }
 
-// 条接管显隐（XOS 单一位置模式语义）：侧边分组开启时由「分组显示位置」全权决定——
-// 纯侧栏（右侧/左侧）= 条不显示（侧栏取代条）；「+列表内」= 条与侧栏共存。
-// 侧边分组关闭时回落电报分组总开关。
+// 条接管显隐（XOS 位置模式语义）：侧边分组开启时不显示分组条（侧栏取代条，XOS
+// 侧栏模式一律无横条）；侧边分组关闭时回落电报分组总开关。
 static BOOL SGWantsStrip(id vc) {
-    SideGroupsConfig *sd = [SideGroupsConfig shared];
-    if (sd.sdEnabled) {
-        return sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList;
-    }
+    if ([SideGroupsConfig shared].sdEnabled) return NO;
     return [SessionGroupsConfig shared].sgEnabled;
 }
 
@@ -341,6 +337,7 @@ static NSString *SGSignature(id vc, UITableView *table) {
     [parts addObject:SGSelectedTab([SessionGroupsTab visibleTabs]).tabId];
     [parts addObject:cfg.sgFilterPinned ? @"p1" : @"p0"];
     [parts addObject:cfg.sgFilterDuplicate ? @"d1" : @"d0"];
+    [parts addObject:[NSString stringWithFormat:@"pos%ld", (long)[SideGroupsConfig shared].sdPosition]];
     return [parts componentsJoinedByString:@"|"];
 }
 
@@ -462,6 +459,13 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
         [hidden addObject:[hiddenPerTab[selIdx][s] sortedArrayUsingSelector:@selector(compare:)]];
     }
 
+    // 列表内目录行数（XOS「+列表内」= hook 注入目录 cell，非覆盖视图）：
+    // 位置含列表内且选中 all 组时，section 0 前置 tabs.count - dirOff 行（跳过 all 行）
+    SideGroupsConfig *sd = [SideGroupsConfig shared];
+    NSInteger dirOff = (tabs.count && tabs[0].kind == 0) ? 1 : 0;
+    snap.dirRows = (sd.sdEnabled && sel.kind == 0 && (NSInteger)tabs.count > dirOff)
+        ? (NSInteger)tabs.count - dirOff : 0;
+
     snap.origCounts = [counts copy];
     snap.hiddenRows = [hidden copy];
     snap.targetSection = targetSection;
@@ -500,11 +504,13 @@ static NSInteger SGNativeRow(SGHomeSnapshot *snap, NSInteger section, NSInteger 
     return native;
 }
 
-// displayed 行空间校验：行号是否落在快照的过滤后行数内
+// displayed 行空间校验：行号是否落在快照的过滤后行数内（目录行偏移感知）
 static BOOL SGIsDisplayedSpace(id self, UITableView *table, NSIndexPath *ip) {
     SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
     if (!snap || !ip) return NO;
     if (ip.section < 0 || ip.section >= (NSInteger)snap.origCounts.count) return NO;
+    NSInteger dirRows = (ip.section == 0) ? snap.dirRows : 0;
+    if (ip.row < dirRows) return NO; // 目录行非会话空间（调用方需先行拦截）
     NSInteger hidden = (NSInteger)snap.hiddenRows[ip.section].count;
     NSInteger origCnt = snap.origCounts[ip.section].integerValue;
     // 与当前原行数不一致视为 native 空间（模型漂移时保守放行）
@@ -513,16 +519,18 @@ static BOOL SGIsDisplayedSpace(id self, UITableView *table, NSIndexPath *ip) {
         curOrig = ((NSInteger (*)(id, SEL, id, NSInteger))orig_numberOfRows)(self, @selector(tableView:numberOfRowsInSection:), table, ip.section);
     }
     if (curOrig != origCnt) return NO;
-    return ip.row < origCnt - hidden;
+    return ip.row - dirRows < origCnt - hidden;
 }
 
 static NSIndexPath *SGNativeIndexPath(id self, UITableView *table, NSIndexPath *ip) {
     SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
     if (!snap || !ip) return ip;
     if (ip.section < 0 || ip.section >= (NSInteger)snap.hiddenRows.count) return ip;
-    NSInteger native = SGNativeRow(snap, ip.section, ip.row);
-    if (native == ip.row) return ip;
-    return [NSIndexPath indexPathForRow:native inSection:ip.section];
+    NSInteger dirRows = (ip.section == 0) ? snap.dirRows : 0;
+    NSInteger row = ip.row - dirRows; // 目录行由调用方拦截，此处必为会话行
+    NSInteger native = SGNativeRow(snap, ip.section, row);
+    if (dirRows == 0 && native == row) return ip;
+    return [NSIndexPath indexPathForRow:native inSection:ip.section]; // 原生坐标（无目录偏移）
 }
 
 #pragma mark - 刷新调度
@@ -616,17 +624,12 @@ static void SGReloadStrip(id vc, SGHomeSnapshot *snap) {
 
 #pragma mark - 侧边分组（XOS XZYCLG 移植：FUN_0020a174 侧栏挂载+列表 frame 让位）
 
-// 关闭时还原：摘侧栏/目录页 + 恢复列表原生 frame
+// 关闭时还原：摘侧栏 + 恢复列表原生 frame
 static void SGRemoveSideRail(id vc, UITableView *table) {
     SideGroupsRailView *rail = objc_getAssociatedObject(vc, kSGAssocRail);
     if (rail) {
         [rail removeFromSuperview];
         objc_setAssociatedObject(vc, kSGAssocRail, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-    SideGroupsDirView *dir = objc_getAssociatedObject(vc, kSGAssocDir);
-    if (dir) {
-        [dir removeFromSuperview];
-        objc_setAssociatedObject(vc, kSGAssocDir, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
     if (nativeV && !CGRectEqualToRect(table.frame, [nativeV CGRectValue])) {
@@ -662,27 +665,38 @@ static void SGSideRailLayoutPass(UITableView *table) {
     }
     objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:native], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    // ── 让位帧计算（XOS FUN__part4.c:19995-20060 同语义；参数钳位同设置项范围） ──
+    // ── 让位帧计算（XOS FUN__part4.c:20045-20060 同语义：纯左/右才让位，0.5pt 阈值；
+    //    「+列表内」列表根本不让位（DAT_003eaad0!=0 → 不写 table.frame，侧栏浮于列表上），
+    //    从让位模式切回列表内时一次性还原原生帧）──
     CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
     CGFloat off = MIN(MAX(sd.sdRailXOffset, -30), 30);
     BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
+    BOOL inList = (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList);
     CGRect want = native;
     CGRect railFrame; // table.superview 坐标系
     if (left) {
-        want.origin.x = native.origin.x + w;
-        want.size.width = native.size.width - w;
         railFrame = CGRectMake(native.origin.x + off, native.origin.y, w, native.size.height);
     } else {
-        want.size.width = native.size.width - w;
         railFrame = CGRectMake(native.origin.x + native.size.width - w + off, native.origin.y, w, native.size.height);
     }
-    if (want.size.width < 100) return; // 极窄屏保护，宁可不出侧栏
-    if (fabs(cur.origin.x - want.origin.x) > 0.5 || fabs(cur.size.width - want.size.width) > 0.5) {
-        table.frame = want; // 写帧触发下一轮 layout；下轮 cur==want 走跳过分支
+    if (!inList) {
+        if (left) {
+            want.origin.x = native.origin.x + w;
+            want.size.width = native.size.width - w;
+        } else {
+            want.size.width = native.size.width - w;
+        }
+        if (want.size.width < 100) return; // 极窄屏保护，宁可不出侧栏
+        if (fabs(cur.origin.x - want.origin.x) > 0.5 || fabs(cur.size.width - want.size.width) > 0.5) {
+            table.frame = want; // 写帧触发下一轮 layout；下轮 cur==want 走跳过分支
+        }
+    } else if (!CGRectEqualToRect(cur, native)) {
+        table.frame = native; // 还原收敛：微信原生布局本就要此帧，不会写回
     }
     objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    // ── 侧栏挂载与定位 ──
+    // ── 侧栏挂载与定位（全部变化才写：布局 pass 内任何无条件写都会与微信原生布局
+    //    形成写回风暴 → host 反复 layout → 卡死，sgbadge18e 实测）──
     SideGroupsRailView *rail = objc_getAssociatedObject(vc, kSGAssocRail);
     if (!rail) {
         rail = [[SideGroupsRailView alloc] initWithFrame:CGRectZero];
@@ -703,8 +717,9 @@ static void SGSideRailLayoutPass(UITableView *table) {
         [rail removeFromSuperview];
         [host addSubview:rail];
     }
-    [host bringSubviewToFront:rail];
-    rail.frame = [table.superview convertRect:railFrame toView:host];
+    if ([host.subviews lastObject] != rail) [host bringSubviewToFront:rail]; // 仅被别的视图盖住时才动层级
+    CGRect newRailFrame = [table.superview convertRect:railFrame toView:host];
+    if (!CGRectEqualToRect(rail.frame, newRailFrame)) rail.frame = newRailFrame;
     [rail applyConfig];
 
     // ── 数据同步（标题/角标/选中态，快照签名缓存，热路径开销同条刷新） ──
@@ -718,53 +733,9 @@ static void SGSideRailLayoutPass(UITableView *table) {
     for (NSUInteger t = 0; t < snap.tabs.count; t++) if (snap.tabs[t] == sel) { idx = (NSInteger)t; break; }
     if (rail.selectedIndex != idx) rail.selectedIndex = idx;
 
-    // ── 列表内目录页（XOS「+列表内」形态）：选中「全部」组时列表区显示分组目录， ──
-    //    点行切入该组；显示条件 = 位置含列表内 && 当前选中组是 all（kind==0）
-    BOOL wantDir = (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList)
-                   && snap.tabs.count > 0 && sel.kind == 0;
-    SideGroupsDirView *dir = objc_getAssociatedObject(vc, kSGAssocDir);
-    if (!wantDir) {
-        if (dir) dir.hidden = YES;
-        return;
-    }
-    if (!dir) {
-        dir = [[SideGroupsDirView alloc] initWithFrame:CGRectZero];
-        __weak id weakVC = vc;
-        dir.onSelectIndex = ^(NSInteger rowIdx) {
-            NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
-            NSInteger off = (tabs.count && tabs[0].kind == 0) ? 1 : 0;
-            SGSelectTabIndex(weakVC, rowIdx + off, 0, YES); // 目录行跳过 all 组行
-        };
-        dir.onLongPressIndex = ^(NSInteger rowIdx) {
-            NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
-            NSInteger off = (tabs.count && tabs[0].kind == 0) ? 1 : 0;
-            NSInteger tIdx = rowIdx + off;
-            if (tIdx < 0 || tIdx >= (NSInteger)tabs.count) return;
-            SGDispatchLongPress(weakVC, tabs[tIdx]);
-        };
-        objc_setAssociatedObject(vc, kSGAssocDir, dir, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-    if (dir.superview != host) {
-        [dir removeFromSuperview];
-        [host addSubview:dir];
-    }
-    dir.backgroundColor = table.backgroundColor; // 跟随列表底色（明暗主题一致）
-    dir.frame = [table.superview convertRect:table.frame toView:host]; // 占据让位后的列表区
-    dir.hidden = NO;
-    [host bringSubviewToFront:dir];
-    [host bringSubviewToFront:rail]; // 侧栏保持最上层
-
-    // 目录数据 = 跳过 all 组行
-    NSInteger dirOff = (snap.tabs.count && snap.tabs[0].kind == 0) ? 1 : 0;
-    NSMutableArray<NSString *> *dirTitles = [NSMutableArray array];
-    for (NSUInteger t = (NSUInteger)dirOff; t < snap.tabs.count; t++) [dirTitles addObject:snap.tabs[t].title ?: @""];
-    NSArray<NSNumber *> *dirCounts = dirOff < (NSInteger)snap.tabSessionCounts.count
-        ? [snap.tabSessionCounts subarrayWithRange:NSMakeRange((NSUInteger)dirOff, snap.tabSessionCounts.count - (NSUInteger)dirOff)]
-        : @[];
-    NSArray<NSNumber *> *dirUnread = dirOff < (NSInteger)snap.tabUnread.count
-        ? [snap.tabUnread subarrayWithRange:NSMakeRange((NSUInteger)dirOff, snap.tabUnread.count - (NSUInteger)dirOff)]
-        : @[];
-    [dir reloadGroups:dirTitles counts:dirCounts unread:dirUnread];
+    // ── 列表内目录（XOS「+列表内」形态）：不再用覆盖视图 —— 由 hook 链把目录行
+    //    以 cell 形式注入 section 0 顶部（见 hook_cellForRow / hook_didSelect），
+    //    快照 dirRows 字段承载行数，此处无任何视图/帧写入 ──
 }
 
 #pragma mark - 切组
@@ -1032,7 +1003,9 @@ static NSInteger hook_numberOfRows(id self, SEL _cmd, UITableView *tableView, NS
             if (snap && section >= 0 && section < (NSInteger)snap.origCounts.count) {
                 NSInteger origCnt = ((NSInteger (*)(id, SEL, id, NSInteger))orig_numberOfRows)(self, _cmd, tableView, section);
                 if (snap.origCounts[section].integerValue == origCnt) {
-                    return MAX(origCnt - (NSInteger)snap.hiddenRows[section].count, 0);
+                    NSInteger rows = MAX(origCnt - (NSInteger)snap.hiddenRows[section].count, 0);
+                    if (section == 0) rows += snap.dirRows; // 列表内目录行前置注入
+                    return rows;
                 }
                 return origCnt; // 行数漂移：透传，下轮按新签名重建
             }
@@ -1044,9 +1017,42 @@ static NSInteger hook_numberOfRows(id self, SEL _cmd, UITableView *tableView, NS
     return 0;
 }
 
+// 目录行拦截辅助：是注入的目录行则返回 YES（仅 section 0 前缀）
+static BOOL SGIsDirRow(id self, NSIndexPath *ip) {
+    if (!ip || ip.section != 0 || ip.row < 0) return NO;
+    SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
+    return snap && ip.row < snap.dirRows;
+}
+
+// 目录行 → 组序号（可见组数组下标，跳过 all 组行）
+static NSInteger SGDirRowTab(id self, NSIndexPath *ip) {
+    SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
+    NSInteger dirOff = (snap && snap.tabs.count && snap.tabs[0].kind == 0) ? 1 : 0;
+    return dirOff + (ip ? ip.row : 0);
+}
+
 static UITableViewCell *hook_cellForRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
     if (SG_CAN_FILTER(self, tableView) && orig_cellForRow) {
         @try {
+            // 列表内目录行（XOS XZYCLG3DGroupCell 语义 FUN__part4.c:16649-16673）：
+            // 该行直接替换为目录 cell，不透传原实现
+            if (SGIsDirRow(self, indexPath)) {
+                SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
+                NSInteger tIdx = SGDirRowTab(self, indexPath);
+                if (snap && tIdx >= 0 && tIdx < (NSInteger)snap.tabs.count) {
+                    SideGroupsDirCell *cell = [tableView dequeueReusableCellWithIdentifier:@"SGDirCell"];
+                    if (!cell) cell = [[SideGroupsDirCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"SGDirCell"];
+                    SessionGroupsTab *tab = snap.tabs[(NSUInteger)tIdx];
+                    NSUInteger cnt = (tIdx < (NSInteger)snap.tabSessionCounts.count)
+                        ? snap.tabSessionCounts[(NSUInteger)tIdx].unsignedIntegerValue : 0;
+                    NSUInteger unr = (tIdx < (NSInteger)snap.tabUnread.count)
+                        ? snap.tabUnread[(NSUInteger)tIdx].unsignedIntegerValue : 0;
+                    [cell configureTitle:(tab.title ?: @"") count:cnt unread:unr];
+                    __weak id weakSelf = self;
+                    cell.onLongPress = ^{ id s = weakSelf; if (s) SGDispatchLongPress(s, tab); };
+                    return cell;
+                }
+            }
             if (SGIsDisplayedSpace(self, tableView, indexPath)) {
                 NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
                 return ((UITableViewCell *(*)(id, SEL, id, id))orig_cellForRow)(self, _cmd, tableView, native);
@@ -1060,64 +1066,89 @@ static UITableViewCell *hook_cellForRow(id self, SEL _cmd, UITableView *tableVie
 }
 
 static CGFloat hook_heightForRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
-    if (SG_CAN_FILTER(self, tableView) && orig_heightForRow && SGIsDisplayedSpace(self, tableView, indexPath)) {
-        NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
-        return ((CGFloat (*)(id, SEL, id, id))orig_heightForRow)(self, _cmd, tableView, native);
+    if (SG_CAN_FILTER(self, tableView) && orig_heightForRow) {
+        if (SGIsDirRow(self, indexPath)) return 48.0; // 目录行高（SideGroupsDirCell 同值）
+        if (SGIsDisplayedSpace(self, tableView, indexPath)) {
+            NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
+            return ((CGFloat (*)(id, SEL, id, id))orig_heightForRow)(self, _cmd, tableView, native);
+        }
     }
     if (orig_heightForRow) return ((CGFloat (*)(id, SEL, id, id))orig_heightForRow)(self, _cmd, tableView, indexPath);
     return 0;
 }
 
 static void hook_didSelect(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
-    if (SG_CAN_FILTER(self, tableView) && orig_didSelect && SGIsDisplayedSpace(self, tableView, indexPath)) {
-        NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
-        ((void (*)(id, SEL, id, id))orig_didSelect)(self, _cmd, tableView, native);
-        return;
+    if (SG_CAN_FILTER(self, tableView) && orig_didSelect) {
+        if (SGIsDirRow(self, indexPath)) {
+            [tableView deselectRowAtIndexPath:indexPath animated:NO];
+            SGSelectTabIndex(self, SGDirRowTab(self, indexPath), 0, YES);
+            return;
+        }
+        if (SGIsDisplayedSpace(self, tableView, indexPath)) {
+            NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
+            ((void (*)(id, SEL, id, id))orig_didSelect)(self, _cmd, tableView, native);
+            return;
+        }
     }
     if (orig_didSelect) ((void (*)(id, SEL, id, id))orig_didSelect)(self, _cmd, tableView, indexPath);
 }
 
 static BOOL hook_canEdit(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
-    if (SG_CAN_FILTER(self, tableView) && orig_canEdit && SGIsDisplayedSpace(self, tableView, indexPath)) {
-        NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
-        return ((BOOL (*)(id, SEL, id, id))orig_canEdit)(self, _cmd, tableView, native);
+    if (SG_CAN_FILTER(self, tableView) && orig_canEdit) {
+        if (SGIsDirRow(self, indexPath)) return NO; // 目录行不可编辑
+        if (SGIsDisplayedSpace(self, tableView, indexPath)) {
+            NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
+            return ((BOOL (*)(id, SEL, id, id))orig_canEdit)(self, _cmd, tableView, native);
+        }
     }
     if (orig_canEdit) return ((BOOL (*)(id, SEL, id, id))orig_canEdit)(self, _cmd, tableView, indexPath);
     return NO;
 }
 
 static UITableViewCellEditingStyle hook_editingStyle(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
-    if (SG_CAN_FILTER(self, tableView) && orig_editingStyle && SGIsDisplayedSpace(self, tableView, indexPath)) {
-        NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
-        return ((UITableViewCellEditingStyle (*)(id, SEL, id, id))orig_editingStyle)(self, _cmd, tableView, native);
+    if (SG_CAN_FILTER(self, tableView) && orig_editingStyle) {
+        if (SGIsDirRow(self, indexPath)) return UITableViewCellEditingStyleNone;
+        if (SGIsDisplayedSpace(self, tableView, indexPath)) {
+            NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
+            return ((UITableViewCellEditingStyle (*)(id, SEL, id, id))orig_editingStyle)(self, _cmd, tableView, native);
+        }
     }
     if (orig_editingStyle) return ((UITableViewCellEditingStyle (*)(id, SEL, id, id))orig_editingStyle)(self, _cmd, tableView, indexPath);
     return UITableViewCellEditingStyleNone;
 }
 
 static void hook_commitEditing(id self, SEL _cmd, UITableView *tableView, UITableViewCellEditingStyle style, NSIndexPath *indexPath) {
-    if (SG_CAN_FILTER(self, tableView) && orig_commitEditing && SGIsDisplayedSpace(self, tableView, indexPath)) {
-        NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
-        ((void (*)(id, SEL, id, UITableViewCellEditingStyle, id))orig_commitEditing)(self, _cmd, tableView, style, native);
-        return;
+    if (SG_CAN_FILTER(self, tableView) && orig_commitEditing) {
+        if (SGIsDirRow(self, indexPath)) return; // 目录行无编辑提交
+        if (SGIsDisplayedSpace(self, tableView, indexPath)) {
+            NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
+            ((void (*)(id, SEL, id, UITableViewCellEditingStyle, id))orig_commitEditing)(self, _cmd, tableView, style, native);
+            return;
+        }
     }
     if (orig_commitEditing) ((void (*)(id, SEL, id, UITableViewCellEditingStyle, id))orig_commitEditing)(self, _cmd, tableView, style, indexPath);
 }
 
 static void hook_willDisplay(id self, SEL _cmd, UITableView *tableView, UITableViewCell *cell, NSIndexPath *indexPath) {
-    if (SG_CAN_FILTER(self, tableView) && orig_willDisplay && SGIsDisplayedSpace(self, tableView, indexPath)) {
-        NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
-        ((void (*)(id, SEL, id, id, id))orig_willDisplay)(self, _cmd, tableView, cell, native);
-        return;
+    if (SG_CAN_FILTER(self, tableView) && orig_willDisplay) {
+        if (SGIsDirRow(self, indexPath)) return; // 目录 cell 自管外观，不走微信 willDisplay
+        if (SGIsDisplayedSpace(self, tableView, indexPath)) {
+            NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
+            ((void (*)(id, SEL, id, id, id))orig_willDisplay)(self, _cmd, tableView, cell, native);
+            return;
+        }
     }
     if (orig_willDisplay) ((void (*)(id, SEL, id, id, id))orig_willDisplay)(self, _cmd, tableView, cell, indexPath);
 }
 
 static void hook_didEndDisplaying(id self, SEL _cmd, UITableView *tableView, UITableViewCell *cell, NSIndexPath *indexPath) {
-    if (SG_CAN_FILTER(self, tableView) && orig_didEndDisplaying && SGIsDisplayedSpace(self, tableView, indexPath)) {
-        NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
-        ((void (*)(id, SEL, id, id, id))orig_didEndDisplaying)(self, _cmd, tableView, cell, native);
-        return;
+    if (SG_CAN_FILTER(self, tableView) && orig_didEndDisplaying) {
+        if (SGIsDirRow(self, indexPath)) return; // 目录 cell 无微信侧收尾
+        if (SGIsDisplayedSpace(self, tableView, indexPath)) {
+            NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
+            ((void (*)(id, SEL, id, id, id))orig_didEndDisplaying)(self, _cmd, tableView, cell, native);
+            return;
+        }
     }
     if (orig_didEndDisplaying) ((void (*)(id, SEL, id, id, id))orig_didEndDisplaying)(self, _cmd, tableView, cell, indexPath);
 }
