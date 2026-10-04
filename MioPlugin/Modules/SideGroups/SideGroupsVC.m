@@ -49,16 +49,6 @@
                              cy:cy
                           width:w];
 
-    // 侧边作用范围（XOS showSideScopeSheet 两选项：0=缩窄列表让位，1=悬浮不缩列表；
-    // 悬浮模式列表帧零写入，下拉小程序面板等原生手势不受干扰）
-    cy = [self addNavRowInGroup:g2
-                          title:@"侧边作用范围"
-                       subtitle:[self scopeName:config.sdRailScope]
-                            tag:0
-                         action:@selector(scopeRowTapped:)
-                             cy:cy
-                          width:w];
-
     // 侧栏宽度（XOS rail 宽 54/48）
     cy = [self addInputRowInGroup:g2
                             title:@"侧栏宽度"
@@ -219,40 +209,6 @@
         if (index < 0 || index >= (NSInteger)names.count || index == cur) return;
         @try {
             [ConfigManager setValue:@(index) forKey:@"sdPosition"];
-            [ConfigManager saveAll];
-        } @catch (NSException *e) {
-            return;
-        }
-        [self wpRebuildWeChatTable];
-        [self buildUI];
-    }];
-}
-
-#pragma mark - 侧边作用范围（XOS showSideScopeSheet 两选项，底部弹出菜单）
-
-+ (NSArray<NSString *> *)scopeNames {
-    return @[@"缩窄列表让位", @"悬浮不缩列表"];
-}
-
-- (NSString *)scopeName:(NSInteger)idx {
-    NSArray<NSString *> *names = [SideGroupsVC scopeNames];
-    if (idx < 0 || idx >= (NSInteger)names.count) return names[0];
-    return names[idx];
-}
-
-- (void)scopeRowTapped:(UIButton *)sender {
-    NSArray<NSString *> *names = [SideGroupsVC scopeNames];
-    NSInteger cur = [SideGroupsConfig shared].sdRailScope;
-    NSMutableArray<NSString *> *titles = [NSMutableArray array];
-    for (NSInteger i = 0; i < (NSInteger)names.count; i++) {
-        [titles addObject:(i == cur) ? [names[i] stringByAppendingString:@" ✓"] : names[i]];
-    }
-    [MioAlertHelper showMenuAlert:@"侧边作用范围"
-                          buttons:titles
-                         onButton:^(NSInteger index) {
-        if (index < 0 || index >= (NSInteger)names.count || index == cur) return;
-        @try {
-            [ConfigManager setValue:@(index) forKey:@"sdRailScope"];
             [ConfigManager saveAll];
         } @catch (NSException *e) {
             return;

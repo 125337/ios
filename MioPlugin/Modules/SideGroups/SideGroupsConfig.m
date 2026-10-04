@@ -21,7 +21,6 @@
     return @[
         [ConfigDescriptor itemWithKey:@"sdEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sdPosition" type:ConfigValueTypeInteger default:@(0)],
-        [ConfigDescriptor itemWithKey:@"sdRailScope" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"sdRailWidth" type:ConfigValueTypeFloat default:@(54.0)],
         [ConfigDescriptor itemWithKey:@"sdRailFontSize" type:ConfigValueTypeFloat default:@(12.0)],
         [ConfigDescriptor itemWithKey:@"sdFontCustom" type:ConfigValueTypeBool default:@(NO)],

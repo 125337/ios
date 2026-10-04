@@ -795,7 +795,7 @@ static void SGRemoveSideRail(id vc, UITableView *table) {
 // XOS FUN_00200a14（hook 的 table setFrame:）移植：让位帧的运行时维护不在布局 pass 逐帧做，
 // 而是拦截微信每次对 table 的 setFrame——
 // · 自写帧（带标志）→ 放行（XOS FUN_00222cec 的 eaeb0 标志语义）
-// · 悬浮模式/未接管 → 放行（XOS DAT_003eaad0==1 短路）
+// · 未接管 → 放行
 // · 宽度未变（下拉小程序面板/滚动动画只改 y/h 或平移）→ 放行，原生动画零对抗
 // · 宽度变宽（微信重排回全宽）→ 在新帧上重套让位，一次写回（变窄放行，对齐 XOS）
 static IMP orig_tableSetFrame = NULL;
@@ -803,7 +803,7 @@ static IMP orig_tableSetFrame = NULL;
 static void hook_tableSetFrame(UITableView *table, SEL _cmd, CGRect frame) {
     if (!orig_tableSetFrame) return;
     SideGroupsConfig *sd = [SideGroupsConfig shared];
-    if (sd.sdEnabled && sd.sdRailScope != 1) {
+    if (sd.sdEnabled) {
         NSNumber *selfWriteV = objc_getAssociatedObject(table, kSGAssocRailSelfWrite);
         if (selfWriteV.boolValue) {
             objc_setAssociatedObject(table, kSGAssocRailSelfWrite, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -839,9 +839,7 @@ static void hook_tableSetFrame(UITableView *table, SEL _cmd, CGRect frame) {
 // 1) 让位帧只在首次接管时写一次（带自写标志走 setFrame hook），此后 table 帧维护全部
 //    交给 hook_tableSetFrame（XOS FUN_00200a14 机制），布局 pass 不逐帧写帧 → 微信
 //    下拉小程序面板等原生动画零对抗
-// 2) 作用范围双模式（XOS SideScope）：0=让位（左 x+=w/width-=w，右 width-=w），
-//    1=悬浮（不写 table 帧，rail 覆盖列表边缘）
-// 3) 侧栏定位（左 minX / 右 maxX-w，X 微调）+ 配置签名应用 + 快照数据同步
+// 2) 侧栏定位（左 minX / 右 maxX-w，X 微调）+ 配置签名应用 + 快照数据同步
 static void SGSideRailLayoutPass(UITableView *table) {
     id vc = nil;
     for (id seen in sSeenVCs) {
@@ -855,21 +853,13 @@ static void SGSideRailLayoutPass(UITableView *table) {
     }
 
     CGRect cur = table.frame;
-    // ── 让位帧维护（XOS SideScope 双模式）──
+    // ── 首次接管：以当前帧为原生基准套让位，一次写帧（自写标志 → hook 放行）；
+    //    此后微信改帧全部由 hook_tableSetFrame 处理 ──
     CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
     CGFloat off = MIN(MAX(sd.sdRailXOffset, -30), 30);
     BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
-    BOOL floating = (sd.sdRailScope == 1);
     NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
-    if (floating) {
-        if (nativeV) {
-            // 切回悬浮：清记录后恢复原生帧（hook 见记录空 → 放行，无对抗）
-            objc_setAssociatedObject(table, kSGAssocRailNative, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            objc_setAssociatedObject(table, kSGAssocRailWanted, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            if (!CGRectEqualToRect(cur, [nativeV CGRectValue])) table.frame = [nativeV CGRectValue];
-        }
-    } else if (!nativeV) {
-        // 首次接管：以当前帧为原生基准套让位，一次写帧（自写标志 → hook 放行）
+    if (!nativeV) {
         CGRect native = cur;
         CGRect want = native;
         if (left) {
@@ -886,10 +876,10 @@ static void SGSideRailLayoutPass(UITableView *table) {
             cur = want;
         }
     }
-    // rail 定位基准：让位模式用原生记录（hook 维护），悬浮/未接管用当前帧；
-    // 微信变窄帧 hook 放行不记录（对齐 XOS），此处识别后同步记录使 rail 贴合实际
+    // rail 定位基准：用原生记录（hook 维护）；微信变窄帧 hook 放行不记录（对齐 XOS），
+    // 此处识别后同步记录使 rail 贴合实际
     CGRect base = cur;
-    if (!floating && nativeV) {
+    if (nativeV) {
         CGRect native = [nativeV CGRectValue];
         NSValue *wantedV = objc_getAssociatedObject(table, kSGAssocRailWanted);
         BOOL ours = wantedV && CGRectEqualToRect(cur, [wantedV CGRectValue]);
