@@ -879,19 +879,9 @@ static void SGSideRailLayoutPass(UITableView *table) {
             cur = want;
         }
     }
-    // rail 定位基准：用原生记录（hook 维护）；微信变窄帧 hook 放行不记录（对齐 XOS），
-    // 此处识别后同步记录使 rail 贴合实际
+    // rail 定位基准：用原生记录（hook 修正时维护，y 平移动画不影响让位语义）
     CGRect base = cur;
-    if (nativeV) {
-        CGRect native = [nativeV CGRectValue];
-        NSValue *wantedV = objc_getAssociatedObject(table, kSGAssocRailWanted);
-        BOOL ours = wantedV && CGRectEqualToRect(cur, [wantedV CGRectValue]);
-        if (!ours && fabs(cur.size.width - native.size.width) > 0.5) {
-            objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:cur], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            native = cur;
-        }
-        base = native;
-    }
+    if (nativeV) base = [nativeV CGRectValue];
     CGRect railFrame; // table.superview 坐标系
     if (left) {
         railFrame = CGRectMake(base.origin.x + off, base.origin.y, w, base.size.height);
@@ -926,6 +916,14 @@ static void SGSideRailLayoutPass(UITableView *table) {
     }
     if ([host.subviews lastObject] != rail) [host bringSubviewToFront:rail]; // 仅被别的视图盖住时才动层级
     if (!CGRectEqualToRect(rail.frame, railFrame)) rail.frame = railFrame;
+    // 小程序面板展开（列表 y 被微信平移离开让位位置）→ 淡出侧栏；回首页 y 归位 → 淡入。
+    // 仅在状态翻转时触发动画，面板动画期间每帧 pass 不会重复起动画
+    NSValue *wantedNowV = objc_getAssociatedObject(table, kSGAssocRailWanted);
+    BOOL panelOut = wantedNowV && fabs(cur.origin.y - [wantedNowV CGRectValue].origin.y) > 60;
+    CGFloat targetAlpha = panelOut ? 0.0 : 1.0;
+    if (rail.alpha != targetAlpha) {
+        [UIView animateWithDuration:0.2 animations:^{ rail.alpha = targetAlpha; }];
+    }
     [rail applyConfig];
 
     // ── 数据同步（标题/角标/选中态，快照签名缓存，热路径开销同条刷新） ──
