@@ -96,7 +96,35 @@
 
     y = [self finishGroup:g2 atY:y height:cy];
 
-    // ──── 卡片3：外观颜色（容器背景不设色，透出微信原生底色）────
+    // ──── 卡片3：会话过滤（侧边独立一套，不与电报分组共享，轮着用免重调） ────
+    y = [self addSectionHeader:@"会话过滤" y:y width:w];
+    UIView *gF = [self addTableGroupAtY:y width:w];
+    cy = 0;
+    cy = [self addSwitchRowInGroup:gF
+                             title:@"过滤置顶聊天"
+                              desc:nil
+                               key:@"sdFilterPinned"
+                              isOn:config.sdFilterPinned
+                                cy:cy
+                             width:w];
+    cy = [self addSwitchRowInGroup:gF
+                             title:@"过滤重复联系人"
+                              desc:nil
+                               key:@"sdFilterDuplicate"
+                              isOn:config.sdFilterDuplicate
+                                cy:cy
+                             width:w];
+    cy = [self addSwitchRowInGroup:gF
+                             title:@"折叠群不红点"
+                              desc:nil
+                               key:@"sdFoldGroupNoRedDot"
+                              isOn:config.sdFoldGroupNoRedDot
+                                cy:cy
+                             width:w];
+    y = [self finishGroup:gF atY:y height:cy];
+    y = [self addSectionFooter:@"仅作用于侧边分组，与电报分组的过滤设置相互独立；最近会话天数在分组管理页设置" y:y width:w];
+
+    // ──── 卡片4：外观颜色（容器背景不设色，透出微信原生底色） ────
     y = [self addSectionHeader:@"外观颜色" y:y width:w];
     UIView *g3 = [self addTableGroupAtY:y width:w];
     cy = 0;
@@ -133,7 +161,7 @@
 
     y = [self finishGroup:g3 atY:y height:cy];
 
-    // ──── 卡片4：分组管理（子页面入口，弹侧边分组自己的管理页） ────
+    // ──── 卡片5：分组管理（子页面入口，push 进侧边分组自己的管理页） ────
     y = [self addSectionHeader:@"分组管理" y:y width:w];
     UIView *g4 = [self addTableGroupAtY:y width:w];
     cy = 0;

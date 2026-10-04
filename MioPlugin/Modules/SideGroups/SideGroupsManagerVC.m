@@ -1,6 +1,6 @@
 #import "SideGroupsManagerVC.h"
 #import "../SessionGroups/SessionGroupsTab.h"
-#import "../SessionGroups/SessionGroupsConfig.h"
+#import "SideGroupsConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/LogManager.h"
@@ -23,7 +23,7 @@
 }
 
 - (void)buildUI {
-    SessionGroupsConfig *config = [SessionGroupsConfig shared];
+    SideGroupsConfig *config = [SideGroupsConfig shared];
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 
@@ -35,7 +35,7 @@
     CGFloat cy = 0;
     for (NSInteger i = 0; i < (NSInteger)tabs.count; i++) {
         SessionGroupsTab *tab = tabs[i];
-        NSString *detail = [tab detailTextWithRecentFallback:config.sgRecentDays];
+        NSString *detail = [tab detailTextWithRecentFallback:config.sdRecentDays];
         if (tab.disabled) detail = [detail stringByAppendingString:@"（已停用）"];
         cy = [self addNavRowInGroup:g1
                               title:tab.title
@@ -68,8 +68,8 @@
     cy = 0;
     cy = [self addInputRowInGroup:g3
                             title:@"最近会话天数"
-                              key:@"sgRecentDays"
-                            value:[NSString stringWithFormat:@"%ld", (long)config.sgRecentDays]
+                              key:@"sdRecentDays"
+                            value:[NSString stringWithFormat:@"%ld", (long)config.sdRecentDays]
                              hint:@"3"
                         valueType:InputValueTypeNumber
                        alertTitle:@"最近会话天数"
@@ -100,7 +100,7 @@
 
 - (void)wpRunInputFlow:(NSDictionary *)row {
     NSString *key = row[@"key"];
-    if ([key isEqualToString:@"sgRecentDays"]) {
+    if ([key isEqualToString:@"sdRecentDays"]) {
         NSString *title = [row[@"alertTitle"] isKindOfClass:[NSString class]] && [row[@"alertTitle"] length] > 0
             ? row[@"alertTitle"] : row[@"title"];
         NSString *hint = [row[@"hint"] isKindOfClass:[NSString class]] ? row[@"hint"] : @"";
@@ -203,7 +203,7 @@
     NSMutableArray<NSString *> *names = [NSMutableArray array];
     for (SessionGroupsTab *t in available) {
         [names addObject:[NSString stringWithFormat:@"%@（%@）", t.title,
-                          [t detailTextWithRecentFallback:[SessionGroupsConfig shared].sgRecentDays]]];
+                          [t detailTextWithRecentFallback:[SideGroupsConfig shared].sdRecentDays]]];
     }
     [MioAlertHelper showMenuAlert:@"添加分组"
                           buttons:names

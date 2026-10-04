@@ -255,15 +255,19 @@ static NSUInteger SGDetermineScope(id session, NSString *username) {
 }
 
 // session:matchesTab: kind0/kind1/kind3 路径（Misc_part6.c:8596-8790）；scope 由调用方预算传入
-static BOOL SGMatchesTab(id session, NSString *username, NSUInteger scope, SessionGroupsTab *tab, SessionGroupsConfig *cfg) {
+// 过滤参数按激活模块取值：电报分组开 → sg*；仅侧边分组开 → sd*（两套配置独立，
+// 轮着用免重调）；双开时列表只有一份，口径跟随电报 sg*
+static BOOL SGMatchesTab(id session, NSString *username, NSUInteger scope, SessionGroupsTab *tab, SessionGroupsConfig *cfg, SideGroupsConfig *sd) {
+    BOOL filterPinned = cfg.sgEnabled ? cfg.sgFilterPinned : sd.sdFilterPinned;
+    NSInteger recentDays = cfg.sgEnabled ? cfg.sgRecentDays : sd.sdRecentDays;
     if (tab.kind == 0) {
-        if ((cfg.sgFilterPinned || tab.hidePinned) && SGIsTopOf(session)) return NO;
+        if ((filterPinned || tab.hidePinned) && SGIsTopOf(session)) return NO;
         return YES;
     }
     if (tab.kind == 3) {
-        // 最近 N 天（Misc_part6.c:8537-8800 kind3 路径）：tab 自带天数优先，回落全局 sgRecentDays
-        if ((cfg.sgFilterPinned || tab.hidePinned) && SGIsTopOf(session)) return NO;
-        NSInteger days = tab.recentDays > 0 ? tab.recentDays : (cfg.sgRecentDays > 0 ? cfg.sgRecentDays : 3);
+        // 最近 N 天（Misc_part6.c:8537-8800 kind3 路径）：tab 自带天数优先，回落全局天数
+        if ((filterPinned || tab.hidePinned) && SGIsTopOf(session)) return NO;
+        NSInteger days = tab.recentDays > 0 ? tab.recentDays : (recentDays > 0 ? recentDays : 3);
         NSTimeInterval last = SGLastTimeOf(session);
         if (last <= 0) return NO;
         NSTimeInterval dt = [NSDate date].timeIntervalSince1970 - last;
@@ -271,9 +275,9 @@ static BOOL SGMatchesTab(id session, NSString *username, NSUInteger scope, Sessi
     }
     if (tab.kind != 1) return NO;
 
-    // 置顶过滤：全局 sgFilterPinned 或本组 hidePinned（长按动作 5 落点，homeTelegramGroupingFilterPinned
+    // 置顶过滤：全局过滤开关或本组 hidePinned（长按动作 5 落点，homeTelegramGroupingFilterPinned
     // Misc_part6.c:8946-8958 + tab.hidePinned per-tab 开关）
-    if ((cfg.sgFilterPinned || tab.hidePinned) && SGIsTopOf(session)) return NO;
+    if ((filterPinned || tab.hidePinned) && SGIsTopOf(session)) return NO;
 
     // effectiveScopeMaskForTab：other 组补公众号位 bit2(4)（Misc_part6.c:7886-7913）
     NSUInteger eff = tab.scopeMask;
@@ -373,9 +377,12 @@ static NSString *SGSignature(id vc, UITableView *table) {
     }
     NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
     [parts addObject:SGSelectedTab(tabs).tabId];
-    [parts addObject:cfg.sgFilterPinned ? @"p1" : @"p0"];
-    [parts addObject:cfg.sgFilterDuplicate ? @"d1" : @"d0"];
     SideGroupsConfig *sd = [SideGroupsConfig shared];
+    // 过滤口径按激活模块取值入签（规则见 SGMatchesTab 注释）
+    BOOL filterPinned = cfg.sgEnabled ? cfg.sgFilterPinned : sd.sdFilterPinned;
+    BOOL filterDup = cfg.sgEnabled ? cfg.sgFilterDuplicate : sd.sdFilterDuplicate;
+    [parts addObject:filterPinned ? @"p1" : @"p0"];
+    [parts addObject:filterDup ? @"d1" : @"d0"];
     [parts addObject:[NSString stringWithFormat:@"pos%ld", (long)sd.sdPosition]];
     // 目录模式与折叠数入签：折叠切换即使漏了显式失效也靠签名变化重建（XOS 修订计数 DAT_003eaab4 同效）
     BOOL dirActive = sd.sdEnabled
@@ -400,6 +407,10 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
     NSUInteger selIdx = 0;
     for (NSUInteger t = 0; t < tabs.count; t++) if (tabs[t] == sel) { selIdx = t; break; }
     SideGroupsConfig *sd = [SideGroupsConfig shared];
+    // 过滤/统计口径按激活模块取值：电报分组开 → sg*；仅侧边分组开 → sd*（两套独立，
+    // 轮着用免重调）；双开时列表只有一份，口径跟随电报 sg*
+    BOOL filterDup = cfg.sgEnabled ? cfg.sgFilterDuplicate : sd.sdFilterDuplicate;
+    BOOL foldNoDot = cfg.sgEnabled ? cfg.sgFoldGroupNoRedDot : sd.sdFoldGroupNoRedDot;
     BOOL dirActive = sd.sdEnabled
         && (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList)
         && sel.kind == 0 && tabs.count > 1;
@@ -486,8 +497,8 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
             BOOL allKeep = NO;
             for (NSUInteger t = 0; t < tabs.count; t++) {
                 SessionGroupsTab *tab = tabs[t];
-                BOOL keep = SGMatchesTab(sess, username, scope, tab, cfg);
-                if (cfg.sgFilterDuplicate && dup) keep = NO;
+                BOOL keep = SGMatchesTab(sess, username, scope, tab, cfg, sd);
+                if (filterDup && dup) keep = NO;
                 if (dirActive) {
                     if ((NSInteger)t == selIdx) allKeep = keep;
                     else if (keep && dirOwner < 0) dirOwner = (NSInteger)t;
@@ -502,7 +513,7 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
                 // tab 序号 1/2/3 硬编码桶，自定义分组下序号与 scope 不再对齐）
                 // 折叠群不红点：红点标记会话不计入数字（Misc_part6.c:10512-10523 config
                 // 开 → FUN_01576b80 查会话红点属性 → 命中不计）
-                if (!redDotFlag || !cfg.sgFoldGroupNoRedDot) {
+                if (!redDotFlag || !foldNoDot) {
                     // WCR 累加的是未读条数之和，非会话数（unreadCountForTab_ 10530：
                     // local_200 += m_uUnReadCount）。按会话 +1 会把"3条消息2个人"
                     // 算成 2，WCR 是 1+2=3
@@ -523,7 +534,7 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
                 row.isHeader = NO;
                 row.nativeSection = s;
                 row.nativeRow = r;
-                BOOL dotCounted = redDotFlag && cfg.sgFoldGroupNoRedDot; // 红点会话不计未读数字
+                BOOL dotCounted = redDotFlag && foldNoDot; // 红点会话不计未读数字
                 if (dirOwner >= 0) {
                     row.tabId = tabs[dirOwner].tabId;
                     [dirBuckets[dirOwner] addObject:row];

@@ -24,6 +24,13 @@ typedef NS_ENUM(NSInteger, SDSidePosition) {
 @property (nonatomic, assign) CGFloat sdRailXOffset;        // X 微调 -30~30（XOS applySideRailLeftXOffset:rightXOffset:）
 @property (nonatomic, assign) BOOL sdShowUnreadBadge;       // 显示未读角标
 
+// 会话过滤/统计（侧边独立一套，不与电报分组共享；两模块轮着用免重调。
+// 引擎取值规则：电报分组开 → 用 sg*，仅侧边开 → 用 sd*，双开跟随 sg*）
+@property (nonatomic, assign) BOOL sdFilterPinned;          // 过滤置顶聊天
+@property (nonatomic, assign) BOOL sdFilterDuplicate;       // 过滤重复联系人
+@property (nonatomic, assign) NSInteger sdRecentDays;       // 最近会话天数 1-30（kind3 分组未自带天数时的回落值）
+@property (nonatomic, assign) BOOL sdFoldGroupNoRedDot;     // 折叠群不红点（红点会话不计入未读数字）
+
 // 外观颜色（浅/深色双 hex，空 = 未自定义跟随默认；容器背景不设色，透出微信原生底色）
 @property (nonatomic, assign) BOOL sdRailSelColorCustom;    // 启用自定义选中背景色
 @property (nonatomic, copy) NSString *sdRailSelColor;
