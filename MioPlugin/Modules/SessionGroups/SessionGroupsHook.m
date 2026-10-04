@@ -916,27 +916,13 @@ static void SGSideRailLayoutPass(UITableView *table) {
     }
     if ([host.subviews lastObject] != rail) [host bringSubviewToFront:rail]; // 仅被别的视图盖住时才动层级
     if (!CGRectEqualToRect(rail.frame, railFrame)) rail.frame = railFrame;
-    // 小程序面板态检测：面板为覆盖式出现（y>60 单判据实测不触发，19m 教训），改多信号：
-    // hidden / alpha / 与让位帧的 y 或高偏差 >20；状态翻转淡出/淡入侧栏
-    NSValue *wantedNowV = objc_getAssociatedObject(table, kSGAssocRailWanted);
-    CGRect wantedNow = wantedNowV ? [wantedNowV CGRectValue] : CGRectNull;
-    BOOL panelOut = table.hidden || table.alpha < 0.99 ||
-                    (!CGRectIsNull(wantedNow) &&
-                     (fabs(cur.origin.y - wantedNow.origin.y) > 20 ||
-                      fabs(cur.size.height - wantedNow.size.height) > 20));
+    // 小程序面板态检测：下拉面板时列表被拉出屏顶（contentOffset.y 深负；实测静止顶部
+    // -97.7 → 面板展开 -837，MioPlugin(30).log rail probe），hidden/alpha/帧均不变；
+    // 阈值 -300 取两者中间，下拉/收起动画穿过阈值即淡出/淡入
+    BOOL panelOut = table.contentOffset.y < -300;
     CGFloat targetAlpha = panelOut ? 0.0 : 1.0;
     if (rail.alpha != targetAlpha) {
         [UIView animateWithDuration:0.2 animations:^{ rail.alpha = targetAlpha; }];
-    }
-    // 探针日志（2s 心跳节流）：记录 table 真实状态，校准面板态判据用，定位后移除
-    static CFAbsoluteTime lastProbe = 0;
-    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-    if (now - lastProbe > 2.0) {
-        lastProbe = now;
-        WPLog(@"SG", @"[SgHook] rail probe cur=(%.1f,%.1f,%.1f,%.1f) wanted=(%.1f,%.1f,%.1f,%.1f) hidden=%d alpha=%.2f offY=%.1f out=%d",
-              cur.origin.x, cur.origin.y, cur.size.width, cur.size.height,
-              wantedNow.origin.x, wantedNow.origin.y, wantedNow.size.width, wantedNow.size.height,
-              table.hidden, table.alpha, table.contentOffset.y, panelOut);
     }
     [rail applyConfig];
 
