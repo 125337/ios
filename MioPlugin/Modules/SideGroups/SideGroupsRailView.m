@@ -40,12 +40,19 @@
 
 - (UIColor *)sdTextColor {
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
-    NSString *hex = [WPUtility isDarkModeForView:self] ? cfg.sdRailTextColorDark : cfg.sdRailTextColor;
+    BOOL dark = [WPUtility isDarkModeForView:self];
+    NSString *hex = dark ? cfg.sdRailTextColorDark : cfg.sdRailTextColor;
     if (cfg.sdRailTextColorCustom && hex.length) return [WPUtility colorFromHex:hex] ?: UIColor.whiteColor;
-    return UIColor.whiteColor;
+    // 默认随微信底色：背景透出微信原生底色，浅色黑字 / 深色白字
+    return dark ? UIColor.whiteColor : UIColor.blackColor;
 }
 
-- (UIColor *)sdDefaultSel { return [UIColor colorWithWhite:1 alpha:0.28]; }
+- (UIColor *)sdDefaultSel {
+    // 选中胶囊默认随明暗：浅色用低透明黑（白 0.28 在微信浅底上贴不住），深色保持白 0.28
+    return [WPUtility isDarkModeForView:self]
+        ? [UIColor colorWithWhite:1 alpha:0.28]
+        : [UIColor colorWithWhite:0 alpha:0.12];
+}
 
 - (CGFloat)sdFontSize {
     return [SideGroupsConfig resolveFontSize:12];
