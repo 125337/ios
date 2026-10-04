@@ -34,7 +34,7 @@
 @property (nonatomic, strong) NSMutableArray<UIButton *> *buttons;
 @property (nonatomic, strong) NSMutableArray<UILabel *> *badges;
 @property (nonatomic, copy) NSArray<NSString *> *titles;
-@property (nonatomic, copy) NSArray<NSString *> *unread;
+@property (nonatomic, copy) NSArray<NSNumber *> *unread;
 @property (nonatomic, copy) NSArray<NSString *> *tabIds;
 @property (nonatomic, copy) NSString *lastConfigSig;   // 宽/字号/颜色/暗色 变化检测
 @property (nonatomic, copy) NSString *lastDataSig;     // 标题/角标/图标数据变化检测（每帧 pass 都会调 reload，没变直接返回）
