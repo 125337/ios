@@ -6,6 +6,7 @@
 #import "../SideGroups/SideGroupsConfig.h"
 #import "../SideGroups/SideGroupsRailView.h"
 #import "../SideGroups/SideGroupsDirCell.h"
+#import "../SideGroups/SideGroupsActions.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../SettingEntry/WPCommonUI.h"
@@ -830,7 +831,7 @@ static void SGSideRailLayoutPass(UITableView *table) {
         rail.onLongPressIndex = ^(NSInteger idx) {
             NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
             if (idx < 0 || idx >= (NSInteger)tabs.count) return;
-            SGDispatchLongPress(weakVC, tabs[idx]);
+            [SideGroupsActions showActionsForTab:tabs[idx]]; // 侧边独立动作器，不触发电报长按链
         };
         objc_setAssociatedObject(vc, kSGAssocRail, rail, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
@@ -1190,12 +1191,11 @@ static UITableViewCell *hook_cellForRow(id self, SEL _cmd, UITableView *tableVie
                     [cell configureTitle:pr.title count:pr.count unread:pr.unread expanded:!pr.folded];
                     cell.onLongPress = nil;
                     if (![pr.tabId isEqualToString:@"__sg_dir_other__"]) {
-                        // 真实组：长按 → 分组长按动作；「其他」为目录聚合桶，无对应组
+                        // 真实组：长按 → 侧边分组动作菜单（独立实现）；「其他」为目录聚合桶，无对应组
                         SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
                         for (SessionGroupsTab *tab in snap.tabs) {
                             if ([tab.tabId isEqualToString:pr.tabId]) {
-                                __weak id weakSelf = self;
-                                cell.onLongPress = ^{ id s = weakSelf; if (s) SGDispatchLongPress(s, tab); };
+                                cell.onLongPress = ^{ [SideGroupsActions showActionsForTab:tab]; };
                                 break;
                             }
                         }

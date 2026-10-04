@@ -12,7 +12,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)configureTitle:(NSString *)title count:(NSUInteger)count unread:(NSUInteger)unread expanded:(BOOL)expanded;
 
-/// 长按一行 → 分组长按动作（SGDispatchLongPress），由 hook 在出队/创建时挂
+/// 长按一行 → 侧边分组动作菜单（SideGroupsActions，独立于电报分组长按链），由 hook 在出队/创建时挂
 @property (nonatomic, copy, nullable) void (^onLongPress)(void);
 
 @end
