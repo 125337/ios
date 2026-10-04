@@ -53,8 +53,7 @@ static const void *kSGAssocPan      = &kSGAssocPan;
 static const void *kSGAssocPanDlg   = &kSGAssocPanDlg;
 static const void *kSGAssocRail     = &kSGAssocRail;     // 侧边分组栏（挂 vc）
 static const void *kSGAssocRailNative = &kSGAssocRailNative; // 列表原生 frame（挂 table，NSValue）
-static const void *kSGAssocRailWanted = &kSGAssocRailWanted; // 上轮让位 frame（挂 table，区分自触发与原生变更）
-static const void *kSGAssocRailSelfWrite = &kSGAssocRailSelfWrite; // 自写帧标志（挂 table，setFrame hook 放行用）
+static const void *kSGAssocRailWanted = &kSGAssocRailWanted; // 上轮让位 frame（挂 table，hook 修正基准）
 
 static IMP orig_numberOfSections      = NULL;
 static IMP orig_numberOfRows          = NULL;
@@ -791,13 +790,8 @@ static void SGRemoveSideRail(id vc, UITableView *table) {
         table.frame = [nativeV CGRectValue]; // 记录已清，setFrame hook 按未接管放行
     }
 }
-
-// XOS FUN_00200a14（hook 的 table setFrame:）移植：让位帧的运行时维护不在布局 pass 逐帧做，
-// 而是拦截微信每次对 table 的 setFrame——
-// · 自写帧（带标志）→ 放行（XOS FUN_00222cec 的 eaeb0 标志语义）
-// · 未接管 → 放行
-// · 宽度未变（下拉小程序面板/滚动动画只改 y/h 或平移）→ 放行，原生动画零对抗
-// · 宽度变宽（微信重排回全宽）→ 在新帧上重套让位，一次写回（变窄放行，对齐 XOS）
+// XOS FUN_00200a14（hook 的 table setFrame:）移植：对照让位帧判定，微信写回非让位帧
+// 立即重套让位弹回；x/w 与让位帧一致（y/h 平移动画）放行，原生动画零对抗
 static IMP orig_tableSetFrame = NULL;
 static void SGSideRailLayoutPass(UITableView *table); // 前向声明：hook 放行后重摆 rail
 
@@ -805,34 +799,31 @@ static void hook_tableSetFrame(UITableView *table, SEL _cmd, CGRect frame) {
     if (!orig_tableSetFrame) return;
     SideGroupsConfig *sd = [SideGroupsConfig shared];
     if (sd.sdEnabled) {
-        NSNumber *selfWriteV = objc_getAssociatedObject(table, kSGAssocRailSelfWrite);
-        if (selfWriteV.boolValue) {
-            objc_setAssociatedObject(table, kSGAssocRailSelfWrite, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        } else {
-            // 已接管：对照让位帧判定（XOS FUN_00200a14 同语义）——微信写回非让位帧
-            // （重排回全宽/位移）立即重套让位弹回，让位稳态由此保持；仅 y/h 变化
-            // （下拉小程序面板的平移动画）x/w 与让位帧一致 → 放行，动画零对抗
-            NSValue *wantedV = objc_getAssociatedObject(table, kSGAssocRailWanted);
-            if (wantedV) {
-                CGRect wanted = [wantedV CGRectValue];
-                if (fabs(frame.size.width - wanted.size.width) > 0.5 ||
-                    fabs(frame.origin.x - wanted.origin.x) > 0.5) {
-                    CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
-                    BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
-                    CGRect want = frame;
-                    if (left) {
-                        want.origin.x = frame.origin.x + w;
-                        want.size.width = frame.size.width - w;
-                    } else {
-                        want.size.width = frame.size.width - w;
-                    }
-                    if (want.size.width >= 100) {
-                        objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                        objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                        objc_setAssociatedObject(table, kSGAssocRailSelfWrite, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                        ((void (*)(id, SEL, CGRect))orig_tableSetFrame)(table, _cmd, want);
-                        return;
-                    }
+        // 已接管：对照让位帧判定（XOS FUN_00200a14 同语义）——微信写回非让位帧
+        // （重排回全宽/位移）立即重套让位弹回，让位稳态由此保持；仅 y/h 变化
+        // （下拉小程序面板的平移动画）x/w 与让位帧一致 → 放行，动画零对抗。
+        // 自己写的让位帧 x/w 与 wanted 必然一致 → 自然放行，无需自写标志
+        // （标志在 orig 直调不再入 hook 的前提下永远清不掉，反而吞掉微信收起
+        // 面板后的第一次恢复布局——已删）
+        NSValue *wantedV = objc_getAssociatedObject(table, kSGAssocRailWanted);
+        if (wantedV) {
+            CGRect wanted = [wantedV CGRectValue];
+            if (fabs(frame.size.width - wanted.size.width) > 0.5 ||
+                fabs(frame.origin.x - wanted.origin.x) > 0.5) {
+                CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
+                BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
+                CGRect want = frame;
+                if (left) {
+                    want.origin.x = frame.origin.x + w;
+                    want.size.width = frame.size.width - w;
+                } else {
+                    want.size.width = frame.size.width - w;
+                }
+                if (want.size.width >= 100) {
+                    objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                    objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                    ((void (*)(id, SEL, CGRect))orig_tableSetFrame)(table, _cmd, want);
+                    return;
                 }
             }
         }
@@ -884,8 +875,7 @@ static void SGSideRailLayoutPass(UITableView *table) {
         if (want.size.width >= 100) {
             objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:native], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            objc_setAssociatedObject(table, kSGAssocRailSelfWrite, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            table.frame = want;
+            table.frame = want; // 与 wanted 一致 → setFrame hook 自然放行
             cur = want;
         }
     }
