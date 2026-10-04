@@ -243,13 +243,15 @@
     CGFloat W = self.bounds.size.width;
     CGFloat H = self.bounds.size.height;
     if (W <= 0 || H <= 0) return;
-    CGFloat rowW = W - 8;
-    CGFloat rowH = MIN(rowW, (H - 12) / n);
+    // 每格固定 46×62（图标+文字形态）；rail 空间不足时高度均分兜底，避免溢出
+    CGFloat rowW = MIN(W - 8, 46.0);
+    CGFloat rowH = MIN(62.0, (H - 12) / n);
     CGFloat total = rowH * n;
     CGFloat y = (H - total) / 2.0;
+    CGFloat x = (W - rowW) / 2.0;
     for (NSInteger i = 0; i < n; i++) {
         UIButton *b = self.buttons[i];
-        b.frame = CGRectMake(4, y + i * rowH, rowW, rowH);
+        b.frame = CGRectMake(x, y + i * rowH, rowW, rowH);
         UILabel *badge = self.badges[i];
         CGSize bs = badge.frame.size;
         if (bs.width < 12) bs.width = 12;
