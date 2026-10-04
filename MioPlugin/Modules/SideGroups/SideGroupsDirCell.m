@@ -51,7 +51,6 @@
     UILabel *badge = self.badgeLabel;
     badge.text = unread > 99 ? @"99+" : (unread > 0 ? [NSString stringWithFormat:@"%lu", (unsigned long)unread] : @"");
     badge.hidden = badge.text.length == 0;
-    if (!badge.hidden) [badge sizeToFit];
     [self setNeedsLayout];
 }
 
@@ -68,11 +67,13 @@
     if (W <= 0 || H <= 0) return;
 
     // 布局从右往左（XOS 实测：chevron 右缘距 18，badge 与箭头间距 6）
+    // badge 宽度用 sizeThatFits 现测（frame 唯一来源是这里，避免复用残留/隐式动画闪跳）
     self.chevronLabel.frame = CGRectMake(W - 18 - 12, (H - 16) / 2.0, 12, 16);
     UILabel *badge = self.badgeLabel;
     CGFloat bw = 0;
     if (!badge.hidden) {
-        bw = MAX(18, badge.frame.size.width + 8);
+        CGFloat tw = [badge sizeThatFits:CGSizeMake(CGFLOAT_MAX, 18)].width;
+        bw = MAX(18, tw + 8);
         badge.frame = CGRectMake(W - 18 - 12 - 6 - bw, (H - 18) / 2.0, bw, 18); // 18 高，紧邻箭头左侧
     }
 

@@ -918,7 +918,10 @@ static void SGToggleFold(id vc, NSString *tabId) {
     [[NSUserDefaults standardUserDefaults] synchronize];
     SGInvalidateSnapshot(vc);
     UITableView *table = SGMainTableView(vc);
-    if (table) [UIView performWithoutAnimation:^{ [table reloadData]; }];
+    if (table) [UIView performWithoutAnimation:^{
+        [table reloadData];
+        [table layoutIfNeeded]; // 布局落在本 block 内完成，防止下一 runloop 的隐式动画让角标闪动
+    }];
     WPLog(@"SG", @"[SgHook] dir fold %@ → %d", tabId, fold);
 }
 
