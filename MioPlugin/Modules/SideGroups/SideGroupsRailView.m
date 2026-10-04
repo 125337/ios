@@ -94,12 +94,13 @@
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         map = @{@"all":      @"line.3.horizontal",
-                @"pinned":   @"pin.fill",
-                @"private":  @"person.fill",
-                @"chatroom": @"person.2.fill",
+                @"pinned":   @"pin",
+                @"private":  @"person",
+                @"chatroom": @"person.2",
                 @"unread":   @"message",
                 @"atme":     @"at",
-                @"other":    @"tray"};
+                @"other":    @"tray",
+                @"brand":    @"doc.text"};
     });
     return map[tabId];
 }
