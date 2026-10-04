@@ -856,9 +856,15 @@ static void SGSideRailLayoutPass(UITableView *table) {
         return;
     }
 
+    // 小程序面板态检测：下拉面板时列表被拉出屏顶（contentOffset.y 深负；实测静止顶部
+    // -97.7 → 面板展开 -837，MioPlugin(30).log rail probe），hidden/alpha/帧均不变；
+    // 阈值 -300 取两者中间，下拉/收起动画穿过阈值即切换
+    BOOL panelOut = table.contentOffset.y < -300;
+
     CGRect cur = table.frame;
     // ── 首次接管：以当前帧为原生基准套让位，一次写帧（自写标志 → hook 放行）；
-    //    此后微信改帧全部由 hook_tableSetFrame 处理 ──
+    //    此后微信改帧全部由 hook_tableSetFrame 处理。面板态下接管则先保持全宽
+    //    （wanted=native，回首页由下方开关重套让位）──
     CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
     CGFloat off = MIN(MAX(sd.sdRailXOffset, -30), 30);
     BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
@@ -874,9 +880,45 @@ static void SGSideRailLayoutPass(UITableView *table) {
         }
         if (want.size.width >= 100) {
             objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:native], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            table.frame = want; // 与 wanted 一致 → setFrame hook 自然放行
-            cur = want;
+            objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:panelOut ? native : want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            if (!panelOut) {
+                table.frame = want; // 与 wanted 一致 → setFrame hook 自然放行
+                cur = want;
+            }
+        }
+    }
+    // ── 面板态让位开关：面板内容随列表绘制，列表挂着让位帧 → 面板左侧留一条让位
+    //    空条（实机截图）。面板态把 wanted 对齐 native 并恢复全宽帧（微信自己画），
+    //    hook 对全宽帧自然放行；回首页按最新原生基准重套让位。先对齐 wanted 再写帧
+    //    是硬性顺序，反了 hook 修正分支会在传入帧上再套一次让位（双重让位）──
+    NSValue *nowNativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
+    NSValue *nowWantedV = objc_getAssociatedObject(table, kSGAssocRailWanted);
+    if (nowNativeV && nowWantedV) {
+        CGRect native = [nowNativeV CGRectValue];
+        CGRect wanted = [nowWantedV CGRectValue];
+        BOOL yieldedNow = fabs(native.size.width - wanted.size.width) > 0.5 ||
+                          fabs(native.origin.x - wanted.origin.x) > 0.5;
+        if (panelOut && yieldedNow) {
+            objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:native], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            // native 记录的 y 可能是动画早期值：只取 x/w，y/h 保留 table 当前值（y/h 永远是微信的）
+            CGRect f = table.frame;
+            f.origin.x = native.origin.x;
+            f.size.width = native.size.width;
+            table.frame = f; // x/w 与 wanted 一致 → hook 放行
+        } else if (!panelOut && !yieldedNow) {
+            CGRect want = native;
+            if (left) {
+                want.origin.x = native.origin.x + w;
+                want.size.width = native.size.width - w;
+            } else {
+                want.size.width = native.size.width - w;
+            }
+            if (want.size.width >= 100) {
+                objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                want.origin.y = table.frame.origin.y; // 同上：y/h 用当前值
+                want.size.height = table.frame.size.height;
+                table.frame = want; // x/w 与 wanted 一致 → hook 放行
+            }
         }
     }
     // rail 定位基准：用原生记录（hook 修正时维护，y 平移动画不影响让位语义）
@@ -916,10 +958,7 @@ static void SGSideRailLayoutPass(UITableView *table) {
     }
     if ([host.subviews lastObject] != rail) [host bringSubviewToFront:rail]; // 仅被别的视图盖住时才动层级
     if (!CGRectEqualToRect(rail.frame, railFrame)) rail.frame = railFrame;
-    // 小程序面板态检测：下拉面板时列表被拉出屏顶（contentOffset.y 深负；实测静止顶部
-    // -97.7 → 面板展开 -837，MioPlugin(30).log rail probe），hidden/alpha/帧均不变；
-    // 阈值 -300 取两者中间，下拉/收起动画穿过阈值即淡出/淡入
-    BOOL panelOut = table.contentOffset.y < -300;
+    // 面板态侧栏淡出/回首页淡入（panelOut 见 pass 开头）
     CGFloat targetAlpha = panelOut ? 0.0 : 1.0;
     if (rail.alpha != targetAlpha) {
         [UIView animateWithDuration:0.2 animations:^{ rail.alpha = targetAlpha; }];
