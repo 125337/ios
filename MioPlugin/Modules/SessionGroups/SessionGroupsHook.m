@@ -112,6 +112,24 @@ static SGHomeGestureSink *sGestureSink = nil;
 
 #pragma mark - 快照模型
 
+// 目录计划行（XOS XZYCLGEntry 语义，构建器 FUN__part4.c:23307-23347）：
+// 组头行（isHeader，kind=1）自包含 tabId/title/count/unread/folded（folded 为构建时快照，
+// XOS FUN_0029f080 setFolded 同款）；会话行携带原生 section/row，hook 链直接重映射透传
+//（XOS entry.row/section 存原生坐标，cellForRow 按 entry 重映射，FUN__part4.c:16473-17100）
+@interface SGPlanRow : NSObject
+@property (nonatomic, assign) BOOL isHeader;
+@property (nonatomic, copy) NSString *tabId;
+@property (nonatomic, copy) NSString *title;           // 组头行
+@property (nonatomic, assign) NSUInteger count;        // 组头行：列入目录的本组会话数
+@property (nonatomic, assign) NSUInteger unread;       // 组头行：未读条数和（红点会话受 sgFoldGroupNoRedDot 折扣）
+@property (nonatomic, assign) BOOL redDot;             // 组头行：组内存在免打扰未读
+@property (nonatomic, assign) BOOL folded;             // 组头行：构建时折叠态（chevron ˅/›）
+@property (nonatomic, assign) NSInteger nativeSection; // 会话行
+@property (nonatomic, assign) NSInteger nativeRow;     // 会话行
+@end
+@implementation SGPlanRow
+@end
+
 @interface SGHomeSnapshot : NSObject
 @property (nonatomic, assign) NSInteger sectionCount;
 @property (nonatomic, strong) NSArray<NSNumber *> *origCounts;             // 每 section 原行数
@@ -121,8 +139,8 @@ static SGHomeGestureSink *sGestureSink = nil;
 @property (nonatomic, strong) NSArray<SessionGroupsTab *> *tabs;
 @property (nonatomic, strong) NSArray<NSNumber *> *tabUnread;              // 每组未读数（all 恒 0）
 @property (nonatomic, strong) NSArray<NSNumber *> *tabRedDot;
-@property (nonatomic, strong) NSArray<NSNumber *> *tabSessionCounts;       // 每组会话数（侧边分组目录页用）
-@property (nonatomic, assign) NSInteger dirRows;                           // 列表内目录行数（section 0 前置注入，「+列表内」且选中 all 组时 >0）
+@property (nonatomic, assign) BOOL dirMode;                                // 目录收纳模式（InList 且选中全部组，XOS 位置模式 6 语义）
+@property (nonatomic, strong) NSArray<SGPlanRow *> *dirPlan;               // 目录计划行（section 0 全量驱动：组头+会话）
 @end
 @implementation SGHomeSnapshot
 @end
@@ -320,6 +338,25 @@ static SessionGroupsTab *SGSelectedTab(NSArray<SessionGroupsTab *> *tabs) {
     return tabs.firstObject; // 无选中记录时回落第一组（WCR Misc_part6.c:4444-4462；启动即此分支）
 }
 
+#pragma mark - 目录折叠集合（XOS DAT_003ea9f8 同构）
+
+// 折叠组集合 + 持久化（XOS：全局 NSMutableSet + NSUserDefaults 键 xzyChatListGroupingFoldedGroups，
+// 加载 FUN__part4.c:13916-13970 / 保存 FUN_0020ba40 20767-20785 setObject+synchronize；Mio 独立键）
+static NSString * const kSGFoldedGroupsKey = @"MioSgFoldedGroups";
+static NSMutableSet<NSString *> *sFoldedTabIds = nil;
+
+static NSMutableSet<NSString *> *SGFoldedSet(void) {
+    if (!sFoldedTabIds) {
+        NSArray *arr = [[NSUserDefaults standardUserDefaults] arrayForKey:kSGFoldedGroupsKey];
+        sFoldedTabIds = [NSMutableSet setWithArray:arr ?: @[]];
+    }
+    return sFoldedTabIds;
+}
+
+static BOOL SGIsTabFolded(NSString *tabId) {
+    return tabId.length > 0 && [SGFoldedSet() containsObject:tabId];
+}
+
 #pragma mark - 快照构建
 
 static NSString *SGSignature(id vc, UITableView *table) {
@@ -338,10 +375,17 @@ static NSString *SGSignature(id vc, UITableView *table) {
         }
         [parts addObject:[NSString stringWithFormat:@"%ld", (long)c]];
     }
-    [parts addObject:SGSelectedTab([SessionGroupsTab visibleTabs]).tabId];
+    NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
+    [parts addObject:SGSelectedTab(tabs).tabId];
     [parts addObject:cfg.sgFilterPinned ? @"p1" : @"p0"];
     [parts addObject:cfg.sgFilterDuplicate ? @"d1" : @"d0"];
-    [parts addObject:[NSString stringWithFormat:@"pos%ld", (long)[SideGroupsConfig shared].sdPosition]];
+    SideGroupsConfig *sd = [SideGroupsConfig shared];
+    [parts addObject:[NSString stringWithFormat:@"pos%ld", (long)sd.sdPosition]];
+    // 目录模式与折叠数入签：折叠切换即使漏了显式失效也靠签名变化重建（XOS 修订计数 DAT_003eaab4 同效）
+    BOOL dirActive = sd.sdEnabled
+        && (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList)
+        && SGSelectedTab(tabs).kind == 0 && tabs.count > 1;
+    [parts addObject:[NSString stringWithFormat:@"dir%d_%lu", dirActive, (unsigned long)SGFoldedSet().count]];
     return [parts componentsJoinedByString:@"|"];
 }
 
@@ -353,6 +397,31 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
     // 分组条数据源 = 管理页维护的可见分组（disabled 过滤后；空回落默认四组）
     NSArray<SessionGroupsTab *> *tabs = [SessionGroupsTab visibleTabs];
     snap.tabs = tabs;
+
+    // 目录模式判定（XOS 位置模式 6 语义：仅 InList 位置 + 选中全部组时在列表内收纳；
+    // 组 = 除选中组外的全部可见组。至少 2 组才收纳，无组可收时维持普通列表）
+    SessionGroupsTab *sel = SGSelectedTab(tabs);
+    NSUInteger selIdx = 0;
+    for (NSUInteger t = 0; t < tabs.count; t++) if (tabs[t] == sel) { selIdx = t; break; }
+    SideGroupsConfig *sd = [SideGroupsConfig shared];
+    BOOL dirActive = sd.sdEnabled
+        && (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList)
+        && sel.kind == 0 && tabs.count > 1;
+
+    // 目录分桶（每组一个桶 + 未匹配任何组的「其他」桶，XOS other 组 DAT_003eaac1 语义）
+    NSMutableArray<NSMutableArray<SGPlanRow *> *> *dirBuckets = [NSMutableArray arrayWithCapacity:tabs.count];
+    NSMutableArray<NSNumber *> *dirCounts = [NSMutableArray arrayWithCapacity:tabs.count];
+    NSMutableArray<NSNumber *> *dirUnreads = [NSMutableArray arrayWithCapacity:tabs.count];
+    NSMutableArray<NSNumber *> *dirDots = [NSMutableArray arrayWithCapacity:tabs.count];
+    for (NSUInteger t = 0; t < tabs.count; t++) {
+        [dirBuckets addObject:[NSMutableArray array]];
+        [dirCounts addObject:@(0)];
+        [dirUnreads addObject:@(0)];
+        [dirDots addObject:@(NO)];
+    }
+    NSMutableArray<SGPlanRow *> *otherRows = [NSMutableArray array];
+    NSInteger otherUnread = 0;
+    BOOL otherDot = NO;
 
     NSInteger sections = ((NSInteger (*)(id, SEL, id))orig_numberOfSections)(vc, @selector(numberOfSectionsInTableView:), table);
     if (sections < 1) sections = 1;
@@ -383,14 +452,12 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
     NSMutableArray<NSMutableArray<NSMutableArray<NSNumber *> *> *> *hiddenPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
     NSMutableArray<NSNumber *> *unreadPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
     NSMutableArray<NSNumber *> *dotPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
-    NSMutableArray<NSNumber *> *countPerTab = [NSMutableArray arrayWithCapacity:tabs.count];
     for (NSUInteger t = 0; t < tabs.count; t++) {
         NSMutableArray<NSMutableArray<NSNumber *> *> *perSection = [NSMutableArray arrayWithCapacity:sections];
         for (NSInteger s = 0; s < sections; s++) [perSection addObject:[NSMutableArray array]];
         [hiddenPerTab addObject:perSection];
         [unreadPerTab addObject:@(0)]; // all 组恒 0（Misc_part6.c:10348-10353）
         [dotPerTab addObject:@(NO)];
-        [countPerTab addObject:@(0)];
     }
 
     NSInteger targetSection = -1;
@@ -418,15 +485,21 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
                 }
             }
 
+            // 目录归属：首个命中的组（互斥，XOS 分类 FUN_00211e50 同语义）；命中选中组（全部）才进目录
+            NSInteger dirOwner = -1;
+            BOOL allKeep = NO;
             for (NSUInteger t = 0; t < tabs.count; t++) {
                 SessionGroupsTab *tab = tabs[t];
                 BOOL keep = SGMatchesTab(sess, username, scope, tab, cfg);
                 if (cfg.sgFilterDuplicate && dup) keep = NO;
+                if (dirActive) {
+                    if ((NSInteger)t == selIdx) allKeep = keep;
+                    else if (keep && dirOwner < 0) dirOwner = (NSInteger)t;
+                }
                 if (!keep) {
                     [hiddenPerTab[t][s] addObject:@(r)]; // 记入本 section 的桶（WCR BySection 语义）
                     continue;
                 }
-                countPerTab[t] = @([countPerTab[t] integerValue] + 1); // 每组会话数（目录页 XOS「未读 · 15」同语义）
                 if (tab.kind == 0) continue; // all 组未读恒 0（Misc_part6.c:10348-10353）
                 if (unread == 0) continue;
                 // 逐组独立统计（unreadCountForTab 按 tab 遍历会话的语义；旧实现按默认
@@ -447,6 +520,32 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
                     [dotPerTab replaceObjectAtIndex:t withObject:@(YES)];
                 }
             }
+
+            // 目录桶落位（XOS 构建器：会话 entry 归组，组头后跟本组会话，FUN__part4.c:23347-23349）
+            if (dirActive && allKeep) {
+                SGPlanRow *row = [[SGPlanRow alloc] init];
+                row.isHeader = NO;
+                row.nativeSection = s;
+                row.nativeRow = r;
+                BOOL dotCounted = redDotFlag && cfg.sgFoldGroupNoRedDot; // 红点会话不计未读数字
+                if (dirOwner >= 0) {
+                    row.tabId = tabs[dirOwner].tabId;
+                    [dirBuckets[dirOwner] addObject:row];
+                    dirCounts[dirOwner] = @(dirCounts[dirOwner].integerValue + 1);
+                    if (unread > 0 && !dotCounted) {
+                        dirUnreads[dirOwner] = @(dirUnreads[dirOwner].integerValue + (NSInteger)unread);
+                    }
+                    if (redDotFlag && !dirDots[dirOwner].boolValue) {
+                        [dirDots replaceObjectAtIndex:(NSUInteger)dirOwner withObject:@(YES)];
+                    }
+                } else {
+                    // 未匹配任何组 → 「其他」桶（XOS other 组）
+                    row.tabId = @"__sg_dir_other__";
+                    [otherRows addObject:row];
+                    if (unread > 0 && !dotCounted) otherUnread += (NSInteger)unread;
+                    if (redDotFlag) otherDot = YES;
+                }
+            }
         }
         if (sessionRows > targetSessionRows) {
             targetSessionRows = sessionRows;
@@ -455,27 +554,63 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
     }
     if (targetSection < 0) targetSection = 0;
 
-    // 选中组的隐藏行（每 section 取自己的桶）
-    SessionGroupsTab *sel = SGSelectedTab(tabs);
-    NSUInteger selIdx = 0;
-    for (NSUInteger t = 0; t < tabs.count; t++) if (tabs[t] == sel) { selIdx = t; break; }
-    for (NSInteger s = 0; s < sections; s++) {
-        [hidden addObject:[hiddenPerTab[selIdx][s] sortedArrayUsingSelector:@selector(compare:)]];
+    // 隐藏行：目录模式 = section 0 由计划行全量驱动、其余 section 全隐藏；
+    // 普通模式 = 选中组每 section 取自己的桶
+    if (dirActive) {
+        for (NSInteger s = 0; s < sections; s++) {
+            if (s == 0) {
+                [hidden addObject:@[]]; // section 0 行空间 = 计划行，不走 hidden 重映射
+                continue;
+            }
+            NSMutableArray<NSNumber *> *all = [NSMutableArray arrayWithCapacity:rowSessions[s].count];
+            for (NSInteger r = 0; r < (NSInteger)rowSessions[s].count; r++) [all addObject:@(r)];
+            [hidden addObject:all];
+        }
+    } else {
+        for (NSInteger s = 0; s < sections; s++) {
+            [hidden addObject:[hiddenPerTab[selIdx][s] sortedArrayUsingSelector:@selector(compare:)]];
+        }
     }
 
-    // 列表内目录行数（XOS「+列表内」= hook 注入目录 cell，非覆盖视图）：
-    // 位置含列表内且选中 all 组时，section 0 前置 tabs.count - dirOff 行（跳过 all 行）
-    SideGroupsConfig *sd = [SideGroupsConfig shared];
-    NSInteger dirOff = (tabs.count && tabs[0].kind == 0) ? 1 : 0;
-    snap.dirRows = (sd.sdEnabled && sel.kind == 0 && (NSInteger)tabs.count > dirOff)
-        ? (NSInteger)tabs.count - dirOff : 0;
+    // 目录计划（XOS 构建器输出：组头 entry 后跟未折叠组的会话 entry，按组序排列；
+    // 空组不出头——构建器只遍历有会话的组，FUN__part4.c:23281-23370）
+    if (dirActive) {
+        snap.dirMode = YES;
+        NSMutableArray<SGPlanRow *> *plan = [NSMutableArray array];
+        for (NSUInteger t = 0; t < tabs.count; t++) {
+            if ((NSInteger)t == selIdx) continue;
+            if (dirCounts[t].integerValue == 0) continue;
+            SGPlanRow *h = [[SGPlanRow alloc] init];
+            h.isHeader = YES;
+            h.tabId = tabs[t].tabId;
+            h.title = tabs[t].title ?: @"";
+            h.count = dirCounts[t].unsignedIntegerValue;
+            h.unread = dirUnreads[t].unsignedIntegerValue;
+            h.redDot = dirDots[t].boolValue;
+            h.folded = SGIsTabFolded(h.tabId);
+            [plan addObject:h];
+            if (!h.folded) [plan addObjectsFromArray:dirBuckets[t]]; // 折叠组只出头（FUN_001cbca4 语义）
+        }
+        if (otherRows.count > 0) {
+            SGPlanRow *h = [[SGPlanRow alloc] init];
+            h.isHeader = YES;
+            h.tabId = @"__sg_dir_other__";
+            h.title = @"其他";
+            h.count = otherRows.count;
+            h.unread = (NSUInteger)otherUnread;
+            h.redDot = otherDot;
+            h.folded = SGIsTabFolded(h.tabId);
+            [plan addObject:h];
+            if (!h.folded) [plan addObjectsFromArray:otherRows];
+        }
+        snap.dirPlan = plan;
+    }
 
     snap.origCounts = [counts copy];
     snap.hiddenRows = [hidden copy];
     snap.targetSection = targetSection;
     snap.tabUnread = [unreadPerTab copy];
     snap.tabRedDot = [dotPerTab copy];
-    snap.tabSessionCounts = [countPerTab copy];
     snap.signature = SGSignature(vc, table);
     return snap;
 }
@@ -508,13 +643,13 @@ static NSInteger SGNativeRow(SGHomeSnapshot *snap, NSInteger section, NSInteger 
     return native;
 }
 
-// displayed 行空间校验：行号是否落在快照的过滤后行数内（目录行偏移感知）
+// displayed 行空间校验：行号是否落在快照的过滤后行数内。
+// 目录模式恒 NO：section 0 由计划行驱动（会话行在调用方先行拦截）、其余 section 全隐藏
 static BOOL SGIsDisplayedSpace(id self, UITableView *table, NSIndexPath *ip) {
     SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
     if (!snap || !ip) return NO;
+    if (snap.dirMode) return NO;
     if (ip.section < 0 || ip.section >= (NSInteger)snap.origCounts.count) return NO;
-    NSInteger dirRows = (ip.section == 0) ? snap.dirRows : 0;
-    if (ip.row < dirRows) return NO; // 目录行非会话空间（调用方需先行拦截）
     NSInteger hidden = (NSInteger)snap.hiddenRows[ip.section].count;
     NSInteger origCnt = snap.origCounts[ip.section].integerValue;
     // 与当前原行数不一致视为 native 空间（模型漂移时保守放行）
@@ -523,18 +658,16 @@ static BOOL SGIsDisplayedSpace(id self, UITableView *table, NSIndexPath *ip) {
         curOrig = ((NSInteger (*)(id, SEL, id, NSInteger))orig_numberOfRows)(self, @selector(tableView:numberOfRowsInSection:), table, ip.section);
     }
     if (curOrig != origCnt) return NO;
-    return ip.row - dirRows < origCnt - hidden;
+    return ip.row < origCnt - hidden;
 }
 
 static NSIndexPath *SGNativeIndexPath(id self, UITableView *table, NSIndexPath *ip) {
     SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
-    if (!snap || !ip) return ip;
+    if (!snap || !ip || snap.dirMode) return ip;
     if (ip.section < 0 || ip.section >= (NSInteger)snap.hiddenRows.count) return ip;
-    NSInteger dirRows = (ip.section == 0) ? snap.dirRows : 0;
-    NSInteger row = ip.row - dirRows; // 目录行由调用方拦截，此处必为会话行
-    NSInteger native = SGNativeRow(snap, ip.section, row);
-    if (dirRows == 0 && native == row) return ip;
-    return [NSIndexPath indexPathForRow:native inSection:ip.section]; // 原生坐标（无目录偏移）
+    NSInteger native = SGNativeRow(snap, ip.section, ip.row);
+    if (native == ip.row) return ip;
+    return [NSIndexPath indexPathForRow:native inSection:ip.section]; // 原生坐标
 }
 
 #pragma mark - 刷新调度
@@ -728,9 +861,9 @@ static void SGSideRailLayoutPass(UITableView *table) {
     for (NSUInteger t = 0; t < snap.tabs.count; t++) if (snap.tabs[t] == sel) { idx = (NSInteger)t; break; }
     if (rail.selectedIndex != idx) rail.selectedIndex = idx;
 
-    // ── 列表内目录（XOS「+列表内」形态）：不再用覆盖视图 —— 由 hook 链把目录行
-    //    以 cell 形式注入 section 0 顶部（见 hook_cellForRow / hook_didSelect），
-    //    快照 dirRows 字段承载行数，此处无任何视图/帧写入 ──
+    // ── 列表内目录（XOS「+列表内」形态）：不再用覆盖视图 —— 目录模式（选中全部组）时
+    //    section 0 由快照计划行全量驱动（组头/会话行，见 hook_cellForRow / hook_didSelect），
+    //    此处无任何视图/帧写入 ──
 }
 
 #pragma mark - 切组
@@ -774,6 +907,24 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
         [UIView performWithoutAnimation:^{ [t reloadData]; }];
     });
     WPLog(@"SG", @"[SgHook] select tab %ld (%@)", (long)idx, tab.tabId);
+}
+
+#pragma mark - 目录折叠切换
+
+// 折叠切换（XOS FUN_001cbd20：集合 toggle → FUN_0020ba40 持久化 → 修订计数 DAT_003eaab4++
+// 失效缓存；点击链 FUN_001ccc14 → FUN_001c9388 刷新）——目录组头点击是收纳展开/收起，不是跳组
+static void SGToggleFold(id vc, NSString *tabId) {
+    if (!tabId.length) return;
+    NSMutableSet<NSString *> *set = SGFoldedSet();
+    BOOL fold = ![set containsObject:tabId];
+    if (fold) [set addObject:tabId];
+    else [set removeObject:tabId];
+    [[NSUserDefaults standardUserDefaults] setObject:[set allObjects] forKey:kSGFoldedGroupsKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    SGInvalidateSnapshot(vc);
+    UITableView *table = SGMainTableView(vc);
+    if (table) [UIView performWithoutAnimation:^{ [table reloadData]; }];
+    WPLog(@"SG", @"[SgHook] dir fold %@ → %d", tabId, fold);
 }
 
 #pragma mark - 长按动作（WCR FUN_007f7044 执行器 FUN__part13.c:19926-20070 + FUN_007f7854 菜单，Mio 裁剪版）
@@ -998,9 +1149,12 @@ static NSInteger hook_numberOfRows(id self, SEL _cmd, UITableView *tableView, NS
             if (snap && section >= 0 && section < (NSInteger)snap.origCounts.count) {
                 NSInteger origCnt = ((NSInteger (*)(id, SEL, id, NSInteger))orig_numberOfRows)(self, _cmd, tableView, section);
                 if (snap.origCounts[section].integerValue == origCnt) {
-                    NSInteger rows = MAX(origCnt - (NSInteger)snap.hiddenRows[section].count, 0);
-                    if (section == 0) rows += snap.dirRows; // 列表内目录行前置注入
-                    return rows;
+                    if (snap.dirMode) {
+                        // 目录模式（XOS numberOfRows = 当前计划 entries 数）：section 0 全量
+                        // 由计划行驱动，其余 section 全隐藏（hiddenRows 已按全量填桶 → 同式得 0）
+                        if (section == 0) return (NSInteger)snap.dirPlan.count;
+                    }
+                    return MAX(origCnt - (NSInteger)snap.hiddenRows[section].count, 0);
                 }
                 return origCnt; // 行数漂移：透传，下轮按新签名重建
             }
@@ -1012,41 +1166,45 @@ static NSInteger hook_numberOfRows(id self, SEL _cmd, UITableView *tableView, NS
     return 0;
 }
 
-// 目录行拦截辅助：是注入的目录行则返回 YES（仅 section 0 前缀）
-static BOOL SGIsDirRow(id self, NSIndexPath *ip) {
-    if (!ip || ip.section != 0 || ip.row < 0) return NO;
+// 目录计划行取行（XOS plan→entry 语义）：目录模式 section 0 的 displayed 行号 → 计划行；非目录行返回 nil
+static SGPlanRow *SGDirPlanRow(id self, NSIndexPath *ip) {
+    if (!ip || ip.section != 0 || ip.row < 0) return nil;
     SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
-    return snap && ip.row < snap.dirRows;
+    if (!snap || !snap.dirMode || ip.row >= (NSInteger)snap.dirPlan.count) return nil;
+    return snap.dirPlan[(NSUInteger)ip.row];
 }
 
-// 目录行 → 组序号（可见组数组下标，跳过 all 组行）
-static NSInteger SGDirRowTab(id self, NSIndexPath *ip) {
-    SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
-    NSInteger dirOff = (snap && snap.tabs.count && snap.tabs[0].kind == 0) ? 1 : 0;
-    return dirOff + (ip ? ip.row : 0);
+// 会话计划行 → 原生坐标（组头行无原生坐标，调用方各自处理）
+static NSIndexPath *SGPlanNativeIndexPath(SGPlanRow *row) {
+    return [NSIndexPath indexPathForRow:row.nativeRow inSection:row.nativeSection];
 }
 
 static UITableViewCell *hook_cellForRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
     if (SG_CAN_FILTER(self, tableView) && orig_cellForRow) {
         @try {
-            // 列表内目录行（XOS XZYCLG3DGroupCell 语义 FUN__part4.c:16649-16673）：
-            // 该行直接替换为目录 cell，不透传原实现
-            if (SGIsDirRow(self, indexPath)) {
-                SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
-                NSInteger tIdx = SGDirRowTab(self, indexPath);
-                if (snap && tIdx >= 0 && tIdx < (NSInteger)snap.tabs.count) {
+            // 目录计划行（XOS cellForRow：isDivider → 组头 cell，会话 → entry 原生坐标重映射，
+            // FUN__part4.c:16473-17100）
+            SGPlanRow *pr = SGDirPlanRow(self, indexPath);
+            if (pr) {
+                if (pr.isHeader) {
                     SideGroupsDirCell *cell = [tableView dequeueReusableCellWithIdentifier:@"SGDirCell"];
                     if (!cell) cell = [[SideGroupsDirCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"SGDirCell"];
-                    SessionGroupsTab *tab = snap.tabs[(NSUInteger)tIdx];
-                    NSUInteger cnt = (tIdx < (NSInteger)snap.tabSessionCounts.count)
-                        ? snap.tabSessionCounts[(NSUInteger)tIdx].unsignedIntegerValue : 0;
-                    NSUInteger unr = (tIdx < (NSInteger)snap.tabUnread.count)
-                        ? snap.tabUnread[(NSUInteger)tIdx].unsignedIntegerValue : 0;
-                    [cell configureTitle:(tab.title ?: @"") count:cnt unread:unr];
-                    __weak id weakSelf = self;
-                    cell.onLongPress = ^{ id s = weakSelf; if (s) SGDispatchLongPress(s, tab); };
+                    [cell configureTitle:pr.title count:pr.count unread:pr.unread expanded:!pr.folded];
+                    cell.onLongPress = nil;
+                    if (![pr.tabId isEqualToString:@"__sg_dir_other__"]) {
+                        // 真实组：长按 → 分组长按动作；「其他」为目录聚合桶，无对应组
+                        SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
+                        for (SessionGroupsTab *tab in snap.tabs) {
+                            if ([tab.tabId isEqualToString:pr.tabId]) {
+                                __weak id weakSelf = self;
+                                cell.onLongPress = ^{ id s = weakSelf; if (s) SGDispatchLongPress(s, tab); };
+                                break;
+                            }
+                        }
+                    }
                     return cell;
                 }
+                return ((UITableViewCell *(*)(id, SEL, id, id))orig_cellForRow)(self, _cmd, tableView, SGPlanNativeIndexPath(pr));
             }
             if (SGIsDisplayedSpace(self, tableView, indexPath)) {
                 NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
@@ -1062,7 +1220,11 @@ static UITableViewCell *hook_cellForRow(id self, SEL _cmd, UITableView *tableVie
 
 static CGFloat hook_heightForRow(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
     if (SG_CAN_FILTER(self, tableView) && orig_heightForRow) {
-        if (SGIsDirRow(self, indexPath)) return 48.0; // 目录行高（SideGroupsDirCell 同值）
+        SGPlanRow *pr = SGDirPlanRow(self, indexPath);
+        if (pr) {
+            if (pr.isHeader) return 48.0; // 组头行高（SideGroupsDirCell 同值）
+            return ((CGFloat (*)(id, SEL, id, id))orig_heightForRow)(self, _cmd, tableView, SGPlanNativeIndexPath(pr));
+        }
         if (SGIsDisplayedSpace(self, tableView, indexPath)) {
             NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
             return ((CGFloat (*)(id, SEL, id, id))orig_heightForRow)(self, _cmd, tableView, native);
@@ -1074,9 +1236,15 @@ static CGFloat hook_heightForRow(id self, SEL _cmd, UITableView *tableView, NSIn
 
 static void hook_didSelect(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
     if (SG_CAN_FILTER(self, tableView) && orig_didSelect) {
-        if (SGIsDirRow(self, indexPath)) {
-            [tableView deselectRowAtIndexPath:indexPath animated:NO];
-            SGSelectTabIndex(self, SGDirRowTab(self, indexPath), 0, YES);
+        SGPlanRow *pr = SGDirPlanRow(self, indexPath);
+        if (pr) {
+            if (pr.isHeader) {
+                // 组头点击 = 折叠切换（XOS FUN_001ccc14 点击链），不是跳组
+                [tableView deselectRowAtIndexPath:indexPath animated:NO];
+                SGToggleFold(self, pr.tabId);
+                return;
+            }
+            ((void (*)(id, SEL, id, id))orig_didSelect)(self, _cmd, tableView, SGPlanNativeIndexPath(pr));
             return;
         }
         if (SGIsDisplayedSpace(self, tableView, indexPath)) {
@@ -1090,7 +1258,7 @@ static void hook_didSelect(id self, SEL _cmd, UITableView *tableView, NSIndexPat
 
 static BOOL hook_canEdit(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
     if (SG_CAN_FILTER(self, tableView) && orig_canEdit) {
-        if (SGIsDirRow(self, indexPath)) return NO; // 目录行不可编辑
+        if (SGDirPlanRow(self, indexPath)) return NO; // 计划行（组头/目录内会话行）不可编辑
         if (SGIsDisplayedSpace(self, tableView, indexPath)) {
             NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
             return ((BOOL (*)(id, SEL, id, id))orig_canEdit)(self, _cmd, tableView, native);
@@ -1102,7 +1270,7 @@ static BOOL hook_canEdit(id self, SEL _cmd, UITableView *tableView, NSIndexPath 
 
 static UITableViewCellEditingStyle hook_editingStyle(id self, SEL _cmd, UITableView *tableView, NSIndexPath *indexPath) {
     if (SG_CAN_FILTER(self, tableView) && orig_editingStyle) {
-        if (SGIsDirRow(self, indexPath)) return UITableViewCellEditingStyleNone;
+        if (SGDirPlanRow(self, indexPath)) return UITableViewCellEditingStyleNone;
         if (SGIsDisplayedSpace(self, tableView, indexPath)) {
             NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
             return ((UITableViewCellEditingStyle (*)(id, SEL, id, id))orig_editingStyle)(self, _cmd, tableView, native);
@@ -1114,7 +1282,7 @@ static UITableViewCellEditingStyle hook_editingStyle(id self, SEL _cmd, UITableV
 
 static void hook_commitEditing(id self, SEL _cmd, UITableView *tableView, UITableViewCellEditingStyle style, NSIndexPath *indexPath) {
     if (SG_CAN_FILTER(self, tableView) && orig_commitEditing) {
-        if (SGIsDirRow(self, indexPath)) return; // 目录行无编辑提交
+        if (SGDirPlanRow(self, indexPath)) return; // 计划行无编辑提交
         if (SGIsDisplayedSpace(self, tableView, indexPath)) {
             NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
             ((void (*)(id, SEL, id, UITableViewCellEditingStyle, id))orig_commitEditing)(self, _cmd, tableView, style, native);
@@ -1126,7 +1294,12 @@ static void hook_commitEditing(id self, SEL _cmd, UITableView *tableView, UITabl
 
 static void hook_willDisplay(id self, SEL _cmd, UITableView *tableView, UITableViewCell *cell, NSIndexPath *indexPath) {
     if (SG_CAN_FILTER(self, tableView) && orig_willDisplay) {
-        if (SGIsDirRow(self, indexPath)) return; // 目录 cell 自管外观，不走微信 willDisplay
+        SGPlanRow *pr = SGDirPlanRow(self, indexPath);
+        if (pr) {
+            if (pr.isHeader) return; // 组头 cell 自管外观，不走微信 willDisplay
+            ((void (*)(id, SEL, id, id, id))orig_willDisplay)(self, _cmd, tableView, cell, SGPlanNativeIndexPath(pr));
+            return;
+        }
         if (SGIsDisplayedSpace(self, tableView, indexPath)) {
             NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
             ((void (*)(id, SEL, id, id, id))orig_willDisplay)(self, _cmd, tableView, cell, native);
@@ -1138,7 +1311,12 @@ static void hook_willDisplay(id self, SEL _cmd, UITableView *tableView, UITableV
 
 static void hook_didEndDisplaying(id self, SEL _cmd, UITableView *tableView, UITableViewCell *cell, NSIndexPath *indexPath) {
     if (SG_CAN_FILTER(self, tableView) && orig_didEndDisplaying) {
-        if (SGIsDirRow(self, indexPath)) return; // 目录 cell 无微信侧收尾
+        SGPlanRow *pr = SGDirPlanRow(self, indexPath);
+        if (pr) {
+            if (pr.isHeader) return; // 组头 cell 无微信侧收尾
+            ((void (*)(id, SEL, id, id, id))orig_didEndDisplaying)(self, _cmd, tableView, cell, SGPlanNativeIndexPath(pr));
+            return;
+        }
         if (SGIsDisplayedSpace(self, tableView, indexPath)) {
             NSIndexPath *native = SGNativeIndexPath(self, tableView, indexPath);
             ((void (*)(id, SEL, id, id, id))orig_didEndDisplaying)(self, _cmd, tableView, cell, native);

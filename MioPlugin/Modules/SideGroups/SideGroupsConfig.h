@@ -3,8 +3,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// 分组显示位置（四种位置列表均让位；「+列表内」额外在列表顶部注入目录行 cell
-/// （hook cellForRowAtIndexPath，XOS XZYCLG3DGroupCell 语义），并保留顶部分组条）
+/// 分组显示位置（四种位置列表均让位；「+列表内」在选中全部组时列表进入目录收纳
+/// 模式——组头行展开/收起，可折叠持久化，XOS 位置模式 6 语义，并保留顶部分组条）
 typedef NS_ENUM(NSInteger, SDSidePosition) {
     SDSidePositionRight      = 0,  // 右侧
     SDSidePositionLeft       = 1,  // 左侧

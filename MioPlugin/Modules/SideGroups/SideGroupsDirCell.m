@@ -1,8 +1,6 @@
 #import "SideGroupsDirCell.h"
 #import "../../Core/WPUtility.h"
 
-static const CGFloat kSDDirRowHeight = 48.0; // 与 hook_heightForRow 目录行高一致
-
 @interface SideGroupsDirCell ()
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *countLabel;
@@ -46,9 +44,10 @@ static const CGFloat kSDDirRowHeight = 48.0; // 与 hook_heightForRow 目录行�
     return l;
 }
 
-- (void)configureTitle:(NSString *)title count:(NSUInteger)count unread:(NSUInteger)unread {
+- (void)configureTitle:(NSString *)title count:(NSUInteger)count unread:(NSUInteger)unread expanded:(BOOL)expanded {
     self.titleLabel.text = title ?: @"";
     self.countLabel.text = [NSString stringWithFormat:@"· %lu", (unsigned long)count];
+    self.chevronLabel.text = expanded ? @"˅" : @"›"; // ˅=组内会话在列 ›=已收起
     UILabel *badge = self.badgeLabel;
     badge.text = unread > 99 ? @"99+" : (unread > 0 ? [NSString stringWithFormat:@"%lu", (unsigned long)unread] : @"");
     badge.hidden = badge.text.length == 0;
