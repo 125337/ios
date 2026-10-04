@@ -1,17 +1,18 @@
 #import "SideGroupsActions.h"
-#import "../SessionGroups/SessionGroupManagerVC.h"
+#import "SideGroupsManagerVC.h"
 #import "../SettingEntry/WPCommonUI.h"
 #import "../../Core/MioAlertHelper.h"
 #import <UIKit/UIKit.h>
 
 @implementation SideGroupsActions
 
-// 分组管理弹窗（裸 UINavigationController + pageSheet + iOS15 largeDetent + 左上关闭）
+// 分组管理弹窗（裸 UINavigationController + pageSheet + iOS15 largeDetent + 左上关闭），
+// 弹侧边分组自己的管理页（不耦合电报 SessionGroupManagerVC）
 + (void)openGroupManager {
     UIViewController *top = [UIApplication sharedApplication].keyWindow.rootViewController;
     while (top.presentedViewController) top = top.presentedViewController;
     if (!top) return;
-    SessionGroupManagerVC *mgr = [[SessionGroupManagerVC alloc] init];
+    SideGroupsManagerVC *mgr = [[SideGroupsManagerVC alloc] init];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:mgr];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     if (@available(iOS 15.0, *)) {

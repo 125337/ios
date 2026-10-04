@@ -1,6 +1,7 @@
 #import "SideGroupsVC.h"
 #import "SideGroupsConfig.h"
 #import "../../Core/ConfigManager.h"
+#import "../../Core/MioAlertHelper.h"
 
 @implementation SideGroupsVC
 
@@ -38,14 +39,14 @@
     UIView *g2 = [self addTableGroupAtY:y width:w];
     cy = 0;
 
-    // 分组显示位置（XOS 位置模式：左/右 rail + 「+列表内」复用电报分组条形态）
-    cy = [self addSegmentRowInGroup:g2
-                              title:@"分组显示位置"
-                                key:@"sdPosition"
-                              names:@[@"右侧", @"左侧", @"左侧+列表内", @"右侧+列表内"]
-                              index:config.sdPosition
-                                 cy:cy
-                              width:w];
+    // 分组显示位置（底部弹出菜单选择，当前项标 ✓，选完刷新行右值）
+    cy = [self addNavRowInGroup:g2
+                          title:@"分组显示位置"
+                       subtitle:[self positionName:config.sdPosition]
+                            tag:0
+                         action:@selector(positionRowTapped:)
+                             cy:cy
+                          width:w];
 
     // 侧栏宽度（XOS rail 宽 54/48）
     cy = [self addInputRowInGroup:g2
@@ -133,6 +134,40 @@
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
+}
+
+#pragma mark - 分组显示位置（底部弹出菜单，WCActionSheet 形态）
+
++ (NSArray<NSString *> *)positionNames {
+    return @[@"右侧", @"左侧", @"左侧+列表内", @"右侧+列表内"];
+}
+
+- (NSString *)positionName:(NSInteger)idx {
+    NSArray<NSString *> *names = [SideGroupsVC positionNames];
+    if (idx < 0 || idx >= (NSInteger)names.count) return names[0];
+    return names[idx];
+}
+
+- (void)positionRowTapped:(UIButton *)sender {
+    NSArray<NSString *> *names = [SideGroupsVC positionNames];
+    NSInteger cur = [SideGroupsConfig shared].sdPosition;
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
+    for (NSInteger i = 0; i < (NSInteger)names.count; i++) {
+        [titles addObject:(i == cur) ? [names[i] stringByAppendingString:@" ✓"] : names[i]];
+    }
+    [MioAlertHelper showMenuAlert:@"分组显示位置"
+                          buttons:titles
+                         onButton:^(NSInteger index) {
+        if (index < 0 || index >= (NSInteger)names.count || index == cur) return;
+        @try {
+            [ConfigManager setValue:@(index) forKey:@"sdPosition"];
+            [ConfigManager saveAll];
+        } @catch (NSException *e) {
+            return;
+        }
+        [self wpRebuildWeChatTable];
+        [self buildUI];
+    }];
 }
 
 - (NSString *)numText:(CGFloat)v {
