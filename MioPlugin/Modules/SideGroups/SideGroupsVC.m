@@ -1,5 +1,6 @@
 #import "SideGroupsVC.h"
 #import "SideGroupsConfig.h"
+#import "SideGroupsActions.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 
@@ -132,6 +133,19 @@
 
     y = [self finishGroup:g3 atY:y height:cy];
 
+    // ──── 卡片4：分组管理（子页面入口，弹侧边分组自己的管理页） ────
+    y = [self addSectionHeader:@"分组管理" y:y width:w];
+    UIView *g4 = [self addTableGroupAtY:y width:w];
+    cy = 0;
+    cy = [self addNavRowInGroup:g4
+                          title:@"分组管理"
+                       subtitle:nil
+                            tag:0
+                         action:@selector(openGroupManager)
+                             cy:cy
+                          width:w];
+    y = [self finishGroup:g4 atY:y height:cy];
+
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
@@ -168,6 +182,10 @@
         [self wpRebuildWeChatTable];
         [self buildUI];
     }];
+}
+
+- (void)openGroupManager {
+    [SideGroupsActions openGroupManager];
 }
 
 - (NSString *)numText:(CGFloat)v {
