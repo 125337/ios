@@ -202,9 +202,10 @@
         BOOL sel = (i == self.selectedIndex);
         b.backgroundColor = sel ? self.sdSelColor : UIColor.clearColor;
         b.layer.cornerRadius = 8;
+        // 模板图标渲染色由 button.tintColor 驱动（System 按钮默认蓝，只设 imageView.tintColor
+        // 会被按钮内部用自身 tintColor 重刷盖掉 → 蓝图标），文字色另走 setTitleColor
+        b.tintColor = sel ? UIColor.whiteColor : text;
         [b setTitleColor:sel ? UIColor.whiteColor : text forState:UIControlStateNormal];
-        // 图标模板 tint 跟随文字色（无图标时设置无害）
-        b.imageView.tintColor = sel ? UIColor.whiteColor : text;
     }
 }
 
