@@ -869,8 +869,12 @@ static void SGSideRailLayoutPass(UITableView *table) {
     SGHomeSnapshot *snap = SGEnsureSnapshot(vc, table);
     if (!snap) return;
     NSMutableArray<NSString *> *titles = [NSMutableArray array];
-    for (SessionGroupsTab *t in snap.tabs) [titles addObject:t.title ?: @""];
-    [rail reloadTitles:titles badges:snap.tabUnread];
+    NSMutableArray<NSString *> *tabIds = [NSMutableArray array];
+    for (SessionGroupsTab *t in snap.tabs) {
+        [titles addObject:t.title ?: @""];
+        [tabIds addObject:t.tabId ?: @""];
+    }
+    [rail reloadTitles:titles badges:snap.tabUnread tabIds:tabIds];
     SessionGroupsTab *sel = SGSelectedTab(snap.tabs);
     NSInteger idx = 0;
     for (NSUInteger t = 0; t < snap.tabs.count; t++) if (snap.tabs[t] == sel) { idx = (NSInteger)t; break; }

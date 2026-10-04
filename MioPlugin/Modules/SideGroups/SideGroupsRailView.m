@@ -2,13 +2,42 @@
 #import "SideGroupsConfig.h"
 #import "../../Core/WPUtility.h"
 
+// 侧边分组按钮：图标上/文字下竖排（无图标走系统默认布局，纯文字垂直居中）
+@interface SDRailButton : UIButton
+@property (nonatomic, copy) NSString *symbolName;
+@end
+@implementation SDRailButton
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.titleLabel.numberOfLines = 1;
+        self.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+    }
+    return self;
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!self.imageView.image) return;
+    CGFloat W = self.bounds.size.width, H = self.bounds.size.height;
+    if (W <= 0 || H <= 0) return;
+    CGSize ts = [self.titleLabel sizeThatFits:CGSizeMake(W - 4, CGFLOAT_MAX)];
+    CGFloat isz = 18, gap = 2;
+    CGFloat block = isz + gap + MIN(ts.height, 14);
+    CGFloat top = (H - block) / 2.0;
+    self.imageView.contentMode = UIViewContentModeScaleAspectFit;
+    self.imageView.frame = CGRectMake((W - isz) / 2.0, top, isz, isz);
+    self.titleLabel.frame = CGRectMake(2, top + isz + gap, W - 4, MIN(ts.height, 14));
+}
+@end
+
 @interface SideGroupsRailView ()
 @property (nonatomic, strong) NSMutableArray<UIButton *> *buttons;
 @property (nonatomic, strong) NSMutableArray<UILabel *> *badges;
 @property (nonatomic, copy) NSArray<NSString *> *titles;
-@property (nonatomic, copy) NSArray<NSNumber *> *unread;
+@property (nonatomic, copy) NSArray<NSString *> *unread;
+@property (nonatomic, copy) NSArray<NSString *> *tabIds;
 @property (nonatomic, copy) NSString *lastConfigSig;   // 宽/字号/颜色/暗色 变化检测
-@property (nonatomic, copy) NSString *lastDataSig;     // 标题/角标数据变化检测（每帧 pass 都会调 reload，没变直接返回）
+@property (nonatomic, copy) NSString *lastDataSig;     // 标题/角标/图标数据变化检测（每帧 pass 都会调 reload，没变直接返回）
 @end
 
 @implementation SideGroupsRailView
@@ -58,6 +87,20 @@
     return [SideGroupsConfig resolveFontSize:12];
 }
 
+#pragma mark - 图标映射（SF Symbols 内置默认；无匹配 → 纯文字按钮）
+
++ (NSString *)sdSymbolForTabId:(NSString *)tabId {
+    static NSDictionary<NSString *, NSString *> *map;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        map = @{@"all":      @"line.3.horizontal",
+                @"pinned":   @"pin.fill",
+                @"private":  @"person.fill",
+                @"chatroom": @"person.2.fill"};
+    });
+    return map[tabId];
+}
+
 #pragma mark - 配置应用（签名比对）
 
 - (void)applyConfig {
@@ -83,6 +126,16 @@
 
 #pragma mark - 按钮管理
 
+// 图标：按 tabId 映射 SF Symbol（模板渲染，tint 由 applySelectionAppearance 跟文字色统一设）
+- (void)sdApplySymbol:(SDRailButton *)b index:(NSInteger)i {
+    NSString *tid = (i < (NSInteger)self.tabIds.count) ? self.tabIds[i] : nil;
+    NSString *sym = tid ? [SideGroupsRailView sdSymbolForTabId:tid] : nil;
+    UIImage *img = sym ? [UIImage systemImageNamed:sym] : nil;
+    if (img) img = [img imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    [b setImage:img forState:UIControlStateNormal];
+    b.symbolName = sym;
+}
+
 - (void)rebuildButtonsIfNeeded {
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
     NSInteger n = (NSInteger)self.titles.count;
@@ -94,13 +147,13 @@
     }
     while ((NSInteger)self.buttons.count < n) {
         NSInteger i = (NSInteger)self.buttons.count;
-        UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+        SDRailButton *b = [SDRailButton buttonWithType:UIButtonTypeSystem];
         b.tag = i;
         b.titleLabel.font = [UIFont systemFontOfSize:self.sdFontSize];
-        b.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
         b.titleLabel.textAlignment = NSTextAlignmentCenter;
         b.backgroundColor = UIColor.clearColor;
         [b addTarget:self action:@selector(sdButtonTap:) forControlEvents:UIControlEventTouchUpInside];
+        [self sdApplySymbol:b index:i];
         [self addSubview:b];
         [self.buttons addObject:b];
 
@@ -116,11 +169,12 @@
         [self.badges addObject:badge];
     }
     for (NSInteger i = 0; i < n; i++) {
-        UIButton *b = self.buttons[i];
+        SDRailButton *b = self.buttons[i];
         b.titleLabel.font = [UIFont systemFontOfSize:self.sdFontSize];
         [b setTitle:self.titles[i] forState:UIControlStateNormal];
         [b setTitleEdgeInsets:UIEdgeInsetsZero];
         b.hidden = NO;
+        [self sdApplySymbol:b index:i];
         UILabel *badge = self.badges[i];
         badge.hidden = !cfg.sdShowUnreadBadge;
     }
@@ -149,19 +203,23 @@
         b.backgroundColor = sel ? self.sdSelColor : UIColor.clearColor;
         b.layer.cornerRadius = 8;
         [b setTitleColor:sel ? UIColor.whiteColor : text forState:UIControlStateNormal];
+        // 图标模板 tint 跟随文字色（无图标时设置无害）
+        b.imageView.tintColor = sel ? UIColor.whiteColor : text;
     }
 }
 
 #pragma mark - 数据刷新
 
-- (void)reloadTitles:(NSArray<NSString *> *)titles badges:(NSArray<NSNumber *> *)unread {
-    // 数据签名门闩：每帧 pass 都会调，标题/角标没变直接返回（setNeedsLayout 会引发布局风暴）
-    NSString *sig = [NSString stringWithFormat:@"%@|%@", [titles componentsJoinedByString:@"\x1F"],
-                     [unread componentsJoinedByString:@"\x1F"]];
+- (void)reloadTitles:(NSArray<NSString *> *)titles badges:(NSArray<NSNumber *> *)unread tabIds:(NSArray<NSString *> *)tabIds {
+    // 数据签名门闩：每帧 pass 都会调，标题/角标/图标映射没变直接返回（setNeedsLayout 会引发布局风暴）
+    NSString *sig = [NSString stringWithFormat:@"%@|%@|%@", [titles componentsJoinedByString:@"\x1F"],
+                     [unread componentsJoinedByString:@"\x1F"],
+                     [tabIds componentsJoinedByString:@"\x1F"]];
     if ([sig isEqualToString:self.lastDataSig]) return;
     self.lastDataSig = sig;
     self.titles = [titles copy];
     self.unread = [unread copy] ?: @[];
+    self.tabIds = [tabIds copy] ?: @[];
     [self rebuildButtonsIfNeeded];
     [self applySelectionAppearance];
 }

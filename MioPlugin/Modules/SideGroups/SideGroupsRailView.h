@@ -16,8 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// 宽/字号/颜色签名比对，变化才重建（防每轮布局风暴）
 - (void)applyConfig;
 
-/// 重建/更新按钮标题与未读角标（组数变化时重建）
-- (void)reloadTitles:(NSArray<NSString *> *)titles badges:(nullable NSArray<NSNumber *> *)unread;
+/// 重建/更新按钮标题、图标与未读角标（组数变化时重建；tabIds 驱动 SF Symbol 图标映射）
+- (void)reloadTitles:(NSArray<NSString *> *)titles badges:(nullable NSArray<NSNumber *> *)unread tabIds:(nullable NSArray<NSString *> *)tabIds;
 
 @end
 
