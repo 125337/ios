@@ -809,10 +809,14 @@ static void hook_tableSetFrame(UITableView *table, SEL _cmd, CGRect frame) {
         if (selfWriteV.boolValue) {
             objc_setAssociatedObject(table, kSGAssocRailSelfWrite, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         } else {
-            NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
-            if (nativeV) {
-                CGRect native = [nativeV CGRectValue];
-                if (frame.size.width > native.size.width + 0.5) { // 微信把列表改宽 → 重套让位
+            // 已接管：对照让位帧判定（XOS FUN_00200a14 同语义）——微信写回非让位帧
+            // （重排回全宽/位移）立即重套让位弹回，让位稳态由此保持；仅 y/h 变化
+            // （下拉小程序面板的平移动画）x/w 与让位帧一致 → 放行，动画零对抗
+            NSValue *wantedV = objc_getAssociatedObject(table, kSGAssocRailWanted);
+            if (wantedV) {
+                CGRect wanted = [wantedV CGRectValue];
+                if (fabs(frame.size.width - wanted.size.width) > 0.5 ||
+                    fabs(frame.origin.x - wanted.origin.x) > 0.5) {
                     CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
                     BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
                     CGRect want = frame;
