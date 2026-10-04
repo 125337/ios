@@ -3,9 +3,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// 分组显示位置（对齐 XOS XZYCLG 位置模式 DAT_003eaac8 + SideScope DAT_003eaad0：
-/// 纯左/右 = 列表让位 54pt（0.5pt 阈值）；「+列表内」= 列表不让位（侧栏浮于列表上，
-/// FUN__part4.c:20045-20060），目录以 cell 注入列表（hook cellForRowAtIndexPath）
+/// 分组显示位置（四种位置列表均让位；「+列表内」额外在列表顶部注入目录行 cell
+/// （hook cellForRowAtIndexPath，XOS XZYCLG3DGroupCell 语义），并保留顶部分组条）
 typedef NS_ENUM(NSInteger, SDSidePosition) {
     SDSidePositionRight      = 0,  // 右侧
     SDSidePositionLeft       = 1,  // 左侧

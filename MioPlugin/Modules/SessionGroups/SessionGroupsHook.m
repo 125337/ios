@@ -301,10 +301,14 @@ static BOOL SGActive(id vc) {
     return [SideGroupsConfig shared].sdEnabled;
 }
 
-// 条接管显隐（XOS 位置模式语义）：侧边分组开启时不显示分组条（侧栏取代条，XOS
-// 侧栏模式一律无横条）；侧边分组关闭时回落电报分组总开关。
+// 条接管显隐（XOS 位置模式语义）：侧边分组开启时由「分组显示位置」全权决定——
+// 纯侧栏（右侧/左侧）= 条不显示（侧栏取代条）；「+列表内」= 条与侧栏共存。
+// 侧边分组关闭时回落电报分组总开关。
 static BOOL SGWantsStrip(id vc) {
-    if ([SideGroupsConfig shared].sdEnabled) return NO;
+    SideGroupsConfig *sd = [SideGroupsConfig shared];
+    if (sd.sdEnabled) {
+        return sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList;
+    }
     return [SessionGroupsConfig shared].sgEnabled;
 }
 
@@ -665,33 +669,24 @@ static void SGSideRailLayoutPass(UITableView *table) {
     }
     objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:native], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    // ── 让位帧计算（XOS FUN__part4.c:20045-20060 同语义：纯左/右才让位，0.5pt 阈值；
-    //    「+列表内」列表根本不让位（DAT_003eaad0!=0 → 不写 table.frame，侧栏浮于列表上），
-    //    从让位模式切回列表内时一次性还原原生帧）──
+    // ── 让位帧计算（列表为侧栏让位：左模式 x+=w/width-=w，右模式 width-=w，四种位置一致；
+    //    0.5pt 阈值防写回风暴）──
     CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
     CGFloat off = MIN(MAX(sd.sdRailXOffset, -30), 30);
     BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
-    BOOL inList = (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList);
     CGRect want = native;
     CGRect railFrame; // table.superview 坐标系
     if (left) {
+        want.origin.x = native.origin.x + w;
+        want.size.width = native.size.width - w;
         railFrame = CGRectMake(native.origin.x + off, native.origin.y, w, native.size.height);
     } else {
+        want.size.width = native.size.width - w;
         railFrame = CGRectMake(native.origin.x + native.size.width - w + off, native.origin.y, w, native.size.height);
     }
-    if (!inList) {
-        if (left) {
-            want.origin.x = native.origin.x + w;
-            want.size.width = native.size.width - w;
-        } else {
-            want.size.width = native.size.width - w;
-        }
-        if (want.size.width < 100) return; // 极窄屏保护，宁可不出侧栏
-        if (fabs(cur.origin.x - want.origin.x) > 0.5 || fabs(cur.size.width - want.size.width) > 0.5) {
-            table.frame = want; // 写帧触发下一轮 layout；下轮 cur==want 走跳过分支
-        }
-    } else if (!CGRectEqualToRect(cur, native)) {
-        table.frame = native; // 还原收敛：微信原生布局本就要此帧，不会写回
+    if (want.size.width < 100) return; // 极窄屏保护，宁可不出侧栏
+    if (fabs(cur.origin.x - want.origin.x) > 0.5 || fabs(cur.size.width - want.size.width) > 0.5) {
+        table.frame = want; // 写帧触发下一轮 layout；下轮 cur==want 走跳过分支
     }
     objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
