@@ -283,10 +283,18 @@ static BOOL SGMatchesTab(id session, NSString *username, NSUInteger scope, Sessi
     NSUInteger eff = tab.scopeMask;
     if ([tab.tabId isEqualToString:@"other"]) eff |= 4;
 
-    // scope==0（未知）落 other 兜底（Misc_part6.c:8755-8780）
-    BOOL match = (scope == 0) ? ((eff & 0x18) != 0) : ((scope & eff & 0x1f) != 0);
+    // 基础 scope 位（0x1f）与非基础位分开判：纯附加位组（置顶0x20/未读0x40/@我0x80，
+    // eff&0x1f==0）不看 scope，直接由附加位决定——旧写法 (scope&eff&0x1f)!=0 会把
+    // 纯附加位组恒判不命中（未读/置顶/@我组加进来永远是空组）
+    BOOL match;
+    if (eff & 0x1f) {
+        // scope==0（未知）落 other 兜底（Misc_part6.c:8755-8780）
+        match = (scope == 0) ? ((eff & 0x18) != 0) : ((scope & eff & 0x1f) != 0);
+    } else {
+        match = (eff & 0xe0) != 0;
+    }
 
-    // 附加位（Misc_part6.c:8722-8748）：0x20 置顶 / 0x40 未读 / 0x80 @我
+    // 附加位收窄/判定（Misc_part6.c:8722-8748）：0x20 置顶 / 0x40 未读 / 0x80 @我
     if (match && (eff & 0x20)) match = SGIsTopOf(session);
     if (match && (eff & 0x40)) match = SGUnreadOf(session) > 0;
     if (match && (eff & 0x80)) {
