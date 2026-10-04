@@ -5,7 +5,7 @@
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *countLabel;
 @property (nonatomic, strong) UILabel *badgeLabel;
-@property (nonatomic, strong) UILabel *chevronLabel;
+@property (nonatomic, strong) UIImageView *chevronView; // SF Symbol 箭头（XOS 同款 chevron.right/down）
 @end
 
 @implementation SideGroupsDirCell
@@ -26,8 +26,10 @@
         _badgeLabel.layer.cornerRadius = 9;
         _badgeLabel.layer.masksToBounds = YES;
         _badgeLabel.hidden = YES;
-        _chevronLabel = [self sdMakeLabel:13];
-        _chevronLabel.text = @"›";
+        _chevronView = [[UIImageView alloc] initWithFrame:CGRectZero];
+        _chevronView.tintColor = [UIColor tertiaryLabelColor]; // XOS 实测 tint，明暗自适应
+        _chevronView.contentMode = UIViewContentModeScaleAspectFit;
+        [self.contentView addSubview:_chevronView];
 
         UILongPressGestureRecognizer *lp =
             [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(sdLongPress:)];
@@ -47,7 +49,7 @@
 - (void)configureTitle:(NSString *)title count:(NSUInteger)count unread:(NSUInteger)unread expanded:(BOOL)expanded {
     self.titleLabel.text = title ?: @"";
     self.countLabel.text = [NSString stringWithFormat:@"· %lu", (unsigned long)count];
-    self.chevronLabel.text = expanded ? @"˅" : @"›"; // ˅=组内会话在列 ›=已收起
+    self.chevronView.image = [UIImage systemImageNamed:expanded ? @"chevron.down" : @"chevron.right"];
     UILabel *badge = self.badgeLabel;
     badge.text = unread > 99 ? @"99+" : (unread > 0 ? [NSString stringWithFormat:@"%lu", (unsigned long)unread] : @"");
     badge.hidden = badge.text.length == 0;
@@ -60,21 +62,20 @@
     BOOL dark = [WPUtility isDarkModeForView:self];
     self.titleLabel.textColor = dark ? UIColor.whiteColor : [UIColor colorWithRed:0.1 green:0.1 blue:0.1 alpha:1];
     self.countLabel.textColor = dark ? [UIColor colorWithWhite:1 alpha:0.55] : [UIColor colorWithWhite:0 alpha:0.45];
-    self.chevronLabel.textColor = dark ? [UIColor colorWithWhite:1 alpha:0.3] : [UIColor colorWithWhite:0 alpha:0.25];
 
     CGFloat W = self.contentView.bounds.size.width;
     CGFloat H = self.contentView.bounds.size.height;
     if (W <= 0 || H <= 0) return;
 
-    // 布局从右往左（XOS 实测：chevron 右缘距 18，badge 与箭头间距 6）
+    // 布局从右往左（XOS 实测：chevron 11×10 右缘距 18，badge 与箭头间距 6）
     // badge 宽度用 sizeThatFits 现测（frame 唯一来源是这里，避免复用残留/隐式动画闪跳）
-    self.chevronLabel.frame = CGRectMake(W - 18 - 12, (H - 16) / 2.0, 12, 16);
+    self.chevronView.frame = CGRectMake(W - 18 - 11, (H - 10) / 2.0, 11, 10);
     UILabel *badge = self.badgeLabel;
     CGFloat bw = 0;
     if (!badge.hidden) {
         CGFloat tw = [badge sizeThatFits:CGSizeMake(CGFLOAT_MAX, 18)].width;
         bw = MAX(18, tw + 8);
-        badge.frame = CGRectMake(W - 18 - 12 - 6 - bw, (H - 18) / 2.0, bw, 18); // 18 高，紧邻箭头左侧
+        badge.frame = CGRectMake(W - 18 - 11 - 6 - bw, (H - 18) / 2.0, bw, 18); // 18 高，紧邻箭头左侧
     }
 
     UILabel *title = self.titleLabel;
