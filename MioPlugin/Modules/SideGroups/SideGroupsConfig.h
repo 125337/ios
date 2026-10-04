@@ -3,8 +3,9 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// 分组显示位置（四种位置列表均让位；「+列表内」在选中全部组时列表进入目录收纳
-/// 模式——组头行展开/收起，可折叠持久化，XOS 位置模式 6 语义，并保留顶部分组条）
+/// 分组显示位置（四种位置；列表是否让位由侧边作用范围 sdRailScope 决定；「+列表内」
+/// 在选中全部组时列表进入目录收纳模式——组头行展开/收起，可折叠持久化，XOS 位置模式 6 语义，
+/// 并保留顶部分组条）
 typedef NS_ENUM(NSInteger, SDSidePosition) {
     SDSidePositionRight      = 0,  // 右侧
     SDSidePositionLeft       = 1,  // 左侧
@@ -19,6 +20,7 @@ typedef NS_ENUM(NSInteger, SDSidePosition) {
 
 @property (nonatomic, assign) BOOL sdEnabled;               // 启动首页侧边分组（总开关）
 @property (nonatomic, assign) NSInteger sdPosition;         // 分组显示位置 SDSidePosition
+@property (nonatomic, assign) NSInteger sdRailScope;        // 侧边作用范围：0=缩窄列表让位，1=悬浮不缩列表（XOS xzyChatListGroupingSideScope）
 @property (nonatomic, assign) CGFloat sdRailWidth;          // 侧栏宽度 40-90，默认 54（XOS rail 宽）
 @property (nonatomic, assign) CGFloat sdRailFontSize;       // 自定义字号 9-20，默认 12（rail 与目录共用）
 @property (nonatomic, assign) BOOL sdFontCustom;            // 自定义字号开关：关 → 跟随微信字体大小（dynamicLength）

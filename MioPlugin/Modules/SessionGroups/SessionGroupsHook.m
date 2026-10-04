@@ -793,7 +793,9 @@ static void SGRemoveSideRail(id vc, UITableView *table) {
 
 // MainFrameTableView.layoutSubviews 收尾调用（对齐 XOS FUN_0020a174 在每次布局后重摆侧栏）：
 // 1) 原生帧追踪（区分微信原生变更 vs 自己上轮写帧，防双重让位/布局风暴）
-// 2) 让位帧写回：左模式 x+=w/width-=w，右模式 width-=w（0.5pt 阈值防空写）
+// 2) 作用范围双模式（XOS SideScope FUN__part4.c:20045-20075）：0=让位（左 x+=w/width-=w，
+//    右 width-=w），1=悬浮（完全不改 table 帧，rail 覆盖列表边缘，原生动画零干扰）；
+//    4 分量 0.5pt 阈值比较防空写
 // 3) 侧栏定位（左 minX / 右 maxX-w，X 微调）+ 配置签名应用 + 快照数据同步
 static void SGSideRailLayoutPass(UITableView *table) {
     id vc = nil;
@@ -817,30 +819,29 @@ static void SGSideRailLayoutPass(UITableView *table) {
     }
     objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:native], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    // ── 让位帧计算（列表为侧栏让位：左模式 x+=w/width-=w，右模式 width-=w，四种位置一致；
-    //    0.5pt 阈值防写回风暴）──
+    // ── 作用范围双模式（XOS SideScope）：悬浮模式 want==native 不写帧——微信改表帧时
+    //    原生帧追踪同步重捕获，want 始终跟随 cur，比较恒不触发，小程序面板等原生动画
+    //    零干扰；让位模式才缩窄（左 x+=w/width-=w，右 width-=w）。4 分量 0.5pt 阈值
+    //    （对齐 XOS FUN_0020a174:20070-20071 的全分量比较）防写回风暴 ──
     CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
     CGFloat off = MIN(MAX(sd.sdRailXOffset, -30), 30);
     BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
+    BOOL floating = (sd.sdRailScope == 1);
     CGRect want = native;
     CGRect railFrame; // table.superview 坐标系
     if (left) {
-        want.origin.x = native.origin.x + w;
-        want.size.width = native.size.width - w;
+        if (!floating) {
+            want.origin.x = native.origin.x + w;
+            want.size.width = native.size.width - w;
+        }
         railFrame = CGRectMake(native.origin.x + off, native.origin.y, w, native.size.height);
     } else {
-        want.size.width = native.size.width - w;
+        if (!floating) want.size.width = native.size.width - w;
         railFrame = CGRectMake(native.origin.x + native.size.width - w + off, native.origin.y, w, native.size.height);
     }
     if (want.size.width < 100) return; // 极窄屏保护，宁可不出侧栏
-    // 触摸/滚动/动画期间挂起让位写帧：微信下拉展开小程序面板时会持续改 table 帧，
-    // 此刻每帧写回 = 与原生动画逐帧对抗（表现即"拉不动小程序"），停稳后再写
-    BOOL busy = table.tracking || table.dragging || table.decelerating ||
-                table.panGestureRecognizer.state == UIGestureRecognizerStateBegan ||
-                table.panGestureRecognizer.state == UIGestureRecognizerStateChanged ||
-                table.layer.animationKeys.count > 0;
-    if (!busy &&
-        (fabs(cur.origin.x - want.origin.x) > 0.5 || fabs(cur.size.width - want.size.width) > 0.5)) {
+    if (fabs(cur.origin.x - want.origin.x) > 0.5 || fabs(cur.origin.y - want.origin.y) > 0.5 ||
+        fabs(cur.size.width - want.size.width) > 0.5 || fabs(cur.size.height - want.size.height) > 0.5) {
         table.frame = want; // 写帧触发下一轮 layout；下轮 cur==want 走跳过分支
     }
     objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
