@@ -83,13 +83,6 @@
         : [UIColor colorWithWhite:0 alpha:0.12];
 }
 
-- (UIColor *)sdBgColor {
-    // 侧栏实色背景（XOS 同款形态：不透明侧栏，浮在列表/面板左侧），明暗自适应
-    return [WPUtility isDarkModeForView:self]
-        ? [UIColor colorWithWhite:0.10 alpha:1]
-        : UIColor.whiteColor;
-}
-
 - (CGFloat)sdFontSize {
     return [SideGroupsConfig resolveFontSize:12];
 }
@@ -130,7 +123,7 @@
         appearanceChanged = YES;
     }
     if (!appearanceChanged) return; // 没变化不写任何外观（写回风暴防线）
-    self.backgroundColor = self.sdBgColor; // 实色侧栏（透明会露出底下穿过的列表内容）
+    self.backgroundColor = UIColor.clearColor; // 背景让微信自己画
     [self rebuildButtonsIfNeeded];
     [self applySelectionAppearance];
 }
