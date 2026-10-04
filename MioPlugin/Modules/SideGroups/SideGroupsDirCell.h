@@ -5,7 +5,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// 首页侧边分组 · 列表内目录行 cell
 /// XOS 组头 cell 语义移植（XZYCLG3DGroupCell / identifier XZYCLGDividerCell，
 /// FUN__part4.c:16649-16673）：目录以 cell 形式注入列表（hook cellForRowAtIndexPath
-/// 按行替换），不再用覆盖视图。行高 44（XOS 细行组头），渲染参数移植自旧 SideGroupsDirView 行布局。
+/// 按行替换），不再用覆盖视图。行高 32（XOS 实测细条组头：普通 cell + label + 箭头 + badge）。
 /// folded 态由快照计划行构建时落定（XOS entry 存 folded 同款），chevron ˅ 展开 / › 收起
 @interface SideGroupsDirCell : UITableViewCell
 

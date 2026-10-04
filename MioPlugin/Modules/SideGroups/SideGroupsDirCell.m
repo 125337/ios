@@ -17,16 +17,16 @@
         self.selectionStyle = UITableViewCellSelectionStyleDefault;
         self.contentView.backgroundColor = UIColor.clearColor;
 
-        _titleLabel = [self sdMakeLabel:15];
-        _countLabel = [self sdMakeLabel:13];
-        _badgeLabel = [self sdMakeLabel:10];
+        _titleLabel = [self sdMakeLabel:13];
+        _countLabel = [self sdMakeLabel:12];
+        _badgeLabel = [self sdMakeLabel:11];
         _badgeLabel.textAlignment = NSTextAlignmentCenter;
         _badgeLabel.textColor = UIColor.whiteColor;
         _badgeLabel.backgroundColor = [UIColor colorWithRed:1 green:0.23 blue:0.19 alpha:1];
-        _badgeLabel.layer.cornerRadius = 7;
+        _badgeLabel.layer.cornerRadius = 9;
         _badgeLabel.layer.masksToBounds = YES;
         _badgeLabel.hidden = YES;
-        _chevronLabel = [self sdMakeLabel:16];
+        _chevronLabel = [self sdMakeLabel:13];
         _chevronLabel.text = @"›";
 
         UILongPressGestureRecognizer *lp =
@@ -70,17 +70,17 @@
     UILabel *badge = self.badgeLabel;
     CGFloat bw = 0;
     if (!badge.hidden) {
-        bw = MAX(14, badge.frame.size.width + 8);
-        badge.frame = CGRectMake(W - 14 - 14 - 8 - bw, (H - 14) / 2.0, bw, 14);
+        bw = MAX(18, badge.frame.size.width + 8);
+        badge.frame = CGRectMake(W - 11 - bw, (H - 18) / 2.0, bw, 18); // XOS: badge 18 高右缘距 11
     }
-    self.chevronLabel.frame = CGRectMake(W - 14 - 14, (H - 20) / 2.0, 14, 20);
+    self.chevronLabel.frame = CGRectMake(W - 11 - 12, (H - 16) / 2.0, 12, 16);
 
     UILabel *title = self.titleLabel;
-    CGSize ts = [title sizeThatFits:CGSizeMake(CGFLOAT_MAX, 20)];
-    title.frame = CGRectMake(16, (H - 20) / 2.0, MIN(ts.width, W * 0.6), 20);
+    CGSize ts = [title sizeThatFits:CGSizeMake(CGFLOAT_MAX, 18)];
+    title.frame = CGRectMake(18, (H - 18) / 2.0, MIN(ts.width, W * 0.6), 18); // XOS: label x=18
     UILabel *count = self.countLabel;
-    CGSize cs = [count sizeThatFits:CGSizeMake(CGFLOAT_MAX, 18)];
-    count.frame = CGRectMake(CGRectGetMaxX(title.frame) + 6, (H - 18) / 2.0, cs.width + 2, 18);
+    CGSize cs = [count sizeThatFits:CGSizeMake(CGFLOAT_MAX, 16)];
+    count.frame = CGRectMake(CGRectGetMaxX(title.frame) + 5, (H - 16) / 2.0, cs.width + 2, 16);
 }
 
 - (void)sdLongPress:(UILongPressGestureRecognizer *)g {

@@ -1217,7 +1217,7 @@ static CGFloat hook_heightForRow(id self, SEL _cmd, UITableView *tableView, NSIn
     if (SG_CAN_FILTER(self, tableView) && orig_heightForRow) {
         SGPlanRow *pr = SGDirPlanRow(self, indexPath);
         if (pr) {
-            if (pr.isHeader) return 44.0; // 组头行高（SideGroupsDirCell 同值，XOS 细行）
+            if (pr.isHeader) return 32.0; // 组头行高（XOS 实测 32pt 细条，Frida dump 证实）
             return ((CGFloat (*)(id, SEL, id, id))orig_heightForRow)(self, _cmd, tableView, SGPlanNativeIndexPath(pr));
         }
         if (SGIsDisplayedSpace(self, tableView, indexPath)) {
