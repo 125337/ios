@@ -804,8 +804,8 @@ static void hook_tableSetFrame(UITableView *table, SEL _cmd, CGRect frame) {
     if (!orig_tableSetFrame) return;
     SideGroupsConfig *sd = [SideGroupsConfig shared];
     if (sd.sdEnabled && sd.sdRailScope != 1) {
-        NSValue *selfWriteV = objc_getAssociatedObject(table, kSGAssocRailSelfWrite);
-        if ([selfWriteV boolValue]) {
+        NSNumber *selfWriteV = objc_getAssociatedObject(table, kSGAssocRailSelfWrite);
+        if (selfWriteV.boolValue) {
             objc_setAssociatedObject(table, kSGAssocRailSelfWrite, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         } else {
             NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
@@ -825,14 +825,14 @@ static void hook_tableSetFrame(UITableView *table, SEL _cmd, CGRect frame) {
                         objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                         objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                         objc_setAssociatedObject(table, kSGAssocRailSelfWrite, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                        orig_tableSetFrame(table, _cmd, want);
+                        ((void (*)(id, SEL, CGRect))orig_tableSetFrame)(table, _cmd, want);
                         return;
                     }
                 }
             }
         }
     }
-    orig_tableSetFrame(table, _cmd, frame);
+    ((void (*)(id, SEL, CGRect))orig_tableSetFrame)(table, _cmd, frame);
 }
 
 // MainFrameTableView.layoutSubviews 收尾调用（对齐 XOS FUN_0020a174 在每次布局后重摆侧栏）：
