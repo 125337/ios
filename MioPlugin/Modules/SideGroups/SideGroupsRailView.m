@@ -8,6 +8,7 @@
 @property (nonatomic, copy) NSArray<NSString *> *titles;
 @property (nonatomic, copy) NSArray<NSNumber *> *unread;
 @property (nonatomic, copy) NSString *lastConfigSig;   // 宽/字号/颜色/暗色 变化检测
+@property (nonatomic, copy) NSString *lastDataSig;     // 标题/角标数据变化检测（每帧 pass 都会调 reload，没变直接返回）
 @end
 
 @implementation SideGroupsRailView
@@ -29,14 +30,7 @@
 
 #pragma mark - 颜色解析（浅/深色，空回落默认）
 
-// 默认外观对齐 XOS 侧栏深色玻璃：深底 + 白字 + 高亮选中
-- (UIColor *)sdBgColor {
-    SideGroupsConfig *cfg = [SideGroupsConfig shared];
-    NSString *hex = [WPUtility isDarkModeForView:self] ? cfg.sdRailBgColorDark : cfg.sdRailBgColor;
-    if (cfg.sdRailBgColorCustom && hex.length) return [WPUtility colorFromHex:hex] ?: self.sdDefaultBg;
-    return self.sdDefaultBg;
-}
-
+// 侧栏容器背景不画色（透出微信原生底色，明暗自适应）；仅选中胶囊可自定义
 - (UIColor *)sdSelColor {
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
     NSString *hex = [WPUtility isDarkModeForView:self] ? cfg.sdRailSelColorDark : cfg.sdRailSelColor;
@@ -51,7 +45,6 @@
     return UIColor.whiteColor;
 }
 
-- (UIColor *)sdDefaultBg  { return [UIColor colorWithWhite:0 alpha:0.35]; }
 - (UIColor *)sdDefaultSel { return [UIColor colorWithWhite:1 alpha:0.28]; }
 
 - (CGFloat)sdFontSize {
@@ -63,11 +56,9 @@
 
 - (void)applyConfig {
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
-    NSString *sig = [NSString stringWithFormat:@"%d|%.1f|%.1f|%d|%@|%@|%@|%@|%@|%@|%@",
+    NSString *sig = [NSString stringWithFormat:@"%d|%.1f|%.1f|%d|%@|%@|%@|%@|%@",
                      (int)cfg.sdPosition, cfg.sdRailWidth, cfg.sdRailFontSize,
                      (int)cfg.sdShowUnreadBadge,
-                     cfg.sdRailBgColorCustom ? cfg.sdRailBgColor : @"",
-                     cfg.sdRailBgColorCustom ? cfg.sdRailBgColorDark : @"",
                      cfg.sdRailSelColorCustom ? cfg.sdRailSelColor : @"",
                      cfg.sdRailSelColorCustom ? cfg.sdRailSelColorDark : @"",
                      cfg.sdRailTextColorCustom ? cfg.sdRailTextColor : @"",
@@ -78,13 +69,10 @@
         self.lastConfigSig = sig;
         appearanceChanged = YES;
     }
-    self.backgroundColor = self.sdBgColor;
-    self.layer.cornerRadius = 10;
-    self.layer.masksToBounds = YES;
-    if (appearanceChanged) {
-        [self rebuildButtonsIfNeeded];
-        [self applySelectionAppearance];
-    }
+    if (!appearanceChanged) return; // 没变化不写任何外观（写回风暴防线）
+    self.backgroundColor = UIColor.clearColor; // 背景让微信自己画
+    [self rebuildButtonsIfNeeded];
+    [self applySelectionAppearance];
 }
 
 #pragma mark - 按钮管理
@@ -161,6 +149,11 @@
 #pragma mark - 数据刷新
 
 - (void)reloadTitles:(NSArray<NSString *> *)titles badges:(NSArray<NSNumber *> *)unread {
+    // 数据签名门闩：每帧 pass 都会调，标题/角标没变直接返回（setNeedsLayout 会引发布局风暴）
+    NSString *sig = [NSString stringWithFormat:@"%@|%@", [titles componentsJoinedByString:@"\x1F"],
+                     [unread componentsJoinedByString:@"\x1F"]];
+    if ([sig isEqualToString:self.lastDataSig]) return;
+    self.lastDataSig = sig;
     self.titles = [titles copy];
     self.unread = [unread copy] ?: @[];
     [self rebuildButtonsIfNeeded];

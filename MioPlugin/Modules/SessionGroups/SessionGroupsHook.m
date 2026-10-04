@@ -319,14 +319,9 @@ static BOOL SGActive(id vc) {
     return [SideGroupsConfig shared].sdEnabled;
 }
 
-// 条接管显隐（XOS 位置模式语义）：侧边分组开启时由「分组显示位置」全权决定——
-// 纯侧栏（右侧/左侧）= 条不显示（侧栏取代条）；「+列表内」= 条与侧栏共存。
-// 侧边分组关闭时回落电报分组总开关。
+// 条显隐：条属于电报式分组模块（sgEnabled），侧边分组不决定条——
+// 只开侧边分组时列表顶部不出现分组 tab（XOS 侧栏形态列表无条）。
 static BOOL SGWantsStrip(id vc) {
-    SideGroupsConfig *sd = [SideGroupsConfig shared];
-    if (sd.sdEnabled) {
-        return sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList;
-    }
     return [SessionGroupsConfig shared].sgEnabled;
 }
 
@@ -1222,7 +1217,7 @@ static CGFloat hook_heightForRow(id self, SEL _cmd, UITableView *tableView, NSIn
     if (SG_CAN_FILTER(self, tableView) && orig_heightForRow) {
         SGPlanRow *pr = SGDirPlanRow(self, indexPath);
         if (pr) {
-            if (pr.isHeader) return 48.0; // 组头行高（SideGroupsDirCell 同值）
+            if (pr.isHeader) return 44.0; // 组头行高（SideGroupsDirCell 同值，XOS 细行）
             return ((CGFloat (*)(id, SEL, id, id))orig_heightForRow)(self, _cmd, tableView, SGPlanNativeIndexPath(pr));
         }
         if (SGIsDisplayedSpace(self, tableView, indexPath)) {

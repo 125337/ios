@@ -17,16 +17,16 @@
         self.selectionStyle = UITableViewCellSelectionStyleDefault;
         self.contentView.backgroundColor = UIColor.clearColor;
 
-        _titleLabel = [self sdMakeLabel:16];
-        _countLabel = [self sdMakeLabel:14];
-        _badgeLabel = [self sdMakeLabel:11];
+        _titleLabel = [self sdMakeLabel:15];
+        _countLabel = [self sdMakeLabel:13];
+        _badgeLabel = [self sdMakeLabel:10];
         _badgeLabel.textAlignment = NSTextAlignmentCenter;
         _badgeLabel.textColor = UIColor.whiteColor;
         _badgeLabel.backgroundColor = [UIColor colorWithRed:1 green:0.23 blue:0.19 alpha:1];
-        _badgeLabel.layer.cornerRadius = 8;
+        _badgeLabel.layer.cornerRadius = 7;
         _badgeLabel.layer.masksToBounds = YES;
         _badgeLabel.hidden = YES;
-        _chevronLabel = [self sdMakeLabel:18];
+        _chevronLabel = [self sdMakeLabel:16];
         _chevronLabel.text = @"›";
 
         UILongPressGestureRecognizer *lp =
@@ -70,14 +70,14 @@
     UILabel *badge = self.badgeLabel;
     CGFloat bw = 0;
     if (!badge.hidden) {
-        bw = MAX(16, badge.frame.size.width + 8);
-        badge.frame = CGRectMake(W - 14 - 14 - 8 - bw, (H - 16) / 2.0, bw, 16);
+        bw = MAX(14, badge.frame.size.width + 8);
+        badge.frame = CGRectMake(W - 14 - 14 - 8 - bw, (H - 14) / 2.0, bw, 14);
     }
-    self.chevronLabel.frame = CGRectMake(W - 14 - 14, (H - 22) / 2.0, 14, 22);
+    self.chevronLabel.frame = CGRectMake(W - 14 - 14, (H - 20) / 2.0, 14, 20);
 
     UILabel *title = self.titleLabel;
     CGSize ts = [title sizeThatFits:CGSizeMake(CGFLOAT_MAX, 20)];
-    title.frame = CGRectMake(20, (H - 20) / 2.0, MIN(ts.width, W * 0.6), 20);
+    title.frame = CGRectMake(16, (H - 20) / 2.0, MIN(ts.width, W * 0.6), 20);
     UILabel *count = self.countLabel;
     CGSize cs = [count sizeThatFits:CGSizeMake(CGFLOAT_MAX, 18)];
     count.frame = CGRectMake(CGRectGetMaxX(title.frame) + 6, (H - 18) / 2.0, cs.width + 2, 18);

@@ -24,10 +24,7 @@ typedef NS_ENUM(NSInteger, SDSidePosition) {
 @property (nonatomic, assign) CGFloat sdRailXOffset;        // X 微调 -30~30（XOS applySideRailLeftXOffset:rightXOffset:）
 @property (nonatomic, assign) BOOL sdShowUnreadBadge;       // 显示未读角标
 
-// 外观颜色（浅/深色双 hex，空 = 未自定义跟随默认）
-@property (nonatomic, assign) BOOL sdRailBgColorCustom;     // 启用自定义背景色
-@property (nonatomic, copy) NSString *sdRailBgColor;
-@property (nonatomic, copy) NSString *sdRailBgColorDark;
+// 外观颜色（浅/深色双 hex，空 = 未自定义跟随默认；容器背景不设色，透出微信原生底色）
 @property (nonatomic, assign) BOOL sdRailSelColorCustom;    // 启用自定义选中背景色
 @property (nonatomic, copy) NSString *sdRailSelColor;
 @property (nonatomic, copy) NSString *sdRailSelColorDark;

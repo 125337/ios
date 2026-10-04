@@ -94,25 +94,10 @@
 
     y = [self finishGroup:g2 atY:y height:cy];
 
-    // ──── 卡片3：外观颜色 ────
+    // ──── 卡片3：外观颜色（容器背景不设色，透出微信原生底色）────
     y = [self addSectionHeader:@"外观颜色" y:y width:w];
     UIView *g3 = [self addTableGroupAtY:y width:w];
     cy = 0;
-
-    cy = [self addMasterSwitchRowInGroup:g3
-                                   title:@"自定义背景色"
-                                     key:@"sdRailBgColorCustom"
-                                    isOn:config.sdRailBgColorCustom
-                              subBuilder:^(UIView *expand, CGFloat *ecy) {
-        *ecy = [self addColorRowInGroup:expand
-                                  title:@"背景色"
-                                    key:@"sdRailBgColor"
-                                  value:config.sdRailBgColor ?: @""
-                                     cy:*ecy
-                                  width:w
-                                darkKey:@"sdRailBgColorDark"
-                              darkValue:config.sdRailBgColorDark ?: @""];
-    } cy:cy width:w];
 
     cy = [self addMasterSwitchRowInGroup:g3
                                    title:@"自定义选中颜色"
