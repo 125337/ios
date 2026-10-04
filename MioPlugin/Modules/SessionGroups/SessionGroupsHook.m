@@ -833,7 +833,14 @@ static void SGSideRailLayoutPass(UITableView *table) {
         railFrame = CGRectMake(native.origin.x + native.size.width - w + off, native.origin.y, w, native.size.height);
     }
     if (want.size.width < 100) return; // 极窄屏保护，宁可不出侧栏
-    if (fabs(cur.origin.x - want.origin.x) > 0.5 || fabs(cur.size.width - want.size.width) > 0.5) {
+    // 触摸/滚动/动画期间挂起让位写帧：微信下拉展开小程序面板时会持续改 table 帧，
+    // 此刻每帧写回 = 与原生动画逐帧对抗（表现即"拉不动小程序"），停稳后再写
+    BOOL busy = table.tracking || table.dragging || table.decelerating ||
+                table.panGestureRecognizer.state == UIGestureRecognizerStateBegan ||
+                table.panGestureRecognizer.state == UIGestureRecognizerStateChanged ||
+                table.layer.animationKeys.count > 0;
+    if (!busy &&
+        (fabs(cur.origin.x - want.origin.x) > 0.5 || fabs(cur.size.width - want.size.width) > 0.5)) {
         table.frame = want; // 写帧触发下一轮 layout；下轮 cur==want 走跳过分支
     }
     objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
