@@ -67,13 +67,13 @@
     CGFloat H = self.contentView.bounds.size.height;
     if (W <= 0 || H <= 0) return;
 
-    // 布局从右往左：chevron 右缘距 11（宽 12），badge 排在 chevron 左侧留 5pt 间距，不压箭头
-    self.chevronLabel.frame = CGRectMake(W - 11 - 12, (H - 16) / 2.0, 12, 16);
+    // 布局从右往左（XOS 实测：chevron 右缘距 18，badge 与箭头间距 6）
+    self.chevronLabel.frame = CGRectMake(W - 18 - 12, (H - 16) / 2.0, 12, 16);
     UILabel *badge = self.badgeLabel;
     CGFloat bw = 0;
     if (!badge.hidden) {
         bw = MAX(18, badge.frame.size.width + 8);
-        badge.frame = CGRectMake(W - 11 - 12 - 5 - bw, (H - 18) / 2.0, bw, 18); // 18 高，紧邻箭头左侧
+        badge.frame = CGRectMake(W - 18 - 12 - 6 - bw, (H - 18) / 2.0, bw, 18); // 18 高，紧邻箭头左侧
     }
 
     UILabel *title = self.titleLabel;
