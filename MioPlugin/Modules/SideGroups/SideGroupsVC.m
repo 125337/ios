@@ -1,6 +1,6 @@
 #import "SideGroupsVC.h"
 #import "SideGroupsConfig.h"
-#import "SideGroupsActions.h"
+#import "SideGroupsManagerVC.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 
@@ -185,7 +185,9 @@
 }
 
 - (void)openGroupManager {
-    [SideGroupsActions openGroupManager];
+    // 设置页有导航栈：push 进管理页（同电报设置页）；rail 长按无导航栈才走弹窗
+    SideGroupsManagerVC *vc = [[SideGroupsManagerVC alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 - (NSString *)numText:(CGFloat)v {
