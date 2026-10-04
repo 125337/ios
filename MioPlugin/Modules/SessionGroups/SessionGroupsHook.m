@@ -54,6 +54,7 @@ static const void *kSGAssocPanDlg   = &kSGAssocPanDlg;
 static const void *kSGAssocRail     = &kSGAssocRail;     // 侧边分组栏（挂 vc）
 static const void *kSGAssocRailNative = &kSGAssocRailNative; // 列表原生 frame（挂 table，NSValue）
 static const void *kSGAssocRailWanted = &kSGAssocRailWanted; // 上轮让位 frame（挂 table，区分自触发与原生变更）
+static const void *kSGAssocRailSelfWrite = &kSGAssocRailSelfWrite; // 自写帧标志（挂 table，setFrame hook 放行用）
 
 static IMP orig_numberOfSections      = NULL;
 static IMP orig_numberOfRows          = NULL;
@@ -784,18 +785,62 @@ static void SGRemoveSideRail(id vc, UITableView *table) {
         objc_setAssociatedObject(vc, kSGAssocRail, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
-    if (nativeV && !CGRectEqualToRect(table.frame, [nativeV CGRectValue])) {
-        table.frame = [nativeV CGRectValue];
-    }
     objc_setAssociatedObject(table, kSGAssocRailNative, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(table, kSGAssocRailWanted, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (nativeV && !CGRectEqualToRect(table.frame, [nativeV CGRectValue])) {
+        table.frame = [nativeV CGRectValue]; // 记录已清，setFrame hook 按未接管放行
+    }
+}
+
+// XOS FUN_00200a14（hook 的 table setFrame:）移植：让位帧的运行时维护不在布局 pass 逐帧做，
+// 而是拦截微信每次对 table 的 setFrame——
+// · 自写帧（带标志）→ 放行（XOS FUN_00222cec 的 eaeb0 标志语义）
+// · 悬浮模式/未接管 → 放行（XOS DAT_003eaad0==1 短路）
+// · 宽度未变（下拉小程序面板/滚动动画只改 y/h 或平移）→ 放行，原生动画零对抗
+// · 宽度变宽（微信重排回全宽）→ 在新帧上重套让位，一次写回（变窄放行，对齐 XOS）
+static IMP orig_tableSetFrame = NULL;
+
+static void hook_tableSetFrame(UITableView *table, SEL _cmd, CGRect frame) {
+    if (!orig_tableSetFrame) return;
+    SideGroupsConfig *sd = [SideGroupsConfig shared];
+    if (sd.sdEnabled && sd.sdRailScope != 1) {
+        NSValue *selfWriteV = objc_getAssociatedObject(table, kSGAssocRailSelfWrite);
+        if ([selfWriteV boolValue]) {
+            objc_setAssociatedObject(table, kSGAssocRailSelfWrite, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        } else {
+            NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
+            if (nativeV) {
+                CGRect native = [nativeV CGRectValue];
+                if (frame.size.width > native.size.width + 0.5) { // 微信把列表改宽 → 重套让位
+                    CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
+                    BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
+                    CGRect want = frame;
+                    if (left) {
+                        want.origin.x = frame.origin.x + w;
+                        want.size.width = frame.size.width - w;
+                    } else {
+                        want.size.width = frame.size.width - w;
+                    }
+                    if (want.size.width >= 100) {
+                        objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                        objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                        objc_setAssociatedObject(table, kSGAssocRailSelfWrite, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                        orig_tableSetFrame(table, _cmd, want);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    orig_tableSetFrame(table, _cmd, frame);
 }
 
 // MainFrameTableView.layoutSubviews 收尾调用（对齐 XOS FUN_0020a174 在每次布局后重摆侧栏）：
-// 1) 原生帧追踪（区分微信原生变更 vs 自己上轮写帧，防双重让位/布局风暴）
-// 2) 作用范围双模式（XOS SideScope FUN__part4.c:20045-20075）：0=让位（左 x+=w/width-=w，
-//    右 width-=w），1=悬浮（完全不改 table 帧，rail 覆盖列表边缘，原生动画零干扰）；
-//    4 分量 0.5pt 阈值比较防空写
+// 1) 让位帧只在首次接管时写一次（带自写标志走 setFrame hook），此后 table 帧维护全部
+//    交给 hook_tableSetFrame（XOS FUN_00200a14 机制），布局 pass 不逐帧写帧 → 微信
+//    下拉小程序面板等原生动画零对抗
+// 2) 作用范围双模式（XOS SideScope）：0=让位（左 x+=w/width-=w，右 width-=w），
+//    1=悬浮（不写 table 帧，rail 覆盖列表边缘）
 // 3) 侧栏定位（左 minX / 右 maxX-w，X 微调）+ 配置签名应用 + 快照数据同步
 static void SGSideRailLayoutPass(UITableView *table) {
     id vc = nil;
@@ -809,42 +854,57 @@ static void SGSideRailLayoutPass(UITableView *table) {
         return;
     }
 
-    // ── 原生帧追踪 ──
     CGRect cur = table.frame;
-    NSValue *lastWantedV = objc_getAssociatedObject(table, kSGAssocRailWanted);
-    NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
-    CGRect native = nativeV ? [nativeV CGRectValue] : cur;
-    if (!lastWantedV || !CGRectEqualToRect(cur, [lastWantedV CGRectValue])) {
-        native = cur; // 与上轮让位帧不一致 → 微信原生布局变更，重捕获
-    }
-    objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:native], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    // ── 作用范围双模式（XOS SideScope）：悬浮模式 want==native 不写帧——微信改表帧时
-    //    原生帧追踪同步重捕获，want 始终跟随 cur，比较恒不触发，小程序面板等原生动画
-    //    零干扰；让位模式才缩窄（左 x+=w/width-=w，右 width-=w）。4 分量 0.5pt 阈值
-    //    （对齐 XOS FUN_0020a174:20070-20071 的全分量比较）防写回风暴 ──
+    // ── 让位帧维护（XOS SideScope 双模式）──
     CGFloat w = MIN(MAX(sd.sdRailWidth, 40), 90);
     CGFloat off = MIN(MAX(sd.sdRailXOffset, -30), 30);
     BOOL left = (sd.sdPosition == SDSidePositionLeft || sd.sdPosition == SDSidePositionLeftInList);
     BOOL floating = (sd.sdRailScope == 1);
-    CGRect want = native;
-    CGRect railFrame; // table.superview 坐标系
-    if (left) {
-        if (!floating) {
+    NSValue *nativeV = objc_getAssociatedObject(table, kSGAssocRailNative);
+    if (floating) {
+        if (nativeV) {
+            // 切回悬浮：清记录后恢复原生帧（hook 见记录空 → 放行，无对抗）
+            objc_setAssociatedObject(table, kSGAssocRailNative, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(table, kSGAssocRailWanted, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            if (!CGRectEqualToRect(cur, [nativeV CGRectValue])) table.frame = [nativeV CGRectValue];
+        }
+    } else if (!nativeV) {
+        // 首次接管：以当前帧为原生基准套让位，一次写帧（自写标志 → hook 放行）
+        CGRect native = cur;
+        CGRect want = native;
+        if (left) {
             want.origin.x = native.origin.x + w;
             want.size.width = native.size.width - w;
+        } else {
+            want.size.width = native.size.width - w;
         }
-        railFrame = CGRectMake(native.origin.x + off, native.origin.y, w, native.size.height);
+        if (want.size.width >= 100) {
+            objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:native], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(table, kSGAssocRailSelfWrite, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            table.frame = want;
+            cur = want;
+        }
+    }
+    // rail 定位基准：让位模式用原生记录（hook 维护），悬浮/未接管用当前帧；
+    // 微信变窄帧 hook 放行不记录（对齐 XOS），此处识别后同步记录使 rail 贴合实际
+    CGRect base = cur;
+    if (!floating && nativeV) {
+        CGRect native = [nativeV CGRectValue];
+        NSValue *wantedV = objc_getAssociatedObject(table, kSGAssocRailWanted);
+        BOOL ours = wantedV && CGRectEqualToRect(cur, [wantedV CGRectValue]);
+        if (!ours && fabs(cur.size.width - native.size.width) > 0.5) {
+            objc_setAssociatedObject(table, kSGAssocRailNative, [NSValue valueWithCGRect:cur], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            native = cur;
+        }
+        base = native;
+    }
+    CGRect railFrame; // table.superview 坐标系
+    if (left) {
+        railFrame = CGRectMake(base.origin.x + off, base.origin.y, w, base.size.height);
     } else {
-        if (!floating) want.size.width = native.size.width - w;
-        railFrame = CGRectMake(native.origin.x + native.size.width - w + off, native.origin.y, w, native.size.height);
+        railFrame = CGRectMake(base.origin.x + base.size.width - w + off, base.origin.y, w, base.size.height);
     }
-    if (want.size.width < 100) return; // 极窄屏保护，宁可不出侧栏
-    if (fabs(cur.origin.x - want.origin.x) > 0.5 || fabs(cur.origin.y - want.origin.y) > 0.5 ||
-        fabs(cur.size.width - want.size.width) > 0.5 || fabs(cur.size.height - want.size.height) > 0.5) {
-        table.frame = want; // 写帧触发下一轮 layout；下轮 cur==want 走跳过分支
-    }
-    objc_setAssociatedObject(table, kSGAssocRailWanted, [NSValue valueWithCGRect:want], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     // ── 侧栏挂载与定位（全部变化才写：布局 pass 内任何无条件写都会与微信原生布局
     //    形成写回风暴 → host 反复 layout → 卡死，sgbadge18e 实测）──
@@ -1617,6 +1677,7 @@ static void SGHook(Class cls, SEL sel, IMP newIMP, IMP *origOut) {
     Class tableCls = objc_getClass("MainFrameTableView");
     if (tableCls) {
         SGHook(tableCls, @selector(layoutSubviews), (IMP)hook_tableLayoutSubviews, &orig_tableLayout);
+        SGHook(tableCls, @selector(setFrame:), (IMP)hook_tableSetFrame, (IMP *)&orig_tableSetFrame);
     } else {
         WPLog(@"SG", @"[SgHook] MainFrameTableView not found, header will stick");
     }
