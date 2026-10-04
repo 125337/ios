@@ -799,6 +799,7 @@ static void SGRemoveSideRail(id vc, UITableView *table) {
 // · 宽度未变（下拉小程序面板/滚动动画只改 y/h 或平移）→ 放行，原生动画零对抗
 // · 宽度变宽（微信重排回全宽）→ 在新帧上重套让位，一次写回（变窄放行，对齐 XOS）
 static IMP orig_tableSetFrame = NULL;
+static void SGSideRailLayoutPass(UITableView *table); // 前向声明：hook 放行后重摆 rail
 
 static void hook_tableSetFrame(UITableView *table, SEL _cmd, CGRect frame) {
     if (!orig_tableSetFrame) return;
@@ -833,6 +834,14 @@ static void hook_tableSetFrame(UITableView *table, SEL _cmd, CGRect frame) {
         }
     }
     ((void (*)(id, SEL, CGRect))orig_tableSetFrame)(table, _cmd, frame);
+    // 放行的同时重摆 rail（对齐 XOS setFrame 链→FUN_0020a174）：面板等新视图出现时
+    // 微信会 setFrame(table)，此处保证 rail 被提到面板上层（「面板让位」）；pass 幂等，
+    // 已接管才跑（首次让位由布局 pass 负责，此处 nativeV 为空不触发，无递归）
+    if (objc_getAssociatedObject(table, kSGAssocRailNative)) {
+        for (id seen in sSeenVCs) {
+            if (SGIsMainFrameVC(seen) && SGMainTableView(seen) == table) { SGSideRailLayoutPass(table); break; }
+        }
+    }
 }
 
 // MainFrameTableView.layoutSubviews 收尾调用（对齐 XOS FUN_0020a174 在每次布局后重摆侧栏）：
@@ -912,15 +921,17 @@ static void SGSideRailLayoutPass(UITableView *table) {
         };
         objc_setAssociatedObject(vc, kSGAssocRail, rail, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    UIView *host = [vc view];
+    // rail 宿主 = table.superview（XOS FUN_0020a174:20155-20195 同款：rail 挂列表容器），
+    // 下拉小程序面板等视图进入该容器/其祖先时，bringSubviewToFront 保证 rail 浮在面板
+    // 左侧（「面板让位」视觉，实机截图确认）；railFrame 与 table 同坐标系无需转换
+    UIView *host = table.superview;
     if (!host) return;
     if (rail.superview != host) {
         [rail removeFromSuperview];
         [host addSubview:rail];
     }
     if ([host.subviews lastObject] != rail) [host bringSubviewToFront:rail]; // 仅被别的视图盖住时才动层级
-    CGRect newRailFrame = [table.superview convertRect:railFrame toView:host];
-    if (!CGRectEqualToRect(rail.frame, newRailFrame)) rail.frame = newRailFrame;
+    if (!CGRectEqualToRect(rail.frame, railFrame)) rail.frame = railFrame;
     [rail applyConfig];
 
     // ── 数据同步（标题/角标/选中态，快照签名缓存，热路径开销同条刷新） ──
