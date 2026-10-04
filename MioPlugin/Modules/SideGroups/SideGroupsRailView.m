@@ -96,7 +96,10 @@
         map = @{@"all":      @"line.3.horizontal",
                 @"pinned":   @"pin.fill",
                 @"private":  @"person.fill",
-                @"chatroom": @"person.2.fill"};
+                @"chatroom": @"person.2.fill",
+                @"unread":   @"message",
+                @"atme":     @"at",
+                @"other":    @"tray"};
     });
     return map[tabId];
 }
