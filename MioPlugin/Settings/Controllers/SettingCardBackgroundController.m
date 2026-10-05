@@ -284,6 +284,7 @@
             WPLog(@"CardBg-Diag", @"[PICKER] Deleting background image");
             [CardBgConfig deleteBackgroundImage];
             [ConfigManager saveAll];
+            [self wpRebuildWeChatTable];
             [self buildUI];
         }
     }];
@@ -327,6 +328,7 @@
                                  key:@"CardBg"];
             [ConfigManager saveAll];
             [picker dismissViewControllerAnimated:YES completion:^{
+                [self wpRebuildWeChatTable];
                 [self buildUI];
             }];
         });
@@ -351,6 +353,7 @@
     [MioAlertHelper showMenuAlert:@"背景填充模式" buttons:titles onButton:^(NSInteger index) {
         config.cardBgFillMode = index;
         [ConfigManager saveAll];
+        [self wpRebuildWeChatTable];
         [self buildUI];
     }];
 }
@@ -373,6 +376,7 @@
     [MioAlertHelper showMenuAlert:@"背景显示层级" buttons:titles onButton:^(NSInteger index) {
         config.cardBgLayer = index;
         [ConfigManager saveAll];
+        [self wpRebuildWeChatTable];
         [self buildUI];
     }];
 }
@@ -395,6 +399,7 @@
     [MioAlertHelper showMenuAlert:@"对齐方式" buttons:titles onButton:^(NSInteger index) {
         config.cardBgAlignment = index;
         [ConfigManager saveAll];
+        [self wpRebuildWeChatTable];
         [self buildUI];
     }];
 }

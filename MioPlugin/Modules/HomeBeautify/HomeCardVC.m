@@ -420,6 +420,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                 [HomeCardConfig deleteDarkImage];
             }
             [ConfigManager saveAll];
+            [self wpRebuildWeChatTable];
             [self buildUI];
         }
     }];
@@ -469,6 +470,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                                       @"HomeCardLight" : @"HomeCardDark")];
             [ConfigManager saveAll];
             [picker dismissViewControllerAnimated:YES completion:^{
+                [self wpRebuildWeChatTable];
                 [self buildUI];
             }];
         });
