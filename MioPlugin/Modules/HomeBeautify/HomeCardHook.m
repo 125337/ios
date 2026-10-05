@@ -186,6 +186,11 @@ static CGFloat HCHeaderExtra(HomeCardConfig *cfg) {
     return cardH + 12.0 + cfg.hcCardBottomFix + ((calOn && calPos != 1) ? calH : 0.0);
 }
 
+// 手势 target（block 转发；UIGestureRecognizer 持有 target，随日历视图释放）
+@interface HCCalTapTarget : NSObject
+@property (nonatomic, copy) void (^block)(void);
+@end
+
 // 农历日文本（1900-2100 压缩表通用算法；XOS 周历每个日期下显示农历（廿四/廿五…））
 static NSString *HCLunarDayText(NSDate *date) {
     static const int li[] = {
@@ -527,10 +532,7 @@ static void HCAddWeatherBadge(UIView *container, HomeCardConfig *cfg, BOOL dark,
     }
 }
 
-// 手势 target（block 转发；UIGestureRecognizer 持有 target，随日历视图释放）
-@interface HCCalTapTarget : NSObject
-@property (nonatomic, copy) void (^block)(void);
-@end
+// 手势 target 实现（声明在日历段前）
 @implementation HCCalTapTarget
 - (void)hcOnTap { if (self.block) self.block(); }
 @end
