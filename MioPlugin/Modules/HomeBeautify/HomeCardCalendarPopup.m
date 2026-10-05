@@ -9,11 +9,12 @@
 //   屏幕居中；弹出动画 0.25s。
 //
 //  【内容】FUN_00153830（~15913-16600）：
-//   ◀ (16,14,36,30) font14；▶ (52,14,36,30)；样式按钮 (88,14,56,30)「样式-黑」
-//   font11 Medium 橙色；年月标题 (16,14,W-32,30) font17 Bold 居中；
-//   三胶囊右对齐（间距 6）font11 Medium 高 17，开启态底色各异；
-//   星期行 y=50 h=18，cellW=(W-32)/7，font11 Medium，周末列 accent 红；
-//   网格首行 y≈68，行高 42：今天块 = min(cellW-4,35) 方形圆角 8 居中 y=rowY+1；
+//   ◀ (16,14,36,30) font14；▶ (52,14,36,30)；年月标题 (16,14,W-32,30) font17 Bold 居中；
+//   （Mio 调整：XOS 原版样式按钮 (88,14) 会压住居中标题 → 移到第二行 (16,48,80,20)）
+//   样式按钮「样式-黑」font11 Medium 橙色左对齐；三胶囊右对齐第二行（间距 6）
+//   font11 Medium 高 17，开启态底色各异；
+//   星期行 y=76 h=18，cellW=(W-32)/7，font11 Medium，周末列 accent 红；
+//   网格首行 y=94，行高 42：今天块 = min(cellW-4,35) 方形圆角 8 居中 y=rowY+1；
 //   日号 (colX,rowY+3,cellW,17) font14；农历 (colX,rowY+19,cellW,11) font7.5；
 //   休班角标 (colX+cellW-14,rowY+1,12,12) font7 圆角 6：1=休(红底) 2=班(橙底)；
 //   网格总高 = 首行 y + rows*42 + 12（面板高随月份行数调整）。
@@ -55,73 +56,20 @@
 - (void)onTap { if (self.block) self.block(); }
 @end
 
-#pragma mark - 农历（1900-2100 压缩表，弹层与周视图共用单份）
-
-static const int kLunarInfo[] = {
-    0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,
-    0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,
-    0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,
-    0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,
-    0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,
-    0x06ca0,0x0b550,0x15355,0x04da0,0x0a5b0,0x14573,0x052b0,0x0a9a8,0x0e950,0x06aa0,
-    0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,
-    0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b6a0,0x195a6,
-    0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,
-    0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x05ac0,0x0ab60,0x096d5,0x092e0,
-    0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,
-    0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,
-    0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,
-    0x05aa0,0x076a3,0x096d0,0x04afb,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,
-    0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0,
-    0x14b63,0x09370,0x049f8,0x04970,0x064b0,0x168a6,0x0ea50,0x06b20,0x1a6c4,0x0aae0,
-    0x0a2e0,0x0d2e3,0x0c960,0x0d557,0x0d4a0,0x0da50,0x05d55,0x056a0,0x0a6d0,0x055d4,
-    0x052d0,0x0a9b8,0x0a950,0x0b4a0,0x0b6a6,0x0ad50,0x055a0,0x0aba4,0x0a5b0,0x052b0,
-    0x0b273,0x06930,0x07337,0x06aa0,0x0ad50,0x14b55,0x04b60,0x0a570,0x054e4,0x0d160,
-    0x0e968,0x0d520,0x0daa0,0x16aa6,0x056d0,0x04ae0,0x0a9d4,0x0a2d0,0x0d150,0x0f252,
-    0x0d520
-};
-
-@implementation HomeCardCalendarPopup
+#pragma mark - 农历（iOS 系统中国农历 NSCalendarIdentifierChinese，ICU 权威历法，无数据表。
+// 压缩表方案已弃用：实测 2015 年起春节累计偏移 14-17 天，数据不可靠）
 
 + (BOOL)lunarMonthDay:(NSDate *)date month:(NSInteger *)outMonth day:(NSInteger *)outDay leap:(BOOL *)outLeap {
-    NSCalendar *g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
-    NSDateComponents *bc = [NSDateComponents new];
-    bc.year = 1900; bc.month = 1; bc.day = 31;   // 农历 1900 年正月初一
-    NSDate *base = [g dateFromComponents:bc];
-    if (!base) return NO;
-    NSInteger days = [g components:NSCalendarUnitDay fromDate:base toDate:date options:0].day;
-    if (days < 0 || days > 73400) return NO;     // 2100 年底之外不处理
-
-    int info = kLunarInfo[0];
-    NSInteger y;
-    for (y = 1900; y < 2101; y++) {              // 扣年
-        info = kLunarInfo[y - 1900];
-        int lmp = info & 0xf;
-        long yd = 0;
-        for (int m = 1; m <= 12; m++) yd += ((info >> (16 - m)) & 1) ? 30 : 29;
-        if (lmp) yd += ((info >> (16 - lmp)) & 1) ? 30 : 29;
-        if (days < yd) break;
-        days -= (NSInteger)yd;
-    }
-    if (y > 2100) return NO;
-    int lmp = info & 0xf;
-    NSInteger lm = 0;
-    BOOL leap = NO;
-    for (int m = 1; m <= 12; m++) {              // 扣月
-        long md = ((info >> (16 - m)) & 1) ? 30 : 29;
-        if (days < md) { lm = m; break; }
-        days -= (NSInteger)md;
-        if (lmp == m) {
-            long lmd = ((info >> (16 - lmp)) & 1) ? 30 : 29;
-            if (days < lmd) { lm = m; leap = YES; break; }
-            days -= (NSInteger)lmd;
-        }
-    }
-    NSInteger d = days + 1;
-    if (lm < 1 || d < 1 || d > 30) return NO;
-    if (outMonth) *outMonth = lm;
-    if (outDay) *outDay = d;
-    if (outLeap) *outLeap = leap;
+    static NSCalendar *cn = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        cn = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierChinese];
+    });
+    NSDateComponents *c = [cn components:NSCalendarUnitMonth | NSCalendarUnitDay fromDate:date];
+    if (c.month < 1 || c.month > 12 || c.day < 1 || c.day > 30) return NO;
+    if (outMonth) *outMonth = c.month;
+    if (outDay) *outDay = c.day;
+    if (outLeap) *outLeap = c.leapMonth;   // NSDateComponents.leapMonth：闰月标志
     return YES;
 }
 
@@ -359,9 +307,12 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     NSCalendar *g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
     NSDate *now = [NSDate date];
     NSDate *monthDate = [g dateByAddingUnit:NSCalendarUnitMonth value:hcCalMonthOffset toDate:now options:0];
-    NSDateComponents *mc = [g components:NSCalendarUnitYear | NSCalendarUnitMonth
-                                  | NSCalendarUnitDay | NSCalendarUnitWeekday
-                                  fromDate:monthDate];
+    // 网格对齐的 weekday 必须取当月 1 号的（此前取 monthDate=今天的，导致首列错位）
+    NSDateComponents *firstC = [g components:NSCalendarUnitYear | NSCalendarUnitMonth fromDate:monthDate];
+    firstC.day = 1;
+    NSDate *firstDate = [g dateFromComponents:firstC];
+    NSDateComponents *mc = [g components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitWeekday
+                                  fromDate:firstDate];
     NSDateComponents *todayC = [g components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay fromDate:now];
     NSInteger daysInMonth = [g rangeOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitMonth forDate:monthDate].length;
 
@@ -370,7 +321,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     BOOL showHoliday = CalShowHoliday();
     BOOL showXiuBan = CalXiuBan();
 
-    // ── 顶行：◀ ▶ 样式-黑白 + 年月标题（标题居中，箭头/样式字叠加两侧）──
+    // ── 第一行：◀ ▶ + 年月标题（居中）；第二行：样式-黑白 左 + 三胶囊右 ──
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(16, 14, W - 32, 30)];
     title.text = [NSString stringWithFormat:@"%ld年%ld月", (long)mc.year, (long)mc.month];
     title.font = [UIFont systemFontOfSize:17.0 weight:UIFontWeightBold];
@@ -394,9 +345,9 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     [next addTarget:self action:@selector(onNext) forControlEvents:UIControlEventTouchUpInside];
     [self.content addSubview:next];
 
-    // 样式按钮（cadis_switchCalendarStyle → 选样式黑/白）
+    // 样式按钮（cadis_switchCalendarStyle → 选样式黑/白）；第二行左侧，不压居中标题
     UIButton *styleBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-    styleBtn.frame = CGRectMake(88, 14, 56, 30);
+    styleBtn.frame = CGRectMake(16, 48, 80, 20);
     [styleBtn setTitle:(styleWhite ? @"样式-白" : @"样式-黑") forState:UIControlStateNormal];
     [styleBtn setTitleColor:orange forState:UIControlStateNormal];
     styleBtn.titleLabel.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightMedium];
@@ -404,22 +355,22 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     [styleBtn addTarget:self action:@selector(onSwitchStyle) forControlEvents:UIControlEventTouchUpInside];
     [self.content addSubview:styleBtn];
 
-    // ── 三胶囊右对齐（间距 6，右边距 12，高 17，与标题同轴；开启态底色各异）──
-    [self addCapsule:@"周一" width:W centeredY:29 right:12.0
+    // ── 三胶囊右对齐（间距 6，右边距 12，高 17，与样式按钮同一行；开启态底色各异）──
+    [self addCapsule:@"周一" width:W centeredY:58 right:12.0
                   on:mondayFirst onColor:blue action:@selector(onToggleMonday)];
-    [self addCapsule:@"节日" width:W centeredY:29 right:(12.0 + 34.0 + 6.0)
+    [self addCapsule:@"节日" width:W centeredY:58 right:(12.0 + 34.0 + 6.0)
                   on:showHoliday onColor:accent action:@selector(onToggleHoliday)];
-    [self addCapsule:@"休"   width:W centeredY:29 right:(12.0 + 34.0 + 6.0 + 34.0 + 6.0)
+    [self addCapsule:@"休"   width:W centeredY:58 right:(12.0 + 34.0 + 6.0 + 34.0 + 6.0)
                   on:showXiuBan onColor:orange action:@selector(onToggleXiuBan)];
 
-    // ── 星期行（y=50 h=18，周末列 accent 红）──
+    // ── 星期行（y=76 h=18，周末列 accent 红）──
     NSArray<NSString *> *weekNames = mondayFirst
         ? @[@"一", @"二", @"三", @"四", @"五", @"六", @"日"]
         : @[@"日", @"一", @"二", @"三", @"四", @"五", @"六"];
     CGFloat cellW = (W - 32.0) / 7.0;
     for (NSInteger i = 0; i < 7; i++) {
         BOOL weekend = mondayFirst ? (i == 5 || i == 6) : (i == 0 || i == 6);
-        UILabel *wd = [[UILabel alloc] initWithFrame:CGRectMake(16 + cellW * i, 50, cellW, 18)];
+        UILabel *wd = [[UILabel alloc] initWithFrame:CGRectMake(16 + cellW * i, 76, cellW, 18)];
         wd.text = weekNames[i];
         wd.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightMedium];
         wd.textAlignment = NSTextAlignmentCenter;
@@ -427,7 +378,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
         [self.content addSubview:wd];
     }
 
-    // ── 月网格（首行 y=68，行高 42；今天块/日号/农历/休班角标 XOS 几何）──
+    // ── 月网格（首行 y=94，行高 42；今天块/日号/农历/休班角标 XOS 几何）──
     NSInteger w1 = mc.weekday;   // 1=周日 … 7=周六
     NSInteger lead = mondayFirst ? ((w1 == 1) ? 6 : w1 - 2) : (w1 - 1);
     NSInteger rows = (lead + daysInMonth + 6) / 7;
@@ -440,7 +391,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
         BOOL isToday = (mc.year == todayC.year && mc.month == todayC.month && d == todayC.day);
         BOOL weekend = mondayFirst ? (col == 5 || col == 6) : (col == 0 || col == 6);
         CGFloat colX = 16 + cellW * col;
-        CGFloat rowY = 68.0 + row * 42.0;
+        CGFloat rowY = 94.0 + row * 42.0;
 
         NSDateComponents *dc = [g components:NSCalendarUnitYear | NSCalendarUnitMonth fromDate:monthDate];
         dc.day = d;
@@ -500,8 +451,8 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
         }
     }
 
-    // 面板高度随月份行数调整并保持居中（XOS：网格总高 = 首行 y + rows*42 + 12）
-    CGFloat ph = 68.0 + rows * 42.0 + 12.0;
+    // 面板高度随月份行数调整并保持居中（网格总高 = 首行 y + rows*42 + 12）
+    CGFloat ph = 94.0 + rows * 42.0 + 12.0;
     self.content.frame = CGRectMake(0, 0, W, ph);
     self.panel.frame = CGRectMake((self.mask.bounds.size.width - W) / 2.0,
                                   (self.mask.bounds.size.height - ph) / 2.0, W, ph);

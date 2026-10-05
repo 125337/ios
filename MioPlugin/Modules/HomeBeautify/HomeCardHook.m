@@ -205,6 +205,8 @@ static NSString *HCLunarDayText(NSDate *date) {
 //    总高 = CadisCalendarBgHeight + 128；内区 (16,0,w-32,总高-8) 圆角14 底色；
 //    月标题 15 Bold (12,4,内宽-24,20) + 副标题"本周 M.D - M.D"（周日始）；
 //    星期行 y=30/42 列宽 (内宽-24)/7 11 Medium，周末列 = CadisCalendarAccentColor；
+//    （Mio 调整：内容块总高 98 在内区内垂直居中，原版贴顶下方留白失衡；
+//    今天块改紧凑高 38 只包日号+农历两行，原版撑到底）
 //    周日期行：日号 17 Medium + 农历 9pt，今天 = CadisCalendarSelectedColor 圆角块白字；
 //    点按弹月历弹层（XOS cadis_calendarTapped → FUN_0015342c，见 HomeCardCalendarPopup）；
 //    内容缩放 = 钳制(50-200)/100（FUN_00147ed8）──
@@ -237,8 +239,12 @@ static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *
                                  fromDate:now];
     NSInteger offset = cur.weekday - 1;   // 今天在周内的列（0 = 周日列，周日始）
 
+    // 内容块（标题 4 → 农历底 98，总高 98）在 bgv 内垂直居中（原版贴顶、下方留白失衡）
+    CGFloat bgvH = calH - 8.0;
+    CGFloat cellTop = MAX((bgvH - 98.0) / 2.0, 4.0);
+
     // 月标题（XOS 19822-19839：15 Bold，frame (12,4,内宽-24,20)）
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(28, 4, gridW, 20)];
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(28, cellTop + 4.0, gridW, 20)];
     title.text = [NSString stringWithFormat:@"%ld年%ld月", (long)cur.year, (long)cur.month];
     title.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightBold];
     title.textColor = [UIColor labelColor];
@@ -249,7 +255,7 @@ static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *
     NSDate *we = [g dateByAddingUnit:NSCalendarUnitDay value:6 - offset toDate:now options:0];
     NSDateComponents *c1 = [g components:NSCalendarUnitMonth | NSCalendarUnitDay fromDate:ws];
     NSDateComponents *c2 = [g components:NSCalendarUnitMonth | NSCalendarUnitDay fromDate:we];
-    UILabel *sub = [[UILabel alloc] initWithFrame:CGRectMake(28, 25, gridW, 13)];
+    UILabel *sub = [[UILabel alloc] initWithFrame:CGRectMake(28, cellTop + 25.0, gridW, 13)];
     sub.text = [NSString stringWithFormat:@"本周 %ld.%ld - %ld.%ld",
                 (long)c1.month, (long)c1.day, (long)c2.month, (long)c2.day];
     sub.font = [UIFont systemFontOfSize:10.0];
@@ -259,7 +265,7 @@ static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *
     // 星期行（XOS：11 Medium 居中，周末列 accent 色）
     NSArray<NSString *> *weekNames = @[@"日", @"一", @"二", @"三", @"四", @"五", @"六"];
     for (NSInteger i = 0; i < 7; i++) {
-        UILabel *wd = [[UILabel alloc] initWithFrame:CGRectMake(28 + cw * i, 42, cw, 14)];
+        UILabel *wd = [[UILabel alloc] initWithFrame:CGRectMake(28 + cw * i, cellTop + 42.0, cw, 14)];
         wd.text = weekNames[i];
         wd.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightMedium];
         wd.textAlignment = NSTextAlignmentCenter;
@@ -268,8 +274,8 @@ static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *
     }
 
     // 周日期行（日号 17 Medium + 农历 9pt；今天 = 选中色圆角块，两行白字；周末列 accent）
-    CGFloat cellY = 60.0;
-    CGFloat cellH = MAX(calH - 8.0 - cellY, 30.0);
+    CGFloat cellY = cellTop + 60.0;
+    CGFloat cellH = 38.0;   // 今天块紧凑包两行（日号 22 + 农历 12 + 边距），随内容块居中
     for (NSInteger i = 0; i < 7; i++) {
         NSDate *d = [g dateByAddingUnit:NSCalendarUnitDay value:i - offset toDate:now options:0];
         NSDateComponents *dc = [g components:NSCalendarUnitDay fromDate:d];
