@@ -186,26 +186,26 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                             width:w];
     cy = [self addSeparatorInGroup:g3 cy:cy width:w];
 
-    // 边框颜色（颜色选择器）
+    // 边框颜色（颜色选择器，浅/深色双预览，同消息时间设置）
     cy = [self addColorRowInGroup:g3
                             title:@"边框颜色"
                               key:@"hcBorderColor"
                             value:(config.hcBorderColor.length > 0 ? config.hcBorderColor : nil)
                                cy:cy
                             width:w
-                          darkKey:nil
-                        darkValue:nil];
+                          darkKey:@"hcBorderColorDark"
+                        darkValue:(config.hcBorderColorDark.length > 0 ? config.hcBorderColorDark : nil)];
     cy = [self addSeparatorInGroup:g3 cy:cy width:w];
 
-    // 背景颜色（颜色选择器）
+    // 背景颜色（颜色选择器，浅/深色双预览，同消息时间设置）
     cy = [self addColorRowInGroup:g3
                             title:@"背景颜色"
                               key:@"hcCardBgColor"
                             value:(config.hcCardBgColor.length > 0 ? config.hcCardBgColor : nil)
                                cy:cy
                             width:w
-                          darkKey:nil
-                        darkValue:nil];
+                          darkKey:@"hcCardBgColorDark"
+                        darkValue:(config.hcCardBgColorDark.length > 0 ? config.hcCardBgColorDark : nil)];
 
     y = [self finishGroup:g3 atY:y height:cy];
 

@@ -17,8 +17,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) CGFloat hcCardBottomFix; // 底部占位修正（header 高度追加量）
 @property (nonatomic, assign) CGFloat hcCardMargin;    // 卡片边距（左右，<0 按 0）
 @property (nonatomic, assign) CGFloat hcBorderWidth;   // 边框粗细（0 = 无边框）
-@property (nonatomic, copy)   NSString *hcBorderColor; // 边框颜色 hex（空 = separator 色）
-@property (nonatomic, copy)   NSString *hcCardBgColor; // 背景颜色 hex（空 = 透明）
+@property (nonatomic, copy)   NSString *hcBorderColor;       // 边框颜色 hex（空 = separator 色）
+@property (nonatomic, copy)   NSString *hcBorderColorDark;   // 边框颜色深色 hex（空 = 用浅色值）
+@property (nonatomic, copy)   NSString *hcCardBgColor;       // 背景颜色 hex（空 = 透明）
+@property (nonatomic, copy)   NSString *hcCardBgColorDark;   // 背景颜色深色 hex（空 = 用浅色值）
 
 // 卡片图片（磁盘文件，浅/深色各一张，与卡片背景图的 MioCardBackground 目录相互独立）
 + (NSString *)imageDirectory;
