@@ -39,6 +39,7 @@
 #import "../Modules/SideGroups/SideGroupsConfig.h"
 #import "../Modules/SideGroups/SideGroupsVC.h"
 #import "../Modules/HomeBeautify/HomeCardConfig.h"
+#import "../Modules/HomeBeautify/HomeCardHook.h"
 #import "../Modules/HomeBeautify/HomeCardVC.h"
 
 // ────── 所有 Hook 类的 import ──────
@@ -257,11 +258,11 @@
                                                   subtitle:@"会话列表侧边分组栏"
                                              sectionTitle:@"通用"],
 
-            // ──── 首页美化（首页卡片，UI 先行；Hook 后续接入） ────
+            // ──── 首页美化（首页卡片：移植 XOS 主页卡片标题/背景图实现） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"homecard"
                                                     title:@"首页卡片"
                                                configClass:[HomeCardConfig class]
-                                               hookClasses:@[]
+                                               hookClasses:@[[HomeCardHook class]]
                                            controllerClass:[HomeCardVC class]
                                                   subtitle:@"首页卡片美化"
                                              sectionTitle:@"通用"],

@@ -34,56 +34,57 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 
-    // ──── 卡片1：启用卡片（总开关，开启后下面的子配置才生效） ────
+    // ──── 卡片1：基础设置（启用卡片 = 整页总开关，子配置行常显，非手风琴） ────
     y = [self addSectionHeader:@"基础设置" y:y width:w];
     UIView *g1 = [self addTableGroupAtY:y width:w];
     CGFloat cy = 0;
 
-    cy = [self addMasterSwitchRowInGroup:g1
-                                   title:@"启用卡片"
-                                     key:@"hcEnabled"
-                                    isOn:config.hcEnabled
-                              subBuilder:^(UIView *expand, CGFloat *ecy) {
-        HomeCardConfig *cfg = [HomeCardConfig shared];
+    cy = [self addSwitchRowInGroup:g1
+                             title:@"启用卡片"
+                              desc:nil
+                               key:@"hcEnabled"
+                              isOn:config.hcEnabled
+                                cy:cy
+                             width:w];
+    cy = [self addSeparatorInGroup:g1 cy:cy width:w];
 
-        // 主页标题（默认留空）
-        *ecy = [self addInputRowInGroup:expand
-                                  title:@"主页标题"
-                                    key:@"hcTitle"
-                                  value:(cfg.hcTitle.length > 0 ? cfg.hcTitle : nil)
-                                   hint:@""
-                              valueType:InputValueTypeText
-                             alertTitle:@"设置主页标题"
-                           alertMessage:@"留空则不替换主页标题"
-                                     cy:*ecy
-                                  width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+    // 主页标题（默认留空）
+    cy = [self addInputRowInGroup:g1
+                            title:@"主页标题"
+                              key:@"hcTitle"
+                            value:(config.hcTitle.length > 0 ? config.hcTitle : nil)
+                             hint:@""
+                        valueType:InputValueTypeText
+                       alertTitle:@"设置主页标题"
+                     alertMessage:@"留空则不替换主页标题"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g1 cy:cy width:w];
 
-        // 标题大小（默认 0 = 默认大小）
-        *ecy = [self addInputRowInGroup:expand
-                                  title:@"标题大小"
-                                    key:@"hcTitleSize"
-                                  value:cfg.hcTitleSize != 0 ? [self numText:cfg.hcTitleSize] : nil
-                                   hint:@"0"
-                              valueType:InputValueTypeNumber
-                             alertTitle:@"设置标题大小"
-                           alertMessage:@"标题大小，0 为跟随默认"
-                                     cy:*ecy
-                                  width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+    // 标题大小（默认 0 = 跟随默认 20）
+    cy = [self addInputRowInGroup:g1
+                            title:@"标题大小"
+                              key:@"hcTitleSize"
+                            value:config.hcTitleSize != 0 ? [self numText:config.hcTitleSize] : nil
+                             hint:@"0"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置标题大小"
+                     alertMessage:@"标题大小，0 为跟随默认"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g1 cy:cy width:w];
 
-        // 标题X偏移值（默认 0）
-        *ecy = [self addInputRowInGroup:expand
-                                  title:@"标题X偏移值"
-                                    key:@"hcTitleOffsetX"
-                                  value:cfg.hcTitleOffsetX != 0 ? [self numText:cfg.hcTitleOffsetX] : nil
-                                   hint:@"0"
-                              valueType:InputValueTypeNumber
-                             alertTitle:@"设置标题X偏移值"
-                           alertMessage:@"标题X偏移值，可为负，0 为默认位置"
-                                     cy:*ecy
-                                  width:w];
-    } cy:cy width:w];
+    // 标题X偏移值（默认 0）
+    cy = [self addInputRowInGroup:g1
+                            title:@"标题X偏移值"
+                              key:@"hcTitleOffsetX"
+                            value:config.hcTitleOffsetX != 0 ? [self numText:config.hcTitleOffsetX] : nil
+                             hint:@"0"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置标题X偏移值"
+                     alertMessage:@"标题X偏移值，可为负，0 为默认位置"
+                               cy:cy
+                            width:w];
 
     y = [self finishGroup:g1 atY:y height:cy];
     y += 8;
