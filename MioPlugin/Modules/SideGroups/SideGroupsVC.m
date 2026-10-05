@@ -75,6 +75,18 @@
                                cy:cy
                             width:w];
 
+    // X 微调（XOS applySideRailLeftXOffset:rightXOffset:）
+    cy = [self addInputRowInGroup:g2
+                            title:@"X 微调"
+                              key:@"sdRailXOffset"
+                            value:[self numText:config.sdRailXOffset]
+                             hint:@"0"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"X 微调"
+                     alertMessage:@"侧边栏水平偏移，可为负，数值(-30~30)"
+                               cy:cy
+                            width:w];
+
     // 自定义按钮字号（master switch，对齐电报「自定义标题字号」：关 → 跟随微信字体大小）
     cy = [self addMasterSwitchRowInGroup:g2
                                    title:@"自定义按钮字号"
@@ -92,18 +104,6 @@
                                      cy:*ecy
                                   width:w];
     } cy:cy width:w];
-
-    // X 微调（XOS applySideRailLeftXOffset:rightXOffset:）
-    cy = [self addInputRowInGroup:g2
-                            title:@"X 微调"
-                              key:@"sdRailXOffset"
-                            value:[self numText:config.sdRailXOffset]
-                             hint:@"0"
-                        valueType:InputValueTypeNumber
-                       alertTitle:@"X 微调"
-                     alertMessage:@"侧边栏水平偏移，可为负，数值(-30~30)"
-                               cy:cy
-                            width:w];
 
     // 显示未读角标
     cy = [self addSwitchRowInGroup:g2
