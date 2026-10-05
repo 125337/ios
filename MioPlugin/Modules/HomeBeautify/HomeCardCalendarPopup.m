@@ -56,6 +56,8 @@
 - (void)onTap { if (self.block) self.block(); }
 @end
 
+@implementation HomeCardCalendarPopup
+
 #pragma mark - 农历（iOS 系统中国农历 NSCalendarIdentifierChinese，ICU 权威历法，无数据表。
 // 压缩表方案已弃用：实测 2015 年起春节累计偏移 14-17 天，数据不可靠）
 
