@@ -3,6 +3,7 @@
 #import "../../Settings/Controllers/SettingAvatarHideController.h"
 #import "../SessionGroups/SessionGroupsVC.h"
 #import "../SideGroups/SideGroupsVC.h"
+#import "../HomeBeautify/HomeCardVC.h"
 #import "../../Core/LogManager.h"
 
 @interface WPUIVC : SettingCategoryController
@@ -74,6 +75,19 @@
                             width:w];
     y = [self finishGroup:sgGroup atY:y height:sgCy];
 
+    // ──── 卡片：首页美化 ────
+    y = [self addSectionHeader:@"首页美化" y:y width:w];
+    UIView *hbGroup = [self addTableGroupAtY:y width:w];
+    CGFloat hbCy = 0;
+    hbCy = [self addNavRowInGroup:hbGroup
+                            title:@"首页卡片"
+                         subtitle:nil
+                              tag:110
+                           action:@selector(navigateTo:)
+                               cy:hbCy
+                            width:w];
+    y = [self finishGroup:hbGroup atY:y height:hbCy];
+
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
     WPLog(@"UI", @"[Sub] WPUIVC buildUI done");
@@ -108,6 +122,9 @@
             break;
         case 109:
             subVC = [[SideGroupsVC alloc] init];
+            break;
+        case 110:
+            subVC = [[HomeCardVC alloc] init];
             break;
     }
 
