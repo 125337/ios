@@ -37,6 +37,24 @@
 #import "../../Core/MioAlertHelper.h"
 #import <objc/runtime.h>
 
+#pragma mark - 弹层
+
+@interface HomeCardCalendarPopup () <UIGestureRecognizerDelegate>
+@property (nonatomic, strong) UIView *mask;
+@property (nonatomic, strong) UIView *panel;
+@property (nonatomic, strong) UIView *content;   // rebuild 时清空重画
+@end
+
+#pragma mark - 手势 target（block 转发；UIGestureRecognizer 对 target 非强持有）
+
+@interface CalTapTarget : NSObject
+@property (nonatomic, copy) void (^block)(void);
+- (void)onTap;
+@end
+@implementation CalTapTarget
+- (void)onTap { if (self.block) self.block(); }
+@end
+
 #pragma mark - 农历（1900-2100 压缩表，弹层与周视图共用单份）
 
 static const int kLunarInfo[] = {
@@ -239,23 +257,7 @@ static UIColor *CalSystemBg(void) {
     return [UIColor whiteColor];
 }
 
-#pragma mark - 手势 target（block 转发；UIGestureRecognizer 对 target 非强持有）
 
-@interface CalTapTarget : NSObject
-@property (nonatomic, copy) void (^block)(void);
-- (void)onTap;
-@end
-@implementation CalTapTarget
-- (void)onTap { if (self.block) self.block(); }
-@end
-
-#pragma mark - 弹层
-
-@interface HomeCardCalendarPopup () <UIGestureRecognizerDelegate>
-@property (nonatomic, strong) UIView *mask;
-@property (nonatomic, strong) UIView *panel;
-@property (nonatomic, strong) UIView *content;   // rebuild 时清空重画
-@end
 
 static HomeCardCalendarPopup *hcCalPopup = nil;
 static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语义）
