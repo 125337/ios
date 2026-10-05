@@ -104,7 +104,7 @@ static NSString *VaultDocsDir(NSString *dirName) {
                 fileName:(NSString *)fileName
                      key:(NSString *)key {
     [[NSFileManager defaultManager] removeItemAtPath:
-        [[VaultDocsDir(dirName)] stringByAppendingPathComponent:fileName] error:nil];
+        [VaultDocsDir(dirName) stringByAppendingPathComponent:fileName] error:nil];
     if (key.length > 0) [self kcDelete:key];
 }
 
