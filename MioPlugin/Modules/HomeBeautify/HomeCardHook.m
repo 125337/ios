@@ -25,8 +25,8 @@
 //   · xzy_updateHomeTopTitle：headerViewForSection:0 上叠加标题（详见 HCApply 注释）
 //
 //  【Mio 移植差异】
-//   · 总开关一开必建卡片（背景色空 → secondarySystemGroupedBackgroundColor 兜底，
-//     对齐 XOS 默认色兜底语义，保证开关即可见）
+//   · 总开关一开必建卡片；卡片/日历/天气底色默认全透明（XOS L15018/19804/15347 实锤
+//     均为 clearColor 兜底），背景图/配置色浮在其上，无图无色时内容直接浮在列表底
 //   · 分组条共存：XOS 主页列表分组是浮层（XZYCLGSideRailView）不占 section 0 header，
 //     Mio 电报/侧边分组条占 header → 分组条开 = 追加式共存（原 header 在上、卡片接其下，
 //     高 = 原高 + 卡片高 + 12 + 底部占位修正）；分组条关 = XOS 式整体替换
@@ -217,7 +217,7 @@ static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *
     if (cw < 1.0) cw = 1.0;
 
     UIColor *bg = HCColorForMode(cfg.hcCalBgColor, cfg.hcCalBgColorDark, dark)
-        ?: [UIColor secondarySystemGroupedBackgroundColor];
+        ?: [UIColor clearColor];   // XOS FUN_001369e0 默认 clearColor（日历透明浮在背景图上）
     UIColor *accent = HCColorForMode(cfg.hcCalHolidayColor, cfg.hcCalHolidayColorDark, dark)
         ?: [UIColor systemRedColor];
     UIColor *selected = HCColorForMode(cfg.hcCalSelectedColor, cfg.hcCalSelectedColorDark, dark)
@@ -450,9 +450,9 @@ static void HCAddWeatherBadge(id vc, UIView *container, HomeCardConfig *cfg, BOO
     UIView *badge = [[UIView alloc] initWithFrame:CGRectZero];
     badge.tag = kHCWeatherTag;
     badge.userInteractionEnabled = YES;   // XOS 同款可点（cadis_weatherBadgeTapped）
-    // XOS 默认 = 白底黑字（FUN_00292dc0 底色兜底 + FUN_0029bfa0 文字色），日历内无缝、卡片内浮层
+    // XOS L15347-15349 实锤：药丸底色默认 [UIColor clearColor]（透明浮层），非白底
     badge.backgroundColor = HCColorForMode(cfg.hcWeatherBgColor, cfg.hcWeatherBgColorDark, dark)
-        ?: [UIColor secondarySystemGroupedBackgroundColor];
+        ?: [UIColor clearColor];
     // XOS FUN_0014b634：透明度存 0-100，应用 /100 并钳制 [0,1]（默认 90 → 0.9）
     badge.alpha = MIN(MAX(cfg.hcWeatherAlpha / 100.0, 0.0), 1.0);
 
@@ -583,9 +583,10 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
     card.layer.masksToBounds = YES;
     card.clipsToBounds = YES;
 
-    // 背景色（XOS CadisCardBgColor 带默认色兜底；Mio 空 = 分组卡片底色，保证开关即可见）
+    // 背景色（XOS L15018-15023 实锤：CadisCardBgColor 默认 [UIColor clearColor] 透明，
+    // 无图无色时卡片隐形、内容直接浮在列表底上）
     UIColor *bg = HCColorForMode(cfg.hcCardBgColor, cfg.hcCardBgColorDark, dark);
-    card.backgroundColor = bg ?: [UIColor secondarySystemGroupedBackgroundColor];
+    card.backgroundColor = bg ?: [UIColor clearColor];
 
     // 边框（XOS：宽度 > 0 才设置 border）
     if (cfg.hcBorderWidth > 0) {
@@ -595,14 +596,14 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
         card.layer.borderColor = bc.CGColor;
     }
 
-    // 卡内背景图（XOS contentMode=2 AspectFit；浅/深色按当前外观）
+    // 卡内背景图（XOS L15124 实锤 contentMode=2 AspectFill 铺满裁剪；浅/深色按当前外观）
     UIImage *img = HCImageForDark(dark);
     if (img) {
         UIImageView *iv = [[UIImageView alloc] initWithImage:img];
         iv.tag = kHCImageTag;
         iv.frame = card.bounds;
         iv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        iv.contentMode = UIViewContentModeScaleAspectFit;
+        iv.contentMode = UIViewContentModeScaleAspectFill;   // XOS L15124 setContentMode:2 实锤
         iv.userInteractionEnabled = NO;
         [card addSubview:iv];
     }
@@ -668,7 +669,7 @@ static void HCApply(id vc) {
         }
         // 浅/深色实时换底色/边框（颜色为构建期取值，需随 trait 同步）
         UIColor *bg = HCColorForMode(cfg.hcCardBgColor, cfg.hcCardBgColorDark, dark);
-        card.backgroundColor = bg ?: [UIColor secondarySystemGroupedBackgroundColor];
+        card.backgroundColor = bg ?: [UIColor clearColor];
         if (cfg.hcBorderWidth > 0) {
             UIColor *bc = HCColorForMode(cfg.hcBorderColor, cfg.hcBorderColorDark, dark)
                 ?: [UIColor separatorColor];
