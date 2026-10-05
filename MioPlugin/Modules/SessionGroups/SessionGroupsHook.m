@@ -138,7 +138,7 @@ static SGHomeGestureSink *sGestureSink = nil;
 @property (nonatomic, strong) NSArray<NSArray<NSNumber *> *> *hiddenRows;  // 每 section 隐藏的原行号（升序）
 @property (nonatomic, assign) NSInteger targetSection;                     // 会话最多的 section
 @property (nonatomic, copy) NSString *signature;
-@property (nonatomic, strong) NSArray *tabs; // 引擎 tab（SessionGroupsTab 或 SideGroupsTab，字段同构）
+@property (nonatomic, strong) NSArray<id<SGTabProtocol>> *tabs; // 引擎 tab（SessionGroupsTab 或 SideGroupsTab，字段同构经协议）
 @property (nonatomic, strong) NSArray<NSNumber *> *tabUnread;              // 每组未读数（all 恒 0）
 @property (nonatomic, strong) NSArray<NSNumber *> *tabRedDot;
 @property (nonatomic, assign) BOOL dirMode;                                // 目录收纳模式（InList 且选中全部组，XOS 位置模式 6 语义）
@@ -258,7 +258,7 @@ static NSUInteger SGDetermineScope(id session, NSString *username) {
 // session:matchesTab: kind0/kind1/kind3 路径（Misc_part6.c:8596-8790）；scope 由调用方预算传入
 // 过滤参数按激活模块取值：电报分组开 → sg*；仅侧边分组开 → sd*（两套配置独立，
 // 轮着用免重调）；双开时列表只有一份，口径跟随电报 sg*
-static BOOL SGMatchesTab(id session, NSString *username, NSUInteger scope, id tab, SessionGroupsConfig *cfg, SideGroupsConfig *sd) {
+static BOOL SGMatchesTab(id session, NSString *username, NSUInteger scope, id<SGTabProtocol> tab, SessionGroupsConfig *cfg, SideGroupsConfig *sd) {
     BOOL filterPinned = cfg.sgEnabled ? cfg.sgFilterPinned : sd.sdFilterPinned;
     NSInteger recentDays = cfg.sgEnabled ? cfg.sgRecentDays : sd.sdRecentDays;
     if (tab.kind == 0) {
@@ -339,7 +339,7 @@ static BOOL SGSideEngineOn(void) {
     return ![SessionGroupsConfig shared].sgEnabled && [SideGroupsConfig shared].sdEnabled;
 }
 
-static NSArray *SGEngineTabs(void) {
+static NSArray<id<SGTabProtocol>> *SGEngineTabs(void) {
     return SGSideEngineOn() ? [SideGroupsTab visibleTabs] : [SessionGroupsTab visibleTabs];
 }
 
@@ -358,7 +358,7 @@ static BOOL SGWantsStrip(id vc) {
     return [SessionGroupsConfig shared].sgEnabled && ![SideGroupsConfig shared].sdEnabled;
 }
 
-static id SGSelectedTab(NSArray *tabs) {
+static id<SGTabProtocol> SGSelectedTab(NSArray<id<SGTabProtocol>> *tabs) {
     NSString *tid = SGEngineSelectedTabId();
     if (tid.length) {
         for (id t in tabs) if ([t.tabId isEqualToString:tid]) return t;
@@ -413,7 +413,7 @@ static NSString *SGSignature(id vc, UITableView *table) {
         }
         [parts addObject:[NSString stringWithFormat:@"%ld", (long)c]];
     }
-    NSArray *tabs = SGEngineTabs();
+    NSArray<id<SGTabProtocol>> *tabs = SGEngineTabs();
     [parts addObject:SGSelectedTab(tabs).tabId];
     // 引擎身份入签：切开关后 sg/sd 两套 tabs 数据不同，防止旧快照缓存污染
     [parts addObject:SGSideEngineOn() ? @"eng_sd" : @"eng_sg"];
@@ -536,7 +536,7 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
             NSInteger dirOwner = -1;
             BOOL allKeep = NO;
             for (NSUInteger t = 0; t < tabs.count; t++) {
-                id tab = tabs[t];
+                id<SGTabProtocol> tab = tabs[t];
                 BOOL keep = SGMatchesTab(sess, username, scope, tab, cfg, sd);
                 if (filterDup && dup) keep = NO;
                 if (dirActive) {
@@ -972,7 +972,7 @@ static void SGSideRailLayoutPass(UITableView *table) {
     if (!snap) return;
     NSMutableArray<NSString *> *titles = [NSMutableArray array];
     NSMutableArray<NSString *> *tabIds = [NSMutableArray array];
-    for (id t in snap.tabs) {
+    for (id<SGTabProtocol> t in snap.tabs) {
         [titles addObject:t.title ?: @""];
         [tabIds addObject:t.tabId ?: @""];
     }
@@ -995,9 +995,9 @@ static void SGSelectTabIndex(id vc, NSInteger idx, CGFloat velocity, BOOL animat
     UITableView *table = SGMainTableView(vc);
     if (!table) return;
 
-    NSArray *tabs = SGEngineTabs();
+    NSArray<id<SGTabProtocol>> *tabs = SGEngineTabs();
     if (idx < 0 || idx >= (NSInteger)tabs.count) return;
-    id tab = tabs[idx];
+    id<SGTabProtocol> tab = tabs[idx];
 
     // 1) 当前选中组（仅会话内内存态，不跨启动；写当前引擎的选中态）
     SGEngineSetSelectedTabId(tab.tabId);
@@ -1319,9 +1319,9 @@ static UITableViewCell *hook_cellForRow(id self, SEL _cmd, UITableView *tableVie
                     if (![pr.tabId isEqualToString:@"__sg_dir_other__"]) {
                         // 真实组：长按 → 侧边分组动作菜单（独立实现）；「其他」为目录聚合桶，无对应组
                         SGHomeSnapshot *snap = objc_getAssociatedObject(self, kSGAssocSnapshot);
-                        for (id tab in snap.tabs) {
+                        for (id<SGTabProtocol> tab in snap.tabs) {
                             if ([tab.tabId isEqualToString:pr.tabId]) {
-                                cell.onLongPress = ^{ [SideGroupsActions showActionsForTab:tab]; };
+                                cell.onLongPress = ^{ [SideGroupsActions showActionsForTab:(SideGroupsTab *)tab]; };
                                 break;
                             }
                         }

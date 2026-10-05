@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import "../../Core/SGTabProtocol.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -8,7 +9,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// config 键 sgTabs 存 JSON 字典数组（WCR homeTelegramGroupingTabs 同构，Misc_part6.c:4436/5124），
 /// 空/非法回落 defaultTabs（ensureTabsLoaded，4325-4440）。
 /// kind：0=全部(all) 1=scope 位组 3=最近 N 天（WCR 的 2/4/5 依赖其自定义分组生态，不做）
-@interface SessionGroupsTab : NSObject
+@interface SessionGroupsTab : NSObject <SGTabProtocol>
 
 @property (nonatomic, copy) NSString *tabId;
 @property (nonatomic, copy) NSString *title;

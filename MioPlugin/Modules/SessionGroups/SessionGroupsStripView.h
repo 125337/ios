@@ -15,6 +15,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) void (^onSelectIndex)(NSInteger index);
 @property (nonatomic, copy) void (^onLongPressIndex)(NSInteger index); // 长按动作（WCR wcrGrouping_handleHomeItemLongPress，wcrGrouping_.c:8807）
 @property (nonatomic, assign) NSInteger selectedIndex;
+/// 数据门闩签名（调用方 SGReloadStrip 维护）：titles/badges/选中态/样式参数哈希，
+/// 每次 reloadData 的 viewForHeaderInSection 都会调 reload，签名相同直接跳过全量重建
+@property (nonatomic, copy, nullable) NSString *lastDataSig;
 
 + (CGFloat)preferredHeight;
 

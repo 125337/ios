@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import "../../Core/SGTabProtocol.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -10,7 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// 长按动作语义为侧栏独立一套（不复用电报候选）：
 ///   0=跟随默认（弹侧栏固定动作菜单，见 SideGroupsActions） 2=打开分组管理
 ///   5=切换置顶过滤  4=无操作
-@interface SideGroupsTab : NSObject
+@interface SideGroupsTab : NSObject <SGTabProtocol>
 
 @property (nonatomic, copy) NSString *tabId;
 @property (nonatomic, copy) NSString *title;
