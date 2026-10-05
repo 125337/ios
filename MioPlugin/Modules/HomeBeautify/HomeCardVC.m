@@ -114,6 +114,100 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                           width:w];
 
     y = [self finishGroup:g2 atY:y height:cy];
+    y += 8;
+
+    // ──── 卡片3：卡片数值（XOS CadisCard* 同构参数） ────
+    y = [self addSectionHeader:@"卡片数值" y:y width:w];
+    UIView *g3 = [self addTableGroupAtY:y width:w];
+    cy = 0;
+
+    // 卡片高度（默认 100，<=0 按 100 处理）
+    cy = [self addInputRowInGroup:g3
+                            title:@"卡片高度"
+                              key:@"hcCardHeight"
+                            value:config.hcCardHeight != 100 ? [self numText:config.hcCardHeight] : nil
+                             hint:@"100"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置卡片高度"
+                     alertMessage:@"卡片高度，0 或留空按默认 100 处理"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g3 cy:cy width:w];
+
+    // 卡片Y偏移（默认 0）
+    cy = [self addInputRowInGroup:g3
+                            title:@"卡片Y偏移"
+                              key:@"hcCardOffsetY"
+                            value:config.hcCardOffsetY != 0 ? [self numText:config.hcCardOffsetY] : nil
+                             hint:@"0"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置卡片Y偏移"
+                     alertMessage:@"卡片Y偏移，可为负"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g3 cy:cy width:w];
+
+    // 底部占位修正（默认 0）
+    cy = [self addInputRowInGroup:g3
+                            title:@"底部占位修正"
+                              key:@"hcCardBottomFix"
+                            value:config.hcCardBottomFix != 0 ? [self numText:config.hcCardBottomFix] : nil
+                             hint:@"0"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置底部占位修正"
+                     alertMessage:@"header 高度追加量，可为负"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g3 cy:cy width:w];
+
+    // 卡片边距（默认 16）
+    cy = [self addInputRowInGroup:g3
+                            title:@"卡片边距"
+                              key:@"hcCardMargin"
+                            value:config.hcCardMargin != 16 ? [self numText:config.hcCardMargin] : nil
+                             hint:@"16"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置卡片边距"
+                     alertMessage:@"卡片左右边距"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g3 cy:cy width:w];
+
+    // 边框粗细（默认 0 = 无边框）
+    cy = [self addInputRowInGroup:g3
+                            title:@"边框粗细"
+                              key:@"hcBorderWidth"
+                            value:config.hcBorderWidth != 0 ? [self numText:config.hcBorderWidth] : nil
+                             hint:@"0.0"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置边框粗细"
+                     alertMessage:@"边框粗细，0 为无边框"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g3 cy:cy width:w];
+
+    // 边框颜色（颜色选择器）
+    cy = [self addColorRowInGroup:g3
+                            title:@"边框颜色"
+                              key:@"hcBorderColor"
+                            value:(config.hcBorderColor.length > 0 ? config.hcBorderColor : nil)
+                               cy:cy
+                            width:w
+                          darkKey:nil
+                        darkValue:nil];
+    cy = [self addSeparatorInGroup:g3 cy:cy width:w];
+
+    // 背景颜色（颜色选择器）
+    cy = [self addColorRowInGroup:g3
+                            title:@"背景颜色"
+                              key:@"hcCardBgColor"
+                            value:(config.hcCardBgColor.length > 0 ? config.hcCardBgColor : nil)
+                               cy:cy
+                            width:w
+                          darkKey:nil
+                        darkValue:nil];
+
+    y = [self finishGroup:g3 atY:y height:cy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);

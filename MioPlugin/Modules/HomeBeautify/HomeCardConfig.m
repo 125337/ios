@@ -21,6 +21,13 @@
         [ConfigDescriptor itemWithKey:@"hcTitle" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"hcTitleSize" type:ConfigValueTypeFloat default:@(0)],
         [ConfigDescriptor itemWithKey:@"hcTitleOffsetX" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"hcCardHeight" type:ConfigValueTypeFloat default:@(100)],
+        [ConfigDescriptor itemWithKey:@"hcCardOffsetY" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"hcCardBottomFix" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"hcCardMargin" type:ConfigValueTypeFloat default:@(16)],
+        [ConfigDescriptor itemWithKey:@"hcBorderWidth" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"hcBorderColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcCardBgColor" type:ConfigValueTypeString default:@""],
     ];
 }
 
