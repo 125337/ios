@@ -186,7 +186,6 @@
         SDRailButton *b = self.buttons[i];
         b.titleLabel.font = [UIFont systemFontOfSize:self.sdFontSize];
         [b setTitle:self.titles[i] forState:UIControlStateNormal];
-        [b setTitleEdgeInsets:UIEdgeInsetsZero];
         b.hidden = NO;
         [self sdApplySymbol:b index:i];
         UILabel *badge = self.badges[i];
