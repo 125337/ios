@@ -361,7 +361,7 @@ static BOOL SGWantsStrip(id vc) {
 static id<SGTabProtocol> SGSelectedTab(NSArray<id<SGTabProtocol>> *tabs) {
     NSString *tid = SGEngineSelectedTabId();
     if (tid.length) {
-        for (id t in tabs) if ([t.tabId isEqualToString:tid]) return t;
+        for (id<SGTabProtocol> t in tabs) if ([t.tabId isEqualToString:tid]) return t;
     }
     return tabs.firstObject; // 无选中记录时回落第一组（WCR Misc_part6.c:4444-4462；启动即此分支）
 }
@@ -438,12 +438,12 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
     SGHomeSnapshot *snap = [[SGHomeSnapshot alloc] init];
     SessionGroupsConfig *cfg = [SessionGroupsConfig shared];
     // 分组条数据源 = 对应引擎管理页维护的可见分组（disabled 过滤后；空回落默认四组）
-    NSArray *tabs = SGEngineTabs();
+    NSArray<id<SGTabProtocol>> *tabs = SGEngineTabs();
     snap.tabs = tabs;
 
     // 目录模式判定（XOS 位置模式 6 语义：仅 InList 位置 + 选中全部组时在列表内收纳；
     // 组 = 除选中组外的全部可见组。至少 2 组才收纳，无组可收时维持普通列表）
-    id sel = SGSelectedTab(tabs);
+    id<SGTabProtocol> sel = SGSelectedTab(tabs);
     NSUInteger selIdx = 0;
     for (NSUInteger t = 0; t < tabs.count; t++) if (tabs[t] == sel) { selIdx = t; break; }
     SideGroupsConfig *sd = [SideGroupsConfig shared];
@@ -977,7 +977,7 @@ static void SGSideRailLayoutPass(UITableView *table) {
         [tabIds addObject:t.tabId ?: @""];
     }
     [rail reloadTitles:titles badges:snap.tabUnread tabIds:tabIds];
-    id sel = SGSelectedTab(snap.tabs);
+    id<SGTabProtocol> sel = SGSelectedTab(snap.tabs);
     NSInteger idx = 0;
     for (NSUInteger t = 0; t < snap.tabs.count; t++) if (snap.tabs[t] == sel) { idx = (NSInteger)t; break; }
     if (rail.selectedIndex != idx) rail.selectedIndex = idx;
