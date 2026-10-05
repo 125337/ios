@@ -114,6 +114,26 @@
                                 cy:cy
                              width:w];
 
+    // 侧边滑动切换（master switch，仅 rail 区域上下滑切组；展开：反向行驶 / 循环滑动）
+    cy = [self addMasterSwitchRowInGroup:g2
+                                   title:@"侧边滑动切换"
+                                     key:@"sdRailSwipe"
+                                    isOn:config.sdRailSwipe
+                              subBuilder:^(UIView *expand, CGFloat *ecy) {
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"反向行驶"
+                                        key:@"sdSwipeReverse"
+                                       isOn:config.sdSwipeReverse
+                                         cy:*ecy
+                                      width:w];
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"循环滑动"
+                                        key:@"sdSwipeLoop"
+                                       isOn:config.sdSwipeLoop
+                                         cy:*ecy
+                                      width:w];
+    } cy:cy width:w];
+
     y = [self finishGroup:g2 atY:y height:cy];
 
     // ──── 卡片3：会话过滤（侧边独立一套，不与电报分组共享，轮着用免重调） ────

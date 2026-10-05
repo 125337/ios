@@ -30,7 +30,7 @@
 }
 @end
 
-@interface SideGroupsRailView ()
+@interface SideGroupsRailView () <UIGestureRecognizerDelegate>
 @property (nonatomic, strong) NSMutableArray<UIButton *> *buttons;
 @property (nonatomic, strong) NSMutableArray<UILabel *> *badges;
 @property (nonatomic, copy) NSArray<NSString *> *titles;
@@ -53,6 +53,16 @@
         UILongPressGestureRecognizer *lp =
             [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(sdLongPress:)];
         [self addGestureRecognizer:lp];
+        // 侧边滑动切换（对齐电报全屏滑动 FUN__part13.c:16571-16853 提交阈值）：
+        // pan 挂 rail 本体 → 只有 rail 区域响应，列表/目录区域原生滚动不受影响
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self
+                                                                              action:@selector(sdHandlePan:)];
+        pan.cancelsTouchesInView = YES;
+        pan.delaysTouchesBegan = NO;
+        pan.delaysTouchesEnded = NO;
+        pan.maximumNumberOfTouches = 1;
+        pan.delegate = self;
+        [self addGestureRecognizer:pan];
     }
     return self;
 }
@@ -279,6 +289,47 @@
             return;
         }
     }
+}
+
+#pragma mark - 侧边滑动切换（对齐电报全屏滑动 FUN__part13.c:16698-16807 同参）
+
+// 竖向占优门闩（电报横向门闩 16766-16772 竖版）：竖（速度或位移）必须 > 横×1.2，
+// 且开关开启才响应；rail 内无竖向滚动视图，门闩仅防斜滑误触
+- (BOOL)gestureRecognizerShouldBegin:(UIPanGestureRecognizer *)ges {
+    if (![SideGroupsConfig shared].sdRailSwipe) return NO;
+    CGPoint vel = [ges velocityInView:self];
+    CGPoint trans = [ges translationInView:self];
+    CGFloat ay = fabs(vel.y) > 1.0 ? vel.y : trans.y;
+    CGFloat ax = fabs(vel.x) > 1.0 ? vel.x : trans.x;
+    return fabs(ay) > fabs(ax) * 1.2;
+}
+
+// 端点提交制（电报 16789-16807 同阈值）：|Δy|>50 或 (|Δy|>12 且 |velY|>450) 或 |velY|>800，需同向；
+// 上滑=下一组（反向行驶翻转），循环滑动取模回绕；rail 无预览动画，直接提交选中
+- (void)sdHandlePan:(UIPanGestureRecognizer *)pan {
+    if (pan.state != UIGestureRecognizerStateEnded &&
+        pan.state != UIGestureRecognizerStateCancelled) return;
+    SideGroupsConfig *cfg = [SideGroupsConfig shared];
+    if (!cfg.sdRailSwipe) return;
+    NSInteger count = (NSInteger)self.buttons.count;
+    if (count < 2) return;
+    CGFloat dy = [pan translationInView:self].y;
+    CGFloat vel = [pan velocityInView:self].y;
+    NSInteger dir = (dy < 0) ? +1 : -1;
+    if (cfg.sdSwipeReverse) dir = -dir;
+    NSInteger idx = self.selectedIndex + dir;
+    if (cfg.sdSwipeLoop) {
+        idx = ((idx % count) + count) % count;
+    } else if (idx < 0 || idx >= count) {
+        idx = self.selectedIndex;
+    }
+    BOOL sameDir = (vel * dy > 0);
+    BOOL commit = sameDir && (fabs(dy) > 50 || (fabs(dy) > 12 && fabs(vel) > 450) || fabs(vel) > 800);
+    commit = commit && idx != self.selectedIndex;
+    if (pan.state == UIGestureRecognizerStateCancelled) commit = NO;
+    if (!commit) return;
+    self.selectedIndex = idx; // 触发选中态外观刷新（同 tap 路径）
+    if (self.onSelectIndex) self.onSelectIndex(idx);
 }
 
 @end
