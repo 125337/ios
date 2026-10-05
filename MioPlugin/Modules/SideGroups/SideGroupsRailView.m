@@ -187,12 +187,13 @@
 }
 
 - (void)refreshBadges {
+    BOOL show = [SideGroupsConfig shared].sdShowUnreadBadge;
     for (NSInteger i = 0; i < (NSInteger)self.badges.count; i++) {
         UILabel *badge = self.badges[i];
         NSUInteger count = 0;
         if (i < (NSInteger)self.unread.count) count = self.unread[i].unsignedIntegerValue;
         badge.text = count > 99 ? @"99+" : (count > 0 ? [NSString stringWithFormat:@"%lu", (unsigned long)count] : @"");
-        badge.hidden = badge.text.length == 0;
+        badge.hidden = badge.text.length == 0 || !show;
         [badge sizeToFit];
     }
     [self setNeedsLayout];
