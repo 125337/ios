@@ -114,15 +114,6 @@
                                 cy:cy
                              width:w];
 
-    // 目录页分组（「+列表内」位置且选中全部组时列表内收纳分组目录）
-    cy = [self addSwitchRowInGroup:g2
-                             title:@"目录页分组"
-                              desc:nil
-                               key:@"sdDirEnabled"
-                              isOn:config.sdDirEnabled
-                                cy:cy
-                             width:w];
-
     y = [self finishGroup:g2 atY:y height:cy];
 
     // ──── 卡片3：会话过滤（侧边独立一套，不与电报分组共享，轮着用免重调） ────

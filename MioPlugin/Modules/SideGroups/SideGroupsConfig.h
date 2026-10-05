@@ -25,7 +25,6 @@ typedef NS_ENUM(NSInteger, SDSidePosition) {
 @property (nonatomic, assign) BOOL sdFontCustom;            // 自定义字号开关：关 → 跟随微信字体大小（dynamicLength）
 @property (nonatomic, assign) CGFloat sdRailXOffset;        // X 微调 -30~30（XOS applySideRailLeftXOffset:rightXOffset:）
 @property (nonatomic, assign) BOOL sdShowUnreadBadge;       // 显示未读角标
-@property (nonatomic, assign) BOOL sdDirEnabled;            // 目录页分组（「+列表内」位置且选中全部组时列表内收纳分组目录）
 @property (nonatomic, copy) NSString *sdTabs;               // 分组列表 JSON 数组（空 = 首次迁移电报分组或默认四组），由侧栏分组管理页维护
 
 // 字号解析（对齐电报 SessionGroupsStripView 链路）：自定义开 → sdRailFontSize（钳 9-20）；

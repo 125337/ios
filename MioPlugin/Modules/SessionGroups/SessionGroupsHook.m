@@ -425,7 +425,7 @@ static NSString *SGSignature(id vc, UITableView *table) {
     [parts addObject:filterDup ? @"d1" : @"d0"];
     [parts addObject:[NSString stringWithFormat:@"pos%ld", (long)sd.sdPosition]];
     // 目录模式与折叠数入签：折叠切换即使漏了显式失效也靠签名变化重建（XOS 修订计数 DAT_003eaab4 同效）
-    BOOL dirActive = sd.sdEnabled && sd.sdDirEnabled
+    BOOL dirActive = sd.sdEnabled
         && (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList)
         && SGSelectedTab(tabs).kind == 0 && tabs.count > 1;
     [parts addObject:[NSString stringWithFormat:@"dir%d_%lu", dirActive, (unsigned long)SGFoldedSet().count]];
@@ -451,7 +451,7 @@ static SGHomeSnapshot *SGBuildSnapshot(id vc, UITableView *table) {
     // 轮着用免重调）；双开时列表只有一份，口径跟随电报 sg*
     BOOL filterDup = cfg.sgEnabled ? cfg.sgFilterDuplicate : sd.sdFilterDuplicate;
     BOOL foldNoDot = cfg.sgEnabled ? cfg.sgFoldGroupNoRedDot : sd.sdFoldGroupNoRedDot;
-    BOOL dirActive = sd.sdEnabled && sd.sdDirEnabled
+    BOOL dirActive = sd.sdEnabled
         && (sd.sdPosition == SDSidePositionLeftInList || sd.sdPosition == SDSidePositionRightInList)
         && sel.kind == 0 && tabs.count > 1;
 
