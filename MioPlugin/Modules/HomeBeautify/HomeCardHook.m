@@ -466,10 +466,14 @@ static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
             temp = [temp stringByTrimmingCharactersInSet:
                     [NSCharacterSet whitespaceAndNewlineCharacterSet]];
             if (temp.length == 0) return;
-            // XOS 同款文本带城市名："新余市 18° Overcast"；配置城市优先，否则用 wttr 返回位置
+            // XOS 同款文本带城市名："新余市 18° Overcast"；配置城市优先。
+            // %l 在 IP 自动定位时可能返回经纬度（如 34.773200,133.722000），坐标样式剔除不显示
             NSString *loc = parts.count > 2 ? [parts[2] stringByTrimmingCharactersInSet:
                               [NSCharacterSet whitespaceAndNewlineCharacterSet]] : @"";
-            NSString *cityName = wcfg.hcWeatherCity.length > 0 ? wcfg.hcWeatherCity : loc;
+            NSPredicate *coordPred = [NSPredicate predicateWithFormat:
+                @"SELF MATCHES '^[-+]?[0-9]+(\\.[0-9]+)?\\s*,\\s*[-+]?[0-9]+(\\.[0-9]+)?$'"];
+            NSString *cityName = wcfg.hcWeatherCity.length > 0 ? wcfg.hcWeatherCity
+                : ((loc.length > 0 && ![coordPred evaluateWithObject:loc]) ? loc : @"");
             hcWeatherText = cityName.length > 0
                 ? [NSString stringWithFormat:@"%@ %@° %@", cityName, temp, desc]
                 : [NSString stringWithFormat:@"%@° %@", temp, desc];
@@ -480,8 +484,9 @@ static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
 }
 
 // 天气徽章：显示位置 1 且日历开 → 在日历区域按 Y% 定位（XOS 15395-15437 同语义），
-// 否则（卡片内/联系人内但无联系人挂件）在卡片内定位
-static void HCAddWeatherBadge(UIView *container, HomeCardConfig *cfg, BOOL dark,
+// 否则（卡片内/联系人内但无联系人挂件）在卡片内定位；
+// 可点按弹天气菜单（XOS 15445 cadis_weatherBadgeTapped → FUN_00155870）
+static void HCAddWeatherBadge(id vc, UIView *container, HomeCardConfig *cfg, BOOL dark,
                               CGFloat cardX, CGFloat cardW, CGFloat cardY, CGFloat cardH,
                               CGFloat calTop, BOOL calOn) {
     BOOL inCalendar = (cfg.hcWeatherPos == 1 && calOn);
@@ -491,7 +496,7 @@ static void HCAddWeatherBadge(UIView *container, HomeCardConfig *cfg, BOOL dark,
 
     UIView *badge = [[UIView alloc] initWithFrame:CGRectZero];
     badge.tag = kHCWeatherTag;
-    badge.userInteractionEnabled = NO;
+    badge.userInteractionEnabled = YES;   // XOS 同款可点（cadis_weatherBadgeTapped）
     // XOS 默认 = 白底黑字（FUN_00292dc0 底色兜底 + FUN_0029bfa0 文字色），日历内无缝、卡片内浮层
     badge.backgroundColor = HCColorForMode(cfg.hcWeatherBgColor, cfg.hcWeatherBgColorDark, dark)
         ?: [UIColor secondarySystemGroupedBackgroundColor];
@@ -517,6 +522,13 @@ static void HCAddWeatherBadge(UIView *container, HomeCardConfig *cfg, BOOL dark,
     HCLayoutWeatherBadge(badge, icon, label,
                          cfg.hcWeatherX, xBase, xAvail, cfg.hcWeatherY, yBase, yAvail);
     [container addSubview:badge];
+
+    // 点按弹天气菜单（XOS 15445 cadis_weatherBadgeTapped 同款）
+    HCCalTapTarget *tgt = [HCCalTapTarget new];
+    tgt.block = ^{ HCShowCalendarMenu(vc); };
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:tgt
+                                                                          action:@selector(hcOnTap)];
+    [badge addGestureRecognizer:tap];
 
     if (!(hcWeatherText && [NSDate date].timeIntervalSince1970 - hcWeatherAt < kHCWeatherCacheInterval)) {
         __weak UIView *wBadge = badge;
@@ -659,7 +671,7 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
 
     // 天气徽章（z 序最上，XOS 15451 最后添加）
     if (cfg.hcWeatherEnabled) {
-        HCAddWeatherBadge(container, cfg, dark, margin, width - margin * 2.0, cardY, cardH,
+        HCAddWeatherBadge(vc, container, cfg, dark, margin, width - margin * 2.0, cardY, cardH,
                           calOn ? calY : 0.0, calOn);
     }
 
