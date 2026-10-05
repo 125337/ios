@@ -2,6 +2,7 @@
 #import "SessionGroupsConfig.h"
 #import "SessionGroupManagerVC.h"
 #import "../SideGroups/SideGroupsConfig.h"
+#import "../SettingEntry/WPCommonUI.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/LogManager.h"
