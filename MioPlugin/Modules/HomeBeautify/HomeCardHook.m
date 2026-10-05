@@ -389,17 +389,39 @@ static void HCLayoutWeatherBadge(UIView *badge, UIImageView *icon, UILabel *labe
     label.frame = CGRectMake(10.0 + iw + 4.0, (bh - lh) / 2.0, lw, lh);
 }
 
-// wttr.in 拉天气（XOS 默认 source=wttr；城市=CadisWeatherCity、语言=CadisWeatherLang 同键语义：
-// 城市非空拼路径，空 = 按 IP 自动定位；语言 0 中文 1 英文；成功才写缓存并回调主线程）
+// j1 节点取值：{key:[{value:"..."}]} → 首个 value（XOS FUN_00157be0 18186-18249 同款取法）
+static NSString *HCJ1Value(NSDictionary *node, NSString *key) {
+    NSArray *arr = node[key];
+    if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return nil;
+    id first = arr[0];
+    if (![first isKindOfClass:[NSDictionary class]]) return nil;
+    NSString *v = first[@"value"];
+    if (![v isKindOfClass:[NSString class]]) return nil;
+    v = [v stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    return v.length > 0 ? v : nil;
+}
+
+// wttr.in j1 JSON 拉天气（XOS FUN_0015660c URL / 00157be0 解析，反编译同款）。
+// 必须用 ?format=j1：实测 one-line format 下 lang 参数不生效（描述恒英文），XOS 正是因此用 j1。
+//   URL：城市空 https://wttr.in/?format=j1&lang={zh|en}（IP 定位）；非空 .../{城市}?format=j1&lang=
+//   解析：current_condition[0].temp_C；英文模式 desc = weatherDesc（恒英文）；
+//         中文模式 desc = lang_zh 优先，空则兜底 weatherDesc；
+//         城市名（XOS 18329 分支）：中文模式且配置城市非空 → 配置名；否则 areaName 英文标准名
+//         （areaName 解析失败回落配置名）；图标恒按英文描述映射（weatherDesc 恒英文）
 static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
     HomeCardConfig *wcfg = [HomeCardConfig shared];
-    NSString *cityQ = @"";
-    NSString *enc = [wcfg.hcWeatherCity stringByAddingPercentEncodingWithAllowedCharacters:
-                     [NSCharacterSet URLQueryAllowedCharacterSet]];
-    if (enc.length > 0) cityQ = [NSString stringWithFormat:@"/%@", enc];
-    NSString *lang = (wcfg.hcWeatherLang == 1) ? @"en" : @"zh";
-    NSString *urlStr = [NSString stringWithFormat:
-                        @"https://wttr.in%@/?format=%%C|%%t|%%l&lang=%@", cityQ, lang];
+    BOOL en = (wcfg.hcWeatherLang == 1);
+    NSString *city = [wcfg.hcWeatherCity stringByTrimmingCharactersInSet:
+                      [NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
+    NSString *lang = en ? @"en" : @"zh";
+    NSString *urlStr;
+    if (city.length > 0) {
+        NSString *enc = [city stringByAddingPercentEncodingWithAllowedCharacters:
+                         [NSCharacterSet URLQueryAllowedCharacterSet]];
+        urlStr = [NSString stringWithFormat:@"https://wttr.in/%@?format=j1&lang=%@", enc, lang];
+    } else {
+        urlStr = [NSString stringWithFormat:@"https://wttr.in/?format=j1&lang=%@", lang];
+    }
     NSURL *url = [NSURL URLWithString:urlStr];
     if (!url) return;
     [[[NSURLSession sharedSession] dataTaskWithURL:url
@@ -407,30 +429,34 @@ static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
             if (err) return;
             NSHTTPURLResponse *http = (NSHTTPURLResponse *)resp;
             if (![http isKindOfClass:[NSHTTPURLResponse class]] || http.statusCode != 200) return;
-            NSString *body = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-            if (body.length == 0 || ![body containsString:@"|"]) return;
-            NSArray<NSString *> *parts = [body componentsSeparatedByString:@"|"];
-            NSString *desc = [parts[0] stringByTrimmingCharactersInSet:
-                              [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            NSString *temp = parts.count > 1 ? parts[1] : @"";
-            temp = [temp stringByReplacingOccurrencesOfString:@"+" withString:@""];
-            temp = [temp stringByReplacingOccurrencesOfString:@"°C" withString:@""];
-            temp = [temp stringByReplacingOccurrencesOfString:@"°" withString:@""];
+            id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if (![json isKindOfClass:[NSDictionary class]]) return;
+            NSArray *cur = json[@"current_condition"];
+            if (![cur isKindOfClass:[NSArray class]] || cur.count == 0) return;
+            NSDictionary *c = cur[0];
+            if (![c isKindOfClass:[NSDictionary class]]) return;
+            NSString *temp = c[@"temp_C"];
+            if (![temp isKindOfClass:[NSString class]]) return;
             temp = [temp stringByTrimmingCharactersInSet:
                     [NSCharacterSet whitespaceAndNewlineCharacterSet]];
             if (temp.length == 0) return;
-            // XOS 同款文本带城市名："新余市 18° Overcast"；配置城市优先。
-            // %l 在 IP 自动定位时可能返回经纬度（如 34.773200,133.722000），坐标样式剔除不显示
-            NSString *loc = parts.count > 2 ? [parts[2] stringByTrimmingCharactersInSet:
-                              [NSCharacterSet whitespaceAndNewlineCharacterSet]] : @"";
-            NSPredicate *coordPred = [NSPredicate predicateWithFormat:
-                @"SELF MATCHES '^[-+]?[0-9]+(\\.[0-9]+)?\\s*,\\s*[-+]?[0-9]+(\\.[0-9]+)?$'"];
-            NSString *cityName = wcfg.hcWeatherCity.length > 0 ? wcfg.hcWeatherCity
-                : ((loc.length > 0 && ![coordPred evaluateWithObject:loc]) ? loc : @"");
+            NSString *descEn = HCJ1Value(c, @"weatherDesc") ?: @"";
+            NSString *descShow = descEn;
+            if (!en) descShow = HCJ1Value(c, @"lang_zh") ?: descEn;
+            NSString *areaName = @"";
+            NSArray *areas = json[@"nearest_area"];
+            if ([areas isKindOfClass:[NSArray class]] && areas.count > 0
+                && [areas[0] isKindOfClass:[NSDictionary class]]) {
+                areaName = HCJ1Value(areas[0], @"areaName") ?: @"";
+            }
+            // 城市名（XOS 18329 同款分支）：中文模式且配置城市非空 → 配置名；否则英文名
+            NSString *cityName = (!en && city.length > 0) ? city
+                               : (areaName.length > 0 ? areaName : city);
+            // XOS 同款文本："新余市 17° Overcast" / 英文模式 "Xinyu 17° Overcast"
             hcWeatherText = cityName.length > 0
-                ? [NSString stringWithFormat:@"%@ %@° %@", cityName, temp, desc]
-                : [NSString stringWithFormat:@"%@° %@", temp, desc];
-            hcWeatherSym = HCWeatherSymbolForDesc(desc);
+                ? [NSString stringWithFormat:@"%@ %@° %@", cityName, temp, descShow]
+                : [NSString stringWithFormat:@"%@° %@", temp, descShow];
+            hcWeatherSym = HCWeatherSymbolForDesc(descEn);
             hcWeatherAt = [NSDate date].timeIntervalSince1970;
             dispatch_async(dispatch_get_main_queue(), ^{ done(hcWeatherText, hcWeatherSym); });
         }] resume];
