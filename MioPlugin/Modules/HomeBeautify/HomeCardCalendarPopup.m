@@ -63,6 +63,8 @@ static const int kLunarInfo[] = {
     0x0d520
 };
 
+@implementation HomeCardCalendarPopup
+
 + (BOOL)lunarMonthDay:(NSDate *)date month:(NSInteger *)outMonth day:(NSInteger *)outDay leap:(BOOL *)outLeap {
     NSCalendar *g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
     NSDateComponents *bc = [NSDateComponents new];
@@ -225,7 +227,7 @@ static void CalSetBool(NSString *key, BOOL value) { [[NSUserDefaults standardUse
 
 // iOS 13 以下兜底
 static UIColor *CalQuaternaryFill(void) {
-    if (@available(iOS 13.0, *)) return [UIColor quaternarySystemFill];
+    if (@available(iOS 13.0, *)) return [UIColor quaternarySystemFillColor];
     return [UIColor colorWithWhite:0.0 alpha:0.06];
 }
 static UIColor *CalSecondaryLabel(void) {
@@ -257,8 +259,6 @@ static UIColor *CalSystemBg(void) {
 
 static HomeCardCalendarPopup *hcCalPopup = nil;
 static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语义）
-
-@implementation HomeCardCalendarPopup
 
 + (void)show {
     if (!hcCalPopup) {
