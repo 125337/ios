@@ -275,7 +275,7 @@ static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *
 
     // 周日期行（日号 17 Medium + 农历 9pt；今天 = 选中色圆角块，两行白字；周末列 accent）
     CGFloat cellY = cellTop + 60.0;
-    CGFloat cellH = 38.0;   // 今天块紧凑包两行（日号 22 + 农历 12 + 边距），随内容块居中
+    CGFloat cellH = 44.0;   // 今天块包两行并在农历下方多留 6pt（日号 22 + 农历 12 + 边距），随内容块居中
     for (NSInteger i = 0; i < 7; i++) {
         NSDate *d = [g dateByAddingUnit:NSCalendarUnitDay value:i - offset toDate:now options:0];
         NSDateComponents *dc = [g components:NSCalendarUnitDay fromDate:d];

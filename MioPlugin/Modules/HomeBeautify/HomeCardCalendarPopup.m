@@ -9,7 +9,7 @@
 //   屏幕居中；弹出动画 0.25s。
 //
 //  【内容】FUN_00153830（~15913-16600）：
-//   ◀ (16,14,36,30) font14；▶ (52,14,36,30)；年月标题 (16,14,W-32,30) font17 Bold 居中；
+//   ◀ 左 (16,14,36,30)、▶ 右 (W-52,14,36,30) 夹居中年月标题 font17 Bold；
 //   （Mio 调整：XOS 原版样式按钮 (88,14) 会压住居中标题 → 移到第二行 (16,48,80,20)）
 //   样式按钮「样式-黑」font11 Medium 橙色左对齐；三胶囊右对齐第二行（间距 6）
 //   font11 Medium 高 17，开启态底色各异；
@@ -340,7 +340,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     [self.content addSubview:prev];
 
     UIButton *next = [UIButton buttonWithType:UIButtonTypeCustom];
-    next.frame = CGRectMake(52, 14, 36, 30);
+    next.frame = CGRectMake(W - 52.0, 14, 36, 30);   // ▶ 右侧对称（◀ 左、▶ 右夹居中标题）
     [next setTitle:@"▶" forState:UIControlStateNormal];
     [next setTitleColor:blue forState:UIControlStateNormal];
     next.titleLabel.font = [UIFont systemFontOfSize:14.0];
