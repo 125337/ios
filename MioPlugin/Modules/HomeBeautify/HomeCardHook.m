@@ -1,4 +1,4 @@
-//
+﻿//
 //  HomeCardHook.m
 //  MioPlugin
 //
@@ -25,7 +25,7 @@
 //   · xzy_updateHomeTopTitle：headerViewForSection:0 上叠加标题（详见 HCApply 注释）
 //
 //  【Mio 移植差异】
-//   · 总开关一开必建卡片（背景色空 → secondarySystemGroupedBackground 兜底，
+//   · 总开关一开必建卡片（背景色空 → secondarySystemGroupedBackgroundColor 兜底，
 //     对齐 XOS 默认色兜底语义，保证开关即可见）
 //   · 分组条共存：XOS 主页列表分组是浮层（XZYCLGSideRailView）不占 section 0 header，
 //     Mio 电报/侧边分组条占 header → 分组条开 = 追加式共存（原 header 在上、卡片接其下，
@@ -158,7 +158,7 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
 
     // 背景色（XOS CadisCardBgColor 带默认色兜底；Mio 空 = 分组卡片底色，保证开关即可见）
     UIColor *bg = HCColorForMode(cfg.hcCardBgColor, cfg.hcCardBgColorDark, dark);
-    card.backgroundColor = bg ?: [UIColor secondarySystemGroupedBackground];
+    card.backgroundColor = bg ?: [UIColor secondarySystemGroupedBackgroundColor];
 
     // 边框（XOS：宽度 > 0 才设置 border）
     if (cfg.hcBorderWidth > 0) {
@@ -215,7 +215,7 @@ static void HCApply(id vc) {
         }
         // 浅/深色实时换底色/边框（颜色为构建期取值，需随 trait 同步）
         UIColor *bg = HCColorForMode(cfg.hcCardBgColor, cfg.hcCardBgColorDark, dark);
-        card.backgroundColor = bg ?: [UIColor secondarySystemGroupedBackground];
+        card.backgroundColor = bg ?: [UIColor secondarySystemGroupedBackgroundColor];
         if (cfg.hcBorderWidth > 0) {
             UIColor *bc = HCColorForMode(cfg.hcBorderColor, cfg.hcBorderColorDark, dark)
                 ?: [UIColor separatorColor];
