@@ -1,4 +1,5 @@
 #import "SettingChatTopBarController.h"
+#import "../../Core/MioImageVault.h"
 #import "ChatTopBarBlacklistEditorVC.h"
 #import "../Modules/ChatTopBar/ChatTopBarConfig.h"
 #import "../../Core/ConfigManager.h"
@@ -47,29 +48,6 @@ static NSString *keyForTag(NSInteger tag) {
 }
 
 @implementation SettingChatTopBarController
-
-#pragma mark - 创建图片存储目录
-
-/// 确保图片存储目录存在，返回目录路径
-- (NSString *)ensureMiopngDirectory {
-    NSString *miopngPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/Miopng"];
-    NSFileManager *fm = [NSFileManager defaultManager];
-
-    if (![fm fileExistsAtPath:miopngPath]) {
-        NSError *error = nil;
-        BOOL success = [fm createDirectoryAtPath:miopngPath
-                      withIntermediateDirectories:YES
-                                       attributes:nil
-                                            error:&error];
-        if (!success) {
-            WPLog(@"Mio-Separator", @"创建Miopng目录失败: %@", error);
-        } else {
-            WPLog(@"Mio-Separator", @"创建Miopng目录成功: %@", miopngPath);
-        }
-    }
-
-    return miopngPath;
-}
 
 - (void)viewDidLoad {
     [super viewDidLoad];
@@ -399,13 +377,12 @@ static NSString *keyForTag(NSInteger tag) {
                 UIImage *image = (UIImage *)object;
                 WPLog(@"Mio-Separator", @"    图片加载成功: size=%.0fx%.0f", image.size.width, image.size.height);
                 NSData *pngData = UIImagePNGRepresentation(image);
-                NSString *miopngDir = [self ensureMiopngDirectory];  // 确保目录存在
-                NSString *iconPath = [miopngDir stringByAppendingPathComponent:@"separator_icon.png"];
-                WPLog(@"Mio-Separator", @"    写入路径: %@", iconPath);
-                [pngData writeToFile:iconPath atomically:YES];
+                // MioImageVault 双存储：Documents 文件 + Keychain 备份（重签覆盖安装后自动恢复）
+                [MioImageVault storeData:pngData
+                                 dirName:@"Miopng"
+                                fileName:@"separator_icon.png"
+                                     key:@"ChatTopBarSeparator"];
                 WPLog(@"Mio-Separator", @"    写入完成, data.length=%lu", (unsigned long)pngData.length);
-                // 文件已写入硬编码路径，不再需要存到 config
-                WPLog(@"Mio-Separator", @"    静态图标已保存到: %@", iconPath);
                 [picker dismissViewControllerAnimated:YES completion:^{
                     WPLog(@"Mio-Separator", @"    dismiss 完成，调用 buildUI");
                     [self wpRebuildWeChatTable];
@@ -421,15 +398,10 @@ static NSString *keyForTag(NSInteger tag) {
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
     WPLog(@"Mio-Separator", @"  当前值: text=%@", config.chatSeparatorText);
 
-    NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *miopngDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/Miopng"];
-
-    // 删除静态图片文件
-    NSString *iconPath = [miopngDir stringByAppendingPathComponent:@"separator_icon.png"];
-    if ([fm fileExistsAtPath:iconPath]) {
-        WPLog(@"Mio-Separator", @"  删除静态图片: %@", iconPath);
-        [fm removeItemAtPath:iconPath error:nil];
-    }
+    // 删除静态图片（文件 + Keychain 备份）
+    [MioImageVault removeForDirName:@"Miopng"
+                           fileName:@"separator_icon.png"
+                                key:@"ChatTopBarSeparator"];
 
     // 清空配置（只需清理文本，静态图片已删除）
     config.chatSeparatorText = nil;

@@ -1,4 +1,5 @@
 #import "HomeCardConfig.h"
+#import "../../Core/MioImageVault.h"
 
 @implementation HomeCardConfig
 
@@ -55,7 +56,7 @@
     ];
 }
 
-#pragma mark - 卡片图片（磁盘存储，浅/深色独立文件）
+#pragma mark - 卡片图片（MioImageVault 双存储：Documents 文件 + Keychain 备份，重装不丢）
 
 + (NSString *)imageDirectory {
     NSString *docsDir = [NSSearchPathForDirectoriesInDomains(
@@ -64,17 +65,15 @@
 }
 
 + (NSString *)lightImagePath {
-    NSString *dir = [self imageDirectory];
-    NSString *pngPath = [dir stringByAppendingPathComponent:@"HomeCardLight.png"];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:pngPath]) return pngPath;
-    return nil;
+    return [MioImageVault restorePathForDirName:@"MioHomeCard"
+                                       fileName:@"HomeCardLight.png"
+                                            key:@"HomeCardLight"];
 }
 
 + (NSString *)darkImagePath {
-    NSString *dir = [self imageDirectory];
-    NSString *pngPath = [dir stringByAppendingPathComponent:@"HomeCardDark.png"];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:pngPath]) return pngPath;
-    return nil;
+    return [MioImageVault restorePathForDirName:@"MioHomeCard"
+                                       fileName:@"HomeCardDark.png"
+                                            key:@"HomeCardDark"];
 }
 
 + (BOOL)hasLightImage {
@@ -86,13 +85,15 @@
 }
 
 + (void)deleteLightImage {
-    NSString *path = [[self imageDirectory] stringByAppendingPathComponent:@"HomeCardLight.png"];
-    [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+    [MioImageVault removeForDirName:@"MioHomeCard"
+                           fileName:@"HomeCardLight.png"
+                                key:@"HomeCardLight"];
 }
 
 + (void)deleteDarkImage {
-    NSString *path = [[self imageDirectory] stringByAppendingPathComponent:@"HomeCardDark.png"];
-    [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+    [MioImageVault removeForDirName:@"MioHomeCard"
+                           fileName:@"HomeCardDark.png"
+                                key:@"HomeCardDark"];
 }
 
 @end

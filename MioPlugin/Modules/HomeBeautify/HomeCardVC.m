@@ -2,6 +2,7 @@
 #import "HomeCardConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
+#import "../../Core/MioImageVault.h"
 #import "../SettingEntry/WPCommonUI.h"
 #import <PhotosUI/PhotosUI.h>
 #import <MobileCoreServices/MobileCoreServices.h>
@@ -449,19 +450,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
     PHPickerResult *result = results.firstObject;
     HomeCardPickerTarget target = self.pickerTarget;
 
-    NSString *imgDir = [HomeCardConfig imageDirectory];
-
-    NSFileManager *fm = [NSFileManager defaultManager];
-    BOOL isDir = NO;
-    if (![fm fileExistsAtPath:imgDir isDirectory:&isDir] || !isDir) {
-        [fm createDirectoryAtPath:imgDir withIntermediateDirectories:YES
-                        attributes:nil error:nil];
-    }
-
-    // 只保存为 PNG（同卡片背景页，只支持静态图片选择）
-    NSString *targetPath = (target == HomeCardPickerLight)
-        ? [imgDir stringByAppendingPathComponent:@"HomeCardLight.png"]
-        : [imgDir stringByAppendingPathComponent:@"HomeCardDark.png"];
+    // 只保存为 PNG（同卡片背景页，只支持静态图片选择）；路径与 Keychain 备份由 MioImageVault 统一管理
 
     [result.itemProvider loadDataRepresentationForTypeIdentifier:@"public.image"
                                                completionHandler:^(NSData *data, NSError *error) {
@@ -472,7 +461,12 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
             return;
         }
         dispatch_async(dispatch_get_main_queue(), ^{
-            [data writeToFile:targetPath atomically:YES];
+            [MioImageVault storeData:data
+                             dirName:@"MioHomeCard"
+                            fileName:(target == HomeCardPickerLight ?
+                                      @"HomeCardLight.png" : @"HomeCardDark.png")
+                                 key:(target == HomeCardPickerLight ?
+                                      @"HomeCardLight" : @"HomeCardDark")];
             [ConfigManager saveAll];
             [picker dismissViewControllerAnimated:YES completion:^{
                 [self buildUI];

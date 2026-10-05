@@ -6,6 +6,7 @@
 //
 
 #import "ChatTopBarConfig.h"
+#import "../../Core/MioImageVault.h"
 
 @implementation ChatTopBarConfig
 
@@ -63,11 +64,15 @@
 }
 
 + (NSString *)separatorIconPath {
-    return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/Miopng/separator_icon.png"];
+    return [MioImageVault restorePathForDirName:@"Miopng"
+                                       fileName:@"separator_icon.png"
+                                            key:@"ChatTopBarSeparator"];
 }
 
 + (BOOL)hasSeparatorIconFile {
-    return [[NSFileManager defaultManager] fileExistsAtPath:[self separatorIconPath]];
+    return [MioImageVault hasDataForDirName:@"Miopng"
+                                   fileName:@"separator_icon.png"
+                                        key:@"ChatTopBarSeparator"];
 }
 
 @end

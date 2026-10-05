@@ -1,4 +1,5 @@
 #import "CardBgConfig.h"
+#import "../../Core/MioImageVault.h"
 
 @implementation CardBgConfig
 
@@ -52,10 +53,9 @@
 }
 
 + (NSString *)backgroundImagePath {
-    NSString *dir = [self backgroundImageDirectory];
-    NSString *pngPath = [dir stringByAppendingPathComponent:@"MioCardBg.png"];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:pngPath]) return pngPath;
-    return nil;
+    return [MioImageVault restorePathForDirName:@"MioCardBackground"
+                                       fileName:@"MioCardBg.png"
+                                            key:@"CardBg"];
 }
 
 + (BOOL)hasBackgroundImage {
@@ -63,9 +63,9 @@
 }
 
 + (void)deleteBackgroundImage {
-    NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [self backgroundImageDirectory];
-    [fm removeItemAtPath:[dir stringByAppendingPathComponent:@"MioCardBg.png"] error:nil];
+    [MioImageVault removeForDirName:@"MioCardBackground"
+                           fileName:@"MioCardBg.png"
+                                key:@"CardBg"];
 }
 
 @end

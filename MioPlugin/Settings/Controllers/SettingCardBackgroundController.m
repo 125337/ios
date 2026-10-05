@@ -2,6 +2,7 @@
 #import "../../Modules/ProfileCardBg/CardBgConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
+#import "../../Core/MioImageVault.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
@@ -311,24 +312,6 @@
 
     PHPickerResult *result = results.firstObject;
 
-    NSString *bgDir = [NSSearchPathForDirectoriesInDomains(
-        NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    bgDir = [bgDir stringByAppendingPathComponent:@"MioCardBackground"];
-
-    NSFileManager *fm = [NSFileManager defaultManager];
-    BOOL isDir = NO;
-    if (![fm fileExistsAtPath:bgDir isDirectory:&isDir] || !isDir) {
-        [fm createDirectoryAtPath:bgDir withIntermediateDirectories:YES
-                        attributes:nil error:nil];
-    }
-
-    WPLog(@"CardBg-Diag", @"[PICKER] bgDir=%@", bgDir);
-
-    // 只保存为 PNG（因为只支持静态图片选择）
-    NSString *targetPath = [bgDir stringByAppendingPathComponent:@"MioCardBg.png"];
-
-    WPLog(@"CardBg-Diag", @"[PICKER] targetPath=%@", targetPath);
-
     [result.itemProvider loadDataRepresentationForTypeIdentifier:@"public.image"
                                                completionHandler:^(NSData *data, NSError *error) {
         if (error || !data) {
@@ -337,11 +320,12 @@
         }
         WPLog(@"CardBg-Diag", @"[PICKER] Image data loaded, size=%lu bytes", (unsigned long)data.length);
         dispatch_async(dispatch_get_main_queue(), ^{
-            BOOL written = [data writeToFile:targetPath atomically:YES];
-            WPLog(@"CardBg-Diag", @"[PICKER] Image write to %@: %@", targetPath, written ? @"SUCCESS" : @"FAILED");
-            // 文件已写入硬编码路径，不再需要存到 config
+            // MioImageVault 双存储：Documents 文件 + Keychain 备份（重签覆盖安装后自动恢复）
+            [MioImageVault storeData:data
+                             dirName:@"MioCardBackground"
+                            fileName:@"MioCardBg.png"
+                                 key:@"CardBg"];
             [ConfigManager saveAll];
-            WPLog(@"CardBg-Diag", @"[PICKER] Verify file exists: %d", [[NSFileManager defaultManager] fileExistsAtPath:targetPath]);
             [picker dismissViewControllerAnimated:YES completion:^{
                 [self buildUI];
             }];
