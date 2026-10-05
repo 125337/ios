@@ -61,6 +61,8 @@ typedef NS_ENUM(NSInteger, InputValueType) {
 - (void)buildUI;
 /// 微信引擎开关落地后的钩子（每页可重写：如提示重启生效）
 - (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on;
+/// switch 回调落地（写配置+saveAll；子类可重写做写前拦截，如互斥开关，拒绝时不调 super）
+- (void)wpHandleSwitchKey:(NSString *)key row:(id)row on:(BOOL)on haveOn:(BOOL)haveOn;
 /// 输入行点击流程（弹窗→保存→重建；子类可重写拦截做校验）
 - (void)wpRunInputFlow:(NSDictionary *)row;
 @end

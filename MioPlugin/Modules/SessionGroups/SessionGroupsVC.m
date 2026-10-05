@@ -1,11 +1,24 @@
 #import "SessionGroupsVC.h"
 #import "SessionGroupsConfig.h"
 #import "SessionGroupManagerVC.h"
+#import "../SideGroups/SideGroupsConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/LogManager.h"
 
 @implementation SessionGroupsVC
+
+// 互斥拦截（分组数据独立后电报/侧边不可同开）：开电报时侧边已开 → 提示并拒绝写入，
+// 重建页面回弹开关（与 SideGroupsVC 的同名拦截对称）
+- (void)wpHandleSwitchKey:(NSString *)key row:(id)row on:(BOOL)on haveOn:(BOOL)haveOn {
+    if ([key isEqualToString:@"sgEnabled"] && on && [SideGroupsConfig shared].sdEnabled) {
+        WPShowToast(@"与侧边分组互斥，请先关闭侧边分组");
+        [self wpRebuildWeChatTable];
+        [self buildUI];
+        return;
+    }
+    [super wpHandleSwitchKey:key row:row on:on haveOn:haveOn];
+}
 
 - (void)viewDidLoad {
     [super viewDidLoad];

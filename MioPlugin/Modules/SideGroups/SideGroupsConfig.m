@@ -26,6 +26,7 @@
         [ConfigDescriptor itemWithKey:@"sdFontCustom" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sdRailXOffset" type:ConfigValueTypeFloat default:@(0.0)],
         [ConfigDescriptor itemWithKey:@"sdShowUnreadBadge" type:ConfigValueTypeBool default:@(YES)],
+        [ConfigDescriptor itemWithKey:@"sdTabs" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"sdFilterPinned" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sdFilterDuplicate" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sdRecentDays" type:ConfigValueTypeInteger default:@(3)],

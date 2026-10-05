@@ -1,10 +1,23 @@
 #import "SideGroupsVC.h"
 #import "SideGroupsConfig.h"
 #import "SideGroupsManagerVC.h"
+#import "../SessionGroups/SessionGroupsConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 
 @implementation SideGroupsVC
+
+// 互斥拦截（分组数据独立后电报/侧边不可同开）：开侧边时电报已开 → 提示并拒绝写入，
+// 重建页面回弹开关（基类 wpHandleSwitchKey 为写前无拦截钩子，此处覆盖实现写前检查）
+- (void)wpHandleSwitchKey:(NSString *)key row:(id)row on:(BOOL)on haveOn:(BOOL)haveOn {
+    if ([key isEqualToString:@"sdEnabled"] && on && [SessionGroupsConfig shared].sgEnabled) {
+        WPShowToast(@"与电报分组互斥，请先关闭电报分组");
+        [self wpRebuildWeChatTable];
+        [self buildUI];
+        return;
+    }
+    [super wpHandleSwitchKey:key row:row on:on haveOn:haveOn];
+}
 
 - (void)viewDidLoad {
     [super viewDidLoad];

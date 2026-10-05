@@ -29,9 +29,33 @@
     [top presentViewController:nav animated:YES completion:nil];
 }
 
-// 侧边长按菜单：固定五项（rail 竖排语义，移位 = 上移/下移），不走电报 per-tab 长按配置
-+ (void)showActionsForTab:(SessionGroupsTab *)tab {
+// sheet 收起动画（0.3s）走完再 present，防两转场并发冲突
++ (void)openGroupManagerAfterMenuDismiss {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ [self openGroupManager]; });
+}
+
+// 长按入口：按分组自身 longPressAction 分发（SideGroupsTab side 语义，独立于电报裁剪集）
+//   0=跟随默认（固定动作菜单） 2=打开分组管理 5=切换置顶过滤 4=无操作
++ (void)showActionsForTab:(SideGroupsTab *)tab {
     if (!tab) return;
+    switch (tab.longPressAction) {
+        case 2:
+            [self openGroupManagerAfterMenuDismiss];
+            return;
+        case 5: {
+            BOOL nv = !tab.hidePinned;
+            [SideGroupsTab setHidePinned:nv forTabId:tab.tabId];
+            WPShowToast(nv ? @"已隐藏置顶会话" : @"已显示置顶会话");
+            return;
+        }
+        case 4:
+            return;
+        default:
+            break; // 0=跟随默认 → 固定动作菜单
+    }
+
+    // 固定动作菜单（rail 竖排语义，移位 = 上移/下移）
     NSMutableArray<NSString *> *titles = [NSMutableArray arrayWithObjects:
         @"分组管理",
         tab.hidePinned ? @"显示置顶会话" : @"隐藏置顶会话",
@@ -43,26 +67,24 @@
                          onButton:^(NSInteger index) {
         switch (index) {
             case 0:
-                // 菜单 sheet 收起动画（0.3s）走完再 present，防两转场并发冲突
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
-                               dispatch_get_main_queue(), ^{ [self openGroupManager]; });
+                [self openGroupManagerAfterMenuDismiss];
                 break;
             case 1: {
                 BOOL nv = !tab.hidePinned;
-                [SessionGroupsTab setHidePinned:nv forTabId:tab.tabId];
+                [SideGroupsTab setHidePinned:nv forTabId:tab.tabId];
                 WPShowToast(nv ? @"已隐藏置顶会话" : @"已显示置顶会话");
                 break;
             }
             case 2:
-                [SessionGroupsTab setTabId:tab.tabId disabled:YES];
+                [SideGroupsTab setTabId:tab.tabId disabled:YES];
                 WPShowToast(@"已停用分组");
                 break;
             case 3:
-                [SessionGroupsTab shiftVisibleTabId:tab.tabId by:-1];
+                [SideGroupsTab shiftVisibleTabId:tab.tabId by:-1];
                 WPShowToast(@"已上移");
                 break;
             case 4:
-                [SessionGroupsTab shiftVisibleTabId:tab.tabId by:1];
+                [SideGroupsTab shiftVisibleTabId:tab.tabId by:1];
                 WPShowToast(@"已下移");
                 break;
         }

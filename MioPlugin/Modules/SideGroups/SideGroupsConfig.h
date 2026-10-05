@@ -13,8 +13,9 @@ typedef NS_ENUM(NSInteger, SDSidePosition) {
 };
 
 /// 首页侧边分组配置
-/// 数据/切组/过滤引擎复用 SessionGroups 模块（SessionGroupsTab + SessionGroupsHook 快照），
-/// 本模块只负责侧边栏呈现（XOS XZYCLGSideRailView 移植）。
+/// 分组数据/长按动作为侧边独立一套（SideGroupsTab，键 sdTabs；首次启用自动复制电报分组
+/// 作为初始数据），本模块负责侧边栏呈现（XOS XZYCLGSideRailView 移植）与侧栏专属配置。
+/// 与电报分组互斥：设置页后开者提示拒绝。
 @interface SideGroupsConfig : NSObject <ConfigModule>
 
 @property (nonatomic, assign) BOOL sdEnabled;               // 启动首页侧边分组（总开关）
@@ -24,6 +25,7 @@ typedef NS_ENUM(NSInteger, SDSidePosition) {
 @property (nonatomic, assign) BOOL sdFontCustom;            // 自定义字号开关：关 → 跟随微信字体大小（dynamicLength）
 @property (nonatomic, assign) CGFloat sdRailXOffset;        // X 微调 -30~30（XOS applySideRailLeftXOffset:rightXOffset:）
 @property (nonatomic, assign) BOOL sdShowUnreadBadge;       // 显示未读角标
+@property (nonatomic, copy) NSString *sdTabs;               // 分组列表 JSON 数组（空 = 首次迁移电报分组或默认四组），由侧栏分组管理页维护
 
 // 字号解析（对齐电报 SessionGroupsStripView 链路）：自定义开 → sdRailFontSize（钳 9-20）；
 // 关 → 微信 [UIFont dynamicLength:base] 跟随微信字体大小；私有 API 缺失 → base
