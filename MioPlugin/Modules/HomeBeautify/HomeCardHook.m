@@ -40,8 +40,10 @@
 //     FUN_00136804：日历总高 = BgHeight + 128；FUN_001369e0/00136d4c/00136db8 三色兜底系统色
 //     位置（FUN_00151594 14959/15133/15457）：0上方 y=0、1中 y=Y%×(卡高-(日历高-8)) 叠卡片上、
 //     2下方 y=卡高+12+底部修正；卡片中时卡高钳制 max(卡高, 日历高-8)（FUN_00159c48）
-//     FUN_00159db8 布局：内区 (16,0,w-32,总高-8) 圆角14，月标题 15 Bold (12,4,内宽-24,20)，
-//     星期行 y=30 h=14 列宽 (内宽-24)/7 11 Medium，周末列 accent 色
+//     FUN_00159db8 布局（周视图）：内区 (16,0,w-32,总高-8) 圆角14，月标题 15 Bold + 副标题
+//     "本周 M.D - M.D"，星期行 11 Medium 周末列 accent，周日期行日号 17 + 农历 9pt（压缩表），
+//     今天 = SelectedColor 圆角块白字；点按 = cadis_calendarTapped（FUN_0015342c 弹层：
+//     城市 CadisWeatherCity / 中英文 CadisWeatherLang / 刷新）
 //   · 天气 CadisWeatherMode/Pos(0卡片内/1日历内/2联系人内)/OffsetX(默认85)/OffsetY(默认5)/
 //     Alpha(0-100，FUN_0014b634 应用 /100 钳[0,1]，默认90) + WeatherColor（药丸底色）
 //     FUN_00151594 内联段 15303-15451：SF Symbol 14 Medium 图标 + 12 Medium 白字，
@@ -55,6 +57,7 @@
 #import "../SessionGroups/SessionGroupsConfig.h"
 #import "../SideGroups/SideGroupsConfig.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioAlertHelper.h"
 #import "../../Config/WPColorUtil.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -76,6 +79,9 @@ static IMP orig_NMFVC_viewForHeader = NULL;
 static BOOL hcHookInstalled = NO;
 static NSCache<NSString *, UIImage *> *hcImageCache = nil;
 static NSString *hcLastGeoKey = nil;   // 配置指纹：变化才 reloadData 重建 header
+
+static void HCScheduleSync(id vc, NSTimeInterval delay);   // 定义在 Apply 段，日历菜单先用
+static void HCShowCalendarMenu(id vc);                     // 定义在天气徽章段，日历点按先用
 
 #pragma mark - Helpers
 
@@ -142,7 +148,7 @@ static NSString *HCGeoKey(void) {
     }
     return [NSString stringWithFormat:
             @"%d|%@|%.1f|%.1f|%@|%@|%.1f|%.1f|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%d"
-            @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@"
+            @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%ld"
             @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%@",
             cfg.hcEnabled, cfg.hcTitle ?: @"", cfg.hcTitleSize, cfg.hcTitleOffsetX,
             [HomeCardConfig lightImagePath] ?: @"", [HomeCardConfig darkImagePath] ?: @"",
@@ -152,6 +158,7 @@ static NSString *HCGeoKey(void) {
             HCStripOccupied() ? @"strip" : @"free", dark,
             cfg.hcWeatherEnabled, (long)cfg.hcWeatherPos, cfg.hcWeatherX, cfg.hcWeatherY,
             cfg.hcWeatherAlpha, cfg.hcWeatherBgColor ?: @"", cfg.hcWeatherBgColorDark ?: @"",
+            cfg.hcWeatherCity ?: @"", (long)cfg.hcWeatherLang,
             cfg.hcCalEnabled, (long)cfg.hcCalPos, cfg.hcCalY, cfg.hcCalBgHeight, cfg.hcCalScale,
             cfg.hcCalBgColor ?: @"", cfg.hcCalBgColorDark ?: @"",
             cfg.hcCalHolidayColor ?: @"", cfg.hcCalHolidayColorDark ?: @"",
@@ -179,12 +186,81 @@ static CGFloat HCHeaderExtra(HomeCardConfig *cfg) {
     return cardH + 12.0 + cfg.hcCardBottomFix + ((calOn && calPos != 1) ? calH : 0.0);
 }
 
-// ── 日历挂件（XOS FUN_00159db8 同构）：
-//    总高 = CadisCalendarBgHeight + 128（FUN_00136804）；内区 (16,0,w-32,总高-8) 圆角14 底色
-//    月标题 15 Bold (12,4,内宽-24,20)；星期行 y=30 h=14，列宽 (内宽-24)/7，11 Medium 居中，
-//    周末列 = CadisCalendarAccentColor（节假日颜色）；日期网格 6 行 12 Medium，
-//    今天 = CadisCalendarSelectedColor 圆底白字；内容缩放 = 钳制(50-200)/100（FUN_00147ed8） ──
-static UIView *HCBuildCalendar(CGFloat width, BOOL dark, HomeCardConfig *cfg) {
+// 农历日文本（1900-2100 压缩表通用算法；XOS 周历每个日期下显示农历（廿四/廿五…））
+static NSString *HCLunarDayText(NSDate *date) {
+    static const int li[] = {
+        0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,
+        0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,
+        0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,
+        0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,
+        0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,
+        0x06ca0,0x0b550,0x15355,0x04da0,0x0a5b0,0x14573,0x052b0,0x0a9a8,0x0e950,0x06aa0,
+        0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,
+        0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b6a0,0x195a6,
+        0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,
+        0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x05ac0,0x0ab60,0x096d5,0x092e0,
+        0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,
+        0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,
+        0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,
+        0x05aa0,0x076a3,0x096d0,0x04afb,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,
+        0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0,
+        0x14b63,0x09370,0x049f8,0x04970,0x064b0,0x168a6,0x0ea50,0x06b20,0x1a6c4,0x0aae0,
+        0x0a2e0,0x0d2e3,0x0c960,0x0d557,0x0d4a0,0x0da50,0x05d55,0x056a0,0x0a6d0,0x055d4,
+        0x052d0,0x0a9b8,0x0a950,0x0b4a0,0x0b6a6,0x0ad50,0x055a0,0x0aba4,0x0a5b0,0x052b0,
+        0x0b273,0x06930,0x07337,0x06aa0,0x0ad50,0x14b55,0x04b60,0x0a570,0x054e4,0x0d160,
+        0x0e968,0x0d520,0x0daa0,0x16aa6,0x056d0,0x04ae0,0x0a9d4,0x0a2d0,0x0d150,0x0f252,
+        0x0d520
+    };
+    NSCalendar *g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
+    NSDateComponents *bc = [NSDateComponents new];
+    bc.year = 1900; bc.month = 1; bc.day = 31;   // 农历 1900 年正月初一
+    NSDate *base = [g dateFromComponents:bc];
+    if (!base) return nil;
+    NSInteger days = [g components:NSCalendarUnitDay fromDate:base toDate:date options:0].day;
+    if (days < 0 || days > 73400) return nil;    // 2100 年底之外不处理
+
+    int info = li[0];
+    NSInteger y;
+    for (y = 1900; y < 2101; y++) {              // 扣年
+        info = li[y - 1900];
+        int lmp = info & 0xf;
+        long yd = 0;
+        for (int m = 1; m <= 12; m++) yd += ((info >> (16 - m)) & 1) ? 30 : 29;
+        if (lmp) yd += ((info >> (16 - lmp)) & 1) ? 30 : 29;
+        if (days < yd) break;
+        days -= (NSInteger)yd;
+    }
+    if (y > 2100) return nil;
+    int lmp = info & 0xf;
+    for (int m = 1; m <= 12; m++) {              // 扣月
+        long md = ((info >> (16 - m)) & 1) ? 30 : 29;
+        if (days < md) break;
+        days -= (NSInteger)md;
+        if (lmp == m) {
+            long lmd = ((info >> (16 - lmp)) & 1) ? 30 : 29;
+            if (days < lmd) break;
+            days -= (NSInteger)lmd;
+        }
+    }
+    NSInteger d = days + 1;
+    if (d < 1 || d > 30) return nil;
+    static NSString *const ones[] = { @"一", @"二", @"三", @"四", @"五", @"六", @"七", @"八", @"九", @"十" };
+    if (d == 10) return @"初十";
+    if (d == 20) return @"二十";
+    if (d == 30) return @"三十";
+    if (d < 10) return [NSString stringWithFormat:@"初%@", ones[d - 1]];
+    if (d < 20) return [NSString stringWithFormat:@"十%@", ones[d - 11]];
+    return [NSString stringWithFormat:@"廿%@", ones[d - 21]];
+}
+
+// ── 日历挂件（XOS FUN_00159db8 同构·周视图）：
+//    总高 = CadisCalendarBgHeight + 128；内区 (16,0,w-32,总高-8) 圆角14 底色；
+//    月标题 15 Bold (12,4,内宽-24,20) + 副标题"本周 M.D - M.D"（周日始）；
+//    星期行 y=30/42 列宽 (内宽-24)/7 11 Medium，周末列 = CadisCalendarAccentColor；
+//    周日期行：日号 17 Medium + 农历 9pt，今天 = CadisCalendarSelectedColor 圆角块白字；
+//    点按弹菜单（XOS cadis_calendarTapped → FUN_0015342c：城市/中英文/刷新）；
+//    内容缩放 = 钳制(50-200)/100（FUN_00147ed8）──
+static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *cfg) {
     CGFloat calH = cfg.hcCalBgHeight + 128.0;
     CGFloat gridW = width - 32.0 - 24.0;   // 内区宽再收 12 边距
     CGFloat cw = gridW / 7.0;
@@ -208,15 +284,10 @@ static UIView *HCBuildCalendar(CGFloat width, BOOL dark, HomeCardConfig *cfg) {
 
     NSCalendar *g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
     NSDate *now = [NSDate date];
-    NSDateComponents *cur = [g components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay
+    NSDateComponents *cur = [g components:NSCalendarUnitYear | NSCalendarUnitMonth
+                                        | NSCalendarUnitDay | NSCalendarUnitWeekday
                                  fromDate:now];
-    NSInteger daysInMonth = [g rangeOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitMonth
-                                  forDate:now].length;
-    NSDateComponents *first = [NSDateComponents new];
-    first.year = cur.year; first.month = cur.month; first.day = 1;
-    // 月首是周几（NSCalendarUnitWeekday：1=周日 → 0 基）
-    NSInteger firstWeekday = [g component:NSCalendarUnitWeekday
-                                 fromDate:[g dateFromComponents:first]] - 1;
+    NSInteger offset = cur.weekday - 1;   // 今天在周内的列（0 = 周日列，周日始）
 
     // 月标题（XOS 19822-19839：15 Bold，frame (12,4,内宽-24,20)）
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(28, 4, gridW, 20)];
@@ -225,10 +296,22 @@ static UIView *HCBuildCalendar(CGFloat width, BOOL dark, HomeCardConfig *cfg) {
     title.textColor = [UIColor labelColor];
     [cal addSubview:title];
 
-    // 星期行（XOS 19859-19880：y=30 h=14，11 Medium 居中，周末列 accent 色）
+    // 副标题"本周 10.4 - 10.10"（XOS 同款：本周范围，周日始）
+    NSDate *ws = [g dateByAddingUnit:NSCalendarUnitDay value:-offset toDate:now options:0];
+    NSDate *we = [g dateByAddingUnit:NSCalendarUnitDay value:6 - offset toDate:now options:0];
+    NSDateComponents *c1 = [g components:NSCalendarUnitMonth | NSCalendarUnitDay fromDate:ws];
+    NSDateComponents *c2 = [g components:NSCalendarUnitMonth | NSCalendarUnitDay fromDate:we];
+    UILabel *sub = [[UILabel alloc] initWithFrame:CGRectMake(28, 25, gridW, 13)];
+    sub.text = [NSString stringWithFormat:@"本周 %ld.%ld - %ld.%ld",
+                (long)c1.month, (long)c1.day, (long)c2.month, (long)c2.day];
+    sub.font = [UIFont systemFontOfSize:10.0];
+    sub.textColor = HCSecondaryLabel();
+    [cal addSubview:sub];
+
+    // 星期行（XOS：11 Medium 居中，周末列 accent 色）
     NSArray<NSString *> *weekNames = @[@"日", @"一", @"二", @"三", @"四", @"五", @"六"];
     for (NSInteger i = 0; i < 7; i++) {
-        UILabel *wd = [[UILabel alloc] initWithFrame:CGRectMake(28 + cw * i, 30, cw, 14)];
+        UILabel *wd = [[UILabel alloc] initWithFrame:CGRectMake(28 + cw * i, 42, cw, 14)];
         wd.text = weekNames[i];
         wd.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightMedium];
         wd.textAlignment = NSTextAlignmentCenter;
@@ -236,32 +319,45 @@ static UIView *HCBuildCalendar(CGFloat width, BOOL dark, HomeCardConfig *cfg) {
         [cal addSubview:wd];
     }
 
-    // 日期网格（6 行，今天 = 选中色圆底白字，周末列 = 节假日色）
-    CGFloat rowH = MAX((calH - 8.0 - 48.0) / 6.0, 1.0);
-    for (NSInteger i = 0; i < 42; i++) {
-        NSInteger day = i - firstWeekday + 1;
-        if (day < 1 || day > daysInMonth) continue;
-        NSInteger col = i % 7, row = i / 7;
-        CGRect cell = CGRectMake(28 + cw * col, 48 + rowH * row, cw, rowH);
-        BOOL isToday = (day == cur.day);
+    // 周日期行（日号 17 Medium + 农历 9pt；今天 = 选中色圆角块，两行白字；周末列 accent）
+    CGFloat cellY = 60.0;
+    CGFloat cellH = MAX(calH - 8.0 - cellY, 30.0);
+    for (NSInteger i = 0; i < 7; i++) {
+        NSDate *d = [g dateByAddingUnit:NSCalendarUnitDay value:i - offset toDate:now options:0];
+        NSDateComponents *dc = [g components:NSCalendarUnitDay fromDate:d];
+        BOOL isToday = (i == offset);
+        BOOL weekend = (i == 0 || i == 6);
+        CGFloat cx = 28 + cw * i;
         if (isToday) {
-            CGFloat d = MIN(cw, rowH) - 8.0;
-            if (d < 1.0) d = 1.0;
-            UIView *dot = [[UIView alloc] initWithFrame:
-                           CGRectMake(cell.origin.x + (cw - d) / 2.0,
-                                      cell.origin.y + (rowH - d) / 2.0, d, d)];
-            dot.backgroundColor = selected;
-            dot.layer.cornerRadius = d / 2.0;
-            [cal addSubview:dot];
+            CGFloat pw = MAX(cw - 6.0, 1.0), ph = MAX(cellH - 2.0, 1.0);
+            UIView *pill = [[UIView alloc] initWithFrame:
+                            CGRectMake(cx + (cw - pw) / 2.0, cellY + 1.0, pw, ph)];
+            pill.backgroundColor = selected;
+            pill.layer.cornerRadius = 10.0;
+            [cal addSubview:pill];
         }
-        UILabel *dl = [[UILabel alloc] initWithFrame:cell];
-        dl.text = [NSString stringWithFormat:@"%ld", (long)day];
-        dl.font = [UIFont systemFontOfSize:12.0 weight:UIFontWeightMedium];
+        UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(cx, cellY + 2.0, cw, 22)];
+        dl.text = [NSString stringWithFormat:@"%ld", (long)dc.day];
+        dl.font = [UIFont systemFontOfSize:17.0 weight:UIFontWeightMedium];
         dl.textAlignment = NSTextAlignmentCenter;
-        dl.textColor = isToday ? UIColor.whiteColor
-                               : ((col == 0 || col == 6) ? accent : [UIColor labelColor]);
+        dl.textColor = isToday ? UIColor.whiteColor : (weekend ? accent : [UIColor labelColor]);
         [cal addSubview:dl];
+
+        UILabel *ll = [[UILabel alloc] initWithFrame:CGRectMake(cx, cellY + 26.0, cw, 12)];
+        ll.text = HCLunarDayText(d) ?: @"";
+        ll.font = [UIFont systemFontOfSize:9.0];
+        ll.textAlignment = NSTextAlignmentCenter;
+        ll.textColor = isToday ? UIColor.whiteColor : (weekend ? accent : HCSecondaryLabel());
+        [cal addSubview:ll];
     }
+
+    // 点按弹菜单（XOS cadis_calendarTapped：设置城市 / 中文-英文 / 刷新天气）
+    HCCalTapTarget *tgt = [HCCalTapTarget new];
+    tgt.block = ^{ HCShowCalendarMenu(vc); };
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:tgt
+                                                                          action:@selector(hcOnTap)];
+    [cal addGestureRecognizer:tap];
+
     return cal;
 }
 
@@ -335,10 +431,18 @@ static void HCLayoutWeatherBadge(UIView *badge, UIImageView *icon, UILabel *labe
     label.frame = CGRectMake(10.0 + iw + 4.0, (bh - lh) / 2.0, lw, lh);
 }
 
-// wttr.in 拉天气（XOS 默认 source=wttr，CadisWeatherQHost/QKey 为和风付费源不移植），
-// 成功才写缓存并回调（主线程）
+// wttr.in 拉天气（XOS 默认 source=wttr；城市=CadisWeatherCity、语言=CadisWeatherLang 同键语义：
+// 城市非空拼路径，空 = 按 IP 自动定位；语言 0 中文 1 英文；成功才写缓存并回调主线程）
 static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
-    NSURL *url = [NSURL URLWithString:@"https://wttr.in/?format=%C|%t&lang=zh"];
+    HomeCardConfig *wcfg = [HomeCardConfig shared];
+    NSString *cityQ = @"";
+    NSString *enc = [wcfg.hcWeatherCity stringByAddingPercentEncodingWithAllowedCharacters:
+                     [NSCharacterSet URLQueryAllowedCharacterSet]];
+    if (enc.length > 0) cityQ = [NSString stringWithFormat:@"/%@", enc];
+    NSString *lang = (wcfg.hcWeatherLang == 1) ? @"en" : @"zh";
+    NSString *urlStr = [NSString stringWithFormat:
+                        @"https://wttr.in%@/?format=%%C|%%t|%%l&lang=%@", cityQ, lang];
+    NSURL *url = [NSURL URLWithString:urlStr];
     if (!url) return;
     [[[NSURLSession sharedSession] dataTaskWithURL:url
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
@@ -357,7 +461,13 @@ static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
             temp = [temp stringByTrimmingCharactersInSet:
                     [NSCharacterSet whitespaceAndNewlineCharacterSet]];
             if (temp.length == 0) return;
-            hcWeatherText = [NSString stringWithFormat:@"%@° %@", temp, desc];
+            // XOS 同款文本带城市名："新余市 18° Overcast"；配置城市优先，否则用 wttr 返回位置
+            NSString *loc = parts.count > 2 ? [parts[2] stringByTrimmingCharactersInSet:
+                              [NSCharacterSet whitespaceAndNewlineCharacterSet]] : @"";
+            NSString *cityName = wcfg.hcWeatherCity.length > 0 ? wcfg.hcWeatherCity : loc;
+            hcWeatherText = cityName.length > 0
+                ? [NSString stringWithFormat:@"%@ %@° %@", cityName, temp, desc]
+                : [NSString stringWithFormat:@"%@° %@", temp, desc];
             hcWeatherSym = HCWeatherSymbolForDesc(desc);
             hcWeatherAt = [NSDate date].timeIntervalSince1970;
             dispatch_async(dispatch_get_main_queue(), ^{ done(hcWeatherText, hcWeatherSym); });
@@ -377,17 +487,18 @@ static void HCAddWeatherBadge(UIView *container, HomeCardConfig *cfg, BOOL dark,
     UIView *badge = [[UIView alloc] initWithFrame:CGRectZero];
     badge.tag = kHCWeatherTag;
     badge.userInteractionEnabled = NO;
+    // XOS 默认 = 白底黑字（FUN_00292dc0 底色兜底 + FUN_0029bfa0 文字色），日历内无缝、卡片内浮层
     badge.backgroundColor = HCColorForMode(cfg.hcWeatherBgColor, cfg.hcWeatherBgColorDark, dark)
-        ?: [UIColor systemBlueColor];
+        ?: [UIColor secondarySystemGroupedBackgroundColor];
     // XOS FUN_0014b634：透明度存 0-100，应用 /100 并钳制 [0,1]（默认 90 → 0.9）
     badge.alpha = MIN(MAX(cfg.hcWeatherAlpha / 100.0, 0.0), 1.0);
 
     UIImageView *icon = [[UIImageView alloc] initWithFrame:CGRectZero];
     icon.contentMode = UIViewContentModeScaleAspectFit;
-    icon.tintColor = UIColor.whiteColor;
+    icon.tintColor = [UIColor labelColor];
     UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
     label.font = [UIFont systemFontOfSize:12.0 weight:UIFontWeightMedium];
-    label.textColor = UIColor.whiteColor;
+    label.textColor = [UIColor labelColor];
 
     NSString *sym = @"cloud.sun.fill", *text = @"--";
     if (hcWeatherText && [NSDate date].timeIntervalSince1970 - hcWeatherAt < kHCWeatherCacheInterval) {
@@ -414,6 +525,51 @@ static void HCAddWeatherBadge(UIView *container, HomeCardConfig *cfg, BOOL dark,
                                  cfg.hcWeatherX, xBase, xAvail, cfg.hcWeatherY, yBase, yAvail);
         });
     }
+}
+
+// 手势 target（block 转发；UIGestureRecognizer 持有 target，随日历视图释放）
+@interface HCCalTapTarget : NSObject
+@property (nonatomic, copy) void (^block)(void);
+@end
+@implementation HCCalTapTarget
+- (void)hcOnTap { if (self.block) self.block(); }
+@end
+
+// 日历点按菜单（XOS cadis_calendarTapped → FUN_0015342c 弹层同功能项：
+// 设置城市（CadisWeatherCity）/ 中文-英文（CadisWeatherLang）/ 刷新天气）
+static void HCShowCalendarMenu(id vc) {
+    if (!vc || ![vc isKindOfClass:[UIViewController class]]) return;
+    HomeCardConfig *cfg = [HomeCardConfig shared];
+    NSString *langItem = (cfg.hcWeatherLang == 1) ? @"切换中文天气" : @"切换英文天气";
+    __weak id wvc = vc;
+    [MioAlertHelper showMenuAlert:@"日历设置"
+                          buttons:@[@"设置城市", langItem, @"刷新天气"]
+                        onButton:^(NSInteger index) {
+        if (index == 0) {
+            [MioAlertHelper showInputAlert:@"设置天气城市"
+                                   message:@"留空则自动按 IP 定位"
+                              initialText:(cfg.hcWeatherCity ?: @"")
+                              placeholder:@"如：新余市"
+                                  keyboard:UIKeyboardTypeDefault
+                                    secure:NO
+                                onConfirm:^(NSString *input) {
+                HomeCardConfig *c = [HomeCardConfig shared];
+                c.hcWeatherCity = [input stringByTrimmingCharactersInSet:
+                                   [NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
+                HCScheduleSync(wvc, 0.1);
+            }];
+        } else if (index == 1) {
+            HomeCardConfig *c = [HomeCardConfig shared];
+            c.hcWeatherLang = (c.hcWeatherLang == 1) ? 0 : 1;
+            hcWeatherText = nil;   // 语言切换丢弃缓存，重建后立即拉新语言
+            hcWeatherAt = 0;
+            HCScheduleSync(wvc, 0.1);
+        } else if (index == 2) {
+            hcWeatherText = nil;
+            hcWeatherAt = 0;
+            HCScheduleSync(wvc, 0.0);
+        }
+    }];
 }
 
 // origHeight > 0 且 origView 非空 = 追加式共存（分组条 header 在上，卡片接其下）；
@@ -490,7 +646,7 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
         } else {
             calY = origHeight + cardH + 12.0 + cfg.hcCardBottomFix;
         }
-        UIView *cal = HCBuildCalendar(width, dark, cfg);
+        UIView *cal = HCBuildCalendar(vc, width, dark, cfg);
         cal.tag = kHCCalTag;
         cal.frame = CGRectMake(0, calY, width, calH);
         // 内容缩放（XOS FUN_00147ed8：≤0 按 100，钳制 50-200，/100 应用）

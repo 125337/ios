@@ -38,6 +38,8 @@
         [ConfigDescriptor itemWithKey:@"hcWeatherAlpha" type:ConfigValueTypeFloat default:@(90)],
         [ConfigDescriptor itemWithKey:@"hcWeatherBgColor" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"hcWeatherBgColorDark" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcWeatherCity" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcWeatherLang" type:ConfigValueTypeInteger default:@(0)],
         // 日历（XOS CadisCalendar*，Pos 未设默认 1 = 卡片中）
         [ConfigDescriptor itemWithKey:@"hcCalEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"hcCalPos" type:ConfigValueTypeInteger default:@(1)],

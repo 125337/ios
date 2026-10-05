@@ -30,6 +30,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) CGFloat   hcWeatherAlpha;      // 透明度 0-100（默认 90，应用时 /100，CadisWeatherAlpha）
 @property (nonatomic, copy)   NSString *hcWeatherBgColor;      // 背景颜色 hex（CadisWeatherColor）
 @property (nonatomic, copy)   NSString *hcWeatherBgColorDark;  // 背景颜色深色 hex
+@property (nonatomic, copy)   NSString *hcWeatherCity;         // 天气城市（空 = wttr.in 按 IP 自动定位，CadisWeatherCity）
+@property (nonatomic, assign) NSInteger hcWeatherLang;         // 天气语言 0中文 1英文（CadisWeatherLang，日历点按菜单可改）
 
 // 日历挂件（XOS CadisCalendar* 同构）
 @property (nonatomic, assign) BOOL      hcCalEnabled;        // 显示日历（CadisCalendarMode）

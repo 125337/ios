@@ -619,7 +619,13 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     WPWGroup *g = (WPWGroup *)group;
     if (![g isKindOfClass:[WPWGroup class]]) return cy;
 
-    CGFloat segW = names.count * 44.0 + 14.0;
+    // 宽度按最长项文字自适应（4 个汉字 ≈ 74pt），避免"卡片内部"这类文字被截断
+    CGFloat maxChars = 1;
+    for (NSString *n in names) {
+        maxChars = MAX(maxChars, (CGFloat)n.length);
+    }
+    CGFloat perSeg = MAX(44.0, maxChars * 15.0 + 14.0);
+    CGFloat segW = names.count * perSeg + 14.0;
     UISegmentedControl *seg = [[UISegmentedControl alloc] initWithItems:names];
     seg.frame = CGRectMake(0, 0, segW, 30.0);
     seg.selectedSegmentIndex = MAX(0, MIN(index, (NSInteger)names.count - 1));
