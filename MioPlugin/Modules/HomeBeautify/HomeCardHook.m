@@ -1,4 +1,4 @@
-﻿//
+﻿﻿//
 //  HomeCardHook.m
 //  MioPlugin
 //
@@ -70,6 +70,9 @@ static const NSInteger kHCTitleTag = 0x4D54;     // 标题 label（挂在 header
 static const NSInteger kHCImageTag = 0x4D49;     // 卡内背景图（挂在卡片上）
 static const NSInteger kHCCalTag = 0x4D45;       // 日历挂件（挂在 header 容器上）
 static const NSInteger kHCWeatherTag = 0x4D46;   // 天气徽章（挂在 header 容器上）
+
+// 手势 target 关联键（objc_setAssociatedObject 键必须 const void* 自指指针）
+static const void *kHCTapTargetKey = &kHCTapTargetKey;
 
 static IMP orig_NMFVC_viewWillAppear = NULL;
 static IMP orig_NMFVC_viewDidAppear = NULL;
@@ -361,6 +364,9 @@ static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *
     tgt.block = ^{ HCShowCalendarMenu(vc); };
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:tgt
                                                                           action:@selector(hcOnTap)];
+    // UIGestureRecognizer 对 target 非强持有（Frida 实证：局部 tgt 释放后 _target 变 nil，
+    // 手势识别发 action 无接收者 → 点不动）；关联手势强持有，生命周期随手势/视图
+    objc_setAssociatedObject(tap, kHCTapTargetKey, tgt, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [cal addGestureRecognizer:tap];
 
     return cal;
@@ -528,6 +534,8 @@ static void HCAddWeatherBadge(id vc, UIView *container, HomeCardConfig *cfg, BOO
     tgt.block = ^{ HCShowCalendarMenu(vc); };
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:tgt
                                                                           action:@selector(hcOnTap)];
+    // 同日历：手势对 target 非强持有（Frida 实证），关联强持有防 tgt 提前释放
+    objc_setAssociatedObject(tap, kHCTapTargetKey, tgt, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [badge addGestureRecognizer:tap];
 
     if (!(hcWeatherText && [NSDate date].timeIntervalSince1970 - hcWeatherAt < kHCWeatherCacheInterval)) {
