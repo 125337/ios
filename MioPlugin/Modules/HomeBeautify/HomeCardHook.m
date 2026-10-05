@@ -58,6 +58,7 @@
 #import "../SideGroups/SideGroupsConfig.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
+#import "../../Core/ConfigManager.h"
 #import "../../Config/WPColorUtil.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -578,11 +579,13 @@ static void HCShowCalendarMenu(id vc) {
                 HomeCardConfig *c = [HomeCardConfig shared];
                 c.hcWeatherCity = [input stringByTrimmingCharactersInSet:
                                    [NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
+                [ConfigManager saveAll];   // 落盘（否则划后台/重启丢失）
                 HCScheduleSync(wvc, 0.1);
             }];
         } else if (index == 1) {
             HomeCardConfig *c = [HomeCardConfig shared];
             c.hcWeatherLang = (c.hcWeatherLang == 1) ? 0 : 1;
+            [ConfigManager saveAll];   // 落盘
             hcWeatherText = nil;   // 语言切换丢弃缓存，重建后立即拉新语言
             hcWeatherAt = 0;
             HCScheduleSync(wvc, 0.1);
