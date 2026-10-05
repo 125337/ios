@@ -413,10 +413,19 @@ static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
     BOOL en = (wcfg.hcWeatherLang == 1);
     NSString *city = [wcfg.hcWeatherCity stringByTrimmingCharactersInSet:
                       [NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
+    NSString *cityDisp = city;      // 中文模式显示名（双名前段）
+    NSString *cityQuery = city;     // URL 查询名（双名后段）
+    NSRange pipe = [city rangeOfString:@"|"];
+    if (pipe.location != NSNotFound && pipe.location > 0 && pipe.location < city.length - 1) {
+        cityDisp = [[city substringToIndex:pipe.location]
+                    stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        cityQuery = [[city substringFromIndex:pipe.location + pipe.length]
+                     stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    }
     NSString *lang = en ? @"en" : @"zh";
     NSString *urlStr;
-    if (city.length > 0) {
-        NSString *enc = [city stringByAddingPercentEncodingWithAllowedCharacters:
+    if (cityQuery.length > 0) {
+        NSString *enc = [cityQuery stringByAddingPercentEncodingWithAllowedCharacters:
                          [NSCharacterSet URLQueryAllowedCharacterSet]];
         urlStr = [NSString stringWithFormat:@"https://wttr.in/%@?format=j1&lang=%@", enc, lang];
     } else {
@@ -449,9 +458,10 @@ static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
                 && [areas[0] isKindOfClass:[NSDictionary class]]) {
                 areaName = HCJ1Value(areas[0], @"areaName") ?: @"";
             }
-            // 城市名（XOS 18329 同款分支）：中文模式且配置城市非空 → 配置名；否则英文名
-            NSString *cityName = (!en && city.length > 0) ? city
-                               : (areaName.length > 0 ? areaName : city);
+            // 城市名（XOS 18329 同款分支 + 双名扩展）：中文模式 → 双名前段；否则 areaName
+            // 英文标准名（拼音查询下 geonames 命中正确，如 xinyu → Xinyu），失败回落查询名
+            NSString *cityName = (!en && cityDisp.length > 0) ? cityDisp
+                               : (areaName.length > 0 ? areaName : cityQuery);
             // XOS 同款文本："新余市 17° Overcast" / 英文模式 "Xinyu 17° Overcast"
             hcWeatherText = cityName.length > 0
                 ? [NSString stringWithFormat:@"%@ %@° %@", cityName, temp, descShow]
@@ -542,9 +552,9 @@ static void HCShowCalendarMenu(id vc) {
                         onButton:^(NSInteger index) {
         if (index == 0) {
             [MioAlertHelper showInputAlert:@"设置天气城市"
-                                   message:@"留空则自动按 IP 定位"
+                                   message:@"留空则自动按 IP 定位；可填\"中文名|拼音\"双名（如 新余市|xinyu），英文名供查询与英文模式显示"
                               initialText:(cfg.hcWeatherCity ?: @"")
-                              placeholder:@"如：新余市"
+                              placeholder:@"如：新余市|xinyu"
                                   keyboard:UIKeyboardTypeDefault
                                     secure:NO
                                 onConfirm:^(NSString *input) {
