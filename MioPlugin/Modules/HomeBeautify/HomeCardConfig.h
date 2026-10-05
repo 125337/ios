@@ -22,6 +22,28 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy)   NSString *hcCardBgColor;       // 背景颜色 hex（空 = 透明）
 @property (nonatomic, copy)   NSString *hcCardBgColorDark;   // 背景颜色深色 hex（空 = 用浅色值）
 
+// 天气挂件（XOS CadisWeather* 同构）
+@property (nonatomic, assign) BOOL      hcWeatherEnabled;    // 显示天气（CadisWeatherMode）
+@property (nonatomic, assign) NSInteger hcWeatherPos;        // 显示位置 0卡片内 1日历内 2联系人内（CadisWeatherPos）
+@property (nonatomic, assign) CGFloat   hcWeatherX;          // X位置%（默认 85，CadisWeatherOffsetX）
+@property (nonatomic, assign) CGFloat   hcWeatherY;          // Y位置%（默认 5，CadisWeatherOffsetY）
+@property (nonatomic, assign) CGFloat   hcWeatherAlpha;      // 透明度 0-100（默认 90，应用时 /100，CadisWeatherAlpha）
+@property (nonatomic, copy)   NSString *hcWeatherBgColor;      // 背景颜色 hex（CadisWeatherColor）
+@property (nonatomic, copy)   NSString *hcWeatherBgColorDark;  // 背景颜色深色 hex
+
+// 日历挂件（XOS CadisCalendar* 同构）
+@property (nonatomic, assign) BOOL      hcCalEnabled;        // 显示日历（CadisCalendarMode）
+@property (nonatomic, assign) NSInteger hcCalPos;            // 显示位置 0上 1中 2下（CadisCalendarPos，未设默认 1）
+@property (nonatomic, assign) CGFloat   hcCalY;              // Y位置%（默认 50，CadisCalendarOffsetY）
+@property (nonatomic, assign) CGFloat   hcCalBgHeight;       // 背景高度（默认 0，总高 = 值 + 128，CadisCalendarBgHeight）
+@property (nonatomic, assign) CGFloat   hcCalScale;          // 内容缩放%（默认 100，应用钳制 50-200，CadisCalendarContentScale）
+@property (nonatomic, copy)   NSString *hcCalBgColor;          // 背景颜色 hex（CadisCalendarColor）
+@property (nonatomic, copy)   NSString *hcCalBgColorDark;
+@property (nonatomic, copy)   NSString *hcCalHolidayColor;     // 节假日颜色 hex（CadisCalendarAccentColor）
+@property (nonatomic, copy)   NSString *hcCalHolidayColorDark;
+@property (nonatomic, copy)   NSString *hcCalSelectedColor;    // 选中日期颜色 hex（CadisCalendarSelectedColor）
+@property (nonatomic, copy)   NSString *hcCalSelectedColorDark;
+
 // 卡片图片（磁盘文件，浅/深色各一张，与卡片背景图的 MioCardBackground 目录相互独立）
 + (NSString *)imageDirectory;
 + (nullable NSString *)lightImagePath;   // 浅色模式图片路径（无 = 未设置）

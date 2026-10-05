@@ -208,6 +208,182 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                         darkValue:(config.hcCardBgColorDark.length > 0 ? config.hcCardBgColorDark : nil)];
 
     y = [self finishGroup:g3 atY:y height:cy];
+    y += 8;
+
+    // ──── 卡片4：天气（XOS CadisWeather* 同构：Mode/Pos/OffsetX/OffsetY/Alpha/Color） ────
+    y = [self addSectionHeader:@"天气" y:y width:w];
+    UIView *g4 = [self addTableGroupAtY:y width:w];
+    cy = 0;
+
+    cy = [self addSwitchRowInGroup:g4
+                             title:@"显示天气"
+                              desc:nil
+                               key:@"hcWeatherEnabled"
+                              isOn:config.hcWeatherEnabled
+                                cy:cy
+                             width:w];
+    cy = [self addSeparatorInGroup:g4 cy:cy width:w];
+
+    // 显示位置（XOS CadisWeatherPos：0卡片内 1日历内 2联系人内，分段选择器同电报分组）
+    cy = [self addSegmentRowInGroup:g4
+                              title:@"显示位置"
+                                key:@"hcWeatherPos"
+                              names:@[@"卡片内部", @"日历内部", @"联系人内部"]
+                              index:config.hcWeatherPos
+                                 cy:cy
+                              width:w];
+    cy = [self addSeparatorInGroup:g4 cy:cy width:w];
+
+    // X位置（百分比，默认 85 = CadisWeatherOffsetX 未设兜底）
+    cy = [self addInputRowInGroup:g4
+                            title:@"X位置"
+                              key:@"hcWeatherX"
+                            value:config.hcWeatherX != 85 ? [self numText:config.hcWeatherX] : nil
+                             hint:@"85"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置X位置"
+                     alertMessage:@"天气水平位置百分比（0-100），默认 85"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g4 cy:cy width:w];
+
+    // Y位置（百分比，默认 5 = CadisWeatherOffsetY 未设兜底 5.0）
+    cy = [self addInputRowInGroup:g4
+                            title:@"Y位置"
+                              key:@"hcWeatherY"
+                            value:config.hcWeatherY != 5 ? [self numText:config.hcWeatherY] : nil
+                             hint:@"5"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置Y位置"
+                     alertMessage:@"天气垂直位置百分比（0-100），默认 5"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g4 cy:cy width:w];
+
+    // 透明度（0-100，应用时 /100，XOS FUN_0014b634：存 90 → alpha 0.9）
+    cy = [self addInputRowInGroup:g4
+                            title:@"透明度"
+                              key:@"hcWeatherAlpha"
+                            value:config.hcWeatherAlpha != 90 ? [self numText:config.hcWeatherAlpha] : nil
+                             hint:@"90"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置透明度"
+                     alertMessage:@"天气背景透明度（0-100），默认 90"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g4 cy:cy width:w];
+
+    // 背景颜色（XOS CadisWeatherColor 药丸底色，浅/深双预览）
+    cy = [self addColorRowInGroup:g4
+                            title:@"背景颜色"
+                              key:@"hcWeatherBgColor"
+                            value:(config.hcWeatherBgColor.length > 0 ? config.hcWeatherBgColor : nil)
+                               cy:cy
+                            width:w
+                          darkKey:@"hcWeatherBgColorDark"
+                        darkValue:(config.hcWeatherBgColorDark.length > 0 ? config.hcWeatherBgColorDark : nil)];
+
+    y = [self finishGroup:g4 atY:y height:cy];
+    y += 8;
+
+    // ──── 卡片5：日历（XOS CadisCalendar* 同构：Mode/Pos/OffsetY/BgHeight/ContentScale/三色） ────
+    y = [self addSectionHeader:@"日历" y:y width:w];
+    UIView *g5 = [self addTableGroupAtY:y width:w];
+    cy = 0;
+
+    cy = [self addSwitchRowInGroup:g5
+                             title:@"显示日历"
+                              desc:nil
+                               key:@"hcCalEnabled"
+                              isOn:config.hcCalEnabled
+                                cy:cy
+                             width:w];
+    cy = [self addSeparatorInGroup:g5 cy:cy width:w];
+
+    // 显示位置（XOS CadisCalendarPos：0上 1中 2下，未设默认 1）
+    cy = [self addSegmentRowInGroup:g5
+                              title:@"显示位置"
+                                key:@"hcCalPos"
+                              names:@[@"卡片上方", @"卡片中", @"卡片下方"]
+                              index:config.hcCalPos
+                                 cy:cy
+                              width:w];
+    cy = [self addSeparatorInGroup:g5 cy:cy width:w];
+
+    // Y位置（百分比，默认 50 = CadisCalendarOffsetY 未设兜底 50.0，仅"卡片中"生效）
+    cy = [self addInputRowInGroup:g5
+                            title:@"Y位置"
+                              key:@"hcCalY"
+                            value:config.hcCalY != 50 ? [self numText:config.hcCalY] : nil
+                             hint:@"50"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置Y位置"
+                     alertMessage:@"日历垂直位置百分比（0-100），默认 50，显示位置为卡片中时生效"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g5 cy:cy width:w];
+
+    // 背景高度（默认 0，日历总高 = 值 + 128，CadisCalendarBgHeight）
+    cy = [self addInputRowInGroup:g5
+                            title:@"背景高度"
+                              key:@"hcCalBgHeight"
+                            value:config.hcCalBgHeight != 0 ? [self numText:config.hcCalBgHeight] : nil
+                             hint:@"0"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置背景高度"
+                     alertMessage:@"日历额外背景高度，默认 0（总高 = 值 + 128）"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g5 cy:cy width:w];
+
+    // 内容缩放（百分比，默认 100，应用钳制 50-200；预览数值带 %）
+    cy = [self addInputRowInGroup:g5
+                            title:@"内容缩放"
+                              key:@"hcCalScale"
+                            value:(config.hcCalScale != 100
+                                       ? [NSString stringWithFormat:@"%@%%", [self numText:config.hcCalScale]]
+                                       : nil)
+                             hint:@"100%"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置内容缩放"
+                     alertMessage:@"日历内容缩放百分比（50-200），默认 100"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g5 cy:cy width:w];
+
+    // 背景颜色（XOS CadisCalendarColor）
+    cy = [self addColorRowInGroup:g5
+                            title:@"背景颜色"
+                              key:@"hcCalBgColor"
+                            value:(config.hcCalBgColor.length > 0 ? config.hcCalBgColor : nil)
+                               cy:cy
+                            width:w
+                          darkKey:@"hcCalBgColorDark"
+                        darkValue:(config.hcCalBgColorDark.length > 0 ? config.hcCalBgColorDark : nil)];
+    cy = [self addSeparatorInGroup:g5 cy:cy width:w];
+
+    // 节假日颜色（XOS CadisCalendarAccentColor，周末/节假日日期色）
+    cy = [self addColorRowInGroup:g5
+                            title:@"节假日颜色"
+                              key:@"hcCalHolidayColor"
+                            value:(config.hcCalHolidayColor.length > 0 ? config.hcCalHolidayColor : nil)
+                               cy:cy
+                            width:w
+                          darkKey:@"hcCalHolidayColorDark"
+                        darkValue:(config.hcCalHolidayColorDark.length > 0 ? config.hcCalHolidayColorDark : nil)];
+    cy = [self addSeparatorInGroup:g5 cy:cy width:w];
+
+    // 选中日期颜色（XOS CadisCalendarSelectedColor，今天圆点底色）
+    cy = [self addColorRowInGroup:g5
+                            title:@"选中日期颜色"
+                              key:@"hcCalSelectedColor"
+                            value:(config.hcCalSelectedColor.length > 0 ? config.hcCalSelectedColor : nil)
+                               cy:cy
+                            width:w
+                          darkKey:@"hcCalSelectedColorDark"
+                        darkValue:(config.hcCalSelectedColorDark.length > 0 ? config.hcCalSelectedColorDark : nil)];
+
+    y = [self finishGroup:g5 atY:y height:cy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);

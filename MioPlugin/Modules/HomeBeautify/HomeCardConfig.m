@@ -30,6 +30,26 @@
         [ConfigDescriptor itemWithKey:@"hcBorderColorDark" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"hcCardBgColor" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"hcCardBgColorDark" type:ConfigValueTypeString default:@""],
+        // 天气（XOS CadisWeather*）
+        [ConfigDescriptor itemWithKey:@"hcWeatherEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hcWeatherPos" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"hcWeatherX" type:ConfigValueTypeFloat default:@(85)],
+        [ConfigDescriptor itemWithKey:@"hcWeatherY" type:ConfigValueTypeFloat default:@(5)],
+        [ConfigDescriptor itemWithKey:@"hcWeatherAlpha" type:ConfigValueTypeFloat default:@(90)],
+        [ConfigDescriptor itemWithKey:@"hcWeatherBgColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcWeatherBgColorDark" type:ConfigValueTypeString default:@""],
+        // 日历（XOS CadisCalendar*，Pos 未设默认 1 = 卡片中）
+        [ConfigDescriptor itemWithKey:@"hcCalEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hcCalPos" type:ConfigValueTypeInteger default:@(1)],
+        [ConfigDescriptor itemWithKey:@"hcCalY" type:ConfigValueTypeFloat default:@(50)],
+        [ConfigDescriptor itemWithKey:@"hcCalBgHeight" type:ConfigValueTypeFloat default:@(0)],
+        [ConfigDescriptor itemWithKey:@"hcCalScale" type:ConfigValueTypeFloat default:@(100)],
+        [ConfigDescriptor itemWithKey:@"hcCalBgColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcCalBgColorDark" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcCalHolidayColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcCalHolidayColorDark" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcCalSelectedColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcCalSelectedColorDark" type:ConfigValueTypeString default:@""],
     ];
 }
 
