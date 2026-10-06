@@ -56,15 +56,6 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
     UIView *g2 = [self addTableGroupAtY:y width:w];
     cy = 0;
 
-    cy = [self addSwitchRowInGroup:g2
-                             title:@"卡片透明"
-                              desc:nil
-                               key:@"hcCardTransparent"
-                              isOn:config.hcCardTransparent
-                                cy:cy
-                             width:w];
-    cy = [self addSeparatorInGroup:g2 cy:cy width:w];
-
     NSString *lightSub = [HomeCardConfig hasLightImage] ? @"已设置" : @"未设置";
     cy = [self addNavRowInGroup:g2
                           title:@"浅色模式"

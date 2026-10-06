@@ -7,7 +7,6 @@ NS_ASSUME_NONNULL_BEGIN
 @interface HomeCardConfig : NSObject <ConfigModule>
 
 @property (nonatomic, assign) BOOL hcEnabled;          // 启用卡片（总开关，开启后子配置才生效）
-@property (nonatomic, assign) BOOL hcCardTransparent;  // 卡片透明（忽略背景色与背景图，日历/天气仍显示）
 
 // 卡片数值（XOS CadisCard* 同构）
 @property (nonatomic, assign) CGFloat hcCardHeight;    // 卡片高度（<=0 按 100 处理）

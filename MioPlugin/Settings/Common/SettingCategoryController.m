@@ -619,13 +619,14 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     WPWGroup *g = (WPWGroup *)group;
     if (![g isKindOfClass:[WPWGroup class]]) return cy;
 
-    // 宽度按最长项文字自适应（4 个汉字 ≈ 74pt），避免"卡片内部"这类文字被截断
+    // 宽度按最长项文字自适应并钳制上限（4 个汉字 ≈ 63pt/段）：过宽时微信 rightView 行
+    // 放不下会左移叠住标题（实测「卡片内部/日历内部/联系人内部」3 段 236pt 盖住「显示位置」）
     CGFloat maxChars = 1;
     for (NSString *n in names) {
         maxChars = MAX(maxChars, (CGFloat)n.length);
     }
-    CGFloat perSeg = MAX(44.0, maxChars * 15.0 + 14.0);
-    CGFloat segW = names.count * perSeg + 14.0;
+    CGFloat perSeg = MAX(40.0, maxChars * 14.0 + 8.0);
+    CGFloat segW = MIN(names.count * perSeg + 14.0, 204.0);
     UISegmentedControl *seg = [[UISegmentedControl alloc] initWithItems:names];
     seg.frame = CGRectMake(0, 0, segW, 30.0);
     seg.selectedSegmentIndex = MAX(0, MIN(index, (NSInteger)names.count - 1));
