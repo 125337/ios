@@ -15,11 +15,11 @@
                   day:(nullable NSInteger *)outDay
                  leap:(nullable BOOL *)outLeap;
 
-// 日历卡片布局样式（XOS CadisCalendarStyle 0-9，键 MioCalStyle，弹层与 HomeCardHook 共用）
-/// 样式值（0=默认周历 1=中式传统（宜忌） 2=今日聚焦（进度） 3=倒计时 4=月历迷你
-///  5=极简横条 6=双栏信息 7=时间线 8=圆环进度 9=翻页日历，XOS 字符串数组实证顺序）
+// 日历卡片布局样式（XOS CadisCalendarStyle 剔除月历迷你后重排 0-8，键 MioCalStyle，弹层与 HomeCardHook 共用）
+/// 样式值（0=默认周历 1=中式传统（宜忌） 2=今日聚焦（进度） 3=倒计时 4=极简横条
+///  5=双栏信息 6=时间线 7=圆环进度 8=翻页日历，XOS 字符串数组实证名序剔除重排）
 + (NSInteger)currentStyle;
-/// 样式名数组（下标 = 样式值，XOS 选择器数组同序）
+/// 样式名数组（下标 = 样式值，0-8 共 9 项）
 + (NSArray<NSString *> *)styleNames;
 /// 当日宜忌（@[宜词数组, 忌词数组]；XOS 25 词池，日期种子轮转，每天固定且跨样式一致）
 + (NSArray<NSArray<NSString *> *> *)yiJiForDate:(NSDate *)date;

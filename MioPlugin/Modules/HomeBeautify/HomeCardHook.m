@@ -168,7 +168,7 @@ static NSString *HCGeoKey(void) {
             cfg.hcWeatherAlpha, cfg.hcWeatherBgColor ?: @"", cfg.hcWeatherBgColorDark ?: @"",
             cfg.hcWeatherCity ?: @"", (long)cfg.hcWeatherLang,
             cfg.hcCalEnabled, (long)cfg.hcCalPos, cfg.hcCalY, cfg.hcCalBgHeight, cfg.hcCalScale,
-            (long)[HomeCardCalendarPopup currentStyle],   // 布局样式 0-9（弹层切换后指纹变化 → 重建）
+            (long)[HomeCardCalendarPopup currentStyle],   // 布局样式 0-8（弹层切换后指纹变化 → 重建）
             cfg.hcCalBgColor ?: @"", cfg.hcCalBgColorDark ?: @"",
             cfg.hcCalHolidayColor ?: @"", cfg.hcCalHolidayColorDark ?: @"",
             cfg.hcCalSelectedColor ?: @"", cfg.hcCalSelectedColorDark ?: @""];
@@ -205,7 +205,7 @@ static NSString *HCLunarDayText(NSDate *date) {
     return [HomeCardCalendarPopup lunarDayText:date];
 }
 
-#pragma mark - 日历挂件布局样式（XOS CadisCalendarStyle 0-9，样式名/词池二进制实证）
+#pragma mark - 日历挂件布局样式（XOS CadisCalendarStyle 剔除月历迷你后重排 0-8）
 
 // 样式渲染上下文（当日数据一次算好，各布局共用；数据全部按日动态计算）
 typedef struct {
@@ -253,6 +253,17 @@ static NSString *HCWeekAbbr(NSInteger weekday) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{ n = @[@"SUN", @"MON", @"TUE", @"WED", @"THU", @"FRI", @"SAT"]; });
     return n[weekday - 1];
+}
+
+// 英文月缩写（翻页日历台历头 OCT 等）
+static NSString *HCMonthAbbr(NSInteger month) {
+    static NSArray *n = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        n = @[@"JAN", @"FEB", @"MAR", @"APR", @"MAY", @"JUN",
+              @"JUL", @"AUG", @"SEP", @"OCT", @"NOV", @"DEC"];
+    });
+    return (month >= 1 && month <= 12) ? n[month - 1] : @"";
 }
 
 static UILabel *HCStyleLbl(UIView *parent, CGRect f, NSString *text, CGFloat size,
@@ -320,36 +331,6 @@ static CGFloat HCYiJiBadge(UIView *parent, CGFloat x, CGFloat y, NSString *tag, 
     b.userInteractionEnabled = NO;
     [parent addSubview:b];
     return x + 18.0;
-}
-
-// 圆环进度（圆弧 CAShapeLayer，-90° 起顺时针；中心 百分比+小标）
-static void HCRing(UIView *parent, CGPoint center, CGFloat radius, double pct,
-                   UIColor *color, NSString *caption, BOOL dark) {
-    CGFloat lw2 = 6.0;
-    CAShapeLayer *track = [CAShapeLayer layer];
-    track.path = [UIBezierPath bezierPathWithArcCenter:center
-                                                radius:radius
-                                            startAngle:-M_PI_2 endAngle:M_PI_2 * 3.0 clockwise:YES].CGPath;
-    track.strokeColor = [UIColor colorWithWhite:dark ? 1.0 : 0.0 alpha:0.10].CGColor;
-    track.fillColor = nil;
-    track.lineWidth = lw2;
-    [parent.layer addSublayer:track];
-
-    CAShapeLayer *arc = [CAShapeLayer layer];
-    arc.path = track.path;
-    arc.strokeColor = color.CGColor;
-    arc.fillColor = nil;
-    arc.lineWidth = lw2;
-    arc.lineCap = kCALineCapRound;
-    arc.strokeStart = 0.0;
-    arc.strokeEnd = MAX(MIN(pct / 100.0, 1.0), 0.02);
-    [parent.layer addSublayer:arc];
-
-    NSString *pctText = [NSString stringWithFormat:@"%.0f%%", floor(pct)];
-    HCStyleLbl(parent, CGRectMake(center.x - radius, center.y - 14, radius * 2, 14),
-               pctText, 10.0, UIFontWeightSemibold, color, NSTextAlignmentCenter);
-    HCStyleLbl(parent, CGRectMake(center.x - radius, center.y + 1, radius * 2, 12),
-               caption, 8.0, 0, HCSecondaryLabel(), NSTextAlignmentCenter);
 }
 
 // ── 样式 1 中式传统（宜忌）图1：左月名红字 + 右农历|年|周；星期行 + 虚线 + 7 日 + 宜忌行 ──
@@ -462,43 +443,7 @@ static void HCStyleCountdown(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyle
     HCStyleLbl(v, CGRectMake(x2, H - 22, w2, 14), yj, 9.5, 0, HCSecondaryLabel(), NSTextAlignmentLeft);
 }
 
-// ── 样式 4 月历迷你（无截图，按名实现）：小标题 + 当月数字网格，今天高亮圆 ──
-static void HCStyleMiniMonth(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleCtx *c,
-                             UIColor *accent, UIColor *selected, UIColor *label) {
-    CGFloat pad = 14.0;
-    HCStyleLbl(v, CGRectMake(pad, 4, 80, 16),
-               [NSString stringWithFormat:@"%ld月", (long)c->month], 12.0, UIFontWeightBold,
-               label, NSTextAlignmentLeft);
-    HCStyleLbl(v, CGRectMake(W - pad - 100, 6, 100, 14), c->lunarMD, 10.0, 0,
-               HCSecondaryLabel(), NSTextAlignmentRight);
-
-    NSCalendar *g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
-    NSDateComponents *fc = [g components:NSCalendarUnitYear | NSCalendarUnitMonth fromDate:c->today];
-    fc.day = 1;
-    NSInteger lead = (NSInteger)[g component:NSCalendarUnitWeekday fromDate:[g dateFromComponents:fc]] - 1;
-    NSInteger rows = (lead + c->daysInMonth + 6) / 7;
-    CGFloat top = 24.0, rowH = (H - top - 4.0) / (CGFloat)rows, cw = (W - pad * 2.0) / 7.0;
-    for (NSInteger d = 1; d <= c->daysInMonth; d++) {
-        NSInteger idx = lead + d - 1;
-        NSInteger row = idx / 7, col = idx % 7;
-        BOOL isToday = (d == c->day), wk = (col == 0 || col == 6);
-        CGFloat cx = pad + cw * col, cy = top + rowH * row;
-        UIColor *col2 = isToday ? UIColor.whiteColor : (wk ? accent : label);
-        if (isToday) {
-            CGFloat side = MIN(MIN(rowH - 2.0, cw - 2.0), 18.0);
-            UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(cx + (cw - side) / 2.0,
-                                                                   cy + (rowH - side) / 2.0, side, side)];
-            dot.backgroundColor = selected;
-            dot.layer.cornerRadius = side / 2.0;
-            dot.layer.masksToBounds = YES;
-            [v addSubview:dot];
-        }
-        HCStyleLbl(v, CGRectMake(cx, cy, cw, rowH), [NSString stringWithFormat:@"%ld", (long)d],
-                   10.0, isToday ? UIFontWeightBold : 0, col2, NSTextAlignmentCenter);
-    }
-}
-
-// ── 样式 5 极简横条 图4：大日期数字 + 英文周缩写 + 横线 + 农历/宜忌首词 + 5 天条 ──
+// ── 样式 4 极简横条 图4：大日期数字 + 英文周缩写 + 横线 + 农历/宜忌首词 + 5 天条 ──
 static void HCStyleMinimal(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleCtx *c,
                            UIColor *accent, UIColor *label) {
     CGFloat pad = 14.0;
@@ -537,7 +482,7 @@ static void HCStyleMinimal(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleCt
     }
 }
 
-// ── 样式 6 双栏信息 图5：左昨天/今天/明天栏 + 竖线 + 右信息/宜忌/本月进度条 ──
+// ── 样式 5 双栏信息 图5：左昨天/今天/明天栏 + 竖线 + 右信息/宜忌/本月进度条 ──
 static void HCStyleDual(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleCtx *c,
                         UIColor *accent, UIColor *label) {
     CGFloat lw2 = 64.0;
@@ -591,7 +536,7 @@ static void HCStyleDual(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleCtx *
                HCSecondaryLabel(), NSTextAlignmentRight);
 }
 
-// ── 样式 7 时间线 图6：标题 + 竖线三节点（昨天/今天/明天），今天行高亮条 ──
+// ── 样式 6 时间线 图6：标题 + 竖线三节点（昨天/今天/明天），今天行高亮条 ──
 static void HCStyleTimeline(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleCtx *c,
                             UIColor *accent, UIColor *label) {
     CGFloat pad = 14.0;
@@ -633,45 +578,107 @@ static void HCStyleTimeline(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleC
     }
 }
 
-// ── 样式 8 圆环进度（无截图，按名 + XOS"年进度圆环/月进度圆环"字符串实现）：
-//     左大日号/周名 + 右双圆环（本月 accent / 本年 label 色）──
+// ── 样式 7 圆环进度 图1：左侧单大环双弧（黑=年进度、红=月进度叠外层，环心日号）
+//     + 右侧信息列（年月/星期周数/农历红字 + 月/年进度图例两行）──
 static void HCStyleRings(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleCtx *c,
                          UIColor *accent, UIColor *label) {
-    CGFloat lw2 = 76.0;
-    HCStyleLbl(v, CGRectMake(0, 14, lw2, 46), [NSString stringWithFormat:@"%ld", (long)c->day],
-               36.0, UIFontWeightBold, label, NSTextAlignmentCenter);
-    HCStyleLbl(v, CGRectMake(0, 64, lw2, 16), HCWeekName(c->weekday, NO), 12.0,
-               UIFontWeightMedium, accent, NSTextAlignmentCenter);
-    HCStyleLbl(v, CGRectMake(W - 150.0, 6, 136, 14),
-               [NSString stringWithFormat:@"%ld年%ld月", (long)c->year, (long)c->month],
-               11.0, 0, HCSecondaryLabel(), NSTextAlignmentRight);
-    CGFloat cy = H / 2.0 + 6.0;
-    double mp = floor((double)c->day / (double)c->daysInMonth * 100.0);
+    CGPoint center = CGPointMake(W * 0.21, H / 2.0 + 4.0);
+    CGFloat radius = 36.0, lw2 = 7.0;
+    CAShapeLayer *track = [CAShapeLayer layer];
+    track.path = [UIBezierPath bezierPathWithArcCenter:center radius:radius
+                                            startAngle:-M_PI_2 endAngle:M_PI_2 * 3.0 clockwise:YES].CGPath;
+    track.strokeColor = [UIColor colorWithWhite:dark ? 1.0 : 0.0 alpha:0.08].CGColor;
+    track.fillColor = nil;
+    track.lineWidth = lw2;
+    [v.layer addSublayer:track];
+
+    // 年进度弧（label 色）→ 月进度弧（accent）叠其上（图1：红弧为月进度 19% 起于顶部顺时针）
     double yp = floor((double)c->dayOfYear / (double)c->daysInYear * 100.0);
-    HCRing(v, CGPointMake(W - 104.0, cy), 24.0, mp, accent, @"本月", dark);
-    HCRing(v, CGPointMake(W - 40.0, cy), 24.0, yp, label, @"本年", dark);
+    double mp = floor((double)c->day / (double)c->daysInMonth * 100.0);
+    NSArray<NSNumber *> *pcts = @[@(MAX(MIN(yp / 100.0, 1.0), 0.02)), @(MAX(MIN(mp / 100.0, 1.0), 0.02))];
+    NSArray<UIColor *> *cols = @[label, accent];
+    for (NSInteger i = 0; i < 2; i++) {
+        CAShapeLayer *arc = [CAShapeLayer layer];
+        arc.path = track.path;
+        arc.strokeColor = cols[i].CGColor;
+        arc.fillColor = nil;
+        arc.lineWidth = lw2;
+        arc.lineCap = kCALineCapRound;
+        arc.strokeEnd = pcts[i].doubleValue;
+        [v.layer addSublayer:arc];
+    }
+    HCStyleLbl(v, CGRectMake(center.x - radius, center.y - 18, radius * 2, 36),
+               [NSString stringWithFormat:@"%ld", (long)c->day], 30.0, UIFontWeightBold,
+               label, NSTextAlignmentCenter);
+
+    // 右侧信息列
+    CGFloat x2 = center.x + radius + lw2 + 18.0, w2 = W - x2 - 14.0;
+    HCStyleLbl(v, CGRectMake(x2, 8, w2, 22),
+               [NSString stringWithFormat:@"%ld年%ld月", (long)c->year, (long)c->month],
+               17.0, UIFontWeightBold, label, NSTextAlignmentLeft);
+    HCStyleLbl(v, CGRectMake(x2, 34, w2, 15),
+               [NSString stringWithFormat:@"%@  第%ld周", HCWeekName(c->weekday, YES), (long)c->weekOfYear],
+               12.0, 0, HCSecondaryLabel(), NSTextAlignmentLeft);
+    HCStyleLbl(v, CGRectMake(x2, 53, w2, 16), c->lunarMD, 13.5, UIFontWeightMedium, accent,
+               NSTextAlignmentLeft);
+    // 图例两行：色点 + 灰标签 + 黑粗百分比
+    NSArray<NSString *> *caps = @[@"月进度", @"年进度"];
+    NSArray<NSString *> *vals = @[[NSString stringWithFormat:@"%.0f%%", mp],
+                                  [NSString stringWithFormat:@"%.0f%%", yp]];
+    for (NSInteger i = 0; i < 2; i++) {
+        CGFloat y = 76.0 + i * 19.0;
+        UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(x2, y + 4.0, 9, 9)];
+        dot.backgroundColor = i == 0 ? accent : label;
+        dot.layer.cornerRadius = 4.5;
+        [v addSubview:dot];
+        HCStyleLbl(v, CGRectMake(x2 + 15, y, 52, 16), caps[i], 11.0, 0, HCSecondaryLabel(),
+                   NSTextAlignmentLeft);
+        HCStyleLbl(v, CGRectMake(x2 + 68, y - 1, w2 - 68, 17), vals[i], 12.5,
+                   UIFontWeightSemibold, label, NSTextAlignmentLeft);
+    }
 }
 
-// ── 样式 9 翻页日历（无截图，按名实现）：台历页 = 顶部色带 + 特大日号 + 信息行 ──
+// ── 样式 8 翻页日历 图2：左侧台历页（OCT 红头 + 特大日号 + TUE）
+//     + 右侧全量信息（完整日期/农历红字/周数 + 虚线 + 宜忌两行）──
 static void HCStyleFlip(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleCtx *c,
                         UIColor *accent, UIColor *label) {
-    CGFloat pad = 14.0;
-    UIView *band = [[UIView alloc] initWithFrame:CGRectMake(pad, 8, W - pad * 2.0, 22)];
+    CGFloat pad = 14.0, pw = 88.0;
+    UIView *page = [[UIView alloc] initWithFrame:CGRectMake(pad + 8.0, 8.0, pw, H - 16.0)];
+    page.backgroundColor = [UIColor colorWithWhite:dark ? 1.0 : 0.0 alpha:dark ? 0.10 : 0.045];
+    page.layer.cornerRadius = 10.0;
+    page.layer.masksToBounds = YES;
+    [v addSubview:page];
+
+    UIView *band = [[UIView alloc] initWithFrame:CGRectMake(0, 0, pw, 24)];
     band.backgroundColor = accent;
-    band.layer.cornerRadius = 6.0;
-    band.layer.masksToBounds = YES;
-    [v addSubview:band];
-    HCStyleLbl(v, CGRectMake(pad, 11, W - pad * 2.0, 16),
-               [NSString stringWithFormat:@"%ld年%ld月", (long)c->year, (long)c->month],
-               12.0, UIFontWeightBold, UIColor.whiteColor, NSTextAlignmentCenter);
-    HCStyleLbl(v, CGRectMake(0, 34, W, 50), [NSString stringWithFormat:@"%ld", (long)c->day],
-               42.0, UIFontWeightBold, label, NSTextAlignmentCenter);
-    NSString *sub = [NSString stringWithFormat:@"%@ · %@ · 第%ld周",
-                     HCWeekName(c->weekday, YES), c->lunarMD, (long)c->weekOfYear];
-    HCStyleLbl(v, CGRectMake(0, 88, W, 16), sub, 11.5, 0, HCSecondaryLabel(), NSTextAlignmentCenter);
+    [page addSubview:band];
+    HCStyleLbl(page, CGRectMake(0, 3, pw, 18), HCMonthAbbr(c->month), 13.0, UIFontWeightBold,
+               UIColor.whiteColor, NSTextAlignmentCenter);
+    HCStyleLbl(page, CGRectMake(0, 26, pw, 44), [NSString stringWithFormat:@"%ld", (long)c->day],
+               34.0, UIFontWeightBold, label, NSTextAlignmentCenter);
+    HCStyleLbl(page, CGRectMake(0, H - 16.0 - 24.0, pw, 16), HCWeekAbbr(c->weekday), 11.0,
+               UIFontWeightSemibold, HCSecondaryLabel(), NSTextAlignmentCenter);
+
+    CGFloat x2 = pad + 8.0 + pw + 16.0, w2 = W - x2 - pad;
+    HCStyleLbl(v, CGRectMake(x2, 8, w2, 22),
+               [NSString stringWithFormat:@"%ld年%ld月%ld日", (long)c->year, (long)c->month, (long)c->day],
+               17.0, UIFontWeightBold, label, NSTextAlignmentLeft);
+    HCStyleLbl(v, CGRectMake(x2, 34, w2, 17), c->lunarMD, 13.5, UIFontWeightMedium, accent,
+               NSTextAlignmentLeft);
+    HCStyleLbl(v, CGRectMake(x2, 55, w2, 14),
+               [NSString stringWithFormat:@"第%ld周", (long)c->weekOfYear], 11.5, 0,
+               HCSecondaryLabel(), NSTextAlignmentLeft);
+    HCDashLine(v, CGRectMake(x2, 76, w2, 1), [UIColor colorWithWhite:dark ? 1.0 : 0.0 alpha:0.18]);
+
+    CGFloat x = HCYiJiBadge(v, x2, 84, @"宜", [UIColor systemGreenColor]);
+    HCStyleLbl(v, CGRectMake(x, 83, W - pad - x, 15), [c->yi componentsJoinedByString:@" "],
+               10.5, 0, label, NSTextAlignmentLeft);
+    x = HCYiJiBadge(v, x2, 102, @"忌", accent);
+    HCStyleLbl(v, CGRectMake(x, 101, W - pad - x, 15), [c->ji componentsJoinedByString:@" "],
+               10.5, 0, HCSecondaryLabel(), NSTextAlignmentLeft);
 }
 
-// 样式分派（0 = 默认周历走 HCBuildCalendar 原有渲染，1-9 走本函数）
+// 样式分派（0 = 默认周历走 HCBuildCalendar 原有渲染，1-8 走本函数）
 static void HCStyleRender(UIView *bgv, NSInteger style, CGFloat W, CGFloat H, BOOL dark,
                           UIColor *accent, UIColor *selected) {
     UIColor *label = dark ? [UIColor whiteColor] : [UIColor blackColor];
@@ -700,12 +707,11 @@ static void HCStyleRender(UIView *bgv, NSInteger style, CGFloat W, CGFloat H, BO
         case 1: HCStyleTraditional(bgv, W, H, dark, &c, accent, selected, label); break;
         case 2: HCStyleFocus(bgv, W, H, dark, &c, accent, label); break;
         case 3: HCStyleCountdown(bgv, W, H, dark, &c, accent, label); break;
-        case 4: HCStyleMiniMonth(bgv, W, H, dark, &c, accent, selected, label); break;
-        case 5: HCStyleMinimal(bgv, W, H, dark, &c, accent, label); break;
-        case 6: HCStyleDual(bgv, W, H, dark, &c, accent, label); break;
-        case 7: HCStyleTimeline(bgv, W, H, dark, &c, accent, label); break;
-        case 8: HCStyleRings(bgv, W, H, dark, &c, accent, label); break;
-        case 9: HCStyleFlip(bgv, W, H, dark, &c, accent, label); break;
+        case 4: HCStyleMinimal(bgv, W, H, dark, &c, accent, label); break;
+        case 5: HCStyleDual(bgv, W, H, dark, &c, accent, label); break;
+        case 6: HCStyleTimeline(bgv, W, H, dark, &c, accent, label); break;
+        case 7: HCStyleRings(bgv, W, H, dark, &c, accent, label); break;
+        case 8: HCStyleFlip(bgv, W, H, dark, &c, accent, label); break;
         default: break;
     }
 }
@@ -716,8 +722,8 @@ static void HCStyleRender(UIView *bgv, NSInteger style, CGFloat W, CGFloat H, BO
 //    样式 0 = 默认周历（下方原渲染：月标题 15 Bold + 副标题"本周 M.D - M.D"（周日始）+
 //    星期行 11 Medium 周末 accent + 日号 17 + 农历 9pt + 今天块 selected 圆角白字；
 //    Mio 调整：内容块总高 98 在内区内垂直居中、今天块紧凑高 38）；
-//    样式 1-9 = HCStyleRender 分派（中式传统/今日聚焦/倒计时/月历迷你/极简横条/
-//    双栏信息/时间线/圆环进度/翻页日历，样式名与值序为 XOS 字符串数组二进制实证）；
+//    样式 1-8 = HCStyleRender 分派（中式传统/今日聚焦/倒计时/极简横条/
+//    双栏信息/时间线/圆环进度/翻页日历；月历迷你未移植，值序为剔除后重排）；
 //    点按弹月历弹层（XOS cadis_calendarTapped → FUN_0015342c，见 HomeCardCalendarPopup）；
 //    内容缩放 = 钳制(50-200)/100（FUN_00147ed8）──
 static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *cfg) {
@@ -743,7 +749,7 @@ static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *
     [cal addSubview:bgv];
 
     NSInteger style = [HomeCardCalendarPopup currentStyle];
-    if (style != 0) {   // 样式 1-9：布局渲染进内区（0 = 默认周历走下方原渲染）
+    if (style != 0) {   // 样式 1-8：布局渲染进内区（0 = 默认周历走下方原渲染）
         HCStyleRender(bgv, style, width - 32.0, calH - 8.0, dark, accent, selected);
     } else {
     NSCalendar *g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];

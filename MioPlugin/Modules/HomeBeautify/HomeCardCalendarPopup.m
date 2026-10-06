@@ -28,11 +28,12 @@
 //  【持久化键】（NSUserDefaults；XOS CadisCalendar* 同语义）
 //   MioCalMondayFirst（周一起始，默认关）/ MioCalShowHoliday（节日显示，默认开——
 //   与 XOS 弹层截图一致：节日/节气红字显示中）/ MioCalXiuBan（休班角标，默认关）；
-//   MioCalStyle（integer 0-9 = XOS CadisCalendarStyle 日历卡片布局样式，默认 0 默认周历）。
+//   MioCalStyle（integer 0-8 = XOS CadisCalendarStyle 日历卡片布局样式，剔除月历迷你后重排，
+//   默认 0 默认周历）。
 //   【样式定论】样式作用于首页卡片周历挂件的布局（HomeCardHook 分派渲染），
-//   非弹层黑白主题；弹层月历渲染固定不随样式值变化。0-9 名序为 XOS 字符串数组
-//   二进制实证：默认周历/中式传统（宜忌）/今日聚焦（进度）/倒计时/月历迷你/
-//   极简横条/双栏信息/时间线/圆环进度/翻页日历。
+//   非弹层黑白主题；弹层月历渲染固定不随样式值变化。XOS 原版 0-9 名序为字符串
+//   数组二进制实证，Mio 剔除"月历迷你"后重排为 0-8：默认周历/中式传统（宜忌）/
+//   今日聚焦（进度）/倒计时/极简横条/双栏信息/时间线/圆环进度/翻页日历。
 //
 //  【数据】调休 = 国务院办公厅《2026 年部分节假日安排》（2025-11-04 发布，官方实锤）；
 //   节气 = 21 世纪寿星通式 D=[Y×0.2422+C]−[Y/4]（2026-10-08 寒露 / 10-23 霜降
@@ -94,22 +95,22 @@
 
 #pragma mark - 样式 / 宜忌（弹层选择器与 HomeCardHook 挂件渲染共用）
 
-static NSString * const kKeyStyle = @"MioCalStyle";   // 样式值 0-9（XOS CadisCalendarStyle）
+static NSString * const kKeyStyle = @"MioCalStyle";   // 样式值 0-8（XOS CadisCalendarStyle 剔除月历迷你后重排）
 
-// 样式名（XOS 选择器数组二进制实证顺序，下标 = 样式值 0-9）
+// 样式名（XOS 选择器同序，下标 = 样式值 0-8；月历迷你未移植已剔除，值序重排）
 + (NSArray<NSString *> *)styleNames {
     static NSArray *names = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         names = @[@"默认周历", @"中式传统（宜忌）", @"今日聚焦（进度）", @"倒计时",
-                  @"月历迷你", @"极简横条", @"双栏信息", @"时间线", @"圆环进度", @"翻页日历"];
+                  @"极简横条", @"双栏信息", @"时间线", @"圆环进度", @"翻页日历"];
     });
     return names;
 }
 
 + (NSInteger)currentStyle {
     NSInteger s = (NSInteger)[[NSUserDefaults standardUserDefaults] integerForKey:kKeyStyle];
-    return (s >= 0 && s <= 9) ? s : 0;   // 越界兜底回默认周历
+    return (s >= 0 && s <= 8) ? s : 0;   // 越界兜底回默认周历
 }
 
 // 当日宜忌：XOS 内置 25 词池（二进制 3466630-3466780 实证）。XOS 的逐日选词算法
@@ -404,7 +405,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     [next addTarget:self action:@selector(onNext) forControlEvents:UIControlEventTouchUpInside];
     [self.content addSubview:next];
 
-    // 样式按钮（cadis_switchCalendarStyle → 选择日历样式 0-9）；第二行左侧，不压居中标题
+    // 样式按钮（cadis_switchCalendarStyle → 选择日历样式 0-8）；第二行左侧，不压居中标题
     UIButton *styleBtn = [UIButton buttonWithType:UIButtonTypeCustom];
     styleBtn.frame = CGRectMake(16, 48, 110, 20);
     NSString *styleName = [HomeCardCalendarPopup styleNames][[HomeCardCalendarPopup currentStyle]] ?: @"默认周历";
@@ -537,7 +538,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
 - (void)onPrev { hcCalMonthOffset--; [self rebuild]; }   // cadis_calendarPrevMonth
 - (void)onNext { hcCalMonthOffset++; [self rebuild]; }   // cadis_calendarNextMonth
 
-- (void)onSwitchStyle {   // XOS FUN_00155348：选择日历样式 0-9（当前项加 ✓）→ 存键 → 重建弹层 + 通知卡片刷新
+- (void)onSwitchStyle {   // XOS FUN_00155348：选择日历样式 0-8（当前项加 ✓）→ 存键 → 重建弹层 + 通知卡片刷新
     NSArray<NSString *> *names = [HomeCardCalendarPopup styleNames];
     NSInteger cur = [HomeCardCalendarPopup currentStyle];
     NSMutableArray<NSString *> *btns = [NSMutableArray arrayWithCapacity:names.count];
