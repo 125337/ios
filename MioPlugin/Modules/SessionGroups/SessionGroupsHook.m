@@ -1608,11 +1608,16 @@ static void hook_deleteSessionCellAt(id self, SEL _cmd, unsigned int row, long l
 // 滚动（下拉时被导航栏裁掉，与"写在内容上"一致）。Mio 的 cell 未被微信包装（直接在
 // subviews），host 由 sHeaderHostCell 缓存直读（hook_viewForHeader 出口赋值），无 subviews 遍历。
 // sticky 钉顶会与微信「Windows 已登录」浮层提示条同位重叠（sgbadge17d 实测），unstick 才是
-// WCR 真实行为（此前"WCR 同款钉顶"为误判，sgbadge8 误删本机制）
+// WCR 真实行为（此前"WCR 同款钉顶"为误判，sgbadge8 误删本机制）。
+// 共存让位（方案 A）：首页卡片开着时本模块的分组条 cell 被包进 HC 卡片容器（HCStripOccupied
+// 追加式共存），此刻 host.superview 是 HC 容器而非 table——若仍用 table 内容坐标摆 frame，
+// 分组条会在容器内乱跑与日历/卡片重叠。故收紧为直属检查（superview == table）：SG 独跑时
+// 微信不包装 cell、直属 table，unstick 正常生效；被 HC 包裹时跳过，整体 header 的 unstick
+// 由 HC 的 HCUnstickHeader 全权负责（HC 宿主 cell 是 table 直接子视图，坐标系正确）
 static void SGUnstickHeader(UITableView *table) {
     UITableViewCell *host = sHeaderHostCell;
     if (!host) return;                              // 未接管：weak 空，立即返回
-    if (![host isDescendantOfView:table]) return;   // 归属检查：其他 table 触发的 layout 跳过（孤儿 view 亦为 NO）
+    if (host.superview != table) return;            // 直属检查：被 HC 卡片容器包裹（共存）→ 让 HC 负责；其他 table 触发的 layout 亦跳过
     CGRect target = [table rectForHeaderInSection:0];
     if (target.size.height <= 0) return;
     // 只在 frame 真不一致时才写，避免高频空写触发多余布局
