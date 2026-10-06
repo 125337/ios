@@ -81,6 +81,7 @@ static IMP orig_NMFVC_viewDidAppear = NULL;
 static IMP orig_NMFVC_traitCollectionDidChange = NULL;
 static IMP orig_NMFVC_heightForHeader = NULL;
 static IMP orig_NMFVC_viewForHeader = NULL;
+static IMP orig_tableLayout = NULL;    // MainFrameTableView.layoutSubviews（unstick 用）
 static BOOL hcHookInstalled = NO;
 static NSCache<NSString *, UIImage *> *hcImageCache = nil;
 static NSString *hcLastGeoKey = nil;   // 配置指纹：变化才 reloadData 重建 header
@@ -413,19 +414,10 @@ static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
     BOOL en = (wcfg.hcWeatherLang == 1);
     NSString *city = [wcfg.hcWeatherCity stringByTrimmingCharactersInSet:
                       [NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
-    NSString *cityDisp = city;      // 中文模式显示名（双名前段）
-    NSString *cityQuery = city;     // URL 查询名（双名后段）
-    NSRange pipe = [city rangeOfString:@"|"];
-    if (pipe.location != NSNotFound && pipe.location > 0 && pipe.location < city.length - 1) {
-        cityDisp = [[city substringToIndex:pipe.location]
-                    stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        cityQuery = [[city substringFromIndex:pipe.location + pipe.length]
-                     stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-    }
     NSString *lang = en ? @"en" : @"zh";
     NSString *urlStr;
-    if (cityQuery.length > 0) {
-        NSString *enc = [cityQuery stringByAddingPercentEncodingWithAllowedCharacters:
+    if (city.length > 0) {
+        NSString *enc = [city stringByAddingPercentEncodingWithAllowedCharacters:
                          [NSCharacterSet URLQueryAllowedCharacterSet]];
         urlStr = [NSString stringWithFormat:@"https://wttr.in/%@?format=j1&lang=%@", enc, lang];
     } else {
@@ -458,10 +450,9 @@ static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
                 && [areas[0] isKindOfClass:[NSDictionary class]]) {
                 areaName = HCJ1Value(areas[0], @"areaName") ?: @"";
             }
-            // 城市名（XOS 18329 同款分支 + 双名扩展）：中文模式 → 双名前段；否则 areaName
-            // 英文标准名（拼音查询下 geonames 命中正确，如 xinyu → Xinyu），失败回落查询名
-            NSString *cityName = (!en && cityDisp.length > 0) ? cityDisp
-                               : (areaName.length > 0 ? areaName : cityQuery);
+            // 城市名（XOS 18329 同款分支）：中文模式且配置城市非空 → 配置名；否则英文名
+            NSString *cityName = (!en && city.length > 0) ? city
+                               : (areaName.length > 0 ? areaName : city);
             // XOS 同款文本："新余市 17° Overcast" / 英文模式 "Xinyu 17° Overcast"
             hcWeatherText = cityName.length > 0
                 ? [NSString stringWithFormat:@"%@ %@° %@", cityName, temp, descShow]
@@ -552,9 +543,9 @@ static void HCShowCalendarMenu(id vc) {
                         onButton:^(NSInteger index) {
         if (index == 0) {
             [MioAlertHelper showInputAlert:@"设置天气城市"
-                                   message:@"留空则自动按 IP 定位；可填\"中文名|拼音\"双名（如 新余市|xinyu），英文名供查询与英文模式显示"
+                                   message:@"留空则自动按 IP 定位"
                               initialText:(cfg.hcWeatherCity ?: @"")
-                              placeholder:@"如：新余市|xinyu"
+                              placeholder:@"如：新余市"
                                   keyboard:UIKeyboardTypeDefault
                                     secure:NO
                                 onConfirm:^(NSString *input) {
@@ -835,6 +826,36 @@ static UIView *hook_NMFVC_viewForHeader(id self, SEL _cmd, UITableView *tableVie
     return HCBuildHeader(self, width, 0.0, nil);
 }
 
+// header 去粘滞（SessionGroupsHook.m SGUnstickHeader 同款，源出 WCR
+// WCRefineHomeHeaderUnstick unstickIfNeededOnTableView: Misc_part4.c:1970-2264）：
+// plain tableView 的 section header 会 sticky 悬停钉顶，与微信「Windows 已登录」
+// 浮层提示条同位重叠（sgbadge17d 实测）。每次 layoutSubviews 后把 header 容器 frame
+// 用 rectForHeaderInSection: 的内容坐标理论位置摆回去 → header 跟随内容滚动。
+// 仅卡片功能接管 header 时生效（容器里有 kHCCardTag 卡片），否则空操作
+static void HCUnstickHeader(UITableView *table) {
+    if (![[HomeCardConfig shared] hcEnabled]) return;
+    UIView *header = [table headerViewForSection:0];
+    if (!header || ![header viewWithTag:kHCCardTag]) return;   // 未接管：不动
+    CGRect target = [table rectForHeaderInSection:0];
+    if (target.size.height <= 0) return;
+    // 只在 frame 真不一致时才写，避免高频空写触发多余布局
+    CGRect f = header.frame;
+    if (fabs(f.origin.y - target.origin.y) < 0.5 &&
+        fabs(f.size.height - target.size.height) < 0.5) {
+        return;
+    }
+    header.frame = target;
+}
+
+static void hook_tableLayoutSubviews(UITableView *table, SEL _cmd) {
+    if (orig_tableLayout) ((void (*)(id, SEL))orig_tableLayout)(table, _cmd);
+    @try {
+        HCUnstickHeader(table);
+    } @catch (NSException *e) {
+        WPLog(@"HomeCard", @"[Unstick] err=%@", e);
+    }
+}
+
 @implementation HomeCardHook
 
 + (void)install {
@@ -859,6 +880,15 @@ static UIView *hook_NMFVC_viewForHeader(id self, SEL _cmd, UITableView *tableVie
                     (IMP)hook_NMFVC_heightForHeader, &orig_NMFVC_heightForHeader);
     MSHookMessageEx(cls, @selector(tableView:viewForHeaderInSection:),
                     (IMP)hook_NMFVC_viewForHeader, &orig_NMFVC_viewForHeader);
+    // header 去粘滞：与 SessionGroupsHook 链式叠加（各自摆各自的对象，幂等不冲突）；
+    // 类缺失时跳过，header 降级为原生 sticky
+    Class tableCls = objc_getClass("MainFrameTableView");
+    if (tableCls) {
+        MSHookMessageEx(tableCls, @selector(layoutSubviews),
+                        (IMP)hook_tableLayoutSubviews, &orig_tableLayout);
+    } else {
+        WPLog(@"HomeCard", @"[Hook] MainFrameTableView 不存在，header 保持原生 sticky");
+    }
     WPLog(@"HomeCard", @"[Hook] ✓ NewMainFrameViewController（viewWillAppear/DidAppear/trait/heightForHeader/viewForHeader）");
 }
 
