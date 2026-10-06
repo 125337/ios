@@ -155,10 +155,15 @@ static NSString *HCGeoKey(void) {
     if (@available(iOS 12.0, *)) {
         dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
     }
+    // 日期入指纹：日历内容（日号/农历/宜忌/进度）按天过期，跨天指纹必须变化
+    NSDate *now = [NSDate date];
+    NSDateComponents *dc = [[NSCalendar currentCalendar]
+        components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay fromDate:now];
+    long dayStamp = (long)(dc.year * 10000 + dc.month * 100 + dc.day);
     return [NSString stringWithFormat:
             @"%d|%@|%@|%.1f|%.1f|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%d"
             @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%ld"
-            @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%@|%ld",
+            @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%@|%ld|%ld",
             cfg.hcEnabled,
             [HomeCardConfig lightImagePath] ?: @"", [HomeCardConfig darkImagePath] ?: @"",
             cfg.hcCardHeight, cfg.hcCardOffsetY, cfg.hcCardBottomFix, cfg.hcCardMargin,
@@ -172,7 +177,8 @@ static NSString *HCGeoKey(void) {
             cfg.hcCalBgColor ?: @"", cfg.hcCalBgColorDark ?: @"",
             cfg.hcCalHolidayColor ?: @"", cfg.hcCalHolidayColorDark ?: @"",
             cfg.hcCalSelectedColor ?: @"", cfg.hcCalSelectedColorDark ?: @"",
-            (long)[HomeCardCalendarPopup currentStyle]];   // 样式值入指纹：切换后 reloadData 重建布局
+            (long)[HomeCardCalendarPopup currentStyle],   // 样式值入指纹：切换后 reloadData 重建布局
+            dayStamp];   // 日期入指纹：挂后台过夜回前台指纹变化 → 重建重算日历/天气
 }
 
 #pragma mark - Header 构建（XOS FUN_00151594 section-0 同构 + 日历/天气挂件）
@@ -1484,6 +1490,13 @@ static void hook_tableLayoutSubviews(UITableView *table, SEL _cmd) {
         WPLog(@"HomeCard", @"[NOTIFY] style changed, vc=%@",
               hcLastMainVC ? NSStringFromClass([hcLastMainVC class]) : @"nil");
         HCScheduleSync(hcLastMainVC, 0.0);
+    }];
+    // 跨午夜/时区变更（前台挂着不动也会收到）：指纹含日期 → 重建换新一天日历
+    [[NSNotificationCenter defaultCenter]
+        addObserverForName:UIApplicationSignificantTimeChangeNotification
+                    object:nil queue:nil
+                usingBlock:^(NSNotification *note) {
+        HCScheduleSync(hcLastMainVC, 0.5);
     }];
     WPLog(@"HomeCard", @"[Hook] ✓ 卡片样式变更通知监听");
 }
