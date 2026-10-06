@@ -16,9 +16,11 @@
                  leap:(nullable BOOL *)outLeap;
 
 // 卡片挂件布局样式（Mio 扩展：键 MioCalCardStyle，弹层选择器与 HomeCardHook 渲染共用）
-/// 样式值（0=默认周历 1=圆环进度，逐步添加中）
+/// 样式值（0=默认周历，1-8=中式传统/今日聚焦/倒计时/极简横条/双栏信息/时间线/圆环进度/翻页日历）
 + (NSInteger)currentStyle;
 /// 样式名数组（下标 = 样式值）
 + (NSArray<NSString *> *)styleNames;
+/// 当日宜忌（@[宜4词, 忌4词]；日期种子轮转，XOS 词池）
++ (NSArray<NSArray<NSString *> *> *)yiJiForDate:(NSDate *)date;
 
 @end

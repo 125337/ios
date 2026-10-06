@@ -195,20 +195,53 @@ static void CalSetBool(NSString *key, BOOL value) { [[NSUserDefaults standardUse
 
 #pragma mark - 卡片布局样式（Mio 扩展：首页卡片挂件布局样式，与弹层黑白主题键 MioCalStyle 分离）
 
-static NSString * const kKeyCardStyle = @"MioCalCardStyle";   // 卡片样式 0=默认周历 1=圆环进度（逐步添加中）
+static NSString * const kKeyCardStyle = @"MioCalCardStyle";   // 卡片样式 0=默认周历 1-8=布局样式（值序 = styleNames，XOS 剔除月历迷你后重排）
 
 + (NSArray<NSString *> *)styleNames {
     static NSArray *names = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        names = @[@"默认周历", @"圆环进度"];
+        names = @[@"默认周历", @"中式传统（宜忌）", @"今日聚焦（进度）", @"倒计时",
+                  @"极简横条", @"双栏信息", @"时间线", @"圆环进度", @"翻页日历"];
     });
     return names;
 }
 
 + (NSInteger)currentStyle {
     NSInteger s = (NSInteger)[[NSUserDefaults standardUserDefaults] integerForKey:kKeyCardStyle];
-    return (s >= 0 && s <= 1) ? s : 0;   // 越界兜底回默认周历
+    return (s >= 0 && s <= 8) ? s : 0;   // 越界兜底回默认周历
+}
+
+// 当日宜忌：XOS 内置 25 词池（二进制 3466630-3466780 实证）。XOS 的逐日选词算法
+// 未逆向（费用取舍）→ 用日期种子轮转替代：每天固定、跨样式一致、逐日不同，
+// 但选词与 XOS 当天可能不一致（如需逐词一致再单独逆向选词函数）
++ (NSArray<NSArray<NSString *> *> *)yiJiForDate:(NSDate *)date {
+    static NSArray<NSString *> *pool = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        pool = @[@"嫁娶", @"开光", @"祭祀", @"祈福", @"出行", @"解除", @"移徙", @"入宅",
+                 @"开市", @"交易", @"立券", @"安床", @"纳财", @"栽种", @"纳畜", @"安葬",
+                 @"修造", @"动土", @"竖柱", @"上梁", @"求嗣", @"作灶", @"破土", @"掘井", @"词讼"];
+    });
+    static NSCalendar *g = nil;
+    static dispatch_once_t once2;
+    dispatch_once(&once2, ^{
+        g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
+    });
+    NSDateComponents *c = [g components:NSCalendarUnitYear | NSCalendarUnitMonth
+                                      | NSCalendarUnitDay fromDate:date];
+    long seed = (long)c.year * 10000L + (long)c.month * 100L + (long)c.day;
+    // 宜：步长 11（与 25 互质 → 四词必不重复）；忌：起点错开 + 步长 17，与宜集合不相交
+    NSInteger yi0 = (NSInteger)((seed * 7) % 25);
+    NSArray *yi = @[pool[yi0], pool[(yi0 + 11) % 25], pool[(yi0 + 22) % 25], pool[(yi0 + 8) % 25]];
+    NSInteger ji0 = (NSInteger)((seed * 13 + 9) % 25);
+    for (NSInteger t = 0; t < 25; t++, ji0 = (ji0 + 3) % 25) {   // 确定性避让：撞宜则顺延
+        NSArray *tryJi = @[pool[ji0], pool[(ji0 + 17) % 25], pool[(ji0 + 9) % 25], pool[(ji0 + 1) % 25]];
+        BOOL hit = NO;
+        for (NSString *w in tryJi) { if ([yi containsObject:w]) { hit = YES; break; } }
+        if (!hit) return @[yi, tryJi];
+    }
+    return @[yi, @[]];
 }
 
 // iOS 13 以下兜底
