@@ -43,7 +43,8 @@ static void wpWCSwitchTramp(id self, SEL _cmd, id arg) {
                     on = (BOOL)((BOOL (*)(id, SEL))objc_msgSend)(arg, @selector(isOn));
                     haveOn = YES;
                 }
-                if (!haveOn || ![arg isKindOfClass:[UISwitch class]]) {
+                // 非 UISwitch（cellManager 等）一律再取一次 userInfo 载荷；UISwitch 本身无载荷
+                if (![arg isKindOfClass:[UISwitch class]]) {
                     @try {
                         id ui = [arg valueForKey:@"userInfo"];
                         if ([ui isKindOfClass:[NSDictionary class]]) row = ui;
@@ -61,24 +62,6 @@ static void wpWCSwitchTramp(id self, SEL _cmd, id arg) {
                 @selector(wpHandleSwitchKey:row:on:haveOn:), key, row, on, haveOn);
         }
     }
-}
-
-static void configLog(NSString *content) {
-    @try {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *folderPath = [paths.firstObject stringByAppendingPathComponent:@"MioPlugin_Logs"];
-        [[NSFileManager defaultManager] createDirectoryAtPath:folderPath withIntermediateDirectories:YES attributes:nil error:nil];
-        NSString *filePath = [folderPath stringByAppendingPathComponent:@"redenvelop.log"];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], content];
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-        if (handle) {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        } else {
-            [line writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    } @catch (NSException *e) {}
 }
 
 static const CGFloat kCellHPadding = 16.0;
@@ -549,6 +532,15 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 
 #pragma mark - Row: Color
 
+// 颜色行小色块按钮（单色/双色复用）：y 恒按 kRowH 居中，assoc 挂配置 key，点击走 colorButtonTapped:
+- (UIButton *)wpColorBtn:(UIColor *)color size:(CGFloat)size x:(CGFloat)x key:(NSString *)key {
+    UIButton *btn = [WPColorPicker makeColorButtonWithColor:color size:size];
+    btn.frame = CGRectMake(x, (kRowH - size) / 2.0, size, size);
+    objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+    return btn;
+}
+
 - (CGFloat)addColorRowInGroup:(UIView *)group
                         title:(NSString *)title
                           key:(NSString *)key
@@ -570,26 +562,14 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 
     if (!dual) {
         UIColor *color = [WPColorUtil colorFromHexString:value] ?: [UIColor grayColor];
-        UIButton *btn = [WPColorPicker makeColorButtonWithColor:color size:30];
-        btn.frame = CGRectMake(2, (kRowH - 30) / 2, 30, 30);
-        objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [cv addSubview:btn];
+        [cv addSubview:[self wpColorBtn:color size:30 x:2 key:key]];
     } else {
         CGFloat btnSize = 24;
-        UIColor *darkColor = [[WPColorUtil class] colorFromHexString:darkValue] ?: [UIColor darkGrayColor];
-        UIButton *darkBtn = [WPColorPicker makeColorButtonWithColor:darkColor size:btnSize];
-        darkBtn.frame = CGRectMake(cvW - 4 - btnSize, (kRowH - btnSize) / 2, btnSize, btnSize);
-        objc_setAssociatedObject(darkBtn, "key", darkKey, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [darkBtn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [cv addSubview:darkBtn];
-
-        UIColor *lightColor = [[WPColorUtil class] colorFromHexString:value] ?: [UIColor whiteColor];
-        UIButton *lightBtn = [WPColorPicker makeColorButtonWithColor:lightColor size:btnSize];
-        lightBtn.frame = CGRectMake(darkBtn.frame.origin.x - 6 - btnSize, darkBtn.frame.origin.y, btnSize, btnSize);
-        objc_setAssociatedObject(lightBtn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [lightBtn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [cv addSubview:lightBtn];
+        CGFloat darkX = cvW - 4 - btnSize;
+        UIColor *darkColor = [WPColorUtil colorFromHexString:darkValue] ?: [UIColor darkGrayColor];
+        [cv addSubview:[self wpColorBtn:darkColor size:btnSize x:darkX key:darkKey]];
+        UIColor *lightColor = [WPColorUtil colorFromHexString:value] ?: [UIColor whiteColor];
+        [cv addSubview:[self wpColorBtn:lightColor size:btnSize x:darkX - 6 - btnSize key:key]];
     }
 
     id cell = WPWCViewCell((SEL)0, self, [self wpSubTitle:title], cv);
