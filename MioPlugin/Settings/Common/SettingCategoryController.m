@@ -24,7 +24,7 @@ static void wpWCSwitchTramp(id self, SEL _cmd, id arg) {
         if ([selName hasPrefix:@"wpSw_"]) {
             key = [selName substringFromIndex:5];
             NSRange r = [key rangeOfString:@"_"];
-            if (r.location != NSNotFound && r.location > 0 && r.location <= 20) {
+            if (r.location != NSNotFound && r.location <= 20) {
                 key = [key substringFromIndex:r.location + 1];
             }
         }
@@ -48,7 +48,9 @@ static void wpWCSwitchTramp(id self, SEL _cmd, id arg) {
                     @try {
                         id ui = [arg valueForKey:@"userInfo"];
                         if ([ui isKindOfClass:[NSDictionary class]]) row = ui;
-                    } @catch (NSException *e) {}
+                    } @catch (NSException *e) {
+                        WPLog(@"WCTable", @"[WCSW] 取 userInfo 异常 arg=%@: %@", NSStringFromClass([arg class]), e.name);
+                    }
                     if (!row) row = objc_getAssociatedObject(arg, "wprow");
                 }
             }
@@ -155,10 +157,9 @@ static const CGFloat kCellHPadding = 16.0;
     BOOL needRestore = NO;
     UIView *oldContainer = nil;
     if (self.wcTable) {
-        if (self.wcTable.tableView) {
-            savedOffset = self.wcTable.tableView.contentOffset;
-            needRestore = savedOffset.y > 0.5;
-        }
+        // tableView 为 nil 时向 nil 发消息返回零值 CGPoint → savedOffset=0、needRestore=NO，与判空等价
+        savedOffset = self.wcTable.tableView.contentOffset;
+        needRestore = savedOffset.y > 0.5;
         oldContainer = self.wcTable.containerView;
     }
     // 立即摘旧挂新会闪一帧空表（新表要等 reloadAsync 才有内容）。
@@ -203,6 +204,18 @@ static const CGFloat kCellHPadding = 16.0;
     return s;
 }
 
+// 配置保存统一出口：setValue + saveAll，异常打日志返回 NO（调用方按需中止后续联动）
+- (BOOL)wpSaveConfigKey:(NSString *)key value:(id)value {
+    @try {
+        [ConfigManager setValue:value forKey:key];
+        [ConfigManager saveAll];
+        return YES;
+    } @catch (NSException *e) {
+        WPLog(@"Config", @"[SAVE] 写配置失败 key=%@ err=%@ - %@", key, e.name, e.reason);
+        return NO;
+    }
+}
+
 // switch 回调落地：写配置；总开关 key 触发整页重建
 - (void)wpHandleSwitchKey:(NSString *)key row:(id)row on:(BOOL)on haveOn:(BOOL)haveOn {
     NSString *cfgKey = key;
@@ -219,13 +232,7 @@ static const CGFloat kCellHPadding = 16.0;
             on = YES;
         }
     }
-    @try {
-        [ConfigManager setValue:@(on) forKey:cfgKey];
-        [ConfigManager saveAll];
-    } @catch (NSException *e) {
-        WPLog(@"Config", @"[WCSW] 写配置失败 key=%@ err=%@", cfgKey, e);
-        return;
-    }
+    if (![self wpSaveConfigKey:cfgKey value:@(on)]) return;
     WPLog(@"Config", @"[WCSW] %@ = %@", cfgKey, on ? @"ON" : @"OFF");
 
     if ([self.masterSwitchKeys containsObject:cfgKey]) {
@@ -249,7 +256,9 @@ static const CGFloat kCellHPadding = 16.0;
         @try {
             id ui = [arg valueForKey:@"userInfo"];
             if ([ui isKindOfClass:[NSDictionary class]]) row = ui;
-        } @catch (NSException *e) {}
+        } @catch (NSException *e) {
+            WPLog(@"WCTable", @"[WCTAP] 取 userInfo 异常 arg=%@: %@", NSStringFromClass([arg class]), e.name);
+        }
         if (!row) row = objc_getAssociatedObject(arg, "wprow");
     }
     if (![row isKindOfClass:[NSDictionary class]]) {
@@ -280,7 +289,7 @@ static const CGFloat kCellHPadding = 16.0;
     } else if ([type isEqualToString:@"colorTap"]) {
         // rightView 包装失败时的兜底：模拟色块按钮打开取色器
         UIButton *dummy = [UIButton buttonWithType:UIButtonTypeCustom];
-        objc_setAssociatedObject(dummy, "key", row[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(dummy, "mioColorKey", row[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         if ([self respondsToSelector:@selector(colorButtonTapped:)]) {
             ((void (*)(id, SEL, id))objc_msgSend)(self, @selector(colorButtonTapped:), dummy);
         }
@@ -309,7 +318,9 @@ static const CGFloat kCellHPadding = 16.0;
         id v = [ConfigManager valueForKey:key];
         if ([v isKindOfClass:[NSString class]]) currentValue = v;
         else if ([v isKindOfClass:[NSNumber class]]) currentValue = [(NSNumber *)v stringValue];
-    } @catch (NSException *e) {}
+    } @catch (NSException *e) {
+        WPLog(@"Config", @"[WCEDIT] 读当前值异常 key=%@: %@", key, e.name);
+    }
 
     WPLog(@"WCTable", @"[WCEDIT] 打开输入弹窗 key=%@ 当前=%@", key, currentValue);
     [MioAlertHelper showInputAlert:title
@@ -322,22 +333,22 @@ static const CGFloat kCellHPadding = 16.0;
         NSString *nv = inputText ?: @"";
         if (nv.length == 0 && hint.length > 0) nv = hint;
         @try {
-            if (valueType == InputValueTypeText) {
-                [ConfigManager setValue:nv forKey:key];
-            } else {
-                [ConfigManager setValue:[NSDecimalNumber decimalNumberWithString:nv] forKey:key];
-            }
-            [ConfigManager saveAll];
+            // NSDecimalNumber 对非法串会 raise，转换必须留在 try 内；写配置由 helper 统一兜
+            id sv = nv;
+            if (valueType != InputValueTypeText) sv = [NSDecimalNumber decimalNumberWithString:nv];
+            if (![self wpSaveConfigKey:key value:sv]) return;
             WPLog(@"Config", @"[WCEDIT] %@ = %@", key, nv);
         } @catch (NSException *e) {
-            WPLog(@"Config", @"[WCEDIT] 保存失败 key=%@ err=%@", key, e);
+            WPLog(@"Config", @"[WCEDIT] 数值转换失败 key=%@ 输入=%@", key, nv);
             return;
         }
         // 落地验证：读回实例值，诊断 descriptor 注册/key 匹配问题
         @try {
             id back = [ConfigManager valueForKey:key];
             WPLog(@"Config", @"[WCEDIT] 验证读回 key=%@ 值=%@(%@)", key, back, NSStringFromClass([back class]));
-        } @catch (NSException *e) {}
+        } @catch (NSException *e) {
+            WPLog(@"Config", @"[WCEDIT] 读回验证异常 key=%@: %@", key, e.name);
+        }
         [self wpRebuildWeChatTable];
         [self buildUI];
     }];
@@ -348,7 +359,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     if (!cellMgr) return;
     objc_setAssociatedObject(cellMgr, "wprow", row, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     @try {
-        [(id)cellMgr setValue:row forKey:@"userInfo"];
+        [cellMgr setValue:row forKey:@"userInfo"];
     } @catch (NSException *e) {
         WPLog(@"WCTable", @"[WCTABLE] userInfo KVC 失败（已用 assoc 兜底）: %@", e.name);
     }
@@ -533,10 +544,12 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 #pragma mark - Row: Color
 
 // 颜色行小色块按钮（单色/双色复用）：y 恒按 kRowH 居中，assoc 挂配置 key，点击走 colorButtonTapped:
+// 关联键用带前缀的 "mioColorKey"：裸 "key" 是 C 字符串字面量，链接器会跨文件合并同名字面量，
+// 其他文件若对同类对象也挂 "key" 会撞键互相覆盖
 - (UIButton *)wpColorBtn:(UIColor *)color size:(CGFloat)size x:(CGFloat)x key:(NSString *)key {
     UIButton *btn = [WPColorPicker makeColorButtonWithColor:color size:size];
     btn.frame = CGRectMake(x, (kRowH - size) / 2.0, size, size);
-    objc_setAssociatedObject(btn, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(btn, "mioColorKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
     return btn;
 }
@@ -644,8 +657,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 - (void)wpSegmentChanged:(UISegmentedControl *)seg {
     NSString *key = objc_getAssociatedObject(seg, "wpSegKey");
     if (key.length == 0) return;
-    [ConfigManager setValue:@(seg.selectedSegmentIndex) forKey:key];
-    [ConfigManager saveAll];
+    [self wpSaveConfigKey:key value:@(seg.selectedSegmentIndex)];
 }
 
 #pragma mark - Separator
@@ -690,16 +702,10 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 #pragma mark - Switch Changed（遗留 UISwitch 入口，微信引擎不触发；保留供子类重写链）
 
 - (void)switchChanged:(UISwitch *)sender {
-    NSString *key = objc_getAssociatedObject(sender, "key");
+    NSString *key = objc_getAssociatedObject(sender, "mioColorKey");
     if (!key) return;
 
-    @try {
-        [ConfigManager setValue:@(sender.on) forKey:key];
-        [ConfigManager saveAll];
-    } @catch (NSException *e) {
-        WPLog(@"Config", @"[SWITCH] 配置保存异常: %@ - %@", e.name, e.reason);
-        return;
-    }
+    if (![self wpSaveConfigKey:key value:@(sender.on)]) return;
 
     if ([self.masterSwitchKeys containsObject:key]) {
         [self.view endEditing:YES];
@@ -754,7 +760,7 @@ static NSString *LightKeyForDarkKey(NSString *darkKey) {
 }
 
 - (void)colorButtonTapped:(UIButton *)sender {
-    NSString *key = objc_getAssociatedObject(sender, "key");
+    NSString *key = objc_getAssociatedObject(sender, "mioColorKey");
     if (!key) return;
 
     UIColor *currentColor = sender.backgroundColor ?: [UIColor grayColor];
