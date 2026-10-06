@@ -82,6 +82,10 @@ static IMP orig_NMFVC_traitCollectionDidChange = NULL;
 static IMP orig_NMFVC_heightForHeader = NULL;
 static IMP orig_NMFVC_viewForHeader = NULL;
 static IMP orig_tableLayout = NULL;    // MainFrameTableView.layoutSubviews（unstick 用）
+
+// HC 宿主 cell 直读缓存（SG sHeaderHostCell 同款：weak 挂引用，cell 销毁自动置 nil；
+// hook_viewForHeader 出口赋值，unstick 热路径免 subviews 遍历/免查微信内部记录）
+static __weak UITableViewCell *sHCHeaderCell = nil;
 static BOOL hcHookInstalled = NO;
 static NSCache<NSString *, UIImage *> *hcImageCache = nil;
 static NSString *hcLastGeoKey = nil;   // 配置指纹：变化才 reloadData 重建 header
@@ -824,6 +828,7 @@ static UIView *hook_NMFVC_viewForHeader(id self, SEL _cmd, UITableView *tableVie
     if (width <= 0.0) width = [UIScreen mainScreen].bounds.size.width;
 
     BOOL strip = HCStripOccupied();
+    UIView *host;
     if (strip) {
         // 追加式共存：原生/分组条 header 在上（原高），卡片接在其下
         UIView *origView = ((UIView *(*)(id, SEL, UITableView *, NSInteger))orig_NMFVC_viewForHeader)
@@ -831,35 +836,39 @@ static UIView *hook_NMFVC_viewForHeader(id self, SEL _cmd, UITableView *tableVie
         CGFloat origH = origView ? CGRectGetHeight(origView.frame) : 0.0;
         WPLog(@"HomeCard", @"[HEADER] wrap w=%.1f orig=%@ h=%.1f cardH=%.1f",
               width, origView ? NSStringFromClass(origView.class) : @"nil", origH, HCCardHeight(cfg));
-        return HCBuildHeader(self, width, origH, origView);
+        host = HCBuildHeader(self, width, origH, origView);
+    } else {
+        // XOS 式整体替换（原生 header 弃用，XOS 同款）
+        WPLog(@"HomeCard", @"[HEADER] replace w=%.1f cardH=%.1f margin=%.1f bottomFix=%.1f",
+              width, HCCardHeight(cfg), HCCardMargin(cfg), cfg.hcCardBottomFix);
+        host = HCBuildHeader(self, width, 0.0, nil);
     }
-
-    // XOS 式整体替换（原生 header 弃用，XOS 同款）
-    WPLog(@"HomeCard", @"[HEADER] replace w=%.1f cardH=%.1f margin=%.1f bottomFix=%.1f",
-          width, HCCardHeight(cfg), HCCardMargin(cfg), cfg.hcCardBottomFix);
-    return HCBuildHeader(self, width, 0.0, nil);
+    // 出口刷新缓存（SG 同款：创建/复用两条路径都刷新，防止复用实例更替后缓存陈旧）
+    sHCHeaderCell = (UITableViewCell *)host;
+    return host;
 }
 
-// header 去粘滞（SessionGroupsHook.m SGUnstickHeader 同款，源出 WCR
+// header 去粘滞（SessionGroupsHook.m SGUnstickHeader 完全同款，源出 WCR
 // WCRefineHomeHeaderUnstick unstickIfNeededOnTableView: Misc_part4.c:1970-2264）：
 // plain tableView 的 section header 会 sticky 悬停钉顶，与微信「Windows 已登录」
-// 浮层提示条同位重叠（sgbadge17d 实测）。每次 layoutSubviews 后把 header frame
-// 用 rectForHeaderInSection: 的内容坐标理论位置摆回去 → header 跟随内容滚动。
-// headerViewForSection:0 返回的就是 HC 的 MMTableViewCell 宿主（cell 类 header
-// 微信不包装，同 SG host cell），摆完没人再动；仅卡片功能接管时生效，否则空操作
+// 浮层提示条同位重叠。每次 layoutSubviews 后把宿主 cell frame 用
+// rectForHeaderInSection: 的内容坐标理论位置摆回去 → cell 是 table 直接子视图
+// （MMTableViewCell 微信不包装），frame.y 恒定内容坐标 = 跟随内容滚动；UIKit 每次
+// 想钉顶就被拉回内容流。条随列表滚走滚回，提示条浮层只在滚动经过顶部一瞬擦肩。
+// 未接管时 weak 缓存为 nil，立即空操作
 static void HCUnstickHeader(UITableView *table) {
-    if (![[HomeCardConfig shared] hcEnabled]) return;
-    UIView *header = [table headerViewForSection:0];
-    if (!header || ![header viewWithTag:kHCCardTag]) return;   // 未接管：不动
+    UITableViewCell *host = sHCHeaderCell;
+    if (!host) return;                              // 未接管：weak 空，立即返回
+    if (![host isDescendantOfView:table]) return;   // 归属检查：其他 table 触发的 layout 跳过（孤儿 view 亦为 NO）
     CGRect target = [table rectForHeaderInSection:0];
     if (target.size.height <= 0) return;
     // 只在 frame 真不一致时才写，避免高频空写触发多余布局
-    CGRect f = header.frame;
+    CGRect f = host.frame;
     if (fabs(f.origin.y - target.origin.y) < 0.5 &&
         fabs(f.size.height - target.size.height) < 0.5) {
         return;
     }
-    header.frame = target;
+    host.frame = target;
 }
 
 static void hook_tableLayoutSubviews(UITableView *table, SEL _cmd) {
