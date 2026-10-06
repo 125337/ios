@@ -717,7 +717,7 @@ static void HCStyleRender(UIView *bgv, NSInteger style, CGFloat W, CGFloat H, BO
     UIColor *label = dark ? [UIColor whiteColor] : [UIColor blackColor];
 
     // 当日上下文（全部动态：日历组件/农历/周数/宜忌，无写死数据）
-    static HCStyleCtx c;
+    HCStyleCtx c = { 0 };   // 栈上临时：含 __strong 成员，不做成 static（静态存储期无析构时机）
     NSCalendar *g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
     NSDate *now = [NSDate date];
     NSDateComponents *cur = [g components:NSCalendarUnitYear | NSCalendarUnitMonth
@@ -806,6 +806,9 @@ static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *
             NSArray<NSString *> *stSyms = e.callStackSymbols;
             WPLog(@"HomeCard", @"[STYLE] ✗ %@: %@\n%@", e.name, e.reason,
                   [stSyms subarrayWithRange:NSMakeRange(0, MIN(6, stSyms.count))]);
+            // 清异常前的半成品（子视图 + 直挂 bgv.layer 的 CAShapeLayer），回落默认周历不叠加
+            [bgv.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
+            for (CALayer *l in [bgv.layer sublayers].copy) [l removeFromSuperlayer];
         }
         if (styled) {
             HCCalTapTarget *t2 = [HCCalTapTarget new];
@@ -1471,7 +1474,7 @@ static void hook_tableLayoutSubviews(UITableView *table, SEL _cmd) {
                                                       object:nil queue:nil
                                                   usingBlock:^(NSNotification *note) {
         WPLog(@"HomeCard", @"[NOTIFY] style changed, vc=%@",
-              hcLastMainVC ? NSStringFromClass(hcLastMainVC.class) : @"nil");
+              hcLastMainVC ? NSStringFromClass([hcLastMainVC class]) : @"nil");
         HCScheduleSync(hcLastMainVC, 0.0);
     }];
     WPLog(@"HomeCard", @"[Hook] ✓ 卡片样式变更通知监听");
