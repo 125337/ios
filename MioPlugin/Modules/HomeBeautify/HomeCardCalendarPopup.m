@@ -68,10 +68,15 @@
         cn = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierChinese];
     });
     NSDateComponents *c = [cn components:NSCalendarUnitMonth | NSCalendarUnitDay fromDate:date];
-    if (c.month < 1 || c.month > 12 || c.day < 1 || c.day > 30) return NO;
-    if (outMonth) *outMonth = c.month;
+    // 农历闰月：components 读取时 month 为负值（-6 = 闰六月，NSCalendar 文档化行为；
+    // leapMonth 属性读取方向不保证填充，不依赖）
+    NSInteger m = c.month;
+    BOOL leap = (m < 0);
+    if (leap) m = -m;
+    if (m < 1 || m > 12 || c.day < 1 || c.day > 30) return NO;
+    if (outMonth) *outMonth = m;
     if (outDay) *outDay = c.day;
-    if (outLeap) *outLeap = c.leapMonth;   // NSDateComponents.leapMonth：闰月标志
+    if (outLeap) *outLeap = leap;
     return YES;
 }
 

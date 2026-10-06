@@ -65,11 +65,9 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 
-// 叠加视图 tag（'MC'/'MI'/'ME'/'MF'，避开微信原生 tag）
+// 叠加视图 tag（'MC'/'MI'，避开微信原生 tag；tag 必须有 viewWithTag 消费点才算活代码）
 static const NSInteger kHCCardTag = 0x4D43;      // 卡片视图（挂在 header 容器上）
 static const NSInteger kHCImageTag = 0x4D49;     // 卡内背景图（挂在卡片上）
-static const NSInteger kHCCalTag = 0x4D45;       // 日历挂件（挂在 header 容器上）
-static const NSInteger kHCWeatherTag = 0x4D46;   // 天气徽章（挂在 header 容器上）
 
 // 手势 target 关联键（objc_setAssociatedObject 键必须 const void* 自指指针）
 static const void *kHCTapTargetKey = &kHCTapTargetKey;
@@ -1072,7 +1070,6 @@ static void HCAddWeatherBadge(id vc, UIView *container, HomeCardConfig *cfg, BOO
     CGFloat wx = cfg.hcWeatherX, wy = cfg.hcWeatherY;
 
     UIView *badge = [[UIView alloc] initWithFrame:CGRectZero];
-    badge.tag = kHCWeatherTag;
     badge.userInteractionEnabled = YES;   // XOS 同款可点（cadis_weatherBadgeTapped）
     // XOS L15347-15349 实锤：药丸底色默认 [UIColor clearColor]（透明浮层），非白底
     badge.backgroundColor = HCColorForMode(cfg.hcWeatherBgColor, cfg.hcWeatherBgColorDark, dark)
@@ -1243,7 +1240,6 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
             calY = origHeight + cardH + 12.0 + cfg.hcCardBottomFix;
         }
         UIView *cal = HCBuildCalendar(vc, width, dark, cfg);
-        cal.tag = kHCCalTag;
         cal.frame = CGRectMake(0, calY, width, calH);
         // 内容缩放（XOS FUN_00147ed8：≤0 按 100，钳制 50-200，/100 应用）
         CGFloat s = MIN(MAX(cfg.hcCalScale <= 0 ? 100.0 : cfg.hcCalScale, 50.0), 200.0) / 100.0;
