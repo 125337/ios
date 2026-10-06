@@ -691,8 +691,11 @@ static void HCApply(id vc) {
     UITableView *table = HCMainTableView(vc);
     if (!table) return;
 
-    UIView *header = [table headerViewForSection:0];
-    if (!header) return;
+    // 宿主直读缓存（SG 同款）： cellul 化后宿主是 MMTableViewCell，不进 UITableView 的
+    // headerViewForSection: 记录（原生查找返回 nil）→ 标题/换图永远跳过；weak 缓存是
+    // hook_viewForHeader 出口刚赋的新实例
+    UIView *header = sHCHeaderCell;
+    if (!header || ![header isDescendantOfView:table]) return;
 
     // 幂等：先清旧标题层
     [[header viewWithTag:kHCTitleTag] removeFromSuperview];
@@ -769,7 +772,10 @@ static void HCScheduleSync(id vc, NSTimeInterval delay) {
         NSString *key = HCGeoKey();
         if (![key isEqualToString:hcLastGeoKey]) {
             hcLastGeoKey = key;
-            [table reloadData];  // 让 viewForHeaderInSection 按新几何重建
+            [table reloadData];
+            // 同步跑完布局 → viewForHeaderInSection 执行 → sHCHeaderCell 就绪
+            // （ cellul 化后 headerViewForSection: 查不到宿主，HCApply 只能依赖缓存）
+            [table layoutIfNeeded];
         }
         HCApply(vc);
     });
