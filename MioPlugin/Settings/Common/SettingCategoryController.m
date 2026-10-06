@@ -619,15 +619,29 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     WPWGroup *g = (WPWGroup *)group;
     if (![g isKindOfClass:[WPWGroup class]]) return cy;
 
-    // 宽度按最长项文字自适应并钳制上限（4 个汉字 ≈ 63pt/段）：过宽时微信 rightView 行
-    // 放不下会左移叠住标题（实测「卡片内部/日历内部/联系人内部」3 段 236pt 盖住「显示位置」）
-    CGFloat maxChars = 1;
+    // 段宽按最长项实测文字宽自适应，总宽超出行右侧可用区时钳制并缩小控件字号兜底：
+    // 过宽会左移叠住行标题（实测 3 段 236pt 盖住「显示位置」），硬钳上限又会把
+    // 「联系人内部」这类 5 字段均分截断——两者都不写死，按内容与可用区动态算
+    CGFloat maxTextW = 0;
     for (NSString *n in names) {
-        maxChars = MAX(maxChars, (CGFloat)n.length);
+        CGFloat tw = [n sizeWithAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:12.5]}].width;
+        maxTextW = MAX(maxTextW, tw);
     }
-    CGFloat perSeg = MAX(40.0, maxChars * 14.0 + 8.0);
-    CGFloat segW = MIN(names.count * perSeg + 14.0, 204.0);
+    CGFloat perSeg = MAX(40.0, ceil(maxTextW) + 10.0);
+    CGFloat segNeed = names.count * perSeg + 14.0;
+    // 行内可用宽 ≈ cell 宽 − 标题实测宽（微信标题 16pt、左距 16）− 右距与间隙 24；
+    // 手风琴子行的 ↑ 前缀会加大标题宽 → 分段自动让位
+    CGFloat cellW = [UIScreen mainScreen].bounds.size.width - 32.0;
+    CGFloat titleW = [[self wpSubTitle:title] sizeWithAttributes:
+                      @{NSFontAttributeName: [UIFont systemFontOfSize:16.0]}].width;
+    CGFloat segAvail = MAX(150.0, cellW - 16.0 - titleW - 24.0);
+    CGFloat segW = MIN(segNeed, segAvail);
     UISegmentedControl *seg = [[UISegmentedControl alloc] initWithItems:names];
+    if (segW < segNeed - 0.5) {
+        // 可用区放不下需求宽：小一号字体兜底，尽量不截断段文字
+        [seg setTitleTextAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:11.0]}
+                           forState:UIControlStateNormal];
+    }
     seg.frame = CGRectMake(0, 0, segW, 30.0);
     seg.selectedSegmentIndex = MAX(0, MIN(index, (NSInteger)names.count - 1));
     objc_setAssociatedObject(seg, "wpSegKey", key ?: @"", OBJC_ASSOCIATION_RETAIN_NONATOMIC);
