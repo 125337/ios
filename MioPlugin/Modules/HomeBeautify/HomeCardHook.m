@@ -247,57 +247,88 @@ static UILabel *HCStyleLbl(UIView *parent, CGRect f, NSString *text, CGFloat siz
     return l;
 }
 
-// ── 样式 1 圆环进度：左侧单大环（年进度 label 弧 + 月进度 accent 弧叠外层，-90° 起顺时针）
-//     环心日号；右侧 年月/星期+周数/农历/图例两行（色点+灰标签+黑粗百分比）──
+// ── 样式 1 圆环进度：XOS style 8 同构（FUN_00159db8 L21993-22120）：
+//     大环 r=38 lw=6（底灰 + 进度弧 accent，strokeEnd=年进度）
+//     小环 r=28 lw=5（底灰 + 进度弧 label 色，strokeEnd=月进度）
+//     圆心 (58, H/2) 固定几何；fillColor 显式 clearColor、lineCap 全 round（XOS 同款）；
+//     环心日号 (c-20, c-10, 40, 20) 18 Bold；右列 x=106 图例两行 ──
 static void HCStyleRings(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleCtx *c,
                          UIColor *accent, UIColor *label) {
-    CGPoint center = CGPointMake(W * 0.21, H / 2.0 + 4.0);
-    CGFloat radius = 36.0, lw2 = 7.0;
-    CAShapeLayer *track = [CAShapeLayer layer];
-    track.path = [UIBezierPath bezierPathWithArcCenter:center radius:radius
-                                            startAngle:-M_PI_2 endAngle:M_PI_2 * 3.0 clockwise:YES].CGPath;
-    track.strokeColor = [UIColor colorWithWhite:dark ? 1.0 : 0.0 alpha:0.08].CGColor;
-    track.fillColor = nil;
-    track.lineWidth = lw2;
-    [v.layer addSublayer:track];
-
-    // 年进度弧（label 色）→ 月进度弧（accent）叠其上（红弧为月进度，起于顶部顺时针）
+    WPLog(@"HomeCard", @"[RINGS] enter W=%.1f H=%.1f dark=%d day=%ld y=%ld/%ld m=%ld/%ld",
+          W, H, dark, (long)c->day, (long)c->dayOfYear, (long)c->daysInYear,
+          (long)c->day, (long)c->daysInMonth);
+    CGPoint center = CGPointMake(58.0, H / 2.0);
     double yp = floor((double)c->dayOfYear / (double)c->daysInYear * 100.0);
     double mp = floor((double)c->day / (double)c->daysInMonth * 100.0);
-    NSArray<NSNumber *> *pcts = @[@(MAX(MIN(yp / 100.0, 1.0), 0.02)), @(MAX(MIN(mp / 100.0, 1.0), 0.02))];
-    NSArray<UIColor *> *cols = @[label, accent];
-    for (NSInteger i = 0; i < 2; i++) {
-        CAShapeLayer *arc = [CAShapeLayer layer];
-        arc.path = track.path;
-        arc.strokeColor = cols[i].CGColor;
-        arc.fillColor = nil;
-        arc.lineWidth = lw2;
-        arc.lineCap = kCALineCapRound;
-        arc.strokeEnd = pcts[i].doubleValue;
-        [v.layer addSublayer:arc];
-    }
-    HCStyleLbl(v, CGRectMake(center.x - radius, center.y - 18, radius * 2, 36),
-               [NSString stringWithFormat:@"%ld", (long)c->day], 30.0, UIFontWeightBold,
+    yp = MAX(MIN(yp, 100.0), 0.0);
+    mp = MAX(MIN(mp, 100.0), 0.0);
+    UIColor *trackCol = [UIColor colorWithWhite:dark ? 1.0 : 0.0 alpha:0.08];
+
+    // 大环（年进度，accent）：底 + 进度两 layer 复用同一 path（XOS 22026-22073）
+    UIBezierPath *big = [UIBezierPath bezierPathWithArcCenter:center radius:38.0
+                                                  startAngle:-M_PI_2 endAngle:M_PI_2 * 3.0 clockwise:YES];
+    CAShapeLayer *bigTrack = [CAShapeLayer layer];
+    bigTrack.path = big.CGPath;
+    bigTrack.fillColor = [UIColor clearColor].CGColor;
+    bigTrack.strokeColor = trackCol.CGColor;
+    bigTrack.lineWidth = 6.0;
+    bigTrack.lineCap = kCALineCapRound;
+    [v.layer addSublayer:bigTrack];
+    CAShapeLayer *bigArc = [CAShapeLayer layer];
+    bigArc.path = big.CGPath;
+    bigArc.fillColor = [UIColor clearColor].CGColor;
+    bigArc.strokeColor = accent.CGColor;
+    bigArc.lineWidth = 6.0;
+    bigArc.lineCap = kCALineCapRound;
+    bigArc.strokeEnd = yp / 100.0;
+    [v.layer addSublayer:bigArc];
+    WPLog(@"HomeCard", @"[RINGS] big ring ok");
+
+    // 小环（月进度，label 色）：XOS 22074-22120
+    UIBezierPath *small = [UIBezierPath bezierPathWithArcCenter:center radius:28.0
+                                                    startAngle:-M_PI_2 endAngle:M_PI_2 * 3.0 clockwise:YES];
+    CAShapeLayer *smTrack = [CAShapeLayer layer];
+    smTrack.path = small.CGPath;
+    smTrack.fillColor = [UIColor clearColor].CGColor;
+    smTrack.strokeColor = trackCol.CGColor;
+    smTrack.lineWidth = 5.0;
+    smTrack.lineCap = kCALineCapRound;
+    [v.layer addSublayer:smTrack];
+    CAShapeLayer *smArc = [CAShapeLayer layer];
+    smArc.path = small.CGPath;
+    smArc.fillColor = [UIColor clearColor].CGColor;
+    smArc.strokeColor = label.CGColor;
+    smArc.lineWidth = 5.0;
+    smArc.lineCap = kCALineCapRound;
+    smArc.strokeEnd = mp / 100.0;
+    [v.layer addSublayer:smArc];
+    WPLog(@"HomeCard", @"[RINGS] small ring ok");
+
+    // 环心日号（XOS 22121-22140：(c-20, c-10, 40, 20) 18 Bold 居中）
+    HCStyleLbl(v, CGRectMake(center.x - 20.0, center.y - 10.0, 40.0, 20.0),
+               [NSString stringWithFormat:@"%ld", (long)c->day], 18.0, UIFontWeightBold,
                label, NSTextAlignmentCenter);
 
-    // 右侧信息列
-    CGFloat x2 = center.x + radius + lw2 + 18.0, w2 = W - x2 - 14.0;
-    HCStyleLbl(v, CGRectMake(x2, 8, w2, 22),
+    // 右列（XOS x=106 = 58+48）：年月 15 Bold / 星期+周数 / 农历 accent / 图例两行
+    CGFloat x2 = center.x + 48.0, w2 = W - x2 - 14.0;
+    if (w2 < 60.0) w2 = 60.0;   // 极窄兜底（标签不越界即可）
+    HCStyleLbl(v, CGRectMake(x2, 10.0, w2, 18),
                [NSString stringWithFormat:@"%ld年%ld月", (long)c->year, (long)c->month],
-               17.0, UIFontWeightBold, label, NSTextAlignmentLeft);
-    HCStyleLbl(v, CGRectMake(x2, 34, w2, 15),
+               15.0, UIFontWeightBold, label, NSTextAlignmentLeft);
+    HCStyleLbl(v, CGRectMake(x2, 30.0, w2, 14),
                [NSString stringWithFormat:@"%@  第%ld周", HCWeekName(c->weekday, YES), (long)c->weekOfYear],
-               12.0, 0, HCSecondaryLabel(), NSTextAlignmentLeft);
-    HCStyleLbl(v, CGRectMake(x2, 53, w2, 16), c->lunarMD, 13.5, UIFontWeightMedium, accent,
+               11.0, 0, HCSecondaryLabel(), NSTextAlignmentLeft);
+    HCStyleLbl(v, CGRectMake(x2, 48.0, w2, 16), c->lunarMD, 12.0, UIFontWeightMedium, accent,
                NSTextAlignmentLeft);
-    // 图例两行：色点 + 灰标签 + 黑粗百分比
+    // 图例两行：色点 + 灰标签 + 粗百分比（月=小环 label 色，年=大环 accent 色）
     NSArray<NSString *> *caps = @[@"月进度", @"年进度"];
     NSArray<NSString *> *vals = @[[NSString stringWithFormat:@"%.0f%%", mp],
                                   [NSString stringWithFormat:@"%.0f%%", yp]];
+    NSArray<UIColor *> *dots = @[label, accent];
     for (NSInteger i = 0; i < 2; i++) {
-        CGFloat y = 76.0 + i * 19.0;
-        UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(x2, y + 4.0, 9, 9)];
-        dot.backgroundColor = i == 0 ? accent : label;
+        CGFloat y = 70.0 + i * 19.0;
+        UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(x2, y + 3.5, 9, 9)];
+        dot.backgroundColor = dots[i];
         dot.layer.cornerRadius = 4.5;
         [v addSubview:dot];
         HCStyleLbl(v, CGRectMake(x2 + 15, y, 52, 16), caps[i], 11.0, 0, HCSecondaryLabel(),
@@ -305,6 +336,7 @@ static void HCStyleRings(UIView *v, CGFloat W, CGFloat H, BOOL dark, HCStyleCtx 
         HCStyleLbl(v, CGRectMake(x2 + 68, y - 1, w2 - 68, 17), vals[i], 12.5,
                    UIFontWeightSemibold, label, NSTextAlignmentLeft);
     }
+    WPLog(@"HomeCard", @"[RINGS] done yp=%.0f mp=%.0f", yp, mp);
 }
 
 // 样式分派（0 = 默认周历走 HCBuildCalendar 原有渲染，≥1 走本函数）
@@ -376,14 +408,28 @@ static UIView *HCBuildCalendar(id vc, CGFloat width, BOOL dark, HomeCardConfig *
     // 卡片布局样式（≠0 = 布局样式渲染 bgv；0 = 默认周历，继续下方原有渲染）
     NSInteger st = [HomeCardCalendarPopup currentStyle];
     if (st != 0) {
-        HCStyleRender(bgv, st, bgv.bounds.size.width, bgv.bounds.size.height, dark, accent, selected);
-        HCCalTapTarget *t2 = [HCCalTapTarget new];
-        t2.block = ^{ [HomeCardCalendarPopup show]; };
-        UITapGestureRecognizer *tgr = [[UITapGestureRecognizer alloc] initWithTarget:t2
-                                                                              action:@selector(hcOnTap)];
-        objc_setAssociatedObject(tgr, kHCTapTargetKey, t2, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [cal addGestureRecognizer:tgr];
-        return cal;
+        // 排查探针：样式渲染异常不落死——WPLog 记录异常与调用栈，回落默认周历
+        BOOL styled = NO;
+        @try {
+            WPLog(@"HomeCard", @"[STYLE] st=%ld render begin", (long)st);
+            HCStyleRender(bgv, st, bgv.bounds.size.width, bgv.bounds.size.height, dark, accent, selected);
+            styled = YES;
+            WPLog(@"HomeCard", @"[STYLE] st=%ld render done", (long)st);
+        } @catch (NSException *e) {
+            NSArray<NSString *> *stSyms = e.callStackSymbols;
+            WPLog(@"HomeCard", @"[STYLE] ✗ %@: %@\n%@", e.name, e.reason,
+                  [stSyms subarrayWithRange:NSMakeRange(0, MIN(6, stSyms.count))]);
+        }
+        if (styled) {
+            HCCalTapTarget *t2 = [HCCalTapTarget new];
+            t2.block = ^{ [HomeCardCalendarPopup show]; };
+            UITapGestureRecognizer *tgr = [[UITapGestureRecognizer alloc] initWithTarget:t2
+                                                                                  action:@selector(hcOnTap)];
+            objc_setAssociatedObject(tgr, kHCTapTargetKey, t2, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            [cal addGestureRecognizer:tgr];
+            return cal;
+        }
+        // styled == NO（渲染异常）→ 落到下方默认周历渲染，保微信可用
     }
 
     // 内容块（标题 4 → 农历底 98，总高 98）在 bgv 内垂直居中（原版贴顶、下方留白失衡）
