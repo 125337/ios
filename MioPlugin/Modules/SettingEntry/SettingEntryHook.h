@@ -3,7 +3,6 @@
 
 @interface MioPluginSwitchHandler : NSObject
 + (instancetype)sharedInstance;
-- (void)switchChanged:(UISwitch *)sender;
 - (void)onEditRowTap:(id)sender;
 @end
 

@@ -343,19 +343,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     return instance;
 }
 
-- (void)switchChanged:(UISwitch *)sender {
-    NSString *key = objc_getAssociatedObject(sender, "key");
-    if (!key) return;
-
-    @try {
-        [ConfigManager setValue:@(sender.on) forKey:key];
-        [ConfigManager saveAll];
-        WPLog(@"Setting", @"[SAVE] %@ = %@", key, sender.on ? @"ON" : @"OFF");
-    } @catch (NSException *e) {
-        WPLog(@"Setting", @"[ERR] save %@: %@ - %@", key, e.name, e.reason);
-    }
-}
-
 - (void)onEditRowTap:(id)sender {
     NSString *key = objc_getAssociatedObject(sender, "editConfigKey");
     NSString *title = objc_getAssociatedObject(sender, "editTitle");

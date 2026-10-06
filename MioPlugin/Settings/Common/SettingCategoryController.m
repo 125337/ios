@@ -699,21 +699,6 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     return resultCy;
 }
 
-#pragma mark - Switch Changed（遗留 UISwitch 入口，微信引擎不触发；保留供子类重写链）
-
-- (void)switchChanged:(UISwitch *)sender {
-    NSString *key = objc_getAssociatedObject(sender, "mioColorKey");
-    if (!key) return;
-
-    if (![self wpSaveConfigKey:key value:@(sender.on)]) return;
-
-    if ([self.masterSwitchKeys containsObject:key]) {
-        [self.view endEditing:YES];
-        [self wpRebuildWeChatTable];
-        [self buildUI];
-    }
-}
-
 /// Light ↔ Dark 颜色 key 配对表
 /// key = light 侧属性名, value = dark 侧属性名
 static NSDictionary *ColorPairMap(void) {

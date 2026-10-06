@@ -55,7 +55,6 @@ typedef NS_ENUM(NSInteger, InputValueType) {
 - (CGFloat)addSegmentRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key names:(NSArray<NSString *> *)names index:(NSInteger)index cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addSeparatorInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addMasterSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on subBuilder:(void (^)(UIView *expand, CGFloat *ecy))subBuilder cy:(CGFloat)cy width:(CGFloat)w;
-- (void)switchChanged:(UISwitch *)sender;
 - (void)colorButtonTapped:(UIButton *)sender;
 - (void)buttonClicked:(NSString *)key;
 - (void)buildUI;
