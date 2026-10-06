@@ -532,7 +532,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
 - (void)onPrev { hcCalMonthOffset--; [self rebuild]; }   // cadis_calendarPrevMonth
 - (void)onNext { hcCalMonthOffset++; [self rebuild]; }   // cadis_calendarNextMonth
 
-- (void)onSwitchCardStyle {   // 首页卡片挂件布局样式（0=默认周历 1=圆环进度）→ 存键 → 通知卡片刷新
+- (void)onSwitchCardStyle {   // 首页卡片挂件布局样式（0-8，值序 = styleNames）→ 存键 → 通知卡片刷新 + 重画弹层状态
     NSArray<NSString *> *names = [HomeCardCalendarPopup styleNames];
     NSInteger cur = [HomeCardCalendarPopup currentStyle];
     NSMutableArray<NSString *> *btns = [NSMutableArray arrayWithCapacity:names.count];
@@ -543,8 +543,10 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
                           buttons:btns
                         onButton:^(NSInteger index) {
         [[NSUserDefaults standardUserDefaults] setInteger:index forKey:kKeyCardStyle];
-        // 卡片挂件布局随样式变化 → 通知 HomeCardHook 重建 header（弹层月历渲染不随卡片样式变）
+        // 卡片挂件布局随样式变化 → 通知 HomeCardHook 重建 header；
+        // rebuild 刷新弹层自身「卡片：xxx」按钮标题（与 onToggle* 同款，弹层还开着时状态即时更新）
         [[NSNotificationCenter defaultCenter] postNotificationName:@"MioHomeCardStyleChanged" object:nil];
+        [self rebuild];
     }];
 }
 
