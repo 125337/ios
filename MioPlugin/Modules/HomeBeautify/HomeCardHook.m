@@ -1036,12 +1036,19 @@ static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
             NSString *cityName = (!en && city.length > 0) ? city
                                : (areaName.length > 0 ? areaName : city);
             // XOS 同款文本："新余市 17° Overcast" / 英文模式 "Xinyu 17° Overcast"
-            hcWeatherText = cityName.length > 0
+            NSString *text = cityName.length > 0
                 ? [NSString stringWithFormat:@"%@ %@° %@", cityName, temp, descShow]
                 : [NSString stringWithFormat:@"%@° %@", temp, descShow];
-            hcWeatherSym = HCWeatherSymbolForDesc(descEn);
-            hcWeatherAt = [NSDate date].timeIntervalSince1970;
-            dispatch_async(dispatch_get_main_queue(), ^{ done(hcWeatherText, hcWeatherSym); });
+            NSString *sym = HCWeatherSymbolForDesc(descEn);
+            NSTimeInterval at = [NSDate date].timeIntervalSince1970;
+            // 缓存写入串行化到主队列（读/清侧全在主线程；后台线程直接赋 static __strong
+            // 会在 release 旧值瞬间与主线程读竞态 → 悬垂指针）
+            dispatch_async(dispatch_get_main_queue(), ^{
+                hcWeatherText = text;
+                hcWeatherSym = sym;
+                hcWeatherAt = at;
+                done(hcWeatherText, hcWeatherSym);
+            });
         }] resume];
 }
 
@@ -1055,6 +1062,8 @@ static void HCAddWeatherBadge(id vc, UIView *container, HomeCardConfig *cfg, BOO
     CGFloat xBase = cardX, xAvail = cardW;
     CGFloat yBase = inCalendar ? calTop : cardY;
     CGFloat yAvail = inCalendar ? (cfg.hcCalBgHeight + 128.0 - 8.0) : cardH;
+    // X/Y 快照：回调闭包只捕获局部值，不再读单例 cfg（配置变更与布局基准强一致）
+    CGFloat wx = cfg.hcWeatherX, wy = cfg.hcWeatherY;
 
     UIView *badge = [[UIView alloc] initWithFrame:CGRectZero];
     badge.tag = kHCWeatherTag;
@@ -1081,8 +1090,7 @@ static void HCAddWeatherBadge(id vc, UIView *container, HomeCardConfig *cfg, BOO
     HCApplyWeatherIcon(icon, sym);
     [badge addSubview:icon];
     [badge addSubview:label];
-    HCLayoutWeatherBadge(badge, icon, label,
-                         cfg.hcWeatherX, xBase, xAvail, cfg.hcWeatherY, yBase, yAvail);
+    HCLayoutWeatherBadge(badge, icon, label, wx, xBase, xAvail, wy, yBase, yAvail);
     [container addSubview:badge];
 
     // 点按弹天气菜单（XOS 15445 cadis_weatherBadgeTapped 同款）
@@ -1102,8 +1110,7 @@ static void HCAddWeatherBadge(id vc, UIView *container, HomeCardConfig *cfg, BOO
             if (!wBadge.superview) return;   // header 已重建，丢弃
             wLabel.text = t;
             HCApplyWeatherIcon(wIcon, s);
-            HCLayoutWeatherBadge(wBadge, wIcon, wLabel,
-                                 cfg.hcWeatherX, xBase, xAvail, cfg.hcWeatherY, yBase, yAvail);
+            HCLayoutWeatherBadge(wBadge, wIcon, wLabel, wx, xBase, xAvail, wy, yBase, yAvail);
         });
     }
 }
@@ -1320,8 +1327,9 @@ static void HCScheduleSync(id vc, NSTimeInterval delay) {
             // 同步跑完布局 → viewForHeaderInSection 执行 → sHCHeaderCell 就绪
             // （ cellul 化后 headerViewForSection: 查不到宿主，HCApply 只能依赖缓存）
             [table layoutIfNeeded];
+            return;   // 重建已含 HCApply 全部效果（图/色/边框随重建取新值），不再重复刷
         }
-        HCApply(vc);
+        HCApply(vc);   // 指纹未变：仅兜底刷卡片（unstick/初装场景）
     });
 }
 
