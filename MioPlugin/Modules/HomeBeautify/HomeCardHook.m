@@ -350,12 +350,17 @@ static void HCStyleRender(UIView *bgv, NSInteger style, CGFloat W, CGFloat H, BO
     NSDate *now = [NSDate date];
     NSDateComponents *cur = [g components:NSCalendarUnitYear | NSCalendarUnitMonth
                                         | NSCalendarUnitDay | NSCalendarUnitWeekday
-                                        | NSCalendarUnitWeekOfYear | NSCalendarUnitDayOfYear
+                                        | NSCalendarUnitWeekOfYear
                                    fromDate:now];
     NSInteger lm = 0;
     [HomeCardCalendarPopup lunarMonthDay:now month:&lm day:nil leap:nil];
     c.year = cur.year; c.month = cur.month; c.day = cur.day; c.weekday = cur.weekday;
-    c.weekOfYear = cur.weekOfYear; c.dayOfYear = cur.dayOfYear;
+    c.weekOfYear = cur.weekOfYear;
+    // 当年第几天：NSDateComponents 无 dayOfYear 方法（运行时 unrecognized selector，
+    // 上一版圆环闪退根因），用 NSCalendar.ordinalityOfUnit 计算
+    c.dayOfYear = (NSInteger)[g ordinalityOfUnit:NSCalendarUnitDayOfYear
+                                          inUnit:NSCalendarUnitYear
+                                         forDate:now];
     c.daysInMonth = [g rangeOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitMonth forDate:now].length;
     c.daysInYear = [g rangeOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitYear forDate:now].length;
     c.lunarMD = [NSString stringWithFormat:@"%@%@", HCLunarMonthName(lm),
