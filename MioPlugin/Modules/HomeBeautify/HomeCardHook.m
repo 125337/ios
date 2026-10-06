@@ -662,7 +662,21 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
                           calOn ? calY : 0.0, calOn);
     }
 
-    return container;
+    // 宿主 = MMTableViewCell（SessionGroupsHook 分组条同款）：cell 类型的 header 微信不包装，
+    // 直接躺 tableView subviews → unstick 摆完 frame 没人再动，滚到顶部钻进「Windows 已登录」
+    // 提示条底下被导航栏裁掉。普通 UIView 会被包装成 header footer view，UITableView 对
+    // wrapper 有持续 sticky 维护，滚动中把它钉回顶部 → 盖住提示条（实测截图）
+    UITableViewCell *host = [[objc_getClass("MMTableViewCell") alloc]
+        initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+    // 全宽三件套清零（SG 同款：防 MMTableViewCell 按 layoutMargins(16pt) 重排内容）
+    host.separatorInset = UIEdgeInsetsZero;
+    host.layoutMargins = UIEdgeInsetsZero;
+    host.preservesSuperviewLayoutMargins = NO;
+    host.backgroundColor = UIColor.clearColor;
+    container.frame = CGRectMake(0, 0, width, containerH);
+    container.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [host.contentView addSubview:container];
+    return host;
 }
 
 #pragma mark - Apply（标题叠加：XOS xzy_updateHomeTopTitle 同构 + 深浅换图；幂等）
@@ -829,9 +843,10 @@ static UIView *hook_NMFVC_viewForHeader(id self, SEL _cmd, UITableView *tableVie
 // header 去粘滞（SessionGroupsHook.m SGUnstickHeader 同款，源出 WCR
 // WCRefineHomeHeaderUnstick unstickIfNeededOnTableView: Misc_part4.c:1970-2264）：
 // plain tableView 的 section header 会 sticky 悬停钉顶，与微信「Windows 已登录」
-// 浮层提示条同位重叠（sgbadge17d 实测）。每次 layoutSubviews 后把 header 容器 frame
+// 浮层提示条同位重叠（sgbadge17d 实测）。每次 layoutSubviews 后把 header frame
 // 用 rectForHeaderInSection: 的内容坐标理论位置摆回去 → header 跟随内容滚动。
-// 仅卡片功能接管 header 时生效（容器里有 kHCCardTag 卡片），否则空操作
+// headerViewForSection:0 返回的就是 HC 的 MMTableViewCell 宿主（cell 类 header
+// 微信不包装，同 SG host cell），摆完没人再动；仅卡片功能接管时生效，否则空操作
 static void HCUnstickHeader(UITableView *table) {
     if (![[HomeCardConfig shared] hcEnabled]) return;
     UIView *header = [table headerViewForSection:0];
