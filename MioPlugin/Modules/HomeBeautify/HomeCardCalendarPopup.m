@@ -10,8 +10,8 @@
 //
 //  【内容】FUN_00153830（~15913-16600）：
 //   ◀ 左 (16,14,36,30)、▶ 右 (W-52,14,36,30) 夹居中年月标题 font17 Bold；
-//   （Mio 调整：XOS 原版样式按钮 (88,14) 会压住居中标题 → 移到第二行 (16,48,80,20)）
-//   样式按钮「样式-黑」font11 Medium 橙色左对齐；三胶囊右对齐第二行（间距 6）
+//   （Mio 调整：XOS 原版样式按钮 (88,14) 会压住居中标题 → 移到第二行 (16,48,110,20)）
+//   样式按钮（当前样式名）font11 Medium 橙色左对齐；三胶囊右对齐第二行（间距 6）
 //   font11 Medium 高 17，开启态底色各异；
 //   星期行 y=76 h=18，cellW=(W-32)/7，font11 Medium，周末列 accent 红；
 //   网格首行 y=94，行高 42：今天块 = min(cellW-4,35) 方形圆角 8 居中 y=rowY+1；
@@ -20,14 +20,19 @@
 //   网格总高 = 首行 y + rows*42 + 12（面板高随月份行数调整）。
 //
 //  【动作】cadis_calendarPrev/NextMonth = FUN_00155054/00155068（月偏移 ±1 + rebuild）；
-//   cadis_switchCalendarStyle = FUN_00155348（选样式黑/白）；
+//   cadis_switchCalendarStyle = FUN_00155348（选择日历样式：10 项 0-9，当前项标题尾加 ✓，
+//   扩展项 10+ 为 XOS 自定义 HTML/JS 样式，Mio 不移植）；
 //   cadis_toggleMondayFirst/Holiday/XiuBan = FUN_00155138/0015507c/001551f4
 //   （取反存 NSUserDefaults + rebuild）；cadis_dismissCalendarPopup = FUN_001556dc。
 //
 //  【持久化键】（NSUserDefaults；XOS CadisCalendar* 同语义）
 //   MioCalMondayFirst（周一起始，默认关）/ MioCalShowHoliday（节日显示，默认开——
 //   与 XOS 弹层截图一致：节日/节气红字显示中）/ MioCalXiuBan（休班角标，默认关）；
-//   MioCalStyle（integer 0黑/1白，XOS CadisCalendarStyle）。
+//   MioCalStyle（integer 0-9 = XOS CadisCalendarStyle 日历卡片布局样式，默认 0 默认周历）。
+//   【样式定论】样式作用于首页卡片周历挂件的布局（HomeCardHook 分派渲染），
+//   非弹层黑白主题；弹层月历渲染固定不随样式值变化。0-9 名序为 XOS 字符串数组
+//   二进制实证：默认周历/中式传统（宜忌）/今日聚焦（进度）/倒计时/月历迷你/
+//   极简横条/双栏信息/时间线/圆环进度/翻页日历。
 //
 //  【数据】调休 = 国务院办公厅《2026 年部分节假日安排》（2025-11-04 发布，官方实锤）；
 //   节气 = 21 世纪寿星通式 D=[Y×0.2422+C]−[Y/4]（2026-10-08 寒露 / 10-23 霜降
@@ -85,6 +90,58 @@
     if (d < 10) return [NSString stringWithFormat:@"初%@", ones[d - 1]];
     if (d < 20) return [NSString stringWithFormat:@"十%@", ones[d - 11]];
     return [NSString stringWithFormat:@"廿%@", ones[d - 21]];
+}
+
+#pragma mark - 样式 / 宜忌（弹层选择器与 HomeCardHook 挂件渲染共用）
+
+static NSString * const kKeyStyle = @"MioCalStyle";   // 样式值 0-9（XOS CadisCalendarStyle）
+
+// 样式名（XOS 选择器数组二进制实证顺序，下标 = 样式值 0-9）
++ (NSArray<NSString *> *)styleNames {
+    static NSArray *names = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        names = @[@"默认周历", @"中式传统（宜忌）", @"今日聚焦（进度）", @"倒计时",
+                  @"月历迷你", @"极简横条", @"双栏信息", @"时间线", @"圆环进度", @"翻页日历"];
+    });
+    return names;
+}
+
++ (NSInteger)currentStyle {
+    NSInteger s = (NSInteger)[[NSUserDefaults standardUserDefaults] integerForKey:kKeyStyle];
+    return (s >= 0 && s <= 9) ? s : 0;   // 越界兜底回默认周历
+}
+
+// 当日宜忌：XOS 内置 25 词池（二进制 3466630-3466780 实证）。XOS 的逐日选词算法
+// 未逆向（费用取舍）→ 用日期种子轮转替代：每天固定、跨样式一致、逐日不同，
+// 但选词与 XOS 当天可能不一致（如需逐词一致再单独逆向选词函数）
++ (NSArray<NSArray<NSString *> *> *)yiJiForDate:(NSDate *)date {
+    static NSArray<NSString *> *pool = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        pool = @[@"嫁娶", @"开光", @"祭祀", @"祈福", @"出行", @"解除", @"移徙", @"入宅",
+                 @"开市", @"交易", @"立券", @"安床", @"纳财", @"栽种", @"纳畜", @"安葬",
+                 @"修造", @"动土", @"竖柱", @"上梁", @"求嗣", @"作灶", @"破土", @"掘井", @"词讼"];
+    });
+    static NSCalendar *g = nil;
+    static dispatch_once_t once2;
+    dispatch_once(&once2, ^{
+        g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
+    });
+    NSDateComponents *c = [g components:NSCalendarUnitYear | NSCalendarUnitMonth
+                                      | NSCalendarUnitDay fromDate:date];
+    long seed = (long)c.year * 10000L + (long)c.month * 100L + (long)c.day;
+    // 宜：步长 11（与 25 互质 → 四词必不重复）；忌：起点错开 + 步长 17，与宜集合不相交
+    NSInteger yi0 = (NSInteger)((seed * 7) % 25);
+    NSArray *yi = @[pool[yi0], pool[(yi0 + 11) % 25], pool[(yi0 + 22) % 25], pool[(yi0 + 8) % 25]];
+    NSInteger ji0 = (NSInteger)((seed * 13 + 9) % 25);
+    for (NSInteger t = 0; t < 25; t++, ji0 = (ji0 + 3) % 25) {   // 确定性避让：撞宜则顺延
+        NSArray *tryJi = @[pool[ji0], pool[(ji0 + 17) % 25], pool[(ji0 + 9) % 25], pool[(ji0 + 1) % 25]];
+        BOOL hit = NO;
+        for (NSString *w in tryJi) { if ([yi containsObject:w]) { hit = YES; break; } }
+        if (!hit) return @[yi, tryJi];
+    }
+    return @[yi, @[]];
 }
 
 #pragma mark - 节气 / 节日 / 调休
@@ -179,7 +236,7 @@ static NSDictionary<NSString *, NSNumber *> *XiuBanMap(void) {
 static NSString * const kKeyMondayFirst = @"MioCalMondayFirst";
 static NSString * const kKeyShowHoliday = @"MioCalShowHoliday";
 static NSString * const kKeyXiuBan      = @"MioCalXiuBan";
-static NSString * const kKeyStyle       = @"MioCalStyle";
+// kKeyStyle（MioCalStyle）声明在样式段（currentStyle 等类方法共用）
 
 static BOOL CalMondayFirst(void) { return [[NSUserDefaults standardUserDefaults] boolForKey:kKeyMondayFirst]; }
 
@@ -189,7 +246,7 @@ static BOOL CalShowHoliday(void) {
     return [ud objectForKey:kKeyShowHoliday] ? [ud boolForKey:kKeyShowHoliday] : YES;
 }
 static BOOL CalXiuBan(void)      { return [[NSUserDefaults standardUserDefaults] boolForKey:kKeyXiuBan]; }
-static NSInteger CalStyle(void)  { return (NSInteger)[[NSUserDefaults standardUserDefaults] integerForKey:kKeyStyle]; }
+// 样式值存取统一走 currentStyle（弹层选择器与 HomeCardHook 挂件共用，见类方法）
 
 static void CalSetBool(NSString *key, BOOL value) { [[NSUserDefaults standardUserDefaults] setBool:value forKey:key]; }
 
@@ -304,7 +361,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     UIColor *accent = [UIColor systemRedColor];
     UIColor *orange = [UIColor systemOrangeColor];
     UIColor *blue = [UIColor systemBlueColor];
-    BOOL styleWhite = (CalStyle() == 1);   // 样式-白：今天块白底黑字带边框；样式-黑：黑底白字
+    // 注：MioCalStyle 是首页卡片挂件的布局样式（0-9），弹层月历渲染固定不随其变化
 
     NSCalendar *g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
     NSDate *now = [NSDate date];
@@ -323,7 +380,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     BOOL showHoliday = CalShowHoliday();
     BOOL showXiuBan = CalXiuBan();
 
-    // ── 第一行：◀ ▶ + 年月标题（居中）；第二行：样式-黑白 左 + 三胶囊右 ──
+    // ── 第一行：◀ ▶ + 年月标题（居中）；第二行：样式选择 左 + 三胶囊右 ──
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(16, 14, W - 32, 30)];
     title.text = [NSString stringWithFormat:@"%ld年%ld月", (long)mc.year, (long)mc.month];
     title.font = [UIFont systemFontOfSize:17.0 weight:UIFontWeightBold];
@@ -347,10 +404,11 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     [next addTarget:self action:@selector(onNext) forControlEvents:UIControlEventTouchUpInside];
     [self.content addSubview:next];
 
-    // 样式按钮（cadis_switchCalendarStyle → 选样式黑/白）；第二行左侧，不压居中标题
+    // 样式按钮（cadis_switchCalendarStyle → 选择日历样式 0-9）；第二行左侧，不压居中标题
     UIButton *styleBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-    styleBtn.frame = CGRectMake(16, 48, 80, 20);
-    [styleBtn setTitle:(styleWhite ? @"样式-白" : @"样式-黑") forState:UIControlStateNormal];
+    styleBtn.frame = CGRectMake(16, 48, 110, 20);
+    NSString *styleName = [HomeCardCalendarPopup styleNames][[HomeCardCalendarPopup currentStyle]] ?: @"默认周历";
+    [styleBtn setTitle:styleName forState:UIControlStateNormal];
     [styleBtn setTitleColor:orange forState:UIControlStateNormal];
     styleBtn.titleLabel.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightMedium];
     styleBtn.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
@@ -385,7 +443,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     NSInteger lead = mondayFirst ? ((w1 == 1) ? 6 : w1 - 2) : (w1 - 1);
     NSInteger rows = (lead + daysInMonth + 6) / 7;
     NSDictionary<NSString *, NSNumber *> *xiuban = XiuBanMap();
-    UIColor *todaySubColor = styleWhite ? [UIColor blackColor] : [UIColor whiteColor];
+    UIColor *todaySubColor = [UIColor whiteColor];   // 今天块 = label 色底白字（固定，不随样式值）
 
     for (NSInteger d = 1; d <= daysInMonth; d++) {
         NSInteger idx = lead + d - 1;
@@ -401,22 +459,16 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
         NSString *key = [NSString stringWithFormat:@"%04ld-%02ld-%02ld", (long)mc.year, (long)mc.month, (long)d];
         NSNumber *xb = xiuban[key];
 
-        // 今天块（样式-黑 = label 色底白字；样式-白 = 白底黑字带边框）
+        // 今天块（label 色底、白字，固定样式）
         if (isToday) {
             CGFloat side = MIN(cellW - 4.0, 35.0);
             UIView *blk = [[UIView alloc] initWithFrame:CGRectMake(colX + (cellW - side) / 2.0, rowY + 1, side, side)];
             blk.layer.cornerRadius = 8.0;
-            if (styleWhite) {
-                blk.backgroundColor = dark ? [UIColor colorWithWhite:1.0 alpha:0.92] : [UIColor whiteColor];
-                blk.layer.borderWidth = 1.0;
-                blk.layer.borderColor = [UIColor colorWithWhite:0.0 alpha:0.25].CGColor;
-            } else {
-                blk.backgroundColor = label;
-            }
+            blk.backgroundColor = label;
             [self.content addSubview:blk];
         }
 
-        // 日号（今天白/黑随样式 / 周末红 / 其他 label）
+        // 日号（今天白 / 周末红 / 其他 label）
         UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(colX, rowY + 3, cellW, 17)];
         dl.text = [NSString stringWithFormat:@"%ld", (long)d];
         dl.font = [UIFont systemFontOfSize:14.0];
@@ -485,13 +537,21 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
 - (void)onPrev { hcCalMonthOffset--; [self rebuild]; }   // cadis_calendarPrevMonth
 - (void)onNext { hcCalMonthOffset++; [self rebuild]; }   // cadis_calendarNextMonth
 
-- (void)onSwitchStyle {   // XOS FUN_00155348：选样式黑/白 → 存键 → rebuild
+- (void)onSwitchStyle {   // XOS FUN_00155348：选择日历样式 0-9（当前项加 ✓）→ 存键 → 重建弹层 + 通知卡片刷新
+    NSArray<NSString *> *names = [HomeCardCalendarPopup styleNames];
+    NSInteger cur = [HomeCardCalendarPopup currentStyle];
+    NSMutableArray<NSString *> *btns = [NSMutableArray arrayWithCapacity:names.count];
+    for (NSInteger i = 0; i < (NSInteger)names.count; i++) {
+        [btns addObject:(i == cur) ? [NSString stringWithFormat:@"✓ %@", names[i]] : names[i]];
+    }
     __weak typeof(self) wself = self;
-    [MioAlertHelper showMenuAlert:@"日历样式"
-                          buttons:@[@"样式-黑", @"样式-白"]
+    [MioAlertHelper showMenuAlert:@"选择日历样式"
+                          buttons:btns
                         onButton:^(NSInteger index) {
         [[NSUserDefaults standardUserDefaults] setInteger:index forKey:kKeyStyle];
         [wself rebuild];
+        // 首页卡片挂件布局随样式变化 → 通知 HomeCardHook 重建 header
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"MioHomeCardStyleChanged" object:nil];
     }];
 }
 
