@@ -1311,6 +1311,7 @@ static void HCScheduleSync(id vc, NSTimeInterval delay) {
 
         NSString *key = HCGeoKey();
         if (![key isEqualToString:hcLastGeoKey]) {
+            WPLog(@"HomeCard", @"[SYNC] geokey changed → reloadData");
             hcLastGeoKey = key;
             [table reloadData];
             // 同步跑完布局 → viewForHeaderInSection 执行 → sHCHeaderCell 就绪
@@ -1382,13 +1383,15 @@ static UIView *hook_NMFVC_viewForHeader(id self, SEL _cmd, UITableView *tableVie
         UIView *origView = ((UIView *(*)(id, SEL, UITableView *, NSInteger))orig_NMFVC_viewForHeader)
             (self, _cmd, tableView, section);
         CGFloat origH = origView ? CGRectGetHeight(origView.frame) : 0.0;
-        WPLog(@"HomeCard", @"[HEADER] wrap w=%.1f orig=%@ h=%.1f cardH=%.1f",
-              width, origView ? NSStringFromClass(origView.class) : @"nil", origH, HCCardHeight(cfg));
+        WPLog(@"HomeCard", @"[HEADER] wrap w=%.1f orig=%@ h=%.1f cardH=%.1f style=%ld",
+              width, origView ? NSStringFromClass(origView.class) : @"nil", origH, HCCardHeight(cfg),
+              (long)[HomeCardCalendarPopup currentStyle]);
         host = HCBuildHeader(self, width, origH, origView);
     } else {
         // XOS 式整体替换（原生 header 弃用，XOS 同款）
-        WPLog(@"HomeCard", @"[HEADER] replace w=%.1f cardH=%.1f margin=%.1f bottomFix=%.1f",
-              width, HCCardHeight(cfg), HCCardMargin(cfg), cfg.hcCardBottomFix);
+        WPLog(@"HomeCard", @"[HEADER] replace w=%.1f cardH=%.1f margin=%.1f bottomFix=%.1f style=%ld",
+              width, HCCardHeight(cfg), HCCardMargin(cfg), cfg.hcCardBottomFix,
+              (long)[HomeCardCalendarPopup currentStyle]);
         host = HCBuildHeader(self, width, 0.0, nil);
     }
     // 出口刷新缓存（SG 同款：创建/复用两条路径都刷新，防止复用实例更替后缓存陈旧）
@@ -1467,6 +1470,8 @@ static void hook_tableLayoutSubviews(UITableView *table, SEL _cmd) {
     [[NSNotificationCenter defaultCenter] addObserverForName:@"MioHomeCardStyleChanged"
                                                       object:nil queue:nil
                                                   usingBlock:^(NSNotification *note) {
+        WPLog(@"HomeCard", @"[NOTIFY] style changed, vc=%@",
+              hcLastMainVC ? NSStringFromClass(hcLastMainVC.class) : @"nil");
         HCScheduleSync(hcLastMainVC, 0.0);
     }];
     WPLog(@"HomeCard", @"[Hook] ✓ 卡片样式变更通知监听");

@@ -355,7 +355,6 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     UIColor *accent = [UIColor systemRedColor];
     UIColor *orange = [UIColor systemOrangeColor];
     UIColor *blue = [UIColor systemBlueColor];
-    BOOL styleWhite = (CalStyle() == 1);   // 样式-白：今天块白底黑字带边框；样式-黑：黑底白字
 
     NSCalendar *g = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
     NSDate *now = [NSDate date];
@@ -438,7 +437,8 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
     NSInteger lead = mondayFirst ? ((w1 == 1) ? 6 : w1 - 2) : (w1 - 1);
     NSInteger rows = (lead + daysInMonth + 6) / 7;
     NSDictionary<NSString *, NSNumber *> *xiuban = XiuBanMap();
-    UIColor *todaySubColor = styleWhite ? [UIColor blackColor] : [UIColor whiteColor];
+    // 今天日号/农历 = 块填充色的反色（浅色黑块白字 / 深色白块黑字）
+    UIColor *todaySubColor = dark ? [UIColor blackColor] : [UIColor whiteColor];
 
     for (NSInteger d = 1; d <= daysInMonth; d++) {
         NSInteger idx = lead + d - 1;
@@ -454,18 +454,12 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
         NSString *key = [NSString stringWithFormat:@"%04ld-%02ld-%02ld", (long)mc.year, (long)mc.month, (long)d];
         NSNumber *xb = xiuban[key];
 
-        // 今天块（样式-黑 = label 色底白字；样式-白 = 白底黑字带边框）
+        // 今天块 = label 色填充（浅色黑块 / 深色白块），反色日号白/黑字（不分黑白样式）
         if (isToday) {
             CGFloat side = MIN(cellW - 4.0, 35.0);
             UIView *blk = [[UIView alloc] initWithFrame:CGRectMake(colX + (cellW - side) / 2.0, rowY + 1, side, side)];
             blk.layer.cornerRadius = 8.0;
-            if (styleWhite) {
-                blk.backgroundColor = dark ? [UIColor colorWithWhite:1.0 alpha:0.92] : [UIColor whiteColor];
-                blk.layer.borderWidth = 1.0;
-                blk.layer.borderColor = [UIColor colorWithWhite:0.0 alpha:0.25].CGColor;
-            } else {
-                blk.backgroundColor = label;
-            }
+            blk.backgroundColor = label;
             [self.content addSubview:blk];
         }
 
