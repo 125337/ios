@@ -155,10 +155,10 @@ static NSString *HCGeoKey(void) {
         dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
     }
     return [NSString stringWithFormat:
-            @"%d|%@|%@|%.1f|%.1f|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%d"
+            @"%d|%d|%@|%@|%.1f|%.1f|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%d"
             @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%ld"
             @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%@",
-            cfg.hcEnabled,
+            cfg.hcEnabled, cfg.hcCardTransparent,
             [HomeCardConfig lightImagePath] ?: @"", [HomeCardConfig darkImagePath] ?: @"",
             cfg.hcCardHeight, cfg.hcCardOffsetY, cfg.hcCardBottomFix, cfg.hcCardMargin,
             cfg.hcBorderWidth, cfg.hcBorderColor ?: @"", cfg.hcBorderColorDark ?: @"",
@@ -613,8 +613,9 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
     card.clipsToBounds = YES;
 
     // 背景色（XOS L15018-15023 实锤：CadisCardBgColor 默认 [UIColor clearColor] 透明，
-    // 无图无色时卡片隐形、内容直接浮在列表底上）
-    UIColor *bg = HCColorForMode(cfg.hcCardBgColor, cfg.hcCardBgColorDark, dark);
+    // 无图无色时卡片隐形、内容直接浮在列表底上）；透明开关开 → 无视配置色强制透明
+    UIColor *bg = cfg.hcCardTransparent
+        ? nil : HCColorForMode(cfg.hcCardBgColor, cfg.hcCardBgColorDark, dark);
     card.backgroundColor = bg ?: [UIColor clearColor];
 
     // 边框（XOS：宽度 > 0 才设置 border）
@@ -625,8 +626,9 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
         card.layer.borderColor = bc.CGColor;
     }
 
-    // 卡内背景图（XOS L15124 实锤 contentMode=2 AspectFill 铺满裁剪；浅/深色按当前外观）
-    UIImage *img = HCImageForDark(dark);
+    // 卡内背景图（XOS L15124 实锤 contentMode=2 AspectFill 铺满裁剪；浅/深色按当前外观；
+    // 透明开关开 → 不铺图）
+    UIImage *img = cfg.hcCardTransparent ? nil : HCImageForDark(dark);
     if (img) {
         UIImageView *iv = [[UIImageView alloc] initWithImage:img];
         iv.tag = kHCImageTag;
@@ -710,8 +712,9 @@ static void HCApply(id vc) {
             UIImage *img = HCImageForDark(dark);
             if (img) iv.image = img;
         }
-        // 浅/深色实时换底色/边框（颜色为构建期取值，需随 trait 同步）
-        UIColor *bg = HCColorForMode(cfg.hcCardBgColor, cfg.hcCardBgColorDark, dark);
+        // 浅/深色实时换底色/边框（颜色为构建期取值，需随 trait 同步；透明开关开 → 强制透明）
+        UIColor *bg = cfg.hcCardTransparent
+            ? nil : HCColorForMode(cfg.hcCardBgColor, cfg.hcCardBgColorDark, dark);
         card.backgroundColor = bg ?: [UIColor clearColor];
         if (cfg.hcBorderWidth > 0) {
             UIColor *bc = HCColorForMode(cfg.hcBorderColor, cfg.hcBorderColorDark, dark)
