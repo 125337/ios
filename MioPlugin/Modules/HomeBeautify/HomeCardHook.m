@@ -22,7 +22,6 @@
 //       图片：CadisSelectedCardDark/Light 按当前外观取文件名，目录+文件名 imageWithContentsOfFile，
 //             带 path→image 静态缓存
 //   · traitCollectionDidChange 重铺（浅/深色换图）
-//   · xzy_updateHomeTopTitle：headerViewForSection:0 上叠加标题（详见 HCApply 注释）
 //
 //  【Mio 移植差异】
 //   · 总开关一开必建卡片；卡片/日历/天气底色默认全透明（XOS L15018/19804/15347 实锤
@@ -66,9 +65,8 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 
-// 叠加视图 tag（'MC'/'MT'/'MI'/'ME'/'MF'，避开微信原生 tag）
+// 叠加视图 tag（'MC'/'MI'/'ME'/'MF'，避开微信原生 tag）
 static const NSInteger kHCCardTag = 0x4D43;      // 卡片视图（挂在 header 容器上）
-static const NSInteger kHCTitleTag = 0x4D54;     // 标题 label（挂在 header 容器上）
 static const NSInteger kHCImageTag = 0x4D49;     // 卡内背景图（挂在卡片上）
 static const NSInteger kHCCalTag = 0x4D45;       // 日历挂件（挂在 header 容器上）
 static const NSInteger kHCWeatherTag = 0x4D46;   // 天气徽章（挂在 header 容器上）
@@ -157,10 +155,10 @@ static NSString *HCGeoKey(void) {
         dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
     }
     return [NSString stringWithFormat:
-            @"%d|%@|%.1f|%.1f|%@|%@|%.1f|%.1f|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%d"
+            @"%d|%@|%@|%.1f|%.1f|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%d"
             @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%ld"
             @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%@",
-            cfg.hcEnabled, cfg.hcTitle ?: @"", cfg.hcTitleSize, cfg.hcTitleOffsetX,
+            cfg.hcEnabled,
             [HomeCardConfig lightImagePath] ?: @"", [HomeCardConfig darkImagePath] ?: @"",
             cfg.hcCardHeight, cfg.hcCardOffsetY, cfg.hcCardBottomFix, cfg.hcCardMargin,
             cfg.hcBorderWidth, cfg.hcBorderColor ?: @"", cfg.hcBorderColorDark ?: @"",
@@ -692,13 +690,10 @@ static void HCApply(id vc) {
     if (!table) return;
 
     // 宿主直读缓存（SG 同款）： cellul 化后宿主是 MMTableViewCell，不进 UITableView 的
-    // headerViewForSection: 记录（原生查找返回 nil）→ 标题/换图永远跳过；weak 缓存是
+    // headerViewForSection: 记录（原生查找返回 nil）→ 换图刷新永远跳过；weak 缓存是
     // hook_viewForHeader 出口刚赋的新实例
     UIView *header = sHCHeaderCell;
     if (!header || ![header isDescendantOfView:table]) return;
-
-    // 幂等：先清旧标题层
-    [[header viewWithTag:kHCTitleTag] removeFromSuperview];
 
     HomeCardConfig *cfg = [HomeCardConfig shared];
     if (!cfg.hcEnabled) return;
@@ -725,40 +720,8 @@ static void HCApply(id vc) {
         }
     }
 
-    // ── 主页标题（XOS 布局同构） ──
-    NSString *text = cfg.hcTitle;
-    if (text.length > 0) {
-        CGFloat size = cfg.hcTitleSize;
-        if (size < 8.0) size = 20.0;  // XOS：NaN/inf/<8 → 默认 20
-
-        UIFont *font = [UIFont systemFontOfSize:size weight:UIFontWeightSemibold];
-        UILabel *lb = [[UILabel alloc] initWithFrame:CGRectZero];
-        lb.tag = kHCTitleTag;
-        lb.text = text;
-        lb.font = font;
-        lb.textColor = [UIColor labelColor];
-        lb.numberOfLines = 1;
-
-        CGFloat headerH = header.bounds.size.height;
-        CGFloat headerW = header.bounds.size.width;
-        CGSize ts = [text sizeWithAttributes:@{NSFontAttributeName: font}];
-
-        CGFloat rowH = MAX(ceil(size + 8.0), 44.0);
-        CGFloat x = 16.0 + cfg.hcTitleOffsetX;
-        CGFloat w = headerW - x - 8.0;
-        if (w <= 1.0) w = 1.0;
-        if (floor(ts.width) + 16.0 <= w) w = floor(ts.width) + 16.0;
-        if (w <= 44.0) w = 44.0;
-
-        // 有卡片时标题在卡片竖向居中（XOS 容器=卡片区的同构语义）；无卡片时在整个 header 居中
-        CGFloat centerY = headerH * 0.5;
-        if (card) centerY = CGRectGetMidY(card.frame);
-        lb.frame = CGRectMake(x, centerY - rowH * 0.5, w, rowH);
-        [header addSubview:lb];
-    }
-
-    WPLog(@"HomeCard", @"[APPLY] header=%@ card=%@ title=%@",
-          NSStringFromClass(header.class), card ? @"y" : @"n", text.length > 0 ? @"y" : @"n");
+    WPLog(@"HomeCard", @"[APPLY] header=%@ card=%@",
+          NSStringFromClass(header.class), card ? @"y" : @"n");
 }
 
 // viewWillAppear/DidAppear 共用：指纹变化 → reloadData 重建 header → apply

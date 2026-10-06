@@ -47,45 +47,6 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                               isOn:config.hcEnabled
                                 cy:cy
                              width:w];
-    cy = [self addSeparatorInGroup:g1 cy:cy width:w];
-
-    // 主页标题（默认留空）
-    cy = [self addInputRowInGroup:g1
-                            title:@"主页标题"
-                              key:@"hcTitle"
-                            value:(config.hcTitle.length > 0 ? config.hcTitle : nil)
-                             hint:@""
-                        valueType:InputValueTypeText
-                       alertTitle:@"设置主页标题"
-                     alertMessage:@"留空则不替换主页标题"
-                               cy:cy
-                            width:w];
-    cy = [self addSeparatorInGroup:g1 cy:cy width:w];
-
-    // 标题大小（默认 0 = 跟随默认 20）
-    cy = [self addInputRowInGroup:g1
-                            title:@"标题大小"
-                              key:@"hcTitleSize"
-                            value:config.hcTitleSize != 0 ? [self numText:config.hcTitleSize] : nil
-                             hint:@"0"
-                        valueType:InputValueTypeNumber
-                       alertTitle:@"设置标题大小"
-                     alertMessage:@"标题大小，0 为跟随默认"
-                               cy:cy
-                            width:w];
-    cy = [self addSeparatorInGroup:g1 cy:cy width:w];
-
-    // 标题X偏移值（默认 0）
-    cy = [self addInputRowInGroup:g1
-                            title:@"标题X偏移值"
-                              key:@"hcTitleOffsetX"
-                            value:config.hcTitleOffsetX != 0 ? [self numText:config.hcTitleOffsetX] : nil
-                             hint:@"0"
-                        valueType:InputValueTypeNumber
-                       alertTitle:@"设置标题X偏移值"
-                     alertMessage:@"标题X偏移值，可为负，0 为默认位置"
-                               cy:cy
-                            width:w];
 
     y = [self finishGroup:g1 atY:y height:cy];
     y += 8;

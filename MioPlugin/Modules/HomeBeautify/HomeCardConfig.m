@@ -19,9 +19,6 @@
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
         [ConfigDescriptor itemWithKey:@"hcEnabled" type:ConfigValueTypeBool default:@(NO)],
-        [ConfigDescriptor itemWithKey:@"hcTitle" type:ConfigValueTypeString default:@""],
-        [ConfigDescriptor itemWithKey:@"hcTitleSize" type:ConfigValueTypeFloat default:@(0)],
-        [ConfigDescriptor itemWithKey:@"hcTitleOffsetX" type:ConfigValueTypeFloat default:@(0)],
         [ConfigDescriptor itemWithKey:@"hcCardHeight" type:ConfigValueTypeFloat default:@(100)],
         [ConfigDescriptor itemWithKey:@"hcCardOffsetY" type:ConfigValueTypeFloat default:@(0)],
         [ConfigDescriptor itemWithKey:@"hcCardBottomFix" type:ConfigValueTypeFloat default:@(0)],

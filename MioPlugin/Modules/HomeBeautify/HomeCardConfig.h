@@ -7,9 +7,6 @@ NS_ASSUME_NONNULL_BEGIN
 @interface HomeCardConfig : NSObject <ConfigModule>
 
 @property (nonatomic, assign) BOOL hcEnabled;          // 启用卡片（总开关，开启后子配置才生效）
-@property (nonatomic, copy)   NSString *hcTitle;       // 主页标题（空 = 不替换）
-@property (nonatomic, assign) CGFloat hcTitleSize;     // 标题大小（0 = 默认）
-@property (nonatomic, assign) CGFloat hcTitleOffsetX;  // 标题X偏移值（0 = 默认）
 
 // 卡片数值（XOS CadisCard* 同构）
 @property (nonatomic, assign) CGFloat hcCardHeight;    // 卡片高度（<=0 按 100 处理）
