@@ -1281,11 +1281,6 @@ static void hook_NMFVC_viewDidAppear(id self, SEL _cmd, BOOL animated) {
     HCScheduleSync(self, 0.05);
 }
 
-// 弹层「选择日历样式」后即时刷新首页卡片挂件（指纹已含样式值，重铺即重建新布局）
-static void HCOnStyleChanged(NSNotification *note) {
-    HCScheduleSync(hcLastMainVC, 0.0);
-}
-
 static void hook_NMFVC_traitCollectionDidChange(id self, SEL _cmd, UITraitCollection *previous) {
     ((void (*)(id, SEL, id))orig_NMFVC_traitCollectionDidChange)(self, _cmd, previous);
     // XOS：外观切换重铺 → 浅/深色卡片图片自动换
@@ -1411,10 +1406,12 @@ static void hook_tableLayoutSubviews(UITableView *table, SEL _cmd) {
     }
     WPLog(@"HomeCard", @"[Hook] ✓ NewMainFrameViewController（viewWillAppear/DidAppear/trait/heightForHeader/viewForHeader）");
 
-    // 弹层样式切换 → 即时重建卡片挂件（HomeCardCalendarPopup onSwitchStyle 发通知）
+    // 弹层样式切换 → 即时重建卡片挂件（指纹已含样式值，重铺即重建新布局）
     [[NSNotificationCenter defaultCenter] addObserverForName:@"MioHomeCardStyleChanged"
                                                       object:nil queue:nil
-                                                  usingBlock:HCOnStyleChanged];
+                                                  usingBlock:^(NSNotification *note) {
+        HCScheduleSync(hcLastMainVC, 0.0);
+    }];
     WPLog(@"HomeCard", @"[Hook] ✓ 日历样式变更通知监听");
 }
 
