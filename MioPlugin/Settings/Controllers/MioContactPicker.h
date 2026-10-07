@@ -4,9 +4,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 // 选人模式（三模式三微信原生类，UI 全部官方原装；原生类天生只显示该类型，不做数据源过滤）
 typedef NS_ENUM(NSInteger, MioContactPickerMode) {
-    MioContactPickerModeContacts = 0,   // 只选人：MMNewMultiSelectContactsViewController（"发起群聊"那套，纯好友）
+    MioContactPickerModeContacts = 0,   // 只选人：MultiSelectContactsViewController（发起群聊主选人器）
     MioContactPickerModeGroups   = 1,   // 只选群：MultiSelectChatRoomHalfScreenViewController（半屏）
-    MioContactPickerModeAll      = 2,   // 都选：SessionSelectController（全屏，好友+群聊）
+    MioContactPickerModeAll      = 2,   // 都选：MultiSelectContactsViewController（同 Contacts 配方）
 };
 
 @protocol MioContactPickerDelegate <NSObject>
