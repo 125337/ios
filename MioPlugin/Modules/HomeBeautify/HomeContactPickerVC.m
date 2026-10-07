@@ -138,7 +138,7 @@ static NSArray *HCAllNormalContacts(void) {
         // 头像容器（每次绑定重建内部头像，规避复用残留）
         UIView *avWrap = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 40.0, 40.0)];
         avWrap.tag = 0x4D50;
-        cell.contentView.addSubview(avWrap);
+        [cell.contentView addSubview:avWrap];
     }
     HCContactRow *row = self.rows[(NSUInteger)indexPath.row];
     cell.textLabel.text = row.displayName;
