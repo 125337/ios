@@ -466,7 +466,7 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     MioMultiSetValue(picker, @"m_rightBarButtonTitle", @"完成", tag);
     MioMultiSetValue(picker, @"m_bShowHistoryGroup", @NO, tag);
     MioMultiSetValue(picker, @"m_bShowContactTag", @YES, tag);
-    MioMultiSetValue(picker, @"m_bShowSelectFromGroup", @YES, tag);
+    MioMultiSetValue(picker, @"m_bShowSelectFromGroup", @NO, tag);   // 顶部"选择群聊中的朋友"入口，需求去掉
     MioMultiSetValue(picker, @"m_bKeepCurViewAfterSelect", @YES, tag);
     MioMultiSetValue(picker, @"m_onlyChatRoom", @NO, tag);
     MioMultiSetValue(picker, @"m_onlyImportChatRoom", @NO, tag);
