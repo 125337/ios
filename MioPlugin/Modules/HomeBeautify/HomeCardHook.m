@@ -263,7 +263,8 @@ static void HCOpenChat(id vc, NSString *userName) {
 }
 
 // 头像（XOS FUN_00158bcc 同构：size+userName 缓存 MMHeadImageView；类/初始化器运行时探测，
-// 缺失返回 nil 由调用方画灰圆占位，XOS L23203-23217 同款兜底）
+// 缺失返回 nil 由调用方画灰圆占位，XOS L23203-23217 同款兜底。差异：显式传联系人头像 URL 且
+// bAutoUpdate=1 —— 群聊头像不走常规头像素引，URL 传 nil 时 @chatroom 只渲染灰色默认图）
 static NSMutableDictionary *hcAvatarCache = nil;   // size|userName → 头像视图（主线程专用）
 
 static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
@@ -275,9 +276,9 @@ static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
         Class cls = objc_getClass("MMHeadImageView");
         SEL sel = NSSelectorFromString(@"initWithUsrName:headImgUrl:bAutoUpdate:bRoundCorner:");
         if (cls && [cls instancesRespondToSelector:sel]) {
-            // XOS 传参同构：bAutoUpdate=0 bRoundCorner=1
+            NSString *url = WXContactHeadImageURL(WXGetContactForWxid(userName));   // HD 优先
             id v = ((id (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)
-                   ([cls alloc], sel, userName, nil, NO, YES);
+                   ([cls alloc], sel, userName, url, YES, YES);
             if ([v isKindOfClass:[UIView class]]) {
                 ((UIView *)v).frame = CGRectMake(0, 0, size, size);
                 av = v;
@@ -285,6 +286,7 @@ static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
         }
     } @catch (...) {}
     if (av) [hcAvatarCache setObject:av forKey:key];
+    else WPLog(@"HomeCard", @"[Contact] 头像构建失败: %@", userName);
     return av;
 }
 
@@ -322,6 +324,8 @@ static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *c
     NSInteger count = (NSInteger)saved.count;
     NSInteger pages = (count + maxVisible - 1) / maxVisible;
     sv.contentSize = CGSizeMake(innerW * pages, H);
+    WPLog(@"HomeCard", @"[Contact] build: count=%ld pages=%ld size=%.0f spacing=%.0f H=%.0f",
+          (long)count, (long)pages, size, spacing, H);
 
     CGFloat pageInnerW = innerW - 8.0;                      // 每页左右各 4pt 内衬（XOS L22935）
     CGFloat cellW = pageInnerW / maxVisible;

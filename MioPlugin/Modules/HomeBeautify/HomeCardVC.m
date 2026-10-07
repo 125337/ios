@@ -1,6 +1,6 @@
 #import "HomeCardVC.h"
 #import "HomeCardConfig.h"
-#import "../../Settings/Controllers/MioTweakGroupSelectsController.h"
+#import "../../Settings/Controllers/MioSessionSelectsController.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/MioImageVault.h"
@@ -14,7 +14,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
     HomeCardPickerDark  = 1,
 };
 
-@interface HomeCardVC () <PHPickerViewControllerDelegate, MioTweakGroupSelectsDelegate>
+@interface HomeCardVC () <PHPickerViewControllerDelegate>
 @property (nonatomic, assign) HomeCardPickerTarget pickerTarget;
 @end
 
@@ -546,22 +546,17 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 }
 
 - (void)onManageContactsTap {
-    // 复用微信原生半屏选人页（MioTweakGroupSelectsController，WCR 同款：自建页黑顶栏已废弃）
-    MioTweakGroupSelectsController *picker =
-        [[MioTweakGroupSelectsController alloc] initWithSelectedGroups:[HomeCardConfig savedContacts]
-                                                                 title:@"管理联系人"];
-    picker.delegate = self;
-    [picker presentFromViewController:self];
-}
-
-#pragma mark - MioTweakGroupSelectsDelegate
-
-- (void)onGroupSelectReturn:(NSArray<NSString *> *)userNames {
-    [HomeCardConfig saveContacts:userNames];   // 选择顺序 = 展示顺序
-    [self buildUI];   // 刷新"管理联系人"行文案；首页挂件由 HCGeoKey 指纹在 viewWillAppear 重建
-}
-
-- (void)onGroupSelectCancel {
+    // 微信原生全屏选联系人页（SessionSelectController，WCR 主力封装同款）：
+    // 好友/群聊均可多选，已选名单回显勾选，完成后按选择顺序保存
+    MioSessionSelectsController *picker =
+        [[MioSessionSelectsController alloc] initWithTitle:@"管理联系人"
+                                              preselectedContacts:[HomeCardConfig savedContacts]];
+    __weak typeof(self) welf = self;
+    [picker presentFromViewController:self completion:^(NSArray<NSString *> *userNames) {
+        [HomeCardConfig saveContacts:userNames];   // 选择顺序 = 展示顺序
+        // 回到主线程当场刷新"管理联系人"行文案；首页挂件由 HCGeoKey 指纹触发 reloadData 重建
+        dispatch_async(dispatch_get_main_queue(), ^{ [welf buildUI]; });
+    }];
 }
 
 #pragma mark - 卡片图片（浅/深色，同卡片背景页：菜单选图/删图 → PHPicker）

@@ -4,10 +4,8 @@
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
-#import <objc/runtime.h>
-#import <objc/message.h>
 #import <UIKit/UIKit.h>
-#import <substrate.h>
+#import "MioSessionSelectsController.h"
 
 @implementation SettingMomentBlocklistController
 
@@ -103,145 +101,28 @@
 
 #pragma mark - 原生选人页（WCR 2.1.8 主力封装同款，移植 8.0.60）
 
-// WCR presentSessionSelectPickerFromViewController:title:selectedUsernames:completion:（01b2dff0，
-// Misc_part13.c L42457-42642，WCR 内 15+ 处调用的主力选人封装）同款：
-// KVC 含 m_bMultiSelect=YES + 强制 view 预加载 + beginMultiSelect + MMUINavigationController present。
-//
-// 8.0.60 移植差异（头文件 L1-391 全量核对）：
-// - WCR 旧版以 reportTag==0x5ea0 属性标记自家 picker；8.0.60 无该属性 →
-//   以 "completionBlock" 关联对象存在性为标记（WCR 消费端同款 fallback 键，FUN__part32.c L85）
-// - WCR 旧版另 hook updatePanelBtn；8.0.60 无该方法 → 只 hook updateMultiSelectRightBtn（头文件 L222）
-
-static void (*orig_SS_onMultiDone)(id, SEL);
-static void hooked_SS_onMultiDone(id self, SEL _cmd) {
-    void (^cb)(NSArray *) = objc_getAssociatedObject(self, "completionBlock");
-    if (!cb) {
-        orig_SS_onMultiDone(self, _cmd);
-        return;
-    }
-    // WCR FUN_01805b20（FUN__part32.c L95-221）同款：key=wxid、value=contact 对象或 NSString
-    NSMutableArray *picked = [NSMutableArray array];
-    id selectView = nil;
-    id dic = nil;
-    @try { selectView = [self valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
-    if ([selectView respondsToSelector:@selector(m_dicMultiSelect)]) {
-        dic = ((id (*)(id, SEL))objc_msgSend)(selectView, @selector(m_dicMultiSelect));
-    }
-    if ([dic isKindOfClass:[NSDictionary class]]) {
-        for (id key in dic) {
-            id val = [dic objectForKey:key];
-            NSString *wxid = nil;
-            if ([val isKindOfClass:[NSString class]]) {
-                wxid = val;
-            } else if ([val respondsToSelector:@selector(m_nsUsrName)]) {
-                wxid = ((id (*)(id, SEL))objc_msgSend)(val, @selector(m_nsUsrName));
-            } else if (val) {
-                @try { wxid = [val valueForKey:@"m_nsUsrName"]; } @catch (NSException *e) {}
-            }
-            if (![wxid isKindOfClass:[NSString class]] || wxid.length == 0) {
-                if ([key isKindOfClass:[NSString class]]) wxid = key;
-            }
-            if ([wxid isKindOfClass:[NSString class]] && wxid.length > 0) [picked addObject:wxid];
-        }
-    }
-    WPLog(@"Moments", @"[Blocklist] picker onMultiDone: %lu selected", (unsigned long)picked.count);
-    cb(picked);
-    ((void (*)(id, SEL, BOOL, id))objc_msgSend)(self, @selector(dismissViewControllerAnimated:completion:), YES, nil);
-}
-
-// WCR FUN_01806780（FUN__part32.c L301-345）同款：orig 后替换右上按钮为 完成→onMultiDone，
-// 防原生按钮走 endMultiSelect 死路（m_delegate=nil 无回调可收）
-static void (*orig_SS_updateMultiSelectRightBtn)(id, SEL);
-static void hooked_SS_updateMultiSelectRightBtn(id self, SEL _cmd) {
-    orig_SS_updateMultiSelectRightBtn(self, _cmd);
-    if (!objc_getAssociatedObject(self, "completionBlock")) return;
-    UIBarButtonItem *done = [[UIBarButtonItem alloc] initWithTitle:@"完成"
-                                                            style:UIBarButtonItemStylePlain
-                                                           target:self
-                                                           action:@selector(onMultiDone)];
-    [((id (*)(id, SEL))objc_msgSend)(self, @selector(navigationItem)) setRightBarButtonItem:done animated:NO];
-}
-
-static void installSessionSelectHooks(void) {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        Class cls = NSClassFromString(@"SessionSelectController");
-        if (!cls) return;
-        MSHookMessageEx(cls, @selector(onMultiDone), (IMP)hooked_SS_onMultiDone, (IMP *)&orig_SS_onMultiDone);
-        if (class_getInstanceMethod(cls, @selector(updateMultiSelectRightBtn))) {
-            MSHookMessageEx(cls, @selector(updateMultiSelectRightBtn), (IMP)hooked_SS_updateMultiSelectRightBtn, (IMP *)&orig_SS_updateMultiSelectRightBtn);
-        }
-        WPLog(@"Moments", @"[Blocklist] SessionSelectController hooks installed");
-    });
-}
-
-// KVC 值与 WCR Misc_part13.c L42474-42567 逐一对应（reportTag 为旧版属性，8.0.60 无，弃）
+// 选人页：复用 MioSessionSelectsController（微信原生 SessionSelectController 全屏选联系人页，
+// WCR 主力封装同款，好友/群聊均可多选；hook 与 KVC 参数统一在封装内维护）
 - (void)presentContactPicker {
-    Class pickerCls = NSClassFromString(@"SessionSelectController");
-    if (!pickerCls) {
+    if (![MioSessionSelectsController isSupported]) {
         WPLog(@"Moments", @"[Blocklist] SessionSelectController not found");
         [MioAlertHelper showTipAlert:@"当前微信版本不支持选人页"];
         return;
     }
-    installSessionSelectHooks();
-
-    UIViewController *picker = [[pickerCls alloc] init];
-    if (!picker) return;
-
-    @try {
-        [picker setValue:@(4096) forKey:@"maxSelectionCount"];
-        [picker setValue:nil forKey:@"m_delegate"];
-        [picker setValue:@(8) forKey:@"m_commonSearchScene"];
-        [picker setValue:@YES forKey:@"useNewSearchBar"];
-        [picker setValue:@YES forKey:@"m_bShowMultiSelectRightBtn"];
-        [picker setValue:@YES forKey:@"m_bKeepCurViewAfterSelect"];
-        [picker setValue:@YES forKey:@"m_bMultiSelect"];
-        [picker setValue:@YES forKey:@"m_bAllowsMultiSelectEmpty"];
-        [picker setValue:@NO forKey:@"m_onlyChatRoom"];
-        [picker setValue:@NO forKey:@"m_bIgnoreChatRoom"];
-        [picker setValue:@NO forKey:@"m_showsChatroomMembers"];
-        [picker setValue:@NO forKey:@"m_showsChatroomFriendsOnly"];
-        [picker setValue:(self.pickerTitle ?: @"添加好友") forKey:@"customTitle"];
-    } @catch (NSException *e) {
-        WPLog(@"Moments", @"[Blocklist] picker KVC error: %@", e);
-    }
-
+    MioSessionSelectsController *picker =
+        [[MioSessionSelectsController alloc] initWithTitle:(self.pickerTitle ?: @"添加好友")
+                                              preselectedContacts:nil];   // WCR 同款语义为追加，不回显
     __weak typeof(self) welf = self;
-    void (^completion)(NSArray *) = ^(NSArray *contacts) {
-        [welf handlePickedContacts:contacts];
-    };
-    objc_setAssociatedObject(picker, "completionBlock", completion, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    // WCR 同款：present 前强制 view 预加载 + 进入多选模式（Misc_part13.c L42594-42604）
-    [picker view];
-    if ([picker respondsToSelector:@selector(beginMultiSelect)]) {
-        ((void (*)(id, SEL))objc_msgSend)(picker, @selector(beginMultiSelect));
-    }
-
-    Class navCls = NSClassFromString(@"MMUINavigationController") ?: [UINavigationController class];
-    UINavigationController *nav = [[navCls alloc] initWithRootViewController:picker];
-    WPLog(@"Moments", @"[Blocklist] presenting contact picker");
-    [self presentViewController:nav animated:YES completion:nil];
+    [picker presentFromViewController:self completion:^(NSArray<NSString *> *userNames) {
+        [welf handlePickedContacts:userNames];
+    }];
 }
 
-// 选中结果处理（WCR FUN_01c81c48 + wcr_sanitizeContactUsernames 同款语义）：
-// 元素 NSString 直取 / contact 对象取 m_nsUsrName；trim、去空、滤 @chatroom；与现名单合并去重
-// 微信 performCallback 调用线程未证实，UI/存储操作统一归主线程
-- (void)handlePickedContacts:(NSArray *)contacts {
-    if (![NSThread isMainThread]) {
-        dispatch_async(dispatch_get_main_queue(), ^{ [self handlePickedContacts:contacts]; });
-        return;
-    }
-    if (![contacts isKindOfClass:[NSArray class]]) contacts = @[];
+// 选中结果处理：与现名单合并去重（追加语义，移除走列表页），滤 @chatroom；回调已在主线程
+- (void)handlePickedContacts:(NSArray<NSString *> *)userNames {
     NSMutableArray *merged = [[self currentList] mutableCopy] ?: [NSMutableArray array];
     NSInteger added = 0;
-    for (id it in contacts) {
-        NSString *wxid = nil;
-        if ([it isKindOfClass:[NSString class]]) {
-            wxid = (NSString *)it;
-        } else if ([it respondsToSelector:@selector(m_nsUsrName)]) {
-            wxid = ((NSString *(*)(id, SEL))objc_msgSend)(it, @selector(m_nsUsrName));
-        }
+    for (NSString *wxid in userNames) {
         if (![wxid isKindOfClass:[NSString class]]) continue;
         NSString *trim = [wxid stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (trim.length == 0) continue;
@@ -252,7 +133,7 @@ static void installSessionSelectHooks(void) {
     }
     [self saveList:merged];
     WPLog(@"Moments", @"[Blocklist] picked %lu, added %ld, total %lu (%@)",
-          (unsigned long)contacts.count, (long)added, (unsigned long)merged.count, [self listKey]);
+          (unsigned long)userNames.count, (long)added, (unsigned long)merged.count, [self listKey]);
     [self reloadTable];
 }
 
