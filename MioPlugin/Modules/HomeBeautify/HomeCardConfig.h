@@ -43,6 +43,29 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy)   NSString *hcCalSelectedColor;    // 选中日期颜色 hex（CadisCalendarSelectedColor）
 @property (nonatomic, copy)   NSString *hcCalSelectedColorDark;
 
+// 联系人挂件（XOS CadisContact* 同构）
+@property (nonatomic, assign) BOOL      hcContactEnabled;        // 显示联系人（CadisContactMode）
+@property (nonatomic, assign) NSInteger hcContactPos;            // 显示位置 0上 1中 2下（CadisContactPos，未设默认 0）
+@property (nonatomic, assign) BOOL      hcContactHideNick;       // 隐藏昵称（CadisContactHideNick；基础高 60:80）
+@property (nonatomic, assign) CGFloat   hcContactY;              // Y位置%（默认 50，仅"卡片中"生效，CadisContactOffsetY）
+@property (nonatomic, assign) CGFloat   hcContactSpacing;        // 与卡片间距（默认 10，CadisContactSpacing）
+@property (nonatomic, copy)   NSString *hcContactBgColor;        // 背景颜色 hex（CadisContactColor）
+@property (nonatomic, copy)   NSString *hcContactBgColorDark;
+@property (nonatomic, assign) CGFloat   hcContactAvatarSize;     // 头像大小（默认 48，应用钳 ≥20，CadisContactAvatarSize）
+@property (nonatomic, assign) CGFloat   hcContactAvatarSpacing;  // 头像间距 pt（默认 3，CadisContactAvatarSpacing）
+@property (nonatomic, assign) NSInteger hcContactMaxVisible;     // 每页显示数量 5/6（默认 5，应用钳 5-6，CadisContactMaxVisible）
+@property (nonatomic, assign) BOOL      hcContactOnline;         // 在线状态圆点（CadisContactOnlineStatus）
+@property (nonatomic, copy)   NSString *hcContactDotColor;       // 在线圆点颜色 hex（空 = 微信绿 #07C160）
+@property (nonatomic, copy)   NSString *hcContactDotColorDark;
+@property (nonatomic, assign) NSInteger hcContactDotPos;         // 圆点位置 0右下 1右上 2左上 3左下（CadisContactOnlineDotPosition）
+@property (nonatomic, assign) BOOL      hcContactFullScreen;     // 全屏显示聊天（关 = 半屏 page sheet）
+@property (nonatomic, assign) CGFloat   hcContactBgHeight;       // 背景高度（默认 0，总高 = 基础60/80 + 值，CadisContactBgHeight）
+
+// 管理联系人持久化（userName 有序数组 = 展示顺序，存 NSUserDefaults，XOS CadisSavedContacts 同构）
++ (NSArray<NSString *> *)savedContacts;
++ (void)saveContacts:(NSArray<NSString *> *)userNames;
++ (NSString *)savedContactsFingerprint;   // 保存列表指纹（HCGeoKey 用，变更触发重建）
+
 // 卡片图片（磁盘文件，浅/深色各一张，与卡片背景图的 MioCardBackground 目录相互独立）
 + (NSString *)imageDirectory;
 + (nullable NSString *)lightImagePath;   // 浅色模式图片路径（无 = 未设置）

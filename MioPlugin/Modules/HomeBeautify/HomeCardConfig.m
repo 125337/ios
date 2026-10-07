@@ -50,7 +50,42 @@
         [ConfigDescriptor itemWithKey:@"hcCalHolidayColorDark" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"hcCalSelectedColor" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"hcCalSelectedColorDark" type:ConfigValueTypeString default:@""],
+        // 联系人（XOS CadisContact*，Pos 未设默认 0 = 卡片上方）
+        [ConfigDescriptor itemWithKey:@"hcContactEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hcContactPos" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"hcContactHideNick" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hcContactY" type:ConfigValueTypeFloat default:@(50)],
+        [ConfigDescriptor itemWithKey:@"hcContactSpacing" type:ConfigValueTypeFloat default:@(10)],
+        [ConfigDescriptor itemWithKey:@"hcContactBgColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcContactBgColorDark" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcContactAvatarSize" type:ConfigValueTypeFloat default:@(48)],
+        [ConfigDescriptor itemWithKey:@"hcContactAvatarSpacing" type:ConfigValueTypeFloat default:@(3)],
+        [ConfigDescriptor itemWithKey:@"hcContactMaxVisible" type:ConfigValueTypeInteger default:@(5)],
+        [ConfigDescriptor itemWithKey:@"hcContactOnline" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hcContactDotColor" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcContactDotColorDark" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"hcContactDotPos" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"hcContactFullScreen" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"hcContactBgHeight" type:ConfigValueTypeFloat default:@(0)],
     ];
+}
+
+#pragma mark - 管理联系人（NSUserDefaults 有序 userName 数组，XOS CadisSavedContacts 同构）
+
++ (NSArray<NSString *> *)savedContacts {
+    id v = [[NSUserDefaults standardUserDefaults] objectForKey:@"MioContactSaved"];
+    return [v isKindOfClass:[NSArray class]] ? v : @[];
+}
+
++ (void)saveContacts:(NSArray<NSString *> *)userNames {
+    [[NSUserDefaults standardUserDefaults] setObject:userNames ?: @[] forKey:@"MioContactSaved"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
++ (NSString *)savedContactsFingerprint {
+    NSArray *saved = [self savedContacts];
+    return [NSString stringWithFormat:@"%lu|%@", (unsigned long)saved.count,
+            [saved componentsJoinedByString:@","]];
 }
 
 #pragma mark - 卡片图片（MioImageVault 双存储：Documents 文件 + Keychain 备份，重装不丢）

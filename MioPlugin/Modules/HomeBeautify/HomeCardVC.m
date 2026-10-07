@@ -1,5 +1,6 @@
 #import "HomeCardVC.h"
 #import "HomeCardConfig.h"
+#import "HomeContactPickerVC.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/MioImageVault.h"
@@ -22,7 +23,18 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"首页卡片";
+    // 管理联系人保存后刷新行文案（返回时触发重建）
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(buildUI)
+                                                 name:MioHomeContactSavedChangedNotification
+                                               object:nil];
     [self buildUI];
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                    name:MioHomeContactSavedChangedNotification
+                                                  object:nil];
 }
 
 - (void)buildUI {
@@ -346,9 +358,207 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                         darkValue:(config.hcCalSelectedColorDark.length > 0 ? config.hcCalSelectedColorDark : nil)];
 
     y = [self finishGroup:g5 atY:y height:cy];
+    y += 8;
+
+    // ──── 卡片6：联系人（XOS CadisContact* 同构：Mode/Pos/OffsetY/Spacing/Color/头像参数） ────
+    y = [self addSectionHeader:@"联系人" y:y width:w];
+    UIView *g6 = [self addTableGroupAtY:y width:w];
+    cy = 0;
+
+    cy = [self addSwitchRowInGroup:g6
+                             title:@"联系人模式"
+                              desc:nil
+                               key:@"hcContactEnabled"
+                              isOn:config.hcContactEnabled
+                                cy:cy
+                             width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    cy = [self addSwitchRowInGroup:g6
+                             title:@"隐藏昵称"
+                              desc:nil
+                               key:@"hcContactHideNick"
+                              isOn:config.hcContactHideNick
+                                cy:cy
+                             width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // 显示位置（XOS CadisContactPos：0上 1中 2下，未设默认 0）
+    cy = [self addSegmentRowInGroup:g6
+                              title:@"显示位置"
+                                key:@"hcContactPos"
+                              names:@[@"卡片上方", @"卡片中", @"卡片下方"]
+                              index:config.hcContactPos
+                                 cy:cy
+                              width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // Y位置（百分比，默认 50，仅"卡片中"生效，CadisContactOffsetY）
+    cy = [self addInputRowInGroup:g6
+                            title:@"Y位置"
+                              key:@"hcContactY"
+                            value:config.hcContactY != 50 ? [self numText:config.hcContactY] : nil
+                             hint:@"50"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置Y位置"
+                     alertMessage:@"联系人垂直位置百分比（0-100），默认 50，显示位置为卡片中时生效"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // 与卡片间距（默认 10，显示位置为上/下方时生效）
+    cy = [self addInputRowInGroup:g6
+                            title:@"与卡片间距"
+                              key:@"hcContactSpacing"
+                            value:config.hcContactSpacing != 10 ? [self numText:config.hcContactSpacing] : nil
+                             hint:@"10"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置与卡片间距"
+                     alertMessage:@"联系人挂件与卡片的间距，默认 10，显示位置为卡片上方/下方时生效"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // 背景颜色（XOS CadisContactColor，浅/深双预览）
+    cy = [self addColorRowInGroup:g6
+                            title:@"背景颜色"
+                              key:@"hcContactBgColor"
+                            value:(config.hcContactBgColor.length > 0 ? config.hcContactBgColor : nil)
+                               cy:cy
+                            width:w
+                          darkKey:@"hcContactBgColorDark"
+                        darkValue:(config.hcContactBgColorDark.length > 0 ? config.hcContactBgColorDark : nil)];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // 头像大小（默认 48，应用钳 ≥20，CadisContactAvatarSize）
+    cy = [self addInputRowInGroup:g6
+                            title:@"头像大小"
+                              key:@"hcContactAvatarSize"
+                            value:config.hcContactAvatarSize != 48 ? [self numText:config.hcContactAvatarSize] : nil
+                             hint:@"48"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置头像大小"
+                     alertMessage:@"头像尺寸（最小 20），默认 48"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // 头像间距（pt，默认 3）
+    cy = [self addInputRowInGroup:g6
+                            title:@"头像间距"
+                              key:@"hcContactAvatarSpacing"
+                            value:config.hcContactAvatarSpacing != 3 ? [self numText:config.hcContactAvatarSpacing] : nil
+                             hint:@"3"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置头像间距"
+                     alertMessage:@"头像之间间距，默认 3"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // 显示数量（XOS CadisContactMaxVisible：5/6，应用钳 5-6，默认 5）
+    cy = [self addSegmentRowInGroup:g6
+                              title:@"显示数量"
+                                key:@"hcContactMaxVisible"
+                              names:@[@"5个", @"6个"]
+                              index:(config.hcContactMaxVisible == 6 ? 1 : 0)
+                                 cy:cy
+                              width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    cy = [self addSwitchRowInGroup:g6
+                             title:@"在线状态"
+                              desc:nil
+                               key:@"hcContactOnline"
+                              isOn:config.hcContactOnline
+                                cy:cy
+                             width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // 在线圆点颜色（空 = 微信绿 #07C160 兜底，浅/深双预览）
+    cy = [self addColorRowInGroup:g6
+                            title:@"在线圆点颜色"
+                              key:@"hcContactDotColor"
+                            value:(config.hcContactDotColor.length > 0 ? config.hcContactDotColor : nil)
+                               cy:cy
+                            width:w
+                          darkKey:@"hcContactDotColorDark"
+                        darkValue:(config.hcContactDotColorDark.length > 0 ? config.hcContactDotColorDark : nil)];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // 在线圆点位置（弹出选择器：0右下 1右上 2左上 3左下，CadisContactOnlineDotPosition）
+    NSString *dotName = @[@"右下角", @"右上角", @"左上角", @"左下角"][
+        MIN(MAX(config.hcContactDotPos, 0), 3)];
+    cy = [self addNavRowInGroup:g6
+                          title:@"在线圆点位置"
+                       subtitle:dotName
+                            tag:0
+                         action:@selector(onDotPosTap)
+                             cy:cy
+                          width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    cy = [self addSwitchRowInGroup:g6
+                             title:@"全屏显示聊天"
+                              desc:nil
+                               key:@"hcContactFullScreen"
+                              isOn:config.hcContactFullScreen
+                                cy:cy
+                             width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // 背景高度（默认 0，总高 = 基础60/80 + 值，CadisContactBgHeight）
+    cy = [self addInputRowInGroup:g6
+                            title:@"背景高度"
+                              key:@"hcContactBgHeight"
+                            value:config.hcContactBgHeight != 0 ? [self numText:config.hcContactBgHeight] : nil
+                             hint:@"0"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"设置背景高度"
+                     alertMessage:@"联系人额外背景高度，默认 0（总高 = 基础高度 + 值）"
+                               cy:cy
+                            width:w];
+    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
+
+    // 管理联系人（多选+顺序保存，返回后刷新行文案）
+    NSUInteger savedCount = [HomeCardConfig savedContacts].count;
+    cy = [self addNavRowInGroup:g6
+                          title:@"管理联系人"
+                       subtitle:(savedCount > 0
+                                 ? [NSString stringWithFormat:@"已选 %lu 位（按选择顺序）", (unsigned long)savedCount]
+                                 : @"未选择（未选择时不显示挂件）")
+                            tag:0
+                         action:@selector(onManageContactsTap)
+                             cy:cy
+                          width:w];
+
+    y = [self finishGroup:g6 atY:y height:cy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
+}
+
+#pragma mark - 联系人（圆点位置弹出选择 / 管理联系人）
+
+- (void)onDotPosTap {
+    HomeCardConfig *config = [HomeCardConfig shared];
+    NSArray<NSString *> *names = @[@"右下角", @"右上角", @"左上角", @"左下角"];
+    NSMutableArray<NSString *> *btns = [NSMutableArray arrayWithCapacity:names.count];
+    for (NSInteger i = 0; i < (NSInteger)names.count; i++) {
+        [btns addObject:(i == config.hcContactDotPos)
+            ? [NSString stringWithFormat:@"✓ %@", names[i]] : names[i]];
+    }
+    [MioAlertHelper showMenuAlert:@"选择圆点位置" buttons:btns onButton:^(NSInteger index) {
+        [HomeCardConfig shared].hcContactDotPos = index;   // 取消不回调，index 恒 0-3
+        [ConfigManager saveAll];
+        [self wpRebuildWeChatTable];
+        [self buildUI];
+    }];
+}
+
+- (void)onManageContactsTap {
+    HomeContactPickerVC *vc = [[HomeContactPickerVC alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 #pragma mark - 卡片图片（浅/深色，同卡片背景页：菜单选图/删图 → PHPicker）

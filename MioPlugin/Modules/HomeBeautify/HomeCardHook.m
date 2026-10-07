@@ -59,6 +59,7 @@
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/ConfigManager.h"
+#import "../../Core/ServiceHelper.h"
 #import "../../Config/WPColorUtil.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -161,7 +162,8 @@ static NSString *HCGeoKey(void) {
     return [NSString stringWithFormat:
             @"%d|%@|%@|%.1f|%.1f|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%d"
             @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%ld"
-            @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%@|%ld|%ld",
+            @"|%d|%ld|%.1f|%.1f|%.1f|%@|%@|%@|%@|%@|%@|%ld|%ld"
+            @"|%d|%ld|%d|%.1f|%.1f|%@|%@|%.1f|%.1f|%ld|%d|%@|%@|%ld|%d|%.1f|%@",
             cfg.hcEnabled,
             [HomeCardConfig lightImagePath] ?: @"", [HomeCardConfig darkImagePath] ?: @"",
             cfg.hcCardHeight, cfg.hcCardOffsetY, cfg.hcCardBottomFix, cfg.hcCardMargin,
@@ -176,7 +178,14 @@ static NSString *HCGeoKey(void) {
             cfg.hcCalHolidayColor ?: @"", cfg.hcCalHolidayColorDark ?: @"",
             cfg.hcCalSelectedColor ?: @"", cfg.hcCalSelectedColorDark ?: @"",
             (long)[HomeCardCalendarPopup currentStyle],   // 样式值入指纹：切换后 reloadData 重建布局
-            dayStamp];   // 日期入指纹：挂后台过夜回前台指纹变化 → 重建重算日历/天气
+            dayStamp,   // 日期入指纹：挂后台过夜回前台指纹变化 → 重建重算日历/天气
+            cfg.hcContactEnabled, (long)cfg.hcContactPos, cfg.hcContactHideNick,
+            cfg.hcContactY, cfg.hcContactSpacing,
+            cfg.hcContactBgColor ?: @"", cfg.hcContactBgColorDark ?: @"",
+            cfg.hcContactAvatarSize, cfg.hcContactAvatarSpacing, (long)cfg.hcContactMaxVisible,
+            cfg.hcContactOnline, cfg.hcContactDotColor ?: @"", cfg.hcContactDotColorDark ?: @"",
+            (long)cfg.hcContactDotPos, cfg.hcContactFullScreen, cfg.hcContactBgHeight,
+            [HomeCardConfig savedContactsFingerprint] ?: @""];   // 保存列表变更 → 重建
 }
 
 #pragma mark - Header 构建（XOS FUN_00151594 section-0 同构 + 日历/天气挂件）
@@ -188,7 +197,11 @@ static UIColor *HCSecondaryLabel(void) {
 }
 
 // header 追加高度（XOS FUN_00159b64 同构：卡片高 + 12 + 底部占位修正，
-// 卡片中放日历时卡片高钳制 max(卡高, 日历高-8)（FUN_00159c48），日历上/下方时追加日历总高）
+// 卡片中放日历时卡片高钳制 max(卡高, 日历高-8)（FUN_00159c48），日历上/下方时追加日历总高；
+// 联系人同构：上/下方追加 联系人高+间距，卡片中钳制卡高不追加）
+static BOOL HCContactOn(HomeCardConfig *cfg);        // 定义在联系人段
+static CGFloat HCContactHeight(HomeCardConfig *cfg); // 定义在联系人段
+
 static CGFloat HCHeaderExtra(HomeCardConfig *cfg) {
     CGFloat cardH = HCCardHeight(cfg);
     BOOL calOn = cfg.hcCalEnabled;
@@ -197,13 +210,202 @@ static CGFloat HCHeaderExtra(HomeCardConfig *cfg) {
     if (calOn && calPos == 1 && cardH < calH - 8.0) {
         cardH = calH - 8.0;
     }
-    return cardH + 12.0 + cfg.hcCardBottomFix + ((calOn && calPos != 1) ? calH : 0.0);
+    BOOL conOn = HCContactOn(cfg);
+    NSInteger conPos = MIN(MAX((NSInteger)cfg.hcContactPos, 0), 2);
+    CGFloat conH = conOn ? HCContactHeight(cfg) : 0.0;
+    CGFloat conSp = MAX(cfg.hcContactSpacing, 0.0);
+    if (conOn && conPos == 1 && cardH < conH - 8.0) {
+        cardH = conH - 8.0;
+    }
+    return cardH + 12.0 + cfg.hcCardBottomFix
+         + ((calOn && calPos != 1) ? calH : 0.0)
+         + ((conOn && conPos != 1) ? conH + conSp : 0.0);
 }
 
 // 手势 target（block 转发；UIGestureRecognizer 持有 target，随日历视图释放）
 @interface HCCalTapTarget : NSObject
 @property (nonatomic, copy) void (^block)(void);
 @end
+
+#pragma mark - 联系人挂件（XOS FUN_00151594 联系人段 + cadis_contactTapped 同构）
+
+// 联系人开且已保存联系人（XOS：保存列表为空不渲染容器）
+static BOOL HCContactOn(HomeCardConfig *cfg) {
+    return cfg.hcContactEnabled && [HomeCardConfig savedContacts].count > 0;
+}
+
+// 联系人总高（XOS FUN_00159d3c：HideNick ? 60 : 80，+ BgHeight）
+static CGFloat HCContactHeight(HomeCardConfig *cfg) {
+    return (cfg.hcContactHideNick ? 60.0 : 80.0) + MAX(cfg.hcContactBgHeight, 0.0);
+}
+
+// 跳聊天（XOS FUN_00152f0c；本版本头文件 MMMsgLogicManager 实证两路：
+// 全屏开 → PushOtherBaseMsgControllerByContact:navigationController:animated:；
+// 关 → ShowPageSheetLogicControllerByContact:pageSheetDelegate:fromViewController:animated: 半屏）
+static void HCOpenChat(id vc, NSString *userName) {
+    id contact = WXGetContactForWxid(userName);   // 内置 getContactByName: 兜底
+    if (!contact) return;
+    id logic = WXGetService(objc_getClass("MMMsgLogicManager"));
+    if (!logic) return;
+    HomeCardConfig *cfg = [HomeCardConfig shared];
+    if (cfg.hcContactFullScreen) {
+        SEL s = NSSelectorFromString(@"PushOtherBaseMsgControllerByContact:navigationController:animated:");
+        if ([logic respondsToSelector:s] && [vc isKindOfClass:[UIViewController class]]) {
+            UINavigationController *nav = [(UIViewController *)vc navigationController];
+            ((void (*)(id, SEL, id, id, BOOL))objc_msgSend)(logic, s, contact, nav, YES);
+        }
+    } else {
+        SEL s = NSSelectorFromString(@"ShowPageSheetLogicControllerByContact:pageSheetDelegate:fromViewController:animated:");
+        if ([logic respondsToSelector:s] && [vc isKindOfClass:[UIViewController class]]) {
+            ((void (*)(id, SEL, id, id, id, BOOL))objc_msgSend)(logic, s, contact, nil, vc, YES);
+        }
+    }
+}
+
+// 头像（XOS FUN_00158bcc 同构：size+userName 缓存 MMHeadImageView；类/初始化器运行时探测，
+// 缺失返回 nil 由调用方画灰圆占位，XOS L23203-23217 同款兜底）
+static NSMutableDictionary *hcAvatarCache = nil;   // size|userName → 头像视图（主线程专用）
+
+static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
+    if (!hcAvatarCache) hcAvatarCache = [NSMutableDictionary dictionary];
+    NSString *key = [NSString stringWithFormat:@"%.0f|%@", size, userName];
+    UIView *av = [hcAvatarCache objectForKey:key];
+    if (av) return av;
+    @try {
+        Class cls = objc_getClass("MMHeadImageView");
+        SEL sel = NSSelectorFromString(@"initWithUsrName:headImgUrl:bAutoUpdate:bRoundCorner:");
+        if (cls && [cls instancesRespondToSelector:sel]) {
+            // XOS 传参同构：bAutoUpdate=0 bRoundCorner=1
+            id v = ((id (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)
+                   ([cls alloc], sel, userName, nil, NO, YES);
+            if ([v isKindOfClass:[UIView class]]) {
+                ((UIView *)v).frame = CGRectMake(0, 0, size, size);
+                av = v;
+            }
+        }
+    } @catch (...) {}
+    if (av) [hcAvatarCache setObject:av forKey:key];
+    return av;
+}
+
+// 联系人挂件容器（XOS 渲染段 L22819-23285 同构：内衬圆角12底板 + 分页横向滚动 +
+// 每页 maxVisible 个头像水平居中 + 装饰在线圆点 + 昵称 + 点按跳聊天；无保存联系人返回 nil）
+static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *cfg) {
+    NSArray<NSString *> *saved = [HomeCardConfig savedContacts];
+    if (!saved.count) return nil;
+
+    CGFloat H = HCContactHeight(cfg);
+    NSInteger maxVisible = MIN(MAX((NSInteger)cfg.hcContactMaxVisible, 5), 6);
+    CGFloat size = MAX(cfg.hcContactAvatarSize, 20.0);      // XOS 钳 ≥20
+    CGFloat spacing = MAX(cfg.hcContactAvatarSpacing, 0.0);
+    BOOL hideNick = cfg.hcContactHideNick;
+
+    UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, H)];
+    container.userInteractionEnabled = YES;
+    container.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+
+    // 内衬底板（XOS L22898-22912：左右各缩 16，圆角 12，裁剪）
+    UIView *inner = [[UIView alloc] initWithFrame:CGRectMake(16.0, 0, width - 32.0, H)];
+    inner.backgroundColor = HCColorForMode(cfg.hcContactBgColor, cfg.hcContactBgColorDark, dark)
+        ?: (dark ? [UIColor colorWithWhite:0.12 alpha:1.0] : [UIColor whiteColor]);
+    inner.layer.cornerRadius = 12.0;
+    inner.clipsToBounds = YES;
+    [container addSubview:inner];
+
+    CGFloat innerW = width - 32.0;
+    UIScrollView *sv = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, innerW, H)];
+    sv.showsHorizontalScrollIndicator = NO;                 // XOS L22920
+    sv.pagingEnabled = YES;                                 // 按页宽分页（contentSize = 页宽×页数）
+    sv.clipsToBounds = YES;
+    [inner addSubview:sv];
+
+    NSInteger count = (NSInteger)saved.count;
+    NSInteger pages = (count + maxVisible - 1) / maxVisible;
+    sv.contentSize = CGSizeMake(innerW * pages, H);
+
+    CGFloat pageInnerW = innerW - 8.0;                      // 每页左右各 4pt 内衬（XOS L22935）
+    CGFloat cellW = pageInnerW / maxVisible;
+    if (size + spacing <= cellW) cellW = size + spacing;    // XOS L23044-23047
+    CGFloat avatarX = (cellW - size) * 0.5;                 // 头像在格内水平居中（XOS L23048）
+    CGFloat dotS = MIN(MAX(size * 0.25, 8.0), 14.0);        // 圆点 = 头像×0.25 钳 8-14（XOS L23050-23057）
+    UIColor *dotColor = HCColorForMode(cfg.hcContactDotColor, cfg.hcContactDotColorDark, dark)
+        ?: [UIColor colorWithRed:7.0 / 255.0 green:193.0 / 255.0 blue:96.0 / 255.0 alpha:1.0];   // 微信绿兜底
+
+    NSMutableArray<UIView *> *pageViews = [NSMutableArray arrayWithCapacity:(NSUInteger)pages];
+    for (NSInteger p = 0; p < pages; p++) {
+        UIView *page = [[UIView alloc] initWithFrame:CGRectMake(innerW * p + 4.0, 0, pageInnerW, H)];
+        [sv addSubview:page];
+        [pageViews addObject:page];
+    }
+
+    for (NSInteger i = 0; i < count; i++) {
+        NSString *userName = saved[i];
+        if (userName.length == 0) continue;
+        NSInteger page = i / maxVisible;
+        NSInteger inPage = (page == pages - 1) ? (count - page * maxVisible) : maxVisible;
+        CGFloat leading = MAX(0.0, (pageInnerW - cellW * inPage) * 0.5);   // 每页整组水平居中（XOS L23192）
+        UIView *cell = [[UIView alloc] initWithFrame:
+            CGRectMake(leading + cellW * (i - page * maxVisible), 6.0, cellW, H - 6.0)];
+        cell.userInteractionEnabled = YES;
+
+        // 头像（缓存复用；构建失败回退灰圆占位）
+        UIView *av = HCContactAvatar(userName, size);
+        if (av) {
+            av.frame = CGRectMake(avatarX, 0, size, size);
+            [cell addSubview:av];
+        } else {
+            UIView *ph = [[UIView alloc] initWithFrame:CGRectMake(avatarX, 0, size, size)];
+            ph.backgroundColor = HCSecondaryLabel();
+            ph.layer.cornerRadius = size * 0.5;
+            ph.userInteractionEnabled = NO;
+            [cell addSubview:ph];
+        }
+
+        // 在线圆点（装饰性：XOS 在线判定用其私有数据源不可复刻 → 开关开 + 非群聊即常显配置色；
+        // XOS L23223-23259：按配置方位、1.5pt 白描边）
+        if (cfg.hcContactOnline && ![userName containsString:@"@chatroom"]) {
+            CGFloat dx = avatarX, dy = 0.0;
+            switch (MIN(MAX((NSInteger)cfg.hcContactDotPos, 0), 3)) {
+                case 1:  dx = size + avatarX - dotS; dy = 0.0;         break;   // 右上
+                case 2:  dx = avatarX;               dy = 0.0;         break;   // 左上
+                case 3:  dx = avatarX;               dy = size - dotS; break;   // 左下
+                default: dx = size + avatarX - dotS; dy = size - dotS; break;   // 右下
+            }
+            UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(dx, dy, dotS, dotS)];
+            dot.backgroundColor = dotColor;
+            dot.layer.cornerRadius = dotS * 0.5;
+            dot.layer.borderWidth = 1.5;
+            dot.layer.borderColor = [UIColor whiteColor].CGColor;
+            dot.userInteractionEnabled = NO;
+            [cell addSubview:dot];
+        }
+
+        // 昵称（备注>昵称>原样，10pt 居中尾部截断，XOS L23260-23277）
+        if (!hideNick) {
+            UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(0, size + 2.0, cellW, 16.0)];
+            lbl.text = WXDisplayNameForWxid(userName);
+            lbl.font = [UIFont systemFontOfSize:10.0];
+            lbl.textAlignment = NSTextAlignmentCenter;
+            lbl.textColor = HCSecondaryLabel();
+            lbl.lineBreakMode = NSLineBreakByTruncatingTail;
+            lbl.userInteractionEnabled = NO;
+            [cell addSubview:lbl];
+        }
+
+        // 点按跳聊天（XOS cadis_contactTapped:；手势关联 target 防释放，天气徽章同款）
+        NSString *target = [userName copy];
+        HCCalTapTarget *tgt = [HCCalTapTarget new];
+        __weak id wvc = vc;
+        tgt.block = ^{ HCOpenChat(wvc, target); };
+        UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:tgt
+                                                                              action:@selector(hcOnTap)];
+        objc_setAssociatedObject(tap, kHCTapTargetKey, tgt, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [cell addGestureRecognizer:tap];
+
+        [pageViews[page] addSubview:cell];
+    }
+    return container;
+}
 
 // 农历日文本（转调 HomeCardCalendarPopup 的 1900-2100 压缩表，全插件共用单份）
 static NSString *HCLunarDayText(NSDate *date) {
@@ -1061,11 +1263,13 @@ static void HCFetchWeather(void (^done)(NSString *text, NSString *sym)) {
 // 可点按弹天气菜单（XOS 15445 cadis_weatherBadgeTapped → FUN_00155870）
 static void HCAddWeatherBadge(id vc, UIView *container, HomeCardConfig *cfg, BOOL dark,
                               CGFloat cardX, CGFloat cardW, CGFloat cardY, CGFloat cardH,
-                              CGFloat calTop, BOOL calOn) {
+                              CGFloat calTop, BOOL calOn, CGFloat conTop, BOOL conOn) {
     BOOL inCalendar = (cfg.hcWeatherPos == 1 && calOn);
+    BOOL inContact = (cfg.hcWeatherPos == 2 && conOn);
     CGFloat xBase = cardX, xAvail = cardW;
-    CGFloat yBase = inCalendar ? calTop : cardY;
-    CGFloat yAvail = inCalendar ? (cfg.hcCalBgHeight + 128.0 - 8.0) : cardH;
+    CGFloat yBase = inCalendar ? calTop : (inContact ? conTop : cardY);
+    CGFloat yAvail = inCalendar ? (cfg.hcCalBgHeight + 128.0 - 8.0)
+                                : (inContact ? (HCContactHeight(cfg) - 8.0) : cardH);
     // X/Y 快照：回调闭包只捕获局部值，不再读单例 cfg（配置变更与布局基准强一致）
     CGFloat wx = cfg.hcWeatherX, wy = cfg.hcWeatherY;
 
@@ -1172,14 +1376,22 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
     BOOL calOn = cfg.hcCalEnabled;
     NSInteger calPos = MIN(MAX((NSInteger)cfg.hcCalPos, 0), 2);
     CGFloat calH = calOn ? cfg.hcCalBgHeight + 128.0 : 0.0;
+    BOOL conOn = HCContactOn(cfg);
+    NSInteger conPos = MIN(MAX((NSInteger)cfg.hcContactPos, 0), 2);
+    CGFloat conH = conOn ? HCContactHeight(cfg) : 0.0;
+    CGFloat conSp = MAX(cfg.hcContactSpacing, 0.0);
 
-    // 卡片高：卡片中放日历时钳制 max(卡高, 日历高-8)（XOS FUN_00159c48）
+    // 卡片高：卡片中放日历/联系人时钳制 max(卡高, 挂件高-8)（XOS FUN_00159c48 双件同构）
     CGFloat cardH = HCCardHeight(cfg);
     if (calOn && calPos == 1 && cardH < calH - 8.0) {
         cardH = calH - 8.0;
     }
+    if (conOn && conPos == 1 && cardH < conH - 8.0) {
+        cardH = conH - 8.0;
+    }
     CGFloat containerH = origHeight + cardH + 12.0 + cfg.hcCardBottomFix
-                       + ((calOn && calPos != 1) ? calH : 0.0);
+                       + ((calOn && calPos != 1) ? calH : 0.0)
+                       + ((conOn && conPos != 1) ? conH + conSp : 0.0);
 
     UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, containerH)];
     if (origView) {
@@ -1193,8 +1405,10 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
         dark = [vc traitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
     }
 
-    // 卡片（XOS：日历在上方时卡片整体下移日历高，14972-14996）
-    CGFloat cardY = origHeight + ((calOn && calPos == 0) ? calH : 0.0) + 4.0 + cfg.hcCardOffsetY;
+    // 卡片（XOS：日历在上方时卡片整体下移日历高；联系人在上方再下移 联系人高+间距）
+    CGFloat cardY = origHeight + ((calOn && calPos == 0) ? calH : 0.0)
+                  + ((conOn && conPos == 0) ? conH + conSp : 0.0)
+                  + 4.0 + cfg.hcCardOffsetY;
     UIView *card = [[UIView alloc] initWithFrame:CGRectMake(margin, cardY,
                                                             width - margin * 2.0, cardH)];
     card.tag = kHCCardTag;
@@ -1247,10 +1461,29 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
         [container addSubview:cal];
     }
 
+    // 联系人挂件（XOS：上方 = 挂件区顶（日历也在上方时接日历下 + 12）；
+    // 中 = Y%×(卡高-(联系人高-8)) 叠卡片上；下方 = 卡高+12+底部修正（日历也在下方时接日历下 + 12））
+    CGFloat conY = 0.0;
+    if (conOn) {
+        if (conPos == 0) {
+            conY = origHeight + ((calOn && calPos == 0) ? calH + 12.0 : 0.0);
+        } else if (conPos == 1) {
+            conY = origHeight + (cfg.hcContactY / 100.0) * (cardH - (conH - 8.0));
+        } else {
+            conY = origHeight + cardH + 12.0 + cfg.hcCardBottomFix
+                 + ((calOn && calPos == 2) ? calH + 12.0 : 0.0);
+        }
+        UIView *con = HCBuildContact(vc, width, dark, cfg);
+        if (con) {
+            con.frame = CGRectMake(0, conY, width, con.frame.size.height);
+            [container addSubview:con];
+        }
+    }
+
     // 天气徽章（z 序最上，XOS 15451 最后添加）
     if (cfg.hcWeatherEnabled) {
         HCAddWeatherBadge(vc, container, cfg, dark, margin, width - margin * 2.0, cardY, cardH,
-                          calOn ? calY : 0.0, calOn);
+                          calOn ? calY : 0.0, calOn, conOn ? conY : 0.0, conOn);
     }
 
     // 宿主 = MMTableViewCell（SessionGroupsHook 分组条同款）：cell 类型的 header 微信不包装，
