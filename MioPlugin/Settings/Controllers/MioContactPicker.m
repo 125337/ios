@@ -3,7 +3,6 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <substrate.h>
-#import "../Core/LogManager.h"
 #import "../Core/ServiceHelper.h"
 
 // ===== 统一选人入口（MioContactPicker.h 注释为架构总览）=====
@@ -50,7 +49,6 @@
     if (self.hasReturned) return;
     self.hasReturned = YES;
     void (^fire)(void) = ^{
-        WPLog(@"MioPicker", @"finish(%@): %lu 个", NSStringFromClass([self class]), (unsigned long)wxids.count);
         if ([self.delegate respondsToSelector:@selector(pickerDidFinish:)]) {
             [self.delegate pickerDidFinish:wxids ?: @[]];
         }
@@ -64,7 +62,6 @@
     if (self.hasReturned) return;
     self.hasReturned = YES;
     void (^fire)(void) = ^{
-        WPLog(@"MioPicker", @"cancel(%@)", NSStringFromClass([self class]));
         if ([self.delegate respondsToSelector:@selector(pickerDidCancel)]) {
             [self.delegate pickerDidCancel];
         }
@@ -154,9 +151,7 @@ static void MioGroupsRefreshRightButton(id picker) {
 static void mioGroupsDoneImp(id self, SEL _cmd) {
     MioPickerGroupsAdapter *bridge = MioGroupsBridge(self);
     if (bridge && !bridge.hasReturned) {
-        WPLog(@"MioPicker", @"[Groups] done clicked");
         NSArray<NSString *> *result = MioGroupsExtract(self);
-        WPLog(@"MioPicker", @"[Groups] extracted %lu: %@", (unsigned long)result.count, result);
         SEL closeSel = NSSelectorFromString(@"doClickCloseWithNeedAnimated:action:");
         if ([self respondsToSelector:closeSel]) {
             ((void (*)(id, SEL, BOOL, long long))objc_msgSend)(self, closeSel, YES, 1);
@@ -191,29 +186,25 @@ static void mioGroupsInstallHooks(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         Class cls = objc_getClass("MultiSelectChatRoomHalfScreenViewController");
-        if (!cls) {
-            WPLog(@"MioPicker", @"[Groups] MultiSelectChatRoomHalfScreenViewController not found!");
-            return;
-        }
+        if (!cls) return;
         // MSHookMessageEx：方法在父类时（如 viewDidLayoutSubviews）hook 限定在本类，不污染 UIViewController 全局
         SEL doneSel = NSSelectorFromString(@"onClickMakeSureButton");
         Method m1 = class_getInstanceMethod(cls, doneSel);
-        if (m1) { MSHookMessageEx(cls, doneSel, (IMP)mioGroupsDoneImp, &gOrigGroupsDone); WPLog(@"MioPicker", @"[Groups] onClickMakeSureButton hooked"); }
+        if (m1) { MSHookMessageEx(cls, doneSel, (IMP)mioGroupsDoneImp, &gOrigGroupsDone); }
         SEL btnSel = NSSelectorFromString(@"updateRightMakeSureButton");
         Method m2 = class_getInstanceMethod(cls, btnSel);
-        if (m2) { MSHookMessageEx(cls, btnSel, (IMP)mioGroupsUpdateBtnImp, &gOrigGroupsUpdateBtn); WPLog(@"MioPicker", @"[Groups] updateRightMakeSureButton hooked"); }
+        if (m2) { MSHookMessageEx(cls, btnSel, (IMP)mioGroupsUpdateBtnImp, &gOrigGroupsUpdateBtn); }
         Method m3 = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
-        if (m3) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioGroupsLayoutImp, &gOrigGroupsLayout); WPLog(@"MioPicker", @"[Groups] viewDidLayoutSubviews hooked"); }
+        if (m3) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioGroupsLayoutImp, &gOrigGroupsLayout); }
         SEL didSelectSel = NSSelectorFromString(@"didSelectContact:");
         Method m4 = class_getInstanceMethod(cls, didSelectSel);
-        if (m4) { MSHookMessageEx(cls, didSelectSel, (IMP)mioGroupsDidSelectImp, &gOrigGroupsDidSelect); WPLog(@"MioPicker", @"[Groups] didSelectContact: hooked"); }
+        if (m4) { MSHookMessageEx(cls, didSelectSel, (IMP)mioGroupsDidSelectImp, &gOrigGroupsDidSelect); }
     });
 }
 
 - (void)presentFrom:(UIViewController *)from title:(NSString *)title preselected:(NSArray<NSString *> *)preselected {
     Class cls = objc_getClass("MultiSelectChatRoomHalfScreenViewController");
     if (!cls) {
-        WPLog(@"MioPicker", @"[Groups] class not found!");
         [self notifyCancel];
         return;
     }
@@ -238,9 +229,7 @@ static void mioGroupsInstallHooks(void) {
     objc_setAssociatedObject(picker, kMioGroupsBridgeKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     @try {
         [picker setValue:self forKey:@"m_delegate"];   // onSelectedOrCancelContact / onHalfScreenPageDidClose
-    } @catch (NSException *e) {
-        WPLog(@"MioPicker", @"[Groups] set m_delegate failed: %@", e);
-    }
+    } @catch (NSException *e) {}
 
     UIViewController *top = from;
     while (top.presentedViewController) top = top.presentedViewController;
@@ -252,19 +241,13 @@ static void mioGroupsInstallHooks(void) {
             ((void (*)(id, SEL, id, BOOL))objc_msgSend)(picker, cfg2, top, YES);
         } else if ([picker respondsToSelector:cfg1]) {
             ((void (*)(id, SEL, id))objc_msgSend)(picker, cfg1, top);
-        } else {
-            WPLog(@"MioPicker", @"[Groups] no cfg selector found");
         }
-    } @catch (NSException *e) {
-        WPLog(@"MioPicker", @"[Groups] cfg exception: %@", e);
-    }
-    WPLog(@"MioPicker", @"[Groups] presenting (preselected=%lu)", (unsigned long)preselected.count);
+    } @catch (NSException *e) {}
     [top presentViewController:picker animated:YES completion:nil];
 }
 
 // m_delegate 回调：未点完成就关页（取消/下滑）
 - (void)onHalfScreenPageDidClose:(id)page action:(long long)action {
-    WPLog(@"MioPicker", @"[Groups] page closed, action=%lld, hasReturned=%d", action, self.hasReturned);
     if (!self.hasReturned) [self notifyCancel];
 }
 
@@ -356,7 +339,6 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
         if ([wxid isKindOfClass:[NSString class]] && wxid.length > 0 && ![ids containsObject:wxid]) [ids addObject:wxid];
     }
     if (ids.count == 0) [ids addObjectsFromArray:MioMultiExtract(self.picker)];
-    WPLog(@"MioPicker", @"%@ done, extracted %lu: %@", self.logTag, (unsigned long)ids.count, ids);
     [self dismissPicker];
     [self finishWithWxids:ids];
 }
@@ -392,19 +374,16 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
     [self onMultiSelectContactCancel];
 }
 
-// KVC 写入（缺失字段打日志不中断；KVC 无 setter 时会自动直写 ivar，设备 dump 已证字段齐全）
+// KVC 写入（缺失字段静默跳过；KVC 无 setter 时会自动直写 ivar，设备 dump 已证字段齐全）
 static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     @try {
         [obj setValue:value forKey:key];
-    } @catch (NSException *e) {
-        WPLog(@"MioPicker", @"%@ KVC skip %@: %@", tag, key, e.reason);
-    }
+    } @catch (NSException *e) {}
 }
 
 - (void)presentFrom:(UIViewController *)from title:(NSString *)title preselected:(NSArray<NSString *> *)preselected {
     Class cls = objc_getClass("MultiSelectContactsViewController");
     if (!cls) {
-        WPLog(@"MioPicker", @"%@ MultiSelectContactsViewController not found!", self.logTag);
         [self notifyCancel];
         return;
     }
@@ -446,7 +425,6 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     // 底部弹出（pageSheet）：下滑即可退出；下滑关闭走 presentationControllerDidDismiss → 取消回调
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     nav.presentationController.delegate = self;
-    WPLog(@"MioPicker", @"%@ presenting (preselected=%lu)", tag, (unsigned long)preselected.count);
     [top presentViewController:nav animated:YES completion:nil];
 }
 
@@ -487,9 +465,7 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     adapter.delegate = delegate;
     @try {
         [adapter presentFrom:from title:(title ?: @"选择联系人") preselected:(preselected ?: @[])];
-    } @catch (NSException *e) {
-        WPLog(@"MioPicker", @"present exception: %@ - %@", e.name, e.reason);
-    }
+    } @catch (NSException *e) {}
 }
 
 @end
