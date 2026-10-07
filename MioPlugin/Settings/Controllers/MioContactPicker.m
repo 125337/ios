@@ -287,6 +287,7 @@ static void mioGroupsInstallHooks(void) {
 static void *kMioContactsBridgeKey = &kMioContactsBridgeKey;
 static IMP gOrigContactsFinish = NULL;
 static IMP gOrigContactsClose = NULL;
+static IMP gOrigContactsUpdateTitle = NULL;
 
 static void mioContactsInstallHooks(void);
 
@@ -344,6 +345,35 @@ static void mioContactsCloseImp(id self, SEL _cmd, id sender) {
     if (gOrigContactsClose) ((void (*)(id, SEL, id))gOrigContactsClose)(self, _cmd, sender);
 }
 
+// 右上按钮计数强制与数据层（getAllSelectedContacts）一致：实测微信原生计数可能偏大
+// （勾 1 人显示"确定 (2)"，完成提取只有 1 个），以实际会保存的数量为准
+static void mioContactsUpdateTitleImp(id self, SEL _cmd) {
+    if (gOrigContactsUpdateTitle) ((void (*)(id, SEL))gOrigContactsUpdateTitle)(self, _cmd);
+    MioPickerContactsAdapter *bridge = MioContactsBridge(self);
+    if (bridge && !bridge.hasReturned) {
+        NSUInteger n = MioContactsExtract(self).count;
+        NSString *title = [NSString stringWithFormat:@"确定(%lu)", (unsigned long)n];
+        @try {
+            id navItem = ((id (*)(id, SEL))objc_msgSend)(self, @selector(navigationItem));
+            UIBarButtonItem *item = [navItem valueForKey:@"rightBarButtonItem"];
+            if (item) {
+                UIButton *btn = item.customView;
+                if ([btn isKindOfClass:[UIButton class]]) {
+                    [btn setTitle:title forState:UIControlStateNormal];
+                    [btn setTitle:title forState:UIControlStateHighlighted];
+                    [btn setTitle:title forState:UIControlStateSelected];
+                    [btn setTitle:title forState:UIControlStateDisabled];
+                    [btn sizeToFit];
+                } else {
+                    item.title = title;
+                }
+            }
+        } @catch (NSException *e) {
+            WPLog(@"MioPicker", @"[Contacts] sync button title failed: %@", e);
+        }
+    }
+}
+
 static void mioContactsInstallHooks(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -358,6 +388,9 @@ static void mioContactsInstallHooks(void) {
         SEL closeSel = NSSelectorFromString(@"onCloseBarButtonPress:");
         Method m2 = class_getInstanceMethod(cls, closeSel);
         if (m2) { MSHookMessageEx(cls, closeSel, (IMP)mioContactsCloseImp, &gOrigContactsClose); WPLog(@"MioPicker", @"[Contacts] onCloseBarButtonPress: hooked"); }
+        SEL titleSel = NSSelectorFromString(@"updateRightBarButtonItemTitle");
+        Method m3 = class_getInstanceMethod(cls, titleSel);
+        if (m3) { MSHookMessageEx(cls, titleSel, (IMP)mioContactsUpdateTitleImp, &gOrigContactsUpdateTitle); WPLog(@"MioPicker", @"[Contacts] updateRightBarButtonItemTitle hooked"); }
     });
 }
 
@@ -413,6 +446,8 @@ static void mioContactsInstallHooks(void) {
     while (top.presentedViewController) top = top.presentedViewController;
     Class navCls = objc_getClass("MMUINavigationController") ?: [UINavigationController class];
     UINavigationController *nav = [[navCls alloc] initWithRootViewController:picker];
+    // 全屏 present：pageSheet 顶部会露出黑边（安全区不足），且下滑关闭不走取消 hook
+    nav.modalPresentationStyle = UIModalPresentationFullScreen;
     WPLog(@"MioPicker", @"[Contacts] presenting (preselected=%lu)", (unsigned long)preselected.count);
     [top presentViewController:nav animated:YES completion:nil];
 }
@@ -621,6 +656,8 @@ static void mioAllInstallHooks(void) {
     while (top.presentedViewController) top = top.presentedViewController;
     Class navCls = objc_getClass("MMUINavigationController") ?: [UINavigationController class];
     UINavigationController *nav = [[navCls alloc] initWithRootViewController:picker];
+    // 全屏 present：pageSheet 顶部会露出黑边（安全区不足），且下滑关闭不走取消 hook
+    nav.modalPresentationStyle = UIModalPresentationFullScreen;
     WPLog(@"MioPicker", @"[All] presenting (preselected=%lu)", (unsigned long)preselected.count);
     [top presentViewController:nav animated:YES completion:nil];
 }

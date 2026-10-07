@@ -558,8 +558,11 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 
 - (void)pickerDidFinish:(NSArray<NSString *> *)wxids {
     [HomeCardConfig saveContacts:wxids];   // 选择顺序 = 展示顺序
-    // 当场刷新"管理联系人"行文案；首页挂件由 HCGeoKey 指纹触发 reloadData 重建
-    dispatch_async(dispatch_get_main_queue(), ^{ [self buildUI]; });
+    // 当场刷新"管理联系人"行文案（表格重建 + 内容重建，与 onDotPosTap 同款，只 buildUI 行文案不动）
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self wpRebuildWeChatTable];
+        [self buildUI];
+    });
 }
 
 - (void)pickerDidCancel {
