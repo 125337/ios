@@ -288,6 +288,7 @@ static void *kMioContactsBridgeKey = &kMioContactsBridgeKey;
 static IMP gOrigContactsFinish = NULL;
 static IMP gOrigContactsClose = NULL;
 static IMP gOrigContactsUpdateTitle = NULL;
+static IMP gOrigContactsDidSelect = NULL;
 
 static void mioContactsInstallHooks(void);
 
@@ -345,33 +346,42 @@ static void mioContactsCloseImp(id self, SEL _cmd, id sender) {
     if (gOrigContactsClose) ((void (*)(id, SEL, id))gOrigContactsClose)(self, _cmd, sender);
 }
 
-// 右上按钮计数强制与数据层（getAllSelectedContacts）一致：实测微信原生计数可能偏大
-// （勾 1 人显示"确定 (2)"，完成提取只有 1 个），以实际会保存的数量为准
+// 右上按钮标题按数据层（getAllSelectedContacts）计数生成——与 Groups 的
+// MioGroupsRefreshRightButton 同款：不信微信原生计数（实测勾 1 人可能显示"确定 (2)"）
+static void MioContactsRefreshRightButton(id picker) {
+    NSUInteger n = MioContactsExtract(picker).count;
+    NSString *title = [NSString stringWithFormat:@"确定(%lu)", (unsigned long)n];
+    @try {
+        id navItem = ((id (*)(id, SEL))objc_msgSend)(picker, @selector(navigationItem));
+        UIBarButtonItem *item = [navItem valueForKey:@"rightBarButtonItem"];
+        if (item) {
+            UIButton *btn = item.customView;
+            if ([btn isKindOfClass:[UIButton class]]) {
+                [btn setTitle:title forState:UIControlStateNormal];
+                [btn setTitle:title forState:UIControlStateHighlighted];
+                [btn setTitle:title forState:UIControlStateSelected];
+                [btn setTitle:title forState:UIControlStateDisabled];
+                [btn sizeToFit];
+            } else {
+                item.title = title;
+            }
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MioPicker", @"[Contacts] refresh button failed: %@", e);
+    }
+}
+
 static void mioContactsUpdateTitleImp(id self, SEL _cmd) {
     if (gOrigContactsUpdateTitle) ((void (*)(id, SEL))gOrigContactsUpdateTitle)(self, _cmd);
     MioPickerContactsAdapter *bridge = MioContactsBridge(self);
-    if (bridge && !bridge.hasReturned) {
-        NSUInteger n = MioContactsExtract(self).count;
-        NSString *title = [NSString stringWithFormat:@"确定(%lu)", (unsigned long)n];
-        @try {
-            id navItem = ((id (*)(id, SEL))objc_msgSend)(self, @selector(navigationItem));
-            UIBarButtonItem *item = [navItem valueForKey:@"rightBarButtonItem"];
-            if (item) {
-                UIButton *btn = item.customView;
-                if ([btn isKindOfClass:[UIButton class]]) {
-                    [btn setTitle:title forState:UIControlStateNormal];
-                    [btn setTitle:title forState:UIControlStateHighlighted];
-                    [btn setTitle:title forState:UIControlStateSelected];
-                    [btn setTitle:title forState:UIControlStateDisabled];
-                    [btn sizeToFit];
-                } else {
-                    item.title = title;
-                }
-            }
-        } @catch (NSException *e) {
-            WPLog(@"MioPicker", @"[Contacts] sync button title failed: %@", e);
-        }
-    }
+    if (bridge && !bridge.hasReturned) MioContactsRefreshRightButton(self);
+}
+
+// 每次点选后主动刷新（Groups didSelectContact: 同款）：微信按钮更新时机不可靠
+static void mioContactsDidSelectImp(id self, SEL _cmd, id tableView, id indexPath) {
+    if (gOrigContactsDidSelect) ((void (*)(id, SEL, id, id))gOrigContactsDidSelect)(self, _cmd, tableView, indexPath);
+    MioPickerContactsAdapter *bridge = MioContactsBridge(self);
+    if (bridge && !bridge.hasReturned) MioContactsRefreshRightButton(self);
 }
 
 static void mioContactsInstallHooks(void) {
@@ -391,6 +401,8 @@ static void mioContactsInstallHooks(void) {
         SEL titleSel = NSSelectorFromString(@"updateRightBarButtonItemTitle");
         Method m3 = class_getInstanceMethod(cls, titleSel);
         if (m3) { MSHookMessageEx(cls, titleSel, (IMP)mioContactsUpdateTitleImp, &gOrigContactsUpdateTitle); WPLog(@"MioPicker", @"[Contacts] updateRightBarButtonItemTitle hooked"); }
+        Method m4 = class_getInstanceMethod(cls, @selector(tableView:didSelectRowAtIndexPath:));
+        if (m4) { MSHookMessageEx(cls, @selector(tableView:didSelectRowAtIndexPath:), (IMP)mioContactsDidSelectImp, &gOrigContactsDidSelect); WPLog(@"MioPicker", @"[Contacts] tableView:didSelectRowAtIndexPath: hooked"); }
     });
 }
 
@@ -659,7 +671,14 @@ static void mioAllInstallHooks(void) {
     // 全屏 present：pageSheet 顶部会露出黑边（安全区不足），且下滑关闭不走取消 hook
     nav.modalPresentationStyle = UIModalPresentationFullScreen;
     WPLog(@"MioPicker", @"[All] presenting (preselected=%lu)", (unsigned long)preselected.count);
-    [top presentViewController:nav animated:YES completion:nil];
+    [top presentViewController:nav animated:YES completion:^{
+        // 显示完成后再进一次多选态：搜索框随多选 UI 渲染，仅在 present 前调 beginMultiSelect
+        // 不会显示（勾选一个后才出来）
+        SEL bms = NSSelectorFromString(@"beginMultiSelect");
+        if ([picker respondsToSelector:bms]) {
+            ((void (*)(id, SEL))objc_msgSend)(picker, bms);
+        }
+    }];
 }
 
 - (void)cleanup {
