@@ -101,13 +101,13 @@
 
 #pragma mark - 原生选人页（WCR 2.1.8 主力封装同款，移植 8.0.60）
 
-// 选人页：只选人模式（MMNewMultiSelectContactsViewController，"发起群聊"那套，原生只列好友）
-// WCR 同款语义为追加（不回显已选，移除走列表页）
+// 选人页：只选人模式（MultiSelectContactsViewController，"发起群聊"那套，原生只列好友）
+// 已选名单回显勾选；回调为全量勾选结果（取消勾选=移除）
 - (void)presentContactPicker {
-    WPLog(@"Moments", @"[Blocklist] presenting contact picker (contacts-only)");
+    WPLog(@"Moments", @"[Blocklist] presenting contact picker (contacts-only, preselect %lu)", (unsigned long)[self currentList].count);
     [MioContactPicker presentPickerWithMode:MioContactPickerModeContacts
                                       title:(self.pickerTitle ?: @"添加好友")
-                                preselected:nil
+                                preselected:[self currentList]
                                    delegate:self
                                        from:self];
 }
@@ -118,21 +118,18 @@
     [self handlePickedContacts:userNames];
 }
 
-// 选中结果处理：与现名单合并去重（追加语义，移除走列表页）；只选人页原生无群聊，回调已在主线程
+// 选中结果处理：选人页已回显当前名单，回调即全量勾选结果（取消勾选=移除），校验后直接保存
 - (void)handlePickedContacts:(NSArray<NSString *> *)userNames {
-    NSMutableArray *merged = [[self currentList] mutableCopy] ?: [NSMutableArray array];
-    NSInteger added = 0;
+    NSMutableArray *result = [NSMutableArray array];
     for (NSString *wxid in userNames) {
         if (![wxid isKindOfClass:[NSString class]]) continue;
         NSString *trim = [wxid stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        if (trim.length == 0) continue;
-        if ([merged containsObject:trim]) continue;
-        [merged addObject:trim];
-        added++;
+        if (trim.length == 0 || [result containsObject:trim]) continue;
+        [result addObject:trim];
     }
-    [self saveList:merged];
-    WPLog(@"Moments", @"[Blocklist] picked %lu, added %ld, total %lu (%@)",
-          (unsigned long)userNames.count, (long)added, (unsigned long)merged.count, [self listKey]);
+    [self saveList:result];
+    WPLog(@"Moments", @"[Blocklist] picked %lu, kept %lu (%@)",
+          (unsigned long)userNames.count, (unsigned long)result.count, [self listKey]);
     [self reloadTable];
 }
 
