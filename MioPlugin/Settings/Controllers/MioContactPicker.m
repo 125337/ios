@@ -352,6 +352,12 @@ static void MioContactsRefreshRightButton(id picker) {
     NSUInteger n = MioContactsExtract(picker).count;
     NSString *title = [NSString stringWithFormat:@"确定(%lu)", (unsigned long)n];
     @try {
+        // m_rightButtonTitle 是 MMNew 自己的按钮标题字段：先写它（走微信渲染链），
+        // 再摸标准 UIBarButtonItem 兜底（自绘导航时可能拿不到）
+        SEL setRT = NSSelectorFromString(@"setM_rightButtonTitle:");
+        if ([picker respondsToSelector:setRT]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(picker, setRT, title);
+        }
         id navItem = ((id (*)(id, SEL))objc_msgSend)(picker, @selector(navigationItem));
         UIBarButtonItem *item = [navItem valueForKey:@"rightBarButtonItem"];
         if (item) {
@@ -366,6 +372,14 @@ static void MioContactsRefreshRightButton(id picker) {
                 item.title = title;
             }
         }
+        // 诊断：看微信 orig 算出的标题 vs 我们的数据层计数，定位"多 1 个"的来源
+        NSString *rt = nil;
+        SEL getRT = NSSelectorFromString(@"m_rightButtonTitle");
+        if ([picker respondsToSelector:getRT]) {
+            rt = ((NSString *(*)(id, SEL))objc_msgSend)(picker, getRT);
+        }
+        WPLog(@"MioPicker", @"[Contacts] btn n=%lu item=(%@, cv=%@) m_rightButtonTitle=%@",
+              (unsigned long)n, item.title, NSStringFromClass([item.customView class] ?: [NSObject class]), rt);
     } @catch (NSException *e) {
         WPLog(@"MioPicker", @"[Contacts] refresh button failed: %@", e);
     }
@@ -428,6 +442,17 @@ static void mioContactsInstallHooks(void) {
     picker.title = title;
 
     [picker view];   // 预加载，logicController 就绪后再注入预选
+
+    // 诊断：打开瞬间初始状态——确认微信有没有预置选中（"确定(2)多 1 个"来源排查）
+    {
+        NSString *rt = nil;
+        SEL getRT = NSSelectorFromString(@"m_rightButtonTitle");
+        if ([picker respondsToSelector:getRT]) {
+            rt = ((NSString *(*)(id, SEL))objc_msgSend)(picker, getRT);
+        }
+        WPLog(@"MioPicker", @"[Contacts] initial: selected=%lu rt=%@",
+              (unsigned long)MioContactsExtract(picker).count, rt);
+    }
 
     // 预选回显：走逻辑层 addContact:（选中操作）。注意 setExistContactArray: 是"已存在禁选"
     // （发起群聊标记已在群里的人），不是预选
