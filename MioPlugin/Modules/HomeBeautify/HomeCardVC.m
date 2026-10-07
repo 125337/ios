@@ -1,6 +1,6 @@
 #import "HomeCardVC.h"
 #import "HomeCardConfig.h"
-#import "HomeContactPickerVC.h"
+#import "../../Settings/Controllers/MioTweakGroupSelectsController.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/MioImageVault.h"
@@ -14,7 +14,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
     HomeCardPickerDark  = 1,
 };
 
-@interface HomeCardVC () <PHPickerViewControllerDelegate>
+@interface HomeCardVC () <PHPickerViewControllerDelegate, MioTweakGroupSelectsDelegate>
 @property (nonatomic, assign) HomeCardPickerTarget pickerTarget;
 @end
 
@@ -23,18 +23,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"首页卡片";
-    // 管理联系人保存后刷新行文案（返回时触发重建）
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(buildUI)
-                                                 name:MioHomeContactSavedChangedNotification
-                                               object:nil];
     [self buildUI];
-}
-
-- (void)dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self
-                                                    name:MioHomeContactSavedChangedNotification
-                                                  object:nil];
 }
 
 - (void)buildUI {
@@ -557,8 +546,22 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 }
 
 - (void)onManageContactsTap {
-    HomeContactPickerVC *vc = [[HomeContactPickerVC alloc] init];
-    [self.navigationController pushViewController:vc animated:YES];
+    // 复用微信原生半屏选人页（MioTweakGroupSelectsController，WCR 同款：自建页黑顶栏已废弃）
+    MioTweakGroupSelectsController *picker =
+        [[MioTweakGroupSelectsController alloc] initWithSelectedGroups:[HomeCardConfig savedContacts]
+                                                                 title:@"管理联系人"];
+    picker.delegate = self;
+    [picker presentFromViewController:self];
+}
+
+#pragma mark - MioTweakGroupSelectsDelegate
+
+- (void)onGroupSelectReturn:(NSArray<NSString *> *)userNames {
+    [HomeCardConfig saveContacts:userNames];   // 选择顺序 = 展示顺序
+    [self buildUI];   // 刷新"管理联系人"行文案；首页挂件由 HCGeoKey 指纹在 viewWillAppear 重建
+}
+
+- (void)onGroupSelectCancel {
 }
 
 #pragma mark - 卡片图片（浅/深色，同卡片背景页：菜单选图/删图 → PHPicker）
