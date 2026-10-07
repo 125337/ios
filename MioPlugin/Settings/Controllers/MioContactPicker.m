@@ -2,6 +2,7 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <substrate.h>
 #import "../Core/LogManager.h"
 #import "../Core/ServiceHelper.h"
 
@@ -198,14 +199,18 @@ static void mioGroupsInstallHooks(void) {
             WPLog(@"MioPicker", @"[Groups] MultiSelectChatRoomHalfScreenViewController not found!");
             return;
         }
-        Method m1 = class_getInstanceMethod(cls, NSSelectorFromString(@"onClickMakeSureButton"));
-        if (m1) { gOrigGroupsDone = method_setImplementation(m1, (IMP)mioGroupsDoneImp); WPLog(@"MioPicker", @"[Groups] onClickMakeSureButton hooked"); }
-        Method m2 = class_getInstanceMethod(cls, NSSelectorFromString(@"updateRightMakeSureButton"));
-        if (m2) { gOrigGroupsUpdateBtn = method_setImplementation(m2, (IMP)mioGroupsUpdateBtnImp); WPLog(@"MioPicker", @"[Groups] updateRightMakeSureButton hooked"); }
+        // MSHookMessageEx：方法在父类时（如 viewDidLayoutSubviews）hook 限定在本类，不污染 UIViewController 全局
+        SEL doneSel = NSSelectorFromString(@"onClickMakeSureButton");
+        Method m1 = class_getInstanceMethod(cls, doneSel);
+        if (m1) { MSHookMessageEx(cls, doneSel, (IMP)mioGroupsDoneImp, &gOrigGroupsDone); WPLog(@"MioPicker", @"[Groups] onClickMakeSureButton hooked"); }
+        SEL btnSel = NSSelectorFromString(@"updateRightMakeSureButton");
+        Method m2 = class_getInstanceMethod(cls, btnSel);
+        if (m2) { MSHookMessageEx(cls, btnSel, (IMP)mioGroupsUpdateBtnImp, &gOrigGroupsUpdateBtn); WPLog(@"MioPicker", @"[Groups] updateRightMakeSureButton hooked"); }
         Method m3 = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
-        if (m3) { gOrigGroupsLayout = method_setImplementation(m3, (IMP)mioGroupsLayoutImp); WPLog(@"MioPicker", @"[Groups] viewDidLayoutSubviews hooked"); }
-        Method m4 = class_getInstanceMethod(cls, NSSelectorFromString(@"didSelectContact:"));
-        if (m4) { gOrigGroupsDidSelect = method_setImplementation(m4, (IMP)mioGroupsDidSelectImp); WPLog(@"MioPicker", @"[Groups] didSelectContact: hooked"); }
+        if (m3) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioGroupsLayoutImp, &gOrigGroupsLayout); WPLog(@"MioPicker", @"[Groups] viewDidLayoutSubviews hooked"); }
+        SEL didSelectSel = NSSelectorFromString(@"didSelectContact:");
+        Method m4 = class_getInstanceMethod(cls, didSelectSel);
+        if (m4) { MSHookMessageEx(cls, didSelectSel, (IMP)mioGroupsDidSelectImp, &gOrigGroupsDidSelect); WPLog(@"MioPicker", @"[Groups] didSelectContact: hooked"); }
     });
 }
 
@@ -347,10 +352,12 @@ static void mioContactsInstallHooks(void) {
             WPLog(@"MioPicker", @"[Contacts] MMNewMultiSelectContactsViewController not found!");
             return;
         }
-        Method m1 = class_getInstanceMethod(cls, NSSelectorFromString(@"onFinishBarButtonPress:"));
-        if (m1) { gOrigContactsFinish = method_setImplementation(m1, (IMP)mioContactsFinishImp); WPLog(@"MioPicker", @"[Contacts] onFinishBarButtonPress: hooked"); }
-        Method m2 = class_getInstanceMethod(cls, NSSelectorFromString(@"onCloseBarButtonPress:"));
-        if (m2) { gOrigContactsClose = method_setImplementation(m2, (IMP)mioContactsCloseImp); WPLog(@"MioPicker", @"[Contacts] onCloseBarButtonPress: hooked"); }
+        SEL finishSel = NSSelectorFromString(@"onFinishBarButtonPress:");
+        Method m1 = class_getInstanceMethod(cls, finishSel);
+        if (m1) { MSHookMessageEx(cls, finishSel, (IMP)mioContactsFinishImp, &gOrigContactsFinish); WPLog(@"MioPicker", @"[Contacts] onFinishBarButtonPress: hooked"); }
+        SEL closeSel = NSSelectorFromString(@"onCloseBarButtonPress:");
+        Method m2 = class_getInstanceMethod(cls, closeSel);
+        if (m2) { MSHookMessageEx(cls, closeSel, (IMP)mioContactsCloseImp, &gOrigContactsClose); WPLog(@"MioPicker", @"[Contacts] onCloseBarButtonPress: hooked"); }
     });
 }
 
@@ -530,12 +537,15 @@ static void mioAllInstallHooks(void) {
             WPLog(@"MioPicker", @"[All] SessionSelectController not found!");
             return;
         }
-        Method m1 = class_getInstanceMethod(cls, NSSelectorFromString(@"onMultiDone"));
-        if (m1) { gOrigAllDone = method_setImplementation(m1, (IMP)mioAllDoneImp); WPLog(@"MioPicker", @"[All] onMultiDone hooked"); }
-        Method m2 = class_getInstanceMethod(cls, NSSelectorFromString(@"updateMultiSelectRightBtn"));
-        if (m2) { gOrigAllUpdateBtn = method_setImplementation(m2, (IMP)mioAllUpdateBtnImp); WPLog(@"MioPicker", @"[All] updateMultiSelectRightBtn hooked"); }
-        Method m3 = class_getInstanceMethod(cls, NSSelectorFromString(@"viewDidBePopedOrDismissed"));
-        if (m3) { gOrigAllPopDismiss = method_setImplementation(m3, (IMP)mioAllPopDismissImp); WPLog(@"MioPicker", @"[All] viewDidBePopedOrDismissed hooked"); }
+        SEL doneSel = NSSelectorFromString(@"onMultiDone");
+        Method m1 = class_getInstanceMethod(cls, doneSel);
+        if (m1) { MSHookMessageEx(cls, doneSel, (IMP)mioAllDoneImp, &gOrigAllDone); WPLog(@"MioPicker", @"[All] onMultiDone hooked"); }
+        SEL btnSel = NSSelectorFromString(@"updateMultiSelectRightBtn");
+        Method m2 = class_getInstanceMethod(cls, btnSel);
+        if (m2) { MSHookMessageEx(cls, btnSel, (IMP)mioAllUpdateBtnImp, &gOrigAllUpdateBtn); WPLog(@"MioPicker", @"[All] updateMultiSelectRightBtn hooked"); }
+        SEL popSel = NSSelectorFromString(@"viewDidBePopedOrDismissed");
+        Method m3 = class_getInstanceMethod(cls, popSel);
+        if (m3) { MSHookMessageEx(cls, popSel, (IMP)mioAllPopDismissImp, &gOrigAllPopDismiss); WPLog(@"MioPicker", @"[All] viewDidBePopedOrDismissed hooked"); }
     });
 }
 
