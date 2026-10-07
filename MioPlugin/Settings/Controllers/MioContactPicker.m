@@ -369,17 +369,6 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
     [self.picker dismissViewControllerAnimated:YES completion:nil];
 }
 
-// 去掉左上角 X：改下滑退出后多余（X 挂在 navigationItem 的 leftBarButton 上）
-- (void)mioMultiStripCloseButton {
-    UINavigationItem *item = self.picker.navigationItem;
-    if (!item) return;
-    if (item.leftBarButtonItem || item.leftBarButtonItems.count > 0) {
-        WPLog(@"MioPicker", @"%@ [X] 清理 leftBar=%@ items=%lu", self.logTag, item.leftBarButtonItem, (unsigned long)item.leftBarButtonItems.count);
-        item.leftBarButtonItem = nil;
-        item.leftBarButtonItems = nil;
-    }
-}
-
 // pageSheet 下滑关闭：系统已 dismiss，走取消（hasReturned 内置防重入）
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
     WPLog(@"MioPicker", @"%@ [回调] 下滑关闭", self.logTag);
@@ -506,16 +495,7 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     nav.presentationController.delegate = self;
     WPLog(@"MioPicker", @"%@ presenting (preselected=%lu)", tag, (unsigned long)preselected.count);
-    [top presentViewController:nav animated:YES completion:^{
-        [self mioMultiStripCloseButton];
-    }];
-    // X 补清：微信 viewWillAppear/viewDidAppear 可能重设导航按钮
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (!self.hasReturned) [self mioMultiStripCloseButton];
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (!self.hasReturned) [self mioMultiStripCloseButton];
-    });
+    [top presentViewController:nav animated:YES completion:nil];
 }
 
 - (void)cleanup {
