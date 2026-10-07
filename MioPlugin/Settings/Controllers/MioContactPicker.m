@@ -301,13 +301,6 @@ static NSString *MioMultiDicDesc(id obj) {
     return [NSString stringWithFormat:@"count=%lu keys=%@", (unsigned long)[dic count], [dic allKeys]];
 }
 
-// 递归收集 view 树中指定类的实例
-static void MioMultiCollectViews(UIView *root, Class cls, NSMutableArray *acc) {
-    if (!root || !cls) return;
-    if ([root isKindOfClass:cls]) [acc addObject:root];
-    for (UIView *sub in root.subviews) MioMultiCollectViews(sub, cls, acc);
-}
-
 // wxid → CContact：getContactByName:（getContactByUserName: 对该名单实测查 nil）
 // + m_nsUsrName 校验（getContactByName: 对个别 ID 会返回错误对象）
 // 每步失败原因都落日志（诊断回显断点用）
@@ -374,6 +367,23 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 
 - (void)dismissPicker {
     [self.picker dismissViewControllerAnimated:YES completion:nil];
+}
+
+// 去掉左上角 X：改下滑退出后多余（X 挂在 navigationItem 的 leftBarButton 上）
+- (void)mioMultiStripCloseButton {
+    UINavigationItem *item = self.picker.navigationItem;
+    if (!item) return;
+    if (item.leftBarButtonItem || item.leftBarButtonItems.count > 0) {
+        WPLog(@"MioPicker", @"%@ [X] 清理 leftBar=%@ items=%lu", self.logTag, item.leftBarButtonItem, (unsigned long)item.leftBarButtonItems.count);
+        item.leftBarButtonItem = nil;
+        item.leftBarButtonItems = nil;
+    }
+}
+
+// pageSheet 下滑关闭：系统已 dismiss，走取消（hasReturned 内置防重入）
+- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
+    WPLog(@"MioPicker", @"%@ [回调] 下滑关闭", self.logTag);
+    [self notifyCancel];
 }
 
 // 完成：合并好友与"从群选人"两路，保序去重；空则回退字典提取
@@ -472,8 +482,6 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     MioMultiSetValue(picker, @"m_onlyImportChatRoom", @NO, tag);
 
     // 预选注入：必须在 present 前（原生首帧渲染读该字典渲染勾选）
-    WPLog(@"MioPicker", @"%@ [注入] 输入 %lu 个: %@", tag, (unsigned long)preselected.count, preselected);
-    WPLog(@"MioPicker", @"%@ [注入] 前 picker.m_dicMultiSelect = %@", tag, MioMultiDicDesc(picker));
     if (preselected.count > 0) {
         NSMutableDictionary *pre = [NSMutableDictionary dictionary];
         for (NSString *wxid in preselected) {
@@ -485,54 +493,29 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
             }
         }
         MioMultiSetValue(picker, @"m_dicMultiSelect", pre, tag);
-        WPLog(@"MioPicker", @"%@ [注入] 后回读 picker.m_dicMultiSelect = %@（期望 count=%lu）", tag, MioMultiDicDesc(picker), (unsigned long)pre.count);
+        WPLog(@"MioPicker", @"%@ [注入] %lu/%lu，回读 %@", tag, (unsigned long)pre.count, (unsigned long)preselected.count, MioMultiDicDesc(picker));
     }
 
     MioMultiSetValue(picker, @"m_delegate", self, tag);
-    @try {
-        WPLog(@"MioPicker", @"%@ [注入] m_delegate 回读 = %@", tag, NSStringFromClass([[picker valueForKey:@"m_delegate"] class]));
-    } @catch (NSException *e) {
-        WPLog(@"MioPicker", @"%@ [注入] m_delegate 回读失败: %@", tag, e.reason);
-    }
 
     UIViewController *top = from;
     while (top.presentedViewController) top = top.presentedViewController;
     Class navCls = objc_getClass("MMUINavigationController") ?: [UINavigationController class];
     UINavigationController *nav = [[navCls alloc] initWithRootViewController:picker];
-    // 全屏 present：pageSheet 顶部会露出黑边（安全区不足），且下滑关闭不走取消回调
-    nav.modalPresentationStyle = UIModalPresentationFullScreen;
+    // 底部弹出（pageSheet）：下滑即可退出；下滑关闭走 presentationControllerDidDismiss → 取消回调
+    nav.modalPresentationStyle = UIModalPresentationPageSheet;
+    nav.presentationController.delegate = self;
     WPLog(@"MioPicker", @"%@ presenting (preselected=%lu)", tag, (unsigned long)preselected.count);
-    [top presentViewController:nav animated:YES completion:nil];
-
-    // 诊断轮询：定位回显断点（零 hook）——
-    //   VC 字典没了 → 原生 initData/viewDidLoad 重建清空；
-    //   VC 字典在但 CSV 字典空 → 原生不透传，需在 CSV 侧补注入；
-    //   CSV 字典也有 → 勾选渲染另有来源（如 cell 自己查 VC）。
-    NSString *logTag = tag;
-    for (NSUInteger i = 0; i < 3; i++) {
-        int delay = (i == 0) ? 1 : (i == 1 ? 3 : 6);
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)delay * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            if (self.hasReturned) return;
-            WPLog(@"MioPicker", @"%@ [T+%ds] VC.m_dicMultiSelect = %@", logTag, delay, MioMultiDicDesc(picker));
-            Class csvCls = NSClassFromString(@"ContactSelectView");
-            if (!picker.view || !csvCls) {
-                WPLog(@"MioPicker", @"%@ [T+%ds] view 未加载或 ContactSelectView 类不存在", logTag, delay);
-                return;
-            }
-            NSMutableArray *csvs = [NSMutableArray array];
-            MioMultiCollectViews(picker.view, csvCls, csvs);
-            if (csvs.count == 0) {
-                WPLog(@"MioPicker", @"%@ [T+%ds] view 树中未找到 ContactSelectView", logTag, delay);
-                return;
-            }
-            for (id csv in csvs) {
-                NSString *multi = @"?";
-                @try { multi = [[csv valueForKey:@"m_bMultiSelect"] description]; }
-                @catch (NSException *e) { multi = [NSString stringWithFormat:@"<KVC err: %@>", e.reason]; }
-                WPLog(@"MioPicker", @"%@ [T+%ds] CSV(m_bMultiSelect=%@).m_dicMultiSelect = %@", logTag, delay, multi, MioMultiDicDesc(csv));
-            }
-        });
-    }
+    [top presentViewController:nav animated:YES completion:^{
+        [self mioMultiStripCloseButton];
+    }];
+    // X 补清：微信 viewWillAppear/viewDidAppear 可能重设导航按钮
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (!self.hasReturned) [self mioMultiStripCloseButton];
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (!self.hasReturned) [self mioMultiStripCloseButton];
+    });
 }
 
 - (void)cleanup {
