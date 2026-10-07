@@ -289,50 +289,19 @@ static void *kMioMultiBridgeKey = &kMioMultiBridgeKey;
 
 @implementation MioPickerMultiSelectAdapter
 
-// ===== 预选回显诊断日志（问题定位后移除）=====
-
-// KVC 回读 m_dicMultiSelect 摘要（count + keys），异常转文本不崩
-static NSString *MioMultiDicDesc(id obj) {
-    id dic = nil;
-    @try { dic = [obj valueForKey:@"m_dicMultiSelect"]; }
-    @catch (NSException *e) { return [NSString stringWithFormat:@"<KVC err: %@>", e.reason]; }
-    if (!dic || dic == [NSNull null]) return @"nil";
-    if (![dic isKindOfClass:[NSDictionary class]]) return [NSString stringWithFormat:@"<非字典:%@>", NSStringFromClass([dic class])];
-    return [NSString stringWithFormat:@"count=%lu keys=%@", (unsigned long)[dic count], [dic allKeys]];
-}
-
 // wxid → CContact：getContactByName:（getContactByUserName: 对该名单实测查 nil）
 // + m_nsUsrName 校验（getContactByName: 对个别 ID 会返回错误对象）
-// 每步失败原因都落日志（诊断回显断点用）
-static id MioMultiContactForWxid(NSString *wxid, NSString *tag) {
-    if (![wxid isKindOfClass:[NSString class]] || wxid.length == 0) {
-        WPLog(@"MioPicker", @"%@ [解析] 失败：非法 wxid(%@)", tag, wxid);
-        return nil;
-    }
+static id MioMultiContactForWxid(NSString *wxid) {
+    if (![wxid isKindOfClass:[NSString class]] || wxid.length == 0) return nil;
     id mgr = WXGetService(objc_getClass("CContactMgr"));
-    if (!mgr) {
-        WPLog(@"MioPicker", @"%@ [解析] 失败：CContactMgr 不可用", tag);
-        return nil;
-    }
+    if (!mgr) return nil;
     SEL byName = NSSelectorFromString(@"getContactByName:");
-    if (![mgr respondsToSelector:byName]) {
-        WPLog(@"MioPicker", @"%@ [解析] 失败：CContactMgr 无 getContactByName:", tag);
-        return nil;
-    }
+    if (![mgr respondsToSelector:byName]) return nil;
     id contact = ((id (*)(id, SEL, id))objc_msgSend)(mgr, byName, wxid);
-    if (!contact) {
-        WPLog(@"MioPicker", @"%@ [解析] 失败：getContactByName:(%@) = nil", tag, wxid);
-        return nil;
-    }
     SEL nameSel = NSSelectorFromString(@"m_nsUsrName");
-    if (![contact respondsToSelector:nameSel]) {
-        WPLog(@"MioPicker", @"%@ [解析] 警告：%@ 无 m_nsUsrName，原样放行", tag, NSStringFromClass([contact class]));
-        return contact;
-    }
-    NSString *got = ((NSString *(*)(id, SEL))objc_msgSend)(contact, nameSel);
-    if (![got isKindOfClass:[NSString class]] || ![got isEqualToString:wxid]) {
-        WPLog(@"MioPicker", @"%@ [解析] 失败：getContactByName:(%@) 返回错误对象 %@（m_nsUsrName=%@）", tag, wxid, NSStringFromClass([contact class]), got);
-        return nil;
+    if (contact && [contact respondsToSelector:nameSel]) {
+        NSString *got = ((NSString *(*)(id, SEL))objc_msgSend)(contact, nameSel);
+        if (![got isKindOfClass:[NSString class]] || ![got isEqualToString:wxid]) return nil;
     }
     return contact;
 }
@@ -371,7 +340,6 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 
 // pageSheet 下滑关闭：系统已 dismiss，走取消（hasReturned 内置防重入）
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
-    WPLog(@"MioPicker", @"%@ [回调] 下滑关闭", self.logTag);
     [self notifyCancel];
 }
 
@@ -379,20 +347,16 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 - (void)finishFromContacts:(NSArray *)contacts fromGroup:(NSArray *)groupContacts {
     NSMutableArray *all = [NSMutableArray arrayWithArray:contacts ?: @[]];
     if (groupContacts) [all addObjectsFromArray:groupContacts];
-    NSMutableArray<NSString *> *clsNames = [NSMutableArray array];
     NSMutableArray<NSString *> *ids = [NSMutableArray array];
     SEL nameSel = NSSelectorFromString(@"m_nsUsrName");
     for (id v in all) {
-        [clsNames addObject:NSStringFromClass([v class])];
         NSString *wxid = nil;
         if ([v isKindOfClass:[NSString class]]) wxid = v;
         else if ([v respondsToSelector:nameSel]) wxid = ((NSString *(*)(id, SEL))objc_msgSend)(v, nameSel);
         if ([wxid isKindOfClass:[NSString class]] && wxid.length > 0 && ![ids containsObject:wxid]) [ids addObject:wxid];
     }
     if (ids.count == 0) [ids addObjectsFromArray:MioMultiExtract(self.picker)];
-    WPLog(@"MioPicker", @"%@ [完成] 回调 contacts=%lu group=%lu 类名=%@ 提取 %lu: %@ 字典回读=%@",
-          self.logTag, (unsigned long)(contacts ? contacts.count : 0), (unsigned long)(groupContacts ? groupContacts.count : 0),
-          clsNames, (unsigned long)ids.count, ids, MioMultiDicDesc(self.picker));
+    WPLog(@"MioPicker", @"%@ done, extracted %lu: %@", self.logTag, (unsigned long)ids.count, ids);
     [self dismissPicker];
     [self finishWithWxids:ids];
 }
@@ -401,9 +365,7 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 
 // nil = 静默关闭
 - (void)onMultiSelectContactReturn:(NSArray *)contacts {
-    WPLog(@"MioPicker", @"%@ [回调] onMultiSelectContactReturn: %lu 个", self.logTag, (unsigned long)(contacts ? contacts.count : 0));
     if (!contacts) {
-        WPLog(@"MioPicker", @"%@ [回调] nil = 静默关闭", self.logTag);
         [self dismissPicker];
         [self notifyCancel];
         return;
@@ -413,10 +375,7 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 
 // 全 nil = dismiss
 - (void)onMultiSelectContactReturn:(NSArray *)contacts selectContactFromGroup:(NSArray *)groupContacts {
-    WPLog(@"MioPicker", @"%@ [回调] onMultiSelectContactReturn:…FromGroup: contacts=%lu group=%lu",
-          self.logTag, (unsigned long)(contacts ? contacts.count : 0), (unsigned long)(groupContacts ? groupContacts.count : 0));
     if (!contacts && !groupContacts) {
-        WPLog(@"MioPicker", @"%@ [回调] 全 nil = dismiss", self.logTag);
         [self dismissPicker];
         [self notifyCancel];
         return;
@@ -425,13 +384,11 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 }
 
 - (void)onMultiSelectContactCancel {
-    WPLog(@"MioPicker", @"%@ [回调] onMultiSelectContactCancel", self.logTag);
     [self dismissPicker];
     [self notifyCancel];
 }
 
 - (void)onCancelSelectContact {
-    WPLog(@"MioPicker", @"%@ [回调] onCancelSelectContact", self.logTag);
     [self onMultiSelectContactCancel];
 }
 
@@ -474,15 +431,10 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     if (preselected.count > 0) {
         NSMutableDictionary *pre = [NSMutableDictionary dictionary];
         for (NSString *wxid in preselected) {
-            id contact = MioMultiContactForWxid(wxid, tag);
-            if (contact) {
-                [pre setObject:contact forKey:wxid];
-            } else {
-                WPLog(@"MioPicker", @"%@ [注入] 跳过解析失败的 %@", tag, wxid);
-            }
+            id contact = MioMultiContactForWxid(wxid);
+            if (contact) [pre setObject:contact forKey:wxid];
         }
         MioMultiSetValue(picker, @"m_dicMultiSelect", pre, tag);
-        WPLog(@"MioPicker", @"%@ [注入] %lu/%lu，回读 %@", tag, (unsigned long)pre.count, (unsigned long)preselected.count, MioMultiDicDesc(picker));
     }
 
     MioMultiSetValue(picker, @"m_delegate", self, tag);
