@@ -191,14 +191,14 @@
 - (void)onGroupsTap {
     @try {
         KeywordAlertConfig *config = [KeywordAlertConfig shared];
-        MioTweakGroupSelectsController *vc = [[MioTweakGroupSelectsController alloc]
-            initWithSelectedGroups:config.keywordAlertSelectedGroups ?: @[]
-            title:@"选择提醒生效的群"];
-        vc.delegate = self;
         WPLog(@"Setting", @"[KeywordAlert] 打开群范围选择 (当前 %lu 个)",
               (unsigned long)(config.keywordAlertSelectedGroups ?: @[]).count);
-        // WCR 同款：直接 present 微信原生半屏多选群聊页（不自建壳，导航栏由微信管理）
-        [vc presentFromViewController:self];
+        // 微信原生半屏多选群聊页（只选群模式，导航栏由微信管理）
+        [MioContactPicker presentPickerWithMode:MioContactPickerModeGroups
+                                          title:@"选择提醒生效的群"
+                                    preselected:config.keywordAlertSelectedGroups
+                                       delegate:self
+                                           from:self];
     } @catch (NSException *e) {
         WPLog(@"Setting", @"[KeywordAlert] 群选择页异常: %@ - %@", e.name, e.reason);
     }
@@ -222,9 +222,9 @@
     [super buttonClicked:key];
 }
 
-#pragma mark - MioTweakGroupSelectsDelegate
+#pragma mark - MioContactPickerDelegate
 
-- (void)onGroupSelectReturn:(NSArray<NSString *> *)groupIds {
+- (void)pickerDidFinish:(NSArray<NSString *> *)groupIds {
     [KeywordAlertConfig shared].keywordAlertSelectedGroups = groupIds ?: @[];
     [ConfigManager saveAll];
     WPLog(@"Setting", @"[KeywordAlert] 群范围已保存: %lu 个", (unsigned long)groupIds.count);

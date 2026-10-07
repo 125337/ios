@@ -5,7 +5,7 @@
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import <UIKit/UIKit.h>
-#import "MioSessionSelectsController.h"
+#import "MioContactPicker.h"
 
 @implementation SettingMomentBlocklistController
 
@@ -101,24 +101,24 @@
 
 #pragma mark - 原生选人页（WCR 2.1.8 主力封装同款，移植 8.0.60）
 
-// 选人页：复用 MioSessionSelectsController（微信原生 SessionSelectController 全屏选联系人页，
-// WCR 主力封装同款，好友/群聊均可多选；hook 与 KVC 参数统一在封装内维护）
+// 选人页：只选人模式（MMNewMultiSelectContactsViewController，"发起群聊"那套，原生只列好友）
+// WCR 同款语义为追加（不回显已选，移除走列表页）
 - (void)presentContactPicker {
-    if (![MioSessionSelectsController isSupported]) {
-        WPLog(@"Moments", @"[Blocklist] SessionSelectController not found");
-        [MioAlertHelper showTipAlert:@"当前微信版本不支持选人页"];
-        return;
-    }
-    MioSessionSelectsController *picker =
-        [[MioSessionSelectsController alloc] initWithTitle:(self.pickerTitle ?: @"添加好友")
-                                              preselectedContacts:nil];   // WCR 同款语义为追加，不回显
-    __weak typeof(self) welf = self;
-    [picker presentFromViewController:self completion:^(NSArray<NSString *> *userNames) {
-        [welf handlePickedContacts:userNames];
-    }];
+    WPLog(@"Moments", @"[Blocklist] presenting contact picker (contacts-only)");
+    [MioContactPicker presentPickerWithMode:MioContactPickerModeContacts
+                                      title:(self.pickerTitle ?: @"添加好友")
+                                preselected:nil
+                                   delegate:self
+                                       from:self];
 }
 
-// 选中结果处理：与现名单合并去重（追加语义，移除走列表页），滤 @chatroom；回调已在主线程
+#pragma mark - MioContactPickerDelegate
+
+- (void)pickerDidFinish:(NSArray<NSString *> *)userNames {
+    [self handlePickedContacts:userNames];
+}
+
+// 选中结果处理：与现名单合并去重（追加语义，移除走列表页）；只选人页原生无群聊，回调已在主线程
 - (void)handlePickedContacts:(NSArray<NSString *> *)userNames {
     NSMutableArray *merged = [[self currentList] mutableCopy] ?: [NSMutableArray array];
     NSInteger added = 0;
@@ -126,7 +126,6 @@
         if (![wxid isKindOfClass:[NSString class]]) continue;
         NSString *trim = [wxid stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (trim.length == 0) continue;
-        if ([trim hasSuffix:@"@chatroom"]) continue;
         if ([merged containsObject:trim]) continue;
         [merged addObject:trim];
         added++;

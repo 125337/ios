@@ -1,6 +1,6 @@
 #import <UIKit/UIKit.h>
 #import "../Common/SettingCategoryController.h"
-#import "MioTweakGroupSelectsController.h"
+#import "MioContactPicker.h"
 
-@interface SettingRedEnvelopController : SettingCategoryController <MioTweakGroupSelectsDelegate>
+@interface SettingRedEnvelopController : SettingCategoryController <MioContactPickerDelegate>
 @end

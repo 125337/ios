@@ -136,10 +136,11 @@ static const NSInteger kMaxInviteRules = 10;
 - (void)launchGroupPickerForNewRuleWithAmount:(double)amount {
     self.pendingRuleIndex = -1;
     self.pendingAmount = amount;
-    MioTweakGroupSelectsController *vc = [[MioTweakGroupSelectsController alloc]
-        initWithSelectedGroups:@[] title:@"选择拉进哪个群"];
-    vc.delegate = self;
-    [vc presentFromViewController:self];
+    [MioContactPicker presentPickerWithMode:MioContactPickerModeGroups
+                                      title:@"选择拉进哪个群"
+                                preselected:@[]
+                                   delegate:self
+                                       from:self];
 }
 
 - (void)launchGroupPickerForRuleIndex:(NSInteger)ruleIndex {
@@ -151,15 +152,16 @@ static const NSInteger kMaxInviteRules = 10;
     if (![room isKindOfClass:[NSString class]]) room = @"";
     self.pendingRuleIndex = ruleIndex;
     self.pendingAmount = [rule[@"amount"] doubleValue];
-    MioTweakGroupSelectsController *vc = [[MioTweakGroupSelectsController alloc]
-        initWithSelectedGroups:(room.length ? @[room] : @[]) title:@"更换拉群目标"];
-    vc.delegate = self;
-    [vc presentFromViewController:self];
+    [MioContactPicker presentPickerWithMode:MioContactPickerModeGroups
+                                      title:@"更换拉群目标"
+                                preselected:(room.length ? @[room] : @[])
+                                   delegate:self
+                                       from:self];
 }
 
-#pragma mark - MioTweakGroupSelectsDelegate
+#pragma mark - MioContactPickerDelegate
 
-- (void)onGroupSelectReturn:(NSArray<NSString *> *)groupIds {
+- (void)pickerDidFinish:(NSArray<NSString *> *)groupIds {
     NSInteger idx = self.pendingRuleIndex;
     double amount = self.pendingAmount;
     self.pendingRuleIndex = -1;
@@ -181,7 +183,7 @@ static const NSInteger kMaxInviteRules = 10;
     [self reloadTable];
 }
 
-- (void)onGroupSelectCancel {
+- (void)pickerDidCancel {
     self.pendingRuleIndex = -1;
     self.pendingAmount = 0;
 }

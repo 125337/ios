@@ -1,6 +1,6 @@
 #import "HomeCardVC.h"
 #import "HomeCardConfig.h"
-#import "../../Settings/Controllers/MioSessionSelectsController.h"
+#import "../../Settings/Controllers/MioContactPicker.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/MioImageVault.h"
@@ -14,7 +14,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
     HomeCardPickerDark  = 1,
 };
 
-@interface HomeCardVC () <PHPickerViewControllerDelegate>
+@interface HomeCardVC () <PHPickerViewControllerDelegate, MioContactPickerDelegate>
 @property (nonatomic, assign) HomeCardPickerTarget pickerTarget;
 @end
 
@@ -546,17 +546,23 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 }
 
 - (void)onManageContactsTap {
-    // 微信原生全屏选联系人页（SessionSelectController，WCR 主力封装同款）：
-    // 好友/群聊均可多选，已选名单回显勾选，完成后按选择顺序保存
-    MioSessionSelectsController *picker =
-        [[MioSessionSelectsController alloc] initWithTitle:@"管理联系人"
-                                              preselectedContacts:[HomeCardConfig savedContacts]];
-    __weak typeof(self) welf = self;
-    [picker presentFromViewController:self completion:^(NSArray<NSString *> *userNames) {
-        [HomeCardConfig saveContacts:userNames];   // 选择顺序 = 展示顺序
-        // 回到主线程当场刷新"管理联系人"行文案；首页挂件由 HCGeoKey 指纹触发 reloadData 重建
-        dispatch_async(dispatch_get_main_queue(), ^{ [welf buildUI]; });
-    }];
+    // 都选模式（SessionSelectController，好友+群聊），已选名单回显勾选，完成后按选择顺序保存
+    [MioContactPicker presentPickerWithMode:MioContactPickerModeAll
+                                      title:@"管理联系人"
+                                preselected:[HomeCardConfig savedContacts]
+                                   delegate:self
+                                       from:self];
+}
+
+#pragma mark - MioContactPickerDelegate
+
+- (void)pickerDidFinish:(NSArray<NSString *> *)wxids {
+    [HomeCardConfig saveContacts:wxids];   // 选择顺序 = 展示顺序
+    // 当场刷新"管理联系人"行文案；首页挂件由 HCGeoKey 指纹触发 reloadData 重建
+    dispatch_async(dispatch_get_main_queue(), ^{ [self buildUI]; });
+}
+
+- (void)pickerDidCancel {
 }
 
 #pragma mark - 卡片图片（浅/深色，同卡片背景页：菜单选图/删图 → PHPicker）

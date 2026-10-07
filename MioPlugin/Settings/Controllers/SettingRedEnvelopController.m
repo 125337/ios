@@ -2,7 +2,7 @@
 #import "../../Modules/RedEnvelop/RedEnvelopConfig.h"
 #import "../../Modules/AutoTransfer/AutoTransferConfig.h"
 #import "../../Core/ConfigManager.h"
-#import "MioTweakGroupSelectsController.h"
+#import "MioContactPicker.h"
 #import "SettingFixedInviteRulesController.h"
 #import "../../Core/LogManager.h"
 
@@ -115,15 +115,13 @@
     WPLog(@"Setting", @"[GroupSelect] config.redEnvelopGroupFilterList=%@", config.redEnvelopGroupFilterList);
     
     @try {
-        MioTweakGroupSelectsController *vc = [[MioTweakGroupSelectsController alloc] 
-            initWithSelectedGroups:config.redEnvelopGroupFilterList 
-            title:@"选择不抢红包的群"];
-        WPLog(@"Setting", @"[GroupSelect] vc created: %@", vc);
-        vc.delegate = self;
-        WPLog(@"Setting", @"[GroupSelect] delegate set");
-        // WCR 同款：直接 present 微信原生半屏多选群聊页（不自建壳，导航栏由微信管理）
-        [vc presentFromViewController:self];
-        WPLog(@"Setting", @"[GroupSelect] presentFromViewController called");
+        // 微信原生半屏多选群聊页（只选群模式，导航栏由微信管理）
+        [MioContactPicker presentPickerWithMode:MioContactPickerModeGroups
+                                          title:@"选择不抢红包的群"
+                                    preselected:config.redEnvelopGroupFilterList
+                                       delegate:self
+                                           from:self];
+        WPLog(@"Setting", @"[GroupSelect] presentPicker called");
     } @catch (NSException *e) {
         WPLog(@"Setting", @"[GroupSelect] exception: %@", e);
     }
@@ -137,9 +135,9 @@
     return n > 0 ? [NSString stringWithFormat:@"已设置 %lu 条规则", (unsigned long)n] : @"点击配置规则";
 }
 
-#pragma mark - MioTweakGroupSelectsDelegate
+#pragma mark - MioContactPickerDelegate
 
-- (void)onGroupSelectReturn:(NSArray<NSString *> *)groupIds {
+- (void)pickerDidFinish:(NSArray<NSString *> *)groupIds {
     RedEnvelopConfig *config = [RedEnvelopConfig shared];
     config.redEnvelopGroupFilterList = groupIds;
     [ConfigManager saveAll];
