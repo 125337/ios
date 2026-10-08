@@ -4,6 +4,7 @@
 #import <objc/message.h>
 #import <stdlib.h>
 #import <string.h>
+#import <dlfcn.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/MioAlertHelper.h"
@@ -20,6 +21,19 @@ static IMP orig_tv_setDelegate = NULL;   // UITextView setDelegate:（动态挂�
 static IMP orig_pyq_dyn1 = NULL;         // 动态 delegate 类的 textViewDidChange: 原实现
 static IMP orig_pyq_dyn2 = NULL;
 static Class gDynCls1 = NULL, gDynCls2 = NULL;
+static volatile int gPyqDidChangeDepth = 0;   // 垫片重入深度（斩断双插件互调递归环）
+
+// IMP 归属判断：dladdr 取所在镜像，路径以 .dylib 结尾 = 已被其他注入插件接管。
+// 双插件同方法 hook 会 orig 互指成无限递归（WCR + Mio 同挂 MMGrowTextView
+// textViewDidChange: 实证：搜索框一输入即栈溢出 _exit 139），我方让位不抢。
+// 主程序二进制与系统 framework 路径不以 .dylib 结尾，正常挂载不受影响
+static BOOL MioImpFromOtherPlugin(IMP imp) {
+    if (!imp) return NO;
+    Dl_info info;
+    if (!dladdr((const void *)imp, &info) || !info.dli_fname) return NO;
+    size_t n = strlen(info.dli_fname);
+    return n >= 6 && strcmp(info.dli_fname + n - 6, ".dylib") == 0;
+}
 
 // 递归找第一个 UIScrollView（深度限制 4 层）
 static UIScrollView *MioFindFirstScroll(UIView *root, int depth) {
@@ -139,11 +153,16 @@ static void MioOpenTimelinePageSheet(void) {
 // 文本来源双兼容：self 有 text 用 self.text（WCR FUN_017a7970 同款），
 // 否则用 textView 参数的 text（动态 delegate 可能是无 text 的 VC/容器）
 static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
-    IMP orig = orig_pyq_didChange;
-    if (gDynCls1 && [self isMemberOfClass:gDynCls1]) orig = orig_pyq_dyn1;
-    else if (gDynCls2 && [self isMemberOfClass:gDynCls2]) orig = orig_pyq_dyn2;
-    if (orig) ((void(*)(id, SEL, id))orig)(self, _cmd, textView);
+    // 深度守卫：垫片内再次进入 = 双插件 orig 互指的递归环（WCR 同挂实证），
+    // 立即返回不再调 orig，任何互相递归到此斩断
+    if (gPyqDidChangeDepth > 0) return;
+    gPyqDidChangeDepth++;
     @try {
+        IMP orig = orig_pyq_didChange;
+        if (gDynCls1 && [self isMemberOfClass:gDynCls1]) orig = orig_pyq_dyn1;
+        else if (gDynCls2 && [self isMemberOfClass:gDynCls2]) orig = orig_pyq_dyn2;
+        if (orig) ((void(*)(id, SEL, id))orig)(self, _cmd, textView);
+
         NSString *text = nil;
         SEL textSel = NSSelectorFromString(@"text");
         if ([self respondsToSelector:textSel]) {
@@ -179,6 +198,8 @@ static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
     } @catch (NSException *e) {
         gPyqHandling = NO;
         WPLog(@"Moments", @"[Pyq] error: %@", e);
+    } @finally {
+        gPyqDidChangeDepth--;
     }
 }
 
@@ -200,6 +221,7 @@ static void hooked_tv_setDelegate(id self, SEL _cmd, id delegate) {
         if (!m || method_getImplementation(m) == (IMP)hooked_pyq_didChange) return;
         if (dCls == gDynCls1 || dCls == gDynCls2) return;   // 已挂过
         IMP origImp = method_getImplementation(m);
+        if (MioImpFromOtherPlugin(origImp)) return;   // 他方插件已接管，让位防环
         if (!gDynCls1) {
             gDynCls1 = dCls; orig_pyq_dyn1 = origImp;
         } else if (!gDynCls2) {
@@ -225,9 +247,16 @@ static void MioInstallPyqHooks(void) {
     }
     Method m1 = class_getInstanceMethod(growCls, didSel);
     if (m1) {
-        orig_pyq_didChange = method_getImplementation(m1);
-        method_setImplementation(m1, (IMP)hooked_pyq_didChange);
-        WPLog(@"Moments", @"[Pyq] MMGrowTextView.textViewDidChange: hooked");
+        IMP cur = method_getImplementation(m1);
+        if (MioImpFromOtherPlugin(cur)) {
+            // 他方插件（WCR 等）先接管了该方法：让位。抢回会把 orig 更新成
+            // 对方替换实现，双方互指成无限递归（搜索框输入栈溢出实证）
+            WPLog(@"Moments", @"[Pyq] yield textViewDidChange: (another dylib owns it)");
+        } else {
+            orig_pyq_didChange = cur;
+            method_setImplementation(m1, (IMP)hooked_pyq_didChange);
+            WPLog(@"Moments", @"[Pyq] MMGrowTextView.textViewDidChange: hooked");
+        }
     } else {
         WPLog(@"Moments", @"[Pyq] SKIP: textViewDidChange: NOT found");
     }
@@ -235,13 +264,20 @@ static void MioInstallPyqHooks(void) {
     Class tvCls = [UITextView class];
     Method m3 = class_getInstanceMethod(tvCls, NSSelectorFromString(@"setDelegate:"));
     if (m3) {
-        orig_tv_setDelegate = method_getImplementation(m3);
-        method_setImplementation(m3, (IMP)hooked_tv_setDelegate);
-        WPLog(@"Moments", @"[Pyq] UITextView.setDelegate: probe hooked");
+        IMP cur = method_getImplementation(m3);
+        if (MioImpFromOtherPlugin(cur)) {
+            WPLog(@"Moments", @"[Pyq] yield setDelegate: probe (another dylib owns it)");
+        } else {
+            orig_tv_setDelegate = cur;
+            method_setImplementation(m3, (IMP)hooked_tv_setDelegate);
+            WPLog(@"Moments", @"[Pyq] UITextView.setDelegate: probe hooked");
+        }
     }
 }
 
-// 重挂自检：微信晚到的初始化可能覆盖 IMP，20s/45s 检查并恢复
+// 重挂自检：微信晚到的初始化可能覆盖 IMP，20s/45s 检查并恢复。
+// 仅当 IMP 回到主程序/系统 framework 才重夺；被他方 dylib 接管时抢回
+// 会把 orig 更新成对方替换实现，互指成环（搜索框输入栈溢出实证）
 static void MioRehookCheck(int round) {
     SEL didSel = NSSelectorFromString(@"textViewDidChange:");
     SEL delSel = NSSelectorFromString(@"setDelegate:");
@@ -250,14 +286,16 @@ static void MioRehookCheck(int round) {
     Class growCls = objc_getClass("MMGrowTextView");
     if (growCls) {
         Method m1 = class_getInstanceMethod(growCls, didSel);
-        if (m1 && method_getImplementation(m1) != (IMP)hooked_pyq_didChange) {
+        if (m1 && method_getImplementation(m1) != (IMP)hooked_pyq_didChange
+            && !MioImpFromOtherPlugin(method_getImplementation(m1))) {
             orig_pyq_didChange = method_getImplementation(m1);
             method_setImplementation(m1, (IMP)hooked_pyq_didChange);
             fixed++;
         }
     }
     Method m3 = class_getInstanceMethod([UITextView class], delSel);
-    if (m3 && method_getImplementation(m3) != (IMP)hooked_tv_setDelegate) {
+    if (m3 && method_getImplementation(m3) != (IMP)hooked_tv_setDelegate
+        && !MioImpFromOtherPlugin(method_getImplementation(m3))) {
         orig_tv_setDelegate = method_getImplementation(m3);
         method_setImplementation(m3, (IMP)hooked_tv_setDelegate);
         fixed++;
