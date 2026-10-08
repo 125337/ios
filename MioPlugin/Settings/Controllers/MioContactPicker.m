@@ -268,7 +268,7 @@ static void *kMioMultiBridgeKey = &kMioMultiBridgeKey;
 @interface MioPickerMultiSelectAdapter : MioPickerAdapterBase
 @property (strong, nonatomic) UIViewController *picker;
 @property (copy, nonatomic) NSString *logTag;   // [Contacts] / [All]
-@property (nonatomic, assign) BOOL showSelectFromGroup;   // 顶部"选择群聊中的朋友"入口（All=开，Contacts=关）
+@property (nonatomic, assign) BOOL showHistoryGroup;   // 顶部"历史群组"入口（原生选群路径，onSelectHistoryGroup→handleSelectedHistoryGroupContacts:；All=开，Contacts=关）
 @end
 
 @implementation MioPickerMultiSelectAdapter
@@ -400,9 +400,9 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     MioMultiSetValue(picker, @"m_memberCountLimit", @(4096), tag);
     MioMultiSetValue(picker, @"m_viewcontrllerTitle", title, tag);   // 设备拼写即如此（原生 typo 字段）
     MioMultiSetValue(picker, @"m_rightBarButtonTitle", @"完成", tag);
-    MioMultiSetValue(picker, @"m_bShowHistoryGroup", @NO, tag);
+    MioMultiSetValue(picker, @"m_bShowHistoryGroup", self.showHistoryGroup ? @YES : @NO, tag);   // 历史群组（真选群）
     MioMultiSetValue(picker, @"m_bShowContactTag", @YES, tag);
-    MioMultiSetValue(picker, @"m_bShowSelectFromGroup", self.showSelectFromGroup ? @YES : @NO, tag);   // 顶部"选择群聊中的朋友"入口
+    MioMultiSetValue(picker, @"m_bShowSelectFromGroup", @NO, tag);   // "从群选人"（进群挑成员）两模式都不要
     MioMultiSetValue(picker, @"m_bKeepCurViewAfterSelect", @YES, tag);
     MioMultiSetValue(picker, @"m_onlyChatRoom", @NO, tag);
     MioMultiSetValue(picker, @"m_onlyImportChatRoom", @NO, tag);
@@ -458,7 +458,7 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
         case MioContactPickerModeAll: {
             MioPickerMultiSelectAdapter *a = [[MioPickerMultiSelectAdapter alloc] init];
             a.logTag = @"[All]";
-            a.showSelectFromGroup = YES;   // 管理联系人：可从群聊选人
+            a.showHistoryGroup = YES;   // 都选：好友 + 历史群组选群
             adapter = a;
             break;
         }

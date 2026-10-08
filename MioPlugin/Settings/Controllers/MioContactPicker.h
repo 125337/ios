@@ -6,7 +6,7 @@ NS_ASSUME_NONNULL_BEGIN
 typedef NS_ENUM(NSInteger, MioContactPickerMode) {
     MioContactPickerModeContacts = 0,   // 只选人：MultiSelectContactsViewController（发起群聊主选人器）
     MioContactPickerModeGroups   = 1,   // 只选群：MultiSelectChatRoomHalfScreenViewController（半屏）
-    MioContactPickerModeAll      = 2,   // 都选：MultiSelectContactsViewController（同 Contacts 配方）
+    MioContactPickerModeAll      = 2,   // 都选：MultiSelectContactsViewController + m_bShowHistoryGroup（好友列表 + 历史群组选群）
 };
 
 @protocol MioContactPickerDelegate <NSObject>
