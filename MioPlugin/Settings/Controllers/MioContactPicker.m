@@ -357,14 +357,18 @@ static void MioMultiEnableBarItem(UIBarButtonItem *item) {
 static void MioMultiApplySurfacesCore(UIViewController *picker) {
     id panelItem = nil;
     @try { panelItem = [picker valueForKey:@"m_panelBtnItem"]; } @catch (NSException *e) {}
-    if ([panelItem isKindOfClass:[UIBarButtonItem class]]) MioMultiEnableBarItem(panelItem);
-    MioMultiEnableBarItem(picker.navigationItem.rightBarButtonItem);
-
+    UIBarButtonItem *rightItem = picker.navigationItem.rightBarButtonItem;
     id toolView = nil;
     @try { toolView = [picker valueForKey:@"m_toolView"]; } @catch (NSException *e) {}
-    if (![toolView isKindOfClass:[UIView class]]) return;
     id doneBtn = nil;
-    @try { doneBtn = [toolView valueForKey:@"completeButton"]; } @catch (NSException *e) {}
+    if ([toolView isKindOfClass:[UIView class]]) {
+        @try { doneBtn = [toolView valueForKey:@"completeButton"]; } @catch (NSException *e) {}
+    }
+    WPLog(@"Contacts", @"[M-Apply] panel=%@ right=%@ tool=%@ done=%@",
+          [panelItem class], [rightItem class], [toolView class], [doneBtn class]);
+
+    if ([panelItem isKindOfClass:[UIBarButtonItem class]]) MioMultiEnableBarItem(panelItem);
+    MioMultiEnableBarItem(rightItem);
     if ([doneBtn isKindOfClass:[UIButton class]]) {
         [(UIButton *)doneBtn setEnabled:YES];
         [(UIButton *)doneBtn setAlpha:1.0];
@@ -377,7 +381,11 @@ static void MioMultiApplySurfacesCore(UIViewController *picker) {
 // hook 回调入口：重入保护（refreshing 已 YES = 本链已在强显中，直接返回）
 static void MioMultiApplySurfaces(UIViewController *picker) {
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(picker);
-    if (!bridge || bridge.refreshing) return;
+    if (!bridge) return;
+    if (bridge.refreshing) {
+        WPLog(@"Contacts", @"[M-Apply] skip (refreshing)");
+        return;
+    }
     bridge.refreshing = YES;
     @try {
         MioMultiApplySurfacesCore(picker);
@@ -386,19 +394,26 @@ static void MioMultiApplySurfaces(UIViewController *picker) {
     }
 }
 
-// 全量刷新（viewDidLayoutSubviews / 250ms 补刷走这里）：主体强显 + 主动调
-// updateRightBarItemEnabled:YES 让原生自刷。同一把 refreshing 锁：update 可能触发原生
-// layout → layout hook → RefreshNow 重入，锁在直接返回，环到此为止
+// 全量刷新（present 后调度 / 250ms 补刷走这里）：主体强显 + 主动调
+// updateRightBarItemEnabled:YES 让原生自刷。同一把 refreshing 锁防同步重入；
+// 注意：本函数绝不能从 viewDidLayoutSubviews hook 调——原生 update 若 setNeedsLayout
+// 会形成"每帧刷新"异步环（锁在下一帧已释放），layout hook 一律只调 ApplySurfaces
 static void MioMultiRefreshNow(UIViewController *picker) {
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(picker);
-    if (!bridge || bridge.refreshing) return;
+    if (!bridge) return;
+    if (bridge.refreshing) {
+        WPLog(@"Contacts", @"[M-Refresh] skip (refreshing)");
+        return;
+    }
     bridge.refreshing = YES;
     @try {
-        WPLog(@"Contacts", @"[DoneRefresh] count=%lu", (unsigned long)MioMultiExtract(picker).count);
+        WPLog(@"Contacts", @"[M-Refresh] enter count=%lu", (unsigned long)MioMultiExtract(picker).count);
         MioMultiApplySurfacesCore(picker);
         SEL upd = NSSelectorFromString(@"updateRightBarItemEnabled:");
         if ([picker respondsToSelector:upd]) {
+            WPLog(@"Contacts", @"[M-Refresh] call updateRightBarItemEnabled:YES begin");
             ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, upd, YES);
+            WPLog(@"Contacts", @"[M-Refresh] call updateRightBarItemEnabled:YES done");
         }
     } @finally {
         bridge.refreshing = NO;
@@ -407,38 +422,45 @@ static void MioMultiRefreshNow(UIViewController *picker) {
 
 // WCR FUN_01b39820 同款：立即刷 + 250ms 后补刷一轮（原生延迟刷新路径会把按钮再置灰）
 static void MioMultiRefreshRightButton(UIViewController *picker) {
+    WPLog(@"Contacts", @"[M-Refresh] schedule (now + 250ms)");
     MioMultiRefreshNow(picker);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         MioPickerMultiSelectAdapter *b = MioMultiBridge(picker);
-        if (b && !b.hasReturned) MioMultiRefreshNow(picker);
+        if (b && !b.hasReturned) {
+            WPLog(@"Contacts", @"[M-250ms] fire");
+            MioMultiRefreshNow(picker);
+        }
     });
 }
 
 static void mioMultiRightEnabledImp(id self, SEL _cmd, id arg1) {
     if (gOrigMultiRightEnabled) ((void (*)(id, SEL, id))gOrigMultiRightEnabled)(self, _cmd, arg1);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) MioMultiApplySurfaces(self);   // 只补强显，无主动 update，不会递归
+    if (bridge && !bridge.hasReturned) {
+        WPLog(@"Contacts", @"[M-Hook] updateRightBarItemEnabled:");
+        MioMultiApplySurfaces(self);   // 只补强显，无主动 update，不会成环
+    }
 }
 
 static void mioMultiRightEnabledPageSheetImp(id self, SEL _cmd, id arg1) {
     if (gOrigMultiRightEnabledPageSheet) ((void (*)(id, SEL, id))gOrigMultiRightEnabledPageSheet)(self, _cmd, arg1);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) MioMultiApplySurfaces(self);
+    if (bridge && !bridge.hasReturned) {
+        WPLog(@"Contacts", @"[M-Hook] updateRightBarItemEnabledInPageSheetModeIfNeeded:");
+        MioMultiApplySurfaces(self);
+    }
 }
 
-static IMP gOrigMultiLayout = NULL;
-static void mioMultiLayoutImp(id self, SEL _cmd) {
-    if (gOrigMultiLayout) ((void (*)(id, SEL))gOrigMultiLayout)(self, _cmd);
-    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) MioMultiRefreshRightButton(self);
-}
-
-// pageSheet 右按钮更新（0 参）：原生 pageSheet 刷"完成"的主路径，0 选中时也走这里
+// pageSheet 右按钮更新（0 参）：原生 pageSheet 刷"完成"的主路径，0 选中时也走这里。
+// 只补强显（主动 update 若引发原生再进本方法会成环）
 static IMP gOrigMultiUpdateRightPageSheet = NULL;
 static void mioMultiUpdateRightPageSheetImp(id self, SEL _cmd) {
     if (gOrigMultiUpdateRightPageSheet) ((void (*)(id, SEL))gOrigMultiUpdateRightPageSheet)(self, _cmd);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) MioMultiRefreshRightButton(self);
+    if (bridge && !bridge.hasReturned) {
+        WPLog(@"Contacts", @"[M-Hook] updateMultiSelectRightBarItemInPageSheetModeIfNeeded");
+        MioMultiApplySurfaces(self);
+    }
 }
 
 // 完成动作（pageSheet 底部按钮 → onDoneInPageSheetMode:，非 pageSheet → onDone:）：
@@ -451,12 +473,20 @@ static void mioMultiFinish(id self, MioPickerMultiSelectAdapter *bridge) {
 }
 static void mioMultiDoneImp(id self, SEL _cmd, id sender) {
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) { mioMultiFinish(self, bridge); return; }
+    if (bridge && !bridge.hasReturned) {
+        WPLog(@"Contacts", @"[M-Done] onDone bridged");
+        mioMultiFinish(self, bridge);
+        return;
+    }
     if (gOrigMultiDone) ((void (*)(id, SEL, id))gOrigMultiDone)(self, _cmd, sender);
 }
 static void mioMultiDonePageSheetImp(id self, SEL _cmd, id sender) {
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) { mioMultiFinish(self, bridge); return; }
+    if (bridge && !bridge.hasReturned) {
+        WPLog(@"Contacts", @"[M-Done] onDoneInPageSheetMode bridged");
+        mioMultiFinish(self, bridge);
+        return;
+    }
     if (gOrigMultiDonePageSheet) ((void (*)(id, SEL, id))gOrigMultiDonePageSheet)(self, _cmd, sender);
 }
 
@@ -472,9 +502,6 @@ static void mioMultiInstallHooks(void) {
         SEL s2 = NSSelectorFromString(@"updateRightBarItemEnabledInPageSheetModeIfNeeded:");
         Method m2 = class_getInstanceMethod(cls, s2);
         if (m2) { MSHookMessageEx(cls, s2, (IMP)mioMultiRightEnabledPageSheetImp, &gOrigMultiRightEnabledPageSheet); }
-        // viewDidLayoutSubviews：首帧强显一次（update*Enabled 依赖原生主动调用，首帧未必触发）
-        Method m3 = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
-        if (m3) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioMultiLayoutImp, &gOrigMultiLayout); }
         SEL s3 = NSSelectorFromString(@"updateMultiSelectRightBarItemInPageSheetModeIfNeeded");
         Method m6 = class_getInstanceMethod(cls, s3);
         if (m6) { MSHookMessageEx(cls, s3, (IMP)mioMultiUpdateRightPageSheetImp, &gOrigMultiUpdateRightPageSheet); }
@@ -598,6 +625,11 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     nav.presentationController.delegate = self;
     [top presentViewController:nav animated:YES completion:nil];
+
+    // 初始强显（WCR 节奏：present 完成后立即 + 250ms 各一次；不挂 layout hook，避免每帧刷新环）
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self.hasReturned && self.picker) MioMultiRefreshRightButton(self.picker);
+    });
 }
 
 - (void)cleanup {
