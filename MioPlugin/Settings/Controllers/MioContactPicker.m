@@ -331,19 +331,36 @@ static MioPickerMultiSelectAdapter *MioMultiBridge(id self) {
 
 // 完成按钮强显（仿 Groups）：原生无选中禁用"完成"，管理联系人需允许清空（0 个也点，回空数组）
 // 两条路都刷：非 pageSheet = navigationItem 右侧 UIBarButtonItem；
-// pageSheet = 页面右下角的"完成" UIButton（截图实证不在 navigationItem），递归视图树强显
+// pageSheet = 页面右下角的"完成" UIButton（截图实证不在 navigationItem），递归视图树强显。
+// 禁用态 title 可能为空（titleForState 取不到"完成"导致匹配失败），依次尝试多种 title 来源；
+// 全空时按窗口坐标"右下角"位置兜底（只强显不改标题，防止误伤）
 static void MioMultiEnableDoneButtons(UIView *view, NSUInteger count) {
     for (UIView *sub in view.subviews) {
         if ([sub isKindOfClass:[UIButton class]]) {
             UIButton *btn = (UIButton *)sub;
-            NSString *cur = [btn titleForState:UIControlStateNormal];
-            if ([cur isKindOfClass:[NSString class]] && [cur containsString:@"完成"]) {
-                NSString *title = count > 0 ? [NSString stringWithFormat:@"完成(%lu)", (unsigned long)count] : @"完成";
+            NSString *n = [btn titleForState:UIControlStateNormal] ?: @"";
+            NSString *d = [btn titleForState:UIControlStateDisabled] ?: @"";
+            NSString *cur = btn.currentTitle ?: btn.titleLabel.text ?: @"";
+            NSString *attr = [btn attributedTitleForState:UIControlStateNormal].string ?: @"";
+            WPLog(@"Contacts", @"[DoneScan] %@ frame=%@ enabled=%d normal='%@' disabled='%@' current='%@' attr='%@'",
+                  NSStringFromClass(btn.class), NSStringFromCGRect(btn.frame), btn.enabled, n, d, cur, attr);
+            BOOL byTitle = [n containsString:@"完成"] || [d containsString:@"完成"]
+                        || [cur containsString:@"完成"] || [attr containsString:@"完成"];
+            BOOL byPos = NO;
+            if (!byTitle && sub.window) {
+                CGRect w = [btn convertRect:btn.bounds toView:nil];
+                CGSize scr = [UIScreen mainScreen].bounds.size;
+                byPos = (w.origin.x > scr.width * 0.5 && w.origin.y > scr.height * 0.5);
+            }
+            if (byTitle || byPos) {
                 [btn setEnabled:YES];
-                [btn setTitle:title forState:UIControlStateNormal];
-                [btn setTitle:title forState:UIControlStateHighlighted];
-                [btn setTitle:title forState:UIControlStateDisabled];
-                [btn setTitle:title forState:UIControlStateSelected];
+                if (byTitle) {
+                    NSString *title = count > 0 ? [NSString stringWithFormat:@"完成(%lu)", (unsigned long)count] : @"完成";
+                    [btn setTitle:title forState:UIControlStateNormal];
+                    [btn setTitle:title forState:UIControlStateHighlighted];
+                    [btn setTitle:title forState:UIControlStateDisabled];
+                    [btn setTitle:title forState:UIControlStateSelected];
+                }
             }
         }
         MioMultiEnableDoneButtons(sub, count);
