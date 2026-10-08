@@ -4,6 +4,7 @@
 #import <objc/message.h>
 #import <substrate.h>
 #import "../Core/ServiceHelper.h"
+#import "../Core/LogManager.h"
 
 // ===== 统一选人入口（MioContactPicker.h 注释为架构总览）=====
 // 三个适配器的机制来源：
@@ -475,6 +476,13 @@ static void MioAllRefreshLeftButton(UIViewController *picker) {
     [picker.navigationItem setLeftBarButtonItem:close animated:NO];
 }
 
+// 关键节点几何快照（frame/bounds/safeTop/window），tag=时间线节点号（T0/T1/T2）
+static void MioAllGeomSnapshot(UIViewController *vc, NSInteger tag) {
+    WPLog(@"MioPicker", @"[All] T%d 时 view.frame=%@ bounds=%@ safeTop=%.1f window=%@",
+          (int)tag, NSStringFromCGRect(vc.view.frame), NSStringFromCGRect(vc.view.bounds),
+          vc.view.safeAreaInsets.top, vc.view.window ? @"有" : @"nil");
+}
+
 // 字典值 → wxid：NSString 直取 / contact 对象取 m_nsUsrName / KVC 兜底，再退回 key
 static NSString *MioAllWxidOf(id value, id key) {
     NSString *wxid = nil;
@@ -569,6 +577,8 @@ static void mioAllPopDismissImp(id self, SEL _cmd) {
 // present 前 beginMultiSelect 会让微信按未布局几何（bounds=0）算"最近转发"条等 frame，
 // 呈现压扁态且需手动触发 layout 才恢复。一次性标志防 viewDidAppear 多次触发重复刷新
 static void mioAllAppearImp(id self, SEL _cmd, BOOL animated) {
+    WPLog(@"MioPicker", @"[All] viewDidAppear 触发，时间戳 T1");
+    MioAllGeomSnapshot(self, 1);
     if (gOrigAllAppear) ((void (*)(id, SEL, BOOL))gOrigAllAppear)(self, _cmd, animated);
     MioPickerAllAdapter *bridge = MioAllBridge(self);
     if (!bridge || bridge.hasReturned || bridge.appearedDone) return;
@@ -578,6 +588,8 @@ static void mioAllAppearImp(id self, SEL _cmd, BOOL animated) {
     if ([vc respondsToSelector:bms]) {
         ((void (*)(id, SEL))objc_msgSend)(vc, bms);
     }
+    WPLog(@"MioPicker", @"[All] beginMultiSelect 执行完成，时间戳 T2");
+    MioAllGeomSnapshot(vc, 2);
     id selectView = nil;
     @try { selectView = [vc valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
     SEL ums = NSSelectorFromString(@"updateMultiSelectView");
@@ -679,6 +691,8 @@ static void mioAllInstallHooks(void) {
     UINavigationController *nav = [[navCls alloc] initWithRootViewController:picker];
     // 全屏 present：pageSheet 顶部会露出黑边（安全区不足），且下滑关闭不走取消 hook
     nav.modalPresentationStyle = UIModalPresentationFullScreen;
+    WPLog(@"MioPicker", @"[All] present 调用，时间戳 T0");
+    MioAllGeomSnapshot(picker, 0);
     [top presentViewController:nav animated:YES completion:^{
         // 补设 title；多选态进入与已选面板刷新由 viewDidAppear hook 承担（彼时几何已稳定）
         [picker setTitle:title ?: @""];
