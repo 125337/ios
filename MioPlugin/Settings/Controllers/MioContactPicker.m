@@ -476,44 +476,121 @@ static void MioAllRefreshLeftButton(UIViewController *picker) {
     [picker.navigationItem setLeftBarButtonItem:close animated:NO];
 }
 
-// 关键节点几何快照（frame/bounds/safeTop/window），tag=时间线节点号（T0/T1/T2）
-static void MioAllGeomSnapshot(UIViewController *vc, NSInteger tag) {
-    WPLog(@"MioPicker", @"[All] T%d 时 view.frame=%@ bounds=%@ safeTop=%.1f window=%@",
-          (int)tag, NSStringFromCGRect(vc.view.frame), NSStringFromCGRect(vc.view.bounds),
-          vc.view.safeAreaInsets.top, vc.view.window ? @"有" : @"nil");
-}
+// ===== [All-Inset] 诊断日志（一次性定位"首 cell 被裁 + 搜索栏不显示"根因）=====
 
-// 校正列表顶部预留空间：隐藏"最近转发"条只移除了视图，列表顶部 contentInset 仍按
-// "搜索栏+最近转发条"的旧值预留，首 cell 被导航栏裁掉、搜索栏被挤出首帧。
-// 首选微信内部重算方法（dump 236 行存在；useNewSearchBar=@YES 走 NewSearchBar 分支）；
-// 兜底：主视图树取最高的 UITableView，顶部 inset 手动设为安全区顶部（只保留导航栏高度）
-static void MioAllFixListTopInset(UIViewController *vc) {
-    SEL resetSel = NSSelectorFromString(@"resetSelectViewContentInsetInNewSearchBar");
-    if ([vc respondsToSelector:resetSel]) {
-        ((void (*)(id, SEL))objc_msgSend)(vc, resetSel);
-        WPLog(@"MioPicker", @"[All] inset 校正：已调用内部 resetSelectViewContentInsetInNewSearchBar");
-        return;
+static __weak UIScrollView *gMioAllListRef = NULL;
+
+// 定位列表对象：先扫 ivar（名字含 table/list/session/scroll 的对象型字段），再递归视图树找 UITableView
+static UIScrollView *MioAllFindList(UIViewController *vc) {
+    UIScrollView *found = nil;
+    unsigned int count = 0;
+    Ivar *ivars = class_copyIvarList(object_getClass(vc), &count);
+    for (unsigned int i = 0; i < count && !found; i++) {
+        const char *enc = ivar_getTypeEncoding(ivars[i]);
+        const char *name = ivar_getName(ivars[i]);
+        if (!enc || enc[0] != '@' || !name) continue;
+        NSString *n = [NSString stringWithUTF8String:name].lowercaseString;
+        if (![n containsString:@"table"] && ![n containsString:@"list"] &&
+            ![n containsString:@"session"] && ![n containsString:@"scroll"]) continue;
+        id v = object_getIvar(vc, ivars[i]);
+        if ([v isKindOfClass:[UIScrollView class]]) found = v;
     }
-    UITableView *table = nil;
+    if (ivars) free(ivars);
+    if (found) return found;
+    UITableView *first = nil, *best = nil;
     NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
     while (stack.count > 0) {
         UIView *v = stack.lastObject;
         [stack removeLastObject];
         if ([v isKindOfClass:[UITableView class]]) {
-            if (!table || v.bounds.size.height > table.bounds.size.height) table = (UITableView *)v;
-        } else {
-            for (UIView *sub in v.subviews) [stack addObject:sub];
+            if (!first) first = (UITableView *)v;
+            if (!best && !v.hidden && v.window && v.bounds.size.height > 50) best = (UITableView *)v;
         }
+        for (UIView *sub in v.subviews) [stack addObject:sub];
     }
-    if (table) {
-        UIEdgeInsets inset = table.contentInset;
-        inset.top = vc.view.safeAreaInsets.top;
-        table.contentInset = inset;
-        WPLog(@"MioPicker", @"[All] inset 校正兜底：table 顶部 inset=%.1f（safeTop=%.1f）",
-              inset.top, vc.view.safeAreaInsets.top);
-    } else {
-        WPLog(@"MioPicker", @"[All] inset 校正：视图树未找到 UITableView");
+    return best ?: first;
+}
+
+// 列表 4 关键值：contentInset.top / contentOffset.y / adjustedContentInset.top / bounds / window
+static void MioAllListSnap(UIViewController *vc, NSString *tag) {
+    if (!gMioAllListRef && vc) gMioAllListRef = MioAllFindList(vc);
+    UIScrollView *list = gMioAllListRef;
+    if (!list) {
+        WPLog(@"MioPicker", @"[All-Inset] %@ | list=nil", tag);
+        return;
     }
+    WPLog(@"MioPicker", @"[All-Inset] %@ | inset.top=%.1f | offset.y=%.1f | adj.top=%.1f | bounds=%@ | window=%@",
+          tag, list.contentInset.top, list.contentOffset.y, list.adjustedContentInset.top,
+          NSStringFromCGRect(list.bounds), list.window ? @"YES" : @"NO");
+}
+
+// dump 控制器全部 ivar：名字含 table/list/session/scroll 的字段（类名，UIView 时附 frame）
+static void MioAllDumpIvars(UIViewController *vc) {
+    unsigned int count = 0;
+    Ivar *ivars = class_copyIvarList(object_getClass(vc), &count);
+    for (unsigned int i = 0; i < count; i++) {
+        const char *enc = ivar_getTypeEncoding(ivars[i]);
+        const char *name = ivar_getName(ivars[i]);
+        if (!enc || enc[0] != '@' || !name) continue;
+        NSString *n = [NSString stringWithUTF8String:name].lowercaseString;
+        if (![n containsString:@"table"] && ![n containsString:@"list"] &&
+            ![n containsString:@"session"] && ![n containsString:@"scroll"]) continue;
+        id v = object_getIvar(vc, ivars[i]);
+        NSString *desc = @"nil";
+        if ([v isKindOfClass:[UIView class]]) {
+            desc = [NSString stringWithFormat:@"%@ frame=%@", NSStringFromClass([v class]),
+                    NSStringFromCGRect([(UIView *)v frame])];
+        } else if (v) {
+            desc = NSStringFromClass([v class]);
+        }
+        WPLog(@"MioPicker", @"[All-Inset] ivar %@ | %@", n, desc);
+    }
+    if (ivars) free(ivars);
+}
+
+// 搜索栏：视图树找 UISearchBar 子类实例，打印 frame/hidden/alpha/superview
+static void MioAllDumpSearchBar(UIViewController *vc, NSString *tag) {
+    NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
+    while (stack.count > 0) {
+        UIView *v = stack.lastObject;
+        [stack removeLastObject];
+        if ([v isKindOfClass:[UISearchBar class]]) {
+            UIView *sv = v.superview;
+            WPLog(@"MioPicker", @"[All-Inset] %@ 搜索栏 | frame=%@ | hidden=%d | alpha=%.2f | superview=%@ %@",
+                  tag, NSStringFromCGRect(v.frame), v.hidden, v.alpha,
+                  NSStringFromClass([sv class]), NSStringFromCGRect(sv.frame));
+            return;
+        }
+        for (UIView *sub in v.subviews) [stack addObject:sub];
+    }
+    WPLog(@"MioPicker", @"[All-Inset] %@ 搜索栏 | 未找到", tag);
+}
+
+// 顶部条：最近转发条（横向 UICollectionView）与"最近聊天"section 标题（UILabel），尽力查找
+static void MioAllDumpTopBars(UIViewController *vc, NSString *tag) {
+    BOOL recent = NO, header = NO;
+    NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
+    while (stack.count > 0) {
+        UIView *v = stack.lastObject;
+        [stack removeLastObject];
+        if (!recent && [v isKindOfClass:[UICollectionView class]]) {
+            recent = YES;
+            UIView *sv = v.superview;
+            WPLog(@"MioPicker", @"[All-Inset] %@ 疑似最近转发条(UICollectionView) | frame=%@ | hidden=%d | superview=%@ %@",
+                  tag, NSStringFromCGRect(v.frame), v.hidden,
+                  NSStringFromClass([sv class]), NSStringFromCGRect(sv.frame));
+        }
+        if (!header && [v isKindOfClass:[UILabel class]] &&
+            [((UILabel *)v).text containsString:@"最近聊天"]) {
+            header = YES;
+            UIView *sv = v.superview;
+            WPLog(@"MioPicker", @"[All-Inset] %@ \"最近聊天\"标题 | frame=%@ | superview=%@ %@",
+                  tag, NSStringFromCGRect(v.frame), NSStringFromClass([sv class]), NSStringFromCGRect(sv.frame));
+        }
+        for (UIView *sub in v.subviews) [stack addObject:sub];
+    }
+    if (!recent) WPLog(@"MioPicker", @"[All-Inset] %@ 最近转发条 | 视图树无 UICollectionView", tag);
+    if (!header) WPLog(@"MioPicker", @"[All-Inset] %@ \"最近聊天\"标题 | 未找到", tag);
 }
 
 // 字典值 → wxid：NSString 直取 / contact 对象取 m_nsUsrName / KVC 兜底，再退回 key
@@ -607,31 +684,44 @@ static void mioAllPopDismissImp(id self, SEL _cmd) {
 }
 
 // viewDidAppear（view 已进 window、present 动画结束、几何稳定）后按序执行：
-// 进多选态 → 隐藏"最近转发"条 → 完整 layout pass → 校正列表顶部 inset → 刷新已选面板。
-// present 前 beginMultiSelect 会让微信按未布局几何（bounds=0）算"最近转发"条等 frame，
-// 呈现压扁态且需手动触发 layout 才恢复。一次性标志防 viewDidAppear 多次触发重复刷新
+// 进多选态 → 隐藏"最近转发"条 → inset 校正 → 完整 layout pass → 刷新已选面板。
+// [All-Inset] 时间线：T1 appear / T2 多选后 / T3 reset 前后 / T4 layout 后 / T5 +0.5s
+// 一次性标志防 viewDidAppear 多次触发重复刷新
 static void mioAllAppearImp(id self, SEL _cmd, BOOL animated) {
-    WPLog(@"MioPicker", @"[All] viewDidAppear 触发，时间戳 T1");
-    MioAllGeomSnapshot(self, 1);
     if (gOrigAllAppear) ((void (*)(id, SEL, BOOL))gOrigAllAppear)(self, _cmd, animated);
     MioPickerAllAdapter *bridge = MioAllBridge(self);
     if (!bridge || bridge.hasReturned || bridge.appearedDone) return;
     bridge.appearedDone = YES;
     UIViewController *vc = self;
+    // T1：viewDidAppear（beginMultiSelect 前）
+    WPLog(@"MioPicker", @"[All-Inset] T1 viewDidAppear | view.frame=%@ | safeTop=%.1f",
+          NSStringFromCGRect(vc.view.frame), vc.view.safeAreaInsets.top);
+    MioAllDumpIvars(vc);
+    MioAllDumpSearchBar(vc, @"T1");
+    MioAllDumpTopBars(vc, @"T1");
+    MioAllListSnap(vc, @"T1");
+    // T2：beginMultiSelect 后
     SEL bms = NSSelectorFromString(@"beginMultiSelect");
     if ([vc respondsToSelector:bms]) {
         ((void (*)(id, SEL))objc_msgSend)(vc, bms);
     }
-    WPLog(@"MioPicker", @"[All] beginMultiSelect 执行完成，时间戳 T2");
-    MioAllGeomSnapshot(vc, 2);
+    MioAllListSnap(vc, @"T2 after beginMultiSelect");
     // 多选态进入后再断言隐藏"最近转发"条（多选自身可能调整顶部布局）
     @try { [vc setValue:@YES forKey:@"m_recentForwardHidden"]; } @catch (NSException *e) {}
-    // 布局收尾：完整 layout pass 重算所有手写 frame 的子视图，再校正列表顶部预留空间
+    // T3：内部 inset 重算方法前后对照
+    MioAllListSnap(vc, @"T3 before reset");
+    SEL resetSel = NSSelectorFromString(@"resetSelectViewContentInsetInNewSearchBar");
+    if ([vc respondsToSelector:resetSel]) {
+        ((void (*)(id, SEL))objc_msgSend)(vc, resetSel);
+        MioAllListSnap(vc, @"T3 after reset");
+    } else {
+        WPLog(@"MioPicker", @"[All-Inset] T3 | 无 resetSelectViewContentInsetInNewSearchBar 方法");
+    }
+    // T4：完整 layout pass 后
     [vc.view setNeedsLayout];
     [vc.view layoutIfNeeded];
-    MioAllFixListTopInset(vc);
-    WPLog(@"MioPicker", @"[All] layout pass + inset 校正完成，时间戳 T3");
-    MioAllGeomSnapshot(vc, 3);
+    MioAllListSnap(vc, @"T4 after layoutIfNeeded");
+    // 已选面板刷新
     id selectView = nil;
     @try { selectView = [vc valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
     SEL ums = NSSelectorFromString(@"updateMultiSelectView");
@@ -642,6 +732,13 @@ static void mioAllAppearImp(id self, SEL _cmd, BOOL animated) {
     if ([vc respondsToSelector:upv]) {
         ((void (*)(id, SEL))objc_msgSend)(vc, upv);
     }
+    // T5：0.5s 后被动快照（用户什么都不做时的最终状态）
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        MioAllListSnap(vc, @"T5 +0.5s delay");
+        MioAllDumpSearchBar(vc, @"T5");
+        MioAllDumpTopBars(vc, @"T5");
+    });
 }
 
 static void mioAllInstallHooks(void) {
@@ -702,8 +799,22 @@ static void mioAllInstallHooks(void) {
         [picker setValue:@NO forKey:@"m_showsChatroomMembers"];
         [picker setValue:@NO forKey:@"m_showsChatroomFriendsOnly"];
         [picker setValue:title forKey:@"customTitle"];
-        [picker setValue:@YES forKey:@"m_recentForwardHidden"];   // 顶部"最近转发"条无业务意义，隐藏（设备 dump 自带开关 ivar）
     } @catch (NSException *e) {}
+
+    // [All-Inset] 验证 m_recentForwardHidden 读写有效性（KVC 块的 @catch 会吞异常，这里单独打）
+    id rfBefore = nil;
+    @try { rfBefore = [picker valueForKey:@"m_recentForwardHidden"]; } @catch (NSException *e) {
+        WPLog(@"MioPicker", @"[All-Inset] 读 m_recentForwardHidden 异常：%@", e);
+    }
+    WPLog(@"MioPicker", @"[All-Inset] m_recentForwardHidden 写前=%@", rfBefore ?: @"nil");
+    @try {
+        [picker setValue:@YES forKey:@"m_recentForwardHidden"];   // 顶部"最近转发"条无业务意义，隐藏（设备 dump 自带开关 ivar）
+        id rfAfter = nil;
+        @try { rfAfter = [picker valueForKey:@"m_recentForwardHidden"]; } @catch (NSException *e) {}
+        WPLog(@"MioPicker", @"[All-Inset] m_recentForwardHidden 写后=%@", rfAfter ?: @"nil");
+    } @catch (NSException *e) {
+        WPLog(@"MioPicker", @"[All-Inset] 写 m_recentForwardHidden 异常：%@", e);
+    }
 
     objc_setAssociatedObject(picker, kMioAllBridgeKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
@@ -727,17 +838,20 @@ static void mioAllInstallHooks(void) {
         } @catch (NSException *e) {}
     }
 
+    // [All-Inset] 时间点1：预载后（view 未进 window，列表可能已创建）
+    MioAllListSnap(picker, @"T0 preload后");
+
     UIViewController *top = from;
     while (top.presentedViewController) top = top.presentedViewController;
     Class navCls = objc_getClass("MMUINavigationController") ?: [UINavigationController class];
     UINavigationController *nav = [[navCls alloc] initWithRootViewController:picker];
     // 全屏 present：pageSheet 顶部会露出黑边（安全区不足），且下滑关闭不走取消 hook
     nav.modalPresentationStyle = UIModalPresentationFullScreen;
-    WPLog(@"MioPicker", @"[All] present 调用，时间戳 T0");
-    MioAllGeomSnapshot(picker, 0);
+    WPLog(@"MioPicker", @"[All-Inset] T0 present 调用前");
     [top presentViewController:nav animated:YES completion:^{
         // 补设 title；多选态进入与已选面板刷新由 viewDidAppear hook 承担（彼时几何已稳定）
         [picker setTitle:title ?: @""];
+        MioAllListSnap(picker, @"T0c completion");
     }];
 }
 
