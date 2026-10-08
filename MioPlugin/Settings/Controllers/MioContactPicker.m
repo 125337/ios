@@ -483,6 +483,39 @@ static void MioAllGeomSnapshot(UIViewController *vc, NSInteger tag) {
           vc.view.safeAreaInsets.top, vc.view.window ? @"有" : @"nil");
 }
 
+// 校正列表顶部预留空间：隐藏"最近转发"条只移除了视图，列表顶部 contentInset 仍按
+// "搜索栏+最近转发条"的旧值预留，首 cell 被导航栏裁掉、搜索栏被挤出首帧。
+// 首选微信内部重算方法（dump 236 行存在；useNewSearchBar=@YES 走 NewSearchBar 分支）；
+// 兜底：主视图树取最高的 UITableView，顶部 inset 手动设为安全区顶部（只保留导航栏高度）
+static void MioAllFixListTopInset(UIViewController *vc) {
+    SEL resetSel = NSSelectorFromString(@"resetSelectViewContentInsetInNewSearchBar");
+    if ([vc respondsToSelector:resetSel]) {
+        ((void (*)(id, SEL))objc_msgSend)(vc, resetSel);
+        WPLog(@"MioPicker", @"[All] inset 校正：已调用内部 resetSelectViewContentInsetInNewSearchBar");
+        return;
+    }
+    UITableView *table = nil;
+    NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
+    while (stack.count > 0) {
+        UIView *v = stack.lastObject;
+        [stack removeLastObject];
+        if ([v isKindOfClass:[UITableView class]]) {
+            if (!table || v.bounds.size.height > table.bounds.size.height) table = (UITableView *)v;
+        } else {
+            for (UIView *sub in v.subviews) [stack addObject:sub];
+        }
+    }
+    if (table) {
+        UIEdgeInsets inset = table.contentInset;
+        inset.top = vc.view.safeAreaInsets.top;
+        table.contentInset = inset;
+        WPLog(@"MioPicker", @"[All] inset 校正兜底：table 顶部 inset=%.1f（safeTop=%.1f）",
+              inset.top, vc.view.safeAreaInsets.top);
+    } else {
+        WPLog(@"MioPicker", @"[All] inset 校正：视图树未找到 UITableView");
+    }
+}
+
 // 字典值 → wxid：NSString 直取 / contact 对象取 m_nsUsrName / KVC 兜底，再退回 key
 static NSString *MioAllWxidOf(id value, id key) {
     NSString *wxid = nil;
@@ -573,7 +606,8 @@ static void mioAllPopDismissImp(id self, SEL _cmd) {
     }
 }
 
-// viewDidAppear（view 已进 window、present 动画结束、几何稳定）后才进多选态并刷新已选面板：
+// viewDidAppear（view 已进 window、present 动画结束、几何稳定）后按序执行：
+// 进多选态 → 隐藏"最近转发"条 → 完整 layout pass → 校正列表顶部 inset → 刷新已选面板。
 // present 前 beginMultiSelect 会让微信按未布局几何（bounds=0）算"最近转发"条等 frame，
 // 呈现压扁态且需手动触发 layout 才恢复。一次性标志防 viewDidAppear 多次触发重复刷新
 static void mioAllAppearImp(id self, SEL _cmd, BOOL animated) {
@@ -590,6 +624,14 @@ static void mioAllAppearImp(id self, SEL _cmd, BOOL animated) {
     }
     WPLog(@"MioPicker", @"[All] beginMultiSelect 执行完成，时间戳 T2");
     MioAllGeomSnapshot(vc, 2);
+    // 多选态进入后再断言隐藏"最近转发"条（多选自身可能调整顶部布局）
+    @try { [vc setValue:@YES forKey:@"m_recentForwardHidden"]; } @catch (NSException *e) {}
+    // 布局收尾：完整 layout pass 重算所有手写 frame 的子视图，再校正列表顶部预留空间
+    [vc.view setNeedsLayout];
+    [vc.view layoutIfNeeded];
+    MioAllFixListTopInset(vc);
+    WPLog(@"MioPicker", @"[All] layout pass + inset 校正完成，时间戳 T3");
+    MioAllGeomSnapshot(vc, 3);
     id selectView = nil;
     @try { selectView = [vc valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
     SEL ums = NSSelectorFromString(@"updateMultiSelectView");
