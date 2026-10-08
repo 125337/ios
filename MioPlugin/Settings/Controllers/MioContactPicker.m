@@ -367,8 +367,9 @@ static void MioMultiEnableDoneButtons(UIView *view, NSUInteger count) {
     }
 }
 
-static void MioMultiRefreshRightButton(UIViewController *picker) {
+static void MioMultiRefreshNow(UIViewController *picker) {
     NSUInteger count = MioMultiExtract(picker).count;
+    WPLog(@"Contacts", @"[DoneRefresh] count=%lu", (unsigned long)count);
     NSString *title = count > 0 ? [NSString stringWithFormat:@"完成(%lu)", (unsigned long)count] : @"完成";
     UIBarButtonItem *item = picker.navigationItem.rightBarButtonItem;
     if ([item isKindOfClass:[UIBarButtonItem class]]) {
@@ -376,6 +377,20 @@ static void MioMultiRefreshRightButton(UIViewController *picker) {
         [item setTitle:title];
     }
     if (picker.viewIfLoaded) MioMultiEnableDoneButtons(picker.viewIfLoaded, count);
+}
+
+static void MioMultiRefreshRightButton(UIViewController *picker) {
+    MioMultiRefreshNow(picker);
+    // 原生有延迟刷新路径（_bShouldDelayUpdatePanelBtnAndToolViewSelectedContacts），
+    // 可能在我们同步强显之后再把按钮禁用，补两轮延迟扫描（bridge 失效/已返回则跳过）
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        MioPickerMultiSelectAdapter *b = MioMultiBridge(picker);
+        if (b && !b.hasReturned) MioMultiRefreshNow(picker);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        MioPickerMultiSelectAdapter *b = MioMultiBridge(picker);
+        if (b && !b.hasReturned) MioMultiRefreshNow(picker);
+    });
 }
 
 static void mioMultiRightEnabledImp(id self, SEL _cmd, id arg1) {
@@ -393,6 +408,14 @@ static void mioMultiRightEnabledPageSheetImp(id self, SEL _cmd, id arg1) {
 static IMP gOrigMultiLayout = NULL;
 static void mioMultiLayoutImp(id self, SEL _cmd) {
     if (gOrigMultiLayout) ((void (*)(id, SEL))gOrigMultiLayout)(self, _cmd);
+    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
+    if (bridge && !bridge.hasReturned) MioMultiRefreshRightButton(self);
+}
+
+// pageSheet 右按钮更新（0 参）：原生 pageSheet 刷"完成"的主路径，0 选中时也走这里
+static IMP gOrigMultiUpdateRightPageSheet = NULL;
+static void mioMultiUpdateRightPageSheetImp(id self, SEL _cmd) {
+    if (gOrigMultiUpdateRightPageSheet) ((void (*)(id, SEL))gOrigMultiUpdateRightPageSheet)(self, _cmd);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
     if (bridge && !bridge.hasReturned) MioMultiRefreshRightButton(self);
 }
@@ -431,6 +454,9 @@ static void mioMultiInstallHooks(void) {
         // viewDidLayoutSubviews：首帧强显一次（update*Enabled 依赖原生主动调用，首帧未必触发）
         Method m3 = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
         if (m3) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioMultiLayoutImp, &gOrigMultiLayout); }
+        SEL s3 = NSSelectorFromString(@"updateMultiSelectRightBarItemInPageSheetModeIfNeeded");
+        Method m6 = class_getInstanceMethod(cls, s3);
+        if (m6) { MSHookMessageEx(cls, s3, (IMP)mioMultiUpdateRightPageSheetImp, &gOrigMultiUpdateRightPageSheet); }
         SEL s4 = NSSelectorFromString(@"onDone:");
         Method m4 = class_getInstanceMethod(cls, s4);
         if (m4) { MSHookMessageEx(cls, s4, (IMP)mioMultiDoneImp, &gOrigMultiDone); }
