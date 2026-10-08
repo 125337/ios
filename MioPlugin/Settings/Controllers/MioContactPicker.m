@@ -13,7 +13,8 @@
 //     字段清单以设备 8.0.60 class dump 为准（ivar + setter 逐一实证存在；
 //     头文件里的 m_bContainOpenIM / setM_bShowOpenIMContactGroup: 设备上不存在，勿用）。
 //     预选 = present 前注入 m_dicMultiSelect（原生 initData 读该字典渲染勾选）；
-//     结果 = m_delegate 回调（onMultiSelectContactReturn 系列原生协议方法）；零 hook。
+//     结果 = m_delegate 回调（onMultiSelectContactReturn 系列原生协议方法）；
+//     完成按钮强显 = hook updateRightBarItemEnabled:（bridge 校验隔离原生"发起群聊"）。
 
 // 仅声明编译所需符号（运行时统一 objc_getClass 取微信真类，绝不以类名直接实例化）
 @interface MultiSelectChatRoomHalfScreenViewController : UIViewController
@@ -262,13 +263,17 @@ static void mioGroupsInstallHooks(void) {
 
 @end
 
-#pragma mark - 适配器 2：只选人（MultiSelectContactsViewController，零 hook）
+#pragma mark - 适配器 2：只选人（MultiSelectContactsViewController，完成按钮强显 hook）
 
 static void *kMioMultiBridgeKey = &kMioMultiBridgeKey;
+static IMP gOrigMultiRightEnabled = NULL;
+static IMP gOrigMultiRightEnabledPageSheet = NULL;
+
+static void mioMultiInstallHooks(void);
 
 @interface MioPickerMultiSelectAdapter : MioPickerAdapterBase <UIAdaptivePresentationControllerDelegate>
 @property (strong, nonatomic) UIViewController *picker;
-@property (copy, nonatomic) NSString *logTag;   // [Contacts] / [All]
+@property (copy, nonatomic) NSString *logTag;   // [Contacts]
 @end
 
 @implementation MioPickerMultiSelectAdapter
@@ -316,6 +321,49 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
         }
     }
     return [ids copy];
+}
+
+static MioPickerMultiSelectAdapter *MioMultiBridge(id self) {
+    id bridge = objc_getAssociatedObject(self, kMioMultiBridgeKey);
+    return [bridge isKindOfClass:[MioPickerMultiSelectAdapter class]] ? bridge : nil;
+}
+
+// 完成按钮强显（仿 Groups）：原生无选中禁用"完成"，管理联系人需允许清空（0 个也点，回空数组）
+// 右按钮是 UIBarButtonItem（dump：createInitRightBarItem 创建，updateRightBarItemEnabled: 刷 enabled）
+static void MioMultiRefreshRightButton(UIViewController *picker) {
+    UIBarButtonItem *item = picker.navigationItem.rightBarButtonItem;
+    if (![item isKindOfClass:[UIBarButtonItem class]]) return;
+    NSUInteger count = MioMultiExtract(picker).count;
+    NSString *title = count > 0 ? [NSString stringWithFormat:@"完成(%lu)", (unsigned long)count] : @"完成";
+    [item setEnabled:YES];
+    [item setTitle:title];
+}
+
+static void mioMultiRightEnabledImp(id self, SEL _cmd, id arg1) {
+    if (gOrigMultiRightEnabled) ((void (*)(id, SEL, id))gOrigMultiRightEnabled)(self, _cmd, arg1);
+    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
+    if (bridge && !bridge.hasReturned) MioMultiRefreshRightButton(self);
+}
+
+static void mioMultiRightEnabledPageSheetImp(id self, SEL _cmd, id arg1) {
+    if (gOrigMultiRightEnabledPageSheet) ((void (*)(id, SEL, id))gOrigMultiRightEnabledPageSheet)(self, _cmd, arg1);
+    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
+    if (bridge && !bridge.hasReturned) MioMultiRefreshRightButton(self);
+}
+
+// hook 安装：bridge 校验保证微信原生"发起群聊"（同用此类）不受影响（无 bridge 走原逻辑）
+static void mioMultiInstallHooks(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class cls = objc_getClass("MultiSelectContactsViewController");
+        if (!cls) return;
+        SEL s1 = NSSelectorFromString(@"updateRightBarItemEnabled:");
+        Method m1 = class_getInstanceMethod(cls, s1);
+        if (m1) { MSHookMessageEx(cls, s1, (IMP)mioMultiRightEnabledImp, &gOrigMultiRightEnabled); }
+        SEL s2 = NSSelectorFromString(@"updateRightBarItemEnabledInPageSheetModeIfNeeded:");
+        Method m2 = class_getInstanceMethod(cls, s2);
+        if (m2) { MSHookMessageEx(cls, s2, (IMP)mioMultiRightEnabledPageSheetImp, &gOrigMultiRightEnabledPageSheet); }
+    });
 }
 
 - (void)dismissPicker {
@@ -388,6 +436,8 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
         [self notifyCancel];
         return;
     }
+    mioMultiInstallHooks();
+
     UIViewController *picker = [[cls alloc] init];
     if (!picker) { [self notifyCancel]; return; }
     self.picker = picker;
