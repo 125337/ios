@@ -546,12 +546,17 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 }
 
 - (void)onManageContactsTap {
-    // 都选模式（SessionSelectController，好友+群聊），已选名单回显勾选，完成后按选择顺序保存
-    [MioContactPicker presentPickerWithMode:MioContactPickerModeAll
-                                      title:@"管理联系人"
-                                preselected:[HomeCardConfig savedContacts]
-                                   delegate:self
-                                       from:self];
+    // 弹窗选类型：联系人 / 群聊（原 All 模式 SessionSelectController 布局有问题，已移除）
+    [MioAlertHelper showMenuAlert:@"管理联系人" buttons:@[@"联系人", @"群聊"] onButton:^(NSInteger index) {
+        // 取消不回调，index 恒 0/1；已选名单回显，完成后按选择顺序保存
+        MioContactPickerMode mode = (index == 1) ? MioContactPickerModeGroups : MioContactPickerModeContacts;
+        NSString *title = (index == 1) ? @"管理群聊" : @"管理联系人";
+        [MioContactPicker presentPickerWithMode:mode
+                                          title:title
+                                    preselected:[HomeCardConfig savedContacts]
+                                       delegate:self
+                                           from:self];
+    }];
 }
 
 #pragma mark - MioContactPickerDelegate
