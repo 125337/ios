@@ -16,7 +16,10 @@
 //     结果 = m_delegate 回调（onMultiSelectContactReturn 系列原生协议方法）；
 //     完成按钮强显 = WCR 配方（FUN_01b39918）：m_panelBtnItem / rightBarItem（含 customView）/
 //       m_toolView.completeButton，UIControl 三件套齐上（不主动调 updateRightBarItemEnabled:，实证必崩）；
-//     完成动作 = hook onDone:/onDoneInPageSheetMode: 直接收尾（均 bridge 校验隔离原生"发起群聊"）。
+//     完成动作 = hook onDone:/onDoneInPageSheetMode: 直接收尾（均 bridge 校验隔离原生"发起群聊"）；
+//     完成按钮刷新路径 = updatePanelBtn（WCR FUN_01b39f6c 实证，8.0.60 真机原生每次勾选变化走这里；
+//       旧 dump 头文件的 updateRightBarItemEnabled: 系列真机上从不被调用），hook 后对 bridge 内
+//       picker 跑强显配方；另挂 FixTitleColorButton setEnabled:/setAlpha: 拦截兜底
 
 // 仅声明编译所需符号（运行时统一 objc_getClass 取微信真类，绝不以类名直接实例化）
 @interface MultiSelectChatRoomHalfScreenViewController : UIViewController
@@ -447,6 +450,20 @@ static void MioMultiRefreshRightButton(UIViewController *picker) {
     });
 }
 
+// ===== 真正的刷新路径（WCR FUN_01b39f6c/01b39ffc 同款）：hook updatePanelBtn =====
+// 8.0.60 原生每次勾选变化后刷新完成按钮走的是 updatePanelBtn（旧 dump 头文件里的
+// updateRightBarItemEnabled: 系列在真机上从不被调用，log55 实证 [M-Hook] 零命中）。
+// WCR 做法 = 调原实现后对挂了 bridge 的 picker 跑一遍强显配方，此处同款
+static IMP gOrigMultiUpdatePanelBtn = NULL;
+static void mioMultiUpdatePanelBtnImp(id self, SEL _cmd) {
+    if (gOrigMultiUpdatePanelBtn) ((void (*)(id, SEL))gOrigMultiUpdatePanelBtn)(self, _cmd);
+    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
+    if (bridge && !bridge.hasReturned) {
+        WPLog(@"Contacts", @"[M-Hook] updatePanelBtn");
+        MioMultiApplySurfaces(self);   // 只补强显，无主动 update，不会成环
+    }
+}
+
 static void mioMultiRightEnabledImp(id self, SEL _cmd, id arg1) {
     if (gOrigMultiRightEnabled) ((void (*)(id, SEL, id))gOrigMultiRightEnabled)(self, _cmd, arg1);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
@@ -568,6 +585,10 @@ static void mioMultiInstallHooks(void) {
     dispatch_once(&onceToken, ^{
         Class cls = objc_getClass("MultiSelectContactsViewController");
         if (!cls) return;
+        // 核心路径（WCR FUN_01b39f6c 同款）：8.0.60 原生刷新完成按钮走 updatePanelBtn
+        SEL s0 = NSSelectorFromString(@"updatePanelBtn");
+        Method m0 = class_getInstanceMethod(cls, s0);
+        if (m0) { MSHookMessageEx(cls, s0, (IMP)mioMultiUpdatePanelBtnImp, &gOrigMultiUpdatePanelBtn); }
         SEL s1 = NSSelectorFromString(@"updateRightBarItemEnabled:");
         Method m1 = class_getInstanceMethod(cls, s1);
         if (m1) { MSHookMessageEx(cls, s1, (IMP)mioMultiRightEnabledImp, &gOrigMultiRightEnabled); }
@@ -582,12 +603,12 @@ static void mioMultiInstallHooks(void) {
         if (m3) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioMultiLayoutImp, &gOrigMultiLayout); }
         // 根治层：完成按钮自身的 setEnabled:/setAlpha:（拦截所有路径的置灰）
         Class fcls = objc_getClass("FixTitleColorButton");
-        if (fcls) {
-            Method fe = class_getInstanceMethod(fcls, @selector(setEnabled:));
-            if (fe) { MSHookMessageEx(fcls, @selector(setEnabled:), (IMP)mioFixBtnSetEnabledImp, &gOrigFixBtnSetEnabled); }
-            Method fa = class_getInstanceMethod(fcls, @selector(setAlpha:));
-            if (fa) { MSHookMessageEx(fcls, @selector(setAlpha:), (IMP)mioFixBtnSetAlphaImp, &gOrigFixBtnSetAlpha); }
-        }
+        Method fe = fcls ? class_getInstanceMethod(fcls, @selector(setEnabled:)) : NULL;
+        Method fa = fcls ? class_getInstanceMethod(fcls, @selector(setAlpha:)) : NULL;
+        if (fe) { MSHookMessageEx(fcls, @selector(setEnabled:), (IMP)mioFixBtnSetEnabledImp, &gOrigFixBtnSetEnabled); }
+        if (fa) { MSHookMessageEx(fcls, @selector(setAlpha:), (IMP)mioFixBtnSetAlphaImp, &gOrigFixBtnSetAlpha); }
+        WPLog(@"Contacts", @"[M-Hook] install panelBtn=%d rightEnabled=%d pageSheetEnabled=%d updatePageSheet=%d layout=%d fixEnabled=%d fixAlpha=%d",
+              m0 != NULL, m1 != NULL, m2 != NULL, m6 != NULL, m3 != NULL, fe != NULL, fa != NULL);
         SEL s4 = NSSelectorFromString(@"onDone:");
         Method m4 = class_getInstanceMethod(cls, s4);
         if (m4) { MSHookMessageEx(cls, s4, (IMP)mioMultiDoneImp, &gOrigMultiDone); }
