@@ -15,7 +15,7 @@
 //     预选 = present 前注入 m_dicMultiSelect（原生 initData 读该字典渲染勾选）；
 //     结果 = m_delegate 回调（onMultiSelectContactReturn 系列原生协议方法）；
 //     完成按钮强显 = WCR 配方（FUN_01b39918）：m_panelBtnItem / rightBarItem（含 customView）/
-//       主动 updateRightBarItemEnabled:YES / m_toolView.completeButton，UIControl 三件套齐上；
+//       m_toolView.completeButton，UIControl 三件套齐上（不主动调 updateRightBarItemEnabled:，实证必崩）；
 //     完成动作 = hook onDone:/onDoneInPageSheetMode: 直接收尾（均 bridge 校验隔离原生"发起群聊"）。
 
 // 仅声明编译所需符号（运行时统一 objc_getClass 取微信真类，绝不以类名直接实例化）
@@ -333,8 +333,9 @@ static MioPickerMultiSelectAdapter *MioMultiBridge(id self) {
 
 // 完成按钮强显（WCR FUN_01b39918/01b3a0ac 同款配方）：
 // 原生置灰 = enabled=NO + alpha 压低 + 关触摸，只 setEnabled 不够，UIControl 要三件套齐上。
-// 四路强显：m_panelBtnItem / navigationItem.rightBarButtonItem（含 customView 子树）/
-// 主动调 updateRightBarItemEnabled:YES（让原生自己刷）/ m_toolView.completeButton（pageSheet 底部按钮）
+// 三路强显：m_panelBtnItem / navigationItem.rightBarButtonItem（含 customView 子树）/
+// m_toolView.completeButton（pageSheet 底部按钮，实证命中 FixTitleColorButton）。
+// 注意不要主动调 updateRightBarItemEnabled:YES——log54 实证该调用在 present 后状态必崩
 
 // WCR FUN_01b3a0ac 同款：子树内所有 UIControl 三件套强显（enabled/alpha/userInteractionEnabled）
 static void MioMultiEnableControls(UIView *view) {
@@ -394,10 +395,10 @@ static void MioMultiApplySurfaces(UIViewController *picker) {
     }
 }
 
-// 全量刷新（present 后调度 / 250ms 补刷走这里）：主体强显 + 主动调
-// updateRightBarItemEnabled:YES 让原生自刷。同一把 refreshing 锁防同步重入；
-// 注意：本函数绝不能从 viewDidLayoutSubviews hook 调——原生 update 若 setNeedsLayout
-// 会形成"每帧刷新"异步环（锁在下一帧已释放），layout hook 一律只调 ApplySurfaces
+// 全量刷新（present 后调度 / 250ms 补刷走这里）：只做四路强显。
+// 不主动调 updateRightBarItemEnabled:YES——实证（log54）该调用在 present 后状态下
+// 必崩在原生内部（日志停在 call begin）；WCR 在其自有时机调用不崩，时机/状态不同。
+// 选中数变化的原生刷新由 update*Enabled hook → ApplySurfaces 补强显兜住
 static void MioMultiRefreshNow(UIViewController *picker) {
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(picker);
     if (!bridge) return;
@@ -409,12 +410,6 @@ static void MioMultiRefreshNow(UIViewController *picker) {
     @try {
         WPLog(@"Contacts", @"[M-Refresh] enter count=%lu", (unsigned long)MioMultiExtract(picker).count);
         MioMultiApplySurfacesCore(picker);
-        SEL upd = NSSelectorFromString(@"updateRightBarItemEnabled:");
-        if ([picker respondsToSelector:upd]) {
-            WPLog(@"Contacts", @"[M-Refresh] call updateRightBarItemEnabled:YES begin");
-            ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, upd, YES);
-            WPLog(@"Contacts", @"[M-Refresh] call updateRightBarItemEnabled:YES done");
-        }
     } @finally {
         bridge.refreshing = NO;
     }
