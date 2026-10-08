@@ -605,15 +605,17 @@ static void mioAllPopDismissImp(id self, SEL _cmd) {
     }
 }
 
-// 首次 layout 且 view 已进 window（几何已正确、present 动画刚开始、用户尚未看清）时刷新多选 UI：
-// 跳变被消化在 present 动画里，首帧即正确布局。一次性标志防重复刷新（滚动/键盘/旋转不再触发）
+// layout 时几何已稳定才刷新多选 UI：进 window + 顶部安全区已算出（导航栏让位完成）+ bounds
+// 高度非零（动画 frame 已收敛）。present 动画中间态的 layout 一律放过，等稳定那次再刷，
+// 避免用错误几何锁死面板（头像条贴进导航栏、搜索栏被挤掉）。一次性标志防重复刷新
 static void mioAllLayoutImp(id self, SEL _cmd) {
     if (gOrigAllLayout) ((void (*)(id, SEL))gOrigAllLayout)(self, _cmd);
     MioPickerAllAdapter *bridge = MioAllBridge(self);
     if (!bridge || bridge.hasReturned || bridge.layoutFixed) return;
     UIViewController *vc = self;
-    if (!vc.view.window) {
-        WPLog(@"MioPicker", @"[All] layout 时未进 window，跳过");
+    if (!vc.view.window || vc.view.safeAreaInsets.top <= 0 || vc.view.bounds.size.height <= 0) {
+        WPLog(@"MioPicker", @"[All] layout 几何未稳定(window=%d safeTop=%.1f height=%.1f) → 跳过等下次",
+              vc.view.window ? 1 : 0, vc.view.safeAreaInsets.top, vc.view.bounds.size.height);
         return;
     }
     bridge.layoutFixed = YES;
@@ -627,7 +629,7 @@ static void mioAllLayoutImp(id self, SEL _cmd) {
     if (upvOk) ((void (*)(id, SEL))objc_msgSend)(vc, upv);
     [vc.view setNeedsLayout];
     [vc.view layoutIfNeeded];
-    WPLog(@"MioPicker", @"[All] 首次 layout(已进 window) → UI 刷新: updateMultiSelectView=%d updateMultiSelectPanelViewResultView=%d",
+    WPLog(@"MioPicker", @"[All] 几何稳定 layout → UI 刷新: updateMultiSelectView=%d updateMultiSelectPanelViewResultView=%d",
           umsOk ? 1 : 0, upvOk ? 1 : 0);
 }
 
@@ -655,9 +657,17 @@ static void mioAllInstallHooks(void) {
         Method m3 = class_getInstanceMethod(cls, popSel);
         if (m3) { MSHookMessageEx(cls, popSel, (IMP)mioAllPopDismissImp, &gOrigAllPopDismiss); }
         WPLog(@"MioPicker", @"[All] hook viewDidBePopedOrDismissed=%d", m3 ? 1 : 0);
-        // MSHookMessageEx：方法在父类时 hook 限定在本类，不污染 UIViewController 全局
-        Method m5 = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
-        if (m5) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioAllLayoutImp, &gOrigAllLayout); }
+        // viewDidLayoutSubviews：若为父类继承实现（cls 与父类取到同一 Method），先在本类挂
+        // 空实现再 hook，避免 method 改写落在 UIViewController 上污染全局
+        SEL layoutSel = @selector(viewDidLayoutSubviews);
+        Method m5 = class_getInstanceMethod(cls, layoutSel);
+        Method m5Super = class_getInstanceMethod(class_getSuperclass(cls), layoutSel);
+        if (m5 && m5 == m5Super) {
+            class_addMethod(cls, layoutSel, imp_implementationWithBlock(^(id _self){}),
+                            method_getTypeEncoding(m5));
+        }
+        m5 = class_getInstanceMethod(cls, layoutSel);
+        if (m5) { MSHookMessageEx(cls, layoutSel, (IMP)mioAllLayoutImp, &gOrigAllLayout); }
         WPLog(@"MioPicker", @"[All] hook viewDidLayoutSubviews=%d", m5 ? 1 : 0);
     });
 }
