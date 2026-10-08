@@ -610,6 +610,7 @@ static void mioAllInstallHooks(void) {
         [picker setValue:@NO forKey:@"m_showsChatroomMembers"];
         [picker setValue:@NO forKey:@"m_showsChatroomFriendsOnly"];
         [picker setValue:title forKey:@"customTitle"];
+        [picker setValue:@YES forKey:@"m_recentForwardHidden"];   // 顶部"最近转发"条无业务意义，隐藏（设备 dump 自带开关 ivar）
     } @catch (NSException *e) {}
 
     objc_setAssociatedObject(picker, kMioAllBridgeKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
