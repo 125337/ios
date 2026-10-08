@@ -70,20 +70,52 @@
     ];
 }
 
-#pragma mark - 管理联系人（NSUserDefaults 有序 userName 数组，XOS CadisSavedContacts 同构）
+#pragma mark - 管理联系人（人/群分区独立存：MioContactSaved 只存人，MioContactSavedGroups 只存群）
+
+// 按 @chatroom 后缀拆分区
+static NSArray<NSString *> *HCFilterPartition(NSArray *src, BOOL wantChatroom) {
+    if (![src isKindOfClass:[NSArray class]]) return @[];
+    NSMutableArray<NSString *> *out = [NSMutableArray array];
+    for (NSString *s in src) {
+        if (![s isKindOfClass:[NSString class]]) continue;
+        if ([s hasSuffix:@"@chatroom"] == wantChatroom) [out addObject:s];
+    }
+    return out;
+}
 
 + (NSArray<NSString *> *)savedContacts {
-    id v = [[NSUserDefaults standardUserDefaults] objectForKey:@"MioContactSaved"];
-    return [v isKindOfClass:[NSArray class]] ? v : @[];
+    return HCFilterPartition([[NSUserDefaults standardUserDefaults] objectForKey:@"MioContactSaved"], NO);
 }
 
 + (void)saveContacts:(NSArray<NSString *> *)userNames {
-    [[NSUserDefaults standardUserDefaults] setObject:userNames ?: @[] forKey:@"MioContactSaved"];
+    [[NSUserDefaults standardUserDefaults] setObject:HCFilterPartition(userNames, NO) forKey:@"MioContactSaved"];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
++ (NSArray<NSString *> *)savedGroups {
+    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+    id v = [ud objectForKey:@"MioContactSavedGroups"];
+    if ([v isKindOfClass:[NSArray class]]) return HCFilterPartition(v, YES);
+    // 旧数据迁移：MioContactSaved 曾人群混存，首次读取把 @chatroom 摘到群分区
+    NSArray *legacy = HCFilterPartition([ud objectForKey:@"MioContactSaved"], YES);
+    if (legacy.count) {
+        [ud setObject:legacy forKey:@"MioContactSavedGroups"];
+        [ud synchronize];
+    }
+    return legacy;
+}
+
++ (void)saveGroups:(NSArray<NSString *> *)groupIds {
+    [[NSUserDefaults standardUserDefaults] setObject:HCFilterPartition(groupIds, YES) forKey:@"MioContactSavedGroups"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
++ (NSArray<NSString *> *)savedAll {
+    return [[self savedContacts] arrayByAddingObjectsFromArray:[self savedGroups]];
+}
+
 + (NSString *)savedContactsFingerprint {
-    NSArray *saved = [self savedContacts];
+    NSArray *saved = [self savedAll];
     return [NSString stringWithFormat:@"%lu|%@", (unsigned long)saved.count,
             [saved componentsJoinedByString:@","]];
 }

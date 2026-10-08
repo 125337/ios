@@ -229,9 +229,9 @@ static CGFloat HCHeaderExtra(HomeCardConfig *cfg) {
 
 #pragma mark - 联系人挂件（XOS FUN_00151594 联系人段 + cadis_contactTapped 同构）
 
-// 联系人开且已保存联系人（XOS：保存列表为空不渲染容器）
+// 联系人开且已保存联系人/群（XOS：保存列表为空不渲染容器）
 static BOOL HCContactOn(HomeCardConfig *cfg) {
-    return cfg.hcContactEnabled && [HomeCardConfig savedContacts].count > 0;
+    return cfg.hcContactEnabled && [HomeCardConfig savedAll].count > 0;
 }
 
 // 联系人总高（XOS FUN_00159d3c：HideNick ? 60 : 80，+ BgHeight）
@@ -293,7 +293,7 @@ static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
 // 联系人挂件容器（XOS 渲染段 L22819-23285 同构：内衬圆角12底板 + 分页横向滚动 +
 // 每页 maxVisible 个头像水平居中 + 装饰在线圆点 + 昵称 + 点按跳聊天；无保存联系人返回 nil）
 static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *cfg) {
-    NSArray<NSString *> *saved = [HomeCardConfig savedContacts];
+    NSArray<NSString *> *saved = [HomeCardConfig savedAll];   // 人 + 群合并（人在前）
     if (!saved.count) return nil;
 
     CGFloat H = HCContactHeight(cfg);

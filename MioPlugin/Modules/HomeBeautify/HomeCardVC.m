@@ -16,6 +16,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 
 @interface HomeCardVC () <PHPickerViewControllerDelegate, MioContactPickerDelegate>
 @property (nonatomic, assign) HomeCardPickerTarget pickerTarget;
+@property (nonatomic, assign) MioContactPickerMode contactPickerMode;   // 当前打开的选人器类型（完成后分区保存）
 @end
 
 @implementation HomeCardVC
@@ -510,11 +511,12 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
     cy = [self addSeparatorInGroup:g6 cy:cy width:w];
 
     // 管理联系人（多选+顺序保存，返回后刷新行文案）
-    NSUInteger savedCount = [HomeCardConfig savedContacts].count;
+    NSUInteger people = [HomeCardConfig savedContacts].count;
+    NSUInteger rooms = [HomeCardConfig savedGroups].count;
     cy = [self addNavRowInGroup:g6
                           title:@"管理联系人"
-                       subtitle:(savedCount > 0
-                                 ? [NSString stringWithFormat:@"已选 %lu 位（按选择顺序）", (unsigned long)savedCount]
+                       subtitle:(people + rooms > 0
+                                 ? [NSString stringWithFormat:@"已选 %lu 人 / %lu 群", (unsigned long)people, (unsigned long)rooms]
                                  : @"未选择（未选择时不显示挂件）")
                             tag:0
                          action:@selector(onManageContactsTap)
@@ -548,12 +550,15 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 - (void)onManageContactsTap {
     // 弹窗选类型：联系人 / 群聊（原 All 模式 SessionSelectController 布局有问题，已移除）
     [MioAlertHelper showMenuAlert:@"管理联系人" buttons:@[@"联系人", @"群聊"] onButton:^(NSInteger index) {
-        // 取消不回调，index 恒 0/1；已选名单回显，完成后按选择顺序保存
+        // 取消不回调，index 恒 0/1；两类分区独立存互不覆盖，回显只给对应分区
         MioContactPickerMode mode = (index == 1) ? MioContactPickerModeGroups : MioContactPickerModeContacts;
+        self.contactPickerMode = mode;
         NSString *title = (index == 1) ? @"管理群聊" : @"管理联系人";
+        NSArray<NSString *> *pre = (mode == MioContactPickerModeGroups)
+            ? [HomeCardConfig savedGroups] : [HomeCardConfig savedContacts];
         [MioContactPicker presentPickerWithMode:mode
                                           title:title
-                                    preselected:[HomeCardConfig savedContacts]
+                                    preselected:pre
                                        delegate:self
                                            from:self];
     }];
@@ -562,7 +567,9 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 #pragma mark - MioContactPickerDelegate
 
 - (void)pickerDidFinish:(NSArray<NSString *> *)wxids {
-    [HomeCardConfig saveContacts:wxids];   // 选择顺序 = 展示顺序
+    // 按本次打开的类型分区保存，互不覆盖（选择顺序 = 展示顺序）
+    if (self.contactPickerMode == MioContactPickerModeGroups) [HomeCardConfig saveGroups:wxids];
+    else [HomeCardConfig saveContacts:wxids];
     // 当场刷新"管理联系人"行文案（表格重建 + 内容重建，与 onDotPosTap 同款，只 buildUI 行文案不动）
     dispatch_async(dispatch_get_main_queue(), ^{
         [self wpRebuildWeChatTable];

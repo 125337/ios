@@ -61,10 +61,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL      hcContactFullScreen;     // 全屏显示聊天（关 = 半屏 page sheet）
 @property (nonatomic, assign) CGFloat   hcContactBgHeight;       // 背景高度（默认 0，总高 = 基础60/80 + 值，CadisContactBgHeight）
 
-// 管理联系人持久化（userName 有序数组 = 展示顺序，存 NSUserDefaults，XOS CadisSavedContacts 同构）
-+ (NSArray<NSString *> *)savedContacts;
-+ (void)saveContacts:(NSArray<NSString *> *)userNames;
-+ (NSString *)savedContactsFingerprint;   // 保存列表指纹（HCGeoKey 用，变更触发重建）
+// 管理联系人持久化（人与群分区独立存，互不覆盖；各自有序 = 展示顺序，存 NSUserDefaults）
++ (NSArray<NSString *> *)savedContacts;                  // 人分区（wxid 不含 @chatroom）
++ (void)saveContacts:(NSArray<NSString *> *)userNames;   // 只覆盖人分区，群分区不动
++ (NSArray<NSString *> *)savedGroups;                    // 群分区（wxid 以 @chatroom 结尾）
++ (void)saveGroups:(NSArray<NSString *> *)groupIds;      // 只覆盖群分区，人分区不动
++ (NSArray<NSString *> *)savedAll;                       // 人 + 群合并（人在前，挂件渲染用）
++ (NSString *)savedContactsFingerprint;                  // 保存列表指纹（HCGeoKey 用，变更触发重建）
 
 // 卡片图片（磁盘文件，浅/深色各一张，与卡片背景图的 MioCardBackground 目录相互独立）
 + (NSString *)imageDirectory;

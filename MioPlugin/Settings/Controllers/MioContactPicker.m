@@ -14,7 +14,8 @@
 //     头文件里的 m_bContainOpenIM / setM_bShowOpenIMContactGroup: 设备上不存在，勿用）。
 //     预选 = present 前注入 m_dicMultiSelect（原生 initData 读该字典渲染勾选）；
 //     结果 = m_delegate 回调（onMultiSelectContactReturn 系列原生协议方法）；
-//     完成按钮强显 = hook updateRightBarItemEnabled:（bridge 校验隔离原生"发起群聊"）。
+//     完成按钮强显 = hook updateRightBarItemEnabled: 系 + viewDidLayoutSubviews（递归强显视图树"完成"按钮）；
+//     完成动作 = hook onDone:/onDoneInPageSheetMode: 直接收尾（均 bridge 校验隔离原生"发起群聊"）。
 
 // 仅声明编译所需符号（运行时统一 objc_getClass 取微信真类，绝不以类名直接实例化）
 @interface MultiSelectChatRoomHalfScreenViewController : UIViewController
@@ -329,14 +330,35 @@ static MioPickerMultiSelectAdapter *MioMultiBridge(id self) {
 }
 
 // 完成按钮强显（仿 Groups）：原生无选中禁用"完成"，管理联系人需允许清空（0 个也点，回空数组）
-// 右按钮是 UIBarButtonItem（dump：createInitRightBarItem 创建，updateRightBarItemEnabled: 刷 enabled）
+// 两条路都刷：非 pageSheet = navigationItem 右侧 UIBarButtonItem；
+// pageSheet = 页面右下角的"完成" UIButton（截图实证不在 navigationItem），递归视图树强显
+static void MioMultiEnableDoneButtons(UIView *view, NSUInteger count) {
+    for (UIView *sub in view.subviews) {
+        if ([sub isKindOfClass:[UIButton class]]) {
+            UIButton *btn = (UIButton *)sub;
+            NSString *cur = [btn titleForState:UIControlStateNormal];
+            if ([cur isKindOfClass:[NSString class]] && [cur containsString:@"完成"]) {
+                NSString *title = count > 0 ? [NSString stringWithFormat:@"完成(%lu)", (unsigned long)count] : @"完成";
+                [btn setEnabled:YES];
+                [btn setTitle:title forState:UIControlStateNormal];
+                [btn setTitle:title forState:UIControlStateHighlighted];
+                [btn setTitle:title forState:UIControlStateDisabled];
+                [btn setTitle:title forState:UIControlStateSelected];
+            }
+        }
+        MioMultiEnableDoneButtons(sub, count);
+    }
+}
+
 static void MioMultiRefreshRightButton(UIViewController *picker) {
-    UIBarButtonItem *item = picker.navigationItem.rightBarButtonItem;
-    if (![item isKindOfClass:[UIBarButtonItem class]]) return;
     NSUInteger count = MioMultiExtract(picker).count;
     NSString *title = count > 0 ? [NSString stringWithFormat:@"完成(%lu)", (unsigned long)count] : @"完成";
-    [item setEnabled:YES];
-    [item setTitle:title];
+    UIBarButtonItem *item = picker.navigationItem.rightBarButtonItem;
+    if ([item isKindOfClass:[UIBarButtonItem class]]) {
+        [item setEnabled:YES];
+        [item setTitle:title];
+    }
+    if (picker.viewIfLoaded) MioMultiEnableDoneButtons(picker.viewIfLoaded, count);
 }
 
 static void mioMultiRightEnabledImp(id self, SEL _cmd, id arg1) {
@@ -351,6 +373,32 @@ static void mioMultiRightEnabledPageSheetImp(id self, SEL _cmd, id arg1) {
     if (bridge && !bridge.hasReturned) MioMultiRefreshRightButton(self);
 }
 
+static IMP gOrigMultiLayout = NULL;
+static void mioMultiLayoutImp(id self, SEL _cmd) {
+    if (gOrigMultiLayout) ((void (*)(id, SEL))gOrigMultiLayout)(self, _cmd);
+    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
+    if (bridge && !bridge.hasReturned) MioMultiRefreshRightButton(self);
+}
+
+// 完成动作（pageSheet 底部按钮 → onDoneInPageSheetMode:，非 pageSheet → onDone:）：
+// bridge 内直接取名单收尾，绕过原生（原生对 0 个选中可能直接吞掉，清空名单就没法点）
+static IMP gOrigMultiDone = NULL;
+static IMP gOrigMultiDonePageSheet = NULL;
+static void mioMultiFinish(id self, MioPickerMultiSelectAdapter *bridge) {
+    [(UIViewController *)self dismissViewControllerAnimated:YES completion:nil];
+    [bridge finishWithWxids:MioMultiExtract(self)];
+}
+static void mioMultiDoneImp(id self, SEL _cmd, id sender) {
+    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
+    if (bridge && !bridge.hasReturned) { mioMultiFinish(self, bridge); return; }
+    if (gOrigMultiDone) ((void (*)(id, SEL, id))gOrigMultiDone)(self, _cmd, sender);
+}
+static void mioMultiDonePageSheetImp(id self, SEL _cmd, id sender) {
+    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
+    if (bridge && !bridge.hasReturned) { mioMultiFinish(self, bridge); return; }
+    if (gOrigMultiDonePageSheet) ((void (*)(id, SEL, id))gOrigMultiDonePageSheet)(self, _cmd, sender);
+}
+
 // hook 安装：bridge 校验保证微信原生"发起群聊"（同用此类）不受影响（无 bridge 走原逻辑）
 static void mioMultiInstallHooks(void) {
     static dispatch_once_t onceToken;
@@ -363,6 +411,15 @@ static void mioMultiInstallHooks(void) {
         SEL s2 = NSSelectorFromString(@"updateRightBarItemEnabledInPageSheetModeIfNeeded:");
         Method m2 = class_getInstanceMethod(cls, s2);
         if (m2) { MSHookMessageEx(cls, s2, (IMP)mioMultiRightEnabledPageSheetImp, &gOrigMultiRightEnabledPageSheet); }
+        // viewDidLayoutSubviews：首帧强显一次（update*Enabled 依赖原生主动调用，首帧未必触发）
+        Method m3 = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
+        if (m3) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioMultiLayoutImp, &gOrigMultiLayout); }
+        SEL s4 = NSSelectorFromString(@"onDone:");
+        Method m4 = class_getInstanceMethod(cls, s4);
+        if (m4) { MSHookMessageEx(cls, s4, (IMP)mioMultiDoneImp, &gOrigMultiDone); }
+        SEL s5 = NSSelectorFromString(@"onDoneInPageSheetMode:");
+        Method m5 = class_getInstanceMethod(cls, s5);
+        if (m5) { MSHookMessageEx(cls, s5, (IMP)mioMultiDonePageSheetImp, &gOrigMultiDonePageSheet); }
     });
 }
 
