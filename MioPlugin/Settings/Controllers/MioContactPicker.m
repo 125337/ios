@@ -4,6 +4,7 @@
 #import <objc/message.h>
 #import <substrate.h>
 #import "../Core/ServiceHelper.h"
+#import "../Core/LogManager.h"
 
 // ===== 统一选人入口（MioContactPicker.h 注释为架构总览）=====
 // 三个适配器的机制来源：
@@ -53,6 +54,7 @@
     if (self.hasReturned) return;
     self.hasReturned = YES;
     void (^fire)(void) = ^{
+        WPLog(@"MioPicker", @"finish(%@): %lu 个 %@", NSStringFromClass([self class]), (unsigned long)wxids.count, wxids);
         if ([self.delegate respondsToSelector:@selector(pickerDidFinish:)]) {
             [self.delegate pickerDidFinish:wxids ?: @[]];
         }
@@ -66,6 +68,7 @@
     if (self.hasReturned) return;
     self.hasReturned = YES;
     void (^fire)(void) = ^{
+        WPLog(@"MioPicker", @"cancel(%@)", NSStringFromClass([self class]));
         if ([self.delegate respondsToSelector:@selector(pickerDidCancel)]) {
             [self.delegate pickerDidCancel];
         }
@@ -154,8 +157,10 @@ static void MioGroupsRefreshRightButton(id picker) {
 
 static void mioGroupsDoneImp(id self, SEL _cmd) {
     MioPickerGroupsAdapter *bridge = MioGroupsBridge(self);
+    WPLog(@"MioPicker", @"[Groups] onClickMakeSureButton: bridge=%@", bridge ? @"命中" : @"未命中");
     if (bridge && !bridge.hasReturned) {
         NSArray<NSString *> *result = MioGroupsExtract(self);
+        WPLog(@"MioPicker", @"[Groups] 提取 %lu 个 %@", (unsigned long)result.count, result);
         SEL closeSel = NSSelectorFromString(@"doClickCloseWithNeedAnimated:action:");
         if ([self respondsToSelector:closeSel]) {
             ((void (*)(id, SEL, BOOL, long long))objc_msgSend)(self, closeSel, YES, 1);
@@ -190,7 +195,10 @@ static void mioGroupsInstallHooks(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         Class cls = objc_getClass("MultiSelectChatRoomHalfScreenViewController");
-        if (!cls) return;
+        if (!cls) {
+            WPLog(@"MioPicker", @"[Groups] MultiSelectChatRoomHalfScreenViewController 类不存在!");
+            return;
+        }
         // MSHookMessageEx：方法在父类时（如 viewDidLayoutSubviews）hook 限定在本类，不污染 UIViewController 全局
         SEL doneSel = NSSelectorFromString(@"onClickMakeSureButton");
         Method m1 = class_getInstanceMethod(cls, doneSel);
@@ -207,8 +215,10 @@ static void mioGroupsInstallHooks(void) {
 }
 
 - (void)presentFrom:(UIViewController *)from title:(NSString *)title preselected:(NSArray<NSString *> *)preselected {
+    WPLog(@"MioPicker", @"[Groups] present: title=%@ 预选 %lu 个 %@", title, (unsigned long)preselected.count, preselected);
     Class cls = objc_getClass("MultiSelectChatRoomHalfScreenViewController");
     if (!cls) {
+        WPLog(@"MioPicker", @"[Groups] 类不存在 → 取消");
         [self notifyCancel];
         return;
     }
@@ -252,7 +262,10 @@ static void mioGroupsInstallHooks(void) {
 
 // m_delegate 回调：未点完成就关页（取消/下滑）
 - (void)onHalfScreenPageDidClose:(id)page action:(long long)action {
-    if (!self.hasReturned) [self notifyCancel];
+    if (!self.hasReturned) {
+        WPLog(@"MioPicker", @"[Groups] 半屏关闭未返回 → 取消");
+        [self notifyCancel];
+    }
 }
 
 // m_delegate 回调：点选/取消勾选，微信原生会刷新按钮，无需处理
@@ -327,6 +340,7 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 
 // pageSheet 下滑关闭：系统已 dismiss，走取消（hasReturned 内置防重入）
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
+    WPLog(@"MioPicker", @"%@ pageSheet 下滑关闭 → 取消", self.logTag);
     [self notifyCancel];
 }
 
@@ -343,6 +357,9 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
         if ([wxid isKindOfClass:[NSString class]] && wxid.length > 0 && ![ids containsObject:wxid]) [ids addObject:wxid];
     }
     if (ids.count == 0) [ids addObjectsFromArray:MioMultiExtract(self.picker)];
+    WPLog(@"MioPicker", @"%@ 完成: 好友 %lu + 群内 %lu → 提取 %lu 个 %@", self.logTag,
+          (unsigned long)(contacts ? contacts.count : 0), (unsigned long)(groupContacts ? groupContacts.count : 0),
+          (unsigned long)ids.count, ids);
     [self dismissPicker];
     [self finishWithWxids:ids];
 }
@@ -351,6 +368,8 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 
 // nil = 静默关闭
 - (void)onMultiSelectContactReturn:(NSArray *)contacts {
+    WPLog(@"MioPicker", @"%@ onMultiSelectContactReturn: %@", self.logTag,
+          contacts ? [NSString stringWithFormat:@"%lu 个", (unsigned long)contacts.count] : @"nil(静默关闭)");
     if (!contacts) {
         [self dismissPicker];
         [self notifyCancel];
@@ -361,6 +380,9 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 
 // 全 nil = dismiss
 - (void)onMultiSelectContactReturn:(NSArray *)contacts selectContactFromGroup:(NSArray *)groupContacts {
+    WPLog(@"MioPicker", @"%@ onMultiSelectContactReturn:selectContactFromGroup: 好友 %@ / 群内 %@", self.logTag,
+          contacts ? [NSString stringWithFormat:@"%lu 个", (unsigned long)contacts.count] : @"nil",
+          groupContacts ? [NSString stringWithFormat:@"%lu 个", (unsigned long)groupContacts.count] : @"nil");
     if (!contacts && !groupContacts) {
         [self dismissPicker];
         [self notifyCancel];
@@ -370,6 +392,7 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 }
 
 - (void)onMultiSelectContactCancel {
+    WPLog(@"MioPicker", @"%@ onMultiSelectContactCancel → 取消", self.logTag);
     [self dismissPicker];
     [self notifyCancel];
 }
@@ -382,12 +405,16 @@ static NSArray<NSString *> *MioMultiExtract(id picker) {
 static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     @try {
         [obj setValue:value forKey:key];
-    } @catch (NSException *e) {}
+    } @catch (NSException *e) {
+        WPLog(@"MioPicker", @"%@ KVC 写入失败: %@ (%@)", tag, key, e);
+    }
 }
 
 - (void)presentFrom:(UIViewController *)from title:(NSString *)title preselected:(NSArray<NSString *> *)preselected {
+    WPLog(@"MioPicker", @"%@ present: title=%@ 预选 %lu 个 %@", self.logTag, title, (unsigned long)preselected.count, preselected);
     Class cls = objc_getClass("MultiSelectContactsViewController");
     if (!cls) {
+        WPLog(@"MioPicker", @"%@ MultiSelectContactsViewController 类不存在 → 取消", self.logTag);
         [self notifyCancel];
         return;
     }
@@ -415,9 +442,14 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
         NSMutableDictionary *pre = [NSMutableDictionary dictionary];
         for (NSString *wxid in preselected) {
             id contact = MioMultiContactForWxid(wxid);
-            if (contact) [pre setObject:contact forKey:wxid];
+            if (contact) {
+                [pre setObject:contact forKey:wxid];
+            } else {
+                WPLog(@"MioPicker", @"%@ 预选解析失败(非联系人或查无): %@", self.logTag, wxid);
+            }
         }
         MioMultiSetValue(picker, @"m_dicMultiSelect", pre, tag);
+        WPLog(@"MioPicker", @"%@ 预选注入 %lu 项", self.logTag, (unsigned long)pre.count);
     }
 
     MioMultiSetValue(picker, @"m_delegate", self, tag);
@@ -471,6 +503,7 @@ static void MioAllRefreshLeftButton(UIViewController *picker) {
                                                              target:bridge
                                                              action:@selector(mioAllCloseTapped:)];
     [picker.navigationItem setLeftBarButtonItem:close animated:NO];
+    WPLog(@"MioPicker", @"[All] 左按钮已重写为 关闭");
 }
 
 // 字典值 → wxid：NSString 直取 / contact 对象取 m_nsUsrName / KVC 兜底，再退回 key
@@ -523,8 +556,10 @@ static NSArray<NSString *> *MioAllExtract(id picker) {
 
 static void mioAllDoneImp(id self, SEL _cmd) {
     MioPickerAllAdapter *bridge = MioAllBridge(self);
+    WPLog(@"MioPicker", @"[All] onMultiDone: bridge=%@", bridge ? @"命中" : @"未命中");
     if (bridge && !bridge.hasReturned) {
         NSArray<NSString *> *result = MioAllExtract(self);
+        WPLog(@"MioPicker", @"[All] 提取 %lu 个 %@", (unsigned long)result.count, result);
         [self dismissViewControllerAnimated:YES completion:nil];
         [bridge finishWithWxids:result];
         return;
@@ -537,6 +572,7 @@ static void mioAllUpdateBtnImp(id self, SEL _cmd) {
     if (gOrigAllUpdateBtn) ((void (*)(id, SEL))gOrigAllUpdateBtn)(self, _cmd);
     MioPickerAllAdapter *bridge = MioAllBridge(self);
     if (bridge && !bridge.hasReturned) {
+        WPLog(@"MioPicker", @"[All] updateMultiSelectRightBtn → 右按钮重写为 完成");
         UIBarButtonItem *done = [[UIBarButtonItem alloc] initWithTitle:@"完成"
                                                                 style:UIBarButtonItemStylePlain
                                                                target:self
@@ -551,7 +587,10 @@ static void mioAllUpdateBtnImp(id self, SEL _cmd) {
 static void mioAllLeftBtnImp(id self, SEL _cmd) {
     if (gOrigAllLeftBtn) ((void (*)(id, SEL))gOrigAllLeftBtn)(self, _cmd);
     MioPickerAllAdapter *bridge = MioAllBridge(self);
-    if (bridge && !bridge.hasReturned) MioAllRefreshLeftButton(self);
+    if (bridge && !bridge.hasReturned) {
+        WPLog(@"MioPicker", @"[All] updateMultiSelectLeftBtn → 重写左按钮");
+        MioAllRefreshLeftButton(self);
+    }
 }
 
 // 未点完成就 pop/dismiss（取消路径；方法缺失时无取消回调，与旧版一致）
@@ -559,6 +598,7 @@ static void mioAllPopDismissImp(id self, SEL _cmd) {
     if (gOrigAllPopDismiss) ((void (*)(id, SEL))gOrigAllPopDismiss)(self, _cmd);
     MioPickerAllAdapter *bridge = MioAllBridge(self);
     if (bridge && !bridge.hasReturned) {
+        WPLog(@"MioPicker", @"[All] viewDidBePopedOrDismissed 未返回 → 取消");
         [bridge notifyCancel];
     }
 }
@@ -567,25 +607,34 @@ static void mioAllInstallHooks(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         Class cls = objc_getClass("SessionSelectController");
-        if (!cls) return;
+        if (!cls) {
+            WPLog(@"MioPicker", @"[All] SessionSelectController 类不存在!");
+            return;
+        }
         SEL doneSel = NSSelectorFromString(@"onMultiDone");
         Method m1 = class_getInstanceMethod(cls, doneSel);
         if (m1) { MSHookMessageEx(cls, doneSel, (IMP)mioAllDoneImp, &gOrigAllDone); }
+        WPLog(@"MioPicker", @"[All] hook onMultiDone=%d", m1 ? 1 : 0);
         SEL btnSel = NSSelectorFromString(@"updateMultiSelectRightBtn");
         Method m2 = class_getInstanceMethod(cls, btnSel);
         if (m2) { MSHookMessageEx(cls, btnSel, (IMP)mioAllUpdateBtnImp, &gOrigAllUpdateBtn); }
+        WPLog(@"MioPicker", @"[All] hook updateMultiSelectRightBtn=%d", m2 ? 1 : 0);
         SEL leftSel = NSSelectorFromString(@"updateMultiSelectLeftBtn");
         Method m4 = class_getInstanceMethod(cls, leftSel);
         if (m4) { MSHookMessageEx(cls, leftSel, (IMP)mioAllLeftBtnImp, &gOrigAllLeftBtn); }
+        WPLog(@"MioPicker", @"[All] hook updateMultiSelectLeftBtn=%d", m4 ? 1 : 0);
         SEL popSel = NSSelectorFromString(@"viewDidBePopedOrDismissed");
         Method m3 = class_getInstanceMethod(cls, popSel);
         if (m3) { MSHookMessageEx(cls, popSel, (IMP)mioAllPopDismissImp, &gOrigAllPopDismiss); }
+        WPLog(@"MioPicker", @"[All] hook viewDidBePopedOrDismissed=%d", m3 ? 1 : 0);
     });
 }
 
 - (void)presentFrom:(UIViewController *)from title:(NSString *)title preselected:(NSArray<NSString *> *)preselected {
+    WPLog(@"MioPicker", @"[All] present: title=%@ 预选 %lu 个 %@", title, (unsigned long)preselected.count, preselected);
     Class cls = objc_getClass("SessionSelectController");
     if (!cls) {
+        WPLog(@"MioPicker", @"[All] SessionSelectController 类不存在 → 取消");
         [self notifyCancel];
         return;
     }
@@ -610,7 +659,9 @@ static void mioAllInstallHooks(void) {
         [picker setValue:@NO forKey:@"m_showsChatroomMembers"];
         [picker setValue:@NO forKey:@"m_showsChatroomFriendsOnly"];
         [picker setValue:title forKey:@"customTitle"];
-    } @catch (NSException *e) {}
+    } @catch (NSException *e) {
+        WPLog(@"MioPicker", @"[All] KVC 配置异常: %@", e);
+    }
 
     objc_setAssociatedObject(picker, kMioAllBridgeKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
@@ -619,6 +670,7 @@ static void mioAllInstallHooks(void) {
     if ([picker respondsToSelector:NSSelectorFromString(@"beginMultiSelect")]) {
         ((void (*)(id, SEL))objc_msgSend)(picker, NSSelectorFromString(@"beginMultiSelect"));
     }
+    WPLog(@"MioPicker", @"[All] view 预加载 + present 前 beginMultiSelect 完成");
 
     // 数据前置：present 前只写 m_dicMultiSelect（原生首帧读该字典渲染勾选态），不做任何 UI 刷新
     if (preselected.count > 0) {
@@ -627,13 +679,19 @@ static void mioAllInstallHooks(void) {
             if (![wxid isKindOfClass:[NSString class]] || wxid.length == 0) continue;
             id contact = WXGetContactForWxid(wxid);
             [pre setObject:contact ?: wxid forKey:wxid];
+            WPLog(@"MioPicker", @"[All] 预选 %@ → %@", wxid, contact ? @"CContact" : @"wxid 字符串(查无联系人)");
         }
         @try {
             id selectView = [picker valueForKey:@"m_selectView"];
             if (selectView && pre.count > 0) {
                 [selectView setValue:pre forKey:@"m_dicMultiSelect"];
+                WPLog(@"MioPicker", @"[All] 预选注入 m_selectView.m_dicMultiSelect %lu 项", (unsigned long)pre.count);
+            } else {
+                WPLog(@"MioPicker", @"[All] 预选注入跳过: selectView=%@ pre.count=%lu", selectView, (unsigned long)pre.count);
             }
-        } @catch (NSException *e) {}
+        } @catch (NSException *e) {
+            WPLog(@"MioPicker", @"[All] 预选注入异常: %@", e);
+        }
     }
 
     UIViewController *top = from;
@@ -643,6 +701,7 @@ static void mioAllInstallHooks(void) {
     // 全屏 present：pageSheet 顶部会露出黑边（安全区不足），且下滑关闭不走取消 hook
     nav.modalPresentationStyle = UIModalPresentationFullScreen;
     [top presentViewController:nav animated:YES completion:^{
+        WPLog(@"MioPicker", @"[All] present completion 触发");
         // 补设 title + 再进一次多选态（搜索框随多选 UI 渲染）
         [picker setTitle:title ?: @""];
         SEL bms = NSSelectorFromString(@"beginMultiSelect");
@@ -655,21 +714,26 @@ static void mioAllInstallHooks(void) {
             id selectView = nil;
             @try { selectView = [picker valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
             SEL ums = NSSelectorFromString(@"updateMultiSelectView");
-            if (selectView && [selectView respondsToSelector:ums]) {
+            BOOL umsOk = selectView && [selectView respondsToSelector:ums];
+            if (umsOk) {
                 ((void (*)(id, SEL))objc_msgSend)(selectView, ums);
             }
             SEL upv = NSSelectorFromString(@"updateMultiSelectPanelViewResultView");
-            if ([picker respondsToSelector:upv]) {
+            BOOL upvOk = [picker respondsToSelector:upv];
+            if (upvOk) {
                 ((void (*)(id, SEL))objc_msgSend)(picker, upv);
             }
             [picker.view setNeedsLayout];
             [picker.view layoutIfNeeded];
+            WPLog(@"MioPicker", @"[All] 下一帧 UI 刷新完成: updateMultiSelectView=%d updateMultiSelectPanelViewResultView=%d 布局强制刷新=1",
+                  umsOk ? 1 : 0, upvOk ? 1 : 0);
         });
     }];
 }
 
 // "关闭"：直接 dismiss 页面并走取消回调（替代原生"取消"的回退普通态）
 - (void)mioAllCloseTapped:(id)sender {
+    WPLog(@"MioPicker", @"[All] 关闭按钮点击 → dismiss + 取消");
     if (self.hasReturned) return;
     [self.picker dismissViewControllerAnimated:YES completion:nil];
     [self notifyCancel];
