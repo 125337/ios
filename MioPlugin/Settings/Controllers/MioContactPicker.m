@@ -444,12 +444,14 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
 static void *kMioAllBridgeKey = &kMioAllBridgeKey;
 static IMP gOrigAllDone = NULL;
 static IMP gOrigAllUpdateBtn = NULL;
+static IMP gOrigAllLeftBtn = NULL;
 static IMP gOrigAllPopDismiss = NULL;
 
 static void mioAllInstallHooks(void);
 
 @interface MioPickerAllAdapter : MioPickerAdapterBase
 @property (strong, nonatomic) UIViewController *picker;
+- (void)mioAllCloseTapped:(id)sender;                          // "关闭"左按钮 action
 @end
 
 @implementation MioPickerAllAdapter
@@ -457,6 +459,18 @@ static void mioAllInstallHooks(void);
 static MioPickerAllAdapter *MioAllBridge(id self) {
     id bridge = objc_getAssociatedObject(self, kMioAllBridgeKey);
     return [bridge isKindOfClass:[MioPickerAllAdapter class]] ? bridge : nil;
+}
+
+// 多选左按钮重写为"关闭"直接关页：原生是"取消"，走 cancelMultiSelect 只回退普通态不关页，
+// 页面会卡在普通态（关闭/多选），不符合需求
+static void MioAllRefreshLeftButton(UIViewController *picker) {
+    MioPickerAllAdapter *bridge = MioAllBridge(picker);
+    if (!bridge || bridge.hasReturned) return;
+    UIBarButtonItem *close = [[UIBarButtonItem alloc] initWithTitle:@"关闭"
+                                                              style:UIBarButtonItemStylePlain
+                                                             target:bridge
+                                                             action:@selector(mioAllCloseTapped:)];
+    [picker.navigationItem setLeftBarButtonItem:close animated:NO];
 }
 
 // 字典值 → wxid：NSString 直取 / contact 对象取 m_nsUsrName / KVC 兜底，再退回 key
@@ -529,7 +543,15 @@ static void mioAllUpdateBtnImp(id self, SEL _cmd) {
                                                                action:@selector(onMultiDone)];
         id navItem = ((id (*)(id, SEL))objc_msgSend)(self, @selector(navigationItem));
         ((void (*)(id, SEL, id, BOOL))objc_msgSend)(navItem, @selector(setRightBarButtonItem:animated:), done, NO);
+        MioAllRefreshLeftButton(self);
     }
+}
+
+// 多选左按钮（原生"取消"）原实现后重写为"关闭"
+static void mioAllLeftBtnImp(id self, SEL _cmd) {
+    if (gOrigAllLeftBtn) ((void (*)(id, SEL))gOrigAllLeftBtn)(self, _cmd);
+    MioPickerAllAdapter *bridge = MioAllBridge(self);
+    if (bridge && !bridge.hasReturned) MioAllRefreshLeftButton(self);
 }
 
 // 未点完成就 pop/dismiss（取消路径；方法缺失时无取消回调，与旧版一致）
@@ -552,6 +574,9 @@ static void mioAllInstallHooks(void) {
         SEL btnSel = NSSelectorFromString(@"updateMultiSelectRightBtn");
         Method m2 = class_getInstanceMethod(cls, btnSel);
         if (m2) { MSHookMessageEx(cls, btnSel, (IMP)mioAllUpdateBtnImp, &gOrigAllUpdateBtn); }
+        SEL leftSel = NSSelectorFromString(@"updateMultiSelectLeftBtn");
+        Method m4 = class_getInstanceMethod(cls, leftSel);
+        if (m4) { MSHookMessageEx(cls, leftSel, (IMP)mioAllLeftBtnImp, &gOrigAllLeftBtn); }
         SEL popSel = NSSelectorFromString(@"viewDidBePopedOrDismissed");
         Method m3 = class_getInstanceMethod(cls, popSel);
         if (m3) { MSHookMessageEx(cls, popSel, (IMP)mioAllPopDismissImp, &gOrigAllPopDismiss); }
@@ -595,8 +620,7 @@ static void mioAllInstallHooks(void) {
         ((void (*)(id, SEL))objc_msgSend)(picker, NSSelectorFromString(@"beginMultiSelect"));
     }
 
-    // 预选回显：把已选名单注入 m_selectView.m_dicMultiSelect（value 优先 CContact，查不到用 wxid
-    // 字符串，提取端两者都认），再刷新表格勾选与底部已选面板
+    // 数据前置：present 前只写 m_dicMultiSelect（原生首帧读该字典渲染勾选态），不做任何 UI 刷新
     if (preselected.count > 0) {
         NSMutableDictionary *pre = [NSMutableDictionary dictionary];
         for (NSString *wxid in preselected) {
@@ -608,14 +632,6 @@ static void mioAllInstallHooks(void) {
             id selectView = [picker valueForKey:@"m_selectView"];
             if (selectView && pre.count > 0) {
                 [selectView setValue:pre forKey:@"m_dicMultiSelect"];
-                SEL ums = NSSelectorFromString(@"updateMultiSelectView");
-                if ([selectView respondsToSelector:ums]) {
-                    ((void (*)(id, SEL))objc_msgSend)(selectView, ums);
-                }
-                SEL upv = NSSelectorFromString(@"updateMultiSelectPanelViewResultView");
-                if ([picker respondsToSelector:upv]) {
-                    ((void (*)(id, SEL))objc_msgSend)(picker, upv);
-                }
             }
         } @catch (NSException *e) {}
     }
@@ -627,13 +643,36 @@ static void mioAllInstallHooks(void) {
     // 全屏 present：pageSheet 顶部会露出黑边（安全区不足），且下滑关闭不走取消 hook
     nav.modalPresentationStyle = UIModalPresentationFullScreen;
     [top presentViewController:nav animated:YES completion:^{
-        // 显示完成后再进一次多选态：搜索框随多选 UI 渲染，仅在 present 前调 beginMultiSelect
-        // 不会显示（勾选一个后才出来）
+        // 补设 title + 再进一次多选态（搜索框随多选 UI 渲染）
+        [picker setTitle:title ?: @""];
         SEL bms = NSSelectorFromString(@"beginMultiSelect");
         if ([picker respondsToSelector:bms]) {
             ((void (*)(id, SEL))objc_msgSend)(picker, bms);
         }
+        // UI 后置：异步到下一帧，几何稳定后再刷新勾选表格与已选面板 + 强制布局收尾
+        // （present completion 时动画刚结束，同步刷新会拿到动画中间帧的几何，面板会被顶进导航栏下面）
+        dispatch_async(dispatch_get_main_queue(), ^{
+            id selectView = nil;
+            @try { selectView = [picker valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
+            SEL ums = NSSelectorFromString(@"updateMultiSelectView");
+            if (selectView && [selectView respondsToSelector:ums]) {
+                ((void (*)(id, SEL))objc_msgSend)(selectView, ums);
+            }
+            SEL upv = NSSelectorFromString(@"updateMultiSelectPanelViewResultView");
+            if ([picker respondsToSelector:upv]) {
+                ((void (*)(id, SEL))objc_msgSend)(picker, upv);
+            }
+            [picker.view setNeedsLayout];
+            [picker.view layoutIfNeeded];
+        });
     }];
+}
+
+// "关闭"：直接 dismiss 页面并走取消回调（替代原生"取消"的回退普通态）
+- (void)mioAllCloseTapped:(id)sender {
+    if (self.hasReturned) return;
+    [self.picker dismissViewControllerAnimated:YES completion:nil];
+    [self notifyCancel];
 }
 
 - (void)cleanup {
