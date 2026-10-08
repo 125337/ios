@@ -276,6 +276,7 @@ static void mioMultiInstallHooks(void);
 @interface MioPickerMultiSelectAdapter : MioPickerAdapterBase <UIAdaptivePresentationControllerDelegate>
 @property (strong, nonatomic) UIViewController *picker;
 @property (copy, nonatomic) NSString *logTag;   // [Contacts]
+@property (nonatomic, assign) BOOL refreshing;  // 强显重入保护（layout/update 链可能间接绕回来）
 @end
 
 @implementation MioPickerMultiSelectAdapter
@@ -352,8 +353,8 @@ static void MioMultiEnableBarItem(UIBarButtonItem *item) {
     if ([item.customView isKindOfClass:[UIView class]]) MioMultiEnableControls(item.customView);
 }
 
-// 四路强显中的 ivar/customView 部分（不主动调 update，hook 回调里调它避免互相递归）
-static void MioMultiApplySurfaces(UIViewController *picker) {
+// 强显主体（无守卫，供两个守卫入口复用）
+static void MioMultiApplySurfacesCore(UIViewController *picker) {
     id panelItem = nil;
     @try { panelItem = [picker valueForKey:@"m_panelBtnItem"]; } @catch (NSException *e) {}
     if ([panelItem isKindOfClass:[UIBarButtonItem class]]) MioMultiEnableBarItem(panelItem);
@@ -373,15 +374,34 @@ static void MioMultiApplySurfaces(UIViewController *picker) {
     }
 }
 
-// 全量刷新（viewDidLayoutSubviews / 250ms 补刷走这里）：
-// ApplySurfaces 之后主动调 updateRightBarItemEnabled:YES 让原生自刷；
-// 该调用会进 hook，但 hook 只调 MioMultiApplySurfaces（无主动 update），链路到此为止不会递归
+// hook 回调入口：重入保护（refreshing 已 YES = 本链已在强显中，直接返回）
+static void MioMultiApplySurfaces(UIViewController *picker) {
+    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(picker);
+    if (!bridge || bridge.refreshing) return;
+    bridge.refreshing = YES;
+    @try {
+        MioMultiApplySurfacesCore(picker);
+    } @finally {
+        bridge.refreshing = NO;
+    }
+}
+
+// 全量刷新（viewDidLayoutSubviews / 250ms 补刷走这里）：主体强显 + 主动调
+// updateRightBarItemEnabled:YES 让原生自刷。同一把 refreshing 锁：update 可能触发原生
+// layout → layout hook → RefreshNow 重入，锁在直接返回，环到此为止
 static void MioMultiRefreshNow(UIViewController *picker) {
-    WPLog(@"Contacts", @"[DoneRefresh] count=%lu", (unsigned long)MioMultiExtract(picker).count);
-    MioMultiApplySurfaces(picker);
-    SEL upd = NSSelectorFromString(@"updateRightBarItemEnabled:");
-    if ([picker respondsToSelector:upd]) {
-        ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, upd, YES);
+    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(picker);
+    if (!bridge || bridge.refreshing) return;
+    bridge.refreshing = YES;
+    @try {
+        WPLog(@"Contacts", @"[DoneRefresh] count=%lu", (unsigned long)MioMultiExtract(picker).count);
+        MioMultiApplySurfacesCore(picker);
+        SEL upd = NSSelectorFromString(@"updateRightBarItemEnabled:");
+        if ([picker respondsToSelector:upd]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, upd, YES);
+        }
+    } @finally {
+        bridge.refreshing = NO;
     }
 }
 
