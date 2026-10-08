@@ -268,7 +268,6 @@ static void *kMioMultiBridgeKey = &kMioMultiBridgeKey;
 @interface MioPickerMultiSelectAdapter : MioPickerAdapterBase
 @property (strong, nonatomic) UIViewController *picker;
 @property (copy, nonatomic) NSString *logTag;   // [Contacts] / [All]
-@property (nonatomic, assign) BOOL showHistoryGroup;   // 顶部"历史群组"入口（原生选群路径，onSelectHistoryGroup→handleSelectedHistoryGroupContacts:；All=开，Contacts=关）
 @end
 
 @implementation MioPickerMultiSelectAdapter
@@ -400,9 +399,9 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     MioMultiSetValue(picker, @"m_memberCountLimit", @(4096), tag);
     MioMultiSetValue(picker, @"m_viewcontrllerTitle", title, tag);   // 设备拼写即如此（原生 typo 字段）
     MioMultiSetValue(picker, @"m_rightBarButtonTitle", @"完成", tag);
-    MioMultiSetValue(picker, @"m_bShowHistoryGroup", self.showHistoryGroup ? @YES : @NO, tag);   // 历史群组（真选群）
+    MioMultiSetValue(picker, @"m_bShowHistoryGroup", @NO, tag);   // "导入群聊中的朋友"（从群挑成员），不是选群，勿开
     MioMultiSetValue(picker, @"m_bShowContactTag", @YES, tag);
-    MioMultiSetValue(picker, @"m_bShowSelectFromGroup", @NO, tag);   // "从群选人"（进群挑成员）两模式都不要
+    MioMultiSetValue(picker, @"m_bShowSelectFromGroup", @NO, tag);   // "选择群聊中的朋友"（从群挑成员），同上勿开
     MioMultiSetValue(picker, @"m_bKeepCurViewAfterSelect", @YES, tag);
     MioMultiSetValue(picker, @"m_onlyChatRoom", @NO, tag);
     MioMultiSetValue(picker, @"m_onlyImportChatRoom", @NO, tag);
@@ -436,6 +435,108 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
 
 @end
 
+#pragma mark - 适配器 3：都选（SessionSelectController，转发"选择一个聊天"页，会话列表人+群混排）
+
+static void *kMioSessionBridgeKey = &kMioSessionBridgeKey;
+
+@interface MioPickerSessionAdapter : MioPickerAdapterBase
+@property (strong, nonatomic) UIViewController *picker;
+@end
+
+@implementation MioPickerSessionAdapter
+
+static MioPickerSessionAdapter *MioSessionBridge(id self) {
+    id bridge = objc_getAssociatedObject(self, kMioSessionBridgeKey);
+    return [bridge isKindOfClass:[MioPickerSessionAdapter class]] ? bridge : nil;
+}
+
+// contacts(CContact/NSString) → wxid 保序去重
+static NSArray<NSString *> *MioSessionExtract(id contacts) {
+    NSMutableArray<NSString *> *ids = [NSMutableArray array];
+    SEL nameSel = NSSelectorFromString(@"m_nsUsrName");
+    for (id v in contacts) {
+        NSString *wxid = nil;
+        if ([v isKindOfClass:[NSString class]]) wxid = v;
+        else if ([v respondsToSelector:nameSel]) wxid = ((NSString *(*)(id, SEL))objc_msgSend)(v, nameSel);
+        if ([wxid isKindOfClass:[NSString class]] && wxid.length > 0 && ![ids containsObject:wxid]) [ids addObject:wxid];
+    }
+    return [ids copy];
+}
+
+- (void)cleanup {
+    if (self.picker) objc_setAssociatedObject(self.picker, kMioSessionBridgeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    self.picker = nil;
+}
+
+- (void)presentFrom:(UIViewController *)from title:(NSString *)title preselected:(NSArray<NSString *> *)preselected {
+    Class cls = objc_getClass("SessionSelectController");
+    if (!cls) {
+        [self notifyCancel];
+        return;
+    }
+    // 预选 wxid → CContact（init 参数注入 = 转发页原生携带已选的路径）
+    NSMutableArray *preContacts = [NSMutableArray array];
+    for (NSString *wxid in preselected) {
+        id contact = MioMultiContactForWxid(wxid);
+        if (contact) [preContacts addObject:contact];
+    }
+    UIViewController *picker = [[cls alloc] initWithSelectedContacts:preContacts];
+    self.picker = picker;
+    objc_setAssociatedObject(picker, kMioSessionBridgeKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    // 转发"选择一个聊天"原生配方：初始多选 + 会话列表（人+群）+ 搜索
+    SEL multiSel = NSSelectorFromString(@"setM_bMultiSelect:");
+    if ([picker respondsToSelector:multiSel]) ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, multiSel, YES);
+    MioMultiSetValue(picker, @"m_commonSearchScene", @(8), @"[All]");
+    MioMultiSetValue(picker, @"customTitle", title, @"[All]");
+    MioMultiSetValue(picker, @"m_onlyChatRoom", @NO, @"[All]");
+    MioMultiSetValue(picker, @"m_bIgnoreChatRoom", @NO, @"[All]");
+    MioMultiSetValue(picker, @"m_bShowNewSession", @NO, @"[All]");       // 不显示"新建聊天"入口
+    MioMultiSetValue(picker, @"m_ignoresFileTransfer", @YES, @"[All]");  // 文件传输助手/机器人不进名单
+    MioMultiSetValue(picker, @"m_ignoresChatBot", @YES, @"[All]");
+    MioMultiSetValue(picker, @"m_delegate", self, @"[All]");
+
+    UIViewController *top = from;
+    while (top.presentedViewController) top = top.presentedViewController;
+    Class navCls = objc_getClass("MMUINavigationController") ?: [UINavigationController class];
+    UINavigationController *nav = [[navCls alloc] initWithRootViewController:picker];
+    // 底部弹出（pageSheet）：下滑即可退出；下滑关闭走 presentationControllerDidDismiss → 取消回调
+    nav.modalPresentationStyle = UIModalPresentationPageSheet;
+    nav.presentationController.delegate = self;
+    [top presentViewController:nav animated:YES completion:nil];
+}
+
+// ===== m_delegate 回调（ForwardMessageLogic 选会话语义）=====
+
+// 多选完成（原生完成后自行关页）
+- (void)OnSelectSessions:(NSArray *)contacts SessionSelectController:(id)ctrl {
+    if (MioSessionBridge(ctrl) != self) return;
+    if (!self.hasReturned) [self finishWithWxids:MioSessionExtract(contacts ?: @[])];
+}
+
+// 单选兜底（多选开关未生效时点 cell 直返单个）
+- (void)OnSelectSession:(id)contact SessionSelectController:(id)ctrl {
+    if (MioSessionBridge(ctrl) != self) return;
+    if (!self.hasReturned) [self finishWithWxids:MioSessionExtract(contact ? @[contact] : @[])];
+}
+
+- (void)OnSelectSessionCancel {
+    if (!self.hasReturned) {
+        [self dismissPicker];
+        [self notifyCancel];
+    }
+}
+
+- (void)OnSelectSessionCancelInPageSheetMode:(id)arg {
+    [self OnSelectSessionCancel];
+}
+
+// pageSheet 下滑关闭：系统已 dismiss，走取消（hasReturned 内置防重入）
+- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
+    [self notifyCancel];
+}
+
+@end
+
 #pragma mark - 统一入口
 
 @implementation MioContactPicker
@@ -455,13 +556,7 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
             break;
         }
         case MioContactPickerModeGroups:   adapter = [[MioPickerGroupsAdapter alloc] init]; break;
-        case MioContactPickerModeAll: {
-            MioPickerMultiSelectAdapter *a = [[MioPickerMultiSelectAdapter alloc] init];
-            a.logTag = @"[All]";
-            a.showHistoryGroup = YES;   // 都选：好友 + 历史群组选群
-            adapter = a;
-            break;
-        }
+        case MioContactPickerModeAll:   adapter = [[MioPickerSessionAdapter alloc] init]; break;   // 都选：转发选会话页（人+群混排）
     }
     if (!adapter) return;
     adapter.delegate = delegate;
