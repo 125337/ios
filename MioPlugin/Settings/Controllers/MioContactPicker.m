@@ -6,9 +6,10 @@
 #import "../Core/ServiceHelper.h"
 
 // ===== 统一选人入口（MioContactPicker.h 注释为架构总览）=====
-// 两个适配器的机制来源：
+// 三个适配器的机制来源：
 //   Groups：WCR WCRefineChatRoomPicker（FUN__part32.c）逆向移植，Frida 实测 init 参数
-//   Contacts/All：MultiSelectContactsViewController（发起群聊主选人器）自有配方。
+//   All   ：WCR presentSessionSelectPickerFromViewController（Misc_part13.c L42457-42642）
+//   Contacts：MultiSelectContactsViewController（发起群聊主选人器）自有配方。
 //     字段清单以设备 8.0.60 class dump 为准（ivar + setter 逐一实证存在；
 //     头文件里的 m_bContainOpenIM / setM_bShowOpenIMContactGroup: 设备上不存在，勿用）。
 //     预选 = present 前注入 m_dicMultiSelect（原生 initData 读该字典渲染勾选）；
@@ -34,7 +35,6 @@
 @end
 
 @interface SessionSelectController : UIViewController
-- (instancetype)initWithSelectedContacts:(NSArray *)contacts;   // 预选 CContact 数组（转发页原生路径）
 @end
 
 #pragma mark - 骨架（共享：重入保护/取消回调/资源清理/主线程回调）
@@ -265,7 +265,7 @@ static void mioGroupsInstallHooks(void) {
 
 @end
 
-#pragma mark - 适配器 2：只选人/都选（MultiSelectContactsViewController，零 hook）
+#pragma mark - 适配器 2：只选人（MultiSelectContactsViewController，零 hook）
 
 static void *kMioMultiBridgeKey = &kMioMultiBridgeKey;
 
@@ -439,37 +439,123 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
 
 @end
 
-#pragma mark - 适配器 3：都选（SessionSelectController，转发"选择一个聊天"页，会话列表人+群混排）
+#pragma mark - 适配器 3：都选（SessionSelectController 全屏，好友+群聊）
 
-static void *kMioSessionBridgeKey = &kMioSessionBridgeKey;
+static void *kMioAllBridgeKey = &kMioAllBridgeKey;
+static IMP gOrigAllDone = NULL;
+static IMP gOrigAllUpdateBtn = NULL;
+static IMP gOrigAllPopDismiss = NULL;
 
-@interface MioPickerSessionAdapter : MioPickerAdapterBase <UIAdaptivePresentationControllerDelegate>
+static void mioAllInstallHooks(void);
+
+@interface MioPickerAllAdapter : MioPickerAdapterBase
 @property (strong, nonatomic) UIViewController *picker;
 @end
 
-@implementation MioPickerSessionAdapter
+@implementation MioPickerAllAdapter
 
-static MioPickerSessionAdapter *MioSessionBridge(id self) {
-    id bridge = objc_getAssociatedObject(self, kMioSessionBridgeKey);
-    return [bridge isKindOfClass:[MioPickerSessionAdapter class]] ? bridge : nil;
+static MioPickerAllAdapter *MioAllBridge(id self) {
+    id bridge = objc_getAssociatedObject(self, kMioAllBridgeKey);
+    return [bridge isKindOfClass:[MioPickerAllAdapter class]] ? bridge : nil;
 }
 
-// contacts(CContact/NSString) → wxid 保序去重
-static NSArray<NSString *> *MioSessionExtract(id contacts) {
-    NSMutableArray<NSString *> *ids = [NSMutableArray array];
+// 字典值 → wxid：NSString 直取 / contact 对象取 m_nsUsrName / KVC 兜底，再退回 key
+static NSString *MioAllWxidOf(id value, id key) {
+    NSString *wxid = nil;
     SEL nameSel = NSSelectorFromString(@"m_nsUsrName");
-    for (id v in contacts) {
-        NSString *wxid = nil;
-        if ([v isKindOfClass:[NSString class]]) wxid = v;
-        else if ([v respondsToSelector:nameSel]) wxid = ((NSString *(*)(id, SEL))objc_msgSend)(v, nameSel);
-        if ([wxid isKindOfClass:[NSString class]] && wxid.length > 0 && ![ids containsObject:wxid]) [ids addObject:wxid];
+    if ([value isKindOfClass:[NSString class]]) {
+        wxid = value;
+    } else if ([value respondsToSelector:nameSel]) {
+        wxid = ((NSString *(*)(id, SEL))objc_msgSend)(value, nameSel);
+    } else if (value) {
+        @try { wxid = [value valueForKey:@"m_nsUsrName"]; } @catch (NSException *e) {}
+    }
+    if (![wxid isKindOfClass:[NSString class]] || wxid.length == 0) {
+        if ([key isKindOfClass:[NSString class]]) wxid = key;
+    }
+    if ([wxid isKindOfClass:[NSString class]] && wxid.length > 0) return wxid;
+    return nil;
+}
+
+// 提取已选（m_selectView.m_dicMultiSelect）：优先 allValuesInOrder（微信有序字典，选择顺序=展示
+// 顺序），否则按键序（实践上为插入序）
+static NSArray<NSString *> *MioAllExtract(id picker) {
+    id selectView = nil;
+    @try { selectView = [picker valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
+    id dic = nil;
+    SEL dicSel = NSSelectorFromString(@"m_dicMultiSelect");
+    if (selectView && [selectView respondsToSelector:dicSel]) {
+        dic = ((id (*)(id, SEL))objc_msgSend)(selectView, dicSel);
+    }
+    if (![dic isKindOfClass:[NSDictionary class]]) return @[];
+
+    NSMutableArray<NSString *> *ids = [NSMutableArray array];
+    SEL orderSel = NSSelectorFromString(@"allValuesInOrder");
+    if ([dic respondsToSelector:orderSel]) {
+        NSArray *values = ((NSArray *(*)(id, SEL))objc_msgSend)(dic, orderSel);
+        for (id v in values) {
+            NSString *wxid = MioAllWxidOf(v, nil);
+            if (wxid) [ids addObject:wxid];
+        }
+    }
+    if (ids.count == 0) {
+        for (id key in [dic allKeys]) {
+            NSString *wxid = MioAllWxidOf([dic objectForKey:key], key);
+            if (wxid) [ids addObject:wxid];
+        }
     }
     return [ids copy];
 }
 
-- (void)cleanup {
-    if (self.picker) objc_setAssociatedObject(self.picker, kMioSessionBridgeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    self.picker = nil;
+static void mioAllDoneImp(id self, SEL _cmd) {
+    MioPickerAllAdapter *bridge = MioAllBridge(self);
+    if (bridge && !bridge.hasReturned) {
+        NSArray<NSString *> *result = MioAllExtract(self);
+        [self dismissViewControllerAnimated:YES completion:nil];
+        [bridge finishWithWxids:result];
+        return;
+    }
+    if (gOrigAllDone) ((void (*)(id, SEL))gOrigAllDone)(self, _cmd);
+}
+
+// 原生按钮走 endMultiSelect 死路（m_delegate=nil 无回调可收），原实现后替换为"完成"→ onMultiDone
+static void mioAllUpdateBtnImp(id self, SEL _cmd) {
+    if (gOrigAllUpdateBtn) ((void (*)(id, SEL))gOrigAllUpdateBtn)(self, _cmd);
+    MioPickerAllAdapter *bridge = MioAllBridge(self);
+    if (bridge && !bridge.hasReturned) {
+        UIBarButtonItem *done = [[UIBarButtonItem alloc] initWithTitle:@"完成"
+                                                                style:UIBarButtonItemStylePlain
+                                                               target:self
+                                                               action:@selector(onMultiDone)];
+        id navItem = ((id (*)(id, SEL))objc_msgSend)(self, @selector(navigationItem));
+        ((void (*)(id, SEL, id, BOOL))objc_msgSend)(navItem, @selector(setRightBarButtonItem:animated:), done, NO);
+    }
+}
+
+// 未点完成就 pop/dismiss（取消路径；方法缺失时无取消回调，与旧版一致）
+static void mioAllPopDismissImp(id self, SEL _cmd) {
+    if (gOrigAllPopDismiss) ((void (*)(id, SEL))gOrigAllPopDismiss)(self, _cmd);
+    MioPickerAllAdapter *bridge = MioAllBridge(self);
+    if (bridge && !bridge.hasReturned) {
+        [bridge notifyCancel];
+    }
+}
+
+static void mioAllInstallHooks(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class cls = objc_getClass("SessionSelectController");
+        if (!cls) return;
+        SEL doneSel = NSSelectorFromString(@"onMultiDone");
+        Method m1 = class_getInstanceMethod(cls, doneSel);
+        if (m1) { MSHookMessageEx(cls, doneSel, (IMP)mioAllDoneImp, &gOrigAllDone); }
+        SEL btnSel = NSSelectorFromString(@"updateMultiSelectRightBtn");
+        Method m2 = class_getInstanceMethod(cls, btnSel);
+        if (m2) { MSHookMessageEx(cls, btnSel, (IMP)mioAllUpdateBtnImp, &gOrigAllUpdateBtn); }
+        SEL popSel = NSSelectorFromString(@"viewDidBePopedOrDismissed");
+        Method m3 = class_getInstanceMethod(cls, popSel);
+        if (m3) { MSHookMessageEx(cls, popSel, (IMP)mioAllPopDismissImp, &gOrigAllPopDismiss); }
+    });
 }
 
 - (void)presentFrom:(UIViewController *)from title:(NSString *)title preselected:(NSArray<NSString *> *)preselected {
@@ -478,69 +564,81 @@ static NSArray<NSString *> *MioSessionExtract(id contacts) {
         [self notifyCancel];
         return;
     }
-    // 预选 wxid → CContact（init 参数注入 = 转发页原生携带已选的路径）
-    NSMutableArray *preContacts = [NSMutableArray array];
-    for (NSString *wxid in preselected) {
-        id contact = MioMultiContactForWxid(wxid);
-        if (contact) [preContacts addObject:contact];
-    }
-    UIViewController *picker = [[cls alloc] initWithSelectedContacts:preContacts];
+    mioAllInstallHooks();
+
+    UIViewController *picker = [[cls alloc] init];
+    if (!picker) { [self notifyCancel]; return; }
     self.picker = picker;
-    objc_setAssociatedObject(picker, kMioSessionBridgeKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    // 转发"选择一个聊天"原生配方：初始多选 + 会话列表（人+群）+ 搜索
-    SEL multiSel = NSSelectorFromString(@"setM_bMultiSelect:");
-    if ([picker respondsToSelector:multiSel]) ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, multiSel, YES);
-    MioMultiSetValue(picker, @"m_commonSearchScene", @(8), @"[All]");
-    MioMultiSetValue(picker, @"customTitle", title, @"[All]");
-    MioMultiSetValue(picker, @"m_onlyChatRoom", @NO, @"[All]");
-    MioMultiSetValue(picker, @"m_bIgnoreChatRoom", @NO, @"[All]");
-    MioMultiSetValue(picker, @"m_bShowNewSession", @NO, @"[All]");       // 不显示"新建聊天"入口
-    MioMultiSetValue(picker, @"m_ignoresFileTransfer", @YES, @"[All]");  // 文件传输助手/机器人不进名单
-    MioMultiSetValue(picker, @"m_ignoresChatBot", @YES, @"[All]");
-    MioMultiSetValue(picker, @"m_delegate", self, @"[All]");
+
+    // KVC 参数与 WCR Misc_part13.c L42474-42567 逐一对应（reportTag 为旧版属性，8.0.60 无，弃）
+    @try {
+        [picker setValue:@(4096) forKey:@"maxSelectionCount"];
+        [picker setValue:nil forKey:@"m_delegate"];
+        [picker setValue:@(8) forKey:@"m_commonSearchScene"];
+        [picker setValue:@YES forKey:@"useNewSearchBar"];
+        [picker setValue:@YES forKey:@"m_bShowMultiSelectRightBtn"];
+        [picker setValue:@YES forKey:@"m_bKeepCurViewAfterSelect"];
+        [picker setValue:@YES forKey:@"m_bMultiSelect"];
+        [picker setValue:@YES forKey:@"m_bAllowsMultiSelectEmpty"];
+        [picker setValue:@NO forKey:@"m_onlyChatRoom"];
+        [picker setValue:@NO forKey:@"m_bIgnoreChatRoom"];
+        [picker setValue:@NO forKey:@"m_showsChatroomMembers"];
+        [picker setValue:@NO forKey:@"m_showsChatroomFriendsOnly"];
+        [picker setValue:title forKey:@"customTitle"];
+    } @catch (NSException *e) {}
+
+    objc_setAssociatedObject(picker, kMioAllBridgeKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    // WCR 同款：present 前强制 view 预加载 + 进入多选模式（Misc_part13.c L42594-42604）
+    [picker view];
+    if ([picker respondsToSelector:NSSelectorFromString(@"beginMultiSelect")]) {
+        ((void (*)(id, SEL))objc_msgSend)(picker, NSSelectorFromString(@"beginMultiSelect"));
+    }
+
+    // 预选回显：把已选名单注入 m_selectView.m_dicMultiSelect（value 优先 CContact，查不到用 wxid
+    // 字符串，提取端两者都认），再刷新表格勾选与底部已选面板
+    if (preselected.count > 0) {
+        NSMutableDictionary *pre = [NSMutableDictionary dictionary];
+        for (NSString *wxid in preselected) {
+            if (![wxid isKindOfClass:[NSString class]] || wxid.length == 0) continue;
+            id contact = WXGetContactForWxid(wxid);
+            [pre setObject:contact ?: wxid forKey:wxid];
+        }
+        @try {
+            id selectView = [picker valueForKey:@"m_selectView"];
+            if (selectView && pre.count > 0) {
+                [selectView setValue:pre forKey:@"m_dicMultiSelect"];
+                SEL ums = NSSelectorFromString(@"updateMultiSelectView");
+                if ([selectView respondsToSelector:ums]) {
+                    ((void (*)(id, SEL))objc_msgSend)(selectView, ums);
+                }
+                SEL upv = NSSelectorFromString(@"updateMultiSelectPanelViewResultView");
+                if ([picker respondsToSelector:upv]) {
+                    ((void (*)(id, SEL))objc_msgSend)(picker, upv);
+                }
+            }
+        } @catch (NSException *e) {}
+    }
 
     UIViewController *top = from;
     while (top.presentedViewController) top = top.presentedViewController;
     Class navCls = objc_getClass("MMUINavigationController") ?: [UINavigationController class];
     UINavigationController *nav = [[navCls alloc] initWithRootViewController:picker];
-    // 底部弹出（pageSheet）：下滑即可退出；下滑关闭走 presentationControllerDidDismiss → 取消回调
-    nav.modalPresentationStyle = UIModalPresentationPageSheet;
-    nav.presentationController.delegate = self;
-    [top presentViewController:nav animated:YES completion:nil];
+    // 全屏 present：pageSheet 顶部会露出黑边（安全区不足），且下滑关闭不走取消 hook
+    nav.modalPresentationStyle = UIModalPresentationFullScreen;
+    [top presentViewController:nav animated:YES completion:^{
+        // 显示完成后再进一次多选态：搜索框随多选 UI 渲染，仅在 present 前调 beginMultiSelect
+        // 不会显示（勾选一个后才出来）
+        SEL bms = NSSelectorFromString(@"beginMultiSelect");
+        if ([picker respondsToSelector:bms]) {
+            ((void (*)(id, SEL))objc_msgSend)(picker, bms);
+        }
+    }];
 }
 
-// ===== m_delegate 回调（ForwardMessageLogic 选会话语义）=====
-
-- (void)dismissPicker {
-    [self.picker dismissViewControllerAnimated:YES completion:nil];
-}
-
-// 多选完成（原生完成后自行关页）
-- (void)OnSelectSessions:(NSArray *)contacts SessionSelectController:(id)ctrl {
-    if (MioSessionBridge(ctrl) != self) return;
-    if (!self.hasReturned) [self finishWithWxids:MioSessionExtract(contacts ?: @[])];
-}
-
-// 单选兜底（多选开关未生效时点 cell 直返单个）
-- (void)OnSelectSession:(id)contact SessionSelectController:(id)ctrl {
-    if (MioSessionBridge(ctrl) != self) return;
-    if (!self.hasReturned) [self finishWithWxids:MioSessionExtract(contact ? @[contact] : @[])];
-}
-
-- (void)OnSelectSessionCancel {
-    if (!self.hasReturned) {
-        [self dismissPicker];
-        [self notifyCancel];
-    }
-}
-
-- (void)OnSelectSessionCancelInPageSheetMode:(id)arg {
-    [self OnSelectSessionCancel];
-}
-
-// pageSheet 下滑关闭：系统已 dismiss，走取消（hasReturned 内置防重入）
-- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
-    [self notifyCancel];
+- (void)cleanup {
+    if (self.picker) objc_setAssociatedObject(self.picker, kMioAllBridgeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    self.picker = nil;
 }
 
 @end
@@ -564,7 +662,7 @@ static NSArray<NSString *> *MioSessionExtract(id contacts) {
             break;
         }
         case MioContactPickerModeGroups:   adapter = [[MioPickerGroupsAdapter alloc] init]; break;
-        case MioContactPickerModeAll:   adapter = [[MioPickerSessionAdapter alloc] init]; break;   // 都选：转发选会话页（人+群混排）
+        case MioContactPickerModeAll:      adapter = [[MioPickerAllAdapter alloc] init]; break;    // 都选：转发选会话页（人+群混排）
     }
     if (!adapter) return;
     adapter.delegate = delegate;
