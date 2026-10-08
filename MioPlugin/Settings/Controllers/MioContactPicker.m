@@ -338,41 +338,31 @@ static MioPickerMultiSelectAdapter *MioMultiBridge(id self) {
 // m_toolView.completeButton（pageSheet 底部按钮，实证命中 FixTitleColorButton）。
 // 注意不要主动调 updateRightBarItemEnabled:YES——log54 实证该调用在 present 后状态必崩
 
-// WCR FUN_01b3a0ac 同款：子树内所有 UIControl 三件套强显（enabled/alpha/userInteractionEnabled）
-static void MioMultiEnableControls(UIView *view) {
+// WCR FUN_01b3a0ac 同款：子树（含自身）内标题含"完成"的 UIButton 三件套强显
+// （enabled/alpha/userInteractionEnabled）。只动完成按钮本身，
+// 不无差别打开子树里其他本该保持禁用的 UIControl
+static void MioMultiEnableDoneControls(UIView *view) {
     if (![view isKindOfClass:[UIView class]]) return;
-    if ([view isKindOfClass:[UIControl class]]) {
-        [(UIControl *)view setEnabled:YES];
-        [(UIControl *)view setAlpha:1.0];
-        [(UIControl *)view setUserInteractionEnabled:YES];
-    }
-    for (UIView *sub in view.subviews) MioMultiEnableControls(sub);
-}
-
-// 子树内所有标题含"完成"的 UIButton 三件套强显（可能存在两个实例：面板项 customView + 底部工具条）
-static void MioMultiEnableDoneButtons(UIView *view) {
-    for (UIView *sub in view.subviews) {
-        if ([sub isKindOfClass:[UIButton class]]) {
-            UIButton *btn = (UIButton *)sub;
-            NSString *n = [btn titleForState:UIControlStateNormal] ?: @"";
-            NSString *d = [btn titleForState:UIControlStateDisabled] ?: @"";
-            if ([n containsString:@"完成"] || [d containsString:@"完成"]) {
-                [btn setEnabled:YES];
-                [btn setAlpha:1.0];
-                [btn setUserInteractionEnabled:YES];
-            }
+    if ([view isKindOfClass:[UIButton class]]) {
+        UIButton *btn = (UIButton *)view;
+        NSString *n = [btn titleForState:UIControlStateNormal] ?: @"";
+        NSString *d = [btn titleForState:UIControlStateDisabled] ?: @"";
+        if ([n containsString:@"完成"] || [d containsString:@"完成"]) {
+            [btn setEnabled:YES];
+            [btn setAlpha:1.0];
+            [btn setUserInteractionEnabled:YES];
         }
-        MioMultiEnableDoneButtons(sub);
     }
+    for (UIView *sub in view.subviews) MioMultiEnableDoneControls(sub);
 }
 
 static void MioMultiEnableBarItem(UIBarButtonItem *item) {
     if (![item isKindOfClass:[UIBarButtonItem class]]) return;
     [item setEnabled:YES];
-    if ([item.customView isKindOfClass:[UIView class]]) MioMultiEnableControls(item.customView);
+    if ([item.customView isKindOfClass:[UIView class]]) MioMultiEnableDoneControls(item.customView);
 }
 
-// 强显主体（无守卫，供两个守卫入口复用）
+// 强显主体（无守卫，供守卫入口 MioMultiApplySurfaces 复用）
 static void MioMultiApplySurfacesCore(UIViewController *picker) {
     id panelItem = nil;
     @try { panelItem = [picker valueForKey:@"m_panelBtnItem"]; } @catch (NSException *e) {}
@@ -390,30 +380,17 @@ static void MioMultiApplySurfacesCore(UIViewController *picker) {
         [(UIButton *)doneBtn setAlpha:1.0];
         [(UIButton *)doneBtn setUserInteractionEnabled:YES];
     } else if ([doneBtn isKindOfClass:[UIView class]]) {
-        MioMultiEnableControls(doneBtn);
+        MioMultiEnableDoneControls(doneBtn);
     }
     // 兜住所有"完成"按钮实例（log55 实证原生置灰不走 update* hook，需视图树扫描补齐）
-    if (picker.viewIfLoaded) MioMultiEnableDoneButtons(picker.viewIfLoaded);
+    if (picker.viewIfLoaded) MioMultiEnableDoneControls(picker.viewIfLoaded);
 }
 
-// hook 回调入口：重入保护（refreshing 已 YES = 本链已在强显中，直接返回）
+// 强显唯一守卫入口（hook 回调 / present 后立即 / 250ms 补刷共用）：
+// refreshing 已 YES = 本链已在强显中，直接返回（update* 链可能间接绕回来）
+// 只做四路强显，不主动调 updateRightBarItemEnabled:YES——实证（log54）该调用
+// 在 present 后状态下必崩在原生内部；WCR 在其自有时机调用不崩，时机/状态不同
 static void MioMultiApplySurfaces(UIViewController *picker) {
-    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(picker);
-    if (!bridge) return;
-    if (bridge.refreshing) return;
-    bridge.refreshing = YES;
-    @try {
-        MioMultiApplySurfacesCore(picker);
-    } @finally {
-        bridge.refreshing = NO;
-    }
-}
-
-// 全量刷新（present 后调度 / 250ms 补刷走这里）：只做四路强显。
-// 不主动调 updateRightBarItemEnabled:YES——实证（log54）该调用在 present 后状态下
-// 必崩在原生内部（日志停在 call begin）；WCR 在其自有时机调用不崩，时机/状态不同。
-// 选中数变化的原生刷新由 updatePanelBtn hook → ApplySurfaces 补强显兜住
-static void MioMultiRefreshNow(UIViewController *picker) {
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(picker);
     if (!bridge) return;
     if (bridge.refreshing) return;
@@ -427,10 +404,10 @@ static void MioMultiRefreshNow(UIViewController *picker) {
 
 // WCR FUN_01b39820 同款：立即刷 + 250ms 后补刷一轮（原生延迟刷新路径会把按钮再置灰）
 static void MioMultiRefreshRightButton(UIViewController *picker) {
-    MioMultiRefreshNow(picker);
+    MioMultiApplySurfaces(picker);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         MioPickerMultiSelectAdapter *b = MioMultiBridge(picker);
-        if (b && !b.hasReturned) MioMultiRefreshNow(picker);
+        if (b && !b.hasReturned) MioMultiApplySurfaces(picker);
     });
 }
 
@@ -690,9 +667,11 @@ static void MioMultiSetValue(id obj, NSString *key, id value) {
     UINavigationController *nav = [[navCls alloc] initWithRootViewController:picker];
     // 底部弹出（pageSheet）：下滑即可退出；下滑关闭走 presentationControllerDidDismiss → 取消回调
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
-    nav.presentationController.delegate = self;
-    [top presentViewController:nav animated:YES completion:nil];
-
+    [top presentViewController:nav animated:YES completion:^{
+        // presentationController 在 present 前是 nil，delegate 只能在 completion 里挂，
+        // 否则 pageSheet 下滑关闭走不到 presentationControllerDidDismiss:
+        nav.presentationController.delegate = self;
+    }];
     // 初始强显（WCR 节奏：present 完成后立即 + 250ms 各一次；不挂 layout hook，避免每帧刷新环）
     dispatch_async(dispatch_get_main_queue(), ^{
         if (!self.hasReturned && self.picker) MioMultiRefreshRightButton(self.picker);
