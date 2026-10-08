@@ -440,11 +440,13 @@ static void mioMultiRightEnabledPageSheetImp(id self, SEL _cmd, id arg1) {
     }
 }
 
-// ===== 根治层：hook 完成按钮自身的 setEnabled:/setAlpha: =====
-// log55 实证原生置灰不走任何 update* 方法（无延迟异步路径也拦不到），任何"找时机补强显"的
-// 方案都有漏网路径。原生无论从哪里置灰，最终必经按钮的 setEnabled:/setAlpha:，
-// 在这里拦截：归属我们选人器（响应链上是挂了 bridge 的 MultiSelectContactsViewController）
-// 且标题含"完成"的按钮，一律抬回可用态。原生"发起群聊"同用此类但无 bridge，不受影响。
+// ===== 按钮级兜底：hook 完成按钮自身的 setEnabled: =====
+// 注意只 hook 类自己实现的方法：FixTitleColorButton 有自己的 setEnabled:（WeChat+0x167f4c3c），
+// hook 仅影响该类；而它没有自己的 setAlpha:（继承 UIView），曾尝试 hook setAlpha: 时
+// class_getInstanceMethod 命中的是 UIView 的 Method，MSHook 直接换掉了全局 UIView setAlpha:
+// 的 IMP——与 WCR 的全局 UIView setAlpha: hook 叠加成互相递归，栈溢出闪退（Frida 栈实证
+// Mio!0x3fcdc ↔ WCR!0x1d4108 无限乒乓）。教训：MSHook 前必须确认方法归属，勿 hook 继承方法。
+// alpha 强显由 updatePanelBtn hook + ApplySurfaces 覆盖，无需 setAlpha: hook
 
 // 沿响应链找归属的 MultiSelectContactsViewController（无 bridge = 原生自己的，不干预）
 static UIViewController *MioMultiOwningPicker(UIView *v) {
@@ -459,7 +461,6 @@ static UIViewController *MioMultiOwningPicker(UIView *v) {
 }
 
 static IMP gOrigFixBtnSetEnabled = NULL;
-static IMP gOrigFixBtnSetAlpha = NULL;
 
 static void mioFixBtnSetEnabledImp(id self, SEL _cmd, BOOL en) {
     ((void (*)(id, SEL, BOOL))gOrigFixBtnSetEnabled)(self, _cmd, en);
@@ -472,21 +473,7 @@ static void mioFixBtnSetEnabledImp(id self, SEL _cmd, BOOL en) {
     MioPickerMultiSelectAdapter *bridge = vc ? MioMultiBridge(vc) : nil;
     if (!bridge || bridge.hasReturned) return;
     ((void (*)(id, SEL, BOOL))gOrigFixBtnSetEnabled)(self, _cmd, YES);
-    [btn setAlpha:1.0];
     [btn setUserInteractionEnabled:YES];
-}
-
-static void mioFixBtnSetAlphaImp(id self, SEL _cmd, CGFloat a) {
-    ((void (*)(id, SEL, CGFloat))gOrigFixBtnSetAlpha)(self, _cmd, a);
-    if (a >= 1.0) return;
-    UIButton *btn = (UIButton *)self;
-    NSString *n = [btn titleForState:UIControlStateNormal] ?: @"";
-    NSString *d = [btn titleForState:UIControlStateDisabled] ?: @"";
-    if (![n containsString:@"完成"] && ![d containsString:@"完成"]) return;
-    UIViewController *vc = MioMultiOwningPicker(btn);
-    MioPickerMultiSelectAdapter *bridge = vc ? MioMultiBridge(vc) : nil;
-    if (!bridge || bridge.hasReturned) return;
-    ((void (*)(id, SEL, CGFloat))gOrigFixBtnSetAlpha)(self, _cmd, 1.0);
 }
 
 // pageSheet 右按钮更新（0 参）：原生 pageSheet 刷"完成"的路径之一。
@@ -544,12 +531,11 @@ static void mioMultiInstallHooks(void) {
         SEL s3 = NSSelectorFromString(@"updateMultiSelectRightBarItemInPageSheetModeIfNeeded");
         Method m6 = class_getInstanceMethod(cls, s3);
         if (m6) { MSHookMessageEx(cls, s3, (IMP)mioMultiUpdateRightPageSheetImp, &gOrigMultiUpdateRightPageSheet); }
-        // 根治层：完成按钮自身的 setEnabled:/setAlpha:（拦截所有路径的置灰）
+        // 按钮级兜底：setEnabled: 是 FixTitleColorButton 自己的方法，hook 仅影响该类。
+        // 勿 hook setAlpha:（继承自 UIView，会劫持全局实现，与 WCR 全局 hook 递归成环）
         Class fcls = objc_getClass("FixTitleColorButton");
         Method fe = fcls ? class_getInstanceMethod(fcls, @selector(setEnabled:)) : NULL;
-        Method fa = fcls ? class_getInstanceMethod(fcls, @selector(setAlpha:)) : NULL;
         if (fe) { MSHookMessageEx(fcls, @selector(setEnabled:), (IMP)mioFixBtnSetEnabledImp, &gOrigFixBtnSetEnabled); }
-        if (fa) { MSHookMessageEx(fcls, @selector(setAlpha:), (IMP)mioFixBtnSetAlphaImp, &gOrigFixBtnSetAlpha); }
         SEL s4 = NSSelectorFromString(@"onDone:");
         Method m4 = class_getInstanceMethod(cls, s4);
         if (m4) { MSHookMessageEx(cls, s4, (IMP)mioMultiDoneImp, &gOrigMultiDone); }
