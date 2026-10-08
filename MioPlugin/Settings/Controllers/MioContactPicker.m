@@ -478,11 +478,13 @@ static IMP gOrigAllDone = NULL;
 static IMP gOrigAllUpdateBtn = NULL;
 static IMP gOrigAllLeftBtn = NULL;
 static IMP gOrigAllPopDismiss = NULL;
+static IMP gOrigAllLayout = NULL;
 
 static void mioAllInstallHooks(void);
 
 @interface MioPickerAllAdapter : MioPickerAdapterBase
 @property (strong, nonatomic) UIViewController *picker;
+@property (nonatomic, assign) BOOL layoutFixed;   // 首次 layout 刷新一次性标志（实例级，防多实例污染）
 - (void)mioAllCloseTapped:(id)sender;                          // "关闭"左按钮 action
 @end
 
@@ -603,6 +605,32 @@ static void mioAllPopDismissImp(id self, SEL _cmd) {
     }
 }
 
+// 首次 layout 且 view 已进 window（几何已正确、present 动画刚开始、用户尚未看清）时刷新多选 UI：
+// 跳变被消化在 present 动画里，首帧即正确布局。一次性标志防重复刷新（滚动/键盘/旋转不再触发）
+static void mioAllLayoutImp(id self, SEL _cmd) {
+    if (gOrigAllLayout) ((void (*)(id, SEL))gOrigAllLayout)(self, _cmd);
+    MioPickerAllAdapter *bridge = MioAllBridge(self);
+    if (!bridge || bridge.hasReturned || bridge.layoutFixed) return;
+    UIViewController *vc = self;
+    if (!vc.view.window) {
+        WPLog(@"MioPicker", @"[All] layout 时未进 window，跳过");
+        return;
+    }
+    bridge.layoutFixed = YES;
+    id selectView = nil;
+    @try { selectView = [vc valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
+    SEL ums = NSSelectorFromString(@"updateMultiSelectView");
+    BOOL umsOk = selectView && [selectView respondsToSelector:ums];
+    if (umsOk) ((void (*)(id, SEL))objc_msgSend)(selectView, ums);
+    SEL upv = NSSelectorFromString(@"updateMultiSelectPanelViewResultView");
+    BOOL upvOk = [vc respondsToSelector:upv];
+    if (upvOk) ((void (*)(id, SEL))objc_msgSend)(vc, upv);
+    [vc.view setNeedsLayout];
+    [vc.view layoutIfNeeded];
+    WPLog(@"MioPicker", @"[All] 首次 layout(已进 window) → UI 刷新: updateMultiSelectView=%d updateMultiSelectPanelViewResultView=%d",
+          umsOk ? 1 : 0, upvOk ? 1 : 0);
+}
+
 static void mioAllInstallHooks(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -627,6 +655,10 @@ static void mioAllInstallHooks(void) {
         Method m3 = class_getInstanceMethod(cls, popSel);
         if (m3) { MSHookMessageEx(cls, popSel, (IMP)mioAllPopDismissImp, &gOrigAllPopDismiss); }
         WPLog(@"MioPicker", @"[All] hook viewDidBePopedOrDismissed=%d", m3 ? 1 : 0);
+        // MSHookMessageEx：方法在父类时 hook 限定在本类，不污染 UIViewController 全局
+        Method m5 = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
+        if (m5) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioAllLayoutImp, &gOrigAllLayout); }
+        WPLog(@"MioPicker", @"[All] hook viewDidLayoutSubviews=%d", m5 ? 1 : 0);
     });
 }
 
@@ -708,26 +740,8 @@ static void mioAllInstallHooks(void) {
         if ([picker respondsToSelector:bms]) {
             ((void (*)(id, SEL))objc_msgSend)(picker, bms);
         }
-        // UI 后置：异步到下一帧，几何稳定后再刷新勾选表格与已选面板 + 强制布局收尾
-        // （present completion 时动画刚结束，同步刷新会拿到动画中间帧的几何，面板会被顶进导航栏下面）
-        dispatch_async(dispatch_get_main_queue(), ^{
-            id selectView = nil;
-            @try { selectView = [picker valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
-            SEL ums = NSSelectorFromString(@"updateMultiSelectView");
-            BOOL umsOk = selectView && [selectView respondsToSelector:ums];
-            if (umsOk) {
-                ((void (*)(id, SEL))objc_msgSend)(selectView, ums);
-            }
-            SEL upv = NSSelectorFromString(@"updateMultiSelectPanelViewResultView");
-            BOOL upvOk = [picker respondsToSelector:upv];
-            if (upvOk) {
-                ((void (*)(id, SEL))objc_msgSend)(picker, upv);
-            }
-            [picker.view setNeedsLayout];
-            [picker.view layoutIfNeeded];
-            WPLog(@"MioPicker", @"[All] 下一帧 UI 刷新完成: updateMultiSelectView=%d updateMultiSelectPanelViewResultView=%d 布局强制刷新=1",
-                  umsOk ? 1 : 0, upvOk ? 1 : 0);
-        });
+        // UI 刷新不在 completion：由 viewDidLayoutSubviews hook 在首次进 window 的布局时机
+        // 执行（几何已正确但用户尚未看清，跳变被消化在 present 动画里）
     }];
 }
 
