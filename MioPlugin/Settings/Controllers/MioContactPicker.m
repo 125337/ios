@@ -33,6 +33,10 @@
 @interface MultiSelectContactsViewController : UIViewController
 @end
 
+@interface SessionSelectController : UIViewController
+- (instancetype)initWithSelectedContacts:(NSArray *)contacts;   // 预选 CContact 数组（转发页原生路径）
+@end
+
 #pragma mark - 骨架（共享：重入保护/取消回调/资源清理/主线程回调）
 
 @interface MioPickerAdapterBase : NSObject
@@ -265,7 +269,7 @@ static void mioGroupsInstallHooks(void) {
 
 static void *kMioMultiBridgeKey = &kMioMultiBridgeKey;
 
-@interface MioPickerMultiSelectAdapter : MioPickerAdapterBase
+@interface MioPickerMultiSelectAdapter : MioPickerAdapterBase <UIAdaptivePresentationStyleDelegate>
 @property (strong, nonatomic) UIViewController *picker;
 @property (copy, nonatomic) NSString *logTag;   // [Contacts] / [All]
 @end
@@ -439,7 +443,7 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
 
 static void *kMioSessionBridgeKey = &kMioSessionBridgeKey;
 
-@interface MioPickerSessionAdapter : MioPickerAdapterBase
+@interface MioPickerSessionAdapter : MioPickerAdapterBase <UIAdaptivePresentationStyleDelegate>
 @property (strong, nonatomic) UIViewController *picker;
 @end
 
@@ -506,6 +510,10 @@ static NSArray<NSString *> *MioSessionExtract(id contacts) {
 }
 
 // ===== m_delegate 回调（ForwardMessageLogic 选会话语义）=====
+
+- (void)dismissPicker {
+    [self.picker dismissViewControllerAnimated:YES completion:nil];
+}
 
 // 多选完成（原生完成后自行关页）
 - (void)OnSelectSessions:(NSArray *)contacts SessionSelectController:(id)ctrl {
