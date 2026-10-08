@@ -268,6 +268,7 @@ static void *kMioMultiBridgeKey = &kMioMultiBridgeKey;
 @interface MioPickerMultiSelectAdapter : MioPickerAdapterBase
 @property (strong, nonatomic) UIViewController *picker;
 @property (copy, nonatomic) NSString *logTag;   // [Contacts] / [All]
+@property (nonatomic, assign) BOOL showSelectFromGroup;   // 顶部"选择群聊中的朋友"入口（All=开，Contacts=关）
 @end
 
 @implementation MioPickerMultiSelectAdapter
@@ -401,7 +402,7 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     MioMultiSetValue(picker, @"m_rightBarButtonTitle", @"完成", tag);
     MioMultiSetValue(picker, @"m_bShowHistoryGroup", @NO, tag);
     MioMultiSetValue(picker, @"m_bShowContactTag", @YES, tag);
-    MioMultiSetValue(picker, @"m_bShowSelectFromGroup", @NO, tag);   // 顶部"选择群聊中的朋友"入口，需求去掉
+    MioMultiSetValue(picker, @"m_bShowSelectFromGroup", self.showSelectFromGroup ? @YES : @NO, tag);   // 顶部"选择群聊中的朋友"入口
     MioMultiSetValue(picker, @"m_bKeepCurViewAfterSelect", @YES, tag);
     MioMultiSetValue(picker, @"m_onlyChatRoom", @NO, tag);
     MioMultiSetValue(picker, @"m_onlyImportChatRoom", @NO, tag);
@@ -457,6 +458,7 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
         case MioContactPickerModeAll: {
             MioPickerMultiSelectAdapter *a = [[MioPickerMultiSelectAdapter alloc] init];
             a.logTag = @"[All]";
+            a.showSelectFromGroup = YES;   // 管理联系人：可从群聊选人
             adapter = a;
             break;
         }
