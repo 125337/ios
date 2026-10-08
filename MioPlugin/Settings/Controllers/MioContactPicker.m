@@ -348,6 +348,23 @@ static void MioMultiEnableControls(UIView *view) {
     for (UIView *sub in view.subviews) MioMultiEnableControls(sub);
 }
 
+// 子树内所有标题含"完成"的 UIButton 三件套强显（可能存在两个实例：面板项 customView + 底部工具条）
+static void MioMultiEnableDoneButtons(UIView *view) {
+    for (UIView *sub in view.subviews) {
+        if ([sub isKindOfClass:[UIButton class]]) {
+            UIButton *btn = (UIButton *)sub;
+            NSString *n = [btn titleForState:UIControlStateNormal] ?: @"";
+            NSString *d = [btn titleForState:UIControlStateDisabled] ?: @"";
+            if ([n containsString:@"完成"] || [d containsString:@"完成"]) {
+                [btn setEnabled:YES];
+                [btn setAlpha:1.0];
+                [btn setUserInteractionEnabled:YES];
+            }
+        }
+        MioMultiEnableDoneButtons(sub);
+    }
+}
+
 static void MioMultiEnableBarItem(UIBarButtonItem *item) {
     if (![item isKindOfClass:[UIBarButtonItem class]]) return;
     [item setEnabled:YES];
@@ -377,6 +394,8 @@ static void MioMultiApplySurfacesCore(UIViewController *picker) {
     } else if ([doneBtn isKindOfClass:[UIView class]]) {
         MioMultiEnableControls(doneBtn);
     }
+    // 兜住所有"完成"按钮实例（log55 实证原生置灰不走 update* hook，需视图树扫描补齐）
+    if (picker.viewIfLoaded) MioMultiEnableDoneButtons(picker.viewIfLoaded);
 }
 
 // hook 回调入口：重入保护（refreshing 已 YES = 本链已在强显中，直接返回）
@@ -446,6 +465,64 @@ static void mioMultiRightEnabledPageSheetImp(id self, SEL _cmd, id arg1) {
     }
 }
 
+// ===== 根治层：hook 完成按钮自身的 setEnabled:/setAlpha: =====
+// log55 实证原生置灰不走任何 update* 方法（无延迟异步路径也拦不到），任何"找时机补强显"的
+// 方案都有漏网路径。原生无论从哪里置灰，最终必经按钮的 setEnabled:/setAlpha:，
+// 在这里拦截：归属我们选人器（响应链上是挂了 bridge 的 MultiSelectContactsViewController）
+// 且标题含"完成"的按钮，一律抬回可用态。原生"发起群聊"同用此类但无 bridge，不受影响。
+
+// 沿响应链找归属的 MultiSelectContactsViewController（无 bridge = 原生自己的，不干预）
+static UIViewController *MioMultiOwningPicker(UIView *v) {
+    UIResponder *r = v;
+    while ((r = [r nextResponder])) {
+        if ([r isKindOfClass:[UIViewController class]] &&
+            [NSStringFromClass([r class]) isEqualToString:@"MultiSelectContactsViewController"]) {
+            return (UIViewController *)r;
+        }
+    }
+    return nil;
+}
+
+static IMP gOrigFixBtnSetEnabled = NULL;
+static IMP gOrigFixBtnSetAlpha = NULL;
+
+static void mioFixBtnSetEnabledImp(id self, SEL _cmd, BOOL en) {
+    ((void (*)(id, SEL, BOOL))gOrigFixBtnSetEnabled)(self, _cmd, en);
+    if (en) return;   // 抬回 YES 再进本 hook 时从这返回，不会无限递归
+    UIButton *btn = (UIButton *)self;
+    NSString *n = [btn titleForState:UIControlStateNormal] ?: @"";
+    NSString *d = [btn titleForState:UIControlStateDisabled] ?: @"";
+    if (![n containsString:@"完成"] && ![d containsString:@"完成"]) return;
+    UIViewController *vc = MioMultiOwningPicker(btn);
+    MioPickerMultiSelectAdapter *bridge = vc ? MioMultiBridge(vc) : nil;
+    if (!bridge || bridge.hasReturned) return;
+    WPLog(@"Contacts", @"[M-Btn] setEnabled:NO → 抬回 YES");
+    ((void (*)(id, SEL, BOOL))gOrigFixBtnSetEnabled)(self, _cmd, YES);
+    [btn setAlpha:1.0];
+    [btn setUserInteractionEnabled:YES];
+}
+
+static void mioFixBtnSetAlphaImp(id self, SEL _cmd, CGFloat a) {
+    ((void (*)(id, SEL, CGFloat))gOrigFixBtnSetAlpha)(self, _cmd, a);
+    if (a >= 1.0) return;
+    UIButton *btn = (UIButton *)self;
+    NSString *n = [btn titleForState:UIControlStateNormal] ?: @"";
+    NSString *d = [btn titleForState:UIControlStateDisabled] ?: @"";
+    if (![n containsString:@"完成"] && ![d containsString:@"完成"]) return;
+    UIViewController *vc = MioMultiOwningPicker(btn);
+    MioPickerMultiSelectAdapter *bridge = vc ? MioMultiBridge(vc) : nil;
+    if (!bridge || bridge.hasReturned) return;
+    WPLog(@"Contacts", @"[M-Btn] setAlpha:%.2f → 抬回 1.0", (double)a);
+    ((void (*)(id, SEL, CGFloat))gOrigFixBtnSetAlpha)(self, _cmd, 1.0);
+}
+
+static IMP gOrigMultiLayout = NULL;
+static void mioMultiLayoutImp(id self, SEL _cmd) {
+    if (gOrigMultiLayout) ((void (*)(id, SEL))gOrigMultiLayout)(self, _cmd);
+    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
+    if (bridge && !bridge.hasReturned) MioMultiApplySurfaces(self);
+}
+
 // pageSheet 右按钮更新（0 参）：原生 pageSheet 刷"完成"的主路径，0 选中时也走这里。
 // 只补强显（主动 update 若引发原生再进本方法会成环）
 static IMP gOrigMultiUpdateRightPageSheet = NULL;
@@ -500,6 +577,17 @@ static void mioMultiInstallHooks(void) {
         SEL s3 = NSSelectorFromString(@"updateMultiSelectRightBarItemInPageSheetModeIfNeeded");
         Method m6 = class_getInstanceMethod(cls, s3);
         if (m6) { MSHookMessageEx(cls, s3, (IMP)mioMultiUpdateRightPageSheetImp, &gOrigMultiUpdateRightPageSheet); }
+        // viewDidLayoutSubviews：布局变化后重申强显（只调 ApplySurfaces，无主动 update，不会成环）
+        Method m3 = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
+        if (m3) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioMultiLayoutImp, &gOrigMultiLayout); }
+        // 根治层：完成按钮自身的 setEnabled:/setAlpha:（拦截所有路径的置灰）
+        Class fcls = objc_getClass("FixTitleColorButton");
+        if (fcls) {
+            Method fe = class_getInstanceMethod(fcls, @selector(setEnabled:));
+            if (fe) { MSHookMessageEx(fcls, @selector(setEnabled:), (IMP)mioFixBtnSetEnabledImp, &gOrigFixBtnSetEnabled); }
+            Method fa = class_getInstanceMethod(fcls, @selector(setAlpha:));
+            if (fa) { MSHookMessageEx(fcls, @selector(setAlpha:), (IMP)mioFixBtnSetAlphaImp, &gOrigFixBtnSetAlpha); }
+        }
         SEL s4 = NSSelectorFromString(@"onDone:");
         Method m4 = class_getInstanceMethod(cls, s4);
         if (m4) { MSHookMessageEx(cls, s4, (IMP)mioMultiDoneImp, &gOrigMultiDone); }
