@@ -446,11 +446,13 @@ static IMP gOrigAllDone = NULL;
 static IMP gOrigAllUpdateBtn = NULL;
 static IMP gOrigAllLeftBtn = NULL;
 static IMP gOrigAllPopDismiss = NULL;
+static IMP gOrigAllAppear = NULL;
 
 static void mioAllInstallHooks(void);
 
 @interface MioPickerAllAdapter : MioPickerAdapterBase
 @property (strong, nonatomic) UIViewController *picker;
+@property (nonatomic, assign) BOOL appearedDone;   // viewDidAppear 一次性标志（实例级，防重复触发）
 - (void)mioAllCloseTapped:(id)sender;                          // "关闭"左按钮 action
 @end
 
@@ -563,6 +565,31 @@ static void mioAllPopDismissImp(id self, SEL _cmd) {
     }
 }
 
+// viewDidAppear（view 已进 window、present 动画结束、几何稳定）后才进多选态并刷新已选面板：
+// present 前 beginMultiSelect 会让微信按未布局几何（bounds=0）算"最近转发"条等 frame，
+// 呈现压扁态且需手动触发 layout 才恢复。一次性标志防 viewDidAppear 多次触发重复刷新
+static void mioAllAppearImp(id self, SEL _cmd, BOOL animated) {
+    if (gOrigAllAppear) ((void (*)(id, SEL, BOOL))gOrigAllAppear)(self, _cmd, animated);
+    MioPickerAllAdapter *bridge = MioAllBridge(self);
+    if (!bridge || bridge.hasReturned || bridge.appearedDone) return;
+    bridge.appearedDone = YES;
+    UIViewController *vc = self;
+    SEL bms = NSSelectorFromString(@"beginMultiSelect");
+    if ([vc respondsToSelector:bms]) {
+        ((void (*)(id, SEL))objc_msgSend)(vc, bms);
+    }
+    id selectView = nil;
+    @try { selectView = [vc valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
+    SEL ums = NSSelectorFromString(@"updateMultiSelectView");
+    if (selectView && [selectView respondsToSelector:ums]) {
+        ((void (*)(id, SEL))objc_msgSend)(selectView, ums);
+    }
+    SEL upv = NSSelectorFromString(@"updateMultiSelectPanelViewResultView");
+    if ([vc respondsToSelector:upv]) {
+        ((void (*)(id, SEL))objc_msgSend)(vc, upv);
+    }
+}
+
 static void mioAllInstallHooks(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -580,6 +607,17 @@ static void mioAllInstallHooks(void) {
         SEL popSel = NSSelectorFromString(@"viewDidBePopedOrDismissed");
         Method m3 = class_getInstanceMethod(cls, popSel);
         if (m3) { MSHookMessageEx(cls, popSel, (IMP)mioAllPopDismissImp, &gOrigAllPopDismiss); }
+        // viewDidAppear:：若为父类继承实现（cls 与父类取到同一 Method），先在本类挂空实现再
+        // hook，避免 method 改写落在 UIViewController 上污染全局
+        SEL appearSel = NSSelectorFromString(@"viewDidAppear:");
+        Method m6 = class_getInstanceMethod(cls, appearSel);
+        Method m6Super = class_getInstanceMethod(class_getSuperclass(cls), appearSel);
+        if (m6 && m6 == m6Super) {
+            class_addMethod(cls, appearSel, imp_implementationWithBlock(^(id _self, BOOL anim){}),
+                            method_getTypeEncoding(m6));
+        }
+        m6 = class_getInstanceMethod(cls, appearSel);
+        if (m6) { MSHookMessageEx(cls, appearSel, (IMP)mioAllAppearImp, &gOrigAllAppear); }
     });
 }
 
@@ -615,11 +653,9 @@ static void mioAllInstallHooks(void) {
 
     objc_setAssociatedObject(picker, kMioAllBridgeKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    // WCR 同款：present 前强制 view 预加载 + 进入多选模式（Misc_part13.c L42594-42604）
+    // present 前仅强制 view 预加载；多选态延后到 viewDidAppear 再进（beginMultiSelect 放前面
+    // 会让微信按未布局几何算"最近转发"条等 frame），预加载保证注入时 m_selectView 已存在
     [picker view];
-    if ([picker respondsToSelector:NSSelectorFromString(@"beginMultiSelect")]) {
-        ((void (*)(id, SEL))objc_msgSend)(picker, NSSelectorFromString(@"beginMultiSelect"));
-    }
 
     // 数据前置：present 前只写 m_dicMultiSelect（原生首帧读该字典渲染勾选态），不做任何 UI 刷新
     if (preselected.count > 0) {
@@ -644,28 +680,8 @@ static void mioAllInstallHooks(void) {
     // 全屏 present：pageSheet 顶部会露出黑边（安全区不足），且下滑关闭不走取消 hook
     nav.modalPresentationStyle = UIModalPresentationFullScreen;
     [top presentViewController:nav animated:YES completion:^{
-        // 补设 title + 再进一次多选态（搜索框随多选 UI 渲染）
+        // 补设 title；多选态进入与已选面板刷新由 viewDidAppear hook 承担（彼时几何已稳定）
         [picker setTitle:title ?: @""];
-        SEL bms = NSSelectorFromString(@"beginMultiSelect");
-        if ([picker respondsToSelector:bms]) {
-            ((void (*)(id, SEL))objc_msgSend)(picker, bms);
-        }
-        // UI 后置：异步到下一帧，几何稳定后再刷新勾选表格与已选面板 + 强制布局收尾
-        // （present completion 时动画刚结束，同步刷新会拿到动画中间帧的几何，面板会被顶进导航栏下面）
-        dispatch_async(dispatch_get_main_queue(), ^{
-            id selectView = nil;
-            @try { selectView = [picker valueForKey:@"m_selectView"]; } @catch (NSException *e) {}
-            SEL ums = NSSelectorFromString(@"updateMultiSelectView");
-            if (selectView && [selectView respondsToSelector:ums]) {
-                ((void (*)(id, SEL))objc_msgSend)(selectView, ums);
-            }
-            SEL upv = NSSelectorFromString(@"updateMultiSelectPanelViewResultView");
-            if ([picker respondsToSelector:upv]) {
-                ((void (*)(id, SEL))objc_msgSend)(picker, upv);
-            }
-            [picker.view setNeedsLayout];
-            [picker.view layoutIfNeeded];
-        });
     }];
 }
 
