@@ -2110,6 +2110,33 @@ static UIImage *MioMomentsGlyphImage(CGFloat size) {
 }
 static UIImage *gMioTailGlyph = nil; // 图标不可变，绘制一次复用
 
+// 定时发送行 clock 图标（发帖页官方图标同规格：48 画布 + 官方黑 + stroke 2.5 圆角，
+// 对齐所在位置/提醒谁看/谁可以看的线条观感）：外圆 r18 + 指针两针（上针 + 右下针）
+static UIImage *MioMomentsClockGlyphImage(CGFloat size) {
+    UIGraphicsImageRendererFormat *fmt = [[UIGraphicsImageRendererFormat alloc] init];
+    fmt.scale = [UIScreen mainScreen].scale;
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size) format:fmt];
+    return [r imageWithActions:^(UIGraphicsImageRendererContext *rc) {
+        CGContextRef c = rc.CGContext;
+        CGContextScaleCTM(c, size / 48.0, size / 48.0);
+        CGContextSetStrokeColorWithColor(c, [UIColor blackColor].CGColor); // 官方黑
+        CGContextSetLineWidth(c, 2.5);
+        CGContextSetLineCap(c, kCGLineCapRound);
+        CGContextSetLineJoin(c, kCGLineJoinRound);
+        CGContextStrokeEllipseInRect(c, CGRectMake(6, 6, 36, 36)); // 表盘外圆
+        CGPoint hands[2][2] = {
+            {{24, 13.5}, {24, 25.5}},  // 分针（竖直向上）
+            {{24, 25.5}, {30.5, 29}},  // 时针（右下）
+        };
+        for (int i = 0; i < 2; i++) {
+            CGContextMoveToPoint(c, hands[i][0].x, hands[i][0].y);
+            CGContextAddLineToPoint(c, hands[i][1].x, hands[i][1].y);
+            CGContextStrokePath(c);
+        }
+    }];
+}
+static UIImage *gMioSchedGlyph = nil; // 图标不可变，绘制一次复用
+
 // cell 右值：本次优先（「本次无」/名字），否则默认（"默认: 名字"）
 static NSString *MioTailCellRightValue(void) {
     MomentsConfig *cfg = [MomentsConfig shared];
@@ -2364,6 +2391,8 @@ static void MioSchedSyncCommitCell(id vc) {
         if (![sec0 respondsToSelector:allCellsSel]) return;
         Class cellCls = objc_getClass("WCTableViewCellManager");
         SEL mkSel = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:");
+        // 图标变体（WCTableViewCellManager.h L69 头文件实证）：对齐所在位置/提醒谁看等官方行
+        SEL mkIconSel = NSSelectorFromString(@"normalCellForSel:target:leftImage:title:badge:rightValue:rightImage:withRightRedDot:selected:");
         SEL clickSel = NSSelectorFromString(@"mioOnSchedCell:");
         SEL addSel = NSSelectorFromString(@"addCell:");
         if (!cellCls || ![cellCls respondsToSelector:mkSel] || ![sec0 respondsToSelector:addSel]) return;
@@ -2383,8 +2412,20 @@ static void MioSchedSyncCommitCell(id vc) {
                 }
             }
         }
-        id cell = ((id(*)(id, SEL, SEL, id, id, id))objc_msgSend)((id)cellCls, mkSel,
-            clickSel, vc, @"定时发送", MioSchedCellRightValue());
+        // 注入新 cell（右值=定时状态）；优先图标构造器（clock 图标对齐官方行），缺失回退普通构造
+        if (!gMioSchedGlyph) gMioSchedGlyph = MioMomentsClockGlyphImage(25);
+        id cell = nil;
+        Class iconCls[2] = { objc_getClass("WCTableViewNormalCellManager"), cellCls };
+        for (int i = 0; i < 2 && !cell; i++) {
+            if (iconCls[i] && [iconCls[i] respondsToSelector:mkIconSel]) {
+                cell = ((id(*)(id, SEL, SEL, id, UIImage *, id, id, id, id, BOOL, BOOL))objc_msgSend)(iconCls[i],
+                    mkIconSel, clickSel, vc, gMioSchedGlyph, @"定时发送", nil, MioSchedCellRightValue(), nil, NO, NO);
+            }
+        }
+        if (!cell) {
+            cell = ((id(*)(id, SEL, SEL, id, id, id))objc_msgSend)((id)cellCls, mkSel,
+                clickSel, vc, @"定时发送", MioSchedCellRightValue());
+        }
         objc_setAssociatedObject(vc, &kMioSchedCommitCellKey, cell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         ((void(*)(id, SEL, id))objc_msgSend)(sec0, addSel, cell);
         SEL rtvSel = NSSelectorFromString(@"reloadTableView");
