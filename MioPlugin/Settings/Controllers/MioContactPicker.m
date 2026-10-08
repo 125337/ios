@@ -352,17 +352,12 @@ static void MioMultiEnableBarItem(UIBarButtonItem *item) {
     if ([item.customView isKindOfClass:[UIView class]]) MioMultiEnableControls(item.customView);
 }
 
-// 四路强显（不含主动 update 调用，hook 回调里调它避免递归）
-static void MioMultiEnableSurfaces(UIViewController *picker) {
+// 四路强显中的 ivar/customView 部分（不主动调 update，hook 回调里调它避免互相递归）
+static void MioMultiApplySurfaces(UIViewController *picker) {
     id panelItem = nil;
     @try { panelItem = [picker valueForKey:@"m_panelBtnItem"]; } @catch (NSException *e) {}
     if ([panelItem isKindOfClass:[UIBarButtonItem class]]) MioMultiEnableBarItem(panelItem);
     MioMultiEnableBarItem(picker.navigationItem.rightBarButtonItem);
-
-    SEL upd = NSSelectorFromString(@"updateRightBarItemEnabled:");
-    if ([picker respondsToSelector:upd]) {
-        ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, upd, YES);
-    }
 
     id toolView = nil;
     @try { toolView = [picker valueForKey:@"m_toolView"]; } @catch (NSException *e) {}
@@ -378,11 +373,16 @@ static void MioMultiEnableSurfaces(UIViewController *picker) {
     }
 }
 
-// 全量刷新（viewDidLayoutSubviews / 250ms 补刷走这里；主动 update 会触发
-// updateRightBarItemEnabled: hook，其内只做 EnableSurfaces 补刷，不会递归）
+// 全量刷新（viewDidLayoutSubviews / 250ms 补刷走这里）：
+// ApplySurfaces 之后主动调 updateRightBarItemEnabled:YES 让原生自刷；
+// 该调用会进 hook，但 hook 只调 MioMultiApplySurfaces（无主动 update），链路到此为止不会递归
 static void MioMultiRefreshNow(UIViewController *picker) {
     WPLog(@"Contacts", @"[DoneRefresh] count=%lu", (unsigned long)MioMultiExtract(picker).count);
-    MioMultiEnableSurfaces(picker);
+    MioMultiApplySurfaces(picker);
+    SEL upd = NSSelectorFromString(@"updateRightBarItemEnabled:");
+    if ([picker respondsToSelector:upd]) {
+        ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, upd, YES);
+    }
 }
 
 // WCR FUN_01b39820 同款：立即刷 + 250ms 后补刷一轮（原生延迟刷新路径会把按钮再置灰）
@@ -397,13 +397,13 @@ static void MioMultiRefreshRightButton(UIViewController *picker) {
 static void mioMultiRightEnabledImp(id self, SEL _cmd, id arg1) {
     if (gOrigMultiRightEnabled) ((void (*)(id, SEL, id))gOrigMultiRightEnabled)(self, _cmd, arg1);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) MioMultiEnableSurfaces(self);   // 只补强显，主动 update 会递归
+    if (bridge && !bridge.hasReturned) MioMultiApplySurfaces(self);   // 只补强显，无主动 update，不会递归
 }
 
 static void mioMultiRightEnabledPageSheetImp(id self, SEL _cmd, id arg1) {
     if (gOrigMultiRightEnabledPageSheet) ((void (*)(id, SEL, id))gOrigMultiRightEnabledPageSheet)(self, _cmd, arg1);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) MioMultiEnableSurfaces(self);
+    if (bridge && !bridge.hasReturned) MioMultiApplySurfaces(self);
 }
 
 static IMP gOrigMultiLayout = NULL;
