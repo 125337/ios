@@ -269,7 +269,7 @@ static void mioGroupsInstallHooks(void) {
 
 static void *kMioMultiBridgeKey = &kMioMultiBridgeKey;
 
-@interface MioPickerMultiSelectAdapter : MioPickerAdapterBase <UIAdaptivePresentationStyleDelegate>
+@interface MioPickerMultiSelectAdapter : MioPickerAdapterBase <UIAdaptivePresentationControllerDelegate>
 @property (strong, nonatomic) UIViewController *picker;
 @property (copy, nonatomic) NSString *logTag;   // [Contacts] / [All]
 @end
@@ -443,7 +443,7 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
 
 static void *kMioSessionBridgeKey = &kMioSessionBridgeKey;
 
-@interface MioPickerSessionAdapter : MioPickerAdapterBase <UIAdaptivePresentationStyleDelegate>
+@interface MioPickerSessionAdapter : MioPickerAdapterBase <UIAdaptivePresentationControllerDelegate>
 @property (strong, nonatomic) UIViewController *picker;
 @end
 
