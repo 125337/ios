@@ -512,14 +512,7 @@ static void mioFixBtnSetAlphaImp(id self, SEL _cmd, CGFloat a) {
     ((void (*)(id, SEL, CGFloat))gOrigFixBtnSetAlpha)(self, _cmd, 1.0);
 }
 
-static IMP gOrigMultiLayout = NULL;
-static void mioMultiLayoutImp(id self, SEL _cmd) {
-    if (gOrigMultiLayout) ((void (*)(id, SEL))gOrigMultiLayout)(self, _cmd);
-    MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) MioMultiApplySurfaces(self);
-}
-
-// pageSheet 右按钮更新（0 参）：原生 pageSheet 刷"完成"的主路径，0 选中时也走这里。
+// pageSheet 右按钮更新（0 参）：原生 pageSheet 刷"完成"的路径之一。
 // 只补强显（主动 update 若引发原生再进本方法会成环）
 static IMP gOrigMultiUpdateRightPageSheet = NULL;
 static void mioMultiUpdateRightPageSheetImp(id self, SEL _cmd) {
@@ -574,9 +567,6 @@ static void mioMultiInstallHooks(void) {
         SEL s3 = NSSelectorFromString(@"updateMultiSelectRightBarItemInPageSheetModeIfNeeded");
         Method m6 = class_getInstanceMethod(cls, s3);
         if (m6) { MSHookMessageEx(cls, s3, (IMP)mioMultiUpdateRightPageSheetImp, &gOrigMultiUpdateRightPageSheet); }
-        // viewDidLayoutSubviews：布局变化后重申强显（只调 ApplySurfaces，无主动 update，不会成环）
-        Method m3 = class_getInstanceMethod(cls, @selector(viewDidLayoutSubviews));
-        if (m3) { MSHookMessageEx(cls, @selector(viewDidLayoutSubviews), (IMP)mioMultiLayoutImp, &gOrigMultiLayout); }
         // 根治层：完成按钮自身的 setEnabled:/setAlpha:（拦截所有路径的置灰）
         Class fcls = objc_getClass("FixTitleColorButton");
         Method fe = fcls ? class_getInstanceMethod(fcls, @selector(setEnabled:)) : NULL;
