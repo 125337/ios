@@ -14,7 +14,8 @@
 //     头文件里的 m_bContainOpenIM / setM_bShowOpenIMContactGroup: 设备上不存在，勿用）。
 //     预选 = present 前注入 m_dicMultiSelect（原生 initData 读该字典渲染勾选）；
 //     结果 = m_delegate 回调（onMultiSelectContactReturn 系列原生协议方法）；
-//     完成按钮强显 = hook updateRightBarItemEnabled: 系 + viewDidLayoutSubviews（递归强显视图树"完成"按钮）；
+//     完成按钮强显 = WCR 配方（FUN_01b39918）：m_panelBtnItem / rightBarItem（含 customView）/
+//       主动 updateRightBarItemEnabled:YES / m_toolView.completeButton，UIControl 三件套齐上；
 //     完成动作 = hook onDone:/onDoneInPageSheetMode: 直接收尾（均 bridge 校验隔离原生"发起群聊"）。
 
 // 仅声明编译所需符号（运行时统一 objc_getClass 取微信真类，绝不以类名直接实例化）
@@ -329,65 +330,65 @@ static MioPickerMultiSelectAdapter *MioMultiBridge(id self) {
     return [bridge isKindOfClass:[MioPickerMultiSelectAdapter class]] ? bridge : nil;
 }
 
-// 完成按钮强显（仿 Groups）：原生无选中禁用"完成"，管理联系人需允许清空（0 个也点，回空数组）
-// 两条路都刷：非 pageSheet = navigationItem 右侧 UIBarButtonItem；
-// pageSheet = 页面右下角的"完成" UIButton（截图实证不在 navigationItem），递归视图树强显。
-// 禁用态 title 可能为空（titleForState 取不到"完成"导致匹配失败），依次尝试多种 title 来源；
-// 全空时按窗口坐标"右下角"位置兜底（只强显不改标题，防止误伤）
-static void MioMultiEnableDoneButtons(UIView *view, NSUInteger count) {
-    for (UIView *sub in view.subviews) {
-        if ([sub isKindOfClass:[UIButton class]]) {
-            UIButton *btn = (UIButton *)sub;
-            NSString *n = [btn titleForState:UIControlStateNormal] ?: @"";
-            NSString *d = [btn titleForState:UIControlStateDisabled] ?: @"";
-            NSString *cur = btn.currentTitle ?: btn.titleLabel.text ?: @"";
-            NSString *attr = [btn attributedTitleForState:UIControlStateNormal].string ?: @"";
-            WPLog(@"Contacts", @"[DoneScan] %@ frame=%@ enabled=%d normal='%@' disabled='%@' current='%@' attr='%@'",
-                  NSStringFromClass(btn.class), NSStringFromCGRect(btn.frame), btn.enabled, n, d, cur, attr);
-            BOOL byTitle = [n containsString:@"完成"] || [d containsString:@"完成"]
-                        || [cur containsString:@"完成"] || [attr containsString:@"完成"];
-            BOOL byPos = NO;
-            if (!byTitle && sub.window) {
-                CGRect w = [btn convertRect:btn.bounds toView:nil];
-                CGSize scr = [UIScreen mainScreen].bounds.size;
-                byPos = (w.origin.x > scr.width * 0.5 && w.origin.y > scr.height * 0.5);
-            }
-            if (byTitle || byPos) {
-                [btn setEnabled:YES];
-                if (byTitle) {
-                    NSString *title = count > 0 ? [NSString stringWithFormat:@"完成(%lu)", (unsigned long)count] : @"完成";
-                    [btn setTitle:title forState:UIControlStateNormal];
-                    [btn setTitle:title forState:UIControlStateHighlighted];
-                    [btn setTitle:title forState:UIControlStateDisabled];
-                    [btn setTitle:title forState:UIControlStateSelected];
-                }
-            }
-        }
-        MioMultiEnableDoneButtons(sub, count);
+// 完成按钮强显（WCR FUN_01b39918/01b3a0ac 同款配方）：
+// 原生置灰 = enabled=NO + alpha 压低 + 关触摸，只 setEnabled 不够，UIControl 要三件套齐上。
+// 四路强显：m_panelBtnItem / navigationItem.rightBarButtonItem（含 customView 子树）/
+// 主动调 updateRightBarItemEnabled:YES（让原生自己刷）/ m_toolView.completeButton（pageSheet 底部按钮）
+
+// WCR FUN_01b3a0ac 同款：子树内所有 UIControl 三件套强显（enabled/alpha/userInteractionEnabled）
+static void MioMultiEnableControls(UIView *view) {
+    if (![view isKindOfClass:[UIView class]]) return;
+    if ([view isKindOfClass:[UIControl class]]) {
+        [(UIControl *)view setEnabled:YES];
+        [(UIControl *)view setAlpha:1.0];
+        [(UIControl *)view setUserInteractionEnabled:YES];
+    }
+    for (UIView *sub in view.subviews) MioMultiEnableControls(sub);
+}
+
+static void MioMultiEnableBarItem(UIBarButtonItem *item) {
+    if (![item isKindOfClass:[UIBarButtonItem class]]) return;
+    [item setEnabled:YES];
+    if ([item.customView isKindOfClass:[UIView class]]) MioMultiEnableControls(item.customView);
+}
+
+// 四路强显（不含主动 update 调用，hook 回调里调它避免递归）
+static void MioMultiEnableSurfaces(UIViewController *picker) {
+    id panelItem = nil;
+    @try { panelItem = [picker valueForKey:@"m_panelBtnItem"]; } @catch (NSException *e) {}
+    if ([panelItem isKindOfClass:[UIBarButtonItem class]]) MioMultiEnableBarItem(panelItem);
+    MioMultiEnableBarItem(picker.navigationItem.rightBarButtonItem);
+
+    SEL upd = NSSelectorFromString(@"updateRightBarItemEnabled:");
+    if ([picker respondsToSelector:upd]) {
+        ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, upd, YES);
+    }
+
+    id toolView = nil;
+    @try { toolView = [picker valueForKey:@"m_toolView"]; } @catch (NSException *e) {}
+    if (![toolView isKindOfClass:[UIView class]]) return;
+    id doneBtn = nil;
+    @try { doneBtn = [toolView valueForKey:@"completeButton"]; } @catch (NSException *e) {}
+    if ([doneBtn isKindOfClass:[UIButton class]]) {
+        [(UIButton *)doneBtn setEnabled:YES];
+        [(UIButton *)doneBtn setAlpha:1.0];
+        [(UIButton *)doneBtn setUserInteractionEnabled:YES];
+    } else if ([doneBtn isKindOfClass:[UIView class]]) {
+        MioMultiEnableControls(doneBtn);
     }
 }
 
+// 全量刷新（viewDidLayoutSubviews / 250ms 补刷走这里；主动 update 会触发
+// updateRightBarItemEnabled: hook，其内只做 EnableSurfaces 补刷，不会递归）
 static void MioMultiRefreshNow(UIViewController *picker) {
-    NSUInteger count = MioMultiExtract(picker).count;
-    WPLog(@"Contacts", @"[DoneRefresh] count=%lu", (unsigned long)count);
-    NSString *title = count > 0 ? [NSString stringWithFormat:@"完成(%lu)", (unsigned long)count] : @"完成";
-    UIBarButtonItem *item = picker.navigationItem.rightBarButtonItem;
-    if ([item isKindOfClass:[UIBarButtonItem class]]) {
-        [item setEnabled:YES];
-        [item setTitle:title];
-    }
-    if (picker.viewIfLoaded) MioMultiEnableDoneButtons(picker.viewIfLoaded, count);
+    WPLog(@"Contacts", @"[DoneRefresh] count=%lu", (unsigned long)MioMultiExtract(picker).count);
+    MioMultiEnableSurfaces(picker);
 }
 
+// WCR FUN_01b39820 同款：立即刷 + 250ms 后补刷一轮（原生延迟刷新路径会把按钮再置灰）
 static void MioMultiRefreshRightButton(UIViewController *picker) {
     MioMultiRefreshNow(picker);
-    // 原生有延迟刷新路径（_bShouldDelayUpdatePanelBtnAndToolViewSelectedContacts），
-    // 可能在我们同步强显之后再把按钮禁用，补两轮延迟扫描（bridge 失效/已返回则跳过）
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        MioPickerMultiSelectAdapter *b = MioMultiBridge(picker);
-        if (b && !b.hasReturned) MioMultiRefreshNow(picker);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         MioPickerMultiSelectAdapter *b = MioMultiBridge(picker);
         if (b && !b.hasReturned) MioMultiRefreshNow(picker);
     });
@@ -396,13 +397,13 @@ static void MioMultiRefreshRightButton(UIViewController *picker) {
 static void mioMultiRightEnabledImp(id self, SEL _cmd, id arg1) {
     if (gOrigMultiRightEnabled) ((void (*)(id, SEL, id))gOrigMultiRightEnabled)(self, _cmd, arg1);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) MioMultiRefreshRightButton(self);
+    if (bridge && !bridge.hasReturned) MioMultiEnableSurfaces(self);   // 只补强显，主动 update 会递归
 }
 
 static void mioMultiRightEnabledPageSheetImp(id self, SEL _cmd, id arg1) {
     if (gOrigMultiRightEnabledPageSheet) ((void (*)(id, SEL, id))gOrigMultiRightEnabledPageSheet)(self, _cmd, arg1);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
-    if (bridge && !bridge.hasReturned) MioMultiRefreshRightButton(self);
+    if (bridge && !bridge.hasReturned) MioMultiEnableSurfaces(self);
 }
 
 static IMP gOrigMultiLayout = NULL;
