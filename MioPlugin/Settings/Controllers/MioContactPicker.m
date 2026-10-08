@@ -4,7 +4,6 @@
 #import <objc/message.h>
 #import <substrate.h>
 #import "../Core/ServiceHelper.h"
-#import "../Core/LogManager.h"
 
 // ===== 统一选人入口（MioContactPicker.h 注释为架构总览）=====
 // 两个适配器的机制来源：
@@ -278,7 +277,6 @@ static void mioMultiInstallHooks(void);
 
 @interface MioPickerMultiSelectAdapter : MioPickerAdapterBase <UIAdaptivePresentationControllerDelegate>
 @property (strong, nonatomic) UIViewController *picker;
-@property (copy, nonatomic) NSString *logTag;   // [Contacts]
 @property (nonatomic, assign) BOOL refreshing;  // 强显重入保护（layout/update 链可能间接绕回来）
 @end
 
@@ -385,9 +383,6 @@ static void MioMultiApplySurfacesCore(UIViewController *picker) {
     if ([toolView isKindOfClass:[UIView class]]) {
         @try { doneBtn = [toolView valueForKey:@"completeButton"]; } @catch (NSException *e) {}
     }
-    WPLog(@"Contacts", @"[M-Apply] panel=%@ right=%@ tool=%@ done=%@",
-          [panelItem class], [rightItem class], [toolView class], [doneBtn class]);
-
     if ([panelItem isKindOfClass:[UIBarButtonItem class]]) MioMultiEnableBarItem(panelItem);
     MioMultiEnableBarItem(rightItem);
     if ([doneBtn isKindOfClass:[UIButton class]]) {
@@ -405,10 +400,7 @@ static void MioMultiApplySurfacesCore(UIViewController *picker) {
 static void MioMultiApplySurfaces(UIViewController *picker) {
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(picker);
     if (!bridge) return;
-    if (bridge.refreshing) {
-        WPLog(@"Contacts", @"[M-Apply] skip (refreshing)");
-        return;
-    }
+    if (bridge.refreshing) return;
     bridge.refreshing = YES;
     @try {
         MioMultiApplySurfacesCore(picker);
@@ -420,17 +412,13 @@ static void MioMultiApplySurfaces(UIViewController *picker) {
 // 全量刷新（present 后调度 / 250ms 补刷走这里）：只做四路强显。
 // 不主动调 updateRightBarItemEnabled:YES——实证（log54）该调用在 present 后状态下
 // 必崩在原生内部（日志停在 call begin）；WCR 在其自有时机调用不崩，时机/状态不同。
-// 选中数变化的原生刷新由 update*Enabled hook → ApplySurfaces 补强显兜住
+// 选中数变化的原生刷新由 updatePanelBtn hook → ApplySurfaces 补强显兜住
 static void MioMultiRefreshNow(UIViewController *picker) {
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(picker);
     if (!bridge) return;
-    if (bridge.refreshing) {
-        WPLog(@"Contacts", @"[M-Refresh] skip (refreshing)");
-        return;
-    }
+    if (bridge.refreshing) return;
     bridge.refreshing = YES;
     @try {
-        WPLog(@"Contacts", @"[M-Refresh] enter count=%lu", (unsigned long)MioMultiExtract(picker).count);
         MioMultiApplySurfacesCore(picker);
     } @finally {
         bridge.refreshing = NO;
@@ -439,14 +427,10 @@ static void MioMultiRefreshNow(UIViewController *picker) {
 
 // WCR FUN_01b39820 同款：立即刷 + 250ms 后补刷一轮（原生延迟刷新路径会把按钮再置灰）
 static void MioMultiRefreshRightButton(UIViewController *picker) {
-    WPLog(@"Contacts", @"[M-Refresh] schedule (now + 250ms)");
     MioMultiRefreshNow(picker);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         MioPickerMultiSelectAdapter *b = MioMultiBridge(picker);
-        if (b && !b.hasReturned) {
-            WPLog(@"Contacts", @"[M-250ms] fire");
-            MioMultiRefreshNow(picker);
-        }
+        if (b && !b.hasReturned) MioMultiRefreshNow(picker);
     });
 }
 
@@ -459,7 +443,6 @@ static void mioMultiUpdatePanelBtnImp(id self, SEL _cmd) {
     if (gOrigMultiUpdatePanelBtn) ((void (*)(id, SEL))gOrigMultiUpdatePanelBtn)(self, _cmd);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
     if (bridge && !bridge.hasReturned) {
-        WPLog(@"Contacts", @"[M-Hook] updatePanelBtn");
         MioMultiApplySurfaces(self);   // 只补强显，无主动 update，不会成环
     }
 }
@@ -468,7 +451,6 @@ static void mioMultiRightEnabledImp(id self, SEL _cmd, id arg1) {
     if (gOrigMultiRightEnabled) ((void (*)(id, SEL, id))gOrigMultiRightEnabled)(self, _cmd, arg1);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
     if (bridge && !bridge.hasReturned) {
-        WPLog(@"Contacts", @"[M-Hook] updateRightBarItemEnabled:");
         MioMultiApplySurfaces(self);   // 只补强显，无主动 update，不会成环
     }
 }
@@ -477,7 +459,6 @@ static void mioMultiRightEnabledPageSheetImp(id self, SEL _cmd, id arg1) {
     if (gOrigMultiRightEnabledPageSheet) ((void (*)(id, SEL, id))gOrigMultiRightEnabledPageSheet)(self, _cmd, arg1);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
     if (bridge && !bridge.hasReturned) {
-        WPLog(@"Contacts", @"[M-Hook] updateRightBarItemEnabledInPageSheetModeIfNeeded:");
         MioMultiApplySurfaces(self);
     }
 }
@@ -513,7 +494,6 @@ static void mioFixBtnSetEnabledImp(id self, SEL _cmd, BOOL en) {
     UIViewController *vc = MioMultiOwningPicker(btn);
     MioPickerMultiSelectAdapter *bridge = vc ? MioMultiBridge(vc) : nil;
     if (!bridge || bridge.hasReturned) return;
-    WPLog(@"Contacts", @"[M-Btn] setEnabled:NO → 抬回 YES");
     ((void (*)(id, SEL, BOOL))gOrigFixBtnSetEnabled)(self, _cmd, YES);
     [btn setAlpha:1.0];
     [btn setUserInteractionEnabled:YES];
@@ -529,7 +509,6 @@ static void mioFixBtnSetAlphaImp(id self, SEL _cmd, CGFloat a) {
     UIViewController *vc = MioMultiOwningPicker(btn);
     MioPickerMultiSelectAdapter *bridge = vc ? MioMultiBridge(vc) : nil;
     if (!bridge || bridge.hasReturned) return;
-    WPLog(@"Contacts", @"[M-Btn] setAlpha:%.2f → 抬回 1.0", (double)a);
     ((void (*)(id, SEL, CGFloat))gOrigFixBtnSetAlpha)(self, _cmd, 1.0);
 }
 
@@ -547,7 +526,6 @@ static void mioMultiUpdateRightPageSheetImp(id self, SEL _cmd) {
     if (gOrigMultiUpdateRightPageSheet) ((void (*)(id, SEL))gOrigMultiUpdateRightPageSheet)(self, _cmd);
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
     if (bridge && !bridge.hasReturned) {
-        WPLog(@"Contacts", @"[M-Hook] updateMultiSelectRightBarItemInPageSheetModeIfNeeded");
         MioMultiApplySurfaces(self);
     }
 }
@@ -563,7 +541,6 @@ static void mioMultiFinish(id self, MioPickerMultiSelectAdapter *bridge) {
 static void mioMultiDoneImp(id self, SEL _cmd, id sender) {
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
     if (bridge && !bridge.hasReturned) {
-        WPLog(@"Contacts", @"[M-Done] onDone bridged");
         mioMultiFinish(self, bridge);
         return;
     }
@@ -572,7 +549,6 @@ static void mioMultiDoneImp(id self, SEL _cmd, id sender) {
 static void mioMultiDonePageSheetImp(id self, SEL _cmd, id sender) {
     MioPickerMultiSelectAdapter *bridge = MioMultiBridge(self);
     if (bridge && !bridge.hasReturned) {
-        WPLog(@"Contacts", @"[M-Done] onDoneInPageSheetMode bridged");
         mioMultiFinish(self, bridge);
         return;
     }
@@ -607,8 +583,6 @@ static void mioMultiInstallHooks(void) {
         Method fa = fcls ? class_getInstanceMethod(fcls, @selector(setAlpha:)) : NULL;
         if (fe) { MSHookMessageEx(fcls, @selector(setEnabled:), (IMP)mioFixBtnSetEnabledImp, &gOrigFixBtnSetEnabled); }
         if (fa) { MSHookMessageEx(fcls, @selector(setAlpha:), (IMP)mioFixBtnSetAlphaImp, &gOrigFixBtnSetAlpha); }
-        WPLog(@"Contacts", @"[M-Hook] install panelBtn=%d rightEnabled=%d pageSheetEnabled=%d updatePageSheet=%d layout=%d fixEnabled=%d fixAlpha=%d",
-              m0 != NULL, m1 != NULL, m2 != NULL, m6 != NULL, m3 != NULL, fe != NULL, fa != NULL);
         SEL s4 = NSSelectorFromString(@"onDone:");
         Method m4 = class_getInstanceMethod(cls, s4);
         if (m4) { MSHookMessageEx(cls, s4, (IMP)mioMultiDoneImp, &gOrigMultiDone); }
@@ -676,7 +650,7 @@ static void mioMultiInstallHooks(void) {
 }
 
 // KVC 写入（缺失字段静默跳过；KVC 无 setter 时会自动直写 ivar，设备 dump 已证字段齐全）
-static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
+static void MioMultiSetValue(id obj, NSString *key, id value) {
     @try {
         [obj setValue:value forKey:key];
     } @catch (NSException *e) {}
@@ -696,18 +670,17 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     objc_setAssociatedObject(picker, kMioMultiBridgeKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     // 配方：字段以设备 8.0.60 class dump 为准；场景值沿用 WCR 实测可用组合（群场景 0xf、搜索场景 8）
-    NSString *tag = self.logTag;
-    MioMultiSetValue(picker, @"m_uiGroupScene", @(0xf), tag);
-    MioMultiSetValue(picker, @"m_commonSearchScene", @(8), tag);
-    MioMultiSetValue(picker, @"m_memberCountLimit", @(4096), tag);
-    MioMultiSetValue(picker, @"m_viewcontrllerTitle", title, tag);   // 设备拼写即如此（原生 typo 字段）
-    MioMultiSetValue(picker, @"m_rightBarButtonTitle", @"完成", tag);
-    MioMultiSetValue(picker, @"m_bShowHistoryGroup", @NO, tag);   // "导入群聊中的朋友"（从群挑成员），不是选群，勿开
-    MioMultiSetValue(picker, @"m_bShowContactTag", @YES, tag);
-    MioMultiSetValue(picker, @"m_bShowSelectFromGroup", @NO, tag);   // "选择群聊中的朋友"（从群挑成员），同上勿开
-    MioMultiSetValue(picker, @"m_bKeepCurViewAfterSelect", @YES, tag);
-    MioMultiSetValue(picker, @"m_onlyChatRoom", @NO, tag);
-    MioMultiSetValue(picker, @"m_onlyImportChatRoom", @NO, tag);
+    MioMultiSetValue(picker, @"m_uiGroupScene", @(0xf));
+    MioMultiSetValue(picker, @"m_commonSearchScene", @(8));
+    MioMultiSetValue(picker, @"m_memberCountLimit", @(4096));
+    MioMultiSetValue(picker, @"m_viewcontrllerTitle", title);   // 设备拼写即如此（原生 typo 字段）
+    MioMultiSetValue(picker, @"m_rightBarButtonTitle", @"完成");
+    MioMultiSetValue(picker, @"m_bShowHistoryGroup", @NO);   // "导入群聊中的朋友"（从群挑成员），不是选群，勿开
+    MioMultiSetValue(picker, @"m_bShowContactTag", @YES);
+    MioMultiSetValue(picker, @"m_bShowSelectFromGroup", @NO);   // "选择群聊中的朋友"（从群挑成员），同上勿开
+    MioMultiSetValue(picker, @"m_bKeepCurViewAfterSelect", @YES);
+    MioMultiSetValue(picker, @"m_onlyChatRoom", @NO);
+    MioMultiSetValue(picker, @"m_onlyImportChatRoom", @NO);
 
     // 预选注入：必须在 present 前（原生首帧渲染读该字典渲染勾选）
     if (preselected.count > 0) {
@@ -716,10 +689,10 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
             id contact = MioMultiContactForWxid(wxid);
             if (contact) [pre setObject:contact forKey:wxid];
         }
-        MioMultiSetValue(picker, @"m_dicMultiSelect", pre, tag);
+        MioMultiSetValue(picker, @"m_dicMultiSelect", pre);
     }
 
-    MioMultiSetValue(picker, @"m_delegate", self, tag);
+    MioMultiSetValue(picker, @"m_delegate", self);
 
     UIViewController *top = from;
     while (top.presentedViewController) top = top.presentedViewController;
@@ -756,9 +729,7 @@ static void MioMultiSetValue(id obj, NSString *key, id value, NSString *tag) {
     MioPickerAdapterBase *adapter = nil;
     switch (mode) {
         case MioContactPickerModeContacts: {
-            MioPickerMultiSelectAdapter *a = [[MioPickerMultiSelectAdapter alloc] init];
-            a.logTag = @"[Contacts]";
-            adapter = a;
+            adapter = [[MioPickerMultiSelectAdapter alloc] init];
             break;
         }
         case MioContactPickerModeGroups:   adapter = [[MioPickerGroupsAdapter alloc] init]; break;
