@@ -282,20 +282,51 @@ static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
               (cls && [cls instancesRespondToSelector:sel]) ? @"exists" : @"missing");
         if (cls && [cls instancesRespondToSelector:sel]) {
             id contact = WXGetContactForWxid(userName);
+            if (!contact) {
+                // getContactByUserName: 查空时回退 getContactByName:（方法名因版本而异，KeywordAlert 同款）
+                id mgr = WXGetService(objc_getClass("CContactMgr"));
+                SEL nameSel = NSSelectorFromString(@"getContactByName:");
+                if (mgr && [mgr respondsToSelector:nameSel]) {
+                    contact = ((id (*)(id, SEL, id))objc_msgSend)(mgr, nameSel, userName);
+                }
+            }
             NSString *url = WXContactHeadImageURL(contact);   // HD 优先
             WPLog(@"HomeCard", @"[Avatar-Diag] node5-url | user=%@ contact=%@ url=%@",
                   userName, contact ? @"有值" : @"nil",
                   url.length ? [url substringToIndex:MIN(40, (NSUInteger)url.length)] : @"nil");
-            id v = ((id (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)
-                   ([cls alloc], sel, userName, url, YES, YES);
-            WPLog(@"HomeCard", @"[Avatar-Diag] node6-init | ret=%@ class=%@ isUIView=%@ frame=%@",
-                  v ? @"有值" : @"nil",
-                  v ? NSStringFromClass([v class]) : @"-",
-                  [v isKindOfClass:[UIView class]] ? @"yes" : @"no",
-                  [v isKindOfClass:[UIView class]] ? NSStringFromCGRect(((UIView *)v).frame) : @"-");
-            if ([v isKindOfClass:[UIView class]]) {
-                ((UIView *)v).frame = CGRectMake(0, 0, size, size);
-                av = v;
+            // URL 为空绝不建 MMHeadImageView（56 日志实证：nil URL 建出空视图且被缓存永久
+            // 复用，永不自愈）。回退 MMHeadImageMgr 本地头像直读（AvatarLoader 同款路径），
+            // 再失败返回 nil 走灰圆占位——失败结果不缓存，下次重建自动重试，联系人库
+            // 就绪后即恢复 MMHeadImageView 真头像
+            if (url.length == 0) {
+                id headMgr = WXGetService(objc_getClass("MMHeadImageMgr"));
+                SEL getSel = NSSelectorFromString(@"getHeadImage:withCategory:");
+                UIImage *img = nil;
+                if (headMgr && [headMgr respondsToSelector:getSel]) {
+                    img = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headMgr, getSel, userName, @0);
+                }
+                WPLog(@"HomeCard", @"[Avatar-Diag] node5b-fallback | user=%@ localImg=%@",
+                      userName, img ? @"有值" : @"nil");
+                if (img) {
+                    UIImageView *iv = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, size, size)];
+                    iv.image = img;
+                    iv.contentMode = UIViewContentModeScaleAspectFill;
+                    iv.clipsToBounds = YES;
+                    iv.layer.cornerRadius = size * 0.5;   // 对齐 bRoundCorner=YES 观感
+                    av = iv;
+                }
+            } else {
+                id v = ((id (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)
+                       ([cls alloc], sel, userName, url, YES, YES);
+                WPLog(@"HomeCard", @"[Avatar-Diag] node6-init | ret=%@ class=%@ isUIView=%@ frame=%@",
+                      v ? @"有值" : @"nil",
+                      v ? NSStringFromClass([v class]) : @"-",
+                      [v isKindOfClass:[UIView class]] ? @"yes" : @"no",
+                      [v isKindOfClass:[UIView class]] ? NSStringFromCGRect(((UIView *)v).frame) : @"-");
+                if ([v isKindOfClass:[UIView class]]) {
+                    ((UIView *)v).frame = CGRectMake(0, 0, size, size);
+                    av = v;
+                }
             }
         }
     } @catch (...) {}
