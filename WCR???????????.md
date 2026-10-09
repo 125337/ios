@@ -97,12 +97,21 @@ WCR 的列表边框在表格级 hook（FUN_007c79c8，FUN__part13.c:4290-4660）
 - **性能观测**：每个 cell layout hook 首尾 `CACurrentMediaTime()` 打点，汇总进 `_WCRHomeJankLogCellLayout`
 - **主题色借用**：WCR 自己的浮动面板用 `[MMThemeManager cellBackgroundColor]`（FUN_01e912f4，FUN__part35.c:1798）——能借微信原生主题管线时直接借，fallback `secondarySystemGroupedBackground`
 
+### 5.3 Frida 运行时实证（2026-10-10，真机抓取）
+
+对 `com.tencent.xin`（微信 8.0.60）挂 Frida 探针（`scripts/frida_wcr_corner.js` / `frida_wcr_contacts.js`）抓取 WCR 运行时行为：
+
+- **首页（NewMainFrameCell）**：首行 `r=15 mc=3(顶角)`、中行 `r=0 mc=0`、末行 `r=15 mc=12(底角)`——按行掩码与我们同构；cell 本体 `bg=clearColor` 透明只做按行裁剪壳，色块打在 **contentView（恒定全角 r=15 mc=15）**——"会变的按行 mc"与"不变的全角色块"分层
+- **通讯录（ContactsViewController，关键差异）**：新的朋友→企业微信联系人 7 行连续 `顶角→无角×5→底角`，**跨越原生 4 个 section 连成一张卡**；WCR cell hook 全程无 `indexPathForCell`（反编译 grep 实证）→ **WCR 的行位判定是几何相邻（frame 紧贴即同卡），与 section 无关**
+- **表格画布**：tableView 上 4 个透明免交互 UIView（tag 连续、x=15.5 内缩、宽 362）= section 级覆盖视图实证；表格 hook（FUN_007c79c8）对 section 逐个画、无跨 section 合并——通讯录连卡是 cell 侧几何行位 + 原生行连续的自然结果，不是边框层主动合并
+
 ## 六、总结对比表
 
 | 维度 | WCR 2.1.8 | 我们（改造后） |
 |---|---|---|
 | 背景色 | `colorWithDynamicProvider:` 一次构建，UIKit 自动跟随明暗 | ✅ 同款（WPColorUtil 动态色入口） |
-| 边框 | 表格级 section 覆盖视图 + 整段描边，动态色 | ✅ 同款（四段拼接机器已删） |
+| 行位判定 | 几何相邻（frame 紧贴，跨 section 自动连卡） | ✅ 同款（WPRowNeighbors，间隙 ≤ 0.5pt） |
+| 边框 | 表格级覆盖视图 + 整段描边，动态色；几何连续行区段合并一组 | ✅ 同款（四段拼接机器已删，分组共享一张覆盖视图） |
 | 写入频率 | 先读后写，几乎零写入 | ✅ 指针/isEqual/stamp/CGColor 多重幂等 |
 | 特殊 cell 逃生门 | associated 标记→透明化 | 涂装标记清洁态（功能关只拆自己动过的）；VC 黑名单已全部删除 |
 | 子视图圆角 | 遍历 subviews 全部处理 | 仅 Mio 页面已做（待办 1） |
@@ -113,9 +122,10 @@ WCR 的列表边框在表格级 hook（FUN_007c79c8，FUN__part13.c:4290-4660）
 ## 七、已执行改造（摘要）
 
 1. **背景色动态色化**：WPColorUtil 新增 `dynamicColorFromLightHex:darkHex:lightFallback:darkFallback:`（两侧各自解析+兜底后包装 `colorWithDynamicProvider:`），列表 cell / MFWebMMBtn / MFBannerBtn / FoldView 背景全部迁移，明暗切换由 UIKit 自动跟随，hook 内不再判暗
-2. **边框 WCR 架构重构**：删除逐 cell 四段边框机器（position switch / 路径拼接 / 全量化 key），改为表格级每 section 一条覆盖视图（tag 管理、挂 tableView 本体）+ CAShapeLayer 整段圆角描边；边框色同样动态色化；frame / 样式戳 / CGColor 三重幂等，未新增全局 hook
+2. **边框 WCR 架构重构**：删除逐 cell 四段边框机器（position switch / 路径拼接 / 全量化 key），改为表格级覆盖视图（tag 管理、挂 tableView 本体）+ CAShapeLayer 整段圆角描边；边框色同样动态色化；frame / 样式戳 / CGColor 三重幂等，未新增全局 hook
 3. **VC 黑名单清理**：删除 CornerResponsibility 模块（44 VC + 4 前缀黑名单）与 cell hook 内 19 VC 背景黑名单，全部页面统一处理
 4. **特例清理**：删除通讯录 section 0-3 半合并块（corner 分支 B + 边框合并组）与聊天列表折叠展开态（openBottom + 无角特判），每个 section 独立成卡片
+5. **几何行位重构（a309e8d，Frida 实证驱动）**：cell 行位不再查 indexPath/section，改为 `WPRowNeighbors` 几何相邻判定（上下紧贴行间隙 ≤ 0.5pt → 中行，悬空 → 首/末行，双向悬空 → 全角）；边框画布同步改为几何分组——相邻 section 行带垂直连续（间隙 ≤ 0.5pt）合并为一组，共享一张覆盖视图 + 一条整段圆角路径，收尾隐藏逻辑改为 tag 不在当前组集合即隐藏。通讯录公众号/服务号/企微联系人跨 section 行自动连成一张卡，与 WCR 图二一致
 
 ---
 
