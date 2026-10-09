@@ -2,8 +2,6 @@
 #import "../../Core/ConfigManager.h"
 #import "../../Config/Constants.h"
 #import "../../Config/WPColors.h"
-#import "../../Config/WPColorPicker.h"
-#import "../../Config/WPColorUtil.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -11,6 +9,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "../../Core/LogManager.h"
 #import "WPWeChatTable.h"
+#import "WPColorRow.h"
 #import "../../Core/MioAlertHelper.h"
 
 // 微信引擎 switch 回调 trampoline：每行独立 selector（wpSw_<key>_<hash>），共享 IMP 从 _cmd 反解行身份。
@@ -287,14 +286,12 @@ static const CGFloat kCellHPadding = 16.0;
     } else if ([type isEqualToString:@"input"]) {
         [self wpRunInputFlow:row];
     } else if ([type isEqualToString:@"colorTap"]) {
-        // rightView 包装失败时的兜底：模拟色块按钮打开取色器
-        UIButton *dummy = [UIButton buttonWithType:UIButtonTypeCustom];
-        objc_setAssociatedObject(dummy, "mioColorKey", row[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(dummy, "mioColorLightKey", row[@"key"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(dummy, "mioColorIsLight", @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if ([self respondsToSelector:@selector(colorButtonTapped:)]) {
-            ((void (*)(id, SEL, id))objc_msgSend)(self, @selector(colorButtonTapped:), dummy);
-        }
+        // rightView 包装失败时的兜底：无色块可刷，取色器直开（写配置逻辑在 WPColorRow 一处）
+        [WPColorRow presentPickerForLightKey:row[@"key"]
+                                      darkKey:(row[@"darkKey"].length > 0 ? row[@"darkKey"] : nil)
+                                   allowClear:[row[@"allowClear"] boolValue]
+                                       hostVC:self
+                                refreshTarget:nil];
     } else if ([type isEqualToString:@"copy"]) {
         NSString *text = row[@"copyText"];
         if (text.length > 0) {
@@ -545,23 +542,6 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 
 #pragma mark - Row: Color
 
-// 颜色行小色块按钮（单色/双色复用）：y 恒按 kRowH 居中，点击走 colorButtonTapped:
-// mioColorKey 挂按钮自己侧的 key（深色块挂 darkKey）；mioColorLightKey/mioColorDarkKey
-// 挂整行浅深两侧 key（两侧按钮一致），点击时无需猜配对
-// 关联键用带前缀的 "mioColorKey"：裸 "key" 是 C 字符串字面量，链接器会跨文件合并同名字面量，
-// 其他文件若对同类对象也挂 "key" 会撞键互相覆盖
-- (UIButton *)wpColorBtn:(UIColor *)color size:(CGFloat)size x:(CGFloat)x lightKey:(NSString *)lightKey darkKey:(NSString *)darkKey isLight:(BOOL)isLight allowClear:(BOOL)allowClear {
-    UIButton *btn = [WPColorPicker makeColorButtonWithColor:color size:size];
-    btn.frame = CGRectMake(x, (kRowH - size) / 2.0, size, size);
-    objc_setAssociatedObject(btn, "mioColorKey", isLight ? lightKey : darkKey, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(btn, "mioColorLightKey", lightKey, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(btn, "mioColorDarkKey", darkKey, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(btn, "mioColorIsLight", @(isLight), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(btn, "mioColorAllowClear", @(allowClear), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
-    return btn;
-}
-
 // 旧版颜色行（无清除入口，等价 allowClear=NO），保持既有调用方编译不变
 - (CGFloat)addColorRowInGroup:(UIView *)group
                         title:(NSString *)title
@@ -589,33 +569,11 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     WPWGroup *g = (WPWGroup *)group;
     if (![g isKindOfClass:[WPWGroup class]]) return cy;
 
-    BOOL dual = (darkKey != nil);
-    CGFloat cvW = dual ? 58 : 34;
-    UIView *cv = [[UIView alloc] initWithFrame:CGRectMake(0, 0, cvW, kRowH)];
-    cv.backgroundColor = [UIColor clearColor];
+    // 颜色行单元自管一切：判空、解析、建块、点击取色、写配置、刷新
+    // （空值映射"浅白/深黑"只在 WPColorRow 内部定义一处）
+    WPColorRow *colorRow = [[WPColorRow alloc] initWithLightKey:key darkKey:darkKey allowClear:allowClear hostVC:self];
 
-    if (!dual) {
-        // 单色行：只有浅色块（无 darkKey，深色侧无可编辑目标）
-        // 空值 = 未设置：colorFromHexString 对空串返回黑色（永不 nil），必须先判空；
-        // 未设置兜底观感：浅色预览白、深色预览黑
-        UIColor *color = value.length > 0 ? [WPColorUtil colorFromHexString:value] : [UIColor whiteColor];
-        [cv addSubview:[self wpColorBtn:color size:30 x:2 lightKey:key darkKey:nil isLight:YES allowClear:allowClear]];
-    } else {
-        CGFloat btnSize = 24;
-        CGFloat darkX = cvW - 4 - btnSize;
-        UIColor *darkColor = darkValue.length > 0 ? [WPColorUtil colorFromHexString:darkValue] : [UIColor blackColor];
-        // 深色块自己侧挂 darkKey（mioColorKey = 自己侧 key）
-        UIButton *darkBtn = [self wpColorBtn:darkColor size:btnSize x:darkX lightKey:key darkKey:darkKey isLight:NO allowClear:allowClear];
-        UIColor *lightColor = value.length > 0 ? [WPColorUtil colorFromHexString:value] : [UIColor whiteColor];
-        UIButton *lightBtn = [self wpColorBtn:lightColor size:btnSize x:darkX - 6 - btnSize lightKey:key darkKey:darkKey isLight:YES allowClear:allowClear];
-        // 双色块互指：确认后由 colorButtonTapped 的回调同步刷新两侧预览
-        objc_setAssociatedObject(lightBtn, "mioPairBtn", darkBtn, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(darkBtn, "mioPairBtn", lightBtn, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [cv addSubview:darkBtn];
-        [cv addSubview:lightBtn];
-    }
-
-    id cell = WPWCViewCell((SEL)0, self, [self wpSubTitle:title], cv);
+    id cell = WPWCViewCell((SEL)0, self, [self wpSubTitle:title], colorRow);
     if (cell) {
         [g addCell:cell];
         return cy + kRowH;
@@ -624,7 +582,9 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     WPLog(@"WCTable", @"[WCTABLE] viewCell 不可用，颜色行走 NavCell 兜底: %@", title);
     NSDictionary *row = @{@"type": @"colorTap",
                           @"title": title ?: @"",
-                          @"key": key ?: @""};
+                          @"key": key ?: @"",
+                          @"darkKey": darkKey ?: @"",
+                          @"allowClear": @(allowClear)};
     id fb = WPWCNavCell(@selector(wpWCTapRow:), self, [self wpSubTitle:title], value);
     if (fb) {
         wpAttachRow(fb, row);
@@ -727,44 +687,6 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     self.wpBuildingSubRows = prevSub;
 
     return resultCy;
-}
-
-- (void)colorButtonTapped:(UIButton *)sender {
-    NSString *ownKey = objc_getAssociatedObject(sender, "mioColorKey");
-    if (!ownKey) return;
-    // 整行浅深 key 从关联对象直读（两侧按钮都挂全套，深色块自己侧挂 darkKey），无需猜配对
-    NSString *lightKey = objc_getAssociatedObject(sender, "mioColorLightKey");
-    NSString *darkKey = objc_getAssociatedObject(sender, "mioColorDarkKey");
-    BOOL isLightSide = [objc_getAssociatedObject(sender, "mioColorIsLight") boolValue];
-    BOOL allowClear = [objc_getAssociatedObject(sender, "mioColorAllowClear") boolValue];
-    UIButton *pairBtn = objc_getAssociatedObject(sender, "mioPairBtn");
-
-    // 浅/深色块按侧别归位：确认/清除后精确刷新对应预览
-    UIButton *lightBtn = isLightSide ? sender : pairBtn;
-    UIButton *darkBtn  = isLightSide ? pairBtn : sender;
-
-    NSString *lightHex = lightKey ? [ConfigManager valueForKey:lightKey] : nil;
-    NSString *darkHex  = darkKey ? [ConfigManager valueForKey:darkKey] : nil;
-
-    [WPColorPicker presentColorPickerOnViewController:self
-                                             lightHex:lightHex
-                                              darkHex:darkHex
-                                           allowClear:allowClear
-                                              onClear:^(BOOL clearLight) {
-        // 清除 = 显式恢复未设置：只清激活侧（空串语义 = 渲染层走兜底色）
-        if (!clearLight && !darkKey) return;   // 无深色键（单色行/colorTap 兜底）无可清
-        [ConfigManager setValue:@"" forKey:(clearLight ? lightKey : darkKey)];
-        [ConfigManager saveAll];
-        UIButton *target = clearLight ? lightBtn : darkBtn;
-        target.backgroundColor = [UIColor grayColor];   // 预览块回落未设置观感
-    }
-                                            onChanged:^(NSString *lHex, NSString *dHex) {
-        [ConfigManager setValue:lHex forKey:lightKey];
-        if (darkKey) [ConfigManager setValue:dHex forKey:darkKey];
-        [ConfigManager saveAll];
-        lightBtn.backgroundColor = [WPColorUtil colorFromHexString:lHex] ?: [UIColor whiteColor];
-        darkBtn.backgroundColor = [WPColorUtil colorFromHexString:dHex] ?: [UIColor blackColor];
-    }];
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
