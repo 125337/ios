@@ -785,7 +785,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                                 radius:radius borderWidth:borderWidth borderColor:borderColor];
             [groupTags addObject:@(tag)];
         }
-        groupFirstSection = s;
+        groupFirstSection++;  // 组序号：仅用于派生唯一 tag
         groupTop = bandTop;
         groupBottom = bandBottom;
         prevBottom = bandBottom;
