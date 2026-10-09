@@ -29,9 +29,29 @@ static inline id WXGetService(Class serviceClass) {
 }
 
 static inline id WXGetContactForWxid(NSString *wxid) {
+    // 58 日志实证：本版本 getContactByUserName: 恒查空，getContactByName: 才是有效查询。
+    // KeywordAlert 实测 getContactByName: 对个别群 ID 会返回错误对象 → 结果校验
+    // m_nsUsrName 必须等于 wxid，不符依次回退旧 selector / nil
+    if (!wxid.length) return nil;
     id contactMgr = WXGetService(objc_getClass("CContactMgr"));
-    if (!contactMgr || ![contactMgr respondsToSelector:@selector(getContactByUserName:)]) return nil;
-    return ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, @selector(getContactByUserName:), wxid);
+    if (!contactMgr) return nil;
+    SEL sels[2] = { NSSelectorFromString(@"getContactByName:"),
+                    NSSelectorFromString(@"getContactByUserName:") };
+    SEL usrSel = NSSelectorFromString(@"m_nsUsrName");
+    for (int i = 0; i < 2; i++) {
+        if (![contactMgr respondsToSelector:sels[i]]) continue;
+        id contact = ((id (*)(id, SEL, id))objc_msgSend)(contactMgr, sels[i], wxid);
+        if (!contact) continue;
+        if ([contact respondsToSelector:usrSel]) {
+            id usr = ((id (*)(id, SEL))objc_msgSend)(contact, usrSel);
+            if ([usr isKindOfClass:[NSString class]] && [(NSString *)usr isEqualToString:wxid]) {
+                return contact;
+            }
+            continue;   // 查错对象，试下一路
+        }
+        return contact;   // 无 m_nsUsrName 可校验，原样返回
+    }
+    return nil;
 }
 
 static inline id WXGetSelfContact(void) {
