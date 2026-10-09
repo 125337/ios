@@ -109,19 +109,44 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
     }
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-    if (!config.globalCornerRadiusEnabled || !config.listSearchCornerRadius) return;
+    UIView *container = ((UIView *(*)(id, SEL))objc_msgSend)(self, @selector(searchBoxContainer));
+    if (!container) return;
+
+    BOOL featureOn = config.globalCornerRadiusEnabled && config.listSearchCornerRadius;
+    BOOL painted = objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
+
+    if (!featureOn) {
+        // 清洁态：凭涂装标记还原原生圆角（涂装时已保存原值）
+        if (painted) {
+            NSNumber *r = objc_getAssociatedObject(container, (__bridge const void *)kMioSearchOrigRadiusKey);
+            NSNumber *m = objc_getAssociatedObject(container, (__bridge const void *)kMioSearchOrigMasksKey);
+            if (r && container.layer.cornerRadius != r.floatValue)
+                container.layer.cornerRadius = r.floatValue;
+            if (m && container.layer.masksToBounds != m.boolValue)
+                container.layer.masksToBounds = m.boolValue;
+            objc_setAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey, nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        return;
+    }
 
     NSInteger radius = (NSInteger)config.listCellCornerRadius;  // ★ 复用 Cell 圆角半径
     if (radius <= 0) radius = 18;
 
-    UIView *container = ((UIView *(*)(id, SEL))objc_msgSend)(self, @selector(searchBoxContainer));
-    if (container) {
-        // 幂等比对：避免每帧无效 setter 产生 CA 脏标记
-        if (container.layer.cornerRadius != (CGFloat)radius)
-            container.layer.cornerRadius = radius;
-        if (!container.layer.masksToBounds)
-            container.layer.masksToBounds = YES;
+    if (!painted) {
+        // 首次涂装：登记原生圆角原值
+        objc_setAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey, @YES,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(container, (__bridge const void *)kMioSearchOrigRadiusKey,
+            @(container.layer.cornerRadius), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(container, (__bridge const void *)kMioSearchOrigMasksKey,
+            @(container.layer.masksToBounds), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
+    // 幂等比对：避免每帧无效 setter 产生 CA 脏标记
+    if (container.layer.cornerRadius != (CGFloat)radius)
+        container.layer.cornerRadius = radius;
+    if (!container.layer.masksToBounds)
+        container.layer.masksToBounds = YES;
 }
 
 // ─── 共享常量与边框画布（WCR 同款：section 覆盖视图 + 整段描边，FUN_007c79c8 实证方案） ───
@@ -130,6 +155,10 @@ static NSString * const kMioBorderStampKey = @"com.mio.borderStamp";
 // 涂装标记：登记"被本模块动过的 cell/table/视图"，功能关后的清洁态只清理这些对象，避免误伤原生样式
 static NSString * const kMioCornerPaintedKey = @"com.mio.cornerPainted";
 static NSString * const kMioTablePaintedKey = @"com.mio.tablePainted";
+// 清洁态原值口袋：首次涂装时保存原生样式，功能关后凭涂装标记还原
+static NSString * const kMioSearchOrigRadiusKey = @"com.mio.searchOrigRadius";
+static NSString * const kMioSearchOrigMasksKey  = @"com.mio.searchOrigMasks";
+static NSString * const kMioViewOrigBgKey       = @"com.mio.viewOrigBg";
 // section 边框覆盖视图 tag 段：tag = 基数 + sectionIndex，覆盖视图挂在 tableView 本体上，免疫 cell 复用
 static NSInteger const kMioBorderTagBase = 0x4D494F;  // 'MIO'
 static NSInteger const kMioBorderTagRange = 1000;
@@ -162,6 +191,14 @@ static void WPStripTableOverlays(UITableView *tableView) {
         }
     }
     [stale makeObjectsPerformSelector:@selector(removeFromSuperview)];
+}
+
+// 清洁态还原：回写涂装前保存的原背景色并清除涂装标记（幂等）
+static void WPRestorePaintedBg(UIView *view) {
+    UIColor *orig = objc_getAssociatedObject(view, (__bridge const void *)kMioViewOrigBgKey);
+    if (![view.backgroundColor isEqual:orig]) view.backgroundColor = orig;
+    objc_setAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey, nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 // 取 section 行带（首末行 rect 并集，table 内容坐标）；@try 兜底 reload/插入动画窗口中
@@ -381,15 +418,30 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     if (orig_MFWebMMBtn_layoutSubviews) orig_MFWebMMBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-    if (!config.globalCornerRadiusEnabled) return;
+    BOOL painted = objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
+    if (!config.globalCornerRadiusEnabled) {
+        // 清洁态：凭涂装标记还原原背景色
+        if (painted) WPRestorePaintedBg((UIView *)self);
+        return;
+    }
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) return;
-    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
+    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) {
+        if (painted) WPRestorePaintedBg((UIView *)self);
+        return;
+    }
 
+    UIView *btnView = (UIView *)self;
+    if (!painted) {
+        // 首次涂装：登记原背景色
+        objc_setAssociatedObject(btnView, (__bridge const void *)kMioViewOrigBgKey,
+            btnView.backgroundColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(btnView, (__bridge const void *)kMioCornerPaintedKey, @YES,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
     // ★ 动态色：明暗跟随交给 UIKit trait 系统；指针幂等避免每轮 CA 脏标记
     UIColor *targetBg = WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser");
-    UIView *btnView = (UIView *)self;
     if (btnView.backgroundColor != targetBg) btnView.backgroundColor = targetBg;
 }
 
@@ -399,15 +451,30 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     if (orig_MFBannerBtn_layoutSubviews) orig_MFBannerBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-    if (!config.globalCornerRadiusEnabled) return;
+    BOOL painted = objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
+    if (!config.globalCornerRadiusEnabled) {
+        // 清洁态：凭涂装标记还原原背景色
+        if (painted) WPRestorePaintedBg((UIView *)self);
+        return;
+    }
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) return;
-    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
+    if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) {
+        if (painted) WPRestorePaintedBg((UIView *)self);
+        return;
+    }
 
+    UIView *btnView = (UIView *)self;
+    if (!painted) {
+        // 首次涂装：登记原背景色
+        objc_setAssociatedObject(btnView, (__bridge const void *)kMioViewOrigBgKey,
+            btnView.backgroundColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(btnView, (__bridge const void *)kMioCornerPaintedKey, @YES,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
     // ★ 动态色：明暗跟随交给 UIKit trait 系统；指针幂等避免每轮 CA 脏标记
     UIColor *targetBg = WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser");
-    UIView *btnView = (UIView *)self;
     if (btnView.backgroundColor != targetBg) btnView.backgroundColor = targetBg;
 }
 
@@ -541,10 +608,13 @@ static void _wp_tableLayoutCommon(id self, SEL _cmd, IMP orig) {
     BOOL painted = objc_getAssociatedObject(tv, (__bridge const void *)kMioTablePaintedKey) != nil;
     if (!config.globalCornerRadiusEnabled && !painted) return;
 
+    // vc 为 nil（表短暂脱离 VC 层级）时不判定也不清洁，避免误拆已有覆盖视图
     UIViewController *vc = [WPUtility findParentViewController:tv];
-    BOOL mioOwn = vc ? WPVCIsMioOwn(vc) : NO;
+    if (!vc) return;
+
+    BOOL mioOwn = WPVCIsMioOwn(vc);
     BOOL featureOn = config.globalCornerRadiusEnabled
-        && (mioOwn || (vc && shouldApplyGlobalCorner(vc)));
+        && (mioOwn || shouldApplyGlobalCorner(vc));
     [ListCornerRadiusHook wp_paintTableBorders:tv
                                      featureOn:featureOn
                                         mioOwn:mioOwn];
@@ -563,8 +633,9 @@ static void _hooked_TextStateProfileTableView_layoutSubviews(id self, SEL _cmd) 
     _wp_tableLayoutCommon(self, _cmd, orig_TextStateProfileTableView_layoutSubviews);
 }
 
-// 挂表 hook 前检查 IMP 归属（项目硬约束）：IMP 来自微信主程序二进制 → 挂；
-// 来自 Mio 自身（继承链已挂，防套娃）或其他插件 dylib（如 WCR，硬约束要求让位）→ 不挂
+// 挂表 hook 前检查 IMP 归属（项目硬约束，fail-closed）：IMP 必须确认来自微信主程序
+// 二进制才挂；dladdr 失败 / 来自 Mio 自身（继承链已挂，子类实例由父类 hook 覆盖，属预期
+// 行为而非漏挂）/ 其他插件 dylib（如 WCR）→ 一律让位不挂
 static void WPHookTableViewLayout(NSString *clsName, IMP *outOrig, IMP newImp) {
     Class cls = objc_getClass(clsName.UTF8String);
     if (!cls) return;
@@ -572,13 +643,15 @@ static void WPHookTableViewLayout(NSString *clsName, IMP *outOrig, IMP newImp) {
     if (!m) return;
     IMP cur = method_getImplementation(m);
     Dl_info info;
-    if (dladdr((void *)cur, &info) && info.dli_fname) {
-        NSString *path = [NSString stringWithUTF8String:info.dli_fname];
-        if (![path hasSuffix:@"/WeChat"]) {
-            WPLog(@"ListCornerRadius", @"[YIELD] %@::layoutSubviews IMP 来自 %@，让位不挂",
-                  clsName, [path lastPathComponent]);
-            return;
-        }
+    if (!dladdr((void *)cur, &info) || !info.dli_fname) {
+        WPLog(@"ListCornerRadius", @"[YIELD] %@::layoutSubviews dladdr 失败，保守不挂", clsName);
+        return;
+    }
+    NSString *path = [NSString stringWithUTF8String:info.dli_fname];
+    if (![path hasSuffix:@"/WeChat"]) {
+        WPLog(@"ListCornerRadius", @"[YIELD] %@::layoutSubviews IMP 来自 %@，让位不挂",
+              clsName, [path lastPathComponent]);
+        return;
     }
     MSHookMessageEx(cls, @selector(layoutSubviews), newImp, outOrig);
     WPLog(@"ListCornerRadius", @"[OK] %@::layoutSubviews (table border mount)", clsName);
@@ -589,28 +662,50 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (orig_UIView_layoutSubviews) orig_UIView_layoutSubviews(self, _cmd);
 
     // 顺序即性能（全 App 每个 UIView 每次布局都进这里）：class 指针比对（O(1) 零分配）
-    // → 总开关 → 尺寸 → 父/祖是表类（O(1) 字符串比较）→ responder 链找 VC + 名单（最贵，压轴）
+    // → 清洁态（assoc O(1)）→ 尺寸 → 父/祖是表类（O(1) 字符串比较）→ responder 链 + 名单（最贵，压轴）
     static Class g_nsViewCls;
     if (!g_nsViewCls) g_nsViewCls = objc_getClass("UIView");
     if ([self class] != g_nsViewCls) return;
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-    if (!config.globalCornerRadiusEnabled) return;
-
     UIView *view = (UIView *)self;
+    BOOL painted = objc_getAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey) != nil;
+
+    if (!config.globalCornerRadiusEnabled) {
+        // 清洁态：凭涂装标记还原原背景色
+        if (painted) WPRestorePaintedBg(view);
+        return;
+    }
+
     if (view.bounds.size.height < 1.0) return;
 
     UIView *parent = view.superview;
-    if (!parent) return;
+    if (!parent) {
+        if (painted) WPRestorePaintedBg(view);
+        return;
+    }
     BOOL parentIsTable = _wp_isTableViewClass(NSStringFromClass([parent class]));
     if (!parentIsTable) {
         UIView *gp = parent.superview;
-        if (!(gp && _wp_isTableViewClass(NSStringFromClass([gp class])))) return;
+        if (!(gp && _wp_isTableViewClass(NSStringFromClass([gp class])))) {
+            if (painted) WPRestorePaintedBg(view);
+            return;
+        }
     }
 
     UIViewController *vc = [WPUtility findParentViewController:view];
-    if (!vc || !_wp_isAllowedVC(NSStringFromClass([vc class]))) return;
+    if (!vc || !_wp_isAllowedVC(NSStringFromClass([vc class]))) {
+        if (painted) WPRestorePaintedBg(view);
+        return;
+    }
 
+    if (!painted) {
+        // 首次涂装：登记原背景色
+        objc_setAssociatedObject(view, (__bridge const void *)kMioViewOrigBgKey,
+            view.backgroundColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey, @YES,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
     // wakeups 优化：幂等赋值——backgroundColor 赋值即 CA 脏标记，布局期内反复赋同值会搅动提交循环
     if (![view.backgroundColor isEqual:[UIColor clearColor]])
         view.backgroundColor = [UIColor clearColor];
