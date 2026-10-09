@@ -104,8 +104,11 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
 
     UIView *container = ((UIView *(*)(id, SEL))objc_msgSend)(self, @selector(searchBoxContainer));
     if (container) {
-        container.layer.cornerRadius = radius;
-        container.layer.masksToBounds = YES;
+        // 幂等比对：避免每帧无效 setter 产生 CA 脏标记
+        if (container.layer.cornerRadius != (CGFloat)radius)
+            container.layer.cornerRadius = radius;
+        if (!container.layer.masksToBounds)
+            container.layer.masksToBounds = YES;
     }
 }
 
@@ -115,8 +118,10 @@ static NSString * const kMioBorderStampKey = @"com.mio.borderStamp";
 // 涂装标记：登记"被本模块动过的 cell/table/视图"，功能关后的清洁态只清理这些对象，避免误伤原生样式
 static NSString * const kMioCornerPaintedKey = @"com.mio.cornerPainted";
 static NSString * const kMioTablePaintedKey = @"com.mio.tablePainted";
-// 边框结构戳：编码边框重绘的全部结构性/配置性输入，戳相同则跳过全表分组（节流）
+// 边框结构戳：编码边框重绘的全部结构性/配置性输入（整数哈希），戳相同则跳过全表分组（节流）
 static NSString * const kMioBorderStructKey = @"com.mio.borderStruct";
+// 行带缓存：全表 section 行带一次构建 2s 内共享（cell 圆角邻接 + 边框分组两个消费者）
+static NSString * const kMioBandsCacheKey = @"com.mio.bandsCache";
 // section 边框覆盖视图 tag 段：tag = 基数 + sectionIndex，覆盖视图挂在 tableView 本体上，免疫 cell 复用
 static NSInteger const kMioBorderTagBase = 0x4D494F;  // 'MIO'
 static NSInteger const kMioBorderTagRange = 1000;
@@ -168,30 +173,54 @@ static BOOL WPSectionBand(UITableView *tableView, NSInteger s, CGFloat *outTop, 
     return YES;
 }
 
+// section 行带（table 内容坐标）
+typedef struct { CGFloat top, bottom; } WPBand;
+
+// 行带缓存：全表 section 行带一次构建（WPSectionBand @try 兜底），2s 内所有消费者
+// （cell 圆角邻接判定 / 边框分组）直接读内存数组，热点路径零 rectForRow 调用；
+// 2s 时间桶兜底动态行高等几何漂移自愈。旋转/结构变化 → 结构戳失配 + 桶过期双重触发重建
+static NSArray *WPBandsForTable(UITableView *tableView) {
+    NSDictionary *cache = objc_getAssociatedObject(tableView, (__bridge const void *)kMioBandsCacheKey);
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+    if (cache && now - [cache[@"t"] doubleValue] < 2.0) return cache[@"b"];
+
+    NSMutableArray *bands = [NSMutableArray array];
+    NSInteger nSections = [tableView numberOfSections];
+    for (NSInteger s = 0; s < nSections; s++) {
+        CGFloat top = 0, bottom = 0;
+        if (!WPSectionBand(tableView, s, &top, &bottom)) continue;
+        WPBand b = { top, bottom };
+        [bands addObject:[NSValue valueWithBytes:&b objCType:@encode(WPBand)]];
+    }
+    objc_setAssociatedObject(tableView, (__bridge const void *)kMioBandsCacheKey,
+        @{@"t": @(now), @"b": bands}, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return bands;
+}
+
 // ★ 几何相邻行位判定（WCR 同款，Frida 实证）：cell 上下是否有紧贴（间隙 ≤ 0.5pt）的行。
-//   遍历各 section 的行带（首末行 rect 并集，table 内容坐标），与 cell 矩形做垂直邻接比对，
-//   与 indexPath/section 完全无关——跨 section 几何连续的行自然连成一张卡
+//   遍历行带缓存与 cell 矩形做垂直邻接比对，与 indexPath/section 完全无关——
+//   跨 section 几何连续的行自然连成一张卡。热点路径：1 次 assoc 读 + 内存遍历
 static void WPRowNeighbors(UITableView *tableView, CGRect cellRect, BOOL *hasAbove, BOOL *hasBelow) {
     *hasAbove = NO;
     *hasBelow = NO;
-    NSInteger nSections = [tableView numberOfSections];
-    for (NSInteger s = 0; s < nSections && (!*hasAbove || !*hasBelow); s++) {
-        CGFloat bandTop = 0, bandBottom = 0;
-        if (!WPSectionBand(tableView, s, &bandTop, &bandBottom)) continue;
-        CGFloat cellTop = cellRect.origin.y;
-        CGFloat cellBottom = cellRect.origin.y + cellRect.size.height;
+    CGFloat cellTop = cellRect.origin.y;
+    CGFloat cellBottom = cellRect.origin.y + cellRect.size.height;
 
-        if (bandBottom <= cellTop + 0.5) {
+    for (NSValue *v in WPBandsForTable(tableView)) {
+        WPBand b;
+        [v getValue:&b];
+        if (b.bottom <= cellTop + 0.5) {
             // 行带整体在上方：底边紧贴 cell 顶边 → 上邻
-            if (fabs(bandBottom - cellTop) <= 0.5) *hasAbove = YES;
-        } else if (bandTop >= cellBottom - 0.5) {
+            if (fabs(b.bottom - cellTop) <= 0.5) *hasAbove = YES;
+        } else if (b.top >= cellBottom - 0.5) {
             // 行带整体在下方：顶边紧贴 cell 底边 → 下邻
-            if (fabs(bandTop - cellBottom) <= 0.5) *hasBelow = YES;
+            if (fabs(b.top - cellBottom) <= 0.5) *hasBelow = YES;
         } else {
             // 行带与 cell 垂直重叠（同 section）：带内是否还有更高/更低的行
-            if (cellTop - bandTop > 0.5) *hasAbove = YES;
-            if (bandBottom - cellBottom > 0.5) *hasBelow = YES;
+            if (cellTop - b.top > 0.5) *hasAbove = YES;
+            if (b.bottom - cellBottom > 0.5) *hasBelow = YES;
         }
+        if (*hasAbove && *hasBelow) break;  // 中行：早退
     }
 }
 
@@ -707,22 +736,26 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     CGFloat overlayW = tableW - 2.0 * margin;
     if (overlayW <= 0) return;
 
-    NSInteger nSections = [tableView numberOfSections];
-
-    // ★ 结构戳节流：边框重绘的全部输入（开关/参数/边框色/表宽/各 section 行数）都是结构性或
-    //   配置性的——rectForRow 返回内容坐标，滚动不变，无需按帧重算全表分组。
-    //   戳相同直接返回（每帧 O(sections) 拼串比对，替代 2N 次 rectForRow + 分组 + subviews 遍历）；
-    //   旋转/配置变更/改色/结构变化 → 戳失配立即重跑；0.5s 时间桶兜底行高漂移自愈
-    NSMutableString *stamp = [[NSMutableString alloc] initWithCapacity:96];
-    [stamp appendFormat:@"%d|%d|%.0f|%ld|%.1f|%p|W%.1f|n%ld|t%lld",
-        featureOn, (BOOL)config.listCellBorder, margin, (long)radius, borderWidth,
-        borderColor, tableW, (long)nSections, (long long)(CFAbsoluteTimeGetCurrent() * 2.0)];
-    for (NSInteger s = 0; s < nSections; s++) {
-        [stamp appendFormat:@"|%ld", (long)[tableView numberOfRowsInSection:s]];
-    }
-    NSString *oldStamp = objc_getAssociatedObject(tableView, (__bridge const void *)kMioBorderStructKey);
-    if (oldStamp && [stamp isEqualToString:oldStamp]) return;
-    objc_setAssociatedObject(tableView, (__bridge const void *)kMioBorderStructKey, stamp,
+    // ★ 结构戳节流（整数哈希，零分配）：边框重绘的全部输入（开关/参数/边框色/表宽）都是
+    //   结构性或配置性的——rectForRow 返回内容坐标，滚动不变，无需按帧重算全表分组。
+    //   哈希相同直接返回（每帧 O(1)，替代 2N 次 rectForRow + 分组 + subviews 遍历）；
+    //   旋转/配置变更/改色 → 哈希失配立即重跑；2s 时间桶兜底动态行高漂移自愈
+    NSUInteger h = 2166136261u;
+#define WPMIX(x) do { h ^= (NSUInteger)(x); h *= 16777619u; } while (0)
+    WPMIX(featureOn);
+    WPMIX((BOOL)config.listCellBorder);
+    WPMIX((NSUInteger)(margin * 10.0));
+    WPMIX((NSUInteger)radius);
+    WPMIX((NSUInteger)(borderWidth * 10.0));
+    WPMIX(borderColor);
+    NSUInteger twBits;
+    memcpy(&twBits, &tableW, sizeof(twBits));
+    WPMIX(twBits);
+    WPMIX((NSUInteger)(CFAbsoluteTimeGetCurrent() * 0.5));  // 2s 时间桶
+#undef WPMIX
+    NSNumber *stamp = objc_getAssociatedObject(tableView, (__bridge const void *)kMioBorderStructKey);
+    if (stamp && stamp.unsignedIntegerValue == h) return;
+    objc_setAssociatedObject(tableView, (__bridge const void *)kMioBorderStructKey, @(h),
         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     // ★ WCR 同款几何分组合并（Frida 实证）：相邻 section 的行带垂直连续（间隙 ≤ 0.5pt）
@@ -732,9 +765,10 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     NSInteger groupFirstSection = -1;
     BOOL groupOpen = NO;
 
-    for (NSInteger s = 0; s < nSections; s++) {
-        CGFloat bandTop = 0, bandBottom = 0;
-        if (!WPSectionBand(tableView, s, &bandTop, &bandBottom)) continue;
+    for (NSValue *v in WPBandsForTable(tableView)) {
+        WPBand b;
+        [v getValue:&b];
+        CGFloat bandTop = b.top, bandBottom = b.bottom;
 
         if (groupOpen && bandTop - prevBottom <= 0.5) {
             // 与当前组垂直连续：扩组
