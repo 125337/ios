@@ -262,76 +262,33 @@ static void HCOpenChat(id vc, NSString *userName) {
     }
 }
 
-// 头像（XOS FUN_00158bcc 同构：size+userName 缓存 MMHeadImageView；类/初始化器运行时探测，
-// 缺失返回 nil 由调用方画灰圆占位，XOS L23203-23217 同款兜底。差异：显式传联系人头像 URL 且
-// bAutoUpdate=1 —— 群聊头像不走常规头像素引，URL 传 nil 时 @chatroom 只渲染灰色默认图）
+// 头像（size+userName 缓存；本地头像库 MMHeadImageMgr 按 wxid 直读，AvatarLoader 同款路径。
+// 联系人库查询实测全空（56/57 日志实证 getContactByUserName:/getContactByName: 均 nil），
+// 不再走 contact→URL→MMHeadImageView 链路；查空返回 nil 由调用方画灰圆占位且不缓存失败结果）
 static NSMutableDictionary *hcAvatarCache = nil;   // size|userName → 头像视图（主线程专用）
 
 static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
     if (!hcAvatarCache) hcAvatarCache = [NSMutableDictionary dictionary];
     NSString *key = [NSString stringWithFormat:@"%.0f|%@", size, userName];
     UIView *av = [hcAvatarCache objectForKey:key];
-    WPLog(@"HomeCard", @"[Avatar-Diag] node3-avatar-in | user=%@ size=%.0f cacheHit=%@",
-          userName, size, av ? @"yes" : @"no");
     if (av) return av;
     @try {
-        Class cls = objc_getClass("MMHeadImageView");
-        SEL sel = NSSelectorFromString(@"initWithUsrName:headImgUrl:bAutoUpdate:bRoundCorner:");
-        WPLog(@"HomeCard", @"[Avatar-Diag] node4-cls | cls=%@ sel=%@",
-              cls ? @"exists" : @"missing",
-              (cls && [cls instancesRespondToSelector:sel]) ? @"exists" : @"missing");
-        if (cls && [cls instancesRespondToSelector:sel]) {
-            id contact = WXGetContactForWxid(userName);
-            if (!contact) {
-                // getContactByUserName: 查空时回退 getContactByName:（方法名因版本而异，KeywordAlert 同款）
-                id mgr = WXGetService(objc_getClass("CContactMgr"));
-                SEL nameSel = NSSelectorFromString(@"getContactByName:");
-                if (mgr && [mgr respondsToSelector:nameSel]) {
-                    contact = ((id (*)(id, SEL, id))objc_msgSend)(mgr, nameSel, userName);
-                }
-            }
-            NSString *url = WXContactHeadImageURL(contact);   // HD 优先
-            WPLog(@"HomeCard", @"[Avatar-Diag] node5-url | user=%@ contact=%@ url=%@",
-                  userName, contact ? @"有值" : @"nil",
-                  url.length ? [url substringToIndex:MIN(40, (NSUInteger)url.length)] : @"nil");
-            // URL 为空绝不建 MMHeadImageView（56 日志实证：nil URL 建出空视图且被缓存永久
-            // 复用，永不自愈）。回退 MMHeadImageMgr 本地头像直读（AvatarLoader 同款路径），
-            // 再失败返回 nil 走灰圆占位——失败结果不缓存，下次重建自动重试，联系人库
-            // 就绪后即恢复 MMHeadImageView 真头像
-            if (url.length == 0) {
-                id headMgr = WXGetService(objc_getClass("MMHeadImageMgr"));
-                SEL getSel = NSSelectorFromString(@"getHeadImage:withCategory:");
-                UIImage *img = nil;
-                if (headMgr && [headMgr respondsToSelector:getSel]) {
-                    img = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headMgr, getSel, userName, @0);
-                }
-                WPLog(@"HomeCard", @"[Avatar-Diag] node5b-fallback | user=%@ localImg=%@",
-                      userName, img ? @"有值" : @"nil");
-                if (img) {
-                    UIImageView *iv = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, size, size)];
-                    iv.image = img;
-                    iv.contentMode = UIViewContentModeScaleAspectFill;
-                    iv.clipsToBounds = YES;
-                    iv.layer.cornerRadius = size * 0.5;   // 对齐 bRoundCorner=YES 观感
-                    av = iv;
-                }
-            } else {
-                id v = ((id (*)(id, SEL, id, id, BOOL, BOOL))objc_msgSend)
-                       ([cls alloc], sel, userName, url, YES, YES);
-                WPLog(@"HomeCard", @"[Avatar-Diag] node6-init | ret=%@ class=%@ isUIView=%@ frame=%@",
-                      v ? @"有值" : @"nil",
-                      v ? NSStringFromClass([v class]) : @"-",
-                      [v isKindOfClass:[UIView class]] ? @"yes" : @"no",
-                      [v isKindOfClass:[UIView class]] ? NSStringFromCGRect(((UIView *)v).frame) : @"-");
-                if ([v isKindOfClass:[UIView class]]) {
-                    ((UIView *)v).frame = CGRectMake(0, 0, size, size);
-                    av = v;
-                }
-            }
+        id headMgr = WXGetService(objc_getClass("MMHeadImageMgr"));
+        SEL getSel = NSSelectorFromString(@"getHeadImage:withCategory:");
+        UIImage *img = nil;
+        if (headMgr && [headMgr respondsToSelector:getSel]) {
+            img = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headMgr, getSel, userName, @0);
+        }
+        if (img) {
+            UIImageView *iv = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, size, size)];
+            iv.image = img;
+            iv.contentMode = UIViewContentModeScaleAspectFill;
+            iv.clipsToBounds = YES;
+            iv.layer.cornerRadius = size * 0.5;
+            av = iv;
         }
     } @catch (...) {}
     if (av) [hcAvatarCache setObject:av forKey:key];
-    else WPLog(@"HomeCard", @"[Avatar-Diag] node6-verdict | avatar build FAILED → 灰圆占位 | user=%@", userName);
     return av;
 }
 
@@ -339,14 +296,7 @@ static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
 // 每页 maxVisible 个头像水平居中 + 装饰在线圆点 + 昵称 + 点按跳聊天；无保存联系人返回 nil）
 static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *cfg) {
     NSArray<NSString *> *saved = [HomeCardConfig savedAll];   // 人 + 群合并（人在前）
-    WPLog(@"HomeCard", @"[Avatar-Diag] node1-build-entry | savedCount=%lu | first5=%@",
-          (unsigned long)saved.count,
-          saved.count ? [saved objectsAtIndexes:[NSIndexSet indexSetWithIndexesInRange:
-              NSMakeRange(0, MIN(5, (NSUInteger)saved.count))]] : @"(empty)");
-    if (!saved.count) {
-        WPLog(@"HomeCard", @"[Avatar-Diag] node1-verdict | saved 为空 → return nil（数据层无联系人，非渲染问题）");
-        return nil;
-    }
+    if (!saved.count) return nil;
 
     CGFloat H = HCContactHeight(cfg);
     NSInteger maxVisible = MIN(MAX((NSInteger)cfg.hcContactMaxVisible, 5), 6);
@@ -378,8 +328,6 @@ static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *c
     sv.contentSize = CGSizeMake(innerW * pages, H);
     WPLog(@"HomeCard", @"[Contact] build: count=%ld pages=%ld size=%.0f spacing=%.0f H=%.0f",
           (long)count, (long)pages, size, spacing, H);
-    WPLog(@"HomeCard", @"[Avatar-Diag] node1-geometry | count=%ld pages=%ld size=%.0f spacing=%.0f H=%.0f maxVisible=%ld",
-          (long)count, (long)pages, size, spacing, H, (long)maxVisible);
 
     CGFloat pageInnerW = innerW - 8.0;                      // 每页左右各 4pt 内衬（XOS L22935）
     CGFloat cellW = pageInnerW / maxVisible;
@@ -407,17 +355,11 @@ static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *c
         cell.userInteractionEnabled = YES;
 
         // 头像（缓存复用；构建失败回退灰圆占位）
-        WPLog(@"HomeCard", @"[Avatar-Diag] node2-avatar-call | i=%ld user=%@ isChatroom=%d",
-              (long)i, userName, [userName containsString:@"@chatroom"] ? 1 : 0);
         UIView *av = HCContactAvatar(userName, size);
         if (av) {
-            WPLog(@"HomeCard", @"[Avatar-Diag] node7-add | branch=real | frame=%@ cellFrame=%@",
-                  NSStringFromCGRect(av.frame), NSStringFromCGRect(cell.frame));
             av.frame = CGRectMake(avatarX, 0, size, size);
             [cell addSubview:av];
         } else {
-            WPLog(@"HomeCard", @"[Avatar-Diag] node7-add | branch=placeholder | cellFrame=%@",
-                  NSStringFromCGRect(cell.frame));
             UIView *ph = [[UIView alloc] initWithFrame:CGRectMake(avatarX, 0, size, size)];
             ph.backgroundColor = HCSecondaryLabel();
             ph.layer.cornerRadius = size * 0.5;
@@ -467,13 +409,6 @@ static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *c
         [cell addGestureRecognizer:tap];
 
         [pageViews[page] addSubview:cell];
-    }
-    {
-        NSMutableArray *pageSubs = [NSMutableArray array];
-        for (UIView *pv in pageViews) [pageSubs addObject:@(pv.subviews.count)];
-        WPLog(@"HomeCard", @"[Avatar-Diag] node8-contact-done | containerH=%.0f containerSubs=%lu svSubs=%lu pageSubviews=%@",
-              H, (unsigned long)container.subviews.count,
-              (unsigned long)sv.subviews.count, pageSubs);
     }
     return container;
 }
@@ -1548,10 +1483,6 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
         if (con) {
             con.frame = CGRectMake(0, conY, width, con.frame.size.height);
             [container addSubview:con];
-            WPLog(@"HomeCard", @"[Avatar-Diag] node9-header-contact | added | conFrame=%@ containerH=%.0f",
-                  NSStringFromCGRect(con.frame), container.frame.size.height);
-        } else {
-            WPLog(@"HomeCard", @"[Avatar-Diag] node9-header-contact | con=nil（HCBuildContact 返回 nil）");
         }
     }
 
@@ -1615,20 +1546,6 @@ static void HCApply(id vc) {
                 ?: [UIColor separatorColor];
             card.layer.borderColor = bc.CGColor;
         }
-    }
-
-    // [Avatar-Diag] node10：最终 header 内滚动容器清点（联系人分页 sv 应存在）
-    {
-        NSInteger scrollCount = 0;
-        NSMutableArray *stack = [NSMutableArray arrayWithObject:header];
-        while (stack.count) {
-            UIView *v = stack.lastObject;
-            [stack removeLastObject];
-            if ([v isKindOfClass:[UIScrollView class]]) scrollCount++;
-            [stack addObjectsFromArray:v.subviews];
-        }
-        WPLog(@"HomeCard", @"[Avatar-Diag] node10-apply | header=%@ scrollViewCount=%ld",
-              NSStringFromClass(header.class), (long)scrollCount);
     }
 
     WPLog(@"HomeCard", @"[APPLY] header=%@ card=%@",
