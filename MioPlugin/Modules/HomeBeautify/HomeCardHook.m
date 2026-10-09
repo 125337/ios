@@ -243,21 +243,57 @@ static CGFloat HCContactHeight(HomeCardConfig *cfg) {
 // 全屏开 → PushOtherBaseMsgControllerByContact:navigationController:animated:；
 // 关 → ShowPageSheetLogicControllerByContact:pageSheetDelegate:fromViewController:animated: 半屏）
 static void HCOpenChat(id vc, NSString *userName) {
+    WPLog(@"HomeCard", @"[Chat-Diag] open-chat | enter | user=%@ vc=%@", userName, NSStringFromClass([vc class]));
+    if (!userName.length) {
+        WPLog(@"HomeCard", @"[Chat-Diag] stop1 | userName 为空");
+        return;
+    }
     id contact = WXGetContactForWxid(userName);   // 内置 getContactByName: 兜底
-    if (!contact) return;
+    if (!contact) {
+        id mgr = WXGetService(objc_getClass("CContactMgr"));
+        SEL nameSel = NSSelectorFromString(@"getContactByName:");
+        WPLog(@"HomeCard", @"[Chat-Diag] lookup | getContactByUserName:nil | mgr=%@ getContactByName:%@",
+              mgr ? @"有值" : @"nil", (mgr && [mgr respondsToSelector:nameSel]) ? @"响应" : @"缺失");
+        if (mgr && [mgr respondsToSelector:nameSel]) {
+            contact = ((id (*)(id, SEL, id))objc_msgSend)(mgr, nameSel, userName);
+        }
+    }
+    if (!contact) {
+        WPLog(@"HomeCard", @"[Chat-Diag] stop2 | contact 查询两路均 nil（CContactMgr 问题）");
+        return;
+    }
+    WPLog(@"HomeCard", @"[Chat-Diag] lookup | contact=有值 class=%@", NSStringFromClass([contact class]));
     id logic = WXGetService(objc_getClass("MMMsgLogicManager"));
-    if (!logic) return;
+    if (!logic) {
+        WPLog(@"HomeCard", @"[Chat-Diag] stop3 | MMMsgLogicManager 服务为 nil");
+        return;
+    }
     HomeCardConfig *cfg = [HomeCardConfig shared];
+    WPLog(@"HomeCard", @"[Chat-Diag] logic | service=有值 fullScreen=%d", cfg.hcContactFullScreen ? 1 : 0);
     if (cfg.hcContactFullScreen) {
         SEL s = NSSelectorFromString(@"PushOtherBaseMsgControllerByContact:navigationController:animated:");
-        if ([logic respondsToSelector:s] && [vc isKindOfClass:[UIViewController class]]) {
+        BOOL resp = [logic respondsToSelector:s] && [vc isKindOfClass:[UIViewController class]];
+        WPLog(@"HomeCard", @"[Chat-Diag] push | selector=%@ vcIsVC=%d",
+              [logic respondsToSelector:s] ? @"响应" : @"缺失",
+              [vc isKindOfClass:[UIViewController class]] ? 1 : 0);
+        if (resp) {
             UINavigationController *nav = [(UIViewController *)vc navigationController];
+            WPLog(@"HomeCard", @"[Chat-Diag] push | nav=%@", nav ? @"有值" : @"nil");
+            if (!nav) {
+                WPLog(@"HomeCard", @"[Chat-Diag] stop4 | navigationController 为 nil");
+                return;
+            }
             ((void (*)(id, SEL, id, id, BOOL))objc_msgSend)(logic, s, contact, nav, YES);
+            WPLog(@"HomeCard", @"[Chat-Diag] push | 已调用");
         }
     } else {
         SEL s = NSSelectorFromString(@"ShowPageSheetLogicControllerByContact:pageSheetDelegate:fromViewController:animated:");
+        WPLog(@"HomeCard", @"[Chat-Diag] sheet | selector=%@ vcIsVC=%d",
+              [logic respondsToSelector:s] ? @"响应" : @"缺失",
+              [vc isKindOfClass:[UIViewController class]] ? 1 : 0);
         if ([logic respondsToSelector:s] && [vc isKindOfClass:[UIViewController class]]) {
             ((void (*)(id, SEL, id, id, id, BOOL))objc_msgSend)(logic, s, contact, nil, vc, YES);
+            WPLog(@"HomeCard", @"[Chat-Diag] sheet | 已调用");
         }
     }
 }
