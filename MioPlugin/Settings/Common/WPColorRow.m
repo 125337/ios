@@ -55,14 +55,16 @@ static CGFloat const kSingleSwatchSize = 30.0;
 
 #pragma mark - 空值映射 + 渲染（全项目唯一一处）
 
+/// 空/nil/非法 hex → 未设置观感：浅侧白、深侧黑；有值且合法 → 真实色
++ (UIColor *)swatchColorForHex:(NSString *)hex darkSide:(BOOL)darkSide {
+    UIColor *color = hex.length > 0 ? [WPColorUtil colorFromHexString:hex] : nil;
+    return color ?: (darkSide ? [UIColor blackColor] : [UIColor whiteColor]);
+}
+
 - (void)refresh {
-    NSString *lightHex = [ConfigManager valueForKey:_lightKey];
-    // 浅色侧空值 → 白
-    _lightBtn.backgroundColor = lightHex.length > 0 ? [WPColorUtil colorFromHexString:lightHex] : [UIColor whiteColor];
+    _lightBtn.backgroundColor = [WPColorRow swatchColorForHex:[ConfigManager valueForKey:_lightKey] darkSide:NO];
     if (_darkKey) {
-        NSString *darkHex = [ConfigManager valueForKey:_darkKey];
-        // 深色侧空值 → 黑
-        _darkBtn.backgroundColor = darkHex.length > 0 ? [WPColorUtil colorFromHexString:darkHex] : [UIColor blackColor];
+        _darkBtn.backgroundColor = [WPColorRow swatchColorForHex:[ConfigManager valueForKey:_darkKey] darkSide:YES];
     }
 }
 

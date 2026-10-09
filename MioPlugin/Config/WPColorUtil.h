@@ -13,13 +13,15 @@ typedef struct {
 @interface WPColorUtil : NSObject
 
 /// #RRGGBB / #RRGGBBAA → UIColor
-+ (UIColor *)colorFromHexString:(NSString *)hex;
+/// 空/nil/非法输入 → nil（调用方据此区分"未设置"与"真黑色"，各自兜底）
+/// @param hex 可含 # 前缀与首尾空白，如 "#FF0000" / " FF0000AA "
++ (nullable UIColor *)colorFromHexString:(nullable NSString *)hex;
 
 /// UIColor → #RRGGBB（小写）
 + (NSString *)hexStringFromColor:(UIColor *)color;
 
-/// 验证 Hex 是否合法（6 或 8 位十六进制，可选 # 前缀）
-+ (BOOL)isValidHexString:(NSString *)hex;
+/// 验证 Hex 是否合法（6 或 8 位十六进制，可选 # 前缀，容忍首尾空白）
++ (BOOL)isValidHexString:(nullable NSString *)hex;
 
 /// HSVA → UIColor
 + (UIColor *)colorWithHue:(CGFloat)hue

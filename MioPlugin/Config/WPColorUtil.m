@@ -4,28 +4,29 @@
 
 #pragma mark - Hex ↔ UIColor
 
-+ (UIColor *)colorFromHexString:(NSString *)hex {
-    // 空/nil/非法 → nil：调用方据此区分"未设置"与"真黑色"，各自兜底
-    if (!hex || hex.length == 0) return nil;
+/// 清洗：去 #、去首尾空白（含换行）；清洗后为空返回 nil
+/// colorFromHexString / isValidHexString 共用，保证验收规则一致
+static NSString * _Nullable NormalizedHex(NSString *hex) {
+    if (!hex) return nil;
+    NSString *clean = [[hex stringByReplacingOccurrencesOfString:@"#" withString:@""]
+                          stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    return clean.length > 0 ? clean : nil;
+}
 
-    // 移除 # 和空格
-    hex = [[hex stringByReplacingOccurrencesOfString:@"#" withString:@""]
-              stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
++ (nullable UIColor *)colorFromHexString:(NSString *)hex {
+    if (![self isValidHexString:hex]) return nil;   // 空/nil/非法 → nil：调用方各自兜底
+    NSString *clean = NormalizedHex(hex);
 
-    if (hex.length != 6 && hex.length != 8) return nil;
-    NSCharacterSet *hexSet = [NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"];
-    if ([hex stringByTrimmingCharactersInSet:hexSet].length != 0) return nil;
-
-    if (hex.length == 6) {
+    if (clean.length == 6) {
         unsigned int rgb = 0;
-        [[NSScanner scannerWithString:hex] scanHexInt:&rgb];
+        [[NSScanner scannerWithString:clean] scanHexInt:&rgb];
         return [UIColor colorWithRed:((rgb >> 16) & 0xFF) / 255.0
                                green:((rgb >> 8) & 0xFF) / 255.0
                                 blue:(rgb & 0xFF) / 255.0
                                alpha:1.0];
     }
     unsigned long long rgba = 0;
-    [[NSScanner scannerWithString:hex] scanHexLongLong:&rgba];
+    [[NSScanner scannerWithString:clean] scanHexLongLong:&rgba];
     return [UIColor colorWithRed:((rgba >> 24) & 0xFF) / 255.0
                            green:((rgba >> 16) & 0xFF) / 255.0
                             blue:((rgba >> 8) & 0xFF) / 255.0
@@ -41,11 +42,10 @@
 }
 
 + (BOOL)isValidHexString:(NSString *)hex {
-    if (!hex || hex.length == 0) return NO;
-    hex = [hex stringByReplacingOccurrencesOfString:@"#" withString:@""];
-    if (hex.length != 6 && hex.length != 8) return NO;
+    NSString *clean = NormalizedHex(hex);
+    if (!clean || (clean.length != 6 && clean.length != 8)) return NO;
     NSCharacterSet *hexSet = [NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"];
-    return [[hex stringByTrimmingCharactersInSet:hexSet] length] == 0;
+    return [clean stringByTrimmingCharactersInSet:hexSet].length == 0;
 }
 
 #pragma mark - HSV ↔ UIColor
