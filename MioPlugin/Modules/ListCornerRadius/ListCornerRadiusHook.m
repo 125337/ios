@@ -246,10 +246,10 @@ static void WPRowNeighbors(UITableView *tableView, CGRect cellRect, BOOL *hasAbo
     }
 }
 
-// 取紧贴（间隙 ≤ 0.5pt）邻 cell 的类（table 坐标比对，可见 cell 逐个转 table 坐标）；
+// 取紧贴（间隙 ≤ 0.5pt）邻 cell 实例（table 坐标比对，可见 cell 逐个转 table 坐标）；
 // 无可见邻 cell（被屏幕裁切/滚出）→ 返回 nil，调用方保留几何判定结果
-static Class WPTouchingNeighborClass(UITableView *tableView, CGRect cellRect, BOOL above) {
-    Class result = nil;
+static UITableViewCell *WPTouchingNeighborCell(UITableView *tableView, CGRect cellRect, BOOL above) {
+    UITableViewCell *result = nil;
     CGFloat cellTop = cellRect.origin.y;
     CGFloat cellBottom = cellRect.origin.y + cellRect.size.height;
     for (UITableViewCell *c in tableView.visibleCells) {
@@ -257,9 +257,9 @@ static Class WPTouchingNeighborClass(UITableView *tableView, CGRect cellRect, BO
         CGFloat cTop = f.origin.y;
         CGFloat cBottom = f.origin.y + f.size.height;
         if (above) {
-            if (cTop < cellTop && fabs(cBottom - cellTop) <= 0.5) { result = [c class]; break; }
+            if (cTop < cellTop && fabs(cBottom - cellTop) <= 0.5) { result = c; break; }
         } else {
-            if (cBottom > cellBottom && fabs(cTop - cellBottom) <= 0.5) { result = [c class]; break; }
+            if (cBottom > cellBottom && fabs(cTop - cellBottom) <= 0.5) { result = c; break; }
         }
     }
     return result;
@@ -399,14 +399,41 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     BOOL hasAbove = NO, hasBelow = NO;
     WPRowNeighbors(tableView, cellRect, &hasAbove, &hasBelow);
 
-    // ★ 同类才连卡（首页实证：置顶区 MMTableViewCell 与普通区 NewMainFrameCell gap=0.0 紧贴但类不同，
-    //   不能连成一张卡）：紧贴邻 cell 可见且类不同 → 该侧视为悬空（卡片边界，出角）。
+    // ★ 断卡规则（WCR 反编译对齐）：
+    //   首页（MainFrameTableView）= WCR 专用特判方案：行位走 indexPath 语义，跨 section 紧贴
+    //   一律不连卡（置顶/普通区、sec1/sec2 全部各自成卡）；
+    //   通用页面 = WCR 通用方案（几何相邻连卡，实证跨 section 连成单卡），仅跨类断卡。
     //   邻 cell 不可见（屏幕裁切/滚出）时 helper 返回 nil，保留几何判定结果不抖动
+    static Class homeTableCls = nil;
+    static dispatch_once_t homeTableOnce;
+    dispatch_once(&homeTableOnce, ^{ homeTableCls = NSClassFromString(@"MainFrameTableView"); });
+    BOOL homeTable = homeTableCls && [tableView isKindOfClass:homeTableCls];
+
     Class selfCls = [cellView class];
-    Class aboveCls = WPTouchingNeighborClass(tableView, cellRect, YES);
-    if (aboveCls && aboveCls != selfCls) hasAbove = NO;
-    Class belowCls = WPTouchingNeighborClass(tableView, cellRect, NO);
-    if (belowCls && belowCls != selfCls) hasBelow = NO;
+    if (hasAbove) {
+        UITableViewCell *aboveCell = WPTouchingNeighborCell(tableView, cellRect, YES);
+        if (aboveCell) {
+            if (homeTable) {
+                NSIndexPath *ip = [tableView indexPathForCell:(UITableViewCell *)cellView];
+                NSIndexPath *nip = [tableView indexPathForCell:aboveCell];
+                if (!nip || !ip || nip.section != ip.section) hasAbove = NO;
+            } else if ([aboveCell class] != selfCls) {
+                hasAbove = NO;
+            }
+        }
+    }
+    if (hasBelow) {
+        UITableViewCell *belowCell = WPTouchingNeighborCell(tableView, cellRect, NO);
+        if (belowCell) {
+            if (homeTable) {
+                NSIndexPath *ip = [tableView indexPathForCell:(UITableViewCell *)cellView];
+                NSIndexPath *nip = [tableView indexPathForCell:belowCell];
+                if (!nip || !ip || nip.section != ip.section) hasBelow = NO;
+            } else if ([belowCell class] != selfCls) {
+                hasBelow = NO;
+            }
+        }
+    }
 
     [ListCornerRadiusHook wp_applyGeometricCorner:cellView
                                      cornerRadius:cornerRadius
@@ -927,13 +954,24 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
     NSInteger nSections = [tableView numberOfSections];
 
+    // ★ 首页特判（WCR 反编译对齐）：WCR 对 MainFrameTableView 是专用方案——per-section
+    //   一张覆盖视图，跨 section 绝不合并；通用页面才是几何相邻合并（通讯录实证连卡）
+    static Class homeTableClsBorder = nil;
+    static dispatch_once_t homeTableOnceBorder;
+    dispatch_once(&homeTableOnceBorder, ^{
+        homeTableClsBorder = NSClassFromString(@"MainFrameTableView");
+    });
+    BOOL homeTable = homeTableClsBorder && [tableView isKindOfClass:homeTableClsBorder];
+
     // ★ 每 section 的 cell 类映射（visibleCells 取证；无可见 cell → nil = 类未知，不阻断连卡）：
-    //   同类才连卡——首页置顶区（MMTableViewCell）与普通区（NewMainFrameCell）紧贴但类不同，必须分卡
+    //   通用页面跨类断卡——首页置顶区（MMTableViewCell）与普通区（NewMainFrameCell）类不同
     Class secCls[256];
     for (NSInteger s = 0; s < nSections && s < 256; s++) secCls[s] = nil;
-    for (UITableViewCell *c in tableView.visibleCells) {
-        NSIndexPath *ip = [tableView indexPathForCell:c];
-        if (ip && ip.section < 256) secCls[ip.section] = [c class];
+    if (!homeTable) {
+        for (UITableViewCell *c in tableView.visibleCells) {
+            NSIndexPath *ip = [tableView indexPathForCell:c];
+            if (ip && ip.section < 256) secCls[ip.section] = [c class];
+        }
     }
 
     // ★ WCR 同款几何分组合并（Frida 实证）：相邻 section 的行带垂直连续（间隙 ≤ 0.5pt）
@@ -953,7 +991,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         Class secClass = (s < 256) ? secCls[s] : nil;
         BOOL classBoundary = groupClass && secClass && groupClass != secClass;
 
-        if (groupOpen && bandTop - prevBottom <= 0.5 && !classBoundary) {
+        if (groupOpen && !homeTable && bandTop - prevBottom <= 0.5 && !classBoundary) {
             // 与当前组垂直连续且同类：扩组
             groupBottom = bandBottom;
             prevBottom = bandBottom;
