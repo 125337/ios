@@ -2,6 +2,7 @@
 #import "MessageTimeConfig.h"
 #import "../Revoke/RevokeConfig.h"
 #import "../../Core/WPUtility.h"
+#import "../../Config/WPColorUtil.h"
 #import "MessageTimeFormatParser.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -522,10 +523,10 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
         NSString *bgHex = isSender ? config.senderBackgroundColorHex : config.receiverBackgroundColorHex;
         NSString *bgDarkHex = isSender ? config.senderBackgroundColorDarkHex : config.receiverBackgroundColorDarkHex;
 
-        UIColor *lightTextColor = textHex.length ? [WPUtility colorFromHex:textHex] : nil;
-        UIColor *darkTextColor  = textDarkHex.length ? [WPUtility colorFromHex:textDarkHex] : nil;
-        UIColor *lightBgColor   = bgHex.length ? [WPUtility colorFromHex:bgHex] : nil;
-        UIColor *darkBgColor    = bgDarkHex.length ? [WPUtility colorFromHex:bgDarkHex] : nil;
+        UIColor *lightTextColor = textHex.length ? [WPColorUtil colorFromHexString:textHex] : nil;
+        UIColor *darkTextColor  = textDarkHex.length ? [WPColorUtil colorFromHexString:textDarkHex] : nil;
+        UIColor *lightBgColor   = bgHex.length ? [WPColorUtil colorFromHexString:bgHex] : nil;
+        UIColor *darkBgColor    = bgDarkHex.length ? [WPColorUtil colorFromHexString:bgDarkHex] : nil;
 
         if (!lightTextColor) lightTextColor = [UIColor colorWithWhite:0.5 alpha:1.0];
 

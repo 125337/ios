@@ -1,6 +1,7 @@
 #import "SideGroupsRailView.h"
 #import "SideGroupsConfig.h"
 #import "../../Core/WPUtility.h"
+#import "../../Config/WPColorUtil.h"
 
 // 侧边分组按钮：图标上/文字下竖排（无图标走系统默认布局，纯文字垂直居中）
 @interface SDRailButton : UIButton
@@ -73,7 +74,7 @@
 - (UIColor *)sdSelColor {
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
     NSString *hex = [WPUtility isDarkModeForView:self] ? cfg.sdRailSelColorDark : cfg.sdRailSelColor;
-    if (cfg.sdRailSelColorCustom && hex.length) return [WPUtility colorFromHex:hex] ?: self.sdDefaultSel;
+    if (cfg.sdRailSelColorCustom && hex.length) return [WPColorUtil colorFromHexString:hex] ?: self.sdDefaultSel;
     return self.sdDefaultSel;
 }
 
@@ -81,7 +82,7 @@
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
     BOOL dark = [WPUtility isDarkModeForView:self];
     NSString *hex = dark ? cfg.sdRailTextColorDark : cfg.sdRailTextColor;
-    if (cfg.sdRailTextColorCustom && hex.length) return [WPUtility colorFromHex:hex] ?: UIColor.whiteColor;
+    if (cfg.sdRailTextColorCustom && hex.length) return [WPColorUtil colorFromHexString:hex] ?: UIColor.whiteColor;
     // 默认随微信底色：背景透出微信原生底色，浅色黑字 / 深色白字
     return dark ? UIColor.whiteColor : UIColor.blackColor;
 }

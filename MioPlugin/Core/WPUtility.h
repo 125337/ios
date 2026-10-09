@@ -1,17 +1,7 @@
 #import <UIKit/UIKit.h>
 
-/// 工具类：提供颜色转换和暗黑模式检测等通用方法
+/// 工具类：提供暗黑模式检测等通用方法（颜色转换统一走 WPColorUtil）
 @interface WPUtility : NSObject
-
-/// 从十六进制字符串创建 UIColor
-/// @param hex 十六进制颜色字符串，如 "#FF0000" 或 "FF0000AA"
-/// @return UIColor 对象，失败返回 nil
-+ (UIColor *)colorFromHex:(NSString *)hex;
-
-/// 从 UIColor 获取十六进制字符串
-/// @param color UIColor 对象
-/// @return 十六进制颜色字符串，如 "#FF0000"
-+ (NSString *)hexFromColor:(UIColor *)color;
 
 /// 检测指定 ViewController 是否为暗黑模式
 /// ⚠️ 所有 UI 相关检测都应优先使用此方法。

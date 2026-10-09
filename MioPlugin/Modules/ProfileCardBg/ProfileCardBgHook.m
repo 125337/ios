@@ -97,6 +97,7 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
             UIColor *borderColor = isDark
                 ? [WPColorUtil colorFromHexString:cardBgConfig.cardBgBorderColorDarkHex]
                 : [WPColorUtil colorFromHexString:cardBgConfig.cardBgBorderColor];
+            if (!borderColor) borderColor = [UIColor blackColor];   // 未设置颜色 → 默认描边
             cell.layer.borderColor = borderColor.CGColor;
         } else {
             cell.layer.borderWidth = 0;

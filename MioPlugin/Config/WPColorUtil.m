@@ -5,11 +5,16 @@
 #pragma mark - Hex ↔ UIColor
 
 + (UIColor *)colorFromHexString:(NSString *)hex {
-    if (!hex || hex.length == 0) return [UIColor blackColor];
+    // 空/nil/非法 → nil：调用方据此区分"未设置"与"真黑色"，各自兜底
+    if (!hex || hex.length == 0) return nil;
 
     // 移除 # 和空格
     hex = [[hex stringByReplacingOccurrencesOfString:@"#" withString:@""]
               stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+
+    if (hex.length != 6 && hex.length != 8) return nil;
+    NSCharacterSet *hexSet = [NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"];
+    if ([hex stringByTrimmingCharactersInSet:hexSet].length != 0) return nil;
 
     if (hex.length == 6) {
         unsigned int rgb = 0;
@@ -18,15 +23,13 @@
                                green:((rgb >> 8) & 0xFF) / 255.0
                                 blue:(rgb & 0xFF) / 255.0
                                alpha:1.0];
-    } else if (hex.length == 8) {
-        unsigned long long rgba = 0;
-        [[NSScanner scannerWithString:hex] scanHexLongLong:&rgba];
-        return [UIColor colorWithRed:((rgba >> 24) & 0xFF) / 255.0
-                               green:((rgba >> 16) & 0xFF) / 255.0
-                                blue:((rgba >> 8) & 0xFF) / 255.0
-                               alpha:(rgba & 0xFF) / 255.0];
     }
-    return [UIColor blackColor];
+    unsigned long long rgba = 0;
+    [[NSScanner scannerWithString:hex] scanHexLongLong:&rgba];
+    return [UIColor colorWithRed:((rgba >> 24) & 0xFF) / 255.0
+                           green:((rgba >> 16) & 0xFF) / 255.0
+                            blue:((rgba >> 8) & 0xFF) / 255.0
+                           alpha:(rgba & 0xFF) / 255.0];
 }
 
 + (NSString *)hexStringFromColor:(UIColor *)color {
