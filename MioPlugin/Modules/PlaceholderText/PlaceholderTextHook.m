@@ -85,7 +85,7 @@ static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
     // ⑦ 占位文本颜色 (L26734-L26783)
     NSString *hexColor = config.placeholderTextColorHex;
     // 深色模式优先用深色值，缺省回落浅色值（与全局颜色行双预览语义一致）
-    if (self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark
+    if (((UIView *)self).traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark
         && config.placeholderTextColorHexDark.length > 0) {
         hexColor = config.placeholderTextColorHexDark;
     }
