@@ -70,7 +70,7 @@ radius = config.globalCornerRadius（默认 20，封顶 40）
 
 ### 5.1 边框画法：section 覆盖视图 + 整段圆角描边（与我们最大的架构差异）
 
-> ✅ **已按此方案彻底重构我们的边框**（详见第七节改动 2），以下为 WCR 原始机制分析。
+> ✅ **已按此方案彻底重构我们的边框**（详见第七节），以下为 WCR 原始机制分析。
 
 WCR 的列表边框在表格级 hook（FUN_007c79c8，FUN__part13.c:4290-4660）里画，**不是逐行拼段，而是每个 section 一条整段描边**：
 
@@ -87,7 +87,7 @@ WCR 的列表边框在表格级 hook（FUN_007c79c8，FUN__part13.c:4290-4660）
 - **颜色**：config `globalCornerStrokeColorLight/Dark` → 与背景同款 `colorWithDynamicProvider:` 动态色 + 静态缓存（DAT_029909b8），设置变更随 FUN_007dc360 三缓存统一失效——**边框颜色同样明暗自动跟随，不存在 CGColor 快照残留问题**
 - **幂等**：层上 associated 缓存 lineWidth + 配置戳，frame/宽/配置任一变化才重设 path/frame
 
-对比我们：逐 cell 四段拼接 + cell.layer 子层（受复用影响，靠全量化 key 防重建）+ CGColor 快照（需 key 含 isDark）。WCR 这套在架构上简单一个量级，是待办①（边框动态色化）更彻底的替代方案。
+对比我们（改造前）：逐 cell 四段拼接 + cell.layer 子层（受复用影响，靠全量化 key 防重建）+ CGColor 快照（需 key 含 isDark）。WCR 这套在架构上简单一个量级，已整体替换我们的旧方案。
 
 ### 5.2 其他机制
 
@@ -99,63 +99,29 @@ WCR 的列表边框在表格级 hook（FUN_007c79c8，FUN__part13.c:4290-4660）
 
 ## 六、总结对比表
 
-| 维度 | WCR 2.1.8 | 我们（改造前） | 现状 |
-|---|---|---|---|
-| 背景色 | `colorWithDynamicProvider:` 构建一次，静态缓存，UIKit 自动跟随明暗 | 每轮 layout 查 VC→判暗→hex 解析→设静态色 | ✅ 已改动态色（WPColorUtil 新入口 + ListCornerRadiusHook 全面迁移） |
-| 明暗切换 | 零成本（系统自动） | 靠缓存 key 带 isDark 触发重建 | 背景 ✅ / 边框仍走 key（保持） |
-| 写入频率 | 先读后写，几乎零写入 | 每轮计算 + 幂等判断 | 背景 ✅（指针/isEqual 双重幂等） |
-| 缓存失效 | 仅设置变更时清 3 个静态对象 | key 失配逐 cell 重建 | 背景 ✅（按 config 值惰性缓存） |
-| 子视图圆角 | 遍历 subviews 全部处理 | 只处理 cell 本体（Mio 页面已做） | ⏳ 见待办 ② |
-| 特殊 cell 逃生门 | associated 标记→整体透明化 | 19 个 VC 名单黑名单 | ⏳ 见待办 ④ |
-| 性能观测 | CACurrentMediaTime 逐帧打点 | 无 | ⏳ 见待办 ⑤ |
+| 维度 | WCR 2.1.8 | 我们（改造后） |
+|---|---|---|
+| 背景色 | `colorWithDynamicProvider:` 一次构建，UIKit 自动跟随明暗 | ✅ 同款（WPColorUtil 动态色入口） |
+| 边框 | 表格级 section 覆盖视图 + 整段描边，动态色 | ✅ 同款（四段拼接机器已删） |
+| 写入频率 | 先读后写，几乎零写入 | ✅ 指针/isEqual/stamp/CGColor 多重幂等 |
+| 特殊 cell 逃生门 | associated 标记→透明化 | 涂装标记清洁态（功能关只拆自己动过的）；VC 黑名单已全部删除 |
+| 子视图圆角 | 遍历 subviews 全部处理 | 仅 Mio 页面已做（待办 1） |
+| 性能观测 | CACurrentMediaTime 逐帧打点 | 无（待办 3） |
 
 ---
 
-## 七、已执行：背景色动态色化（本次改动）
+## 七、已执行改造（摘要）
 
-### 改动 1：WPColorUtil 新增动态色入口
-
-`WPColorUtil.h/.m` 新增：
-
-```objc
-+ (nullable UIColor *)dynamicColorFromLightHex:(nullable NSString *)lightHex
-                                        darkHex:(nullable NSString *)darkHex
-                                  lightFallback:(nullable UIColor *)lightFallback
-                                   darkFallback:(nullable UIColor *)darkFallback;
-```
-
-语义：两侧各自"hex 解析，失败/未设置 → 对应侧兜底"，包装为 `colorWithDynamicProvider:`；两侧均为空 → 返回 nil（调用方保留原生背景）；iOS 13 以下回退浅色侧。**与原 Strict 策略 + 二元兜底的组合语义逐字一致**，只是把"按 isDark 选侧"交给 UIKit 的 trait 系统。
-
-### 改动 2：ListCornerRadiusHook 全面迁移
-
-- 删除 `wp_cellDefaultBgColor(isDark)`（被动态色两侧兜底取代）
-- 新增 `WPDynamicCellBgColor(lightHex, darkHex, tag)`：按 config 值惰性构建并静态缓存动态色（WCR 同款），兜底固定浅色白 / 深色 #202020
-- **Cell 背景**：featureOn（含 Mio 页面功能开）→ 用户色动态色；Mio 页面功能关 → 默认底动态色（保持"Mio 基线不吃用户色"原语义）；清洁态 → nil 回原生底。幂等判断升级为"指针相同 || isEqual"双保险
-- **MFWebMMBtn / MFBannerBtn / MainFrameSectionFoldView**：同换动态色，赋值加指针幂等
-- hook 内背景路径的 `isDark` 判定全部移除；边框随后也完成动态色化（见改动 2）
-
-### 改动 2：边框整体重构为 WCR 架构（section 覆盖视图 + 整段描边）
-
-- **删除**逐 cell 四段边框整套机器：`wp_applyBorderAndBg`（position 0-3 switch）、`wp_buildUnifiedBorderLayer`（四段路径拼接）、全量化缓存 key、`WPStripBorderLayers`、`applyBorderToView`
-- **新增 `wp_paintTableBorders`**：每个 section 一条透明覆盖视图（tag = 'MIO' 基数 + sectionIndex，挂 tableView 本体、userInteractionEnabled=NO、bringSubviewToFront），内含一条 CAShapeLayer 整段圆角描边（`bezierPathWithRoundedRect:cornerRadius:`）——**完全免疫 cell 复用，滚动零重建**
-- **边框色动态色化**：`WPDynamicBorderColor` 按 config 明暗 hex 惰性构建动态 UIColor（兜底浅 0.9 灰 / 深 0.25 灰，与原语义一致），每次按 table 当前 trait 解析 + CGColor 幂等比对写入——**明暗切换自动跟随，key 里的 isDark 机制整体消失**
-- 触发方式：cell hook 内调用（在清洁态 return 之前，保证功能关时覆盖视图也被拆除），painter 全幂等，未新增任何全局 hook（规避与 WCR 的 hook 冲突风险）
-- 特例保留：通讯录 section 0-3 半合并块 → 一条整段描边包整块；聊天列表 section 1 折叠展开态 → openBottom 路径（顶角圆角+左右边不封底）；FoldView 改用 `wp_paintViewSelfBorder` 自体整段描边（双向拆装，顺带修复了功能关时 FoldView 边框残留的旧问题）
-- 幂等三件套：frame fabs 比对、样式戳（radius/线宽/封底）比对、CGColor CFEqual 比对——每轮 layout 几乎零写入
-
-### 效果
-
-- 明暗切换：背景由 UIKit 自动跟随，不再依赖"下一轮 layout 重算"
-- 换色：config 值变化 → 缓存 key 失配 → 下一轮 layout 重建（成本≈0）
-- 每轮 layout 的背景路径：查表返回共享色对象 + 指针判等，几乎零分配零写入
+1. **背景色动态色化**：WPColorUtil 新增 `dynamicColorFromLightHex:darkHex:lightFallback:darkFallback:`（两侧各自解析+兜底后包装 `colorWithDynamicProvider:`），列表 cell / MFWebMMBtn / MFBannerBtn / FoldView 背景全部迁移，明暗切换由 UIKit 自动跟随，hook 内不再判暗
+2. **边框 WCR 架构重构**：删除逐 cell 四段边框机器（position switch / 路径拼接 / 全量化 key），改为表格级每 section 一条覆盖视图（tag 管理、挂 tableView 本体）+ CAShapeLayer 整段圆角描边；边框色同样动态色化；frame / 样式戳 / CGColor 三重幂等，未新增全局 hook
+3. **VC 黑名单清理**：删除 CornerResponsibility 模块（44 VC + 4 前缀黑名单）与 cell hook 内 19 VC 背景黑名单，全部页面统一处理
+4. **特例清理**：删除通讯录 section 0-3 半合并块（corner 分支 B + 边框合并组）与聊天列表折叠展开态（openBottom + 无角特判），每个 section 独立成卡片
 
 ---
 
 ## 八、待办（暂不动，留档）
 
-1. ~~**边框色动态色化**~~ ✅ 已执行（见第七节改动 2）：直接采用 5.1 的"section 覆盖视图 + 整段描边"架构整体替换四段拼接方案，边框色改动态色，key 里的 isDark 机制整体消失
-2. **子视图圆角遍历推广到微信页面**：WCR 对 cell 全部 subviews 的 layer 幂等设圆角；我们目前只在 Mio 页面做。微信页面内部直角背景穿帮场景可用同款方案（注意 1px 分隔线豁免规则要保留）
-3. **透明化分工（cell 本体上色 + contentView clearColor）**：WCR 的层次方案，可评估替代我们直接给 cell 上色的做法
-4. **逃生门重构**：WCR 用 associated 标记 + 整体透明化（FUN_007d09d4）替代 VC 名单黑名单；我们的 19 个 VC skip-list 永远追不上微信新增页面，可评估换成"标记制"
-5. **性能打点**：`CACurrentMediaTime()` 首尾打点 + 汇总日志，定位列表卡顿用，成本低收益高
-6. **ProfileCardBgHook 等其他背景类迁移动态色**：本次只动了列表模块（ListCornerRadiusHook），资料卡背景仍是静态取色，后续可按同一入口迁移
+1. **子视图圆角遍历推广到微信页面**：WCR 对 cell 全部 subviews 的 layer 幂等设圆角；我们目前只在 Mio 页面做（注意 1px 分隔线豁免规则要保留）
+2. **透明化分工（cell 本体上色 + contentView clearColor）**：WCR 的层次方案，可评估替代我们直接给 cell 上色的做法
+3. **性能打点**：`CACurrentMediaTime()` 首尾打点 + 汇总日志，定位列表卡顿用，成本低收益高
+4. **ProfileCardBgHook 等其他背景类迁移动态色**：资料卡背景仍是静态取色，后续可按同一入口迁移
