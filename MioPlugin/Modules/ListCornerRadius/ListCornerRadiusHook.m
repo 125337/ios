@@ -732,17 +732,19 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
     BOOL isDark = [WPUtility isDarkModeForView:cell];
 
-    // 缓存 key 覆盖全部渲染入参：几何 + 边框开关 + 总开关 + 明暗 + 两个边框色。
+    // 缓存 key 覆盖全部渲染入参：几何 + 边框开关 + 总开关 + 明暗 + 两个边框色 + cell 宽高。
     // 任一变化即重建——边框即开即清、即关即清、换色/明暗切换即换
-    // （旧 key 缺明暗，暗黑↔浅色切换时 CGColor 快照残留）
+    // （旧 key 缺明暗，暗黑↔浅色切换时 CGColor 快照残留；缺 bounds，旋转/分屏后边框几何过期）
     NSString *existingCacheKey = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey);
-    NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-f%d-b%.1f-bd%d-d%d-g%d-cl%@-cd%@",
+    CGRect cb = cell.bounds;
+    NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-f%d-b%.1f-bd%d-d%d-g%d-cl%@-cd%@-w%.0f-h%.0f",
                           (long)radius, (long)position, isFTSHome,
                           config.listCellBorderWidth,
                           (int)config.listCellBorder, (int)isDark,
                           (int)config.globalCornerRadiusEnabled,
                           config.listCellBorderColor ?: @"",
-                          config.listCellBorderColorDarkHex ?: @""];
+                          config.listCellBorderColorDarkHex ?: @"",
+                          cb.size.width, cb.size.height];
     if ([existingCacheKey isEqualToString:cacheKey]) return;
 
     WPStripBorderLayers(cell);
