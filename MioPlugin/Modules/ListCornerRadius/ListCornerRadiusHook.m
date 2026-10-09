@@ -204,9 +204,18 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         CGFloat currentX = cellView.frame.origin.x;
         UIView *superview = cellView.superview;
         CGFloat superX = superview ? superview.frame.origin.x : 0;
-        CGFloat targetX = (margin > superX) ? margin - superX : 0;
-        CGFloat containerW = superview ? superview.bounds.size.width
-                                       : [UIScreen mainScreen].bounds.size.width;
+        // ★ 宽度基准 = 最近的 UITableView（表坐标系），Frida 实证修复：
+        //   部分页面 cell 的直接父视图是内缩容器（如插件页 wrapper 宽 361、x=16），
+        //   按容器宽减 margin 会左右不对称（左 20/右 52）；WCR 语义 = 永远 表宽 - 2*margin
+        UITableView *geoTable = nil;
+        UIView *walk = superview;
+        for (int i = 0; i < 8 && walk; i++) {
+            if ([walk isKindOfClass:[UITableView class]]) { geoTable = (UITableView *)walk; break; }
+            walk = walk.superview;
+        }
+        CGFloat containerW = geoTable ? geoTable.bounds.size.width
+            : (superview ? superview.bounds.size.width : [UIScreen mainScreen].bounds.size.width);
+        CGFloat targetX = margin - superX;  // 表坐标 x=margin（不钳位，wrapper 有偏移时可为负）
         CGFloat targetW = containerW - 2.0 * margin;
         CGFloat currentW = cellView.frame.size.width;
         // ★ 改造 A：浮点比较使用 fabs 阈值，精确匹配微信优化的整数运算行为
