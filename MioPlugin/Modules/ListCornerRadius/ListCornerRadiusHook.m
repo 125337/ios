@@ -103,6 +103,13 @@ static BOOL WPVCIsMioOwn(UIViewController *vc) {
         || (scCls && [vc isKindOfClass:scCls]);
 }
 
+// 涂装标记：登记"被本模块动过的 cell/table/视图"，功能关后的清洁态只清理这些对象，避免误伤原生样式
+static NSString * const kMioCornerPaintedKey = @"com.mio.cornerPainted";
+// 清洁态原值口袋：首次涂装时保存原生样式，功能关后凭涂装标记还原
+static NSString * const kMioSearchOrigRadiusKey = @"com.mio.searchOrigRadius";
+static NSString * const kMioSearchOrigMasksKey  = @"com.mio.searchOrigMasks";
+static NSString * const kMioViewOrigBgKey       = @"com.mio.viewOrigBg";
+
 static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
     if (orig_WCSearchBar_layoutSubviews) {
         ((void (*)(id, SEL))orig_WCSearchBar_layoutSubviews)(self, _cmd);
@@ -152,13 +159,8 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
 // ─── 共享常量与边框画布（WCR 同款：section 覆盖视图 + 整段描边，FUN_007c79c8 实证方案） ───
 static NSString * const kMioBorderLayerName = @"com.mio.cornerBorder";
 static NSString * const kMioBorderStampKey = @"com.mio.borderStamp";
-// 涂装标记：登记"被本模块动过的 cell/table/视图"，功能关后的清洁态只清理这些对象，避免误伤原生样式
-static NSString * const kMioCornerPaintedKey = @"com.mio.cornerPainted";
+// （涂装标记 kMioCornerPaintedKey 与原值口袋已上移至文件头部，供 WCSearchBar 等早期函数使用）
 static NSString * const kMioTablePaintedKey = @"com.mio.tablePainted";
-// 清洁态原值口袋：首次涂装时保存原生样式，功能关后凭涂装标记还原
-static NSString * const kMioSearchOrigRadiusKey = @"com.mio.searchOrigRadius";
-static NSString * const kMioSearchOrigMasksKey  = @"com.mio.searchOrigMasks";
-static NSString * const kMioViewOrigBgKey       = @"com.mio.viewOrigBg";
 // section 边框覆盖视图 tag 段：tag = 基数 + sectionIndex，覆盖视图挂在 tableView 本体上，免疫 cell 复用
 static NSInteger const kMioBorderTagBase = 0x4D494F;  // 'MIO'
 static NSInteger const kMioBorderTagRange = 1000;
