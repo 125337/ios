@@ -14,58 +14,20 @@
     return btn;
 }
 
-+ (void)presentCustomPickerOnViewController:(UIViewController *)vc
-                                    lightHex:(NSString *)lightHex
-                                     darkHex:(NSString *)darkHex
-                               activeIsLight:(BOOL)activeIsLight
-                                sourceButton:(UIButton *)button
-                                  onSelected:(void(^)(NSString *lightHex, NSString *darkHex))onSelected {
-    [self presentCustomPickerOnViewController:vc lightHex:lightHex darkHex:darkHex activeIsLight:activeIsLight sourceButton:button allowClear:NO onClear:nil onSelected:onSelected];
-}
-
-+ (void)presentCustomPickerOnViewController:(UIViewController *)vc
-                                    lightHex:(NSString *)lightHex
-                                     darkHex:(NSString *)darkHex
-                               activeIsLight:(BOOL)activeIsLight
-                                sourceButton:(UIButton *)button
-                                  allowClear:(BOOL)allowClear
-                                     onClear:(void(^)(void))onClear
-                                  onSelected:(void(^)(NSString *lightHex, NSString *darkHex))onSelected {
-    BOOL isDual = (lightHex.length > 0 && darkHex.length > 0);
-
-    // 未修改（选择器回传 nil,nil）→ 直接跳过，不写字段不刷按钮，保住"未设置"语义
-    void(^selBlock)(NSString *, NSString *) = ^(NSString *lHex, NSString *dHex) {
-        if (!onSelected) return;
-        if (lHex.length == 0 && dHex.length == 0) return;
-        if (button) {
-            NSString *hex = activeIsLight ? lHex : dHex;
-            button.backgroundColor = [WPColorUtil colorFromHexString:hex];
-        }
-        onSelected(lHex ?: lightHex, dHex ?: darkHex);
-    };
-
-    WPHsvColorPickerController *picker;
-    if (isDual) {
-        picker = [[WPHsvColorPickerController alloc]
-            initWithLightHex:lightHex
-                    darkHex:darkHex
-                 allowClear:allowClear
-              clearCallback:onClear
-                   callback:selBlock];
-        picker.singleColorMode = NO;
-        picker.isLightMode = activeIsLight;
-    } else {
-        NSString *hex = lightHex.length > 0 ? lightHex : (darkHex.length > 0 ? darkHex : @"#FFFFFF");
-        picker = [[WPHsvColorPickerController alloc]
-            initWithLightHex:hex
-                    darkHex:hex
-                 allowClear:allowClear
-              clearCallback:onClear
-                   callback:selBlock];
-        picker.singleColorMode = YES;
-        picker.isLightMode = activeIsLight;
-    }
-
++ (void)presentColorPickerOnViewController:(UIViewController *)vc
+                                  lightHex:(NSString *)lightHex
+                                   darkHex:(NSString *)darkHex
+                                allowClear:(BOOL)allowClear
+                                   onClear:(void(^)(BOOL isLightSide))onClear
+                                 onChanged:(void(^)(NSString *lightHex, NSString *darkHex))onChanged {
+    // 选择器内部用 userModified 判定：未修改确认 → 不回调直接关闭；
+    // 清除 → onClear(isLightSide) 单独出口。这里无需再做任何判定/兜底
+    WPHsvColorPickerController *picker =
+        [[WPHsvColorPickerController alloc] initWithLightHex:lightHex
+                                                      darkHex:darkHex
+                                                   allowClear:allowClear
+                                                    onChanged:onChanged
+                                                      onClear:onClear];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:picker];
     [vc presentViewController:nav animated:YES completion:nil];
 }

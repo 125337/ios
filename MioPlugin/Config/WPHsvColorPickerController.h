@@ -6,27 +6,21 @@ NS_ASSUME_NONNULL_BEGIN
 @interface WPHsvColorPickerController : UIViewController
 
 // ═══════════════════════════════════════════
-//  初始化
+//  初始化（永远双色模式：顶栏下方浅色/深色分段常显）
 // ═══════════════════════════════════════════
 
-/// 完整构造（浅色 + 深色双模式）
+/// 唯一构造入口
 /// @param lightHex  浅色 Hex，nil 则默认 #FFFFFF（仅初始显示）
 /// @param darkHex   深色 Hex，nil 则默认 #202020（仅初始显示）
-/// @param allowClear YES = 导航栏提供「清除」入口，走 clearCallback（独立于确认回调）
-/// @param clearCallback 清除回调，语义 = 用户显式要求恢复"未设置"
-/// @param callback  确认回调 (lightHex, darkHex)；与打开时完全一致（未修改）→ 传 (nil, nil)，
-///                  调用方收到 nil 不写字段，避免空值被兜底色隐性污染
+/// @param allowClear YES = 导航栏提供「清除」入口
+/// @param onChanged  确认回调：仅"用户调整了颜色 + 点确认"时触发（userModified 判定），
+///                   未修改 → 不回调直接关闭。确认即写入两侧当前值
+/// @param onClear    清除回调：用户点清除时触发，isLightSide 标明清的是哪一侧
 - (instancetype)initWithLightHex:(nullable NSString *)lightHex
                         darkHex:(nullable NSString *)darkHex
                      allowClear:(BOOL)allowClear
-                  clearCallback:(nullable void(^)(void))clearCallback
-                       callback:(nullable void(^)(nullable NSString *lightHex, nullable NSString *darkHex))callback;
-
-/// 旧构造（无清除入口，等价 allowClear=NO）
-
-/// 简易构造（单色模式，无浅深切换）
-- (instancetype)initWithHex:(NSString *)hex
-                  callback:(void(^)(NSString *hex))callback;
+                       onChanged:(nullable void(^)(NSString *lightHex, NSString *darkHex))onChanged
+                         onClear:(nullable void(^)(BOOL isLightSide))onClear;
 
 // ═══════════════════════════════════════════
 //  颜色状态
@@ -36,7 +30,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy)   NSString   *currentLightHex;
 @property (nonatomic, copy)   NSString   *currentDarkHex;
 @property (nonatomic, assign) BOOL       isLightMode;
-@property (nonatomic, assign) BOOL       singleColorMode; // YES = 无浅深切换
 @property (nonatomic, assign) BOOL       allowClear;      // YES = 导航栏带「清除」入口
 
 // ═══════════════════════════════════════════

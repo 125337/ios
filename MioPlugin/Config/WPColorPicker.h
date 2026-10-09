@@ -9,28 +9,18 @@
 /// @param size 按钮尺寸 (宽高一致, 自动计算圆角为 size/2)
 + (UIButton *)makeColorButtonWithColor:(nullable UIColor *)color size:(CGFloat)size;
 
-/// 弹出自定义颜色选择器（统一入口，自动处理单色/双模式）
+/// 弹出自定义颜色选择器（唯一入口）
 /// @param vc 当前 VC
-/// @param lightHex  浅色 hex
-/// @param darkHex   深色 hex
-/// @param activeIsLight YES=默认编辑浅色, NO=默认编辑深色
-/// @param button    关联按钮（确认后自动更新背景色）
-/// @param onSelected 确认回调 (lightHex, darkHex) — 双 hex 都有值；未修改时不回调
-+ (void)presentCustomPickerOnViewController:(UIViewController *)vc
-                                    lightHex:(NSString *)lightHex
-                                     darkHex:(NSString *)darkHex
-                               activeIsLight:(BOOL)activeIsLight
-                                sourceButton:(nullable UIButton *)button
-                                  onSelected:(void(^)(NSString *lightHex, NSString *darkHex))onSelected;
-
-/// 完整入口：支持「清除」按钮（语义 = 显式恢复未设置，走独立 onClear 回调）
-+ (void)presentCustomPickerOnViewController:(UIViewController *)vc
-                                    lightHex:(nullable NSString *)lightHex
-                                     darkHex:(nullable NSString *)darkHex
-                               activeIsLight:(BOOL)activeIsLight
-                                sourceButton:(nullable UIButton *)button
-                                  allowClear:(BOOL)allowClear
-                                     onClear:(nullable void(^)(void))onClear
-                                  onSelected:(void(^)(NSString *lightHex, NSString *darkHex))onSelected;
+/// @param lightHex  浅色 hex（nil = 未设置）
+/// @param darkHex   深色 hex（nil = 未设置）
+/// @param allowClear YES = 选择器提供「清除」入口
+/// @param onChanged  确认回调：仅用户调整过颜色后确认才触发，双 hex 均有值
+/// @param onClear    清除回调：isLightSide 标明清的是哪一侧
++ (void)presentColorPickerOnViewController:(UIViewController *)vc
+                                  lightHex:(nullable NSString *)lightHex
+                                   darkHex:(nullable NSString *)darkHex
+                                allowClear:(BOOL)allowClear
+                                   onClear:(nullable void(^)(BOOL isLightSide))onClear
+                                 onChanged:(nullable void(^)(NSString *lightHex, NSString *darkHex))onChanged;
 
 @end

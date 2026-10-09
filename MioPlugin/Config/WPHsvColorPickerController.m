@@ -16,12 +16,9 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 #pragma mark - 私有属性
 
 @interface WPHsvColorPickerController ()
-@property (nonatomic, copy) void(^callback)(NSString *lightHex, NSString *darkHex);
-@property (nonatomic, copy) void(^clearCallback)(void);   // 清除回调（语义 = 显式恢复未设置）
-@property (nonatomic, copy) NSString *initialLightHex;    // 打开时的初始值（nil = 当时未设置）
-@property (nonatomic, copy) NSString *initialDarkHex;
-@property (nonatomic, assign) BOOL hadInitialLight;       // 打开时浅色是否已设置
-@property (nonatomic, assign) BOOL hadInitialDark;
+@property (nonatomic, copy, nullable) void(^onChanged)(NSString *lightHex, NSString *darkHex);
+@property (nonatomic, copy, nullable) void(^onClear)(BOOL isLightSide);   // 清除回调：isLightSide 标明清的是哪一侧
+@property (nonatomic, assign) BOOL userModified;   // 用户意图：本轮打开后是否真实调整过颜色（Hex/色相/SB/RGBA/色板 置位）
 @property (nonatomic, strong) WPHueSlider *hueSlider;
 @property (nonatomic, strong) WPSaturationBrightnessView *sbView;
 @property (nonatomic, strong) WPRGBAControl *rgbaControl;
@@ -37,47 +34,20 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 - (instancetype)initWithLightHex:(NSString *)lightHex
                         darkHex:(NSString *)darkHex
                      allowClear:(BOOL)allowClear
-                  clearCallback:(void(^)(void))clearCallback
-                       callback:(void(^)(NSString *, NSString *))callback {
+                       onChanged:(void(^)(NSString *, NSString *))onChanged
+                         onClear:(void(^)(BOOL))onClear {
     self = [super init];
     if (self) {
-        // 兜底显示与确认语义分离：nil 起始的默认色仅用于初始显示，
-        // confirmTapped 对比 initial 决定回传新值还是 (nil, nil)=未修改
-        _hadInitialLight = (lightHex.length > 0);
-        _hadInitialDark  = (darkHex.length > 0);
-        _initialLightHex = _hadInitialLight ? lightHex : nil;
-        _initialDarkHex  = _hadInitialDark  ? darkHex  : nil;
-        _currentLightHex = _hadInitialLight ? lightHex : @"#FFFFFF";
-        _currentDarkHex  = _hadInitialDark  ? darkHex  : @"#202020";
+        // 兜底显示与确认语义分离：nil 起始的默认色仅用于初始显示；
+        // userModified == NO 时确认直接关闭不回调，调用方字段保持原样
+        _currentLightHex = lightHex.length > 0 ? lightHex : @"#FFFFFF";
+        _currentDarkHex  = darkHex.length  > 0 ? darkHex  : @"#202020";
         _allowClear = allowClear;
-        _clearCallback = clearCallback;
-        _callback = callback;
+        _onChanged = onChanged;
+        _onClear = onClear;
         _isLightMode = YES;
-        _singleColorMode = NO;
+        _userModified = NO;
         _historyColors = [NSMutableArray array];
-    }
-    return self;
-}
-
-- (instancetype)initWithLightHex:(NSString *)lightHex
-                        darkHex:(NSString *)darkHex
-                       callback:(void(^)(NSString *, NSString *))callback {
-    return [self initWithLightHex:lightHex darkHex:darkHex allowClear:NO clearCallback:nil callback:callback];
-}
-
-- (instancetype)initWithHex:(NSString *)hex callback:(void(^)(NSString *))callback {
-    self = [self initWithLightHex:(hex ?: @"#FFFFFF")
-                          darkHex:(hex ?: @"#FFFFFF")
-                       allowClear:NO
-                     clearCallback:nil
-                          callback:nil];
-    if (self) {
-        // 单色模式：双值共用，回调仅回传当前浅色
-        _singleColorMode = YES;
-        void(^cb)(NSString *) = callback;
-        _callback = ^(NSString *l, NSString *d) {
-            if (cb) cb(l ?: d);
-        };
     }
     return self;
 }
@@ -124,7 +94,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
     if (!self.allowClear) {
         self.navigationItem.rightBarButtonItem = confirm;
     } else {
-        // 清除入口：右侧双按钮（确认 + 清除），清除走独立回调（语义 = 显式恢复未设置）
+        // 清除入口：右侧双按钮（确认 + 清除），走独立 onClear 回调
         UIBarButtonItem *clear =
             [[UIBarButtonItem alloc] initWithTitle:@"清除" style:UIBarButtonItemStylePlain
                                             target:self action:@selector(clearTapped)];
@@ -137,11 +107,22 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 }
 
 - (void)clearTapped {
-    if (self.clearCallback) self.clearCallback();
+    if (!self.onClear) {
+        // 未提供 onClear 却展示了清除按钮属于装配错误：提示且不关闭，避免静默吞操作
+        NSLog(@"[WPColorPicker] clearTapped: onClear 回调为空，忽略清除操作");
+        return;
+    }
+    self.onClear(self.isLightMode);   // 只清当前激活侧
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)confirmTapped {
+    // 未修改（打开后没动过任何颜色输入）→ 直接关闭，不写历史不回调，调用方字段保持原样
+    if (!self.userModified) {
+        [self dismissViewControllerAnimated:YES completion:nil];
+        return;
+    }
+
     // 保存到历史（委托给 WPColorPaletteView）
     UIColor *color = [UIColor colorWithHue:self.currentHsv.hue
                                 saturation:self.currentHsv.saturation
@@ -153,14 +134,9 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
     [[NSUserDefaults standardUserDefaults] setObject:[self.colorPalette historyHexes]
                                               forKey:@"WPColorPickerHistory"];
 
-    if (self.callback) {
-        // 未修改判定：与打开时一致（含同值忽略大小写）→ 回传 nil，调用方不写字段；
-        // 与"初始显示兜底"（nil→默认色）严格分离
-        NSString *l = self.currentLightHex;
-        NSString *d = self.currentDarkHex;
-        BOOL lightSame = self.hadInitialLight ? [l caseInsensitiveCompare:self.initialLightHex] == 0 : NO;
-        BOOL darkSame  = self.hadInitialDark  ? [d caseInsensitiveCompare:self.initialDarkHex]  == 0 : NO;
-        self.callback(lightSame ? nil : l, darkSame ? nil : d);
+    // 确认即写入两侧当前值（另一侧若从未切过去，保持打开时的初始值）
+    if (self.onChanged) {
+        self.onChanged(self.currentLightHex, self.currentDarkHex);
     }
     [self dismissViewControllerAnimated:YES completion:nil];
 }
@@ -196,7 +172,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 #pragma mark - UI 搭建
 
 - (void)setupUI {
-    // ─── 模式切换 ───
+    // ─── 模式切换（永远双色：分段常显） ───
     [self setupModeControl];
 
     // ─── Hex 输入（独立组件） ───
@@ -207,6 +183,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
         if (!strongSelf) return;
         UIColor *color = [WPColorUtil colorFromHexString:hex];
         strongSelf.currentHsv = [WPColorUtil hsvFromColor:color];
+        strongSelf.userModified = YES;
         [strongSelf syncToComponentsFromCurrentColor];
     };
     [self.contentView addSubview:self.hexInput];
@@ -252,6 +229,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
         __strong __typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
         strongSelf.currentHsv = [WPColorUtil hsvFromRed:r green:g blue:b alpha:a];
+        strongSelf.userModified = YES;
         [strongSelf syncToComponentsFromCurrentColor];
     };
     [self.contentView addSubview:self.rgbaControl];
@@ -265,6 +243,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
         __strong __typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
         strongSelf.currentHsv = [WPColorUtil hsvFromColor:color];
+        strongSelf.userModified = YES;
         [strongSelf syncToComponentsFromCurrentColor];
     };
     [self.contentView addSubview:self.colorPalette];
@@ -274,7 +253,6 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 }
 
 - (void)setupModeControl {
-    if (self.singleColorMode) return;
     self.modeSegmentedControl = [[UISegmentedControl alloc] initWithItems:@[@"浅色", @"深色"]];
     self.modeSegmentedControl.selectedSegmentIndex = self.isLightMode ? 0 : 1;
     [self.modeSegmentedControl addTarget:self action:@selector(modeChanged:) forControlEvents:UIControlEventValueChanged];
@@ -282,6 +260,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 }
 
 - (void)modeChanged:(UISegmentedControl *)seg {
+    // 切分段只是切换编辑对象，不算用户修改（不置 userModified）
     self.isLightMode = seg.selectedSegmentIndex == 0;
     [self updateCurrentColorFromHex];
 }
@@ -289,6 +268,9 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 #pragma mark - 颜色更新核心链路
 
 - (void)updateColorFromComponents {
+    // 色相条 / S/B 面板的出口：这是用户拖动产生的真实调整
+    self.userModified = YES;
+
     UIColor *color = [UIColor colorWithHue:self.currentHsv.hue
                                 saturation:self.currentHsv.saturation
                                 brightness:self.currentHsv.brightness
@@ -419,11 +401,9 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
         prev = view;
     };
 
-    // 1. 模式切换
-    if (!self.singleColorMode) {
-        self.modeSegmentedControl.translatesAutoresizingMaskIntoConstraints = NO;
-        layout(self.modeSegmentedControl, 32);
-    }
+    // 1. 模式切换（永远双色，分段常显）
+    self.modeSegmentedControl.translatesAutoresizingMaskIntoConstraints = NO;
+    layout(self.modeSegmentedControl, 32);
 
     // 2. Hex 区
     self.hexInput.translatesAutoresizingMaskIntoConstraints = NO;

@@ -11,6 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) CGFloat placeholderTextFontSize;
 @property (nonatomic, assign) CGFloat placeholderTextAlpha;
 @property (nonatomic, copy, nullable) NSString *placeholderTextColorHex;
+@property (nonatomic, copy, nullable) NSString *placeholderTextColorHexDark;
 
 + (instancetype)shared;
 

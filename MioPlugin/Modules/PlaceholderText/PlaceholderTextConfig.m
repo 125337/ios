@@ -23,6 +23,7 @@
         [ConfigDescriptor itemWithKey:@"placeholderTextFontSize" type:ConfigValueTypeFloat default:@(15.0)],
         [ConfigDescriptor itemWithKey:@"placeholderTextAlpha" type:ConfigValueTypeFloat default:@(0.6)],
         [ConfigDescriptor itemWithKey:@"placeholderTextColorHex" type:ConfigValueTypeString default:@"#808080"],
+        [ConfigDescriptor itemWithKey:@"placeholderTextColorHexDark" type:ConfigValueTypeString default:@""],
     ];
 }
 
