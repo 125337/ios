@@ -26,7 +26,6 @@ static NSString *const kSkipListVCs[] = {
     @"SayHelloViewController",
     @"MMFinderPivotLiveViewController",
     @"WCSearchController",
-    @"WCPluginsViewController",
     @"AccountDetailViewController",
     @"SpecificPageLockViewController",
     @"ThemeExchangeViewController",
