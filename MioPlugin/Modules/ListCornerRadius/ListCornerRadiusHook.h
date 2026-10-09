@@ -5,6 +5,5 @@
 
 + (void)initListCornerRadiusHook;
 + (void)install;
-+ (void)applyBorderToView:(UIView *)view radius:(NSInteger)radius position:(NSInteger)position isFTSHome:(BOOL)isFTSHome;
 
 @end
