@@ -288,7 +288,7 @@ static const CGFloat kCellHPadding = 16.0;
     } else if ([type isEqualToString:@"colorTap"]) {
         // rightView 包装失败时的兜底：无色块可刷，取色器直开（写配置逻辑在 WPColorRow 一处）
         [WPColorRow presentPickerForLightKey:row[@"key"]
-                                      darkKey:(row[@"darkKey"].length > 0 ? row[@"darkKey"] : nil)
+                                      darkKey:([row[@"darkKey"] length] > 0 ? row[@"darkKey"] : nil)
                                    allowClear:[row[@"allowClear"] boolValue]
                                        hostVC:self
                                 refreshTarget:nil];
