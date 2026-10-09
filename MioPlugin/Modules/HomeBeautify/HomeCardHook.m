@@ -262,35 +262,34 @@ static void HCOpenChat(id vc, NSString *userName) {
     }
 }
 
-// 头像（size+userName 缓存；本地头像库 MMHeadImageMgr 按 wxid 直读，AvatarLoader 同款路径。
-// 头像 URL 链路依赖联系人库查询，建头时机实测查空（56 日志实证）且坏视图曾被缓存永久
-// 复用——不再走 contact→URL→MMHeadImageView 链路；查空返回 nil 由调用方画灰圆占位且
-// 不缓存失败结果）
-static NSMutableDictionary *hcAvatarCache = nil;   // size|userName → 头像视图（主线程专用）
+// 头像（本地头像库 MMHeadImageMgr 按 wxid 直读，AvatarLoader 同款路径。
+// 缓存只存 UIImage 不存 UIView —— UIView 同一时刻只能挂一个父视图，重复 addSubview
+// 会把实例从旧父视图摘走；若缓存视图实例，重复 wxid 或 header 快速重建时新旧 cell
+// 共用同一实例会互相抢走导致头像消失。UIImage 不可变可安全共享，视图每次新建。
+// 头像 URL 链路依赖联系人库查询且建头时机查空（56 日志实证），不走该链路；
+// 查空不缓存失败结果，由调用方画灰圆占位）
+static NSMutableDictionary<NSString *, UIImage *> *hcAvatarImgCache = nil;   // wxid → 头像图（主线程专用）
 
 static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
-    if (!hcAvatarCache) hcAvatarCache = [NSMutableDictionary dictionary];
-    NSString *key = [NSString stringWithFormat:@"%.0f|%@", size, userName];
-    UIView *av = [hcAvatarCache objectForKey:key];
-    if (av) return av;
-    @try {
-        id headMgr = WXGetService(objc_getClass("MMHeadImageMgr"));
-        SEL getSel = NSSelectorFromString(@"getHeadImage:withCategory:");
-        UIImage *img = nil;
-        if (headMgr && [headMgr respondsToSelector:getSel]) {
-            img = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headMgr, getSel, userName, @0);
-        }
-        if (img) {
-            UIImageView *iv = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, size, size)];
-            iv.image = img;
-            iv.contentMode = UIViewContentModeScaleAspectFill;
-            iv.clipsToBounds = YES;
-            iv.layer.cornerRadius = size * 0.5;
-            av = iv;
-        }
-    } @catch (...) {}
-    if (av) [hcAvatarCache setObject:av forKey:key];
-    return av;
+    if (!hcAvatarImgCache) hcAvatarImgCache = [NSMutableDictionary dictionary];
+    UIImage *img = [hcAvatarImgCache objectForKey:userName];
+    if (!img) {
+        @try {
+            id headMgr = WXGetService(objc_getClass("MMHeadImageMgr"));
+            SEL getSel = NSSelectorFromString(@"getHeadImage:withCategory:");
+            if (headMgr && [headMgr respondsToSelector:getSel]) {
+                img = ((UIImage *(*)(id, SEL, id, id))objc_msgSend)(headMgr, getSel, userName, @0);
+            }
+        } @catch (...) {}
+        if (img) [hcAvatarImgCache setObject:img forKey:userName];
+    }
+    if (!img) return nil;
+    UIImageView *iv = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, size, size)];
+    iv.image = img;
+    iv.contentMode = UIViewContentModeScaleAspectFill;
+    iv.clipsToBounds = YES;
+    iv.layer.cornerRadius = size * 0.5;
+    return iv;
 }
 
 // 联系人挂件容器（XOS 渲染段 L22819-23285 同构：内衬圆角12底板 + 分页横向滚动 +
