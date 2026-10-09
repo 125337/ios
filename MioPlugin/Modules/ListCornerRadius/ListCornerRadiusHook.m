@@ -102,6 +102,24 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
+// ─── 共享常量与边框清理（Cell hook 与 wp_applyBorderAndBg 共用） ───
+static NSString * const kMioBorderLayerName = @"com.mio.cornerBorder";
+static NSString * const kMioBorderCacheKey = @"com.mio.cornerBorderCache";
+// 涂装标记：登记"被本模块动过的 cell"，功能关后的清洁态只清理这些 cell，避免误伤原生样式
+static NSString * const kMioCornerPaintedKey = @"com.mio.cornerPainted";
+
+// 移除 cell 上全部边框子层并清边框缓存标记（保证下次开启时重建）
+static void WPStripBorderLayers(UIView *cell) {
+    NSArray *oldSublayers = [cell.layer.sublayers copy];
+    for (CALayer *sub in oldSublayers) {
+        if ([sub.name isEqualToString:kMioBorderLayerName]) {
+            [sub removeFromSuperlayer];
+        }
+    }
+    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey, nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 // ★★★ Cell Hook：列表圆角 + 分发到资料卡透明化 ★★★
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
@@ -115,43 +133,26 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
     NSString *className = NSStringFromClass([vc class]);
 
-    // ★ Mio 自己的设置页强制圆角：微信引擎迁移后 cell 是微信原生直角样式，
-    //   而 globalCornerRadiusEnabled 默认关——Mio 页面（MioPlugin*/WP*/SettingCategoryController 子类）
-    //   绕过下方三道守卫，微信原生页面行为不变
+    // ★ Mio 自己的设置页基线皮肤（保留原意图）：微信引擎迁移后 cell 是微信原生直角样式，
+    //   Mio 页面（MioPlugin*/WP*/SettingCategoryController 子类）始终应用硬编码基线
+    //   （圆角 15 + 默认底），微信原生页面行为不变
     static Class scCls = nil;
     static dispatch_once_t scOnceToken;
     dispatch_once(&scOnceToken, ^{ scCls = NSClassFromString(@"SettingCategoryController"); });
     BOOL mioOwn = [className hasPrefix:@"MioPlugin"] || [className hasPrefix:@"WP"]
                   || (scCls && [vc isKindOfClass:scCls]);
 
-    // ★ 列表圆角入口守卫：只看自己的开关（Mio 页面除外）
-    if (!mioOwn && !config.globalCornerRadiusEnabled) {
-        if (orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
-        return;
-    }
-
-    // ★ 模块责任查询：不属于列表圆角则跳过（Mio 页面除外）
-    if (!mioOwn && ![CornerResponsibility isListCornerResponsibleFor:vc]) {
-        if (orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
-        return;
-    }
-
-    // ★★★ 全局开关过滤（Mio 页面除外）★★★
-    if (!mioOwn && !shouldApplyGlobalCorner(vc)) {
-        if (orig_MMTableViewCell_layoutSubviews) {
-            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
-        }
-        return;
-    }
+    // ★ 功能效果总闸：三道守卫从"提前 return"改为合并计算——用户颜色/边框/圆角配置
+    //   这层"功能效果"随开关走（Mio 页面只看总开关）；关功能时走下方清洁态主动复原，
+    //   而不是放任残留
+    BOOL featureOn = config.globalCornerRadiusEnabled
+        && (mioOwn
+            || ([CornerResponsibility isListCornerResponsibleFor:vc] && shouldApplyGlobalCorner(vc)));
 
     UIView *cellView = (UIView *)self;
 
-    // ★ margin：Mio 页面写死 15（不读用户配置），微信页面走用户配置 ★
-    CGFloat margin = mioOwn ? 15.0 : config.listCellMargin;
+    // ★ margin：Mio 页面写死 15（不读用户配置）；微信页面功能开走用户配置、功能关复原原生全宽 ★
+    CGFloat margin = mioOwn ? 15.0 : (featureOn ? config.listCellMargin : 0.0);
     if (margin > 0) {
         CGFloat currentX = cellView.frame.origin.x;
         UIView *superview = cellView.superview;
@@ -168,11 +169,30 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             f.size.width = targetW;
             cellView.frame = f;
         }
+    } else if (!mioOwn && objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey)) {
+        // 清洁态复原：仅对被我们内缩过的 cell 回原生全宽
+        UIView *superview = cellView.superview;
+        CGFloat containerW = superview ? superview.bounds.size.width
+                                       : [UIScreen mainScreen].bounds.size.width;
+        CGFloat currentX = cellView.frame.origin.x;
+        CGFloat currentW = cellView.frame.size.width;
+        if (fabs(currentX) > 0.5 || fabs(currentW - containerW) > 0.5) {
+            CGRect f = cellView.frame;
+            f.origin.x = 0;
+            f.size.width = containerW;
+            cellView.frame = f;
+        }
     }
 
     // ★ orig ★
     if (orig_MMTableViewCell_layoutSubviews) {
         ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+    }
+
+    // 涂装标记：功能开即登记，供功能关后的清洁态识别"我们动过的 cell"
+    if (featureOn) {
+        objc_setAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey, @YES,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
     // ★ bgColor 设置 ★
@@ -192,13 +212,48 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             @"WCSearchController", nil];
     });
     if (![bgColorSkipList containsObject:className]) {
-        BOOL isDark = [WPUtility isDarkModeForViewController:vc];
-        UIColor *customBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
-                                                          darkHex:config.listCellDarkBgColor
-                                                           isDark:isDark
-                                                     withStrategy:WPColorResolveStrict
-                                                         fallback:nil];
-        ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
+        BOOL manageBg = featureOn || mioOwn
+            || objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
+        if (manageBg) {
+            BOOL isDark = [WPUtility isDarkModeForViewController:vc];
+            UIColor *targetBg = nil;
+            if (mioOwn) {
+                // Mio 基线皮肤=默认底；仅功能开时叠加用户色（随开关走）
+                UIColor *customBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
+                                                                  darkHex:config.listCellDarkBgColor
+                                                                   isDark:isDark
+                                                             withStrategy:WPColorResolveStrict
+                                                                 fallback:nil];
+                targetBg = featureOn ? (customBg ?: wp_cellDefaultBgColor(isDark))
+                                     : wp_cellDefaultBgColor(isDark);
+            } else if (featureOn) {
+                UIColor *customBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
+                                                                  darkHex:config.listCellDarkBgColor
+                                                                   isDark:isDark
+                                                             withStrategy:WPColorResolveStrict
+                                                                 fallback:nil];
+                targetBg = customBg ?: wp_cellDefaultBgColor(isDark);
+            }
+            // else：清洁态 targetBg 保持 nil（回微信原生底）
+            BOOL sameBg = (targetBg == nil) ? (cellView.backgroundColor == nil)
+                                            : [targetBg isEqual:cellView.backgroundColor];
+            if (!sameBg) {
+                cellView.backgroundColor = targetBg;
+            }
+        }
+    }
+
+    // ★ 清洁态（微信页面，功能关）：只清理涂装过的 cell——回原生直角、清边框；未涂装的零触碰
+    if (!featureOn && !mioOwn) {
+        if (objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey)) {
+            if (cellView.layer.cornerRadius != 0) cellView.layer.cornerRadius = 0;
+            if (cellView.layer.maskedCorners != 0) cellView.layer.maskedCorners = 0;
+            if (cellView.layer.masksToBounds) cellView.layer.masksToBounds = NO;
+            WPStripBorderLayers(cellView);
+            objc_setAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey, nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        return;
     }
 
     // ★ corner 圆角：Mio 页面写死 15（不读用户配置），微信页面走用户配置 ★
@@ -675,31 +730,32 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                   isFTSHome:(BOOL)isFTSHome {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
 
-    static NSString *kBorderCacheKey = @"com.mio.cornerBorderCache";
+    BOOL isDark = [WPUtility isDarkModeForView:cell];
 
-    NSString *existingCacheKey = objc_getAssociatedObject(cell, (__bridge const void *)kBorderCacheKey);
-    NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-f%d-b%.1f",
+    // 缓存 key 覆盖全部渲染入参：几何 + 边框开关 + 总开关 + 明暗 + 两个边框色。
+    // 任一变化即重建——边框即开即清、即关即清、换色/明暗切换即换
+    // （旧 key 缺明暗，暗黑↔浅色切换时 CGColor 快照残留）
+    NSString *existingCacheKey = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey);
+    NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-f%d-b%.1f-bd%d-d%d-g%d-cl%@-cd%@",
                           (long)radius, (long)position, isFTSHome,
-                          config.listCellBorderWidth];
+                          config.listCellBorderWidth,
+                          (int)config.listCellBorder, (int)isDark,
+                          (int)config.globalCornerRadiusEnabled,
+                          config.listCellBorderColor ?: @"",
+                          config.listCellBorderColorDarkHex ?: @""];
     if ([existingCacheKey isEqualToString:cacheKey]) return;
 
-    NSArray *oldSublayers = [cell.layer.sublayers copy];
-    for (CALayer *sub in oldSublayers) {
-        if ([sub.name isEqualToString:@"com.mio.cornerBorder"]) {
-            [sub removeFromSuperlayer];
-        }
-    }
+    WPStripBorderLayers(cell);
 
-    if (!config.listCellBorder) {
-        objc_setAssociatedObject(cell, (__bridge const void *)kBorderCacheKey, cacheKey,
+    // 双向应用：边框关（或功能总闸关）→ 移除既有边框后登记缓存即返回
+    if (!config.listCellBorder || !config.globalCornerRadiusEnabled) {
+        objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey, cacheKey,
             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         return;
     }
 
     CGFloat borderWidth = config.listCellBorderWidth;
     if (borderWidth <= 0) borderWidth = 1.0;
-
-    BOOL isDark = [WPUtility isDarkModeForView:cell];
 
     // 明暗二元兜底先算好再传
     UIColor *borderFallback = isDark
@@ -762,7 +818,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    objc_setAssociatedObject(cell, (__bridge const void *)kBorderCacheKey, cacheKey,
+    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey, cacheKey,
         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
@@ -787,7 +843,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                                      radius:(CGFloat)radius
                                        type:(NSString *)type {
     CAShapeLayer *shape = [CAShapeLayer layer];
-    shape.name = @"com.mio.cornerBorder";
+    shape.name = kMioBorderLayerName;
     shape.strokeColor = borderColor.CGColor;
     shape.fillColor = [UIColor clearColor].CGColor;
     shape.lineWidth = borderWidth;
