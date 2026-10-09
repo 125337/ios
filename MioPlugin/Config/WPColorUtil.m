@@ -64,6 +64,21 @@ static NSString * _Nullable NormalizedHex(NSString *hex) {
     return color;
 }
 
++ (nullable UIColor *)dynamicColorFromLightHex:(NSString *)lightHex
+                                        darkHex:(NSString *)darkHex
+                                  lightFallback:(UIColor *)lightFallback
+                                   darkFallback:(UIColor *)darkFallback {
+    UIColor *light = [self colorFromHexString:lightHex] ?: lightFallback;
+    UIColor *dark = [self colorFromHexString:darkHex] ?: darkFallback;
+    if (!light && !dark) return nil;   // 两侧均无值：调用方保留原生背景
+    if (@available(iOS 13.0, *)) {
+        return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traitCollection) {
+            return traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark ? dark : light;
+        }];
+    }
+    return light;
+}
+
 + (nullable UIColor *)resolveColorWithLight:(nullable UIColor *)light
                                        dark:(nullable UIColor *)dark
                                      isDark:(BOOL)isDark

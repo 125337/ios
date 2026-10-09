@@ -48,13 +48,24 @@ static IMP orig_WCSearchBar_layoutSubviews = NULL;
 
 @end
 
-static UIColor *wp_cellDefaultBgColor(BOOL isDark) {
-    if (@available(iOS 13.0, *)) {
-        if (isDark) {
-            return [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0];
-        }
+// ★ WCR 同款动态背景色（FUN_007d44a8 实证方案）：明暗 hex 一次构建 colorWithDynamicProvider
+//   并按 config 值惰性静态缓存，明暗切换由 UIKit 按 trait 自动重取色——hook 内不再判暗。
+//   两侧兜底与原 wp_cellDefaultBgColor 语义一致：浅色白 / 深色 #202020；
+//   tag 区分缓存槽（用户色通道 / 默认底通道）
+static UIColor *WPDynamicCellBgColor(NSString *lightHex, NSString *darkHex, NSString *tag) {
+    static NSMutableDictionary *cache = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ cache = [NSMutableDictionary dictionary]; });
+    NSString *key = [tag stringByAppendingFormat:@"|%@|%@", lightHex ?: @"", darkHex ?: @""];
+    UIColor *cached = cache[key];
+    if (!cached) {
+        cached = [WPColorUtil dynamicColorFromLightHex:lightHex
+                                                darkHex:darkHex
+                                          lightFallback:[UIColor whiteColor]
+                                           darkFallback:[UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]];
+        if (cached) cache[key] = cached;
     }
-    return [UIColor whiteColor];
+    return cached;
 }
 
 // ★★★ 全局开关过滤 ★★★
@@ -215,28 +226,23 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         BOOL manageBg = featureOn || mioOwn
             || objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
         if (manageBg) {
-            BOOL isDark = [WPUtility isDarkModeForViewController:vc];
+            // ★ 动态色语义：明暗跟随交给 UIKit 的 trait 系统，hook 内不再判暗。
+            //   Mio 基线皮肤=默认底（不吃用户色）、微信页面功能开=用户色（两侧兜底默认底）、
+            //   清洁态=nil 回微信原生底——三条通道与原语义逐字一致
             UIColor *targetBg = nil;
             if (mioOwn) {
-                // Mio 基线皮肤=默认底；仅功能开时叠加用户色（随开关走）
-                UIColor *customBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
-                                                                  darkHex:config.listCellDarkBgColor
-                                                                   isDark:isDark
-                                                             withStrategy:WPColorResolveStrict
-                                                                 fallback:nil];
-                targetBg = featureOn ? (customBg ?: wp_cellDefaultBgColor(isDark))
-                                     : wp_cellDefaultBgColor(isDark);
+                targetBg = featureOn
+                    ? WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser")
+                    : WPDynamicCellBgColor(nil, nil, @"cellDefault");
             } else if (featureOn) {
-                UIColor *customBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
-                                                                  darkHex:config.listCellDarkBgColor
-                                                                   isDark:isDark
-                                                             withStrategy:WPColorResolveStrict
-                                                                 fallback:nil];
-                targetBg = customBg ?: wp_cellDefaultBgColor(isDark);
+                targetBg = WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser");
             }
             // else：清洁态 targetBg 保持 nil（回微信原生底）
-            BOOL sameBg = (targetBg == nil) ? (cellView.backgroundColor == nil)
-                                            : [targetBg isEqual:cellView.backgroundColor];
+            // 幂等：指针相同（共享动态色对象）或 isEqual 才跳过，避免每轮产生 CA 脏标记
+            BOOL sameBg = (targetBg == nil)
+                ? (cellView.backgroundColor == nil)
+                : (cellView.backgroundColor == targetBg
+                   || [targetBg isEqual:cellView.backgroundColor]);
             if (!sameBg) {
                 cellView.backgroundColor = targetBg;
             }
@@ -342,16 +348,10 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
-
-    UIColor *targetBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
-                                                      darkHex:config.listCellDarkBgColor
-                                                       isDark:isDark
-                                                 withStrategy:WPColorResolveStrict
-                                                     fallback:isDark
-                                     ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
-                                     : [UIColor whiteColor]];
-    ((UIView *)self).backgroundColor = targetBg;
+    // ★ 动态色：明暗跟随交给 UIKit trait 系统；指针幂等避免每轮 CA 脏标记
+    UIColor *targetBg = WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser");
+    UIView *btnView = (UIView *)self;
+    if (btnView.backgroundColor != targetBg) btnView.backgroundColor = targetBg;
 }
 
 // ★★★ [WPAuxiliaryHooks] MFBannerBtn background color ★★★
@@ -366,16 +366,10 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) return;
 
-    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
-
-    UIColor *targetBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
-                                                      darkHex:config.listCellDarkBgColor
-                                                       isDark:isDark
-                                                 withStrategy:WPColorResolveStrict
-                                                     fallback:isDark
-                                     ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
-                                     : [UIColor whiteColor]];
-    ((UIView *)self).backgroundColor = targetBg;
+    // ★ 动态色：明暗跟随交给 UIKit trait 系统；指针幂等避免每轮 CA 脏标记
+    UIColor *targetBg = WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser");
+    UIView *btnView = (UIView *)self;
+    if (btnView.backgroundColor != targetBg) btnView.backgroundColor = targetBg;
 }
 
 // ★★★ [WPAuxiliaryHooks] MainFrameSectionFoldView ★★★
@@ -427,15 +421,9 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
     [ListCornerRadiusHook applyBorderToView:view radius:radius position:0 isFTSHome:NO];
 
-    BOOL isDark = [WPUtility isDarkModeForViewController:vc];
-    UIColor *targetBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
-                                                      darkHex:config.listCellDarkBgColor
-                                                       isDark:isDark
-                                                 withStrategy:WPColorResolveStrict
-                                                     fallback:isDark
-                                     ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
-                                     : [UIColor whiteColor]];
-    view.backgroundColor = targetBg;
+    // ★ 动态色：明暗跟随交给 UIKit trait 系统；指针幂等避免每轮 CA 脏标记
+    UIColor *targetBg = WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser");
+    if (view.backgroundColor != targetBg) view.backgroundColor = targetBg;
 
     for (UIView *subview in view.subviews) {
         if ([NSStringFromClass([subview class]) isEqualToString:@"UIView"]) {

@@ -41,6 +41,15 @@ typedef NS_ENUM(NSUInteger, WPColorResolveStrategy) {
                                   withStrategy:(WPColorResolveStrategy)strategy
                                       fallback:(nullable UIColor *)fallback;
 
+/// 明暗动态色（hex 级）：两侧各自"hex 解析，未设置/非法 → 对应侧兜底"，包装为
+/// colorWithDynamicProvider 动态 UIColor——明暗切换由 UIKit 按 trait 自动重取色，
+/// 调用方无需判暗、无需在切换时重设
+/// 两侧输入与兜底均为空 → 返回 nil（调用方保留原生背景）；iOS 13 以下回退浅色侧结果
++ (nullable UIColor *)dynamicColorFromLightHex:(nullable NSString *)lightHex
+                                        darkHex:(nullable NSString *)darkHex
+                                  lightFallback:(nullable UIColor *)lightFallback
+                                   darkFallback:(nullable UIColor *)darkFallback;
+
 /// 明暗取色统一解析器（颜色级）：输入已是 UIColor 时使用，提亮策略的实现基础
 /// 颜色级"未设置"即 nil，无解析失败概念；hex 级的提亮策略内部委托本方法
 + (nullable UIColor *)resolveColorWithLight:(nullable UIColor *)light
