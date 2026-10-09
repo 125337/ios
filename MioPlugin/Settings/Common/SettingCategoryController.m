@@ -596,15 +596,17 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 
     if (!dual) {
         // 单色行：只有浅色块（无 darkKey，深色侧无可编辑目标）
-        UIColor *color = [WPColorUtil colorFromHexString:value] ?: [UIColor grayColor];
+        // 空值 = 未设置：colorFromHexString 对空串返回黑色（永不 nil），必须先判空；
+        // 未设置兜底观感：浅色预览白、深色预览黑
+        UIColor *color = value.length > 0 ? [WPColorUtil colorFromHexString:value] : [UIColor whiteColor];
         [cv addSubview:[self wpColorBtn:color size:30 x:2 lightKey:key darkKey:nil isLight:YES allowClear:allowClear]];
     } else {
         CGFloat btnSize = 24;
         CGFloat darkX = cvW - 4 - btnSize;
-        UIColor *darkColor = [WPColorUtil colorFromHexString:darkValue] ?: [UIColor darkGrayColor];
+        UIColor *darkColor = darkValue.length > 0 ? [WPColorUtil colorFromHexString:darkValue] : [UIColor blackColor];
         // 深色块自己侧挂 darkKey（mioColorKey = 自己侧 key）
         UIButton *darkBtn = [self wpColorBtn:darkColor size:btnSize x:darkX lightKey:key darkKey:darkKey isLight:NO allowClear:allowClear];
-        UIColor *lightColor = [WPColorUtil colorFromHexString:value] ?: [UIColor whiteColor];
+        UIColor *lightColor = value.length > 0 ? [WPColorUtil colorFromHexString:value] : [UIColor whiteColor];
         UIButton *lightBtn = [self wpColorBtn:lightColor size:btnSize x:darkX - 6 - btnSize lightKey:key darkKey:darkKey isLight:YES allowClear:allowClear];
         // 双色块互指：确认后由 colorButtonTapped 的回调同步刷新两侧预览
         objc_setAssociatedObject(lightBtn, "mioPairBtn", darkBtn, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -761,7 +763,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
         if (darkKey) [ConfigManager setValue:dHex forKey:darkKey];
         [ConfigManager saveAll];
         lightBtn.backgroundColor = [WPColorUtil colorFromHexString:lHex] ?: [UIColor whiteColor];
-        darkBtn.backgroundColor = [WPColorUtil colorFromHexString:dHex] ?: [UIColor darkGrayColor];
+        darkBtn.backgroundColor = [WPColorUtil colorFromHexString:dHex] ?: [UIColor blackColor];
     }];
 }
 
