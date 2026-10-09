@@ -246,6 +246,25 @@ static void WPRowNeighbors(UITableView *tableView, CGRect cellRect, BOOL *hasAbo
     }
 }
 
+// 取紧贴（间隙 ≤ 0.5pt）邻 cell 的类（table 坐标比对，可见 cell 逐个转 table 坐标）；
+// 无可见邻 cell（被屏幕裁切/滚出）→ 返回 nil，调用方保留几何判定结果
+static Class WPTouchingNeighborClass(UITableView *tableView, CGRect cellRect, BOOL above) {
+    Class result = nil;
+    CGFloat cellTop = cellRect.origin.y;
+    CGFloat cellBottom = cellRect.origin.y + cellRect.size.height;
+    for (UITableViewCell *c in tableView.visibleCells) {
+        CGRect f = [tableView convertRect:c.frame fromView:c.superview];
+        CGFloat cTop = f.origin.y;
+        CGFloat cBottom = f.origin.y + f.size.height;
+        if (above) {
+            if (cTop < cellTop && fabs(cBottom - cellTop) <= 0.5) { result = [c class]; break; }
+        } else {
+            if (cBottom > cellBottom && fabs(cTop - cellBottom) <= 0.5) { result = [c class]; break; }
+        }
+    }
+    return result;
+}
+
 // ★★★ Cell Hook：列表圆角 + 分发到资料卡透明化 ★★★
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
@@ -379,6 +398,15 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     CGRect cellRect = [tableView convertRect:cellView.bounds fromView:cellView];
     BOOL hasAbove = NO, hasBelow = NO;
     WPRowNeighbors(tableView, cellRect, &hasAbove, &hasBelow);
+
+    // ★ 同类才连卡（首页实证：置顶区 MMTableViewCell 与普通区 NewMainFrameCell gap=0.0 紧贴但类不同，
+    //   不能连成一张卡）：紧贴邻 cell 可见且类不同 → 该侧视为悬空（卡片边界，出角）。
+    //   邻 cell 不可见（屏幕裁切/滚出）时 helper 返回 nil，保留几何判定结果不抖动
+    Class selfCls = [cellView class];
+    Class aboveCls = WPTouchingNeighborClass(tableView, cellRect, YES);
+    if (aboveCls && aboveCls != selfCls) hasAbove = NO;
+    Class belowCls = WPTouchingNeighborClass(tableView, cellRect, NO);
+    if (belowCls && belowCls != selfCls) hasBelow = NO;
 
     [ListCornerRadiusHook wp_applyGeometricCorner:cellView
                                      cornerRadius:cornerRadius
@@ -617,8 +645,28 @@ static void _wp_tableLayoutCommon(id self, SEL _cmd, IMP orig) {
     BOOL mioOwn = WPVCIsMioOwn(vc);
     BOOL featureOn = config.globalCornerRadiusEnabled
         && (mioOwn || shouldApplyGlobalCorner(vc));
+
+    // 功能关 → 交由 wp_paintTableBorders 双向清洁（仅拆自己涂装的）
+    if (!featureOn) {
+        [ListCornerRadiusHook wp_paintTableBorders:tv featureOn:NO mioOwn:mioOwn];
+        return;
+    }
+
+    // ★ 页面归属性校验（聊天详情页误涂 f6373b9 实证）：MMTableView 遍布全 App，
+    //   VC 宽语义（未知=YES）在表级会误涂无 MMTableViewCell 的页面（聊天详情页消息 cell
+    //   不是 MMTableViewCell，cell hook 时代靠类过滤天然安全）。
+    //   以表内可见 cell 是否 MMTableViewCell 为准——结构级判据，无时序依赖
+    static Class mmCellCls = nil;
+    static dispatch_once_t mmCellOnce;
+    dispatch_once(&mmCellOnce, ^{ mmCellCls = NSClassFromString(@"MMTableViewCell"); });
+    BOOL hasMioCell = NO;
+    for (UITableViewCell *c in tv.visibleCells) {
+        if ([c isKindOfClass:mmCellCls]) { hasMioCell = YES; break; }
+    }
+    if (!hasMioCell) return;
+
     [ListCornerRadiusHook wp_paintTableBorders:tv
-                                     featureOn:featureOn
+                                     featureOn:YES
                                         mioOwn:mioOwn];
 }
 
@@ -879,6 +927,15 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
     NSInteger nSections = [tableView numberOfSections];
 
+    // ★ 每 section 的 cell 类映射（visibleCells 取证；无可见 cell → nil = 类未知，不阻断连卡）：
+    //   同类才连卡——首页置顶区（MMTableViewCell）与普通区（NewMainFrameCell）紧贴但类不同，必须分卡
+    Class secCls[256];
+    for (NSInteger s = 0; s < nSections && s < 256; s++) secCls[s] = nil;
+    for (UITableViewCell *c in tableView.visibleCells) {
+        NSIndexPath *ip = [tableView indexPathForCell:c];
+        if (ip && ip.section < 256) secCls[ip.section] = [c class];
+    }
+
     // ★ WCR 同款几何分组合并（Frida 实证）：相邻 section 的行带垂直连续（间隙 ≤ 0.5pt）
     //   即并入同一组，共享一张覆盖视图 + 一条整段圆角路径——与 indexPath/section 无关。
     //   挂载点 = table layoutSubviews（仅布局/结构变化触发，每表一次），逐帧幂等比对即可，
@@ -887,19 +944,23 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     CGFloat prevBottom = 0, groupTop = 0, groupBottom = 0;
     NSInteger groupFirstSection = -1;
     BOOL groupOpen = NO;
+    Class groupClass = nil;
 
     for (NSInteger s = 0; s < nSections; s++) {
         CGFloat bandTop = 0, bandBottom = 0;
         if (!WPSectionBand(tableView, s, &bandTop, &bandBottom)) continue;
 
-        if (groupOpen && bandTop - prevBottom <= 0.5) {
-            // 与当前组垂直连续：扩组
+        Class secClass = (s < 256) ? secCls[s] : nil;
+        BOOL classBoundary = groupClass && secClass && groupClass != secClass;
+
+        if (groupOpen && bandTop - prevBottom <= 0.5 && !classBoundary) {
+            // 与当前组垂直连续且同类：扩组
             groupBottom = bandBottom;
             prevBottom = bandBottom;
             continue;
         }
 
-        // 与当前组断开：收口旧组，开新组
+        // 与当前组断开（几何不连续或跨类）：收口旧组，开新组
         if (groupOpen) {
             NSInteger tag = kMioBorderTagBase + groupFirstSection;
             [self wp_paintGroupOverlay:tableView tag:tag
@@ -911,6 +972,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         groupTop = bandTop;
         groupBottom = bandBottom;
         prevBottom = bandBottom;
+        groupClass = secClass;
         groupOpen = YES;
     }
     if (groupOpen) {
