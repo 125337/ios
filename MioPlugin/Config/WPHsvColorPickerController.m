@@ -5,6 +5,7 @@
 #import "WPRGBAControl.h"
 #import "WPHexInputView.h"
 #import "WPColorPaletteView.h"
+#import "../../Core/LogManager.h"
 
 #pragma mark - 常量
 
@@ -109,7 +110,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 - (void)clearTapped {
     if (!self.onClear) {
         // 未提供 onClear 却展示了清除按钮属于装配错误：提示且不关闭，避免静默吞操作
-        NSLog(@"[WPColorPicker] clearTapped: onClear 回调为空，忽略清除操作");
+        WPLog(@"ColorPicker", @"[WPColorPicker] clearTapped: onClear 回调为空，忽略清除操作");
         return;
     }
     self.onClear(self.isLightMode);   // 只清当前激活侧
@@ -196,6 +197,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
         WPHsvColor hsv = strongSelf.currentHsv;
         hsv.hue = hue;
         strongSelf.currentHsv = hsv;
+        strongSelf.userModified = YES;
         // 通知 S/B 面板色相变了
         strongSelf.sbView.hue = hue;
         // 更新输出
@@ -212,6 +214,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
         hsv.saturation = saturation;
         hsv.brightness = brightness;
         strongSelf.currentHsv = hsv;
+        strongSelf.userModified = YES;
         [strongSelf updateColorFromComponents];
     };
     [self.contentView addSubview:self.sbView];
@@ -268,9 +271,8 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 #pragma mark - 颜色更新核心链路
 
 - (void)updateColorFromComponents {
-    // 色相条 / S/B 面板的出口：这是用户拖动产生的真实调整
-    self.userModified = YES;
-
+    // 通用方法：把当前 HSV 应用到 hex 与 UI，不承载"用户已修改"语义
+    // （userModified 由五个用户输入回调各自置位）
     UIColor *color = [UIColor colorWithHue:self.currentHsv.hue
                                 saturation:self.currentHsv.saturation
                                 brightness:self.currentHsv.brightness
