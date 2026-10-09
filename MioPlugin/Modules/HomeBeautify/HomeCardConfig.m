@@ -60,6 +60,8 @@
         [ConfigDescriptor itemWithKey:@"hcContactBgColorDark" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"hcContactAvatarSize" type:ConfigValueTypeFloat default:@(48)],
         [ConfigDescriptor itemWithKey:@"hcContactAvatarSpacing" type:ConfigValueTypeFloat default:@(3)],
+        [ConfigDescriptor itemWithKey:@"hcContactAvatarRound" type:ConfigValueTypeBool default:@(YES)],
+        [ConfigDescriptor itemWithKey:@"hcContactAvatarRadius" type:ConfigValueTypeFloat default:@(12)],
         [ConfigDescriptor itemWithKey:@"hcContactMaxVisible" type:ConfigValueTypeInteger default:@(5)],
         [ConfigDescriptor itemWithKey:@"hcContactOnline" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"hcContactDotColor" type:ConfigValueTypeString default:@""],

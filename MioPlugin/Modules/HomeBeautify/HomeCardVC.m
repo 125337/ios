@@ -456,36 +456,52 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                               width:w];
     cy = [self addSeparatorInGroup:g6 cy:cy width:w];
 
-    cy = [self addSwitchRowInGroup:g6
-                             title:@"在线状态"
-                              desc:nil
-                               key:@"hcContactOnline"
-                              isOn:config.hcContactOnline
-                                cy:cy
-                             width:w];
+    // 头像圆角（手风琴：开=正圆（默认，与历史观感一致）；关=圆角矩形用子行半径）
+    cy = [self addMasterSwitchRowInGroup:g6
+                                  title:@"头像圆角"
+                                    key:@"hcContactAvatarRound"
+                                   isOn:config.hcContactAvatarRound
+                             subBuilder:^(UIView *expand, CGFloat *ecy) {
+        HomeCardConfig *c = [HomeCardConfig shared];
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"圆角半径"
+                                    key:@"hcContactAvatarRadius"
+                                  value:(c.hcContactAvatarRadius != 12 ? [self numText:c.hcContactAvatarRadius] : nil)
+                                   hint:@"12"
+                              valueType:InputValueTypeNumber
+                             alertTitle:@"设置圆角半径"
+                           alertMessage:@"仅正圆开关关闭时生效（0 至头像大小一半，超出按正圆处理），默认 12"
+                                     cy:*ecy
+                                  width:w];
+    } cy:cy width:w];
     cy = [self addSeparatorInGroup:g6 cy:cy width:w];
 
-    // 在线圆点颜色（空 = 微信绿 #07C160 兜底，浅/深双预览）
-    cy = [self addColorRowInGroup:g6
-                            title:@"在线圆点颜色"
-                              key:@"hcContactDotColor"
-                            value:(config.hcContactDotColor.length > 0 ? config.hcContactDotColor : nil)
-                               cy:cy
-                            width:w
-                          darkKey:@"hcContactDotColorDark"
-                        darkValue:(config.hcContactDotColorDark.length > 0 ? config.hcContactDotColorDark : nil)];
-    cy = [self addSeparatorInGroup:g6 cy:cy width:w];
-
-    // 在线圆点位置（弹出选择器：0右下 1右上 2左上 3左下，CadisContactOnlineDotPosition）
-    NSString *dotName = @[@"右下角", @"右上角", @"左上角", @"左下角"][
-        MIN(MAX(config.hcContactDotPos, 0), 3)];
-    cy = [self addNavRowInGroup:g6
-                          title:@"在线圆点位置"
-                       subtitle:dotName
-                            tag:0
-                         action:@selector(onDotPosTap)
-                             cy:cy
-                          width:w];
+    // 在线状态（手风琴：开=展开圆点颜色 / 圆点位置子行）
+    cy = [self addMasterSwitchRowInGroup:g6
+                                  title:@"在线状态"
+                                    key:@"hcContactOnline"
+                                   isOn:config.hcContactOnline
+                             subBuilder:^(UIView *expand, CGFloat *ecy) {
+        HomeCardConfig *c = [HomeCardConfig shared];
+        *ecy = [self addColorRowInGroup:expand
+                                  title:@"在线圆点颜色"
+                                    key:@"hcContactDotColor"
+                                  value:(c.hcContactDotColor.length > 0 ? c.hcContactDotColor : nil)
+                                     cy:*ecy
+                                  width:w
+                               darkKey:@"hcContactDotColorDark"
+                             darkValue:(c.hcContactDotColorDark.length > 0 ? c.hcContactDotColorDark : nil)];
+        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
+        NSString *dotName = @[@"右下角", @"右上角", @"左上角", @"左下角"][
+            MIN(MAX(c.hcContactDotPos, 0), 3)];
+        *ecy = [self addNavRowInGroup:expand
+                                title:@"在线圆点位置"
+                             subtitle:dotName
+                                  tag:1   // 手风琴子行点击分发要求 tag != 0（Voice 页同款）
+                               action:@selector(onDotPosTap)
+                                   cy:*ecy
+                                width:w];
+    } cy:cy width:w];
     cy = [self addSeparatorInGroup:g6 cy:cy width:w];
 
     cy = [self addSwitchRowInGroup:g6

@@ -53,6 +53,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy)   NSString *hcContactBgColorDark;
 @property (nonatomic, assign) CGFloat   hcContactAvatarSize;     // 头像大小（默认 48，应用钳 ≥20，CadisContactAvatarSize）
 @property (nonatomic, assign) CGFloat   hcContactAvatarSpacing;  // 头像间距 pt（默认 3，CadisContactAvatarSpacing）
+@property (nonatomic, assign) BOOL      hcContactAvatarRound;    // 头像正圆（默认开 = 历史观感；关 = 圆角矩形用 hcContactAvatarRadius）
+@property (nonatomic, assign) CGFloat   hcContactAvatarRadius;   // 圆角半径（默认 12，仅正圆关闭时生效，渲染钳 0-尺寸半）
 @property (nonatomic, assign) NSInteger hcContactMaxVisible;     // 每页显示数量 5/6（默认 5，应用钳 5-6，CadisContactMaxVisible）
 @property (nonatomic, assign) BOOL      hcContactOnline;         // 在线状态圆点（CadisContactOnlineStatus）
 @property (nonatomic, copy)   NSString *hcContactDotColor;       // 在线圆点颜色 hex（空 = 微信绿 #07C160）

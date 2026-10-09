@@ -284,11 +284,15 @@ static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
         if (img) [hcAvatarImgCache setObject:img forKey:userName];
     }
     if (!img) return nil;
+    HomeCardConfig *ccfg = [HomeCardConfig shared];
+    CGFloat radius = ccfg.hcContactAvatarRound
+        ? size * 0.5
+        : MIN(MAX(ccfg.hcContactAvatarRadius, 0.0), size * 0.5);   // 钳 0-尺寸半，超出即正圆
     UIImageView *iv = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, size, size)];
     iv.image = img;
     iv.contentMode = UIViewContentModeScaleAspectFill;
     iv.clipsToBounds = YES;
-    iv.layer.cornerRadius = size * 0.5;
+    iv.layer.cornerRadius = radius;
     return iv;
 }
 
@@ -362,7 +366,9 @@ static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *c
         } else {
             UIView *ph = [[UIView alloc] initWithFrame:CGRectMake(avatarX, 0, size, size)];
             ph.backgroundColor = HCSecondaryLabel();
-            ph.layer.cornerRadius = size * 0.5;
+            ph.layer.cornerRadius = cfg.hcContactAvatarRound
+                ? size * 0.5
+                : MIN(MAX(cfg.hcContactAvatarRadius, 0.0), size * 0.5);   // 与真头像圆角同步
             ph.userInteractionEnabled = NO;
             [cell addSubview:ph];
         }
