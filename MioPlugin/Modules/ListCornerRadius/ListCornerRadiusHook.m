@@ -139,6 +139,23 @@ static void WPStripTableOverlays(UITableView *tableView) {
     [stale makeObjectsPerformSelector:@selector(removeFromSuperview)];
 }
 
+// 取 section 行带（首末行 rect 并集，table 内容坐标）；@try 兜底 reload/插入动画窗口中
+// numberOfRows（实时问数据源）与 rectForRow（读内部几何缓存）短暂不一致导致的越界异常
+static BOOL WPSectionBand(UITableView *tableView, NSInteger s, CGFloat *outTop, CGFloat *outBottom) {
+    NSInteger rows = [tableView numberOfRowsInSection:s];
+    if (rows <= 0) return NO;
+    CGRect first, last;
+    @try {
+        first = [tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:s]];
+        last = [tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:rows - 1 inSection:s]];
+    } @catch (NSException *e) {
+        return NO;
+    }
+    *outTop = first.origin.y;
+    *outBottom = last.origin.y + last.size.height;
+    return YES;
+}
+
 // ★ 几何相邻行位判定（WCR 同款，Frida 实证）：cell 上下是否有紧贴（间隙 ≤ 0.5pt）的行。
 //   遍历各 section 的行带（首末行 rect 并集，table 内容坐标），与 cell 矩形做垂直邻接比对，
 //   与 indexPath/section 完全无关——跨 section 几何连续的行自然连成一张卡
@@ -147,12 +164,8 @@ static void WPRowNeighbors(UITableView *tableView, CGRect cellRect, BOOL *hasAbo
     *hasBelow = NO;
     NSInteger nSections = [tableView numberOfSections];
     for (NSInteger s = 0; s < nSections && (!*hasAbove || !*hasBelow); s++) {
-        NSInteger rows = [tableView numberOfRowsInSection:s];
-        if (rows <= 0) continue;
-        CGRect first = [tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:s]];
-        CGRect last = [tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:rows - 1 inSection:s]];
-        CGFloat bandTop = first.origin.y;
-        CGFloat bandBottom = last.origin.y + last.size.height;
+        CGFloat bandTop = 0, bandBottom = 0;
+        if (!WPSectionBand(tableView, s, &bandTop, &bandBottom)) continue;
         CGFloat cellTop = cellRect.origin.y;
         CGFloat cellBottom = cellRect.origin.y + cellRect.size.height;
 
@@ -356,7 +369,7 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 // ★★★ [WPAuxiliaryHooks] MFWebMMBtn background color ★★★
 static void (*orig_MFWebMMBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
-    orig_MFWebMMBtn_layoutSubviews(self, _cmd);
+    if (orig_MFWebMMBtn_layoutSubviews) orig_MFWebMMBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
@@ -374,7 +387,7 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
 // ★★★ [WPAuxiliaryHooks] MFBannerBtn background color ★★★
 static void (*orig_MFBannerBtn_layoutSubviews)(id, SEL);
 static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
-    orig_MFBannerBtn_layoutSubviews(self, _cmd);
+    if (orig_MFBannerBtn_layoutSubviews) orig_MFBannerBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
@@ -392,7 +405,7 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
 // ★★★ [WPAuxiliaryHooks] MainFrameSectionFoldView ★★★
 static void (*orig_FoldView_layoutSubviews)(id, SEL);
 static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
-    orig_FoldView_layoutSubviews(self, _cmd);
+    if (orig_FoldView_layoutSubviews) orig_FoldView_layoutSubviews(self, _cmd);
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) return;
@@ -469,14 +482,15 @@ static id _hooked_NMFVC_viewForHeader(id self, SEL _cmd, id tableView, NSInteger
     if (config.globalCornerRadiusEnabled && section > 0) {
         return [[UIView alloc] initWithFrame:CGRectZero];
     }
-    return orig_NMFVC_viewForHeader(self, _cmd, tableView, section);
+    if (orig_NMFVC_viewForHeader) return orig_NMFVC_viewForHeader(self, _cmd, tableView, section);
+    return nil;
 }
 
 static void (*orig_setBgImageView)(id, SEL, id);
 static void _hooked_setBgImageView(id self, SEL _cmd, id imageView) {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) {
-        orig_setBgImageView(self, _cmd, imageView);
+        if (orig_setBgImageView) orig_setBgImageView(self, _cmd, imageView);
     }
 }
 
@@ -499,7 +513,7 @@ static BOOL _wp_isAllowedVC(NSString *name) {
 
 static void (*orig_UIView_layoutSubviews)(id, SEL);
 static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
-    orig_UIView_layoutSubviews(self, _cmd);
+    if (orig_UIView_layoutSubviews) orig_UIView_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     if (!config.globalCornerRadiusEnabled) return;
@@ -696,13 +710,8 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     BOOL groupOpen = NO;
 
     for (NSInteger s = 0; s < nSections; s++) {
-        NSInteger rows = [tableView numberOfRowsInSection:s];
-        if (rows <= 0) continue;
-
-        CGRect first = [tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:s]];
-        CGRect last = [tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:rows - 1 inSection:s]];
-        CGFloat bandTop = first.origin.y;
-        CGFloat bandBottom = last.origin.y + last.size.height;
+        CGFloat bandTop = 0, bandBottom = 0;
+        if (!WPSectionBand(tableView, s, &bandTop, &bandBottom)) continue;
 
         if (groupOpen && bandTop - prevBottom <= 0.5) {
             // 与当前组垂直连续：扩组
