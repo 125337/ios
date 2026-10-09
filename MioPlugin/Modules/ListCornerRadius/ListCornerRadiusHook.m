@@ -5,6 +5,7 @@
 #import "../../Core/LogManager.h"
 #import "../ProfileCardBg/ProfileCardBgHook.h"
 #import <substrate.h>
+#import <dlfcn.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 
@@ -19,7 +20,7 @@ static IMP orig_WCSearchBar_layoutSubviews = NULL;
                        hasBelow:(BOOL)hasBelow;
 
 // 表格级边框（WCR 同款）：几何连续的行区段合并为一组，每组一条覆盖视图 + 整段圆角描边，
-// 挂 tableView 本体；需在 cell hook 清洁态 return 之前调用，保证功能关时覆盖视图也被拆除
+// 挂 tableView 本体；由 table 自身 layoutSubviews hook 调用（含功能/边框关时的双向清洁）
 + (void)wp_paintTableBorders:(UITableView *)tableView
                    featureOn:(BOOL)featureOn
                       mioOwn:(BOOL)mioOwn;
@@ -91,6 +92,17 @@ static BOOL shouldApplyGlobalCorner(UIViewController *vc) {
     return YES;
 }
 
+// Mio 自有页面判定（cell hook / table hook 共用）：MioPlugin*/WP* 前缀 + 设置页基类子类，
+// 这些页面始终应用硬编码基线皮肤（圆角 15 + 默认底）
+static BOOL WPVCIsMioOwn(UIViewController *vc) {
+    static Class scCls = nil;
+    static dispatch_once_t scOnceToken;
+    dispatch_once(&scOnceToken, ^{ scCls = NSClassFromString(@"SettingCategoryController"); });
+    NSString *className = NSStringFromClass([vc class]);
+    return [className hasPrefix:@"MioPlugin"] || [className hasPrefix:@"WP"]
+        || (scCls && [vc isKindOfClass:scCls]);
+}
+
 static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
     if (orig_WCSearchBar_layoutSubviews) {
         ((void (*)(id, SEL))orig_WCSearchBar_layoutSubviews)(self, _cmd);
@@ -118,10 +130,6 @@ static NSString * const kMioBorderStampKey = @"com.mio.borderStamp";
 // 涂装标记：登记"被本模块动过的 cell/table/视图"，功能关后的清洁态只清理这些对象，避免误伤原生样式
 static NSString * const kMioCornerPaintedKey = @"com.mio.cornerPainted";
 static NSString * const kMioTablePaintedKey = @"com.mio.tablePainted";
-// 边框结构戳：编码边框重绘的全部结构性/配置性输入（整数哈希），戳相同则跳过全表分组（节流）
-static NSString * const kMioBorderStructKey = @"com.mio.borderStruct";
-// 行带缓存：全表 section 行带一次构建 2s 内共享（cell 圆角邻接 + 边框分组两个消费者）
-static NSString * const kMioBandsCacheKey = @"com.mio.bandsCache";
 // section 边框覆盖视图 tag 段：tag = 基数 + sectionIndex，覆盖视图挂在 tableView 本体上，免疫 cell 复用
 static NSInteger const kMioBorderTagBase = 0x4D494F;  // 'MIO'
 static NSInteger const kMioBorderTagRange = 1000;
@@ -173,54 +181,29 @@ static BOOL WPSectionBand(UITableView *tableView, NSInteger s, CGFloat *outTop, 
     return YES;
 }
 
-// section 行带（table 内容坐标）
-typedef struct { CGFloat top, bottom; } WPBand;
-
-// 行带缓存：全表 section 行带一次构建（WPSectionBand @try 兜底），2s 内所有消费者
-// （cell 圆角邻接判定 / 边框分组）直接读内存数组，热点路径零 rectForRow 调用；
-// 2s 时间桶兜底动态行高等几何漂移自愈。旋转/结构变化 → 结构戳失配 + 桶过期双重触发重建
-static NSArray *WPBandsForTable(UITableView *tableView) {
-    NSDictionary *cache = objc_getAssociatedObject(tableView, (__bridge const void *)kMioBandsCacheKey);
-    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-    if (cache && now - [cache[@"t"] doubleValue] < 2.0) return cache[@"b"];
-
-    NSMutableArray *bands = [NSMutableArray array];
-    NSInteger nSections = [tableView numberOfSections];
-    for (NSInteger s = 0; s < nSections; s++) {
-        CGFloat top = 0, bottom = 0;
-        if (!WPSectionBand(tableView, s, &top, &bottom)) continue;
-        WPBand b = { top, bottom };
-        [bands addObject:[NSValue valueWithBytes:&b objCType:@encode(WPBand)]];
-    }
-    objc_setAssociatedObject(tableView, (__bridge const void *)kMioBandsCacheKey,
-        @{@"t": @(now), @"b": bands}, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return bands;
-}
-
 // ★ 几何相邻行位判定（WCR 同款，Frida 实证）：cell 上下是否有紧贴（间隙 ≤ 0.5pt）的行。
-//   遍历行带缓存与 cell 矩形做垂直邻接比对，与 indexPath/section 完全无关——
-//   跨 section 几何连续的行自然连成一张卡。热点路径：1 次 assoc 读 + 内存遍历
+//   遍历各 section 行带与 cell 矩形做垂直邻接比对，与 indexPath/section 完全无关——
+//   跨 section 几何连续的行自然连成一张卡（O(sections) 内存级比较，命中即早退）
 static void WPRowNeighbors(UITableView *tableView, CGRect cellRect, BOOL *hasAbove, BOOL *hasBelow) {
     *hasAbove = NO;
     *hasBelow = NO;
+    NSInteger nSections = [tableView numberOfSections];
     CGFloat cellTop = cellRect.origin.y;
     CGFloat cellBottom = cellRect.origin.y + cellRect.size.height;
-
-    for (NSValue *v in WPBandsForTable(tableView)) {
-        WPBand b;
-        [v getValue:&b];
-        if (b.bottom <= cellTop + 0.5) {
+    for (NSInteger s = 0; s < nSections && (!*hasAbove || !*hasBelow); s++) {
+        CGFloat bandTop = 0, bandBottom = 0;
+        if (!WPSectionBand(tableView, s, &bandTop, &bandBottom)) continue;
+        if (bandBottom <= cellTop + 0.5) {
             // 行带整体在上方：底边紧贴 cell 顶边 → 上邻
-            if (fabs(b.bottom - cellTop) <= 0.5) *hasAbove = YES;
-        } else if (b.top >= cellBottom - 0.5) {
+            if (fabs(bandBottom - cellTop) <= 0.5) *hasAbove = YES;
+        } else if (bandTop >= cellBottom - 0.5) {
             // 行带整体在下方：顶边紧贴 cell 底边 → 下邻
-            if (fabs(b.top - cellBottom) <= 0.5) *hasBelow = YES;
+            if (fabs(bandTop - cellBottom) <= 0.5) *hasBelow = YES;
         } else {
             // 行带与 cell 垂直重叠（同 section）：带内是否还有更高/更低的行
-            if (cellTop - b.top > 0.5) *hasAbove = YES;
-            if (b.bottom - cellBottom > 0.5) *hasBelow = YES;
+            if (cellTop - bandTop > 0.5) *hasAbove = YES;
+            if (bandBottom - cellBottom > 0.5) *hasBelow = YES;
         }
-        if (*hasAbove && *hasBelow) break;  // 中行：早退
     }
 }
 
@@ -237,14 +220,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     }
     NSString *className = NSStringFromClass([vc class]);
 
-    // ★ Mio 自己的设置页基线皮肤（保留原意图）：微信引擎迁移后 cell 是微信原生直角样式，
-    //   Mio 页面（MioPlugin*/WP*/SettingCategoryController 子类）始终应用硬编码基线
-    //   （圆角 15 + 默认底），微信原生页面行为不变
-    static Class scCls = nil;
-    static dispatch_once_t scOnceToken;
-    dispatch_once(&scOnceToken, ^{ scCls = NSClassFromString(@"SettingCategoryController"); });
-    BOOL mioOwn = [className hasPrefix:@"MioPlugin"] || [className hasPrefix:@"WP"]
-                  || (scCls && [vc isKindOfClass:scCls]);
+    // ★ Mio 自有页面判定（共用函数）
+    BOOL mioOwn = WPVCIsMioOwn(vc);
 
     // ★ 功能效果总闸：总开关 + （Mio 页面 || 分页面开关）；无黑名单，全部页面统一 WCR 式处理
     BOOL featureOn = config.globalCornerRadiusEnabled
@@ -337,13 +314,8 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    // ★ WCR 同款表格级边框（需在清洁态 return 之前调用，保证功能关时覆盖视图也被拆除）：
-    //   几何连续行区段合并为一组，每组一条覆盖视图 + 整段圆角描边，挂 tableView 本体（tag 管理）
-    if (tableView) {
-        [ListCornerRadiusHook wp_paintTableBorders:tableView
-                                         featureOn:featureOn
-                                            mioOwn:mioOwn];
-    }
+    // ★ 表格级边框已移交 table 自身 layoutSubviews hook（架构修正：表格级操作每表一次，
+    //   不再逐 cell 触发）；cell hook 只干 margin / bgColor / 圆角三件事
 
     // ★ 清洁态（微信页面，功能关）：只清理涂装过的 cell——回原生直角；未涂装的零触碰
     if (!featureOn && !mioOwn) {
@@ -551,6 +523,67 @@ static BOOL _wp_isAllowedVC(NSString *name) {
            [name isEqualToString:@"BrandServiceContactsViewController"];
 }
 
+// ─── 表格级边框挂载点（架构修正）───
+// wp_paintTableBorders 是表格级操作（遍历全 section 分组 + 覆盖视图管理），挂 table 自身
+// layoutSubviews——仅布局/结构变化时触发、每表一次；cell hook 不再逐 cell 调用，
+// 因此无需节流戳/时间桶/行带缓存，逐帧幂等比对（fabs/stamp/CGColor）即收敛
+static IMP orig_MMTableView_layoutSubviews;
+static IMP orig_MMMainTableView_layoutSubviews;
+static IMP orig_MainFrameTableView_layoutSubviews;
+static IMP orig_TextStateProfileTableView_layoutSubviews;
+
+static void _wp_tableLayoutCommon(id self, SEL _cmd, IMP orig) {
+    if (orig) ((void (*)(id, SEL))orig)(self, _cmd);
+
+    // 快路径：总开关关且该表从未被涂装 → 零操作（避免无关表每帧付 responder 链成本）
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
+    UITableView *tv = (UITableView *)self;
+    BOOL painted = objc_getAssociatedObject(tv, (__bridge const void *)kMioTablePaintedKey) != nil;
+    if (!config.globalCornerRadiusEnabled && !painted) return;
+
+    UIViewController *vc = [WPUtility findParentViewController:tv];
+    BOOL mioOwn = vc ? WPVCIsMioOwn(vc) : NO;
+    BOOL featureOn = config.globalCornerRadiusEnabled
+        && (mioOwn || (vc && shouldApplyGlobalCorner(vc)));
+    [ListCornerRadiusHook wp_paintTableBorders:tv
+                                     featureOn:featureOn
+                                        mioOwn:mioOwn];
+}
+
+static void _hooked_MMTableView_layoutSubviews(id self, SEL _cmd) {
+    _wp_tableLayoutCommon(self, _cmd, orig_MMTableView_layoutSubviews);
+}
+static void _hooked_MMMainTableView_layoutSubviews(id self, SEL _cmd) {
+    _wp_tableLayoutCommon(self, _cmd, orig_MMMainTableView_layoutSubviews);
+}
+static void _hooked_MainFrameTableView_layoutSubviews(id self, SEL _cmd) {
+    _wp_tableLayoutCommon(self, _cmd, orig_MainFrameTableView_layoutSubviews);
+}
+static void _hooked_TextStateProfileTableView_layoutSubviews(id self, SEL _cmd) {
+    _wp_tableLayoutCommon(self, _cmd, orig_TextStateProfileTableView_layoutSubviews);
+}
+
+// 挂表 hook 前检查 IMP 归属（项目硬约束）：IMP 来自微信主程序二进制 → 挂；
+// 来自 Mio 自身（继承链已挂，防套娃）或其他插件 dylib（如 WCR，硬约束要求让位）→ 不挂
+static void WPHookTableViewLayout(NSString *clsName, IMP *outOrig, IMP newImp) {
+    Class cls = objc_getClass(clsName.UTF8String);
+    if (!cls) return;
+    Method m = class_getInstanceMethod(cls, @selector(layoutSubviews));
+    if (!m) return;
+    IMP cur = method_getImplementation(m);
+    Dl_info info;
+    if (dladdr((void *)cur, &info) && info.dli_fname) {
+        NSString *path = [NSString stringWithUTF8String:info.dli_fname];
+        if (![path hasSuffix:@"/WeChat"]) {
+            WPLog(@"ListCornerRadius", @"[YIELD] %@::layoutSubviews IMP 来自 %@，让位不挂",
+                  clsName, [path lastPathComponent]);
+            return;
+        }
+    }
+    MSHookMessageEx(cls, @selector(layoutSubviews), newImp, outOrig);
+    WPLog(@"ListCornerRadius", @"[OK] %@::layoutSubviews (table border mount)", clsName);
+}
+
 static void (*orig_UIView_layoutSubviews)(id, SEL);
 static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (orig_UIView_layoutSubviews) orig_UIView_layoutSubviews(self, _cmd);
@@ -649,6 +682,17 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
             (IMP)_hooked_setBgImageView, (IMP *)&orig_setBgImageView);
     }
 
+    // ★ 表格级边框挂载点（架构修正）：table 自身 layoutSubviews，每表一次而非逐 cell；
+    //   dladdr 检查 IMP 归属——继承链已挂（Mio）/其他插件（WCR）让位，仅主程序 IMP 才挂
+    WPHookTableViewLayout(@"MMTableView", &orig_MMTableView_layoutSubviews,
+        (IMP)_hooked_MMTableView_layoutSubviews);
+    WPHookTableViewLayout(@"MMMainTableView", &orig_MMMainTableView_layoutSubviews,
+        (IMP)_hooked_MMMainTableView_layoutSubviews);
+    WPHookTableViewLayout(@"MainFrameTableView", &orig_MainFrameTableView_layoutSubviews,
+        (IMP)_hooked_MainFrameTableView_layoutSubviews);
+    WPHookTableViewLayout(@"TextStateProfileTableView", &orig_TextStateProfileTableView_layoutSubviews,
+        (IMP)_hooked_TextStateProfileTableView_layoutSubviews);
+
     // ★ 已移交给 ProfileCardBgHook.install 自行管理，消除跨模块耦合
 }
 
@@ -736,39 +780,20 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     CGFloat overlayW = tableW - 2.0 * margin;
     if (overlayW <= 0) return;
 
-    // ★ 结构戳节流（整数哈希，零分配）：边框重绘的全部输入（开关/参数/边框色/表宽）都是
-    //   结构性或配置性的——rectForRow 返回内容坐标，滚动不变，无需按帧重算全表分组。
-    //   哈希相同直接返回（每帧 O(1)，替代 2N 次 rectForRow + 分组 + subviews 遍历）；
-    //   旋转/配置变更/改色 → 哈希失配立即重跑；2s 时间桶兜底动态行高漂移自愈
-    NSUInteger h = 2166136261u;
-#define WPMIX(x) do { h ^= (NSUInteger)(x); h *= 16777619u; } while (0)
-    WPMIX(featureOn);
-    WPMIX((BOOL)config.listCellBorder);
-    WPMIX((NSUInteger)(margin * 10.0));
-    WPMIX((NSUInteger)radius);
-    WPMIX((NSUInteger)(borderWidth * 10.0));
-    WPMIX(borderColor);
-    NSUInteger twBits;
-    memcpy(&twBits, &tableW, sizeof(twBits));
-    WPMIX(twBits);
-    WPMIX((NSUInteger)(CFAbsoluteTimeGetCurrent() * 0.5));  // 2s 时间桶
-#undef WPMIX
-    NSNumber *stamp = objc_getAssociatedObject(tableView, (__bridge const void *)kMioBorderStructKey);
-    if (stamp && stamp.unsignedIntegerValue == h) return;
-    objc_setAssociatedObject(tableView, (__bridge const void *)kMioBorderStructKey, @(h),
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    NSInteger nSections = [tableView numberOfSections];
 
     // ★ WCR 同款几何分组合并（Frida 实证）：相邻 section 的行带垂直连续（间隙 ≤ 0.5pt）
-    //   即并入同一组，共享一张覆盖视图 + 一条整段圆角路径——与 indexPath/section 无关
+    //   即并入同一组，共享一张覆盖视图 + 一条整段圆角路径——与 indexPath/section 无关。
+    //   挂载点 = table layoutSubviews（仅布局/结构变化触发，每表一次），逐帧幂等比对即可，
+    //   无需任何节流戳/时间桶/行带缓存
     NSMutableArray<NSNumber *> *groupTags = [NSMutableArray array];
     CGFloat prevBottom = 0, groupTop = 0, groupBottom = 0;
     NSInteger groupFirstSection = -1;
     BOOL groupOpen = NO;
 
-    for (NSValue *v in WPBandsForTable(tableView)) {
-        WPBand b;
-        [v getValue:&b];
-        CGFloat bandTop = b.top, bandBottom = b.bottom;
+    for (NSInteger s = 0; s < nSections; s++) {
+        CGFloat bandTop = 0, bandBottom = 0;
+        if (!WPSectionBand(tableView, s, &bandTop, &bandBottom)) continue;
 
         if (groupOpen && bandTop - prevBottom <= 0.5) {
             // 与当前组垂直连续：扩组
@@ -785,7 +810,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                                 radius:radius borderWidth:borderWidth borderColor:borderColor];
             [groupTags addObject:@(tag)];
         }
-        groupFirstSection++;  // 组序号：仅用于派生唯一 tag
+        groupFirstSection = s;
         groupTop = bandTop;
         groupBottom = bandBottom;
         prevBottom = bandBottom;
