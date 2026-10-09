@@ -1,6 +1,7 @@
 #import "SessionGroupsStripView.h"
 #import "SessionGroupsConfig.h"
 #import "../../Config/WPColorUtil.h"
+#import "../../Core/WPUtility.h"
 #import <objc/message.h>
 
 static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.c:7922-8020
@@ -76,19 +77,18 @@ static NSString * const kIndicatorAnimKey = @"wcr_tg_indicator"; // Misc_part19.
 }
 
 - (BOOL)isDarkMode {
-    if (@available(iOS 12.0, *)) {
-        return self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
-    }
-    return NO;
+    return [WPUtility isDarkModeForView:self];
 }
 
 // 深浅色取对应 hex，空/非法回 fallback（对齐 WCR colorFromHex:fallback:，Misc_part19.c FUN_01ef0c74）
+// 选侧/解析/兜底统一走 WPColorUtil 解析器，本壳只负责按 key 读配置
 - (UIColor *)colorFromConfigLight:(NSString *)lightKey dark:(NSString *)darkKey fallback:(UIColor *)fallback {
     SessionGroupsConfig *cfg = [SessionGroupsConfig shared];
-    NSString *hex = [self isDarkMode] ? [cfg valueForKey:darkKey] : [cfg valueForKey:lightKey];
-    if (hex.length == 0) return fallback;
-    UIColor *c = [WPColorUtil colorFromHexString:hex];
-    return c ?: fallback;
+    return [WPColorUtil resolveColorFromLightHex:[cfg valueForKey:lightKey]
+                                         darkHex:[cfg valueForKey:darkKey]
+                                          isDark:[self isDarkMode]
+                                    withStrategy:WPColorResolveStrict
+                                        fallback:fallback];
 }
 
 // 卡片背景：WCR resolvedCardColor（Misc_part19.c:5137-5242）默认链 = corner 未启用 →

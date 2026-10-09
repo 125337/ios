@@ -193,9 +193,11 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     });
     if (![bgColorSkipList containsObject:className]) {
         BOOL isDark = [WPUtility isDarkModeForViewController:vc];
-        UIColor *customBg = isDark
-            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
-            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
+        UIColor *customBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
+                                                          darkHex:config.listCellDarkBgColor
+                                                           isDark:isDark
+                                                     withStrategy:WPColorResolveStrict
+                                                         fallback:nil];
         ((UIView *)self).backgroundColor = customBg ?: wp_cellDefaultBgColor(isDark);
     }
 
@@ -287,14 +289,13 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
 
     BOOL isDark = [WPUtility isDarkModeForViewController:vc];
 
-    UIColor *targetBg = isDark
-            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
-            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
-    if (!targetBg) {
-        targetBg = isDark
-            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
-            : [UIColor whiteColor];
-    }
+    UIColor *targetBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
+                                                      darkHex:config.listCellDarkBgColor
+                                                       isDark:isDark
+                                                 withStrategy:WPColorResolveStrict
+                                                     fallback:isDark
+                                     ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+                                     : [UIColor whiteColor]];
     ((UIView *)self).backgroundColor = targetBg;
 }
 
@@ -312,14 +313,13 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
 
     BOOL isDark = [WPUtility isDarkModeForViewController:vc];
 
-    UIColor *targetBg = isDark
-            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
-            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
-    if (!targetBg) {
-        targetBg = isDark
-            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
-            : [UIColor whiteColor];
-    }
+    UIColor *targetBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
+                                                      darkHex:config.listCellDarkBgColor
+                                                       isDark:isDark
+                                                 withStrategy:WPColorResolveStrict
+                                                     fallback:isDark
+                                     ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+                                     : [UIColor whiteColor]];
     ((UIView *)self).backgroundColor = targetBg;
 }
 
@@ -373,14 +373,13 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     [ListCornerRadiusHook applyBorderToView:view radius:radius position:0 isFTSHome:NO];
 
     BOOL isDark = [WPUtility isDarkModeForViewController:vc];
-    UIColor *targetBg = isDark
-            ? [WPColorUtil colorFromHexString:config.listCellDarkBgColor]
-            : [WPColorUtil colorFromHexString:config.listCellLightBgColor];
-    if (!targetBg) {
-        targetBg = isDark
-            ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
-            : [UIColor whiteColor];
-    }
+    UIColor *targetBg = [WPColorUtil resolveColorFromLightHex:config.listCellLightBgColor
+                                                      darkHex:config.listCellDarkBgColor
+                                                       isDark:isDark
+                                                 withStrategy:WPColorResolveStrict
+                                                     fallback:isDark
+                                     ? [UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]
+                                     : [UIColor whiteColor]];
     view.backgroundColor = targetBg;
 
     for (UIView *subview in view.subviews) {
@@ -702,12 +701,15 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
     BOOL isDark = [WPUtility isDarkModeForView:cell];
 
-    UIColor *borderColor = [WPColorUtil colorFromHexString:isDark ? config.listCellBorderColorDarkHex : config.listCellBorderColor];
-    if (!borderColor) {
-        borderColor = isDark
-            ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
-            : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
-    }
+    // 明暗二元兜底先算好再传
+    UIColor *borderFallback = isDark
+        ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
+        : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
+    UIColor *borderColor = [WPColorUtil resolveColorFromLightHex:config.listCellBorderColor
+                                                         darkHex:config.listCellBorderColorDarkHex
+                                                          isDark:isDark
+                                                    withStrategy:WPColorResolveStrict
+                                                        fallback:borderFallback];
 
     switch (position) {
         case 0: {  // 完整边框（单独 cell / 全圆角 cell）

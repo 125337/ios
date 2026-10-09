@@ -48,6 +48,68 @@ static NSString * _Nullable NormalizedHex(NSString *hex) {
     return [clean stringByTrimmingCharactersInSet:hexSet].length == 0;
 }
 
+#pragma mark - 明暗取色统一解析器
+
+// 提亮派生（原 MessageTimeHook autoDarkColor 现行实现照搬）：RGB 各通道 +0.15、封顶 1.0、保留 alpha；
+// 无法取到 RGB 分量时原样返回
++ (nullable UIColor *)brightenedColor:(nullable UIColor *)color {
+    if (!color) return nil;
+    CGFloat r, g, b, a;
+    if ([color getRed:&r green:&g blue:&b alpha:&a]) {
+        return [UIColor colorWithRed:MIN(r + 0.15, 1.0)
+                               green:MIN(g + 0.15, 1.0)
+                                blue:MIN(b + 0.15, 1.0)
+                               alpha:a];
+    }
+    return color;
+}
+
++ (nullable UIColor *)resolveColorWithLight:(nullable UIColor *)light
+                                       dark:(nullable UIColor *)dark
+                                     isDark:(BOOL)isDark
+                               withStrategy:(WPColorResolveStrategy)strategy {
+    switch (strategy) {
+        case WPColorResolveStrict:
+            return isDark ? dark : light;
+        case WPColorResolveDarkFallsBackToLight:
+            return isDark ? (dark ?: light) : light;
+        case WPColorResolveMutualFallback:
+            return isDark ? (dark ?: light) : (light ?: dark);
+        case WPColorResolveBrightenDerive:
+            return isDark ? (dark ?: [self brightenedColor:light]) : light;
+    }
+    return nil;
+}
+
++ (nullable UIColor *)resolveColorFromLightHex:(nullable NSString *)lightHex
+                                       darkHex:(nullable NSString *)darkHex
+                                        isDark:(BOOL)isDark
+                                  withStrategy:(WPColorResolveStrategy)strategy
+                                      fallback:(nullable UIColor *)fallback {
+    switch (strategy) {
+        case WPColorResolveStrict:
+            return [self colorFromHexString:isDark ? darkHex : lightHex] ?: fallback;
+        case WPColorResolveDarkFallsBackToLight: {
+            // "未设置"指空串/nil：深色侧已设置但解析失败 → 走兜底（不回落浅色）
+            NSString *pick = (isDark && darkHex.length > 0) ? darkHex : lightHex;
+            return [self colorFromHexString:pick] ?: fallback;
+        }
+        case WPColorResolveMutualFallback: {
+            // "未设置"指空串/nil：当前侧已设置但解析失败 → 走兜底（不取另一侧）
+            NSString *own = isDark ? darkHex : lightHex;
+            NSString *pick = (own.length > 0) ? own : (isDark ? lightHex : darkHex);
+            return [self colorFromHexString:pick] ?: fallback;
+        }
+        case WPColorResolveBrightenDerive: {
+            // 提亮策略委托颜色级入口实现
+            UIColor *light = [self colorFromHexString:lightHex];
+            UIColor *dark = darkHex.length > 0 ? [self colorFromHexString:darkHex] : nil;
+            return [self resolveColorWithLight:light dark:dark isDark:isDark withStrategy:strategy] ?: fallback;
+        }
+    }
+    return nil;
+}
+
 #pragma mark - HSV ↔ UIColor
 
 + (UIColor *)colorWithHue:(CGFloat)hue saturation:(CGFloat)saturation

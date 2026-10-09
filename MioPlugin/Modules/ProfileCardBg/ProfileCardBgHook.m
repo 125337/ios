@@ -67,9 +67,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         cell.layer.cornerRadius = radius;
         cell.layer.masksToBounds = YES;
 
-        UIColor *bgColor = isDark
-            ? [WPColorUtil colorFromHexString:listConfig.listCellDarkBgColor]
-            : [WPColorUtil colorFromHexString:listConfig.listCellLightBgColor];
+        UIColor *bgColor = [WPColorUtil resolveColorFromLightHex:listConfig.listCellLightBgColor
+                                                         darkHex:listConfig.listCellDarkBgColor
+                                                          isDark:isDark
+                                                    withStrategy:WPColorResolveStrict
+                                                        fallback:nil];
         if (bgColor) {
             cell.backgroundColor = bgColor;
         }
@@ -81,8 +83,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         cell.layer.cornerRadius = radius;
         cell.layer.masksToBounds = YES;
 
-        UIColor *bgColor = [WPColorUtil colorFromHexString:isDark
-            ? config.cardBgCornerDarkBgColor : config.cardBgCornerBgColor];
+        UIColor *bgColor = [WPColorUtil resolveColorFromLightHex:config.cardBgCornerBgColor
+                                                         darkHex:config.cardBgCornerDarkBgColor
+                                                          isDark:isDark
+                                                    withStrategy:WPColorResolveStrict
+                                                        fallback:nil];
         if (bgColor) {
             cell.backgroundColor = bgColor;
         }
@@ -94,10 +99,11 @@ static void replaced_MMUIButton_layoutSubviews(id self, SEL _cmd) {
         CGFloat bw = cardBgConfig.cardBgBorderWidth;
         if (bw > 0) {
             cell.layer.borderWidth = bw;
-            UIColor *borderColor = isDark
-                ? [WPColorUtil colorFromHexString:cardBgConfig.cardBgBorderColorDarkHex]
-                : [WPColorUtil colorFromHexString:cardBgConfig.cardBgBorderColor];
-            if (!borderColor) borderColor = [UIColor blackColor];   // 未设置颜色 → 默认描边
+            UIColor *borderColor = [WPColorUtil resolveColorFromLightHex:cardBgConfig.cardBgBorderColor
+                                                                 darkHex:cardBgConfig.cardBgBorderColorDarkHex
+                                                                  isDark:isDark
+                                                            withStrategy:WPColorResolveStrict
+                                                                fallback:[UIColor blackColor]];   // 未设置颜色 → 默认描边
             cell.layer.borderColor = borderColor.CGColor;
         } else {
             cell.layer.borderWidth = 0;

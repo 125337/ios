@@ -11,28 +11,6 @@
 #import "../../Core/LogManager.h"
 
 // ============================================================
-// MARK: - Color / Theme Helpers
-// ============================================================
-
-static UIColor *autoDarkColor(UIColor *lightColor, BOOL isDark) {
-    if (!lightColor) return nil;
-    if (isDark) {
-        CGFloat r, g, b, a;
-        if ([lightColor getRed:&r green:&g blue:&b alpha:&a]) {
-            return [UIColor colorWithRed:MIN(r + 0.15, 1.0)
-                                   green:MIN(g + 0.15, 1.0)
-                                    blue:MIN(b + 0.15, 1.0)
-                                   alpha:a];
-        }
-    }
-    return lightColor;
-}
-
-static UIColor *colorInLightMode(UIColor *lightColor, UIColor *darkColor, BOOL isDark) {
-    return isDark ? (darkColor ?: autoDarkColor(lightColor, isDark)) : lightColor;
-}
-
-// ============================================================
 // MARK: - Coordinate Helpers
 // ============================================================
 
@@ -530,8 +508,10 @@ static void repl_CommonMessageCellView_updateNodeStatus(id self, SEL _cmd) {
 
         if (!lightTextColor) lightTextColor = [UIColor colorWithWhite:0.5 alpha:1.0];
 
-        UIColor *textColor = colorInLightMode(lightTextColor, darkTextColor, isDark);
-        UIColor *bgColor   = colorInLightMode(lightBgColor, darkBgColor, isDark);
+        UIColor *textColor = [WPColorUtil resolveColorWithLight:lightTextColor dark:darkTextColor
+                                                         isDark:isDark withStrategy:WPColorResolveBrightenDerive];
+        UIColor *bgColor   = [WPColorUtil resolveColorWithLight:lightBgColor dark:darkBgColor
+                                                         isDark:isDark withStrategy:WPColorResolveBrightenDerive];
 
         if (textColor && [textColor isKindOfClass:[UIColor class]]) {
             label.textColor = textColor;

@@ -1,5 +1,6 @@
 #import "MessageTimeFormatEditorVC.h"
 #import "../../Config/WPColors.h"
+#import "../../Core/WPUtility.h"
 #import "MessageTimeFormatParser.h"
 
 // 复刻微信优化 1.6.5 CSTimeFormatEditorViewController
@@ -321,7 +322,7 @@ static NSArray<NSString *> *_pseudoReadItems(void) {
         self.previewView.text = @"";
         return;
     }
-    BOOL isDark = (self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
+    BOOL isDark = [WPUtility isDarkModeForViewController:self];
     NSString *result = [MessageTimeFormatParser previewWithFormat:fmt isDarkMode:isDark];
     self.previewView.text = result ?: @"---";
 }

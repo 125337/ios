@@ -36,6 +36,7 @@
 
 #import "HomeCardCalendarPopup.h"
 #import "../../Core/MioAlertHelper.h"
+#import "../../Core/WPUtility.h"
 #import <objc/runtime.h>
 
 #pragma mark - 弹层
@@ -351,10 +352,7 @@ static NSInteger hcCalMonthOffset = 0;   // 月偏移（XOS DAT_003e8a18 同语�
 - (void)rebuild {
     for (UIView *sub in self.content.subviews) [sub removeFromSuperview];
 
-    BOOL dark = NO;
-    if (@available(iOS 12.0, *)) {
-        dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
-    }
+    BOOL dark = [WPUtility isDarkModeForCurrentEnvironment];
     UIColor *label = dark ? [UIColor whiteColor] : [UIColor blackColor];
     UIColor *secondary = CalSecondaryLabel();
     UIColor *accent = [UIColor systemRedColor];

@@ -82,22 +82,17 @@ static void hook_MMGrowTextView_layoutSubviews(id self, SEL _cmd) {
         [self setPlaceHolder:content];
     }
 
-    // ⑦ 占位文本颜色 (L26734-L26783)
-    NSString *hexColor = config.placeholderTextColorHex;
-    // 深色模式优先用深色值，缺省回落浅色值（与全局颜色行双预览语义一致）
-    if (((UIView *)self).traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark
-        && config.placeholderTextColorHexDark.length > 0) {
-        hexColor = config.placeholderTextColorHexDark;
-    }
+    // ⑦ 占位文本颜色：深色模式优先用深色值，缺省回落浅色值（与全局颜色行双预览语义一致）
     CGFloat alpha = config.placeholderTextAlpha;
     if (alpha <= 0) alpha = kDefaultAlpha;
 
-    UIColor *color = nil;
-    if (hexColor.length > 0) {
-        color = [WPColorUtil colorFromHexString:hexColor];
-    }
+    UIColor *color = [WPColorUtil resolveColorFromLightHex:config.placeholderTextColorHex
+                                                   darkHex:config.placeholderTextColorHexDark
+                                                    isDark:[WPUtility isDarkModeForView:(UIView *)self]
+                                              withStrategy:WPColorResolveDarkFallsBackToLight
+                                                  fallback:nil];
     if (!color) {
-        // 没有设置颜色时使用默认灰色 + alpha
+        // 没有设置颜色时使用默认灰色 + alpha（灰色已含 alpha，不再叠加）
         color = [UIColor colorWithWhite:0.0 alpha:alpha];
     } else {
         // 有颜色时叠加 alpha

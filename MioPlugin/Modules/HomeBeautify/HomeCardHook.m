@@ -61,6 +61,7 @@
 #import "../../Core/ConfigManager.h"
 #import "../../Core/ServiceHelper.h"
 #import "../../Config/WPColorUtil.h"
+#import "../../Core/WPUtility.h"
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -128,11 +129,13 @@ static UIColor *HCColor(NSString *hex) {
     return [WPColorUtil colorFromHexString:hex];
 }
 
-// 浅/深色取色：深色优先用深色值，缺省回落浅色值（addColorRowInGroup 双预览语义）
+// 浅/深色取色：双向互为回落，统一走 WPColorUtil 解析器
 static UIColor *HCColorForMode(NSString *hex, NSString *hexDark, BOOL dark) {
-    NSString *pick = dark ? (hexDark.length > 0 ? hexDark : hex)
-                          : (hex.length > 0 ? hex : hexDark);
-    return HCColor(pick);
+    return [WPColorUtil resolveColorFromLightHex:hex
+                                         darkHex:hexDark
+                                          isDark:dark
+                                    withStrategy:WPColorResolveMutualFallback
+                                        fallback:nil];
 }
 
 // 卡片图片：按浅/深色取磁盘文件（XOS 同款 path→image 缓存）
@@ -150,10 +153,7 @@ static UIImage *HCImageForDark(BOOL dark) {
 // 配置指纹（几何/颜色/图片路径变化 → reloadData 重建 header；含深色标志，外观切换即整体重建换色）
 static NSString *HCGeoKey(void) {
     HomeCardConfig *cfg = [HomeCardConfig shared];
-    BOOL dark = NO;
-    if (@available(iOS 12.0, *)) {
-        dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
-    }
+    BOOL dark = [WPUtility isDarkModeForCurrentEnvironment];
     // 日期入指纹：日历内容（日号/农历/宜忌/进度）按天过期，跨天指纹必须变化
     NSDate *now = [NSDate date];
     NSDateComponents *dc = [[NSCalendar currentCalendar]
@@ -1412,10 +1412,7 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
         [container addSubview:origView];
     }
 
-    BOOL dark = NO;
-    if (@available(iOS 12.0, *)) {
-        dark = [vc traitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
-    }
+    BOOL dark = [WPUtility isDarkModeForViewController:vc];
 
     // 卡片（XOS：日历在上方时卡片整体下移日历高；联系人在上方再下移 联系人高+间距）
     CGFloat cardY = origHeight + ((calOn && calPos == 0) ? calH : 0.0)
@@ -1533,10 +1530,7 @@ static void HCApply(id vc) {
     if (!cfg.hcEnabled) return;
 
     // ── 卡片实时刷新（浅/深色切换换图/换色；卡片由 viewForHeaderInSection 重建） ──
-    BOOL dark = NO;
-    if (@available(iOS 12.0, *)) {
-        dark = [vc traitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
-    }
+    BOOL dark = [WPUtility isDarkModeForViewController:vc];
     UIView *card = [header viewWithTag:kHCCardTag];
     if (card) {
         UIImageView *iv = [card viewWithTag:kHCImageTag];
