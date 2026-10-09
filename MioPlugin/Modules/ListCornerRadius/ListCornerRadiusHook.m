@@ -3,6 +3,7 @@
 #import "../../Core/WPUtility.h"
 #import "../../Config/WPColorUtil.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/Utils/CornerResponsibility/CornerResponsibility.h"
 #import "../ProfileCardBg/ProfileCardBgHook.h"
 #import <substrate.h>
 #import <dlfcn.h>
@@ -14,24 +15,31 @@ static IMP orig_WCSearchBar_layoutSubviews = NULL;
 
 @interface ListCornerRadiusHook ()
 
-+ (void)wp_applyGeometricCorner:(UIView *)cell
-                   cornerRadius:(NSInteger)configuredRadius
-                       hasAbove:(BOOL)hasAbove
-                       hasBelow:(BOOL)hasBelow;
+// 行位判定 + 圆角/边框应用（indexPath 语义：首/中/末 + 通讯录半合并 + 折叠置顶特判）
++ (void)wp_applyStandardCorner:(UIView *)cell
+                    tableView:(UITableView *)tableView
+                    indexPath:(NSIndexPath *)indexPath
+                      section:(NSInteger)section
+                          row:(NSInteger)row
+                        total:(NSInteger)totalRows
+                 cornerRadius:(NSInteger)configuredRadius
+                    isFTSHome:(BOOL)isFTSHome
+                    className:(NSString *)className;
 
-// 表格级边框（WCR 同款）：几何连续的行区段合并为一组，每组一条覆盖视图 + 整段圆角描边，
-// 挂 tableView 本体；由 table 自身 layoutSubviews hook 调用（含功能/边框关时的双向清洁）
-+ (void)wp_paintTableBorders:(UITableView *)tableView
-                   featureOn:(BOOL)featureOn
-                      mioOwn:(BOOL)mioOwn;
++ (void)wp_applyCornerForContacts:(UIView *)cell
+                       tableView:(UITableView *)tableView
+                       indexPath:(NSIndexPath *)indexPath
+                         section:(NSInteger)section
+                             row:(NSInteger)row
+                           total:(NSInteger)rowInThisSection
+                    cornerRadius:(NSInteger)radius
+                        isFTSHome:(BOOL)isFTSHome;
 
-// 单组覆盖视图的查找/创建 + 整段圆角描边（幂等）
-+ (void)wp_paintGroupOverlay:(UITableView *)tableView
-                         tag:(NSInteger)tag
-                      target:(CGRect)target
-                      radius:(NSInteger)radius
-                  borderWidth:(CGFloat)borderWidth
-                  borderColor:(UIColor *)borderColor;
+// cell 内四段 CAShapeLayer 拼接边框（顶/底/左右/完整），样式戳幂等
++ (void)wp_applyBorderAndBg:(UIView *)cell
+                     radius:(NSInteger)radius
+                   position:(NSInteger)position
+                  isFTSHome:(BOOL)isFTSHome;
 
 // 独立视图（FoldView）的自体整段描边，双向拆装
 + (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius;
@@ -156,14 +164,13 @@ static void replaced_WCSearchBar_layoutSubviews(id self, SEL _cmd) {
         container.layer.masksToBounds = YES;
 }
 
-// ─── 共享常量与边框画布（WCR 同款：section 覆盖视图 + 整段描边，FUN_007c79c8 实证方案） ───
+// ─── 共享常量与边框画布（cell 内四段 CAShapeLayer 拼接，01:12 版本方案） ───
 static NSString * const kMioBorderLayerName = @"com.mio.cornerBorder";
 static NSString * const kMioBorderStampKey = @"com.mio.borderStamp";
 // （涂装标记 kMioCornerPaintedKey 与原值口袋已上移至文件头部，供 WCSearchBar 等早期函数使用）
 static NSString * const kMioTablePaintedKey = @"com.mio.tablePainted";
-// section 边框覆盖视图 tag 段：tag = 基数 + sectionIndex，覆盖视图挂在 tableView 本体上，免疫 cell 复用
-static NSInteger const kMioBorderTagBase = 0x4D494F;  // 'MIO'
-static NSInteger const kMioBorderTagRange = 1000;
+// cell 边框缓存 key：key 失配触发重建而非每 layout 重建（含所有影响边框渲染的输入参数）
+static NSString * const kMioBorderCacheKey = @"com.mio.cornerBorderCacheKey";
 
 // 边框动态色（WCR 同款）：明暗 hex 一次构建动态 UIColor 并槽位缓存，
 // 明暗切换由 UIKit trait 自动重取色；两侧兜底语义一致（浅 0.9 灰 / 深 0.25 灰）。
@@ -184,17 +191,6 @@ static UIColor *WPDynamicBorderColor(NSString *lightHex, NSString *darkHex) {
     return color;
 }
 
-// 移除 table 上全部边框覆盖视图（tag 段识别，只动我们自己的）
-static void WPStripTableOverlays(UITableView *tableView) {
-    NSMutableArray *stale = [NSMutableArray array];
-    for (UIView *sub in tableView.subviews) {
-        if (sub.tag >= kMioBorderTagBase && sub.tag < kMioBorderTagBase + kMioBorderTagRange) {
-            [stale addObject:sub];
-        }
-    }
-    [stale makeObjectsPerformSelector:@selector(removeFromSuperview)];
-}
-
 // 清洁态还原：回写涂装前保存的原背景色并清除涂装标记（幂等）
 static void WPRestorePaintedBg(UIView *view) {
     UIColor *orig = objc_getAssociatedObject(view, (__bridge const void *)kMioViewOrigBgKey);
@@ -203,66 +199,16 @@ static void WPRestorePaintedBg(UIView *view) {
         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-// 取 section 行带（首末行 rect 并集，table 内容坐标）；@try 兜底 reload/插入动画窗口中
-// numberOfRows（实时问数据源）与 rectForRow（读内部几何缓存）短暂不一致导致的越界异常
-static BOOL WPSectionBand(UITableView *tableView, NSInteger s, CGFloat *outTop, CGFloat *outBottom) {
-    NSInteger rows = [tableView numberOfRowsInSection:s];
-    if (rows <= 0) return NO;
-    CGRect first, last;
-    @try {
-        first = [tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:s]];
-        last = [tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:rows - 1 inSection:s]];
-    } @catch (NSException *e) {
-        return NO;
-    }
-    *outTop = first.origin.y;
-    *outBottom = last.origin.y + last.size.height;
-    return YES;
-}
-
-// ★ 几何相邻行位判定（WCR 同款，Frida 实证）：cell 上下是否有紧贴（间隙 ≤ 0.5pt）的行。
-//   遍历各 section 行带与 cell 矩形做垂直邻接比对，与 indexPath/section 完全无关——
-//   跨 section 几何连续的行自然连成一张卡（O(sections) 内存级比较，命中即早退）
-static void WPRowNeighbors(UITableView *tableView, CGRect cellRect, BOOL *hasAbove, BOOL *hasBelow) {
-    *hasAbove = NO;
-    *hasBelow = NO;
-    NSInteger nSections = [tableView numberOfSections];
-    CGFloat cellTop = cellRect.origin.y;
-    CGFloat cellBottom = cellRect.origin.y + cellRect.size.height;
-    for (NSInteger s = 0; s < nSections && (!*hasAbove || !*hasBelow); s++) {
-        CGFloat bandTop = 0, bandBottom = 0;
-        if (!WPSectionBand(tableView, s, &bandTop, &bandBottom)) continue;
-        if (bandBottom <= cellTop + 0.5) {
-            // 行带整体在上方：底边紧贴 cell 顶边 → 上邻
-            if (fabs(bandBottom - cellTop) <= 0.5) *hasAbove = YES;
-        } else if (bandTop >= cellBottom - 0.5) {
-            // 行带整体在下方：顶边紧贴 cell 底边 → 下邻
-            if (fabs(bandTop - cellBottom) <= 0.5) *hasBelow = YES;
-        } else {
-            // 行带与 cell 垂直重叠（同 section）：带内是否还有更高/更低的行
-            if (cellTop - bandTop > 0.5) *hasAbove = YES;
-            if (bandBottom - cellBottom > 0.5) *hasBelow = YES;
+// 拆除 cell 内我们拼接的边框层（按 layer.name 识别，只动自己的）
+static void WPStripBorderLayers(UIView *cell) {
+    if (!cell) return;
+    for (CALayer *sub in [cell.layer.sublayers copy]) {
+        if ([sub isKindOfClass:[CAShapeLayer class]] && [sub.name isEqualToString:kMioBorderLayerName]) {
+            [sub removeFromSuperlayer];
         }
     }
-}
-
-// 取紧贴（间隙 ≤ 0.5pt）邻 cell 实例（table 坐标比对，可见 cell 逐个转 table 坐标）；
-// 无可见邻 cell（被屏幕裁切/滚出）→ 返回 nil，调用方保留几何判定结果
-static UITableViewCell *WPTouchingNeighborCell(UITableView *tableView, CGRect cellRect, BOOL above) {
-    UITableViewCell *result = nil;
-    CGFloat cellTop = cellRect.origin.y;
-    CGFloat cellBottom = cellRect.origin.y + cellRect.size.height;
-    for (UITableViewCell *c in tableView.visibleCells) {
-        CGRect f = [tableView convertRect:c.frame fromView:c.superview];
-        CGFloat cTop = f.origin.y;
-        CGFloat cBottom = f.origin.y + f.size.height;
-        if (above) {
-            if (cTop < cellTop && fabs(cBottom - cellTop) <= 0.5) { result = c; break; }
-        } else {
-            if (cBottom > cellBottom && fabs(cTop - cellBottom) <= 0.5) { result = c; break; }
-        }
-    }
-    return result;
+    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey, nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 // ★★★ Cell Hook：列表圆角 + 分发到资料卡透明化 ★★★
@@ -281,9 +227,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     // ★ Mio 自有页面判定（共用函数）
     BOOL mioOwn = WPVCIsMioOwn(vc);
 
-    // ★ 功能效果总闸：总开关 + （Mio 页面 || 分页面开关）；无黑名单，全部页面统一 WCR 式处理
+    // ★ 页面归属（01:12 版本方案）：CornerResponsibility 黑名单（44 VC + 4 前缀，默认归列表圆角）
+    //   + 分页面开关（我的/通讯录/发现三页独立开关）
     BOOL featureOn = config.globalCornerRadiusEnabled
-        && (mioOwn || shouldApplyGlobalCorner(vc));
+        && (mioOwn || ([CornerResponsibility isListCornerResponsibleFor:vc] && shouldApplyGlobalCorner(vc)));
 
     UIView *cellView = (UIView *)self;
 
@@ -344,21 +291,38 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
-    // ★ bgColor 设置（无 VC 黑名单，三态全覆盖：功能开/Mio 基线/清洁态复原）
+    // ★ bgColor 设置（动态色三态：功能开/Mio 基线/清洁态复原；页面跳过名单与 01:12 一致）
     {
-        BOOL manageBg = featureOn || mioOwn
-            || objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
+        BOOL paintedNow = objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
+        BOOL manageBg = featureOn || mioOwn || paintedNow;
         if (manageBg) {
+            // ★ 页面跳过名单（01:12 版本）：这些页面原生底色更协调，不涂用户背景色
+            static NSSet *bgColorSkipList = nil;
+            static dispatch_once_t bgOnceToken;
+            dispatch_once(&bgOnceToken, ^{
+                bgColorSkipList = [NSSet setWithObjects:
+                    @"FTSHomeViewController", @"NewSettingViewController", @"SettingCategoryController",
+                    @"NewMoreViewController", @"NewPluginListController", @"PluginPageController",
+                    @"DiscoverViewController", @"FindFriendEntryViewController", @"WCProfileCardHeaderController",
+                    @"WCProfileCardController", @"ContactsViewController", @"ContactsDynamicCardViewController",
+                    @"MiniProgramHomepageController", @"ChatRoomAnnouncementViewController",
+                    @"WWACountListController", @"OpenIMProfileCardController", @"WCAccountListController",
+                    @"MMScanCodeResultController", @"WCVoipInputPanelViewController", nil];
+            });
+            BOOL bgAllowed = [bgColorSkipList containsObject:className] ? NO : YES;
+
             // ★ 动态色语义：明暗跟随交给 UIKit 的 trait 系统，hook 内不再判暗。
             //   Mio 基线皮肤=默认底（不吃用户色）、微信页面功能开=用户色（两侧兜底默认底）、
             //   清洁态=nil 回微信原生底——三条通道与原语义逐字一致
             UIColor *targetBg = nil;
             if (mioOwn) {
                 targetBg = featureOn
-                    ? WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser")
+                    ? (bgAllowed ? WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser") : nil)
                     : WPDynamicCellBgColor(nil, nil, @"cellDefault");
             } else if (featureOn) {
-                targetBg = WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser");
+                targetBg = bgAllowed
+                    ? WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser")
+                    : nil;
             }
             // else：清洁态 targetBg 保持 nil（回微信原生底）
             // 幂等：指针相同（共享动态色对象）或 isEqual 才跳过，避免每轮产生 CA 脏标记
@@ -372,12 +336,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    // ★ 表格级边框已移交 table 自身 layoutSubviews hook（架构修正：表格级操作每表一次，
-    //   不再逐 cell 触发）；cell hook 只干 margin / bgColor / 圆角三件事
-
-    // ★ 清洁态（微信页面，功能关）：只清理涂装过的 cell——回原生直角；未涂装的零触碰
+    // ★ 清洁态（微信页面，功能关）：只清理涂装过的 cell——拆边框、回原生直角；未涂装的零触碰
     if (!featureOn && !mioOwn) {
         if (objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey)) {
+            WPStripBorderLayers(cellView);
             if (cellView.layer.cornerRadius != 0) cellView.layer.cornerRadius = 0;
             if (cellView.layer.maskedCorners != 0) cellView.layer.maskedCorners = 0;
             if (cellView.layer.masksToBounds) cellView.layer.masksToBounds = NO;
@@ -393,52 +355,37 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     if (!tableView) return;
 
-    // ★ 几何行位判定（WCR 同款，Frida 实证）：不查 indexPath，按上下是否紧贴其他行定首/中/末——
-    //   跨 section 几何连续的行自动并入同一张卡（如通讯录公众号/服务号/企微联系人）
-    CGRect cellRect = [tableView convertRect:cellView.bounds fromView:cellView];
-    BOOL hasAbove = NO, hasBelow = NO;
-    WPRowNeighbors(tableView, cellRect, &hasAbove, &hasBelow);
+    // ★ 行位判定与分卡（01:12 版本方案）：indexPath 语义（首/中/末）；
+    //   通讯录走半合并特例，其余页面走 standard（含折叠置顶特判）
+    NSIndexPath *indexPath = [tableView indexPathForCell:(UITableViewCell *)self];
+    if (!indexPath) return;
+    NSInteger section = indexPath.section;
+    NSInteger row = indexPath.row;
+    NSInteger totalRows = [tableView numberOfRowsInSection:section];
 
-    // ★ 断卡规则（WCR 反编译对齐）：
-    //   首页（MainFrameTableView）= WCR 专用特判方案：行位走 indexPath 语义，跨 section 紧贴
-    //   一律不连卡（置顶/普通区、sec1/sec2 全部各自成卡）；
-    //   通用页面 = WCR 通用方案（几何相邻连卡，实证跨 section 连成单卡），仅跨类断卡。
-    //   邻 cell 不可见（屏幕裁切/滚出）时 helper 返回 nil，保留几何判定结果不抖动
-    static Class homeTableCls = nil;
-    static dispatch_once_t homeTableOnce;
-    dispatch_once(&homeTableOnce, ^{ homeTableCls = NSClassFromString(@"MainFrameTableView"); });
-    BOOL homeTable = homeTableCls && [tableView isKindOfClass:homeTableCls];
+    BOOL isContacts = [className isEqualToString:@"ContactsViewController"];
+    BOOL isFTSHome = [className isEqualToString:@"FTSHomeViewController"];
 
-    Class selfCls = [cellView class];
-    if (hasAbove) {
-        UITableViewCell *aboveCell = WPTouchingNeighborCell(tableView, cellRect, YES);
-        if (aboveCell) {
-            if (homeTable) {
-                NSIndexPath *ip = [tableView indexPathForCell:(UITableViewCell *)cellView];
-                NSIndexPath *nip = [tableView indexPathForCell:aboveCell];
-                if (!nip || !ip || nip.section != ip.section) hasAbove = NO;
-            } else if ([aboveCell class] != selfCls) {
-                hasAbove = NO;
-            }
-        }
+    if (isContacts) {
+        [ListCornerRadiusHook wp_applyCornerForContacts:cellView
+                                              tableView:tableView
+                                              indexPath:indexPath
+                                                section:section
+                                                    row:row
+                                                  total:totalRows
+                                           cornerRadius:cornerRadius
+                                               isFTSHome:isFTSHome];
+    } else {
+        [ListCornerRadiusHook wp_applyStandardCorner:cellView
+                                            tableView:tableView
+                                            indexPath:indexPath
+                                              section:section
+                                                  row:row
+                                                total:totalRows
+                                         cornerRadius:cornerRadius
+                                            isFTSHome:isFTSHome
+                                            className:className];
     }
-    if (hasBelow) {
-        UITableViewCell *belowCell = WPTouchingNeighborCell(tableView, cellRect, NO);
-        if (belowCell) {
-            if (homeTable) {
-                NSIndexPath *ip = [tableView indexPathForCell:(UITableViewCell *)cellView];
-                NSIndexPath *nip = [tableView indexPathForCell:belowCell];
-                if (!nip || !ip || nip.section != ip.section) hasBelow = NO;
-            } else if ([belowCell class] != selfCls) {
-                hasBelow = NO;
-            }
-        }
-    }
-
-    [ListCornerRadiusHook wp_applyGeometricCorner:cellView
-                                     cornerRadius:cornerRadius
-                                         hasAbove:hasAbove
-                                         hasBelow:hasBelow];
 
     // ★ 非 MoreVC 资料卡 Cell 的正常收尾 ★
     cellView.layer.masksToBounds = YES;
@@ -647,93 +594,6 @@ static BOOL _wp_isAllowedVC(NSString *name) {
            [name isEqualToString:@"BrandServiceContactsViewController"];
 }
 
-// ─── 表格级边框挂载点（架构修正）───
-// wp_paintTableBorders 是表格级操作（遍历全 section 分组 + 覆盖视图管理），挂 table 自身
-// layoutSubviews——仅布局/结构变化时触发、每表一次；cell hook 不再逐 cell 调用，
-// 因此无需节流戳/时间桶/行带缓存，逐帧幂等比对（fabs/stamp/CGColor）即收敛
-static IMP orig_MMTableView_layoutSubviews;
-static IMP orig_MMMainTableView_layoutSubviews;
-static IMP orig_MainFrameTableView_layoutSubviews;
-static IMP orig_TextStateProfileTableView_layoutSubviews;
-
-static void _wp_tableLayoutCommon(id self, SEL _cmd, IMP orig) {
-    if (orig) ((void (*)(id, SEL))orig)(self, _cmd);
-
-    // 快路径：总开关关且该表从未被涂装 → 零操作（避免无关表每帧付 responder 链成本）
-    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-    UITableView *tv = (UITableView *)self;
-    BOOL painted = objc_getAssociatedObject(tv, (__bridge const void *)kMioTablePaintedKey) != nil;
-    if (!config.globalCornerRadiusEnabled && !painted) return;
-
-    // vc 为 nil（表短暂脱离 VC 层级）时不判定也不清洁，避免误拆已有覆盖视图
-    UIViewController *vc = [WPUtility findParentViewController:tv];
-    if (!vc) return;
-
-    BOOL mioOwn = WPVCIsMioOwn(vc);
-    BOOL featureOn = config.globalCornerRadiusEnabled
-        && (mioOwn || shouldApplyGlobalCorner(vc));
-
-    // 功能关 → 交由 wp_paintTableBorders 双向清洁（仅拆自己涂装的）
-    if (!featureOn) {
-        [ListCornerRadiusHook wp_paintTableBorders:tv featureOn:NO mioOwn:mioOwn];
-        return;
-    }
-
-    // ★ 页面归属性校验（聊天详情页误涂 f6373b9 实证）：MMTableView 遍布全 App，
-    //   VC 宽语义（未知=YES）在表级会误涂无 MMTableViewCell 的页面（聊天详情页消息 cell
-    //   不是 MMTableViewCell，cell hook 时代靠类过滤天然安全）。
-    //   以表内可见 cell 是否 MMTableViewCell 为准——结构级判据，无时序依赖
-    static Class mmCellCls = nil;
-    static dispatch_once_t mmCellOnce;
-    dispatch_once(&mmCellOnce, ^{ mmCellCls = NSClassFromString(@"MMTableViewCell"); });
-    BOOL hasMioCell = NO;
-    for (UITableViewCell *c in tv.visibleCells) {
-        if ([c isKindOfClass:mmCellCls]) { hasMioCell = YES; break; }
-    }
-    if (!hasMioCell) return;
-
-    [ListCornerRadiusHook wp_paintTableBorders:tv
-                                     featureOn:YES
-                                        mioOwn:mioOwn];
-}
-
-static void _hooked_MMTableView_layoutSubviews(id self, SEL _cmd) {
-    _wp_tableLayoutCommon(self, _cmd, orig_MMTableView_layoutSubviews);
-}
-static void _hooked_MMMainTableView_layoutSubviews(id self, SEL _cmd) {
-    _wp_tableLayoutCommon(self, _cmd, orig_MMMainTableView_layoutSubviews);
-}
-static void _hooked_MainFrameTableView_layoutSubviews(id self, SEL _cmd) {
-    _wp_tableLayoutCommon(self, _cmd, orig_MainFrameTableView_layoutSubviews);
-}
-static void _hooked_TextStateProfileTableView_layoutSubviews(id self, SEL _cmd) {
-    _wp_tableLayoutCommon(self, _cmd, orig_TextStateProfileTableView_layoutSubviews);
-}
-
-// 挂表 hook 前检查 IMP 归属（项目硬约束，fail-closed）：IMP 必须确认来自微信主程序
-// 二进制才挂；dladdr 失败 / 来自 Mio 自身（继承链已挂，子类实例由父类 hook 覆盖，属预期
-// 行为而非漏挂）/ 其他插件 dylib（如 WCR）→ 一律让位不挂
-static void WPHookTableViewLayout(NSString *clsName, IMP *outOrig, IMP newImp) {
-    Class cls = objc_getClass(clsName.UTF8String);
-    if (!cls) return;
-    Method m = class_getInstanceMethod(cls, @selector(layoutSubviews));
-    if (!m) return;
-    IMP cur = method_getImplementation(m);
-    Dl_info info;
-    if (!dladdr((void *)cur, &info) || !info.dli_fname) {
-        WPLog(@"ListCornerRadius", @"[YIELD] %@::layoutSubviews dladdr 失败，保守不挂", clsName);
-        return;
-    }
-    NSString *path = [NSString stringWithUTF8String:info.dli_fname];
-    if (![path hasSuffix:@"/WeChat"]) {
-        WPLog(@"ListCornerRadius", @"[YIELD] %@::layoutSubviews IMP 来自 %@，让位不挂",
-              clsName, [path lastPathComponent]);
-        return;
-    }
-    MSHookMessageEx(cls, @selector(layoutSubviews), newImp, outOrig);
-    WPLog(@"ListCornerRadius", @"[OK] %@::layoutSubviews (table border mount)", clsName);
-}
-
 static void (*orig_UIView_layoutSubviews)(id, SEL);
 static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (orig_UIView_layoutSubviews) orig_UIView_layoutSubviews(self, _cmd);
@@ -854,46 +714,326 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
             (IMP)_hooked_setBgImageView, (IMP *)&orig_setBgImageView);
     }
 
-    // ★ 表格级边框挂载点（架构修正）：table 自身 layoutSubviews，每表一次而非逐 cell；
-    //   dladdr 检查 IMP 归属——继承链已挂（Mio）/其他插件（WCR）让位，仅主程序 IMP 才挂
-    WPHookTableViewLayout(@"MMTableView", &orig_MMTableView_layoutSubviews,
-        (IMP)_hooked_MMTableView_layoutSubviews);
-    WPHookTableViewLayout(@"MMMainTableView", &orig_MMMainTableView_layoutSubviews,
-        (IMP)_hooked_MMMainTableView_layoutSubviews);
-    WPHookTableViewLayout(@"MainFrameTableView", &orig_MainFrameTableView_layoutSubviews,
-        (IMP)_hooked_MainFrameTableView_layoutSubviews);
-    WPHookTableViewLayout(@"TextStateProfileTableView", &orig_TextStateProfileTableView_layoutSubviews,
-        (IMP)_hooked_TextStateProfileTableView_layoutSubviews);
-
     // ★ 已移交给 ProfileCardBgHook.install 自行管理，消除跨模块耦合
 }
 
-// 行位掩码写入（几何三态）：幂等比对后才写，避免每轮产生 CA 脏标记
-+ (void)wp_applyGeometricCorner:(UIView *)cell
-                   cornerRadius:(NSInteger)configuredRadius
-                       hasAbove:(BOOL)hasAbove
-                       hasBelow:(BOOL)hasBelow {
-    NSUInteger mc = 0;
-    if (hasAbove && hasBelow) {
-        mc = 0;                                                 // 中行：无角
-    } else if (hasAbove) {
-        mc = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;   // 仅下方悬空：底角
-    } else if (hasBelow) {
-        mc = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;   // 仅上方悬空：顶角
+// ─── 行位判定与圆角/边框应用（01:12 版本方案，indexPath 语义） ───
+// position 语义（wp_applyBorderAndBg 四段边框选择）：
+//   0=完整边框（单行卡） 1=顶边框（首行） 2=左右边框（中行） 3=底边框（末行）
+
++ (void)wp_applyStandardCorner:(UIView *)cell
+                     tableView:(UITableView *)tableView
+                     indexPath:(NSIndexPath *)indexPath
+                       section:(NSInteger)section
+                           row:(NSInteger)row
+                         total:(NSInteger)totalRows
+                  cornerRadius:(NSInteger)configuredRadius
+                     isFTSHome:(BOOL)isFTSHome
+                     className:(NSString *)className {
+    NSInteger cornerType = 0;  // 用于 maskedCorners
+    NSInteger borderType = 0;  // 用于 wp_applyBorderAndBg switch
+    if (totalRows == 1) {
+        cornerType = 3; borderType = 0;  // 全角 + 完整边框
+    } else if (row == 0) {
+        cornerType = 1; borderType = 1;  // 顶角 + 顶边框
+    } else if (row == totalRows - 1) {
+        cornerType = 2; borderType = 3;  // 底角 + 底边框
+
+        // ★ 折叠置顶检测（仅聊天列表 section 1 的末行）★
+        BOOL isNewMainFrame = [className isEqualToString:@"NewMainFrameViewController"];
+        if (isNewMainFrame && indexPath.section == 1) {
+            UIView *foldView = [ListCornerRadiusHook wp_findFoldViewInSubviews:tableView.subviews];
+            if (foldView && [foldView respondsToSelector:@selector(isFolding)]) {
+                BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(foldView, @selector(isFolding));
+                if (!folding) {
+                    // 展开状态 → 无圆角 + 左右边框
+                    cell.layer.cornerRadius = 0;
+                    cell.layer.maskedCorners = 0;
+                    [self wp_applyBorderAndBg:cell radius:0 position:2 isFTSHome:isFTSHome];
+                    return;
+                }
+            }
+        }
     } else {
-        mc = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
-             kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;   // 双向悬空：全角（单行）
+        cornerType = 0; borderType = 2;  // 无角 + 左右边框
     }
 
-    if (cell.layer.cornerRadius != (CGFloat)configuredRadius) {
-        cell.layer.cornerRadius = (CGFloat)configuredRadius;
+    cell.layer.cornerRadius = (CGFloat)configuredRadius;
+    cell.layer.maskedCorners = 0;
+
+    if (cornerType == 1) {
+        cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    } else if (cornerType == 2) {
+        cell.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+    } else if (cornerType == 3) {
+        cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
+                                   kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
-    if (cell.layer.maskedCorners != mc) {
-        cell.layer.maskedCorners = mc;
-    }
+
+    [self wp_applyBorderAndBg:cell radius:configuredRadius position:borderType isFTSHome:isFTSHome];
 }
 
-#pragma mark - ★ 表格级边框（WCR 同款：几何分组覆盖视图 + 整段圆角描边）
+// 通讯录半合并特例（01:12 版本）：section 0-3 结构匹配时（sec0=3~4 行 + sec1/2/3 各 1 行）
+// 连成一张卡；sec0 末行无角与后面单行相接，sec3 出底角；结构不符回退 standard
++ (void)wp_applyCornerForContacts:(UIView *)cell
+                        tableView:(UITableView *)tableView
+                        indexPath:(NSIndexPath *)indexPath
+                          section:(NSInteger)section
+                              row:(NSInteger)row
+                            total:(NSInteger)rowInThisSection
+                     cornerRadius:(NSInteger)radius
+                         isFTSHome:(BOOL)isFTSHome {
+
+    // ─── 分支 A：section > 3 → per-section ───
+    if (section > 3) {
+        [self wp_applyStandardCorner:cell tableView:tableView indexPath:indexPath
+                              section:section row:row total:rowInThisSection
+                         cornerRadius:radius isFTSHome:isFTSHome
+                            className:@"ContactsViewController"];
+        return;
+    }
+
+    // ─── 分支 B：section 0-3 特殊算法 ───
+
+    // 收集 Section 0-3 行数（不足补 0）
+    NSMutableArray *rowCounts = [NSMutableArray array];
+    for (NSInteger s = 0; s < 4; s++) {
+        [rowCounts addObject:@(s < [tableView numberOfSections]
+                              ? [tableView numberOfRowsInSection:s] : 0)];
+    }
+
+    // Section 0 行数必须 3-4 行
+    if ([rowCounts[0] integerValue] < 3 || [rowCounts[0] integerValue] > 4) {
+        [self wp_applyStandardCorner:cell tableView:tableView indexPath:indexPath
+                              section:section row:row total:rowInThisSection
+                         cornerRadius:radius isFTSHome:isFTSHome
+                            className:@"ContactsViewController"];
+        return;
+    }
+
+    // bVar1：section 1/2/3 是否都是 1 行
+    BOOL bVar1 = ([rowCounts[1] integerValue] == 1 &&
+                  [rowCounts[2] integerValue] == 1 &&
+                  [rowCounts[3] integerValue] == 1);
+
+    if (!bVar1) {
+        [self wp_applyStandardCorner:cell tableView:tableView indexPath:indexPath
+                              section:section row:row total:rowInThisSection
+                         cornerRadius:radius isFTSHome:isFTSHome
+                            className:@"ContactsViewController"];
+        return;
+    }
+
+    // ─── 半合并模式（bVar1=true） ───
+
+    NSInteger ct = 0, bt = 2;  // cornerType / borderType
+
+    if (section == 0) {
+        // Section 0：首行顶角，末行无角（和后面单行连一起）
+        if (row == 0) {
+            ct = 1; bt = 1;  // 顶角
+        } else {
+            ct = 0; bt = 2;  // 无角（末行/中间行都一样）
+        }
+    } else if (section == 3) {
+        // Section 3：最后一个单行 → 底角
+        ct = 2; bt = 3;
+    } else {
+        // Section 1/2：中间单行 → 无角
+        ct = 0; bt = 2;
+    }
+
+    // 应用圆角
+    cell.layer.cornerRadius = (ct == 0) ? 0 : (CGFloat)radius;
+    cell.layer.maskedCorners = ct == 1 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner)
+                             : ct == 2 ? (kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
+                             : ct == 3 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner|
+                                          kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
+                             : 0;
+    [self wp_applyBorderAndBg:cell radius:radius position:bt isFTSHome:isFTSHome];
+}
+
+// cell 内四段 CAShapeLayer 拼接边框（01:12 版本）：全量化缓存 key，key 失配才重建，
+// 幂等路径零分配零重建；边框关/功能关时拆除既有边框后登记缓存即返回
++ (void)wp_applyBorderAndBg:(UIView *)cell
+                     radius:(NSInteger)radius
+                   position:(NSInteger)position
+                  isFTSHome:(BOOL)isFTSHome {
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
+
+    BOOL isDark = [WPUtility isDarkModeForView:cell];
+
+    // 缓存 key 覆盖全部渲染入参：几何 + 边框开关 + 总开关 + 明暗 + 两个边框色 + cell 宽高。
+    // 任一变化即重建——边框即开即清、即关即清、换色/明暗切换即换
+    // （旧 key 缺明暗，暗黑↔浅色切换时 CGColor 快照残留；缺 bounds，旋转/分屏后边框几何过期）
+    NSString *existingCacheKey = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey);
+    CGRect cb = cell.bounds;
+    NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-f%d-b%.1f-bd%d-d%d-g%d-cl%@-cd%@-w%.0f-h%.0f",
+                          (long)radius, (long)position, isFTSHome,
+                          config.listCellBorderWidth,
+                          (int)config.listCellBorder, (int)isDark,
+                          (int)config.globalCornerRadiusEnabled,
+                          config.listCellBorderColor ?: @"",
+                          config.listCellBorderColorDarkHex ?: @"",
+                          cb.size.width, cb.size.height];
+    if ([existingCacheKey isEqualToString:cacheKey]) return;
+
+    WPStripBorderLayers(cell);
+
+    // 双向应用：边框关（或功能总闸关）→ 移除既有边框后登记缓存即返回
+    if (!config.listCellBorder || !config.globalCornerRadiusEnabled) {
+        objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey, cacheKey,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return;
+    }
+
+    CGFloat borderWidth = config.listCellBorderWidth;
+    if (borderWidth <= 0) borderWidth = 1.0;
+
+    // 明暗二元兜底先算好再传
+    UIColor *borderFallback = isDark
+        ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
+        : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
+    UIColor *borderColor = [WPColorUtil resolveColorFromLightHex:config.listCellBorderColor
+                                                         darkHex:config.listCellBorderColorDarkHex
+                                                          isDark:isDark
+                                                    withStrategy:WPColorResolveStrict
+                                                        fallback:borderFallback];
+
+    switch (position) {
+        case 0: {  // 完整边框（单独 cell / 全圆角 cell）
+            CAShapeLayer *top = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                      borderWidth:borderWidth
+                                                     borderColor:borderColor
+                                                          radius:(CGFloat)radius
+                                                            type:@"top"];
+            CAShapeLayer *bottom = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                         borderWidth:borderWidth
+                                                        borderColor:borderColor
+                                                             radius:(CGFloat)radius
+                                                               type:@"bottom"];
+            [cell.layer addSublayer:top];
+            [cell.layer addSublayer:bottom];
+            break;
+        }
+        case 1: {  // 顶部边框（首行）
+            CAShapeLayer *shape = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                       borderWidth:borderWidth
+                                                      borderColor:borderColor
+                                                           radius:(CGFloat)radius
+                                                             type:@"top"];
+            [cell.layer addSublayer:shape];
+            break;
+        }
+        case 2: {  // 左右边框（中间行）
+            CAShapeLayer *left = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                      borderWidth:borderWidth
+                                                     borderColor:borderColor
+                                                          radius:(CGFloat)radius
+                                                            type:@"left"];
+            CAShapeLayer *right = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                       borderWidth:borderWidth
+                                                      borderColor:borderColor
+                                                           radius:(CGFloat)radius
+                                                             type:@"right"];
+            [cell.layer addSublayer:left];
+            [cell.layer addSublayer:right];
+            break;
+        }
+        case 3: {  // 底部边框（末行）
+            CAShapeLayer *shape = [self wp_buildUnifiedBorderLayer:cell.bounds
+                                                       borderWidth:borderWidth
+                                                      borderColor:borderColor
+                                                           radius:(CGFloat)radius
+                                                             type:@"bottom"];
+            [cell.layer addSublayer:shape];
+            break;
+        }
+    }
+
+    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey, cacheKey,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+// 递归查找表内 FoldView（折叠置顶容器，供折叠置顶特判使用）
++ (UIView *)wp_findFoldViewInSubviews:(NSArray<UIView *> *)subviews {
+    for (UIView *subview in subviews) {
+        if ([NSStringFromClass([subview class]) containsString:@"MainFrameSectionFoldView"]) {
+            return subview;
+        }
+        UIView *found = [self wp_findFoldViewInSubviews:subview.subviews];
+        if (found) return found;
+    }
+    return nil;
+}
+
+// 四段式整段边框路径（01:12 版本）：top/bottom 带圆角弧，left/right 直线
++ (CAShapeLayer *)wp_buildUnifiedBorderLayer:(CGRect)rect
+                                 borderWidth:(CGFloat)borderWidth
+                                borderColor:(UIColor *)borderColor
+                                     radius:(CGFloat)radius
+                                       type:(NSString *)type {
+    CAShapeLayer *shape = [CAShapeLayer layer];
+    shape.name = kMioBorderLayerName;
+    shape.strokeColor = borderColor.CGColor;
+    shape.fillColor = [UIColor clearColor].CGColor;
+    shape.lineWidth = borderWidth;
+    shape.lineJoin = kCALineJoinRound;
+
+    CGFloat hw = borderWidth / 2.0;
+    CGFloat w = rect.size.width;
+    CGFloat h = rect.size.height;
+    CGFloat r = (radius > 0) ? radius : 0;
+
+    UIBezierPath *path = [UIBezierPath bezierPath];
+
+    if ([type isEqualToString:@"top"]) {
+        [path moveToPoint:CGPointMake(hw, h)];
+        [path addLineToPoint:CGPointMake(hw, hw + r)];
+        if (r > 0) {
+            [path addArcWithCenter:CGPointMake(hw + r, hw + r)
+                            radius:r
+                        startAngle:M_PI
+                          endAngle:M_PI * 1.5
+                         clockwise:YES];
+            [path addArcWithCenter:CGPointMake(w - hw - r, hw + r)
+                            radius:r
+                        startAngle:M_PI * 1.5
+                          endAngle:0
+                         clockwise:YES];
+        }
+        [path addLineToPoint:CGPointMake(w - hw, h)];
+    } else if ([type isEqualToString:@"bottom"]) {
+        [path moveToPoint:CGPointMake(hw, 0)];
+        [path addLineToPoint:CGPointMake(hw, h - hw - r)];
+        if (r > 0) {
+            [path addArcWithCenter:CGPointMake(hw + r, h - hw - r)
+                            radius:r
+                        startAngle:M_PI
+                          endAngle:M_PI * 0.5
+                         clockwise:NO];
+            [path addArcWithCenter:CGPointMake(w - hw - r, h - hw - r)
+                            radius:r
+                        startAngle:M_PI * 0.5
+                          endAngle:0
+                         clockwise:NO];
+        }
+        [path addLineToPoint:CGPointMake(w - hw, 0)];
+    } else if ([type isEqualToString:@"left"]) {
+        [path moveToPoint:CGPointMake(hw, 0)];
+        [path addLineToPoint:CGPointMake(hw, h)];
+    } else if ([type isEqualToString:@"right"]) {
+        [path moveToPoint:CGPointMake(w - hw, 0)];
+        [path addLineToPoint:CGPointMake(w - hw, h)];
+    }
+
+    shape.path = path.CGPath;
+    shape.frame = rect;
+
+    return shape;
+}
+
+#pragma mark - ★ 边框层查找与描边色（FoldView 自体描边共用）
 
 // 在视图子层中查找本模块的边框 CAShapeLayer（按 name 识别）
 + (CAShapeLayer *)wp_findBorderShapeInView:(UIView *)view {
@@ -917,167 +1057,6 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (!shape.strokeColor || !CFEqual(shape.strokeColor, cg)) {
         shape.strokeColor = cg;
     }
-}
-
-// 表格级边框：几何连续的行区段合并为一组，每组一条透明覆盖视图（tag 管理、挂 tableView 本体，
-// 免疫 cell 复用）内含一条 CAShapeLayer 整段描边；样式戳 + frame 双幂等，功能/边框关时主动拆除
-+ (void)wp_paintTableBorders:(UITableView *)tableView
-                   featureOn:(BOOL)featureOn
-                      mioOwn:(BOOL)mioOwn {
-    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-    BOOL painted = objc_getAssociatedObject(tableView, (__bridge const void *)kMioTablePaintedKey) != nil;
-
-    // ★ 双向清洁：功能关或边框关 → 拆除本模块覆盖视图（涂装标记保证只动我们自己的 table）
-    if (!featureOn || !config.listCellBorder) {
-        if (painted) {
-            WPStripTableOverlays(tableView);
-            objc_setAssociatedObject(tableView, (__bridge const void *)kMioTablePaintedKey, nil,
-                OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
-        return;
-    }
-
-    objc_setAssociatedObject(tableView, (__bridge const void *)kMioTablePaintedKey, @YES,
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    CGFloat margin = mioOwn ? 15.0 : (CGFloat)config.listCellMargin;
-    NSInteger radius = mioOwn ? 15 : (NSInteger)config.listCellCornerRadius;
-    if (!mioOwn && radius == 0) radius = 18;
-    CGFloat borderWidth = config.listCellBorderWidth;
-    if (borderWidth <= 0) borderWidth = 1.0;
-    UIColor *borderColor = WPDynamicBorderColor(config.listCellBorderColor, config.listCellBorderColorDarkHex);
-    if (!borderColor) return;
-
-    CGFloat tableW = tableView.bounds.size.width;
-    CGFloat overlayW = tableW - 2.0 * margin;
-    if (overlayW <= 0) return;
-
-    NSInteger nSections = [tableView numberOfSections];
-
-    // ★ 首页特判（WCR 反编译对齐）：WCR 对 MainFrameTableView 是专用方案——per-section
-    //   一张覆盖视图，跨 section 绝不合并；通用页面才是几何相邻合并（通讯录实证连卡）
-    static Class homeTableClsBorder = nil;
-    static dispatch_once_t homeTableOnceBorder;
-    dispatch_once(&homeTableOnceBorder, ^{
-        homeTableClsBorder = NSClassFromString(@"MainFrameTableView");
-    });
-    BOOL homeTable = homeTableClsBorder && [tableView isKindOfClass:homeTableClsBorder];
-
-    // ★ 每 section 的 cell 类映射（visibleCells 取证；无可见 cell → nil = 类未知，不阻断连卡）：
-    //   通用页面跨类断卡——首页置顶区（MMTableViewCell）与普通区（NewMainFrameCell）类不同
-    Class secCls[256];
-    for (NSInteger s = 0; s < nSections && s < 256; s++) secCls[s] = nil;
-    if (!homeTable) {
-        for (UITableViewCell *c in tableView.visibleCells) {
-            NSIndexPath *ip = [tableView indexPathForCell:c];
-            if (ip && ip.section < 256) secCls[ip.section] = [c class];
-        }
-    }
-
-    // ★ WCR 同款几何分组合并（Frida 实证）：相邻 section 的行带垂直连续（间隙 ≤ 0.5pt）
-    //   即并入同一组，共享一张覆盖视图 + 一条整段圆角路径——与 indexPath/section 无关。
-    //   挂载点 = table layoutSubviews（仅布局/结构变化触发，每表一次），逐帧幂等比对即可，
-    //   无需任何节流戳/时间桶/行带缓存
-    NSMutableArray<NSNumber *> *groupTags = [NSMutableArray array];
-    CGFloat prevBottom = 0, groupTop = 0, groupBottom = 0;
-    NSInteger groupFirstSection = -1;
-    BOOL groupOpen = NO;
-    Class groupClass = nil;
-
-    for (NSInteger s = 0; s < nSections; s++) {
-        CGFloat bandTop = 0, bandBottom = 0;
-        if (!WPSectionBand(tableView, s, &bandTop, &bandBottom)) continue;
-
-        Class secClass = (s < 256) ? secCls[s] : nil;
-        BOOL classBoundary = groupClass && secClass && groupClass != secClass;
-
-        if (groupOpen && !homeTable && bandTop - prevBottom <= 0.5 && !classBoundary) {
-            // 与当前组垂直连续且同类：扩组
-            groupBottom = bandBottom;
-            prevBottom = bandBottom;
-            continue;
-        }
-
-        // 与当前组断开（几何不连续或跨类）：收口旧组，开新组
-        if (groupOpen) {
-            NSInteger tag = kMioBorderTagBase + groupFirstSection;
-            [self wp_paintGroupOverlay:tableView tag:tag
-                                target:CGRectMake(margin, groupTop, overlayW, groupBottom - groupTop)
-                                radius:radius borderWidth:borderWidth borderColor:borderColor];
-            [groupTags addObject:@(tag)];
-        }
-        groupFirstSection = s;
-        groupTop = bandTop;
-        groupBottom = bandBottom;
-        prevBottom = bandBottom;
-        groupClass = secClass;
-        groupOpen = YES;
-    }
-    if (groupOpen) {
-        NSInteger tag = kMioBorderTagBase + groupFirstSection;
-        [self wp_paintGroupOverlay:tableView tag:tag
-                            target:CGRectMake(margin, groupTop, overlayW, groupBottom - groupTop)
-                            radius:radius borderWidth:borderWidth borderColor:borderColor];
-        [groupTags addObject:@(tag)];
-    }
-
-    // 收尾：tag 不在当前组集合内的历史覆盖视图（分组变化/section 收缩产生）一律隐藏
-    for (UIView *sub in tableView.subviews) {
-        NSInteger idx = sub.tag - kMioBorderTagBase;
-        if (idx >= 0 && idx < kMioBorderTagRange
-            && ![groupTags containsObject:@(sub.tag)] && !sub.hidden) {
-            sub.hidden = YES;
-        }
-    }
-}
-
-// 单组覆盖视图：查找/创建（tag 定位）+ frame 幂等 + 整段圆角描边（样式戳幂等）
-+ (void)wp_paintGroupOverlay:(UITableView *)tableView
-                         tag:(NSInteger)tag
-                      target:(CGRect)target
-                      radius:(NSInteger)radius
-                  borderWidth:(CGFloat)borderWidth
-                  borderColor:(UIColor *)borderColor {
-    UIView *overlay = [tableView viewWithTag:tag];
-    if (!overlay) {
-        overlay = [[UIView alloc] initWithFrame:CGRectZero];
-        overlay.tag = tag;
-        overlay.userInteractionEnabled = NO;
-        overlay.backgroundColor = [UIColor clearColor];
-        [tableView addSubview:overlay];
-    }
-    if (overlay.hidden) overlay.hidden = NO;
-    [tableView bringSubviewToFront:overlay];
-
-    if (fabs(overlay.frame.origin.x - target.origin.x) > 0.5
-        || fabs(overlay.frame.origin.y - target.origin.y) > 0.5
-        || fabs(overlay.frame.size.width - target.size.width) > 0.5
-        || fabs(overlay.frame.size.height - target.size.height) > 0.5) {
-        overlay.frame = target;
-    }
-
-    CAShapeLayer *shape = [self wp_findBorderShapeInView:overlay];
-    if (!shape) {
-        shape = [CAShapeLayer layer];
-        shape.name = kMioBorderLayerName;
-        shape.fillColor = [UIColor clearColor].CGColor;
-        shape.lineJoin = kCALineJoinRound;
-        [overlay.layer addSublayer:shape];
-    }
-
-    // 样式戳：radius/线宽任一变化才重建 path（frame 变化由 shape.frame 比对兜底触发）
-    NSString *stamp = [NSString stringWithFormat:@"r%ld-bw%.1f", (long)radius, borderWidth];
-    NSString *oldStamp = objc_getAssociatedObject(overlay, (__bridge const void *)kMioBorderStampKey);
-    if (![stamp isEqualToString:oldStamp] || !CGRectEqualToRect(shape.frame, overlay.bounds)) {
-        shape.frame = overlay.bounds;
-        shape.lineWidth = borderWidth;
-        shape.path = [UIBezierPath bezierPathWithRoundedRect:overlay.bounds
-                                                cornerRadius:(CGFloat)radius].CGPath;
-        objc_setAssociatedObject(overlay, (__bridge const void *)kMioBorderStampKey, stamp,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-
-    [self wp_applyStrokeColor:shape dynamicColor:borderColor trait:tableView.traitCollection];
 }
 
 // FoldView 等独立视图的自体整段描边（原 position 0 全边框语义）：动态色 + 样式戳幂等，双向拆装
