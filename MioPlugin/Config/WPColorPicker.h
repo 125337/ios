@@ -15,12 +15,22 @@
 /// @param darkHex   深色 hex
 /// @param activeIsLight YES=默认编辑浅色, NO=默认编辑深色
 /// @param button    关联按钮（确认后自动更新背景色）
-/// @param onSelected 确认回调 (lightHex, darkHex) — 双 hex 都有值
+/// @param onSelected 确认回调 (lightHex, darkHex) — 双 hex 都有值；未修改时不回调
 + (void)presentCustomPickerOnViewController:(UIViewController *)vc
                                     lightHex:(NSString *)lightHex
                                      darkHex:(NSString *)darkHex
                                activeIsLight:(BOOL)activeIsLight
                                 sourceButton:(nullable UIButton *)button
+                                  onSelected:(void(^)(NSString *lightHex, NSString *darkHex))onSelected;
+
+/// 完整入口：支持「清除」按钮（语义 = 显式恢复未设置，走独立 onClear 回调）
++ (void)presentCustomPickerOnViewController:(UIViewController *)vc
+                                    lightHex:(nullable NSString *)lightHex
+                                     darkHex:(nullable NSString *)darkHex
+                               activeIsLight:(BOOL)activeIsLight
+                                sourceButton:(nullable UIButton *)button
+                                  allowClear:(BOOL)allowClear
+                                     onClear:(nullable void(^)(void))onClear
                                   onSelected:(void(^)(NSString *lightHex, NSString *darkHex))onSelected;
 
 @end

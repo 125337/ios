@@ -17,6 +17,11 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 
 @interface WPHsvColorPickerController ()
 @property (nonatomic, copy) void(^callback)(NSString *lightHex, NSString *darkHex);
+@property (nonatomic, copy) void(^clearCallback)(void);   // 清除回调（语义 = 显式恢复未设置）
+@property (nonatomic, copy) NSString *initialLightHex;    // 打开时的初始值（nil = 当时未设置）
+@property (nonatomic, copy) NSString *initialDarkHex;
+@property (nonatomic, assign) BOOL hadInitialLight;       // 打开时浅色是否已设置
+@property (nonatomic, assign) BOOL hadInitialDark;
 @property (nonatomic, strong) WPHueSlider *hueSlider;
 @property (nonatomic, strong) WPSaturationBrightnessView *sbView;
 @property (nonatomic, strong) WPRGBAControl *rgbaControl;
@@ -31,11 +36,21 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 
 - (instancetype)initWithLightHex:(NSString *)lightHex
                         darkHex:(NSString *)darkHex
+                     allowClear:(BOOL)allowClear
+                  clearCallback:(void(^)(void))clearCallback
                        callback:(void(^)(NSString *, NSString *))callback {
     self = [super init];
     if (self) {
-        _currentLightHex = lightHex ?: @"#FFFFFF";
-        _currentDarkHex  = darkHex  ?: @"#202020";
+        // 兜底显示与确认语义分离：nil 起始的默认色仅用于初始显示，
+        // confirmTapped 对比 initial 决定回传新值还是 (nil, nil)=未修改
+        _hadInitialLight = (lightHex.length > 0);
+        _hadInitialDark  = (darkHex.length > 0);
+        _initialLightHex = _hadInitialLight ? lightHex : nil;
+        _initialDarkHex  = _hadInitialDark  ? darkHex  : nil;
+        _currentLightHex = _hadInitialLight ? lightHex : @"#FFFFFF";
+        _currentDarkHex  = _hadInitialDark  ? darkHex  : @"#202020";
+        _allowClear = allowClear;
+        _clearCallback = clearCallback;
         _callback = callback;
         _isLightMode = YES;
         _singleColorMode = NO;
@@ -44,17 +59,25 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
     return self;
 }
 
+- (instancetype)initWithLightHex:(NSString *)lightHex
+                        darkHex:(NSString *)darkHex
+                       callback:(void(^)(NSString *, NSString *))callback {
+    return [self initWithLightHex:lightHex darkHex:darkHex allowClear:NO clearCallback:nil callback:callback];
+}
+
 - (instancetype)initWithHex:(NSString *)hex callback:(void(^)(NSString *))callback {
-    self = [super init];
+    self = [self initWithLightHex:(hex ?: @"#FFFFFF")
+                          darkHex:(hex ?: @"#FFFFFF")
+                       allowClear:NO
+                     clearCallback:nil
+                          callback:nil];
     if (self) {
-        _currentLightHex = hex ?: @"#FFFFFF";
-        _currentDarkHex = _currentLightHex;
-        _callback = ^(NSString *l, NSString *d) {
-            if (callback) callback(l ?: d);
-        };
-        _isLightMode = YES;
+        // 单色模式：双值共用，回调仅回传当前浅色
         _singleColorMode = YES;
-        _historyColors = [NSMutableArray array];
+        void(^cb)(NSString *) = callback;
+        _callback = ^(NSString *l, NSString *d) {
+            if (cb) cb(l ?: d);
+        };
     }
     return self;
 }
@@ -95,12 +118,26 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
     self.navigationItem.leftBarButtonItem =
         [[UIBarButtonItem alloc] initWithTitle:@"取消" style:UIBarButtonItemStylePlain
                                         target:self action:@selector(cancelTapped)];
-    self.navigationItem.rightBarButtonItem =
+    UIBarButtonItem *confirm =
         [[UIBarButtonItem alloc] initWithTitle:@"确认" style:UIBarButtonItemStyleDone
                                         target:self action:@selector(confirmTapped)];
+    if (!self.allowClear) {
+        self.navigationItem.rightBarButtonItem = confirm;
+    } else {
+        // 清除入口：右侧双按钮（确认 + 清除），清除走独立回调（语义 = 显式恢复未设置）
+        UIBarButtonItem *clear =
+            [[UIBarButtonItem alloc] initWithTitle:@"清除" style:UIBarButtonItemStylePlain
+                                            target:self action:@selector(clearTapped)];
+        self.navigationItem.rightBarButtonItems = @[confirm, clear];
+    }
 }
 
 - (void)cancelTapped {
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)clearTapped {
+    if (self.clearCallback) self.clearCallback();
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 
@@ -117,7 +154,13 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
                                               forKey:@"WPColorPickerHistory"];
 
     if (self.callback) {
-        self.callback(self.currentLightHex, self.currentDarkHex);
+        // 未修改判定：与打开时一致（含同值忽略大小写）→ 回传 nil，调用方不写字段；
+        // 与"初始显示兜底"（nil→默认色）严格分离
+        NSString *l = self.currentLightHex;
+        NSString *d = self.currentDarkHex;
+        BOOL lightSame = self.hadInitialLight ? [l caseInsensitiveCompare:self.initialLightHex] == 0 : NO;
+        BOOL darkSame  = self.hadInitialDark  ? [d caseInsensitiveCompare:self.initialDarkHex]  == 0 : NO;
+        self.callback(lightSame ? nil : l, darkSame ? nil : d);
     }
     [self dismissViewControllerAnimated:YES completion:nil];
 }

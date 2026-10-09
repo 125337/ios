@@ -158,7 +158,8 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                                cy:cy
                             width:w
                           darkKey:@"hcBorderColorDark"
-                        darkValue:(config.hcBorderColorDark.length > 0 ? config.hcBorderColorDark : nil)];
+                        darkValue:(config.hcBorderColorDark.length > 0 ? config.hcBorderColorDark : nil)
+                       allowClear:YES];
     cy = [self addSeparatorInGroup:g3 cy:cy width:w];
 
     // 背景颜色（颜色选择器，浅/深色双预览，同消息时间设置）
@@ -169,7 +170,8 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                                cy:cy
                             width:w
                           darkKey:@"hcCardBgColorDark"
-                        darkValue:(config.hcCardBgColorDark.length > 0 ? config.hcCardBgColorDark : nil)];
+                        darkValue:(config.hcCardBgColorDark.length > 0 ? config.hcCardBgColorDark : nil)
+                       allowClear:YES];
 
     y = [self finishGroup:g3 atY:y height:cy];
     y += 8;
@@ -245,7 +247,8 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                                cy:cy
                             width:w
                           darkKey:@"hcWeatherBgColorDark"
-                        darkValue:(config.hcWeatherBgColorDark.length > 0 ? config.hcWeatherBgColorDark : nil)];
+                        darkValue:(config.hcWeatherBgColorDark.length > 0 ? config.hcWeatherBgColorDark : nil)
+                       allowClear:YES];
 
     y = [self finishGroup:g4 atY:y height:cy];
     y += 8;
@@ -323,7 +326,8 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                                cy:cy
                             width:w
                           darkKey:@"hcCalBgColorDark"
-                        darkValue:(config.hcCalBgColorDark.length > 0 ? config.hcCalBgColorDark : nil)];
+                        darkValue:(config.hcCalBgColorDark.length > 0 ? config.hcCalBgColorDark : nil)
+                       allowClear:YES];
     cy = [self addSeparatorInGroup:g5 cy:cy width:w];
 
     // 节假日颜色（XOS CadisCalendarAccentColor，周末/节假日日期色）
@@ -334,7 +338,8 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                                cy:cy
                             width:w
                           darkKey:@"hcCalHolidayColorDark"
-                        darkValue:(config.hcCalHolidayColorDark.length > 0 ? config.hcCalHolidayColorDark : nil)];
+                        darkValue:(config.hcCalHolidayColorDark.length > 0 ? config.hcCalHolidayColorDark : nil)
+                       allowClear:YES];
     cy = [self addSeparatorInGroup:g5 cy:cy width:w];
 
     // 选中日期颜色（XOS CadisCalendarSelectedColor，今天圆点底色）
@@ -345,7 +350,8 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                                cy:cy
                             width:w
                           darkKey:@"hcCalSelectedColorDark"
-                        darkValue:(config.hcCalSelectedColorDark.length > 0 ? config.hcCalSelectedColorDark : nil)];
+                        darkValue:(config.hcCalSelectedColorDark.length > 0 ? config.hcCalSelectedColorDark : nil)
+                       allowClear:YES];
 
     y = [self finishGroup:g5 atY:y height:cy];
     y += 8;
@@ -417,7 +423,8 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                                cy:cy
                             width:w
                           darkKey:@"hcContactBgColorDark"
-                        darkValue:(config.hcContactBgColorDark.length > 0 ? config.hcContactBgColorDark : nil)];
+                        darkValue:(config.hcContactBgColorDark.length > 0 ? config.hcContactBgColorDark : nil)
+                       allowClear:YES];
     cy = [self addSeparatorInGroup:g6 cy:cy width:w];
 
     // 头像大小（默认 48，应用钳 ≥20，CadisContactAvatarSize）
@@ -490,7 +497,8 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                                      cy:*ecy
                                   width:w
                                darkKey:@"hcContactDotColorDark"
-                             darkValue:(c.hcContactDotColorDark.length > 0 ? c.hcContactDotColorDark : nil)];
+                             darkValue:(c.hcContactDotColorDark.length > 0 ? c.hcContactDotColorDark : nil)
+                            allowClear:YES];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         NSString *dotName = @[@"右下角", @"右上角", @"左上角", @"左下角"][
             MIN(MAX(c.hcContactDotPos, 0), 3)];

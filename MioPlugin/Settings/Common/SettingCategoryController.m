@@ -546,12 +546,25 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 // 颜色行小色块按钮（单色/双色复用）：y 恒按 kRowH 居中，assoc 挂配置 key，点击走 colorButtonTapped:
 // 关联键用带前缀的 "mioColorKey"：裸 "key" 是 C 字符串字面量，链接器会跨文件合并同名字面量，
 // 其他文件若对同类对象也挂 "key" 会撞键互相覆盖
-- (UIButton *)wpColorBtn:(UIColor *)color size:(CGFloat)size x:(CGFloat)x key:(NSString *)key {
+- (UIButton *)wpColorBtn:(UIColor *)color size:(CGFloat)size x:(CGFloat)x key:(NSString *)key allowClear:(BOOL)allowClear {
     UIButton *btn = [WPColorPicker makeColorButtonWithColor:color size:size];
     btn.frame = CGRectMake(x, (kRowH - size) / 2.0, size, size);
     objc_setAssociatedObject(btn, "mioColorKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(btn, "mioColorAllowClear", @(allowClear), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [btn addTarget:self action:@selector(colorButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
     return btn;
+}
+
+// 旧版颜色行（无清除入口，等价 allowClear=NO），保持既有调用方编译不变
+- (CGFloat)addColorRowInGroup:(UIView *)group
+                        title:(NSString *)title
+                          key:(NSString *)key
+                        value:(NSString *)value
+                           cy:(CGFloat)cy
+                        width:(CGFloat)w
+                     darkKey:(NSString *)darkKey
+                   darkValue:(NSString *)darkValue {
+    return [self addColorRowInGroup:group title:title key:key value:value cy:cy width:w darkKey:darkKey darkValue:darkValue allowClear:NO];
 }
 
 - (CGFloat)addColorRowInGroup:(UIView *)group
@@ -561,7 +574,8 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
                            cy:(CGFloat)cy
                         width:(CGFloat)w
                      darkKey:(NSString *)darkKey
-                   darkValue:(NSString *)darkValue {
+                   darkValue:(NSString *)darkValue
+                   allowClear:(BOOL)allowClear {
     // WCR 同款（addColorCellToSection 反编译实证）：title 传给微信原生 label 渲染，
     // rightView 只挂小色块预览容器。禁止整行自绘——整宽 rightView 会被微信
     // 布局算法按 width 定位（x=cellW-width-margin 变负值），文字被推出左边界。
@@ -575,14 +589,14 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 
     if (!dual) {
         UIColor *color = [WPColorUtil colorFromHexString:value] ?: [UIColor grayColor];
-        [cv addSubview:[self wpColorBtn:color size:30 x:2 key:key]];
+        [cv addSubview:[self wpColorBtn:color size:30 x:2 key:key allowClear:allowClear]];
     } else {
         CGFloat btnSize = 24;
         CGFloat darkX = cvW - 4 - btnSize;
         UIColor *darkColor = [WPColorUtil colorFromHexString:darkValue] ?: [UIColor darkGrayColor];
-        [cv addSubview:[self wpColorBtn:darkColor size:btnSize x:darkX key:darkKey]];
+        [cv addSubview:[self wpColorBtn:darkColor size:btnSize x:darkX key:darkKey allowClear:allowClear]];
         UIColor *lightColor = [WPColorUtil colorFromHexString:value] ?: [UIColor whiteColor];
-        [cv addSubview:[self wpColorBtn:lightColor size:btnSize x:darkX - 6 - btnSize key:key]];
+        [cv addSubview:[self wpColorBtn:lightColor size:btnSize x:darkX - 6 - btnSize key:key allowClear:allowClear]];
     }
 
     id cell = WPWCViewCell((SEL)0, self, [self wpSubTitle:title], cv);
@@ -771,12 +785,25 @@ static NSString *LightKeyForDarkKey(NSString *darkKey) {
     NSString *lightHex = lightKey ? [ConfigManager valueForKey:lightKey] : [WPColorUtil hexStringFromColor:currentColor];
     NSString *darkHex  = darkKey  ? [ConfigManager valueForKey:darkKey]  : nil;
     BOOL activeIsLight = lightKey ? [key isEqualToString:lightKey] : YES;
+    BOOL allowClear = [objc_getAssociatedObject(sender, "mioColorAllowClear") boolValue];
 
     [WPColorPicker presentCustomPickerOnViewController:self
                                               lightHex:lightHex
                                                darkHex:darkHex
                                          activeIsLight:activeIsLight
                                           sourceButton:sender
+                                            allowClear:allowClear
+                                               onClear:^{
+        // 清除 = 显式恢复未设置：主键 + 配对深色键都写空串（渲染层空串语义 = 走兜底色）
+        if (lightKey) {
+            [ConfigManager setValue:@"" forKey:lightKey];
+        } else {
+            [ConfigManager setValue:@"" forKey:key];
+        }
+        if (darkKey) [ConfigManager setValue:@"" forKey:darkKey];
+        [ConfigManager saveAll];
+        sender.backgroundColor = [UIColor grayColor];   // 预览块回落未设置观感
+    }
                                             onSelected:^(NSString *lHex, NSString *dHex) {
         if (lightKey) {
             [ConfigManager setValue:lHex forKey:lightKey];
