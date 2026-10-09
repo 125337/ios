@@ -37,24 +37,31 @@ static IMP orig_WCSearchBar_layoutSubviews = NULL;
 
 @end
 
+// hex/tag 比较：nil 安全，指针相同走快路径（调用点传同一 config 字符串，常态零成本命中）
+static BOOL WPHexSame(NSString *a, NSString *b) {
+    if (a == b) return YES;
+    if (!a || !b) return NO;
+    return [a isEqualToString:b];
+}
+
 // ★ WCR 同款动态背景色（FUN_007d44a8 实证方案）：明暗 hex 一次构建 colorWithDynamicProvider
-//   并按 config 值惰性静态缓存，明暗切换由 UIKit 按 trait 自动重取色——hook 内不再判暗。
-//   两侧兜底与原 wp_cellDefaultBgColor 语义一致：浅色白 / 深色 #202020；
-//   tag 区分缓存槽（用户色通道 / 默认底通道）
+//   并槽位缓存，明暗切换由 UIKit 按 trait 自动重取色——hook 内不再判暗。
+//   两侧兜底语义：浅色白 / 深色 #202020；tag 区分通道（用户色 / 默认底）。
+//   ★ 单槽 + 指针快路径：命中零分配（替代每帧 stringWithFormat 拼 key 的热路径分配）
 static UIColor *WPDynamicCellBgColor(NSString *lightHex, NSString *darkHex, NSString *tag) {
-    static NSMutableDictionary *cache = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{ cache = [NSMutableDictionary dictionary]; });
-    NSString *key = [tag stringByAppendingFormat:@"|%@|%@", lightHex ?: @"", darkHex ?: @""];
-    UIColor *cached = cache[key];
-    if (!cached) {
-        cached = [WPColorUtil dynamicColorFromLightHex:lightHex
-                                                darkHex:darkHex
-                                          lightFallback:[UIColor whiteColor]
-                                           darkFallback:[UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]];
-        if (cached) cache[key] = cached;
+    static NSString *sTag = nil, *sLight = nil, *sDark = nil;
+    static UIColor *sColor = nil;
+    if (sColor && WPHexSame(tag, sTag) && WPHexSame(lightHex, sLight) && WPHexSame(darkHex, sDark)) {
+        return sColor;
     }
-    return cached;
+    UIColor *color = [WPColorUtil dynamicColorFromLightHex:lightHex
+                                                   darkHex:darkHex
+                                             lightFallback:[UIColor whiteColor]
+                                              darkFallback:[UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]];
+    if (color) {
+        sTag = tag; sLight = lightHex; sDark = darkHex; sColor = color;
+    }
+    return color;
 }
 
 // ★★★ 全局开关过滤 ★★★
@@ -108,24 +115,29 @@ static NSString * const kMioBorderStampKey = @"com.mio.borderStamp";
 // 涂装标记：登记"被本模块动过的 cell/table/视图"，功能关后的清洁态只清理这些对象，避免误伤原生样式
 static NSString * const kMioCornerPaintedKey = @"com.mio.cornerPainted";
 static NSString * const kMioTablePaintedKey = @"com.mio.tablePainted";
+// 边框结构戳：编码边框重绘的全部结构性/配置性输入，戳相同则跳过全表分组（节流）
+static NSString * const kMioBorderStructKey = @"com.mio.borderStruct";
 // section 边框覆盖视图 tag 段：tag = 基数 + sectionIndex，覆盖视图挂在 tableView 本体上，免疫 cell 复用
 static NSInteger const kMioBorderTagBase = 0x4D494F;  // 'MIO'
 static NSInteger const kMioBorderTagRange = 1000;
 
-// 边框动态色（WCR 同款）：明暗 hex 一次构建动态 UIColor 并按 config 值静态缓存，
-// 明暗切换由 UIKit trait 自动重取色；两侧兜底与原二元兜底语义一致（浅 0.9 灰 / 深 0.25 灰）
+// 边框动态色（WCR 同款）：明暗 hex 一次构建动态 UIColor 并槽位缓存，
+// 明暗切换由 UIKit trait 自动重取色；两侧兜底语义一致（浅 0.9 灰 / 深 0.25 灰）。
+// ★ 槽位 + 指针快路径：命中零分配；计算结果为 nil 不占槽，下轮重算
 static UIColor *WPDynamicBorderColor(NSString *lightHex, NSString *darkHex) {
-    static NSString *cacheKey = nil;
-    static UIColor *cached = nil;
-    NSString *key = [NSString stringWithFormat:@"%@|%@", lightHex ?: @"", darkHex ?: @""];
-    if (![key isEqualToString:cacheKey]) {
-        cached = [WPColorUtil dynamicColorFromLightHex:lightHex
-                                                darkHex:darkHex
-                                          lightFallback:[UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0]
-                                           darkFallback:[UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]];
-        cacheKey = key;
+    static NSString *sLight = nil, *sDark = nil;
+    static UIColor *sColor = nil;
+    if (sColor && WPHexSame(lightHex, sLight) && WPHexSame(darkHex, sDark)) {
+        return sColor;
     }
-    return cached;
+    UIColor *color = [WPColorUtil dynamicColorFromLightHex:lightHex
+                                                   darkHex:darkHex
+                                             lightFallback:[UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0]
+                                              darkFallback:[UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]];
+    if (color) {
+        sLight = lightHex; sDark = darkHex; sColor = color;
+    }
+    return color;
 }
 
 // 移除 table 上全部边框覆盖视图（tag 段识别，只动我们自己的）
@@ -211,22 +223,26 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     UIView *cellView = (UIView *)self;
 
+    // ★ 查一次 tableView（margin 宽度基准 + 边框画布 + 圆角判定三处共用，禁止重复上溯）
+    UIView *parent = cellView.superview;
+    UITableView *tableView = nil;
+    while (parent) {
+        if ([parent isKindOfClass:[UITableView class]]) {
+            tableView = (UITableView *)parent; break;
+        }
+        parent = parent.superview;
+    }
+
     // ★ margin：Mio 页面写死 15（不读用户配置）；微信页面功能开走用户配置、功能关复原原生全宽 ★
     CGFloat margin = mioOwn ? 15.0 : (featureOn ? config.listCellMargin : 0.0);
     if (margin > 0) {
         CGFloat currentX = cellView.frame.origin.x;
         UIView *superview = cellView.superview;
         CGFloat superX = superview ? superview.frame.origin.x : 0;
-        // ★ 宽度基准 = 最近的 UITableView（表坐标系），Frida 实证修复：
+        // ★ 宽度基准 = UITableView 表坐标系，Frida 实证修复：
         //   部分页面 cell 的直接父视图是内缩容器（如插件页 wrapper 宽 361、x=16），
         //   按容器宽减 margin 会左右不对称（左 20/右 52）；WCR 语义 = 永远 表宽 - 2*margin
-        UITableView *geoTable = nil;
-        UIView *walk = superview;
-        for (int i = 0; i < 8 && walk; i++) {
-            if ([walk isKindOfClass:[UITableView class]]) { geoTable = (UITableView *)walk; break; }
-            walk = walk.superview;
-        }
-        CGFloat containerW = geoTable ? geoTable.bounds.size.width
+        CGFloat containerW = tableView ? tableView.bounds.size.width
             : (superview ? superview.bounds.size.width : [UIScreen mainScreen].bounds.size.width);
         CGFloat targetX = margin - superX;  // 表坐标 x=margin（不钳位，wrapper 有偏移时可为负）
         CGFloat targetW = containerW - 2.0 * margin;
@@ -294,14 +310,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
 
     // ★ WCR 同款表格级边框（需在清洁态 return 之前调用，保证功能关时覆盖视图也被拆除）：
     //   几何连续行区段合并为一组，每组一条覆盖视图 + 整段圆角描边，挂 tableView 本体（tag 管理）
-    UIView *parent = cellView.superview;
-    UITableView *tableView = nil;
-    while (parent) {
-        if ([parent isKindOfClass:[UITableView class]]) {
-            tableView = (UITableView *)parent; break;
-        }
-        parent = parent.superview;
-    }
     if (tableView) {
         [ListCornerRadiusHook wp_paintTableBorders:tableView
                                          featureOn:featureOn
@@ -458,8 +466,11 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     UIColor *targetBg = WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser");
     if (view.backgroundColor != targetBg) view.backgroundColor = targetBg;
 
+    // wakeups 优化：class 指针比对零分配（精确匹配 UIView 基类，替代 NSStringFromClass 文本比较）
+    static Class gUIViewCls;
+    if (!gUIViewCls) gUIViewCls = objc_getClass("UIView");
     for (UIView *subview in view.subviews) {
-        if ([NSStringFromClass([subview class]) isEqualToString:@"UIView"]) {
+        if ([subview class] == gUIViewCls) {
             BOOL hasLabel = NO;
             for (UIView *child in subview.subviews) {
                 if ([child isKindOfClass:[UILabel class]]) {
@@ -515,36 +526,32 @@ static void (*orig_UIView_layoutSubviews)(id, SEL);
 static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (orig_UIView_layoutSubviews) orig_UIView_layoutSubviews(self, _cmd);
 
-    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-    if (!config.globalCornerRadiusEnabled) return;
-
-    // wakeups 优化（原实现每次布局都 NSStringFromClass 字符串分配）：指针比对零分配，语义不变（精确匹配 UIView 基类）
+    // 顺序即性能（全 App 每个 UIView 每次布局都进这里）：class 指针比对（O(1) 零分配）
+    // → 总开关 → 尺寸 → 父/祖是表类（O(1) 字符串比较）→ responder 链找 VC + 名单（最贵，压轴）
     static Class g_nsViewCls;
     if (!g_nsViewCls) g_nsViewCls = objc_getClass("UIView");
     if ([self class] != g_nsViewCls) return;
 
-    UIView *view = (UIView *)self;
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
+    if (!config.globalCornerRadiusEnabled) return;
 
+    UIView *view = (UIView *)self;
     if (view.bounds.size.height < 1.0) return;
+
+    UIView *parent = view.superview;
+    if (!parent) return;
+    BOOL parentIsTable = _wp_isTableViewClass(NSStringFromClass([parent class]));
+    if (!parentIsTable) {
+        UIView *gp = parent.superview;
+        if (!(gp && _wp_isTableViewClass(NSStringFromClass([gp class])))) return;
+    }
 
     UIViewController *vc = [WPUtility findParentViewController:view];
     if (!vc || !_wp_isAllowedVC(NSStringFromClass([vc class]))) return;
 
-    UIView *parent = view.superview;
-    if (!parent) return;
-
     // wakeups 优化：幂等赋值——backgroundColor 赋值即 CA 脏标记，布局期内反复赋同值会搅动提交循环
-    if (_wp_isTableViewClass(NSStringFromClass([parent class]))) {
-        if (![view.backgroundColor isEqual:[UIColor clearColor]])
-            view.backgroundColor = [UIColor clearColor];
-        return;
-    }
-
-    UIView *gp = parent.superview;
-    if (gp && _wp_isTableViewClass(NSStringFromClass([gp class]))) {
-        if (![view.backgroundColor isEqual:[UIColor clearColor]])
-            view.backgroundColor = [UIColor clearColor];
-    }
+    if (![view.backgroundColor isEqual:[UIColor clearColor]])
+        view.backgroundColor = [UIColor clearColor];
 }
 
 @implementation ListCornerRadiusHook
@@ -701,6 +708,22 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (overlayW <= 0) return;
 
     NSInteger nSections = [tableView numberOfSections];
+
+    // ★ 结构戳节流：边框重绘的全部输入（开关/参数/边框色/表宽/各 section 行数）都是结构性或
+    //   配置性的——rectForRow 返回内容坐标，滚动不变，无需按帧重算全表分组。
+    //   戳相同直接返回（每帧 O(sections) 拼串比对，替代 2N 次 rectForRow + 分组 + subviews 遍历）；
+    //   旋转/配置变更/改色/结构变化 → 戳失配立即重跑；0.5s 时间桶兜底行高漂移自愈
+    NSMutableString *stamp = [[NSMutableString alloc] initWithCapacity:96];
+    [stamp appendFormat:@"%d|%d|%.0f|%ld|%.1f|%p|W%.1f|n%ld|t%lld",
+        featureOn, (BOOL)config.listCellBorder, margin, (long)radius, borderWidth,
+        borderColor, tableW, (long)nSections, (long long)(CFAbsoluteTimeGetCurrent() * 2.0)];
+    for (NSInteger s = 0; s < nSections; s++) {
+        [stamp appendFormat:@"|%ld", (long)[tableView numberOfRowsInSection:s]];
+    }
+    NSString *oldStamp = objc_getAssociatedObject(tableView, (__bridge const void *)kMioBorderStructKey);
+    if (oldStamp && [stamp isEqualToString:oldStamp]) return;
+    objc_setAssociatedObject(tableView, (__bridge const void *)kMioBorderStructKey, stamp,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     // ★ WCR 同款几何分组合并（Frida 实证）：相邻 section 的行带垂直连续（间隙 ≤ 0.5pt）
     //   即并入同一组，共享一张覆盖视图 + 一条整段圆角路径——与 indexPath/section 无关
