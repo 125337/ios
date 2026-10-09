@@ -296,18 +296,21 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         BOOL paintedNow = objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
         BOOL manageBg = featureOn || mioOwn || paintedNow;
         if (manageBg) {
-            // ★ 页面跳过名单（01:12 版本）：这些页面原生底色更协调，不涂用户背景色
+            // ★ 页面跳过名单（01:12 版本）：消息流/详情页/搜索类页面原生底更协调，不涂用户背景色
             static NSSet *bgColorSkipList = nil;
             static dispatch_once_t bgOnceToken;
             dispatch_once(&bgOnceToken, ^{
                 bgColorSkipList = [NSSet setWithObjects:
-                    @"FTSHomeViewController", @"NewSettingViewController", @"SettingCategoryController",
-                    @"NewMoreViewController", @"NewPluginListController", @"PluginPageController",
-                    @"DiscoverViewController", @"FindFriendEntryViewController", @"WCProfileCardHeaderController",
-                    @"WCProfileCardController", @"ContactsViewController", @"ContactsDynamicCardViewController",
-                    @"MiniProgramHomepageController", @"ChatRoomAnnouncementViewController",
-                    @"WWACountListController", @"OpenIMProfileCardController", @"WCAccountListController",
-                    @"MMScanCodeResultController", @"WCVoipInputPanelViewController", nil];
+                    @"WCTimeLineViewController", @"WCAccountLoginUsersViewController",
+                    @"SessionSelectController", @"WCListViewController",
+                    @"BrandNotificationListViewController", @"BrandNewSessionViewController",
+                    @"BaseMsgContentViewController", @"BraceletRankProfileViewController",
+                    @"BraceletRankViewController", @"WCRedEnvelopesRedEnvelopesDetailViewController",
+                    @"MsgRecordDetailViewController", @"ChatRoomInfoViewController",
+                    @"ContactInfoViewController", @"AddFriendEntryViewController",
+                    @"AddContactToChatRoomViewController", @"SayHelloViewController",
+                    @"FTSHomeViewController", @"MMFinderPivotLiveViewController",
+                    @"WCSearchController", nil];
             });
             BOOL bgAllowed = [bgColorSkipList containsObject:className] ? NO : YES;
 
