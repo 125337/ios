@@ -184,7 +184,8 @@
                                      cy:*ecy
                                   width:w
                                 darkKey:@"sgBgColorDark"
-                              darkValue:config.sgBgColorDark ?: @""];
+                              darkValue:config.sgBgColorDark ?: @""
+                            allowClear:YES];
     } cy:cy width:w];
 
     // 指示器颜色
@@ -200,7 +201,8 @@
                                      cy:*ecy
                                   width:w
                                 darkKey:@"sgIndicatorColorDark"
-                              darkValue:config.sgIndicatorColorDark ?: @""];
+                              darkValue:config.sgIndicatorColorDark ?: @""
+                            allowClear:YES];
     } cy:cy width:w];
 
     // 默认文本颜色
@@ -216,7 +218,8 @@
                                      cy:*ecy
                                   width:w
                                 darkKey:@"sgTextColorDark"
-                              darkValue:config.sgTextColorDark ?: @""];
+                              darkValue:config.sgTextColorDark ?: @""
+                            allowClear:YES];
     } cy:cy width:w];
 
     // 高亮文本颜色
@@ -232,7 +235,8 @@
                                      cy:*ecy
                                   width:w
                                 darkKey:@"sgHighlightColorDark"
-                              darkValue:config.sgHighlightColorDark ?: @""];
+                              darkValue:config.sgHighlightColorDark ?: @""
+                            allowClear:YES];
     } cy:cy width:w];
 
     // 自定义标题字号（自"外观与位置"移入；hook 已存在，照常生效）

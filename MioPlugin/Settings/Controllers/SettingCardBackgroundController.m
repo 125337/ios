@@ -180,7 +180,8 @@
                           value:config.cardBgCornerBgColor
                              cy:*ecy width:w
                        darkKey:@"cardBgCornerDarkBgColor"
-                     darkValue:config.cardBgCornerDarkBgColor];
+                     darkValue:config.cardBgCornerDarkBgColor
+                    allowClear:YES];
             *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
             CGFloat sw = config.cardBgStrokeWidth > 0 ? config.cardBgStrokeWidth : 2.0;
@@ -221,7 +222,8 @@
                                       value:c5.cardBgBorderColor
                                          cy:*ecy2 width:w
                                    darkKey:@"cardBgBorderColorDarkHex"
-                                 darkValue:c5.cardBgBorderColorDarkHex];
+                                 darkValue:c5.cardBgBorderColorDarkHex
+                                allowClear:YES];
         } cy:*ecy width:w];
 
     } cy:crny width:w];

@@ -69,7 +69,8 @@
                                   value:config.placeholderTextColorHex
                                      cy:*ecy width:w
                                darkKey:@"placeholderTextColorHexDark"
-                             darkValue:(config.placeholderTextColorHexDark ?: @"")];
+                             darkValue:(config.placeholderTextColorHexDark ?: @"")
+                            allowClear:YES];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         // 文字透明度

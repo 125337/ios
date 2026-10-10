@@ -88,14 +88,15 @@
                            alertMessage:@"请输入边距值(0-30像素)"
                                      cy:*ecy width:w];
 
-        // Cell 背景色（浅色+深色双预览）
+        // Cell 背景色（浅色+深色双预览，带清除入口：清空后走 Config 默认色兜底）
         *ecy = [self addColorRowInGroup:expand
                                   title:@"Cell背景色"
                                     key:@"listCellLightBgColor"
                                   value:cfg.listCellLightBgColor
                                      cy:*ecy width:w
                                darkKey:@"listCellDarkBgColor"
-                             darkValue:cfg.listCellDarkBgColor];
+                             darkValue:cfg.listCellDarkBgColor
+                            allowClear:YES];
     } cy:gcy width:w];
 
     y = [self finishGroup:globalGroup atY:y height:gcy];
@@ -132,7 +133,8 @@
                                   value:c3.listCellBorderColor
                                      cy:*ecy width:w
                                darkKey:@"listCellBorderColorDarkHex"
-                             darkValue:c3.listCellBorderColorDarkHex];
+                             darkValue:c3.listCellBorderColorDarkHex
+                            allowClear:YES];
 
     } cy:bocy width:w];
 

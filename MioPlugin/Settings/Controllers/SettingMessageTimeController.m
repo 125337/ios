@@ -101,7 +101,8 @@
                                       value:config.senderTextColorHex
                                          cy:*ecy width:w
                                    darkKey:@"senderTextColorDarkHex"
-                                 darkValue:config.senderTextColorDarkHex];
+                                 darkValue:config.senderTextColorDarkHex
+                                allowClear:YES];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
 
         *ecy = [self addColorRowInGroup:expand
@@ -110,7 +111,8 @@
                                       value:config.receiverTextColorHex
                                          cy:*ecy width:w
                                    darkKey:@"receiverTextColorDarkHex"
-                                 darkValue:config.receiverTextColorDarkHex];
+                                 darkValue:config.receiverTextColorDarkHex
+                                allowClear:YES];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand title:@"水平偏移" key:@"messageTimeOffsetX" value:[NSString stringWithFormat:@"%.1f", config.messageTimeOffsetX] hint:@"0" valueType:InputValueTypeNumber cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];

@@ -542,18 +542,6 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 
 #pragma mark - Row: Color
 
-// 旧版颜色行（无清除入口，等价 allowClear=NO），保持既有调用方编译不变
-- (CGFloat)addColorRowInGroup:(UIView *)group
-                        title:(NSString *)title
-                          key:(NSString *)key
-                        value:(NSString *)value
-                           cy:(CGFloat)cy
-                        width:(CGFloat)w
-                     darkKey:(NSString *)darkKey
-                   darkValue:(NSString *)darkValue {
-    return [self addColorRowInGroup:group title:title key:key value:value cy:cy width:w darkKey:darkKey darkValue:darkValue allowClear:NO];
-}
-
 - (CGFloat)addColorRowInGroup:(UIView *)group
                         title:(NSString *)title
                           key:(NSString *)key

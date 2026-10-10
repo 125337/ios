@@ -181,7 +181,8 @@
                                      cy:*ecy
                                   width:w
                                 darkKey:@"sdRailSelColorDark"
-                              darkValue:config.sdRailSelColorDark ?: @""];
+                              darkValue:config.sdRailSelColorDark ?: @""
+                            allowClear:YES];
     } cy:cy width:w];
 
     cy = [self addMasterSwitchRowInGroup:g3
@@ -196,7 +197,8 @@
                                      cy:*ecy
                                   width:w
                                 darkKey:@"sdRailTextColorDark"
-                              darkValue:config.sdRailTextColorDark ?: @""];
+                              darkValue:config.sdRailTextColorDark ?: @""
+                            allowClear:YES];
     } cy:cy width:w];
 
     y = [self finishGroup:g3 atY:y height:cy];

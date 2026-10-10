@@ -50,9 +50,8 @@ typedef NS_ENUM(NSInteger, InputValueType) {
                         width:(CGFloat)w;
 - (CGFloat)addHintRowInGroup:(UIView *)group text:(NSString *)text cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addButtonRowInGroup:(UIView *)group title:(NSString *)title hint:(NSString *)hint key:(NSString *)key cy:(CGFloat)cy width:(CGFloat)w;
-- (CGFloat)addColorRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w darkKey:(nullable NSString *)darkKey darkValue:(nullable NSString *)darkValue;
 
-/// 颜色行（完整版）：allowClear=YES 时选择器带「清除」入口，点击把 key/darkKey 写回空串恢复未设置
+/// 颜色行：allowClear=YES 时选择器带「清除」入口，点击把 key/darkKey 写回空串恢复未设置（全项目唯一颜色行入口）
 - (CGFloat)addColorRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w darkKey:(nullable NSString *)darkKey darkValue:(nullable NSString *)darkValue allowClear:(BOOL)allowClear;
 /// WCR addSegmentCellTo 同款：行内右侧 UISegmentedControl，ValueChanged 直写配置
 - (CGFloat)addSegmentRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key names:(NSArray<NSString *> *)names index:(NSInteger)index cy:(CGFloat)cy width:(CGFloat)w;
