@@ -36,8 +36,9 @@ static IMP orig_WCSearchBar_layoutSubviews = NULL;
                      radius:(NSInteger)radius
                    position:(NSInteger)position;
 
-// 独立视图（FoldView）的自体整段描边，双向拆装
-+ (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius;
+// 独立视图（FoldView）的自体描边：复用 cell 四段式几何（路径内缩半线宽），双向拆装
+// folded 传 YES 独立卡画完整轮廓；传 NO 时仅画左右竖线+底弧（卡片底部，无顶线）
++ (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius folded:(BOOL)folded;
 
 @end
 
@@ -479,7 +480,7 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     UIView *view = (UIView *)self;
     if (!config.globalCornerRadiusEnabled) {
         // ★ 功能总闸关：仅拆除自体边框（双向清洁），几何/底色不碰
-        [ListCornerRadiusHook wp_paintViewSelfBorder:view radius:0];
+        [ListCornerRadiusHook wp_paintViewSelfBorder:view radius:0 folded:YES];
         return;
     }
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
@@ -498,27 +499,21 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     }
     view.autoresizingMask = UIViewAutoresizingNone;
 
-    // 展开态：顶部方角 + 底部圆角（六月版方案：顶边直线衔接上卡，底角圆弧压在置顶卡顶弧上）；
-    // 折叠态：独立卡四角全圆；isFolding 不可用时兜底独立卡
+    // 折叠态：独立卡四角全圆；展开态：顶部方角 + 底部圆角（六月版方案：顶边直线衔接上卡，
+    // 底角圆弧压在置顶卡顶弧上）；isFolding 不可用时兜底独立卡
+    BOOL folded = YES;
     if ([view respondsToSelector:@selector(isFolding)]) {
-        BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(view, @selector(isFolding));
-        if (folding) {
-            view.layer.cornerRadius = radius;
-            view.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
-                                     | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
-        } else {
-            view.layer.cornerRadius = radius;
-            view.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
-        }
-    } else {
-        view.layer.cornerRadius = radius;
-        view.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
-                                 | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+        folded = ((BOOL (*)(id, SEL))objc_msgSend)(view, @selector(isFolding));
     }
+    view.layer.cornerRadius = radius;
+    view.layer.maskedCorners = folded
+        ? (kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
+         | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner)
+        : (kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner);
 
     view.layer.masksToBounds = YES;
 
-    [ListCornerRadiusHook wp_paintViewSelfBorder:view radius:radius];
+    [ListCornerRadiusHook wp_paintViewSelfBorder:view radius:radius folded:folded];
 
     // ★ 动态色：明暗跟随交给 UIKit trait 系统；指针幂等避免每轮 CA 脏标记
     UIColor *targetBg = WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser");
@@ -994,16 +989,6 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
 #pragma mark - ★ 边框层查找与描边色（FoldView 自体描边共用）
 
-// 在视图子层中查找本模块的边框 CAShapeLayer（按 name 识别）
-+ (CAShapeLayer *)wp_findBorderShapeInView:(UIView *)view {
-    for (CALayer *sub in view.layer.sublayers) {
-        if ([sub isKindOfClass:[CAShapeLayer class]] && [sub.name isEqualToString:kMioBorderLayerName]) {
-            return (CAShapeLayer *)sub;
-        }
-    }
-    return nil;
-}
-
 // 描边色写入：动态色按当前 trait 解析，CGColor 幂等比对后才写（明暗切换由 UIKit 自动跟随）
 + (void)wp_applyStrokeColor:(CAShapeLayer *)shape
                dynamicColor:(UIColor *)color
@@ -1018,9 +1003,12 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
-// FoldView 等独立视图的自体整段描边：动态色 + 样式戳幂等，双向拆装，完整圆角矩形轮廓。
-// 注意：radius 仅在绘制路径生效（决定 path 圆角），拆除分支不读它——调用方传 0 只是占位
-+ (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius {
+// FoldView 自体描边：复用 cell 的 wp_buildUnifiedBorderLayer 四段式几何——路径统一内缩半线宽
+// （侧线中线 x=hw / w-hw，与 cell 竖线 x=1/x=374 精确对齐），消除旧全宽矩形外扩 1pt 的错位。
+// folded=NO（展开态，卡片底部）：仅左右竖线 + 底弧，无顶线——上方 cell 中间行无底线，正好单线衔接；
+// folded=YES（折叠态，独立卡）：top+bottom 两段拼完整圆角轮廓（同 cell 首行+末行）。
+// 动态色逐轮按 trait 解析写入（CGColor 幂等），样式戳幂等，双向拆装。
++ (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius folded:(BOOL)folded {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     BOOL painted = objc_getAssociatedObject(view, (__bridge const void *)kMioTablePaintedKey) != nil;
 
@@ -1044,28 +1032,40 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (borderWidth <= 0) borderWidth = 1.0;
     UIColor *borderColor = WPDynamicBorderColor(config.listCellBorderColor, config.listCellBorderColorDarkHex);
 
-    CAShapeLayer *shape = [self wp_findBorderShapeInView:view];
-    if (!shape) {
-        shape = [CAShapeLayer layer];
-        shape.name = kMioBorderLayerName;
-        shape.fillColor = [UIColor clearColor].CGColor;
-        shape.lineJoin = kCALineJoinRound;
-        [view.layer addSublayer:shape];
-    }
-
-    NSString *stamp = [NSString stringWithFormat:@"r%ld-bw%.1f-w%.0f-h%.0f",
-                       (long)radius, borderWidth, view.bounds.size.width, view.bounds.size.height];
+    NSString *stamp = [NSString stringWithFormat:@"r%ld-f%d-bw%.1f-w%.0f-h%.0f",
+                       (long)radius, (int)folded, borderWidth,
+                       view.bounds.size.width, view.bounds.size.height];
     NSString *oldStamp = objc_getAssociatedObject(view, (__bridge const void *)kMioBorderStampKey);
     if (![stamp isEqualToString:oldStamp]) {
-        shape.frame = view.bounds;
-        shape.lineWidth = borderWidth;
-        shape.path = [UIBezierPath bezierPathWithRoundedRect:view.bounds
-                                                cornerRadius:(CGFloat)radius].CGPath;
+        // 段数随 folded 变化（1 段 ↔ 2 段），重建前先拆干净旧边框层
+        for (CALayer *sub in [view.layer.sublayers copy]) {
+            if ([sub isKindOfClass:[CAShapeLayer class]] && [sub.name isEqualToString:kMioBorderLayerName]) {
+                [sub removeFromSuperlayer];
+            }
+        }
+        if (folded) {
+            [view.layer addSublayer:[self wp_buildUnifiedBorderLayer:view.bounds
+                                                          borderWidth:borderWidth
+                                                         borderColor:borderColor
+                                                              radius:(CGFloat)radius
+                                                                type:@"top"]];
+        }
+        [view.layer addSublayer:[self wp_buildUnifiedBorderLayer:view.bounds
+                                                      borderWidth:borderWidth
+                                                     borderColor:borderColor
+                                                          radius:(CGFloat)radius
+                                                            type:@"bottom"]];
         objc_setAssociatedObject(view, (__bridge const void *)kMioBorderStampKey, stamp,
             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
-    [self wp_applyStrokeColor:shape dynamicColor:borderColor trait:view.traitCollection];
+    // 明暗切换不走重建：对全部边框层按当前 trait 解析动态色写入
+    for (CALayer *sub in view.layer.sublayers) {
+        if ([sub isKindOfClass:[CAShapeLayer class]] && [sub.name isEqualToString:kMioBorderLayerName]) {
+            [self wp_applyStrokeColor:(CAShapeLayer *)sub dynamicColor:borderColor
+                                trait:view.traitCollection];
+        }
+    }
 }
 
 + (void)install {
