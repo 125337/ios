@@ -246,20 +246,6 @@ static void WPStripBorderLayers(UIView *cell) {
         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-// 某页面列表 cell 的最终内缩边距（0 = 不内缩）——语义与下方 cell hook 的 margin 决策
-// 完全一致（mioOwn 写死 15；微信页面功能开走用户配置）。冷路径：仅供 HomeCard header
-// 构建宽基准等外部查询；cell hook 是热路径，保持内联不绕此方法
-+ (CGFloat)listCellMarginForViewController:(UIViewController *)vc {
-    if (!vc) return 0.0;
-    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-    NSString *className = NSStringFromClass([vc class]);
-    BOOL mioOwn = WPVCIsMioOwn(vc, className);
-    if (mioOwn) return 15.0;
-    BOOL featureOn = config.globalCornerRadiusEnabled
-        && ([CornerResponsibility isListCornerResponsibleFor:vc] && shouldApplyGlobalCorner(className));
-    return featureOn ? (CGFloat)config.listCellMargin : 0.0;
-}
-
 // ★★★ Cell Hook：列表圆角 + 分发到资料卡透明化 ★★★
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
@@ -722,6 +708,20 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 }
 
 @implementation ListCornerRadiusHook
+
+// 某页面列表 cell 的最终内缩边距（0 = 不内缩）——语义与 cell hook 的 margin 决策
+// 完全一致（mioOwn 写死 15；微信页面功能开走用户配置）。冷路径：仅供 HomeCard header
+// 构建宽基准等外部查询；cell hook 是热路径，保持内联不绕此方法
++ (CGFloat)listCellMarginForViewController:(UIViewController *)vc {
+    if (!vc) return 0.0;
+    ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
+    NSString *className = NSStringFromClass([vc class]);
+    BOOL mioOwn = WPVCIsMioOwn(vc, className);
+    if (mioOwn) return 15.0;
+    BOOL featureOn = config.globalCornerRadiusEnabled
+        && ([CornerResponsibility isListCornerResponsibleFor:vc] && shouldApplyGlobalCorner(className));
+    return featureOn ? (CGFloat)config.listCellMargin : 0.0;
+}
 
 + (void)initListCornerRadiusHook {
     WPLog(@"ListCornerRadius", @"[INIT] Initializing ListCornerRadius hook...");
