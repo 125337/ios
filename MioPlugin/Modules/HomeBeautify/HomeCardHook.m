@@ -312,15 +312,18 @@ static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *c
     container.userInteractionEnabled = YES;
     container.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 
-    // 内衬底板（XOS L22898-22912：左右各缩 16，圆角 12，裁剪）
-    UIView *inner = [[UIView alloc] initWithFrame:CGRectMake(16.0, 0, width - 32.0, H)];
+    // 内衬底板（XOS L22898-22912 同构，圆角 12，裁剪）：左右内缩与主卡片边距同源（HCCardMargin），
+    // 保证与主卡片左右边缘对齐；背景空值回落链 = 联系人自己的色 → 主卡片色 → 透明（主卡片同语义）
+    CGFloat inset = HCCardMargin(cfg);
+    UIView *inner = [[UIView alloc] initWithFrame:CGRectMake(inset, 0, width - inset * 2.0, H)];
     inner.backgroundColor = HCColorForMode(cfg.hcContactBgColor, cfg.hcContactBgColorDark, dark)
-        ?: (dark ? [UIColor colorWithWhite:0.12 alpha:1.0] : [UIColor whiteColor]);
+        ?: HCColorForMode(cfg.hcCardBgColor, cfg.hcCardBgColorDark, dark)
+        ?: [UIColor clearColor];
     inner.layer.cornerRadius = 12.0;
     inner.clipsToBounds = YES;
     [container addSubview:inner];
 
-    CGFloat innerW = width - 32.0;
+    CGFloat innerW = width - inset * 2.0;
     UIScrollView *sv = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, innerW, H)];
     sv.showsHorizontalScrollIndicator = NO;                 // XOS L22920
     sv.pagingEnabled = YES;                                 // 按页宽分页（contentSize = 页宽×页数）
