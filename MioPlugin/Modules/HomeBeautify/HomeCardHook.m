@@ -56,6 +56,7 @@
 #import "HomeCardCalendarPopup.h"
 #import "../SessionGroups/SessionGroupsConfig.h"
 #import "../SideGroups/SideGroupsConfig.h"
+#import "../ListCornerRadius/ListCornerRadiusHook.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/ConfigManager.h"
@@ -1514,8 +1515,6 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
     host.layoutMargins = UIEdgeInsetsZero;
     host.preservesSuperviewLayoutMargins = NO;
     host.backgroundColor = UIColor.clearColor;
-    // ★ 专属标记：ListCornerRadius 的 cell 内缩/涂装 hook 凭此跳过本 cell（见 HomeCardHook.h）
-    host.tag = MioHomeCardHeaderCellTag;
     container.frame = CGRectMake(0, 0, width, containerH);
     container.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [host.contentView addSubview:container];
@@ -1637,6 +1636,13 @@ static UIView *hook_NMFVC_viewForHeader(id self, SEL _cmd, UITableView *tableVie
 
     CGFloat width = CGRectGetWidth(tableView.frame);
     if (width <= 0.0) width = [UIScreen mainScreen].bounds.size.width;
+
+    // ★ 构建宽 = 最终 cell 宽：header 宿主是 MMTableViewCell，列表圆角开启时同普通 cell
+    //   一样被内缩/涂白底（视觉上与下方卡片连成一体）。若按表宽构建，容器经 autoresizing
+    //   收窄后，内部按表宽建的卡片/日历板/联系人分页整体错位（探针实证：容器 393→375，
+    //   卡片左距 25/右距 7 不对称）。内缩决策收拢在 ListCornerRadiusHook 单一事实源
+    CGFloat cellInset = [ListCornerRadiusHook listCellMarginForViewController:self];
+    if (cellInset > 0) width -= cellInset * 2.0;
 
     BOOL strip = HCStripOccupied();
     UIView *host;
