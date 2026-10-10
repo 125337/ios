@@ -3,7 +3,6 @@
 #import "../../Core/MioAlertHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
-#import <dlfcn.h>
 #import "../../Core/LogManager.h"
 
 // ==================== 原始IMP保存 ====================
@@ -247,50 +246,19 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
     return joker_menuWithAppend(orig_TransferCell_operationMenuItems, self, _cmd, "mioTransferJoker");
 }
 
-// ==================== ③b 菜单顺序统一 ====================
-// Frida 实证：菜单显示顺序 = -[MMMenuController setMenuItems:] 传入的数组顺序。
-// 文字菜单原生组装把外来项（menuType=0）留在末尾，转账菜单组装却把外来项插到头部。
-// 此处把 type=0 的项统一移到数组末尾：文字菜单本就在末尾（等价跳过），转账菜单被纠正。
-// 原生聊天菜单项全部走 initWithType:（type ≥1），type=0 只会是外来项。
-static IMP orig_MenuController_setMenuItems = NULL;
-
-// IMP 归属判断（同 MomentsHook）：当前 IMP 在其他 .dylib 里 = 已被别的插件接管，让位不挂
-static BOOL joker_impFromOtherPlugin(IMP imp) {
-    if (!imp) return NO;
-    Dl_info info;
-    if (!dladdr((const void *)imp, &info) || !info.dli_fname) return NO;
-    size_t n = strlen(info.dli_fname);
-    return n >= 6 && strcmp(info.dli_fname + n - 6, ".dylib") == 0;
-}
-
-static void hooked_MenuController_setMenuItems(id self, SEL _cmd, NSArray *items) {
-    if ([JokerConfig shared].enableJoker && [items isKindOfClass:[NSArray class]] && items.count >= 2) {
-        NSMutableArray *normal = nil, *foreign = nil;
-        for (id it in items) {
-            BOOL isForeign = NO;
-            @try {
-                if ([it respondsToSelector:@selector(menuType)]) {
-                    isForeign = (((NSUInteger(*)(id, SEL))objc_msgSend)(it, @selector(menuType)) == 0);
-                }
-            } @catch (NSException *e) {}
-            if (isForeign) {
-                if (!foreign) foreign = [NSMutableArray array];
-                [foreign addObject:it];
-            } else {
-                if (!normal) normal = [NSMutableArray array];
-                [normal addObject:it];
-            }
-        }
-        // 无外来项或全是外来项 → 不重排
-        if (normal && foreign) {
-            [normal addObjectsFromArray:foreign];
-            if (![normal isEqualToArray:items]) items = normal;
-        }
-    }
-    if (orig_MenuController_setMenuItems) {
-        ((void(*)(id, SEL, id))orig_MenuController_setMenuItems)(self, _cmd, items);
-    }
-}
+/*
+ * 【菜单顺序取证结论（Frida 实证，微信 8.0.60），暂不修：转账菜单"修改文字"显示在头部】
+ * - 菜单显示顺序 = -[MMMenuController setMenuItems:] 传入的数组顺序（非 menuType 排序）。
+ * - 文字菜单传入数组：[复制1,转发2,收藏3,删除4,多选5 | 引用6,提醒7,连续朗读44,搜一搜22, 外来0]
+ *   → 外来项（我们的，menuType=0）本就在末尾；转账菜单传入数组：[外来0, 引用6,提醒7,删除4,多选5,连续朗读44]
+ *   → 转账菜单的原生组装函数把外来项插到了头部。
+ * - 原生聊天菜单项全部走 initWithType:（type ≥1），menuType=0 只会是外来项（initWithTitle: 系默认 0）。
+ * - 原生项在 operationMenuItems 返回后才由组装函数（WeChat!0x1707caec）创建，无法在 hook 内控制最终顺序。
+ * - 已尝试修复路径：挂 MMMenuController setMenuItems:（dladdr 让位检查）把 type=0 项移到末尾——
+ *   实测未生效（KVO 派生类 NSKVONotifying_MMMenuController 可能拦截了调用，或转账菜单走了别的控制器），
+ *   已回退。若要再战：可试 MMMenuItem setMenuType: 改大值经验法，或 hook MMMenuContentView
+ *   updateWithData:animated: 读 MMMenuItemData.itemRows 抓真实分行。
+ */
 
 // ==================== ④ 钱包余额修改 ====================
 // 长按手势防重安装：遍历已有手势，无长按才挂（SEL 动态加到 view 类上，handler 签名 v@:@）
@@ -442,23 +410,6 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
             orig_TransferCell_operationMenuItems = method_getImplementation(existing);
             method_setImplementation(existing, (IMP)hooked_TransferCell_operationMenuItems);
         }
-    }
-
-    // ====== 菜单顺序统一 Hook（转账菜单外来项被原生组装插到头部，此处统一移尾）======
-    Class menuCtrlClass = objc_getClass("MMMenuController");
-    if (menuCtrlClass) {
-        SEL setItemsSel = NSSelectorFromString(@"setMenuItems:");
-        Method setItemsMethod = class_getInstanceMethod(menuCtrlClass, setItemsSel);
-        if (setItemsMethod) {
-            IMP curImp = method_getImplementation(setItemsMethod);
-            if (joker_impFromOtherPlugin(curImp)) {
-                WPLog(@"Joker", @"[JokerHook] setMenuItems: IMP 已被其他插件接管，让位不挂");
-            } else {
-                orig_MenuController_setMenuItems = method_setImplementation(setItemsMethod, (IMP)hooked_MenuController_setMenuItems);
-            }
-        }
-    } else {
-        WPLog(@"Joker", @"[JokerHook] ⚠️ MMMenuController NOT found");
     }
 
     // ====== 钱包 Hook ======
