@@ -114,93 +114,25 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
 }
 
 // ==================== 弹窗：修改文字 ====================
-static char kJokerAlertKey;
-static char kJokerMsgKey;
-
-static void joker_text_confirm_IMP(id self, SEL _cmd) {
-    WPLog(@"Joker", @"🔥 Joker confirm fired");
-
-    id alert = objc_getAssociatedObject(self, &kJokerAlertKey);
-    id msgWrap = objc_getAssociatedObject(self, &kJokerMsgKey);
-
-    if (!alert) {
-        WPLog(@"Joker", @"   ⚠️ alert released");
-        return;
-    }
-
-    NSString *input = nil;
-    @try { input = [alert valueForKeyPath:@"tipsVc.tipsTextView.text"]; }
-    @catch (NSException *e) {}
-    if (!input || input.length == 0) {
-        @try { input = [alert valueForKeyPath:@"tipsVc.tipsTextField.text"]; }
-        @catch (NSException *e) {}
-    }
-    if (!input || input.length == 0) {
-        SEL getText = NSSelectorFromString(@"getTextFieldText");
-        if ([alert respondsToSelector:getText]) {
-            input = ((id(*)(id, SEL))objc_msgSend)(alert, getText);
-        }
-    }
-
-    if (input.length > 0 && msgWrap) {
-        Class transferCls = objc_getClass("WCPayTransferMessageCellView");
-        if (transferCls && [self isKindOfClass:transferCls]) {
-            applyTransferModification(msgWrap, self, input);
-        } else {
-            applyTextModification(msgWrap, self, input);
-        }
-    }
-
-    objc_setAssociatedObject(self, &kJokerAlertKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(self, &kJokerMsgKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
+// 弹窗统一走 MioAlertHelper（anchor 单例做 target，永不悬垂；输入读取三级 fallback 内建）
 
 static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent) {
-    Class cls = objc_getClass("WCUIAlertView");
-    if (!cls) return;
-
-    SEL confirmSel = NSSelectorFromString(@"__joker_text_confirm");
-    Class cellClass = [cellView class];
-    if (![cellClass instancesRespondToSelector:confirmSel]) {
-        class_addMethod(cellClass, confirmSel, (IMP)joker_text_confirm_IMP, "v@:");
-    }
-
-    @try {
-        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([cls alloc], @selector(initWithTitle:message:), @"Mio助手", @"");
-        if (!alert) return;
-
-        SEL stf = NSSelectorFromString(@"showTextFieldWithMaxLen:");
-        if ([alert respondsToSelector:stf]) {
-            ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stf, 99999);
-        }
-
-        if (currentContent.length > 0) {
-            SEL dtf = NSSelectorFromString(@"setTextFieldDefaultText:");
-            if ([alert respondsToSelector:dtf]) {
-                ((void(*)(id, SEL, id))objc_msgSend)(alert, dtf, currentContent);
+    [MioAlertHelper showInputAlert:@"Mio助手"
+                           message:nil
+                       initialText:currentContent
+                       placeholder:nil
+                          keyboard:UIKeyboardTypeDefault
+                            secure:NO
+                        onConfirm:^(NSString *inputText) {
+        if (inputText.length > 0 && msgWrap) {
+            Class transferCls = objc_getClass("WCPayTransferMessageCellView");
+            if (transferCls && [cellView isKindOfClass:transferCls]) {
+                applyTransferModification(msgWrap, cellView, inputText);
+            } else {
+                applyTextModification(msgWrap, cellView, inputText);
             }
         }
-
-        SEL cancel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
-        if ([alert respondsToSelector:cancel]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancel, @"取消", cellView, NULL);
-        }
-
-        objc_setAssociatedObject(cellView, &kJokerAlertKey, alert, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(cellView, &kJokerMsgKey, msgWrap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-        SEL btn = NSSelectorFromString(@"addBtnTitle:target:sel:");
-        if ([alert respondsToSelector:btn]) {
-            ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btn, @"确定", cellView, confirmSel);
-        }
-
-        SEL sh = NSSelectorFromString(@"show");
-        if ([alert respondsToSelector:sh]) {
-            ((void(*)(id, SEL))objc_msgSend)(alert, sh);
-        }
-    } @catch (NSException *e) {
-        WPLog(@"Joker", @"[Joker] ❌ showEditAlert: %@", e);
-    }
+    }];
 }
 
 // ==================== ① 文本消息修改 ====================
@@ -334,77 +266,42 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
 }
 
 // ==================== ④ 钱包余额修改 ====================
-static char kJokerWalletAlertKey;
-
-static void joker_wallet_confirm_IMP(id self, SEL _cmd) {
-    id alert = objc_getAssociatedObject(self, &kJokerWalletAlertKey);
-    if (!alert) return;
-
-    NSString *input = nil;
-    @try { input = [alert valueForKeyPath:@"tipsVc.tipsTextView.text"]; }
-    @catch (NSException *e) {}
-    if (!input || input.length == 0) return;
-
-    NSNumberFormatter *fmt = sharedNumberFormatter();
-    NSNumber *n = [fmt numberFromString:input];
-    if (!n) {
-        WPLog(@"Joker", @"[Joker] ❌ invalid wallet amount: [%@]", input);
-        return;
-    }
-
-    @try {
-        SEL tnSel = NSSelectorFromString(@"timeoutNumber");
-        id timeoutNumber = nil;
-        if ([self respondsToSelector:tnSel]) {
-            timeoutNumber = ((id(*)(id, SEL))objc_msgSend)(self, tnSel);
-        } else {
-            timeoutNumber = [self valueForKey:@"timeoutNumber"];
-        }
-        if (timeoutNumber) {
-            NSInteger intVal = [n integerValue];
-            SEL updateNumSel = NSSelectorFromString(@"updateNumber:");
-            if ([timeoutNumber respondsToSelector:updateNumSel]) {
-                ((void(*)(id, SEL, NSInteger))objc_msgSend)(timeoutNumber, updateNumSel, intVal);
-            }
-        }
-    } @catch (NSException *e) {
-        WPLog(@"Joker", @"[Joker] ❌ wallet update: %@", e);
-    }
-
-    objc_setAssociatedObject(self, &kJokerWalletAlertKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
 static void walletLongPressHandler(id self, SEL _cmd, UIGestureRecognizer *gesture) {
     if (gesture.state != UIGestureRecognizerStateBegan) return;
     UIView *headerView = (UIView *)self;
 
-    Class cls = [headerView class];
-    SEL walletSel = NSSelectorFromString(@"__joker_wallet_confirm");
-    if (![cls instancesRespondToSelector:walletSel]) {
-        class_addMethod(cls, walletSel, (IMP)joker_wallet_confirm_IMP, "v@:");
-    }
-
-    Class alertCls = objc_getClass("WCUIAlertView");
-    if (!alertCls) return;
-
-    @try {
-        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertCls alloc], @selector(initWithTitle:message:), @"Mio助手", @"");
-
-        SEL stf = NSSelectorFromString(@"showTextFieldWithMaxLen:");
-        if ([alert respondsToSelector:stf]) ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stf, 99999);
-
-        SEL cancel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
-        if ([alert respondsToSelector:cancel]) ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancel, @"取消", headerView, NULL);
-
-        objc_setAssociatedObject(headerView, &kJokerWalletAlertKey, alert, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        SEL btn = NSSelectorFromString(@"addBtnTitle:target:sel:");
-        if ([alert respondsToSelector:btn]) ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btn, @"确定", headerView, walletSel);
-
-        SEL sh = NSSelectorFromString(@"show");
-        if ([alert respondsToSelector:sh]) ((void(*)(id, SEL))objc_msgSend)(alert, sh);
-    } @catch (NSException *e) {
-        WPLog(@"Joker", @"[Joker] ❌ Wallet alert: %@", e);
-    }
+    [MioAlertHelper showInputAlert:@"Mio助手"
+                           message:nil
+                       initialText:nil
+                       placeholder:nil
+                          keyboard:UIKeyboardTypeNumbersAndPunctuation
+                            secure:NO
+                        onConfirm:^(NSString *inputText) {
+        if (!inputText.length) return;
+        NSNumberFormatter *fmt = sharedNumberFormatter();
+        NSNumber *n = [fmt numberFromString:inputText];
+        if (!n) {
+            WPLog(@"Joker", @"[Joker] ❌ invalid wallet amount: [%@]", inputText);
+            return;
+        }
+        @try {
+            SEL tnSel = NSSelectorFromString(@"timeoutNumber");
+            id timeoutNumber = nil;
+            if ([headerView respondsToSelector:tnSel]) {
+                timeoutNumber = ((id(*)(id, SEL))objc_msgSend)(headerView, tnSel);
+            } else {
+                timeoutNumber = [headerView valueForKey:@"timeoutNumber"];
+            }
+            if (timeoutNumber) {
+                SEL updateNumSel = NSSelectorFromString(@"updateNumber:");
+                if ([timeoutNumber respondsToSelector:updateNumSel]) {
+                    ((void(*)(id, SEL, NSInteger))objc_msgSend)(timeoutNumber, updateNumSel, [n integerValue]);
+                }
+            }
+        } @catch (NSException *e) {
+            WPLog(@"Joker", @"[Joker] ❌ wallet update: %@", e);
+        }
+    }];
 }
 
 static void hooked_Wallet_updateBalanceEntryView(id self, SEL _cmd) {
@@ -428,64 +325,29 @@ static void hooked_Wallet_updateBalanceEntryView(id self, SEL _cmd) {
 }
 
 // ==================== ⑤ 零钱通修改 ====================
-static char kJokerTimeoutAlertKey;
-
-static void joker_timeout_confirm_IMP(id self, SEL _cmd) {
-    id alert = objc_getAssociatedObject(self, &kJokerTimeoutAlertKey);
-    if (!alert) return;
-
-    NSString *input = nil;
-    @try { input = [alert valueForKeyPath:@"tipsVc.tipsTextView.text"]; }
-    @catch (NSException *e) {}
-    if (!input || input.length == 0) return;
-
-    NSNumberFormatter *fmt = sharedNumberFormatter();
-    NSNumber *n = [fmt numberFromString:input];
-    if (!n) {
-        WPLog(@"Joker", @"[Joker] ❌ invalid timeout amount: [%@]", input);
-        return;
-    }
-
-    NSInteger intVal = [n integerValue];
-    SEL updateSel = NSSelectorFromString(@"updateNumber:");
-    if ([self respondsToSelector:updateSel]) {
-        ((void(*)(id, SEL, NSInteger))objc_msgSend)(self, updateSel, intVal);
-    }
-
-    objc_setAssociatedObject(self, &kJokerTimeoutAlertKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
 static void joker_timeout_longpress_IMP(id self, SEL _cmd, UIGestureRecognizer *gesture) {
     if (gesture.state != UIGestureRecognizerStateBegan) return;
     UIView *timeoutView = (UIView *)self;
 
-    Class cls = [timeoutView class];
-    SEL confirmSel = NSSelectorFromString(@"__joker_timeout_confirm");
-    if (![cls instancesRespondToSelector:confirmSel]) {
-        class_addMethod(cls, confirmSel, (IMP)joker_timeout_confirm_IMP, "v@:");
-    }
-
-    Class alertCls = objc_getClass("WCUIAlertView");
-    if (!alertCls) return;
-
-    @try {
-        id alert = ((id(*)(id, SEL, id, id))objc_msgSend)([alertCls alloc], @selector(initWithTitle:message:), @"Mio助手", @"请输入金额");
-
-        SEL stf = NSSelectorFromString(@"showTextFieldWithMaxLen:");
-        if ([alert respondsToSelector:stf]) ((void(*)(id, SEL, NSInteger))objc_msgSend)(alert, stf, 99999);
-
-        SEL cancel = NSSelectorFromString(@"addCancelBtnTitle:target:sel:");
-        if ([alert respondsToSelector:cancel]) ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, cancel, @"取消", timeoutView, NULL);
-
-        objc_setAssociatedObject(timeoutView, &kJokerTimeoutAlertKey, alert, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        SEL btn = NSSelectorFromString(@"addBtnTitle:target:sel:");
-        if ([alert respondsToSelector:btn]) ((void(*)(id, SEL, id, id, SEL))objc_msgSend)(alert, btn, @"确定", timeoutView, confirmSel);
-
-        SEL sh = NSSelectorFromString(@"show");
-        if ([alert respondsToSelector:sh]) ((void(*)(id, SEL))objc_msgSend)(alert, sh);
-    } @catch (NSException *e) {
-        WPLog(@"Joker", @"[Joker] ❌ TimeoutNumber alert: %@", e);
-    }
+    [MioAlertHelper showInputAlert:@"Mio助手"
+                           message:@"请输入金额"
+                       initialText:nil
+                       placeholder:nil
+                          keyboard:UIKeyboardTypeNumbersAndPunctuation
+                            secure:NO
+                        onConfirm:^(NSString *inputText) {
+        if (!inputText.length) return;
+        NSNumberFormatter *fmt = sharedNumberFormatter();
+        NSNumber *n = [fmt numberFromString:inputText];
+        if (!n) {
+            WPLog(@"Joker", @"[Joker] ❌ invalid timeout amount: [%@]", inputText);
+            return;
+        }
+        SEL updateSel = NSSelectorFromString(@"updateNumber:");
+        if ([timeoutView respondsToSelector:updateSel]) {
+            ((void(*)(id, SEL, NSInteger))objc_msgSend)(timeoutView, updateSel, [n integerValue]);
+        }
+    }];
 }
 
 static IMP orig_TimeoutNumber_didMoveToWindow = NULL;
