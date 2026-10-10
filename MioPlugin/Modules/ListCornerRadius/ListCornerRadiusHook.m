@@ -5,6 +5,7 @@
 #import "../../Core/LogManager.h"
 #import "../../Core/Utils/CornerResponsibility/CornerResponsibility.h"
 #import "../ProfileCardBg/ProfileCardBgHook.h"
+#import "../HomeBeautify/HomeCardHook.h"
 #import <substrate.h>
 #import <dlfcn.h>
 #import <objc/runtime.h>
@@ -248,6 +249,15 @@ static void WPStripBorderLayers(UIView *cell) {
 
 // ★★★ Cell Hook：列表圆角 + 分发到资料卡透明化 ★★★
 static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
+    // ★ HomeCard header 宿主 cell：不是列表行，跳过内缩/涂装（宿主恒按表宽构建，
+    //   若被内缩成卡宽，容器经 autoresizing 收窄后内部按表宽建的卡片/挂件整体错位）
+    if (((UIView *)self).tag == MioHomeCardHeaderCellTag) {
+        if (orig_MMTableViewCell_layoutSubviews) {
+            ((void (*)(id, SEL))orig_MMTableViewCell_layoutSubviews)(self, _cmd);
+        }
+        return;
+    }
+
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];

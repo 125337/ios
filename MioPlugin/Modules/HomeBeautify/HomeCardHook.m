@@ -1514,6 +1514,8 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
     host.layoutMargins = UIEdgeInsetsZero;
     host.preservesSuperviewLayoutMargins = NO;
     host.backgroundColor = UIColor.clearColor;
+    // ★ 专属标记：ListCornerRadius 的 cell 内缩/涂装 hook 凭此跳过本 cell（见 HomeCardHook.h）
+    host.tag = MioHomeCardHeaderCellTag;
     container.frame = CGRectMake(0, 0, width, containerH);
     container.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [host.contentView addSubview:container];
