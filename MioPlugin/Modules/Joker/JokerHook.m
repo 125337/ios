@@ -98,12 +98,18 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
         }
     } @catch (NSException *e) {}
 
-    // 刷新
+    // 刷新：updateTitleLabel 只置文本+默认 frame（金额 y=9），精调定位在 layoutContentView
+    // （原生流程经 layoutSubviews → layoutInternal → layoutContentView 把金额贴到描述上方，
+    //   实证 settle 后 y=16.7；改后不补调 layoutContentView 金额会停在默认位偏上）
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
             SEL titleSel = NSSelectorFromString(@"updateTitleLabel");
             if ([cellRef respondsToSelector:titleSel]) {
                 ((void(*)(id, SEL))objc_msgSend)(cellRef, titleSel);
+            }
+            SEL layoutSel = NSSelectorFromString(@"layoutContentView");
+            if ([cellRef respondsToSelector:layoutSel]) {
+                ((void(*)(id, SEL))objc_msgSend)(cellRef, layoutSel);
             }
         } @catch (NSException *e) {}
     });
