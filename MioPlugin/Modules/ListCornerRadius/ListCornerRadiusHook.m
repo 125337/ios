@@ -37,7 +37,7 @@ static IMP orig_WCSearchBar_layoutSubviews = NULL;
                    position:(NSInteger)position;
 
 // 独立视图（FoldView）的自体描边：复用 cell 四段式几何（路径内缩半线宽），双向拆装
-// folded 传 YES 独立卡画完整轮廓；传 NO 时仅画左右竖线+底弧（卡片底部，无顶线）
+// folded 传 YES 独立卡画完整圆角轮廓；传 NO 时画方角顶线+左右竖线+底弧（顶线分隔置顶卡，竖线上接置顶卡）
 + (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius folded:(BOOL)folded;
 
 @end
@@ -1005,7 +1005,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
 // FoldView 自体描边：复用 cell 的 wp_buildUnifiedBorderLayer 四段式几何——路径统一内缩半线宽
 // （侧线中线 x=hw / w-hw，与 cell 竖线 x=1/x=374 精确对齐），消除旧全宽矩形外扩 1pt 的错位。
-// folded=NO（展开态，卡片底部）：仅左右竖线 + 底弧，无顶线——上方 cell 中间行无底线，正好单线衔接；
+// folded=NO（展开态）：方角顶线（分隔置顶卡）+ 左右竖线（上接置顶卡侧线，连续无断点）+ 底弧收口；
 // folded=YES（折叠态，独立卡）：top+bottom 两段拼完整圆角轮廓（同 cell 首行+末行）。
 // 动态色逐轮按 trait 解析写入（CGColor 幂等），样式戳幂等，双向拆装。
 + (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius folded:(BOOL)folded {
@@ -1037,19 +1037,18 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                        view.bounds.size.width, view.bounds.size.height];
     NSString *oldStamp = objc_getAssociatedObject(view, (__bridge const void *)kMioBorderStampKey);
     if (![stamp isEqualToString:oldStamp]) {
-        // 段数随 folded 变化（1 段 ↔ 2 段），重建前先拆干净旧边框层
+        // 段数固定 2 段，但顶段圆角随 folded 变化（方角 0 ↔ 圆角 radius），重建前先拆干净
         for (CALayer *sub in [view.layer.sublayers copy]) {
             if ([sub isKindOfClass:[CAShapeLayer class]] && [sub.name isEqualToString:kMioBorderLayerName]) {
                 [sub removeFromSuperlayer];
             }
         }
-        if (folded) {
-            [view.layer addSublayer:[self wp_buildUnifiedBorderLayer:view.bounds
-                                                          borderWidth:borderWidth
-                                                         borderColor:borderColor
-                                                              radius:(CGFloat)radius
-                                                                type:@"top"]];
-        }
+        // 顶段：折叠态=圆角顶弧；展开态=方角顶线（r=0，顶线分隔置顶卡且竖线穿过与其相连）
+        [view.layer addSublayer:[self wp_buildUnifiedBorderLayer:view.bounds
+                                                      borderWidth:borderWidth
+                                                     borderColor:borderColor
+                                                              radius:folded ? (CGFloat)radius : 0
+                                                            type:@"top"]];
         [view.layer addSublayer:[self wp_buildUnifiedBorderLayer:view.bounds
                                                       borderWidth:borderWidth
                                                      borderColor:borderColor
