@@ -404,22 +404,23 @@ static void _hooked_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
     if (orig_MFWebMMBtn_layoutSubviews) orig_MFWebMMBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-    BOOL painted = objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
     if (!config.globalCornerRadiusEnabled) {
-        // 清洁态：凭涂装标记还原原背景色
-        if (painted) WPRestorePaintedBg((UIView *)self);
+        // 清洁态：凭涂装标记还原原背景色（painted 推迟到失效分支才读）
+        if (objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey))
+            WPRestorePaintedBg((UIView *)self);
         return;
     }
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) {
-        if (painted) WPRestorePaintedBg((UIView *)self);
+        if (objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey))
+            WPRestorePaintedBg((UIView *)self);
         return;
     }
 
     UIView *btnView = (UIView *)self;
-    if (!painted) {
+    if (!objc_getAssociatedObject(btnView, (__bridge const void *)kMioCornerPaintedKey)) {
         // 首次涂装：登记原背景色
         objc_setAssociatedObject(btnView, (__bridge const void *)kMioViewOrigBgKey,
             btnView.backgroundColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -437,22 +438,23 @@ static void _hooked_MFBannerBtn_layoutSubviews(id self, SEL _cmd) {
     if (orig_MFBannerBtn_layoutSubviews) orig_MFBannerBtn_layoutSubviews(self, _cmd);
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-    BOOL painted = objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
     if (!config.globalCornerRadiusEnabled) {
-        // 清洁态：凭涂装标记还原原背景色
-        if (painted) WPRestorePaintedBg((UIView *)self);
+        // 清洁态：凭涂装标记还原原背景色（painted 推迟到失效分支才读）
+        if (objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey))
+            WPRestorePaintedBg((UIView *)self);
         return;
     }
 
     UIViewController *vc = [WPUtility findParentViewController:(UIView *)self];
     if (!vc) return;
     if (![NSStringFromClass([vc class]) isEqualToString:@"NewMainFrameViewController"]) {
-        if (painted) WPRestorePaintedBg((UIView *)self);
+        if (objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey))
+            WPRestorePaintedBg((UIView *)self);
         return;
     }
 
     UIView *btnView = (UIView *)self;
-    if (!painted) {
+    if (!objc_getAssociatedObject(btnView, (__bridge const void *)kMioCornerPaintedKey)) {
         // 首次涂装：登记原背景色
         objc_setAssociatedObject(btnView, (__bridge const void *)kMioViewOrigBgKey,
             btnView.backgroundColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);

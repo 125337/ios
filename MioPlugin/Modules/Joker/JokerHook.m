@@ -25,15 +25,11 @@ static NSNumberFormatter *sharedNumberFormatter(void) {
 static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
     if (newText.length == 0) return;
 
-    BOOL msgUpdated = NO;
     if (msgRef) {
         @try {
             SEL setM_nsContentSel = NSSelectorFromString(@"setM_nsContent:");
             if ([msgRef respondsToSelector:setM_nsContentSel]) {
                 ((void(*)(id, SEL, id))objc_msgSend)(msgRef, setM_nsContentSel, newText);
-                NSString *after = nil;
-                @try { after = [msgRef valueForKey:@"m_nsContent"]; } @catch (NSException *e) {}
-                msgUpdated = [newText isEqualToString:after];
             }
         } @catch (NSException *e) {
             WPLog(@"Joker", @"[Joker] text modify failed: %@", e);
@@ -116,7 +112,7 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
 // ==================== 弹窗：修改文字 ====================
 // 弹窗统一走 MioAlertHelper（anchor 单例做 target，永不悬垂；输入读取三级 fallback 内建）
 
-static void showEditAlert(id alertView, id cellView, id msgWrap, NSString *currentContent) {
+static void showEditAlert(id cellView, id msgWrap, NSString *currentContent) {
     [MioAlertHelper showInputAlert:@"Mio助手"
                            message:nil
                        initialText:currentContent
@@ -154,7 +150,7 @@ static void mioTextJoker(id self, SEL _cmd) {
     }
     if (!content) content = @"";
 
-    showEditAlert(nil, self, msgWrap, content);
+    showEditAlert(self, msgWrap, content);
 }
 
 // ==================== ② 转账消息修改 ====================
@@ -195,7 +191,7 @@ static void mioTransferJoker(id self, SEL _cmd) {
     if (content.length > 200) content = @"";
     if (!content) content = @"";
 
-    showEditAlert(nil, self, msgWrap, content);
+    showEditAlert(self, msgWrap, content);
 }
 
 // ==================== ③ 菜单 Hook ====================
