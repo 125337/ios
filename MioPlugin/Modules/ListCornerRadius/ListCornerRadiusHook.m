@@ -18,28 +18,23 @@ static IMP orig_WCSearchBar_layoutSubviews = NULL;
 // 行位判定 + 圆角/边框应用（indexPath 语义：首/中/末 + 通讯录半合并 + 折叠置顶特判）
 + (void)wp_applyStandardCorner:(UIView *)cell
                     tableView:(UITableView *)tableView
-                    indexPath:(NSIndexPath *)indexPath
                       section:(NSInteger)section
                           row:(NSInteger)row
                         total:(NSInteger)totalRows
                  cornerRadius:(NSInteger)configuredRadius
-                    isFTSHome:(BOOL)isFTSHome
                     className:(NSString *)className;
 
 + (void)wp_applyCornerForContacts:(UIView *)cell
                        tableView:(UITableView *)tableView
-                       indexPath:(NSIndexPath *)indexPath
                          section:(NSInteger)section
                              row:(NSInteger)row
                            total:(NSInteger)rowInThisSection
-                    cornerRadius:(NSInteger)radius
-                        isFTSHome:(BOOL)isFTSHome;
+                    cornerRadius:(NSInteger)radius;
 
 // cell 内四段 CAShapeLayer 拼接边框（顶/底/左右/完整），样式戳幂等
 + (void)wp_applyBorderAndBg:(UIView *)cell
                      radius:(NSInteger)radius
-                   position:(NSInteger)position
-                  isFTSHome:(BOOL)isFTSHome;
+                   position:(NSInteger)position;
 
 // 独立视图（FoldView）的自体整段描边，双向拆装
 + (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius;
@@ -78,13 +73,12 @@ static NSString * const kMyPageVCClassName        = @"MoreViewController";
 static NSString * const kContactsVCClassName       = @"ContactsViewController";
 static NSString * const kDiscoverVCClassName       = @"FindFriendEntryViewController";
 
-static BOOL shouldApplyGlobalCorner(UIViewController *vc) {
-    if (!vc) return NO;
+// 分页面开关（className 由调用方传入，避免热路径重复 NSStringFromClass）
+static BOOL shouldApplyGlobalCorner(NSString *vcName) {
+    if (!vcName) return NO;
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     // 总开关由调用方短路，此处只管分页面开关
-
-    NSString *vcName = NSStringFromClass([vc class]);
 
     if ([vcName isEqualToString:kMyPageVCClassName]) {
         return config.globalCornerMyPageEnabled;
@@ -99,13 +93,13 @@ static BOOL shouldApplyGlobalCorner(UIViewController *vc) {
     return YES;
 }
 
-// Mio 自有页面判定（cell hook / table hook 共用）：MioPlugin*/WP* 前缀 + 设置页基类子类，
+// Mio 自有页面判定（className 由调用方传入，避免热路径重复 NSStringFromClass）：
+// MioPlugin*/WP* 前缀 + 设置页基类子类，
 // 这些页面始终应用硬编码基线皮肤（圆角 15 + 默认底）
-static BOOL WPVCIsMioOwn(UIViewController *vc) {
+static BOOL WPVCIsMioOwn(UIViewController *vc, NSString *className) {
     static Class scCls = nil;
     static dispatch_once_t scOnceToken;
     dispatch_once(&scOnceToken, ^{ scCls = NSClassFromString(@"SettingCategoryController"); });
-    NSString *className = NSStringFromClass([vc class]);
     return [className hasPrefix:@"MioPlugin"] || [className hasPrefix:@"WP"]
         || (scCls && [vc isKindOfClass:scCls]);
 }
@@ -224,12 +218,12 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     NSString *className = NSStringFromClass([vc class]);
 
     // ★ Mio 自有页面判定（共用函数）
-    BOOL mioOwn = WPVCIsMioOwn(vc);
+    BOOL mioOwn = WPVCIsMioOwn(vc, className);
 
     // ★ 页面归属（01:12 版本方案）：CornerResponsibility 黑名单（44 VC + 4 前缀，默认归列表圆角）
     //   + 分页面开关（我的/通讯录/发现三页独立开关）
     BOOL featureOn = config.globalCornerRadiusEnabled
-        && (mioOwn || ([CornerResponsibility isListCornerResponsibleFor:vc] && shouldApplyGlobalCorner(vc)));
+        && (mioOwn || ([CornerResponsibility isListCornerResponsibleFor:vc] && shouldApplyGlobalCorner(className)));
 
     UIView *cellView = (UIView *)self;
 
@@ -359,26 +353,21 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     NSInteger totalRows = [tableView numberOfRowsInSection:section];
 
     BOOL isContacts = [className isEqualToString:@"ContactsViewController"];
-    BOOL isFTSHome = [className isEqualToString:@"FTSHomeViewController"];
 
     if (isContacts) {
         [ListCornerRadiusHook wp_applyCornerForContacts:cellView
                                               tableView:tableView
-                                              indexPath:indexPath
                                                 section:section
                                                     row:row
                                                   total:totalRows
-                                           cornerRadius:cornerRadius
-                                               isFTSHome:isFTSHome];
+                                           cornerRadius:cornerRadius];
     } else {
         [ListCornerRadiusHook wp_applyStandardCorner:cellView
                                             tableView:tableView
-                                            indexPath:indexPath
                                               section:section
                                                   row:row
                                                 total:totalRows
                                          cornerRadius:cornerRadius
-                                            isFTSHome:isFTSHome
                                             className:className];
     }
 
@@ -592,18 +581,19 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     if (orig_UIView_layoutSubviews) orig_UIView_layoutSubviews(self, _cmd);
 
     // 顺序即性能（全 App 每个 UIView 每次布局都进这里）：class 指针比对（O(1) 零分配）
-    // → 清洁态（assoc O(1)）→ 尺寸 → 父/祖是表类（O(1) 字符串比较）→ responder 链 + 名单（最贵，压轴）
+    // → 尺寸 → 父/祖是表类（O(1) 字符串比较）→ responder 链 + 名单（最贵，压轴）；
+    //   painted 标记推迟到失效/首次涂装判定处才读——功能开且已涂装的多数帧免一次 assoc 读
     static Class g_nsViewCls;
     if (!g_nsViewCls) g_nsViewCls = objc_getClass("UIView");
     if ([self class] != g_nsViewCls) return;
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     UIView *view = (UIView *)self;
-    BOOL painted = objc_getAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey) != nil;
 
     if (!config.globalCornerRadiusEnabled) {
         // 清洁态：凭涂装标记还原原背景色
-        if (painted) WPRestorePaintedBg(view);
+        if (objc_getAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey))
+            WPRestorePaintedBg(view);
         return;
     }
 
@@ -611,25 +601,28 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
     UIView *parent = view.superview;
     if (!parent) {
-        if (painted) WPRestorePaintedBg(view);
+        if (objc_getAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey))
+            WPRestorePaintedBg(view);
         return;
     }
     BOOL parentIsTable = _wp_isTableViewClass(NSStringFromClass([parent class]));
     if (!parentIsTable) {
         UIView *gp = parent.superview;
         if (!(gp && _wp_isTableViewClass(NSStringFromClass([gp class])))) {
-            if (painted) WPRestorePaintedBg(view);
+            if (objc_getAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey))
+                WPRestorePaintedBg(view);
             return;
         }
     }
 
     UIViewController *vc = [WPUtility findParentViewController:view];
     if (!vc || !_wp_isAllowedVC(NSStringFromClass([vc class]))) {
-        if (painted) WPRestorePaintedBg(view);
+        if (objc_getAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey))
+            WPRestorePaintedBg(view);
         return;
     }
 
-    if (!painted) {
+    if (!objc_getAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey)) {
         // 首次涂装：登记原背景色
         objc_setAssociatedObject(view, (__bridge const void *)kMioViewOrigBgKey,
             view.backgroundColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -716,12 +709,10 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
 + (void)wp_applyStandardCorner:(UIView *)cell
                      tableView:(UITableView *)tableView
-                     indexPath:(NSIndexPath *)indexPath
                        section:(NSInteger)section
                            row:(NSInteger)row
                          total:(NSInteger)totalRows
                   cornerRadius:(NSInteger)configuredRadius
-                     isFTSHome:(BOOL)isFTSHome
                      className:(NSString *)className {
     NSInteger cornerType = 0;  // 用于 maskedCorners
     NSInteger borderType = 0;  // 用于 wp_applyBorderAndBg switch
@@ -734,7 +725,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
 
         // ★ 折叠置顶检测（仅聊天列表 section 1 的末行）★
         BOOL isNewMainFrame = [className isEqualToString:@"NewMainFrameViewController"];
-        if (isNewMainFrame && indexPath.section == 1) {
+        if (isNewMainFrame && section == 1) {
             UIView *foldView = [ListCornerRadiusHook wp_findFoldViewInSubviews:tableView.subviews];
             if (foldView && [foldView respondsToSelector:@selector(isFolding)]) {
                 BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(foldView, @selector(isFolding));
@@ -742,7 +733,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                     // 展开状态 → 无圆角 + 左右边框
                     cell.layer.cornerRadius = 0;
                     cell.layer.maskedCorners = 0;
-                    [self wp_applyBorderAndBg:cell radius:0 position:2 isFTSHome:isFTSHome];
+                    [self wp_applyBorderAndBg:cell radius:0 position:2];
                     return;
                 }
             }
@@ -763,77 +754,49 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                                    kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
 
-    [self wp_applyBorderAndBg:cell radius:configuredRadius position:borderType isFTSHome:isFTSHome];
+    [self wp_applyBorderAndBg:cell radius:configuredRadius position:borderType];
 }
 
 // 通讯录半合并特例（01:12 版本）：section 0-3 结构匹配时（sec0=3~4 行 + sec1/2/3 各 1 行）
 // 连成一张卡；sec0 末行无角与后面单行相接，sec3 出底角；结构不符回退 standard
 + (void)wp_applyCornerForContacts:(UIView *)cell
                         tableView:(UITableView *)tableView
-                        indexPath:(NSIndexPath *)indexPath
                           section:(NSInteger)section
                               row:(NSInteger)row
                             total:(NSInteger)rowInThisSection
-                     cornerRadius:(NSInteger)radius
-                         isFTSHome:(BOOL)isFTSHome {
+                     cornerRadius:(NSInteger)radius {
 
-    // ─── 分支 A：section > 3 → per-section ───
-    if (section > 3) {
-        [self wp_applyStandardCorner:cell tableView:tableView indexPath:indexPath
+    // ─── 结构取证：sec0 行数必须 3-4，sec1/2/3 各 1 行（不满足 → 回退 standard） ───
+    NSInteger sec0Rows = 0, sec1Rows = 0, sec2Rows = 0, sec3Rows = 0;
+    if ([tableView numberOfSections] > 0) sec0Rows = [tableView numberOfRowsInSection:0];
+    if ([tableView numberOfSections] > 1) sec1Rows = [tableView numberOfRowsInSection:1];
+    if ([tableView numberOfSections] > 2) sec2Rows = [tableView numberOfRowsInSection:2];
+    if ([tableView numberOfSections] > 3) sec3Rows = [tableView numberOfRowsInSection:3];
+
+    BOOL halfMerge = (sec0Rows >= 3 && sec0Rows <= 4)
+                  && sec1Rows == 1 && sec2Rows == 1 && sec3Rows == 1;
+
+    if (section > 3 || !halfMerge) {
+        [self wp_applyStandardCorner:cell tableView:tableView
                               section:section row:row total:rowInThisSection
-                         cornerRadius:radius isFTSHome:isFTSHome
-                            className:@"ContactsViewController"];
+                         cornerRadius:radius className:@"ContactsViewController"];
         return;
     }
 
-    // ─── 分支 B：section 0-3 特殊算法 ───
-
-    // 收集 Section 0-3 行数（不足补 0）
-    NSMutableArray *rowCounts = [NSMutableArray array];
-    for (NSInteger s = 0; s < 4; s++) {
-        [rowCounts addObject:@(s < [tableView numberOfSections]
-                              ? [tableView numberOfRowsInSection:s] : 0)];
-    }
-
-    // Section 0 行数必须 3-4 行
-    if ([rowCounts[0] integerValue] < 3 || [rowCounts[0] integerValue] > 4) {
-        [self wp_applyStandardCorner:cell tableView:tableView indexPath:indexPath
-                              section:section row:row total:rowInThisSection
-                         cornerRadius:radius isFTSHome:isFTSHome
-                            className:@"ContactsViewController"];
-        return;
-    }
-
-    // bVar1：section 1/2/3 是否都是 1 行
-    BOOL bVar1 = ([rowCounts[1] integerValue] == 1 &&
-                  [rowCounts[2] integerValue] == 1 &&
-                  [rowCounts[3] integerValue] == 1);
-
-    if (!bVar1) {
-        [self wp_applyStandardCorner:cell tableView:tableView indexPath:indexPath
-                              section:section row:row total:rowInThisSection
-                         cornerRadius:radius isFTSHome:isFTSHome
-                            className:@"ContactsViewController"];
-        return;
-    }
-
-    // ─── 半合并模式（bVar1=true） ───
+    // ─── 半合并模式：sec0 顶段（首行顶角、末行无角与后面单行相连），sec1/2 中段无角，sec3 底角 ───
 
     NSInteger ct = 0, bt = 2;  // cornerType / borderType
 
     if (section == 0) {
-        // Section 0：首行顶角，末行无角（和后面单行连一起）
         if (row == 0) {
             ct = 1; bt = 1;  // 顶角
         } else {
             ct = 0; bt = 2;  // 无角（末行/中间行都一样）
         }
     } else if (section == 3) {
-        // Section 3：最后一个单行 → 底角
-        ct = 2; bt = 3;
+        ct = 2; bt = 3;      // 底角
     } else {
-        // Section 1/2：中间单行 → 无角
-        ct = 0; bt = 2;
+        ct = 0; bt = 2;      // 中间单行无角
     }
 
     // 应用圆角
@@ -843,15 +806,14 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                              : ct == 3 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner|
                                           kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
                              : 0;
-    [self wp_applyBorderAndBg:cell radius:radius position:bt isFTSHome:isFTSHome];
+    [self wp_applyBorderAndBg:cell radius:radius position:bt];
 }
 
 // cell 内四段 CAShapeLayer 拼接边框（01:12 版本）：全量化缓存 key，key 失配才重建，
 // 幂等路径零分配零重建；边框关/功能关时拆除既有边框后登记缓存即返回
 + (void)wp_applyBorderAndBg:(UIView *)cell
                      radius:(NSInteger)radius
-                   position:(NSInteger)position
-                  isFTSHome:(BOOL)isFTSHome {
+                   position:(NSInteger)position {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
 
     BOOL isDark = [WPUtility isDarkModeForView:cell];
@@ -861,8 +823,8 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     // （旧 key 缺明暗，暗黑↔浅色切换时 CGColor 快照残留；缺 bounds，旋转/分屏后边框几何过期）
     NSString *existingCacheKey = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey);
     CGRect cb = cell.bounds;
-    NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-f%d-b%.1f-bd%d-d%d-g%d-cl%@-cd%@-w%.0f-h%.0f",
-                          (long)radius, (long)position, isFTSHome,
+    NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-b%.1f-bd%d-d%d-g%d-cl%@-cd%@-w%.0f-h%.0f",
+                          (long)radius, (long)position,
                           config.listCellBorderWidth,
                           (int)config.listCellBorder, (int)isDark,
                           (int)config.globalCornerRadiusEnabled,
@@ -1052,7 +1014,8 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
-// FoldView 等独立视图的自体整段描边（原 position 0 全边框语义）：动态色 + 样式戳幂等，双向拆装
+// FoldView 等独立视图的自体整段描边（原 position 0 全边框语义）：动态色 + 样式戳幂等，双向拆装。
+// 注意：radius 仅在绘制路径生效（决定 path 圆角），拆除分支不读它——调用方传 0 只是占位
 + (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     BOOL painted = objc_getAssociatedObject(view, (__bridge const void *)kMioTablePaintedKey) != nil;
