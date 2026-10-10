@@ -57,7 +57,7 @@ static BOOL WPHexSame(NSString *a, NSString *b) {
 
 // ★ WCR 同款动态背景色（FUN_007d44a8 实证方案）：明暗 hex 一次构建 colorWithDynamicProvider
 //   并槽位缓存，明暗切换由 UIKit 按 trait 自动重取色——hook 内不再判暗。
-//   两侧兜底语义：浅色白 / 深色 #202020；tag 区分通道（用户色 / 默认底）。
+//   兜底色与 Config 默认色同源（MioDefault* 常量）；tag 区分通道（用户色 / 默认底）。
 //   ★ 单槽 + 指针快路径：命中零分配（替代每帧 stringWithFormat 拼 key 的热路径分配）
 static UIColor *WPDynamicCellBgColor(NSString *lightHex, NSString *darkHex, NSString *tag) {
     static NSString *sTag = nil, *sLight = nil, *sDark = nil;
@@ -65,10 +65,17 @@ static UIColor *WPDynamicCellBgColor(NSString *lightHex, NSString *darkHex, NSSt
     if (sColor && WPHexSame(tag, sTag) && WPHexSame(lightHex, sLight) && WPHexSame(darkHex, sDark)) {
         return sColor;
     }
+    // 兜底色与 Config 默认色同源（MioDefault* 常量）：清空颜色与从未配置呈现一致
+    static UIColor *fLight = nil, *fDark = nil;
+    static dispatch_once_t fbOnce;
+    dispatch_once(&fbOnce, ^{
+        fLight = [WPColorUtil colorFromHexString:MioDefaultCellLightBgColor];
+        fDark  = [WPColorUtil colorFromHexString:MioDefaultCellDarkBgColor];
+    });
     UIColor *color = [WPColorUtil dynamicColorFromLightHex:lightHex
                                                    darkHex:darkHex
-                                             lightFallback:[UIColor whiteColor]
-                                              darkFallback:[UIColor colorWithRed:0.125 green:0.125 blue:0.125 alpha:1.0]];
+                                             lightFallback:fLight
+                                              darkFallback:fDark];
     if (color) {
         sTag = tag; sLight = lightHex; sDark = darkHex; sColor = color;
     }
@@ -191,7 +198,7 @@ static NSString * const kMioFoldOrigClipsKey      = @"com.mio.foldOrigClips";
 static NSString * const kMioFoldOrigAutoresizingKey = @"com.mio.foldOrigAutoresizing";
 
 // 边框动态色（WCR 同款）：明暗 hex 一次构建动态 UIColor 并槽位缓存，
-// 明暗切换由 UIKit trait 自动重取色；两侧兜底语义一致（浅 0.9 灰 / 深 0.25 灰）。
+// 明暗切换由 UIKit trait 自动重取色；兜底色与 Config 默认色同源（MioDefault* 常量）。
 // ★ 槽位 + 指针快路径：命中零分配；计算结果为 nil 不占槽，下轮重算
 static UIColor *WPDynamicBorderColor(NSString *lightHex, NSString *darkHex) {
     static NSString *sLight = nil, *sDark = nil;
@@ -199,10 +206,16 @@ static UIColor *WPDynamicBorderColor(NSString *lightHex, NSString *darkHex) {
     if (sColor && WPHexSame(lightHex, sLight) && WPHexSame(darkHex, sDark)) {
         return sColor;
     }
+    static UIColor *fLight = nil, *fDark = nil;
+    static dispatch_once_t fbOnce;
+    dispatch_once(&fbOnce, ^{
+        fLight = [WPColorUtil colorFromHexString:MioDefaultBorderColorLight];
+        fDark  = [WPColorUtil colorFromHexString:MioDefaultBorderColorDark];
+    });
     UIColor *color = [WPColorUtil dynamicColorFromLightHex:lightHex
                                                    darkHex:darkHex
-                                             lightFallback:[UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0]
-                                              darkFallback:[UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]];
+                                             lightFallback:fLight
+                                              darkFallback:fDark];
     if (color) {
         sLight = lightHex; sDark = darkHex; sColor = color;
     }
@@ -422,9 +435,10 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         for (UIView *sub in cellView.subviews) {
             // 分隔线类 1px 小视图不参与切角：强设 r=15 圆角会把线两端削断
             if (CGRectGetHeight(sub.frame) <= 2.0 || CGRectGetWidth(sub.frame) <= 2.0) continue;
-            sub.layer.cornerRadius = cr;
-            sub.layer.maskedCorners = mc;
-            sub.layer.masksToBounds = YES;
+            // 幂等写入：先读后写，避免每帧无条件 set 产生 CA 脏标记
+            if (sub.layer.cornerRadius != cr) sub.layer.cornerRadius = cr;
+            if (sub.layer.maskedCorners != mc) sub.layer.maskedCorners = mc;
+            if (!sub.layer.masksToBounds) sub.layer.masksToBounds = YES;
         }
     }
 }
@@ -554,11 +568,15 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     if ([view respondsToSelector:@selector(isFolding)]) {
         folded = ((BOOL (*)(id, SEL))objc_msgSend)(view, @selector(isFolding));
     }
-    view.layer.cornerRadius = radius;
-    view.layer.maskedCorners = folded
+    // 幂等写入：先读后写，避免每帧无条件 set 产生 CA 脏标记
+    if (view.layer.cornerRadius != (CGFloat)radius)
+        view.layer.cornerRadius = (CGFloat)radius;
+    NSUInteger foldCorners = folded
         ? (kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
          | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner)
         : (kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner);
+    if (view.layer.maskedCorners != foldCorners)
+        view.layer.maskedCorners = foldCorners;
 
     view.layer.masksToBounds = YES;
 
@@ -785,9 +803,9 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
             if (foldView && [foldView respondsToSelector:@selector(isFolding)]) {
                 BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(foldView, @selector(isFolding));
                 if (!folding) {
-                    // 展开状态 → 无圆角 + 左右边框
-                    cell.layer.cornerRadius = 0;
-                    cell.layer.maskedCorners = 0;
+                    // 展开状态 → 无圆角 + 左右边框（幂等写）
+                    if (cell.layer.cornerRadius != 0) cell.layer.cornerRadius = 0;
+                    if (cell.layer.maskedCorners != 0) cell.layer.maskedCorners = 0;
                     [self wp_applyBorderAndBg:cell radius:0 position:2];
                     return;
                 }
@@ -797,17 +815,19 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         cornerType = 0; borderType = 2;  // 无角 + 左右边框
     }
 
-    cell.layer.cornerRadius = (CGFloat)configuredRadius;
-    cell.layer.maskedCorners = 0;
-
+    // 幂等写入：先读后写，避免每帧无条件 set 产生 CA 脏标记
+    if (cell.layer.cornerRadius != (CGFloat)configuredRadius)
+        cell.layer.cornerRadius = (CGFloat)configuredRadius;
+    NSUInteger mc = 0;
     if (cornerType == 1) {
-        cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+        mc = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
     } else if (cornerType == 2) {
-        cell.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+        mc = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     } else if (cornerType == 3) {
-        cell.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
-                                   kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+        mc = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
+             kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
+    if (cell.layer.maskedCorners != mc) cell.layer.maskedCorners = mc;
 
     [self wp_applyBorderAndBg:cell radius:configuredRadius position:borderType];
 }
@@ -854,13 +874,15 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         ct = 0; bt = 2;      // 中间单行无角
     }
 
-    // 应用圆角
-    cell.layer.cornerRadius = (ct == 0) ? 0 : (CGFloat)radius;
-    cell.layer.maskedCorners = ct == 1 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner)
+    // 应用圆角（幂等写：先读后写，避免每帧无条件 set 产生 CA 脏标记）
+    CGFloat targetR = (ct == 0) ? 0 : (CGFloat)radius;
+    if (cell.layer.cornerRadius != targetR) cell.layer.cornerRadius = targetR;
+    NSUInteger mc = ct == 1 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner)
                              : ct == 2 ? (kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
                              : ct == 3 ? (kCALayerMinXMinYCorner|kCALayerMaxXMinYCorner|
                                           kCALayerMinXMaxYCorner|kCALayerMaxXMaxYCorner)
                              : 0;
+    if (cell.layer.maskedCorners != mc) cell.layer.maskedCorners = mc;
     [self wp_applyBorderAndBg:cell radius:radius position:bt];
 }
 
