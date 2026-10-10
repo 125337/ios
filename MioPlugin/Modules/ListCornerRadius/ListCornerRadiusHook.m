@@ -955,6 +955,9 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                         startAngle:M_PI * 1.5
                           endAngle:0
                          clockwise:YES];
+        } else {
+            // ★ r=0（方角顶线）必须显式补顶边，否则左上直接连右下会画出对角线
+            [path addLineToPoint:CGPointMake(w - hw, hw + r)];
         }
         [path addLineToPoint:CGPointMake(w - hw, h)];
     } else if ([type isEqualToString:@"bottom"]) {
@@ -971,6 +974,9 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
                         startAngle:M_PI * 0.5
                           endAngle:0
                          clockwise:NO];
+        } else {
+            // ★ r=0（方角底线）同理补底边，防对角线
+            [path addLineToPoint:CGPointMake(w - hw, h - hw - r)];
         }
         [path addLineToPoint:CGPointMake(w - hw, 0)];
     } else if ([type isEqualToString:@"left"]) {
