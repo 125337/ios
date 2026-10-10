@@ -31,14 +31,20 @@ static IMP orig_WCSearchBar_layoutSubviews = NULL;
                            total:(NSInteger)rowInThisSection
                     cornerRadius:(NSInteger)radius;
 
-// cell 内四段 CAShapeLayer 拼接边框（顶/底/左右/完整），样式戳幂等
+// cell 内四段 CAShapeLayer 拼接边框（顶/底/左右/完整），结构签名幂等
 + (void)wp_applyBorderAndBg:(UIView *)cell
                      radius:(NSInteger)radius
                    position:(NSInteger)position;
 
+// 按当前 trait 幂等刷新 cell 内边框层描边色（动态色，明暗切换零重建）
++ (void)wp_refreshBorderStroke:(UIView *)cell;
+
 // 独立视图（FoldView）的自体描边：复用 cell 四段式几何（路径内缩半线宽），双向拆装
 // folded 传 YES 独立卡画完整圆角轮廓；传 NO 时画方角顶线+左右竖线+底弧（顶线分隔置顶卡，竖线上接置顶卡）
 + (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius folded:(BOOL)folded;
+
+// FoldView 清洁态：还原涂装时登记的全部原值（圆角/masks/autoresizing/背景色/子视图底色/frame 全宽）
++ (void)wp_restoreFoldView:(UIView *)view;
 
 @end
 
@@ -163,8 +169,26 @@ static NSString * const kMioBorderLayerName = @"com.mio.cornerBorder";
 static NSString * const kMioBorderStampKey = @"com.mio.borderStamp";
 // （涂装标记 kMioCornerPaintedKey 与原值口袋已上移至文件头部，供 WCSearchBar 等早期函数使用）
 static NSString * const kMioTablePaintedKey = @"com.mio.tablePainted";
-// cell 边框缓存 key：key 失配触发重建而非每 layout 重建（含所有影响边框渲染的输入参数）
-static NSString * const kMioBorderCacheKey = @"com.mio.cornerBorderCacheKey";
+// cell 边框缓存：结构签名（8 数值字段 memcmp）+ 明暗 hex 指针比较——每帧零分配，
+// 任一渲染入参变化才重建（替代旧 9 字段 stringWithFormat 拼接的热路径分配）
+static NSString * const kMioBorderSigKey   = @"com.mio.cornerBorderSig";
+static NSString * const kMioBorderLightKey = @"com.mio.cornerBorderLightHex";
+static NSString * const kMioBorderDarkKey  = @"com.mio.cornerBorderDarkHex";
+typedef struct {
+    NSInteger radius;
+    NSInteger position;
+    CGFloat   borderWidth;
+    BOOL      borderOn;
+    BOOL      globalOn;
+    CGFloat   w;
+    CGFloat   h;
+} WPBorderSig;
+
+// FoldView 清洁态原值口袋（背景色复用 kMioViewOrigBgKey，子视图同）
+static NSString * const kMioFoldOrigRadiusKey     = @"com.mio.foldOrigRadius";
+static NSString * const kMioFoldOrigMasksKey      = @"com.mio.foldOrigMasks";
+static NSString * const kMioFoldOrigClipsKey      = @"com.mio.foldOrigClips";
+static NSString * const kMioFoldOrigAutoresizingKey = @"com.mio.foldOrigAutoresizing";
 
 // 边框动态色（WCR 同款）：明暗 hex 一次构建动态 UIColor 并槽位缓存，
 // 明暗切换由 UIKit trait 自动重取色；两侧兜底语义一致（浅 0.9 灰 / 深 0.25 灰）。
@@ -201,7 +225,11 @@ static void WPStripBorderLayers(UIView *cell) {
             [sub removeFromSuperlayer];
         }
     }
-    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey, nil,
+    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderSigKey, nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderLightKey, nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderDarkKey, nil,
         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
@@ -285,10 +313,9 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
-    // ★ bgColor 设置（动态色三态：功能开/Mio 基线/清洁态复原；页面跳过名单与 01:12 一致）
+    // ★ bgColor 设置（动态色：功能开/Mio 基线两通道；清洁态不走这里，由下方 WPRestorePaintedBg 回写原值）
     {
-        BOOL paintedNow = objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
-        BOOL manageBg = featureOn || mioOwn || paintedNow;
+        BOOL manageBg = featureOn || mioOwn;
         if (manageBg) {
             // ★ 页面跳过名单：仅搜索页——其列表圆角照做但保留原生底。
             //   01:12 名单其余 18 项（消息流/详情页等）均同时被 CornerResponsibility 圆角黑名单
@@ -302,8 +329,13 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
             BOOL bgAllowed = [bgColorSkipList containsObject:className] ? NO : YES;
 
             // ★ 动态色语义：明暗跟随交给 UIKit 的 trait 系统，hook 内不再判暗。
-            //   Mio 基线皮肤=默认底（不吃用户色）、微信页面功能开=用户色（两侧兜底默认底）、
-            //   清洁态=nil 回微信原生底——三条通道与原语义逐字一致
+            //   Mio 基线皮肤=默认底（不吃用户色）、微信页面功能开=用户色（两侧兜底默认底）
+            // ★ 首次涂装登记原背景色（原值口袋），功能关后由 WPRestorePaintedBg 回写，
+            //   不再赌微信重新 configure——静止不滚动的 cell 不透底
+            if (objc_getAssociatedObject(cellView, (__bridge const void *)kMioViewOrigBgKey) == nil) {
+                objc_setAssociatedObject(cellView, (__bridge const void *)kMioViewOrigBgKey,
+                    cellView.backgroundColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
             UIColor *targetBg = nil;
             if (mioOwn) {
                 targetBg = featureOn
@@ -314,7 +346,6 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
                     ? WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser")
                     : nil;
             }
-            // else：清洁态 targetBg 保持 nil（回微信原生底）
             // 幂等：指针相同（共享动态色对象）或 isEqual 才跳过，避免每轮产生 CA 脏标记
             BOOL sameBg = (targetBg == nil)
                 ? (cellView.backgroundColor == nil)
@@ -326,15 +357,14 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    // ★ 清洁态（微信页面，功能关）：只清理涂装过的 cell——拆边框、回原生直角；未涂装的零触碰
+    // ★ 清洁态（微信页面，功能关）：只清理涂装过的 cell——拆边框、回原生直角、回写原背景色；未涂装的零触碰
     if (!featureOn && !mioOwn) {
         if (objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey)) {
             WPStripBorderLayers(cellView);
             if (cellView.layer.cornerRadius != 0) cellView.layer.cornerRadius = 0;
             if (cellView.layer.maskedCorners != 0) cellView.layer.maskedCorners = 0;
             if (cellView.layer.masksToBounds) cellView.layer.masksToBounds = NO;
-            objc_setAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey, nil,
-                OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            WPRestorePaintedBg(cellView);  // 回写涂装前原 bg + 清涂装标记
         }
         return;
     }
@@ -479,8 +509,11 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     UIView *view = (UIView *)self;
     if (!config.globalCornerRadiusEnabled) {
-        // ★ 功能总闸关：仅拆除自体边框（双向清洁），几何/底色不碰
+        // ★ 功能总闸关：清洁态——拆自体边框 + 凭原值口袋还原涂装过的全部属性
         [ListCornerRadiusHook wp_paintViewSelfBorder:view radius:0 folded:YES];
+        if (objc_getAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey)) {
+            [ListCornerRadiusHook wp_restoreFoldView:view];
+        }
         return;
     }
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
@@ -488,6 +521,22 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
     NSInteger margin = (NSInteger)config.listCellMargin;
     if (margin == 0) margin = 9;
+
+    // ★ 首次涂装：登记原值口袋（圆角/masks/autoresizing/背景色），供清洁态还原
+    if (!objc_getAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey)) {
+        objc_setAssociatedObject(view, (__bridge const void *)kMioCornerPaintedKey, @YES,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, (__bridge const void *)kMioFoldOrigRadiusKey,
+            @(view.layer.cornerRadius), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, (__bridge const void *)kMioFoldOrigMasksKey,
+            @(view.layer.maskedCorners), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, (__bridge const void *)kMioFoldOrigClipsKey,
+            @(view.layer.masksToBounds), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, (__bridge const void *)kMioFoldOrigAutoresizingKey,
+            @(view.autoresizingMask), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, (__bridge const void *)kMioViewOrigBgKey,
+            view.backgroundColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
 
     CGRect frame = view.frame;
     CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
@@ -532,7 +581,14 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
                 }
             }
             if (!hasLabel) {
-                subview.backgroundColor = [UIColor clearColor];
+                // 清透明前登记子视图原 bg（原值口袋挂在子视图上），清洁态逐个回写
+                if (objc_getAssociatedObject(subview, (__bridge const void *)kMioViewOrigBgKey) == nil) {
+                    objc_setAssociatedObject(subview, (__bridge const void *)kMioViewOrigBgKey,
+                        subview.backgroundColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                }
+                if (![subview.backgroundColor isEqual:[UIColor clearColor]]) {
+                    subview.backgroundColor = [UIColor clearColor];
+                }
             }
         }
     }
@@ -808,51 +864,56 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     [self wp_applyBorderAndBg:cell radius:radius position:bt];
 }
 
-// cell 内四段 CAShapeLayer 拼接边框（01:12 版本）：全量化缓存 key，key 失配才重建，
-// 幂等路径零分配零重建；边框关/功能关时拆除既有边框后登记缓存即返回
+// cell 内四段 CAShapeLayer 拼接边框：结构签名（WPBorderSig 7 数值字段 memcmp）+ 明暗 hex 指针比较，
+// 每帧零分配零重建；命中签名仅按 trait 幂等刷新描边色（动态色，明暗切换不走重建、不参与签名）；
+// 签名失配才拆旧层重建；边框关/功能关时拆既有边框后登记签名即返回
 + (void)wp_applyBorderAndBg:(UIView *)cell
                      radius:(NSInteger)radius
                    position:(NSInteger)position {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-
-    BOOL isDark = [WPUtility isDarkModeForView:cell];
-
-    // 缓存 key 覆盖全部渲染入参：几何 + 边框开关 + 总开关 + 明暗 + 两个边框色 + cell 宽高。
-    // 任一变化即重建——边框即开即清、即关即清、换色/明暗切换即换
-    // （旧 key 缺明暗，暗黑↔浅色切换时 CGColor 快照残留；缺 bounds，旋转/分屏后边框几何过期）
-    NSString *existingCacheKey = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey);
     CGRect cb = cell.bounds;
-    NSString *cacheKey = [NSString stringWithFormat:@"r%ld-p%ld-b%.1f-bd%d-d%d-g%d-cl%@-cd%@-w%.0f-h%.0f",
-                          (long)radius, (long)position,
-                          config.listCellBorderWidth,
-                          (int)config.listCellBorder, (int)isDark,
-                          (int)config.globalCornerRadiusEnabled,
-                          config.listCellBorderColor ?: @"",
-                          config.listCellBorderColorDarkHex ?: @"",
-                          cb.size.width, cb.size.height];
-    if ([existingCacheKey isEqualToString:cacheKey]) return;
 
-    WPStripBorderLayers(cell);
-
-    // 双向应用：边框关（或功能总闸关）→ 移除既有边框后登记缓存即返回
-    if (!config.listCellBorder || !config.globalCornerRadiusEnabled) {
-        objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey, cacheKey,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        return;
+    WPBorderSig sig = {
+        .radius = radius, .position = position,
+        .borderWidth = config.listCellBorderWidth,
+        .borderOn = (BOOL)config.listCellBorder,
+        .globalOn = (BOOL)config.globalCornerRadiusEnabled,
+        .w = cb.size.width, .h = cb.size.height
+    };
+    NSValue *sigVal = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderSigKey);
+    if (sigVal) {
+        WPBorderSig oldSig;
+        [sigVal getValue:&oldSig];
+        if (memcmp(&oldSig, &sig, sizeof(WPBorderSig)) == 0) {
+            // 命中签名：几何/开关/宽高均未变；换色时层不重建，登记新 hex 后刷新描边色
+            NSString *oldLight = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderLightKey);
+            NSString *oldDark  = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderDarkKey);
+            if (WPHexSame(oldLight, config.listCellBorderColor)
+                && WPHexSame(oldDark, config.listCellBorderColorDarkHex)) return;
+            objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderLightKey, config.listCellBorderColor,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderDarkKey, config.listCellBorderColorDarkHex,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            if (config.listCellBorder && config.globalCornerRadiusEnabled)
+                [self wp_refreshBorderStroke:cell];
+            return;
+        }
     }
 
-    CGFloat borderWidth = config.listCellBorderWidth;
-    if (borderWidth <= 0) borderWidth = 1.0;
+    // 签名失配：拆旧层 + 登记新签名与 hex
+    WPStripBorderLayers(cell);
+    sigVal = [NSValue valueWithBytes:&sig objCType:@encode(WPBorderSig)];
+    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderSigKey, sigVal,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderLightKey, config.listCellBorderColor,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderDarkKey, config.listCellBorderColorDarkHex,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    // 明暗二元兜底先算好再传
-    UIColor *borderFallback = isDark
-        ? [UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]
-        : [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
-    UIColor *borderColor = [WPColorUtil resolveColorFromLightHex:config.listCellBorderColor
-                                                         darkHex:config.listCellBorderColorDarkHex
-                                                          isDark:isDark
-                                                    withStrategy:WPColorResolveStrict
-                                                        fallback:borderFallback];
+    if (!config.listCellBorder || !config.globalCornerRadiusEnabled) return;
+
+    CGFloat borderWidth = (config.listCellBorderWidth > 0) ? config.listCellBorderWidth : 1.0;
+    UIColor *borderColor = WPDynamicBorderColor(config.listCellBorderColor, config.listCellBorderColorDarkHex);
 
     switch (position) {
         case 0: {  // 完整边框（单独 cell / 全圆角 cell）
@@ -905,8 +966,7 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         }
     }
 
-    objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderCacheKey, cacheKey,
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [self wp_refreshBorderStroke:cell];
 }
 
 // 递归查找表内 FoldView（折叠置顶容器，供折叠置顶特判使用）
@@ -1070,6 +1130,58 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
             [self wp_applyStrokeColor:(CAShapeLayer *)sub dynamicColor:borderColor
                                 trait:view.traitCollection];
         }
+    }
+}
+
+// 按当前 trait 幂等刷新 cell 内边框层描边色：hex 存在 cell 的口袋上，
+// 动态色命中槽位零分配，CGColor 幂等比对后才写——明暗切换零重建
++ (void)wp_refreshBorderStroke:(UIView *)cell {
+    NSString *lightHex = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderLightKey);
+    NSString *darkHex  = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderDarkKey);
+    UIColor *color = WPDynamicBorderColor(lightHex, darkHex);
+    if (!color) return;
+    for (CALayer *sub in cell.layer.sublayers) {
+        if ([sub isKindOfClass:[CAShapeLayer class]] && [sub.name isEqualToString:kMioBorderLayerName]) {
+            [self wp_applyStrokeColor:(CAShapeLayer *)sub dynamicColor:color trait:cell.traitCollection];
+        }
+    }
+}
+
+// FoldView 清洁态：还原涂装时登记的全部原值——圆角/maskedCorners/masksToBounds/autoresizingMask、
+// 自身与子视图背景色（原值口袋）、frame 回全宽（与 cell 清洁态同语义）；拆自体边框由调用方负责
++ (void)wp_restoreFoldView:(UIView *)view {
+    NSNumber *r = objc_getAssociatedObject(view, (__bridge const void *)kMioFoldOrigRadiusKey);
+    if (r && view.layer.cornerRadius != r.floatValue)
+        view.layer.cornerRadius = r.floatValue;
+    NSNumber *mc = objc_getAssociatedObject(view, (__bridge const void *)kMioFoldOrigMasksKey);
+    if (mc && view.layer.maskedCorners != mc.unsignedIntegerValue)
+        view.layer.maskedCorners = mc.unsignedIntegerValue;
+    NSNumber *mk = objc_getAssociatedObject(view, (__bridge const void *)kMioFoldOrigClipsKey);
+    if (mk && view.layer.masksToBounds != mk.boolValue)
+        view.layer.masksToBounds = mk.boolValue;
+    NSNumber *ar = objc_getAssociatedObject(view, (__bridge const void *)kMioFoldOrigAutoresizingKey);
+    if (ar && view.autoresizingMask != ar.unsignedIntegerValue)
+        view.autoresizingMask = ar.unsignedIntegerValue;
+
+    // frame 回全宽：x=0、宽=父视图宽（涂装时按 margin 内缩的反向还原）
+    UIView *superview = view.superview;
+    CGFloat containerW = superview ? superview.bounds.size.width
+                                   : [UIScreen mainScreen].bounds.size.width;
+    CGRect f = view.frame;
+    if (fabs(f.origin.x) > 0.5 || fabs(f.size.width - containerW) > 0.5) {
+        f.origin.x = 0;
+        f.size.width = containerW;
+        view.frame = f;
+    }
+
+    // 自身背景色回写 + 清涂装标记
+    WPRestorePaintedBg(view);
+
+    // 子视图背景色回写（涂装时清透明的那些；口袋为 nil 的子视图原本就是透明底，无需还原）
+    for (UIView *subview in view.subviews) {
+        UIColor *origSub = objc_getAssociatedObject(subview, (__bridge const void *)kMioViewOrigBgKey);
+        if (origSub && ![subview.backgroundColor isEqual:origSub])
+            subview.backgroundColor = origSub;
     }
 }
 
