@@ -87,10 +87,10 @@ static CGFloat const kSingleSwatchSize = 30.0;
                                              lightHex:lightHex
                                               darkHex:darkHex
                                            allowClear:allowClear
-                                              onClear:^(BOOL clearLight) {
-        // 清除 = 显式恢复未设置：只清激活侧（空串语义 = 渲染层走空值映射）
-        if (!clearLight && !darkKey) return;   // 单色行无深色键，深色侧无可清
-        [ConfigManager setValue:@"" forKey:(clearLight ? lightKey : darkKey)];
+                                              onClear:^{
+        // 清除 = 显式恢复未设置：浅/深一并清空（空串语义 = 渲染层走空值映射 → 默认色兜底）
+        [ConfigManager setValue:@"" forKey:lightKey];
+        if (darkKey) [ConfigManager setValue:@"" forKey:darkKey];
         [ConfigManager saveAll];
         [refreshTarget refresh];
     }

@@ -15,12 +15,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// @param allowClear YES = 导航栏提供「清除」入口
 /// @param onChanged  确认回调：仅"用户调整了颜色 + 点确认"时触发（userModified 判定），
 ///                   未修改 → 不回调直接关闭。确认即写入两侧当前值
-/// @param onClear    清除回调：用户点清除时触发，isLightSide 标明清的是哪一侧
+/// @param onClear    清除回调：用户点清除时触发（清除由调用方执行，浅/深语义在 WPColorRow 统一处理）
 - (instancetype)initWithLightHex:(nullable NSString *)lightHex
                         darkHex:(nullable NSString *)darkHex
                      allowClear:(BOOL)allowClear
                        onChanged:(nullable void(^)(NSString *lightHex, NSString *darkHex))onChanged
-                         onClear:(nullable void(^)(BOOL isLightSide))onClear;
+                         onClear:(nullable void(^)(void))onClear;
 
 // ═══════════════════════════════════════════
 //  颜色状态

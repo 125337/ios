@@ -15,12 +15,12 @@
 /// @param darkHex   深色 hex（nil = 未设置）
 /// @param allowClear YES = 选择器提供「清除」入口
 /// @param onChanged  确认回调：仅用户调整过颜色后确认才触发，双 hex 均有值
-/// @param onClear    清除回调：isLightSide 标明清的是哪一侧
+/// @param onClear    清除回调：用户点清除时触发，浅/深一并由调用方处理
 + (void)presentColorPickerOnViewController:(UIViewController *)vc
                                   lightHex:(nullable NSString *)lightHex
                                    darkHex:(nullable NSString *)darkHex
                                 allowClear:(BOOL)allowClear
-                                   onClear:(nullable void(^)(BOOL isLightSide))onClear
+                                   onClear:(nullable void(^)(void))onClear
                                  onChanged:(nullable void(^)(NSString *lightHex, NSString *darkHex))onChanged;
 
 @end

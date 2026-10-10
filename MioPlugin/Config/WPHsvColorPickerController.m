@@ -18,7 +18,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
 
 @interface WPHsvColorPickerController ()
 @property (nonatomic, copy, nullable) void(^onChanged)(NSString *lightHex, NSString *darkHex);
-@property (nonatomic, copy, nullable) void(^onClear)(BOOL isLightSide);   // 清除回调：isLightSide 标明清的是哪一侧
+@property (nonatomic, copy, nullable) void(^onClear)(void);   // 清除回调：清除的浅/深语义由调用方统一处理
 @property (nonatomic, assign) BOOL userModified;   // 用户意图：本轮打开后是否真实调整过颜色（Hex/色相/SB/RGBA/色板 置位）
 @property (nonatomic, strong) WPHueSlider *hueSlider;
 @property (nonatomic, strong) WPSaturationBrightnessView *sbView;
@@ -36,7 +36,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
                         darkHex:(NSString *)darkHex
                      allowClear:(BOOL)allowClear
                        onChanged:(void(^)(NSString *, NSString *))onChanged
-                         onClear:(void(^)(BOOL))onClear {
+                         onClear:(void(^)(void))onClear {
     self = [super init];
     if (self) {
         // 兜底显示与确认语义分离：nil 起始的默认色仅用于初始显示；
@@ -113,7 +113,7 @@ static CGFloat const kSBAspectRatio = 0.7;   // S/B 面板高/宽比
         WPLog(@"ColorPicker", @"[WPColorPicker] clearTapped: onClear 回调为空，忽略清除操作");
         return;
     }
-    self.onClear(self.isLightMode);   // 只清当前激活侧
+    self.onClear();
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 

@@ -18,10 +18,10 @@
                                   lightHex:(NSString *)lightHex
                                    darkHex:(NSString *)darkHex
                                 allowClear:(BOOL)allowClear
-                                   onClear:(void(^)(BOOL isLightSide))onClear
+                                   onClear:(void(^)(void))onClear
                                  onChanged:(void(^)(NSString *lightHex, NSString *darkHex))onChanged {
     // 选择器内部用 userModified 判定：未修改确认 → 不回调直接关闭；
-    // 清除 → onClear(isLightSide) 单独出口。这里无需再做任何判定/兜底
+    // 清除 → onClear() 单独出口。这里无需再做任何判定/兜底
     WPHsvColorPickerController *picker =
         [[WPHsvColorPickerController alloc] initWithLightHex:lightHex
                                                       darkHex:darkHex
