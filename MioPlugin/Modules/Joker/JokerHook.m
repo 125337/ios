@@ -3,6 +3,7 @@
 #import "../../Core/MioAlertHelper.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <dlfcn.h>
 #import "../../Core/LogManager.h"
 
 // ==================== 原始IMP保存 ====================
@@ -246,6 +247,51 @@ static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
     return joker_menuWithAppend(orig_TransferCell_operationMenuItems, self, _cmd, "mioTransferJoker");
 }
 
+// ==================== ③b 菜单顺序统一 ====================
+// Frida 实证：菜单显示顺序 = -[MMMenuController setMenuItems:] 传入的数组顺序。
+// 文字菜单原生组装把外来项（menuType=0）留在末尾，转账菜单组装却把外来项插到头部。
+// 此处把 type=0 的项统一移到数组末尾：文字菜单本就在末尾（等价跳过），转账菜单被纠正。
+// 原生聊天菜单项全部走 initWithType:（type ≥1），type=0 只会是外来项。
+static IMP orig_MenuController_setMenuItems = NULL;
+
+// IMP 归属判断（同 MomentsHook）：当前 IMP 在其他 .dylib 里 = 已被别的插件接管，让位不挂
+static BOOL joker_impFromOtherPlugin(IMP imp) {
+    if (!imp) return NO;
+    Dl_info info;
+    if (!dladdr((const void *)imp, &info) || !info.dli_fname) return NO;
+    size_t n = strlen(info.dli_fname);
+    return n >= 6 && strcmp(info.dli_fname + n - 6, ".dylib") == 0;
+}
+
+static void hooked_MenuController_setMenuItems(id self, SEL _cmd, NSArray *items) {
+    if ([JokerConfig shared].enableJoker && [items isKindOfClass:[NSArray class]] && items.count >= 2) {
+        NSMutableArray *normal = nil, *foreign = nil;
+        for (id it in items) {
+            BOOL isForeign = NO;
+            @try {
+                if ([it respondsToSelector:@selector(menuType)]) {
+                    isForeign = (((NSUInteger(*)(id, SEL))objc_msgSend)(it, @selector(menuType)) == 0);
+                }
+            } @catch (NSException *e) {}
+            if (isForeign) {
+                if (!foreign) foreign = [NSMutableArray array];
+                [foreign addObject:it];
+            } else {
+                if (!normal) normal = [NSMutableArray array];
+                [normal addObject:it];
+            }
+        }
+        // 无外来项或全是外来项 → 不重排
+        if (normal && foreign) {
+            [normal addObjectsFromArray:foreign];
+            if (![normal isEqualToArray:items]) items = normal;
+        }
+    }
+    if (orig_MenuController_setMenuItems) {
+        ((void(*)(id, SEL, id))orig_MenuController_setMenuItems)(self, _cmd, items);
+    }
+}
+
 // ==================== ④ 钱包余额修改 ====================
 // 长按手势防重安装：遍历已有手势，无长按才挂（SEL 动态加到 view 类上，handler 签名 v@:@）
 static void joker_installLongPressIfNeeded(UIView *view, const char *selName, IMP handler) {
@@ -396,6 +442,23 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
             orig_TransferCell_operationMenuItems = method_getImplementation(existing);
             method_setImplementation(existing, (IMP)hooked_TransferCell_operationMenuItems);
         }
+    }
+
+    // ====== 菜单顺序统一 Hook（转账菜单外来项被原生组装插到头部，此处统一移尾）======
+    Class menuCtrlClass = objc_getClass("MMMenuController");
+    if (menuCtrlClass) {
+        SEL setItemsSel = NSSelectorFromString(@"setMenuItems:");
+        Method setItemsMethod = class_getInstanceMethod(menuCtrlClass, setItemsSel);
+        if (setItemsMethod) {
+            IMP curImp = method_getImplementation(setItemsMethod);
+            if (joker_impFromOtherPlugin(curImp)) {
+                WPLog(@"Joker", @"[JokerHook] setMenuItems: IMP 已被其他插件接管，让位不挂");
+            } else {
+                orig_MenuController_setMenuItems = method_setImplementation(setItemsMethod, (IMP)hooked_MenuController_setMenuItems);
+            }
+        }
+    } else {
+        WPLog(@"Joker", @"[JokerHook] ⚠️ MMMenuController NOT found");
     }
 
     // ====== 钱包 Hook ======
