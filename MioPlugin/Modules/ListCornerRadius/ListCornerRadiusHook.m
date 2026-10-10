@@ -82,8 +82,7 @@ static BOOL shouldApplyGlobalCorner(UIViewController *vc) {
     if (!vc) return NO;
 
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
-
-    if (!config.globalCornerRadiusEnabled) return NO;
+    // 总开关由调用方短路，此处只管分页面开关
 
     NSString *vcName = NSStringFromClass([vc class]);
 
@@ -296,21 +295,14 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
         BOOL paintedNow = objc_getAssociatedObject(self, (__bridge const void *)kMioCornerPaintedKey) != nil;
         BOOL manageBg = featureOn || mioOwn || paintedNow;
         if (manageBg) {
-            // ★ 页面跳过名单（01:12 版本）：消息流/详情页/搜索类页面原生底更协调，不涂用户背景色
+            // ★ 页面跳过名单：仅搜索页——其列表圆角照做但保留原生底。
+            //   01:12 名单其余 18 项（消息流/详情页等）均同时被 CornerResponsibility 圆角黑名单
+            //   覆盖（featureOn 恒 NO，bg 段不执行），不可达，无需重复登记；将来若把某页从
+            //   圆角黑名单移出，其背景判定自动回归这里的统一逻辑
             static NSSet *bgColorSkipList = nil;
             static dispatch_once_t bgOnceToken;
             dispatch_once(&bgOnceToken, ^{
-                bgColorSkipList = [NSSet setWithObjects:
-                    @"WCTimeLineViewController", @"WCAccountLoginUsersViewController",
-                    @"SessionSelectController", @"WCListViewController",
-                    @"BrandNotificationListViewController", @"BrandNewSessionViewController",
-                    @"BaseMsgContentViewController", @"BraceletRankProfileViewController",
-                    @"BraceletRankViewController", @"WCRedEnvelopesRedEnvelopesDetailViewController",
-                    @"MsgRecordDetailViewController", @"ChatRoomInfoViewController",
-                    @"ContactInfoViewController", @"AddFriendEntryViewController",
-                    @"AddContactToChatRoomViewController", @"SayHelloViewController",
-                    @"FTSHomeViewController", @"MMFinderPivotLiveViewController",
-                    @"WCSearchController", nil];
+                bgColorSkipList = [NSSet setWithObject:@"FTSHomeViewController"];
             });
             BOOL bgAllowed = [bgColorSkipList containsObject:className] ? NO : YES;
 
@@ -399,13 +391,11 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     //      cornerRadius/maskedCorners/masksToBounds，防内部直角背景盖住圆角
     if (mioOwn) {
         UITableViewCell *tc = (UITableViewCell *)self;
-        if ([tc respondsToSelector:@selector(selectedBackgroundView)]) {
-            UIView *selBg = tc.selectedBackgroundView;
-            if (selBg) {
-                selBg.backgroundColor = [UIColor clearColor];
-                selBg.alpha = 0.0;
-                selBg.hidden = YES;
-            }
+        UIView *selBg = tc.selectedBackgroundView;
+        if (selBg) {
+            selBg.backgroundColor = [UIColor clearColor];
+            selBg.alpha = 0.0;
+            selBg.hidden = YES;
         }
         CGFloat cr = cellView.layer.cornerRadius;
         NSUInteger mc = cellView.layer.maskedCorners;
@@ -1086,7 +1076,6 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     CGFloat borderWidth = config.listCellBorderWidth;
     if (borderWidth <= 0) borderWidth = 1.0;
     UIColor *borderColor = WPDynamicBorderColor(config.listCellBorderColor, config.listCellBorderColorDarkHex);
-    if (!borderColor) return;
 
     CAShapeLayer *shape = [self wp_findBorderShapeInView:view];
     if (!shape) {
