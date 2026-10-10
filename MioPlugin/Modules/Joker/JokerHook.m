@@ -252,7 +252,7 @@ static void joker_installLongPressIfNeeded(UIView *view, const char *selName, IM
     for (UIGestureRecognizer *g in view.gestureRecognizers) {
         if ([g isKindOfClass:[UILongPressGestureRecognizer class]]) return;
     }
-    SEL gestureSel = NSSelectorFromString(selName);
+    SEL gestureSel = sel_registerName(selName);
     class_addMethod([view class], gestureSel, handler, "v@:@");
     UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] initWithTarget:view action:gestureSel];
     lp.minimumPressDuration = 0.5;
