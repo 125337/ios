@@ -36,8 +36,8 @@ static IMP orig_WCSearchBar_layoutSubviews = NULL;
                      radius:(NSInteger)radius
                    position:(NSInteger)position;
 
-// 独立视图（FoldView）的自体整段描边，双向拆装；passthrough=贯通段只画左右竖线（展开态六月复刻：与上卡连体，置顶卡独立收口）
-+ (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius passthrough:(BOOL)passthrough;
+// 独立视图（FoldView）的自体整段描边，双向拆装
++ (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius;
 
 @end
 
@@ -479,7 +479,7 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     UIView *view = (UIView *)self;
     if (!config.globalCornerRadiusEnabled) {
         // ★ 功能总闸关：仅拆除自体边框（双向清洁），几何/底色不碰
-        [ListCornerRadiusHook wp_paintViewSelfBorder:view radius:0 passthrough:NO];
+        [ListCornerRadiusHook wp_paintViewSelfBorder:view radius:0];
         return;
     }
     NSInteger radius = (NSInteger)config.listCellCornerRadius;
@@ -498,10 +498,8 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
     }
     view.autoresizingMask = UIViewAutoresizingNone;
 
-    // 展开态（六月复刻）：贯通段——四角全方 + 边框只画左右竖线，与上方卡片连成一张卡；
-    // 置顶卡保持顶角顶弧独立收口，交界处只有置顶卡一条弧线（探针实证：无双弧捏腰、无方角穿线）
+    // 展开态：顶部方角 + 底部圆角（六月版方案：顶边直线衔接上卡，底角圆弧压在置顶卡顶弧上）；
     // 折叠态：独立卡四角全圆；isFolding 不可用时兜底独立卡
-    BOOL passthrough = NO;
     if ([view respondsToSelector:@selector(isFolding)]) {
         BOOL folding = ((BOOL (*)(id, SEL))objc_msgSend)(view, @selector(isFolding));
         if (folding) {
@@ -509,10 +507,8 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
             view.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner
                                      | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
         } else {
-            // 贯通段：无圆角（上下开口）
-            view.layer.cornerRadius = 0;
-            view.layer.maskedCorners = 0;
-            passthrough = YES;
+            view.layer.cornerRadius = radius;
+            view.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
         }
     } else {
         view.layer.cornerRadius = radius;
@@ -522,7 +518,7 @@ static void _hooked_FoldView_layoutSubviews(id self, SEL _cmd) {
 
     view.layer.masksToBounds = YES;
 
-    [ListCornerRadiusHook wp_paintViewSelfBorder:view radius:radius passthrough:passthrough];
+    [ListCornerRadiusHook wp_paintViewSelfBorder:view radius:radius];
 
     // ★ 动态色：明暗跟随交给 UIKit trait 系统；指针幂等避免每轮 CA 脏标记
     UIColor *targetBg = WPDynamicCellBgColor(config.listCellLightBgColor, config.listCellDarkBgColor, @"cellUser");
@@ -1022,10 +1018,9 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
     }
 }
 
-// FoldView 等独立视图的自体整段描边：动态色 + 样式戳幂等，双向拆装。
-// passthrough=YES 贯通段（只画左右竖线，上下开口无横线无圆弧）；NO = 完整圆角矩形轮廓。
+// FoldView 等独立视图的自体整段描边：动态色 + 样式戳幂等，双向拆装，完整圆角矩形轮廓。
 // 注意：radius 仅在绘制路径生效（决定 path 圆角），拆除分支不读它——调用方传 0 只是占位
-+ (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius passthrough:(BOOL)passthrough {
++ (void)wp_paintViewSelfBorder:(UIView *)view radius:(NSInteger)radius {
     ListCornerRadiusConfig *config = [ListCornerRadiusConfig shared];
     BOOL painted = objc_getAssociatedObject(view, (__bridge const void *)kMioTablePaintedKey) != nil;
 
@@ -1058,28 +1053,14 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         [view.layer addSublayer:shape];
     }
 
-    // 样式戳含 passthrough：折叠↔展开切换时 w/h 可能不变，靠此位触发路径重建
-    NSString *stamp = [NSString stringWithFormat:@"r%ld-bw%.1f-w%.0f-h%.0f-pt%d",
-                       (long)radius, borderWidth, view.bounds.size.width, view.bounds.size.height, (int)passthrough];
+    NSString *stamp = [NSString stringWithFormat:@"r%ld-bw%.1f-w%.0f-h%.0f",
+                       (long)radius, borderWidth, view.bounds.size.width, view.bounds.size.height];
     NSString *oldStamp = objc_getAssociatedObject(view, (__bridge const void *)kMioBorderStampKey);
     if (![stamp isEqualToString:oldStamp]) {
         shape.frame = view.bounds;
         shape.lineWidth = borderWidth;
-        if (passthrough) {
-            // 贯通段：仅左右竖线，上下开口（与上卡左右线连续，置顶卡顶弧独立收口）
-            CGFloat hw = borderWidth / 2.0;
-            CGFloat w = view.bounds.size.width;
-            CGFloat h = view.bounds.size.height;
-            UIBezierPath *p = [UIBezierPath bezierPath];
-            [p moveToPoint:CGPointMake(hw, 0)];
-            [p addLineToPoint:CGPointMake(hw, h)];
-            [p moveToPoint:CGPointMake(w - hw, 0)];
-            [p addLineToPoint:CGPointMake(w - hw, h)];
-            shape.path = p.CGPath;
-        } else {
-            shape.path = [UIBezierPath bezierPathWithRoundedRect:view.bounds
-                                                    cornerRadius:(CGFloat)radius].CGPath;
-        }
+        shape.path = [UIBezierPath bezierPathWithRoundedRect:view.bounds
+                                                cornerRadius:(CGFloat)radius].CGPath;
         objc_setAssociatedObject(view, (__bridge const void *)kMioBorderStampKey, stamp,
             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
