@@ -298,6 +298,7 @@ static UIView *HCContactAvatar(NSString *userName, CGFloat size) {
 
 // 联系人挂件容器（XOS 渲染段 L22819-23285 同构：内衬圆角12底板 + 分页横向滚动 +
 // 每页 maxVisible 个头像水平居中 + 装饰在线圆点 + 昵称 + 点按跳聊天；无保存联系人返回 nil）
+// ★ width 语义 = 卡片宽（width-2*margin），调用方负责；容器/底板宽度都以它为准
 static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *cfg) {
     NSArray<NSString *> *saved = [HomeCardConfig savedAll];   // 人 + 群合并（人在前）
     if (!saved.count) return nil;
@@ -312,10 +313,12 @@ static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *c
     container.userInteractionEnabled = YES;
     container.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 
-    // 内衬底板（XOS L22898-22912 同构，圆角 12，裁剪）：左右内缩与主卡片边距同源（HCCardMargin），
-    // 保证与主卡片左右边缘对齐；背景空值回落链 = 联系人自己的色 → 主卡片色 → 透明（主卡片同语义）
-    CGFloat inset = HCCardMargin(cfg);
-    UIView *inner = [[UIView alloc] initWithFrame:CGRectMake(inset, 0, width - inset * 2.0, H)];
+    // 内衬底板（XOS L22898-22912 同构，圆角 12，裁剪）：width 已是卡宽（调用方传 width-2*margin），
+    // 底板占满容器宽 → 左右边缘与主卡片精确对齐；autoresizing 跟随容器宽度（旋转/重排不残旧宽）。
+    // ★ 探针实证（frida_homecard_margin）：旧实现按全屏宽建底板（w=393-32=361）而容器被宿主布局
+    //   收成卡宽 375，底板无 autoresizing → 左距 25/右距 7 不对称
+    UIView *inner = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, H)];
+    inner.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     inner.backgroundColor = HCColorForMode(cfg.hcContactBgColor, cfg.hcContactBgColorDark, dark)
         ?: HCColorForMode(cfg.hcCardBgColor, cfg.hcCardBgColorDark, dark)
         ?: [UIColor clearColor];
@@ -323,7 +326,7 @@ static UIView *HCBuildContact(id vc, CGFloat width, BOOL dark, HomeCardConfig *c
     inner.clipsToBounds = YES;
     [container addSubview:inner];
 
-    CGFloat innerW = width - inset * 2.0;
+    CGFloat innerW = width;
     UIScrollView *sv = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, innerW, H)];
     sv.showsHorizontalScrollIndicator = NO;                 // XOS L22920
     sv.pagingEnabled = YES;                                 // 按页宽分页（contentSize = 页宽×页数）
@@ -1485,9 +1488,11 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
             conY = origHeight + cardH + 12.0 + cfg.hcCardBottomFix
                  + ((calOn && calPos == 2) ? calH + 12.0 : 0.0);
         }
-        UIView *con = HCBuildContact(vc, width, dark, cfg);
+        // 卡宽（width-2*margin）：挂件底板与主卡片左右边缘对齐（探针实证：传全宽会导致
+        // 底板按全屏宽构建，宿主布局收容器为卡宽后底板溢出，左右距不对称）
+        UIView *con = HCBuildContact(vc, width - margin * 2.0, dark, cfg);
         if (con) {
-            con.frame = CGRectMake(0, conY, width, con.frame.size.height);
+            con.frame = CGRectMake(margin, conY, width - margin * 2.0, con.frame.size.height);
             [container addSubview:con];
         }
     }
