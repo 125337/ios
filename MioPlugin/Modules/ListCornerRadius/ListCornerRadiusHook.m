@@ -885,11 +885,15 @@ static void _hooked_UIView_layoutSubviews(id self, SEL _cmd) {
         WPBorderSig oldSig;
         [sigVal getValue:&oldSig];
         if (memcmp(&oldSig, &sig, sizeof(WPBorderSig)) == 0) {
-            // 命中签名：几何/开关/宽高均未变；换色时层不重建，登记新 hex 后刷新描边色
+            // 命中签名：几何/开关/宽高均未变。hex 未变也必须按 trait 幂等刷新描边色——
+            // 描边是 trait 解析的 CGColor 快照，明暗切换不走重建，全靠这里逐轮跟随
             NSString *oldLight = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderLightKey);
             NSString *oldDark  = objc_getAssociatedObject(cell, (__bridge const void *)kMioBorderDarkKey);
             if (WPHexSame(oldLight, config.listCellBorderColor)
-                && WPHexSame(oldDark, config.listCellBorderColorDarkHex)) return;
+                && WPHexSame(oldDark, config.listCellBorderColorDarkHex)) {
+                [self wp_refreshBorderStroke:cell];
+                return;
+            }
             objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderLightKey, config.listCellBorderColor,
                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             objc_setAssociatedObject(cell, (__bridge const void *)kMioBorderDarkKey, config.listCellBorderColorDarkHex,
