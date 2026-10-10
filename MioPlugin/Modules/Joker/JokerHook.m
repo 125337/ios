@@ -21,6 +21,20 @@ static NSNumberFormatter *sharedNumberFormatter(void) {
     return fmt;
 }
 
+// 主线程走 viewModel 完整布局链（金额/文本的精调定位在链内 layoutContentView，
+// 直调单环缺上游状态会错位——实证容器高被压、角标叠图标）
+static void joker_updateLayoutsAsync(id cellRef) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            id viewModel = [cellRef valueForKey:@"m_viewModel"];
+            SEL updateLayoutsSel = NSSelectorFromString(@"updateLayouts");
+            if (viewModel && [viewModel respondsToSelector:updateLayoutsSel]) {
+                ((void(*)(id, SEL))objc_msgSend)(viewModel, updateLayoutsSel);
+            }
+        } @catch (NSException *e) {}
+    });
+}
+
 // ==================== 公共：应用文字修改 ====================
 static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
     if (newText.length == 0) return;
@@ -36,15 +50,7 @@ static void applyTextModification(id msgRef, id cellRef, NSString *newText) {
         }
     }
 
-    dispatch_async(dispatch_get_main_queue(), ^{
-        @try {
-            id viewModel = [cellRef valueForKey:@"m_viewModel"];
-            SEL updateLayoutsSel = NSSelectorFromString(@"updateLayouts");
-            if (viewModel && [viewModel respondsToSelector:updateLayoutsSel]) {
-                ((void(*)(id, SEL))objc_msgSend)(viewModel, updateLayoutsSel);
-            }
-        } @catch (NSException *e) {}
-    });
+    joker_updateLayoutsAsync(cellRef);
 }
 
 // ==================== 转账消息修改 ====================
@@ -99,22 +105,17 @@ static void applyTransferModification(id msgRef, id cellRef, NSString *newText) 
     } @catch (NSException *e) {}
 
     // 刷新：updateTitleLabel 只置文本+默认 frame（金额 y=9），精调定位走 viewModel 的
-    // updateLayouts 完整布局链（与文字修改路径同款）。实证：直调 cell 的 layoutContentView
-    // 缺上游状态——容器高被压成 62（原生 86）、CellSourceView 上移 38 叠到图标，禁止直调单环。
+    // updateLayouts 完整布局链。实证：直调 cell 的 layoutContentView 缺上游状态——
+    // 容器高被压成 62（原生 86）、CellSourceView 上移 38 叠到图标，禁止直调单环。
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
             SEL titleSel = NSSelectorFromString(@"updateTitleLabel");
             if ([cellRef respondsToSelector:titleSel]) {
                 ((void(*)(id, SEL))objc_msgSend)(cellRef, titleSel);
             }
-            SEL updateLayoutsSel = NSSelectorFromString(@"updateLayouts");
-            id viewModel = nil;
-            @try { viewModel = [cellRef valueForKey:@"m_viewModel"]; } @catch (NSException *e) {}
-            if (viewModel && [viewModel respondsToSelector:updateLayoutsSel]) {
-                ((void(*)(id, SEL))objc_msgSend)(viewModel, updateLayoutsSel);
-            }
         } @catch (NSException *e) {}
     });
+    joker_updateLayoutsAsync(cellRef);
 }
 
 // ==================== 弹窗：修改文字 ====================
@@ -203,10 +204,12 @@ static void mioTransferJoker(id self, SEL _cmd) {
 }
 
 // ==================== ③ 菜单 Hook ====================
-static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
+// 追加"修改文字"菜单项（照抄锤子助手 FUN_0084c460：initWithTitle:svgName:action:，
+// action 参数类型是 SEL，svgName 用运行时 NSString 避免跨 dylib 指针比对问题）
+static id joker_menuWithAppend(IMP origImp, id self, SEL _cmd, const char *actionName) {
     NSMutableArray *items = nil;
-    if (orig_TextCell_operationMenuItems) {
-        items = ((id(*)(id, SEL))orig_TextCell_operationMenuItems)(self, _cmd);
+    if (origImp) {
+        items = ((id(*)(id, SEL))origImp)(self, _cmd);
     }
     if (!items) items = [NSMutableArray array];
     if (![JokerConfig shared].enableJoker) return items;
@@ -215,13 +218,11 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
     Class mmItemClass = objc_getClass("MMMenuItem");
     if (mmItemClass) {
         @try {
-            // 照抄锤子助手 FUN_0084c460：initWithTitle:svgName:action:
-            // action 参数类型是 SEL，svgName 用运行时 NSString（避免跨 dylib 指针比对问题）
             SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
             if (![mmItemClass instancesRespondToSelector:initSel]) {
                 WPLog(@"Joker", @"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
             } else {
-                SEL actionSEL = sel_registerName("mioTextJoker");
+                SEL actionSEL = sel_registerName(actionName);
                 NSString *iconName = [NSString stringWithUTF8String:"expression"];
                 id mmItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
                     [mmItemClass alloc], initSel, @"修改文字", iconName, actionSEL);
@@ -235,41 +236,29 @@ static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
         }
     }
     return newItems;
+}
+
+static id hooked_TextCell_operationMenuItems(id self, SEL _cmd) {
+    return joker_menuWithAppend(orig_TextCell_operationMenuItems, self, _cmd, "mioTextJoker");
 }
 
 static id hooked_TransferCell_operationMenuItems(id self, SEL _cmd) {
-    NSMutableArray *items = nil;
-    if (orig_TransferCell_operationMenuItems) {
-        items = ((id(*)(id, SEL))orig_TransferCell_operationMenuItems)(self, _cmd);
-    }
-    if (!items) items = [NSMutableArray array];
-    if (![JokerConfig shared].enableJoker) return items;
-
-    NSMutableArray *newItems = [items mutableCopy];
-    Class mmItemClass = objc_getClass("MMMenuItem");
-    if (mmItemClass) {
-        @try {
-            SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
-            if (![mmItemClass instancesRespondToSelector:initSel]) {
-                WPLog(@"Joker", @"[Joker] ⚠️ MMMenuItem initWithTitle:svgName:action: not found");
-            } else {
-                SEL actionSEL = sel_registerName("mioTransferJoker");
-                NSString *iconName = [NSString stringWithUTF8String:"expression"];
-                id mmItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
-                    [mmItemClass alloc], initSel, @"修改文字", iconName, actionSEL);
-                if (mmItem) {
-                    [newItems addObject:mmItem];
-                    WPLog(@"Joker", @"✅ MMMenuItem: 修改文字 / expression");
-                }
-            }
-        } @catch (NSException *e) {
-            WPLog(@"Joker", @"[Joker] ❌ MMMenuItem create: %@", e);
-        }
-    }
-    return newItems;
+    return joker_menuWithAppend(orig_TransferCell_operationMenuItems, self, _cmd, "mioTransferJoker");
 }
 
 // ==================== ④ 钱包余额修改 ====================
+// 长按手势防重安装：遍历已有手势，无长按才挂（SEL 动态加到 view 类上，handler 签名 v@:@）
+static void joker_installLongPressIfNeeded(UIView *view, const char *selName, IMP handler) {
+    for (UIGestureRecognizer *g in view.gestureRecognizers) {
+        if ([g isKindOfClass:[UILongPressGestureRecognizer class]]) return;
+    }
+    SEL gestureSel = NSSelectorFromString(selName);
+    class_addMethod([view class], gestureSel, handler, "v@:@");
+    UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] initWithTarget:view action:gestureSel];
+    lp.minimumPressDuration = 0.5;
+    [view addGestureRecognizer:lp];
+}
+
 static void walletLongPressHandler(id self, SEL _cmd, UIGestureRecognizer *gesture) {
     if (gesture.state != UIGestureRecognizerStateBegan) return;
     UIView *headerView = (UIView *)self;
@@ -314,18 +303,7 @@ static void hooked_Wallet_updateBalanceEntryView(id self, SEL _cmd) {
     }
     if (![JokerConfig shared].enableJoker) return;
 
-    BOOL hasGesture = NO;
-    for (UIGestureRecognizer *g in ((UIView *)self).gestureRecognizers) {
-        if ([g isKindOfClass:[UILongPressGestureRecognizer class]]) { hasGesture = YES; break; }
-    }
-    if (!hasGesture) {
-        SEL gestureSel = NSSelectorFromString(@"__joker_wallet_longpress");
-        class_addMethod([((UIView *)self) class], gestureSel, (IMP)walletLongPressHandler, "v@:@");
-
-        UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:gestureSel];
-        lp.minimumPressDuration = 0.5;
-        [(UIView *)self addGestureRecognizer:lp];
-    }
+    joker_installLongPressIfNeeded((UIView *)self, "__joker_wallet_longpress", (IMP)walletLongPressHandler);
 }
 
 // ==================== ⑤ 零钱通修改 ====================
@@ -361,18 +339,7 @@ static void hooked_TimeoutNumber_didMoveToWindow(id self, SEL _cmd) {
     }
     if (![JokerConfig shared].enableJoker) return;
 
-    BOOL hasGesture = NO;
-    for (UIGestureRecognizer *g in ((UIView *)self).gestureRecognizers) {
-        if ([g isKindOfClass:[UILongPressGestureRecognizer class]]) { hasGesture = YES; break; }
-    }
-    if (!hasGesture) {
-        SEL gestureSel = NSSelectorFromString(@"__joker_timeout_longpress");
-        class_addMethod([((UIView *)self) class], gestureSel, (IMP)joker_timeout_longpress_IMP, "v@:@");
-
-        UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:gestureSel];
-        lp.minimumPressDuration = 0.5;
-        [(UIView *)self addGestureRecognizer:lp];
-    }
+    joker_installLongPressIfNeeded((UIView *)self, "__joker_timeout_longpress", (IMP)joker_timeout_longpress_IMP);
 }
 
 // ==================== JokerHook ====================
