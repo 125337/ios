@@ -207,11 +207,76 @@ static NSString *MioCertTypeNameFromEntitlements(NSDictionary *ent) {
     return @"签名安装";
 }
 
+/// 从主程序代码签名提取叶子签名证书信息（对齐 WCR WCRSideloadReadSigningCertificate 的产出）：
+/// CN（如 "Apple iPhone OS Application Signing"）+ 证书有效期。
+/// 走系统 Security API：SecStaticCodeCreateWithPath → SecCodeCopySigningInformation(kSecCSSigningInformation)
+/// → kSecCodeInfoCertificates 叶子证书 → SecCertificateCopyValues（OID 常量 dlsym 系统符号，零硬编码）
+static NSDictionary *MioReadSigningCertificate(void) {
+    void *sec = dlopen("/System/Library/Frameworks/Security.framework/Security", RTLD_LAZY);
+    if (!sec) return nil;
+    OSStatus (*pCreateWithPath)(CFURLRef, uint32_t, void **) = dlsym(sec, "SecStaticCodeCreateWithPath");
+    OSStatus (*pCopySigningInfo)(void *, uint32_t, CFDictionaryRef *) = dlsym(sec, "SecCodeCopySigningInformation");
+    CFDictionaryRef (*pCopyValues)(CFTypeRef, CFArrayRef, CFErrorRef *) = dlsym(sec, "SecCertificateCopyValues");
+    CFStringRef *oidCN = dlsym(sec, "kSecOIDCommonName");
+    CFStringRef *oidNBE = dlsym(sec, "kSecOIDX509V1ValidityNotBefore");
+    CFStringRef *oidNAE = dlsym(sec, "kSecOIDX509V1ValidityNotAfter");
+    CFStringRef *infoCerts = dlsym(sec, "kSecCodeInfoCertificates");
+    CFStringRef *propValue = dlsym(sec, "kSecPropertyKeyValue");
+    if (!pCreateWithPath || !pCopySigningInfo || !pCopyValues || !oidCN || !oidNBE || !oidNAE || !infoCerts || !propValue) {
+        dlclose(sec);
+        return nil;
+    }
+
+    CFURLRef execURL = (__bridge CFURLRef)[[NSBundle mainBundle] executableURL];
+    if (!execURL) { dlclose(sec); return nil; }
+    void *staticCode = NULL;
+    if (pCreateWithPath(execURL, 0, &staticCode) != 0 || !staticCode) { dlclose(sec); return nil; }
+
+    CFDictionaryRef info = NULL;
+    NSDictionary *result = nil;
+    if (pCopySigningInfo(staticCode, 2 /* kSecCSSigningInformation */, &info) == 0 && info) {
+        CFArrayRef certs = (CFArrayRef)CFDictionaryGetValue(info, *infoCerts);
+        if (certs && CFArrayGetCount(certs) > 0) {
+            CFTypeRef leaf = CFArrayGetValueAtIndex(certs, 0);  // 0 = 叶子（签名者）
+            CFTypeRef oids[3] = { *oidCN, *oidNBE, *oidNAE };
+            CFArrayRef keyArr = CFArrayCreate(NULL, oids, 3, &kCFTypeArrayCallBacks);
+            CFDictionaryRef vals = pCopyValues(leaf, keyArr, NULL);
+            if (vals) {
+                NSMutableDictionary *out = [NSMutableDictionary dictionary];
+                for (NSUInteger i = 0; i < 3; i++) {
+                    CFDictionaryRef item = (CFDictionaryRef)CFDictionaryGetValue(vals, oids[i]);
+                    if (!item) continue;
+                    id v = (__bridge id)CFDictionaryGetValue(item, *propValue);
+                    if (!v) continue;
+                    if (i == 0) {
+                        out[@"CommonName"] = [v isKindOfClass:[NSString class]] ? v : [v description];
+                    } else {
+                        // 有效期：CFAbsoluteTime(2001 基准) 或 epoch 秒，按量级自适应
+                        double t = [v respondsToSelector:@selector(doubleValue)] ? [v doubleValue] : 0;
+                        if (t > 1e6) {
+                            NSTimeInterval epoch = (t > 2e9) ? t : (t + 978307200.0);
+                            out[(i == 1) ? @"NotBefore" : @"NotAfter"] = [NSDate dateWithTimeIntervalSince1970:epoch];
+                        }
+                    }
+                }
+                CFRelease(vals);
+                if (out.count > 0) result = [out copy];
+            }
+            CFRelease(keyArr);
+        }
+        CFRelease(info);
+    }
+    CFRelease(staticCode);
+    dlclose(sec);
+    return result;
+}
+
 #pragma mark - 页面
 
 @interface WPAccountVC ()
 @property (nonatomic, strong) NSDictionary *profile; // embedded.mobileprovision 解析结果
 @property (nonatomic, strong) NSDictionary *effectiveEntitlements; // 巨魔/越狱回退：SecTask 实际生效权限
+@property (nonatomic, strong) NSDictionary *signingCert; // 巨魔/越狱回退：代码签名叶子证书（CN/有效期）
 @end
 
 @implementation WPAccountVC
@@ -222,6 +287,7 @@ static NSString *MioCertTypeNameFromEntitlements(NSDictionary *ent) {
     self.profile = MioReadProvisioningProfile();
     if (self.profile.count == 0) {
         self.effectiveEntitlements = MioReadSecTaskEntitlements();  // 对齐 WCR 二级回退
+        self.signingCert = MioReadSigningCertificate();             // 对齐 WCR 三级回退
     }
     [self wpReloadUI];
 }
@@ -316,24 +382,23 @@ static NSString *MioCertTypeNameFromEntitlements(NSDictionary *ent) {
             [self finishGroup:permGroup atY:0 height:0];
         }
     } else if (self.effectiveEntitlements.count > 0) {
-        // 巨魔/越狱：无 embedded.mobileprovision，用 SecTask 实际生效 entitlements 展示
-        //（对齐 WCR：类型/团队/时间走占位，权限为真实运行时数据）
+        // 巨魔/越狱：无 embedded.mobileprovision。对齐 WCR 展示：签名证书 CN + 证书有效期
+        //（从代码签名 CMS 证书链取）+ 运行时 entitlements 权限；描述文件字段无来源不展示
         [self addSectionHeader:@"证书信息" y:0 width:0];
         UIView *certGroup = [self addTableGroupAtY:0 width:0];
         CGFloat cy2 = 0;
         NSDictionary *ent = self.effectiveEntitlements;
+        NSDictionary *cert = self.signingCert;
         NSArray<NSArray<NSString *> *> *certRows = @[
             @[@"证书类型", MioCertTypeNameFromEntitlements(ent)],
-            @[@"签名团队", @"-"],
-            @[@"团队ID", @"-"],
-            @[@"注册时间", @"-"],
-            @[@"过期时间", @"-"],
-            @[@"允许设备", @"-"],
+            @[@"签名证书", cert[@"CommonName"] ?: @"-"],
+            @[@"证书生效时间", cert[@"NotBefore"] ? MioFormatProfileDate(cert[@"NotBefore"]) : @"-"],
+            @[@"证书到期时间", cert[@"NotAfter"] ? MioFormatProfileDate(cert[@"NotAfter"]) : @"-"],
         ];
         for (NSUInteger i = 0; i < certRows.count; i++) {
             cy2 = [self addInfoRowInGroup:certGroup title:certRows[i][0] rightValue:certRows[i][1] copyText:nil showArrow:NO cy:cy2 width:0];
         }
-        [self addHintRowInGroup:certGroup text:@"当前安装方式无描述文件，显示运行时权限" cy:cy2 width:0];
+        [self addHintRowInGroup:certGroup text:@"未读取到描述文件有效期，显示签名证书有效期；不代表应用可使用至该日期。" cy:cy2 width:0];
         [self finishGroup:certGroup atY:0 height:0];
 
         // ── 证书权限（Entitlements）──
