@@ -37,7 +37,9 @@
 }
 
 + (NSArray<NSString *> *)guideLineStyleNames {
-    return @[@"流光顶角 [✦", @"脉冲底角 [✦", @"顶部拐弯箭头 ⌐→", @"底部拐弯箭头 ⌞→",
+    // 拐弯箭头用 SF Symbol（arrow.turn.up.right / arrow.turn.down.right）对应的 Unicode 字符显示；
+    // 运行时绘制端点可直接用这两个 SF Symbol 名走 UIImage systemImageNamed:
+    return @[@"流光顶角 [✦", @"脉冲底角 [✦", @"顶部拐弯 ↱", @"底部拐弯 ↳",
              @"方括号 [ ]", @"彩虹拐角 🌈", @"不显示"];
 }
 
