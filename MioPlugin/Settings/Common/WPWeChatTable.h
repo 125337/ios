@@ -38,4 +38,5 @@
 // 行构造（全反射 + respondsToSelector 探测；类/方法缺失返回 nil 由调用方回退）
 id WPWCSwitchCell(SEL sel, id target, NSString *title, BOOL on);
 id WPWCNavCell(SEL sel, id target, NSString *title, NSString *rightValue);   // accessoryType=1 右箭头
+id WPWCNavCellEx(SEL sel, id target, NSString *title, NSString *rightValue, long accessoryType); // accessoryType 可指定（0=无箭头）
 id WPWCViewCell(SEL sel, id target, NSString *title, UIView *view);          // 自定义视图行（sel 可传 NULL）

@@ -219,7 +219,8 @@ static NSDictionary *MioReadProvisioningProfile(void) {
         @[@"设备标识", MioDeviceModelName()],
     ];
     for (NSUInteger i = 0; i < appRows.count; i++) {
-        ay = [self addInfoRowInGroup:appGroup title:appRows[i][0] rightValue:appRows[i][1] copyText:nil cy:ay width:0];
+        // 纯展示行不可点击 → 不画右箭头（copyText=nil 无复制语义）
+        ay = [self addInfoRowInGroup:appGroup title:appRows[i][0] rightValue:appRows[i][1] copyText:nil showArrow:NO cy:ay width:0];
     }
     [self finishGroup:appGroup atY:0 height:0];
 

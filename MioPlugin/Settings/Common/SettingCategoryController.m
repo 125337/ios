@@ -447,13 +447,18 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 #pragma mark - Row: Info（只读信息/复制行）
 
 - (CGFloat)addInfoRowInGroup:(UIView *)group title:(NSString *)title rightValue:(NSString *)value copyText:(NSString *)copyText cy:(CGFloat)cy width:(CGFloat)w {
+    return [self addInfoRowInGroup:group title:title rightValue:value copyText:copyText showArrow:YES cy:cy width:w];
+}
+
+- (CGFloat)addInfoRowInGroup:(UIView *)group title:(NSString *)title rightValue:(NSString *)value copyText:(NSString *)copyText showArrow:(BOOL)showArrow cy:(CGFloat)cy width:(CGFloat)w {
     WPWGroup *g = (WPWGroup *)group;
     if (![g isKindOfClass:[WPWGroup class]]) return cy;
     NSDictionary *row = @{@"type": (copyText.length > 0 ? @"copy" : @"info"),
                           @"title": title ?: @"",
                           @"copyText": copyText ?: @"",
                           @"copyTitle": title ?: @""};
-    id cell = WPWCNavCell(@selector(wpWCTapRow:), self, [self wpSubTitle:title], value);
+    // showArrow=NO 时用 accessoryType=0（不可点击的纯展示行不画右箭头）
+    id cell = WPWCNavCellEx(@selector(wpWCTapRow:), self, [self wpSubTitle:title], value, showArrow ? 1 : 0);
     if (cell) {
         wpAttachRow(cell, row);
         [g addCell:cell];

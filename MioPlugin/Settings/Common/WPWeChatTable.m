@@ -312,6 +312,14 @@ id WPWCNavCell(SEL sel, id target, NSString *title, NSString *rightValue) {
     return ((id (*)(id, SEL, SEL, id, id, id, long))objc_msgSend)(ncls, s, sel, target, title, rightValue ?: @"", (long)1);
 }
 
+id WPWCNavCellEx(SEL sel, id target, NSString *title, NSString *rightValue, long accessoryType) {
+    // 同 WPWCNavCell，accessoryType 可指定（0=无箭头，1=右箭头）
+    Class ncls = objc_getClass("WCTableViewNormalCellManager");
+    SEL s = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:accessoryType:");
+    if (!ncls || ![ncls respondsToSelector:s]) return nil;
+    return ((id (*)(id, SEL, SEL, id, id, id, long))objc_msgSend)(ncls, s, sel, target, title, rightValue ?: @"", accessoryType);
+}
+
 id WPWCViewCell(SEL sel, id target, NSString *title, UIView *view) {
     Class cls = objc_getClass("WCTableViewCellManager");
     // WCR 颜色行/滑杆行同款：rightView 挂自定义 UIView（sel 可传 0，点击由视图内部控件自理）
