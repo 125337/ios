@@ -11,6 +11,13 @@
     [self buildUI];
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    // 微信引擎表每次重建后再添加行，防止 pop 返回时行叠加
+    [self wpRebuildWeChatTable];
+    [self buildUI];
+}
+
 - (void)buildUI {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
@@ -36,7 +43,7 @@
     UIView *navGroup = [self addTableGroupAtY:y width:w];
     CGFloat ncy = [self addNavRowInGroup:navGroup
                                    title:@"头像气泡上"
-                                subtitle:@"头像与昵称移至气泡上方及配套样式"
+                                subtitle:(config.msgMergeAabEnabled ? @"已开启" : @"已关闭")
                                      tag:100
                                   action:@selector(navigateTo:)
                                       cy:0
