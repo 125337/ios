@@ -23,12 +23,16 @@ static NSMutableDictionary<NSString *, NSValue *> *_kaOrigImps = nil;
 
 static void processKeywordAlertMessage(id wrap);
 
+/// 指针合理性防护：批量入口部分参数可能是 BOOL/int 等原始值，直接当对象发消息会崩
+static BOOL kaIsPlausiblePointer(void *ptr) {
+    uintptr_t p = (uintptr_t)ptr;
+    return p >= 0x1000 && (p & 0x7) == 0;
+}
+
 /// 从批量入口参数中提取 CMessageWrap 并送入处理（免打扰会话走批量路径，单条入口收不到）
-static void kaProcessBatchObj(id obj) {
-    if (!obj) return;
-    // 指针合理性防护：批量入口部分参数可能是 BOOL 等非对象值，对野指针发消息会直接崩
-    uintptr_t p = (uintptr_t)obj;
-    if (p < 0x1000 || (p & 0x7) != 0) return;
+static void kaProcessBatchObj(void *ptr) {
+    if (!kaIsPlausiblePointer(ptr)) return;
+    id obj = (__bridge id)ptr;
     static Class wrapCls = Nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ wrapCls = objc_getClass("CMessageWrap"); });
@@ -46,14 +50,14 @@ static IMP kaOrigImpForCmd(SEL _cmd) {
     return origV ? (IMP)[origV pointerValue] : NULL;
 }
 
-static void kaBatchProcessArgs(id a1, id a2) {
+static void kaBatchProcessArgs(void *a1, void *a2) {
     @try {
         kaProcessBatchObj(a1);
         kaProcessBatchObj(a2);
-        if ([a1 isKindOfClass:[NSDictionary class]]) {
-            // WCR 同款：批量入口参数为 会话→消息 的字典（见 WCR FUN_004d5280）
-            for (id v in [(NSDictionary *)a1 allValues]) {
-                kaProcessBatchObj(v);
+        // WCR 同款：批量入口参数为 会话→消息 的字典（见 WCR FUN_004d5280）
+        if (kaIsPlausiblePointer(a1) && [(__bridge id)a1 isKindOfClass:[NSDictionary class]]) {
+            for (id v in [(__bridge NSDictionary *)a1 allValues]) {
+                kaProcessBatchObj((__bridge void *)v);
             }
         }
     } @catch (NSException *e) {
@@ -61,17 +65,20 @@ static void kaBatchProcessArgs(id a1, id a2) {
     }
 }
 
-// 替换函数必须与原方法签名严格一致（参数个数不同走不同 IMP），否则调用即崩（109 日志闪退根因）
-static void replaced_ka_batch2(id self, SEL _cmd, id a1, id a2) {
+// 替换函数必须与原方法参数个数严格一致（参数个数不同走不同 IMP），否则调用即崩（109 日志闪退根因）。
+// ★ 参数一律声明为 void*：ARC 编译单元里 id 形参会在函数入口被自动 objc_retain，
+//   而批量入口的部分参数是 BOOL/int 等原始值（8.0.78 实锤 objc_retain(0x1) 崩溃根因）；
+//   void* 不触发 retain，寄存器原样透传，与方法真实参数类型无关
+static void replaced_ka_batch2(id self, SEL _cmd, void *a1, void *a2) {
     IMP orig = kaOrigImpForCmd(_cmd);
-    if (orig) ((void (*)(id, SEL, id, id))orig)(self, _cmd, a1, a2);
+    if (orig) ((void (*)(id, SEL, void *, void *))orig)(self, _cmd, a1, a2);
     kaBatchProcessArgs(a1, a2);
 }
 
-static void replaced_ka_batch3(id self, SEL _cmd, id a1, id a2, id a3) {
+static void replaced_ka_batch3(id self, SEL _cmd, void *a1, void *a2, void *a3) {
     IMP orig = kaOrigImpForCmd(_cmd);
-    if (orig) ((void (*)(id, SEL, id, id, id))orig)(self, _cmd, a1, a2, a3);
-    // a3 可能是 BOOL 等非对象参数，不做提取，仅原样转发
+    if (orig) ((void (*)(id, SEL, void *, void *, void *))orig)(self, _cmd, a1, a2, a3);
+    // a3 可能是 BOOL 等原始值，仅原样转发
     kaBatchProcessArgs(a1, a2);
 }
 
@@ -407,6 +414,26 @@ static BOOL kaSafeHook(Class cls, SEL sel, IMP replacement, IMP *origOut) {
     return YES;
 }
 
+/// 批量入口（void* 透传垫片）安全守卫：返回 void 且不含结构体/联合体参数。
+/// 小结构体占多个寄存器，按参数个数声明的垫片会寄存器错位截断转发，必须挡掉；
+/// 其余类型（对象/BOOL/int/指针等）均为单寄存器，void* 垫片原样透传皆安全
+static BOOL kaIsBatchSignatureSafe(Method m, const char *name) {
+    char *retEnc = method_copyReturnType(m);
+    BOOL isVoid = retEnc && retEnc[0] == 'v';
+    if (retEnc) free(retEnc);
+    if (!isVoid) return NO;
+    unsigned int total = method_getNumberOfArguments(m); // 含 self/_cmd
+    for (unsigned int i = 2; i < total; i++) {
+        char t[8] = {0};
+        method_getArgumentType(m, i, t, sizeof(t));
+        if (t[0] == '{' || t[0] == '(') {
+            WPLog(@"KeywordAlert", @"[GUARD] 跳过 %s (第%u参类型'%s'为结构体，透传会错位)", name, i - 2, t);
+            return NO;
+        }
+    }
+    return YES;
+}
+
 @implementation KeywordAlertHook
 
 + (void)install {
@@ -460,13 +487,12 @@ static BOOL kaSafeHook(Class cls, SEL sel, IMP replacement, IMP *origOut) {
             if (strstr(name, "AsyncOnAddMsg") || strstr(name, "OnAddMsg:")) {
                 unsigned int totalArgs = method_getNumberOfArguments(methodList[i]); // 含 self/_cmd
                 int nArgs = (int)totalArgs - 2;
-                // 替换函数只提供 2/3 参版本；且必须全对象参数 + void 返回，
-                // 否则 ARC 入口对原始值参数 retain 必崩（8.0.78 根因），宁可不挂
+                // 垫片只提供 2/3 参版本；void* 透传垫片类型无关，仅需 void 返回 + 无结构体参数
                 if (nArgs != 2 && nArgs != 3) {
                     WPLog(@"KeywordAlert", @"[BATCH] 跳过 %s (参数%d 个数不匹配)", name, nArgs);
                     continue;
                 }
-                if (!kaIsMethodSignatureSafe(methodList[i], name)) continue;
+                if (!kaIsBatchSignatureSafe(methodList[i], name)) continue;
                 if (!_kaOrigImps) _kaOrigImps = [NSMutableDictionary dictionary];
                 _kaOrigImps[n] = [NSValue valueWithPointer:method_getImplementation(methodList[i])];
                 MSHookMessageEx(CMessageMgrClass, sel,
