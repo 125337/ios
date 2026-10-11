@@ -154,12 +154,15 @@ static void wpRunGroupPass(id chatVC) {
         }
 
         id wrap = ((id (*)(id, SEL))objc_msgSend)(vm, @selector(messageWrap));
-        // 分组键 = 真实发送者：群聊收到的消息 m_nsFromUsr 是群 ID（探针实证），
-        // 按 fromUsr 分组会把全群非本人消息并成一个大组；m_nsRealChatUsr 才是
-        // 群消息真实发送者（KeywordAlert 同源用法），为空（本人消息/私聊）回退 m_nsFromUsr
+        // 分组键 = 真实发送者：群聊收到的消息 m_nsFromUsr 恒为群 ID（探针实证），
+        // 按 fromUsr 分组会把全群非本人消息并成一个大组；m_nsRealChatUsr 才是群消息
+        // 真实发送者（探针实证文本/图片/表情均带正确 wxid；KeywordAlert 同源用法）。
+        // 特例：type49 等 appmsg 的 realChatUsr 被塞入 XML 内容（探针实证），不可信 →
+        // 回退 fromUsr 后若仍是群 ID（@chatroom）则发送者不可判定，该条不参与合并（防误并）
         NSString *from = wrap ? ((id (*)(id, SEL))objc_msgSend)(wrap, @selector(m_nsRealChatUsr)) : nil;
+        if (from.length && [from hasPrefix:@"<"]) from = nil;
         if (!from.length) from = wrap ? ((id (*)(id, SEL))objc_msgSend)(wrap, @selector(m_nsFromUsr)) : nil;
-        if (!from.length) {
+        if (!from.length || [from containsString:@"@chatroom"]) {
             WP_FLUSH_GROUP();
             prevFrom = nil;
             continue;
