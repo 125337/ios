@@ -235,6 +235,9 @@ static IMP orig_VM_rowHeight_text        = NULL;
 
 static char kMioAabAvatarH;   // vm 上缓存实测头像高（rowHeight 先于 cell 构建，用实测值补偿）
 static char kMioAabContBaseY; // 气泡容器/引用板首过自然 y（绝对定位基准，防逐轮累加）
+static char kMioAabContLastDy; // 容器/引用板上轮 delta（失效检测：native 动过 frame 则重置基准）
+static char kMioAabHeadBase;  // 头像首过自然 x（头像 native 不每轮重置 frame，相对位移会累加）
+static char kMioAabHeadLastDx; // 头像上轮 dx（失效检测用，XOS FUN_00192580 同款）
 static char kMioAabSepLayer;  // 时间板下水平虚线分隔（XOS 20260220 对应件）
 
 /// AAB 是否对该 viewModel 生效；outMode 返回 0=上方 1=下方，outDelta 返回高度增量
@@ -715,11 +718,23 @@ static void wpApplyAabLayout(id cellView) {
         //   只移图会让文字悬空在上、气泡空白（v3 探针实证 bg y=47 而 RichText y=10）。
         //   移容器则文字随行；容器 y/x 用首过自然值 + delta 绝对定位，orig 每轮是否
         //   重置容器 frame 都不会累加。
+        // 头像位移：x 必须走「基准缓存 + 失效检测」（XOS FUN_00192580 L41993-42037 同款）——
+        // native 不每轮重置头像 frame，裸 headF.x+3 会逐轮累加把头像推出屏外（截图实证）。
+        // 失效条件：当前 x ≠ 基准+上轮dx（cell 复用换侧 9↔341 或 native 重排）→ 以当前值重置基准。
+        CGFloat dx = isSender ? -3 : 3;
+        NSNumber *headBase = objc_getAssociatedObject(head, &kMioAabHeadBase);
+        NSNumber *headLastDx = objc_getAssociatedObject(head, &kMioAabHeadLastDx);
+        CGFloat baseX = headF.origin.x;
+        if (headBase && fabs(headF.origin.x - (headBase.doubleValue + headLastDx.doubleValue)) <= 0.5) {
+            baseX = headBase.doubleValue;  // 基准仍有效
+        }
         CGRect newHead = headF;
-        newHead.origin.x = headF.origin.x + (isSender ? -3 : 3);
+        newHead.origin.x = baseX + dx;
         newHead.origin.y = 4;
         if (fabs(newHead.origin.x - headF.origin.x) > 0.5 || fabs(newHead.origin.y - headF.origin.y) > 0.5)
             ((void (*)(id, SEL, CGRect))objc_msgSend)(head, @selector(setFrame:), newHead);
+        objc_setAssociatedObject(head, &kMioAabHeadBase, @(baseX), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(head, &kMioAabHeadLastDx, @(dx), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         if (!isSender) {
             // 昵称随头像偏移（XOS 实证 (64,4) = 头像新右缘 + 9、y = 头像 y）；自身侧无昵称
             Class nickCls = objc_getClass("MMCPLabel");
@@ -741,36 +756,43 @@ static void wpApplyAabLayout(id cellView) {
             }
         }
         if (fabs(delta) > 0.5) {
-            id container = ((id (*)(id, SEL))objc_msgSend)(bg, @selector(superview));
-            if (container) {
-                CGRect contF = ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame));
-                NSNumber *baseY = objc_getAssociatedObject(bg, &kMioAabContBaseY);
-                if (!baseY) {
-                    baseY = @(contF.origin.y);
-                    objc_setAssociatedObject(bg, &kMioAabContBaseY, baseY, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                id container = ((id (*)(id, SEL))objc_msgSend)(bg, @selector(superview));
+                if (container) {
+                    CGRect contF = ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame));
+                    // 基准缓存 + 失效检测（XOS 同款）：native 复用换内容后动了自然 y → 以当前值重置基准
+                    NSNumber *baseY = objc_getAssociatedObject(bg, &kMioAabContBaseY);
+                    NSNumber *lastDy = objc_getAssociatedObject(bg, &kMioAabContLastDy);
+                    CGFloat base = contF.origin.y;
+                    if (baseY && fabs(contF.origin.y - (baseY.doubleValue + lastDy.doubleValue)) <= 0.5) {
+                        base = baseY.doubleValue;
+                    }
+                    contF.origin.y = base + delta;
+                    if (!isSender) contF.origin.x = 15;  // 接收侧：气泡左缘对齐 cell 边距（XOS 实证 61→15）
+                    if (fabs(contF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.y) > 0.5 ||
+                        fabs(contF.origin.x - ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.x) > 0.5)
+                        ((void (*)(id, SEL, CGRect))objc_msgSend)(container, @selector(setFrame:), contF);
+                    objc_setAssociatedObject(bg, &kMioAabContBaseY, @(base), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                    objc_setAssociatedObject(bg, &kMioAabContLastDy, @(delta), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 }
-                contF.origin.y = baseY.doubleValue + delta;
-                if (!isSender) contF.origin.x = 15;  // 接收侧：气泡左缘对齐 cell 边距（XOS 实证 61→15）
-                if (fabs(contF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.y) > 0.5 ||
-                    fabs(contF.origin.x - ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.x) > 0.5)
-                    ((void (*)(id, SEL, CGRect))objc_msgSend)(container, @selector(setFrame:), contF);
-            }
-            if (refer) {
-                // 引用板同款 baseY+delta 绝对下移（native 每轮重置其 y，不会累加）；接收侧同款左移
-                CGRect refF = ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame));
-                NSNumber *rBase = objc_getAssociatedObject(refer, &kMioAabContBaseY);
-                if (!rBase) {
-                    rBase = @(refF.origin.y);
-                    objc_setAssociatedObject(refer, &kMioAabContBaseY, rBase, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                if (refer) {
+                    // 引用板同款 baseY+delta 绝对下移 + 失效检测；接收侧同款左移
+                    CGRect refF = ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame));
+                    NSNumber *rBase = objc_getAssociatedObject(refer, &kMioAabContBaseY);
+                    NSNumber *rLastDy = objc_getAssociatedObject(refer, &kMioAabContLastDy);
+                    CGFloat rBaseVal = refF.origin.y;
+                    if (rBase && fabs(refF.origin.y - (rBase.doubleValue + rLastDy.doubleValue)) <= 0.5) {
+                        rBaseVal = rBase.doubleValue;
+                    }
+                    refF.origin.y = rBaseVal + delta;
+                    if (!isSender) refF.origin.x = 15;
+                    if (fabs(refF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame)).origin.y) > 0.5 ||
+                        fabs(refF.origin.x - ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame)).origin.x) > 0.5)
+                        ((void (*)(id, SEL, CGRect))objc_msgSend)(refer, @selector(setFrame:), refF);
+                    objc_setAssociatedObject(refer, &kMioAabContBaseY, @(rBaseVal), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                    objc_setAssociatedObject(refer, &kMioAabContLastDy, @(delta), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 }
-                refF.origin.y = rBase.doubleValue + delta;
-                if (!isSender) refF.origin.x = 15;
-                if (fabs(refF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame)).origin.y) > 0.5 ||
-                    fabs(refF.origin.x - ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame)).origin.x) > 0.5)
-                    ((void (*)(id, SEL, CGRect))objc_msgSend)(refer, @selector(setFrame:), refF);
+                // 昵称 y/x 见上方 mode0 头像段：XOS 实证昵称随头像偏移到 (64,4)，非累加路径
             }
-            // 昵称 y/x 见上方 mode0 头像段：XOS 实证昵称随头像偏移到 (64,4)，非累加路径
-        }
     } else {
         // 下方：气泡/昵称不动，头像放到气泡容器底。
         // ★ bgF 是容器内坐标，必须叠加容器 y，否则头像定位错位
