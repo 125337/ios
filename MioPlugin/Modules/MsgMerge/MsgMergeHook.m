@@ -225,7 +225,7 @@ static BOOL hook_isShowChatRoomDisplayName(id self, SEL _cmd) {
 // MARK: - Phase2 AAB 布局垫片（头像移到气泡上/下方）
 // ============================================================
 
-static IMP orig_Cell_layoutContentView   = NULL;
+static IMP orig_Common_layoutSubviews    = NULL;
 static IMP orig_VM_rowHeight_common      = NULL;
 static IMP orig_VM_rowHeight_text        = NULL;
 
@@ -352,6 +352,7 @@ static void wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, NS
 
     if (!label) {
         label = [[UILabel alloc] initWithFrame:CGRectZero];
+        label.tag = 20260219;  // 对齐 XOS 时间板 tag，双端探针对账用
         label.font = [UIFont systemFontOfSize:10];
         label.textAlignment = NSTextAlignmentLeft;
         objc_setAssociatedObject(cellView, &kMioAabTimeLabel, label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -602,7 +603,6 @@ static void wpApplyAabLayout(id cellView) {
     // 头像位移：仅对位置模式启用且头像可见（组首）的 cell
     NSInteger mode; CGFloat textShift;
     if (!wpAabActive(vm, &mode, NULL, &textShift)) return;
-    id name = ((id (*)(id, SEL))objc_msgSend)(cellView, @selector(getNameLabel));
     // 缓存实测头像高（rowHeight 垫片用）
     objc_setAssociatedObject(vm, &kMioAabAvatarH, @(headF.size.height), OBJC_ASSOCIATION_RETAIN);
 
@@ -632,29 +632,35 @@ static void wpApplyAabLayout(id cellView) {
                 if (fabs(contF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.y) > 0.5)
                     ((void (*)(id, SEL, CGRect))objc_msgSend)(container, @selector(setFrame:), contF);
             }
-            if (name) {
-                CGRect nameF = ((CGRect (*)(id, SEL))objc_msgSend)(name, @selector(frame));
-                if (fabs(nameF.origin.y + delta - nameF.origin.y) > 0.5) {
-                    nameF.origin.y += delta;
-                    ((void (*)(id, SEL, CGRect))objc_msgSend)(name, @selector(setFrame:), nameF);
-                }
-            }
+            // 昵称不动：XOS 探针对照实证组首昵称恒在头像右侧自然位（y=4），不随容器下移；
+            // 旧 += 写法在 orig 不重置昵称 frame 时每轮累加（实证 0/47/94/141/188），已删
         }
     } else {
-        // 下方：气泡/昵称不动，头像放到气泡底
+        // 下方：气泡/昵称不动，头像放到气泡容器底。
+        // ★ bgF 是容器内坐标，必须叠加容器 y，否则头像定位错位
         CGRect newHead = headF;
-        newHead.origin.y = bgF.origin.y + bgF.size.height + gap;
+        CGFloat contY = 0;
+        id container = ((id (*)(id, SEL))objc_msgSend)(bg, @selector(superview));
+        if (container) contY = ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.y;
+        newHead.origin.y = contY + bgF.origin.y + bgF.size.height + gap;
         if (fabs(newHead.origin.y - headF.origin.y) > 0.5)
             ((void (*)(id, SEL, CGRect))objc_msgSend)(head, @selector(setFrame:), newHead);
     }
+
+    // 视觉件取移动后的头像 frame（下方模式时间标注要贴新头像位）
+    headF = ((CGRect (*)(id, SEL))objc_msgSend)(head, @selector(frame));
 
     wpApplyAabTimeLabel(cellView, vm, headF, bgF, mode);
     wpApplyAabDash(cellView, vm, headF, isSender);
     wpApplyAabGuideLine(cellView, vm, headF, isSender);
 }
 
-static void hook_Cell_layoutContentView(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_Cell_layoutContentView)(self, _cmd);
+// 挂 CommonMessageCellView 自有 layoutSubviews（类自有方法，8.0.78 头文件 L64 实证）：
+// native 在 layoutContentView 之后还有一轮容器定位（探针实证：垫片把容器挪到 63，
+// 最终仍被打回 16），垫片必须挂在最后执行的 layoutSubviews 才能盖住原生坐标；
+// 同时天然覆盖 Text/Image/Emoticon/AppFile 等全部消息类型（对齐 XOS 行为）
+static void hook_Common_layoutSubviews(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_Common_layoutSubviews)(self, _cmd);
     wpApplyAabLayout(self);
 }
 
@@ -719,11 +725,11 @@ static void wpSafeHook(Class cls, SEL sel, IMP newImp, IMP *origOut, const char 
                "CommonMessageViewModel.isShowChatRoomDisplayName");
 
     // Phase2 AAB 布局垫片
-    Class textCellCls = objc_getClass("TextMessageCellView");
-    Class textVmCls   = objc_getClass("TextMessageViewModel");
-    wpSafeHook(textCellCls, NSSelectorFromString(@"layoutContentView"),
-               (IMP)hook_Cell_layoutContentView, &orig_Cell_layoutContentView,
-               "TextMessageCellView.layoutContentView");
+    Class commonCellCls = objc_getClass("CommonMessageCellView");
+    Class textVmCls     = objc_getClass("TextMessageViewModel");
+    wpSafeHook(commonCellCls, @selector(layoutSubviews),
+               (IMP)hook_Common_layoutSubviews, &orig_Common_layoutSubviews,
+               "CommonMessageCellView.layoutSubviews");
     wpSafeHook(vmCls, @selector(rowHeight),
                (IMP)hook_VM_rowHeight_common, &orig_VM_rowHeight_common,
                "CommonMessageViewModel.rowHeight");
