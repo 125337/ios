@@ -229,9 +229,31 @@ static BOOL hook_isShowChatRoomDisplayName(id self, SEL _cmd) {
 // MARK: - Phase2 AAB 布局垫片（头像移到气泡上/下方）
 // ============================================================
 
-static IMP orig_Common_layoutSubviews    = NULL;
 static IMP orig_VM_rowHeight_common      = NULL;
 static IMP orig_VM_rowHeight_text        = NULL;
+
+// 消息 cell layoutSubviews 分层挂载（XOS FUN_00192294 同款架构）：
+// 各消息 cell 类对 layoutSubviews 的重写情况不同（Image/Emoticon 重写、Text/AppFile 沿用
+// Common 实现），单一挂载点必然漏类（图片/表情 AAB 失效实证）。改为：基类挂一次 +
+// 名单内重写子类判重后逐个补挂，每类独立 orig 槽。
+#define WP_CELL_HOOK_MAX 8
+static IMP g_cellOrig[WP_CELL_HOOK_MAX];
+
+static void wpApplyAabLayout(id cellView);
+
+static void wpCellLayoutThunk0(id self, SEL _cmd) { ((void (*)(id, SEL))g_cellOrig[0])(self, _cmd); wpApplyAabLayout(self); }
+static void wpCellLayoutThunk1(id self, SEL _cmd) { ((void (*)(id, SEL))g_cellOrig[1])(self, _cmd); wpApplyAabLayout(self); }
+static void wpCellLayoutThunk2(id self, SEL _cmd) { ((void (*)(id, SEL))g_cellOrig[2])(self, _cmd); wpApplyAabLayout(self); }
+static void wpCellLayoutThunk3(id self, SEL _cmd) { ((void (*)(id, SEL))g_cellOrig[3])(self, _cmd); wpApplyAabLayout(self); }
+static void wpCellLayoutThunk4(id self, SEL _cmd) { ((void (*)(id, SEL))g_cellOrig[4])(self, _cmd); wpApplyAabLayout(self); }
+static void wpCellLayoutThunk5(id self, SEL _cmd) { ((void (*)(id, SEL))g_cellOrig[5])(self, _cmd); wpApplyAabLayout(self); }
+static void wpCellLayoutThunk6(id self, SEL _cmd) { ((void (*)(id, SEL))g_cellOrig[6])(self, _cmd); wpApplyAabLayout(self); }
+static void wpCellLayoutThunk7(id self, SEL _cmd) { ((void (*)(id, SEL))g_cellOrig[7])(self, _cmd); wpApplyAabLayout(self); }
+
+static const IMP g_cellThunks[WP_CELL_HOOK_MAX] = {
+    (IMP)wpCellLayoutThunk0, (IMP)wpCellLayoutThunk1, (IMP)wpCellLayoutThunk2, (IMP)wpCellLayoutThunk3,
+    (IMP)wpCellLayoutThunk4, (IMP)wpCellLayoutThunk5, (IMP)wpCellLayoutThunk6, (IMP)wpCellLayoutThunk7,
+};
 
 static char kMioAabAvatarH;   // vm 上缓存实测头像高（rowHeight 先于 cell 构建，用实测值补偿）
 static char kMioAabContBaseY; // 气泡容器/引用板首过自然 y（绝对定位基准，防逐轮累加）
@@ -823,13 +845,46 @@ static void wpApplyAabLayout(id cellView) {
     wpApplyAabGuideLine(cellView, vm, headF, isSender);
 }
 
-// 挂 CommonMessageCellView 自有 layoutSubviews（类自有方法，8.0.78 头文件 L64 实证）：
-// native 在 layoutContentView 之后还有一轮容器定位（探针实证：垫片把容器挪到 63，
-// 最终仍被打回 16），垫片必须挂在最后执行的 layoutSubviews 才能盖住原生坐标；
-// 同时天然覆盖 Text/Image/Emoticon/AppFile 等全部消息类型（对齐 XOS 行为）
-static void hook_Common_layoutSubviews(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_Common_layoutSubviews)(self, _cmd);
-    wpApplyAabLayout(self);
+// 分层挂载入口（XOS FUN_00192294 同款）：先挂根基类 BaseMessageCellView，名单内子类
+// 若重写了 layoutSubviews（class_getInstanceMethod 与父类返回不同 Method）则判重后补挂。
+// 未重写的类沿继承链命中父类上已挂的 thunk，天然覆盖，无需重复挂。
+static const char *kCellLayoutClasses[WP_CELL_HOOK_MAX] = {
+    "BaseMessageCellView",       // 根基类：覆盖全部未重写 layoutSubviews 的消息 cell
+    "CommonMessageCellView",     // 中间层
+    "TextMessageCellView",
+    "ImageMessageCellView",      // 重写类（探针实证：单挂 Common 时图片 AAB 失效）
+    "EmoticonMessageCellView",   // 重写类（同上）
+    "VoiceMessageCellView",      // XOS 同款补挂
+    "VideoMessageCellView",
+    "AppFileMessageCellView",
+};
+
+static void wpHookCellLayoutSubviews(void) {
+    SEL sel = @selector(layoutSubviews);
+    for (int i = 0; i < WP_CELL_HOOK_MAX; i++) {
+        const char *name = kCellLayoutClasses[i];
+        Class cls = objc_getClass(name);
+        if (!cls) {
+            WPLog(@"MsgMerge", @"[Hook] ✗ cell layout: %s not found", name);
+            continue;
+        }
+        Method m = class_getInstanceMethod(cls, sel);
+        if (!m) continue;
+        Class superCls = class_getSuperclass(cls);
+        Method mSuper = superCls ? class_getInstanceMethod(superCls, sel) : NULL;
+        if (mSuper && m == mSuper) continue;  // 未重写 → 父类 hook 已覆盖
+        IMP cur = method_getImplementation(m);
+        Dl_info info;
+        if (dladdr((void *)cur, &info) && info.dli_fname &&
+            !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio")) {
+            WPLog(@"MsgMerge", @"[Hook] ⇢ %s.layoutSubviews: IMP from %s, yield", name, info.dli_fname);
+            continue;
+        }
+        if (g_cellOrig[i]) continue;  // 槽位已用
+        g_cellOrig[i] = cur;
+        MSHookMessageEx(cls, sel, g_cellThunks[i], NULL);
+        WPLog(@"MsgMerge", @"[Hook] ✓ %s.layoutSubviews (slot %d)", name, i);
+    }
 }
 
 static CGFloat hook_VM_rowHeight_common(id self, SEL _cmd) {
@@ -892,12 +947,9 @@ static void wpSafeHook(Class cls, SEL sel, IMP newImp, IMP *origOut, const char 
                (IMP)hook_isShowChatRoomDisplayName, &orig_VM_isShowChatRoomDisplayName,
                "CommonMessageViewModel.isShowChatRoomDisplayName");
 
-    // Phase2 AAB 布局垫片
-    Class commonCellCls = objc_getClass("CommonMessageCellView");
-    Class textVmCls     = objc_getClass("TextMessageViewModel");
-    wpSafeHook(commonCellCls, @selector(layoutSubviews),
-               (IMP)hook_Common_layoutSubviews, &orig_Common_layoutSubviews,
-               "CommonMessageCellView.layoutSubviews");
+    // Phase2 AAB 布局垫片：消息 cell layoutSubviews 分层挂载（基类 + 重写子类补挂）
+    Class textVmCls = objc_getClass("TextMessageViewModel");
+    wpHookCellLayoutSubviews();
     wpSafeHook(vmCls, @selector(rowHeight),
                (IMP)hook_VM_rowHeight_common, &orig_VM_rowHeight_common,
                "CommonMessageViewModel.rowHeight");
