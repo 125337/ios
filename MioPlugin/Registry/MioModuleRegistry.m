@@ -43,6 +43,7 @@
 #import "../Modules/HomeBeautify/HomeCardVC.h"
 #import "../Modules/MsgMerge/MsgMergeConfig.h"
 #import "../Modules/MsgMerge/MsgMergeVC.h"
+#import "../Modules/MsgMerge/MsgMergeHook.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -281,7 +282,7 @@
             [MioModuleDescriptor descriptorWithIdentifier:@"msgmerge"
                                                     title:@"消息合并"
                                                configClass:[MsgMergeConfig class]
-                                               hookClasses:@[]
+                                               hookClasses:@[[MsgMergeHook class]]
                                            controllerClass:[MsgMergeVC class]
                                                   subtitle:@"消息合并与头像气泡上"
                                              sectionTitle:@"通用"],
