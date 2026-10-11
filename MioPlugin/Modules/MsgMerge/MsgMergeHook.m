@@ -178,6 +178,114 @@ static BOOL hook_isShowChatRoomDisplayName(id self, SEL _cmd) {
 }
 
 // ============================================================
+// MARK: - Phase2 AAB 布局垫片（头像移到气泡上/下方）
+// ============================================================
+
+static IMP orig_Cell_layoutContentView   = NULL;
+static IMP orig_VM_rowHeight_common      = NULL;
+static IMP orig_VM_rowHeight_text        = NULL;
+
+static char kMioAabAvatarH;   // vm 上缓存实测头像高（rowHeight 先于 cell 构建，用实测值补偿）
+
+/// AAB 是否对该 viewModel 生效；outMode 返回 0=上方 1=下方，outDelta 返回高度增量
+static BOOL wpAabActive(id vm, NSInteger *outMode, CGFloat *outDelta, CGFloat *outShift) {
+    MsgMergeConfig *config = [MsgMergeConfig shared];
+    if (outMode) *outMode = 2;
+    if (outDelta) *outDelta = 0;
+    if (outShift) *outShift = 0;
+    if (!config.msgMergeEnabled || !config.msgMergeAabEnabled || !vm) return NO;
+
+    BOOL isSender = NO;
+    @try {
+        isSender = ((BOOL (*)(id, SEL))objc_msgSend)(vm, @selector(isSender));
+    } @catch (NSException *e) { return NO; }
+
+    NSInteger mode = isSender ? config.msgMergePositionModeSelf : config.msgMergePositionModeOther;
+    if (mode != 0 && mode != 1) return NO;
+    if (outMode) *outMode = mode;
+
+    // 组内非首条头像已被合并隐藏，aab 只作用于有头像的 cell（经 hook 链后的真实值）
+    BOOL showHead = ((BOOL (*)(id, SEL))objc_msgSend)(vm, @selector(isShowHeadImage));
+    if (!showHead) return NO;
+
+    CGFloat textShift = isSender ? config.msgMergeTextYShiftSelf : config.msgMergeTextYShiftOther;
+    if (outShift) *outShift = textShift;
+    // 高度补偿 = 头像高 + 间隙 + 文字 Y 偏移（上下两个方向都占高度）
+    NSNumber *cachedH = objc_getAssociatedObject(vm, &kMioAabAvatarH);
+    CGFloat avatarH = cachedH.doubleValue > 1 ? cachedH.doubleValue : 42;
+    if (outDelta) *outDelta = avatarH + 4 + fabs(textShift);
+    return YES;
+}
+
+/// 布局垫片：orig 完成原生布局后，将头像移到气泡上/下方
+static void wpApplyAabLayout(id cellView) {
+    id vm = nil;
+    @try { vm = ((id (*)(id, SEL))objc_msgSend)(cellView, @selector(viewModel)); } @catch (NSException *e) {}
+    NSInteger mode; CGFloat textShift;
+    if (!wpAabActive(vm, &mode, NULL, &textShift)) return;
+
+    id head = ((id (*)(id, SEL))objc_msgSend)(cellView, @selector(getHeadImageView));
+    id bg   = ((id (*)(id, SEL))objc_msgSend)(cellView, @selector(getBgImageView));
+    id name = ((id (*)(id, SEL))objc_msgSend)(cellView, @selector(getNameLabel));
+    if (!head || !bg) return;
+
+    CGRect headF = ((CGRect (*)(id, SEL))objc_msgSend)(head, @selector(frame));
+    if (headF.size.height < 1) return;  // 头像尚未布局
+    // 缓存实测头像高（rowHeight 垫片用）
+    objc_setAssociatedObject(vm, &kMioAabAvatarH, @(headF.size.height), OBJC_ASSOCIATION_RETAIN);
+
+    CGRect bgF = ((CGRect (*)(id, SEL))objc_msgSend)(bg, @selector(frame));
+    CGFloat gap = 4;
+    CGFloat delta = headF.size.height + gap + fabs(textShift);
+
+    if (mode == 0) {
+        // 上方：头像贴顶，气泡/昵称整体下移
+        CGRect newHead = headF;
+        newHead.origin.y = 2;
+        if (fabs(newHead.origin.y - headF.origin.y) > 0.5)
+            ((void (*)(id, SEL, CGRect))objc_msgSend)(head, @selector(setFrame:), newHead);
+        if (fabs(delta) > 0.5) {
+            if (fabs(bgF.origin.y + delta - bgF.origin.y) > 0.5) {
+                bgF.origin.y += delta;
+                ((void (*)(id, SEL, CGRect))objc_msgSend)(bg, @selector(setFrame:), bgF);
+            }
+            if (name) {
+                CGRect nameF = ((CGRect (*)(id, SEL))objc_msgSend)(name, @selector(frame));
+                if (fabs(nameF.origin.y + delta - nameF.origin.y) > 0.5) {
+                    nameF.origin.y += delta;
+                    ((void (*)(id, SEL, CGRect))objc_msgSend)(name, @selector(setFrame:), nameF);
+                }
+            }
+        }
+    } else {
+        // 下方：气泡/昵称不动，头像放到气泡底
+        CGRect newHead = headF;
+        newHead.origin.y = bgF.origin.y + bgF.size.height + gap;
+        if (fabs(newHead.origin.y - headF.origin.y) > 0.5)
+            ((void (*)(id, SEL, CGRect))objc_msgSend)(head, @selector(setFrame:), newHead);
+    }
+}
+
+static void hook_Cell_layoutContentView(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_Cell_layoutContentView)(self, _cmd);
+    wpApplyAabLayout(self);
+}
+
+static CGFloat hook_VM_rowHeight_common(id self, SEL _cmd) {
+    CGFloat h = ((CGFloat (*)(id, SEL))orig_VM_rowHeight_common)(self, _cmd);
+    NSInteger mode; CGFloat delta;
+    if (!wpAabActive(self, &mode, &delta, NULL)) return h;
+    return h + delta;
+}
+
+static CGFloat hook_VM_rowHeight_text(id self, SEL _cmd) {
+    CGFloat h = ((CGFloat (*)(id, SEL))orig_VM_rowHeight_text)(self, _cmd);
+    NSInteger mode; CGFloat delta;
+    if (!wpAabActive(self, &mode, &delta, NULL)) return h;
+    return h + delta;
+}
+
+// ============================================================
 // MARK: - Install
 // ============================================================
 
@@ -222,6 +330,19 @@ static void wpSafeHook(Class cls, SEL sel, IMP newImp, IMP *origOut, const char 
     wpSafeHook(vmCls, NSSelectorFromString(@"isShowChatRoomDisplayName"),
                (IMP)hook_isShowChatRoomDisplayName, &orig_VM_isShowChatRoomDisplayName,
                "CommonMessageViewModel.isShowChatRoomDisplayName");
+
+    // Phase2 AAB 布局垫片
+    Class textCellCls = objc_getClass("TextMessageCellView");
+    Class textVmCls   = objc_getClass("TextMessageViewModel");
+    wpSafeHook(textCellCls, NSSelectorFromString(@"layoutContentView"),
+               (IMP)hook_Cell_layoutContentView, &orig_Cell_layoutContentView,
+               "TextMessageCellView.layoutContentView");
+    wpSafeHook(vmCls, @selector(rowHeight),
+               (IMP)hook_VM_rowHeight_common, &orig_VM_rowHeight_common,
+               "CommonMessageViewModel.rowHeight");
+    wpSafeHook(textVmCls, @selector(rowHeight),
+               (IMP)hook_VM_rowHeight_text, &orig_VM_rowHeight_text,
+               "TextMessageViewModel.rowHeight");
 
     WPLog(@"MsgMerge", @"MsgMergeHook install complete");
 }
