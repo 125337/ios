@@ -1516,7 +1516,10 @@ static UIView *HCBuildHeader(id vc, CGFloat width, CGFloat origHeight, UIView *o
     host.preservesSuperviewLayoutMargins = NO;
     host.backgroundColor = UIColor.clearColor;
     container.frame = CGRectMake(0, 0, width, containerH);
-    container.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    // ★ 宽度刚性：构建宽已按 ListCornerRadiusHook 扣减成最终 cell 宽（见 viewForHeader），
+    //   若保留 FlexibleWidth，cell 内缩瞬间 contentView 393→375 会再把容器砍 18
+    //   （探针实证：容器 375→357，联系人 343→325 右侧短一截）
+    container.autoresizingMask = UIViewAutoresizingFlexibleHeight;
     [host.contentView addSubview:container];
     return host;
 }
