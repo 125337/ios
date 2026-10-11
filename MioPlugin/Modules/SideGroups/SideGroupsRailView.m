@@ -34,8 +34,10 @@
 @interface SideGroupsRailView () <UIGestureRecognizerDelegate>
 @property (nonatomic, strong) NSMutableArray<UIButton *> *buttons;
 @property (nonatomic, strong) NSMutableArray<UILabel *> *badges;
+@property (nonatomic, strong) NSMutableArray<UILabel *> *dots;
 @property (nonatomic, copy) NSArray<NSString *> *titles;
 @property (nonatomic, copy) NSArray<NSNumber *> *unread;
+@property (nonatomic, copy) NSArray<NSNumber *> *redDots;
 @property (nonatomic, copy) NSArray<NSString *> *tabIds;
 @property (nonatomic, copy) NSString *lastConfigSig;   // 宽/字号/颜色/暗色 变化检测
 @property (nonatomic, copy) NSString *lastDataSig;     // 标题/角标/图标数据变化检测（每帧 pass 都会调 reload，没变直接返回）
@@ -49,6 +51,7 @@
         _selectedIndex = 0;
         _buttons = [NSMutableArray array];
         _badges = [NSMutableArray array];
+        _dots = [NSMutableArray array];
         _titles = @[];
         _unread = @[];
         UILongPressGestureRecognizer *lp =
@@ -170,8 +173,9 @@
     while ((NSInteger)self.buttons.count > n) {
         UIButton *b = self.buttons.lastObject;
         UILabel *l = self.badges.lastObject;
-        [b removeFromSuperview]; [l removeFromSuperview];
-        [self.buttons removeLastObject]; [self.badges removeLastObject];
+        UILabel *d = self.dots.lastObject;
+        [b removeFromSuperview]; [l removeFromSuperview]; [d removeFromSuperview];
+        [self.buttons removeLastObject]; [self.badges removeLastObject]; [self.dots removeLastObject];
     }
     while ((NSInteger)self.buttons.count < n) {
         NSInteger i = (NSInteger)self.buttons.count;
@@ -195,6 +199,15 @@
         badge.hidden = !cfg.sdShowUnreadBadge;
         [self addSubview:badge];
         [self.badges addObject:badge];
+
+        // 免打扰红点（count==0 且组内存在免打扰未读时显示，数字 > 红点）
+        UILabel *dot = [[UILabel alloc] initWithFrame:CGRectZero];
+        dot.backgroundColor = [UIColor colorWithRed:1 green:0.23 blue:0.19 alpha:1];
+        dot.layer.cornerRadius = 4;
+        dot.layer.masksToBounds = YES;
+        dot.hidden = YES;
+        [self addSubview:dot];
+        [self.dots addObject:dot];
     }
     for (NSInteger i = 0; i < n; i++) {
         SDRailButton *b = self.buttons[i];
@@ -215,9 +228,15 @@
         UILabel *badge = self.badges[i];
         NSUInteger count = 0;
         if (i < (NSInteger)self.unread.count) count = self.unread[i].unsignedIntegerValue;
-        badge.text = count > 99 ? @"99+" : (count > 0 ? [NSString stringWithFormat:@"%lu", (unsigned long)count] : @"");
-        badge.hidden = badge.text.length == 0 || !show;
+        BOOL hasNumber = count > 0;
+        BOOL hasDot = !hasNumber && i < (NSInteger)self.redDots.count
+                      && self.redDots[i].boolValue; // 数字 > 红点（WCR 双值显示优先级）
+        badge.text = hasNumber ? (count > 99 ? @"99+" : [NSString stringWithFormat:@"%lu", (unsigned long)count]) : @"";
+        badge.hidden = !hasNumber || !show;
         [badge sizeToFit];
+        UILabel *dot = self.dots[i];
+        dot.hidden = !hasDot || !show;
+        dot.frame = CGRectMake(0, 0, 8, 8); // 红点定尺寸，layoutSubviews 只管摆位
     }
     [self setNeedsLayout];
 }
@@ -239,15 +258,21 @@
 
 #pragma mark - 数据刷新
 
-- (void)reloadTitles:(NSArray<NSString *> *)titles badges:(NSArray<NSNumber *> *)unread tabIds:(NSArray<NSString *> *)tabIds {
+- (void)reloadTitles:(NSArray<NSString *> *)titles
+              badges:(NSArray<NSNumber *> *)unread
+             redDots:(NSArray<NSNumber *> *)redDots
+              tabIds:(NSArray<NSString *> *)tabIds {
     // 数据签名门闩：每帧 pass 都会调，标题/角标/图标映射没变直接返回（setNeedsLayout 会引发布局风暴）
-    NSString *sig = [NSString stringWithFormat:@"%@|%@|%@", [titles componentsJoinedByString:@"\x1F"],
+    NSString *sig = [NSString stringWithFormat:@"%@|%@|%@|%@",
+                     [titles componentsJoinedByString:@"\x1F"],
                      [unread componentsJoinedByString:@"\x1F"],
+                     [redDots componentsJoinedByString:@"\x1F"],
                      [tabIds componentsJoinedByString:@"\x1F"]];
     if ([sig isEqualToString:self.lastDataSig]) return;
     self.lastDataSig = sig;
     self.titles = [titles copy];
     self.unread = [unread copy] ?: @[];
+    self.redDots = [redDots copy] ?: @[];
     self.tabIds = [tabIds copy] ?: @[];
     [self rebuildButtonsIfNeeded];
     [self applySelectionAppearance];
@@ -282,6 +307,11 @@
         if (bs.height < 12) bs.height = 12;
         badge.frame = CGRectMake(CGRectGetMaxX(b.frame) - bs.width - 1,
                                  CGRectGetMinY(b.frame) - 3, bs.width, bs.height);
+        UILabel *dot = self.dots[i];
+        if (!dot.hidden) {
+            dot.frame = CGRectMake(CGRectGetMaxX(b.frame) - 8 - 1,
+                                   CGRectGetMinY(b.frame) - 2, 8, 8);
+        }
     }
 }
 

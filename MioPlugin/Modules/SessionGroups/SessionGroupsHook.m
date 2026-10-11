@@ -976,7 +976,7 @@ static void SGSideRailLayoutPass(UITableView *table) {
         [titles addObject:t.title ?: @""];
         [tabIds addObject:t.tabId ?: @""];
     }
-    [rail reloadTitles:titles badges:snap.tabUnread tabIds:tabIds];
+    [rail reloadTitles:titles badges:snap.tabUnread redDots:snap.tabRedDot tabIds:tabIds];
     id<SGTabProtocol> sel = SGSelectedTab(snap.tabs);
     NSInteger idx = 0;
     for (NSUInteger t = 0; t < snap.tabs.count; t++) if (snap.tabs[t] == sel) { idx = (NSInteger)t; break; }

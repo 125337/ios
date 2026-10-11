@@ -16,8 +16,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// 宽/字号/颜色签名比对，变化才重建（防每轮布局风暴）
 - (void)applyConfig;
 
-/// 重建/更新按钮标题、图标与未读角标（组数变化时重建；tabIds 驱动 SF Symbol 图标映射）
-- (void)reloadTitles:(NSArray<NSString *> *)titles badges:(nullable NSArray<NSNumber *> *)unread tabIds:(nullable NSArray<NSString *> *)tabIds;
+/// 重建/更新按钮标题、图标与未读角标（组数变化时重建；tabIds 驱动 SF Symbol 图标映射）。
+/// 双值语义同电报条 updateBadges:redDots:（数字 > 红点）：count>0 显示数字，
+/// count==0 且对应组存在免打扰未读（tabRedDot）时显示小红点
+- (void)reloadTitles:(NSArray<NSString *> *)titles
+              badges:(nullable NSArray<NSNumber *> *)unread
+             redDots:(nullable NSArray<NSNumber *> *)redDots
+              tabIds:(nullable NSArray<NSString *> *)tabIds;
 
 @end
 
