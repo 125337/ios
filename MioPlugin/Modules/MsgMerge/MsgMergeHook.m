@@ -38,6 +38,10 @@ static char kMioAabGroupHead;
 static char kMioAabGroupTail;
 /// 时间标注 label（挂在 cell 上）
 static char kMioAabTimeLabel;
+/// 时间板渲染侧别缓存（cell 复用换侧时强制重建 attributedText）
+static char kMioAabSideMark;
+/// 时间板明暗缓存（明暗切换时强制重建 attributedText）
+static char kMioAabDarkMark;
 /// 虚线竖线段（挂在 cell 上）
 static char kMioAabDashLayer;
 /// 引导线终点视图（挂在 cell 上）
@@ -267,6 +271,8 @@ static BOOL wpAabActive(id vm, NSInteger *outMode, CGFloat *outDelta, CGFloat *o
 // MARK: - Phase3 时间标注
 // ============================================================
 
+static BOOL wpIsDarkMode(id cellView);
+
 /// 按配置格式化消息时间（显示样式 0-8 / 时间格式 / 时间语音）
 static NSString *wpAabTimeString(NSDate *date, MsgMergeConfig *config) {
     if (!date) return nil;
@@ -355,29 +361,49 @@ static CGRect wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, 
     if (!label) {
         label = [[UILabel alloc] initWithFrame:CGRectZero];
         label.tag = 20260219;  // 对齐 XOS 时间板 tag，双端探针对账用
-        label.font = [UIFont systemFontOfSize:10];
         label.numberOfLines = 2;  // 日期/时间两行（XOS 同款）
-        label.textAlignment = NSTextAlignmentLeft;
         objc_setAssociatedObject(cellView, &kMioAabTimeLabel, label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [cellView addSubview:label];
     }
     label.hidden = NO;
-    if (![label.text isEqualToString:text]) label.text = text;
     UIColor *color = [WPColorUtil dynamicColorFromLightHex:config.msgMergeTimeColorHex
                                                    darkHex:config.msgMergeTimeColorDarkHex
                                              lightFallback:[UIColor secondaryLabelColor]
                                               darkFallback:[UIColor secondaryLabelColor]];
-    label.textColor = color;
+    // XOS 时间板是「两个独立 10pt label」结构（FUN_001a0c34：label2.y = h1 + 5，行距 5），
+    // 自身侧两行右对齐（L46159-46163）。用单 label + attributedText 行距 5 + 侧别对齐等效还原
+    CGFloat cellW = ((CGRect (*)(id, SEL))objc_msgSend)(cellView, @selector(frame)).size.width;
+    BOOL rightSide = headF.origin.x > cellW / 2;
+    NSMutableParagraphStyle *ps = [NSMutableParagraphStyle new];
+    ps.lineSpacing = 5;
+    ps.alignment = rightSide ? NSTextAlignmentRight : NSTextAlignmentLeft;
+    BOOL isDark = wpIsDarkMode(cellView);
+    // attributedText 固化了行距/对齐/颜色：文本变化、cell 复用换侧、明暗切换任一发生都重建
+    NSString *oldText = label.attributedText.string;
+    NSNumber *lastSide = objc_getAssociatedObject(label, &kMioAabSideMark);
+    NSNumber *lastDark = objc_getAssociatedObject(label, &kMioAabDarkMark);
+    BOOL sideChanged = !lastSide || lastSide.boolValue != rightSide;
+    BOOL darkChanged = !lastDark || lastDark.boolValue != isDark;
+    if (![oldText isEqualToString:text] || sideChanged || darkChanged) {
+        label.attributedText = [[NSAttributedString alloc] initWithString:text attributes:@{
+            NSFontAttributeName: [UIFont systemFontOfSize:10],
+            NSParagraphStyleAttributeName: ps,
+            NSForegroundColorAttributeName: color,
+        }];
+        objc_setAssociatedObject(label, &kMioAabSideMark, @(rightSide), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(label, &kMioAabDarkMark, @(isDark), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
 
     [label sizeToFit];
     CGRect lf = label.frame;
-    // 板位按头像侧别镜像：固定放头像右侧会把自己（右缘头像）的时间板推出屏外（截图实证）
-    CGFloat cellW = ((CGRect (*)(id, SEL))objc_msgSend)(cellView, @selector(frame)).size.width;
-    BOOL rightSide = headF.origin.x > cellW / 2;
+    // 板位按头像侧别镜像（XOS 公式 FUN_001a0c34）：固定放头像右侧会把自己（右缘头像）
+    // 的时间板推出屏外（截图实证）
     if (mode == 0) {
-        lf.origin.x = rightSide ? (headF.origin.x - 6 - lf.size.width)
-                                : (headF.origin.x + headF.size.width + 6);
-        lf.origin.y = headF.origin.y + (headF.size.height - lf.size.height) / 2;
+        // 接收侧 x = head.maxX + 11、自身侧 x = head.minX - 11 - 板宽（L46087-46088/L46151）；
+        // y = head.minY + 16（两行竖排 L46165-46171，非垂直居中——探针实证 20 = 4+16）
+        lf.origin.x = rightSide ? (headF.origin.x - 11 - lf.size.width)
+                                : (headF.origin.x + headF.size.width + 11);
+        lf.origin.y = headF.origin.y + 16;
     } else {
         lf.origin.x = rightSide ? (headF.origin.x + headF.size.width - lf.size.width) : headF.origin.x;
         lf.origin.y = headF.origin.y - lf.size.height - 2;
@@ -506,7 +532,8 @@ static void wpApplyAabSepLine(id cellView, CGRect boardF, CGRect headF, CGFloat 
         if (layer) { [layer removeFromSuperlayer]; objc_setAssociatedObject(cellView, &kMioAabSepLayer, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
         return;
     }
-    CGFloat sepY = bubbleTopY - 6;
+    // XOS FUN_001a2190：y = board.maxY + 6.5 - 线高/2（探针实证 53 = 板底 49 + 4）
+    CGFloat sepY = boardF.origin.y + boardF.size.height + 4;
     CGFloat x0 = rightSide ? boardF.origin.x : headF.origin.x + 7;
     CGFloat x1 = rightSide ? (headF.origin.x + headF.size.width - 7) : (boardF.origin.x + boardF.size.width);
     if (x1 - x0 < 4) {
