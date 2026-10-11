@@ -9,7 +9,7 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"头像气泡上";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 #pragma mark - 选项名表
@@ -171,7 +171,7 @@
 
 #pragma mark - 页面构建
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
