@@ -376,7 +376,8 @@ static void wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, NS
 /// 明暗模式判定（cell 视图特性）
 static BOOL wpIsDarkMode(id cellView) {
     @try {
-        return ((NSInteger)cellView.traitCollection.userInterfaceStyle == 2);  // UIUserInterfaceStyleDark
+        UITraitCollection *tc = ((UITraitCollection *(*)(id, SEL))objc_msgSend)(cellView, @selector(traitCollection));
+        return tc ? ((NSInteger)tc.userInterfaceStyle == 2) : NO;  // UIUserInterfaceStyleDark
     } @catch (NSException *e) { return NO; }
 }
 
@@ -401,7 +402,8 @@ static void wpApplyAabDash(id cellView, id vm, CGRect headF, BOOL isSender) {
 
     BOOL isHead = [objc_getAssociatedObject(vm, &kMioAabGroupHead) boolValue];
     BOOL isTail = [objc_getAssociatedObject(vm, &kMioAabGroupTail) boolValue];
-    CGFloat cellH = cellView.frame.size.height;
+    BOOL isDark = wpIsDarkMode(cellView);
+    CGFloat cellH = ((CGRect (*)(id, SEL))objc_msgSend)(cellView, @selector(frame)).size.height;
     CGFloat x = headF.origin.x + headF.size.width / 2;
     CGFloat ext = config.msgMergeDashExtendPt;
 
@@ -416,7 +418,8 @@ static void wpApplyAabDash(id cellView, id vm, CGRect headF, BOOL isSender) {
         layer = [CAShapeLayer new];
         layer.fillColor = nil;
         objc_setAssociatedObject(cellView, &kMioAabDashLayer, layer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [cellView.layer addSublayer:layer];
+        CALayer *hostLayer = ((CALayer *(*)(id, SEL))objc_msgSend)(cellView, @selector(layer));
+        [hostLayer addSublayer:layer];
     }
     layer.hidden = NO;
 
