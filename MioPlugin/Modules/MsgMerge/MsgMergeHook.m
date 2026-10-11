@@ -154,14 +154,18 @@ static void wpRunGroupPass(id chatVC) {
         }
 
         id wrap = ((id (*)(id, SEL))objc_msgSend)(vm, @selector(messageWrap));
-        NSString *from = wrap ? ((id (*)(id, SEL))objc_msgSend)(wrap, @selector(m_nsFromUsr)) : nil;
+        // 分组键 = 真实发送者：群聊收到的消息 m_nsFromUsr 是群 ID（探针实证），
+        // 按 fromUsr 分组会把全群非本人消息并成一个大组；m_nsActualUsr 才是发送者 wxid，
+        // 为空（本人消息/私聊）回退 m_nsFromUsr
+        NSString *from = wrap ? ((id (*)(id, SEL))objc_msgSend)(wrap, @selector(m_nsActualUsr)) : nil;
+        if (!from.length) from = wrap ? ((id (*)(id, SEL))objc_msgSend)(wrap, @selector(m_nsFromUsr)) : nil;
         if (!from.length) {
             WP_FLUSH_GROUP();
             prevFrom = nil;
             continue;
         }
 
-        // 与前一条同发送者 → 组内非首条（XOS：群聊内 m_nsFromUsr 相等才合并）
+        // 与前一条同真实发送者 → 组内非首条
         if (prevFrom && [from isEqualToString:prevFrom]) {
             objc_setAssociatedObject(vm, &kMioMergeHidden, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
             groupCount++;
