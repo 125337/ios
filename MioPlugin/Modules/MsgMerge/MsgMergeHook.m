@@ -17,7 +17,10 @@
 
 #import "MsgMergeHook.h"
 #import "MsgMergeConfig.h"
+#import "MessageTimeFormatParser.h"
+#import "../../Config/WPColorUtil.h"
 #import "../../Core/LogManager.h"
+#import <UIKit/UIKit.h>
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -29,6 +32,10 @@
 
 /// 组内非首条标志（藏头像 + 藏群昵称）
 static char kMioMergeHidden;
+/// 合并组首条标志（组内 ≥2 条时的第一条，时间标注挂它上面）
+static char kMioAabGroupHead;
+/// 时间标注 label（挂在 cell 上）
+static char kMioAabTimeLabel;
 
 // ============================================================
 // MARK: - Original IMPs
@@ -114,30 +121,47 @@ static void wpRunGroupPass(id chatVC) {
     if (n == 0) return;
 
     NSString *prevFrom = nil;
+    id firstInGroup = nil;
+    NSUInteger groupCount = 0;
     for (NSUInteger i = 0; i < n; i++) {
         id vm = arr[i];
 
         // 幂等重算：先清标志（含中断元素，保证关闭开关/分组变化后无残留）
         objc_setAssociatedObject(vm, &kMioMergeHidden, kCFBooleanFalse, OBJC_ASSOCIATION_RETAIN);
+        objc_setAssociatedObject(vm, &kMioAabGroupHead, kCFBooleanFalse, OBJC_ASSOCIATION_RETAIN);
 
         if (wpIsGroupBreaker(vm)) {
-            prevFrom = nil;
+            // 组被时间条/系统消息截断：给上一组首条打标
+            if (groupCount > 1 && firstInGroup)
+                objc_setAssociatedObject(firstInGroup, &kMioAabGroupHead, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
+            firstInGroup = nil; groupCount = 0; prevFrom = nil;
             continue;
         }
 
         id wrap = ((id (*)(id, SEL))objc_msgSend)(vm, @selector(messageWrap));
         NSString *from = wrap ? ((id (*)(id, SEL))objc_msgSend)(wrap, @selector(m_nsFromUsr)) : nil;
         if (!from.length) {
-            prevFrom = nil;
+            if (groupCount > 1 && firstInGroup)
+                objc_setAssociatedObject(firstInGroup, &kMioAabGroupHead, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
+            firstInGroup = nil; groupCount = 0; prevFrom = nil;
             continue;
         }
 
         // 与前一条同发送者 → 组内非首条（XOS：群聊内 m_nsFromUsr 相等才合并）
         if (prevFrom && [from isEqualToString:prevFrom]) {
             objc_setAssociatedObject(vm, &kMioMergeHidden, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
+            groupCount++;
+        } else {
+            // 新组开始：先给上一组首条打标
+            if (groupCount > 1 && firstInGroup)
+                objc_setAssociatedObject(firstInGroup, &kMioAabGroupHead, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
+            firstInGroup = vm; groupCount = 1;
         }
         prevFrom = from;
     }
+    // 收尾：最后一组
+    if (groupCount > 1 && firstInGroup)
+        objc_setAssociatedObject(firstInGroup, &kMioAabGroupHead, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
 }
 
 // ============================================================
@@ -217,6 +241,119 @@ static BOOL wpAabActive(id vm, NSInteger *outMode, CGFloat *outDelta, CGFloat *o
     return YES;
 }
 
+// ============================================================
+// MARK: - Phase3 时间标注
+// ============================================================
+
+/// 按配置格式化消息时间（显示样式 0-8 / 时间格式 / 时间语音）
+static NSString *wpAabTimeString(NSDate *date, MsgMergeConfig *config) {
+    if (!date) return nil;
+    NSInteger mode = config.msgMergeTimeDisplayMode;
+    if (mode == 7) return nil;
+    if (mode == 8) {
+        if (config.msgMergeTimeCustomFormat.length == 0) return nil;
+        return [MessageTimeFormatParser formatDate:date
+                                     customFormat:config.msgMergeTimeCustomFormat
+                                       isDarkMode:NO];
+    }
+
+    // 时间语音：0=跟随系统 1=中文 2=英文
+    NSLocale *locale = nil;
+    if (config.msgMergeTimeLocaleStyle == 1) locale = [NSLocale localeWithLocaleIdentifier:@"zh_CN"];
+    else if (config.msgMergeTimeLocaleStyle == 2) locale = [NSLocale localeWithLocaleIdentifier:@"en_US"];
+    BOOL isCN = (locale == nil)
+        ? [[[NSLocale currentLocale] languageCode] isEqualToString:@"zh"]
+        : [locale.languageCode isEqualToString:@"zh"];
+
+    // 时间格式：0=24小时 1=24小时(秒) 2=12小时 3=12小时(秒)
+    NSString *timeFmt = @[@"HH:mm", @"HH:mm:ss", @"h:mm a", @"h:mm:ss a"][config.msgMergeTimeFormatStyle >= 0 && config.msgMergeTimeFormatStyle <= 3 ? config.msgMergeTimeFormatStyle : 0];
+
+    NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+    if (locale) fmt.locale = locale;
+
+    NSString *datePart;
+    switch (mode) {
+        case 0: datePart = isCN ? @"M月d日 " : @"MMM d "; break;   // 日期+时间
+        case 2: datePart = isCN ? @"M月d日"  : @"MMM d";  break;   // 仅日期
+        case 3: datePart = nil; break;                              // 时间+星期（星期走末尾追加 E）
+        case 4: datePart = isCN ? @"M/d " : @"M/d "; break;        // 紧凑单行
+        case 5: {                                                   // 相对日期+时间
+            NSCalendar *cal = [NSCalendar currentCalendar];
+            NSDate *startOfToday = [cal startOfDayForDate:[NSDate date]];
+            NSDate *startOfMsg = [cal startOfDayForDate:date];
+            NSDateComponents *diff = [cal components:NSCalendarUnitDay fromDate:startOfMsg toDate:startOfToday options:0];
+            NSInteger days = diff.day;
+            if (days == 0) { datePart = @""; timeFmt = @"HH:mm"; }
+            else if (days == 1) datePart = isCN ? @"昨天 " : @"Yesterday ";
+            else if (days > 1 && days < 7) datePart = @"E ";
+            else datePart = isCN ? @"M月d日 " : @"MMM d ";
+            break;
+        }
+        case 6: datePart = isCN ? @"yyyy年M月d日 " : @"yyyy MMM d "; break;  // 完整日期+时间
+        default: datePart = nil; break;                             // 1=仅时间
+    }
+
+    NSMutableString *pattern = [NSMutableString string];
+    if (datePart.length) [pattern appendFormat:@"%@ ", datePart];
+    [pattern appendString:timeFmt];
+    if (mode == 3) [pattern appendString:@" E"];
+
+    fmt.dateFormat = pattern;
+    return [fmt stringFromDate:date];
+}
+
+/// 组首 cell 的时间标注 label（常驻 cellView，随布局更新）
+static void wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, NSInteger mode) {
+    MsgMergeConfig *config = [MsgMergeConfig shared];
+    UILabel *label = objc_getAssociatedObject(cellView, &kMioAabTimeLabel);
+
+    // 非组首 / 显示样式=不显示 → 隐藏并返回
+    BOOL isGroupHead = [objc_getAssociatedObject(vm, &kMioAabGroupHead) boolValue];
+    if (!isGroupHead || config.msgMergeTimeDisplayMode == 7) {
+        if (label && !label.hidden) label.hidden = YES;
+        return;
+    }
+
+    // 时间文本（缓存上次渲染的文本，相同则跳过重设）
+    id wrap = ((id (*)(id, SEL))objc_msgSend)(vm, @selector(messageWrap));
+    NSDate *date = nil;
+    if (wrap) {
+        @try {
+            NSNumber *ts = [wrap valueForKey:@"m_uiCreateTime"];
+            if (ts.doubleValue > 0) date = [NSDate dateWithTimeIntervalSince1970:ts.doubleValue];
+        } @catch (NSException *e) {}
+    }
+    NSString *text = wpAabTimeString(date, config);
+    if (!text.length) {
+        if (label && !label.hidden) label.hidden = YES;
+        return;
+    }
+
+    if (!label) {
+        label = [[UILabel alloc] initWithFrame:CGRectZero];
+        label.font = [UIFont systemFontOfSize:10];
+        label.textAlignment = NSTextAlignmentLeft;
+        objc_setAssociatedObject(cellView, &kMioAabTimeLabel, label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [cellView addSubview:label];
+    }
+    label.hidden = NO;
+    if (![label.text isEqualToString:text]) label.text = text;
+    UIColor *color = [WPColorUtil dynamicColorFromLightHex:config.msgMergeTimeColorHex
+                                                   darkHex:config.msgMergeTimeColorDarkHex];
+    label.textColor = color ?: [UIColor secondaryLabelColor];
+
+    [label sizeToFit];
+    CGRect lf = label.frame;
+    // 时间统一放头像旁：上方模式头像在顶 → 时间在头像右侧；下方模式 → 时间在头像上方
+    if (mode == 0) {
+        lf.origin = CGPointMake(headF.origin.x + headF.size.width + 6,
+                                headF.origin.y + (headF.size.height - lf.size.height) / 2);
+    } else {
+        lf.origin = CGPointMake(headF.origin.x, headF.origin.y - lf.size.height - 2);
+    }
+    label.frame = lf;
+}
+
 /// 布局垫片：orig 完成原生布局后，将头像移到气泡上/下方
 static void wpApplyAabLayout(id cellView) {
     id vm = nil;
@@ -264,6 +401,8 @@ static void wpApplyAabLayout(id cellView) {
         if (fabs(newHead.origin.y - headF.origin.y) > 0.5)
             ((void (*)(id, SEL, CGRect))objc_msgSend)(head, @selector(setFrame:), newHead);
     }
+
+    wpApplyAabTimeLabel(cellView, vm, headF, bgF, mode);
 }
 
 static void hook_Cell_layoutContentView(id self, SEL _cmd) {
