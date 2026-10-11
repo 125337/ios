@@ -5,7 +5,7 @@
 
 // 构建版本标记：随启动日志输出，用于鉴别真机装的包。Mach-O 段按 16KB 对齐，小改动可能
 // 不改变 dylib 字节数（曾出现两版同为 865,680），字节数鉴别法在小版本间会失灵，以日志为准
-#define MIO_BUILD_TAG @"build-0929-fakelike"
+#define MIO_BUILD_TAG @"build-1003-sgbadge13"
 
 static BOOL WPWCHasClass(NSString *name) {
     return objc_getClass(name.UTF8String) != nil;
@@ -150,7 +150,7 @@ static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **
     return g;
 }
 
-// WCR reloadTableData 同款复用入口：manager/tableView 原地保留，只清空 sections 待 buildUI 重填。
+// WCR reloadTableData 同款复用入口：manager/tableView 原地保留，只清空 sections 待 wpBuildRows 重填。
 // clearAllSection 为微信原生方法——WCR dylib 字符串表含此 selector（无参，单数 Section），反编译目录
 // 5 万文件中无 clearAllSection.c（WCR 自实现方法均有对应文件）→ 非 category；WCR 在 8.0.60 正常
 // 工作且无守卫直调 → 方法必然存在。respondsToSelector 守卫仅防极端版本差异，缺失时回退整表重建。
@@ -177,7 +177,7 @@ static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **
     [self.tableView reloadData];
 }
 
-// 延迟 reload：排到当前 runloop 之后执行（buildUI/addGroup 与建表同步连续，
+// 延迟 reload：排到当前 runloop 之后执行（wpBuildRows/addGroup 与建表同步连续，
 // async 必然排在数据填充完成后），连刷两次覆盖 heightFor 布局陈旧
 - (void)reloadAsync {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -310,6 +310,14 @@ id WPWCNavCell(SEL sel, id target, NSString *title, NSString *rightValue) {
     SEL s = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:accessoryType:");
     if (!ncls || ![ncls respondsToSelector:s]) return nil;
     return ((id (*)(id, SEL, SEL, id, id, id, long))objc_msgSend)(ncls, s, sel, target, title, rightValue ?: @"", (long)1);
+}
+
+id WPWCNavCellEx(SEL sel, id target, NSString *title, NSString *rightValue, long accessoryType) {
+    // 同 WPWCNavCell，accessoryType 可指定（0=无箭头，1=右箭头）
+    Class ncls = objc_getClass("WCTableViewNormalCellManager");
+    SEL s = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:accessoryType:");
+    if (!ncls || ![ncls respondsToSelector:s]) return nil;
+    return ((id (*)(id, SEL, SEL, id, id, id, long))objc_msgSend)(ncls, s, sel, target, title, rightValue ?: @"", accessoryType);
 }
 
 id WPWCViewCell(SEL sel, id target, NSString *title, UIView *view) {

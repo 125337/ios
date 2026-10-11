@@ -3,8 +3,14 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <stdlib.h>
+#import <string.h>
+#import <dlfcn.h>
 #import "../../Core/LogManager.h"
+#import "../../Core/ServiceHelper.h"
+#import "../../Core/MioAlertHelper.h"
+#import "../SettingEntry/WPCommonUI.h"
 #import "MomentsConfig.h"
+#import "MomentsScheduler.h"
 
 #pragma mark - 便捷朋友圈（WCR 同款机制，触发词 pyq）
 
@@ -15,6 +21,19 @@ static IMP orig_tv_setDelegate = NULL;   // UITextView setDelegate:（动态挂�
 static IMP orig_pyq_dyn1 = NULL;         // 动态 delegate 类的 textViewDidChange: 原实现
 static IMP orig_pyq_dyn2 = NULL;
 static Class gDynCls1 = NULL, gDynCls2 = NULL;
+static volatile int gPyqDidChangeDepth = 0;   // 垫片重入深度（斩断双插件互调递归环）
+
+// IMP 归属判断：dladdr 取所在镜像，路径以 .dylib 结尾 = 已被其他注入插件接管。
+// 双插件同方法 hook 会 orig 互指成无限递归（WCR + Mio 同挂 MMGrowTextView
+// textViewDidChange: 实证：搜索框一输入即栈溢出 _exit 139），我方让位不抢。
+// 主程序二进制与系统 framework 路径不以 .dylib 结尾，正常挂载不受影响
+static BOOL MioImpFromOtherPlugin(IMP imp) {
+    if (!imp) return NO;
+    Dl_info info;
+    if (!dladdr((const void *)imp, &info) || !info.dli_fname) return NO;
+    size_t n = strlen(info.dli_fname);
+    return n >= 6 && strcmp(info.dli_fname + n - 6, ".dylib") == 0;
+}
 
 // 递归找第一个 UIScrollView（深度限制 4 层）
 static UIScrollView *MioFindFirstScroll(UIView *root, int depth) {
@@ -134,11 +153,16 @@ static void MioOpenTimelinePageSheet(void) {
 // 文本来源双兼容：self 有 text 用 self.text（WCR FUN_017a7970 同款），
 // 否则用 textView 参数的 text（动态 delegate 可能是无 text 的 VC/容器）
 static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
-    IMP orig = orig_pyq_didChange;
-    if (gDynCls1 && [self isMemberOfClass:gDynCls1]) orig = orig_pyq_dyn1;
-    else if (gDynCls2 && [self isMemberOfClass:gDynCls2]) orig = orig_pyq_dyn2;
-    if (orig) ((void(*)(id, SEL, id))orig)(self, _cmd, textView);
+    // 深度守卫：垫片内再次进入 = 双插件 orig 互指的递归环（WCR 同挂实证），
+    // 立即返回不再调 orig，任何互相递归到此斩断
+    if (gPyqDidChangeDepth > 0) return;
+    gPyqDidChangeDepth++;
     @try {
+        IMP orig = orig_pyq_didChange;
+        if (gDynCls1 && [self isMemberOfClass:gDynCls1]) orig = orig_pyq_dyn1;
+        else if (gDynCls2 && [self isMemberOfClass:gDynCls2]) orig = orig_pyq_dyn2;
+        if (orig) ((void(*)(id, SEL, id))orig)(self, _cmd, textView);
+
         NSString *text = nil;
         SEL textSel = NSSelectorFromString(@"text");
         if ([self respondsToSelector:textSel]) {
@@ -174,6 +198,8 @@ static void hooked_pyq_didChange(id self, SEL _cmd, id textView) {
     } @catch (NSException *e) {
         gPyqHandling = NO;
         WPLog(@"Moments", @"[Pyq] error: %@", e);
+    } @finally {
+        gPyqDidChangeDepth--;
     }
 }
 
@@ -195,6 +221,7 @@ static void hooked_tv_setDelegate(id self, SEL _cmd, id delegate) {
         if (!m || method_getImplementation(m) == (IMP)hooked_pyq_didChange) return;
         if (dCls == gDynCls1 || dCls == gDynCls2) return;   // 已挂过
         IMP origImp = method_getImplementation(m);
+        if (MioImpFromOtherPlugin(origImp)) return;   // 他方插件已接管，让位防环
         if (!gDynCls1) {
             gDynCls1 = dCls; orig_pyq_dyn1 = origImp;
         } else if (!gDynCls2) {
@@ -220,9 +247,16 @@ static void MioInstallPyqHooks(void) {
     }
     Method m1 = class_getInstanceMethod(growCls, didSel);
     if (m1) {
-        orig_pyq_didChange = method_getImplementation(m1);
-        method_setImplementation(m1, (IMP)hooked_pyq_didChange);
-        WPLog(@"Moments", @"[Pyq] MMGrowTextView.textViewDidChange: hooked");
+        IMP cur = method_getImplementation(m1);
+        if (MioImpFromOtherPlugin(cur)) {
+            // 他方插件（WCR 等）先接管了该方法：让位。抢回会把 orig 更新成
+            // 对方替换实现，双方互指成无限递归（搜索框输入栈溢出实证）
+            WPLog(@"Moments", @"[Pyq] yield textViewDidChange: (another dylib owns it)");
+        } else {
+            orig_pyq_didChange = cur;
+            method_setImplementation(m1, (IMP)hooked_pyq_didChange);
+            WPLog(@"Moments", @"[Pyq] MMGrowTextView.textViewDidChange: hooked");
+        }
     } else {
         WPLog(@"Moments", @"[Pyq] SKIP: textViewDidChange: NOT found");
     }
@@ -230,13 +264,20 @@ static void MioInstallPyqHooks(void) {
     Class tvCls = [UITextView class];
     Method m3 = class_getInstanceMethod(tvCls, NSSelectorFromString(@"setDelegate:"));
     if (m3) {
-        orig_tv_setDelegate = method_getImplementation(m3);
-        method_setImplementation(m3, (IMP)hooked_tv_setDelegate);
-        WPLog(@"Moments", @"[Pyq] UITextView.setDelegate: probe hooked");
+        IMP cur = method_getImplementation(m3);
+        if (MioImpFromOtherPlugin(cur)) {
+            WPLog(@"Moments", @"[Pyq] yield setDelegate: probe (another dylib owns it)");
+        } else {
+            orig_tv_setDelegate = cur;
+            method_setImplementation(m3, (IMP)hooked_tv_setDelegate);
+            WPLog(@"Moments", @"[Pyq] UITextView.setDelegate: probe hooked");
+        }
     }
 }
 
-// 重挂自检：微信晚到的初始化可能覆盖 IMP，20s/45s 检查并恢复
+// 重挂自检：微信晚到的初始化可能覆盖 IMP，20s/45s 检查并恢复。
+// 仅当 IMP 回到主程序/系统 framework 才重夺；被他方 dylib 接管时抢回
+// 会把 orig 更新成对方替换实现，互指成环（搜索框输入栈溢出实证）
 static void MioRehookCheck(int round) {
     SEL didSel = NSSelectorFromString(@"textViewDidChange:");
     SEL delSel = NSSelectorFromString(@"setDelegate:");
@@ -245,14 +286,16 @@ static void MioRehookCheck(int round) {
     Class growCls = objc_getClass("MMGrowTextView");
     if (growCls) {
         Method m1 = class_getInstanceMethod(growCls, didSel);
-        if (m1 && method_getImplementation(m1) != (IMP)hooked_pyq_didChange) {
+        if (m1 && method_getImplementation(m1) != (IMP)hooked_pyq_didChange
+            && !MioImpFromOtherPlugin(method_getImplementation(m1))) {
             orig_pyq_didChange = method_getImplementation(m1);
             method_setImplementation(m1, (IMP)hooked_pyq_didChange);
             fixed++;
         }
     }
     Method m3 = class_getInstanceMethod([UITextView class], delSel);
-    if (m3 && method_getImplementation(m3) != (IMP)hooked_tv_setDelegate) {
+    if (m3 && method_getImplementation(m3) != (IMP)hooked_tv_setDelegate
+        && !MioImpFromOtherPlugin(method_getImplementation(m3))) {
         orig_tv_setDelegate = method_getImplementation(m3);
         method_setImplementation(m3, (IMP)hooked_tv_setDelegate);
         fixed++;
@@ -299,7 +342,7 @@ static void MioHDSetN(id obj, NSString *selName, NSInteger val) {
     ((void(*)(id, SEL, NSInteger))objc_msgSend)(obj, sel, val);
 }
 
-// WCR FUN_0033e618 同款：对发图页对象执行强制原图配置（15 项 setter 全序列）
+// WCR FUN_0033e618 同款：对发图页对象执行强制原图配置（能力开/限制关全序列）
 static void MioApplyHDOptions(id poster) {
     if (!poster) return;
     MioHDSetB(poster, @"setCanSendOriginalImage:", YES);
@@ -409,7 +452,7 @@ static void MioHDRouterReopen(id vc, id poster) {
 static void MioHDReopenPicker(id vc) {
     gHDPending = YES;
     id poster = MioHDFindPoster(vc);
-    // WCR 主路径（FUN_0033a85c）无 setter 注入：15 项配置只经 RouterHelper 的
+    // WCR 主路径（FUN_0033a85c）无 setter 注入：强制原图配置只经 RouterHelper 的
     // customOptionsBlock（FUN_0033e0e0）打在选图选项对象上，此处对齐不重复打
     if (MioHDTryShowPicker(vc) || MioHDTryShowPicker(poster)) return;
     MioHDRouterReopen(vc, poster);
@@ -596,35 +639,22 @@ static void MioInstallHDHooks(void) {
     MioHDInstallGetterHooks();
 }
 
-#pragma mark - 伪集赞（WCR 同款机制：WCDataItem getter 层增强，仅本人朋友圈生效）
+#pragma mark - 伪集赞（对齐 WCR 2.1.8：数据层写回 + 会话字典 + viewDidAppear 重摇）
 
-// WCR 证据链（FUN_00545778 核心应用 + FUN_00555580 自动应用层反编译实锤）：
-// 读原 likeUsers/commentUsers → 生成假赞/假评（WCUserComment：username/nickName/content）
-// → NSMutableArray(orig) addObjectsFromArray:(fake) → setLikeUsers:/setLikeCount:/
-//   setCommentUsers:/setCommentCount: 写回 → reloadTableData；re-entrancy 守卫包 setter。
-// Mio 等价实现走 getter 层（不动原 item，读时增强 + associated 缓存保证会话内稳定）：
-// 固定内置行为（无子配置）：仅「本人发出 且 我已点赞」的帖子生效（WCR 默认模式
-// 「需要集赞的朋友圈点赞后生效」——self 出现在原 likeUsers 即已点赞，FUN_0054b750 同款判定）；
-// 赞 8~28 随机、评 2~5 随机，昵称/评论取内置池。假数据只在读路径：点赞/评论请求只上报
-// self 的 wxid，不携带全量数组，无泄漏面。开关关闭时 getter 原样透传，下次渲染即还原。
-// 类名双候选（WCDataItem 主 / WCTimeLineDataItem 兜底），逐条 class_getInstanceMethod
-// 判存在才挂（CI 无微信头文件，全反射 + respondsToSelector 守卫）。
+// 架构（演进实锤见 project_memory fldl11~17）：数据层 7 挂点主注入（WCTimelineMgr 四回调 +
+// 三缓存填充路径，item 落地即写回）+ 渲染 getter 触发器自愈兜底（服务端覆盖丢假数据后
+// 重注入）+ WCTimeLineViewController viewDidAppear 清空会话字典（每次进朋友圈重摇新一批，
+// 停留期间按帖缓存不闪变）。门=本人帖或已赞帖（likeFlag=1）。假人全部取自 feed 采集的真
+// 好友池（冻结后使用，池未冻结不注入——无头像假人是废弃兜底，已删）。
 
-static NSString *gFakeMyWxId = nil;      // 懒解析缓存（CContactMgr.getSelfContact.userName）
+static NSString *gFakeMyWxId = nil;      // 懒解析缓存（WXGetSelfContact → m_nsUsrName，失败 30s 冷却）
 static volatile int gFakeLogCount = 0;   // 首见式日志限流（防逐条刷屏）
-static char kFakeLikArrKey, kFakeCmtArrKey;
+static char kFakeLikeAppliedKey, kFakeCmtAppliedKey;   // 各维度已注入假对象集合（NSSet 指针身份，供自愈探测）
+// WCDataItem 原生 likeUsers/commentUsers IMP（安装期在 hook 前解析；AutoApply 取 raw
+// 统一直调原生 IMP——若走 [item likeUsers] 会经已 hook 的 getter 垫片引发无限递归）
+static IMP gFakeOrigLU = NULL, gFakeOrigCU = NULL;
 
-// WCR 内置昵称池（dylib __ustring 池同款风格摘录）
-static NSString * const kFakeLikeNames[] = {
-    @"二狗哥哥的iPhone", @"懒癌晚期已弃疗", @"肉的理想白菜命", @"点赞有惊喜Surprise",
-    @"王者内测专用机", @"吃鸡内测专用机", @"生日快乐鸭", @"看到请还钱",
-    @"神一样的男人", @"一直被模仿从未被超越", @"祝自己生日快乐", @"别放弃治疗",
-    @"叙利亚打工中", @"对方正在输入", @"诺基亚N72", @"摩托罗拉328C",
-    @"买菜必涨价超级加倍", @"我是颜值主播不露脸", @"克克克克业业", @"今日还钱打99折",
-};
-static const int kFakeLikeNameCount = (int)(sizeof(kFakeLikeNames) / sizeof(kFakeLikeNames[0]));
-
-// WCR 内置评论池（dylib 伪集赞预设同款摘录）
+// WCR 内置评论池（dylib 伪集赞预设同款摘录）：用户未配置 fakeCommentTexts 时回退
 static NSString * const kFakeCommentTexts[] = {
     @"好看", @"厉害了", @"收藏了", @"学习了", @"赞啦宝宝", @"支持一下",
     @"来啦", @"绝绝子", @"太棒了", @"我什么时候能像你一样优秀",
@@ -646,22 +676,24 @@ static NSString *MioFakeGetStr(id obj, NSArray *selNames) {
     return nil;
 }
 
-// 我的 wxid（CContactMgr getSelfContact 同款稳定路径，懒解析 + 缓存）
+// 我的 wxid（WXGetSelfContact 两级服务策略：MMContext 主路径 + 守卫兜底；
+// CContact 自身字段为 m_nsUsrName。懒解析 + 缓存，失败 30s 冷却防刷屏）
 static NSString *MioFakeMyWxId(void) {
     if (gFakeMyWxId) return gFakeMyWxId;
+    static NSTimeInterval gFakeMyWxIdLastFail = 0;
+    NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+    if (now - gFakeMyWxIdLastFail < 30) return nil;
     @try {
-        Class ctrCls = objc_getClass("MMServiceCenter");
-        Class mgrCls = objc_getClass("CContactMgr");
-        if (!ctrCls || !mgrCls) return nil;
-        id center = ((id(*)(id, SEL))objc_msgSend)(ctrCls, NSSelectorFromString(@"defaultCenter"));
-        id mgr = center ? ((id(*)(id, SEL, Class))objc_msgSend)(center, NSSelectorFromString(@"getService"), mgrCls) : nil;
-        id selfContact = mgr ? ((id(*)(id, SEL))objc_msgSend)(mgr, NSSelectorFromString(@"getSelfContact")) : nil;
-        NSString *wxid = MioFakeGetStr(selfContact, @[@"userName", @"username"]);
+        id selfContact = WXGetSelfContact();
+        NSString *wxid = MioFakeGetStr(selfContact, @[@"m_nsUsrName", @"userName", @"username"]);
         if (wxid.length > 0) {
             gFakeMyWxId = wxid;
             WPLog(@"Moments", @"[FakeLike] myWxId resolved: %@", wxid);
+        } else {
+            gFakeMyWxIdLastFail = now;
         }
     } @catch (NSException *e) {
+        gFakeMyWxIdLastFail = now;
         WPLog(@"Moments", @"[FakeLike] myWxId error: %@", e);
     }
     return gFakeMyWxId;
@@ -675,32 +707,80 @@ static BOOL MioFakeGateOwnPost(id item) {
     return [poster isEqualToString:my];
 }
 
-// 门 B：我已点赞（WCR 默认触发模式；fakes 全部 wxid_fake* 前缀，扫增强数组不误判）
-static BOOL MioFakeGateLiked(id item, NSArray *likeUsers) {
+// 好友池（180.log 重大改版：数据层采集真好友替代联系人库枚举。8.0.60 CContact 无
+// m_uiType/isChatroom/m_isPlugin，库枚举 11704 项过滤后仍剩 11227——混入陌生人/群发
+// 助手/小程序客服等非好友官方账号，用户实证假赞头像出现官方账号；feed 天然只含真好友）
+// 数据层采集：从数据到达处直接收集发帖人 wxid（排除广告 gh_/企业微信 @openim/群聊/
+// 本人）。仅主线程数据回调与 fb 触发器调用，无锁
+static NSMutableSet *gFakeFeedFriends = nil;
+
+static void MioFakeHarvestFeedFriend(NSString *un) {
+    if (un.length < 5) return;
+    if ([un hasPrefix:@"gh_"] || [un containsString:@"@openim"] || [un containsString:@"@chatroom"]) return;
     NSString *my = MioFakeMyWxId();
-    if (!my) return NO;
-    for (id u in likeUsers) {
-        NSString *un = MioFakeGetStr(u, @[@"username", @"userName"]);
-        if ([un isEqualToString:my]) return YES;
-    }
-    return NO;
+    if (my && [un isEqualToString:my]) return;
+    if (!gFakeFeedFriends) gFakeFeedFriends = [NSMutableSet set];
+    [gFakeFeedFriends addObject:un];
 }
 
-// 造 WCUserComment（WCR 同款类）：username=假 wxid、nickName=池内随机；评论追加 content
-static id MioFakeMakeUser(NSString *nick, NSString *content) {
+// 好友池=采集集快照，冻结在首次凑满 8 人时（冻结保证重注入时假人组合稳定；随机选人
+// 按 WCR 2.1.8 FUN_0054cb60 同款 arc4random，防闪变靠按帖会话缓存）。未冻结前返回
+// nil（调用方不注入——无头像假人兜底已删，180.log 实证假人池混入官方账号）
+static NSArray *MioFakeFriendPool(void) {
+    static NSArray *gPool;
+    static BOOL logged = NO;
+    if (!gPool && gFakeFeedFriends.count >= 8) {
+        gPool = [[gFakeFeedFriends allObjects] sortedArrayUsingSelector:@selector(compare:)];
+        if (!logged && gFakeLogCount < 5) {
+            logged = YES;
+            gFakeLogCount++;
+            WPLog(@"Moments", @"[FakeLike] friend pool frozen: %lu (feed-harvest)", (unsigned long)gPool.count);
+        }
+    }
+    return gPool;
+}
+
+// 造 WCUserComment（WCR 2.1.8 实锤分流：假赞 FUN_0056e164 内 setType:1+setIsRichText:1
+// 无 commentID；假评 FUN_00571210 setType:2+setCommentID:"WCRefine_%ld" 无 isRichText。
+// 182.log 评论不显示根源：评论 type=1 被当赞渲染丢弃，且缺 commentID=评论渲染/diff 的 key。
+// 183.log 仍丢条根源：同秒生成 createTime 全等+同文案 → WCUserComment isEqual 合并 →
+// UI 去重后 3 条只显示 1-2 条（WCR 把 createTime 做成入参逐条错开，33283 行实锤））
+static id MioFakeMakeCommentUser(NSString *wxid, NSString *content, BOOL isComment, int cTime) {
     Class ucls = objc_getClass("WCUserComment");
-    if (!ucls) return nil;
+    if (!ucls || wxid.length == 0) return nil;
     id u = [[ucls alloc] init];
     if (!u) return nil;
-    NSString *fakeWxid = [NSString stringWithFormat:@"wxid_fake%08u", (unsigned)arc4random()];
+    NSString *nick = nil;
+    Class mgrCls = objc_getClass("CContactMgr");
+    id mgr = mgrCls ? WXGetService(mgrCls) : nil;
+    SEL byNameSel = NSSelectorFromString(@"getContactByName:");
+    if (mgr && [mgr respondsToSelector:byNameSel]) {
+        id ct = ((id(*)(id, SEL, id))objc_msgSend)(mgr, byNameSel, wxid);
+        nick = MioFakeGetStr(ct, @[@"m_nsNickName", @"nickName", @"nickname"]);
+    }
+    if (nick.length == 0) nick = wxid;
     for (NSString *sn in @[@"setUsername:", @"setUserName:"]) {
         SEL sel = NSSelectorFromString(sn);
-        if ([u respondsToSelector:sel]) { ((void(*)(id, SEL, id))objc_msgSend)(u, sel, fakeWxid); break; }
+        if ([u respondsToSelector:sel]) { ((void(*)(id, SEL, id))objc_msgSend)(u, sel, wxid); break; }
     }
-    for (NSString *sn in @[@"setNickName:", @"setNickname:"]) {
+    for (NSString *sn in @[@"setNickname:", @"setNickName:"]) {
         SEL sel = NSSelectorFromString(sn);
         if ([u respondsToSelector:sel]) { ((void(*)(id, SEL, id))objc_msgSend)(u, sel, nick); break; }
     }
+    SEL typeSel = NSSelectorFromString(@"setType:");
+    if ([u respondsToSelector:typeSel]) ((void(*)(id, SEL, long long))objc_msgSend)(u, typeSel, isComment ? 2 : 1);
+    if (isComment) {
+        SEL cidSel = NSSelectorFromString(@"setCommentID:");
+        if ([u respondsToSelector:cidSel]) {
+            ((void(*)(id, SEL, id))objc_msgSend)(u, cidSel,
+                [NSString stringWithFormat:@"Mio_%u_%d", arc4random(), cTime]);
+        }
+    } else {
+        SEL richSel = NSSelectorFromString(@"setIsRichText:");
+        if ([u respondsToSelector:richSel]) ((void(*)(id, SEL, BOOL))objc_msgSend)(u, richSel, YES);
+    }
+    SEL timeSel = NSSelectorFromString(@"setCreateTime:");
+    if ([u respondsToSelector:timeSel]) ((void(*)(id, SEL, int))objc_msgSend)(u, timeSel, cTime);
     if (content) {
         for (NSString *sn in @[@"setContent:", @"setContentStr:"]) {
             SEL sel = NSSelectorFromString(sn);
@@ -710,121 +790,1708 @@ static id MioFakeMakeUser(NSString *nick, NSString *content) {
     return u;
 }
 
-// 假赞数组（每条 item 会话内稳定：associated 缓存；8~28 随机）
-static NSArray *MioFakeLikersForItem(id item) {
-    NSArray *cached = objc_getAssociatedObject(item, &kFakeLikArrKey);
-    if (cached) return cached;
-    NSMutableArray *arr = [NSMutableArray array];
-    NSInteger n = 8 + (NSInteger)arc4random_uniform(21);
-    for (NSInteger i = 0; i < n; i++) {
-        id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)], nil);
-        if (u) [arr addObject:u];
+// 帖子稳定 key（WCR FUN_00546750 同款三级：tid 优先 → u:发帖人_t:创建时间 → 兜底 nil
+// 不缓存。WCR 兜底 p:%p 指针地址=闪变源，Mio 弃用——拿不到稳定 key 宁可每次随机）
+static NSString *MioFakePostKey(id item) {
+    NSString *tid = MioFakeGetStr(item, @[@"m_nsTimelineObjectID", @"timelineObjectID",
+                                          @"tid", @"objectID", @"m_nsObjectID"]);
+    if (tid.length > 0) return [@"tid_" stringByAppendingString:tid];
+    NSString *user = MioFakeGetStr(item, @[@"username", @"userName", @"m_nsUsrName"]);
+    unsigned long long t = 0;
+    for (NSString *tn in @[@"createTime", @"m_uiCreateTime", @"m_ullCreateTime", @"timestamp"]) {
+        SEL ts = NSSelectorFromString(tn);
+        if (![item respondsToSelector:ts]) continue;
+        @try {
+            t = ((unsigned long long(*)(id, SEL))objc_msgSend)(item, ts);
+        } @catch (NSException *e) {}
+        if (t > 0) break;
     }
-    objc_setAssociatedObject(item, &kFakeLikArrKey, arr, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return arr;
+    if (user.length > 0 && t > 0) return [NSString stringWithFormat:@"u:%@_t:%llu", user, t];
+    return nil;
 }
 
-// 假评数组（2~5 随机，同缓存策略）
-static NSArray *MioFakeCommentsForItem(id item) {
-    NSArray *cached = objc_getAssociatedObject(item, &kFakeCmtArrKey);
-    if (cached) return cached;
-    NSMutableArray *arr = [NSMutableArray array];
-    NSInteger n = 2 + (NSInteger)arc4random_uniform(4);
-    for (NSInteger i = 0; i < n; i++) {
-        id u = MioFakeMakeUser(kFakeLikeNames[arc4random_uniform(kFakeLikeNameCount)],
-                               kFakeCommentTexts[arc4random_uniform(kFakeCommentTextCount)]);
-        if (u) [arr addObject:u];
-    }
-    objc_setAssociatedObject(item, &kFakeCmtArrKey, arr, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return arr;
+// 假数据按帖会话缓存（WCR 2.1.8 FUN_00577df8 RefreshEachOpen 开启路径同款：只写静态内存
+// 字典不落盘，进入朋友圈页 viewDidAppear 清空 → 同一次停留内按帖复用不闪变，每次进入
+// 重摇新一批人。WCR 的 NSUserDefaults 永久落盘是 RefreshEachOpen 关闭行为=永远同一批，
+// 182.log 用户明确不要）
+static NSMutableDictionary *gFakeLikeCache = nil;
+static NSMutableDictionary *gFakeCmtCache = nil;
+
+static NSArray *MioFakeCacheFetch(NSString *key, BOOL isLike) {
+    if (key.length == 0) return nil;
+    id v = (isLike ? gFakeLikeCache : gFakeCmtCache)[key];
+    return ([v isKindOfClass:[NSArray class]] && [(NSArray *)v count] > 0) ? v : nil;
 }
 
-static void MioFakeLogAugment(id item, NSInteger likes, NSInteger comments) {
-    if (gFakeLogCount >= 5) return;
-    gFakeLogCount++;
-    WPLog(@"Moments", @"[FakeLike] augment %@: +%ld likers +%ld comments (item cls %@)",
-          MioFakeGetStr(item, @[@"userName", @"username"]) ?: @"?",
-          (long)likes, (long)comments, NSStringFromClass([item class]));
+static void MioFakeCacheStore(NSString *key, BOOL isLike, NSArray *arr) {
+    if (key.length == 0 || arr.count == 0) return;
+    if (isLike && !gFakeLikeCache) gFakeLikeCache = [NSMutableDictionary dictionary];
+    if (!isLike && !gFakeCmtCache) gFakeCmtCache = [NSMutableDictionary dictionary];
+    (isLike ? gFakeLikeCache : gFakeCmtCache)[key] = arr;
 }
+
+// 生成一批假数据（WCR 2.1.8 同款）：好友池纯随机，赞/评都抽一删一防同批同人
+//（假评抽删实证=FUN_0056ede4 内 removeObjectAtIndex；仅缓存未命中时调用一次，生成即
+// 存会话字典 → 此后同一批）。183.log 丢条修复：评论 createTime 逐条错开（now-i*61-随机，
+// 同帖绝不相同，对齐 WCR FUN_00571210 createTime 入参逐条错开），文案也同帖抽一删一——
+// 同秒+同文案 → WCUserComment isEqual 合并 → UI 只显示 1-2 条。
+// 假人只来自冻结好友池（调用方 MioFakeWriteBack 保证池已冻结；无头像假人 wxid_fake
+// 兜底是废弃方案已删——180.log 实证假人池混入官方账号）
+static NSArray *MioFakeGenerateBatch(BOOL isLike, NSInteger n, NSArray<NSString *> *texts) {
+    NSArray *pool = MioFakeFriendPool();
+    NSMutableArray *cand = [pool mutableCopy];
+    NSMutableArray *out = [NSMutableArray array];
+    NSArray<NSString *> *tx = (texts.count > 0) ? texts : nil;
+    u_int32_t nT = tx ? (u_int32_t)tx.count : (u_int32_t)kFakeCommentTextCount;
+    NSMutableArray *txCand = tx ? [tx mutableCopy] : nil;
+    int now = (int)[NSDate date].timeIntervalSince1970;
+    for (NSInteger i = 0; i < n; i++) {
+        NSString *wxid;
+        if (cand.count > 0) {
+            u_int32_t pick = arc4random_uniform((u_int32_t)cand.count);
+            wxid = cand[pick];
+            [cand removeObjectAtIndex:pick];
+        } else {
+            wxid = pool[arc4random_uniform((u_int32_t)pool.count)];
+        }
+        int cTime = now - (int)(i * 61) - (int)arc4random_uniform(60);
+        NSString *text = nil;
+        if (!isLike) {
+            if (txCand.count > 0) {
+                u_int32_t p = arc4random_uniform((u_int32_t)txCand.count);
+                text = txCand[p];
+                [txCand removeObjectAtIndex:p];
+            } else if (nT > 0) {
+                text = tx ? tx[arc4random_uniform(nT)] : kFakeCommentTexts[arc4random_uniform(nT)];
+            }
+        }
+        id u = MioFakeMakeCommentUser(wxid, text, !isLike, cTime);
+        if (u) [out addObject:u];
+    }
+    return out;
+}
+
+// 已注入假对象是否仍在 item 数组内（NSSet 指针身份探测，O(n)）
+static BOOL MioFakeStillApplied(NSSet *applied, NSArray *arr) {
+    if (applied.count == 0) return NO;
+    for (id obj in arr) {
+        if ([applied member:obj]) return YES;
+    }
+    return NO;
+}
+
+// 守卫式 setter 写回（WCR 同款方案：假数据合并进 item 本体，数组与计数一次写平，
+// 渲染/详情页/持久化等所有原生路径看到的数据天然一致，getter 层零改动不产生临时数组）
+static BOOL MioFakeSetObj(id item, NSString *setterName, id value) {
+    SEL sel = NSSelectorFromString(setterName);
+    if (![item respondsToSelector:sel]) return NO;
+    @try { ((void(*)(id, SEL, id))objc_msgSend)(item, sel, value); return YES; }
+    @catch (NSException *e) { return NO; }
+}
+
+static BOOL MioFakeSetCount(id item, NSString *setterName, long long v) {
+    SEL sel = NSSelectorFromString(setterName);
+    if (![item respondsToSelector:sel]) return NO;
+    @try { ((void(*)(id, SEL, unsigned long long))objc_msgSend)(item, sel, (unsigned long long)v); return YES; }
+    @catch (NSException *e) { return NO; }
+}
+
+// 写回执行（自愈式）：探测上次注入的假对象是否仍在 item 数组内——服务端刷新会整体覆盖
+// likeUsers/commentUsers（169.log 实证假评显示后即消失），覆盖即丢假数据，丢失的维度
+// 重新注入、仍在的维度跳过防重复累积。四 setter 齐全才写（缺一即数组/计数不一致=崩溃源）
+static void MioFakeWriteBack(id item, NSArray *rawLikes, NSArray *rawCmts, const char *src) {
+    SEL sLU = NSSelectorFromString(@"setLikeUsers:");
+    SEL sCU = NSSelectorFromString(@"setCommentUsers:");
+    SEL sLC = NSSelectorFromString(@"setLikeCount:");
+    SEL sCC = NSSelectorFromString(@"setCommentCount:");
+    if (![item respondsToSelector:sLU] || ![item respondsToSelector:sCU] ||
+        ![item respondsToSelector:sLC] || ![item respondsToSelector:sCC]) {
+        if (gFakeLogCount < 5) {
+            gFakeLogCount++;
+            WPLog(@"Moments", @"[FakeLike] setters incomplete on %@, skip", NSStringFromClass([item class]));
+        }
+        return;
+    }
+    MomentsConfig *cfg = [MomentsConfig shared];
+    NSInteger nLike = cfg.fakeLikeCount; if (nLike < 0) nLike = 0; if (nLike > 10000) nLike = 10000;
+    NSInteger nCmt  = cfg.fakeCommentCount; if (nCmt < 0) nCmt = 0; if (nCmt > 300) nCmt = 300;
+    NSArray<NSString *> *texts = (cfg.fakeCommentTexts.count > 0) ? cfg.fakeCommentTexts : nil;
+    NSString *postKey = MioFakePostKey(item);
+    NSArray *pool = MioFakeFriendPool();
+    if (pool.count == 0) return;   // 池未冻结不注入（无头像假人兜底已删；池冻结后由数据层回调/fb 触发器自然补上）
+    NSInteger nLikeEff = (nLike > (NSInteger)pool.count) ? (NSInteger)pool.count : nLike;
+
+    // 赞维度：假赞缺失才重注入；假人取自按帖会话缓存（随机一次→存字典→本次停留同一批）
+    if (nLikeEff > 0 && !MioFakeStillApplied(objc_getAssociatedObject(item, &kFakeLikeAppliedKey), rawLikes)) {
+        NSArray *add = MioFakeCacheFetch(postKey, YES);
+        if (!add) {
+            add = MioFakeGenerateBatch(YES, nLikeEff, nil);
+            MioFakeCacheStore(postKey, YES, add);
+        }
+        NSMutableArray *likes = [NSMutableArray arrayWithArray:rawLikes];
+        [likes addObjectsFromArray:add];
+        NSMutableSet *fakes = [NSMutableSet setWithArray:add];
+        if (MioFakeSetObj(item, @"setLikeUsers:", likes) &&
+            MioFakeSetCount(item, @"setLikeCount:", (long long)likes.count)) {
+            objc_setAssociatedObject(item, &kFakeLikeAppliedKey, [fakes copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        if (gFakeLogCount < 40) {   // 40：覆盖 dl-list 全量扫描多个本人帖 + fb 兜底，防额度被先耗尽吞掉关键证据
+            gFakeLogCount++;
+            WPLog(@"Moments", @"[FakeLike] write-back likes +%ld (src=%s, cls %@)",
+                  (long)fakes.count, src, NSStringFromClass([item class]));
+        }
+    }
+
+    // 评论维度：假评缺失才重注入；同会话字典复用（WCR 假评=选人+选文案各随机一次）
+    if (nCmt > 0 && !MioFakeStillApplied(objc_getAssociatedObject(item, &kFakeCmtAppliedKey), rawCmts)) {
+        NSArray *add = MioFakeCacheFetch(postKey, NO);
+        if (!add) {
+            add = MioFakeGenerateBatch(NO, nCmt, texts);
+            MioFakeCacheStore(postKey, NO, add);
+        }
+        NSMutableArray *cmts = [NSMutableArray arrayWithArray:rawCmts];
+        [cmts addObjectsFromArray:add];
+        NSMutableSet *fakes = [NSMutableSet setWithArray:add];
+        if (MioFakeSetObj(item, @"setCommentUsers:", cmts) &&
+            MioFakeSetCount(item, @"setCommentCount:", (long long)cmts.count)) {
+            objc_setAssociatedObject(item, &kFakeCmtAppliedKey, [fakes copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        if (gFakeLogCount < 40) {
+            gFakeLogCount++;
+            WPLog(@"Moments", @"[FakeLike] write-back comments +%ld (src=%s, cls %@)",
+                  (long)fakes.count, src, NSStringFromClass([item class]));
+        }
+    }
+}
+
+// 双门（本人帖 + 已赞）通过后自愈式写回。getter 触发器与数据层预注入共用：
+// 门 A=userName==我方 wxid；门 B=原生 likeFlag 优先（WCR FUN_00545778 实证），
+// 回退扫原生 likeUsers 找我方 wxid。取 raw 一律走安装期原生 IMP（防 getter 递归）。
+static int gFakeDLLogCount = 0;
+
+static void MioFakeAutoApplyItem(id item, const char *src) {
+    @try {
+        MomentsConfig *cfg = [MomentsConfig shared];
+        if (!cfg.fakeLikeEnabled) return;
+        // 数据层采集真好友（180.log 定论：feed 只含真好友帖+广告 gh_，比联系人库枚举精确）
+        NSString *un = MioFakeGetStr(item, @[@"username", @"userName", @"m_nsUsrName"]);
+        MioFakeHarvestFeedFriend(un);
+        // WCR FUN_00555580 同款门：likeFlag=1（已点赞的任何人的帖）或本人帖（OwnPostsAuto
+        // Enable 恒开）。181.log 用户实证：给别人帖子点赞也要出假赞
+        BOOL isMy = MioFakeGateOwnPost(item);
+        BOOL liked = NO;
+        SEL lfSel = NSSelectorFromString(@"likeFlag");
+        if ([item respondsToSelector:lfSel]) {
+            @try { liked = ((BOOL(*)(id, SEL))objc_msgSend)(item, lfSel); } @catch (NSException *e) {}
+        }
+        if (!liked && gFakeOrigLU) {
+            NSArray *lu = ((id(*)(id, SEL))gFakeOrigLU)(item, @selector(likeUsers));
+            NSString *my = MioFakeMyWxId();
+            if ([lu isKindOfClass:[NSArray class]] && my) {
+                for (id u in lu) {
+                    NSString *luName = MioFakeGetStr(u, @[@"username", @"userName", @"m_nsUsrName"]);
+                    if ([luName isEqualToString:my]) { liked = YES; break; }
+                }
+            }
+        }
+        if (!isMy && !liked) {
+            if (src && src[0] == 'd' && strncmp(src, "dl-list", 7) != 0 && gFakeDLLogCount < 60) {
+                gFakeDLLogCount++;
+                WPLog(@"Moments", @"[FakeLike] dl-reject (%s): user=%@ likeFlag=%d (not mine, not liked)", src, un, liked ? 1 : 0);
+            }
+            return;
+        }
+        NSArray *rawLikes = @[], *rawCmts = @[];
+        if (gFakeOrigLU) {
+            id v = ((id(*)(id, SEL))gFakeOrigLU)(item, @selector(likeUsers));
+            if ([v isKindOfClass:[NSArray class]]) rawLikes = v;
+        }
+        if (gFakeOrigCU) {
+            id v = ((id(*)(id, SEL))gFakeOrigCU)(item, @selector(commentUsers));
+            if ([v isKindOfClass:[NSArray class]]) rawCmts = v;
+        }
+        MioFakeWriteBack(item, rawLikes, rawCmts, src);
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[FakeLike] auto-apply error: %@", e);
+    }
+}
+
+// 批量应用（WCR FUN_005581fc 同款：datas 数组里 isKindOfClass:WCDataItem 才应用）
+static void MioFakeAutoApplyArray(NSArray *datas, const char *src) {
+    if (![datas isKindOfClass:[NSArray class]]) return;
+    Class itemCls = objc_getClass("WCDataItem");
+    if (!itemCls) return;
+    for (id it in datas) {
+        if ([it isKindOfClass:itemCls]) MioFakeAutoApplyItem(it, src);
+    }
+}
+
+// ===== 朋友圈自动点赞（WCR 2.1.8 证据链：00567418 挂载/00573044 入队/0057399c 调度/
+// 00575078 消费/00575474 执行/005721b4~00572784 刷新循环）=====
+// 入队与伪集赞同一数据流（WCTimelineMgr 回调，WCR 垫片 FUN_00569280 同位置）：
+// item → pending 去重入队 → dispatch_after 间隔逐个执行 → WCFacade likeObject:ofUser:source:
+// + setLikeFlag:1。刷新循环在不在朋友圈页时按间隔主动 beginTimeline+updateTimelineHead
+// 制造新数据流（回包经数据回调自动入队），与 WCR FUN_00572784 判定链一致。
+
+static NSMutableArray *gAutoLikeQueue = nil;     // 待处理 WCDataItem（FIFO，WCR DAT_0298f1a8[0]）
+static NSMutableSet *gAutoLikePending = nil;     // 队列内 key 去重（WCR DAT_0298f198[0]）
+static NSMutableSet *gAutoLikeDone = nil;        // 已处理 key（WCR DAT_0298f188[0]）
+static BOOL gAutoLikeRunning = NO;               // 调度器运行守卫（WCR DAT_0298f238[0]）
+static NSTimeInterval gAutoLikeLastRefresh = 0;  // 上次主动刷新时间（WCR DAT_0298f248）
+static BOOL gAutoLikeTickScheduled = NO;         // 刷新循环重排守卫（WCR DAT_0298f260）
+static long gAutoLikeCount = 0;                  // 本会话已赞数（单轮上限计数）
+static NSTimeInterval gAutoLikeSessionStart = 0; // 会话起点（首赞置位，冷却结束重置）
+static BOOL gAutoLikeCooling = NO;               // 单轮上限冷却守卫（WCR MaxPerSession 语义真实生效版）
+
+static BOOL MioFakeVCCoveringTimeline(void);    // 定义在伪集赞 active-refresh 段
+
+// KVC 字符串提取（WCR FUN_00571ca4 同款 valueForKey: 路径）
+static NSString *MioAutoLikeKvcString(id item, NSString *key) {
+    @try {
+        id v = [item valueForKey:key];
+        if (![v isKindOfClass:[NSString class]]) return nil;
+        return (NSString *)v;
+    } @catch (NSException *e) {}
+    return nil;
+}
+
+// key = tid ?: itemID（WCR FUN_00574a1c 实锤：tid 优先，空则 itemID）
+static NSString *MioAutoLikeKey(id item) {
+    return MioAutoLikeKvcString(item, @"tid") ?: MioAutoLikeKvcString(item, @"itemID");
+}
+
+// likeFlag 已赞判定（WCR FUN_00573648/FUN_00575474 双重检查同款）
+static BOOL MioAutoLikeAlreadyLiked(id item) {
+    @try {
+        id v = [item valueForKey:@"likeFlag"];
+        if ([v respondsToSelector:@selector(boolValue)] && [v boolValue]) return YES;
+    } @catch (NSException *e) {}
+    return NO;
+}
+
+static void MioAutoLikeSchedule(void);
+
+// 单轮上限钳位（WCR MaxPerSession UI 实锤：默认20钳[2,500]；2.1.8 引擎零引用是摆设，Mio 实现为真实生效）
+static long MioAutoLikeMaxClamped(void) {
+    long v = [MomentsConfig shared].autoLikeMaxPerSession;
+    if (v < 2) v = 2;
+    if (v > 500) v = 500;
+    return v;
+}
+
+static NSString *MioSelfWxid(void);   // 定义在评论引擎区（点赞/评论共用 skipOwn）
+
+// 单帖执行点赞（WCR FUN_00575474 实锤：likeFlag 检查 → username?:sourceUserName + itemID
+// 空判 → WCFacade respondsToSelector(likeObject:ofUser:source:) → 调用 + setLikeFlag:1）。
+// 返回 NO 表示未成功，key 不入 done，等下轮刷新重试；FAIL 日志留痕定位
+static BOOL MioAutoLikePerform(id item) {
+    NSString *user = MioAutoLikeKvcString(item, @"username")
+                     ?: MioAutoLikeKvcString(item, @"sourceUserName");
+    NSString *itemID = MioAutoLikeKvcString(item, @"itemID");
+    if (user.length == 0 || itemID.length == 0) {
+        WPLog(@"Moments", @"[AutoLike] FAIL %@: missing user(%@)/itemID", itemID ?: @"?", user);
+        return NO;
+    }
+    id facade = WXGetService(objc_getClass("WCFacade"));
+    if (!facade) {
+        WPLog(@"Moments", @"[AutoLike] FAIL %@: WCFacade unavailable", itemID);
+        return NO;
+    }
+    SEL like = NSSelectorFromString(@"likeObject:ofUser:source:");
+    if (![facade respondsToSelector:like]) {
+        WPLog(@"Moments", @"[AutoLike] FAIL %@: WCFacade lacks likeObject:ofUser:source:", itemID);
+        return NO;
+    }
+    // 返回类型感知：B/c=BOOL 判成败；@=对象只打日志（BOOL 不能当 id 解引用，会崩）；v=无返回
+    char ret = 'v';
+    Method m = class_getInstanceMethod([facade class], like);
+    if (m) {
+        char rbuf[8] = {0};
+        method_getReturnType(m, rbuf, sizeof(rbuf));
+        ret = rbuf[0];
+    }
+    if (ret == 'B' || ret == 'c') {
+        BOOL ok = ((BOOL(*)(id, SEL, id, id, id))objc_msgSend)(facade, like, item, user, nil);
+        if (!ok) {
+            WPLog(@"Moments", @"[AutoLike] FAIL %@ (user %@): likeObject returned NO", itemID, user);
+            return NO;
+        }
+    } else if (ret == '@') {
+        id r = ((id(*)(id, SEL, id, id, id))objc_msgSend)(facade, like, item, user, nil);
+        WPLog(@"Moments", @"[AutoLike] likeObject ret=%@", r);
+    } else {
+        ((void(*)(id, SEL, id, id, id))objc_msgSend)(facade, like, item, user, nil);
+    }
+    [item setValue:@1 forKey:@"likeFlag"];   // WCR setLikeFlag:1（本地防重复）
+    WPLog(@"Moments", @"[AutoLike] liked %@ (user %@)", itemID, user);
+    return YES;
+}
+
+// 消费一轮（WCR FUN_00575078 实锤：开关关→清空队列与 pending；否则取队首→pending 移除→
+// done 查重→执行→key 入 done→队列非空续调度）
+static void MioAutoLikeConsume(void) {
+    gAutoLikeRunning = NO;
+    MomentsConfig *cfg = [MomentsConfig shared];
+    if (!cfg.autoLikeEnabled) {
+        [gAutoLikeQueue removeAllObjects];
+        [gAutoLikePending removeAllObjects];
+        WPLog(@"Moments", @"[AutoLike] consume: disabled, queue cleared");
+        return;
+    }
+    if (gAutoLikeQueue.count == 0) return;
+    // 单轮上限：连续赞满 N 条冷却 60 秒后清零续赞（冷却期间 cooling 守卫挡住 Schedule 并发）
+    long maxPer = MioAutoLikeMaxClamped();
+    if (gAutoLikeCount >= maxPer) {
+        NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+        if (now - gAutoLikeSessionStart < 60) {
+            gAutoLikeCooling = YES;
+            WPLog(@"Moments", @"[AutoLike] session limit %ld reached, cooling 60s (queue %lu)",
+                  maxPer, (unsigned long)gAutoLikeQueue.count);
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                gAutoLikeCooling = NO;
+                gAutoLikeCount = 0;
+                gAutoLikeSessionStart = [NSDate date].timeIntervalSince1970;
+                MioAutoLikeSchedule();
+            });
+            return;
+        }
+        gAutoLikeSessionStart = now;
+        gAutoLikeCount = 0;
+    }
+    id item = gAutoLikeQueue.firstObject;
+    [gAutoLikeQueue removeObjectAtIndex:0];
+    NSString *key = MioAutoLikeKey(item);
+    if (key.length > 0) [gAutoLikePending removeObject:key];
+    if (key.length > 0 && ![gAutoLikeDone containsObject:key]) {
+        @try {
+            if (MioAutoLikePerform(item)) {
+                [gAutoLikeDone addObject:key];
+                if (gAutoLikeCount == 0) gAutoLikeSessionStart = [NSDate date].timeIntervalSince1970;
+                gAutoLikeCount++;
+            }
+            // 失败不入 done：下轮刷新循环 timelineDataList 扫描会重新入队重试（60s 起步，
+            // 频率受刷新间隔约束，无风控压力），FAIL 日志留痕
+        } @catch (NSException *e) {
+            WPLog(@"Moments", @"[AutoLike] perform error: %@", e);
+        }
+    }
+    if (gAutoLikeQueue.count > 0) MioAutoLikeSchedule();
+}
+
+// 调度（WCR FUN_0057399c 实锤：运行守卫 + 队列非空才排；delay=操作间隔钳位，主队列串行）
+static void MioAutoLikeSchedule(void) {
+    if (gAutoLikeRunning || gAutoLikeCooling) return;
+    if (gAutoLikeQueue.count == 0) return;
+    gAutoLikeRunning = YES;
+    MomentsConfig *cfg = [MomentsConfig shared];
+    long d = cfg.autoLikeInterval;   // WCR FUN_00574ed4 钳位 3~600，Mio 语义 3~300
+    if (d < 3) d = 3;
+    if (d > 300) d = 300;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(d * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ MioAutoLikeConsume(); });
+}
+
+// 单帖入队（WCR FUN_00573044 实锤：gate → WCDataItem 类检查 → key 空/已赞/去重跳过 →
+// pending+queue → 调度）
+static void MioAutoLikeEnqueueItem(id item, const char *src) {
+    if (!gAutoLikeQueue) {
+        gAutoLikeQueue = [NSMutableArray array];
+        gAutoLikePending = [NSMutableSet set];
+        gAutoLikeDone = [NSMutableSet set];
+    }
+    MomentsConfig *cfg = [MomentsConfig shared];
+    if (!cfg.autoLikeEnabled) return;
+    Class itemCls = objc_getClass("WCDataItem");
+    if (!itemCls || ![item isKindOfClass:itemCls]) return;
+    if (MioAutoLikeAlreadyLiked(item)) return;
+    // 自己发的不点赞（WCR FUN_00573f38 skipOwn 实锤）
+    NSString *selfWxid = MioSelfWxid();
+    NSString *lkUser = MioAutoLikeKvcString(item, @"username")
+                       ?: MioAutoLikeKvcString(item, @"sourceUserName");
+    if (lkUser.length > 0 && selfWxid.length > 0 && [lkUser isEqualToString:selfWxid]) return;
+    NSString *key = MioAutoLikeKey(item);
+    if (key.length == 0) {
+        WPLog(@"Moments", @"[AutoLike] FAIL (%s): empty key (tid/itemID both nil)", src);
+        return;
+    }
+    // 广告帖排除（WCR FUN_00574940/FUN_00573ad4 实锤：advertiseInfo 非空即拦）
+    @try {
+        if ([item respondsToSelector:@selector(advertiseInfo)]) {
+            id adv = [item valueForKey:@"advertiseInfo"];
+            if (adv) {
+                WPLog(@"Moments", @"[AutoLike] skip (%s) key %@: advertise post", src, key);
+                return;
+            }
+        }
+    } @catch (NSException *e) {}
+    // 黑名单（WCR TargetMode=2 语义：发帖人在黑名单中不点赞）
+    NSString *user = MioAutoLikeKvcString(item, @"username")
+                     ?: MioAutoLikeKvcString(item, @"sourceUserName");
+    if (user.length > 0 && [[MomentsConfig shared].autoLikeBlocklist containsObject:user]) {
+        WPLog(@"Moments", @"[AutoLike] skip (%s) key %@: user %@ in blocklist", src, key, user);
+        return;
+    }
+    if ([gAutoLikeDone containsObject:key] || [gAutoLikePending containsObject:key]) return;
+    [gAutoLikePending addObject:key];
+    [gAutoLikeQueue addObject:item];
+    WPLog(@"Moments", @"[AutoLike] enqueue (%s) key %@ queue=%lu",
+          src, key, (unsigned long)gAutoLikeQueue.count);
+    MioAutoLikeSchedule();
+}
+
+// 数组入队（WCR FUN_00572d68 实锤：NSArray 遍历逐 item 入队）
+static void MioAutoLikeEnqueueArray(NSArray *datas, const char *src) {
+    if (![datas isKindOfClass:[NSArray class]]) return;
+    for (id it in datas) MioAutoLikeEnqueueItem(it, src);
+}
+
+// 自己 wxid（WCR FUN_0056b564 实锤 fallback：SettingUtil getCurUsrName 类方法）
+static NSString *MioSelfWxid(void) {
+    @try {
+        Class cls = objc_getClass("SettingUtil");
+        SEL sel = NSSelectorFromString(@"getCurUsrName");
+        if (cls && [cls respondsToSelector:sel]) {
+            return ((NSString *(*)(id, SEL))objc_msgSend)(cls, sel);
+        }
+    } @catch (NSException *e) {}
+    return nil;
+}
+
+// ===== 朋友圈自动评论引擎（WCR kind=1 实锤：独立队列套件 &DAT_0298f1a8[1]/f198/f188/f238，
+// 与点赞完全分离；执行链 FUN_005753dc→FUN_005758e8：WCCommentItem genCommentObject →
+// WCFacade commentObject:ForAd:extraInfo:{@Scene:@3}）=====
+static NSMutableArray *gAcmtQueue = nil;
+static NSMutableSet *gAcmtPending = nil, *gAcmtDone = nil;
+static BOOL gAcmtRunning = NO;
+static NSTimeInterval gAcmtLastRefresh = 0;
+
+// 评论内容随机（WCR FUN_00575f28 实锤随机取用；Mio 池空不评论——发好友可见内容必须用户自配，
+// 不学 WCR 内置文案池）
+static NSString *MioAcmtRandomText(void) {
+    NSArray *texts = [MomentsConfig shared].autoCommentTexts;
+    if (texts.count == 0) return nil;
+    return texts[arc4random_uniform((u_int32_t)texts.count)];
+}
+
+// 操作间隔钳位（WCR momentsAutoCommentInterval 同款 [3,300]，Mio 默认 10）
+static long MioAcmtIntervalClamped(void) {
+    long d = [MomentsConfig shared].autoCommentInterval;
+    if (d < 3) d = 3;
+    if (d > 300) d = 300;
+    return d;
+}
+
+// 后台刷新间隔钳位（WCR refresh 同款 [60,3600]，Mio 默认 180）
+static long MioAcmtRefreshIntervalClamped(void) {
+    long iv = [MomentsConfig shared].autoCommentRefreshInterval;
+    if (iv < 60) iv = 60;
+    if (iv > 3600) iv = 3600;
+    return iv;
+}
+
+// 已评论过检测（WCR 缺失项，Mio 补齐：commentUsers.username==我方 wxid 为服务端持久态，
+// 防重启后内存 done 清空导致旧帖重评）
+static BOOL MioAcmtAlreadyCommented(id item, NSString *selfWxid) {
+    if (selfWxid.length == 0) return NO;
+    @try {
+        NSArray *cmts = [item valueForKey:@"commentUsers"];
+        if (![cmts isKindOfClass:[NSArray class]]) return NO;
+        for (id c in cmts) {
+            if (![c respondsToSelector:@selector(username)]) continue;
+            NSString *u = ((NSString *(*)(id, SEL))objc_msgSend)(c, @selector(username));
+            if ([u isKindOfClass:[NSString class]] && [u isEqualToString:selfWxid]) return YES;
+        }
+    } @catch (NSException *e) {}
+    return NO;
+}
+
+// 未知 selector 兜底网 v2（sgbadge3）：v1 对"原生给不出签名"的消息伪造 @@: 空签名——
+// 退出群聊时微信删群消息链上带 block 参数的转发消息按 @@: 构造 NSInvocation，参数错位
+// objc_retain 到野指针 SIGSEGV（WeChat-2026-10-03-045114.ips 实锤：objc_retain ←
+// Mio_arm64-2.dylib ← NSInvocation invoke）。v2 改 resolve 白名单：实证已删除属性在转发
+// 开始前补 IMP（返回 nil，x0=0 对 BOOL/int/指针全等 0），消息直接命中不走转发；其余
+// selector 原样透传，methodSignatureForSelector 不再伪造
+static NSSet *MioAcmtStubbedProps(void) {
+    static NSSet *set;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ set = [NSSet setWithArray:@[ @"commentStartTime", @"adViewId" ]]; });
+    return set;
+}
+
+static void MioAcmtInstallDataItemSelectorNet(NSString *clsName) {
+    Class cls = objc_getClass(clsName.UTF8String);
+    if (!cls) return;
+    // +resolveInstanceMethod: 是类方法，替换必须落在 metaclass 上
+    SEL riSel = @selector(resolveInstanceMethod:);
+    Class meta = object_getClass(cls);
+    Method m = class_getInstanceMethod(meta, riSel);
+    if (!m) return;
+    __block BOOL (*orig)(id, SEL, SEL) = (void *)method_getImplementation(m);
+    id riBlock = ^BOOL(id _self, SEL aSel) {
+        if ([MioAcmtStubbedProps() containsObject:NSStringFromSelector(aSel)]) {
+            class_addMethod((Class)_self, aSel,
+                            imp_implementationWithBlock(^(id self_){ return nil; }), "@@:");
+            return YES;
+        }
+        return orig(_self, riSel, aSel);
+    };
+    class_replaceMethod(meta, riSel, imp_implementationWithBlock(riBlock), "B@:@");
+    // forwardInvocation: 真实签名下真走到转发的消息静默吞（v1 行为保留，无参数错位风险）
+    SEL fiSel = @selector(forwardInvocation:);
+    if (!class_getInstanceMethod(cls, fiSel)) {
+        id fiBlock = ^(id _self, NSInvocation *inv) { };
+        class_addMethod(cls, fiSel, imp_implementationWithBlock(fiBlock), "v@:@");
+    }
+    WPLog(@"Moments", @"[AutoCmt] selector net v2 (resolve-stub) installed on %@", clsName);
+}
+
+// 执行评论（WCR FUN_005758e8 实锤全链：内容判空 → itemID/username 判空 →
+// WCCommentItem genCommentObject:content:ref:source:SnsEmojiInfoObj:（头文件 L66）→
+// WCFacade commentObject:ForAd:extraInfo:（头文件 L523）+ extraInfo{@Scene:@3}）
+static BOOL MioAcmtPerform(id item) {
+    NSString *content = MioAcmtRandomText();
+    if (content.length == 0) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL: no comment texts configured");
+        return NO;
+    }
+    NSString *key = MioAutoLikeKey(item);
+    NSString *itemID = MioAutoLikeKvcString(item, @"itemID");
+    NSString *user = MioAutoLikeKvcString(item, @"username")
+                     ?: MioAutoLikeKvcString(item, @"sourceUserName");
+    if (itemID.length == 0 || user.length == 0) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL (%@): missing itemID/user", key);
+        return NO;
+    }
+    Class cmtCls = objc_getClass("WCCommentItem");
+    SEL gen = NSSelectorFromString(@"genCommentObject:content:ref:source:SnsEmojiInfoObj:");
+    if (!cmtCls || ![cmtCls respondsToSelector:gen]) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL: WCCommentItem lacks genCommentObject");
+        return NO;
+    }
+    id comment = nil;
+    @try {
+        comment = ((id(*)(id, SEL, id, id, id, id, id))objc_msgSend)(cmtCls, gen, item, content, nil, nil, nil);
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL (%@): genCommentObject %@", key, e);
+        return NO;
+    }
+    if (!comment) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL (%@): genCommentObject nil", key);
+        return NO;
+    }
+    id facade = WXGetService(objc_getClass("WCFacade"));
+    SEL cm = NSSelectorFromString(@"commentObject:ForAd:extraInfo:");
+    if (!facade || ![facade respondsToSelector:cm]) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL: WCFacade lacks commentObject:ForAd:extraInfo:");
+        return NO;
+    }
+    NSDictionary *extra = @{@"WCMomentsInteractionExtraInfoKey_Scene": @3};
+    // ForAd 参数必须传 nil（WCR FUN_005336a0 L9008 实锤：msgSend(facade, sel, comment, 0, extra)）。
+    // 该参数是给广告对象用的：8.0.60 的 facade 会对它读 adViewId 等广告属性（WCDataItem 已删），
+    // 传 item 必炸 unrecognized selector；消息到 nil 永远安全返回 0。genCommentObject 才收 item。
+    @try {
+        id ret = ((id(*)(id, SEL, id, id, id))objc_msgSend)(facade, cm, comment, nil, extra);
+        WPLog(@"Moments", @"[AutoCmt] commented %@ (user %@) content=%@", key, user, content);
+        return (ret != nil);
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[AutoCmt] FAIL (%@): %@", key, e);
+        return NO;
+    }
+}
+
+// 消费（WCR FUN_00575078 kind=1 路径同构：取队首→执行→入 done→续排；评论无单轮上限）
+static void MioAcmtSchedule(void);
+
+static void MioAcmtConsume(void) {
+    gAcmtRunning = NO;
+    MomentsConfig *cfg = [MomentsConfig shared];
+    if (!cfg.autoCommentEnabled) {
+        [gAcmtQueue removeAllObjects];
+        [gAcmtPending removeAllObjects];
+        WPLog(@"Moments", @"[AutoCmt] consume: disabled, queue cleared");
+        return;
+    }
+    if (gAcmtQueue.count == 0) return;
+    id item = gAcmtQueue.firstObject;
+    [gAcmtQueue removeObjectAtIndex:0];
+    NSString *key = MioAutoLikeKey(item);
+    if (key.length > 0) [gAcmtPending removeObject:key];
+    if (key.length > 0 && ![gAcmtDone containsObject:key]) {
+        @try {
+            if (MioAcmtPerform(item)) [gAcmtDone addObject:key];
+            // 失败不入 done：下轮刷新 timelineDataList 补扫重试（180s 起步，无风控压力）
+        } @catch (NSException *e) {
+            WPLog(@"Moments", @"[AutoCmt] perform error: %@", e);
+        }
+    }
+    if (gAcmtQueue.count > 0) MioAcmtSchedule();
+}
+
+// 调度（WCR FUN_0057399c kind=1 同构：运行守卫 + 队列非空才排，delay=评论操作间隔）
+static void MioAcmtSchedule(void) {
+    if (gAcmtRunning) return;
+    if (gAcmtQueue.count == 0) return;
+    gAcmtRunning = YES;
+    long d = MioAcmtIntervalClamped();
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(d * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ MioAcmtConsume(); });
+}
+
+// 单帖入队（WCR 过滤链 kind=1 路径：gate → 类检查 → skipOwn → 生效范围 → 广告 → 已评/去重）
+static void MioAcmtEnqueueItem(id item, const char *src) {
+    if (!gAcmtQueue) {
+        gAcmtQueue = [NSMutableArray array];
+        gAcmtPending = [NSMutableSet set];
+        gAcmtDone = [NSMutableSet set];
+    }
+    MomentsConfig *cfg = [MomentsConfig shared];
+    if (!cfg.autoCommentEnabled) return;
+    Class itemCls = objc_getClass("WCDataItem");
+    if (!itemCls || ![item isKindOfClass:itemCls]) return;
+    NSString *key = MioAutoLikeKey(item);
+    if (key.length == 0) return;
+    // 自己发的不评论（WCR FUN_00573f38 skipOwn 实锤）
+    NSString *selfWxid = MioSelfWxid();
+    NSString *user = MioAutoLikeKvcString(item, @"username")
+                     ?: MioAutoLikeKvcString(item, @"sourceUserName");
+    if (user.length > 0 && selfWxid.length > 0 && [user isEqualToString:selfWxid]) return;
+    // 生效范围：白名单非空仅评论选中好友（WCR TargetMode=1 语义；空=全部好友）
+    NSArray *scope = cfg.autoCommentContacts;
+    if (scope.count > 0 && (user.length == 0 || ![scope containsObject:user])) return;
+    // 广告帖排除（过滤链 kind 共用 advertiseInfo 门）
+    @try {
+        if ([item respondsToSelector:@selector(advertiseInfo)] && [item valueForKey:@"advertiseInfo"]) return;
+    } @catch (NSException *e) {}
+    // 防重复评论（服务端持久态；WCR 缺失，Mio 补齐）
+    if (MioAcmtAlreadyCommented(item, selfWxid)) return;
+    if ([gAcmtDone containsObject:key] || [gAcmtPending containsObject:key]) return;
+    [gAcmtPending addObject:key];
+    [gAcmtQueue addObject:item];
+    WPLog(@"Moments", @"[AutoCmt] enqueue (%s) key %@ queue=%lu",
+          src, key, (unsigned long)gAcmtQueue.count);
+    MioAcmtSchedule();
+}
+
+// 数组入队（WCR FUN_00572d68 kind=1 同构）
+static void MioAcmtEnqueueArray(NSArray *datas, const char *src) {
+    if (![datas isKindOfClass:[NSArray class]]) return;
+    for (id it in datas) MioAcmtEnqueueItem(it, src);
+}
+
+// 刷新循环当前间隔（WCR FUN_00572a6c 钳位 60~3600）
+static long MioAutoLikeRefreshIntervalClamped(void) {
+    MomentsConfig *cfg = [MomentsConfig shared];
+    long iv = cfg.autoLikeRefreshInterval;
+    if (iv < 60) iv = 60;
+    if (iv > 3600) iv = 3600;
+    return iv;
+}
+
+// 刷新 tick（WCR FUN_00572784 判定链实锤：gate → 前台 → 不在朋友圈页 → 队列空 →
+// 距上次≥间隔 → timelineDataList 补入队 + beginTimeline + updateTimelineHead；
+// 双引擎改造：点赞(60s 默认)/评论(180s 默认)各自节流记账，任一到期即拉新，一次刷新服务两者）
+static void MioAutoLikeRefreshTick(void) {
+    MomentsConfig *cfg = [MomentsConfig shared];
+    BOOL likeOn = cfg.autoLikeEnabled;
+    BOOL cmtOn = cfg.autoCommentEnabled;
+    if (!likeOn && !cmtOn) return;
+    if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
+    if (MioFakeVCCoveringTimeline()) return;
+    NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+    BOOL likeNeed = likeOn && !gAutoLikeRunning && gAutoLikeQueue.count == 0
+                    && (gAutoLikeLastRefresh <= 0 || now - gAutoLikeLastRefresh >= MioAutoLikeRefreshIntervalClamped());
+    BOOL cmtNeed = cmtOn && !gAcmtRunning && gAcmtQueue.count == 0
+                   && (gAcmtLastRefresh <= 0 || now - gAcmtLastRefresh >= MioAcmtRefreshIntervalClamped());
+    if (!likeNeed && !cmtNeed) return;
+    id facade = WXGetService(objc_getClass("WCFacade"));
+    if (!facade) return;
+    if (likeNeed) gAutoLikeLastRefresh = now;   // WCR 同款：取到 facade 才记账
+    if (cmtNeed) gAcmtLastRefresh = now;
+    // 已加载未处理的 item 补入队（WCR FUN_005724e4 timelineDataList → 逐 item 入队）
+    @try {
+        SEL gtm = NSSelectorFromString(@"getTimelineMgr");
+        id mgr = [facade respondsToSelector:gtm] ? ((id(*)(id, SEL))objc_msgSend)(facade, gtm) : nil;
+        if (!mgr) mgr = WXGetService(objc_getClass("WCTimelineMgr"));
+        SEL tdl = NSSelectorFromString(@"timelineDataList");
+        if (mgr && [mgr respondsToSelector:tdl]) {
+            NSArray *list = ((id(*)(id, SEL))objc_msgSend)(mgr, tdl);
+            if ([list isKindOfClass:[NSArray class]]) {
+                if (likeOn) MioAutoLikeEnqueueArray(list, "al-list");
+                if (cmtOn) MioAcmtEnqueueArray(list, "ac-list");
+            }
+        }
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[AutoLike] list scan error: %@", e);
+    }
+    SEL begin = NSSelectorFromString(@"beginTimeline");
+    if ([facade respondsToSelector:begin]) ((void(*)(id, SEL))objc_msgSend)(facade, begin);
+    SEL head = NSSelectorFromString(@"updateTimelineHead");
+    if ([facade respondsToSelector:head]) {
+        ((void(*)(id, SEL))objc_msgSend)(facade, head);
+        WPLog(@"Moments", @"[AutoLike] bg refresh fired (t=%.0f, likeNeed=%d cmtNeed=%d)", now, likeNeed, cmtNeed);
+    } else {
+        WPLog(@"Moments", @"[AutoLike] bg refresh: WCFacade lacks updateTimelineHead");
+    }
+}
+
+// 重排周期：两引擎刷新间隔取小者（tick 高频醒，节流靠各引擎时间戳）
+static long MioRefreshTickMinInterval(void) {
+    long a = MioAutoLikeRefreshIntervalClamped();
+    long b = MioAcmtRefreshIntervalClamped();
+    return a < b ? a : b;
+}
+
+// 重排调度（WCR FUN_00572220/FUN_00576918 实锤：防重入守卫 + 下限 15s + 每轮执行后
+// 现读间隔重排，无限循环；配置变更即时生效）
+static void MioAutoLikeScheduleTick(double delay) {
+    if (gAutoLikeTickScheduled) return;
+    gAutoLikeTickScheduled = YES;
+    if (delay < 15) delay = 15;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        gAutoLikeTickScheduled = NO;
+        MioAutoLikeRefreshTick();
+        MioAutoLikeScheduleTick((double)MioRefreshTickMinInterval());
+    });
+}
+
+// 刷新循环安装（WCR FUN_0056783c/00567964 实锤：启动 20s 首轮 + didBecomeActive 触发）
+static void MioAutoLikeInstallRefreshLoop(void) {
+    MioAcmtInstallDataItemSelectorNet(@"WCDataItem");        // 未知 selector 兜底网（commentStartTime/adViewId 实证）
+    MioAcmtInstallDataItemSelectorNet(@"WCTimeLineDataItem"); // 防御：timeline 数据同类
+    [[NSNotificationCenter defaultCenter]
+        addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil
+        usingBlock:^(NSNotification *note) {
+            MioAutoLikeRefreshTick();
+            MioAutoLikeScheduleTick((double)MioRefreshTickMinInterval());
+        }];
+    MioAutoLikeScheduleTick(20.0);   // WCR 首轮 20s（0x4034000000000000 实锤）
+    WPLog(@"Moments", @"[AutoLike] refresh loop installed (first tick 20s, like+cmt)");
+}
+
+// install 期日志早于文件日志窗口必然丢失（174.log 定论），安装结果存全局，
+// 由 install 的 30s 补打任务在日志窗口内重放
+static NSString *gFakeTriggerSummary = nil;
+static NSString *gFakeDLInstallSummary = nil;
 
 static void MioInstallFakeLikeHooks(void) {
-    struct { const char *sel; BOOL isCount; } specs[] = {
-        {"likeUsers", NO}, {"likeCount", YES}, {"commentUsers", NO}, {"commentCount", YES},
-    };
+    // 主注入 = 数据层四挂点（WCTimelineMgr，见 MioInstallFakeDataLayerHooks，WCR 同款：
+    // item 落地即写回，头像与正文同步加载）；getter 触发器降级为自愈兜底（服务端覆盖后
+    // 渲染路径重注入）。getter 本身透传，双门逻辑收敛进 MioFakeAutoApplyItem。
     int ok = 0, total = 0;
     for (NSString *cn in @[@"WCDataItem", @"WCTimeLineDataItem"]) {
         Class cls = objc_getClass(cn.UTF8String);
         if (!cls) continue;
-        for (int i = 0; i < (int)(sizeof(specs) / sizeof(specs[0])); i++) {
-            SEL sel = NSSelectorFromString(@(specs[i].sel));
+        // hook 前解析原生 getter IMP（AutoApply 取 raw 共用；只认 WCDataItem 本体，170.log 实证 item 类即它）
+        if ([cn isEqualToString:@"WCDataItem"] && !gFakeOrigLU) {
+            Method mLU = class_getInstanceMethod(cls, NSSelectorFromString(@"likeUsers"));
+            Method mCU = class_getInstanceMethod(cls, NSSelectorFromString(@"commentUsers"));
+            if (mLU) gFakeOrigLU = method_getImplementation(mLU);
+            if (mCU) gFakeOrigCU = method_getImplementation(mCU);
+        }
+        for (int i = 0; i < 2; i++) {
+            const char *selName = (i == 0) ? "likeUsers" : "commentUsers";
+            SEL sel = NSSelectorFromString(@(selName));
             Method m = class_getInstanceMethod(cls, sel);
             if (!m) continue;
+            char *ret = method_copyReturnType(m);
+            BOOL isArr = (ret && ret[0] == '@');
+            if (ret) free(ret);
+            if (!isArr) continue;
             total++;
             IMP orig = method_getImplementation(m);
-            char *ret = method_copyReturnType(m);
-            IMP newImp = NULL;
-            if (!specs[i].isCount && ret && ret[0] == '@') {
-                BOOL isCmt = [@(specs[i].sel) hasPrefix:@"comment"];
-                newImp = imp_implementationWithBlock(^id(id self) {
-                    id origArr = ((id(*)(id, SEL))orig)(self, sel);
-                    @try {
-                        MomentsConfig *cfg = [MomentsConfig shared];
-                        if (!cfg.fakeLikeEnabled) return origArr;
-                        NSArray *origList = [origArr isKindOfClass:[NSArray class]] ? origArr : @[];
-                        if (!MioFakeGateOwnPost(self)) return origArr;
-                        if (isCmt) {
-                            // 门 B 经 likeUsers（消息发点赞后 self 必在赞列表；fakes 无我方 wxid 不误判）
-                            SEL luSel = NSSelectorFromString(@"likeUsers");
-                            NSArray *lu = [self respondsToSelector:luSel]
-                                ? ((id(*)(id, SEL))objc_msgSend)(self, luSel) : nil;
-                            if (!MioFakeGateLiked(self, [lu isKindOfClass:[NSArray class]] ? lu : @[])) return origArr;
-                            NSArray *fakes = MioFakeCommentsForItem(self);
-                            if (!fakes.count) return origArr;
-                            MioFakeLogAugment(self, -1, (NSInteger)fakes.count);
-                            NSMutableArray *mm = [NSMutableArray arrayWithArray:origList];
-                            [mm addObjectsFromArray:fakes];
-                            return mm;
-                        }
-                        if (!MioFakeGateLiked(self, origList)) return origArr;
-                        NSArray *fakes = MioFakeLikersForItem(self);
-                        if (!fakes.count) return origArr;
-                        MioFakeLogAugment(self, (NSInteger)fakes.count, -1);
-                        NSMutableArray *mm = [NSMutableArray arrayWithArray:origList];
-                        [mm addObjectsFromArray:fakes];
-                        return mm;
-                    } @catch (NSException *e) {
-                        WPLog(@"Moments", @"[FakeLike] getter error: %@", e);
-                        return origArr;
+            IMP newImp = imp_implementationWithBlock(^id(id self) {
+                id origArr = ((id(*)(id, SEL))orig)(self, sel);
+                @try {
+                    MomentsConfig *cfg = [MomentsConfig shared];
+                    if (cfg.fakeLikeEnabled && MioFakeGateOwnPost(self)) {
+                        MioFakeAutoApplyItem(self, "fb");                 // 双门+写回（自愈兜底）
+                        return ((id(*)(id, SEL))orig)(self, sel);         // 返回写回后的数组
                     }
-                });
-            } else if (specs[i].isCount && ret &&
-                       (ret[0] == 'q' || ret[0] == 'l' || ret[0] == 'i' || ret[0] == 'I' || ret[0] == 'Q')) {
-                BOOL isLike = [@(specs[i].sel) hasPrefix:@"like"];   // block 不能捕获局部数组，先取标量
-                newImp = imp_implementationWithBlock(^long long(id self) {
-                    long long origV = ((long long(*)(id, SEL))orig)(self, sel);
-                    @try {
-                        MomentsConfig *cfg = [MomentsConfig shared];
-                        if (!cfg.fakeLikeEnabled) return origV;
-                        if (!MioFakeGateOwnPost(self)) return origV;
-                        // 门 B 统一经 likeUsers getter（增强数组内 fakes 无我方 wxid）
-                        SEL luSel = NSSelectorFromString(@"likeUsers");
-                        NSArray *lu = [self respondsToSelector:luSel]
-                            ? ((id(*)(id, SEL))objc_msgSend)(self, luSel) : nil;
-                        if (!MioFakeGateLiked(self, [lu isKindOfClass:[NSArray class]] ? lu : @[])) return origV;
-                        NSArray *fakes = isLike ? MioFakeLikersForItem(self) : MioFakeCommentsForItem(self);
-                        return origV + (long long)fakes.count;
-                    } @catch (NSException *e) {
-                        return origV;
-                    }
-                });
-            }
-            if (ret) free(ret);
-            if (!newImp) continue;
+                } @catch (NSException *e) {
+                    WPLog(@"Moments", @"[FakeLike] trigger error: %@", e);
+                }
+                return origArr;
+            });
             method_setImplementation(m, newImp);
             ok++;
         }
     }
-    WPLog(@"Moments", @"[FakeLike] getter hooks installed %d/%d", ok, total);
+    gFakeTriggerSummary = [NSString stringWithFormat:@"%d/%d", ok, total];
+    WPLog(@"Moments", @"[FakeLike] trigger hooks installed %d/%d", ok, total);
+    // 每次进入朋友圈重摇（WCR 2.1.8 FUN_00567a08 同款：WCTimeLineViewController viewDidAppear
+    // 清空赞/评会话字典 → 本次停留按帖稳定不闪变，每次进入重新随机新一批人）
+    Class tlVC = objc_getClass("WCTimeLineViewController");
+    if (tlVC) {
+        Method mVD = class_getInstanceMethod(tlVC, NSSelectorFromString(@"viewDidAppear:"));
+        if (mVD) {
+            IMP origVD = method_getImplementation(mVD);
+            IMP newVD = imp_implementationWithBlock(^(id self, BOOL animated) {
+                ((void(*)(id, SEL, BOOL))origVD)(self, NSSelectorFromString(@"viewDidAppear:"), animated);
+                MomentsConfig *cfg = [MomentsConfig shared];
+                if (cfg.fakeLikeEnabled) {
+                    gFakeLikeCache = nil;
+                    gFakeCmtCache = nil;
+                    WPLog(@"Moments", @"[FakeLike] session cache reset (viewDidAppear)");
+                }
+            });
+            method_setImplementation(mVD, newVD);
+            WPLog(@"Moments", @"[FakeLike] viewDidAppear reset hook installed");
+        }
+    } else {
+        WPLog(@"Moments", @"[FakeLike] WCTimeLineViewController not found, reset hook skipped");
+    }
+}
+
+// ===== 数据层预注入（WCR FUN_005474f4 实锤挂点，头像慢根因修复：WCR 在数据落地时注入，
+// 头像与正文图同步入队；旧版渲染路径 getter 才注入，头像入队晚一个渲染周期）=====
+// WCTimelineMgr 四个数据回调 + WCCommentDetailViewControllerFB 评论详情页。
+// 垫片参数表照抄 WCR 垫片（FUN_00549550/5495fc/49714/4982c 反编译：datas 数组位于
+// onPre/onNext 第 2 参、onFirst 第 3 参、modify 单 item）。方法名运行时前缀匹配
+// （Ghidra PTR 名有截断，selector 全名以 runtime 为准），返回类型 void 才挂。
+
+typedef void (*MioDLModOrig)(id, SEL, id, BOOL);
+typedef void (*MioDL7Orig)(id, SEL, id, id, id, unsigned int, id);
+typedef void (*MioDL10Orig)(id, SEL, id, BOOL, id, id, unsigned int, id, id, id);
+static MioDLModOrig gOrigMod = NULL;
+static MioDL7Orig gOrigPre = NULL, gOrigNext = NULL;
+static MioDL10Orig gOrigFirst = NULL;
+
+static void MioFakeDLMod(id self, SEL _cmd, id item, BOOL notify) {
+    MioFakeAutoApplyItem(item, "dl");
+    MioAutoLikeEnqueueItem(item, "al-dl");
+    MioAcmtEnqueueItem(item, "ac-dl");
+    if (gOrigMod) gOrigMod(self, _cmd, item, notify);
+}
+
+static void MioFakeDLPre(id self, SEL _cmd, id p1, NSArray *datas, id p4, unsigned int p5, id p6) {
+    MioFakeAutoApplyArray(datas, "dl-pre");
+    MioAutoLikeEnqueueArray(datas, "al-dl-pre");
+    MioAcmtEnqueueArray(datas, "ac-dl-pre");
+    if (gOrigPre) gOrigPre(self, _cmd, p1, datas, p4, p5, p6);
+}
+
+static void MioFakeDLNext(id self, SEL _cmd, id p1, NSArray *datas, id p4, unsigned int p5, id p6) {
+    MioFakeAutoApplyArray(datas, "dl-next");
+    MioAutoLikeEnqueueArray(datas, "al-dl-next");
+    MioAcmtEnqueueArray(datas, "ac-dl-next");
+    if (gOrigNext) gOrigNext(self, _cmd, p1, datas, p4, p5, p6);
+}
+
+static void MioFakeDLFirst(id self, SEL _cmd, id p1, BOOL p2, NSArray *datas, id p5, unsigned int p6, id p7, id p8, id p9) {
+    MioFakeAutoApplyArray(datas, "dl-first");
+    MioAutoLikeEnqueueArray(datas, "al-dl-first");
+    MioAcmtEnqueueArray(datas, "ac-dl-first");
+    if (gOrigFirst) gOrigFirst(self, _cmd, p1, p2, datas, p5, p6, p7, p8, p9);
+}
+
+// 缓存填充路径（头文件 WCTimelineMgr.h 实证）：首屏走本地缓存不经过网络回调
+//（172.log 实证 src=dl 为 0），updateDataHead/PrePage/Tail 才是缓存数据的入口。
+// 无参方法：先 orig 填充列表，再遍历 timelineDataList 注入。
+typedef void (*MioDL0Orig)(id, SEL);
+static MioDL0Orig gOrigUDHead = NULL, gOrigUDPre = NULL, gOrigUDTail = NULL;
+
+static void MioFakeDLUDHead(id self, SEL _cmd) {
+    if (gOrigUDHead) gOrigUDHead(self, _cmd);
+    NSArray *list = ((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList"));
+    MioFakeAutoApplyArray(list, "dl-udHead");
+    MioAutoLikeEnqueueArray(list, "al-udHead");
+    MioAcmtEnqueueArray(list, "ac-udHead");
+}
+
+static void MioFakeDLUDPre(id self, SEL _cmd) {
+    if (gOrigUDPre) gOrigUDPre(self, _cmd);
+    NSArray *list = ((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList"));
+    MioFakeAutoApplyArray(list, "dl-udPre");
+    MioAutoLikeEnqueueArray(list, "al-udPre");
+    MioAcmtEnqueueArray(list, "ac-udPre");
+}
+
+static void MioFakeDLUDTail(id self, SEL _cmd) {
+    if (gOrigUDTail) gOrigUDTail(self, _cmd);
+    NSArray *list = ((id(*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"timelineDataList"));
+    MioFakeAutoApplyArray(list, "dl-udTail");
+    MioAutoLikeEnqueueArray(list, "al-udTail");
+    MioAcmtEnqueueArray(list, "ac-udTail");
+}
+
+// 不强制返回类型：垫片末句透传 orig，ARM64 x0 返回值天然透传，任何类型安全；
+// 头文件 dump 工具返回类型全写 id 不可信，真实编码打进日志供诊断
+static BOOL MioFakeHookMethod(Method m, IMP newImp, IMP *origOut, NSString **retCodeOut) {
+    if (!m || !newImp || *origOut) return NO;
+    if (retCodeOut) {
+        char *ret = method_copyReturnType(m);
+        if (ret) {
+            *retCodeOut = [NSString stringWithUTF8String:ret];
+            free(ret);
+        }
+    }
+    *origOut = method_getImplementation(m);
+    method_setImplementation(m, newImp);
+    return YES;
+}
+
+static void MioInstallFakeDataLayerHooks(void) {
+    Class mgr = objc_getClass("WCTimelineMgr");
+    if (!mgr) {
+        WPLog(@"Moments", @"[FakeLike] data-layer hooks 0/7 (WCTimelineMgr not found)");
+        return;
+    }
+    unsigned int n = 0;
+    Method *list = class_copyMethodList(mgr, &n);
+    if (!list) {
+        WPLog(@"Moments", @"[FakeLike] data-layer hooks 0/7 (no method list)");
+        return;
+    }
+    int installed = 0;
+    NSMutableString *hit = [NSMutableString string];
+    for (unsigned int i = 0; i < n; i++) {
+        NSString *nm = NSStringFromSelector(method_getName(list[i]));
+        NSString *rc = nil;
+        if (!gOrigMod && [nm isEqualToString:@"modifyDataItem:notify:"] &&
+            MioFakeHookMethod(list[i], (IMP)MioFakeDLMod, (IMP *)&gOrigMod, &rc)) {
+            installed++; [hit appendFormat:@" mod(%@)", rc];
+        } else if (!gOrigPre && [nm hasPrefix:@"onPrePageUpdated:datas:"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLPre, (IMP *)&gOrigPre, &rc)) {
+            installed++; [hit appendFormat:@" pre(%@)", rc];
+        } else if (!gOrigNext && [nm hasPrefix:@"onNextPageUpdated:datas:"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLNext, (IMP *)&gOrigNext, &rc)) {
+            installed++; [hit appendFormat:@" next(%@)", rc];
+        } else if (!gOrigFirst && [nm hasPrefix:@"onFirstPageUpdated:dataChanged:"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLFirst, (IMP *)&gOrigFirst, &rc)) {
+            installed++; [hit appendFormat:@" first(%@)", rc];
+        } else if (!gOrigUDHead && [nm isEqualToString:@"updateDataHead"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLUDHead, (IMP *)&gOrigUDHead, &rc)) {
+            installed++; [hit appendFormat:@" udHead(%@)", rc];
+        } else if (!gOrigUDPre && [nm isEqualToString:@"updateDataPrePage"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLUDPre, (IMP *)&gOrigUDPre, &rc)) {
+            installed++; [hit appendFormat:@" udPre(%@)", rc];
+        } else if (!gOrigUDTail && [nm isEqualToString:@"updateDataTail"] &&
+                   MioFakeHookMethod(list[i], (IMP)MioFakeDLUDTail, (IMP *)&gOrigUDTail, &rc)) {
+            installed++; [hit appendFormat:@" udTail(%@)", rc];
+        }
+    }
+    free(list);
+    gFakeDLInstallSummary = [NSString stringWithFormat:@"%d/7:%@", installed, hit];
+    WPLog(@"Moments", @"[FakeLike] data-layer hooks installed %d/7:%@", installed, hit);
+}
+
+// ===== App 激活主动刷新（WCR FUN_00551580 同款复刻）=====
+// 根因定论（173.log + WCR 反编译 FUN_00551580/FUN_005512e0/FUN_00551994）：朋友圈首屏走本地
+// 缓存、不经网络回调，src=dl 恒为 0；WCR 靠 didBecomeActive 时主动调 WCFacade 的
+// beginTimeline + updateTimelineHead（头文件 WCFacade.h L416/L429 实锤）制造数据刷新，
+// 数据流经 WCTimelineMgr 回调 → 数据层挂点在用户打开朋友圈前命中注入 → 假赞随微信持久化
+// 进缓存，下次打开即命中。节流取 WCR 钳位区间（61~3600s，FUN_00551868）中值 300s 固定。
+static NSTimeInterval gFakeLastActiveRefresh = 0;
+
+// 顶 VC 链是否在朋友圈页面（WCR FUN_00554fd4 同款：WCTimeLine/WCCommentDetail 在栈即跳过，
+// 避免与用户正在浏览的刷新叠加导致列表跳动）
+static BOOL MioFakeVCCoveringTimeline(void) {
+    UIViewController *vc = WPGetTopVCForPresentation();
+    int depth = 0;
+    while (vc && depth++ < 16) {
+        NSString *cls = NSStringFromClass(vc.class);
+        if ([cls containsString:@"WCTimeLine"] || [cls containsString:@"WCCommentDetail"]) return YES;
+        vc = vc.parentViewController;
+    }
+    return NO;
+}
+
+// timelineDataList 全量扫描注入（WCR FUN_005512e0 同源思路）：数据回调只送"最新增量"，
+// 旧本人帖不在其中（178.log 实锤 70 条回调 item 全 rejectA 而 fb 渲染能命中），对管理器
+// 持有的全量列表直接写回。tag 区分首扫（dl-list，请求前扫既有列表）与重扫（dl-list2，
+// 回包落地后扫刷新后列表）
+static void MioFakeScanTimelineList(id facade, const char *tag) {
+    @try {
+        SEL gtm = NSSelectorFromString(@"getTimelineMgr");
+        id mgr = nil;
+        if ([facade respondsToSelector:gtm]) {
+            mgr = ((id(*)(id, SEL))objc_msgSend)(facade, gtm);
+        }
+        if (!mgr) mgr = WXGetService(objc_getClass("WCTimelineMgr"));
+        SEL tdl = NSSelectorFromString(@"timelineDataList");
+        if (mgr && [mgr respondsToSelector:tdl]) {
+            NSArray *list = ((id(*)(id, SEL))objc_msgSend)(mgr, tdl);
+            if ([list isKindOfClass:[NSArray class]]) {
+                WPLog(@"Moments", @"[FakeLike] dl-list scan (%s): %lu items", tag, (unsigned long)list.count);
+                MioFakeAutoApplyArray(list, tag);
+            }
+        } else {
+            WPLog(@"Moments", @"[FakeLike] dl-list scan: timelineDataList unavailable");
+        }
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[FakeLike] dl-list scan error: %@", e);
+    }
+}
+
+static void MioFakeActiveRefresh(const char *reason) {
+    @try {
+        MomentsConfig *cfg = [MomentsConfig shared];
+        if (!cfg.fakeLikeEnabled) {
+            WPLog(@"Moments", @"[FakeLike] active-refresh skipped (%s, fakeLike=NO)", reason);
+            return;
+        }
+        if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
+            WPLog(@"Moments", @"[FakeLike] active-refresh skipped (%s, not active)", reason);
+            return;
+        }
+        if (MioFakeVCCoveringTimeline()) {
+            WPLog(@"Moments", @"[FakeLike] active-refresh skipped (%s, timeline VC on screen)", reason);
+            return;
+        }
+        NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+        if (gFakeLastActiveRefresh > 0 && now - gFakeLastActiveRefresh < 300) {
+            WPLog(@"Moments", @"[FakeLike] active-refresh skipped (%s, throttled, %.0fs left)",
+                  reason, 300 - (now - gFakeLastActiveRefresh));
+            return;
+        }
+        id facade = WXGetService(objc_getClass("WCFacade"));
+        if (!facade) {
+            WPLog(@"Moments", @"[FakeLike] active-refresh: WCFacade unavailable (%s)", reason);
+            return;
+        }
+        gFakeLastActiveRefresh = now;   // WCR 同款：取到 facade 才记账
+        // 全量兜底首扫：请求前扫既有列表（热激活时列表尚有上次会话数据，WCR FUN_005512e0 同序）
+        MioFakeScanTimelineList(facade, "dl-list");
+        SEL begin = NSSelectorFromString(@"beginTimeline");
+        if ([facade respondsToSelector:begin]) {
+            ((void(*)(id, SEL))objc_msgSend)(facade, begin);
+        }
+        SEL head = NSSelectorFromString(@"updateTimelineHead");
+        if ([facade respondsToSelector:head]) {
+            ((void(*)(id, SEL))objc_msgSend)(facade, head);
+            WPLog(@"Moments", @"[FakeLike] active-refresh: updateTimelineHead fired (%s, t=%.0f)", reason, now);
+            // 回包落地后二次全量（179.log 实证：冷启动请求与回包同秒，首扫 0 items——
+            // 回包经数据层回调写入列表需数秒，延迟重扫才能覆盖刷新后全量含旧本人帖）
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                MioFakeScanTimelineList(facade, "dl-list2");
+            });
+        } else {
+            WPLog(@"Moments", @"[FakeLike] active-refresh: WCFacade lacks updateTimelineHead");
+        }
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[FakeLike] active-refresh error: %@", e);
+    }
+}
+
+static void MioFakeInstallActiveRefresh(void) {
+    // 回前台触发（PrivacyHook 同款通知监听，零 hook）
+    [[NSNotificationCenter defaultCenter]
+        addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil
+        usingBlock:^(NSNotification *note) { MioFakeActiveRefresh("fg"); }];
+    WPLog(@"Moments", @"[FakeLike] active-refresh listener installed");
+    // 冷启动补偿：install 早于首次 didBecomeActive 通知时也能在服务就绪后刷一次
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ MioFakeActiveRefresh("coldstart"); });
+}
+
+#pragma mark - 朋友圈详细时间（WCR FUN_00555a70 同款机制）
+
+// hook WCTimeLineCellView updateWithDataItem:actionAreaVM:（WCR MSHookMessageEx 同款挂点）：
+// orig 正常渲染相对时间（"1小时前"）后，把 m_timeLabel 写回为 createtime 绝对时间，
+// 再调 fitTimeLableLineElements 让行高适配（WCR 同款收尾，仅实际改写文本后调用）。
+// createtime 在 8.0.60 实为 uint32 时间戳（WCR FUN_00556010 直接以返回值作 uint 用），非 NSNumber
+static IMP orig_tl_updateItem = NULL;
+
+// 相对时间（WCR FUN_00556a14 同款分支：刚刚/N分钟前/N小时前/昨天/N天前）
+static NSString *MioRelativeTimeString(unsigned int ts, NSDate *date) {
+    NSDate *now = [NSDate date];
+    NSTimeInterval interval = [now timeIntervalSinceDate:date];
+    if (interval < 0) interval = 0; // 未来时间按 0 算（WCR max(0,·) 同款）
+    static NSCalendar *cal = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cal = [NSCalendar currentCalendar]; });
+    NSInteger dayDiff = [[cal components:NSCalendarUnitDay
+                                fromDate:[cal startOfDayForDate:date]
+                                  toDate:[cal startOfDayForDate:now]
+                                 options:0] day];
+    if (dayDiff < 1) {
+        if (interval < 60) return @"刚刚";
+        if (interval < 3600) return [NSString stringWithFormat:@"%d分钟前", (int)(interval / 60)];
+        return [NSString stringWithFormat:@"%d小时前", (int)(interval / 3600)];
+    }
+    if (dayDiff == 1) return @"昨天";
+    return [NSString stringWithFormat:@"%d天前", (int)dayDiff];
+}
+
+// 按单段 pattern 格式化（空段返回空串，避免空 pattern 异常）
+static NSString *MioFormatSegment(NSDateFormatter *fmt, NSString *seg, NSDate *date) {
+    if (seg.length == 0) return @"";
+    if (![fmt.dateFormat isEqualToString:seg]) fmt.dateFormat = seg;
+    return [fmt stringFromDate:date] ?: @"";
+}
+
+// 格式化（WCR FUN_00557bdc/FUN_00556100 同款：zh_CN locale + 本地时区；
+// 格式串空/空白回落默认；(RT) 占位符渲染时替换为相对时间，如 (1小时前)）
+static NSString *MioDetailedTimeString(unsigned int ts) {
+    static NSDateFormatter *fmt = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        fmt = [[NSDateFormatter alloc] init];
+        fmt.locale = [NSLocale localeWithLocaleIdentifier:@"zh_CN"];
+        fmt.timeZone = [NSTimeZone localTimeZone];
+    });
+    NSString *pattern = [[MomentsConfig shared].detailedTimeFormat
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (pattern.length == 0) pattern = @"yyyy-MM-dd HH:mm:ss (RT)";
+    NSDate *date = [NSDate dateWithTimeIntervalSince1970:ts];
+    NSString *RT = @"(RT)";
+    if ([pattern containsString:RT]) {
+        // (RT) 占位：按 token 拆段逐段格式化，段间插入相对时间（仅第一个 token 生效，其余移除防乱码）
+        NSArray<NSString *> *parts = [pattern componentsSeparatedByString:RT];
+        NSMutableString *out = [NSMutableString string];
+        [out appendString:MioFormatSegment(fmt, parts[0], date)];
+        for (NSUInteger i = 1; i < parts.count; i++) {
+            if (i == 1) [out appendFormat:@"(%@)", MioRelativeTimeString(ts, date)]; // 相对时间带括号展示
+            [out appendString:MioFormatSegment(fmt, parts[i], date)];
+        }
+        return out;
+    }
+    return MioFormatSegment(fmt, pattern, date);
+}
+
+static void MioApplyDetailedTime(id cell, id dataItem) {
+    @try {
+        if (![MomentsConfig shared].detailedTimeEnabled) return;
+        SEL lblSel = NSSelectorFromString(@"m_timeLabel");
+        if (![cell respondsToSelector:lblSel]) return;
+        UILabel *label = ((id(*)(id, SEL))objc_msgSend)(cell, lblSel);
+        if (![label isKindOfClass:[UILabel class]]) return;
+        if (!dataItem) return;
+        SEL ctSel = NSSelectorFromString(@"createtime");
+        if (![dataItem respondsToSelector:ctSel]) return;
+        unsigned int ts = ((unsigned int(*)(id, SEL))objc_msgSend)(dataItem, ctSel);
+        if (ts == 0) return;
+        NSString *s = MioDetailedTimeString(ts);
+        if (s.length == 0 || [s isEqualToString:label.text]) return;
+        label.text = s;
+        // 行高适配（方法名实为 Lable 非 Label，8.0.60 头文件与 WCR 实证一致）
+        SEL fitSel = NSSelectorFromString(@"fitTimeLableLineElements");
+        if ([cell respondsToSelector:fitSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(cell, fitSel);
+        }
+    } @catch (NSException *e) {
+        WPLog(@"Moments", @"[DTime] apply error: %@", e);
+    }
+}
+
+static id hooked_tl_updateItem(id self, SEL _cmd, id dataItem, id areaVM) {
+    id r = ((id(*)(id, SEL, id, id))orig_tl_updateItem)(self, _cmd, dataItem, areaVM);
+    MioApplyDetailedTime(self, dataItem);
+    return r;
+}
+
+static void MioInstallDetailedTimeHook(void) {
+    Class cls = objc_getClass("WCTimeLineCellView");
+    if (!cls) {
+        WPLog(@"Moments", @"[DTime] SKIP: WCTimeLineCellView NOT found");
+        return;
+    }
+    SEL sel = NSSelectorFromString(@"updateWithDataItem:actionAreaVM:");
+    Method m = class_getInstanceMethod(cls, sel);
+    if (!m) {
+        WPLog(@"Moments", @"[DTime] SKIP: updateWithDataItem:actionAreaVM: NOT found");
+        return;
+    }
+    orig_tl_updateItem = method_getImplementation(m);
+    method_setImplementation(m, (IMP)hooked_tl_updateItem);
+    WPLog(@"Moments", @"[DTime] WCTimeLineCellView updateWithDataItem:actionAreaVM: hooked");
+}
+
+#pragma mark - 朋友圈小尾巴（WCR FUN_005d7810 同款机制）
+
+// hook -[WCUploadTask appInfo]（WCR MSHookMessageEx 同款挂点，替换实现 FUN_005d7a30 同款）：
+// 微信发朋友圈时以 task.appInfo 声明来源应用，随 SnsObject 的 appinfo 字段编入（即"来自 XXX"尾巴）。
+// 生效值：发帖页单次选择（PostSession）优先，回落默认 tailAppId（WCR FUN_005d835c 同款优先级）。
+// 未注册一律走原实现（WCR isRegisteredAppID: 校验同款）。8.0.60 头文件交叉验证：
+// WCUploadTask -appInfo、WCAppInfo -init/-setAppID:/-setAppName: 均存在
+static IMP orig_uploadTask_appInfo = NULL;
+
+// appid → 预设名（未注册返回 nil；WCR nameForAppID: 同款语义）
+static NSString *MioTailNameForAppId(MomentsConfig *cfg, NSString *appId) {
+    for (NSDictionary *p in [cfg effectiveTailPresets]) {
+        if ([p isKindOfClass:[NSDictionary class]] && [appId isEqualToString:p[@"appId"]]) {
+            NSString *n = p[@"name"];
+            if ([n isKindOfClass:[NSString class]] && n.length > 0) return n;
+        }
+    }
+    return nil;
+}
+
+static id hooked_uploadTask_appInfo(id self, SEL _cmd) {
+    @try {
+        MomentsConfig *cfg = [MomentsConfig shared];
+        // PostSession 优先（has 与值分离：「本次无」= has 且值为空 → 直接 orig，不回落默认，
+        // WCR FUN_005d835c 同款）；默认分支 gate 总开关（总开关关=整体不生效）
+        NSString *appId = nil;
+        if ([MomentsConfig tailHasPostSession]) {
+            appId = [MomentsConfig tailPostSessionAppId] ?: @"";
+        } else if (cfg.tailEnabled) {
+            appId = cfg.tailAppId;
+        }
+        appId = [appId stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (appId.length == 0) {
+            return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
+        }
+        // 未注册视为无尾巴（输入端已完美匹配+自愈，此处兜底）
+        NSString *name = MioTailNameForAppId(cfg, appId);
+        if (!name) return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
+
+        Class appInfoCls = objc_getClass("WCAppInfo");
+        if (!appInfoCls) return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
+        id info = [[appInfoCls alloc] init];
+        ((void(*)(id, SEL, id))objc_msgSend)(info, NSSelectorFromString(@"setAppID:"), appId);
+        ((void(*)(id, SEL, id))objc_msgSend)(info, NSSelectorFromString(@"setAppName:"), name);
+        return info;
+    } @catch (NSException *e) {
+        return ((id(*)(id, SEL))orig_uploadTask_appInfo)(self, _cmd);
+    }
+}
+
+static void MioInstallTailHook(void) {
+    Class cls = objc_getClass("WCUploadTask");
+    if (!cls) return;
+    SEL sel = NSSelectorFromString(@"appInfo");
+    Method m = class_getInstanceMethod(cls, sel);
+    if (!m) return;
+    orig_uploadTask_appInfo = method_getImplementation(m);
+    method_setImplementation(m, (IMP)hooked_uploadTask_appInfo);
+}
+
+#pragma mark - 发帖页单次选择（WCR PostSession 同款机制）
+
+// hook WCNewCommitViewController（8.0.60 头文件实证：init/initWithImages:contacts:/initWithSightDraft:/
+// initWithTextType/reloadData/viewDidAppear: 及 ivar m_tableViewManager 均存在）：
+// - 4 个 init：orig 后重置 PostSession（WCR FUN_005d7d10/df8/f44/8060 同款，新发帖会话回默认）
+// - viewDidAppear: / reloadData：注入「小尾巴」cell（WCR FUN_005d81a4/8148 → 005d8d4c 同款，
+//   先删旧再注入防重复；不 hook addSection: 宽域兜底——reloadData 重建 sections 后 sync 会补注）
+// - class_addMethod 点击回调：present 选择页（SettingMomentTailController postSessionMode）
+static IMP orig_commit_init = NULL;
+static IMP orig_commit_initImages = NULL;
+static IMP orig_commit_initSight = NULL;
+static IMP orig_commit_initText = NULL;
+static IMP orig_commit_viewDidAppear = NULL;
+static IMP orig_commit_reloadData = NULL;
+
+// 朋友圈入口同款光圈图标（SVG 48x48 直录：外圆 r20 + 内圆 r7 + 8 条叶片线，stroke 4 圆角）
+// 颜色/线宽按发帖页官方图标实测调细：官方黑 + stroke 2.5（25pt 下约 1.3pt），融合官方观感
+static UIImage *MioMomentsGlyphImage(CGFloat size) {
+    UIGraphicsImageRendererFormat *fmt = [[UIGraphicsImageRendererFormat alloc] init];
+    fmt.scale = [UIScreen mainScreen].scale;
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size) format:fmt];
+    return [r imageWithActions:^(UIGraphicsImageRendererContext *rc) {
+        CGContextRef c = rc.CGContext;
+        CGContextScaleCTM(c, size / 48.0, size / 48.0);
+        CGContextSetStrokeColorWithColor(c, [UIColor blackColor].CGColor); // 官方黑
+        CGContextSetLineWidth(c, 2.5);
+        CGContextSetLineCap(c, kCGLineCapRound);
+        CGContextSetLineJoin(c, kCGLineJoinRound);
+        CGContextStrokeEllipseInRect(c, CGRectMake(4, 4, 40, 40));   // 外圆
+        CGContextStrokeEllipseInRect(c, CGRectMake(17, 17, 14, 14)); // 内圆
+        CGPoint blades[8][2] = {
+            {{31, 7}, {31, 24}},
+            {{16.6357, 6.63599}, {30.7779, 20.7781}},
+            {{7, 17}, {24, 17}},
+            {{20.3643, 17.636}, {6.22212, 31.7781}},
+            {{17, 25}, {17, 42}},
+            {{17.6357, 27.636}, {31.7779, 41.7781}},
+            {{24, 31}, {42, 31}},
+            {{42.3643, 16.636}, {28.2221, 30.7781}},
+        };
+        for (int i = 0; i < 8; i++) {
+            CGContextMoveToPoint(c, blades[i][0].x, blades[i][0].y);
+            CGContextAddLineToPoint(c, blades[i][1].x, blades[i][1].y);
+            CGContextStrokePath(c);
+        }
+    }];
+}
+static UIImage *gMioTailGlyph = nil; // 图标不可变，绘制一次复用
+
+// 定时发送行 clock 图标（发帖页官方图标同规格：48 画布 + 官方黑 + stroke 2.5 圆角，
+// 对齐所在位置/提醒谁看/谁可以看的线条观感）：外圆 r18 + 指针两针（上针 + 右下针）
+static UIImage *MioMomentsClockGlyphImage(CGFloat size) {
+    UIGraphicsImageRendererFormat *fmt = [[UIGraphicsImageRendererFormat alloc] init];
+    fmt.scale = [UIScreen mainScreen].scale;
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size) format:fmt];
+    return [r imageWithActions:^(UIGraphicsImageRendererContext *rc) {
+        CGContextRef c = rc.CGContext;
+        CGContextScaleCTM(c, size / 48.0, size / 48.0);
+        CGContextSetStrokeColorWithColor(c, [UIColor blackColor].CGColor); // 官方黑
+        CGContextSetLineWidth(c, 2.5);
+        CGContextSetLineCap(c, kCGLineCapRound);
+        CGContextSetLineJoin(c, kCGLineJoinRound);
+        CGContextStrokeEllipseInRect(c, CGRectMake(6, 6, 36, 36)); // 表盘外圆
+        CGPoint hands[2][2] = {
+            {{24, 13.5}, {24, 25.5}},  // 分针（竖直向上）
+            {{24, 25.5}, {30.5, 29}},  // 时针（右下）
+        };
+        for (int i = 0; i < 2; i++) {
+            CGContextMoveToPoint(c, hands[i][0].x, hands[i][0].y);
+            CGContextAddLineToPoint(c, hands[i][1].x, hands[i][1].y);
+            CGContextStrokePath(c);
+        }
+    }];
+}
+static UIImage *gMioSchedGlyph = nil; // 图标不可变，绘制一次复用
+
+// cell 右值：本次优先（「本次无」/名字），否则默认（"默认: 名字"）
+static NSString *MioTailCellRightValue(void) {
+    MomentsConfig *cfg = [MomentsConfig shared];
+    if ([MomentsConfig tailHasPostSession]) {
+        NSString *v = [[MomentsConfig tailPostSessionAppId] ?: @""
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (v.length == 0) return @"本次无";
+        return MioTailNameForAppId(cfg, v) ?: v;
+    }
+    NSString *appId = [cfg.tailAppId stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (appId.length == 0) return @"默认: 无";
+    return [NSString stringWithFormat:@"默认: %@",
+        MioTailNameForAppId(cfg, appId) ?: appId];
+}
+
+// 注入/刷新「小尾巴」cell 到发帖页第一 section（WCR FUN_005d8d4c 同款思路）。
+// 每次先删旧注入 cell 再注入新的（右值实时跟随 PostSession；也天然防重）。
+// 不查 cell title：WCTableViewCellManager 无 m_title 属性（8.0.60 头文件实证，title 在
+// _cellConfig 内部），曾因查重失效致双入口。旧 cell 挂 VC 关联（RETAIN——sections 重建后原
+// cell 被微信释放，ASSIGN 会悬挂，getCellAt 比较指针会崩）
+static char kMioTailCommitCellKey;
+
+static void MioTailSyncCommitCell(id vc) {
+    @try {
+        if (!vc || ![MomentsConfig shared].tailEnabled) return;
+        // 取 m_tableViewManager（getter 优先，KVC 兜底；WCR FUN_005d9250 同款）
+        id mgr = nil;
+        SEL mgrSel = NSSelectorFromString(@"m_tableViewManager");
+        if ([vc respondsToSelector:mgrSel]) {
+            mgr = ((id(*)(id, SEL))objc_msgSend)(vc, mgrSel);
+        } else {
+            @try { mgr = [vc valueForKey:@"m_tableViewManager"]; } @catch (NSException *e) { mgr = nil; }
+        }
+        if (!mgr) return;
+        SEL cntSel = NSSelectorFromString(@"getSectionCount");
+        SEL atSel = NSSelectorFromString(@"getSectionAt:");
+        if (![mgr respondsToSelector:cntSel] || ![mgr respondsToSelector:atSel]) return;
+        NSUInteger cnt = ((NSUInteger(*)(id, SEL))objc_msgSend)(mgr, cntSel);
+        if (cnt == 0) return;
+        id sec0 = ((id(*)(id, SEL, long))objc_msgSend)(mgr, atSel, 0);
+        if (!sec0) return;
+        SEL allCellsSel = NSSelectorFromString(@"getAllCells");
+        if (![sec0 respondsToSelector:allCellsSel]) return;
+        Class cellCls = objc_getClass("WCTableViewCellManager");
+        SEL mkSel = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:");
+        // 图标变体（WCTableViewCellManager.h L69 头文件实证）：左侧光圈图标 + 右值，微信发现页管理同款布局
+        SEL mkIconSel = NSSelectorFromString(@"normalCellForSel:target:leftImage:title:badge:rightValue:rightImage:withRightRedDot:selected:");
+        SEL clickSel = NSSelectorFromString(@"mioOnTailCell:");
+        SEL addSel = NSSelectorFromString(@"addCell:");
+        if (!cellCls || ![cellCls respondsToSelector:mkSel] || ![sec0 respondsToSelector:addSel]) return;
+        // 先删旧注入 cell（右值跟随 PostSession 实时刷新）
+        id injected = objc_getAssociatedObject(vc, &kMioTailCommitCellKey);
+        SEL cellCntSel = NSSelectorFromString(@"getCellCount");
+        SEL cellAtSel = NSSelectorFromString(@"getCellAt:");
+        SEL removeAtSel = NSSelectorFromString(@"removeCellAt:");
+        if (injected && [sec0 respondsToSelector:cellCntSel]
+            && [sec0 respondsToSelector:cellAtSel] && [sec0 respondsToSelector:removeAtSel]) {
+            NSUInteger n = ((NSUInteger(*)(id, SEL))objc_msgSend)(sec0, cellCntSel);
+            for (NSUInteger i = 0; i < n; i++) {
+                id c = ((id(*)(id, SEL, long))objc_msgSend)(sec0, cellAtSel, (long)i);
+                if (c == injected) {
+                    ((void(*)(id, SEL, long))objc_msgSend)(sec0, removeAtSel, (long)i);
+                    break;
+                }
+            }
+        }
+        // 注入新 cell（右值=当前生效状态）；优先图标构造器（宿主类以探测为准），缺失回退普通构造
+        if (!gMioTailGlyph) gMioTailGlyph = MioMomentsGlyphImage(25);
+        id cell = nil;
+        Class iconCls[2] = { objc_getClass("WCTableViewNormalCellManager"), cellCls };
+        for (int i = 0; i < 2 && !cell; i++) {
+            if (iconCls[i] && [iconCls[i] respondsToSelector:mkIconSel]) {
+                cell = ((id(*)(id, SEL, SEL, id, UIImage *, id, id, id, id, BOOL, BOOL))objc_msgSend)(iconCls[i],
+                    mkIconSel, clickSel, vc, gMioTailGlyph, @"小尾巴", nil, MioTailCellRightValue(), nil, NO, NO);
+            }
+        }
+        if (!cell) {
+            cell = ((id(*)(id, SEL, SEL, id, id, id))objc_msgSend)((id)cellCls, mkSel,
+                clickSel, vc, @"小尾巴", MioTailCellRightValue());
+        }
+        objc_setAssociatedObject(vc, &kMioTailCommitCellKey, cell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        ((void(*)(id, SEL, id))objc_msgSend)(sec0, addSel, cell);
+        // manager 级刷新（不经过 VC reloadData hook，无递归）
+        SEL rtvSel = NSSelectorFromString(@"reloadTableView");
+        if ([mgr respondsToSelector:rtvSel]) ((void(*)(id, SEL))objc_msgSend)(mgr, rtvSel);
+    } @catch (NSException *e) {
+    }
+}
+
+// 选择页主动推送的刷新入口（applyPostSessionAppId 后立即调用，右值即时更新）
+static void hooked_commit_syncTailCell(id self, SEL _cmd) {
+    MioTailSyncCommitCell(self);
+}
+
+// cell 点击回调（WCR WCRefineOnMomentsTailCell: → FUN_005dabb8 同款：resignInput → modal nav 包选择页）
+static void hooked_commit_tailCellClicked(id self, SEL _cmd, id cellMgr) {
+    @try {
+        if (![MomentsConfig shared].tailEnabled) {
+            WPShowToast(@"小尾巴已关闭");
+            return;
+        }
+        Class pickerCls = objc_getClass("SettingMomentTailController");
+        if (!pickerCls) return;
+        SEL riSel = NSSelectorFromString(@"resignInput");
+        if ([self respondsToSelector:riSel]) ((void(*)(id, SEL))objc_msgSend)(self, riSel);
+        id picker = [[pickerCls alloc] init];
+        SEL psmSel = NSSelectorFromString(@"setPostSessionMode:");
+        if ([picker respondsToSelector:psmSel]) {
+            ((void(*)(id, SEL, BOOL))objc_msgSend)(picker, psmSel, YES);
+        }
+        // dismiss 后刷新发帖页显示（WCR onPick block 同款：调 reloadData → sync 重建 cell）
+        SEL sctSel = NSSelectorFromString(@"setMioCommitTarget:");
+        if ([picker respondsToSelector:sctSel]) {
+            ((void(*)(id, SEL, id))objc_msgSend)(picker, sctSel, self);
+        }
+        Class navCls = objc_getClass("MMUINavigationController") ?: [UINavigationController class];
+        id nav = [[navCls alloc] initWithRootViewController:picker];
+        ((void(*)(id, SEL, long))objc_msgSend)(nav,
+            NSSelectorFromString(@"setModalPresentationStyle:"), (long)1);
+        if ([self respondsToSelector:@selector(presentViewController:animated:completion:)]) {
+            ((void(*)(id, SEL, id, BOOL, id))objc_msgSend)(self,
+                NSSelectorFromString(@"presentViewController:animated:completion:"), nav, YES, nil);
+        }
+    } @catch (NSException *e) {
+    }
+}
+
+// 4 个 init：orig 后重置 PostSession + 定时会话（WCR 同款：新建发帖页=新会话）
+static id hooked_commit_init(id self, SEL _cmd) {
+    id r = ((id(*)(id, SEL))orig_commit_init)(self, _cmd);
+    [MomentsConfig tailResetPostSession];
+    [MomentsScheduler schedSetPendingFireDate:nil];
+    return r;
+}
+static id hooked_commit_initImages(id self, SEL _cmd, id a1, id a2) {
+    id r = ((id(*)(id, SEL, id, id))orig_commit_initImages)(self, _cmd, a1, a2);
+    [MomentsConfig tailResetPostSession];
+    [MomentsScheduler schedSetPendingFireDate:nil];
+    return r;
+}
+static id hooked_commit_initSight(id self, SEL _cmd, id a1) {
+    id r = ((id(*)(id, SEL, id))orig_commit_initSight)(self, _cmd, a1);
+    [MomentsConfig tailResetPostSession];
+    [MomentsScheduler schedSetPendingFireDate:nil];
+    return r;
+}
+static id hooked_commit_initText(id self, SEL _cmd) {
+    id r = ((id(*)(id, SEL))orig_commit_initText)(self, _cmd);
+    [MomentsConfig tailResetPostSession];
+    [MomentsScheduler schedSetPendingFireDate:nil];
+    return r;
+}
+
+static void MioTailSyncCommitCell(id vc); // 前置声明（定义在下方小尾巴区块）
+static void MioSchedSyncCommitCell(id vc); // 前置声明（定义在下方定时区块）
+
+static void hooked_commit_viewDidAppear(id self, SEL _cmd, BOOL animated) {
+    ((void(*)(id, SEL, BOOL))orig_commit_viewDidAppear)(self, _cmd, animated);
+    MioTailSyncCommitCell(self);
+    MioSchedSyncCommitCell(self);
+}
+
+static id hooked_commit_reloadData(id self, SEL _cmd) {
+    id r = ((id(*)(id, SEL))orig_commit_reloadData)(self, _cmd);
+    MioTailSyncCommitCell(self);
+    MioSchedSyncCommitCell(self);
+    return r;
+}
+
+static void MioInstallTailCommitHooks(void) {
+    Class cls = objc_getClass("WCNewCommitViewController");
+    if (!cls) return;
+    // 点击回调挂到发帖页（WCR class_addMethod 同款）
+    class_addMethod(cls, NSSelectorFromString(@"mioOnTailCell:"),
+                    (IMP)hooked_commit_tailCellClicked, "v@:@");
+    // 单次选择后选择页主动推送的刷新入口（不依赖 dismiss→reloadData 回调链）
+    class_addMethod(cls, NSSelectorFromString(@"mioSyncTailCell"),
+                    (IMP)hooked_commit_syncTailCell, "v@:");
+
+    struct { const char *sel; IMP hook; IMP *orig; } items[] = {
+        { "init",                        (IMP)hooked_commit_init,        &orig_commit_init        },
+        { "initWithImages:contacts:",    (IMP)hooked_commit_initImages,  &orig_commit_initImages  },
+        { "initWithSightDraft:",         (IMP)hooked_commit_initSight,   &orig_commit_initSight   },
+        { "initWithTextType",            (IMP)hooked_commit_initText,    &orig_commit_initText    },
+        { "viewDidAppear:",              (IMP)hooked_commit_viewDidAppear, &orig_commit_viewDidAppear },
+        { "reloadData",                  (IMP)hooked_commit_reloadData,  &orig_commit_reloadData  },
+    };
+    for (NSUInteger i = 0; i < sizeof(items) / sizeof(items[0]); i++) {
+        SEL sel = NSSelectorFromString([NSString stringWithUTF8String:items[i].sel]);
+        Method m = class_getInstanceMethod(cls, sel);
+        if (!m) continue;
+        *items[i].orig = method_getImplementation(m);
+        method_setImplementation(m, items[i].hook);
+    }
+}
+
+#pragma mark - 定时发送（WCR MomentsScheduled 同款：发帖页 cell + addUploadTask 拦截）
+
+// 拦截 -[WCUploadMgr addUploadTask:]（WCR 同款挂点）：发帖页点发表 → 微信构建 WCUploadTask 提交。
+// 发帖页已设定定时时间（PostSession 同款内存会话）且开关开 → capture 转定时任务（不调原实现，
+// 帖子不立即发出）；返回 nil（WCR 实证同款，调用方容忍）。tick 发布时重新走本方法但会话为空 → 放行
+static IMP orig_uploadMgr_addTask = NULL;
+
+static id hooked_uploadMgr_addTask(id self, SEL _cmd, id task) {
+    @try {
+        if ([MomentsScheduler captureUploadTask:task]) return nil;
+    } @catch (NSException *e) {}
+    return ((id(*)(id, SEL, id))orig_uploadMgr_addTask)(self, _cmd, task);
+}
+
+static void MioInstallSchedAddTaskHook(void) {
+    Class cls = objc_getClass("WCUploadMgr");
+    if (!cls) return;
+    SEL sel = NSSelectorFromString(@"addUploadTask:");
+    Method m = class_getInstanceMethod(cls, sel);
+    if (!m) return;
+    orig_uploadMgr_addTask = method_getImplementation(m);
+    method_setImplementation(m, (IMP)hooked_uploadMgr_addTask);
+}
+
+// ── 发帖页「定时发送」cell（小尾巴同款注入模式：先删旧再注入防重复）──
+static char kMioSchedCommitCellKey;
+
+static NSString *MioSchedCellRightValue(void) {
+    NSDate *d = [MomentsScheduler schedPendingFireDate];
+    if (!d) return @"不定时";
+    NSDateFormatter *f = [[NSDateFormatter alloc] init];
+    f.dateFormat = @"MM-dd HH:mm";
+    return [f stringFromDate:d];
+}
+
+static void MioSchedSyncCommitCell(id vc) {
+    @try {
+        if (!vc || ![MomentsConfig shared].schedEnabled) return;
+        id mgr = nil;
+        SEL mgrSel = NSSelectorFromString(@"m_tableViewManager");
+        if ([vc respondsToSelector:mgrSel]) {
+            mgr = ((id(*)(id, SEL))objc_msgSend)(vc, mgrSel);
+        } else {
+            @try { mgr = [vc valueForKey:@"m_tableViewManager"]; } @catch (NSException *e) { mgr = nil; }
+        }
+        if (!mgr) return;
+        SEL cntSel = NSSelectorFromString(@"getSectionCount");
+        SEL atSel = NSSelectorFromString(@"getSectionAt:");
+        if (![mgr respondsToSelector:cntSel] || ![mgr respondsToSelector:atSel]) return;
+        NSUInteger cnt = ((NSUInteger(*)(id, SEL))objc_msgSend)(mgr, cntSel);
+        if (cnt == 0) return;
+        id sec0 = ((id(*)(id, SEL, long))objc_msgSend)(mgr, atSel, 0);
+        if (!sec0) return;
+        SEL allCellsSel = NSSelectorFromString(@"getAllCells");
+        if (![sec0 respondsToSelector:allCellsSel]) return;
+        Class cellCls = objc_getClass("WCTableViewCellManager");
+        SEL mkSel = NSSelectorFromString(@"normalCellForSel:target:title:rightValue:");
+        // 图标变体（WCTableViewCellManager.h L69 头文件实证）：对齐所在位置/提醒谁看等官方行
+        SEL mkIconSel = NSSelectorFromString(@"normalCellForSel:target:leftImage:title:badge:rightValue:rightImage:withRightRedDot:selected:");
+        SEL clickSel = NSSelectorFromString(@"mioOnSchedCell:");
+        SEL addSel = NSSelectorFromString(@"addCell:");
+        if (!cellCls || ![cellCls respondsToSelector:mkSel] || ![sec0 respondsToSelector:addSel]) return;
+        // 先删旧注入 cell（右值跟随会话实时刷新）
+        id injected = objc_getAssociatedObject(vc, &kMioSchedCommitCellKey);
+        SEL cellCntSel = NSSelectorFromString(@"getCellCount");
+        SEL cellAtSel = NSSelectorFromString(@"getCellAt:");
+        SEL removeAtSel = NSSelectorFromString(@"removeCellAt:");
+        if (injected && [sec0 respondsToSelector:cellCntSel]
+            && [sec0 respondsToSelector:cellAtSel] && [sec0 respondsToSelector:removeAtSel]) {
+            NSUInteger n = ((NSUInteger(*)(id, SEL))objc_msgSend)(sec0, cellCntSel);
+            for (NSUInteger i = 0; i < n; i++) {
+                id c = ((id(*)(id, SEL, long))objc_msgSend)(sec0, cellAtSel, (long)i);
+                if (c == injected) {
+                    ((void(*)(id, SEL, long))objc_msgSend)(sec0, removeAtSel, (long)i);
+                    break;
+                }
+            }
+        }
+        // 注入新 cell（右值=定时状态）；优先图标构造器（clock 图标对齐官方行），缺失回退普通构造
+        if (!gMioSchedGlyph) gMioSchedGlyph = MioMomentsClockGlyphImage(25);
+        id cell = nil;
+        Class iconCls[2] = { objc_getClass("WCTableViewNormalCellManager"), cellCls };
+        for (int i = 0; i < 2 && !cell; i++) {
+            if (iconCls[i] && [iconCls[i] respondsToSelector:mkIconSel]) {
+                cell = ((id(*)(id, SEL, SEL, id, UIImage *, id, id, id, id, BOOL, BOOL))objc_msgSend)(iconCls[i],
+                    mkIconSel, clickSel, vc, gMioSchedGlyph, @"定时发送", nil, MioSchedCellRightValue(), nil, NO, NO);
+            }
+        }
+        if (!cell) {
+            cell = ((id(*)(id, SEL, SEL, id, id, id))objc_msgSend)((id)cellCls, mkSel,
+                clickSel, vc, @"定时发送", MioSchedCellRightValue());
+        }
+        objc_setAssociatedObject(vc, &kMioSchedCommitCellKey, cell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        ((void(*)(id, SEL, id))objc_msgSend)(sec0, addSel, cell);
+        SEL rtvSel = NSSelectorFromString(@"reloadTableView");
+        if ([mgr respondsToSelector:rtvSel]) ((void(*)(id, SEL))objc_msgSend)(mgr, rtvSel);
+    } @catch (NSException *e) {
+    }
+}
+
+// 选择页主动推送的刷新入口（设定/取消时间后立即调用，右值即时更新）
+static void hooked_commit_syncSchedCell(id self, SEL _cmd) {
+    MioSchedSyncCommitCell(self);
+}
+
+// 时间选择面板：WCR 同款底部弹出六轮选择器（确定时内建 ≥1 分钟 / ≤1 年校验）
+static void MioSchedPresentDatePicker(id vc) {
+    [MioAlertHelper showDateTimePickerPanel:@"选择发送时间"
+                                initialDate:nil
+                                     onPick:^(NSDate *date) {
+        [MomentsScheduler schedSetPendingFireDate:date];
+        NSDateFormatter *f = [[NSDateFormatter alloc] init];
+        f.dateFormat = @"MM-dd HH:mm";
+        WPShowToast([NSString stringWithFormat:@"将于 %@ 定时发送", [f stringFromDate:date]]);
+        SEL sync = NSSelectorFromString(@"mioSyncSchedCell");
+        if ([vc respondsToSelector:sync]) ((void(*)(id, SEL))objc_msgSend)(vc, sync);
+    }];
+}
+
+// cell 点击回调：未设定直接选时间；已设定出菜单（重新选择/取消定时）
+static void hooked_commit_schedCellClicked(id self, SEL _cmd, id cellMgr) {
+    @try {
+        if (![MomentsConfig shared].schedEnabled) {
+            WPShowToast(@"定时发送已关闭");
+            return;
+        }
+        SEL riSel = NSSelectorFromString(@"resignInput");
+        if ([self respondsToSelector:riSel]) ((void(*)(id, SEL))objc_msgSend)(self, riSel);
+        if (![MomentsScheduler schedPendingFireDate]) {
+            MioSchedPresentDatePicker(self);
+            return;
+        }
+        [MioAlertHelper showMenuAlert:[NSString stringWithFormat:@"定时发送 · %@", MioSchedCellRightValue()]
+                              buttons:@[@"重新选择时间", @"取消定时（立即照常发表）"]
+                             onButton:^(NSInteger index) {
+            if (index == 0) {
+                MioSchedPresentDatePicker(self);
+                return;
+            }
+            if (index == 1) {
+                [MomentsScheduler schedSetPendingFireDate:nil];
+                WPShowToast(@"已取消定时，发表将立即发出");
+                SEL sync = NSSelectorFromString(@"mioSyncSchedCell");
+                if ([self respondsToSelector:sync]) ((void(*)(id, SEL))objc_msgSend)(self, sync);
+            }
+        }];
+    } @catch (NSException *e) {
+    }
+}
+
+static void MioInstallSchedCommitHooks(void) {
+    Class cls = objc_getClass("WCNewCommitViewController");
+    if (!cls) return;
+    // 点击回调 + 刷新入口挂到发帖页（小尾巴同款 class_addMethod）
+    class_addMethod(cls, NSSelectorFromString(@"mioOnSchedCell:"),
+                    (IMP)hooked_commit_schedCellClicked, "v@:@");
+    class_addMethod(cls, NSSelectorFromString(@"mioSyncSchedCell"),
+                    (IMP)hooked_commit_syncSchedCell, "v@:");
 }
 
 #pragma mark - 安装
@@ -835,13 +2502,28 @@ static void MioInstallFakeLikeHooks(void) {
     WPLog(@"Moments", @"[MomentsHook] install start");
     MioInstallPyqHooks();
     MioInstallHDHooks();
+    MioInstallDetailedTimeHook();
+    MioInstallTailHook();
+    MioInstallTailCommitHooks();
+    MioInstallSchedAddTaskHook();
+    MioInstallSchedCommitHooks();
+    [[MomentsScheduler shared] start];
     MioInstallFakeLikeHooks();
+    MioInstallFakeDataLayerHooks();
+    MioFakeInstallActiveRefresh();
+    MioAutoLikeInstallRefreshLoop();
     // 重挂自检（防微信晚到初始化覆盖 IMP）
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ MioRehookCheck(1); });
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(45 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ MioRehookCheck(2); });
     WPLog(@"Moments", @"[MomentsHook] install complete");
+    // install 期日志在文件窗口开之前必然丢失：30s 后（appReady 已过、窗口已开）补打安装摘要
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(30 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        WPLog(@"Moments", @"[FakeLike] install summary: triggers %@, data-layer %@, active-refresh=on",
+              gFakeTriggerSummary, gFakeDLInstallSummary);
+    });
 }
 
 @end

@@ -1,9 +1,0 @@
-// _$s8WCRefine22WCRSuperFloatPetPlayerC5cellH33_055756806827E3E096844F7589DA8AF5LLSivpfi @ 021fd684
-
-undefined8
-__s8WCRefine22WCRSuperFloatPetPlayerC5cellH33_055756806827E3E096844F7589DA8AF5LLSivpfi(void)
-
-{
-  return 0xd0;
-}
-

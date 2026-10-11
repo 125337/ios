@@ -1,14 +1,46 @@
 #import "SideGroupsRailView.h"
 #import "SideGroupsConfig.h"
 #import "../../Core/WPUtility.h"
+#import "../../Config/WPColorUtil.h"
 
-@interface SideGroupsRailView ()
+// 侧边分组按钮：图标上/文字下竖排（无图标走系统默认布局，纯文字垂直居中）
+@interface SDRailButton : UIButton
+@property (nonatomic, copy) NSString *symbolName;
+@end
+@implementation SDRailButton
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.titleLabel.numberOfLines = 1;
+        self.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+    }
+    return self;
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!self.imageView.image) return;
+    CGFloat W = self.bounds.size.width, H = self.bounds.size.height;
+    if (W <= 0 || H <= 0) return;
+    CGSize ts = [self.titleLabel sizeThatFits:CGSizeMake(W - 4, CGFLOAT_MAX)];
+    CGFloat isz = 18, gap = 2;
+    CGFloat block = isz + gap + MIN(ts.height, 14);
+    CGFloat top = (H - block) / 2.0;
+    self.imageView.contentMode = UIViewContentModeScaleAspectFit;
+    self.imageView.frame = CGRectMake((W - isz) / 2.0, top, isz, isz);
+    self.titleLabel.frame = CGRectMake(2, top + isz + gap, W - 4, MIN(ts.height, 14));
+}
+@end
+
+@interface SideGroupsRailView () <UIGestureRecognizerDelegate>
 @property (nonatomic, strong) NSMutableArray<UIButton *> *buttons;
 @property (nonatomic, strong) NSMutableArray<UILabel *> *badges;
+@property (nonatomic, strong) NSMutableArray<UILabel *> *dots;
 @property (nonatomic, copy) NSArray<NSString *> *titles;
 @property (nonatomic, copy) NSArray<NSNumber *> *unread;
+@property (nonatomic, copy) NSArray<NSNumber *> *redDots;
+@property (nonatomic, copy) NSArray<NSString *> *tabIds;
 @property (nonatomic, copy) NSString *lastConfigSig;   // 宽/字号/颜色/暗色 变化检测
-@property (nonatomic, copy) NSString *lastDataSig;     // 标题/角标数据变化检测（每帧 pass 都会调 reload，没变直接返回）
+@property (nonatomic, copy) NSString *lastDataSig;     // 标题/角标/图标数据变化检测（每帧 pass 都会调 reload，没变直接返回）
 @end
 
 @implementation SideGroupsRailView
@@ -19,56 +51,94 @@
         _selectedIndex = 0;
         _buttons = [NSMutableArray array];
         _badges = [NSMutableArray array];
+        _dots = [NSMutableArray array];
         _titles = @[];
         _unread = @[];
         UILongPressGestureRecognizer *lp =
             [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(sdLongPress:)];
         [self addGestureRecognizer:lp];
+        // 侧边滑动切换（对齐电报全屏滑动 FUN__part13.c:16571-16853 提交阈值）：
+        // pan 挂 rail 本体 → 只有 rail 区域响应，列表/目录区域原生滚动不受影响
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self
+                                                                              action:@selector(sdHandlePan:)];
+        pan.cancelsTouchesInView = YES;
+        pan.delaysTouchesBegan = NO;
+        pan.delaysTouchesEnded = NO;
+        pan.maximumNumberOfTouches = 1;
+        pan.delegate = self;
+        [self addGestureRecognizer:pan];
     }
     return self;
 }
 
 #pragma mark - 颜色解析（浅/深色，空回落默认）
 
-// 默认外观对齐 XOS 侧栏深色玻璃：深底 + 白字 + 高亮选中
-- (UIColor *)sdBgColor {
-    SideGroupsConfig *cfg = [SideGroupsConfig shared];
-    NSString *hex = [WPUtility isDarkModeForView:self] ? cfg.sdRailBgColorDark : cfg.sdRailBgColor;
-    if (cfg.sdRailBgColorCustom && hex.length) return [WPUtility colorFromHex:hex] ?: self.sdDefaultBg;
-    return self.sdDefaultBg;
-}
-
+// 侧栏容器背景不画色（透出微信原生底色，明暗自适应）；仅选中胶囊可自定义
 - (UIColor *)sdSelColor {
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
-    NSString *hex = [WPUtility isDarkModeForView:self] ? cfg.sdRailSelColorDark : cfg.sdRailSelColor;
-    if (cfg.sdRailSelColorCustom && hex.length) return [WPUtility colorFromHex:hex] ?: self.sdDefaultSel;
+    BOOL dark = [WPUtility isDarkModeForView:self];
+    NSString *hex = dark ? cfg.sdRailSelColorDark : cfg.sdRailSelColor;
+    if (cfg.sdRailSelColorCustom && hex.length) {
+        return [WPColorUtil resolveColorFromLightHex:cfg.sdRailSelColor
+                                             darkHex:cfg.sdRailSelColorDark
+                                              isDark:dark
+                                        withStrategy:WPColorResolveStrict
+                                            fallback:self.sdDefaultSel];
+    }
     return self.sdDefaultSel;
 }
 
 - (UIColor *)sdTextColor {
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
-    NSString *hex = [WPUtility isDarkModeForView:self] ? cfg.sdRailTextColorDark : cfg.sdRailTextColor;
-    if (cfg.sdRailTextColorCustom && hex.length) return [WPUtility colorFromHex:hex] ?: UIColor.whiteColor;
-    return UIColor.whiteColor;
+    BOOL dark = [WPUtility isDarkModeForView:self];
+    NSString *hex = dark ? cfg.sdRailTextColorDark : cfg.sdRailTextColor;
+    if (cfg.sdRailTextColorCustom && hex.length) {
+        return [WPColorUtil resolveColorFromLightHex:cfg.sdRailTextColor
+                                             darkHex:cfg.sdRailTextColorDark
+                                              isDark:dark
+                                        withStrategy:WPColorResolveStrict
+                                            fallback:UIColor.whiteColor];
+    }
+    // 默认随微信底色：背景透出微信原生底色，浅色黑字 / 深色白字
+    return dark ? UIColor.whiteColor : UIColor.blackColor;
 }
 
-- (UIColor *)sdDefaultBg  { return [UIColor colorWithWhite:0 alpha:0.35]; }
-- (UIColor *)sdDefaultSel { return [UIColor colorWithWhite:1 alpha:0.28]; }
+- (UIColor *)sdDefaultSel {
+    // 选中胶囊默认随明暗：浅色用低透明黑（白 0.28 在微信浅底上贴不住），深色保持白 0.28
+    return [WPUtility isDarkModeForView:self]
+        ? [UIColor colorWithWhite:1 alpha:0.28]
+        : [UIColor colorWithWhite:0 alpha:0.12];
+}
 
 - (CGFloat)sdFontSize {
-    CGFloat f = [SideGroupsConfig shared].sdRailFontSize;
-    return MIN(MAX(f, 9), 20);
+    return [SideGroupsConfig resolveFontSize:12];
+}
+
+#pragma mark - 图标映射（SF Symbols 内置默认；无匹配 → 纯文字按钮）
+
++ (NSString *)sdSymbolForTabId:(NSString *)tabId {
+    static NSDictionary<NSString *, NSString *> *map;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        map = @{@"all":      @"line.3.horizontal",
+                @"pinned":   @"pin",
+                @"private":  @"person",
+                @"chatroom": @"person.2",
+                @"unread":   @"message",
+                @"atme":     @"at",
+                @"other":    @"tray",
+                @"brand":    @"doc.text"};
+    });
+    return map[tabId];
 }
 
 #pragma mark - 配置应用（签名比对）
 
 - (void)applyConfig {
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
-    NSString *sig = [NSString stringWithFormat:@"%d|%.1f|%.1f|%d|%@|%@|%@|%@|%@|%@|%@",
+    NSString *sig = [NSString stringWithFormat:@"%d|%.1f|%.1f|%d|%d|%@|%@|%@|%@|%@",
                      (int)cfg.sdPosition, cfg.sdRailWidth, cfg.sdRailFontSize,
-                     (int)cfg.sdShowUnreadBadge,
-                     cfg.sdRailBgColorCustom ? cfg.sdRailBgColor : @"",
-                     cfg.sdRailBgColorCustom ? cfg.sdRailBgColorDark : @"",
+                     (int)cfg.sdFontCustom, (int)cfg.sdShowUnreadBadge,
                      cfg.sdRailSelColorCustom ? cfg.sdRailSelColor : @"",
                      cfg.sdRailSelColorCustom ? cfg.sdRailSelColorDark : @"",
                      cfg.sdRailTextColorCustom ? cfg.sdRailTextColor : @"",
@@ -80,14 +150,22 @@
         appearanceChanged = YES;
     }
     if (!appearanceChanged) return; // 没变化不写任何外观（写回风暴防线）
-    self.backgroundColor = self.sdBgColor;
-    self.layer.cornerRadius = 10;
-    self.layer.masksToBounds = YES;
+    self.backgroundColor = UIColor.clearColor; // 背景让微信自己画
     [self rebuildButtonsIfNeeded];
     [self applySelectionAppearance];
 }
 
 #pragma mark - 按钮管理
+
+// 图标：按 tabId 映射 SF Symbol（模板渲染，tint 由 applySelectionAppearance 跟文字色统一设）
+- (void)sdApplySymbol:(SDRailButton *)b index:(NSInteger)i {
+    NSString *tid = (i < (NSInteger)self.tabIds.count) ? self.tabIds[i] : nil;
+    NSString *sym = tid ? [SideGroupsRailView sdSymbolForTabId:tid] : nil;
+    UIImage *img = sym ? [UIImage systemImageNamed:sym] : nil;
+    if (img) img = [img imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    [b setImage:img forState:UIControlStateNormal];
+    b.symbolName = sym;
+}
 
 - (void)rebuildButtonsIfNeeded {
     SideGroupsConfig *cfg = [SideGroupsConfig shared];
@@ -95,18 +173,19 @@
     while ((NSInteger)self.buttons.count > n) {
         UIButton *b = self.buttons.lastObject;
         UILabel *l = self.badges.lastObject;
-        [b removeFromSuperview]; [l removeFromSuperview];
-        [self.buttons removeLastObject]; [self.badges removeLastObject];
+        UILabel *d = self.dots.lastObject;
+        [b removeFromSuperview]; [l removeFromSuperview]; [d removeFromSuperview];
+        [self.buttons removeLastObject]; [self.badges removeLastObject]; [self.dots removeLastObject];
     }
     while ((NSInteger)self.buttons.count < n) {
         NSInteger i = (NSInteger)self.buttons.count;
-        UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+        SDRailButton *b = [SDRailButton buttonWithType:UIButtonTypeSystem];
         b.tag = i;
         b.titleLabel.font = [UIFont systemFontOfSize:self.sdFontSize];
-        b.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
         b.titleLabel.textAlignment = NSTextAlignmentCenter;
         b.backgroundColor = UIColor.clearColor;
         [b addTarget:self action:@selector(sdButtonTap:) forControlEvents:UIControlEventTouchUpInside];
+        [self sdApplySymbol:b index:i];
         [self addSubview:b];
         [self.buttons addObject:b];
 
@@ -120,13 +199,22 @@
         badge.hidden = !cfg.sdShowUnreadBadge;
         [self addSubview:badge];
         [self.badges addObject:badge];
+
+        // 免打扰红点（count==0 且组内存在免打扰未读时显示，数字 > 红点）
+        UILabel *dot = [[UILabel alloc] initWithFrame:CGRectZero];
+        dot.backgroundColor = [UIColor colorWithRed:1 green:0.23 blue:0.19 alpha:1];
+        dot.layer.cornerRadius = 4;
+        dot.layer.masksToBounds = YES;
+        dot.hidden = YES;
+        [self addSubview:dot];
+        [self.dots addObject:dot];
     }
     for (NSInteger i = 0; i < n; i++) {
-        UIButton *b = self.buttons[i];
+        SDRailButton *b = self.buttons[i];
         b.titleLabel.font = [UIFont systemFontOfSize:self.sdFontSize];
         [b setTitle:self.titles[i] forState:UIControlStateNormal];
-        [b setTitleEdgeInsets:UIEdgeInsetsZero];
         b.hidden = NO;
+        [self sdApplySymbol:b index:i];
         UILabel *badge = self.badges[i];
         badge.hidden = !cfg.sdShowUnreadBadge;
     }
@@ -135,13 +223,20 @@
 }
 
 - (void)refreshBadges {
+    BOOL show = [SideGroupsConfig shared].sdShowUnreadBadge;
     for (NSInteger i = 0; i < (NSInteger)self.badges.count; i++) {
         UILabel *badge = self.badges[i];
         NSUInteger count = 0;
         if (i < (NSInteger)self.unread.count) count = self.unread[i].unsignedIntegerValue;
-        badge.text = count > 99 ? @"99+" : (count > 0 ? [NSString stringWithFormat:@"%lu", (unsigned long)count] : @"");
-        badge.hidden = badge.text.length == 0;
+        BOOL hasNumber = count > 0;
+        BOOL hasDot = !hasNumber && i < (NSInteger)self.redDots.count
+                      && self.redDots[i].boolValue; // 数字 > 红点（WCR 双值显示优先级）
+        badge.text = hasNumber ? (count > 99 ? @"99+" : [NSString stringWithFormat:@"%lu", (unsigned long)count]) : @"";
+        badge.hidden = !hasNumber || !show;
         [badge sizeToFit];
+        UILabel *dot = self.dots[i];
+        dot.hidden = !hasDot || !show;
+        dot.frame = CGRectMake(0, 0, 8, 8); // 红点定尺寸，layoutSubviews 只管摆位
     }
     [self setNeedsLayout];
 }
@@ -154,20 +249,31 @@
         BOOL sel = (i == self.selectedIndex);
         b.backgroundColor = sel ? self.sdSelColor : UIColor.clearColor;
         b.layer.cornerRadius = 8;
+        // 模板图标渲染色由 button.tintColor 驱动（System 按钮默认蓝，只设 imageView.tintColor
+        // 会被按钮内部用自身 tintColor 重刷盖掉 → 蓝图标），文字色另走 setTitleColor
+        b.tintColor = sel ? UIColor.whiteColor : text;
         [b setTitleColor:sel ? UIColor.whiteColor : text forState:UIControlStateNormal];
     }
 }
 
 #pragma mark - 数据刷新
 
-- (void)reloadTitles:(NSArray<NSString *> *)titles badges:(NSArray<NSNumber *> *)unread {
-    // 数据签名门闩：每帧 pass 都会调，标题/角标没变直接返回（setNeedsLayout 会引发布局风暴）
-    NSString *sig = [NSString stringWithFormat:@"%@|%@", [titles componentsJoinedByString:@"\x1F"],
-                     [unread componentsJoinedByString:@"\x1F"]];
+- (void)reloadTitles:(NSArray<NSString *> *)titles
+              badges:(NSArray<NSNumber *> *)unread
+             redDots:(NSArray<NSNumber *> *)redDots
+              tabIds:(NSArray<NSString *> *)tabIds {
+    // 数据签名门闩：每帧 pass 都会调，标题/角标/图标映射没变直接返回（setNeedsLayout 会引发布局风暴）
+    NSString *sig = [NSString stringWithFormat:@"%@|%@|%@|%@",
+                     [titles componentsJoinedByString:@"\x1F"],
+                     [unread componentsJoinedByString:@"\x1F"],
+                     [redDots componentsJoinedByString:@"\x1F"],
+                     [tabIds componentsJoinedByString:@"\x1F"]];
     if ([sig isEqualToString:self.lastDataSig]) return;
     self.lastDataSig = sig;
     self.titles = [titles copy];
     self.unread = [unread copy] ?: @[];
+    self.redDots = [redDots copy] ?: @[];
+    self.tabIds = [tabIds copy] ?: @[];
     [self rebuildButtonsIfNeeded];
     [self applySelectionAppearance];
 }
@@ -186,19 +292,26 @@
     CGFloat W = self.bounds.size.width;
     CGFloat H = self.bounds.size.height;
     if (W <= 0 || H <= 0) return;
-    CGFloat rowW = W - 8;
-    CGFloat rowH = MIN(rowW, (H - 12) / n);
+    // 每格固定 46×62（图标+文字形态）；rail 空间不足时高度均分兜底，避免溢出
+    CGFloat rowW = MIN(W - 8, 46.0);
+    CGFloat rowH = MIN(62.0, (H - 12) / n);
     CGFloat total = rowH * n;
     CGFloat y = (H - total) / 2.0;
+    CGFloat x = (W - rowW) / 2.0;
     for (NSInteger i = 0; i < n; i++) {
         UIButton *b = self.buttons[i];
-        b.frame = CGRectMake(4, y + i * rowH, rowW, rowH);
+        b.frame = CGRectMake(x, y + i * rowH, rowW, rowH);
         UILabel *badge = self.badges[i];
         CGSize bs = badge.frame.size;
         if (bs.width < 12) bs.width = 12;
         if (bs.height < 12) bs.height = 12;
         badge.frame = CGRectMake(CGRectGetMaxX(b.frame) - bs.width - 1,
                                  CGRectGetMinY(b.frame) - 3, bs.width, bs.height);
+        UILabel *dot = self.dots[i];
+        if (!dot.hidden) {
+            dot.frame = CGRectMake(CGRectGetMaxX(b.frame) - 8 - 1,
+                                   CGRectGetMinY(b.frame) - 2, 8, 8);
+        }
     }
 }
 
@@ -219,6 +332,47 @@
             return;
         }
     }
+}
+
+#pragma mark - 侧边滑动切换（对齐电报全屏滑动 FUN__part13.c:16698-16807 同参）
+
+// 竖向占优门闩（电报横向门闩 16766-16772 竖版）：竖（速度或位移）必须 > 横×1.2，
+// 且开关开启才响应；rail 内无竖向滚动视图，门闩仅防斜滑误触
+- (BOOL)gestureRecognizerShouldBegin:(UIPanGestureRecognizer *)ges {
+    if (![SideGroupsConfig shared].sdRailSwipe) return NO;
+    CGPoint vel = [ges velocityInView:self];
+    CGPoint trans = [ges translationInView:self];
+    CGFloat ay = fabs(vel.y) > 1.0 ? vel.y : trans.y;
+    CGFloat ax = fabs(vel.x) > 1.0 ? vel.x : trans.x;
+    return fabs(ay) > fabs(ax) * 1.2;
+}
+
+// 端点提交制（电报 16789-16807 同阈值）：|Δy|>50 或 (|Δy|>12 且 |velY|>450) 或 |velY|>800，需同向；
+// 上滑=下一组（反向行驶翻转），循环滑动取模回绕；rail 无预览动画，直接提交选中
+- (void)sdHandlePan:(UIPanGestureRecognizer *)pan {
+    if (pan.state != UIGestureRecognizerStateEnded &&
+        pan.state != UIGestureRecognizerStateCancelled) return;
+    SideGroupsConfig *cfg = [SideGroupsConfig shared];
+    if (!cfg.sdRailSwipe) return;
+    NSInteger count = (NSInteger)self.buttons.count;
+    if (count < 2) return;
+    CGFloat dy = [pan translationInView:self].y;
+    CGFloat vel = [pan velocityInView:self].y;
+    NSInteger dir = (dy < 0) ? +1 : -1;
+    if (cfg.sdSwipeReverse) dir = -dir;
+    NSInteger idx = self.selectedIndex + dir;
+    if (cfg.sdSwipeLoop) {
+        idx = ((idx % count) + count) % count;
+    } else if (idx < 0 || idx >= count) {
+        idx = self.selectedIndex;
+    }
+    BOOL sameDir = (vel * dy > 0);
+    BOOL commit = sameDir && (fabs(dy) > 50 || (fabs(dy) > 12 && fabs(vel) > 450) || fabs(vel) > 800);
+    commit = commit && idx != self.selectedIndex;
+    if (pan.state == UIGestureRecognizerStateCancelled) commit = NO;
+    if (!commit) return;
+    self.selectedIndex = idx; // 触发选中态外观刷新（同 tap 路径）
+    if (self.onSelectIndex) self.onSelectIndex(idx);
 }
 
 @end

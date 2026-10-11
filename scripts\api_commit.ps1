@@ -1,8 +1,8 @@
-# 通过 API 提交单个/多个文件更新到 master
+# Commit single/multiple file updates to master via GitHub API
 param(
-    [Parameter(Mandatory=$true)][string[]]$Paths,     # 要更新/新增的文件路径（相对仓库根）
+    [string[]]$Paths,                                 # files to update/add (relative to repo root; may be empty for delete-only)
     [Parameter(Mandatory=$true)][string]$Message,
-    [string[]]$DeletePaths                            # 要删除的文件路径（相对仓库根，可选）
+    [string[]]$DeletePaths                            # files to delete (optional, raw path as-is)
 )
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -17,14 +17,18 @@ $BaseTree = $Commit.commit.tree.sha
 
 $entries = @()
 foreach ($p in $Paths) {
+    # Windows backslash must become forward slash: GitHub treats "a\b\c.m" as a
+    # single root-level filename, and the source change silently never lands
+    $gitPath = $p -replace '\\', '/'
     $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $Root $p)))
     $r = Invoke-RestMethod "$Api/git/blobs" -Method Post -Headers $H `
         -Body (@{ content = $b64; encoding = "base64" } | ConvertTo-Json) -ContentType "application/json"
-    $entries += @{ path = $p; mode = "100644"; type = "blob"; sha = $r.sha }
-    Write-Host "blob: $p"
+    $entries += @{ path = $gitPath; mode = "100644"; type = "blob"; sha = $r.sha }
+    Write-Host "blob: $gitPath"
 }
 foreach ($p in $DeletePaths) {
-    # sha = null 表示删除该路径（git trees API 约定）
+    # sha = null deletes the path (git trees API); raw path, e.g. cleanup of legacy
+    # backslash-named junk files at repo root
     $entries += @{ path = $p; mode = "100644"; type = "blob"; sha = $null }
     Write-Host "delete: $p"
 }

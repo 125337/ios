@@ -27,3 +27,24 @@ Code*.html
 scripts/.gh_token
 dist/
 memory/
+
+# ===== 资料目录与文件（不入库） =====
+8.0.60微信头文件/
+8.0.78微信头文件/
+WCR反编译2.1.8/
+WCR_2.1.8_export/
+XOS反编译/
+锤子助手/
+.trae/
+.zcode/
+tmp_*
+p6_funcs.txt
+wcr_sym_list.txt
+mio_watch.py
+mio_watch.js
+Frida钩子使用标杆.md
+侧边分组面板偏移问题复盘.md
+小尾巴.txt
+文档/
+*.ips
+scripts/*

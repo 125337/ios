@@ -314,7 +314,7 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         wpEntryBuildRows(wc, nil); // 首次填充功能列表行（搜索重建走同一入口）
 
         UILabel *wfooter = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, headW, 50)];
-        wfooter.text = @"Mio助手 v2.0.0";
+        wfooter.text = [NSString stringWithFormat:@"Mio助手 v%@", kPluginVersion];
         wfooter.font = [UIFont systemFontOfSize:12];
         wfooter.textColor = WPT3();
         wfooter.textAlignment = NSTextAlignmentCenter;
@@ -341,19 +341,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
         instance = [[MioPluginSwitchHandler alloc] init];
     });
     return instance;
-}
-
-- (void)switchChanged:(UISwitch *)sender {
-    NSString *key = objc_getAssociatedObject(sender, "key");
-    if (!key) return;
-
-    @try {
-        [ConfigManager setValue:@(sender.on) forKey:key];
-        [ConfigManager saveAll];
-        WPLog(@"Setting", @"[SAVE] %@ = %@", key, sender.on ? @"ON" : @"OFF");
-    } @catch (NSException *e) {
-        WPLog(@"Setting", @"[ERR] save %@: %@ - %@", key, e.name, e.reason);
-    }
 }
 
 - (void)onEditRowTap:(id)sender {
