@@ -72,7 +72,7 @@ static const CGFloat kCellHPadding = 16.0;
 @property (nonatomic, strong) WPWeChatTable *wcTable;
 @property (nonatomic, strong) WPWGroup *wcLastGroup;                 // 最近一个组（hint/footer 挂靠）
 @property (nonatomic, copy) NSString *wcPendingHeader;               // addSectionHeader 暂存，建组时消费
-@property (nonatomic, assign) BOOL wpBuildingSubRows;                // 手风琴展开构建中（子配置行标题加「空格+↑」前缀）
+@property (nonatomic, assign) BOOL wpBuildingSubRows;                // 手风琴展开构建中（子配置行标题加「空格+↳」前缀）
 @property (nonatomic, assign) BOOL wpReloading;                      // wpReloadUI 执行中（wpBuildRows 直接调用守卫依据）
 @end
 
@@ -600,7 +600,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     CGFloat perSeg = MAX(40.0, ceil(maxTextW) + 10.0);
     CGFloat segNeed = names.count * perSeg + 14.0;
     // 行内可用宽 ≈ cell 宽 − 标题实测宽（微信标题 16pt、左距 16）− 右距与间隙 24；
-    // 手风琴子行的 ↑ 前缀会加大标题宽 → 分段自动让位
+    // 手风琴子行的 ↳ 前缀会加大标题宽 → 分段自动让位
     CGFloat cellW = [UIScreen mainScreen].bounds.size.width - 32.0;
     CGFloat titleW = [[self wpSubTitle:title] sizeWithAttributes:
                       @{NSFontAttributeName: [UIFont systemFontOfSize:16.0]}].width;
@@ -646,13 +646,14 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 
 #pragma mark - Master Switch（手风琴：状态 = 总开关状态）
 
-// 手风琴展开期间构建的行 = 子配置：标题统一加「空格+↑」前缀（视觉归属上方的总开关）。
+// 手风琴展开期间构建的行 = 子配置：标题统一加「空格+↳」前缀（U+21B3，视觉归属上方的总开关；
+// WCR 同款字符——iOS 字体渲染箭头尖极小，观感近似 SF Symbol arrow.turn.down.right）。
 // row 载荷里存原始标题（弹窗标题/日志不受前缀影响），仅 cell 显示串加前缀。
 - (NSString *)wpSubTitle:(NSString *)title {
     if (!self.wpBuildingSubRows) return title;
     NSString *t = title ?: @"";
-    if (t.length == 0 || [t hasPrefix:@"↑"] || [t hasPrefix:@" ↑"]) return t; // 防重复前缀
-    return [@" ↑" stringByAppendingString:t];
+    if (t.length == 0 || [t hasPrefix:@"↳"] || [t hasPrefix:@" ↳"]) return t; // 防重复前缀
+    return [@" ↳" stringByAppendingString:t];
 }
 
 - (CGFloat)addMasterSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on subBuilder:(void (^)(UIView *expand, CGFloat *ecy))subBuilder cy:(CGFloat)cy width:(CGFloat)w {
