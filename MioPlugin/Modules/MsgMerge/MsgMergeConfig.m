@@ -33,17 +33,25 @@
         [ConfigDescriptor itemWithKey:@"msgMergeTimeColorDarkHex" type:ConfigValueTypeString default:nil],
         [ConfigDescriptor itemWithKey:@"msgMergeTimeDisplayMode" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"msgMergeTimeCustomFormat" type:ConfigValueTypeString default:nil],
-        [ConfigDescriptor itemWithKey:@"msgMergeTimeFormatStyle" type:ConfigValueTypeInteger default:@(1)],
+        [ConfigDescriptor itemWithKey:@"msgMergeTimeFormatStyle" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"msgMergeTimeLocaleStyle" type:ConfigValueTypeInteger default:@(0)],
 
-        // 虚线
-        [ConfigDescriptor itemWithKey:@"msgMergeDashStyle" type:ConfigValueTypeInteger default:@(0)],
+        // 虚线（对方/我方 × 浅色/深色）
+        [ConfigDescriptor itemWithKey:@"msgMergeDashStyleOtherLight" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"msgMergeDashStyleOtherDark" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"msgMergeDashStyleSelfLight" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"msgMergeDashStyleSelfDark" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"msgMergeDashExtendPt" type:ConfigValueTypeFloat default:@(0)],
 
-        // 引导线
-        [ConfigDescriptor itemWithKey:@"msgMergeGuideLineStyle" type:ConfigValueTypeInteger default:@(0)],
-        [ConfigDescriptor itemWithKey:@"msgMergeGuideLinePos" type:ConfigValueTypeInteger default:@(0)],
-        [ConfigDescriptor itemWithKey:@"msgMergeGuideLineXPad" type:ConfigValueTypeFloat default:@(0)],
+        // 引导线（对方/我方 × 浅色/深色 + 终点位置 + 偏移）
+        [ConfigDescriptor itemWithKey:@"msgMergeGuideLineOtherLight" type:ConfigValueTypeInteger default:@(6)],
+        [ConfigDescriptor itemWithKey:@"msgMergeGuideLineOtherDark" type:ConfigValueTypeInteger default:@(6)],
+        [ConfigDescriptor itemWithKey:@"msgMergeGuideLineSelfLight" type:ConfigValueTypeInteger default:@(6)],
+        [ConfigDescriptor itemWithKey:@"msgMergeGuideLineSelfDark" type:ConfigValueTypeInteger default:@(6)],
+        [ConfigDescriptor itemWithKey:@"msgMergeGuideLineEndPosOther" type:ConfigValueTypeInteger default:@(1)],
+        [ConfigDescriptor itemWithKey:@"msgMergeGuideLineEndPosSelf" type:ConfigValueTypeInteger default:@(1)],
+        [ConfigDescriptor itemWithKey:@"msgMergeGuideLineOffsetOther" type:ConfigValueTypeFloat default:@(8)],
+        [ConfigDescriptor itemWithKey:@"msgMergeGuideLineOffsetSelf" type:ConfigValueTypeFloat default:@(8)],
     ];
 }
 
