@@ -62,51 +62,42 @@
 
 - (void)onPickAction:(UIButton *)sender {
     MsgMergeConfig *config = [MsgMergeConfig shared];
-    switch (sender.tag) {
-        case 100: // 头像位置模式
-            [self showPicker:@"请选择头像位置模式"
-                       names:[self.class positionModeNames]
-                currentIndex:config.msgMergePositionMode
-                      onPick:^(NSInteger i) { config.msgMergePositionMode = i; }];
-            break;
-        case 101: // 时间显示模式
-            [self showPicker:@"请选择时间显示模式"
-                       names:[self.class displayModeNames]
-                currentIndex:config.msgMergeTimeDisplayMode
-                      onPick:^(NSInteger i) { config.msgMergeTimeDisplayMode = i; }];
-            break;
-        case 102: // 时间格式样式（存储值 1-3）
-            [self showPicker:@"请选择时间格式样式"
-                       names:[self.class formatStyleNames]
-                currentIndex:config.msgMergeTimeFormatStyle - 1
-                      onPick:^(NSInteger i) { config.msgMergeTimeFormatStyle = i + 1; }];
-            break;
-        case 103: // 时制
-            [self showPicker:@"请选择时间制式"
-                       names:[self.class localeStyleNames]
-                currentIndex:config.msgMergeTimeLocaleStyle
-                      onPick:^(NSInteger i) { config.msgMergeTimeLocaleStyle = i; }];
-            break;
-        case 104: // 虚线样式
-            [self showPicker:@"请选择虚线样式"
-                       names:[self.class dashStyleNames]
-                currentIndex:config.msgMergeDashStyle
-                      onPick:^(NSInteger i) { config.msgMergeDashStyle = i; }];
-            break;
-        case 105: // 引导线样式
-            [self showPicker:@"请选择引导线样式"
-                       names:[self.class guideLineStyleNames]
-                currentIndex:config.msgMergeGuideLineStyle
-                      onPick:^(NSInteger i) { config.msgMergeGuideLineStyle = i; }];
-            break;
-        case 106: // 引导线位置
-            [self showPicker:@"请选择引导线位置"
-                       names:[self.class guideLinePosNames]
-                currentIndex:config.msgMergeGuideLinePos
-                      onPick:^(NSInteger i) { config.msgMergeGuideLinePos = i; }];
-            break;
-        default:
-            break;
+    NSInteger tag = sender.tag;
+    if (tag == 100) { // 头像位置模式
+        [self showPicker:@"请选择头像位置模式"
+                   names:[self.class positionModeNames]
+            currentIndex:config.msgMergePositionMode
+                  onPick:^(NSInteger i) { config.msgMergePositionMode = i; }];
+    } else if (tag == 101) { // 时间显示模式
+        [self showPicker:@"请选择时间显示模式"
+                   names:[self.class displayModeNames]
+            currentIndex:config.msgMergeTimeDisplayMode
+                  onPick:^(NSInteger i) { config.msgMergeTimeDisplayMode = i; }];
+    } else if (tag == 102) { // 时间格式样式（存储值 1-3）
+        [self showPicker:@"请选择时间格式样式"
+                   names:[self.class formatStyleNames]
+            currentIndex:config.msgMergeTimeFormatStyle - 1
+                  onPick:^(NSInteger i) { config.msgMergeTimeFormatStyle = i + 1; }];
+    } else if (tag == 103) { // 时制
+        [self showPicker:@"请选择时间制式"
+                   names:[self.class localeStyleNames]
+            currentIndex:config.msgMergeTimeLocaleStyle
+                  onPick:^(NSInteger i) { config.msgMergeTimeLocaleStyle = i; }];
+    } else if (tag == 104) { // 虚线样式
+        [self showPicker:@"请选择虚线样式"
+                   names:[self.class dashStyleNames]
+            currentIndex:config.msgMergeDashStyle
+                  onPick:^(NSInteger i) { config.msgMergeDashStyle = i; }];
+    } else if (tag == 105) { // 引导线样式
+        [self showPicker:@"请选择引导线样式"
+                   names:[self.class guideLineStyleNames]
+            currentIndex:config.msgMergeGuideLineStyle
+                  onPick:^(NSInteger i) { config.msgMergeGuideLineStyle = i; }];
+    } else if (tag == 106) { // 引导线位置
+        [self showPicker:@"请选择引导线位置"
+                   names:[self.class guideLinePosNames]
+            currentIndex:config.msgMergeGuideLinePos
+                  onPick:^(NSInteger i) { config.msgMergeGuideLinePos = i; }];
     }
 }
 
