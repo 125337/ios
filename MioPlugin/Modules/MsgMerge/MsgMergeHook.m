@@ -34,8 +34,14 @@
 static char kMioMergeHidden;
 /// 合并组首条标志（组内 ≥2 条时的第一条，时间标注挂它上面）
 static char kMioAabGroupHead;
+/// 合并组尾条标志（组内 ≥2 条时的最后一条，虚线段收尾用）
+static char kMioAabGroupTail;
 /// 时间标注 label（挂在 cell 上）
 static char kMioAabTimeLabel;
+/// 虚线竖线段（挂在 cell 上）
+static char kMioAabDashLayer;
+/// 引导线终点视图（挂在 cell 上）
+static char kMioAabGuideView;
 
 // ============================================================
 // MARK: - Original IMPs
@@ -122,28 +128,36 @@ static void wpRunGroupPass(id chatVC) {
 
     NSString *prevFrom = nil;
     id firstInGroup = nil;
+    id lastInGroup = nil;
     NSUInteger groupCount = 0;
+    // 组收尾：组内 ≥2 条时给首条打组首标、末条打组尾标
+    #define WP_FLUSH_GROUP() do { \
+        if (groupCount > 1 && firstInGroup) { \
+            objc_setAssociatedObject(firstInGroup, &kMioAabGroupHead, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN); \
+            if (lastInGroup) objc_setAssociatedObject(lastInGroup, &kMioAabGroupTail, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN); \
+        } \
+        firstInGroup = nil; lastInGroup = nil; groupCount = 0; \
+    } while (0)
+
     for (NSUInteger i = 0; i < n; i++) {
         id vm = arr[i];
 
         // 幂等重算：先清标志（含中断元素，保证关闭开关/分组变化后无残留）
         objc_setAssociatedObject(vm, &kMioMergeHidden, kCFBooleanFalse, OBJC_ASSOCIATION_RETAIN);
         objc_setAssociatedObject(vm, &kMioAabGroupHead, kCFBooleanFalse, OBJC_ASSOCIATION_RETAIN);
+        objc_setAssociatedObject(vm, &kMioAabGroupTail, kCFBooleanFalse, OBJC_ASSOCIATION_RETAIN);
 
         if (wpIsGroupBreaker(vm)) {
-            // 组被时间条/系统消息截断：给上一组首条打标
-            if (groupCount > 1 && firstInGroup)
-                objc_setAssociatedObject(firstInGroup, &kMioAabGroupHead, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
-            firstInGroup = nil; groupCount = 0; prevFrom = nil;
+            WP_FLUSH_GROUP();
+            prevFrom = nil;
             continue;
         }
 
         id wrap = ((id (*)(id, SEL))objc_msgSend)(vm, @selector(messageWrap));
         NSString *from = wrap ? ((id (*)(id, SEL))objc_msgSend)(wrap, @selector(m_nsFromUsr)) : nil;
         if (!from.length) {
-            if (groupCount > 1 && firstInGroup)
-                objc_setAssociatedObject(firstInGroup, &kMioAabGroupHead, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
-            firstInGroup = nil; groupCount = 0; prevFrom = nil;
+            WP_FLUSH_GROUP();
+            prevFrom = nil;
             continue;
         }
 
@@ -152,16 +166,15 @@ static void wpRunGroupPass(id chatVC) {
             objc_setAssociatedObject(vm, &kMioMergeHidden, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
             groupCount++;
         } else {
-            // 新组开始：先给上一组首条打标
-            if (groupCount > 1 && firstInGroup)
-                objc_setAssociatedObject(firstInGroup, &kMioAabGroupHead, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
-            firstInGroup = vm; groupCount = 1;
+            WP_FLUSH_GROUP();
+            firstInGroup = vm;
+            groupCount = 1;
         }
+        lastInGroup = vm;
         prevFrom = from;
     }
-    // 收尾：最后一组
-    if (groupCount > 1 && firstInGroup)
-        objc_setAssociatedObject(firstInGroup, &kMioAabGroupHead, kCFBooleanTrue, OBJC_ASSOCIATION_RETAIN);
+    WP_FLUSH_GROUP();
+    #undef WP_FLUSH_GROUP
 }
 
 // ============================================================
@@ -339,8 +352,10 @@ static void wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, NS
     label.hidden = NO;
     if (![label.text isEqualToString:text]) label.text = text;
     UIColor *color = [WPColorUtil dynamicColorFromLightHex:config.msgMergeTimeColorHex
-                                                   darkHex:config.msgMergeTimeColorDarkHex];
-    label.textColor = color ?: [UIColor secondaryLabelColor];
+                                                   darkHex:config.msgMergeTimeColorDarkHex
+                                             lightFallback:[UIColor secondaryLabelColor]
+                                              darkFallback:[UIColor secondaryLabelColor]];
+    label.textColor = color;
 
     [label sizeToFit];
     CGRect lf = label.frame;
@@ -354,24 +369,232 @@ static void wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, NS
     label.frame = lf;
 }
 
+// ============================================================
+// MARK: - Phase3 虚线（头像列竖向连接线，10 种样式）
+// ============================================================
+
+/// 明暗模式判定（cell 视图特性）
+static BOOL wpIsDarkMode(id cellView) {
+    @try {
+        return ((NSInteger)cellView.traitCollection.userInterfaceStyle == 2);  // UIUserInterfaceStyleDark
+    } @catch (NSException *e) { return NO; }
+}
+
+/// 按侧别与明暗取虚线样式
+static NSInteger wpDashStyleFor(MsgMergeConfig *config, BOOL isSender, BOOL isDark) {
+    return isSender ? (isDark ? config.msgMergeDashStyleSelfDark : config.msgMergeDashStyleSelfLight)
+                    : (isDark ? config.msgMergeDashStyleOtherDark : config.msgMergeDashStyleOtherLight);
+}
+
+/// 竖向虚线段样式绘制（样式 0-9，9=不显示）
+static void wpApplyAabDash(id cellView, id vm, CGRect headF, BOOL isSender) {
+    MsgMergeConfig *config = [MsgMergeConfig shared];
+    CAShapeLayer *layer = objc_getAssociatedObject(cellView, &kMioAabDashLayer);
+
+    BOOL inGroup = [objc_getAssociatedObject(vm, &kMioMergeHidden) boolValue]
+                || [objc_getAssociatedObject(vm, &kMioAabGroupTail) boolValue];
+    NSInteger style = wpDashStyleFor(config, isSender, wpIsDarkMode(cellView));
+    if (!inGroup || style == 9 || headF.size.height < 1) {
+        if (layer) { [layer removeFromSuperlayer]; objc_setAssociatedObject(cellView, &kMioAabDashLayer, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+        return;
+    }
+
+    BOOL isHead = [objc_getAssociatedObject(vm, &kMioAabGroupHead) boolValue];
+    BOOL isTail = [objc_getAssociatedObject(vm, &kMioAabGroupTail) boolValue];
+    CGFloat cellH = cellView.frame.size.height;
+    CGFloat x = headF.origin.x + headF.size.width / 2;
+    CGFloat ext = config.msgMergeDashExtendPt;
+
+    // 线段 y 范围：组首从头像下延到 cell 底；中间满段；组尾到头像上沿
+    CGFloat y0, y1;
+    if (isTail && !isHead) { y0 = -ext; y1 = headF.origin.y - 2 + ext; }
+    else if (isHead)       { y0 = headF.origin.y + headF.size.height + 2 - ext; y1 = cellH + ext; }
+    else                   { y0 = -ext; y1 = cellH + ext; }
+    if (y1 - y0 < 2) { if (layer) [layer removeFromSuperlayer]; return; }
+
+    if (!layer) {
+        layer = [CAShapeLayer new];
+        layer.fillColor = nil;
+        objc_setAssociatedObject(cellView, &kMioAabDashLayer, layer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [cellView.layer addSublayer:layer];
+    }
+    layer.hidden = NO;
+
+    UIBezierPath *path;
+    switch (style) {
+        case 7: {  // 波浪
+            path = [UIBezierPath bezierPath];
+            [path moveToPoint:CGPointMake(x, y0)];
+            CGFloat amp = 2.5, wl = 8;
+            for (CGFloat y = y0; y < y1; y += wl / 2) {
+                CGFloat dir = ((NSInteger)((y - y0) / (wl / 2)) % 2 == 0) ? 1 : -1;
+                [path addQuadCurveToPoint:CGPointMake(x, MIN(y + wl / 2, y1))
+                            controlPoint:CGPointMake(x + amp * dir, y + wl / 4)];
+            }
+            layer.lineWidth = 1.2; layer.lineDashPattern = nil;
+            break;
+        }
+        case 8: {  // 锯齿
+            path = [UIBezierPath bezierPath];
+            [path moveToPoint:CGPointMake(x, y0)];
+            CGFloat amp = 2.5, seg = 5;
+            CGFloat y = y0;
+            while (y < y1) {
+                CGFloat dir = ((NSInteger)((y - y0) / seg) % 2 == 0) ? 1 : -1;
+                [path addLineToPoint:CGPointMake(x + amp * dir, MIN(y + seg, y1))];
+                y += seg;
+            }
+            layer.lineWidth = 1.2; layer.lineDashPattern = nil;
+            break;
+        }
+        default: {
+            path = [UIBezierPath bezierPath];
+            [path moveToPoint:CGPointMake(x, y0)];
+            [path addLineToPoint:CGPointMake(x, y1)];
+            layer.lineWidth = (style == 3) ? 2.0 : 1.2;
+            switch (style) {
+                case 0: layer.lineDashPattern = @[@4, @3]; break;               // 默认虚线
+                case 1: layer.lineDashPattern = nil; break;                      // 实线
+                case 2: layer.lineDashPattern = @[@0.1, @3]; break;              // 细点线
+                case 3: layer.lineDashPattern = @[@6, @4]; break;                // 粗虚线
+                case 4: layer.lineDashPattern = @[@4, @3]; break;                // 流光
+                case 5: layer.lineDashPattern = @[@2, @4]; break;                // 律动
+                default: layer.lineDashPattern = @[@5, @3]; break;               // 彩虹及其他
+            }
+            break;
+        }
+    }
+    layer.path = path.CGPath;
+    switch (style) {
+        case 4: layer.strokeColor = [UIColor colorWithRed:0.3 green:0.6 blue:1.0 alpha:0.9].CGColor; break;  // 流光 蓝
+        case 5: layer.strokeColor = [UIColor colorWithRed:0.2 green:0.8 blue:0.5 alpha:0.9].CGColor; break;  // 律动 绿
+        case 6: layer.strokeColor = [UIColor colorWithRed:0.8 green:0.4 blue:1.0 alpha:0.9].CGColor; break;  // 彩虹 紫
+        default: layer.strokeColor = [UIColor colorWithWhite:isDark ? 0.55 : 0.7 alpha:1].CGColor; break;
+    }
+}
+
+// ============================================================
+// MARK: - Phase3 引导线（组首/组尾终点标记，7 种样式）
+// ============================================================
+
+static NSInteger wpGuideStyleFor(MsgMergeConfig *config, BOOL isSender, BOOL isDark) {
+    return isSender ? (isDark ? config.msgMergeGuideLineSelfDark : config.msgMergeGuideLineSelfLight)
+                    : (isDark ? config.msgMergeGuideLineOtherDark : config.msgMergeGuideLineOtherLight);
+}
+
+/// 引导线终点标记：SF Symbol 拐弯箭头 / 方括号，画在组首或组尾的头像旁
+static void wpApplyAabGuideLine(id cellView, id vm, CGRect headF, BOOL isSender) {
+    MsgMergeConfig *config = [MsgMergeConfig shared];
+    UIView *view = objc_getAssociatedObject(cellView, &kMioAabGuideView);
+
+    BOOL isHead = [objc_getAssociatedObject(vm, &kMioAabGroupHead) boolValue];
+    BOOL isTail = [objc_getAssociatedObject(vm, &kMioAabGroupTail) boolValue];
+    NSInteger endPos = isSender ? config.msgMergeGuideLineEndPosSelf : config.msgMergeGuideLineEndPosOther;
+    NSInteger style = wpGuideStyleFor(config, isSender, wpIsDarkMode(cellView));
+
+    // 终点命中：样式非不显示 && 该 cell 是配置的终点（0=首条 1=末条）&& 组内 ≥2 条
+    BOOL isEndpoint = (endPos == 0) ? isHead : isTail;
+    if (!isEndpoint || style == 6 || headF.size.height < 1) {
+        if (view && !view.hidden) view.hidden = YES;
+        return;
+    }
+
+    if (!view) {
+        view = [[UIView alloc] initWithFrame:CGRectZero];
+        objc_setAssociatedObject(cellView, &kMioAabGuideView, view, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [cellView addSubview:view];
+    }
+    view.hidden = NO;
+
+    BOOL isDark = wpIsDarkMode(cellView);
+    BOOL wantLabel = (style == 4);
+    // 视图类型不匹配（样式切换 UILabel ↔ UIImageView）时移除重建
+    if (view && wantLabel && ![view isKindOfClass:[UILabel class]]) {
+        [view removeFromSuperview];
+        objc_setAssociatedObject(cellView, &kMioAabGuideView, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        view = nil;
+    }
+    if (view && !wantLabel && ![view isKindOfClass:[UIImageView class]]) {
+        [view removeFromSuperview];
+        objc_setAssociatedObject(cellView, &kMioAabGuideView, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        view = nil;
+    }
+
+    if (wantLabel) {
+        UILabel *label = (UILabel *)view;
+        if (!label) {
+            label = [UILabel new];
+            objc_setAssociatedObject(cellView, &kMioAabGuideView, label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            [cellView addSubview:label];
+            view = label;
+        }
+        label.text = @"⌐";
+        label.font = [UIFont systemFontOfSize:13];
+        label.textColor = [UIColor colorWithWhite:isDark ? 0.6 : 0.45 alpha:1];
+        [label sizeToFit];
+    } else {
+        // SF Symbol：0=流光顶角 1=脉冲底角 2=顶部拐弯↱ 3=底部拐弯↳ 5=彩虹拐角
+        UIImageView *iv = (UIImageView *)view;
+        if (!iv) {
+            iv = [UIImageView new];
+            objc_setAssociatedObject(cellView, &kMioAabGuideView, iv, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            [cellView addSubview:iv];
+            view = iv;
+        }
+        NSString *sym;
+        switch (style) {
+            case 0: sym = @"arrow.turn.left.up"; break;
+            case 1: sym = @"arrow.turn.left.down"; break;
+            case 2: sym = @"arrow.turn.up.right"; break;
+            case 3: sym = @"arrow.turn.down.right"; break;
+            default: sym = @"arrow.turn.up.right"; break;  // 5 彩虹拐角
+        }
+        UIImage *img = [UIImage systemImageNamed:sym];
+        if (!img) { view.hidden = YES; return; }
+        UIColor *color;
+        if (style == 5) color = [UIColor colorWithRed:0.8 green:0.4 blue:1.0 alpha:1];
+        else color = [UIColor colorWithWhite:isDark ? 0.6 : 0.45 alpha:1];
+        UIImage *tinted = [img imageWithTintColor:color];
+        iv.image = tinted ?: img;
+        iv.frame = CGRectMake(0, 0, 14, 14);
+    }
+
+    CGFloat offset = isSender ? config.msgMergeGuideLineOffsetSelf : config.msgMergeGuideLineOffsetOther;
+    view.frame = CGRectMake(headF.origin.x + headF.size.width + offset,
+                            headF.origin.y + (headF.size.height - view.frame.size.height) / 2,
+                            view.frame.size.width, view.frame.size.height);
+}
+
 /// 布局垫片：orig 完成原生布局后，将头像移到气泡上/下方
 static void wpApplyAabLayout(id cellView) {
     id vm = nil;
     @try { vm = ((id (*)(id, SEL))objc_msgSend)(cellView, @selector(viewModel)); } @catch (NSException *e) {}
-    NSInteger mode; CGFloat textShift;
-    if (!wpAabActive(vm, &mode, NULL, &textShift)) return;
+    if (!vm) return;
+
+    MsgMergeConfig *config = [MsgMergeConfig shared];
+    if (!config.msgMergeEnabled || !config.msgMergeAabEnabled) return;
+
+    BOOL isSender = NO;
+    @try { isSender = ((BOOL (*)(id, SEL))objc_msgSend)(vm, @selector(isSender)); } @catch (NSException *e) {}
 
     id head = ((id (*)(id, SEL))objc_msgSend)(cellView, @selector(getHeadImageView));
     id bg   = ((id (*)(id, SEL))objc_msgSend)(cellView, @selector(getBgImageView));
-    id name = ((id (*)(id, SEL))objc_msgSend)(cellView, @selector(getNameLabel));
     if (!head || !bg) return;
-
     CGRect headF = ((CGRect (*)(id, SEL))objc_msgSend)(head, @selector(frame));
     if (headF.size.height < 1) return;  // 头像尚未布局
+    CGRect bgF = ((CGRect (*)(id, SEL))objc_msgSend)(bg, @selector(frame));
+
+    // 视觉件（虚线/引导线）：覆盖组内所有 cell（含隐藏头像的中间条），独立于头像位移 gate
+    wpApplyAabDash(cellView, vm, headF, isSender);
+    wpApplyAabGuideLine(cellView, vm, headF, isSender);
+
+    // 头像位移：仅对位置模式启用且头像可见（组首）的 cell
+    NSInteger mode; CGFloat textShift;
+    if (!wpAabActive(vm, &mode, NULL, &textShift)) return;
+    id name = ((id (*)(id, SEL))objc_msgSend)(cellView, @selector(getNameLabel));
     // 缓存实测头像高（rowHeight 垫片用）
     objc_setAssociatedObject(vm, &kMioAabAvatarH, @(headF.size.height), OBJC_ASSOCIATION_RETAIN);
 
-    CGRect bgF = ((CGRect (*)(id, SEL))objc_msgSend)(bg, @selector(frame));
     CGFloat gap = 4;
     CGFloat delta = headF.size.height + gap + fabs(textShift);
 
@@ -403,6 +626,8 @@ static void wpApplyAabLayout(id cellView) {
     }
 
     wpApplyAabTimeLabel(cellView, vm, headF, bgF, mode);
+    wpApplyAabDash(cellView, vm, headF, isSender);
+    wpApplyAabGuideLine(cellView, vm, headF, isSender);
 }
 
 static void hook_Cell_layoutContentView(id self, SEL _cmd) {
