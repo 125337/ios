@@ -230,7 +230,7 @@ static IMP orig_VM_rowHeight_common      = NULL;
 static IMP orig_VM_rowHeight_text        = NULL;
 
 static char kMioAabAvatarH;   // vm 上缓存实测头像高（rowHeight 先于 cell 构建，用实测值补偿）
-static char kMioAabContBaseY; // bg 容器首过自然 y（气泡容器绝对定位基准，防逐轮累加）
+static char kMioAabContBaseY; // 气泡容器/引用板首过自然 y（绝对定位基准，防逐轮累加）
 
 /// AAB 是否对该 viewModel 生效；outMode 返回 0=上方 1=下方，outDelta 返回高度增量
 static BOOL wpAabActive(id vm, NSInteger *outMode, CGFloat *outDelta, CGFloat *outShift) {
@@ -596,6 +596,18 @@ static void wpApplyAabLayout(id cellView) {
     if (headF.size.height < 1) return;  // 头像尚未布局
     CGRect bgF = ((CGRect (*)(id, SEL))objc_msgSend)(bg, @selector(frame));
 
+    // 引用消息面板：cellView 直接子视图（不在气泡容器内），native 按「文本气泡自然 y+高+4」
+    // 链定位（探针实证自然 y=57）。它不随容器走，AAB 位移时必须单独带上，
+    // 否则下移后的气泡与引用板重叠（探针实证：气泡 63..100 压在引用板 57..99.7 上）
+    id refer = nil;
+    Class referCls = objc_getClass("MMInputMsgReferView");
+    if (referCls) {
+        NSArray *subs = ((NSArray *(*)(id, SEL))objc_msgSend)(cellView, @selector(subviews));
+        for (UIView *sub in subs) {
+            if ([sub isKindOfClass:referCls]) { refer = sub; break; }
+        }
+    }
+
     // 视觉件（虚线/引导线）：覆盖组内所有 cell（含隐藏头像的中间条），独立于头像位移 gate
     wpApplyAabDash(cellView, vm, headF, isSender);
     wpApplyAabGuideLine(cellView, vm, headF, isSender);
@@ -632,6 +644,18 @@ static void wpApplyAabLayout(id cellView) {
                 if (fabs(contF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.y) > 0.5)
                     ((void (*)(id, SEL, CGRect))objc_msgSend)(container, @selector(setFrame:), contF);
             }
+            if (refer) {
+                // 引用板同款 baseY+delta 绝对下移（native 每轮重置其 y，不会累加）
+                CGRect refF = ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame));
+                NSNumber *rBase = objc_getAssociatedObject(refer, &kMioAabContBaseY);
+                if (!rBase) {
+                    rBase = @(refF.origin.y);
+                    objc_setAssociatedObject(refer, &kMioAabContBaseY, rBase, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                }
+                refF.origin.y = rBase.doubleValue + delta;
+                if (fabs(refF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame)).origin.y) > 0.5)
+                    ((void (*)(id, SEL, CGRect))objc_msgSend)(refer, @selector(setFrame:), refF);
+            }
             // 昵称不动：XOS 探针对照实证组首昵称恒在头像右侧自然位（y=4），不随容器下移；
             // 旧 += 写法在 orig 不重置昵称 frame 时每轮累加（实证 0/47/94/141/188），已删
         }
@@ -643,6 +667,11 @@ static void wpApplyAabLayout(id cellView) {
         id container = ((id (*)(id, SEL))objc_msgSend)(bg, @selector(superview));
         if (container) contY = ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.y;
         newHead.origin.y = contY + bgF.origin.y + bgF.size.height + gap;
+        if (refer) {
+            // 有引用板时头像放引用板底（refer frame 已是 cellView 坐标）
+            CGRect refF = ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame));
+            newHead.origin.y = refF.origin.y + refF.size.height + gap;
+        }
         if (fabs(newHead.origin.y - headF.origin.y) > 0.5)
             ((void (*)(id, SEL, CGRect))objc_msgSend)(head, @selector(setFrame:), newHead);
     }
