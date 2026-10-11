@@ -138,7 +138,7 @@
                                     isOn:config.sgShowGroupRedDot
                               subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addSubSwitchRowInGroup:expand
-                                      title:@"折叠群不红点"
+                                      title:@"免打扰不计入角标数字"
                                         key:@"sgFoldGroupNoRedDot"
                                        isOn:config.sgFoldGroupNoRedDot
                                          cy:*ecy

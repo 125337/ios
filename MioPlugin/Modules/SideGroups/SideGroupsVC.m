@@ -104,14 +104,19 @@
                                   width:w];
     } cy:cy width:w];
 
-    // 显示未读角标
-    cy = [self addSwitchRowInGroup:g2
-                             title:@"显示未读角标"
-                              desc:nil
-                               key:@"sdShowUnreadBadge"
-                              isOn:config.sdShowUnreadBadge
-                                cy:cy
-                             width:w];
+    // 显示未读角标（开关，展开：免打扰不计入角标数字）
+    cy = [self addMasterSwitchRowInGroup:g2
+                                   title:@"显示未读角标"
+                                     key:@"sdShowUnreadBadge"
+                                    isOn:config.sdShowUnreadBadge
+                              subBuilder:^(UIView *expand, CGFloat *ecy) {
+        *ecy = [self addSubSwitchRowInGroup:expand
+                                      title:@"免打扰不计入角标数字"
+                                        key:@"sdFoldGroupNoRedDot"
+                                       isOn:config.sdFoldGroupNoRedDot
+                                         cy:*ecy
+                                      width:w];
+    } cy:cy width:w];
 
     // 侧边滑动切换（master switch，仅 rail 区域上下滑切组；展开：反向行驶 / 循环滑动）
     cy = [self addMasterSwitchRowInGroup:g2
@@ -151,13 +156,6 @@
                               desc:nil
                                key:@"sdFilterDuplicate"
                               isOn:config.sdFilterDuplicate
-                                cy:cy
-                             width:w];
-    cy = [self addSwitchRowInGroup:gF
-                             title:@"折叠群不红点"
-                              desc:nil
-                               key:@"sdFoldGroupNoRedDot"
-                              isOn:config.sdFoldGroupNoRedDot
                                 cy:cy
                              width:w];
     y = [self finishGroup:gF atY:y height:cy];
