@@ -65,6 +65,7 @@
     editor.saveBlock = [^(NSString *newFormat) {
         [MsgMergeConfig shared].msgMergeTimeCustomFormat = newFormat;
         [ConfigManager saveAll];
+        [self wpRebuildWeChatTable]; // 微信引擎表先清空旧 section 再重填
         [self buildUI];
     } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
@@ -85,6 +86,7 @@
     [MioAlertHelper showMenuAlert:title buttons:titles onButton:^(NSInteger index) {
         onPick(index);
         [ConfigManager saveAll];
+        [self wpRebuildWeChatTable]; // 微信引擎表先清空旧 section 再重填，否则新行追加在旧行后面
         [self buildUI];
     }];
 }
