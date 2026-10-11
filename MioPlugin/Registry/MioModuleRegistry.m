@@ -41,9 +41,6 @@
 #import "../Modules/HomeBeautify/HomeCardConfig.h"
 #import "../Modules/HomeBeautify/HomeCardHook.h"
 #import "../Modules/HomeBeautify/HomeCardVC.h"
-#import "../Modules/MsgMerge/MsgMergeConfig.h"
-#import "../Modules/MsgMerge/MsgMergeVC.h"
-#import "../Modules/MsgMerge/MsgMergeHook.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -276,15 +273,6 @@
                                                hookClasses:@[[FontLayoutHook class]]
                                            controllerClass:[WPUILayoutSettingsVC class]
                                                   subtitle:@"全局/对话字号调整"
-                                             sectionTitle:@"通用"],
-
-            // ──── 消息合并（头像气泡上，配置先行；运行时 hook 后续接入） ────
-            [MioModuleDescriptor descriptorWithIdentifier:@"msgmerge"
-                                                    title:@"消息合并"
-                                               configClass:[MsgMergeConfig class]
-                                               hookClasses:@[[MsgMergeHook class]]
-                                           controllerClass:[MsgMergeVC class]
-                                                  subtitle:@"消息合并与头像气泡上"
                                              sectionTitle:@"通用"],
             
             // ──── 朋友圈（伪集赞/pyq 触发/高清原图） ────

@@ -38,7 +38,6 @@
         @[@"界面净化", @(105)],
         @[@"隐藏头像", @(106)],
         @[@"布局设置", @(107)],
-        @[@"消息合并", @(111)],
     ];
 
     for (NSUInteger i = 0; i < items.count; i++) {
@@ -117,9 +116,6 @@
             break;
         case 107:
             subVC = [[NSClassFromString(@"WPUILayoutSettingsVC") alloc] init];
-            break;
-        case 111:
-            subVC = [[NSClassFromString(@"MsgMergeVC") alloc] init];
             break;
         case 108:
             subVC = [[SessionGroupsVC alloc] init];
