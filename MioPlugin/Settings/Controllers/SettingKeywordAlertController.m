@@ -12,17 +12,16 @@
     [super viewDidLoad];
     self.title = @"关键词提醒";
     WPLog(@"Setting", @"[KeywordAlert] 设置页打开");
-    // 不在此处 buildUI：viewWillAppear 统一重建，避免同表叠行
+    // 不在此处 wpBuildRows：viewWillAppear 统一 wpReloadUI，避免同表叠行
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     // 微信引擎表每次重建后再添加行，防止 pop 返回/多次进入时行叠加
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -157,8 +156,7 @@
         [KeywordAlertConfig shared].keywordAlertKeywords = text;
         [ConfigManager saveAll];
         WPLog(@"Setting", @"[KeywordAlert] 关键词列表已保存");
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -169,8 +167,7 @@
         [KeywordAlertConfig shared].keywordAlertDisabledKeywords = text;
         [ConfigManager saveAll];
         WPLog(@"Setting", @"[KeywordAlert] 禁用词已保存");
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -215,8 +212,7 @@
         [KeywordAlertConfig shared].keywordAlertHistoryRecords = @[];
         [ConfigManager saveAll];
         WPLog(@"Setting", @"[KeywordAlert] 历史记录已清空");
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
         return;
     }
     [super buttonClicked:key];
@@ -228,8 +224,7 @@
     [KeywordAlertConfig shared].keywordAlertSelectedGroups = groupIds ?: @[];
     [ConfigManager saveAll];
     WPLog(@"Setting", @"[KeywordAlert] 群范围已保存: %lu 个", (unsigned long)groupIds.count);
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 @end

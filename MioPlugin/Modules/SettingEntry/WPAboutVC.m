@@ -11,10 +11,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"关于";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
 
     // ── Hero：自定义视图行（WPWCViewCell，点击无动作） ──
@@ -64,7 +64,7 @@
     }
     [self finishGroup:archGroup atY:0 height:0];
 
-    WPLog(@"UI", @"[Sub] WPAboutVC buildUI done");
+    WPLog(@"UI", @"[Sub] WPAboutVC wpBuildRows done");
 }
 
 @end

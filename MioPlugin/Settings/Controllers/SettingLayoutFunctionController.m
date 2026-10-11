@@ -7,15 +7,15 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"界面布局";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) [v removeFromSuperview];
 
     CGFloat w = [UIScreen mainScreen].bounds.size.width;

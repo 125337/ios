@@ -11,10 +11,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"文本占位";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -90,7 +90,7 @@
         y = [self addSectionFooter:@"开启后可自定义输入框占位文本样式" y:y width:w];
     }
 
-    WPLog(@"UI", @"[Sub] WPUIPlaceholderTextVC buildUI done");
+    WPLog(@"UI", @"[Sub] WPUIPlaceholderTextVC wpBuildRows done");
 }
 
 @end

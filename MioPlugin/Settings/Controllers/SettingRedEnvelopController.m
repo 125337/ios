@@ -11,14 +11,13 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"自动抢红包";
-    // 不在此处 buildUI：viewWillAppear 统一重建（含从拉群规则页返回后刷新入口行 hint）
+    // 不在此处 wpBuildRows：viewWillAppear 统一 wpReloadUI（含从拉群规则页返回后刷新入口行 hint）
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     // 微信引擎表每次重建后再添加行，防止 pop 返回/多次进入时行叠加
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 - (void)buttonClicked:(NSString *)key {
@@ -65,12 +64,9 @@
     void (^select)(NSInteger) = ^(NSInteger mode) {
         config.redEnvelopSyncMode = mode;
         [ConfigManager saveAll];
-        // 等 action sheet 完全退场后重建（与 wpHandleSwitchKey 同款组合：
-        // 只调 buildUI 行进旧表引擎不刷新，必须先 wpRebuildWeChatTable 重建表容器）
-        [self dismissViewControllerAnimated:YES completion:^{
+        // 等 action sheet 完全退场后 wpReloadUI 重建`n        [self dismissViewControllerAnimated:YES completion:^{
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self wpRebuildWeChatTable];
-                [self buildUI];
+                [self wpReloadUI];
             });
         }];
     };
@@ -100,8 +96,7 @@
         [ConfigManager saveAll];
         [self dismissViewControllerAnimated:YES completion:^{
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self wpRebuildWeChatTable];
-                [self buildUI];
+                [self wpReloadUI];
             });
         }];
     }]];
@@ -141,12 +136,10 @@
     RedEnvelopConfig *config = [RedEnvelopConfig shared];
     config.redEnvelopGroupFilterList = groupIds;
     [ConfigManager saveAll];
-    // 与 wpHandleSwitchKey 同款组合：只 buildUI 行进旧表，引擎表不重载 hint 不刷新
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -261,7 +254,7 @@
         [self addSectionFooter:@"开启自动收款后可配置详细选项" y:y width:w];
     }
 
-    WPLog(@"UI", @"[Sub] SettingRedEnvelopController buildUI done");
+    WPLog(@"UI", @"[Sub] SettingRedEnvelopController wpBuildRows done");
 }
 
 @end

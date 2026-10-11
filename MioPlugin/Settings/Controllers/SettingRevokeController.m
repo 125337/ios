@@ -11,10 +11,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"防撤回设置";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -59,7 +59,7 @@
     editor.saveBlock = [^(NSString *newFormat) {
         [RevokeConfig shared].revokeTemplate = newFormat;
         [ConfigManager saveAll];
-        [self buildUI];
+        [self wpReloadUI];
     } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
@@ -72,7 +72,7 @@
     editor.saveBlock = [^(NSString *newFormat) {
         [RevokeConfig shared].notifySenderTemplate = newFormat;
         [ConfigManager saveAll];
-        [self buildUI];
+        [self wpReloadUI];
     } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;

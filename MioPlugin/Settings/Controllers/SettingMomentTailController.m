@@ -13,13 +13,12 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = self.postSessionMode ? @"选择本次小尾巴" : @"朋友圈小尾巴";
-    // 不在此处 buildUI：viewWillAppear 统一重建，避免同表叠行
+    // 不在此处 wpBuildRows：viewWillAppear 统一 wpReloadUI，避免同表叠行
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 // 单次模式 dismiss 回发帖页后刷新 cell 显示（WCR onPick block 同款：调 reloadData → 重注入）
@@ -35,8 +34,7 @@
 #pragma mark - 状态/保存
 
 - (void)reloadTable {
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 // appid → 预设名（未注册返回 nil）
@@ -138,7 +136,7 @@
 
 #pragma mark - UI
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }

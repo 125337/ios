@@ -52,7 +52,7 @@ static NSString *keyForTag(NSInteger tag) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"聊天顶栏";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 /// 返回指定 key 对应的当前配置值（用于列表项 subtitle 显示）
@@ -119,8 +119,7 @@ static NSString *keyForTag(NSInteger tag) {
     [MioAlertHelper showMenuAlert:@"选择显示模式" buttons:modeTitles onButton:^(NSInteger index) {
         config.chatDisplayMode = index;
         [ConfigManager saveAll];
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -165,9 +164,8 @@ static NSString *keyForTag(NSInteger tag) {
         WPLog(@"Mio-Separator", @"  设置 chatSeparatorText = %@", text);
         [ConfigManager saveAll];
         WPLog(@"Mio-Separator", @"  调用 [ConfigManager saveAll]");
-        [self wpRebuildWeChatTable];
-        [self buildUI];
-        WPLog(@"Mio-Separator", @"  调用 [self buildUI]");
+        [self wpReloadUI];
+        WPLog(@"Mio-Separator", @"  调用 wpReloadUI");
     }];
 
     WPLog(@"Mio-Separator", @"  弹窗已显示");
@@ -197,8 +195,7 @@ static NSString *keyForTag(NSInteger tag) {
                          onConfirm:^(NSString *inputText) {
         config.chatAddTimeSuffixFormat = inputText.length > 0 ? inputText : nil;
         [ConfigManager saveAll];
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -213,8 +210,7 @@ static NSString *keyForTag(NSInteger tag) {
                          onConfirm:^(NSString *inputText) {
         config.chatGroupMemberCountSuffix = inputText.length > 0 ? inputText : nil;
         [ConfigManager saveAll];
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -277,14 +273,13 @@ static NSString *keyForTag(NSInteger tag) {
         else if ([key isEqualToString:@"NicknameHorizontalOffset"]) c.chatNicknameOffsetX = [text floatValue];
         else if ([key isEqualToString:@"ViewWidth"])            c.chatTitleViewWidth = [text floatValue];
         [ConfigManager saveAll];
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
 #pragma mark - Build UI
 
-- (void)buildUI {
+- (void)wpBuildRows {
     ChatTopBarConfig *config = [ChatTopBarConfig shared];
     CGFloat w = [UIScreen mainScreen].bounds.size.width;
     CGFloat y = 8;
@@ -384,9 +379,8 @@ static NSString *keyForTag(NSInteger tag) {
                                      key:@"ChatTopBarSeparator"];
                 WPLog(@"Mio-Separator", @"    写入完成, data.length=%lu", (unsigned long)pngData.length);
                 [picker dismissViewControllerAnimated:YES completion:^{
-                    WPLog(@"Mio-Separator", @"    dismiss 完成，调用 buildUI");
-                    [self wpRebuildWeChatTable];
-                    [self buildUI];
+                    WPLog(@"Mio-Separator", @"    dismiss 完成，调用 wpReloadUI");
+                    [self wpReloadUI];
                 }];
             });
         }];
@@ -409,9 +403,8 @@ static NSString *keyForTag(NSInteger tag) {
     [ConfigManager saveAll];
     WPLog(@"Mio-Separator", @"  调用 [ConfigManager saveAll]");
 
-    [self wpRebuildWeChatTable];
-    [self buildUI];
-    WPLog(@"Mio-Separator", @"  调用 [self buildUI]");
+    [self wpReloadUI];
+    WPLog(@"Mio-Separator", @"  调用 wpReloadUI");
 }
 
 @end

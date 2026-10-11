@@ -10,10 +10,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"圆角设置";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -143,7 +143,7 @@
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
-    WPLog(@"UI", @"[Sub] SettingListCornerRadiusController buildUI done");
+    WPLog(@"UI", @"[Sub] SettingListCornerRadiusController wpBuildRows done");
 }
 
 // 微信引擎开关落地钩子（基类 wpHandleSwitchKey 每次开关后调用；旧 UISwitch switchChanged: 入口已废弃）

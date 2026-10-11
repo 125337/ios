@@ -14,10 +14,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"界面定制";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -91,7 +91,7 @@
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
-    WPLog(@"UI", @"[Sub] WPUIVC buildUI done");
+    WPLog(@"UI", @"[Sub] WPUIVC wpBuildRows done");
 }
 
 - (void)navigateTo:(UIButton *)sender {

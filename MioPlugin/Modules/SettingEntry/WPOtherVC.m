@@ -11,10 +11,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"其他功能";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -47,12 +47,12 @@
     cy = [self addSwitchRowInGroup:group title:@"免提示" desc:nil
                                key:@"noTip" isOn:[RevokeConfig shared].noTip
                                cy:cy width:w];
-    WPLog(@"UI", @"[Sub] WPOtherVC buildUI complete");
+    WPLog(@"UI", @"[Sub] WPOtherVC wpBuildRows complete");
     y = [self finishGroup:group atY:y height:cy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
-    WPLog(@"UI", @"[Sub] WPOtherVC buildUI done");
+    WPLog(@"UI", @"[Sub] WPOtherVC wpBuildRows done");
 }
 
 @end

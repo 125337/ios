@@ -170,7 +170,7 @@ static NSDictionary *MioReadProvisioningProfile(void) {
     [super viewDidLoad];
     self.title = @"账户信息";
     self.profile = MioReadProvisioningProfile();
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -180,7 +180,7 @@ static NSDictionary *MioReadProvisioningProfile(void) {
 
 #pragma mark UI 构建（全微信引擎：组 = WPWGroup，信息行 = NavCell 右值，点击信息行复制）
 
-- (void)buildUI {
+- (void)wpBuildRows {
     NSDictionary *profile = self.profile;
 
     // ── 用户信息 ──
@@ -287,7 +287,7 @@ static NSDictionary *MioReadProvisioningProfile(void) {
     [self addHintRowInGroup:ruleGroup text:@"到期前按设定天数各提示一次" cy:ry width:0];
     [self finishGroup:ruleGroup atY:0 height:0];
 
-    WPLog(@"Setting", @"[Sub] WPAccountVC buildUI done");
+    WPLog(@"Setting", @"[Sub] WPAccountVC wpBuildRows done");
 }
 
 #pragma mark 动作

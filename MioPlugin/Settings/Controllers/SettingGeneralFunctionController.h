@@ -1,5 +1,5 @@
 #import "SettingCategoryController.h"
 
 @interface SettingGeneralFunctionController : SettingCategoryController
-- (void)buildUI;   // 公开给外部调用的 UI 刷新方法
+- (void)wpBuildRows;   // 行构建钩子（外部刷新一律调 wpReloadUI）
 @end

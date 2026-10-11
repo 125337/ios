@@ -73,6 +73,7 @@ static const CGFloat kCellHPadding = 16.0;
 @property (nonatomic, strong) WPWGroup *wcLastGroup;                 // 最近一个组（hint/footer 挂靠）
 @property (nonatomic, copy) NSString *wcPendingHeader;               // addSectionHeader 暂存，建组时消费
 @property (nonatomic, assign) BOOL wpBuildingSubRows;                // 手风琴展开构建中（子配置行标题加「空格+↑」前缀）
+@property (nonatomic, assign) BOOL wpReloading;                      // wpReloadUI 执行中（wpBuildRows 直接调用守卫依据）
 @end
 
 // 全站唯一渲染引擎 = 微信引擎（WCR 同款）。旧 UITableView/手绘引擎已删除；
@@ -142,9 +143,9 @@ static const CGFloat kCellHPadding = 16.0;
         return;
     }
     // WCR reloadTableData 同款复用路径：manager/tableView 原地保留，只 clearAllSection 清空
-    // sections，随后 buildUI 重填、reloadAsync 刷新（async 排队晚于本 runloop 的同步填充）。
+    // sections，随后 wpBuildRows 重填、reloadAsync 刷新（async 排队晚于本 runloop 的同步填充）。
     // 同一 tableView 意味着 contentOffset 天然保留（WCR 切手风琴不跳顶的根源）、无空帧、
-    // 无容器交换。所有调用方均遵循「本方法后必接 buildUI」约定（已全量核查 20 处）。
+    // 无容器交换。本方法只由 wpReloadUI 调用，外部刷新一律走 wpReloadUI，禁止手动成对调。
     if (self.wcTable && [self.wcTable clearSectionsForReuse]) {
         self.wcLastGroup = nil;
         self.wcPendingHeader = nil;
@@ -162,13 +163,13 @@ static const CGFloat kCellHPadding = 16.0;
         oldContainer = self.wcTable.containerView;
     }
     // 立即摘旧挂新会闪一帧空表（新表要等 reloadAsync 才有内容）。
-    // 对齐 WCR reloadTableData 观感：新表后台建好、buildUI 填完、reload 跑完后，
+    // 对齐 WCR reloadTableData 观感：新表后台建好、wpBuildRows 填完、reload 跑完后，
     // 再与旧表同帧原子替换（本 runloop 内完成，无空帧）
     self.wcTable = [WPWeChatTable tableForVC:self];
     if (!self.wcTable) return;
     self.wcLastGroup = nil;
     self.wcPendingHeader = nil;
-    // 数据由后续 buildUI 同步填充，此处延迟 reload 兜底（首帧 layout 早于 buildUI 时表会空一帧）
+    // 数据由后续 wpBuildRows 同步填充，此处延迟 reload 兜底（首帧 layout 早于 wpBuildRows 时表会空一帧）
     [self.wcTable reloadAsync];
     UITableView *newTV = self.wcTable.tableView;
     UIView *newContainer = self.wcTable.containerView;
@@ -236,8 +237,7 @@ static const CGFloat kCellHPadding = 16.0;
 
     if ([self.masterSwitchKeys containsObject:cfgKey]) {
         // 手风琴状态 = 总开关状态：开即展开子行，关即收起（整页重建时按 isOn 决定是否构建子行）
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }
 
     // 每页钩子（如圆角页提示重启生效）
@@ -348,8 +348,7 @@ static const CGFloat kCellHPadding = 16.0;
         } @catch (NSException *e) {
             WPLog(@"Config", @"[WCEDIT] 读回验证异常 key=%@: %@", key, e.name);
         }
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -681,8 +680,26 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     [self.view endEditing:YES];
 }
 
-- (void)buildUI {
-    WPLog(@"Config", @"[BUILD] buildUI 调用! self=%@, 注意: 基类空实现, 子类应重写", self);
+#pragma mark - 唯一刷新入口 / 行构建钩子
+
+// 唯一公开刷新入口：任何配置变更后的刷新统一走这里。
+// wpRebuildWeChatTable 内部自判首次建表/清表复用两条路径，调用方永不区分"初次/刷新"。
+- (void)wpReloadUI {
+    self.wpReloading = YES;
+    [self wpRebuildWeChatTable];
+    [self wpBuildRows];
+    self.wpReloading = NO;
+}
+
+// 行构建钩子（子类只重写不调用）：非 reload 上下文被直接调用 = 误用，
+// 自愈转发为完整重建（幂等，不会回"只重填不清表"的老坑）并打日志提示修正。
+- (void)wpBuildRows {
+    if (!self.wpReloading) {
+        WPLog(@"Config", @"[BUILD] wpBuildRows 被直接调用（self=%@），已自愈转发 wpReloadUI，请改调 wpReloadUI", self);
+        [self wpReloadUI];
+        return;
+    }
+    WPLog(@"Config", @"[BUILD] wpBuildRows 基类空实现: self=%@, 子类应重写", self);
 }
 
 - (void)buttonClicked:(NSString *)key {

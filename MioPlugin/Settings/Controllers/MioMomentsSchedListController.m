@@ -21,13 +21,11 @@
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 - (void)reloadTable {
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 #pragma mark - 状态文案
@@ -51,7 +49,7 @@
 
 #pragma mark - UI（WCR 同款：每任务一卡，卡内一行——预览在上 / 时间·状态灰色第二行，点击弹操作单）
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }

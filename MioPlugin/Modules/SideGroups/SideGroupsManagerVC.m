@@ -20,10 +20,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"分组管理";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     SideGroupsConfig *config = [SideGroupsConfig shared];
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
@@ -94,7 +94,7 @@
     y = [self finishGroup:g4 atY:y height:cy];
     y = [self addSectionFooter:@"恢复为 全部/私聊/群聊/其他 四个默认分组（不影响电报分组）" y:y width:w];
 
-    WPLog(@"UI", @"[Sub] SideGroupsManagerVC buildUI done (tabs=%lu)", (unsigned long)tabs.count);
+    WPLog(@"UI", @"[Sub] SideGroupsManagerVC wpBuildRows done (tabs=%lu)", (unsigned long)tabs.count);
 }
 
 #pragma mark - 数值输入（范围钳制 [1,30]）
@@ -133,8 +133,7 @@
                 return;
             }
             WPLog(@"Config", @"[SGMGR] %@ = %@", key, @(val));
-            [self wpRebuildWeChatTable];
-            [self buildUI];
+            [self wpReloadUI];
         }];
         return;
     }
@@ -250,8 +249,7 @@
 }
 
 - (void)reloadAfterStoreChange {
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 @end

@@ -17,10 +17,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"卡片背景";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -286,8 +286,7 @@
             WPLog(@"CardBg-Diag", @"[PICKER] Deleting background image");
             [CardBgConfig deleteBackgroundImage];
             [ConfigManager saveAll];
-            [self wpRebuildWeChatTable];
-            [self buildUI];
+            [self wpReloadUI];
         }
     }];
 }
@@ -330,8 +329,7 @@
                                  key:@"CardBg"];
             [ConfigManager saveAll];
             [picker dismissViewControllerAnimated:YES completion:^{
-                [self wpRebuildWeChatTable];
-                [self buildUI];
+                [self wpReloadUI];
             }];
         });
     }];
@@ -355,8 +353,7 @@
     [MioAlertHelper showMenuAlert:@"背景填充模式" buttons:titles onButton:^(NSInteger index) {
         config.cardBgFillMode = index;
         [ConfigManager saveAll];
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -378,8 +375,7 @@
     [MioAlertHelper showMenuAlert:@"背景显示层级" buttons:titles onButton:^(NSInteger index) {
         config.cardBgLayer = index;
         [ConfigManager saveAll];
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -401,8 +397,7 @@
     [MioAlertHelper showMenuAlert:@"对齐方式" buttons:titles onButton:^(NSInteger index) {
         config.cardBgAlignment = index;
         [ConfigManager saveAll];
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -414,8 +409,7 @@
 // master key（Material/Corner/Border）已由基类整页重建，这里只补子开关的联动重建）
 - (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on {
     if ([key isEqualToString:@"cardBgCornerUseGlobal"]) {
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }
 }
 

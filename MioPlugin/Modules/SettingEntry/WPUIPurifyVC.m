@@ -10,10 +10,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"界面净化";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -55,7 +55,7 @@
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
-    WPLog(@"UI", @"[Sub] WPUIPurifyVC buildUI done");
+    WPLog(@"UI", @"[Sub] WPUIPurifyVC wpBuildRows done");
 }
 
 @end

@@ -17,14 +17,13 @@ static const NSInteger kMaxInviteRules = 10;
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"拉群规则";
-    // 不在此处 buildUI：viewWillAppear 统一重建，避免同表叠行
+    // 不在此处 wpBuildRows：viewWillAppear 统一 wpReloadUI，避免同表叠行
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     // 微信引擎表每次重建后再添加行，防止 pop 返回/多次进入时行叠加
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 #pragma mark - 行点击分发
@@ -56,8 +55,7 @@ static const NSInteger kMaxInviteRules = 10;
 }
 
 - (void)reloadTable {
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 - (void)showRuleActions:(NSInteger)ruleIndex {
@@ -190,7 +188,7 @@ static const NSInteger kMaxInviteRules = 10;
 
 #pragma mark - UI
 
-- (void)buildUI {
+- (void)wpBuildRows {
     self.masterSwitchKeys = [NSMutableSet set];
 
     AutoTransferConfig *config = [AutoTransferConfig shared];

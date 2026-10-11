@@ -8,10 +8,10 @@
     [super viewDidLoad];
     self.title = @"指定页面上锁";
     self.categoryName = @"指定页面上锁";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }

@@ -13,8 +13,7 @@
 - (void)wpHandleSwitchKey:(NSString *)key row:(id)row on:(BOOL)on haveOn:(BOOL)haveOn {
     if ([key isEqualToString:@"sdEnabled"] && on && [SessionGroupsConfig shared].sgEnabled) {
         WPShowToast(@"与电报分组互斥，请先关闭电报分组");
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
         return;
     }
     [super wpHandleSwitchKey:key row:row on:on haveOn:haveOn];
@@ -23,10 +22,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"首页侧边分组";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -249,8 +248,7 @@
         } @catch (NSException *e) {
             return;
         }
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 

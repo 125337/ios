@@ -12,7 +12,7 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"消息时间设置";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 - (NSString *)positionName:(NSInteger)position {
@@ -50,7 +50,7 @@
     [MioAlertHelper showMenuAlert:@"请选择时间标签的显示位置" buttons:titles onButton:^(NSInteger index) {
         config.messageTimePosition = index;
         [ConfigManager saveAll];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -60,14 +60,14 @@
     editor.saveBlock = [^(NSString *newFormat) {
         [MessageTimeConfig shared].messageTimeCustomFormat = newFormat;
         [ConfigManager saveAll];
-        [self buildUI];
+        [self wpReloadUI];
     } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     [self presentViewController:nav animated:YES completion:nil];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }

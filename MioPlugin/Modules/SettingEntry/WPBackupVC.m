@@ -12,10 +12,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"备份与重置";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     CGFloat w = self.view.bounds.size.width;
 
     [self addSectionHeader:@"重置插件配置" y:0 width:w];
@@ -31,7 +31,7 @@
                                 cy:cy width:w];
 
     [self finishGroup:group atY:0 height:cy];
-    WPLog(@"UI", @"[Backup] buildUI done");
+    WPLog(@"UI", @"[Backup] wpBuildRows done");
 }
 
 - (void)buttonClicked:(NSString *)key {

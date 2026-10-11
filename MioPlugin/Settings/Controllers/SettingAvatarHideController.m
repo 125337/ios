@@ -10,10 +10,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"隐藏头像";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }

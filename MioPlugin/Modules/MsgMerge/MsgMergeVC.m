@@ -1,4 +1,4 @@
-﻿#import "MsgMergeVC.h"
+#import "MsgMergeVC.h"
 #import "MsgMergeConfig.h"
 #import "MsgMergeAABVC.h"
 #import "../../Core/ConfigManager.h"
@@ -8,17 +8,16 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"消息合并";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     // 微信引擎表每次重建后再添加行，防止 pop 返回时行叠加
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }

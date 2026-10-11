@@ -12,14 +12,13 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"朋友圈";
-    // 不在此处 buildUI：viewWillAppear 统一重建（评论页返回后刷新条数反显）
+    // 不在此处 wpBuildRows：viewWillAppear 统一 wpReloadUI（评论页返回后刷新条数反显）
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     // 微信引擎表每次重建后再添加行，防止 pop 返回/多次进入时行叠加
-    [self wpRebuildWeChatTable];
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 - (void)buttonClicked:(NSString *)key {
@@ -104,7 +103,7 @@
     return n > 0 ? [NSString stringWithFormat:@"已设置 %lu 条", (unsigned long)n] : @"点击编辑（空则不评论）";
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }

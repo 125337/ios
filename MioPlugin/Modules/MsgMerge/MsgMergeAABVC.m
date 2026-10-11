@@ -9,7 +9,7 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"头像气泡上";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
 #pragma mark - 选项名表
@@ -65,8 +65,7 @@
     editor.saveBlock = [^(NSString *newFormat) {
         [MsgMergeConfig shared].msgMergeTimeCustomFormat = newFormat;
         [ConfigManager saveAll];
-        [self wpRebuildWeChatTable]; // 微信引擎表先清空旧 section 再重填
-        [self buildUI];
+        [self wpReloadUI];
     } copy];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
@@ -86,8 +85,7 @@
     [MioAlertHelper showMenuAlert:title buttons:titles onButton:^(NSInteger index) {
         onPick(index);
         [ConfigManager saveAll];
-        [self wpRebuildWeChatTable]; // 微信引擎表先清空旧 section 再重填，否则新行追加在旧行后面
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -144,7 +142,7 @@
 
 #pragma mark - 页面构建
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }

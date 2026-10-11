@@ -14,8 +14,7 @@
 - (void)wpHandleSwitchKey:(NSString *)key row:(id)row on:(BOOL)on haveOn:(BOOL)haveOn {
     if ([key isEqualToString:@"sgEnabled"] && on && [SideGroupsConfig shared].sdEnabled) {
         WPShowToast(@"与侧边分组互斥，请先关闭侧边分组");
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
         return;
     }
     [super wpHandleSwitchKey:key row:row on:on haveOn:haveOn];
@@ -24,10 +23,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"首页电报分组";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -272,7 +271,7 @@
                           width:w];
     y = [self finishGroup:g4 atY:y height:cy];
 
-    WPLog(@"UI", @"[Sub] SessionGroupsVC buildUI done");
+    WPLog(@"UI", @"[Sub] SessionGroupsVC wpBuildRows done");
 }
 
 #pragma mark - 名称映射
@@ -335,8 +334,7 @@
             return;
         }
         WPLog(@"Config", @"[SGEDIT] %@ = %@", key, @(val));
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 

@@ -24,10 +24,10 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"首页卡片";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -566,8 +566,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
     [MioAlertHelper showMenuAlert:@"选择圆点位置" buttons:btns onButton:^(NSInteger index) {
         [HomeCardConfig shared].hcContactDotPos = index;   // 取消不回调，index 恒 0-3
         [ConfigManager saveAll];
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     }];
 }
 
@@ -594,10 +593,9 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
     // 按本次打开的类型分区保存，互不覆盖（选择顺序 = 展示顺序）
     if (self.contactPickerMode == MioContactPickerModeGroups) [HomeCardConfig saveGroups:wxids];
     else [HomeCardConfig saveContacts:wxids];
-    // 当场刷新"管理联系人"行文案（表格重建 + 内容重建，与 onDotPosTap 同款，只 buildUI 行文案不动）
+    // 当场刷新"管理联系人"行文案（表格重建 + 内容重建，与 onDotPosTap 同款）
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self wpRebuildWeChatTable];
-        [self buildUI];
+        [self wpReloadUI];
     });
 }
 
@@ -634,8 +632,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                 [HomeCardConfig deleteDarkImage];
             }
             [ConfigManager saveAll];
-            [self wpRebuildWeChatTable];
-            [self buildUI];
+            [self wpReloadUI];
         }
     }];
 }
@@ -684,8 +681,7 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                                       @"HomeCardLight" : @"HomeCardDark")];
             [ConfigManager saveAll];
             [picker dismissViewControllerAnimated:YES completion:^{
-                [self wpRebuildWeChatTable];
-                [self buildUI];
+                [self wpReloadUI];
             }];
         });
     }];

@@ -22,10 +22,10 @@ static BOOL wpFontSizeValid(CGFloat v) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"布局设置";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }

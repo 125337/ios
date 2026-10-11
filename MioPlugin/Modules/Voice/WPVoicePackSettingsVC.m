@@ -11,10 +11,10 @@
     [super viewDidLoad];
     self.title = @"语音包";
     self.categoryName = @"语音包";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }

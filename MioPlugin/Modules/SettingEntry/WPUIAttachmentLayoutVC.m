@@ -11,10 +11,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"附件布局优化";
-    [self buildUI];
+    [self wpReloadUI];
 }
 
-- (void)buildUI {
+- (void)wpBuildRows {
     for (UIView *v in self.contentView.subviews) {
         [v removeFromSuperview];
     }
@@ -55,7 +55,7 @@
         y = [self addSectionFooter:@"开启附件布局优化后可配置详细选项" y:y width:w];
     }
 
-    WPLog(@"UI", @"[Sub] WPUIAttachmentLayoutVC buildUI done");
+    WPLog(@"UI", @"[Sub] WPUIAttachmentLayoutVC wpBuildRows done");
 }
 
 @end

@@ -19,8 +19,13 @@ typedef NS_ENUM(NSInteger, InputValueType) {
 @property (nonatomic, strong) NSMutableSet<NSString *> *masterSwitchKeys;
 
 - (UIView *)addTableGroupAtY:(CGFloat)y width:(CGFloat)w;
-/// 重建微信引擎表（变更回调后先调此方法再调 buildUI，避免向旧 manager 重复加行）
+/// 重建微信引擎表（wpReloadUI 内部已调用；仅引擎就绪检测/特殊时序才直接使用）
 - (void)wpRebuildWeChatTable;
+/// 唯一公开刷新入口：重建微信引擎表（首次建表/清表复用由内部自判）+ 重填行。
+/// 任何配置变更、开关切换、picker/输入保存后的刷新统一调这个，禁止再手动成对调 wpRebuildWeChatTable+wpBuildRows
+- (void)wpReloadUI;
+/// 行构建钩子：子类只重写、不调用（基类守卫：非 reload 上下文直接调用会打日志并自愈转发 wpReloadUI）
+- (void)wpBuildRows;
 - (CGFloat)finishGroup:(UIView *)group atY:(CGFloat)y height:(CGFloat)h;
 - (CGFloat)addSectionHeader:(NSString *)text y:(CGFloat)y width:(CGFloat)w;
 - (CGFloat)addSectionFooter:(NSString *)text y:(CGFloat)y width:(CGFloat)w;
@@ -59,7 +64,6 @@ typedef NS_ENUM(NSInteger, InputValueType) {
 - (CGFloat)addMasterSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on subBuilder:(void (^)(UIView *expand, CGFloat *ecy))subBuilder cy:(CGFloat)cy width:(CGFloat)w;
 - (void)colorButtonTapped:(UIButton *)sender;
 - (void)buttonClicked:(NSString *)key;
-- (void)buildUI;
 /// 微信引擎开关落地后的钩子（每页可重写：如提示重启生效）
 - (void)wpAfterSwitchChanged:(NSString *)key on:(BOOL)on;
 /// switch 回调落地（写配置+saveAll；子类可重写做写前拦截，如互斥开关，拒绝时不调 super）
