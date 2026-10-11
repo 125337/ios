@@ -8,6 +8,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 // 总开关与基础布局
 @property (nonatomic, assign) BOOL msgMergeEnabled;
+@property (nonatomic, assign) BOOL msgMergeAabEnabled;          // 头像气泡上开关
 @property (nonatomic, assign) NSInteger msgMergePositionMode;   // 头像位置模式 0-2
 @property (nonatomic, assign) CGFloat msgMergeAboveShiftPt;     // 上方额外偏移 ±10
 @property (nonatomic, assign) CGFloat msgMergeBelowShiftPt;     // 下方额外偏移 ±10

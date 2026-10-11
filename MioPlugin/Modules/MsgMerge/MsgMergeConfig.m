@@ -19,6 +19,7 @@
     return @[
         // 总开关与基础布局
         [ConfigDescriptor itemWithKey:@"msgMergeEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"msgMergeAabEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"msgMergePositionMode" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"msgMergeAboveShiftPt" type:ConfigValueTypeFloat default:@(0)],
         [ConfigDescriptor itemWithKey:@"msgMergeBelowShiftPt" type:ConfigValueTypeFloat default:@(0)],
