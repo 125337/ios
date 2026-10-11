@@ -64,7 +64,8 @@
     void (^select)(NSInteger) = ^(NSInteger mode) {
         config.redEnvelopSyncMode = mode;
         [ConfigManager saveAll];
-        // 等 action sheet 完全退场后 wpReloadUI 重建`n        [self dismissViewControllerAnimated:YES completion:^{
+        // 等 action sheet 完全退场后 wpReloadUI 重建
+        [self dismissViewControllerAnimated:YES completion:^{
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self wpReloadUI];
             });
