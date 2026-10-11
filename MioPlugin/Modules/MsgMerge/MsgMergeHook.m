@@ -260,10 +260,12 @@ static BOOL wpAabActive(id vm, NSInteger *outMode, CGFloat *outDelta, CGFloat *o
 
     CGFloat textShift = isSender ? config.msgMergeTextYShiftSelf : config.msgMergeTextYShiftOther;
     if (outShift) *outShift = textShift;
-    // 高度补偿 = 头像高 + 间隙 + 文字 Y 偏移（上下两个方向都占高度）
+    // 高度补偿（XOS 探针实证）：上方模式 delta=头像高（接收 43），自身侧 +2（容器 16→61）；
+    // 下方模式保持头像高+4
     NSNumber *cachedH = objc_getAssociatedObject(vm, &kMioAabAvatarH);
     CGFloat avatarH = cachedH.doubleValue > 1 ? cachedH.doubleValue : 42;
-    if (outDelta) *outDelta = avatarH + 4 + fabs(textShift);
+    CGFloat base = (mode == 0) ? (isSender ? 2.0 : 0.0) : 4.0;
+    if (outDelta) *outDelta = avatarH + base + fabs(textShift);
     return YES;
 }
 
@@ -701,18 +703,43 @@ static void wpApplyAabLayout(id cellView) {
     objc_setAssociatedObject(vm, &kMioAabAvatarH, @(headF.size.height), OBJC_ASSOCIATION_RETAIN);
 
     CGFloat gap = 4;
-    CGFloat delta = headF.size.height + gap + fabs(textShift);
+    // XOS 探针实证：上方模式 delta=头像高（接收侧 16→59），自身侧 +2（16→61）；下方保持 +4
+    CGFloat delta = headF.size.height + (mode == 0 ? (isSender ? 2 : 0) : gap) + fabs(textShift);
 
     if (mode == 0) {
-        // 上方：头像贴顶，气泡容器（含气泡图+文字）整体下移到头像下方。
+        // 上方：整个头部重排（XOS 探针实证组首 AppFile/Text）：
+        //   头像 (9,2)→(12,4) 接收 +3、自身 (341,2)→(338,4) -3；昵称 (61,0)→(64,4)；
+        //   气泡容器 (61,16)→(15,59)：x 左移到 cell 边距 15（占满头像下方整行）、y += delta；
+        //   自身侧容器 x 不动（314 已靠右缘），仅 y += delta。
         // ★ 不能只移容器内的气泡图：文字（RichTextView）与气泡图同容器，
         //   只移图会让文字悬空在上、气泡空白（v3 探针实证 bg y=47 而 RichText y=10）。
-        //   移容器则文字随行；容器 y 用首过自然 y + delta 绝对定位，orig 每轮是否
+        //   移容器则文字随行；容器 y/x 用首过自然值 + delta 绝对定位，orig 每轮是否
         //   重置容器 frame 都不会累加。
         CGRect newHead = headF;
-        newHead.origin.y = 2;
-        if (fabs(newHead.origin.y - headF.origin.y) > 0.5)
+        newHead.origin.x = headF.origin.x + (isSender ? -3 : 3);
+        newHead.origin.y = 4;
+        if (fabs(newHead.origin.x - headF.origin.x) > 0.5 || fabs(newHead.origin.y - headF.origin.y) > 0.5)
             ((void (*)(id, SEL, CGRect))objc_msgSend)(head, @selector(setFrame:), newHead);
+        if (!isSender) {
+            // 昵称随头像偏移（XOS 实证 (64,4) = 头像新右缘 + 9、y = 头像 y）；自身侧无昵称
+            Class nickCls = objc_getClass("MMCPLabel");
+            if (nickCls) {
+                NSArray *subs = ((NSArray *(*)(id, SEL))objc_msgSend)(cellView, @selector(subviews));
+                CGFloat nickX = newHead.origin.x + newHead.size.width + 9;
+                for (UIView *sub in subs) {
+                    if ([sub isKindOfClass:nickCls] && !sub.hidden &&
+                        sub.frame.origin.x > 40 && sub.frame.origin.y < 20) {
+                        CGRect nf = sub.frame;
+                        if (fabs(nf.origin.x - nickX) > 0.5 || fabs(nf.origin.y - 4) > 0.5) {
+                            nf.origin.x = nickX;
+                            nf.origin.y = 4;
+                            ((void (*)(id, SEL, CGRect))objc_msgSend)(sub, @selector(setFrame:), nf);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
         if (fabs(delta) > 0.5) {
             id container = ((id (*)(id, SEL))objc_msgSend)(bg, @selector(superview));
             if (container) {
@@ -723,11 +750,13 @@ static void wpApplyAabLayout(id cellView) {
                     objc_setAssociatedObject(bg, &kMioAabContBaseY, baseY, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 }
                 contF.origin.y = baseY.doubleValue + delta;
-                if (fabs(contF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.y) > 0.5)
+                if (!isSender) contF.origin.x = 15;  // 接收侧：气泡左缘对齐 cell 边距（XOS 实证 61→15）
+                if (fabs(contF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.y) > 0.5 ||
+                    fabs(contF.origin.x - ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.x) > 0.5)
                     ((void (*)(id, SEL, CGRect))objc_msgSend)(container, @selector(setFrame:), contF);
             }
             if (refer) {
-                // 引用板同款 baseY+delta 绝对下移（native 每轮重置其 y，不会累加）
+                // 引用板同款 baseY+delta 绝对下移（native 每轮重置其 y，不会累加）；接收侧同款左移
                 CGRect refF = ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame));
                 NSNumber *rBase = objc_getAssociatedObject(refer, &kMioAabContBaseY);
                 if (!rBase) {
@@ -735,11 +764,12 @@ static void wpApplyAabLayout(id cellView) {
                     objc_setAssociatedObject(refer, &kMioAabContBaseY, rBase, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 }
                 refF.origin.y = rBase.doubleValue + delta;
-                if (fabs(refF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame)).origin.y) > 0.5)
+                if (!isSender) refF.origin.x = 15;
+                if (fabs(refF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame)).origin.y) > 0.5 ||
+                    fabs(refF.origin.x - ((CGRect (*)(id, SEL))objc_msgSend)(refer, @selector(frame)).origin.x) > 0.5)
                     ((void (*)(id, SEL, CGRect))objc_msgSend)(refer, @selector(setFrame:), refF);
             }
-            // 昵称不动：XOS 探针对照实证组首昵称恒在头像右侧自然位（y=4），不随容器下移；
-            // 旧 += 写法在 orig 不重置昵称 frame 时每轮累加（实证 0/47/94/141/188），已删
+            // 昵称 y/x 见上方 mode0 头像段：XOS 实证昵称随头像偏移到 (64,4)，非累加路径
         }
     } else {
         // 下方：气泡/昵称不动，头像放到气泡容器底。
