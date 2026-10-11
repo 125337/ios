@@ -378,6 +378,35 @@ static void processKeywordAlertMessage(id wrap) {
 
 #pragma mark - 安装
 
+/// 挂载安全守卫：原方法必须返回 void 且所有参数均为对象类型（'@'）。
+/// ARC 替换函数入口会对声明为 id 的形参自动 objc_retain，实际参数若是
+/// BOOL/int 等原始值（如 0x1=YES）会直接 SIGSEGV（8.0.78 崩溃根因）
+static BOOL kaIsMethodSignatureSafe(Method m, const char *name) {
+    char *retEnc = method_copyReturnType(m);
+    BOOL isVoid = retEnc && retEnc[0] == 'v';
+    if (retEnc) free(retEnc);
+    if (!isVoid) return NO;
+    unsigned int total = method_getNumberOfArguments(m); // 含 self/_cmd
+    for (unsigned int i = 2; i < total; i++) {
+        char t[8] = {0};
+        method_getArgumentType(m, i, t, sizeof(t));
+        if (t[0] != '@') {
+            WPLog(@"KeywordAlert", @"[GUARD] 跳过 %s (第%u参类型'%s'为原始值，ARC入口retain必崩)", name, i - 2, t);
+            return NO;
+        }
+    }
+    return YES;
+}
+
+/// 带签名守卫的挂载：方法不存在或签名不安全返回 NO 且不挂钩
+static BOOL kaSafeHook(Class cls, SEL sel, IMP replacement, IMP *origOut) {
+    Method m = class_getInstanceMethod(cls, sel);
+    if (!m) return NO;
+    if (!kaIsMethodSignatureSafe(m, sel_getName(sel))) return NO;
+    MSHookMessageEx(cls, sel, replacement, origOut);
+    return YES;
+}
+
 @implementation KeywordAlertHook
 
 + (void)install {
@@ -385,27 +414,31 @@ static void processKeywordAlertMessage(id wrap) {
 
     Class CMessageMgrClass = objc_getClass("CMessageMgr");
     if (CMessageMgrClass) {
-        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncAddMessage:), (IMP)replaced_ka_onNewSyncAddMessage, &orig_ka_onNewSyncAddMessage);
-        WPLog(@"KeywordAlert", @"[+] onNewSyncAddMessage: hooked");
+        if (kaSafeHook(CMessageMgrClass, @selector(onNewSyncAddMessage:), (IMP)replaced_ka_onNewSyncAddMessage, &orig_ka_onNewSyncAddMessage))
+            WPLog(@"KeywordAlert", @"[+] onNewSyncAddMessage: hooked");
+        else
+            WPLog(@"KeywordAlert", @"[-] onNewSyncAddMessage: 未挂载(方法缺失或签名不安全)");
 
-        MSHookMessageEx(CMessageMgrClass, @selector(addMessageLibWithWrap:withVC:), (IMP)replaced_ka_addMessageLibWithWrap, &orig_ka_addMessageLibWithWrap);
-        if (orig_ka_addMessageLibWithWrap) {
+        if (kaSafeHook(CMessageMgrClass, @selector(addMessageLibWithWrap:withVC:), (IMP)replaced_ka_addMessageLibWithWrap, &orig_ka_addMessageLibWithWrap)) {
             WPLog(@"KeywordAlert", @"[+] addMessageLibWithWrap:withVC: hooked");
-        } else {
-            MSHookMessageEx(CMessageMgrClass, @selector(addMessageLibWithWrap:WithVC:), (IMP)replaced_ka_addMessageLibWithWrap, &orig_ka_addMessageLibWithWrap);
-            if (orig_ka_addMessageLibWithWrap) {
-                WPLog(@"KeywordAlert", @"[+] addMessageLibWithWrap:WithVC: hooked");
-            }
+        } else if (kaSafeHook(CMessageMgrClass, @selector(addMessageLibWithWrap:WithVC:), (IMP)replaced_ka_addMessageLibWithWrap, &orig_ka_addMessageLibWithWrap)) {
+            WPLog(@"KeywordAlert", @"[+] addMessageLibWithWrap:WithVC: hooked");
         }
 
-        MSHookMessageEx(CMessageMgrClass, @selector(onNewSyncNotAddDBMessage:), (IMP)replaced_ka_onNewSyncNotAddDBMessage, &orig_ka_onNewSyncNotAddDBMessage);
-        WPLog(@"KeywordAlert", @"[+] onNewSyncNotAddDBMessage: hooked");
+        if (kaSafeHook(CMessageMgrClass, @selector(onNewSyncNotAddDBMessage:), (IMP)replaced_ka_onNewSyncNotAddDBMessage, &orig_ka_onNewSyncNotAddDBMessage))
+            WPLog(@"KeywordAlert", @"[+] onNewSyncNotAddDBMessage: hooked");
+        else
+            WPLog(@"KeywordAlert", @"[-] onNewSyncNotAddDBMessage: 未挂载(方法缺失或签名不安全)");
 
-        MSHookMessageEx(CMessageMgrClass, @selector(AddMsg:MsgWrap:), (IMP)replaced_ka_AddMsgMsgWrap, &orig_ka_AddMsgMsgWrap);
-        WPLog(@"KeywordAlert", @"[+] AddMsg:MsgWrap: hooked");
+        if (kaSafeHook(CMessageMgrClass, @selector(AddMsg:MsgWrap:), (IMP)replaced_ka_AddMsgMsgWrap, &orig_ka_AddMsgMsgWrap))
+            WPLog(@"KeywordAlert", @"[+] AddMsg:MsgWrap: hooked");
+        else
+            WPLog(@"KeywordAlert", @"[-] AddMsg:MsgWrap: 未挂载(方法缺失或签名不安全)");
 
-        MSHookMessageEx(CMessageMgrClass, @selector(AsyncOnAddMsg:MsgWrap:), (IMP)replaced_ka_AsyncOnAddMsgMsgWrap, &orig_ka_AsyncOnAddMsgMsgWrap);
-        WPLog(@"KeywordAlert", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
+        if (kaSafeHook(CMessageMgrClass, @selector(AsyncOnAddMsg:MsgWrap:), (IMP)replaced_ka_AsyncOnAddMsgMsgWrap, &orig_ka_AsyncOnAddMsgMsgWrap))
+            WPLog(@"KeywordAlert", @"[+] AsyncOnAddMsg:MsgWrap: hooked");
+        else
+            WPLog(@"KeywordAlert", @"[-] AsyncOnAddMsg:MsgWrap: 未挂载(方法缺失或签名不安全)");
 
         // 运行时探测批量/会话级消息入口（免打扰会话不走单条入口；WCR 反编译确认存在
         // AsyncOnAddMsgForSession:... / AsyncOnAddMsgListForSession:... 等方法，完整签名因版本而异，
@@ -425,18 +458,15 @@ static void processKeywordAlertMessage(id wrap) {
                 continue;
             }
             if (strstr(name, "AsyncOnAddMsg") || strstr(name, "OnAddMsg:")) {
-                // 实锤打印真实签名：参数个数（去掉 self/_cmd）与返回类型编码
                 unsigned int totalArgs = method_getNumberOfArguments(methodList[i]); // 含 self/_cmd
                 int nArgs = (int)totalArgs - 2;
-                char *retEnc = method_copyReturnType(methodList[i]);
-                NSString *retStr = retEnc ? [NSString stringWithUTF8String:retEnc] : @"?";
-                if (retEnc) free(retEnc);
-                // 替换函数只提供 2/3 参且原方法返回 void 的版本；签名不匹配挂上去调用即崩（109 闪退根因），宁可不挂
-                BOOL isVoid = [retStr isEqualToString:@"v"];
-                if (!isVoid || (nArgs != 2 && nArgs != 3)) {
-                    WPLog(@"KeywordAlert", @"[BATCH] 跳过 %s (参数%d 返回%@ 签名不安全)", name, nArgs, retStr);
+                // 替换函数只提供 2/3 参版本；且必须全对象参数 + void 返回，
+                // 否则 ARC 入口对原始值参数 retain 必崩（8.0.78 根因），宁可不挂
+                if (nArgs != 2 && nArgs != 3) {
+                    WPLog(@"KeywordAlert", @"[BATCH] 跳过 %s (参数%d 个数不匹配)", name, nArgs);
                     continue;
                 }
+                if (!kaIsMethodSignatureSafe(methodList[i], name)) continue;
                 if (!_kaOrigImps) _kaOrigImps = [NSMutableDictionary dictionary];
                 _kaOrigImps[n] = [NSValue valueWithPointer:method_getImplementation(methodList[i])];
                 MSHookMessageEx(CMessageMgrClass, sel,
