@@ -12,6 +12,7 @@
 #import <objc/message.h>
 #import <sys/sysctl.h>
 #import <stdlib.h>
+#import <dlfcn.h>
 
 #pragma mark - C 辅助函数（定义在使用点之前）
 
@@ -158,10 +159,59 @@ static NSDictionary *MioReadProvisioningProfile(void) {
     return [plist isKindOfClass:[NSDictionary class]] ? plist : nil;
 }
 
+/// 巨魔/越狱回退（对齐 WCR WCRSideloadReadCodeSignatureEntitlements）：profile 文件不存在时，
+/// dlsym SecTaskCreateFromSelf + SecTaskCopyValueForEntitlement 从进程安全任务读取实际生效的
+/// entitlements——巨魔伪签名与越狱安装都没有 embedded.mobileprovision，但运行时 entitlements 真实存在
+static NSDictionary *MioReadSecTaskEntitlements(void) {
+    void *handle = dlopen(NULL, RTLD_LAZY);
+    if (!handle) return nil;
+    void *(*SecTaskCreateFromSelf)(void *) = dlsym(handle, "SecTaskCreateFromSelf");
+    CFTypeRef (*SecTaskCopyValueForEntitlement)(void *, CFStringRef, CFErrorRef *) = dlsym(handle, "SecTaskCopyValueForEntitlement");
+    if (!SecTaskCreateFromSelf || !SecTaskCopyValueForEntitlement) {
+        dlclose(handle);
+        return nil;
+    }
+    void *task = SecTaskCreateFromSelf(NULL);
+    if (!task) {
+        dlclose(handle);
+        return nil;
+    }
+    // 键集：权限卡片 6 键 + 证书类型判定 2 键（对齐 WCR DAT_02646830 键数组的语义）
+    NSArray<NSString *> *keys = @[
+        @"aps-environment",
+        @"com.apple.security.application-groups",
+        @"com.apple.developer.kernel.increased-memory-limit",
+        @"com.apple.developer.kernel.extended-virtual-addressing",
+        @"com.apple.developer.avfoundation.multitasking-camera-access",
+        @"com.apple.developer.usernotifications.communication",
+        @"get-task-allow",
+        @"com.apple.private.security.no-sandbox",
+    ];
+    NSMutableDictionary *ent = [NSMutableDictionary dictionary];
+    for (NSString *key in keys) {
+        CFTypeRef v = SecTaskCopyValueForEntitlement(task, (__bridge CFStringRef)key, NULL);
+        if (!v) continue;
+        id obj = CFBridgingRelease(v);
+        if (obj && obj != (id)kCFNull) ent[key] = obj;
+    }
+    CFRelease(task);
+    dlclose(handle);
+    return ent.count > 0 ? [ent copy] : nil;
+}
+
+/// 无 profile 时从 entitlements 推断证书类型（对齐 WCR 类型判定语义的运行时等价物）
+static NSString *MioCertTypeNameFromEntitlements(NSDictionary *ent) {
+    if (ent[@"com.apple.private.security.no-sandbox"] != nil) return @"巨魔签名";
+    id gta = ent[@"get-task-allow"];
+    if ([gta respondsToSelector:@selector(boolValue)] && [gta boolValue]) return @"开发签名";
+    return @"签名安装";
+}
+
 #pragma mark - 页面
 
 @interface WPAccountVC ()
 @property (nonatomic, strong) NSDictionary *profile; // embedded.mobileprovision 解析结果
+@property (nonatomic, strong) NSDictionary *effectiveEntitlements; // 巨魔/越狱回退：SecTask 实际生效权限
 @end
 
 @implementation WPAccountVC
@@ -170,6 +220,9 @@ static NSDictionary *MioReadProvisioningProfile(void) {
     [super viewDidLoad];
     self.title = @"账户信息";
     self.profile = MioReadProvisioningProfile();
+    if (self.profile.count == 0) {
+        self.effectiveEntitlements = MioReadSecTaskEntitlements();  // 对齐 WCR 二级回退
+    }
     [self wpReloadUI];
 }
 
@@ -262,6 +315,44 @@ static NSDictionary *MioReadProvisioningProfile(void) {
             }
             [self finishGroup:permGroup atY:0 height:0];
         }
+    } else if (self.effectiveEntitlements.count > 0) {
+        // 巨魔/越狱：无 embedded.mobileprovision，用 SecTask 实际生效 entitlements 展示
+        //（对齐 WCR：类型/团队/时间走占位，权限为真实运行时数据）
+        [self addSectionHeader:@"证书信息" y:0 width:0];
+        UIView *certGroup = [self addTableGroupAtY:0 width:0];
+        CGFloat cy2 = 0;
+        NSDictionary *ent = self.effectiveEntitlements;
+        NSArray<NSArray<NSString *> *> *certRows = @[
+            @[@"证书类型", MioCertTypeNameFromEntitlements(ent)],
+            @[@"签名团队", @"-"],
+            @[@"团队ID", @"-"],
+            @[@"注册时间", @"-"],
+            @[@"过期时间", @"-"],
+            @[@"允许设备", @"-"],
+        ];
+        for (NSUInteger i = 0; i < certRows.count; i++) {
+            cy2 = [self addInfoRowInGroup:certGroup title:certRows[i][0] rightValue:certRows[i][1] copyText:nil showArrow:NO cy:cy2 width:0];
+        }
+        [self addHintRowInGroup:certGroup text:@"当前安装方式无描述文件，显示运行时权限" cy:cy2 width:0];
+        [self finishGroup:certGroup atY:0 height:0];
+
+        // ── 证书权限（Entitlements）──
+        [self addSectionHeader:@"证书权限" y:0 width:0];
+        UIView *permGroup = [self addTableGroupAtY:0 width:0];
+        CGFloat py = 0;
+        NSArray<NSArray<NSString *> *> *permKeys = @[
+            @[@"aps-environment", @"推送权限"],
+            @[@"com.apple.security.application-groups", @"应用组权限"],
+            @[@"com.apple.developer.kernel.increased-memory-limit", @"内存限制"],
+            @[@"com.apple.developer.kernel.extended-virtual-addressing", @"扩展虚拟地址"],
+            @[@"com.apple.developer.avfoundation.multitasking-camera-access", @"多任务摄像头"],
+            @[@"com.apple.developer.usernotifications.communication", @"Communication权限"],
+        ];
+        for (NSUInteger i = 0; i < permKeys.count; i++) {
+            NSString *status = [self permissionStatusTextForKey:permKeys[i][0] entitlements:ent];
+            py = [self addInfoRowInGroup:permGroup title:permKeys[i][1] rightValue:status copyText:nil showArrow:NO cy:py width:0];
+        }
+        [self finishGroup:permGroup atY:0 height:0];
     } else {
         [self addSectionHeader:@"证书信息" y:0 width:0];
         UIView *certGroup = [self addTableGroupAtY:0 width:0];
