@@ -231,6 +231,7 @@ static IMP orig_VM_rowHeight_text        = NULL;
 
 static char kMioAabAvatarH;   // vm 上缓存实测头像高（rowHeight 先于 cell 构建，用实测值补偿）
 static char kMioAabContBaseY; // 气泡容器/引用板首过自然 y（绝对定位基准，防逐轮累加）
+static char kMioAabSepLayer;  // 时间板下水平虚线分隔（XOS 20260220 对应件）
 
 /// AAB 是否对该 viewModel 生效；outMode 返回 0=上方 1=下方，outDelta 返回高度增量
 static BOOL wpAabActive(id vm, NSInteger *outMode, CGFloat *outDelta, CGFloat *outShift) {
@@ -314,8 +315,9 @@ static NSString *wpAabTimeString(NSDate *date, MsgMergeConfig *config) {
         default: datePart = nil; break;                             // 1=仅时间
     }
 
+    // 日期与时间两行显示（对齐 XOS 时间板；紧凑单行模式 4 保持一行）
     NSMutableString *pattern = [NSMutableString string];
-    if (datePart.length) [pattern appendFormat:@"%@ ", datePart];
+    if (datePart.length) [pattern appendFormat:@"%@%@", datePart, (mode == 4) ? @" " : @"\n"];
     [pattern appendString:timeFmt];
     if (mode == 3) [pattern appendString:@" E"];
 
@@ -324,7 +326,7 @@ static NSString *wpAabTimeString(NSDate *date, MsgMergeConfig *config) {
 }
 
 /// 组首 cell 的时间标注 label（常驻 cellView，随布局更新）
-static void wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, NSInteger mode) {
+static CGRect wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, NSInteger mode) {
     MsgMergeConfig *config = [MsgMergeConfig shared];
     UILabel *label = objc_getAssociatedObject(cellView, &kMioAabTimeLabel);
 
@@ -332,7 +334,7 @@ static void wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, NS
     BOOL isGroupHead = [objc_getAssociatedObject(vm, &kMioAabGroupHead) boolValue];
     if (!isGroupHead || config.msgMergeTimeDisplayMode == 7) {
         if (label && !label.hidden) label.hidden = YES;
-        return;
+        return CGRectZero;
     }
 
     // 时间文本（缓存上次渲染的文本，相同则跳过重设）
@@ -347,13 +349,14 @@ static void wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, NS
     NSString *text = wpAabTimeString(date, config);
     if (!text.length) {
         if (label && !label.hidden) label.hidden = YES;
-        return;
+        return CGRectZero;
     }
 
     if (!label) {
         label = [[UILabel alloc] initWithFrame:CGRectZero];
         label.tag = 20260219;  // 对齐 XOS 时间板 tag，双端探针对账用
         label.font = [UIFont systemFontOfSize:10];
+        label.numberOfLines = 2;  // 日期/时间两行（XOS 同款）
         label.textAlignment = NSTextAlignmentLeft;
         objc_setAssociatedObject(cellView, &kMioAabTimeLabel, label, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [cellView addSubview:label];
@@ -368,14 +371,19 @@ static void wpApplyAabTimeLabel(id cellView, id vm, CGRect headF, CGRect bgF, NS
 
     [label sizeToFit];
     CGRect lf = label.frame;
-    // 时间统一放头像旁：上方模式头像在顶 → 时间在头像右侧；下方模式 → 时间在头像上方
+    // 板位按头像侧别镜像：固定放头像右侧会把自己（右缘头像）的时间板推出屏外（截图实证）
+    CGFloat cellW = ((CGRect (*)(id, SEL))objc_msgSend)(cellView, @selector(frame)).size.width;
+    BOOL rightSide = headF.origin.x > cellW / 2;
     if (mode == 0) {
-        lf.origin = CGPointMake(headF.origin.x + headF.size.width + 6,
-                                headF.origin.y + (headF.size.height - lf.size.height) / 2);
+        lf.origin.x = rightSide ? (headF.origin.x - 6 - lf.size.width)
+                                : (headF.origin.x + headF.size.width + 6);
+        lf.origin.y = headF.origin.y + (headF.size.height - lf.size.height) / 2;
     } else {
-        lf.origin = CGPointMake(headF.origin.x, headF.origin.y - lf.size.height - 2);
+        lf.origin.x = rightSide ? (headF.origin.x + headF.size.width - lf.size.width) : headF.origin.x;
+        lf.origin.y = headF.origin.y - lf.size.height - 2;
     }
     label.frame = lf;
+    return lf;
 }
 
 // ============================================================
@@ -410,17 +418,20 @@ static void wpApplyAabDash(id cellView, id vm, CGRect headF, BOOL isSender) {
     }
 
     BOOL isHead = [objc_getAssociatedObject(vm, &kMioAabGroupHead) boolValue];
-    BOOL isTail = [objc_getAssociatedObject(vm, &kMioAabGroupTail) boolValue];
     BOOL isDark = wpIsDarkMode(cellView);
-    CGFloat cellH = ((CGRect (*)(id, SEL))objc_msgSend)(cellView, @selector(frame)).size.height;
-    CGFloat x = headF.origin.x + headF.size.width / 2;
+    CGRect cellFrame = ((CGRect (*)(id, SEL))objc_msgSend)(cellView, @selector(frame));
+    CGFloat cellH = cellFrame.size.height;
+    // 连接线沿屏幕外缘走（XOS 同款：接收侧最左、自身侧最右）——画在头像中心会被
+    // 齐头像列的整排气泡盖住（截图实证不可见）
+    BOOL rightSide = headF.origin.x > cellFrame.size.width / 2;
+    CGFloat x = rightSide ? (cellFrame.size.width - 7.5) : 7.5;
     CGFloat ext = config.msgMergeDashExtendPt;
 
-    // 线段 y 范围：组首从头像下延到 cell 底；中间满段；组尾到头像上沿
+    // 线段 y 范围：组首从头像顶上方延到 cell 底（外缘线与头像不同列不相压），
+    // 其余满段；旧组尾特判用隐藏头像 frame 算出 y1≈0 导致尾条无线（截图实证），删
     CGFloat y0, y1;
-    if (isTail && !isHead) { y0 = -ext; y1 = headF.origin.y - 2 + ext; }
-    else if (isHead)       { y0 = headF.origin.y + headF.size.height + 2 - ext; y1 = cellH + ext; }
-    else                   { y0 = -ext; y1 = cellH + ext; }
+    if (isHead) { y0 = headF.origin.y - 2 - ext; y1 = cellH + ext; }
+    else        { y0 = -ext; y1 = cellH + ext; }
     if (y1 - y0 < 2) { if (layer) [layer removeFromSuperlayer]; return; }
 
     if (!layer) {
@@ -483,6 +494,40 @@ static void wpApplyAabDash(id cellView, id vm, CGRect headF, BOOL isSender) {
         case 6: layer.strokeColor = [UIColor colorWithRed:0.8 green:0.4 blue:1.0 alpha:0.9].CGColor; break;  // 彩虹 紫
         default: layer.strokeColor = [UIColor colorWithWhite:isDark ? 0.55 : 0.7 alpha:1].CGColor; break;
     }
+}
+
+/// 时间板下水平虚线分隔（XOS 20260220 对应件）：头像列到时间板边缘，气泡上方 6pt
+static void wpApplyAabSepLine(id cellView, CGRect boardF, CGRect headF, CGFloat bubbleTopY, NSInteger mode) {
+    CAShapeLayer *layer = objc_getAssociatedObject(cellView, &kMioAabSepLayer);
+    CGFloat cellW = ((CGRect (*)(id, SEL))objc_msgSend)(cellView, @selector(frame)).size.width;
+    BOOL rightSide = headF.origin.x > cellW / 2;
+    BOOL show = (mode == 0) && boardF.size.height > 0.5 && bubbleTopY > 1;
+    if (!show) {
+        if (layer) { [layer removeFromSuperlayer]; objc_setAssociatedObject(cellView, &kMioAabSepLayer, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+        return;
+    }
+    CGFloat sepY = bubbleTopY - 6;
+    CGFloat x0 = rightSide ? boardF.origin.x : headF.origin.x + 7;
+    CGFloat x1 = rightSide ? (headF.origin.x + headF.size.width - 7) : (boardF.origin.x + boardF.size.width);
+    if (x1 - x0 < 4) {
+        if (layer) [layer removeFromSuperlayer];
+        return;
+    }
+    if (!layer) {
+        layer = [CAShapeLayer new];
+        layer.fillColor = nil;
+        layer.lineWidth = 1;
+        layer.lineDashPattern = @[@4, @3];
+        objc_setAssociatedObject(cellView, &kMioAabSepLayer, layer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        CALayer *hostLayer = ((CALayer *(*)(id, SEL))objc_msgSend)(cellView, @selector(layer));
+        [hostLayer addSublayer:layer];
+    }
+    BOOL isDark = wpIsDarkMode(cellView);
+    layer.strokeColor = [UIColor colorWithWhite:isDark ? 0.55 : 0.7 alpha:1].CGColor;
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    [path moveToPoint:CGPointMake(x0, sepY)];
+    [path addLineToPoint:CGPointMake(x1, sepY)];
+    layer.path = path.CGPath;
 }
 
 // ============================================================
@@ -572,7 +617,12 @@ static void wpApplyAabGuideLine(id cellView, id vm, CGRect headF, BOOL isSender)
     }
 
     CGFloat offset = isSender ? config.msgMergeGuideLineOffsetSelf : config.msgMergeGuideLineOffsetOther;
-    view.frame = CGRectMake(headF.origin.x + headF.size.width + offset,
+    // 自身（右头像）镜像到头像左侧，否则箭头被推出屏外（同时间板）
+    CGFloat cellW = ((CGRect (*)(id, SEL))objc_msgSend)(cellView, @selector(frame)).size.width;
+    BOOL rightSide = headF.origin.x > cellW / 2;
+    CGFloat ax = rightSide ? (headF.origin.x - offset - view.frame.size.width)
+                           : (headF.origin.x + headF.size.width + offset);
+    view.frame = CGRectMake(ax,
                             headF.origin.y + (headF.size.height - view.frame.size.height) / 2,
                             view.frame.size.width, view.frame.size.height);
 }
@@ -614,7 +664,12 @@ static void wpApplyAabLayout(id cellView) {
 
     // 头像位移：仅对位置模式启用且头像可见（组首）的 cell
     NSInteger mode; CGFloat textShift;
-    if (!wpAabActive(vm, &mode, NULL, &textShift)) return;
+    if (!wpAabActive(vm, &mode, NULL, &textShift)) {
+        // cell 复用为非 AAB 行（含组内非首条）：清时间板/分隔线防残留（此路径不走晚段视觉件）
+        wpApplyAabTimeLabel(cellView, vm, headF, bgF, 0);
+        wpApplyAabSepLine(cellView, CGRectZero, headF, 0, 0);
+        return;
+    }
     // 缓存实测头像高（rowHeight 垫片用）
     objc_setAssociatedObject(vm, &kMioAabAvatarH, @(headF.size.height), OBJC_ASSOCIATION_RETAIN);
 
@@ -679,7 +734,12 @@ static void wpApplyAabLayout(id cellView) {
     // 视觉件取移动后的头像 frame（下方模式时间标注要贴新头像位）
     headF = ((CGRect (*)(id, SEL))objc_msgSend)(head, @selector(frame));
 
-    wpApplyAabTimeLabel(cellView, vm, headF, bgF, mode);
+    CGFloat bubbleTopY = 0;
+    id contNow = ((id (*)(id, SEL))objc_msgSend)(bg, @selector(superview));
+    if (contNow) bubbleTopY = ((CGRect (*)(id, SEL))objc_msgSend)(contNow, @selector(frame)).origin.y;
+
+    CGRect boardF = wpApplyAabTimeLabel(cellView, vm, headF, bgF, mode);
+    wpApplyAabSepLine(cellView, boardF, headF, bubbleTopY, mode);
     wpApplyAabDash(cellView, vm, headF, isSender);
     wpApplyAabGuideLine(cellView, vm, headF, isSender);
 }
