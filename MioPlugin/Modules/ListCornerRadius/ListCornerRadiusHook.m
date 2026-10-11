@@ -284,13 +284,20 @@ static void replaced_MMTableViewCell_layoutSubviews(id self, SEL _cmd) {
     if (margin > 0) {
         CGFloat currentX = cellView.frame.origin.x;
         UIView *superview = cellView.superview;
-        CGFloat superX = superview ? superview.frame.origin.x : 0;
+        // ★ superX 只补偿 cell 与表之间的中间容器（插件页 wrapper x=16 等）相对表的偏移；
+        //   cell 直接挂在表上时必须取 0——旧写法读 table.frame.origin.x，侧边分组的让位
+        //   （表 x=54）被当成 wrapper 偏移抵消，cell 被拉回屏幕边（Frida 实证：
+        //   cell.frame.x=-45、绝对左距 9/右距 63，右侧空出 63pt＝让位方向视觉反了）
+        CGFloat superX = 0;
+        if (superview && (UITableView *)superview != tableView) {
+            superX = superview.frame.origin.x;
+        }
         // ★ 宽度基准 = UITableView 表坐标系，Frida 实证修复：
         //   部分页面 cell 的直接父视图是内缩容器（如插件页 wrapper 宽 361、x=16），
         //   按容器宽减 margin 会左右不对称（左 20/右 52）；WCR 语义 = 永远 表宽 - 2*margin
         CGFloat containerW = tableView ? tableView.bounds.size.width
             : (superview ? superview.bounds.size.width : [UIScreen mainScreen].bounds.size.width);
-        CGFloat targetX = margin - superX;  // 表坐标 x=margin（不钳位，wrapper 有偏移时可为负）
+        CGFloat targetX = margin - superX;  // cell 父视图坐标系 x=margin（不钳位，wrapper 有偏移时可为负）
         CGFloat targetW = containerW - 2.0 * margin;
         CGFloat currentW = cellView.frame.size.width;
         // ★ 改造 A：浮点比较使用 fabs 阈值，精确匹配微信优化的整数运算行为
