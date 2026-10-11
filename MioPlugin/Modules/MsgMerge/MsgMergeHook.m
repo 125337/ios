@@ -230,6 +230,7 @@ static IMP orig_VM_rowHeight_common      = NULL;
 static IMP orig_VM_rowHeight_text        = NULL;
 
 static char kMioAabAvatarH;   // vm 上缓存实测头像高（rowHeight 先于 cell 构建，用实测值补偿）
+static char kMioAabContBaseY; // bg 容器首过自然 y（气泡容器绝对定位基准，防逐轮累加）
 
 /// AAB 是否对该 viewModel 生效；outMode 返回 0=上方 1=下方，outDelta 返回高度增量
 static BOOL wpAabActive(id vm, NSInteger *outMode, CGFloat *outDelta, CGFloat *outShift) {
@@ -609,15 +610,27 @@ static void wpApplyAabLayout(id cellView) {
     CGFloat delta = headF.size.height + gap + fabs(textShift);
 
     if (mode == 0) {
-        // 上方：头像贴顶，气泡/昵称整体下移
+        // 上方：头像贴顶，气泡容器（含气泡图+文字）整体下移到头像下方。
+        // ★ 不能只移容器内的气泡图：文字（RichTextView）与气泡图同容器，
+        //   只移图会让文字悬空在上、气泡空白（v3 探针实证 bg y=47 而 RichText y=10）。
+        //   移容器则文字随行；容器 y 用首过自然 y + delta 绝对定位，orig 每轮是否
+        //   重置容器 frame 都不会累加。
         CGRect newHead = headF;
         newHead.origin.y = 2;
         if (fabs(newHead.origin.y - headF.origin.y) > 0.5)
             ((void (*)(id, SEL, CGRect))objc_msgSend)(head, @selector(setFrame:), newHead);
         if (fabs(delta) > 0.5) {
-            if (fabs(bgF.origin.y + delta - bgF.origin.y) > 0.5) {
-                bgF.origin.y += delta;
-                ((void (*)(id, SEL, CGRect))objc_msgSend)(bg, @selector(setFrame:), bgF);
+            id container = ((id (*)(id, SEL))objc_msgSend)(bg, @selector(superview));
+            if (container) {
+                CGRect contF = ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame));
+                NSNumber *baseY = objc_getAssociatedObject(bg, &kMioAabContBaseY);
+                if (!baseY) {
+                    baseY = @(contF.origin.y);
+                    objc_setAssociatedObject(bg, &kMioAabContBaseY, baseY, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                }
+                contF.origin.y = baseY.doubleValue + delta;
+                if (fabs(contF.origin.y - ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)).origin.y) > 0.5)
+                    ((void (*)(id, SEL, CGRect))objc_msgSend)(container, @selector(setFrame:), contF);
             }
             if (name) {
                 CGRect nameF = ((CGRect (*)(id, SEL))objc_msgSend)(name, @selector(frame));
