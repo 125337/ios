@@ -5,6 +5,12 @@
 
 @implementation MsgMergeVC
 
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"消息合并";
+    [self buildUI];
+}
+
 #pragma mark - 选项名表
 
 + (NSArray<NSString *> *)positionModeNames {
