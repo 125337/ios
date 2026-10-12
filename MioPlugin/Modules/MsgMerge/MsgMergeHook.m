@@ -31,6 +31,7 @@
 
 static IMP orig_BaseMsgContentVC_viewDidLoad   = NULL;
 static IMP orig_BaseMsgContentVC_viewWillAppear = NULL;
+static IMP orig_BaseMsgContentVC_heightForRow  = NULL;
 static IMP orig_CMCellView_layoutInternal       = NULL;
 static IMP orig_CMCellView_updateNodeStatus     = NULL;
 
@@ -182,6 +183,17 @@ static NSArray *msgNodeArrayOfCellView(id cellView) {
     return safeKVC(vc, @"m_arrMessageNodeData");
 }
 
+/// 会话名从 wrap 推导（GetContact 跟踪链路在 8.0.60 上不可靠）
+static NSString *chatNameOfWrap(id wrap) {
+    NSString *fromS = safeKVC(wrap, @"m_nsFromUsr");
+    NSString *toS = safeKVC(wrap, @"m_nsToUsr");
+    if ([toS isKindOfClass:[NSString class]] && [toS hasSuffix:@"@chatroom"]) return toS;
+    if ([fromS isKindOfClass:[NSString class]] && [fromS hasSuffix:@"@chatroom"]) return fromS;
+    if ([toS isKindOfClass:[NSString class]] && toS.length > 0) return toS;
+    if ([fromS isKindOfClass:[NSString class]] && fromS.length > 0) return fromS;
+    return nil;
+}
+
 // ============================================================
 // MARK: - 合并渲染应用
 // ============================================================
@@ -204,21 +216,12 @@ static void applyMergeToCellView(id cellView) {
             return;
         }
 
-        NSString *chat = currentChatName();
         id viewModel = safeKVC(cellView, @"viewModel");
         if (!viewModel) { WPLog(@"MsgMerge", @"[Apply] viewModel nil"); return; }
         id wrap = safeKVC(viewModel, @"messageWrap");
         if (!wrap) { WPLog(@"MsgMerge", @"[Apply] wrap nil"); return; }
 
-        // ★ 会话名直接从 wrap 推导（GetContact 跟踪链路在 8.0.60 上不可靠）
-        NSString *fromS = safeKVC(wrap, @"m_nsFromUsr");
-        NSString *toS = safeKVC(wrap, @"m_nsToUsr");
-        NSString *wrapChat = nil;
-        if ([toS isKindOfClass:[NSString class]] && [toS hasSuffix:@"@chatroom"]) wrapChat = toS;
-        else if ([fromS isKindOfClass:[NSString class]] && [fromS hasSuffix:@"@chatroom"]) wrapChat = fromS;
-        else if ([toS isKindOfClass:[NSString class]] && toS.length > 0) wrapChat = toS;
-        else if ([fromS isKindOfClass:[NSString class]] && fromS.length > 0) wrapChat = fromS;
-        if (wrapChat.length > 0) chat = wrapChat;
+        NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
         if (chat.length == 0) { WPLog(@"MsgMerge", @"[Apply] 会话名为空"); return; }
 
         NSArray *nodes = msgNodeArrayOfCellView(cellView);
@@ -258,13 +261,10 @@ static void applyMergeToCellView(id cellView) {
             applyCorner(bg, pos);
         }
 
-        // ④ 手动间距（v1 近似：非组首将气泡背景在 cell 内上移 spacing pt）
-        if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0 && !isFirst && [bg isKindOfClass:[UIImageView class]]) {
-            CGRect f = bg.frame;
-            f.origin.y -= cfg.mmSpacing;
-            if (f.origin.y < 1) f.origin.y = 1;   // 防越界
-            bg.frame = f;
-        }
+        // ④ 间距：在 tableView:heightForRowAtIndexPath: 钩子里对非组首行减行高实现
+        //    （探针 #11 实证：气泡原生贴 cell 顶 bg.y=0，无上移空间；视觉空隙全来自
+        //    cell 底部约 28pt 空白；固定行高内挪 bg 会让一段间隙缩小、另一段等量放大，
+        //    几何上不成立，只有行高缩减能真正收紧气泡间距）
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Apply] exception: %@", e.reason);
     }
@@ -294,6 +294,36 @@ static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
     applyMergeToCellView(self);
 }
 
+/// 非组首行缩减行高（间距的唯一实现路径，见 applyMergeToCellView ④ 注释）
+static CGFloat repl_BaseMsgContentVC_heightForRow(id self, SEL _cmd, id tableView, id indexPath) {
+    CGFloat h = ((CGFloat(*)(id, SEL, id, id))orig_BaseMsgContentVC_heightForRow)(self, _cmd, tableView, indexPath);
+    @try {
+        MsgMergeConfig *cfg = [MsgMergeConfig shared];
+        if (!cfg.mmEnable || cfg.mmSpacingMode != 1 || cfg.mmSpacing <= 0) return h;
+
+        NSArray *arr = safeKVC(self, @"m_arrMessageNodeData");
+        if (!arr) return h;
+        NSUInteger row = [(NSIndexPath *)indexPath row];
+        if (row >= [arr count]) return h;
+
+        id node = [arr objectAtIndex:row];
+        id vm = safeKVC(node, @"viewModel");
+        id wrap = vm ? safeKVC(vm, @"messageWrap") : safeKVC(node, @"messageWrap");
+        if (!wrap) return h;   // 时间节点等：原样返回
+
+        NSString *chat = chatNameOfWrap(wrap);
+        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:arr];
+        if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) {
+            CGFloat delta = (cfg.mmSpacing < 24.0) ? cfg.mmSpacing : 24.0;   // 防裁切气泡
+            CGFloat nh = h - delta;
+            if (nh >= 30.0) return nh;
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Height] exception: %@", e.reason);
+    }
+    return h;
+}
+
 // ============================================================
 // MARK: - 安装
 // ============================================================
@@ -313,7 +343,10 @@ static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
         MSHookMessageEx(cls, @selector(viewWillAppear:),
                         (IMP)repl_BaseMsgContentVC_viewWillAppear,
                         &orig_BaseMsgContentVC_viewWillAppear);
-        WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController viewDidLoad/viewWillAppear:");
+        MSHookMessageEx(cls, @selector(tableView:heightForRowAtIndexPath:),
+                        (IMP)repl_BaseMsgContentVC_heightForRow,
+                        &orig_BaseMsgContentVC_heightForRow);
+        WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController viewDidLoad/viewWillAppear:/heightForRow");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseMsgContentViewController not found");
     }
