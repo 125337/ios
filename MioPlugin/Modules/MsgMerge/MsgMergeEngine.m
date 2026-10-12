@@ -16,8 +16,8 @@
 //    均不存在，MMServiceCenter defaultCenter 调用直接 abort），GetMsg:LocalID: 邻接
 //    查询方案不可用。改用聊天 VC 的 m_arrMessageNodeData（消息表数据源数组）：
 //    元素为 ChatTimeViewModel（时间节点，无 wrap）/ TextMessageViewModel 等 viewModel，
-//    经 viewModel.messageWrap 取 wrap；数组顺序即渲染顺序，localID 定位 ±1 即邻居，
-//    时间节点无 wrap 天然断组。
+//    经 viewModel.messageWrap 取 wrap；数组顺序即渲染顺序，localID 定位后只看
+//    紧邻节点即邻居，紧邻时间节点（无 wrap）即断组。
 //
 
 #import "MsgMergeEngine.h"
@@ -158,14 +158,14 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
         return MOMergePositionNone;
     }
 
-    // ---- 找前后最近的有效邻居（跳过时间节点）----
+    // ---- 前后邻居：只看紧邻节点，紧邻是时间节点（NSNull）即断组 ----
+    // 【实证】跳过时间节点找"最近有效邻居"会跨时间行合并：22:20 时间行后同发送者
+    // 的组首被判成 Middle/Last，头像丢失（2026-10-13 截图实证）
     id prevWrap = nil;
-    for (NSInteger i = targetIdx - 1; i >= 0; i--) {
-        if (wraps[i] != kNullNode()) { prevWrap = wraps[i]; break; }
-    }
+    if (targetIdx > 0 && wraps[targetIdx - 1] != kNullNode()) prevWrap = wraps[targetIdx - 1];
     id nextWrap = nil;
-    for (NSUInteger i = (NSUInteger)(targetIdx + 1); i < wraps.count; i++) {
-        if (wraps[i] != kNullNode()) { nextWrap = wraps[i]; break; }
+    if ((NSUInteger)(targetIdx + 1) < wraps.count && wraps[targetIdx + 1] != kNullNode()) {
+        nextWrap = wraps[targetIdx + 1];
     }
 
     BOOL joinPrev = (prevWrap != nil) && [self shouldJoin:wrap wrapB:prevWrap];
