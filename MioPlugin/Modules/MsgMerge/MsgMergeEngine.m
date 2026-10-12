@@ -164,8 +164,9 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     if (localID <= 0) return MOMergePositionNone;
 
     // ---- 缓存命中（TTL 内）直接返回 ----
+    NSMutableDictionary *cache = _positionCache();
     NSString *cacheKey = [chatName ?: @"?" stringByAppendingFormat:@"|%lld", localID];
-    NSDictionary *cached = [_positionCache()][cacheKey];
+    NSDictionary *cached = cache[cacheKey];
     if (cached) {
         NSTimeInterval ts = [cached[@"ts"] doubleValue];
         if ([[NSDate date] timeIntervalSince1970] - ts < kCacheTTL) {
@@ -187,11 +188,11 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     else                           pos = MOMergePositionSingle;
 
     // ---- 写缓存 ----
-    if ([_positionCache() count] > kCacheCapacity) {
-        [_positionCache() removeAllObjects];
+    if ([cache count] > kCacheCapacity) {
+        [cache removeAllObjects];
         WPLog(@"MsgMerge", @"[Engine] position cache purged (>%lu)", (unsigned long)kCacheCapacity);
     }
-    _positionCache()[cacheKey] = @{
+    cache[cacheKey] = @{
         @"pos": @(pos),
         @"ts": @([[NSDate date] timeIntervalSince1970]),
     };
@@ -202,7 +203,8 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
 }
 
 + (void)clearCache {
-    [_positionCache() removeAllObjects];
+    NSMutableDictionary *cache = _positionCache();
+    [cache removeAllObjects];
     WPLog(@"MsgMerge", @"[Engine] cache cleared");
 }
 
