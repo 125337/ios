@@ -109,7 +109,7 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
 /// 决定该消息是否打断合并链。原版读侧实证只读 emoticon/media 两个键 + m_uiMessageType/
 /// m_uiAppMsgInnerType，不读 system/time 两个键（那两个属节点结构层，当前实现里
 /// 系统消息 >=10000 与时间节点始终断组）。全部合并模式（mmMode==0）忽略全部开关。
-+ (BOOL)isSeparatorMessage:(id)wrap {
++ (BOOL)mmIsSeparatorMessage:(id)wrap {
     if (!wrap) return NO;
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (cfg.mmMode != 1) return NO;
@@ -125,7 +125,7 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
 /// 两条消息是否满足合并条件（身份相等 + 均可合并；时间打断由渲染数组时间节点天然承担）
 + (BOOL)shouldJoin:(id)wrapA wrapB:(id)wrapB {
     if (!isMergeableWrap(wrapA) || !isMergeableWrap(wrapB)) return NO;
-    if ([self isSeparatorMessage:wrapA] || [self isSeparatorMessage:wrapB]) return NO;
+    if ([self mmIsSeparatorMessage:wrapA] || [self mmIsSeparatorMessage:wrapB]) return NO;
 
     NSString *idA = senderIdentity(wrapA);
     NSString *idB = senderIdentity(wrapB);
@@ -139,7 +139,7 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!cfg.mmEnable) return MOMergePositionNone;
     if (!isMergeableWrap(wrap)) return MOMergePositionNone;
-    if ([self isSeparatorMessage:wrap]) return MOMergePositionNone;   // 分隔消息独立，不参与任何组
+    if ([self mmIsSeparatorMessage:wrap]) return MOMergePositionNone;   // 分隔消息独立，不参与任何组
     if (cfg.mmOnlyRoom && ![chatName hasSuffix:@"@chatroom"]) return MOMergePositionNone;
     if (!nodeArray || nodeArray.count == 0) {
         WPLog(@"MsgMerge", @"[Engine] nodeArray 为空（VC 未找到或数组未加载）");
