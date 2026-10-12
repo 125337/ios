@@ -87,10 +87,10 @@
                             title:@"合并间距 (pt)"
                               key:@"mmSpacing"
                             value:[NSString stringWithFormat:@"%.1f", config.mmSpacing]
-                             hint:@"0-24"
+                             hint:@"0-12"
                         valueType:InputValueTypeNumber
                        alertTitle:@"合并间距"
-                     alertMessage:@"手动调整时组内气泡的上移距离，单位 pt (0-24)"
+                     alertMessage:@"组内相邻气泡的收拢间距，组内逐条递进叠加，单位 pt (0-12)"
                                cy:cy
                              width:w];
     y = [self finishGroup:g3 atY:y height:cy];

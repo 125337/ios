@@ -117,7 +117,9 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
 
 + (MOMergePosition)positionForWrap:(id)wrap
                           chatName:(nullable NSString *)chatName
-                         nodeArray:(nullable NSArray *)nodeArray {
+                         nodeArray:(nullable NSArray *)nodeArray
+                             depth:(nullable NSInteger *)depthOut {
+    if (depthOut) *depthOut = 0;
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!cfg.mmEnable) return MOMergePositionNone;
     if (!isMergeableWrap(wrap)) return MOMergePositionNone;
@@ -137,6 +139,7 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     if (cached) {
         NSTimeInterval ts = [cached[@"ts"] doubleValue];
         if ([[NSDate date] timeIntervalSince1970] - ts < kCacheTTL) {
+            if (depthOut) *depthOut = [cached[@"depth"] integerValue];
             return (MOMergePosition)[cached[@"pos"] unsignedIntegerValue];
         }
     }
@@ -171,6 +174,20 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     BOOL joinPrev = (prevWrap != nil) && [self shouldJoin:wrap wrapB:prevWrap];
     BOOL joinNext = (nextWrap != nil) && [self shouldJoin:wrap wrapB:nextWrap];
 
+    // ---- 组内深度：从本条往前数连续同发送者的步数（组首/独立=0）----
+    // 递进位移用：第 k 条上移 k×间距，组内相邻气泡间隙统一收敛到 17−间距
+    //（固定行高内等幅位移守恒：只缩组首→第二条，其余间隙不变，2026-10-13 截图实证）
+    NSInteger depth = 0;
+    if (joinPrev) {
+        NSInteger cur = targetIdx;
+        while (cur > 0 && depth < 32) {
+            id p = wraps[cur - 1];
+            if (p == kNullNode() || ![self shouldJoin:wraps[cur] wrapB:p]) break;
+            depth++;
+            cur--;
+        }
+    }
+
     MOMergePosition pos;
     if (joinPrev && joinNext)      pos = MOMergePositionMiddle;
     else if (joinPrev)             pos = MOMergePositionLast;
@@ -184,8 +201,10 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     }
     cache[cacheKey] = @{
         @"pos": @(pos),
+        @"depth": @(depth),
         @"ts": @([[NSDate date] timeIntervalSince1970]),
     };
+    if (depthOut) *depthOut = depth;
 
     WPLog(@"MsgMerge", @"[Engine] pos=%lu chat=%@ localID=%lld idx=%ld/%lu",
           (unsigned long)pos, chatName, localID, targetIdx, (unsigned long)wraps.count);

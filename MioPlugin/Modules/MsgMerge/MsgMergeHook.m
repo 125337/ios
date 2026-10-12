@@ -278,6 +278,26 @@ static void restoreNoClip(id view) {
     }
 }
 
+/// 递进位移会让深位气泡越出本 cell 顶部（第 k 条上移 k×间距），
+/// 放开 cellView → 宿主 UITableViewCell 整条链的裁剪（逐级备份可还原）
+static void applyNoClipChain(id view) {
+    id cur = view;
+    for (int i = 0; i < 5 && cur; i++) {
+        applyNoClip(cur);
+        if ([cur isKindOfClass:[UITableViewCell class]]) break;
+        cur = safeCall(cur, "superview");
+    }
+}
+
+static void restoreNoClipChain(id view) {
+    id cur = view;
+    for (int i = 0; i < 5 && cur; i++) {
+        restoreNoClip(cur);
+        if ([cur isKindOfClass:[UITableViewCell class]]) break;
+        cur = safeCall(cur, "superview");
+    }
+}
+
 /// 上一条可见 cell 的「气泡底 → cell 底」空白（上移封顶，防压到上一条气泡）
 static CGFloat prevCellBottomGap(id cellView) {
     @try {
@@ -334,8 +354,7 @@ static void applyMergeToCellView(id cellView) {
                 if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:NO];
                 id name = safeCall(cellView, "getNameLabel");
                 if ([name isKindOfClass:[UILabel class]]) [(UILabel *)name setHidden:NO];
-                restoreNoClip(cellView);
-                restoreNoClip(safeCall(cellView, "superview"));
+                restoreNoClipChain(cellView);
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
             return;
@@ -358,7 +377,8 @@ static void applyMergeToCellView(id cellView) {
                 WPLog(@"MsgMerge", @"[Apply] 未找到聊天 VC 或渲染数组（页面=%s）", object_getClassName(cellView));
             }
         }
-        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:nodes];
+        NSInteger mergeDepth = 0;
+        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:nodes depth:&mergeDepth];
         if (pos == MOMergePositionNone) { WPLog(@"MsgMerge", @"[Apply] pos=None（类型不可合并/开关）"); return; }   // 系统消息/不可合并：不干预
 
         BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
@@ -386,25 +406,22 @@ static void applyMergeToCellView(id cellView) {
             applyCorner(bg, pos);
         }
 
-        // ④ 间距收拢（cell 层，见文件头 v2 架构说明）：
-        //    非组首气泡上移，吃掉与上一条同组消息的视觉空隙；
-        //    上移量封顶 = 上一条 cell 的气泡底空白，防压到上一条气泡。
-        //    【探针 #22 实证】8.0.78 文本消息的 bg 父视图就是 getContentView
-        //    （bg 与 richTextView 都在 cv 内，bgCellY = bg.y + cv.y 恒成立）：
-        //    移 cv 即整体带动气泡与文字；再单独移 bg 会双移
-        //    （气泡 -8 / 文字 -4，错位 4pt，"文字偏下"根因）。
-        //    仅当 bg 不在 cv 内（其他消息类型布局变体）才对 bg 单独位移。
+        // ④ 间距收拢（cell 层递进位移）：
+        //    固定行高内等幅位移守恒——只缩「组首→第二条」，其余间隙不变（截图实证）。
+        //    组内第 k 条上移 k×mmSpacing，组内相邻气泡间隙统一收敛到 原生17−mmSpacing，
+        //    组尾到下一组的空间相应变大（段落感）。
+        //    封顶 = 上一条 cell 气泡底实测空白（含其位移，防压到上一条气泡）。
+        //    【探针 #22/#23 实证】bg 与 richTextView 都直接在 getContentView 内，
+        //    移 cv 即整体带动；仅 bg 不在 cv 内的布局变体才对 bg 单独位移。
         id contentView = safeCall(cellView, "getContentView");
         BOOL bgInCv = ([bg isKindOfClass:[UIView class]]
                        && [contentView isKindOfClass:[UIView class]]
                        && [(UIView *)bg superview] == (UIView *)contentView);
-        if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0
-            && (pos == MOMergePositionMiddle || pos == MOMergePositionLast)) {
+        if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0 && mergeDepth > 0) {
             CGFloat cap = prevCellBottomGap(cellView);
-            CGFloat delta = MIN(cfg.mmSpacing, cap);
+            CGFloat delta = MIN(mergeDepth * cfg.mmSpacing, cap);
             if (delta > 0.5) {
-                applyNoClip(cellView);
-                applyNoClip(safeCall(cellView, "superview"));
+                applyNoClipChain(cellView);
                 if (!bgInCv && [bg isKindOfClass:[UIView class]]) applyViewShift(bg, delta);
                 if ([contentView isKindOfClass:[UIView class]]) applyViewShift(contentView, delta);
                 else if (!bgInCv && [bg isKindOfClass:[UIView class]]) applyViewShift(bg, delta);
