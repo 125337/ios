@@ -31,7 +31,7 @@
 
 static IMP orig_BaseMsgContentVC_viewDidLoad    = NULL;
 static IMP orig_BaseMsgContentVC_viewWillAppear = NULL;
-static IMP orig_BaseMsgViewModel_updateCVH      = NULL;
+static IMP orig_BaseChatViewModel_rowHeight     = NULL;
 static IMP orig_CMCellView_layoutInternal       = NULL;
 static IMP orig_CMCellView_updateNodeStatus     = NULL;
 
@@ -211,11 +211,13 @@ static NSString *chatNameOfWrap(id wrap) {
 // MARK: - 行高钩子（间距收拢生效点）
 // ============================================================
 
-// BaseMessageViewModel updateContentViewHeight:（8.0.78 实证签名 v@0:8d16，参数为
-// double 高度值——签名快查 frida_msgmerge_sig.js 实证，按 id 处理必崩）。
-// 8.0.78 聊天表不走 delegate heightForRow 也不走 self-sizing（探针 #13/#14/#17/#18），
-// 行高源头在此更新链。组内非组尾（Middle/Last）行高 -mmSpacing（下限 24 防裁切）。
-static void repl_BaseMsgViewModel_updateCVH(id self, SEL _cmd, double h) {
+// -[BaseChatViewModel rowHeight]（8.0.78 实证签名 d16@0:8，返回 double）：
+// 全部消息/时间 viewModel 均继承此实现（探针快查单一 IMP，无子类重写），
+// 滚动期间 270+ 次调用（探针 #26）——这是聊天行高的真实来源。
+// delegate heightForRow、self-sizing、updateContentViewHeight: 均零调用（探针 #13/#14/#17/#18/#25）。
+// 组内非组尾（Middle/Last）行高 -mmSpacing（下限 24 防裁切），组首/独立/时间行原生。
+static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
+    double h = ((double (*)(id, SEL))orig_BaseChatViewModel_rowHeight)(self, _cmd);
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (cfg.mmEnable && cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
@@ -230,15 +232,15 @@ static void repl_BaseMsgViewModel_updateCVH(id self, SEL _cmd, double h) {
                                                                     depth:NULL];
                     if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) {
                         double v = h - (double)cfg.mmSpacing;
-                        if (v >= 24.0) h = v;   // 下限 24 防裁切（内容顶对齐，缩减只吃底部空白）
+                        if (v >= 24.0) return v;   // 下限 24 防裁切（内容顶对齐，缩减只吃底部空白）
                     }
                 }
             }
         }
     } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[H] updateCVH exception: %@", e.reason);
+        WPLog(@"MsgMerge", @"[H] rowHeight exception: %@", e.reason);
     }
-    ((void (*)(id, SEL, double))orig_BaseMsgViewModel_updateCVH)(self, _cmd, h);
+    return h;
 }
 
 // ============================================================
@@ -376,15 +378,15 @@ static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
         WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageCellView not found");
     }
 
-    // ③ 行高钩子（间距收拢真正生效点；8.0.78 delegate heightForRow 零调用不可用）
-    cls = objc_getClass("BaseMessageViewModel");
-    if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"updateContentViewHeight:")]) {
-        MSHookMessageEx(cls, NSSelectorFromString(@"updateContentViewHeight:"),
-                        (IMP)repl_BaseMsgViewModel_updateCVH,
-                        &orig_BaseMsgViewModel_updateCVH);
-        WPLog(@"MsgMerge", @"[Hook] ✓ BaseMessageViewModel updateContentViewHeight:");
+    // ③ 行高钩子（间距收拢真正生效点；8.0.78 真实行高来源，探针 #26 实证）
+    cls = objc_getClass("BaseChatViewModel");
+    if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"rowHeight")]) {
+        MSHookMessageEx(cls, NSSelectorFromString(@"rowHeight"),
+                        (IMP)repl_BaseChatViewModel_rowHeight,
+                        &orig_BaseChatViewModel_rowHeight);
+        WPLog(@"MsgMerge", @"[Hook] ✓ BaseChatViewModel rowHeight");
     } else {
-        WPLog(@"MsgMerge", @"[Hook] ✗ BaseMessageViewModel updateContentViewHeight: not found");
+        WPLog(@"MsgMerge", @"[Hook] ✗ BaseChatViewModel rowHeight not found");
     }
 
     WPLog(@"MsgMerge", @"MsgMergeHook install complete");
