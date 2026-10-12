@@ -219,41 +219,43 @@ static CGRect shiftedUp(CGRect base, CGFloat delta) {
     return CGRectMake(base.origin.x, base.origin.y - delta, base.size.width, base.size.height);
 }
 
-/// 还原气泡位移：当前仍是我们的位移态且原生未重置时还原自然值，随后清标记
-static void resetBgShift(UIImageView *bg) {
-    NSValue *baseV = objc_getAssociatedObject(bg, kMMBgBaseFrame);
+/// 还原视图位移：当前仍是我们的位移态且原生未重置时还原自然值，随后清标记
+static void resetViewShift(UIView *v) {
+    NSValue *baseV = objc_getAssociatedObject(v, kMMBgBaseFrame);
     if (!baseV) return;
     CGRect base = [baseV CGRectValue];
-    NSNumber *deltaV = objc_getAssociatedObject(bg, kMMBgDelta);
+    NSNumber *deltaV = objc_getAssociatedObject(v, kMMBgDelta);
     CGFloat oldDelta = deltaV ? [deltaV doubleValue] : 0;
-    if (oldDelta > 0 && rectClose(bg.frame, shiftedUp(base, oldDelta))) {
-        bg.frame = base;
+    if (oldDelta > 0 && rectClose(v.frame, shiftedUp(base, oldDelta))) {
+        v.frame = base;
     }
-    objc_setAssociatedObject(bg, kMMBgBaseFrame, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(bg, kMMBgDelta, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(v, kMMBgBaseFrame, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(v, kMMBgDelta, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 /// 绝对定位位移（XOS FUN_00192580 同款基准缓存+失效检测）：
 ///   原生每轮重置 frame → 以基准+delta 覆写；原生不重置 → 幂等；
 ///   原生改了自然值（复用/重排）→ 重置基准再覆写
-static void applyBgShift(UIImageView *bg, CGFloat delta) {
-    if (delta <= 0) { resetBgShift(bg); return; }
-    NSValue *baseV = objc_getAssociatedObject(bg, kMMBgBaseFrame);
-    NSNumber *deltaV = objc_getAssociatedObject(bg, kMMBgDelta);
+/// 同一位移必须同时作用于气泡 bg 与内容容器（getContentView，文字在其内），
+/// 二者一起动才不会错位
+static void applyViewShift(UIView *v, CGFloat delta) {
+    if (delta <= 0) { resetViewShift(v); return; }
+    NSValue *baseV = objc_getAssociatedObject(v, kMMBgBaseFrame);
+    NSNumber *deltaV = objc_getAssociatedObject(v, kMMBgDelta);
     CGFloat oldDelta = deltaV ? [deltaV doubleValue] : 0;
     CGRect base;
     if (!baseV) {
-        base = bg.frame;   // 首触：原生刚布局完，即自然值
+        base = v.frame;   // 首触：原生刚布局完，即自然值
     } else {
         base = [baseV CGRectValue];
-        if (!rectClose(bg.frame, base) && !rectClose(bg.frame, shiftedUp(base, oldDelta))) {
-            base = bg.frame;   // 原生改了自然值：重置基准
+        if (!rectClose(v.frame, base) && !rectClose(v.frame, shiftedUp(base, oldDelta))) {
+            base = v.frame;   // 原生改了自然值：重置基准
         }
     }
-    objc_setAssociatedObject(bg, kMMBgBaseFrame, [NSValue valueWithCGRect:base], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(bg, kMMBgDelta, @(delta), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(v, kMMBgBaseFrame, [NSValue valueWithCGRect:base], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(v, kMMBgDelta, @(delta), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     CGRect target = shiftedUp(base, delta);
-    if (!rectClose(bg.frame, target)) bg.frame = target;
+    if (!rectClose(v.frame, target)) v.frame = target;
 }
 
 /// 负 y 位移会越出 cell 边界，放开 cellView 及其宿主 cell 的裁剪（备份原值可还原）
@@ -322,10 +324,12 @@ static void applyMergeToCellView(id cellView) {
         if (!cfg.mmEnable) {
             if (isTouched(cellView)) {
                 UIImageView *bg = safeCall(cellView, "getBgImageView");
+                id contentView = safeCall(cellView, "getContentView");
                 if ([bg isKindOfClass:[UIImageView class]]) {
                     restoreCorner(bg);
-                    resetBgShift(bg);
+                    resetViewShift(bg);
                 }
+                if ([contentView isKindOfClass:[UIView class]]) resetViewShift(contentView);
                 id head = safeCall(cellView, "getHeadImageView");
                 if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:NO];
                 id name = safeCall(cellView, "getNameLabel");
@@ -384,7 +388,9 @@ static void applyMergeToCellView(id cellView) {
 
         // ④ 间距收拢（cell 层，见文件头 v2 架构说明）：
         //    非组首气泡上移，吃掉与上一条同组消息的视觉空隙；
-        //    上移量封顶 = 上一条 cell 的气泡底空白，防压到上一条气泡
+        //    上移量封顶 = 上一条 cell 的气泡底空白，防压到上一条气泡；
+        //    bg 与内容容器（getContentView，文字在其内）同移防错位
+        id contentView = safeCall(cellView, "getContentView");
         if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0
             && (pos == MOMergePositionMiddle || pos == MOMergePositionLast)) {
             CGFloat cap = prevCellBottomGap(cellView);
@@ -392,12 +398,15 @@ static void applyMergeToCellView(id cellView) {
             if (bg && delta > 0.5) {
                 applyNoClip(cellView);
                 applyNoClip(safeCall(cellView, "superview"));
-                applyBgShift(bg, delta);
+                applyViewShift(bg, delta);
+                if ([contentView isKindOfClass:[UIView class]]) applyViewShift(contentView, delta);
             } else if (bg) {
-                applyBgShift(bg, 0);
+                applyViewShift(bg, 0);
+                if ([contentView isKindOfClass:[UIView class]]) applyViewShift(contentView, 0);
             }
         } else if (bg) {
-            applyBgShift(bg, 0);   // 组首/独立/间距关闭：还原
+            applyViewShift(bg, 0);   // 组首/独立/间距关闭：还原
+            if ([contentView isKindOfClass:[UIView class]]) applyViewShift(contentView, 0);
         }
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Apply] exception: %@", e.reason);
