@@ -61,6 +61,8 @@ typedef NS_ENUM(NSInteger, InputValueType) {
 - (CGFloat)addColorRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key value:(NSString *)value cy:(CGFloat)cy width:(CGFloat)w darkKey:(nullable NSString *)darkKey darkValue:(nullable NSString *)darkValue allowClear:(BOOL)allowClear;
 /// WCR addSegmentCellTo 同款：行内右侧 UISegmentedControl，ValueChanged 直写配置
 - (CGFloat)addSegmentRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key names:(NSArray<NSString *> *)names index:(NSInteger)index cy:(CGFloat)cy width:(CGFloat)w;
+/// segment ValueChanged 统一入口（直写配置；子类可重写做页级联动，如模式切换重建页面）
+- (void)wpSegmentChanged:(UISegmentedControl *)seg;
 - (CGFloat)addSeparatorInGroup:(UIView *)group cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addMasterSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on subBuilder:(void (^)(UIView *expand, CGFloat *ecy))subBuilder cy:(CGFloat)cy width:(CGFloat)w;
 - (void)colorButtonTapped:(UIButton *)sender;
