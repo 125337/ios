@@ -32,9 +32,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// 手动间距（pt），mmSpacingMode==1 时生效
 @property (nonatomic, assign) CGFloat mmSpacing;
 
-/// 合并时间窗（秒）：相邻两条消息间隔超过该值则断组；0=不按时间断组
-@property (nonatomic, assign) NSInteger mmTimeWindow;
-
 + (instancetype)shared;
 
 @end

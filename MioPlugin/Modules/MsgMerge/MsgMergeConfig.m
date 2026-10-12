@@ -30,7 +30,6 @@
         [ConfigDescriptor itemWithKey:@"mmAvatarPos" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"mmSpacingMode" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"mmSpacing" type:ConfigValueTypeFloat default:@(2.0)],
-        [ConfigDescriptor itemWithKey:@"mmTimeWindow" type:ConfigValueTypeInteger default:@(120)],
     ];
 }
 

@@ -93,16 +93,6 @@
                      alertMessage:@"手动调整时组内气泡的上移距离，单位 pt (0-24)"
                                cy:cy
                              width:w];
-    cy = [self addInputRowInGroup:g3
-                            title:@"合并时间窗 (秒)"
-                              key:@"mmTimeWindow"
-                            value:[NSString stringWithFormat:@"%ld", (long)config.mmTimeWindow]
-                             hint:@"0=不限"
-                        valueType:InputValueTypeNumber
-                       alertTitle:@"合并时间窗"
-                     alertMessage:@"相邻消息间隔超过该秒数则断开分组，0 表示不按时间断组"
-                               cy:cy
-                             width:w];
     y = [self finishGroup:g3 atY:y height:cy];
 
     // ──── 页脚提示（对齐 BubbleBox 截图页脚） ────

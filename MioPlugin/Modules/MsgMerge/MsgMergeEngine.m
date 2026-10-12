@@ -8,7 +8,8 @@
 //    相邻两条有效消息满足以下全部条件 → 合并为同一组：
 //      ① senderUser 相等：m_nsFromUsr；若其以 @chatroom 结尾则改用 m_nsRealChatUsr
 //      ② 两者均为可合并类型（m_uiMessageType < 10000，系统/状态消息断组）
-//      ③ 时间间隔 ≤ mmTimeWindow（0=不按时间断组）
+//    时间打断 = 微信自身时间分隔行（BubbleBox isNeedInsertTimeNode 同语义）：
+//    渲染数组中 ChatTimeViewModel 无 wrap，天然断组，无秒数窗。
 //
 //  邻接数据源（8.0.78 实证，Frida 探针 #5/#8/#9）：
 //    CMessageMgr 无单例访问器（9 个类方法全是 CDN 路径，defaultMgr/sharedInstance
@@ -69,13 +70,6 @@ static BOOL isMergeableWrap(id wrap) {
     return [typeVal longLongValue] < 10000;
 }
 
-/// 消息创建时间（秒级时间戳）
-static long long createTimeOf(id wrap) {
-    id t = safeValue(wrap, @"m_uiCreateTime");
-    if (![t respondsToSelector:@selector(longLongValue)]) return 0;
-    return [t longLongValue];
-}
-
 /// 消息 LocalID
 static long long localIDOf(id wrap) {
     id v = safeValue(wrap, @"m_uiMesLocalID");
@@ -111,21 +105,14 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
 
 @implementation MsgMergeEngine
 
-/// 两条消息是否满足合并条件（身份相等 + 均可合并 + 时间窗）
+/// 两条消息是否满足合并条件（身份相等 + 均可合并；时间打断由渲染数组时间节点天然承担）
 + (BOOL)shouldJoin:(id)wrapA wrapB:(id)wrapB {
     if (!isMergeableWrap(wrapA) || !isMergeableWrap(wrapB)) return NO;
 
     NSString *idA = senderIdentity(wrapA);
     NSString *idB = senderIdentity(wrapB);
     if (idA.length == 0 || idB.length == 0) return NO;
-    if (![idA isEqualToString:idB]) return NO;
-
-    NSInteger window = [MsgMergeConfig shared].mmTimeWindow;
-    if (window > 0) {
-        long long gap = llabs(createTimeOf(wrapA) - createTimeOf(wrapB));
-        if (gap > (long long)window) return NO;
-    }
-    return YES;
+    return [idA isEqualToString:idB];
 }
 
 + (MOMergePosition)positionForWrap:(id)wrap
