@@ -178,15 +178,24 @@ static void applyMergeToCellView(id cellView) {
         }
 
         NSString *chat = currentChatName();
-        if (chat.length == 0) return;   // 会话上下文未就绪
-
         id viewModel = safeKVC(cellView, @"viewModel");
-        if (!viewModel) return;
+        if (!viewModel) { WPLog(@"MsgMerge", @"[Apply] viewModel nil"); return; }
         id wrap = safeKVC(viewModel, @"messageWrap");
-        if (!wrap) return;
+        if (!wrap) { WPLog(@"MsgMerge", @"[Apply] wrap nil"); return; }
+
+        // ★ 会话名直接从 wrap 推导（GetContact 跟踪链路在 8.0.60 上不可靠）
+        NSString *fromS = safeKVC(wrap, @"m_nsFromUsr");
+        NSString *toS = safeKVC(wrap, @"m_nsToUsr");
+        NSString *wrapChat = nil;
+        if ([toS isKindOfClass:[NSString class]] && [toS hasSuffix:@"@chatroom"]) wrapChat = toS;
+        else if ([fromS isKindOfClass:[NSString class]] && [fromS hasSuffix:@"@chatroom"]) wrapChat = fromS;
+        else if ([toS isKindOfClass:[NSString class]] && toS.length > 0) wrapChat = toS;
+        else if ([fromS isKindOfClass:[NSString class]] && fromS.length > 0) wrapChat = fromS;
+        if (wrapChat.length > 0) chat = wrapChat;
+        if (chat.length == 0) { WPLog(@"MsgMerge", @"[Apply] 会话名为空"); return; }
 
         MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat];
-        if (pos == MOMergePositionNone) return;   // 系统消息/不可合并：不干预
+        if (pos == MOMergePositionNone) { WPLog(@"MsgMerge", @"[Apply] pos=None（类型不可合并/开关）"); return; }   // 系统消息/不可合并：不干预
 
         BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
         BOOL isLast  = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
