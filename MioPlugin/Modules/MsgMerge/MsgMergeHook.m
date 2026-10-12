@@ -11,9 +11,16 @@
 //  挂载点为 CommonMessageCellView 头文件实证方法（initWithViewModel:/
 //  layoutInternal/updateNodeStatus 与 BubbleBox 反编译钩子点一致）。
 //
-//  v1 已知边界（如实声明）：
+//  v2 间距架构（探针 #13/#14/#17/#18 实证定论）：
+//    8.0.78 聊天表既不走 delegate heightForRowAtIndexPath（IMP 被换也零调用），
+//    也不走 self-sizing（ChatTableViewCell 未重写且基类零调用），行高由微信固定。
+//    因此间距收拢全部落在 cell 内部布局层：原生 layoutInternal 跑完后按合并模型
+//    上移非组首气泡（基准缓存+失效检测绝对定位，防 native 不每轮重置 frame 的漂移），
+//    与 UITableView 委托无关。
+//
+//  已知边界（如实声明）：
 //    - 隐藏头像后不扩展气泡（BubbleBox 会重排内容），组内非首条会留头像位空白
-//    - 手动间距为 cell 内气泡上移近似，真正的行间距需 hook 行高计算（后续版本）
+//    - 上移量封顶 = 上一条可见 cell 的气泡底空白（测不到时 16pt），防压到上一条气泡
 //
 
 #import "MsgMergeHook.h"
@@ -31,7 +38,6 @@
 
 static IMP orig_BaseMsgContentVC_viewDidLoad   = NULL;
 static IMP orig_BaseMsgContentVC_viewWillAppear = NULL;
-static IMP orig_BaseMsgContentVC_heightForRow  = NULL;
 static IMP orig_CMCellView_layoutInternal       = NULL;
 static IMP orig_CMCellView_updateNodeStatus     = NULL;
 
@@ -195,6 +201,116 @@ static NSString *chatNameOfWrap(id wrap) {
 }
 
 // ============================================================
+// MARK: - 间距收拢（cell 层 y 位移，基准缓存+失效检测）
+// ============================================================
+
+static void *kMMBgBaseFrame = &kMMBgBaseFrame;
+static void *kMMBgDelta     = &kMMBgDelta;
+static void *kMMClipBackup  = &kMMClipBackup;
+
+static BOOL rectClose(CGRect a, CGRect b) {
+    return fabs(a.origin.x - b.origin.x) < 0.5
+        && fabs(a.origin.y - b.origin.y) < 0.5
+        && fabs(a.size.width  - b.size.width)  < 0.5
+        && fabs(a.size.height - b.size.height) < 0.5;
+}
+
+static CGRect shiftedUp(CGRect base, CGFloat delta) {
+    return CGRectMake(base.origin.x, base.origin.y - delta, base.size.width, base.size.height);
+}
+
+/// 还原气泡位移：当前仍是我们的位移态且原生未重置时还原自然值，随后清标记
+static void resetBgShift(UIImageView *bg) {
+    NSValue *baseV = objc_getAssociatedObject(bg, kMMBgBaseFrame);
+    if (!baseV) return;
+    CGRect base = [baseV CGRectValue];
+    NSNumber *deltaV = objc_getAssociatedObject(bg, kMMBgDelta);
+    CGFloat oldDelta = deltaV ? [deltaV doubleValue] : 0;
+    if (oldDelta > 0 && rectClose(bg.frame, shiftedUp(base, oldDelta))) {
+        bg.frame = base;
+    }
+    objc_setAssociatedObject(bg, kMMBgBaseFrame, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(bg, kMMBgDelta, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+/// 绝对定位位移（XOS FUN_00192580 同款基准缓存+失效检测）：
+///   原生每轮重置 frame → 以基准+delta 覆写；原生不重置 → 幂等；
+///   原生改了自然值（复用/重排）→ 重置基准再覆写
+static void applyBgShift(UIImageView *bg, CGFloat delta) {
+    if (delta <= 0) { resetBgShift(bg); return; }
+    NSValue *baseV = objc_getAssociatedObject(bg, kMMBgBaseFrame);
+    NSNumber *deltaV = objc_getAssociatedObject(bg, kMMBgDelta);
+    CGFloat oldDelta = deltaV ? [deltaV doubleValue] : 0;
+    CGRect base;
+    if (!baseV) {
+        base = bg.frame;   // 首触：原生刚布局完，即自然值
+    } else {
+        base = [baseV CGRectValue];
+        if (!rectClose(bg.frame, base) && !rectClose(bg.frame, shiftedUp(base, oldDelta))) {
+            base = bg.frame;   // 原生改了自然值：重置基准
+        }
+    }
+    objc_setAssociatedObject(bg, kMMBgBaseFrame, [NSValue valueWithCGRect:base], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(bg, kMMBgDelta, @(delta), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    CGRect target = shiftedUp(base, delta);
+    if (!rectClose(bg.frame, target)) bg.frame = target;
+}
+
+/// 负 y 位移会越出 cell 边界，放开 cellView 及其宿主 cell 的裁剪（备份原值可还原）
+static void applyNoClip(id view) {
+    if (![view isKindOfClass:[UIView class]]) return;
+    UIView *v = view;
+    if (!objc_getAssociatedObject(v, kMMClipBackup)) {
+        objc_setAssociatedObject(v, kMMClipBackup, @(v.clipsToBounds), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    v.clipsToBounds = NO;
+}
+
+static void restoreNoClip(id view) {
+    if (![view isKindOfClass:[UIView class]]) return;
+    UIView *v = view;
+    NSNumber *backup = objc_getAssociatedObject(v, kMMClipBackup);
+    if (backup) {
+        v.clipsToBounds = [backup boolValue];
+        objc_setAssociatedObject(v, kMMClipBackup, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+}
+
+/// 上一条可见 cell 的「气泡底 → cell 底」空白（上移封顶，防压到上一条气泡）
+static CGFloat prevCellBottomGap(id cellView) {
+    @try {
+        id cur = cellView;
+        id cell = nil;
+        for (int i = 0; i < 6 && cur; i++) {
+            if ([cur isKindOfClass:[UITableViewCell class]]) { cell = cur; break; }
+            cur = safeCall(cur, "superview");
+        }
+        id table = nil;
+        if (cell) {
+            id p = safeCall(cell, "superview");
+            for (int i = 0; i < 6 && p; i++) {
+                if ([p isKindOfClass:[UITableView class]]) { table = p; break; }
+                p = safeCall(p, "superview");
+            }
+        }
+        if (!cell || !table) return 16.0;
+        NSArray *visible = safeCall(table, "visibleCells");
+        NSUInteger idx = [visible indexOfObjectIdenticalTo:cell];
+        if (idx == NSNotFound || idx == 0) return 16.0;
+        UITableViewCell *prev = [visible objectAtIndex:idx - 1];
+        id prevCellView = safeCall(prev, "cellView");
+        UIImageView *prevBg = safeCall(prevCellView, "getBgImageView");
+        if (![prevBg isKindOfClass:[UIImageView class]]) return 16.0;
+        CGRect bgInCell = [prevBg convertRect:prevBg.bounds toView:prev];
+        CGFloat gap = prev.bounds.size.height - CGRectGetMaxY(bgInCell);
+        if (gap < 0 || gap > 40) return 16.0;   // 异常值兜底
+        return gap;
+    } @catch (NSException *e) {
+        return 16.0;
+    }
+}
+
+// ============================================================
 // MARK: - 合并渲染应用
 // ============================================================
 
@@ -206,11 +322,16 @@ static void applyMergeToCellView(id cellView) {
         if (!cfg.mmEnable) {
             if (isTouched(cellView)) {
                 UIImageView *bg = safeCall(cellView, "getBgImageView");
-                if ([bg isKindOfClass:[UIImageView class]]) restoreCorner(bg);
+                if ([bg isKindOfClass:[UIImageView class]]) {
+                    restoreCorner(bg);
+                    resetBgShift(bg);
+                }
                 id head = safeCall(cellView, "getHeadImageView");
                 if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:NO];
                 id name = safeCall(cellView, "getNameLabel");
                 if ([name isKindOfClass:[UILabel class]]) [(UILabel *)name setHidden:NO];
+                restoreNoClip(cellView);
+                restoreNoClip(safeCall(cellView, "superview"));
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
             return;
@@ -261,10 +382,23 @@ static void applyMergeToCellView(id cellView) {
             applyCorner(bg, pos);
         }
 
-        // ④ 间距：在 tableView:heightForRowAtIndexPath: 钩子里对非组首行减行高实现
-        //    （探针 #11 实证：气泡原生贴 cell 顶 bg.y=0，无上移空间；视觉空隙全来自
-        //    cell 底部约 28pt 空白；固定行高内挪 bg 会让一段间隙缩小、另一段等量放大，
-        //    几何上不成立，只有行高缩减能真正收紧气泡间距）
+        // ④ 间距收拢（cell 层，见文件头 v2 架构说明）：
+        //    非组首气泡上移，吃掉与上一条同组消息的视觉空隙；
+        //    上移量封顶 = 上一条 cell 的气泡底空白，防压到上一条气泡
+        if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0
+            && (pos == MOMergePositionMiddle || pos == MOMergePositionLast)) {
+            CGFloat cap = prevCellBottomGap(cellView);
+            CGFloat delta = MIN(cfg.mmSpacing, cap);
+            if (bg && delta > 0.5) {
+                applyNoClip(cellView);
+                applyNoClip(safeCall(cellView, "superview"));
+                applyBgShift(bg, delta);
+            } else if (bg) {
+                applyBgShift(bg, 0);
+            }
+        } else if (bg) {
+            applyBgShift(bg, 0);   // 组首/独立/间距关闭：还原
+        }
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Apply] exception: %@", e.reason);
     }
@@ -294,36 +428,6 @@ static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
     applyMergeToCellView(self);
 }
 
-/// 非组首行缩减行高（间距的唯一实现路径，见 applyMergeToCellView ④ 注释）
-static CGFloat repl_BaseMsgContentVC_heightForRow(id self, SEL _cmd, id tableView, id indexPath) {
-    CGFloat h = ((CGFloat(*)(id, SEL, id, id))orig_BaseMsgContentVC_heightForRow)(self, _cmd, tableView, indexPath);
-    @try {
-        MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        if (!cfg.mmEnable || cfg.mmSpacingMode != 1 || cfg.mmSpacing <= 0) return h;
-
-        NSArray *arr = safeKVC(self, @"m_arrMessageNodeData");
-        if (!arr) return h;
-        NSUInteger row = [(NSIndexPath *)indexPath row];
-        if (row >= [arr count]) return h;
-
-        id node = [arr objectAtIndex:row];
-        id vm = safeKVC(node, @"viewModel");
-        id wrap = vm ? safeKVC(vm, @"messageWrap") : safeKVC(node, @"messageWrap");
-        if (!wrap) return h;   // 时间节点等：原样返回
-
-        NSString *chat = chatNameOfWrap(wrap);
-        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:arr];
-        if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) {
-            CGFloat delta = (cfg.mmSpacing < 24.0) ? cfg.mmSpacing : 24.0;   // 防裁切气泡
-            CGFloat nh = h - delta;
-            if (nh >= 30.0) return nh;
-        }
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[Height] exception: %@", e.reason);
-    }
-    return h;
-}
-
 // ============================================================
 // MARK: - 安装
 // ============================================================
@@ -343,10 +447,7 @@ static CGFloat repl_BaseMsgContentVC_heightForRow(id self, SEL _cmd, id tableVie
         MSHookMessageEx(cls, @selector(viewWillAppear:),
                         (IMP)repl_BaseMsgContentVC_viewWillAppear,
                         &orig_BaseMsgContentVC_viewWillAppear);
-        MSHookMessageEx(cls, @selector(tableView:heightForRowAtIndexPath:),
-                        (IMP)repl_BaseMsgContentVC_heightForRow,
-                        &orig_BaseMsgContentVC_heightForRow);
-        WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController viewDidLoad/viewWillAppear:/heightForRow");
+        WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController viewDidLoad/viewWillAppear:");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseMsgContentViewController not found");
     }
