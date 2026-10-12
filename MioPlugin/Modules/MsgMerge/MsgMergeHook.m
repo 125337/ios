@@ -156,6 +156,33 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 }
 
 // ============================================================
+// MARK: - 聊天 VC 渲染数组获取
+// ============================================================
+
+/// 从 cellView 沿 responder 链找 BaseMsgContentViewController（8.0.78 实证其持有
+/// m_arrMessageNodeData 渲染数组；CMessageMgr 无单例访问器，查库方案不可用）
+static id findMsgContentVC(id view) {
+    id cur = view;
+    for (int hop = 0; hop < 24 && cur; hop++) {
+        id rr = cur;
+        for (int j = 0; j < 12 && rr; j++) {
+            Class baseCls = objc_getClass("BaseMsgContentViewController");
+            if (baseCls && [rr isKindOfClass:baseCls]) return rr;
+            rr = safeCall(rr, "nextResponder");
+        }
+        cur = safeCall(cur, "superview");
+    }
+    return nil;
+}
+
+/// 取聊天 VC 的消息渲染数组（消息表数据源，元素为消息 viewModel）
+static NSArray *msgNodeArrayOfCellView(id cellView) {
+    id vc = findMsgContentVC(cellView);
+    if (!vc) return nil;
+    return safeKVC(vc, @"m_arrMessageNodeData");
+}
+
+// ============================================================
 // MARK: - 合并渲染应用
 // ============================================================
 
@@ -194,7 +221,16 @@ static void applyMergeToCellView(id cellView) {
         if (wrapChat.length > 0) chat = wrapChat;
         if (chat.length == 0) { WPLog(@"MsgMerge", @"[Apply] 会话名为空"); return; }
 
-        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat];
+        NSArray *nodes = msgNodeArrayOfCellView(cellView);
+        if (!nodes) {
+            static NSTimeInterval lastVCFailLog = 0;
+            NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+            if (now - lastVCFailLog > 10) {
+                lastVCFailLog = now;
+                WPLog(@"MsgMerge", @"[Apply] 未找到聊天 VC 或渲染数组（页面=%s）", object_getClassName(cellView));
+            }
+        }
+        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:nodes];
         if (pos == MOMergePositionNone) { WPLog(@"MsgMerge", @"[Apply] pos=None（类型不可合并/开关）"); return; }   // 系统消息/不可合并：不干预
 
         BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);

@@ -7,7 +7,8 @@
 //    - 相邻有效消息 senderUser 相等（m_nsFromUsr，群聊 @chatroom 归一化到 m_nsRealChatUsr）
 //    - 时间节点/系统消息打断分组
 //    - 输出节点位置标志：组首/组中/组尾/独立
-//  邻接遍历走 CMessageMgr GetMsg:LocalID:（BubbleBox findValidMsg 同款）
+//  邻接数据源为聊天 VC 的 m_arrMessageNodeData 渲染数组（8.0.78 实证：
+//  CMessageMgr 无单例访问器，GetMsg:LocalID: 查库方案不可用）
 //
 
 #import <Foundation/Foundation.h>
@@ -26,9 +27,12 @@ typedef NS_ENUM(NSUInteger, MOMergePosition) {
 @interface MsgMergeEngine : NSObject
 
 /// 计算一条消息在会话中的合并位置（带 5s TTL 缓存）
-/// @param wrap     CMessageWrap（来自 viewModel.messageWrap）
-/// @param chatName 会话名（talker：群聊为 @chatroom id，私聊为对端 id）
-+ (MOMergePosition)positionForWrap:(id)wrap chatName:(nullable NSString *)chatName;
+/// @param wrap      CMessageWrap（来自 viewModel.messageWrap）
+/// @param chatName  会话名（talker：群聊为 @chatroom id，私聊为对端 id）
+/// @param nodeArray 聊天 VC 的 m_arrMessageNodeData 渲染数组（元素为消息 viewModel）
++ (MOMergePosition)positionForWrap:(id)wrap
+                          chatName:(nullable NSString *)chatName
+                         nodeArray:(nullable NSArray *)nodeArray;
 
 /// 清空位置缓存（切换会话时调用）
 + (void)clearCache;
