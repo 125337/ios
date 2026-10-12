@@ -30,6 +30,10 @@
         [ConfigDescriptor itemWithKey:@"mmAvatarPos" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"mmSpacingMode" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"mmSpacing" type:ConfigValueTypeFloat default:@(2.0)],
+        [ConfigDescriptor itemWithKey:@"mmSepMedia" type:ConfigValueTypeBool default:@(YES)],
+        [ConfigDescriptor itemWithKey:@"mmSepEmoticon" type:ConfigValueTypeBool default:@(YES)],
+        [ConfigDescriptor itemWithKey:@"mmSepSystem" type:ConfigValueTypeBool default:@(YES)],
+        [ConfigDescriptor itemWithKey:@"mmSepTime" type:ConfigValueTypeBool default:@(YES)],
     ];
 }
 

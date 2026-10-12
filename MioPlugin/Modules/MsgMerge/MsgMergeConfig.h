@@ -32,6 +32,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// 手动间距（pt），mmSpacingMode==1 时生效
 @property (nonatomic, assign) CGFloat mmSpacing;
 
+/// 每类消息是否充当分隔符打断合并链（仅 mmMode==1 手动配置时生效）：YES=打断 NO=参与合并
+@property (nonatomic, assign) BOOL mmSepMedia;     // 媒体消息（语音34/视频43/App消息49）
+@property (nonatomic, assign) BOOL mmSepEmoticon;  // 动画表情（47）
+@property (nonatomic, assign) BOOL mmSepSystem;    // 系统消息（>=10000，节点结构层，当前始终打断）
+@property (nonatomic, assign) BOOL mmSepTime;      // 时间行（节点结构层，当前始终打断）
+
 + (instancetype)shared;
 
 @end

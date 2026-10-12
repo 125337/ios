@@ -10,6 +10,7 @@
 
 #import "SettingMsgMergeController.h"
 #import "../../Modules/MsgMerge/MsgMergeConfig.h"
+#import "SettingMsgMergeSeparatorController.h"
 #import "../Common/SettingCategoryController.h"
 #import "../../Core/LogManager.h"
 
@@ -62,8 +63,17 @@
                               index:config.mmMode
                                  cy:cy
                               width:w];
+    if (config.mmMode == 1) {
+        // 手动配置：显示按类型细分入口（复刻 BubbleBox「配置合并模式 >」导航行）
+        cy = [self addNavRowInGroup:g2
+                              title:@"配置合并模式"
+                           subtitle:@"按消息类型设置打断规则"
+                                tag:201
+                             action:@selector(navigateToSeparator:)
+                                 cy:cy
+                              width:w];
+    }
     y = [self finishGroup:g2 atY:y height:cy];
-    y = [self addSectionFooter:@"「手动配置」按类型细分将在后续版本开放，当前与全部合并行为一致" y:y width:w];
 
     // ──── 卡片3：外观 ────
     y = [self addSectionHeader:@"外观" y:y width:w];
@@ -101,6 +111,23 @@
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
     WPLog(@"MsgMerge", @"[UI] SettingMsgMergeController wpBuildRows done");
+}
+
+#pragma mark - 模式切换联动
+
+/// 基类 segment ValueChanged 直写配置后不刷新页面；切合并模式时行构成变化
+///（手动配置 ↔ 追加「配置合并模式」入口行），此处重载整页
+- (void)wpSegmentChanged:(UISegmentedControl *)seg {
+    [super wpSegmentChanged:seg];
+    NSString *key = objc_getAssociatedObject(seg, "wpSegKey");
+    if ([key isEqualToString:@"mmMode"]) {
+        WPLog(@"MsgMerge", @"[UI] 合并模式切换 → %ld，重建页面", (long)seg.selectedSegmentIndex);
+        [self wpReloadUI];
+    }
+}
+
+- (void)navigateToSeparator:(UIButton *)sender {
+    [self.navigationController pushViewController:[[SettingMsgMergeSeparatorController alloc] init] animated:YES];
 }
 
 @end

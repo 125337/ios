@@ -37,6 +37,9 @@ typedef NS_ENUM(NSUInteger, MOMergePosition) {
 /// 清空位置缓存（切换会话时调用）
 + (void)clearCache;
 
+/// 该消息是否充当分隔符打断合并链（仅 mmMode==1 手动配置时按类型查开关，其余恒 NO）
++ (BOOL)isSeparatorMessage:(id)wrap;
+
 @end
 
 NS_ASSUME_NONNULL_END
