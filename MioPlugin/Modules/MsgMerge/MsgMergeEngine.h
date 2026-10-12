@@ -26,15 +26,13 @@ typedef NS_ENUM(NSUInteger, MOMergePosition) {
 
 @interface MsgMergeEngine : NSObject
 
-/// 计算一条消息在会话中的合并位置与组内深度（带 5s TTL 缓存）
+/// 计算一条消息在会话中的合并位置（带 5s TTL 缓存）
 /// @param wrap      CMessageWrap（来自 viewModel.messageWrap）
 /// @param chatName  会话名（talker：群聊为 @chatroom id，私聊为对端 id）
 /// @param nodeArray 聊天 VC 的 m_arrMessageNodeData 渲染数组（元素为消息 viewModel）
-/// @param depthOut  返回组内深度：组首/独立=0，组内第 k 条=k（连续同发送者步数）
 + (MOMergePosition)positionForWrap:(id)wrap
                           chatName:(nullable NSString *)chatName
-                         nodeArray:(nullable NSArray *)nodeArray
-                             depth:(nullable NSInteger *)depthOut;
+                         nodeArray:(nullable NSArray *)nodeArray;
 
 /// 清空位置缓存（切换会话时调用）
 + (void)clearCache;

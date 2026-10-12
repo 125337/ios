@@ -7,8 +7,10 @@
 //       与渲染数组 m_arrMessageNodeData
 //    ② CommonMessageCellView layoutInternal / updateNodeStatus → 按节点位置
 //       应用合并渲染：头像显隐 / 群昵称显隐 / 气泡圆角连续化
-//    ③ BaseMessageViewModel updateContentViewHeight:（8.0.78 实证签名 v@0:8d16，
-//       参数为 double 高度值）→ 间距收拢生效点：组内非组尾行高 -mmSpacing。
+//    ③ BaseChatViewModel rowHeight（8.0.78 实证签名 d16@0:8，返回 double，滚动期间
+//       270+ 次调用）→ 间距收拢生效点：组内非组尾（First/Middle）行高 -mmSpacing。
+//       行高缩减规则：间隙(i,i+1) = 行i高 - 气泡i高（气泡贴 cell 顶），所以减"上方
+//       那条"的行高即收拢其与下条的间隙；组尾行保持原生 → 组尾到组外间隙不变。
 //       固定行高内平移内容必然守恒（探针 #11/#22/#23 实证），行高缩减是唯一正解；
 //       delegate heightForRow 与 self-sizing 在 8.0.78 均零调用（探针 #13/#14/#17/#18）。
 //
@@ -34,7 +36,6 @@ static IMP orig_BaseMsgContentVC_viewWillAppear = NULL;
 static IMP orig_BaseChatViewModel_rowHeight     = NULL;
 static IMP orig_CMCellView_layoutInternal       = NULL;
 static IMP orig_CMCellView_updateNodeStatus     = NULL;
-static IMP orig_ChatCell_layoutSubviews         = NULL;
 
 // ============================================================
 // MARK: - 会话上下文
@@ -209,149 +210,6 @@ static NSString *chatNameOfWrap(id wrap) {
 }
 
 // ============================================================
-// MARK: - 气泡生长式间距（基准缓存 + 失效检测 + 上一条气泡底封顶）
-// ============================================================
-
-static void *kMMBaseFrame = &kMMBaseFrame;   // NSValue<CGRect>：自然帧基准
-static void *kMMLastDelta = &kMMLastDelta;   // NSValue<CGPoint>：上轮 (dy, dh)
-static void *kMMClipSaved = &kMMClipSaved;   // NSNumber：clipsToBounds 备份
-
-static BOOL rectClose(CGRect a, CGRect b) {
-    return fabs(a.origin.x - b.origin.x) < 0.5 && fabs(a.origin.y - b.origin.y) < 0.5
-        && fabs(a.size.width - b.size.width) < 0.5 && fabs(a.size.height - b.size.height) < 0.5;
-}
-
-/// 帧定位（XOS FUN_00192580 同款语义）：target = 基准帧 + (dy, dh)。
-/// native 重置 frame（reuse/重布局）→ 以当前值重建基准，绝不相对累加。
-static void applyFrameDelta(UIView *v, CGFloat dy, CGFloat dh) {
-    if (!v) return;
-    NSValue *baseV = objc_getAssociatedObject(v, kMMBaseFrame);
-    NSValue *lastV = objc_getAssociatedObject(v, kMMLastDelta);
-    CGRect base;
-    if (baseV && lastV) {
-        base = [baseV CGRectValue];
-        CGPoint ld = [lastV CGPointValue];
-        CGRect steady = base;
-        steady.origin.y += ld.x;
-        steady.size.height += ld.y;
-        if (!rectClose(v.frame, steady)) base = v.frame;   // native 重置：重建基准
-    } else if (baseV) {
-        base = [baseV CGRectValue];
-        if (!rectClose(v.frame, base)) base = v.frame;
-    } else {
-        base = v.frame;                                    // 首过存自然值
-    }
-    objc_setAssociatedObject(v, kMMBaseFrame, [NSValue valueWithCGRect:base], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(v, kMMLastDelta, [NSValue valueWithCGPoint:CGPointMake(dy, dh)], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    CGRect target = base;
-    target.origin.y += dy;
-    target.size.height += dh;
-    if (!rectClose(v.frame, target)) v.frame = target;
-}
-
-/// 对称还原：仅当当前帧确为「基准+上轮位移」时回写基准帧，避免覆盖 native 新布局
-static void resetFrameDelta(UIView *v) {
-    if (!v) return;
-    NSValue *baseV = objc_getAssociatedObject(v, kMMBaseFrame);
-    NSValue *lastV = objc_getAssociatedObject(v, kMMLastDelta);
-    if (baseV && lastV) {
-        CGRect base = [baseV CGRectValue];
-        CGPoint ld = [lastV CGPointValue];
-        CGRect expect = base;
-        expect.origin.y += ld.x;
-        expect.size.height += ld.y;
-        if (rectClose(v.frame, expect)) v.frame = base;
-    }
-    objc_setAssociatedObject(v, kMMBaseFrame, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(v, kMMLastDelta, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
-static void resetMergeShift(id cellView) {
-    resetFrameDelta(safeCall(cellView, "getBgImageView"));
-    resetFrameDelta(safeCall(cellView, "getRichTextView"));
-}
-
-// 裁剪放开（生长可能越出 cv/cell 顶；逐级备份可还原）
-static void setNoClip(UIView *v) {
-    if (!v) return;
-    if (!objc_getAssociatedObject(v, kMMClipSaved))
-        objc_setAssociatedObject(v, kMMClipSaved, @(v.clipsToBounds), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    v.clipsToBounds = NO;
-}
-
-static void applyNoClipChain(id cellView) {
-    UIView *v = cellView;
-    for (int i = 0; i < 6 && v; i++) {
-        setNoClip(v);
-        if ([v isKindOfClass:[UITableViewCell class]]) break;
-        v = [v superview];
-    }
-}
-
-static void restoreClipChain(id cellView) {
-    UIView *v = cellView;
-    for (int i = 0; i < 6 && v; i++) {
-        NSNumber *saved = objc_getAssociatedObject(v, kMMClipSaved);
-        if (saved) v.clipsToBounds = [saved boolValue];
-        if ([v isKindOfClass:[UITableViewCell class]]) break;
-        v = [v superview];
-    }
-}
-
-/// 上一条 cell 的气泡底 → 本条气泡顶的实测空白（生长封顶，防压到上一条气泡）
-static id findMessageCellViewIn(UIView *root, int depth) {
-    if (!root || depth > 8) return nil;
-    NSString *cn = NSStringFromClass([root class]);
-    if ([cn containsString:@"MessageCellView"] && [root respondsToSelector:@selector(getBgImageView)])
-        return root;
-    for (UIView *s in root.subviews) {
-        id r = findMessageCellViewIn(s, depth + 1);
-        if (r) return r;
-    }
-    return nil;
-}
-
-static CGFloat prevCellBottomGap(id cellView) {
-    @try {
-        UITableViewCell *host = nil;
-        id cur = cellView;
-        for (int i = 0; i < 8 && cur; i++) {
-            if ([cur isKindOfClass:[UITableViewCell class]]) { host = cur; break; }
-            cur = [cur superview];
-        }
-        if (!host) return 16.0;
-        UITableView *tv = nil;
-        id p = [host superview];
-        if ([p isKindOfClass:[UITableView class]]) tv = p;
-        else if ([[p superview] isKindOfClass:[UITableView class]]) tv = [p superview];
-        if (!tv) return 16.0;
-        NSIndexPath *ip = [tv indexPathForCell:host];
-        if (!ip || ip.row == 0) return 16.0;
-        UITableViewCell *prev = [tv cellForRowAtIndexPath:
-            [NSIndexPath indexPathForRow:ip.row - 1 inSection:ip.section]];
-        if (!prev) return 16.0;
-        id mcv = findMessageCellViewIn(prev, 0);
-        if (!mcv) return 16.0;
-        UIImageView *pbg = safeCall(mcv, "getBgImageView");
-        if (![pbg isKindOfClass:[UIImageView class]]) return 16.0;
-        CGRect prevBgInPrev = [prev convertRect:pbg.frame fromView:pbg.superview];
-        CGFloat prevBubbleBottom = prevBgInPrev.origin.y + prevBgInPrev.size.height;
-
-        CGFloat myTop = 5.0;
-        UIImageView *bg = safeCall(cellView, "getBgImageView");
-        if ([bg isKindOfClass:[UIImageView class]]) {
-            CGRect myBg = [host convertRect:bg.frame fromView:bg.superview];
-            myTop = myBg.origin.y;
-        }
-        // 相邻行：host.y - prev.y = prev 行高
-        CGFloat totalGap = prev.frame.size.height - prevBubbleBottom + myTop;
-        return totalGap > 0 ? totalGap : 16.0;
-    } @catch (NSException *e) {
-        return 16.0;
-    }
-}
-
-// ============================================================
 // MARK: - 行高钩子（间距收拢生效点）
 // ============================================================
 
@@ -359,7 +217,7 @@ static CGFloat prevCellBottomGap(id cellView) {
 // 全部消息/时间 viewModel 均继承此实现（探针快查单一 IMP，无子类重写），
 // 滚动期间 270+ 次调用（探针 #26）——这是聊天行高的真实来源。
 // delegate heightForRow、self-sizing、updateContentViewHeight: 均零调用（探针 #13/#14/#17/#18/#25）。
-// 组内非组尾（Middle/Last）行高 -mmSpacing（下限 24 防裁切），组首/独立/时间行原生。
+// 组内非组尾（First/Middle）行高 -mmSpacing（下限 24 防裁切），组尾/独立/时间行原生。
 static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
     double h = ((double (*)(id, SEL))orig_BaseChatViewModel_rowHeight)(self, _cmd);
     @try {
@@ -372,9 +230,8 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
                 if (chat.length > 0) {
                     MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap
                                                                  chatName:chat
-                                                                nodeArray:g_currentNodeArray
-                                                                    depth:NULL];
-                    if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) {
+                                                                nodeArray:g_currentNodeArray];
+                    if (pos == MOMergePositionFirst || pos == MOMergePositionMiddle) {
                         double v = h - (double)cfg.mmSpacing;
                         if (v >= 24.0) return v;   // 下限 24 防裁切（内容顶对齐，缩减只吃底部空白）
                     }
@@ -404,8 +261,6 @@ static void applyMergeToCellView(id cellView) {
                 if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:NO];
                 id name = safeCall(cellView, "getNameLabel");
                 if ([name isKindOfClass:[UILabel class]]) [(UILabel *)name setHidden:NO];
-                resetMergeShift(cellView);
-                restoreClipChain(cellView);
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
             return;
@@ -428,8 +283,7 @@ static void applyMergeToCellView(id cellView) {
                 WPLog(@"MsgMerge", @"[Apply] 未找到聊天 VC 或渲染数组（页面=%s）", object_getClassName(cellView));
             }
         }
-        NSInteger mergeDepth = 0;
-        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:nodes depth:&mergeDepth];
+        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:nodes];
         if (pos == MOMergePositionNone) { WPLog(@"MsgMerge", @"[Apply] pos=None（类型不可合并/开关）"); return; }   // 系统消息/不可合并：不干预
 
         BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
@@ -455,27 +309,6 @@ static void applyMergeToCellView(id cellView) {
         UIImageView *bg = safeCall(cellView, "getBgImageView");
         if ([bg isKindOfClass:[UIImageView class]]) {
             applyCorner(bg, pos);
-        }
-
-        // ④ 间距收拢（气泡向上生长：bg 顶吃留白、底不动；文本同步上移）
-        //    仅文本 cell 应用（其余类型内容结构不同）；行高钩子若已生效，
-        //    prevCellBottomGap 封顶会让生长量自然趋零，两机制不叠加
-        if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0 && !isFirst) {
-            BOOL isText = [NSStringFromClass([cellView class]) containsString:@"Text"];
-            if (isText) {
-                CGFloat grow = MIN((CGFloat)mergeDepth * cfg.mmSpacing, prevCellBottomGap(cellView));
-                if (grow > 0.5) {
-                    applyNoClipChain(cellView);
-                    applyFrameDelta(bg, -grow, grow);              // 气泡向上生长
-                    id rt = safeCall(cellView, "getRichTextView");
-                    if ([rt isKindOfClass:[UIView class]])
-                        applyFrameDelta((UIView *)rt, -grow, 0);   // 文本顶对齐跟随
-                } else {
-                    resetMergeShift(cellView);
-                }
-            }
-        } else {
-            resetMergeShift(cellView);
         }
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Apply] exception: %@", e.reason);
@@ -504,31 +337,6 @@ static void repl_CMCellView_layoutInternal(id self, SEL _cmd) {
 static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_CMCellView_updateNodeStatus)(self, _cmd);
     applyMergeToCellView(self);
-}
-
-// ── cell 级终局重排 ──
-// 探针 #27b 实证：layoutInternal 中段的 bg 生长会被 cell.layoutSubviews 后段
-// native 布局重置回原生帧。必须在 ChatTableViewCell.layoutSubviews（微信自有类
-// 自有方法）返回后再应用一次，生长/位移才真正落地。前两钩保留（数据早绑定、幂等）。
-static void applyMergeToCellTree(id root, int depth) {
-    if (!root || depth > 6) return;
-    @try {
-        NSString *cn = NSStringFromClass([root class]);
-        if ([cn containsString:@"MessageCellView"]) {
-            applyMergeToCellView(root);
-            return;   // MessageCellView 子树内部无需再下钻
-        }
-        for (UIView *s in [(UIView *)root subviews]) applyMergeToCellTree(s, depth + 1);
-    } @catch (NSException *ignored) {}
-}
-
-static void repl_ChatCell_layoutSubviews(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_ChatCell_layoutSubviews)(self, _cmd);
-    @try {
-        applyMergeToCellTree(self, 0);
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[CellLS] exception: %@", e.reason);
-    }
 }
 
 // ============================================================
@@ -578,17 +386,6 @@ static void repl_ChatCell_layoutSubviews(id self, SEL _cmd) {
         WPLog(@"MsgMerge", @"[Hook] ✓ BaseChatViewModel rowHeight");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseChatViewModel rowHeight not found");
-    }
-
-    // ④ cell 布局终局钩子（生长式间距落地点，探针 #27b 实证 layoutInternal 中段会被重置）
-    cls = objc_getClass("ChatTableViewCell");
-    if (cls && [cls instancesRespondToSelector:@selector(layoutSubviews)]) {
-        MSHookMessageEx(cls, @selector(layoutSubviews),
-                        (IMP)repl_ChatCell_layoutSubviews,
-                        &orig_ChatCell_layoutSubviews);
-        WPLog(@"MsgMerge", @"[Hook] ✓ ChatTableViewCell layoutSubviews");
-    } else {
-        WPLog(@"MsgMerge", @"[Hook] ✗ ChatTableViewCell not found");
     }
 
     WPLog(@"MsgMerge", @"MsgMergeHook install complete");
