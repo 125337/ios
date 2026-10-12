@@ -117,7 +117,8 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     if (![typeVal respondsToSelector:@selector(longLongValue)]) return NO;
     long long type = [typeVal longLongValue];
     if (type == 47) return cfg.mmSepEmoticon;           // 动画表情
-    if (type == 34 || type == 43 || type == 49) return cfg.mmSepMedia;  // 语音/视频/App消息
+    // 媒体消息：图片3/语音34/视频43/短视频62/App消息49（探针 #30 实证漏映射图片导致"打断无效果"）
+    if (type == 3 || type == 34 || type == 43 || type == 49 || type == 62) return cfg.mmSepMedia;
     if (type >= 10000) return YES;                      // 系统/状态消息始终断组
     return NO;                                          // 文本等默认参与合并
 }
