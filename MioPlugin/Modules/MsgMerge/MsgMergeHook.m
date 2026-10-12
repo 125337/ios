@@ -34,6 +34,7 @@ static IMP orig_BaseMsgContentVC_viewWillAppear = NULL;
 static IMP orig_BaseChatViewModel_rowHeight     = NULL;
 static IMP orig_CMCellView_layoutInternal       = NULL;
 static IMP orig_CMCellView_updateNodeStatus     = NULL;
+static IMP orig_ChatCell_layoutSubviews         = NULL;
 
 // ============================================================
 // MARK: - 会话上下文
@@ -505,6 +506,31 @@ static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
     applyMergeToCellView(self);
 }
 
+// ── cell 级终局重排 ──
+// 探针 #27b 实证：layoutInternal 中段的 bg 生长会被 cell.layoutSubviews 后段
+// native 布局重置回原生帧。必须在 ChatTableViewCell.layoutSubviews（微信自有类
+// 自有方法）返回后再应用一次，生长/位移才真正落地。前两钩保留（数据早绑定、幂等）。
+static void applyMergeToCellTree(id root, int depth) {
+    if (!root || depth > 6) return;
+    @try {
+        NSString *cn = NSStringFromClass([root class]);
+        if ([cn containsString:@"MessageCellView"]) {
+            applyMergeToCellView(root);
+            return;   // MessageCellView 子树内部无需再下钻
+        }
+        for (UIView *s in [(UIView *)root subviews]) applyMergeToCellTree(s, depth + 1);
+    } @catch (NSException *ignored) {}
+}
+
+static void repl_ChatCell_layoutSubviews(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_ChatCell_layoutSubviews)(self, _cmd);
+    @try {
+        applyMergeToCellTree(self, 0);
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[CellLS] exception: %@", e.reason);
+    }
+}
+
 // ============================================================
 // MARK: - 安装
 // ============================================================
@@ -552,6 +578,17 @@ static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
         WPLog(@"MsgMerge", @"[Hook] ✓ BaseChatViewModel rowHeight");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseChatViewModel rowHeight not found");
+    }
+
+    // ④ cell 布局终局钩子（生长式间距落地点，探针 #27b 实证 layoutInternal 中段会被重置）
+    cls = objc_getClass("ChatTableViewCell");
+    if (cls && [cls instancesRespondToSelector:@selector(layoutSubviews)]) {
+        MSHookMessageEx(cls, @selector(layoutSubviews),
+                        (IMP)repl_ChatCell_layoutSubviews,
+                        &orig_ChatCell_layoutSubviews);
+        WPLog(@"MsgMerge", @"[Hook] ✓ ChatTableViewCell layoutSubviews");
+    } else {
+        WPLog(@"MsgMerge", @"[Hook] ✗ ChatTableViewCell not found");
     }
 
     WPLog(@"MsgMerge", @"MsgMergeHook install complete");
