@@ -388,24 +388,32 @@ static void applyMergeToCellView(id cellView) {
 
         // ④ 间距收拢（cell 层，见文件头 v2 架构说明）：
         //    非组首气泡上移，吃掉与上一条同组消息的视觉空隙；
-        //    上移量封顶 = 上一条 cell 的气泡底空白，防压到上一条气泡；
-        //    bg 与内容容器（getContentView，文字在其内）同移防错位
+        //    上移量封顶 = 上一条 cell 的气泡底空白，防压到上一条气泡。
+        //    【探针 #22 实证】8.0.78 文本消息的 bg 父视图就是 getContentView
+        //    （bg 与 richTextView 都在 cv 内，bgCellY = bg.y + cv.y 恒成立）：
+        //    移 cv 即整体带动气泡与文字；再单独移 bg 会双移
+        //    （气泡 -8 / 文字 -4，错位 4pt，"文字偏下"根因）。
+        //    仅当 bg 不在 cv 内（其他消息类型布局变体）才对 bg 单独位移。
         id contentView = safeCall(cellView, "getContentView");
+        BOOL bgInCv = ([bg isKindOfClass:[UIView class]]
+                       && [contentView isKindOfClass:[UIView class]]
+                       && [(UIView *)bg superview] == (UIView *)contentView);
         if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0
             && (pos == MOMergePositionMiddle || pos == MOMergePositionLast)) {
             CGFloat cap = prevCellBottomGap(cellView);
             CGFloat delta = MIN(cfg.mmSpacing, cap);
-            if (bg && delta > 0.5) {
+            if (delta > 0.5) {
                 applyNoClip(cellView);
                 applyNoClip(safeCall(cellView, "superview"));
-                applyViewShift(bg, delta);
+                if (!bgInCv && [bg isKindOfClass:[UIView class]]) applyViewShift(bg, delta);
                 if ([contentView isKindOfClass:[UIView class]]) applyViewShift(contentView, delta);
-            } else if (bg) {
-                applyViewShift(bg, 0);
+                else if (!bgInCv && [bg isKindOfClass:[UIView class]]) applyViewShift(bg, delta);
+            } else {
+                if (!bgInCv && [bg isKindOfClass:[UIView class]]) applyViewShift(bg, 0);
                 if ([contentView isKindOfClass:[UIView class]]) applyViewShift(contentView, 0);
             }
-        } else if (bg) {
-            applyViewShift(bg, 0);   // 组首/独立/间距关闭：还原
+        } else {
+            if (!bgInCv && [bg isKindOfClass:[UIView class]]) applyViewShift(bg, 0);   // 组首/独立/间距关闭：还原
             if ([contentView isKindOfClass:[UIView class]]) applyViewShift(contentView, 0);
         }
     } @catch (NSException *e) {
