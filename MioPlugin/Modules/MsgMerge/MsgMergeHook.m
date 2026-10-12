@@ -253,6 +253,8 @@ static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
 // MARK: - 安装
 // ============================================================
 
+@implementation MsgMergeHook
+
 + (void)install {
     WPLog(@"MsgMerge", @"MsgMergeHook install (消息合并 v1)");
     Class cls;
