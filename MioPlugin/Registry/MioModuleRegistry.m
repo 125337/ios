@@ -40,7 +40,9 @@
 #import "../Modules/SideGroups/SideGroupsVC.h"
 #import "../Modules/HomeBeautify/HomeCardConfig.h"
 #import "../Modules/HomeBeautify/HomeCardHook.h"
+#import "../Modules/MsgMerge/MsgMergeHook.h"
 #import "../Modules/HomeBeautify/HomeCardVC.h"
+#import "../Modules/MsgMerge/MsgMergeConfig.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -223,6 +225,16 @@
                                                   subtitle:@"聊天界面顶部栏自定义"
                                              sectionTitle:@"通用"],
             
+
+            // ──── 消息合并（入口在 界面定制 页） ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"msgmerge"
+                                                    title:@"消息合并"
+                                               configClass:[MsgMergeConfig class]
+                                               hookClasses:@[[MsgMergeHook class]]
+                                           controllerClass:nil
+                                                  subtitle:@"连续消息合并显示"
+                                             sectionTitle:@"通用"],
+
             // ──── 列表圆角 + 资料卡背景 ────
             [MioModuleDescriptor descriptorWithIdentifier:@"listcorner"
                                                     title:@"列表圆角"

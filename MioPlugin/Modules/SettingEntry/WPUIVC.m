@@ -4,6 +4,7 @@
 #import "../SessionGroups/SessionGroupsVC.h"
 #import "../SideGroups/SideGroupsVC.h"
 #import "../HomeBeautify/HomeCardVC.h"
+#import "../../Settings/Controllers/SettingMsgMergeController.h"
 #import "../../Core/LogManager.h"
 
 @interface WPUIVC : SettingCategoryController
@@ -38,6 +39,7 @@
         @[@"界面净化", @(105)],
         @[@"隐藏头像", @(106)],
         @[@"布局设置", @(107)],
+        @[@"消息合并", @(111)],
     ];
 
     for (NSUInteger i = 0; i < items.count; i++) {
@@ -125,6 +127,9 @@
             break;
         case 110:
             subVC = [[HomeCardVC alloc] init];
+            break;
+        case 111:
+            subVC = [[SettingMsgMergeController alloc] init];
             break;
     }
 
