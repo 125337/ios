@@ -40,6 +40,10 @@ typedef NS_ENUM(NSUInteger, MOMergePosition) {
 /// 该消息是否充当分隔符打断合并链（仅 mmMode==1 手动配置时按类型查开关，其余恒 NO）
 + (BOOL)mmIsSeparatorMessage:(id)wrap;
 
+/// 文本消息行高自算（渐进接管路线图 阶段1，mmOwnLayout 开关下替换原实现）
+/// 公式：20×渲染行数L + 20(气泡上下内边距) + 17(行间隙) + 13(群聊收方昵称块)
++ (CGFloat)textRowHeightForWrap:(id)wrap;
+
 @end
 
 NS_ASSUME_NONNULL_END

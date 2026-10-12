@@ -26,6 +26,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <stdlib.h>
+#import <math.h>
 
 // ============================================================
 // MARK: - 常量
@@ -75,6 +76,19 @@ static long long localIDOf(id wrap) {
     id v = safeValue(wrap, @"m_uiMesLocalID");
     if (![v respondsToSelector:@selector(longLongValue)]) return 0;
     return [v longLongValue];
+}
+
+/// 文本行宽估算（全角单位数）：CJK 及全角区段记 1、ASCII 等半角记 0.5、代理对（emoji/生僻字）记 1
+static CGFloat textWidthUnits(NSString *s) {
+    CGFloat w = 0;
+    NSUInteger i = 0, n = s.length;
+    while (i < n) {
+        unichar c = [s characterAtIndex:i];
+        if (c >= 0xD800 && c <= 0xDBFF) { w += 1.0; i += 2; continue; }  // 高代理：按一个全角
+        w += (c >= 0x2E80) ? 1.0 : 0.5;
+        i++;
+    }
+    return w;
 }
 
 /// 从数据源节点提取 wrap（viewModel.messageWrap；ChatTimeViewModel 等时间节点无 wrap）
@@ -210,6 +224,35 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     WPLog(@"MsgMerge", @"[Engine] pos=%lu chat=%@ localID=%lld idx=%ld/%lu",
           (unsigned long)pos, chatName, localID, targetIdx, (unsigned long)wraps.count);
     return pos;
+}
+
+/// 文本消息行高自算（渐进接管路线图 阶段1，mmOwnLayout 开关下替换原实现）
+///
+/// 公式与采样依据（2026-10-13 原生环境采样 411 条，scripts\mm_sample_data.csv）：
+///   行高 = 20×L + 20 + 17 [+13]
+///     20×L   气泡内容高：渲染行数 L，每行 20（bg 单行 40，多行步进 20 实测）
+///     +20    气泡上下内边距各 10（bg = 内容高 + 20 实测）
+///     +17    行间隙（单聊发方 57 = 40+17 实测）
+///     +13    群聊收方昵称块（群收 70 − 单发 57 = 13 实测；前提：微信聊天设置开昵称显示）
+///   L 不能用 m_nsContent 的 \n 数：微信按渲染宽度折行（77 字无换行实测渲染 4 行），
+///   故按字宽加权估算后除以每行容量 16 全角单位（采样实证：≤16 全角 1 行，19 全角 2 行）。
++ (CGFloat)textRowHeightForWrap:(id)wrap {
+    if (!wrap) return 0;
+    NSString *content = safeValue(wrap, @"m_nsContent");
+    if (![content isKindOfClass:[NSString class]]) content = @"";
+
+    const CGFloat perLineUnits = 16.0;
+    NSInteger lines = 0;
+    for (NSString *seg in [content componentsSeparatedByString:@"\n"]) {
+        NSInteger l = (NSInteger)ceil(textWidthUnits(seg) / perLineUnits);
+        lines += (l < 1) ? 1 : l;   // 空行/短行至少占一行
+    }
+    if (lines < 1) lines = 1;
+
+    double h = 20.0 * lines + 20.0 + 17.0;
+    NSString *from = safeValue(wrap, @"m_nsFromUsr");
+    if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) h += 13.0;
+    return (CGFloat)h;
 }
 
 + (void)clearCache {

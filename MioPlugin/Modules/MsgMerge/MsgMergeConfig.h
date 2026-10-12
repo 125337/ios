@@ -38,6 +38,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL mmSepSystem;    // 系统消息（>=10000，节点结构层，当前始终打断）
 @property (nonatomic, assign) BOOL mmSepTime;      // 时间行（节点结构层，当前始终打断）
 
+/// 布局接管（渐进接管路线图 阶段1）：YES 时 type==1 文本行高走自算公式（替换式），NO 时全部走原实现
+@property (nonatomic, assign) BOOL mmOwnLayout;
+
 + (instancetype)shared;
 
 @end

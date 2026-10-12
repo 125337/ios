@@ -26,6 +26,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
+#import <math.h>
 
 // ============================================================
 // MARK: - Original IMPs
@@ -213,15 +214,52 @@ static NSString *chatNameOfWrap(id wrap) {
 // MARK: - 行高钩子（间距收拢生效点）
 // ============================================================
 
+// 双算验证日志（渐进接管路线图 阶段1.4）：mmOwnLayout 下同一条消息首次计算时
+// 输出公式值 vs 原生值，验证公式对采样外消息的误差（验收：|diff|≤2pt 比例 ≥98%）
+static void wpRowHeightDualLog(id wrap, double formula, double native) {
+    static NSMutableSet *seen;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
+    if ([seen count] > 4096) [seen removeAllObjects];
+    id lidV = safeKVC(wrap, @"m_uiMesLocalID");
+    if (![lidV respondsToSelector:@selector(longLongValue)]) return;
+    long long lid = [lidV longLongValue];
+    if (lid <= 0 || [seen containsObject:@(lid)]) return;
+    [seen addObject:@(lid)];
+    double d = formula - native;
+    WPLog(@"MsgMerge", @"[Own] lid=%lld 公式=%.0f 原生=%.0f diff=%+.0f%@",
+          lid, formula, native, d, (fabs(d) > 2.0 ? @"  ←超差" : @""));
+}
+
 // -[BaseChatViewModel rowHeight]（8.0.78 实证签名 d16@0:8，返回 double）：
 // 全部消息/时间 viewModel 均继承此实现（探针快查单一 IMP，无子类重写），
 // 滚动期间 270+ 次调用（探针 #26）——这是聊天行高的真实来源。
 // delegate heightForRow、self-sizing、updateContentViewHeight: 均零调用（探针 #13/#14/#17/#18/#25）。
-// 组内非组尾（First/Middle）行高 -mmSpacing（下限 24 防裁切），组尾/独立/时间行原生。
+// 双路径：
+//   替换式（mmOwnLayout，阶段1实验开关）：type==1 文本行高走自算公式，不再依赖原实现
+//   包裹式（现有行为）：原实现返回值上对组内非组尾（First/Middle）-mmSpacing（下限 24 防裁切）
 static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
     double h = ((double (*)(id, SEL))orig_BaseChatViewModel_rowHeight)(self, _cmd);
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
+        if (cfg.mmEnable && cfg.mmOwnLayout) {
+            id wrap = safeKVC(self, @"messageWrap");
+            id typeVal = wrap ? safeKVC(wrap, @"m_uiMessageType") : nil;
+            if (wrap && [typeVal respondsToSelector:@selector(longLongValue)] &&
+                [typeVal longLongValue] == 1) {
+                double f = (double)[MsgMergeEngine textRowHeightForWrap:wrap];
+                wpRowHeightDualLog(wrap, f, h);   // 1.4 验证日志（公式值 vs 原生值）
+                NSString *chat = chatNameOfWrap(wrap);
+                if (chat.length == 0) chat = currentChatName();
+                MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap
+                                                             chatName:chat
+                                                            nodeArray:g_currentNodeArray];
+                if (pos == MOMergePositionFirst || pos == MOMergePositionMiddle) {
+                    f -= (double)cfg.mmSpacing;
+                }
+                return f > 24.0 ? f : 24.0;
+            }
+        }
         if (cfg.mmEnable && cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
             id wrap = safeKVC(self, @"messageWrap");
             if (wrap) {
