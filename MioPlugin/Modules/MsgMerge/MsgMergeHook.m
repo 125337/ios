@@ -222,13 +222,30 @@ static NSString *chatNameOfWrap(id wrap) {
 // （56/53 并存，同会话真值 54），两个带误差的估计相减误差叠加（实测 N 偏 1~2pt）。
 //
 // 新方案：cell 布局时（applyMergeToCellView ② 群昵称块）直读微信摆好的真实
-// frame —— 群收行 bg.y：昵称开=16（带昵称区）/ 关=5（无昵称区）。补偿量
-// N = bg.y − 无昵称基准 g_plainBgY（由零高 label 的群收行上报，默认 5），
-// 持久化于 Engine（kNickBlockKey），rowHeight 消费。
-// 注意不能用 label 高度（实测 14）——昵称区是 bg.y 差值 11（65−54，探针 #31/#33）。
+// frame —— 昵称区 = 收方行 bgTopInCell（昵称开=16 / 关=5，diag33 表坐标实证）
+// − 无昵称基准 g_plainBgY（自发行上报校准，恒 5），持久化于 Engine（kNickBlockKey），
+// rowHeight 消费。
+// 【diag34 实证坑位】bg 自身 frame.origin.y 恒 0（钉在宿主顶），16/5 的差挂在
+// bg→cell 的中间容器上 —— 不能直接读 bg.frame.origin.y，必须逐层累加折算到
+// cell 坐标（bgTopWithinCell）。也不能用 label 高度判昵称开关（两种状态都是 14，
+// 微信用 setHidden 不改 frame，那条分支恒走不到）。
 // 换行高/字体缩放自动跟随（读的就是目标量本身，无推断链）。
 
-static double g_plainBgY = 5.0;   // 无昵称区文本行的 bg.y 基准（零高 label 行上报校准）
+static double g_plainBgY = 5.0;   // 无昵称区行的 bgTopInCell 基准（自发行上报校准）
+
+/// bg 顶边折算到所属 UITableViewCell 坐标的 y（diag34 实证 bg.frame.origin.y 恒 0，
+/// 昵称区偏移挂在 bg→cell 的中间容器上，逐层累加到 cell 坐标才对）。
+/// 找不到 cell 归属时返回 0（正常布局 bgTopInCell ≥ 5，0 即失败信号）。
+static CGFloat bgTopWithinCell(UIImageView *bg) {
+    if (!bg) return 0;
+    CGFloat y = bg.frame.origin.y;
+    UIView *v = bg.superview;
+    while (v && ![v isKindOfClass:[UITableViewCell class]]) {
+        y += v.frame.origin.y;
+        v = v.superview;
+    }
+    return (v && [v isKindOfClass:[UITableViewCell class]]) ? y : 0;
+}
 
 // ---- N 变化触发行高重算 ----
 // 布局时上报的新 N 落盘后，表格已按旧持久值算完行高，之后无人触发重算 →
@@ -388,22 +405,25 @@ static void applyMergeToCellView(id cellView) {
 
         // ② 群昵称：仅组首显示（私聊无昵称标签，操作无害）。
         //    同时直测昵称区（微信摆好的原生 frame，先于任何修改）：
-        //    群收行 label 有高度 → 昵称显示开，N = bg.y − g_plainBgY（实测 16−5=11）；
-        //    群收行 label 零高 → 昵称显示关，N=0，并用本行 bg.y 校准无昵称基准。
+        //    群收行（from=@chatroom 结尾）：N = bgTopInCell − g_plainBgY
+        //      （昵称开 16−5=11 / 关 5−5=0，diag33 表坐标实证）；
+        //    自发行（from=wxid）：无昵称区，bgTopInCell 恒为基准 → 校准 g_plainBgY。
+        //    bg.frame.origin.y 恒 0（diag34），必须用 bgTopWithinCell 折算。
         if (inGroup) {
             id name = safeCall(cellView, "getNameLabel");
             if ([name isKindOfClass:[UILabel class]]) {
                 UILabel *lb = (UILabel *)name;
                 NSString *from = safeKVC(wrap, @"m_nsFromUsr");
-                if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
+                if ([from isKindOfClass:[NSString class]] && from.length > 0) {
                     UIImageView *bgV = safeCall(cellView, "getBgImageView");
                     if ([bgV isKindOfClass:[UIImageView class]]) {
-                        CGFloat bgY = bgV.frame.origin.y;
-                        if (lb.frame.size.height > 0.5) {
-                            [MsgMergeEngine reportNicknameBlock:bgY - g_plainBgY];
-                        } else {
-                            g_plainBgY = bgY;
-                            [MsgMergeEngine reportNicknameBlock:0];
+                        CGFloat bgTop = bgTopWithinCell(bgV);
+                        if (bgTop > 0) {
+                            if ([from hasSuffix:@"@chatroom"]) {
+                                [MsgMergeEngine reportNicknameBlock:bgTop - g_plainBgY];
+                            } else {
+                                g_plainBgY = bgTop;   // 自发行：无昵称区，校准基准
+                            }
                         }
                     }
                 }
