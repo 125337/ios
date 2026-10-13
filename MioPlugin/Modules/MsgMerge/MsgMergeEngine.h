@@ -40,9 +40,8 @@ typedef NS_ENUM(NSUInteger, MOMergePosition) {
 /// 该消息是否充当分隔符打断合并链（仅 mmMode==1 手动配置时按类型查开关，其余恒 NO）
 + (BOOL)mmIsSeparatorMessage:(id)wrap;
 
-/// 是否单行短文本（type==1、无换行、字宽 ≤14 全角单位——昵称块采样的入样门槛，
-/// 宁严勿滥：估行数可能偏大，混入多行消息会污染收发差值样本）
-+ (BOOL)isSingleLineShortText:(id)wrap;
++ (CGFloat)nicknameBlockHeight;             // 昵称区补偿量（rowHeight 消费；布局直读持久化值）
++ (void)reportNicknameBlock:(double)h;      // 渲染层上报实测昵称区（bg.y − 无昵称基准；0=昵称显示关）
 
 @end
 

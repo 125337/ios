@@ -50,7 +50,6 @@ static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chat
 static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageNodeData（行高钩子用，retain）
 
 static id safeKVC(id obj, NSString *key);   // 定义见下文视图安全访问节
-static void nickSampleReset(void);          // 定义见昵称块采样节
 
 static void updateChatContext(id self) {
     @try {
@@ -66,7 +65,6 @@ static void updateChatContext(id self) {
 #endif
                 g_currentChatName = [name copy];
                 [MsgMergeEngine clearCache];
-                nickSampleReset();   // 采样按会话隔离（原生行高基准随会话变化）
             }
         }
         // 渲染数组每次进出聊天都刷新（数组对象可能被整表重建）
@@ -217,74 +215,20 @@ static NSString *chatNameOfWrap(id wrap) {
 }
 
 // ============================================================
-// MARK: - 昵称块运行时实测（包裹式补偿量，跨会话漂移免疫）
+// MARK: - 昵称区补偿量（布局时直读，消灭推断链）
 // ============================================================
 //
-// 原生 rowHeight 存在跨会话度量基准漂移（同一消息不同会话每行差约 3pt），固定常数
-// 补偿无法两套基准通用。实测方案：聊天内采样"单行短文本"的原生行高，群收与自发
-// 两桶各取众数，差值即昵称块高度——两桶随基准同漂移，差值天然免疫。
-// 实测就绪前用 8.0.78 先验值 11（群收 65 − 发方 54，探针 #31）。
-// 实测验证（MioPlugin(63).log）：recv 众数 70 / self 众数 57 → 13，校准生效。
+// 旧两桶差值方案（收/发短文本原生行高众数相减）已删：自发桶混入跨会话样本
+// （56/53 并存，同会话真值 54），两个带误差的估计相减误差叠加（实测 N 偏 1~2pt）。
+//
+// 新方案：cell 布局时（applyMergeToCellView ② 群昵称块）直读微信摆好的真实
+// frame —— 群收行 bg.y：昵称开=16（带昵称区）/ 关=5（无昵称区）。补偿量
+// N = bg.y − 无昵称基准 g_plainBgY（由零高 label 的群收行上报，默认 5），
+// 持久化于 Engine（kNickBlockKey），rowHeight 消费。
+// 注意不能用 label 高度（实测 14）——昵称区是 bg.y 差值 11（65−54，探针 #31/#33）。
+// 换行高/字体缩放自动跟随（读的就是目标量本身，无推断链）。
 
-static NSMutableDictionary *g_nickRecvSamples = nil;  // lid -> orig 行高（群收）
-static NSMutableDictionary *g_nickSelfSamples = nil;  // lid -> orig 行高（自发）
-static double g_nickBlock = 11.0;
-
-static void nickSampleReset(void) {
-    if (!g_nickRecvSamples) {
-        g_nickRecvSamples = [NSMutableDictionary dictionary];
-        g_nickSelfSamples = [NSMutableDictionary dictionary];
-        return;
-    }
-    [g_nickRecvSamples removeAllObjects];
-    [g_nickSelfSamples removeAllObjects];
-    g_nickBlock = 11.0;
-}
-
-static double modeOfValues(NSArray *vals) {
-    NSMutableDictionary *freq = [NSMutableDictionary dictionary];
-    double best = 0;
-    NSUInteger bestN = 0;
-    for (NSNumber *v in vals) {
-        NSNumber *k = @(round(v.doubleValue));
-        NSUInteger n = [freq[k] unsignedIntegerValue] + 1;
-        freq[k] = @(n);
-        if (n > bestN) { bestN = n; best = k.doubleValue; }
-    }
-    return best;
-}
-
-static void nickSampleRecompute(void) {
-    if (g_nickRecvSamples.count == 0 || g_nickSelfSamples.count == 0) return;
-    double recvMode = modeOfValues([g_nickRecvSamples allValues]);
-    double selfMode = modeOfValues([g_nickSelfSamples allValues]);
-    double d = recvMode - selfMode;
-    if (d < 0) d = 0;
-    if (d > 30) d = 30;
-    double rounded = round(d);
-    if (rounded != g_nickBlock) {
-        WPLog(@"MsgMerge", @"[Nick] 昵称块实测 %.0f → %.0f（recv 众数 %.0f / self 众数 %.0f）",
-              g_nickBlock, rounded, recvMode, selfMode);
-    }
-    g_nickBlock = rounded;
-}
-
-static void nickSampleRecord(NSString *chat, id wrap, double h) {
-    if (![chat hasSuffix:@"@chatroom"]) return;
-    if (![MsgMergeEngine isSingleLineShortText:wrap]) return;
-    if (g_nickRecvSamples.count > 512 || g_nickSelfSamples.count > 512) return;
-    NSString *from = safeKVC(wrap, @"m_nsFromUsr");
-    BOOL isRecv = [from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"];
-    id lidV = safeKVC(wrap, @"m_uiMesLocalID");
-    if (![lidV respondsToSelector:@selector(longLongValue)]) return;
-    long long lid = [lidV longLongValue];
-    if (lid <= 0) return;
-    NSNumber *key = @(lid);
-    NSMutableDictionary *bucket = isRecv ? g_nickRecvSamples : g_nickSelfSamples;
-    if (bucket[key]) return;   // 首见记值：同一会话内同一消息只采一次
-    bucket[key] = @(h);
-    nickSampleRecompute();
-}
+static double g_plainBgY = 5.0;   // 无昵称区文本行的 bg.y 基准（零高 label 行上报校准）
 
 // ============================================================
 // MARK: - 行高钩子（切片感知包裹式生效点）
@@ -343,9 +287,6 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         if (chat.length == 0) chat = currentChatName();
         if (chat.length == 0) return h;
 
-        // 昵称块采样（先于修改判定，样本永远是原生值）
-        nickSampleRecord(chat, wrap, h);
-
         MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap
                                                      chatName:chat
                                                     nodeArray:g_currentNodeArray];
@@ -370,7 +311,7 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         if (pos != MOMergePositionSingle && (split == 0 || split == 1) && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
-                reduce += g_nickBlock;
+                reduce += [MsgMergeEngine nicknameBlockHeight];
             }
         }
         if (reduce <= 0) return h;
@@ -437,10 +378,29 @@ static void applyMergeToCellView(id cellView) {
             if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:!showAvatar];
         }
 
-        // ② 群昵称：仅组首显示（私聊无昵称标签，操作无害）
+        // ② 群昵称：仅组首显示（私聊无昵称标签，操作无害）。
+        //    同时直测昵称区（微信摆好的原生 frame，先于任何修改）：
+        //    群收行 label 有高度 → 昵称显示开，N = bg.y − g_plainBgY（实测 16−5=11）；
+        //    群收行 label 零高 → 昵称显示关，N=0，并用本行 bg.y 校准无昵称基准。
         if (inGroup) {
             id name = safeCall(cellView, "getNameLabel");
-            if ([name isKindOfClass:[UILabel class]]) [(UILabel *)name setHidden:!isFirst];
+            if ([name isKindOfClass:[UILabel class]]) {
+                UILabel *lb = (UILabel *)name;
+                NSString *from = safeKVC(wrap, @"m_nsFromUsr");
+                if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
+                    UIImageView *bgV = safeCall(cellView, "getBgImageView");
+                    if ([bgV isKindOfClass:[UIImageView class]]) {
+                        CGFloat bgY = bgV.frame.origin.y;
+                        if (lb.frame.size.height > 0.5) {
+                            [MsgMergeEngine reportNicknameBlock:bgY - g_plainBgY];
+                        } else {
+                            g_plainBgY = bgY;
+                            [MsgMergeEngine reportNicknameBlock:0];
+                        }
+                    }
+                }
+                lb.hidden = !isFirst;
+            }
         }
 
         // ③ 气泡背景圆角连续化（独立消息还原原值）

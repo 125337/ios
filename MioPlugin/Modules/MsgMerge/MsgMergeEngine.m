@@ -78,20 +78,6 @@ static long long localIDOf(id wrap) {
     return [v longLongValue];
 }
 
-/// 文本行宽估算（全角单位数）：CJK 及全角区段记 1、ASCII 等半角记 0.6、代理对（emoji/生僻字）记 1
-/// （ASCII 0.6 而非 0.5：数字串实测每行约 19-20 个而非 26+，宁可用宽估多一行也不可裁切）
-static CGFloat textWidthUnits(NSString *s) {
-    CGFloat w = 0;
-    NSUInteger i = 0, n = s.length;
-    while (i < n) {
-        unichar c = [s characterAtIndex:i];
-        if (c >= 0xD800 && c <= 0xDBFF) { w += 1.0; i += 2; continue; }  // 高代理：按一个全角
-        w += (c >= 0x2E80) ? 1.0 : 0.6;
-        i++;
-    }
-    return w;
-}
-
 /// 从数据源节点提取 wrap（viewModel.messageWrap；ChatTimeViewModel 等时间节点无 wrap）
 static id wrapOfNode(id node) {
     if (!node) return nil;
@@ -229,16 +215,26 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     return pos;
 }
 
-/// 昵称块采样入样门槛：type==1 文本、无换行、估行数=1（字宽 ≤14 全角单位）
-+ (BOOL)isSingleLineShortText:(id)wrap {
-    if (!wrap) return NO;
-    id typeVal = safeValue(wrap, @"m_uiMessageType");
-    if (![typeVal respondsToSelector:@selector(longLongValue)] ||
-        [typeVal longLongValue] != 1) return NO;
-    NSString *content = safeValue(wrap, @"m_nsContent");
-    if (![content isKindOfClass:[NSString class]]) return NO;
-    if ([content rangeOfString:@"\n"].location != NSNotFound) return NO;
-    return textWidthUnits(content) <= 14.0;
+// 昵称区补偿量（布局时直读，Hook 上报，rowHeight 消费）：
+// 读的就是目标量本身（群收行 bg.y − 无昵称基准），无两桶推断链，无跨会话漂移
+static NSString * const kNickBlockKey = @"MioPlugin_MsgMerge_mmNickBlockHeight";
+
++ (CGFloat)nicknameBlockHeight {
+    id v = [[NSUserDefaults standardUserDefaults] objectForKey:kNickBlockKey];
+    double d = [v isKindOfClass:[NSNumber class]] ? [v doubleValue] : 11.0;   // 首次无数据：微信昵称默认开
+    return (CGFloat)(d > 0.5 ? d : 0.0);
+}
+
++ (void)reportNicknameBlock:(double)h {
+    if (h < 0) h = 0;
+    if (h > 30) h = 30;
+    double rounded = round(h);
+    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+    id v = [ud objectForKey:kNickBlockKey];
+    double cur = [v isKindOfClass:[NSNumber class]] ? [v doubleValue] : 11.0;
+    if ([v isKindOfClass:[NSNumber class]] && fabs(cur - rounded) < 0.5) return;   // 未变化
+    [ud setDouble:rounded forKey:kNickBlockKey];
+    WPLog(@"MsgMerge", @"[Nick] 昵称区实测: %.1f → %.0f", cur, rounded);
 }
 
 + (void)clearCache {
