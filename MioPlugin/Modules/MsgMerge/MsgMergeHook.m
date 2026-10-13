@@ -524,6 +524,13 @@ static void applyMergeToCellView(id cellView) {
                 WPLog(@"MsgMerge", @"[Apply] 未找到聊天 VC 或渲染数组（页面=%s）", object_getClassName(cellView));
             }
         }
+        // ⑤ 布局接管（阶段2/3）：白名单类型（文本+媒体四类）横向自摆。
+        //    必须在 pos=None 早退之前——mmSepMedia 开启时媒体消息充当分隔符
+        //    （positionForWrap 返 None），早退会饿死媒体自摆（实证：图片/视频偏移无效）。
+        //    自摆只依赖 wrap 类型与原生基准帧，不依赖合并位置。
+        long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
+        applyOwnLayout(cellView, olTypeEnabled(msgType) && cfg.mmOwnLayout);
+
         MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:nodes];
         if (pos == MOMergePositionNone) { WPLog(@"MsgMerge", @"[Apply] pos=None（类型不可合并/开关）"); return; }   // 系统消息/不可合并：不干预
 
@@ -595,10 +602,6 @@ static void applyMergeToCellView(id cellView) {
                 WPLog(@"MsgMerge", @"[Nick] N→%.0f 变化，触发行高重算", nNow);
             }
         }
-
-        // ⑤ 布局接管（阶段2/3）：白名单类型（文本+媒体四类）参与横向自摆；开关关=delta 归零自动还原
-        long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
-        applyOwnLayout(cellView, olTypeEnabled(msgType) && cfg.mmOwnLayout);
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Apply] exception: %@", e.reason);
     }
