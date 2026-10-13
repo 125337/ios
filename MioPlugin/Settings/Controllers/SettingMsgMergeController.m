@@ -103,6 +103,33 @@
                      alertMessage:@"组内相邻气泡的收拢间距，组内逐条递进叠加，单位 pt (0-12)"
                                cy:cy
                              width:w];
+    cy = [self addSwitchRowInGroup:g3
+                             title:@"布局接管（实验）"
+                              desc:nil
+                               key:@"mmOwnLayout"
+                              isOn:config.mmOwnLayout
+                                cy:cy
+                             width:w];
+    cy = [self addInputRowInGroup:g3
+                            title:@"头像偏移 (pt)"
+                              key:@"mmAvatarOffset"
+                            value:[NSString stringWithFormat:@"%.0f", config.mmAvatarOffset]
+                             hint:@"±60"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"头像偏移"
+                     alertMessage:@"布局接管下的头像横向偏移，正=向屏幕边缘，负=向气泡侧，收发镜像，单位 pt (±60)"
+                               cy:cy
+                             width:w];
+    cy = [self addInputRowInGroup:g3
+                            title:@"整列偏移 (pt)"
+                              key:@"mmWholeOffset"
+                            value:[NSString stringWithFormat:@"%.0f", config.mmWholeOffset]
+                             hint:@"±20"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"整列偏移"
+                     alertMessage:@"头像+气泡+昵称整列横向平移，正=向屏幕边缘，负=向中央，收发镜像，单位 pt (±20)"
+                               cy:cy
+                             width:w];
     y = [self finishGroup:g3 atY:y height:cy];
 
     // ──── 页脚提示（对齐 BubbleBox 截图页脚） ────

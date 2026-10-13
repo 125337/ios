@@ -38,6 +38,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL mmSepSystem;    // 系统消息（>=10000，节点结构层，当前始终打断）
 @property (nonatomic, assign) BOOL mmSepTime;      // 时间行（节点结构层，当前始终打断）
 
+/// 布局接管（阶段2 实验开关，默认 NO）：type==1 文本 cell 三 frame 自摆
+/// （头像/气泡容器/昵称横向重摆，纵向与尺寸保持原生测量；路线图阶段5 转正）
+@property (nonatomic, assign) BOOL mmOwnLayout;
+
+/// 头像横向偏移（pt，±60 钳位）：正=向屏幕边缘，负=向气泡侧；收发镜像（按原生头像位判定）
+@property (nonatomic, assign) CGFloat mmAvatarOffset;
+
+/// 整列横向偏移（pt，±20 钳位）：头像+气泡+昵称同向平移，正=向屏幕边缘；收发镜像
+@property (nonatomic, assign) CGFloat mmWholeOffset;
+
 + (instancetype)shared;
 
 @end

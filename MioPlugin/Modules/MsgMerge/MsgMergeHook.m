@@ -7,6 +7,8 @@
 //       与渲染数组 m_arrMessageNodeData
 //    ② CommonMessageCellView layoutInternal / updateNodeStatus → 按节点位置
 //       应用合并渲染：头像显隐 / 群昵称显隐 / 气泡圆角连续化
+//       （⑤ 阶段2 布局接管：type==1 && mmOwnLayout 时头像/气泡容器/昵称横向自摆，
+//         原生几何模型与失效检测见 applyOwnLayout 注释）
 //    ③ BaseChatViewModel rowHeight（8.0.78 实证签名 d16@0:8，返回 double，滚动期间
 //       270+ 次调用）→ 行高包裹式生效点。探针 #32 实证原生长文本消息是多 cell 切片
 //       渲染（同 wrap 多 viewModel，原生无缝拼成一条大气泡），替换式公式会撕开切片
@@ -173,6 +175,117 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
         default:
             restoreCorner(bg);
             break;
+    }
+}
+
+// ============================================================
+// MARK: - 阶段2 布局接管（type==1 文本三 frame 横向自摆）
+// ============================================================
+// 原生模型（视图调试器 8.0.78 实测，cell 坐标，TextMessageCellView 即 cellView）：
+//   头像 MMHeadImageView 46×46 y=2 距屏边 9：自发 x=W−55 / 收方 x=9
+//   气泡容器 = getBgImageView.superview 的 UIView，距屏边 64：
+//     自发右缘 W−64 / 收方 x=64；y=5（无昵称）/ 16（群收昵称开）——纵向原生已对，不碰
+//     （固定行高内挪 y 必守恒，项目定论；间距收拢走 rowHeight 钩子）
+//   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
+//   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
+// 自摆范围：仅横向 x。位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
+//   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）。
+// 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
+//   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
+//   逐轮累加会把头像推出屏外（9→270 实证）。开关关闭 = delta 归零，同机制自动还原。
+static void *kOLBaseHeadF = &kOLBaseHeadF;
+static void *kOLBaseBubF  = &kOLBaseBubF;
+static void *kOLBaseNameX = &kOLBaseNameX;
+static void *kOLLastDH    = &kOLLastDH;
+static void *kOLLastDC    = &kOLLastDC;
+static void *kOLLastDN    = &kOLLastDN;
+
+static double olClamp(double v, double lim) {
+    return v > lim ? lim : (v < -lim ? -lim : v);
+}
+
+static void applyOwnLayout(id cellView, BOOL active) {
+    UIView *head = safeCall(cellView, "getHeadImageView");
+    UIImageView *bg = safeCall(cellView, "getBgImageView");
+    UIView *cont = [bg isKindOfClass:[UIView class]] ? (UIView *)bg.superview : nil;
+    if (![head isKindOfClass:[UIView class]] || ![cont isKindOfClass:[UIView class]]) return;
+
+    // 首过建基准（此刻原生 layoutInternal 刚跑完，frame 为原生值）
+    NSValue *bHeadV = objc_getAssociatedObject(cellView, kOLBaseHeadF);
+    if (!bHeadV) {
+        bHeadV = [NSValue valueWithCGRect:head.frame];
+        objc_setAssociatedObject(cellView, kOLBaseHeadF, bHeadV, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:cont.frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLLastDH, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLLastDC, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    CGRect bHead = [bHeadV CGRectValue];
+    CGRect bBub  = [(NSValue *)objc_getAssociatedObject(cellView, kOLBaseBubF) CGRectValue];
+    double lastDH = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDH) doubleValue];
+    double lastDC = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDC) doubleValue];
+
+    // 失效检测：位置或尺寸偏离 基准+上轮delta → 原生已重摆（复用/重布局），重置基准
+    if (fabs(head.frame.origin.x - (bHead.origin.x + lastDH)) > 0.5 ||
+        fabs(head.frame.origin.y - bHead.origin.y) > 0.5 ||
+        fabs(head.frame.size.width - bHead.size.width) > 0.5 ||
+        fabs(cont.frame.origin.x - (bBub.origin.x + lastDC)) > 0.5 ||
+        fabs(cont.frame.origin.y - bBub.origin.y) > 0.5 ||
+        fabs(cont.frame.size.width - bBub.size.width) > 0.5) {
+        bHead = head.frame;
+        bBub = cont.frame;
+        lastDH = 0;
+        lastDC = 0;
+        objc_setAssociatedObject(cellView, kOLBaseHeadF, [NSValue valueWithCGRect:bHead], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:bBub], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+
+    // 昵称 label 整列跟随（隐藏态 frame 仍有效，同样基准+失效检测）
+    __block UILabel *lb = nil;
+    double baseNameX = 0, lastDN = 0;
+    if ([safeCall(cellView, "getNameLabel") isKindOfClass:[UILabel class]]) {
+        lb = safeCall(cellView, "getNameLabel");
+        NSNumber *bnx = objc_getAssociatedObject(cellView, kOLBaseNameX);
+        if (!bnx) {
+            bnx = @(lb.frame.origin.x);
+            objc_setAssociatedObject(cellView, kOLBaseNameX, bnx, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(cellView, kOLLastDN, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        baseNameX = [bnx doubleValue];
+        lastDN = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDN) doubleValue];
+        if (fabs(lb.frame.origin.x - (baseNameX + lastDN)) > 0.5) {
+            baseNameX = lb.frame.origin.x;
+            lastDN = 0;
+            objc_setAssociatedObject(cellView, kOLBaseNameX, @(baseNameX), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    }
+
+    double newDH = 0, newDC = 0;
+    if (active) {
+        CGFloat W = ((UIView *)cellView).bounds.size.width;
+        BOOL isSender = bHead.origin.x > W * 0.5;
+        double sign = isSender ? 1.0 : -1.0;
+        MsgMergeConfig *cfg = [MsgMergeConfig shared];
+        newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
+        newDC = sign * olClamp(cfg.mmWholeOffset, 20);
+    }
+
+    if (fabs(newDH - lastDH) > 0.01) {
+        CGRect f = bHead;
+        f.origin.x += newDH;
+        head.frame = f;
+        objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (fabs(newDC - lastDC) > 0.01) {
+        CGRect f = bBub;
+        f.origin.x += newDC;
+        cont.frame = f;
+        objc_setAssociatedObject(cellView, kOLLastDC, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (lb && fabs(newDC - lastDN) > 0.01) {
+            CGRect nf = lb.frame;
+            nf.origin.x = baseNameX + newDC;
+            lb.frame = nf;
+            objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
     }
 }
 
@@ -367,6 +480,7 @@ static void applyMergeToCellView(id cellView) {
                 if ([name isKindOfClass:[UILabel class]]) [(UILabel *)name setHidden:NO];
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
+            applyOwnLayout(cellView, NO);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
             return;
         }
 
@@ -458,6 +572,10 @@ static void applyMergeToCellView(id cellView) {
                 WPLog(@"MsgMerge", @"[Nick] N→%.0f 变化，触发行高重算", nNow);
             }
         }
+
+        // ⑤ 布局接管（阶段2）：仅 type==1 文本参与横向自摆；开关关=delta 归零自动还原
+        long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
+        applyOwnLayout(cellView, msgType == 1 && cfg.mmOwnLayout);
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Apply] exception: %@", e.reason);
     }
