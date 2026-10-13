@@ -158,7 +158,12 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     if ([self mmIsSeparatorMessage:wrap]) return MOMergePositionNone;   // 分隔消息独立，不参与任何组
     if (cfg.mmOnlyRoom && ![chatName hasSuffix:@"@chatroom"]) return MOMergePositionNone;
     if (!nodeArray || nodeArray.count == 0) {
-        WPLog(@"MsgMerge", @"[Engine] nodeArray 为空（VC 未找到或数组未加载）");
+        // 刚进聊天数组未加载属常态，仅首见提示一次防刷屏
+        static BOOL loggedEmpty = NO;
+        if (!loggedEmpty) {
+            loggedEmpty = YES;
+            WPLog(@"MsgMerge", @"[Engine] nodeArray 为空（VC 未找到或数组未加载，仅提示一次）");
+        }
         return MOMergePositionNone;
     }
 
@@ -188,7 +193,7 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
         if (selfIdx < 0 && w && localIDOf(w) == localID) selfIdx = (NSInteger)i;
     }
     if (selfIdx < 0) {
-        WPLog(@"MsgMerge", @"[Engine] localID=%lld 不在渲染数组中", localID);
+        // vm 不在渲染数组属常态（数组重建/过期 vm 复用），静默回退原生
         return MOMergePositionNone;
     }
 
