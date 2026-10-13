@@ -34,18 +34,30 @@ typedef NS_ENUM(NSUInteger, MOMergePosition) {
                           chatName:(nullable NSString *)chatName
                          nodeArray:(nullable NSArray *)nodeArray;
 
+/// 切片信息（长文本消息被微信拆成多个 cell 渲染，共享同一 messageWrap/lid，
+/// 在渲染数组中表现为同 localID 的连续节点 run；探针 #32 实证 10 行消息 = 3 片）
+typedef struct {
+    MOMergePosition pos;        // 消息级合并位置（邻居按跨 run 判定，不受切片干扰）
+    NSInteger sliceIndex;       // 本片在 run 内的序号（0 = 首片，昵称只画在首片）
+    NSInteger sliceCount;       // run 内切片总数（1 = 未切片）
+} MOMergeSliceInfo;
+
+/// 计算切片信息（带 5s TTL 缓存，按 chat|lid|vm 指针键控）
+/// @param vm rowHeight 钩子的 self（用于在 run 内定位本片）；传 nil 时 sliceIndex 恒 0
++ (MOMergeSliceInfo)sliceInfoForWrap:(id)wrap
+                            chatName:(nullable NSString *)chatName
+                           nodeArray:(nullable NSArray *)nodeArray
+                                  vm:(nullable id)vm;
+
 /// 清空位置缓存（切换会话时调用）
 + (void)clearCache;
 
 /// 该消息是否充当分隔符打断合并链（仅 mmMode==1 手动配置时按类型查开关，其余恒 NO）
 + (BOOL)mmIsSeparatorMessage:(id)wrap;
 
-/// 文本消息行高自算（渐进接管路线图 阶段1，mmOwnLayout 开关下替换原实现）
-/// 公式：17×渲染行数L + 37(气泡+行间隙) + 11(群聊收方昵称块)
-+ (CGFloat)textRowHeightForWrap:(id)wrap;
-
-/// 渲染行数估算（双算日志用，与行高公式同源）
-+ (NSInteger)textLineCountForWrap:(id)wrap;
+/// 是否单行短文本（type==1、无换行、字宽 ≤14 全角单位——昵称块采样的入样门槛，
+/// 宁严勿滥：估行数可能偏大，混入多行消息会污染收发差值样本）
++ (BOOL)isSingleLineShortText:(id)wrap;
 
 @end
 

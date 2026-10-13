@@ -8,10 +8,14 @@
 //    ② CommonMessageCellView layoutInternal / updateNodeStatus → 按节点位置
 //       应用合并渲染：头像显隐 / 群昵称显隐 / 气泡圆角连续化
 //    ③ BaseChatViewModel rowHeight（8.0.78 实证签名 d16@0:8，返回 double，滚动期间
-//       270+ 次调用）→ 间距收拢生效点：组内非组尾（First/Middle）行高 -mmSpacing。
-//       行高缩减规则：间隙(i,i+1) = 行i高 - 气泡i高（气泡贴 cell 顶），所以减"上方
-//       那条"的行高即收拢其与下条的间隙；组尾行保持原生 → 组尾到组外间隙不变。
-//       固定行高内平移内容必然守恒（探针 #11/#22/#23 实证），行高缩减是唯一正解；
+//       270+ 次调用）→ 行高包裹式生效点。探针 #32 实证原生长文本消息是多 cell 切片
+//       渲染（同 wrap 多 viewModel，原生无缝拼成一条大气泡），替换式公式会撕开切片
+//       接缝（判死），行高主体永远用 orig，只做两类补偿：
+//         a) 间距收拢：只减"组内非组尾消息的最后一片" -mmSpacing（片间不能减，会
+//            撕开接缝；组尾保持原生 → 组尾到组外间隙不变）
+//         b) 昵称空洞：群收消息合并后昵称隐藏（Middle/Last），首片原生含昵称空间，
+//            补偿量运行时实测（群收单行短文本 orig − 自发单行短文本 orig，众数差），
+//            两桶同漂移差值免疫跨会话度量基准漂移
 //       delegate heightForRow 与 self-sizing 在 8.0.78 均零调用（探针 #13/#14/#17/#18）。
 //
 //  挂载点为 CommonMessageCellView 头文件实证方法（layoutInternal/updateNodeStatus
@@ -46,6 +50,7 @@ static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chat
 static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageNodeData（行高钩子用，retain）
 
 static id safeKVC(id obj, NSString *key);   // 定义见下文视图安全访问节
+static void nickSampleReset(void);          // 定义见昵称块采样节
 
 static void updateChatContext(id self) {
     @try {
@@ -61,6 +66,7 @@ static void updateChatContext(id self) {
 #endif
                 g_currentChatName = [name copy];
                 [MsgMergeEngine clearCache];
+                nickSampleReset();   // 采样按会话隔离（原生行高基准随会话变化）
             }
         }
         // 渲染数组每次进出聊天都刷新（数组对象可能被整表重建）
@@ -211,92 +217,125 @@ static NSString *chatNameOfWrap(id wrap) {
 }
 
 // ============================================================
-// MARK: - 行高钩子（间距收拢生效点）
+// MARK: - 昵称块运行时实测（包裹式补偿量，跨会话漂移免疫）
 // ============================================================
+//
+// 原生 rowHeight 存在跨会话度量基准漂移（同一消息不同会话每行差约 3pt），固定常数
+// 补偿无法两套基准通用。实测方案：聊天内采样"单行短文本"的原生行高，群收与自发
+// 两桶各取众数，差值即昵称块高度——两桶随基准同漂移，差值天然免疫。
+// 实测就绪前用 8.0.78 先验值 11（群收 65 − 发方 54，探针 #31）。
 
-// 双算验证日志（渐进接管路线图 阶段1.4）：mmOwnLayout 下同一条消息在 orig 值
-// 发生变化时输出（首算必记，后续仅记变化）——捕捉原生 rowHeight 对同一消息的
-// 时变行为（实证：一条 10 行消息首调 95、原生满渲染约 207，需确认是瞬态还是常态）
-static void wpRowHeightDualLog(id wrap, double formula, double native, NSInteger lines) {
-    static NSMutableDictionary *seen;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{ seen = [NSMutableDictionary dictionary]; });
-    if ([seen count] > 4096) [seen removeAllObjects];
+static NSMutableDictionary *g_nickRecvSamples = nil;  // lid -> orig 行高（群收）
+static NSMutableDictionary *g_nickSelfSamples = nil;  // lid -> orig 行高（自发）
+static double g_nickBlock = 11.0;
+
+static void nickSampleReset(void) {
+    if (!g_nickRecvSamples) {
+        g_nickRecvSamples = [NSMutableDictionary dictionary];
+        g_nickSelfSamples = [NSMutableDictionary dictionary];
+        return;
+    }
+    [g_nickRecvSamples removeAllObjects];
+    [g_nickSelfSamples removeAllObjects];
+    g_nickBlock = 11.0;
+}
+
+static double modeOfValues(NSArray *vals) {
+    NSMutableDictionary *freq = [NSMutableDictionary dictionary];
+    double best = 0;
+    NSUInteger bestN = 0;
+    for (NSNumber *v in vals) {
+        NSNumber *k = @(round(v.doubleValue));
+        NSUInteger n = [freq[k] unsignedIntegerValue] + 1;
+        freq[k] = @(n);
+        if (n > bestN) { bestN = n; best = k.doubleValue; }
+    }
+    return best;
+}
+
+static void nickSampleRecompute(void) {
+    if (g_nickRecvSamples.count == 0 || g_nickSelfSamples.count == 0) return;
+    double recvMode = modeOfValues([g_nickRecvSamples allValues]);
+    double selfMode = modeOfValues([g_nickSelfSamples allValues]);
+    double d = recvMode - selfMode;
+    if (d < 0) d = 0;
+    if (d > 30) d = 30;
+    double rounded = round(d);
+    if (rounded != g_nickBlock) {
+        WPLog(@"MsgMerge", @"[Nick] 昵称块实测 %.0f → %.0f（recv 众数 %.0f / self 众数 %.0f）",
+              g_nickBlock, rounded, recvMode, selfMode);
+    }
+    g_nickBlock = rounded;
+}
+
+static void nickSampleRecord(NSString *chat, id wrap, double h) {
+    if (![chat hasSuffix:@"@chatroom"]) return;
+    if (![MsgMergeEngine isSingleLineShortText:wrap]) return;
+    if (g_nickRecvSamples.count > 512 || g_nickSelfSamples.count > 512) return;
+    NSString *from = safeKVC(wrap, @"m_nsFromUsr");
+    BOOL isRecv = [from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"];
     id lidV = safeKVC(wrap, @"m_uiMesLocalID");
     if (![lidV respondsToSelector:@selector(longLongValue)]) return;
     long long lid = [lidV longLongValue];
     if (lid <= 0) return;
     NSNumber *key = @(lid);
-    NSNumber *last = seen[key];
-    if (last && [last doubleValue] == native) return;   // 值没变不重复记
-    seen[key] = @(native);
-    double d = formula - native;
-    if (fabs(d) > 2.0) {
-        // 超差行附带行数与内容头部，便于定位坏例（emoji/@提及/引用等特殊内容）
-        NSString *content = safeKVC(wrap, @"m_nsContent");
-        if (![content isKindOfClass:[NSString class]]) content = @"";
-        NSString *head = [content length] > 24 ? [content substringToIndex:24] : content;
-        head = [head stringByReplacingOccurrencesOfString:@"\n" withString:@"⏎"];
-        WPLog(@"MsgMerge", @"[Own] lid=%lld L=%ld 公式=%.0f 原生=%.0f diff=%+.0f ←超差 内容<%@>",
-              lid, (long)lines, formula, native, d, head);
-    } else {
-        WPLog(@"MsgMerge", @"[Own] lid=%lld L=%ld 公式=%.0f 原生=%.0f diff=%+.0f",
-              lid, (long)lines, formula, native, d);
-    }
+    NSMutableDictionary *bucket = isRecv ? g_nickRecvSamples : g_nickSelfSamples;
+    if (bucket[key]) return;   // 首见记值：同一会话内同一消息只采一次
+    bucket[key] = @(h);
+    nickSampleRecompute();
 }
+
+// ============================================================
+// MARK: - 行高钩子（切片感知包裹式生效点）
+// ============================================================
 
 // -[BaseChatViewModel rowHeight]（8.0.78 实证签名 d16@0:8，返回 double）：
 // 全部消息/时间 viewModel 均继承此实现（探针快查单一 IMP，无子类重写），
 // 滚动期间 270+ 次调用（探针 #26）——这是聊天行高的真实来源。
 // delegate heightForRow、self-sizing、updateContentViewHeight: 均零调用（探针 #13/#14/#17/#18/#25）。
-// 双路径：
-//   替换式（mmOwnLayout，阶段1实验开关）：type==1 文本行高走自算公式，不再依赖原实现
-//   包裹式（现有行为）：原实现返回值上对组内非组尾（First/Middle）-mmSpacing（下限 24 防裁切）
+// 包裹式（探针 #32 判死替换式）：行高主体永远用 orig，只做两类补偿——
+//   a) 间距收拢：非组尾消息的最后一片 -mmSpacing（间隙(i,i+1)=行i高-气泡i高，
+//      气泡贴 cell 顶，减"上方那条"的最后一片即收拢其与下条的间隙）
+//   b) 昵称空洞：群收非组首消息的首片 -实测昵称块（合并后昵称隐藏但空间残留）
 static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
     double h = ((double (*)(id, SEL))orig_BaseChatViewModel_rowHeight)(self, _cmd);
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        if (cfg.mmEnable && cfg.mmOwnLayout) {
-            id wrap = safeKVC(self, @"messageWrap");
-            id typeVal = wrap ? safeKVC(wrap, @"m_uiMessageType") : nil;
-            id content = wrap ? safeKVC(wrap, @"m_nsContent") : nil;
-            // 仅接管无换行的纯文本（按宽度折行，公式已双算验证）；
-            // 含 \n 的多行消息微信有特殊原生处理（实测一条 10 行消息原生 rowHeight 仅 95，
-            // 且行高错位时会拆成多个气泡渲染），暂回退原生，待摸清折叠机制再接管
-            BOOL hasNewline = [content isKindOfClass:[NSString class]] &&
-                              [content rangeOfString:@"\n"].location != NSNotFound;
-            if (wrap && !hasNewline &&
-                [typeVal respondsToSelector:@selector(longLongValue)] &&
-                [typeVal longLongValue] == 1) {
-                double f = (double)[MsgMergeEngine textRowHeightForWrap:wrap];
-                wpRowHeightDualLog(wrap, f, h, [MsgMergeEngine textLineCountForWrap:wrap]);
-                NSString *chat = chatNameOfWrap(wrap);
-                if (chat.length == 0) chat = currentChatName();
-                MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap
-                                                             chatName:chat
-                                                            nodeArray:g_currentNodeArray];
-                if (pos == MOMergePositionFirst || pos == MOMergePositionMiddle) {
-                    f -= (double)cfg.mmSpacing;
-                }
-                return f > 24.0 ? f : 24.0;
+        if (!cfg.mmEnable) return h;
+        id wrap = safeKVC(self, @"messageWrap");
+        if (!wrap) return h;   // 时间节点等无 wrap
+        NSString *chat = chatNameOfWrap(wrap);
+        if (chat.length == 0) chat = currentChatName();
+        if (chat.length == 0) return h;
+
+        // 昵称块采样（先于修改判定，样本永远是原生值）
+        nickSampleRecord(chat, wrap, h);
+
+        MOMergeSliceInfo si = [MsgMergeEngine sliceInfoForWrap:wrap
+                                                      chatName:chat
+                                                     nodeArray:g_currentNodeArray
+                                                            vm:self];
+        if (si.pos == MOMergePositionNone) return h;
+
+        BOOL isMsgHead = (si.pos == MOMergePositionFirst || si.pos == MOMergePositionSingle);
+        BOOL isMsgTail = (si.pos == MOMergePositionLast  || si.pos == MOMergePositionSingle);
+
+        double reduce = 0;
+        // a) 组内间隙收拢：只减非组尾消息的最后一片（片间不能减，会撕开切片接缝）
+        if (!isMsgTail && si.sliceIndex == si.sliceCount - 1 &&
+            cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
+            reduce += (double)cfg.mmSpacing;
+        }
+        // b) 昵称空洞：群收消息合并后昵称隐藏（Middle/Last），首片原生含昵称空间
+        if (!isMsgHead && si.sliceIndex == 0 && [chat hasSuffix:@"@chatroom"]) {
+            NSString *from = safeKVC(wrap, @"m_nsFromUsr");
+            if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
+                reduce += g_nickBlock;
             }
         }
-        if (cfg.mmEnable && cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
-            id wrap = safeKVC(self, @"messageWrap");
-            if (wrap) {
-                NSString *chat = chatNameOfWrap(wrap);
-                if (chat.length == 0) chat = currentChatName();
-                if (chat.length > 0) {
-                    MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap
-                                                                 chatName:chat
-                                                                nodeArray:g_currentNodeArray];
-                    if (pos == MOMergePositionFirst || pos == MOMergePositionMiddle) {
-                        double v = h - (double)cfg.mmSpacing;
-                        if (v >= 24.0) return v;   // 下限 24 防裁切（内容顶对齐，缩减只吃底部空白）
-                    }
-                }
-            }
-        }
+        if (reduce <= 0) return h;
+        double v = h - reduce;
+        return v >= 24.0 ? v : 24.0;   // 下限 24 防裁切（内容顶对齐，缩减只吃底部空白）
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[H] rowHeight exception: %@", e.reason);
     }

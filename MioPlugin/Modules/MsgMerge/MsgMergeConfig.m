@@ -33,8 +33,7 @@
         [ConfigDescriptor itemWithKey:@"mmSepMedia" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"mmSepEmoticon" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"mmSepSystem" type:ConfigValueTypeBool default:@(YES)],
-        [ConfigDescriptor itemWithKey:@"mmSepTime" type:ConfigValueTypeBool default:@(YES)],
-        [ConfigDescriptor itemWithKey:@"mmOwnLayout" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"mmSepTime" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 

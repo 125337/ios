@@ -152,27 +152,42 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
 + (MOMergePosition)positionForWrap:(id)wrap
                           chatName:(nullable NSString *)chatName
                          nodeArray:(nullable NSArray *)nodeArray {
+    // 单元化：位置判定收口到切片信息（vm=nil 时 sliceIndex 恒 0，cell 渲染层只用 pos）
+    return [self sliceInfoForWrap:wrap chatName:chatName nodeArray:nodeArray vm:nil].pos;
+}
+
++ (MOMergeSliceInfo)sliceInfoForWrap:(id)wrap
+                            chatName:(NSString *)chatName
+                           nodeArray:(NSArray *)nodeArray
+                                  vm:(id)vm {
+    MOMergeSliceInfo bad = { MOMergePositionNone, 0, 1 };
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    if (!cfg.mmEnable) return MOMergePositionNone;
-    if (!isMergeableWrap(wrap)) return MOMergePositionNone;
-    if ([self mmIsSeparatorMessage:wrap]) return MOMergePositionNone;   // 分隔消息独立，不参与任何组
-    if (cfg.mmOnlyRoom && ![chatName hasSuffix:@"@chatroom"]) return MOMergePositionNone;
+    if (!cfg.mmEnable) return bad;
+    if (!isMergeableWrap(wrap)) return bad;
+    if ([self mmIsSeparatorMessage:wrap]) return bad;   // 分隔消息独立，不参与任何组
+    if (cfg.mmOnlyRoom && ![chatName hasSuffix:@"@chatroom"]) return bad;
     if (!nodeArray || nodeArray.count == 0) {
         WPLog(@"MsgMerge", @"[Engine] nodeArray 为空（VC 未找到或数组未加载）");
-        return MOMergePositionNone;
+        return bad;
     }
 
     long long localID = localIDOf(wrap);
-    if (localID <= 0) return MOMergePositionNone;
+    if (localID <= 0) return bad;
 
-    // ---- 缓存命中（TTL 内）直接返回 ----
+    // ---- 缓存命中（TTL 内）直接返回（按 chat|lid|vm 指针键控：同 lid 各切片
+    //      的 sliceIndex 不同，必须按 viewModel 指针区分）----
     NSMutableDictionary *cache = _positionCache();
-    NSString *cacheKey = [chatName ?: @"?" stringByAppendingFormat:@"|%lld", localID];
+    NSString *cacheKey = [chatName ?: @"?" stringByAppendingFormat:@"|%lld|%@",
+                          localID, vm ? [NSString stringWithFormat:@"%p", vm] : @"-"];
     NSDictionary *cached = cache[cacheKey];
     if (cached) {
         NSTimeInterval ts = [cached[@"ts"] doubleValue];
         if ([[NSDate date] timeIntervalSince1970] - ts < kCacheTTL) {
-            return (MOMergePosition)[cached[@"pos"] unsignedIntegerValue];
+            MOMergeSliceInfo si;
+            si.pos = (MOMergePosition)[cached[@"pos"] unsignedIntegerValue];
+            si.sliceIndex = [cached[@"sliceIndex"] integerValue];
+            si.sliceCount = [cached[@"sliceCount"] integerValue];
+            return si;
         }
     }
 
@@ -183,25 +198,49 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
         [wraps addObject:(w ?: kNullNode())];
     }
 
-    NSInteger targetIdx = -1;
+    // ---- 定位同 localID 的连续 run（长文本切片）----
+    NSInteger firstMatch = -1;
     for (NSUInteger i = 0; i < wraps.count; i++) {
         if (wraps[i] == kNullNode()) continue;
-        if (localIDOf(wraps[i]) == localID) { targetIdx = (NSInteger)i; break; }
+        if (localIDOf(wraps[i]) == localID) { firstMatch = (NSInteger)i; break; }
     }
-    if (targetIdx < 0) {
+    if (firstMatch < 0) {
         WPLog(@"MsgMerge", @"[Engine] localID=%lld 不在渲染数组中", localID);
-        return MOMergePositionNone;
+        return bad;
+    }
+    NSUInteger runStart = (NSUInteger)firstMatch, runEnd = (NSUInteger)firstMatch;
+    while (runStart > 0 && wraps[runStart - 1] != kNullNode() &&
+           localIDOf(wraps[runStart - 1]) == localID) runStart--;
+    while (runEnd + 1 < wraps.count && wraps[runEnd + 1] != kNullNode() &&
+           localIDOf(wraps[runEnd + 1]) == localID) runEnd++;
+    NSInteger sliceCount = (NSInteger)(runEnd - runStart + 1);
+
+    // ---- 切片序号：节点即 viewModel，按指针在 run 内定位 ----
+    // vm 匹配不上且确有多片时放弃干预（宁可无补偿也不可每片都减撕开接缝）
+    NSInteger sliceIndex = 0;
+    BOOL foundVM = NO;
+    if (vm) {
+        for (NSUInteger i = runStart; i <= runEnd; i++) {
+            id node = nodeArray[i];
+            id nvm = safeValue(node, @"viewModel");
+            if (node == vm || nvm == vm) {
+                sliceIndex = (NSInteger)(i - runStart);
+                foundVM = YES;
+                break;
+            }
+        }
+    }
+    if (!foundVM && sliceCount > 1 && vm) {
+        return bad;
     }
 
-    // ---- 前后邻居：只看紧邻节点，紧邻是时间节点（NSNull）即断组 ----
+    // ---- 消息级邻居：run 两侧紧邻节点，紧邻时间节点（NSNull）即断组 ----
     // 【实证】跳过时间节点找"最近有效邻居"会跨时间行合并：22:20 时间行后同发送者
     // 的组首被判成 Middle/Last，头像丢失（2026-10-13 截图实证）
     id prevWrap = nil;
-    if (targetIdx > 0 && wraps[targetIdx - 1] != kNullNode()) prevWrap = wraps[targetIdx - 1];
+    if (runStart > 0 && wraps[runStart - 1] != kNullNode()) prevWrap = wraps[runStart - 1];
     id nextWrap = nil;
-    if ((NSUInteger)(targetIdx + 1) < wraps.count && wraps[targetIdx + 1] != kNullNode()) {
-        nextWrap = wraps[targetIdx + 1];
-    }
+    if (runEnd + 1 < wraps.count && wraps[runEnd + 1] != kNullNode()) nextWrap = wraps[runEnd + 1];
 
     BOOL joinPrev = (prevWrap != nil) && [self shouldJoin:wrap wrapB:prevWrap];
     BOOL joinNext = (nextWrap != nil) && [self shouldJoin:wrap wrapB:nextWrap];
@@ -219,46 +258,28 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     }
     cache[cacheKey] = @{
         @"pos": @(pos),
+        @"sliceIndex": @(sliceIndex),
+        @"sliceCount": @(sliceCount),
         @"ts": @([[NSDate date] timeIntervalSince1970]),
     };
 
-    WPLog(@"MsgMerge", @"[Engine] pos=%lu chat=%@ localID=%lld idx=%ld/%lu",
-          (unsigned long)pos, chatName, localID, targetIdx, (unsigned long)wraps.count);
-    return pos;
+    WPLog(@"[Engine] pos=%lu chat=%@ localID=%lld run=%lu-%lu slice=%ld/%ld",
+          (unsigned long)pos, chatName, localID,
+          (unsigned long)runStart, (unsigned long)runEnd,
+          (long)sliceIndex, (long)sliceCount);
+    return (MOMergeSliceInfo){ pos, sliceIndex, sliceCount };
 }
 
-/// 文本消息行高自算（渐进接管路线图 阶段1，mmOwnLayout 开关下替换原实现）
-///
-/// 公式与实证（双算日志 + 探针 #31 实测帧交叉验证，2026-10-13）：
-///   行高 = 17×L + 37 [+11]
-///     17×L   气泡内容高：渲染行数 L，每行 17（orig rowHeight 实测 54/71/88 = L1/2/3 发方）
-///     +37    气泡(17+20 上下内边距各10) + 行间隙 17（单行发方 54 = 17+20+17）
-///     +11    群聊收方昵称块（群收 65 − 发方 54；探针 #31 同值）
-///   【教训】m_cachedHeight 不能作拟合基准：它 = 真实行高 + 3×L + 2(群收)，
-///   是微信内部缓存值，系统性偏大（第一版公式 20L+20+17+13 即错信它所致）。
-/// 渲染行数估算（按字宽加权折行，供行高公式与双算日志共用）：
-///   L 不能用 m_nsContent 的 \n 数——微信按渲染宽度折行（77 字无换行实测渲染多行）；
-///   按字宽加权估算后除以每行容量 16 全角单位（ASCII 记 0.6 偏保守，宁高勿裁）。
-+ (NSInteger)textLineCountForWrap:(id)wrap {
-    if (!wrap) return 1;
+/// 昵称块采样入样门槛：type==1 文本、无换行、估行数=1（字宽 ≤14 全角单位）
++ (BOOL)isSingleLineShortText:(id)wrap {
+    if (!wrap) return NO;
+    id typeVal = safeValue(wrap, @"m_uiMessageType");
+    if (![typeVal respondsToSelector:@selector(longLongValue)] ||
+        [typeVal longLongValue] != 1) return NO;
     NSString *content = safeValue(wrap, @"m_nsContent");
-    if (![content isKindOfClass:[NSString class]]) content = @"";
-    const CGFloat perLineUnits = 16.0;
-    NSInteger lines = 0;
-    for (NSString *seg in [content componentsSeparatedByString:@"\n"]) {
-        NSInteger l = (NSInteger)ceil(textWidthUnits(seg) / perLineUnits);
-        lines += (l < 1) ? 1 : l;   // 空行/短行至少占一行
-    }
-    return (lines < 1) ? 1 : lines;
-}
-
-+ (CGFloat)textRowHeightForWrap:(id)wrap {
-    if (!wrap) return 0;
-    NSInteger lines = [self textLineCountForWrap:wrap];
-    double h = 17.0 * lines + 37.0;
-    NSString *from = safeValue(wrap, @"m_nsFromUsr");
-    if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) h += 11.0;
-    return (CGFloat)h;
+    if (![content isKindOfClass:[NSString class]]) return NO;
+    if ([content rangeOfString:@"\n"].location != NSNotFound) return NO;
+    return textWidthUnits(content) <= 14.0;
 }
 
 + (void)clearCache {
