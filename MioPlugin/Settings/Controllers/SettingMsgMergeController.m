@@ -105,6 +105,19 @@
                              width:w];
     y = [self finishGroup:g3 atY:y height:cy];
 
+    // ──── 卡片4：实验功能（渐进接管路线图） ────
+    y = [self addSectionHeader:@"实验功能" y:y width:w];
+    UIView *g4 = [self addTableGroupAtY:y width:w];
+    cy = 0;
+    cy = [self addSwitchRowInGroup:g4
+                             title:@"布局接管（文本行高自算）"
+                              desc:nil
+                               key:@"mmOwnLayout"
+                              isOn:config.mmOwnLayout
+                                cy:cy
+                              width:w];
+    y = [self finishGroup:g4 atY:y height:cy];
+
     // ──── 页脚提示（对齐 BubbleBox 截图页脚） ────
     y = [self addSectionFooter:@"启用消息合并需要关闭其它插件的合并功能" y:y width:w];
 
