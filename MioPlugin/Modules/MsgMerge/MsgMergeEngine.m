@@ -263,7 +263,7 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
         @"ts": @([[NSDate date] timeIntervalSince1970]),
     };
 
-    WPLog(@"[Engine] pos=%lu chat=%@ localID=%lld run=%lu-%lu slice=%ld/%ld",
+    WPLog(@"MsgMerge", @"[Engine] pos=%lu chat=%@ localID=%lld run=%lu-%lu slice=%ld/%ld",
           (unsigned long)pos, chatName, localID,
           (unsigned long)runStart, (unsigned long)runEnd,
           (long)sliceIndex, (long)sliceCount);
