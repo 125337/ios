@@ -297,7 +297,8 @@ static void nickSampleRecord(NSString *chat, id wrap, double h) {
 // 包裹式（探针 #32 判死替换式）：行高主体永远用 orig，只做两类补偿——
 //   a) 间距收拢：非组尾消息的整条/末片 -mmSpacing（间隙(i,i+1)=行i高-气泡i高，
 //      气泡贴 cell 顶，减"上方那条"的末片即收拢其与下条的间隙）
-//   b) 昵称空洞：群收非组首消息的整条/首片 -实测昵称块（合并后昵称隐藏但空间残留）
+//   b) 昵称空洞：组内所有行（First/Middle/Last）的整条/首片 -实测昵称块
+//      （组首不减则无气泡下溢，下一行隐藏昵称孔填不上 → 间隙大 11，diag33 实证）
 //
 // 【探针 #34 实证】长文本切片的角色由 vm 自身 ivar `_splitPosition`（Q 类型）提供：
 //   0=整条未切片 / 1=首片 / 2=中片 / 3=末片。
@@ -350,7 +351,6 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
                                                     nodeArray:g_currentNodeArray];
         if (pos == MOMergePositionNone) return h;
 
-        BOOL isMsgHead = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
         BOOL isMsgTail = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
         splitPosLog(self, wrap);
@@ -361,8 +361,13 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
             cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
             reduce += (double)cfg.mmSpacing;
         }
-        // b) 昵称空洞：群收消息合并后昵称隐藏（Middle/Last），首片原生含昵称空间
-        if (!isMsgHead && (split == 0 || split == 1) && [chat hasSuffix:@"@chatroom"]) {
+        // b) 昵称空洞：组内所有行（First/Middle/Last）都减。
+        //    几何实证（diag33）：昵称画在 cell 顶部 bg.y=16 区（行高缩减不动它），
+        //    气泡间隙 = 上一行行高 - 37；行高 <53 的气泡下溢 11pt 恰好填满下一行
+        //    隐藏昵称残留的顶部孔。组首不减则无下溢 → 组首→第2条间隙大 11（实证）。
+        //    组首昵称在顶部 0~14，减 11 不挤压；组尾减 11 使组尾→组外 = 17（隐藏
+        //    昵称后本就不该保留昵称空间）；独立消息（Single）昵称可见且不参与合并，不减。
+        if (pos != MOMergePositionSingle && (split == 0 || split == 1) && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
                 reduce += g_nickBlock;
