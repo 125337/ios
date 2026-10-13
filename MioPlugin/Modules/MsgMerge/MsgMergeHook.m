@@ -204,6 +204,12 @@ static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
 }
 
+/// 阶段3 类型白名单：纳入布局接管的类型（视图调试器实证媒体四类与文本同构：
+/// 头像 46×46 y=2、容器距屏边 64、间隙 9；表情 47 为居中异构结构无头像，不纳入）
+static BOOL olTypeEnabled(long long t) {
+    return t == 1 || t == 3 || t == 34 || t == 43 || t == 49 || t == 62;
+}
+
 static int g_olLogCnt = 0;   // 诊断日志帽（防滚动刷屏）
 
 static void applyOwnLayout(id cellView, BOOL active) {
@@ -590,9 +596,9 @@ static void applyMergeToCellView(id cellView) {
             }
         }
 
-        // ⑤ 布局接管（阶段2）：仅 type==1 文本参与横向自摆；开关关=delta 归零自动还原
+        // ⑤ 布局接管（阶段2/3）：白名单类型（文本+媒体四类）参与横向自摆；开关关=delta 归零自动还原
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
-        applyOwnLayout(cellView, msgType == 1 && cfg.mmOwnLayout);
+        applyOwnLayout(cellView, olTypeEnabled(msgType) && cfg.mmOwnLayout);
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Apply] exception: %@", e.reason);
     }
@@ -620,6 +626,62 @@ static void repl_CMCellView_layoutInternal(id self, SEL _cmd) {
 static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_CMCellView_updateNodeStatus)(self, _cmd);
     applyMergeToCellView(self);
+}
+
+// ------------------------------------------------------------
+// 阶段3：媒体子类 layoutInternal 判重补挂（XOS FUN_00192294 同架构）
+// 子类重写 layoutInternal 时基类钩子拦不到（垫片不会被调），必须逐子类补挂；
+// class_getInstanceMethod 子类与基类返回同一 Method = 未重写，跳过（防对同一
+// Method 二次挂钩）。垫片与基类同构：orig 先跑，再走 applyMergeToCellView
+// （内部幂等：associated 备份/基准失效检测，子类调 super 链路重复进入无害）。
+// ------------------------------------------------------------
+static IMP orig_VoiceCellView_layoutInternal   = NULL;
+static IMP orig_VideoCellView_layoutInternal   = NULL;
+static IMP orig_ImageCellView_layoutInternal   = NULL;
+static IMP orig_AppFileCellView_layoutInternal = NULL;
+
+static void repl_VoiceCellView_layoutInternal(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_VoiceCellView_layoutInternal)(self, _cmd);
+    applyMergeToCellView(self);
+}
+
+static void repl_VideoCellView_layoutInternal(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_VideoCellView_layoutInternal)(self, _cmd);
+    applyMergeToCellView(self);
+}
+
+static void repl_ImageCellView_layoutInternal(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_ImageCellView_layoutInternal)(self, _cmd);
+    applyMergeToCellView(self);
+}
+
+static void repl_AppFileCellView_layoutInternal(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_AppFileCellView_layoutInternal)(self, _cmd);
+    applyMergeToCellView(self);
+}
+
+static void installMediaLayoutInternalHooks(void) {
+    struct MediaHook { const char *name; IMP *orig; IMP repl; } hooks[] = {
+        { "VoiceMessageCellView",   &orig_VoiceCellView_layoutInternal,   (IMP)repl_VoiceCellView_layoutInternal   },
+        { "VideoMessageCellView",   &orig_VideoCellView_layoutInternal,   (IMP)repl_VideoCellView_layoutInternal   },
+        { "ImageMessageCellView",   &orig_ImageCellView_layoutInternal,   (IMP)repl_ImageCellView_layoutInternal   },
+        { "AppFileMessageCellView", &orig_AppFileCellView_layoutInternal, (IMP)repl_AppFileCellView_layoutInternal },
+    };
+    Class base = objc_getClass("CommonMessageCellView");
+    Method baseM = base ? class_getInstanceMethod(base, @selector(layoutInternal)) : NULL;
+    for (NSUInteger i = 0; i < sizeof(hooks) / sizeof(hooks[0]); i++) {
+        NSString *name = @(hooks[i].name);
+        Class c = objc_getClass(hooks[i].name);
+        if (!c) { WPLog(@"MsgMerge", @"[Hook] ✗ %@ not found，跳过补挂", name); continue; }
+        Method m = class_getInstanceMethod(c, @selector(layoutInternal));
+        if (!m) { WPLog(@"MsgMerge", @"[Hook] ✗ %@ 无 layoutInternal，跳过补挂", name); continue; }
+        if (baseM && method_getImplementation(m) == method_getImplementation(baseM)) {
+            WPLog(@"MsgMerge", @"[Hook] = %@ layoutInternal 未重写（基类钩子已覆盖），跳过", name);
+            continue;
+        }
+        MSHookMessageEx(c, @selector(layoutInternal), hooks[i].repl, hooks[i].orig);
+        WPLog(@"MsgMerge", @"[Hook] ✓ %@ layoutInternal 补挂（子类重写）", name);
+    }
 }
 
 // ============================================================
@@ -659,6 +721,9 @@ static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageCellView not found");
     }
+
+    // ②b 阶段3：媒体子类 layoutInternal 判重补挂
+    installMediaLayoutInternalHooks();
 
     // ③ 行高钩子（间距收拢真正生效点；8.0.78 真实行高来源，探针 #26 实证）
     cls = objc_getClass("BaseChatViewModel");
