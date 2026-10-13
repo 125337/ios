@@ -307,7 +307,7 @@ static unsigned long long vmSplitPosition(id vm) {
     static Ivar iv = nil;
     if (!iv) iv = class_getInstanceVariable(object_getClass(vm), "_splitPosition");
     if (!iv) return 0;
-    return *(unsigned long long *)((char *)(void *)vm + ivar_getOffset(iv));
+    return *(unsigned long long *)((char *)(__bridge void *)vm + ivar_getOffset(iv));
 }
 
 // 切片角色日志（首见即记，按 vm 指针判重）：验证 _splitPosition 枚举语义，
