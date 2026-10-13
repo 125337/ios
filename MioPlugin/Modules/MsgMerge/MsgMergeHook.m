@@ -7,7 +7,8 @@
 //       与渲染数组 m_arrMessageNodeData
 //    ② CommonMessageCellView layoutInternal / updateNodeStatus → 按节点位置
 //       应用合并渲染：头像显隐 / 群昵称显隐 / 气泡圆角连续化
-//       （⑤ 阶段2 布局接管：type==1 && mmOwnLayout 时头像/气泡容器/昵称横向自摆，
+//       （⑤ 阶段2 布局接管：白名单类型（文本1+媒体 3/34/43/49/62）&& mmOwnLayout 时
+//         头像/气泡容器/昵称横向自摆，
 //         原生几何模型与失效检测见 applyOwnLayout 注释）
 //    ③ BaseChatViewModel rowHeight（8.0.78 实证签名 d16@0:8，返回 double，滚动期间
 //       270+ 次调用）→ 行高包裹式生效点。探针 #32 实证原生长文本消息是多 cell 切片
@@ -179,11 +180,12 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 }
 
 // ============================================================
-// MARK: - 阶段2 布局接管（type==1 文本三 frame 横向自摆）
+// MARK: - 阶段2/3 布局接管（白名单类型三 frame 横向自摆）
 // ============================================================
 // 原生模型（视图调试器 8.0.78 实测，cell 坐标，TextMessageCellView 即 cellView）：
 //   头像 MMHeadImageView 46×46 y=2 距屏边 9：自发 x=W−55 / 收方 x=9
-//   气泡容器 = getBgImageView.superview 的 UIView，距屏边 64：
+//   气泡容器 = getBgImageView.superview；媒体（图片3/视频43）无气泡 bg，回退取
+//   mcv 直接子视图中面积最大的非头像/非label/非控件 UIView（探针实证唯一候选）
 //     自发右缘 W−64 / 收方 x=64；y=5（无昵称）/ 16（群收昵称开）——纵向原生已对，不碰
 //     （固定行高内挪 y 必守恒，项目定论；间距收拢走 rowHeight 钩子）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
@@ -215,7 +217,23 @@ static int g_olLogCnt = 0;   // 诊断日志帽（防滚动刷屏）
 static void applyOwnLayout(id cellView, BOOL active) {
     UIView *head = safeCall(cellView, "getHeadImageView");
     UIImageView *bg = safeCall(cellView, "getBgImageView");
-    UIView *cont = [bg isKindOfClass:[UIView class]] ? (UIView *)bg.superview : nil;
+    UIView *cont = [bg isKindOfClass:[UIImageView class]] ? (UIView *)bg.superview : nil;
+    if (![cont isKindOfClass:[UIView class]]) {
+        // 媒体消息（图片3/视频43）无气泡 bg（图片/视频本身就是气泡，getBgImageView 返 nil），
+        // 回退：取 mcv 直接子视图中面积最大的非头像/非label/非控件 UIView 作容器
+        // （探针实证：图片容器 {239,5,90,196}、视频 {219,5,110,196}，均为唯一候选）
+        UIView *best = nil;
+        CGFloat bestArea = 0;
+        for (UIView *v in ((UIView *)cellView).subviews) {
+            if (v == head) continue;
+            if (![v isKindOfClass:[UIView class]]
+                || [v isKindOfClass:[UILabel class]]
+                || [v isKindOfClass:[UIControl class]]) continue;
+            CGFloat area = v.frame.size.width * v.frame.size.height;
+            if (area > bestArea) { best = v; bestArea = area; }
+        }
+        cont = best;
+    }
     if (![head isKindOfClass:[UIView class]] || ![cont isKindOfClass:[UIView class]]) return;
 
     // 首过建基准（此刻原生 layoutInternal 刚跑完，frame 为原生值）
