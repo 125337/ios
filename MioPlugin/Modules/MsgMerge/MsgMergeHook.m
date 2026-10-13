@@ -255,7 +255,14 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         if (cfg.mmEnable && cfg.mmOwnLayout) {
             id wrap = safeKVC(self, @"messageWrap");
             id typeVal = wrap ? safeKVC(wrap, @"m_uiMessageType") : nil;
-            if (wrap && [typeVal respondsToSelector:@selector(longLongValue)] &&
+            id content = wrap ? safeKVC(wrap, @"m_nsContent") : nil;
+            // 仅接管无换行的纯文本（按宽度折行，公式已双算验证）；
+            // 含 \n 的多行消息微信有特殊原生处理（实测一条 10 行消息原生 rowHeight 仅 95，
+            // 且行高错位时会拆成多个气泡渲染），暂回退原生，待摸清折叠机制再接管
+            BOOL hasNewline = [content isKindOfClass:[NSString class]] &&
+                              [content rangeOfString:@"\n"].location != NSNotFound;
+            if (wrap && !hasNewline &&
+                [typeVal respondsToSelector:@selector(longLongValue)] &&
                 [typeVal longLongValue] == 1) {
                 double f = (double)[MsgMergeEngine textRowHeightForWrap:wrap];
                 wpRowHeightDualLog(wrap, f, h, [MsgMergeEngine textLineCountForWrap:wrap]);
