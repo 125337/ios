@@ -224,6 +224,7 @@ static NSString *chatNameOfWrap(id wrap) {
 // 补偿无法两套基准通用。实测方案：聊天内采样"单行短文本"的原生行高，群收与自发
 // 两桶各取众数，差值即昵称块高度——两桶随基准同漂移，差值天然免疫。
 // 实测就绪前用 8.0.78 先验值 11（群收 65 − 发方 54，探针 #31）。
+// 实测验证（MioPlugin(63).log）：recv 众数 70 / self 众数 57 → 13，校准生效。
 
 static NSMutableDictionary *g_nickRecvSamples = nil;  // lid -> orig 行高（群收）
 static NSMutableDictionary *g_nickSelfSamples = nil;  // lid -> orig 行高（自发）
@@ -299,7 +300,11 @@ static void nickSampleRecord(NSString *chat, id wrap, double h) {
 //   b) 昵称空洞：群收非组首消息的整条/首片 -实测昵称块（合并后昵称隐藏但空间残留）
 //
 // 【探针 #34 实证】长文本切片的角色由 vm 自身 ivar `_splitPosition`（Q 类型）提供：
-//   0=整条未切片 / 1=首片 / 2=中片 / 3=末片（切片1._startHeight=0/80/160 递进佐证）。
+//   0=整条未切片 / 1=首片 / 2=中片 / 3=末片。
+//   实证：10 行消息拆 3 片（行高 95/80/62，共享同 wrap），三片 split=1/2/3、
+//   _startHeight=0/80/160 递进；未切片消息恒 0（MioPlugin(63).log 16 条全 0）。
+//   中片行高=内容高（接缝 0 空隙），末片才含底部空白（62=50+12），故只有
+//   split∈{0,3} 的行高里才有可安全吃掉的消息间空隙。
 //   节点数组一条消息只有 1 个节点（切片是表格内部展开的），不能从数组推切片结构——
 //   旧 run 扫描方案 sliceCount 恒 1，兜底 sliceIndex=0 使 0==count-1 对每个切片
 //   vm 都成立，全部被减导致切片接缝撕开（4/5、8/9 行间距变负，用户实证）。
