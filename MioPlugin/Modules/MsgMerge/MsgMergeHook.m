@@ -230,6 +230,14 @@ static NSString *chatNameOfWrap(id wrap) {
 
 static double g_plainBgY = 5.0;   // 无昵称区文本行的 bg.y 基准（零高 label 行上报校准）
 
+// ---- N 变化触发行高重算 ----
+// 布局时上报的新 N 落盘后，表格已按旧持久值算完行高，之后无人触发重算 →
+// 昵称开关切换后间隙错误（实证：N=11 上报但行高仍按 0 算，收方组间隙 24≠13）。
+// 检测 rowHeight 消费值 [Engine nicknameBlockHeight] 与上次已应用值的变化 →
+// 异步 reloadData 当前聊天表。值收敛后同值不再触发，无循环。
+static __weak UITableView *g_mmChatTable = nil;
+static double s_lastAppliedN = -1.0;   // -1 = 未登记（首次仅建基线不触发）
+
 // ============================================================
 // MARK: - 行高钩子（切片感知包裹式生效点）
 // ============================================================
@@ -407,6 +415,28 @@ static void applyMergeToCellView(id cellView) {
         UIImageView *bg = safeCall(cellView, "getBgImageView");
         if ([bg isKindOfClass:[UIImageView class]]) {
             applyCorner(bg, pos);
+        }
+
+        // ④ N 变化触发行高重算（见 g_mmChatTable 处说明）
+        double nNow = [MsgMergeEngine nicknameBlockHeight];
+        if (s_lastAppliedN < 0) {
+            s_lastAppliedN = nNow;   // 首次仅登记基线
+        } else if (fabs(nNow - s_lastAppliedN) > 0.5) {
+            s_lastAppliedN = nNow;
+            UITableView *tbl = nil;
+            id cur = cellView;
+            for (int hop = 0; hop < 8 && cur; hop++) {
+                if ([cur isKindOfClass:[UITableView class]]) { tbl = cur; break; }
+                cur = safeCall(cur, "superview");
+            }
+            if (tbl) {
+                g_mmChatTable = tbl;
+                UITableView *t = tbl;
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [t reloadData];
+                });
+                WPLog(@"MsgMerge", @"[Nick] N→%.0f 变化，触发行高重算", nNow);
+            }
         }
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Apply] exception: %@", e.reason);
