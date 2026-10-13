@@ -204,6 +204,8 @@ static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
 }
 
+static int g_olLogCnt = 0;   // 诊断日志帽（防滚动刷屏）
+
 static void applyOwnLayout(id cellView, BOOL active) {
     UIView *head = safeCall(cellView, "getHeadImageView");
     UIImageView *bg = safeCall(cellView, "getBgImageView");
@@ -218,6 +220,13 @@ static void applyOwnLayout(id cellView, BOOL active) {
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:cont.frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDH, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDC, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (g_olLogCnt < 20) {
+            g_olLogCnt++;
+            MsgMergeConfig *dbg = [MsgMergeConfig shared];
+            WPLog(@"MsgMerge", @"[OL] 首过 active=%d own=%d av=%.1f wo=%.1f head=(%.0f,%.0f,%0.f)",
+                  active, dbg.mmOwnLayout, dbg.mmAvatarOffset, dbg.mmWholeOffset,
+                  head.frame.origin.x, head.frame.origin.y, head.frame.size.width);
+        }
     }
     CGRect bHead = [bHeadV CGRectValue];
     CGRect bBub  = [(NSValue *)objc_getAssociatedObject(cellView, kOLBaseBubF) CGRectValue];
@@ -274,6 +283,10 @@ static void applyOwnLayout(id cellView, BOOL active) {
         f.origin.x += newDH;
         head.frame = f;
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (g_olLogCnt < 40) {
+            g_olLogCnt++;
+            WPLog(@"MsgMerge", @"[OL] 应用 head.dx=%.1f → x=%.0f", newDH, f.origin.x);
+        }
     }
     if (fabs(newDC - lastDC) > 0.01) {
         CGRect f = bBub;
@@ -285,6 +298,10 @@ static void applyOwnLayout(id cellView, BOOL active) {
             nf.origin.x = baseNameX + newDC;
             lb.frame = nf;
             objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        if (g_olLogCnt < 40) {
+            g_olLogCnt++;
+            WPLog(@"MsgMerge", @"[OL] 应用 col.dx=%.1f → bub.x=%.0f", newDC, f.origin.x);
         }
     }
 }
