@@ -78,14 +78,15 @@ static long long localIDOf(id wrap) {
     return [v longLongValue];
 }
 
-/// 文本行宽估算（全角单位数）：CJK 及全角区段记 1、ASCII 等半角记 0.5、代理对（emoji/生僻字）记 1
+/// 文本行宽估算（全角单位数）：CJK 及全角区段记 1、ASCII 等半角记 0.6、代理对（emoji/生僻字）记 1
+/// （ASCII 0.6 而非 0.5：数字串实测每行约 19-20 个而非 26+，宁可用宽估多一行也不可裁切）
 static CGFloat textWidthUnits(NSString *s) {
     CGFloat w = 0;
     NSUInteger i = 0, n = s.length;
     while (i < n) {
         unichar c = [s characterAtIndex:i];
         if (c >= 0xD800 && c <= 0xDBFF) { w += 1.0; i += 2; continue; }  // 高代理：按一个全角
-        w += (c >= 0x2E80) ? 1.0 : 0.5;
+        w += (c >= 0x2E80) ? 1.0 : 0.6;
         i++;
     }
     return w;
@@ -228,30 +229,35 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
 
 /// 文本消息行高自算（渐进接管路线图 阶段1，mmOwnLayout 开关下替换原实现）
 ///
-/// 公式与采样依据（2026-10-13 原生环境采样 411 条，scripts\mm_sample_data.csv）：
-///   行高 = 20×L + 20 + 17 [+13]
-///     20×L   气泡内容高：渲染行数 L，每行 20（bg 单行 40，多行步进 20 实测）
-///     +20    气泡上下内边距各 10（bg = 内容高 + 20 实测）
-///     +17    行间隙（单聊发方 57 = 40+17 实测）
-///     +13    群聊收方昵称块（群收 70 − 单发 57 = 13 实测；前提：微信聊天设置开昵称显示）
-///   L 不能用 m_nsContent 的 \n 数：微信按渲染宽度折行（77 字无换行实测渲染 4 行），
-///   故按字宽加权估算后除以每行容量 16 全角单位（采样实证：≤16 全角 1 行，19 全角 2 行）。
-+ (CGFloat)textRowHeightForWrap:(id)wrap {
-    if (!wrap) return 0;
+/// 公式与实证（双算日志 + 探针 #31 实测帧交叉验证，2026-10-13）：
+///   行高 = 17×L + 37 [+11]
+///     17×L   气泡内容高：渲染行数 L，每行 17（orig rowHeight 实测 54/71/88 = L1/2/3 发方）
+///     +37    气泡(17+20 上下内边距各10) + 行间隙 17（单行发方 54 = 17+20+17）
+///     +11    群聊收方昵称块（群收 65 − 发方 54；探针 #31 同值）
+///   【教训】m_cachedHeight 不能作拟合基准：它 = 真实行高 + 3×L + 2(群收)，
+///   是微信内部缓存值，系统性偏大（第一版公式 20L+20+17+13 即错信它所致）。
+/// 渲染行数估算（按字宽加权折行，供行高公式与双算日志共用）：
+///   L 不能用 m_nsContent 的 \n 数——微信按渲染宽度折行（77 字无换行实测渲染多行）；
+///   按字宽加权估算后除以每行容量 16 全角单位（ASCII 记 0.6 偏保守，宁高勿裁）。
++ (NSInteger)textLineCountForWrap:(id)wrap {
+    if (!wrap) return 1;
     NSString *content = safeValue(wrap, @"m_nsContent");
     if (![content isKindOfClass:[NSString class]]) content = @"";
-
     const CGFloat perLineUnits = 16.0;
     NSInteger lines = 0;
     for (NSString *seg in [content componentsSeparatedByString:@"\n"]) {
         NSInteger l = (NSInteger)ceil(textWidthUnits(seg) / perLineUnits);
         lines += (l < 1) ? 1 : l;   // 空行/短行至少占一行
     }
-    if (lines < 1) lines = 1;
+    return (lines < 1) ? 1 : lines;
+}
 
-    double h = 20.0 * lines + 20.0 + 17.0;
++ (CGFloat)textRowHeightForWrap:(id)wrap {
+    if (!wrap) return 0;
+    NSInteger lines = [self textLineCountForWrap:wrap];
+    double h = 17.0 * lines + 37.0;
     NSString *from = safeValue(wrap, @"m_nsFromUsr");
-    if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) h += 13.0;
+    if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) h += 11.0;
     return (CGFloat)h;
 }
 

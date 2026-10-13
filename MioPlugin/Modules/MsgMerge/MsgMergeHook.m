@@ -216,7 +216,7 @@ static NSString *chatNameOfWrap(id wrap) {
 
 // 双算验证日志（渐进接管路线图 阶段1.4）：mmOwnLayout 下同一条消息首次计算时
 // 输出公式值 vs 原生值，验证公式对采样外消息的误差（验收：|diff|≤2pt 比例 ≥98%）
-static void wpRowHeightDualLog(id wrap, double formula, double native) {
+static void wpRowHeightDualLog(id wrap, double formula, double native, NSInteger lines) {
     static NSMutableSet *seen;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
@@ -227,8 +227,18 @@ static void wpRowHeightDualLog(id wrap, double formula, double native) {
     if (lid <= 0 || [seen containsObject:@(lid)]) return;
     [seen addObject:@(lid)];
     double d = formula - native;
-    WPLog(@"MsgMerge", @"[Own] lid=%lld 公式=%.0f 原生=%.0f diff=%+.0f%@",
-          lid, formula, native, d, (fabs(d) > 2.0 ? @"  ←超差" : @""));
+    if (fabs(d) > 2.0) {
+        // 超差行附带行数与内容头部，便于定位坏例（emoji/@提及/引用等特殊内容）
+        NSString *content = safeKVC(wrap, @"m_nsContent");
+        if (![content isKindOfClass:[NSString class]]) content = @"";
+        NSString *head = [content length] > 24 ? [content substringToIndex:24] : content;
+        head = [head stringByReplacingOccurrencesOfString:@"\n" withString:@"⏎"];
+        WPLog(@"MsgMerge", @"[Own] lid=%lld L=%ld 公式=%.0f 原生=%.0f diff=%+.0f ←超差 内容<%@>",
+              lid, (long)lines, formula, native, d, head);
+    } else {
+        WPLog(@"MsgMerge", @"[Own] lid=%lld L=%ld 公式=%.0f 原生=%.0f diff=%+.0f",
+              lid, (long)lines, formula, native, d);
+    }
 }
 
 // -[BaseChatViewModel rowHeight]（8.0.78 实证签名 d16@0:8，返回 double）：
@@ -248,7 +258,7 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
             if (wrap && [typeVal respondsToSelector:@selector(longLongValue)] &&
                 [typeVal longLongValue] == 1) {
                 double f = (double)[MsgMergeEngine textRowHeightForWrap:wrap];
-                wpRowHeightDualLog(wrap, f, h);   // 1.4 验证日志（公式值 vs 原生值）
+                wpRowHeightDualLog(wrap, f, h, [MsgMergeEngine textLineCountForWrap:wrap]);
                 NSString *chat = chatNameOfWrap(wrap);
                 if (chat.length == 0) chat = currentChatName();
                 MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap

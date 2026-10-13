@@ -41,8 +41,11 @@ typedef NS_ENUM(NSUInteger, MOMergePosition) {
 + (BOOL)mmIsSeparatorMessage:(id)wrap;
 
 /// 文本消息行高自算（渐进接管路线图 阶段1，mmOwnLayout 开关下替换原实现）
-/// 公式：20×渲染行数L + 20(气泡上下内边距) + 17(行间隙) + 13(群聊收方昵称块)
+/// 公式：17×渲染行数L + 37(气泡+行间隙) + 11(群聊收方昵称块)
 + (CGFloat)textRowHeightForWrap:(id)wrap;
+
+/// 渲染行数估算（双算日志用，与行高公式同源）
++ (NSInteger)textLineCountForWrap:(id)wrap;
 
 @end
 
