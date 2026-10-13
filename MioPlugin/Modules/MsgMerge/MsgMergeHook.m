@@ -184,8 +184,8 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 // ============================================================
 // 原生模型（视图调试器 8.0.78 实测，cell 坐标，TextMessageCellView 即 cellView）：
 //   头像 MMHeadImageView 46×46 y=2 距屏边 9：自发 x=W−55 / 收方 x=9
-//   气泡容器 = getBgImageView.superview；媒体（图片3/视频43）无气泡 bg，回退取
-//   mcv 直接子视图中面积最大的非头像/非label/非控件 UIView（探针实证唯一候选）
+//   气泡容器：有 bg 的类型 = getBgImageView.superview；无 bg 的（图片3/视频43/表情47）
+//   = getContentView 返回值（探针全类型实证与 bg.superview 同一视图，精准命中）
 //     自发右缘 W−64 / 收方 x=64；y=5（无昵称）/ 16（群收昵称开）——纵向原生已对，不碰
 //     （固定行高内挪 y 必守恒，项目定论；间距收拢走 rowHeight 钩子）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
@@ -219,22 +219,13 @@ static int g_olLogCnt = 0;   // 诊断日志帽（防滚动刷屏）
 static void applyOwnLayout(id cellView, BOOL active) {
     UIView *head = safeCall(cellView, "getHeadImageView");
     UIImageView *bg = safeCall(cellView, "getBgImageView");
+    // 容器发现（探针 #getContentView 全类型实证）：有气泡 bg 的类型（文本/语音/App/文件）
+    // 容器 = bg.superview；无 bg 的类型（图片3/视频43/表情47，内容本身即气泡）容器 =
+    // getContentView 返回值——与 bg.superview 同一视图（自发右缘 W−64/收方 x=64），
+    // 精准命中，无需启发式
     UIView *cont = [bg isKindOfClass:[UIImageView class]] ? (UIView *)bg.superview : nil;
     if (![cont isKindOfClass:[UIView class]]) {
-        // 媒体消息（图片3/视频43）无气泡 bg（图片/视频本身就是气泡，getBgImageView 返 nil），
-        // 回退：取 mcv 直接子视图中面积最大的非头像/非label/非控件 UIView 作容器
-        // （探针实证：图片容器 {239,5,90,196}、视频 {219,5,110,196}，均为唯一候选）
-        UIView *best = nil;
-        CGFloat bestArea = 0;
-        for (UIView *v in ((UIView *)cellView).subviews) {
-            if (v == head) continue;
-            if (![v isKindOfClass:[UIView class]]
-                || [v isKindOfClass:[UILabel class]]
-                || [v isKindOfClass:[UIControl class]]) continue;
-            CGFloat area = v.frame.size.width * v.frame.size.height;
-            if (area > bestArea) { best = v; bestArea = area; }
-        }
-        cont = best;
+        cont = safeCall(cellView, "getContentView");
     }
     if (![head isKindOfClass:[UIView class]] || ![cont isKindOfClass:[UIView class]]) return;
 
