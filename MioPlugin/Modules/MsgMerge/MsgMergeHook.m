@@ -294,9 +294,38 @@ static void nickSampleRecord(NSString *chat, id wrap, double h) {
 // 滚动期间 270+ 次调用（探针 #26）——这是聊天行高的真实来源。
 // delegate heightForRow、self-sizing、updateContentViewHeight: 均零调用（探针 #13/#14/#17/#18/#25）。
 // 包裹式（探针 #32 判死替换式）：行高主体永远用 orig，只做两类补偿——
-//   a) 间距收拢：非组尾消息的最后一片 -mmSpacing（间隙(i,i+1)=行i高-气泡i高，
-//      气泡贴 cell 顶，减"上方那条"的最后一片即收拢其与下条的间隙）
-//   b) 昵称空洞：群收非组首消息的首片 -实测昵称块（合并后昵称隐藏但空间残留）
+//   a) 间距收拢：非组尾消息的整条/末片 -mmSpacing（间隙(i,i+1)=行i高-气泡i高，
+//      气泡贴 cell 顶，减"上方那条"的末片即收拢其与下条的间隙）
+//   b) 昵称空洞：群收非组首消息的整条/首片 -实测昵称块（合并后昵称隐藏但空间残留）
+//
+// 【探针 #34 实证】长文本切片的角色由 vm 自身 ivar `_splitPosition`（Q 类型）提供：
+//   0=整条未切片 / 1=首片 / 2=中片 / 3=末片（切片1._startHeight=0/80/160 递进佐证）。
+//   节点数组一条消息只有 1 个节点（切片是表格内部展开的），不能从数组推切片结构——
+//   旧 run 扫描方案 sliceCount 恒 1，兜底 sliceIndex=0 使 0==count-1 对每个切片
+//   vm 都成立，全部被减导致切片接缝撕开（4/5、8/9 行间距变负，用户实证）。
+static unsigned long long vmSplitPosition(id vm) {
+    static Ivar iv = nil;
+    if (!iv) iv = class_getInstanceVariable(object_getClass(vm), "_splitPosition");
+    if (!iv) return 0;
+    return *(unsigned long long *)((char *)(void *)vm + ivar_getOffset(iv));
+}
+
+// 切片角色日志（首见即记，按 vm 指针判重）：验证 _splitPosition 枚举语义，
+// 重点观察 2 片消息的末片是 2 还是 3（决定间距条件 split==3 是否完备）
+static void splitPosLog(id vm, id wrap) {
+    static NSMutableDictionary *seen;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ seen = [NSMutableDictionary dictionary]; });
+    if ([seen count] > 4096) [seen removeAllObjects];
+    NSString *key = [NSString stringWithFormat:@"%p", vm];
+    if (seen[key]) return;
+    seen[key] = @YES;
+    id lidV = safeKVC(wrap, @"m_uiMesLocalID");
+    WPLog(@"MsgMerge", @"[Split] vm=%@ lid=%@ split=%llu",
+          key, [lidV respondsToSelector:@selector(description)] ? lidV : @"?",
+          vmSplitPosition(vm));
+}
+
 static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
     double h = ((double (*)(id, SEL))orig_BaseChatViewModel_rowHeight)(self, _cmd);
     @try {
@@ -311,23 +340,24 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         // 昵称块采样（先于修改判定，样本永远是原生值）
         nickSampleRecord(chat, wrap, h);
 
-        MOMergeSliceInfo si = [MsgMergeEngine sliceInfoForWrap:wrap
-                                                      chatName:chat
-                                                     nodeArray:g_currentNodeArray
-                                                            vm:self];
-        if (si.pos == MOMergePositionNone) return h;
+        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap
+                                                     chatName:chat
+                                                    nodeArray:g_currentNodeArray];
+        if (pos == MOMergePositionNone) return h;
 
-        BOOL isMsgHead = (si.pos == MOMergePositionFirst || si.pos == MOMergePositionSingle);
-        BOOL isMsgTail = (si.pos == MOMergePositionLast  || si.pos == MOMergePositionSingle);
+        BOOL isMsgHead = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
+        BOOL isMsgTail = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
+        unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
+        splitPosLog(self, wrap);
 
         double reduce = 0;
-        // a) 组内间隙收拢：只减非组尾消息的最后一片（片间不能减，会撕开切片接缝）
-        if (!isMsgTail && si.sliceIndex == si.sliceCount - 1 &&
+        // a) 组内间隙收拢：只减非组尾消息的整条/末片（片间不能减，会撕开切片接缝）
+        if (!isMsgTail && (split == 0 || split == 3) &&
             cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
             reduce += (double)cfg.mmSpacing;
         }
         // b) 昵称空洞：群收消息合并后昵称隐藏（Middle/Last），首片原生含昵称空间
-        if (!isMsgHead && si.sliceIndex == 0 && [chat hasSuffix:@"@chatroom"]) {
+        if (!isMsgHead && (split == 0 || split == 1) && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
                 reduce += g_nickBlock;

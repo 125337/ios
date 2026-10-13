@@ -150,97 +150,55 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
 }
 
 + (MOMergePosition)positionForWrap:(id)wrap
-                          chatName:(nullable NSString *)chatName
-                         nodeArray:(nullable NSArray *)nodeArray {
-    // 单元化：位置判定收口到切片信息（vm=nil 时 sliceIndex 恒 0，cell 渲染层只用 pos）
-    return [self sliceInfoForWrap:wrap chatName:chatName nodeArray:nodeArray vm:nil].pos;
-}
-
-+ (MOMergeSliceInfo)sliceInfoForWrap:(id)wrap
-                            chatName:(NSString *)chatName
-                           nodeArray:(NSArray *)nodeArray
-                                  vm:(id)vm {
-    MOMergeSliceInfo bad = { MOMergePositionNone, 0, 1 };
+                          chatName:(NSString *)chatName
+                         nodeArray:(NSArray *)nodeArray {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    if (!cfg.mmEnable) return bad;
-    if (!isMergeableWrap(wrap)) return bad;
-    if ([self mmIsSeparatorMessage:wrap]) return bad;   // 分隔消息独立，不参与任何组
-    if (cfg.mmOnlyRoom && ![chatName hasSuffix:@"@chatroom"]) return bad;
+    if (!cfg.mmEnable) return MOMergePositionNone;
+    if (!isMergeableWrap(wrap)) return MOMergePositionNone;
+    if ([self mmIsSeparatorMessage:wrap]) return MOMergePositionNone;   // 分隔消息独立，不参与任何组
+    if (cfg.mmOnlyRoom && ![chatName hasSuffix:@"@chatroom"]) return MOMergePositionNone;
     if (!nodeArray || nodeArray.count == 0) {
         WPLog(@"MsgMerge", @"[Engine] nodeArray 为空（VC 未找到或数组未加载）");
-        return bad;
+        return MOMergePositionNone;
     }
 
     long long localID = localIDOf(wrap);
-    if (localID <= 0) return bad;
+    if (localID <= 0) return MOMergePositionNone;
 
-    // ---- 缓存命中（TTL 内）直接返回（按 chat|lid|vm 指针键控：同 lid 各切片
-    //      的 sliceIndex 不同，必须按 viewModel 指针区分）----
+    // ---- 缓存命中（TTL 内）直接返回 ----
+    // 【探针 #34 实证】节点数组一条消息只有 1 个节点（切片是表格内部展开的，
+    // 数组里没有同 lid 的多条记录），切片角色由 vm 自身 ivar _splitPosition 提供，
+    // 本方法只做消息级邻接判定，缓存无需按 vm 指针区分。
     NSMutableDictionary *cache = _positionCache();
-    NSString *cacheKey = [chatName ?: @"?" stringByAppendingFormat:@"|%lld|%@",
-                          localID, vm ? [NSString stringWithFormat:@"%p", vm] : @"-"];
+    NSString *cacheKey = [chatName ?: @"?" stringByAppendingFormat:@"|%lld", localID];
     NSDictionary *cached = cache[cacheKey];
     if (cached) {
         NSTimeInterval ts = [cached[@"ts"] doubleValue];
         if ([[NSDate date] timeIntervalSince1970] - ts < kCacheTTL) {
-            MOMergeSliceInfo si;
-            si.pos = (MOMergePosition)[cached[@"pos"] unsignedIntegerValue];
-            si.sliceIndex = [cached[@"sliceIndex"] integerValue];
-            si.sliceCount = [cached[@"sliceCount"] integerValue];
-            return si;
+            return (MOMergePosition)[cached[@"pos"] unsignedIntegerValue];
         }
     }
 
     // ---- 渲染数组邻接判定：节点数组 → wrap 数组（NSNull 占位时间节点）----
     NSMutableArray *wraps = [NSMutableArray arrayWithCapacity:nodeArray.count];
-    for (id node in nodeArray) {
-        id w = wrapOfNode(node);
+    NSInteger selfIdx = -1;
+    for (NSUInteger i = 0; i < nodeArray.count; i++) {
+        id w = wrapOfNode(nodeArray[i]);
         [wraps addObject:(w ?: kNullNode())];
+        if (selfIdx < 0 && w && localIDOf(w) == localID) selfIdx = (NSInteger)i;
     }
-
-    // ---- 定位同 localID 的连续 run（长文本切片）----
-    NSInteger firstMatch = -1;
-    for (NSUInteger i = 0; i < wraps.count; i++) {
-        if (wraps[i] == kNullNode()) continue;
-        if (localIDOf(wraps[i]) == localID) { firstMatch = (NSInteger)i; break; }
-    }
-    if (firstMatch < 0) {
+    if (selfIdx < 0) {
         WPLog(@"MsgMerge", @"[Engine] localID=%lld 不在渲染数组中", localID);
-        return bad;
-    }
-    NSUInteger runStart = (NSUInteger)firstMatch, runEnd = (NSUInteger)firstMatch;
-    while (runStart > 0 && wraps[runStart - 1] != kNullNode() &&
-           localIDOf(wraps[runStart - 1]) == localID) runStart--;
-    while (runEnd + 1 < wraps.count && wraps[runEnd + 1] != kNullNode() &&
-           localIDOf(wraps[runEnd + 1]) == localID) runEnd++;
-    NSInteger sliceCount = (NSInteger)(runEnd - runStart + 1);
-
-    // ---- 切片序号：节点即 viewModel，按指针在 run 内定位 ----
-    // vm 匹配不上且确有多片时放弃干预（宁可无补偿也不可每片都减撕开接缝）
-    NSInteger sliceIndex = 0;
-    BOOL foundVM = NO;
-    if (vm) {
-        for (NSUInteger i = runStart; i <= runEnd; i++) {
-            id node = nodeArray[i];
-            id nvm = safeValue(node, @"viewModel");
-            if (node == vm || nvm == vm) {
-                sliceIndex = (NSInteger)(i - runStart);
-                foundVM = YES;
-                break;
-            }
-        }
-    }
-    if (!foundVM && sliceCount > 1 && vm) {
-        return bad;
+        return MOMergePositionNone;
     }
 
-    // ---- 消息级邻居：run 两侧紧邻节点，紧邻时间节点（NSNull）即断组 ----
+    // ---- 邻居：紧邻节点，紧邻时间节点（NSNull）即断组 ----
     // 【实证】跳过时间节点找"最近有效邻居"会跨时间行合并：22:20 时间行后同发送者
     // 的组首被判成 Middle/Last，头像丢失（2026-10-13 截图实证）
     id prevWrap = nil;
-    if (runStart > 0 && wraps[runStart - 1] != kNullNode()) prevWrap = wraps[runStart - 1];
+    if (selfIdx > 0 && wraps[selfIdx - 1] != kNullNode()) prevWrap = wraps[selfIdx - 1];
     id nextWrap = nil;
-    if (runEnd + 1 < wraps.count && wraps[runEnd + 1] != kNullNode()) nextWrap = wraps[runEnd + 1];
+    if (selfIdx + 1 < (NSInteger)wraps.count && wraps[selfIdx + 1] != kNullNode()) nextWrap = wraps[selfIdx + 1];
 
     BOOL joinPrev = (prevWrap != nil) && [self shouldJoin:wrap wrapB:prevWrap];
     BOOL joinNext = (nextWrap != nil) && [self shouldJoin:wrap wrapB:nextWrap];
@@ -258,16 +216,12 @@ static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
     }
     cache[cacheKey] = @{
         @"pos": @(pos),
-        @"sliceIndex": @(sliceIndex),
-        @"sliceCount": @(sliceCount),
         @"ts": @([[NSDate date] timeIntervalSince1970]),
     };
 
-    WPLog(@"MsgMerge", @"[Engine] pos=%lu chat=%@ localID=%lld run=%lu-%lu slice=%ld/%ld",
-          (unsigned long)pos, chatName, localID,
-          (unsigned long)runStart, (unsigned long)runEnd,
-          (long)sliceIndex, (long)sliceCount);
-    return (MOMergeSliceInfo){ pos, sliceIndex, sliceCount };
+    WPLog(@"MsgMerge", @"[Engine] pos=%lu chat=%@ localID=%lld idx=%ld",
+          (unsigned long)pos, chatName, localID, (long)selfIdx);
+    return pos;
 }
 
 /// 昵称块采样入样门槛：type==1 文本、无换行、估行数=1（字宽 ≤14 全角单位）

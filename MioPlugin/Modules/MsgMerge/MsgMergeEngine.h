@@ -34,21 +34,6 @@ typedef NS_ENUM(NSUInteger, MOMergePosition) {
                           chatName:(nullable NSString *)chatName
                          nodeArray:(nullable NSArray *)nodeArray;
 
-/// 切片信息（长文本消息被微信拆成多个 cell 渲染，共享同一 messageWrap/lid，
-/// 在渲染数组中表现为同 localID 的连续节点 run；探针 #32 实证 10 行消息 = 3 片）
-typedef struct {
-    MOMergePosition pos;        // 消息级合并位置（邻居按跨 run 判定，不受切片干扰）
-    NSInteger sliceIndex;       // 本片在 run 内的序号（0 = 首片，昵称只画在首片）
-    NSInteger sliceCount;       // run 内切片总数（1 = 未切片）
-} MOMergeSliceInfo;
-
-/// 计算切片信息（带 5s TTL 缓存，按 chat|lid|vm 指针键控）
-/// @param vm rowHeight 钩子的 self（用于在 run 内定位本片）；传 nil 时 sliceIndex 恒 0
-+ (MOMergeSliceInfo)sliceInfoForWrap:(id)wrap
-                            chatName:(nullable NSString *)chatName
-                           nodeArray:(nullable NSArray *)nodeArray
-                                  vm:(nullable id)vm;
-
 /// 清空位置缓存（切换会话时调用）
 + (void)clearCache;
 
