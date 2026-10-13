@@ -214,18 +214,22 @@ static NSString *chatNameOfWrap(id wrap) {
 // MARK: - 行高钩子（间距收拢生效点）
 // ============================================================
 
-// 双算验证日志（渐进接管路线图 阶段1.4）：mmOwnLayout 下同一条消息首次计算时
-// 输出公式值 vs 原生值，验证公式对采样外消息的误差（验收：|diff|≤2pt 比例 ≥98%）
+// 双算验证日志（渐进接管路线图 阶段1.4）：mmOwnLayout 下同一条消息在 orig 值
+// 发生变化时输出（首算必记，后续仅记变化）——捕捉原生 rowHeight 对同一消息的
+// 时变行为（实证：一条 10 行消息首调 95、原生满渲染约 207，需确认是瞬态还是常态）
 static void wpRowHeightDualLog(id wrap, double formula, double native, NSInteger lines) {
-    static NSMutableSet *seen;
+    static NSMutableDictionary *seen;
     static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
+    dispatch_once(&onceToken, ^{ seen = [NSMutableDictionary dictionary]; });
     if ([seen count] > 4096) [seen removeAllObjects];
     id lidV = safeKVC(wrap, @"m_uiMesLocalID");
     if (![lidV respondsToSelector:@selector(longLongValue)]) return;
     long long lid = [lidV longLongValue];
-    if (lid <= 0 || [seen containsObject:@(lid)]) return;
-    [seen addObject:@(lid)];
+    if (lid <= 0) return;
+    NSNumber *key = @(lid);
+    NSNumber *last = seen[key];
+    if (last && [last doubleValue] == native) return;   // 值没变不重复记
+    seen[key] = @(native);
     double d = formula - native;
     if (fabs(d) > 2.0) {
         // 超差行附带行数与内容头部，便于定位坏例（emoji/@提及/引用等特殊内容）
