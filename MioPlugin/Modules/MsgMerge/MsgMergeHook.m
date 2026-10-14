@@ -521,48 +521,20 @@ static void mergeFindTable(UIView *v, int depth, UITableView **out) {
 
 static void mergeDoReload(void) {
     s_mergeRelayoutPending = NO;
-    UIViewController *vc = g_curChatVC;
-    if (!vc.isViewLoaded || !vc.view.window) return;   // 会话页已不在屏
-    UITableView *tbl = nil;
-    mergeFindTable(vc.view, 0, &tbl);
-    if (!tbl) return;
     // 独立模型主动重建（本方案核心）：轮询已确认节点追加，此刻重建的 entries
     // 即含新消息的正确邻接；旧架构此处只清缓存、靠微信后续查询现算回填（会把
-    // 中间态判定写回缓存=毒缓存），重建后查询只读、判定确定
+    // 中间态判定写回缓存=毒缓存），重建后查询只读、判定确定。
+    //
+    // 绝不参与表格变更（frida_voice_crash.js 三轮实证，25b8c0d5 门闸仍炸）：
+    // begin/endUpdates 撞进微信语音管线（reloadData 多连发、数据源计数后台
+    // 抖动）时，endUpdates 对比"begin 时内部快照 vs end 时重读数据源"必抛
+    // Invalid Number Of Sections，坏状态连锁=新行建不出来+退页闪退；事前任何
+    // 一致性检查都赌不过竞态。而环形缓冲实证微信对聊天表行变更全部走
+    // reloadData（零 insertRows），每次收发消息它自己都会全量重询行高，配合
+    // 模型查询期自愈（positionForWrap 失配自动重建）几何必然正确——本函数
+    // 只需重建模型，表格一个字都不碰。
     [[BBMergeModel shared] rebuildWithNodeArray:g_currentNodeArray
                                        chatName:g_currentChatName];
-    // begin/endUpdates 而非 reloadData：只重新询问行高并动画过渡差异，
-    // 不重建可见 cell、不动滚动位置（reloadData 全表重建会抖动，用户实证）。
-    // 确定性门闸（语音闪退根治，frida_voice_crash.js 实证链）：begin/endUpdates
-    // 撞进微信挂起中的表格变更管线（reloadData 已调、布局 pass 未消费，或插入
-    // 动画在途），endUpdates 对比快照必抛 "Invalid Number Of Sections"，坏状态
-    // 连锁导致新行建不出来、退出聊天页闪退；收发语音时序不同，300ms 时间戳
-    // 启发式只能赌中概率（收语音实证仍概率性崩）。改为直接比对状态本体：
-    // 数据源行数 ≠ 表格内部行数 = 微信有挂起变更，此刻绝不碰表格——微信自己
-    // 的 reload 布局 pass 会全量重询行高 + 模型查询期自愈（BBMergeModel
-    // positionForWrap 失配自动重建），几何必然正确；两者一致才安全 begin/end。
-    NSInteger liveRows = 0, tableRows = -1;
-    id ds = tbl.dataSource;
-    if (ds && [ds respondsToSelector:@selector(numberOfSectionsInTableView:)]
-        && [ds respondsToSelector:@selector(tableView:numberOfRowsInSection:)]) {
-        NSInteger secs = [(id<UITableViewDataSource>)ds numberOfSectionsInTableView:tbl];
-        if (secs > 0)
-            liveRows = [(id<UITableViewDataSource>)ds tableView:tbl numberOfRowsInSection:0];
-        tableRows = [tbl numberOfRowsInSection:0];
-    }
-    if (tableRows >= 0 && liveRows != tableRows) {
-        WPLog(@"MsgMerge", @"[RL] pending wechat mutation (live=%ld table=%ld), skip begin/endUpdates",
-              (long)liveRows, (long)tableRows);
-        return;
-    }
-    @try {
-        [tbl layoutIfNeeded];
-        [tbl beginUpdates];
-        [tbl endUpdates];
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[RL] begin/endUpdates clash, fallback reloadData: %@", e.reason);
-        [tbl reloadData];
-    }
 }
 
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt);
@@ -575,9 +547,11 @@ static void mergeScheduleRelayout(void) {
 }
 
 // 等微信把新消息节点追加进 m_arrMessageNodeData（探针实证追加发生在
-// AsyncOnAddMsg 返回后 ~30ms 内的某个 runloop，早于它我们重排必用旧数组），
-// 30ms 轮询节点计数，增长（新消息 +1，跨时间行 +2）即重排；12 次未变兜底重排。
-// 全程主线程（AJ 回调与计数读取同队列，无竞态）。
+// AsyncOnAddMsg 返回后 ~30ms 内的某个 runloop，早于它重建必用旧数组），
+// 30ms 轮询节点计数，增长（新消息 +1，跨时间行 +2）即重建模型；12 次未变
+// 兜底重建。全程主线程（AJ 回调与计数读取同队列，无竞态）。
+// 注意：这里只重建模型，不触发表格——微信自己 reload 时全量重询行高（探针
+// 实证聊天表行变更全部走 reloadData），配合查询期自愈几何必然正确。
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.03 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
@@ -599,7 +573,9 @@ static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) 
         if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
         if (g_curChatVC) updateChatContext(g_curChatVC);   // 刷新 g_currentNodeArray（含切会话自检）
         // 此刻节点大概率未追加（~30ms 后才进数组）：期间微信建行查询落模型
-        // miss → None 原生渲染；轮询确认追加后 mergeDoReload 主动重建并重排，
+        // miss → None 原生渲染；轮询确认追加后 mergeDoReload 主动重建模型，
+        // 微信自己的 reload 布局 pass 全量重询行高即得正确几何（本函数绝不
+        // 触发表格变更，见 mergeDoReload 注释）
         // 模型只在重建时计算判定，不存在"中间态判定被写回"的毒缓存问题
         mergeScheduleRelayout();
     } @catch (NSException *e) {
@@ -614,6 +590,9 @@ static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) 
 // 之后条件不变不再重建（旧 TTL 架构靠微信加载完刷表重询自愈，独立模型堵死
 // 了该路径）。didAppear 落定后延迟主动重建 + begin/endUpdates 强制全表重询，
 // 行高无差异时无动画。
+// 注意 begin/endUpdates 只允许出现在这里（进会话静默窗口，微信建表管线已
+// 消费完，三轮探针实证 crash 类只发生在消息到达时刻的语音管线期间）；
+// mergeDoReload（消息路径）绝不碰表格。
 // ------------------------------------------------------------
 static IMP orig_BaseMsgContentVC_viewDidAppear = NULL;
 
@@ -627,7 +606,17 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
                        dispatch_get_main_queue(), ^{
             if (g_curChatVC != self) return;   // 已切走
             updateChatContext(self);           // 刷新数组引用（重建输入取落定后的表）
-            mergeDoReload();                   // 重建 + begin/endUpdates
+            mergeDoReload();                   // 重建模型（不碰表格）
+            UITableView *tbl = nil;            // 静默窗口强制全表重询行高
+            mergeFindTable(self.view, 0, &tbl);
+            if (!tbl) return;
+            @try {
+                [tbl layoutIfNeeded];
+                [tbl beginUpdates];
+                [tbl endUpdates];
+            } @catch (NSException *e) {
+                WPLog(@"MsgMerge", @"[Ctx] appear begin/end clash: %@", e.reason);
+            }
         });
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] viewDidAppear exception: %@", e.reason);
