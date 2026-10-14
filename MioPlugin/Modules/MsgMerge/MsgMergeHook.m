@@ -501,10 +501,11 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
 // id 垫片安全，bc065e6 定论；AutoTransfer/RedEnvelop 同款挂法，链式共存）。
 // 新消息插入改变节点邻接结构（新 lid 入组/组尾变组中），旧渲染数组与位置
 // 缓存全部失效——不刷新则新消息按 Single 渲染（原生大间隙），重进会话才
-// 恢复（实证）。同步刷新 nodeArray + 清位置缓存（先于微信为新行查询行高），
-// 再异步重排已可见的旧行（组尾→组中的昵称断供与行高补偿随之更新）。
+// 恢复（实证）。同步刷新 nodeArray 引用；重排走等节点追加的轮询（见下），
+// 因为我们过早 reloadData 会用"缺新节点的旧数组"算位置（探针实证竞争）。
 // ------------------------------------------------------------
 static IMP orig_CMMsgMgr_AsyncOnAddMsg = NULL;
+static BOOL s_mergeRelayoutPending = NO;   // 重排进行中（防连发消息重复排队）
 
 static void mergeFindTable(UIView *v, int depth, UITableView **out) {
     if (!v || *out || depth > 6) return;
@@ -512,17 +513,41 @@ static void mergeFindTable(UIView *v, int depth, UITableView **out) {
     for (UIView *sub in v.subviews) mergeFindTable(sub, depth + 1, out);
 }
 
+static void mergeDoReload(void) {
+    s_mergeRelayoutPending = NO;
+    UIViewController *vc = g_curChatVC;
+    if (!vc.isViewLoaded || !vc.view.window) return;   // 会话页已不在屏
+    UITableView *tbl = nil;
+    mergeFindTable(vc.view, 0, &tbl);
+    if (!tbl) return;
+    // 清缓存再重排：微信建行期间的查询会用"缺新节点的旧数组"算位置并写回
+    // TTL 缓存（探针实证 nodes=15/16 同帧并存）——不清则重排命中毒缓存照旧错
+    [MsgMergeEngine clearCache];
+    [tbl reloadData];
+}
+
+static void mergeRetryRelayout(NSInteger count0, NSInteger attempt);
+
 static void mergeScheduleRelayout(void) {
-    static BOOL s_pending = NO;
-    if (s_pending) return;
-    s_pending = YES;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        s_pending = NO;
-        UIViewController *vc = g_curChatVC;
-        if (!vc.isViewLoaded || !vc.view.window) return;   // 会话页已不在屏
-        UITableView *tbl = nil;
-        mergeFindTable(vc.view, 0, &tbl);
-        if (tbl) [tbl reloadData];
+    if (s_mergeRelayoutPending) return;
+    s_mergeRelayoutPending = YES;
+    NSInteger count0 = g_currentNodeArray ? (NSInteger)g_currentNodeArray.count : -1;
+    mergeRetryRelayout(count0, 0);
+}
+
+// 等微信把新消息节点追加进 m_arrMessageNodeData（探针实证追加发生在
+// AsyncOnAddMsg 返回后 ~30ms 内的某个 runloop，早于它我们重排必用旧数组），
+// 30ms 轮询节点计数，增长（新消息 +1，跨时间行 +2）即重排；12 次未变兜底重排。
+// 全程主线程（AJ 回调与计数读取同队列，无竞态）。
+static void mergeRetryRelayout(NSInteger count0, NSInteger attempt) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.03 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        NSInteger now = g_currentNodeArray ? (NSInteger)g_currentNodeArray.count : -1;
+        if (now > count0 || attempt >= 12) {
+            mergeDoReload();
+        } else {
+            mergeRetryRelayout(count0, attempt + 1);
+        }
     });
 }
 
