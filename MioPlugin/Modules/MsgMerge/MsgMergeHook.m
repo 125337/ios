@@ -520,10 +520,13 @@ static void mergeDoReload(void) {
     UITableView *tbl = nil;
     mergeFindTable(vc.view, 0, &tbl);
     if (!tbl) return;
-    // 清缓存再重排：微信建行期间的查询会用"缺新节点的旧数组"算位置并写回
-    // TTL 缓存（探针实证 nodes=15/16 同帧并存）——不清则重排命中毒缓存照旧错
+    // 清缓存再重算：微信建行期间的查询会用"缺新节点的旧数组"算位置并写回
+    // TTL 缓存（探针实证 nodes=15/16 同帧并存）——不清则重算命中毒缓存照旧错
     [MsgMergeEngine clearCache];
-    [tbl reloadData];
+    // begin/endUpdates 而非 reloadData：只重新询问行高并动画过渡差异，
+    // 不重建可见 cell、不动滚动位置（reloadData 全表重建会抖动，用户实证）
+    [tbl beginUpdates];
+    [tbl endUpdates];
 }
 
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt);
