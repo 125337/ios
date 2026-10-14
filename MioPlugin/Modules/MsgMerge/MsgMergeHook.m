@@ -479,15 +479,21 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
             cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
             reduce += (double)cfg.mmSpacing;
         }
-        // b) 昵称补偿（组首+组中）：[CELL] 探针实证（451245 批次）收方组所有行原生
-        //    均按昵称布局渲染（行内 bgTop=16、原生行高 65），昵称文本仅组首绘制但
-        //    空间每行都预留——"昵称断供让原生自动回收 11pt"在 rowHeight 层面不成立。
-        //    组内间隙 = 上行行高 − 气泡高（bgTop 组内统一），组首 65−N−sp=42（间隙
-        //    5pt ✓）而组中 65−sp=53（间隙 16pt ✗）即为不均根因。组中同样减 N；
-        //    Last 保持原生（65）保住组尾到组外的原生间隙；Single 昵称可见不参与
-        //    合并，不减。
+        // b) 昵称补偿（组首+组中，仅整条消息）：[CELL] 探针实证（451245 批次）收方组
+        //    所有行原生均按昵称布局渲染（行内 bgTop=16、原生行高 65），昵称文本仅
+        //    组首绘制但空间每行都预留。组内间隙 = 上行行高 − 气泡高（bgTop 组内统
+        //    一），组首 65−N−sp=42（间隙 5pt ✓）而组中 65−sp=53（间隙 16pt ✗）即为
+        //    不均根因。组中同样减 N；Last 保持原生（65）保住组尾到组外的原生间隙；
+        //    Single 昵称可见不参与合并，不减。
+        //    【diag33 实锤（lid=10449，两片切片）】切片消息的首片（split=1）不能减
+        //    N：原生切片气泡是无缝整体（首片 bg 底=片底 94，续片 bgTop=0 贴顶），
+        //    首片行高压缩后 bg（16+78=94）溢出 11pt 直接压进同消息续片的气泡上
+        //    （探针实测气泡间隙=-11）——同一条大气泡自己叠自己，文字行重叠错乱。
+        //    单行组首溢出无害的前提是下一行 bgTop=16 让位（组内间隙恒 5），切片
+        //    续片 bgTop=0 无让位。故 N 只减 split==0 的整条消息；切片消息首片保持
+        //    原生无缝，该消息与组内下一条的间隙会比单行组大 ~11pt，可接受代价。
         if ((pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
-            (split == 0 || split == 1) && [chat hasSuffix:@"@chatroom"]) {
+            split == 0 && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
                 reduce += [MsgMergeEngine nicknameBlockHeight];
