@@ -50,10 +50,12 @@ static IMP orig_CMCellView_updateNodeStatus     = NULL;
 
 static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chatroom id，私聊=对端 id）
 static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageNodeData（行高钩子用，retain）
+static __weak UIViewController *g_curChatVC = nil;   // 当前聊天 VC（新消息入库联动重排用）
 
 static id safeKVC(id obj, NSString *key);   // 定义见下文视图安全访问节
 
 static void updateChatContext(id self) {
+    g_curChatVC = self;
     @try {
         id contact = ((id (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"GetContact"));
         NSString *name = nil;
@@ -494,6 +496,51 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
     return h;
 }
 
+// ------------------------------------------------------------
+// 新消息入库联动：CMessageMgr AsyncOnAddMsg:MsgWrap:（v@:@@ 全对象签名，
+// id 垫片安全，bc065e6 定论；AutoTransfer/RedEnvelop 同款挂法，链式共存）。
+// 新消息插入改变节点邻接结构（新 lid 入组/组尾变组中），旧渲染数组与位置
+// 缓存全部失效——不刷新则新消息按 Single 渲染（原生大间隙），重进会话才
+// 恢复（实证）。同步刷新 nodeArray + 清位置缓存（先于微信为新行查询行高），
+// 再异步重排已可见的旧行（组尾→组中的昵称断供与行高补偿随之更新）。
+// ------------------------------------------------------------
+static IMP orig_CMMsgMgr_AsyncOnAddMsg = NULL;
+
+static void mergeFindTable(UIView *v, int depth, UITableView **out) {
+    if (!v || *out || depth > 6) return;
+    if ([v isKindOfClass:[UITableView class]]) { *out = (UITableView *)v; return; }
+    for (UIView *sub in v.subviews) mergeFindTable(sub, depth + 1, out);
+}
+
+static void mergeScheduleRelayout(void) {
+    static BOOL s_pending = NO;
+    if (s_pending) return;
+    s_pending = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        s_pending = NO;
+        UIViewController *vc = g_curChatVC;
+        if (!vc.isViewLoaded || !vc.view.window) return;   // 会话页已不在屏
+        UITableView *tbl = nil;
+        mergeFindTable(vc.view, 0, &tbl);
+        if (tbl) [tbl reloadData];
+    });
+}
+
+static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) {
+    ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AsyncOnAddMsg)(self, _cmd, session, wrap);
+    @try {
+        MsgMergeConfig *cfg = [MsgMergeConfig shared];
+        if (!cfg.mmEnable) return;
+        if (![session isKindOfClass:[NSString class]]) return;
+        if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
+        if (g_curChatVC) updateChatContext(g_curChatVC);   // 刷新 g_currentNodeArray（含切会话自检）
+        [MsgMergeEngine clearCache];
+        mergeScheduleRelayout();
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Ctx] AsyncOnAddMsg exception: %@", e.reason);
+    }
+}
+
 // ============================================================
 // MARK: - 合并渲染应用
 // ============================================================
@@ -800,6 +847,17 @@ static void installMediaLayoutInternalHooks(void) {
         WPLog(@"MsgMerge", @"[Hook] ✓ BaseChatViewModel rowHeight");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseChatViewModel rowHeight not found");
+    }
+
+    // ④ 新消息入库联动（新 lid 入组/邻接变化 → 刷数组+清缓存+重排）
+    cls = objc_getClass("CMessageMgr");
+    if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:")]) {
+        MSHookMessageEx(cls, NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:"),
+                        (IMP)repl_CMMsgMgr_AsyncOnAddMsg,
+                        &orig_CMMsgMgr_AsyncOnAddMsg);
+        WPLog(@"MsgMerge", @"[Hook] ✓ CMessageMgr AsyncOnAddMsg:MsgWrap:");
+    } else {
+        WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr AsyncOnAddMsg not found");
     }
 
     WPLog(@"MsgMerge", @"MsgMergeHook install complete");
