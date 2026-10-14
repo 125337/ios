@@ -547,6 +547,11 @@ static void dumpNickSource(id cellView) {
     g_nickDumpCnt++;
     WPLog(@"NickDS", @"=== dump #%d ===", g_nickDumpCnt);
     dumpNickSourceObj(cellView, cn, 0);
+    // wrap 层补扫：首轮实证 view/VM 层无昵称缓存（仅 m_contentText），
+    // 昵称要么在 CMessageWrap 字段、要么布局期按发送者现查联系人库
+    id vm = safeKVC(cellView, @"viewModel");
+    id wrap = safeKVC(vm, @"messageWrap");
+    if (wrap) dumpNickSourceObj(wrap, @"wrap", 0);
 }
 
 // ============================================================
