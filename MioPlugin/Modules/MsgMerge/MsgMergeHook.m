@@ -533,11 +533,14 @@ static void mergeDoReload(void) {
                                        chatName:g_currentChatName];
     // begin/endUpdates 而非 reloadData：只重新询问行高并动画过渡差异，
     // 不重建可见 cell、不动滚动位置（reloadData 全表重建会抖动，用户实证）。
-    // 语音发送实证闪退（frida_voice_crash.js 取证）：微信语音插入有自己的表格
-    // 变更管线，我们的 begin/end 撞进其未完成变更窗口 → endUpdates 抛
-    // "Invalid Number Of Sections"（栈帧 Mio 0x4db10=本函数 + dispatch_after）。
-    // @try 兜底：撞车时 reloadData 重同步表与数据源（仅异常路径，正常无抖动）。
+    // 语音发送实证闪退链（frida_voice_crash.js 取证）：微信 reloadData 在 t、
+    // 我们 begin/endUpdates 在 t+17ms 同一主队列批次——reloadData 延迟到布局
+    // pass 才消费，表内部仍是旧行集而数据源已新，endUpdates 必抛
+    // "Invalid Number Of Sections"（栈帧 Mio 0x4db10=本函数）；坏状态连锁导致
+    // 语音行建不出来、退出聊天页闪退。layoutIfNeeded 先强制消费挂起的 reload
+    // 同步表内部状态；@try 兜底仅防极端残余（正常路径无抖动）。
     @try {
+        [tbl layoutIfNeeded];
         [tbl beginUpdates];
         [tbl endUpdates];
     } @catch (NSException *e) {
