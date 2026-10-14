@@ -481,15 +481,26 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (!cfg.mmEnable || !cfg.mmNickJudgeTakeover) return origVal;
+        // 现场邻接判定（全同步，不查 BBMergeModel）。探针 frida_mm_measure.js 实证：
+        // 原生测量先于模型重建——进聊天瞬间批量测量时模型查询全 miss 走 orig，
+        // 65 型固化进测量缓存且永不重测（resetLayoutCache 原生全程零调用），与
+        // 模型就绪后测得的 54 型混合 = 间隙不均根因；清缓存重测方案因可见跳变
+        // 弃用。直接用渲染数组现场判定，首次测量即正确：
+        //   idx 用指针恒等定位；prev 无 wrap（时间/系统节点）= 组首边界走 orig；
+        //   shouldJoin（纯函数，含分隔符/系统消息规则）判同组 → 返 NO 让原生按
+        //   无昵称布局自动回收昵称区。仅群聊启用（单聊 orig 恒无昵称，无影响面）。
+        NSArray *arr = g_currentNodeArray;
+        if (!arr || arr.count < 2) return origVal;
+        NSUInteger idx = [arr indexOfObjectIdenticalTo:self];
+        if (idx == NSNotFound || idx == 0) return origVal;
         id wrap = safeKVC(self, @"messageWrap");
-        if (!wrap) return origVal;   // 时间节点等无 wrap
+        if (!wrap) return origVal;
         NSString *chat = chatNameOfWrap(wrap);
         if (chat.length == 0) chat = currentChatName();
-        if (chat.length == 0) return origVal;
-        MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
-                                                            chatName:chat
-                                                           nodeArray:g_currentNodeArray];
-        if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) return NO;
+        if (!(chat && [chat hasSuffix:@"@chatroom"])) return origVal;
+        id prevWrap = safeKVC(arr[idx - 1], @"messageWrap");
+        if (!prevWrap) return origVal;
+        if ([BBMergeModel shouldJoin:wrap wrapB:prevWrap]) return NO;
         return origVal;
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[NJ] isShowChatRoomDisplayName exception: %@", e.reason);
@@ -596,22 +607,6 @@ static void mergeDoReload(void) {
     // 只需重建模型，表格一个字都不碰。
     [[BBMergeModel shared] rebuildWithNodeArray:g_currentNodeArray
                                        chatName:g_currentChatName];
-    // 昵称判定接管配套：模型重建落定后清空全部消息 vm 的测量缓存（原生失效
-    // 入口 resetLayoutCache，XOS 反编译同款步骤）。探针 frida_mm_measure.js
-    // 实证根因：进聊天瞬间原生批量测量先于模型重建，判定钩查不到位置全走
-    // orig（nick=1），行高 65 固化进测量缓存；resetLayoutCache 原生全程零
-    // 调用，固化值永不重测，与模型就绪后测得的 54 型行混合 = 间隙不均根因。
-    // 清缓存后微信下次重询行高（didAppear 的 begin/endUpdates 或它自己的
-    // reloadData）即按就绪模型重测，组内行统一 54 型。仅接管开启时执行
-    // （旧路径 N 补偿读实测值，不依赖测量翻转）。
-    if ([MsgMergeConfig shared].mmNickJudgeTakeover) {
-        SEL selRLC = NSSelectorFromString(@"resetLayoutCache");
-        for (id vm in g_currentNodeArray) {
-            if (vm && [vm respondsToSelector:selRLC]) {
-                ((void (*)(id, SEL))objc_msgSend)(vm, selRLC);
-            }
-        }
-    }
 }
 
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt);
