@@ -513,20 +513,6 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
 static IMP orig_CMMsgMgr_AsyncOnAddMsg = NULL;
 static BOOL s_mergeRelayoutPending = NO;   // 重排进行中（防连发消息重复排队）
 
-// 微信整表 reload 时间戳（语音闪退根治）：微信自己 reloadData（语音/图片插入路径）
-// 后其布局 pass 会全量重询行高，配合模型查询期自愈（BBMergeModel positionForWrap
-// 数组身份/计数/指纹失配自动重建），几何必然正确——此窗口内绝不能再叠加
-// begin/endUpdates（两次探针实锤 endUpdates 抛 Invalid Number Of Sections）。
-static IMP orig_UITV_reloadData = NULL;
-static double g_lastWeChatReloadAt = -1e9;
-static double nowUptime(void) {
-    return [[NSProcessInfo processInfo] systemUptime];
-}
-static void repl_UITV_reloadData(id self, SEL _cmd) {
-    g_lastWeChatReloadAt = nowUptime();
-    ((void (*)(id, SEL))orig_UITV_reloadData)(self, _cmd);
-}
-
 static void mergeFindTable(UIView *v, int depth, UITableView **out) {
     if (!v || *out || depth > 6) return;
     if ([v isKindOfClass:[UITableView class]]) { *out = (UITableView *)v; return; }
@@ -547,15 +533,26 @@ static void mergeDoReload(void) {
                                        chatName:g_currentChatName];
     // begin/endUpdates 而非 reloadData：只重新询问行高并动画过渡差异，
     // 不重建可见 cell、不动滚动位置（reloadData 全表重建会抖动，用户实证）。
-    // 根治门闸（语音闪退链 frida_voice_crash.js 两次实锤）：微信整表 reload 后
-    // 300ms 内绝不能 begin/endUpdates——endUpdates 对比快照必抛
-    // "Invalid Number Of Sections"（栈帧 Mio 0x4db08/0x4db10=本函数，layoutIfNeeded
-    // 也堵不住），坏状态连锁导致语音行建不出来、退出聊天页闪退。该窗口内微信
-    // 自己的 reload 布局 pass 会全量重询行高 + 模型查询期自愈，直接不碰表格；
-    // 只有微信未走整表 reload 的纯插入路径（文本）才需要 begin/endUpdates 修正
-    // 邻行缓存行高。
-    if (nowUptime() - g_lastWeChatReloadAt < 0.3) {
-        WPLog(@"MsgMerge", @"[RL] wechat reload recent, skip begin/endUpdates (self-heal covers)");
+    // 确定性门闸（语音闪退根治，frida_voice_crash.js 实证链）：begin/endUpdates
+    // 撞进微信挂起中的表格变更管线（reloadData 已调、布局 pass 未消费，或插入
+    // 动画在途），endUpdates 对比快照必抛 "Invalid Number Of Sections"，坏状态
+    // 连锁导致新行建不出来、退出聊天页闪退；收发语音时序不同，300ms 时间戳
+    // 启发式只能赌中概率（收语音实证仍概率性崩）。改为直接比对状态本体：
+    // 数据源行数 ≠ 表格内部行数 = 微信有挂起变更，此刻绝不碰表格——微信自己
+    // 的 reload 布局 pass 会全量重询行高 + 模型查询期自愈（BBMergeModel
+    // positionForWrap 失配自动重建），几何必然正确；两者一致才安全 begin/end。
+    NSInteger liveRows = 0, tableRows = -1;
+    id ds = tbl.dataSource;
+    if (ds && [ds respondsToSelector:@selector(numberOfSectionsInTableView:)]
+        && [ds respondsToSelector:@selector(tableView:numberOfRowsInSection:)]) {
+        NSInteger secs = [(id<UITableViewDataSource>)ds numberOfSectionsInTableView:tbl];
+        if (secs > 0)
+            liveRows = [(id<UITableViewDataSource>)ds tableView:tbl numberOfRowsInSection:0];
+        tableRows = [tbl numberOfRowsInSection:0];
+    }
+    if (tableRows >= 0 && liveRows != tableRows) {
+        WPLog(@"MsgMerge", @"[RL] pending wechat mutation (live=%ld table=%ld), skip begin/endUpdates",
+              (long)liveRows, (long)tableRows);
         return;
     }
     @try {
@@ -961,12 +958,6 @@ static void installMediaLayoutInternalHooks(void) {
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr AsyncOnAddMsg not found");
     }
-
-    // ⑤ UITableView reload 时间戳（mergeDoReload 避让微信整表 reload 窗口，
-    //    语音闪退根治；只记时间戳不改行为，全局挂安全）
-    MSHookMessageEx([UITableView class], @selector(reloadData),
-                    (IMP)repl_UITV_reloadData, &orig_UITV_reloadData);
-    WPLog(@"MsgMerge", @"[Hook] ✓ UITableView reloadData (timestamp only)");
 
     WPLog(@"MsgMerge", @"MsgMergeHook install complete");
 }
