@@ -532,9 +532,18 @@ static void mergeDoReload(void) {
     [[BBMergeModel shared] rebuildWithNodeArray:g_currentNodeArray
                                        chatName:g_currentChatName];
     // begin/endUpdates 而非 reloadData：只重新询问行高并动画过渡差异，
-    // 不重建可见 cell、不动滚动位置（reloadData 全表重建会抖动，用户实证）
-    [tbl beginUpdates];
-    [tbl endUpdates];
+    // 不重建可见 cell、不动滚动位置（reloadData 全表重建会抖动，用户实证）。
+    // 语音发送实证闪退（frida_voice_crash.js 取证）：微信语音插入有自己的表格
+    // 变更管线，我们的 begin/end 撞进其未完成变更窗口 → endUpdates 抛
+    // "Invalid Number Of Sections"（栈帧 Mio 0x4db10=本函数 + dispatch_after）。
+    // @try 兜底：撞车时 reloadData 重同步表与数据源（仅异常路径，正常无抖动）。
+    @try {
+        [tbl beginUpdates];
+        [tbl endUpdates];
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[RL] begin/endUpdates clash, fallback reloadData: %@", e.reason);
+        [tbl reloadData];
+    }
 }
 
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt);
