@@ -496,6 +496,60 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
 }
 
 // ============================================================
+// MARK: - 临时诊断：昵称数据源 ivar dump（定位后删除）
+// ============================================================
+// 目的：探针逆向证实昵称文本在 layoutInternal 期间由原生写入（写入点 WeChat+0x9ffa6a4
+// 函数区），但数据源字段未知。此处借 applyMergeToCellView（每个 cell 布局必经）在进程内
+// 枚举 cellView/ViewModel/Wrap 的对象型 ivar，把非空短 NSString 全部打出——
+// 昵称字段按值即可辨认。帽 12 个 cell，按 路径|ivar 去重防刷屏。
+static int g_nickDumpCnt = 0;
+static NSMutableSet *g_nickDumpSeen = nil;
+
+static void dumpNickSourceObj(id obj, NSString *path, int depth) {
+    if (!obj || depth > 1 || g_nickDumpCnt > 40) return;
+    for (Class c = object_getClass(obj); c; c = class_getSuperclass(c)) {
+        const char *cn = class_getName(c);
+        if (!cn) break;
+        NSString *cns = @(cn);
+        if ([cns hasPrefix:@"UI"] || [cns hasPrefix:@"NS"] || [cns hasPrefix:@"CA"]) break;  // 不进 UIKit 层
+        unsigned int cnt = 0;
+        Ivar *ivars = class_copyIvarList(c, &cnt);
+        for (unsigned int i = 0; i < cnt; i++) {
+            const char *te = ivar_getTypeEncoding(ivars[i]);
+            if (!te || te[0] != '@') continue;                    // 只读对象型 ivar
+            const char *nm = ivar_getName(ivars[i]);
+            NSString *iName = nm ? @(nm) : @"?";
+            id val = object_getIvar(obj, ivars[i]);
+            if (!val) continue;
+            if ([val isKindOfClass:[NSString class]]) {
+                NSString *s = (NSString *)val;
+                if (s.length == 0 || s.length > 40) continue;     // 昵称级短文本
+                NSString *key = [NSString stringWithFormat:@"%@|%@", path, iName];
+                if (!g_nickDumpSeen) g_nickDumpSeen = [[NSMutableSet alloc] init];
+                if ([g_nickDumpSeen containsObject:key]) continue;
+                [g_nickDumpSeen addObject:key];
+                WPLog(@"NickDS", @"%@.%@ = %@", path, iName, s);
+            } else if (depth == 0) {
+                NSString *vCls = NSStringFromClass([val class]);
+                if ([vCls containsString:@"Wrap"] || [vCls containsString:@"ViewModel"]) {
+                    dumpNickSourceObj(val, [path stringByAppendingFormat:@".%@", iName], depth + 1);
+                }
+            }
+        }
+        if (ivars) free(ivars);
+    }
+}
+
+static void dumpNickSource(id cellView) {
+    if (g_nickDumpCnt >= 12) return;
+    NSString *cn = NSStringFromClass([cellView class]);
+    if (![cn containsString:@"TextMessageCellView"]) return;
+    g_nickDumpCnt++;
+    WPLog(@"NickDS", @"=== dump #%d ===", g_nickDumpCnt);
+    dumpNickSourceObj(cellView, cn, 0);
+}
+
+// ============================================================
 // MARK: - 合并渲染应用
 // ============================================================
 
@@ -541,6 +595,7 @@ static void applyMergeToCellView(id cellView) {
         //    自摆只依赖 wrap 类型与原生基准帧，不依赖合并位置。
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
         applyOwnLayout(cellView, olTypeEnabled(msgType) && cfg.mmOwnLayout);
+        if (msgType == 1) dumpNickSource(cellView);   // 临时诊断：昵称数据源 ivar dump（采完删）
 
         MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:nodes];
         if (pos == MOMergePositionNone) { WPLog(@"MsgMerge", @"[Apply] pos=None（类型不可合并/开关）"); return; }   // 系统消息/不可合并：不干预
