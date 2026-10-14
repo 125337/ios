@@ -468,6 +468,19 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
         splitPosLog(self, wrap);
 
+        // 临时决策日志（昵称断供联动）：每 vm 首算打 orig 行高+pos，观察断供后
+        // Middle/Last 的 orig 是否自动降（降→删昵称补偿；不降→保留），采完删
+        {
+            static NSMutableSet *g_rhSeen = nil;
+            if (!g_rhSeen) g_rhSeen = [[NSMutableSet alloc] init];
+            if ([g_rhSeen count] > 512) [g_rhSeen removeAllObjects];
+            NSString *k = [NSString stringWithFormat:@"%p|%llu|%ld", self, split, (long)pos];
+            if (![g_rhSeen containsObject:k]) {
+                [g_rhSeen addObject:k];
+                WPLog(@"MsgMerge", @"[RH] h=%.1f split=%llu pos=%ld", h, split, (long)pos);
+            }
+        }
+
         double reduce = 0;
         // a) 组内间隙收拢：只减非组尾消息的整条/末片（片间不能减，会撕开切片接缝）
         if (!isMsgTail && (split == 0 || split == 3) &&
@@ -493,65 +506,6 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         WPLog(@"MsgMerge", @"[H] rowHeight exception: %@", e.reason);
     }
     return h;
-}
-
-// ============================================================
-// MARK: - 临时诊断：昵称数据源 ivar dump（定位后删除）
-// ============================================================
-// 目的：探针逆向证实昵称文本在 layoutInternal 期间由原生写入（写入点 WeChat+0x9ffa6a4
-// 函数区），但数据源字段未知。此处借 applyMergeToCellView（每个 cell 布局必经）在进程内
-// 枚举 cellView/ViewModel/Wrap 的对象型 ivar，把非空短 NSString 全部打出——
-// 昵称字段按值即可辨认。帽 12 个 cell，按 路径|ivar 去重防刷屏。
-static int g_nickDumpCnt = 0;
-static NSMutableSet *g_nickDumpSeen = nil;
-
-static void dumpNickSourceObj(id obj, NSString *path, int depth) {
-    if (!obj || depth > 1 || g_nickDumpCnt > 40) return;
-    for (Class c = object_getClass(obj); c; c = class_getSuperclass(c)) {
-        const char *cn = class_getName(c);
-        if (!cn) break;
-        NSString *cns = @(cn);
-        if ([cns hasPrefix:@"UI"] || [cns hasPrefix:@"NS"] || [cns hasPrefix:@"CA"]) break;  // 不进 UIKit 层
-        unsigned int cnt = 0;
-        Ivar *ivars = class_copyIvarList(c, &cnt);
-        for (unsigned int i = 0; i < cnt; i++) {
-            const char *te = ivar_getTypeEncoding(ivars[i]);
-            if (!te || te[0] != '@') continue;                    // 只读对象型 ivar
-            const char *nm = ivar_getName(ivars[i]);
-            NSString *iName = nm ? @(nm) : @"?";
-            id val = object_getIvar(obj, ivars[i]);
-            if (!val) continue;
-            if ([val isKindOfClass:[NSString class]]) {
-                NSString *s = (NSString *)val;
-                if (s.length == 0 || s.length > 40) continue;     // 昵称级短文本
-                NSString *key = [NSString stringWithFormat:@"%@|%@", path, iName];
-                if (!g_nickDumpSeen) g_nickDumpSeen = [[NSMutableSet alloc] init];
-                if ([g_nickDumpSeen containsObject:key]) continue;
-                [g_nickDumpSeen addObject:key];
-                WPLog(@"NickDS", @"%@.%@ = %@", path, iName, s);
-            } else if (depth == 0) {
-                NSString *vCls = NSStringFromClass([val class]);
-                if ([vCls containsString:@"Wrap"] || [vCls containsString:@"ViewModel"]) {
-                    dumpNickSourceObj(val, [path stringByAppendingFormat:@".%@", iName], depth + 1);
-                }
-            }
-        }
-        if (ivars) free(ivars);
-    }
-}
-
-static void dumpNickSource(id cellView) {
-    if (g_nickDumpCnt >= 12) return;
-    NSString *cn = NSStringFromClass([cellView class]);
-    if (![cn containsString:@"TextMessageCellView"]) return;
-    g_nickDumpCnt++;
-    WPLog(@"NickDS", @"=== dump #%d ===", g_nickDumpCnt);
-    dumpNickSourceObj(cellView, cn, 0);
-    // wrap 层补扫：首轮实证 view/VM 层无昵称缓存（仅 m_contentText），
-    // 昵称要么在 CMessageWrap 字段、要么布局期按发送者现查联系人库
-    id vm = safeKVC(cellView, @"viewModel");
-    id wrap = safeKVC(vm, @"messageWrap");
-    if (wrap) dumpNickSourceObj(wrap, @"wrap", 0);
 }
 
 // ============================================================
@@ -600,7 +554,6 @@ static void applyMergeToCellView(id cellView) {
         //    自摆只依赖 wrap 类型与原生基准帧，不依赖合并位置。
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
         applyOwnLayout(cellView, olTypeEnabled(msgType) && cfg.mmOwnLayout);
-        if (msgType == 1) dumpNickSource(cellView);   // 临时诊断：昵称数据源 ivar dump（采完删）
 
         MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:nodes];
         if (pos == MOMergePositionNone) { WPLog(@"MsgMerge", @"[Apply] pos=None（类型不可合并/开关）"); return; }   // 系统消息/不可合并：不干预
@@ -703,6 +656,56 @@ static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
 }
 
 // ------------------------------------------------------------
+// 昵称断供（根治）：组内非首条（Middle/Last）让 getNameLabel 返回 nil，
+// 原生布局走无昵称分支（气泡贴顶，昵称区从源头消失，无 11pt 残空）。
+// 依据：写入链 backtrace 实证 layoutInternal → 昵称区处理 → getNameLabel →
+// MMCPLabel setText:，每轮布局重写——断供 label 即断整链；nil 对 ObjC 全链安全。
+// 数据源实证（NickDS 三层 ivar 全扫）：昵称不缓存于 view/VM/wrap，原生布局期
+// 按 wrap.m_nsRealChatUsr 现查联系人库——断 label 是唯一单点。
+// 残留防护：断供后原生无昵称分支不再触碰 label 实例，复用 cell 的 label 会
+// 残留旧文本/可见态——断供时顺手 setHidden:YES（带标记），其余路径对称还原。
+// ------------------------------------------------------------
+static void *kNLHiddenByUs = &kNLHiddenByUs;
+static IMP orig_CMCellView_getNameLabel = NULL;
+
+static id repl_CMCellView_getNameLabel(id self, SEL _cmd) {
+    id label = ((id (*)(id, SEL))orig_CMCellView_getNameLabel)(self, _cmd);
+    @try {
+        MsgMergeConfig *cfg = [MsgMergeConfig shared];
+        UILabel *lb = [label isKindOfClass:[UILabel class]] ? (UILabel *)label : nil;
+        BOOL cut = NO;
+        if (cfg.mmEnable) {
+            // wrap 取法：cellView 无 messageWrap ivar，走 viewModel.messageWrap（与 applyMerge 同链）
+            id viewModel = safeKVC(self, @"viewModel");
+            id wrap = safeKVC(viewModel, @"messageWrap");
+            if (wrap) {
+                NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
+                if (chat.length > 0) {
+                    MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap
+                                                                 chatName:chat
+                                                                nodeArray:g_currentNodeArray];
+                    cut = (pos == MOMergePositionMiddle || pos == MOMergePositionLast);
+                }
+            }
+        }
+        if (cut) {
+            if (lb && !lb.hidden) {
+                lb.hidden = YES;
+                objc_setAssociatedObject(lb, kNLHiddenByUs, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+            return nil;   // 断供：原生布局走无昵称分支
+        }
+        if (lb && [objc_getAssociatedObject(lb, kNLHiddenByUs) boolValue]) {
+            lb.hidden = NO;   // 对称还原（pos 变 First/None、开关关闭等路径）
+            objc_setAssociatedObject(lb, kNLHiddenByUs, @(NO), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[N] getNameLabel exception: %@", e.reason);
+    }
+    return label;
+}
+
+// ------------------------------------------------------------
 // 阶段3：媒体子类 layoutInternal 判重补挂（XOS FUN_00192294 同架构）
 // 子类重写 layoutInternal 时基类钩子拦不到（垫片不会被调），必须逐子类补挂；
 // class_getInstanceMethod 子类与基类返回同一 Method = 未重写，跳过（防对同一
@@ -791,7 +794,10 @@ static void installMediaLayoutInternalHooks(void) {
         MSHookMessageEx(cls, @selector(updateNodeStatus),
                         (IMP)repl_CMCellView_updateNodeStatus,
                         &orig_CMCellView_updateNodeStatus);
-        WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageCellView layoutInternal/updateNodeStatus");
+        MSHookMessageEx(cls, NSSelectorFromString(@"getNameLabel"),
+                        (IMP)repl_CMCellView_getNameLabel,
+                        &orig_CMCellView_getNameLabel);
+        WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageCellView layoutInternal/updateNodeStatus/getNameLabel");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageCellView not found");
     }
