@@ -31,6 +31,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// 按 localID 查 entry
 - (nullable BBMergeEntry *)entryForLocalID:(long long)lid;
 
+/// 两条消息是否满足合并条件（身份相等 + 均可合并 + 均非分隔符，纯函数）
+/// rebuild 的分组判定与昵称判定钩的现场邻接判定共用此规则（单一事实源）
++ (BOOL)shouldJoin:(id)wrapA wrapB:(id)wrapB;
+
 /// 渲染/行高钩子的位置查询入口：失效检测（数组身份/配置指纹变化→就地重建）
 /// 后查表；查不到（时间节点/分隔消息/陈旧 vm）返回 None
 - (MOMergePosition)positionForWrap:(id)wrap
