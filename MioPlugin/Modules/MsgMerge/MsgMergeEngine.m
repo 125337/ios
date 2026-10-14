@@ -2,222 +2,18 @@
 //  MsgMergeEngine.m
 //  MioPlugin
 //
-//  消息合并分组引擎实现（MRC）
-//
-//  判定规则（对齐 BubbleBox 反编译证据）：
-//    相邻两条有效消息满足以下全部条件 → 合并为同一组：
-//      ① senderUser 相等：m_nsFromUsr；若其以 @chatroom 结尾则改用 m_nsRealChatUsr
-//      ② 两者均为可合并类型（m_uiMessageType < 10000，系统/状态消息断组）
-//    时间打断 = 微信自身时间分隔行（BubbleBox isNeedInsertTimeNode 同语义）：
-//    渲染数组中 ChatTimeViewModel 无 wrap，天然断组，无秒数窗。
-//
-//  邻接数据源（8.0.78 实证，Frida 探针 #5/#8/#9）：
-//    CMessageMgr 无单例访问器（9 个类方法全是 CDN 路径，defaultMgr/sharedInstance
-//    均不存在，MMServiceCenter defaultCenter 调用直接 abort），GetMsg:LocalID: 邻接
-//    查询方案不可用。改用聊天 VC 的 m_arrMessageNodeData（消息表数据源数组）：
-//    元素为 ChatTimeViewModel（时间节点，无 wrap）/ TextMessageViewModel 等 viewModel，
-//    经 viewModel.messageWrap 取 wrap；数组顺序即渲染顺序，localID 定位后只看
-//    紧邻节点即邻居，紧邻时间节点（无 wrap）即断组。
+//  昵称区补偿量（布局时直读，Hook 上报，rowHeight 消费）：
+//  读的就是目标量本身（群收行 bg.y − 无昵称基准），无两桶推断链，无跨会话漂移。
+//  分组判定/位置计算已迁至 BBMergeModel（独立 entries 模型）。
 //
 
 #import "MsgMergeEngine.h"
-#import "MsgMergeConfig.h"
 #import "../../Core/LogManager.h"
-#import <objc/runtime.h>
-#import <objc/message.h>
-#import <stdlib.h>
 #import <math.h>
 
-// ============================================================
-// MARK: - 常量
-// ============================================================
-
-static const NSTimeInterval kCacheTTL        = 5.0;  // 位置缓存有效期（秒）
-static const NSUInteger kCacheCapacity       = 2048; // 缓存容量上限（超过整体清空）
-
-static id kNullNode(void) { return [NSNull null]; }  // 时间节点占位（无 wrap）
-
-// ============================================================
-// MARK: - 工具函数
-// ============================================================
-
-/// 安全读取对象字段（KVC 自动装箱基本类型，避免头文件 id 类型标注误导）
-static id safeValue(id obj, NSString *key) {
-    if (!obj) return nil;
-    @try {
-        return [obj valueForKey:key];
-    } @catch (NSException *e) {
-        return nil;
-    }
-}
-
-/// 发送者身份归一化（对齐 +senderUser: 的 hasSuffix 分支）
-static NSString *senderIdentity(id wrap) {
-    NSString *fromUsr = safeValue(wrap, @"m_nsFromUsr");
-    if (![fromUsr isKindOfClass:[NSString class]] || fromUsr.length == 0) return nil;
-    if ([fromUsr hasSuffix:@"@chatroom"]) {
-        // 群消息 fromUsr 为 chatroom 时，真实发送者在 m_nsRealChatUsr
-        NSString *real = safeValue(wrap, @"m_nsRealChatUsr");
-        if ([real isKindOfClass:[NSString class]] && real.length > 0) return real;
-    }
-    return fromUsr;
-}
-
-/// 是否可合并类型：排除系统/状态消息（m_uiMessageType >= 10000）
-static BOOL isMergeableWrap(id wrap) {
-    if (!wrap) return NO;
-    id typeVal = safeValue(wrap, @"m_uiMessageType");
-    if (![typeVal respondsToSelector:@selector(longLongValue)]) return NO;
-    return [typeVal longLongValue] < 10000;
-}
-
-/// 消息 LocalID
-static long long localIDOf(id wrap) {
-    id v = safeValue(wrap, @"m_uiMesLocalID");
-    if (![v respondsToSelector:@selector(longLongValue)]) return 0;
-    return [v longLongValue];
-}
-
-/// 从数据源节点提取 wrap（viewModel.messageWrap；ChatTimeViewModel 等时间节点无 wrap）
-static id wrapOfNode(id node) {
-    if (!node) return nil;
-    id vm = safeValue(node, @"viewModel");
-    if (vm) {
-        id w = safeValue(vm, @"messageWrap");
-        if (w) return w;
-    }
-    return safeValue(node, @"messageWrap");
-}
-
-// ============================================================
-// MARK: - 位置缓存
-// ============================================================
-
-static NSMutableDictionary<NSString *, NSDictionary *> *_positionCache(void) {
-    static NSMutableDictionary *dict = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{ dict = [NSMutableDictionary dictionary]; });
-    return dict;
-}
-
-// ============================================================
-// MARK: - 引擎实现
-// ============================================================
+static NSString * const kNickBlockKey = @"MioPlugin_MsgMerge_mmNickBlockHeight";
 
 @implementation MsgMergeEngine
-
-/// 复刻 +isSeparatorMessage:：手动配置模式（mmMode==1）下按消息类型查分隔开关，
-/// 决定该消息是否打断合并链。原版读侧实证只读 emoticon/media 两个键 + m_uiMessageType/
-/// m_uiAppMsgInnerType，不读 system/time 两个键（那两个属节点结构层，当前实现里
-/// 系统消息 >=10000 与时间节点始终断组）。全部合并模式（mmMode==0）忽略全部开关。
-+ (BOOL)mmIsSeparatorMessage:(id)wrap {
-    if (!wrap) return NO;
-    MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    if (cfg.mmMode != 1) return NO;
-    id typeVal = safeValue(wrap, @"m_uiMessageType");
-    if (![typeVal respondsToSelector:@selector(longLongValue)]) return NO;
-    long long type = [typeVal longLongValue];
-    if (type == 47) return cfg.mmSepEmoticon;           // 动画表情
-    // 媒体消息：图片3/语音34/视频43/短视频62/App消息49（探针 #30 实证漏映射图片导致"打断无效果"）
-    if (type == 3 || type == 34 || type == 43 || type == 49 || type == 62) return cfg.mmSepMedia;
-    if (type >= 10000) return YES;                      // 系统/状态消息始终断组
-    return NO;                                          // 文本等默认参与合并
-}
-
-/// 两条消息是否满足合并条件（身份相等 + 均可合并；时间打断由渲染数组时间节点天然承担）
-+ (BOOL)shouldJoin:(id)wrapA wrapB:(id)wrapB {
-    if (!isMergeableWrap(wrapA) || !isMergeableWrap(wrapB)) return NO;
-    if ([self mmIsSeparatorMessage:wrapA] || [self mmIsSeparatorMessage:wrapB]) return NO;
-
-    NSString *idA = senderIdentity(wrapA);
-    NSString *idB = senderIdentity(wrapB);
-    if (idA.length == 0 || idB.length == 0) return NO;
-    return [idA isEqualToString:idB];
-}
-
-+ (MOMergePosition)positionForWrap:(id)wrap
-                          chatName:(NSString *)chatName
-                         nodeArray:(NSArray *)nodeArray {
-    MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    if (!cfg.mmEnable) return MOMergePositionNone;
-    if (!isMergeableWrap(wrap)) return MOMergePositionNone;
-    if ([self mmIsSeparatorMessage:wrap]) return MOMergePositionNone;   // 分隔消息独立，不参与任何组
-    if (cfg.mmOnlyRoom && ![chatName hasSuffix:@"@chatroom"]) return MOMergePositionNone;
-    if (!nodeArray || nodeArray.count == 0) {
-        // 刚进聊天数组未加载属常态，仅首见提示一次防刷屏
-        static BOOL loggedEmpty = NO;
-        if (!loggedEmpty) {
-            loggedEmpty = YES;
-            WPLog(@"MsgMerge", @"[Engine] nodeArray 为空（VC 未找到或数组未加载，仅提示一次）");
-        }
-        return MOMergePositionNone;
-    }
-
-    long long localID = localIDOf(wrap);
-    if (localID <= 0) return MOMergePositionNone;
-
-    // ---- 缓存命中（TTL 内）直接返回 ----
-    // 【探针 #34 实证】节点数组一条消息只有 1 个节点（切片是表格内部展开的，
-    // 数组里没有同 lid 的多条记录），切片角色由 vm 自身 ivar _splitPosition 提供，
-    // 本方法只做消息级邻接判定，缓存无需按 vm 指针区分。
-    NSMutableDictionary *cache = _positionCache();
-    NSString *cacheKey = [chatName ?: @"?" stringByAppendingFormat:@"|%lld", localID];
-    NSDictionary *cached = cache[cacheKey];
-    if (cached) {
-        NSTimeInterval ts = [cached[@"ts"] doubleValue];
-        if ([[NSDate date] timeIntervalSince1970] - ts < kCacheTTL) {
-            return (MOMergePosition)[cached[@"pos"] unsignedIntegerValue];
-        }
-    }
-
-    // ---- 渲染数组邻接判定：节点数组 → wrap 数组（NSNull 占位时间节点）----
-    NSMutableArray *wraps = [NSMutableArray arrayWithCapacity:nodeArray.count];
-    NSInteger selfIdx = -1;
-    for (NSUInteger i = 0; i < nodeArray.count; i++) {
-        id w = wrapOfNode(nodeArray[i]);
-        [wraps addObject:(w ?: kNullNode())];
-        if (selfIdx < 0 && w && localIDOf(w) == localID) selfIdx = (NSInteger)i;
-    }
-    if (selfIdx < 0) {
-        // vm 不在渲染数组属常态（数组重建/过期 vm 复用），静默回退原生
-        return MOMergePositionNone;
-    }
-
-    // ---- 邻居：紧邻节点，紧邻时间节点（NSNull）即断组 ----
-    // 【实证】跳过时间节点找"最近有效邻居"会跨时间行合并：22:20 时间行后同发送者
-    // 的组首被判成 Middle/Last，头像丢失（2026-10-13 截图实证）
-    id prevWrap = nil;
-    if (selfIdx > 0 && wraps[selfIdx - 1] != kNullNode()) prevWrap = wraps[selfIdx - 1];
-    id nextWrap = nil;
-    if (selfIdx + 1 < (NSInteger)wraps.count && wraps[selfIdx + 1] != kNullNode()) nextWrap = wraps[selfIdx + 1];
-
-    BOOL joinPrev = (prevWrap != nil) && [self shouldJoin:wrap wrapB:prevWrap];
-    BOOL joinNext = (nextWrap != nil) && [self shouldJoin:wrap wrapB:nextWrap];
-
-    MOMergePosition pos;
-    if (joinPrev && joinNext)      pos = MOMergePositionMiddle;
-    else if (joinPrev)             pos = MOMergePositionLast;
-    else if (joinNext)             pos = MOMergePositionFirst;
-    else                           pos = MOMergePositionSingle;
-
-    // ---- 写缓存 ----
-    if ([cache count] > kCacheCapacity) {
-        [cache removeAllObjects];
-        WPLog(@"MsgMerge", @"[Engine] position cache purged (>%lu)", (unsigned long)kCacheCapacity);
-    }
-    cache[cacheKey] = @{
-        @"pos": @(pos),
-        @"ts": @([[NSDate date] timeIntervalSince1970]),
-    };
-
-    WPLog(@"MsgMerge", @"[Engine] pos=%lu chat=%@ localID=%lld idx=%ld",
-          (unsigned long)pos, chatName, localID, (long)selfIdx);
-    return pos;
-}
-
-// 昵称区补偿量（布局时直读，Hook 上报，rowHeight 消费）：
-// 读的就是目标量本身（群收行 bg.y − 无昵称基准），无两桶推断链，无跨会话漂移
-static NSString * const kNickBlockKey = @"MioPlugin_MsgMerge_mmNickBlockHeight";
 
 + (CGFloat)nicknameBlockHeight {
     id v = [[NSUserDefaults standardUserDefaults] objectForKey:kNickBlockKey];
@@ -235,12 +31,6 @@ static NSString * const kNickBlockKey = @"MioPlugin_MsgMerge_mmNickBlockHeight";
     if ([v isKindOfClass:[NSNumber class]] && fabs(cur - rounded) < 0.5) return;   // 未变化
     [ud setDouble:rounded forKey:kNickBlockKey];
     WPLog(@"MsgMerge", @"[Nick] 昵称区实测: %.1f → %.0f", cur, rounded);
-}
-
-+ (void)clearCache {
-    NSMutableDictionary *cache = _positionCache();
-    [cache removeAllObjects];
-    WPLog(@"MsgMerge", @"[Engine] cache cleared");
 }
 
 @end

@@ -4,7 +4,7 @@
 //
 //  配置合并模式二级页（对齐 BubbleBoxSeparatorViewController）：
 //  写侧 = 分段开关直写 Config 四个 separator 键（isOn → setXxxSeparator: 同语义）；
-//  读侧 = MsgMergeEngine isSeparatorMessage: 按消息类型查表决定是否打断合并链。
+//  读侧 = BBMergeModel isSeparatorMessage: 按消息类型查表决定是否打断合并链。
 //  语义：YES（打断，默认）→ 该类消息独立成组；NO（参与合并）→ 该类消息并入相邻同发送者的合并链。
 //  系统/时间两个开关属原版节点结构层消费（当前实现中系统消息与时间行始终断组，开关预留）。
 //

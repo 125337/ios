@@ -3,6 +3,8 @@
 //  MRC 编译（与工程一致）
 //
 //  架构（对齐 BubbleBox 反编译证据 + 工程既有范式）：
+//    ⓪ 分组判定来源 = 独立模型 BBMergeModel（BBMergeEntry entries 预计算 +
+//       主动重建，旧"逐查询现算邻接 + 5s TTL 缓存"已删）；渲染/行高钩子只查表。
 //    ① BaseMsgContentViewController viewDidLoad/viewWillAppear: → 跟踪当前会话
 //       与渲染数组 m_arrMessageNodeData
 //    ② CommonMessageCellView layoutInternal / updateNodeStatus → 按节点位置
@@ -27,6 +29,7 @@
 #import "MsgMergeHook.h"
 #import "MsgMergeConfig.h"
 #import "MsgMergeEngine.h"
+#import "BBMergeModel.h"
 #import "../../Core/LogManager.h"
 #import <substrate.h>
 #import <objc/runtime.h>
@@ -68,7 +71,7 @@ static void updateChatContext(id self) {
                 if (g_currentChatName) [g_currentChatName release];
 #endif
                 g_currentChatName = [name copy];
-                [MsgMergeEngine clearCache];
+                [[BBMergeModel shared] clear];   // 防跨会话残留（模型自身也按数组身份失效）
             }
         }
         // 渲染数组每次进出聊天都刷新（数组对象可能被整表重建）
@@ -461,9 +464,9 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         if (chat.length == 0) chat = currentChatName();
         if (chat.length == 0) return h;
 
-        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap
-                                                     chatName:chat
-                                                    nodeArray:g_currentNodeArray];
+        MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
+                                                            chatName:chat
+                                                           nodeArray:g_currentNodeArray];
         if (pos == MOMergePositionNone) return h;
 
         BOOL isMsgTail = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
@@ -520,9 +523,11 @@ static void mergeDoReload(void) {
     UITableView *tbl = nil;
     mergeFindTable(vc.view, 0, &tbl);
     if (!tbl) return;
-    // 清缓存再重算：微信建行期间的查询会用"缺新节点的旧数组"算位置并写回
-    // TTL 缓存（探针实证 nodes=15/16 同帧并存）——不清则重算命中毒缓存照旧错
-    [MsgMergeEngine clearCache];
+    // 独立模型主动重建（本方案核心）：轮询已确认节点追加，此刻重建的 entries
+    // 即含新消息的正确邻接；旧架构此处只清缓存、靠微信后续查询现算回填（会把
+    // 中间态判定写回缓存=毒缓存），重建后查询只读、判定确定
+    [[BBMergeModel shared] rebuildWithNodeArray:g_currentNodeArray
+                                       chatName:g_currentChatName];
     // begin/endUpdates 而非 reloadData：只重新询问行高并动画过渡差异，
     // 不重建可见 cell、不动滚动位置（reloadData 全表重建会抖动，用户实证）
     [tbl beginUpdates];
@@ -562,7 +567,9 @@ static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) 
         if (![session isKindOfClass:[NSString class]]) return;
         if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
         if (g_curChatVC) updateChatContext(g_curChatVC);   // 刷新 g_currentNodeArray（含切会话自检）
-        [MsgMergeEngine clearCache];
+        // 此刻节点大概率未追加（~30ms 后才进数组）：期间微信建行查询落模型
+        // miss → None 原生渲染；轮询确认追加后 mergeDoReload 主动重建并重排，
+        // 模型只在重建时计算判定，不存在"中间态判定被写回"的毒缓存问题
         mergeScheduleRelayout();
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] AsyncOnAddMsg exception: %@", e.reason);
@@ -616,7 +623,7 @@ static void applyMergeToCellView(id cellView) {
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
         applyOwnLayout(cellView, olTypeEnabled(msgType) && cfg.mmOwnLayout);
 
-        MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap chatName:chat nodeArray:nodes];
+        MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap chatName:chat nodeArray:nodes];
         if (pos == MOMergePositionNone) { WPLog(@"MsgMerge", @"[Apply] pos=None（类型不可合并/开关）"); return; }   // 系统消息/不可合并：不干预
 
         BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
@@ -742,9 +749,9 @@ static id repl_CMCellView_getNameLabel(id self, SEL _cmd) {
             if (wrap) {
                 NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
                 if (chat.length > 0) {
-                    MOMergePosition pos = [MsgMergeEngine positionForWrap:wrap
-                                                                 chatName:chat
-                                                                nodeArray:g_currentNodeArray];
+                    MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
+                                                                        chatName:chat
+                                                                       nodeArray:g_currentNodeArray];
                     cut = (pos == MOMergePositionMiddle || pos == MOMergePositionLast);
                 }
             }
