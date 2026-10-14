@@ -473,10 +473,15 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
         splitPosLog(self, wrap);
 
+        // 末片门控（统一前置闸）：首片/中片是无缝泡体——原生切片气泡底=片边界、
+        // 续片 bgTop=0 贴顶无让位，任何行高缩减都让泡体溢出压进下一片（diag33
+        // 实锤 lid=10449 同气泡自叠文字重叠）。所有补偿只允许落在整条/末片上；
+        // 未来新增补偿一律写在本门之后，禁止自带 split 条件绕过。
+        if (split != 0 && split != 3) return h;
+
         double reduce = 0;
-        // a) 组内间隙收拢：只减非组尾消息的整条/末片（片间不能减，会撕开切片接缝）
-        if (!isMsgTail && (split == 0 || split == 3) &&
-            cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
+        // a) 组内间隙收拢：非组尾消息减间距（整条/末片的 split 限制由门控保证）
+        if (!isMsgTail && cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
             reduce += (double)cfg.mmSpacing;
         }
         // b) 昵称补偿（组首+组中，仅整条消息）：[CELL] 探针实证（451245 批次）收方组
@@ -485,13 +490,13 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         //    一），组首 65−N−sp=42（间隙 5pt ✓）而组中 65−sp=53（间隙 16pt ✗）即为
         //    不均根因。组中同样减 N；Last 保持原生（65）保住组尾到组外的原生间隙；
         //    Single 昵称可见不参与合并，不减。
-        //    【diag33 实锤（lid=10449，两片切片）】切片消息的首片（split=1）不能减
-        //    N：原生切片气泡是无缝整体（首片 bg 底=片底 94，续片 bgTop=0 贴顶），
-        //    首片行高压缩后 bg（16+78=94）溢出 11pt 直接压进同消息续片的气泡上
-        //    （探针实测气泡间隙=-11）——同一条大气泡自己叠自己，文字行重叠错乱。
-        //    单行组首溢出无害的前提是下一行 bgTop=16 让位（组内间隙恒 5），切片
-        //    续片 bgTop=0 无让位。故 N 只减 split==0 的整条消息；切片消息首片保持
-        //    原生无缝，该消息与组内下一条的间隙会比单行组大 ~11pt，可接受代价。
+        //    【diag33 实锤（lid=10449，两片切片）】N 不能随门控放宽到末片：整条消息
+        //    气泡底=行高−12（底部有 12pt 原生空隙），减 N+间距后溢出恒 11 < 下一行
+        //    让位 16 → 间隙 5 安全；末片 bg 恒占满整片（底隙在拉伸图内部、外部空隙
+        //    为 0），行高预算只有间距 12pt 的安全余量，再减 N 的 11pt 必压到可见泡
+        //    体（重叠/裁字），且间隙被 bg 占满恒等式锁死 16 不变——零收益纯风险。
+        //    故 N 仅减整条（split==0）；切片消息首片保持原生无缝，与组内下一条的
+        //    间隙比单行组大 ~11pt，四约束（不裁字/不叠字/不变形/不藏昵称）下的最优。
         if ((pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
             split == 0 && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
