@@ -16,9 +16,8 @@
 //       接缝（判死），行高主体永远用 orig，只做两类补偿：
 //         a) 间距收拢：只减"组内非组尾消息的最后一片" -mmSpacing（片间不能减，会
 //            撕开接缝；组尾保持原生 → 组尾到组外间隙不变）
-//         b) 昵称空洞：群收消息合并后昵称隐藏（Middle/Last），首片原生含昵称空间，
-//            补偿量运行时实测（群收单行短文本 orig − 自发单行短文本 orig，众数差），
-//            两桶同漂移差值免疫跨会话度量基准漂移
+//         b) 昵称补偿（仅组首）：昵称断供后组内非首条原生行高已自动不含昵称区，
+//            组首（昵称仍显示）减实测昵称块维持组内几何统一
 //       delegate heightForRow 与 self-sizing 在 8.0.78 均零调用（探针 #13/#14/#17/#18）。
 //
 //  挂载点为 CommonMessageCellView 头文件实证方法（layoutInternal/updateNodeStatus
@@ -413,8 +412,9 @@ static double s_lastAppliedN = -1.0;   // -1 = 未登记（首次仅建基线不
 // 包裹式（探针 #32 判死替换式）：行高主体永远用 orig，只做两类补偿——
 //   a) 间距收拢：非组尾消息的整条/末片 -mmSpacing（间隙(i,i+1)=行i高-气泡i高，
 //      气泡贴 cell 顶，减"上方那条"的末片即收拢其与下条的间隙）
-//   b) 昵称空洞：组内所有行（First/Middle/Last）的整条/首片 -实测昵称块
-//      （组首不减则无气泡下溢，下一行隐藏昵称孔填不上 → 间隙大 11，diag33 实证）
+//   b) 昵称补偿（仅组首）：昵称断供（getNameLabel 返 nil）后 Middle/Last 原生
+//      rowHeight 已自动不含昵称区（65→54 实证），仅组首（昵称仍显示、原生 65）
+//      需继续减实测昵称块维持组内几何统一
 //
 // 【探针 #34 实证】长文本切片的角色由 vm 自身 ivar `_splitPosition`（Q 类型）提供：
 //   0=整条未切片 / 1=首片 / 2=中片 / 3=末片。
@@ -468,32 +468,18 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
         splitPosLog(self, wrap);
 
-        // 临时决策日志（昵称断供联动）：每 vm 首算打 orig 行高+pos，观察断供后
-        // Middle/Last 的 orig 是否自动降（降→删昵称补偿；不降→保留），采完删
-        {
-            static NSMutableSet *g_rhSeen = nil;
-            if (!g_rhSeen) g_rhSeen = [[NSMutableSet alloc] init];
-            if ([g_rhSeen count] > 512) [g_rhSeen removeAllObjects];
-            NSString *k = [NSString stringWithFormat:@"%p|%llu|%ld", self, split, (long)pos];
-            if (![g_rhSeen containsObject:k]) {
-                [g_rhSeen addObject:k];
-                WPLog(@"MsgMerge", @"[RH] h=%.1f split=%llu pos=%ld", h, split, (long)pos);
-            }
-        }
-
         double reduce = 0;
         // a) 组内间隙收拢：只减非组尾消息的整条/末片（片间不能减，会撕开切片接缝）
         if (!isMsgTail && (split == 0 || split == 3) &&
             cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
             reduce += (double)cfg.mmSpacing;
         }
-        // b) 昵称空洞：组内所有行（First/Middle/Last）都减。
-        //    几何实证（diag33）：昵称画在 cell 顶部 bg.y=16 区（行高缩减不动它），
-        //    气泡间隙 = 上一行行高 - 37；行高 <53 的气泡下溢 11pt 恰好填满下一行
-        //    隐藏昵称残留的顶部孔。组首不减则无下溢 → 组首→第2条间隙大 11（实证）。
-        //    组首昵称在顶部 0~14，减 11 不挤压；组尾减 11 使组尾→组外 = 17（隐藏
-        //    昵称后本就不该保留昵称空间）；独立消息（Single）昵称可见且不参与合并，不减。
-        if (pos != MOMergePositionSingle && (split == 0 || split == 1) && [chat hasSuffix:@"@chatroom"]) {
+        // b) 昵称补偿（仅组首）：昵称断供（getNameLabel 返 nil）后 Middle/Last 的
+        //    原生 rowHeight 已自动不含昵称区（65→54，[RH] 实证），再减即双重缩减；
+        //    组首仍显示昵称（label 正常返回），原生 65 含昵称区，维持旧验收几何
+        //    （旧：65−11−sp = 54−sp）必须继续减 11。Last 旧为 65−11=54 = 新原生值，
+        //    不减自洽；Single 昵称可见不参与合并，不减。
+        if (pos == MOMergePositionFirst && (split == 0 || split == 1) && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
                 reduce += [MsgMergeEngine nicknameBlockHeight];
