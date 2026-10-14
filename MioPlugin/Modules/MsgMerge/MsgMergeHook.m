@@ -576,6 +576,33 @@ static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) 
     }
 }
 
+// ------------------------------------------------------------
+// 建表期判定固化兜底：历史行的 rowHeight 只在建表期被问一次，若模型首次
+// 重建时渲染数组尚未就绪（刚进聊天数组未加载完，实证常态），错判定固化——
+// UITableView 不会对已建好的行重询 rowHeight，而模型按数组身份/指纹判失效，
+// 之后条件不变不再重建（旧 TTL 架构靠微信加载完刷表重询自愈，独立模型堵死
+// 了该路径）。didAppear 落定后延迟主动重建 + begin/endUpdates 强制全表重询，
+// 行高无差异时无动画。
+// ------------------------------------------------------------
+static IMP orig_BaseMsgContentVC_viewDidAppear = NULL;
+
+static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated) {
+    ((void (*)(id, SEL, BOOL))orig_BaseMsgContentVC_viewDidAppear)(self, _cmd, animated);
+    @try {
+        MsgMergeConfig *cfg = [MsgMergeConfig shared];
+        if (!cfg.mmEnable) return;
+        if (self != g_curChatVC) return;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if (g_curChatVC != self) return;   // 已切走
+            updateChatContext(self);           // 刷新数组引用（重建输入取落定后的表）
+            mergeDoReload();                   // 重建 + begin/endUpdates
+        });
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Ctx] viewDidAppear exception: %@", e.reason);
+    }
+}
+
 // ============================================================
 // MARK: - 合并渲染应用
 // ============================================================
@@ -848,6 +875,12 @@ static void installMediaLayoutInternalHooks(void) {
         MSHookMessageEx(cls, @selector(viewWillAppear:),
                         (IMP)repl_BaseMsgContentVC_viewWillAppear,
                         &orig_BaseMsgContentVC_viewWillAppear);
+        if ([cls instancesRespondToSelector:NSSelectorFromString(@"viewDidAppear:")]) {
+            MSHookMessageEx(cls, NSSelectorFromString(@"viewDidAppear:"),
+                            (IMP)repl_BaseMsgContentVC_viewDidAppear,
+                            &orig_BaseMsgContentVC_viewDidAppear);
+            WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController viewDidAppear:");
+        }
         WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController viewDidLoad/viewWillAppear:");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseMsgContentViewController not found");
