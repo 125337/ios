@@ -42,6 +42,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// （头像/气泡容器/昵称横向重摆，纵向与尺寸保持原生测量；路线图阶段5 转正）
 @property (nonatomic, assign) BOOL mmOwnLayout;
 
+/// 昵称判定接管（实验开关，默认 NO）：钩 -[CommonMessageViewModel isShowChatRoomDisplayName]
+/// 组内非首条返 NO，让原生按「无昵称行」测量+布局（bgTop 16→5、行高自动回收昵称区），
+/// 取代 rowHeight 层的 N 实测补偿链（XOS 同款挂点，探针+反编译实证）
+@property (nonatomic, assign) BOOL mmNickJudgeTakeover;
+
 /// 头像横向偏移（pt，±60 钳位）：正=向屏幕边缘，负=向气泡侧；收发镜像（按原生头像位判定）
 @property (nonatomic, assign) CGFloat mmAvatarOffset;
 
