@@ -608,7 +608,8 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
             updateChatContext(self);           // 刷新数组引用（重建输入取落定后的表）
             mergeDoReload();                   // 重建模型（不碰表格）
             UITableView *tbl = nil;            // 静默窗口强制全表重询行高
-            mergeFindTable(self.view, 0, &tbl);
+            UIViewController *vcSelf = self;
+            mergeFindTable(vcSelf.view, 0, &tbl);
             if (!tbl) return;
             @try {
                 [tbl layoutIfNeeded];
