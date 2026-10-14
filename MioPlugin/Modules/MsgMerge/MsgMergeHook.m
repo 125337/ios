@@ -513,6 +513,20 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
 static IMP orig_CMMsgMgr_AsyncOnAddMsg = NULL;
 static BOOL s_mergeRelayoutPending = NO;   // 重排进行中（防连发消息重复排队）
 
+// 微信整表 reload 时间戳（语音闪退根治）：微信自己 reloadData（语音/图片插入路径）
+// 后其布局 pass 会全量重询行高，配合模型查询期自愈（BBMergeModel positionForWrap
+// 数组身份/计数/指纹失配自动重建），几何必然正确——此窗口内绝不能再叠加
+// begin/endUpdates（两次探针实锤 endUpdates 抛 Invalid Number Of Sections）。
+static IMP orig_UITV_reloadData = NULL;
+static double g_lastWeChatReloadAt = -1e9;
+static double nowUptime(void) {
+    return [[NSProcessInfo processInfo] systemUptime];
+}
+static void repl_UITV_reloadData(id self, SEL _cmd) {
+    g_lastWeChatReloadAt = nowUptime();
+    ((void (*)(id, SEL))orig_UITV_reloadData)(self, _cmd);
+}
+
 static void mergeFindTable(UIView *v, int depth, UITableView **out) {
     if (!v || *out || depth > 6) return;
     if ([v isKindOfClass:[UITableView class]]) { *out = (UITableView *)v; return; }
@@ -533,12 +547,17 @@ static void mergeDoReload(void) {
                                        chatName:g_currentChatName];
     // begin/endUpdates 而非 reloadData：只重新询问行高并动画过渡差异，
     // 不重建可见 cell、不动滚动位置（reloadData 全表重建会抖动，用户实证）。
-    // 语音发送实证闪退链（frida_voice_crash.js 取证）：微信 reloadData 在 t、
-    // 我们 begin/endUpdates 在 t+17ms 同一主队列批次——reloadData 延迟到布局
-    // pass 才消费，表内部仍是旧行集而数据源已新，endUpdates 必抛
-    // "Invalid Number Of Sections"（栈帧 Mio 0x4db10=本函数）；坏状态连锁导致
-    // 语音行建不出来、退出聊天页闪退。layoutIfNeeded 先强制消费挂起的 reload
-    // 同步表内部状态；@try 兜底仅防极端残余（正常路径无抖动）。
+    // 根治门闸（语音闪退链 frida_voice_crash.js 两次实锤）：微信整表 reload 后
+    // 300ms 内绝不能 begin/endUpdates——endUpdates 对比快照必抛
+    // "Invalid Number Of Sections"（栈帧 Mio 0x4db08/0x4db10=本函数，layoutIfNeeded
+    // 也堵不住），坏状态连锁导致语音行建不出来、退出聊天页闪退。该窗口内微信
+    // 自己的 reload 布局 pass 会全量重询行高 + 模型查询期自愈，直接不碰表格；
+    // 只有微信未走整表 reload 的纯插入路径（文本）才需要 begin/endUpdates 修正
+    // 邻行缓存行高。
+    if (nowUptime() - g_lastWeChatReloadAt < 0.3) {
+        WPLog(@"MsgMerge", @"[RL] wechat reload recent, skip begin/endUpdates (self-heal covers)");
+        return;
+    }
     @try {
         [tbl layoutIfNeeded];
         [tbl beginUpdates];
@@ -942,6 +961,12 @@ static void installMediaLayoutInternalHooks(void) {
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr AsyncOnAddMsg not found");
     }
+
+    // ⑤ UITableView reload 时间戳（mergeDoReload 避让微信整表 reload 窗口，
+    //    语音闪退根治；只记时间戳不改行为，全局挂安全）
+    MSHookMessageEx([UITableView class], @selector(reloadData),
+                    (IMP)repl_UITV_reloadData, &orig_UITV_reloadData);
+    WPLog(@"MsgMerge", @"[Hook] ✓ UITableView reloadData (timestamp only)");
 
     WPLog(@"MsgMerge", @"MsgMergeHook install complete");
 }
