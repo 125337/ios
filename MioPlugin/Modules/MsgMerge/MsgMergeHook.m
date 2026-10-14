@@ -21,13 +21,6 @@
 //         b) 昵称补偿（仅组首）：昵称断供后组内非首条原生行高已自动不含昵称区，
 //            组首（昵称仍显示）减实测昵称块维持组内几何统一
 //       delegate heightForRow 与 self-sizing 在 8.0.78 均零调用（探针 #13/#14/#17/#18）。
-//    ⑥ 昵称判定接管（mmNickJudgeTakeover，默认 NO；XOS 同款挂点实证）：
-//       -[CommonMessageViewModel isShowChatRoomDisplayName]（B16@0:8，8.0.78 探针快查
-//       实证存在；Text/Voice 等全部消息 viewModel 继承同一 IMP，单一挂点全覆盖）。
-//       组内非首条（Middle/Last）返 NO → 原生布局阶段不预留昵称区（XOS 态几何实证：
-//       bgTop 16→5、昵称 label nil、行高原生自算回收），rowHeight 层 N 补偿链随之
-//       停用（双重扣减）。查询与 rowHeight 同源（BBMergeModel 只读查表），两钩判定
-//       天然一致；安装前 dladdr 查 IMP 归属，被其他插件（XOS）占坑则让位不挂。
 //
 //  挂载点为 CommonMessageCellView 头文件实证方法（layoutInternal/updateNodeStatus
 //  与 BubbleBox 反编译钩子点一致）。
@@ -43,7 +36,6 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 #import <math.h>
-#import <dlfcn.h>
 
 // ============================================================
 // MARK: - Original IMPs
@@ -461,42 +453,6 @@ static void splitPosLog(id vm, id wrap) {
           vmSplitPosition(vm));
 }
 
-// IMP 归属判断（MomentsHook 同款）：dladdr 取所在镜像，路径以 .dylib 结尾 =
-// 已被其他注入插件接管（双插件同方法 hook 会 orig 互指成无限递归，WCR 实证），
-// 我方让位不抢。主程序与系统 framework 路径不以 .dylib 结尾，正常挂载不受影响
-static BOOL mmImpFromOtherPlugin(IMP imp) {
-    if (!imp) return NO;
-    Dl_info info;
-    if (!dladdr((const void *)imp, &info) || !info.dli_fname) return NO;
-    size_t n = strlen(info.dli_fname);
-    return n >= 6 && strcmp(info.dli_fname + n - 6, ".dylib") == 0;
-}
-
-// ⑥ 昵称判定接管：组内非首条返 NO，让原生按「无昵称行」测量+布局（昵称区自动
-//    回收，XOS 态几何实证 bgTop 16→5、label nil、行高原生自算）。只读查表，每行
-//    布局调一次，低频安全；无 wrap/无会话/位置 None 一律走 orig 零影响
-static IMP orig_CMVM_isShowChatRoomDisplayName = NULL;
-static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
-    BOOL origVal = ((BOOL (*)(id, SEL))orig_CMVM_isShowChatRoomDisplayName)(self, _cmd);
-    @try {
-        MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        if (!cfg.mmEnable || !cfg.mmNickJudgeTakeover) return origVal;
-        id wrap = safeKVC(self, @"messageWrap");
-        if (!wrap) return origVal;   // 时间节点等无 wrap
-        NSString *chat = chatNameOfWrap(wrap);
-        if (chat.length == 0) chat = currentChatName();
-        if (chat.length == 0) return origVal;
-        MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
-                                                            chatName:chat
-                                                           nodeArray:g_currentNodeArray];
-        if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) return NO;
-        return origVal;
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[NJ] isShowChatRoomDisplayName exception: %@", e.reason);
-        return origVal;
-    }
-}
-
 static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
     double h = ((double (*)(id, SEL))orig_BaseChatViewModel_rowHeight)(self, _cmd);
     @try {
@@ -530,28 +486,11 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         //    5pt ✓）而组中 65−sp=53（间隙 16pt ✗）即为不均根因。组中同样减 N；
         //    Last 保持原生（65）保住组尾到组外的原生间隙；Single 昵称可见不参与
         //    合并，不减。
-        //    mmNickJudgeTakeover 生效时必须停用：⑥ 判定钩已让原生按无昵称布局回收
-        //    昵称区（orig 行高自动 65→54 型），再减 N = 双重扣减。
-        if (!cfg.mmNickJudgeTakeover &&
-            (pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
+        if ((pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
             (split == 0 || split == 1) && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
                 reduce += [MsgMergeEngine nicknameBlockHeight];
-            }
-        }
-        // [NJ] 接管验证日志（验证期临时，通过后随 N 链一并删除）：判定翻转生效时
-        // 组内非首条 h_orig 应显示 54 型；仍 65 型 = 翻转未生效（失败判据）
-        if (cfg.mmNickJudgeTakeover) {
-            static NSMutableDictionary *njSeen;
-            static dispatch_once_t njOnce;
-            dispatch_once(&njOnce, ^{ njSeen = [NSMutableDictionary dictionary]; });
-            if ([njSeen count] > 4096) [njSeen removeAllObjects];
-            NSString *vmKey = [NSString stringWithFormat:@"%p", self];
-            if (!njSeen[vmKey] && [njSeen count] < 60) {
-                njSeen[vmKey] = @YES;
-                WPLog(@"MsgMerge", @"[NJ] vm=%@ pos=%lu split=%llu h_orig=%.1f",
-                      vmKey, (unsigned long)pos, split, h);
             }
         }
         if (reduce <= 0) return h;
@@ -997,24 +936,6 @@ static void installMediaLayoutInternalHooks(void) {
         WPLog(@"MsgMerge", @"[Hook] ✓ BaseChatViewModel rowHeight");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseChatViewModel rowHeight not found");
-    }
-
-    // ③b 昵称判定接管（mmNickJudgeTakeover，默认 NO；XOS 同款挂点，8.0.78 探针
-    //    快查实证存在 B16@0:8，全部消息 viewModel 继承同一 IMP 单点覆盖）。
-    //    IMP 已被其他插件（如 XOS）接管时让位不挂——双插件同方法 hook 会互递归
-    cls = objc_getClass("CommonMessageViewModel");
-    if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"isShowChatRoomDisplayName")]) {
-        IMP curImp = method_getImplementation(class_getInstanceMethod(cls, NSSelectorFromString(@"isShowChatRoomDisplayName")));
-        if (mmImpFromOtherPlugin(curImp)) {
-            WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageViewModel isShowChatRoomDisplayName 已被其他插件接管，让位不挂");
-        } else {
-            MSHookMessageEx(cls, NSSelectorFromString(@"isShowChatRoomDisplayName"),
-                            (IMP)repl_CMVM_isShowChatRoomDisplayName,
-                            &orig_CMVM_isShowChatRoomDisplayName);
-            WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageViewModel isShowChatRoomDisplayName");
-        }
-    } else {
-        WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageViewModel isShowChatRoomDisplayName not found");
     }
 
     // ④ 新消息入库联动（新 lid 入组/邻接变化 → 刷数组+清缓存+重排）
