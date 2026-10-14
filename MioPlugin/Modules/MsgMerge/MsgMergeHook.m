@@ -479,12 +479,15 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
             cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
             reduce += (double)cfg.mmSpacing;
         }
-        // b) 昵称补偿（仅组首）：昵称断供（getNameLabel 返 nil）后 Middle/Last 的
-        //    原生 rowHeight 已自动不含昵称区（65→54，[RH] 实证），再减即双重缩减；
-        //    组首仍显示昵称（label 正常返回），原生 65 含昵称区，维持旧验收几何
-        //    （旧：65−11−sp = 54−sp）必须继续减 11。Last 旧为 65−11=54 = 新原生值，
-        //    不减自洽；Single 昵称可见不参与合并，不减。
-        if (pos == MOMergePositionFirst && (split == 0 || split == 1) && [chat hasSuffix:@"@chatroom"]) {
+        // b) 昵称补偿（组首+组中）：[CELL] 探针实证（451245 批次）收方组所有行原生
+        //    均按昵称布局渲染（行内 bgTop=16、原生行高 65），昵称文本仅组首绘制但
+        //    空间每行都预留——"昵称断供让原生自动回收 11pt"在 rowHeight 层面不成立。
+        //    组内间隙 = 上行行高 − 气泡高（bgTop 组内统一），组首 65−N−sp=42（间隙
+        //    5pt ✓）而组中 65−sp=53（间隙 16pt ✗）即为不均根因。组中同样减 N；
+        //    Last 保持原生（65）保住组尾到组外的原生间隙；Single 昵称可见不参与
+        //    合并，不减。
+        if ((pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
+            (split == 0 || split == 1) && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
                 reduce += [MsgMergeEngine nicknameBlockHeight];
