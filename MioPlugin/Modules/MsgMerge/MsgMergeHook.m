@@ -596,6 +596,22 @@ static void mergeDoReload(void) {
     // 只需重建模型，表格一个字都不碰。
     [[BBMergeModel shared] rebuildWithNodeArray:g_currentNodeArray
                                        chatName:g_currentChatName];
+    // 昵称判定接管配套：模型重建落定后清空全部消息 vm 的测量缓存（原生失效
+    // 入口 resetLayoutCache，XOS 反编译同款步骤）。探针 frida_mm_measure.js
+    // 实证根因：进聊天瞬间原生批量测量先于模型重建，判定钩查不到位置全走
+    // orig（nick=1），行高 65 固化进测量缓存；resetLayoutCache 原生全程零
+    // 调用，固化值永不重测，与模型就绪后测得的 54 型行混合 = 间隙不均根因。
+    // 清缓存后微信下次重询行高（didAppear 的 begin/endUpdates 或它自己的
+    // reloadData）即按就绪模型重测，组内行统一 54 型。仅接管开启时执行
+    // （旧路径 N 补偿读实测值，不依赖测量翻转）。
+    if ([MsgMergeConfig shared].mmNickJudgeTakeover) {
+        SEL selRLC = NSSelectorFromString(@"resetLayoutCache");
+        for (id vm in g_currentNodeArray) {
+            if (vm && [vm respondsToSelector:selRLC]) {
+                ((void (*)(id, SEL))objc_msgSend)(vm, selRLC);
+            }
+        }
+    }
 }
 
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt);
