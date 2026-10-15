@@ -34,6 +34,7 @@
 #import <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <dlfcn.h>
 #import <UIKit/UIKit.h>
 #import <math.h>
 
@@ -497,11 +498,26 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         //    体（重叠/裁字），且间隙被 bg 占满恒等式锁死 16 不变——零收益纯风险。
         //    故 N 仅减整条（split==0）；切片消息首片保持原生无缝，与组内下一条的
         //    间隙比单行组大 ~11pt，四约束（不裁字/不叠字/不变形/不藏昵称）下的最优。
-        if ((pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
+        if (!cfg.mmNickJudgeTakeover &&
+            (pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
             split == 0 && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
                 reduce += [MsgMergeEngine nicknameBlockHeight];
+            }
+        }
+        // [NJ] 验证日志（按 vm 去重）：昵称判定接管开启后，组内非首条的 h_orig
+        // 应从 65 型变 54 型（原生已回收昵称区）——仍 65 型 = 判定翻转未生效
+        if (cfg.mmNickJudgeTakeover && reduce > 0) {
+            static NSMutableSet *njLoggedVm = nil;
+            static dispatch_once_t njOnce;
+            dispatch_once(&njOnce, ^{ njLoggedVm = [NSMutableSet set]; });
+            NSString *vk = [NSString stringWithFormat:@"%p", self];
+            if (![njLoggedVm containsObject:vk] && njLoggedVm.count < 400) {
+                [njLoggedVm addObject:vk];
+                WPLog(@"MsgMerge", @"[NJ] vm=%@ lid=%lld pos=%lu sp=%llu h_orig=%.1f reduce=%.1f",
+                      vk, (long long)safeKVC(wrap, @"m_uiMesLocalID"),
+                      (unsigned long)pos, split, h, reduce);
             }
         }
         if (reduce <= 0) return h;
@@ -511,6 +527,60 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         WPLog(@"MsgMerge", @"[H] rowHeight exception: %@", e.reason);
     }
     return h;
+}
+
+// ------------------------------------------------------------
+// 昵称判定接管（实验，mmNickJudgeTakeover，XOS 同款挂点）：
+//   -[CommonMessageViewModel isShowChatRoomDisplayName]（B16@0:8，8.0.78 实存，
+//   TextMessage/VoiceMessage 等全部消息 viewModel 共用同一 IMP，单一挂点全覆盖）。
+// 组内非首条返 NO → 微信原生按「无昵称行」测量+布局：bgTop 16→5、行高自动回收
+// 昵称区（65→54）、切片泡体随 bgTop 上移零溢出（XOS 态几何取证实证：切片首片
+// h=bgTop5+泡体90 贴底无自叠、组内间隙全程 5、15 cell 零固化混合态）。
+//
+// 现场邻接判定 v2（实时数组）。v1（46332c2f）读 g_currentNodeArray 缓存：进聊天
+// 瞬间原生批量测量早于 updateChatContext 刷新时，拿到的是上一会话旧数组 →
+// indexOfObjectIdenticalTo 恒 miss → orig → 65 型固化 = 「时好时坏」根因。
+// v2 每次判定实时读当前聊天 VC 的 m_arrMessageNodeData（微信当前正用的那份，
+// 与测量同时刻零时差；XOS 从 vm 自身导航取邻接同理无竞态）。miss 点限频打日志。
+// 安装前 dladdr 查 IMP 归属：被其他 dylib（XOS）占用则让位不挂（防互递归）。
+// ------------------------------------------------------------
+static IMP orig_CMVM_isShowChatRoomDisplayName = NULL;
+static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
+    BOOL origVal = ((BOOL (*)(id, SEL))orig_CMVM_isShowChatRoomDisplayName)(self, _cmd);
+    @try {
+        MsgMergeConfig *cfg = [MsgMergeConfig shared];
+        if (!cfg.mmEnable || !cfg.mmNickJudgeTakeover) return origVal;
+        UIViewController *vc = g_curChatVC;
+        NSArray *arr = vc ? safeKVC(vc, @"m_arrMessageNodeData") : nil;
+        static NSInteger njMissLogged = 0;
+        if (!arr || arr.count < 2) {
+            if (njMissLogged++ < 20) WPLog(@"MsgMerge", @"[NJ] stop1 no-array");
+            return origVal;
+        }
+        NSUInteger idx = [arr indexOfObjectIdenticalTo:self];
+        if (idx == NSNotFound) {
+            if (njMissLogged++ < 20) {
+                WPLog(@"MsgMerge", @"[NJ] stop2 idx-miss vcArr=%lu cls=%@",
+                      (unsigned long)arr.count, NSStringFromClass([self class]));
+            }
+            return origVal;
+        }
+        if (idx == 0) return origVal;   // 组首边界（首条消息昵称必显）
+        id wrap = safeKVC(self, @"messageWrap");
+        if (!wrap) return origVal;
+        NSString *chat = chatNameOfWrap(wrap);
+        if (chat.length == 0) chat = currentChatName();
+        if (!(chat && [chat hasSuffix:@"@chatroom"])) return origVal;
+        id prevWrap = safeKVC(arr[idx - 1], @"messageWrap");
+        if (!prevWrap) return origVal;  // 时间/系统节点 = 组首边界
+        // shouldJoin 纯函数单一事实源（与 BBMergeModel rebuild 同规则）：同发送者
+        // +可合并+非分隔符 → 返 NO 让原生按无昵称布局自动回收昵称区
+        if ([BBMergeModel shouldJoin:wrap wrapB:prevWrap]) return NO;
+        return origVal;
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[NJ] isShowChatRoomDisplayName exception: %@", e.reason);
+        return origVal;
+    }
 }
 
 // ------------------------------------------------------------
@@ -947,6 +1017,28 @@ static void installMediaLayoutInternalHooks(void) {
         WPLog(@"MsgMerge", @"[Hook] ✓ BaseChatViewModel rowHeight");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseChatViewModel rowHeight not found");
+    }
+
+    // ③b 昵称判定接管钩子（实验开关 mmNickJudgeTakeover，XOS 同款挂点；
+    //     安装前 dladdr 查 IMP 归属，被其他 dylib（如 XOS）占用则让位不挂）
+    cls = objc_getClass("CommonMessageViewModel");
+    if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"isShowChatRoomDisplayName")]) {
+        Method m = class_getInstanceMethod(cls, NSSelectorFromString(@"isShowChatRoomDisplayName"));
+        IMP cur = m ? method_getImplementation(m) : NULL;
+        Dl_info info;
+        BOOL foreign = cur && dladdr((void *)cur, &info) && info.dli_fname &&
+                       strstr(info.dli_fname, ".dylib") &&
+                       !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio");
+        if (foreign) {
+            WPLog(@"MsgMerge", @"[Hook] ⊘ isShowChatRoomDisplayName IMP 归属 %s，让位不挂", info.dli_fname);
+        } else {
+            MSHookMessageEx(cls, NSSelectorFromString(@"isShowChatRoomDisplayName"),
+                            (IMP)repl_CMVM_isShowChatRoomDisplayName,
+                            &orig_CMVM_isShowChatRoomDisplayName);
+            WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageViewModel isShowChatRoomDisplayName");
+        }
+    } else {
+        WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageViewModel isShowChatRoomDisplayName not found");
     }
 
     // ④ 新消息入库联动（新 lid 入组/邻接变化 → 刷数组+清缓存+重排）
