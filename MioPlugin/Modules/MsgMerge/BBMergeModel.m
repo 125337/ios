@@ -75,6 +75,7 @@ static id wrapOfNode(id node) {
     NSMutableDictionary<NSNumber *, BBMergeEntry *> *_index;   // localID → entry
     NSArray *_lastArray;      // 上次重建的数组引用（指针身份失效检测）
     NSUInteger _lastCount;
+    NSString *_lastChatName;
     BOOL _fpEnable, _fpOnlyRoom, _fpSepMedia, _fpSepEmoticon;
     NSInteger _fpMode;
 }
@@ -125,9 +126,24 @@ static id wrapOfNode(id node) {
 - (void)rebuildWithNodeArray:(NSArray *)nodeArray
                     chatName:(NSString *)chatName {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
+    // 幂等守卫（防 rebuild 风暴）：同输入（数组指针/count/会话名/配置指纹）直接
+    // 跳过。失效检测在查询高频路径上，若调用方混用多个数据源引用（如 KVC 实时读
+    // 与 g_currentNodeArray 缓存身份不一致）会退化为每次查询全量重建（O(n) KVC），
+    // 高频测量下即主线程卡死；幂等后失配重复触发退化为 O(1) 比对。
+    if (nodeArray == _lastArray && nodeArray.count == _lastCount
+        && (chatName == _lastChatName || [chatName isEqualToString:_lastChatName])
+        && ![self configFingerprintChanged]) {
+        return;
+    }
     // 记录重建身份（空结果同样记录，防同输入反复重建）
     _lastArray = nodeArray;
     _lastCount = nodeArray.count;
+#if __has_feature(objc_arc)
+    _lastChatName = chatName;
+#else
+    [_lastChatName release];
+    _lastChatName = [chatName copy];
+#endif
     _fpEnable = cfg.mmEnable;
     _fpOnlyRoom = cfg.mmOnlyRoom;
     _fpMode = cfg.mmMode;
@@ -226,6 +242,10 @@ static id wrapOfNode(id node) {
 - (void)clear {
     _lastArray = nil;
     _lastCount = 0;
+#if !__has_feature(objc_arc)
+    [_lastChatName release];
+#endif
+    _lastChatName = nil;
     _index = [NSMutableDictionary dictionary];
     self.entries = @[];
 }

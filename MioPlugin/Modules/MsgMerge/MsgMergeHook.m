@@ -585,28 +585,32 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
 // ------------------------------------------------------------
 static IMP orig_CMVM_isShowChatRoomDisplayName = NULL;
 static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
+    static BOOL s_inJudge = NO;   // 重入守卫：垫片内再进入直接走原生（防任何递归风暴）
     BOOL origVal = ((BOOL (*)(id, SEL))orig_CMVM_isShowChatRoomDisplayName)(self, _cmd);
+    if (s_inJudge) return origVal;
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (!cfg.mmEnable || !cfg.mmNickJudgeTakeover) return origVal;
         if (!origVal) return origVal;   // 原生不显示，无需翻转
         // 非聊天页上下文（上会话残留测量）不干预——防跨会话 localID 误判
-        UIViewController *vc = g_curChatVC;
-        if (!vc) return origVal;
+        if (!g_curChatVC) return origVal;
         id wrap = safeKVC(self, @"messageWrap");
         if (!wrap) return origVal;
         NSString *chat = chatNameOfWrap(wrap);
         if (chat.length == 0) chat = currentChatName();
         if (!(chat && [chat hasSuffix:@"@chatroom"])) return origVal;
-        NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
-        if (![arr isKindOfClass:[NSArray class]] || arr.count < 2) return origVal;
+        NSArray *arr = g_currentNodeArray;
+        if (arr.count < 2) return origVal;
+        s_inJudge = YES;
         MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
                                                             chatName:chat
                                                            nodeArray:arr];
+        s_inJudge = NO;
         // 组内非首条（Middle/Last）返 NO → 原生按无昵称测量+布局自动回收昵称区
         if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) return NO;
         return origVal;
     } @catch (NSException *e) {
+        s_inJudge = NO;
         WPLog(@"MsgMerge", @"[NJ] isShowChatRoomDisplayName exception: %@", e.reason);
         return origVal;
     }
@@ -864,6 +868,9 @@ static void applyMergeToCellView(id cellView) {
 static void repl_BaseMsgContentVC_viewDidLoad(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
     updateChatContext(self);
+    // 定位锚点：本日志出现 = 聊天页 viewDidLoad 垫片完整跑完（卡死判别用：
+    // 停在本行之前 = 卡在微信自身 viewDidLoad；之后无 [Model] = 卡在测量链）
+    WPLog(@"MsgMerge", @"[Ctx] chatVC viewDidLoad done");
 }
 
 static void repl_BaseMsgContentVC_viewWillAppear(id self, SEL _cmd, BOOL animated) {
