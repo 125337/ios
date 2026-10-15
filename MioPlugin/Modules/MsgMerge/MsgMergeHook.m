@@ -527,7 +527,11 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         //    不均根因。组中同样减 N；Last 保持原生（65）保住组尾到组外的原生间隙；
         //    Single 昵称可见不参与合并，不减。
         //    【接管开启时】Middle/Last 的昵称区已由判定钩 v3 回收（原生 54 型），
-        //    仅组首仍显示昵称（65 型）→ 仅 First 减 N 与组内行高对齐。
+        //    组首也不减 N——组首气泡（bgTop=16）下溢的 11~12pt 原设计是填充下一行
+        //    顶部的昵称残留孔，接管后组中 bgTop=5 孔已不存在，再减 N 会让下溢直接
+        //    压住下一条气泡（截图实证：组首与第 2 条连体无缝、其余均匀）。接管后
+        //    组内间隙统一 = (行高−bgTop−气泡)+下行bgTop：组首 65−sp 下溢 1 填 5 空
+        //    → 4pt；组中 54−sp → 4pt，全程一致。
         //    【diag33 实锤（lid=10449，两片切片）】N 不能随门控放宽到末片：整条消息
         //    气泡底=行高−12（底部有 12pt 原生空隙），减 N+间距后溢出恒 11 < 下一行
         //    让位 16 → 间隙 5 安全；末片 bg 恒占满整片（底隙在拉伸图内部、外部空隙
@@ -535,15 +539,14 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         //    体（重叠/裁字），且间隙被 bg 占满恒等式锁死 16 不变——零收益纯风险。
         //    故 N 仅减整条（split==0）；切片消息首片保持原生无缝，与组内下一条的
         //    间隙比单行组大 ~11pt，四约束（不裁字/不叠字/不变形/不藏昵称）下的最优。
-        if ((pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
+        if (!cfg.mmNickJudgeTakeover &&
+            (pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
             split == 0 && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
-                if (!cfg.mmNickJudgeTakeover) {
-                    reduce += [MsgMergeEngine nicknameBlockHeight];
-                } else if (pos == MOMergePositionFirst) {
-                    reduce += [MsgMergeEngine nicknameBlockHeight];
-                }
+                // 接管关闭：老 N 补偿路径，First/Middle 全减（下溢填昵称孔）
+                // 接管开启：组内全部由判定钩回收，组首不减 N（孔已不存在，见上注释）
+                reduce += [MsgMergeEngine nicknameBlockHeight];
             }
         }
         // [NJ] 验证日志（按 vm 去重）：昵称判定接管开启后，组内非首条的 h_orig
