@@ -513,10 +513,13 @@ static void rebuildAndApplyFromContext(void) {
     if (changed > 0) refreshFlaggedCells();   // 表内容变化 → 可见刷新（清测量缓存+标脏）
 }
 
-/// 读侧限频保鲜：索引未覆盖的全新消息（微信记账迟滞）由此补表，0.5s 一次封顶
+/// 读侧限频保鲜：索引未覆盖的全新消息（微信记账迟滞）由此补表。0.15s 一次
+/// 封顶——rebuildAndApplyFromContext 有幂等守卫，数据未到货时 O(1) 比对空转，
+/// 到货后最快 0.15s 内补上（BubbleBox 无窗口的本质差异疑似 DB 层数据源，
+/// 我们 UI 数组记账迟滞只能靠缩短补表节奏逼近）。
 static void refreshModelNow(void) {
     double now = [NSDate timeIntervalSinceReferenceDate];
-    if (now - g_lastArrCheck < 0.5) return;
+    if (now - g_lastArrCheck < 0.15) return;
     g_lastArrCheck = now;
     rebuildAndApplyFromContext();
 }
