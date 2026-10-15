@@ -49,12 +49,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSUInteger)rebuildFromNodeArray:(nullable NSArray *)nodeArray
                           chatName:(nullable NSString *)chatName;
 
-/// 聊天 VC 就位（viewDidLoad 钩子调用）：第二数据源自发现入口。
-/// 8.0.78 无 CMessageMgr 单例访问器（MMServiceCenter 亦无类方法，项目记忆实证），
-/// mgr 实例从 VC ivar 树运行时自发现（同时响应 GetMsg:LocalID: +
-/// GetLastMsgLocalID: 的对象），供索引 miss 时按 localID 直查存储补邻接
+/// CMessageMgr 实例捕获回调（MsgMergeHook 的 GetMsg:LocalID: 钩调用）。
+/// 8.0.78 无单例访问器且 VC ivar 树 2 层内无其实例（frida 探针实证判死），
+/// 实证唯一稳定捕获点 = 微信自己调 GetMsg:LocalID:（每次进聊天必调），首调
+/// 即记录 receiver，供索引 miss 时按 localID 直查存储补邻接
 /// （BubbleBox findValidMsg 同路线，根除滚动加载 ~1s 记账迟滞的 None 闪回窗口）。
-- (void)adoptChatViewController:(nullable id)vc;
+- (void)noteMessageManager:(nullable id)mgr;
 
 /// 标志查询（O(1) 索引查表）：未覆盖/组外/不可合并/功能未激活 = None。
 /// 所有钩子只读本方法，禁止查数组、禁止读 vm 关联对象。

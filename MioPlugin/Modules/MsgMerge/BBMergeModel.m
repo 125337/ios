@@ -26,7 +26,6 @@
 #import "BBMergeModel.h"
 #import "MsgMergeConfig.h"
 #import "../../Core/LogManager.h"
-#import <objc/runtime.h>
 #import <objc/message.h>
 
 // ============================================================
@@ -93,80 +92,20 @@ static id wrapOfNode(id node) {
 // 直查存储（GetMsg:LocalID:），上限 15 步跳过已删除消息空洞——这正是它无闪回
 // 窗口的本质。本节照抄该路线作读侧兜底：索引 miss 时查存储补邻接，缓存进索引。
 //
-// mgr 实例运行时自发现（8.0.78 无 CMessageMgr 单例访问器，MMServiceCenter 无类
-// 方法——项目记忆实证）：从聊天 VC ivar 树挖「同时响应 GetMsg:LocalID: +
-// GetLastMsgLocalID:」的对象实例即 CMessageMgr；发现成功即弃 VC 引用，失败
-// 每 VC 上限 3 次（ivar 可能晚于 viewDidLoad 就绪，借 rebuild 事件重试）。
+// mgr 实例捕获（frida 探针实证定论）：8.0.78 无 CMessageMgr 单例访问器，聊天
+// VC ivar 树 2 层内也无其实例（ivar 自发现判死）；实证唯一稳定捕获点 = 微信
+// 自己调 GetMsg:LocalID:（每次进聊天必调），MsgMergeHook 挂钩首调即记录
+// receiver（noteMessageManager:）。API 可用性已实证：GetLastMsgLocalID: 取会话
+// maxLID、GetMsg:LocalID: 邻接/深部历史（lid=5）均命中，字段齐全。
 
-static id g_dbMgr = nil;            // CMessageMgr 实例（进程级服务对象，挖到即常驻）
-static int g_dbAttempts = 0;        // 自发现尝试计数（每 VC 上限 3）
-static __weak id g_dbVC = nil;      // 聊天 VC（挖 mgr 用）
+static id g_dbMgr = nil;            // CMessageMgr 实例（进程级服务对象，捕获即常驻）
 static NSString *g_dbTalker = nil;  // 当前会话 talker（rebuild 记录，clear 置空防串会话查库）
 static SEL g_selGetMsg = NULL;      // GetMsg:LocalID:
-
-/// obj 的对象 ivar 值集合（含父类 3 层）
-static NSArray *dbObjectIvars(id obj) {
-    NSMutableArray *out = [NSMutableArray array];
-    Class c = object_getClass(obj);
-    for (int depth = 0; depth < 3 && c; depth++) {
-        unsigned int n = 0;
-        Ivar *ivs = class_copyIvarList(c, &n);
-        for (unsigned int i = 0; i < n; i++) {
-            const char *enc = ivar_getTypeEncoding(ivs[i]);
-            if (!enc || enc[0] != '@') continue;
-            id v = object_getIvar(obj, ivs[i]);
-            if (v) [out addObject:v];
-        }
-        free(ivs);
-        c = class_getSuperclass(c);
-    }
-    return out;
-}
-
-/// 双 selector 特征认定 CMessageMgr（只查方法表不发消息，零崩溃风险）
-static BOOL dbIsMsgMgr(id obj, SEL selGet, SEL selLast) {
-    if (!obj) return NO;
-    Class c = object_getClass(obj);
-    return class_getInstanceMethod(c, selGet) && class_getInstanceMethod(c, selLast);
-}
-
-static void dbAdoptMgr(id mgr) {
-    g_dbMgr = mgr;
-#if !__has_feature(objc_arc)
-    [mgr retain];
-#endif
-    WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@)", mgr, NSStringFromClass(object_getClass(mgr)));
-}
-
-static BOOL dbEnsureStore(void) {
-    if (g_dbMgr) return YES;
-    if (g_dbAttempts >= 3 || !g_dbVC) return NO;
-    g_dbAttempts++;
-    if (!g_selGetMsg) g_selGetMsg = NSSelectorFromString(@"GetMsg:LocalID:");
-    SEL selLast = NSSelectorFromString(@"GetLastMsgLocalID:");
-
-    // 深度 1：VC 自身 ivar
-    NSArray *level1 = dbObjectIvars(g_dbVC);
-    for (id v in level1) {
-        if (dbIsMsgMgr(v, g_selGetMsg, selLast)) { dbAdoptMgr(v); return YES; }
-    }
-    // 深度 2：VC → 子控制器/逻辑对象 → mgr 形态
-    for (id v in level1) {
-        for (id v2 in dbObjectIvars(v)) {
-            if (dbIsMsgMgr(v2, g_selGetMsg, selLast)) { dbAdoptMgr(v2); return YES; }
-        }
-    }
-    // 诊断：一级对象 ivar 类名清单（自发现失败时下一轮适配用）
-    NSMutableArray *names = [NSMutableArray array];
-    for (id v in level1) [names addObject:NSStringFromClass(object_getClass(v))];
-    WPLog(@"MsgMerge", @"[Model] DB source NOT found (try %d/%d) ivar classes=%@",
-          g_dbAttempts, 3, names);
-    return NO;
-}
 
 /// GetMsg:LocalID:（talker + localID → CMessageWrap；已删消息/越界返回 nil）
 static id dbGetMsg(long long lid) {
     if (!g_dbMgr || !g_dbTalker || lid <= 0 || lid > 0xFFFFFFFFLL) return nil;
+    if (!g_selGetMsg) g_selGetMsg = NSSelectorFromString(@"GetMsg:LocalID:");
     id (*send)(id, SEL, id, unsigned int) = (id (*)(id, SEL, id, unsigned int))objc_msgSend;
     @try {
         return send(g_dbMgr, g_selGetMsg, g_dbTalker, (unsigned int)lid);
@@ -242,9 +181,7 @@ static id dbFindValidMsg(long long startLID, int direction) {
 - (NSUInteger)rebuildFromNodeArray:(NSArray *)nodeArray
                           chatName:(NSString *)chatName {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    // 第二数据源：mgr 未就绪时借 rebuild 事件重试自发现（上限 3 次/VC）；
-    // talker 随 rebuild 记录（clear 已置空，防切会话窗口期串库查询）
-    if (!g_dbMgr && g_dbVC) dbEnsureStore();
+    // talker 随 rebuild 记录（DB 邻接查询用；clear 已置空，防切会话窗口期串库查询）
     if (chatName.length > 0 && ![chatName isEqualToString:g_dbTalker]) {
 #if !__has_feature(objc_arc)
         [g_dbTalker release];
@@ -402,11 +339,13 @@ static id dbFindValidMsg(long long startLID, int direction) {
 #endif
 }
 
-- (void)adoptChatViewController:(id)vc {
-    if (vc == (id)g_dbVC) return;
-    g_dbVC = vc;
-    g_dbAttempts = 0;
-    if (vc) dbEnsureStore();
+- (void)noteMessageManager:(id)mgr {
+    if (!mgr || mgr == (id)g_dbMgr) return;
+    g_dbMgr = mgr;
+#if !__has_feature(objc_arc)
+    [mgr retain];
+#endif
+    WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@)", mgr, NSStringFromClass(object_getClass(mgr)));
 }
 
 - (MOMergePosition)posForLocalID:(long long)lid {

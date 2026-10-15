@@ -931,8 +931,6 @@ static void applyMergeToCellView(id cellView) {
 static void repl_BaseMsgContentVC_viewDidLoad(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
     updateChatContext(self);
-    // 第二数据源：从 VC ivar 树自发现 CMessageMgr（数组 miss 时按 localID 补邻接）
-    [[BBMergeModel shared] adoptChatViewController:self];
     // 定位锚点：本日志出现 = 聊天页 viewDidLoad 垫片完整跑完（卡死判别用：
     // 停在本行之前 = 卡在微信自身 viewDidLoad；之后无 [Model] = 卡在测量链）
     WPLog(@"MsgMerge", @"[Ctx] chatVC viewDidLoad done");
@@ -1093,6 +1091,17 @@ static void installMediaLayoutInternalHooks(void) {
 // MARK: - 安装
 // ============================================================
 
+// 第二数据源 mgr 捕获（frida 探针实证定论）：CMessageMgr 无单例访问器，聊天
+// VC ivar 树 2 层内也无其实例（ivar 自发现路线判死）。实证唯一稳定捕获点 =
+// 微信自己调 GetMsg:LocalID:（每次进聊天加载消息必调），MSHook 后首调即记录
+// receiver。本钩子纯指针记录零逻辑；插件自身 DB 查询同样经过（此时 receiver
+// 已捕获，直接转发，无递归风险）。
+static void (*orig_CMGR_GetMsg_LocalID)(id, SEL, id, unsigned int);
+static id repl_CMGR_GetMsg_LocalID(id self, SEL _cmd, id talker, unsigned int localID) {
+    [[BBMergeModel shared] noteMessageManager:self];
+    return orig_CMGR_GetMsg_LocalID(self, _cmd, talker, localID);
+}
+
 @implementation MsgMergeHook
 
 + (void)install {
@@ -1117,6 +1126,17 @@ static void installMediaLayoutInternalHooks(void) {
         WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController viewDidLoad/viewWillAppear:");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseMsgContentViewController not found");
+    }
+
+    // ①c 第二数据源：CMessageMgr 捕获钩（读侧 DB 兜底的实例来源）
+    cls = objc_getClass("CMessageMgr");
+    if (cls) {
+        MSHookMessageEx(cls, NSSelectorFromString(@"GetMsg:LocalID:"),
+                        (IMP)repl_CMGR_GetMsg_LocalID,
+                        &orig_CMGR_GetMsg_LocalID);
+        WPLog(@"MsgMerge", @"[Hook] ✓ CMessageMgr GetMsg:LocalID: (mgr 捕获)");
+    } else {
+        WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr not found");
     }
 
     // ①b 滚动驱动全量重刷（BubbleBox scheduleUpdateNodes:scroll: 同款触发源）：
