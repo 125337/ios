@@ -61,7 +61,6 @@ static IMP orig_CMCellView_updateNodeStatus     = NULL;
 static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chatroom id，私聊=对端 id）
 static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageNodeData（行高钩子用，retain）
 static __weak UIViewController *g_curChatVC = nil;   // 当前聊天 VC（新消息入库联动重排用）
-static NSInteger g_njLogCount = 0;   // 判定钩限频日志计数（updateChatContext 每会话清零）
 
 static id safeKVC(id obj, NSString *key);   // 定义见下文视图安全访问节
 
@@ -80,7 +79,6 @@ static void updateChatContext(id self) {
 #endif
                 g_currentChatName = [name copy];
                 [[BBMergeModel shared] clear];   // 防跨会话残留（模型自身也按数组身份失效）
-                g_njLogCount = 0;   // 判定钩限频日志按会话重置
             }
         }
         // 渲染数组每次进出聊天都刷新（数组对象可能被整表重建）
@@ -489,6 +487,29 @@ static void splitPosLog(id vm, id wrap) {
           vmSplitPosition(vm));
 }
 
+// [NJH] 行高全流程取证日志（按「vm 指针 + 行内容」去重）：rowHeight 高频
+//（滚动期 270+ 次/秒），去重后首测/值变化必打、稳态零噪音——每个 return 出口
+// 都打，日志序即判定全流程。帽 800 防极端场景爆量。
+static NSMutableDictionary *g_njLogSeen = nil;
+static void njLogKeyed(id vm, NSString *line) {
+    if (!g_njLogSeen) {
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ g_njLogSeen = [NSMutableDictionary dictionary]; });
+    }
+    if (g_njLogSeen.count > 800) return;
+    NSString *vk = [NSString stringWithFormat:@"%p", vm];
+    NSString *prev = g_njLogSeen[vk];
+    if (prev && [prev isEqualToString:line]) return;
+    g_njLogSeen[vk] = line;
+    WPLog(@"MsgMerge", @"%@", line);
+}
+
+// rowHeight 垫片日志行前缀（lid 从 wrap 的 KVC 对象取，nil 显 ?）
+static NSString *njLidOf(id wrap) {
+    id v = safeKVC(wrap, @"m_uiMesLocalID");
+    return [v respondsToSelector:@selector(stringValue)] ? [v stringValue] : @"?";
+}
+
 static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
     double h = ((double (*)(id, SEL))orig_BaseChatViewModel_rowHeight)(self, _cmd);
     @try {
@@ -498,12 +519,22 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         if (!wrap) return h;   // 时间节点等无 wrap
         NSString *chat = chatNameOfWrap(wrap);
         if (chat.length == 0) chat = currentChatName();
-        if (chat.length == 0) return h;
+        if (chat.length == 0) {
+            njLogKeyed(self, [NSString stringWithFormat:
+                @"[NJH] lid=%@ pos=? h_orig=%.1f -> passthrough(no-chat)",
+                njLidOf(wrap), h]);
+            return h;
+        }
 
         MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
                                                             chatName:chat
                                                            nodeArray:g_currentNodeArray];
-        if (pos == MOMergePositionNone) return h;
+        if (pos == MOMergePositionNone) {
+            njLogKeyed(self, [NSString stringWithFormat:
+                @"[NJH] lid=%@ pos=None h_orig=%.1f -> passthrough(组外/模型miss)",
+                njLidOf(wrap), h]);
+            return h;
+        }
 
         BOOL isMsgTail = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
@@ -513,7 +544,12 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         // 续片 bgTop=0 贴顶无让位，任何行高缩减都让泡体溢出压进下一片（diag33
         // 实锤 lid=10449 同气泡自叠文字重叠）。所有补偿只允许落在整条/末片上；
         // 未来新增补偿一律写在本门之后，禁止自带 split 条件绕过。
-        if (split != 0 && split != 3) return h;
+        if (split != 0 && split != 3) {
+            njLogKeyed(self, [NSString stringWithFormat:
+                @"[NJH] lid=%@ pos=%lu sp=%llu h_orig=%.1f -> gated(首/中片无缝,禁一切补偿)",
+                njLidOf(wrap), (unsigned long)pos, split, h]);
+            return h;
+        }
 
         double reduce = 0;
         // a) 组内间隙收拢：非组尾消息减间距（整条/末片的 split 限制由门控保证）
@@ -539,6 +575,7 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         //    体（重叠/裁字），且间隙被 bg 占满恒等式锁死 16 不变——零收益纯风险。
         //    故 N 仅减整条（split==0）；切片消息首片保持原生无缝，与组内下一条的
         //    间隙比单行组大 ~11pt，四约束（不裁字/不叠字/不变形/不藏昵称）下的最优。
+        double nickReduce = 0;
         if (!cfg.mmNickJudgeTakeover &&
             (pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
             split == 0 && [chat hasSuffix:@"@chatroom"]) {
@@ -546,26 +583,18 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
                 // 接管关闭：老 N 补偿路径，First/Middle 全减（下溢填昵称孔）
                 // 接管开启：组内全部由判定钩回收，组首不减 N（孔已不存在，见上注释）
-                reduce += [MsgMergeEngine nicknameBlockHeight];
+                nickReduce = [MsgMergeEngine nicknameBlockHeight];
             }
         }
-        // [NJ] 验证日志（按 vm 去重）：昵称判定接管开启后，组内非首条的 h_orig
-        // 应从 65 型变 54 型（原生已回收昵称区）——仍 65 型 = 判定翻转未生效
-        if (cfg.mmNickJudgeTakeover && reduce > 0) {
-            static NSMutableSet *njLoggedVm = nil;
-            static dispatch_once_t njOnce;
-            dispatch_once(&njOnce, ^{ njLoggedVm = [NSMutableSet set]; });
-            NSString *vk = [NSString stringWithFormat:@"%p", self];
-            if (![njLoggedVm containsObject:vk] && njLoggedVm.count < 400) {
-                [njLoggedVm addObject:vk];
-                WPLog(@"MsgMerge", @"[NJ] vm=%@ lid=%lld pos=%lu sp=%llu h_orig=%.1f reduce=%.1f",
-                      vk, (long long)safeKVC(wrap, @"m_uiMesLocalID"),
-                      (unsigned long)pos, split, h, reduce);
-            }
-        }
-        if (reduce <= 0) return h;
-        double v = h - reduce;
-        return v >= 24.0 ? v : 24.0;   // 下限 24 防裁切（内容顶对齐，缩减只吃底部空白）
+        double final = h - reduce - nickReduce;
+        if (final < 24.0) final = 24.0;   // 下限 24 防裁切（内容顶对齐，缩减只吃底部空白）
+        // [NJH] 统一出口：测量行高与补偿明细一行列齐（与 [CELL] 渲染几何互证）
+        njLogKeyed(self, [NSString stringWithFormat:
+            @"[NJH] lid=%@ pos=%lu sp=%llu h_orig=%.1f spR=%.1f nkR=%.1f take=%d final=%.1f",
+            njLidOf(wrap), (unsigned long)pos, split, h,
+            reduce, nickReduce, cfg.mmNickJudgeTakeover ? 1 : 0, final]);
+        if (final >= h) return h;
+        return final;
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[H] rowHeight exception: %@", e.reason);
     }
@@ -622,9 +651,18 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
         if (!wrap) return origVal;
         NSString *chat = chatNameOfWrap(wrap);
         if (chat.length == 0) chat = currentChatName();
-        if (!(chat && [chat hasSuffix:@"@chatroom"])) return origVal;
+        if (!(chat && [chat hasSuffix:@"@chatroom"])) {
+            njLogKeyed(self, [NSString stringWithFormat:
+                @"[NJD] lid=%@ miss=not-room -> orig", njLidOf(wrap)]);
+            return origVal;
+        }
         NSArray *arr = g_currentNodeArray;
-        if (arr.count < 2) return origVal;
+        if (arr.count < 2) {
+            njLogKeyed(self, [NSString stringWithFormat:
+                @"[NJD] lid=%@ miss=no-arr(count=%lu) -> orig",
+                njLidOf(wrap), (unsigned long)arr.count]);
+            return origVal;
+        }
         s_inJudge = YES;
         MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
                                                             chatName:chat
@@ -632,11 +670,12 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
         s_inJudge = NO;
         // 组内非首条（Middle/Last）返 NO → 原生按无昵称测量+布局自动回收昵称区
         if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) {
-            if (g_njLogCount++ < 30) {
-                WPLog(@"MsgMerge", @"[NJD] vm=%p pos=%lu -> NO", (void *)self, (unsigned long)pos);
-            }
+            njLogKeyed(self, [NSString stringWithFormat:
+                @"[NJD] lid=%@ pos=%lu -> NO(回收昵称)", njLidOf(wrap), (unsigned long)pos]);
             return NO;
         }
+        njLogKeyed(self, [NSString stringWithFormat:
+            @"[NJD] lid=%@ pos=%lu -> orig(组首/独立保持昵称)", njLidOf(wrap), (unsigned long)pos]);
         return origVal;
     } @catch (NSException *e) {
         s_inJudge = NO;
@@ -911,9 +950,37 @@ static void repl_BaseMsgContentVC_viewWillAppear(id self, SEL _cmd, BOOL animate
     if (cfg.mmEnable && cfg.mmNickJudgeTakeover) resetAllMeasureCaches();
 }
 
+// [CELL] 渲染几何真值：cellView 高（=最终行高）+ bg 折算到 cellView 坐标的
+// top/bottom——间隙真值 = 时间序相邻两行的「下一行 bgTop − 本行 bgBot」。
+// 与 [NJH] 测量行高互证：h_orig 65 但渲染 rowH=54 = 判定回收触发了重测（正常）；
+// 测量 54 渲染 rowH=65 = 布局层未跟进（异常）。按「vm+行内容」去重，稳态静默。
+static void cellGeomLog(id cellView) {
+    MsgMergeConfig *cfg = [MsgMergeConfig shared];
+    if (!cfg.mmEnable) return;
+    @try {
+        UIImageView *bg = safeCall(cellView, "getBgImageView");
+        if (![bg isKindOfClass:[UIImageView class]]) return;
+        id vm = safeKVC(cellView, @"viewModel");
+        id wrap = vm ? safeKVC(vm, @"messageWrap") : nil;
+        if (!wrap) return;
+        double rowH = cellView.frame.size.height;
+        double bgTop = 0;
+        for (UIView *v = bg; v && v != cellView; v = v.superview) {
+            bgTop += v.frame.origin.y;
+        }
+        double bgH = bg.frame.size.height;
+        njLogKeyed(cellView, [NSString stringWithFormat:
+            @"[CELL] lid=%@ rowH=%.1f bgTop=%.1f bgH=%.1f bgBot=%.1f",
+            njLidOf(wrap), rowH, bgTop, bgH, bgTop + bgH]);
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[CELL] exception: %@", e.reason);
+    }
+}
+
 static void repl_CMCellView_layoutInternal(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_CMCellView_layoutInternal)(self, _cmd);
     applyMergeToCellView(self);
+    cellGeomLog(self);
 }
 
 static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
