@@ -78,6 +78,12 @@ static long long createTimeOf(id wrap) {
     return [v longLongValue];
 }
 
+/// 是否新邀请入群消息（状态转换消息，强制断组）
+static BOOL isInviteesMsg(id wrap) {
+    id inv = safeValue(wrap, @"isNewInviteesMsg");
+    return [inv respondsToSelector:@selector(boolValue)] && [inv boolValue];
+}
+
 /// 从数据源节点提取 wrap（viewModel.messageWrap；ChatTimeViewModel 等时间节点无 wrap）
 static id wrapOfNode(id node) {
     if (!node) return nil;
@@ -173,10 +179,14 @@ static id dbFindValidMsg(long long startLID, int direction) {
     return NO;                                          // 文本等默认参与合并
 }
 
-/// 两条消息是否满足合并条件（身份相等 + 均可合并 + 均非分隔符）
+/// 两条消息是否满足合并条件（身份相等 + 均可合并 + 均非分隔符 + 均非新邀请）
+/// isNewInviteesMsg 双向查：新邀请是状态转换消息，自身不参与任何合并
+/// （BubbleBox isNeedInsertTimeNode 反编译实证单向查 current，双向更稳；
+/// 该消息 type 可能 <10000 能穿过类型闸，必须显式排除）
 + (BOOL)shouldJoin:(id)wrapA wrapB:(id)wrapB {
     if (!isMergeableWrap(wrapA) || !isMergeableWrap(wrapB)) return NO;
     if ([self isSeparatorMessage:wrapA] || [self isSeparatorMessage:wrapB]) return NO;
+    if (isInviteesMsg(wrapA) || isInviteesMsg(wrapB)) return NO;
 
     NSString *idA = senderIdentity(wrapA);
     NSString *idB = senderIdentity(wrapB);
@@ -333,13 +343,11 @@ static id dbFindValidMsg(long long startLID, int direction) {
 // MARK: - 第二数据源（存储层邻接，BubbleBox 对齐）
 // ============================================================
 
-/// DB 邻接合并判定 = shouldJoin + 时间行等价规则。存储层无时间节点，按
-/// BubbleBox isNeedInsertTimeNode:current: 反编译实证（002fe49c）：
-/// |Δm_uiCreateTime| > 299s 需插时间行（断组）；isNewInviteesMsg 强制断组。
+/// DB 邻接合并判定 = shouldJoin（已含 isNewInviteesMsg）+ 299s 时间窗。存储层
+/// 无时间节点，按 BubbleBox isNeedInsertTimeNode:current: 反编译实证（002fe49c）：
+/// |Δm_uiCreateTime| > 299s 需插时间行（断组）。
 + (BOOL)shouldJoinDB:(id)wrapA wrapB:(id)wrapB {
     if (![self shouldJoin:wrapA wrapB:wrapB]) return NO;
-    id inv = safeValue(wrapB, @"isNewInviteesMsg");
-    if ([inv respondsToSelector:@selector(boolValue)] && [inv boolValue]) return NO;
     long long ta = [safeValue(wrapA, @"m_uiCreateTime") longLongValue];
     long long tb = [safeValue(wrapB, @"m_uiCreateTime") longLongValue];
     if (ta <= 0 || tb <= 0) return NO;
