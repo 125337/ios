@@ -73,6 +73,17 @@ static long long localIDOf(id wrap) {
     return [v longLongValue];
 }
 
+/// 消息所属会话（与 Hook.m chatNameOfWrap 同逻辑，跨会话撞号防护共用语义）
+static NSString *chatNameOfWrap(id wrap) {
+    NSString *fromS = safeValue(wrap, @"m_nsFromUsr");
+    NSString *toS = safeValue(wrap, @"m_nsToUsr");
+    if ([toS isKindOfClass:[NSString class]] && [toS hasSuffix:@"@chatroom"]) return toS;
+    if ([fromS isKindOfClass:[NSString class]] && [fromS hasSuffix:@"@chatroom"]) return fromS;
+    if ([toS isKindOfClass:[NSString class]] && toS.length > 0) return toS;
+    if ([fromS isKindOfClass:[NSString class]] && fromS.length > 0) return fromS;
+    return nil;
+}
+
 /// 从数据源节点提取 wrap（viewModel.messageWrap；ChatTimeViewModel 等时间节点无 wrap）
 static id wrapOfNode(id node) {
     if (!node) return nil;
@@ -309,10 +320,48 @@ static id flagTargetOfNode(id node) {
     return [self applyToNodeArray:nodeArray];
 }
 
+// ============================================================
+// MARK: - 懒物化（vm 重建闪回根治）
+// ============================================================
+
+/// [MAT] 取证日志（按 vm 指针去重：每个重建 vm 只记一次，防滚动期刷屏）
+static void matLog(id vm, long long lid, MOMergePosition pos) {
+    static NSMutableSet<NSValue *> *s_logged;
+    static dispatch_once_t t;
+    dispatch_once(&t, ^{ s_logged = [NSMutableSet set]; });
+    NSValue *k = [NSValue valueWithPointer:(__bridge void *)vm];
+    if ([s_logged containsObject:k]) return;
+    if (s_logged.count > 512) [s_logged removeAllObjects];
+    [s_logged addObject:k];
+    WPLog(@"MsgMerge", @"[MAT] vm=%p lid=%lld pos=%lu（重建 vm 懒物化补写）",
+          vm, lid, (unsigned long)pos);
+}
+
 + (MOMergePosition)posFromVM:(id)vm {
     if (!vm) return MOMergePositionNone;
     NSNumber *v = objc_getAssociatedObject(vm, kBBPosKey);
     return v ? (MOMergePosition)[v unsignedIntegerValue] : MOMergePositionNone;
+}
+
+- (BOOL)materializeFlagForVM:(id)vm {
+    if (!vm) return NO;
+    // 守卫①：模型活跃（空索引 = 未激活/已清，标志语义恒 None，无需物化）
+    if (_index.count == 0) return NO;
+    // 守卫②：配置指纹变化时让 rebuild 先行（物化用旧指纹索引会写错代次标志）
+    if ([self configFingerprintChanged]) return NO;
+    id wrap = safeValue(vm, @"messageWrap");
+    if (!wrap) return NO;
+    // 守卫③：跨会话 localID 撞号防护——wrap 所属会话必须与当前重建会话一致
+    NSString *chat = chatNameOfWrap(wrap);
+    if (![_lastChatName isKindOfClass:[NSString class]] || _lastChatName.length == 0
+        || ![chat isEqualToString:_lastChatName]) return NO;
+    long long lid = localIDOf(wrap);
+    BBMergeEntry *e = [self entryForLocalID:lid];
+    if (!e) return NO;
+    objc_setAssociatedObject(vm, kBBPosKey, @(e.pos),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    matLog(vm, lid, e.pos);
+    return YES;
 }
 
 - (void)clear {

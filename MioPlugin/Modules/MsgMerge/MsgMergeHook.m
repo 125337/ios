@@ -519,17 +519,22 @@ static void refreshModelNow(void) {
 }
 
 /// 读侧标志统一入口（measure:/昵称判定/渲染/昵称断供四钩子走这里）：
-/// 纯 O(1) 关联对象读；标志缺席 → 限频保鲜一次再读；配置指纹变化 → 立即
-/// 重建+预写（与旧查询期重建同语义，最多一次，重建后指纹守卫归零）。
+/// 纯 O(1) 关联对象读；None 时先懒物化（微信滚动/刷新会反复重建 viewModel，
+/// 预写标志随旧对象死亡——模型索引按 localID 跨 vm 重建稳定，O(1) 补写即
+/// 零重建零刷新自愈），未命中（真新消息，微信入库记账迟滞）再限频保鲜；
+/// 配置指纹变化 → 立即重建+预写（重建后指纹守卫归零）。
 static MOMergePosition flagsPos(id vm) {
     BBMergeModel *m = [BBMergeModel shared];
     MOMergePosition pos = [BBMergeModel posFromVM:vm];
     if (pos != MOMergePositionNone && ![m configFingerprintChanged]) return pos;
     if ([m configFingerprintChanged]) {
         rebuildAndApplyFromContext();
-    } else {
-        refreshModelNow();
+        return [BBMergeModel posFromVM:vm];
     }
+    if ([m materializeFlagForVM:vm]) {
+        return [BBMergeModel posFromVM:vm];
+    }
+    refreshModelNow();
     return [BBMergeModel posFromVM:vm];
 }
 
