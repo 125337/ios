@@ -7,8 +7,10 @@
 //      ① senderUser 相等：m_nsFromUsr；若其以 @chatroom 结尾则改用 m_nsRealChatUsr
 //      ② 两者均为可合并类型（m_uiMessageType < 10000，系统/状态消息断组）
 //      ③ 均非分隔消息（mmMode==1 时按类型查分隔开关）
-//    时间打断 = 渲染数组中 ChatTimeViewModel 无 wrap（NSNull 占位），天然断组；
-//    邻居只看紧邻节点（跳过时间节点找"最近有效邻居"会跨时间行合并，实证判死）。
+//    时间打断 = 时间行两侧 Δ(m_uiCreateTime) > 299s 才断组（BubbleBox
+//    isNeedInsertTimeNode 同窗）；≤299s 的时间行是分钟粒度显示细节，穿透合并
+//    （91 号日志实证：一律断组会把连续组锯断，表情被顶成组头）。穿透必须带
+//    Δt 校验，无校验跳时间行合并会跨大间隔错并（早期实证判死教训）。
 //
 //  查表架构 v5（预写层废弃，见 BBMergeModel.h 头注释）：
 //    rebuild 一次性预计算 entries + localID→entry 索引；读侧（measure:/昵称判定/
@@ -27,6 +29,7 @@
 #import "MsgMergeConfig.h"
 #import "../../Core/LogManager.h"
 #import <objc/message.h>
+#import <stdlib.h>
 
 // ============================================================
 // MARK: - 工具函数（自 MsgMergeEngine 原样移植）
@@ -64,6 +67,13 @@ static BOOL isMergeableWrap(id wrap) {
 /// 消息 LocalID
 static long long localIDOf(id wrap) {
     id v = safeValue(wrap, @"m_uiMesLocalID");
+    if (![v respondsToSelector:@selector(longLongValue)]) return 0;
+    return [v longLongValue];
+}
+
+/// 消息创建时间（秒级 unix；时间行穿透 Δt 校验用）
+static long long createTimeOf(id wrap) {
+    id v = safeValue(wrap, @"m_uiCreateTime");
     if (![v respondsToSelector:@selector(longLongValue)]) return 0;
     return [v longLongValue];
 }
@@ -257,12 +267,24 @@ static id dbFindValidMsg(long long startLID, int direction) {
                 runEnd++;
             }
 
-            // 邻居 = run 外紧邻节点，紧邻 NSNull（时间行）即断组
+            // 邻居 = 最近有效节点（穿透连续时间行，Δt≤299s 才允许跨行 join）。
+            // 时间行语义与 DB 兜底（dbShouldJoin）对齐：微信分钟粒度插时间行
+            // （21:55→21:56 即插），5 分钟合并窗内的时间行全是显示细节，一律
+            // 断组会把连续组锯断（91 号日志实证：表情被顶成组头）。穿透必须
+            // 带 Δt 校验——无校验跳时间行合并会跨大间隔错并（实证判死教训）。
             id prevWrap = nil;
-            if (i > 0 && wraps[i - 1] != [NSNull null]) prevWrap = wraps[i - 1];
+            for (NSInteger j = (NSInteger)i - 1; j >= 0; j--) {
+                if (wraps[j] == [NSNull null]) continue;
+                prevWrap = wraps[j];
+                if (llabs(createTimeOf(wrap) - createTimeOf(prevWrap)) > 299) prevWrap = nil;
+                break;
+            }
             id nextWrap = nil;
-            if (runEnd + 1 < wraps.count && wraps[runEnd + 1] != [NSNull null]) {
-                nextWrap = wraps[runEnd + 1];
+            for (NSUInteger j = runEnd + 1; j < wraps.count; j++) {
+                if (wraps[j] == [NSNull null]) continue;
+                nextWrap = wraps[j];
+                if (llabs(createTimeOf(wrap) - createTimeOf(nextWrap)) > 299) nextWrap = nil;
+                break;
             }
 
             BOOL joinPrev = (prevWrap != nil) && [[self class] shouldJoin:wrap wrapB:prevWrap];
