@@ -367,6 +367,24 @@ static id dbFindValidMsg(long long startLID, int direction) {
     WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@)", mgr, NSStringFromClass(object_getClass(mgr)));
 }
 
+// 新消息入库直写：AsyncOnAddMsg 回调即刻判定（不等 UI 节点记账的 30ms 轮询）。
+// BubbleBox 发出瞬间即正确的本质 = apply 从存储层即时算，微信建行（~30ms 后）
+// 首测时标志已就位；我们 rebuild 输入依赖 nodeArray 恒晚于建行，此处补齐同款
+// 时序。只写索引（自持、跨 vm 重建恒真），不做任何可见刷新——新消息自己是组
+// 生长端点（Last/Single）行高本就原生，需要重排的是上一条（Last→Middle），
+// 由随后轮询 rebuild 的 changed>0 → refreshFlaggedCells 覆盖。
+- (void)noteIncomingMsgLocalID:(long long)lid {
+    if (lid <= 0 || !g_dbMgr || !g_dbTalker) return;
+    if (_index[@(lid)]) return;        // rebuild/fill 已覆盖，重复回调幂等
+    id wrap = dbGetMsg(lid);
+    if (!wrap) return;                 // DB 未就绪（罕见）——轮询 rebuild 兜底
+    id prevWrap = dbFindValidMsg(lid, -1);
+    BOOL joinPrev = (prevWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:prevWrap];
+    MOMergePosition pos = joinPrev ? MOMergePositionLast : MOMergePositionSingle;
+    [self dbCacheEntry:wrap lid:lid pos:pos];
+    WPLog(@"MsgMerge", @"[Model] note lid=%lld pos=%ld", lid, (long)pos);
+}
+
 - (MOMergePosition)posForLocalID:(long long)lid {
     BBMergeEntry *e = lid > 0 ? _index[@(lid)] : nil;
     if (e) return e.pos;

@@ -36,6 +36,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// 按 localID 查 entry
 - (nullable BBMergeEntry *)entryForLocalID:(long long)lid;
 
+/// 新消息入库直写（AsyncOnAddMsg 回调调，不等 UI 节点记账）：存储层即时判定
+/// 新消息与 prev 的邻接并写入索引——微信建行首测即命中，消灭「发出那一刻原生
+/// 间距」的固化窗口（BubbleBox 同款时序：存储层即时，不等 UI 数组；之后的
+/// rebuild 全量重建会用同一套 shouldJoinDB 规则覆盖，无漂移）
+- (void)noteIncomingMsgLocalID:(long long)lid;
+
 /// 合并判定唯一入口（DB 单路径）：身份相等 + 均可合并 + 均非分隔符/新邀请
 /// + 299s 时间窗（BubbleBox isNeedInsertTimeNode 同语义）
 + (BOOL)shouldJoinDB:(id)wrapA wrapB:(id)wrapB;

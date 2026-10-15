@@ -806,12 +806,20 @@ static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) 
         if (!cfg.mmEnable) return;
         if (![session isKindOfClass:[NSString class]]) return;
         if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
+        // 新消息入库直写（BubbleBox 同款时序）：wrap 的 lid 此刻已入库，立即
+        // 判定邻接写进索引——微信建行（~30ms 后）首测即命中，消灭「发出那一刻
+        // 原生间距」固化窗口（rebuild 依赖 nodeArray 记账恒晚于建行，救不了首测）。
+        // 主线程执行（AsyncOnAddMsg 可能在后台线程回调，索引写入须与 rebuild 同队列）
+        long long lid = localIDOfWrap(wrap);
+        if (lid > 0) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[BBMergeModel shared] noteIncomingMsgLocalID:lid];
+            });
+        }
         if (g_curChatVC) updateChatContext(g_curChatVC);   // 刷新 g_currentNodeArray（含切会话自检）
-        // 此刻节点大概率未追加（~30ms 后才进数组）：期间微信建行查询落模型
-        // miss → None 原生渲染；轮询确认追加后 mergeDoReload 主动重建模型，
-        // 微信自己的 reload 布局 pass 全量重询行高即得正确几何（本函数绝不
-        // 触发表格变更，见 mergeDoReload 注释）
-        // 模型只在重建时计算判定，不存在"中间态判定被写回"的毒缓存问题
+        // 轮询确认节点追加后 mergeDoReload 主动重建：负责上一条 Last→Middle 的
+        // 重排（noteIncomingMsg 不做刷新）+ 索引全量校准（本函数绝不触发表格
+        // 变更，见 mergeDoReload 注释）
         mergeScheduleRelayout();
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] AsyncOnAddMsg exception: %@", e.reason);
