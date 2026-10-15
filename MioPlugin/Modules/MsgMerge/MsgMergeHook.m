@@ -519,23 +519,49 @@ static void refreshModelNow(void) {
 }
 
 /// 读侧标志统一入口（measure:/昵称判定/渲染/昵称断供四钩子走这里）：
-/// 纯 O(1) 关联对象读；None 时先懒物化（微信滚动/刷新会反复重建 viewModel，
-/// 预写标志随旧对象死亡——模型索引按 localID 跨 vm 重建稳定，O(1) 补写即
-/// 零重建零刷新自愈），未命中（真新消息，微信入库记账迟滞）再限频保鲜；
-/// 配置指纹变化 → 立即重建+预写（重建后指纹守卫归零）。
+/// 纯 O(1) 关联对象读；None → 限频保鲜一次再读；配置指纹变化 → 立即重建+预写。
+/// vm 重建场景（微信滚动/刷新反复重建 viewModel，预写标志随旧对象死亡）由
+/// 滚动驱动全量重刷覆盖（repl_BMCVC_scrollViewDidScroll，BubbleBox 同款），
+/// 读侧不做懒物化/邻接判定（懒物化实测拦不住重建风暴，已删）。
 static MOMergePosition flagsPos(id vm) {
     BBMergeModel *m = [BBMergeModel shared];
     MOMergePosition pos = [BBMergeModel posFromVM:vm];
     if (pos != MOMergePositionNone && ![m configFingerprintChanged]) return pos;
     if ([m configFingerprintChanged]) {
         rebuildAndApplyFromContext();
-        return [BBMergeModel posFromVM:vm];
+    } else {
+        refreshModelNow();
     }
-    if ([m materializeFlagForVM:vm]) {
-        return [BBMergeModel posFromVM:vm];
-    }
-    refreshModelNow();
     return [BBMergeModel posFromVM:vm];
+}
+
+// ------------------------------------------------------------
+// 滚动驱动全量重刷（全面对齐 BubbleBox scheduleUpdateNodes:scroll: →
+// updateAllNodes:scroll: 路线）：微信滚动加载历史会反复重建 viewModel，预写
+// 标志随旧对象死亡，读侧限频保鲜（0.5s）慢一拍，实测仍有原生闪回。BubbleBox
+// 的答案是把滚动本身当一等触发事件：滚动期高频把标志全量重写到当前全部 vm。
+// 实现细节：限频 100ms；rebuild 幂等守卫挡重建（同数组/同会话/同指纹退化为
+// O(1) 比对），apply 仍无条件全量重写（重建 vm 的标志缺席由全量重写补齐）；
+// 实改 >0 → BubbleBox 三件套可见刷新（resetAllMeasureCaches + setNeedsLayout）。
+// ------------------------------------------------------------
+static IMP orig_BMCVC_scrollViewDidScroll = NULL;
+static double g_lastScrollApply = 0;
+
+static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
+    if (orig_BMCVC_scrollViewDidScroll) {
+        ((void (*)(id, SEL, id))orig_BMCVC_scrollViewDidScroll)(self, _cmd, scrollView);
+    }
+    @try {
+        MsgMergeConfig *cfg = [MsgMergeConfig shared];
+        if (!cfg.mmEnable) return;
+        if (self != g_curChatVC) return;   // 非当前聊天页的滚动不干预
+        double now = [NSDate timeIntervalSinceReferenceDate];
+        if (now - g_lastScrollApply < 0.1) return;
+        g_lastScrollApply = now;
+        rebuildAndApplyFromContext();
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Scroll] exception: %@", e.reason);
+    }
 }
 
 // ------------------------------------------------------------
@@ -1081,6 +1107,32 @@ static void installMediaLayoutInternalHooks(void) {
         WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController viewDidLoad/viewWillAppear:");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseMsgContentViewController not found");
+    }
+
+    // ①b 滚动驱动全量重刷（BubbleBox scheduleUpdateNodes:scroll: 同款触发源）：
+    //    微信滚动重建 vm 后标志丢失 → 滚动期全量重写补齐。仅聊天 VC 继承链上
+    //    真有 scrollViewDidScroll: 实现时挂（MSHook 挂在 VC 类=仅聊天页生效）；
+    //    IMP 归属其他 dylib 则让位不挂（防互递归）。
+    cls = objc_getClass("BaseMsgContentViewController");
+    if (cls) {
+        SEL selScroll = @selector(scrollViewDidScroll:);
+        Method sm = class_getInstanceMethod(cls, selScroll);
+        if (sm) {
+            IMP cur = method_getImplementation(sm);
+            Dl_info sinfo;
+            BOOL foreign = cur && dladdr((void *)cur, &sinfo) && sinfo.dli_fname &&
+                           strstr(sinfo.dli_fname, ".dylib") &&
+                           !strstr(sinfo.dli_fname, "WeChat") && !strstr(sinfo.dli_fname, "Mio");
+            if (foreign) {
+                WPLog(@"MsgMerge", @"[Hook] ⊘ scrollViewDidScroll: 归属 %s，让位不挂", sinfo.dli_fname);
+            } else {
+                MSHookMessageEx(cls, selScroll, (IMP)repl_BMCVC_scrollViewDidScroll,
+                                &orig_BMCVC_scrollViewDidScroll);
+                WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController scrollViewDidScroll:（滚动驱动全量重刷）");
+            }
+        } else {
+            WPLog(@"MsgMerge", @"[Hook] ✗ BaseMsgContentViewController 无 scrollViewDidScroll:，滚动驱动不可用");
+        }
     }
 
     // ② 消息 cell 布局钩子

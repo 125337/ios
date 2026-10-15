@@ -54,17 +54,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// 当前配置是否与上次重建时的分组配置指纹不一致（O(1)，读侧保鲜判断用）
 - (BOOL)configFingerprintChanged;
 
-/// 懒物化（vm 重建闪回根治）：微信滚动/刷新期反复重建消息 viewModel，预写标志
-/// 随旧对象死亡（87 号日志实证：数组 22↔33 震荡、每轮 apply 全是新对象）。
-/// 模型索引 _index 以 localID 为键、跨 vm 重建稳定——读侧 flagsPos 遇 None 时
-/// 调本方法，按 vm.messageWrap 的 localID 查索引，命中即补写标志到新 vm
-/// （O(1) 关联对象写，非重建、非邻接判定、零刷新）。
-/// 守卫：模型索引非空 + 配置指纹未变（变化时让 rebuild 先行，防写旧代次标志）
-/// + wrap 所属会话与当前重建会话一致（防跨会话 localID 撞号误写）。
-/// @return YES = 命中并已补写（读侧重读标志即得正确值）；NO = 模型未覆盖
-/// （真新消息，微信入库记账迟滞），调用方走限频保鲜。
-- (BOOL)materializeFlagForVM:(id)vm;
-
 /// 清空模型（切会话时调用，防跨会话残留）
 - (void)clear;
 
