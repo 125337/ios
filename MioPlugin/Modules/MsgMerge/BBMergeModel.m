@@ -282,6 +282,7 @@ static id dbFindValidMsg(long long startLID, int direction) {
                 if (!wrap) {
                     // UI 数组有而 DB 无：理论不可达（数组数据源自同一存储），
                     // 负缓存防同一 localID 反复查库
+                    WPLog(@"MsgMerge", @"[Model][Diag] rDBmiss lid=%lld", lid);
                     [self dbCacheEntry:nil lid:lid pos:MOMergePositionSingle];
                     continue;
                 }
@@ -297,6 +298,12 @@ static id dbFindValidMsg(long long startLID, int direction) {
                 else if (joinPrev)             pos = MOMergePositionLast;
                 else if (joinNext)             pos = MOMergePositionFirst;
                 else                           pos = MOMergePositionSingle;
+
+                WPLog(@"MsgMerge", @"[Model][Diag] r lid=%lld p=%lld(%d) n=%lld(%d) pos=%ld ct=%lld from=%@",
+                      lid,
+                      prevWrap ? localIDOf(prevWrap) : 0, joinPrev,
+                      nextWrap ? localIDOf(nextWrap) : 0, joinNext,
+                      (long)pos, createTimeOf(wrap), senderIdentity(wrap));
 
                 BBMergeEntry *e = [[BBMergeEntry alloc] init];
                 e.wrap = wrap;
