@@ -437,6 +437,48 @@ static NSString *njLidOf(id wrap) {
     return [v respondsToSelector:@selector(stringValue)] ? [v stringValue] : @"?";
 }
 
+// ------------------------------------------------------------
+// 可见刷新（BubbleBox apply 三件套同款）：apply 实改标志后同刻做
+// resetLayoutCache + cellView setNeedsLayout。历史滚动场景实证（86 号日志）：
+// 微信把滚动加载的历史节点补进 m_arrMessageNodeData 迟到 ~1s，补齐瞬间标志
+// 才写上，但已渲染 cell 的固化测量值与布局不会自愈（昵称残留、原生间隙，
+// 要重新进出聊天才恢复）。此处对可见消息 cellView 标脏，layoutInternal 钩子
+// 下轮按新标志重排（None 也走 applyMergeToCellView 的对称还原路径）。
+// 刻意不碰 UITableView 任何 API——语音管线抖动期 begin/endUpdates 崩溃定论；
+// 行高若未被原生布局链重询，滚动复用时自愈。
+// ------------------------------------------------------------
+static void refreshFlaggedCells(void) {
+    @try {
+        UIViewController *vc = g_curChatVC;
+        if (!vc || ![vc isViewLoaded]) return;
+        resetAllMeasureCaches();
+        UITableView *tbl = nil;
+        NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
+        while (stack.count > 0) {
+            UIView *v = [stack lastObject];
+            [stack removeLastObject];
+            if ([v isKindOfClass:[UITableView class]]) { tbl = (UITableView *)v; break; }
+            for (UIView *s in v.subviews) [stack addObject:s];
+        }
+        if (!tbl) return;
+        for (UITableViewCell *cell in tbl.visibleCells) {
+            NSMutableArray<UIView *> *st = [NSMutableArray arrayWithObject:cell];
+            for (int guard = 0; st.count > 0 && guard < 24; guard++) {
+                UIView *v = [st lastObject];
+                [st removeLastObject];
+                NSString *cn = NSStringFromClass([v class]);
+                if ([cn containsString:@"MessageCellView"]) {
+                    [v setNeedsLayout];   // 下轮 layoutInternal 按新标志重排/还原
+                    continue;
+                }
+                for (UIView *s in v.subviews) [st addObject:s];
+            }
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Refresh] exception: %@", e.reason);
+    }
+}
+
 // —— 数据源保鲜 + 读侧标志（BubbleBox 同构读路径）——
 // 读路径唯一合法动作：标志读不到 → 限频触发一次「重读数组 + rebuild + apply」，
 // 然后重读标志。重建本体在 BBMergeModel（幂等守卫，同输入 O(1)），读侧不做任何
@@ -444,6 +486,9 @@ static NSString *njLidOf(id wrap) {
 // 卡死主线程的教训，就是靠「读侧只读标志」根治的。
 // m_arrMessageNodeData 是原地 append 的可变数组：滚动加载历史后指针不变、count
 // 增长，g_currentNodeArray 始终指向同一可变数组，重读 .count/元素即拿到最新状态。
+// 但补节点记账有 ~1s 迟滞（86 号日志实证：历史 cell 已上屏时数组仍 20 节点，
+// 28 节点在数秒后才到），迟到窗口内历史 vm 无标志直通渲染——补齐瞬间 apply
+// 实改标志，由 refreshFlaggedCells 同刻刷新可见 cell 收敛，无需重新进出聊天。
 static double g_lastArrCheck = 0;      // 上次保鲜触发时间戳（0.5s 限频）
 
 /// 事件驱动重建+预写的统一入口（切会话/进聊天/新消息确认追加/读侧保鲜都走这里）
@@ -460,9 +505,9 @@ static void rebuildAndApplyFromContext(void) {
     g_currentNodeArray = arr;
 #endif
     NSString *chat = currentChatName();
-    if (chat.length > 0) {
-        [[BBMergeModel shared] rebuildAndApplyWithNodeArray:arr chatName:chat];
-    }
+    if (chat.length == 0) return;
+    NSUInteger changed = [[BBMergeModel shared] rebuildAndApplyWithNodeArray:arr chatName:chat];
+    if (changed > 0) refreshFlaggedCells();   // 标志实改 → BubbleBox 同款可见刷新
 }
 
 /// 读侧限频保鲜：新载入消息/空数组期的标志缺席由此自愈，0.5s 一次封顶

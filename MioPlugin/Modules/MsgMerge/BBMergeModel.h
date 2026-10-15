@@ -42,8 +42,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// 保证测量/渲染钩读到的一定是当前代次的标志。
 /// @param nodeArray 聊天 VC 的 m_arrMessageNodeData（元素为消息 viewModel / ChatTimeViewModel）
 /// @param chatName  会话名（talker；mmOnlyRoom 判断用）
-- (void)rebuildAndApplyWithNodeArray:(nullable NSArray *)nodeArray
-                            chatName:(nullable NSString *)chatName;
+/// @return 本次 apply 实际改变标志值的 vm 数（0=无变化）——调用方据此触发
+/// 可见刷新（resetLayoutCache + cellView setNeedsLayout，BubbleBox 三件套同款）
+- (NSUInteger)rebuildAndApplyWithNodeArray:(nullable NSArray *)nodeArray
+                                  chatName:(nullable NSString *)chatName;
 
 /// 标志读取（O(1) 关联对象读）：未预写/组外/不可合并/功能未激活 = None。
 /// 所有钩子（measure:/昵称判定/渲染/昵称断供）只读本方法，禁止查模型。

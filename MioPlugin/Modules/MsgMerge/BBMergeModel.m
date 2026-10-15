@@ -274,13 +274,16 @@ static id flagTargetOfNode(id node) {
 /// 全量重写（rebuild 幂等跳过时仍执行——vm 可能被微信整表重建，旧标志随对象
 /// 消失，必须补写）；查不到 entry 的 vm 清标志（缺席 = None = 原生直通）。
 /// 功能未激活（entries 空）时全清，等价于「关闭立即生效」。
-- (void)applyToNodeArray:(NSArray *)nodeArray {
-    NSUInteger written = 0;
+/// @return 本次实际改变标志值的 vm 数（同值重写不计）——调用方据此触发
+/// 可见刷新（BubbleBox apply 三件套）；历史滚动标志迟到补写时 changed>0。
+- (NSUInteger)applyToNodeArray:(NSArray *)nodeArray {
+    NSUInteger written = 0, changed = 0;
     for (id node in nodeArray) {
         id vm = flagTargetOfNode(node);
         if (!vm) continue;
         id wrap = wrapOfNode(node);
         BBMergeEntry *e = wrap ? [self entryForLocalID:localIDOf(wrap)] : nil;
+        NSNumber *old = objc_getAssociatedObject(vm, kBBPosKey);
         if (e) {
             objc_setAssociatedObject(vm, kBBPosKey, @(e.pos),
                                      OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -289,16 +292,21 @@ static id flagTargetOfNode(id node) {
             objc_setAssociatedObject(vm, kBBPosKey, nil,
                                      OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
+        NSNumber *newV = e ? @(e.pos) : nil;
+        BOOL same = (old == newV) || (old && newV && [old isEqualToNumber:newV]);
+        if (!same) changed++;
     }
-    WPLog(@"MsgMerge", @"[Model] apply nodes=%lu written=%lu",
-          (unsigned long)nodeArray.count, (unsigned long)written);
+    WPLog(@"MsgMerge", @"[Model] apply nodes=%lu written=%lu changed=%lu",
+          (unsigned long)nodeArray.count, (unsigned long)written, (unsigned long)changed);
+    return changed;
 }
 
 /// 事件驱动触发点的唯一入口：rebuild（幂等守卫）+ apply（全量重写）同刻完成
-- (void)rebuildAndApplyWithNodeArray:(NSArray *)nodeArray
-                            chatName:(NSString *)chatName {
+/// @return apply 实际改变标志的 vm 数（0 = 无变化，调用方免刷新）
+- (NSUInteger)rebuildAndApplyWithNodeArray:(NSArray *)nodeArray
+                                  chatName:(NSString *)chatName {
     [self rebuildWithNodeArray:nodeArray chatName:chatName];
-    [self applyToNodeArray:nodeArray];
+    return [self applyToNodeArray:nodeArray];
 }
 
 + (MOMergePosition)posFromVM:(id)vm {
