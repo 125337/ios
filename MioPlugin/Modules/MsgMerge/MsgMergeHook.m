@@ -151,7 +151,7 @@ static void startMeasureRefreshWindow(void) {
     __block int ticks = 0;
     double t0 = [NSDate timeIntervalSinceReferenceDate];
     dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, 5 * NSEC_PER_MSEC, 0);
-    dispatch_source_set_event_handler(^{
+    dispatch_source_set_event_handler(timer, ^{
         ticks++;
         NSUInteger c = 0;
         UIViewController *vc = g_curChatVC;
