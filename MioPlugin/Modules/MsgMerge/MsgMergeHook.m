@@ -2,14 +2,14 @@
 //  MsgMergeHook.m — 消息合并钩子
 //  MRC 编译（与工程一致）
 //
-//  架构（对齐 BubbleBox 反编译证据 + 工程既有范式）：
-//    ⓪ 数据预写（BubbleBox 同构核心）：BBMergeModel 重建后 apply 阶段把分组
-//       位置用关联对象写到每个消息 viewModel 上（对齐 BubbleBox 的
-//       setB_isFirstMessage 预写模式）；measure:/昵称判定/渲染/昵称断供钩子
-//       一律 posFromVM O(1) 读标志——零查询、零数组交叉引用、零读路径重建，
-//       旧「查询期失效检测 + 保鲜重查」补丁链已整体删除。
+//  架构（v5 查表版；预写层已废弃，见 BBMergeModel.h 头注释）：
+//    ⓪ BBMergeModel 独立模型：rebuild 一次性预计算 localID→entry 索引（幂等
+//       守卫），measure:/昵称判定/渲染/昵称断供钩子按 wrap 的 localID 直接
+//       O(1) 查表（posForLocalID）——模型即真相、跨 vm 重建恒真，零查询期
+//       重建、零 vm 关联对象（预写标志随微信 vm 整批重建丢失致集体闪回，
+//       89 号日志实证，已废弃）。
 //    ① BaseMsgContentViewController viewDidLoad/viewWillAppear: → 跟踪当前会话
-//       与渲染数组 m_arrMessageNodeData（上下文变化即触发重建+预写）
+//       与渲染数组 m_arrMessageNodeData（上下文变化即触发 rebuild）
 //    ② CommonMessageCellView layoutInternal / updateNodeStatus → 按节点位置
 //       应用合并渲染：头像显隐 / 群昵称显隐 / 气泡圆角连续化
 //       （⑤ 阶段2 布局接管：白名单类型（文本1+媒体 3/34/43/49/62）&& mmOwnLayout 时
@@ -24,7 +24,7 @@
 //       测量自动收缩，无任何 N 补偿。子类重写类判重补挂（NJD 同款架构）。
 //    ④ CommonMessageViewModel isShowChatRoomDisplayName → 昵称判定接管（实验开关
 //       mmNickJudgeTakeover）：组内非首条返 NO，微信原生按无昵称测量+布局自动回收
-//       昵称区（65→54 型）。判定读预写标志（posFromVM），与测量同链路同刻，
+//       昵称区（65→54 型）。判定查表（posForLocalID），与测量同链路同刻，
 //       首测即正确无固化。
 //
 //  挂载点为 CommonMessageCellView 头文件实证方法（layoutInternal/updateNodeStatus
@@ -92,7 +92,7 @@ static void updateChatContext(id self) {
 #endif
             g_currentNodeArray = arr;
         }
-        // 上下文变化即重建+预写（BubbleBox 同构：标志先于测量就位）
+        // 上下文变化即 rebuild（查表架构：索引先行就位，测量读表恒真）
         rebuildAndApplyFromContext();
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] updateChatContext exception: %@", e.reason);
@@ -479,19 +479,17 @@ static void refreshFlaggedCells(void) {
     }
 }
 
-// —— 数据源保鲜 + 读侧标志（BubbleBox 同构读路径）——
-// 读路径唯一合法动作：标志读不到 → 限频触发一次「重读数组 + rebuild + apply」，
-// 然后重读标志。重建本体在 BBMergeModel（幂等守卫，同输入 O(1)），读侧不做任何
-// 邻接判定——判定钩与行高钩引用不同数组对象致失效检测恒真、每次查询全量重建
-// 卡死主线程的教训，就是靠「读侧只读标志」根治的。
+// —— 数据源保鲜 + 读侧查表（v5 查表架构）——
+// 读路径唯一合法动作：按 wrap 的 localID 查模型索引（posForLocalID，O(1)）。
+// 模型即真相、跨 vm 重建恒真——预写标志到 vm 的旧方案随微信 vm 整批重建而
+// 集体闪回（89 号日志 03:00:26 实证 17 条 None），已废弃。
 // m_arrMessageNodeData 是原地 append 的可变数组：滚动加载历史后指针不变、count
 // 增长，g_currentNodeArray 始终指向同一可变数组，重读 .count/元素即拿到最新状态。
-// 但补节点记账有 ~1s 迟滞（86 号日志实证：历史 cell 已上屏时数组仍 20 节点，
-// 28 节点在数秒后才到），迟到窗口内历史 vm 无标志直通渲染——补齐瞬间 apply
-// 实改标志，由 refreshFlaggedCells 同刻刷新可见 cell 收敛，无需重新进出聊天。
+// 微信补节点记账有 ~1s 迟滞（86 号日志实证）：索引未覆盖的全新消息查表 None →
+// 原生直通，限频 rebuild 补齐后内容变化数>0 → refreshFlaggedCells 同刻收敛。
 static double g_lastArrCheck = 0;      // 上次保鲜触发时间戳（0.5s 限频）
 
-/// 事件驱动重建+预写的统一入口（切会话/进聊天/新消息确认追加/读侧保鲜都走这里）
+/// 事件驱动重建的统一入口（切会话/进聊天/新消息确认追加/滚动限频/读侧保鲜都走这里）
 static void rebuildAndApplyFromContext(void) {
     UIViewController *vc = g_curChatVC;
     if (!vc) return;
@@ -506,11 +504,11 @@ static void rebuildAndApplyFromContext(void) {
 #endif
     NSString *chat = currentChatName();
     if (chat.length == 0) return;
-    NSUInteger changed = [[BBMergeModel shared] rebuildAndApplyWithNodeArray:arr chatName:chat];
-    if (changed > 0) refreshFlaggedCells();   // 标志实改 → BubbleBox 同款可见刷新
+    NSUInteger changed = [[BBMergeModel shared] rebuildFromNodeArray:arr chatName:chat];
+    if (changed > 0) refreshFlaggedCells();   // 表内容变化 → 可见刷新（清测量缓存+标脏）
 }
 
-/// 读侧限频保鲜：新载入消息/空数组期的标志缺席由此自愈，0.5s 一次封顶
+/// 读侧限频保鲜：索引未覆盖的全新消息（微信记账迟滞）由此补表，0.5s 一次封顶
 static void refreshModelNow(void) {
     double now = [NSDate timeIntervalSinceReferenceDate];
     if (now - g_lastArrCheck < 0.5) return;
@@ -518,31 +516,35 @@ static void refreshModelNow(void) {
     rebuildAndApplyFromContext();
 }
 
+/// 消息 localID 提取（查表键；KVC 自动装箱 → longLongValue）
+static long long localIDOfWrap(id wrap) {
+    id v = safeKVC(wrap, @"m_uiMesLocalID");
+    return [v respondsToSelector:@selector(longLongValue)] ? [v longLongValue] : 0;
+}
+
 /// 读侧标志统一入口（measure:/昵称判定/渲染/昵称断供四钩子走这里）：
-/// 纯 O(1) 关联对象读；None → 限频保鲜一次再读；配置指纹变化 → 立即重建+预写。
-/// vm 重建场景（微信滚动/刷新反复重建 viewModel，预写标志随旧对象死亡）由
-/// 滚动驱动全量重刷覆盖（repl_BMCVC_scrollViewDidScroll，BubbleBox 同款），
-/// 读侧不做懒物化/邻接判定（懒物化实测拦不住重建风暴，已删）。
+/// 按 wrap 的 localID 直接 O(1) 查模型索引——不依赖 vm 对象，微信整批重建 vm
+/// 零影响（v5 查表架构核心）。None → 限频保鲜补表再查；配置指纹变化 → 立即重建。
 static MOMergePosition flagsPos(id vm) {
     BBMergeModel *m = [BBMergeModel shared];
-    MOMergePosition pos = [BBMergeModel posFromVM:vm];
+    MOMergePosition pos = [m posForLocalID:localIDOfWrap(safeKVC(vm, @"messageWrap"))];
     if (pos != MOMergePositionNone && ![m configFingerprintChanged]) return pos;
     if ([m configFingerprintChanged]) {
         rebuildAndApplyFromContext();
     } else {
         refreshModelNow();
     }
-    return [BBMergeModel posFromVM:vm];
+    return [m posForLocalID:localIDOfWrap(safeKVC(vm, @"messageWrap"))];
 }
 
 // ------------------------------------------------------------
-// 滚动驱动全量重刷（全面对齐 BubbleBox scheduleUpdateNodes:scroll: →
-// updateAllNodes:scroll: 路线）：微信滚动加载历史会反复重建 viewModel，预写
-// 标志随旧对象死亡，读侧限频保鲜（0.5s）慢一拍，实测仍有原生闪回。BubbleBox
-// 的答案是把滚动本身当一等触发事件：滚动期高频把标志全量重写到当前全部 vm。
-// 实现细节：限频 100ms；rebuild 幂等守卫挡重建（同数组/同会话/同指纹退化为
-// O(1) 比对），apply 仍无条件全量重写（重建 vm 的标志缺席由全量重写补齐）；
-// 实改 >0 → BubbleBox 三件套可见刷新（resetAllMeasureCaches + setNeedsLayout）。
+// 滚动驱动保鲜（对齐 BubbleBox scheduleUpdateNodes:scroll: 把滚动当一等触发
+// 事件）：v5 查表架构下 vm 重建已零影响，滚动触发仅服务「微信补节点记账迟滞
+// ~1s」场景——滚动加载历史后索引未覆盖的新条目查表 None 直通原生，等 0.5s
+// 保鲜太慢；滚动时限频 100ms 触发 rebuild，表内容变化数>0 → 同刻可见刷新收敛。
+// 幂等守卫保证无新条目的滚动退化为 O(1) 比对。
+// 实现细节：限频 100ms；内容变化数>0 → 可见刷新（resetAllMeasureCaches +
+// 标脏可见 cell）。
 // ------------------------------------------------------------
 static IMP orig_BMCVC_scrollViewDidScroll = NULL;
 static double g_lastScrollApply = 0;
@@ -652,17 +654,16 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
 // 组内非首条返 NO → 微信原生按「无昵称行」测量+布局：bgTop 16→5、行高自动回收
 // 昵称区（65→54）、切片泡体随 bgTop 上移零溢出（XOS 态几何取证实证）。
 //
-// v4（BubbleBox 同构数据预写）：判定只读预写标志（posFromVM O(1)），不引用
-// 节点数组、不查模型。标志由 BBMergeModel 重建+预写（rebuildAndApply）在
-// 事件触发点先行就位；首测（viewDidLoad+9~20ms）必经测量链（measure: 挂点，
-// 探针 #25/#26 实证行高唯一来源），而 updateChatContext（viewDidLoad 链路）已先完成预写 →
-// 首测即 54 型，无固化。标志缺席时读侧限频保鲜自愈（flagsPos）。
+// v5（查表架构）：判定按 wrap 的 localID 查 BBMergeModel 索引（posForLocalID
+// O(1)），不依赖 vm 对象——微信整批重建 vm 时索引不受影响，判定与测量同链路
+// 同刻读表恒真，首测即 54 型无固化。索引未覆盖（微信补节点记账迟滞 ~1s）时
+// 读侧限频保鲜补表（flagsPos）。查表前版本史：
 //   v1（46332c2f）读 g_currentNodeArray 缓存：旧数组竞态，恒 miss 固化。
 //   v2（cd7ee314）现场邻接 indexOfObjectIdenticalTo:self：依赖「数组元素==vm
 //   本体」，元素实为节点包装对象（wrapOfNode 实证 node 有 .viewModel 层）时恒
 //   miss → 判定全程 orig → 65 型固化 + [NJ] 无一条 54 型（74 号日志实证），已删。
-//   v3 查 BBMergeModel + 查询内失效检测：双钩子数组引用失配时每次查询全量
-//   重建（卡死主线程，幂等守卫只是补丁），已随预写架构整体删除。
+//   v3/v4 预写标志（关联对象写 vm）：标志随微信 vm 整批重建丢失（89 号日志
+//   03:00:26 实证 17 条集体 None 闪回），已随预写架构整体废弃。
 // 安装前 dladdr 查 IMP 归属：被其他 dylib（XOS）占用则让位不挂（防互递归）。
 // ------------------------------------------------------------
 static IMP orig_CMVM_isShowChatRoomDisplayName = NULL;
@@ -741,9 +742,8 @@ static void mergeFindTable(UIView *v, int depth, UITableView **out) {
 
 static void mergeDoReload(void) {
     s_mergeRelayoutPending = NO;
-    // 独立模型重建+预写（本方案核心）：轮询已确认节点追加，此刻 rebuild 的
-    // entries 即含新消息的正确邻接，apply 同刻把标志写到新消息 vm 上——微信
-    // 随后 reload 全量重询行高时标志已就位，首测即正确。
+    // 独立模型 rebuild（本方案核心）：轮询已确认节点追加，此刻 rebuild 的索引
+    // 即含新消息的正确邻接——微信随后 reload 全量重询行高时查表恒真，首测即正确。
     //
     // 绝不参与表格变更（frida_voice_crash.js 三轮实证，25b8c0d5 门闸仍炸）：
     // begin/endUpdates 撞进微信语音管线（reloadData 多连发、数据源计数后台
@@ -751,7 +751,7 @@ static void mergeDoReload(void) {
     // Invalid Number Of Sections，坏状态连锁=新行建不出来+退页闪退；事前任何
     // 一致性检查都赌不过竞态。而环形缓冲实证微信对聊天表行变更全部走
     // reloadData（零 insertRows），每次收发消息它自己都会全量重询行高，配合
-    // 预写标志几何必然正确——本函数只需重建+预写，表格一个字都不碰。
+    // 查表恒真几何必然正确——本函数只需 rebuild，表格一个字都不碰。
     rebuildAndApplyFromContext();
 }
 
@@ -766,10 +766,10 @@ static void mergeScheduleRelayout(void) {
 
 // 等微信把新消息节点追加进 m_arrMessageNodeData（探针实证追加发生在
 // AsyncOnAddMsg 返回后 ~30ms 内的某个 runloop，早于它重建必用旧数组），
-// 30ms 轮询节点计数，增长（新消息 +1，跨时间行 +2）即重建+预写；12 次未变
+// 30ms 轮询节点计数，增长（新消息 +1，跨时间行 +2）即 rebuild；12 次未变
 // 兜底重建。全程主线程（AJ 回调与计数读取同队列，无竞态）。
-// 注意：这里只重建+预写，不触发表格——微信自己 reload 时全量重询行高（探针
-// 实证聊天表行变更全部走 reloadData），标志已就位，几何必然正确。
+// 注意：这里只 rebuild，不触发表格——微信自己 reload 时全量重询行高（探针
+// 实证聊天表行变更全部走 reloadData），查表恒真，几何必然正确。
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.03 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
