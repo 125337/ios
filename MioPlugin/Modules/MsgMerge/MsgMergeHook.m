@@ -963,7 +963,7 @@ static void cellGeomLog(id cellView) {
         id vm = safeKVC(cellView, @"viewModel");
         id wrap = vm ? safeKVC(vm, @"messageWrap") : nil;
         if (!wrap) return;
-        double rowH = cellView.frame.size.height;
+        double rowH = ((UIView *)cellView).frame.size.height;
         double bgTop = 0;
         for (UIView *v = bg; v && v != cellView; v = v.superview) {
             bgTop += v.frame.origin.y;
