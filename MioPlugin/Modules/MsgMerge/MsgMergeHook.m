@@ -63,6 +63,7 @@ static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageN
 static __weak UIViewController *g_curChatVC = nil;   // 当前聊天 VC（新消息入库联动重排用）
 
 static id safeKVC(id obj, NSString *key);   // 定义见下文视图安全访问节
+static NSUInteger g_currentNodeCount;       // 定义见下文数据源保鲜节
 
 static void updateChatContext(id self) {
     g_curChatVC = self;
@@ -91,6 +92,7 @@ static void updateChatContext(id self) {
 #endif
             g_currentNodeArray = arr;
         }
+        g_currentNodeCount = arr.count;   // 保鲜检测的 count 基准同步（原地 append 场景）
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] updateChatContext exception: %@", e.reason);
     }
@@ -510,6 +512,51 @@ static NSString *njLidOf(id wrap) {
     return [v respondsToSelector:@selector(stringValue)] ? [v stringValue] : @"?";
 }
 
+// —— 数据源保鲜（MioPlugin(82) 间歇性主犯实证）——
+// m_arrMessageNodeData 是原地 append 的可变数组：滚动加载历史后指针不变、count
+// 增长，而垫片持有的 g_currentNodeArray 是进聊天时抓的旧引用 → 失效检测（指针+count
+// 均按旧值比对）恒判定"未变"→ 不重建 → 新载入消息判定全 miss None → 昵称残留大
+// 间隙。滚到哪 miss 到哪 = "有时正常有时不正常"。
+static double g_lastArrCheck = 0;      // 上次新鲜度检查时间戳（0.5s 限频）
+static NSUInteger g_currentNodeCount = 0;
+
+static void ensureFreshNodeArray(void) {
+    double now = [NSDate timeIntervalSinceReferenceDate];
+    if (now - g_lastArrCheck < 0.5) return;
+    g_lastArrCheck = now;
+    UIViewController *vc = g_curChatVC;
+    if (!vc) return;
+    NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
+    if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return;
+    if (arr == g_currentNodeArray && arr.count == g_currentNodeCount) return;
+#if __has_feature(objc_arc)
+    g_currentNodeArray = arr;
+#else
+    [arr retain];
+    [g_currentNodeArray release];
+    g_currentNodeArray = arr;
+#endif
+    g_currentNodeCount = arr.count;
+    NSString *chat = currentChatName();
+    if (chat.length > 0) {
+        [[BBMergeModel shared] rebuildWithNodeArray:arr chatName:chat];
+        WPLog(@"MsgMerge", @"[Ctx] node array refreshed count=%lu", (unsigned long)arr.count);
+    }
+}
+
+/// 分组查询统一入口：None 时先做一次限频数据源保鲜再重查——切片/新载入消息的
+/// 判定 miss 若由数组过期引起，重查即命中；真组外消息只多付 0.5s 一次的 KVC。
+static MOMergePosition queryPos(id wrap, NSString *chat) {
+    MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
+                                                        chatName:chat
+                                                       nodeArray:g_currentNodeArray];
+    if (pos != MOMergePositionNone) return pos;
+    ensureFreshNodeArray();
+    return [[BBMergeModel shared] positionForWrap:wrap
+                                         chatName:chat
+                                        nodeArray:g_currentNodeArray];
+}
+
 static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
     double h = ((double (*)(id, SEL))orig_BaseChatViewModel_rowHeight)(self, _cmd);
     @try {
@@ -526,9 +573,7 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
             return h;
         }
 
-        MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
-                                                            chatName:chat
-                                                           nodeArray:g_currentNodeArray];
+        MOMergePosition pos = queryPos(wrap, chat);
         if (pos == MOMergePositionNone) {
             njLogKeyed(self, [NSString stringWithFormat:
                 @"[NJH] lid=%@ pos=None h_orig=%.1f -> passthrough(组外/模型miss)",
@@ -576,13 +621,26 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
         //    故 N 仅减整条（split==0）；切片消息首片保持原生无缝，与组内下一条的
         //    间隙比单行组大 ~11pt，四约束（不裁字/不叠字/不变形/不藏昵称）下的最优。
         double nickReduce = 0;
-        if (!cfg.mmNickJudgeTakeover &&
-            (pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
-            split == 0 && [chat hasSuffix:@"@chatroom"]) {
+        if (cfg.mmNickJudgeTakeover) {
+            // 接管开启·昵称回收差补齐（间歇性根治，MioPlugin(82) 双波铁证）：
+            // 微信首测（布局前）不走判定钩（[NJD] 零 miss 日志 = 首测根本没调它）
+            // → 65 型（含昵称 11pt）固化；判定生效后的重测（54 型）非每次发生 →
+            // 渲染随机落在两波值（同 lid 两波 h_orig：160→149 / 88→77，恒差 11），
+            // 落第一波 = 组内大间隙，落第二波 = 正常，即"有时正常有时不正常"。
+            // 行高侧主动对齐回收态：Middle/Last（布局层昵称已被判定钩回收，bgTop
+            // 16→5）且 h_orig 为含昵称型（≥60 阈值；漂移带宽 62~68 vs 回收 51~57，
+            // 恒稳）且整条（split==0，昵称区只在整条/首片行高里，切片末片无昵称区）
+            // → 减昵称块，返回值与"判定已生效的重测值"严格相等，两波合流。
+            if (split == 0 &&
+                (pos == MOMergePositionMiddle || pos == MOMergePositionLast) &&
+                h >= 60.0) {
+                nickReduce = [MsgMergeEngine nicknameBlockHeight];
+            }
+        } else if ((pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
+                   split == 0 && [chat hasSuffix:@"@chatroom"]) {
             NSString *from = safeKVC(wrap, @"m_nsFromUsr");
             if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
                 // 接管关闭：老 N 补偿路径，First/Middle 全减（下溢填昵称孔）
-                // 接管开启：组内全部由判定钩回收，组首不减 N（孔已不存在，见上注释）
                 nickReduce = [MsgMergeEngine nicknameBlockHeight];
             }
         }
@@ -664,9 +722,7 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
             return origVal;
         }
         s_inJudge = YES;
-        MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
-                                                            chatName:chat
-                                                           nodeArray:arr];
+        MOMergePosition pos = queryPos(wrap, chat);
         s_inJudge = NO;
         // 组内非首条（Middle/Last）返 NO → 原生按无昵称测量+布局自动回收昵称区
         if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) {

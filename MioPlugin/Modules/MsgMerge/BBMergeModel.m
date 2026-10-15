@@ -166,21 +166,37 @@ static id wrapOfNode(id node) {
             [wraps addObject:(w ?: [NSNull null])];
         }
 
-        for (NSUInteger i = 0; i < wraps.count; i++) {
+        // 切片 run 合并（MioPlugin(82) 实证）：长文本消息被微信拆成同 localID 的
+        // 连续多节点（共享同一 wrap 对象）。逐节点建 entry 有两个毒点：
+        //   ① 切片节点互相"自己 join 自己"（同 wrap → 同 sender → shouldJoin 恒
+        //      YES）→ 伪造邻接；
+        //   ② 后片 entry 覆盖 _index[lid] → 切片消息 pos 恒落在末片上。
+        // 正确语义：一条消息一个 entry，pos = 首片的 prev 邻接 + 末片的 next 邻接。
+        NSUInteger i = 0;
+        while (i < wraps.count) {
             id wrap = wraps[i];
-            if (wrap == [NSNull null]) continue;
-            // 旧 positionForWrap 同语义：不可合并/分隔消息/lid 无效 → None
-            // （不建 entry，查询 miss 落 None）；它们作为邻居时 shouldJoin 返 NO 断组
-            if (!isMergeableWrap(wrap)) continue;
-            if ([[self class] isSeparatorMessage:wrap]) continue;
+            if (wrap == [NSNull null]) { i++; continue; }
+            if (!isMergeableWrap(wrap)) { i++; continue; }
+            if ([[self class] isSeparatorMessage:wrap]) { i++; continue; }
             long long lid = localIDOf(wrap);
-            if (lid <= 0) continue;
+            if (lid <= 0) { i++; continue; }
 
-            // 邻居 = 紧邻节点，紧邻 NSNull（时间行）即断组
+            // 吞并同 lid 的连续切片节点（run 内不参与对外邻接）
+            NSUInteger runEnd = i;
+            while (runEnd + 1 < wraps.count) {
+                id nw = wraps[runEnd + 1];
+                if (nw == [NSNull null] || !isMergeableWrap(nw)) break;
+                if (localIDOf(nw) != lid) break;
+                runEnd++;
+            }
+
+            // 邻居 = run 外紧邻节点，紧邻 NSNull（时间行）即断组
             id prevWrap = nil;
             if (i > 0 && wraps[i - 1] != [NSNull null]) prevWrap = wraps[i - 1];
             id nextWrap = nil;
-            if (i + 1 < wraps.count && wraps[i + 1] != [NSNull null]) nextWrap = wraps[i + 1];
+            if (runEnd + 1 < wraps.count && wraps[runEnd + 1] != [NSNull null]) {
+                nextWrap = wraps[runEnd + 1];
+            }
 
             BOOL joinPrev = (prevWrap != nil) && [[self class] shouldJoin:wrap wrapB:prevWrap];
             BOOL joinNext = (nextWrap != nil) && [[self class] shouldJoin:wrap wrapB:nextWrap];
@@ -199,6 +215,8 @@ static id wrapOfNode(id node) {
             e.pos = pos;
             [tmp addObject:e];
             _index[@(lid)] = e;
+
+            i = runEnd + 1;
         }
     }
 
