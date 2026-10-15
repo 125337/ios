@@ -438,45 +438,50 @@ static NSString *njLidOf(id wrap) {
 }
 
 // ------------------------------------------------------------
-// 可见刷新（BubbleBox apply 三件套同款）：apply 实改标志后同刻做
-// resetLayoutCache + cellView setNeedsLayout。历史滚动场景实证（86 号日志）：
-// 微信把滚动加载的历史节点补进 m_arrMessageNodeData 迟到 ~1s，补齐瞬间标志
-// 才写上，但已渲染 cell 的固化测量值与布局不会自愈（昵称残留、原生间隙，
-// 要重新进出聊天才恢复）。此处对可见消息 cellView 标脏，layoutInternal 钩子
-// 下轮按新标志重排（None 也走 applyMergeToCellView 的对称还原路径）。
+// 可见刷新（BubbleBox apply 同款 + 异步形态照抄）：apply 实改标志后做
+// resetLayoutCache + cellView setNeedsLayout。反编译实证 updateAllNodes 的
+// 刷新块走 _dispatch_async(main_q)（0030dfb8:2437）——刷新扔到下一 runloop，
+// 不占触发点（滚动回调）的当前帧。照抄：本函数体整体 dispatch_async(main)。
+// 历史滚动场景实证（86 号日志）：微信把滚动加载的历史节点补进
+// m_arrMessageNodeData 迟到 ~1s，补齐瞬间标志才写上，但已渲染 cell 的固化
+// 测量值与布局不会自愈（昵称残留、原生间隙，要重新进出聊天才恢复）。此处对
+// 可见消息 cellView 标脏，layoutInternal 钩子下轮按新标志重排（None 也走
+// applyMergeToCellView 的对称还原路径）。
 // 刻意不碰 UITableView 任何 API——语音管线抖动期 begin/endUpdates 崩溃定论；
 // 行高若未被原生布局链重询，滚动复用时自愈。
 // ------------------------------------------------------------
 static void refreshFlaggedCells(void) {
-    @try {
-        UIViewController *vc = g_curChatVC;
-        if (!vc || ![vc isViewLoaded]) return;
-        resetAllMeasureCaches();
-        UITableView *tbl = nil;
-        NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
-        while (stack.count > 0) {
-            UIView *v = [stack lastObject];
-            [stack removeLastObject];
-            if ([v isKindOfClass:[UITableView class]]) { tbl = (UITableView *)v; break; }
-            for (UIView *s in v.subviews) [stack addObject:s];
-        }
-        if (!tbl) return;
-        for (UITableViewCell *cell in tbl.visibleCells) {
-            NSMutableArray<UIView *> *st = [NSMutableArray arrayWithObject:cell];
-            for (int guard = 0; st.count > 0 && guard < 24; guard++) {
-                UIView *v = [st lastObject];
-                [st removeLastObject];
-                NSString *cn = NSStringFromClass([v class]);
-                if ([cn containsString:@"MessageCellView"]) {
-                    [v setNeedsLayout];   // 下轮 layoutInternal 按新标志重排/还原
-                    continue;
-                }
-                for (UIView *s in v.subviews) [st addObject:s];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            UIViewController *vc = g_curChatVC;
+            if (!vc || ![vc isViewLoaded]) return;
+            resetAllMeasureCaches();
+            UITableView *tbl = nil;
+            NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
+            while (stack.count > 0) {
+                UIView *v = [stack lastObject];
+                [stack removeLastObject];
+                if ([v isKindOfClass:[UITableView class]]) { tbl = (UITableView *)v; break; }
+                for (UIView *s in v.subviews) [stack addObject:s];
             }
+            if (!tbl) return;
+            for (UITableViewCell *cell in tbl.visibleCells) {
+                NSMutableArray<UIView *> *st = [NSMutableArray arrayWithObject:cell];
+                for (int guard = 0; st.count > 0 && guard < 24; guard++) {
+                    UIView *v = [st lastObject];
+                    [st removeLastObject];
+                    NSString *cn = NSStringFromClass([v class]);
+                    if ([cn containsString:@"MessageCellView"]) {
+                        [v setNeedsLayout];   // 下轮 layoutInternal 按新标志重排/还原
+                        continue;
+                    }
+                    for (UIView *s in v.subviews) [st addObject:s];
+                }
+            }
+        } @catch (NSException *e) {
+            WPLog(@"MsgMerge", @"[Refresh] exception: %@", e.reason);
         }
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[Refresh] exception: %@", e.reason);
-    }
+    });
 }
 
 // —— 数据源保鲜 + 读侧查表（v5 查表架构）——
@@ -538,19 +543,16 @@ static MOMergePosition flagsPos(id vm) {
 }
 
 // ------------------------------------------------------------
-// 滚动驱动保鲜（对齐 BubbleBox scheduleUpdateNodes:scroll: 把滚动当一等触发
-// 事件）：v5 查表架构下 vm 重建已零影响，滚动触发仅服务「微信补节点记账迟滞
-// ~1s」场景——滚动加载历史后索引未覆盖的新条目查表 None 直通原生。
-//
-// 【滚动中只补表、停止才刷新】（90 号日志定论：快速滑动卡屏根因）：
-// 滚动中每轮 rebuild changed>0 都会清测量缓存+标脏全部可见 cell → 微信全表
-// 重测重布局 → 快速滑动连续触发即掉帧。改为：isTracking/isDecelerating 期间
-// 只 rebuildFromNodeArray 补索引（幂等守卫 O(1)），刷新记 pending；滚动停止
-// 的回调尾巴一次性刷新收敛。滑动态稳定显示原生样式，停下 0.2s 内收敛合并态。
+// 滚动驱动保鲜（照抄 BubbleBox scheduleUpdateNodes:scroll: → updateAllNodes:scroll:
+// 反编译实证：schedule 为薄转发直调 updateAllNodes，滚动无节流无 busy 判定，
+// apply 逐节点写标志后 _dispatch_async(main_q, block) 异步刷新——滚动中高频
+// 全量重刷，但刷新动作扔到下一 runloop，不占滚动回调帧）。
+// 我们的同款实现：滚动时限频 100ms 跑完整链路（rebuild + changed>0 刷新），
+// 刷新本体 dispatch_async(main) 异步执行（对齐它的 dispatch_async 形态）；
+// 幂等守卫保证无新条目的滚动退化为 O(1) 比对，不产生刷新。
 // ------------------------------------------------------------
 static IMP orig_BMCVC_scrollViewDidScroll = NULL;
 static double g_lastScrollApply = 0;
-static BOOL g_scrollRefreshPending = NO;
 
 static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
     if (orig_BMCVC_scrollViewDidScroll) {
@@ -563,28 +565,7 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
         double now = [NSDate timeIntervalSinceReferenceDate];
         if (now - g_lastScrollApply < 0.1) return;
         g_lastScrollApply = now;
-
-        BOOL busy = NO;
-        if ([scrollView isKindOfClass:[UIScrollView class]]) {
-            UIScrollView *sv = (UIScrollView *)scrollView;
-            busy = sv.isTracking || sv.isDecelerating;
-        }
-        UIViewController *vc = g_curChatVC;
-        NSArray *arr = vc ? safeKVC(vc, @"m_arrMessageNodeData") : nil;
-        NSString *chat = currentChatName();
-        if (![arr isKindOfClass:[NSArray class]] || arr.count == 0 || chat.length == 0) return;
-
-        if (busy) {
-            // 滚动中：只补索引，不碰可见 cell（刷新挂起）
-            NSUInteger changed = [[BBMergeModel shared] rebuildFromNodeArray:arr chatName:chat];
-            if (changed > 0) g_scrollRefreshPending = YES;
-            return;
-        }
-        // 滚动停止：完整链路收敛（含挂起的刷新）
-        BOOL needRefresh = g_scrollRefreshPending;
-        g_scrollRefreshPending = NO;
-        NSUInteger changed = [[BBMergeModel shared] rebuildFromNodeArray:arr chatName:chat];
-        if (changed > 0 || needRefresh) refreshFlaggedCells();
+        rebuildAndApplyFromContext();
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Scroll] exception: %@", e.reason);
     }
