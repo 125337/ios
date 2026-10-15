@@ -1254,7 +1254,100 @@ static void installMediaLayoutInternalHooks(void) {
         WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr AsyncOnAddMsg not found");
     }
 
+    // ⑤ 测量链探针（临时实证，验证后删除）：确认 rowHeight 链是否走 measure:/contentTextSize
+    static void installMeasureChainProbe(void);   // 实现见文件尾（@end 后）
+    installMeasureChainProbe();
+
     WPLog(@"MsgMerge", @"MsgMergeHook install complete");
 }
 
 @end
+
+// ============================================================
+// MARK: - 测量链探针（临时实证代码，验证后整体删除）
+// 目的：实证 8.0.78 行高链是否走 CommonMessageViewModel measure: /
+//       TextMessageViewModel contentTextSize，调用时机与 [NJH] rowHeight 对账。
+// 透传定式：返回 16 字节 struct（x0/x1 寄存器无损透传，CGSize/id 皆兼容）；
+//       参数一律 void*（ARC 垫片不 retain，类型无关）。
+// ============================================================
+typedef struct { unsigned long long x0, x1; } MSPPair;
+
+static MSPPair (*orig_MSP_measure)(void *, SEL, void *);
+static MSPPair (*orig_MSP_cts)(void *, SEL);
+static Class g_mspCls[16];
+static MSPPair (*g_mspOrig[16])(void *, SEL, void *);
+static NSInteger g_mspCount = 0;
+
+static long long mspLidOf(void *vm) {
+    @try {
+        id wrap = [(id)vm valueForKey:@"messageWrap"];
+        id v = [wrap valueForKey:@"m_uiMesLocalID"];
+        return [v respondsToSelector:@selector(longLongValue)] ? [v longLongValue] : 0;
+    } @catch (NSException *e) { return 0; }
+}
+
+static MSPPair repl_MSP_measure(void *self, SEL _cmd, void *arg) {
+    MSPPair (*o)(void *, SEL, void *) = orig_MSP_measure;
+    for (NSInteger i = 0; i < g_mspCount; i++) {
+        if (g_mspCls[i] == object_getClass(self)) { o = g_mspOrig[i]; break; }
+    }
+    MSPPair r = o(self, _cmd, arg);
+    WPLog(@"MsgMerge", @"[MSP] measure cls=%s lid=%lld ret=%llx,%llx arg=%p",
+          object_getClassName(self), mspLidOf(self), r.x0, r.x1, arg);
+    return r;
+}
+
+static MSPPair repl_MSP_cts(void *self, SEL _cmd) {
+    MSPPair r = orig_MSP_cts(self, _cmd);
+    WPLog(@"MsgMerge", @"[MSP] cts cls=%s lid=%lld ret=%llx,%llx",
+          object_getClassName(self), mspLidOf(self), r.x0, r.x1);
+    return r;
+}
+
+static void installMeasureChainProbe(void) {
+    SEL selM = NSSelectorFromString(@"measure:");
+    Class baseCls = objc_getClass("CommonMessageViewModel");
+    if (baseCls && [baseCls instancesRespondToSelector:selM]) {
+        Method bm = class_getInstanceMethod(baseCls, selM);
+        WPLog(@"MsgMerge", @"[MSP] enc CommonMessageViewModel measure: %s",
+              bm ? method_getTypeEncoding(bm) : "nil");
+        IMP baseIMP = bm ? method_getImplementation(bm) : NULL;
+        unsigned int n = 0;
+        Class *classes = objc_copyClassList(&n);
+        for (unsigned int i = 0; classes && i < n; i++) {
+            Class c = classes[i];
+            if (c == baseCls) continue;
+            BOOL derived = NO;
+            for (Class p = class_getSuperclass(c); p; p = class_getSuperclass(p))
+                if (p == baseCls) { derived = YES; break; }
+            if (!derived) continue;
+            Method m = class_getInstanceMethod(c, selM);
+            IMP cur = m ? method_getImplementation(m) : NULL;
+            if (!cur || cur == baseIMP) continue;   // 继承实现跳过，根类单点覆盖
+            if (g_mspCount >= 16) break;
+            MSPPair (*o)(void *, SEL, void *) = NULL;
+            MSHookMessageEx(c, selM, (IMP)repl_MSP_measure, (IMP *)&o);
+            g_mspCls[g_mspCount] = c;
+            g_mspOrig[g_mspCount] = o;
+            g_mspCount++;
+            WPLog(@"MsgMerge", @"[MSP] hook 重写类 %s measure:", class_getName(c));
+        }
+        if (classes) free(classes);
+        MSHookMessageEx(baseCls, selM, (IMP)repl_MSP_measure, (IMP *)&orig_MSP_measure);
+        WPLog(@"MsgMerge", @"[MSP] hook CommonMessageViewModel measure:");
+    } else {
+        WPLog(@"MsgMerge", @"[MSP] ✗ CommonMessageViewModel measure: not found");
+    }
+
+    SEL selC = NSSelectorFromString(@"contentTextSize");
+    Class tcls = objc_getClass("TextMessageViewModel");
+    if (tcls && [tcls instancesRespondToSelector:selC]) {
+        Method tm = class_getInstanceMethod(tcls, selC);
+        WPLog(@"MsgMerge", @"[MSP] enc TextMessageViewModel contentTextSize %s",
+              tm ? method_getTypeEncoding(tm) : "nil");
+        MSHookMessageEx(tcls, selC, (IMP)repl_MSP_cts, (IMP *)&orig_MSP_cts);
+        WPLog(@"MsgMerge", @"[MSP] hook TextMessageViewModel contentTextSize");
+    } else {
+        WPLog(@"MsgMerge", @"[MSP] ✗ TextMessageViewModel contentTextSize not found");
+    }
+}
