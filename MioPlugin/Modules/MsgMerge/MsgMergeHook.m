@@ -753,14 +753,23 @@ static void mergeDoReload(void) {
     // 独立模型 rebuild（本方案核心）：轮询已确认节点追加，此刻 rebuild 的索引
     // 即含新消息的正确邻接——微信随后 reload 全量重询行高时查表恒真，首测即正确。
     //
+    // rebuild 后无条件可见刷新（92 号日志实证的发送时序洞）：新行建成时的首测
+    // 可能落 None（读侧 fill 限频 0.15s / 时序窗口），原生几何随首建固化；而
+    // 读侧 fill 已把新消息补进索引 → 后续 rebuild changed=0 → 刷新被跳过，
+    // 固化错误保持到下次 reload（表现=新发消息保持原生间距，再发一条才缩小）。
+    // changed 只反映「索引内容变化」，反映不了「已建成行的测量固化」——此处
+    // 必须主动 resetLayoutCache + setNeedsLayout 强制重排。安全：不碰表格 API，
+    // dispatch_async 异步标脏（语音管线崩溃定论不受影响）。
+    //
     // 绝不参与表格变更（frida_voice_crash.js 三轮实证，25b8c0d5 门闸仍炸）：
     // begin/endUpdates 撞进微信语音管线（reloadData 多连发、数据源计数后台
     // 抖动）时，endUpdates 对比"begin 时内部快照 vs end 时重读数据源"必抛
     // Invalid Number Of Sections，坏状态连锁=新行建不出来+退页闪退；事前任何
     // 一致性检查都赌不过竞态。而环形缓冲实证微信对聊天表行变更全部走
     // reloadData（零 insertRows），每次收发消息它自己都会全量重询行高，配合
-    // 查表恒真几何必然正确——本函数只需 rebuild，表格一个字都不碰。
+    // 查表恒真几何必然正确——本函数只需 rebuild+标脏，表格一个字都不碰。
     rebuildAndApplyFromContext();
+    refreshFlaggedCells();
 }
 
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt);
