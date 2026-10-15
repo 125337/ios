@@ -5,7 +5,7 @@
 //  消息合并独立模型（BubbleBox 同构架构）：
 //  分组结果在 rebuild 时一次性预计算（entries + localID→entry 索引），
 //  随后由 apply 阶段把位置标志用关联对象写到每个消息 viewModel 上
-//  （对齐 BubbleBox 的 setB_isFirstMessage 等预写模式）。rowHeight / 昵称
+//  （对齐 BubbleBox 的 setB_isFirstMessage 等预写模式）。measure:（测量层）/ 昵称
 //  判定 / 渲染钩子一律只读关联标志（posFromVM，O(1)），零查询、零数组
 //  交叉引用、零查询期重建——旧「查询期失效检测 + 保鲜重查」补丁链已整体删除。
 //
@@ -46,7 +46,7 @@ NS_ASSUME_NONNULL_BEGIN
                             chatName:(nullable NSString *)chatName;
 
 /// 标志读取（O(1) 关联对象读）：未预写/组外/不可合并/功能未激活 = None。
-/// 所有钩子（rowHeight/昵称判定/渲染/昵称断供）只读本方法，禁止查模型。
+/// 所有钩子（measure:/昵称判定/渲染/昵称断供）只读本方法，禁止查模型。
 + (MOMergePosition)posFromVM:(id)vm;
 
 /// 当前配置是否与上次重建时的分组配置指纹不一致（O(1)，读侧保鲜判断用）

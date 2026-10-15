@@ -13,7 +13,7 @@
 //  BubbleBox 同构预写层（本架构核心）：
 //    rebuild 完成后 apply 阶段把分组位置（MOMergePosition）用关联对象写到
 //    每个消息 viewModel 上（对齐 BubbleBox 把 b_isFirstMessage 等 objc_msgSend
-//    直写到 viewModel 的模式）。rowHeight / 昵称判定 / 渲染 / 昵称断供钩子
+//    直写到 viewModel 的模式）。measure:（测量层）/ 昵称判定 / 渲染 / 昵称断供钩子
 //    一律 posFromVM O(1) 读标志，不引用节点数组、不查模型、不在读路径重建。
 //    写标志与重建同函数同刻完成（rebuildAndApply），不存在「标志已变但测量
 //    消费旧值」的窗口；rebuild 幂等守卫（同数组/同会话/同配置指纹跳过）+
@@ -91,7 +91,7 @@ static id wrapOfNode(id node) {
 /// 分组位置关联对象 key（写在消息 viewModel 上，读侧 posFromVM 消费）
 static void *kBBPosKey = &kBBPosKey;
 
-/// 标志写入目标 = 读侧钩子里的 vm 本体（rowHeight/昵称判定钩的 self、
+/// 标志写入目标 = 读侧钩子里的 vm 本体（measure:/昵称判定钩的 self、
 /// cellView.viewModel）。与 wrapOfNode 同构：节点带 viewModel 层时写 viewModel，
 /// 节点本身是 viewModel（ChatTimeViewModel 等）时写节点自己。
 static id flagTargetOfNode(id node) {

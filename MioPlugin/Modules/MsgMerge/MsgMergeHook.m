@@ -5,7 +5,7 @@
 //  架构（对齐 BubbleBox 反编译证据 + 工程既有范式）：
 //    ⓪ 数据预写（BubbleBox 同构核心）：BBMergeModel 重建后 apply 阶段把分组
 //       位置用关联对象写到每个消息 viewModel 上（对齐 BubbleBox 的
-//       setB_isFirstMessage 预写模式）；rowHeight/昵称判定/渲染/昵称断供钩子
+//       setB_isFirstMessage 预写模式）；measure:/昵称判定/渲染/昵称断供钩子
 //       一律 posFromVM O(1) 读标志——零查询、零数组交叉引用、零读路径重建，
 //       旧「查询期失效检测 + 保鲜重查」补丁链已整体删除。
 //    ① BaseMsgContentViewController viewDidLoad/viewWillAppear: → 跟踪当前会话
@@ -15,19 +15,17 @@
 //       （⑤ 阶段2 布局接管：白名单类型（文本1+媒体 3/34/43/49/62）&& mmOwnLayout 时
 //         头像/气泡容器/昵称横向自摆，
 //         原生几何模型与失效检测见 applyOwnLayout 注释）
-//    ③ BaseChatViewModel rowHeight（8.0.78 实证签名 d16@0:8，返回 double，滚动期间
-//       270+ 次调用）→ 行高包裹式生效点。探针 #32 实证原生长文本消息是多 cell 切片
-//       渲染（同 wrap 多 viewModel，原生无缝拼成一条大气泡），替换式公式会撕开切片
-//       接缝（判死），行高主体永远用 orig，只做两类补偿：
-//         a) 间距收拢：只减"组内非组尾消息的最后一片" -mmSpacing（片间不能减，会
-//            撕开接缝；组尾保持原生 → 组尾到组外间隙不变）
-//         b) 昵称补偿（仅组首）：昵称断供后组内非首条原生行高已自动不含昵称区，
-//            组首（昵称仍显示）减实测昵称块维持组内几何统一
-//    delegate heightForRow 与 self-sizing 在 8.0.78 均零调用（探针 #13/#14/#17/#18）。
+//    ③ CommonMessageViewModel measure: → 测量层接管（BubbleBox 同款行高杠杆）：
+//       替换式直接在测量源头算合并感知尺寸，orig 只当排版工具，唯一算术 =
+//       组内间距 mmSpacing（非组尾消息 −sp，下限 24）。组尾/Single 原生直通
+//       （组尾到组外间隙不变）；切片首/中片原生直通（无缝泡体，diag33 实锤禁
+//       一切缩减）。rowHeight 回归原生直通，旧「rowHeight 包裹式补偿链」
+//       （sp 收拢/N 补偿/末片门控）整体删除；昵称区由 ④ 判定钩翻转让原生
+//       测量自动收缩，无任何 N 补偿。子类重写类判重补挂（NJD 同款架构）。
 //    ④ CommonMessageViewModel isShowChatRoomDisplayName → 昵称判定接管（实验开关
 //       mmNickJudgeTakeover）：组内非首条返 NO，微信原生按无昵称测量+布局自动回收
 //       昵称区（65→54 型）。判定读预写标志（posFromVM），与测量同链路同刻，
-//       首测即正确无固化。接管开启后 rowHeight 仅组首减昵称补偿 N。
+//       首测即正确无固化。
 //
 //  挂载点为 CommonMessageCellView 头文件实证方法（layoutInternal/updateNodeStatus
 //  与 BubbleBox 反编译钩子点一致）。
@@ -35,7 +33,6 @@
 
 #import "MsgMergeHook.h"
 #import "MsgMergeConfig.h"
-#import "MsgMergeEngine.h"
 #import "BBMergeModel.h"
 #import "../../Core/LogManager.h"
 #import <substrate.h>
@@ -52,9 +49,9 @@
 
 static IMP orig_BaseMsgContentVC_viewDidLoad    = NULL;
 static IMP orig_BaseMsgContentVC_viewWillAppear = NULL;
-static IMP orig_BaseChatViewModel_rowHeight     = NULL;
 static IMP orig_CMCellView_layoutInternal       = NULL;
 static IMP orig_CMCellView_updateNodeStatus     = NULL;
+static NSMutableDictionary *g_njLogSeen = nil;  // [NJH] 去重表（随会话切换清空，定义挪前供 updateChatContext 使用）
 
 // ============================================================
 // MARK: - 会话上下文
@@ -82,6 +79,7 @@ static void updateChatContext(id self) {
 #endif
                 g_currentChatName = [name copy];
                 [[BBMergeModel shared] clear];   // 防跨会话残留（模型自身也按数组身份失效）
+                [g_njLogSeen removeAllObjects];  // 去重表随会话切换清空：否则同 vm 指针复用+800 帽会让 [NJH] 永久静默
             }
         }
         // 渲染数组每次进出聊天都刷新（数组对象可能被整表重建）
@@ -230,7 +228,7 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //   气泡容器：有 bg 的类型 = getBgImageView.superview；无 bg 的（图片3/视频43/表情47）
 //   = getContentView 返回值（探针全类型实证与 bg.superview 同一视图，精准命中）
 //     自发右缘 W−64 / 收方 x=64；y=5（无昵称）/ 16（群收昵称开）——纵向原生已对，不碰
-//     （固定行高内挪 y 必守恒，项目定论；间距收拢走 rowHeight 钩子）
+//     （固定行高内挪 y 必守恒，项目定论；间距收拢走 measure: 测量层接管）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
 //   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
 // 自摆范围：仅横向 x。位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
@@ -382,61 +380,9 @@ static NSString *chatNameOfWrap(id wrap) {
 }
 
 // ============================================================
-// MARK: - 昵称区补偿量（布局时直读，消灭推断链）
-// ============================================================
-//
-// 旧两桶差值方案（收/发短文本原生行高众数相减）已删：自发桶混入跨会话样本
-// （56/53 并存，同会话真值 54），两个带误差的估计相减误差叠加（实测 N 偏 1~2pt）。
-//
-// 新方案：cell 布局时（applyMergeToCellView ② 群昵称块）直读微信摆好的真实
-// frame —— 昵称区 = 收方行 bgTopInCell（昵称开=16 / 关=5，diag33 表坐标实证）
-// − 无昵称基准 g_plainBgY（自发行上报校准，恒 5），持久化于 Engine（kNickBlockKey），
-// rowHeight 消费。
-// 【diag34 实证坑位】bg 自身 frame.origin.y 恒 0（钉在宿主顶），16/5 的差挂在
-// bg→cell 的中间容器上 —— 不能直接读 bg.frame.origin.y，必须逐层累加折算到
-// cell 坐标（bgTopWithinCell）。也不能用 label 高度判昵称开关（两种状态都是 14，
-// 微信用 setHidden 不改 frame，那条分支恒走不到）。
-// 换行高/字体缩放自动跟随（读的就是目标量本身，无推断链）。
-
-static double g_plainBgY = 5.0;   // 无昵称区行的 bgTopInCell 基准（自发行上报校准）
-
-/// bg 顶边折算到所属 UITableViewCell 坐标的 y（diag34 实证 bg.frame.origin.y 恒 0，
-/// 昵称区偏移挂在 bg→cell 的中间容器上，逐层累加到 cell 坐标才对）。
-/// 找不到 cell 归属时返回 0（正常布局 bgTopInCell ≥ 5，0 即失败信号）。
-static CGFloat bgTopWithinCell(UIImageView *bg) {
-    if (!bg) return 0;
-    CGFloat y = bg.frame.origin.y;
-    UIView *v = bg.superview;
-    while (v && ![v isKindOfClass:[UITableViewCell class]]) {
-        y += v.frame.origin.y;
-        v = v.superview;
-    }
-    return (v && [v isKindOfClass:[UITableViewCell class]]) ? y : 0;
-}
-
-// ---- N 变化触发行高重算 ----
-// 布局时上报的新 N 落盘后，表格已按旧持久值算完行高，之后无人触发重算 →
-// 昵称开关切换后间隙错误（实证：N=11 上报但行高仍按 0 算，收方组间隙 24≠13）。
-// 检测 rowHeight 消费值 [Engine nicknameBlockHeight] 与上次已应用值的变化 →
-// 异步 reloadData 当前聊天表。值收敛后同值不再触发，无循环。
-static __weak UITableView *g_mmChatTable = nil;
-static double s_lastAppliedN = -1.0;   // -1 = 未登记（首次仅建基线不触发）
-
-// ============================================================
-// MARK: - 行高钩子（切片感知包裹式生效点）
+// MARK: - 测量层接管（BubbleBox 同款行高杠杆）
 // ============================================================
 
-// -[BaseChatViewModel rowHeight]（8.0.78 实证签名 d16@0:8，返回 double）：
-// 全部消息/时间 viewModel 均继承此实现（探针快查单一 IMP，无子类重写），
-// 滚动期间 270+ 次调用（探针 #26）——这是聊天行高的真实来源。
-// delegate heightForRow、self-sizing、updateContentViewHeight: 均零调用（探针 #13/#14/#17/#18/#25）。
-// 包裹式（探针 #32 判死替换式）：行高主体永远用 orig，只做两类补偿——
-//   a) 间距收拢：非组尾消息的整条/末片 -mmSpacing（间隙(i,i+1)=行i高-气泡i高，
-//      气泡贴 cell 顶，减"上方那条"的末片即收拢其与下条的间隙）
-//   b) 昵称补偿（仅组首）：昵称断供（getNameLabel 返 nil）后 Middle/Last 原生
-//      rowHeight 已自动不含昵称区（65→54 实证），仅组首（昵称仍显示、原生 65）
-//      需继续减实测昵称块维持组内几何统一
-//
 // 【探针 #34 实证】长文本切片的角色由 vm 自身 ivar `_splitPosition`（Q 类型）提供：
 //   0=整条未切片 / 1=首片 / 2=中片 / 3=末片。
 //   实证：10 行消息拆 3 片（行高 95/80/62，共享同 wrap），三片 split=1/2/3、
@@ -469,10 +415,9 @@ static void splitPosLog(id vm, id wrap) {
           vmSplitPosition(vm));
 }
 
-// [NJH] 行高全流程取证日志（按「vm 指针 + 行内容」去重）：rowHeight 高频
-//（滚动期 270+ 次/秒），去重后首测/值变化必打、稳态零噪音——每个 return 出口
-// 都打，日志序即判定全流程。帽 800 防极端场景爆量。
-static NSMutableDictionary *g_njLogSeen = nil;
+// [NJH]/[MMZ]/[NJD]/[CELL] 共用取证日志（按「vm 指针 + 行内容」去重）：
+// 测量/判定高频（滚动期每秒数百次），去重后首测/值变化必打、稳态零噪音——
+// 每个 return 出口都打，日志序即判定全流程。帽 800 防极端场景爆量。
 static void njLogKeyed(id vm, NSString *line) {
     if (!g_njLogSeen) {
         static dispatch_once_t once;
@@ -486,7 +431,7 @@ static void njLogKeyed(id vm, NSString *line) {
     WPLog(@"MsgMerge", @"%@", line);
 }
 
-// rowHeight 垫片日志行前缀（lid 从 wrap 的 KVC 对象取，nil 显 ?）
+// 垫片日志行 lid 前缀（从 wrap 的 KVC 对象取，nil 显 ?）
 static NSString *njLidOf(id wrap) {
     id v = safeKVC(wrap, @"m_uiMesLocalID");
     return [v respondsToSelector:@selector(stringValue)] ? [v stringValue] : @"?";
@@ -528,7 +473,7 @@ static void refreshModelNow(void) {
     rebuildAndApplyFromContext();
 }
 
-/// 读侧标志统一入口（rowHeight/昵称判定/渲染/昵称断供四钩子走这里）：
+/// 读侧标志统一入口（measure:/昵称判定/渲染/昵称断供四钩子走这里）：
 /// 纯 O(1) 关联对象读；标志缺席 → 限频保鲜一次再读；配置指纹变化 → 立即
 /// 重建+预写（与旧查询期重建同语义，最多一次，重建后指纹守卫归零）。
 static MOMergePosition flagsPos(id vm) {
@@ -543,106 +488,85 @@ static MOMergePosition flagsPos(id vm) {
     return [BBMergeModel posFromVM:vm];
 }
 
-static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
-    double h = ((double (*)(id, SEL))orig_BaseChatViewModel_rowHeight)(self, _cmd);
+// ------------------------------------------------------------
+// -[CommonMessageViewModel measure:]（探针实证：CGSize 参数入 x2/x3，调用侧
+// 传 {-1,-1} 无约束哨兵；CGSize=HFA 经 d0/d1 返回——MSHook + 同声明签名，
+// 编译器自动对齐 ABI，无需关心寄存器细节）。orig 只当排版工具，唯一算术 =
+// 组内间距：非组尾消息测量高 −mmSpacing（下限 24）。昵称区不在此补偿——
+// NJD 判定钩翻转让原生测量自动收缩（N 补偿链已删）。
+// 验证闭环：[MMZ] 测量值 vs [CELL] bgH——气泡不变形、行高收拢即绿灯；
+// 若 bgH 随之缩小 = measure: 返回值驱动气泡尺寸，此杠杆判死回滚。
+// ------------------------------------------------------------
+static IMP orig_CMVM_measure = NULL;
+static Class g_measCls[32];
+static IMP   g_measOrig[32];
+static int   g_measClsCount = 0;
+
+static IMP measureOrigForClass(Class c) {
+    for (int i = 0; i < g_measClsCount; i++) {
+        if (g_measCls[i] == c) return g_measOrig[i];
+    }
+    return NULL;
+}
+
+static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
+    IMP o = measureOrigForClass(object_getClass(self));
+    if (!o) o = orig_CMVM_measure;
+    CGSize s = ((CGSize (*)(id, SEL, CGSize))o)(self, _cmd, sz);
+    static BOOL s_inMeasure = NO;
+    if (s_inMeasure) return s;
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        if (!cfg.mmEnable) return h;
+        if (!cfg.mmEnable) return s;
+        if (!(cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0)) return s;
         id wrap = safeKVC(self, @"messageWrap");
-        if (!wrap) return h;   // 时间节点等无 wrap
+        if (!wrap) return s;   // 时间节点等无 wrap
         NSString *chat = chatNameOfWrap(wrap);
         if (chat.length == 0) chat = currentChatName();
         if (chat.length == 0) {
             njLogKeyed(self, [NSString stringWithFormat:
-                @"[NJH] lid=%@ pos=? h_orig=%.1f -> passthrough(no-chat)",
-                njLidOf(wrap), h]);
-            return h;
+                @"[MMZ] lid=%@ pos=? w=%.0f h=%.1f -> passthrough(no-chat)",
+                njLidOf(wrap), sz.width, s.height]);
+            return s;
         }
-
+        s_inMeasure = YES;
         MOMergePosition pos = flagsPos(self);
+        s_inMeasure = NO;
         if (pos == MOMergePositionNone) {
             njLogKeyed(self, [NSString stringWithFormat:
-                @"[NJH] lid=%@ pos=None h_orig=%.1f -> passthrough(组外/标志缺席)",
-                njLidOf(wrap), h]);
-            return h;
+                @"[MMZ] lid=%@ pos=None w=%.0f h=%.1f -> passthrough(组外/标志缺席)",
+                njLidOf(wrap), sz.width, s.height]);
+            return s;
         }
-
-        BOOL isMsgTail = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
         splitPosLog(self, wrap);
-
-        // 末片门控（统一前置闸）：首片/中片是无缝泡体——原生切片气泡底=片边界、
-        // 续片 bgTop=0 贴顶无让位，任何行高缩减都让泡体溢出压进下一片（diag33
-        // 实锤 lid=10449 同气泡自叠文字重叠）。所有补偿只允许落在整条/末片上；
-        // 未来新增补偿一律写在本门之后，禁止自带 split 条件绕过。
+        BOOL isMsgTail = (pos == MOMergePositionLast || pos == MOMergePositionSingle);
+        if (isMsgTail) {
+            njLogKeyed(self, [NSString stringWithFormat:
+                @"[MMZ] lid=%@ pos=%lu sp=%llu w=%.0f h=%.1f -> passthrough(组尾保原生)",
+                njLidOf(wrap), (unsigned long)pos, split, sz.width, s.height]);
+            return s;
+        }
+        // 末片门控：首片/中片是无缝泡体——原生切片气泡底=片边界、续片 bgTop=0
+        // 贴顶无让位，任何测量缩减都让泡体溢出压进下一片（diag33 实锤同气泡自叠）。
         if (split != 0 && split != 3) {
             njLogKeyed(self, [NSString stringWithFormat:
-                @"[NJH] lid=%@ pos=%lu sp=%llu h_orig=%.1f -> gated(首/中片无缝,禁一切补偿)",
-                njLidOf(wrap), (unsigned long)pos, split, h]);
-            return h;
+                @"[MMZ] lid=%@ pos=%lu sp=%llu w=%.0f h=%.1f -> gated(首/中片无缝)",
+                njLidOf(wrap), (unsigned long)pos, split, sz.width, s.height]);
+            return s;
         }
-
-        double reduce = 0;
-        // a) 组内间隙收拢：非组尾消息减间距（整条/末片的 split 限制由门控保证）
-        if (!isMsgTail && cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) {
-            reduce += (double)cfg.mmSpacing;
-        }
-        // b) 昵称补偿（组首+组中，仅整条消息）：[CELL] 探针实证（451245 批次）收方组
-        //    所有行原生均按昵称布局渲染（行内 bgTop=16、原生行高 65），昵称文本仅
-        //    组首绘制但空间每行都预留。组内间隙 = 上行行高 − 气泡高（bgTop 组内统
-        //    一），组首 65−N−sp=42（间隙 5pt ✓）而组中 65−sp=53（间隙 16pt ✗）即为
-        //    不均根因。组中同样减 N；Last 保持原生（65）保住组尾到组外的原生间隙；
-        //    Single 昵称可见不参与合并，不减。
-        //    【接管开启时】Middle/Last 的昵称区已由判定钩 v3 回收（原生 54 型），
-        //    组首也不减 N——组首气泡（bgTop=16）下溢的 11~12pt 原设计是填充下一行
-        //    顶部的昵称残留孔，接管后组中 bgTop=5 孔已不存在，再减 N 会让下溢直接
-        //    压住下一条气泡（截图实证：组首与第 2 条连体无缝、其余均匀）。接管后
-        //    组内间隙统一 = (行高−bgTop−气泡)+下行bgTop：组首 65−sp 下溢 1 填 5 空
-        //    → 4pt；组中 54−sp → 4pt，全程一致。
-        //    【diag33 实锤（lid=10449，两片切片）】N 不能随门控放宽到末片：整条消息
-        //    气泡底=行高−12（底部有 12pt 原生空隙），减 N+间距后溢出恒 11 < 下一行
-        //    让位 16 → 间隙 5 安全；末片 bg 恒占满整片（底隙在拉伸图内部、外部空隙
-        //    为 0），行高预算只有间距 12pt 的安全余量，再减 N 的 11pt 必压到可见泡
-        //    体（重叠/裁字），且间隙被 bg 占满恒等式锁死 16 不变——零收益纯风险。
-        //    故 N 仅减整条（split==0）；切片消息首片保持原生无缝，与组内下一条的
-        //    间隙比单行组大 ~11pt，四约束（不裁字/不叠字/不变形/不藏昵称）下的最优。
-        double nickReduce = 0;
-        if (cfg.mmNickJudgeTakeover) {
-            // 接管开启·昵称回收差补齐（间歇性根治，MioPlugin(82) 双波铁证）：
-            // 微信首测（布局前）不走判定钩（[NJD] 零 miss 日志 = 首测根本没调它）
-            // → 65 型（含昵称 11pt）固化；判定生效后的重测（54 型）非每次发生 →
-            // 渲染随机落在两波值（同 lid 两波 h_orig：160→149 / 88→77，恒差 11），
-            // 落第一波 = 组内大间隙，落第二波 = 正常，即"有时正常有时不正常"。
-            // 行高侧主动对齐回收态：Middle/Last（布局层昵称已被判定钩回收，bgTop
-            // 16→5）且 h_orig 为含昵称型（≥60 阈值；漂移带宽 62~68 vs 回收 51~57，
-            // 恒稳）且整条（split==0，昵称区只在整条/首片行高里，切片末片无昵称区）
-            // → 减昵称块，返回值与"判定已生效的重测值"严格相等，两波合流。
-            if (split == 0 &&
-                (pos == MOMergePositionMiddle || pos == MOMergePositionLast) &&
-                h >= 60.0) {
-                nickReduce = [MsgMergeEngine nicknameBlockHeight];
-            }
-        } else if ((pos == MOMergePositionFirst || pos == MOMergePositionMiddle) &&
-                   split == 0 && [chat hasSuffix:@"@chatroom"]) {
-            NSString *from = safeKVC(wrap, @"m_nsFromUsr");
-            if ([from isKindOfClass:[NSString class]] && [from hasSuffix:@"@chatroom"]) {
-                // 接管关闭：老 N 补偿路径，First/Middle 全减（下溢填昵称孔）
-                nickReduce = [MsgMergeEngine nicknameBlockHeight];
-            }
-        }
-        double final = h - reduce - nickReduce;
-        if (final < 24.0) final = 24.0;   // 下限 24 防裁切（内容顶对齐，缩减只吃底部空白）
-        // [NJH] 统一出口：测量行高与补偿明细一行列齐（与 [CELL] 渲染几何互证）
+        double h = (double)s.height - (double)cfg.mmSpacing;
+        if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
+        if (h >= (double)s.height) return s;
         njLogKeyed(self, [NSString stringWithFormat:
-            @"[NJH] lid=%@ pos=%lu sp=%llu h_orig=%.1f spR=%.1f nkR=%.1f take=%d final=%.1f",
-            njLidOf(wrap), (unsigned long)pos, split, h,
-            reduce, nickReduce, cfg.mmNickJudgeTakeover ? 1 : 0, final]);
-        if (final >= h) return h;
-        return final;
+            @"[MMZ] lid=%@ pos=%lu sp=%llu w=%.0f h_orig=%.1f -> %.1f (-%.0f)",
+            njLidOf(wrap), (unsigned long)pos, split, sz.width, s.height, h, (double)cfg.mmSpacing]);
+        return CGSizeMake(s.width, (CGFloat)h);
     } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[H] rowHeight exception: %@", e.reason);
+        s_inMeasure = NO;
+        WPLog(@"MsgMerge", @"[MMZ] measure exception: %@", e.reason);
     }
-    return h;
+    return s;
 }
 
 // ------------------------------------------------------------
@@ -654,8 +578,8 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
 //
 // v4（BubbleBox 同构数据预写）：判定只读预写标志（posFromVM O(1)），不引用
 // 节点数组、不查模型。标志由 BBMergeModel 重建+预写（rebuildAndApply）在
-// 事件触发点先行就位；首测（viewDidLoad+9~20ms）必经 rowHeight（行高唯一源，
-// 探针 #25/#26），而 updateChatContext（viewDidLoad 链路）已先完成预写 →
+// 事件触发点先行就位；首测（viewDidLoad+9~20ms）必经测量链（measure: 挂点，
+// 探针 #25/#26 实证行高唯一来源），而 updateChatContext（viewDidLoad 链路）已先完成预写 →
 // 首测即 54 型，无固化。标志缺席时读侧限频保鲜自愈（flagsPos）。
 //   v1（46332c2f）读 g_currentNodeArray 缓存：旧数组竞态，恒 miss 固化。
 //   v2（cd7ee314）现场邻接 indexOfObjectIdenticalTo:self：依赖「数组元素==vm
@@ -802,9 +726,9 @@ static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) 
 }
 
 // ------------------------------------------------------------
-// 建表期判定固化兜底：历史行的 rowHeight 只在建表期被问一次，若模型首次
+// 建表期判定固化兜底：历史行的行高只在建表期被问一次，若模型首次
 // 重建时渲染数组尚未就绪（刚进聊天数组未加载完，实证常态），错判定固化——
-// UITableView 不会对已建好的行重询 rowHeight，而模型按数组身份/指纹判失效，
+// UITableView 不会对已建好的行重询行高，而模型按数组身份/指纹判失效，
 // 之后条件不变不再重建（旧 TTL 架构靠微信加载完刷表重询自愈，独立模型堵死
 // 了该路径）。didAppear 落定后延迟主动重建 + begin/endUpdates 强制全表重询，
 // 行高无差异时无动画。
@@ -897,30 +821,12 @@ static void applyMergeToCellView(id cellView) {
         }
 
         // ② 群昵称：仅组首显示（私聊无昵称标签，操作无害）。
-        //    同时直测昵称区（微信摆好的原生 frame，先于任何修改）：
-        //    群收行（from=@chatroom 结尾）：N = bgTopInCell − g_plainBgY
-        //      （昵称开 16−5=11 / 关 5−5=0，diag33 表坐标实证）；
-        //    自发行（from=wxid）：无昵称区，bgTopInCell 恒为基准 → 校准 g_plainBgY。
-        //    bg.frame.origin.y 恒 0（diag34），必须用 bgTopWithinCell 折算。
+        //    行高侧昵称区回收由测量层负责（NJD 判定钩翻转 + 原生自动收缩），
+        //    此处只管渲染显隐。
         if (inGroup) {
             id name = safeCall(cellView, "getNameLabel");
             if ([name isKindOfClass:[UILabel class]]) {
-                UILabel *lb = (UILabel *)name;
-                NSString *from = safeKVC(wrap, @"m_nsFromUsr");
-                if ([from isKindOfClass:[NSString class]] && from.length > 0) {
-                    UIImageView *bgV = safeCall(cellView, "getBgImageView");
-                    if ([bgV isKindOfClass:[UIImageView class]]) {
-                        CGFloat bgTop = bgTopWithinCell(bgV);
-                        if (bgTop > 0) {
-                            if ([from hasSuffix:@"@chatroom"]) {
-                                [MsgMergeEngine reportNicknameBlock:bgTop - g_plainBgY];
-                            } else {
-                                g_plainBgY = bgTop;   // 自发行：无昵称区，校准基准
-                            }
-                        }
-                    }
-                }
-                lb.hidden = !isFirst;
+                [(UILabel *)name setHidden:!isFirst];
             }
         }
 
@@ -928,28 +834,6 @@ static void applyMergeToCellView(id cellView) {
         UIImageView *bg = safeCall(cellView, "getBgImageView");
         if ([bg isKindOfClass:[UIImageView class]]) {
             applyCorner(bg, pos);
-        }
-
-        // ④ N 变化触发行高重算（见 g_mmChatTable 处说明）
-        double nNow = [MsgMergeEngine nicknameBlockHeight];
-        if (s_lastAppliedN < 0) {
-            s_lastAppliedN = nNow;   // 首次仅登记基线
-        } else if (fabs(nNow - s_lastAppliedN) > 0.5) {
-            s_lastAppliedN = nNow;
-            UITableView *tbl = nil;
-            id cur = cellView;
-            for (int hop = 0; hop < 8 && cur; hop++) {
-                if ([cur isKindOfClass:[UITableView class]]) { tbl = cur; break; }
-                cur = safeCall(cur, "superview");
-            }
-            if (tbl) {
-                g_mmChatTable = tbl;
-                UITableView *t = tbl;
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [t reloadData];
-                });
-                WPLog(@"MsgMerge", @"[Nick] N→%.0f 变化，触发行高重算", nNow);
-            }
         }
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Apply] exception: %@", e.reason);
@@ -1169,15 +1053,65 @@ static void installMediaLayoutInternalHooks(void) {
     // ②b 阶段3：媒体子类 layoutInternal 判重补挂
     installMediaLayoutInternalHooks();
 
-    // ③ 行高钩子（间距收拢真正生效点；8.0.78 真实行高来源，探针 #26 实证）
-    cls = objc_getClass("BaseChatViewModel");
-    if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"rowHeight")]) {
-        MSHookMessageEx(cls, NSSelectorFromString(@"rowHeight"),
-                        (IMP)repl_BaseChatViewModel_rowHeight,
-                        &orig_BaseChatViewModel_rowHeight);
-        WPLog(@"MsgMerge", @"[Hook] ✓ BaseChatViewModel rowHeight");
-    } else {
-        WPLog(@"MsgMerge", @"[Hook] ✗ BaseChatViewModel rowHeight not found");
+    // ③ 测量层接管（BubbleBox 同款行高杠杆）。挂载策略 = 子类重写类判重补挂 +
+    //     根类单点（NJD 同款架构）：子类自带 measure: IMP 时根类钩子拦不到。
+    //     先扫描补挂（此时各类 IMP 仍原始，可判重），再挂根类覆盖继承实现。
+    //     每处安装前 dladdr 查 IMP 归属，被其他 dylib 占用则让位。
+    {
+        SEL selMeasure = NSSelectorFromString(@"measure:");
+        Class baseCls = objc_getClass("CommonMessageViewModel");
+        if (baseCls && [baseCls instancesRespondToSelector:selMeasure]) {
+            Method bm = class_getInstanceMethod(baseCls, selMeasure);
+            WPLog(@"MsgMerge", @"[Hook] measure: types=%s",
+                  bm ? method_getTypeEncoding(bm) : "(null)");
+            IMP baseIMP = bm ? method_getImplementation(bm) : NULL;
+            unsigned int n = 0;
+            Class *classes = objc_copyClassList(&n);
+            Dl_info info;
+            for (unsigned int i = 0; classes && i < n; i++) {
+                Class c = classes[i];
+                if (c == baseCls) continue;
+                BOOL derived = NO;
+                for (Class p = class_getSuperclass(c); p; p = class_getSuperclass(p)) {
+                    if (p == baseCls) { derived = YES; break; }
+                }
+                if (!derived) continue;
+                Method m = class_getInstanceMethod(c, selMeasure);
+                IMP cur = m ? method_getImplementation(m) : NULL;
+                if (!cur || cur == baseIMP) continue;   // 继承实现，根类单点覆盖
+                BOOL foreign = dladdr((void *)cur, &info) && info.dli_fname &&
+                               strstr(info.dli_fname, ".dylib") &&
+                               !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio");
+                if (foreign) {
+                    WPLog(@"MsgMerge", @"[Hook] ⊘ %s measure: 归属 %s，让位",
+                          class_getName(c), info.dli_fname);
+                    continue;
+                }
+                if (g_measClsCount >= 32) break;
+                IMP orig = NULL;
+                MSHookMessageEx(c, selMeasure, (IMP)repl_CMVM_measure, &orig);
+                g_measCls[g_measClsCount] = c;
+                g_measOrig[g_measClsCount] = orig;
+                g_measClsCount++;
+                WPLog(@"MsgMerge", @"[Hook] ✓ %s measure:（重写类补挂）", class_getName(c));
+            }
+            if (classes) free(classes);
+            // 根类单点（继承实现全覆盖）
+            Method m = class_getInstanceMethod(baseCls, selMeasure);
+            IMP cur = m ? method_getImplementation(m) : NULL;
+            BOOL foreign = cur && dladdr((void *)cur, &info) && info.dli_fname &&
+                           strstr(info.dli_fname, ".dylib") &&
+                           !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio");
+            if (foreign) {
+                WPLog(@"MsgMerge", @"[Hook] ⊘ CommonMessageViewModel measure: 归属 %s，让位不挂", info.dli_fname);
+            } else {
+                MSHookMessageEx(baseCls, selMeasure, (IMP)repl_CMVM_measure,
+                                &orig_CMVM_measure);
+                WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageViewModel measure:");
+            }
+        } else {
+            WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageViewModel measure: not found");
+        }
     }
 
     // ③b 昵称判定接管钩子（实验开关 mmNickJudgeTakeover，XOS 同款挂点）。
@@ -1254,100 +1188,7 @@ static void installMediaLayoutInternalHooks(void) {
         WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr AsyncOnAddMsg not found");
     }
 
-    // ⑤ 测量链探针（临时实证，验证后删除）：确认 rowHeight 链是否走 measure:/contentTextSize
-    static void installMeasureChainProbe(void);   // 实现见文件尾（@end 后）
-    installMeasureChainProbe();
-
     WPLog(@"MsgMerge", @"MsgMergeHook install complete");
 }
 
 @end
-
-// ============================================================
-// MARK: - 测量链探针（临时实证代码，验证后整体删除）
-// 目的：实证 8.0.78 行高链是否走 CommonMessageViewModel measure: /
-//       TextMessageViewModel contentTextSize，调用时机与 [NJH] rowHeight 对账。
-// 透传定式：返回 16 字节 struct（x0/x1 寄存器无损透传，CGSize/id 皆兼容）；
-//       参数一律 void*（ARC 垫片不 retain，类型无关）。
-// ============================================================
-typedef struct { unsigned long long x0, x1; } MSPPair;
-
-static MSPPair (*orig_MSP_measure)(void *, SEL, void *);
-static MSPPair (*orig_MSP_cts)(void *, SEL);
-static Class g_mspCls[16];
-static MSPPair (*g_mspOrig[16])(void *, SEL, void *);
-static NSInteger g_mspCount = 0;
-
-static long long mspLidOf(void *vm) {
-    @try {
-        id wrap = [(id)vm valueForKey:@"messageWrap"];
-        id v = [wrap valueForKey:@"m_uiMesLocalID"];
-        return [v respondsToSelector:@selector(longLongValue)] ? [v longLongValue] : 0;
-    } @catch (NSException *e) { return 0; }
-}
-
-static MSPPair repl_MSP_measure(void *self, SEL _cmd, void *arg) {
-    MSPPair (*o)(void *, SEL, void *) = orig_MSP_measure;
-    for (NSInteger i = 0; i < g_mspCount; i++) {
-        if (g_mspCls[i] == object_getClass(self)) { o = g_mspOrig[i]; break; }
-    }
-    MSPPair r = o(self, _cmd, arg);
-    WPLog(@"MsgMerge", @"[MSP] measure cls=%s lid=%lld ret=%llx,%llx arg=%p",
-          object_getClassName(self), mspLidOf(self), r.x0, r.x1, arg);
-    return r;
-}
-
-static MSPPair repl_MSP_cts(void *self, SEL _cmd) {
-    MSPPair r = orig_MSP_cts(self, _cmd);
-    WPLog(@"MsgMerge", @"[MSP] cts cls=%s lid=%lld ret=%llx,%llx",
-          object_getClassName(self), mspLidOf(self), r.x0, r.x1);
-    return r;
-}
-
-static void installMeasureChainProbe(void) {
-    SEL selM = NSSelectorFromString(@"measure:");
-    Class baseCls = objc_getClass("CommonMessageViewModel");
-    if (baseCls && [baseCls instancesRespondToSelector:selM]) {
-        Method bm = class_getInstanceMethod(baseCls, selM);
-        WPLog(@"MsgMerge", @"[MSP] enc CommonMessageViewModel measure: %s",
-              bm ? method_getTypeEncoding(bm) : "nil");
-        IMP baseIMP = bm ? method_getImplementation(bm) : NULL;
-        unsigned int n = 0;
-        Class *classes = objc_copyClassList(&n);
-        for (unsigned int i = 0; classes && i < n; i++) {
-            Class c = classes[i];
-            if (c == baseCls) continue;
-            BOOL derived = NO;
-            for (Class p = class_getSuperclass(c); p; p = class_getSuperclass(p))
-                if (p == baseCls) { derived = YES; break; }
-            if (!derived) continue;
-            Method m = class_getInstanceMethod(c, selM);
-            IMP cur = m ? method_getImplementation(m) : NULL;
-            if (!cur || cur == baseIMP) continue;   // 继承实现跳过，根类单点覆盖
-            if (g_mspCount >= 16) break;
-            MSPPair (*o)(void *, SEL, void *) = NULL;
-            MSHookMessageEx(c, selM, (IMP)repl_MSP_measure, (IMP *)&o);
-            g_mspCls[g_mspCount] = c;
-            g_mspOrig[g_mspCount] = o;
-            g_mspCount++;
-            WPLog(@"MsgMerge", @"[MSP] hook 重写类 %s measure:", class_getName(c));
-        }
-        if (classes) free(classes);
-        MSHookMessageEx(baseCls, selM, (IMP)repl_MSP_measure, (IMP *)&orig_MSP_measure);
-        WPLog(@"MsgMerge", @"[MSP] hook CommonMessageViewModel measure:");
-    } else {
-        WPLog(@"MsgMerge", @"[MSP] ✗ CommonMessageViewModel measure: not found");
-    }
-
-    SEL selC = NSSelectorFromString(@"contentTextSize");
-    Class tcls = objc_getClass("TextMessageViewModel");
-    if (tcls && [tcls instancesRespondToSelector:selC]) {
-        Method tm = class_getInstanceMethod(tcls, selC);
-        WPLog(@"MsgMerge", @"[MSP] enc TextMessageViewModel contentTextSize %s",
-              tm ? method_getTypeEncoding(tm) : "nil");
-        MSHookMessageEx(tcls, selC, (IMP)repl_MSP_cts, (IMP *)&orig_MSP_cts);
-        WPLog(@"MsgMerge", @"[MSP] hook TextMessageViewModel contentTextSize");
-    } else {
-        WPLog(@"MsgMerge", @"[MSP] ✗ TextMessageViewModel contentTextSize not found");
-    }
-}
