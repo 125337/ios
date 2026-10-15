@@ -2,17 +2,16 @@
 //  BBMergeModel.m
 //  MioPlugin
 //
-//  分组判定规则（语义零漂移）：
-//    相邻两条有效消息满足以下全部条件 → 合并为同一组：
+//  分组判定规则（语义零漂移，DB 存储层邻接）：
+//    两条有效消息满足以下全部条件 → 合并为同一组（shouldJoinDB）：
 //      ① senderUser 相等：m_nsFromUsr；若其以 @chatroom 结尾则改用 m_nsRealChatUsr
 //      ② 两者均为可合并类型（m_uiMessageType < 10000，系统/状态消息断组）
-//      ③ 均非分隔消息（mmMode==1 时按类型查分隔开关）
-//    时间打断 = 时间行两侧 Δ(m_uiCreateTime) > 299s 才断组（BubbleBox
-//    isNeedInsertTimeNode 同窗）；≤299s 的时间行是分钟粒度显示细节，穿透合并
-//    （91 号日志实证：一律断组会把连续组锯断，表情被顶成组头）。穿透必须带
-//    Δt 校验，无校验跳时间行合并会跨大间隔错并（早期实证判死教训）。
+//      ③ 均非分隔消息（mmMode==1 时按类型查分隔开关）/ 新邀请消息
+//      ④ |Δ(m_uiCreateTime)| ≤ 299s（BubbleBox isNeedInsertTimeNode 同窗，
+//        91 号日志实证：超窗断组，窗内分钟粒度时间行只是显示细节不断组）
 //
-//  查表架构 v5（预写层废弃，见 BBMergeModel.h 头注释）：
+//  查表架构 v6 · DB 单路径（预写层废弃见 BBMergeModel.h 头注释；UI 数组邻接
+//  路径废弃，双路径语义漂移实证：UI 侧时间行一律断组 / DB 侧 299s 窗）：
 //    rebuild 一次性预计算 entries + localID→entry 索引；读侧（measure:/昵称判定/
 //    渲染/昵称断供钩）按 wrap 的 localID 直接 O(1) 查索引，不依赖 vm 对象——
 //    微信整批重建 vm 时索引不受影响，测量瞬间查表即得正确值，零竞速零闪回。
@@ -21,15 +20,14 @@
 //    保证重复触发退化为 O(1) 比对。rebuild 返回内容变化数（新增/变化/移除），
 //    调用方仅在变化>0 时做可见刷新（表内容变化场景，不再有 vm 重建刷新需求）。
 //
-//  长文本切片 run 合并（MioPlugin(82) 实证）：一条消息（同 localID 连续多节点）
-//  仅一个 entry，pos 取首片 prev 邻接 + 末片 next 邻接；切片所有 vm 查表同 pos。
+//  长文本切片合一（MioPlugin(82) 实证）：一条消息（同 localID 连续多节点）
+//  仅一个 entry，lid 列表构建时去重；切片所有 vm 查表同 pos。
 //
 
 #import "BBMergeModel.h"
 #import "MsgMergeConfig.h"
 #import "../../Core/LogManager.h"
 #import <objc/message.h>
-#import <stdlib.h>
 
 // ============================================================
 // MARK: - 工具函数（自 MsgMergeEngine 原样移植）
@@ -71,7 +69,7 @@ static long long localIDOf(id wrap) {
     return [v longLongValue];
 }
 
-/// 消息创建时间（秒级 unix；时间行穿透 Δt 校验用）
+/// 消息创建时间（秒级 unix；合并 299s 时间窗用）
 static long long createTimeOf(id wrap) {
     id v = safeValue(wrap, @"m_uiCreateTime");
     if (![v respondsToSelector:@selector(longLongValue)]) return 0;
@@ -179,19 +177,25 @@ static id dbFindValidMsg(long long startLID, int direction) {
     return NO;                                          // 文本等默认参与合并
 }
 
-/// 两条消息是否满足合并条件（身份相等 + 均可合并 + 均非分隔符 + 均非新邀请）
-/// isNewInviteesMsg 双向查：新邀请是状态转换消息，自身不参与任何合并
-/// （BubbleBox isNeedInsertTimeNode 反编译实证单向查 current，双向更稳；
-/// 该消息 type 可能 <10000 能穿过类型闸，必须显式排除）
-+ (BOOL)shouldJoin:(id)wrapA wrapB:(id)wrapB {
+/// 合并判定唯一入口（DB 单路径）：身份相等 + 均可合并 + 均非分隔符/新邀请
+/// + 299s 时间窗。存储层无时间节点，时间窗按 BubbleBox isNeedInsertTimeNode:
+/// current: 反编译实证（002fe49c）：|Δm_uiCreateTime| > 299s 断组；
+/// isNewInviteesMsg 双向强制断组（type 可能 <10000 能穿过类型闸）。
++ (BOOL)shouldJoinDB:(id)wrapA wrapB:(id)wrapB {
+    if (!wrapA || !wrapB) return NO;
     if (!isMergeableWrap(wrapA) || !isMergeableWrap(wrapB)) return NO;
     if ([self isSeparatorMessage:wrapA] || [self isSeparatorMessage:wrapB]) return NO;
     if (isInviteesMsg(wrapA) || isInviteesMsg(wrapB)) return NO;
 
     NSString *idA = senderIdentity(wrapA);
     NSString *idB = senderIdentity(wrapB);
-    if (idA.length == 0 || idB.length == 0) return NO;
-    return [idA isEqualToString:idB];
+    if (idA.length == 0 || idB.length == 0 || ![idA isEqualToString:idB]) return NO;
+
+    long long ta = createTimeOf(wrapA);
+    long long tb = createTimeOf(wrapB);
+    if (ta <= 0 || tb <= 0) return NO;
+    long long diff = ta > tb ? ta - tb : tb - ta;
+    return diff <= 299;
 }
 
 // ============================================================
@@ -246,76 +250,66 @@ static id dbFindValidMsg(long long startLID, int direction) {
                && nodeArray.count > 0;
 
     if (active) {
-        // 节点数组 → wrap 数组（NSNull 占位时间节点等无 wrap 节点，天然断组）
-        NSMutableArray *wraps = [NSMutableArray arrayWithCapacity:nodeArray.count];
-        for (id node in nodeArray) {
-            id w = wrapOfNode(node);
-            [wraps addObject:(w ?: [NSNull null])];
-        }
-
-        // 切片 run 合并（MioPlugin(82) 实证）：长文本消息被微信拆成同 localID 的
-        // 连续多节点（共享同一 wrap 对象）。逐节点建 entry 有两个毒点：
-        //   ① 切片节点互相"自己 join 自己"（同 wrap → 同 sender → shouldJoin 恒
-        //      YES）→ 伪造邻接；
-        //   ② 后片 entry 覆盖 _index[lid] → 切片消息 pos 恒落在末片上。
-        // 正确语义：一条消息一个 entry，pos = 首片的 prev 邻接 + 末片的 next 邻接。
-        NSUInteger i = 0;
-        while (i < wraps.count) {
-            id wrap = wraps[i];
-            if (wrap == [NSNull null]) { i++; continue; }
-            if (!isMergeableWrap(wrap)) { i++; continue; }
-            if ([[self class] isSeparatorMessage:wrap]) { i++; continue; }
-            long long lid = localIDOf(wrap);
-            if (lid <= 0) { i++; continue; }
-
-            // 吞并同 lid 的连续切片节点（run 内不参与对外邻接）
-            NSUInteger runEnd = i;
-            while (runEnd + 1 < wraps.count) {
-                id nw = wraps[runEnd + 1];
-                if (nw == [NSNull null] || !isMergeableWrap(nw)) break;
-                if (localIDOf(nw) != lid) break;
-                runEnd++;
+        // DB 单路径（BubbleBox 同构；UI 数组邻接路径已废弃——双路径语义漂移
+        // 实证：UI 侧一律断组 / DB 侧 299s 窗，表情被分钟粒度时间行锯成组头）。
+        // UI 数组仅提供屏上有序 lid 列表（渲染集合），邻接判定全部走存储层，
+        // 与读侧 DB fill 同一套规则（shouldJoinDB），存储恒完整、步进跳已删
+        // 空洞、无记账迟滞窗口，微信裁剪数组不影响逻辑邻接。
+        //
+        // mgr 未捕获时不建 entries（读侧全 None 原生渲染）：nodeArray 非空
+        // 蕴含微信已调 GetMsg 加载消息（捕获必然完成），此分支仅理论保险；
+        // 读侧 None-miss 保鲜 rebuild 兜自愈。
+        if (!g_dbMgr || !g_dbTalker) {
+            WPLog(@"MsgMerge", @"[Model] DB not ready, rebuild skipped chat=%@", chatName);
+        } else {
+            // 屏上有序 lid 列表。切片合一（MioPlugin(82) 实证）：长文本消息被
+            // 微信拆成同 localID 连续多节点，一条消息一个 entry，否则切片互相
+            // "自己 join 自己"伪造邻接、末片 entry 覆盖索引。
+            NSMutableArray<NSNumber *> *lids = [NSMutableArray array];
+            for (id node in nodeArray) {
+                id w = wrapOfNode(node);
+                if (!w || !isMergeableWrap(w)) continue;            // 时间行/系统消息无 entry
+                if ([[self class] isSeparatorMessage:w]) continue;  // 分隔消息无 entry
+                long long lid = localIDOf(w);
+                if (lid <= 0) continue;
+                if (lids.count && [lids lastObject].longLongValue == lid) continue;
+                [lids addObject:@(lid)];
             }
 
-            // 邻居 = 最近有效节点（穿透连续时间行，Δt≤299s 才允许跨行 join）。
-            // 时间行语义与 DB 兜底（dbShouldJoin）对齐：微信分钟粒度插时间行
-            // （21:55→21:56 即插），5 分钟合并窗内的时间行全是显示细节，一律
-            // 断组会把连续组锯断（91 号日志实证：表情被顶成组头）。穿透必须
-            // 带 Δt 校验——无校验跳时间行合并会跨大间隔错并（实证判死教训）。
-            id prevWrap = nil;
-            for (NSInteger j = (NSInteger)i - 1; j >= 0; j--) {
-                if (wraps[j] == [NSNull null]) continue;
-                prevWrap = wraps[j];
-                if (llabs(createTimeOf(wrap) - createTimeOf(prevWrap)) > 299) prevWrap = nil;
-                break;
+            for (NSNumber *lidN in lids) {
+                long long lid = lidN.longLongValue;
+                id wrap = dbGetMsg(lid);
+                if (!wrap) {
+                    // UI 数组有而 DB 无：理论不可达（数组数据源自同一存储），
+                    // 负缓存防同一 localID 反复查库
+                    [self dbCacheEntry:nil lid:lid pos:MOMergePositionSingle];
+                    continue;
+                }
+                // 邻接 = findValidMsg 对齐（BubbleBox 002ffcdc）：±1 步进跳已删
+                // 空洞，上限 15 步
+                id prevWrap = dbFindValidMsg(lid, -1);
+                id nextWrap = dbFindValidMsg(lid, +1);
+                BOOL joinPrev = (prevWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:prevWrap];
+                BOOL joinNext = (nextWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:nextWrap];
+
+                MOMergePosition pos;
+                if (joinPrev && joinNext)      pos = MOMergePositionMiddle;
+                else if (joinPrev)             pos = MOMergePositionLast;
+                else if (joinNext)             pos = MOMergePositionFirst;
+                else                           pos = MOMergePositionSingle;
+
+                BBMergeEntry *e = [[BBMergeEntry alloc] init];
+                e.wrap = wrap;
+                e.senderUser = senderIdentity(wrap);
+                e.localID = lid;
+                e.type = [safeValue(wrap, @"m_uiMessageType") longLongValue];
+                e.pos = pos;
+                [tmp addObject:e];
+                _index[@(lid)] = e;
+#if !__has_feature(objc_arc)
+                [e release];
+#endif
             }
-            id nextWrap = nil;
-            for (NSUInteger j = runEnd + 1; j < wraps.count; j++) {
-                if (wraps[j] == [NSNull null]) continue;
-                nextWrap = wraps[j];
-                if (llabs(createTimeOf(wrap) - createTimeOf(nextWrap)) > 299) nextWrap = nil;
-                break;
-            }
-
-            BOOL joinPrev = (prevWrap != nil) && [[self class] shouldJoin:wrap wrapB:prevWrap];
-            BOOL joinNext = (nextWrap != nil) && [[self class] shouldJoin:wrap wrapB:nextWrap];
-
-            MOMergePosition pos;
-            if (joinPrev && joinNext)      pos = MOMergePositionMiddle;
-            else if (joinPrev)             pos = MOMergePositionLast;
-            else if (joinNext)             pos = MOMergePositionFirst;
-            else                           pos = MOMergePositionSingle;
-
-            BBMergeEntry *e = [[BBMergeEntry alloc] init];
-            e.wrap = wrap;
-            e.senderUser = senderIdentity(wrap);
-            e.localID = lid;
-            e.type = [safeValue(wrap, @"m_uiMessageType") longLongValue];
-            e.pos = pos;
-            [tmp addObject:e];
-            _index[@(lid)] = e;
-
-            i = runEnd + 1;
         }
     }
 
@@ -342,18 +336,6 @@ static id dbFindValidMsg(long long startLID, int direction) {
 // ============================================================
 // MARK: - 第二数据源（存储层邻接，BubbleBox 对齐）
 // ============================================================
-
-/// DB 邻接合并判定 = shouldJoin（已含 isNewInviteesMsg）+ 299s 时间窗。存储层
-/// 无时间节点，按 BubbleBox isNeedInsertTimeNode:current: 反编译实证（002fe49c）：
-/// |Δm_uiCreateTime| > 299s 需插时间行（断组）。
-+ (BOOL)shouldJoinDB:(id)wrapA wrapB:(id)wrapB {
-    if (![self shouldJoin:wrapA wrapB:wrapB]) return NO;
-    long long ta = [safeValue(wrapA, @"m_uiCreateTime") longLongValue];
-    long long tb = [safeValue(wrapB, @"m_uiCreateTime") longLongValue];
-    if (ta <= 0 || tb <= 0) return NO;
-    long long diff = ta > tb ? ta - tb : tb - ta;
-    return diff <= 299;
-}
 
 /// DB 查询结果缓存进索引（负缓存 wrap=nil，防空洞 localID 反复查库）
 - (void)dbCacheEntry:(id)wrap lid:(long long)lid pos:(MOMergePosition)pos {

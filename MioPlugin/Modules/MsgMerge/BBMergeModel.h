@@ -2,10 +2,13 @@
 //  BBMergeModel.h
 //  MioPlugin
 //
-//  消息合并独立模型（查表架构 v5）：
-//  分组结果在 rebuild 时一次性预计算（entries + localID→entry 索引）。
-//  读侧（measure:/昵称判定/渲染/昵称断供钩）一律按 wrap 的 localID 直接
-//  O(1) 查索引（posForLocalID:）——模型即真相，不依赖 vm 对象。
+//  消息合并独立模型（查表架构 v6 · DB 单路径）：
+//  分组结果在 rebuild 时一次性预计算（entries + localID→entry 索引），邻接
+//  判定全部走微信存储层（GetMsg:LocalID: ±1 步进跳已删空洞，BubbleBox
+//  findValidMsg 同构）——UI 数组仅提供屏上 lid 渲染集合，UI 数组邻接路径已
+//  废弃（双路径语义漂移实证：UI 侧时间行一律断组 / DB 侧 299s 窗，表情被
+//  分钟粒度时间行锯成组头）。读侧（measure:/昵称判定/渲染/昵称断供钩）一律
+//  按 wrap 的 localID 直接 O(1) 查索引（posForLocalID:）——模型即真相。
 //
 //  【为什么废弃预写层（89 号日志定论）】旧 BubbleBox 同构方案把分组位置用
 //  关联对象写到 vm 上，但 vm 生命周期归微信管：进聊天/滚动时微信整批重建 vm
@@ -33,19 +36,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// 按 localID 查 entry
 - (nullable BBMergeEntry *)entryForLocalID:(long long)lid;
 
-/// 两条消息是否满足合并条件（身份相等 + 均可合并 + 均非分隔符，纯函数）
-+ (BOOL)shouldJoin:(id)wrapA wrapB:(id)wrapB;
+/// 合并判定唯一入口（DB 单路径）：身份相等 + 均可合并 + 均非分隔符/新邀请
+/// + 299s 时间窗（BubbleBox isNeedInsertTimeNode 同语义）
++ (BOOL)shouldJoinDB:(id)wrapA wrapB:(id)wrapB;
 
 // ------------------------------------------------------------
 // 查表架构（v5）
 // ------------------------------------------------------------
 
 /// 重建（事件驱动触发点的唯一入口，幂等守卫：同数组/同会话/同配置指纹跳过）。
-/// @param nodeArray 聊天 VC 的 m_arrMessageNodeData
-/// @param chatName  会话名（talker；mmOnlyRoom 判断用）
-/// @return 内容变化数（新增条目 + pos 变化 + 条目移除，0=无变化）——调用方据此
-/// 触发可见刷新（resetLayoutCache + cellView setNeedsLayout），只覆盖
-/// 「表内容变化」场景（新消息/历史补齐/配置切换），不再有 vm 重建刷新需求
+/// @param nodeArray 聊天 VC 的 m_arrMessageNodeData（仅提供屏上有序 lid 渲染集合；
+///                   邻接判定全走存储层——DB 单路径，UI 数组邻接已废弃）
+/// @param chatName  会话名（talker；mmOnlyRoom 判断用 + DB 邻接查询的 talker）
+/// @return 内容变化数（新增条目 + pos 变化，0=无变化）——调用方据此
+/// 触发可见刷新（resetLayoutCache + cellView setNeedsLayout）
 - (NSUInteger)rebuildFromNodeArray:(nullable NSArray *)nodeArray
                           chatName:(nullable NSString *)chatName;
 
