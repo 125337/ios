@@ -61,6 +61,7 @@ static IMP orig_CMCellView_updateNodeStatus     = NULL;
 static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chatroom id，私聊=对端 id）
 static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageNodeData（行高钩子用，retain）
 static __weak UIViewController *g_curChatVC = nil;   // 当前聊天 VC（新消息入库联动重排用）
+static NSInteger g_njLogCount = 0;   // 判定钩限频日志计数（updateChatContext 每会话清零）
 
 static id safeKVC(id obj, NSString *key);   // 定义见下文视图安全访问节
 
@@ -593,7 +594,6 @@ static IMP orig_CMVM_isShowChatRoomDisplayName = NULL;
 static Class g_nickCls[32];
 static IMP   g_nickOrig[32];
 static int   g_nickClsCount = 0;
-static NSInteger g_njLogCount = 0;   // 判定钩限频日志计数（updateChatContext 每会话清零）
 
 static IMP nickOrigForClass(Class c) {
     for (int i = 0; i < g_nickClsCount; i++) {
