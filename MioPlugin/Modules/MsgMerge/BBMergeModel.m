@@ -238,7 +238,7 @@ static id wrapOfNode(id node) {
 
     self.entries = tmp;
     // 内容变化数 = 新增 lid + pos 变化 + 移除 lid（调用方仅在 >0 时可见刷新）
-    NSUInteger changed = 0;
+    __block NSUInteger changed = 0;
     [_index enumerateKeysAndObjectsUsingBlock:^(NSNumber *lid, BBMergeEntry *e, BOOL *stop) {
         NSNumber *old = oldPos[lid];
         if (!old) { changed++; return; }
