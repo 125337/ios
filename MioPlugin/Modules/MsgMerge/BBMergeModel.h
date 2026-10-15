@@ -2,12 +2,15 @@
 //  BBMergeModel.h
 //  MioPlugin
 //
-//  消息合并独立模型（对齐 BubbleBox 独立 entries 架构）：
-//  持有当前会话的 entries 数组（渲染顺序）与 localID→entry 索引，位置标志
-//  在 rebuild 时一次性预计算。替代旧「逐查询现算邻接 + 5s TTL 缓存」——
-//  旧架构在新消息到达时靠微信下次布局被动触发重算，时机不可控且查询会把
-//  早于节点追加的错判定写回缓存（毒缓存，探针实证）；本模型重建只发生在
-//  主动触发（切会话/新消息轮询确认追加/配置或数组身份变化），查询只读。
+//  消息合并独立模型（BubbleBox 同构架构）：
+//  分组结果在 rebuild 时一次性预计算（entries + localID→entry 索引），
+//  随后由 apply 阶段把位置标志用关联对象写到每个消息 viewModel 上
+//  （对齐 BubbleBox 的 setB_isFirstMessage 等预写模式）。rowHeight / 昵称
+//  判定 / 渲染钩子一律只读关联标志（posFromVM，O(1)），零查询、零数组
+//  交叉引用、零查询期重建——旧「查询期失效检测 + 保鲜重查」补丁链已整体删除。
+//
+//  重建+预写只发生在事件触发点（切会话/进聊天/新消息轮询确认追加/读侧
+//  None-miss 限频保鲜），rebuild 幂等守卫保证重复触发退化为 O(1) 比对。
 //
 
 #import <Foundation/Foundation.h>
@@ -22,12 +25,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (instancetype)shared;
 
-/// 从渲染数组主动重建 entries（新消息入库联动/切会话/配置变化后调用）
-/// @param nodeArray 聊天 VC 的 m_arrMessageNodeData（元素为消息 viewModel / ChatTimeViewModel）
-/// @param chatName  会话名（talker；mmOnlyRoom 判断用）
-- (void)rebuildWithNodeArray:(nullable NSArray *)nodeArray
-                    chatName:(nullable NSString *)chatName;
-
 /// 按 localID 查 entry
 - (nullable BBMergeEntry *)entryForLocalID:(long long)lid;
 
@@ -35,11 +32,25 @@ NS_ASSUME_NONNULL_BEGIN
 /// rebuild 的分组判定与昵称判定钩的现场邻接判定共用此规则（单一事实源）
 + (BOOL)shouldJoin:(id)wrapA wrapB:(id)wrapB;
 
-/// 渲染/行高钩子的位置查询入口：失效检测（数组身份/配置指纹变化→就地重建）
-/// 后查表；查不到（时间节点/分隔消息/陈旧 vm）返回 None
-- (MOMergePosition)positionForWrap:(id)wrap
-                          chatName:(nullable NSString *)chatName
-                         nodeArray:(nullable NSArray *)nodeArray;
+// ------------------------------------------------------------
+// BubbleBox 同构预写层（本架构核心，见 BBMergeModel.m 头注释）
+// ------------------------------------------------------------
+
+/// 重建 + 预写（事件驱动触发点的唯一入口）：
+/// rebuild（幂等守卫：同数组/同会话/同配置指纹直接跳过）后把分组位置用
+/// 关联对象写到每个消息 viewModel 上。写标志与重建同函数同刻完成，
+/// 保证测量/渲染钩读到的一定是当前代次的标志。
+/// @param nodeArray 聊天 VC 的 m_arrMessageNodeData（元素为消息 viewModel / ChatTimeViewModel）
+/// @param chatName  会话名（talker；mmOnlyRoom 判断用）
+- (void)rebuildAndApplyWithNodeArray:(nullable NSArray *)nodeArray
+                            chatName:(nullable NSString *)chatName;
+
+/// 标志读取（O(1) 关联对象读）：未预写/组外/不可合并/功能未激活 = None。
+/// 所有钩子（rowHeight/昵称判定/渲染/昵称断供）只读本方法，禁止查模型。
++ (MOMergePosition)posFromVM:(id)vm;
+
+/// 当前配置是否与上次重建时的分组配置指纹不一致（O(1)，读侧保鲜判断用）
+- (BOOL)configFingerprintChanged;
 
 /// 清空模型（切会话时调用，防跨会话残留）
 - (void)clear;

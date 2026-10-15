@@ -10,15 +10,28 @@
 //    时间打断 = 渲染数组中 ChatTimeViewModel 无 wrap（NSNull 占位），天然断组；
 //    邻居只看紧邻节点（跳过时间节点找"最近有效邻居"会跨时间行合并，实证判死）。
 //
-//  重建触发（needsRebuild，查询时自动检测 + 外部主动调用）：
-//    entries 空 / 数组对象指针变化 / 数组计数变化 / 分组配置指纹变化。
-//    配置指纹只含影响分组的开关（mmEnable/mmOnlyRoom/mmMode/mmSepMedia/mmSepEmoticon），
-//    间距/偏移等渲染参数是查询期读值，不参与指纹。
+//  BubbleBox 同构预写层（本架构核心）：
+//    rebuild 完成后 apply 阶段把分组位置（MOMergePosition）用关联对象写到
+//    每个消息 viewModel 上（对齐 BubbleBox 把 b_isFirstMessage 等 objc_msgSend
+//    直写到 viewModel 的模式）。rowHeight / 昵称判定 / 渲染 / 昵称断供钩子
+//    一律 posFromVM O(1) 读标志，不引用节点数组、不查模型、不在读路径重建。
+//    写标志与重建同函数同刻完成（rebuildAndApply），不存在「标志已变但测量
+//    消费旧值」的窗口；rebuild 幂等守卫（同数组/同会话/同配置指纹跳过）+
+//    apply 全量重写（vm 可能被微信重建，缺席 = None = 原生直通）。
+//
+//  重建+预写触发（事件驱动，唯一入口 rebuildAndApplyWithNodeArray）：
+//    切会话 / 进聊天 / 新消息轮询确认追加 / 读侧 None-miss 限频保鲜（0.5s）。
+//    配置指纹只含影响分组的开关（mmEnable/mmOnlyRoom/mmMode/mmSepMedia/
+//    mmSepEmoticon），间距/偏移等渲染参数是钩子内读值，不参与指纹。
+//
+//  长文本切片 run 合并（MioPlugin(82) 实证）：一条消息（同 localID 连续多节点）
+//  仅一个 entry，pos 取首片 prev 邻接 + 末片 next 邻接；切片所有 vm 写同一 pos。
 //
 
 #import "BBMergeModel.h"
 #import "MsgMergeConfig.h"
 #import "../../Core/LogManager.h"
+#import <objc/runtime.h>
 
 // ============================================================
 // MARK: - 工具函数（自 MsgMergeEngine 原样移植）
@@ -71,6 +84,22 @@ static id wrapOfNode(id node) {
     return safeValue(node, @"messageWrap");
 }
 
+// ------------------------------------------------------------
+// 预写层（BubbleBox 同构）
+// ------------------------------------------------------------
+
+/// 分组位置关联对象 key（写在消息 viewModel 上，读侧 posFromVM 消费）
+static void *kBBPosKey = &kBBPosKey;
+
+/// 标志写入目标 = 读侧钩子里的 vm 本体（rowHeight/昵称判定钩的 self、
+/// cellView.viewModel）。与 wrapOfNode 同构：节点带 viewModel 层时写 viewModel，
+/// 节点本身是 viewModel（ChatTimeViewModel 等）时写节点自己。
+static id flagTargetOfNode(id node) {
+    if (!node) return nil;
+    id vm = safeValue(node, @"viewModel");
+    return vm ?: node;
+}
+
 @implementation BBMergeModel {
     NSMutableDictionary<NSNumber *, BBMergeEntry *> *_index;   // localID → entry
     NSArray *_lastArray;      // 上次重建的数组引用（指针身份失效检测）
@@ -120,7 +149,7 @@ static id wrapOfNode(id node) {
 }
 
 // ============================================================
-// MARK: - 重建
+// MARK: - 重建（仅 rebuildAndApplyWithNodeArray 内部调用，无查询期重建）
 // ============================================================
 
 - (void)rebuildWithNodeArray:(NSArray *)nodeArray
@@ -230,10 +259,10 @@ static id wrapOfNode(id node) {
 }
 
 // ============================================================
-// MARK: - 查询入口
+// MARK: - 预写层（BubbleBox 同构）
 // ============================================================
 
-/// 分组配置指纹变化检测（影响分组的开关才参与；渲染参数是查询期读值）
+/// 分组配置指纹变化检测（影响分组的开关才参与；渲染参数是钩子内读值）
 - (BOOL)configFingerprintChanged {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     return cfg.mmEnable != _fpEnable || cfg.mmOnlyRoom != _fpOnlyRoom
@@ -241,20 +270,41 @@ static id wrapOfNode(id node) {
         || cfg.mmSepEmoticon != _fpSepEmoticon;
 }
 
-- (MOMergePosition)positionForWrap:(id)wrap
-                          chatName:(NSString *)chatName
-                         nodeArray:(NSArray *)nodeArray {
-    if (!wrap) return MOMergePositionNone;
-    MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    if (!cfg.mmEnable) return MOMergePositionNone;
-    // 刚进聊天数组未加载属常态（与旧版一致：空数组一律 None 不干预）
-    if (nodeArray.count == 0) return MOMergePositionNone;
-    if (!_lastArray || nodeArray != _lastArray || nodeArray.count != _lastCount
-        || [self configFingerprintChanged]) {
-        [self rebuildWithNodeArray:nodeArray chatName:chatName];
+/// apply 阶段：把 entries 的位置用关联对象写到节点数组每个 vm 上。
+/// 全量重写（rebuild 幂等跳过时仍执行——vm 可能被微信整表重建，旧标志随对象
+/// 消失，必须补写）；查不到 entry 的 vm 清标志（缺席 = None = 原生直通）。
+/// 功能未激活（entries 空）时全清，等价于「关闭立即生效」。
+- (void)applyToNodeArray:(NSArray *)nodeArray {
+    NSUInteger written = 0;
+    for (id node in nodeArray) {
+        id vm = flagTargetOfNode(node);
+        if (!vm) continue;
+        id wrap = wrapOfNode(node);
+        BBMergeEntry *e = wrap ? [self entryForLocalID:localIDOf(wrap)] : nil;
+        if (e) {
+            objc_setAssociatedObject(vm, kBBPosKey, @(e.pos),
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            written++;
+        } else {
+            objc_setAssociatedObject(vm, kBBPosKey, nil,
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
     }
-    BBMergeEntry *e = [self entryForLocalID:localIDOf(wrap)];
-    return e ? e.pos : MOMergePositionNone;
+    WPLog(@"MsgMerge", @"[Model] apply nodes=%lu written=%lu",
+          (unsigned long)nodeArray.count, (unsigned long)written);
+}
+
+/// 事件驱动触发点的唯一入口：rebuild（幂等守卫）+ apply（全量重写）同刻完成
+- (void)rebuildAndApplyWithNodeArray:(NSArray *)nodeArray
+                            chatName:(NSString *)chatName {
+    [self rebuildWithNodeArray:nodeArray chatName:chatName];
+    [self applyToNodeArray:nodeArray];
+}
+
++ (MOMergePosition)posFromVM:(id)vm {
+    if (!vm) return MOMergePositionNone;
+    NSNumber *v = objc_getAssociatedObject(vm, kBBPosKey);
+    return v ? (MOMergePosition)[v unsignedIntegerValue] : MOMergePositionNone;
 }
 
 - (void)clear {

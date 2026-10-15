@@ -3,10 +3,13 @@
 //  MRC 编译（与工程一致）
 //
 //  架构（对齐 BubbleBox 反编译证据 + 工程既有范式）：
-//    ⓪ 分组判定来源 = 独立模型 BBMergeModel（BBMergeEntry entries 预计算 +
-//       主动重建，旧"逐查询现算邻接 + 5s TTL 缓存"已删）；渲染/行高钩子只查表。
+//    ⓪ 数据预写（BubbleBox 同构核心）：BBMergeModel 重建后 apply 阶段把分组
+//       位置用关联对象写到每个消息 viewModel 上（对齐 BubbleBox 的
+//       setB_isFirstMessage 预写模式）；rowHeight/昵称判定/渲染/昵称断供钩子
+//       一律 posFromVM O(1) 读标志——零查询、零数组交叉引用、零读路径重建，
+//       旧「查询期失效检测 + 保鲜重查」补丁链已整体删除。
 //    ① BaseMsgContentViewController viewDidLoad/viewWillAppear: → 跟踪当前会话
-//       与渲染数组 m_arrMessageNodeData
+//       与渲染数组 m_arrMessageNodeData（上下文变化即触发重建+预写）
 //    ② CommonMessageCellView layoutInternal / updateNodeStatus → 按节点位置
 //       应用合并渲染：头像显隐 / 群昵称显隐 / 气泡圆角连续化
 //       （⑤ 阶段2 布局接管：白名单类型（文本1+媒体 3/34/43/49/62）&& mmOwnLayout 时
@@ -23,9 +26,8 @@
 //    delegate heightForRow 与 self-sizing 在 8.0.78 均零调用（探针 #13/#14/#17/#18）。
 //    ④ CommonMessageViewModel isShowChatRoomDisplayName → 昵称判定接管（实验开关
 //       mmNickJudgeTakeover）：组内非首条返 NO，微信原生按无昵称测量+布局自动回收
-//       昵称区（65→54 型）。判定查 BBMergeModel（localID 索引+失效检测自动重建），
-//       与测量同链路同刻，首测即正确无固化（v1 缓存竞态/v2 元素身份 miss 均已删，
-//       BubbleBox 数据预写同源思路）。接管开启后 rowHeight 仅组首减昵称补偿 N。
+//       昵称区（65→54 型）。判定读预写标志（posFromVM），与测量同链路同刻，
+//       首测即正确无固化。接管开启后 rowHeight 仅组首减昵称补偿 N。
 //
 //  挂载点为 CommonMessageCellView 头文件实证方法（layoutInternal/updateNodeStatus
 //  与 BubbleBox 反编译钩子点一致）。
@@ -63,7 +65,7 @@ static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageN
 static __weak UIViewController *g_curChatVC = nil;   // 当前聊天 VC（新消息入库联动重排用）
 
 static id safeKVC(id obj, NSString *key);   // 定义见下文视图安全访问节
-static NSUInteger g_currentNodeCount;       // 定义见下文数据源保鲜节
+static void rebuildAndApplyFromContext(void);   // 定义见下文数据源保鲜节（前向声明）
 
 static void updateChatContext(id self) {
     g_curChatVC = self;
@@ -92,7 +94,8 @@ static void updateChatContext(id self) {
 #endif
             g_currentNodeArray = arr;
         }
-        g_currentNodeCount = arr.count;   // 保鲜检测的 count 基准同步（原地 append 场景）
+        // 上下文变化即重建+预写（BubbleBox 同构：标志先于测量就位）
+        rebuildAndApplyFromContext();
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] updateChatContext exception: %@", e.reason);
     }
@@ -364,31 +367,8 @@ static void applyOwnLayout(id cellView, BOOL active) {
 }
 
 // ============================================================
-// MARK: - 聊天 VC 渲染数组获取
+// MARK: - 会话名推导
 // ============================================================
-
-/// 从 cellView 沿 responder 链找 BaseMsgContentViewController（8.0.78 实证其持有
-/// m_arrMessageNodeData 渲染数组；CMessageMgr 无单例访问器，查库方案不可用）
-static id findMsgContentVC(id view) {
-    id cur = view;
-    for (int hop = 0; hop < 24 && cur; hop++) {
-        id rr = cur;
-        for (int j = 0; j < 12 && rr; j++) {
-            Class baseCls = objc_getClass("BaseMsgContentViewController");
-            if (baseCls && [rr isKindOfClass:baseCls]) return rr;
-            rr = safeCall(rr, "nextResponder");
-        }
-        cur = safeCall(cur, "superview");
-    }
-    return nil;
-}
-
-/// 取聊天 VC 的消息渲染数组（消息表数据源，元素为消息 viewModel）
-static NSArray *msgNodeArrayOfCellView(id cellView) {
-    id vc = findMsgContentVC(cellView);
-    if (!vc) return nil;
-    return safeKVC(vc, @"m_arrMessageNodeData");
-}
 
 /// 会话名从 wrap 推导（GetContact 跟踪链路在 8.0.60 上不可靠）
 static NSString *chatNameOfWrap(id wrap) {
@@ -512,23 +492,21 @@ static NSString *njLidOf(id wrap) {
     return [v respondsToSelector:@selector(stringValue)] ? [v stringValue] : @"?";
 }
 
-// —— 数据源保鲜（MioPlugin(82) 间歇性主犯实证）——
+// —— 数据源保鲜 + 读侧标志（BubbleBox 同构读路径）——
+// 读路径唯一合法动作：标志读不到 → 限频触发一次「重读数组 + rebuild + apply」，
+// 然后重读标志。重建本体在 BBMergeModel（幂等守卫，同输入 O(1)），读侧不做任何
+// 邻接判定——判定钩与行高钩引用不同数组对象致失效检测恒真、每次查询全量重建
+// 卡死主线程的教训，就是靠「读侧只读标志」根治的。
 // m_arrMessageNodeData 是原地 append 的可变数组：滚动加载历史后指针不变、count
-// 增长，而垫片持有的 g_currentNodeArray 是进聊天时抓的旧引用 → 失效检测（指针+count
-// 均按旧值比对）恒判定"未变"→ 不重建 → 新载入消息判定全 miss None → 昵称残留大
-// 间隙。滚到哪 miss 到哪 = "有时正常有时不正常"。
-static double g_lastArrCheck = 0;      // 上次新鲜度检查时间戳（0.5s 限频）
-static NSUInteger g_currentNodeCount = 0;
+// 增长，g_currentNodeArray 始终指向同一可变数组，重读 .count/元素即拿到最新状态。
+static double g_lastArrCheck = 0;      // 上次保鲜触发时间戳（0.5s 限频）
 
-static void ensureFreshNodeArray(void) {
-    double now = [NSDate timeIntervalSinceReferenceDate];
-    if (now - g_lastArrCheck < 0.5) return;
-    g_lastArrCheck = now;
+/// 事件驱动重建+预写的统一入口（切会话/进聊天/新消息确认追加/读侧保鲜都走这里）
+static void rebuildAndApplyFromContext(void) {
     UIViewController *vc = g_curChatVC;
     if (!vc) return;
     NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
     if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return;
-    if (arr == g_currentNodeArray && arr.count == g_currentNodeCount) return;
 #if __has_feature(objc_arc)
     g_currentNodeArray = arr;
 #else
@@ -536,25 +514,33 @@ static void ensureFreshNodeArray(void) {
     [g_currentNodeArray release];
     g_currentNodeArray = arr;
 #endif
-    g_currentNodeCount = arr.count;
     NSString *chat = currentChatName();
     if (chat.length > 0) {
-        [[BBMergeModel shared] rebuildWithNodeArray:arr chatName:chat];
-        WPLog(@"MsgMerge", @"[Ctx] node array refreshed count=%lu", (unsigned long)arr.count);
+        [[BBMergeModel shared] rebuildAndApplyWithNodeArray:arr chatName:chat];
     }
 }
 
-/// 分组查询统一入口：None 时先做一次限频数据源保鲜再重查——切片/新载入消息的
-/// 判定 miss 若由数组过期引起，重查即命中；真组外消息只多付 0.5s 一次的 KVC。
-static MOMergePosition queryPos(id wrap, NSString *chat) {
-    MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
-                                                        chatName:chat
-                                                       nodeArray:g_currentNodeArray];
-    if (pos != MOMergePositionNone) return pos;
-    ensureFreshNodeArray();
-    return [[BBMergeModel shared] positionForWrap:wrap
-                                         chatName:chat
-                                        nodeArray:g_currentNodeArray];
+/// 读侧限频保鲜：新载入消息/空数组期的标志缺席由此自愈，0.5s 一次封顶
+static void refreshModelNow(void) {
+    double now = [NSDate timeIntervalSinceReferenceDate];
+    if (now - g_lastArrCheck < 0.5) return;
+    g_lastArrCheck = now;
+    rebuildAndApplyFromContext();
+}
+
+/// 读侧标志统一入口（rowHeight/昵称判定/渲染/昵称断供四钩子走这里）：
+/// 纯 O(1) 关联对象读；标志缺席 → 限频保鲜一次再读；配置指纹变化 → 立即
+/// 重建+预写（与旧查询期重建同语义，最多一次，重建后指纹守卫归零）。
+static MOMergePosition flagsPos(id vm) {
+    BBMergeModel *m = [BBMergeModel shared];
+    MOMergePosition pos = [BBMergeModel posFromVM:vm];
+    if (pos != MOMergePositionNone && ![m configFingerprintChanged]) return pos;
+    if ([m configFingerprintChanged]) {
+        rebuildAndApplyFromContext();
+    } else {
+        refreshModelNow();
+    }
+    return [BBMergeModel posFromVM:vm];
 }
 
 static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
@@ -573,10 +559,10 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
             return h;
         }
 
-        MOMergePosition pos = queryPos(wrap, chat);
+        MOMergePosition pos = flagsPos(self);
         if (pos == MOMergePositionNone) {
             njLogKeyed(self, [NSString stringWithFormat:
-                @"[NJH] lid=%@ pos=None h_orig=%.1f -> passthrough(组外/模型miss)",
+                @"[NJH] lid=%@ pos=None h_orig=%.1f -> passthrough(组外/标志缺席)",
                 njLidOf(wrap), h]);
             return h;
         }
@@ -666,14 +652,17 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
 // 组内非首条返 NO → 微信原生按「无昵称行」测量+布局：bgTop 16→5、行高自动回收
 // 昵称区（65→54）、切片泡体随 bgTop 上移零溢出（XOS 态几何取证实证）。
 //
-// v3（对齐 BubbleBox 数据预写模式）：判定查 BBMergeModel（localID 索引 O(1)），
-// 模型失效检测（数组指针/count/配置指纹）在查询内自动同步重建，与测量同链路
-// 同时刻。首测（viewDidLoad+9~20ms）必经 rowHeight（行高唯一源，探针 #25/#26），
-// 数组已装满（+7~14ms，时序探针实证）→ 查表必命中 → 首测即 54 型，无固化。
+// v4（BubbleBox 同构数据预写）：判定只读预写标志（posFromVM O(1)），不引用
+// 节点数组、不查模型。标志由 BBMergeModel 重建+预写（rebuildAndApply）在
+// 事件触发点先行就位；首测（viewDidLoad+9~20ms）必经 rowHeight（行高唯一源，
+// 探针 #25/#26），而 updateChatContext（viewDidLoad 链路）已先完成预写 →
+// 首测即 54 型，无固化。标志缺席时读侧限频保鲜自愈（flagsPos）。
 //   v1（46332c2f）读 g_currentNodeArray 缓存：旧数组竞态，恒 miss 固化。
 //   v2（cd7ee314）现场邻接 indexOfObjectIdenticalTo:self：依赖「数组元素==vm
 //   本体」，元素实为节点包装对象（wrapOfNode 实证 node 有 .viewModel 层）时恒
 //   miss → 判定全程 orig → 65 型固化 + [NJ] 无一条 54 型（74 号日志实证），已删。
+//   v3 查 BBMergeModel + 查询内失效检测：双钩子数组引用失配时每次查询全量
+//   重建（卡死主线程，幂等守卫只是补丁），已随预写架构整体删除。
 // 安装前 dladdr 查 IMP 归属：被其他 dylib（XOS）占用则让位不挂（防互递归）。
 // ------------------------------------------------------------
 static IMP orig_CMVM_isShowChatRoomDisplayName = NULL;
@@ -714,15 +703,8 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
                 @"[NJD] lid=%@ miss=not-room -> orig", njLidOf(wrap)]);
             return origVal;
         }
-        NSArray *arr = g_currentNodeArray;
-        if (arr.count < 2) {
-            njLogKeyed(self, [NSString stringWithFormat:
-                @"[NJD] lid=%@ miss=no-arr(count=%lu) -> orig",
-                njLidOf(wrap), (unsigned long)arr.count]);
-            return origVal;
-        }
         s_inJudge = YES;
-        MOMergePosition pos = queryPos(wrap, chat);
+        MOMergePosition pos = flagsPos(self);
         s_inJudge = NO;
         // 组内非首条（Middle/Last）返 NO → 原生按无昵称测量+布局自动回收昵称区
         if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) {
@@ -759,9 +741,9 @@ static void mergeFindTable(UIView *v, int depth, UITableView **out) {
 
 static void mergeDoReload(void) {
     s_mergeRelayoutPending = NO;
-    // 独立模型主动重建（本方案核心）：轮询已确认节点追加，此刻重建的 entries
-    // 即含新消息的正确邻接；旧架构此处只清缓存、靠微信后续查询现算回填（会把
-    // 中间态判定写回缓存=毒缓存），重建后查询只读、判定确定。
+    // 独立模型重建+预写（本方案核心）：轮询已确认节点追加，此刻 rebuild 的
+    // entries 即含新消息的正确邻接，apply 同刻把标志写到新消息 vm 上——微信
+    // 随后 reload 全量重询行高时标志已就位，首测即正确。
     //
     // 绝不参与表格变更（frida_voice_crash.js 三轮实证，25b8c0d5 门闸仍炸）：
     // begin/endUpdates 撞进微信语音管线（reloadData 多连发、数据源计数后台
@@ -769,10 +751,8 @@ static void mergeDoReload(void) {
     // Invalid Number Of Sections，坏状态连锁=新行建不出来+退页闪退；事前任何
     // 一致性检查都赌不过竞态。而环形缓冲实证微信对聊天表行变更全部走
     // reloadData（零 insertRows），每次收发消息它自己都会全量重询行高，配合
-    // 模型查询期自愈（positionForWrap 失配自动重建）几何必然正确——本函数
-    // 只需重建模型，表格一个字都不碰。
-    [[BBMergeModel shared] rebuildWithNodeArray:g_currentNodeArray
-                                       chatName:g_currentChatName];
+    // 预写标志几何必然正确——本函数只需重建+预写，表格一个字都不碰。
+    rebuildAndApplyFromContext();
 }
 
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt);
@@ -786,10 +766,10 @@ static void mergeScheduleRelayout(void) {
 
 // 等微信把新消息节点追加进 m_arrMessageNodeData（探针实证追加发生在
 // AsyncOnAddMsg 返回后 ~30ms 内的某个 runloop，早于它重建必用旧数组），
-// 30ms 轮询节点计数，增长（新消息 +1，跨时间行 +2）即重建模型；12 次未变
+// 30ms 轮询节点计数，增长（新消息 +1，跨时间行 +2）即重建+预写；12 次未变
 // 兜底重建。全程主线程（AJ 回调与计数读取同队列，无竞态）。
-// 注意：这里只重建模型，不触发表格——微信自己 reload 时全量重询行高（探针
-// 实证聊天表行变更全部走 reloadData），配合查询期自愈几何必然正确。
+// 注意：这里只重建+预写，不触发表格——微信自己 reload 时全量重询行高（探针
+// 实证聊天表行变更全部走 reloadData），标志已就位，几何必然正确。
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.03 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
@@ -893,24 +873,15 @@ static void applyMergeToCellView(id cellView) {
         NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
         if (chat.length == 0) { WPLog(@"MsgMerge", @"[Apply] 会话名为空"); return; }
 
-        NSArray *nodes = msgNodeArrayOfCellView(cellView);
-        if (!nodes) {
-            static NSTimeInterval lastVCFailLog = 0;
-            NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-            if (now - lastVCFailLog > 10) {
-                lastVCFailLog = now;
-                WPLog(@"MsgMerge", @"[Apply] 未找到聊天 VC 或渲染数组（页面=%s）", object_getClassName(cellView));
-            }
-        }
         // ⑤ 布局接管（阶段2/3）：白名单类型（文本+媒体四类）横向自摆。
         //    必须在 pos=None 早退之前——mmSepMedia 开启时媒体消息充当分隔符
-        //    （positionForWrap 返 None），早退会饿死媒体自摆（实证：图片/视频偏移无效）。
+        //    （标志为 None），早退会饿死媒体自摆（实证：图片/视频偏移无效）。
         //    自摆只依赖 wrap 类型与原生基准帧，不依赖合并位置。
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
         applyOwnLayout(cellView, olTypeEnabled(msgType) && cfg.mmOwnLayout);
 
-        MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap chatName:chat nodeArray:nodes];
-        if (pos == MOMergePositionNone) { WPLog(@"MsgMerge", @"[Apply] pos=None（类型不可合并/开关）"); return; }   // 系统消息/不可合并：不干预
+        MOMergePosition pos = flagsPos(viewModel);
+        if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
 
         BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
         BOOL isLast  = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
@@ -1070,9 +1041,7 @@ static id repl_CMCellView_getNameLabel(id self, SEL _cmd) {
             if (wrap) {
                 NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
                 if (chat.length > 0) {
-                    MOMergePosition pos = [[BBMergeModel shared] positionForWrap:wrap
-                                                                        chatName:chat
-                                                                       nodeArray:g_currentNodeArray];
+                    MOMergePosition pos = flagsPos(viewModel);
                     cut = (pos == MOMergePositionMiddle || pos == MOMergePositionLast);
                 }
             }
