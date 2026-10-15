@@ -1096,7 +1096,7 @@ static void installMediaLayoutInternalHooks(void) {
 // 微信自己调 GetMsg:LocalID:（每次进聊天加载消息必调），MSHook 后首调即记录
 // receiver。本钩子纯指针记录零逻辑；插件自身 DB 查询同样经过（此时 receiver
 // 已捕获，直接转发，无递归风险）。
-static void (*orig_CMGR_GetMsg_LocalID)(id, SEL, id, unsigned int);
+static id (*orig_CMGR_GetMsg_LocalID)(id, SEL, id, unsigned int);
 static id repl_CMGR_GetMsg_LocalID(id self, SEL _cmd, id talker, unsigned int localID) {
     [[BBMergeModel shared] noteMessageManager:self];
     return orig_CMGR_GetMsg_LocalID(self, _cmd, talker, localID);
