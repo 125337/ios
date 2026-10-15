@@ -40,6 +40,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <dlfcn.h>
+#import <stdlib.h>
 #import <UIKit/UIKit.h>
 #import <math.h>
 
@@ -78,6 +79,7 @@ static void updateChatContext(id self) {
 #endif
                 g_currentChatName = [name copy];
                 [[BBMergeModel shared] clear];   // 防跨会话残留（模型自身也按数组身份失效）
+                g_njLogCount = 0;   // 判定钩限频日志按会话重置
             }
         }
         // 渲染数组每次进出聊天都刷新（数组对象可能被整表重建）
@@ -584,9 +586,28 @@ static double repl_BaseChatViewModel_rowHeight(id self, SEL _cmd) {
 // 安装前 dladdr 查 IMP 归属：被其他 dylib（XOS）占用则让位不挂（防互递归）。
 // ------------------------------------------------------------
 static IMP orig_CMVM_isShowChatRoomDisplayName = NULL;
+
+// 重写类补挂表（77 号日志实证：单点挂 Common 漏媒体重写类 → 判定钩不被调 →
+// 媒体消息行高固化 65 型昵称洞，同批文本 54 型生效、媒体 65 型漏挂——按类型分裂）。
+// 垫片按 isa 指针直查（热路径禁 NSStringFromClass/字典分配，边框缓存 memcmp 同款教训）。
+static Class g_nickCls[32];
+static IMP   g_nickOrig[32];
+static int   g_nickClsCount = 0;
+static NSInteger g_njLogCount = 0;   // 判定钩限频日志计数（updateChatContext 每会话清零）
+
+static IMP nickOrigForClass(Class c) {
+    for (int i = 0; i < g_nickClsCount; i++) {
+        if (g_nickCls[i] == c) return g_nickOrig[i];
+    }
+    return NULL;
+}
+
 static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
     static BOOL s_inJudge = NO;   // 重入守卫：垫片内再进入直接走原生（防任何递归风暴）
-    BOOL origVal = ((BOOL (*)(id, SEL))orig_CMVM_isShowChatRoomDisplayName)(self, _cmd);
+    IMP o = nickOrigForClass(object_getClass(self));
+    if (!o) o = orig_CMVM_isShowChatRoomDisplayName;
+    if (!o) return NO;
+    BOOL origVal = ((BOOL (*)(id, SEL))o)(self, _cmd);
     if (s_inJudge) return origVal;
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
@@ -607,7 +628,12 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
                                                            nodeArray:arr];
         s_inJudge = NO;
         // 组内非首条（Middle/Last）返 NO → 原生按无昵称测量+布局自动回收昵称区
-        if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) return NO;
+        if (pos == MOMergePositionMiddle || pos == MOMergePositionLast) {
+            if (g_njLogCount++ < 30) {
+                WPLog(@"MsgMerge", @"[NJD] vm=%p pos=%lu -> NO", (void *)self, (unsigned long)pos);
+            }
+            return NO;
+        }
         return origVal;
     } @catch (NSException *e) {
         s_inJudge = NO;
@@ -1059,26 +1085,67 @@ static void installMediaLayoutInternalHooks(void) {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseChatViewModel rowHeight not found");
     }
 
-    // ③b 昵称判定接管钩子（实验开关 mmNickJudgeTakeover，XOS 同款挂点；
-    //     安装前 dladdr 查 IMP 归属，被其他 dylib（如 XOS）占用则让位不挂）
-    cls = objc_getClass("CommonMessageViewModel");
-    if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"isShowChatRoomDisplayName")]) {
-        Method m = class_getInstanceMethod(cls, NSSelectorFromString(@"isShowChatRoomDisplayName"));
-        IMP cur = m ? method_getImplementation(m) : NULL;
-        Dl_info info;
-        BOOL foreign = cur && dladdr((void *)cur, &info) && info.dli_fname &&
-                       strstr(info.dli_fname, ".dylib") &&
-                       !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio");
-        if (foreign) {
-            WPLog(@"MsgMerge", @"[Hook] ⊘ isShowChatRoomDisplayName IMP 归属 %s，让位不挂", info.dli_fname);
+    // ③b 昵称判定接管钩子（实验开关 mmNickJudgeTakeover，XOS 同款挂点）。
+    //     挂载策略 = 全类扫描判重补挂 + 根类单点（探针 #25 消息 cell 同款架构）：
+    //     单点挂 CommonMessageViewModel 只覆盖继承实现；部分媒体类重写了
+    //     isShowChatRoomDisplayName 自带 IMP，单点漏挂 → 判定钩不被调 → 媒体消息
+    //     昵称区不回收（77 号日志实证：同批 pos=3 文本 54 型生效、媒体 65 型漏挂）。
+    //     先扫描补挂（此时各类 IMP 仍原始，可判重），再挂根类覆盖继承实现。
+    //     每处安装前 dladdr 查 IMP 归属，被其他 dylib（如 XOS）占用则让位。
+    {
+        SEL selNick = NSSelectorFromString(@"isShowChatRoomDisplayName");
+        Class baseCls = objc_getClass("CommonMessageViewModel");
+        if (baseCls && [baseCls instancesRespondToSelector:selNick]) {
+            IMP baseIMP = NULL;
+            Method bm = class_getInstanceMethod(baseCls, selNick);
+            baseIMP = bm ? method_getImplementation(bm) : NULL;
+            unsigned int n = 0;
+            Class *classes = objc_copyClassList(&n);
+            Dl_info info;
+            for (unsigned int i = 0; classes && i < n; i++) {
+                Class c = classes[i];
+                if (c == baseCls) continue;
+                BOOL derived = NO;
+                for (Class p = class_getSuperclass(c); p; p = class_getSuperclass(p)) {
+                    if (p == baseCls) { derived = YES; break; }
+                }
+                if (!derived) continue;
+                Method m = class_getInstanceMethod(c, selNick);
+                IMP cur = m ? method_getImplementation(m) : NULL;
+                if (!cur || cur == baseIMP) continue;   // 继承实现，根类单点覆盖
+                BOOL foreign = dladdr((void *)cur, &info) && info.dli_fname &&
+                               strstr(info.dli_fname, ".dylib") &&
+                               !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio");
+                if (foreign) {
+                    WPLog(@"MsgMerge", @"[Hook] ⊘ %s isShowChatRoomDisplayName 归属 %s，让位",
+                          class_getName(c), info.dli_fname);
+                    continue;
+                }
+                if (g_nickClsCount >= 32) break;
+                IMP orig = NULL;
+                MSHookMessageEx(c, selNick, (IMP)repl_CMVM_isShowChatRoomDisplayName, &orig);
+                g_nickCls[g_nickClsCount] = c;
+                g_nickOrig[g_nickClsCount] = orig;
+                g_nickClsCount++;
+                WPLog(@"MsgMerge", @"[Hook] ✓ %s isShowChatRoomDisplayName（重写类补挂）", class_getName(c));
+            }
+            if (classes) free(classes);
+            // 根类单点（继承实现全覆盖）
+            Method m = class_getInstanceMethod(baseCls, selNick);
+            IMP cur = m ? method_getImplementation(m) : NULL;
+            BOOL foreign = cur && dladdr((void *)cur, &info) && info.dli_fname &&
+                           strstr(info.dli_fname, ".dylib") &&
+                           !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio");
+            if (foreign) {
+                WPLog(@"MsgMerge", @"[Hook] ⊘ CommonMessageViewModel isShowChatRoomDisplayName 归属 %s，让位不挂", info.dli_fname);
+            } else {
+                MSHookMessageEx(baseCls, selNick, (IMP)repl_CMVM_isShowChatRoomDisplayName,
+                                &orig_CMVM_isShowChatRoomDisplayName);
+                WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageViewModel isShowChatRoomDisplayName");
+            }
         } else {
-            MSHookMessageEx(cls, NSSelectorFromString(@"isShowChatRoomDisplayName"),
-                            (IMP)repl_CMVM_isShowChatRoomDisplayName,
-                            &orig_CMVM_isShowChatRoomDisplayName);
-            WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageViewModel isShowChatRoomDisplayName");
+            WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageViewModel isShowChatRoomDisplayName not found");
         }
-    } else {
-        WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageViewModel isShowChatRoomDisplayName not found");
     }
 
     // ④ 新消息入库联动（新 lid 入组/邻接变化 → 刷数组+清缓存+重排）
