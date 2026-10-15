@@ -94,6 +94,89 @@ static NSString *currentChatName(void) {
     return g_currentChatName;
 }
 
+// ------------------------------------------------------------
+// 测量缓存窗口刷新（昵称判定接管配套，BubbleBox revision/resetLayoutCache 同源思路）：
+// 固化根因（frida_mm_timeline.js 时序探针实证）：viewDidLoad 后微信渐进加载数组
+//（首批 +7~14ms），首次测量 +9~20ms 时数组未装满 → 判定钩 miss 走 orig →
+// 65 型固化进 m_cachedHeight，resetLayoutCache 原生全程零调用，固化值永不重测。
+// 窗口：「数组填充 → 首帧 cell 布局」稳定存在 60~73ms。
+// 方案：viewDidLoad 后主线程 5ms 轮询数组 count，连续两次采样相等且 ≥2（装满信号）
+//       → 立即对全部节点 vm 调 resetLayoutCache → 微信首帧前重测 → 判定钩（实时数组）
+//       命中返 NO → 原生按无昵称重测 54 型 → 首帧即正确布局，零跳变。
+//       预算 200ms 超时放弃（异常慢机退化为旧症状，不崩、无表格操作）。
+// 条件：mmEnable && mmNickJudgeTakeover（N 补偿路径不经过此处）。
+// ------------------------------------------------------------
+static dispatch_source_t g_measureWinTimer = nil;
+
+static void resetAllMeasureCaches(void) {
+    @try {
+        UIViewController *vc = g_curChatVC;
+        if (!vc) return;
+        NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
+        if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return;
+        SEL selReset = NSSelectorFromString(@"resetLayoutCache");
+        NSUInteger n = 0;
+        for (id vm in arr) {
+            if (!vm || ![vm respondsToSelector:selReset]) continue;
+            ((void (*)(id, SEL))objc_msgSend)(vm, selReset);
+            n++;
+        }
+        WPLog(@"MsgMerge", @"[NJW] resetLayoutCache done, vm=%lu", (unsigned long)n);
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[NJW] reset exception: %@", e.reason);
+    }
+}
+
+static void stopMeasureRefreshWindow(void) {
+    if (g_measureWinTimer) {
+        dispatch_source_cancel(g_measureWinTimer);
+#if !__has_feature(objc_arc)
+        dispatch_release(g_measureWinTimer);
+#endif
+        g_measureWinTimer = nil;
+    }
+}
+
+static void startMeasureRefreshWindow(void) {
+    MsgMergeConfig *cfg = [MsgMergeConfig shared];
+    if (!(cfg.mmEnable && cfg.mmNickJudgeTakeover)) return;
+    stopMeasureRefreshWindow();
+    dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+    if (!timer) return;
+#if !__has_feature(objc_arc)
+    dispatch_retain(timer);
+#endif
+    g_measureWinTimer = timer;
+    __block NSUInteger lastCount = 0;
+    __block int ticks = 0;
+    double t0 = [NSDate timeIntervalSinceReferenceDate];
+    dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, 5 * NSEC_PER_MSEC, 0);
+    dispatch_source_set_event_handler(^{
+        ticks++;
+        NSUInteger c = 0;
+        UIViewController *vc = g_curChatVC;
+        if (vc) {
+            NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
+            if ([arr isKindOfClass:[NSArray class]]) c = arr.count;
+        }
+        if (ticks >= 40) {   // 5ms × 40 = 200ms 预算
+            WPLog(@"MsgMerge", @"[NJW] timeout (count=%lu)", (unsigned long)c);
+            stopMeasureRefreshWindow();
+            return;
+        }
+        if (c >= 2 && c == lastCount) {   // 连续两次采样相等 = 装满信号
+            double dt = ([NSDate timeIntervalSinceReferenceDate] - t0) * 1000.0;
+            WPLog(@"MsgMerge", @"[NJW] stable count=%lu @%.1fms -> reset", (unsigned long)c, dt);
+            stopMeasureRefreshWindow();
+            resetAllMeasureCaches();
+            return;
+        }
+        lastCount = c;
+    });
+    dispatch_resume(timer);
+    WPLog(@"MsgMerge", @"[NJW] window poll started");
+}
+
 // ============================================================
 // MARK: - 视图安全访问
 // ============================================================
@@ -835,6 +918,7 @@ static void applyMergeToCellView(id cellView) {
 static void repl_BaseMsgContentVC_viewDidLoad(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
     updateChatContext(self);
+    startMeasureRefreshWindow();   // 昵称判定接管：首帧前窗口内洗测量缓存（见函数头注释）
 }
 
 static void repl_BaseMsgContentVC_viewWillAppear(id self, SEL _cmd, BOOL animated) {
