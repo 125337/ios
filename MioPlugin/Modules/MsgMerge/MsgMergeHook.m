@@ -931,6 +931,8 @@ static void applyMergeToCellView(id cellView) {
 static void repl_BaseMsgContentVC_viewDidLoad(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
     updateChatContext(self);
+    // 第二数据源：从 VC ivar 树自发现 CMessageMgr（数组 miss 时按 localID 补邻接）
+    [[BBMergeModel shared] adoptChatViewController:self];
     // 定位锚点：本日志出现 = 聊天页 viewDidLoad 垫片完整跑完（卡死判别用：
     // 停在本行之前 = 卡在微信自身 viewDidLoad；之后无 [Model] = 卡在测量链）
     WPLog(@"MsgMerge", @"[Ctx] chatVC viewDidLoad done");

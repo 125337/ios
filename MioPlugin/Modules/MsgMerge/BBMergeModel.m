@@ -26,6 +26,8 @@
 #import "BBMergeModel.h"
 #import "MsgMergeConfig.h"
 #import "../../Core/LogManager.h"
+#import <objc/runtime.h>
+#import <objc/message.h>
 
 // ============================================================
 // MARK: - 工具函数（自 MsgMergeEngine 原样移植）
@@ -82,6 +84,109 @@ static id wrapOfNode(id node) {
 // 查表架构（v5）
 // ------------------------------------------------------------
 
+// ============================================================
+// MARK: - 第二数据源：微信消息存储（BubbleBox findValidMsg 对齐）
+// ============================================================
+// 滚动加载历史时 m_arrMessageNodeData 有 ~1s 记账迟滞：测量先于节点到账 →
+// 索引 miss → None 窗口 → 原生闪回。BubbleBox 的邻接判定不依赖 UI 数组：
+// findValidMsg:startId:direction:（反编译 002ffcdc）从当前消息 localID ±1 步进
+// 直查存储（GetMsg:LocalID:），上限 15 步跳过已删除消息空洞——这正是它无闪回
+// 窗口的本质。本节照抄该路线作读侧兜底：索引 miss 时查存储补邻接，缓存进索引。
+//
+// mgr 实例运行时自发现（8.0.78 无 CMessageMgr 单例访问器，MMServiceCenter 无类
+// 方法——项目记忆实证）：从聊天 VC ivar 树挖「同时响应 GetMsg:LocalID: +
+// GetLastMsgLocalID:」的对象实例即 CMessageMgr；发现成功即弃 VC 引用，失败
+// 每 VC 上限 3 次（ivar 可能晚于 viewDidLoad 就绪，借 rebuild 事件重试）。
+
+static id g_dbMgr = nil;            // CMessageMgr 实例（进程级服务对象，挖到即常驻）
+static int g_dbAttempts = 0;        // 自发现尝试计数（每 VC 上限 3）
+static __weak id g_dbVC = nil;      // 聊天 VC（挖 mgr 用）
+static NSString *g_dbTalker = nil;  // 当前会话 talker（rebuild 记录，clear 置空防串会话查库）
+static SEL g_selGetMsg = NULL;      // GetMsg:LocalID:
+
+/// obj 的对象 ivar 值集合（含父类 3 层）
+static NSArray *dbObjectIvars(id obj) {
+    NSMutableArray *out = [NSMutableArray array];
+    Class c = object_getClass(obj);
+    for (int depth = 0; depth < 3 && c; depth++) {
+        unsigned int n = 0;
+        Ivar *ivs = class_copyIvarList(c, &n);
+        for (unsigned int i = 0; i < n; i++) {
+            const char *enc = ivar_getTypeEncoding(ivs[i]);
+            if (!enc || enc[0] != '@') continue;
+            id v = object_getIvar(obj, ivs[i]);
+            if (v) [out addObject:v];
+        }
+        free(ivs);
+        c = class_getSuperclass(c);
+    }
+    return out;
+}
+
+/// 双 selector 特征认定 CMessageMgr（只查方法表不发消息，零崩溃风险）
+static BOOL dbIsMsgMgr(id obj, SEL selGet, SEL selLast) {
+    if (!obj) return NO;
+    Class c = object_getClass(obj);
+    return class_getInstanceMethod(c, selGet) && class_getInstanceMethod(c, selLast);
+}
+
+static void dbAdoptMgr(id mgr) {
+    g_dbMgr = mgr;
+#if !__has_feature(objc_arc)
+    [mgr retain];
+#endif
+    WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@)", mgr, NSStringFromClass(object_getClass(mgr)));
+}
+
+static BOOL dbEnsureStore(void) {
+    if (g_dbMgr) return YES;
+    if (g_dbAttempts >= 3 || !g_dbVC) return NO;
+    g_dbAttempts++;
+    if (!g_selGetMsg) g_selGetMsg = NSSelectorFromString(@"GetMsg:LocalID:");
+    SEL selLast = NSSelectorFromString(@"GetLastMsgLocalID:");
+
+    // 深度 1：VC 自身 ivar
+    NSArray *level1 = dbObjectIvars(g_dbVC);
+    for (id v in level1) {
+        if (dbIsMsgMgr(v, g_selGetMsg, selLast)) { dbAdoptMgr(v); return YES; }
+    }
+    // 深度 2：VC → 子控制器/逻辑对象 → mgr 形态
+    for (id v in level1) {
+        for (id v2 in dbObjectIvars(v)) {
+            if (dbIsMsgMgr(v2, g_selGetMsg, selLast)) { dbAdoptMgr(v2); return YES; }
+        }
+    }
+    // 诊断：一级对象 ivar 类名清单（自发现失败时下一轮适配用）
+    NSMutableArray *names = [NSMutableArray array];
+    for (id v in level1) [names addObject:NSStringFromClass(object_getClass(v))];
+    WPLog(@"MsgMerge", @"[Model] DB source NOT found (try %d/%d) ivar classes=%@",
+          g_dbAttempts, 3, names);
+    return NO;
+}
+
+/// GetMsg:LocalID:（talker + localID → CMessageWrap；已删消息/越界返回 nil）
+static id dbGetMsg(long long lid) {
+    if (!g_dbMgr || !g_dbTalker || lid <= 0 || lid > 0xFFFFFFFFLL) return nil;
+    id (*send)(id, SEL, id, unsigned int) = (id (*)(id, SEL, id, unsigned int))objc_msgSend;
+    @try {
+        return send(g_dbMgr, g_selGetMsg, g_dbTalker, (unsigned int)lid);
+    } @catch (NSException *e) {
+        return nil;
+    }
+}
+
+/// BubbleBox findValidMsg 语义（002ffcdc）：±1 步进，跳过已删除消息空洞（GetMsg
+/// 为 nil 的 localID），上限 15 步，返回首个存在的消息 wrap
+static id dbFindValidMsg(long long startLID, int direction) {
+    for (int step = 1; step <= 15; step++) {
+        long long lid = startLID + (long long)direction * step;
+        if (lid < 1) return nil;
+        id w = dbGetMsg(lid);
+        if (w) return w;
+    }
+    return nil;
+}
+
 @implementation BBMergeModel {
     NSMutableDictionary<NSNumber *, BBMergeEntry *> *_index;   // localID → entry
     NSArray *_lastArray;      // 上次重建的数组引用（指针身份失效检测）
@@ -137,6 +242,15 @@ static id wrapOfNode(id node) {
 - (NSUInteger)rebuildFromNodeArray:(NSArray *)nodeArray
                           chatName:(NSString *)chatName {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
+    // 第二数据源：mgr 未就绪时借 rebuild 事件重试自发现（上限 3 次/VC）；
+    // talker 随 rebuild 记录（clear 已置空，防切会话窗口期串库查询）
+    if (!g_dbMgr && g_dbVC) dbEnsureStore();
+    if (chatName.length > 0 && ![chatName isEqualToString:g_dbTalker]) {
+#if !__has_feature(objc_arc)
+        [g_dbTalker release];
+#endif
+        g_dbTalker = [chatName copy];
+    }
     // 幂等守卫（防 rebuild 风暴）：同输入（数组指针/count/会话名/配置指纹）直接
     // 跳过。失效检测在查询高频路径上，若调用方混用多个数据源引用（如 KVC 实时读
     // 与 g_currentNodeArray 缓存身份不一致）会退化为每次查询全量重建（O(n) KVC），
@@ -256,9 +370,74 @@ static id wrapOfNode(id node) {
     return lid > 0 ? _index[@(lid)] : nil;
 }
 
+// ============================================================
+// MARK: - 第二数据源（存储层邻接，BubbleBox 对齐）
+// ============================================================
+
+/// DB 邻接合并判定 = shouldJoin + 时间行等价规则。存储层无时间节点，按
+/// BubbleBox isNeedInsertTimeNode:current: 反编译实证（002fe49c）：
+/// |Δm_uiCreateTime| > 299s 需插时间行（断组）；isNewInviteesMsg 强制断组。
++ (BOOL)shouldJoinDB:(id)wrapA wrapB:(id)wrapB {
+    if (![self shouldJoin:wrapA wrapB:wrapB]) return NO;
+    id inv = safeValue(wrapB, @"isNewInviteesMsg");
+    if ([inv respondsToSelector:@selector(boolValue)] && [inv boolValue]) return NO;
+    long long ta = [safeValue(wrapA, @"m_uiCreateTime") longLongValue];
+    long long tb = [safeValue(wrapB, @"m_uiCreateTime") longLongValue];
+    if (ta <= 0 || tb <= 0) return NO;
+    long long diff = ta > tb ? ta - tb : tb - ta;
+    return diff <= 299;
+}
+
+/// DB 查询结果缓存进索引（负缓存 wrap=nil，防空洞 localID 反复查库）
+- (void)dbCacheEntry:(id)wrap lid:(long long)lid pos:(MOMergePosition)pos {
+    BBMergeEntry *e = [[BBMergeEntry alloc] init];
+    e.wrap = wrap;
+    e.senderUser = wrap ? senderIdentity(wrap) : nil;
+    e.type = wrap ? [safeValue(wrap, @"m_uiMessageType") longLongValue] : 0;
+    e.localID = lid;
+    e.pos = pos;
+    _index[@(lid)] = e;
+#if !__has_feature(objc_arc)
+    [e release];
+#endif
+}
+
+- (void)adoptChatViewController:(id)vc {
+    if (vc == (id)g_dbVC) return;
+    g_dbVC = vc;
+    g_dbAttempts = 0;
+    if (vc) dbEnsureStore();
+}
+
 - (MOMergePosition)posForLocalID:(long long)lid {
     BBMergeEntry *e = lid > 0 ? _index[@(lid)] : nil;
-    return e ? e.pos : MOMergePositionNone;
+    if (e) return e.pos;
+    // 第二数据源兜底：数组记账迟滞窗口（~1s）内索引 miss → 直查存储补邻接
+    //（BubbleBox isPrevSameUser/isNextSameUser 即此路线，无数组依赖 → 无 None 窗口）。
+    // 存储不可用/未激活 = None（v5 行为，不留死代码分支）。
+    if (lid <= 0 || !g_dbMgr || !g_dbTalker) return MOMergePositionNone;
+    MsgMergeConfig *cfg = [MsgMergeConfig shared];
+    if (!(cfg.mmEnable && !(cfg.mmOnlyRoom && ![g_dbTalker hasSuffix:@"@chatroom"]))) {
+        return MOMergePositionNone;
+    }
+    id wrap = dbGetMsg(lid);
+    if (!wrap) {
+        [self dbCacheEntry:nil lid:lid pos:MOMergePositionNone];
+        return MOMergePositionNone;
+    }
+    id prev = dbFindValidMsg(lid, -1);
+    id next = dbFindValidMsg(lid, +1);
+    BOOL joinPrev = (prev != nil) && [[self class] shouldJoinDB:wrap wrapB:prev];
+    BOOL joinNext = (next != nil) && [[self class] shouldJoinDB:wrap wrapB:next];
+    MOMergePosition pos;
+    if (joinPrev && joinNext)      pos = MOMergePositionMiddle;
+    else if (joinPrev)             pos = MOMergePositionLast;
+    else if (joinNext)             pos = MOMergePositionFirst;
+    else                           pos = MOMergePositionSingle;
+    [self dbCacheEntry:wrap lid:lid pos:pos];
+    WPLog(@"MsgMerge", @"[Model] DB fill lid=%lld pos=%lu prev=%d next=%d",
+          lid, (unsigned long)pos, prev != nil, next != nil);
+    return pos;
 }
 
 // ============================================================
@@ -280,6 +459,11 @@ static id wrapOfNode(id node) {
     [_lastChatName release];
 #endif
     _lastChatName = nil;
+    // DB talker 一并置空：切会话窗口期（新 rebuild 未跑）读侧不得拿旧会话查库
+#if !__has_feature(objc_arc)
+    [g_dbTalker release];
+#endif
+    g_dbTalker = nil;
     _index = [NSMutableDictionary dictionary];
     self.entries = @[];
 }

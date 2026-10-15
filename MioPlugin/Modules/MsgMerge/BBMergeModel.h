@@ -49,8 +49,17 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSUInteger)rebuildFromNodeArray:(nullable NSArray *)nodeArray
                           chatName:(nullable NSString *)chatName;
 
+/// 聊天 VC 就位（viewDidLoad 钩子调用）：第二数据源自发现入口。
+/// 8.0.78 无 CMessageMgr 单例访问器（MMServiceCenter 亦无类方法，项目记忆实证），
+/// mgr 实例从 VC ivar 树运行时自发现（同时响应 GetMsg:LocalID: +
+/// GetLastMsgLocalID: 的对象），供索引 miss 时按 localID 直查存储补邻接
+/// （BubbleBox findValidMsg 同路线，根除滚动加载 ~1s 记账迟滞的 None 闪回窗口）。
+- (void)adoptChatViewController:(nullable id)vc;
+
 /// 标志查询（O(1) 索引查表）：未覆盖/组外/不可合并/功能未激活 = None。
 /// 所有钩子只读本方法，禁止查数组、禁止读 vm 关联对象。
+/// 索引 miss 且存储层就绪时：按 localID 直查微信消息存储补邻接（DB 兜底），
+/// 结果缓存进索引；存储不可用 = None（v5 行为）。
 - (MOMergePosition)posForLocalID:(long long)lid;
 
 /// 当前配置是否与上次重建时的分组配置指纹不一致（O(1)，读侧保鲜判断用）
