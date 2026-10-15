@@ -540,14 +540,17 @@ static MOMergePosition flagsPos(id vm) {
 // ------------------------------------------------------------
 // 滚动驱动保鲜（对齐 BubbleBox scheduleUpdateNodes:scroll: 把滚动当一等触发
 // 事件）：v5 查表架构下 vm 重建已零影响，滚动触发仅服务「微信补节点记账迟滞
-// ~1s」场景——滚动加载历史后索引未覆盖的新条目查表 None 直通原生，等 0.5s
-// 保鲜太慢；滚动时限频 100ms 触发 rebuild，表内容变化数>0 → 同刻可见刷新收敛。
-// 幂等守卫保证无新条目的滚动退化为 O(1) 比对。
-// 实现细节：限频 100ms；内容变化数>0 → 可见刷新（resetAllMeasureCaches +
-// 标脏可见 cell）。
+// ~1s」场景——滚动加载历史后索引未覆盖的新条目查表 None 直通原生。
+//
+// 【滚动中只补表、停止才刷新】（90 号日志定论：快速滑动卡屏根因）：
+// 滚动中每轮 rebuild changed>0 都会清测量缓存+标脏全部可见 cell → 微信全表
+// 重测重布局 → 快速滑动连续触发即掉帧。改为：isTracking/isDecelerating 期间
+// 只 rebuildFromNodeArray 补索引（幂等守卫 O(1)），刷新记 pending；滚动停止
+// 的回调尾巴一次性刷新收敛。滑动态稳定显示原生样式，停下 0.2s 内收敛合并态。
 // ------------------------------------------------------------
 static IMP orig_BMCVC_scrollViewDidScroll = NULL;
 static double g_lastScrollApply = 0;
+static BOOL g_scrollRefreshPending = NO;
 
 static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
     if (orig_BMCVC_scrollViewDidScroll) {
@@ -560,7 +563,28 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
         double now = [NSDate timeIntervalSinceReferenceDate];
         if (now - g_lastScrollApply < 0.1) return;
         g_lastScrollApply = now;
-        rebuildAndApplyFromContext();
+
+        BOOL busy = NO;
+        if ([scrollView isKindOfClass:[UIScrollView class]]) {
+            UIScrollView *sv = (UIScrollView *)scrollView;
+            busy = sv.isTracking || sv.isDecelerating;
+        }
+        UIViewController *vc = g_curChatVC;
+        NSArray *arr = vc ? safeKVC(vc, @"m_arrMessageNodeData") : nil;
+        NSString *chat = currentChatName();
+        if (![arr isKindOfClass:[NSArray class]] || arr.count == 0 || chat.length == 0) return;
+
+        if (busy) {
+            // 滚动中：只补索引，不碰可见 cell（刷新挂起）
+            NSUInteger changed = [[BBMergeModel shared] rebuildFromNodeArray:arr chatName:chat];
+            if (changed > 0) g_scrollRefreshPending = YES;
+            return;
+        }
+        // 滚动停止：完整链路收敛（含挂起的刷新）
+        BOOL needRefresh = g_scrollRefreshPending;
+        g_scrollRefreshPending = NO;
+        NSUInteger changed = [[BBMergeModel shared] rebuildFromNodeArray:arr chatName:chat];
+        if (changed > 0 || needRefresh) refreshFlaggedCells();
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Scroll] exception: %@", e.reason);
     }

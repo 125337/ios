@@ -237,16 +237,15 @@ static id wrapOfNode(id node) {
     }
 
     self.entries = tmp;
-    // 内容变化数 = 新增 lid + pos 变化 + 移除 lid（调用方仅在 >0 时可见刷新）
+    // 内容变化数 = 新增 lid + pos 变化（调用方仅在 >0 时可见刷新）。
+    // 移除不计数：微信会裁剪渲染数组（90 号日志实证 nodes 24↔39 震荡），被裁
+    // 都是屏外条目，行高无变化；移除导致某条 pos 变化已由新索引 pos 对比覆盖。
     __block NSUInteger changed = 0;
     [_index enumerateKeysAndObjectsUsingBlock:^(NSNumber *lid, BBMergeEntry *e, BOOL *stop) {
         NSNumber *old = oldPos[lid];
         if (!old) { changed++; return; }
         if ([old unsignedIntegerValue] != (NSUInteger)e.pos) changed++;
     }];
-    for (NSNumber *lid in oldPos) {
-        if (!_index[lid]) changed++;
-    }
     WPLog(@"MsgMerge", @"[Model] rebuild chat=%@ nodes=%lu entries=%lu active=%d changed=%lu",
           chatName ?: @"?", (unsigned long)nodeArray.count, (unsigned long)tmp.count, active,
           (unsigned long)changed);
