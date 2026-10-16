@@ -2,23 +2,22 @@
 //  BBMergeModel.h
 //  MioPlugin
 //
-//  消息合并独立模型（查表架构 v6 · DB 单路径）：
+//  消息合并独立模型（查表架构 · DB 单路径）：
 //  分组结果在 rebuild 时一次性预计算（entries + localID→entry 索引），邻接
-//  判定全部走微信存储层（GetMsg:LocalID: ±1 步进跳已删空洞，BubbleBox
-//  findValidMsg 同构）——UI 数组仅提供屏上 lid 渲染集合，UI 数组邻接路径已
-//  废弃（双路径语义漂移实证：UI 侧时间行一律断组 / DB 侧 299s 窗，表情被
-//  分钟粒度时间行锯成组头）。读侧（measure:/昵称判定/渲染/昵称断供钩）一律
-//  按 wrap 的 localID 直接 O(1) 查索引（posForLocalID:）——模型即真相。
+//  判定全走微信存储层（GetMsg:LocalID: ±1 步进跳已删空洞，BubbleBox
+//  findValidMsg 同构）；UI 数组仅提供屏上 lid 渲染集合（UI 数组邻接已废弃：
+//  双路径语义漂移——UI 侧时间行一律断组 / DB 侧 299s 窗）。读侧（measure:/
+//  昵称判定/渲染/昵称断供钩）一律按 wrap 的 localID 直接 O(1) 查索引
+//  （posForLocalID:）——模型即真相，微信整批重建 vm 零影响。
 //
-//  【为什么废弃预写层（89 号日志定论）】旧 BubbleBox 同构方案把分组位置用
-//  关联对象写到 vm 上，但 vm 生命周期归微信管：进聊天/滚动时微信整批重建 vm
-//  并立刻测量，预写标志随旧对象死亡、新对象还没被 apply 覆盖 → 测量瞬间读
-//  None → 原生样式闪回（03:00:26 实证 17 条集体 None 后同秒自愈）。任何
-//  预写+刷新都在和微信测量竞速，窗口永远存在。查表路线：索引按 localID 建、
-//  跨 vm 重建恒真，测量瞬间查表即得正确值，vm 死活彻底无关。
+//  【禁止复活预写层】旧方案把分组位置用关联对象写到 vm 上，但 vm 生命周期
+//  归微信管：进聊天/滚动时整批重建 vm 并立刻测量，预写标志随旧对象死亡 →
+//  测量瞬间读 None → 原生样式闪回（89 号日志实证 17 条集体 None）。任何
+//  预写+刷新都在和微信测量竞速，窗口永远存在；查表按 localID 建、跨 vm
+//  重建恒真，vm 死活彻底无关。
 //
 //  rebuild 触发点（事件驱动）：切会话/进聊天/新消息轮询确认追加/滚动限频
-//  （100ms）/读侧 None-miss 限频保鲜（0.5s）/配置指纹变化。幂等守卫防风暴。
+//  （100ms）/读侧 None-miss 限频保鲜（0.15s）/配置指纹变化。幂等守卫防风暴。
 //
 
 #import <Foundation/Foundation.h>
@@ -46,10 +45,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// + 299s 时间窗（BubbleBox isNeedInsertTimeNode 同语义）
 + (BOOL)shouldJoinDB:(id)wrapA wrapB:(id)wrapB;
 
-// ------------------------------------------------------------
-// 查表架构（v5）
-// ------------------------------------------------------------
-
 /// 重建（事件驱动触发点的唯一入口，幂等守卫：同数组/同会话/同配置指纹跳过）。
 /// @param nodeArray 聊天 VC 的 m_arrMessageNodeData（仅提供屏上有序 lid 渲染集合；
 ///                   邻接判定全走存储层——DB 单路径，UI 数组邻接已废弃）
@@ -70,7 +65,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// 标志查询（O(1) 索引查表）：未覆盖/组外/不可合并/功能未激活 = None。
 /// 所有钩子只读本方法，禁止查数组、禁止读 vm 关联对象。
 /// 索引 miss 且存储层就绪时：按 localID 直查微信消息存储补邻接（DB 兜底），
-/// 结果缓存进索引；存储不可用 = None（v5 行为）。
+/// 结果缓存进索引；存储不可用 = None。
 - (MOMergePosition)posForLocalID:(long long)lid;
 
 /// 时间行应否收起（BubbleBox isNeedInsertTimeNode 显示语义接管）：
