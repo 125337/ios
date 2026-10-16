@@ -422,14 +422,20 @@ static id dbFindValidMsg(long long startLID, int direction) {
 // ============================================================
 
 // 微信按「显示分钟变化」插时间行（分钟粒度），同 299s 窗内会重复插行——
-// 同屏两个 01:47 实证（96 号日志/用户截图）。BubbleBox 的 isNeedInsertTimeNode:
-// current:（002fe49c）同时是分组断点与时间行显示规则：|ΔcreateTime| ≤ 299s 不插。
-// 本判定补齐显示侧：时间行之下首条有效消息与其 DB 前驱 Δ≤299s → 该时间行收起。
+// 时间行收起判定 = !isNeedInsertTimeNode(prev, current)，判定式完全对照
+// BubbleBox isNeedInsertTimeNode:current:（002fe49c 反编译一手）：
+//   ③ current.isNewInviteesMsg → 不收起（其语义 = 强制插行）
+//   ④ |Δm_uiCreateTime| ≤ 299 → 收起（其语义 = 不插行）；>299 → 不收起
+//   prev/current 的类型、sender 均不感知（它也不查）——不加发明。
+// 边界安全网（BubbleBox 序列构建中不存在的场景，渲染层方案的生存条件）：
+//   找不到时间行位置/管辖消息/DB 前驱 → 显示（宁多勿错，不比原生差）。
 
 - (BOOL)shouldCollapseTimeNode:(id)timeVM inNodes:(NSArray *)nodes {
     if (!timeVM || nodes.count == 0 || !g_dbMgr || !g_dbTalker) return NO;
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!(cfg.mmEnable && !(cfg.mmOnlyRoom && ![g_dbTalker hasSuffix:@"@chatroom"]))) return NO;
+    // 配置门对应关系：BubbleBox mergeMode==0 恒插行（不收起）；我们 mmEnable==0
+    // 时本函数不被调用（rowHeight/hidden 调用侧已挡），恒显示，语义一致。
 
     // 定位时间行：node 数组元素是 wrapper 节点（有 viewModel 属性，wrapOfNode
     // 即为此设计），rowHeight override 收到的 self 是 vm 本身——必须遍历比对
@@ -442,7 +448,7 @@ static id dbFindValidMsg(long long startLID, int direction) {
     }
     if (tIdx == NSNotFound) return NO;
 
-    // 时间行管辖消息 = 其下首条有效消息（跳过连续时间行/空节点）
+    // current = 时间行之下首条有效消息（跳过连续时间行/空节点）
     long long lid = 0;
     long long ct = 0;
     for (NSUInteger i = tIdx + 1; i < nodes.count; i++) {
@@ -450,15 +456,18 @@ static id dbFindValidMsg(long long startLID, int direction) {
         if (!w || !isMergeableWrap(w)) continue;
         lid = localIDOf(w);
         ct = createTimeOf(w);
+        // ③ 管辖消息是新邀请 → BubbleBox 强制插行 → 不收起
+        if (isInviteesMsg(w)) return NO;
         break;
     }
     if (lid <= 0) return NO;
 
-    // DB 前驱（跳已删空洞）：Δ≤299s → 该时间行多余 → 收起
+    // prev = DB 前驱（±1 步进跳已删空洞，= BubbleBox 序列中的相邻上一条）
     id prev = dbFindValidMsg(lid, -1);
     if (!prev) return NO;
     long long prevCt = createTimeOf(prev);
     if (prevCt <= 0 || ct <= 0) return NO;
+    // ④ 时间窗：Δ≤299 → 收起（= BubbleBox 不插行）；>299 → 显示
     long long diff = ct - prevCt;
     if (diff < 0) diff = -diff;
     if (diff <= 299) {
