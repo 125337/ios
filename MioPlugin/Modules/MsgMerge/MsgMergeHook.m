@@ -798,22 +798,6 @@ static void mergeKickTailVMs(void) {
     }
 }
 
-// BubbleBox addNewMessage 同款同步收尾：note 已把标志写进索引（主线程同步），
-// 此刻立即标脏可见 cell + kick 尾部 vm——全部发生在微信建行首测之前，发送
-// 那一帧即为合并布局，消灭「发出时原生、秒跳合并」。幂等：收消息双管道
-// （AddMsg+AsyncOnAddMsg）都调时重复标脏/kick 无副作用，代价可忽略。
-static void mergeImmediateRefresh(void) {
-    if (![NSThread isMainThread]) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            refreshFlaggedCellsSync();
-            mergeKickTailVMs();
-        });
-        return;
-    }
-    refreshFlaggedCellsSync();
-    mergeKickTailVMs();
-}
-
 static void mergeDoReload(void) {
     s_mergeRelayoutPending = NO;
     // 独立模型 rebuild（本方案核心）：轮询已确认节点追加，此刻 rebuild 的索引
@@ -871,10 +855,10 @@ static void mergeRetryRelayout(NSInteger count0, NSInteger attempt) {
 // note 直写不执行 → 建行首测 miss → 原生帧固化 → 秒跳合并），AsyncOnAddMsg
 // 仅接收侧补充（两条管道收消息都触发，note 以 _index 幂等去重）。
 //
-// BubbleBox addNewMessage:nodes: 时序完全对齐（同步三步，主线程内完成）：
-//   note 直写索引（含上一条 pos 修正）→ updateChatContext → mergeImmediateRefresh
-// 异步 dispatch 会把直写排到微信建行首测之后，首测仍 miss（实证）——主线程
-// 同步执行是「发出即合并布局」的唯一时序。
+// 管道内只做同步 note 直写（标志在微信建行首测前就位）；之后一切刷新交给
+// 微信自己的 reloadData 管线（探针实证发送时 2-4 次全量 reload，行高全量
+// 重询，查表恒真几何必然正确）——管道内同步标脏/kick 会打断微信「插入+滚动
+// 动画」管线，新气泡从滑入变成跳出（装机实证），多余动作全部不做。
 static void mmHandleIncomingMsg(id session, id wrap) {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!cfg.mmEnable) return;
@@ -886,14 +870,11 @@ static void mmHandleIncomingMsg(id session, id wrap) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [[BBMergeModel shared] noteIncomingMsgLocalID:lid];
             if (g_curChatVC) updateChatContext(g_curChatVC);   // 刷新 g_currentNodeArray（含切会话自检）
-            mergeImmediateRefresh();
         });
-        mergeScheduleRelayout();   // 轮询等节点追加后 rebuild 校准（不触发表格）
-        return;
+    } else {
+        [[BBMergeModel shared] noteIncomingMsgLocalID:lid];
+        if (g_curChatVC) updateChatContext(g_curChatVC);
     }
-    [[BBMergeModel shared] noteIncomingMsgLocalID:lid];
-    if (g_curChatVC) updateChatContext(g_curChatVC);
-    mergeImmediateRefresh();
     // 轮询确认节点追加后 mergeDoReload 主动 rebuild：索引全量校准 + 可见刷新
     // （本函数绝不触发表格变更，见 mergeDoReload 注释）
     mergeScheduleRelayout();
