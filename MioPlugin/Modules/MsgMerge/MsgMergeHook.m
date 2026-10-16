@@ -985,7 +985,11 @@ static id repl_CMCellView_getNameLabel(id self, SEL _cmd) {
 // 不钩它则发出消息首测恒 miss → 原生帧固化）。与 AsyncOnAddMsg 收消息双触发，
 // note 幂等去重。
 static void repl_CMMsgMgr_AddMsg(id self, SEL _cmd, id session, id wrap) {
-    [[BBMergeModel shared] noteMessageManager:self];   // mgr 捕获（零新增 hook，查询栈零跳板）
+    if ([[BBMergeModel shared] noteMessageManager:self]) {   // mgr 捕获（零新增 hook，查询栈零跳板）
+        // 新捕获调度重算：冷启动首次进聊天 rebuild 先于 DB 就绪（entries=0 被
+        // 幂等守卫锁死，MioPlugin(100) 实证「第二次进才合并」），异步出管道
+        dispatch_async(dispatch_get_main_queue(), ^{ rebuildAndApplyFromContext(); });
+    }
     ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AddMsg)(self, _cmd, session, wrap);
     @try {
         mmHandleIncomingMsg(session, wrap);
@@ -995,7 +999,10 @@ static void repl_CMMsgMgr_AddMsg(id self, SEL _cmd, id session, id wrap) {
 }
 
 static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) {
-    [[BBMergeModel shared] noteMessageManager:self];   // mgr 捕获（零新增 hook，查询栈零跳板）
+    if ([[BBMergeModel shared] noteMessageManager:self]) {   // mgr 捕获（零新增 hook，查询栈零跳板）
+        // 同 AddMsg：新捕获异步重算，出管道执行
+        dispatch_async(dispatch_get_main_queue(), ^{ rebuildAndApplyFromContext(); });
+    }
     ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AsyncOnAddMsg)(self, _cmd, session, wrap);
     @try {
         mmHandleIncomingMsg(session, wrap);

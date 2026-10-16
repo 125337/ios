@@ -60,7 +60,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// 查询踩坏消息抛异常展开到跳板帧必 terminate（.ips 三轮崩溃实证）；BubbleBox
 /// 查 DB 不死正因其查询栈无自家跳板。捕获后供索引 miss 时按 localID 直查
 /// 存储补邻接（插件直调不被 hook 的 4 参版，@try 可接坏消息异常）。
-- (void)noteMessageManager:(nullable id)mgr;
+/// @return YES = 本次新捕获（此前 mgr 为 nil）——调用方应调度一次
+/// rebuildAndApplyFromContext：冷启动首次进聊天时 rebuild 先于 DB 就绪
+/// （entries=0 的空结果被幂等守卫锁死，MioPlugin(100) 实证），新捕获必须
+/// 失效守卫重算，否则该页永远停在"不合并"残局。
+- (BOOL)noteMessageManager:(nullable id)mgr;
+
+/// 失效 rebuild 幂等守卫（DB 新捕获时调用）：_lastArray/_lastCount 置空，
+/// 下次 rebuild 必然真正重算。裸指针 ivar（无所有权），置 nil 零成本。
+- (void)invalidateRebuildGuard;
 
 /// 标志查询（O(1) 索引查表）：未覆盖/组外/不可合并/功能未激活 = None。
 /// 所有钩子只读本方法，禁止查数组、禁止读 vm 关联对象。

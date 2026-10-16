@@ -343,16 +343,25 @@ static id dbFindValidMsg(long long startLID, int direction) {
 #endif
 }
 
-- (void)noteMessageManager:(id)mgr {
+- (BOOL)noteMessageManager:(id)mgr {
     // DB 查询路径（dbGetMsg 直调 4 参 GetMsg，查询栈零跳板）实证无罪——98 号
     // 日志"功能全灭"真凶是按类扫描补挂的递归环，已在 MsgMergeHook 删净。
-    if (!mgr || mgr == (id)g_dbMgr) return;
+    if (!mgr || mgr == (id)g_dbMgr) return NO;
     g_dbMgr = mgr;
 #if !__has_feature(objc_arc)
     [mgr retain];
 #endif
     WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@) (via AddMsg pipeline)",
           mgr, NSStringFromClass(object_getClass(mgr)));
+    // 新捕获 = DB 查询能力从无到有：失效幂等守卫，调用方（Hook）据此调度
+    // rebuild——冷启动首次进聊天的 entries=0 空结果由这次重算自愈
+    [self invalidateRebuildGuard];
+    return YES;
+}
+
+- (void)invalidateRebuildGuard {
+    _lastArray = nil;   // 裸指针 ivar（无所有权），置 nil 零成本
+    _lastCount = 0;
 }
 
 // 新消息入库直写：AddMsg 管道回调同步判定（不等 UI 节点记账的 30ms 轮询）。
