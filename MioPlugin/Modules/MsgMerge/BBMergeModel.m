@@ -106,22 +106,22 @@ static id wrapOfNode(id node) {
 // 直查存储（GetMsg:LocalID:），上限 15 步跳过已删除消息空洞——这正是它无闪回
 // 窗口的本质。本节照抄该路线作读侧兜底：索引 miss 时查存储补邻接，缓存进索引。
 //
-// mgr 实例捕获（frida 探针实证定论）：8.0.78 无 CMessageMgr 单例访问器，聊天
-// VC ivar 树 2 层内也无其实例（ivar 自发现判死）；实证唯一稳定捕获点 = 微信
-// 自己调 GetMsg:LocalID:（每次进聊天必调），MsgMergeHook 挂钩首调即记录
-// receiver（noteMessageManager:）。API 可用性已实证：GetLastMsgLocalID: 取会话
-// maxLID、GetMsg:LocalID: 邻接/深部历史（lid=5）均命中，字段齐全。
+// mgr 实例捕获（frida 探针 + .ips 官方崩溃日志定论）：8.0.78 无 CMessageMgr
+// 单例访问器，聊天 VC ivar 树 2 层内也无其实例（ivar 自发现判死）。捕获点 =
+// CMessageDB 层 GetMsg:LocalID:hasError:needOriginContent:（微信查询必下沉 DB
+// 层，首调即记录 receiver）。禁止捕获 CMessageMgr 查询簇：.ips 实证 MSHook 该
+// 族后插件查询即 511 帧无限递归（IMP 共享互调，栈溢出 SIGSEGV）。DB 实例上
+// 4 参版同样可用（栈实证 CMessageDB 直有该实现），邻接/深部历史均命中。
 
-static id g_dbMgr = nil;            // CMessageMgr 实例（进程级服务对象，捕获即常驻）
+static id g_dbMgr = nil;            // CMessageDB 实例（捕获点见上注，接口名沿用旧称）
 static NSString *g_dbTalker = nil;  // 当前会话 talker（rebuild 记录，clear 置空防串会话查库）
 static SEL g_selGetMsg = NULL;      // GetMsg:LocalID:hasError:needOriginContent:（4 参版）
 
 /// GetMsg（talker + localID → CMessageWrap；已删消息/越界返回 nil）。
 /// 4 参版 needOriginContent:YES = 跳过 ChangeForDisplay 显示加工——崩溃实证（frida
-/// 栈）：2 参版内部对结果做 HandleMessage→ChangeForDisplay→protobuf 解析扩展 XML，
-/// 遇损坏 App 消息抛 C++ 异常（readRawVarint64），纯 ObjC @catch（objc personality）
-/// 接不住 C++ 异常（gxx personality）直接进程死；插件邻接判定只需 sender/type/
-/// createTime，原始内容足够，源头绕开加工链。
+/// 栈）：查询内部对结果做 HandleMessage→ChangeForDisplay→protobuf 解析扩展 XML，
+/// 遇损坏 App 消息抛 ObjC 异常（readRawVarint64）；@catch 接住返回 nil（该 lid
+/// 走步进下一跳），异常防护另有捕获钩 repl 层双层兜底。
 static id dbGetMsg(long long lid) {
     if (!g_dbMgr || !g_dbTalker || lid <= 0 || lid > 0xFFFFFFFFLL) return nil;
     if (!g_selGetMsg) g_selGetMsg = NSSelectorFromString(@"GetMsg:LocalID:hasError:needOriginContent:");

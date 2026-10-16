@@ -1248,15 +1248,23 @@ static void installTimeRowCollapseHook(void) {
 // MARK: - 安装
 // ============================================================
 
-// 第二数据源 mgr 捕获（frida 探针实证定论）：CMessageMgr 无单例访问器，聊天
-// VC ivar 树 2 层内也无其实例（ivar 自发现路线判死）。实证唯一稳定捕获点 =
-// 微信自己调 GetMsg:LocalID:（每次进聊天加载消息必调），MSHook 后首调即记录
-// receiver。本钩子纯指针记录零逻辑；插件自身 DB 查询同样经过（此时 receiver
-// 已捕获，直接转发，无递归风险）。
-static id (*orig_CMGR_GetMsg_LocalID)(id, SEL, id, unsigned int);
-static id repl_CMGR_GetMsg_LocalID(id self, SEL _cmd, id talker, unsigned int localID) {
+// 第二数据源 DB 捕获（.ips 官方崩溃日志定论）：MSHook CMessageMgr 的
+// GetMsg:LocalID: 后插件改调 4 参版即触发 511 帧无限递归（Mio trampoline ↔
+// WeChat 0x6624608 交替，栈溢出 SIGSEGV）——该族方法 IMP 相互共享/互调，捕获钩
+// 绝不能挂在查询簇上。捕获点改 CMessageDB 层 4 参版：微信查询必下沉 DB 层
+//（栈实证 CMessageMgr 4 参 → CMessageDB 4 参），而 DB 层调用链单向
+//（4 参 → Where 版 → HandleMessage，无互调）不成环。@catch 兜住查询踩坏消息
+// 抛的 ObjC 异常（readRawVarint64），防止穿透 unwind 经 MSHook trampoline。
+static id (*orig_CDB_GetMsg)(id, SEL, id, unsigned int, BOOL *, BOOL);
+static id repl_CDB_GetMsg(id self, SEL _cmd, id talker, unsigned int localID,
+                          BOOL *hasError, BOOL needOriginContent) {
     [[BBMergeModel shared] noteMessageManager:self];
-    return orig_CMGR_GetMsg_LocalID(self, _cmd, talker, localID);
+    @try {
+        return orig_CDB_GetMsg(self, _cmd, talker, localID, hasError, needOriginContent);
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Hook] DB GetMsg lid=%u exception: %@", localID, e.name);
+        return nil;
+    }
 }
 
 @implementation MsgMergeHook
@@ -1285,15 +1293,16 @@ static id repl_CMGR_GetMsg_LocalID(id self, SEL _cmd, id talker, unsigned int lo
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseMsgContentViewController not found");
     }
 
-    // ①c 第二数据源：CMessageMgr 捕获钩（读侧 DB 兜底的实例来源）
-    cls = objc_getClass("CMessageMgr");
+    // ①c 第二数据源：CMessageDB 捕获钩（读侧 DB 兜底的实例来源；勿挂 CMessageMgr
+    //    查询簇——.ips 定论 511 帧递归环）
+    cls = objc_getClass("CMessageDB");
     if (cls) {
-        MSHookMessageEx(cls, NSSelectorFromString(@"GetMsg:LocalID:"),
-                        (IMP)repl_CMGR_GetMsg_LocalID,
-                        &orig_CMGR_GetMsg_LocalID);
-        WPLog(@"MsgMerge", @"[Hook] ✓ CMessageMgr GetMsg:LocalID: (mgr 捕获)");
+        MSHookMessageEx(cls, NSSelectorFromString(@"GetMsg:LocalID:hasError:needOriginContent:"),
+                        (IMP)repl_CDB_GetMsg,
+                        &orig_CDB_GetMsg);
+        WPLog(@"MsgMerge", @"[Hook] ✓ CMessageDB GetMsg (DB 捕获)");
     } else {
-        WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr not found");
+        WPLog(@"MsgMerge", @"[Hook] ✗ CMessageDB not found");
     }
 
     // ①d 时间行收起（isNeedInsertTimeNode 显示语义）：299s 窗内压行高 + hidden
