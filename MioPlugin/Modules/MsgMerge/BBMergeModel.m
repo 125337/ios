@@ -349,14 +349,15 @@ static id dbFindValidMsg(long long startLID, int direction) {
     if (!mgr) return NO;
     // 快路径（每消息高频）：指针比较原子，现行 mgr 直接早退，零锁零计数开销
     if (mgr == (id)g_dbMgr) return NO;
-    // 慢路径（仅首捕）双检查单飞：AddMsg/AsyncOnAddMsg 双线程同时首捕时，
-    // 无锁「检查-赋值-retain」会双跑（多出的 retain 永久泄漏），锁内重查消灭
+    // 慢路径（仅首捕）双检查单飞：AddMsg/AsyncOnAddMsg 双线程同时首捕时防止
+    // 双跑。5151f01e 教训：此处加 release/retain「配对释放」会拨动 mgr 引用
+    // 计数（微信侧对 mgr 有 autorelease 波动），快路径比较失效 → 每条消息
+    // 重捕获+失效守卫 → rebuild 永远处于中间态 → entries 恒空合并全灭
+    // （探针实证 ret=1 恒真、rebuild changed=17 entries=0）。微信常驻服务
+    // 对象进程级不换人，纯指针赋值即正确持有语义（40da0a8a 四轮验证）。
     @synchronized ([BBMergeModel class]) {
         if (mgr == (id)g_dbMgr) return NO;
-#if !__has_feature(objc_arc)
-        [g_dbMgr release];   // 进程级常驻服务对象实际不换人，配对释放仅为语义完备
-        g_dbMgr = [mgr retain];
-#endif
+        g_dbMgr = mgr;
         WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@) (via AddMsg pipeline)",
               mgr, NSStringFromClass(object_getClass(mgr)));
         // 新捕获 = DB 查询能力从无到有：失效幂等守卫，调用方（Hook）据此调度
