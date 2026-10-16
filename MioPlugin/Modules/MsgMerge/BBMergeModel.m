@@ -369,10 +369,9 @@ static id dbFindValidMsg(long long startLID, int direction) {
 }
 
 - (void)noteMessageManager:(id)mgr {
-    // 【诊断实验】DB 数据源整体短路：g_dbMgr 恒不捕获 → ensureDBSource 恒失败
-    // → DB 兜底/note 直写全部失效，退回纯查表 v5（原生渲染兜底）。
-    // 用于二分定位小程序分享消息闪退是否出在 DB 查询路径；定论后按需恢复或删除。
-    return;
+    // 【2026-10-16 恢复】DB 短路诊断补丁已删：闪退真凶 = 按类扫描补挂的递归环
+    // （MsgMergeHook 已对齐 BubbleBox 删净），DB 查询路径（dbGetMsg 直调 4 参
+    // GetMsg，查询栈零跳板）实证无罪，恢复捕获。
     if (!mgr || mgr == (id)g_dbMgr) return;
     g_dbMgr = mgr;
 #if !__has_feature(objc_arc)
