@@ -106,22 +106,26 @@ static id wrapOfNode(id node) {
 // 直查存储（GetMsg:LocalID:），上限 15 步跳过已删除消息空洞——这正是它无闪回
 // 窗口的本质。本节照抄该路线作读侧兜底：索引 miss 时查存储补邻接，缓存进索引。
 //
-// mgr 实例捕获（frida 探针 + .ips 官方崩溃日志定论）：8.0.78 无 CMessageMgr
+// mgr 实例捕获（.ips 三轮崩溃 + BubbleBox 对照定论）：8.0.78 无 CMessageMgr
 // 单例访问器，聊天 VC ivar 树 2 层内也无其实例（ivar 自发现判死）。捕获点 =
-// CMessageDB 层 GetMsg:LocalID:hasError:needOriginContent:（微信查询必下沉 DB
-// 层，首调即记录 receiver）。禁止捕获 CMessageMgr 查询簇：.ips 实证 MSHook 该
-// 族后插件查询即 511 帧无限递归（IMP 共享互调，栈溢出 SIGSEGV）。DB 实例上
-// 4 参版同样可用（栈实证 CMessageDB 直有该实现），邻接/深部历史均命中。
+// AddMsg/AsyncOnAddMsg 收发钩 repl（self 即 mgr，MsgMergeHook 侧调用）。
+// 【铁律】捕获钩绝不能挂在 GetMsg 查询簇上：MSHook trampoline 无 unwind info，
+// 查询踩坏消息抛异常展开到跳板帧必 terminate（死法三连：2参版抛异常穿跳板/
+// 4参版 IMP 共享互调 511 帧递归环/CMessageDB 版异常照穿跳板）；BubbleBox 查
+// DB 不死正因其查询栈无自家跳板。插件查询直调不被 hook 的 4 参版——全栈
+// FDE 完整，dbGetMsg 的 @try 能正常接住坏消息异常。
+// API 可用性已实证：4 参版 GetMsg 邻接/深部历史均命中，字段齐全。
 
-static id g_dbMgr = nil;            // CMessageDB 实例（捕获点见上注，接口名沿用旧称）
+static id g_dbMgr = nil;            // CMessageMgr 实例（进程级服务对象，捕获即常驻）
 static NSString *g_dbTalker = nil;  // 当前会话 talker（rebuild 记录，clear 置空防串会话查库）
 static SEL g_selGetMsg = NULL;      // GetMsg:LocalID:hasError:needOriginContent:（4 参版）
 
 /// GetMsg（talker + localID → CMessageWrap；已删消息/越界返回 nil）。
-/// 4 参版 needOriginContent:YES = 跳过 ChangeForDisplay 显示加工——崩溃实证（frida
-/// 栈）：查询内部对结果做 HandleMessage→ChangeForDisplay→protobuf 解析扩展 XML，
-/// 遇损坏 App 消息抛 ObjC 异常（readRawVarint64）；@catch 接住返回 nil（该 lid
-/// 走步进下一跳），异常防护另有捕获钩 repl 层双层兜底。
+/// 4 参版直调（不经任何 hook——查询栈零跳板，异常 unwind 全链 FDE 完整）。
+/// needOriginContent:YES：邻接判定只需 sender/type/createTime，原始内容足够。
+/// 群历史存在扩展数据损坏的 App 消息，查询内部（HandleMessage→ChangeForDisplay
+/// →protobuf）解析它抛 ObjC 异常——@try 接住返回 nil（该 lid 当已删除，
+/// dbFindValidMsg 步进下一跳）。
 static id dbGetMsg(long long lid) {
     if (!g_dbMgr || !g_dbTalker || lid <= 0 || lid > 0xFFFFFFFFLL) return nil;
     if (!g_selGetMsg) g_selGetMsg = NSSelectorFromString(@"GetMsg:LocalID:hasError:needOriginContent:");
@@ -370,7 +374,8 @@ static id dbFindValidMsg(long long startLID, int direction) {
 #if !__has_feature(objc_arc)
     [mgr retain];
 #endif
-    WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@)", mgr, NSStringFromClass(object_getClass(mgr)));
+    WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@) (via AddMsg pipeline)",
+          mgr, NSStringFromClass(object_getClass(mgr)));
 }
 
 // 新消息入库直写：AddMsg 管道回调同步判定（不等 UI 节点记账的 30ms 轮询）。

@@ -59,13 +59,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSUInteger)rebuildFromNodeArray:(nullable NSArray *)nodeArray
                           chatName:(nullable NSString *)chatName;
 
-/// 存储层实例捕获回调（MsgMergeHook 的 CMessageDB GetMsg 钩调用）。
-/// 8.0.78 无单例访问器且 VC ivar 树 2 层内无其实例（frida 探针实证判死）。
-/// 捕获点定论（.ips 官方崩溃日志）：微信查询必下沉 CMessageDB 层，捕获 DB 层
-/// 4 参版 GetMsg（调用链单向不成环）；禁止捕获 CMessageMgr 查询簇——MSHook 该
-/// 族后插件查询即 511 帧无限递归（IMP 共享互调，栈溢出 SIGSEGV）。
-/// 捕获后供索引 miss 时按 localID 直查存储补邻接（BubbleBox findValidMsg
-/// 同路线，根除滚动加载 ~1s 记账迟滞的 None 闪回窗口）。
+/// 存储层实例捕获回调（MsgMergeHook 的 AddMsg/AsyncOnAddMsg 钩调用，self 即
+/// CMessageMgr）。8.0.78 无单例访问器且 VC ivar 树 2 层内无其实例（探针实证）。
+/// 【铁律】捕获点绝不能放在 GetMsg 查询簇上：MSHook trampoline 无 unwind info，
+/// 查询踩坏消息抛异常展开到跳板帧必 terminate（.ips 三轮崩溃实证）；BubbleBox
+/// 查 DB 不死正因其查询栈无自家跳板。捕获后供索引 miss 时按 localID 直查
+/// 存储补邻接（插件直调不被 hook 的 4 参版，@try 可接坏消息异常）。
 - (void)noteMessageManager:(nullable id)mgr;
 
 /// 标志查询（O(1) 索引查表）：未覆盖/组外/不可合并/功能未激活 = None。

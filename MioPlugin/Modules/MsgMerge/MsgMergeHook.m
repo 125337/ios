@@ -881,6 +881,7 @@ static void mmHandleIncomingMsg(id session, id wrap) {
 }
 
 static void repl_CMMsgMgr_AddMsg(id self, SEL _cmd, id session, id wrap) {
+    [[BBMergeModel shared] noteMessageManager:self];   // mgr 捕获（离开查询路径，见安装注）
     ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AddMsg)(self, _cmd, session, wrap);
     @try {
         WPLog(@"MsgMerge", @"[Ctx] AddMsg session=%@ cur=%@ type=%lld",
@@ -893,6 +894,7 @@ static void repl_CMMsgMgr_AddMsg(id self, SEL _cmd, id session, id wrap) {
 }
 
 static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) {
+    [[BBMergeModel shared] noteMessageManager:self];   // mgr 捕获（离开查询路径，见安装注）
     ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AsyncOnAddMsg)(self, _cmd, session, wrap);
     @try {
         mmHandleIncomingMsg(session, wrap);
@@ -1248,24 +1250,13 @@ static void installTimeRowCollapseHook(void) {
 // MARK: - 安装
 // ============================================================
 
-// 第二数据源 DB 捕获（.ips 官方崩溃日志定论）：MSHook CMessageMgr 的
-// GetMsg:LocalID: 后插件改调 4 参版即触发 511 帧无限递归（Mio trampoline ↔
-// WeChat 0x6624608 交替，栈溢出 SIGSEGV）——该族方法 IMP 相互共享/互调，捕获钩
-// 绝不能挂在查询簇上。捕获点改 CMessageDB 层 4 参版：微信查询必下沉 DB 层
-//（栈实证 CMessageMgr 4 参 → CMessageDB 4 参），而 DB 层调用链单向
-//（4 参 → Where 版 → HandleMessage，无互调）不成环。@catch 兜住查询踩坏消息
-// 抛的 ObjC 异常（readRawVarint64），防止穿透 unwind 经 MSHook trampoline。
-static id (*orig_CDB_GetMsg)(id, SEL, id, unsigned int, BOOL *, BOOL);
-static id repl_CDB_GetMsg(id self, SEL _cmd, id talker, unsigned int localID,
-                          BOOL *hasError, BOOL needOriginContent) {
-    [[BBMergeModel shared] noteMessageManager:self];
-    @try {
-        return orig_CDB_GetMsg(self, _cmd, talker, localID, hasError, needOriginContent);
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[Hook] DB GetMsg lid=%u exception: %@", localID, e.name);
-        return nil;
-    }
-}
+// 【mgr 捕获点定论（.ips 三轮崩溃 + BubbleBox 对照）】BubbleBox 查 DB 不死，
+// 因其查询栈里没有它自己的 hook 跳板（hook 的是 cell 生命周期，异常穿到微信
+// 自己的异常处理被吞）；我们死在把捕获钩挂进查询路径——MSHook trampoline 是
+// 无 unwind info 的裸机器码，异常展开到该帧必 terminate，@catch 再深也接不到。
+// 故捕获点 = AddMsg/AsyncOnAddMsg repl（self 即 CMessageMgr，零新增 hook，
+// 查询栈零跳板）；插件查询直调不被 hook 的 4 参版 GetMsg，全栈 FDE 完整，
+// dbGetMsg 的 @try 可正常接住坏消息异常（按已删除处理，步进跳过）。
 
 @implementation MsgMergeHook
 
@@ -1293,19 +1284,7 @@ static id repl_CDB_GetMsg(id self, SEL _cmd, id talker, unsigned int localID,
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseMsgContentViewController not found");
     }
 
-    // ①c 第二数据源：CMessageDB 捕获钩（读侧 DB 兜底的实例来源；勿挂 CMessageMgr
-    //    查询簇——.ips 定论 511 帧递归环）
-    cls = objc_getClass("CMessageDB");
-    if (cls) {
-        MSHookMessageEx(cls, NSSelectorFromString(@"GetMsg:LocalID:hasError:needOriginContent:"),
-                        (IMP)repl_CDB_GetMsg,
-                        &orig_CDB_GetMsg);
-        WPLog(@"MsgMerge", @"[Hook] ✓ CMessageDB GetMsg (DB 捕获)");
-    } else {
-        WPLog(@"MsgMerge", @"[Hook] ✗ CMessageDB not found");
-    }
-
-    // ①d 时间行收起（isNeedInsertTimeNode 显示语义）：299s 窗内压行高 + hidden
+    // ①c 时间行收起（isNeedInsertTimeNode 显示语义）：299s 窗内压行高 + hidden
     installTimeRowCollapseHook();
 
     // ①b 滚动驱动全量重刷（BubbleBox scheduleUpdateNodes:scroll: 同款触发源）：
