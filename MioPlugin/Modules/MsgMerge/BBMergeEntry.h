@@ -28,9 +28,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) long long type;      // m_uiMessageType
 @property (nonatomic, assign) MOMergePosition pos; // 预计算位置标志
 
-/// 渲染语义：组首（First 或 Single，昵称可见/头像位"消息头"用）
+/// 渲染语义：组首（First 或 Single，昵称可见）
 - (BOOL)isGroupHead;
-/// 渲染语义：组尾（Last 或 Single，头像位"消息尾"用）
+/// 渲染语义：组尾（Last 或 Single）
 - (BOOL)isGroupTail;
 
 @end

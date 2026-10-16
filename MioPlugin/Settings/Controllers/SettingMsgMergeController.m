@@ -3,7 +3,7 @@
 //  MioPlugin
 //
 //  消息合并二级设置页（对齐 BubbleBox 设置页选项构成，截图对照）
-//  选项：启用消息合并 / 仅对群聊生效 / 消息合并模式 / 头像显示位置 /
+//  选项：启用消息合并 / 仅对群聊生效 / 消息合并模式 /
 //        消息合并间距 / 合并时间窗
 //  行构建沿用 SettingCategoryController 微信引擎范式（key 直接绑定 ConfigManager）
 //
@@ -79,13 +79,6 @@
     y = [self addSectionHeader:@"外观" y:y width:w];
     UIView *g3 = [self addTableGroupAtY:y width:w];
     cy = 0;
-    cy = [self addSegmentRowInGroup:g3
-                              title:@"头像显示位置"
-                                key:@"mmAvatarPos"
-                              names:@[@"气泡设定", @"消息头", @"消息尾"]
-                              index:config.mmAvatarPos
-                                 cy:cy
-                              width:w];
     cy = [self addSegmentRowInGroup:g3
                               title:@"消息合并间距"
                                 key:@"mmSpacingMode"

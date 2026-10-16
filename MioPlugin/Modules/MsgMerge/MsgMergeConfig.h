@@ -23,9 +23,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// 消息合并模式：0=全部合并 1=手动配置（预留，暂与全部合并同行为）
 @property (nonatomic, assign) NSInteger mmMode;
 
-/// 头像显示位置：0=气泡设定（不干预） 1=消息头（组首显示） 2=消息尾（组尾显示）
-@property (nonatomic, assign) NSInteger mmAvatarPos;
-
 /// 消息合并间距：0=跟随气泡（不干预） 1=手动调整
 @property (nonatomic, assign) NSInteger mmSpacingMode;
 

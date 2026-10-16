@@ -659,19 +659,11 @@ static void applyMergeToCellView(id cellView) {
         if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
 
         BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
-        BOOL isLast  = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
         BOOL inGroup = [chat hasSuffix:@"@chatroom"];
 
         markTouched(cellView);
 
-        // ① 头像显隐（气泡设定=0 时尊重微信默认，不干预）
-        if (cfg.mmAvatarPos == 1 || cfg.mmAvatarPos == 2) {
-            BOOL showAvatar = (cfg.mmAvatarPos == 1) ? isFirst : isLast;
-            id head = safeCall(cellView, "getHeadImageView");
-            if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:!showAvatar];
-        }
-
-        // ② 群昵称：仅组首显示（私聊无昵称标签，操作无害）。
+        // ① 群昵称：仅组首显示（私聊无昵称标签，操作无害）。
         //    行高侧昵称区回收由测量层负责（NJD 判定钩翻转 + 原生自动收缩），
         //    此处只管渲染显隐。
         if (inGroup) {
@@ -681,7 +673,7 @@ static void applyMergeToCellView(id cellView) {
             }
         }
 
-        // ③ 气泡背景圆角连续化（独立消息还原原值）
+        // ② 气泡背景圆角连续化（独立消息还原原值）
         UIImageView *bg = safeCall(cellView, "getBgImageView");
         if ([bg isKindOfClass:[UIImageView class]]) {
             applyCorner(bg, pos);
