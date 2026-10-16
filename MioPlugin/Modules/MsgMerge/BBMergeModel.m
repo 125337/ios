@@ -346,16 +346,23 @@ static id dbFindValidMsg(long long startLID, int direction) {
 - (BOOL)noteMessageManager:(id)mgr {
     // DB 查询路径（dbGetMsg 直调 4 参 GetMsg，查询栈零跳板）实证无罪——98 号
     // 日志"功能全灭"真凶是按类扫描补挂的递归环，已在 MsgMergeHook 删净。
-    if (!mgr || mgr == (id)g_dbMgr) return NO;
-    g_dbMgr = mgr;
+    if (!mgr) return NO;
+    // 快路径（每消息高频）：指针比较原子，现行 mgr 直接早退，零锁零计数开销
+    if (mgr == (id)g_dbMgr) return NO;
+    // 慢路径（仅首捕）双检查单飞：AddMsg/AsyncOnAddMsg 双线程同时首捕时，
+    // 无锁「检查-赋值-retain」会双跑（多出的 retain 永久泄漏），锁内重查消灭
+    @synchronized ([BBMergeModel class]) {
+        if (mgr == (id)g_dbMgr) return NO;
 #if !__has_feature(objc_arc)
-    [mgr retain];
+        [g_dbMgr release];   // 进程级常驻服务对象实际不换人，配对释放仅为语义完备
+        g_dbMgr = [mgr retain];
 #endif
-    WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@) (via AddMsg pipeline)",
-          mgr, NSStringFromClass(object_getClass(mgr)));
-    // 新捕获 = DB 查询能力从无到有：失效幂等守卫，调用方（Hook）据此调度
-    // rebuild——冷启动首次进聊天的 entries=0 空结果由这次重算自愈
-    [self invalidateRebuildGuard];
+        WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@) (via AddMsg pipeline)",
+              mgr, NSStringFromClass(object_getClass(mgr)));
+        // 新捕获 = DB 查询能力从无到有：失效幂等守卫，调用方（Hook）据此调度
+        // rebuild——冷启动首次进聊天的 entries=0 空结果由这次重算自愈
+        [self invalidateRebuildGuard];
+    }
     return YES;
 }
 

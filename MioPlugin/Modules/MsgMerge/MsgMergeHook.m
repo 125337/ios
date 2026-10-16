@@ -459,18 +459,21 @@ static void mmHandleIncomingMsg(id session, id wrap) {
     if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
     long long lid = localIDOfWrap(wrap);
     if (lid <= 0) return;
+    // g_currentNodeArray 仅主线程安全（主线程 updateChatContext/prune 会换数组），
+    // 读 count 前必须先归队——非主线程回调时三项动作整体派发主队列串行执行
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [[BBMergeModel shared] noteIncomingMsgLocalID:lid];
             if (g_curChatVC) updateChatContext(g_curChatVC);   // 刷新 g_currentNodeArray（含切会话自检）
+            mergeScheduleRelayout();
         });
     } else {
         [[BBMergeModel shared] noteIncomingMsgLocalID:lid];
         if (g_curChatVC) updateChatContext(g_curChatVC);
+        mergeScheduleRelayout();
     }
     // 轮询确认节点追加后 mergeDoReload 主动 rebuild：索引全量校准 + 可见刷新
     // （本函数绝不触发表格变更，见 mergeDoReload 注释）
-    mergeScheduleRelayout();
 }
 
 // ============================================================
