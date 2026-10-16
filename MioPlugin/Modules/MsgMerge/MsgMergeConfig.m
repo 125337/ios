@@ -27,6 +27,7 @@
         [ConfigDescriptor itemWithKey:@"mmEnable" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"mmOnlyRoom" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"mmMode" type:ConfigValueTypeInteger default:@(0)],
+        [ConfigDescriptor itemWithKey:@"mmAvatarPos" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"mmSpacingMode" type:ConfigValueTypeInteger default:@(0)],
         [ConfigDescriptor itemWithKey:@"mmSpacing" type:ConfigValueTypeFloat default:@(2.0)],
         [ConfigDescriptor itemWithKey:@"mmSepMedia" type:ConfigValueTypeBool default:@(YES)],

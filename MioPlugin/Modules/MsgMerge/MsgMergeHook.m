@@ -652,9 +652,19 @@ static void applyMergeToCellView(id cellView) {
         MOMergePosition pos = flagsPos(viewModel);
         if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
 
+        BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
+        BOOL isLast  = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
+
         markTouched(cellView);
 
-        // 气泡背景圆角连续化（独立消息还原原值）。
+        // ① 头像显隐（0=消息头/组首显示，1=消息尾/组尾显示）
+        if (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1) {
+            BOOL showAvatar = (cfg.mmAvatarPos == 0) ? isFirst : isLast;
+            id head = safeCall(cellView, "getHeadImageView");
+            if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:!showAvatar];
+        }
+
+        // ② 气泡背景圆角连续化（独立消息还原原值）。
         // 群昵称显隐不再由渲染层干预——昵称判定钩（常驻）翻转后原生按无昵称行
         // 测量+布局，渲染层 hidden 已冗余。
         UIImageView *bg = safeCall(cellView, "getBgImageView");
