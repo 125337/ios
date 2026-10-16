@@ -63,6 +63,7 @@ static IMP orig_CMCellView_getNameLabel         = NULL;
 static IMP orig_CMVM_measure                    = NULL;
 static IMP orig_CMVM_isShowChatRoomDisplayName  = NULL;
 static IMP orig_CMMsgMgr_AddMsg                 = NULL;   // 收发总管道（发送侧不走 AsyncOnAddMsg）
+static IMP orig_CMMsgMgr_onServiceInit          = NULL;   // 服务初始化（mgr 早捕获挂点）
 static IMP orig_CMMsgMgr_AsyncOnAddMsg          = NULL;
 
 // —— 会话上下文 ——
@@ -984,6 +985,16 @@ static id repl_CMCellView_getNameLabel(id self, SEL _cmd) {
 // AddMsg:MsgWrap: = 收发总管道（94 号日志实证：自己发送不走 AsyncOnAddMsg，
 // 不钩它则发出消息首测恒 miss → 原生帧固化）。与 AsyncOnAddMsg 收消息双触发，
 // note 幂等去重。
+// onServiceInit = MMBaseService 服务体系生命周期钩（CMessageMgr 自有方法，探针
+// class_copyMethodList 实证；super chain CMessageMgr←MMUserService←MMBaseService）。
+// 登录后服务树初始化即调——远早于首条消息，mgr 早捕获消灭冷启动窗口期
+// （MioPlugin(100/101) 实证：AddMsg 管道捕获晚于首进聊天，首屏 entries=0）。
+// 非查询路径+纯指针捕获，铁律合规。noteMessageManager 幂等（同 mgr 直接跳过）。
+static void repl_CMMsgMgr_onServiceInit(id self, SEL _cmd) {
+    [[BBMergeModel shared] noteMessageManager:self];
+    ((void (*)(id, SEL))orig_CMMsgMgr_onServiceInit)(self, _cmd);
+}
+
 static void repl_CMMsgMgr_AddMsg(id self, SEL _cmd, id session, id wrap) {
     if ([[BBMergeModel shared] noteMessageManager:self]) {   // mgr 捕获（零新增 hook，查询栈零跳板）
         // 新捕获调度重算：冷启动首次进聊天 rebuild 先于 DB 就绪（entries=0 被
@@ -1160,6 +1171,14 @@ static BOOL impIsForeign(IMP cur) {
         WPLog(@"MsgMerge", @"[Hook] ✓ CMessageMgr AsyncOnAddMsg:MsgWrap:");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr AsyncOnAddMsg not found");
+    }
+    // mgr 早捕获：onServiceInit（服务初始化，登录期必调，早于首条消息）
+    if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"onServiceInit")]) {
+        orig_CMMsgMgr_onServiceInit = bbSwap(cls, NSSelectorFromString(@"onServiceInit"),
+                                             (IMP)repl_CMMsgMgr_onServiceInit, "CMessageMgr");
+        WPLog(@"MsgMerge", @"[Hook] ✓ CMessageMgr onServiceInit (mgr 早捕获)");
+    } else {
+        WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr onServiceInit not found");
     }
 
     WPLog(@"MsgMerge", @"MsgMergeHook install complete");
