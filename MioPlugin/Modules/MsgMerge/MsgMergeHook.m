@@ -753,6 +753,7 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 // 因为我们过早 reloadData 会用"缺新节点的旧数组"算位置（探针实证竞争）。
 // ------------------------------------------------------------
 static IMP orig_CMMsgMgr_AsyncOnAddMsg = NULL;
+static IMP orig_CMMsgMgr_AddMsg = NULL;      // 收发总管道（发送侧 note 直写入口）
 static BOOL s_mergeRelayoutPending = NO;   // 重排进行中（防连发消息重复排队）
 
 static void mergeFindTable(UIView *v, int depth, UITableView **out) {
@@ -843,31 +844,48 @@ static void mergeRetryRelayout(NSInteger count0, NSInteger attempt) {
     });
 }
 
-static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) {
-    ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AsyncOnAddMsg)(self, _cmd, session, wrap);
+// 新消息处理公共体（收发双管道共用）：AddMsg:MsgWrap: 是收发总管道（探针
+// 94 号实证：自己发送不走 AsyncOnAddMsg——它是接收入口，发送时钩子零调用，
+// note 直写不执行 → 建行首测 miss → 原生帧固化 → 秒跳合并），AsyncOnAddMsg
+// 仅接收侧补充（两条管道收消息都触发，note 以 _index 幂等去重）。
+static void mmHandleIncomingMsg(id session, id wrap) {
+    MsgMergeConfig *cfg = [MsgMergeConfig shared];
+    if (!cfg.mmEnable) return;
+    if (![session isKindOfClass:[NSString class]]) return;
+    if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
+    // 新消息入库直写（BubbleBox 同款时序）：wrap 的 lid 此刻已入库，立即
+    // 判定邻接写进索引——微信建行（~30ms 后）首测即命中，消灭「发出那一刻
+    // 原生间距」固化窗口（rebuild 依赖 nodeArray 记账恒晚于建行，救不了首测）。
+    // 主线程执行（管道回调可能在后台线程，索引写入须与 rebuild 同队列）
+    long long lid = localIDOfWrap(wrap);
+    if (lid > 0) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[BBMergeModel shared] noteIncomingMsgLocalID:lid];
+        });
+    }
+    if (g_curChatVC) updateChatContext(g_curChatVC);   // 刷新 g_currentNodeArray（含切会话自检）
+    // 轮询确认节点追加后 mergeDoReload 主动重建：负责上一条 Last→Middle 的
+    // 重排（noteIncomingMsg 不做刷新）+ 索引全量校准（本函数绝不触发表格
+    // 变更，见 mergeDoReload 注释）
+    mergeScheduleRelayout();
+}
+
+static void repl_CMMsgMgr_AddMsg(id self, SEL _cmd, id session, id wrap) {
+    ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AddMsg)(self, _cmd, session, wrap);
     @try {
-        MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        if (!cfg.mmEnable) return;
-        if (![session isKindOfClass:[NSString class]]) return;
         WPLog(@"MsgMerge", @"[Ctx] AddMsg session=%@ cur=%@ type=%lld",
               session, g_currentChatName ?: @"(nil)",
               (long long)[safeKVC(wrap, @"m_uiMessageType") longLongValue]);   // 触发实证
-        if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
-        // 新消息入库直写（BubbleBox 同款时序）：wrap 的 lid 此刻已入库，立即
-        // 判定邻接写进索引——微信建行（~30ms 后）首测即命中，消灭「发出那一刻
-        // 原生间距」固化窗口（rebuild 依赖 nodeArray 记账恒晚于建行，救不了首测）。
-        // 主线程执行（AsyncOnAddMsg 可能在后台线程回调，索引写入须与 rebuild 同队列）
-        long long lid = localIDOfWrap(wrap);
-        if (lid > 0) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [[BBMergeModel shared] noteIncomingMsgLocalID:lid];
-            });
-        }
-        if (g_curChatVC) updateChatContext(g_curChatVC);   // 刷新 g_currentNodeArray（含切会话自检）
-        // 轮询确认节点追加后 mergeDoReload 主动重建：负责上一条 Last→Middle 的
-        // 重排（noteIncomingMsg 不做刷新）+ 索引全量校准（本函数绝不触发表格
-        // 变更，见 mergeDoReload 注释）
-        mergeScheduleRelayout();
+        mmHandleIncomingMsg(session, wrap);
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Ctx] AddMsg exception: %@", e.reason);
+    }
+}
+
+static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) {
+    ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AsyncOnAddMsg)(self, _cmd, session, wrap);
+    @try {
+        mmHandleIncomingMsg(session, wrap);
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] AsyncOnAddMsg exception: %@", e.reason);
     }
@@ -1375,6 +1393,17 @@ static id repl_CMGR_GetMsg_LocalID(id self, SEL _cmd, id talker, unsigned int lo
 
     // ④ 新消息入库联动（新 lid 入组/邻接变化 → 刷数组+清缓存+重排）
     cls = objc_getClass("CMessageMgr");
+    // AddMsg:MsgWrap: = 收发总管道（94 号日志实证：自己发送不走 AsyncOnAddMsg，
+    // 不钩它则发出消息首测恒 miss → 原生帧固化）。KeywordAlert/RedEnv 等成熟
+    // 插件同钩佐证签名 (v@:@@)。与 AsyncOnAddMsg 收消息双触发，note 幂等去重。
+    if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"AddMsg:MsgWrap:")]) {
+        MSHookMessageEx(cls, NSSelectorFromString(@"AddMsg:MsgWrap:"),
+                        (IMP)repl_CMMsgMgr_AddMsg,
+                        &orig_CMMsgMgr_AddMsg);
+        WPLog(@"MsgMerge", @"[Hook] ✓ CMessageMgr AddMsg:MsgWrap: (收发总管道)");
+    } else {
+        WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr AddMsg:MsgWrap: not found");
+    }
     if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:")]) {
         MSHookMessageEx(cls, NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:"),
                         (IMP)repl_CMMsgMgr_AsyncOnAddMsg,
