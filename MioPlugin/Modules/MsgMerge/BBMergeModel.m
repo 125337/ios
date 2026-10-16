@@ -10,19 +10,21 @@
 //      ④ |Δ(m_uiCreateTime)| ≤ 299s（BubbleBox isNeedInsertTimeNode 同窗：
 //        窗内分钟粒度时间行只是显示细节不断组，超窗断组）
 //
-//  查表架构 · DB 单路径：
-//    rebuild 一次性预计算 entries + localID→entry 索引；读侧（measure:/昵称判定/
+//  数据先行 · 增量索引 · DB 单路径：
+//    对齐 BubbleBox——分组判定永远发生在微信建 vm/测量之前。索引覆盖域 =
+//    屏上 lid 渲染集合（refreshIndex 增量补建，已覆盖 O(1) 跳过）+ 历史方向
+//    DB 预扩（extendHistoricalFromMinLid：屏上最小 lid 向 −1 预建 ~32 条，
+//    滚动加载的批次插入数组前 entries 已就位）；读侧（measure:/昵称判定/
 //    渲染/昵称断供钩）按 wrap 的 localID 直接 O(1) 查索引，不依赖 vm 对象——
 //    微信整批重建 vm 时索引不受影响，测量瞬间查表即得正确值，零竞速零闪回。
 //    邻接判定全走微信存储层（GetMsg:LocalID: ±1 步进跳已删空洞，BubbleBox
-//    findValidMsg 同构）；UI 数组仅提供屏上 lid 渲染集合（UI 数组邻接已废弃：
-//    双路径语义漂移——UI 侧时间行一律断组 / DB 侧 299s 窗）。
+//    findValidMsg 同构）；UI 数组仅提供 lid 种子，不参与邻接判定。
 //    【禁止复活预写层】vm 生命周期归微信管：进聊天/滚动整批重建 vm 并立刻
 //    测量，预写标志随旧对象死亡 → 测量读 None → 原生闪回（89 号日志实证）。
-//    重建触发点（事件驱动）：切会话/进聊天/新消息轮询确认追加/滚动限频
-//    （100ms）/读侧 None-miss 限频保鲜（0.15s）/配置指纹变化；幂等守卫保证
-//    重复触发退化为 O(1) 比对。rebuild 返回内容变化数，调用方仅在变化>0 时
-//    做可见刷新。
+//    刷新语义（BubbleBox scheduleUpdateNodes:scroll: 精髓）：refreshIndex 返回
+//    的 changed 只统计「屏上已渲染 lid 的 pos 实变」；新 lid 进索引不计——
+//    微信建行首测查表即真，无需事后刷新，滚动场景 changed 恒 0，永不跳动。
+//    时间行零干预（BubbleBox 同款：全链无 ChatTime 引用）。
 //
 //  长文本切片合一（MioPlugin(82) 实证）：一条消息（同 localID 连续多节点）
 //  仅一个 entry，lid 列表构建时去重；切片所有 vm 查表同 pos。
@@ -111,7 +113,7 @@ static id wrapOfNode(id node) {
 // GetMsg:LocalID:hasError:needOriginContent:（邻接/深部历史均命中，字段齐全）。
 
 static id g_dbMgr = nil;            // CMessageMgr 实例（进程级服务对象，捕获即常驻）
-static NSString *g_dbTalker = nil;  // 当前会话 talker（rebuild 记录，clear 置空防串会话查库）
+static NSString *g_dbTalker = nil;  // 当前会话 talker（refreshIndex 记录，clear 置空防串会话查库）
 static SEL g_selGetMsg = NULL;      // GetMsg:LocalID:hasError:needOriginContent:（4 参版）
 
 /// GetMsg（talker + localID → CMessageWrap；已删消息/越界返回 nil）。
@@ -146,11 +148,12 @@ static id dbFindValidMsg(long long startLID, int direction) {
 
 @implementation BBMergeModel {
     NSMutableDictionary<NSNumber *, BBMergeEntry *> *_index;   // localID → entry
-    NSArray *_lastArray;      // 上次重建的数组引用（指针身份失效检测）
+    NSArray *_lastArray;      // 上次刷新的数组引用（指针身份失效检测）
     NSUInteger _lastCount;
     NSString *_lastChatName;
     BOOL _fpEnable, _fpOnlyRoom, _fpSepMedia, _fpSepEmoticon;
     NSInteger _fpMode;
+    long long _coveredMinLid; // 历史预扩已覆盖的最小 lid（0=未预扩，防重复步进）
 }
 
 + (instancetype)shared {
@@ -203,34 +206,109 @@ static id dbFindValidMsg(long long startLID, int direction) {
 }
 
 // ============================================================
-// MARK: - 重建（仅事件触发点调用，无查询期重建）
+// MARK: - 索引增量刷新（仅事件触发点调用，无查询期刷新）
 // ============================================================
 
-- (NSUInteger)rebuildFromNodeArray:(NSArray *)nodeArray
-                          chatName:(NSString *)chatName {
+/// 建单条 entry（屏上 fill / 历史预扩 / 读侧兜底三路共用）：
+/// wrap 入库 + DB 双向邻接判定 → pos 写索引。
+/// 已覆盖 O(1) 返回；DB 未就绪（g_dbMgr/g_dbTalker 缺）不写任何缓存直接返回
+/// None——防冷启动负缓存锁死 DB 捕获后的自愈重算（DB 未就绪时零缓存空转，
+/// DB 捕获后 invalidateRebuildGuard 重算即自愈）；wrap=nil 且 DB 就绪 → 空洞负缓存 None。
+- (MOMergePosition)fillEntryForLid:(long long)lid wrap:(id)wrap {
+    if (lid <= 0) return MOMergePositionNone;
+    BBMergeEntry *e = _index[@(lid)];
+    if (e) return e.pos;
+    if (!g_dbMgr || !g_dbTalker) return MOMergePositionNone;
+    if (!wrap) wrap = dbGetMsg(lid);
+    if (!wrap) {
+        [self dbCacheEntry:nil lid:lid pos:MOMergePositionNone];
+        return MOMergePositionNone;
+    }
+    // 邻接 = findValidMsg 对齐（BubbleBox 002ffcdc）：±1 步进跳已删空洞
+    id prevWrap = dbFindValidMsg(lid, -1);
+    id nextWrap = dbFindValidMsg(lid, +1);
+    BOOL joinPrev = (prevWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:prevWrap];
+    BOOL joinNext = (nextWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:nextWrap];
+
+    MOMergePosition pos;
+    if (joinPrev && joinNext)      pos = MOMergePositionMiddle;
+    else if (joinPrev)             pos = MOMergePositionLast;
+    else if (joinNext)             pos = MOMergePositionFirst;
+    else                           pos = MOMergePositionSingle;
+
+    [self dbCacheEntry:wrap lid:lid pos:pos];
+    return pos;
+}
+
+/// 历史方向预扩（数据先行核心）：从 minLid-1 向 −1 步进预建最多 32 条有效
+/// entry，连续 15 个已删空洞即停（findValidMsg 语义：整段空洞 = 邻接链断）。
+/// 目标区间已被覆盖（minLid-32 ≥ _coveredMinLid）时 O(1) 跳过——滚动钩 100ms
+/// 限频下重复触发的常态路径。
+- (NSInteger)extendHistoricalFromMinLid:(long long)minLid {
+    if (minLid <= 1 || !g_dbMgr || !g_dbTalker) return 0;
+    static const int kMaxBuild = 32;
+    static const int kMaxHole = 15;
+    if (_coveredMinLid > 0 && minLid - kMaxBuild >= _coveredMinLid) return 0;
+    NSInteger built = 0;
+    int holes = 0;
+    long long lid = minLid - 1;
+    while (built < kMaxBuild && holes < kMaxHole && lid >= 1) {
+        id w = dbGetMsg(lid);
+        if (!w) {
+            holes++;
+        } else {
+            holes = 0;
+            built++;
+            [self fillEntryForLid:lid wrap:w];
+        }
+        lid--;
+    }
+    if (_coveredMinLid <= 0 || lid + 1 < _coveredMinLid) _coveredMinLid = lid + 1;
+    return built;
+}
+
+- (NSUInteger)refreshIndexWithNodeArray:(NSArray *)nodeArray
+                               chatName:(NSString *)chatName {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    // talker 随 rebuild 记录（DB 邻接查询用；clear 已置空，防切会话窗口期串库查询）
+    // talker 随刷新记录（DB 邻接查询用；clear 已置空，防切会话窗口期串库查询）
     if (chatName.length > 0 && ![chatName isEqualToString:g_dbTalker]) {
 #if !__has_feature(objc_arc)
         [g_dbTalker release];
 #endif
         g_dbTalker = [chatName copy];
     }
-    // 幂等守卫（防 rebuild 风暴）：同输入（数组指针/count/会话名/配置指纹）直接
-    // 跳过。失效检测在查询高频路径上，若调用方混用多个数据源引用（如 KVC 实时读
-    // 与 g_currentNodeArray 缓存身份不一致）会退化为每次查询全量重建（O(n) KVC），
-    // 高频测量下即主线程卡死；幂等后失配重复触发退化为 O(1) 比对。
+    // 幂等守卫（防刷新风暴）：同输入（数组指针/count/会话名/配置指纹）直接
+    // 跳过。增量本体天然幂等（已覆盖 lid O(1) 跳过），守卫只省掉 lid 扫描的
+    // KVC 成本。失效检测在查询高频路径上，若调用方混用多个数据源引用会退化
+    // 为每次全扫，幂等后失配重复触发退化为 O(1) 比对。
     if (nodeArray == _lastArray && nodeArray.count == _lastCount
         && (chatName == _lastChatName || [chatName isEqualToString:_lastChatName])
         && ![self configFingerprintChanged]) {
         return 0;
     }
-    // 旧代次 pos 快照（内容变化数计算基准：新增/变化/移除）
+    // changed 基准：屏上 lid 的旧 pos 快照（须在指纹失效清索引之前取——指纹
+    // 变化时全量重建，旧 pos 全部参与对比，翻转全计 changed）
+    NSMutableArray<NSNumber *> *lids = [NSMutableArray array];
+    for (id node in nodeArray) {
+        id w = wrapOfNode(node);
+        if (!w || !isMergeableWrap(w)) continue;            // 时间行/系统消息无 entry
+        if ([[self class] isSeparatorMessage:w]) continue;  // 分隔消息无 entry
+        long long lid = localIDOf(w);
+        if (lid <= 0) continue;
+        if (lids.count && [lids lastObject].longLongValue == lid) continue;  // 切片合一
+        [lids addObject:@(lid)];
+    }
     NSMutableDictionary<NSNumber *, NSNumber *> *oldPos = [NSMutableDictionary dictionaryWithCapacity:_index.count];
-    [_index enumerateKeysAndObjectsUsingBlock:^(NSNumber *lid, BBMergeEntry *e, BOOL *stop) {
-        oldPos[lid] = @(e.pos);
-    }];
-    // 记录重建身份（空结果同样记录，防同输入反复重建）
+    for (NSNumber *lidN in lids) {
+        BBMergeEntry *e = _index[lidN];
+        if (e) oldPos[lidN] = @(e.pos);
+    }
+    // 配置指纹变化 → 全量失效（pos 规则已变，旧 entry 不可复用）
+    if ([self configFingerprintChanged]) {
+        _index = [NSMutableDictionary dictionary];
+        _coveredMinLid = 0;
+    }
+    // 记录刷新身份（空结果同样记录，防同输入反复扫描）
     _lastArray = nodeArray;
     _lastCount = nodeArray.count;
 #if __has_feature(objc_arc)
@@ -245,79 +323,35 @@ static id dbFindValidMsg(long long startLID, int direction) {
     _fpSepMedia = cfg.mmSepMedia;
     _fpSepEmoticon = cfg.mmSepEmoticon;
 
-    NSMutableArray<BBMergeEntry *> *tmp = [NSMutableArray array];
-    _index = [NSMutableDictionary dictionary];
-
-    // 前置条件不满足 → 空 entries（所有查询落 None，钩子不干预）
+    NSInteger filled = 0, extended = 0;
     BOOL active = cfg.mmEnable
                && !(cfg.mmOnlyRoom && ![chatName hasSuffix:@"@chatroom"])
                && nodeArray.count > 0;
-
     if (active) {
-        // DB 单路径：UI 数组仅提供屏上有序 lid 列表（渲染集合），邻接判定全部
-        // 走存储层（与读侧 DB fill 同一套 shouldJoinDB 规则）——存储恒完整、
-        // 步进跳已删空洞、无记账迟滞窗口，微信裁剪数组不影响逻辑邻接。
-        // 屏上有序 lid 列表。切片合一（MioPlugin(82) 实证）：长文本消息被微信
-        // 拆成同 localID 连续多节点，一条消息一个 entry，否则切片互相
-        // "自己 join 自己"伪造邻接、末片 entry 覆盖索引。
-        NSMutableArray<NSNumber *> *lids = [NSMutableArray array];
-        for (id node in nodeArray) {
-            id w = wrapOfNode(node);
-            if (!w || !isMergeableWrap(w)) continue;            // 时间行/系统消息无 entry
-            if ([[self class] isSeparatorMessage:w]) continue;  // 分隔消息无 entry
-            long long lid = localIDOf(w);
-            if (lid <= 0) continue;
-            if (lids.count && [lids lastObject].longLongValue == lid) continue;
-            [lids addObject:@(lid)];
-        }
-
+        // ① 屏上增量 fill：无 entry 的 lid 从存储层补建（DB 未就绪时零缓存空转，
+        //    DB 捕获后 invalidateRebuildGuard 重算自愈）
         for (NSNumber *lidN in lids) {
-            long long lid = lidN.longLongValue;
-            id wrap = dbGetMsg(lid);
-            if (!wrap) {
-                // UI 数组有而 DB 无（理论不可达）：负缓存防同一 localID 反复查库
-                [self dbCacheEntry:nil lid:lid pos:MOMergePositionSingle];
-                continue;
-            }
-            // 邻接 = findValidMsg 对齐（BubbleBox 002ffcdc）：±1 步进跳已删空洞
-            id prevWrap = dbFindValidMsg(lid, -1);
-            id nextWrap = dbFindValidMsg(lid, +1);
-            BOOL joinPrev = (prevWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:prevWrap];
-            BOOL joinNext = (nextWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:nextWrap];
-
-            MOMergePosition pos;
-            if (joinPrev && joinNext)      pos = MOMergePositionMiddle;
-            else if (joinPrev)             pos = MOMergePositionLast;
-            else if (joinNext)             pos = MOMergePositionFirst;
-            else                           pos = MOMergePositionSingle;
-
-            BBMergeEntry *e = [[BBMergeEntry alloc] init];
-            e.wrap = wrap;
-            e.senderUser = senderIdentity(wrap);
-            e.localID = lid;
-            e.type = [safeValue(wrap, @"m_uiMessageType") longLongValue];
-            e.pos = pos;
-            [tmp addObject:e];
-            _index[@(lid)] = e;
-#if !__has_feature(objc_arc)
-            [e release];
-#endif
+            if (_index[lidN]) continue;
+            [self fillEntryForLid:lidN.longLongValue wrap:nil];
+            if (_index[lidN]) filled++;
         }
+        // ② 历史方向预扩：屏上最小 lid 向 −1 预建（滚动批次插入前索引已就位）
+        extended = [self extendHistoricalFromMinLid:lids.count ? lids.firstObject.longLongValue : 0];
     }
 
-    self.entries = tmp;
-    // 内容变化数 = 新增 lid + pos 变化（调用方仅在 >0 时可见刷新）。
-    // 移除不计数：微信会裁剪渲染数组（90 号日志实证 nodes 24↔39 震荡），被裁
-    // 都是屏外条目，行高无变化；移除导致某条 pos 变化已由新索引 pos 对比覆盖。
+    // changed 只统计「屏上已渲染 lid 的 pos 实变」（None→有值 或 值翻转）：
+    // 新 lid 进索引不计——微信建行首测查表即真（数据先行），事后刷新只会造成
+    // 滚动/新消息场景的行高突变跳动（BubbleBox scroll 分支消灭的正是它）。
     __block NSUInteger changed = 0;
-    [_index enumerateKeysAndObjectsUsingBlock:^(NSNumber *lid, BBMergeEntry *e, BOOL *stop) {
-        NSNumber *old = oldPos[lid];
-        if (!old) { changed++; return; }
-        if ([old unsignedIntegerValue] != (NSUInteger)e.pos) changed++;
-    }];
-    WPLog(@"MsgMerge", @"[Model] rebuild chat=%@ nodes=%lu entries=%lu active=%d changed=%lu",
-          chatName ?: @"?", (unsigned long)nodeArray.count, (unsigned long)tmp.count, active,
-          (unsigned long)changed);
+    for (NSNumber *lidN in lids) {
+        BBMergeEntry *ne = _index[lidN];
+        if (!ne || ne.pos == MOMergePositionNone) continue;
+        NSNumber *old = oldPos[lidN];
+        if (!old || [old unsignedIntegerValue] != (NSUInteger)ne.pos) changed++;
+    }
+    WPLog(@"MsgMerge", @"[Model] refresh chat=%@ nodes=%lu entries=%lu filled=%ld extended=%ld changed=%lu",
+          chatName ?: @"?", (unsigned long)nodeArray.count, (unsigned long)_index.count,
+          (long)filled, (long)extended, (unsigned long)changed);
     return changed;
 }
 
@@ -377,7 +411,7 @@ static id dbFindValidMsg(long long startLID, int direction) {
 // updateLayouts，微信建行首测时标志已就位。只写索引（自持、跨 vm 重建恒真），
 // 并同步修正上一条 pos（新消息 join 后上一条 Last→Middle/Single→First）——
 // 不修则上一条保持组尾原生行高迟一拍；可见刷新（标脏+kick vm）由调用方
-// mergeImmediateRefresh 同步完成（BubbleBox 同款收尾）。
+// mergeDoReload 无条件刷新兜底完成（BubbleBox 同款收尾）。
 - (void)noteIncomingMsgLocalID:(long long)lid {
     // 契约：主线程同步调用（AddMsg 管道回调里直接执行，先于微信建行首测——
     // dispatch_async 会把直写排到首测之后，首测仍 miss → 原生帧固化，实证）。
@@ -408,90 +442,15 @@ static id dbFindValidMsg(long long startLID, int direction) {
 - (MOMergePosition)posForLocalID:(long long)lid {
     BBMergeEntry *e = lid > 0 ? _index[@(lid)] : nil;
     if (e) return e.pos;
-    // 存储层兜底：数组记账迟滞窗口（~1s）内索引 miss → 直查存储补邻接
-    //（BubbleBox isPrevSameUser/isNextSameUser 即此路线，无数组依赖 → 无 None 窗口）。
-    // 存储不可用/未激活 = None。
+    // 存储层兜底：索引未覆盖（预扩/refresh 未及）时直查存储补邻接（BubbleBox
+    // isPrevSameUser/isNextSameUser 即此路线，无数组依赖），结果缓存进索引。
+    // 未激活/存储不可用 = None。
     if (lid <= 0 || !g_dbMgr || !g_dbTalker) return MOMergePositionNone;
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!(cfg.mmEnable && !(cfg.mmOnlyRoom && ![g_dbTalker hasSuffix:@"@chatroom"]))) {
         return MOMergePositionNone;
     }
-    id wrap = dbGetMsg(lid);
-    if (!wrap) {
-        [self dbCacheEntry:nil lid:lid pos:MOMergePositionNone];
-        return MOMergePositionNone;
-    }
-    id prev = dbFindValidMsg(lid, -1);
-    id next = dbFindValidMsg(lid, +1);
-    BOOL joinPrev = (prev != nil) && [[self class] shouldJoinDB:wrap wrapB:prev];
-    BOOL joinNext = (next != nil) && [[self class] shouldJoinDB:wrap wrapB:next];
-    MOMergePosition pos;
-    if (joinPrev && joinNext)      pos = MOMergePositionMiddle;
-    else if (joinPrev)             pos = MOMergePositionLast;
-    else if (joinNext)             pos = MOMergePositionFirst;
-    else                           pos = MOMergePositionSingle;
-    [self dbCacheEntry:wrap lid:lid pos:pos];
-    return pos;
-}
-
-// ============================================================
-// MARK: - 时间行收起判定（isNeedInsertTimeNode 显示语义接管）
-// ============================================================
-
-// 微信按「显示分钟变化」插时间行（分钟粒度），同 299s 窗内会重复插行——
-// 时间行收起判定 = !isNeedInsertTimeNode(prev, current)，判定式完全对照
-// BubbleBox isNeedInsertTimeNode:current:（002fe49c 反编译一手）：
-//   ③ current.isNewInviteesMsg → 不收起（其语义 = 强制插行）
-//   ④ |Δm_uiCreateTime| ≤ 299 → 收起（其语义 = 不插行）；>299 → 不收起
-//   prev/current 的类型、sender 均不感知（它也不查）——不加发明。
-// 边界安全网（BubbleBox 序列构建中不存在的场景，渲染层方案的生存条件）：
-//   找不到时间行位置/管辖消息/DB 前驱 → 显示（宁多勿错，不比原生差）。
-
-- (BOOL)shouldCollapseTimeNode:(id)timeVM inNodes:(NSArray *)nodes {
-    if (!timeVM || nodes.count == 0 || !g_dbMgr || !g_dbTalker) return NO;
-    MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    if (!(cfg.mmEnable && !(cfg.mmOnlyRoom && ![g_dbTalker hasSuffix:@"@chatroom"]))) return NO;
-    // 配置门对应关系：BubbleBox mergeMode==0 恒插行（不收起）；我们 mmEnable==0
-    // 时本函数不被调用（mmPruneTimeNodes 调用侧已挡），恒显示，语义一致。
-
-    // 定位时间行：node 数组元素是 wrapper 节点（有 viewModel 属性，wrapOfNode
-    // 即为此设计），rowHeight override 收到的 self 是 vm 本身——必须遍历比对
-    // wrapper.viewModel，indexOfObjectIdenticalTo 找 vm 身份恒 NSNotFound
-    //（frida 探针实证：63 次调用全穿透基类 = 旧定位恒 NO）。
-    NSUInteger tIdx = NSNotFound;
-    for (NSUInteger i = 0; i < nodes.count; i++) {
-        id node = nodes[i];
-        if (node == timeVM || safeValue(node, @"viewModel") == timeVM) { tIdx = i; break; }
-    }
-    if (tIdx == NSNotFound) return NO;
-
-    // current = 时间行之下首条有效消息（跳过连续时间行/空节点）
-    long long lid = 0;
-    long long ct = 0;
-    for (NSUInteger i = tIdx + 1; i < nodes.count; i++) {
-        id w = wrapOfNode(nodes[i]);
-        if (!w || !isMergeableWrap(w)) continue;
-        lid = localIDOf(w);
-        ct = createTimeOf(w);
-        // ③ 管辖消息是新邀请 → BubbleBox 强制插行 → 不收起
-        if (isInviteesMsg(w)) return NO;
-        break;
-    }
-    if (lid <= 0) return NO;
-
-    // prev = DB 前驱（±1 步进跳已删空洞，= BubbleBox 序列中的相邻上一条）
-    id prev = dbFindValidMsg(lid, -1);
-    if (!prev) return NO;
-    long long prevCt = createTimeOf(prev);
-    if (prevCt <= 0 || ct <= 0) return NO;
-    // ④ 时间窗：Δ≤299 → 收起（= BubbleBox 不插行）；>299 → 显示
-    long long diff = ct - prevCt;
-    if (diff < 0) diff = -diff;
-    if (diff <= 299) {
-        WPLog(@"MsgMerge", @"[Time] collapse lid=%lld Δ=%llds", lid, diff);
-        return YES;
-    }
-    return NO;
+    return [self fillEntryForLid:lid wrap:nil];
 }
 
 // ============================================================
@@ -513,13 +472,13 @@ static id dbFindValidMsg(long long startLID, int direction) {
     [_lastChatName release];
 #endif
     _lastChatName = nil;
-    // DB talker 一并置空：切会话窗口期（新 rebuild 未跑）读侧不得拿旧会话查库
+    // DB talker 一并置空：切会话窗口期（新刷新未跑）读侧不得拿旧会话查库
 #if !__has_feature(objc_arc)
     [g_dbTalker release];
 #endif
     g_dbTalker = nil;
+    _coveredMinLid = 0;
     _index = [NSMutableDictionary dictionary];
-    self.entries = @[];
 }
 
 @end

@@ -2,13 +2,14 @@
 //  BBMergeModel.h
 //  MioPlugin
 //
-//  消息合并独立模型（查表架构 · DB 单路径）：
-//  分组结果在 rebuild 时一次性预计算（entries + localID→entry 索引），邻接
-//  判定全走微信存储层（GetMsg:LocalID: ±1 步进跳已删空洞，BubbleBox
-//  findValidMsg 同构）；UI 数组仅提供屏上 lid 渲染集合（UI 数组邻接已废弃：
-//  双路径语义漂移——UI 侧时间行一律断组 / DB 侧 299s 窗）。读侧（measure:/
-//  昵称判定/渲染/昵称断供钩）一律按 wrap 的 localID 直接 O(1) 查索引
-//  （posForLocalID:）——模型即真相，微信整批重建 vm 零影响。
+//  消息合并独立模型（数据先行 · 增量索引 · DB 单路径）：
+//  对齐 BubbleBox 数据先行架构——分组判定永远发生在微信建 vm/测量之前：
+//  索引覆盖域 = 屏上 lid 渲染集合（refreshIndex 增量补建）+ 历史方向 DB 预扩
+//  （extendHistorical，滚动加载的批次插入前 entries 已就位）。邻接判定全走
+//  微信存储层（GetMsg:LocalID: ±1 步进跳已删空洞，BubbleBox findValidMsg 同构）；
+//  UI 数组仅提供 lid 种子，不参与邻接判定。读侧（measure:/昵称判定/渲染/昵称
+//  断供钩）按 wrap 的 localID 直接 O(1) 查索引（posForLocalID:）——模型即真相，
+//  微信整批重建 vm 零影响；索引 miss 时 DB fill 同步兜底（测量返回前即正确）。
 //
 //  【禁止复活预写层】旧方案把分组位置用关联对象写到 vm 上，但 vm 生命周期
 //  归微信管：进聊天/滚动时整批重建 vm 并立刻测量，预写标志随旧对象死亡 →
@@ -16,7 +17,13 @@
 //  预写+刷新都在和微信测量竞速，窗口永远存在；查表按 localID 建、跨 vm
 //  重建恒真，vm 死活彻底无关。
 //
-//  rebuild 触发点（事件驱动）：切会话/进聊天/新消息轮询确认追加/滚动限频
+//  刷新语义（BubbleBox scheduleUpdateNodes:scroll: 精髓——滚动中零可见变更）：
+//  refreshIndex 返回的 changed 只统计「屏上已渲染 lid 的 pos 实变」（None→有值
+//  或值翻转）；新 lid 进索引不计——微信建行首测查表即真，无需事后刷新，滚动
+//  场景 changed 恒 0，永不跳动。时间行零干预（BubbleBox 同款：全链无 ChatTime
+//  引用），冗余时间行按原生显示。
+//
+//  refreshIndex 触发点（事件驱动）：切会话/进聊天/新消息轮询确认追加/滚动限频
 //  （100ms）/读侧 None-miss 限频保鲜（0.15s）/配置指纹变化。幂等守卫防风暴。
 //
 
@@ -27,65 +34,54 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface BBMergeModel : NSObject
 
-/// 当前会话 entries（渲染顺序，只含可参与合并的消息；时间节点/分隔消息无 entry）
-@property (nonatomic, copy) NSArray<BBMergeEntry *> *entries;
-
 + (instancetype)shared;
 
 /// 按 localID 查 entry
 - (nullable BBMergeEntry *)entryForLocalID:(long long)lid;
 
-/// 新消息入库直写（AsyncOnAddMsg 回调调，不等 UI 节点记账）：存储层即时判定
-/// 新消息与 prev 的邻接并写入索引——微信建行首测即命中，消灭「发出那一刻原生
-/// 间距」的固化窗口（BubbleBox 同款时序：存储层即时，不等 UI 数组；之后的
-/// rebuild 全量重建会用同一套 shouldJoinDB 规则覆盖，无漂移）
+/// 新消息入库直写（AddMsg/AsyncOnAddMsg 管道回调调，不等 UI 节点记账）：存储层
+/// 即时判定新消息与 prev 的邻接并写入索引——微信建行首测即命中（BubbleBox
+/// addNewMessage 管道内同步 merge: 同款时序）；之后的 refreshIndex 用同一套
+/// shouldJoinDB 规则覆盖，无漂移
 - (void)noteIncomingMsgLocalID:(long long)lid;
 
 /// 合并判定唯一入口（DB 单路径）：身份相等 + 均可合并 + 均非分隔符/新邀请
 /// + 299s 时间窗（BubbleBox isNeedInsertTimeNode 同语义）
 + (BOOL)shouldJoinDB:(id)wrapA wrapB:(id)wrapB;
 
-/// 重建（事件驱动触发点的唯一入口，幂等守卫：同数组/同会话/同配置指纹跳过）。
-/// @param nodeArray 聊天 VC 的 m_arrMessageNodeData（仅提供屏上有序 lid 渲染集合；
-///                   邻接判定全走存储层——DB 单路径，UI 数组邻接已废弃）
-/// @param chatName  会话名（talker；mmOnlyRoom 判断用 + DB 邻接查询的 talker）
-/// @return 内容变化数（新增条目 + pos 变化，0=无变化）——调用方据此
-/// 触发可见刷新（resetLayoutCache + cellView setNeedsLayout）
-- (NSUInteger)rebuildFromNodeArray:(nullable NSArray *)nodeArray
-                          chatName:(nullable NSString *)chatName;
+/// 索引增量刷新（事件驱动触发点的唯一入口，幂等守卫：同数组/同会话/同配置
+/// 指纹跳过；增量本体天然幂等——已覆盖 lid O(1) 跳过）：
+///   ① 屏上无 entry 的 lid → DB fill 建 entry（含 None 负缓存）
+///   ② 历史方向预扩：屏上最小 lid 向 −1 预建 ~32 条（数据先行，滚动批次到账
+///      前 entries 已就位）
+/// @param nodeArray 聊天 VC 的 m_arrMessageNodeData（仅提供屏上 lid 种子）
+/// @param chatName  会话名（talker）
+/// @return 屏上已渲染 lid 的 pos 实变数（0=无需可见刷新）
+- (NSUInteger)refreshIndexWithNodeArray:(nullable NSArray *)nodeArray
+                               chatName:(nullable NSString *)chatName;
 
-/// 存储层实例捕获回调（MsgMergeHook 的 AddMsg/AsyncOnAddMsg 钩调用，self 即
-/// CMessageMgr）。8.0.78 无单例访问器且 VC ivar 树 2 层内无其实例（探针实证）。
+/// 存储层实例捕获回调（MsgMergeHook 的 onServiceInit/AddMsg/AsyncOnAddMsg 钩调用，
+/// self 即 CMessageMgr）。8.0.78 无单例访问器且 VC ivar 树 2 层内无其实例（探针实证）。
 /// 【铁律】捕获点绝不能放在 GetMsg 查询簇上：MSHook trampoline 无 unwind info，
 /// 查询踩坏消息抛异常展开到跳板帧必 terminate（.ips 三轮崩溃实证）；BubbleBox
 /// 查 DB 不死正因其查询栈无自家跳板。捕获后供索引 miss 时按 localID 直查
 /// 存储补邻接（插件直调不被 hook 的 4 参版，@try 可接坏消息异常）。
 /// @return YES = 本次新捕获（此前 mgr 为 nil）——调用方应调度一次
-/// rebuildAndApplyFromContext：冷启动首次进聊天时 rebuild 先于 DB 就绪
-/// （entries=0 的空结果被幂等守卫锁死，MioPlugin(100) 实证），新捕获必须
-/// 失效守卫重算，否则该页永远停在"不合并"残局。
+/// refreshIndex：冷启动首次进聊天时索引先于 DB 就绪（fill 全部落空），
+/// 新捕获必须失效守卫重算，否则该页永远停在"不合并"残局。
 - (BOOL)noteMessageManager:(nullable id)mgr;
 
-/// 失效 rebuild 幂等守卫（DB 新捕获时调用）：_lastArray/_lastCount 置空，
-/// 下次 rebuild 必然真正重算。裸指针 ivar（无所有权），置 nil 零成本。
+/// 失效 refreshIndex 幂等守卫（DB 新捕获时调用）：_lastArray/_lastCount 置空，
+/// 下次刷新必然真正扫描。裸指针 ivar（无所有权），置 nil 零成本。
 - (void)invalidateRebuildGuard;
 
 /// 标志查询（O(1) 索引查表）：未覆盖/组外/不可合并/功能未激活 = None。
 /// 所有钩子只读本方法，禁止查数组、禁止读 vm 关联对象。
-/// 索引 miss 且存储层就绪时：按 localID 直查微信消息存储补邻接（DB 兜底），
-/// 结果缓存进索引；存储不可用 = None。
+/// 索引 miss 且存储层就绪时：按 localID 直查微信消息存储补邻接（DB fill 兜底，
+/// 同步发生在测量返回之前），结果缓存进索引；存储不可用 = None。
 - (MOMergePosition)posForLocalID:(long long)lid;
 
-/// 时间行收起判定 = !isNeedInsertTimeNode(prev, current)，判定式完全对照
-/// BubbleBox isNeedInsertTimeNode:current:（反编译 002fe49c）：
-/// 管辖消息（时间行下首条有效消息）是新邀请 → 显示；管辖消息与 DB 前驱
-/// |ΔcreateTime| > 299s → 显示；≤ 299s → 收起。类型/sender 不感知（同 BubbleBox）。
-/// 找不到管辖消息/DB 前驱/DB 不可用 → 显示（保守，宁多勿错）。
-/// @param timeVM ChatTimeViewModel（node 数组中的时间节点，无 messageWrap）
-/// @param nodes  当前聊天页 m_arrMessageNodeData（定位 timeVM 位置用）
-- (BOOL)shouldCollapseTimeNode:(id)timeVM inNodes:(nullable NSArray *)nodes;
-
-/// 当前配置是否与上次重建时的分组配置指纹不一致（O(1)，读侧保鲜判断用）
+/// 当前配置是否与上次刷新时的分组配置指纹不一致（O(1)，读侧保鲜判断用）
 - (BOOL)configFingerprintChanged;
 
 /// 清空模型（切会话时调用，防跨会话 localID 撞号）
