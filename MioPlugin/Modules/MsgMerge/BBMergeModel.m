@@ -114,15 +114,21 @@ static id wrapOfNode(id node) {
 
 static id g_dbMgr = nil;            // CMessageMgr 实例（进程级服务对象，捕获即常驻）
 static NSString *g_dbTalker = nil;  // 当前会话 talker（rebuild 记录，clear 置空防串会话查库）
-static SEL g_selGetMsg = NULL;      // GetMsg:LocalID:
+static SEL g_selGetMsg = NULL;      // GetMsg:LocalID:hasError:needOriginContent:（4 参版）
 
-/// GetMsg:LocalID:（talker + localID → CMessageWrap；已删消息/越界返回 nil）
+/// GetMsg（talker + localID → CMessageWrap；已删消息/越界返回 nil）。
+/// 4 参版 needOriginContent:YES = 跳过 ChangeForDisplay 显示加工——崩溃实证（frida
+/// 栈）：2 参版内部对结果做 HandleMessage→ChangeForDisplay→protobuf 解析扩展 XML，
+/// 遇损坏 App 消息抛 C++ 异常（readRawVarint64），纯 ObjC @catch（objc personality）
+/// 接不住 C++ 异常（gxx personality）直接进程死；插件邻接判定只需 sender/type/
+/// createTime，原始内容足够，源头绕开加工链。
 static id dbGetMsg(long long lid) {
     if (!g_dbMgr || !g_dbTalker || lid <= 0 || lid > 0xFFFFFFFFLL) return nil;
-    if (!g_selGetMsg) g_selGetMsg = NSSelectorFromString(@"GetMsg:LocalID:");
-    id (*send)(id, SEL, id, unsigned int) = (id (*)(id, SEL, id, unsigned int))objc_msgSend;
+    if (!g_selGetMsg) g_selGetMsg = NSSelectorFromString(@"GetMsg:LocalID:hasError:needOriginContent:");
+    id (*send)(id, SEL, id, unsigned int, BOOL *, BOOL) = (id (*)(id, SEL, id, unsigned int, BOOL *, BOOL))objc_msgSend;
+    BOOL hasErr = NO;
     @try {
-        return send(g_dbMgr, g_selGetMsg, g_dbTalker, (unsigned int)lid);
+        return send(g_dbMgr, g_selGetMsg, g_dbTalker, (unsigned int)lid, &hasErr, YES);
     } @catch (NSException *e) {
         return nil;
     }
