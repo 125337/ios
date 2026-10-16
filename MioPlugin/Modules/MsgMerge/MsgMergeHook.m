@@ -602,21 +602,12 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
 // 若 bgH 随之缩小 = measure: 返回值驱动气泡尺寸，此杠杆判死回滚。
 // ------------------------------------------------------------
 static IMP orig_CMVM_measure = NULL;
-static Class g_measCls[32];
-static IMP   g_measOrig[32];
-static int   g_measClsCount = 0;
-
-static IMP measureOrigForClass(Class c) {
-    for (int i = 0; i < g_measClsCount; i++) {
-        if (g_measCls[i] == c) return g_measOrig[i];
-    }
-    return NULL;
-}
 
 static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
-    IMP o = measureOrigForClass(object_getClass(self));
-    if (!o) o = orig_CMVM_measure;
-    CGSize s = ((CGSize (*)(id, SEL, CGSize))o)(self, _cmd, sz);
+    // BubbleBox 同款直换 IMP：orig 全局唯一（公共基类单点，无按类分表）
+    IMP o = orig_CMVM_measure;
+    CGSize s = o ? ((CGSize (*)(id, SEL, CGSize))o)(self, _cmd, sz)
+                 : CGSizeMake(sz.width, 0);
     static BOOL s_inMeasure = NO;
     if (s_inMeasure) return s;
     @try {
@@ -694,24 +685,14 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
 // ------------------------------------------------------------
 static IMP orig_CMVM_isShowChatRoomDisplayName = NULL;
 
-// 重写类补挂表（77 号日志实证：单点挂 Common 漏媒体重写类 → 判定钩不被调 →
-// 媒体消息行高固化 65 型昵称洞，同批文本 54 型生效、媒体 65 型漏挂——按类型分裂）。
-// 垫片按 isa 指针直查（热路径禁 NSStringFromClass/字典分配，边框缓存 memcmp 同款教训）。
-static Class g_nickCls[32];
-static IMP   g_nickOrig[32];
-static int   g_nickClsCount = 0;
-
-static IMP nickOrigForClass(Class c) {
-    for (int i = 0; i < g_nickClsCount; i++) {
-        if (g_nickCls[i] == c) return g_nickOrig[i];
-    }
-    return NULL;
-}
+// 【对齐 BubbleBox 2026-10-16】重写类补挂表已删（全类扫描补挂是 WAApp 小程序
+// 分享消息闪退环的宿主链路；BubbleBox 反编译定论零类扫描、公共基类单点）。
+// 代价：媒体重写类（77 号日志 65 型昵称洞场景）不再补挂——媒体默认断组
+// （isSeparatorMessage），pos 恒 None，判定钩本就直通，无实际影响。
 
 static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
     static BOOL s_inJudge = NO;   // 重入守卫：垫片内再进入直接走原生（防任何递归风暴）
-    IMP o = nickOrigForClass(object_getClass(self));
-    if (!o) o = orig_CMVM_isShowChatRoomDisplayName;
+    IMP o = orig_CMVM_isShowChatRoomDisplayName;   // BubbleBox 同款：orig 全局唯一
     if (!o) return NO;
     BOOL origVal = ((BOOL (*)(id, SEL))o)(self, _cmd);
     if (s_inJudge) return origVal;
@@ -1146,59 +1127,32 @@ static id repl_CMCellView_getNameLabel(id self, SEL _cmd) {
 }
 
 // ------------------------------------------------------------
-// 阶段3：媒体子类 layoutInternal 判重补挂（XOS FUN_00192294 同架构）
-// 子类重写 layoutInternal 时基类钩子拦不到（垫片不会被调），必须逐子类补挂；
-// class_getInstanceMethod 子类与基类返回同一 Method = 未重写，跳过（防对同一
-// Method 二次挂钩）。垫片与基类同构：orig 先跑，再走 applyMergeToCellView
-// （内部幂等：associated 备份/基准失效检测，子类调 super 链路重复进入无害）。
+// 【对齐 BubbleBox 2026-10-16】媒体子类 layoutInternal 判重补挂整段已删
+// （4 垫片 + installMediaLayoutInternalHooks）：按类接管是 WAApp 闪退环宿主；
+// BubbleBox 零类扫描，媒体 cell 布局走基类单点 + applyMerge 幂等。
 // ------------------------------------------------------------
-static IMP orig_VoiceCellView_layoutInternal   = NULL;
-static IMP orig_VideoCellView_layoutInternal   = NULL;
-static IMP orig_ImageCellView_layoutInternal   = NULL;
-static IMP orig_AppFileCellView_layoutInternal = NULL;
 
-static void repl_VoiceCellView_layoutInternal(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_VoiceCellView_layoutInternal)(self, _cmd);
-    applyMergeToCellView(self);
-}
-
-static void repl_VideoCellView_layoutInternal(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_VideoCellView_layoutInternal)(self, _cmd);
-    applyMergeToCellView(self);
-}
-
-static void repl_ImageCellView_layoutInternal(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_ImageCellView_layoutInternal)(self, _cmd);
-    applyMergeToCellView(self);
-}
-
-static void repl_AppFileCellView_layoutInternal(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_AppFileCellView_layoutInternal)(self, _cmd);
-    applyMergeToCellView(self);
-}
-
-static void installMediaLayoutInternalHooks(void) {
-    struct MediaHook { const char *name; IMP *orig; IMP repl; } hooks[] = {
-        { "VoiceMessageCellView",   &orig_VoiceCellView_layoutInternal,   (IMP)repl_VoiceCellView_layoutInternal   },
-        { "VideoMessageCellView",   &orig_VideoCellView_layoutInternal,   (IMP)repl_VideoCellView_layoutInternal   },
-        { "ImageMessageCellView",   &orig_ImageCellView_layoutInternal,   (IMP)repl_ImageCellView_layoutInternal   },
-        { "AppFileMessageCellView", &orig_AppFileCellView_layoutInternal, (IMP)repl_AppFileCellView_layoutInternal },
-    };
-    Class base = objc_getClass("CommonMessageCellView");
-    Method baseM = base ? class_getInstanceMethod(base, @selector(layoutInternal)) : NULL;
-    for (NSUInteger i = 0; i < sizeof(hooks) / sizeof(hooks[0]); i++) {
-        NSString *name = @(hooks[i].name);
-        Class c = objc_getClass(hooks[i].name);
-        if (!c) { WPLog(@"MsgMerge", @"[Hook] ✗ %@ not found，跳过补挂", name); continue; }
-        Method m = class_getInstanceMethod(c, @selector(layoutInternal));
-        if (!m) { WPLog(@"MsgMerge", @"[Hook] ✗ %@ 无 layoutInternal，跳过补挂", name); continue; }
-        if (baseM && method_getImplementation(m) == method_getImplementation(baseM)) {
-            WPLog(@"MsgMerge", @"[Hook] = %@ layoutInternal 未重写（基类钩子已覆盖），跳过", name);
-            continue;
-        }
-        MSHookMessageEx(c, @selector(layoutInternal), hooks[i].repl, hooks[i].orig);
-        WPLog(@"MsgMerge", @"[Hook] ✓ %@ layoutInternal 补挂（子类重写）", name);
+// ------------------------------------------------------------
+// BubbleBox 同款挂钩基础设施（反编译 FUN_0044bfbc 定论）：全程不用
+// MSHookMessageEx——class_getInstanceMethod 取 Method，method_getImplementation
+// 存 orig，method_setImplementation 直接换 IMP。
+// 注：本项目 MioSubstrate.m 的 MSHookMessageEx 本就是纯 Runtime 直换（无
+// CydiaSubstrate 蹦床），bbSwap 与其语义一致（复制下沉：方法在父类时 addMethod
+// 复制到本类再替换，父类实现不受污染），仅更显式并便于归属让位判断。
+// ------------------------------------------------------------
+static IMP bbSwap(Class c, SEL sel, IMP newImp, const char *tag) {
+    Method m = class_getInstanceMethod(c, sel);
+    if (!m) {
+        WPLog(@"MsgMerge", @"[Hook] ✗ %s 无 %@（bbSwap）", tag, NSStringFromSelector(sel));
+        return NULL;
     }
+    IMP orig = method_getImplementation(m);
+    if (!class_addMethod(c, sel, orig, method_getTypeEncoding(m))) {
+        method_setImplementation(m, newImp);   // 方法在 c 本身 → 直接替换
+    } else {
+        class_replaceMethod(c, sel, newImp, method_getTypeEncoding(m));   // 从父类复制下沉后替换
+    }
+    return orig;
 }
 
 // ------------------------------------------------------------
@@ -1238,11 +1192,11 @@ static void installTimeRowCollapseHook(void) {
     if (class_addMethod(tCls, @selector(rowHeight), (IMP)repl_TimeVM_rowHeight, "d@:")) {
         WPLog(@"MsgMerge", @"[Hook] ✓ ChatTimeViewModel rowHeight override (时间行收起)");
     } else {
-        // 子类已有自有 rowHeight（addMethod 失败）：改走 MSHook 精确覆盖
+        // 子类已有自有 rowHeight（addMethod 失败）：BubbleBox 同款直换覆盖
         static IMP orig_t = NULL;
-        MSHookMessageEx(tCls, @selector(rowHeight), (IMP)repl_TimeVM_rowHeight, &orig_t);
+        orig_t = bbSwap(tCls, @selector(rowHeight), (IMP)repl_TimeVM_rowHeight, "ChatTimeViewModel");
         g_timeRowSuperImp = orig_t;   // 转发目标改为被替换前的子类 IMP
-        WPLog(@"MsgMerge", @"[Hook] ✓ ChatTimeViewModel rowHeight MSHook (子类已有实现)");
+        WPLog(@"MsgMerge", @"[Hook] ✓ ChatTimeViewModel rowHeight 直换 (子类已有实现)");
     }
 }
 
@@ -1267,16 +1221,16 @@ static void installTimeRowCollapseHook(void) {
     // ① 会话上下文跟踪
     cls = objc_getClass("BaseMsgContentViewController");
     if (cls) {
-        MSHookMessageEx(cls, @selector(viewDidLoad),
-                        (IMP)repl_BaseMsgContentVC_viewDidLoad,
-                        &orig_BaseMsgContentVC_viewDidLoad);
-        MSHookMessageEx(cls, @selector(viewWillAppear:),
-                        (IMP)repl_BaseMsgContentVC_viewWillAppear,
-                        &orig_BaseMsgContentVC_viewWillAppear);
+        orig_BaseMsgContentVC_viewDidLoad = bbSwap(cls, @selector(viewDidLoad),
+                                                   (IMP)repl_BaseMsgContentVC_viewDidLoad,
+                                                   "BaseMsgContentViewController");
+        orig_BaseMsgContentVC_viewWillAppear = bbSwap(cls, @selector(viewWillAppear:),
+                                                      (IMP)repl_BaseMsgContentVC_viewWillAppear,
+                                                      "BaseMsgContentViewController");
         if ([cls instancesRespondToSelector:NSSelectorFromString(@"viewDidAppear:")]) {
-            MSHookMessageEx(cls, NSSelectorFromString(@"viewDidAppear:"),
-                            (IMP)repl_BaseMsgContentVC_viewDidAppear,
-                            &orig_BaseMsgContentVC_viewDidAppear);
+            orig_BaseMsgContentVC_viewDidAppear = bbSwap(cls, NSSelectorFromString(@"viewDidAppear:"),
+                                                         (IMP)repl_BaseMsgContentVC_viewDidAppear,
+                                                         "BaseMsgContentViewController");
             WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController viewDidAppear:");
         }
         WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController viewDidLoad/viewWillAppear:");
@@ -1304,8 +1258,9 @@ static void installTimeRowCollapseHook(void) {
             if (foreign) {
                 WPLog(@"MsgMerge", @"[Hook] ⊘ scrollViewDidScroll: 归属 %s，让位不挂", sinfo.dli_fname);
             } else {
-                MSHookMessageEx(cls, selScroll, (IMP)repl_BMCVC_scrollViewDidScroll,
-                                &orig_BMCVC_scrollViewDidScroll);
+                orig_BMCVC_scrollViewDidScroll = bbSwap(cls, selScroll,
+                                                        (IMP)repl_BMCVC_scrollViewDidScroll,
+                                                        "BaseMsgContentViewController");
                 WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController scrollViewDidScroll:（滚动驱动全量重刷）");
             }
         } else {
@@ -1316,27 +1271,30 @@ static void installTimeRowCollapseHook(void) {
     // ② 消息 cell 布局钩子
     cls = objc_getClass("CommonMessageCellView");
     if (cls) {
-        MSHookMessageEx(cls, @selector(layoutInternal),
-                        (IMP)repl_CMCellView_layoutInternal,
-                        &orig_CMCellView_layoutInternal);
-        MSHookMessageEx(cls, @selector(updateNodeStatus),
-                        (IMP)repl_CMCellView_updateNodeStatus,
-                        &orig_CMCellView_updateNodeStatus);
-        MSHookMessageEx(cls, NSSelectorFromString(@"getNameLabel"),
-                        (IMP)repl_CMCellView_getNameLabel,
-                        &orig_CMCellView_getNameLabel);
+        orig_CMCellView_layoutInternal = bbSwap(cls, @selector(layoutInternal),
+                                                (IMP)repl_CMCellView_layoutInternal,
+                                                "CommonMessageCellView");
+        orig_CMCellView_updateNodeStatus = bbSwap(cls, @selector(updateNodeStatus),
+                                                  (IMP)repl_CMCellView_updateNodeStatus,
+                                                  "CommonMessageCellView");
+        orig_CMCellView_getNameLabel = bbSwap(cls, NSSelectorFromString(@"getNameLabel"),
+                                              (IMP)repl_CMCellView_getNameLabel,
+                                              "CommonMessageCellView");
         WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageCellView layoutInternal/updateNodeStatus/getNameLabel");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageCellView not found");
     }
 
-    // ②b 阶段3：媒体子类 layoutInternal 判重补挂
-    installMediaLayoutInternalHooks();
+    // ②b 【已删】媒体子类 layoutInternal 判重补挂——按类接管是 WAApp 闪退环
+    //     宿主，对齐 BubbleBox 零类扫描（见上文删除注释）。
 
-    // ③ 测量层接管（BubbleBox 同款行高杠杆）。挂载策略 = 子类重写类判重补挂 +
-    //     根类单点（NJD 同款架构）：子类自带 measure: IMP 时根类钩子拦不到。
-    //     先扫描补挂（此时各类 IMP 仍原始，可判重），再挂根类覆盖继承实现。
-    //     每处安装前 dladdr 查 IMP 归属，被其他 dylib 占用则让位。
+    // ③ 测量层接管（BubbleBox 同款行高杠杆 + 同款挂法）：公共基类单点直换
+    //     IMP，无子类扫描补挂。2026-10-16 WAApp 小程序分享消息进群闪退定论：
+    //     按类扫描补挂的多钩链路是崩溃环宿主（Mio 的 MSHookMessageEx 本就是
+    //     MioSubstrate 纯 Runtime 直换无蹦床，环为 MsgMerge 逻辑级递归）；
+    //     BubbleBox 反编译实证零类扫描、固定类名单点，同类场景不死。
+    //     内层类型分派走 repl 内 flagsPos 查表：pos=None/组尾/首中片直通，
+    //     仅组尾前整条/末片收 mmSpacing——公共基类一钩天然覆盖全部消息类型。
     {
         SEL selMeasure = NSSelectorFromString(@"measure:");
         Class baseCls = objc_getClass("CommonMessageViewModel");
@@ -1344,50 +1302,17 @@ static void installTimeRowCollapseHook(void) {
             Method bm = class_getInstanceMethod(baseCls, selMeasure);
             WPLog(@"MsgMerge", @"[Hook] measure: types=%s",
                   bm ? method_getTypeEncoding(bm) : "(null)");
-            IMP baseIMP = bm ? method_getImplementation(bm) : NULL;
-            unsigned int n = 0;
-            Class *classes = objc_copyClassList(&n);
+            IMP cur = bm ? method_getImplementation(bm) : NULL;
             Dl_info info;
-            for (unsigned int i = 0; classes && i < n; i++) {
-                Class c = classes[i];
-                if (c == baseCls) continue;
-                BOOL derived = NO;
-                for (Class p = class_getSuperclass(c); p; p = class_getSuperclass(p)) {
-                    if (p == baseCls) { derived = YES; break; }
-                }
-                if (!derived) continue;
-                Method m = class_getInstanceMethod(c, selMeasure);
-                IMP cur = m ? method_getImplementation(m) : NULL;
-                if (!cur || cur == baseIMP) continue;   // 继承实现，根类单点覆盖
-                BOOL foreign = dladdr((void *)cur, &info) && info.dli_fname &&
-                               strstr(info.dli_fname, ".dylib") &&
-                               !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio");
-                if (foreign) {
-                    WPLog(@"MsgMerge", @"[Hook] ⊘ %s measure: 归属 %s，让位",
-                          class_getName(c), info.dli_fname);
-                    continue;
-                }
-                if (g_measClsCount >= 32) break;
-                IMP orig = NULL;
-                MSHookMessageEx(c, selMeasure, (IMP)repl_CMVM_measure, &orig);
-                g_measCls[g_measClsCount] = c;
-                g_measOrig[g_measClsCount] = orig;
-                g_measClsCount++;
-                WPLog(@"MsgMerge", @"[Hook] ✓ %s measure:（重写类补挂）", class_getName(c));
-            }
-            if (classes) free(classes);
-            // 根类单点（继承实现全覆盖）
-            Method m = class_getInstanceMethod(baseCls, selMeasure);
-            IMP cur = m ? method_getImplementation(m) : NULL;
             BOOL foreign = cur && dladdr((void *)cur, &info) && info.dli_fname &&
                            strstr(info.dli_fname, ".dylib") &&
                            !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio");
             if (foreign) {
                 WPLog(@"MsgMerge", @"[Hook] ⊘ CommonMessageViewModel measure: 归属 %s，让位不挂", info.dli_fname);
             } else {
-                MSHookMessageEx(baseCls, selMeasure, (IMP)repl_CMVM_measure,
-                                &orig_CMVM_measure);
-                WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageViewModel measure:");
+                orig_CMVM_measure = bbSwap(baseCls, selMeasure, (IMP)repl_CMVM_measure,
+                                           "CommonMessageViewModel");
+                WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageViewModel measure: (BubbleBox 直换)");
             }
         } else {
             WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageViewModel measure: not found");
@@ -1395,62 +1320,26 @@ static void installTimeRowCollapseHook(void) {
     }
 
     // ③b 昵称判定接管钩子（实验开关 mmNickJudgeTakeover，XOS 同款挂点）。
-    //     挂载策略 = 全类扫描判重补挂 + 根类单点（探针 #25 消息 cell 同款架构）：
-    //     单点挂 CommonMessageViewModel 只覆盖继承实现；部分媒体类重写了
-    //     isShowChatRoomDisplayName 自带 IMP，单点漏挂 → 判定钩不被调 → 媒体消息
-    //     昵称区不回收（77 号日志实证：同批 pos=3 文本 54 型生效、媒体 65 型漏挂）。
-    //     先扫描补挂（此时各类 IMP 仍原始，可判重），再挂根类覆盖继承实现。
-    //     每处安装前 dladdr 查 IMP 归属，被其他 dylib（如 XOS）占用则让位。
+    //     【对齐 BubbleBox 2026-10-16】全类扫描判重补挂已删——正是 WAApp 闪退
+    //     环宿主链路；公共基类单点直换，零类扫描。媒体重写类漏挂回归原生：
+    //     媒体默认断组 pos 恒 None，判定钩本就直通，无实际影响。
     {
         SEL selNick = NSSelectorFromString(@"isShowChatRoomDisplayName");
         Class baseCls = objc_getClass("CommonMessageViewModel");
         if (baseCls && [baseCls instancesRespondToSelector:selNick]) {
-            IMP baseIMP = NULL;
-            Method bm = class_getInstanceMethod(baseCls, selNick);
-            baseIMP = bm ? method_getImplementation(bm) : NULL;
-            unsigned int n = 0;
-            Class *classes = objc_copyClassList(&n);
-            Dl_info info;
-            for (unsigned int i = 0; classes && i < n; i++) {
-                Class c = classes[i];
-                if (c == baseCls) continue;
-                BOOL derived = NO;
-                for (Class p = class_getSuperclass(c); p; p = class_getSuperclass(p)) {
-                    if (p == baseCls) { derived = YES; break; }
-                }
-                if (!derived) continue;
-                Method m = class_getInstanceMethod(c, selNick);
-                IMP cur = m ? method_getImplementation(m) : NULL;
-                if (!cur || cur == baseIMP) continue;   // 继承实现，根类单点覆盖
-                BOOL foreign = dladdr((void *)cur, &info) && info.dli_fname &&
-                               strstr(info.dli_fname, ".dylib") &&
-                               !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio");
-                if (foreign) {
-                    WPLog(@"MsgMerge", @"[Hook] ⊘ %s isShowChatRoomDisplayName 归属 %s，让位",
-                          class_getName(c), info.dli_fname);
-                    continue;
-                }
-                if (g_nickClsCount >= 32) break;
-                IMP orig = NULL;
-                MSHookMessageEx(c, selNick, (IMP)repl_CMVM_isShowChatRoomDisplayName, &orig);
-                g_nickCls[g_nickClsCount] = c;
-                g_nickOrig[g_nickClsCount] = orig;
-                g_nickClsCount++;
-                WPLog(@"MsgMerge", @"[Hook] ✓ %s isShowChatRoomDisplayName（重写类补挂）", class_getName(c));
-            }
-            if (classes) free(classes);
-            // 根类单点（继承实现全覆盖）
             Method m = class_getInstanceMethod(baseCls, selNick);
             IMP cur = m ? method_getImplementation(m) : NULL;
+            Dl_info info;
             BOOL foreign = cur && dladdr((void *)cur, &info) && info.dli_fname &&
                            strstr(info.dli_fname, ".dylib") &&
                            !strstr(info.dli_fname, "WeChat") && !strstr(info.dli_fname, "Mio");
             if (foreign) {
                 WPLog(@"MsgMerge", @"[Hook] ⊘ CommonMessageViewModel isShowChatRoomDisplayName 归属 %s，让位不挂", info.dli_fname);
             } else {
-                MSHookMessageEx(baseCls, selNick, (IMP)repl_CMVM_isShowChatRoomDisplayName,
-                                &orig_CMVM_isShowChatRoomDisplayName);
-                WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageViewModel isShowChatRoomDisplayName");
+                orig_CMVM_isShowChatRoomDisplayName = bbSwap(baseCls, selNick,
+                                                             (IMP)repl_CMVM_isShowChatRoomDisplayName,
+                                                             "CommonMessageViewModel");
+                WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageViewModel isShowChatRoomDisplayName (BubbleBox 直换)");
             }
         } else {
             WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageViewModel isShowChatRoomDisplayName not found");
@@ -1463,17 +1352,15 @@ static void installTimeRowCollapseHook(void) {
     // 不钩它则发出消息首测恒 miss → 原生帧固化）。KeywordAlert/RedEnv 等成熟
     // 插件同钩佐证签名 (v@:@@)。与 AsyncOnAddMsg 收消息双触发，note 幂等去重。
     if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"AddMsg:MsgWrap:")]) {
-        MSHookMessageEx(cls, NSSelectorFromString(@"AddMsg:MsgWrap:"),
-                        (IMP)repl_CMMsgMgr_AddMsg,
-                        &orig_CMMsgMgr_AddMsg);
+        orig_CMMsgMgr_AddMsg = bbSwap(cls, NSSelectorFromString(@"AddMsg:MsgWrap:"),
+                                      (IMP)repl_CMMsgMgr_AddMsg, "CMessageMgr");
         WPLog(@"MsgMerge", @"[Hook] ✓ CMessageMgr AddMsg:MsgWrap: (收发总管道)");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr AddMsg:MsgWrap: not found");
     }
     if (cls && [cls instancesRespondToSelector:NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:")]) {
-        MSHookMessageEx(cls, NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:"),
-                        (IMP)repl_CMMsgMgr_AsyncOnAddMsg,
-                        &orig_CMMsgMgr_AsyncOnAddMsg);
+        orig_CMMsgMgr_AsyncOnAddMsg = bbSwap(cls, NSSelectorFromString(@"AsyncOnAddMsg:MsgWrap:"),
+                                             (IMP)repl_CMMsgMgr_AsyncOnAddMsg, "CMessageMgr");
         WPLog(@"MsgMerge", @"[Hook] ✓ CMessageMgr AsyncOnAddMsg:MsgWrap:");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr AsyncOnAddMsg not found");
