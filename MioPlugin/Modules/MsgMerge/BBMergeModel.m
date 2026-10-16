@@ -374,10 +374,13 @@ static id dbFindValidMsg(long long startLID, int direction) {
 // 生长端点（Last/Single）行高本就原生，需要重排的是上一条（Last→Middle），
 // 由随后轮询 rebuild 的 changed>0 → refreshFlaggedCells 覆盖。
 - (void)noteIncomingMsgLocalID:(long long)lid {
-    if (lid <= 0 || !g_dbMgr || !g_dbTalker) return;
-    if (_index[@(lid)]) return;        // rebuild/fill 已覆盖，重复回调幂等
+    // 多静默返回点诊断：每个 return 打原因（定位后收敛为 OK 行）
+    if (lid <= 0) { WPLog(@"MsgMerge", @"[Model] note r1 lid<=0"); return; }
+    if (!g_dbMgr) { WPLog(@"MsgMerge", @"[Model] note r2 no-mgr"); return; }
+    if (!g_dbTalker) { WPLog(@"MsgMerge", @"[Model] note r3 no-talker"); return; }
+    if (_index[@(lid)]) return;        // rebuild/fill 已覆盖，重复回调幂等（无日志）
     id wrap = dbGetMsg(lid);
-    if (!wrap) return;                 // DB 未就绪（罕见）——轮询 rebuild 兜底
+    if (!wrap) { WPLog(@"MsgMerge", @"[Model] note r5 db-nil lid=%lld", lid); return; }
     id prevWrap = dbFindValidMsg(lid, -1);
     BOOL joinPrev = (prevWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:prevWrap];
     MOMergePosition pos = joinPrev ? MOMergePositionLast : MOMergePositionSingle;

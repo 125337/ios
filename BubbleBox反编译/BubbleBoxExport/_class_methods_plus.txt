@@ -1,0 +1,165 @@
+共 9 个类有元类方法表
+==== +[BubbleBoxBaseViewController] 类方法 (元类=BubbleBoxBaseViewController) ====
+    (无方法表)
+==== +[BubbleBoxCardViewController] 类方法 (元类=BubbleBoxCardViewController) ====
+    (无方法表)
+==== +[BubbleColorPickerContext] 类方法 (元类=BubbleColorPickerContext) ====
+    (无方法表)
+==== +[BubbleBoxColorPickerController] 类方法 (元类=BubbleBoxColorPickerController) ====
+    (无方法表)
+==== +[BubbleBoxColorViewController] 类方法 (元类=BubbleBoxColorViewController) ====
+    (无方法表)
+==== +[BubbleBoxDetailViewController] 类方法 (元类=BubbleBoxDetailViewController) ====
+    (无方法表)
+==== +[BubbleBoxHeadCardViewController] 类方法 (元类=BubbleBoxHeadCardViewController) ====
+    (无方法表)
+==== +[BubbleBoxHeadViewController] 类方法 (元类=BubbleBoxHeadViewController) ====
+    (无方法表)
+==== +[BubbleBoxListViewController] 类方法 (元类=BubbleBoxListViewController) ====
+    (无方法表)
+==== +[BubbleBoxMaskViewController] 类方法 (元类=BubbleBoxMaskViewController) ====
+    (无方法表)
+==== +[BubbleBoxSeparatorViewController] 类方法 (元类=BubbleBoxSeparatorViewController) ====
+    (无方法表)
+==== +[BubbleBoxStoreViewController] 类方法 (元类=BubbleBoxStoreViewController) ====
+    (无方法表)
+==== +[BubbleBoxViewController] 类方法 (元类=BubbleBoxViewController) ====
+    (无方法表)
+==== +[BubbleSettingViewController] 类方法 (元类=BubbleSettingViewController) ====
+    (无方法表)
+==== +[BubbleTimeViewController] 类方法 (元类=BubbleTimeViewController) ====
+    (无方法表)
+==== +[BubbleBoxAssets] 类方法 (元类=BubbleBoxAssets) ====
+    relative=true
+    +/-(?:shared   @ 00149bf0
+    +/-(?:imageNamed:   @ 00162a74
+    +/-(?:svgImageNamed:fromConfig:   @ 00164780
+    +/-(?:imageData:   @ 00164b0c
+    +/-(?:isInAssets:   @ 00164e08
+    +/-(?:cardBackground:   @ 00165208
+==== +[BubbleBoxCache] 类方法 (元类=BubbleBoxCache) ====
+    relative=true
+    +/-(?:shared   @ 00174c68
+    +/-(?:getData:   @ 00175af8
+    +/-(?:setData:key:   @ 00175f34
+==== +[BubbleBoxConfig] 类方法 (元类=BubbleBoxConfig) ====
+    relative=true
+    +/-(?:shared   @ 00176cf8
+==== +[BubbleBoxDownloadDelegate] 类方法 (元类=BubbleBoxDownloadDelegate) ====
+    (无方法表)
+==== +[BubbleBoxInfo] 类方法 (元类=BubbleBoxInfo) ====
+    (无方法表)
+==== +[BubbleBoxMgr] 类方法 (元类=BubbleBoxMgr) ====
+    relative=true
+    +/-(?:shared   @ 00222354
+    +/-(?:changeBubble:completion:   @ 00246ca8
+    +/-(?:exportConfigStringWithError:   @ 002483d8
+    +/-(?:copyConfigToPasteboardWithError:   @ 0024a6f4
+    +/-(?:importConfigFromPasteboardWithError:   @ 0024ba60
+==== +[BubbleBoxUI] 类方法 (元类=BubbleBoxUI) ====
+    relative=true
+    +/-(?:logoImage   @ 0025ed9c
+    +/-(?:downImage   @ 0025f938
+    +/-(?:bubbleImage   @ 00260d30
+    +/-(?:settingImage   @ 00261e64
+    +/-(?:plusImage   @ 0026318c
+    +/-(?:normalCellForSel:target:title:rightValue:userInfo:   @ 00264270
+    +/-(?:normalCellForSel:target:title:detailValue:userInfo:   @ 00264e64
+    +/-(?:switchCellForSel:target:title:on:userInfo:   @ 00265a78
+    +/-(?:segmentedCellForSel:target:title:items:selectedIndex:   @ 0026667c
+    +/-(?:centerCellForSel:target:title:userInfo:   @ 00266e84
+    +/-(?:sliderCellForSel:target:title:minValue:maxValue:value:   @ 00267f48
+    +/-(?:colorCellWithTitle:light:dark:setter:   @ 00268f60
+    +/-(?:colorPicker:   @ 0026af3c
+    +/-(?:imageWithColor:   @ 0026c380
+    +/-(?:alertControllerTitle:message:btn:   @ 0026cac8
+    +/-(?:alertControllerTitle:message:btn:block:   @ 0026d4cc
+    +/-(?:alertControllerTitle:message:text:btn:block:   @ 0026e118
+    +/-(?:applyMessageTime:   @ 0026fadc
+    +/-(?:applyCellLabelColor:   @ 00282f7c
+    +/-(?:applyHongBaoLabelColor:   @ 0028cf74
+    +/-(?:applyColorForCell:key:textColor:alpha:   @ 0028f2b0
+    +/-(?:applyHeadMaskView:   @ 0029119c
+==== +[BubbleBoxUtil] 类方法 (元类=BubbleBoxUtil) ====
+    relative=true
+    +/-(?:shared   @ 00293854
+    +/-(?:getService:   @ 00294304
+    +/-(?:getTopViewController   @ 00294a18
+    +/-(?:isAvatarToFoot   @ 002954b8
+    +/-(?:isGifMask:   @ 002963a4
+    +/-(?:colorInLightMode:DarkModel:   @ 0029903c
+    +/-(?:refreshChatLayoutsFromController:onlyRefer:   @ 0029b164
+    +/-(?:shouldShowMessageTime:   @ 002a1ae0
+    +/-(?:msgTimeLabelWidth   @ 002a53fc
+    +/-(?:timeLabelColor:   @ 002a6c5c
+    +/-(?:getMsgTextColor:   @ 002a8828
+    +/-(?:getHongBaoColor   @ 002aab30
+    +/-(?:getMessageTimeFormatter   @ 002ade80
+    +/-(?:bubbleCoverImage:completion:   @ 002b02a0
+    +/-(?:getMaskData:   @ 002b7598
+    +/-(?:getMaskImage:   @ 002ba99c
+    +/-(?:getReferImage:   @ 002bd6cc
+    +/-(?:isDarkMode   @ 002bfd48
+    +/-(?:genReferImage:   @ 002c0018
+    +/-(?:getCardImage:   @ 002c432c
+    +/-(?:getCardTimeColor:   @ 002c640c
+    +/-(?:getCardNameColor:   @ 002c8a24
+    +/-(?:clearDirectory:   @ 002ca908
+    +/-(?:clearDownloadTemp   @ 002cc86c
+    +/-(?:download:progress:success:failure:   @ 002cd974
+    +/-(?:deviceModel   @ 002d5e1c
+    +/-(?:request:params:success:failure:   @ 002d6138
+    +/-(?:upgradeUserGroupWithCode:   @ 002dcde0
+    +/-(?:fetchBubbleWithPage:query:success:failure:   @ 002e1ee8
+    +/-(?:updateCheck   @ 002e33d0
+    +/-(?:updateBubble   @ 002ebef8
+    +/-(?:deleteBubble:success:failure:   @ 002f4f38
+    +/-(?:restart   @ 002f62a4
+==== +[BubbleMessageMerge] 类方法 (元类=BubbleMessageMerge) ====
+    relative=true
+    +/-(?:shared   @ 002fb7a4
+    +/-(?:isSeparatorMessage:   @ 002fc6a8
+    +/-(?:isNeedInsertTimeNode:current:   @ 002fe49c
+    +/-(?:senderUser:   @ 002ff2a0
+    +/-(?:findValidMsg:startId:direction:   @ 002ffcdc
+    +/-(?:isPrevSameUser:wrap:   @ 00301f6c
+    +/-(?:isNextSameUser:wrap:   @ 00302fa4
+    +/-(?:merge:   @ 00303fc4
+    +/-(?:isSame:node:   @ 00306204
+    +/-(?:bubbleMerge:   @ 00307730
+    +/-(?:scheduleUpdateNodes:scroll:   @ 0030c71c
+    +/-(?:isSeparatorNode:classes:   @ 0030c964
+    +/-(?:updateAllNodes:scroll:   @ 0030dfb8
+    +/-(?:addNewMessage:nodes:   @ 0031c158
+==== +[BubbleAvatarCardView] 类方法 (元类=BubbleAvatarCardView) ====
+    (无方法表)
+==== +[BubbleBoxActionView] 类方法 (元类=BubbleBoxActionView) ====
+    (无方法表)
+==== +[BubbleBoxCollectionViewCell] 类方法 (元类=BubbleBoxCollectionViewCell) ====
+    (无方法表)
+==== +[BubbleBoxHeadCardView] 类方法 (元类=BubbleBoxHeadCardView) ====
+    (无方法表)
+==== +[BBReferState] 类方法 (元类=BBReferState) ====
+    (无方法表)
+==== +[BubbleBoxInfoView] 类方法 (元类=BubbleBoxInfoView) ====
+    (无方法表)
+==== +[BubbleBoxTableViewCell] 类方法 (元类=BubbleBoxTableViewCell) ====
+    relative=true
+    +/-(?:identifier   @ 003914d0
+==== +[BubbleBoxTagView] 类方法 (元类=BubbleBoxTagView) ====
+    (无方法表)
+==== +[BubbleBoxToast] 类方法 (元类=BubbleBoxToast) ====
+    relative=true
+    +/-(?:shared   @ 003a0064
+    +/-(?:showSuccess:   @ 003a0a40
+    +/-(?:showError:   @ 003a0d4c
+==== +[BubbleMsgTimeView] 类方法 (元类=BubbleMsgTimeView) ====
+    (无方法表)
+==== +[BBNewEntry] 类方法 (元类=BBNewEntry) ====
+    (无方法表)
+==== +[BBNewControllerState] 类方法 (元类=BBNewControllerState) ====
+    (无方法表)
+==== +[BBNewCardState] 类方法 (元类=BBNewCardState) ====
+    (无方法表)
+==== +[BBNewOptions] 类方法 (元类=BBNewOptions) ====
+    (无方法表)

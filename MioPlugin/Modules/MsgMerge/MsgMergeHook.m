@@ -849,6 +849,9 @@ static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) 
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (!cfg.mmEnable) return;
         if (![session isKindOfClass:[NSString class]]) return;
+        WPLog(@"MsgMerge", @"[Ctx] AddMsg session=%@ cur=%@ type=%lld",
+              session, g_currentChatName ?: @"(nil)",
+              (long long)[safeKVC(wrap, @"m_uiMessageType") longLongValue]);   // 触发实证
         if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
         // 新消息入库直写（BubbleBox 同款时序）：wrap 的 lid 此刻已入库，立即
         // 判定邻接写进索引——微信建行（~30ms 后）首测即命中，消灭「发出那一刻
