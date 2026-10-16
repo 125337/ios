@@ -236,6 +236,12 @@ static id dbFindValidMsg(long long startLID, int direction) {
     else if (joinNext)             pos = MOMergePositionFirst;
     else                           pos = MOMergePositionSingle;
 
+    WPLog(@"MsgMerge", @"[fill] lid=%lld pos=%ld jp=%d jn=%d self(t=%lld id=%@) prev(t=%lld id=%@) next(t=%lld id=%@)",
+          lid, (long)pos, joinPrev, joinNext,
+          createTimeOf(wrap), senderIdentity(wrap),
+          prevWrap ? createTimeOf(prevWrap) : -1, prevWrap ? (senderIdentity(prevWrap) ?: @"nil") : @"-",
+          nextWrap ? createTimeOf(nextWrap) : -1, nextWrap ? (senderIdentity(nextWrap) ?: @"nil") : @"-");
+
     [self dbCacheEntry:wrap lid:lid pos:pos];
     return pos;
 }
