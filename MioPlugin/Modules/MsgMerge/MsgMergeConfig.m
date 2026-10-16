@@ -33,8 +33,6 @@
         [ConfigDescriptor itemWithKey:@"mmSepEmoticon" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"mmSepSystem" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"mmSepTime" type:ConfigValueTypeBool default:@(NO)],
-        [ConfigDescriptor itemWithKey:@"mmOwnLayout" type:ConfigValueTypeBool default:@(NO)],
-        [ConfigDescriptor itemWithKey:@"mmNickJudgeTakeover" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"mmAvatarOffset" type:ConfigValueTypeFloat default:@(0.0)],
         [ConfigDescriptor itemWithKey:@"mmWholeOffset" type:ConfigValueTypeFloat default:@(0.0)],
     ];

@@ -96,20 +96,6 @@
                      alertMessage:@"组内相邻气泡的收拢间距，组内逐条递进叠加，单位 pt (0-12)"
                                cy:cy
                              width:w];
-    cy = [self addSwitchRowInGroup:g3
-                             title:@"布局接管（实验）"
-                              desc:nil
-                               key:@"mmOwnLayout"
-                              isOn:config.mmOwnLayout
-                                cy:cy
-                             width:w];
-    cy = [self addSwitchRowInGroup:g3
-                             title:@"昵称判定接管（实验）"
-                              desc:nil
-                               key:@"mmNickJudgeTakeover"
-                              isOn:config.mmNickJudgeTakeover
-                                cy:cy
-                             width:w];
     cy = [self addInputRowInGroup:g3
                             title:@"头像偏移 (pt)"
                               key:@"mmAvatarOffset"

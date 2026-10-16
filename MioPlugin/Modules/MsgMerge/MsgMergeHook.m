@@ -5,14 +5,14 @@
 //  架构（数据先行 · 增量索引，对齐 BubbleBox）：
 //    BBMergeModel 是唯一数据源：refreshIndex 增量补建 localID→entry 索引（屏上
 //    fill + 历史方向 DB 预扩，幂等守卫防风暴），分组判定永远发生在微信建 vm/
-//    测量之前——读侧钩子（measure:/昵称判定/渲染/昵称断供）按 wrap 的 localID
+//    测量之前——读侧钩子（measure:/昵称判定/渲染）按 wrap 的 localID
 //    直接 O(1) 查表（flagsPos），首测即命中。刷新语义对齐 BubbleBox scroll 分支：
 //    changed 只统计屏上已渲染 lid 的 pos 实变，新 lid 进索引不计（首测查表即真，
 //    无需事后刷新）——滚动场景 changed 恒 0，永不跳动。
 //    测量层接管（BubbleBox 同款行高杠杆）：measure: 对组内非组尾消息 −mmSpacing
 //    （下限 24），组尾/Single 原生直通；切片首/中片无缝直通（末片才含底部空隙）。
-//    昵称区回收走 isShowChatRoomDisplayName 判定翻转 + getNameLabel 断供，
-//    无任何 N 补偿。时间行零干预（BubbleBox 同款：全链无 ChatTime 引用）。
+//    昵称区回收走 isShowChatRoomDisplayName 判定翻转（常驻，原生按无昵称行
+//    测量+布局），无任何 N 补偿。时间行零干预（BubbleBox 同款：全链无 ChatTime 引用）。
 //    微信对聊天表行变更全部走 reloadData（环形缓冲实证），新消息路径只 rebuild
 //    +标脏，表格一个字不碰。
 //
@@ -25,9 +25,8 @@
 //    BaseMsgContentViewController  viewDidLoad / viewWillAppear: / viewDidAppear: /
 //                                  scrollViewDidScroll:（会话跟踪 + 滚动保鲜）
 //    CommonMessageCellView         layoutInternal / updateNodeStatus（渲染应用）
-//                                  getNameLabel（组内非首条断供昵称）
 //    CommonMessageViewModel        measure:（组内间距收拢）
-//                                  isShowChatRoomDisplayName（昵称判定接管）
+//                                  isShowChatRoomDisplayName（昵称判定，常驻）
 //    CMessageMgr                   onServiceInit（mgr 早捕获）/ AddMsg:MsgWrap: /
 //                                  AsyncOnAddMsg:MsgWrap:（新消息联动）
 //
@@ -58,7 +57,6 @@ static IMP orig_BaseMsgContentVC_viewDidAppear  = NULL;
 static IMP orig_BMCVC_scrollViewDidScroll       = NULL;
 static IMP orig_CMCellView_layoutInternal       = NULL;
 static IMP orig_CMCellView_updateNodeStatus     = NULL;
-static IMP orig_CMCellView_getNameLabel         = NULL;
 static IMP orig_CMVM_measure                    = NULL;
 static IMP orig_CMVM_isShowChatRoomDisplayName  = NULL;
 static IMP orig_CMMsgMgr_AddMsg                 = NULL;   // 收发总管道（发送侧不走 AsyncOnAddMsg）
@@ -492,7 +490,7 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）。
 // 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
 //   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
-//   逐轮累加会把头像推出屏外（9→270 实证）。开关关闭 = delta 归零，同机制自动还原。
+//   逐轮累加会把头像推出屏外（9→270 实证）。总开关关闭 = delta 归零，同机制自动还原。
 static void *kOLBaseHeadF = &kOLBaseHeadF;
 static void *kOLBaseBubF  = &kOLBaseBubF;
 static void *kOLBaseNameX = &kOLBaseNameX;
@@ -627,10 +625,6 @@ static void applyMergeToCellView(id cellView) {
             if (isTouched(cellView)) {
                 UIImageView *bg = safeCall(cellView, "getBgImageView");
                 if ([bg isKindOfClass:[UIImageView class]]) restoreCorner(bg);
-                id head = safeCall(cellView, "getHeadImageView");
-                if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:NO];
-                id name = safeCall(cellView, "getNameLabel");
-                if ([name isKindOfClass:[UILabel class]]) [(UILabel *)name setHidden:NO];
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
             applyOwnLayout(cellView, NO);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
@@ -653,27 +647,16 @@ static void applyMergeToCellView(id cellView) {
         // 媒体自摆（实证：图片/视频偏移无效）。自摆只依赖 wrap 类型与原生基准帧，
         // 不依赖合并位置。
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
-        applyOwnLayout(cellView, olTypeEnabled(msgType) && cfg.mmOwnLayout);
+        applyOwnLayout(cellView, olTypeEnabled(msgType));
 
         MOMergePosition pos = flagsPos(viewModel);
         if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
 
-        BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
-        BOOL inGroup = [chat hasSuffix:@"@chatroom"];
-
         markTouched(cellView);
 
-        // ① 群昵称：仅组首显示（私聊无昵称标签，操作无害）。
-        //    行高侧昵称区回收由测量层负责（NJD 判定钩翻转 + 原生自动收缩），
-        //    此处只管渲染显隐。
-        if (inGroup) {
-            id name = safeCall(cellView, "getNameLabel");
-            if ([name isKindOfClass:[UILabel class]]) {
-                [(UILabel *)name setHidden:!isFirst];
-            }
-        }
-
-        // ② 气泡背景圆角连续化（独立消息还原原值）
+        // 气泡背景圆角连续化（独立消息还原原值）。
+        // 群昵称显隐不再由渲染层干预——昵称判定钩（常驻）翻转后原生按无昵称行
+        // 测量+布局，渲染层 hidden 已冗余。
         UIImageView *bg = safeCall(cellView, "getBgImageView");
         if ([bg isKindOfClass:[UIImageView class]]) {
             applyCorner(bg, pos);
@@ -703,7 +686,7 @@ static void repl_BaseMsgContentVC_viewWillAppear(id self, SEL _cmd, BOOL animate
     // 洗掉旧开关状态/上一会话遗留的固化行高值，保证首测前缓存干净
     //（首测判定走查表，正确性由模型保证；这里只负责清旧值）
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    if (cfg.mmEnable && cfg.mmNickJudgeTakeover) resetAllMeasureCaches();
+    if (cfg.mmEnable) resetAllMeasureCaches();
 }
 
 // 建表期判定固化兜底：历史行的行高只在建表期被问一次，若模型首次重建时渲染
@@ -814,8 +797,8 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
 // —— CommonMessageViewModel：昵称判定接管 ——
 
 // ------------------------------------------------------------
-// -[CommonMessageViewModel isShowChatRoomDisplayName]（mmNickJudgeTakeover 开关，
-// XOS 同款挂点）：组内非首条返 NO → 微信原生按「无昵称行」测量+布局：bgTop
+// -[CommonMessageViewModel isShowChatRoomDisplayName]（常驻，XOS 同款挂点）：
+// 组内非首条返 NO → 微信原生按「无昵称行」测量+布局：bgTop
 // 16→5、行高自动回收昵称区（65→54）、切片泡体随 bgTop 上移零溢出。判定查表
 //（flagsPos），与测量同链路同刻读表恒真，首测即正确无固化。
 // 8.0.78 全部消息 viewModel 共用基类 IMP，单一挂点全覆盖。
@@ -828,7 +811,7 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
     if (s_inJudge) return origVal;
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        if (!cfg.mmEnable || !cfg.mmNickJudgeTakeover) return origVal;
+        if (!cfg.mmEnable) return origVal;
         if (!origVal) return origVal;   // 原生不显示，无需翻转
         // 非聊天页上下文（上会话残留测量）不干预——防跨会话 localID 误判
         if (!g_curChatVC) return origVal;
@@ -860,52 +843,6 @@ static void repl_CMCellView_layoutInternal(id self, SEL _cmd) {
 static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_CMCellView_updateNodeStatus)(self, _cmd);
     applyMergeToCellView(self);
-}
-
-// ------------------------------------------------------------
-// 昵称断供（根治）：组内非首条（Middle/Last）让 getNameLabel 返回 nil，
-// 原生布局走无昵称分支（气泡贴顶，昵称区从源头消失，无 11pt 残空）。
-// 依据：写入链 backtrace 实证 layoutInternal → 昵称区处理 → getNameLabel →
-// MMCPLabel setText:，每轮布局重写——断供 label 即断整链；nil 对 ObjC 全链安全。
-// 昵称不缓存于 view/VM/wrap，原生布局期按 wrap.m_nsRealChatUsr 现查联系人库
-// ——断 label 是唯一单点。断供时顺手 setHidden:YES（带标记），其余路径对称还原
-//（断供后原生无昵称分支不再触碰 label 实例，复用 cell 的 label 会残留旧文本）。
-// ------------------------------------------------------------
-static void *kNLHiddenByUs = &kNLHiddenByUs;
-
-static id repl_CMCellView_getNameLabel(id self, SEL _cmd) {
-    id label = ((id (*)(id, SEL))orig_CMCellView_getNameLabel)(self, _cmd);
-    @try {
-        MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        UILabel *lb = [label isKindOfClass:[UILabel class]] ? (UILabel *)label : nil;
-        BOOL cut = NO;
-        if (cfg.mmEnable) {
-            // wrap 取法：cellView 无 messageWrap ivar，走 viewModel.messageWrap（与 applyMerge 同链）
-            id viewModel = safeKVC(self, @"viewModel");
-            id wrap = safeKVC(viewModel, @"messageWrap");
-            if (wrap) {
-                NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
-                if (chat.length > 0) {
-                    MOMergePosition pos = flagsPos(viewModel);
-                    cut = (pos == MOMergePositionMiddle || pos == MOMergePositionLast);
-                }
-            }
-        }
-        if (cut) {
-            if (lb && !lb.hidden) {
-                lb.hidden = YES;
-                objc_setAssociatedObject(lb, kNLHiddenByUs, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
-            return nil;   // 断供：原生布局走无昵称分支
-        }
-        if (lb && [objc_getAssociatedObject(lb, kNLHiddenByUs) boolValue]) {
-            lb.hidden = NO;   // 对称还原（pos 变 First/None、开关关闭等路径）
-            objc_setAssociatedObject(lb, kNLHiddenByUs, @(NO), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[N] getNameLabel exception: %@", e.reason);
-    }
-    return label;
 }
 
 // —— CMessageMgr：mgr 捕获 + 新消息入库联动 ——
@@ -1024,10 +961,7 @@ static BOOL impIsForeign(IMP cur) {
         orig_CMCellView_updateNodeStatus = bbSwap(cls, @selector(updateNodeStatus),
                                                   (IMP)repl_CMCellView_updateNodeStatus,
                                                   "CommonMessageCellView");
-        orig_CMCellView_getNameLabel = bbSwap(cls, NSSelectorFromString(@"getNameLabel"),
-                                              (IMP)repl_CMCellView_getNameLabel,
-                                              "CommonMessageCellView");
-        WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageCellView layoutInternal/updateNodeStatus/getNameLabel");
+        WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageCellView layoutInternal/updateNodeStatus");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageCellView not found");
     }
@@ -1057,7 +991,7 @@ static BOOL impIsForeign(IMP cur) {
         }
     }
 
-    // ③b 昵称判定接管钩子（mmNickJudgeTakeover 开关，XOS 同款挂点）：公共基类
+    // ③b 昵称判定钩子（常驻，XOS 同款挂点）：公共基类
     //     单点直换，零类扫描。媒体重写类漏挂回归原生：媒体默认断组 pos 恒
     //     None，判定钩本就直通，无实际影响。
     {
