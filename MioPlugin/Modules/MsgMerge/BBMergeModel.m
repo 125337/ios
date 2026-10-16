@@ -435,7 +435,7 @@ static id dbFindValidMsg(long long startLID, int direction) {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!(cfg.mmEnable && !(cfg.mmOnlyRoom && ![g_dbTalker hasSuffix:@"@chatroom"]))) return NO;
     // 配置门对应关系：BubbleBox mergeMode==0 恒插行（不收起）；我们 mmEnable==0
-    // 时本函数不被调用（rowHeight/hidden 调用侧已挡），恒显示，语义一致。
+    // 时本函数不被调用（mmPruneTimeNodes 调用侧已挡），恒显示，语义一致。
 
     // 定位时间行：node 数组元素是 wrapper 节点（有 viewModel 属性，wrapOfNode
     // 即为此设计），rowHeight override 收到的 self 是 vm 本身——必须遍历比对

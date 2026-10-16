@@ -10,6 +10,12 @@
 //    （下限 24），组尾/Single 原生直通；切片首/中片无缝直通（末片才含底部空隙）。
 //    昵称区回收走 isShowChatRoomDisplayName 判定翻转 + getNameLabel 断供，
 //    无任何 N 补偿。
+//    时间行 = 数据源层剪除（BubbleBox 引擎级控制同效）：mmPruneTimeNodes 按
+//    shouldCollapseTimeNode 判定把应收起的时间行节点从 m_arrMessageNodeData
+//    删除并写回 + reloadData——微信渲染的世界里该时间行从未存在（8.0.78 无
+//    ObjC 插入判定可 hook，全类扫描实证；渲染层 rowHeight/hidden 方案废弃）。
+//    微信对聊天表行变更全部走 reloadData（零 insertRows，环形缓冲实证），
+//    删节点 + reload 行数一致性安全；无可删节点即空转，微信重建数组才再触发。
 //
 //  铁律（违反即崩）：
 //    ✗ 预写标志到 vm —— 随微信整批重建 vm 丢失 → 测量读 None → 集体闪回
@@ -23,7 +29,6 @@
 //                                  getNameLabel（组内非首条断供昵称）
 //    CommonMessageViewModel        measure:（组内间距收拢）
 //                                  isShowChatRoomDisplayName（昵称判定接管）
-//    ChatTimeViewModel             rowHeight（时间行收起 · class_addMethod override）
 //    CMessageMgr                   AddMsg:MsgWrap: / AsyncOnAddMsg:MsgWrap:
 //                                  （mgr 捕获 + 新消息联动）
 //
@@ -59,7 +64,6 @@ static IMP orig_CMVM_measure                    = NULL;
 static IMP orig_CMVM_isShowChatRoomDisplayName  = NULL;
 static IMP orig_CMMsgMgr_AddMsg                 = NULL;   // 收发总管道（发送侧不走 AsyncOnAddMsg）
 static IMP orig_CMMsgMgr_AsyncOnAddMsg          = NULL;
-static IMP g_timeRowSuperImp                    = NULL;   // ChatTimeViewModel rowHeight 转发目标
 
 // —— 会话上下文 ——
 static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chatroom id，私聊=对端 id）
@@ -212,20 +216,27 @@ static void resetAllMeasureCaches(void) {
 // 刻意不碰 UITableView 任何 API——语音管线抖动期 begin/endUpdates 崩溃定论；
 // 行高若未被原生布局链重询，滚动复用时自愈。
 // ------------------------------------------------------------
+// 聊天页消息表查找（vc.view 树深度优先；唯一 UITableView）
+static UITableView *findChatTableView(UIViewController *vc) {
+    if (!vc || ![vc isViewLoaded]) return nil;
+    UITableView *tbl = nil;
+    NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
+    while (stack.count > 0) {
+        UIView *v = [stack lastObject];
+        [stack removeLastObject];
+        if ([v isKindOfClass:[UITableView class]]) { tbl = (UITableView *)v; break; }
+        for (UIView *s in v.subviews) [stack addObject:s];
+    }
+    return tbl;
+}
+
 static void refreshFlaggedCellsSync(void) {
     // 主线程同步版（AddMsg 管道收尾用——必须在微信建行首测前完成标脏）
     @try {
         UIViewController *vc = g_curChatVC;
-        if (!vc || ![vc isViewLoaded]) return;
+        if (!vc) return;
         resetAllMeasureCaches();
-        UITableView *tbl = nil;
-        NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
-        while (stack.count > 0) {
-            UIView *v = [stack lastObject];
-            [stack removeLastObject];
-            if ([v isKindOfClass:[UITableView class]]) { tbl = (UITableView *)v; break; }
-            for (UIView *s in v.subviews) [stack addObject:s];
-        }
+        UITableView *tbl = findChatTableView(vc);
         if (!tbl) return;
         for (UITableViewCell *cell in tbl.visibleCells) {
             NSMutableArray<UIView *> *st = [NSMutableArray arrayWithObject:cell];
@@ -251,6 +262,71 @@ static void refreshFlaggedCells(void) {
     });
 }
 
+// —— 时间行数据源层剪除（BubbleBox 引擎级控制同效）——
+// 把应收起的时间行节点从 m_arrMessageNodeData 里删掉并写回 + reloadData：
+// 微信按此数组渲染，删掉的时间行「从未存在」，而非渲染后再藏。判定核心是
+// BBMergeModel shouldCollapseTimeNode（BubbleBox isNeedInsertTimeNode 同式）。
+// 安全性：微信对聊天表行变更全部走 reloadData、零 insertRows（环形缓冲实证），
+// 删节点 + reload 行数一致性安全；无可删节点直接返回（幂等），只有微信重建
+// 数组（引用变化且含可删节点）才会再触发，无拉锯循环。
+static void mmPruneTimeNodes(void) {
+    MsgMergeConfig *cfg = [MsgMergeConfig shared];
+    if (!cfg.mmEnable) return;
+    UIViewController *vc = g_curChatVC;
+    if (!vc) return;
+    NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
+    if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return;
+    static Class timeCls;
+    if (!timeCls) timeCls = objc_getClass("ChatTimeViewModel");
+
+    NSMutableArray<NSNumber *> *hits = nil;
+    for (NSUInteger i = 0; i < arr.count; i++) {
+        id node = arr[i];
+        if (!node) continue;
+        id vm = safeKVC(node, @"viewModel") ?: node;
+        if (![vm isKindOfClass:timeCls]) continue;
+        if ([[BBMergeModel shared] shouldCollapseTimeNode:vm inNodes:arr]) {
+            if (!hits) hits = [NSMutableArray array];
+            [hits addObject:@(i)];
+        }
+    }
+    if (hits.count == 0) return;
+
+    NSMutableArray *m = [arr mutableCopy];
+    for (NSNumber *n in hits.reverseObjectEnumerator) {
+        [m removeObjectAtIndex:n.unsignedIntegerValue];
+    }
+    SEL selSet = NSSelectorFromString(@"setM_arrMessageNodeData:");
+    @try {
+        if ([vc respondsToSelector:selSet]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(vc, selSet, m);
+        } else {
+            [vc setValue:m forKey:@"m_arrMessageNodeData"];   // KVC 无 setter：写 ivar（retain/release 标准语义）
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Time] prune writeback exception: %@", e.reason);
+        return;
+    }
+#if __has_feature(objc_arc)
+    g_currentNodeArray = m;
+#else
+    [m retain];
+    [g_currentNodeArray release];
+    g_currentNodeArray = m;
+    [m release];   // MRC：局部所有权已移交（vc setter + g_currentNodeArray 各持 1）
+#endif
+    WPLog(@"MsgMerge", @"[Time] pruned %lu time node(s), reload", (unsigned long)hits.count);
+    UITableView *tbl = findChatTableView(vc);
+    if (!tbl) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            [tbl reloadData];
+        } @catch (NSException *e) {
+            WPLog(@"MsgMerge", @"[Time] prune reload exception: %@", e.reason);
+        }
+    });
+}
+
 // 事件驱动重建的统一入口（切会话/进聊天/新消息确认追加/滚动限频/读侧保鲜都走这里）
 static void rebuildAndApplyFromContext(void) {
     UIViewController *vc = g_curChatVC;
@@ -268,6 +344,7 @@ static void rebuildAndApplyFromContext(void) {
     if (chat.length == 0) return;
     NSUInteger changed = [[BBMergeModel shared] rebuildFromNodeArray:arr chatName:chat];
     if (changed > 0) refreshFlaggedCells();   // 表内容变化 → 可见刷新（清测量缓存+标脏）
+    mmPruneTimeNodes();                        // 时间行数据源层剪除（自身幂等）
 }
 
 // 读侧限频保鲜：索引未覆盖的全新消息（微信记账迟滞）由此补表。0.15s 一次
@@ -620,12 +697,6 @@ static void applyMergeToCellView(id cellView) {
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
             applyOwnLayout(cellView, NO);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
-            // 时间行对称还原（判定链在下方 mmEnable=YES 侧，关闭路径此处恢复）
-            id vm0 = safeKVC(cellView, @"viewModel");
-            if (vm0 && !safeKVC(vm0, @"messageWrap")) {
-                UIView *cv0 = (UIView *)cellView;
-                if ([cv0 isKindOfClass:[UIView class]] && cv0.hidden) cv0.hidden = NO;
-            }
             return;
         }
 
@@ -633,19 +704,9 @@ static void applyMergeToCellView(id cellView) {
         if (!viewModel) return;
         id wrap = safeKVC(viewModel, @"messageWrap");
 
-        // 时间行收起（无 messageWrap 的节点=ChatTimeViewModel）：299s 窗内隐藏。
-        // hidden 为双保险（行高已由 ChatTimeViewModel rowHeight override 压 0.01，
-        // UITableViewCell clipsToBounds=NO 内容会溢出，hidden 兜住）。
-        if (!wrap) {
-            UIView *cv = (UIView *)cellView;
-            if ([cv isKindOfClass:[UIView class]]) {
-                BOOL hide = [g_currentNodeArray count] > 0 &&
-                    [[BBMergeModel shared] shouldCollapseTimeNode:viewModel
-                                                          inNodes:g_currentNodeArray];
-                if (cv.hidden != hide) cv.hidden = hide;
-            }
-            return;
-        }
+        // 无 messageWrap = 时间行等辅助节点：数据源层已剪除（mmPruneTimeNodes），
+        // 渲染层零干预（原 rowHeight 0.01 + hidden 兜底随数据源方案废弃）
+        if (!wrap) return;
 
         NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
         if (chat.length == 0) return;
@@ -943,51 +1004,9 @@ static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) 
     }
 }
 
-// —— ChatTimeViewModel：时间行收起 · 行高杠杆 ——
-
-// ChatTimeViewModel 无自有 rowHeight（继承 BaseChatViewModel 统一 IMP，签名
-// d16@0:8），class_addMethod 给子类加 override 覆盖继承链查找；299s 窗内返回
-// 0.01，否则转发原生 super IMP。渲染侧 hidden 兜底见 applyMergeToCellView。
-static double repl_TimeVM_rowHeight(id self, SEL _cmd) {
-    @try {
-        if (g_currentNodeArray.count > 0
-            && [[BBMergeModel shared] shouldCollapseTimeNode:self
-                                                     inNodes:g_currentNodeArray]) {
-            return 0.01;
-        }
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[Time] rowHeight exception: %@", e.reason);
-    }
-    return g_timeRowSuperImp ? ((double (*)(id, SEL))g_timeRowSuperImp)(self, _cmd) : 30.0;
-}
-
 // ============================================================
 // MARK: - 安装
 // ============================================================
-
-// 时间行收起：ChatTimeViewModel 无自有 rowHeight 时 class_addMethod 优先；
-// 子类已有自有实现（addMethod 失败）则 bbSwap 直换覆盖，转发目标改为被替换
-// 前的子类 IMP。
-static void installTimeRowCollapseHook(void) {
-    Class tCls = objc_getClass("ChatTimeViewModel");
-    Class baseCls = objc_getClass("BaseChatViewModel");
-    if (!tCls || !baseCls) {
-        WPLog(@"MsgMerge", @"[Hook] ✗ ChatTimeViewModel/BaseChatViewModel not found，时间行收起不可用");
-        return;
-    }
-    Method superM = class_getInstanceMethod(baseCls, @selector(rowHeight));
-    if (!superM) {
-        WPLog(@"MsgMerge", @"[Hook] ✗ BaseChatViewModel rowHeight not found");
-        return;
-    }
-    g_timeRowSuperImp = method_getImplementation(superM);
-    if (class_addMethod(tCls, @selector(rowHeight), (IMP)repl_TimeVM_rowHeight, "d@:")) {
-        WPLog(@"MsgMerge", @"[Hook] ✓ ChatTimeViewModel rowHeight override (时间行收起)");
-    } else {
-        g_timeRowSuperImp = bbSwap(tCls, @selector(rowHeight), (IMP)repl_TimeVM_rowHeight, "ChatTimeViewModel");
-        WPLog(@"MsgMerge", @"[Hook] ✓ ChatTimeViewModel rowHeight 直换 (子类已有实现)");
-    }
-}
 
 // dladdr 查 IMP 归属：被其他 dylib（如 WCR/XOS）占用则让位不挂（防互递归）
 static BOOL impIsForeign(IMP cur) {
@@ -1026,9 +1045,6 @@ static BOOL impIsForeign(IMP cur) {
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ BaseMsgContentViewController not found");
     }
-
-    // ①a 时间行收起（isNeedInsertTimeNode 显示语义）：299s 窗内压行高 + hidden
-    installTimeRowCollapseHook();
 
     // ①b 滚动驱动保鲜（BubbleBox scheduleUpdateNodes:scroll: 同款触发源）
     cls = objc_getClass("BaseMsgContentViewController");
