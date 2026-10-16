@@ -68,6 +68,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// 结果缓存进索引；存储不可用 = None。
 - (MOMergePosition)posForLocalID:(long long)lid;
 
+/// 时间行收起判定 = !isNeedInsertTimeNode(prev, current)，判定式完全对照
+/// BubbleBox isNeedInsertTimeNode:current:（反编译 002fe49c）：
+/// 管辖消息（时间行下首条有效消息）是新邀请 → 显示；管辖消息与 DB 前驱
+/// |ΔcreateTime| > 299s → 显示；≤ 299s → 收起。类型/sender 不感知（同 BubbleBox）。
+/// 找不到管辖消息/DB 前驱/DB 不可用 → 显示（保守，宁多勿错）。
+/// @param timeVM ChatTimeViewModel（node 数组中的时间节点，无 messageWrap）
+/// @param nodes  当前聊天页 m_arrMessageNodeData（定位 timeVM 位置用）
+- (BOOL)shouldCollapseTimeNode:(id)timeVM inNodes:(nullable NSArray *)nodes;
+
 /// 当前配置是否与上次重建时的分组配置指纹不一致（O(1)，读侧保鲜判断用）
 - (BOOL)configFingerprintChanged;
 

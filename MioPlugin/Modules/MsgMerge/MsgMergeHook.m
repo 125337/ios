@@ -9,9 +9,13 @@
 //    测量层接管（BubbleBox 同款行高杠杆）：measure: 对组内非组尾消息 −mmSpacing
 //    （下限 24），组尾/Single 原生直通；切片首/中片无缝直通（末片才含底部空隙）。
 //    昵称区回收走 isShowChatRoomDisplayName 判定翻转 + getNameLabel 断供，
-//    无任何 N 补偿。时间行零干预（对齐 BubbleBox 实证定论：它对微信时间行
-//    无任何 hook/删除/渲染接管，时间行照原生显示；渲染层收起与数据源剪除
-//    方案均已废弃删除）。
+//    无任何 N 补偿。
+//    时间行 = 数据源层剪除（BubbleBox 引擎级控制同效）：mmPruneTimeNodes 按
+//    shouldCollapseTimeNode 判定把应收起的时间行节点从 m_arrMessageNodeData
+//    删除并写回 + reloadData——微信渲染的世界里该时间行从未存在（8.0.78 无
+//    ObjC 插入判定可 hook，全类扫描实证；渲染层 rowHeight/hidden 方案废弃）。
+//    微信对聊天表行变更全部走 reloadData（零 insertRows，环形缓冲实证），
+//    删节点 + reload 行数一致性安全；无可删节点即空转，微信重建数组才再触发。
 //
 //  铁律（违反即崩）：
 //    ✗ 预写标志到 vm —— 随微信整批重建 vm 丢失 → 测量读 None → 集体闪回
@@ -258,6 +262,71 @@ static void refreshFlaggedCells(void) {
     });
 }
 
+// —— 时间行数据源层剪除（BubbleBox 引擎级控制同效）——
+// 把应收起的时间行节点从 m_arrMessageNodeData 里删掉并写回 + reloadData：
+// 微信按此数组渲染，删掉的时间行「从未存在」，而非渲染后再藏。判定核心是
+// BBMergeModel shouldCollapseTimeNode（BubbleBox isNeedInsertTimeNode 同式）。
+// 安全性：微信对聊天表行变更全部走 reloadData、零 insertRows（环形缓冲实证），
+// 删节点 + reload 行数一致性安全；无可删节点直接返回（幂等），只有微信重建
+// 数组（引用变化且含可删节点）才会再触发，无拉锯循环。
+static void mmPruneTimeNodes(void) {
+    MsgMergeConfig *cfg = [MsgMergeConfig shared];
+    if (!cfg.mmEnable) return;
+    UIViewController *vc = g_curChatVC;
+    if (!vc) return;
+    NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
+    if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return;
+    static Class timeCls;
+    if (!timeCls) timeCls = objc_getClass("ChatTimeViewModel");
+
+    NSMutableArray<NSNumber *> *hits = nil;
+    for (NSUInteger i = 0; i < arr.count; i++) {
+        id node = arr[i];
+        if (!node) continue;
+        id vm = safeKVC(node, @"viewModel") ?: node;
+        if (![vm isKindOfClass:timeCls]) continue;
+        if ([[BBMergeModel shared] shouldCollapseTimeNode:vm inNodes:arr]) {
+            if (!hits) hits = [NSMutableArray array];
+            [hits addObject:@(i)];
+        }
+    }
+    if (hits.count == 0) return;
+
+    NSMutableArray *m = [arr mutableCopy];
+    for (NSNumber *n in hits.reverseObjectEnumerator) {
+        [m removeObjectAtIndex:n.unsignedIntegerValue];
+    }
+    SEL selSet = NSSelectorFromString(@"setM_arrMessageNodeData:");
+    @try {
+        if ([vc respondsToSelector:selSet]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(vc, selSet, m);
+        } else {
+            [vc setValue:m forKey:@"m_arrMessageNodeData"];   // KVC 无 setter：写 ivar（retain/release 标准语义）
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Time] prune writeback exception: %@", e.reason);
+        return;
+    }
+#if __has_feature(objc_arc)
+    g_currentNodeArray = m;
+#else
+    [m retain];
+    [g_currentNodeArray release];
+    g_currentNodeArray = m;
+    [m release];   // MRC：局部所有权已移交（vc setter + g_currentNodeArray 各持 1）
+#endif
+    WPLog(@"MsgMerge", @"[Time] pruned %lu time node(s), reload", (unsigned long)hits.count);
+    UITableView *tbl = findChatTableView(vc);
+    if (!tbl) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            [tbl reloadData];
+        } @catch (NSException *e) {
+            WPLog(@"MsgMerge", @"[Time] prune reload exception: %@", e.reason);
+        }
+    });
+}
+
 // 事件驱动重建的统一入口（切会话/进聊天/新消息确认追加/滚动限频/读侧保鲜都走这里）
 static void rebuildAndApplyFromContext(void) {
     UIViewController *vc = g_curChatVC;
@@ -275,6 +344,7 @@ static void rebuildAndApplyFromContext(void) {
     if (chat.length == 0) return;
     NSUInteger changed = [[BBMergeModel shared] rebuildFromNodeArray:arr chatName:chat];
     if (changed > 0) refreshFlaggedCells();   // 表内容变化 → 可见刷新（清测量缓存+标脏）
+    mmPruneTimeNodes();                        // 时间行数据源层剪除（自身幂等）
 }
 
 // 读侧限频保鲜：索引未覆盖的全新消息（微信记账迟滞）由此补表。0.15s 一次
@@ -634,8 +704,8 @@ static void applyMergeToCellView(id cellView) {
         if (!viewModel) return;
         id wrap = safeKVC(viewModel, @"messageWrap");
 
-        // 无 messageWrap = 时间行等辅助节点：零干预照原生渲染
-        //（对齐 BubbleBox 实证：它对时间行无任何干预）
+        // 无 messageWrap = 时间行等辅助节点：数据源层已剪除（mmPruneTimeNodes），
+        // 渲染层零干预（原 rowHeight 0.01 + hidden 兜底随数据源方案废弃）
         if (!wrap) return;
 
         NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
