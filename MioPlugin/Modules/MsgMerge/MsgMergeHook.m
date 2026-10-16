@@ -962,13 +962,33 @@ static void applyMergeToCellView(id cellView) {
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
             applyOwnLayout(cellView, NO);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
+            // 时间行对称还原（判定链在下方 mmEnable=YES 侧，关闭路径此处恢复）
+            id vm0 = safeKVC(cellView, @"viewModel");
+            if (vm0 && !safeKVC(vm0, @"messageWrap")) {
+                UIView *cv0 = (UIView *)cellView;
+                if ([cv0 isKindOfClass:[UIView class]] && cv0.hidden) cv0.hidden = NO;
+            }
             return;
         }
 
         id viewModel = safeKVC(cellView, @"viewModel");
         if (!viewModel) { WPLog(@"MsgMerge", @"[Apply] viewModel nil"); return; }
         id wrap = safeKVC(viewModel, @"messageWrap");
-        if (!wrap) { WPLog(@"MsgMerge", @"[Apply] wrap nil"); return; }
+
+        // 时间行收起（无 messageWrap 的节点=ChatTimeViewModel）：299s 窗内隐藏。
+        // （关闭路径的 hidden 还原见上方 mmEnable=NO 分支的对称还原）
+        // hidden 为双保险（行高已由 ChatTimeViewModel rowHeight override 压 0.01，
+        // UITableViewCell clipsToBounds=NO 内容会溢出，hidden 兜住）。
+        if (!wrap) {
+            UIView *cv = (UIView *)cellView;
+            if ([cv isKindOfClass:[UIView class]]) {
+                BOOL hide = [g_currentNodeArray count] > 0 &&
+                    [[BBMergeModel shared] shouldCollapseTimeNode:viewModel
+                                                          inNodes:g_currentNodeArray];
+                if (cv.hidden != hide) cv.hidden = hide;
+            }
+            return;
+        }
 
         NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
         if (chat.length == 0) { WPLog(@"MsgMerge", @"[Apply] 会话名为空"); return; }
@@ -1179,6 +1199,51 @@ static void installMediaLayoutInternalHooks(void) {
     }
 }
 
+// ------------------------------------------------------------
+// 时间行收起 · 行高杠杆：ChatTimeViewModel 无自有 rowHeight（继承
+// BaseChatViewModel 统一 IMP，签名 d16@0:8），class_addMethod 给子类加
+// override 覆盖继承链查找；299s 窗内返回 0.01，否则转发原生 super IMP。
+// 渲染侧 hidden 兜底见 applyMergeToCellView 无 wrap 分支。
+// ------------------------------------------------------------
+static IMP g_timeRowSuperImp = NULL;
+
+static double repl_TimeVM_rowHeight(id self, SEL _cmd) {
+    @try {
+        if (g_currentNodeArray.count > 0
+            && [[BBMergeModel shared] shouldCollapseTimeNode:self
+                                                     inNodes:g_currentNodeArray]) {
+            return 0.01;
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Time] rowHeight exception: %@", e.reason);
+    }
+    return g_timeRowSuperImp ? ((double (*)(id, SEL))g_timeRowSuperImp)(self, _cmd) : 30.0;
+}
+
+static void installTimeRowCollapseHook(void) {
+    Class tCls = objc_getClass("ChatTimeViewModel");
+    Class baseCls = objc_getClass("BaseChatViewModel");
+    if (!tCls || !baseCls) {
+        WPLog(@"MsgMerge", @"[Hook] ✗ ChatTimeViewModel/BaseChatViewModel not found，时间行收起不可用");
+        return;
+    }
+    Method superM = class_getInstanceMethod(baseCls, @selector(rowHeight));
+    if (!superM) {
+        WPLog(@"MsgMerge", @"[Hook] ✗ BaseChatViewModel rowHeight not found");
+        return;
+    }
+    g_timeRowSuperImp = method_getImplementation(superM);
+    if (class_addMethod(tCls, @selector(rowHeight), (IMP)repl_TimeVM_rowHeight, "d@:")) {
+        WPLog(@"MsgMerge", @"[Hook] ✓ ChatTimeViewModel rowHeight override (时间行收起)");
+    } else {
+        // 子类已有自有 rowHeight（addMethod 失败）：改走 MSHook 精确覆盖
+        static IMP orig_t = NULL;
+        MSHookMessageEx(tCls, @selector(rowHeight), (IMP)repl_TimeVM_rowHeight, &orig_t);
+        g_timeRowSuperImp = orig_t;   // 转发目标改为被替换前的子类 IMP
+        WPLog(@"MsgMerge", @"[Hook] ✓ ChatTimeViewModel rowHeight MSHook (子类已有实现)");
+    }
+}
+
 // ============================================================
 // MARK: - 安装
 // ============================================================
@@ -1230,6 +1295,9 @@ static id repl_CMGR_GetMsg_LocalID(id self, SEL _cmd, id talker, unsigned int lo
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CMessageMgr not found");
     }
+
+    // ①d 时间行收起（isNeedInsertTimeNode 显示语义）：299s 窗内压行高 + hidden
+    installTimeRowCollapseHook();
 
     // ①b 滚动驱动全量重刷（BubbleBox scheduleUpdateNodes:scroll: 同款触发源）：
     //    微信滚动重建 vm 后标志丢失 → 滚动期全量重写补齐。仅聊天 VC 继承链上

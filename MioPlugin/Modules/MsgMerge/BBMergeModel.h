@@ -72,6 +72,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// 结果缓存进索引；存储不可用 = None（v5 行为）。
 - (MOMergePosition)posForLocalID:(long long)lid;
 
+/// 时间行应否收起（BubbleBox isNeedInsertTimeNode 显示语义接管）：
+/// 微信按分钟粒度插时间行，同 5 分钟窗内会重复插行（同屏两个 01:47 实证）。
+/// 判定 = 该时间行之下首条有效消息与 DB 前驱的 |ΔcreateTime| ≤ 299s → 隐藏。
+/// 找不到管辖消息/DB 不可用/非聊天会话 → 显示（保守，不比原生差）。
+/// @param timeVM ChatTimeViewModel（node 数组中的时间节点，无 messageWrap）
+/// @param nodes  当前聊天页 m_arrMessageNodeData（定位 timeVM 位置用）
+- (BOOL)shouldCollapseTimeNode:(id)timeVM inNodes:(nullable NSArray *)nodes;
+
 /// 当前配置是否与上次重建时的分组配置指纹不一致（O(1)，读侧保鲜判断用）
 - (BOOL)configFingerprintChanged;
 

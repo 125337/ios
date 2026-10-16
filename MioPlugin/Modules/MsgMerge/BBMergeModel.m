@@ -435,6 +435,46 @@ static id dbFindValidMsg(long long startLID, int direction) {
 }
 
 // ============================================================
+// MARK: - 时间行收起判定（isNeedInsertTimeNode 显示语义接管）
+// ============================================================
+
+// 微信按「显示分钟变化」插时间行（分钟粒度），同 299s 窗内会重复插行——
+// 同屏两个 01:47 实证（96 号日志/用户截图）。BubbleBox 的 isNeedInsertTimeNode:
+// current:（002fe49c）同时是分组断点与时间行显示规则：|ΔcreateTime| ≤ 299s 不插。
+// 本判定补齐显示侧：时间行之下首条有效消息与其 DB 前驱 Δ≤299s → 该时间行收起。
+
+- (BOOL)shouldCollapseTimeNode:(id)timeVM inNodes:(NSArray *)nodes {
+    if (!timeVM || nodes.count == 0 || !g_dbMgr || !g_dbTalker) return NO;
+    MsgMergeConfig *cfg = [MsgMergeConfig shared];
+    if (!(cfg.mmEnable && !(cfg.mmOnlyRoom && ![g_dbTalker hasSuffix:@"@chatroom"]))) return NO;
+
+    // 定位时间行在数组中的位置（vm 身份匹配；找不到 = 记账未就绪，保守显示）
+    NSUInteger tIdx = [nodes indexOfObjectIdenticalTo:timeVM];
+    if (tIdx == NSNotFound) return NO;
+
+    // 时间行管辖消息 = 其下首条有效消息（跳过连续时间行/空节点）
+    long long lid = 0;
+    long long ct = 0;
+    for (NSUInteger i = tIdx + 1; i < nodes.count; i++) {
+        id w = wrapOfNode(nodes[i]);
+        if (!w || !isMergeableWrap(w)) continue;
+        lid = localIDOf(w);
+        ct = createTimeOf(w);
+        break;
+    }
+    if (lid <= 0) return NO;
+
+    // DB 前驱（跳已删空洞）：Δ≤299s → 该时间行多余 → 收起
+    id prev = dbFindValidMsg(lid, -1);
+    if (!prev) return NO;
+    long long prevCt = createTimeOf(prev);
+    if (prevCt <= 0 || ct <= 0) return NO;
+    long long diff = ct - prevCt;
+    if (diff < 0) diff = -diff;
+    return diff <= 299;
+}
+
+// ============================================================
 // MARK: - 配置指纹与清空
 // ============================================================
 
