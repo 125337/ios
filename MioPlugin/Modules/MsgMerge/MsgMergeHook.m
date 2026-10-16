@@ -118,13 +118,26 @@ static void resetAllMeasureCaches(void) {
         NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
         if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return;
         SEL selReset = NSSelectorFromString(@"resetLayoutCache");
-        NSUInteger n = 0;
+        // BubbleBox 刷新三连照抄（engine 11563-11570）：resetLayoutCache +
+        // changeRevision + setNeedsLayout——微信按 revision 缓存布局，不 bump
+        // revision 的话标脏后也不会真正重询行高（发出原生间距固化的共因之一）
+        SEL selBump = NSSelectorFromString(@"changeRevision");
+        NSUInteger n = 0, bumps = 0;
         for (id vm in arr) {
-            if (!vm || ![vm respondsToSelector:selReset]) continue;
-            ((void (*)(id, SEL))objc_msgSend)(vm, selReset);
-            n++;
+            if (!vm) continue;
+            if ([vm respondsToSelector:selReset]) {
+                ((void (*)(id, SEL))objc_msgSend)(vm, selReset);
+                n++;
+            }
+            @try {
+                if ([vm respondsToSelector:selBump]) {
+                    ((void (*)(id, SEL))objc_msgSend)(vm, selBump);
+                    bumps++;
+                }
+            } @catch (NSException *e) { }
         }
-        WPLog(@"MsgMerge", @"[NJW] resetLayoutCache done, vm=%lu", (unsigned long)n);
+        WPLog(@"MsgMerge", @"[NJW] resetLayoutCache done, vm=%lu revBump=%lu",
+              (unsigned long)n, (unsigned long)bumps);
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[NJW] reset exception: %@", e.reason);
     }
@@ -770,6 +783,37 @@ static void mergeDoReload(void) {
     // 查表恒真几何必然正确——本函数只需 rebuild+标脏，表格一个字都不碰。
     rebuildAndApplyFromContext();
     refreshFlaggedCells();
+    // BubbleBox addNewMessage:nodes: 收尾照抄（addNewMessage.c:234-236）：
+    // [vm setB_isCompleted:@YES] + [vm updateLayoutsWithTryScroll:0 ReloadAll:0]
+    // ——微信自己的增量布局 API（0,0=不滚动不整刷），触发完整重布局（含行高
+    // 重询）而滚动位置不动。我们此前只标脏 cellView（不重询行高）+ 标脏的
+    // 表格层不刷新，这是「发出那一刻原生间距」的第二共因。
+    @try {
+        UIViewController *vc = g_curChatVC;
+        NSArray *arr = vc ? safeKVC(vc, @"m_arrMessageNodeData") : nil;
+        if ([arr isKindOfClass:[NSArray class]] && arr.count > 0) {
+            SEL selUpd = NSSelectorFromString(@"updateLayoutsWithTryScroll:ReloadAll:");
+            // 对尾部新增 vm 逐个调（BubbleBox 语义：受影响的消息 vm；新消息场景
+            // = 数组尾部）。respondsToSelector 守卫 + 结果计数日志供实证。
+            NSUInteger hits = 0;
+            for (NSUInteger k = arr.count; k > 0 && k + 4 > arr.count; k--) {
+                id vm = arr[k - 1];
+                if (!vm || ![vm respondsToSelector:selUpd]) continue;
+                ((void (*)(id, SEL, BOOL, BOOL))objc_msgSend)(vm, selUpd, NO, NO);
+                hits++;
+            }
+            static BOOL s_reported = NO;
+            if (!s_reported) {
+                s_reported = YES;
+                id probe = arr.lastObject;
+                WPLog(@"MsgMerge", @"[Refresh] updateLayoutsWithTryScroll sel=%@ hits=%lu",
+                      probe && [probe respondsToSelector:selUpd] ? @"YES" : @"NO",
+                      (unsigned long)hits);
+            }
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Refresh] updateLayouts exception: %@", e.reason);
+    }
 }
 
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt);
