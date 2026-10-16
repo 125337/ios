@@ -367,13 +367,15 @@ static id dbFindValidMsg(long long startLID, int direction) {
     WPLog(@"MsgMerge", @"[Model] DB source ready mgr=%@ (%@)", mgr, NSStringFromClass(object_getClass(mgr)));
 }
 
-// 新消息入库直写：AsyncOnAddMsg 回调即刻判定（不等 UI 节点记账的 30ms 轮询）。
-// BubbleBox 发出瞬间即正确的本质 = apply 从存储层即时算，微信建行（~30ms 后）
-// 首测时标志已就位；我们 rebuild 输入依赖 nodeArray 恒晚于建行，此处补齐同款
-// 时序。只写索引（自持、跨 vm 重建恒真），不做任何可见刷新——新消息自己是组
-// 生长端点（Last/Single）行高本就原生，需要重排的是上一条（Last→Middle），
-// 由随后轮询 rebuild 的 changed>0 → refreshFlaggedCells 覆盖。
+// 新消息入库直写：AddMsg 管道回调同步判定（不等 UI 节点记账的 30ms 轮询）。
+// BubbleBox 发出瞬间即正确的本质 = addNewMessage 钩点同步 merge: 写标志 +
+// updateLayouts，微信建行首测时标志已就位。只写索引（自持、跨 vm 重建恒真），
+// 并同步修正上一条 pos（新消息 join 后上一条 Last→Middle/Single→First）——
+// 不修则上一条保持组尾原生行高迟一拍；可见刷新（标脏+kick vm）由调用方
+// mergeImmediateRefresh 同步完成（BubbleBox 同款收尾）。
 - (void)noteIncomingMsgLocalID:(long long)lid {
+    // 契约：主线程同步调用（AddMsg 管道回调里直接执行，先于微信建行首测——
+    // dispatch_async 会把直写排到首测之后，首测仍 miss → 原生帧固化，实证）。
     // 多静默返回点诊断：每个 return 打原因（定位后收敛为 OK 行）
     if (lid <= 0) { WPLog(@"MsgMerge", @"[Model] note r1 lid<=0"); return; }
     if (!g_dbMgr) { WPLog(@"MsgMerge", @"[Model] note r2 no-mgr"); return; }
@@ -385,7 +387,20 @@ static id dbFindValidMsg(long long startLID, int direction) {
     BOOL joinPrev = (prevWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:prevWrap];
     MOMergePosition pos = joinPrev ? MOMergePositionLast : MOMergePositionSingle;
     [self dbCacheEntry:wrap lid:lid pos:pos];
-    WPLog(@"MsgMerge", @"[Model] note lid=%lld pos=%ld", lid, (long)pos);
+    // 上一条 pos 同步修正（BubbleBox merge: 语义）：新消息 join 后上一条有了
+    // 后继——Last→Middle / Single→First。不修则上一条保持组尾原生行高直到
+    // 30ms 轮询 rebuild，上一条与新行之间的间距迟一拍（「跳变」残余来源）。
+    NSString *prevFix = @"-";
+    if (joinPrev) {
+        long long plid = localIDOf(prevWrap);
+        BBMergeEntry *pe = plid > 0 ? _index[@(plid)] : nil;
+        if (pe && pe.pos == MOMergePositionLast) {
+            pe.pos = MOMergePositionMiddle; prevFix = @"L->M";
+        } else if (pe && pe.pos == MOMergePositionSingle) {
+            pe.pos = MOMergePositionFirst; prevFix = @"S->F";
+        }
+    }
+    WPLog(@"MsgMerge", @"[Model] note lid=%lld pos=%ld prevFix=%@", lid, (long)pos, prevFix);
 }
 
 - (MOMergePosition)posForLocalID:(long long)lid {

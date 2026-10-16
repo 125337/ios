@@ -463,37 +463,42 @@ static NSString *njLidOf(id wrap) {
 // 刻意不碰 UITableView 任何 API——语音管线抖动期 begin/endUpdates 崩溃定论；
 // 行高若未被原生布局链重询，滚动复用时自愈。
 // ------------------------------------------------------------
+static void refreshFlaggedCellsSync(void) {
+    // 主线程同步版（AddMsg 管道收尾用——必须在微信建行首测前完成标脏）
+    @try {
+        UIViewController *vc = g_curChatVC;
+        if (!vc || ![vc isViewLoaded]) return;
+        resetAllMeasureCaches();
+        UITableView *tbl = nil;
+        NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
+        while (stack.count > 0) {
+            UIView *v = [stack lastObject];
+            [stack removeLastObject];
+            if ([v isKindOfClass:[UITableView class]]) { tbl = (UITableView *)v; break; }
+            for (UIView *s in v.subviews) [stack addObject:s];
+        }
+        if (!tbl) return;
+        for (UITableViewCell *cell in tbl.visibleCells) {
+            NSMutableArray<UIView *> *st = [NSMutableArray arrayWithObject:cell];
+            for (int guard = 0; st.count > 0 && guard < 24; guard++) {
+                UIView *v = [st lastObject];
+                [st removeLastObject];
+                NSString *cn = NSStringFromClass([v class]);
+                if ([cn containsString:@"MessageCellView"]) {
+                    [v setNeedsLayout];   // 下轮 layoutInternal 按新标志重排/还原
+                    continue;
+                }
+                for (UIView *s in v.subviews) [st addObject:s];
+            }
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Refresh] exception: %@", e.reason);
+    }
+}
+
 static void refreshFlaggedCells(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        @try {
-            UIViewController *vc = g_curChatVC;
-            if (!vc || ![vc isViewLoaded]) return;
-            resetAllMeasureCaches();
-            UITableView *tbl = nil;
-            NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:vc.view];
-            while (stack.count > 0) {
-                UIView *v = [stack lastObject];
-                [stack removeLastObject];
-                if ([v isKindOfClass:[UITableView class]]) { tbl = (UITableView *)v; break; }
-                for (UIView *s in v.subviews) [stack addObject:s];
-            }
-            if (!tbl) return;
-            for (UITableViewCell *cell in tbl.visibleCells) {
-                NSMutableArray<UIView *> *st = [NSMutableArray arrayWithObject:cell];
-                for (int guard = 0; st.count > 0 && guard < 24; guard++) {
-                    UIView *v = [st lastObject];
-                    [st removeLastObject];
-                    NSString *cn = NSStringFromClass([v class]);
-                    if ([cn containsString:@"MessageCellView"]) {
-                        [v setNeedsLayout];   // 下轮 layoutInternal 按新标志重排/还原
-                        continue;
-                    }
-                    for (UIView *s in v.subviews) [st addObject:s];
-                }
-            }
-        } @catch (NSException *e) {
-            WPLog(@"MsgMerge", @"[Refresh] exception: %@", e.reason);
-        }
+        refreshFlaggedCellsSync();
     });
 }
 
@@ -762,6 +767,53 @@ static void mergeFindTable(UIView *v, int depth, UITableView **out) {
     for (UIView *sub in v.subviews) mergeFindTable(sub, depth + 1, out);
 }
 
+// BubbleBox addNewMessage:nodes: 收尾照抄（addNewMessage.c:234-236）：
+// [vm updateLayoutsWithTryScroll:0 ReloadAll:0] ——微信自己的增量布局 API
+// （0,0=不滚动不整刷），触发完整重布局（含行高重询）而滚动位置不动。对尾部
+// vm 逐个调（新消息场景=数组尾部）。 respondsToSelector 守卫 + 首调日志实证。
+static void mergeKickTailVMs(void) {
+    @try {
+        UIViewController *vc = g_curChatVC;
+        NSArray *arr = vc ? safeKVC(vc, @"m_arrMessageNodeData") : nil;
+        if ([arr isKindOfClass:[NSArray class]] && arr.count > 0) {
+            SEL selUpd = NSSelectorFromString(@"updateLayoutsWithTryScroll:ReloadAll:");
+            NSUInteger hits = 0;
+            for (NSUInteger k = arr.count; k > 0 && k + 4 > arr.count; k--) {
+                id vm = arr[k - 1];
+                if (!vm || ![vm respondsToSelector:selUpd]) continue;
+                ((void (*)(id, SEL, BOOL, BOOL))objc_msgSend)(vm, selUpd, NO, NO);
+                hits++;
+            }
+            static BOOL s_reported = NO;
+            if (!s_reported) {
+                s_reported = YES;
+                id probe = arr.lastObject;
+                WPLog(@"MsgMerge", @"[Refresh] updateLayoutsWithTryScroll sel=%@ hits=%lu",
+                      probe && [probe respondsToSelector:selUpd] ? @"YES" : @"NO",
+                      (unsigned long)hits);
+            }
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Refresh] updateLayouts exception: %@", e.reason);
+    }
+}
+
+// BubbleBox addNewMessage 同款同步收尾：note 已把标志写进索引（主线程同步），
+// 此刻立即标脏可见 cell + kick 尾部 vm——全部发生在微信建行首测之前，发送
+// 那一帧即为合并布局，消灭「发出时原生、秒跳合并」。幂等：收消息双管道
+// （AddMsg+AsyncOnAddMsg）都调时重复标脏/kick 无副作用，代价可忽略。
+static void mergeImmediateRefresh(void) {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            refreshFlaggedCellsSync();
+            mergeKickTailVMs();
+        });
+        return;
+    }
+    refreshFlaggedCellsSync();
+    mergeKickTailVMs();
+}
+
 static void mergeDoReload(void) {
     s_mergeRelayoutPending = NO;
     // 独立模型 rebuild（本方案核心）：轮询已确认节点追加，此刻 rebuild 的索引
@@ -784,37 +836,7 @@ static void mergeDoReload(void) {
     // 查表恒真几何必然正确——本函数只需 rebuild+标脏，表格一个字都不碰。
     rebuildAndApplyFromContext();
     refreshFlaggedCells();
-    // BubbleBox addNewMessage:nodes: 收尾照抄（addNewMessage.c:234-236）：
-    // [vm setB_isCompleted:@YES] + [vm updateLayoutsWithTryScroll:0 ReloadAll:0]
-    // ——微信自己的增量布局 API（0,0=不滚动不整刷），触发完整重布局（含行高
-    // 重询）而滚动位置不动。我们此前只标脏 cellView（不重询行高）+ 标脏的
-    // 表格层不刷新，这是「发出那一刻原生间距」的第二共因。
-    @try {
-        UIViewController *vc = g_curChatVC;
-        NSArray *arr = vc ? safeKVC(vc, @"m_arrMessageNodeData") : nil;
-        if ([arr isKindOfClass:[NSArray class]] && arr.count > 0) {
-            SEL selUpd = NSSelectorFromString(@"updateLayoutsWithTryScroll:ReloadAll:");
-            // 对尾部新增 vm 逐个调（BubbleBox 语义：受影响的消息 vm；新消息场景
-            // = 数组尾部）。respondsToSelector 守卫 + 结果计数日志供实证。
-            NSUInteger hits = 0;
-            for (NSUInteger k = arr.count; k > 0 && k + 4 > arr.count; k--) {
-                id vm = arr[k - 1];
-                if (!vm || ![vm respondsToSelector:selUpd]) continue;
-                ((void (*)(id, SEL, BOOL, BOOL))objc_msgSend)(vm, selUpd, NO, NO);
-                hits++;
-            }
-            static BOOL s_reported = NO;
-            if (!s_reported) {
-                s_reported = YES;
-                id probe = arr.lastObject;
-                WPLog(@"MsgMerge", @"[Refresh] updateLayoutsWithTryScroll sel=%@ hits=%lu",
-                      probe && [probe respondsToSelector:selUpd] ? @"YES" : @"NO",
-                      (unsigned long)hits);
-            }
-        }
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[Refresh] updateLayouts exception: %@", e.reason);
-    }
+    mergeKickTailVMs();
 }
 
 static void mergeRetryRelayout(NSInteger count0, NSInteger attempt);
@@ -848,25 +870,32 @@ static void mergeRetryRelayout(NSInteger count0, NSInteger attempt) {
 // 94 号实证：自己发送不走 AsyncOnAddMsg——它是接收入口，发送时钩子零调用，
 // note 直写不执行 → 建行首测 miss → 原生帧固化 → 秒跳合并），AsyncOnAddMsg
 // 仅接收侧补充（两条管道收消息都触发，note 以 _index 幂等去重）。
+//
+// BubbleBox addNewMessage:nodes: 时序完全对齐（同步三步，主线程内完成）：
+//   note 直写索引（含上一条 pos 修正）→ updateChatContext → mergeImmediateRefresh
+// 异步 dispatch 会把直写排到微信建行首测之后，首测仍 miss（实证）——主线程
+// 同步执行是「发出即合并布局」的唯一时序。
 static void mmHandleIncomingMsg(id session, id wrap) {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!cfg.mmEnable) return;
     if (![session isKindOfClass:[NSString class]]) return;
     if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
-    // 新消息入库直写（BubbleBox 同款时序）：wrap 的 lid 此刻已入库，立即
-    // 判定邻接写进索引——微信建行（~30ms 后）首测即命中，消灭「发出那一刻
-    // 原生间距」固化窗口（rebuild 依赖 nodeArray 记账恒晚于建行，救不了首测）。
-    // 主线程执行（管道回调可能在后台线程，索引写入须与 rebuild 同队列）
     long long lid = localIDOfWrap(wrap);
-    if (lid > 0) {
+    if (lid <= 0) return;
+    if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [[BBMergeModel shared] noteIncomingMsgLocalID:lid];
+            if (g_curChatVC) updateChatContext(g_curChatVC);   // 刷新 g_currentNodeArray（含切会话自检）
+            mergeImmediateRefresh();
         });
+        mergeScheduleRelayout();   // 轮询等节点追加后 rebuild 校准（不触发表格）
+        return;
     }
-    if (g_curChatVC) updateChatContext(g_curChatVC);   // 刷新 g_currentNodeArray（含切会话自检）
-    // 轮询确认节点追加后 mergeDoReload 主动重建：负责上一条 Last→Middle 的
-    // 重排（noteIncomingMsg 不做刷新）+ 索引全量校准（本函数绝不触发表格
-    // 变更，见 mergeDoReload 注释）
+    [[BBMergeModel shared] noteIncomingMsgLocalID:lid];
+    if (g_curChatVC) updateChatContext(g_curChatVC);
+    mergeImmediateRefresh();
+    // 轮询确认节点追加后 mergeDoReload 主动 rebuild：索引全量校准 + 可见刷新
+    // （本函数绝不触发表格变更，见 mergeDoReload 注释）
     mergeScheduleRelayout();
 }
 
