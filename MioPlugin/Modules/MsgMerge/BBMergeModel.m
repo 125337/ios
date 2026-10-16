@@ -448,8 +448,15 @@ static id dbFindValidMsg(long long startLID, int direction) {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!(cfg.mmEnable && !(cfg.mmOnlyRoom && ![g_dbTalker hasSuffix:@"@chatroom"]))) return NO;
 
-    // 定位时间行在数组中的位置（vm 身份匹配；找不到 = 记账未就绪，保守显示）
-    NSUInteger tIdx = [nodes indexOfObjectIdenticalTo:timeVM];
+    // 定位时间行：node 数组元素是 wrapper 节点（有 viewModel 属性，wrapOfNode
+    // 即为此设计），rowHeight override 收到的 self 是 vm 本身——必须遍历比对
+    // wrapper.viewModel，indexOfObjectIdenticalTo 找 vm 身份恒 NSNotFound
+    //（frida 探针实证：63 次调用全穿透基类 = 旧定位恒 NO）。
+    NSUInteger tIdx = NSNotFound;
+    for (NSUInteger i = 0; i < nodes.count; i++) {
+        id node = nodes[i];
+        if (node == timeVM || safeValue(node, @"viewModel") == timeVM) { tIdx = i; break; }
+    }
     if (tIdx == NSNotFound) return NO;
 
     // 时间行管辖消息 = 其下首条有效消息（跳过连续时间行/空节点）
@@ -471,7 +478,11 @@ static id dbFindValidMsg(long long startLID, int direction) {
     if (prevCt <= 0 || ct <= 0) return NO;
     long long diff = ct - prevCt;
     if (diff < 0) diff = -diff;
-    return diff <= 299;
+    if (diff <= 299) {
+        WPLog(@"MsgMerge", @"[Time] collapse lid=%lld Δ=%llds", lid, diff);
+        return YES;
+    }
+    return NO;
 }
 
 // ============================================================
