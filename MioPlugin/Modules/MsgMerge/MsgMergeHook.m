@@ -494,11 +494,12 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //     （固定行高内挪 y 必守恒，项目定论；间距收拢走 measure: 测量层接管）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
 //   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
-// 自摆范围：横向 x（全体白名单行）+ 头像可见行 y 下沉（骑气泡，mmAvatarRide）。
+// 自摆范围：横向 x（全体白名单行）+ 头像可见行 y 钉顶（骑气泡，mmAvatarRide）。
 // 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
 //   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
-//   骑行输入 = mmAvatarRideDepth（±40 钳位），正=头像下沉压入气泡顶边（XOS AvatarAboveBubble
-//   同款语义，其硬编码 −8.0 即默认 8），负=上浮悬浮；固定行高内挪 y 守恒，行高/测量层不碰。
+//   骑行 = 绝对钉顶 targetY=-8+mmAvatarRideDepth（±100 钳位，XOS ReverseAvatarDownOffset
+//   同款语义），0=标准冒顶 8pt；y 写帧走 applyRideY（layoutInternal 末端/下一拍），
+//   本函数只管 x/宽。固定行高内挪 y 守恒，行高/测量层不碰。
 // 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
 //   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
 //   逐轮累加会把头像推出屏外（9→270 实证）。总开关关闭 = delta 归零，同机制自动还原。
@@ -910,19 +911,23 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 static void applyRideY(UIView *head) {
     static void *kRideLastY = &kRideLastY;
     if (!head || head.hidden) return;
-    double depth = olClamp([MsgMergeConfig shared].mmAvatarRideDepth, 40);
-    if (depth == 0) return;
+    // XOS 同款绝对钉顶（FUN_00097fa0 反编译实证：targetY = -8 + offset，与原生
+    // 基准无关——(param_4−param_4) 恒 0，param_4 实为原定 h）。头像钉在 cell 顶
+    // 上方 8pt（负 y 冒出 cell，cell 默认不裁剪子视图），悬于组头位；「骑坐」
+    // 观感由组内行高收拢（measure −mmSpacing）+气泡钻入（48pt）共同成型。
+    // mmAvatarRideDepth 语义=XOS ReverseAvatarDownOffset（±100 微调偏置，默认 0
+    // 即标准冒顶 8pt）。
+    double offset = olClamp([MsgMergeConfig shared].mmAvatarRideDepth, 100);
+    double targetY = -8.0 + offset;
     CGPoint p = head.frame.origin;
-    // 合法域守卫：进聊天/复用瞬间读到微信过渡布局值（实证 y=-46，隐藏头像的藏匿
-    // 位残留），增量写 -46+8=-38 → 头像只剩底边 5pt 露出（视觉黑短线，截图+探针
-    // head_out(y-38) 实锤）。原生头像 y 恒在 [0,60]，越域一律跳过本轮，等微信摆正
-    // 后下轮重写（幂等基准自动接管）
-    if (p.y < 0 || p.y > 60) return;
+    // 野值域守卫：微信过渡布局极端值一律跳过（进聊天/复用瞬间，实证 y=-46 藏匿
+    // 位残留；绝对语义下过渡读数不参与计算，写前宽域 [−60,60] 只挡真正的野值）
+    if (p.y < -60 || p.y > 60) return;
     NSNumber *lastWrote = objc_getAssociatedObject(head, kRideLastY);
     if (lastWrote && fabs(p.y - [lastWrote doubleValue]) < 0.5) return;
-    head.frame = CGRectMake(p.x, p.y + depth, head.frame.size.width, head.frame.size.height);
-    objc_setAssociatedObject(head, kRideLastY, @(p.y + depth), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    WPLog(@"MsgMerge", @"[RIDE-写帧] y=%.1f→%.1f sync=%d", p.y, p.y + depth, g_inLayoutInternal);
+    head.frame = CGRectMake(p.x, targetY, head.frame.size.width, head.frame.size.height);
+    objc_setAssociatedObject(head, kRideLastY, @(targetY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    WPLog(@"MsgMerge", @"[RIDE-写帧] y=%.1f→%.1f sync=%d", p.y, targetY, g_inLayoutInternal);
 }
 
 // —— RIDE 诊断（帽限，验证后拆除）——
