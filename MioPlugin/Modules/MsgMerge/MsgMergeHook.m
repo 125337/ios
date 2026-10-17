@@ -594,6 +594,7 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible) {
         // headVisible 由调用方与显隐钩同源传入）；XOS 同款 Y 下沉语义
         if (cfg.mmAvatarRide && headVisible) {
             newDY = olClamp(cfg.mmAvatarRideDepth, 40);
+            WPLog(@"MsgMerge", @"[RIDE-写帧] dh=%.1f dy=%.1f y=%.1f→%.1f", newDH, newDY, bHead.origin.y, bHead.origin.y + newDY);
         }
     }
 
@@ -678,6 +679,9 @@ static void applyMergeToCellView(id cellView) {
         // 媒体自摆（实证：图片/视频偏移无效）。分隔符行 pos=None → headVisible=NO，
         // 自摆生效但骑行不生效（独立打断行不属于合并组，无骑可言）。
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
+        if (cfg.mmAvatarRide && headVisible) {
+            WPLog(@"MsgMerge", @"[RIDE-候选] t=%lld pos=%ld hv=%d avPos=%lld", msgType, (long)pos, headVisible, cfg.mmAvatarPos);
+        }
         applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible);
 
         if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
