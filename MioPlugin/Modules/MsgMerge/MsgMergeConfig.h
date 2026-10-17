@@ -44,10 +44,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// 整列横向偏移（pt，±20 钳位）：头像+气泡+昵称同向平移，正=向屏幕边缘；收发镜像
 @property (nonatomic, assign) CGFloat mmWholeOffset;
 
-/// 头像骑气泡：头像可见行（组首/独立行）下压骑坐 + 气泡钻入头像列（需 mmEnable 开）
+/// 头像骑气泡：头像可见行（组首/独立行）绝对钉顶 + 气泡钻入头像列（需 mmEnable 开）
 @property (nonatomic, assign) BOOL   mmAvatarRide;
-/// 下压深度（pt，±100 钳位，XOS GapReduce 守恒设计）：targetY = 原生y + 深度，
-/// 默认 10=XOS 群聊值，总行高守恒零冒出；负=上浮
+/// 钉顶偏置（pt，±100 钳位，XOS ReverseAvatarDownOffset 同款）：targetY = -8 + 偏置，
+/// 默认 0=钉 cell 顶上方 8pt；写帧关隐式动画（CATransaction setDisableActions:YES）
 @property (nonatomic, assign) CGFloat mmAvatarRideDepth;
 /// 气泡让位（pt，±60 钳位）：骑气泡时气泡向头像列钻入的横向偏移（XOS MessageOffset 对应物），
 /// 正=向头像方向让位（气泡钻到头像正下方，头像悬于气泡上外角），仅头像可见行生效

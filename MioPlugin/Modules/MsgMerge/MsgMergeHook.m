@@ -896,19 +896,19 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 static void applyRideY(UIView *head) {
     static void *kRideLastY = &kRideLastY;
     if (!head || head.hidden) return;
-    // 骑行 = 头像相对下压（targetY = 原生y + offset，XOS GapReduce 守恒设计：头像
-    // y+gap 与行高补偿同键，总行高不变零冒出零压线）+ 气泡钻入头像列（rideInset）
-    // → 头像骑坐进气泡左上角。默认 10 = XOS GroupGapReduce 群聊值。
-    // mmAvatarRideDepth 语义=下压深度（±100 钳位），负=上浮。
+    // 骑行 = XOS 同款绝对钉顶（FUN_00097fa0 真身实证）：targetY = -8 + 偏置，
+    // 守卫 |当前y−targetY|>1 才写，CATransaction 关隐式动画（无动画写帧）。
+    // mmAvatarRideDepth 语义=XOS ReverseAvatarDownOffset（默认 0 → 钉顶 −8，±100 钳位）。
     double offset = olClamp([MsgMergeConfig shared].mmAvatarRideDepth, 100);
     CGPoint p = head.frame.origin;
-    double targetY = p.y + offset;
-    // 野值域守卫：微信过渡布局极端值一律跳过（进聊天/复用瞬间，实证 y=-46 藏匿
-    // 位残留；相对语义下过渡读数会被放大写歪，原生头像 y 恒在 [0,60]）
+    double targetY = -8.0 + offset;
+    // 双守卫：野值域（原生头像 y 恒在 [0,60]，过渡值 -46 拦截）+ 差>1 才写
     if (p.y < 0 || p.y > 60) return;
-    NSNumber *lastWrote = objc_getAssociatedObject(head, kRideLastY);
-    if (lastWrote && fabs(p.y - [lastWrote doubleValue]) < 0.5) return;
+    if (fabs(p.y - targetY) <= 1.0) return;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
     head.frame = CGRectMake(p.x, targetY, head.frame.size.width, head.frame.size.height);
+    [CATransaction commit];
     objc_setAssociatedObject(head, kRideLastY, @(targetY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     WPLog(@"MsgMerge", @"[RIDE-写帧] y=%.1f→%.1f", p.y, targetY);
 }
