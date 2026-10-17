@@ -502,7 +502,6 @@ static void *kOLBaseNameX = &kOLBaseNameX;
 static void *kOLLastDH    = &kOLLastDH;
 static void *kOLLastDC    = &kOLLastDC;
 static void *kOLLastDN    = &kOLLastDN;
-static void *kOLLastDY    = &kOLLastDY;   // 上轮头像 y 位移（骑模式写入量）
 
 static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
@@ -536,19 +535,15 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible) {
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:cont.frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDH, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDC, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(cellView, kOLLastDY, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     CGRect bHead = [bHeadV CGRectValue];
     CGRect bBub  = [(NSValue *)objc_getAssociatedObject(cellView, kOLBaseBubF) CGRectValue];
     double lastDH = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDH) doubleValue];
     double lastDC = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDC) doubleValue];
-    double lastDY = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDY) doubleValue];
 
     // 失效检测：位置或尺寸偏离 基准+上轮delta → 原生已重摆（复用/重布局），重置基准。
-    // y 必须同构纳入 lastDY：骑模式写过 y 后当前值恒偏离裸基准，漏加会误判原生重摆
-    // → 基准被污染成骑后值 → 逐轮累加漂移（9→270 同款事故模式）
+    // y 轴不在本函数管理范围（骑气泡走异步重申，自持幂等基准），只检测 x/宽。
     if (fabs(head.frame.origin.x - (bHead.origin.x + lastDH)) > 0.5 ||
-        fabs(head.frame.origin.y - (bHead.origin.y + lastDY)) > 0.5 ||
         fabs(head.frame.size.width - bHead.size.width) > 0.5 ||
         fabs(cont.frame.origin.x - (bBub.origin.x + lastDC)) > 0.5 ||
         fabs(cont.frame.origin.y - bBub.origin.y) > 0.5 ||
@@ -557,7 +552,6 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible) {
         bBub = cont.frame;
         lastDH = 0;
         lastDC = 0;
-        lastDY = 0;
         objc_setAssociatedObject(cellView, kOLBaseHeadF, [NSValue valueWithCGRect:bHead], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:bBub], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
@@ -582,7 +576,7 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible) {
         }
     }
 
-    double newDH = 0, newDC = 0, newDY = 0;
+    double newDH = 0, newDC = 0;
     if (active) {
         CGFloat W = ((UIView *)cellView).bounds.size.width;
         BOOL isSender = bHead.origin.x > W * 0.5;
@@ -590,24 +584,16 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible) {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
-        // 骑气泡：仅头像可见行（合并位按 mmAvatarPos 对应 First/Single 或 Last/Single，
-        // headVisible 由调用方与显隐钩同源传入）；XOS 同款 Y 下沉语义
-        if (cfg.mmAvatarRide && headVisible) {
-            newDY = olClamp(cfg.mmAvatarRideDepth, 40);
-            WPLog(@"MsgMerge", @"[RIDE-写帧] dh=%.1f dy=%.1f y=%.1f→%.1f", newDH, newDY, bHead.origin.y, bHead.origin.y + newDY);
-        }
     }
 
     // 头像 x+y 合并单次写帧：两轴同源于 bHead，若按方案分两段各写各的，后写者会把
     // 先写者刚写入的另一轴增量抹掉（基于裸 bHead 重建 frame）→ 下轮失效检测误判
     // 原生重摆 → 基准被污染 → 逐轮累加漂移（9→270 同款）。幂等条件两轴任一变化即写。
-    if (fabs(newDH - lastDH) > 0.01 || fabs(newDY - lastDY) > 0.01) {
+    if (fabs(newDH - lastDH) > 0.01) {
         CGRect f = bHead;
         f.origin.x += newDH;
-        f.origin.y += newDY;
         head.frame = f;
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(cellView, kOLLastDY, @(newDY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     if (fabs(newDC - lastDC) > 0.01) {
         CGRect f = bBub;
@@ -679,8 +665,26 @@ static void applyMergeToCellView(id cellView) {
         // 媒体自摆（实证：图片/视频偏移无效）。分隔符行 pos=None → headVisible=NO，
         // 自摆生效但骑行不生效（独立打断行不属于合并组，无骑可言）。
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
+        // 骑气泡：写帧必须在微信本轮布局全部完成之后。updateNodeStatus 时机写入会被
+        // 后续布局链重置回原生 y（实证：日志 y=2.0→10.0 每轮循环，视觉恒 2）。
+        // XOS 同款延迟重申：主队列下一拍写帧；幂等基准 = 关联对象记上轮写入值，
+        // 已骑（未重置）跳过、被重置重写，杜绝逐轮累加漂移。
         if (cfg.mmAvatarRide && headVisible) {
-            WPLog(@"MsgMerge", @"[RIDE-候选] t=%lld pos=%ld hv=%d avPos=%lld", msgType, (long)pos, headVisible, cfg.mmAvatarPos);
+            UIView *headNow = safeCall(cellView, "getHeadImageView");
+            if ([headNow isKindOfClass:[UIView class]] && !headNow.hidden) {
+                static void *kRideLastY = &kRideLastY;
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (headNow.hidden) return;
+                    double depth = olClamp([MsgMergeConfig shared].mmAvatarRideDepth, 40);
+                    if (depth == 0) return;
+                    CGPoint p = headNow.frame.origin;
+                    NSNumber *lastWrote = objc_getAssociatedObject(headNow, kRideLastY);
+                    if (lastWrote && fabs(p.y - [lastWrote doubleValue]) < 0.5) return;  // 已骑未重置
+                    headNow.frame = CGRectMake(p.x, p.y + depth, headNow.frame.size.width, headNow.frame.size.height);
+                    objc_setAssociatedObject(headNow, kRideLastY, @(p.y + depth), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                    WPLog(@"MsgMerge", @"[RIDE-写帧] y=%.1f→%.1f", p.y, p.y + depth);
+                });
+            }
         }
         applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible);
 
