@@ -69,6 +69,7 @@ static IMP orig_CMMsgMgr_AsyncOnAddMsg          = NULL;
 // updateNodeStatus 路径异步下一拍兜底重申（幂等防漂移）
 static BOOL g_inLayoutInternal = NO;
 static void applyRideY(UIView *head);   // 定义见渲染应用段（layoutInternal 垫片前）
+static void rideDumpHeads(UIView *v, int depth, NSMutableString *out, int *cnt);   // 定义见 applyRideY 后
 
 // —— 会话上下文 ——
 static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chatroom id，私聊=对端 id）
