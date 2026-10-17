@@ -916,14 +916,12 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 static void applyRideY(UIView *head) {
     static void *kRideLastY = &kRideLastY;
     if (!head || head.hidden) return;
-    // XOS 同款绝对钉顶（FUN_00097fa0 反编译实证：targetY = -8 + offset，与原生
-    // 基准无关——(param_4−param_4) 恒 0，param_4 实为原定 h）。头像钉在 cell 顶
-    // 上方 8pt（负 y 冒出 cell，cell 默认不裁剪子视图），悬于组头位；「骑坐」
-    // 观感由组内行高收拢（measure −mmSpacing）+气泡钻入（48pt）共同成型。
-    // mmAvatarRideDepth 语义=XOS ReverseAvatarDownOffset（±100 微调偏置，默认 0
-    // 即标准冒顶 8pt）。
+    // 骑行 = 头像贴 cell 顶（targetY = offset，默认 0=原生贴顶位）+ 气泡钻入头像列
+    // （applyOwnLayout rideInset）→ 头像悬于钻入气泡的上外角，即「骑」。零冒出：
+    // 不压上一行（XOS 的 -8 冒出依赖其行高体系 ±gap 兜底，未复刻；用户要悬浮感
+    // 自调 offset 负值，压线风险自担）。mmAvatarRideDepth 语义=Y 微调偏置（±100 钳位）。
     double offset = olClamp([MsgMergeConfig shared].mmAvatarRideDepth, 100);
-    double targetY = -8.0 + offset;
+    double targetY = offset;
     CGPoint p = head.frame.origin;
     // 野值域守卫：微信过渡布局极端值一律跳过（进聊天/复用瞬间，实证 y=-46 藏匿
     // 位残留；绝对语义下过渡读数不参与计算，写前宽域 [−60,60] 只挡真正的野值）
