@@ -916,16 +916,16 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 static void applyRideY(UIView *head) {
     static void *kRideLastY = &kRideLastY;
     if (!head || head.hidden) return;
-    // 骑行 = 头像贴 cell 顶（targetY = offset，默认 0=原生贴顶位）+ 气泡钻入头像列
-    // （applyOwnLayout rideInset）→ 头像悬于钻入气泡的上外角，即「骑」。零冒出：
-    // 不压上一行（XOS 的 -8 冒出依赖其行高体系 ±gap 兜底，未复刻；用户要悬浮感
-    // 自调 offset 负值，压线风险自担）。mmAvatarRideDepth 语义=Y 微调偏置（±100 钳位）。
+    // 骑行 = 头像相对下压（targetY = 原生y + offset，XOS GapReduce 守恒设计：头像
+    // y+gap 与行高补偿同键，总行高不变零冒出零压线）+ 气泡钻入头像列（rideInset）
+    // → 头像骑坐进气泡左上角。默认 10 = XOS GroupGapReduce 群聊值。
+    // mmAvatarRideDepth 语义=下压深度（±100 钳位），负=上浮。
     double offset = olClamp([MsgMergeConfig shared].mmAvatarRideDepth, 100);
-    double targetY = offset;
     CGPoint p = head.frame.origin;
+    double targetY = p.y + offset;
     // 野值域守卫：微信过渡布局极端值一律跳过（进聊天/复用瞬间，实证 y=-46 藏匿
-    // 位残留；绝对语义下过渡读数不参与计算，写前宽域 [−60,60] 只挡真正的野值）
-    if (p.y < -60 || p.y > 60) return;
+    // 位残留；相对语义下过渡读数会被放大写歪，原生头像 y 恒在 [0,60]）
+    if (p.y < 0 || p.y > 60) return;
     NSNumber *lastWrote = objc_getAssociatedObject(head, kRideLastY);
     if (lastWrote && fabs(p.y - [lastWrote doubleValue]) < 0.5) return;
     head.frame = CGRectMake(p.x, targetY, head.frame.size.width, head.frame.size.height);
