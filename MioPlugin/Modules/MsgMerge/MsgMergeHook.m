@@ -12,8 +12,9 @@
 //    测量层接管（BubbleBox 同款行高杠杆）：measure: 对组内非组尾消息 −mmSpacing
 //    （下限 24），组尾/Single 原生直通；切片首/中片无缝直通（末片才含底部空隙）。
 //    昵称区回收走 isShowChatRoomDisplayName 判定翻转（常驻，原生按无昵称行
-//    测量+布局），无任何 N 补偿。时间行精准隐藏（用户需求）：ChatTimeViewModel
-//    cellHeight 钩，夹在合并组内的时间行高度归零（视觉等效源头不插入）。
+//    测量+布局），无任何 N 补偿。时间行断组修正：refreshIndex 扫 nodeArray，
+//    发现「DB 判一组、微信却插行」的矛盾行时以行为权威断组符修正切口两侧
+//    entry 的 pos（组首恢复头像，行保留原生显示）——判定服从微信行，矛盾根除。
 //    微信对聊天表行变更全部走 reloadData（环形缓冲实证），新消息路径只 rebuild
 //    +标脏，表格一个字不碰。
 //
@@ -28,7 +29,6 @@
 //    CommonMessageCellView         layoutInternal / updateNodeStatus（渲染应用）
 //    CommonMessageViewModel        measure:（组内间距收拢）
 //                                  isShowChatRoomDisplayName（昵称判定，常驻）
-//    ChatTimeViewModel             cellHeight（组内时间行精准隐藏，用户需求）
 //    CMessageMgr                   onServiceInit（mgr 早捕获）/ AddMsg:MsgWrap: /
 //                                  AsyncOnAddMsg:MsgWrap:（新消息联动）
 //
@@ -61,7 +61,6 @@ static IMP orig_CMCellView_layoutInternal       = NULL;
 static IMP orig_CMCellView_updateNodeStatus     = NULL;
 static IMP orig_CMVM_measure                    = NULL;
 static IMP orig_CMVM_isShowChatRoomDisplayName  = NULL;
-static IMP orig_ChatTimeVM_cellHeight           = NULL;   // 组内时间行精准隐藏（链回 MsgTime 垫片→原生）
 static IMP orig_CMMsgMgr_AddMsg                 = NULL;   // 收发总管道（发送侧不走 AsyncOnAddMsg）
 static IMP orig_CMMsgMgr_onServiceInit          = NULL;   // 服务初始化（mgr 早捕获挂点）
 static IMP orig_CMMsgMgr_AsyncOnAddMsg          = NULL;
@@ -846,33 +845,6 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
     }
 }
 
-// —— ChatTimeViewModel：组内时间行精准隐藏 ——
-
-// ------------------------------------------------------------
-// -[ChatTimeViewModel cellHeight]（用户需求：合并条件内的时间行不显示）：
-// 时间行夹在满足 shouldJoinDB 的两条消息之间 → 高度归零（视觉等效「源头不
-// 插入」；真源头在混淆的 build 流程不可稳定 hook）。判定委托 Model（集合
-// O(1)，miss 现场扫 nodeArray 邻居兜底）。链式垫片：MessageTime 模块已挂
-// 本方法（Runtime 直换），bbSwap 存的 orig 即 MsgTime 垫片，hideChatTime
-// 全局隐藏与其自然共存；mmEnable 关闭时全直通。
-// ------------------------------------------------------------
-static CGFloat repl_ChatTimeVM_cellHeight(id self, SEL _cmd) {
-    IMP o = orig_ChatTimeVM_cellHeight;
-    CGFloat h = o ? ((CGFloat (*)(id, SEL))o)(self, _cmd) : 0;
-    @try {
-        MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        if (!cfg.mmEnable) return h;
-        if (!g_curChatVC) return h;                 // 非聊天页/上下文残留不干预
-        NSArray *arr = g_currentNodeArray;
-        if (arr.count == 0) return h;
-        if ([[BBMergeModel shared] shouldHideTimeVM:self nodeArray:arr]) return 0.001;
-        return h;
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[Time] cellHeight exception: %@", e.reason);
-        return h;
-    }
-}
-
 // —— CommonMessageCellView：渲染应用 ——
 
 static void repl_CMCellView_layoutInternal(id self, SEL _cmd) {
@@ -1053,30 +1025,6 @@ static BOOL impIsForeign(IMP cur) {
             }
         } else {
             WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageViewModel isShowChatRoomDisplayName not found");
-        }
-    }
-
-    // ③c 时间行高度归零钩（组内精准隐藏，用户需求）：ChatTimeViewModel.cellHeight
-    //     已被 MessageTime 模块挂载——IMP 属本 dylib，impIsForeign=NO 正常接管，
-    //     orig 链回 MsgTime 垫片→原生，双模块共存。
-    {
-        SEL selH = NSSelectorFromString(@"cellHeight");
-        Class tcls = objc_getClass("ChatTimeViewModel");
-        if (tcls && [tcls instancesRespondToSelector:selH]) {
-            Method m = class_getInstanceMethod(tcls, selH);
-            IMP cur = m ? method_getImplementation(m) : NULL;
-            if (impIsForeign(cur)) {
-                Dl_info info;
-                dladdr((void *)cur, &info);
-                WPLog(@"MsgMerge", @"[Hook] ⊘ ChatTimeViewModel cellHeight 归属 %s，让位不挂",
-                      info.dli_fname ?: "?");
-            } else {
-                orig_ChatTimeVM_cellHeight = bbSwap(tcls, selH, (IMP)repl_ChatTimeVM_cellHeight,
-                                                    "ChatTimeViewModel");
-                WPLog(@"MsgMerge", @"[Hook] ✓ ChatTimeViewModel cellHeight (组内时间行精准隐藏)");
-            }
-        } else {
-            WPLog(@"MsgMerge", @"[Hook] ✗ ChatTimeViewModel cellHeight not found");
         }
     }
 

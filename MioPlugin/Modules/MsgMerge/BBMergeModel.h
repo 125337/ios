@@ -20,7 +20,8 @@
 //  刷新语义（BubbleBox scheduleUpdateNodes:scroll: 精髓——滚动中零可见变更）：
 //  refreshIndex 返回的 changed 只统计「屏上已渲染 lid 的 pos 实变」（None→有值
 //  或值翻转）；新 lid 进索引不计——微信建行首测查表即真，无需事后刷新，滚动
-//  场景 changed 恒 0，永不跳动。时间行精准隐藏（见 shouldHideTimeVM:）。
+//  场景 changed 恒 0，永不跳动。时间行断组修正（微信插行=权威断组符，
+//  矛盾行切口两侧 pos 重算，见 applyTimeNodeBreaksWithNodeArray:）。
 //
 //  refreshIndex 触发点（事件驱动）：切会话/进聊天/新消息轮询确认追加/滚动限频
 //  （100ms）/读侧 None-miss 限频保鲜（0.15s）/配置指纹变化。幂等守卫防风暴。
@@ -82,13 +83,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 当前配置是否与上次刷新时的分组配置指纹不一致（O(1)，读侧保鲜判断用）
 - (BOOL)configFingerprintChanged;
-
-/// 时间行隐藏判定（ChatTimeViewModel cellHeight 钩调用）：时间行夹在满足
-/// shouldJoinDB 的两条消息之间 → cellHeight 归零（视觉等效「源头不插入」，
-/// 数据层零改动；原生阈值更敏感的时间行保留）。集合 O(1) 命中（refreshIndex
-/// 建表前重建）；miss 时现场扫 nodeArray 邻居判定并回填（滚动新批次窗口期
-/// 兜底，时序无关恒正确）。
-- (BOOL)shouldHideTimeVM:(nullable id)vm nodeArray:(nullable NSArray *)nodeArray;
 
 /// 清空模型（切会话时调用，防跨会话 localID 撞号）
 - (void)clear;

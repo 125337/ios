@@ -24,11 +24,13 @@
 //    刷新语义（BubbleBox scheduleUpdateNodes:scroll: 精髓）：refreshIndex 返回
 //    的 changed 只统计「屏上已渲染 lid 的 pos 实变」；新 lid 进索引不计——
 //    微信建行首测查表即真，无需事后刷新，滚动场景 changed 恒 0，永不跳动。
-//    时间行精准隐藏（用户需求）：夹在满足 shouldJoinDB 消息间的时间行
-//    cellHeight 归零——视觉等效「源头不插入」（真源头在混淆的 build 流程，
-//    不可稳定 hook），数据层零改动；前后消息不满足合并条件的时间行保留。
-//    判定集合随 refreshIndex 重建（屏上范围，建表前就位），滚动新批次由
-//    shouldHideTimeVM 现场扫邻居兜底回填。
+//    时间行断组修正（BubbleBox 同哲学）：微信插行基准=距上一条时间行 5min，
+//    与本插件 299s 相邻窗错位 → 会出现「DB 判一组、微信却插行」的矛盾行。
+//    refreshIndex 扫 nodeArray 发现矛盾行（前后消息 shouldJoinDB=YES）时，
+//    以行为权威断组符修正索引：行下消息切 joinPrev 变组首、行上消息切
+//    joinNext 变组尾——仅需重算切口两侧两条 entry 的 pos（组内其他相邻对
+//    不变），行本身保留原生显示。修正先于 changed 统计 → 屏上 pos 实变
+//    自然计入 changed 触发可见刷新（罕见且只涉两行）。
 //
 //  长文本切片合一（MioPlugin(82) 实证）：一条消息（同 localID 连续多节点）
 //  仅一个 entry，lid 列表构建时去重；切片所有 vm 查表同 pos。
@@ -165,7 +167,6 @@ static id dbFindValidMsg(long long startLID, int direction) {
 
 @implementation BBMergeModel {
     NSMutableDictionary<NSNumber *, BBMergeEntry *> *_index;   // localID → entry
-    NSMutableSet<NSNumber *> *_hiddenTimeKeys;   // 组内时间行 createTime 集合（cellHeight 归零判定）
     NSArray *_lastArray;      // 上次刷新的数组引用（指针身份失效检测）
     NSUInteger _lastCount;
     NSString *_lastChatName;
@@ -185,7 +186,6 @@ static id dbFindValidMsg(long long startLID, int direction) {
     self = [super init];
     if (self) {
         _index = [NSMutableDictionary dictionary];
-        _hiddenTimeKeys = [NSMutableSet set];
     }
     return self;
 }
@@ -360,7 +360,6 @@ static id dbFindValidMsg(long long startLID, int direction) {
     BOOL active = cfg.mmEnable
                && !(cfg.mmOnlyRoom && ![chatName hasSuffix:@"@chatroom"])
                && nodeArray.count > 0;
-    if (!active) [_hiddenTimeKeys removeAllObjects];
     if (active) {
         // ① 屏上增量 fill：无 entry 的 lid 从存储层补建（DB 未就绪时零缓存空转，
         //    DB 捕获后 invalidateRebuildGuard 重算自愈）
@@ -371,8 +370,8 @@ static id dbFindValidMsg(long long startLID, int direction) {
         }
         // ② 历史方向预扩：屏上最小 lid 向 −1 预建（滚动批次插入前索引已就位）
         extended = [self extendHistoricalFromMinLid:lids.count ? lids.firstObject.longLongValue : 0];
-        // ③ 组内时间行收集：建表前重建集合，首测 cellHeight O(1) 命中
-        [self collectHiddenTimeKeysFromNodeArray:nodeArray];
+        // ③ 时间行断组修正：微信插行=权威断组符，矛盾行切口两侧 pos 重算
+        [self applyTimeNodeBreaksWithNodeArray:nodeArray];
     }
 
     // changed 只统计「屏上已渲染 lid 的 pos 实变」（None→有值 或 值翻转）：
@@ -490,15 +489,18 @@ static id dbFindValidMsg(long long startLID, int direction) {
 }
 
 // ============================================================
-// MARK: - 组内时间行精准隐藏（用户需求）
+// MARK: - 时间行断组修正
 // ============================================================
 
-/// 组内时间行收集（数据源重建，refreshIndex 建表前调用）：时间行节点（无 wrap
-/// + 有 createTime）前后最近消息 wrap 满足 shouldJoinDB → 该时间行 cellHeight
-/// 归零（视觉等效「源头不插入」；原生阈值更敏感的时间行保留）。屏上范围扫描，
-/// 滚动新批次的窗口期由 shouldHideTimeVM 现场判定兜底。
-- (void)collectHiddenTimeKeysFromNodeArray:(NSArray *)nodeArray {
-    [_hiddenTimeKeys removeAllObjects];
+/// 时间行断组修正（BubbleBox 同哲学：微信插行 = 权威断组符，refreshIndex
+/// 建表前调用）：扫描 nodeArray 时间行节点（无 wrap + 有 createTime），其
+/// 前后最近消息 wrap 若被 DB 判定连组（shouldJoinDB=YES，而微信却插了行
+/// ——两套插行基准错位）→ 以行为准切口：行下消息切 joinPrev 变组首、行上
+/// 消息切 joinNext 变组尾。pos 是上下邻接的纯函数，切口只影响两侧两条消息
+/// ——仅需修正这两条 entry；组内其他相邻对与更远成员的 pos 不变。行本身
+/// 保留原生显示（断组后行有信息价值）。修正发生在 changed 统计之前 → 屏上
+/// pos 实变自然计入 changed，触发一次仅涉两行的可见刷新。
+- (void)applyTimeNodeBreaksWithNodeArray:(NSArray *)nodeArray {
     NSInteger n = (NSInteger)nodeArray.count;
     for (NSInteger i = 0; i < n; i++) {
         id node = nodeArray[i];
@@ -508,42 +510,22 @@ static id dbFindValidMsg(long long startLID, int direction) {
         id prevW = nil, nextW = nil;
         for (NSInteger j = i - 1; j >= 0 && !prevW; j--) prevW = wrapOfNode(nodeArray[j]);
         for (NSInteger j = i + 1; j < n && !nextW; j++) nextW = wrapOfNode(nodeArray[j]);
-        if (prevW && nextW && [[self class] shouldJoinDB:prevW wrapB:nextW]) {
-            [_hiddenTimeKeys addObject:@(t)];
-        }
+        if (!prevW || !nextW) continue;
+        if (![[self class] shouldJoinDB:prevW wrapB:nextW]) continue;   // 行与判定一致
+        long long prevLid = localIDOf(prevW);
+        long long nextLid = localIDOf(nextW);
+        BBMergeEntry *pe = prevLid > 0 ? _index[@(prevLid)] : nil;
+        BBMergeEntry *ne = nextLid > 0 ? _index[@(nextLid)] : nil;
+        if (!pe || !ne) continue;                       // 未 fill（DB 未就绪）：下次刷新自愈
+        // prev 切 joinNext：First(joinPrev=NO,joinNext=YES)→Single；Middle(YES,YES)→Last
+        if (pe.pos == MOMergePositionFirst)       pe.pos = MOMergePositionSingle;
+        else if (pe.pos == MOMergePositionMiddle) pe.pos = MOMergePositionLast;
+        // next 切 joinPrev：Last(joinPrev=YES,joinNext=NO)→Single；Middle(YES,YES)→First
+        if (ne.pos == MOMergePositionLast)        ne.pos = MOMergePositionSingle;
+        else if (ne.pos == MOMergePositionMiddle) ne.pos = MOMergePositionFirst;
+        WPLog(@"MsgMerge", @"[Time] break t=%lld: lid %lld pos→%ld, lid %lld pos→%ld",
+              t, prevLid, (long)pe.pos, nextLid, (long)ne.pos);
     }
-    WPLog(@"MsgMerge", @"[Time] collected=%lu", (unsigned long)_hiddenTimeKeys.count);
-}
-
-/// 时间行隐藏判定（ChatTimeViewModel cellHeight 钩调用）：集合 O(1) 命中；
-/// miss 时现场扫 nodeArray 找该时间行节点的前后消息判定并回填（滚动新批次
-/// 微信先记账、refreshIndex 未及的窗口期兜底，时序无关恒正确）。
-- (BOOL)shouldHideTimeVM:(id)vm nodeArray:(NSArray *)nodeArray {
-    if (!vm) return NO;
-    MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    if (!cfg.mmEnable) return NO;
-    if (cfg.mmOnlyRoom && !(g_dbTalker.length > 0 && [g_dbTalker hasSuffix:@"@chatroom"])) return NO;
-    long long t = timeOfTimeNode(vm);
-    if (t <= 0) return NO;
-    if ([_hiddenTimeKeys containsObject:@(t)]) return YES;
-    // 现场判定 + 回填
-    NSInteger n = (NSInteger)nodeArray.count;
-    if (n == 0 || !g_dbMgr || !g_dbTalker) return NO;
-    NSInteger idx = -1;
-    for (NSInteger i = 0; i < n; i++) {
-        id node = nodeArray[i];
-        if (wrapOfNode(node)) continue;                 // 消息节点
-        if (safeValue(node, @"viewModel") == vm) { idx = i; break; }
-        if (timeOfTimeNode(node) == t) { idx = i; break; }
-    }
-    if (idx < 0) return NO;
-    id prevW = nil, nextW = nil;
-    for (NSInteger j = idx - 1; j >= 0 && !prevW; j--) prevW = wrapOfNode(nodeArray[j]);
-    for (NSInteger j = idx + 1; j < n && !nextW; j++) nextW = wrapOfNode(nodeArray[j]);
-    BOOL hide = prevW && nextW && [[self class] shouldJoinDB:prevW wrapB:nextW];
-    if (hide) [_hiddenTimeKeys addObject:@(t)];
-    WPLog(@"MsgMerge", @"[Time] live t=%lld hide=%d idx=%ld", t, hide, (long)idx);
-    return hide;
 }
 
 // ============================================================
@@ -572,7 +554,6 @@ static id dbFindValidMsg(long long startLID, int direction) {
     g_dbTalker = nil;
     _coveredMinLid = 0;
     _index = [NSMutableDictionary dictionary];
-    [_hiddenTimeKeys removeAllObjects];
 }
 
 @end
