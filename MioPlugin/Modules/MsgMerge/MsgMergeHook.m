@@ -26,7 +26,9 @@
 //  钩子清单（全部 bbSwap 直换，公共基类单点）：
 //    BaseMsgContentViewController  viewDidLoad / viewWillAppear: / viewDidAppear: /
 //                                  scrollViewDidScroll:（会话跟踪 + 滚动保鲜）
-//    CommonMessageCellView         layoutInternal / updateNodeStatus（渲染应用）
+//    CommonMessageCellView         layoutSubviews（渲染应用，XOS 同款挂点：原生
+//                                  layoutSubviews 跑完后置重排——UIView 布局链最终
+//                                  提交点，写帧天然站住，无后续覆盖）
 //    CommonMessageViewModel        measure:（组内间距收拢）
 //                                  isShowChatRoomDisplayName（昵称判定，常驻）
 //    CMessageMgr                   onServiceInit（mgr 早捕获）/ AddMsg:MsgWrap: /
@@ -57,19 +59,14 @@ static IMP orig_BaseMsgContentVC_viewDidLoad    = NULL;
 static IMP orig_BaseMsgContentVC_viewWillAppear = NULL;
 static IMP orig_BaseMsgContentVC_viewDidAppear  = NULL;
 static IMP orig_BMCVC_scrollViewDidScroll       = NULL;
-static IMP orig_CMCellView_layoutInternal       = NULL;
-static IMP orig_CMCellView_updateNodeStatus     = NULL;
+static IMP orig_CMCellView_layoutSubviews       = NULL;   // 渲染应用（XOS 同款挂点）
 static IMP orig_CMVM_measure                    = NULL;
 static IMP orig_CMVM_isShowChatRoomDisplayName  = NULL;
 static IMP orig_CMMsgMgr_AddMsg                 = NULL;   // 收发总管道（发送侧不走 AsyncOnAddMsg）
 static IMP orig_CMMsgMgr_onServiceInit          = NULL;   // 服务初始化（mgr 早捕获挂点）
 static IMP orig_CMMsgMgr_AsyncOnAddMsg          = NULL;
 
-// 骑气泡写帧路径标记：layoutInternal 垫片执行中=YES（同步写，布局末端无后续覆盖）；
-// updateNodeStatus 路径异步下一拍兜底重申（幂等防漂移）
-static BOOL g_inLayoutInternal = NO;
-static void applyRideY(UIView *head);   // 定义见渲染应用段（layoutInternal 垫片前）
-static void rideDumpHeads(UIView *v, int depth, NSMutableString *out, int *cnt);   // 定义见 applyRideY 后
+static void applyRideY(UIView *head);   // 定义见渲染应用段（layoutSubviews 垫片前）
 
 // —— 会话上下文 ——
 static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chatroom id，私聊=对端 id）
@@ -217,7 +214,7 @@ static void resetAllMeasureCaches(void) {
 // resetLayoutCache + cellView setNeedsLayout。反编译实证 updateAllNodes 的
 // 刷新块走 _dispatch_async(main_q)——刷新扔到下一 runloop，不占触发点帧。
 // 历史滚动场景：微信把滚动加载的历史节点补进数组迟到 ~1s，补齐瞬间已渲染
-// cell 的固化测量值与布局不会自愈，此处对可见消息 cellView 标脏，layoutInternal
+// cell 的固化测量值与布局不会自愈，此处对可见消息 cellView 标脏，layoutSubviews
 // 钩子下轮按新标志重排（None 也走 applyMergeToCellView 的对称还原路径）。
 // 刻意不碰 UITableView 任何 API——语音管线抖动期 begin/endUpdates 崩溃定论；
 // 行高若未被原生布局链重询，滚动复用时自愈。
@@ -251,7 +248,7 @@ static void refreshFlaggedCellsSync(void) {
                 [st removeLastObject];
                 NSString *cn = NSStringFromClass([v class]);
                 if ([cn containsString:@"MessageCellView"]) {
-                    [v setNeedsLayout];   // 下轮 layoutInternal 按新标志重排/还原
+                    [v setNeedsLayout];   // 下轮 layoutSubviews 按新标志重排/还原
                     continue;
                 }
                 for (UIView *s in v.subviews) [st addObject:s];
@@ -494,11 +491,11 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //     （固定行高内挪 y 必守恒，项目定论；间距收拢走 measure: 测量层接管）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
 //   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
-// 自摆范围：横向 x（全体白名单行）+ 头像可见行 y 钉顶（骑气泡，mmAvatarRide）。
+// 自摆范围：横向 x（全体白名单行）+ 头像可见行 y 下压（骑气泡，mmAvatarRide）。
 // 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
 //   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
-//   骑行 = 绝对钉顶 targetY=-8+mmAvatarRideDepth（±100 钳位，XOS ReverseAvatarDownOffset
-//   同款语义），0=标准冒顶 8pt；y 写帧走 applyRideY（layoutInternal 末端/下一拍），
+//   骑行 = 相对下压 targetY=原生y+mmAvatarRideDepth（±100 钳位，XOS GapReduce
+//   守恒语义，默认 10）；y 写帧走 applyRideY（layoutSubviews 末端同步），
 //   本函数只管 x/宽。固定行高内挪 y 守恒，行高/测量层不碰。
 // 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
 //   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
@@ -534,7 +531,7 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
     }
     if (![head isKindOfClass:[UIView class]] || ![cont isKindOfClass:[UIView class]]) return;
 
-    // 首过建基准（此刻原生 layoutInternal 刚跑完，frame 为原生值）
+    // 首过建基准（此刻原生 layoutSubviews 刚跑完，frame 为原生值）
     NSValue *bHeadV = objc_getAssociatedObject(cellView, kOLBaseHeadF);
     if (!bHeadV) {
         bHeadV = [NSValue valueWithCGRect:head.frame];
@@ -642,7 +639,7 @@ static unsigned long long vmSplitPosition(id vm) {
     return *(unsigned long long *)((char *)(__bridge void *)vm + ivar_getOffset(iv));
 }
 
-// —— 合并渲染应用（layoutInternal/updateNodeStatus 钩调）——
+// —— 合并渲染应用（layoutSubviews 钩调）——
 
 static void applyMergeToCellView(id cellView) {
     @try {
@@ -688,31 +685,15 @@ static void applyMergeToCellView(id cellView) {
         applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible, pos);
 
         // 骑气泡：写帧必须晚于 applyOwnLayout（其 x 写帧基于原生基准重建 frame，
-        // y 取原生值，先写骑行 y 会被它抹掉）且晚于微信本轮布局链——updateNodeStatus
-        // 时机写入被后续布局链重置回原生 y（实证：日志 y=2.0→10.0 每轮循环，视觉
-        // 恒 2）。双路径：layoutInternal 垫片内同步写（布局末端，XOS 实证无后续
-        // 覆盖）；updateNodeStatus 路径主队列下一拍重申（幂等兜底）。applyRideY
-        // 自持幂等基准：已骑跳过、被微信重置重写、cell 复用新行新基准。
+        // y 取原生值，先写骑行 y 会被它抹掉）。挂 layoutSubviews 后（XOS 同款）
+        // 本函数整体在原生布局链最终提交点之后执行——同步写帧天然站住，无后续
+        // 覆盖（此前 updateNodeStatus 异步下一拍/layoutInternal 双路径对抗全部
+        // 随迁移删除）。applyRideY 自持幂等基准：已骑跳过、被微信重置重写、cell
+        // 复用新行新基准。
         if (cfg.mmAvatarRide && headVisible) {
             UIView *headNow = safeCall(cellView, "getHeadImageView");
             if ([headNow isKindOfClass:[UIView class]]) {
-                static int s_rideDbg = 0;
-                BOOL dbg = (s_rideDbg < 10);
-                if (dbg) {
-                    NSMutableString *hs = [NSMutableString string];
-                    int cnt = 0;
-                    rideDumpHeads(cellView, 0, hs, &cnt);
-                    WPLog(@"MsgMerge", @"[RIDE-dbg] cell=%@ 直接head=%p hid=%d 树内MMHeadImageView×%d%@",
-                        NSStringFromClass([cellView class]), headNow, headNow.hidden, cnt, hs);
-                    s_rideDbg++;
-                }
-                if (g_inLayoutInternal) {
-                    double yB = headNow.frame.origin.y;
-                    applyRideY(headNow);
-                    if (dbg) WPLog(@"MsgMerge", @"[RIDE-dbg] sync y %.1f→%.1f（写后读回）", yB, headNow.frame.origin.y);
-                } else {
-                    dispatch_async(dispatch_get_main_queue(), ^{ applyRideY(headNow); });
-                }
+                applyRideY(headNow);
             }
         }
 
@@ -911,8 +892,7 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 // —— CommonMessageCellView：渲染应用 ——
 
 // 骑气泡写帧（幂等）：关联对象记上轮写入值——已骑未重置跳过、被微信重置重写、
-// cell 复用后新行新基准，杜绝逐轮累加漂移。同步（layoutInternal 末端）与异步
-// （下一拍重申）两路径共用。
+// cell 复用后新行新基准，杜绝逐轮累加漂移。layoutSubviews 垫片内同步写（布局末端）。
 static void applyRideY(UIView *head) {
     static void *kRideLastY = &kRideLastY;
     if (!head || head.hidden) return;
@@ -930,50 +910,18 @@ static void applyRideY(UIView *head) {
     if (lastWrote && fabs(p.y - [lastWrote doubleValue]) < 0.5) return;
     head.frame = CGRectMake(p.x, targetY, head.frame.size.width, head.frame.size.height);
     objc_setAssociatedObject(head, kRideLastY, @(targetY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    WPLog(@"MsgMerge", @"[RIDE-写帧] y=%.1f→%.1f sync=%d", p.y, targetY, g_inLayoutInternal);
+    WPLog(@"MsgMerge", @"[RIDE-写帧] y=%.1f→%.1f", p.y, targetY);
 }
 
-// —— RIDE 诊断（帽限，验证后拆除）——
-// 全树浅扫 MMHeadImageView 实例：判定 getHeadImageView 返回的与视觉头像是否同一视图
-static void rideDumpHeads(UIView *v, int depth, NSMutableString *out, int *cnt) {
-    if (!v || depth > 4 || *cnt >= 6) return;
-    if ([v isKindOfClass:NSClassFromString(@"MMHeadImageView")]) {
-        [out appendFormat:@"\n      %@ hid=%d a=%.1f sup=%@", v,
-            v.hidden, v.alpha, NSStringFromClass([v.superview class])];
-        (*cnt)++;
-    }
-    for (UIView *s in v.subviews) rideDumpHeads(s, depth + 1, out, cnt);
-}
-
-static void repl_CMCellView_layoutInternal(id self, SEL _cmd) {
-    // 上轮末端写帧存活性实证：enter 时 orig 未跑，读回的是上轮垫片末端状态——
-    // 上轮写了 10 而此处读回 2 = 垫片之外有人重置；读回 10 = 站住（问题在别处）
-    // 实证 112 日志：enter y=10 恒定（站住），视觉不变 → 嫌疑收窄至 frame→视觉
-    // 映射被吃（transform/anchorPoint），此处全量读出定音
-    static int s_enterDbg = 0;
-    if (s_enterDbg < 10) {
-        UIView *h = safeCall(self, "getHeadImageView");
-        if ([h isKindOfClass:[UIView class]]) {
-            CGAffineTransform t = h.transform;
-            CGPoint c = h.center;
-            CGSize bsz = h.bounds.size;
-            CGPoint ap = h.layer.anchorPoint;
-            CGPoint pos = h.layer.position;
-            WPLog(@"MsgMerge", @"[RIDE-dbg] enter y=%.1f hid=%d t=(%.2f,%.2f,%.2f,%.2f,%.2f,%.2f) center=(%.1f,%.1f) bsz=(%.1f,%.1f) ap=(%.2f,%.2f) pos=(%.1f,%.1f)",
-                h.frame.origin.y, h.isHidden,
-                t.a, t.b, t.c, t.d, t.tx, t.ty,
-                c.x, c.y, bsz.width, bsz.height, ap.x, ap.y, pos.x, pos.y);
-            s_enterDbg++;
-        }
-    }
-    g_inLayoutInternal = YES;
-    ((void (*)(id, SEL))orig_CMCellView_layoutInternal)(self, _cmd);
-    applyMergeToCellView(self);
-    g_inLayoutInternal = NO;
-}
-
-static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_CMCellView_updateNodeStatus)(self, _cmd);
+// ------------------------------------------------------------
+// -[CommonMessageCellView layoutSubviews]（XOS 同款挂点）：原生布局跑完后置应用。
+// layoutSubviews 是 UIView 布局链最终提交点——垫片内同步写帧天然站住，无后续覆盖
+// （此前 layoutInternal/updateNodeStatus 双路径 + 异步下一拍 + g_inLayoutInternal
+// 旗标的整套对抗机制随迁移删除）。CommonMessageCellView 未实现该方法时 bbSwap
+// 复制下沉（class_addMethod）后替换，父类（UIView）实现不受污染。
+// ------------------------------------------------------------
+static void repl_CMCellView_layoutSubviews(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_CMCellView_layoutSubviews)(self, _cmd);
     applyMergeToCellView(self);
 }
 
@@ -1084,16 +1032,13 @@ static BOOL impIsForeign(IMP cur) {
         }
     }
 
-    // ② 消息 cell 渲染钩子（CommonMessageCellView）
+    // ② 消息 cell 渲染钩子（CommonMessageCellView，XOS 同款 layoutSubviews 挂点）
     cls = objc_getClass("CommonMessageCellView");
     if (cls) {
-        orig_CMCellView_layoutInternal = bbSwap(cls, @selector(layoutInternal),
-                                                (IMP)repl_CMCellView_layoutInternal,
+        orig_CMCellView_layoutSubviews = bbSwap(cls, @selector(layoutSubviews),
+                                                (IMP)repl_CMCellView_layoutSubviews,
                                                 "CommonMessageCellView");
-        orig_CMCellView_updateNodeStatus = bbSwap(cls, @selector(updateNodeStatus),
-                                                  (IMP)repl_CMCellView_updateNodeStatus,
-                                                  "CommonMessageCellView");
-        WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageCellView layoutInternal/updateNodeStatus");
+        WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageCellView layoutSubviews（渲染应用，XOS 同款）");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageCellView not found");
     }
