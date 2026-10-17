@@ -687,12 +687,13 @@ static void applyMergeToCellView(id cellView) {
         // 骑气泡：写帧必须晚于 applyOwnLayout（其 x 写帧基于原生基准重建 frame，
         // y 取原生值，先写骑行 y 会被它抹掉）。挂 layoutSubviews 后（XOS 同款）
         // 本函数整体在原生布局链最终提交点之后执行——同步写帧天然站住，无后续
-        // 覆盖（此前 updateNodeStatus 异步下一拍/layoutInternal 双路径对抗全部
-        // 随迁移删除）。applyRideY 自持幂等基准：已骑跳过、被微信重置重写、cell
-        // 复用新行新基准。
+        // 覆盖。侧判定（XOS 真身双开关之一）：只骑头像在左半屏的行（对方侧）——
+        // 我方（右半屏）组首头像原生隐藏，钉顶 −8 会露出黑色占位块（113 实证）。
         if (cfg.mmAvatarRide && headVisible) {
             UIView *headNow = safeCall(cellView, "getHeadImageView");
-            if ([headNow isKindOfClass:[UIView class]]) {
+            double W = [UIScreen mainScreen].bounds.size.width;
+            if ([headNow isKindOfClass:[UIView class]] &&
+                ((UIView *)headNow).frame.origin.x < W * 0.5) {
                 applyRideY(headNow);
             }
         }
