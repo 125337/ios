@@ -20,8 +20,10 @@
 //  刷新语义（BubbleBox scheduleUpdateNodes:scroll: 精髓——滚动中零可见变更）：
 //  refreshIndex 返回的 changed 只统计「屏上已渲染 lid 的 pos 实变」（None→有值
 //  或值翻转）；新 lid 进索引不计——微信建行首测查表即真，无需事后刷新，滚动
-//  场景 changed 恒 0，永不跳动。时间行断组修正（微信插行=权威断组符，
-//  矛盾行切口两侧 pos 重算，见 applyTimeNodeBreaksWithNodeArray:）。
+//  场景 changed 恒 0，永不跳动。
+//  邻接判定主路径消费节点数组（BubbleBox isSame:node: 同构）：相邻节点是
+//  ChatTimeViewModel（nodeArray 时间行节点，探针实证）= 微信插行权威断组符，
+//  判定与微信插行同源（DB 299s 基准错位在源头消解，无后置修正 pass）。
 //
 //  refreshIndex 触发点（事件驱动）：切会话/进聊天/新消息轮询确认追加/滚动限频
 //  （100ms）/读侧 None-miss 限频保鲜（0.15s）/配置指纹变化。幂等守卫防风暴。

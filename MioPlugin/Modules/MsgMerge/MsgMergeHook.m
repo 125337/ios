@@ -739,8 +739,11 @@ static void applyMergeToCellView(id cellView) {
 // —— BaseMsgContentViewController：会话跟踪与保鲜触发 ——
 
 static void repl_BaseMsgContentVC_viewDidLoad(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
+    // 数据先行（BubbleBox 时机对齐）：索引在微信首屏建表之前就位——orig 之后
+    // 刷新会错过首屏首测（None 窗口=进聊天闪/骑行失效的根源）。
+    // findChatTableView 有 isViewLoaded 守卫，此刻触发表查找安全空转不递归。
     updateChatContext(self);
+    ((void (*)(id, SEL))orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
     // 定位锚点：本日志出现 = 聊天页 viewDidLoad 垫片完整跑完（卡死判别用：
     // 停在本行之前 = 卡在微信自身 viewDidLoad；之后无 [Model] = 卡在测量链）
     WPLog(@"MsgMerge", @"[Ctx] chatVC viewDidLoad done");
