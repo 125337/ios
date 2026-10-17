@@ -681,8 +681,20 @@ static void applyMergeToCellView(id cellView) {
         if (cfg.mmAvatarRide && headVisible) {
             UIView *headNow = safeCall(cellView, "getHeadImageView");
             if ([headNow isKindOfClass:[UIView class]]) {
+                static int s_rideDbg = 0;
+                BOOL dbg = (s_rideDbg < 10);
+                if (dbg) {
+                    NSMutableString *hs = [NSMutableString string];
+                    int cnt = 0;
+                    rideDumpHeads(cellView, 0, hs, &cnt);
+                    WPLog(@"MsgMerge", @"[RIDE-dbg] cell=%@ 直接head=%p hid=%d 树内MMHeadImageView×%d%@",
+                        NSStringFromClass([cellView class]), headNow, headNow.hidden, cnt, hs);
+                    s_rideDbg++;
+                }
                 if (g_inLayoutInternal) {
-                    applyRideY(headNow);   // 布局末端同步写
+                    double yB = headNow.frame.origin.y;
+                    applyRideY(headNow);
+                    if (dbg) WPLog(@"MsgMerge", @"[RIDE-dbg] sync y %.1f→%.1f（写后读回）", yB, headNow.frame.origin.y);
                 } else {
                     dispatch_async(dispatch_get_main_queue(), ^{ applyRideY(headNow); });
                 }
@@ -896,7 +908,29 @@ static void applyRideY(UIView *head) {
     WPLog(@"MsgMerge", @"[RIDE-写帧] y=%.1f→%.1f sync=%d", p.y, p.y + depth, g_inLayoutInternal);
 }
 
+// —— RIDE 诊断（帽限，验证后拆除）——
+// 全树浅扫 MMHeadImageView 实例：判定 getHeadImageView 返回的与视觉头像是否同一视图
+static void rideDumpHeads(UIView *v, int depth, NSMutableString *out, int *cnt) {
+    if (!v || depth > 4 || *cnt >= 6) return;
+    if ([v isKindOfClass:NSClassFromString(@"MMHeadImageView")]) {
+        [out appendFormat:@"\n      %@ hid=%d a=%.1f sup=%@", v,
+            v.hidden, v.alpha, NSStringFromClass([v.superview class])];
+        (*cnt)++;
+    }
+    for (UIView *s in v.subviews) rideDumpHeads(s, depth + 1, out, cnt);
+}
+
 static void repl_CMCellView_layoutInternal(id self, SEL _cmd) {
+    // 上轮末端写帧存活性实证：enter 时 orig 未跑，读回的是上轮垫片末端状态——
+    // 上轮写了 10 而此处读回 2 = 垫片之外有人重置；读回 10 = 站住（问题在别处）
+    static int s_enterDbg = 0;
+    if (s_enterDbg < 10) {
+        UIView *h = safeCall(self, "getHeadImageView");
+        if ([h isKindOfClass:[UIView class]]) {
+            WPLog(@"MsgMerge", @"[RIDE-dbg] enter y=%.1f hid=%d", h.frame.origin.y, h.isHidden);
+            s_enterDbg++;
+        }
+    }
     g_inLayoutInternal = YES;
     ((void (*)(id, SEL))orig_CMCellView_layoutInternal)(self, _cmd);
     applyMergeToCellView(self);
