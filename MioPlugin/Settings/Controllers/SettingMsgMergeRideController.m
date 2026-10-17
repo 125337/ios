@@ -2,9 +2,10 @@
 //  SettingMsgMergeRideController.m
 //  MioPlugin
 //
-//  头像骑气泡子页（XOS AvatarAboveBubble 对应功能）：
-//  主开关手风琴（mmAvatarRide）+ 骑入深度输入（mmAvatarRideDepth，正=下沉骑，负=上浮悬浮）。
-//  渲染端 MsgMergeHook applyOwnLayout 每轮布局读新值，改动即时生效，无需重启微信。
+//  头像骑气泡子页（XOS 反编译一比一配置项）：
+//  主开关手风琴（mmAvatarRide）+ 钉顶偏置（mmAvatarRideDepth，XOS ReverseAvatarDownOffset）
+//  + 对方/我方消息偏移（mmMessageOffsetOther/Self，XOS MessageOffsetOther/Self）。
+//  渲染端 MsgMergeHook applyRideY/applyOwnLayout 每轮布局读新值，改动即时生效，无需重启微信。
 //
 
 #import "SettingMsgMergeRideController.h"
@@ -29,7 +30,7 @@
     CGFloat w = self.view.bounds.size.width;
     CGFloat y = 8;
 
-    // ──── 卡片1：骑气泡（手风琴） ────
+    // ──── 卡片1：骑气泡（手风琴，配置项按 XOS 反编译同名键） ────
     y = [self addSectionHeader:@"骑气泡" y:y width:w];
     UIView *g1 = [self addTableGroupAtY:y width:w];
     CGFloat cy = [self addMasterSwitchRowInGroup:g1
@@ -38,21 +39,39 @@
                                            isOn:config.mmAvatarRide
                                      subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addInputRowInGroup:expand
-                                  title:@"骑入深度 (pt)"
+                                  title:@"钉顶偏置 (pt)"
                                     key:@"mmAvatarRideDepth"
                                   value:[NSString stringWithFormat:@"%.0f", config.mmAvatarRideDepth]
-                                   hint:@"8"
+                                   hint:@"0"
                               valueType:InputValueTypeNumber
-                            alertTitle:@"骑入深度"
-                          alertMessage:@"头像压入气泡顶边的深度，正=下沉（骑坐气泡上沿），负=上浮（悬浮于气泡上方），单位 pt (±40)"
+                            alertTitle:@"钉顶偏置"
+                          alertMessage:@"头像钉顶目标 = 冒出 cell 顶 8pt + 本偏置 + GapReduce(群+10/私−10) −13(仅群)，正=下移，负=上浮，单位 pt (±100)"
+                                       cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"对方消息偏移 (pt)"
+                                    key:@"mmMessageOffsetOther"
+                                  value:[NSString stringWithFormat:@"%.0f", config.mmMessageOffsetOther]
+                                   hint:@"0"
+                              valueType:InputValueTypeNumber
+                            alertTitle:@"对方消息偏移"
+                          alertMessage:@"对方（左缘）行气泡向头像列的水平钻入量，0=气泡保持原位，正=向头像方向，单位 pt"
+                                       cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"我方消息偏移 (pt)"
+                                    key:@"mmMessageOffsetSelf"
+                                  value:[NSString stringWithFormat:@"%.0f", config.mmMessageOffsetSelf]
+                                   hint:@"0"
+                              valueType:InputValueTypeNumber
+                            alertTitle:@"我方消息偏移"
+                          alertMessage:@"我方（右缘）行气泡向头像列的水平钻入量，0=气泡保持原位，正=向头像方向，单位 pt"
                                        cy:*ecy width:w];
         *ecy = [self addHintRowInGroup:expand
-                                  text:@"仅对头像可见的行（组首/独立行）生效；开启后气泡自动向头像列让位钻入（XOS 同款内置几何），头像原位骑坐气泡上沿；骑入深度仅微调头像贴附"
+                                  text:@"仅对头像可见的行（组首/独立行，对方侧）生效；默认头像冒出 cell 顶（群 11pt/私 18pt）、气泡保持原生列位，均为 XOS 同款数值"
                                     cy:*ecy width:w];
     } cy:0 width:w];
     y = [self finishGroup:g1 atY:y height:cy];
 
-    y = [self addSectionFooter:@"开启后合并组首行（或独立行）头像下沉骑坐在气泡上沿，组内其余行头像隐藏不受影响" y:y width:w];
+    y = [self addSectionFooter:@"开启后组首行头像钉到 cell 顶上方骑坐气泡，组内其余行头像隐藏不受影响；GapReduce/行高缩减走默认值（群+10/私−10/缩减0）" y:y width:w];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
