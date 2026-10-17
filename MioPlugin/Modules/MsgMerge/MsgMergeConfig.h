@@ -44,6 +44,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// 整列横向偏移（pt，±20 钳位）：头像+气泡+昵称同向平移，正=向屏幕边缘；收发镜像
 @property (nonatomic, assign) CGFloat mmWholeOffset;
 
+/// 头像骑气泡：头像可见行（组首/独立行）头像 y 下沉骑坐在气泡上沿（需 mmEnable 开）
+@property (nonatomic, assign) BOOL   mmAvatarRide;
+/// 骑入深度（pt，±40 钳位）：头像压入气泡顶边的深度，正=下沉（骑，XOS 同款默认 8），负=上浮（悬浮）
+@property (nonatomic, assign) CGFloat mmAvatarRideDepth;
+
 + (instancetype)shared;
 
 @end

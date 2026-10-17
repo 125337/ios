@@ -488,8 +488,11 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //     （固定行高内挪 y 必守恒，项目定论；间距收拢走 measure: 测量层接管）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
 //   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
-// 自摆范围：仅横向 x。位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
-//   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）。
+// 自摆范围：横向 x（全体白名单行）+ 头像可见行 y 下沉（骑气泡，mmAvatarRide）。
+// 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
+//   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
+//   骑行输入 = mmAvatarRideDepth（±40 钳位），正=头像下沉压入气泡顶边（XOS AvatarAboveBubble
+//   同款语义，其硬编码 −8.0 即默认 8），负=上浮悬浮；固定行高内挪 y 守恒，行高/测量层不碰。
 // 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
 //   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
 //   逐轮累加会把头像推出屏外（9→270 实证）。总开关关闭 = delta 归零，同机制自动还原。
@@ -499,6 +502,7 @@ static void *kOLBaseNameX = &kOLBaseNameX;
 static void *kOLLastDH    = &kOLLastDH;
 static void *kOLLastDC    = &kOLLastDC;
 static void *kOLLastDN    = &kOLLastDN;
+static void *kOLLastDY    = &kOLLastDY;   // 上轮头像 y 位移（骑模式写入量）
 
 static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
@@ -511,7 +515,7 @@ static BOOL olTypeEnabled(long long t) {
     return t == 1 || t == 3 || t == 34 || t == 43 || t == 47 || t == 49 || t == 62;
 }
 
-static void applyOwnLayout(id cellView, BOOL active) {
+static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible) {
     UIView *head = safeCall(cellView, "getHeadImageView");
     UIImageView *bg = safeCall(cellView, "getBgImageView");
     // 容器发现（探针 #getContentView 全类型实证）：有气泡 bg 的类型（文本/语音/App/文件）
@@ -532,15 +536,19 @@ static void applyOwnLayout(id cellView, BOOL active) {
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:cont.frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDH, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDC, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLLastDY, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     CGRect bHead = [bHeadV CGRectValue];
     CGRect bBub  = [(NSValue *)objc_getAssociatedObject(cellView, kOLBaseBubF) CGRectValue];
     double lastDH = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDH) doubleValue];
     double lastDC = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDC) doubleValue];
+    double lastDY = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDY) doubleValue];
 
-    // 失效检测：位置或尺寸偏离 基准+上轮delta → 原生已重摆（复用/重布局），重置基准
+    // 失效检测：位置或尺寸偏离 基准+上轮delta → 原生已重摆（复用/重布局），重置基准。
+    // y 必须同构纳入 lastDY：骑模式写过 y 后当前值恒偏离裸基准，漏加会误判原生重摆
+    // → 基准被污染成骑后值 → 逐轮累加漂移（9→270 同款事故模式）
     if (fabs(head.frame.origin.x - (bHead.origin.x + lastDH)) > 0.5 ||
-        fabs(head.frame.origin.y - bHead.origin.y) > 0.5 ||
+        fabs(head.frame.origin.y - (bHead.origin.y + lastDY)) > 0.5 ||
         fabs(head.frame.size.width - bHead.size.width) > 0.5 ||
         fabs(cont.frame.origin.x - (bBub.origin.x + lastDC)) > 0.5 ||
         fabs(cont.frame.origin.y - bBub.origin.y) > 0.5 ||
@@ -549,6 +557,7 @@ static void applyOwnLayout(id cellView, BOOL active) {
         bBub = cont.frame;
         lastDH = 0;
         lastDC = 0;
+        lastDY = 0;
         objc_setAssociatedObject(cellView, kOLBaseHeadF, [NSValue valueWithCGRect:bHead], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:bBub], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
@@ -573,7 +582,7 @@ static void applyOwnLayout(id cellView, BOOL active) {
         }
     }
 
-    double newDH = 0, newDC = 0;
+    double newDH = 0, newDC = 0, newDY = 0;
     if (active) {
         CGFloat W = ((UIView *)cellView).bounds.size.width;
         BOOL isSender = bHead.origin.x > W * 0.5;
@@ -581,13 +590,23 @@ static void applyOwnLayout(id cellView, BOOL active) {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
+        // 骑气泡：仅头像可见行（合并位按 mmAvatarPos 对应 First/Single 或 Last/Single，
+        // headVisible 由调用方与显隐钩同源传入）；XOS 同款 Y 下沉语义
+        if (cfg.mmAvatarRide && headVisible) {
+            newDY = olClamp(cfg.mmAvatarRideDepth, 40);
+        }
     }
 
-    if (fabs(newDH - lastDH) > 0.01) {
+    // 头像 x+y 合并单次写帧：两轴同源于 bHead，若按方案分两段各写各的，后写者会把
+    // 先写者刚写入的另一轴增量抹掉（基于裸 bHead 重建 frame）→ 下轮失效检测误判
+    // 原生重摆 → 基准被污染 → 逐轮累加漂移（9→270 同款）。幂等条件两轴任一变化即写。
+    if (fabs(newDH - lastDH) > 0.01 || fabs(newDY - lastDY) > 0.01) {
         CGRect f = bHead;
         f.origin.x += newDH;
+        f.origin.y += newDY;
         head.frame = f;
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLLastDY, @(newDY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     if (fabs(newDC - lastDC) > 0.01) {
         CGRect f = bBub;
@@ -629,7 +648,7 @@ static void applyMergeToCellView(id cellView) {
                 if ([bg isKindOfClass:[UIImageView class]]) restoreCorner(bg);
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
-            applyOwnLayout(cellView, NO);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
+            applyOwnLayout(cellView, NO, NO);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
             return;
         }
 
@@ -644,26 +663,31 @@ static void applyMergeToCellView(id cellView) {
         NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
         if (chat.length == 0) return;
 
-        // 布局接管：白名单类型（文本+媒体四类）横向自摆。必须在 pos=None 早退
-        // 之前——mmSepMedia 开启时媒体消息充当分隔符（标志为 None），早退会饿死
-        // 媒体自摆（实证：图片/视频偏移无效）。自摆只依赖 wrap 类型与原生基准帧，
-        // 不依赖合并位置。
-        long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
-        applyOwnLayout(cellView, olTypeEnabled(msgType));
-
         MOMergePosition pos = flagsPos(viewModel);
-        if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
-
         BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
         BOOL isLast  = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
+        // 头像可见性判定（与 ① 显隐钩同源同值）：作为骑行门控传入 applyOwnLayout，
+        // 避免布局函数里二次查表；mmAvatarPos 非 0/1 时显隐钩不干预，骑行也不生效
+        BOOL headVisible = NO;
+        if (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1) {
+            headVisible = (cfg.mmAvatarPos == 0) ? isFirst : isLast;
+        }
+
+        // 布局接管：白名单类型（文本+媒体四类）横向自摆+骑行 y。必须在 pos=None 早退
+        // 之前——mmSepMedia 开启时媒体消息充当分隔符（标志为 None），早退会饿死
+        // 媒体自摆（实证：图片/视频偏移无效）。分隔符行 pos=None → headVisible=NO，
+        // 自摆生效但骑行不生效（独立打断行不属于合并组，无骑可言）。
+        long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
+        applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible);
+
+        if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
 
         markTouched(cellView);
 
-        // ① 头像显隐（0=消息头/组首显示，1=消息尾/组尾显示）
+        // ① 头像显隐（0=消息头/组首显示，1=消息尾/组尾显示；headVisible 与骑行门控同源）
         if (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1) {
-            BOOL showAvatar = (cfg.mmAvatarPos == 0) ? isFirst : isLast;
             id head = safeCall(cellView, "getHeadImageView");
-            if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:!showAvatar];
+            if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:!headVisible];
         }
 
         // ② 气泡背景圆角连续化（独立消息还原原值）。

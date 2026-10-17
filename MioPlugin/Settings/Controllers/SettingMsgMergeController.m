@@ -11,6 +11,7 @@
 #import "SettingMsgMergeController.h"
 #import "../../Modules/MsgMerge/MsgMergeConfig.h"
 #import "SettingMsgMergeSeparatorController.h"
+#import "SettingMsgMergeRideController.h"
 #import "../Common/SettingCategoryController.h"
 #import "../../Core/LogManager.h"
 
@@ -123,6 +124,13 @@
                      alertMessage:@"头像+气泡+昵称整列横向平移，正=向屏幕边缘，负=向中央，收发镜像，单位 pt (±20)"
                                cy:cy
                              width:w];
+    cy = [self addNavRowInGroup:g3
+                          title:@"头像骑气泡"
+                       subtitle:@"合并组头像下沉骑坐在气泡上沿"
+                            tag:202
+                         action:@selector(navigateToRide:)
+                             cy:cy
+                          width:w];
     y = [self finishGroup:g3 atY:y height:cy];
 
     // ──── 页脚提示（对齐 BubbleBox 截图页脚） ────
@@ -148,6 +156,10 @@
 
 - (void)navigateToSeparator:(UIButton *)sender {
     [self.navigationController pushViewController:[[SettingMsgMergeSeparatorController alloc] init] animated:YES];
+}
+
+- (void)navigateToRide:(UIButton *)sender {
+    [self.navigationController pushViewController:[[SettingMsgMergeRideController alloc] init] animated:YES];
 }
 
 @end
