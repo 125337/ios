@@ -520,7 +520,7 @@ static BOOL olTypeEnabled(long long t) {
     return t == 1 || t == 3 || t == 34 || t == 43 || t == 47 || t == 49 || t == 62;
 }
 
-static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible) {
+static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePosition pos) {
     UIView *head = safeCall(cellView, "getHeadImageView");
     UIImageView *bg = safeCall(cellView, "getBgImageView");
     // 容器发现（探针 #getContentView 全类型实证）：有气泡 bg 的类型（文本/语音/App/文件）
@@ -591,9 +591,12 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible) {
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
     // 骑气泡横向让位（XOS AvatarAboveBubble 同款几何）：气泡向头像列钻入，头像原位
-    // 悬于气泡上外角 + 骑入深度下沉。仅头像可见行（组首/独立行）生效；头像 X 不跟随
+    // 悬于气泡上外角 + 骑入深度下沉。门控 = pos 非 None：组内所有行（First/Middle/
+    // Last）+ 独立行统一让位保持列位一致（XOS 组内全列偏移）；None（分隔符行/索引
+    // 未就绪）不钻——进聊天瞬间 pos 尚未就绪，按 headVisible 门控曾导致全行钻入
+    // （图片到 x15、绿泡穿屏，探针+截图实证），索引就绪后又撤回闪烁。头像 X 不跟随
     // （newDH 不加 inset）保持原生列位——与 XOS「只动头像 X/Y，气泡靠偏移让位」一致
-    if (cfg.mmAvatarRide && headVisible) {
+    if (cfg.mmAvatarRide && pos != MOMergePositionNone) {
         newDC += sign * olClamp(cfg.mmAvatarRideInset, 60);
     }
 
@@ -646,7 +649,7 @@ static void applyMergeToCellView(id cellView) {
                 if ([bg isKindOfClass:[UIImageView class]]) restoreCorner(bg);
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
-            applyOwnLayout(cellView, NO, NO);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
+            applyOwnLayout(cellView, NO, NO, MOMergePositionNone);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
             return;
         }
 
@@ -676,7 +679,7 @@ static void applyMergeToCellView(id cellView) {
         // 媒体自摆（实证：图片/视频偏移无效）。分隔符行 pos=None → headVisible=NO，
         // 自摆生效但骑行不生效（独立打断行不属于合并组，无骑可言）。
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
-        applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible);
+        applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible, pos);
 
         // 骑气泡：写帧必须晚于 applyOwnLayout（其 x 写帧基于原生基准重建 frame，
         // y 取原生值，先写骑行 y 会被它抹掉）且晚于微信本轮布局链——updateNodeStatus
@@ -907,6 +910,11 @@ static void applyRideY(UIView *head) {
     double depth = olClamp([MsgMergeConfig shared].mmAvatarRideDepth, 40);
     if (depth == 0) return;
     CGPoint p = head.frame.origin;
+    // 合法域守卫：进聊天/复用瞬间读到微信过渡布局值（实证 y=-46，隐藏头像的藏匿
+    // 位残留），增量写 -46+8=-38 → 头像只剩底边 5pt 露出（视觉黑短线，截图+探针
+    // head_out(y-38) 实锤）。原生头像 y 恒在 [0,60]，越域一律跳过本轮，等微信摆正
+    // 后下轮重写（幂等基准自动接管）
+    if (p.y < 0 || p.y > 60) return;
     NSNumber *lastWrote = objc_getAssociatedObject(head, kRideLastY);
     if (lastWrote && fabs(p.y - [lastWrote doubleValue]) < 0.5) return;
     head.frame = CGRectMake(p.x, p.y + depth, head.frame.size.width, head.frame.size.height);
