@@ -65,6 +65,11 @@ static IMP orig_CMMsgMgr_AddMsg                 = NULL;   // 收发总管道（�
 static IMP orig_CMMsgMgr_onServiceInit          = NULL;   // 服务初始化（mgr 早捕获挂点）
 static IMP orig_CMMsgMgr_AsyncOnAddMsg          = NULL;
 
+// 骑气泡写帧路径标记：layoutInternal 垫片执行中=YES（同步写，布局末端无后续覆盖）；
+// updateNodeStatus 路径异步下一拍兜底重申（幂等防漂移）
+static BOOL g_inLayoutInternal = NO;
+static void applyRideY(UIView *head);   // 定义见渲染应用段（layoutInternal 垫片前）
+
 // —— 会话上下文 ——
 static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chatroom id，私聊=对端 id）
 static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageNodeData（retain）
@@ -660,33 +665,29 @@ static void applyMergeToCellView(id cellView) {
             headVisible = (cfg.mmAvatarPos == 0) ? isFirst : isLast;
         }
 
-        // 布局接管：白名单类型（文本+媒体四类）横向自摆+骑行 y。必须在 pos=None 早退
+        // 布局接管：白名单类型（文本+媒体四类）横向自摆。必须在 pos=None 早退
         // 之前——mmSepMedia 开启时媒体消息充当分隔符（标志为 None），早退会饿死
         // 媒体自摆（实证：图片/视频偏移无效）。分隔符行 pos=None → headVisible=NO，
         // 自摆生效但骑行不生效（独立打断行不属于合并组，无骑可言）。
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
-        // 骑气泡：写帧必须在微信本轮布局全部完成之后。updateNodeStatus 时机写入会被
-        // 后续布局链重置回原生 y（实证：日志 y=2.0→10.0 每轮循环，视觉恒 2）。
-        // XOS 同款延迟重申：主队列下一拍写帧；幂等基准 = 关联对象记上轮写入值，
-        // 已骑（未重置）跳过、被重置重写，杜绝逐轮累加漂移。
+        applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible);
+
+        // 骑气泡：写帧必须晚于 applyOwnLayout（其 x 写帧基于原生基准重建 frame，
+        // y 取原生值，先写骑行 y 会被它抹掉）且晚于微信本轮布局链——updateNodeStatus
+        // 时机写入被后续布局链重置回原生 y（实证：日志 y=2.0→10.0 每轮循环，视觉
+        // 恒 2）。双路径：layoutInternal 垫片内同步写（布局末端，XOS 实证无后续
+        // 覆盖）；updateNodeStatus 路径主队列下一拍重申（幂等兜底）。applyRideY
+        // 自持幂等基准：已骑跳过、被微信重置重写、cell 复用新行新基准。
         if (cfg.mmAvatarRide && headVisible) {
             UIView *headNow = safeCall(cellView, "getHeadImageView");
-            if ([headNow isKindOfClass:[UIView class]] && !headNow.hidden) {
-                static void *kRideLastY = &kRideLastY;
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (headNow.hidden) return;
-                    double depth = olClamp([MsgMergeConfig shared].mmAvatarRideDepth, 40);
-                    if (depth == 0) return;
-                    CGPoint p = headNow.frame.origin;
-                    NSNumber *lastWrote = objc_getAssociatedObject(headNow, kRideLastY);
-                    if (lastWrote && fabs(p.y - [lastWrote doubleValue]) < 0.5) return;  // 已骑未重置
-                    headNow.frame = CGRectMake(p.x, p.y + depth, headNow.frame.size.width, headNow.frame.size.height);
-                    objc_setAssociatedObject(headNow, kRideLastY, @(p.y + depth), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                    WPLog(@"MsgMerge", @"[RIDE-写帧] y=%.1f→%.1f", p.y, p.y + depth);
-                });
+            if ([headNow isKindOfClass:[UIView class]]) {
+                if (g_inLayoutInternal) {
+                    applyRideY(headNow);   // 布局末端同步写
+                } else {
+                    dispatch_async(dispatch_get_main_queue(), ^{ applyRideY(headNow); });
+                }
             }
         }
-        applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible);
 
         if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
 
@@ -879,9 +880,27 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 
 // —— CommonMessageCellView：渲染应用 ——
 
+// 骑气泡写帧（幂等）：关联对象记上轮写入值——已骑未重置跳过、被微信重置重写、
+// cell 复用后新行新基准，杜绝逐轮累加漂移。同步（layoutInternal 末端）与异步
+// （下一拍重申）两路径共用。
+static void applyRideY(UIView *head) {
+    static void *kRideLastY = &kRideLastY;
+    if (!head || head.hidden) return;
+    double depth = olClamp([MsgMergeConfig shared].mmAvatarRideDepth, 40);
+    if (depth == 0) return;
+    CGPoint p = head.frame.origin;
+    NSNumber *lastWrote = objc_getAssociatedObject(head, kRideLastY);
+    if (lastWrote && fabs(p.y - [lastWrote doubleValue]) < 0.5) return;
+    head.frame = CGRectMake(p.x, p.y + depth, head.frame.size.width, head.frame.size.height);
+    objc_setAssociatedObject(head, kRideLastY, @(p.y + depth), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    WPLog(@"MsgMerge", @"[RIDE-写帧] y=%.1f→%.1f sync=%d", p.y, p.y + depth, g_inLayoutInternal);
+}
+
 static void repl_CMCellView_layoutInternal(id self, SEL _cmd) {
+    g_inLayoutInternal = YES;
     ((void (*)(id, SEL))orig_CMCellView_layoutInternal)(self, _cmd);
     applyMergeToCellView(self);
+    g_inLayoutInternal = NO;
 }
 
 static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
