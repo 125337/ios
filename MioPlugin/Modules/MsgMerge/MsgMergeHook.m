@@ -597,8 +597,10 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
     // 未就绪）不钻——进聊天瞬间 pos 尚未就绪，按 headVisible 门控曾导致全行钻入
     // （图片到 x15、绿泡穿屏，探针+截图实证），索引就绪后又撤回闪烁。头像 X 不跟随
     // （newDH 不加 inset）保持原生列位——与 XOS「只动头像 X/Y，气泡靠偏移让位」一致
+    double rideInsetApplied = 0;   // 本次骑行钻入量（昵称跟随剥离用）
     if (cfg.mmAvatarRide && pos != MOMergePositionNone) {
-        newDC += sign * olClamp(cfg.mmAvatarRideInset, 60);
+        rideInsetApplied = sign * olClamp(cfg.mmAvatarRideInset, 60);
+        newDC += rideInsetApplied;
     }
 
     // 头像 x+y 合并单次写帧：两轴同源于 bHead，若按方案分两段各写各的，后写者会把
@@ -615,11 +617,14 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         f.origin.x += newDC;
         cont.frame = f;
         objc_setAssociatedObject(cellView, kOLLastDC, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if (lb && fabs(newDC - lastDN) > 0.01) {
+        // 昵称跟随剥离骑行钻入量（XOS 实证行为：气泡钻入头像列，昵称留在原生气泡
+        // 列位=头像右侧；昵称若跟钻入会叠到冒顶头像上——截图实证重叠成一团）
+        double nameDC = newDC - rideInsetApplied;
+        if (lb && fabs(nameDC - lastDN) > 0.01) {
             CGRect nf = lb.frame;
-            nf.origin.x = baseNameX + newDC;
+            nf.origin.x = baseNameX + nameDC;
             lb.frame = nf;
-            objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(cellView, kOLLastDN, @(nameDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
     }
 }
