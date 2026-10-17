@@ -46,8 +46,17 @@
                             alertTitle:@"骑入深度"
                           alertMessage:@"头像压入气泡顶边的深度，正=下沉（骑坐气泡上沿），负=上浮（悬浮于气泡上方），单位 pt (±40)"
                                        cy:*ecy width:w];
+        *ecy = [self addInputRowInGroup:expand
+                                  title:@"气泡让位 (pt)"
+                                    key:@"mmAvatarRideInset"
+                                  value:[NSString stringWithFormat:@"%.0f", config.mmAvatarRideInset]
+                                   hint:@"48"
+                              valueType:InputValueTypeNumber
+                            alertTitle:@"气泡让位"
+                          alertMessage:@"骑气泡时气泡向头像列钻入的横向偏移，正=气泡钻到头像正下方（骑感来源），0=不钻入，单位 pt (±60)"
+                                       cy:*ecy width:w];
         *ecy = [self addHintRowInGroup:expand
-                                  text:@"仅对头像可见的行（组首/独立行）生效；横向让位沿用「头像偏移/整列偏移」，建议先调好横向再开骑模式"
+                                  text:@"仅对头像可见的行（组首/独立行）生效；气泡让位=气泡钻入头像列的深度（XOS 效果核心），骑入深度=头像下沉贴气泡上沿"
                                     cy:*ecy width:w];
     } cy:0 width:w];
     y = [self finishGroup:g1 atY:y height:cy];

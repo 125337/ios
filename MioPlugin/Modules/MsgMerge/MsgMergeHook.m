@@ -583,13 +583,18 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible) {
     }
 
     double newDH = 0, newDC = 0;
+    CGFloat W = ((UIView *)cellView).bounds.size.width;
+    double sign = (bHead.origin.x > W * 0.5) ? 1.0 : -1.0;
+    MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (active) {
-        CGFloat W = ((UIView *)cellView).bounds.size.width;
-        BOOL isSender = bHead.origin.x > W * 0.5;
-        double sign = isSender ? 1.0 : -1.0;
-        MsgMergeConfig *cfg = [MsgMergeConfig shared];
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
+    }
+    // 骑气泡横向让位（XOS AvatarAboveBubble 同款几何）：气泡向头像列钻入，头像原位
+    // 悬于气泡上外角 + 骑入深度下沉。仅头像可见行（组首/独立行）生效；头像 X 不跟随
+    // （newDH 不加 inset）保持原生列位——与 XOS「只动头像 X/Y，气泡靠偏移让位」一致
+    if (cfg.mmAvatarRide && headVisible) {
+        newDC += sign * olClamp(cfg.mmAvatarRideInset, 60);
     }
 
     // 头像 x+y 合并单次写帧：两轴同源于 bHead，若按方案分两段各写各的，后写者会把
@@ -924,11 +929,21 @@ static void rideDumpHeads(UIView *v, int depth, NSMutableString *out, int *cnt) 
 static void repl_CMCellView_layoutInternal(id self, SEL _cmd) {
     // 上轮末端写帧存活性实证：enter 时 orig 未跑，读回的是上轮垫片末端状态——
     // 上轮写了 10 而此处读回 2 = 垫片之外有人重置；读回 10 = 站住（问题在别处）
+    // 实证 112 日志：enter y=10 恒定（站住），视觉不变 → 嫌疑收窄至 frame→视觉
+    // 映射被吃（transform/anchorPoint），此处全量读出定音
     static int s_enterDbg = 0;
     if (s_enterDbg < 10) {
         UIView *h = safeCall(self, "getHeadImageView");
         if ([h isKindOfClass:[UIView class]]) {
-            WPLog(@"MsgMerge", @"[RIDE-dbg] enter y=%.1f hid=%d", h.frame.origin.y, h.isHidden);
+            CGAffineTransform t = h.transform;
+            CGPoint c = h.center;
+            CGSize bsz = h.bounds.size;
+            CGPoint ap = h.layer.anchorPoint;
+            CGPoint pos = h.layer.position;
+            WPLog(@"MsgMerge", @"[RIDE-dbg] enter y=%.1f hid=%d t=(%.2f,%.2f,%.2f,%.2f,%.2f,%.2f) center=(%.1f,%.1f) bsz=(%.1f,%.1f) ap=(%.2f,%.2f) pos=(%.1f,%.1f)",
+                h.frame.origin.y, h.isHidden,
+                t.a, t.b, t.c, t.d, t.tx, t.ty,
+                c.x, c.y, bsz.width, bsz.height, ap.x, ap.y, pos.x, pos.y);
             s_enterDbg++;
         }
     }

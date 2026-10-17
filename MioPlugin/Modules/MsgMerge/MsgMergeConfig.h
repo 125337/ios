@@ -48,6 +48,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL   mmAvatarRide;
 /// 骑入深度（pt，±40 钳位）：头像压入气泡顶边的深度，正=下沉（骑，XOS 同款默认 8），负=上浮（悬浮）
 @property (nonatomic, assign) CGFloat mmAvatarRideDepth;
+/// 气泡让位（pt，±60 钳位）：骑气泡时气泡向头像列钻入的横向偏移（XOS MessageOffset 对应物），
+/// 正=向头像方向让位（气泡钻到头像正下方，头像悬于气泡上外角），仅头像可见行生效
+@property (nonatomic, assign) CGFloat mmAvatarRideInset;
 
 + (instancetype)shared;
 

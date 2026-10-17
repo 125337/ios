@@ -38,6 +38,7 @@
         [ConfigDescriptor itemWithKey:@"mmWholeOffset" type:ConfigValueTypeFloat default:@(0.0)],
         [ConfigDescriptor itemWithKey:@"mmAvatarRide" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"mmAvatarRideDepth" type:ConfigValueTypeFloat default:@(8.0)],
+        [ConfigDescriptor itemWithKey:@"mmAvatarRideInset" type:ConfigValueTypeFloat default:@(48.0)],
     ];
 }
 
