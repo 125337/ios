@@ -39,12 +39,45 @@
                                            isOn:config.mmAvatarRide
                                      subBuilder:^(UIView *expand, CGFloat *ecy) {
         *ecy = [self addHintRowInGroup:expand
-                                  text:@"XOS 同款骑坐：头像可见行（组首/独立行）x 向屏幕边缘 3pt、y 下沉 2pt；气泡向头像列钻入 5pt（仅对方侧，我方不动）——头像与气泡咬合在气泡左上角，非悬空冒顶"
+                                  text:@"泡整体钻到头像正下方靠边，泡视觉缘=头像缘；泡顶=头像顶+57，行高自动补足"
                                     cy:*ecy width:w];
     } cy:0 width:w];
     y = [self finishGroup:g1 atY:y height:cy];
 
-    y = [self addSectionFooter:@"开启后组内首行头像与气泡咬合骑坐（XOS 实测常量，无需调参）；组内其余行头像隐藏不受影响" y:y width:w];
+    // ──── 卡片2：钻入微调与调试 ────
+    y = [self addSectionHeader:@"钻入微调" y:y width:w];
+    UIView *g2 = [self addTableGroupAtY:y width:w];
+    cy = 0;
+    cy = [self addInputRowInGroup:g2
+                            title:@"钻入量-对方 (pt)"
+                              key:@"mmRideDiveRecv"
+                            value:[NSString stringWithFormat:@"%.1f", config.mmRideDiveRecv]
+                             hint:@"默认 52"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"钻入量-对方"
+                     alertMessage:@"对方侧气泡容器向屏幕边缘的钻入量，泡图素材自带透明边距，视觉对齐需自行微调"
+                               cy:cy
+                             width:w];
+    cy = [self addInputRowInGroup:g2
+                            title:@"钻入量-我方 (pt)"
+                              key:@"mmRideDiveSend"
+                            value:[NSString stringWithFormat:@"%.1f", config.mmRideDiveSend]
+                             hint:@"默认 0"
+                        valueType:InputValueTypeNumber
+                       alertTitle:@"钻入量-我方"
+                     alertMessage:@"我方侧气泡容器横向偏移，正=向屏幕边缘，0=原生位（我方原生已贴边）"
+                               cy:cy
+                             width:w];
+    cy = [self addSwitchRowInGroup:g2
+                             title:@"钻入调试悬浮窗"
+                               desc:@"聊天页显示可拖动悬浮条，步进 0.5pt 实时调钻入量"
+                                key:@"mmRideDebug"
+                              isOn:config.mmRideDebug
+                                cy:cy
+                             width:w];
+    y = [self finishGroup:g2 atY:y height:cy];
+
+    y = [self addSectionFooter:@"调试悬浮窗需骑行开启时生效；调好的数值填入上方钻入量后关闭悬浮窗即可" y:y width:w];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
