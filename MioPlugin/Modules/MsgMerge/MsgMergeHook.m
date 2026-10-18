@@ -660,19 +660,21 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
-    // XOS 1.5.9 骑坐变换（trace2 前后帧探针 + BG-DUMP 白泡结构联立实证）：
-    //   白泡真身=bg（YYAsyncImageView，cont 内部 x=−5 恒定），可视位=cont.x+bg.x。
-    //   XOS 写 cont（原生 61→17）：白泡整块钻到头像正下方（可视 12=head.x 12），
-    //   头像右移下沉 ±3/+2 压住白泡左上角——「头像在气泡上面」。
-    //   cont 位移仅头像可见行：对方 −44 / 我方 +44（镜像）；隐藏行只做侧位归位不动。
+    // XOS 1.5.9 骑坐形态（用户双机截图对照实证，trace2 独立行 ±3/+2 为非组形态）：
+    //   组首行：头像悬空组顶（y=−56+钉顶偏置，XOS 截图实测气泡顶上方≈56pt）
+    //   组内全行：cont ±44 钻入 → 整组气泡左缘对齐头像正下方（可视位=cont.x+bg.x）
+    //   独立行（非组）：仅头像 ±3/+2 轻咬合，不悬空不钻入
     if (cfg.mmAvatarRide) {
         newDH += (sign > 0) ? -3.0 : 3.0;
-        if (headVisible) newDC += sign * 44.0;
+        if (active) newDC += sign * 44.0;
     }
-    if (fabs(newDH - lastDH) > 0.01) {
+    BOOL rideTop = (cfg.mmAvatarRide && active && headVisible);
+    if (fabs(newDH - lastDH) > 0.01 || rideTop) {
         CGRect f = bHead;
         f.origin.x += newDH;
-        if (cfg.mmAvatarRide && headVisible) f.origin.y += 2.0;   // XOS 骑坐 y=4（原生 2）
+        if (cfg.mmAvatarRide && headVisible) {
+            f.origin.y = active ? (-56.0 + olClamp(cfg.mmAvatarRideDepth, 100)) : (f.origin.y + 2.0);
+        }
         head.frame = f;
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
