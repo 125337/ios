@@ -545,8 +545,8 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //     （固定行高内挪 y 必守恒，项目定论；间距收拢走 measure: 测量层接管）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
 //   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
-// 自摆范围：横向 x（全体白名单行）+ 骑行行纵向（头像行顶原生位 + cont 行内下移
-//   olRideExpand，与 measure 扩行同源；mmAvatarRide）。
+// 自摆范围：横向 x（全体白名单行）+ 骑行行纵向（头像 XOS 式悬垂 −8+偏置，
+//   气泡/行高不动；mmAvatarRide）。
 // 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
 //   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
 //   骑行 = XOS 1.5.9 双机截图实证形态：头像可见行 x±3、气泡对方侧 x−5（本函数内
@@ -566,14 +566,11 @@ static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
 }
 
-/// 骑行组首行行高扩展量（40−钉顶偏置，下限 0）。实测标定：56 系旧探针「头像相对
-/// 气泡抬升量」，未扣头像自身行内占位——双机截图同尺度对照（头像底→气泡顶）XOS
-/// ≈23pt、56 扩行版 ≈39pt，差 16pt → 扩行 40。measure 层扩行与渲染层气泡下移
-/// 必须同值同源（本函数单点），否则气泡溢出压行/组间缝失控。
-static double olRideExpand(MsgMergeConfig *cfg) {
-    double e = 40.0 - olClamp(cfg.mmAvatarRideDepth, 100);
-    return e > 0 ? e : 0;
-}
+// —— 骑行纵向（XOS 1.5.9 反编译实证范式，specs/xos-ride-align-spec.md）——
+// 头像悬垂行顶上方 8pt（XOS 钉位公式 −8+mesMsgMergeReverseAvatarDownOffset，
+// 吃上一行原生底部空白 ~10pt，不触上一组气泡），气泡保持原生基线（16/5）不动、
+// 不扩行——XOS 骑行零行高变更（其 rowHeight 钩只做紧凑收缩，与骑行无关）。
+// mmAvatarRideDepth = 头像下垂偏置（XOS 同名键语义，±100）。
 
 /// 布局接管类型白名单：媒体四类与表情均为 CommonMessageCellView 同构结构
 ///（头像 46×46 y=2、容器与气泡列对齐：自发右缘 W−64/收方 x=64）；表情 47 有头像
@@ -676,11 +673,10 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
-    // XOS 1.5.9 骑坐形态（双机截图对照实证）：悬空头像的空间由组首行行高扩展提供
-    //   （measure 层 olRideExpand 同源扩行），头像坐回行顶原生位（旧版负 y 越界 =
-    //   顶进上一组气泡区的病灶根源），cont 行内下移同量 → 组间恢复整行空隙。
+    // XOS 1.5.9 骑坐形态（反编译实证范式）：头像悬垂行顶上方 8pt（−8+下垂偏置，
+    //   吃上一行原生底部空白，不扩行不触上一组气泡），气泡保持原生基线（16/5）不动。
     //   组内全行：cont ±44 钻入 → 整组气泡左缘对齐头像正下方（可视位=cont.x+bg.x）
-    //   独立行（非组）：仅头像 ±3/+2 轻咬合，不悬空不钻入不扩行
+    //   独立行（非组）：仅头像 ±3/+2 轻咬合，不悬空不钻入
     if (cfg.mmAvatarRide) {
         newDH += (sign > 0) ? -3.0 : 3.0;
         if (active) newDC += sign * 44.0;
@@ -690,9 +686,9 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         CGRect f = bHead;
         f.origin.x += newDH;
         if (cfg.mmAvatarRide && headVisible) {
-            // 骑行头行：头像坐回行顶原生 y（悬空量已由行高扩展+气泡下移腾出）；
-            // 切片行（泡体无缝不可扩行）/非接管类型：+2 轻咬合
-            f.origin.y = (active && rideOK) ? bHead.origin.y : (f.origin.y + 2.0);
+            // 骑行头行：XOS 式悬垂钉位（−8+下垂偏置）；切片行（泡体无缝）/
+            // 非接管类型：+2 轻咬合
+            f.origin.y = (active && rideOK) ? (-8.0 + olClamp(cfg.mmAvatarRideDepth, 100)) : (f.origin.y + 2.0);
         }
         head.frame = f;
         // XOS 同款：骑坐组首昵称重排到悬空头像右侧（双机截图实证「过客.」与头像同排）
@@ -705,9 +701,9 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         }
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    // cont 纵向：骑行头行行内下移（与 measure 扩行同值同源），开关翻转/复用经
-    // lastDY 增量检测自动还原
-    double newDY = rideTop ? olRideExpand(cfg) : 0.0;
+    // cont 纵向：XOS 实证气泡保持原生基线（16/5）不动，行内不下移；newDY 恒 0，
+    // lastDY 增量检测保留为还原路径（旧版扩行残留帧经此自愈）
+    double newDY = 0.0;
     if (fabs(newDC - lastDC) > 0.01 || fabs(newDY - lastDY) > 0.01) {
         CGRect f = bBub;
         f.origin.x += newDC;
@@ -906,11 +902,10 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
 // ------------------------------------------------------------
 // -[CommonMessageViewModel measure:]（探针实证：CGSize 参数入 x2/x3，调用侧
 // 传 {-1,-1} 无约束哨兵；MSHook + 同声明签名，编译器自动对齐 ABI）。orig 只当
-// 排版工具，两项算术：
-//   ① 骑行扩行（XOS 组间不重叠的根源）：悬空头像的空间由组首行自身行高提供，
-//      渲染层气泡下移同量（olRideExpand 单点同源）→ 组间整行空隙，头像不越界
-//   ② 组内行高缩减：非组尾消息测量高 −(mmSpacing+mmHeightReduce)（下限 24；
-//      HeightReduce=XOS mesMsgMergeHeightReduce 同款：组内行高原生−该值）
+// 排版工具，一项算术：
+//   组内行高缩减：非组尾消息测量高 −(mmSpacing+mmHeightReduce)（下限 24；
+//   HeightReduce=XOS mesMsgMergeHeightReduce 同款：组内行高原生−该值）。
+//   骑行不改行高（XOS 反编译实证：骑行零行高变更，头像负 y 悬垂上一行空白）。
 // 昵称区不在此补偿——判定钩翻转让原生测量自动收缩（N 补偿链已删）。
 // ------------------------------------------------------------
 static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
@@ -925,11 +920,11 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         if (!cfg.mmEnable) return s;
         // 行高缩减（XOS 同域两键合并）：手动间距（mmSpacingMode==1）+ 行高缩减
         //（mmHeightReduce，mesMsgMergeHeightReduce 同款默认 0），组内非组尾行在
-        // 原生行高上统一缩减
+        // 原生行高上统一缩减。骑行不在此掺和（XOS 实证骑行零行高变更）。
         double reduce = 0;
         if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) reduce += (double)cfg.mmSpacing;
         reduce += (double)cfg.mmHeightReduce;
-        if (reduce <= 0 && !cfg.mmAvatarRide) return s;
+        if (reduce <= 0) return s;
         id wrap = safeKVC(self, @"messageWrap");
         if (!wrap) return s;   // 时间节点等无 wrap
         NSString *chat = chatNameOfWrap(wrap);
@@ -940,29 +935,13 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         s_inMeasure = NO;
         if (pos == MOMergePositionNone) return s;   // 组外/标志缺席：原生直通
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
-        // ① 骑行扩行：骑行头行（mmAvatarPos 0=First/Single 1=Last/Single，与渲染
-        //    headVisible 同判）+ 整条消息 + 白名单类型。切片行泡体无缝，扩行必裂缝。
-        double rideAdd = 0;
-        if (cfg.mmAvatarRide && split == 0 &&
-            (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1)) {
-            BOOL headRow = (cfg.mmAvatarPos == 0)
-                ? (pos == MOMergePositionFirst || pos == MOMergePositionSingle)
-                : (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
-            if (headRow) {
-                long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
-                if (olTypeEnabled(msgType)) rideAdd = olRideExpand(cfg);
-            }
-        }
         BOOL isTail = (pos == MOMergePositionLast || pos == MOMergePositionSingle);
-        if (rideAdd <= 0 && isTail) return s;   // 组尾保原生（组尾到组外间隙不变）
+        if (isTail) return s;   // 组尾保原生（组尾到组外间隙不变）
         // 末片门控：首片/中片是无缝泡体——原生切片气泡底=片边界、续片 bgTop=0
         // 贴顶无让位，任何测量缩减都让泡体溢出压进下一片（diag33 实锤同气泡自叠）。
-        if (rideAdd <= 0 && split != 0 && split != 3) return s;
-        double h = (double)s.height + rideAdd;
-        if (!isTail) {
-            h -= reduce;
-            if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
-        }
+        if (split != 0 && split != 3) return s;
+        double h = (double)s.height - reduce;
+        if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
         if (fabs(h - (double)s.height) < 0.01) return s;
         return CGSizeMake(s.width, (CGFloat)h);
     } @catch (NSException *e) {
