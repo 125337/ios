@@ -584,7 +584,7 @@ static const double olRideLift = 57.0;   // 头像顶→气泡顶抬升（XOS �
 ///（头像 46×46 y=2、容器与气泡列对齐：自发右缘 W−64/收方 x=64）；表情 47 有头像
 /// 有昵称有容器（旧"居中异构"系视图调试器误读），仅无 bg 走 getContentView 回退。
 static BOOL olTypeEnabled(long long t) {
-    return t == 1 || t == 3 || t == 34 || t == 43 || t == 47 || t == 49 || t == 62;
+    return t == 1 || t == 3 || t == 34 || t == 43 || t == 47 || t == 49 || t == 50 || t == 62;
 }
 
 static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePosition pos, BOOL rideOK) {
