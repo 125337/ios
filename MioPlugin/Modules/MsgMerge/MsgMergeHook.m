@@ -591,6 +591,32 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:cont.frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDH, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDC, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        // [BG-DUMP] 白泡真身结构（总量帽 8 条，与 XOS bg(−5,50x37) 对照）
+        static NSInteger sBgdumpCnt = 0;
+        if (sBgdumpCnt < 8) {
+            sBgdumpCnt++;
+            NSMutableString *d = [NSMutableString stringWithFormat:
+                @"[BG-DUMP] %@ head %@ | bg %@ sup=%@",
+                NSStringFromClass([cellView class]),
+                NSStringFromCGRect(head.frame),
+                bg ? NSStringFromCGRect(bg.frame) : @"nil",
+                cont ? NSStringFromClass([cont class]) : @"nil"];
+            if ([bg isKindOfClass:[UIImageView class]]) {
+                UIImage *im = [(UIImageView *)bg image];
+                [d appendFormat:@" img(%gx%g)", im ? im.size.width : 0, im ? im.size.height : 0];
+                NSArray<UIView *> *ss = [(UIImageView *)bg subviews];
+                for (UIView *sv in ss) {
+                    if ([sv isKindOfClass:[UIImageView class]]) {
+                        UIImage *si = [(UIImageView *)sv image];
+                        [d appendFormat:@" sub=%@ %@ img(%gx%g)",
+                            NSStringFromClass([sv class]),
+                            NSStringFromCGRect(sv.frame),
+                            si ? si.size.width : 0, si ? si.size.height : 0];
+                    }
+                }
+            }
+            WPLog(@"MsgMerge", @"%@", d);
+        }
     }
     CGRect bHead = [bHeadV CGRectValue];
     CGRect bBub  = [(NSValue *)objc_getAssociatedObject(cellView, kOLBaseBubF) CGRectValue];
