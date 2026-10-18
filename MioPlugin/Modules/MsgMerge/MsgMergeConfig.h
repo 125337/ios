@@ -53,6 +53,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// 行高缩减（pt，XOS mesMsgMergeHeightReduce 同款，默认 0）：组内非组尾行在原生行高
 ///（及手动间距）基础上再减此值，下限 24
 @property (nonatomic, assign) CGFloat mmHeightReduce;
+/// 骑行钻入量（pt，向屏内正值）：收方侧。默认 52 = 视觉泡体缘贴头像缘（探针实证基值）
+@property (nonatomic, assign) CGFloat mmRideDiveRecv;
+/// 骑行钻入量（pt，向屏内正值）：自发侧。默认 0（原生自发泡右缘已贴边，仅调凸出时用）
+@property (nonatomic, assign) CGFloat mmRideDiveSend;
+/// 骑行钻入调试悬浮窗：聊天页显示小悬浮条，实时调 mmRideDiveRecv/Send（±0.5 步进，
+/// 改值立即重排生效），用于精调视觉泡体缘与头像缘的贴合
+@property (nonatomic, assign) BOOL   mmRideDebug;
 
 + (instancetype)shared;
 

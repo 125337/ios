@@ -41,6 +41,7 @@
 
 #import "MsgMergeHook.h"
 #import "MsgMergeConfig.h"
+#import "MsgMergeDebugHud.h"
 #import "BBMergeModel.h"
 #import "../../Core/LogManager.h"
 #import <substrate.h>
@@ -587,6 +588,7 @@ static BOOL olTypeEnabled(long long t) {
 }
 
 static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePosition pos, BOOL rideOK) {
+    [MsgMergeDebugHud syncVisible];   // 骑行调试悬浮窗随开关显隐（BOOL 判断，开销可忽略）
     UIView *head = safeCall(cellView, "getHeadImageView");
     UIImageView *bg = safeCall(cellView, "getBgImageView");
     // 容器发现（探针 #getContentView 全类型实证）：有气泡 bg 的类型（文本/语音/App/文件）
@@ -686,12 +688,10 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
     //   自发右 3.2 不对称（截图量测 2026-10-19）。
     if (cfg.mmAvatarRide && active) {
         // 组内全行钻入：视觉泡体缘=头像缘（用户定论 2026-10-19：对齐的是泡图素材内的
-        // 真实泡体，不是容器——素材含透明边）。探针实证 8bf92bf3：sign*(52/50) 方向全错
-        // ——自发 +50 会把泡推出屏（原生右缘 382 已贴边），实际被写帧体系挡在原生位，
-        // 视觉泡体凸出头像 2.8pt；收方视觉泡体凸出 3.2pt。两侧正确量恒为负（向屏内）：
-        // 收 −52：容器 64→12，bg 左缘 7+素材左 pad 4.8 → 泡体左 11.8≈头像左 12；
-        // 自发 −3：容器 321→318，bg 右缘 384−素材右 pad 3.2 → 泡体右 380.8≈头像右 381。
-        newDC += (sign < 0 ? -52.0 : -3.0);
+        // 真实泡体，不是容器——素材含透明边）。量配置化（mmRideDiveRecv/Send，向屏内
+        // 正值），悬浮调试窗（mmRideDebug）实时精调。默认 recv=52/send=0 = 8bf92bf3
+        // 稳定版实测行为（收方泡体缘贴头像缘、自发原生已贴边不钻）。
+        newDC += (sign < 0 ? -olClamp(cfg.mmRideDiveRecv, 80) : -olClamp(cfg.mmRideDiveSend, 80));
     }
     BOOL rideTop = (cfg.mmAvatarRide && active && headVisible && rideOK);
     // XOS 组首头像构图微调（8.0.60 探针实测：组首 (12,4)/自发 (338,4) vs 组内原生
