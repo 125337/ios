@@ -169,15 +169,12 @@ static void updateChatContext(id self) {
         // 时机 mmcronet 网络注册 dispatch_once 尚在后台执行，主线程介入
         // _dispatch_once_wait 死等 10s → scene-update watchdog SIGKILL（实证
         // WeChat-2026-10-18-094818.ips）。推导链：① m_nsTalker（聊天页本地 ivar，KVC
-        // 直读不走服务）② 渲染数组节点两层提取 chatNameOfWrap（node.viewModel.messageWrap，
-        // m_arrMessageNodeData 元素是 NodeData 包装层）。
+        // 直读不走服务）② 渲染数组节点提取 chatNameOfWrap（BBMergeModel wrapOfNode
+        // 同款：两层 node.viewModel.messageWrap + 单层 node.messageWrap 兜底——119
+        // 实证数组元素直接就是 vm，时间行节点无 wrap 循环跳过）。
         NSString *name = safeKVC(self, @"m_nsTalker");
-        WPLog(@"MsgMerge", @"[DBG][Ctx] talker raw=%@ (%@)", name, NSStringFromClass([self class]));
         if (![name isKindOfClass:[NSString class]] || name.length == 0) {
             NSArray *arr0 = safeKVC(self, @"m_arrMessageNodeData");
-            WPLog(@"MsgMerge", @"[DBG][Ctx] talker miss → wrap 推导：arr=%@ count=%lu",
-                  NSStringFromClass([arr0 class] ?: [NSObject class]),
-                  (unsigned long)([arr0 isKindOfClass:[NSArray class]] ? arr0.count : -1));
             if ([arr0 isKindOfClass:[NSArray class]] && arr0.count > 0) {
                 // BBMergeModel wrapOfNode 完全同款：node 可能是 NodeData 包装（两层链）
                 // 也可能直接是 vm（119 日志实证首条 ChatTimeViewModel、vm=nil——单层
@@ -306,12 +303,9 @@ static void refreshFlaggedCells(void) {
 // 索引增量刷新（数据先行，无可见动作）+ 屏上 pos 实变时才可见刷新。
 static void refreshAndApplyFromContext(void) {
     UIViewController *vc = g_curChatVC;
-    if (!vc) { WPLog(@"MsgMerge", @"[DBG][Ref] 跳过：无 vc"); return; }
+    if (!vc) return;
     NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
-    if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) {
-        WPLog(@"MsgMerge", @"[DBG][Ref] 跳过：数组空（%@）", NSStringFromClass([arr class] ?: [NSObject class]));
-        return;
-    }
+    if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return;
 #if __has_feature(objc_arc)
     g_currentNodeArray = arr;
 #else
@@ -321,14 +315,15 @@ static void refreshAndApplyFromContext(void) {
 #endif
     NSString *chat = currentChatName();
     if (chat.length == 0) {
-        WPLog(@"MsgMerge", @"[DBG][Ref] 跳过：无聊天名（arr.count=%lu）→ 索引永不重建=合并失效",
-              (unsigned long)arr.count);
+        // 理论不达（常规路径 viewWillAppear 建立 + measure/管道双兜底），达即异常
+        WPLog(@"MsgMerge", @"[Ref] ⚠ 无聊天名跳过重建（arr.count=%lu）", (unsigned long)arr.count);
         return;
     }
     NSUInteger changed = [[BBMergeModel shared] refreshIndexWithNodeArray:arr chatName:chat];
-    WPLog(@"MsgMerge", @"[DBG][Ref] rebuild chat=%@ count=%lu changed=%lu", chat,
-          (unsigned long)arr.count, (unsigned long)changed);
-    if (changed > 0) refreshFlaggedCells();   // 屏上 pos 实变 → 可见刷新（清测量缓存+标脏）
+    if (changed > 0) {
+        WPLog(@"MsgMerge", @"[Ref] rebuild count=%lu changed=%lu", (unsigned long)arr.count, (unsigned long)changed);
+        refreshFlaggedCells();   // 屏上 pos 实变 → 可见刷新（清测量缓存+标脏）
+    }
 }
 
 // 读侧限频保鲜：索引未覆盖的全新消息（微信记账迟滞）由此补表。0.15s 一次
@@ -346,31 +341,23 @@ static void refreshModelNow(void) {
 // 零影响（查表架构核心）。None → 限频保鲜补表再查；配置指纹变化 → 立即重建。
 static MOMergePosition flagsPos(id vm) {
     BBMergeModel *m = [BBMergeModel shared];
-    id wrap = safeKVC(vm, @"messageWrap");          // 键有效性 118 实证（lid 恒取到）
+    id wrap = safeKVC(vm, @"messageWrap");
     long long lid = localIDOfWrap(wrap);
     MOMergePosition pos = [m posForLocalID:lid];
-    // 聊天名缺位兜底（118 实证：NodeData 两层提取失效，聊天名永不建立=合并全灭）：
-    // measure 是微信建表必经之路，此 vm.messageWrap 键有效性已实证——wrap 直接
-    // 推导聊天名并建立（主线程 measure 时机安全，零服务总线依赖）。正常路径
-    // （聊天名已建立）零影响。
+    // 聊天名缺位兜底（119 实证有效路径）：measure 是微信建表必经之路，
+    // vm.messageWrap 键有效性已实证——wrap 直接推导聊天名并建立（主线程
+    // measure 时机安全，零服务总线依赖）。常规路径建立后此分支零触发。
     if (pos == MOMergePositionNone && currentChatName().length == 0 && lid > 0) {
         NSString *nm = chatNameOfWrap(wrap);
-        if (nm.length > 0) {
-            WPLog(@"MsgMerge", @"[DBG][Read] 聊天名缺位 → measure 兜底建立：%@", nm);
-            setCurrentChatNameIfEmpty(nm);
-        }
+        if (nm.length > 0) setCurrentChatNameIfEmpty(nm);
     }
     if (pos != MOMergePositionNone && ![m configFingerprintChanged]) return pos;
     if ([m configFingerprintChanged]) {
-        WPLog(@"MsgMerge", @"[DBG][Read] lid=%lld 指纹变化 → 立即重建", lid);
         refreshAndApplyFromContext();
     } else {
-        WPLog(@"MsgMerge", @"[DBG][Read] lid=%lld None → 保鲜补表", lid);
         refreshModelNow();
     }
-    MOMergePosition pos2 = [m posForLocalID:lid];
-    WPLog(@"MsgMerge", @"[DBG][Read] lid=%lld 二查=%ld", lid, (long)pos2);
-    return pos2;
+    return [m posForLocalID:lid];
 }
 
 // —— 新消息入库联动 ——
@@ -456,20 +443,13 @@ static void mmHandleIncomingMsg(id session, id wrap) {
     if (!cfg.mmEnable) return;
     if (![session isKindOfClass:[NSString class]]) return;
     if (![(NSString *)session isEqualToString:g_currentChatName]) {
-        // 聊天名缺位兜底（118 实证）：session 是微信收发管道自带的 talker，
-        // 当前聊天页在且聊天名空 → 直接用 session 建立（零服务总线依赖）
-        if (g_currentChatName.length == 0 && g_curChatVC) {
-            setCurrentChatNameIfEmpty(session);
-            WPLog(@"MsgMerge", @"[DBG][Pipe] 缺位兜底后重匹配 session=%@", session);
-        }
-        if (![(NSString *)session isEqualToString:g_currentChatName]) {
-            WPLog(@"MsgMerge", @"[DBG][Pipe] 丢弃：session=%@ ≠ 当前=%@", session, g_currentChatName ?: @"nil");
-            return;   // 只管当前打开的会话
-        }
+        // 聊天名缺位兜底：session 是微信收发管道自带的 talker，当前聊天页在且
+        // 聊天名空 → 直接用 session 建立（零服务总线依赖）。常规建立后零触发。
+        if (g_currentChatName.length == 0 && g_curChatVC) setCurrentChatNameIfEmpty(session);
+        if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
     }
     long long lid = localIDOfWrap(wrap);
     if (lid <= 0) return;
-    WPLog(@"MsgMerge", @"[DBG][Pipe] 命中当前会话 lid=%lld", lid);
     // g_currentNodeArray 仅主线程安全（主线程 updateChatContext 会换数组），
     // 读 count 前必须先归队——非主线程回调时三项动作整体派发主队列串行执行
     if (![NSThread isMainThread]) {
@@ -845,16 +825,12 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
     ((void (*)(id, SEL, BOOL))orig_BaseMsgContentVC_viewDidAppear)(self, _cmd, animated);
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        WPLog(@"MsgMerge", @"[DBG][Appear] enter mmEnable=%d curVC匹配=%d", (int)cfg.mmEnable,
-              (int)(self == g_curChatVC));
         if (!cfg.mmEnable) return;
         if (self != g_curChatVC) return;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-            if (g_curChatVC != self) { WPLog(@"MsgMerge", @"[DBG][Appear] 延迟块：已切走"); return; }
+            if (g_curChatVC != self) return;   // 已切走
             updateChatContext(self);           // 刷新数组引用（重建输入取落定后的表）
-            WPLog(@"MsgMerge", @"[DBG][Appear] 延迟块：updateChatContext 完，聊天名=%@",
-                  g_currentChatName ?: @"nil");
             mergeDoReload();                   // 重建模型（不碰表格）
             UITableView *tbl = nil;            // 静默窗口强制全表重询行高
             UIViewController *vcSelf = self;
