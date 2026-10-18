@@ -660,13 +660,14 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
-    // XOS 1.5.9 骑坐变换（com.tencent.wx 探针实测终态，推翻一切静态推测的 −8/−46 公式）：
-    //   头像可见行：x ±3 向屏幕边缘、y +2（原生 9,2 → 12,4；我方 341,2 → 338,4 镜像）
-    //   气泡：对方侧 x −5 钻向头像列、我方 0 不动（全行生效，含头像隐藏行）
-    //   「骑」= 头像右移下沉与气泡左移咬合在气泡左上角，非悬空冒顶
+    // XOS 1.5.9 骑坐变换（trace2 前后帧探针 + BG-DUMP 白泡结构联立实证）：
+    //   白泡真身=bg（YYAsyncImageView，cont 内部 x=−5 恒定），可视位=cont.x+bg.x。
+    //   XOS 写 cont（原生 61→17）：白泡整块钻到头像正下方（可视 12=head.x 12），
+    //   头像右移下沉 ±3/+2 压住白泡左上角——「头像在气泡上面」。
+    //   cont 位移仅头像可见行：对方 −44 / 我方 +44（镜像）；隐藏行只做侧位归位不动。
     if (cfg.mmAvatarRide) {
         newDH += (sign > 0) ? -3.0 : 3.0;
-        newDC += (sign < 0) ? -5.0 : 0.0;
+        if (headVisible) newDC += sign * 44.0;
     }
     if (fabs(newDH - lastDH) > 0.01) {
         CGRect f = bHead;
