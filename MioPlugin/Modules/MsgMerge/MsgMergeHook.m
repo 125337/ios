@@ -697,12 +697,19 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
             f.origin.y = (active && rideOK) ? (bHead.origin.y + olClamp(cfg.mmAvatarRideDepth, 100)) : (f.origin.y + 2.0);
         }
         head.frame = f;
-        // XOS 同款：骑坐组首昵称重排到悬空头像右侧（双机截图实证「过客.」与头像同排）
+        // 昵称跟随（XOS 同款：原生布局本就把昵称排在头像右侧锚点（头像右+8/顶+4，
+        // 探针实证 63,6），天然绑定即终态——默认态（depth=0 且无横移）对昵称零干预；
+        // 仅当头像偏离原生锚点（depth/横移配置）导致期望位与原生位不一致时才显式写帧
+        // 跟随。lastDN 照记，供切回非骑行行时还原路径使用。）
         if (rideTop && lb) {
             CGRect nf = lb.frame;
-            nf.origin.x = f.origin.x + f.size.width + 8.0;
-            nf.origin.y = f.origin.y + 4.0;   // 压低防蹭气泡新顶（头像顶+58）
-            lb.frame = nf;
+            double wx = f.origin.x + f.size.width + 8.0;
+            double wy = f.origin.y + 4.0;
+            if (fabs(wx - nf.origin.x) > 0.5 || fabs(wy - nf.origin.y) > 0.5) {
+                nf.origin.x = wx;
+                nf.origin.y = wy;
+                lb.frame = nf;
+            }
             objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
