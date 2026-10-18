@@ -676,6 +676,14 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
             f.origin.y = active ? (-56.0 + olClamp(cfg.mmAvatarRideDepth, 100)) : (f.origin.y + 2.0);
         }
         head.frame = f;
+        // XOS 同款：骑坐组首昵称重排到悬空头像右侧（双机截图实证「过客.」与头像同排）
+        if (rideTop && lb) {
+            CGRect nf = lb.frame;
+            nf.origin.x = f.origin.x + f.size.width + 8.0;
+            nf.origin.y = f.origin.y + 8.0;
+            lb.frame = nf;
+            objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     if (fabs(newDC - lastDC) > 0.01) {
@@ -683,7 +691,7 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         f.origin.x += newDC;
         cont.frame = f;
         objc_setAssociatedObject(cellView, kOLLastDC, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if (lb && fabs(newDC - lastDN) > 0.01) {
+        if (lb && !rideTop && fabs(newDC - lastDN) > 0.01) {
             CGRect nf = lb.frame;
             nf.origin.x = baseNameX + newDC;
             lb.frame = nf;
