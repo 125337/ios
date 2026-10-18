@@ -158,10 +158,17 @@ static void updateChatContext(id self) {
         // 直读不走服务）② 渲染数组首条 wrap 的 chatNameOfWrap（m_arrMessageNodeData
         // 元素即 viewModel，读侧同款推导）。
         NSString *name = safeKVC(self, @"m_nsTalker");
+        WPLog(@"MsgMerge", @"[DBG][Ctx] talker raw=%@ (%@)", name, NSStringFromClass([self class]));
         if (![name isKindOfClass:[NSString class]] || name.length == 0) {
             NSArray *arr0 = safeKVC(self, @"m_arrMessageNodeData");
+            WPLog(@"MsgMerge", @"[DBG][Ctx] talker miss → wrap 推导：arr=%@ count=%lu",
+                  NSStringFromClass([arr0 class] ?: [NSObject class]),
+                  (unsigned long)([arr0 isKindOfClass:[NSArray class]] ? arr0.count : -1));
             if ([arr0 isKindOfClass:[NSArray class]] && arr0.count > 0) {
-                name = chatNameOfWrap(safeKVC([arr0 objectAtIndex:0], @"messageWrap"));
+                id vm0 = [arr0 objectAtIndex:0];
+                id wrap0 = safeKVC(vm0, @"messageWrap");
+                name = chatNameOfWrap(wrap0);
+                WPLog(@"MsgMerge", @"[DBG][Ctx] wrap0=%@ → name=%@", wrap0 ? @"有" : @"nil", name ?: @"nil");
             }
         }
         if ([name isKindOfClass:[NSString class]] && name.length > 0) {
@@ -280,9 +287,12 @@ static void refreshFlaggedCells(void) {
 // 索引增量刷新（数据先行，无可见动作）+ 屏上 pos 实变时才可见刷新。
 static void refreshAndApplyFromContext(void) {
     UIViewController *vc = g_curChatVC;
-    if (!vc) return;
+    if (!vc) { WPLog(@"MsgMerge", @"[DBG][Ref] 跳过：无 vc"); return; }
     NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
-    if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return;
+    if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) {
+        WPLog(@"MsgMerge", @"[DBG][Ref] 跳过：数组空（%@）", NSStringFromClass([arr class] ?: [NSObject class]));
+        return;
+    }
 #if __has_feature(objc_arc)
     g_currentNodeArray = arr;
 #else
@@ -291,8 +301,14 @@ static void refreshAndApplyFromContext(void) {
     g_currentNodeArray = arr;
 #endif
     NSString *chat = currentChatName();
-    if (chat.length == 0) return;
+    if (chat.length == 0) {
+        WPLog(@"MsgMerge", @"[DBG][Ref] 跳过：无聊天名（arr.count=%lu）→ 索引永不重建=合并失效",
+              (unsigned long)arr.count);
+        return;
+    }
     NSUInteger changed = [[BBMergeModel shared] refreshIndexWithNodeArray:arr chatName:chat];
+    WPLog(@"MsgMerge", @"[DBG][Ref] rebuild chat=%@ count=%lu changed=%lu", chat,
+          (unsigned long)arr.count, (unsigned long)changed);
     if (changed > 0) refreshFlaggedCells();   // 屏上 pos 实变 → 可见刷新（清测量缓存+标脏）
 }
 
@@ -311,14 +327,19 @@ static void refreshModelNow(void) {
 // 零影响（查表架构核心）。None → 限频保鲜补表再查；配置指纹变化 → 立即重建。
 static MOMergePosition flagsPos(id vm) {
     BBMergeModel *m = [BBMergeModel shared];
-    MOMergePosition pos = [m posForLocalID:localIDOfWrap(safeKVC(vm, @"messageWrap"))];
+    long long lid = localIDOfWrap(safeKVC(vm, @"messageWrap"));
+    MOMergePosition pos = [m posForLocalID:lid];
     if (pos != MOMergePositionNone && ![m configFingerprintChanged]) return pos;
     if ([m configFingerprintChanged]) {
+        WPLog(@"MsgMerge", @"[DBG][Read] lid=%lld 指纹变化 → 立即重建", lid);
         refreshAndApplyFromContext();
     } else {
+        WPLog(@"MsgMerge", @"[DBG][Read] lid=%lld None → 保鲜补表", lid);
         refreshModelNow();
     }
-    return [m posForLocalID:localIDOfWrap(safeKVC(vm, @"messageWrap"))];
+    MOMergePosition pos2 = [m posForLocalID:lid];
+    WPLog(@"MsgMerge", @"[DBG][Read] lid=%lld 二查=%ld", lid, (long)pos2);
+    return pos2;
 }
 
 // —— 新消息入库联动 ——
@@ -403,9 +424,13 @@ static void mmHandleIncomingMsg(id session, id wrap) {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!cfg.mmEnable) return;
     if (![session isKindOfClass:[NSString class]]) return;
-    if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
+    if (![(NSString *)session isEqualToString:g_currentChatName]) {
+        WPLog(@"MsgMerge", @"[DBG][Pipe] 丢弃：session=%@ ≠ 当前=%@", session, g_currentChatName ?: @"nil");
+        return;   // 只管当前打开的会话
+    }
     long long lid = localIDOfWrap(wrap);
     if (lid <= 0) return;
+    WPLog(@"MsgMerge", @"[DBG][Pipe] 命中当前会话 lid=%lld", lid);
     // g_currentNodeArray 仅主线程安全（主线程 updateChatContext 会换数组），
     // 读 count 前必须先归队——非主线程回调时三项动作整体派发主队列串行执行
     if (![NSThread isMainThread]) {
@@ -781,12 +806,16 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
     ((void (*)(id, SEL, BOOL))orig_BaseMsgContentVC_viewDidAppear)(self, _cmd, animated);
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
+        WPLog(@"MsgMerge", @"[DBG][Appear] enter mmEnable=%d curVC匹配=%d", (int)cfg.mmEnable,
+              (int)(self == g_curChatVC));
         if (!cfg.mmEnable) return;
         if (self != g_curChatVC) return;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-            if (g_curChatVC != self) return;   // 已切走
+            if (g_curChatVC != self) { WPLog(@"MsgMerge", @"[DBG][Appear] 延迟块：已切走"); return; }
             updateChatContext(self);           // 刷新数组引用（重建输入取落定后的表）
+            WPLog(@"MsgMerge", @"[DBG][Appear] 延迟块：updateChatContext 完，聊天名=%@",
+                  g_currentChatName ?: @"nil");
             mergeDoReload();                   // 重建模型（不碰表格）
             UITableView *tbl = nil;            // 静默窗口强制全表重询行高
             UIViewController *vcSelf = self;
