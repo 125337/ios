@@ -545,8 +545,8 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //     （固定行高内挪 y 必守恒，项目定论；间距收拢走 measure: 测量层接管）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
 //   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
-// 自摆范围：横向 x（全体白名单行）+ 骑行行纵向（头像 XOS 式悬垂 −8+偏置，
-//   气泡/行高不动；mmAvatarRide）。
+// 自摆范围：横向 x（全体白名单行）+ 骑行行纵向（头像钉行顶+depth、气泡顶统一钉
+//   头像顶+23；mmAvatarRide）。
 // 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
 //   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
 //   骑行 = XOS 1.5.9 双机截图实证形态：头像可见行 x±3、气泡对方侧 x−5（本函数内
@@ -566,11 +566,12 @@ static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
 }
 
-// —— 骑行纵向（XOS 1.5.9 反编译实证范式，specs/xos-ride-align-spec.md）——
-// 头像悬垂行顶上方 8pt（XOS 钉位公式 −8+mesMsgMergeReverseAvatarDownOffset，
-// 吃上一行原生底部空白 ~10pt，不触上一组气泡），气泡保持原生基线（16/5）不动、
-// 不扩行——XOS 骑行零行高变更（其 rowHeight 钩只做紧凑收缩，与骑行无关）。
-// mmAvatarRideDepth = 头像下垂偏置（XOS 同名键语义，±100）。
+// —— 骑行纵向（XOS 实证几何：反编译 rowHeight +13 还原分支 + 探针实测头像 y≈+2
+// + 双机实测可视抬升 23pt；装机反馈修正：头像不得出行，出行必与上一行 cell 重叠）——
+// 头像钉行顶（不出行），气泡顶统一钉到 头像顶+23——原生两基线（群昵称 16/无昵称 5）
+// 一次拉平，左右恒对称；行高只补「气泡下移后底部空白不足」的差额（仅无昵称行需要）。
+static const double olRideLift = 23.0;   // 头像顶→气泡顶抬升（XOS 双机实测）
+static const double olRidePad  = 10.0;   // 行底部空白估计（可吸收的气泡下移量）
 
 /// 布局接管类型白名单：媒体四类与表情均为 CommonMessageCellView 同构结构
 ///（头像 46×46 y=2、容器与气泡列对齐：自发右缘 W−64/收方 x=64）；表情 47 有头像
@@ -673,8 +674,8 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
-    // XOS 1.5.9 骑坐形态（反编译实证范式）：头像悬垂行顶上方 8pt（−8+下垂偏置，
-    //   吃上一行原生底部空白，不扩行不触上一组气泡），气泡保持原生基线（16/5）不动。
+    // XOS 1.5.9 骑坐形态（装机反馈修订）：头像钉行顶（不出行→绝不与上一行 cell
+    //   重叠），气泡顶统一钉到 头像顶+23（XOS 实测可视抬升，两基线拉平恒对称）。
     //   组内全行：cont ±44 钻入 → 整组气泡左缘对齐头像正下方（可视位=cont.x+bg.x）
     //   独立行（非组）：仅头像 ±3/+2 轻咬合，不悬空不钻入
     if (cfg.mmAvatarRide) {
@@ -686,24 +687,29 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         CGRect f = bHead;
         f.origin.x += newDH;
         if (cfg.mmAvatarRide && headVisible) {
-            // 骑行头行：XOS 式悬垂钉位（−8+下垂偏置）；切片行（泡体无缝）/
-            // 非接管类型：+2 轻咬合
-            f.origin.y = (active && rideOK) ? (-8.0 + olClamp(cfg.mmAvatarRideDepth, 100)) : (f.origin.y + 2.0);
+            // 骑行头行：头像钉行顶（XOS 探针实测 y≈+2，不出行→绝不与上一行 cell
+            // 重叠）+depth 整体下沉；切片行（泡体无缝）/非接管类型：+2 轻咬合
+            f.origin.y = (active && rideOK) ? (bHead.origin.y + olClamp(cfg.mmAvatarRideDepth, 100)) : (f.origin.y + 2.0);
         }
         head.frame = f;
         // XOS 同款：骑坐组首昵称重排到悬空头像右侧（双机截图实证「过客.」与头像同排）
         if (rideTop && lb) {
             CGRect nf = lb.frame;
             nf.origin.x = f.origin.x + f.size.width + 8.0;
-            nf.origin.y = f.origin.y + 8.0;
+            nf.origin.y = f.origin.y + 4.0;   // 压低防蹭气泡新顶（头像顶+23）
             lb.frame = nf;
             objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    // cont 纵向：XOS 实证气泡保持原生基线（16/5）不动，行内不下移；newDY 恒 0，
-    // lastDY 增量检测保留为还原路径（旧版扩行残留帧经此自愈）
+    // cont 纵向：气泡顶统一钉到 头像顶+lift+depth（XOS 实测可视抬升 23pt，原生两
+    // 基线 16/5 拉平→左右恒对称）；行高差额由 measure 补（仅无昵称行）。lastDY
+    // 增量管理：开关翻转/复用自动还原
     double newDY = 0.0;
+    if (rideTop) {
+        newDY = bHead.origin.y + olRideLift + olClamp(cfg.mmAvatarRideDepth, 100) - bBub.origin.y;
+        if (newDY < 0.0) newDY = 0.0;
+    }
     if (fabs(newDC - lastDC) > 0.01 || fabs(newDY - lastDY) > 0.01) {
         CGRect f = bBub;
         f.origin.x += newDC;
@@ -902,10 +908,10 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
 // ------------------------------------------------------------
 // -[CommonMessageViewModel measure:]（探针实证：CGSize 参数入 x2/x3，调用侧
 // 传 {-1,-1} 无约束哨兵；MSHook + 同声明签名，编译器自动对齐 ABI）。orig 只当
-// 排版工具，一项算术：
-//   组内行高缩减：非组尾消息测量高 −(mmSpacing+mmHeightReduce)（下限 24；
-//   HeightReduce=XOS mesMsgMergeHeightReduce 同款：组内行高原生−该值）。
-//   骑行不改行高（XOS 反编译实证：骑行零行高变更，头像负 y 悬垂上一行空白）。
+// 排版工具，两项算术：
+//   ① 骑行补高：气泡顶钉 头像顶+23 后，无昵称行底部空白不足的差额由行高补足
+//   ② 组内行高缩减：非组尾消息测量高 −(mmSpacing+mmHeightReduce)（下限 24；
+//      HeightReduce=XOS mesMsgMergeHeightReduce 同款：组内行高原生−该值）
 // 昵称区不在此补偿——判定钩翻转让原生测量自动收缩（N 补偿链已删）。
 // ------------------------------------------------------------
 static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
@@ -918,13 +924,12 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (!cfg.mmEnable) return s;
-        // 行高缩减（XOS 同域两键合并）：手动间距（mmSpacingMode==1）+ 行高缩减
-        //（mmHeightReduce，mesMsgMergeHeightReduce 同款默认 0），组内非组尾行在
-        // 原生行高上统一缩减。骑行不在此掺和（XOS 实证骑行零行高变更）。
+        // 行高两项算术：① 骑行补高（气泡下移后底部空白不足的差额，仅无昵称行需要）
+        // ② 组内行高缩减（XOS 同域两键合并：mmSpacing+mmHeightReduce，下限 24）
         double reduce = 0;
         if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) reduce += (double)cfg.mmSpacing;
         reduce += (double)cfg.mmHeightReduce;
-        if (reduce <= 0) return s;
+        if (reduce <= 0 && !cfg.mmAvatarRide) return s;
         id wrap = safeKVC(self, @"messageWrap");
         if (!wrap) return s;   // 时间节点等无 wrap
         NSString *chat = chatNameOfWrap(wrap);
@@ -935,13 +940,43 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         s_inMeasure = NO;
         if (pos == MOMergePositionNone) return s;   // 组外/标志缺席：原生直通
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
+        // ① 骑行补高：渲染层把气泡顶钉到 头像顶(2)+23+depth（两基线 16/5 统一拉平，
+        //    左右恒对称），下移量超出本行底部空白 ~10 的部分由行高补足——只有无昵称
+        //    行基线 5 距目标 20 需要补；切片行泡体无缝不扩（渲染层对切片行不做骑行 y）。
+        double rideAdd = 0;
+        if (cfg.mmAvatarRide && split == 0 &&
+            (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1)) {
+            BOOL headRow = (cfg.mmAvatarPos == 0)
+                ? (pos == MOMergePositionFirst || pos == MOMergePositionSingle)
+                : (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
+            if (headRow) {
+                long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
+                if (olTypeEnabled(msgType)) {
+                    // 本行原生 cont 基线：群昵称行（chatroom+组首/Single+原生判定开）
+                    // y=16，否则 y=5。直调原生 orig 判定（与渲染层 bBub 实测同语义）
+                    BOOL nickRow = NO;
+                    if ([chat hasSuffix:@"@chatroom"] &&
+                        (pos == MOMergePositionFirst || pos == MOMergePositionSingle) &&
+                        orig_CMVM_isShowChatRoomDisplayName) {
+                        nickRow = ((BOOL (*)(id, SEL))orig_CMVM_isShowChatRoomDisplayName)(
+                            self, @selector(isShowChatRoomDisplayName));
+                    }
+                    double need = 2.0 + olRideLift + olClamp(cfg.mmAvatarRideDepth, 100) - (nickRow ? 16.0 : 5.0);
+                    rideAdd = need - olRidePad;   // 底部空白 ~10 可吸收，超出才补行高
+                    if (rideAdd < 0.0) rideAdd = 0.0;
+                }
+            }
+        }
         BOOL isTail = (pos == MOMergePositionLast || pos == MOMergePositionSingle);
-        if (isTail) return s;   // 组尾保原生（组尾到组外间隙不变）
+        if (rideAdd <= 0 && isTail) return s;   // 组尾保原生（组尾到组外间隙不变）
         // 末片门控：首片/中片是无缝泡体——原生切片气泡底=片边界、续片 bgTop=0
-        // 贴顶无让位，任何测量缩减都让泡体溢出压进下一片（diag33 实锤同气泡自叠）。
-        if (split != 0 && split != 3) return s;
-        double h = (double)s.height - reduce;
-        if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
+        // 贴顶无让位，任何测量改动都让泡体溢出压进下一片（diag33 实锤同气泡自叠）。
+        if (rideAdd <= 0 && split != 0 && split != 3) return s;
+        double h = (double)s.height + rideAdd;
+        if (!isTail) {
+            h -= reduce;
+            if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
+        }
         if (fabs(h - (double)s.height) < 0.01) return s;
         return CGSizeMake(s.width, (CGFloat)h);
     } @catch (NSException *e) {
@@ -992,8 +1027,7 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 
 // —— CommonMessageCellView：渲染应用 ——
 
-// 骑气泡写帧已并入 applyOwnLayout（XOS 1.5.9 探针实测：头像 ±3/+2、气泡对方 −5，
-// 无独立 y 写帧路径）。
+// 骑气泡写帧已并入 applyOwnLayout（头像 x±3/y 钉行顶、气泡对方 x−5、y 钉头像顶+23）。
 
 // ------------------------------------------------------------
 // -[CommonMessageCellView layoutSubviews]（XOS 同款挂点）：原生布局跑完后置应用。

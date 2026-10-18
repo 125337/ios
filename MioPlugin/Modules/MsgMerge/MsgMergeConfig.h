@@ -44,11 +44,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// 整列横向偏移（pt，±20 钳位）：头像+气泡+昵称同向平移，正=向屏幕边缘；收发镜像
 @property (nonatomic, assign) CGFloat mmWholeOffset;
 
-/// 头像骑气泡（XOS 1.5.9 骑坐，需 mmEnable 开）：组首头像悬空组顶+组内气泡整组钻入
-///（XOS 双机截图实证形态）；独立行仅头像 ±3/+2 轻咬合
+/// 头像骑气泡（XOS 1.5.9 骑坐，需 mmEnable 开）：组首头像钉行顶、组首气泡顶统一
+/// 钉到头像顶+23（可视抬升恒定，左右对称）+组内气泡整组钻入；独立行仅头像 ±3/+2 轻咬合
 @property (nonatomic, assign) BOOL   mmAvatarRide;
-/// 骑行头像下垂偏置（pt，±100 钳位，XOS mesMsgMergeReverseAvatarDownOffset 同款）：
-/// 0 = 头像悬垂行顶上方 8pt（XOS 实证位）；正值=头像下沉贴近气泡，负值=悬空更高
+/// 骑行纵向偏置（pt，±100 钳位）：0=XOS 实证位（头像钉行顶、气泡顶=头像顶+23）；
+/// 正=整套骑行下沉（头像与气泡同步下移），负=上移
 @property (nonatomic, assign) CGFloat mmAvatarRideDepth;
 /// 行高缩减（pt，XOS mesMsgMergeHeightReduce 同款，默认 0）：组内非组尾行在原生行高
 ///（及手动间距）基础上再减此值，下限 24
