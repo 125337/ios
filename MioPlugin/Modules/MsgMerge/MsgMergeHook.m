@@ -591,29 +591,23 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:cont.frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDH, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDC, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        // [BG-DUMP] 白泡真身结构（总量帽 8 条，与 XOS bg(−5,50x37) 对照）
+        // [BG-DUMP] cont 全子视图清单（白泡真身定位；bg 实证为空容器占位）
         static NSInteger sBgdumpCnt = 0;
-        if (sBgdumpCnt < 8) {
+        if (sBgdumpCnt < 6) {
             sBgdumpCnt++;
             NSMutableString *d = [NSMutableString stringWithFormat:
-                @"[BG-DUMP] %@ head %@ | bg %@ sup=%@",
+                @"[BG-DUMP] %@ head %@ | cont=%@ %@ subs:",
                 NSStringFromClass([cellView class]),
                 NSStringFromCGRect(head.frame),
-                bg ? NSStringFromCGRect(bg.frame) : @"nil",
-                cont ? NSStringFromClass([cont class]) : @"nil"];
-            if ([bg isKindOfClass:[UIImageView class]]) {
-                UIImage *im = [(UIImageView *)bg image];
-                [d appendFormat:@" img(%gx%g)", im ? im.size.width : 0, im ? im.size.height : 0];
-                NSArray<UIView *> *ss = [(UIImageView *)bg subviews];
-                for (UIView *sv in ss) {
-                    if ([sv isKindOfClass:[UIImageView class]]) {
-                        UIImage *si = [(UIImageView *)sv image];
-                        [d appendFormat:@" sub=%@ %@ img(%gx%g)",
-                            NSStringFromClass([sv class]),
-                            NSStringFromCGRect(sv.frame),
-                            si ? si.size.width : 0, si ? si.size.height : 0];
-                    }
-                }
+                NSStringFromClass([cont class]),
+                NSStringFromCGRect(cont.frame)];
+            for (UIView *sv in cont.subviews) {
+                UIImage *si = ([sv isKindOfClass:[UIImageView class]] ? [(UIImageView *)sv image] : nil);
+                [d appendFormat:@" %@%@%@", NSStringFromClass([sv class]),
+                    ([sv isKindOfClass:[UIImageView class]] && !sv.isHidden) ? @"*" : @"",
+                    [NSString stringWithFormat:@"(%g,%g %gx%g%@)",
+                        sv.frame.origin.x, sv.frame.origin.y, sv.frame.size.width, sv.frame.size.height,
+                        si ? [NSString stringWithFormat:@" img%gx%g", si.size.width, si.size.height] : @""]];
             }
             WPLog(@"MsgMerge", @"%@", d);
         }
