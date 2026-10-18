@@ -558,10 +558,13 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 static void *kOLBaseHeadF = &kOLBaseHeadF;
 static void *kOLBaseBubF  = &kOLBaseBubF;
 static void *kOLBaseNameX = &kOLBaseNameX;
+static void *kOLBaseRefF  = &kOLBaseRefF;
 static void *kOLLastDH    = &kOLLastDH;
 static void *kOLLastDC    = &kOLLastDC;
 static void *kOLLastDY    = &kOLLastDY;
 static void *kOLLastDN    = &kOLLastDN;
+static void *kOLLastDRX   = &kOLLastDRX;
+static void *kOLLastDRY   = &kOLLastDRY;
 
 static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
@@ -740,6 +743,51 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
             nf.origin.x = baseNameX + newDC;
             lb.frame = nf;
             objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    }
+    // 引用条跟随（MMInputMsgReferView 是 mcv 直接子视图，不随泡容器走）：原生按泡原生
+    // 基准摆位（探针 2026-10-19 实证：原生泡底+4 处 y=57，与泡左对齐 x=61），骑行把泡
+    // 钉到 头像顶+57 后引用条留在原地压进泡体（重叠 219×28，引用消息渲染撕裂）。
+    // 跟随 = 与 cont 完全同量位移（newDC/newDY），随泡贴引用条保持原生间距。发现走
+    // 子视图遍历（无已知 getter，防懒建不直调）；基准+失效检测+记账同口径（head/cont
+    // 同款——native 每轮把引用条重摆回原生位，靠检测+重写站住）；无此类/无此子视图
+    // （非引用消息）零开销幂等。
+    static Class s_refCls = nil;
+    static dispatch_once_t onceRef;
+    dispatch_once(&onceRef, ^{ s_refCls = objc_getClass("MMInputMsgReferView"); });
+    if (s_refCls) {
+        UIView *refer = nil;
+        for (UIView *sv in ((UIView *)cellView).subviews) {
+            if ([sv isKindOfClass:s_refCls]) { refer = sv; break; }
+        }
+        if ([refer isKindOfClass:[UIView class]]) {
+            NSValue *bRefV = objc_getAssociatedObject(cellView, kOLBaseRefF);
+            double lastDRX = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDRX) doubleValue];
+            double lastDRY = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDRY) doubleValue];
+            if (!bRefV) {
+                bRefV = [NSValue valueWithCGRect:refer.frame];
+                objc_setAssociatedObject(cellView, kOLBaseRefF, bRefV, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(cellView, kOLLastDRX, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(cellView, kOLLastDRY, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                lastDRX = 0;
+                lastDRY = 0;
+            }
+            CGRect bRef = [bRefV CGRectValue];
+            if (fabs(refer.frame.origin.x - (bRef.origin.x + lastDRX)) > 0.5 ||
+                fabs(refer.frame.origin.y - (bRef.origin.y + lastDRY)) > 0.5) {
+                bRef = refer.frame;   // 原生已重摆（复用/重布局），以当前值为新基准
+                lastDRX = 0;
+                lastDRY = 0;
+                objc_setAssociatedObject(cellView, kOLBaseRefF, [NSValue valueWithCGRect:bRef], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+            if (fabs(newDC - lastDRX) > 0.01 || fabs(newDY - lastDRY) > 0.01) {
+                CGRect f = bRef;
+                f.origin.x += newDC;
+                f.origin.y += newDY;
+                refer.frame = f;
+                objc_setAssociatedObject(cellView, kOLLastDRX, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(cellView, kOLLastDRY, @(newDY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
         }
     }
 }
