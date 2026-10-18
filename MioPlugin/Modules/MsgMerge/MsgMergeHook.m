@@ -580,13 +580,6 @@ static double olClamp(double v, double lim) {
 // reduce 在骑行/非骑行行均匀生效，两功能叠加间距不出错。）
 static const double olRideLift = 57.0;   // 头像顶→气泡顶抬升（XOS 标杆图 2026-10-18 实测泡顶=头像顶+57；57=头像高43+底间隙14）
 
-/// 布局接管类型白名单：媒体四类与表情均为 CommonMessageCellView 同构结构
-///（头像 46×46 y=2、容器与气泡列对齐：自发右缘 W−64/收方 x=64）；表情 47 有头像
-/// 有昵称有容器（旧"居中异构"系视图调试器误读），仅无 bg 走 getContentView 回退。
-static BOOL olTypeEnabled(long long t) {
-    return t == 1 || t == 3 || t == 34 || t == 43 || t == 47 || t == 49 || t == 50 || t == 62;
-}
-
 static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePosition pos, BOOL rideOK) {
     @try { [MsgMergeDebugHud syncVisible]; } @catch (NSException *e) {}   // 调试悬浮窗显隐（异常不进布局路径）
     UIView *head = safeCall(cellView, "getHeadImageView");
@@ -802,15 +795,17 @@ static void applyMergeToCellView(id cellView) {
             headVisible = (cfg.mmAvatarPos == 0) ? isFirst : isLast;
         }
 
-        // 布局接管：白名单类型（文本+媒体四类）横向自摆。必须在 pos=None 早退
-        // 之前——mmSepMedia 开启时媒体消息充当分隔符（标志为 None），早退会饿死
-        // 媒体自摆（实证：图片/视频偏移无效）。分隔符行 pos=None → headVisible=NO，
-        // 自摆生效但骑行不生效（独立打断行不属于合并组，无骑可言）。
-        long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
+        // 布局接管：进组类型横向自摆（结构防御靠 applyOwnLayout 取数兜底：head/cont
+        // 取不到直接 return，不瞎挪）。必须在 pos=None 早退之前——mmSepMedia 开启时
+        // 媒体消息充当分隔符（标志为 None），早退会饿死媒体自摆（实证：图片/视频偏移
+        // 无效）。分隔符行 pos=None → headVisible=NO，自摆生效但骑行不生效（独立打断
+        // 行不属于合并组，无骑可言）。
+        // （旧类型白名单 olTypeEnabled 已删：合并每支持新类型就得手动加白名单，
+        // 通话 t=50 漏加导致骑行不生效——根治 = 进组即接管 + 取数兜底。）
         // 骑行门控：整条消息（split==0）才可悬空+扩行——切片行泡体无缝，扩行必裂缝、
         // 悬空必与上一行重叠（measure 层同门控，两侧一致）
         unsigned long long split = vmSplitPosition(viewModel);
-        applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible, pos, split == 0);
+        applyOwnLayout(cellView, YES, headVisible, pos, split == 0);
 
         // 骑气泡：写帧必须晚于 applyOwnLayout（其 x 写帧基于原生基准重建 frame，
         // y 取原生值，先写骑行 y 会被它抹掉）。挂 layoutSubviews 后（XOS 同款）
@@ -979,21 +974,18 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
                 ? (pos == MOMergePositionFirst || pos == MOMergePositionSingle)
                 : (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
             if (headRow) {
-                long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
-                if (olTypeEnabled(msgType)) {
-                    // 本行原生 cont 基线：群昵称行（chatroom+组首/Single+原生判定开）
-                    // y=16，否则 y=5。直调原生 orig 判定（与渲染层 bBub 实测同语义）
-                    BOOL nickRow = NO;
-                    if ([chat hasSuffix:@"@chatroom"] &&
-                        (pos == MOMergePositionFirst || pos == MOMergePositionSingle) &&
-                        orig_CMVM_isShowChatRoomDisplayName) {
-                        nickRow = ((BOOL (*)(id, SEL))orig_CMVM_isShowChatRoomDisplayName)(
-                            self, @selector(isShowChatRoomDisplayName));
-                    }
-                    double need = 2.0 + olRideLift + olClamp(cfg.mmAvatarRideDepth, 100) - (nickRow ? 16.0 : 5.0);
-                    rideAdd = need;   // 泡下移量全额补高（不抵扣底部空白，间距保原生）
-                    if (rideAdd < 0.0) rideAdd = 0.0;
+                // 本行原生 cont 基线：群昵称行（chatroom+组首/Single+原生判定开）
+                // y=16，否则 y=5。直调原生 orig 判定（与渲染层 bBub 实测同语义）
+                BOOL nickRow = NO;
+                if ([chat hasSuffix:@"@chatroom"] &&
+                    (pos == MOMergePositionFirst || pos == MOMergePositionSingle) &&
+                    orig_CMVM_isShowChatRoomDisplayName) {
+                    nickRow = ((BOOL (*)(id, SEL))orig_CMVM_isShowChatRoomDisplayName)(
+                        self, @selector(isShowChatRoomDisplayName));
                 }
+                double need = 2.0 + olRideLift + olClamp(cfg.mmAvatarRideDepth, 100) - (nickRow ? 16.0 : 5.0);
+                rideAdd = need;   // 泡下移量全额补高（不抵扣底部空白，间距保原生）
+                if (rideAdd < 0.0) rideAdd = 0.0;
             }
         }
         BOOL isTail = (pos == MOMergePositionLast || pos == MOMergePositionSingle);
