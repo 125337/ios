@@ -692,20 +692,20 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         newDC += sign * (sign < 0 ? 52.0 : 50.0);
     }
     BOOL rideTop = (cfg.mmAvatarRide && active && headVisible && rideOK);
-    if (fabs(newDH - lastDH) > 0.01 || rideTop) {
+    // XOS 组首头像构图微调（8.0.60 探针实测：组首 (12,4)/自发 (338,4) vs 组内原生
+    // (9,2)/(341,2)——向屏内 3pt、向下 2pt，所有类型一致）。★★必须并入记账：
+    // 写帧 delta = newDH+tuneX / depth+tuneY，失效检测按同口径比对——若只写帧不记账，
+    // 检测每轮发现差一个微调量 → 误判"原生重摆"重置基准 → 微调逐轮累加发散
+    // （探针实证 76afa41f：头像每轮 -3/+2 漂移、泡连带每轮 +50/轮 跑飞）。
+    double tuneX = 0.0, tuneY = 0.0;
+    if (active && rideOK) { tuneX = -sign * 3.0; tuneY = 2.0; }
+    if (fabs(newDH + tuneX - lastDH) > 0.01 || rideTop) {
         CGRect f = bHead;
-        f.origin.x += newDH;
+        f.origin.x += newDH + tuneX;
         if (cfg.mmAvatarRide && headVisible) {
             // 骑行头行：头像钉行顶（XOS 探针实测 y≈+2，不出行→绝不与上一行 cell
-            // 重叠）+depth 整体下沉；切片行（泡体无缝）/非接管类型：+2 轻咬合
-            f.origin.y = (active && rideOK) ? (bHead.origin.y + olClamp(cfg.mmAvatarRideDepth, 100)) : (f.origin.y + 2.0);
-            if (active && rideOK) {
-                // XOS 组首头像构图微调（8.0.60 探针实测：组首 (12,4)/自发 (338,4)
-                // vs 组内原生 (9,2)/(341,2)——向屏内 3pt、向下 2pt，所有类型一致）；
-                // 组内行头像隐藏不受影响。泡顶锚 bHead+57 不变 → 泡−头像=55 与 XOS 同。
-                f.origin.x -= sign * 3.0;
-                f.origin.y += 2.0;
-            }
+            // 重叠）+depth 整体下沉+tuneY；切片行（泡体无缝）/非接管类型：+2 轻咬合
+            f.origin.y = (active && rideOK) ? (bHead.origin.y + olClamp(cfg.mmAvatarRideDepth, 100) + tuneY) : (f.origin.y + 2.0);
         }
         head.frame = f;
         // 昵称跟随（XOS 同款：原生布局本就把昵称排在头像右侧锚点（头像右+8/顶+4，
@@ -723,7 +723,7 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
             }
             objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
-        objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLLastDH, @(newDH + tuneX), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     // cont 纵向：气泡顶统一钉到 头像底+14（=头像顶+57，XOS 标杆：泡在头像正下方
     // 纵向分离；原生两基线 16/5 拉平→左右恒对称）；行高差额由 measure 全额补足。
