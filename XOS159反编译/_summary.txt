@@ -1,0 +1,5 @@
+Total scanned : 9446
+Exported      : 9099
+Skipped (thunk): 346
+Skipped (short): 0
+Failed         : 1

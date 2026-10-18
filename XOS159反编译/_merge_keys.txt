@@ -1,0 +1,193 @@
+== keys ==
+cf_CadisCalendarStyle
+cf_IconHideDouTuButton
+cf_IconHideEmojiButton
+cf_IconHideHomeShortcutButton
+cf_IconHideHomeTitle
+cf_IconHideKeyboardButton
+cf_IconHideNavMoreButton
+cf_IconHideNavSearchChatRecordButton
+cf_IconHideVoiceButton
+cf_InputToolViewBar
+cf_LGLiquidGlassSettings
+cf_MFBannerBtn
+cf_MMUINavigationBar
+cf_SHTM_AVATAR_ROTATION_ENABLED
+cf_SHTM_CONTENT_COLOR_ENABLED
+cf_SHTM_GLOW_COLOR_ENABLED
+cf_SHTM_IMAGE_BACKGROUND_ENABLED
+cf_SHTM_NICKNAME_COLOR_ENABLED
+cf_SHTM_QUICK_REPLY_BEAUTIFY_ENABLED
+cf_SHTM_SNOW_ANIMATION_ENABLED
+cf_SHTM_VIDEO_BACKGROUND_ENABLED
+cf_ThemeBoxSegmentedView
+cf___
+cf_bubbleCropEnabled
+cf_bubbleCropRight
+cf_coverAvatarCornerEnabled
+cf_coverDisableHomeCardContactMask
+cf_coverDisableOnMainPage
+cf_coverFunctionEnabled
+cf_coversEnabled
+cf_grayTestCardBorderEnabled
+cf_grayTestImageBlurEnabled
+cf_grayTestImageStackEnabled
+cf_grayTestOriginalImageEnabled
+cf_grayTestStackCheckEnabled
+cf_mesMsgMergeAvatarAboveBubble
+cf_mesMsgMergeBubbleWrapRefer
+cf_mesMsgMergeHideGroupOtherAvatar
+cf_mesMsgMergeHideGroupSelfAvatar
+cf_mesMsgMergeHidePrivateOtherAvatar
+cf_mesMsgMergeHidePrivateSelfAvatar
+cf_mesMsgMergeMessageOffsetOther
+cf_mesMsgMergeMessageOffsetSelf
+cf_mesMsgMergePayBubbleEnabled
+cf_mesMsgMergeReverse
+cf_mesMsgMergeReverseAvatarDownOffset
+cf_mesMsgMergeSmoothScrollEnabled
+cf_mesMsgMergeWrapReferDivider
+cf_xzyBubblePetAutoAnimEnabled
+cf_xzyBubblePetEnabled
+cf_xzyBubblePetStartFromFront
+cf_xzyBubbleShadowBreathEnabled
+cf_xzyChatListGroupingDeduplicateContacts
+cf_xzyChatListGroupingDividerTitleColorEnabled
+cf_xzyChatListGroupingFollowThemeBadge
+cf_xzyChatListGroupingHorizontalSearchOrbEnabled
+cf_xzyChatListGroupingShowAll
+cf_xzyChatListGroupingShowCount
+cf_xzyChatListGroupingShowGroupChat
+cf_xzyChatListGroupingShowOfficial
+cf_xzyChatListGroupingShowPrivate
+cf_xzyChatListGroupingShowSticky
+cf_xzyChatListGroupingShowUnread
+cf_xzyChatListGroupingShowUnreadBadge
+cf_xzyChatListGroupingSideRailTitleColorEnabled
+cf_xzyColorSchemeDisableConfigJson
+cf_xzyColorSchemeMessageEnabled
+cf_xzyColorSchemeNicknameEnabled
+cf_xzyColorSchemeRedPacketEnabled
+cf_xzyCoverParallaxLightingEnabled
+cf_xzyDesktopLyricsEnabled
+cf_xzyHighRefreshEnabled
+cf_xzyHighRefreshFPSVisible
+cf_xzyHomeBottomBarBadgeEnabled
+cf_xzyHomeBottomBarFloatingMenuSpread
+cf_xzyHomeBottomBarFollowThemeIcon
+cf_xzyHomeBottomBarTabLabelHidden
+cf_xzyHomeBottomBarWiderDock
+cf_xzyHomeNameplateMethod
+cf_xzyMesReferColorEnabled
+cf_xzyMesReferRoundedEnabled
+cf_xzyMesReferRoundedFlipOrder
+cf_xzyMesReferTextColorEnabled
+cf_xzyMusicRhythmVibrationEnabled
+cf_xzyNameplateEnabled
+cf_xzyNameplatePMEnabled
+cf_xzyNameplatePerUserEnabled
+cf_xzyNameplatePosition
+cf_xzyTimeLabelBubbleExtendAuto
+cf_xzyTimeLabelNoMerge
+cf_xzyTimeLabelSenderLeft
+cf_xzyTimeLabelShowCheckmark
+cf_xzyTimeLabelSuffixEnabled
+
+== slots ==
+DAT_003e6888 <- cf_bubbleCropRight
+DAT_003e6b08 <- cf_CadisCalendarStyle
+DAT_003e70e8 <- cf_xzyChatListGroupingFollowThemeBadge
+DAT_003e70f0 <- cf_xzyChatListGroupingShowUnreadBadge
+DAT_003e70f1 <- cf_xzyChatListGroupingShowCount
+DAT_003e7158 <- cf_xzyChatListGroupingShowSticky
+DAT_003e7159 <- cf_xzyChatListGroupingShowUnread
+DAT_003e715a <- cf_xzyChatListGroupingShowPrivate
+DAT_003e715b <- cf_xzyChatListGroupingShowGroupChat
+DAT_003e715c <- cf_xzyChatListGroupingShowOfficial
+DAT_003e715d <- cf_xzyChatListGroupingDeduplicateContacts
+DAT_003e715e <- cf_xzyChatListGroupingHorizontalSearchOrbEnabled
+DAT_003e7268 <- cf_xzyHomeBottomBarBadgeEnabled
+DAT_003e7488 <- cf___
+DAT_003e74b9 <- cf_coversEnabled
+DAT_003e74d8 <- cf_coverFunctionEnabled
+DAT_003e74d9 <- cf_coverDisableOnMainPage
+DAT_003e74da <- cf_coverDisableHomeCardContactMask
+DAT_003e74db <- cf_mesMsgMergeSmoothScrollEnabled
+DAT_003e74dc <- cf_mesMsgMergeBubbleWrapRefer
+DAT_003e74dd <- cf_mesMsgMergeWrapReferDivider
+DAT_003e7951 <- cf_coverAvatarCornerEnabled
+DAT_003e7a28 <- cf_mesMsgMergeHideGroupSelfAvatar
+DAT_003e7a29 <- cf_mesMsgMergeHidePrivateSelfAvatar
+DAT_003e7a2a <- cf_mesMsgMergeHideGroupOtherAvatar
+DAT_003e7a2b <- cf_mesMsgMergeHidePrivateOtherAvatar
+DAT_003e7b28 <- cf_mesMsgMergeMessageOffsetSelf
+DAT_003e7b30 <- cf_mesMsgMergeMessageOffsetOther
+DAT_003e7b38 <- cf_mesMsgMergeReverseAvatarDownOffset
+DAT_003e7bc0 <- cf_mesMsgMergeReverse
+DAT_003e7bc1 <- cf_mesMsgMergeAvatarAboveBubble
+DAT_003e7d10 <- cf_coversEnabled
+DAT_003e7d11 <- cf_IconHideEmojiButton
+DAT_003e7d12 <- cf_IconHideVoiceButton
+DAT_003e7d13 <- cf_IconHideDouTuButton
+DAT_003e7d14 <- cf_IconHideKeyboardButton
+DAT_003e7d15 <- cf_IconHideNavMoreButton
+DAT_003e7d16 <- cf_IconHideNavSearchChatRecordButton
+DAT_003e7d17 <- cf_IconHideHomeShortcutButton
+DAT_003e7d18 <- cf_IconHideHomeTitle
+DAT_003e7d38 <- cf_MMUINavigationBar
+DAT_003e7d48 <- cf_InputToolViewBar
+DAT_003e7d99 <- cf_SHTM_QUICK_REPLY_BEAUTIFY_ENABLED
+DAT_003e7d9a <- cf_SHTM_SNOW_ANIMATION_ENABLED
+DAT_003e7d9b <- cf_SHTM_VIDEO_BACKGROUND_ENABLED
+DAT_003e7d9c <- cf_SHTM_IMAGE_BACKGROUND_ENABLED
+DAT_003e7d9d <- cf_SHTM_AVATAR_ROTATION_ENABLED
+DAT_003e7d9e <- cf_SHTM_NICKNAME_COLOR_ENABLED
+DAT_003e7d9f <- cf_SHTM_CONTENT_COLOR_ENABLED
+DAT_003e7da0 <- cf_SHTM_GLOW_COLOR_ENABLED
+DAT_003e7ed8 <- cf_mesMsgMergePayBubbleEnabled
+DAT_003e7ed9 <- cf_bubbleCropEnabled
+DAT_003e7fa8 <- cf_LGLiquidGlassSettings
+DAT_003e811a <- cf_xzyTimeLabelShowCheckmark
+DAT_003e8150 <- cf_xzyTimeLabelBubbleExtendAuto
+DAT_003e8151 <- cf_xzyTimeLabelSuffixEnabled
+DAT_003e8152 <- cf_xzyTimeLabelSenderLeft
+DAT_003e8153 <- cf_xzyTimeLabelNoMerge
+DAT_003e82ab <- cf_xzyBubblePetEnabled
+DAT_003e82ac <- cf_xzyBubblePetAutoAnimEnabled
+DAT_003e82e8 <- cf_xzyBubblePetStartFromFront
+DAT_003e8321 <- cf_xzyNameplateEnabled
+DAT_003e8322 <- cf_xzyNameplatePMEnabled
+DAT_003e83d1 <- cf_xzyNameplatePerUserEnabled
+DAT_003e83f0 <- cf_xzyNameplatePosition
+DAT_003e8400 <- cf_mesMsgMergeHidePrivateOtherAvatar
+DAT_003e8470 <- cf_xzyHomeNameplateMethod
+DAT_003e8561 <- cf_xzyColorSchemeNicknameEnabled
+DAT_003e85d8 <- cf_xzyColorSchemeMessageEnabled
+DAT_003e85d9 <- cf_xzyColorSchemeRedPacketEnabled
+DAT_003e85da <- cf_xzyColorSchemeDisableConfigJson
+DAT_003e8d31 <- cf_grayTestImageStackEnabled
+DAT_003e8d32 <- cf_grayTestStackCheckEnabled
+DAT_003e8d33 <- cf_grayTestOriginalImageEnabled
+DAT_003e8d34 <- cf_grayTestImageBlurEnabled
+DAT_003e8d35 <- cf_grayTestCardBorderEnabled
+DAT_003e8db9 <- cf_xzyBubbleShadowBreathEnabled
+DAT_003e9630 <- cf_mesMsgMergeMessageOffsetOther
+DAT_003e9638 <- cf_mesMsgMergeMessageOffsetSelf
+DAT_003e9788 <- cf_xzyCoverParallaxLightingEnabled
+DAT_003e97c2 <- cf_xzyMusicRhythmVibrationEnabled
+DAT_003ea920 <- cf_xzyDesktopLyricsEnabled
+DAT_003eaabe <- cf_xzyChatListGroupingDividerTitleColorEnabled
+DAT_003eaabf <- cf_xzyChatListGroupingSideRailTitleColorEnabled
+DAT_003eaac1 <- cf_xzyChatListGroupingShowAll
+DAT_003eaed0 <- cf_ThemeBoxSegmentedView
+DAT_003eaed8 <- cf_MFBannerBtn
+DAT_003eaf98 <- cf_xzyMesReferRoundedEnabled
+DAT_003eafb0 <- cf_xzyMesReferRoundedFlipOrder
+DAT_003eafd0 <- cf_xzyMesReferColorEnabled
+DAT_003eafd1 <- cf_xzyMesReferTextColorEnabled
+DAT_003eb0e8 <- cf_xzyHighRefreshEnabled
+DAT_003eb0e9 <- cf_xzyHighRefreshFPSVisible
+DAT_003eb268 <- cf_xzyHomeBottomBarFloatingMenuSpread
+DAT_003eb269 <- cf_xzyHomeBottomBarFollowThemeIcon
+DAT_003eb290 <- cf_xzyHomeBottomBarWiderDock
+DAT_003eb428 <- cf_xzyHomeBottomBarTabLabelHidden
