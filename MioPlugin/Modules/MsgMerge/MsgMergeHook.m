@@ -66,8 +66,6 @@ static IMP orig_CMMsgMgr_AddMsg                 = NULL;   // 收发总管道（�
 static IMP orig_CMMsgMgr_onServiceInit          = NULL;   // 服务初始化（mgr 早捕获挂点）
 static IMP orig_CMMsgMgr_AsyncOnAddMsg          = NULL;
 
-static void applyRideY(UIView *head, BOOL isGroup, BOOL isSelf);   // 定义见渲染应用段（layoutSubviews 垫片前）
-
 // —— 会话上下文 ——
 static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chatroom id，私聊=对端 id）
 static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageNodeData（retain）
@@ -549,9 +547,8 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 // 自摆范围：横向 x（全体白名单行）+ 头像可见行 y 钉顶（骑气泡，mmAvatarRide）。
 // 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
 //   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
-//   骑行 = XOS 绝对钉顶 targetY=−8+偏置+GapReduce(群+10/私−10)−13(仅群)，y 写帧走
-//   applyRideY（layoutSubviews 末端同步）；本函数只管 x/宽。固定行高内挪 y 守恒，
-//   行高/测量层不碰。
+//   骑行 = XOS 1.5.9 探针实测骑坐变换：头像可见行 x±3/y+2、气泡对方侧 x−5（本函数内
+//   统一写帧）；本函数管 x/y/宽。固定行高内挪 y 守恒，行高/测量层不碰。
 // 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
 //   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
 //   逐轮累加会把头像推出屏外（9→270 实证）。总开关关闭 = delta 归零，同机制自动还原。
@@ -643,12 +640,18 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
-    // XOS 1.5.9 实证：MessageOffsetSelf/Other 是头像垂直 Y 偏移（applyRideY 消费），
-    // 不动气泡 x——旧「水平钻入」实现（newDC 让位+昵称剥离）随语义纠正整体删除。
-    // 气泡保持原生列位，XOS 默认形态 = 头像骑组顶、气泡不动。
+    // XOS 1.5.9 骑坐变换（com.tencent.wx 探针实测终态，推翻一切静态推测的 −8/−46 公式）：
+    //   头像可见行：x ±3 向屏幕边缘、y +2（原生 9,2 → 12,4；我方 341,2 → 338,4 镜像）
+    //   气泡：对方侧 x −5 钻向头像列、我方 0 不动（全行生效，含头像隐藏行）
+    //   「骑」= 头像右移下沉与气泡左移咬合在气泡左上角，非悬空冒顶
+    if (cfg.mmAvatarRide) {
+        newDH += (sign > 0) ? -3.0 : 3.0;
+        newDC += (sign < 0) ? -5.0 : 0.0;
+    }
     if (fabs(newDH - lastDH) > 0.01) {
         CGRect f = bHead;
         f.origin.x += newDH;
+        if (cfg.mmAvatarRide && headVisible) f.origin.y += 2.0;   // XOS 骑坐 y=4（原生 2）
         head.frame = f;
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
@@ -728,18 +731,6 @@ static void applyMergeToCellView(id cellView) {
         // y 取原生值，先写骑行 y 会被它抹掉）。挂 layoutSubviews 后（XOS 同款）
         // 本函数整体在原生布局链最终提交点之后执行——同步写帧天然站住，无后续
         // 覆盖。侧判定（XOS 真身双开关之一）：只骑头像在左半屏的行（对方侧）——
-        // 我方（右半屏）组首头像原生隐藏，钉顶 −8 会露出黑色占位块（113 实证）。
-        if (cfg.mmAvatarRide && headVisible) {
-            UIView *headNow = safeCall(cellView, "getHeadImageView");
-            double W = [UIScreen mainScreen].bounds.size.width;
-            if ([headNow isKindOfClass:[UIView class]]) {
-                BOOL isSelf = ((UIView *)headNow).frame.origin.x > W * 0.5;
-                if (!isSelf) {   // 只骑对方侧（我方组首头像原生隐藏，骑了露黑块——113 实证）
-                    applyRideY((UIView *)headNow, [chat hasSuffix:@"@chatroom"], NO);
-                }
-            }
-        }
-
         if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
 
         markTouched(cellView);
@@ -944,35 +935,8 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 
 // —— CommonMessageCellView：渲染应用 ——
 
-// 骑气泡写帧（幂等）：关联对象记上轮写入值——已骑未重置跳过、被微信重置重写、
-// cell 复用后新行新基准，杜绝逐轮累加漂移。layoutSubviews 垫片内同步写（布局末端）。
-static void applyRideY(UIView *head, BOOL isGroup, BOOL isSelf) {
-    static void *kRideLastY = &kRideLastY;
-    if (!head || head.hidden) return;
-    // XOS 1.5.9 一比一（全量反编译实证，推翻旧「水平钻入」理解）：
-    //   FUN_000050c0：|MessageOffset+46|>0.001 → 骑行激活（−46=关闭哨兵）
-    //   L102097：offset = MessageOffset侧 + (−46)   ← 头像可见时叠加钉顶基准族
-    //   FUN_000ac078：targetY = (基准−头像高) + (−8+DownOffset)，|Δy|>1 写帧
-    //   合成：targetY = −46 + MessageOffset侧 + DownOffset + GapReduce − 13(仅群)
-    //   默认落点（offset=0）：群 −49 / 私 −56——头像悬于组顶上方（XOS 截图形态：
-    //   头像整体在首行顶上方、仅底部压组首行，气泡保持原生列位不动）
-    //   −46 = 0(cell顶) − 头像高38 − 冒顶8；MessageOffsetSelf/Other = 垂直 Y 偏移
-    MsgMergeConfig *cfg = [MsgMergeConfig shared];
-    double mo = isSelf ? (double)cfg.mmMessageOffsetSelf : (double)cfg.mmMessageOffsetOther;
-    double offset = olClamp(cfg.mmAvatarRideDepth, 100) + olClamp(mo, 100);
-    double gap = isGroup ? (double)cfg.mmGroupGapReduce : (double)cfg.mmPrivateGapReduce;
-    double targetY = -46.0 + offset + gap - (isGroup ? 13.0 : 0.0);
-    CGPoint p = head.frame.origin;
-    // 双守卫：野值域（原生头像 y 恒在 [0,60]，过渡值 -46 拦截）+ 差>1 才写
-    if (p.y < 0 || p.y > 60) return;
-    if (fabs(p.y - targetY) <= 1.0) return;
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    head.frame = CGRectMake(p.x, targetY, head.frame.size.width, head.frame.size.height);
-    [CATransaction commit];
-    objc_setAssociatedObject(head, kRideLastY, @(targetY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    WPLog(@"MsgMerge", @"[RIDE-写帧] y=%.1f→%.1f 群%d", p.y, targetY, isGroup);
-}
+// 骑气泡写帧已并入 applyOwnLayout（XOS 1.5.9 探针实测：头像 ±3/+2、气泡对方 −5，
+// 无独立 y 写帧路径）。
 
 // ------------------------------------------------------------
 // -[CommonMessageCellView layoutSubviews]（XOS 同款挂点）：原生布局跑完后置应用。

@@ -37,11 +37,6 @@
         [ConfigDescriptor itemWithKey:@"mmAvatarOffset" type:ConfigValueTypeFloat default:@(0.0)],
         [ConfigDescriptor itemWithKey:@"mmWholeOffset" type:ConfigValueTypeFloat default:@(0.0)],
         [ConfigDescriptor itemWithKey:@"mmAvatarRide" type:ConfigValueTypeBool default:@(NO)],
-        [ConfigDescriptor itemWithKey:@"mmAvatarRideDepth" type:ConfigValueTypeFloat default:@(0.0)],
-        [ConfigDescriptor itemWithKey:@"mmMessageOffsetSelf" type:ConfigValueTypeFloat default:@(0.0)],
-        [ConfigDescriptor itemWithKey:@"mmMessageOffsetOther" type:ConfigValueTypeFloat default:@(0.0)],
-        [ConfigDescriptor itemWithKey:@"mmGroupGapReduce" type:ConfigValueTypeFloat default:@(10.0)],
-        [ConfigDescriptor itemWithKey:@"mmPrivateGapReduce" type:ConfigValueTypeFloat default:@(-10.0)],
         [ConfigDescriptor itemWithKey:@"mmHeightReduce" type:ConfigValueTypeFloat default:@(0.0)],
     ];
 }
