@@ -155,8 +155,8 @@ static void updateChatContext(id self) {
         // 时机 mmcronet 网络注册 dispatch_once 尚在后台执行，主线程介入
         // _dispatch_once_wait 死等 10s → scene-update watchdog SIGKILL（实证
         // WeChat-2026-10-18-094818.ips）。推导链：① m_nsTalker（聊天页本地 ivar，KVC
-        // 直读不走服务）② 渲染数组首条 wrap 的 chatNameOfWrap（m_arrMessageNodeData
-        // 元素即 viewModel，读侧同款推导）。
+        // 直读不走服务）② 渲染数组节点两层提取 chatNameOfWrap（node.viewModel.messageWrap，
+        // m_arrMessageNodeData 元素是 NodeData 包装层）。
         NSString *name = safeKVC(self, @"m_nsTalker");
         WPLog(@"MsgMerge", @"[DBG][Ctx] talker raw=%@ (%@)", name, NSStringFromClass([self class]));
         if (![name isKindOfClass:[NSString class]] || name.length == 0) {
@@ -165,10 +165,14 @@ static void updateChatContext(id self) {
                   NSStringFromClass([arr0 class] ?: [NSObject class]),
                   (unsigned long)([arr0 isKindOfClass:[NSArray class]] ? arr0.count : -1));
             if ([arr0 isKindOfClass:[NSArray class]] && arr0.count > 0) {
-                id vm0 = [arr0 objectAtIndex:0];
-                id wrap0 = safeKVC(vm0, @"messageWrap");
-                name = chatNameOfWrap(wrap0);
-                WPLog(@"MsgMerge", @"[DBG][Ctx] wrap0=%@ → name=%@", wrap0 ? @"有" : @"nil", name ?: @"nil");
+                // BBMergeModel wrapOfNode 同款两层提取（117 日志实证：NodeData 包装层，
+                // 单层 messageWrap KVC 拿不到——正确链 node.viewModel.messageWrap）
+                for (id node in arr0) {
+                    id wrap = safeKVC(safeKVC(node, @"viewModel"), @"messageWrap");
+                    name = chatNameOfWrap(wrap);
+                    if (name.length > 0) break;
+                }
+                WPLog(@"MsgMerge", @"[DBG][Ctx] 两层提取 → name=%@", name ?: @"nil");
             }
         }
         if ([name isKindOfClass:[NSString class]] && name.length > 0) {
