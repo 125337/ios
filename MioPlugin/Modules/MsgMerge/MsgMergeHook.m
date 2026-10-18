@@ -549,7 +549,7 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //   （头像钉行顶+depth、气泡顶钉头像底+14 靠边钻入；mmAvatarRide）。
 // 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
 //   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
-//   骑行 = XOS 标杆形态：泡整体钻到头像正下方（cont ±44 靠边）+ 泡顶钉头像底+14
+//   骑行 = XOS 标杆形态：泡整体钻到头像正下方（cont ±47 靠边，泡缘=头像缘）+ 泡顶钉头像底+14
 //   纵向分离（v2 的重叠根因是泡顶 25 与头像共存，非钻入本身）。行高只归 measure 层，渲染层只挪 x/y。
 // 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
 //   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
@@ -681,11 +681,14 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
     // XOS 标杆形态（截图 2026-10-18）：泡整体在头像正下方、泡边缘=头像边缘（靠边），
-    //   泡顶在头像底下方（olRideLift=58 纵向分离零重叠）。cont ±44 钻入使泡边缘对齐
-    //   头像边缘（探针实证：钻入 44 后左泡左缘=头像左缘 12/右泡右缘=头像右缘 381）；
+    //   泡顶在头像底下方（olRideLift=58 纵向分离零重叠）。cont ±47 钻入使泡边缘对齐
+    //   头像边缘（探针实证：钻 44 泡缘内缩 3pt，47 严格对齐，见下方钻入块注释）；
     //   泡顶分离后文字顶 70+ 恒在头像底(45)下，钻入不再压头像（v2 的错在泡顶 25 共存）。
     if (cfg.mmAvatarRide && active) {
-        newDC += sign * 44.0;   // 组内全行钻入：整组泡边缘对齐头像正下方（含非骑行行）
+        // 组内全行钻入：整组泡边缘对齐头像正下方（含非骑行行）。47 = 探针实证
+        // （2026-10-19 骑行对数）：钻 44 时泡视觉缘比头像缘内缩 3pt——收方 bg 左缘
+        // 12 vs 头像左缘 9、自发 bg 右缘 381 vs 头像右缘 384，两侧同差 3，+3 对齐。
+        newDC += sign * 47.0;
     }
     BOOL rideTop = (cfg.mmAvatarRide && active && headVisible && rideOK);
     if (fabs(newDH - lastDH) > 0.01 || rideTop) {
