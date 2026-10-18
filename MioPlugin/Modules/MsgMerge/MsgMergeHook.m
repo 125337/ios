@@ -10,7 +10,8 @@
 //    changed 只统计屏上已渲染 lid 的 pos 实变，新 lid 进索引不计（首测查表即真，
 //    无需事后刷新）——滚动场景 changed 恒 0，永不跳动。
 //    测量层接管（BubbleBox 同款行高杠杆）：measure: 对组内非组尾消息 −mmSpacing
-//    （下限 24），组尾/Single 原生直通；切片首/中片无缝直通（末片才含底部空隙）。
+//    （下限 24），组尾/Single 原生直通；骑行开启时组首行行高扩展（悬空头像空间
+//    由本行提供，XOS 组间不重叠根源）；切片首/中片无缝直通（末片才含底部空隙）。
 //    昵称区回收走 isShowChatRoomDisplayName 判定翻转（常驻，原生按无昵称行
 //    测量+布局），无任何 N 补偿。时间行断组修正：refreshIndex 扫 nodeArray，
 //    发现「DB 判一组、微信却插行」的矛盾行时以行为权威断组符修正切口两侧
@@ -544,11 +545,12 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //     （固定行高内挪 y 必守恒，项目定论；间距收拢走 measure: 测量层接管）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
 //   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
-// 自摆范围：横向 x（全体白名单行）+ 头像可见行 y 钉顶（骑气泡，mmAvatarRide）。
+// 自摆范围：横向 x（全体白名单行）+ 骑行行纵向（头像行顶原生位 + cont 行内下移
+//   olRideExpand，与 measure 扩行同源；mmAvatarRide）。
 // 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
 //   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
-//   骑行 = XOS 1.5.9 探针实测骑坐变换：头像可见行 x±3/y+2、气泡对方侧 x−5（本函数内
-//   统一写帧）；本函数管 x/y/宽。固定行高内挪 y 守恒，行高/测量层不碰。
+//   骑行 = XOS 1.5.9 双机截图实证形态：头像可见行 x±3、气泡对方侧 x−5（本函数内
+//   统一写帧）；本函数管 x/y/宽。行高只归 measure 层（扩行/缩减），渲染层只挪 y。
 // 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
 //   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
 //   逐轮累加会把头像推出屏外（9→270 实证）。总开关关闭 = delta 归零，同机制自动还原。
@@ -557,10 +559,18 @@ static void *kOLBaseBubF  = &kOLBaseBubF;
 static void *kOLBaseNameX = &kOLBaseNameX;
 static void *kOLLastDH    = &kOLLastDH;
 static void *kOLLastDC    = &kOLLastDC;
+static void *kOLLastDY    = &kOLLastDY;
 static void *kOLLastDN    = &kOLLastDN;
 
 static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
+}
+
+/// 骑行组首行行高扩展量 = 悬空量（56−钉顶偏置，下限 0）。measure 层扩行与渲染层
+/// 气泡下移必须同值同源（本函数单点），否则气泡溢出压行/组间缝失控。
+static double olRideExpand(MsgMergeConfig *cfg) {
+    double e = 56.0 - olClamp(cfg.mmAvatarRideDepth, 100);
+    return e > 0 ? e : 0;
 }
 
 /// 布局接管类型白名单：媒体四类与表情均为 CommonMessageCellView 同构结构
@@ -570,7 +580,7 @@ static BOOL olTypeEnabled(long long t) {
     return t == 1 || t == 3 || t == 34 || t == 43 || t == 47 || t == 49 || t == 62;
 }
 
-static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePosition pos) {
+static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePosition pos, BOOL rideOK) {
     UIView *head = safeCall(cellView, "getHeadImageView");
     UIImageView *bg = safeCall(cellView, "getBgImageView");
     // 容器发现（探针 #getContentView 全类型实证）：有气泡 bg 的类型（文本/语音/App/文件）
@@ -591,6 +601,7 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:cont.frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDH, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDC, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLLastDY, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         // [BG-DUMP] cont 全子视图清单（白泡真身定位；bg 实证为空容器占位）
         static NSInteger sBgdumpCnt = 0;
         if (sBgdumpCnt < 6) {
@@ -616,20 +627,23 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
     CGRect bBub  = [(NSValue *)objc_getAssociatedObject(cellView, kOLBaseBubF) CGRectValue];
     double lastDH = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDH) doubleValue];
     double lastDC = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDC) doubleValue];
+    double lastDY = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDY) doubleValue];
 
     // 失效检测：位置或尺寸偏离 基准+上轮delta → 原生已重摆（复用/重布局），重置基准。
-    // y 轴不在本函数管理范围（骑气泡走异步重申，自持幂等基准），只检测 x/宽。
+    // cont y 已纳入管理（骑行头行行内下移），按 基准+lastDY 检测。
     if (fabs(head.frame.origin.x - (bHead.origin.x + lastDH)) > 0.5 ||
         fabs(head.frame.size.width - bHead.size.width) > 0.5 ||
         fabs(cont.frame.origin.x - (bBub.origin.x + lastDC)) > 0.5 ||
-        fabs(cont.frame.origin.y - bBub.origin.y) > 0.5 ||
+        fabs(cont.frame.origin.y - (bBub.origin.y + lastDY)) > 0.5 ||
         fabs(cont.frame.size.width - bBub.size.width) > 0.5) {
         bHead = head.frame;
         bBub = cont.frame;
         lastDH = 0;
         lastDC = 0;
+        lastDY = 0;
         objc_setAssociatedObject(cellView, kOLBaseHeadF, [NSValue valueWithCGRect:bHead], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:bBub], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLLastDY, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
     // 昵称 label 整列跟随（隐藏态 frame 仍有效，同样基准+失效检测）
@@ -660,20 +674,23 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
-    // XOS 1.5.9 骑坐形态（用户双机截图对照实证，trace2 独立行 ±3/+2 为非组形态）：
-    //   组首行：头像悬空组顶（y=−56+钉顶偏置，XOS 截图实测气泡顶上方≈56pt）
+    // XOS 1.5.9 骑坐形态（双机截图对照实证）：悬空头像的空间由组首行行高扩展提供
+    //   （measure 层 olRideExpand 同源扩行），头像坐回行顶原生位（旧版负 y 越界 =
+    //   顶进上一组气泡区的病灶根源），cont 行内下移同量 → 组间恢复整行空隙。
     //   组内全行：cont ±44 钻入 → 整组气泡左缘对齐头像正下方（可视位=cont.x+bg.x）
-    //   独立行（非组）：仅头像 ±3/+2 轻咬合，不悬空不钻入
+    //   独立行（非组）：仅头像 ±3/+2 轻咬合，不悬空不钻入不扩行
     if (cfg.mmAvatarRide) {
         newDH += (sign > 0) ? -3.0 : 3.0;
         if (active) newDC += sign * 44.0;
     }
-    BOOL rideTop = (cfg.mmAvatarRide && active && headVisible);
+    BOOL rideTop = (cfg.mmAvatarRide && active && headVisible && rideOK);
     if (fabs(newDH - lastDH) > 0.01 || rideTop) {
         CGRect f = bHead;
         f.origin.x += newDH;
         if (cfg.mmAvatarRide && headVisible) {
-            f.origin.y = active ? (-56.0 + olClamp(cfg.mmAvatarRideDepth, 100)) : (f.origin.y + 2.0);
+            // 骑行头行：头像坐回行顶原生 y（悬空量已由行高扩展+气泡下移腾出）；
+            // 切片行（泡体无缝不可扩行）/非接管类型：+2 轻咬合
+            f.origin.y = (active && rideOK) ? bHead.origin.y : (f.origin.y + 2.0);
         }
         head.frame = f;
         // XOS 同款：骑坐组首昵称重排到悬空头像右侧（双机截图实证「过客.」与头像同排）
@@ -686,11 +703,16 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         }
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    if (fabs(newDC - lastDC) > 0.01) {
+    // cont 纵向：骑行头行行内下移（与 measure 扩行同值同源），开关翻转/复用经
+    // lastDY 增量检测自动还原
+    double newDY = rideTop ? olRideExpand(cfg) : 0.0;
+    if (fabs(newDC - lastDC) > 0.01 || fabs(newDY - lastDY) > 0.01) {
         CGRect f = bBub;
         f.origin.x += newDC;
+        f.origin.y += newDY;
         cont.frame = f;
         objc_setAssociatedObject(cellView, kOLLastDC, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLLastDY, @(newDY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         if (lb && !rideTop && fabs(newDC - lastDN) > 0.01) {
             CGRect nf = lb.frame;
             nf.origin.x = baseNameX + newDC;
@@ -726,7 +748,7 @@ static void applyMergeToCellView(id cellView) {
                 if ([bg isKindOfClass:[UIImageView class]]) restoreCorner(bg);
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
-            applyOwnLayout(cellView, NO, NO, MOMergePositionNone);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
+            applyOwnLayout(cellView, NO, NO, MOMergePositionNone, NO);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
             return;
         }
 
@@ -756,7 +778,10 @@ static void applyMergeToCellView(id cellView) {
         // 媒体自摆（实证：图片/视频偏移无效）。分隔符行 pos=None → headVisible=NO，
         // 自摆生效但骑行不生效（独立打断行不属于合并组，无骑可言）。
         long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
-        applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible, pos);
+        // 骑行门控：整条消息（split==0）才可悬空+扩行——切片行泡体无缝，扩行必裂缝、
+        // 悬空必与上一行重叠（measure 层同门控，两侧一致）
+        unsigned long long split = vmSplitPosition(viewModel);
+        applyOwnLayout(cellView, olTypeEnabled(msgType), headVisible, pos, split == 0);
 
         // 骑气泡：写帧必须晚于 applyOwnLayout（其 x 写帧基于原生基准重建 frame，
         // y 取原生值，先写骑行 y 会被它抹掉）。挂 layoutSubviews 后（XOS 同款）
@@ -879,8 +904,11 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
 // ------------------------------------------------------------
 // -[CommonMessageViewModel measure:]（探针实证：CGSize 参数入 x2/x3，调用侧
 // 传 {-1,-1} 无约束哨兵；MSHook + 同声明签名，编译器自动对齐 ABI）。orig 只当
-// 排版工具，唯一算术 = 组内行高缩减：非组尾消息测量高 −(mmSpacing+mmHeightReduce)
-//（下限 24；HeightReduce=XOS mesMsgMergeHeightReduce 同款：组内行高原生−该值）。
+// 排版工具，两项算术：
+//   ① 骑行扩行（XOS 组间不重叠的根源）：悬空头像的空间由组首行自身行高提供，
+//      渲染层气泡下移同量（olRideExpand 单点同源）→ 组间整行空隙，头像不越界
+//   ② 组内行高缩减：非组尾消息测量高 −(mmSpacing+mmHeightReduce)（下限 24；
+//      HeightReduce=XOS mesMsgMergeHeightReduce 同款：组内行高原生−该值）
 // 昵称区不在此补偿——判定钩翻转让原生测量自动收缩（N 补偿链已删）。
 // ------------------------------------------------------------
 static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
@@ -899,7 +927,7 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         double reduce = 0;
         if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) reduce += (double)cfg.mmSpacing;
         reduce += (double)cfg.mmHeightReduce;
-        if (reduce <= 0) return s;
+        if (reduce <= 0 && !cfg.mmAvatarRide) return s;
         id wrap = safeKVC(self, @"messageWrap");
         if (!wrap) return s;   // 时间节点等无 wrap
         NSString *chat = chatNameOfWrap(wrap);
@@ -910,13 +938,30 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         s_inMeasure = NO;
         if (pos == MOMergePositionNone) return s;   // 组外/标志缺席：原生直通
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
-        if (pos == MOMergePositionLast || pos == MOMergePositionSingle) return s;   // 组尾保原生（组尾到组外间隙不变）
+        // ① 骑行扩行：骑行头行（mmAvatarPos 0=First/Single 1=Last/Single，与渲染
+        //    headVisible 同判）+ 整条消息 + 白名单类型。切片行泡体无缝，扩行必裂缝。
+        double rideAdd = 0;
+        if (cfg.mmAvatarRide && split == 0 &&
+            (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1)) {
+            BOOL headRow = (cfg.mmAvatarPos == 0)
+                ? (pos == MOMergePositionFirst || pos == MOMergePositionSingle)
+                : (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
+            if (headRow) {
+                long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
+                if (olTypeEnabled(msgType)) rideAdd = olRideExpand(cfg);
+            }
+        }
+        BOOL isTail = (pos == MOMergePositionLast || pos == MOMergePositionSingle);
+        if (rideAdd <= 0 && isTail) return s;   // 组尾保原生（组尾到组外间隙不变）
         // 末片门控：首片/中片是无缝泡体——原生切片气泡底=片边界、续片 bgTop=0
         // 贴顶无让位，任何测量缩减都让泡体溢出压进下一片（diag33 实锤同气泡自叠）。
-        if (split != 0 && split != 3) return s;
-        double h = (double)s.height - reduce;
-        if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
-        if (h >= (double)s.height) return s;
+        if (rideAdd <= 0 && split != 0 && split != 3) return s;
+        double h = (double)s.height + rideAdd;
+        if (!isTail) {
+            h -= reduce;
+            if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
+        }
+        if (fabs(h - (double)s.height) < 0.01) return s;
         return CGSizeMake(s.width, (CGFloat)h);
     } @catch (NSException *e) {
         s_inMeasure = NO;
