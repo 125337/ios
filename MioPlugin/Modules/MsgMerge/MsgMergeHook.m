@@ -150,9 +150,20 @@ static void refreshAndApplyFromContext(void);   // 定义见下（updateChatCont
 static void updateChatContext(id self) {
     g_curChatVC = self;
     @try {
-        id contact = ((id (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"GetContact"));
-        NSString *name = nil;
-        @try { name = [contact valueForKey:@"m_nsUsrName"]; } @catch (NSException *ignored) {}
+        // 聊天名（BubbleBox 原版机制 applyCell 同源）：零服务总线依赖。绝不调
+        // GetContact——8.0.79 上它走 NSInvocation 服务转发链，viewDidLoad/viewWillAppear
+        // 时机 mmcronet 网络注册 dispatch_once 尚在后台执行，主线程介入
+        // _dispatch_once_wait 死等 10s → scene-update watchdog SIGKILL（实证
+        // WeChat-2026-10-18-094818.ips）。推导链：① m_nsTalker（聊天页本地 ivar，KVC
+        // 直读不走服务）② 渲染数组首条 wrap 的 chatNameOfWrap（m_arrMessageNodeData
+        // 元素即 viewModel，读侧同款推导）。
+        NSString *name = safeKVC(self, @"m_nsTalker");
+        if (![name isKindOfClass:[NSString class]] || name.length == 0) {
+            NSArray *arr0 = safeKVC(self, @"m_arrMessageNodeData");
+            if ([arr0 isKindOfClass:[NSArray class]] && arr0.count > 0) {
+                name = chatNameOfWrap(safeKVC([arr0 objectAtIndex:0], @"messageWrap"));
+            }
+        }
         if ([name isKindOfClass:[NSString class]] && name.length > 0) {
             if (![name isEqualToString:g_currentChatName]) {
                 WPLog(@"MsgMerge", @"[Ctx] chat switch: %@ → %@", g_currentChatName, name);
@@ -731,14 +742,13 @@ static void applyMergeToCellView(id cellView) {
 // —— BaseMsgContentViewController：会话跟踪与保鲜触发 ——
 
 static void repl_BaseMsgContentVC_viewDidLoad(id self, SEL _cmd) {
-    // 8.0.79 watchdog 实证修复（WeChat-2026-10-18-094818.ips）：此前此处先调
-    // updateChatContext → GetContact —— 8.0.79 的 GetContact 走服务总线（NSInvocation
-    // 转发链），viewDidLoad 时机 mmcronet 网络注册 dispatch_once 尚在后台线程执行中，
-    // 主线程介入 _dispatch_once_wait 死等 10s → scene-update watchdog SIGKILL
-    //（栈：Mio 垫片→NSInvocation→CronetAdapter_RegisterNetworkChangeNotifier→once_wait；
-    // once 执行者 thread63 自身卡在其 block 内的 dispatch_sync——微信内部慢/死锁，
-    // 主线程不介入等待就不会被 watchdog 杀）。上下文跟踪收敛到 viewDidAppear 延迟块
-    //（服务就绪后）+ AddMsg 管道兜底；聊天名读侧 chatNameOfWrap(wrap) 优先兜底。
+    // 数据先行（BubbleBox 时机对齐）：索引在微信首屏建表之前就位——orig 之后
+    // 刷新会错过首屏首测（None 窗口=进聊天闪/骑行失效的根源）。
+    // findChatTableView 有 isViewLoaded 守卫，此刻触发表查找安全空转不递归。
+    // updateChatContext 零服务总线依赖（BubbleBox 原版机制，不调 GetContact），
+    // 任何时机安全——8.0.79 GetContact 走 NSInvocation 服务转发链会撞 mmcronet
+    // 网络 once 等待链 → scene-update watchdog SIGKILL（IPS 实证，已根除）。
+    updateChatContext(self);
     ((void (*)(id, SEL))orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
     // 定位锚点：本日志出现 = 聊天页 viewDidLoad 垫片完整跑完（卡死判别用：
     // 停在本行之前 = 卡在微信自身 viewDidLoad；之后无 [Model] = 卡在测量链）
@@ -747,8 +757,9 @@ static void repl_BaseMsgContentVC_viewDidLoad(id self, SEL _cmd) {
 
 static void repl_BaseMsgContentVC_viewWillAppear(id self, SEL _cmd, BOOL animated) {
     ((void (*)(id, SEL, BOOL))orig_BaseMsgContentVC_viewWillAppear)(self, _cmd, animated);
-    // updateChatContext 已移除（8.0.79 watchdog 修复，见 viewDidLoad 垫片注释）：
-    // viewWillAppear 时机服务同样未就绪，GetContact 有撞网络 once 等待链的同款风险
+    updateChatContext(self);
+    // 洗掉旧开关状态/上一会话遗留的固化行高值，保证首测前缓存干净
+    //（首测判定走查表，正确性由模型保证；这里只负责清旧值）
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (cfg.mmEnable) resetAllMeasureCaches();
 }
