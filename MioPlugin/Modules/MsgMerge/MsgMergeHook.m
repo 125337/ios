@@ -561,6 +561,7 @@ static void *kOLLastDH    = &kOLLastDH;
 static void *kOLLastDC    = &kOLLastDC;
 static void *kOLLastDY    = &kOLLastDY;
 static void *kOLLastDN    = &kOLLastDN;
+static void *kOLRideDumped = &kOLRideDumped;   // [RIDE-DUMP] 每 cellView 一次去重
 
 static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
@@ -723,6 +724,39 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
             lb.frame = nf;
             objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
+    }
+    // [RIDE-DUMP]（标杆 BG-DUMP：限量+每 cellView 一次）骑行头行写帧后全量几何，
+    // 定位「头像与自身 cell 内容重叠」真身：cont 各子视图平移到 cell 坐标，直接与
+    // 头像帧求交——∩头 为 "-" 即无交集，有值即重叠真身及其区域
+    static NSInteger sRideDump = 0;
+    if (rideTop && sRideDump < 10 && !objc_getAssociatedObject(cellView, kOLRideDumped)) {
+        sRideDump++;
+        objc_setAssociatedObject(cellView, kOLRideDumped, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        NSMutableString *d = [NSMutableString stringWithFormat:
+            @"[RIDE-DUMP] %@ bounds=%@ sign=%d active=%d headVis=%d rideOK=%d "
+            @"bHead=(%g,%g %gx%g) bBub=(%g,%g %gx%g) dH=%g dC=%g dY=%g "
+            @"| head=%@ cont=%@ lb=%@ subs(cell坐标):",
+            NSStringFromClass([cellView class]),
+            NSStringFromCGRect(cellView.bounds), sign, active, headVisible, rideOK,
+            bHead.origin.x, bHead.origin.y, bHead.size.width, bHead.size.height,
+            bBub.origin.x, bBub.origin.y, bBub.size.width, bBub.size.height,
+            newDH, newDC, newDY,
+            NSStringFromCGRect(head.frame), NSStringFromCGRect(cont.frame),
+            lb ? NSStringFromCGRect(lb.frame) : @"nil"];
+        for (UIView *sv in cont.subviews) {
+            CGRect r = sv.frame;
+            r.origin.x += cont.frame.origin.x;
+            r.origin.y += cont.frame.origin.y;
+            UIImage *si = ([sv isKindOfClass:[UIImageView class]] ? [(UIImageView *)sv image] : nil);
+            CGRect inter = CGRectIntersection(head.frame, r);
+            [d appendFormat:@" %@%@(%g,%g %gx%g%@)∩头%@",
+                NSStringFromClass([sv class]),
+                ([sv isKindOfClass:[UIImageView class]] && !sv.isHidden) ? @"*" : @"",
+                r.origin.x, r.origin.y, r.size.width, r.size.height,
+                si ? [NSString stringWithFormat:@" img%gx%g", si.size.width, si.size.height] : @"",
+                CGRectIsEmpty(inter) ? @"-" : NSStringFromCGRect(inter)];
+        }
+        WPLog(@"MsgMerge", @"%@", d);
     }
 }
 
