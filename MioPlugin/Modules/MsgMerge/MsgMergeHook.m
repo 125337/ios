@@ -546,10 +546,10 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
 //   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
 // 自摆范围：横向 x（仅 mmAvatarOffset/mmWholeOffset 配置，默认 0 = 原生）+ 骑行行纵向
-//   （头像钉行顶+depth、泡纵向全交原生行高杠杆；mmAvatarRide）。
+//   （头像钉行顶+depth、气泡顶钉头像底+14 靠边钻入；mmAvatarRide）。
 // 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
 //   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
-//   骑行 = XOS 标杆形态：泡整体钻到头像正下方（cont ±44 靠边）+ 泡顶落头像底下
+//   骑行 = XOS 标杆形态：泡整体钻到头像正下方（cont ±44 靠边）+ 泡顶钉头像底+14
 //   纵向分离（v2 的重叠根因是泡顶 25 与头像共存，非钻入本身）。行高只归 measure 层，渲染层只挪 x/y。
 // 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
 //   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
@@ -566,18 +566,18 @@ static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
 }
 
-// —— 骑行形态（v6 定论 2026-10-18：渲染层只动 头像 y + 泡 x，纵向全交原生）——
-// 原生泡贴底排（探针实证 昵称行 16+59.7+1.3=77/无昵称行 5+59.7+1.3=66）：泡顶 =
-// 行高−泡高−底距，扩行高即泡下移，与泡高无关恒自洽。XOS 渲染层同款（反编译实锤
-// 只写头像 y，从不写泡/昵称帧）。头像钉行顶（不出行）+depth；泡顶=头像顶+57
-// 由 measure 全额补高（rideAdd=43|54+depth）达成；泡靠边由 cont ±44 钻入（只 x）。
-// 昵称零干预（原生天然把昵称排在头像右侧锚点 63,6）。v2-v5 的泡 y 手写系与原生
-// 贴底逻辑打架，是位置反复出问题的根源，已全部删除。
+// —— 骑行形态（XOS 标杆截图 2026-10-18：泡整体在头像正下方、泡边缘=头像边缘
+// （靠边），泡顶在头像底下方，纵向与头像完全分离零重叠；装机演进定论）——
+// 头像钉行顶（不出行），气泡顶 = 头像底(45)+14 = 头像顶+57；泡随 cont ±44 钻入
+// 使泡边缘对齐头像边缘（探针实证钻入 44 后左泡左缘=头像左缘 12/右泡右缘=头像右缘
+// 381，量准）。v2 的错不在钻入而在泡顶 25 与头像共存 20pt（头像压着泡区→文字钻到
+// 头像底下+泡 z 序盖头像）；泡顶 59 分离后，文字顶 69+ 恒在头像底下，钻入安全。
+// 泡下移量由行高全额补足（rideAdd = 下移量，底部空白保原生）。
 // （2026-10-18 探针定论：不可抵扣本行底部空白——那块空白是组内行间距的来源，抵扣=
 // 骑行偷间距，实测骑行行泡底溢出行底 9.7pt 压进下一行；与 mmSpacing/mmHeightReduce
 // 叠加时 reduce 收的是同一块空白，必叠泡。全额补高后骑行行底部空白与原生一致，
 // reduce 在骑行/非骑行行均匀生效，两功能叠加间距不出错。）
-static const double olRideLift = 57.0;   // 头像顶→目标泡顶抬升（XOS 标杆图 2026-10-18 实测 57；仅 measure 补高公式用，渲染层不写泡 y）
+static const double olRideLift = 57.0;   // 头像顶→气泡顶抬升（XOS 标杆图 2026-10-18 实测泡顶=头像顶+57；57=头像高43+底间隙14）
 
 /// 布局接管类型白名单：媒体四类与表情均为 CommonMessageCellView 同构结构
 ///（头像 46×46 y=2、容器与气泡列对齐：自发右缘 W−64/收方 x=64）；表情 47 有头像
@@ -680,9 +680,10 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
-    // XOS 标杆形态（截图 2026-10-18）：泡整体在头像正下方、泡边缘=头像边缘（靠边）。
-    //   cont ±44 钻入使泡边缘对齐头像边缘（探针实证：钻入 44 后左泡左缘=头像左缘
-    //   12/右泡右缘=头像右缘 381）；只动 x，纵向全交原生（见下方 v6 定论）。
+    // XOS 标杆形态（截图 2026-10-18）：泡整体在头像正下方、泡边缘=头像边缘（靠边），
+    //   泡顶在头像底下方（olRideLift=58 纵向分离零重叠）。cont ±44 钻入使泡边缘对齐
+    //   头像边缘（探针实证：钻入 44 后左泡左缘=头像左缘 12/右泡右缘=头像右缘 381）；
+    //   泡顶分离后文字顶 70+ 恒在头像底(45)下，钻入不再压头像（v2 的错在泡顶 25 共存）。
     if (cfg.mmAvatarRide && active) {
         newDC += sign * 44.0;   // 组内全行钻入：整组泡边缘对齐头像正下方（含非骑行行）
     }
@@ -696,20 +697,38 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
             f.origin.y = (active && rideOK) ? (bHead.origin.y + olClamp(cfg.mmAvatarRideDepth, 100)) : (f.origin.y + 2.0);
         }
         head.frame = f;
-        // 昵称零干预（v6 定论）：原生布局把昵称排在头像右侧锚点（63,6=头像右+8/顶+4）
-        // 天然绑定，XOS 同款——渲染层不写昵称帧。
+        // 昵称跟随（XOS 同款：原生布局本就把昵称排在头像右侧锚点（头像右+8/顶+4，
+        // 探针实证 63,6），天然绑定即终态——默认态（depth=0 且无横移）对昵称零干预；
+        // 仅当头像偏离原生锚点（depth/横移配置）导致期望位与原生位不一致时才显式写帧
+        // 跟随。lastDN 照记，供切回非骑行行时还原路径使用。）
+        if (rideTop && lb) {
+            CGRect nf = lb.frame;
+            double wx = f.origin.x + f.size.width + 8.0;
+            double wy = f.origin.y + 2.0;   // XOS 标杆图：昵称与头像顶几乎齐平（+2pt），原生锚点 +4 偏低
+            if (fabs(wx - nf.origin.x) > 0.5 || fabs(wy - nf.origin.y) > 0.5) {
+                nf.origin.x = wx;
+                nf.origin.y = wy;
+                lb.frame = nf;
+            }
+            objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
         objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    // cont 纵向零干预（v6 核心定论）：原生泡贴底排——探针实证 昵称行 16+59.7+1.3=77 /
-    // 无昵称行 5+59.7+1.3=66，泡顶 = 行高−泡高−底距，与泡高无关恒自洽。measure 扩行高
-    // （rideAdd=43+depth 全额）后原生自动把泡排到 头像顶+57+depth（XOS 实测位）——
-    // 泡 y 手写必与原生贴底逻辑打架（v2-v5 位置反复出问题的根源），XOS 渲染层也从不
-    // 写泡 y（反编译实锤只有头像 y）。渲染层只管 cont x（钻入）。
-    if (fabs(newDC - lastDC) > 0.01) {
+    // cont 纵向：气泡顶统一钉到 头像底+14（=头像顶+57，XOS 标杆：泡在头像正下方
+    // 纵向分离；原生两基线 16/5 拉平→左右恒对称）；行高差额由 measure 全额补足。
+    // lastDY 增量管理：开关翻转/复用自动还原
+    double newDY = 0.0;
+    if (rideTop) {
+        newDY = bHead.origin.y + olRideLift + olClamp(cfg.mmAvatarRideDepth, 100) - bBub.origin.y;
+        if (newDY < 0.0) newDY = 0.0;
+    }
+    if (fabs(newDC - lastDC) > 0.01 || fabs(newDY - lastDY) > 0.01) {
         CGRect f = bBub;
         f.origin.x += newDC;
+        f.origin.y += newDY;
         cont.frame = f;
         objc_setAssociatedObject(cellView, kOLLastDC, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLLastDY, @(newDY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         if (lb && !rideTop && fabs(newDC - lastDN) > 0.01) {
             CGRect nf = lb.frame;
             nf.origin.x = baseNameX + newDC;
@@ -902,7 +921,7 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
 // -[CommonMessageViewModel measure:]（探针实证：CGSize 参数入 x2/x3，调用侧
 // 传 {-1,-1} 无约束哨兵；MSHook + 同声明签名，编译器自动对齐 ABI）。orig 只当
 // 排版工具，两项算术：
-//   ① 骑行补高：泡顶目标 头像顶+57 由行高全额补足达成（原生贴底自动落位，底部空白保原生，
+//   ① 骑行补高：气泡顶钉 头像底+14 后，泡下移量由行高全额补足（底部空白保原生，
 //      组内间距不被骑行偷走，与②叠加均匀生效）
 //   ② 组内行高缩减：非组尾消息测量高 −(mmSpacing+mmHeightReduce)（下限 24；
 //      HeightReduce=XOS mesMsgMergeHeightReduce 同款：组内行高原生−该值）
@@ -934,10 +953,8 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         s_inMeasure = NO;
         if (pos == MOMergePositionNone) return s;   // 组外/标志缺席：原生直通
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
-        // ① 骑行补高（行高杠杆，v6 定论）：原生泡贴底排（泡顶=行高−泡高−底距），
-        //    渲染层不写泡 y——行高全额补 rideAdd=need（昵称行 43+depth/无昵称 54+depth，
-        //    与泡高无关恒自洽）后，原生自动把泡排到 头像顶+57+depth（XOS 实测位）。
-        //    不可抵扣本行
+        // ① 骑行补高：渲染层把气泡顶钉到 头像底(45)+14=头像顶+57（泡在头像正下方
+        //    左右恒对称），泡下移量由行高全额补足（rideAdd = 下移量）。不可抵扣本行
         //    底部空白——那块空白是组内行间距的来源，抵扣=骑行偷间距（探针实证骑行行
         //    泡底溢出行底 9.7pt 压进下一行），与 reduce 叠加必叠泡；全额补高后骑行行
         //    底部空白与原生一致，reduce 均匀生效。切片行泡体无缝不扩（渲染层对切片行
@@ -1026,7 +1043,7 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 
 // —— CommonMessageCellView：渲染应用 ——
 
-// 骑气泡写帧已并入 applyOwnLayout（头像钉行顶、cont ±44 钻入靠边；泡 y/昵称零干预交原生）。
+// 骑气泡写帧已并入 applyOwnLayout（头像钉行顶、泡顶钉头像底+14、cont ±44 钻入靠边）。
 
 // ------------------------------------------------------------
 // -[CommonMessageCellView layoutSubviews]（XOS 同款挂点）：原生布局跑完后置应用。
