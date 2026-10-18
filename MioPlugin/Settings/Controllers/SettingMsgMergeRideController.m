@@ -45,7 +45,7 @@
                                    hint:@"0"
                               valueType:InputValueTypeNumber
                             alertTitle:@"钉顶偏置"
-                          alertMessage:@"头像钉顶目标 = 冒出 cell 顶 8pt + 本偏置 + GapReduce(群+10/私−10) −13(仅群)，正=下移，负=上浮，单位 pt (±100)"
+                          alertMessage:@"头像 Y 目标 = −46(基准族: cell顶−头像高38−冒顶8) + 本偏置 + 对方/我方消息偏移 + GapReduce(群+10/私−10) −13(仅群)，正=下移，负=上浮，单位 pt (±100)"
                                        cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand
                                   title:@"对方消息偏移 (pt)"
@@ -54,7 +54,7 @@
                                    hint:@"0"
                               valueType:InputValueTypeNumber
                             alertTitle:@"对方消息偏移"
-                          alertMessage:@"对方（左缘）行气泡向头像列的水平钻入量，0=气泡保持原位，正=向头像方向，单位 pt"
+                          alertMessage:@"对方（左缘）行头像的垂直 Y 偏移，0=XOS 默认骑组顶形态，正=下移，负=上浮，单位 pt (±100)"
                                        cy:*ecy width:w];
         *ecy = [self addInputRowInGroup:expand
                                   title:@"我方消息偏移 (pt)"
@@ -63,10 +63,10 @@
                                    hint:@"0"
                               valueType:InputValueTypeNumber
                             alertTitle:@"我方消息偏移"
-                          alertMessage:@"我方（右缘）行气泡向头像列的水平钻入量，0=气泡保持原位，正=向头像方向，单位 pt"
+                          alertMessage:@"我方（右缘）行头像的垂直 Y 偏移，0=XOS 默认骑组顶形态，正=下移，负=上浮，单位 pt (±100)"
                                        cy:*ecy width:w];
         *ecy = [self addHintRowInGroup:expand
-                                  text:@"仅对头像可见的行（组首/独立行，对方侧）生效；默认头像冒出 cell 顶（群 11pt/私 18pt）、气泡保持原生列位，均为 XOS 同款数值"
+                                  text:@"仅对头像可见的行（组首/独立行，对方侧）生效；默认头像骑在组顶上方（群 −49/私 −56）、气泡保持原生列位，均为 XOS 同款数值"
                                     cy:*ecy width:w];
     } cy:0 width:w];
     y = [self finishGroup:g1 atY:y height:cy];

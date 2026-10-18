@@ -46,14 +46,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 头像骑气泡：头像可见行（组首/独立行）绝对钉顶（需 mmEnable 开）
 @property (nonatomic, assign) BOOL   mmAvatarRide;
-/// 钉顶偏置（pt，±100 钳位，XOS ReverseAvatarDownOffset 同款）：targetY = -8 + 偏置
-/// + GapReduce − 13(仅群)，默认 0 → 群 −11 / 私 −18；写帧关隐式动画（CATransaction）
+/// 钉顶偏置（pt，±100 钳位，XOS ReverseAvatarDownOffset 同款）：targetY = −46(基准族) + 偏置
+/// + 消息偏移 + GapReduce − 13(仅群)，默认 0 → 群 −49 / 私 −56；写帧关隐式动画（CATransaction）
+/// −46 = cell顶0 − 头像高38 − 冒顶8（1.5.9 全量反编译实证，FUN_000050c0/ac078/L102097）
 @property (nonatomic, assign) CGFloat mmAvatarRideDepth;
-/// 我方消息水平偏移（pt，XOS mesMsgMergeMessageOffsetSelf 同款，默认 0=不钻入）：
-/// 骑行时我方（右缘）行气泡向头像列的钻入量，正=向头像方向
+/// 我方消息偏移（pt，XOS mesMsgMergeMessageOffsetSelf 同款，默认 0）：头像垂直 Y 偏移
+/// （1.5.9 实证：头像可见时 offset += −46 叠加钉顶基准族；非水平钻入）
 @property (nonatomic, assign) CGFloat mmMessageOffsetSelf;
-/// 对方消息水平偏移（pt，XOS mesMsgMergeMessageOffsetOther 同款，默认 0=不钻入）：
-/// 骑行时对方（左缘）行气泡向头像列的钻入量，正=向头像方向
+/// 对方消息偏移（pt，XOS mesMsgMergeMessageOffsetOther 同款，默认 0）：头像垂直 Y 偏移（同上）
 @property (nonatomic, assign) CGFloat mmMessageOffsetOther;
 /// 群聊 GapReduce（pt，XOS mesMsgMergeGroupGapReduce 同款，默认 +10）：骑行目标 y 微调；
 /// XOS 默认群行矮 10pt、头像冒出 cell 顶 11pt
