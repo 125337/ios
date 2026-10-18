@@ -569,9 +569,12 @@ static double olClamp(double v, double lim) {
 // —— 骑行纵向（XOS 实证几何：反编译 rowHeight +13 还原分支 + 探针实测头像 y≈+2
 // + 双机实测可视抬升 23pt；装机反馈修正：头像不得出行，出行必与上一行 cell 重叠）——
 // 头像钉行顶（不出行），气泡顶统一钉到 头像顶+23——原生两基线（群昵称 16/无昵称 5）
-// 一次拉平，左右恒对称；行高只补「气泡下移后底部空白不足」的差额（仅无昵称行需要）。
+// 一次拉平，左右恒对称；泡下移量由行高全额补足（rideAdd = 下移量，底部空白保原生）。
+// （2026-10-18 探针定论：不可抵扣本行底部空白——那块空白是组内行间距的来源，抵扣=
+// 骑行偷间距，实测骑行行泡底溢出行底 9.7pt 压进下一行；与 mmSpacing/mmHeightReduce
+// 叠加时 reduce 收的是同一块空白，必叠泡。全额补高后骑行行底部空白与原生一致，
+// reduce 在骑行/非骑行行均匀生效，两功能叠加间距不出错。）
 static const double olRideLift = 23.0;   // 头像顶→气泡顶抬升（XOS 双机实测）
-static const double olRidePad  = 10.0;   // 行底部空白估计（可吸收的气泡下移量）
 
 /// 布局接管类型白名单：媒体四类与表情均为 CommonMessageCellView 同构结构
 ///（头像 46×46 y=2、容器与气泡列对齐：自发右缘 W−64/收方 x=64）；表情 47 有头像
@@ -906,7 +909,8 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
 // -[CommonMessageViewModel measure:]（探针实证：CGSize 参数入 x2/x3，调用侧
 // 传 {-1,-1} 无约束哨兵；MSHook + 同声明签名，编译器自动对齐 ABI）。orig 只当
 // 排版工具，两项算术：
-//   ① 骑行补高：气泡顶钉 头像顶+23 后，无昵称行底部空白不足的差额由行高补足
+//   ① 骑行补高：气泡顶钉 头像顶+23 后，泡下移量由行高全额补足（底部空白保原生，
+//      组内间距不被骑行偷走，与②叠加均匀生效）
 //   ② 组内行高缩减：非组尾消息测量高 −(mmSpacing+mmHeightReduce)（下限 24；
 //      HeightReduce=XOS mesMsgMergeHeightReduce 同款：组内行高原生−该值）
 // 昵称区不在此补偿——判定钩翻转让原生测量自动收缩（N 补偿链已删）。
@@ -938,8 +942,11 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         if (pos == MOMergePositionNone) return s;   // 组外/标志缺席：原生直通
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
         // ① 骑行补高：渲染层把气泡顶钉到 头像顶(2)+23+depth（两基线 16/5 统一拉平，
-        //    左右恒对称），下移量超出本行底部空白 ~10 的部分由行高补足——只有无昵称
-        //    行基线 5 距目标 20 需要补；切片行泡体无缝不扩（渲染层对切片行不做骑行 y）。
+        //    左右恒对称），泡下移量由行高全额补足（rideAdd = 下移量）。不可抵扣本行
+        //    底部空白——那块空白是组内行间距的来源，抵扣=骑行偷间距（探针实证骑行行
+        //    泡底溢出行底 9.7pt 压进下一行），与 reduce 叠加必叠泡；全额补高后骑行行
+        //    底部空白与原生一致，reduce 均匀生效。切片行泡体无缝不扩（渲染层对切片行
+        //    不做骑行 y）。
         double rideAdd = 0;
         if (cfg.mmAvatarRide && split == 0 &&
             (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1)) {
@@ -959,7 +966,7 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
                             self, @selector(isShowChatRoomDisplayName));
                     }
                     double need = 2.0 + olRideLift + olClamp(cfg.mmAvatarRideDepth, 100) - (nickRow ? 16.0 : 5.0);
-                    rideAdd = need - olRidePad;   // 底部空白 ~10 可吸收，超出才补行高
+                    rideAdd = need;   // 泡下移量全额补高（不抵扣底部空白，间距保原生）
                     if (rideAdd < 0.0) rideAdd = 0.0;
                 }
             }
