@@ -545,12 +545,12 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //     （固定行高内挪 y 必守恒，项目定论；间距收拢走 measure: 测量层接管）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
 //   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
-// 自摆范围：横向 x（全体白名单行）+ 骑行行纵向（头像钉行顶+depth、气泡顶统一钉
-//   头像顶+23；mmAvatarRide）。
+// 自摆范围：横向 x（仅 mmAvatarOffset/mmWholeOffset 配置，默认 0 = 原生）+ 骑行行纵向
+//   （头像钉行顶+depth、气泡顶统一钉头像顶+23；mmAvatarRide）。
 // 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
 //   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
-//   骑行 = XOS 1.5.9 双机截图实证形态：头像可见行 x±3、气泡对方侧 x−5（本函数内
-//   统一写帧）；本函数管 x/y/宽。行高只归 measure 层（扩行/缩减），渲染层只挪 y。
+//   骑行 = 纯纵向形态（Frida 探针定论：横向钻入会让泡+文字滑进头像列、且泡 z 序在头像
+//   之上→泡盖头像=「和自己 cell 重叠」；骑行不改任何 x）。行高只归 measure 层，渲染层只挪 y。
 // 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
 //   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
 //   逐轮累加会把头像推出屏外（9→270 实证）。总开关关闭 = delta 归零，同机制自动还原。
@@ -561,7 +561,6 @@ static void *kOLLastDH    = &kOLLastDH;
 static void *kOLLastDC    = &kOLLastDC;
 static void *kOLLastDY    = &kOLLastDY;
 static void *kOLLastDN    = &kOLLastDN;
-static void *kOLRideDumped = &kOLRideDumped;   // [RIDE-DUMP] 每 cellView 一次去重
 
 static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
@@ -675,14 +674,11 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
-    // XOS 1.5.9 骑坐形态（装机反馈修订）：头像钉行顶（不出行→绝不与上一行 cell
-    //   重叠），气泡顶统一钉到 头像顶+23（XOS 实测可视抬升，两基线拉平恒对称）。
-    //   组内全行：cont ±44 钻入 → 整组气泡左缘对齐头像正下方（可视位=cont.x+bg.x）
-    //   独立行（非组）：仅头像 ±3/+2 轻咬合，不悬空不钻入
-    if (cfg.mmAvatarRide) {
-        newDH += (sign > 0) ? -3.0 : 3.0;
-        if (active) newDC += sign * 44.0;
-    }
+    // XOS 1.5.9 骑坐形态（Frida 探针定论 2026-10-18）：纯纵向——头像钉行顶（不出行
+    //   →绝不与上一行 cell 重叠），气泡顶统一钉到 头像顶+23（XOS 实测可视抬升，两基线
+    //   拉平恒对称）。横向一律不动：旧版 ±44 钻入会把泡和文字一起滑进头像列（左行文字
+    //   x=29 < 头像右缘 55 实证），且泡容器 z 序在头像之上 → 泡盖头像下缘 20pt，即用户
+    //   所见「头像和自己 cell 重叠」；XOS 探针从未实测过任何横向偏移，±44 系 spec 误标。
     BOOL rideTop = (cfg.mmAvatarRide && active && headVisible && rideOK);
     if (fabs(newDH - lastDH) > 0.01 || rideTop) {
         CGRect f = bHead;
@@ -724,39 +720,6 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
             lb.frame = nf;
             objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
-    }
-    // [RIDE-DUMP]（标杆 BG-DUMP：限量+每 cellView 一次）骑行头行写帧后全量几何，
-    // 定位「头像与自身 cell 内容重叠」真身：cont 各子视图平移到 cell 坐标，直接与
-    // 头像帧求交——∩头 为 "-" 即无交集，有值即重叠真身及其区域
-    static NSInteger sRideDump = 0;
-    if (rideTop && sRideDump < 10 && !objc_getAssociatedObject(cellView, kOLRideDumped)) {
-        sRideDump++;
-        objc_setAssociatedObject(cellView, kOLRideDumped, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        NSMutableString *d = [NSMutableString stringWithFormat:
-            @"[RIDE-DUMP] %@ bounds=%@ sign=%d active=%d headVis=%d rideOK=%d "
-            @"bHead=(%g,%g %gx%g) bBub=(%g,%g %gx%g) dH=%g dC=%g dY=%g "
-            @"| head=%@ cont=%@ lb=%@ subs(cell坐标):",
-            NSStringFromClass([cellView class]),
-            NSStringFromCGRect(cellView.bounds), sign, active, headVisible, rideOK,
-            bHead.origin.x, bHead.origin.y, bHead.size.width, bHead.size.height,
-            bBub.origin.x, bBub.origin.y, bBub.size.width, bBub.size.height,
-            newDH, newDC, newDY,
-            NSStringFromCGRect(head.frame), NSStringFromCGRect(cont.frame),
-            lb ? NSStringFromCGRect(lb.frame) : @"nil"];
-        for (UIView *sv in cont.subviews) {
-            CGRect r = sv.frame;
-            r.origin.x += cont.frame.origin.x;
-            r.origin.y += cont.frame.origin.y;
-            UIImage *si = ([sv isKindOfClass:[UIImageView class]] ? [(UIImageView *)sv image] : nil);
-            CGRect inter = CGRectIntersection(head.frame, r);
-            [d appendFormat:@" %@%@(%g,%g %gx%g%@)∩头%@",
-                NSStringFromClass([sv class]),
-                ([sv isKindOfClass:[UIImageView class]] && !sv.isHidden) ? @"*" : @"",
-                r.origin.x, r.origin.y, r.size.width, r.size.height,
-                si ? [NSString stringWithFormat:@" img%gx%g", si.size.width, si.size.height] : @"",
-                CGRectIsEmpty(inter) ? @"-" : NSStringFromCGRect(inter)];
-        }
-        WPLog(@"MsgMerge", @"%@", d);
     }
 }
 
