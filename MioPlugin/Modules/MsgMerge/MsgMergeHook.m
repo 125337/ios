@@ -179,28 +179,15 @@ static void updateChatContext(id self) {
                   NSStringFromClass([arr0 class] ?: [NSObject class]),
                   (unsigned long)([arr0 isKindOfClass:[NSArray class]] ? arr0.count : -1));
             if ([arr0 isKindOfClass:[NSArray class]] && arr0.count > 0) {
-                // BBMergeModel wrapOfNode 同款两层提取（117 日志实证：NodeData 包装层，
-                // 单层 messageWrap KVC 拿不到——正确链 node.viewModel.messageWrap）
-                BOOL dumped = NO;
+                // BBMergeModel wrapOfNode 完全同款：node 可能是 NodeData 包装（两层链）
+                // 也可能直接是 vm（119 日志实证首条 ChatTimeViewModel、vm=nil——单层
+                // messageWrap 才是有效键）。时间行节点无 wrap，循环跳过。
                 for (id node in arr0) {
-                    id nvm = safeKVC(node, @"viewModel");
-                    id wrap = safeKVC(nvm, @"messageWrap");
-                    if (!dumped) {   // 首条结构 dump（键名实证用）
-                        WPLog(@"MsgMerge", @"[DBG][Ctx] node=%@ vm=%@ wrap=%@",
-                              NSStringFromClass([node class] ?: [NSObject class]),
-                              nvm ? NSStringFromClass([nvm class]) : @"nil",
-                              wrap ? NSStringFromClass([wrap class]) : @"nil");
-                        if ([wrap isKindOfClass:[NSString class]] || wrap) {
-                            WPLog(@"MsgMerge", @"[DBG][Ctx] wrap from=%@ to=%@",
-                                  safeKVC(wrap, @"m_nsFromUsr") ?: @"nil",
-                                  safeKVC(wrap, @"m_nsToUsr") ?: @"nil");
-                        }
-                        dumped = YES;
-                    }
+                    id wrap = safeKVC(safeKVC(node, @"viewModel"), @"messageWrap");
+                    if (!wrap) wrap = safeKVC(node, @"messageWrap");
                     name = chatNameOfWrap(wrap);
                     if (name.length > 0) break;
                 }
-                WPLog(@"MsgMerge", @"[DBG][Ctx] 两层提取 → name=%@", name ?: @"nil");
             }
         }
         if ([name isKindOfClass:[NSString class]] && name.length > 0) {
