@@ -80,6 +80,20 @@ static NSString *currentChatName(void) {
     return g_currentChatName;
 }
 
+/// 聊天名缺位时建立（不覆盖已有值——切会话检测由 updateChatContext 专属）。
+/// 8.0.79 兜底链实证：m_nsTalker 不存在 + NodeData 两层提取失效 → 聊天名只能由
+/// measure 读侧 wrap / AddMsg 管道 session 建立（两条都零服务总线依赖）。
+static void setCurrentChatNameIfEmpty(NSString *name) {
+    if (g_currentChatName.length > 0) return;
+    if (![name isKindOfClass:[NSString class]] || name.length == 0) return;
+    WPLog(@"MsgMerge", @"[Ctx] chat 建立（缺位兜底）: %@ → %@", g_currentChatName, name);
+#if __has_feature(objc_arc)
+#else
+    if (g_currentChatName) [g_currentChatName release];
+#endif
+    g_currentChatName = [name copy];
+}
+
 // —— 视图安全访问 ——
 static id safeCall(id obj, const char *selName) {
     if (!obj) return nil;
@@ -167,8 +181,22 @@ static void updateChatContext(id self) {
             if ([arr0 isKindOfClass:[NSArray class]] && arr0.count > 0) {
                 // BBMergeModel wrapOfNode 同款两层提取（117 日志实证：NodeData 包装层，
                 // 单层 messageWrap KVC 拿不到——正确链 node.viewModel.messageWrap）
+                BOOL dumped = NO;
                 for (id node in arr0) {
-                    id wrap = safeKVC(safeKVC(node, @"viewModel"), @"messageWrap");
+                    id nvm = safeKVC(node, @"viewModel");
+                    id wrap = safeKVC(nvm, @"messageWrap");
+                    if (!dumped) {   // 首条结构 dump（键名实证用）
+                        WPLog(@"MsgMerge", @"[DBG][Ctx] node=%@ vm=%@ wrap=%@",
+                              NSStringFromClass([node class] ?: [NSObject class]),
+                              nvm ? NSStringFromClass([nvm class]) : @"nil",
+                              wrap ? NSStringFromClass([wrap class]) : @"nil");
+                        if ([wrap isKindOfClass:[NSString class]] || wrap) {
+                            WPLog(@"MsgMerge", @"[DBG][Ctx] wrap from=%@ to=%@",
+                                  safeKVC(wrap, @"m_nsFromUsr") ?: @"nil",
+                                  safeKVC(wrap, @"m_nsToUsr") ?: @"nil");
+                        }
+                        dumped = YES;
+                    }
                     name = chatNameOfWrap(wrap);
                     if (name.length > 0) break;
                 }
@@ -331,8 +359,20 @@ static void refreshModelNow(void) {
 // 零影响（查表架构核心）。None → 限频保鲜补表再查；配置指纹变化 → 立即重建。
 static MOMergePosition flagsPos(id vm) {
     BBMergeModel *m = [BBMergeModel shared];
-    long long lid = localIDOfWrap(safeKVC(vm, @"messageWrap"));
+    id wrap = safeKVC(vm, @"messageWrap");          // 键有效性 118 实证（lid 恒取到）
+    long long lid = localIDOfWrap(wrap);
     MOMergePosition pos = [m posForLocalID:lid];
+    // 聊天名缺位兜底（118 实证：NodeData 两层提取失效，聊天名永不建立=合并全灭）：
+    // measure 是微信建表必经之路，此 vm.messageWrap 键有效性已实证——wrap 直接
+    // 推导聊天名并建立（主线程 measure 时机安全，零服务总线依赖）。正常路径
+    // （聊天名已建立）零影响。
+    if (pos == MOMergePositionNone && currentChatName().length == 0 && lid > 0) {
+        NSString *nm = chatNameOfWrap(wrap);
+        if (nm.length > 0) {
+            WPLog(@"MsgMerge", @"[DBG][Read] 聊天名缺位 → measure 兜底建立：%@", nm);
+            setCurrentChatNameIfEmpty(nm);
+        }
+    }
     if (pos != MOMergePositionNone && ![m configFingerprintChanged]) return pos;
     if ([m configFingerprintChanged]) {
         WPLog(@"MsgMerge", @"[DBG][Read] lid=%lld 指纹变化 → 立即重建", lid);
@@ -429,8 +469,16 @@ static void mmHandleIncomingMsg(id session, id wrap) {
     if (!cfg.mmEnable) return;
     if (![session isKindOfClass:[NSString class]]) return;
     if (![(NSString *)session isEqualToString:g_currentChatName]) {
-        WPLog(@"MsgMerge", @"[DBG][Pipe] 丢弃：session=%@ ≠ 当前=%@", session, g_currentChatName ?: @"nil");
-        return;   // 只管当前打开的会话
+        // 聊天名缺位兜底（118 实证）：session 是微信收发管道自带的 talker，
+        // 当前聊天页在且聊天名空 → 直接用 session 建立（零服务总线依赖）
+        if (g_currentChatName.length == 0 && g_curChatVC) {
+            setCurrentChatNameIfEmpty(session);
+            WPLog(@"MsgMerge", @"[DBG][Pipe] 缺位兜底后重匹配 session=%@", session);
+        }
+        if (![(NSString *)session isEqualToString:g_currentChatName]) {
+            WPLog(@"MsgMerge", @"[DBG][Pipe] 丢弃：session=%@ ≠ 当前=%@", session, g_currentChatName ?: @"nil");
+            return;   // 只管当前打开的会话
+        }
     }
     long long lid = localIDOfWrap(wrap);
     if (lid <= 0) return;
