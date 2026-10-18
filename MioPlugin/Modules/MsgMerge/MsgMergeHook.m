@@ -566,10 +566,12 @@ static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
 }
 
-/// 骑行组首行行高扩展量 = 悬空量（56−钉顶偏置，下限 0）。measure 层扩行与渲染层
-/// 气泡下移必须同值同源（本函数单点），否则气泡溢出压行/组间缝失控。
+/// 骑行组首行行高扩展量（40−钉顶偏置，下限 0）。实测标定：56 系旧探针「头像相对
+/// 气泡抬升量」，未扣头像自身行内占位——双机截图同尺度对照（头像底→气泡顶）XOS
+/// ≈23pt、56 扩行版 ≈39pt，差 16pt → 扩行 40。measure 层扩行与渲染层气泡下移
+/// 必须同值同源（本函数单点），否则气泡溢出压行/组间缝失控。
 static double olRideExpand(MsgMergeConfig *cfg) {
-    double e = 56.0 - olClamp(cfg.mmAvatarRideDepth, 100);
+    double e = 40.0 - olClamp(cfg.mmAvatarRideDepth, 100);
     return e > 0 ? e : 0;
 }
 

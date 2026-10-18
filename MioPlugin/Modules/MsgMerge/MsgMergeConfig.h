@@ -47,7 +47,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// 头像骑气泡（XOS 1.5.9 骑坐，需 mmEnable 开）：组首头像悬空组顶+组内气泡整组钻入
 ///（XOS 双机截图实证形态）；独立行仅头像 ±3/+2 轻咬合
 @property (nonatomic, assign) BOOL   mmAvatarRide;
-/// 钉顶偏置（pt，±100 钳位）：组首头像悬空 y = −56 + 偏置，默认 0=XOS 截图实测位
+/// 钉顶偏置（pt，±100 钳位）：骑行组首行行高扩展 = 40 − 偏置，默认 0=XOS 截图实测位
+///（正值=头像下沉贴近气泡/缝隙变小，负值=悬空更高/缝隙变大）
 @property (nonatomic, assign) CGFloat mmAvatarRideDepth;
 /// 行高缩减（pt，XOS mesMsgMergeHeightReduce 同款，默认 0）：组内非组尾行在原生行高
 ///（及手动间距）基础上再减此值，下限 24
