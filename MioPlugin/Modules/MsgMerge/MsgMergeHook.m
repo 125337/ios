@@ -699,13 +699,6 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
             // 骑行头行：头像钉行顶（XOS 探针实测 y≈+2，不出行→绝不与上一行 cell
             // 重叠）+depth 整体下沉；切片行（泡体无缝）/非接管类型：+2 轻咬合
             f.origin.y = (active && rideOK) ? (bHead.origin.y + olClamp(cfg.mmAvatarRideDepth, 100)) : (f.origin.y + 2.0);
-            if (active && rideOK) {
-                // XOS 组首头像构图微调（8.0.60 探针实测：组首 (12,4)/自发 (338,4)
-                // vs 组内原生 (9,2)/(341,2)——向屏内 3pt、向下 2pt，所有类型一致）；
-                // 组内行头像隐藏不受影响。泡顶锚 bHead+57 不变 → 泡−头像=55 与 XOS 同。
-                f.origin.x -= sign * 3.0;
-                f.origin.y += 2.0;
-            }
         }
         head.frame = f;
         // 昵称跟随（XOS 同款：原生布局本就把昵称排在头像右侧锚点（头像右+8/顶+4，
