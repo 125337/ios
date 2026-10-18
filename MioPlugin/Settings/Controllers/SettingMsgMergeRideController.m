@@ -52,7 +52,7 @@
                             title:@"钻入量-对方 (pt)"
                               key:@"mmRideDiveRecv"
                             value:[NSString stringWithFormat:@"%.1f", config.mmRideDiveRecv]
-                             hint:@"默认 52"
+                             hint:@"默认 46"
                         valueType:InputValueTypeNumber
                        alertTitle:@"钻入量-对方"
                      alertMessage:@"对方侧气泡容器向屏幕边缘的钻入量，泡图素材自带透明边距，视觉对齐需自行微调"
@@ -62,7 +62,7 @@
                             title:@"钻入量-我方 (pt)"
                               key:@"mmRideDiveSend"
                             value:[NSString stringWithFormat:@"%.1f", config.mmRideDiveSend]
-                             hint:@"默认 0"
+                             hint:@"默认 46"
                         valueType:InputValueTypeNumber
                        alertTitle:@"钻入量-我方"
                      alertMessage:@"我方侧气泡容器横向偏移，正=向屏幕边缘，0=原生位（我方原生已贴边）"
