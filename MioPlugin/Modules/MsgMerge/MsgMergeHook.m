@@ -939,9 +939,25 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
             mergeFindTable(vcSelf.view, 0, &tbl);
             if (!tbl) return;
             @try {
+                // 首屏贴底重锚（截图 2026-10-19 实证）：微信原生锚底发生在行高补差
+                // （rideAdd/reduce）落地之前，补差后 contentSize 增长把锚点以下内容
+                // 整体下推 → 底行泡被输入栏截断。补差前记贴底状态，补差后按原状态
+                // 重锚（中途用户已滚动/搜索定位进入则不动）。
+                double offY0 = tbl.contentOffset.y;
+                double bottom0 = tbl.contentSize.height - tbl.bounds.size.height
+                               + tbl.adjustedContentInset.bottom;
+                BOOL atBottom = (bottom0 <= 0) || (offY0 >= bottom0 - 80.0);
+                resetAllMeasureCaches();       // 同步清缓存（mergeDoReload 的异步版赶不上下方重询）
                 [tbl layoutIfNeeded];
                 [tbl beginUpdates];
                 [tbl endUpdates];
+                if (atBottom) {
+                    double target = tbl.contentSize.height - tbl.bounds.size.height
+                                  + tbl.adjustedContentInset.bottom;
+                    if (target > 0 && fabs(tbl.contentOffset.y - target) > 1.0) {
+                        [tbl setContentOffset:CGPointMake(0, target) animated:NO];
+                    }
+                }
             } @catch (NSException *e) {
                 WPLog(@"MsgMerge", @"[Ctx] appear begin/end clash: %@", e.reason);
             }
