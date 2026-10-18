@@ -120,8 +120,14 @@ static void showHud(void) {
     [root addSubview:close];
     refreshLabel();
 
-    UIWindow *win = [UIApplication sharedApplication].keyWindow;
-    if (!win) win = [UIApplication sharedApplication].windows.firstObject;
+    // 选主 window：微信多 window 环境 keyWindow 可能指向键盘等辅助 window，
+    // 遍历取可见且最高的 window 才保证显示
+    UIWindow *win = nil;
+    for (UIWindow *w in [UIApplication sharedApplication].windows) {
+        if (w.hidden || w.frame.size.height < 100) continue;
+        if (!win || w.frame.size.height > win.frame.size.height) win = w;
+    }
+    if (!win) return;
     root.layer.zPosition = 9999;
     [win addSubview:root];
     s_hud = root;

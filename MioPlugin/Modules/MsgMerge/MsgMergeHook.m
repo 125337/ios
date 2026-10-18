@@ -588,7 +588,7 @@ static BOOL olTypeEnabled(long long t) {
 }
 
 static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePosition pos, BOOL rideOK) {
-    [MsgMergeDebugHud syncVisible];   // 骑行调试悬浮窗随开关显隐（BOOL 判断，开销可忽略）
+    @try { [MsgMergeDebugHud syncVisible]; } @catch (NSException *e) {}   // 调试悬浮窗显隐（异常不进布局路径）
     UIView *head = safeCall(cellView, "getHeadImageView");
     UIImageView *bg = safeCall(cellView, "getBgImageView");
     // 容器发现（探针 #getContentView 全类型实证）：有气泡 bg 的类型（文本/语音/App/文件）
