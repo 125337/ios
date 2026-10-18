@@ -66,7 +66,8 @@ static IMP orig_CMVM_measure                    = NULL;
 static IMP orig_CMVM_isShowChatRoomDisplayName  = NULL;
 static IMP orig_CMMsgMgr_AddMsg                 = NULL;   // 收发总管道（发送侧不走 AsyncOnAddMsg）
 static IMP orig_CMMsgMgr_onServiceInit          = NULL;   // 服务初始化（mgr 早捕获挂点）
-static IMP orig_CMMsgMgr_AsyncOnAddMsg          = NULL;
+static IMP orig_CMMsgMgr_AsyncOnAddMsg           = NULL;
+static IMP orig_UITableView_reloadData           = NULL;   // 聊天表 reload 首测前置
 
 // —— 会话上下文 ——
 static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chatroom id，私聊=对端 id）
@@ -923,6 +924,30 @@ static void mergeFindTable(UIView *v, int depth, UITableView **out) {
     for (UIView *sub in v.subviews) mergeFindTable(sub, depth + 1, out);
 }
 
+// 聊天表 reloadData 首测前置（首屏固化根治，2026-10-19）：微信行变更全走 reloadData
+// （本项目定论），被调时节点数组必然就位（reload 就是要渲染这些节点）——此刻同步
+// 重建索引，行高首测与首帧渲染的标志必就位。根治后 viewDidAppear 0.2s 补救退化为
+// 保险丝（微信原生锚底不再撞上行高补差落地，底行截断从源头消失）。
+// 守卫：只认当前聊天页的表（delegate 直比，视图树确认兜底），其它表格直通零成本。
+static void repl_UITableView_reloadData(UITableView *self, SEL _cmd) {
+    @try {
+        if (g_curChatVC && g_currentNodeArray.count > 0) {
+            BOOL isChatTbl = (self.delegate == (id)g_curChatVC);
+            if (!isChatTbl) {
+                UITableView *tbl = nil;
+                mergeFindTable(g_curChatVC.view, 0, &tbl);
+                isChatTbl = (tbl == self);
+            }
+            if (isChatTbl) refreshAndApplyFromContext();
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Ctx] reloadData 前置刷新异常: %@", e.reason);
+    }
+    if (orig_UITableView_reloadData) {
+        ((void (*)(id, SEL))orig_UITableView_reloadData)(self, _cmd);
+    }
+}
+
 static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated) {
     ((void (*)(id, SEL, BOOL))orig_BaseMsgContentVC_viewDidAppear)(self, _cmd, animated);
     @try {
@@ -1230,6 +1255,24 @@ static BOOL impIsForeign(IMP cur) {
             }
         } else {
             WPLog(@"MsgMerge", @"[Hook] ✗ BaseMsgContentViewController 无 scrollViewDidScroll:，滚动驱动不可用");
+        }
+    }
+
+    // ①c 聊天表 reload 首测前置（首屏固化根治，见 repl_UITableView_reloadData 注释）。
+    // impIsForeign 让位（reloadData 可能已被外挂 MSHook，链上不可靠），0.2s 补救兜底。
+    {
+        Class uicls = objc_getClass("UITableView");
+        Method rm = uicls ? class_getInstanceMethod(uicls, @selector(reloadData)) : NULL;
+        if (rm) {
+            IMP cur = method_getImplementation(rm);
+            if (impIsForeign(cur)) {
+                WPLog(@"MsgMerge", @"[Hook] ⊘ UITableView reloadData 归属外挂，让位不挂（0.2s 补救兜底）");
+            } else {
+                orig_UITableView_reloadData = bbSwap(uicls, @selector(reloadData),
+                                                     (IMP)repl_UITableView_reloadData,
+                                                     "UITableView");
+                WPLog(@"MsgMerge", @"[Hook] ✓ UITableView reloadData（聊天表首测前置）");
+            }
         }
     }
 
