@@ -1099,6 +1099,43 @@ static void repl_UITableView_reloadData(UITableView *self, SEL _cmd) {
     }
 }
 
+// —— 入场贴底跟踪锚（装机日志 2026-10-19 实证）——
+// 微信入场锚底用布局未完成的旧 contentSize（锚 792 → 行高落地 cs=1630，底缺口
+// 66.3pt=用户所见首屏截断；缺口=0 与否取决于布局运气）。+0.2s 一次性重锚太迟，
+// 用户先看到截断帧再一次 66pt 跳动。改为入场 1.2s 内 50ms 节拍跟踪：cs 每长高
+// 一点就贴底补锚一点，修正摊薄为不可见微调，且从第一帧后即生效。
+// 安全边界：用户手动滚动即停（g_userScrolled）；收发 1.5s 避让（同补询口径）；
+// 仅贴底容差 80pt 内才动；纯 setContentOffset 不碰行高对账（崩溃规则只限
+// begin/endUpdates 类），节拍短促增量更安全。
+static NSTimer *g_anchorTimer = nil;
+static CFAbsoluteTime g_anchorT0 = 0;
+
+static void mergeStartAnchorTicker(void) {
+    if (g_anchorTimer) { [g_anchorTimer invalidate]; g_anchorTimer = nil; }
+    g_anchorT0 = CFAbsoluteTimeGetCurrent();
+    g_anchorTimer = [NSTimer timerWithTimeInterval:0.05 repeats:YES block:^(NSTimer *t) {
+        CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+        if (now - g_anchorT0 > 1.2 || g_userScrolled || !g_curChatVC) {
+            [t invalidate];
+            if (t == g_anchorTimer) g_anchorTimer = nil;
+            return;
+        }
+        if (g_lastAddMsgTick > 0 && now - g_lastAddMsgTick < 1.5) return;   // 收发避让
+        UITableView *tbl = nil;
+        mergeFindTable(g_curChatVC.view, 0, &tbl);
+        if (!tbl) return;
+        double offY = tbl.contentOffset.y;
+        double bottom = tbl.contentSize.height - tbl.bounds.size.height
+                      + tbl.adjustedContentInset.bottom;
+        if (bottom <= 0) return;
+        if (offY < bottom - 80.0) return;   // 已偏离贴底（用户意图），不追
+        if (offY >= bottom - 1.0) return;   // 已贴底
+        [tbl setContentOffset:CGPointMake(0, bottom) animated:NO];
+        WPLog(@"MsgMerge", @"[Anc] 跟踪锚 %.1f → %.1f (cs=%.1f)", offY, bottom, tbl.contentSize.height);
+    }];
+    [[NSRunLoop mainRunLoop] addTimer:g_anchorTimer forMode:NSRunLoopCommonModes];
+}
+
 static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated) {
     ((void (*)(id, SEL, BOOL))orig_BaseMsgContentVC_viewDidAppear)(self, _cmd, animated);
     @try {
@@ -1110,6 +1147,7 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
         g_userScrolled = NO;
         g_fuseSnap = NO;
         g_fuseCount = 0;
+        mergeStartAnchorTicker();   // 入场即开贴底跟踪锚（cs 增长期间持续小步补锚，见函数注释）
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             if (g_curChatVC != self) return;   // 已切走
