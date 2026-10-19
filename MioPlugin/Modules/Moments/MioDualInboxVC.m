@@ -76,13 +76,16 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.title = @"消息";                                        // 导航标题（‹ 发现 由面板包装）
     self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
 
     self.table = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleInsetGrouped];
     self.table.dataSource = self;
     self.table.delegate = self;
     self.table.backgroundColor = [UIColor systemGroupedBackgroundColor];
+    self.table.separatorStyle = UITableViewCellSeparatorStyleNone;       // 无发丝线（卡片间隙即分隔）
     self.table.rowHeight = 72;   // 对齐 WCM setRowHeight_（42pt 圆头像 + 两行文字）
+    if (@available(iOS 15.0, *)) self.table.sectionHeaderTopPadding = 0; // 去系统 section 头 padding
 
     // 下拉刷新 → loadMessages（WCM 同款：本页自己拉 facade 数据）
     self.refresh = [UIRefreshControl new];
@@ -99,6 +102,14 @@
     [self.seg addTarget:self action:@selector(segChanged:) forControlEvents:UIControlEventValueChanged];
     [hdr addSubview:self.seg];
     self.table.tableHeaderView = hdr;
+
+    // 左右滑切分类（WCM swipeCategory: 同款手势）
+    UISwipeGestureRecognizer *swL = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(handleSwipe:)];
+    swL.direction = UISwipeGestureRecognizerDirectionRight;
+    [self.table addGestureRecognizer:swL];
+    UISwipeGestureRecognizer *swR = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(handleSwipe:)];
+    swR.direction = UISwipeGestureRecognizerDirectionLeft;
+    [self.table addGestureRecognizer:swR];
 
     [self.view addSubview:self.table];
     [NSLayoutConstraint activateConstraints:@[
@@ -124,6 +135,20 @@
     [self.table reloadData];
 }
 
+// 左右滑切分类（对齐 WCM swipeCategory: 行为）
+- (void)handleSwipe:(UISwipeGestureRecognizer *)g {
+    NSInteger i = self.seg.selectedSegmentIndex + (g.direction == UISwipeGestureRecognizerDirectionLeft ? 1 : -1);
+    if (i < 0 || i >= self.seg.numberOfSegments) return;
+    self.seg.selectedSegmentIndex = i;
+    [self segChanged:self.seg];
+}
+
+// 卡间距 ~10pt（WCM 观感）：每卡 section header/footer 各 5
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section { return 5; }
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section  { return 5; }
+- (NSString *)tableView:titleForHeaderInSection:(NSInteger)section   { return nil; }
+- (NSString *)tableView:titleForFooterInSection:(NSInteger)section    { return nil; }
+
 // WCM changeCategory 对齐（宽松版）：赞 tab=kind like 且我帖；评论 tab=非赞；全部=全部
 - (void)applyFilter {
     NSInteger s = self.seg.selectedSegmentIndex;
@@ -148,10 +173,8 @@
         empty.font = [UIFont systemFontOfSize:14];
         empty.textColor = [UIColor secondaryLabelColor];
         self.table.backgroundView = empty;
-        self.table.separatorStyle = UITableViewCellSeparatorStyleNone;
     } else {
         self.table.backgroundView = nil;
-        self.table.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
     }
 }
 
@@ -166,31 +189,40 @@
     return 1;
 }
 
-// WCM 同款渲染路径：现代内容配置管线（UIListContentConfiguration，iOS14+ 运行时必有）——
-// InsetGrouped 分组卡底/排版/深色模式由系统接管，与 WCMoments 走同一 API。
-// 接口声明见 Core/MioListContentShim.h（__has_include 守卫，新 SDK 下自动让位）。
+// WCM cellForRow 逐选择器重建（③-⑧）：现代内容配置管线 + 手绘卡 + 右上时间。
+// subtitleCellConfiguration 是 UIListContentConfiguration 的类方法，必须发给本类
+// （发给 UITableViewCell 会 doesNotRecognizeSelector → 点进铃铛页即崩，dump 实证）。
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"msg"];
     if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"msg"];
 
     NSDictionary *d = self.rows[indexPath.section];
     BOOL like = [d[@"kind"] isEqualToString:@"like"];
-    NSString *sec = ((NSString *)d[@"text"]).length > 0 ? d[@"text"]
-                  : (like ? @"赞了你的朋友圈" : @"评论了你的朋友圈");
+    NSString *txt = d[@"text"];
+    NSString *sec = (txt.length > 0) ? txt
+                  : (like ? @"♡ 赞了你的朋友圈" : @"评论了你的朋友圈");
 
-    // ---- 现代内容配置（WCM 同款管线）：排版 + 分组卡底系统接管 ----
-    // subtitleCellConfiguration 是 UIListContentConfiguration 的类方法，必须发给本类；
-    // 发给 UITableViewCell 会 doesNotRecognizeSelector → 点进铃铛页即崩（dump 实证）
-    UIListContentConfiguration *cfg = [UIListContentConfiguration subtitleCellConfiguration];
+    // ---- ③ 内容配置（接收者 = UIListContentConfiguration 类，dump 实证）----
+    SEL cfgSel = NSSelectorFromString(@"subtitleCellConfiguration");
+    UIListContentConfiguration *cfg =
+        ((id(*)(id, SEL))objc_msgSend)(objc_getClass("UIListContentConfiguration"), cfgSel);
     cfg.text = d[@"name"];
     cfg.secondaryText = sec;
-    cfg.image = [self circleAvatar:[self avatarImage:d[@"actor"]]];   // 预渲染 42pt 圆形位图
+    cfg.image = [self avatarImage:d[@"actor"]];                 // 原图，圆角交给系统
+    cfg.imageProperties.maximumSize  = CGSizeMake(42, 42);      // WCM 同款（setMaximumSize_ 实证）
+    cfg.imageProperties.cornerRadius = 21;                      // setCornerRadius_ 实证
     cfg.secondaryTextProperties.font = [UIFont systemFontOfSize:13];
     cfg.textToSecondaryTextVerticalPadding = 2;
     cell.contentConfiguration = cfg;
+
+    // ---- ⑥ 手绘卡（WCM 实证：白卡是自己画的 layer，非系统分组底）----
+    cell.backgroundColor = [UIColor clearColor];
+    cell.contentView.backgroundColor = [UIColor secondarySystemGroupedBackground];
+    cell.contentView.layer.cornerRadius = 12;
+    cell.contentView.layer.masksToBounds = YES;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 
-    // ---- 右侧时间「10月19日 16:24」（WCM 也是手工挂载，同款）----
+    // ---- ⑧ 右上时间「M月d日 HH:mm」（WCM 同款手工挂载）----
     [[cell.contentView viewWithTag:1001] removeFromSuperview];   // 复用清理（时间 label 手工挂载）
     UILabel *time = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 110, 20)];
     time.tag = 1001;
@@ -205,7 +237,7 @@
     [cell.contentView addSubview:time];
     [NSLayoutConstraint activateConstraints:@[
         [time.trailingAnchor constraintEqualToAnchor:cell.contentView.layoutMarginsGuide.trailingAnchor],
-        [time.centerYAnchor constraintEqualToAnchor:cell.contentView.centerYAnchor]]];
+        [time.topAnchor constraintEqualToAnchor:cell.contentView.layoutMarginsGuide.topAnchor]]];
 
     return cell;
 }
@@ -217,8 +249,8 @@
     NSDictionary *d = self.rows[indexPath.section];
     NSString *txt = ((NSString *)d[@"text"]).length > 0 ? d[@"text"]
                   : ([d[@"kind"] isEqualToString:@"like"] ? @"赞了你的朋友圈" : @"评论了你的朋友圈");
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"该条消息"
-                                    message:[NSString stringWithFormat:@"%@：%@", d[@"name"], txt]
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:d[@"name"]
+                                    message:txt
                                     preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"查看原帖" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
         [self dismissViewControllerAnimated:YES completion:nil];
@@ -235,8 +267,8 @@
     return [UIImage systemImageNamed:@"person.crop.circle.fill"];
 }
 
-// 头像统一画成 42pt 圆形位图（SF Symbol 拉伸后仍为圆形观感）。
-// 用预渲染而非 imageProperties.cornerRadius：后者实际类型是 UIListContentImageProperties，观感不可控
+// 头像圆角：系统 imageProperties.cornerRadius 接管（42pt 正圆）；
+// circleAvatar: 预渲染保留为 imageProperties 在个别 iOS 上不生效时的兜底
 - (UIImage *)circleAvatar:(UIImage *)img {
     if (!img) return nil;
     CGFloat s = 42;
