@@ -585,7 +585,7 @@ static NSString *MioCallStr(id msg, NSString *method) {
         @try {
             NSString *actor = WXSafeStringGet(msg, @"username") ?: MioCallStr(msg, @"username") ?: @"";
             if ([actor isEqualToString:selfUsr]) continue;   // 自己的操作不进消息页（WCM 同款）
-            NSInteger type = WXSafeIntegerGet(msg, @"type");
+            NSInteger type = WXSafeIntegerGet(msg, @"type", 0);
             id objID = MioMsgCall(msg, @"objID") ?: [msg valueForKey:@"objID"];
             NSString *owner = MioCallStr(msg, @"dataItemUsrName") ?: @"";
             id dataItem = nil;
@@ -602,7 +602,7 @@ static NSString *MioCallStr(id msg, NSString *method) {
                 @"actor": actor,
                 @"kind": (type == 1) ? @"like" : @"cmt",                // 1=赞 2/3/8=评论
                 @"text": text,
-                @"t": @([MioMsgCall(msg, @"createTime") longLongValue] ?: WXSafeIntegerGet(msg, @"createtime")),
+                @"t": @([MioMsgCall(msg, @"createTime") longLongValue] ?: WXSafeIntegerGet(msg, @"createtime", 0)),
                 @"mine": @([owner isEqualToString:selfUsr]),
                 @"refSelf": @([MioCallStr(msg, @"refUserName") ?: @"" isEqualToString:selfUsr])}];
         } @catch (NSException *e) { continue; }
