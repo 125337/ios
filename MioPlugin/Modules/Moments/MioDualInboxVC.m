@@ -146,8 +146,6 @@
 // 卡间距 ~10pt（WCM 观感）：每卡 section header/footer 各 5
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section { return 5; }
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section  { return 5; }
-- (NSString *)tableView:titleForHeaderInSection:(NSInteger)section   { return nil; }
-- (NSString *)tableView:titleForFooterInSection:(NSInteger)section    { return nil; }
 
 // WCM changeCategory 对齐（宽松版）：赞 tab=kind like 且我帖；评论 tab=非赞；全部=全部
 - (void)applyFilter {
@@ -217,7 +215,7 @@
 
     // ---- ⑥ 手绘卡（WCM 实证：白卡是自己画的 layer，非系统分组底）----
     cell.backgroundColor = [UIColor clearColor];
-    cell.contentView.backgroundColor = [UIColor secondarySystemGroupedBackground];
+    cell.contentView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
     cell.contentView.layer.cornerRadius = 12;
     cell.contentView.layer.masksToBounds = YES;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
