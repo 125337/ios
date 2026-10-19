@@ -934,9 +934,30 @@ static NSUInteger g_fuseCount = 0;           // 本次进页补询次数（上�
 static BOOL g_fuseSnap = NO;                 // 贴底快照已取
 static BOOL g_fuseAtBottom = NO;             // 进页贴底快照
 
-// 补询执行：同步清测量缓存 + begin/endUpdates 强制全表重询 + 贴底重锚。
-// begin/endUpdates 安全性同 appear 保险丝（进会话静默窗口；收发管线由调用侧
-// 1.5s 避让与 @try 共同防）。
+// 行高重询执行体：调微信自己的 reloadTableData（全表重建入口，XOS 同款杠杆——
+// 2026-10-19 XOS 反编译钩子清单实证它钩 BaseMsgContentViewController reloadTableData）。
+// begin/endUpdates 只让 UITableView 重询 delegate，微信 delegate 层自己的行高缓存
+// 并不失效（装机探针实证：补询后 measure 钩一次未被调、行高恒旧值）——只有微信
+// 自己的全表重建才丢弃内部缓存重新测量。reloadTableData 内部自带回锚。
+static void mergeForceHeightRequery(UITableView *tbl) {
+    if (!tbl) return;
+    @try {
+        if (g_curChatVC && [(id)g_curChatVC respondsToSelector:@selector(reloadTableData)]) {
+            resetAllMeasureCaches();
+            ((void (*)(id, SEL))objc_msgSend)(g_curChatVC, @selector(reloadTableData));
+        } else {
+            resetAllMeasureCaches();
+            [tbl layoutIfNeeded];
+            [tbl beginUpdates];
+            [tbl endUpdates];
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Ctx] 行高重询 clash: %@", e.reason);
+    }
+}
+
+// 补询执行：行高重询（reloadTableData）+ 贴底重锚。
+// 安全性同 appear 保险丝（进会话静默窗口；收发管线由调用侧 1.5s 避让与 @try 共同防）。
 static void mergeFuseFire(void) {
     if (!g_curChatVC) return;
     UIViewController *vc = g_curChatVC;
@@ -944,12 +965,10 @@ static void mergeFuseFire(void) {
     mergeFindTable(vc.view, 0, &tbl);
     if (!tbl) return;
     @try {
-        resetAllMeasureCaches();
-        [tbl layoutIfNeeded];
-        [tbl beginUpdates];
-        [tbl endUpdates];
+        mergeForceHeightRequery(tbl);
         g_fuseCount++;
         if (g_fuseAtBottom) {
+            [tbl layoutIfNeeded];
             double target = tbl.contentSize.height - tbl.bounds.size.height
                           + tbl.adjustedContentInset.bottom;
             if (target > 0 && fabs(tbl.contentOffset.y - target) > 1.0) {
@@ -957,7 +976,7 @@ static void mergeFuseFire(void) {
             }
         }
     } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[Ctx] 数据补询 begin/end clash: %@", e.reason);
+        WPLog(@"MsgMerge", @"[Ctx] 数据补询 clash: %@", e.reason);
     }
 }
 
@@ -1052,18 +1071,16 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
             if (!tbl) return;
             @try {
                 // 首屏贴底重锚（截图 2026-10-19 实证）：微信原生锚底发生在行高补差
-                // （rideAdd/reduce）落地之前，补差后 contentSize 增长把锚点以下内容
-                // 整体下推 → 底行泡被输入栏截断。补差前记贴底状态，补差后按原状态
-                // 重锚（中途用户已滚动/搜索定位进入则不动）。
+                // （rideAdd/reduce）落地之前。补差前记贴底状态，行高重询
+                // （mergeForceHeightRequery：微信自己的 reloadTableData，丢弃其内部
+                // 行高缓存重新测量）后按原状态重锚（中途已滚动/搜索定位进入则不动）。
                 double offY0 = tbl.contentOffset.y;
                 double bottom0 = tbl.contentSize.height - tbl.bounds.size.height
                                + tbl.adjustedContentInset.bottom;
                 BOOL atBottom = (bottom0 <= 0) || (offY0 >= bottom0 - 80.0);
-                resetAllMeasureCaches();       // 同步清缓存（mergeDoReload 的异步版赶不上下方重询）
-                [tbl layoutIfNeeded];
-                [tbl beginUpdates];
-                [tbl endUpdates];
+                mergeForceHeightRequery(tbl);
                 if (atBottom) {
+                    [tbl layoutIfNeeded];
                     double target = tbl.contentSize.height - tbl.bounds.size.height
                                   + tbl.adjustedContentInset.bottom;
                     if (target > 0 && fabs(tbl.contentOffset.y - target) > 1.0) {
@@ -1071,7 +1088,7 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
                     }
                 }
             } @catch (NSException *e) {
-                WPLog(@"MsgMerge", @"[Ctx] appear begin/end clash: %@", e.reason);
+                WPLog(@"MsgMerge", @"[Ctx] appear 重询 clash: %@", e.reason);
             }
         });
     } @catch (NSException *e) {
