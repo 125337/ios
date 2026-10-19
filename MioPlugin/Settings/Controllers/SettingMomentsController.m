@@ -121,6 +121,8 @@
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addSwitchRowInGroup:group title:@"高清朋友圈" desc:nil key:@"hdMomentsEnabled" isOn:config.hdMomentsEnabled cy:cy width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
+    cy = [self addSwitchRowInGroup:group title:@"双列朋友圈" desc:nil key:@"dualColumnEnabled" isOn:config.dualColumnEnabled cy:cy width:w];
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
 
     // 子开关：朋友圈伪集赞（开=展开子配置，关=收起；手风琴，总开关唯一入口）
     cy = [self addMasterSwitchRowInGroup:group
@@ -204,7 +206,7 @@
 
     y = [self finishGroup:group atY:y height:cy];
 
-    [self addSectionFooter:@"伪集赞: 自定义朋友圈收到的点赞与评论数量\n评论文本按设置的数量随机取用\n自动点赞: 广告帖与黑名单好友不发赞\n自动评论: 广告帖与自己的帖子不评论\n详细时间: 时间行显示绝对时间\n定时发送: 发帖页选时间后照常发表\n即转为定时任务，到点自动发出\n小尾巴: 发朋友圈携带自定义来源\n设置后需重进朋友圈生效" y:y width:w];
+    [self addSectionFooter:@"伪集赞: 自定义朋友圈收到的点赞与评论数量\n评论文本按设置的数量随机取用\n自动点赞: 广告帖与黑名单好友不发赞\n自动评论: 广告帖与自己的帖子不评论\n详细时间: 时间行显示绝对时间\n定时发送: 发帖页选时间后照常发表\n即转为定时任务，到点自动发出\n小尾巴: 发朋友圈携带自定义来源\n双列朋友圈: 朋友圈页右上角「双列」\n切换瀑布流视图，「原生」切回\n设置后需重进朋友圈生效" y:y width:w];
 }
 
 @end

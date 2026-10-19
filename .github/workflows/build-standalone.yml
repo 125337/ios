@@ -96,6 +96,7 @@ jobs:
               -framework ImageIO \
               -framework PhotosUI \
               -framework MobileCoreServices \
+              -framework WebKit \
               -Wl,-S \
               -Wl,-x \
               -o build/Mio_arm64.dylib \

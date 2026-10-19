@@ -19,6 +19,7 @@
     return @[
         [ConfigDescriptor itemWithKey:@"convenientMomentsEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"hdMomentsEnabled" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"dualColumnEnabled" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"fakeLikeEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"fakeLikeCount" type:ConfigValueTypeInteger default:@(10)],
         [ConfigDescriptor itemWithKey:@"fakeCommentCount" type:ConfigValueTypeInteger default:@(3)],

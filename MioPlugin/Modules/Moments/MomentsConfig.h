@@ -7,6 +7,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, assign) BOOL convenientMomentsEnabled;   // 便捷朋友圈
 @property (nonatomic, assign) BOOL hdMomentsEnabled;           // 高清朋友圈
+@property (nonatomic, assign) BOOL dualColumnEnabled;          // 双列朋友圈（WCMoments 式瀑布流面板，默认开）
 @property (nonatomic, assign) BOOL fakeLikeEnabled;            // 朋友圈伪集赞
 @property (nonatomic, assign) NSInteger fakeLikeCount;         // 伪集赞点赞数量
 @property (nonatomic, assign) NSInteger fakeCommentCount;      // 伪集赞评论数量

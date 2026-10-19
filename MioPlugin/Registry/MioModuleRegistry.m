@@ -33,6 +33,7 @@
 #import "../Modules/Privacy/PrivacyConfig.h"
 #import "../Modules/Moments/MomentsConfig.h"
 #import "../Modules/Moments/MomentsHook.h"
+#import "../Modules/Moments/MomentsDualHook.h"
 #import "../Modules/SessionGroups/SessionGroupsConfig.h"
 #import "../Modules/SessionGroups/SessionGroupsVC.h"
 #import "../Modules/SessionGroups/SessionGroupsHook.h"
@@ -287,13 +288,13 @@
                                                   subtitle:@"全局/对话字号调整"
                                              sectionTitle:@"通用"],
             
-            // ──── 朋友圈（伪集赞/pyq 触发/高清原图） ────
+            // ──── 朋友圈（伪集赞/pyq 触发/高清原图/双列瀑布流） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"moments"
                                                     title:@"朋友圈"
                                                configClass:[MomentsConfig class]
-                                               hookClasses:@[[MomentsHook class]]
+                                               hookClasses:@[[MomentsHook class], [MomentsDualHook class]]
                                            controllerClass:[SettingMomentsController class]
-                                                  subtitle:@"便捷浏览/高清/伪集赞"
+                                                  subtitle:@"便捷浏览/高清/伪集赞/双列"
                                              sectionTitle:@"通用"],
 
             // ──── 关于 ────
