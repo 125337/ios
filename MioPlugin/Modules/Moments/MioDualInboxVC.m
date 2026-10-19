@@ -35,20 +35,6 @@
         if (![msgs isKindOfClass:[NSArray class]]) msgs = @[];
     } @catch (NSException *e) { return @[]; }
 
-    // 首条实证探针：验证 comment 链路（字段有值后删除）
-    @try {
-        id p = msgs.firstObject;
-        if (p) {
-            id pc = [p valueForKey:@"comment"];
-            WPLog(@"Dual", @"[Inbox] comment=%@ usr=%@ type=%@ createTime=%@ objID=%@",
-                  pc,
-                  WXSafeStringGet(pc, @"username") ?: @"-",
-                  [pc valueForKey:@"type"] ?: @"-",
-                  [pc valueForKey:@"createTime"] ?: @"-",
-                  [p valueForKey:@"objID"] ?: @"-");
-        }
-    } @catch (NSException *e) {}
-
     NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName") ?: @"";
     SEL byIDSel = NSSelectorFromString(@"getDataItemByID:");
     NSMutableArray *arr = [NSMutableArray array];
