@@ -254,6 +254,24 @@ static NSString * const kDualPageHTML = @(
 ".stat { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--secondary); }"
 ".stat svg { width:12px; height:12px; fill:var(--secondary); }"
 "#empty { text-align:center; color:#b3b3b3; font-size:13px; padding:70px 0; }"
+"#inbox { position:fixed; top:0; left:0; right:0; bottom:0; background:var(--bg-color); z-index:600; overflow-y:auto; padding-top:env(safe-area-inset-top); }"
+".ib-top { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; position:sticky; top:env(safe-area-inset-top); backdrop-filter:blur(12px) saturate(120%); -webkit-backdrop-filter:blur(12px) saturate(120%); background:linear-gradient(155deg,var(--glass-highlight),transparent 65%),var(--glass); border-bottom:1px solid var(--glass-edge); z-index:2; }"
+".ib-back { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:var(--button-glass); border:1px solid var(--glass-edge); box-shadow:inset 0 .5px 0 rgba(255,255,255,.4); cursor:pointer; }"
+".ib-back svg { width:20px; height:20px; fill:var(--text-main); }"
+".ib-title { font-size:17px; font-weight:600; letter-spacing:-.3px; }"
+".ib-tabs { display:flex; background:var(--button-glass); border:1px solid var(--glass-edge); border-radius:20px; padding:3px; margin:12px 16px; box-shadow:inset 0 .5px 0 rgba(255,255,255,.33); }"
+".ib-tab { flex:1; text-align:center; font-size:13px; color:var(--secondary); padding:7px 0; border-radius:17px; cursor:pointer; }"
+".ib-tab.on { background:var(--pill); color:var(--text-main); font-weight:600; }"
+".ib-item { display:flex; gap:12px; padding:14px 16px; background:var(--card-bg); border-radius:16px; margin:0 12px 10px; box-shadow:var(--shadow); }"
+".ib-avatar { width:42px; height:42px; border-radius:50%; object-fit:cover; background:var(--control); flex-shrink:0; }"
+".ib-main { flex:1; min-width:0; }"
+".ib-line1 { font-size:14px; line-height:1.45; display:flex; align-items:center; flex-wrap:wrap; gap:4px; }"
+".ib-line1 b { font-weight:600; color:var(--text-main); }"
+".ib-line1 span { color:var(--secondary); display:inline-flex; align-items:center; }"
+".ib-ic { width:16px; height:16px; fill:var(--secondary); }"
+".ib-text { font-size:13.5px; color:var(--secondary); margin-top:3px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }"
+".ib-time { font-size:11px; color:var(--tertiary); margin-top:5px; font-variant-numeric:tabular-nums; }"
+"#ibEmpty { text-align:center; color:#b3b3b3; font-size:13px; padding:80px 0; }"
 "#pull { position:fixed; top:-30px; left:0; right:0; text-align:center; font-size:12px; color:#9b9b9b; transition:top .2s; z-index:99; pointer-events:none; }"
 "@media (prefers-color-scheme:dark) {"
 ":root { --bg-color:#000; --card-bg:#1C1C1E; --text-main:#F5F5F7; --secondary:#AEAEB2; --tertiary:#98989D; --control:#2C2C2E; --glass:rgba(20,20,23,.76); --button-glass:rgba(70,70,78,.42); --glass-edge:rgba(255,255,255,.1); --glass-highlight:rgba(255,255,255,.16); --pill:rgba(125,125,135,.38); --shadow:none; --icon-fill:#CCC; }"
@@ -290,6 +308,20 @@ static NSString * const kDualPageHTML = @(
 "</div>"
 "<div id=\"grid\"></div>"
 "<div id=\"empty\" style=\"display:none\">暂无内容，下拉刷新</div>"
+"<div id=\"inbox\" style=\"display:none\">"
+"<div class=\"ib-top\">"
+"<div class=\"ib-back\" id=\"ibBack\"><svg viewBox=\"0 0 24 24\"><path d=\"M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z\"/></svg></div>"
+"<div class=\"ib-title\">消息</div>"
+"<div style=\"width:34px\"></div>"
+"</div>"
+"<div class=\"ib-tabs\">"
+"<div class=\"ib-tab on\" data-ib=\"all\">全部</div>"
+"<div class=\"ib-tab\" data-ib=\"like\">收到的赞</div>"
+"<div class=\"ib-tab\" data-ib=\"cmt\">评论</div>"
+"</div>"
+"<div id=\"ibList\"></div>"
+"<div id=\"ibEmpty\" style=\"display:none\">还没有收到赞和评论</div>"
+"</div>"
 "<script>"
 "(function(){"
 "var HEART='<svg viewBox=\"0 0 24 24\"><path d=\"M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z\"/></svg>';"
@@ -369,6 +401,33 @@ static NSString * const kDualPageHTML = @(
 "return l;"
 "}"
 "window.__mioSetFeed=function(payload){ALL=(payload&&payload.items)||[];render();};"
+"var ibData=[],ibTab='all';"
+"window.__mioSetMessages=function(o){ibData=(o&&o.items)||[];ibShow(true);};"
+"function ibShow(v){document.getElementById('inbox').style.display=v?'block':'none';if(v)renderInbox();}"
+"function renderInbox(){"
+"var list=ibData.filter(function(m){"
+"if(ibTab==='like')return m.kind==='like'&&m.mine;"
+"if(ibTab==='cmt')return m.kind!=='like';"
+"return true;});"
+"var box=document.getElementById('ibList');box.innerHTML='';"
+"document.getElementById('ibEmpty').style.display=list.length?'none':'block';"
+"list.forEach(function(m){"
+"var it=el('div','ib-item');"
+"var av=el('img','ib-avatar');av.src=m.avatar||'';av.onerror=function(){av.style.visibility='hidden';};"
+"var main=el('div','ib-main');"
+"var l1=el('div','ib-line1');"
+"var b=el('b');b.textContent=m.name||'（微信用户）';"
+"var sp=el('span');sp.innerHTML=(m.kind==='like'?HEART+' 赞了你的朋友圈':BUB+' 评论了你的朋友圈');"
+"l1.appendChild(b);l1.appendChild(sp);"
+"main.appendChild(l1);"
+"if(m.text){var tx=el('div','ib-text');tx.textContent=m.text;main.appendChild(tx);}"
+"var tm=el('div','ib-time');tm.textContent=fmtTime(m.t);main.appendChild(tm);"
+"it.appendChild(av);it.appendChild(main);box.appendChild(it);});}"
+"document.querySelectorAll('.ib-tab').forEach(function(t){t.addEventListener('click',function(){"
+"ibTab=t.dataset.ib;"
+"document.querySelectorAll('.ib-tab').forEach(function(x){x.classList.toggle('on',x===t);});"
+"renderInbox();});});"
+"document.getElementById('ibBack').addEventListener('click',function(){ibShow(false);});"
 "window.__mioSetBadge=function(n){var b=document.getElementById('bellBadge');"
 "if(!b)return;if(n>0){b.textContent=n>99?'99+':n;b.classList.remove('hide');}else{b.classList.add('hide');}};"
 "var qEl=document.getElementById('q');"
@@ -385,7 +444,7 @@ static NSString * const kDualPageHTML = @(
 "render();window.scrollTo(0,0);});"
 "var mio=function(o){window.webkit.messageHandlers.mio.postMessage(o);};"
 "document.getElementById('ibMore').addEventListener('click',function(e){e.stopPropagation();menu.classList.toggle('show');});"
-"document.getElementById('ibBell').addEventListener('click',function(){mio({action:'back'});});"
+"document.getElementById('ibBell').addEventListener('click',function(){mio({action:'inbox'});});"
 "document.getElementById('ibAdd').addEventListener('click',function(){mio({action:'publish'});});"
 "sb.addEventListener('click',function(){"
 "if(window.scrollY>72)window.scrollTo({top:0,behavior:'smooth'});"
@@ -529,7 +588,7 @@ static char kDualPanelAssocKey;
 }
 
 // 铃铛角标：getSnsMessageCount（发现页头文件实证，朋友圈互动未读数；头文件声明返回 id）
-// 点击铃铛 = 切回原生朋友圈（消息入口在原生页），角标只做提示
+// 点击铃铛 = 面板内消息列表（WCMoments openMessages 复刻）
 - (void)updateBellBadge {
     UIViewController *host = self.hostVC;
     SEL cntSel = NSSelectorFromString(@"getSnsMessageCount");
@@ -541,6 +600,65 @@ static char kDualPanelAssocKey;
             [NSString stringWithFormat:@"window.__mioSetBadge(%ld);", (long)n]
             completionHandler:nil];
     } @catch (NSException *e) {}
+}
+
+#pragma mark 消息页数据（WCMoments WCMInboxController 复刻，全静态实证）
+
+// 消息 → JSON → __mioSetMessages。
+// 数据源 [facade getAllMessages]（WCFacade.h#L563 实证）；元素字段全部 duck-typing KVC：
+//   msg.comment{username,type,refUserName,dataItemUsrName,content} + msg.objID/nickname/createTime
+//   type 1=赞 2/3/8=评论（WCM changeCategory 反编译）；帖子归属 comment.dataItemUsrName，
+//   空则 facade getDataItemByID: 兜底（isMine 反编译同款）
+- (void)pushInboxNow {
+    if (!self.pageReady || !self.webView) return;
+    id facade = MioDualFacade();
+    SEL allSel = NSSelectorFromString(@"getAllMessages");
+    if (!facade || ![facade respondsToSelector:allSel]) return;
+    NSArray *msgs = @[];
+    @try {
+        msgs = ((id(*)(id, SEL))objc_msgSend)(facade, allSel);
+        if (![msgs isKindOfClass:[NSArray class]]) msgs = @[];
+    } @catch (NSException *e) { return; }
+
+    NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName") ?: @"";
+    SEL byIDSel = NSSelectorFromString(@"getDataItemByID:");
+    NSMutableArray *arr = [NSMutableArray array];
+    for (id msg in msgs) {
+        if (arr.count >= 200) break;
+        @try {
+            id cmt = [msg valueForKey:@"comment"];
+            if (!cmt) continue;
+            NSString *actor = WXSafeStringGet(cmt, @"username") ?: @"";
+            if ([actor isEqualToString:selfUsr]) continue;   // 自己的操作不进消息页（WCM 同款）
+            NSInteger type = [[cmt valueForKey:@"type"] integerValue];
+            NSString *owner = WXSafeStringGet(cmt, @"dataItemUsrName") ?: @"";
+            if (owner.length == 0 && [facade respondsToSelector:byIDSel]) {
+                // 帖主空 → objID 反查原帖（isMine 兜底同款）
+                id objID = [msg valueForKey:@"objID"];
+                id item = objID ? ((id(*)(id, SEL, id))objc_msgSend)(facade, byIDSel, objID) : nil;
+                owner = WXSafeStringGet(item, @"username") ?: @"";
+            }
+            NSString *text = WXSafeStringGet(cmt, @"content") ?: @"";
+            if (text.length == 0) text = WXSafeStringGet(msg, @"content") ?: @"";
+            [arr addObject:@{
+                @"name": WXSafeStringGet(msg, @"nickname") ?: actor,   // 操作者昵称
+                @"actor": actor,                                        // 操作者 wxid
+                @"avatar": [self avatarFor:actor] ?: @"",
+                @"kind": (type == 1) ? @"like" : @"cmt",                // 1=赞 2/3/8=评论
+                @"text": text,
+                @"t": @([[msg valueForKey:@"createTime"] integerValue]),
+                @"mine": @([owner isEqualToString:selfUsr]),
+                @"refSelf": @([WXSafeStringGet(cmt, @"refUserName") ?: @"" isEqualToString:selfUsr])}];
+        } @catch (NSException *e) { continue; }
+    }
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@{@"items": arr} options:0 error:nil];
+    if (!data) return;
+    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    json = [json stringByReplacingOccurrencesOfString:@"\u2028" withString:@"\\u2028"];
+    json = [json stringByReplacingOccurrencesOfString:@"\u2029" withString:@"\\u2029"];
+    [self.webView evaluateJavaScript:
+        [NSString stringWithFormat:@"window.__mioSetMessages(%@);", json]
+        completionHandler:nil];
 }
 
 - (NSDictionary *)itemDict:(id)item {
@@ -655,6 +773,11 @@ static char kDualPanelAssocKey;
         if (host && [host respondsToSelector:sel]) {
             ((void(*)(id, SEL, id))objc_msgSend)(host, sel, nil);
         }
+        return;
+    }
+    if ([action isEqualToString:@"inbox"]) {
+        // WCMoments openMessages 同款数据源（反编译+8.0.78头文件实证）：[facade getAllMessages]
+        [self pushInboxNow];
         return;
     }
     if (![action isEqualToString:@"refresh"]) return;
