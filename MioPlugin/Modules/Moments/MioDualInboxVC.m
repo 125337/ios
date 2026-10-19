@@ -1,8 +1,8 @@
 #import "MioDualInboxVC.h"
 #import "MomentsDualPanel.h"
 #import "../../Core/ServiceHelper.h"
-#import "../../Core/LogManager.h"
 #import "../ChatTopBar/AvatarLoader.h"
+#import "../../Core/MioListContentShim.h"
 #import <objc/message.h>
 
 // 消息 dict 字段：id/name/actor/kind(like|cmt)/text/t/mine
@@ -166,27 +166,34 @@
     return 1;
 }
 
-// WCM cellForRow 对齐：subtitle 样式（text=昵称 secondaryText=内容摘要 image=头像）
-// + 右侧完整时间。用经典 textLabel API（CI SDK 无 UIListContentConfiguration）
+// WCM 同款渲染路径：现代内容配置管线（UIListContentConfiguration，iOS14+ 运行时必有）——
+// InsetGrouped 分组卡底/排版/深色模式由系统接管，与 WCMoments 走同一 API。
+// 接口声明见 Core/MioListContentShim.h（__has_include 守卫，新 SDK 下自动让位）。
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"msg"];
     if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"msg"];
-    [[cell.contentView viewWithTag:1001] removeFromSuperview];   // 复用清理（时间 label 手工挂载）
 
     NSDictionary *d = self.rows[indexPath.section];
     BOOL like = [d[@"kind"] isEqualToString:@"like"];
-    NSString *text = d[@"text"];
+    NSString *sec = ((NSString *)d[@"text"]).length > 0 ? d[@"text"]
+                  : (like ? @"赞了你的朋友圈" : @"评论了你的朋友圈");
 
-    cell.textLabel.text = d[@"name"];
-    cell.textLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
-    cell.detailTextLabel.text = (text.length > 0) ? text : (like ? @"赞了你的朋友圈" : @"评论了你的朋友圈");
-    cell.detailTextLabel.font = [UIFont systemFontOfSize:13];
-    cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
-    cell.detailTextLabel.numberOfLines = 2;
-    cell.imageView.image = [self circleAvatar:[self avatarImage:d[@"actor"]]];
+    // ---- 现代内容配置（WCM 同款管线）：排版 + 分组卡底系统接管 ----
+    SEL cfgSel = NSSelectorFromString(@"subtitleCellConfiguration");
+    UIListContentConfiguration *cfg =
+        ((id(*)(id, SEL))objc_msgSend)([UITableViewCell class], cfgSel);
+    cfg.text = d[@"name"];
+    cfg.secondaryText = sec;
+    cfg.image = [self avatarImage:d[@"actor"]];          // 原图即可，圆角交给系统
+    cfg.imageProperties.maximumSize = CGSizeMake(42, 42);
+    cfg.imageProperties.cornerRadius = 21;              // 系统画正圆头像
+    cfg.secondaryTextProperties.font = [UIFont systemFontOfSize:13];
+    cfg.textToSecondaryTextVerticalPadding = 2;
+    cell.contentConfiguration = cfg;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 
-    // 右侧时间「10月19日 16:24」（WCM 真机截图格式）
+    // ---- 右侧时间「10月19日 16:24」（WCM 也是手工挂载，同款）----
+    [[cell.contentView viewWithTag:1001] removeFromSuperview];   // 复用清理（时间 label 手工挂载）
     UILabel *time = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 110, 20)];
     time.tag = 1001;
     time.font = [UIFont systemFontOfSize:12];
@@ -228,20 +235,6 @@
     UIImage *img = usr.length ? [[AvatarLoader shared] loadAvatarSyncForWxid:usr contact:nil] : nil;
     if (img) return img;
     return [UIImage systemImageNamed:@"person.crop.circle.fill"];
-}
-
-// 头像统一画成 42pt 圆形位图（SF Symbol 拉伸后仍为圆形观感）
-- (UIImage *)circleAvatar:(UIImage *)img {
-    if (!img) return nil;
-    CGFloat s = 42;
-    UIGraphicsImageRendererFormat *fmt = [UIGraphicsImageRendererFormat defaultFormat];
-    fmt.scale = 2;
-    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(s, s) format:fmt];
-    return [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
-        UIBezierPath *p = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, s, s)];
-        [p addClip];
-        [img drawInRect:CGRectMake(0, 0, s, s)];
-    }];
 }
 
 - (void)viewDidDisappear:(BOOL)animated {
