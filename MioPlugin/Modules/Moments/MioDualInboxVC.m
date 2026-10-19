@@ -1,5 +1,5 @@
 #import "MioDualInboxVC.h"
-#import "../../ChatTopBar/AvatarLoader.h"
+#import "../ChatTopBar/AvatarLoader.h"
 #import <objc/message.h>
 
 // 消息 dict 字段（MomentsDualPanel inboxItems 产出）：
