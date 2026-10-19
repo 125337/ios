@@ -1269,7 +1269,18 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         }
         WPLog(@"MsgMerge", @"[MMZ] chat=%@ pos=%ld split=%llu nat=%.1f ride=%.1f red=%.1f -> %.1f",
               chat, (long)pos, split, (double)s.height, rideAdd, reduce, h);
-        mergeScheduleDataFuse();   // 改高即调度补询（数据驱动首屏修复，见函数注释）
+        // 改高调度按「上次输出的合并值」判定真实变化：骑行行每次 measure 都与原生
+        // 基线不同（107.3 ≠ 64.3 恒成立），按 s.height 判定会每次都调度补询 →
+        // 改高风暴（装机日志实证 gen 60+、2 秒 3 次全表重建 = 首屏闪动）。
+        {
+            static char kLastMergedH;
+            NSValue *lv = objc_getAssociatedObject(self, &kLastMergedH);
+            double lastH = lv ? [lv doubleValue] : 0.0;
+            if (fabs(h - lastH) > 0.01) {
+                objc_setAssociatedObject(self, &kLastMergedH, @(h), OBJC_ASSOCIATION_RETAIN);
+                mergeScheduleDataFuse();   // 真实改高才调度补询（数据驱动首屏修复，见函数注释）
+            }
+        }
         return CGSizeMake(s.width, (CGFloat)h);
     } @catch (NSException *e) {
         s_inMeasure = NO;
