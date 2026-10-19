@@ -12,8 +12,8 @@
 // viewDidAppear 原实现（若被 WCR 等他方插件先接管则让位不挂，与 MomentsHook 同规）
 static IMP gDualOrigViewDidAppear = NULL;
 
-// 最近一次 viewDidAppear 的 timeline VC（weak：half-sheet pyq 会另建同类实例，
-// 谁在前台谁是 host；VC 释放后自动置 nil，不可强持否则泄漏+悬垂）
+// 最近一次 viewDidAppear 的发现页 VC（weak：谁在前台谁是 host；VC 释放后自动置 nil，
+// 不可强持否则泄漏+悬垂）
 static __weak UIViewController *gDualCurrentHost = nil;
 
 static char kDualButtonMarkerKey;   // 按钮幂等标记（关联对象，防 viewDidAppear 反复追加）
@@ -99,12 +99,14 @@ static void MioDualEnsureButton(UIViewController *host) {
 }
 
 static void MioDualInstallEntryHooks(void) {
-    Class tlVC = objc_getClass("WCTimeLineViewController");
-    if (!tlVC) {
-        WPLog(@"Dual", @"[Dual] SKIP: WCTimeLineViewController NOT found");
+    // 入口在发现页（WCMoments 0.6.49 同位）：FindFriendEntryViewController.viewDidAppear:
+    // 自有方法（class-dump 8.0.78 头文件实证），hook 不影响其他 tab 页
+    Class ffVC = objc_getClass("FindFriendEntryViewController");
+    if (!ffVC) {
+        WPLog(@"Dual", @"[Dual] SKIP: FindFriendEntryViewController NOT found");
         return;
     }
-    Method m = class_getInstanceMethod(tlVC, NSSelectorFromString(@"viewDidAppear:"));
+    Method m = class_getInstanceMethod(ffVC, NSSelectorFromString(@"viewDidAppear:"));
     if (!m) return;
     IMP cur = method_getImplementation(m);
     if (MioDualImpFromOtherPlugin(cur)) {
@@ -113,15 +115,15 @@ static void MioDualInstallEntryHooks(void) {
         return;
     }
     gDualOrigViewDidAppear = cur;
-    __weak Class weakTlVC = tlVC;
+    __weak Class weakFFVC = ffVC;
     method_setImplementation(m, imp_implementationWithBlock(^(id self, BOOL animated) {
         ((void(*)(id, SEL, BOOL))gDualOrigViewDidAppear)(self, NSSelectorFromString(@"viewDidAppear:"), animated);
-        if (weakTlVC && [self isKindOfClass:weakTlVC]) {   // 守卫误挂到子类/他类实例
+        if (weakFFVC && [self isKindOfClass:weakFFVC]) {   // 守卫误挂到子类/他类实例
             gDualCurrentHost = self;
             MioDualEnsureButton(self);
         }
     }));
-    WPLog(@"Dual", @"[Dual] viewDidAppear entry hook installed");
+    WPLog(@"Dual", @"[Dual] viewDidAppear entry hook installed on FindFriendEntryViewController");
 }
 
 @implementation MomentsDualHook

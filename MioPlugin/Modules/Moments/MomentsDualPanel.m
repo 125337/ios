@@ -546,6 +546,12 @@ void MioDualPanelOpen(UIViewController *host) {
     panel.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [host.view addSubview:panel.view];
     [panel didMoveToParentViewController:host];
+    // 发现页直接打开时朋友圈缓存可能为空（尚未进过朋友圈），先主动拉一次
+    id facade = MioDualFacade();
+    SEL refreshSel = NSSelectorFromString(@"updateTimelineHead");
+    if (facade && [facade respondsToSelector:refreshSel]) {
+        ((void(*)(id, SEL))objc_msgSend)(facade, refreshSel);
+    }
     WPLog(@"Dual", @"[Dual] panel opened on %@", NSStringFromClass([host class]));
 }
 
