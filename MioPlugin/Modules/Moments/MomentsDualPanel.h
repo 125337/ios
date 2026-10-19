@@ -13,6 +13,8 @@
 // host = 发现页 VC；面板 view 挂 host.view 顶层（切 tab 随宿主消失），
 // host.edgesForExtendedLayout=All + 藏导航栏实现「连顶栏一起盖」（WCMoments coverHost 复刻）
 void MioDualPanelOpen(UIViewController *host);
+// 面板开着时重新压 chrome（tab 切回/压栈返回触发 viewDidAppear：微信导航容器会重置导航栏 hidden 态）
+void MioDualPanelReassertChrome(UIViewController *host);
 void MioDualPanelClose(UIViewController *host);
 void MioDualPanelToggle(UIViewController *host);
 BOOL MioDualPanelIsOpen(UIViewController *host);

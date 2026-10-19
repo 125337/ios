@@ -565,6 +565,14 @@ void MioDualPanelOpen(UIViewController *host) {
     WPLog(@"Dual", @"[Dual] panel opened on %@", NSStringFromClass([host class]));
 }
 
+void MioDualPanelReassertChrome(UIViewController *host) {
+    MomentsDualPanel *panel = objc_getAssociatedObject(host, &kDualPanelAssocKey);
+    if (![panel isKindOfClass:[MomentsDualPanel class]]) return;
+    host.edgesForExtendedLayout = UIRectEdgeAll;
+    host.extendedLayoutIncludesOpaqueBars = YES;
+    [host.navigationController setNavigationBarHidden:YES animated:NO];
+}
+
 void MioDualPanelClose(UIViewController *host) {
     MomentsDualPanel *panel = objc_getAssociatedObject(host, &kDualPanelAssocKey);
     if (![panel isKindOfClass:[MomentsDualPanel class]]) return;

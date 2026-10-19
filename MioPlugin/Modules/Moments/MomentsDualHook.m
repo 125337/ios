@@ -120,6 +120,7 @@ static void MioDualInstallEntryHooks(void) {
         ((void(*)(id, SEL, BOOL))gDualOrigViewDidAppear)(self, NSSelectorFromString(@"viewDidAppear:"), animated);
         if (weakFFVC && [self isKindOfClass:weakFFVC]) {   // 守卫误挂到子类/他类实例
             gDualCurrentHost = self;
+            MioDualPanelReassertChrome(self);   // 面板开着时切 tab 回来，微信容器会重置导航栏 hidden 态
             MioDualEnsureButton(self);
         }
     }));
