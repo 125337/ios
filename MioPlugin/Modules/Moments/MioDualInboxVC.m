@@ -54,6 +54,21 @@ static NSString *MioMsgStr(id msg, NSString *key) {
 
     NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName") ?: @"";
     SEL byIDSel = NSSelectorFromString(@"getDataItemByID:");
+    // 数据诊断探针：先看消息对象真身（类/Call:代理/各字段响应性），别盲改
+    @try {
+        id probe = msgs.firstObject;
+        if (probe) {
+            id pkvc = nil;
+            @try { pkvc = [probe valueForKey:@"__probe__"]; } @catch (NSException *e) { pkvc = nil; }
+            WPLog("Dual", "[Inbox] class=%@ Call:=%d content=%d username=%d createTime=%d kvc=%@",
+                  NSStringFromClass([probe class]),
+                  [probe respondsToSelector:NSSelectorFromString(@"Call:")],
+                  [probe respondsToSelector:NSSelectorFromString(@"content")],
+                  [probe respondsToSelector:NSSelectorFromString(@"username")],
+                  [probe respondsToSelector:NSSelectorFromString(@"createTime")],
+                  pkvc ?: @"-");
+        }
+    } @catch (NSException *e) {}
     NSMutableArray *arr = [NSMutableArray array];
     for (id msg in msgs) {
         if (arr.count >= 200) break;
@@ -171,8 +186,13 @@ static NSString *MioMsgStr(id msg, NSString *key) {
 
 #pragma mark - UITableView
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+// 每条消息 = 一个 section = 一张独立圆角卡（对齐 WCM 卡片粒度）
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
     return self.rows.count;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return 1;
 }
 
 // WCM cellForRow 对齐：subtitle 样式（text=昵称 secondaryText=内容摘要 image=头像）
@@ -182,7 +202,7 @@ static NSString *MioMsgStr(id msg, NSString *key) {
     if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"msg"];
     [[cell.contentView viewWithTag:1001] removeFromSuperview];   // 复用清理（时间 label 手工挂载）
 
-    NSDictionary *d = self.rows[indexPath.row];
+    NSDictionary *d = self.rows[indexPath.section];
     BOOL like = [d[@"kind"] isEqualToString:@"like"];
     NSString *text = d[@"text"];
 
@@ -218,8 +238,11 @@ static NSString *MioMsgStr(id msg, NSString *key) {
 // （直跳详情需 WCCommentListViewController 实例，通知面板切回原生兜底）
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    NSDictionary *d = self.rows[indexPath.section];
+    NSString *txt = d[@"text"].length > 0 ? d[@"text"]
+                  : ([d[@"kind"] isEqualToString:@"like"] ? @"赞了你的朋友圈" : @"评论了你的朋友圈");
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"该条消息"
-                                    message:@"在微信朋友圈中查看原帖？"
+                                    message:[NSString stringWithFormat:@"%@：%@", d[@"name"], txt]
                                     preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"查看原帖" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
         [self dismissViewControllerAnimated:YES completion:nil];
