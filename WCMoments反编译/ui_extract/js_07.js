@@ -1,0 +1,2 @@
+','authorChat',username));positionAuthorMenu(anchor.querySelector?.('.avatar:not([hidden])')||anchor)}
+function showHiddenFriends(anchor){const menu=document.getElementById('author-menu');if(!menu)return;const users=new Map();for(const p of feed)if(p.hidden)users.set(p.username,p.name);menu.replaceChildren(element('div','menu-name',users.size?'

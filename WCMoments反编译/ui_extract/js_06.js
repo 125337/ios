@@ -1,0 +1,2 @@
+'));button.appendChild(element('span','',label));button.dataset.authorAction=action;button.dataset.username=username;button.setAttribute('role','menuitem');return button}
+function openAuthorMenu(username,anchor){const menu=document.getElementById('author-menu');if(!menu)return;const post=feed.find(p=>p.username===username);if(!post)return;menu.replaceChildren(element('div','menu-name',post.name),authorMenuButton(post.following?'

@@ -37,26 +37,20 @@ static NSString *MioDualLookupMediaPath(NSString *key) {
     return p;
 }
 
-// 魔数嗅探 Content-Type（微信本地文件常无扩展名）
-static NSString *MioDualSniffMime(NSData *d) {
-    if (d.length < 12) return @"application/octet-stream";
-    const unsigned char *b = (const unsigned char *)d.bytes;
-    if (b[0] == 0xFF && b[1] == 0xD8) return @"image/jpeg";
-    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return @"image/png";
-    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return @"image/gif";
-    if (b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 &&
-        b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) return @"image/webp";
-    if (b[4] == 'f' && b[5] == 't' && b[6] == 'y' && b[7] == 'p') return @"video/mp4";
-    return @"application/octet-stream";
-}
-
 @interface MioDualSchemeHandler : NSObject <WKURLSchemeHandler>
 @end
 @implementation MioDualSchemeHandler
 
 - (void)webView:(WKWebView *)webView startURLSchemeTask:(id<WKURLSchemeTask>)task {
     NSString *key = task.request.URL.lastPathComponent;
-    NSString *path = MioDualLookupMediaPath(key);
+    // 文件名白名单 [A-Za-z0-9_] 且不以 _ 开头（WCMAssetHandler 实证同款），防路径穿越
+    static NSPredicate *nameOK;
+    static dispatch_once_t oncePred;
+    dispatch_once(&oncePred, ^{
+        nameOK = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", @"^[A-Za-z0-9][A-Za-z0-9_]*$"];
+    });
+    NSString *path = (key.length && nameOK && [nameOK evaluateObject:key])
+        ? MioDualLookupMediaPath(key) : nil;
     if (!path.length) {
         [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain
                                                    code:NSURLErrorFileDoesNotExist
@@ -65,8 +59,24 @@ static NSString *MioDualSniffMime(NSData *d) {
     }
     NSValue *taskRef = [NSValue valueWithNonretainedObject:task];   // 取消标记（stop 与响应都在主线程比对）
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        NSData *data = [NSData dataWithContentsOfFile:path];
-        NSString *mime = MioDualSniffMime(data);
+        // 解码后按列宽缩放返回（WCMAssetHandler 同款：不回原图，单图内存几MB→几十KB）
+        UIImage *img = [UIImage imageWithContentsOfFile:path];
+        if (!img) {
+            [self finishFail:task ref:taskRef code:NSURLErrorCannotOpenFile];
+            return;
+        }
+        CGFloat scale = [UIScreen mainScreen].scale;
+        CGFloat target = MAX(512, ([UIScreen mainScreen].bounds.size.width - 40) * scale / 2 + 64);
+        CGFloat maxSide = MAX(img.size.width, img.size.height);
+        if (maxSide > target) {
+            CGFloat k = target / maxSide;
+            UIGraphicsBeginImageContextWithOptions(CGSizeMake(img.size.width * k, img.size.height * k), NO, scale);
+            [img drawInRect:CGRectMake(0, 0, img.size.width * k, img.size.height * k)];
+            UIImage *small = UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+            if (small) img = small;
+        }
+        NSData *data = UIImageJPEGRepresentation(img, 0.8);
         dispatch_async(dispatch_get_main_queue(), ^{
             // stopURLSchemeTask 已到必须先检查：对已停 task 回任何回调
             // WebKit 直接断言崩溃（"called after the task was stopped"）
@@ -76,22 +86,32 @@ static NSString *MioDualSniffMime(NSData *d) {
                 return;
             }
             if (!data.length) {
-                [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain
-                                                           code:NSURLErrorCannotOpenFile
-                                                       userInfo:nil]];
+                [self finishFail:task ref:taskRef code:NSURLErrorCannotOpenFile];
                 return;
             }
             NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
                                        initWithURL:task.request.URL
                                        statusCode:200
                                        HTTPVersion:@"HTTP/1.1"
-                                       headerFields:@{@"Content-Type": mime,
+                                       headerFields:@{@"Content-Type": @"image/jpeg",
                                                       @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length],
                                                       @"Cache-Control": @"max-age=86400"}];
             [task didReceiveResponse:resp];
             [task didReceiveData:data];
             [task didFinish];
         });
+    });
+}
+
+// 后台线程结果统一走主线程回调（含取消检查）
+- (void)finishFail:(id<WKURLSchemeTask>)task ref:(NSValue *)taskRef code:(NSInteger)code {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSMutableSet *cancelled = [self cancelledTasks];
+        if ([cancelled containsObject:taskRef]) {
+            [cancelled removeObject:taskRef];
+            return;
+        }
+        [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:code userInfo:nil]];
     });
 }
 
@@ -162,13 +182,13 @@ static long long MioDualScalarGet(id obj, NSString *key, long long def) {
 
 #pragma mark - 内置双列瀑布流页面（纯静态，无格式化注入）
 
-// 贪心双列：每次追加到当前较矮列；单图原比例、多图九宫格；
-// 下拉刷新 → mio 桥发 refresh → 原生调 facade updateTimelineHead 后推新数据
-// 双列朋友圈页面（UI 对齐 WCMoments 0.6.49 截图版）：大标题+搜索框+三tab+贪心双列。
+// 双列朋友圈页面（增量渲染版，机制对齐 WCMoments _WCMHTML 反编译实证）：
+// 绝对定位网格 + aspect-ratio 预锁（--aspect 变量）+ cards/colOf Map 增量更新（DOM 永不重建）
+// + measuredHeight 缓存 + 列归属终身不变 + dataKey 整条 JSON 去重——根治滑动跳顶。
 // 已接交互：搜索框=过滤已加载缓存；「全部动态/我赞过的」=tab 过滤（likeFlag）；
-// 「…」圆钮=切回原生朋友圈；下拉刷新=facade updateTimelineHead。
+// 「…」圆钮=切回原生朋友圈；下拉刷新=facade updateTimelineHead；滚底=facade updateTimelineTail 翻页。
 // 死 UI（无数据支撑，点击无反应）：铃铛、加号、tab「我的关注」。
-// ratio 由原生媒体宽高 ivar 提供（KVC m64_width/m64_height），缺省时 JS onload 锁高防跳动。
+// ratio：原生媒体宽高（item.ratio）优先，onload naturalWidth 兜底，都无则 1:1 占位。
 // 注意：整段为单行拼接，JS 内禁用 // 行注释，双引号一律 \" 转义。
 static NSString * const kDualPageHTML = @(
 "<!DOCTYPE html>"
@@ -195,11 +215,11 @@ static NSString * const kDualPageHTML = @(
 ".tabs { display:flex; justify-content:space-between; align-items:center; background:var(--tab-bg); border-radius:20px; padding:4px; margin-bottom:12px; }"
 ".tab { flex:1; text-align:center; padding:8px 0; border-radius:16px; font-size:14px; color:var(--text-main); font-weight:500; }"
 ".tab.active { background:var(--card-bg); font-weight:600; color:#000; box-shadow:0 1px 4px rgba(0,0,0,0.08); }"
-".waterfall { display:flex; align-items:flex-start; padding:0 12px 30px; gap:10px; }"
-".col { width:calc(50% - 5px); display:flex; flex-direction:column; gap:10px; }"
-".card { background:var(--card-bg); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; }"
-".card-media { width:100%; position:relative; }"
-".card-media img { width:100%; display:block; object-fit:cover; }"
+"#grid { position:relative; }"
+".card { position:absolute; background:var(--card-bg); border-radius:12px; overflow:hidden; contain:layout paint style; }"
+".card.text-only .card-info { min-height:214px; }"
+".card-media { width:100%; aspect-ratio:var(--aspect,1); position:relative; background:#E8E8E8; }"
+".card-media img { width:100%; height:100%; display:block; object-fit:cover; }"
 ".mtag { position:absolute; right:8px; bottom:8px; background:rgba(0,0,0,0.3); color:white; font-size:10px; padding:3px 6px; border-radius:4px; backdrop-filter:blur(4px); display:flex; align-items:center; gap:2px; }"
 ".card-info { padding:10px 12px 12px; display:flex; flex-direction:column; flex:1; }"
 ".title { font-size:14px; color:var(--text-main); font-weight:500; line-height:1.5; margin-bottom:10px; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; }"
@@ -240,10 +260,7 @@ static NSString * const kDualPageHTML = @(
 "<div class=\"tab\" id=\"tab-follow\">我的关注</div>"
 "</div>"
 "</div>"
-"<div class=\"waterfall\">"
-"<div class=\"col\" id=\"col-left\"></div>"
-"<div class=\"col\" id=\"col-right\"></div>"
-"</div>"
+"<div id=\"grid\"></div>"
 "<div id=\"empty\" style=\"display:none\">暂无内容，下拉刷新</div>"
 "<script>"
 "(function(){"
@@ -251,9 +268,8 @@ static NSString * const kDualPageHTML = @(
 "var BUB='<svg viewBox=\"0 0 24 24\"><path d=\"M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z\"/></svg>';"
 "var PLAY='<svg viewBox=\"0 0 24 24\" width=\"10\" height=\"10\" fill=\"currentColor\"><path d=\"M8 5v14l11-7z\"/></svg>';"
 "var AV='data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"%23ddd\"><rect width=\"100\" height=\"100\"/></svg>';"
-"var colL=document.getElementById('col-left'),colR=document.getElementById('col-right');"
-"var empty=document.getElementById('empty'),pullTip=document.getElementById('pull');"
-"var ALL=[],q='',tab='all';"
+"var grid=document.getElementById('grid'),empty=document.getElementById('empty'),pullTip=document.getElementById('pull');"
+"var cards={},ratios={},colOf={},ALL=[],q='',tab='all',colW=0,layoutFrame=0;"
 "function fmtTime(t){if(!t)return '';var d=new Date(t*1000),n=new Date();"
 "var p=function(x){return x<10?'0'+x:''+x;};var hm=p(d.getHours())+':'+p(d.getMinutes());"
 "var sd=function(a,b){return a.getFullYear()==b.getFullYear()&&a.getMonth()==b.getMonth()&&a.getDate()==b.getDate();};"
@@ -263,58 +279,76 @@ static NSString * const kDualPageHTML = @(
 "return d.getFullYear()==n.getFullYear()?md:d.getFullYear()+'年'+md;}"
 "function el(t,c){var e=document.createElement(t);if(c)e.className=c;return e;}"
 "function stat(svg,n){return '<div class=\"stat\">'+svg+' '+(n||0)+'</div>';}"
-"function render(list){"
-"var sy=window.scrollY;"
-"colL.innerHTML='';colR.innerHTML='';"
-"var hL=0,hR=0,colW=(document.body.clientWidth-34)/2;"
-"list.forEach(function(item){"
-"var card=el('div','card');"
+"function scheduleLayout(){if(layoutFrame)return;layoutFrame=requestAnimationFrame(function(){layoutFrame=0;layoutCards();});}"
+"function createCard(item){"
+"var card=el('div','card');card.dataset.id=item.id;card.parts={};"
 "if(item.img){"
 "var media=el('div','card-media');"
-"var img=el('img');img.src=item.img;img.loading='lazy';"
-"if(item.ratio>0){img.dataset.locked=1;img.style.height=(colW/item.ratio)+'px';}"
-"else{img.onload=function(){if(!img.dataset.locked&&img.naturalWidth>0){img.dataset.locked=1;img.style.height=(colW/img.naturalWidth*img.naturalHeight)+'px';}};}"
-"media.appendChild(img);"
+"var img=el('img');img.loading='lazy';img.decoding='async';"
+"img.onload=function(){if(!ratios[item.id]&&img.naturalWidth>0){ratios[item.id]=img.naturalWidth/img.naturalHeight;media.style.setProperty('--aspect',String(ratios[item.id]));card.dirty=1;scheduleLayout();}};"
+"media.appendChild(img);card.appendChild(media);card.parts.media=media;card.parts.img=img;"
 "if(item.isVideo){var vt=el('div','mtag');vt.innerHTML=PLAY+' 视频';media.appendChild(vt);}"
 "else if(item.imgCount>1){var it2=el('div','mtag');it2.textContent=item.imgCount+'图';media.appendChild(it2);}"
-"card.appendChild(media);"
 "}"
 "var info=el('div','card-info');"
-"if(item.content){"
-"var tt=el('div','title'+(item.isLargeText?' large':''));"
-"tt.textContent=item.content;info.appendChild(tt);"
-"}"
+"var tt=el('div','title');info.appendChild(tt);"
 "var ur=el('div','user-row'),ul=el('div','user-left');"
-"var av=el('img','avatar');av.src=item.avatar||AV;ul.appendChild(av);"
-"var nm=el('div','name');nm.textContent=item.name||'';ul.appendChild(nm);"
+"var av=el('img','avatar');ul.appendChild(av);"
+"var nm=el('div','name');ul.appendChild(nm);"
 "var rt=el('div','user-right');"
-"rt.innerHTML='<span style=\"font-size:12px;color:#999;\">'+fmtTime(item.time)+'</span>'+stat(HEART,item.likes)+stat(BUB,item.cmt);"
-"ur.appendChild(ul);ur.appendChild(rt);"
-"info.appendChild(ur);card.appendChild(info);"
-"var target=(hL<=hR)?colL:colR;"
-"target.appendChild(card);"
-"var ch=card.offsetHeight+10;"
-"if(target===colL)hL+=ch;else hR+=ch;"
-"});"
-"empty.style.display=list.length?'none':'block';"
-"window.scrollTo(0,Math.min(sy,Math.max(0,document.body.scrollHeight-window.innerHeight)));"
-"pullTip.style.top='-30px';"
+"ur.appendChild(ul);ur.appendChild(rt);info.appendChild(ur);card.appendChild(info);"
+"card.parts={img:img||null,media:media||null,tt:tt,av:av,nm:nm,rt:rt};"
+"return card;"
 "}"
-"function applyFilter(){"
+"function updateCard(card,item){"
+"var key=JSON.stringify(item);if(card.dataKey===key)return;card.dataKey=key;"
+"if(item.ratio>0&&!ratios[item.id])ratios[item.id]=item.ratio;"
+"if(ratios[item.id]&&card.parts.media)card.parts.media.style.setProperty('--aspect',String(ratios[item.id]));"
+"if(item.img){var s=card.parts.img.getAttribute('src');if(s!==item.img)card.parts.img.src=item.img;}"
+"card.className=item.img?'card':'card text-only';"
+"card.parts.tt.className='title'+((!item.img||item.isLargeText)?' large':'');"
+"card.parts.tt.textContent=item.content||'';"
+"card.parts.tt.style.display=item.content?'':'none';"
+"var avSrc=item.avatar||AV;if(card.parts.av.getAttribute('src')!==avSrc)card.parts.av.src=avSrc;"
+"card.parts.nm.textContent=item.name||'';"
+"card.parts.rt.innerHTML='<span style=\"font-size:12px;color:#999;\">'+fmtTime(item.time)+'</span>'+stat(HEART,item.likes)+stat(BUB,item.cmt);"
+"}"
+"function render(){"
+"var list=visibleList(),keep={};"
+"list.forEach(function(it){keep[it.id]=1;});"
+"Object.keys(cards).forEach(function(id){if(!keep[id]){cards[id].remove();delete cards[id];delete colOf[id];}});"
+"list.forEach(function(it){var c=cards[it.id];if(!c){c=createCard(it);grid.appendChild(c);cards[it.id]=c;}updateCard(c,it);});"
+"empty.style.display=list.length?'none':'block';"
+"scheduleLayout();"
+"}"
+"function layoutCards(){"
+"var list=Object.keys(cards).map(function(k){return cards[k];});"
+"var w=(document.body.clientWidth-24)/2;"
+"if(w!==colW){colW=w;list.forEach(function(c){c.dirty=1;});}"
+"if(!list.length){grid.style.height='';return;}"
+"list.forEach(function(c){if(c.dirty||!c.measuredH)c.style.width=w+'px';});"
+"list.forEach(function(c){if(c.dirty||!c.measuredH){c.measuredH=Math.ceil(c.getBoundingClientRect().height);c.dirty=0;}});"
+"var y0=2,y1=2;"
+"list.forEach(function(c){var col=colOf[c.dataset.id];if(col===undefined){col=y0<=y1?0:1;colOf[c.dataset.id]=col;}"
+"c.style.left=(12+col*(w+10))+'px';c.style.top=(col===0?y0:y1)+'px';"
+"if(col===0)y0+=c.measuredH+10;else y1+=c.measuredH+10;});"
+"var h=(Math.max(y0,y1)+16)+'px';if(grid.style.height!==h)grid.style.height=h;"
+"}"
+"function visibleList(){"
 "var l=ALL;"
 "if(tab==='liked')l=l.filter(function(it){return it.liked>0;});"
 "if(q)l=l.filter(function(it){return ((it.name||'')+' '+(it.content||'')).toLowerCase().indexOf(q)>=0;});"
 "return l;"
 "}"
-"window.__mioSetFeed=function(payload){ALL=(payload&&payload.items)||[];render(applyFilter());};"
+"window.__mioSetFeed=function(payload){ALL=(payload&&payload.items)||[];render();};"
 "var qEl=document.getElementById('q');"
-"qEl.addEventListener('input',function(){q=this.value.trim().toLowerCase();render(applyFilter());window.scrollTo(0,0);});"
+"qEl.addEventListener('input',function(){q=this.value.trim().toLowerCase();render();window.scrollTo(0,0);});"
 "document.getElementById('tab-all').addEventListener('click',function(){"
 "tab='all';this.classList.add('active');document.getElementById('tab-liked').classList.remove('active');"
-"render(applyFilter());window.scrollTo(0,0);});"
+"render();window.scrollTo(0,0);});"
 "document.getElementById('tab-liked').addEventListener('click',function(){"
 "tab='liked';this.classList.add('active');document.getElementById('tab-all').classList.remove('active');"
-"render(applyFilter());window.scrollTo(0,0);});"
+"render();window.scrollTo(0,0);});"
 "document.getElementById('ibMore').addEventListener('click',function(){"
 "window.webkit.messageHandlers.mio.postMessage({action:'back'});});"
 "var tsy=0,pulled=false;"
