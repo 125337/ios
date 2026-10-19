@@ -49,7 +49,7 @@ static NSString *MioDualLookupMediaPath(NSString *key) {
     dispatch_once(&oncePred, ^{
         nameOK = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", @"^[A-Za-z0-9][A-Za-z0-9_]*$"];
     });
-    NSString *path = (key.length && nameOK && [nameOK evaluateObject:key])
+    NSString *path = (key.length && nameOK && [nameOK evaluateWithObject:key])
         ? MioDualLookupMediaPath(key) : nil;
     if (!path.length) {
         [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain
