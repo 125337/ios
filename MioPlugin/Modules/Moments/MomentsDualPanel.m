@@ -542,9 +542,18 @@ void MioDualPanelOpen(UIViewController *host) {
     MomentsDualPanel *panel = [[MomentsDualPanel alloc] init];
     objc_setAssociatedObject(host, &kDualPanelAssocKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [host addChildViewController:panel];
-    panel.view.frame = host.view.bounds;
-    panel.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    [host.view addSubview:panel.view];
+    // WCMoments 同款覆盖层级：连导航栏一起盖（HTML 大标题即顶栏），仅保留底部 tabbar。
+    // host.view 非全屏（导航容器内 origin 在导航栏下），故 view 直上 window，高度到 tabBar 顶
+    UIWindow *win = host.view.window;
+    CGRect full = win.bounds;
+    CGFloat top = full.size.height;
+    UIViewController *tbc = host.tabBarController;
+    if (tbc && !tbc.tabBar.isHidden && tbc.tabBar.frame.origin.y > 0) {
+        top = tbc.tabBar.frame.origin.y;
+    }
+    panel.view.frame = CGRectMake(0, 0, full.size.width, top);
+    panel.view.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    [win addSubview:panel.view];
     [panel didMoveToParentViewController:host];
     // 发现页直接打开时朋友圈缓存可能为空（尚未进过朋友圈），先主动拉一次
     id facade = MioDualFacade();
