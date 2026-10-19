@@ -8,28 +8,6 @@
 // 消息 dict 字段：id/name/actor/kind(like|cmt)/text/t/mine
 // 分类过滤对齐 WCM changeCategory（宽松版）：赞过我=kind like 且我帖；评论过我=非赞类
 
-// WCMoments 消息对象是 Call: 代理（duck-typing 命令总线，与 facade 同构），字段走动态分发
-static id MioMsgCall(id msg, NSString *method) {
-    if (!msg || method.length == 0) return nil;
-    SEL call = NSSelectorFromString(@"Call:");
-    if (![msg respondsToSelector:call]) return nil;
-    @try {
-        return ((id(*)(id, SEL, id))objc_msgSend)(msg, call, method);
-    } @catch (NSException *e) { return nil; }
-}
-
-static NSString *MioCallStr(id msg, NSString *method) {
-    id v = MioMsgCall(msg, method);
-    if ([v isKindOfClass:[NSString class]]) return v;
-    if ([v isKindOfClass:[NSNumber class]]) return [v stringValue];
-    return nil;
-}
-
-// 字段读法统一入口：真 getter（KVC）优先，miss 走 Call: 代理
-static NSString *MioMsgStr(id msg, NSString *key) {
-    return WXSafeStringGet(msg, key) ?: MioCallStr(msg, key) ?: @"";
-}
-
 @interface MioDualInboxVC () <UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, copy) NSArray<NSDictionary *> *items;   // 全量
 @property (nonatomic, copy) NSArray<NSDictionary *> *rows;    // 当前分类过滤后
@@ -40,9 +18,13 @@ static NSString *MioMsgStr(id msg, NSString *key) {
 
 @implementation MioDualInboxVC
 
-// 消息数组解析（WCMInboxController 复刻）：[facade getAllMessages]；
-// type 1=赞 2/3/8=评论（changeCategory）。帖子归属 dataItemUsrName，空则
-// facade getDataItemByID: 取真 WCDataItem（信息流已实证小写字段），兜底更可靠。
+// 消息数组解析（WCMInboxController 复刻）：[facade getAllMessages]。
+// 探针实证：消息对象 = 微信自有 WCSNSMessage（Call:=0，Call: 字段分发全 miss），展示数据
+// 全在 comment 子对象 —— WCSNSMessage.h（8.0.78）仅 msgID/objID/parentObjID/comment/
+// refComment/hasRead/delStatus/rewardInfo/clientId；WCUserComment.h：username/nickname/
+// content/createTime/type/dataItemUsrName 全为真 property。type 1=赞 2/3/8=评论（changeCategory）。
+// createTime/type 用 KVC 装箱读：WXSafeIntegerGet 是裸 msgSend，标量 getter 返回值接 id
+// 再 respondsToSelector 必 SIGSEGV（127.log 实证）；KVC 对标量/NSNumber 两态都安全。
 - (NSArray<NSDictionary *> *)loadItems {
     id facade = MioDualFacade();
     SEL allSel = NSSelectorFromString(@"getAllMessages");
@@ -53,32 +35,34 @@ static NSString *MioMsgStr(id msg, NSString *key) {
         if (![msgs isKindOfClass:[NSArray class]]) msgs = @[];
     } @catch (NSException *e) { return @[]; }
 
-    NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName") ?: @"";
-    SEL byIDSel = NSSelectorFromString(@"getDataItemByID:");
-    // 数据诊断探针：先看消息对象真身（类/Call:代理/各字段响应性），别盲改
+    // 首条实证探针：验证 comment 链路（字段有值后删除）
     @try {
-        id probe = msgs.firstObject;
-        if (probe) {
-            id pkvc = nil;
-            @try { pkvc = [probe valueForKey:@"__probe__"]; } @catch (NSException *e) { pkvc = nil; }
-            WPLog(@"Dual", @"[Inbox] class=%@ Call:=%d content=%d username=%d createTime=%d kvc=%@",
-                  NSStringFromClass([probe class]),
-                  [probe respondsToSelector:NSSelectorFromString(@"Call:")],
-                  [probe respondsToSelector:NSSelectorFromString(@"content")],
-                  [probe respondsToSelector:NSSelectorFromString(@"username")],
-                  [probe respondsToSelector:NSSelectorFromString(@"createTime")],
-                  pkvc ?: @"-");
+        id p = msgs.firstObject;
+        if (p) {
+            id pc = [p valueForKey:@"comment"];
+            WPLog(@"Dual", @"[Inbox] comment=%@ usr=%@ type=%@ createTime=%@ objID=%@",
+                  pc,
+                  WXSafeStringGet(pc, @"username") ?: @"-",
+                  [pc valueForKey:@"type"] ?: @"-",
+                  [pc valueForKey:@"createTime"] ?: @"-",
+                  [p valueForKey:@"objID"] ?: @"-");
         }
     } @catch (NSException *e) {}
+
+    NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName") ?: @"";
+    SEL byIDSel = NSSelectorFromString(@"getDataItemByID:");
     NSMutableArray *arr = [NSMutableArray array];
     for (id msg in msgs) {
         if (arr.count >= 200) break;
         @try {
-            NSString *actor = MioMsgStr(msg, @"username");
+            id cmt = [msg valueForKey:@"comment"];   // WCSNSMessage 真 property
+            NSString *actor = WXSafeStringGet(cmt, @"username") ?: @"";
+            if (actor.length == 0) continue;         // 无 comment 本体的异常消息不展示
             if ([actor isEqualToString:selfUsr]) continue;   // 自己的操作不进消息页（WCM 同款）
-            NSInteger type = WXSafeIntegerGet(msg, @"type", 0);
-            id objID = MioMsgCall(msg, @"objID") ?: [msg valueForKey:@"objID"];
-            NSString *owner = MioCallStr(msg, @"dataItemUsrName") ?: @"";
+            NSInteger type = [[cmt valueForKey:@"type"] integerValue];
+            long long ts = [[cmt valueForKey:@"createTime"] longLongValue];
+            id objID = [msg valueForKey:@"objID"];   // WCSNSMessage 真 property
+            NSString *owner = WXSafeStringGet(cmt, @"dataItemUsrName") ?: @"";
             if (owner.length == 0 && objID && [facade respondsToSelector:byIDSel]) {
                 // 帖主空 → objID 反查真 WCDataItem（isMine 兜底同款）
                 id dataItem = ((id(*)(id, SEL, id))objc_msgSend)(facade, byIDSel, objID);
@@ -86,11 +70,11 @@ static NSString *MioMsgStr(id msg, NSString *key) {
             }
             [arr addObject:@{
                 @"id": [objID isKindOfClass:NSString.class] ? objID : [NSString stringWithFormat:@"%@", objID ?: @""],
-                @"name": MioMsgStr(msg, @"nickname") ?: actor,
+                @"name": WXSafeStringGet(cmt, @"nickname") ?: actor,
                 @"actor": actor,
-                @"kind": (type == 1) ? @"like" : @"cmt",   // 1=赞 2/3/8=评论
-                @"text": MioMsgStr(msg, @"content"),
-                @"t": @([MioMsgCall(msg, @"createTime") longLongValue] ?: WXSafeIntegerGet(msg, @"createtime", 0)),
+                @"kind": (type == 1) ? @"like" : @"cmt",   // WCUserComment type 1=赞 2/3/8=评论
+                @"text": WXSafeStringGet(cmt, @"content") ?: @"",
+                @"t": @(ts),
                 @"mine": @([owner isEqualToString:selfUsr])}];
         } @catch (NSException *e) { continue; }
     }
