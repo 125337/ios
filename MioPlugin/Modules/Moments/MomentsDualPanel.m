@@ -134,8 +134,7 @@ static NSString *MioDualLookupMediaPath(NSString *key) {
 
 // facade：MMContext activeUserContext getService:WCFacade.class（WCMoments _Service 同款；
 // 8.0.60 的 MMContext 无 activeUserContext 时回退 currentContext）。单例稳定，缓存命中。
-static id MioDualFacade(void) {
-    static id cached = nil;
+id MioDualFacade(void) {    static id cached = nil;
     if (cached) return cached;
     Class fCls = objc_getClass("WCFacade");
     Class ctxCls = objc_getClass("MMContext");
@@ -544,71 +543,7 @@ static char kDualPanelAssocKey;
     } @catch (NSException *e) {}
 }
 
-#pragma mark 消息页数据（WCMoments WCMInboxController 复刻，全静态实证）
-
-// WCMoments 消息对象是 Call: 代理（duck-typing 命令总线，与 facade 同构），字段统一走动态分发
-static id MioMsgCall(id msg, NSString *method) {
-    if (!msg || method.length == 0) return nil;
-    SEL call = NSSelectorFromString(@"Call:");
-    if (![msg respondsToSelector:call]) return nil;
-    @try {
-        return ((id(*)(id, SEL, id))objc_msgSend)(msg, call, method);
-    } @catch (NSException *e) { return nil; }
-}
-
-static NSString *MioCallStr(id msg, NSString *method) {
-    id v = MioMsgCall(msg, method);
-    if ([v isKindOfClass:[NSString class]]) return v;
-    if ([v isKindOfClass:[NSNumber class]]) return [v stringValue];
-    return nil;
-}
-
-// 消息数组解析（WCMInboxController 复刻）：字段优先真 getter（KVC），miss 走 Call: 代理；
-// type 有真 getter 保留。type 1=赞 2/3/8=评论（changeCategory）。
-// 帖子归属 dataItemUsrName，空则 facade getDataItemByID: 取真 WCDataItem（信息流已实证
-// createtime/username 全小写可用），比逐字段戳代理更可靠。
-- (NSArray<NSDictionary *> *)inboxItems {
-    id facade = MioDualFacade();
-    SEL allSel = NSSelectorFromString(@"getAllMessages");
-    if (!facade || ![facade respondsToSelector:allSel]) return @[];
-    NSArray *msgs = @[];
-    @try {
-        msgs = ((id(*)(id, SEL))objc_msgSend)(facade, allSel);
-        if (![msgs isKindOfClass:[NSArray class]]) msgs = @[];
-    } @catch (NSException *e) { return @[]; }
-
-    NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName") ?: @"";
-    SEL byIDSel = NSSelectorFromString(@"getDataItemByID:");
-    NSMutableArray *arr = [NSMutableArray array];
-    for (id msg in msgs) {
-        if (arr.count >= 200) break;
-        @try {
-            NSString *actor = WXSafeStringGet(msg, @"username") ?: MioCallStr(msg, @"username") ?: @"";
-            if ([actor isEqualToString:selfUsr]) continue;   // 自己的操作不进消息页（WCM 同款）
-            NSInteger type = WXSafeIntegerGet(msg, @"type", 0);
-            id objID = MioMsgCall(msg, @"objID") ?: [msg valueForKey:@"objID"];
-            NSString *owner = MioCallStr(msg, @"dataItemUsrName") ?: @"";
-            id dataItem = nil;
-            if (owner.length == 0 && [facade respondsToSelector:byIDSel]) {
-                // 帖主空 → objID 反查真 WCDataItem（isMine 兜底同款）
-                dataItem = objID ? ((id(*)(id, SEL, id))objc_msgSend)(facade, byIDSel, objID) : nil;
-                owner = WXSafeStringGet(dataItem, @"username") ?: @"";
-            }
-            NSString *text = WXSafeStringGet(msg, @"content") ?: MioCallStr(msg, @"content") ?: @"";
-            id objIDStr = [objID isKindOfClass:NSString.class] ? objID : [NSString stringWithFormat:@"%@", objID ?: @""];
-            [arr addObject:@{
-                @"id": objIDStr,
-                @"name": WXSafeStringGet(msg, @"nickname") ?: MioCallStr(msg, @"nickname") ?: actor,
-                @"actor": actor,
-                @"kind": (type == 1) ? @"like" : @"cmt",                // 1=赞 2/3/8=评论
-                @"text": text,
-                @"t": @([MioMsgCall(msg, @"createTime") longLongValue] ?: WXSafeIntegerGet(msg, @"createtime", 0)),
-                @"mine": @([owner isEqualToString:selfUsr]),
-                @"refSelf": @([MioCallStr(msg, @"refUserName") ?: @"" isEqualToString:selfUsr])}];
-        } @catch (NSException *e) { continue; }
-    }
-    return arr;
-}
+#pragma mark 消息页数据
 
 - (NSDictionary *)itemDict:(id)item {
     if (!item) return nil;
@@ -727,9 +662,10 @@ static NSString *MioCallStr(id msg, NSString *method) {
     }
     if ([action isEqualToString:@"inbox"]) {
         // 铃铛 → 原生消息页（WCMInboxController 原生复刻：present 全屏，导航栏「‹ 发现/消息」）
+        // 数据由 InboxVC 自己拉（facade getAllMessages），此处只管 present/关闭
         UIViewController *host = self.hostVC;
         if (!host) return;
-        MioDualInboxVC *vc = [[MioDualInboxVC alloc] initWithItems:[self inboxItems]];
+        MioDualInboxVC *vc = [[MioDualInboxVC alloc] init];
         UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
         nav.modalPresentationStyle = UIModalPresentationFullScreen;
         UIBarButtonItem *back = [[UIBarButtonItem alloc] initWithTitle:@"‹ 发现"
@@ -737,17 +673,12 @@ static NSString *MioCallStr(id msg, NSString *method) {
                                            target:vc action:@selector(goBack)];
         vc.navigationItem.leftBarButtonItem = back;
         vc.navigationItem.title = @"消息";
-        __weak typeof(self) ws = self;
-        id obsReload = [[NSNotificationCenter defaultCenter]
-            addObserverForName:@"MioDualInboxReload" object:nil queue:NSOperationQueue.mainQueue
-            usingBlock:^(NSNotification *n) { [vc updateItems:[ws inboxItems]]; }];
         id obsPost = [[NSNotificationCenter defaultCenter]
             addObserverForName:@"MioDualInboxOpenPost" object:nil queue:NSOperationQueue.mainQueue
             usingBlock:^(__unused NSNotification *n) {
-                if (ws.hostVC) MioDualPanelClose(ws.hostVC);
+                if (self.hostVC) MioDualPanelClose(self.hostVC);
             }];
         vc.userOnDismiss = ^{
-            [[NSNotificationCenter defaultCenter] removeObserver:obsReload];
             [[NSNotificationCenter defaultCenter] removeObserver:obsPost];
         };
         [host presentViewController:nav animated:YES completion:nil];

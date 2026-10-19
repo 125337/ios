@@ -19,3 +19,7 @@ void MioDualPanelReassertChrome(UIViewController *host);
 void MioDualPanelClose(UIViewController *host);
 void MioDualPanelToggle(UIViewController *host);
 BOOL MioDualPanelIsOpen(UIViewController *host);
+
+// WCFacade 获取（阶段0 探针实证：logEnterTimeline 首调捕获，进程级缓存）
+// 双列模块内共享（面板数据桥/消息页取数都走它）
+id MioDualFacade(void);

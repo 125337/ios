@@ -1,10 +1,33 @@
 #import "MioDualInboxVC.h"
+#import "MomentsDualPanel.h"
+#import "../../Core/ServiceHelper.h"
 #import "../ChatTopBar/AvatarLoader.h"
 #import <objc/message.h>
 
-// 消息 dict 字段（MomentsDualPanel inboxItems 产出）：
-// id/name/actor/kind(like|cmt)/text/t/mine/refSelf
-// 分类过滤对齐 WCM changeCategory（宽松版）：收到的赞=我帖被赞；评论=非赞类
+// 消息 dict 字段：id/name/actor/kind(like|cmt)/text/t/mine
+// 分类过滤对齐 WCM changeCategory（宽松版）：赞过我=kind like 且我帖；评论过我=非赞类
+
+// WCMoments 消息对象是 Call: 代理（duck-typing 命令总线，与 facade 同构），字段走动态分发
+static id MioMsgCall(id msg, NSString *method) {
+    if (!msg || method.length == 0) return nil;
+    SEL call = NSSelectorFromString(@"Call:");
+    if (![msg respondsToSelector:call]) return nil;
+    @try {
+        return ((id(*)(id, SEL, id))objc_msgSend)(msg, call, method);
+    } @catch (NSException *e) { return nil; }
+}
+
+static NSString *MioCallStr(id msg, NSString *method) {
+    id v = MioMsgCall(msg, method);
+    if ([v isKindOfClass:[NSString class]]) return v;
+    if ([v isKindOfClass:[NSNumber class]]) return [v stringValue];
+    return nil;
+}
+
+// 字段读法统一入口：真 getter（KVC）优先，miss 走 Call: 代理
+static NSString *MioMsgStr(id msg, NSString *key) {
+    return WXSafeStringGet(msg, key) ?: MioCallStr(msg, key) ?: @"";
+}
 
 @interface MioDualInboxVC () <UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, copy) NSArray<NSDictionary *> *items;   // 全量
@@ -16,26 +39,53 @@
 
 @implementation MioDualInboxVC
 
-- (instancetype)initWithItems:(NSArray<NSDictionary *> *)items {
-    if ((self = [super init])) {
-        _items = items ?: @[];
-        _rows = _items;
+// 消息数组解析（WCMInboxController 复刻）：[facade getAllMessages]；
+// type 1=赞 2/3/8=评论（changeCategory）。帖子归属 dataItemUsrName，空则
+// facade getDataItemByID: 取真 WCDataItem（信息流已实证小写字段），兜底更可靠。
+- (NSArray<NSDictionary *> *)loadItems {
+    id facade = MioDualFacade();
+    SEL allSel = NSSelectorFromString(@"getAllMessages");
+    if (!facade || ![facade respondsToSelector:allSel]) return @[];
+    NSArray *msgs = @[];
+    @try {
+        msgs = ((id(*)(id, SEL))objc_msgSend)(facade, allSel);
+        if (![msgs isKindOfClass:[NSArray class]]) msgs = @[];
+    } @catch (NSException *e) { return @[]; }
+
+    NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName") ?: @"";
+    SEL byIDSel = NSSelectorFromString(@"getDataItemByID:");
+    NSMutableArray *arr = [NSMutableArray array];
+    for (id msg in msgs) {
+        if (arr.count >= 200) break;
+        @try {
+            NSString *actor = MioMsgStr(msg, @"username");
+            if ([actor isEqualToString:selfUsr]) continue;   // 自己的操作不进消息页（WCM 同款）
+            NSInteger type = WXSafeIntegerGet(msg, @"type", 0);
+            id objID = MioMsgCall(msg, @"objID") ?: [msg valueForKey:@"objID"];
+            NSString *owner = MioCallStr(msg, @"dataItemUsrName") ?: @"";
+            if (owner.length == 0 && objID && [facade respondsToSelector:byIDSel]) {
+                // 帖主空 → objID 反查真 WCDataItem（isMine 兜底同款）
+                id dataItem = ((id(*)(id, SEL, id))objc_msgSend)(facade, byIDSel, objID);
+                owner = WXSafeStringGet(dataItem, @"username") ?: @"";
+            }
+            [arr addObject:@{
+                @"id": [objID isKindOfClass:NSString.class] ? objID : [NSString stringWithFormat:@"%@", objID ?: @""],
+                @"name": MioMsgStr(msg, @"nickname") ?: actor,
+                @"actor": actor,
+                @"kind": (type == 1) ? @"like" : @"cmt",   // 1=赞 2/3/8=评论
+                @"text": MioMsgStr(msg, @"content"),
+                @"t": @([MioMsgCall(msg, @"createTime") longLongValue] ?: WXSafeIntegerGet(msg, @"createtime", 0)),
+                @"mine": @([owner isEqualToString:selfUsr])}];
+        } @catch (NSException *e) { continue; }
     }
-    return self;
+    return arr;
 }
 
-// 面板重取数据后回填（下拉刷新链路：通知面板 → 面板重取 → 回调此方法）
-- (void)updateItems:(NSArray<NSDictionary *> *)items {
-    self.items = items ?: @[];
+- (void)reloadFromSource {
+    self.items = [self loadItems];
     [self applyFilter];
     [self.table reloadData];
     [self.refresh endRefreshing];
-}
-
-- (void)viewDidDisappear:(BOOL)animated {
-    [super viewDidDisappear:animated];
-    // 仅真正被 dismiss 时清理（弹 UIAlertController 也会触发 disappear，需排除）
-    if (self.isBeingDismissed && self.userOnDismiss) self.userOnDismiss();
 }
 
 - (void)viewDidLoad {
@@ -53,10 +103,10 @@
     self.table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.table.dataSource = self;
     self.table.delegate = self;
-    self.table.backgroundColor = [UIColor colorWithRed:0.969 green:0.969 blue:0.969 alpha:1];   // #F7F7F7
+    self.table.backgroundColor = [UIColor colorWithRed:0.969 green:0.969 blue:0.969 alpha:1];
     self.table.separatorInset = UIEdgeInsetsMake(0, 68, 0, 0);
 
-    // 下拉刷新 → loadMessages（WCM 同款：数据由面板统一解析，这里通知面板重取）
+    // 下拉刷新 → loadMessages（WCM 同款：本页自己拉 facade 数据）
     self.refresh = [UIRefreshControl new];
     [self.refresh addTarget:self action:@selector(pullRefresh) forControlEvents:UIControlEventValueChanged];
     [self.table addSubview:self.refresh];
@@ -71,11 +121,11 @@
         [self.table.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [self.table.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]]];
 
-    [self applyFilter];
+    [self reloadFromSource];
 }
 
 - (void)pullRefresh {
-    [[NSNotificationCenter defaultCenter] postNotificationName:@"MioDualInboxReload" object:nil];
+    [self reloadFromSource];
 }
 
 // 导航栏「‹ 发现」返回（present 包装，dismiss 即回面板）
@@ -126,7 +176,7 @@
 }
 
 // WCM cellForRow 对齐：subtitle 样式（text=昵称 secondaryText=内容摘要 image=头像）
-// + 右侧「M 月」时间。用经典 textLabel API（CI SDK 无 UIListContentConfiguration）
+// + 右侧完整时间。用经典 textLabel API（CI SDK 无 UIListContentConfiguration）
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"msg"];
     if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"msg"];
@@ -164,20 +214,6 @@
     return cell;
 }
 
-// 头像统一画成 42pt 圆形位图（SF Symbol 拉伸后仍为圆形观感）
-- (UIImage *)circleAvatar:(UIImage *)img {
-    if (!img) return nil;
-    CGFloat s = 42;
-    UIGraphicsImageRendererFormat *fmt = [UIGraphicsImageRendererFormat defaultFormat];
-    fmt.scale = 2;
-    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(s, s) format:fmt];
-    return [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
-        UIBezierPath *p = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, s, s)];
-        [p addClip];
-        [img drawInRect:CGRectMake(0, 0, s, s)];
-    }];
-}
-
 // WCM didSelectRow 对齐：弹 UIAlertController 动作面板 → 查看原帖
 // （直跳详情需 WCCommentListViewController 实例，通知面板切回原生兜底）
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -193,12 +229,31 @@
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-// 头像：项目已实证全链路 AvatarLoader（本地自定义 → MMHeadImageMgr → CDN）
-// （MMContext activeUserContext 链在 8.0.78 不成立，弃用）；无图回落 SF Symbol
+// 头像：项目已实证全链路 AvatarLoader（本地自定义 → MMHeadImageMgr → CDN）；无图回落 SF Symbol
 - (UIImage *)avatarImage:(NSString *)usr {
     UIImage *img = usr.length ? [[AvatarLoader shared] loadAvatarSyncForWxid:usr contact:nil] : nil;
     if (img) return img;
     return [UIImage systemImageNamed:@"person.crop.circle.fill"];
+}
+
+// 头像统一画成 42pt 圆形位图（SF Symbol 拉伸后仍为圆形观感）
+- (UIImage *)circleAvatar:(UIImage *)img {
+    if (!img) return nil;
+    CGFloat s = 42;
+    UIGraphicsImageRendererFormat *fmt = [UIGraphicsImageRendererFormat defaultFormat];
+    fmt.scale = 2;
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(s, s) format:fmt];
+    return [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
+        UIBezierPath *p = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, s, s)];
+        [p addClip];
+        [img drawInRect:CGRectMake(0, 0, s, s)];
+    }];
+}
+
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    // 仅真正被 dismiss 时清理（弹 UIAlertController 也会触发 disappear，需排除）
+    if (self.isBeingDismissed && self.userOnDismiss) self.userOnDismiss();
 }
 
 @end

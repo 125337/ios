@@ -3,11 +3,10 @@
 NS_ASSUME_NONNULL_BEGIN
 
 // 铃铛消息页（WCMoments WCMInboxController 原生复刻）：
-// UISegmentedControl 三段分类 + UITableView（subtitleCell 样式）+ UIRefreshControl
-// 数据由面板 pushInboxNow 同款解析（[facade getAllMessages] KVC 字段表）传入
+// UISegmentedControl 三段分类（全部/赞过我/评论过我）+ UITableView（subtitle 样式）
+// + UIRefreshControl。数据自取：[facade getAllMessages]（Call: 代理字段分发）。
+// 「查看原帖」经 MioDualInboxOpenPost 通知由面板关闭切回原生朋友圈。
 @interface MioDualInboxVC : UIViewController
-- (instancetype)initWithItems:(NSArray<NSDictionary *> *)items;
-- (void)updateItems:(NSArray<NSDictionary *> *)items;   // 下拉刷新回填（面板重取后调用）
 @property (nonatomic, copy, nullable) void (^userOnDismiss)(void);   // 用户离开页面（清理观察者）
 @end
 
