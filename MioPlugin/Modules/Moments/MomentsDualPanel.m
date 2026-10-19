@@ -402,8 +402,10 @@ static NSString * const kDualPageHTML = @(
 "}"
 "window.__mioSetFeed=function(payload){ALL=(payload&&payload.items)||[];render();};"
 "var ibData=[],ibTab='all';"
+"var PERSON='data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path fill=\"%23C7C7CC\" d=\"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13 8.5 11.43 8.5 9.5 10.07 6 12 6zm0 14c-2.33 0-4.39-1.2-5.59-3.01C6.56 15.28 9.12 14.5 12 14.5s5.44.78 5.59 2.49C16.39 18.8 14.33 20 12 20z\"/></svg>';"
 "window.__mioSetMessages=function(o){ibData=(o&&o.items)||[];ibShow(true);};"
 "function ibShow(v){document.getElementById('inbox').style.display=v?'block':'none';if(v)renderInbox();}"
+"function fmtMonth(t){if(!t)return '';var d=new Date(t*1000);return (d.getMonth()+1)+' 月';}"
 "function renderInbox(){"
 "var list=ibData.filter(function(m){"
 "if(ibTab==='like')return m.kind==='like'&&m.mine;"
@@ -412,8 +414,8 @@ static NSString * const kDualPageHTML = @(
 "var box=document.getElementById('ibList');box.innerHTML='';"
 "document.getElementById('ibEmpty').style.display=list.length?'none':'block';"
 "list.forEach(function(m){"
-"var it=el('div','ib-item');"
-"var av=el('img','ib-avatar');av.src=m.avatar||'';av.onerror=function(){av.style.visibility='hidden';};"
+"var it=el('div','ib-item');it.addEventListener('click',function(){mio({action:'openMsg',id:m.id});});"
+"var av=el('img','ib-avatar');av.src=m.avatar||PERSON;av.onerror=function(){av.src=PERSON;};"
 "var main=el('div','ib-main');"
 "var l1=el('div','ib-line1');"
 "var b=el('b');b.textContent=m.name||'（微信用户）';"
@@ -421,7 +423,7 @@ static NSString * const kDualPageHTML = @(
 "l1.appendChild(b);l1.appendChild(sp);"
 "main.appendChild(l1);"
 "if(m.text){var tx=el('div','ib-text');tx.textContent=m.text;main.appendChild(tx);}"
-"var tm=el('div','ib-time');tm.textContent=fmtTime(m.t);main.appendChild(tm);"
+"var tm=el('div','ib-time');tm.textContent=fmtMonth(m.t);main.appendChild(tm);"
 "it.appendChild(av);it.appendChild(main);box.appendChild(it);});}"
 "document.querySelectorAll('.ib-tab').forEach(function(t){t.addEventListener('click',function(){"
 "ibTab=t.dataset.ib;"
@@ -604,11 +606,10 @@ static char kDualPanelAssocKey;
 
 #pragma mark 消息页数据（WCMoments WCMInboxController 复刻，全静态实证）
 
-// 消息 → JSON → __mioSetMessages。
-// 数据源 [facade getAllMessages]（WCFacade.h#L563 实证）；元素字段全部 duck-typing KVC：
-//   msg.comment{username,type,refUserName,dataItemUsrName,content} + msg.objID/nickname/createTime
-//   type 1=赞 2/3/8=评论（WCM changeCategory 反编译）；帖子归属 comment.dataItemUsrName，
-//   空则 facade getDataItemByID: 兜底（isMine 反编译同款）
+// 消息 → JSON → __mioSetMessages（WCMInboxController 复刻，字段表按反编译终极分析：
+// 全部字段在消息对象本体：type/username/nickname/refUserName/dataItemUsrName/content/
+// createTime/objID；comment 只是评论内容子对象。type 1=赞 2/3/8=评论（changeCategory）。
+// 帖子归属 dataItemUsrName，空则 facade getDataItemByID: 兜底（isMine 同款））
 - (void)pushInboxNow {
     if (!self.pageReady || !self.webView) return;
     id facade = MioDualFacade();
@@ -626,29 +627,29 @@ static char kDualPanelAssocKey;
     for (id msg in msgs) {
         if (arr.count >= 200) break;
         @try {
-            id cmt = [msg valueForKey:@"comment"];
-            if (!cmt) continue;
-            NSString *actor = WXSafeStringGet(cmt, @"username") ?: @"";
+            NSString *actor = WXSafeStringGet(msg, @"username") ?: @"";
             if ([actor isEqualToString:selfUsr]) continue;   // 自己的操作不进消息页（WCM 同款）
-            NSInteger type = [[cmt valueForKey:@"type"] integerValue];
-            NSString *owner = WXSafeStringGet(cmt, @"dataItemUsrName") ?: @"";
+            NSInteger type = [[msg valueForKey:@"type"] integerValue];
+            NSString *owner = WXSafeStringGet(msg, @"dataItemUsrName") ?: @"";
             if (owner.length == 0 && [facade respondsToSelector:byIDSel]) {
                 // 帖主空 → objID 反查原帖（isMine 兜底同款）
                 id objID = [msg valueForKey:@"objID"];
                 id item = objID ? ((id(*)(id, SEL, id))objc_msgSend)(facade, byIDSel, objID) : nil;
                 owner = WXSafeStringGet(item, @"username") ?: @"";
             }
-            NSString *text = WXSafeStringGet(cmt, @"content") ?: @"";
-            if (text.length == 0) text = WXSafeStringGet(msg, @"content") ?: @"";
+            NSString *text = WXSafeStringGet(msg, @"content") ?: @"";
+            if (text.length == 0) text = WXSafeStringGet([msg valueForKey:@"comment"], @"content") ?: @"";
+            id objID = [msg valueForKey:@"objID"];
             [arr addObject:@{
-                @"name": WXSafeStringGet(msg, @"nickname") ?: actor,   // 操作者昵称
-                @"actor": actor,                                        // 操作者 wxid
+                @"id": [objID isKindOfClass:NSString.class] ? objID : [NSString stringWithFormat:@"%@", objID ?: @""],
+                @"name": WXSafeStringGet(msg, @"nickname") ?: actor,   // 发送者昵称
+                @"actor": actor,                                        // 发送者 wxid
                 @"avatar": [self avatarFor:actor] ?: @"",
                 @"kind": (type == 1) ? @"like" : @"cmt",                // 1=赞 2/3/8=评论
                 @"text": text,
                 @"t": @([[msg valueForKey:@"createTime"] integerValue]),
                 @"mine": @([owner isEqualToString:selfUsr]),
-                @"refSelf": @([WXSafeStringGet(cmt, @"refUserName") ?: @"" isEqualToString:selfUsr])}];
+                @"refSelf": @([WXSafeStringGet(msg, @"refUserName") ?: @"" isEqualToString:selfUsr])}];
         } @catch (NSException *e) { continue; }
     }
     NSData *data = [NSJSONSerialization dataWithJSONObject:@{@"items": arr} options:0 error:nil];
@@ -746,10 +747,27 @@ static char kDualPanelAssocKey;
 - (void)userContentController:(WKUserContentController *)userContentController
       didReceiveScriptMessage:(WKScriptMessage *)message {
     if (![message.body isKindOfClass:[NSDictionary class]]) return;
-    NSString *action = ((NSDictionary *)message.body)[@"action"];
+    NSDictionary *params = (NSDictionary *)message.body;
+    NSString *action = params[@"action"];
     if ([action isEqualToString:@"back"]) {
         // 「…」圆钮：切回原生朋友圈（面板覆盖移除）。面板不挂 childVC，host 用弱引用存
         if (self.hostVC) MioDualPanelClose(self.hostVC);
+        return;
+    }
+    if ([action isEqualToString:@"openMsg"]) {
+        // 消息卡片点击（WCM didSelectRow 弹 action 面板同款）：查看原帖 → 切回原生朋友圈
+        // （直跳详情需 WCCommentListViewController 实例，暂以切回原生兜底）
+        NSString *msgId = params[@"id"] ?: @"";
+        UIViewController *host = self.hostVC;
+        if (!host) return;
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"该条消息"
+                                    message:(msgId.length ? @"在微信朋友圈中查看原帖？" : @"切回微信朋友圈查看？")
+                                    preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"查看原帖" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
+            if (self.hostVC) MioDualPanelClose(self.hostVC);
+        }]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [host presentViewController:alert animated:YES completion:nil];
         return;
     }
     if ([action isEqualToString:@"more"]) {
