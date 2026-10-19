@@ -220,7 +220,7 @@
     cfg.textProperties.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];  // 0x402e=15.0 + Semibold
     cfg.secondaryText = secondary;
     cfg.secondaryTextProperties.font = [UIFont systemFontOfSize:13];                     // 0x402a=13.0
-    cfg.secondaryTextProperties.textColor = [UIColor secondaryLabelColor];
+    cfg.secondaryTextProperties.color = [UIColor secondaryLabelColor];
     cfg.secondaryTextProperties.numberOfLines = 3;
     cfg.image = [self avatarImage:d[@"actor"]];
     cfg.imageProperties.maximumSize  = CGSizeMake(45, 45);   // 0x4046=45.0
