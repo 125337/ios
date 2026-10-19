@@ -547,7 +547,7 @@ void MioDualPanelOpen(UIViewController *host) {
     UIWindow *win = host.view.window;
     CGRect full = win.bounds;
     CGFloat top = full.size.height;
-    UIViewController *tbc = host.tabBarController;
+    UITabBarController *tbc = host.tabBarController;
     if (tbc && !tbc.tabBar.isHidden && tbc.tabBar.frame.origin.y > 0) {
         top = tbc.tabBar.frame.origin.y;
     }
