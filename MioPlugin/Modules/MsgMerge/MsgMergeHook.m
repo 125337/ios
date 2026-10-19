@@ -579,11 +579,11 @@ static double olClamp(double v, double lim) {
 // 使泡边缘对齐头像边缘（探针实证钻入 44 后左泡左缘=头像左缘 12/右泡右缘=头像右缘
 // 381，量准）。v2 的错不在钻入而在泡顶 25 与头像共存 20pt（头像压着泡区→文字钻到
 // 头像底下+泡 z 序盖头像）；泡顶 59 分离后，文字顶 69+ 恒在头像底下，钻入安全。
-// 泡下移量由行高全额补足（rideAdd = 下移量，底部空白保原生）。
-// （2026-10-18 探针定论：不可抵扣本行底部空白——那块空白是组内行间距的来源，抵扣=
-// 骑行偷间距，实测骑行行泡底溢出行底 9.7pt 压进下一行；与 mmSpacing/mmHeightReduce
-// 叠加时 reduce 收的是同一块空白，必叠泡。全额补高后骑行行底部空白与原生一致，
-// reduce 在骑行/非骑行行均匀生效，两功能叠加间距不出错。）
+// 行高补差 = XOS 同款 +13（反编译实证 FUN_00120c4c/00120cbc：骑坐生效行 rowHeight
+// += 13.0，自发/组内行不扩，不区分昵称行）。早期 43/54 全额补高方案已废：行高较原生
+// 巨变 40+ 是微信首屏锚底截断顽疾的根因（锚底/高度缓存对巨变极敏感）；XOS +13 行高
+// 与原生几乎一致、锚底无感。泡溢出行底的部分由组内行间空白自然吸收（XOS 实机形态
+// 即如此，其自带合并缩减钩子与骑行钩子链式叠加，算术与本项目 h=原生+13−reduce 一致）。
 static const double olRideLift = 57.0;   // 头像顶→气泡顶抬升（XOS 标杆图 2026-10-18 实测泡顶=头像顶+57；57=头像高43+底间隙14）
 
 static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePosition pos, BOOL rideOK) {
@@ -806,6 +806,23 @@ static unsigned long long vmSplitPosition(id vm) {
     if (!iv) iv = class_getInstanceVariable(object_getClass(vm), "_splitPosition");
     if (!iv) return 0;
     return *(unsigned long long *)((char *)(__bridge void *)vm + ivar_getOffset(iv));
+}
+
+// 自发判定（XOS 骑坐谓词 FUN_00123948 同语义：isSender 行不扩行高）。VM 有 isSender
+// 直调；缺省回落 wrap.m_uiIsSender（KVC 撞 ivar）。measure 无 cellView 几何可判侧，
+// 只能走模型。
+static BOOL vmIsSender(id vm) {
+    @try {
+        if (vm && [(id)vm respondsToSelector:@selector(isSender)])
+            return ((BOOL (*)(id, SEL))objc_msgSend)(vm, @selector(isSender));
+        id wrap = safeKVC(vm, @"messageWrap");
+        if (wrap) {
+            id v = safeKVC(wrap, @"m_uiIsSender");
+            if ([v respondsToSelector:@selector(unsignedIntValue)])
+                return [(NSNumber *)v unsignedIntValue] != 0;
+        }
+    } @catch (NSException *e) {}
+    return NO;
 }
 
 // —— 合并渲染应用（layoutSubviews 钩调）——
@@ -1135,40 +1152,23 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         if (reduce <= 0 && !cfg.mmAvatarRide) return s;
         id wrap = safeKVC(self, @"messageWrap");
         if (!wrap) return s;   // 时间节点等无 wrap
-        NSString *chat = chatNameOfWrap(wrap);
-        if (chat.length == 0) chat = currentChatName();
-        if (chat.length == 0) return s;
         s_inMeasure = YES;
         MOMergePosition pos = flagsPos(self);
         s_inMeasure = NO;
         if (pos == MOMergePositionNone) return s;   // 组外/标志缺席：原生直通
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
-        // ① 骑行补高：渲染层把气泡顶钉到 头像底(45)+14=头像顶+57（泡在头像正下方
-        //    左右恒对称），泡下移量由行高全额补足（rideAdd = 下移量）。不可抵扣本行
-        //    底部空白——那块空白是组内行间距的来源，抵扣=骑行偷间距（探针实证骑行行
-        //    泡底溢出行底 9.7pt 压进下一行），与 reduce 叠加必叠泡；全额补高后骑行行
-        //    底部空白与原生一致，reduce 均匀生效。切片行泡体无缝不扩（渲染层对切片行
-        //    不做骑行 y）。
+        // ① 骑行补高（XOS 1.5.9 反编译同款 FUN_00120c4c/00120cbc+00123948）：骑坐生效行
+        //    （收方+组首/单条，自发不扩、组内不扩、不区分昵称行）rowHeight += 13.0。
+        //    早期 43/54 全额补高把行高抬高 40+，微信首屏锚底/高度缓存对巨变极敏感
+        //    （首屏截断顽疾根因）；+13 行高与原生几乎一致，锚底无感。切片行泡体无缝
+        //    不扩（渲染层对切片行不做骑行 y）。
         double rideAdd = 0;
         if (cfg.mmAvatarRide && split == 0 &&
             (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1)) {
             BOOL headRow = (cfg.mmAvatarPos == 0)
                 ? (pos == MOMergePositionFirst || pos == MOMergePositionSingle)
                 : (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
-            if (headRow) {
-                // 本行原生 cont 基线：群昵称行（chatroom+组首/Single+原生判定开）
-                // y=16，否则 y=5。直调原生 orig 判定（与渲染层 bBub 实测同语义）
-                BOOL nickRow = NO;
-                if ([chat hasSuffix:@"@chatroom"] &&
-                    (pos == MOMergePositionFirst || pos == MOMergePositionSingle) &&
-                    orig_CMVM_isShowChatRoomDisplayName) {
-                    nickRow = ((BOOL (*)(id, SEL))orig_CMVM_isShowChatRoomDisplayName)(
-                        self, @selector(isShowChatRoomDisplayName));
-                }
-                double need = 2.0 + olRideLift + olClamp(cfg.mmAvatarRideDepth, 100) - (nickRow ? 16.0 : 5.0);
-                rideAdd = need;   // 泡下移量全额补高（不抵扣底部空白，间距保原生）
-                if (rideAdd < 0.0) rideAdd = 0.0;
-            }
+            if (headRow && !vmIsSender(self)) rideAdd = 13.0;
         }
         BOOL isTail = (pos == MOMergePositionLast || pos == MOMergePositionSingle);
         if (rideAdd <= 0 && isTail) return s;   // 组尾保原生（组尾到组外间隙不变）
