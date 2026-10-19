@@ -90,33 +90,33 @@ static NSString *MioMsgStr(id msg, NSString *key) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = [UIColor colorWithRed:0.969 green:0.969 blue:0.969 alpha:1];   // #F7F7F7
-
-    // 顶部分类（WCM 真机截图：全部 / 赞过我 / 评论过我）
-    self.seg = [[UISegmentedControl alloc] initWithItems:@[@"全部", @"赞过我", @"评论过我"]];
-    self.seg.selectedSegmentIndex = 0;
-    [self.seg addTarget:self action:@selector(segChanged:) forControlEvents:UIControlEventValueChanged];
-    self.seg.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.seg];
+    self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
 
     self.table = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleInsetGrouped];
-    self.table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.table.dataSource = self;
     self.table.delegate = self;
-    self.table.backgroundColor = [UIColor colorWithRed:0.969 green:0.969 blue:0.969 alpha:1];
-    self.table.separatorInset = UIEdgeInsetsMake(0, 68, 0, 0);
+    self.table.backgroundColor = [UIColor systemGroupedBackgroundColor];
+    self.table.rowHeight = 72;   // 对齐 WCM setRowHeight_（42pt 圆头像 + 两行文字）
 
     // 下拉刷新 → loadMessages（WCM 同款：本页自己拉 facade 数据）
     self.refresh = [UIRefreshControl new];
     [self.refresh addTarget:self action:@selector(pullRefresh) forControlEvents:UIControlEventValueChanged];
     [self.table addSubview:self.refresh];
-    [self.view addSubview:self.table];
 
+    // 分段控件进 tableHeaderView（布局只留一套：table 顶到 safeArea，hdr 随列表滚动）
+    UIView *hdr = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 56)];
+    hdr.backgroundColor = [UIColor systemGroupedBackgroundColor];
+    self.seg = [[UISegmentedControl alloc] initWithItems:@[@"全部", @"赞过我", @"评论过我"]];
+    self.seg.selectedSegmentIndex = 0;
+    self.seg.frame = CGRectMake(16, 12, self.view.bounds.size.width - 32, 32);
+    self.seg.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    [self.seg addTarget:self action:@selector(segChanged:) forControlEvents:UIControlEventValueChanged];
+    [hdr addSubview:self.seg];
+    self.table.tableHeaderView = hdr;
+
+    [self.view addSubview:self.table];
     [NSLayoutConstraint activateConstraints:@[
-        [self.seg.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:12],
-        [self.seg.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],
-        [self.seg.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16],
-        [self.table.topAnchor constraintEqualToAnchor:self.seg.bottomAnchor constant:8],
+        [self.table.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
         [self.table.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [self.table.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [self.table.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]]];
