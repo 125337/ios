@@ -36,12 +36,6 @@
         [ConfigDescriptor itemWithKey:@"mmSepTime" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"mmAvatarOffset" type:ConfigValueTypeFloat default:@(0.0)],
         [ConfigDescriptor itemWithKey:@"mmWholeOffset" type:ConfigValueTypeFloat default:@(0.0)],
-        [ConfigDescriptor itemWithKey:@"mmAvatarRide" type:ConfigValueTypeBool default:@(NO)],
-        [ConfigDescriptor itemWithKey:@"mmAvatarRideDepth" type:ConfigValueTypeFloat default:@(0.0)],
-        [ConfigDescriptor itemWithKey:@"mmHeightReduce" type:ConfigValueTypeFloat default:@(0.0)],
-        [ConfigDescriptor itemWithKey:@"mmRideDiveRecv" type:ConfigValueTypeFloat default:@(46.0)],
-        [ConfigDescriptor itemWithKey:@"mmRideDiveSend" type:ConfigValueTypeFloat default:@(46.0)],
-        [ConfigDescriptor itemWithKey:@"mmRideDebug" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 

@@ -88,6 +88,19 @@ static long long createTimeOf(id wrap) {
     return [v longLongValue];
 }
 
+/// 时间行 createTime（node 或 ChatTimeViewModel 通用：多候选字段名，KVC 安全）
+static long long timeOfTimeNode(id obj) {
+    if (!obj) return 0;
+    for (NSString *k in @[@"m_uiCreateTime", @"createTime", @"m_createTime"]) {
+        id v = safeValue(obj, k);
+        if ([v respondsToSelector:@selector(longLongValue)]) {
+            long long t = [v longLongValue];
+            if (t > 0) return t;
+        }
+    }
+    return 0;
+}
+
 /// 是否新邀请入群消息（状态转换消息，强制断组）
 static BOOL isInviteesMsg(id wrap) {
     id inv = safeValue(wrap, @"isNewInviteesMsg");
@@ -223,93 +236,26 @@ static id dbFindValidMsg(long long startLID, int direction) {
 // MARK: - 索引增量刷新（仅事件触发点调用，无查询期刷新）
 // ============================================================
 
-/// nodeArray 邻接探测（BubbleBox 主路径对齐，isSame:node: 语义）：目标 lid 在
-/// _lastArray 中定位后，向两侧取首个异 lid 节点：
-///   ChatTimeViewModel（探针实证 nodeArray 时间行节点类）→ *break=YES（微信插行
-///   = 权威断组符，判定源头消解 DB/插行基准错位）
-///   消息节点 → wrap 提取（nil/不可合并 → join 自然 NO）
-///   未知辅助节点（无 wrap 非时间行）→ 保守断组（少合不多合，isSeparatorNode 同哲学）
-/// 目标不在数组 → 返回 NO（调用方走 DB 兜底：新消息 ~1s 记账迟滞窗口）。
-/// 目标 wrap 顺带带出（outWrap，切片定位扫描复用）。
-- (BOOL)nodeArrayNeighborsForLid:(long long)lid
-                        outWrap:(id *)outWrap
-                       prevWrap:(id *)prevWrap
-                      prevBreak:(BOOL *)prevBreak
-                       nextWrap:(id *)nextWrap
-                      nextBreak:(BOOL *)nextBreak {
-    if (outWrap) *outWrap = nil;
-    if (prevWrap) *prevWrap = nil;
-    if (nextWrap) *nextWrap = nil;
-    if (prevBreak) *prevBreak = NO;
-    if (nextBreak) *nextBreak = NO;
-    NSArray *arr = _lastArray;
-    NSInteger n = (NSInteger)arr.count;
-    if (lid <= 0 || n == 0) return NO;
-    Class timeCls = NSClassFromString(@"ChatTimeViewModel");
-    NSInteger target = -1;
-    for (NSInteger i = 0; i < n; i++) {
-        id w = wrapOfNode(arr[i]);
-        if (w && localIDOf(w) == lid) { target = i; break; }
-    }
-    if (target < 0) return NO;
-    if (outWrap) *outWrap = wrapOfNode(arr[target]);
-    for (NSInteger j = target - 1; j >= 0; j--) {           // 左邻：跳同 lid 切片
-        id node = arr[j];
-        if (timeCls && [node isKindOfClass:timeCls]) { if (prevBreak) *prevBreak = YES; break; }
-        id w = wrapOfNode(node);
-        if (!w) { if (prevBreak) *prevBreak = YES; break; } // 未知辅助节点：保守断
-        if (localIDOf(w) != lid) { if (prevWrap) *prevWrap = w; break; }
-    }
-    for (NSInteger j = target + 1; j < n; j++) {            // 右邻对称
-        id node = arr[j];
-        if (timeCls && [node isKindOfClass:timeCls]) { if (nextBreak) *nextBreak = YES; break; }
-        id w = wrapOfNode(node);
-        if (!w) { if (nextBreak) *nextBreak = YES; break; }
-        if (localIDOf(w) != lid) { if (nextWrap) *nextWrap = w; break; }
-    }
-    return YES;
-}
-
 /// 建单条 entry（屏上 fill / 历史预扩 / 读侧兜底三路共用）：
-/// 邻接判定主路径 = nodeArray（时间行 ChatTimeViewModel 权威断组，BubbleBox
-/// isSame:node: 同构）；目标不在 nodeArray（新消息记账迟滞 ~1s / 深部历史）
-/// 才走 DB ±1 步进兜底（299s 窗，BubbleBox isNeedInsertTimeNode 复刻同语义）。
-/// 已覆盖 O(1) 返回；nodeArray 与 DB 双未就绪不写任何缓存直接返回 None——
-/// 防冷启动负缓存锁死自愈（DB 捕获后 invalidateRebuildGuard 重算即自愈）；
-/// 目标节点 wrap 为空（不可合并）→ 负缓存 None。
+/// wrap 入库 + DB 双向邻接判定 → pos 写索引。
+/// 已覆盖 O(1) 返回；DB 未就绪（g_dbMgr/g_dbTalker 缺）不写任何缓存直接返回
+/// None——防冷启动负缓存锁死 DB 捕获后的自愈重算（DB 未就绪时零缓存空转，
+/// DB 捕获后 invalidateRebuildGuard 重算即自愈）；wrap=nil 且 DB 就绪 → 空洞负缓存 None。
 - (MOMergePosition)fillEntryForLid:(long long)lid wrap:(id)wrap {
     if (lid <= 0) return MOMergePositionNone;
     BBMergeEntry *e = _index[@(lid)];
     if (e) return e.pos;
-
-    id prevWrap = nil, nextWrap = nil;
-    BOOL prevBreak = NO, nextBreak = NO;
-    BOOL found = NO;
-    // ① 主路径：nodeArray 邻接（不依赖 DB 就绪，冷启动窗口同步缩小）
-    if (_lastArray.count > 0) {
-        id naWrap = nil;
-        found = [self nodeArrayNeighborsForLid:lid outWrap:&naWrap
-                                     prevWrap:&prevWrap prevBreak:&prevBreak
-                                      nextWrap:&nextWrap nextBreak:&nextBreak];
-        if (found && !wrap) wrap = naWrap;
-    }
-    // ② 兜底：目标不在 nodeArray → DB ±1 步进（原链路不变）
-    if (!found) {
-        if (!g_dbMgr || !g_dbTalker) return MOMergePositionNone;
-        if (!wrap) wrap = dbGetMsg(lid);
-        if (!wrap) {
-            [self dbCacheEntry:nil lid:lid pos:MOMergePositionNone];
-            return MOMergePositionNone;
-        }
-        prevWrap = dbFindValidMsg(lid, -1);
-        nextWrap = dbFindValidMsg(lid, +1);
-    }
+    if (!g_dbMgr || !g_dbTalker) return MOMergePositionNone;
+    if (!wrap) wrap = dbGetMsg(lid);
     if (!wrap) {
         [self dbCacheEntry:nil lid:lid pos:MOMergePositionNone];
         return MOMergePositionNone;
     }
-    BOOL joinPrev = !prevBreak && prevWrap != nil && [[self class] shouldJoinDB:wrap wrapB:prevWrap];
-    BOOL joinNext = !nextBreak && nextWrap != nil && [[self class] shouldJoinDB:wrap wrapB:nextWrap];
+    // 邻接 = findValidMsg 对齐（BubbleBox 002ffcdc）：±1 步进跳已删空洞
+    id prevWrap = dbFindValidMsg(lid, -1);
+    id nextWrap = dbFindValidMsg(lid, +1);
+    BOOL joinPrev = (prevWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:prevWrap];
+    BOOL joinNext = (nextWrap != nil) && [[self class] shouldJoinDB:wrap wrapB:nextWrap];
 
     MOMergePosition pos;
     if (joinPrev && joinNext)      pos = MOMergePositionMiddle;
@@ -317,8 +263,8 @@ static id dbFindValidMsg(long long startLID, int direction) {
     else if (joinNext)             pos = MOMergePositionFirst;
     else                           pos = MOMergePositionSingle;
 
-    WPLog(@"MsgMerge", @"[fill] lid=%lld pos=%ld jp=%d jn=%d na=%d pB=%d nB=%d self(t=%lld id=%@) prev(t=%lld id=%@) next(t=%lld id=%@)",
-          lid, (long)pos, joinPrev, joinNext, found, prevBreak, nextBreak,
+    WPLog(@"MsgMerge", @"[fill] lid=%lld pos=%ld jp=%d jn=%d self(t=%lld id=%@) prev(t=%lld id=%@) next(t=%lld id=%@)",
+          lid, (long)pos, joinPrev, joinNext,
           createTimeOf(wrap), senderIdentity(wrap),
           prevWrap ? createTimeOf(prevWrap) : -1, prevWrap ? (senderIdentity(prevWrap) ?: @"nil") : @"-",
           nextWrap ? createTimeOf(nextWrap) : -1, nextWrap ? (senderIdentity(nextWrap) ?: @"nil") : @"-");
@@ -424,8 +370,8 @@ static id dbFindValidMsg(long long startLID, int direction) {
         }
         // ② 历史方向预扩：屏上最小 lid 向 −1 预建（滚动批次插入前索引已就位）
         extended = [self extendHistoricalFromMinLid:lids.count ? lids.firstObject.longLongValue : 0];
-        // ③ 时间行断组已内联进 fillEntryForLid 主路径（nodeArray 邻接探测，
-        //    ChatTimeViewModel=权威断组符）——后置批量修正 pass 删除
+        // ③ 时间行断组修正：微信插行=权威断组符，矛盾行切口两侧 pos 重算
+        [self applyTimeNodeBreaksWithNodeArray:nodeArray];
     }
 
     // changed 只统计「屏上已渲染 lid 的 pos 实变」（None→有值 或 值翻转）：
@@ -540,6 +486,46 @@ static id dbFindValidMsg(long long startLID, int direction) {
         return MOMergePositionNone;
     }
     return [self fillEntryForLid:lid wrap:nil];
+}
+
+// ============================================================
+// MARK: - 时间行断组修正
+// ============================================================
+
+/// 时间行断组修正（BubbleBox 同哲学：微信插行 = 权威断组符，refreshIndex
+/// 建表前调用）：扫描 nodeArray 时间行节点（无 wrap + 有 createTime），其
+/// 前后最近消息 wrap 若被 DB 判定连组（shouldJoinDB=YES，而微信却插了行
+/// ——两套插行基准错位）→ 以行为准切口：行下消息切 joinPrev 变组首、行上
+/// 消息切 joinNext 变组尾。pos 是上下邻接的纯函数，切口只影响两侧两条消息
+/// ——仅需修正这两条 entry；组内其他相邻对与更远成员的 pos 不变。行本身
+/// 保留原生显示（断组后行有信息价值）。修正发生在 changed 统计之前 → 屏上
+/// pos 实变自然计入 changed，触发一次仅涉两行的可见刷新。
+- (void)applyTimeNodeBreaksWithNodeArray:(NSArray *)nodeArray {
+    NSInteger n = (NSInteger)nodeArray.count;
+    for (NSInteger i = 0; i < n; i++) {
+        id node = nodeArray[i];
+        if (wrapOfNode(node)) continue;                 // 消息节点（含切片）
+        long long t = timeOfTimeNode(node);
+        if (t <= 0) continue;                           // 非可识别时间节点
+        id prevW = nil, nextW = nil;
+        for (NSInteger j = i - 1; j >= 0 && !prevW; j--) prevW = wrapOfNode(nodeArray[j]);
+        for (NSInteger j = i + 1; j < n && !nextW; j++) nextW = wrapOfNode(nodeArray[j]);
+        if (!prevW || !nextW) continue;
+        if (![[self class] shouldJoinDB:prevW wrapB:nextW]) continue;   // 行与判定一致
+        long long prevLid = localIDOf(prevW);
+        long long nextLid = localIDOf(nextW);
+        BBMergeEntry *pe = prevLid > 0 ? _index[@(prevLid)] : nil;
+        BBMergeEntry *ne = nextLid > 0 ? _index[@(nextLid)] : nil;
+        if (!pe || !ne) continue;                       // 未 fill（DB 未就绪）：下次刷新自愈
+        // prev 切 joinNext：First(joinPrev=NO,joinNext=YES)→Single；Middle(YES,YES)→Last
+        if (pe.pos == MOMergePositionFirst)       pe.pos = MOMergePositionSingle;
+        else if (pe.pos == MOMergePositionMiddle) pe.pos = MOMergePositionLast;
+        // next 切 joinPrev：Last(joinPrev=YES,joinNext=NO)→Single；Middle(YES,YES)→First
+        if (ne.pos == MOMergePositionLast)        ne.pos = MOMergePositionSingle;
+        else if (ne.pos == MOMergePositionMiddle) ne.pos = MOMergePositionFirst;
+        WPLog(@"MsgMerge", @"[Time] break t=%lld: lid %lld pos→%ld, lid %lld pos→%ld",
+              t, prevLid, (long)pe.pos, nextLid, (long)ne.pos);
+    }
 }
 
 // ============================================================

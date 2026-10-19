@@ -10,8 +10,7 @@
 //    changed 只统计屏上已渲染 lid 的 pos 实变，新 lid 进索引不计（首测查表即真，
 //    无需事后刷新）——滚动场景 changed 恒 0，永不跳动。
 //    测量层接管（BubbleBox 同款行高杠杆）：measure: 对组内非组尾消息 −mmSpacing
-//    （下限 24），组尾/Single 原生直通；骑行开启时组首行行高扩展（悬空头像空间
-//    由本行提供，XOS 组间不重叠根源）；切片首/中片无缝直通（末片才含底部空隙）。
+//    （下限 24），组尾/Single 原生直通；切片首/中片无缝直通（末片才含底部空隙）。
 //    昵称区回收走 isShowChatRoomDisplayName 判定翻转（常驻，原生按无昵称行
 //    测量+布局），无任何 N 补偿。时间行断组修正：refreshIndex 扫 nodeArray，
 //    发现「DB 判一组、微信却插行」的矛盾行时以行为权威断组符修正切口两侧
@@ -27,9 +26,7 @@
 //  钩子清单（全部 bbSwap 直换，公共基类单点）：
 //    BaseMsgContentViewController  viewDidLoad / viewWillAppear: / viewDidAppear: /
 //                                  scrollViewDidScroll:（会话跟踪 + 滚动保鲜）
-//    CommonMessageCellView         layoutSubviews（渲染应用，XOS 同款挂点：原生
-//                                  layoutSubviews 跑完后置重排——UIView 布局链最终
-//                                  提交点，写帧天然站住，无后续覆盖）
+//    CommonMessageCellView         layoutInternal / updateNodeStatus（渲染应用）
 //    CommonMessageViewModel        measure:（组内间距收拢）
 //                                  isShowChatRoomDisplayName（昵称判定，常驻）
 //    CMessageMgr                   onServiceInit（mgr 早捕获）/ AddMsg:MsgWrap: /
@@ -41,7 +38,6 @@
 
 #import "MsgMergeHook.h"
 #import "MsgMergeConfig.h"
-#import "MsgMergeDebugHud.h"
 #import "BBMergeModel.h"
 #import "../../Core/LogManager.h"
 #import <substrate.h>
@@ -61,40 +57,24 @@ static IMP orig_BaseMsgContentVC_viewDidLoad    = NULL;
 static IMP orig_BaseMsgContentVC_viewWillAppear = NULL;
 static IMP orig_BaseMsgContentVC_viewDidAppear  = NULL;
 static IMP orig_BMCVC_scrollViewDidScroll       = NULL;
-static IMP orig_BMCVC_estH                      = NULL;   // tableView:estimatedHeightForRow:（入场锚底源头）
-static IMP orig_CMCellView_layoutSubviews       = NULL;   // 渲染应用（XOS 同款挂点）
+static IMP orig_CMCellView_layoutInternal       = NULL;
+static IMP orig_CMCellView_updateNodeStatus     = NULL;
 static IMP orig_CMVM_measure                    = NULL;
 static IMP orig_CMVM_isShowChatRoomDisplayName  = NULL;
 static IMP orig_CMMsgMgr_AddMsg                 = NULL;   // 收发总管道（发送侧不走 AsyncOnAddMsg）
 static IMP orig_CMMsgMgr_onServiceInit          = NULL;   // 服务初始化（mgr 早捕获挂点）
-static IMP orig_CMMsgMgr_AsyncOnAddMsg           = NULL;
-static IMP orig_UITableView_reloadData           = NULL;   // 聊天表 reload 首测前置
+static IMP orig_CMMsgMgr_AsyncOnAddMsg          = NULL;
 
 // —— 会话上下文 ——
 static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chatroom id，私聊=对端 id）
 static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageNodeData（retain）
 static __weak UIViewController *g_curChatVC = nil;   // 当前聊天 VC（刷新/重排定位用）
 static double g_lastArrCheck    = 0;        // 读侧保鲜限频（0.15s）
-static CFAbsoluteTime g_lastAddMsgTick = 0; // 最近一次收发消息（首屏补询避让收发管线，mmHandleIncomingMsg 写）
 static double g_lastScrollApply = 0;        // 滚动保鲜限频（100ms）
 static BOOL s_mergeRelayoutPending = NO;    // 新消息重排进行中（防连发消息重复排队）
 
 static NSString *currentChatName(void) {
     return g_currentChatName;
-}
-
-/// 聊天名缺位时建立（不覆盖已有值——切会话检测由 updateChatContext 专属）。
-/// 8.0.79 兜底链实证：m_nsTalker 不存在 + NodeData 两层提取失效 → 聊天名只能由
-/// measure 读侧 wrap / AddMsg 管道 session 建立（两条都零服务总线依赖）。
-static void setCurrentChatNameIfEmpty(NSString *name) {
-    if (g_currentChatName.length > 0) return;
-    if (![name isKindOfClass:[NSString class]] || name.length == 0) return;
-    WPLog(@"MsgMerge", @"[Ctx] chat 建立（缺位兜底）: %@ → %@", g_currentChatName, name);
-#if __has_feature(objc_arc)
-#else
-    if (g_currentChatName) [g_currentChatName release];
-#endif
-    g_currentChatName = [name copy];
 }
 
 // —— 视图安全访问 ——
@@ -167,29 +147,9 @@ static void refreshAndApplyFromContext(void);   // 定义见下（updateChatCont
 static void updateChatContext(id self) {
     g_curChatVC = self;
     @try {
-        // 聊天名（BubbleBox 原版机制 applyCell 同源）：零服务总线依赖。绝不调
-        // GetContact——8.0.79 上它走 NSInvocation 服务转发链，viewDidLoad/viewWillAppear
-        // 时机 mmcronet 网络注册 dispatch_once 尚在后台执行，主线程介入
-        // _dispatch_once_wait 死等 10s → scene-update watchdog SIGKILL（实证
-        // WeChat-2026-10-18-094818.ips）。推导链：① m_nsTalker（聊天页本地 ivar，KVC
-        // 直读不走服务）② 渲染数组节点提取 chatNameOfWrap（BBMergeModel wrapOfNode
-        // 同款：两层 node.viewModel.messageWrap + 单层 node.messageWrap 兜底——119
-        // 实证数组元素直接就是 vm，时间行节点无 wrap 循环跳过）。
-        NSString *name = safeKVC(self, @"m_nsTalker");
-        if (![name isKindOfClass:[NSString class]] || name.length == 0) {
-            NSArray *arr0 = safeKVC(self, @"m_arrMessageNodeData");
-            if ([arr0 isKindOfClass:[NSArray class]] && arr0.count > 0) {
-                // BBMergeModel wrapOfNode 完全同款：node 可能是 NodeData 包装（两层链）
-                // 也可能直接是 vm（119 日志实证首条 ChatTimeViewModel、vm=nil——单层
-                // messageWrap 才是有效键）。时间行节点无 wrap，循环跳过。
-                for (id node in arr0) {
-                    id wrap = safeKVC(safeKVC(node, @"viewModel"), @"messageWrap");
-                    if (!wrap) wrap = safeKVC(node, @"messageWrap");
-                    name = chatNameOfWrap(wrap);
-                    if (name.length > 0) break;
-                }
-            }
-        }
+        id contact = ((id (*)(id, SEL))objc_msgSend)(self, NSSelectorFromString(@"GetContact"));
+        NSString *name = nil;
+        @try { name = [contact valueForKey:@"m_nsUsrName"]; } @catch (NSException *ignored) {}
         if ([name isKindOfClass:[NSString class]] && name.length > 0) {
             if (![name isEqualToString:g_currentChatName]) {
                 WPLog(@"MsgMerge", @"[Ctx] chat switch: %@ → %@", g_currentChatName, name);
@@ -227,11 +187,7 @@ static void resetAllMeasureCaches(void) {
         UIViewController *vc = g_curChatVC;
         if (!vc) return;
         NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
-        if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) {
-            WPLog(@"MsgMerge", @"[NJW] reset 空转（arr 无效/空）");
-            return;
-        }
-        WPLog(@"MsgMerge", @"[NJW] resetLayoutCache count=%lu", (unsigned long)arr.count);
+        if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return;
         SEL selReset = NSSelectorFromString(@"resetLayoutCache");
         SEL selBump = NSSelectorFromString(@"changeRevision");
         for (id vm in arr) {
@@ -255,7 +211,7 @@ static void resetAllMeasureCaches(void) {
 // resetLayoutCache + cellView setNeedsLayout。反编译实证 updateAllNodes 的
 // 刷新块走 _dispatch_async(main_q)——刷新扔到下一 runloop，不占触发点帧。
 // 历史滚动场景：微信把滚动加载的历史节点补进数组迟到 ~1s，补齐瞬间已渲染
-// cell 的固化测量值与布局不会自愈，此处对可见消息 cellView 标脏，layoutSubviews
+// cell 的固化测量值与布局不会自愈，此处对可见消息 cellView 标脏，layoutInternal
 // 钩子下轮按新标志重排（None 也走 applyMergeToCellView 的对称还原路径）。
 // 刻意不碰 UITableView 任何 API——语音管线抖动期 begin/endUpdates 崩溃定论；
 // 行高若未被原生布局链重询，滚动复用时自愈。
@@ -289,7 +245,7 @@ static void refreshFlaggedCellsSync(void) {
                 [st removeLastObject];
                 NSString *cn = NSStringFromClass([v class]);
                 if ([cn containsString:@"MessageCellView"]) {
-                    [v setNeedsLayout];   // 下轮 layoutSubviews 按新标志重排/还原
+                    [v setNeedsLayout];   // 下轮 layoutInternal 按新标志重排/还原
                     continue;
                 }
                 for (UIView *s in v.subviews) [st addObject:s];
@@ -321,17 +277,9 @@ static void refreshAndApplyFromContext(void) {
     g_currentNodeArray = arr;
 #endif
     NSString *chat = currentChatName();
-    if (chat.length == 0) {
-        // 理论不达（常规路径 viewWillAppear 建立 + measure/管道双兜底），达即异常
-        WPLog(@"MsgMerge", @"[Ref] ⚠ 无聊天名跳过重建（arr.count=%lu）", (unsigned long)arr.count);
-        return;
-    }
+    if (chat.length == 0) return;
     NSUInteger changed = [[BBMergeModel shared] refreshIndexWithNodeArray:arr chatName:chat];
-    if (changed > 0) {
-        WPLog(@"MsgMerge", @"[Ref] rebuild chat=%@ count=%lu changed=%lu", chat,
-              (unsigned long)arr.count, (unsigned long)changed);
-        refreshFlaggedCells();   // 屏上 pos 实变 → 可见刷新（清测量缓存+标脏）
-    }
+    if (changed > 0) refreshFlaggedCells();   // 屏上 pos 实变 → 可见刷新（清测量缓存+标脏）
 }
 
 // 读侧限频保鲜：索引未覆盖的全新消息（微信记账迟滞）由此补表。0.15s 一次
@@ -349,23 +297,14 @@ static void refreshModelNow(void) {
 // 零影响（查表架构核心）。None → 限频保鲜补表再查；配置指纹变化 → 立即重建。
 static MOMergePosition flagsPos(id vm) {
     BBMergeModel *m = [BBMergeModel shared];
-    id wrap = safeKVC(vm, @"messageWrap");
-    long long lid = localIDOfWrap(wrap);
-    MOMergePosition pos = [m posForLocalID:lid];
-    // 聊天名缺位兜底（119 实证有效路径）：measure 是微信建表必经之路，
-    // vm.messageWrap 键有效性已实证——wrap 直接推导聊天名并建立（主线程
-    // measure 时机安全，零服务总线依赖）。常规路径建立后此分支零触发。
-    if (pos == MOMergePositionNone && currentChatName().length == 0 && lid > 0) {
-        NSString *nm = chatNameOfWrap(wrap);
-        if (nm.length > 0) setCurrentChatNameIfEmpty(nm);
-    }
+    MOMergePosition pos = [m posForLocalID:localIDOfWrap(safeKVC(vm, @"messageWrap"))];
     if (pos != MOMergePositionNone && ![m configFingerprintChanged]) return pos;
     if ([m configFingerprintChanged]) {
         refreshAndApplyFromContext();
     } else {
         refreshModelNow();
     }
-    return [m posForLocalID:lid];
+    return [m posForLocalID:localIDOfWrap(safeKVC(vm, @"messageWrap"))];
 }
 
 // —— 新消息入库联动 ——
@@ -449,14 +388,8 @@ static void mergeScheduleRelayout(void) {
 static void mmHandleIncomingMsg(id session, id wrap) {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!cfg.mmEnable) return;
-    g_lastAddMsgTick = CFAbsoluteTimeGetCurrent();   // 收发管线活跃标记（补询避让）
     if (![session isKindOfClass:[NSString class]]) return;
-    if (![(NSString *)session isEqualToString:g_currentChatName]) {
-        // 聊天名缺位兜底：session 是微信收发管道自带的 talker，当前聊天页在且
-        // 聊天名空 → 直接用 session 建立（零服务总线依赖）。常规建立后零触发。
-        if (g_currentChatName.length == 0 && g_curChatVC) setCurrentChatNameIfEmpty(session);
-        if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
-    }
+    if (![(NSString *)session isEqualToString:g_currentChatName]) return;   // 只管当前打开的会话
     long long lid = localIDOfWrap(wrap);
     if (lid <= 0) return;
     // g_currentNodeArray 仅主线程安全（主线程 updateChatContext 会换数组），
@@ -555,45 +488,30 @@ static void applyCorner(UIImageView *bg, MOMergePosition pos) {
 //     （固定行高内挪 y 必守恒，项目定论；间距收拢走 measure: 测量层接管）
 //   气泡图 YYAsyncImageView 与内容 RichTextView（getRichTextView，ivar m_richTextView）
 //   均为容器子视图，随容器走；尺寸保持原生测量（宽=文字宽+24，inset 左右12/上10/下10）
-// 自摆范围：横向 x（仅 mmAvatarOffset/mmWholeOffset 配置，默认 0 = 原生）+ 骑行行纵向
-//   （头像钉行顶+depth、气泡顶钉头像底+14 靠边钻入；mmAvatarRide）。
-// 位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
-//   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）；
-//   骑行 = XOS 标杆形态：泡整体钻到头像正下方（cont 收−52/自+50 靠边，视觉泡体缘=头像缘）+ 泡顶钉头像底+14
-//   纵向分离（v2 的重叠根因是泡顶 25 与头像共存，非钻入本身）。行高只归 measure 层，渲染层只挪 x/y。
+// 自摆范围：仅横向 x。位置输入 = mmAvatarOffset（头像，±60 钳位）+ mmWholeOffset
+//   （整列含昵称，±20 钳位），正=向屏幕边缘，收发镜像（按原生头像 x>W/2 判侧，不查联系人）。
 // 失效检测（项目定论）：首过缓存原生基准帧；当前值 ≠ 基准+上轮 delta → 原生已重摆
 //   （cell 复用/重布局），以当前值为新基准——裸相对位移在 native 不重置 frame 的视图上
 //   逐轮累加会把头像推出屏外（9→270 实证）。总开关关闭 = delta 归零，同机制自动还原。
 static void *kOLBaseHeadF = &kOLBaseHeadF;
 static void *kOLBaseBubF  = &kOLBaseBubF;
 static void *kOLBaseNameX = &kOLBaseNameX;
-static void *kOLBaseRefF  = &kOLBaseRefF;
 static void *kOLLastDH    = &kOLLastDH;
 static void *kOLLastDC    = &kOLLastDC;
-static void *kOLLastDY    = &kOLLastDY;
 static void *kOLLastDN    = &kOLLastDN;
-static void *kOLLastDRX   = &kOLLastDRX;
-static void *kOLLastDRY   = &kOLLastDRY;
 
 static double olClamp(double v, double lim) {
     return v > lim ? lim : (v < -lim ? -lim : v);
 }
 
-// —— 骑行形态（XOS 标杆截图 2026-10-18：泡整体在头像正下方、泡边缘=头像边缘
-// （靠边），泡顶在头像底下方，纵向与头像完全分离零重叠；装机演进定论）——
-// 头像钉行顶（不出行），气泡顶 = 头像底(45)+14 = 头像顶+57；泡随 cont ±44 钻入
-// 使泡边缘对齐头像边缘（探针实证钻入 44 后左泡左缘=头像左缘 12/右泡右缘=头像右缘
-// 381，量准）。v2 的错不在钻入而在泡顶 25 与头像共存 20pt（头像压着泡区→文字钻到
-// 头像底下+泡 z 序盖头像）；泡顶 59 分离后，文字顶 69+ 恒在头像底下，钻入安全。
-// 泡下移量由行高全额补足（rideAdd = 下移量，底部空白保原生）。
-// （2026-10-18 探针定论：不可抵扣本行底部空白——那块空白是组内行间距的来源，抵扣=
-// 骑行偷间距，实测骑行行泡底溢出行底 9.7pt 压进下一行；与 mmSpacing/mmHeightReduce
-// 叠加时 reduce 收的是同一块空白，必叠泡。全额补高后骑行行底部空白与原生一致，
-// reduce 在骑行/非骑行行均匀生效，两功能叠加间距不出错。）
-static const double olRideLift = 57.0;   // 头像顶→气泡顶抬升（XOS 标杆图 2026-10-18 实测泡顶=头像顶+57；57=头像高43+底间隙14）
+/// 布局接管类型白名单：媒体四类与表情均为 CommonMessageCellView 同构结构
+///（头像 46×46 y=2、容器与气泡列对齐：自发右缘 W−64/收方 x=64）；表情 47 有头像
+/// 有昵称有容器（旧"居中异构"系视图调试器误读），仅无 bg 走 getContentView 回退。
+static BOOL olTypeEnabled(long long t) {
+    return t == 1 || t == 3 || t == 34 || t == 43 || t == 47 || t == 49 || t == 62;
+}
 
-static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePosition pos, BOOL rideOK) {
-    @try { [MsgMergeDebugHud syncVisible]; } @catch (NSException *e) {}   // 调试悬浮窗显隐（异常不进布局路径）
+static void applyOwnLayout(id cellView, BOOL active) {
     UIView *head = safeCall(cellView, "getHeadImageView");
     UIImageView *bg = safeCall(cellView, "getBgImageView");
     // 容器发现（探针 #getContentView 全类型实证）：有气泡 bg 的类型（文本/语音/App/文件）
@@ -606,7 +524,7 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
     }
     if (![head isKindOfClass:[UIView class]] || ![cont isKindOfClass:[UIView class]]) return;
 
-    // 首过建基准（此刻原生 layoutSubviews 刚跑完，frame 为原生值）
+    // 首过建基准（此刻原生 layoutInternal 刚跑完，frame 为原生值）
     NSValue *bHeadV = objc_getAssociatedObject(cellView, kOLBaseHeadF);
     if (!bHeadV) {
         bHeadV = [NSValue valueWithCGRect:head.frame];
@@ -614,49 +532,25 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:cont.frame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDH, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLLastDC, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(cellView, kOLLastDY, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        // [BG-DUMP] cont 全子视图清单（白泡真身定位；bg 实证为空容器占位）
-        static NSInteger sBgdumpCnt = 0;
-        if (sBgdumpCnt < 6) {
-            sBgdumpCnt++;
-            NSMutableString *d = [NSMutableString stringWithFormat:
-                @"[BG-DUMP] %@ head %@ | cont=%@ %@ subs:",
-                NSStringFromClass([cellView class]),
-                NSStringFromCGRect(head.frame),
-                NSStringFromClass([cont class]),
-                NSStringFromCGRect(cont.frame)];
-            for (UIView *sv in cont.subviews) {
-                UIImage *si = ([sv isKindOfClass:[UIImageView class]] ? [(UIImageView *)sv image] : nil);
-                [d appendFormat:@" %@%@%@", NSStringFromClass([sv class]),
-                    ([sv isKindOfClass:[UIImageView class]] && !sv.isHidden) ? @"*" : @"",
-                    [NSString stringWithFormat:@"(%g,%g %gx%g%@)",
-                        sv.frame.origin.x, sv.frame.origin.y, sv.frame.size.width, sv.frame.size.height,
-                        si ? [NSString stringWithFormat:@" img%gx%g", si.size.width, si.size.height] : @""]];
-            }
-            WPLog(@"MsgMerge", @"%@", d);
-        }
     }
     CGRect bHead = [bHeadV CGRectValue];
     CGRect bBub  = [(NSValue *)objc_getAssociatedObject(cellView, kOLBaseBubF) CGRectValue];
     double lastDH = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDH) doubleValue];
     double lastDC = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDC) doubleValue];
-    double lastDY = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDY) doubleValue];
 
-    // 失效检测：位置或尺寸偏离 基准+上轮delta → 原生已重摆（复用/重布局），重置基准。
-    // cont y 已纳入管理（骑行头行行内下移），按 基准+lastDY 检测。
+    // 失效检测：位置或尺寸偏离 基准+上轮delta → 原生已重摆（复用/重布局），重置基准
     if (fabs(head.frame.origin.x - (bHead.origin.x + lastDH)) > 0.5 ||
+        fabs(head.frame.origin.y - bHead.origin.y) > 0.5 ||
         fabs(head.frame.size.width - bHead.size.width) > 0.5 ||
         fabs(cont.frame.origin.x - (bBub.origin.x + lastDC)) > 0.5 ||
-        fabs(cont.frame.origin.y - (bBub.origin.y + lastDY)) > 0.5 ||
+        fabs(cont.frame.origin.y - bBub.origin.y) > 0.5 ||
         fabs(cont.frame.size.width - bBub.size.width) > 0.5) {
         bHead = head.frame;
         bBub = cont.frame;
         lastDH = 0;
         lastDC = 0;
-        lastDY = 0;
         objc_setAssociatedObject(cellView, kOLBaseHeadF, [NSValue valueWithCGRect:bHead], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(cellView, kOLBaseBubF, [NSValue valueWithCGRect:bBub], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(cellView, kOLLastDY, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
     // 昵称 label 整列跟随（隐藏态 frame 仍有效，同样基准+失效检测）
@@ -680,123 +574,31 @@ static void applyOwnLayout(id cellView, BOOL active, BOOL headVisible, MOMergePo
     }
 
     double newDH = 0, newDC = 0;
-    CGFloat W = ((UIView *)cellView).bounds.size.width;
-    double sign = (bHead.origin.x > W * 0.5) ? 1.0 : -1.0;
-    MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (active) {
+        CGFloat W = ((UIView *)cellView).bounds.size.width;
+        BOOL isSender = bHead.origin.x > W * 0.5;
+        double sign = isSender ? 1.0 : -1.0;
+        MsgMergeConfig *cfg = [MsgMergeConfig shared];
         newDH = sign * (olClamp(cfg.mmAvatarOffset, 60) + olClamp(cfg.mmWholeOffset, 20));
         newDC = sign * olClamp(cfg.mmWholeOffset, 20);
     }
-    // XOS 标杆形态（截图 2026-10-18）：泡整体在头像正下方、视觉泡体缘=头像边缘（靠边），
-    //   泡顶在头像底下方（olRideLift=58 纵向分离零重叠）。泡图素材自带透明边距（bg frame
-    //   比视觉泡体宽），对齐基准必须用视觉泡体缘而非 bg frame；素材 pad 收方左 4.8 /
-    //   自发右 3.2 不对称（截图量测 2026-10-19）。
-    if (cfg.mmAvatarRide && active) {
-        // 组内全行钻入：视觉泡体缘=头像缘（用户定论 2026-10-19：对齐的是泡图素材内的
-        // 真实泡体，不是容器——素材含透明边）。量配置化（mmRideDiveRecv/Send，向屏内
-        // 正值），悬浮调试窗（mmRideDebug）实时精调。默认 recv=52/send=0 = 8bf92bf3
-        // 稳定版实测行为（收方泡体缘贴头像缘、自发原生已贴边不钻）。
-        newDC += (sign < 0 ? -olClamp(cfg.mmRideDiveRecv, 80) : -olClamp(cfg.mmRideDiveSend, 80));
-    }
-    BOOL rideTop = (cfg.mmAvatarRide && active && headVisible && rideOK);
-    // XOS 组首头像构图微调（8.0.60 探针实测：组首 (12,4)/自发 (338,4) vs 组内原生
-    // (9,2)/(341,2)——向屏内 3pt、向下 2pt，所有类型一致）。★★必须并入记账：
-    // 写帧 delta = newDH+tuneX / depth+tuneY，失效检测按同口径比对——若只写帧不记账，
-    // 检测每轮发现差一个微调量 → 误判"原生重摆"重置基准 → 微调逐轮累加发散
-    // （探针实证 76afa41f：头像每轮 -3/+2 漂移、泡连带每轮 +50/轮 跑飞）。
-    double tuneX = 0.0, tuneY = 0.0;
-    if (active && rideOK) { tuneX = -sign * 3.0; tuneY = 2.0; }
-    if (fabs(newDH + tuneX - lastDH) > 0.01 || rideTop) {
+
+    if (fabs(newDH - lastDH) > 0.01) {
         CGRect f = bHead;
-        f.origin.x += newDH + tuneX;
-        if (cfg.mmAvatarRide && headVisible) {
-            // 骑行头行：头像钉行顶（XOS 探针实测 y≈+2，不出行→绝不与上一行 cell
-            // 重叠）+depth 整体下沉+tuneY；切片行（泡体无缝）/非接管类型：+2 轻咬合
-            f.origin.y = (active && rideOK) ? (bHead.origin.y + olClamp(cfg.mmAvatarRideDepth, 100) + tuneY) : (f.origin.y + 2.0);
-        }
+        f.origin.x += newDH;
         head.frame = f;
-        // 昵称跟随（XOS 同款：原生布局本就把昵称排在头像右侧锚点（头像右+8/顶+4，
-        // 探针实证 63,6），天然绑定即终态——默认态（depth=0 且无横移）对昵称零干预；
-        // 仅当头像偏离原生锚点（depth/横移配置）导致期望位与原生位不一致时才显式写帧
-        // 跟随。lastDN 照记，供切回非骑行行时还原路径使用。）
-        if (rideTop && lb) {
-            CGRect nf = lb.frame;
-            double wx = f.origin.x + f.size.width + 8.0;
-            double wy = f.origin.y + 2.0;   // XOS 标杆图：昵称与头像顶几乎齐平（+2pt），原生锚点 +4 偏低
-            if (fabs(wx - nf.origin.x) > 0.5 || fabs(wy - nf.origin.y) > 0.5) {
-                nf.origin.x = wx;
-                nf.origin.y = wy;
-                lb.frame = nf;
-            }
-            objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
-        objc_setAssociatedObject(cellView, kOLLastDH, @(newDH + tuneX), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(cellView, kOLLastDH, @(newDH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    // cont 纵向：气泡顶统一钉到 头像底+14（=头像顶+57，XOS 标杆：泡在头像正下方
-    // 纵向分离；原生两基线 16/5 拉平→左右恒对称）；行高差额由 measure 全额补足。
-    // lastDY 增量管理：开关翻转/复用自动还原
-    double newDY = 0.0;
-    if (rideTop) {
-        newDY = bHead.origin.y + olRideLift + olClamp(cfg.mmAvatarRideDepth, 100) - bBub.origin.y;
-        if (newDY < 0.0) newDY = 0.0;
-    }
-    if (fabs(newDC - lastDC) > 0.01 || fabs(newDY - lastDY) > 0.01) {
+    if (fabs(newDC - lastDC) > 0.01) {
         CGRect f = bBub;
         f.origin.x += newDC;
-        f.origin.y += newDY;
         cont.frame = f;
         objc_setAssociatedObject(cellView, kOLLastDC, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(cellView, kOLLastDY, @(newDY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if (lb && !rideTop && fabs(newDC - lastDN) > 0.01) {
+        if (lb && fabs(newDC - lastDN) > 0.01) {
             CGRect nf = lb.frame;
             nf.origin.x = baseNameX + newDC;
             lb.frame = nf;
             objc_setAssociatedObject(cellView, kOLLastDN, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
-    }
-    // 引用条跟随（MMInputMsgReferView 是 mcv 直接子视图，不随泡容器走）：原生按泡原生
-    // 基准摆位（探针 2026-10-19 实证：原生泡底+4 处 y=57，与泡左对齐 x=61），骑行把泡
-    // 钉到 头像顶+57 后引用条留在原地压进泡体（重叠 219×28，引用消息渲染撕裂）。
-    // 跟随 = 与 cont 完全同量位移（newDC/newDY），随泡贴引用条保持原生间距。发现走
-    // 子视图遍历（无已知 getter，防懒建不直调）；基准+失效检测+记账同口径（head/cont
-    // 同款——native 每轮把引用条重摆回原生位，靠检测+重写站住）；无此类/无此子视图
-    // （非引用消息）零开销幂等。
-    static Class s_refCls = nil;
-    static dispatch_once_t onceRef;
-    dispatch_once(&onceRef, ^{ s_refCls = objc_getClass("MMInputMsgReferView"); });
-    if (s_refCls) {
-        UIView *refer = nil;
-        for (UIView *sv in ((UIView *)cellView).subviews) {
-            if ([sv isKindOfClass:s_refCls]) { refer = sv; break; }
-        }
-        if ([refer isKindOfClass:[UIView class]]) {
-            NSValue *bRefV = objc_getAssociatedObject(cellView, kOLBaseRefF);
-            double lastDRX = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDRX) doubleValue];
-            double lastDRY = [(NSNumber *)objc_getAssociatedObject(cellView, kOLLastDRY) doubleValue];
-            if (!bRefV) {
-                bRefV = [NSValue valueWithCGRect:refer.frame];
-                objc_setAssociatedObject(cellView, kOLBaseRefF, bRefV, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                objc_setAssociatedObject(cellView, kOLLastDRX, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                objc_setAssociatedObject(cellView, kOLLastDRY, @(0), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                lastDRX = 0;
-                lastDRY = 0;
-            }
-            CGRect bRef = [bRefV CGRectValue];
-            if (fabs(refer.frame.origin.x - (bRef.origin.x + lastDRX)) > 0.5 ||
-                fabs(refer.frame.origin.y - (bRef.origin.y + lastDRY)) > 0.5) {
-                bRef = refer.frame;   // 原生已重摆（复用/重布局），以当前值为新基准
-                lastDRX = 0;
-                lastDRY = 0;
-                objc_setAssociatedObject(cellView, kOLBaseRefF, [NSValue valueWithCGRect:bRef], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
-            if (fabs(newDC - lastDRX) > 0.01 || fabs(newDY - lastDRY) > 0.01) {
-                CGRect f = bRef;
-                f.origin.x += newDC;
-                f.origin.y += newDY;
-                refer.frame = f;
-                objc_setAssociatedObject(cellView, kOLLastDRX, @(newDC), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                objc_setAssociatedObject(cellView, kOLLastDRY, @(newDY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
         }
     }
 }
@@ -814,7 +616,7 @@ static unsigned long long vmSplitPosition(id vm) {
     return *(unsigned long long *)((char *)(__bridge void *)vm + ivar_getOffset(iv));
 }
 
-// —— 合并渲染应用（layoutSubviews 钩调）——
+// —— 合并渲染应用（layoutInternal/updateNodeStatus 钩调）——
 
 static void applyMergeToCellView(id cellView) {
     @try {
@@ -827,7 +629,7 @@ static void applyMergeToCellView(id cellView) {
                 if ([bg isKindOfClass:[UIImageView class]]) restoreCorner(bg);
                 markTouched(cellView);  // 保持标记，防止重复还原开销（幂等）
             }
-            applyOwnLayout(cellView, NO, NO, MOMergePositionNone, NO);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
+            applyOwnLayout(cellView, NO);   // 布局接管残留还原（delta 归零路径，无缓存则幂等空转）
             return;
         }
 
@@ -842,60 +644,26 @@ static void applyMergeToCellView(id cellView) {
         NSString *chat = chatNameOfWrap(wrap) ?: currentChatName();
         if (chat.length == 0) return;
 
+        // 布局接管：白名单类型（文本+媒体四类）横向自摆。必须在 pos=None 早退
+        // 之前——mmSepMedia 开启时媒体消息充当分隔符（标志为 None），早退会饿死
+        // 媒体自摆（实证：图片/视频偏移无效）。自摆只依赖 wrap 类型与原生基准帧，
+        // 不依赖合并位置。
+        long long msgType = [(NSNumber *)safeKVC(wrap, @"m_uiMessageType") longLongValue];
+        applyOwnLayout(cellView, olTypeEnabled(msgType));
+
         MOMergePosition pos = flagsPos(viewModel);
+        if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
+
         BOOL isFirst = (pos == MOMergePositionFirst || pos == MOMergePositionSingle);
         BOOL isLast  = (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
-        // 头像可见性判定（与 ① 显隐钩同源同值）：作为骑行门控传入 applyOwnLayout，
-        // 避免布局函数里二次查表；mmAvatarPos 非 0/1 时显隐钩不干预，骑行也不生效
-        BOOL headVisible = NO;
-        if (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1) {
-            headVisible = (cfg.mmAvatarPos == 0) ? isFirst : isLast;
-        }
-
-        // 布局接管：进组类型横向自摆（结构防御靠 applyOwnLayout 取数兜底：head/cont
-        // 取不到直接 return，不瞎挪）。必须在 pos=None 早退之前——mmSepMedia 开启时
-        // 媒体消息充当分隔符（标志为 None），早退会饿死媒体自摆（实证：图片/视频偏移
-        // 无效）。分隔符行 pos=None → headVisible=NO，自摆生效但骑行不生效（独立打断
-        // 行不属于合并组，无骑可言）。
-        // （旧类型白名单 olTypeEnabled 已删：合并每支持新类型就得手动加白名单，
-        // 通话 t=50 漏加导致骑行不生效——根治 = 进组即接管 + 取数兜底。）
-        // 骑行门控：整条消息（split==0）才可悬空+扩行——切片行泡体无缝，扩行必裂缝、
-        // 悬空必与上一行重叠（measure 层同门控，两侧一致）
-        unsigned long long split = vmSplitPosition(viewModel);
-        applyOwnLayout(cellView, YES, headVisible, pos, split == 0);
-
-        // 骑气泡：写帧必须晚于 applyOwnLayout（其 x 写帧基于原生基准重建 frame，
-        // y 取原生值，先写骑行 y 会被它抹掉）。挂 layoutSubviews 后（XOS 同款）
-        // 本函数整体在原生布局链最终提交点之后执行——同步写帧天然站住，无后续
-        // 覆盖。侧判定（XOS 真身双开关之一）：只骑头像在左半屏的行（对方侧）——
-        if (pos == MOMergePositionNone) return;   // 组外/标志缺席：不干预渲染
 
         markTouched(cellView);
 
-        // —— 全日志（2026-10-19 排障，定位后整体删除）：渲染帧签名，每 cell 仅帧变化时记 ——
-        {
-            static NSMutableDictionary *g_rl;
-            static dispatch_once_t onceT;
-            dispatch_once(&onceT, ^{ g_rl = [NSMutableDictionary new]; });
-            if (g_rl.count > 200) [g_rl removeAllObjects];
-            NSString *ck = [NSString stringWithFormat:@"%p", cellView];
-            UIView *hV = safeCall(cellView, "getHeadImageView");
-            UIImageView *bV = safeCall(cellView, "getBgImageView");
-            NSString *sig = [NSString stringWithFormat:
-                @"pos=%ld split=%llu hv=%d h=%@ bg=%@",
-                (long)pos, split, headVisible,
-                hV ? NSStringFromCGRect(hV.frame) : @"nil",
-                [bV isKindOfClass:[UIImageView class]] ? NSStringFromCGRect(bV.frame) : @"nil"];
-            if (![g_rl[ck] isEqualToString:sig]) {
-                g_rl[ck] = sig;
-                WPLog(@"MsgMerge", @"[Rdr] %@ chat=%@ %@", ck, chat, sig);
-            }
-        }
-
-        // ① 头像显隐（0=消息头/组首显示，1=消息尾/组尾显示；headVisible 与骑行门控同源）
+        // ① 头像显隐（0=消息头/组首显示，1=消息尾/组尾显示）
         if (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1) {
+            BOOL showAvatar = (cfg.mmAvatarPos == 0) ? isFirst : isLast;
             id head = safeCall(cellView, "getHeadImageView");
-            if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:!headVisible];
+            if ([head isKindOfClass:[UIView class]]) [(UIView *)head setHidden:!showAvatar];
         }
 
         // ② 气泡背景圆角连续化（独立消息还原原值）。
@@ -917,14 +685,8 @@ static void applyMergeToCellView(id cellView) {
 // —— BaseMsgContentViewController：会话跟踪与保鲜触发 ——
 
 static void repl_BaseMsgContentVC_viewDidLoad(id self, SEL _cmd) {
-    // 数据先行（BubbleBox 时机对齐）：索引在微信首屏建表之前就位——orig 之后
-    // 刷新会错过首屏首测（None 窗口=进聊天闪/骑行失效的根源）。
-    // findChatTableView 有 isViewLoaded 守卫，此刻触发表查找安全空转不递归。
-    // updateChatContext 零服务总线依赖（BubbleBox 原版机制，不调 GetContact），
-    // 任何时机安全——8.0.79 GetContact 走 NSInvocation 服务转发链会撞 mmcronet
-    // 网络 once 等待链 → scene-update watchdog SIGKILL（IPS 实证，已根除）。
-    updateChatContext(self);
     ((void (*)(id, SEL))orig_BaseMsgContentVC_viewDidLoad)(self, _cmd);
+    updateChatContext(self);
     // 定位锚点：本日志出现 = 聊天页 viewDidLoad 垫片完整跑完（卡死判别用：
     // 停在本行之前 = 卡在微信自身 viewDidLoad；之后无 [Model] = 卡在测量链）
     WPLog(@"MsgMerge", @"[Ctx] chatVC viewDidLoad done");
@@ -952,203 +714,12 @@ static void mergeFindTable(UIView *v, int depth, UITableView **out) {
     for (UIView *sub in v.subviews) mergeFindTable(sub, depth + 1, out);
 }
 
-// —— 首屏数据驱动补询状态（微信数据落地时机不定，固定延迟保险丝会输给晚到数据）——
-static CFAbsoluteTime g_entryTick = 0;       // 进页时刻（viewDidAppear 刷新）
-static BOOL g_userScrolled = NO;             // 用户手动滚动过 → 补询窗口关闭
-static NSUInteger g_fuseGen = 0;             // 去抖代际
-static NSUInteger g_fuseCount = 0;           // 本次进页补询次数（上限 3）
-static BOOL g_fuseSnap = NO;                 // 贴底快照已取
-static BOOL g_fuseAtBottom = NO;             // 进页贴底快照
-
-// 行高重询执行体：调微信自己的 reloadTableData（全表重建入口，XOS 同款杠杆——
-// 2026-10-19 XOS 反编译钩子清单实证它钩 BaseMsgContentViewController reloadTableData）。
-// begin/endUpdates 只让 UITableView 重询 delegate，微信 delegate 层自己的行高缓存
-// 并不失效（装机探针实证：补询后 measure 钩一次未被调、行高恒旧值）——只有微信
-// 自己的全表重建才丢弃内部缓存重新测量。reloadTableData 内部自带回锚。
-static void mergeForceHeightRequery(UITableView *tbl) {
-    if (!tbl) return;
-    @try {
-        if (g_curChatVC && [(id)g_curChatVC respondsToSelector:@selector(reloadTableData)]) {
-            WPLog(@"MsgMerge", @"[Req] 路径=reloadTableData pre(offY=%.1f cs=%.1f)",
-                  tbl.contentOffset.y, tbl.contentSize.height);
-            resetAllMeasureCaches();
-            ((void (*)(id, SEL))objc_msgSend)(g_curChatVC, @selector(reloadTableData));
-            WPLog(@"MsgMerge", @"[Req] reloadTableData 完成 post(cs=%.1f)", tbl.contentSize.height);
-        } else {
-            WPLog(@"MsgMerge", @"[Req] 路径=begin/end 兜底（无 reloadTableData 响应）");
-            resetAllMeasureCaches();
-            [tbl layoutIfNeeded];
-            [tbl beginUpdates];
-            [tbl endUpdates];
-        }
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[Ctx] 行高重询 clash: %@", e.reason);
-    }
-}
-
-// 补询执行：行高重询（reloadTableData）+ 贴底重锚。
-// 安全性同 appear 保险丝（进会话静默窗口；收发管线由调用侧 1.5s 避让与 @try 共同防）。
-static void mergeFuseFire(void) {
-    if (!g_curChatVC) return;
-    UIViewController *vc = g_curChatVC;
-    UITableView *tbl = nil;
-    mergeFindTable(vc.view, 0, &tbl);
-    if (!tbl) return;
-    @try {
-        double offPre = tbl.contentOffset.y, csPre = tbl.contentSize.height;
-        mergeForceHeightRequery(tbl);
-        g_fuseCount++;
-        WPLog(@"MsgMerge", @"[Fuse] #%lu pre(offY=%.1f cs=%.1f) post(cs=%.1f) atBottom=%d",
-              (unsigned long)g_fuseCount, offPre, csPre, tbl.contentSize.height, g_fuseAtBottom);
-        if (g_fuseAtBottom) {
-            [tbl layoutIfNeeded];
-            double target = tbl.contentSize.height - tbl.bounds.size.height
-                          + tbl.adjustedContentInset.bottom;
-            if (target > 0 && fabs(tbl.contentOffset.y - target) > 1.0) {
-                [tbl setContentOffset:CGPointMake(0, target) animated:NO];
-            }
-        }
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[Ctx] 数据补询 clash: %@", e.reason);
-    }
-}
-
-// measure 实际改高时去抖 0.4s 补询（首屏截断根治，2026-10-19 探针实证）：微信聊天
-// 数据落地时机不定（DB/网络，同一进页动作 measure 爆发相对 viewDidAppear+0.2s 可
-// 漂移 5s+），固定延迟保险丝与晚到数据赛跑必输——晚到的骑行补高无人重询，微信
-// 锚底仍用旧 contentSize，底行被输入栏截断。改为改高测量自身触发：数据何时落地
-// 就何时补询。窗口=进页 10s 内且用户未手动滚动（isDragging/isDecelerating 判定，
-// 程序性 setContentOffset 不算）；距最近收发消息 ≥1.5s（语音管线期间 begin/
-// endUpdates 崩溃定论，撞上则顺延 1s）；上限 3 次（防「补询→重询→再调度」自激励
-// 循环）；贴底快照取首次改高时刻（此时微信锚底尚未消费新行高）。
-static void mergeScheduleDataFuse(void) {
-    if (![NSThread isMainThread]) return;
-    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-    if (g_entryTick <= 0 || now - g_entryTick > 10.0) {
-        WPLog(@"MsgMerge", @"[Fuse] 调度拒绝：非入场窗口（entryTick=%.1f now=%.1f）", g_entryTick, now);
-        return;
-    }
-    if (g_userScrolled) {
-        WPLog(@"MsgMerge", @"[Fuse] 调度拒绝：用户已滚动");
-        return;
-    }
-    if (g_lastAddMsgTick > 0 && now - g_lastAddMsgTick < 1.5) {
-        WPLog(@"MsgMerge", @"[Fuse] 调度拒绝：距收发 %.2fs < 1.5s", now - g_lastAddMsgTick);
-        return;
-    }
-    if (g_fuseCount >= 3) {
-        WPLog(@"MsgMerge", @"[Fuse] 调度拒绝：次数上限（%lu）", (unsigned long)g_fuseCount);
-        return;
-    }
-    if (!g_fuseSnap) {
-        g_fuseSnap = YES;
-        UITableView *tbl = nil;
-        if (g_curChatVC) mergeFindTable(g_curChatVC.view, 0, &tbl);
-        if (tbl) {
-            double offY = tbl.contentOffset.y;
-            double bottom = tbl.contentSize.height - tbl.bounds.size.height
-                          + tbl.adjustedContentInset.bottom;
-            g_fuseAtBottom = (bottom <= 0) || (offY >= bottom - 80.0);
-        }
-    }
-    WPLog(@"MsgMerge", @"[Fuse] 改高调度 gen→%lu atBottom=%d（去抖 0.4s）",
-          (unsigned long)(g_fuseGen + 1), g_fuseAtBottom);
-    NSUInteger myGen = ++g_fuseGen;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        if (myGen != g_fuseGen) return;   // 被更新的改高测量取代（去抖）
-        if (g_userScrolled) return;
-        CFAbsoluteTime now2 = CFAbsoluteTimeGetCurrent();
-        if (g_lastAddMsgTick > 0 && now2 - g_lastAddMsgTick < 1.5) {
-            NSUInteger g2 = ++g_fuseGen;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-                if (g2 != g_fuseGen) return;
-                mergeFuseFire();
-            });
-            return;
-        }
-        mergeFuseFire();
-    });
-}
-
-// 聊天表 reloadData 首测前置（首屏固化根治，2026-10-19）：微信行变更全走 reloadData
-// （本项目定论），被调时节点数组必然就位（reload 就是要渲染这些节点）——此刻同步
-// 重建索引，行高首测与首帧渲染的标志必就位。根治后 viewDidAppear 0.2s 补救退化为
-// 保险丝（微信原生锚底不再撞上行高补差落地，底行截断从源头消失）。
-// 守卫：只认当前聊天页的表（delegate 直比，视图树确认兜底），其它表格直通零成本。
-static void repl_UITableView_reloadData(UITableView *self, SEL _cmd) {
-    @try {
-        if (g_curChatVC && g_currentNodeArray.count > 0) {
-            BOOL isChatTbl = (self.delegate == (id)g_curChatVC);
-            if (!isChatTbl) {
-                UITableView *tbl = nil;
-                mergeFindTable(g_curChatVC.view, 0, &tbl);
-                isChatTbl = (tbl == self);
-            }
-            if (isChatTbl) {
-                WPLog(@"MsgMerge", @"[Rld] 聊天表 reload → 前置刷新（arr=%lu）",
-                      (unsigned long)g_currentNodeArray.count);
-                refreshAndApplyFromContext();
-            }
-        }
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[Ctx] reloadData 前置刷新异常: %@", e.reason);
-    }
-    if (orig_UITableView_reloadData) {
-        ((void (*)(id, SEL))orig_UITableView_reloadData)(self, _cmd);
-    }
-}
-
-// —— 入场贴底跟踪锚（装机日志 2026-10-19 实证）——
-// 微信入场锚底用布局未完成的旧 contentSize（锚 792 → 行高落地 cs=1630，底缺口
-// 66.3pt=用户所见首屏截断；缺口=0 与否取决于布局运气）。+0.2s 一次性重锚太迟，
-// 用户先看到截断帧再一次 66pt 跳动。改为入场 1.2s 内 50ms 节拍跟踪：cs 每长高
-// 一点就贴底补锚一点，修正摊薄为不可见微调，且从第一帧后即生效。
-// 安全边界：用户手动滚动即停（g_userScrolled）；收发 1.5s 避让（同补询口径）；
-// 仅贴底容差 80pt 内才动；纯 setContentOffset 不碰行高对账（崩溃规则只限
-// begin/endUpdates 类），节拍短促增量更安全。
-static NSTimer *g_anchorTimer = nil;
-static CFAbsoluteTime g_anchorT0 = 0;
-
-static void mergeStartAnchorTicker(void) {
-    if (g_anchorTimer) { [g_anchorTimer invalidate]; g_anchorTimer = nil; }
-    g_anchorT0 = CFAbsoluteTimeGetCurrent();
-    g_anchorTimer = [NSTimer timerWithTimeInterval:0.05 repeats:YES block:^(NSTimer *t) {
-        CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-        if (now - g_anchorT0 > 1.2 || g_userScrolled || !g_curChatVC) {
-            [t invalidate];
-            if (t == g_anchorTimer) g_anchorTimer = nil;
-            return;
-        }
-        if (g_lastAddMsgTick > 0 && now - g_lastAddMsgTick < 1.5) return;   // 收发避让
-        UITableView *tbl = nil;
-        mergeFindTable(g_curChatVC.view, 0, &tbl);
-        if (!tbl) return;
-        double offY = tbl.contentOffset.y;
-        double bottom = tbl.contentSize.height - tbl.bounds.size.height
-                      + tbl.adjustedContentInset.bottom;
-        if (bottom <= 0) return;
-        if (offY < bottom - 80.0) return;   // 已偏离贴底（用户意图），不追
-        if (offY >= bottom - 1.0) return;   // 已贴底
-        [tbl setContentOffset:CGPointMake(0, bottom) animated:NO];
-        WPLog(@"MsgMerge", @"[Anc] 跟踪锚 %.1f → %.1f (cs=%.1f)", offY, bottom, tbl.contentSize.height);
-    }];
-    [[NSRunLoop mainRunLoop] addTimer:g_anchorTimer forMode:NSRunLoopCommonModes];
-}
-
 static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated) {
     ((void (*)(id, SEL, BOOL))orig_BaseMsgContentVC_viewDidAppear)(self, _cmd, animated);
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (!cfg.mmEnable) return;
         if (self != g_curChatVC) return;
-        // 数据驱动补询窗口开启（详见 mergeScheduleDataFuse 注释）
-        g_entryTick = CFAbsoluteTimeGetCurrent();
-        g_userScrolled = NO;
-        g_fuseSnap = NO;
-        g_fuseCount = 0;
-        mergeStartAnchorTicker();   // 入场即开贴底跟踪锚（cs 增长期间持续小步补锚，见函数注释）
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             if (g_curChatVC != self) return;   // 已切走
@@ -1159,28 +730,11 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
             mergeFindTable(vcSelf.view, 0, &tbl);
             if (!tbl) return;
             @try {
-                // 首屏贴底重锚（截图 2026-10-19 实证）：微信原生锚底发生在行高补差
-                // （rideAdd/reduce）落地之前。补差前记贴底状态，行高重询
-                // （mergeForceHeightRequery：微信自己的 reloadTableData，丢弃其内部
-                // 行高缓存重新测量）后按原状态重锚（中途已滚动/搜索定位进入则不动）。
-                double offY0 = tbl.contentOffset.y;
-                double bottom0 = tbl.contentSize.height - tbl.bounds.size.height
-                               + tbl.adjustedContentInset.bottom;
-                BOOL atBottom = (bottom0 <= 0) || (offY0 >= bottom0 - 80.0);
-                WPLog(@"MsgMerge", @"[Enter] +0.2s offY0=%.1f bottom0=%.1f atBottom=%d cs=%.1f",
-                      offY0, bottom0, atBottom, tbl.contentSize.height);
-                mergeForceHeightRequery(tbl);
-                if (atBottom) {
-                    [tbl layoutIfNeeded];
-                    double target = tbl.contentSize.height - tbl.bounds.size.height
-                                  + tbl.adjustedContentInset.bottom;
-                    if (target > 0 && fabs(tbl.contentOffset.y - target) > 1.0) {
-                        WPLog(@"MsgMerge", @"[Enter] 重锚 %.1f → %.1f", tbl.contentOffset.y, target);
-                        [tbl setContentOffset:CGPointMake(0, target) animated:NO];
-                    }
-                }
+                [tbl layoutIfNeeded];
+                [tbl beginUpdates];
+                [tbl endUpdates];
             } @catch (NSException *e) {
-                WPLog(@"MsgMerge", @"[Ctx] appear 重询 clash: %@", e.reason);
+                WPLog(@"MsgMerge", @"[Ctx] appear begin/end clash: %@", e.reason);
             }
         });
     } @catch (NSException *e) {
@@ -1196,15 +750,6 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
         ((void (*)(id, SEL, id))orig_BMCVC_scrollViewDidScroll)(self, _cmd, scrollView);
     }
     @try {
-        // 用户手动滚动判定（isDragging/isDecelerating：程序性 setContentOffset 不算）
-        if (scrollView) {
-            BOOL drag = ((BOOL (*)(id, SEL))objc_msgSend)(scrollView, @selector(isDragging))
-                     || ((BOOL (*)(id, SEL))objc_msgSend)(scrollView, @selector(isDecelerating));
-            if (drag && !g_userScrolled) {
-                WPLog(@"MsgMerge", @"[Scroll] 用户手动滚动 → 补询窗口关闭");
-                g_userScrolled = YES;
-            }
-        }
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (!cfg.mmEnable) return;
         if (self != g_curChatVC) return;   // 非当前聊天页的滚动不干预
@@ -1222,92 +767,9 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
 // ------------------------------------------------------------
 // -[CommonMessageViewModel measure:]（探针实证：CGSize 参数入 x2/x3，调用侧
 // 传 {-1,-1} 无约束哨兵；MSHook + 同声明签名，编译器自动对齐 ABI）。orig 只当
-// 排版工具，两项算术：
-//   ① 骑行补高：气泡顶钉 头像底+14 后，泡下移量由行高全额补足（底部空白保原生，
-//      组内间距不被骑行偷走，与②叠加均匀生效）
-//   ② 组内行高缩减：非组尾消息测量高 −(mmSpacing+mmHeightReduce)（下限 24；
-//      HeightReduce=XOS mesMsgMergeHeightReduce 同款：组内行高原生−该值）
+// 排版工具，唯一算术 = 组内间距：非组尾消息测量高 −mmSpacing（下限 24）。
 // 昵称区不在此补偿——判定钩翻转让原生测量自动收缩（N 补偿链已删）。
-// 核心算术抽成 mmMergedSize：measure 钩与估算行高钩（入场锚底源头，见
-// repl_BMCVC_estHeightForRow）共用同一份，保证两路高度恒同源。
 // ------------------------------------------------------------
-static CGSize mmMergedSize(id vm, CGSize s) {
-    @try {
-        MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        if (!cfg.mmEnable) return s;
-        // 行高两项算术：① 骑行补高（气泡下移后底部空白不足的差额，仅无昵称行需要）
-        // ② 组内行高缩减（XOS 同域两键合并：mmSpacing+mmHeightReduce，下限 24）
-        double reduce = 0;
-        if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) reduce += (double)cfg.mmSpacing;
-        reduce += (double)cfg.mmHeightReduce;
-        if (reduce <= 0 && !cfg.mmAvatarRide) return s;
-        id wrap = safeKVC(vm, @"messageWrap");
-        if (!wrap) return s;   // 时间节点等无 wrap
-        NSString *chat = chatNameOfWrap(wrap);
-        if (chat.length == 0) chat = currentChatName();
-        if (chat.length == 0) return s;
-        MOMergePosition pos = flagsPos(vm);
-        if (pos == MOMergePositionNone) return s;   // 组外/标志缺席：原生直通
-        unsigned long long split = vmSplitPosition(vm);   // 0=整条 1=首片 2=中片 3=末片
-        // ① 骑行补高：渲染层把气泡顶钉到 头像底(45)+14=头像顶+57（泡在头像正下方
-        //    左右恒对称），泡下移量由行高全额补足（rideAdd = 下移量）。不可抵扣本行
-        //    底部空白——那块空白是组内行间距的来源，抵扣=骑行偷间距（探针实证骑行行
-        //    泡底溢出行底 9.7pt 压进下一行），与 reduce 叠加必叠泡；全额补高后骑行行
-        //    底部空白与原生一致，reduce 均匀生效。切片行泡体无缝不扩（渲染层对切片行
-        //    不做骑行 y）。
-        double rideAdd = 0;
-        if (cfg.mmAvatarRide && split == 0 &&
-            (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1)) {
-            BOOL headRow = (cfg.mmAvatarPos == 0)
-                ? (pos == MOMergePositionFirst || pos == MOMergePositionSingle)
-                : (pos == MOMergePositionLast  || pos == MOMergePositionSingle);
-            if (headRow) {
-                // 本行原生 cont 基线：群昵称行（chatroom+组首/Single+原生判定开）
-                // y=16，否则 y=5。直调原生 orig 判定（与渲染层 bBub 实测同语义）
-                BOOL nickRow = NO;
-                if ([chat hasSuffix:@"@chatroom"] &&
-                    (pos == MOMergePositionFirst || pos == MOMergePositionSingle) &&
-                    orig_CMVM_isShowChatRoomDisplayName) {
-                    nickRow = ((BOOL (*)(id, SEL))orig_CMVM_isShowChatRoomDisplayName)(
-                        vm, @selector(isShowChatRoomDisplayName));
-                }
-                double need = 2.0 + olRideLift + olClamp(cfg.mmAvatarRideDepth, 100) - (nickRow ? 16.0 : 5.0);
-                rideAdd = need;   // 泡下移量全额补高（不抵扣底部空白，间距保原生）
-                if (rideAdd < 0.0) rideAdd = 0.0;
-            }
-        }
-        BOOL isTail = (pos == MOMergePositionLast || pos == MOMergePositionSingle);
-        if (rideAdd <= 0 && isTail) return s;   // 组尾保原生（组尾到组外间隙不变）
-        // 末片门控：首片/中片是无缝泡体——原生切片气泡底=片边界、续片 bgTop=0
-        // 贴顶无让位，任何测量改动都让泡体溢出压进下一片（diag33 实锤同气泡自叠）。
-        if (rideAdd <= 0 && split != 0 && split != 3) return s;
-        double h = (double)s.height + rideAdd;
-        if (!isTail) {
-            h -= reduce;
-            if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
-        }
-        if (fabs(h - (double)s.height) < 0.01) return s;
-        WPLog(@"MsgMerge", @"[MMZ] chat=%@ pos=%ld split=%llu nat=%.1f ride=%.1f red=%.1f -> %.1f",
-              chat, (long)pos, split, (double)s.height, rideAdd, reduce, h);
-        // 改高调度按「上次输出的合并值」判定真实变化：骑行行每次 measure 都与原生
-        // 基线不同（107.3 ≠ 64.3 恒成立），按 s.height 判定会每次都调度补询 →
-        // 改高风暴（装机日志实证 gen 60+、2 秒 3 次全表重建 = 首屏闪动）。
-        {
-            static void *kLastMergedH = &kLastMergedH;
-            NSNumber *lv = objc_getAssociatedObject(vm, kLastMergedH);
-            double lastH = lv ? [lv floatValue] : 0.0;
-            if (fabs(h - lastH) > 0.01) {
-                objc_setAssociatedObject(vm, kLastMergedH, @(h), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                mergeScheduleDataFuse();   // 真实改高才调度补询（数据驱动首屏修复，见函数注释）
-            }
-        }
-        return CGSizeMake(s.width, (CGFloat)h);
-    } @catch (NSException *e) {
-        WPLog(@"MsgMerge", @"[MMZ] exception: %@", e.reason);
-    }
-    return s;
-}
-
 static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
     // BubbleBox 同款直换 IMP：orig 全局唯一（公共基类单点，无按类分表）
     IMP o = orig_CMVM_measure;
@@ -1315,34 +777,33 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
                  : CGSizeMake(sz.width, 0);
     static BOOL s_inMeasure = NO;
     if (s_inMeasure) return s;
-    s_inMeasure = YES;
-    CGSize r = mmMergedSize(self, s);
-    s_inMeasure = NO;
-    return r;
-}
-
-// —— BaseMsgContentViewController：估算行高委托接管（入场锚底源头根治）——
-// 微信聊天表用 estimated 行高算首屏 contentSize：估算=原生值，真实合并高度只在
-// 可见行落地 → 原生锚底锚在旧估算 cs 上（装机实证锚 792、行高落地后 cs=1630、
-// 缺口 66.3pt=用户所见首屏截断；缺口大小取决于布局运气）。此钩把合并行高同样
-// 注入估算路径：微信第一次锚底拿到的 cs 即终值，缺口=0，跟踪锚退化为保险丝。
-// 与 measure 钩共用 mmMergedSize（同源算术）；取数与微信 delegate 同源：
-// m_arrMessageNodeData[indexPath.row].viewModel（updateChatContext 实证结构）。
-static CGFloat repl_BMCVC_estHeightForRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
-    IMP o = orig_BMCVC_estH;
-    CGFloat est = o ? ((CGFloat (*)(id, SEL, UITableView *, NSIndexPath *))o)(self, _cmd, tv, ip) : 0.0;
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
-        if (!cfg.mmEnable) return est;
-        NSArray *arr = g_currentNodeArray;
-        if (arr.count == 0 || ip.row >= (NSInteger)arr.count) return est;
-        id vm = safeKVC(arr[ip.row], @"viewModel");
-        if (!vm) return est;
-        CGSize r = mmMergedSize(vm, CGSizeMake(0, (double)est));
-        return (CGFloat)r.height;
+        if (!cfg.mmEnable) return s;
+        if (!(cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0)) return s;
+        id wrap = safeKVC(self, @"messageWrap");
+        if (!wrap) return s;   // 时间节点等无 wrap
+        NSString *chat = chatNameOfWrap(wrap);
+        if (chat.length == 0) chat = currentChatName();
+        if (chat.length == 0) return s;
+        s_inMeasure = YES;
+        MOMergePosition pos = flagsPos(self);
+        s_inMeasure = NO;
+        if (pos == MOMergePositionNone) return s;   // 组外/标志缺席：原生直通
+        unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
+        if (pos == MOMergePositionLast || pos == MOMergePositionSingle) return s;   // 组尾保原生（组尾到组外间隙不变）
+        // 末片门控：首片/中片是无缝泡体——原生切片气泡底=片边界、续片 bgTop=0
+        // 贴顶无让位，任何测量缩减都让泡体溢出压进下一片（diag33 实锤同气泡自叠）。
+        if (split != 0 && split != 3) return s;
+        double h = (double)s.height - (double)cfg.mmSpacing;
+        if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
+        if (h >= (double)s.height) return s;
+        return CGSizeMake(s.width, (CGFloat)h);
     } @catch (NSException *e) {
-        return est;
+        s_inMeasure = NO;
+        WPLog(@"MsgMerge", @"[MMZ] measure exception: %@", e.reason);
     }
+    return s;
 }
 
 // —— CommonMessageViewModel：昵称判定接管 ——
@@ -1386,17 +847,13 @@ static BOOL repl_CMVM_isShowChatRoomDisplayName(id self, SEL _cmd) {
 
 // —— CommonMessageCellView：渲染应用 ——
 
-// 骑气泡写帧已并入 applyOwnLayout（头像钉行顶、泡顶钉头像底+14、cont ±44 钻入靠边）。
+static void repl_CMCellView_layoutInternal(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_CMCellView_layoutInternal)(self, _cmd);
+    applyMergeToCellView(self);
+}
 
-// ------------------------------------------------------------
-// -[CommonMessageCellView layoutSubviews]（XOS 同款挂点）：原生布局跑完后置应用。
-// layoutSubviews 是 UIView 布局链最终提交点——垫片内同步写帧天然站住，无后续覆盖
-// （此前 layoutInternal/updateNodeStatus 双路径 + 异步下一拍 + g_inLayoutInternal
-// 旗标的整套对抗机制随迁移删除）。CommonMessageCellView 未实现该方法时 bbSwap
-// 复制下沉（class_addMethod）后替换，父类（UIView）实现不受污染。
-// ------------------------------------------------------------
-static void repl_CMCellView_layoutSubviews(id self, SEL _cmd) {
-    ((void (*)(id, SEL))orig_CMCellView_layoutSubviews)(self, _cmd);
+static void repl_CMCellView_updateNodeStatus(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_CMCellView_updateNodeStatus)(self, _cmd);
     applyMergeToCellView(self);
 }
 
@@ -1423,9 +880,6 @@ static void repl_CMMsgMgr_AddMsg(id self, SEL _cmd, id session, id wrap) {
     }
     ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AddMsg)(self, _cmd, session, wrap);
     @try {
-        WPLog(@"MsgMerge", @"[Msg] AddMsg chat=%@ wrap=%@ type=%@",
-              session, [wrap isKindOfClass:[NSObject class]] ? NSStringFromClass([wrap class]) : @"nil",
-              safeKVC(wrap, @"m_uiMessageType") ?: @"?");
         mmHandleIncomingMsg(session, wrap);
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] AddMsg exception: %@", e.reason);
@@ -1439,9 +893,6 @@ static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) 
     }
     ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AsyncOnAddMsg)(self, _cmd, session, wrap);
     @try {
-        WPLog(@"MsgMerge", @"[Msg] AsyncOnAddMsg chat=%@ wrap=%@ type=%@",
-              session, [wrap isKindOfClass:[NSObject class]] ? NSStringFromClass([wrap class]) : @"nil",
-              safeKVC(wrap, @"m_uiMessageType") ?: @"?");
         mmHandleIncomingMsg(session, wrap);
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] AsyncOnAddMsg exception: %@", e.reason);
@@ -1513,52 +964,16 @@ static BOOL impIsForeign(IMP cur) {
         }
     }
 
-    // ①c 聊天表 reload 首测前置（首屏固化根治，见 repl_UITableView_reloadData 注释）。
-    // impIsForeign 让位（reloadData 可能已被外挂 MSHook，链上不可靠），0.2s 补救兜底。
-    {
-        Class uicls = objc_getClass("UITableView");
-        Method rm = uicls ? class_getInstanceMethod(uicls, @selector(reloadData)) : NULL;
-        if (rm) {
-            IMP cur = method_getImplementation(rm);
-            if (impIsForeign(cur)) {
-                WPLog(@"MsgMerge", @"[Hook] ⊘ UITableView reloadData 归属外挂，让位不挂（0.2s 补救兜底）");
-            } else {
-                orig_UITableView_reloadData = bbSwap(uicls, @selector(reloadData),
-                                                     (IMP)repl_UITableView_reloadData,
-                                                     "UITableView");
-                WPLog(@"MsgMerge", @"[Hook] ✓ UITableView reloadData（聊天表首测前置）");
-            }
-        }
-    }
-
-    // ①d 估算行高委托接管（入场锚底源头根治，见 repl_BMCVC_estHeightForRow 注释）。
-    // 委托方法存在才挂；缺席=聊天表走 estimatedRowHeight 属性（估算接管不可行，
-    // 日志可见，退回入场跟踪锚方案）。
-    {
-        Class bcls = objc_getClass("BaseMsgContentViewController");
-        SEL selEst = @selector(tableView:estimatedHeightForRowAtIndexPath:);
-        Method em = bcls ? class_getInstanceMethod(bcls, selEst) : NULL;
-        if (em) {
-            IMP cur = method_getImplementation(em);
-            if (impIsForeign(cur)) {
-                WPLog(@"MsgMerge", @"[Hook] ⊘ estimatedHeightForRow 归属外挂，让位不挂（跟踪锚兜底）");
-            } else {
-                orig_BMCVC_estH = bbSwap(bcls, selEst, (IMP)repl_BMCVC_estHeightForRow,
-                                         "BaseMsgContentViewController");
-                WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController estimatedHeightForRow（入场锚底源头）");
-            }
-        } else {
-            WPLog(@"MsgMerge", @"[Hook] [Est] 基类无 estimatedHeightForRow 委托（估算=属性，退跟踪锚）");
-        }
-    }
-
-    // ② 消息 cell 渲染钩子（CommonMessageCellView，XOS 同款 layoutSubviews 挂点）
+    // ② 消息 cell 渲染钩子（CommonMessageCellView）
     cls = objc_getClass("CommonMessageCellView");
     if (cls) {
-        orig_CMCellView_layoutSubviews = bbSwap(cls, @selector(layoutSubviews),
-                                                (IMP)repl_CMCellView_layoutSubviews,
+        orig_CMCellView_layoutInternal = bbSwap(cls, @selector(layoutInternal),
+                                                (IMP)repl_CMCellView_layoutInternal,
                                                 "CommonMessageCellView");
-        WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageCellView layoutSubviews（渲染应用，XOS 同款）");
+        orig_CMCellView_updateNodeStatus = bbSwap(cls, @selector(updateNodeStatus),
+                                                  (IMP)repl_CMCellView_updateNodeStatus,
+                                                  "CommonMessageCellView");
+        WPLog(@"MsgMerge", @"[Hook] ✓ CommonMessageCellView layoutInternal/updateNodeStatus");
     } else {
         WPLog(@"MsgMerge", @"[Hook] ✗ CommonMessageCellView not found");
     }
