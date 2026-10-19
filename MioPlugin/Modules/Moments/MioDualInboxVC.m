@@ -8,6 +8,33 @@
 // 消息 dict 字段：id/name/actor/kind(like|cmt)/text/t/mine
 // 分类过滤对齐 WCM changeCategory（宽松版）：赞过我=kind like 且我帖；评论过我=非赞类
 
+// WCMMessageCardBackground 原样复刻（initWithFrame_/layoutSubviews 反编译）：
+// 容器透明 + surface 子view 白底、18pt continuous 圆角（0x4032），
+// layoutSubviews 里 surface.frame = CGRectInset(bounds, 10, 0)——卡左右贴边 10pt、上下占满
+// cell 高（卡间空隙全靠系统 section 间距，与 WCM 同路径）。
+@interface _MioInboxCardBg : UIView
+@property (nonatomic, strong) UIView *surface;
+@end
+@implementation _MioInboxCardBg
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.userInteractionEnabled = NO;
+        _surface = [[UIView alloc] initWithFrame:CGRectInset(self.bounds, 10, 0)];
+        _surface.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+        _surface.layer.cornerRadius = 18;
+        _surface.layer.cornerCurve = kCACornerCurveContinuous;
+        _surface.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [self addSubview:_surface];
+    }
+    return self;
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    _surface.frame = CGRectInset(self.bounds, 10, 0);
+}
+@end
+
 @interface MioDualInboxVC () <UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, copy) NSArray<NSDictionary *> *items;   // 全量
 @property (nonatomic, copy) NSArray<NSDictionary *> *rows;    // 当前分类过滤后
@@ -229,19 +256,16 @@
     cell.contentConfiguration = cfg;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 
-    // ---- ⑥ 卡片（WCM _StyleMessageCell 反编译）：cell/contentView 全 clearColor，
-    //      白卡 = cell.backgroundView（InsetGrouped 系统圆角裁剪自动作用于 backgroundView，
-    //      非 contentView.layer 手绘）；选中态 = tertiarySystemFillColor 同款卡
+    // ---- ⑥ 卡片（WCM _StyleMessageCell + WCMMessageCardBackground 反编译复刻）：
+    //      cell/contentView 全 clearColor，卡 = backgroundView 里的 surface（18pt continuous 圆角）
     cell.backgroundColor = [UIColor clearColor];
     cell.contentView.backgroundColor = [UIColor clearColor];
-    if (![cell.backgroundView isKindOfClass:[UIView class]]) {
-        UIView *card = [[UIView alloc] initWithFrame:cell.bounds];
-        card.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
-        cell.backgroundView = card;
+    if (![cell.backgroundView isKindOfClass:[_MioInboxCardBg class]]) {
+        cell.backgroundView = [[_MioInboxCardBg alloc] initWithFrame:cell.bounds];
     }
-    if (![cell.selectedBackgroundView isKindOfClass:[UIView class]]) {
-        UIView *selCard = [[UIView alloc] initWithFrame:cell.bounds];
-        selCard.backgroundColor = [UIColor tertiarySystemFillColor];
+    if (![cell.selectedBackgroundView isKindOfClass:[_MioInboxCardBg class]]) {
+        _MioInboxCardBg *selCard = [[_MioInboxCardBg alloc] initWithFrame:cell.bounds];
+        selCard.surface.backgroundColor = [UIColor tertiarySystemFillColor];   // WCM 选中态 surface 同款
         cell.selectedBackgroundView = selCard;
     }
 
