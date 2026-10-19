@@ -226,7 +226,11 @@ static void resetAllMeasureCaches(void) {
         UIViewController *vc = g_curChatVC;
         if (!vc) return;
         NSArray *arr = safeKVC(vc, @"m_arrMessageNodeData");
-        if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) return;
+        if (![arr isKindOfClass:[NSArray class]] || arr.count == 0) {
+            WPLog(@"MsgMerge", @"[NJW] reset 空转（arr 无效/空）");
+            return;
+        }
+        WPLog(@"MsgMerge", @"[NJW] resetLayoutCache count=%lu", (unsigned long)arr.count);
         SEL selReset = NSSelectorFromString(@"resetLayoutCache");
         SEL selBump = NSSelectorFromString(@"changeRevision");
         for (id vm in arr) {
@@ -323,7 +327,8 @@ static void refreshAndApplyFromContext(void) {
     }
     NSUInteger changed = [[BBMergeModel shared] refreshIndexWithNodeArray:arr chatName:chat];
     if (changed > 0) {
-        WPLog(@"MsgMerge", @"[Ref] rebuild count=%lu changed=%lu", (unsigned long)arr.count, (unsigned long)changed);
+        WPLog(@"MsgMerge", @"[Ref] rebuild chat=%@ count=%lu changed=%lu", chat,
+              (unsigned long)arr.count, (unsigned long)changed);
         refreshFlaggedCells();   // 屏上 pos 实变 → 可见刷新（清测量缓存+标脏）
     }
 }
@@ -866,6 +871,26 @@ static void applyMergeToCellView(id cellView) {
 
         markTouched(cellView);
 
+        // —— 全日志（2026-10-19 排障，定位后整体删除）：渲染帧签名，每 cell 仅帧变化时记 ——
+        {
+            static NSMutableDictionary *g_rl;
+            static dispatch_once_t onceT;
+            dispatch_once(&onceT, ^{ g_rl = [NSMutableDictionary new]; });
+            if (g_rl.count > 200) [g_rl removeAllObjects];
+            NSString *ck = [NSString stringWithFormat:@"%p", cellView];
+            UIView *hV = safeCall(cellView, "getHeadImageView");
+            UIImageView *bV = safeCall(cellView, "getBgImageView");
+            NSString *sig = [NSString stringWithFormat:
+                @"pos=%ld split=%llu hv=%d h=%@ bg=%@",
+                (long)pos, split, headVisible,
+                hV ? NSStringFromCGRect(hV.frame) : @"nil",
+                [bV isKindOfClass:[UIImageView class]] ? NSStringFromCGRect(bV.frame) : @"nil"];
+            if (![g_rl[ck] isEqualToString:sig]) {
+                g_rl[ck] = sig;
+                WPLog(@"MsgMerge", @"[Rdr] %@ chat=%@ %@", ck, chat, sig);
+            }
+        }
+
         // ① 头像显隐（0=消息头/组首显示，1=消息尾/组尾显示；headVisible 与骑行门控同源）
         if (cfg.mmAvatarPos == 0 || cfg.mmAvatarPos == 1) {
             id head = safeCall(cellView, "getHeadImageView");
@@ -943,9 +968,13 @@ static void mergeForceHeightRequery(UITableView *tbl) {
     if (!tbl) return;
     @try {
         if (g_curChatVC && [(id)g_curChatVC respondsToSelector:@selector(reloadTableData)]) {
+            WPLog(@"MsgMerge", @"[Req] 路径=reloadTableData pre(offY=%.1f cs=%.1f)",
+                  tbl.contentOffset.y, tbl.contentSize.height);
             resetAllMeasureCaches();
             ((void (*)(id, SEL))objc_msgSend)(g_curChatVC, @selector(reloadTableData));
+            WPLog(@"MsgMerge", @"[Req] reloadTableData 完成 post(cs=%.1f)", tbl.contentSize.height);
         } else {
+            WPLog(@"MsgMerge", @"[Req] 路径=begin/end 兜底（无 reloadTableData 响应）");
             resetAllMeasureCaches();
             [tbl layoutIfNeeded];
             [tbl beginUpdates];
@@ -965,8 +994,11 @@ static void mergeFuseFire(void) {
     mergeFindTable(vc.view, 0, &tbl);
     if (!tbl) return;
     @try {
+        double offPre = tbl.contentOffset.y, csPre = tbl.contentSize.height;
         mergeForceHeightRequery(tbl);
         g_fuseCount++;
+        WPLog(@"MsgMerge", @"[Fuse] #%lu pre(offY=%.1f cs=%.1f) post(cs=%.1f) atBottom=%d",
+              (unsigned long)g_fuseCount, offPre, csPre, tbl.contentSize.height, g_fuseAtBottom);
         if (g_fuseAtBottom) {
             [tbl layoutIfNeeded];
             double target = tbl.contentSize.height - tbl.bounds.size.height
@@ -991,10 +1023,22 @@ static void mergeFuseFire(void) {
 static void mergeScheduleDataFuse(void) {
     if (![NSThread isMainThread]) return;
     CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-    if (g_entryTick <= 0 || now - g_entryTick > 10.0) return;
-    if (g_userScrolled) return;
-    if (g_lastAddMsgTick > 0 && now - g_lastAddMsgTick < 1.5) return;
-    if (g_fuseCount >= 3) return;
+    if (g_entryTick <= 0 || now - g_entryTick > 10.0) {
+        WPLog(@"MsgMerge", @"[Fuse] 调度拒绝：非入场窗口（entryTick=%.1f now=%.1f）", g_entryTick, now);
+        return;
+    }
+    if (g_userScrolled) {
+        WPLog(@"MsgMerge", @"[Fuse] 调度拒绝：用户已滚动");
+        return;
+    }
+    if (g_lastAddMsgTick > 0 && now - g_lastAddMsgTick < 1.5) {
+        WPLog(@"MsgMerge", @"[Fuse] 调度拒绝：距收发 %.2fs < 1.5s", now - g_lastAddMsgTick);
+        return;
+    }
+    if (g_fuseCount >= 3) {
+        WPLog(@"MsgMerge", @"[Fuse] 调度拒绝：次数上限（%lu）", (unsigned long)g_fuseCount);
+        return;
+    }
     if (!g_fuseSnap) {
         g_fuseSnap = YES;
         UITableView *tbl = nil;
@@ -1006,6 +1050,8 @@ static void mergeScheduleDataFuse(void) {
             g_fuseAtBottom = (bottom <= 0) || (offY >= bottom - 80.0);
         }
     }
+    WPLog(@"MsgMerge", @"[Fuse] 改高调度 gen→%lu atBottom=%d（去抖 0.4s）",
+          (unsigned long)(g_fuseGen + 1), g_fuseAtBottom);
     NSUInteger myGen = ++g_fuseGen;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
@@ -1039,7 +1085,11 @@ static void repl_UITableView_reloadData(UITableView *self, SEL _cmd) {
                 mergeFindTable(g_curChatVC.view, 0, &tbl);
                 isChatTbl = (tbl == self);
             }
-            if (isChatTbl) refreshAndApplyFromContext();
+            if (isChatTbl) {
+                WPLog(@"MsgMerge", @"[Rld] 聊天表 reload → 前置刷新（arr=%lu）",
+                      (unsigned long)g_currentNodeArray.count);
+                refreshAndApplyFromContext();
+            }
         }
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] reloadData 前置刷新异常: %@", e.reason);
@@ -1078,12 +1128,15 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
                 double bottom0 = tbl.contentSize.height - tbl.bounds.size.height
                                + tbl.adjustedContentInset.bottom;
                 BOOL atBottom = (bottom0 <= 0) || (offY0 >= bottom0 - 80.0);
+                WPLog(@"MsgMerge", @"[Enter] +0.2s offY0=%.1f bottom0=%.1f atBottom=%d cs=%.1f",
+                      offY0, bottom0, atBottom, tbl.contentSize.height);
                 mergeForceHeightRequery(tbl);
                 if (atBottom) {
                     [tbl layoutIfNeeded];
                     double target = tbl.contentSize.height - tbl.bounds.size.height
                                   + tbl.adjustedContentInset.bottom;
                     if (target > 0 && fabs(tbl.contentOffset.y - target) > 1.0) {
+                        WPLog(@"MsgMerge", @"[Enter] 重锚 %.1f → %.1f", tbl.contentOffset.y, target);
                         [tbl setContentOffset:CGPointMake(0, target) animated:NO];
                     }
                 }
@@ -1108,7 +1161,10 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
         if (scrollView) {
             BOOL drag = ((BOOL (*)(id, SEL))objc_msgSend)(scrollView, @selector(isDragging))
                      || ((BOOL (*)(id, SEL))objc_msgSend)(scrollView, @selector(isDecelerating));
-            if (drag) g_userScrolled = YES;
+            if (drag && !g_userScrolled) {
+                WPLog(@"MsgMerge", @"[Scroll] 用户手动滚动 → 补询窗口关闭");
+                g_userScrolled = YES;
+            }
         }
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (!cfg.mmEnable) return;
@@ -1158,7 +1214,10 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         s_inMeasure = YES;
         MOMergePosition pos = flagsPos(self);
         s_inMeasure = NO;
-        if (pos == MOMergePositionNone) return s;   // 组外/标志缺席：原生直通
+        if (pos == MOMergePositionNone) {   // 组外/标志缺席：原生直通
+            WPLog(@"MsgMerge", @"[MMZ] pos=None 直通 h=%.1f", (double)s.height);
+            return s;
+        }
         unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
         // ① 骑行补高：渲染层把气泡顶钉到 头像底(45)+14=头像顶+57（泡在头像正下方
         //    左右恒对称），泡下移量由行高全额补足（rideAdd = 下移量）。不可抵扣本行
@@ -1188,16 +1247,28 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
             }
         }
         BOOL isTail = (pos == MOMergePositionLast || pos == MOMergePositionSingle);
-        if (rideAdd <= 0 && isTail) return s;   // 组尾保原生（组尾到组外间隙不变）
+        if (rideAdd <= 0 && isTail) {   // 组尾保原生（组尾到组外间隙不变）
+            WPLog(@"MsgMerge", @"[MMZ] 组尾直通 chat=%@ h=%.1f", chat, (double)s.height);
+            return s;
+        }
         // 末片门控：首片/中片是无缝泡体——原生切片气泡底=片边界、续片 bgTop=0
         // 贴顶无让位，任何测量改动都让泡体溢出压进下一片（diag33 实锤同气泡自叠）。
-        if (rideAdd <= 0 && split != 0 && split != 3) return s;
+        if (rideAdd <= 0 && split != 0 && split != 3) {
+            WPLog(@"MsgMerge", @"[MMZ] 切片直通 chat=%@ split=%llu h=%.1f", chat, split, (double)s.height);
+            return s;
+        }
         double h = (double)s.height + rideAdd;
         if (!isTail) {
             h -= reduce;
             if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
         }
-        if (fabs(h - (double)s.height) < 0.01) return s;
+        if (fabs(h - (double)s.height) < 0.01) {
+            WPLog(@"MsgMerge", @"[MMZ] 无变化 chat=%@ pos=%ld split=%llu h=%.1f",
+                  chat, (long)pos, split, (double)h);
+            return s;
+        }
+        WPLog(@"MsgMerge", @"[MMZ] chat=%@ pos=%ld split=%llu nat=%.1f ride=%.1f red=%.1f -> %.1f",
+              chat, (long)pos, split, (double)s.height, rideAdd, reduce, h);
         mergeScheduleDataFuse();   // 改高即调度补询（数据驱动首屏修复，见函数注释）
         return CGSizeMake(s.width, (CGFloat)h);
     } @catch (NSException *e) {
@@ -1285,6 +1356,9 @@ static void repl_CMMsgMgr_AddMsg(id self, SEL _cmd, id session, id wrap) {
     }
     ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AddMsg)(self, _cmd, session, wrap);
     @try {
+        WPLog(@"MsgMerge", @"[Msg] AddMsg chat=%@ wrap=%@ type=%@",
+              session, [wrap isKindOfClass:[NSObject class]] ? NSStringFromClass([wrap class]) : @"nil",
+              safeKVC(wrap, @"m_uiMessageType") ?: @"?");
         mmHandleIncomingMsg(session, wrap);
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] AddMsg exception: %@", e.reason);
@@ -1298,6 +1372,9 @@ static void repl_CMMsgMgr_AsyncOnAddMsg(id self, SEL _cmd, id session, id wrap) 
     }
     ((void (*)(id, SEL, id, id))orig_CMMsgMgr_AsyncOnAddMsg)(self, _cmd, session, wrap);
     @try {
+        WPLog(@"MsgMerge", @"[Msg] AsyncOnAddMsg chat=%@ wrap=%@ type=%@",
+              session, [wrap isKindOfClass:[NSObject class]] ? NSStringFromClass([wrap class]) : @"nil",
+              safeKVC(wrap, @"m_uiMessageType") ?: @"?");
         mmHandleIncomingMsg(session, wrap);
     } @catch (NSException *e) {
         WPLog(@"MsgMerge", @"[Ctx] AsyncOnAddMsg exception: %@", e.reason);
