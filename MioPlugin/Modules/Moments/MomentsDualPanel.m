@@ -185,9 +185,13 @@ static long long MioDualScalarGet(id obj, NSString *key, long long def) {
 // 双列朋友圈页面（增量渲染版，机制对齐 WCMoments _WCMHTML 反编译实证）：
 // 绝对定位网格 + aspect-ratio 预锁（--aspect 变量）+ cards/colOf Map 增量更新（DOM 永不重建）
 // + measuredHeight 缓存 + 列归属终身不变 + dataKey 整条 JSON 去重——根治滑动跳顶。
+// 顶栏对齐 WCMoments：玻璃拟态 header + 滚动收缩搜索框（--collapse 16/72px 联动 + focus 钉住）
+// + 铃铛未读角标（getSnsMessageCount）+ 菜单浮层（刷新/发文字帖/切回）。
+// 按钮交互（原生方法 8.0.78 头文件实证）：铃铛=切回原生（消息入口在原生页）；＋=openAlbumAndPublish:
+// 发图文帖；菜单·发文字朋友圈=openAlbumAndPublishText:（duck-typing，push 页在面板之上，返回面板还在）。
 // 已接交互：搜索框=过滤已加载缓存；「全部动态/我赞过的」=tab 过滤（likeFlag）；
-// 「…」圆钮=切回原生朋友圈；下拉刷新=facade updateTimelineHead；滚底=facade updateTimelineTail 翻页。
-// 死 UI（无数据支撑，点击无反应）：铃铛、加号、tab「我的关注」。
+// 下拉刷新=facade updateTimelineHead；滚底=facade updateTimelineTail 翻页。
+// 死 UI（无数据支撑，点击无反应）：tab「我的关注」、大标题（WCM 点标题进我的相册，需路由后补）。
 // ratio：原生媒体宽高（item.ratio）优先，onload naturalWidth 兜底，都无则 1:1 占位。
 // 注意：整段为单行拼接，JS 内禁用 // 行注释，双引号一律 \" 转义。
 static NSString * const kDualPageHTML = @(
@@ -201,18 +205,29 @@ static NSString * const kDualPageHTML = @(
 ":root { --bg-color:#F7F7F7; --card-bg:#FFFFFF; --text-main:#1A1A1A; --search-bg:#EBEBEB; --icon-fill:#333; --tab-bg:#F0F0F0; }"
 "* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }"
 "body { background:var(--bg-color); font-family:-apple-system,\"PingFang SC\",\"Helvetica Neue\",sans-serif; padding-top:env(safe-area-inset-top); overflow-x:hidden; color:var(--text-main); }"
-".header { position:sticky; top:0; z-index:100; background:var(--bg-color); padding:10px 16px 8px; }"
-".top-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; margin-top:8px; }"
-".top-bar h1 { font-size:28px; font-weight:800; color:#000; letter-spacing:0.5px; }"
-".icons { display:flex; gap:10px; }"
-".icon-btn { width:36px; height:36px; border-radius:50%; background:var(--card-bg); display:flex; justify-content:center; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.05); }"
-".icon-btn:active { transform:scale(0.92); }"
-".icon-btn svg { width:20px; height:20px; fill:var(--icon-fill); }"
-".search-box { display:flex; align-items:center; background:var(--search-bg); height:36px; border-radius:6px; padding:0 12px; margin-bottom:16px; }"
-".search-box svg { width:16px; height:16px; fill:#999; margin-right:6px; flex:none; }"
-".search-box input { flex:1; border:0; outline:0; background:transparent; font-size:15px; color:var(--text-main); }"
-".search-box input::placeholder { color:#999; }"
-".tabs { display:flex; justify-content:space-between; align-items:center; background:var(--tab-bg); border-radius:20px; padding:4px; margin-bottom:12px; }"
+".header { position:sticky; top:0; z-index:100; padding:2px 18px 8px; --collapse:0; --header-bg:rgba(247,247,247,0.86); }"
+".header::before { content:''; position:absolute; inset:0; background:var(--header-bg); -webkit-backdrop-filter:saturate(180%) blur(20px); backdrop-filter:saturate(180%) blur(20px); z-index:-1; -webkit-mask-image:linear-gradient(to bottom,black 72%,transparent); mask-image:linear-gradient(to bottom,black 72%,transparent); pointer-events:none; }"
+".top-bar { display:flex; justify-content:space-between; align-items:center; min-height:44px; margin-top:8px; position:relative; z-index:2; }"
+".top-bar h1 { font-size:26px; font-weight:800; color:#000; letter-spacing:0.5px; }"
+".tools { display:flex; gap:10px; }"
+".tool { width:36px; height:36px; border-radius:50%; background:var(--header-bg); display:flex; justify-content:center; align-items:center; position:relative; transition:transform .2s cubic-bezier(.34,1.56,.64,1); }"
+".tool:active { transform:scale(0.9); }"
+".tool svg { width:20px; height:20px; fill:var(--icon-fill); }"
+".tool.fade { opacity:var(--collapse); pointer-events:none; }"
+".badge { position:absolute; top:-3px; right:-3px; min-width:16px; height:16px; background:#FA5151; color:#fff; font-size:10px; border-radius:8px; display:flex; justify-content:center; align-items:center; padding:0 4px; font-weight:700; box-sizing:border-box; }"
+".badge.hide { display:none; }"
+".search { position:relative; z-index:1; display:flex; align-items:center; background:var(--search-bg); height:36px; border-radius:6px; padding:0 12px; margin-top:12px; opacity:calc(1 - var(--collapse)); transform:scale(calc(1 - var(--collapse)*0.4)) translateY(calc(var(--collapse)*-6px)); transform-origin:calc(100% - 18px) top; transition:opacity .25s, transform .3s cubic-bezier(.22,1,.36,1); }"
+".search.off { pointer-events:none; }"
+".search svg { width:16px; height:16px; fill:#999; margin-right:6px; flex:none; }"
+".search input { flex:1; border:0; outline:0; background:transparent; font-size:15px; color:var(--text-main); }"
+".search input::placeholder { color:#999; }"
+"#menu { position:absolute; top:46px; right:18px; z-index:200; background:var(--card-bg); border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.16); overflow:hidden; display:none; min-width:180px; }"
+"#menu.show { display:block; }"
+".mi { padding:13px 18px; font-size:15px; color:var(--text-main); display:flex; align-items:center; gap:10px; }"
+".mi:active { background:rgba(0,0,0,0.06); }"
+".mi + .mi { border-top:0.5px solid rgba(0,0,0,0.06); }"
+".mi svg { width:18px; height:18px; fill:var(--icon-fill); }"
+".tabs { display:flex; justify-content:space-between; align-items:center; background:var(--tab-bg); border-radius:20px; padding:4px; margin-top:12px; }"
 ".tab { flex:1; text-align:center; padding:8px 0; border-radius:16px; font-size:14px; color:var(--text-main); font-weight:500; }"
 ".tab.active { background:var(--card-bg); font-weight:600; color:#000; box-shadow:0 1px 4px rgba(0,0,0,0.08); }"
 "#grid { position:relative; }"
@@ -235,22 +250,24 @@ static NSString * const kDualPageHTML = @(
 "#pull { position:fixed; top:-30px; left:0; right:0; text-align:center; font-size:12px; color:#9b9b9b; transition:top .2s; z-index:99; pointer-events:none; }"
 "@media (prefers-color-scheme:dark) {"
 ":root { --bg-color:#0E0E0E; --card-bg:#1B1B1B; --text-main:#EAEAEA; --search-bg:#1D1D1D; --icon-fill:#CCC; --tab-bg:#1D1D1D; }"
+".header { --header-bg:rgba(18,18,18,0.86); }"
 ".top-bar h1 { color:#F2F2F2; } .tab.active { color:#F0F0F0; } .avatar { background:#2A2A2A; } .name { color:#8A8A8A; } .card-media img { background:#242424; }"
 "}"
 "</style>"
 "</head>"
 "<body>"
 "<div id=\"pull\">刷新中…</div>"
-"<div class=\"header\">"
+"<div class=\"header\" id=\"hd\">"
 "<div class=\"top-bar\">"
 "<h1>朋友圈</h1>"
-"<div class=\"icons\">"
-"<div class=\"icon-btn\" id=\"ibBell\"><svg viewBox=\"0 0 24 24\"><path d=\"M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z\"/></svg></div>"
-"<div class=\"icon-btn\" id=\"ibAdd\"><svg viewBox=\"0 0 24 24\"><path d=\"M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z\"/></svg></div>"
-"<div class=\"icon-btn\" id=\"ibMore\"><svg viewBox=\"0 0 24 24\"><path d=\"M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z\"/></svg></div>"
+"<div class=\"tools\">"
+"<div class=\"tool\" id=\"ibBell\"><svg viewBox=\"0 0 24 24\"><path d=\"M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z\"/></svg><span class=\"badge hide\" id=\"bellBadge\"></span></div>"
+"<div class=\"tool fade\" id=\"ibSearch\"><svg viewBox=\"0 0 24 24\"><path d=\"M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z\"/></svg></div>"
+"<div class=\"tool\" id=\"ibAdd\"><svg viewBox=\"0 0 24 24\"><path d=\"M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z\"/></svg></div>"
+"<div class=\"tool\" id=\"ibMore\"><svg viewBox=\"0 0 24 24\"><path d=\"M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z\"/></svg></div>"
 "</div>"
 "</div>"
-"<div class=\"search-box\">"
+"<div class=\"search\" id=\"sb\">"
 "<svg viewBox=\"0 0 24 24\"><path d=\"M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z\"/></svg>"
 "<input id=\"q\" placeholder=\"搜索朋友或动态\">"
 "</div>"
@@ -258,6 +275,11 @@ static NSString * const kDualPageHTML = @(
 "<div class=\"tab active\" id=\"tab-all\">全部动态</div>"
 "<div class=\"tab\" id=\"tab-liked\">我赞过的</div>"
 "<div class=\"tab\" id=\"tab-follow\">我的关注</div>"
+"</div>"
+"<div id=\"menu\">"
+"<div class=\"mi\" id=\"mi-refresh\"><svg viewBox=\"0 0 24 24\"><path d=\"M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-8 8s3.57 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z\"/></svg>刷新动态</div>"
+"<div class=\"mi\" id=\"mi-text\"><svg viewBox=\"0 0 24 24\"><path d=\"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z\"/></svg>发文字朋友圈</div>"
+"<div class=\"mi\" id=\"mi-native\"><svg viewBox=\"0 0 24 24\"><path d=\"M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z\"/></svg>打开微信朋友圈</div>"
 "</div>"
 "</div>"
 "<div id=\"grid\"></div>"
@@ -341,29 +363,53 @@ static NSString * const kDualPageHTML = @(
 "return l;"
 "}"
 "window.__mioSetFeed=function(payload){ALL=(payload&&payload.items)||[];render();};"
+"window.__mioSetBadge=function(n){var b=document.getElementById('bellBadge');"
+"if(!b)return;if(n>0){b.textContent=n>99?'99+':n;b.classList.remove('hide');}else{b.classList.add('hide');}};"
 "var qEl=document.getElementById('q');"
 "qEl.addEventListener('input',function(){q=this.value.trim().toLowerCase();render();window.scrollTo(0,0);});"
+"var hd=document.getElementById('hd'),menu=document.getElementById('menu'),sb=document.getElementById('sb');"
+"function closeMenu(){menu.classList.remove('show');}"
 "document.getElementById('tab-all').addEventListener('click',function(){"
 "tab='all';this.classList.add('active');document.getElementById('tab-liked').classList.remove('active');"
 "render();window.scrollTo(0,0);});"
 "document.getElementById('tab-liked').addEventListener('click',function(){"
 "tab='liked';this.classList.add('active');document.getElementById('tab-all').classList.remove('active');"
 "render();window.scrollTo(0,0);});"
-"document.getElementById('ibMore').addEventListener('click',function(){"
-"window.webkit.messageHandlers.mio.postMessage({action:'back'});});"
+"var mio=function(o){window.webkit.messageHandlers.mio.postMessage(o);};"
+"document.getElementById('ibMore').addEventListener('click',function(e){e.stopPropagation();menu.classList.toggle('show');});"
+"document.getElementById('ibBell').addEventListener('click',function(){mio({action:'back'});});"
+"document.getElementById('ibAdd').addEventListener('click',function(){mio({action:'publish'});});"
+"document.getElementById('ibSearch').addEventListener('click',function(){window.scrollTo(0,0);qEl.focus();});"
+"document.getElementById('mi-refresh').addEventListener('click',function(){closeMenu();mio({action:'refresh'});});"
+"document.getElementById('mi-text').addEventListener('click',function(){closeMenu();mio({action:'publishText'});});"
+"document.getElementById('mi-native').addEventListener('click',function(){closeMenu();mio({action:'back'});});"
+"document.addEventListener('click',function(e){if(!menu.contains(e.target))closeMenu();});"
+"var searchPinned=false;"
+"qEl.addEventListener('focus',function(){searchPinned=true;hd.style.setProperty('--collapse',0);sb.classList.remove('off');});"
+"qEl.addEventListener('blur',function(){searchPinned=false;updateSearchChrome();});"
+"var lastC=-1;"
+"function updateSearchChrome(){"
+"var y=window.scrollY;"
+"var c=y<=16?0:(y>=72?1:(y-16)/56);"
+"if(searchPinned)c=0;"
+"if(Math.abs(c-lastC)<0.01&&lastC>=0)return;lastC=c;"
+"hd.style.setProperty('--collapse',c);"
+"sb.classList.toggle('off',c>0.6);"
+"}"
 "var tsy=0,pulled=false;"
 "document.addEventListener('touchstart',function(e){tsy=e.touches[0].clientY;},{passive:true});"
 "document.addEventListener('touchmove',function(e){"
 "var dy=e.touches[0].clientY-tsy;"
 "if(!pulled&&window.scrollY<=0&&dy>80){pulled=true;pullTip.style.top='0px';"
-"window.webkit.messageHandlers.mio.postMessage({action:'refresh'});}"
+"mio({action:'refresh'});}"
 "},{passive:true});"
 "document.addEventListener('touchend',function(){setTimeout(function(){pulled=false;if(pullTip.style.top==='0px')pullTip.style.top='-30px';},2500);},false);"
 "var moreLock=false;"
 "window.addEventListener('scroll',function(){"
+"updateSearchChrome();"
 "if(moreLock)return;"
 "if(window.scrollY+window.innerHeight>document.body.scrollHeight-600){"
-"moreLock=true;window.webkit.messageHandlers.mio.postMessage({action:'more'});"
+"moreLock=true;mio({action:'more'});"
 "setTimeout(function(){moreLock=false;},2000);}"
 "},{passive:true});"
 "})();"
@@ -444,6 +490,7 @@ static char kDualPanelAssocKey;
 
 - (void)pushFeedNow {
     if (!self.pageReady || !self.webView) return;
+    [self updateBellBadge];
     NSMutableArray *arr = [NSMutableArray array];
     @try {
         NSArray *cache = MioDualTimelineCache(MioDualFacade());
@@ -466,6 +513,21 @@ static char kDualPanelAssocKey;
     [self.webView evaluateJavaScript:
         [NSString stringWithFormat:@"window.__mioSetFeed(%@);", json]
         completionHandler:nil];
+}
+
+// 铃铛角标：getSnsMessageCount（发现页头文件实证，朋友圈互动未读数；头文件声明返回 id）
+// 点击铃铛 = 切回原生朋友圈（消息入口在原生页），角标只做提示
+- (void)updateBellBadge {
+    UIViewController *host = self.hostVC;
+    SEL cntSel = NSSelectorFromString(@"getSnsMessageCount");
+    if (!host || ![host respondsToSelector:cntSel]) return;
+    @try {
+        id v = ((id(*)(id, SEL))objc_msgSend)(host, cntSel);
+        NSInteger n = [v respondsToSelector:@selector(intValue)] ? [v intValue] : 0;
+        [self.webView evaluateJavaScript:
+            [NSString stringWithFormat:@"window.__mioSetBadge(%ld);", (long)n]
+            completionHandler:nil];
+    } @catch (NSException *e) {}
 }
 
 - (NSDictionary *)itemDict:(id)item {
@@ -568,6 +630,18 @@ static char kDualPanelAssocKey;
             ((void(*)(id, SEL))objc_msgSend)(facade, tailSel);
         }
         [self scheduleFeedChecks];
+        return;
+    }
+    if ([action isEqualToString:@"publish"] || [action isEqualToString:@"publishText"]) {
+        // WCMoments publish 同款 duck-typing（反编译实证 publish → 调 host 原生方法）：
+        // 发现页方法 openAlbumAndPublish:/openAlbumAndPublishText:（8.0.78 头文件实证）
+        // 不关面板：push 的新页面在面板之上，返回时面板还在（体验连贯）
+        UIViewController *host = self.hostVC;
+        SEL sel = NSSelectorFromString(
+            [action isEqualToString:@"publish"] ? @"openAlbumAndPublish:" : @"openAlbumAndPublishText:");
+        if (host && [host respondsToSelector:sel]) {
+            ((void(*)(id, SEL, id))objc_msgSend)(host, sel, nil);
+        }
         return;
     }
     if (![action isEqualToString:@"refresh"]) return;
