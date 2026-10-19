@@ -27,13 +27,9 @@
 @property (nonatomic, assign) NSInteger numberOfLines;
 @end
 
-// UIImageConfiguration 更早（Xcode 11/iOS 13 SDK）就有：老头文件已带时不重复声明，防重定义
-#if !__has_include(<UIKit/UIImageConfiguration.h>)
-@interface UIImageConfiguration : NSObject
-@property (nonatomic, assign) CGSize maximumSize;
-@property (nonatomic, assign) CGFloat cornerRadius;
-@end
-#endif
+// ⚠️ UIImageConfiguration 是只读值对象：运行时没有 setMaximumSize:/setCornerRadius:，
+// 在此补可写声明编译能过但一调用即 unrecognized selector（首版 shim 点进铃铛页必崩实证）。
+// 圆头像只能走 circleAvatar: 预渲染位图，不要在此补这两个声明。
 
 @interface UITableViewCell ()
 @property (nonatomic, copy, nullable) UIListContentConfiguration *contentConfiguration;

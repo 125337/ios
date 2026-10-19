@@ -184,9 +184,8 @@
         ((id(*)(id, SEL))objc_msgSend)([UITableViewCell class], cfgSel);
     cfg.text = d[@"name"];
     cfg.secondaryText = sec;
-    cfg.image = [self avatarImage:d[@"actor"]];          // 原图即可，圆角交给系统
-    cfg.imageProperties.maximumSize = CGSizeMake(42, 42);
-    cfg.imageProperties.cornerRadius = 21;              // 系统画正圆头像
+    cfg.image = [self circleAvatar:[self avatarImage:d[@"actor"]]];   // 预渲染 42pt 圆形位图
+                                                                      // （imageProperties 运行时是只读值对象无 setter，赋值即 unrecognized selector，别走系统圆角）
     cfg.secondaryTextProperties.font = [UIFont systemFontOfSize:13];
     cfg.textToSecondaryTextVerticalPadding = 2;
     cell.contentConfiguration = cfg;
@@ -235,6 +234,21 @@
     UIImage *img = usr.length ? [[AvatarLoader shared] loadAvatarSyncForWxid:usr contact:nil] : nil;
     if (img) return img;
     return [UIImage systemImageNamed:@"person.crop.circle.fill"];
+}
+
+// 头像统一画成 42pt 圆形位图（SF Symbol 拉伸后仍为圆形观感）。
+// contentConfiguration 的 imageProperties 运行时是只读值对象（无 setter），圆角只能预渲染实现
+- (UIImage *)circleAvatar:(UIImage *)img {
+    if (!img) return nil;
+    CGFloat s = 42;
+    UIGraphicsImageRendererFormat *fmt = [UIGraphicsImageRendererFormat defaultFormat];
+    fmt.scale = 2;
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(s, s) format:fmt];
+    return [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
+        UIBezierPath *p = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, s, s)];
+        [p addClip];
+        [img drawInRect:CGRectMake(0, 0, s, s)];
+    }];
 }
 
 - (void)viewDidDisappear:(BOOL)animated {

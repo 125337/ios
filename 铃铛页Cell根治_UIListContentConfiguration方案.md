@@ -43,10 +43,8 @@
 @property (nonatomic, assign) NSInteger numberOfLines;
 @end
 
-@interface UIImageConfiguration : NSObject
-@property (nonatomic, assign) CGSize maximumSize;
-@property (nonatomic, assign) CGFloat cornerRadius;
-@end
+// ⚠️ UIImageConfiguration 是只读值对象：运行时无 setMaximumSize:/setCornerRadius:，
+// 声明成可写属性 = cellForRow 必崩（unrecognized selector）。圆头像走预渲染位图（circleAvatar:）。
 
 @interface UITableViewCell ()
 @property (nonatomic, copy, nullable) UIListContentConfiguration *contentConfiguration;
@@ -74,9 +72,7 @@
         ((id(*)(id, SEL))objc_msgSend)([UITableViewCell class], cfgSel);
     cfg.text = d[@"name"];
     cfg.secondaryText = sec;
-    cfg.image = [self avatarImage:d[@"actor"]];          // 原图即可，圆角交给系统
-    cfg.imageProperties.maximumSize = CGSizeMake(42, 42);
-    cfg.imageProperties.cornerRadius = 21;              // 系统画圆头像，circleAvatar 删除
+    cfg.image = [self circleAvatar:[self avatarImage:d[@"actor"]]];   // 预渲染圆头像（UIImageConfiguration 只读无 setter，不可用 imageProperties 赋值）
     cfg.secondaryTextProperties.font = [UIFont systemFontOfSize:13];
     cfg.textToSecondaryTextVerticalPadding = 2;
     cell.contentConfiguration = cfg;                     // ← 系统接管排版 + 分组卡底
@@ -108,7 +104,7 @@
 
 | 删除项 | 原因 |
 |---|---|
-| `circleAvatar:` 整个方法（~15 行） | `imageProperties.cornerRadius = 21` 系统画圆 |
+| `circleAvatar:` 整个方法（~15 行） | ~~改为 imageProperties.cornerRadius~~ **保留**：UIImageConfiguration 只读无 setter，声明 setter 必崩（ unrecognized selector） |
 | `cell.textLabel.text/font`、`cell.detailTextLabel.*` 全部 | 由 contentConfiguration 接管 |
 | `secondaryLabelColor`/字号手工赋值 | 系统默认即 secondaryLabel，如需 13pt 保留上面那行 font |
 
@@ -124,7 +120,7 @@
 ## 六、验证清单
 
 - [ ] 每条消息独立白卡、圆角、~10pt 间隙（浅色模式白卡/深色模式深卡自动切换）
-- [ ] 头像 42pt 正圆（imageProperties.cornerRadius 生效）
+- [ ] 头像 42pt 正圆（circleAvatar 预渲染位图）
 - [ ] 昵称粗体、内容 secondary 灰、字号与 WCM 截图一致
 - [ ] 深色模式切换后卡片颜色自适应（管线自动，无需手工）
 - [ ] 点击仍弹动作面板
@@ -132,6 +128,6 @@
 ## 七、为什么这是根治
 
 1. **同路径**：和 WCMoments 一字不差的系统 API——它有卡我们必有卡，系统升级自动跟随
-2. **删代码**：cell 相关手工代码从 ~40 行降到 ~15 行，圆头像渲染整个消失
+2. **删代码**：textLabel/detailTextLabel 手工排版全套消失（circleAvatar 保留，圆头像预渲染）
 3. **免费深色模式**：系统卡底 + 系统标签色，dark mode 零成本
 4. **shim 自失效**：`__has_include` 守卫——将来 CI SDK 更新后声明自动让位，不留死代码
