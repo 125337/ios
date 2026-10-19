@@ -546,9 +546,31 @@ static char kDualPanelAssocKey;
 
 #pragma mark 消息页数据（WCMoments WCMInboxController 复刻，全静态实证）
 
+// 消息字段多拼写 KVC（微信消息模型命名风格混杂：type/content 全小写可用，其余
+// 大概率 userName/nickName 驼峰或 m_ns ivar 前缀；命中即用，全 miss 返回空）
+static id MioField(id obj, NSArray *names) {
+    for (NSString *n in names) {
+        if (!obj || !n) continue;
+        id v = nil;
+        @try { v = [obj valueForKey:n]; } @catch (NSException *e) { v = nil; }
+        if (v) return v;
+    }
+    return nil;
+}
+
+static NSString *MioStrField(id obj, NSArray *names) {
+    id v = MioField(obj, names);
+    return [v isKindOfClass:[NSString class]] ? v : @"";
+}
+
+static NSInteger MioIntField(id obj, NSArray *names) {
+    id v = MioField(obj, names);
+    return [v respondsToSelector:@selector(integerValue)] ? [v integerValue] : 0;
+}
+
 // 消息数组解析（WCMInboxController 复刻，字段表按反编译终极分析：
 // 全部字段在消息对象本体：type/username/nickname/refUserName/dataItemUsrName/content/
-// createTime/objID；comment 只是评论内容子对象。type 1=赞 2/3/8=评论（changeCategory）。
+// createtime/objID；comment 只是评论内容子对象。type 1=赞 2/3/8=评论（changeCategory）。
 // 帖子归属 dataItemUsrName，空则 facade getDataItemByID: 兜底（isMine 同款））
 - (NSArray<NSDictionary *> *)inboxItems {
     id facade = MioDualFacade();
@@ -566,28 +588,28 @@ static char kDualPanelAssocKey;
     for (id msg in msgs) {
         if (arr.count >= 200) break;
         @try {
-            NSString *actor = WXSafeStringGet(msg, @"username") ?: @"";
+            NSString *actor = MioStrField(msg, @[@"username", @"userName", @"m_nsUsrName", @"nsUsrName"]);
             if ([actor isEqualToString:selfUsr]) continue;   // 自己的操作不进消息页（WCM 同款）
-            NSInteger type = [[msg valueForKey:@"type"] integerValue];
-            NSString *owner = WXSafeStringGet(msg, @"dataItemUsrName") ?: @"";
+            NSInteger type = MioIntField(msg, @[@"type", @"m_uiType", @"m_iType"]);
+            NSString *owner = MioStrField(msg, @[@"dataItemUsrName", @"dataItemUsrname", @"dataitemUsrName"]);
             if (owner.length == 0 && [facade respondsToSelector:byIDSel]) {
                 // 帖主空 → objID 反查原帖（isMine 兜底同款）
-                id objID = [msg valueForKey:@"objID"];
+                id objID = MioField(msg, @[@"objID", @"objId", @"m_nsObjID"]);
                 id item = objID ? ((id(*)(id, SEL, id))objc_msgSend)(facade, byIDSel, objID) : nil;
                 owner = WXSafeStringGet(item, @"username") ?: @"";
             }
-            NSString *text = WXSafeStringGet(msg, @"content") ?: @"";
-            if (text.length == 0) text = WXSafeStringGet([msg valueForKey:@"comment"], @"content") ?: @"";
-            id objID = [msg valueForKey:@"objID"];
+            NSString *text = MioStrField(msg, @[@"content", @"m_nsContent"]);
+            if (text.length == 0) text = MioStrField(MioField(msg, @[@"comment"]), @[@"content", @"m_nsContent"]);
+            id objID = MioField(msg, @[@"objID", @"objId", @"m_nsObjID"]);
             [arr addObject:@{
                 @"id": [objID isKindOfClass:NSString.class] ? objID : [NSString stringWithFormat:@"%@", objID ?: @""],
-                @"name": WXSafeStringGet(msg, @"nickname") ?: actor,   // 发送者昵称
-                @"actor": actor,                                        // 发送者 wxid
+                @"name": MioStrField(msg, @[@"nickname", @"nickName", @"m_nsNickName", @"nsNickName"]) ?: actor,
+                @"actor": actor,
                 @"kind": (type == 1) ? @"like" : @"cmt",                // 1=赞 2/3/8=评论
                 @"text": text,
-                @"t": @([[msg valueForKey:@"createTime"] integerValue]),
+                @"t": @(MioIntField(msg, @[@"createtime", @"createTime", @"m_uiCreateTime", @"m_iCreateTime"])),
                 @"mine": @([owner isEqualToString:selfUsr]),
-                @"refSelf": @([WXSafeStringGet(msg, @"refUserName") ?: @"" isEqualToString:selfUsr])}];
+                @"refSelf": @([MioStrField(msg, @[@"refUserName", @"refUsername", @"refusername", @"m_nsRefUserName"]) isEqualToString:selfUsr])}];
         } @catch (NSException *e) { continue; }
     }
     return arr;
@@ -709,11 +731,17 @@ static char kDualPanelAssocKey;
         return;
     }
     if ([action isEqualToString:@"inbox"]) {
-        // 铃铛 → 原生消息页（WCMInboxController 原生复刻：present 全屏 VC）
+        // 铃铛 → 原生消息页（WCMInboxController 原生复刻：present 全屏，导航栏「‹ 发现/消息」）
         UIViewController *host = self.hostVC;
         if (!host) return;
         MioDualInboxVC *vc = [[MioDualInboxVC alloc] initWithItems:[self inboxItems]];
-        vc.modalPresentationStyle = UIModalPresentationFullScreen;
+        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
+        nav.modalPresentationStyle = UIModalPresentationFullScreen;
+        UIBarButtonItem *back = [[UIBarButtonItem alloc] initWithTitle:@"‹ 发现"
+                                            style:UIBarButtonItemStylePlain
+                                           target:vc action:@selector(goBack)];
+        vc.navigationItem.leftBarButtonItem = back;
+        vc.navigationItem.title = @"消息";
         __weak typeof(self) ws = self;
         id obsReload = [[NSNotificationCenter defaultCenter]
             addObserverForName:@"MioDualInboxReload" object:nil queue:NSOperationQueue.mainQueue
@@ -727,7 +755,7 @@ static char kDualPanelAssocKey;
             [[NSNotificationCenter defaultCenter] removeObserver:obsReload];
             [[NSNotificationCenter defaultCenter] removeObserver:obsPost];
         };
-        [host presentViewController:vc animated:YES completion:nil];
+        [host presentViewController:nav animated:YES completion:nil];
         return;
     }
     if (![action isEqualToString:@"refresh"]) return;

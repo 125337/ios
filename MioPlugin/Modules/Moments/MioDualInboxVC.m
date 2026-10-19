@@ -1,4 +1,5 @@
 #import "MioDualInboxVC.h"
+#import "../../ChatTopBar/AvatarLoader.h"
 #import <objc/message.h>
 
 // 消息 dict 字段（MomentsDualPanel inboxItems 产出）：
@@ -41,18 +42,18 @@
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor colorWithRed:0.969 green:0.969 blue:0.969 alpha:1];   // #F7F7F7
 
-    // 顶部分类（WCM：UISegmentedControl initWithItems: categories）
-    self.seg = [[UISegmentedControl alloc] initWithItems:@[@"全部", @"收到的赞", @"评论"]];
+    // 顶部分类（WCM 真机截图：全部 / 赞过我 / 评论过我）
+    self.seg = [[UISegmentedControl alloc] initWithItems:@[@"全部", @"赞过我", @"评论过我"]];
     self.seg.selectedSegmentIndex = 0;
     [self.seg addTarget:self action:@selector(segChanged:) forControlEvents:UIControlEventValueChanged];
     self.seg.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.seg];
 
-    self.table = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStylePlain];
+    self.table = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleInsetGrouped];
     self.table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.table.dataSource = self;
     self.table.delegate = self;
-    self.table.backgroundColor = [UIColor clearColor];
+    self.table.backgroundColor = [UIColor colorWithRed:0.969 green:0.969 blue:0.969 alpha:1];   // #F7F7F7
     self.table.separatorInset = UIEdgeInsetsMake(0, 68, 0, 0);
 
     // 下拉刷新 → loadMessages（WCM 同款：数据由面板统一解析，这里通知面板重取）
@@ -75,6 +76,11 @@
 
 - (void)pullRefresh {
     [[NSNotificationCenter defaultCenter] postNotificationName:@"MioDualInboxReload" object:nil];
+}
+
+// 导航栏「‹ 发现」返回（present 包装，dismiss 即回面板）
+- (void)goBack {
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)segChanged:(UISegmentedControl *)seg {
@@ -137,17 +143,17 @@
     cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
     cell.detailTextLabel.numberOfLines = 2;
     cell.imageView.image = [self circleAvatar:[self avatarImage:d[@"actor"]]];
-    cell.accessoryType = UITableViewCellAccessoryNone;
+    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 
-    // 右侧时间「M 月」（WCM DateFormatter "M 月"）
-    UILabel *time = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 44, 20)];
+    // 右侧时间「10月19日 16:24」（WCM 真机截图格式）
+    UILabel *time = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 110, 20)];
     time.tag = 1001;
-    time.font = [UIFont systemFontOfSize:11];
+    time.font = [UIFont systemFontOfSize:12];
     time.textColor = [UIColor tertiaryLabelColor];
     time.textAlignment = NSTextAlignmentRight;
     NSDate *dt = [NSDate dateWithTimeIntervalSince1970:[d[@"t"] doubleValue]];
     NSDateFormatter *f = [[NSDateFormatter alloc] init];
-    f.dateFormat = @"M 月";
+    f.dateFormat = @"M月d日 HH:mm";
     time.text = [f stringFromDate:dt];
     time.translatesAutoresizingMaskIntoConstraints = NO;
     [cell.contentView addSubview:time];
@@ -187,20 +193,11 @@
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-// 头像：MMHeadImageMgr getHeadImage:withCategory:（8.0.78 头文件实证）
-// 无缓存回落 SF Symbol person.crop.circle.fill（WCM 同款 fallback）
+// 头像：项目已实证全链路 AvatarLoader（本地自定义 → MMHeadImageMgr → CDN）
+// （MMContext activeUserContext 链在 8.0.78 不成立，弃用）；无图回落 SF Symbol
 - (UIImage *)avatarImage:(NSString *)usr {
-    if (usr.length > 0) {
-        @try {
-            id ctx = ((id(*)(id, SEL))objc_msgSend)(objc_getClass("MMContext"), NSSelectorFromString(@"activeUserContext"));
-            id mgr = ctx ? ((id(*)(id, SEL, id))objc_msgSend)(ctx, NSSelectorFromString(@"getService:"), objc_getClass("MMHeadImageMgr")) : nil;
-            SEL imgSel = NSSelectorFromString(@"getHeadImage:withCategory:");
-            if (mgr && [mgr respondsToSelector:imgSel]) {
-                UIImage *img = ((id(*)(id, SEL, id, long))objc_msgSend)(mgr, imgSel, usr, 0);
-                if ([img isKindOfClass:[UIImage class]]) return img;
-            }
-        } @catch (NSException *e) {}
-    }
+    UIImage *img = usr.length ? [[AvatarLoader shared] loadAvatarSyncForWxid:usr contact:nil] : nil;
+    if (img) return img;
     return [UIImage systemImageNamed:@"person.crop.circle.fill"];
 }
 
