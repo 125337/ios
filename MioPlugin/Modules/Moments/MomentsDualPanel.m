@@ -535,26 +535,27 @@ static char kDualPanelAssocKey;
 
 @end
 
-#pragma mark - 面板挂载/移除（childVC 覆盖 host 内容区，导航栏保留）
+#pragma mark - 面板挂载/移除（WCMoments coverHost/restoreChrome 复刻）
 
 void MioDualPanelOpen(UIViewController *host) {
     if ([objc_getAssociatedObject(host, &kDualPanelAssocKey) isKindOfClass:[MomentsDualPanel class]]) return;
     MomentsDualPanel *panel = [[MomentsDualPanel alloc] init];
     objc_setAssociatedObject(host, &kDualPanelAssocKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    // WCMoments 同款覆盖层级：连导航栏一起盖（HTML 大标题即顶栏），仅保留底部 tabbar。
-    // host.view 非全屏（导航容器内 origin 在导航栏下），故 view 直上 window，高度到 tabBar 顶。
-    // 不挂 childVC（UIKit 禁止把 childVC 的 view 加进 parent 视图树之外，window 上必崩，
-    // IPS 实证 _associatedViewControllerForwardsAppearanceCallbacks 断言）；panel 由关联对象持有
-    UIWindow *win = host.view.window;
-    CGRect full = win.bounds;
-    CGFloat top = full.size.height;
-    UITabBarController *tbc = host.tabBarController;
-    if (tbc && !tbc.tabBar.isHidden && tbc.tabBar.frame.origin.y > 0) {
-        top = tbc.tabBar.frame.origin.y;
+    // WCMoments coverHost 同款：capture chrome → host 全屏化 + 藏导航栏 → 面板 view 挂 host.view 顶层。
+    // 面板随宿主 view 走（切 tab 自动消失）；不能上 window（childVC/独立 view 都会脱离 tab 生命周期）
+    if (!panel.chromeCaptured) {
+        panel.chromeCaptured = YES;
+        panel.prevNavHidden = host.navigationController.isNavigationBarHidden;
+        panel.prevEdges = host.edgesForExtendedLayout;
+        panel.prevOpaqueBars = host.extendedLayoutIncludesOpaqueBars;
     }
-    panel.view.frame = CGRectMake(0, 0, full.size.width, top);
-    panel.view.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    [win addSubview:panel.view];
+    host.edgesForExtendedLayout = UIRectEdgeAll;
+    host.extendedLayoutIncludesOpaqueBars = YES;
+    [host.navigationController setNavigationBarHidden:YES animated:NO];
+    panel.view.frame = host.view.bounds;
+    panel.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [host.view addSubview:panel.view];
+    [host.view bringSubviewToFront:panel.view];
     // 发现页直接打开时朋友圈缓存可能为空（尚未进过朋友圈），先主动拉一次
     id facade = MioDualFacade();
     SEL refreshSel = NSSelectorFromString(@"updateTimelineHead");
@@ -571,6 +572,12 @@ void MioDualPanelClose(UIViewController *host) {
     // 硬摘除不会触发 viewWillDisappear（非容器协调移除），必须手动停轮询
     [panel stopPolling];
     [panel.view removeFromSuperview];
+    // WCMoments restoreChrome：还原发现页 chrome
+    host.edgesForExtendedLayout = panel.prevEdges;
+    host.extendedLayoutIncludesOpaqueBars = panel.prevOpaqueBars;
+    if (!panel.prevNavHidden) {
+        [host.navigationController setNavigationBarHidden:NO animated:NO];
+    }
     WPLog(@"Dual", @"[Dual] panel closed");
 }
 
