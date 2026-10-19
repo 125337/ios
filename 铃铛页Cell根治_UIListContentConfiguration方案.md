@@ -25,6 +25,8 @@
 #if !__has_include(<UIKit/UIListContentConfiguration.h>)
 
 @interface UIListContentConfiguration : NSObject
+// 类方法：必须发给本类，发给 UITableViewCell 即 unrecognized selector（闪退根因实证）
++ (instancetype)subtitleCellConfiguration;
 @property (nonatomic, copy, nullable) NSString *text;
 @property (nonatomic, copy, nullable) NSAttributedString *attributedText;
 @property (nonatomic, copy, nullable) NSString *secondaryText;
@@ -67,12 +69,11 @@
                   : (like ? @"赞了你的朋友圈" : @"评论了你的朋友圈");
 
     // ---- 现代内容配置（WCM 同款管线）----
-    SEL cfgSel = NSSelectorFromString(@"subtitleCellConfiguration");
-    UIListContentConfiguration *cfg =
-        ((id(*)(id, SEL))objc_msgSend)([UITableViewCell class], cfgSel);
+    // subtitleCellConfiguration 是 UIListContentConfiguration 的类方法，必须发给本类
+    UIListContentConfiguration *cfg = [UIListContentConfiguration subtitleCellConfiguration];
     cfg.text = d[@"name"];
     cfg.secondaryText = sec;
-    cfg.image = [self circleAvatar:[self avatarImage:d[@"actor"]]];   // 预渲染圆头像（UIImageConfiguration 只读无 setter，不可用 imageProperties 赋值）
+    cfg.image = [self circleAvatar:[self avatarImage:d[@"actor"]]];   // 预渲染圆头像（imageProperties 实际类型是 UIListContentImageProperties，预渲染更可控）
     cfg.secondaryTextProperties.font = [UIFont systemFontOfSize:13];
     cfg.textToSecondaryTextVerticalPadding = 2;
     cell.contentConfiguration = cfg;                     // ← 系统接管排版 + 分组卡底

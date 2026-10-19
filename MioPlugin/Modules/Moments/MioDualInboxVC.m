@@ -179,13 +179,12 @@
                   : (like ? @"赞了你的朋友圈" : @"评论了你的朋友圈");
 
     // ---- 现代内容配置（WCM 同款管线）：排版 + 分组卡底系统接管 ----
-    SEL cfgSel = NSSelectorFromString(@"subtitleCellConfiguration");
-    UIListContentConfiguration *cfg =
-        ((id(*)(id, SEL))objc_msgSend)([UITableViewCell class], cfgSel);
+    // subtitleCellConfiguration 是 UIListContentConfiguration 的类方法，必须发给本类；
+    // 发给 UITableViewCell 会 doesNotRecognizeSelector → 点进铃铛页即崩（dump 实证）
+    UIListContentConfiguration *cfg = [UIListContentConfiguration subtitleCellConfiguration];
     cfg.text = d[@"name"];
     cfg.secondaryText = sec;
     cfg.image = [self circleAvatar:[self avatarImage:d[@"actor"]]];   // 预渲染 42pt 圆形位图
-                                                                      // （imageProperties 运行时是只读值对象无 setter，赋值即 unrecognized selector，别走系统圆角）
     cfg.secondaryTextProperties.font = [UIFont systemFontOfSize:13];
     cfg.textToSecondaryTextVerticalPadding = 2;
     cell.contentConfiguration = cfg;
@@ -237,7 +236,7 @@
 }
 
 // 头像统一画成 42pt 圆形位图（SF Symbol 拉伸后仍为圆形观感）。
-// contentConfiguration 的 imageProperties 运行时是只读值对象（无 setter），圆角只能预渲染实现
+// 用预渲染而非 imageProperties.cornerRadius：后者实际类型是 UIListContentImageProperties，观感不可控
 - (UIImage *)circleAvatar:(UIImage *)img {
     if (!img) return nil;
     CGFloat s = 42;

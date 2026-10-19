@@ -9,6 +9,9 @@
 #if !__has_include(<UIKit/UIListContentConfiguration.h>)
 
 @interface UIListContentConfiguration : NSObject
+// 类方法：必须发给 UIListContentConfiguration 本类。发给 UITableViewCell 会
+// doesNotRecognizeSelector → cellForRow 首行即崩（dump 实证：UITableViewCell 无此方法）
++ (instancetype)subtitleCellConfiguration;
 @property (nonatomic, copy, nullable) NSString *text;
 @property (nonatomic, copy, nullable) NSAttributedString *attributedText;
 @property (nonatomic, copy, nullable) NSString *secondaryText;
@@ -27,9 +30,9 @@
 @property (nonatomic, assign) NSInteger numberOfLines;
 @end
 
-// ⚠️ UIImageConfiguration 是只读值对象：运行时没有 setMaximumSize:/setCornerRadius:，
-// 在此补可写声明编译能过但一调用即 unrecognized selector（首版 shim 点进铃铛页必崩实证）。
-// 圆头像只能走 circleAvatar: 预渲染位图，不要在此补这两个声明。
+// 注：imageProperties 运行时实际返回 UIListContentImageProperties（dump 实证，
+// 含 setMaximumSize:/setCornerRadius:），与头文件里的 UIImageConfiguration 不是同一个类。
+// 圆头像仍走 circleAvatar: 预渲染，不依赖它。
 
 @interface UITableViewCell ()
 @property (nonatomic, copy, nullable) UIListContentConfiguration *contentConfiguration;
