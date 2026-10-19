@@ -74,6 +74,7 @@ static NSString *g_currentChatName = nil;   // 当前会话 talker（群聊=chat
 static NSArray  *g_currentNodeArray = nil;  // 当前聊天 VC 的 m_arrMessageNodeData（retain）
 static __weak UIViewController *g_curChatVC = nil;   // 当前聊天 VC（刷新/重排定位用）
 static double g_lastArrCheck    = 0;        // 读侧保鲜限频（0.15s）
+static CFAbsoluteTime g_lastAddMsgTick = 0; // 最近一次收发消息（首屏补询避让收发管线，mmHandleIncomingMsg 写）
 static double g_lastScrollApply = 0;        // 滚动保鲜限频（100ms）
 static BOOL s_mergeRelayoutPending = NO;    // 新消息重排进行中（防连发消息重复排队）
 
@@ -442,6 +443,7 @@ static void mergeScheduleRelayout(void) {
 static void mmHandleIncomingMsg(id session, id wrap) {
     MsgMergeConfig *cfg = [MsgMergeConfig shared];
     if (!cfg.mmEnable) return;
+    g_lastAddMsgTick = CFAbsoluteTimeGetCurrent();   // 收发管线活跃标记（补询避让）
     if (![session isKindOfClass:[NSString class]]) return;
     if (![(NSString *)session isEqualToString:g_currentChatName]) {
         // 聊天名缺位兜底：session 是微信收发管道自带的 talker，当前聊天页在且
@@ -924,6 +926,86 @@ static void mergeFindTable(UIView *v, int depth, UITableView **out) {
     for (UIView *sub in v.subviews) mergeFindTable(sub, depth + 1, out);
 }
 
+// —— 首屏数据驱动补询状态（微信数据落地时机不定，固定延迟保险丝会输给晚到数据）——
+static CFAbsoluteTime g_entryTick = 0;       // 进页时刻（viewDidAppear 刷新）
+static BOOL g_userScrolled = NO;             // 用户手动滚动过 → 补询窗口关闭
+static NSUInteger g_fuseGen = 0;             // 去抖代际
+static NSUInteger g_fuseCount = 0;           // 本次进页补询次数（上限 3）
+static BOOL g_fuseSnap = NO;                 // 贴底快照已取
+static BOOL g_fuseAtBottom = NO;             // 进页贴底快照
+
+// 补询执行：同步清测量缓存 + begin/endUpdates 强制全表重询 + 贴底重锚。
+// begin/endUpdates 安全性同 appear 保险丝（进会话静默窗口；收发管线由调用侧
+// 1.5s 避让与 @try 共同防）。
+static void mergeFuseFire(void) {
+    if (!g_curChatVC) return;
+    UIViewController *vc = g_curChatVC;
+    UITableView *tbl = nil;
+    mergeFindTable(vc.view, 0, &tbl);
+    if (!tbl) return;
+    @try {
+        resetAllMeasureCaches();
+        [tbl layoutIfNeeded];
+        [tbl beginUpdates];
+        [tbl endUpdates];
+        g_fuseCount++;
+        if (g_fuseAtBottom) {
+            double target = tbl.contentSize.height - tbl.bounds.size.height
+                          + tbl.adjustedContentInset.bottom;
+            if (target > 0 && fabs(tbl.contentOffset.y - target) > 1.0) {
+                [tbl setContentOffset:CGPointMake(0, target) animated:NO];
+            }
+        }
+    } @catch (NSException *e) {
+        WPLog(@"MsgMerge", @"[Ctx] 数据补询 begin/end clash: %@", e.reason);
+    }
+}
+
+// measure 实际改高时去抖 0.4s 补询（首屏截断根治，2026-10-19 探针实证）：微信聊天
+// 数据落地时机不定（DB/网络，同一进页动作 measure 爆发相对 viewDidAppear+0.2s 可
+// 漂移 5s+），固定延迟保险丝与晚到数据赛跑必输——晚到的骑行补高无人重询，微信
+// 锚底仍用旧 contentSize，底行被输入栏截断。改为改高测量自身触发：数据何时落地
+// 就何时补询。窗口=进页 10s 内且用户未手动滚动（isDragging/isDecelerating 判定，
+// 程序性 setContentOffset 不算）；距最近收发消息 ≥1.5s（语音管线期间 begin/
+// endUpdates 崩溃定论，撞上则顺延 1s）；上限 3 次（防「补询→重询→再调度」自激励
+// 循环）；贴底快照取首次改高时刻（此时微信锚底尚未消费新行高）。
+static void mergeScheduleDataFuse(void) {
+    if (![NSThread isMainThread]) return;
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+    if (g_entryTick <= 0 || now - g_entryTick > 10.0) return;
+    if (g_userScrolled) return;
+    if (g_lastAddMsgTick > 0 && now - g_lastAddMsgTick < 1.5) return;
+    if (g_fuseCount >= 3) return;
+    if (!g_fuseSnap) {
+        g_fuseSnap = YES;
+        UITableView *tbl = nil;
+        if (g_curChatVC) mergeFindTable(g_curChatVC.view, 0, &tbl);
+        if (tbl) {
+            double offY = tbl.contentOffset.y;
+            double bottom = tbl.contentSize.height - tbl.bounds.size.height
+                          + tbl.adjustedContentInset.bottom;
+            g_fuseAtBottom = (bottom <= 0) || (offY >= bottom - 80.0);
+        }
+    }
+    NSUInteger myGen = ++g_fuseGen;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (myGen != g_fuseGen) return;   // 被更新的改高测量取代（去抖）
+        if (g_userScrolled) return;
+        CFAbsoluteTime now2 = CFAbsoluteTimeGetCurrent();
+        if (g_lastAddMsgTick > 0 && now2 - g_lastAddMsgTick < 1.5) {
+            NSUInteger g2 = ++g_fuseGen;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                if (g2 != g_fuseGen) return;
+                mergeFuseFire();
+            });
+            return;
+        }
+        mergeFuseFire();
+    });
+}
+
 // 聊天表 reloadData 首测前置（首屏固化根治，2026-10-19）：微信行变更全走 reloadData
 // （本项目定论），被调时节点数组必然就位（reload 就是要渲染这些节点）——此刻同步
 // 重建索引，行高首测与首帧渲染的标志必就位。根治后 viewDidAppear 0.2s 补救退化为
@@ -954,6 +1036,11 @@ static void repl_BaseMsgContentVC_viewDidAppear(id self, SEL _cmd, BOOL animated
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (!cfg.mmEnable) return;
         if (self != g_curChatVC) return;
+        // 数据驱动补询窗口开启（详见 mergeScheduleDataFuse 注释）
+        g_entryTick = CFAbsoluteTimeGetCurrent();
+        g_userScrolled = NO;
+        g_fuseSnap = NO;
+        g_fuseCount = 0;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             if (g_curChatVC != self) return;   // 已切走
@@ -1000,6 +1087,12 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
         ((void (*)(id, SEL, id))orig_BMCVC_scrollViewDidScroll)(self, _cmd, scrollView);
     }
     @try {
+        // 用户手动滚动判定（isDragging/isDecelerating：程序性 setContentOffset 不算）
+        if (scrollView) {
+            BOOL drag = ((BOOL (*)(id, SEL))objc_msgSend)(scrollView, @selector(isDragging))
+                     || ((BOOL (*)(id, SEL))objc_msgSend)(scrollView, @selector(isDecelerating));
+            if (drag) g_userScrolled = YES;
+        }
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (!cfg.mmEnable) return;
         if (self != g_curChatVC) return;   // 非当前聊天页的滚动不干预
@@ -1088,6 +1181,7 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
             if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
         }
         if (fabs(h - (double)s.height) < 0.01) return s;
+        mergeScheduleDataFuse();   // 改高即调度补询（数据驱动首屏修复，见函数注释）
         return CGSizeMake(s.width, (CGFloat)h);
     } @catch (NSException *e) {
         s_inMeasure = NO;
