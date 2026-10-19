@@ -84,8 +84,8 @@
     self.table.delegate = self;
     self.table.backgroundColor = [UIColor systemGroupedBackgroundColor];
     self.table.separatorStyle = UITableViewCellSeparatorStyleNone;       // 无发丝线（卡片间隙即分隔）
-    self.table.rowHeight = 72;   // 对齐 WCM setRowHeight_（42pt 圆头像 + 两行文字）
-    if (@available(iOS 15.0, *)) self.table.sectionHeaderTopPadding = 0; // 去系统 section 头 padding
+    self.table.rowHeight = 87;   // WCM setRowHeight_ 反编译实证（87.0；delegate heightForRow 已钉死，此处兜底）
+    // 不设 sectionHeaderTopPadding（WCM 反编译未触碰，间距全交系统默认）
 
     // 下拉刷新 → loadMessages（WCM 同款：本页自己拉 facade 数据）
     self.refresh = [UIRefreshControl new];
@@ -143,9 +143,8 @@
     [self segChanged:self.seg];
 }
 
-// 卡间距 ~16pt（WCM 真机截图实测）：每卡 section header/footer 各 8
-- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section { return 8; }
-- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section  { return 8; }
+// 卡间距：不实现 heightForHeader/Footer（WCM 反编译实证同样不实现）——
+// 间距全交 InsetGrouped 系统默认，与 WCM 同一条渲染路径
 
 // WCM changeCategory 对齐（宽松版）：赞 tab=kind like 且我帖；评论 tab=非赞；全部=全部
 - (void)applyFilter {
@@ -183,10 +182,10 @@
     return self.rows.count;
 }
 
-// 固定 92（WCM 真机截图实测：三行布局 昵称/内容/时间）：delegate 实现后 self-sizing 关闭——
+// 固定 87（WCM setRowHeight_ 反编译实证 0x405a8=87.0）：delegate 实现后 self-sizing 关闭——
 // InsetGrouped + contentConfiguration 组合会把 rowHeight 属性顶掉自撑高度，必须用 delegate 钉死
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    return 92;
+    return 87;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
@@ -206,42 +205,45 @@
     NSString *sec = (txt.length > 0) ? txt
                   : (like ? @"♡ 赞了你的朋友圈" : @"评论了你的朋友圈");
 
-    // ---- ③ 内容配置（接收者 = UIListContentConfiguration 类，dump 实证）----
+    // ---- 时间行：WCM 反编译实证——时间不是独立 label，stringWithFormat:@"%@\n%@"
+    //      把 内容+时间 拼成 secondaryText 第二行（三行观感的来源），numberOfLines=3
+    NSDate *dt = [NSDate dateWithTimeIntervalSince1970:[d[@"t"] doubleValue]];
+    NSDateFormatter *f = [[NSDateFormatter alloc] init];
+    f.dateFormat = @"M月d日 HH:mm";
+    NSString *secondary = [NSString stringWithFormat:@"%@\n%@", sec, [f stringFromDate:dt]];
+
+    // ---- ③ 内容配置（WCM cellForRow 反编译逐选择器对齐，实参十六进制已解码）----
     SEL cfgSel = NSSelectorFromString(@"subtitleCellConfiguration");
     UIListContentConfiguration *cfg =
         ((id(*)(id, SEL))objc_msgSend)(objc_getClass("UIListContentConfiguration"), cfgSel);
     cfg.text = d[@"name"];
-    cfg.secondaryText = sec;
-    cfg.image = [self avatarImage:d[@"actor"]];                 // 原图，圆角交给系统
-    cfg.imageProperties.maximumSize  = CGSizeMake(42, 42);      // WCM 同款（setMaximumSize_ 实证）
-    cfg.imageProperties.cornerRadius = 21;                      // setCornerRadius_ 实证
-    cfg.secondaryTextProperties.font = [UIFont systemFontOfSize:13];
-    cfg.textToSecondaryTextVerticalPadding = 2;
+    cfg.textProperties.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];  // 0x402e=15.0 + Semibold
+    cfg.secondaryText = secondary;
+    cfg.secondaryTextProperties.font = [UIFont systemFontOfSize:13];                     // 0x402a=13.0
+    cfg.secondaryTextProperties.textColor = [UIColor secondaryLabelColor];
+    cfg.secondaryTextProperties.numberOfLines = 3;
+    cfg.image = [self avatarImage:d[@"actor"]];
+    cfg.imageProperties.maximumSize  = CGSizeMake(45, 45);   // 0x4046=45.0
+    cfg.imageProperties.cornerRadius = 22.5;                 // 45/2 正圆（WCM setCornerRadius_ 同款）
+    cfg.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(12, 22.5, 12, 22.5);  // 0x4028/0x4036
     cell.contentConfiguration = cfg;
-
-    // ---- ⑥ 手绘卡（WCM 实证：白卡是自己画的 layer，非系统分组底）----
-    cell.backgroundColor = [UIColor clearColor];
-    cell.contentView.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
-    cell.contentView.layer.cornerRadius = 12;
-    cell.contentView.layer.masksToBounds = YES;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 
-    // ---- ⑧ 第三行时间「M月d日 HH:mm」（WCM 真机截图：三行左对齐，时间贴卡底）----
-    [[cell.contentView viewWithTag:1001] removeFromSuperview];   // 复用清理（时间 label 手工挂载）
-    UILabel *time = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 160, 16)];
-    time.tag = 1001;
-    time.font = [UIFont systemFontOfSize:12];
-    time.textColor = [UIColor tertiaryLabelColor];
-    NSDate *dt = [NSDate dateWithTimeIntervalSince1970:[d[@"t"] doubleValue]];
-    NSDateFormatter *f = [[NSDateFormatter alloc] init];
-    f.dateFormat = @"M月d日 HH:mm";
-    time.text = [f stringFromDate:dt];
-    time.translatesAutoresizingMaskIntoConstraints = NO;
-    [cell.contentView addSubview:time];
-    [NSLayoutConstraint activateConstraints:@[
-        // leading = 文本区起点：margins + 头像42 + 图文间距12（WCM 三行同 x 左对齐）
-        [time.leadingAnchor constraintEqualToAnchor:cell.contentView.layoutMarginsGuide.leadingAnchor constant:54],
-        [time.bottomAnchor constraintEqualToAnchor:cell.contentView.layoutMarginsGuide.bottomAnchor]]];
+    // ---- ⑥ 卡片（WCM _StyleMessageCell 反编译）：cell/contentView 全 clearColor，
+    //      白卡 = cell.backgroundView（InsetGrouped 系统圆角裁剪自动作用于 backgroundView，
+    //      非 contentView.layer 手绘）；选中态 = tertiarySystemFillColor 同款卡
+    cell.backgroundColor = [UIColor clearColor];
+    cell.contentView.backgroundColor = [UIColor clearColor];
+    if (![cell.backgroundView isKindOfClass:[UIView class]]) {
+        UIView *card = [[UIView alloc] initWithFrame:cell.bounds];
+        card.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+        cell.backgroundView = card;
+    }
+    if (![cell.selectedBackgroundView isKindOfClass:[UIView class]]) {
+        UIView *selCard = [[UIView alloc] initWithFrame:cell.bounds];
+        selCard.backgroundColor = [UIColor tertiarySystemFillColor];
+        cell.selectedBackgroundView = selCard;
+    }
 
     return cell;
 }
