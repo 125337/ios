@@ -61,6 +61,7 @@ static IMP orig_BaseMsgContentVC_viewDidLoad    = NULL;
 static IMP orig_BaseMsgContentVC_viewWillAppear = NULL;
 static IMP orig_BaseMsgContentVC_viewDidAppear  = NULL;
 static IMP orig_BMCVC_scrollViewDidScroll       = NULL;
+static IMP orig_BMCVC_estH                      = NULL;   // tableView:estimatedHeightForRow:（入场锚底源头）
 static IMP orig_CMCellView_layoutSubviews       = NULL;   // 渲染应用（XOS 同款挂点）
 static IMP orig_CMVM_measure                    = NULL;
 static IMP orig_CMVM_isShowChatRoomDisplayName  = NULL;
@@ -1227,14 +1228,10 @@ static void repl_BMCVC_scrollViewDidScroll(id self, SEL _cmd, id scrollView) {
 //   ② 组内行高缩减：非组尾消息测量高 −(mmSpacing+mmHeightReduce)（下限 24；
 //      HeightReduce=XOS mesMsgMergeHeightReduce 同款：组内行高原生−该值）
 // 昵称区不在此补偿——判定钩翻转让原生测量自动收缩（N 补偿链已删）。
+// 核心算术抽成 mmMergedSize：measure 钩与估算行高钩（入场锚底源头，见
+// repl_BMCVC_estHeightForRow）共用同一份，保证两路高度恒同源。
 // ------------------------------------------------------------
-static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
-    // BubbleBox 同款直换 IMP：orig 全局唯一（公共基类单点，无按类分表）
-    IMP o = orig_CMVM_measure;
-    CGSize s = o ? ((CGSize (*)(id, SEL, CGSize))o)(self, _cmd, sz)
-                 : CGSizeMake(sz.width, 0);
-    static BOOL s_inMeasure = NO;
-    if (s_inMeasure) return s;
+static CGSize mmMergedSize(id vm, CGSize s) {
     @try {
         MsgMergeConfig *cfg = [MsgMergeConfig shared];
         if (!cfg.mmEnable) return s;
@@ -1244,19 +1241,14 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         if (cfg.mmSpacingMode == 1 && cfg.mmSpacing > 0) reduce += (double)cfg.mmSpacing;
         reduce += (double)cfg.mmHeightReduce;
         if (reduce <= 0 && !cfg.mmAvatarRide) return s;
-        id wrap = safeKVC(self, @"messageWrap");
+        id wrap = safeKVC(vm, @"messageWrap");
         if (!wrap) return s;   // 时间节点等无 wrap
         NSString *chat = chatNameOfWrap(wrap);
         if (chat.length == 0) chat = currentChatName();
         if (chat.length == 0) return s;
-        s_inMeasure = YES;
-        MOMergePosition pos = flagsPos(self);
-        s_inMeasure = NO;
-        if (pos == MOMergePositionNone) {   // 组外/标志缺席：原生直通
-            WPLog(@"MsgMerge", @"[MMZ] pos=None 直通 h=%.1f", (double)s.height);
-            return s;
-        }
-        unsigned long long split = vmSplitPosition(self);   // 0=整条 1=首片 2=中片 3=末片
+        MOMergePosition pos = flagsPos(vm);
+        if (pos == MOMergePositionNone) return s;   // 组外/标志缺席：原生直通
+        unsigned long long split = vmSplitPosition(vm);   // 0=整条 1=首片 2=中片 3=末片
         // ① 骑行补高：渲染层把气泡顶钉到 头像底(45)+14=头像顶+57（泡在头像正下方
         //    左右恒对称），泡下移量由行高全额补足（rideAdd = 下移量）。不可抵扣本行
         //    底部空白——那块空白是组内行间距的来源，抵扣=骑行偷间距（探针实证骑行行
@@ -1277,7 +1269,7 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
                     (pos == MOMergePositionFirst || pos == MOMergePositionSingle) &&
                     orig_CMVM_isShowChatRoomDisplayName) {
                     nickRow = ((BOOL (*)(id, SEL))orig_CMVM_isShowChatRoomDisplayName)(
-                        self, @selector(isShowChatRoomDisplayName));
+                        vm, @selector(isShowChatRoomDisplayName));
                 }
                 double need = 2.0 + olRideLift + olClamp(cfg.mmAvatarRideDepth, 100) - (nickRow ? 16.0 : 5.0);
                 rideAdd = need;   // 泡下移量全额补高（不抵扣底部空白，间距保原生）
@@ -1285,26 +1277,16 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
             }
         }
         BOOL isTail = (pos == MOMergePositionLast || pos == MOMergePositionSingle);
-        if (rideAdd <= 0 && isTail) {   // 组尾保原生（组尾到组外间隙不变）
-            WPLog(@"MsgMerge", @"[MMZ] 组尾直通 chat=%@ h=%.1f", chat, (double)s.height);
-            return s;
-        }
+        if (rideAdd <= 0 && isTail) return s;   // 组尾保原生（组尾到组外间隙不变）
         // 末片门控：首片/中片是无缝泡体——原生切片气泡底=片边界、续片 bgTop=0
         // 贴顶无让位，任何测量改动都让泡体溢出压进下一片（diag33 实锤同气泡自叠）。
-        if (rideAdd <= 0 && split != 0 && split != 3) {
-            WPLog(@"MsgMerge", @"[MMZ] 切片直通 chat=%@ split=%llu h=%.1f", chat, split, (double)s.height);
-            return s;
-        }
+        if (rideAdd <= 0 && split != 0 && split != 3) return s;
         double h = (double)s.height + rideAdd;
         if (!isTail) {
             h -= reduce;
             if (h < 24.0) h = 24.0;   // 下限 24 防裁切（缩减只吃底部空白）
         }
-        if (fabs(h - (double)s.height) < 0.01) {
-            WPLog(@"MsgMerge", @"[MMZ] 无变化 chat=%@ pos=%ld split=%llu h=%.1f",
-                  chat, (long)pos, split, (double)h);
-            return s;
-        }
+        if (fabs(h - (double)s.height) < 0.01) return s;
         WPLog(@"MsgMerge", @"[MMZ] chat=%@ pos=%ld split=%llu nat=%.1f ride=%.1f red=%.1f -> %.1f",
               chat, (long)pos, split, (double)s.height, rideAdd, reduce, h);
         // 改高调度按「上次输出的合并值」判定真实变化：骑行行每次 measure 都与原生
@@ -1312,19 +1294,55 @@ static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
         // 改高风暴（装机日志实证 gen 60+、2 秒 3 次全表重建 = 首屏闪动）。
         {
             static void *kLastMergedH = &kLastMergedH;
-            NSNumber *lv = objc_getAssociatedObject(self, kLastMergedH);
+            NSNumber *lv = objc_getAssociatedObject(vm, kLastMergedH);
             double lastH = lv ? [lv floatValue] : 0.0;
             if (fabs(h - lastH) > 0.01) {
-                objc_setAssociatedObject(self, kLastMergedH, @(h), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(vm, kLastMergedH, @(h), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 mergeScheduleDataFuse();   // 真实改高才调度补询（数据驱动首屏修复，见函数注释）
             }
         }
         return CGSizeMake(s.width, (CGFloat)h);
     } @catch (NSException *e) {
-        s_inMeasure = NO;
-        WPLog(@"MsgMerge", @"[MMZ] measure exception: %@", e.reason);
+        WPLog(@"MsgMerge", @"[MMZ] exception: %@", e.reason);
     }
     return s;
+}
+
+static CGSize repl_CMVM_measure(id self, SEL _cmd, CGSize sz) {
+    // BubbleBox 同款直换 IMP：orig 全局唯一（公共基类单点，无按类分表）
+    IMP o = orig_CMVM_measure;
+    CGSize s = o ? ((CGSize (*)(id, SEL, CGSize))o)(self, _cmd, sz)
+                 : CGSizeMake(sz.width, 0);
+    static BOOL s_inMeasure = NO;
+    if (s_inMeasure) return s;
+    s_inMeasure = YES;
+    CGSize r = mmMergedSize(self, s);
+    s_inMeasure = NO;
+    return r;
+}
+
+// —— BaseMsgContentViewController：估算行高委托接管（入场锚底源头根治）——
+// 微信聊天表用 estimated 行高算首屏 contentSize：估算=原生值，真实合并高度只在
+// 可见行落地 → 原生锚底锚在旧估算 cs 上（装机实证锚 792、行高落地后 cs=1630、
+// 缺口 66.3pt=用户所见首屏截断；缺口大小取决于布局运气）。此钩把合并行高同样
+// 注入估算路径：微信第一次锚底拿到的 cs 即终值，缺口=0，跟踪锚退化为保险丝。
+// 与 measure 钩共用 mmMergedSize（同源算术）；取数与微信 delegate 同源：
+// m_arrMessageNodeData[indexPath.row].viewModel（updateChatContext 实证结构）。
+static CGFloat repl_BMCVC_estHeightForRow(id self, SEL _cmd, UITableView *tv, NSIndexPath *ip) {
+    IMP o = orig_BMCVC_estH;
+    CGFloat est = o ? ((CGFloat (*)(id, SEL, UITableView *, NSIndexPath *))o)(self, _cmd, tv, ip) : 0.0;
+    @try {
+        MsgMergeConfig *cfg = [MsgMergeConfig shared];
+        if (!cfg.mmEnable) return est;
+        NSArray *arr = g_currentNodeArray;
+        if (arr.count == 0 || ip.row >= (NSInteger)arr.count) return est;
+        id vm = safeKVC(arr[ip.row], @"viewModel");
+        if (!vm) return est;
+        CGSize r = mmMergedSize(vm, CGSizeMake(0, (double)est));
+        return (CGFloat)r.height;
+    } @catch (NSException *e) {
+        return est;
+    }
 }
 
 // —— CommonMessageViewModel：昵称判定接管 ——
@@ -1510,6 +1528,27 @@ static BOOL impIsForeign(IMP cur) {
                                                      "UITableView");
                 WPLog(@"MsgMerge", @"[Hook] ✓ UITableView reloadData（聊天表首测前置）");
             }
+        }
+    }
+
+    // ①d 估算行高委托接管（入场锚底源头根治，见 repl_BMCVC_estHeightForRow 注释）。
+    // 委托方法存在才挂；缺席=聊天表走 estimatedRowHeight 属性（估算接管不可行，
+    // 日志可见，退回入场跟踪锚方案）。
+    {
+        Class bcls = objc_getClass("BaseMsgContentViewController");
+        SEL selEst = @selector(tableView:estimatedHeightForRowAtIndexPath:);
+        Method em = bcls ? class_getInstanceMethod(bcls, selEst) : NULL;
+        if (em) {
+            IMP cur = method_getImplementation(em);
+            if (impIsForeign(cur)) {
+                WPLog(@"MsgMerge", @"[Hook] ⊘ estimatedHeightForRow 归属外挂，让位不挂（跟踪锚兜底）");
+            } else {
+                orig_BMCVC_estH = bbSwap(bcls, selEst, (IMP)repl_BMCVC_estHeightForRow,
+                                         "BaseMsgContentViewController");
+                WPLog(@"MsgMerge", @"[Hook] ✓ BaseMsgContentViewController estimatedHeightForRow（入场锚底源头）");
+            }
+        } else {
+            WPLog(@"MsgMerge", @"[Hook] [Est] 基类无 estimatedHeightForRow 委托（估算=属性，退跟踪锚）");
         }
     }
 
