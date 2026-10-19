@@ -1,0 +1,10 @@
+// showType @0x8ea58
+
+/* Function Stack Size: 0x10 bytes */
+
+long_long WCMYBIBAnimatedTransition::showType(ID param_1,SEL param_2)
+
+{
+  return *(long_long *)(param_1 + 8);
+}
+

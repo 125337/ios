@@ -1,0 +1,455 @@
+// start @0x39718
+
+/* Function Stack Size: 0x10 bytes */
+
+void WCMFeedController::start(ID param_1,SEL param_2)
+
+{
+  undefined1 uVar1;
+  ID IVar2;
+  bool bVar3;
+  uint uVar4;
+  undefined4 uVar5;
+  undefined8 uVar6;
+  long lVar7;
+  undefined8 uVar8;
+  undefined8 uVar9;
+  undefined *puVar10;
+  undefined8 uVar11;
+  undefined8 uVar12;
+  undefined8 uVar13;
+  undefined8 uVar14;
+  undefined8 uVar15;
+  dispatch_time_t dVar16;
+  double dVar17;
+  double dVar18;
+  undefined *local_248;
+  undefined8 local_1b8;
+  undefined *local_160;
+  undefined4 local_158;
+  undefined4 local_154;
+  code *local_150;
+  undefined *local_148;
+  undefined1 auStack_140 [8];
+  undefined8 local_138;
+  undefined8 local_130;
+  undefined8 local_128;
+  undefined1 local_119;
+  undefined *local_118;
+  undefined4 local_110;
+  undefined4 local_10c;
+  code *local_108;
+  undefined *local_100;
+  undefined1 auStack_f8 [8];
+  undefined1 auStack_f0 [12];
+  undefined4 local_e4;
+  undefined1 local_dd;
+  undefined *local_d0;
+  undefined4 local_c8;
+  undefined4 local_c4;
+  code *local_c0;
+  undefined *local_b8;
+  undefined1 auStack_b0 [8];
+  undefined1 auStack_a8 [15];
+  undefined1 local_99;
+  long local_98;
+  undefined8 local_90;
+  SEL local_88;
+  ID local_80;
+  cfstringStruct *local_78;
+  undefined8 local_70;
+  cfstringStruct *local_68;
+  cfstringStruct *local_60;
+  undefined8 local_58;
+  undefined8 local_50;
+  undefined8 local_48;
+  undefined8 local_40;
+  undefined **local_38;
+  undefined8 local_30;
+  long local_28;
+  
+  local_28 = *(long *)PTR____stack_chk_guard_00110518;
+  local_88 = param_2;
+  local_80 = param_1;
+  uVar6 = _objc_msgSend_timer(param_1);
+  lVar7 = _objc_retainAutoreleasedReturnValue(uVar6);
+  (*(code *)PTR__objc_release_00110458)();
+  if (lVar7 == 0) {
+    uVar6 = _Context();
+    uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+    uVar8 = _Call(uVar6,&cf_userName,PTR____NSArray0__struct_00110718);
+    uVar8 = _objc_retainAutoreleasedReturnValue(uVar8);
+    uVar9 = _Text();
+    local_90 = _objc_retainAutoreleasedReturnValue(uVar9);
+    (*(code *)PTR__objc_release_00110458)(uVar8);
+    (*(code *)PTR__objc_release_00110458)(uVar6);
+    uVar6 = local_90;
+    uVar8 = _objc_msgSend_account(local_80,local_1b8);
+    uVar8 = _objc_retainAutoreleasedReturnValue(uVar8);
+    uVar4 = _objc_msgSend_isEqualToString_(uVar6,local_1b8);
+    (*(code *)PTR__objc_release_00110458)(uVar8);
+    if ((uVar4 & 1) == 0) {
+      _objc_msgSend_setItems_(local_80,local_1b8,PTR____NSDictionary0__struct_00110720);
+      uVar6 = _objc_msgSend_images(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_avatars(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_requestedAvatars(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      _objc_msgSend_setLastJSON_(local_80,local_1b8,0);
+      _objc_msgSend_setAccount_(local_80,local_1b8,local_90);
+      uVar6 = _objc_opt_new(&_OBJC_CLASS___NSMutableSet);
+      _objc_msgSend_setHiddenUsers_(local_80,local_1b8,uVar6);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_opt_new(&_OBJC_CLASS___NSMutableDictionary);
+      _objc_msgSend_setPermissionRequests_(local_80,local_1b8,uVar6);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      _objc_msgSend_syncHiddenUsers(local_80,local_1b8);
+      uVar6 = _objc_msgSend_standardUserDefaults(&_OBJC_CLASS___NSUserDefaults,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      uVar8 = _objc_msgSend_followingKey(local_80,local_1b8);
+      uVar8 = _objc_retainAutoreleasedReturnValue(uVar8);
+      uVar9 = _objc_msgSend_arrayForKey_(uVar6,local_1b8);
+      puVar10 = (undefined *)_objc_retainAutoreleasedReturnValue(uVar9);
+      local_248 = puVar10;
+      if (puVar10 == (undefined *)0x0) {
+        local_248 = PTR____NSArray0__struct_00110718;
+      }
+      uVar9 = _objc_msgSend_setWithArray_(&_OBJC_CLASS___NSMutableSet,local_1b8,local_248);
+      uVar9 = _objc_retainAutoreleasedReturnValue(uVar9);
+      _objc_msgSend_setFollowing_(local_80,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar9);
+      (*(code *)PTR__objc_release_00110458)(puVar10);
+      (*(code *)PTR__objc_release_00110458)(uVar8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      _objc_msgSend_setLimit_(local_80,local_1b8,0x28);
+      _objc_msgSend_setLoadingTail_(local_80,local_1b8,0);
+      _objc_msgSend_setExhausted_(local_80,local_1b8,0);
+      _objc_msgSend_setTailRetryRequired_(local_80,local_1b8,0);
+      IVar2 = local_80;
+      lVar7 = _objc_msgSend_pagingGeneration(local_80,local_1b8);
+      _objc_msgSend_setPagingGeneration_(IVar2,local_1b8,lVar7 + 1);
+      uVar6 = _objc_msgSend_visibleIDs(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_rowOrder(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_nativeContentByID(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_nativeMediaByID(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      IVar2 = local_80;
+      lVar7 = _objc_msgSend_bridgeGeneration(local_80,local_1b8);
+      _objc_msgSend_setBridgeGeneration_(IVar2,local_1b8,lVar7 + 1);
+      _objc_msgSend_setBridgeBusy_(local_80,local_1b8,0);
+      _objc_msgSend_setPendingFeedSnapshot_(local_80,local_1b8,0);
+      _objc_msgSend_setLatestFeedSnapshot_(local_80,local_1b8,0);
+      _objc_msgSend_setPendingFeedPreferLatest_(local_80,local_1b8,0);
+      _objc_msgSend_setNeedsBindingMore_(local_80,local_1b8,0);
+      _objc_msgSend_setBridgeRows_(local_80,local_1b8,0);
+      uVar6 = _objc_msgSend_itemMediaKeys(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_mediaTargets(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      _objc_msgSend_setLastSeenCreateTime_(local_80,local_1b8,0);
+      _objc_msgSend_setLastSeenItemID_(local_80,local_1b8,0);
+      _objc_msgSend_setPendingSeenIDs_(local_80,local_1b8,0);
+      uVar6 = _objc_msgSend_renderKeys(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_renderQualities(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_mediaRequestTimes(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      IVar2 = local_80;
+      lVar7 = _objc_msgSend_mediaGeneration(local_80,local_1b8);
+      _objc_msgSend_setMediaGeneration_(IVar2,local_1b8,lVar7 + 1);
+      uVar6 = _objc_msgSend_mediaQueue(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_cancelAllOperations(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_pendingExports(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_previewQueue(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_cancelAllOperations(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_pendingOriginalExports(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_cachedRows(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      _objc_msgSend_setMetadataRefreshPending_(local_80,local_1b8,0);
+      uVar6 = _objc_msgSend_mediaProbeTimes(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      _objc_msgSend_setNativeCacheSignature_(local_80,local_1b8,0);
+      _objc_msgSend_setNativeFirstID_(local_80,local_1b8,0);
+      _objc_msgSend_setLastNativeListSync_(0,local_80,local_1b8);
+      _objc_msgSend_setLastFeedPoll_(0,local_80,local_1b8);
+      uVar6 = _objc_msgSend_videoRequests(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_videoURIs(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_removeAllObjects(uVar6,local_1b8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      _objc_msgSend_setCachedFeedShown_(local_80,local_1b8,0);
+      uVar6 = _Digest(local_90);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      uVar8 = _objc_msgSend_assetHandler(local_80,local_1b8);
+      uVar8 = _objc_retainAutoreleasedReturnValue(uVar8);
+      _objc_msgSend_setAccountToken_(uVar8,local_1b8,uVar6);
+      (*(code *)PTR__objc_release_00110458)(uVar8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _NSSearchPathForDirectoriesInDomains(0xd,1,1);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      uVar8 = _objc_msgSend_firstObject(uVar6,local_1b8);
+      uVar8 = _objc_retainAutoreleasedReturnValue(uVar8);
+      uVar9 = _objc_msgSend_stringByAppendingPathComponent_(uVar8,local_1b8,&cf_WCMoments);
+      uVar9 = _objc_retainAutoreleasedReturnValue(uVar9);
+      uVar11 = _objc_msgSend_assetHandler(local_80,local_1b8);
+      uVar11 = _objc_retainAutoreleasedReturnValue(uVar11);
+      uVar12 = _objc_msgSend_accountToken(uVar11,local_1b8);
+      uVar12 = _objc_retainAutoreleasedReturnValue(uVar12);
+      uVar13 = _objc_msgSend_stringByAppendingPathComponent_(uVar9,local_1b8);
+      uVar13 = _objc_retainAutoreleasedReturnValue(uVar13);
+      uVar14 = _objc_msgSend_copy(uVar13,local_1b8);
+      uVar15 = _objc_msgSend_assetHandler(local_80,local_1b8);
+      uVar15 = _objc_retainAutoreleasedReturnValue(uVar15);
+      _objc_msgSend_setRoot_(uVar15,local_1b8,uVar14);
+      (*(code *)PTR__objc_release_00110458)(uVar15);
+      (*(code *)PTR__objc_release_00110458)(uVar14);
+      (*(code *)PTR__objc_release_00110458)(uVar13);
+      (*(code *)PTR__objc_release_00110458)(uVar12);
+      (*(code *)PTR__objc_release_00110458)(uVar11);
+      (*(code *)PTR__objc_release_00110458)(uVar9);
+      (*(code *)PTR__objc_release_00110458)(uVar8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_defaultManager(&_OBJC_CLASS___NSFileManager,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      uVar8 = _objc_msgSend_assetHandler(local_80,local_1b8);
+      uVar8 = _objc_retainAutoreleasedReturnValue(uVar8);
+      uVar9 = _objc_msgSend_root(uVar8,local_1b8);
+      uVar9 = _objc_retainAutoreleasedReturnValue(uVar9);
+      local_48 = *(undefined8 *)PTR__NSFilePosixPermissions_00110160;
+      local_38 = &PTR__OBJC_CLASS___NSConstantIntegerNumber_0010fd70;
+      local_40 = *(undefined8 *)PTR__NSFileProtectionKey_00110170;
+      local_30 = *(undefined8 *)PTR__NSFileProtectionCompleteUntilFirstUserAuthentication_00110168;
+      uVar11 = _objc_msgSend_dictionaryWithObjects_forKeys_count_
+                         (&_OBJC_CLASS___NSDictionary,local_1b8,&local_38,&local_48,2);
+      uVar11 = _objc_retainAutoreleasedReturnValue(uVar11);
+      _objc_msgSend_createDirectoryAtPath_withIntermediateDirectories_attributes_error_
+                (uVar6,local_1b8,uVar9,1,uVar11,0);
+      (*(code *)PTR__objc_release_00110458)(uVar11);
+      (*(code *)PTR__objc_release_00110458)(uVar9);
+      (*(code *)PTR__objc_release_00110458)(uVar8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar6 = _objc_msgSend_assetHandler(local_80,local_1b8);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      uVar8 = _objc_msgSend_root(uVar6,local_1b8);
+      uVar8 = _objc_retainAutoreleasedReturnValue(uVar8);
+      uVar9 = _objc_msgSend_fileURLWithPath_(&_OBJC_CLASS___NSURL,local_1b8);
+      uVar9 = _objc_retainAutoreleasedReturnValue(uVar9);
+      _objc_msgSend_setResourceValue_forKey_error_
+                (uVar9,local_1b8,PTR____kCFBooleanTrue_00110730,
+                 *(undefined8 *)PTR__NSURLIsExcludedFromBackupKey_00110708,0);
+      (*(code *)PTR__objc_release_00110458)(uVar9);
+      (*(code *)PTR__objc_release_00110458)(uVar8);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      uVar4 = _objc_msgSend_ready(local_80,local_1b8);
+      if ((uVar4 & 1) != 0) {
+        uVar6 = _objc_msgSend_web(local_80,local_1b8);
+        uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+        _objc_msgSend_evaluateJavaScript_completionHandler_(uVar6,local_1b8,&cf_clearFeed__,0);
+        (*(code *)PTR__objc_release_00110458)(uVar6);
+      }
+    }
+    uVar6 = _Service(&cf_WCFacade);
+    uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+    _objc_msgSend_setFacade_(local_80,local_1b8);
+    (*(code *)PTR__objc_release_00110458)(uVar6);
+    _objc_msgSend_applyHeaderBrand(local_80,local_1b8);
+    _objc_msgSend_showCachedFeed(local_80,local_1b8);
+    lVar7 = _objc_msgSend_length(local_90,local_1b8);
+    local_99 = 0;
+    bVar3 = true;
+    uVar1 = lVar7 != 0;
+    if ((bool)uVar1) {
+      uVar6 = _objc_msgSend_facade(local_80,local_1b8);
+      local_98 = _objc_retainAutoreleasedReturnValue(uVar6);
+      bVar3 = local_98 == 0;
+      local_99 = uVar1;
+      (*(code *)PTR__objc_release_00110458)(local_98);
+      uVar1 = local_99;
+    }
+    local_99 = uVar1;
+    if (bVar3) {
+      local_68 = &cf_loggedIn;
+      lVar7 = _objc_msgSend_length(local_90,local_1b8);
+      uVar6 = _objc_msgSend_numberWithInt_(lVar7,&_OBJC_CLASS___NSNumber,local_1b8,lVar7 != 0);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      local_60 = &cf_facadeAvailable;
+      local_58 = uVar6;
+      uVar8 = _objc_msgSend_facade(local_80,local_1b8);
+      lVar7 = _objc_retainAutoreleasedReturnValue(uVar8);
+      uVar8 = _objc_msgSend_numberWithInt_(lVar7,&_OBJC_CLASS___NSNumber,local_1b8,lVar7 != 0);
+      uVar8 = _objc_retainAutoreleasedReturnValue(uVar8);
+      local_50 = uVar8;
+      uVar9 = _objc_msgSend_dictionaryWithObjects_forKeys_count_
+                        (&_OBJC_CLASS___NSDictionary,local_1b8,&local_58,&local_68,2);
+      uVar9 = _objc_retainAutoreleasedReturnValue(uVar9);
+      _Trace(&cf_session_unavailable);
+      (*(code *)PTR__objc_release_00110458)(uVar9);
+      (*(code *)PTR__objc_release_00110458)(uVar8);
+      (*(code *)PTR__objc_release_00110458)(lVar7);
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      _objc_msgSend_status_(local_80,local_1b8,&cf_ck_WI___OgSWgR_);
+      _objc_initWeak(auStack_a8,local_80);
+      local_d0 = PTR___NSConcreteStackBlock_001104f0;
+      local_c8 = 0xc2000000;
+      local_c4 = 0;
+      local_c0 = ___26__WCMFeedController_start__block_invoke;
+      local_b8 = &___block_descriptor_40_e8_32w_e17_v16__0__NSTimer_8l;
+      _objc_copyWeak(auStack_b0,auStack_a8);
+      local_dd = 1;
+      uVar6 = _objc_msgSend_scheduledTimerWithTimeInterval_repeats_block_
+                        (0x4008000000000000,&_OBJC_CLASS___NSTimer,local_1b8,0,&local_d0);
+      uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+      _objc_msgSend_setTimer_(local_80,local_1b8);
+      local_dd = 0;
+      (*(code *)PTR__objc_release_00110458)(uVar6);
+      local_e4 = 1;
+      _objc_destroyWeak(auStack_b0);
+      _objc_destroyWeak(auStack_a8);
+    }
+    else {
+      uVar4 = _objc_msgSend_began(local_80,local_1b8);
+      if ((uVar4 & 1) == 0) {
+        uVar6 = _objc_msgSend_facade(local_80,local_1b8);
+        uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+        uVar8 = _Call(uVar6,&cf_beginTimeline,PTR____NSArray0__struct_00110718);
+        lVar7 = _objc_retainAutoreleasedReturnValue(uVar8);
+        _objc_msgSend_setBegan_(lVar7,local_80,local_1b8,lVar7 != 0);
+        (*(code *)PTR__objc_release_00110458)(lVar7);
+        (*(code *)PTR__objc_release_00110458)(uVar6);
+        _objc_msgSend_setNativeListDirty_(local_80,local_1b8,1);
+        _objc_msgSend_traceState_(local_80,local_1b8,&cf_session_begin);
+      }
+      uVar4 = _objc_msgSend_began(local_80,local_1b8);
+      if ((uVar4 & 1) == 0) {
+        _objc_msgSend_status_(local_80,local_1b8,&cf_gSWcSN_Q_b_YSHr);
+        local_e4 = 1;
+      }
+      else {
+        _objc_msgSend_reloadFeed(local_80,local_1b8);
+        _objc_initWeak(auStack_f0,local_80);
+        local_118 = PTR___NSConcreteStackBlock_001104f0;
+        local_110 = 0xc2000000;
+        local_10c = 0;
+        local_108 = ___26__WCMFeedController_start__block_invoke_2;
+        local_100 = &___block_descriptor_40_e8_32w_e17_v16__0__NSTimer_8l;
+        _objc_copyWeak(auStack_f8,auStack_f0);
+        local_119 = 1;
+        uVar6 = _objc_msgSend_timerWithTimeInterval_repeats_block_
+                          (0x3fe0000000000000,&_OBJC_CLASS___NSTimer,local_1b8,1,&local_118);
+        uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+        _objc_msgSend_setTimer_(local_80,local_1b8);
+        local_119 = 0;
+        (*(code *)PTR__objc_release_00110458)(uVar6);
+        uVar6 = _objc_msgSend_mainRunLoop(&_OBJC_CLASS___NSRunLoop,local_1b8);
+        uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+        uVar8 = _objc_msgSend_timer(local_80,local_1b8);
+        uVar8 = _objc_retainAutoreleasedReturnValue(uVar8);
+        _objc_msgSend_addTimer_forMode_
+                  (uVar6,local_1b8,uVar8,*(undefined8 *)PTR__NSRunLoopCommonModes_001106f0);
+        (*(code *)PTR__objc_release_00110458)(uVar8);
+        (*(code *)PTR__objc_release_00110458)(uVar6);
+        uVar6 = _objc_msgSend_date(&_OBJC_CLASS___NSDate,local_1b8);
+        uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+        dVar17 = (double)_objc_msgSend_timeIntervalSinceReferenceDate(uVar6,local_1b8);
+        dVar18 = (double)_objc_msgSend_lastHeadRequest(local_80,local_1b8);
+        (*(code *)PTR__objc_release_00110458)(uVar6);
+        if (5.0 < dVar17 - dVar18) {
+          _objc_msgSend_setInitialHeadPending_(local_80,local_1b8,1);
+          _objc_msgSend_syncPaging(local_80,local_1b8);
+          uVar6 = _objc_msgSend_facade(local_80,local_1b8);
+          uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+          uVar8 = _Call(uVar6,&cf_updateTimelineHead,PTR____NSArray0__struct_00110718);
+          local_128 = _objc_retainAutoreleasedReturnValue(uVar8);
+          (*(code *)PTR__objc_release_00110458)(uVar6);
+          uVar6 = _objc_msgSend_date(&_OBJC_CLASS___NSDate,local_1b8);
+          uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+          uVar8 = _objc_msgSend_timeIntervalSinceReferenceDate(uVar6,local_1b8);
+          _objc_msgSend_setLastHeadRequest_(uVar8,local_80,local_1b8);
+          (*(code *)PTR__objc_release_00110458)(uVar6);
+          local_78 = &cf_accepted;
+          uVar5 = _objc_msgSend_boolValue(local_128,local_1b8);
+          uVar6 = _objc_msgSend_numberWithBool_(&_OBJC_CLASS___NSNumber,local_1b8,uVar5);
+          uVar6 = _objc_retainAutoreleasedReturnValue(uVar6);
+          local_70 = uVar6;
+          uVar8 = _objc_msgSend_dictionaryWithObjects_forKeys_count_
+                            (&_OBJC_CLASS___NSDictionary,local_1b8,&local_70,&local_78,1);
+          uVar8 = _objc_retainAutoreleasedReturnValue(uVar8);
+          _Trace(&cf_head_initial_request);
+          (*(code *)PTR__objc_release_00110458)(uVar8);
+          (*(code *)PTR__objc_release_00110458)(uVar6);
+          local_130 = _objc_msgSend_lastHeadRequest(local_80,local_1b8);
+          dVar16 = _dispatch_time(0,5000000000);
+          _objc_retainAutoreleaseReturnValue(PTR___dispatch_main_q_00110528);
+          uVar6 = _objc_retainAutoreleasedReturnValue(PTR___dispatch_main_q_00110528);
+          local_160 = PTR___NSConcreteStackBlock_001104f0;
+          local_158 = 0xc2000000;
+          local_154 = 0;
+          local_150 = ___26__WCMFeedController_start__block_invoke_3;
+          local_148 = &___block_descriptor_48_e8_32w_e5_v8__0l;
+          _objc_copyWeak(auStack_140,auStack_f0);
+          local_138 = local_130;
+          _dispatch_after(dVar16,uVar6,&local_160);
+          (*(code *)PTR__objc_release_00110458)(uVar6);
+          _objc_destroyWeak(auStack_140);
+          _objc_storeStrong(&local_128,0);
+        }
+        _objc_destroyWeak(auStack_f8);
+        _objc_destroyWeak(auStack_f0);
+        local_e4 = 0;
+      }
+    }
+    _objc_storeStrong(&local_90,0);
+  }
+  if (*(long *)PTR____stack_chk_guard_00110518 - local_28 == 0) {
+    return;
+  }
+                    /* WARNING: Subroutine does not return */
+  ___stack_chk_fail(*(long *)PTR____stack_chk_guard_00110518 - local_28);
+}
+

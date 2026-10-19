@@ -1,0 +1,8 @@
+Package: com.wcmoments.plugin
+Name: WCMoments
+Version: 0.6.49
+Architecture: iphoneos-arm64
+Description: WCMoments jailbreak tweak
+Maintainer: Local Package
+Section: Tweaks
+Priority: optional

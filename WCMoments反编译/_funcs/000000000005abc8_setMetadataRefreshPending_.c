@@ -1,0 +1,11 @@
+// setMetadataRefreshPending: @0x5abc8
+
+/* Function Stack Size: 0x14 bytes */
+
+void WCMFeedController::setMetadataRefreshPending_(ID param_1,SEL param_2,bool param_3)
+
+{
+  *(byte *)(param_1 + (long)_metadataRefreshPending) = (byte)param_3 & 1;
+  return;
+}
+
