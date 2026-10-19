@@ -38,15 +38,13 @@ XOS反编译/
 .trae/
 .zcode/
 tmp_*
-p6_funcs.txt
-wcr_sym_list.txt
-mio_watch.py
-mio_watch.js
+头像骑气泡分析/
 Frida钩子使用标杆.md
 侧边分组面板偏移问题复盘.md
 小尾巴.txt
 文档/
 *.ips
 scripts/*
+ios_build_tools/
 
 commit_msg_tmp.txt
