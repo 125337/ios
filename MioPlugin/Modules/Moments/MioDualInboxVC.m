@@ -1,6 +1,7 @@
 #import "MioDualInboxVC.h"
 #import "MomentsDualPanel.h"
 #import "../../Core/ServiceHelper.h"
+#import "../../Core/LogManager.h"
 #import "../ChatTopBar/AvatarLoader.h"
 #import <objc/message.h>
 
@@ -239,7 +240,7 @@ static NSString *MioMsgStr(id msg, NSString *key) {
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     NSDictionary *d = self.rows[indexPath.section];
-    NSString *txt = d[@"text"].length > 0 ? d[@"text"]
+    NSString *txt = ((NSString *)d[@"text"]).length > 0 ? d[@"text"]
                   : ([d[@"kind"] isEqualToString:@"like"] ? @"赞了你的朋友圈" : @"评论了你的朋友圈");
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"该条消息"
                                     message:[NSString stringWithFormat:@"%@：%@", d[@"name"], txt]
