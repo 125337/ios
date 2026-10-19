@@ -146,6 +146,20 @@ static NSArray *MioDualTimelineCache(id facade) {
     return ((id(*)(id, SEL))objc_msgSend)(mgr, cacheSel);
 }
 
+// WCDataItem 的 createtime/likeCount/commentCount 是标量 getter（ULL/uint），
+// 禁止用 id 接裸 msgSend 返回值（WXSafeIntegerGet 同款）：x0 原始整数被当指针
+// 发 respondsToSelector 必 SIGSEGV（127.log 点双列闪退实证）。
+// 阶段0 探针实证的 KVC 装箱路径：valueForKey 自动装箱 NSNumber，未知 key @try 兜住。
+static long long MioDualScalarGet(id obj, NSString *key, long long def) {
+    if (!obj || !key.length) return def;
+    @try {
+        id v = [obj valueForKey:key];
+        if ([v isKindOfClass:[NSNumber class]]) return [(NSNumber *)v longLongValue];
+    } @catch (NSException *e) {
+    }
+    return def;
+}
+
 #pragma mark - 内置双列瀑布流页面（纯静态，无格式化注入）
 
 // 贪心双列：每次追加到当前较矮列；单图原比例、多图九宫格；
@@ -355,9 +369,9 @@ static char kDualPanelAssocKey;
     return @{@"id": WXSafeStringGet(item, @"itemID") ?: @"",
              @"name": WXSafeStringGet(item, @"nickname") ?: username,
              @"avatar": [self avatarFor:username] ?: @"",
-             @"time": @(WXSafeIntegerGet(item, @"createtime", 0)),
-             @"like": @(WXSafeIntegerGet(item, @"likeCount", 0)),
-             @"cmt": @(WXSafeIntegerGet(item, @"commentCount", 0)),
+             @"time": @(MioDualScalarGet(item, @"createtime", 0)),
+             @"like": @(MioDualScalarGet(item, @"likeCount", 0)),
+             @"cmt": @(MioDualScalarGet(item, @"commentCount", 0)),
              @"content": content,
              @"media": media};
 }
