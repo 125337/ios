@@ -4,6 +4,7 @@
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 #import "MomentsConfig.h"
+#import "MioDualInboxVC.h"
 
 #pragma mark - 图片服务（WKURLSchemeTask 读本地媒体文件，WCMAssetHandler 同职责）
 
@@ -254,24 +255,6 @@ static NSString * const kDualPageHTML = @(
 ".stat { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--secondary); }"
 ".stat svg { width:12px; height:12px; fill:var(--secondary); }"
 "#empty { text-align:center; color:#b3b3b3; font-size:13px; padding:70px 0; }"
-"#inbox { position:fixed; top:0; left:0; right:0; bottom:0; background:var(--bg-color); z-index:600; overflow-y:auto; padding-top:env(safe-area-inset-top); }"
-".ib-top { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; position:sticky; top:env(safe-area-inset-top); backdrop-filter:blur(12px) saturate(120%); -webkit-backdrop-filter:blur(12px) saturate(120%); background:linear-gradient(155deg,var(--glass-highlight),transparent 65%),var(--glass); border-bottom:1px solid var(--glass-edge); z-index:2; }"
-".ib-back { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:var(--button-glass); border:1px solid var(--glass-edge); box-shadow:inset 0 .5px 0 rgba(255,255,255,.4); cursor:pointer; }"
-".ib-back svg { width:20px; height:20px; fill:var(--text-main); }"
-".ib-title { font-size:17px; font-weight:600; letter-spacing:-.3px; }"
-".ib-tabs { display:flex; background:var(--button-glass); border:1px solid var(--glass-edge); border-radius:20px; padding:3px; margin:12px 16px; box-shadow:inset 0 .5px 0 rgba(255,255,255,.33); }"
-".ib-tab { flex:1; text-align:center; font-size:13px; color:var(--secondary); padding:7px 0; border-radius:17px; cursor:pointer; }"
-".ib-tab.on { background:var(--pill); color:var(--text-main); font-weight:600; }"
-".ib-item { display:flex; gap:12px; padding:14px 16px; background:var(--card-bg); border-radius:16px; margin:0 12px 10px; box-shadow:var(--shadow); }"
-".ib-avatar { width:42px; height:42px; border-radius:50%; object-fit:cover; background:var(--control); flex-shrink:0; }"
-".ib-main { flex:1; min-width:0; }"
-".ib-line1 { font-size:14px; line-height:1.45; display:flex; align-items:center; flex-wrap:wrap; gap:4px; }"
-".ib-line1 b { font-weight:600; color:var(--text-main); }"
-".ib-line1 span { color:var(--secondary); display:inline-flex; align-items:center; }"
-".ib-ic { width:16px; height:16px; fill:var(--secondary); }"
-".ib-text { font-size:13.5px; color:var(--secondary); margin-top:3px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }"
-".ib-time { font-size:11px; color:var(--tertiary); margin-top:5px; font-variant-numeric:tabular-nums; }"
-"#ibEmpty { text-align:center; color:#b3b3b3; font-size:13px; padding:80px 0; }"
 "#pull { position:fixed; top:-30px; left:0; right:0; text-align:center; font-size:12px; color:#9b9b9b; transition:top .2s; z-index:99; pointer-events:none; }"
 "@media (prefers-color-scheme:dark) {"
 ":root { --bg-color:#000; --card-bg:#1C1C1E; --text-main:#F5F5F7; --secondary:#AEAEB2; --tertiary:#98989D; --control:#2C2C2E; --glass:rgba(20,20,23,.76); --button-glass:rgba(70,70,78,.42); --glass-edge:rgba(255,255,255,.1); --glass-highlight:rgba(255,255,255,.16); --pill:rgba(125,125,135,.38); --shadow:none; --icon-fill:#CCC; }"
@@ -308,20 +291,6 @@ static NSString * const kDualPageHTML = @(
 "</div>"
 "<div id=\"grid\"></div>"
 "<div id=\"empty\" style=\"display:none\">暂无内容，下拉刷新</div>"
-"<div id=\"inbox\" style=\"display:none\">"
-"<div class=\"ib-top\">"
-"<div class=\"ib-back\" id=\"ibBack\"><svg viewBox=\"0 0 24 24\"><path d=\"M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z\"/></svg></div>"
-"<div class=\"ib-title\">消息</div>"
-"<div style=\"width:34px\"></div>"
-"</div>"
-"<div class=\"ib-tabs\">"
-"<div class=\"ib-tab on\" data-ib=\"all\">全部</div>"
-"<div class=\"ib-tab\" data-ib=\"like\">收到的赞</div>"
-"<div class=\"ib-tab\" data-ib=\"cmt\">评论</div>"
-"</div>"
-"<div id=\"ibList\"></div>"
-"<div id=\"ibEmpty\" style=\"display:none\">还没有收到赞和评论</div>"
-"</div>"
 "<script>"
 "(function(){"
 "var HEART='<svg viewBox=\"0 0 24 24\"><path d=\"M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z\"/></svg>';"
@@ -401,35 +370,6 @@ static NSString * const kDualPageHTML = @(
 "return l;"
 "}"
 "window.__mioSetFeed=function(payload){ALL=(payload&&payload.items)||[];render();};"
-"var ibData=[],ibTab='all';"
-"var PERSON='data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path fill=\"%23C7C7CC\" d=\"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13 8.5 11.43 8.5 9.5 10.07 6 12 6zm0 14c-2.33 0-4.39-1.2-5.59-3.01C6.56 15.28 9.12 14.5 12 14.5s5.44.78 5.59 2.49C16.39 18.8 14.33 20 12 20z\"/></svg>';"
-"window.__mioSetMessages=function(o){ibData=(o&&o.items)||[];ibShow(true);};"
-"function ibShow(v){document.getElementById('inbox').style.display=v?'block':'none';if(v)renderInbox();}"
-"function fmtMonth(t){if(!t)return '';var d=new Date(t*1000);return (d.getMonth()+1)+' 月';}"
-"function renderInbox(){"
-"var list=ibData.filter(function(m){"
-"if(ibTab==='like')return m.kind==='like'&&m.mine;"
-"if(ibTab==='cmt')return m.kind!=='like';"
-"return true;});"
-"var box=document.getElementById('ibList');box.innerHTML='';"
-"document.getElementById('ibEmpty').style.display=list.length?'none':'block';"
-"list.forEach(function(m){"
-"var it=el('div','ib-item');it.addEventListener('click',function(){mio({action:'openMsg',id:m.id});});"
-"var av=el('img','ib-avatar');av.src=m.avatar||PERSON;av.onerror=function(){av.src=PERSON;};"
-"var main=el('div','ib-main');"
-"var l1=el('div','ib-line1');"
-"var b=el('b');b.textContent=m.name||'（微信用户）';"
-"var sp=el('span');sp.innerHTML=(m.kind==='like'?HEART+' 赞了你的朋友圈':BUB+' 评论了你的朋友圈');"
-"l1.appendChild(b);l1.appendChild(sp);"
-"main.appendChild(l1);"
-"if(m.text){var tx=el('div','ib-text');tx.textContent=m.text;main.appendChild(tx);}"
-"var tm=el('div','ib-time');tm.textContent=fmtMonth(m.t);main.appendChild(tm);"
-"it.appendChild(av);it.appendChild(main);box.appendChild(it);});}"
-"document.querySelectorAll('.ib-tab').forEach(function(t){t.addEventListener('click',function(){"
-"ibTab=t.dataset.ib;"
-"document.querySelectorAll('.ib-tab').forEach(function(x){x.classList.toggle('on',x===t);});"
-"renderInbox();});});"
-"document.getElementById('ibBack').addEventListener('click',function(){ibShow(false);});"
 "window.__mioSetBadge=function(n){var b=document.getElementById('bellBadge');"
 "if(!b)return;if(n>0){b.textContent=n>99?'99+':n;b.classList.remove('hide');}else{b.classList.add('hide');}};"
 "var qEl=document.getElementById('q');"
@@ -606,20 +546,19 @@ static char kDualPanelAssocKey;
 
 #pragma mark 消息页数据（WCMoments WCMInboxController 复刻，全静态实证）
 
-// 消息 → JSON → __mioSetMessages（WCMInboxController 复刻，字段表按反编译终极分析：
+// 消息数组解析（WCMInboxController 复刻，字段表按反编译终极分析：
 // 全部字段在消息对象本体：type/username/nickname/refUserName/dataItemUsrName/content/
 // createTime/objID；comment 只是评论内容子对象。type 1=赞 2/3/8=评论（changeCategory）。
 // 帖子归属 dataItemUsrName，空则 facade getDataItemByID: 兜底（isMine 同款））
-- (void)pushInboxNow {
-    if (!self.pageReady || !self.webView) return;
+- (NSArray<NSDictionary *> *)inboxItems {
     id facade = MioDualFacade();
     SEL allSel = NSSelectorFromString(@"getAllMessages");
-    if (!facade || ![facade respondsToSelector:allSel]) return;
+    if (!facade || ![facade respondsToSelector:allSel]) return @[];
     NSArray *msgs = @[];
     @try {
         msgs = ((id(*)(id, SEL))objc_msgSend)(facade, allSel);
         if (![msgs isKindOfClass:[NSArray class]]) msgs = @[];
-    } @catch (NSException *e) { return; }
+    } @catch (NSException *e) { return @[]; }
 
     NSString *selfUsr = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName") ?: @"";
     SEL byIDSel = NSSelectorFromString(@"getDataItemByID:");
@@ -644,7 +583,6 @@ static char kDualPanelAssocKey;
                 @"id": [objID isKindOfClass:NSString.class] ? objID : [NSString stringWithFormat:@"%@", objID ?: @""],
                 @"name": WXSafeStringGet(msg, @"nickname") ?: actor,   // 发送者昵称
                 @"actor": actor,                                        // 发送者 wxid
-                @"avatar": [self avatarFor:actor] ?: @"",
                 @"kind": (type == 1) ? @"like" : @"cmt",                // 1=赞 2/3/8=评论
                 @"text": text,
                 @"t": @([[msg valueForKey:@"createTime"] integerValue]),
@@ -652,14 +590,7 @@ static char kDualPanelAssocKey;
                 @"refSelf": @([WXSafeStringGet(msg, @"refUserName") ?: @"" isEqualToString:selfUsr])}];
         } @catch (NSException *e) { continue; }
     }
-    NSData *data = [NSJSONSerialization dataWithJSONObject:@{@"items": arr} options:0 error:nil];
-    if (!data) return;
-    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    json = [json stringByReplacingOccurrencesOfString:@"\u2028" withString:@"\\u2028"];
-    json = [json stringByReplacingOccurrencesOfString:@"\u2029" withString:@"\\u2029"];
-    [self.webView evaluateJavaScript:
-        [NSString stringWithFormat:@"window.__mioSetMessages(%@);", json]
-        completionHandler:nil];
+    return arr;
 }
 
 - (NSDictionary *)itemDict:(id)item {
@@ -754,22 +685,6 @@ static char kDualPanelAssocKey;
         if (self.hostVC) MioDualPanelClose(self.hostVC);
         return;
     }
-    if ([action isEqualToString:@"openMsg"]) {
-        // 消息卡片点击（WCM didSelectRow 弹 action 面板同款）：查看原帖 → 切回原生朋友圈
-        // （直跳详情需 WCCommentListViewController 实例，暂以切回原生兜底）
-        NSString *msgId = params[@"id"] ?: @"";
-        UIViewController *host = self.hostVC;
-        if (!host) return;
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"该条消息"
-                                    message:(msgId.length ? @"在微信朋友圈中查看原帖？" : @"切回微信朋友圈查看？")
-                                    preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"查看原帖" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) {
-            if (self.hostVC) MioDualPanelClose(self.hostVC);
-        }]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        [host presentViewController:alert animated:YES completion:nil];
-        return;
-    }
     if ([action isEqualToString:@"more"]) {
         // WCMoments requestTimelineMore 同款（反编译实证）：滚到底 → facade updateTimelineTail
         // 翻页拉更多，原生落 cache 后复查推送；与 updateTimelineHead 成对
@@ -794,8 +709,25 @@ static char kDualPanelAssocKey;
         return;
     }
     if ([action isEqualToString:@"inbox"]) {
-        // WCMoments openMessages 同款数据源（反编译+8.0.78头文件实证）：[facade getAllMessages]
-        [self pushInboxNow];
+        // 铃铛 → 原生消息页（WCMInboxController 原生复刻：present 全屏 VC）
+        UIViewController *host = self.hostVC;
+        if (!host) return;
+        MioDualInboxVC *vc = [[MioDualInboxVC alloc] initWithItems:[self inboxItems]];
+        vc.modalPresentationStyle = UIModalPresentationFullScreen;
+        __weak typeof(self) ws = self;
+        id obsReload = [[NSNotificationCenter defaultCenter]
+            addObserverForName:@"MioDualInboxReload" object:nil queue:NSOperationQueue.mainQueue
+            usingBlock:^(NSNotification *n) { [vc updateItems:[ws inboxItems]]; }];
+        id obsPost = [[NSNotificationCenter defaultCenter]
+            addObserverForName:@"MioDualInboxOpenPost" object:nil queue:NSOperationQueue.mainQueue
+            usingBlock:^(__unused NSNotification *n) {
+                if (ws.hostVC) MioDualPanelClose(ws.hostVC);
+            }];
+        vc.userOnDismiss = ^{
+            [[NSNotificationCenter defaultCenter] removeObserver:obsReload];
+            [[NSNotificationCenter defaultCenter] removeObserver:obsPost];
+        };
+        [host presentViewController:vc animated:YES completion:nil];
         return;
     }
     if (![action isEqualToString:@"refresh"]) return;
