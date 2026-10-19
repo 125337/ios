@@ -119,29 +119,24 @@
     return self.rows.count;
 }
 
-// WCM cellForRow 对齐：subtitleCellConfiguration（text=昵称 secondaryText=内容摘要
-// image=头像）+ 右侧「M 月」时间
+// WCM cellForRow 对齐：subtitle 样式（text=昵称 secondaryText=内容摘要 image=头像）
+// + 右侧「M 月」时间。用经典 textLabel API（CI SDK 无 UIListContentConfiguration）
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"msg"];
     if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"msg"];
     [[cell.contentView viewWithTag:1001] removeFromSuperview];   // 复用清理（时间 label 手工挂载）
 
     NSDictionary *d = self.rows[indexPath.row];
-    UIListContentConfiguration *c = [cell subtitleCellConfiguration];
-
-    c.text = d[@"name"];
-    NSString *text = d[@"text"];
     BOOL like = [d[@"kind"] isEqualToString:@"like"];
-    c.secondaryText = (text.length > 0) ? text : (like ? @"赞了你的朋友圈" : @"评论了你的朋友圈");
-    c.textProperties.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
-    c.secondaryTextProperties.font = [UIFont systemFontOfSize:13];
-    c.secondaryTextProperties.color = [UIColor secondaryLabelColor];
-    c.secondaryTextProperties.numberOfLines = 2;
-    c.image = [self avatarImage:d[@"actor"]];
-    c.imageProperties.maximumSize = CGSizeMake(42, 42);
-    c.imageProperties.cornerRadius = 21;
-    c.imageToTextPadding = 12;
-    cell.contentConfiguration = c;
+    NSString *text = d[@"text"];
+
+    cell.textLabel.text = d[@"name"];
+    cell.textLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+    cell.detailTextLabel.text = (text.length > 0) ? text : (like ? @"赞了你的朋友圈" : @"评论了你的朋友圈");
+    cell.detailTextLabel.font = [UIFont systemFontOfSize:13];
+    cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
+    cell.detailTextLabel.numberOfLines = 2;
+    cell.imageView.image = [self circleAvatar:[self avatarImage:d[@"actor"]]];
     cell.accessoryType = UITableViewCellAccessoryNone;
 
     // 右侧时间「M 月」（WCM DateFormatter "M 月"）
@@ -161,6 +156,20 @@
         [time.centerYAnchor constraintEqualToAnchor:cell.contentView.centerYAnchor]]];
 
     return cell;
+}
+
+// 头像统一画成 42pt 圆形位图（SF Symbol 拉伸后仍为圆形观感）
+- (UIImage *)circleAvatar:(UIImage *)img {
+    if (!img) return nil;
+    CGFloat s = 42;
+    UIGraphicsImageRendererFormat *fmt = [UIGraphicsImageRendererFormat defaultFormat];
+    fmt.scale = 2;
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(s, s) format:fmt];
+    return [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
+        UIBezierPath *p = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, s, s)];
+        [p addClip];
+        [img drawInRect:CGRectMake(0, 0, s, s)];
+    }];
 }
 
 // WCM didSelectRow 对齐：弹 UIAlertController 动作面板 → 查看原帖
