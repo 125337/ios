@@ -237,7 +237,7 @@ static NSString * const kDualPageHTML = @(
 
 #pragma mark - 面板 VC
 
-@interface MomentsDualPanel : UIViewController <WKScriptMessageHandler, WKNavigationDelegate>
+@interface MomentsDualPanel () <WKScriptMessageHandler, WKNavigationDelegate>
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, strong) NSTimer *pollTimer;
 @property (nonatomic, copy) NSString *lastJson;
