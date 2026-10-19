@@ -61,7 +61,7 @@ static NSString *MioMsgStr(id msg, NSString *key) {
         if (probe) {
             id pkvc = nil;
             @try { pkvc = [probe valueForKey:@"__probe__"]; } @catch (NSException *e) { pkvc = nil; }
-            WPLog("Dual", "[Inbox] class=%@ Call:=%d content=%d username=%d createTime=%d kvc=%@",
+            WPLog("Dual", @"[Inbox] class=%@ Call:=%d content=%d username=%d createTime=%d kvc=%@",
                   NSStringFromClass([probe class]),
                   [probe respondsToSelector:NSSelectorFromString(@"Call:")],
                   [probe respondsToSelector:NSSelectorFromString(@"content")],
