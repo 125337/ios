@@ -668,9 +668,17 @@ static char kDualPanelAssocKey;
         MioDualInboxVC *vc = [[MioDualInboxVC alloc] init];
         UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
         nav.modalPresentationStyle = UIModalPresentationFullScreen;
-        UIBarButtonItem *back = [[UIBarButtonItem alloc] initWithTitle:@"‹ 发现"
-                                            style:UIBarButtonItemStylePlain
-                                           target:vc action:@selector(goBack)];
+        // 返回钮（WCM 真机同款：细 chevron 图标 + 灰字，非系统 back 粗箭头/非"‹"字符）
+        UIButton *backBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+        backBtn.tintColor = [UIColor secondaryLabelColor];
+        UIImage *chev = [UIImage systemImageNamed:@"chevron.left"];
+        if (chev) [backBtn setImage:chev forState:UIControlStateNormal];
+        [backBtn setTitle:@"  发现" forState:UIControlStateNormal];   // 两空格 ≈ WCM 箭头与文字间距
+        [backBtn setTitleColor:[UIColor secondaryLabelColor] forState:UIControlStateNormal];
+        backBtn.titleLabel.font = [UIFont systemFontOfSize:17];
+        [backBtn addTarget:vc action:@selector(goBack) forControlEvents:UIControlEventTouchUpInside];
+        [backBtn sizeToFit];
+        UIBarButtonItem *back = [[UIBarButtonItem alloc] initWithCustomView:backBtn];
         vc.navigationItem.leftBarButtonItem = back;
         vc.navigationItem.title = @"消息";
         id obsPost = [[NSNotificationCenter defaultCenter]

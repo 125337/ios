@@ -143,9 +143,9 @@
     [self segChanged:self.seg];
 }
 
-// 卡间距 ~10pt（WCM 观感）：每卡 section header/footer 各 5
-- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section { return 5; }
-- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section  { return 5; }
+// 卡间距 ~16pt（WCM 真机截图实测）：每卡 section header/footer 各 8
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section { return 8; }
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section  { return 8; }
 
 // WCM changeCategory 对齐（宽松版）：赞 tab=kind like 且我帖；评论 tab=非赞；全部=全部
 - (void)applyFilter {
@@ -183,10 +183,10 @@
     return self.rows.count;
 }
 
-// 固定 72（WCM setRowHeight_ 同款）：delegate 实现后 self-sizing 关闭——
-// InsetGrouped + contentConfiguration 组合会把 rowHeight 属性顶掉自撑高度（截图实证卡高 92pt），必须用 delegate 钉死
+// 固定 92（WCM 真机截图实测：三行布局 昵称/内容/时间）：delegate 实现后 self-sizing 关闭——
+// InsetGrouped + contentConfiguration 组合会把 rowHeight 属性顶掉自撑高度，必须用 delegate 钉死
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    return 72;
+    return 92;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
@@ -226,13 +226,12 @@
     cell.contentView.layer.masksToBounds = YES;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 
-    // ---- ⑧ 右上时间「M月d日 HH:mm」（WCM 同款手工挂载）----
+    // ---- ⑧ 第三行时间「M月d日 HH:mm」（WCM 真机截图：三行左对齐，时间贴卡底）----
     [[cell.contentView viewWithTag:1001] removeFromSuperview];   // 复用清理（时间 label 手工挂载）
-    UILabel *time = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 110, 20)];
+    UILabel *time = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 160, 16)];
     time.tag = 1001;
     time.font = [UIFont systemFontOfSize:12];
     time.textColor = [UIColor tertiaryLabelColor];
-    time.textAlignment = NSTextAlignmentRight;
     NSDate *dt = [NSDate dateWithTimeIntervalSince1970:[d[@"t"] doubleValue]];
     NSDateFormatter *f = [[NSDateFormatter alloc] init];
     f.dateFormat = @"M月d日 HH:mm";
@@ -240,8 +239,9 @@
     time.translatesAutoresizingMaskIntoConstraints = NO;
     [cell.contentView addSubview:time];
     [NSLayoutConstraint activateConstraints:@[
-        [time.trailingAnchor constraintEqualToAnchor:cell.contentView.layoutMarginsGuide.trailingAnchor],
-        [time.topAnchor constraintEqualToAnchor:cell.contentView.layoutMarginsGuide.topAnchor]]];
+        // leading = 文本区起点：margins + 头像42 + 图文间距12（WCM 三行同 x 左对齐）
+        [time.leadingAnchor constraintEqualToAnchor:cell.contentView.layoutMarginsGuide.leadingAnchor constant:54],
+        [time.bottomAnchor constraintEqualToAnchor:cell.contentView.layoutMarginsGuide.bottomAnchor]]];
 
     return cell;
 }
