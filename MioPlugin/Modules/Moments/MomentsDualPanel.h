@@ -8,6 +8,7 @@
 @property (nonatomic, assign) UIRectEdge prevEdges;
 @property (nonatomic, assign) BOOL prevOpaqueBars;
 @property (nonatomic, assign) BOOL chromeCaptured;
+@property (nonatomic, weak) UIViewController *hostVC;   // 发现页（面板不挂 childVC，back 桥用）
 @end
 
 // host = 发现页 VC；面板 view 挂 host.view 顶层（切 tab 随宿主消失），

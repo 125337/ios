@@ -325,6 +325,13 @@ static NSString * const kDualPageHTML = @(
 "window.webkit.messageHandlers.mio.postMessage({action:'refresh'});}"
 "},{passive:true});"
 "document.addEventListener('touchend',function(){setTimeout(function(){pulled=false;if(pullTip.style.top==='0px')pullTip.style.top='-30px';},2500);},false);"
+"var moreLock=false;"
+"window.addEventListener('scroll',function(){"
+"if(moreLock)return;"
+"if(window.scrollY+window.innerHeight>document.body.scrollHeight-600){"
+"moreLock=true;window.webkit.messageHandlers.mio.postMessage({action:'more'});"
+"setTimeout(function(){moreLock=false;},2000);}"
+"},{passive:true});"
 "})();"
 "</script>"
 "</body>"
@@ -407,7 +414,7 @@ static char kDualPanelAssocKey;
     @try {
         NSArray *cache = MioDualTimelineCache(MioDualFacade());
         for (id item in cache) {
-            if (arr.count >= 100) break;   // 面板首轮只取前 100 条
+            if (arr.count >= 300) break;   // 上限 300：滚底翻页（updateTimelineTail）后 cache 超百条
             NSDictionary *d = [self itemDict:item];
             if (d) [arr addObject:d];
         }
@@ -514,9 +521,19 @@ static char kDualPanelAssocKey;
     if (![message.body isKindOfClass:[NSDictionary class]]) return;
     NSString *action = ((NSDictionary *)message.body)[@"action"];
     if ([action isEqualToString:@"back"]) {
-        // 「…」圆钮：切回原生朋友圈（面板覆盖移除）
-        UIViewController *host = self.parentViewController;
-        if (host) MioDualPanelClose(host);
+        // 「…」圆钮：切回原生朋友圈（面板覆盖移除）。面板不挂 childVC，host 用弱引用存
+        if (self.hostVC) MioDualPanelClose(self.hostVC);
+        return;
+    }
+    if ([action isEqualToString:@"more"]) {
+        // WCMoments requestTimelineMore 同款（反编译实证）：滚到底 → facade updateTimelineTail
+        // 翻页拉更多，原生落 cache 后复查推送；与 updateTimelineHead 成对
+        id facade = MioDualFacade();
+        SEL tailSel = NSSelectorFromString(@"updateTimelineTail");
+        if (facade && [facade respondsToSelector:tailSel]) {
+            ((void(*)(id, SEL))objc_msgSend)(facade, tailSel);
+        }
+        [self scheduleFeedChecks];
         return;
     }
     if (![action isEqualToString:@"refresh"]) return;
@@ -525,7 +542,11 @@ static char kDualPanelAssocKey;
     if (facade && [facade respondsToSelector:refreshSel]) {
         ((void(*)(id, SEL))objc_msgSend)(facade, refreshSel);   // 探针实证：主动调用成功，等价下拉
     }
-    // 刷新落盘有时延：短周期复查推送，命中变更后 3s 轮询自然接管
+    [self scheduleFeedChecks];
+}
+
+// 刷新/翻页落库有时延：短周期复查推送（WCMoments syncPaging 状态机同款思想）
+- (void)scheduleFeedChecks {
     __weak typeof(self) wself = self;
     for (NSNumber *delay in @[ @1.0, @2.5, @4.0 ]) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
@@ -541,6 +562,7 @@ void MioDualPanelOpen(UIViewController *host) {
     if ([objc_getAssociatedObject(host, &kDualPanelAssocKey) isKindOfClass:[MomentsDualPanel class]]) return;
     MomentsDualPanel *panel = [[MomentsDualPanel alloc] init];
     objc_setAssociatedObject(host, &kDualPanelAssocKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    panel.hostVC = host;
     // WCMoments coverHost 同款：capture chrome → host 全屏化 + 藏导航栏 → 面板 view 挂 host.view 顶层。
     // 面板随宿主 view 走（切 tab 自动消失）；不能上 window（childVC/独立 view 都会脱离 tab 生命周期）
     if (!panel.chromeCaptured) {
