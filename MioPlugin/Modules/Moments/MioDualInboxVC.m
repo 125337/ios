@@ -183,6 +183,12 @@
     return self.rows.count;
 }
 
+// 固定 72（WCM setRowHeight_ 同款）：delegate 实现后 self-sizing 关闭——
+// InsetGrouped + contentConfiguration 组合会把 rowHeight 属性顶掉自撑高度（截图实证卡高 92pt），必须用 delegate 钉死
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    return 72;
+}
+
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     return 1;
 }
