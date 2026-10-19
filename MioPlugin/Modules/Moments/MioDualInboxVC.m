@@ -112,7 +112,9 @@
     self.table.backgroundColor = [UIColor systemGroupedBackgroundColor];
     self.table.separatorStyle = UITableViewCellSeparatorStyleNone;       // 无发丝线（卡片间隙即分隔）
     self.table.rowHeight = 87;   // WCM setRowHeight_ 反编译实证（87.0；delegate heightForRow 已钉死，此处兜底）
-    // 不设 sectionHeaderTopPadding（WCM 反编译未触碰，间距全交系统默认）
+    // topPadding 显式归零：WCM 用老 SDK 编译，iOS15 的 sectionHeaderTopPadding 新行为对它不生效；
+    // 我们是最新 SDK 编译，默认 ~22pt padding 生效——不归零卡间距必比 WCM 大一截
+    if (@available(iOS 15.0, *)) self.table.sectionHeaderTopPadding = 0;
 
     // 下拉刷新 → loadMessages（WCM 同款：本页自己拉 facade 数据）
     self.refresh = [UIRefreshControl new];
