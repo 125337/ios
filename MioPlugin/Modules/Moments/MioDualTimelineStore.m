@@ -289,11 +289,13 @@ static int gTailZero = 0;                        // 连续零增长轮数（3 �
 static long gTailRounds = 0;                     // accepted 轮次累计（HUD 诊断）
 static long long gTailLastDelta = 0;             // 上轮供给行数（HUD 诊断）
 static NSTimeInterval gTailBackoffUntil = 0;     // 退避截止时刻
+static BOOL gTailAtEnd = NO;                     // 真到底（引擎最底条==累积层最旧行，refreshHead 重置）
 
 static void MioDualTailStateReset(void) {
     gTailLastAt = 0;
     gTailZero = 0;
     gTailBackoffUntil = 0;
+    gTailAtEnd = NO;
 }
 
 - (void)refreshHead {
@@ -366,10 +368,31 @@ static void MioDualTailStateReset(void) {
 
 - (NSString *)tailStatus {
     if (!gTailLoopOn) return @"OFF";
+    if (gTailAtEnd) return @"到底";
     NSTimeInterval now = [NSDate date].timeIntervalSinceReferenceDate;
     if (now < gTailBackoffUntil)
         return [NSString stringWithFormat:@"退避%.0fs", gTailBackoffUntil - now];
     return [NSString stringWithFormat:@"ON z%d r%ld +%lld", gTailZero, gTailRounds, gTailLastDelta];
+}
+
+// 真到底判定（WCM noMore: 同款语义，反编译 _funcs/34e4c）：引擎窗口最底条的 itemID
+// == 累积层最旧行 id → 引擎已翻到我们已有内容的最底且不再供页 = 服务器翻页链尽头。
+// 仅在持续零增长后调用；refreshHead（下拉）重置
+- (BOOL)tailAtServerEnd {
+    id facade = MioDualFacade();
+    long long n = MioDualDataSourceCount(facade);
+    if (n <= 0 || _accRows.count == 0) return NO;
+    id item = ((id(*)(id, SEL, unsigned long long))objc_msgSend)(
+        facade, NSSelectorFromString(@"getTimelineDataItemOfIndex:"), (unsigned long long)(n - 1));
+    NSString *engID = WXSafeStringGet(item, @"itemID");
+    if (engID.length == 0) return NO;
+    NSString *oldest = nil;
+    long long oldestT = LLONG_MAX;
+    for (NSDictionary *r in _accRows.allValues) {
+        long long t = [r[@"time"] longLongValue];
+        if (t < oldestT) { oldestT = t; oldest = r[@"id"]; }
+    }
+    return oldest.length > 0 && [engID isEqualToString:oldest];
 }
 
 // 循环心跳：退避/节流/无 facade 期间 2s 续链保持循环，只是不发请求
@@ -383,6 +406,10 @@ static void MioDualTailStateReset(void) {
 
 - (void)tailTick {
     if (!gTailLoopOn) return;
+    if (gTailAtEnd) {
+        [self tailTickLater:30.0];   // 到底待机：tail 无意义，等下拉 refreshHead 重置
+        return;
+    }
     NSTimeInterval now = [NSDate date].timeIntervalSinceReferenceDate;
     if (now < gTailBackoffUntil) {
         WPLog(@"Dual", @"[Sess] tail tick: 退避中（%.0fs）", gTailBackoffUntil - now);
@@ -468,8 +495,21 @@ static void MioDualTailStateReset(void) {
         }
         if (++gTailZero >= 3) {
             gTailZero = 0;
-            gTailBackoffUntil = [NSDate date].timeIntervalSinceReferenceDate + 60.0;
-            WPLog(@"Dual", @"[Sess] tail 3 轮零增长 → 退避 60s（count=%lld）", before);
+            if ([self tailAtServerEnd]) {
+                gTailAtEnd = YES;
+                WPLog(@"Dual", @"[Sess] tail 到底：引擎最底条==累积层最旧行，服务器无更多（下拉重置）");
+            } else {
+                // 会话回收再供：endTimeline→beginTimeline→reload 重启翻页链（等效重开
+                // 面板，冷启动实测即供 ~130）——r62+1 的「翻页链僵住」靠这个解锁
+                SEL eSel = NSSelectorFromString(@"endTimeline");
+                SEL bSel = NSSelectorFromString(@"beginTimeline");
+                SEL rl = NSSelectorFromString(@"reloadTimelineDataItems");
+                if ([f respondsToSelector:eSel]) ((void(*)(id, SEL))objc_msgSend)(f, eSel);
+                if ([f respondsToSelector:bSel]) ((void(*)(id, SEL))objc_msgSend)(f, bSel);
+                if ([f respondsToSelector:rl]) ((void(*)(id, SEL))objc_msgSend)(f, rl);
+                gTailBackoffUntil = [NSDate date].timeIntervalSinceReferenceDate + 30.0;
+                WPLog(@"Dual", @"[Sess] tail 3 轮零增长 → 会话回收+退避 30s（count=%lld）", before);
+            }
         } else {
             WPLog(@"Dual", @"[Sess] tail 零增长（count=%lld, zero=%d/3）", before, gTailZero);
         }
