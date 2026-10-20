@@ -26,10 +26,12 @@ static void HUDTick(void) {
     if (!gTicking) return;
     gLabel.text = HUDDiagText();
     gLabel.font = [UIFont monospacedDigitSystemFontOfSize:12 * gScale weight:UIFontWeightMedium];
-    [gLabel sizeToFit];
+    // sizeToFit 拿当前宽度当约束——初始 0 宽会把文本按字符折行成竖条且每次沿用
+    // （真机截图实证）；改显式无限宽 hint 求 fit 尺寸，文本自带 \n 分两行
+    CGSize fit = [gLabel sizeThatFits:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)];
+    gLabel.frame = CGRectMake(0, 0, ceil(fit.width), ceil(fit.height));
     CGFloat pad = 8 * gScale;
-    gHud.bounds = CGRectMake(0, 0, gLabel.frame.size.width + pad * 2,
-                             gLabel.frame.size.height + pad * 2);
+    gHud.bounds = CGRectMake(0, 0, ceil(fit.width) + pad * 2, ceil(fit.height) + pad * 2);
     gLabel.center = CGPointMake(gHud.bounds.size.width / 2, gHud.bounds.size.height / 2);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
@@ -64,7 +66,7 @@ static void HUDTick(void) {
         gHud.layer.masksToBounds = YES;
         gLabel = [[UILabel alloc] init];
         gLabel.textColor = UIColor.greenColor;
-        gLabel.numberOfLines = 2;
+        gLabel.numberOfLines = 0;   // 文本自带 \n 分两行，配合无限宽 hint 不折行
         [gHud addSubview:gLabel];
         [gHud addGestureRecognizer:
             [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(hudPan:)]];
@@ -73,7 +75,7 @@ static void HUDTick(void) {
     }
     if (gHud.superview != container) {
         [gHud removeFromSuperview];
-        gHud.center = CGPointMake(80, 170);   // 初始位（可拖动）
+        gHud.center = CGPointMake(90, 320);   // 初始位（标题区下方，可拖动）
         [container addSubview:gHud];
         [container bringSubviewToFront:gHud];
     }
