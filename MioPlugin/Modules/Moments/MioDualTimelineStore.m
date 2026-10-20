@@ -137,7 +137,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     }
     [rows sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
         long long ta = [a[@"time"] longLongValue], tb = [b[@"time"] longLongValue];
-        return ta < tb ? NSOrderedDescending : (ta > tb ? NSOrderedAscending : NSOrderedOrdered);
+        return ta < tb ? NSOrderedDescending : (ta > tb ? NSOrderedAscending : NSOrderedSame);
     }];
     if (rows.count > kMaxRows) [rows removeObjectsInRange:NSMakeRange(kMaxRows, rows.count - kMaxRows)];
     return rows;
