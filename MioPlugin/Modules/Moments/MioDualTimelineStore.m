@@ -249,17 +249,49 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 
 - (void)refreshHead {
     id facade = MioDualFacade();
+    if (!facade) {
+        WPLog(@"Dual", @"[Sess] refreshHead SKIP: facade nil");
+        return;
+    }
+    // 会话会被微信内部终结（原生页生命周期/超时）：每次拉新前重开，否则 head 不走网络
+    // （实证：面板下拉失效、切 tab 回来就好——切 tab 恰好重开了会话）
+    SEL bSel = NSSelectorFromString(@"beginTimeline");
+    if ([facade respondsToSelector:bSel]) {
+        ((id(*)(id, SEL))objc_msgSend)(facade, bSel);
+        WPLog(@"Dual", @"[Sess] refreshHead: beginTimeline OK");
+    } else {
+        WPLog(@"Dual", @"[Sess] refreshHead: beginTimeline NOT resp");
+    }
     SEL sel = NSSelectorFromString(@"updateTimelineHead");
-    if (facade && [facade respondsToSelector:sel]) {
+    if ([facade respondsToSelector:sel]) {
         ((void(*)(id, SEL))objc_msgSend)(facade, sel);   // 探针实证：主动调用成功，等价下拉
+        WPLog(@"Dual", @"[Sess] refreshHead: updateTimelineHead sent (count=%lld)",
+              MioDualDataSourceCount(facade));
+    } else {
+        WPLog(@"Dual", @"[Sess] refreshHead: updateTimelineHead NOT resp");
     }
 }
 
 - (void)loadTail {
     id facade = MioDualFacade();
+    if (!facade) {
+        WPLog(@"Dual", @"[Sess] loadTail SKIP: facade nil");
+        return;
+    }
+    SEL bSel = NSSelectorFromString(@"beginTimeline");   // 翻页同样需要活会话
+    if ([facade respondsToSelector:bSel]) {
+        ((id(*)(id, SEL))objc_msgSend)(facade, bSel);
+        WPLog(@"Dual", @"[Sess] loadTail: beginTimeline OK");
+    } else {
+        WPLog(@"Dual", @"[Sess] loadTail: beginTimeline NOT resp");
+    }
     SEL sel = NSSelectorFromString(@"updateTimelineTail");
-    if (facade && [facade respondsToSelector:sel]) {
+    if ([facade respondsToSelector:sel]) {
         ((void(*)(id, SEL))objc_msgSend)(facade, sel);   // WCMoments requestTimelineMore 同款
+        WPLog(@"Dual", @"[Sess] loadTail: updateTimelineTail sent (count=%lld)",
+              MioDualDataSourceCount(facade));
+    } else {
+        WPLog(@"Dual", @"[Sess] loadTail: updateTimelineTail NOT resp");
     }
 }
 
@@ -268,20 +300,40 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 // 发现页出现即调（入口预热），用户点双列时 live 数据已就绪
 - (void)beginSession {
     id facade = MioDualFacade();
-    if (!facade) return;
+    if (!facade) {
+        WPLog(@"Dual", @"[Sess] beginSession SKIP: facade nil");
+        return;
+    }
     SEL s1 = NSSelectorFromString(@"beginTimeline");
-    if ([facade respondsToSelector:s1])
+    if ([facade respondsToSelector:s1]) {
         ((id(*)(id, SEL))objc_msgSend)(facade, s1);
+        WPLog(@"Dual", @"[Sess] beginSession: beginTimeline OK");
+    } else {
+        WPLog(@"Dual", @"[Sess] beginSession: beginTimeline NOT resp");
+    }
     SEL s2 = NSSelectorFromString(@"reloadTimelineDataItems");
-    if ([facade respondsToSelector:s2])
+    long long before = MioDualDataSourceCount(facade);
+    if ([facade respondsToSelector:s2]) {
         ((id(*)(id, SEL))objc_msgSend)(facade, s2);
+        long long after = MioDualDataSourceCount(facade);
+        WPLog(@"Dual", @"[Sess] beginSession: reloadTimelineDataItems OK count %lld->%lld",
+              before, after);
+    } else {
+        WPLog(@"Dual", @"[Sess] beginSession: reloadTimelineDataItems NOT resp (count=%lld)",
+              before);
+    }
 }
 
 - (void)endSession {
     id facade = MioDualFacade();
     SEL sel = NSSelectorFromString(@"endTimeline");
-    if (facade && [facade respondsToSelector:sel])
+    if (facade && [facade respondsToSelector:sel]) {
         ((id(*)(id, SEL))objc_msgSend)(facade, sel);
+        WPLog(@"Dual", @"[Sess] endSession: endTimeline OK");
+    } else {
+        WPLog(@"Dual", @"[Sess] endSession: endTimeline SKIP (facade=%d)",
+              facade ? 1 : 0);
+    }
 }
 
 - (id)dataItemByID:(NSString *)objID {
