@@ -119,6 +119,16 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     } @catch (NSException *e) {
         WPLog(@"Dual", @"[Store] map error: %@", e);
     }
+    // 快照种子（144.log 实证 remove=80 风暴根因）：累积层是进程内存态，重启清零；
+    // 冷启动数据源只有 10 条而快照有 90 行 → diff 把快照 80 行当「已删除」全删（JS
+    // 空态）+ pruneExcept 把快照媒体 key 裁掉。种子后仓=快照全量+数据源 merge，
+    // diff 对快照基线≈no changes，快照稳定显示，新数据落地走增量 upsert
+    if (_accRows.count == 0) {
+        for (NSDictionary *r in [self snapshotRows]) {
+            NSString *rid = r[@"id"];
+            if (rid.length) _accRows[rid] = r;
+        }
+    }
     // LRU500 累积层（B7 根治的另一半；142.log 实证）：微信原生语义 = head 把内存
     // 窗口重置回最新一页（翻页 50 条 → 下拉 → count 回 10，翻页行连库里都不留），
     // 窗口直接透传会让 diff 产生 remove=40 把 JS 已滚到的内容砍掉——下拉「没效果」
