@@ -1,4 +1,5 @@
 #import "MioDualInboxVC.h"
+#import "MioDualTimelineStore.h"
 #import "MomentsDualPanel.h"
 #import "../../Core/ServiceHelper.h"
 #import "../ChatTopBar/AvatarLoader.h"

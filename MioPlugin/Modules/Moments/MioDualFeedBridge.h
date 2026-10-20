@@ -1,0 +1,24 @@
+#import <Foundation/Foundation.h>
+
+@class WKWebView;
+
+// 双列朋友圈推送层（B8/B9/B10/B11 根治，重构方案 3.3）：
+//   - 行级 diff：native 持 lastRowsByID，每次只序列化变更行，
+//     __mioFeedPatch({upsert,remove,order}) 增量协议（300KB 全量 → 通常 <20KB）
+//   - 尾沿防抖：事件 → 0.5s 后推一次，推送时重读最新状态（窗口内变更全合并，永不丢尾）
+//   - 快照协议：attach 后首推 __mioFeedSnapshot 灌上次会话快照（JS 标记 stale），
+//     同时以快照做 diff 基线——首推 patch 只含快照之后的新增/变更
+//   - 让位兜底：onTimelineDataChanged 被他方插件占有时 10s 慢轮询保底
+// 主线程模型：全部状态仅在主线程读写。
+@interface MioDualFeedBridge : NSObject
+// 面板 WebView 页面就绪/复开时挂上（didFinishNavigation / Open 复用路径）
++ (void)attachWebView:(WKWebView *)webView;
+// 面板 Close 时摘除（weak 引用，WebView 释放亦自动断开）
++ (void)detachWebView;
+// 立即推送（attach 后首推用；事件路径走 notifyDataChanged 防抖）
++ (void)pushNow;
+// hook 层入口：微信 timeline 变更（0.5s 尾沿防抖）
++ (void)notifyDataChanged;
+// onTimelineDataChanged 让位他方插件时开启 10s 慢轮询（实时性降级但不断供）
++ (void)enablePollingFallback;
+@end

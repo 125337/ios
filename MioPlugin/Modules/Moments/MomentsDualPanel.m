@@ -2,42 +2,16 @@
 #import <WebKit/WebKit.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
-#import "../../Core/ServiceHelper.h"
 #import "MomentsConfig.h"
 #import "MioDualInboxVC.h"
+#import "MioDualMediaService.h"
+#import "MioDualTimelineStore.h"
+#import "MioDualFeedBridge.h"
 
 #pragma mark - 图片服务（WKURLSchemeTask 读本地媒体文件，WCMAssetHandler 同职责）
 
-// 路径表：pushFeed 时把微信本地媒体路径注册成 mioimg://local/<key>，
-// handler 按 key 回读。start/stop 与注册均在主线程（WebKit scheme 回调在主线程），
-// 无需加锁；响应体在后台队列读盘后回主线程提交。
-static NSMutableDictionary<NSString *, NSString *> *gDualPaths = nil;
-
-static NSLock *MioDualPathsLock(void) {
-    static NSLock *lock = nil;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ lock = [[NSLock alloc] init]; });
-    return lock;
-}
-
-static NSString *MioDualRegisterMediaPath(NSString *path) {
-    static NSUInteger counter = 0;
-    MioDualPathsLock();
-    if (!gDualPaths) gDualPaths = [NSMutableDictionary dictionary];
-    counter++;
-    NSString *key = [NSString stringWithFormat:@"f%lu", (unsigned long)counter];
-    gDualPaths[key] = path;
-    MioDualPathsLock();
-    return key;
-}
-
-static NSString *MioDualLookupMediaPath(NSString *key) {
-    MioDualPathsLock();
-    NSString *p = gDualPaths[key];
-    MioDualPathsLock();
-    return p;
-}
-
+// 媒体路径注册/解析全在 MioDualMediaService（MD5 稳定 key + 持久化 + 文件校验 +
+// CDN 回落，B1-B5 根治）；本文件只保留 scheme handler 管线。
 @interface MioDualSchemeHandler : NSObject <WKURLSchemeHandler>
 @end
 @implementation MioDualSchemeHandler
@@ -50,9 +24,13 @@ static NSString *MioDualLookupMediaPath(NSString *key) {
     dispatch_once(&oncePred, ^{
         nameOK = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", @"^[A-Za-z0-9][A-Za-z0-9_]*$"];
     });
-    NSString *path = (key.length && nameOK && [nameOK evaluateWithObject:key])
-        ? MioDualLookupMediaPath(key) : nil;
-    if (!path.length) {
+    BOOL keyOK = (key.length && nameOK && [nameOK evaluateWithObject:key]);
+    // 解析顺序：注册表 key → 本地路径（每次文件校验）→ CDN 回落 URL。
+    // 微信清缓存后自动降级 CDN（B4/B5 根治），快照放久了图不再灭
+    NSString *path = keyOK ? [[MioDualMediaService shared] resolveKey:key] : nil;
+    NSString *cdn = (keyOK && !path.length)
+        ? [[MioDualMediaService shared] cdnFallbackForKey:key] : nil;
+    if (!path.length && !cdn.length) {
         [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain
                                                    code:NSURLErrorFileDoesNotExist
                                                userInfo:nil]];
@@ -60,47 +38,69 @@ static NSString *MioDualLookupMediaPath(NSString *key) {
     }
     NSValue *taskRef = [NSValue valueWithNonretainedObject:task];   // 取消标记（stop 与响应都在主线程比对）
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        // 解码后按列宽缩放返回（WCMAssetHandler 同款：不回原图，单图内存几MB→几十KB）
-        UIImage *img = [UIImage imageWithContentsOfFile:path];
+        UIImage *img = nil;
+        if (path.length) {
+            img = [UIImage imageWithContentsOfFile:path];
+        } else {
+            // CDN 回落：后台信号量同步下载（限 10s），缩略图几KB-几十KB
+            NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:cdn]
+                                                              cachePolicy:NSURLRequestUseProtocolCachePolicy
+                                                              timeoutInterval:10];
+            __block NSData *cdnData = nil;
+            dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+            [[[NSURLSession sharedSession] dataTaskWithRequest:req
+                completionHandler:^(NSData *d, __unused NSURLResponse *r, __unused NSError *e) {
+                    cdnData = d;
+                    dispatch_semaphore_signal(sem);
+                }] resume];
+            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 11 * NSEC_PER_SEC));
+            img = [UIImage imageWithData:cdnData];
+        }
         if (!img) {
             [self finishFail:task ref:taskRef code:NSURLErrorCannotOpenFile];
             return;
         }
-        CGFloat scale = [UIScreen mainScreen].scale;
-        CGFloat target = MAX(512, ([UIScreen mainScreen].bounds.size.width - 40) * scale / 2 + 64);
-        CGFloat maxSide = MAX(img.size.width, img.size.height);
-        if (maxSide > target) {
-            CGFloat k = target / maxSide;
-            UIGraphicsBeginImageContextWithOptions(CGSizeMake(img.size.width * k, img.size.height * k), NO, scale);
-            [img drawInRect:CGRectMake(0, 0, img.size.width * k, img.size.height * k)];
-            UIImage *small = UIGraphicsGetImageFromCurrentImageContext();
-            UIGraphicsEndImageContext();
-            if (small) img = small;
+        [self serveScaledImage:img task:task ref:taskRef];
+    });
+}
+
+// 解码后按列宽缩放返回（WCMAssetHandler 同款：不回原图，单图内存几MB→几十KB），
+// 主线程提交（含取消检查）
+- (void)serveScaledImage:(UIImage *)img task:(id<WKURLSchemeTask>)task ref:(NSValue *)taskRef {
+    CGFloat scale = [UIScreen mainScreen].scale;
+    CGFloat target = MAX(512, ([UIScreen mainScreen].bounds.size.width - 40) * scale / 2 + 64);
+    CGFloat maxSide = MAX(img.size.width, img.size.height);
+    if (maxSide > target) {
+        CGFloat k = target / maxSide;
+        UIGraphicsBeginImageContextWithOptions(CGSizeMake(img.size.width * k, img.size.height * k), NO, scale);
+        [img drawInRect:CGRectMake(0, 0, img.size.width * k, img.size.height * k)];
+        UIImage *small = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        if (small) img = small;
+    }
+    NSData *data = UIImageJPEGRepresentation(img, 0.8);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // stopURLSchemeTask 已到必须先检查：对已停 task 回任何回调
+        // WebKit 直接断言崩溃（"called after the task was stopped"）
+        NSMutableSet *cancelled = [self cancelledTasks];
+        if ([cancelled containsObject:taskRef]) {
+            [cancelled removeObject:taskRef];
+            return;
         }
-        NSData *data = UIImageJPEGRepresentation(img, 0.8);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            // stopURLSchemeTask 已到必须先检查：对已停 task 回任何回调
-            // WebKit 直接断言崩溃（"called after the task was stopped"）
-            NSMutableSet *cancelled = [self cancelledTasks];
-            if ([cancelled containsObject:taskRef]) {
-                [cancelled removeObject:taskRef];
-                return;
-            }
-            if (!data.length) {
-                [self finishFail:task ref:taskRef code:NSURLErrorCannotOpenFile];
-                return;
-            }
-            NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
-                                       initWithURL:task.request.URL
-                                       statusCode:200
-                                       HTTPVersion:@"HTTP/1.1"
-                                       headerFields:@{@"Content-Type": @"image/jpeg",
-                                                      @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length],
-                                                      @"Cache-Control": @"max-age=86400"}];
-            [task didReceiveResponse:resp];
-            [task didReceiveData:data];
-            [task didFinish];
-        });
+        if (!data.length) {
+            [self finishFail:task ref:taskRef code:NSURLErrorCannotOpenFile];
+            return;
+        }
+        NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
+                                   initWithURL:task.request.URL
+                                   statusCode:200
+                                   HTTPVersion:@"HTTP/1.1"
+                                   headerFields:@{@"Content-Type": @"image/jpeg",
+                                                  @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length],
+                                                  @"Cache-Control": @"max-age=86400"}];
+        [task didReceiveResponse:resp];
+        [task didReceiveData:data];
+        [task didFinish];
     });
 }
 
@@ -129,68 +129,6 @@ static NSString *MioDualLookupMediaPath(NSString *key) {
 }
 
 @end
-
-#pragma mark - facade 数据访问（阶段0 探针实证的链路）
-
-// facade：MMContext activeUserContext getService:WCFacade.class（WCMoments _Service 同款；
-// 8.0.60 的 MMContext 无 activeUserContext 时回退 currentContext）。单例稳定，缓存命中。
-id MioDualFacade(void) {    static id cached = nil;
-    if (cached) return cached;
-    Class fCls = objc_getClass("WCFacade");
-    Class ctxCls = objc_getClass("MMContext");
-    if (!fCls || !ctxCls) return nil;
-    id ctx = nil;
-    SEL activeSel = NSSelectorFromString(@"activeUserContext");
-    SEL curSel = NSSelectorFromString(@"currentContext");
-    if ([ctxCls respondsToSelector:activeSel]) {
-        ctx = ((id(*)(id, SEL))objc_msgSend)(ctxCls, activeSel);
-    }
-    if (!ctx && [ctxCls respondsToSelector:curSel]) {
-        ctx = ((id(*)(id, SEL))objc_msgSend)(ctxCls, curSel);
-    }
-    if (!ctx || ![ctx respondsToSelector:@selector(getService:)]) return nil;
-    cached = ((id(*)(id, SEL, Class))objc_msgSend)(ctx, @selector(getService:), fCls);
-    return cached;
-}
-
-
-
-// WCDataItem 的 createtime/likeCount/commentCount 是标量 getter（ULL/uint），
-// 禁止用 id 接裸 msgSend 返回值（WXSafeIntegerGet 同款）：x0 原始整数被当指针
-// 发 respondsToSelector 必 SIGSEGV（127.log 点双列闪退实证）。
-// 阶段0 探针实证的 KVC 装箱路径：valueForKey 自动装箱 NSNumber，未知 key @try 兜住。
-static long long MioDualScalarGet(id obj, NSString *key, long long def) {
-    if (!obj || !key.length) return def;
-    @try {
-        id v = [obj valueForKey:key];
-        if ([v isKindOfClass:[NSNumber class]]) return [(NSNumber *)v longLongValue];
-    } @catch (NSException *e) {
-    }
-    return def;
-}
-
-// timeline 数据直读（对齐 WCM 直读三件套；WCFacade.h:429-431 微信原生 API 实证）：
-// 主路 getTimelineDataItem（返回全数组）；回落 countOfTimelineDataItem + getTimelineDataItemOfIndex:。
-// WCFacade 是 MMUserService（微信原生服务，8.0.78 头文件实证）——此链路与 WCMoments 插件无依赖。
-// count 若为标量 getter，禁 id 接裸 msgSend（SIGSEGV 教训），走上面 KVC 装箱。
-static NSArray *MioDualTimelineItems(id facade) {
-    if (!facade) return nil;
-    SEL all = NSSelectorFromString(@"getTimelineDataItem");
-    if ([facade respondsToSelector:all]) {
-        id v = ((id(*)(id, SEL))objc_msgSend)(facade, all);
-        if ([v isKindOfClass:[NSArray class]]) return v;
-    }
-    SEL idx = NSSelectorFromString(@"getTimelineDataItemOfIndex:");
-    if (![facade respondsToSelector:idx]) return nil;
-    long long n = MioDualScalarGet(facade, @"countOfTimelineDataItem", 0);
-    if (n <= 0) return nil;
-    NSMutableArray *arr = [NSMutableArray arrayWithCapacity:(NSUInteger)n];
-    for (long long i = 0; i < n; i++) {
-        id it = ((id(*)(id, SEL, unsigned long long))objc_msgSend)(facade, idx, (unsigned long long)i);
-        if (it) [arr addObject:it];
-    }
-    return arr;
-}
 
 #pragma mark - 内置双列瀑布流页面（纯静态，无格式化注入）
 
@@ -267,6 +205,7 @@ static NSString * const kDualPageHTML = @(
 ".stat svg { width:12px; height:12px; fill:var(--secondary); }"
 "#empty { text-align:center; color:#b3b3b3; font-size:13px; padding:70px 0; }"
 "#pull { position:fixed; top:-30px; left:0; right:0; text-align:center; font-size:12px; color:#9b9b9b; transition:top .2s; z-index:99; pointer-events:none; }"
+"#staleTag { position:fixed; left:50%; bottom:28px; transform:translateX(-50%); z-index:150; background:rgba(255,204,0,.92); color:#5a4a00; font-size:12px; padding:5px 14px; border-radius:14px; display:none; box-shadow:0 2px 12px rgba(0,0,0,.14); white-space:nowrap; }"
 "@media (prefers-color-scheme:dark) {"
 ":root { --bg-color:#000; --card-bg:#1C1C1E; --text-main:#F5F5F7; --secondary:#AEAEB2; --tertiary:#98989D; --control:#2C2C2E; --glass:rgba(20,20,23,.76); --button-glass:rgba(70,70,78,.42); --glass-edge:rgba(255,255,255,.1); --glass-highlight:rgba(255,255,255,.16); --pill:rgba(125,125,135,.38); --shadow:none; --icon-fill:#CCC; }"
 ".top-bar h1 { color:#F5F5F7; } .avatar { background:#2A2A2A; } .card-media img { background:#242424; }"
@@ -302,6 +241,7 @@ static NSString * const kDualPageHTML = @(
 "</div>"
 "<div id=\"grid\"></div>"
 "<div id=\"empty\" style=\"display:none\">暂无内容，下拉刷新</div>"
+"<div id=\"staleTag\">快照内容 · 更新中</div>"
 "<script>"
 "(function(){"
 "var HEART='<svg viewBox=\"0 0 24 24\"><path d=\"M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z\"/></svg>';"
@@ -309,7 +249,7 @@ static NSString * const kDualPageHTML = @(
 "var PLAY='<svg viewBox=\"0 0 24 24\" width=\"10\" height=\"10\" fill=\"currentColor\"><path d=\"M8 5v14l11-7z\"/></svg>';"
 "var AV='data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"%23ddd\"><rect width=\"100\" height=\"100\"/></svg>';"
 "var grid=document.getElementById('grid'),empty=document.getElementById('empty'),pullTip=document.getElementById('pull');"
-"var cards={},ratios={},colOf={},ALL=[],q='',tab='all',colW=0,layoutFrame=0;"
+"var cards={},ratios={},colOf={},ALL=[],byId={},stale=false,q='',tab='all',colW=0,layoutFrame=0;"
 "function fmtTime(t){if(!t)return '';var d=new Date(t*1000),n=new Date();"
 "var p=function(x){return x<10?'0'+x:''+x;};var hm=p(d.getHours())+':'+p(d.getMinutes());"
 "var sd=function(a,b){return a.getFullYear()==b.getFullYear()&&a.getMonth()==b.getMonth()&&a.getDate()==b.getDate();};"
@@ -380,7 +320,21 @@ static NSString * const kDualPageHTML = @(
 "if(q)l=l.filter(function(it){return ((it.name||'')+' '+(it.content||'')).toLowerCase().indexOf(q)>=0;});"
 "return l;"
 "}"
-"window.__mioSetFeed=function(payload){ALL=(payload&&payload.items)||[];render();};"
+"function updateStale(){var t=document.getElementById('staleTag');if(t)t.style.display=stale?'block':'none';}"
+"window.__mioFeedSnapshot=function(p){"
+"ALL=(p&&p.items)||[];byId={};"
+"for(var i=0;i<ALL.length;i++)byId[ALL[i].id]=ALL[i];"
+"stale=ALL.length>0;render();updateStale();};"
+"window.__mioFeedPatch=function(p){"
+"var ups=(p&&p.upsert)||[],rm=(p&&p.remove)||[],i,id;"
+"for(i=0;i<rm.length;i++)delete byId[rm[i]];"
+"var known={};for(i=0;i<ALL.length;i++)known[ALL[i].id]=1;"
+"var fresh=[];"
+"for(i=0;i<ups.length;i++){id=ups[i].id;if(!byId[id]&&!known[id])fresh.push(id);byId[id]=ups[i];}"
+"if(p&&p.order){ALL=p.order.map(function(k){return byId[k];}).filter(Boolean);}"
+"else{ALL=ALL.map(function(it){return byId[it.id];}).filter(Boolean);"
+"for(i=fresh.length-1;i>=0;i--)ALL.unshift(byId[fresh[i]]);}"
+"stale=false;updateStale();render();};"
 "window.__mioSetBadge=function(n){var b=document.getElementById('bellBadge');"
 "if(!b)return;if(n>0){b.textContent=n>99?'99+':n;b.classList.remove('hide');}else{b.classList.add('hide');}};"
 "var qEl=document.getElementById('q');"
@@ -447,8 +401,6 @@ static NSString * const kDualPageHTML = @(
 
 @interface MomentsDualPanel () <WKScriptMessageHandler, WKNavigationDelegate>
 @property (nonatomic, strong) WKWebView *webView;
-@property (nonatomic, copy) NSString *lastJson;
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *avatarCache;
 @property (nonatomic, assign) BOOL pageReady;
 @end
 
@@ -465,7 +417,6 @@ static __weak UIViewController *g_dualPanelHost = nil;
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor whiteColor];
-    self.avatarCache = [NSMutableDictionary dictionary];
 
     WKWebViewConfiguration *cfg = [[WKWebViewConfiguration alloc] init];
     [cfg setURLSchemeHandler:[[MioDualSchemeHandler alloc] init] forURLScheme:@"mioimg"];
@@ -483,28 +434,15 @@ static __weak UIViewController *g_dualPanelHost = nil;
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     self.pageReady = YES;
-    [self pushFeedNow];
+    // 页面就绪：挂推送桥 → 首推（快照秒显 + 增量 patch 全在 Bridge 内）
+    [MioDualFeedBridge attachWebView:self.webView];
+    [MioDualFeedBridge pushNow];
+    [self updateBellBadge];
 }
 
-// 数据刷新为纯事件驱动（对齐 WCM 变更回调）：微信 timeline 变更 →
-// onTimelineDataChanged hook（MomentsDualHook）→ MioDualPanelNotifyDataChanged →
-// 0.5s 防抖 → 活跃面板 pushFeedNow。旧 3s 轮询已删（P1 实时性落地，轮询冗余）。
-
-// 活跃面板弱引用：hook 层 → 面板桥（Open 赋值 / Close 置 nil，主线程生命周期内读写）
-static __weak id gDualActivePanel = nil;
-
-// P1 实时性入口：微信原生 timeline 变更回调（WCFacade.h:415 实证）转发至此，
-// 主线程 0.5s 防抖合并（连赞连评/批量同步多次触发）
-void MioDualPanelNotifyDataChanged(void) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        static NSTimeInterval last = 0;
-        NSTimeInterval now = [NSDate date].timeIntervalSince1970;
-        if (now - last < 0.5) return;
-        last = now;
-        id panel = gDualActivePanel;
-        if (panel && [panel respondsToSelector:@selector(pushFeedNow)]) [panel pushFeedNow];
-    });
-}
+// 数据刷新为纯事件驱动：微信 timeline 变更 → onTimelineDataChanged hook
+// （MomentsDualHook）→ MioDualFeedBridge notifyDataChanged（0.5s 尾沿防抖）→
+// 行级 diff 增量推送。快照协议/让位轮询兜底见 MioDualFeedBridge。
 
 - (void)dealloc {
     // addScriptMessageHandler 强持 self，必须解绑才能断开 webview→controller→webview 环
@@ -516,77 +454,7 @@ void MioDualPanelNotifyDataChanged(void) {
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
     g_dualPanel = nil;
-    if (gDualActivePanel == self) gDualActivePanel = nil;
-}
-
-#pragma mark 数据桥：WCDataItem → JSON → window.__mioSetFeed
-
-- (void)pushFeedNow {
-    if (!self.pageReady || !self.webView) return;
-    [self updateBellBadge];
-    NSMutableArray *arr = [NSMutableArray array];
-    NSUInteger cacheCount = 0;
-    @try {
-        NSArray *cache = MioDualTimelineItems(MioDualFacade());
-        cacheCount = cache.count;
-        for (id item in cache) {
-            if (arr.count >= 300) break;   // 上限 300：滚底翻页（updateTimelineTail）后 cache 超百条
-            NSDictionary *d = [self itemDict:item];
-            if (d) [arr addObject:d];
-        }
-    } @catch (NSException *e) {
-        WPLog(@"Dual", @"[Dual] read cache error: %@", e);
-    }
-    // 冷启动快照（WCM arrayForKey_/showCachedFeed 同语义，探针实证 cacheCount=0 差距）：
-    // 原生同步未落地（冷启动 3s）时，先用上次会话的持久化快照顶首屏秒显，
-    // return 等事件回调推新数据替换（json≠snap 会正常重推并写盘）
-    if (cacheCount == 0) {
-        NSString *snap = [[NSUserDefaults standardUserDefaults]
-                          stringForKey:@"MioDualLastFeedJSON"];
-        if (snap.length > 0) {
-            [self.webView evaluateJavaScript:
-                [NSString stringWithFormat:@"window.__mioSetFeed(%@);", snap]
-                completionHandler:nil];
-            self.lastJson = snap;
-            WPLog(@"Dual", @"[Push] cache empty, showing last-session snapshot");
-            return;
-        }
-    }
-    NSData *data = [NSJSONSerialization dataWithJSONObject:@{@"items": arr} options:0 error:nil];
-    if (!data) return;
-    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    // U+2028/2029 在 JS 字面量里是行终止符，JSONSerialization 不转义，直接 eval 会语法错误
-    json = [json stringByReplacingOccurrencesOfString:@"\u2028" withString:@"\\u2028"];
-    json = [json stringByReplacingOccurrencesOfString:@"\u2029" withString:@"\\u2029"];
-    // 冷启动仪表：cache 当时是不是 0 / rows 多少 / 是否被 lastJson 去重拦下
-    WPLog(@"Dual", @"[Push] ready=%d cacheCount=%lu rows=%lu lastJsonSame=%d",
-          self.pageReady, (unsigned long)cacheCount, (unsigned long)arr.count,
-          [json isEqualToString:self.lastJson] ? 1 : 0);
-    if ([json isEqualToString:self.lastJson]) return;   // 无变化不重渲（防滚动位置跳动）
-    self.lastJson = json;
-    // 持久化快照（WCM arrayForKey_ 同语义）：有内容才存，空结果不覆盖（防坏数据顶屏）
-    if (arr.count > 0) {
-        [[NSUserDefaults standardUserDefaults] setObject:json forKey:@"MioDualLastFeedJSON"];
-    }
-    [self.webView evaluateJavaScript:
-        [NSString stringWithFormat:@"window.__mioSetFeed(%@);", json]
-        completionHandler:nil];
-    // DOM dump 探针：推送落定后回读 #grid 每张卡的真实布局状态，
-    // 钉死 text-only 全宽塌方（className/锁宽/坐标/实测尺寸 对照）
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        if (!self.webView) return;
-        [self.webView evaluateJavaScript:
-            @"(function(){var g=document.getElementById('grid'),out=[];"
-            @"for(var i=0;i<g.children.length&&i<12;i++){var c=g.children[i];"
-            @"out.push({i:i,id:c.dataset.id,cls:c.className,w:c.style.width,"
-            @"l:c.style.left,t:c.style.top,ow:c.offsetWidth,oh:c.offsetHeight,"
-            @"tx:(c.parts&&c.parts.tt)?c.parts.tt.textContent.substr(0,10):''});}"
-            @"return JSON.stringify(out);})()"
-            completionHandler:^(id r, NSError *e) {
-                if (r) WPLog(@"Dual", @"[DOM] %@", r);
-            }];
-    });
+    [MioDualFeedBridge detachWebView];
 }
 
 // 铃铛角标：getSnsMessageCount（发现页头文件实证，朋友圈互动未读数；头文件声明返回 id）
@@ -604,89 +472,7 @@ void MioDualPanelNotifyDataChanged(void) {
     } @catch (NSException *e) {}
 }
 
-#pragma mark 消息页数据
-
-- (NSDictionary *)itemDict:(id)item {
-    if (!item) return nil;
-    NSString *username = WXSafeStringGet(item, @"username") ?: @"";
-    NSString *content = WXSafeStringGet(item, @"contentDesc") ?: @"";
-    NSMutableArray *media = [NSMutableArray array];
-    BOOL isVideo = NO;
-    double ratio = 0;   // 宽/高，JS 预锁卡片高度防瀑布流跳动；拿不到留 0 由 JS onload 锁高
-    @try {
-        if ([item respondsToSelector:@selector(getMediaWraps)]) {
-            NSArray *wraps = ((id(*)(id, SEL))objc_msgSend)(item, @selector(getMediaWraps));
-            for (id wrap in wraps) {
-                if (media.count >= 9) break;
-                id mi = nil;
-                if ([wrap respondsToSelector:@selector(mediaItem)]) {
-                    mi = ((id(*)(id, SEL))objc_msgSend)(wrap, @selector(mediaItem));
-                }
-                NSString *src = [self mediaSrc:mi];
-                if (src) [media addObject:@{@"src": src}];
-                if (mi && !isVideo) {
-                    // 视频条目 mediaItem 为 WCVideoMediaItem 类变体，类名匹配避开拼写差异
-                    NSString *cls = NSStringFromClass([mi class]);
-                    isVideo = [cls rangeOfString:@"ideo"].location != NSNotFound;
-                }
-                if (mi && media.count == 1 && ratio == 0) {
-                    // 宽高 ivar 名未探针实证，KVC 失败即回落 JS onload 锁高
-                    @try {
-                        double w = [(NSNumber *)[mi valueForKey:@"m64_width"] doubleValue];
-                        double h = [(NSNumber *)[mi valueForKey:@"m64_height"] doubleValue];
-                        if (w > 1 && h > 1) ratio = w / h;
-                    } @catch (NSException *e) {}
-                }
-            }
-        }
-    } @catch (NSException *e) {
-        WPLog(@"Dual", @"[Dual] media read error: %@", e);
-    }
-    NSString *firstImg = media.firstObject[@"src"] ?: @"";
-    return @{@"id": WXSafeStringGet(item, @"itemID") ?: @"",
-             @"name": WXSafeStringGet(item, @"nickname") ?: username,
-             @"avatar": [self avatarFor:username] ?: @"",
-             @"time": @(MioDualScalarGet(item, @"createtime", 0)),
-             @"likes": @(MioDualScalarGet(item, @"likeCount", 0)),
-             @"cmt": @(MioDualScalarGet(item, @"commentCount", 0)),
-             @"liked": @(MioDualScalarGet(item, @"likeFlag", 0)),
-             @"content": content,
-             @"img": firstImg,
-             @"imgCount": @(media.count),
-             @"isVideo": isVideo ? @YES : @NO,
-             @"ratio": @(ratio),
-             @"isLargeText": media.count ? @NO : @YES};
-}
-
-// 媒体源：本地路径（微信自带方法，探针实证可直接调）走 mioimg 服务，缺文件回落 CDN URL
-- (NSString *)mediaSrc:(id)mi {
-    if (!mi) return nil;
-    SEL pathSels[4] = { @selector(getThumbImagePath), @selector(pathForPreview),
-                        @selector(pathForData), @selector(pathForHdData) };
-    for (int i = 0; i < 4; i++) {
-        if (![mi respondsToSelector:pathSels[i]]) continue;
-        NSString *p = ((id(*)(id, SEL))objc_msgSend)(mi, pathSels[i]);
-        if ([p isKindOfClass:[NSString class]] && p.length > 0 &&
-            [[NSFileManager defaultManager] fileExistsAtPath:p]) {
-            return [NSString stringWithFormat:@"mioimg://local/%@", MioDualRegisterMediaPath(p)];
-        }
-    }
-    NSString *url = WXSafeStringGet(mi, @"attachThumbUrl");
-    if (url.length == 0) url = WXSafeStringGet(mi, @"dataUrl");
-    return (url.length > 4 && [url hasPrefix:@"http"]) ? url : nil;
-}
-
-// 头像：按 wxid 走 CContactMgr 查（面板会话内缓存，避免 3s 轮询重复查询）
-- (NSString *)avatarFor:(NSString *)wxid {
-    if (wxid.length == 0) return nil;
-    NSString *hit = self.avatarCache[wxid];
-    if (hit) return hit;
-    NSString *url = WXContactHeadImageURL(WXGetContactForWxid(wxid));
-    if (url.length > 0) self.avatarCache[wxid] = url;
-    return url;
-}
-
-#pragma mark JS 桥：下拉刷新
+#pragma mark JS 桥：面板交互
 
 - (void)userContentController:(WKUserContentController *)userContentController
       didReceiveScriptMessage:(WKScriptMessage *)message {
@@ -699,13 +485,9 @@ void MioDualPanelNotifyDataChanged(void) {
         return;
     }
     if ([action isEqualToString:@"more"]) {
-        // WCMoments requestTimelineMore 同款（反编译实证）：滚到底 → facade updateTimelineTail
+        // WCMoments requestTimelineMore 同款（反编译实证）：滚到底 → updateTimelineTail
         // 翻页拉更多；新数据落库后 onTimelineDataChanged hook 自动推面板（纯事件驱动）
-        id facade = MioDualFacade();
-        SEL tailSel = NSSelectorFromString(@"updateTimelineTail");
-        if (facade && [facade respondsToSelector:tailSel]) {
-            ((void(*)(id, SEL))objc_msgSend)(facade, tailSel);
-        }
+        [[MioDualTimelineStore shared] loadTail];
         return;
     }
     if ([action isEqualToString:@"publish"] || [action isEqualToString:@"publishText"]) {
@@ -753,12 +535,9 @@ void MioDualPanelNotifyDataChanged(void) {
         return;
     }
     if (![action isEqualToString:@"refresh"]) return;
-    id facade = MioDualFacade();
-    SEL refreshSel = NSSelectorFromString(@"updateTimelineHead");
-    if (facade && [facade respondsToSelector:refreshSel]) {
-        ((void(*)(id, SEL))objc_msgSend)(facade, refreshSel);   // 探针实证：主动调用成功，等价下拉
-        // 新数据落库后 onTimelineDataChanged hook 自动推面板，无需复查轮询
-    }
+    // 下拉刷新 → updateTimelineHead（探针实证：主动调用成功，等价下拉）；
+    // 新数据落库后 onTimelineDataChanged hook 自动推面板
+    [[MioDualTimelineStore shared] refreshHead];
 }
 
 
@@ -792,16 +571,15 @@ void MioDualPanelOpen(UIViewController *host) {
     panel.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [host.view addSubview:panel.view];
     [host.view bringSubviewToFront:panel.view];
-    gDualActivePanel = panel;   // P1 事件驱动：hook 层 → 防抖 → 此面板 pushFeedNow
-    // 复用时 pageReady 已 YES：立即推上屏（内容没变 lastJson no-op，零等待首屏）；
-    // 首开 pageReady NO：此处 no-op，didFinishNavigation 后自动首推
-    [panel pushFeedNow];
-    // 发现页直接打开时朋友圈缓存可能为空（尚未进过朋友圈），后台拉新（不阻塞显示）
-    id facade = MioDualFacade();
-    SEL refreshSel = NSSelectorFromString(@"updateTimelineHead");
-    if (facade && [facade respondsToSelector:refreshSel]) {
-        ((void(*)(id, SEL))objc_msgSend)(facade, refreshSel);
+    // 复用时 pageReady 已 YES：挂推送桥立即推上屏（无变化时 Bridge 内 no-op，零等待首屏）；
+    // 首开 pageReady NO：此处不推，didFinishNavigation 后自动首推
+    if (panel.pageReady) {
+        [MioDualFeedBridge attachWebView:panel.webView];
+        [MioDualFeedBridge pushNow];
+        [panel updateBellBadge];
     }
+    // 发现页直接打开时朋友圈缓存可能为空（尚未进过朋友圈），后台拉新（不阻塞显示）
+    [[MioDualTimelineStore shared] refreshHead];
     WPLog(@"Dual", @"[Dual] panel opened (%@) on %@", panel.pageReady ? @"reuse" : @"cold",
           NSStringFromClass([host class]));
 }
@@ -818,7 +596,7 @@ void MioDualPanelClose(UIViewController *host) {
     MomentsDualPanel *panel = objc_getAssociatedObject(host, &kDualPanelAssocKey);
     if (![panel isKindOfClass:[MomentsDualPanel class]]) return;
     objc_setAssociatedObject(host, &kDualPanelAssocKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    gDualActivePanel = nil;   // 不可见即停推送目标；常驻实例仍活着，重开复用
+    [MioDualFeedBridge detachWebView];   // 不可见即停推送目标；常驻实例仍活着，重开复用
     [panel.view removeFromSuperview];   // 只摘视图：g_dualPanel 强持有，WebView 已渲染态保留（秒显）
     // WCMoments restoreChrome：还原发现页 chrome
     host.edgesForExtendedLayout = panel.prevEdges;

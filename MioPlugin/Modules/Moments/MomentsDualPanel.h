@@ -1,7 +1,7 @@
 #import <UIKit/UIKit.h>
 
-// 双列朋友圈面板（WCMFeedController 式覆盖壳 + WKWebView 渲染层）。
-// 数据桥/图片服务实现见 MomentsDualPanel.m
+// 双列朋友圈面板（WCMFeedController 式覆盖壳 + WKWebView 渲染层，UI 层）。
+// 三层分离：媒体 MioDualMediaService / 数据 MioDualTimelineStore / 推送 MioDualFeedBridge
 @interface MomentsDualPanel : UIViewController
 // coverHost 前捕获的 chrome（restoreChrome 用，WCMoments 同款 capture/restore）
 @property (nonatomic, assign) BOOL prevNavHidden;
@@ -19,18 +19,3 @@ void MioDualPanelReassertChrome(UIViewController *host);
 void MioDualPanelClose(UIViewController *host);
 void MioDualPanelToggle(UIViewController *host);
 BOOL MioDualPanelIsOpen(UIViewController *host);
-
-// WCFacade 获取（阶段0 探针实证：logEnterTimeline 首调捕获，进程级缓存）
-// 双列模块内共享（面板数据桥/消息页取数都走它）
-id MioDualFacade(void);
-
-// P1 实时性：微信 timeline 变更回调 hook（MomentsDualHook 挂 WCFacade
-// onTimelineDataChangedWithAdded:andChanged:andDeleted:，WCFacade.h:415 实证）
-// 转发入口——主线程 0.5s 防抖后活跃面板 pushFeedNow（替代旧 3s 轮询）
-void MioDualPanelNotifyDataChanged(void);
-
-// 数据推送（常驻面板复用：Open 时立即推已渲染缓存，零等待首屏）
-// 实现在 MomentsDualPanel（同文件内 Open/Close 与 VC 生命周期共用）
-@interface MomentsDualPanel (PushFeed)
-- (void)pushFeedNow;
-@end

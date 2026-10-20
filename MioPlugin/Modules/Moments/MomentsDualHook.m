@@ -8,6 +8,7 @@
 #import "../../Core/LogManager.h"
 #import "MomentsConfig.h"
 #import "MomentsDualPanel.h"
+#import "MioDualFeedBridge.h"
 
 // viewDidAppear 原实现（若被 WCR 等他方插件先接管则让位不挂，与 MomentsHook 同规）
 static IMP gDualOrigViewDidAppear = NULL;
@@ -129,29 +130,33 @@ static void MioDualInstallEntryHooks(void) {
 
 // P1 实时性：微信原生 timeline 变更回调（WCFacade.h:415 实证——WCFacade 是
 // MMUserService 微信原生服务，非 WCMoments 私有）。每次朋友圈数据增/改/删都会走这里，
-// 转发 MioDualPanelNotifyDataChanged（0.5s 防抖）→ 活跃双列面板即时重推，替代轮询
+// 转发 MioDualFeedBridge notifyDataChanged（0.5s 尾沿防抖）→ 行级 diff 增量推送；
+// 让位他方插件时 Bridge 开 10s 慢轮询兜底（B11）
 static void MioDualInstallTimelineChangedHook(void) {
     Class fCls = objc_getClass("WCFacade");
     SEL sel = NSSelectorFromString(@"onTimelineDataChangedWithAdded:andChanged:andDeleted:");
     if (!fCls) {
         WPLog(@"Dual", @"[Dual] timeline-changed hook SKIP: WCFacade NOT found");
+        [MioDualFeedBridge enablePollingFallback];   // 无 hook 通道，轮询保底
         return;
     }
     Method m = class_getInstanceMethod(fCls, sel);
     if (!m) {
         WPLog(@"Dual", @"[Dual] timeline-changed hook SKIP: selector NOT found");
+        [MioDualFeedBridge enablePollingFallback];
         return;
     }
     IMP cur = method_getImplementation(m);
     if (MioDualImpFromOtherPlugin(cur)) {   // 他方插件先接管则让位（同 viewDidAppear 规则）
         WPLog(@"Dual", @"[Dual] yield onTimelineDataChanged: (another dylib owns it)");
+        [MioDualFeedBridge enablePollingFallback];
         return;
     }
     __block void (*orig)(id, SEL, id, id, id) = (void (*)(id, SEL, id, id, id))cur;
     method_setImplementation(m, imp_implementationWithBlock(^(id self, id added, id changed, id deleted) {
         orig(self, sel, added, changed, deleted);
         WPLog(@"Dual", @"[Evt] onTimelineDataChanged fired");
-        MioDualPanelNotifyDataChanged();
+        [MioDualFeedBridge notifyDataChanged];
     }));
     WPLog(@"Dual", @"[Dual] onTimelineDataChanged hook installed (P1 event-driven)");
 }
