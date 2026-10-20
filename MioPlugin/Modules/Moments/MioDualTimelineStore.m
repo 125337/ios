@@ -278,6 +278,17 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 
 #pragma mark facade 翻页/查单条
 
+// tail 状态机状态（WCM requestTimelineMore 同款；文件级 static 供 refreshHead 重置）
+static NSTimeInterval gTailLastAt = 0;   // 上次 tail 时刻（8s 节流）
+static int gTailRetry = 0;               // 零增长重试计数（上限 3）
+static BOOL gTailExhausted = NO;         // 供给枯竭判定（下拉刷新重置）
+
+static void MioDualTailStateReset(void) {
+    gTailLastAt = 0;
+    gTailRetry = 0;
+    gTailExhausted = NO;
+}
+
 - (void)refreshHead {
     id facade = MioDualFacade();
     if (!facade) {
@@ -311,6 +322,9 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     } else {
         WPLog(@"Dual", @"[Sess] refreshHead: updateTimelineHead NOT resp");
     }
+    // 下拉 = 用户主动要新内容：tail 状态机重置（head 同时重置了微信的 tail 供给状态，
+    // exhausted 判定随之一并作废）
+    MioDualTailStateReset();
     // 统一刷新链路（与开面板同款）：reload 是同步的——本地库新数据此刻已可见，
     // 立即推送一波；head 网络回来后 onChanged→防抖→再推第二波。
     // （147 日志：下拉靠 NSTimer 防抖推送整体失联，显式推不依赖 timer）
@@ -318,6 +332,19 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 }
 
 - (void)loadTail {
+    // tail 状态机（WCM requestTimelineMore 反编译 L99-178 同款三件套）：
+    // ① 8s 节流——tail accepted 后微信有冷却期，密集调用被拒（探针实证 tail 供到
+    //   130 停供、反复滚 count 恒 130）；② 8s 自动重试×3——用户停在某处等加载，
+    //  count 零增长说明被节流，等 8s 过冷却继续要；③ exhausted——3 轮零增长停手。
+    NSTimeInterval now = [NSDate date].timeIntervalSinceReferenceDate;
+    if (gTailExhausted) {
+        WPLog(@"Dual", @"[Sess] loadTail SKIP: exhausted（下拉刷新后重置）");
+        return;
+    }
+    if (now - gTailLastAt < 8.0) {
+        WPLog(@"Dual", @"[Sess] loadTail SKIP: 8s 节流（%.1fs）", now - gTailLastAt);
+        return;
+    }
     id facade = MioDualFacade();
     if (!facade) {
         WPLog(@"Dual", @"[Sess] loadTail SKIP: facade nil");
@@ -326,23 +353,51 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     SEL bSel = NSSelectorFromString(@"beginTimeline");   // 翻页同样需要活会话
     if ([facade respondsToSelector:bSel]) {
         ((id(*)(id, SEL))objc_msgSend)(facade, bSel);
-        WPLog(@"Dual", @"[Sess] loadTail: beginTimeline OK");
-    } else {
-        WPLog(@"Dual", @"[Sess] loadTail: beginTimeline NOT resp");
     }
-    SEL rSel = NSSelectorFromString(@"reloadTimelineDataItems");   // 同 refreshHead：先灌库
+    SEL rSel = NSSelectorFromString(@"reloadTimelineDataItems");   // 先灌库
     if ([facade respondsToSelector:rSel]) {
         ((id(*)(id, SEL))objc_msgSend)(facade, rSel);
     }
+    long long before = MioDualDataSourceCount(facade);
     SEL sel = NSSelectorFromString(@"updateTimelineTail");
     if ([facade respondsToSelector:sel]) {
         ((void(*)(id, SEL))objc_msgSend)(facade, sel);   // WCMoments requestTimelineMore 同款
-        WPLog(@"Dual", @"[Sess] loadTail: updateTimelineTail sent (count=%lld)",
-              MioDualDataSourceCount(facade));
+        WPLog(@"Dual", @"[Sess] loadTail: updateTimelineTail sent (count=%lld, retry=%d)",
+              before, gTailRetry);
     } else {
         WPLog(@"Dual", @"[Sess] loadTail: updateTimelineTail NOT resp");
+        return;
     }
+    gTailLastAt = now;
     [MioDualFeedBridge pushNowFromSession];   // 统一链路：翻页页脚新行立即上屏
+
+    // ② 8s 后核对：count 涨了 → 重置重试；零增长 → 重试（上限 3），超限置 exhausted。
+    //    reload 在回调时再打一次——库新数据此刻才可见。
+    __weak typeof(self) wself = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        __strong typeof(wself) sself = wself;
+        if (!sself) return;
+        id f = MioDualFacade();
+        if (!f) return;
+        SEL rl = NSSelectorFromString(@"reloadTimelineDataItems");
+        if ([f respondsToSelector:rl]) ((void(*)(id, SEL))objc_msgSend)(f, rl);
+        long long after = MioDualDataSourceCount(f);
+        if (after > before) {
+            WPLog(@"Dual", @"[Sess] loadTail: +%lld rows (count %lld->%lld) 重置重试",
+                  after - before, before, after);
+            gTailRetry = 0;
+            [MioDualFeedBridge pushNowFromSession];
+        } else {
+            gTailRetry++;
+            if (gTailRetry >= 3) {
+                gTailExhausted = YES;
+                WPLog(@"Dual", @"[Sess] loadTail: exhausted（count %lld 零增长 ×3）——下拉刷新重置", before);
+            } else {
+                WPLog(@"Dual", @"[Sess] loadTail: 零增长（count=%lld），8s 后重试 %d/3", before, gTailRetry);
+            }
+        }
+    });
 }
 
 // 会话：begin = beginTimeline 开会话 + reloadTimelineDataItems 本地库重载——
