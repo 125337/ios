@@ -743,7 +743,7 @@ static __weak UIViewController *g_dualPanelHost = nil;
     if ([action isEqualToString:@"visible"]) {
         // 可见性上报（WCM visible→scheduleMediaReload 同构，02 L1230-1244）：JS
         // visiblePass 把视口±2屏的媒体 key 报上来，原生只备看得到的图
-        NSString *ids = body[@"ids"] ?: @"";
+        NSString *ids = params[@"ids"] ?: @"";
         if (ids.length) {
             for (NSString *k in [ids componentsSeparatedByString:@","]) {
                 if (k.length) [[MioDualMediaService shared] ensureMediaForKey:k];
