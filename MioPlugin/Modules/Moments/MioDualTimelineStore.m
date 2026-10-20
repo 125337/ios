@@ -66,6 +66,13 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     NSUInteger _lastRawCount;
     NSArray<NSDictionary *> *_snapshotRowsCache;   // 快照行解析缓存（stale 模式期间复用）
     NSMutableDictionary<NSString *, NSDictionary *> *_accRows;   // itemID→row 跨刷新累积层（无上限）
+    // 行字典缓存（丝滑根治：推送每次全量重映射 1500 行=动画掉帧元凶；签名命中直接
+    // 复用上次 dict——同指针还让 Bridge diff 走 isEqualToDictionary 指针等价快路径）
+    NSMutableDictionary<NSString *, NSDictionary *> *_dictCache;   // itemID → itemDict 结果
+    NSMutableDictionary<NSString *, NSNumber *> *_sigCache;        // itemID → 行签名
+    NSMutableSet<NSString *> *_pendingMedia;                       // 等补图的行（epoch 变化才重映射）
+    NSMutableDictionary<NSString *, NSNumber *> *_pendingEpoch;    // itemID → 映射时媒体代际
+    BOOL _lastMediaPending;                                        // mediaSrc 本次调用「有路径但未就绪」
 }
 
 + (instancetype)shared {
@@ -80,6 +87,10 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     if (self) {
         _avatarCache = [NSMutableDictionary dictionary];
         _accRows = [NSMutableDictionary dictionary];
+        _dictCache = [NSMutableDictionary dictionary];
+        _sigCache = [NSMutableDictionary dictionary];
+        _pendingMedia = [NSMutableSet set];
+        _pendingEpoch = [NSMutableDictionary dictionary];
     }
     return self;
 }
@@ -112,8 +123,34 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 - (NSArray<NSDictionary *> *)currentItems {
     NSMutableArray *rows = [NSMutableArray array];
     @try {
+        // 行签名：createtime/likes/cmt/content 长度四标量（4 次廉价 msgSend）。
+        // 命中缓存直接复用 dict 指针，跳过 itemDict（selector 探路+MD5+字典构建）；
+        // 等补图的行看媒体代际——epoch 变了才重映射（可能已就绪，文本卡→带图卡）
+        long long epoch = [MioDualMediaService mediaEpoch];
         for (id item in [self fetchRawItems]) {
-            NSDictionary *d = [self itemDict:item];
+            NSString *rid = WXSafeStringGet(item, @"itemID") ?: @"";
+            long long sig = MioDualScalarGet(item, @"createtime", 0)
+                          ^ (MioDualScalarGet(item, @"likeCount", 0) << 46)
+                          ^ (MioDualScalarGet(item, @"commentCount", 0) << 56)
+                          ^ ((long long)WXSafeStringGet(item, @"contentDesc").length << 33);
+            NSDictionary *d = ([_sigCache[rid] longLongValue] == sig) ? _dictCache[rid] : nil;
+            if (d && [_pendingMedia containsObject:rid]
+                  && [_pendingEpoch[rid] longLongValue] != epoch) {
+                d = nil;   // 补图推进：强制重映射这一行
+            }
+            if (!d) {
+                d = [self itemDict:item];
+                if (d) {
+                    _sigCache[rid] = @(sig);
+                    _dictCache[rid] = d;
+                    if ([d[@"mediaPending"] boolValue]) {
+                        [_pendingMedia addObject:rid];
+                        _pendingEpoch[rid] = @(epoch);
+                    } else {
+                        [_pendingMedia removeObject:rid];
+                    }
+                }
+            }
             if (d) [rows addObject:d];
         }
     } @catch (NSException *e) {
@@ -181,6 +218,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     NSMutableArray *media = [NSMutableArray array];
     id firstMi = nil;
     BOOL isVideo = NO;
+    BOOL mediaPending = NO;   // 有媒体路径但尚未就绪（文本卡先出，补图后 diff upsert）
     double ratio = 0;   // 宽/高，JS 预锁卡片高度防瀑布流跳动；拿不到留 0 由 JS onload 锁高
     @try {
         if ([item respondsToSelector:@selector(getMediaWraps)]) {
@@ -193,6 +231,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
                 }
                 if (mi && !firstMi) firstMi = mi;
                 NSString *src = [self mediaSrc:mi itemID:WXSafeStringGet(item, @"itemID")];
+                if (!src && _lastMediaPending) mediaPending = YES;   // 有图但还没就绪（等补图）
                 if (src) {
                     [media addObject:[NSMutableDictionary dictionaryWithObject:src forKey:@"src"]];
                 }
@@ -240,6 +279,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
              @"imgCount": @(media.count),
              @"isVideo": isVideo ? @YES : @NO,
              @"ratio": @(ratio),
+             @"mediaPending": @(mediaPending),
              @"isLargeText": media.count ? @NO : @YES};
 }
 
@@ -247,6 +287,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 // 稳定副本已在 → 同步就绪，返回 mioimg key；未就绪（副本缺失/占位 <1KB）→ 返回 nil，
 // 卡片本轮走文本形态，后台拷贝完成 → notifyDataChanged → diff upsert 带图版本无缝补图
 - (NSString *)mediaSrc:(id)mi itemID:(NSString *)itemID {
+    _lastMediaPending = NO;
     if (!mi) return nil;
     // 视频帖 mediaItem（类名含 Video）只取封面缩略图两路——pathForData/HdData
     // 返回的是视频文件本体（几 MB mp4），注册后 handler 按 JPEG 解码必败
@@ -264,7 +305,9 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
                                                  completion:^(NSString *key, BOOL ready) {
                 if (ready) img = [NSString stringWithFormat:@"mioimg://local/%@", key];
             }];
-            return img.length ? img : nil;   // 未就绪 → nil（文本卡先出，拷完 diff 补图）
+            if (img.length) return img;
+            _lastMediaPending = YES;   // 有路径但未就绪（等稳定副本/微信下载）
+            return nil;
         }
     }
     return nil;

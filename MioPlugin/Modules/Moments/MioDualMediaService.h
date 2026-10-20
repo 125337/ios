@@ -11,6 +11,8 @@
 // 线程模型：注册/解析可能来自 scheme handler 后台队列，统一 @synchronized(self)。
 @interface MioDualMediaService : NSObject
 + (instancetype)shared;
+// 媒体就绪全局代际（未就绪→就绪每次 +1）：Store 行字典缓存据此检测补图行是否该重映射
++ (long long)mediaEpoch;
 // 注册本地媒体路径（就绪门槛 + 异步补图，对齐 WCM 模型）：
 //   稳定副本已在 → cb(key,YES) 同步返回（本轮就带图）
 //   源文件 <1KB（占位/下载中）→ 只登记（CDN-only），cb(key,NO)——卡片先出文本

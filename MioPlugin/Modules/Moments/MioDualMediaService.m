@@ -25,6 +25,10 @@ static NSString *MioDualMediaMD5(NSString *s) {
 }
 #pragma clang diagnostic pop
 
+// 媒体就绪全局代际：任何「key 从未就绪→就绪」的迁移都 +1。Store 行字典缓存用
+// 它检测「等待补图的行」何时该重映射（文本卡 → 带图卡），无需逐行 stat
+static long long gMediaEpoch = 1;
+
 @implementation MioDualMediaService {
     NSMutableDictionary<NSString *, NSDictionary *> *_memTable;   // 会话层
     NSMutableDictionary<NSString *, NSDictionary *> *_diskTable;  // 持久层镜像（启动加载）
@@ -56,6 +60,10 @@ static NSString *MediaStableDir(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{ svc = [[MioDualMediaService alloc] init]; });
     return svc;
+}
+
++ (long long)mediaEpoch {
+    return gMediaEpoch;
 }
 
 - (instancetype)init {
@@ -165,7 +173,10 @@ static NSString *MediaStableDir(void) {
             @synchronized(sself) { [sself->_copying removeObject:key]; }
         }
         WPLog(@"Dual", @"[Media] stable copy %@ key=%@", ok ? @"ready" : @"FAILED", key);
-        if (ok) @synchronized(sself) { [sself->_ready addObject:key]; }
+        if (ok) @synchronized(sself) {
+            [sself->_ready addObject:key];
+            gMediaEpoch++;   // 未就绪→就绪迁移：Store 补图行重映射触发
+        }
         if (cb) cb(key, ok);
         if (ok) dispatch_async(dispatch_get_main_queue(), ^{
             [MioDualFeedBridge notifyDataChanged];   // 唤醒：下一次 push 重跑 itemDict，img 就位 → diff upsert 补图
@@ -205,8 +216,10 @@ static NSString *MediaStableDir(void) {
                     if (sself) {
                         @synchronized(sself) {
                             [sself->_copying removeObject:key];
-                            if ([[NSFileManager defaultManager] fileExistsAtPath:dst])
+                            if ([[NSFileManager defaultManager] fileExistsAtPath:dst]) {
                                 [sself->_ready addObject:key];
+                                gMediaEpoch++;
+                            }
                         }
                     }
                 }];
@@ -332,6 +345,7 @@ static NSString *MediaStableDir(void) {
     void (^done)(void) = ^{
         [self endDownloadForKey:key];
         WPLog(@"Dual", @"[Media] downloader finished key=%@", key);
+        gMediaEpoch++;   // 下载落地=就绪迁移：Store 补图行重映射触发（resolveKey 拷副本也会再 +1，幂等无害）
         [MioDualFeedBridge mediaReadyForKey:key];
     };
     ((void(*)(id, SEL, id))objc_msgSend)(dl, @selector(setCompletionHandler:), done);
