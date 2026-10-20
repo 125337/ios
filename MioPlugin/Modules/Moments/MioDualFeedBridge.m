@@ -202,6 +202,10 @@ static NSTimer *gPendingPush = nil;
     }
 
     if (upserts.count == 0 && removedIDs.count == 0 && !needOrder) {
+        // 空分支也打状态：区分「live==基线（健康）」与「stale 顶仓」（139 排障教训：
+        // 零 patch 时日志无法自证是哪种）
+        WPLog(@"Dual", @"[Push] no changes (rows=%lu stale=%d)", (unsigned long)rows.count,
+              [[MioDualTimelineStore shared] staleMode] ? 1 : 0);
         // 快照 == 当前数据：空 patch 把 JS 的 stale 标记切正常。
         // stale 模式（仓里就是快照行）不清——数据确实还是旧的，角标保留到新数据落地
         if (_snapshotHadRows && ![[MioDualTimelineStore shared] staleMode]) {
