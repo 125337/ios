@@ -165,8 +165,13 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
                 if ([wrap respondsToSelector:@selector(mediaItem)]) {
                     mi = ((id(*)(id, SEL))objc_msgSend)(wrap, @selector(mediaItem));
                 }
-                NSString *src = [self mediaSrc:mi];
-                if (src) [media addObject:@{@"src": src}];
+                NSString *cdn = nil;
+                NSString *src = [self mediaSrc:mi cdnOut:&cdn];
+                if (src) {
+                    NSMutableDictionary *md = [NSMutableDictionary dictionaryWithObject:src forKey:@"src"];
+                    if (cdn) md[@"cdn"] = cdn;   // JS onerror 换源闭环（收尾③）
+                    [media addObject:md];
+                }
                 if (mi && !isVideo) {
                     // 视频条目 mediaItem 为 WCVideoMediaItem 类变体，类名匹配避开拼写差异
                     NSString *cls = NSStringFromClass([mi class]);
@@ -185,7 +190,9 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     } @catch (NSException *e) {
         WPLog(@"Dual", @"[Store] media read error: %@", e);
     }
-    NSString *firstImg = media.firstObject[@"src"] ?: @"";
+    NSDictionary *firstMedia = media.firstObject;
+    NSString *firstImg = firstMedia[@"src"] ?: @"";
+    NSString *firstCdn = firstMedia[@"cdn"] ?: @"";
     return @{@"id": WXSafeStringGet(item, @"itemID") ?: @"",
              @"name": WXSafeStringGet(item, @"nickname") ?: username,
              @"avatar": [self avatarFor:username] ?: @"",
@@ -195,27 +202,32 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
              @"liked": @(MioDualScalarGet(item, @"likeFlag", 0)),
              @"content": content,
              @"img": firstImg,
+             @"imgCdn": firstCdn,
              @"imgCount": @(media.count),
              @"isVideo": isVideo ? @YES : @NO,
              @"ratio": @(ratio),
              @"isLargeText": media.count ? @NO : @YES};
 }
 
-// 媒体源：本地路径注册进媒体服务（MD5 稳定 key + CDN 回落入库，B1-B5 根治），
-// 缺本地文件直接回落 CDN URL
-- (NSString *)mediaSrc:(id)mi {
+// 媒体源：本地路径注册进媒体服务（MD5 稳定 key + CDN 回落入库，B1-B5 根治）。
+// cdnOut 带出 CDN URL（itemDict 写进 media.cdn / 行 imgCdn）。
+// 注册无条件——resolveKey 在 scheme 服务时逐次 fileExists 校验，注册前不再 stat，
+// 500 条 ×4 selector 的主线程 stat 风暴消除（独立方案收尾②）
+- (NSString *)mediaSrc:(id)mi cdnOut:(NSString **)cdnOut {
     if (!mi) return nil;
-    // CDN 缩略图 URL 先备好（与本地路径一并入库，文件事后被清时可回落）
+    // CDN 缩略图 URL 先备好（与本地路径一并入库，文件事后被清时双路回落）
     NSString *cdn = WXSafeStringGet(mi, @"attachThumbUrl");
     if (cdn.length == 0) cdn = WXSafeStringGet(mi, @"dataUrl");
     if (!(cdn.length > 4 && [cdn hasPrefix:@"http"])) cdn = nil;
+    if (cdnOut) *cdnOut = cdn;
     SEL pathSels[4] = { @selector(getThumbImagePath), @selector(pathForPreview),
                         @selector(pathForData), @selector(pathForHdData) };
     for (int i = 0; i < 4; i++) {
         if (![mi respondsToSelector:pathSels[i]]) continue;
         NSString *p = ((id(*)(id, SEL))objc_msgSend)(mi, pathSels[i]);
-        if ([p isKindOfClass:[NSString class]] && p.length > 0 &&
-            [[NSFileManager defaultManager] fileExistsAtPath:p]) {
+        if ([p isKindOfClass:[NSString class]] && p.length > 0) {
+            // 文件失效不在此拦截：resolveKey 每次服务都校验，失效自动降级
+            // handler 层 CDN 下载兜底 + 渲染层 JS onerror 换源
             NSString *key = [[MioDualMediaService shared] registerLocalPath:p cdnURL:cdn];
             return [NSString stringWithFormat:@"mioimg://local/%@", key];
         }
@@ -251,12 +263,25 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     }
 }
 
-// 预热：数据源懒加载（138 探针：冷启动 count=0，10s 后数据才落地），发现页一出现
-// 就触发 head 同步把本地库灌上——用户点双列时 count 大概率已非零，快照轮不到上场。
-// count>0 跳过：入口钩子每次 viewDidAppear 都会调到，不设防就是每次进发现页都打网络
-- (void)preheatIfNeeded {
-    if (MioDualDataSourceCount(MioDualFacade()) > 0) return;
-    [self refreshHead];
+// 会话：begin = beginTimeline 开会话 + reloadTimelineDataItems 本地库重载——
+// 数据源懒加载（138 探针：冷启动 count=0），reload 后 count 立即非零，
+// 发现页出现即调（入口预热），用户点双列时 live 数据已就绪
+- (void)beginSession {
+    id facade = MioDualFacade();
+    if (!facade) return;
+    SEL s1 = NSSelectorFromString(@"beginTimeline");
+    if ([facade respondsToSelector:s1])
+        ((id(*)(id, SEL))objc_msgSend)(facade, s1);
+    SEL s2 = NSSelectorFromString(@"reloadTimelineDataItems");
+    if ([facade respondsToSelector:s2])
+        ((id(*)(id, SEL))objc_msgSend)(facade, s2);
+}
+
+- (void)endSession {
+    id facade = MioDualFacade();
+    SEL sel = NSSelectorFromString(@"endTimeline");
+    if (facade && [facade respondsToSelector:sel])
+        ((id(*)(id, SEL))objc_msgSend)(facade, sel);
 }
 
 - (id)dataItemByID:(NSString *)objID {

@@ -266,6 +266,7 @@ static NSString * const kDualPageHTML = @(
 "var media=el('div','card-media');"
 "var img=el('img');img.loading='lazy';img.decoding='async';"
 "img.onload=function(){if(!ratios[item.id]&&img.naturalWidth>0){ratios[item.id]=img.naturalWidth/img.naturalHeight;media.style.setProperty('--aspect',String(ratios[item.id]));card.dirty=1;scheduleLayout();}};"
+"img.onerror=function(){if(img.dataset.fb||!card.dataset.id)return;var cur=byId[card.dataset.id];if(cur&&cur.imgCdn){img.dataset.fb=1;img.src=cur.imgCdn;}};"
 "media.appendChild(img);card.appendChild(media);card.parts.media=media;card.parts.img=img;"
 "if(item.isVideo){var vt=el('div','mtag');vt.innerHTML=PLAY+' 视频';media.appendChild(vt);}"
 "else if(item.imgCount>1){var it2=el('div','mtag');it2.textContent=item.imgCount+'图';media.appendChild(it2);}"
@@ -284,7 +285,7 @@ static NSString * const kDualPageHTML = @(
 "var key=JSON.stringify(item);if(card.dataKey===key)return;card.dataKey=key;"
 "if(item.ratio>0&&!ratios[item.id])ratios[item.id]=item.ratio;"
 "if(ratios[item.id]&&card.parts.media)card.parts.media.style.setProperty('--aspect',String(ratios[item.id]));"
-"if(item.img){var s=card.parts.img.getAttribute('src');if(s!==item.img)card.parts.img.src=item.img;}"
+"if(item.img){var s=card.parts.img.getAttribute('src');if(s!==item.img){card.parts.img.dataset.fb='';card.parts.img.src=item.img;}}"
 "card.className=item.img?'card':'card text-only';"
 "card.parts.tt.className='title'+((!item.img||item.isLargeText)?' large':'');"
 "card.parts.tt.textContent=item.content||'';"
@@ -578,15 +579,10 @@ void MioDualPanelOpen(UIViewController *host) {
         [MioDualFeedBridge pushNow];
         [panel updateBellBadge];
     }
-    // 探针定生死：冷启动（未进过原生朋友圈页）时原生数据源是否有数——
-    // n>0 = 本地库直读成立，快照持久化/注册表持久化全是死重可删；
-    // n=0 = 懒加载，保底还有价值（预热替代或快照保留）
-    long probeN = ((long(*)(id, SEL))objc_msgSend)(MioDualFacade(),
-        NSSelectorFromString(@"countOfTimelineDataItem"));
-    WPLog(@"Dual", @"[Probe] countOfTimelineDataItem=%ld approxCount=%lu stale=%d",
-          probeN, (unsigned long)[MioDualTimelineStore shared].approxCount,
-          [MioDualTimelineStore shared].staleMode ? 1 : 0);
-    // 发现页直接打开时朋友圈缓存可能为空（尚未进过朋友圈），后台拉新（不阻塞显示）
+    // 开会话 + 本地库重载（beginTimeline + reloadTimelineDataItems）：count 立即非零；
+    // 入口预热已 begin 过，此处再调幂等无害
+    [[MioDualTimelineStore shared] beginSession];
+    // 会话内 updateTimelineHead 才真正走网络：拉新帖（不阻塞显示）
     [[MioDualTimelineStore shared] refreshHead];
     WPLog(@"Dual", @"[Dual] panel opened (%@) on %@", panel.pageReady ? @"reuse" : @"cold",
           NSStringFromClass([host class]));
@@ -604,6 +600,7 @@ void MioDualPanelClose(UIViewController *host) {
     MomentsDualPanel *panel = objc_getAssociatedObject(host, &kDualPanelAssocKey);
     if (![panel isKindOfClass:[MomentsDualPanel class]]) return;
     objc_setAssociatedObject(host, &kDualPanelAssocKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [[MioDualTimelineStore shared] endSession];   // endTimeline 关会话（对齐 WCM；不影响原生页自身）
     [MioDualFeedBridge detachWebView];   // 不可见即停推送目标；常驻实例仍活着，重开复用
     [panel.view removeFromSuperview];   // 只摘视图：g_dualPanel 强持有，WebView 已渲染态保留（秒显）
     // WCMoments restoreChrome：还原发现页 chrome

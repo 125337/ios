@@ -22,9 +22,11 @@ id MioDualFacade(void);
 @property (nonatomic, assign, readonly) BOOL staleMode;
 - (void)refreshHead;                            // facade updateTimelineHead（下拉刷新）
 - (void)loadTail;                               // facade updateTimelineTail（滚底翻页）
-// 预热（138 探针实锤：数据源懒加载，冷启动 count=0）：发现页出现即触发 head 同步，
-// 用户点双列前数据大概率已落地。数据源已有数则跳过（幂等，不重复打网络）
-- (void)preheatIfNeeded;
+// 会话（对齐 WCM beginTimeline/endTimeline；WCFacade.h:421-422/426 头文件实证）：
+// begin = beginTimeline 开会话 + reloadTimelineDataItems 本地库重载（count 立即非零，
+// 138 探针的懒加载空窗就此关闭）；end = endTimeline 关会话
+- (void)beginSession;
+- (void)endSession;
 - (id)dataItemByID:(NSString *)objID;           // facade getDataItemByID:
 - (NSString *)lastSnapshotJSON;                 // 上次会话快照（冷启动秒显，Bridge 灌 JS）
 // 保存快照并修剪媒体注册表（liveKeys = 快照引用的 mioimg key，同存同删）
