@@ -33,6 +33,8 @@ static NSString *MioDualMediaMD5(NSString *s) {
     NSMutableDictionary<NSString *, NSDate *> *_downloadStart;    // 挂起起始时间（60s 超时重置死链）
     NSOperationQueue *_exportQueue;                               // 稳定副本后台拷贝（主线程零 IO）
     NSMutableSet<NSString *> *_copying;                           // 拷贝中去重（防同 key 重复入队）
+    NSMutableSet<NSString *> *_ready;                             // 就绪缓存：内存命中免 stat（推送每轮
+                                                                  // 重注册全部行，无缓存=每轮千次主线程 stat，卡顿实证）
     BOOL _dirty;
 }
 
@@ -64,6 +66,7 @@ static NSString *MediaStableDir(void) {
         _attempts = [NSMutableDictionary dictionary];
         _downloadStart = [NSMutableDictionary dictionary];
         _copying = [NSMutableSet set];
+        _ready = [NSMutableSet set];
         _exportQueue = [[NSOperationQueue alloc] init];
         _exportQueue.maxConcurrentOperationCount = 2;   // 拷贝是小块 JPEG，2 并发足够且不抢 IO
         _exportQueue.name = @"mio.dual.media.export";
@@ -110,6 +113,19 @@ static NSString *MediaStableDir(void) {
     return [[MediaStableDir() stringByAppendingPathComponent:key] stringByAppendingPathExtension:@"jpg"];
 }
 
+// 就绪查询：_ready 内存命中直接 YES；未知的才 stat 一次并缓存（YES 永久缓存——
+// 稳定副本在自己目录不会被微信清；NO 不缓存，源文件可能是下载中的占位，要复查）
+- (BOOL)isReadyKey:(NSString *)key dst:(NSString *)dst {
+    @synchronized(self) {
+        if ([_ready containsObject:key]) return YES;
+    }
+    if ([[NSFileManager defaultManager] fileExistsAtPath:dst]) {
+        @synchronized(self) { [_ready addObject:key]; }
+        return YES;
+    }
+    return NO;
+}
+
 - (NSString *)registerLocalPath:(NSString *)path itemID:(NSString *)itemID
                        cdnURL:(NSString *)cdn
                      completion:(void (^)(NSString *key, BOOL ready))cb {
@@ -118,8 +134,8 @@ static NSString *MediaStableDir(void) {
     [self recordEntryWithPath:path itemID:itemID cdn:cdn];
     NSString *dst = [self stablePathForKey:key];
 
-    // 就绪快路径：稳定副本已在（含跨启动），同步 cb——本轮 itemDict 直接带图
-    if ([[NSFileManager defaultManager] fileExistsAtPath:dst]) {
+    // 就绪快路径：副本已在（含跨启动），同步 cb——本轮 itemDict 直接带图
+    if ([self isReadyKey:key dst:dst]) {
         if (cb) cb(key, YES);
         return key;
     }
@@ -149,6 +165,7 @@ static NSString *MediaStableDir(void) {
             @synchronized(sself) { [sself->_copying removeObject:key]; }
         }
         WPLog(@"Dual", @"[Media] stable copy %@ key=%@", ok ? @"ready" : @"FAILED", key);
+        if (ok) @synchronized(sself) { [sself->_ready addObject:key]; }
         if (cb) cb(key, ok);
         if (ok) dispatch_async(dispatch_get_main_queue(), ^{
             [MioDualFeedBridge notifyDataChanged];   // 唤醒：下一次 push 重跑 itemDict，img 就位 → diff upsert 补图
@@ -163,7 +180,7 @@ static NSString *MediaStableDir(void) {
 - (NSString *)resolveKey:(NSString *)key {
     if (key.length == 0) return nil;
     NSString *dst = [self stablePathForKey:key];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:dst]) return dst;
+    if ([self isReadyKey:key dst:dst]) return dst;
     NSString *path = nil;
     @synchronized(self) {
         NSDictionary *entry = _memTable[key];
@@ -185,7 +202,13 @@ static NSString *MediaStableDir(void) {
                 [_exportQueue addOperationWithBlock:^{
                     __strong typeof(wself) sself = wself;
                     [[NSFileManager defaultManager] copyItemAtPath:p toPath:dst error:nil];
-                    if (sself) @synchronized(sself) { [sself->_copying removeObject:key]; }
+                    if (sself) {
+                        @synchronized(sself) {
+                            [sself->_copying removeObject:key];
+                            if ([[NSFileManager defaultManager] fileExistsAtPath:dst])
+                                [sself->_ready addObject:key];
+                        }
+                    }
                 }];
             }
         }
