@@ -243,10 +243,9 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
              @"isLargeText": media.count ? @NO : @YES};
 }
 
-// 媒体源：本地路径注册进媒体服务（MD5 稳定 key + 帖子 itemID 反查）。
-// 注册无条件——resolveKey 在 scheme 服务时逐次 fileExists 校验；文件缺失时
-// handler 层按 itemID 找回数据项交 WCMediaDownloader（微信管线）拉图，零破图。
-// 500 条 ×4 selector 的主线程 stat 风暴消除（独立方案收尾②）
+// 媒体源：本地路径注册进媒体服务（就绪门槛 + 异步补图，对齐 WCM 模型）。
+// 稳定副本已在 → 同步就绪，返回 mioimg key；未就绪（副本缺失/占位 <1KB）→ 返回 nil，
+// 卡片本轮走文本形态，后台拷贝完成 → notifyDataChanged → diff upsert 带图版本无缝补图
 - (NSString *)mediaSrc:(id)mi itemID:(NSString *)itemID {
     if (!mi) return nil;
     // 视频帖 mediaItem（类名含 Video）只取封面缩略图两路——pathForData/HdData
@@ -259,11 +258,24 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
         if (![mi respondsToSelector:pathSels[i]]) continue;
         NSString *p = ((id(*)(id, SEL))objc_msgSend)(mi, pathSels[i]);
         if ([p isKindOfClass:[NSString class]] && p.length > 0) {
-            NSString *key = [[MioDualMediaService shared] registerLocalPath:p itemID:itemID];
-            return [NSString stringWithFormat:@"mioimg://local/%@", key];
+            __block NSString *img = @"";
+            [[MioDualMediaService shared] registerLocalPath:p itemID:itemID
+                                                     cdnURL:[self cdnURLFor:mi]
+                                                 completion:^(NSString *key, BOOL ready) {
+                if (ready) img = [NSString stringWithFormat:@"mioimg://local/%@", key];
+            }];
+            return img.length ? img : nil;   // 未就绪 → nil（文本卡先出，拷完 diff 补图）
         }
     }
     return nil;
+}
+
+// CDN 直连地址（WCMediaItem attachCdnUrl，未实证的变体选择器拿不到就空串，
+// 只登记不阻塞：主链路是稳定副本，cdn 仅备后续直连下载）
+- (NSString *)cdnURLFor:(id)mi {
+    if (![mi respondsToSelector:@selector(attachCdnUrl)]) return @"";
+    NSString *u = ((id(*)(id, SEL))objc_msgSend)(mi, @selector(attachCdnUrl));
+    return [u isKindOfClass:[NSString class]] ? u : @"";
 }
 
 // 头像：按 wxid 走 CContactMgr 查（会话内缓存，避免每次推送重复查询）

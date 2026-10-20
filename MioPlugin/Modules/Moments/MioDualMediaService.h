@@ -11,8 +11,17 @@
 // 线程模型：注册/解析可能来自 scheme handler 后台队列，统一 @synchronized(self)。
 @interface MioDualMediaService : NSObject
 + (instancetype)shared;
-// 注册本地媒体路径（附带所属帖子 itemID 供找回数据项），返回稳定 key
-- (NSString *)registerLocalPath:(NSString *)path itemID:(NSString *)itemID;
+// 注册本地媒体路径（就绪门槛 + 异步补图，对齐 WCM 模型）：
+//   稳定副本已在 → cb(key,YES) 同步返回（本轮就带图）
+//   源文件 <1KB（占位/下载中）→ 只登记（CDN-only），cb(key,NO)——卡片先出文本
+//   源文件有效 → 后台队列拷贝进自己的稳定目录（主线程零 IO），完成 cb(key,YES)
+//   + 唤醒 notifyDataChanged → diff upsert 带图版本无缝补图
+// 返回稳定 key（mioimg://local/<key>）
+- (NSString *)registerLocalPath:(NSString *)path itemID:(NSString *)itemID
+                       cdnURL:(NSString *)cdn
+                     completion:(void (^)(NSString *key, BOOL ready))cb;
+// key → 自己目录的稳定副本路径（免疫微信缓存清理；resolveKey 稳定副本优先）
+- (NSString *)stablePathForKey:(NSString *)key;
 // 解析 key → 可用本地路径（内存→持久→文件校验→nil）
 - (NSString *)resolveKey:(NSString *)key;
 // key 对应的帖子 itemID（数据项找回用）
