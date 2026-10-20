@@ -454,6 +454,12 @@ static NSString * const kDualPageHTML = @(
 
 static char kDualPanelAssocKey;
 
+// 常驻面板（WCM showCachedFeed 同语义，根治「打开慢一步」）：
+// Close 只摘视图不释放，WebView 已渲染态保留，重开秒显。发现页 VC 每次进入可能是
+// 新实例，assoc 只当「开着」标记，常驻实例放进程级强持有；内存警告时降级置 nil。
+static MomentsDualPanel *g_dualPanel = nil;
+static __weak UIViewController *g_dualPanelHost = nil;
+
 @implementation MomentsDualPanel
 
 - (void)viewDidLoad {
@@ -503,6 +509,14 @@ void MioDualPanelNotifyDataChanged(void) {
 - (void)dealloc {
     // addScriptMessageHandler 强持 self，必须解绑才能断开 webview→controller→webview 环
     [self.webView.configuration.userContentController removeScriptMessageHandlerForName:@"mio"];
+}
+
+// 内存警告兜底：系统吃紧时放弃常驻（WCM 同款边界），下次 Open 走冷建降级路径。
+// 仅置 nil：dealloc 里 removeScriptMessageHandler 自动解绑，无泄漏
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    g_dualPanel = nil;
+    if (gDualActivePanel == self) gDualActivePanel = nil;
 }
 
 #pragma mark 数据桥：WCDataItem → JSON → window.__mioSetFeed
@@ -713,7 +727,13 @@ void MioDualPanelNotifyDataChanged(void) {
 
 void MioDualPanelOpen(UIViewController *host) {
     if ([objc_getAssociatedObject(host, &kDualPanelAssocKey) isKindOfClass:[MomentsDualPanel class]]) return;
-    MomentsDualPanel *panel = [[MomentsDualPanel alloc] init];
+    // 常驻复用优先：有常驻实例直接复用（WebView 已渲染、数据已在 JS），无则新建
+    MomentsDualPanel *panel = g_dualPanel;
+    if (!panel) {
+        panel = [[MomentsDualPanel alloc] init];
+        g_dualPanel = panel;
+    }
+    g_dualPanelHost = host;
     objc_setAssociatedObject(host, &kDualPanelAssocKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     panel.hostVC = host;
     // WCMoments coverHost 同款：capture chrome → host 全屏化 + 藏导航栏 → 面板 view 挂 host.view 顶层。
@@ -732,13 +752,17 @@ void MioDualPanelOpen(UIViewController *host) {
     [host.view addSubview:panel.view];
     [host.view bringSubviewToFront:panel.view];
     gDualActivePanel = panel;   // P1 事件驱动：hook 层 → 防抖 → 此面板 pushFeedNow
-    // 发现页直接打开时朋友圈缓存可能为空（尚未进过朋友圈），先主动拉一次
+    // 复用时 pageReady 已 YES：立即推上屏（内容没变 lastJson no-op，零等待首屏）；
+    // 首开 pageReady NO：此处 no-op，didFinishNavigation 后自动首推
+    [panel pushFeedNow];
+    // 发现页直接打开时朋友圈缓存可能为空（尚未进过朋友圈），后台拉新（不阻塞显示）
     id facade = MioDualFacade();
     SEL refreshSel = NSSelectorFromString(@"updateTimelineHead");
     if (facade && [facade respondsToSelector:refreshSel]) {
         ((void(*)(id, SEL))objc_msgSend)(facade, refreshSel);
     }
-    WPLog(@"Dual", @"[Dual] panel opened on %@", NSStringFromClass([host class]));
+    WPLog(@"Dual", @"[Dual] panel opened (%@) on %@", panel.pageReady ? @"reuse" : @"cold",
+          NSStringFromClass([host class]));
 }
 
 void MioDualPanelReassertChrome(UIViewController *host) {
@@ -753,15 +777,15 @@ void MioDualPanelClose(UIViewController *host) {
     MomentsDualPanel *panel = objc_getAssociatedObject(host, &kDualPanelAssocKey);
     if (![panel isKindOfClass:[MomentsDualPanel class]]) return;
     objc_setAssociatedObject(host, &kDualPanelAssocKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    gDualActivePanel = nil;   // 面板摘除，hook 推送目标清空
-    [panel.view removeFromSuperview];
+    gDualActivePanel = nil;   // 不可见即停推送目标；常驻实例仍活着，重开复用
+    [panel.view removeFromSuperview];   // 只摘视图：g_dualPanel 强持有，WebView 已渲染态保留（秒显）
     // WCMoments restoreChrome：还原发现页 chrome
     host.edgesForExtendedLayout = panel.prevEdges;
     host.extendedLayoutIncludesOpaqueBars = panel.prevOpaqueBars;
     if (!panel.prevNavHidden) {
         [host.navigationController setNavigationBarHidden:NO animated:NO];
     }
-    WPLog(@"Dual", @"[Dual] panel closed");
+    WPLog(@"Dual", @"[Dual] panel hidden (instance kept)");
 }
 
 void MioDualPanelToggle(UIViewController *host) {

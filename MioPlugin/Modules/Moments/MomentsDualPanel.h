@@ -28,3 +28,9 @@ id MioDualFacade(void);
 // onTimelineDataChangedWithAdded:andChanged:andDeleted:，WCFacade.h:415 实证）
 // 转发入口——主线程 0.5s 防抖后活跃面板 pushFeedNow（替代旧 3s 轮询）
 void MioDualPanelNotifyDataChanged(void);
+
+// 数据推送（常驻面板复用：Open 时立即推已渲染缓存，零等待首屏）
+// 实现在 MomentsDualPanel（同文件内 Open/Close 与 VC 生命周期共用）
+@interface MomentsDualPanel (PushFeed)
+- (void)pushFeedNow;
+@end

@@ -10,7 +10,7 @@
 | | WCMoments（他） | Mio（我们） |
 |---|---|---|
 | 数据源 | **微信 timeline 数据源直读** + 变更回调 | **借 WCMoments 的 WCFacade 缓存**（timelineMgr.getCache） |
-| 微信依赖方式 | duck-typing 调数据源 selector + 注册回调 | objc_getClass("WCFacade") —— **要求 WCMoments 插件同时安装** |
+| 微信依赖方式 | duck-typing 调数据源 selector + 注册回调 | 同一 WCFacade（**微信原生 MMUserService**，8.0.78 头文件实证，非 WCMoments 私有类——初版分析误判，P0 依赖风险不成立） |
 | 更新机制 | 事件驱动（onTimelineDataChangedWithAdded:andChanged:andDeleted:） | 轮询（动作后 1/2.5/4s 三次复查推送） |
 | 推送粒度 | 增量（bridgeGeneration/bridgeRows/bridgeBusy 状态机） | 全量（≤300 条 JSON 重推，lastJson 相同则跳过） |
 | 媒体 | 完整管线（mediaQueue/probeTimes/renderKeys/renderQualities + 视频下载事件钩子） | 直读本地路径（4 级 selector 回落）→ mioimg:// scheme → CDN 兜底 |
@@ -104,22 +104,22 @@ WebView 双列渲染
 - 他：exhausted（没有更多了）/ limit / tailRetryRequired / pendingSeenIDs / hiddenUsers / followingKey。
 - 我们：无 exhausted 判定（滚底重复 updateTimelineTail）；无已读/屏蔽体系。
 
-### 6. 依赖结构（风险最高的差异）
-- 他：**自包含**。WCFacade 是他自己的类，装进微信进程就活。
-- 我们：`objc_getClass("WCFacade")` ——**WCMoments 卸载 = 我们的双列面板全灭**（facade nil → cache nil → 空面板）。且他 cache 的填充依赖他自己 start() 会话跑过——**我们的数据可用性挂在别人的状态机上**。
+### 6. 依赖结构（初版误判，已证伪）
+- 他：**自包含**（WCFacade 是微信原生类，他也只是调用方）。
+- 我们：同样调用微信原生 WCFacade（`MMUserService` 子类，8.0.78 头文件实证）——**不存在「WCMoments 卸载即全灭」的依赖**。真正的差异只剩数据 API 选择：他用 count/index 直读三件套，我们现已同款（getTimelineDataItem 主路 + count/index 回落）。
 
 ---
 
-## 五、对齐建议（按收益/成本排序）
+## 五、对齐进度（按收益/成本排序）
 
-| 优先级 | 项 | 做法 | 收益 |
+| 优先级 | 项 | 做法 | 状态 |
 |---|---|---|---|
-| P0 | **解除 WCFacade 依赖** | 照他直读：对微信 timeline 数据源对象 duck-typing 调 `countOfTimelineDataItem`/`getTimelineDataItemOfIndex:`（反编译实证这三个 selector 可用），自己持快照 | 卸载 WCMoments 也能活；数据自主 |
-| P1 | **变更回调** | 注册/钩 `onTimelineDataChangedWithAdded:andChanged:andDeleted:` → 触发 pushFeedNow | 实时性：新赞新评论即时反映，替代轮询 |
-| P2 | 增量推送 | items 按 id 建 map，只推 diff 行（或沿用 lastJson 但上限提到 500） | 长信息流流畅度 |
-| P3 | exhausted 判定 | updateTimelineTail 后比对 cache 计数不增 → exhausted，JS 停止请求 | 防无效翻页 |
-| P4 | 视频下载联动 | 钩 WCDownloadVideoCDNMgr 三回调 → JS 进度条 | 视频体验对齐 |
-| P5 | 已读体系 | pendingSeenIDs 持久化 | 角标/已读灰显 |
+| P0 | 数据直读正式 API | ~~解除 WCFacade 依赖~~（误判证伪）；实做：`getTimelineDataItem` 主路 + count/index 三件套回落，替代 `timelineMgr.getCache` | ✅ 已落地 |
+| P1 | **变更回调** | hook 微信原生 `onTimelineDataChangedWithAdded:andChanged:andDeleted:`（WCFacade.h:415）→ 0.5s 主线程防抖 → 活跃面板 pushFeedNow；删 3s 轮询与 1/2.5/4s 复查链 | ✅ 已落地 |
+| P2 | 增量推送 | items 按 id 建 map，只推 diff 行（或沿用 lastJson 但上限提到 500） | 待做 |
+| P3 | exhausted 判定 | updateTimelineTail 后比对计数不增 → exhausted，JS 停止请求 | 待做 |
+| P4 | 视频下载联动 | 钩 WCDownloadVideoCDNMgr 三回调 → JS 进度条 | 待做 |
+| P5 | 已读体系 | pendingSeenIDs 持久化 | 待做 |
 
 ---
 
