@@ -242,7 +242,7 @@ typedef struct {
     CGFloat mediaH, titleH, infoH, totalH;
 } MioDualCardMetrics;
 
-static MioDualCardMetrics MioDualCardMetrics(NSDictionary *it, CGFloat w, CGFloat measuredRatio) {
+static MioDualCardMetrics MioDualCardMeasure(NSDictionary *it, CGFloat w, CGFloat measuredRatio) {
     MioDualCardMetrics m = {0, 0, 0, 0};
     if (w <= 0 || !it) return m;
     NSString *img = it[@"img"];
@@ -439,9 +439,10 @@ static NSString *MioDualFmtTime(NSTimeInterval t) {
             _mediaView.image = nil;
             __weak typeof(self) ws = self;
             [[MioDualImageLoader shared] loadImage:img done:^(UIImage *result) {
-                if (!ws || ws->_mediaSeq != seq) return;
-                ws->_mediaView.image = result;
-                [ws maybeMeasureImage:result];
+                __strong typeof(self) st = ws;   // ARC 禁止弱指针直接解引用，先转强
+                if (!st || st->_mediaSeq != seq) return;
+                st->_mediaView.image = result;
+                [st maybeMeasureImage:result];
             }];
         }
     }
@@ -471,7 +472,7 @@ static NSString *MioDualFmtTime(NSTimeInterval t) {
     CGFloat w = self.contentView.bounds.size.width;
     CGFloat h = self.contentView.bounds.size.height;
     if (w <= 0 || !_item) return;
-    MioDualCardMetrics m = MioDualCardMetrics(_item, w, _measuredRatio);
+    MioDualCardMetrics m = MioDualCardMeasure(_item, w, _measuredRatio);
     BOOL hasMedia = ((NSString *)_item[@"img"]).length > 0;
 
     // 阴影路径（浅色微阴影 0 2 12 @3.5%，暗色无——CSS --shadow 同款）
@@ -839,7 +840,7 @@ static __weak UIViewController *g_dualPanelHost = nil;
 // 暗色切换：layer 边框是 CGColor 快照，不随动态 UIColor 自动刷新，手动补一遍
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
     [super traitCollectionDidChange:previousTraitCollection];
-    if (![self.traitCollection hasDifferentColorAppearanceComparedTo:previousTraitCollection]) return;
+    if (self.traitCollection.userInterfaceStyle == previousTraitCollection.userInterfaceStyle) return;
     UIColor *edge = MioDualGlassEdge();
     self.searchGlass.layer.borderColor = edge.CGColor;
     self.tabsGlass.layer.borderColor = edge.CGColor;
@@ -1173,7 +1174,7 @@ void MioDualPanelNotifyDataChanged(void) {
 - (CGFloat)collectionView:(UICollectionView *)cv heightForItemAtIndexPath:(NSIndexPath *)ip
                 itemWidth:(CGFloat)width {
     NSDictionary *it = self.visibleItems[ip.item];
-    return MioDualCardMetrics(it, width, [self.measuredRatios[it[@"id"]] doubleValue]).totalH;
+    return MioDualCardMeasure(it, width, [self.measuredRatios[it[@"id"]] doubleValue]).totalH;
 }
 
 // 图片实测补 ratio：更新表后失效重排 + 重载可见 cell（HTML onload 重排同款；低频路径）
