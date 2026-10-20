@@ -72,6 +72,17 @@ static NSString *MioDualJSONString(id obj) {
     [[self bridge] pushNowLocked];
 }
 
+// 刷新链路显式推送（refreshHead/loadTail 末尾）：与开面板同链路，绕开事件防抖——
+// reload 同步完成后本地库新数据立即可见，推送一次；head 网络回来后防抖再推第二波
++ (void)pushNowFromSession {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self pushNowFromSession]; });
+        return;
+    }
+    WPLog(@"Dual", @"[Push] session push (refresh chain)");
+    [[self bridge] pushNowLocked];
+}
+
 // 媒体就绪通知（零破图闭环的最后一跳）：WCMediaDownloader 把缩略图拉到本地后，
 // 调 JS __mioMediaReady(key) 让对应 <img> 重设 src 二次请求——这次文件已在，返回真图
 + (void)mediaReadyForKey:(NSString *)key {
@@ -89,25 +100,23 @@ static NSString *MioDualJSONString(id obj) {
 
 #pragma mark 尾沿防抖（B10 根治：0.5s 窗口内事件全合并，推送时重读最新状态永不丢尾）
 
-// 待推计时器（文件级：flush 时必须清引用，否则一次性 timer 失火后残留引用，
-// 后续 notifyDataChanged 全部被吞——只推一次的静默 bug）
-static NSTimer *gPendingPush = nil;
+// dispatch_after 版防抖（原 NSTimer 方案废止：147 日志实证一次性 timer 在长会话中
+// 整体失联——timer 从 runloop 移除但 gPendingPush 引用未清则后续事件全被吞，且
+// runloop mode 语义不透明。dispatch_after 与主队列同一调度器，无残留状态可腐烂）
+static BOOL gPushQueued = NO;
 
 + (void)notifyDataChanged {
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self notifyDataChanged]; });
         return;
     }
-    if (gPendingPush) return;   // 已有待推：本次事件被即将到达的推送覆盖（fire 时重读最新）
-    gPendingPush = [NSTimer timerWithTimeInterval:0.5 target:self selector:@selector(flushPending)
-                                         userInfo:nil repeats:NO];
-    [[NSRunLoop mainRunLoop] addTimer:gPendingPush forMode:NSRunLoopCommonModes];
-}
-
-+ (void)flushPending {
-    [gPendingPush invalidate];
-    gPendingPush = nil;   // 先清再推：推送过程中若触发新变更可再排程
-    [self pushNow];
+    if (gPushQueued) return;   // 已有待推：本次事件被即将到达的推送覆盖（fire 时重读最新）
+    gPushQueued = YES;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        gPushQueued = NO;   // 先清再推：推送过程中若触发新变更可再排程
+        [self pushNow];
+    });
 }
 
 #pragma mark 让位兜底（B11：他方插件占有变更回调时 10s 慢轮询保底）
@@ -137,7 +146,16 @@ static NSTimer *gPendingPush = nil;
 
 - (void)pushNowLocked {
     WKWebView *wv = _detached ? nil : _webView;   // 面板不可见：不推（基线照常更新于可见期）
-    if (!wv) return;
+    if (!wv) {
+        // 早退可观测（节流 10s：10s 轮询兜底开启时避免刷屏）
+        static CFAbsoluteTime lastSkipLog = 0;
+        CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+        if (now - lastSkipLog > 10.0) {
+            lastSkipLog = now;
+            WPLog(@"Dual", @"[Push] skip: panel detached or webview gone");
+        }
+        return;
+    }
 
     // ---- 首推：灌快照 + 以快照重建 diff 基线（patch 只含快照之后的增量） ----
     if (_needsSnapshot) {

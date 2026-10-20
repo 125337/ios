@@ -3,6 +3,7 @@
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 #import "MioDualMediaService.h"
+#import "MioDualFeedBridge.h"
 
 #pragma mark - facade（原 MomentsDualPanel.m 内联实现迁入，消息页共用）
 
@@ -317,6 +318,10 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     } else {
         WPLog(@"Dual", @"[Sess] refreshHead: updateTimelineHead NOT resp");
     }
+    // 统一刷新链路（与开面板同款）：reload 是同步的——本地库新数据此刻已可见，
+    // 立即推送一波；head 网络回来后 onChanged→防抖→再推第二波。
+    // （147 日志：下拉靠 NSTimer 防抖推送整体失联，显式推不依赖 timer）
+    [MioDualFeedBridge pushNowFromSession];
 }
 
 - (void)loadTail {
@@ -344,6 +349,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     } else {
         WPLog(@"Dual", @"[Sess] loadTail: updateTimelineTail NOT resp");
     }
+    [MioDualFeedBridge pushNowFromSession];   // 统一链路：翻页页脚新行立即上屏
 }
 
 // 会话：begin = beginTimeline 开会话 + reloadTimelineDataItems 本地库重载——
