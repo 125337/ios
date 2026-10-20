@@ -56,6 +56,10 @@ static long long MioDualDataSourceCount(id facade) {
 
 #pragma mark - Store
 
+// 行版本号：itemDict 每次重建递增。JS updateCard 用它做 O(1) 去重（旧 JSON.stringify
+// 全行序列化在几千行×每推一次=主线程十几 ms，WCM 同位比较 key 实证 O(1)）
+static long long sRowRev = 0;
+
 // 行数无上限（用户拍板方案 A：WCM 同为 WebView 且无截断可一直刷——供给深度对齐
 // 原生，先实测流畅度，卡了再上 JS 虚拟回收）。kMaxRows 与 LRU 裁剪整体废止。
 // 快照持久化 key（新 key：旧 MioDualLastFeedJSON 为 f1/f2 key 时代产物，首次保存即清除）
@@ -280,6 +284,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
              @"isVideo": isVideo ? @YES : @NO,
              @"ratio": @(ratio),
              @"mediaPending": @(mediaPending),
+             @"rev": @(++sRowRev),
              @"isLargeText": media.count ? @NO : @YES};
 }
 

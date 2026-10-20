@@ -343,7 +343,9 @@ static NSString * const kDualPageHTML = @(
 "return card;"
 "}"
 "function updateCard(card,item){"
-"var key=JSON.stringify(item);if(card.dataKey===key)return;card.dataKey=key;card.layoutDirty=true;"
+// O(1) 去重：rev=原生行重建版本号（WCM 同位比较 key 实证）。旧 JSON.stringify 全行
+// 序列化在几千行×每推一次=每推十几 ms 主线程阻塞，「数据加载时卡」的主因
+"if(card.dataKey===item.rev)return;card.dataKey=item.rev;card.layoutDirty=true;"
 "if(item.ratio>0&&!ratios[item.id])ratios[item.id]=item.ratio;"
 "if(item.img&&!card.parts.media)buildMedia(card,item);"   // 文本卡 → 补图（异步拷贝完成 diff upsert）
 "if(ratios[item.id]&&card.parts.media)card.parts.media.style.setProperty('--aspect',String(ratios[item.id]));"
@@ -379,9 +381,18 @@ static NSString * const kDualPageHTML = @(
 "stale=ALL.length>0;render();updateStale();};"
 "window.__mioFeedPatch=function(p){"
 "var ups=(p&&p.upsert)||[],rm=(p&&p.remove)||[],i,id;"
-"for(i=0;i<rm.length;i++)delete byId[rm[i]];"
 "var known={};for(i=0;i<ALL.length;i++)known[ALL[i].id]=1;"
-"var fresh=[];"
+"var fresh=[],patchOnly=rm.length===0&&!(p&&p.order)&&ups.length>0;"
+"for(i=0;i<ups.length;i++){id=ups[i].id;if(!byId[id]&&!known[id]){fresh.push(id);patchOnly=false;}}"
+// 纯更新快通道（WCM applyPatches 同构，反编译 js_02 L25）：点赞/评论/补图类推送只动
+// 补丁行——原对象就地 assign + 单卡 updateCard + 一次合帧布局；不重建 ALL、不走
+// render 全量 reconcile。新帖/删卡/带 order 才落全量路径
+"if(patchOnly){"
+"for(i=0;i<ups.length;i++){var t=byId[ups[i].id],c2=cards[ups[i].id];"
+"for(var k in ups[i])t[k]=ups[i][k];"
+"if(c2){updateCard(c2,t);if(c2.layoutDirty)scheduleLayout();}}"
+"stale=false;return;}"
+"for(i=0;i<rm.length;i++)delete byId[rm[i]];"
 "for(i=0;i<ups.length;i++){id=ups[i].id;if(!byId[id]&&!known[id])fresh.push(id);byId[id]=ups[i];}"
 "if(p&&p.order){ALL=p.order.map(function(k){return byId[k];}).filter(Boolean);}"
 "else{ALL=ALL.map(function(it){return byId[it.id];}).filter(Boolean);"
