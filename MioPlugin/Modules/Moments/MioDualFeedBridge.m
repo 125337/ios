@@ -71,6 +71,21 @@ static NSString *MioDualJSONString(id obj) {
     [[self bridge] pushNowLocked];
 }
 
+// 媒体就绪通知（零破图闭环的最后一跳）：WCMediaDownloader 把缩略图拉到本地后，
+// 调 JS __mioMediaReady(key) 让对应 <img> 重设 src 二次请求——这次文件已在，返回真图
++ (void)mediaReadyForKey:(NSString *)key {
+    if (key.length == 0) return;
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self mediaReadyForKey:key]; });
+        return;
+    }
+    MioDualFeedBridge *b = [self bridge];
+    if (b->_detached || !b->_webView) return;   // 面板不可见：下次 attach 推送自然带新文件
+    [b->_webView evaluateJavaScript:
+        [NSString stringWithFormat:@"window.__mioMediaReady&&window.__mioMediaReady('%@');", key]
+                 completionHandler:nil];
+}
+
 #pragma mark 尾沿防抖（B10 根治：0.5s 窗口内事件全合并，推送时重读最新状态永不丢尾）
 
 // 待推计时器（文件级：flush 时必须清引用，否则一次性 timer 失火后残留引用，

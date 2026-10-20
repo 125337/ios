@@ -3,7 +3,7 @@
 #import "../../Core/LogManager.h"
 
 // 持久表结构（NSUserDefaults key = MioDualMediaRegistry）：
-//   { key: @{ @"p": 本地路径, @"u": CDN 缩略图 URL（可缺） } }
+//   { key: @{ @"p": 本地路径, @"iid": 帖子 itemID } }
 // 写盘合并：注册高频（首推可达数百条），1s 合并窗口内只落盘一次。
 
 static NSString * const kMediaRegistryKey = @"MioDualMediaRegistry";
@@ -25,6 +25,7 @@ static NSString *MioDualMediaMD5(NSString *s) {
 @implementation MioDualMediaService {
     NSMutableDictionary<NSString *, NSDictionary *> *_memTable;   // 会话层
     NSMutableDictionary<NSString *, NSDictionary *> *_diskTable;  // 持久层镜像（启动加载）
+    NSMutableSet<NSString *> *_downloading;                       // 进行中的下载 key（去重）
     BOOL _dirty;
 }
 
@@ -39,6 +40,7 @@ static NSString *MioDualMediaMD5(NSString *s) {
     self = [super init];
     if (self) {
         _memTable = [NSMutableDictionary dictionary];
+        _downloading = [NSMutableSet set];
         id saved = [[NSUserDefaults standardUserDefaults] objectForKey:kMediaRegistryKey];
         if ([saved isKindOfClass:[NSDictionary class]]) {
             _diskTable = [saved mutableCopy];
@@ -56,12 +58,12 @@ static NSString *MioDualMediaMD5(NSString *s) {
     [[NSUserDefaults standardUserDefaults] setObject:_diskTable forKey:kMediaRegistryKey];
 }
 
-- (NSString *)registerLocalPath:(NSString *)path cdnURL:(NSString *)cdnURL {
+- (NSString *)registerLocalPath:(NSString *)path itemID:(NSString *)itemID {
     if (path.length == 0) return nil;
     NSString *key = MioDualMediaMD5(path);
     NSMutableDictionary *entry = [NSMutableDictionary dictionary];
     entry[@"p"] = path;
-    if (cdnURL.length) entry[@"u"] = cdnURL;
+    if (itemID.length) entry[@"iid"] = itemID;
     @synchronized(self) {
         NSDictionary *old = _memTable[key] ?: _diskTable[key];
         if (![old isEqualToDictionary:entry]) {
@@ -86,19 +88,42 @@ static NSString *MioDualMediaMD5(NSString *s) {
         }
         NSString *path = entry[@"p"];
         if (path.length == 0) return nil;
-        // 每次解析都校验文件：微信清缓存后自动失效（上层回落 CDN），文件可能被
-        // 重新下载故不删表项，清理交给 pruneExcept
+        // 每次解析都校验文件：微信清缓存/未下载完成时返回 nil，
+        // 上层触发 WCMediaDownloader 走微信管线拉图；文件可能重新出现故不删表项
         return [[NSFileManager defaultManager] fileExistsAtPath:path] ? path : nil;
     }
 }
 
-- (NSString *)cdnFallbackForKey:(NSString *)key {
+- (NSString *)itemIDForKey:(NSString *)key {
     if (key.length == 0) return nil;
     @synchronized(self) {
         NSDictionary *entry = _memTable[key] ?: _diskTable[key];
-        NSString *url = entry[@"u"];
-        return (url.length > 4 && [url hasPrefix:@"http"]) ? url : nil;
+        NSString *iid = entry[@"iid"];
+        return iid.length ? iid : nil;
     }
+}
+
+- (NSString *)registeredPathForKey:(NSString *)key {
+    if (key.length == 0) return nil;
+    @synchronized(self) {
+        NSDictionary *entry = _memTable[key] ?: _diskTable[key];
+        NSString *p = entry[@"p"];
+        return p.length ? p : nil;
+    }
+}
+
+- (BOOL)beginDownloadForKey:(NSString *)key {
+    if (key.length == 0) return NO;
+    @synchronized(self) {
+        if ([_downloading containsObject:key]) return NO;
+        [_downloading addObject:key];
+        return YES;
+    }
+}
+
+- (void)endDownloadForKey:(NSString *)key {
+    if (key.length == 0) return;
+    @synchronized(self) { [_downloading removeObject:key]; }
 }
 
 - (void)pruneExcept:(NSSet<NSString *> *)liveKeys {

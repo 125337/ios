@@ -10,14 +10,103 @@
 
 #pragma mark - 图片服务（WKURLSchemeTask 读本地媒体文件，WCMAssetHandler 同职责）
 
-// 媒体路径注册/解析全在 MioDualMediaService（MD5 稳定 key + 持久化 + 文件校验 +
-// CDN 回落，B1-B5 根治）；本文件只保留 scheme handler 管线。
+// 媒体路径注册/解析全在 MioDualMediaService（MD5 稳定 key + 持久化 + itemID 反查）。
+// 零破图架构：任何请求分支都返回有效图片响应——
+//   ① 注册路径文件在 → 缩放返回真图（99% 常态）
+//   ② 文件不在/读图失败 → 1x1 透明 PNG（HTTP 200，<img> 物理上不产生 onerror，
+//      破图标不可能出现）+ 触发 WCMediaDownloader（微信原生管线：CDN+解密+落盘）
+//      → 轮询文件到位 → mediaReadyForKey 通知 JS 重载该 img（二次请求命中 ①）
+//   ③ 数据项不可得/下载超时 → 透明图为终态（卡片灰底占位，干净不破图）
+// didFailWithError 全部移除——didFail 是破图标的唯一来源。
 @interface MioDualSchemeHandler : NSObject <WKURLSchemeHandler>
 @end
 @implementation MioDualSchemeHandler
 
+// 1x1 透明 PNG（硬编码字节，后台线程随时可用）
+static NSData *MioDualPlaceholderPNG(void) {
+    static NSData *d;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSString *b64 = @"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+        d = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+    });
+    return d;
+}
+
+// 按 key 找回媒体对象：Store 按 itemID 拿 WCDataItem → getMediaWraps → 路径匹配的
+// WCMediaItem（注册路径本就来自 mi 的标准 path selector，同 mi 下载落盘即同路径）
+static SEL kPathSels[4];
+static id MioDualMediaItemForPath(id di, NSString *targetPath) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        kPathSels[0] = @selector(getThumbImagePath);
+        kPathSels[1] = @selector(pathForPreview);
+        kPathSels[2] = @selector(pathForData);
+        kPathSels[3] = @selector(pathForHdData);
+    });
+    if (!di || targetPath.length == 0) return nil;
+    if (![di respondsToSelector:@selector(getMediaWraps)]) return nil;
+    NSArray *wraps = ((id(*)(id, SEL))objc_msgSend)(di, @selector(getMediaWraps));
+    id firstMI = nil;
+    for (id wrap in wraps) {
+        if (![wrap respondsToSelector:@selector(mediaItem)]) continue;
+        id mi = ((id(*)(id, SEL))objc_msgSend)(wrap, @selector(mediaItem));
+        if (!mi) continue;
+        for (int i = 0; i < 4; i++) {
+            if (![mi respondsToSelector:kPathSels[i]]) continue;
+            NSString *p = ((id(*)(id, SEL))objc_msgSend)(mi, kPathSels[i]);
+            if ([p isKindOfClass:[NSString class]] && [p isEqualToString:targetPath]) return mi;
+            if (!firstMI && [p isKindOfClass:[NSString class]] && p.length) firstMI = mi;
+        }
+    }
+    return firstMI;   // 路径未精确匹配：退回首个有路径的 mi（微信重算路径可能变体）
+}
+
+// ②→① 闭环：启动微信下载器 + 轮询注册路径文件出现 → 通知 JS 重载
+- (void)kickDownloadForKey:(NSString *)key {
+    if (![[MioDualMediaService shared] beginDownloadForKey:key]) return;   // 去重
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSString *pathInTable = [[MioDualMediaService shared] registeredPathForKey:key];
+        NSString *iid = [[MioDualMediaService shared] itemIDForKey:key];
+        id di = iid ? [[MioDualTimelineStore shared] dataItemByID:iid] : nil;
+        id mi = MioDualMediaItemForPath(di, pathInTable);
+        if (di && mi) {
+            Class dCls = objc_getClass("WCMediaDownloader");
+            // Image_startDownload 无参无 block（completionHandler 签名 dump 无法确认，
+            // 不赌签名）：启动后轮询文件出现即可
+            SEL startSel = NSSelectorFromString(@"Image_startDownload");
+            if (dCls && [dCls instancesRespondToSelector:startSel]) {
+                id dl = [[dCls alloc] initWithDataItem:di mediaItem:mi];
+                if ([dl respondsToSelector:startSel]) {
+                    ((void(*)(id, SEL))objc_msgSend)(dl, startSel);
+                    WPLog(@"Dual", @"[Media] downloader started key=%@ iid=%@", key, iid);
+                }
+            }
+        } else {
+            WPLog(@"Dual", @"[Media] no dataItem/mediaItem for key=%@ iid=%@", key, iid);
+        }
+        // 轮询文件出现（500ms × 24 = 12s 上限）
+        for (int i = 0; i < 24; i++) {
+            [NSThread sleepForTimeInterval:0.5];
+            if ([[MioDualMediaService shared] resolveKey:key]) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[MioDualMediaService shared] endDownloadForKey:key];
+                    [MioDualFeedBridge mediaReadyForKey:key];
+                });
+                return;
+            }
+        }
+        WPLog(@"Dual", @"[Media] download wait timeout key=%@", key);
+        [[MioDualMediaService shared] endDownloadForKey:key];
+    });
+}
+
 - (void)webView:(WKWebView *)webView startURLSchemeTask:(id<WKURLSchemeTask>)task {
-    NSString *key = task.request.URL.lastPathComponent;
+    // key 取 path 末段（?r= cache-bust 参数在 query，不进 pathComponents）
+    NSString *key = nil;
+    for (NSString *comp in [task.request.URL.pathComponents reverseObjectEnumerator]) {
+        if (comp.length && ![comp isEqualToString:@"/"]) { key = comp; break; }
+    }
     // 文件名白名单 [A-Za-z0-9_] 且不以 _ 开头（WCMAssetHandler 实证同款），防路径穿越
     static NSPredicate *nameOK;
     static dispatch_once_t oncePred;
@@ -25,42 +114,44 @@
         nameOK = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", @"^[A-Za-z0-9][A-Za-z0-9_]*$"];
     });
     BOOL keyOK = (key.length && nameOK && [nameOK evaluateWithObject:key]);
-    // 解析顺序：注册表 key → 本地路径（每次文件校验）→ CDN 回落 URL。
-    // 微信清缓存后自动降级 CDN（B4/B5 根治），快照放久了图不再灭
     NSString *path = keyOK ? [[MioDualMediaService shared] resolveKey:key] : nil;
-    NSString *cdn = (keyOK && !path.length)
-        ? [[MioDualMediaService shared] cdnFallbackForKey:key] : nil;
-    if (!path.length && !cdn.length) {
-        [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain
-                                                   code:NSURLErrorFileDoesNotExist
-                                               userInfo:nil]];
+    if (!path.length) {
+        // ② 文件缺失：透明图立即响应 + 触发微信管线拉图
+        [self servePlaceholder:task];
+        if (keyOK) [self kickDownloadForKey:key];
         return;
     }
     NSValue *taskRef = [NSValue valueWithNonretainedObject:task];   // 取消标记（stop 与响应都在主线程比对）
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        UIImage *img = nil;
-        if (path.length) {
-            img = [UIImage imageWithContentsOfFile:path];
-        } else {
-            // CDN 回落：后台信号量同步下载（限 10s），缩略图几KB-几十KB
-            NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:cdn]
-                                                              cachePolicy:NSURLRequestUseProtocolCachePolicy
-                                                              timeoutInterval:10];
-            __block NSData *cdnData = nil;
-            dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-            [[[NSURLSession sharedSession] dataTaskWithRequest:req
-                completionHandler:^(NSData *d, __unused NSURLResponse *r, __unused NSError *e) {
-                    cdnData = d;
-                    dispatch_semaphore_signal(sem);
-                }] resume];
-            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 11 * NSEC_PER_SEC));
-            img = [UIImage imageWithData:cdnData];
-        }
+        UIImage *img = [UIImage imageWithContentsOfFile:path];
         if (!img) {
-            [self finishFail:task ref:taskRef code:NSURLErrorCannotOpenFile];
+            // 文件在校验后半路被清/写一半：回占位（绝不 didFail）
+            [self servePlaceholder:task];
             return;
         }
         [self serveScaledImage:img task:task ref:taskRef];
+    });
+}
+
+// 占位响应（主线程提交；no-store 防 WebKit 缓存透明图挡住二次请求的真图）
+- (void)servePlaceholder:(id<WKURLSchemeTask>)task {
+    NSData *data = MioDualPlaceholderPNG();
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSMutableSet *cancelled = [self cancelledTasks];
+        if ([cancelled containsObject:[NSValue valueWithNonretainedObject:task]]) {
+            [cancelled removeObject:[NSValue valueWithNonretainedObject:task]];
+            return;
+        }
+        NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
+                                   initWithURL:task.request.URL
+                                   statusCode:200
+                                   HTTPVersion:@"HTTP/1.1"
+                                   headerFields:@{@"Content-Type": @"image/png",
+                                                  @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length],
+                                                  @"Cache-Control": @"no-store"}];
+        [task didReceiveResponse:resp];
+        [task didReceiveData:data];
+        [task didFinish];
     });
 }
 
@@ -88,7 +179,7 @@
             return;
         }
         if (!data.length) {
-            [self finishFail:task ref:taskRef code:NSURLErrorCannotOpenFile];
+            [self servePlaceholder:task];
             return;
         }
         NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
@@ -101,18 +192,6 @@
         [task didReceiveResponse:resp];
         [task didReceiveData:data];
         [task didFinish];
-    });
-}
-
-// 后台线程结果统一走主线程回调（含取消检查）
-- (void)finishFail:(id<WKURLSchemeTask>)task ref:(NSValue *)taskRef code:(NSInteger)code {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSMutableSet *cancelled = [self cancelledTasks];
-        if ([cancelled containsObject:taskRef]) {
-            [cancelled removeObject:taskRef];
-            return;
-        }
-        [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:code userInfo:nil]];
     });
 }
 
@@ -272,9 +351,8 @@ static NSString * const kDualPageHTML = @(
 "var card=el('div','card');card.dataset.id=item.id;card.parts={};"
 "if(item.img){"
 "var media=el('div','card-media');"
-"var img=el('img');img.loading='lazy';img.decoding='async';"
+"var img=el('img');img.loading='lazy';img.decoding='async';img.dataset.miokey=item.src.split('/').pop();"
 "img.onload=function(){if(!ratios[item.id]&&img.naturalWidth>0){ratios[item.id]=img.naturalWidth/img.naturalHeight;media.style.setProperty('--aspect',String(ratios[item.id]));calib();}};"
-"img.onerror=function(){if(img.dataset.fb||!card.dataset.id)return;var cur=byId[card.dataset.id];if(cur&&cur.imgCdn){img.dataset.fb=1;img.src=cur.imgCdn;}};"
 "media.appendChild(img);card.appendChild(media);card.parts.media=media;card.parts.img=img;"
 "if(item.isVideo){var vt=el('div','mtag');vt.innerHTML=PLAY+' 视频';media.appendChild(vt);}"
 "else if(item.imgCount>1){var it2=el('div','mtag');it2.textContent=item.imgCount+'图';media.appendChild(it2);}"
@@ -341,6 +419,7 @@ static NSString * const kDualPageHTML = @(
 "if(pendingFresh.length){newTip.style.display='block';newTip.textContent=pendingFresh.length+' 条新动态';}"
 "}"
 "render();};"
+"window.__mioMediaReady=function(k){var i=document.querySelector('img[data-miokey=\"'+k+'\"]');if(i)i.src='mioimg://local/'+k+'?r='+(Date.now());};"
 "function visibleList(){"
 "var l=ALL;"
 "if(pendingFresh.length&&tab==='all'&&!q)l=l.filter(function(it){return pendingFresh.indexOf(it.id)<0;});"

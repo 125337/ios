@@ -186,12 +186,9 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
                 if ([wrap respondsToSelector:@selector(mediaItem)]) {
                     mi = ((id(*)(id, SEL))objc_msgSend)(wrap, @selector(mediaItem));
                 }
-                NSString *cdn = nil;
-                NSString *src = [self mediaSrc:mi cdnOut:&cdn];
+                NSString *src = [self mediaSrc:mi itemID:WXSafeStringGet(item, @"itemID")];
                 if (src) {
-                    NSMutableDictionary *md = [NSMutableDictionary dictionaryWithObject:src forKey:@"src"];
-                    if (cdn) md[@"cdn"] = cdn;   // JS onerror 换源闭环（收尾③）
-                    [media addObject:md];
+                    [media addObject:[NSMutableDictionary dictionaryWithObject:src forKey:@"src"]];
                 }
                 if (mi && !isVideo) {
                     // 视频条目 mediaItem 为 WCVideoMediaItem 类变体，类名匹配避开拼写差异
@@ -213,7 +210,6 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     }
     NSDictionary *firstMedia = media.firstObject;
     NSString *firstImg = firstMedia[@"src"] ?: @"";
-    NSString *firstCdn = firstMedia[@"cdn"] ?: @"";
     return @{@"id": WXSafeStringGet(item, @"itemID") ?: @"",
              @"name": WXSafeStringGet(item, @"nickname") ?: username,
              @"avatar": [self avatarFor:username] ?: @"",
@@ -223,37 +219,29 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
              @"liked": @(MioDualScalarGet(item, @"likeFlag", 0)),
              @"content": content,
              @"img": firstImg,
-             @"imgCdn": firstCdn,
              @"imgCount": @(media.count),
              @"isVideo": isVideo ? @YES : @NO,
              @"ratio": @(ratio),
              @"isLargeText": media.count ? @NO : @YES};
 }
 
-// 媒体源：本地路径注册进媒体服务（MD5 稳定 key + CDN 回落入库，B1-B5 根治）。
-// cdnOut 带出 CDN URL（itemDict 写进 media.cdn / 行 imgCdn）。
-// 注册无条件——resolveKey 在 scheme 服务时逐次 fileExists 校验，注册前不再 stat，
+// 媒体源：本地路径注册进媒体服务（MD5 稳定 key + 帖子 itemID 反查）。
+// 注册无条件——resolveKey 在 scheme 服务时逐次 fileExists 校验；文件缺失时
+// handler 层按 itemID 找回数据项交 WCMediaDownloader（微信管线）拉图，零破图。
 // 500 条 ×4 selector 的主线程 stat 风暴消除（独立方案收尾②）
-- (NSString *)mediaSrc:(id)mi cdnOut:(NSString **)cdnOut {
+- (NSString *)mediaSrc:(id)mi itemID:(NSString *)itemID {
     if (!mi) return nil;
-    // CDN 缩略图 URL 先备好（与本地路径一并入库，文件事后被清时双路回落）
-    NSString *cdn = WXSafeStringGet(mi, @"attachThumbUrl");
-    if (cdn.length == 0) cdn = WXSafeStringGet(mi, @"dataUrl");
-    if (!(cdn.length > 4 && [cdn hasPrefix:@"http"])) cdn = nil;
-    if (cdnOut) *cdnOut = cdn;
     SEL pathSels[4] = { @selector(getThumbImagePath), @selector(pathForPreview),
                         @selector(pathForData), @selector(pathForHdData) };
     for (int i = 0; i < 4; i++) {
         if (![mi respondsToSelector:pathSels[i]]) continue;
         NSString *p = ((id(*)(id, SEL))objc_msgSend)(mi, pathSels[i]);
         if ([p isKindOfClass:[NSString class]] && p.length > 0) {
-            // 文件失效不在此拦截：resolveKey 每次服务都校验，失效自动降级
-            // handler 层 CDN 下载兜底 + 渲染层 JS onerror 换源
-            NSString *key = [[MioDualMediaService shared] registerLocalPath:p cdnURL:cdn];
+            NSString *key = [[MioDualMediaService shared] registerLocalPath:p itemID:itemID];
             return [NSString stringWithFormat:@"mioimg://local/%@", key];
         }
     }
-    return cdn;
+    return nil;
 }
 
 // 头像：按 wxid 走 CContactMgr 查（会话内缓存，避免每次推送重复查询）

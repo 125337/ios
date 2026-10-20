@@ -17,6 +17,7 @@
 + (void)detachWebView;
 // 立即推送（attach 后首推用；事件路径走 notifyDataChanged 防抖）
 + (void)pushNow;
++ (void)mediaReadyForKey:(NSString *)key;   // 缩略图落盘后通知 JS 重载对应 img（零破图闭环）
 // hook 层入口：微信 timeline 变更（0.5s 尾沿防抖）
 + (void)notifyDataChanged;
 // onTimelineDataChanged 让位他方插件时开启 10s 慢轮询（实时性降级但不断供）
