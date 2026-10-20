@@ -16,6 +16,8 @@ id MioDualFacade(void);
 - (NSArray<NSDictionary *> *)currentItems;
 // 原始条数（去重合并后、LRU 截断前；翻页 exhausted 判定用）
 - (NSUInteger)approxCount;
+// YES = 原生双源为空、快照顶上（冷启动 stale 层）；NO = 数据来自原生实时源
+@property (nonatomic, assign, readonly) BOOL staleMode;
 - (void)refreshHead;                            // facade updateTimelineHead（下拉刷新）
 - (void)loadTail;                               // facade updateTimelineTail（滚底翻页）
 - (id)dataItemByID:(NSString *)objID;           // facade getDataItemByID:

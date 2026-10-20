@@ -148,6 +148,16 @@ static NSTimer *gPendingPush = nil;
 
     // ---- 新状态 ----
     NSArray<NSDictionary *> *rows = [[MioDualTimelineStore shared] currentItems];
+
+    // ---- 空仓保护（冷启动清屏根治②，与 Store 层快照顶上互为保险）：----
+    // Store 已用快照顶仓（stale 层），此处兜底——万一 Store 仍空而 JS 侧有内容
+    // （异常态），不发 remove patch 清屏，等微信同步落地
+    if (rows.count == 0 && _lastRowsByID.count > 0) {
+        WPLog(@"Dual", @"[Push] store empty, keep %lu JS rows (cold-start guard)",
+              (unsigned long)_lastRowsByID.count);
+        return;
+    }
+
     NSMutableDictionary *freshByID = [NSMutableDictionary dictionaryWithCapacity:rows.count];
     NSMutableArray<NSString *> *freshOrder = [NSMutableArray arrayWithCapacity:rows.count];
     for (NSDictionary *r in rows) {
@@ -186,8 +196,9 @@ static NSTimer *gPendingPush = nil;
     }
 
     if (upserts.count == 0 && removedIDs.count == 0 && !needOrder) {
-        if (_snapshotHadRows) {
-            // 快照 == 当前数据：仍需一条空 patch 把 JS 的 stale 标记切正常
+        // 快照 == 当前数据：空 patch 把 JS 的 stale 标记切正常。
+        // stale 模式（仓里就是快照行）不清——数据确实还是旧的，角标保留到新数据落地
+        if (_snapshotHadRows && ![[MioDualTimelineStore shared] staleMode]) {
             _snapshotHadRows = NO;
             [wv evaluateJavaScript:@"window.__mioFeedPatch({upsert:[],remove:[]});"
                  completionHandler:nil];

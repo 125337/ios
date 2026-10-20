@@ -71,6 +71,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 @implementation MioDualTimelineStore {
     NSMutableDictionary<NSString *, NSString *> *_avatarCache;   // wxid → 头像 URL（会话缓存）
     NSUInteger _lastRawCount;
+    NSArray<NSDictionary *> *_snapshotRowsCache;   // 快照行解析缓存（stale 模式期间复用）
 }
 
 + (instancetype)shared {
@@ -140,7 +141,33 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
         return ta < tb ? NSOrderedDescending : (ta > tb ? NSOrderedAscending : NSOrderedSame);
     }];
     if (rows.count > kMaxRows) [rows removeObjectsInRange:NSMakeRange(kMaxRows, rows.count - kMaxRows)];
-    return rows;
+    if (rows.count > 0) {
+        _staleMode = NO;
+        return rows;
+    }
+    // 原生缓存冷启动为空（双源都空）：上次快照顶上（stale 层）——diff 仓里始终有
+    // 快照那些行，不再产生 remove，JS 侧快照稳定显示不被清空；新数据落地后
+    // diff 自然变成「upsert 变更行 + remove 真正消失的行」，语义完全正确
+    NSArray *snap = [self snapshotRows];
+    if (snap.count > 0) {
+        _staleMode = YES;
+        return snap;
+    }
+    _staleMode = NO;
+    return @[];
+}
+
+// 快照行（解析一次缓存：stale 模式期间每次推送复用，不重复解析几百 KB JSON）
+- (NSArray<NSDictionary *> *)snapshotRows {
+    if (_snapshotRowsCache) return _snapshotRowsCache;
+    NSString *snap = [self lastSnapshotJSON];
+    if (snap.length <= 2) return @[];
+    id parsed = [NSJSONSerialization JSONObjectWithData:[snap dataUsingEncoding:NSUTF8StringEncoding]
+                                                options:0 error:nil];
+    NSArray *arr = [parsed isKindOfClass:[NSDictionary class]] ? parsed[@"items"] : nil;
+    if (arr.count == 0) return @[];
+    _snapshotRowsCache = arr;
+    return arr;
 }
 
 - (NSDictionary *)itemDict:(id)item {
@@ -266,6 +293,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
     [ud setObject:json forKey:kSnapshotKey];
     [ud removeObjectForKey:@"MioDualLastFeedJSON"];   // 旧实现快照 key 清除，避免残留
+    _snapshotRowsCache = nil;   // 快照已更新，行缓存失效
     // 快照与媒体注册表同存同删（重构方案 3.1 设计 3）：不会出现
     // "JSON 有 key、注册表没 key" 的撕裂
     [[MioDualMediaService shared] pruneExcept:liveKeys];
