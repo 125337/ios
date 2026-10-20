@@ -26,6 +26,13 @@
 
 @implementation MioDualTimelineEngine
 
++ (instancetype)shared {
+    static MioDualTimelineEngine *e = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ e = [[MioDualTimelineEngine alloc] init]; });
+    return e;
+}
+
 #pragma mark 原语
 
 - (long long)sourceCount {
