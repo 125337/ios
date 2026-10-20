@@ -23,3 +23,8 @@ BOOL MioDualPanelIsOpen(UIViewController *host);
 // WCFacade 获取（阶段0 探针实证：logEnterTimeline 首调捕获，进程级缓存）
 // 双列模块内共享（面板数据桥/消息页取数都走它）
 id MioDualFacade(void);
+
+// P1 实时性：微信 timeline 变更回调 hook（MomentsDualHook 挂 WCFacade
+// onTimelineDataChangedWithAdded:andChanged:andDeleted:，WCFacade.h:415 实证）
+// 转发入口——主线程 0.5s 防抖后活跃面板 pushFeedNow（替代旧 3s 轮询）
+void MioDualPanelNotifyDataChanged(void);

@@ -127,10 +127,39 @@ static void MioDualInstallEntryHooks(void) {
     WPLog(@"Dual", @"[Dual] viewDidAppear entry hook installed on FindFriendEntryViewController");
 }
 
+// P1 实时性：微信原生 timeline 变更回调（WCFacade.h:415 实证——WCFacade 是
+// MMUserService 微信原生服务，非 WCMoments 私有）。每次朋友圈数据增/改/删都会走这里，
+// 转发 MioDualPanelNotifyDataChanged（0.5s 防抖）→ 活跃双列面板即时重推，替代轮询
+static void MioDualInstallTimelineChangedHook(void) {
+    Class fCls = objc_getClass("WCFacade");
+    SEL sel = NSSelectorFromString(@"onTimelineDataChangedWithAdded:andChanged:andDeleted:");
+    if (!fCls) {
+        WPLog(@"Dual", @"[Dual] timeline-changed hook SKIP: WCFacade NOT found");
+        return;
+    }
+    Method m = class_getInstanceMethod(fCls, sel);
+    if (!m) {
+        WPLog(@"Dual", @"[Dual] timeline-changed hook SKIP: selector NOT found");
+        return;
+    }
+    IMP cur = method_getImplementation(m);
+    if (MioDualImpFromOtherPlugin(cur)) {   // 他方插件先接管则让位（同 viewDidAppear 规则）
+        WPLog(@"Dual", @"[Dual] yield onTimelineDataChanged: (another dylib owns it)");
+        return;
+    }
+    __block void (*orig)(id, SEL, id, id, id) = (void (*)(id, SEL, id, id, id))cur;
+    method_setImplementation(m, imp_implementationWithBlock(^(id self, id added, id changed, id deleted) {
+        orig(self, sel, added, changed, deleted);
+        MioDualPanelNotifyDataChanged();
+    }));
+    WPLog(@"Dual", @"[Dual] onTimelineDataChanged hook installed (P1 event-driven)");
+}
+
 @implementation MomentsDualHook
 
 + (void)install {
     MioDualInstallEntryHooks();
+    MioDualInstallTimelineChangedHook();
 }
 
 @end

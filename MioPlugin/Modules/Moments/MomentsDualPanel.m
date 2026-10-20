@@ -153,18 +153,7 @@ id MioDualFacade(void) {    static id cached = nil;
     return cached;
 }
 
-static NSArray *MioDualTimelineCache(id facade) {
-    if (!facade) return nil;
-    id mgr = nil;
-    SEL mgrSel = NSSelectorFromString(@"timelineMgr");
-    if ([facade respondsToSelector:mgrSel]) {
-        mgr = ((id(*)(id, SEL))objc_msgSend)(facade, mgrSel);
-    }
-    if (!mgr) return nil;
-    SEL cacheSel = NSSelectorFromString(@"getCache");
-    if (![mgr respondsToSelector:cacheSel]) return nil;
-    return ((id(*)(id, SEL))objc_msgSend)(mgr, cacheSel);
-}
+
 
 // WCDataItem 的 createtime/likeCount/commentCount 是标量 getter（ULL/uint），
 // 禁止用 id 接裸 msgSend 返回值（WXSafeIntegerGet 同款）：x0 原始整数被当指针
@@ -178,6 +167,29 @@ static long long MioDualScalarGet(id obj, NSString *key, long long def) {
     } @catch (NSException *e) {
     }
     return def;
+}
+
+// timeline 数据直读（对齐 WCM 直读三件套；WCFacade.h:429-431 微信原生 API 实证）：
+// 主路 getTimelineDataItem（返回全数组）；回落 countOfTimelineDataItem + getTimelineDataItemOfIndex:。
+// WCFacade 是 MMUserService（微信原生服务，8.0.78 头文件实证）——此链路与 WCMoments 插件无依赖。
+// count 若为标量 getter，禁 id 接裸 msgSend（SIGSEGV 教训），走上面 KVC 装箱。
+static NSArray *MioDualTimelineItems(id facade) {
+    if (!facade) return nil;
+    SEL all = NSSelectorFromString(@"getTimelineDataItem");
+    if ([facade respondsToSelector:all]) {
+        id v = ((id(*)(id, SEL))objc_msgSend)(facade, all);
+        if ([v isKindOfClass:[NSArray class]]) return v;
+    }
+    SEL idx = NSSelectorFromString(@"getTimelineDataItemOfIndex:");
+    if (![facade respondsToSelector:idx]) return nil;
+    long long n = MioDualScalarGet(facade, @"countOfTimelineDataItem", 0);
+    if (n <= 0) return nil;
+    NSMutableArray *arr = [NSMutableArray arrayWithCapacity:(NSUInteger)n];
+    for (long long i = 0; i < n; i++) {
+        id it = ((id(*)(id, SEL, unsigned long long))objc_msgSend)(facade, idx, (unsigned long long)i);
+        if (it) [arr addObject:it];
+    }
+    return arr;
 }
 
 #pragma mark - 内置双列瀑布流页面（纯静态，无格式化注入）
@@ -435,11 +447,9 @@ static NSString * const kDualPageHTML = @(
 
 @interface MomentsDualPanel () <WKScriptMessageHandler, WKNavigationDelegate>
 @property (nonatomic, strong) WKWebView *webView;
-@property (nonatomic, strong) NSTimer *pollTimer;
 @property (nonatomic, copy) NSString *lastJson;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *avatarCache;
 @property (nonatomic, assign) BOOL pageReady;
-- (void)stopPolling;
 @end
 
 static char kDualPanelAssocKey;
@@ -470,31 +480,27 @@ static char kDualPanelAssocKey;
     [self pushFeedNow];
 }
 
-// 轮询推数据：缓存由原生刷新（updateTimelineHead/后台同步）变更后 3s 内跟上面板。
-// block 定时器 + weak self：面板被 Close 硬摘除时不会走 viewWillDisappear，
-// 靠 stopPolling 兜底，防 runloop 持 timer→target 强持成僵尸
-- (void)viewDidAppear:(BOOL)animated {
-    [super viewDidAppear:animated];
-    [self stopPolling];
-    __weak typeof(self) wself = self;
-    self.pollTimer = [NSTimer timerWithTimeInterval:3.0 repeats:YES block:^(NSTimer *t) {
-        [wself pushFeedNow];
-    }];
-    [[NSRunLoop mainRunLoop] addTimer:self.pollTimer forMode:NSRunLoopCommonModes];
-}
+// 数据刷新为纯事件驱动（对齐 WCM 变更回调）：微信 timeline 变更 →
+// onTimelineDataChanged hook（MomentsDualHook）→ MioDualPanelNotifyDataChanged →
+// 0.5s 防抖 → 活跃面板 pushFeedNow。旧 3s 轮询已删（P1 实时性落地，轮询冗余）。
 
-- (void)viewWillDisappear:(BOOL)animated {
-    [super viewWillDisappear:animated];
-    [self stopPolling];
-}
+// 活跃面板弱引用：hook 层 → 面板桥（Open 赋值 / Close 置 nil，主线程生命周期内读写）
+static __weak id gDualActivePanel = nil;
 
-- (void)stopPolling {
-    [self.pollTimer invalidate];
-    self.pollTimer = nil;
+// P1 实时性入口：微信原生 timeline 变更回调（WCFacade.h:415 实证）转发至此，
+// 主线程 0.5s 防抖合并（连赞连评/批量同步多次触发）
+void MioDualPanelNotifyDataChanged(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        static NSTimeInterval last = 0;
+        NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+        if (now - last < 0.5) return;
+        last = now;
+        id panel = gDualActivePanel;
+        if (panel && [panel respondsToSelector:@selector(pushFeedNow)]) [panel pushFeedNow];
+    });
 }
 
 - (void)dealloc {
-    [self.pollTimer invalidate];
     // addScriptMessageHandler 强持 self，必须解绑才能断开 webview→controller→webview 环
     [self.webView.configuration.userContentController removeScriptMessageHandlerForName:@"mio"];
 }
@@ -506,7 +512,7 @@ static char kDualPanelAssocKey;
     [self updateBellBadge];
     NSMutableArray *arr = [NSMutableArray array];
     @try {
-        NSArray *cache = MioDualTimelineCache(MioDualFacade());
+        NSArray *cache = MioDualTimelineItems(MioDualFacade());
         for (id item in cache) {
             if (arr.count >= 300) break;   // 上限 300：滚底翻页（updateTimelineTail）后 cache 超百条
             NSDictionary *d = [self itemDict:item];
@@ -639,13 +645,12 @@ static char kDualPanelAssocKey;
     }
     if ([action isEqualToString:@"more"]) {
         // WCMoments requestTimelineMore 同款（反编译实证）：滚到底 → facade updateTimelineTail
-        // 翻页拉更多，原生落 cache 后复查推送；与 updateTimelineHead 成对
+        // 翻页拉更多；新数据落库后 onTimelineDataChanged hook 自动推面板（纯事件驱动）
         id facade = MioDualFacade();
         SEL tailSel = NSSelectorFromString(@"updateTimelineTail");
         if (facade && [facade respondsToSelector:tailSel]) {
             ((void(*)(id, SEL))objc_msgSend)(facade, tailSel);
         }
-        [self scheduleFeedChecks];
         return;
     }
     if ([action isEqualToString:@"publish"] || [action isEqualToString:@"publishText"]) {
@@ -697,18 +702,10 @@ static char kDualPanelAssocKey;
     SEL refreshSel = NSSelectorFromString(@"updateTimelineHead");
     if (facade && [facade respondsToSelector:refreshSel]) {
         ((void(*)(id, SEL))objc_msgSend)(facade, refreshSel);   // 探针实证：主动调用成功，等价下拉
+        // 新数据落库后 onTimelineDataChanged hook 自动推面板，无需复查轮询
     }
-    [self scheduleFeedChecks];
 }
 
-// 刷新/翻页落库有时延：短周期复查推送（WCMoments syncPaging 状态机同款思想）
-- (void)scheduleFeedChecks {
-    __weak typeof(self) wself = self;
-    for (NSNumber *delay in @[ @1.0, @2.5, @4.0 ]) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{ [wself pushFeedNow]; });
-    }
-}
 
 @end
 
@@ -734,6 +731,7 @@ void MioDualPanelOpen(UIViewController *host) {
     panel.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [host.view addSubview:panel.view];
     [host.view bringSubviewToFront:panel.view];
+    gDualActivePanel = panel;   // P1 事件驱动：hook 层 → 防抖 → 此面板 pushFeedNow
     // 发现页直接打开时朋友圈缓存可能为空（尚未进过朋友圈），先主动拉一次
     id facade = MioDualFacade();
     SEL refreshSel = NSSelectorFromString(@"updateTimelineHead");
@@ -755,8 +753,7 @@ void MioDualPanelClose(UIViewController *host) {
     MomentsDualPanel *panel = objc_getAssociatedObject(host, &kDualPanelAssocKey);
     if (![panel isKindOfClass:[MomentsDualPanel class]]) return;
     objc_setAssociatedObject(host, &kDualPanelAssocKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    // 硬摘除不会触发 viewWillDisappear（非容器协调移除），必须手动停轮询
-    [panel stopPolling];
+    gDualActivePanel = nil;   // 面板摘除，hook 推送目标清空
     [panel.view removeFromSuperview];
     // WCMoments restoreChrome：还原发现页 chrome
     host.edgesForExtendedLayout = panel.prevEdges;
