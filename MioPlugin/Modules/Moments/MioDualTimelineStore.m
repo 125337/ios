@@ -395,28 +395,31 @@ static void MioDualTailStateReset(void) {
         [self tailTickLater:2.0];
         return;
     }
-    SEL bSel = NSSelectorFromString(@"beginTimeline");   // 翻页同样需要活会话
-    if ([facade respondsToSelector:bSel]) {
-        ((void(*)(id, SEL))objc_msgSend)(facade, bSel);
-    }
-    SEL rSel = NSSelectorFromString(@"reloadTimelineDataItems");   // 先灌库
-    if ([facade respondsToSelector:rSel]) {
-        ((void(*)(id, SEL))objc_msgSend)(facade, rSel);
-    }
-    long long before = MioDualDataSourceCount(facade);
+    // WCM requestTimelineMore 同款（反编译 L519-937 实证）：翻页**不动会话**——
+    // 它全程只调 updateTimelineTail，无 beginTimeline/reload。beginTimeline 是会话
+    // 重置，会打断引擎深度翻页状态机（updateNextPage 异步网络中被重置作废），
+    // 实测翻到 ~1195 条后引擎供不动即此嫌疑
     SEL sel = NSSelectorFromString(@"updateTimelineTail");
     if (![facade respondsToSelector:sel]) {
         WPLog(@"Dual", @"[Sess] tail loop STOP: updateTimelineTail NOT resp");
         gTailLoopOn = NO;
         return;
     }
-    ((void(*)(id, SEL))objc_msgSend)(facade, sel);   // WCMoments requestTimelineMore 同款
+    long long before = MioDualDataSourceCount(facade);
+    // 返回 BOOL accepted（WCFacade.h L437）：拒绝=引擎冷却/忙碌，立即重排不计失败
+    long accepted = ((long(*)(id, SEL))objc_msgSend)(facade, sel);
     gTailLastAt = now;
-    WPLog(@"Dual", @"[Sess] tail tick sent (count=%lld, zero=%d)", before, gTailZero);
+    WPLog(@"Dual", @"[Sess] tail tick sent (count=%lld, accepted=%ld, z=%d)",
+          before, accepted, gTailZero);
     [MioDualFeedBridge pushNowFromSession];   // 页脚新行立即上屏（若有）
 
-    // 8s 后核对：涨了→清零计数再续；零增长→计数+1（连续 3 轮→退避 60s，跨过服务器
-    // 冷却期自动恢复，不再永久停机）；循环继续，直到滚离底部/关面板
+    if (!accepted) {
+        // WCM 同款 finishTailWait→retryRequired→轮询重试：2s 后心跳重排，不计零增长
+        [self tailTickLater:2.0];
+        return;
+    }
+    // accepted：8s 看门狗核对（WCM block_invoke 同款）——引擎网络回来自动写内存
+    // 列表，count 自涨；reload 仅兜底把库装窗口。零增长→计数+1，3 轮退避 60s
     __weak typeof(self) wself = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
