@@ -23,6 +23,9 @@
 @end
 @implementation MioDualSchemeHandler
 
+// displayCache 单例（读取/写入共用一份；定义在下方，前置声明供 startURLSchemeTask 用）
+static NSCache *MioDualDispCache(void);
+
 // 1x1 透明 PNG（硬编码字节，后台线程随时可用）
 static NSData *MioDualPlaceholderPNG(void) {
     static NSData *d;
@@ -58,6 +61,13 @@ static NSData *MioDualPlaceholderPNG(void) {
         return;
     }
     NSValue *taskRef = [NSValue valueWithNonretainedObject:task];   // 取消标记（stop 与响应都在主线程比对）
+    // displayCache（WCMAssetHandler 同款，03 L578-613）：URL→data 内存缓存，同 key
+    // 二次请求（mediaReady 二载/滚动回看）免解码免缩放免重编码
+    NSData *cached = [MioDualDispCache() objectForKey:task.request.URL.absoluteString];
+    if (cached.length) {
+        [self serveData:cached mime:@"image/jpeg" task:task ref:taskRef cacheHit:YES];
+        return;
+    }
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         UIImage *img = [UIImage imageWithContentsOfFile:path];
         if (!img) {
@@ -92,7 +102,7 @@ static NSData *MioDualPlaceholderPNG(void) {
 }
 
 // 解码后按列宽缩放返回（WCMAssetHandler 同款：不回原图，单图内存几MB→几十KB），
-// 主线程提交（含取消检查）
+// 主线程提交（含取消检查）；产物进 displayCache
 - (void)serveScaledImage:(UIImage *)img task:(id<WKURLSchemeTask>)task ref:(NSValue *)taskRef {
     CGFloat scale = [UIScreen mainScreen].scale;
     CGFloat target = MAX(512, ([UIScreen mainScreen].bounds.size.width - 40) * scale / 2 + 64);
@@ -106,6 +116,29 @@ static NSData *MioDualPlaceholderPNG(void) {
         if (small) img = small;
     }
     NSData *data = UIImageJPEGRepresentation(img, 0.8);
+    [self displayCacheStore:data url:task.request.URL.absoluteString];
+    [self serveData:data mime:@"image/jpeg" task:task ref:taskRef cacheHit:NO];
+}
+
+// displayCache 写入（仅真图；URL 含 ?r= cache-bust 时按完整 URL 存——同 key 变体
+// 会多存一份，240 上限自动淘汰，可接受）
+- (void)displayCacheStore:(NSData *)data url:(NSString *)url {
+    if (data.length) [MioDualDispCache() setObject:data forKey:url];
+}
+
+static NSCache<NSString *, NSData *> *MioDualDispCache(void) {
+    static NSCache *c = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        c = [[NSCache alloc] init];
+        c.countLimit = 240;
+    });
+    return c;
+}
+
+// 统一响应提交（主线程；取消检查 + data 空回落占位）
+- (void)serveData:(NSData *)data mime:(NSString *)mime
+             task:(id<WKURLSchemeTask>)task ref:(NSValue *)taskRef cacheHit:(BOOL)hit {
     dispatch_async(dispatch_get_main_queue(), ^{
         // stopURLSchemeTask 已到必须先检查：对已停 task 回任何回调
         // WebKit 直接断言崩溃（"called after the task was stopped"）
@@ -122,7 +155,7 @@ static NSData *MioDualPlaceholderPNG(void) {
                                    initWithURL:task.request.URL
                                    statusCode:200
                                    HTTPVersion:@"HTTP/1.1"
-                                   headerFields:@{@"Content-Type": @"image/jpeg",
+                                   headerFields:@{@"Content-Type": mime,
                                                   @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length],
                                                   @"Cache-Control": @"max-age=86400"}];
         [task didReceiveResponse:resp];
@@ -355,22 +388,25 @@ static NSString * const kDualPageHTML = @(
 // 一个 IO；每图挂 IO=2000 个观察者在滚动/装载时回调风暴）。可见性由 scheduleVisible
 // 按 layoutCards 缓存的 mtop/mh 判定：视口±2屏内 img 翻转 eager（其余原生 lazy）、
 // 转圈加 run，区间外摘除；120ms 节流 + lastKey 未变零开销
-"var visLast=-1,visTimer=0;"
+"var visLast=-1,visTimer=0,visSent='';"
 "function scheduleVisible(){if(visTimer)return;visTimer=setTimeout(function(){visTimer=0;visiblePass();},120);}"
 "function visiblePass(){"
 "var vh=window.innerHeight||600,scroll=window.scrollY||0;"
 "var key=Math.round(scroll/120);if(key===visLast)return;visLast=key;"
 "var gtop=grid.getBoundingClientRect().top+scroll;"
 "var lo=gtop+scroll-2*vh,hi=gtop+scroll+3*vh;"
-"var chs=grid.children;"
+"var chs=grid.children;var vk=[];"
 "for(var i=0;i<chs.length;i++){var c=chs[i];"
 "if(!c.dataset.id||c.mtop===undefined)continue;"
 "var p=c.parts;if(!p||!p.media)continue;"
 "var vis=c.mtop+c.mhh>lo&&c.mtop<hi;"
+"if(vis&&p.img&&p.img.src.indexOf('mioimg://local/')===0)vk.push(p.img.src.split('/').pop().split('?')[0]);"
 "if(vis&&p.img.loading!=='eager')p.img.loading='eager';"
 "var sp=p.media.firstChild;"
 "if(sp&&sp.classList&&sp.classList.contains('spin'))sp.classList.toggle('run',vis);"
 "}"
+// 可见媒体上报（WCM visible→scheduleMediaReload 同构）：变化才发，原生只备可见图
+"var vks=vk.join(',');if(vks&&vks!==visSent){visSent=vks;mio({action:'visible',ids:vks});}"
 "}"
 "function buildMedia(card,item){"
 "var media=el('div','card-media');"
@@ -702,6 +738,17 @@ static __weak UIViewController *g_dualPanelHost = nil;
             [[NSNotificationCenter defaultCenter] removeObserver:obsPost];
         };
         [host presentViewController:nav animated:YES completion:nil];
+        return;
+    }
+    if ([action isEqualToString:@"visible"]) {
+        // 可见性上报（WCM visible→scheduleMediaReload 同构，02 L1230-1244）：JS
+        // visiblePass 把视口±2屏的媒体 key 报上来，原生只备看得到的图
+        NSString *ids = body[@"ids"] ?: @"";
+        if (ids.length) {
+            for (NSString *k in [ids componentsSeparatedByString:@","]) {
+                if (k.length) [[MioDualMediaService shared] ensureMediaForKey:k];
+            }
+        }
         return;
     }
     if (![action isEqualToString:@"refresh"]) return;

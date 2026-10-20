@@ -149,6 +149,7 @@ static BOOL gPolling = NO;
 
 + (void)pollTick {
     if (!gPolling) return;
+    [[MioDualTimelineStore shared] ensureSession];   // 会话心跳：内部被终结则重开（WCM timer 同位）
     [[MioDualTimelineStore shared] reloadWindow];
     [self notifyDataChanged];   // 0.5s 尾沿防抖，窗口内变更全合并
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
@@ -213,13 +214,8 @@ static NSTimeInterval gLastPushAt = 0;
                 [wv evaluateJavaScript:[NSString stringWithFormat:
                     @"window.__mioFeedSnapshot(%@);", snap] completionHandler:nil];
                 WPLog(@"Dual", @"[Push] snapshot loaded (%lu rows)", (unsigned long)snapRows.count);
-                // 快照行备图（WCM exportImage 模式）：跨启动注册表持久但文件可能被
-                // 微信清理——上屏即检查缺失并触发微信管线下载，主线程
-                for (NSDictionary *r in snapRows) {
-                    NSString *img = r[@"img"];
-                    if ([img hasPrefix:@"mioimg://local/"])
-                        [[MioDualMediaService shared] ensureMediaForKey:img.lastPathComponent];
-                }
+                // 快照行备图废止（对齐 WCM visible 上报模式）：WCM 不做全量预拉，
+                // JS visiblePass 按视口上报 → 只备看得到的图（省流量省 IO）
             }
         }
     }

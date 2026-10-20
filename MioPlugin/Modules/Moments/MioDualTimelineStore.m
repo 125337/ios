@@ -344,6 +344,8 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 // 3 轮零增长→退避→服务器松口时在睡觉；会话回收→窗口清零重爬几千条全收重复。
 // 现行：inFlight 串行 + 0.3s 核对链，涨即 0.5s 续轮，零增长 2s 续追，到底才停
 static BOOL gTailLoopOn = NO;                    // 循环开关（进滚底区开，滚离/关面板停）
+static BOOL gSessionBegan = NO;                  // 引擎会话在开（beginSession 置位/endSession 清）
+static BOOL gRefreshingHead = NO;                // head 在途防重（WCM refreshingHead 同款）
 static BOOL gTailInFlight = NO;                  // 一轮网络翻页进行中（串行化，WCM loadingTail 同款）
 static NSTimeInterval gTailLastAt = 0;           // 上次发 tail 时刻（1s 最小间距防密集）
 static int gTailZero = 0;                        // 连续零增长轮数（HUD 观测僵局用）
@@ -363,29 +365,34 @@ static void MioDualTailStateReset(void) {
 #if MIO_DUAL_BISECT_NO_DATA
     return;   // 二分法测试构建：数据管线全关
 #endif
+    if (gRefreshingHead) {
+        WPLog(@"Dual", @"[Sess] refreshHead SKIP: refreshing in-flight");
+        return;
+    }
     id facade = MioDualFacade();
     if (!facade) {
         WPLog(@"Dual", @"[Sess] refreshHead SKIP: facade nil");
         return;
     }
-    // 会话会被微信内部终结（原生页生命周期/超时）：每次拉新前重开，否则 head 不走网络
-    // （实证：面板下拉失效、切 tab 回来就好——切 tab 恰好重开了会话）
-    SEL bSel = NSSelectorFromString(@"beginTimeline");
-    if ([facade respondsToSelector:bSel]) {
-        ((id(*)(id, SEL))objc_msgSend)(facade, bSel);
-        WPLog(@"Dual", @"[Sess] refreshHead: beginTimeline OK");
-    } else {
-        WPLog(@"Dual", @"[Sess] refreshHead: beginTimeline NOT resp");
-    }
-    // 本地库已有数据先灌进内存列表（探针 15:16 实证：与原生同链路、唯一差异是
-    // 原生页 UI 从数据源现读而内存列表只在 reload 时重灌）——新帖可能早已静默
-    // 落库，head 网络若回「无新帖」则 onChanged 参数全空、钩子 reload 被跳过，
-    // 内存列表保持旧数据 → diff 恒 no changes（切 tab 有效正因 beginSession 带 reload）
-    SEL rSel = NSSelectorFromString(@"reloadTimelineDataItems");
-    if ([facade respondsToSelector:rSel]) {
-        ((id(*)(id, SEL))objc_msgSend)(facade, rSel);
-        WPLog(@"Dual", @"[Sess] refreshHead: reloadTimelineDataItems OK (count=%lld)",
-              MioDualDataSourceCount(facade));
+    gRefreshingHead = YES;   // 防重由完成事件（onChanged 推送）+12s 超时双路解除
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(12.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ gRefreshingHead = NO; });
+    // WCM refreshHead 反编译（01 L277-395）：必要时 start（began 检查→begin+reload）
+    // → updateTimelineHead，全程不动活会话——head 前无脑 beginTimeline 会作废引擎
+    // 翻页状态（我们的窗口重置→重爬几千条根因，WCM 无此动作）
+    if (!gSessionBegan) {
+        SEL bSel = NSSelectorFromString(@"beginTimeline");
+        if ([facade respondsToSelector:bSel]) {
+            ((id(*)(id, SEL))objc_msgSend)(facade, bSel);
+            gSessionBegan = YES;
+            WPLog(@"Dual", @"[Sess] refreshHead: session re-begun");
+        }
+        SEL rSel = NSSelectorFromString(@"reloadTimelineDataItems");
+        if ([facade respondsToSelector:rSel]) {
+            ((id(*)(id, SEL))objc_msgSend)(facade, rSel);
+            WPLog(@"Dual", @"[Sess] refreshHead: reload OK (count=%lld)",
+                  MioDualDataSourceCount(facade));
+        }
     }
     SEL sel = NSSelectorFromString(@"updateTimelineHead");
     if ([facade respondsToSelector:sel]) {
@@ -618,6 +625,7 @@ static void MioDualTailStateReset(void) {
     SEL s1 = NSSelectorFromString(@"beginTimeline");
     if ([facade respondsToSelector:s1]) {
         ((id(*)(id, SEL))objc_msgSend)(facade, s1);
+        gSessionBegan = YES;
         WPLog(@"Dual", @"[Sess] beginSession: beginTimeline OK");
     } else {
         WPLog(@"Dual", @"[Sess] beginSession: beginTimeline NOT resp");
@@ -637,6 +645,7 @@ static void MioDualTailStateReset(void) {
 
 - (void)endSession {
     [self stopTailLoop];   // 关面板断供给循环（对齐面板生命周期）
+    gSessionBegan = NO;    // WCM stop 同款：began 状态清理（00 L940-1009）
     id facade = MioDualFacade();
     SEL sel = NSSelectorFromString(@"endTimeline");
     if (facade && [facade respondsToSelector:sel]) {
@@ -646,6 +655,26 @@ static void MioDualTailStateReset(void) {
         WPLog(@"Dual", @"[Sess] endSession: endTimeline SKIP (facade=%d)",
               facade ? 1 : 0);
     }
+}
+
+// 会话心跳校验（WCM timer→reloadFeed 等价，可见期轮询每跳调用）：微信会原生页
+// 生命周期会内部终结会话而 began 标志不知情（历史实证「下拉失效、切 tab 回来就好」
+// 根因）。isInSession（WCTimelineMgr，头文件 L79 实证）真值校验，掉了才重开+装窗口
+- (void)ensureSession {
+#if MIO_DUAL_BISECT_NO_DATA
+    return;
+#endif
+    if (!gSessionBegan) return;   // 面板主动关的：不可见期不重开
+    id facade = MioDualFacade();
+    if (!facade) return;
+    id mgr = ((id(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"timelineMgr"));
+    SEL iss = NSSelectorFromString(@"isInSession");
+    if (!mgr || ![mgr respondsToSelector:iss]) return;
+    if (((BOOL(*)(id, SEL))objc_msgSend)(mgr, iss)) return;
+    ((id(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"beginTimeline"));
+    ((void(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"reloadTimelineDataItems"));
+    WPLog(@"Dual", @"[Sess] ensureSession: re-begun (isInSession=NO, count=%lld)",
+          MioDualDataSourceCount(facade));
 }
 
 - (id)dataItemByID:(NSString *)objID {

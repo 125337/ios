@@ -167,8 +167,22 @@ static NSString *MediaStableDir(void) {
     __weak typeof(self) wself = self;
     [_exportQueue addOperationWithBlock:^{
         __strong typeof(wself) sself = wself;
-        [[NSFileManager defaultManager] copyItemAtPath:path toPath:dst error:nil];
-        BOOL ok = [[NSFileManager defaultManager] fileExistsAtPath:dst];
+        // 格式归一（WCM exportImage 同款：读源→JPEG 0.999→自有存储）：jpg/png 直拷
+        // 保真；heic/gif 等异格式解码重编码——WKWebView <img> 对 HEIC 支持不全，
+        // 直拷会黑图；同时顺带校正方向
+        NSString *ext = path.pathExtension.lowercaseString;
+        BOOL plain = [ext isEqualToString:@"jpg"] || [ext isEqualToString:@"jpeg"] ||
+                     [ext isEqualToString:@"png"];
+        BOOL ok = NO;
+        if (plain) {
+            ok = [[NSFileManager defaultManager] copyItemAtPath:path toPath:dst error:nil];
+        } else {
+            UIImage *img = [UIImage imageWithContentsOfFile:path];
+            if (img) {
+                NSData *jpeg = UIImageJPEGRepresentation(img, 0.999);
+                if (jpeg) ok = [jpeg writeToFile:dst atomically:YES];
+            }
+        }
         if (sself) {
             @synchronized(sself) { [sself->_copying removeObject:key]; }
         }
