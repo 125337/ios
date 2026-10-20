@@ -1,5 +1,6 @@
 #import "MioDualMediaService.h"
 #import <CommonCrypto/CommonDigest.h>
+#import <UIKit/UIKit.h>   // 副本格式归一：UIImage/UIImageJPEGRepresentation（HEIC→JPEG）
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
 #import "MioDualFeedBridge.h"
