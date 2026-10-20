@@ -56,8 +56,8 @@ static long long MioDualDataSourceCount(id facade) {
 
 #pragma mark - Store
 
-// LRU 上限（内存行数组保留最近 500 条；B7 根治：300 硬截断移除）
-static const NSUInteger kMaxRows = 500;
+// 行数无上限（用户拍板方案 A：WCM 同为 WebView 且无截断可一直刷——供给深度对齐
+// 原生，先实测流畅度，卡了再上 JS 虚拟回收）。kMaxRows 与 LRU 裁剪整体废止。
 // 快照持久化 key（新 key：旧 MioDualLastFeedJSON 为 f1/f2 key 时代产物，首次保存即清除）
 static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 
@@ -65,7 +65,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     NSMutableDictionary<NSString *, NSString *> *_avatarCache;   // wxid → 头像 URL（会话缓存）
     NSUInteger _lastRawCount;
     NSArray<NSDictionary *> *_snapshotRowsCache;   // 快照行解析缓存（stale 模式期间复用）
-    NSMutableDictionary<NSString *, NSDictionary *> *_accRows;   // itemID→row 跨刷新累积层（LRU500）
+    NSMutableDictionary<NSString *, NSDictionary *> *_accRows;   // itemID→row 跨刷新累积层（无上限）
 }
 
 + (instancetype)shared {
@@ -93,11 +93,10 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     SEL idxSel = NSSelectorFromString(@"getTimelineDataItemOfIndex:");
     if (![facade respondsToSelector:idxSel]) { _lastRawCount = 0; return @[]; }
     _lastRawCount = n;
-    // 500 上限只是渲染保护（可调）；count 返回多少按序读多少（index 0 = 最新，
-    // 原生页即按此序渲染）；排序/截断在 currentItems 统一收口
-    long long take = MIN(n, (long long)kMaxRows);
-    NSMutableArray *raw = [NSMutableArray arrayWithCapacity:(NSUInteger)take];
-    for (long long i = 0; i < take; i++) {
+    // 无上限：count 返回多少按序读多少（index 0 = 最新，原生页即按此序渲染）；
+    // 排序在 currentItems 统一收口
+    NSMutableArray *raw = [NSMutableArray arrayWithCapacity:(NSUInteger)n];
+    for (long long i = 0; i < n; i++) {
         id item = ((id(*)(id, SEL, unsigned long long))objc_msgSend)(facade, idxSel, (unsigned long long)i);
         if (item) [raw addObject:item];
     }
@@ -130,28 +129,22 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
             if (rid.length) _accRows[rid] = r;
         }
     }
-    // LRU500 累积层（B7 根治的另一半；142.log 实证）：微信原生语义 = head 把内存
+    // 累积层（B7 根治的另一半；142.log 实证）：微信原生语义 = head 把内存
     // 窗口重置回最新一页（翻页 50 条 → 下拉 → count 回 10，翻页行连库里都不留），
     // 窗口直接透传会让 diff 产生 remove=40 把 JS 已滚到的内容砍掉——下拉「没效果」
     // 的假象。按 itemID 合并：head 重置只更新 top 行，翻页行稳定保留，diff 只剩真变更。
+    // 无上限（方案 A）：不再按 500 淘汰——供给深度对齐 WCM/原生。
     for (NSDictionary *d in rows) {
         NSString *rid = d[@"id"];
         if (rid.length) _accRows[rid] = d;
     }
+
     NSMutableArray *acc = [NSMutableArray arrayWithCapacity:_accRows.count];
     [acc addObjectsFromArray:_accRows.allValues];
     [acc sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
         long long ta = [a[@"time"] longLongValue], tb = [b[@"time"] longLongValue];
         return ta < tb ? NSOrderedDescending : (ta > tb ? NSOrderedAscending : NSOrderedSame);
     }];
-    if (acc.count > kMaxRows) {
-        // 已按 time 降序，尾部即最旧——按 id 淘汰出累积 dict
-        for (NSUInteger i = kMaxRows; i < acc.count; i++) {
-            NSString *rid = acc[i][@"id"];
-            if (rid.length) [_accRows removeObjectForKey:rid];
-        }
-        [acc removeObjectsInRange:NSMakeRange(kMaxRows, acc.count - kMaxRows)];
-    }
     if (acc.count > 0) {
         _staleMode = NO;
         return acc;
