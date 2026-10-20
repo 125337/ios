@@ -255,9 +255,13 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 // 500 条 ×4 selector 的主线程 stat 风暴消除（独立方案收尾②）
 - (NSString *)mediaSrc:(id)mi itemID:(NSString *)itemID {
     if (!mi) return nil;
+    // 视频帖 mediaItem（类名含 Video）只取封面缩略图两路——pathForData/HdData
+    // 返回的是视频文件本体（几 MB mp4），注册后 handler 按 JPEG 解码必败
+    NSString *cls = NSStringFromClass([mi class]);
+    int n = ([cls rangeOfString:@"ideo"].location != NSNotFound) ? 2 : 4;
     SEL pathSels[4] = { @selector(getThumbImagePath), @selector(pathForPreview),
                         @selector(pathForData), @selector(pathForHdData) };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < n; i++) {
         if (![mi respondsToSelector:pathSels[i]]) continue;
         NSString *p = ((id(*)(id, SEL))objc_msgSend)(mi, pathSels[i]);
         if ([p isKindOfClass:[NSString class]] && p.length > 0) {

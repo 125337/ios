@@ -72,15 +72,20 @@ static id MioDualMediaItemForPath(id di, NSString *targetPath) {
         id mi = MioDualMediaItemForPath(di, pathInTable);
         if (di && mi) {
             Class dCls = objc_getClass("WCMediaDownloader");
-            // Image_startDownload 无参无 block（completionHandler 签名 dump 无法确认，
-            // 不赌签名）：启动后轮询文件出现即可
-            SEL startSel = NSSelectorFromString(@"Image_startDownload");
+            SEL startSel = NSSelectorFromString(@"startDownloadWithCompletionHandler:");
             SEL initSel = NSSelectorFromString(@"initWithDataItem:mediaItem:");
             if (dCls && [dCls instancesRespondToSelector:startSel]) {
                 id dl = ((id(*)(id, SEL, id, id))objc_msgSend)(
                     ((id(*)(id, SEL))objc_msgSend)(dCls, @selector(alloc)), initSel, di, mi);
-                if ([dl respondsToSelector:startSel]) {
-                    ((void(*)(id, SEL))objc_msgSend)(dl, startSel);
+                if (dl && [dl respondsToSelector:startSel]) {
+                    // 主入口（Image_startDownload 是状态 getter，调用即返回不触发下载
+                    // ——146 日志 12 个 downloader 全 timeout 的根因）。completionHandler
+                    // 传 0 参空 block：ABI 上被调方只读自己声明的参数寄存器，签名失真无碍；
+                    // 异步下载必须自持有（_retainedSelf 机制），否则块结束 ARC 释放即中止
+                    void (^done)(void) = ^{};
+                    ((void(*)(id, SEL, id))objc_msgSend)(dl, @selector(setCompletionHandler:), done);
+                    ((void(*)(id, SEL, id))objc_msgSend)(dl, startSel, done);
+                    ((void(*)(id, SEL, id))objc_msgSend)(dl, @selector(setRetainedSelf:), dl);
                     WPLog(@"Dual", @"[Media] downloader started key=%@ iid=%@", key, iid);
                 }
             }
@@ -278,7 +283,11 @@ static NSString * const kDualPageHTML = @(
 ".card:active { opacity:0.75; }"
 ".card.text-only .card-info { min-height:214px; }"
 ".card-media { width:100%; aspect-ratio:var(--aspect,1); position:relative; background:var(--control); overflow:hidden; }"
-".card-media img { width:100%; height:100%; display:block; object-fit:cover; }"
+".card-media::after { content:''; position:absolute; inset:0; z-index:3; pointer-events:none;"
+"background:linear-gradient(100deg,transparent 32%,rgba(255,255,255,.32) 50%,transparent 68%);"
+"transform:translateX(-100%); animation:mioshimmer 1.5s ease-in-out 3; }"
+"@keyframes mioshimmer { to { transform:translateX(100%); } }"
+".card-media img { width:100%; height:100%; display:block; object-fit:cover; position:relative; z-index:2; }"
 ".mtag { position:absolute; right:8px; bottom:8px; background:rgba(0,0,0,0.3); color:white; font-size:10px; padding:3px 6px; border-radius:4px; backdrop-filter:blur(4px); display:flex; align-items:center; gap:2px; }"
 ".card-info { padding:12px 12px 13px; display:flex; flex-direction:column; flex:1; }"
 ".title { font-size:14px; color:var(--text-main); font-weight:500; letter-spacing:-.15px; line-height:1.55; margin-bottom:13px; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; }"
@@ -295,7 +304,7 @@ static NSString * const kDualPageHTML = @(
 "#staleTag { position:fixed; left:50%; bottom:28px; transform:translateX(-50%); z-index:150; background:rgba(255,204,0,.92); color:#5a4a00; font-size:12px; padding:5px 14px; border-radius:14px; display:none; box-shadow:0 2px 12px rgba(0,0,0,.14); white-space:nowrap; }"
 "@media (prefers-color-scheme:dark) {"
 ":root { --bg-color:#000; --card-bg:#1C1C1E; --text-main:#F5F5F7; --secondary:#AEAEB2; --tertiary:#98989D; --control:#2C2C2E; --glass:rgba(20,20,23,.76); --button-glass:rgba(70,70,78,.42); --glass-edge:rgba(255,255,255,.1); --glass-highlight:rgba(255,255,255,.16); --pill:rgba(125,125,135,.38); --shadow:none; --icon-fill:#CCC; }"
-".top-bar h1 { color:#F5F5F7; } .avatar { background:#2A2A2A; } .card-media img { background:#242424; }"
+".top-bar h1 { color:#F5F5F7; } .avatar { background:#2A2A2A; } .card-media img { background:#242424; } .card-media::after { background:linear-gradient(100deg,transparent 32%,rgba(255,255,255,.12) 50%,transparent 68%); }"
 "#menu { background:rgba(28,28,30,.84); box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 12px 42px rgba(0,0,0,.31); }"
 "}"
 "</style>"
