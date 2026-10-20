@@ -2,6 +2,7 @@
 #import <WebKit/WebKit.h>
 #import "../../Core/LogManager.h"
 #import "MioDualTimelineStore.h"
+#import "MioDualMediaService.h"
 
 // JSON → 可注入 JS 字面量的字符串（U+2028/2029 是 JS 行终止符，JSONSerialization
 // 不转义，直接 eval 会语法错误；转义后的串同时可安全回灌 NSJSONSerialization 解析）
@@ -163,6 +164,13 @@ static NSTimer *gPendingPush = nil;
                 [wv evaluateJavaScript:[NSString stringWithFormat:
                     @"window.__mioFeedSnapshot(%@);", snap] completionHandler:nil];
                 WPLog(@"Dual", @"[Push] snapshot loaded (%lu rows)", (unsigned long)snapRows.count);
+                // 快照行备图（WCM exportImage 模式）：跨启动注册表持久但文件可能被
+                // 微信清理——上屏即检查缺失并触发微信管线下载，主线程
+                for (NSDictionary *r in snapRows) {
+                    NSString *img = r[@"img"];
+                    if ([img hasPrefix:@"mioimg://local/"])
+                        [[MioDualMediaService shared] ensureMediaForKey:img.lastPathComponent];
+                }
             }
         }
     }
@@ -241,6 +249,13 @@ static NSTimer *gPendingPush = nil;
     WPLog(@"Dual", @"[Push] patch upsert=%lu remove=%lu order=%d bytes=%lu",
           (unsigned long)upserts.count, (unsigned long)removedIDs.count,
           needOrder ? 1 : 0, (unsigned long)patchJSON.length);
+
+    // ---- 渲染层备图（WCM exportImage 模式）：只对本次变更行，缺文件即触发微信管线 ----
+    for (NSDictionary *r in upserts) {
+        NSString *img = r[@"img"];
+        if ([img hasPrefix:@"mioimg://local/"])
+            [[MioDualMediaService shared] ensureMediaForKey:img.lastPathComponent];
+    }
 
     _lastRowsByID = freshByID;
     _lastOrder = freshOrder;

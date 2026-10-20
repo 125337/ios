@@ -33,80 +33,9 @@ static NSData *MioDualPlaceholderPNG(void) {
     return d;
 }
 
-// 按 key 找回媒体对象：Store 按 itemID 拿 WCDataItem → getMediaWraps → 路径匹配的
-// WCMediaItem（注册路径本就来自 mi 的标准 path selector，同 mi 下载落盘即同路径）
-static SEL kPathSels[4];
-static id MioDualMediaItemForPath(id di, NSString *targetPath) {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        kPathSels[0] = @selector(getThumbImagePath);
-        kPathSels[1] = @selector(pathForPreview);
-        kPathSels[2] = @selector(pathForData);
-        kPathSels[3] = @selector(pathForHdData);
-    });
-    if (!di || targetPath.length == 0) return nil;
-    if (![di respondsToSelector:@selector(getMediaWraps)]) return nil;
-    NSArray *wraps = ((id(*)(id, SEL))objc_msgSend)(di, @selector(getMediaWraps));
-    id firstMI = nil;
-    for (id wrap in wraps) {
-        if (![wrap respondsToSelector:@selector(mediaItem)]) continue;
-        id mi = ((id(*)(id, SEL))objc_msgSend)(wrap, @selector(mediaItem));
-        if (!mi) continue;
-        for (int i = 0; i < 4; i++) {
-            if (![mi respondsToSelector:kPathSels[i]]) continue;
-            NSString *p = ((id(*)(id, SEL))objc_msgSend)(mi, kPathSels[i]);
-            if ([p isKindOfClass:[NSString class]] && [p isEqualToString:targetPath]) return mi;
-            if (!firstMI && [p isKindOfClass:[NSString class]] && p.length) firstMI = mi;
-        }
-    }
-    return firstMI;   // 路径未精确匹配：退回首个有路径的 mi（微信重算路径可能变体）
-}
-
-// ②→① 闭环：启动微信下载器 + 轮询注册路径文件出现 → 通知 JS 重载
-- (void)kickDownloadForKey:(NSString *)key {
-    if (![[MioDualMediaService shared] beginDownloadForKey:key]) return;   // 去重
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        NSString *pathInTable = [[MioDualMediaService shared] registeredPathForKey:key];
-        NSString *iid = [[MioDualMediaService shared] itemIDForKey:key];
-        id di = iid ? [[MioDualTimelineStore shared] dataItemByID:iid] : nil;
-        id mi = MioDualMediaItemForPath(di, pathInTable);
-        if (di && mi) {
-            Class dCls = objc_getClass("WCMediaDownloader");
-            SEL startSel = NSSelectorFromString(@"startDownloadWithCompletionHandler:");
-            SEL initSel = NSSelectorFromString(@"initWithDataItem:mediaItem:");
-            if (dCls && [dCls instancesRespondToSelector:startSel]) {
-                id dl = ((id(*)(id, SEL, id, id))objc_msgSend)(
-                    ((id(*)(id, SEL))objc_msgSend)(dCls, @selector(alloc)), initSel, di, mi);
-                if (dl && [dl respondsToSelector:startSel]) {
-                    // 主入口（Image_startDownload 是状态 getter，调用即返回不触发下载
-                    // ——146 日志 12 个 downloader 全 timeout 的根因）。completionHandler
-                    // 传 0 参空 block：ABI 上被调方只读自己声明的参数寄存器，签名失真无碍；
-                    // 异步下载必须自持有（_retainedSelf 机制），否则块结束 ARC 释放即中止
-                    void (^done)(void) = ^{};
-                    ((void(*)(id, SEL, id))objc_msgSend)(dl, @selector(setCompletionHandler:), done);
-                    ((void(*)(id, SEL, id))objc_msgSend)(dl, startSel, done);
-                    ((void(*)(id, SEL, id))objc_msgSend)(dl, @selector(setRetainedSelf:), dl);
-                    WPLog(@"Dual", @"[Media] downloader started key=%@ iid=%@", key, iid);
-                }
-            }
-        } else {
-            WPLog(@"Dual", @"[Media] no dataItem/mediaItem for key=%@ iid=%@", key, iid);
-        }
-        // 轮询文件出现（500ms × 24 = 12s 上限）
-        for (int i = 0; i < 24; i++) {
-            [NSThread sleepForTimeInterval:0.5];
-            if ([[MioDualMediaService shared] resolveKey:key]) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [[MioDualMediaService shared] endDownloadForKey:key];
-                    [MioDualFeedBridge mediaReadyForKey:key];
-                });
-                return;
-            }
-        }
-        WPLog(@"Dual", @"[Media] download wait timeout key=%@", key);
-        [[MioDualMediaService shared] endDownloadForKey:key];
-    });
-}
+// 渲染层备图（kickDownload/MioDualMediaItemForPath）已迁 MioDualMediaService
+// ensureMediaForKey:——WCM exportImage 同构：备图是推送上屏（渲染）的职责，
+// handler 只管读文件（WCMAssetHandler 实证同款纯读，文件不在即占位响应）
 
 - (void)webView:(WKWebView *)webView startURLSchemeTask:(id<WKURLSchemeTask>)task {
     // key 取 path 末段（?r= cache-bust 参数在 query，不进 pathComponents）
@@ -120,12 +49,11 @@ static id MioDualMediaItemForPath(id di, NSString *targetPath) {
     dispatch_once(&oncePred, ^{
         nameOK = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", @"^[A-Za-z0-9][A-Za-z0-9_]*$"];
     });
-    BOOL keyOK = (key.length && nameOK && [nameOK evaluateWithObject:key]);
-    NSString *path = keyOK ? [[MioDualMediaService shared] resolveKey:key] : nil;
+    NSString *path = (key.length && nameOK && [nameOK evaluateWithObject:key])
+        ? [[MioDualMediaService shared] resolveKey:key] : nil;
     if (!path.length) {
-        // ② 文件缺失：透明图立即响应 + 触发微信管线拉图
+        // 文件缺失：透明图立即响应（下载触发归渲染层 ensureMediaForKey:）
         [self servePlaceholder:task];
-        if (keyOK) [self kickDownloadForKey:key];
         return;
     }
     NSValue *taskRef = [NSValue valueWithNonretainedObject:task];   // 取消标记（stop 与响应都在主线程比对）

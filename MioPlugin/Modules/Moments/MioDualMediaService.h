@@ -22,6 +22,12 @@
 // 下载去重：YES=首次（调用方应触发 WCMediaDownloader），NO=已有进行中的下载
 - (BOOL)beginDownloadForKey:(NSString *)key;
 - (void)endDownloadForKey:(NSString *)key;
+// 渲染层备图（WCMFeedController exportImage 同构）：key 对应文件缺失时主线程
+// 触发 WCMediaDownloader（微信管线 CDN+解密+落盘），完成后经 Bridge mediaReadyForKey
+// 精准刷新对应 <img>。含下载去重 + 会话内重试上限 3 次 + 60s 挂起超时重置
+- (void)ensureMediaForKey:(NSString *)key;
+// 数据项 → 目标路径所属的 WCMediaItem（按四路路径 selector 匹配）
+- (id)mediaItemForDataItem:(id)di path:(NSString *)targetPath;
 // 只保留 liveKeys（快照引用的 key），修剪持久表
 - (void)pruneExcept:(NSSet<NSString *> *)liveKeys;
 @end

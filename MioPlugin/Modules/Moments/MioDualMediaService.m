@@ -1,6 +1,9 @@
 #import "MioDualMediaService.h"
 #import <CommonCrypto/CommonDigest.h>
+#import <objc/message.h>
 #import "../../Core/LogManager.h"
+#import "MioDualFeedBridge.h"
+#import "MioDualTimelineStore.h"
 
 // 持久表结构（NSUserDefaults key = MioDualMediaRegistry）：
 //   { key: @{ @"p": 本地路径, @"iid": 帖子 itemID } }
@@ -26,6 +29,8 @@ static NSString *MioDualMediaMD5(NSString *s) {
     NSMutableDictionary<NSString *, NSDictionary *> *_memTable;   // 会话层
     NSMutableDictionary<NSString *, NSDictionary *> *_diskTable;  // 持久层镜像（启动加载）
     NSMutableSet<NSString *> *_downloading;                       // 进行中的下载 key（去重）
+    NSMutableDictionary<NSString *, NSNumber *> *_attempts;       // 会话内重试计数（≤3 防 CDN 坏 URL 死循环）
+    NSMutableDictionary<NSString *, NSDate *> *_downloadStart;    // 挂起起始时间（60s 超时重置死链）
     BOOL _dirty;
 }
 
@@ -41,6 +46,8 @@ static NSString *MioDualMediaMD5(NSString *s) {
     if (self) {
         _memTable = [NSMutableDictionary dictionary];
         _downloading = [NSMutableSet set];
+        _attempts = [NSMutableDictionary dictionary];
+        _downloadStart = [NSMutableDictionary dictionary];
         id saved = [[NSUserDefaults standardUserDefaults] objectForKey:kMediaRegistryKey];
         if ([saved isKindOfClass:[NSDictionary class]]) {
             _diskTable = [saved mutableCopy];
@@ -124,6 +131,98 @@ static NSString *MioDualMediaMD5(NSString *s) {
 - (void)endDownloadForKey:(NSString *)key {
     if (key.length == 0) return;
     @synchronized(self) { [_downloading removeObject:key]; }
+}
+
+#pragma mark 渲染层备图（WCMFeedController exportImage 同构）
+
+// 数据项 → 目标路径所属的 WCMediaItem：遍历 media wraps，四路路径 selector
+// 匹配注册路径；顺带记录首个有路径的 mi 作兜底（注册时与查找时 selector
+// 返回值可能随下载状态变化）
+- (id)mediaItemForDataItem:(id)di path:(NSString *)targetPath {
+    if (!di || targetPath.length == 0) return nil;
+    if (![di respondsToSelector:@selector(getMediaWraps)]) return nil;
+    NSArray *wraps = ((id(*)(id, SEL))objc_msgSend)(di, @selector(getMediaWraps));
+    SEL pathSels[4] = { @selector(getThumbImagePath), @selector(pathForPreview),
+                        @selector(pathForData), @selector(pathForHdData) };
+    id firstMI = nil;
+    for (id wrap in wraps) {
+        if (![wrap respondsToSelector:@selector(mediaItem)]) continue;
+        id mi = ((id(*)(id, SEL))objc_msgSend)(wrap, @selector(mediaItem));
+        if (!mi) continue;
+        for (int i = 0; i < 4; i++) {
+            if (![mi respondsToSelector:pathSels[i]]) continue;
+            NSString *p = ((id(*)(id, SEL))objc_msgSend)(mi, pathSels[i]);
+            if ([p isKindOfClass:[NSString class]] && [p isEqualToString:targetPath]) return mi;
+            if (!firstMI && [p isKindOfClass:[NSString class]] && p.length) firstMI = mi;
+        }
+    }
+    return firstMI;
+}
+
+// 渲染层备图：推送上屏时对缺文件的 media 主线程触发微信管线下载。
+// 与 WCM 原生页逐层同构——cell 渲染时 exportImage（本方法）→ downloader 下载
+// → completionHandler（mediaFinished 语义）→ Bridge mediaReadyForKey 刷新 <img>。
+// 主线程调用（downloader 依赖会话上下文，146 日志后台线程调它全 timeout 的教训）
+- (void)ensureMediaForKey:(NSString *)key {
+    if (key.length == 0) return;
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self ensureMediaForKey:key]; });
+        return;
+    }
+    if ([self resolveKey:key]) return;   // 文件在，无需备
+
+    @synchronized(self) {
+        if ([_downloading containsObject:key]) {
+            // 挂起超 60s 视为死链（completionHandler 未回调），重置后允许重试
+            NSDate *start = _downloadStart[key];
+            if (start && -[start timeIntervalSinceNow] < 60.0) return;
+            [_downloading removeObject:key];
+        }
+        [_downloading addObject:key];
+        _downloadStart[key] = [NSDate date];
+        NSNumber *att = _attempts[key];
+        if (att.intValue >= 3) {
+            [_downloading removeObject:key];
+            WPLog(@"Dual", @"[Media] attempts exhausted key=%@", key);
+            return;
+        }
+        _attempts[key] = @(att.intValue + 1);
+    }
+
+    NSString *path = [self registeredPathForKey:key];
+    NSString *iid = [self itemIDForKey:key];
+    id di = iid.length ? [[MioDualTimelineStore shared] dataItemByID:iid] : nil;
+    id mi = [self mediaItemForDataItem:di path:path];
+    if (!di || !mi) {
+        [self endDownloadForKey:key];
+        WPLog(@"Dual", @"[Media] no dataItem/mediaItem key=%@ iid=%@", key, iid);
+        return;
+    }
+
+    Class dCls = objc_getClass("WCMediaDownloader");
+    SEL startSel = NSSelectorFromString(@"startDownloadWithCompletionHandler:");
+    if (!dCls || ![dCls instancesRespondToSelector:startSel]) {
+        [self endDownloadForKey:key];
+        return;
+    }
+    id dl = ((id(*)(id, SEL, id, id))objc_msgSend)(
+        ((id(*)(id, SEL))objc_msgSend)(dCls, @selector(alloc)),
+        NSSelectorFromString(@"initWithDataItem:mediaItem:"), di, mi);
+    if (!dl || ![dl respondsToSelector:startSel]) {
+        [self endDownloadForKey:key];
+        return;
+    }
+    // completionHandler 传 0 参空结构 block（ABI 被调方只读自己声明的参数寄存器，
+    // 签名 dump 失真无碍）；回调里精准刷新对应 <img>（mediaFinished 语义）
+    void (^done)(void) = ^{
+        [self endDownloadForKey:key];
+        WPLog(@"Dual", @"[Media] downloader finished key=%@", key);
+        [MioDualFeedBridge mediaReadyForKey:key];
+    };
+    ((void(*)(id, SEL, id))objc_msgSend)(dl, @selector(setCompletionHandler:), done);
+    ((void(*)(id, SEL, id))objc_msgSend)(dl, startSel, done);
+    ((void(*)(id, SEL, id))objc_msgSend)(dl, @selector(setRetainedSelf:), dl);   // 异步下载自持有
+    WPLog(@"Dual", @"[Media] downloader started key=%@ iid=%@", key, iid);
 }
 
 - (void)pruneExcept:(NSSet<NSString *> *)liveKeys {
