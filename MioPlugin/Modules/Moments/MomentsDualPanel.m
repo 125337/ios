@@ -145,6 +145,42 @@ static NSData *MioDualPlaceholderPNG(void) {
 
 @end
 
+// miosnap:// 快照 scheme 流（首屏秒开，WCM restore 同构）：JS boot 主动 fetch，
+// 数据走 WebKit 网络栈流式回来（零脚本编译）。内联 evaluateJavaScript 方案
+// 每次冷启动都要 WKWebView 把 1~2MB JSON 当 JS 编译（100-300ms 主线程）——废止
+@interface MioSnapHandler : NSObject <WKURLSchemeHandler>
+@end
+@implementation MioSnapHandler
+- (void)webView:(WKWebView *)webView startURLSchemeTask:(id<WKURLSchemeTask>)task {
+    NSString *file = [MioDualTimelineStore snapshotFilePath];
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSData *data = [NSData dataWithContentsOfFile:file];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!data.length) {
+                // 无快照文件（首次安装）：404，JS catch 后等原生推送（双保险路径）
+                NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
+                                           initWithURL:task.request.URL statusCode:404
+                                           HTTPVersion:@"HTTP/1.1" headerFields:@{}];
+                [task didReceiveResponse:resp];
+                [task didFinish];
+                return;
+            }
+            NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
+                                       initWithURL:task.request.URL statusCode:200
+                                       HTTPVersion:@"HTTP/1.1"
+                                       headerFields:@{@"Content-Type": @"application/json",
+                                                      @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length],
+                                                      @"Access-Control-Allow-Origin": @"*",   // loadHTMLString 透明源 fetch 必需
+                                                      @"Cache-Control": @"no-store"}];
+            [task didReceiveResponse:resp];
+            [task didReceiveData:data];
+            [task didFinish];
+        });
+    });
+}
+- (void)webView:(WKWebView *)webView stopURLSchemeTask:(id<WKURLSchemeTask>)task {}
+@end
+
 #pragma mark - 内置双列瀑布流页面（纯静态，无格式化注入）
 
 // 双列朋友圈页面（WCM layoutCards 同构布局引擎，反编译 ui_extract/js_02 实证移植）：
@@ -514,6 +550,11 @@ static NSString * const kDualPageHTML = @(
 "},{passive:true});"
 "window.addEventListener('resize',function(){scheduleLayout();scheduleVisible();});"
 "mioTailCheck();"
+// Boot 秒显（WCM restore 同构：页面一活 JS 主动拉）：miosnap:// scheme 流零脚本
+// 编译；原生 didFinish 推送照旧作为双保险——先到者渲染，后到者 rev 去重零成本
+"fetch('miosnap://feed.json').then(function(r){return r.ok?r.json():null;})"
+".then(function(d){if(d&&d.items&&d.items.length&&!ALL.length)window.__mioFeedSnapshot(d);})"
+".catch(function(){});"
 "})();"
 "</script>"
 "</body>"
@@ -543,6 +584,7 @@ static __weak UIViewController *g_dualPanelHost = nil;
 
     WKWebViewConfiguration *cfg = [[WKWebViewConfiguration alloc] init];
     [cfg setURLSchemeHandler:[[MioDualSchemeHandler alloc] init] forURLScheme:@"mioimg"];
+    [cfg setURLSchemeHandler:[[MioSnapHandler alloc] init] forURLScheme:@"miosnap"];
     [cfg.userContentController addScriptMessageHandler:self name:@"mio"];
 
     self.webView = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:cfg];

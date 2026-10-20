@@ -46,6 +46,7 @@ id MioDualFacade(void);
 - (void)endSession;
 - (id)dataItemByID:(NSString *)objID;           // facade getDataItemByID:
 - (NSString *)lastSnapshotJSON;                 // 上次会话快照（冷启动秒显，Bridge 灌 JS）
++ (NSString *)snapshotFilePath;                 // miosnap:// scheme 流供数文件（JS fetch 零编译秒开）
 // 保存快照并修剪媒体注册表（liveKeys = 快照引用的 mioimg key，同存同删）
 - (void)saveSnapshotJSON:(NSString *)json liveKeys:(NSSet<NSString *> *)liveKeys;
 @end

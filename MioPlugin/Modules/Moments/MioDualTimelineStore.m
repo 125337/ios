@@ -660,6 +660,19 @@ static void MioDualTailStateReset(void) {
 
 #pragma mark 快照
 
+// miosnap:// scheme 流供数文件（首屏秒开）：JS fetch 此文件零脚本编译——
+// 快照内联进 evaluateJavaScript 脚本文本时 WKWebView 要整段当 JS 编译（1~2MB
+// 100-300ms 主线程开销，每次冷启动都交）。与 NSUserDefaults 快照同源同写
++ (NSString *)snapshotFilePath {
+    static NSString *p;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        p = [[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES)
+              firstObject] stringByAppendingPathComponent:@"mio_snap.json"];
+    });
+    return p;
+}
+
 - (NSString *)lastSnapshotJSON {
     return [[NSUserDefaults standardUserDefaults] stringForKey:kSnapshotKey];
 }
@@ -673,6 +686,11 @@ static void MioDualTailStateReset(void) {
     // 快照与媒体注册表同存同删（重构方案 3.1 设计 3）：不会出现
     // "JSON 有 key、注册表没 key" 的撕裂
     [[MioDualMediaService shared] pruneExcept:liveKeys];
+    // scheme 流文件同步落一份（原子写防 fetch 读到半截；后台队列，推送路径零阻塞）
+    NSString *file = [self snapshotFilePath];
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        [json writeToFile:file atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    });
 }
 
 @end
