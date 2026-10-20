@@ -499,14 +499,23 @@ static void MioDualTailStateReset(void) {
                 gTailAtEnd = YES;
                 WPLog(@"Dual", @"[Sess] tail 到底：引擎最底条==累积层最旧行，服务器无更多（下拉重置）");
             } else {
-                // 会话回收再供：endTimeline→beginTimeline→reload 重启翻页链（等效重开
-                // 面板，冷启动实测即供 ~130）——r62+1 的「翻页链僵住」靠这个解锁
+                // 会话回收再供：endTimeline→beginTimeline 重启翻页链（等效重开面板）。
+                // endTimeline 可能清内存窗口（清了 reload 只装回首屏 ~10，引擎要重爬
+                // 全程）——实测留证据：count 保住了就跳过 reload，窗口深度不丢
                 SEL eSel = NSSelectorFromString(@"endTimeline");
                 SEL bSel = NSSelectorFromString(@"beginTimeline");
                 SEL rl = NSSelectorFromString(@"reloadTimelineDataItems");
                 if ([f respondsToSelector:eSel]) ((void(*)(id, SEL))objc_msgSend)(f, eSel);
                 if ([f respondsToSelector:bSel]) ((void(*)(id, SEL))objc_msgSend)(f, bSel);
-                if ([f respondsToSelector:rl]) ((void(*)(id, SEL))objc_msgSend)(f, rl);
+                long long kept = MioDualDataSourceCount(f);
+                if (kept < before) {
+                    if ([f respondsToSelector:rl]) ((void(*)(id, SEL))objc_msgSend)(f, rl);
+                    WPLog(@"Dual", @"[Sess] tail 会话回收：窗口被清（%lld→%lld），reload 重装",
+                          before, kept);
+                } else {
+                    WPLog(@"Dual", @"[Sess] tail 会话回收：窗口保住（%lld），跳过 reload 不重爬",
+                          kept);
+                }
                 gTailBackoffUntil = [NSDate date].timeIntervalSinceReferenceDate + 30.0;
                 WPLog(@"Dual", @"[Sess] tail 3 轮零增长 → 会话回收+退避 30s（count=%lld）", before);
             }
