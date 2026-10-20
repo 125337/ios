@@ -38,6 +38,7 @@ id MioDualFacade(void);
 - (long long)liveSourceCount;                   // 数据源内存窗口实时 count
 - (NSUInteger)accRowCount;                      // 累积层行数（跨刷新合并仓）
 - (NSString *)tailStatus;                       // tail 自驱循环状态串（OFF/ON z n/退避）
+- (NSString *)loadStatus;                       // 装载状态串（翻页中/等服务器/到底 +N行/Ns）
 // 会话（对齐 WCM beginTimeline/endTimeline；WCFacade.h:421-422/426 头文件实证）：
 // begin = beginTimeline 开会话 + reloadTimelineDataItems 本地库重载（count 立即非零，
 // 138 探针的懒加载空窗就此关闭）；end = endTimeline 关会话

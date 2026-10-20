@@ -350,6 +350,8 @@ static int gTailZero = 0;                        // 连续零增长轮数（HUD 
 static long gTailRounds = 0;                     // accepted 轮次累计（HUD 诊断）
 static long long gTailLastDelta = 0;             // 上轮供给行数（HUD 诊断）
 static BOOL gTailAtEnd = NO;                     // 真到底（引擎最底条==累积层最旧行，refreshHead 重置）
+static CFAbsoluteTime gTailSessionSince = 0;     // 本轮装载会话起点（HUD 加载计时）
+static long long gTailSessionRows = 0;           // 本轮会话累计供给行数（HUD 加载量）
 
 static void MioDualTailStateReset(void) {
     gTailLastAt = 0;
@@ -411,6 +413,8 @@ static void MioDualTailStateReset(void) {
     // exhausted 一旦误判（3×8s 全撞服务器冷却期）就锁死到下拉刷新，表现即「拉到底断供」
     if (gTailLoopOn) return;
     gTailLoopOn = YES;
+    gTailSessionSince = CFAbsoluteTimeGetCurrent();
+    gTailSessionRows = 0;
     WPLog(@"Dual", @"[Sess] tail loop ON");
     [self tailTick];
 }
@@ -435,6 +439,17 @@ static void MioDualTailStateReset(void) {
     if (!gTailLoopOn) return @"OFF";
     if (gTailAtEnd) return @"到底";
     return [NSString stringWithFormat:@"ON z%d r%ld +%lld", gTailZero, gTailRounds, gTailLastDelta];
+}
+
+// 装载状态（HUD 第三行）：正在干什么 + 本轮会话供给了多少行/跑了多少秒
+- (NSString *)loadStatus {
+    NSString *phase;
+    if (!gTailLoopOn) phase = @"待机";
+    else if (gTailAtEnd) phase = @"到底";
+    else phase = gTailInFlight ? @"翻页中" : @"等服务器";
+    if (gTailSessionSince == 0) return phase;
+    return [NSString stringWithFormat:@"%@ +%lld行/%.0fs", phase, gTailSessionRows,
+            CFAbsoluteTimeGetCurrent() - gTailSessionSince];
 }
 
 // 真到底判定（WCM noMore: 同款语义，反编译 _funcs/34e4c）：引擎窗口最底条的 itemID
@@ -528,6 +543,7 @@ static void MioDualTailStateReset(void) {
             gTailInFlight = NO;
             gTailZero = 0;
             gTailLastDelta = after - before;
+            gTailSessionRows += after - before;
             WPLog(@"Dual", @"[Sess] tail +%lld rows (count %lld->%lld)",
                   after - before, before, after);
             [MioDualFeedBridge pushNowFromSession];
@@ -544,6 +560,7 @@ static void MioDualTailStateReset(void) {
             if (after > before) {
                 gTailZero = 0;
                 gTailLastDelta = after - before;
+                gTailSessionRows += after - before;
                 WPLog(@"Dual", @"[Sess] tail(reload) +%lld rows (count %lld->%lld)",
                       after - before, before, after);
                 [MioDualFeedBridge pushNowFromSession];

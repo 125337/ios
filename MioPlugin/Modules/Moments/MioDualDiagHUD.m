@@ -15,11 +15,11 @@ static NSString *HUDDiagText(void) {
     NSTimeInterval since = [MioDualFeedBridge secondsSinceLastPush];
     NSString *push = since < 0 ? @"—" : [NSString stringWithFormat:@"%.0fs", since];
     return [NSString stringWithFormat:
-        @"窗:%lld  存:%lu  JS:%lu\n尾:%@  推:%@",
+        @"窗:%lld  存:%lu  JS:%lu\n尾:%@  推:%@\n载:%@",
         [store liveSourceCount],
         (unsigned long)[store accRowCount],
         (unsigned long)[MioDualFeedBridge jsRowCount],
-        [store tailStatus], push];
+        [store tailStatus], push, [store loadStatus]];
 }
 
 static void HUDTick(void) {
