@@ -353,7 +353,7 @@ static NSString * const kDualPageHTML = @(
 "var card=el('div','card');card.dataset.id=item.id;card.parts={};"
 "if(item.img){"
 "var media=el('div','card-media');"
-"var img=el('img');img.loading='lazy';img.decoding='async';img.dataset.miokey=item.src.split('/').pop();"
+"var img=el('img');img.loading='lazy';img.decoding='async';img.dataset.miokey=item.img.split('/').pop();"
 "img.onload=function(){if(!ratios[item.id]&&img.naturalWidth>0){ratios[item.id]=img.naturalWidth/img.naturalHeight;media.style.setProperty('--aspect',String(ratios[item.id]));calib();}};"
 "media.appendChild(img);card.appendChild(media);card.parts.media=media;card.parts.img=img;"
 "if(item.isVideo){var vt=el('div','mtag');vt.innerHTML=PLAY+' 视频';media.appendChild(vt);}"
