@@ -207,7 +207,7 @@ static NSString * const kDualPageHTML = @(
 ".tab.active { font-weight:650; background:transparent; }"
 "#grid { display:flex; gap:12px; padding:2px 14px 20px; align-items:flex-start; }"
 ".col { flex:1; min-width:0; display:flex; flex-direction:column; gap:12px; }"
-".card { background:var(--card-bg); border-radius:19px; overflow:hidden; contain:layout paint style; content-visibility:auto; contain-intrinsic-size:auto 380px; box-shadow:var(--shadow); }"
+".card { background:var(--card-bg); border-radius:19px; overflow:hidden; contain:layout paint style; box-shadow:var(--shadow); }"
 "#newTip { position:fixed; top:64px; left:50%; transform:translateX(-50%); background:var(--pill); backdrop-filter:blur(10px); padding:7px 16px; border-radius:17px; font-size:12px; color:#fff; z-index:40; display:none; }"
 ".card:active { opacity:0.75; }"
 ".card.text-only .card-info { min-height:214px; }"
