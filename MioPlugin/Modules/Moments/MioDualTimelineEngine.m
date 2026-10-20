@@ -35,13 +35,6 @@
         facade, NSSelectorFromString(@"countOfTimelineDataItem"));
 }
 
-- (id)callFacade:(NSString *)method {
-    id facade = MioDualFacade();
-    SEL s = NSSelectorFromString(method);
-    if (!facade || ![facade respondsToSelector:s]) return nil;
-    return ((id(*)(id, SEL))objc_msgSend)(facade, s);
-}
-
 - (void)callVoid:(NSString *)method {
     id facade = MioDualFacade();
     SEL s = NSSelectorFromString(method);
@@ -60,7 +53,7 @@
         return;
     }
     if (_sessionBegan && [self sourceCount] > 0) return;   // 活会话不重置窗口
-    ((id(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"beginTimeline"));
+    ((void(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"beginTimeline"));
     ((void(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"reloadTimelineDataItems"));
     _sessionBegan = YES;
     WPLog(@"Dual", @"[Engine] session begun (count=%lld)", [self sourceCount]);
@@ -97,16 +90,16 @@
     // 会作废引擎翻页状态（窗口重置→重爬几千条的根因，WCM 无此动作）
     SEL sel = NSSelectorFromString(@"updateTimelineHead");
     if ([facade respondsToSelector:sel]) {
-        // 刀3：accepted 返回值检查——被拒（会话态不收 head）可见，beginTimeline 后重试一次
-        id result = ((id(*)(id, SEL))objc_msgSend)(facade, sel);
-        BOOL accepted = [result respondsToSelector:@selector(boolValue)] ? [result boolValue] : YES;
+        // 刀3：accepted 返回值检查——被拒（会话态不收 head）可见，beginTimeline 后重试一次。
+        // 返回值是 BOOL：必须 BOOL cast 直接收 x0（127.log 教训——id 接标量再发
+        // respondsToSelector，x0=1 被当指针必 SIGSEGV；x0=0 时 nil 又把被拒判成接受）
+        BOOL accepted = ((BOOL(*)(id, SEL))objc_msgSend)(facade, sel);
         WPLog(@"Dual", @"[Engine] refreshHead: head accepted=%d (count=%lld)",
               accepted, [self sourceCount]);
         if (!accepted) {
-            ((id(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"beginTimeline"));
+            ((void(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"beginTimeline"));
             _sessionBegan = YES;
-            id retry = ((id(*)(id, SEL))objc_msgSend)(facade, sel);
-            BOOL acc2 = [retry respondsToSelector:@selector(boolValue)] ? [retry boolValue] : YES;
+            BOOL acc2 = ((BOOL(*)(id, SEL))objc_msgSend)(facade, sel);
             WPLog(@"Dual", @"[Engine] refreshHead: head retry accepted=%d", acc2);
             _headRequestCount = [self sourceCount];
         }
@@ -327,7 +320,7 @@
     SEL iss = NSSelectorFromString(@"isInSession");
     if (!mgr || ![mgr respondsToSelector:iss]) return;
     if (((BOOL(*)(id, SEL))objc_msgSend)(mgr, iss)) return;
-    ((id(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"beginTimeline"));
+    ((void(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"beginTimeline"));
     ((void(*)(id, SEL))objc_msgSend)(facade, NSSelectorFromString(@"reloadTimelineDataItems"));
     WPLog(@"Dual", @"[Engine] ensureSession: re-begun (isInSession=NO, count=%lld)", [self sourceCount]);
 }
