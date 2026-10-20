@@ -6,7 +6,7 @@
 // 用途：隔离卡顿来源——空载丝滑→问题在数据管线/DOM 数据量；空载仍卡→问题在
 // 面板基础（WebView/HUD/玻璃 header/CSS）。测完必须改回 0 再出正式包！
 #ifndef MIO_DUAL_BISECT_NO_DATA
-#define MIO_DUAL_BISECT_NO_DATA 1
+#define MIO_DUAL_BISECT_NO_DATA 0
 #endif
 // ==========================================================
 
