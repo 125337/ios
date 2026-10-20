@@ -578,6 +578,14 @@ void MioDualPanelOpen(UIViewController *host) {
         [MioDualFeedBridge pushNow];
         [panel updateBellBadge];
     }
+    // 探针定生死：冷启动（未进过原生朋友圈页）时原生数据源是否有数——
+    // n>0 = 本地库直读成立，快照持久化/注册表持久化全是死重可删；
+    // n=0 = 懒加载，保底还有价值（预热替代或快照保留）
+    long probeN = ((long(*)(id, SEL))objc_msgSend)(MioDualFacade(),
+        NSSelectorFromString(@"countOfTimelineDataItem"));
+    WPLog(@"Dual", @"[Probe] countOfTimelineDataItem=%ld approxCount=%lu stale=%d",
+          probeN, (unsigned long)[MioDualTimelineStore shared].approxCount,
+          [MioDualTimelineStore shared].staleMode ? 1 : 0);
     // 发现页直接打开时朋友圈缓存可能为空（尚未进过朋友圈），后台拉新（不阻塞显示）
     [[MioDualTimelineStore shared] refreshHead];
     WPLog(@"Dual", @"[Dual] panel opened (%@) on %@", panel.pageReady ? @"reuse" : @"cold",
