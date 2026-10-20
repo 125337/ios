@@ -413,7 +413,7 @@ static void MioDualTailStateReset(void) {
                 gTailZero = 0;
                 WPLog(@"Dual", @"[Sess] tail +%lld rows (count %lld->%lld)",
                       after - before, before, after);
-                [sself pushNowFromSession];   // reload 后库新数据此刻可见
+                [MioDualFeedBridge pushNowFromSession];   // reload 后库新数据此刻可见
             } else if (++gTailZero >= 3) {
                 gTailZero = 0;
                 gTailBackoffUntil = [NSDate date].timeIntervalSinceReferenceDate + 60.0;
