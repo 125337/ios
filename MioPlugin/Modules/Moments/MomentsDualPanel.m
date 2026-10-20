@@ -537,6 +537,21 @@ void MioDualPanelNotifyDataChanged(void) {
     } @catch (NSException *e) {
         WPLog(@"Dual", @"[Dual] read cache error: %@", e);
     }
+    // 冷启动快照（WCM arrayForKey_/showCachedFeed 同语义，探针实证 cacheCount=0 差距）：
+    // 原生同步未落地（冷启动 3s）时，先用上次会话的持久化快照顶首屏秒显，
+    // return 等事件回调推新数据替换（json≠snap 会正常重推并写盘）
+    if (cacheCount == 0) {
+        NSString *snap = [[NSUserDefaults standardUserDefaults]
+                          stringForKey:@"MioDualLastFeedJSON"];
+        if (snap.length > 0) {
+            [self.webView evaluateJavaScript:
+                [NSString stringWithFormat:@"window.__mioSetFeed(%@);", snap]
+                completionHandler:nil];
+            self.lastJson = snap;
+            WPLog(@"Dual", @"[Push] cache empty, showing last-session snapshot");
+            return;
+        }
+    }
     NSData *data = [NSJSONSerialization dataWithJSONObject:@{@"items": arr} options:0 error:nil];
     if (!data) return;
     NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
@@ -549,6 +564,10 @@ void MioDualPanelNotifyDataChanged(void) {
           [json isEqualToString:self.lastJson] ? 1 : 0);
     if ([json isEqualToString:self.lastJson]) return;   // 无变化不重渲（防滚动位置跳动）
     self.lastJson = json;
+    // 持久化快照（WCM arrayForKey_ 同语义）：有内容才存，空结果不覆盖（防坏数据顶屏）
+    if (arr.count > 0) {
+        [[NSUserDefaults standardUserDefaults] setObject:json forKey:@"MioDualLastFeedJSON"];
+    }
     [self.webView evaluateJavaScript:
         [NSString stringWithFormat:@"window.__mioSetFeed(%@);", json]
         completionHandler:nil];
