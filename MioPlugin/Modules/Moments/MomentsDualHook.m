@@ -179,7 +179,7 @@ static void MioDualInstallTimelineChangedHook(void) {
             inReload = NO;
         }
         WPLog(@"Dual", @"[Evt] onTimelineDataChanged fired");
-        MioDualPanelNotifyDataChanged();
+        [MioDualFeedBridge notifyDataChanged];   // 0.5s 尾沿防抖 → 行级 diff → 增量 patch
     }));
     WPLog(@"Dual", @"[Dual] onTimelineDataChanged hook installed (P1 event-driven)");
 }
