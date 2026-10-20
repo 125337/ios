@@ -262,6 +262,16 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     } else {
         WPLog(@"Dual", @"[Sess] refreshHead: beginTimeline NOT resp");
     }
+    // 本地库已有数据先灌进内存列表（探针 15:16 实证：与原生同链路、唯一差异是
+    // 原生页 UI 从数据源现读而内存列表只在 reload 时重灌）——新帖可能早已静默
+    // 落库，head 网络若回「无新帖」则 onChanged 参数全空、钩子 reload 被跳过，
+    // 内存列表保持旧数据 → diff 恒 no changes（切 tab 有效正因 beginSession 带 reload）
+    SEL rSel = NSSelectorFromString(@"reloadTimelineDataItems");
+    if ([facade respondsToSelector:rSel]) {
+        ((id(*)(id, SEL))objc_msgSend)(facade, rSel);
+        WPLog(@"Dual", @"[Sess] refreshHead: reloadTimelineDataItems OK (count=%lld)",
+              MioDualDataSourceCount(facade));
+    }
     SEL sel = NSSelectorFromString(@"updateTimelineHead");
     if ([facade respondsToSelector:sel]) {
         ((void(*)(id, SEL))objc_msgSend)(facade, sel);   // 探针实证：主动调用成功，等价下拉
@@ -284,6 +294,10 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
         WPLog(@"Dual", @"[Sess] loadTail: beginTimeline OK");
     } else {
         WPLog(@"Dual", @"[Sess] loadTail: beginTimeline NOT resp");
+    }
+    SEL rSel = NSSelectorFromString(@"reloadTimelineDataItems");   // 同 refreshHead：先灌库
+    if ([facade respondsToSelector:rSel]) {
+        ((id(*)(id, SEL))objc_msgSend)(facade, rSel);
     }
     SEL sel = NSSelectorFromString(@"updateTimelineTail");
     if ([facade respondsToSelector:sel]) {
