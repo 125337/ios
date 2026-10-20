@@ -21,7 +21,8 @@ id MioDualFacade(void);
 // YES = 数据源为空（同步未落库）、快照顶上（冷启动 stale 层）；NO = 数据来自原生数据源
 @property (nonatomic, assign, readonly) BOOL staleMode;
 - (void)refreshHead;                            // facade updateTimelineHead（下拉刷新）
-- (void)loadTail;                               // facade updateTimelineTail（滚底翻页）
+- (void)loadTail;                               // 进滚底区：启动 tail 自驱循环（updateTimelineTail 主动重发）
+- (void)stopTailLoop;                           // 滚离底部：停 tail 循环（关面板 endSession 亦停）
 - (void)reloadWindow;                           // facade reloadTimelineDataItems（本地库→内存窗口重载，保鲜轮询用）
 // 会话（对齐 WCM beginTimeline/endTimeline；WCFacade.h:421-422/426 头文件实证）：
 // begin = beginTimeline 开会话 + reloadTimelineDataItems 本地库重载（count 立即非零，

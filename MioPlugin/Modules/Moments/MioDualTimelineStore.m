@@ -278,15 +278,19 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 
 #pragma mark facade 翻页/查单条
 
-// tail 状态机状态（WCM requestTimelineMore 同款；文件级 static 供 refreshHead 重置）
-static NSTimeInterval gTailLastAt = 0;   // 上次 tail 时刻（8s 节流）
-static int gTailRetry = 0;               // 零增长重试计数（上限 3）
-static BOOL gTailExhausted = NO;         // 供给枯竭判定（下拉刷新重置）
+// tail 自驱循环状态（文件级 static 供 refreshHead 重置）。WCM「能一直刷」的根源 =
+// requestTimelineMore 循环主动重发、不等用户滚动：旧实现重试被动（内容不涨→无滚动
+// 事件→永不重发）+ 假枯竭锁死（3×8s 全撞服务器冷却期 → exhausted 停机直到下拉），
+// 实测即「拉到底断供」。改自驱循环：节流内主动重发，连续零增长退避 60s 后自动再试
+static BOOL gTailLoopOn = NO;                    // 循环开关（进滚底区开，滚离/关面板停）
+static NSTimeInterval gTailLastAt = 0;           // 上次发 tail 时刻（8s 节流）
+static int gTailZero = 0;                        // 连续零增长轮数
+static NSTimeInterval gTailBackoffUntil = 0;     // 退避截止时刻（连续 3 轮零增长 → 60s）
 
 static void MioDualTailStateReset(void) {
     gTailLastAt = 0;
-    gTailRetry = 0;
-    gTailExhausted = NO;
+    gTailZero = 0;
+    gTailBackoffUntil = 0;
 }
 
 - (void)refreshHead {
@@ -322,8 +326,8 @@ static void MioDualTailStateReset(void) {
     } else {
         WPLog(@"Dual", @"[Sess] refreshHead: updateTimelineHead NOT resp");
     }
-    // 下拉 = 用户主动要新内容：tail 状态机重置（head 同时重置了微信的 tail 供给状态，
-    // exhausted 判定随之一并作废）
+    // 下拉 = 用户主动要新内容：tail 循环的零增长计数/退避一并作废（head 同时重置了
+    // 微信的 tail 供给状态），循环若在跑则下一轮立即续供
     MioDualTailStateReset();
     // 统一刷新链路（与开面板同款）：reload 是同步的——本地库新数据此刻已可见，
     // 立即推送一波；head 网络回来后 onChanged→防抖→再推第二波。
@@ -332,71 +336,93 @@ static void MioDualTailStateReset(void) {
 }
 
 - (void)loadTail {
-    // tail 状态机（WCM requestTimelineMore 反编译 L99-178 同款三件套）：
-    // ① 8s 节流——tail accepted 后微信有冷却期，密集调用被拒（探针实证 tail 供到
-    //   130 停供、反复滚 count 恒 130）；② 8s 自动重试×3——用户停在某处等加载，
-    //  count 零增长说明被节流，等 8s 过冷却继续要；③ exhausted——3 轮零增长停手。
+    // 进滚底区（JS 哨兵上报，幂等）：启动自驱循环。WCM「能一直刷」= requestTimelineMore
+    // 循环主动重发、不等用户滚动——旧实现重试被动（内容不涨→无滚动事件→永不重发），
+    // exhausted 一旦误判（3×8s 全撞服务器冷却期）就锁死到下拉刷新，表现即「拉到底断供」
+    if (gTailLoopOn) return;
+    gTailLoopOn = YES;
+    WPLog(@"Dual", @"[Sess] tail loop ON");
+    [self tailTick];
+}
+
+- (void)stopTailLoop {
+    if (!gTailLoopOn) return;
+    gTailLoopOn = NO;
+    WPLog(@"Dual", @"[Sess] tail loop OFF");
+}
+
+// 循环心跳：退避/节流/无 facade 期间 2s 续链保持循环，只是不发请求
+- (void)tailTickLater:(NSTimeInterval)delay {
+    __weak typeof(self) wself = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [wself tailTick];
+    });
+}
+
+- (void)tailTick {
+    if (!gTailLoopOn) return;
     NSTimeInterval now = [NSDate date].timeIntervalSinceReferenceDate;
-    if (gTailExhausted) {
-        WPLog(@"Dual", @"[Sess] loadTail SKIP: exhausted（下拉刷新后重置）");
+    if (now < gTailBackoffUntil) {
+        WPLog(@"Dual", @"[Sess] tail tick: 退避中（%.0fs）", gTailBackoffUntil - now);
+        [self tailTickLater:2.0];
         return;
     }
     if (now - gTailLastAt < 8.0) {
-        WPLog(@"Dual", @"[Sess] loadTail SKIP: 8s 节流（%.1fs）", now - gTailLastAt);
+        [self tailTickLater:2.0];
         return;
     }
     id facade = MioDualFacade();
     if (!facade) {
-        WPLog(@"Dual", @"[Sess] loadTail SKIP: facade nil");
+        [self tailTickLater:2.0];
         return;
     }
     SEL bSel = NSSelectorFromString(@"beginTimeline");   // 翻页同样需要活会话
     if ([facade respondsToSelector:bSel]) {
-        ((id(*)(id, SEL))objc_msgSend)(facade, bSel);
+        ((void(*)(id, SEL))objc_msgSend)(facade, bSel);
     }
     SEL rSel = NSSelectorFromString(@"reloadTimelineDataItems");   // 先灌库
     if ([facade respondsToSelector:rSel]) {
-        ((id(*)(id, SEL))objc_msgSend)(facade, rSel);
+        ((void(*)(id, SEL))objc_msgSend)(facade, rSel);
     }
     long long before = MioDualDataSourceCount(facade);
     SEL sel = NSSelectorFromString(@"updateTimelineTail");
-    if ([facade respondsToSelector:sel]) {
-        ((void(*)(id, SEL))objc_msgSend)(facade, sel);   // WCMoments requestTimelineMore 同款
-        WPLog(@"Dual", @"[Sess] loadTail: updateTimelineTail sent (count=%lld, retry=%d)",
-              before, gTailRetry);
-    } else {
-        WPLog(@"Dual", @"[Sess] loadTail: updateTimelineTail NOT resp");
+    if (![facade respondsToSelector:sel]) {
+        WPLog(@"Dual", @"[Sess] tail loop STOP: updateTimelineTail NOT resp");
+        gTailLoopOn = NO;
         return;
     }
+    ((void(*)(id, SEL))objc_msgSend)(facade, sel);   // WCMoments requestTimelineMore 同款
     gTailLastAt = now;
-    [MioDualFeedBridge pushNowFromSession];   // 统一链路：翻页页脚新行立即上屏
+    WPLog(@"Dual", @"[Sess] tail tick sent (count=%lld, zero=%d)", before, gTailZero);
+    [MioDualFeedBridge pushNowFromSession];   // 页脚新行立即上屏（若有）
 
-    // ② 8s 后核对：count 涨了 → 重置重试；零增长 → 重试（上限 3），超限置 exhausted。
-    //    reload 在回调时再打一次——库新数据此刻才可见。
+    // 8s 后核对：涨了→清零计数再续；零增长→计数+1（连续 3 轮→退避 60s，跨过服务器
+    // 冷却期自动恢复，不再永久停机）；循环继续，直到滚离底部/关面板
     __weak typeof(self) wself = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         __strong typeof(wself) sself = wself;
-        if (!sself) return;
+        if (!sself || !gTailLoopOn) return;
         id f = MioDualFacade();
-        if (!f) return;
-        SEL rl = NSSelectorFromString(@"reloadTimelineDataItems");
-        if ([f respondsToSelector:rl]) ((void(*)(id, SEL))objc_msgSend)(f, rl);
-        long long after = MioDualDataSourceCount(f);
-        if (after > before) {
-            WPLog(@"Dual", @"[Sess] loadTail: +%lld rows (count %lld->%lld) 重置重试",
-                  after - before, before, after);
-            gTailRetry = 0;
-            [MioDualFeedBridge pushNowFromSession];
-        } else {
-            gTailRetry++;
-            if (gTailRetry >= 3) {
-                gTailExhausted = YES;
-                WPLog(@"Dual", @"[Sess] loadTail: exhausted（count %lld 零增长 ×3）——下拉刷新重置", before);
+        if (f) {
+            SEL rl = NSSelectorFromString(@"reloadTimelineDataItems");
+            if ([f respondsToSelector:rl]) ((void(*)(id, SEL))objc_msgSend)(f, rl);
+            long long after = MioDualDataSourceCount(f);
+            if (after > before) {
+                gTailZero = 0;
+                WPLog(@"Dual", @"[Sess] tail +%lld rows (count %lld->%lld)",
+                      after - before, before, after);
+                [sself pushNowFromSession];   // reload 后库新数据此刻可见
+            } else if (++gTailZero >= 3) {
+                gTailZero = 0;
+                gTailBackoffUntil = [NSDate date].timeIntervalSinceReferenceDate + 60.0;
+                WPLog(@"Dual", @"[Sess] tail 3 轮零增长 → 退避 60s（count=%lld）", before);
             } else {
-                WPLog(@"Dual", @"[Sess] loadTail: 零增长（count=%lld），8s 后重试 %d/3", before, gTailRetry);
+                WPLog(@"Dual", @"[Sess] tail 零增长（count=%lld, zero=%d/3）", before, gTailZero);
             }
         }
+        [sself tailTick];
     });
 }
 
@@ -441,6 +467,7 @@ static void MioDualTailStateReset(void) {
 }
 
 - (void)endSession {
+    [self stopTailLoop];   // 关面板断供给循环（对齐面板生命周期）
     id facade = MioDualFacade();
     SEL sel = NSSelectorFromString(@"endTimeline");
     if (facade && [facade respondsToSelector:sel]) {

@@ -421,15 +421,17 @@ static NSString * const kDualPageHTML = @(
 "mio({action:'refresh'});}"
 "},{passive:true});"
 "document.addEventListener('touchend',function(){setTimeout(function(){pulled=false;if(pullTip.style.top==='0px')pullTip.style.top='-30px';},2500);},false);"
-"var moreLock=false;"
+"var moreActive=false;"
+"function mioTailCheck(){"
+"var nb=window.scrollY+window.innerHeight>document.body.scrollHeight-600;"
+"if(nb&&!moreActive){moreActive=true;mio({action:'more'});}"
+"else if(!nb&&moreActive){moreActive=false;mio({action:'tailStop'});}}"
 "window.addEventListener('scroll',function(){"
 "updateSearchChrome();"
 "if(pendingFresh.length&&(window.scrollY||0)<100){pendingFresh=[];newTip.style.display='none';render();}"
-"if(moreLock)return;"
-"if(window.scrollY+window.innerHeight>document.body.scrollHeight-600){"
-"moreLock=true;mio({action:'more'});"
-"setTimeout(function(){moreLock=false;},2000);}"
+"mioTailCheck();"
 "},{passive:true});"
+"mioTailCheck();"
 "})();"
 "</script>"
 "</body>"
@@ -524,9 +526,14 @@ static __weak UIViewController *g_dualPanelHost = nil;
         return;
     }
     if ([action isEqualToString:@"more"]) {
-        // WCMoments requestTimelineMore 同款（反编译实证）：滚到底 → updateTimelineTail
-        // 翻页拉更多；新数据落库后 onTimelineDataChanged hook 自动推面板（纯事件驱动）
+        // 进滚底区（WCMoments requestTimelineMore 同款语义）：启动 tail 自驱循环——
+        // 循环主动重发 updateTimelineTail，不等滚动事件；新数据落库后推送上面板
         [[MioDualTimelineStore shared] loadTail];
+        return;
+    }
+    if ([action isEqualToString:@"tailStop"]) {
+        // 滚离底部：停 tail 循环（关面板 endSession 亦停）
+        [[MioDualTimelineStore shared] stopTailLoop];
         return;
     }
     if ([action isEqualToString:@"publish"] || [action isEqualToString:@"publishText"]) {
