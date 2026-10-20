@@ -106,7 +106,7 @@ static NSString *MioDualMediaMD5(NSString *s) {
     @synchronized(self) {
         // 只修剪持久层：内存层存会话内注册过的全部 key（含未入快照的），
         // 当前显示中的图仍可解析；持久层以快照为准防 NSUserDefaults 膨胀
-        NSArray *staleKeys = [_diskTable.keys filteredArrayUsingPredicate:
+        NSArray *staleKeys = [_diskTable.allKeys filteredArrayUsingPredicate:
             [NSPredicate predicateWithFormat:@"NOT SELF IN %@", liveKeys]];
         if (staleKeys.count == 0) return;
         for (NSString *k in staleKeys) [_diskTable removeObjectForKey:k];
