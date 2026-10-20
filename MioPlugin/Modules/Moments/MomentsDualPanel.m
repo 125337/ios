@@ -606,9 +606,11 @@ static NSString * const kDualPageHTML = @(
 
 static char kDualPanelAssocKey;
 
-// 常驻面板（WCM showCachedFeed 同语义，根治「打开慢一步」）：
-// Close 只摘视图不释放，WebView 已渲染态保留，重开秒显。发现页 VC 每次进入可能是
-// 新实例，assoc 只当「开着」标记，常驻实例放进程级强持有；内存警告时降级置 nil。
+// 常驻面板（WCM showCachedFeed 同语义，根治「打开慢一步」）：Close 只摘视图不释放，
+// WebView 已渲染态保留（JS 里的 feed 还活着），重开零重载秒显。发现页 VC 每次进入
+// 可能是新实例，assoc 只当「开着」标记，常驻实例放进程级强持有。
+// 内存警告不放弃常驻（旧策略在微信高频内存压力下等于每次都冷建重载——实证根因）：
+// 面板 WebView 是核心资产，丢弃的重建成本远超省下的内存
 static MomentsDualPanel *g_dualPanel = nil;
 static __weak UIViewController *g_dualPanelHost = nil;
 
@@ -648,14 +650,6 @@ static __weak UIViewController *g_dualPanelHost = nil;
 - (void)dealloc {
     // addScriptMessageHandler 强持 self，必须解绑才能断开 webview→controller→webview 环
     [self.webView.configuration.userContentController removeScriptMessageHandlerForName:@"mio"];
-}
-
-// 内存警告兜底：系统吃紧时放弃常驻（WCM 同款边界），下次 Open 走冷建降级路径。
-// 仅置 nil：dealloc 里 removeScriptMessageHandler 自动解绑，无泄漏
-- (void)didReceiveMemoryWarning {
-    [super didReceiveMemoryWarning];
-    g_dualPanel = nil;
-    [MioDualFeedBridge detachWebView];
 }
 
 // 铃铛角标：getSnsMessageCount（发现页头文件实证，朋友圈互动未读数；头文件声明返回 id）
@@ -820,7 +814,7 @@ void MioDualPanelClose(UIViewController *host) {
     [[MioDualTimelineStore shared] endSession];   // endTimeline 关会话（对齐 WCM；不影响原生页自身）
     [MioDualFeedBridge detachWebView];   // 不可见即停推送目标；常驻实例仍活着，重开复用
     [MioDualDiagHUD detach];   // 诊断悬浮窗随面板摘除
-    [panel.view removeFromSuperview];   // 只摘视图：g_dualPanel 强持有，WebView 已渲染态保留（秒显）
+    [panel.view removeFromSuperview];   // 只摘视图：g_dualPanel 强持有，WebView 已渲染态保留（重开零重载秒显）
     // WCMoments restoreChrome：还原发现页 chrome
     host.edgesForExtendedLayout = panel.prevEdges;
     host.extendedLayoutIncludesOpaqueBars = panel.prevOpaqueBars;
