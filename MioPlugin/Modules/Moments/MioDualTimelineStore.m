@@ -185,6 +185,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     NSString *username = WXSafeStringGet(item, @"username") ?: @"";
     NSString *content = WXSafeStringGet(item, @"contentDesc") ?: @"";
     NSMutableArray *media = [NSMutableArray array];
+    id firstMi = nil;
     BOOL isVideo = NO;
     double ratio = 0;   // 宽/高，JS 预锁卡片高度防瀑布流跳动；拿不到留 0 由 JS onload 锁高
     @try {
@@ -196,6 +197,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
                 if ([wrap respondsToSelector:@selector(mediaItem)]) {
                     mi = ((id(*)(id, SEL))objc_msgSend)(wrap, @selector(mediaItem));
                 }
+                if (mi && !firstMi) firstMi = mi;
                 NSString *src = [self mediaSrc:mi itemID:WXSafeStringGet(item, @"itemID")];
                 if (src) {
                     [media addObject:[NSMutableDictionary dictionaryWithObject:src forKey:@"src"]];
@@ -218,8 +220,20 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     } @catch (NSException *e) {
         WPLog(@"Dual", @"[Store] media read error: %@", e);
     }
+    // 分享帖（笔记/公众号链接卡）contentDesc 为空，标题/描述在 mediaItem.title/desc
+    // （WCMediaItem.h L25-26 实证）——空白卡的根因即此处字段缺失
+    if (!content.length && firstMi) {
+        content = WXSafeStringGet(firstMi, @"title") ?: @"";
+        if (!content.length) content = WXSafeStringGet(firstMi, @"desc") ?: @"";
+    }
     NSDictionary *firstMedia = media.firstObject;
     NSString *firstImg = firstMedia[@"src"] ?: @"";
+    // 分享帖封面不走本地 SNS 缓存（四件套路径拿不到）：attachThumbUrl 是普通
+    // HTTP URL（L36 实证），JS img 直接加载，不经 mioimg 本地体系
+    if (!firstImg.length && firstMi) {
+        NSString *thumb = WXSafeStringGet(firstMi, @"attachThumbUrl") ?: @"";
+        if (thumb.length) firstImg = thumb;
+    }
     return @{@"id": WXSafeStringGet(item, @"itemID") ?: @"",
              @"name": WXSafeStringGet(item, @"nickname") ?: username,
              @"avatar": [self avatarFor:username] ?: @"",
