@@ -75,8 +75,10 @@ static id MioDualMediaItemForPath(id di, NSString *targetPath) {
             // Image_startDownload 无参无 block（completionHandler 签名 dump 无法确认，
             // 不赌签名）：启动后轮询文件出现即可
             SEL startSel = NSSelectorFromString(@"Image_startDownload");
+            SEL initSel = NSSelectorFromString(@"initWithDataItem:mediaItem:");
             if (dCls && [dCls instancesRespondToSelector:startSel]) {
-                id dl = [[dCls alloc] initWithDataItem:di mediaItem:mi];
+                id dl = ((id(*)(id, SEL, id, id))objc_msgSend)(
+                    ((id(*)(id, SEL))objc_msgSend)(dCls, @selector(alloc)), initSel, di, mi);
                 if ([dl respondsToSelector:startSel]) {
                     ((void(*)(id, SEL))objc_msgSend)(dl, startSel);
                     WPLog(@"Dual", @"[Media] downloader started key=%@ iid=%@", key, iid);
