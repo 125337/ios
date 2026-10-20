@@ -22,6 +22,9 @@ id MioDualFacade(void);
 @property (nonatomic, assign, readonly) BOOL staleMode;
 - (void)refreshHead;                            // facade updateTimelineHead（下拉刷新）
 - (void)loadTail;                               // facade updateTimelineTail（滚底翻页）
+// 预热（138 探针实锤：数据源懒加载，冷启动 count=0）：发现页出现即触发 head 同步，
+// 用户点双列前数据大概率已落地。数据源已有数则跳过（幂等，不重复打网络）
+- (void)preheatIfNeeded;
 - (id)dataItemByID:(NSString *)objID;           // facade getDataItemByID:
 - (NSString *)lastSnapshotJSON;                 // 上次会话快照（冷启动秒显，Bridge 灌 JS）
 // 保存快照并修剪媒体注册表（liveKeys = 快照引用的 mioimg key，同存同删）

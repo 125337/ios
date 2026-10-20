@@ -251,6 +251,14 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     }
 }
 
+// 预热：数据源懒加载（138 探针：冷启动 count=0，10s 后数据才落地），发现页一出现
+// 就触发 head 同步把本地库灌上——用户点双列时 count 大概率已非零，快照轮不到上场。
+// count>0 跳过：入口钩子每次 viewDidAppear 都会调到，不设防就是每次进发现页都打网络
+- (void)preheatIfNeeded {
+    if (MioDualDataSourceCount(MioDualFacade()) > 0) return;
+    [self refreshHead];
+}
+
 - (id)dataItemByID:(NSString *)objID {
     if (objID.length == 0) return nil;
     id facade = MioDualFacade();

@@ -9,6 +9,7 @@
 #import "MomentsConfig.h"
 #import "MomentsDualPanel.h"
 #import "MioDualFeedBridge.h"
+#import "MioDualTimelineStore.h"
 
 // viewDidAppear 原实现（若被 WCR 等他方插件先接管则让位不挂，与 MomentsHook 同规）
 static IMP gDualOrigViewDidAppear = NULL;
@@ -123,6 +124,9 @@ static void MioDualInstallEntryHooks(void) {
             gDualCurrentHost = self;
             MioDualPanelReassertChrome(self);   // 面板开着时切 tab 回来，微信容器会重置导航栏 hidden 态
             MioDualEnsureButton(self);
+            // 预热（138 探针：数据源懒加载，冷启动 count=0）：发现页出现即拉 timeline，
+            // 用户浏览发现页的几秒里数据同步落地，点双列直接 live 数据（count>0 跳过）
+            [[MioDualTimelineStore shared] preheatIfNeeded];
         }
     }));
     WPLog(@"Dual", @"[Dual] viewDidAppear entry hook installed on FindFriendEntryViewController");

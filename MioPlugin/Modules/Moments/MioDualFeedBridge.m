@@ -17,6 +17,7 @@ static NSString *MioDualJSONString(id obj) {
 
 @implementation MioDualFeedBridge {
     __weak WKWebView *_webView;                       // 活跃面板 WebView（主线程读写）
+    BOOL _detached;                                   // 面板不可见（Close）：挡推送，但保留基线
     NSMutableDictionary<NSString *, NSDictionary *> *_lastRowsByID;  // diff 基线：id → 行 dict
     NSArray<NSString *> *_lastOrder;                  // diff 基线：行序
     BOOL _needsSnapshot;                              // attach 后尚未灌快照
@@ -38,15 +39,18 @@ static NSString *MioDualJSONString(id obj) {
         return;
     }
     MioDualFeedBridge *b = [self bridge];
-    BOOL first = (b->_webView != webView);
-    b->_webView = webView;
-    if (first) {
+    if (b->_webView != webView) {
         // 新页面（didFinishNavigation）：JS 侧是空 DOM，重灌快照、重建 diff 基线
+        b->_webView = webView;
         b->_needsSnapshot = YES;
         b->_snapshotHadRows = NO;
         b->_lastRowsByID = [NSMutableDictionary dictionary];
         b->_lastOrder = @[];
     }
+    b->_detached = NO;
+    // 同一 WebView 重挂（reuse，138 日志 13:17:42）：基线原样续上不重灌——
+    // 旧逻辑 detach 置 nil 导致重挂 first=YES 重灌旧快照，把 JS 已渲染的
+    // live 内容整个替换再 patch 回来（闪一下 + stale 角标闪现）
 }
 
 + (void)detachWebView {
@@ -54,7 +58,9 @@ static NSString *MioDualJSONString(id obj) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self detachWebView]; });
         return;
     }
-    [self bridge]->_webView = nil;
+    // 只置标志不置 nil（weak 引用，WebView 释放自动断）：
+    // 基线保留给 reuse 路径，diff 直接续上
+    [self bridge]->_detached = YES;
 }
 
 + (void)pushNow {
@@ -114,7 +120,7 @@ static NSTimer *gPendingPush = nil;
 #pragma mark 推送（主线程）
 
 - (void)pushNowLocked {
-    WKWebView *wv = _webView;
+    WKWebView *wv = _detached ? nil : _webView;   // 面板不可见：不推（基线照常更新于可见期）
     if (!wv) return;
 
     // ---- 首推：灌快照 + 以快照重建 diff 基线（patch 只含快照之后的增量） ----
