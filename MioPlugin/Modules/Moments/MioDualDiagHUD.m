@@ -8,6 +8,7 @@
 static UIView *gHud = nil;
 static UILabel *gLabel = nil;
 static BOOL gTicking = NO;
+static CGFloat gScale = 1.0;   // 显示倍率（点按循环 1.0 → 1.6 → 2.4 → 1.0）
 
 static NSString *HUDDiagText(void) {
     MioDualTimelineStore *store = [MioDualTimelineStore shared];
@@ -24,8 +25,9 @@ static NSString *HUDDiagText(void) {
 static void HUDTick(void) {
     if (!gTicking) return;
     gLabel.text = HUDDiagText();
+    gLabel.font = [UIFont monospacedDigitSystemFontOfSize:12 * gScale weight:UIFontWeightMedium];
     [gLabel sizeToFit];
-    CGFloat pad = 8;
+    CGFloat pad = 8 * gScale;
     gHud.bounds = CGRectMake(0, 0, gLabel.frame.size.width + pad * 2,
                              gLabel.frame.size.height + pad * 2);
     gLabel.center = CGPointMake(gHud.bounds.size.width / 2, gHud.bounds.size.height / 2);
@@ -44,6 +46,12 @@ static void HUDTick(void) {
     [g setTranslation:CGPointZero inView:v.superview];
 }
 
+// 点按缩放（拖动与点按手势并存不冲突）
++ (void)hudTap:(UITapGestureRecognizer *)g {
+    gScale = (gScale < 1.2) ? 1.6 : (gScale < 2.0) ? 2.4 : 1.0;
+    HUDTick();
+}
+
 + (void)attachToView:(UIView *)container {
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self attachToView:container]; });
@@ -56,11 +64,12 @@ static void HUDTick(void) {
         gHud.layer.masksToBounds = YES;
         gLabel = [[UILabel alloc] init];
         gLabel.textColor = UIColor.greenColor;
-        gLabel.font = [UIFont monospacedDigitSystemFontOfSize:10 weight:UIFontWeightMedium];
         gLabel.numberOfLines = 2;
         [gHud addSubview:gLabel];
         [gHud addGestureRecognizer:
             [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(hudPan:)]];
+        [gHud addGestureRecognizer:
+            [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(hudTap:)]];
     }
     if (gHud.superview != container) {
         [gHud removeFromSuperview];
