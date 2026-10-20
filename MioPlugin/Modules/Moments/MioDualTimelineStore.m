@@ -64,6 +64,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     NSMutableDictionary<NSString *, NSString *> *_avatarCache;   // wxid → 头像 URL（会话缓存）
     NSUInteger _lastRawCount;
     NSArray<NSDictionary *> *_snapshotRowsCache;   // 快照行解析缓存（stale 模式期间复用）
+    NSMutableDictionary<NSString *, NSDictionary *> *_accRows;   // itemID→row 跨刷新累积层（LRU500）
 }
 
 + (instancetype)shared {
@@ -75,7 +76,10 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 
 - (instancetype)init {
     self = [super init];
-    if (self) _avatarCache = [NSMutableDictionary dictionary];
+    if (self) {
+        _avatarCache = [NSMutableDictionary dictionary];
+        _accRows = [NSMutableDictionary dictionary];
+    }
     return self;
 }
 
@@ -115,14 +119,31 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     } @catch (NSException *e) {
         WPLog(@"Dual", @"[Store] map error: %@", e);
     }
-    [rows sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+    // LRU500 累积层（B7 根治的另一半；142.log 实证）：微信原生语义 = head 把内存
+    // 窗口重置回最新一页（翻页 50 条 → 下拉 → count 回 10，翻页行连库里都不留），
+    // 窗口直接透传会让 diff 产生 remove=40 把 JS 已滚到的内容砍掉——下拉「没效果」
+    // 的假象。按 itemID 合并：head 重置只更新 top 行，翻页行稳定保留，diff 只剩真变更。
+    for (NSDictionary *d in rows) {
+        NSString *rid = d[@"id"];
+        if (rid.length) _accRows[rid] = d;
+    }
+    NSMutableArray *acc = [NSMutableArray arrayWithCapacity:_accRows.count];
+    [acc addObjectsFromArray:_accRows.allValues];
+    [acc sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
         long long ta = [a[@"time"] longLongValue], tb = [b[@"time"] longLongValue];
         return ta < tb ? NSOrderedDescending : (ta > tb ? NSOrderedAscending : NSOrderedSame);
     }];
-    if (rows.count > kMaxRows) [rows removeObjectsInRange:NSMakeRange(kMaxRows, rows.count - kMaxRows)];
-    if (rows.count > 0) {
+    if (acc.count > kMaxRows) {
+        // 已按 time 降序，尾部即最旧——按 id 淘汰出累积 dict
+        for (NSUInteger i = kMaxRows; i < acc.count; i++) {
+            NSString *rid = acc[i][@"id"];
+            if (rid.length) [_accRows removeObjectForKey:rid];
+        }
+        [acc removeObjectsInRange:NSMakeRange(kMaxRows, acc.count - kMaxRows)];
+    }
+    if (acc.count > 0) {
         _staleMode = NO;
-        return rows;
+        return acc;
     }
     // 数据源空（facade 缺失/同步未落库）：上次快照顶上（stale 层）——diff 仓里始终有
     // 快照那些行，不再产生 remove，JS 侧快照稳定显示不被清空；新数据落地后
