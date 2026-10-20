@@ -172,6 +172,9 @@ static NSTimeInterval gLastPushAt = 0;
 #pragma mark 推送（主线程）
 
 - (void)pushNowLocked {
+#if MIO_DUAL_BISECT_NO_DATA
+    return;   // 二分法测试构建：全部 JS 数据推送关闭（面板零卡片）
+#endif
     WKWebView *wv = _detached ? nil : _webView;   // 面板不可见：不推（基线照常更新于可见期）
     if (!wv) {
         // 早退可观测（节流 10s：10s 轮询兜底开启时避免刷屏）

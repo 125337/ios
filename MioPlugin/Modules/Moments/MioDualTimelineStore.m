@@ -353,6 +353,9 @@ static void MioDualTailStateReset(void) {
 }
 
 - (void)refreshHead {
+#if MIO_DUAL_BISECT_NO_DATA
+    return;   // 二分法测试构建：数据管线全关
+#endif
     id facade = MioDualFacade();
     if (!facade) {
         WPLog(@"Dual", @"[Sess] refreshHead SKIP: facade nil");
@@ -395,6 +398,9 @@ static void MioDualTailStateReset(void) {
 }
 
 - (void)loadTail {
+#if MIO_DUAL_BISECT_NO_DATA
+    return;   // 二分法测试构建：数据管线全关
+#endif
     // 进滚底区（JS 哨兵上报，幂等）：启动自驱循环。WCM「能一直刷」= requestTimelineMore
     // 循环主动重发、不等用户滚动——旧实现重试被动（内容不涨→无滚动事件→永不重发），
     // exhausted 一旦误判（3×8s 全撞服务器冷却期）就锁死到下拉刷新，表现即「拉到底断供」
@@ -564,6 +570,9 @@ static void MioDualTailStateReset(void) {
 // 本地库 → 内存窗口重载（可见期保鲜轮询用）：新帖静默落库后内存窗口不自动刷新
 // （140 实证），轮询 tick 显式 reload 才可见；与 hook 路径对 facade 的 reload 同一动作
 - (void)reloadWindow {
+#if MIO_DUAL_BISECT_NO_DATA
+    return;   // 二分法测试构建：数据管线全关
+#endif
     id facade = MioDualFacade();
     if (!facade) return;
     SEL rSel = NSSelectorFromString(@"reloadTimelineDataItems");
@@ -576,6 +585,9 @@ static void MioDualTailStateReset(void) {
 // 数据源懒加载（138 探针：冷启动 count=0），reload 后 count 立即非零，
 // 发现页出现即调（入口预热），用户点双列时 live 数据已就绪
 - (void)beginSession {
+#if MIO_DUAL_BISECT_NO_DATA
+    return;   // 二分法测试构建：数据管线全关
+#endif
     id facade = MioDualFacade();
     if (!facade) {
         WPLog(@"Dual", @"[Sess] beginSession SKIP: facade nil");

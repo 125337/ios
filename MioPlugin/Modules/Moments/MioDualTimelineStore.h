@@ -1,5 +1,15 @@
 #import <Foundation/Foundation.h>
 
+// ===================== 二分法测试开关 =====================
+// 置 1：面板空载构建——数据管线全关（beginSession/refreshHead/loadTail/reloadWindow/
+// 全部 JS 推送），WebView 骨架+搜索框+HUD 照常，零卡片零网络零映射。
+// 用途：隔离卡顿来源——空载丝滑→问题在数据管线/DOM 数据量；空载仍卡→问题在
+// 面板基础（WebView/HUD/玻璃 header/CSS）。测完必须改回 0 再出正式包！
+#ifndef MIO_DUAL_BISECT_NO_DATA
+#define MIO_DUAL_BISECT_NO_DATA 1
+#endif
+// ==========================================================
+
 // WCFacade 获取（阶段0 探针实证：MMContext activeUserContext getService:WCFacade.class，
 // 8.0.60 回退 currentContext；进程级缓存）。双列模块内共享（Store 取数/消息页取数）。
 id MioDualFacade(void);
