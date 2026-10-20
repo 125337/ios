@@ -160,8 +160,26 @@ static void MioDualInstallTimelineChangedHook(void) {
     __block void (*orig)(id, SEL, id, id, id) = (void (*)(id, SEL, id, id, id))cur;
     method_setImplementation(m, imp_implementationWithBlock(^(id self, id added, id changed, id deleted) {
         orig(self, sel, added, changed, deleted);
+        // 内存数据项列表重载（140 日志根治「新帖不自动出现」）：同步落在本地库后，
+        // countOfTimelineDataItem/getTimelineDataItemOfIndex 读的内存列表不会自动
+        // 刷新（140 实证：8 次事件 rows 恒 10、恒 no changes）——必须显式 reload
+        // 把本地库灌进内存列表，diff 才能看到新数据（WCFacade.h L426 原生方法）
+        static BOOL inReload = NO;   // 防重入：reload 可能同步再触发本回调，防死循环
+        BOOL hasChange = NO;         // 空变更跳过：纯 UI 类回调不值得一次 reload
+        id parts[3] = {added, changed, deleted};   // C 数组防 nil（@[] 字面量装 nil 直接崩）
+        for (int i = 0; i < 3 && !hasChange; i++) {
+            if ([parts[i] respondsToSelector:@selector(count)] &&
+                [(NSArray *)parts[i] count] > 0) hasChange = YES;
+        }
+        if (hasChange && !inReload) {
+            inReload = YES;
+            SEL rsel = NSSelectorFromString(@"reloadTimelineDataItems");
+            if ([self respondsToSelector:rsel])
+                ((id(*)(id, SEL))objc_msgSend)(self, rsel);
+            inReload = NO;
+        }
         WPLog(@"Dual", @"[Evt] onTimelineDataChanged fired");
-        [MioDualFeedBridge notifyDataChanged];
+        MioDualPanelNotifyDataChanged();
     }));
     WPLog(@"Dual", @"[Dual] onTimelineDataChanged hook installed (P1 event-driven)");
 }
