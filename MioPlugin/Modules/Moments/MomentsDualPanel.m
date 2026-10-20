@@ -147,10 +147,12 @@ static NSData *MioDualPlaceholderPNG(void) {
 
 #pragma mark - 内置双列瀑布流页面（纯静态，无格式化注入）
 
-// 双列朋友圈页面（小红书式瀑布流，布局回归浏览器文档流）：
-// 两列 flex 容器（.col）各自流式堆叠，卡片宽 100% 自适应，新卡按两列真实高度取短列
-// 插入（colH 估高决策 + rAF 读 offsetHeight 校准）——顶部插入/删除/过滤全部由文档流
-// 自然重排，不再有手写坐标引擎（colOf 仅记录分列决策；measuredH/绝对定位已删）。
+// 双列朋友圈页面（WCM layoutCards 同构布局引擎，反编译 ui_extract/js_02 实证移植）：
+// 卡片绝对定位（.card position:absolute），每卡只 getBoundingClientRect 测一次高
+// （mh 缓存 + layoutDirty 失效），rAF 合帧 layoutCards：列宽计算 → 脏卡重测 →
+// 按 DOM 序（=新→旧）逐卡定列（colOf 稳定分配，新卡取当时短列）→ left/top 差量写
+// → grid 显式高度。插入/删卡/锁高只重排自己，绝无 flex 整列 reflow——几千行时
+// 动画/滚动不被布局阻塞（WCM 丝滑的主菜；旧 flex 文档流方案整体废止）。
 // 滚动中（scrollY>600）到达的新帖暂存 pendingFresh 并弹「N 条新动态」浮标，回顶自动插入
 // ——防滚动跳变（原生同款）；下拉刷新必然在顶部，新帖即时可见。
 // dataKey 整条 JSON 去重保留（增量 DOM 卡片复用不重建）；aspect-ratio 预锁（--aspect 变量）。
@@ -205,9 +207,9 @@ static NSString * const kDualPageHTML = @(
 ".tab { flex:1; min-height:30px; text-align:center; line-height:30px; border-radius:19px; font-size:13px; font-weight:500; color:var(--text-main); position:relative; z-index:1; white-space:nowrap; transition:color .16s ease,transform .16s ease; }"
 ".tab:active { transform:scale(0.96); }"
 ".tab.active { font-weight:650; background:transparent; }"
-"#grid { display:flex; gap:12px; padding:2px 14px 20px; align-items:flex-start; }"
-".col { flex:1; min-width:0; display:flex; flex-direction:column; gap:12px; }"
-".card { background:var(--card-bg); border-radius:19px; overflow:hidden; contain:layout paint style; box-shadow:var(--shadow); }"
+"#grid { position:relative; }"
+".skel { position:absolute; width:calc(50% - 20px); background:var(--card-bg); border-radius:19px; box-shadow:var(--shadow); }"
+".card { position:absolute; background:var(--card-bg); border-radius:19px; overflow:hidden; contain:layout paint style; box-shadow:var(--shadow); }"
 "#newTip { position:fixed; top:64px; left:50%; transform:translateX(-50%); background:var(--pill); backdrop-filter:blur(10px); padding:7px 16px; border-radius:17px; font-size:12px; color:#fff; z-index:40; display:none; }"
 ".card:active { opacity:0.75; }"
 ".card.text-only .card-info { min-height:214px; }"
@@ -268,7 +270,7 @@ static NSString * const kDualPageHTML = @(
 "<div class=\"mi\" id=\"mi-text\">发文字朋友圈</div>"
 "</div>"
 "</div>"
-"<div id=\"grid\"><div class=\"col\" id=\"c0\"></div><div class=\"col\" id=\"c1\"></div></div>"
+"<div id=\"grid\"><div class=\"skel\" style=\"left:14px;top:2px;height:280px\"></div><div class=\"skel\" style=\"left:calc(50% + 6px);top:2px;height:340px\"></div></div>"
 "<div id=\"newTip\" style=\"display:none\"></div>"
 "<div id=\"empty\" style=\"display:none\">暂无内容，下拉刷新</div>"
 "<div id=\"staleTag\">快照内容 · 更新中</div>"
@@ -279,8 +281,9 @@ static NSString * const kDualPageHTML = @(
 "var PLAY='<svg viewBox=\"0 0 24 24\" width=\"10\" height=\"10\" fill=\"currentColor\"><path d=\"M8 5v14l11-7z\"/></svg>';"
 "var AV='data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"%23ddd\"><rect width=\"100\" height=\"100\"/></svg>';"
 "var grid=document.getElementById('grid'),empty=document.getElementById('empty'),pullTip=document.getElementById('pull');"
-"var cols=[document.getElementById('c0'),document.getElementById('c1')],newTip=document.getElementById('newTip');"
-"var cards={},ratios={},colOf={},ALL=[],byId={},stale=false,q='',tab='all',colH=[0,0],pendingFresh=[];"
+"var newTip=document.getElementById('newTip');"
+"var cards={},ratios={},colOf={},ALL=[],byId={},stale=false,q='',tab='all',pendingFresh=[];"
+"var layoutW=0,layoutFrame=0;"
 "function fmtTime(t){if(!t)return '';var d=new Date(t*1000),n=new Date();"
 "var p=function(x){return x<10?'0'+x:''+x;};var hm=p(d.getHours())+':'+p(d.getMinutes());"
 "var sd=function(a,b){return a.getFullYear()==b.getFullYear()&&a.getMonth()==b.getMonth()&&a.getDate()==b.getDate();};"
@@ -290,7 +293,26 @@ static NSString * const kDualPageHTML = @(
 "return d.getFullYear()==n.getFullYear()?md:d.getFullYear()+'年'+md;}"
 "function el(t,c){var e=document.createElement(t);if(c)e.className=c;return e;}"
 "function stat(svg,n){return '<div class=\"stat\">'+svg+' '+(n||0)+'</div>';}"
-"function calib(){requestAnimationFrame(function(){colH[0]=cols[0].offsetHeight;colH[1]=cols[1].offsetHeight;});}"
+// WCM layoutCards 同构（反编译 js_02 L6-21 移植）：测量缓存 + 绝对定位 + 差量写。
+// rAF 合帧：同帧多次 scheduleLayout 只跑一次；脏卡才重测（getBoundingClientRect 强制
+// reflow 是每帧掉帧大户，几千行全量重测绝不可接受）；left/top 不变不写（免无谓 style 失效）
+"function scheduleLayout(){if(layoutFrame)return;layoutFrame=requestAnimationFrame(function(){layoutFrame=0;layoutCards();});}"
+"function layoutCards(){"
+"var w=((grid.clientWidth||window.innerWidth)-40)/2,resized=w!==layoutW;layoutW=w;"
+"var chs=grid.children,i,c;"
+"for(i=0;i<chs.length;i++){c=chs[i];if(!c.dataset.id)continue;"
+"if(resized||c.layoutDirty||!c.mh){c.style.width=w+'px';c.mh=Math.ceil(c.getBoundingClientRect().height);c.layoutDirty=false;}}"
+"var y=[2,2];"
+"for(i=0;i<chs.length;i++){c=chs[i];if(!c.dataset.id)continue;"
+"var id=c.dataset.id,col=colOf[id];"
+"if(col===undefined){col=y[0]<=y[1]?0:1;colOf[id]=col;}"
+"var lft=(14+col*(w+12))+'px',top=y[col]+'px';"
+"if(c.style.left!==lft)c.style.left=lft;"
+"if(c.style.top!==top)c.style.top=top;"
+"y[col]+=c.mh+12;}"
+"var h=(Math.max(y[0],y[1])+20)+'px';"
+"if(grid.style.height!==h)grid.style.height=h;"
+"}"
 // 转圈门控：只在视口附近转（loading=lazy 的图视口外不加载，转圈若常转=几百个并发
 // 合成动画拖垮玻璃 header 过渡）；IO 自动丢弃已移除节点，无需 unobserve
 "var sio=new IntersectionObserver(function(es){es.forEach(function(e){e.target.classList.toggle('run',e.isIntersecting);});},{rootMargin:'300px'});"
@@ -298,7 +320,7 @@ static NSString * const kDualPageHTML = @(
 "var media=el('div','card-media');"
 "var img=el('img');img.loading='lazy';img.decoding='async';img.dataset.miokey=item.img.split('/').pop();"
 "var sp=el('div','spin');sp.innerHTML='<b><i></i><i></i><i></i></b>';media.appendChild(sp);sio.observe(sp);"
-"img.onload=function(){if(sp.parentNode)sp.parentNode.removeChild(sp);if(!ratios[item.id]&&img.naturalWidth>0){ratios[item.id]=img.naturalWidth/img.naturalHeight;media.style.setProperty('--aspect',String(ratios[item.id]));calib();}};"
+"img.onload=function(){if(sp.parentNode)sp.parentNode.removeChild(sp);if(!ratios[item.id]&&img.naturalWidth>0){ratios[item.id]=img.naturalWidth/img.naturalHeight;media.style.setProperty('--aspect',String(ratios[item.id]));card.layoutDirty=true;scheduleLayout();}};"
 "img.onerror=function(){if(sp.parentNode)sp.parentNode.removeChild(sp);};"
 "media.appendChild(img);"
 "if(item.isVideo){var vt=el('div','mtag');vt.innerHTML=PLAY+' 视频';media.appendChild(vt);}"
@@ -321,7 +343,7 @@ static NSString * const kDualPageHTML = @(
 "return card;"
 "}"
 "function updateCard(card,item){"
-"var key=JSON.stringify(item);if(card.dataKey===key)return;card.dataKey=key;"
+"var key=JSON.stringify(item);if(card.dataKey===key)return;card.dataKey=key;card.layoutDirty=true;"
 "if(item.ratio>0&&!ratios[item.id])ratios[item.id]=item.ratio;"
 "if(item.img&&!card.parts.media)buildMedia(card,item);"   // 文本卡 → 补图（异步拷贝完成 diff upsert）
 "if(ratios[item.id]&&card.parts.media)card.parts.media.style.setProperty('--aspect',String(ratios[item.id]));"
@@ -335,23 +357,20 @@ static NSString * const kDualPageHTML = @(
 "card.parts.rt.innerHTML='<span style=\"font-size:12px;color:#999;\">'+fmtTime(item.time)+'</span>'+stat(HEART,item.likes)+stat(BUB,item.cmt);"
 "}"
 "function render(){"
-"var list=visibleList(),keep={},idx={};"
-"list.forEach(function(it,i){keep[it.id]=1;idx[it.id]=i;});"
-"Object.keys(cards).forEach(function(id){if(!keep[id]){cards[id].remove();delete cards[id];delete colOf[id];}});"
-"list.forEach(function(it){"
-"var c=cards[it.id];"
-"if(!c){"
-"c=createCard(it);cards[it.id]=c;"
-"var col=colOf[it.id];"
-"if(col===undefined){col=colH[0]<=colH[1]?0:1;colOf[it.id]=col;var r=it.ratio>0?it.ratio:(ratios[it.id]||1);colH[col]+=(window.innerWidth-40)/2/r+96;}"
-"var ce=cols[col],ref=null;"
-"for(var ch=ce.firstChild;ch;ch=ch.nextSibling){if(idx[ch.dataset.id]!==undefined&&idx[ch.dataset.id]>idx[it.id]){ref=ch;break;}}"
-"ce.insertBefore(c,ref);"
-"}"
-"updateCard(c,it);"
-"});"
+"var list=visibleList(),keep={},i;"
+"for(i=0;i<list.length;i++)keep[list[i].id]=1;"
+// 卸载不在可见列表的卡（含 .skel 骨架占位——无 dataset.id 必被清）
+"var chs=Array.prototype.slice.call(grid.children);"
+"for(i=0;i<chs.length;i++){var cd=chs[i];if(!keep[cd.dataset.id]){var oid=cd.dataset.id;cd.parentNode.removeChild(cd);if(oid){delete cards[oid];delete colOf[oid];}}}"
+// 顺序 reconcile（WCM 同款）：desired 序=新→旧，next 指针线性推进，O(N) 无双重循环
+"var next=grid.firstChild;"
+"for(i=0;i<list.length;i++){"
+"var it=list[i],c=cards[it.id];"
+"if(!c){c=createCard(it);cards[it.id]=c;}"
+"if(next===c)next=c.nextSibling;else grid.insertBefore(c,next||null);"
+"updateCard(c,it);}"
 "empty.style.display=list.length?'none':'block';"
-"calib();"
+"scheduleLayout();"
 "}"
 "function updateStale(){var t=document.getElementById('staleTag');if(t)t.style.display=stale?'block':'none';}"
 "window.__mioFeedSnapshot=function(p){"
