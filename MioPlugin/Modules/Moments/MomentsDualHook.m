@@ -10,6 +10,7 @@
 #import "MomentsDualPanel.h"
 #import "MioDualFeedBridge.h"
 #import "MioDualTimelineStore.h"
+#import "MioDualTimelineEngine.h"
 
 // viewDidAppear 原实现（若被 WCR 等他方插件先接管则让位不挂，与 MomentsHook 同规）
 static IMP gDualOrigViewDidAppear = NULL;
@@ -124,10 +125,10 @@ static void MioDualInstallEntryHooks(void) {
             gDualCurrentHost = self;
             MioDualPanelReassertChrome(self);   // 面板开着时切 tab 回来，微信容器会重置导航栏 hidden 态
             MioDualEnsureButton(self);
-            // 预热前移（独立方案 2.3）：发现页出现即开会话 + 本地库重载 + 网络拉新，
+            // 预热前移（独立方案 2.3）：发现页出现即开会话 + 网络拉新（状态机收口 Engine），
             // 用户浏览发现页的几秒里数据落地，点双列直接 live 数据、快照基本轮不到上场
-            [[MioDualTimelineStore shared] beginSession];
-            [[MioDualTimelineStore shared] refreshHead];
+            [[MioDualTimelineEngine shared] start];
+            [[MioDualTimelineEngine shared] refreshHead];
         }
     }));
     WPLog(@"Dual", @"[Dual] viewDidAppear entry hook installed on FindFriendEntryViewController");
@@ -176,7 +177,7 @@ static void MioDualInstallTimelineChangedHook(void) {
             inReload = NO;
         }
         WPLog(@"Dual", @"[Evt] onTimelineDataChanged fired");
-        [MioDualFeedBridge notifyDataChanged];   // 0.5s 尾沿防抖 → 行级 diff → 增量 patch
+        [[MioDualTimelineEngine shared] notifyDataChanged];   // 0.5s 尾沿防抖 → rebuild → 增量 patch
     }));
     WPLog(@"Dual", @"[Dual] onTimelineDataChanged hook installed (P1 event-driven)");
 }

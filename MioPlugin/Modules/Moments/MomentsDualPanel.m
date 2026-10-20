@@ -6,6 +6,7 @@
 #import "MioDualInboxVC.h"
 #import "MioDualMediaService.h"
 #import "MioDualTimelineStore.h"
+#import "MioDualTimelineEngine.h"
 #import "MioDualFeedBridge.h"
 #import "MioDualDiagHUD.h"
 
@@ -682,12 +683,12 @@ static __weak UIViewController *g_dualPanelHost = nil;
     if ([action isEqualToString:@"more"]) {
         // 进滚底区（WCMoments requestTimelineMore 同款语义）：启动 tail 自驱循环——
         // 循环主动重发 updateTimelineTail，不等滚动事件；新数据落库后推送上面板
-        [[MioDualTimelineStore shared] loadTail];
+        [[MioDualTimelineEngine shared] loadTail];
         return;
     }
     if ([action isEqualToString:@"tailStop"]) {
-        // 滚离底部：停 tail 循环（关面板 endSession 亦停）
-        [[MioDualTimelineStore shared] stopTailLoop];
+        // 滚离底部：停 tail 循环（关面板 stop 亦停）
+        [[MioDualTimelineEngine shared] stopLoadTail];
         return;
     }
     if ([action isEqualToString:@"publish"] || [action isEqualToString:@"publishText"]) {
@@ -748,7 +749,7 @@ static __weak UIViewController *g_dualPanelHost = nil;
     if (![action isEqualToString:@"refresh"]) return;
     // 下拉刷新 → updateTimelineHead（探针实证：主动调用成功，等价下拉）；
     // 新数据落库后 onTimelineDataChanged hook 自动推面板
-    [[MioDualTimelineStore shared] refreshHead];
+    [[MioDualTimelineEngine shared] refreshHead];
 }
 
 
@@ -792,9 +793,9 @@ void MioDualPanelOpen(UIViewController *host) {
     }
     // 开会话 + 本地库重载（beginTimeline + reloadTimelineDataItems）：count 立即非零；
     // 入口预热已 begin 过，此处再调幂等无害
-    [[MioDualTimelineStore shared] beginSession];
+    [[MioDualTimelineEngine shared] start];
     // 会话内 updateTimelineHead 才真正走网络：拉新帖（不阻塞显示）
-    [[MioDualTimelineStore shared] refreshHead];
+    [[MioDualTimelineEngine shared] refreshHead];
     WPLog(@"Dual", @"[Dual] panel opened (%@) on %@", panel.pageReady ? @"reuse" : @"cold",
           NSStringFromClass([host class]));
 }
@@ -811,7 +812,7 @@ void MioDualPanelClose(UIViewController *host) {
     MomentsDualPanel *panel = objc_getAssociatedObject(host, &kDualPanelAssocKey);
     if (![panel isKindOfClass:[MomentsDualPanel class]]) return;
     objc_setAssociatedObject(host, &kDualPanelAssocKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [[MioDualTimelineStore shared] endSession];   // endTimeline 关会话（对齐 WCM；不影响原生页自身）
+    [[MioDualTimelineEngine shared] stop];   // endTimeline 关会话+停循环+清状态（对齐 WCM；不影响原生页自身）
     [MioDualFeedBridge detachWebView];   // 不可见即停推送目标；常驻实例仍活着，重开复用
     [MioDualDiagHUD detach];   // 诊断悬浮窗随面板摘除
     [panel.view removeFromSuperview];   // 只摘视图：g_dualPanel 强持有，WebView 已渲染态保留（重开零重载秒显）

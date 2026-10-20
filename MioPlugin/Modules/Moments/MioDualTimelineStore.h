@@ -34,21 +34,13 @@ id MioDualFacade(void);
 - (NSUInteger)approxCount;
 // YES = 数据源为空（同步未落库）、快照顶上（冷启动 stale 层）；NO = 数据来自原生数据源
 @property (nonatomic, assign, readonly) BOOL staleMode;
-- (void)refreshHead;                            // facade updateTimelineHead（下拉刷新）
-- (void)ensureSession;                          // isInSession 心跳校验，掉了重开+装窗口
-- (void)loadTail;                               // 进滚底区：启动 tail 自驱循环（updateTimelineTail 主动重发）
-- (void)stopTailLoop;                           // 滚离底部：停 tail 循环（关面板 endSession 亦停）
-- (void)reloadWindow;                           // facade reloadTimelineDataItems（本地库→内存窗口重载，保鲜轮询用）
+// 累积层最旧行 id（主线程只读提交值）：Engine tailAtServerEnd 的真到底判定用
+- (NSString *)committedOldestID;
 // 诊断指标（悬浮窗 HUD 读）
 - (long long)liveSourceCount;                   // 数据源内存窗口实时 count
 - (NSUInteger)accRowCount;                      // 累积层行数（跨刷新合并仓）
-- (NSString *)tailStatus;                       // tail 自驱循环状态串（OFF/ON z n/退避）
-- (NSString *)loadStatus;                       // 装载状态串（翻页中/等服务器/到底 +N行/Ns）
-// 会话（对齐 WCM beginTimeline/endTimeline；WCFacade.h:421-422/426 头文件实证）：
-// begin = beginTimeline 开会话 + reloadTimelineDataItems 本地库重载（count 立即非零，
-// 138 探针的懒加载空窗就此关闭）；end = endTimeline 关会话
-- (void)beginSession;
-- (void)endSession;
+// 注：会话/翻页状态机（beginSession/endSession/refreshHead/loadTail/reloadWindow/
+// tailStatus/loadStatus）已整体收口 MioDualTimelineEngine——外部只经 Engine 幂等方法
 - (id)dataItemByID:(NSString *)objID;           // facade getDataItemByID:
 - (NSString *)lastSnapshotJSON;                 // 上次会话快照（冷启动秒显，Bridge 灌 JS）
 + (NSString *)snapshotFilePath;                 // miosnap:// scheme 流供数文件（JS fetch 零编译秒开）

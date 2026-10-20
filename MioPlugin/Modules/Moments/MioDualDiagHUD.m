@@ -1,5 +1,6 @@
 #import "MioDualDiagHUD.h"
 #import "MioDualTimelineStore.h"
+#import "MioDualTimelineEngine.h"
 #import "MioDualFeedBridge.h"
 
 // 数据源诊断悬浮窗：native UIKit overlay（盖在面板 WebView 之上），只读各层指标。
@@ -12,6 +13,7 @@ static CGFloat gScale = 1.0;   // 显示倍率（点按循环 1.0 → 1.6 → 2.
 
 static NSString *HUDDiagText(void) {
     MioDualTimelineStore *store = [MioDualTimelineStore shared];
+    MioDualTimelineEngine *engine = [MioDualTimelineEngine shared];
     NSTimeInterval since = [MioDualFeedBridge secondsSinceLastPush];
     NSString *push = since < 0 ? @"—" : [NSString stringWithFormat:@"%.0fs", since];
     return [NSString stringWithFormat:
@@ -19,7 +21,7 @@ static NSString *HUDDiagText(void) {
         [store liveSourceCount],
         (unsigned long)[store accRowCount],
         (unsigned long)[MioDualFeedBridge jsRowCount],
-        [store tailStatus], push, [store loadStatus]];
+        [engine tailStatus], push, [engine loadStatus]];
 }
 
 static void HUDTick(void) {

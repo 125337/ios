@@ -2,6 +2,7 @@
 #import <WebKit/WebKit.h>
 #import "../../Core/LogManager.h"
 #import "MioDualTimelineStore.h"
+#import "MioDualTimelineEngine.h"
 #import "MioDualMediaService.h"
 
 // JSON → 可注入 JS 字面量的字符串（U+2028/2029 是 JS 行终止符，JSONSerialization
@@ -107,32 +108,19 @@ static NSString *MioDualJSONString(id obj) {
                  completionHandler:nil];
 }
 
-#pragma mark 尾沿防抖（B10 根治：0.5s 窗口内事件全合并，推送时重读最新状态永不丢尾）
+#pragma mark 尾沿防抖（已收口 Engine；此处保留转发器——MediaService 补图唤醒等调用方零改动）
 
-// dispatch_after 版防抖（原 NSTimer 方案废止：147 日志实证一次性 timer 在长会话中
-// 整体失联——timer 从 runloop 移除但 gPendingPush 引用未清则后续事件全被吞，且
-// runloop mode 语义不透明。dispatch_after 与主队列同一调度器，无残留状态可腐烂）
-static BOOL gPushQueued = NO;
-
+// 0.5s 尾沿防抖与 rebuild 链本体在 MioDualTimelineEngine.notifyDataChanged
+// （dispatch_after 版，原 NSTimer 方案废止：147 日志实证一次性 timer 长会话失联）
 + (void)notifyDataChanged {
-    if (![NSThread isMainThread]) {
-        dispatch_async(dispatch_get_main_queue(), ^{ [self notifyDataChanged]; });
-        return;
-    }
-    if (gPushQueued) return;   // 已有待推：本次事件被即将到达的推送覆盖（fire 时重读最新）
-    gPushQueued = YES;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        gPushQueued = NO;   // 先清再推：推送过程中若触发新变更可再排程
-        [[MioDualTimelineStore shared] rebuildItemsAsync];   // 刀1：重活后台，commit 后经闸门推送
-    });
+    [[MioDualTimelineEngine shared] notifyDataChanged];
 }
 
 #pragma mark 可见期保鲜轮询（对齐 WCM：实时性不依赖事件，面板可见即兜底）
 
-// dispatch_after 自续链（废止 NSTimer：一次性 timer 失联教训同上）。tick = 窗口重载 +
-// 防抖推送——新帖静默落库后内存窗口不自动刷新（140 实证），显式 reload 才可见；
-// diff 无变更零字节空转，成本 = 本地库灌一页窗口 + 内存比对
+// dispatch_after 自续链（废止 NSTimer：一次性 timer 失联教训同上）。tick = 会话心跳 +
+// 窗口重载 + 防抖推送（三连均收口 Engine）——新帖静默落库后内存窗口不自动刷新
+// （140 实证），显式 reload 才可见；diff 无变更零字节空转
 static BOOL gPolling = NO;
 
 + (void)startVisiblePolling {
@@ -156,9 +144,9 @@ static BOOL gPolling = NO;
 
 + (void)pollTick {
     if (!gPolling) return;
-    [[MioDualTimelineStore shared] ensureSession];   // 会话心跳：内部被终结则重开（WCM timer 同位）
-    [[MioDualTimelineStore shared] reloadWindow];
-    [self notifyDataChanged];   // 0.5s 尾沿防抖，窗口内变更全合并
+    [[MioDualTimelineEngine shared] ensureSession];   // 会话心跳：内部被终结则重开（WCM timer 同位）
+    [[MioDualTimelineEngine shared] reloadWindow];    // 本地库→内存窗口（140：窗口不自动刷新）
+    [self notifyDataChanged];   // 转发 Engine：0.5s 尾沿防抖，窗口内变更全合并
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [self pollTick];
