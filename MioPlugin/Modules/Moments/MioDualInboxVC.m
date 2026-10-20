@@ -173,10 +173,12 @@
 }
 
 // 卡间距 15pt（WCM 真机实测）：header/footer 各 7.5。
-// live 快照实证：系统默认空 header/footer 合计 35pt（相邻 cellY 差 122 = 87+35），
-// WCM 老 SDK 默认只有 ~15pt——必须显式压，否则每卡间多 20pt。
+// live 快照实证：只实现 heightFor 间距仍是 122（87+35）——InsetGrouped 怪癖：
+// 自定义高度必须配 viewForHeader/Footer 返回空 view 才生效，否则系统用默认 ~17.5pt。
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section { return 7.5; }
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section  { return 7.5; }
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section   { return [UIView new]; }
+- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section   { return [UIView new]; }
 
 // WCM changeCategory 对齐（宽松版）：赞 tab=kind like 且我帖；评论 tab=非赞；全部=全部
 - (void)applyFilter {
