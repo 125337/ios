@@ -157,6 +157,18 @@ static BOOL gPolling = NO;
     });
 }
 
+#pragma mark 诊断指标（悬浮窗 HUD 读，主线程）
+
+static NSTimeInterval gLastPushAt = 0;
+
++ (NSUInteger)jsRowCount {
+    return [self bridge]->_lastRowsByID.count;
+}
+
++ (NSTimeInterval)secondsSinceLastPush {
+    return gLastPushAt ? [NSDate date].timeIntervalSinceReferenceDate - gLastPushAt : -1;
+}
+
 #pragma mark 推送（主线程）
 
 - (void)pushNowLocked {
@@ -171,6 +183,7 @@ static BOOL gPolling = NO;
         }
         return;
     }
+    gLastPushAt = [NSDate date].timeIntervalSinceReferenceDate;   // 诊断：最近推送时刻
 
     // ---- 首推：灌快照 + 以快照重建 diff 基线（patch 只含快照之后的增量） ----
     if (_needsSnapshot) {

@@ -351,6 +351,24 @@ static void MioDualTailStateReset(void) {
     WPLog(@"Dual", @"[Sess] tail loop OFF");
 }
 
+#pragma mark 诊断指标（悬浮窗 HUD 读，主线程）
+
+- (long long)liveSourceCount {
+    return MioDualDataSourceCount(MioDualFacade());
+}
+
+- (NSUInteger)accRowCount {
+    return _accRows.count;
+}
+
+- (NSString *)tailStatus {
+    if (!gTailLoopOn) return @"OFF";
+    NSTimeInterval now = [NSDate date].timeIntervalSinceReferenceDate;
+    if (now < gTailBackoffUntil)
+        return [NSString stringWithFormat:@"退避%.0fs", gTailBackoffUntil - now];
+    return [NSString stringWithFormat:@"ON z%d", gTailZero];
+}
+
 // 循环心跳：退避/节流/无 facade 期间 2s 续链保持循环，只是不发请求
 - (void)tailTickLater:(NSTimeInterval)delay {
     __weak typeof(self) wself = self;

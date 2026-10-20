@@ -7,6 +7,7 @@
 #import "MioDualMediaService.h"
 #import "MioDualTimelineStore.h"
 #import "MioDualFeedBridge.h"
+#import "MioDualDiagHUD.h"
 
 #pragma mark - 图片服务（WKURLSchemeTask 读本地媒体文件，WCMAssetHandler 同职责）
 
@@ -617,6 +618,7 @@ void MioDualPanelOpen(UIViewController *host) {
     panel.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [host.view addSubview:panel.view];
     [host.view bringSubviewToFront:panel.view];
+    [MioDualDiagHUD attachToView:host.view];   // 诊断悬浮窗（数据源深度/tail 状态）
     // 复用时 pageReady 已 YES：挂推送桥立即推上屏（无变化时 Bridge 内 no-op，零等待首屏）；
     // 首开 pageReady NO：此处不推，didFinishNavigation 后自动首推
     if (panel.pageReady) {
@@ -647,6 +649,7 @@ void MioDualPanelClose(UIViewController *host) {
     objc_setAssociatedObject(host, &kDualPanelAssocKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [[MioDualTimelineStore shared] endSession];   // endTimeline 关会话（对齐 WCM；不影响原生页自身）
     [MioDualFeedBridge detachWebView];   // 不可见即停推送目标；常驻实例仍活着，重开复用
+    [MioDualDiagHUD detach];   // 诊断悬浮窗随面板摘除
     [panel.view removeFromSuperview];   // 只摘视图：g_dualPanel 强持有，WebView 已渲染态保留（秒显）
     // WCMoments restoreChrome：还原发现页 chrome
     host.edgesForExtendedLayout = panel.prevEdges;

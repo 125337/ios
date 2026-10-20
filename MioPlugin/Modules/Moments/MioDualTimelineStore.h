@@ -24,6 +24,10 @@ id MioDualFacade(void);
 - (void)loadTail;                               // 进滚底区：启动 tail 自驱循环（updateTimelineTail 主动重发）
 - (void)stopTailLoop;                           // 滚离底部：停 tail 循环（关面板 endSession 亦停）
 - (void)reloadWindow;                           // facade reloadTimelineDataItems（本地库→内存窗口重载，保鲜轮询用）
+// 诊断指标（悬浮窗 HUD 读）
+- (long long)liveSourceCount;                   // 数据源内存窗口实时 count
+- (NSUInteger)accRowCount;                      // 累积层行数（跨刷新合并仓）
+- (NSString *)tailStatus;                       // tail 自驱循环状态串（OFF/ON z n/退避）
 // 会话（对齐 WCM beginTimeline/endTimeline；WCFacade.h:421-422/426 头文件实证）：
 // begin = beginTimeline 开会话 + reloadTimelineDataItems 本地库重载（count 立即非零，
 // 138 探针的懒加载空窗就此关闭）；end = endTimeline 关会话

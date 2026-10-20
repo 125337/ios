@@ -27,4 +27,7 @@
 // 无变更 diff 零字节空转——对齐 WCM「实时性不依赖事件」的轮询保鲜语义
 + (void)startVisiblePolling;
 + (void)stopVisiblePolling;
+// 诊断指标（悬浮窗 HUD 读，主线程）
++ (NSUInteger)jsRowCount;                   // JS 已渲染基线行数（diff 基线 = 上屏行数）
++ (NSTimeInterval)secondsSinceLastPush;     // 距上次推送循环秒数（从未推送返回 -1）
 @end
