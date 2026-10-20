@@ -687,7 +687,7 @@ static void MioDualTailStateReset(void) {
     // "JSON 有 key、注册表没 key" 的撕裂
     [[MioDualMediaService shared] pruneExcept:liveKeys];
     // scheme 流文件同步落一份（原子写防 fetch 读到半截；后台队列，推送路径零阻塞）
-    NSString *file = [self snapshotFilePath];
+    NSString *file = [MioDualTimelineStore snapshotFilePath];
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
         [json writeToFile:file atomically:YES encoding:NSUTF8StringEncoding error:nil];
     });
