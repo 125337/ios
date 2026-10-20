@@ -8,7 +8,7 @@
 //   - 尾沿防抖：事件 → 0.5s 后推一次，推送时重读最新状态（窗口内变更全合并，永不丢尾）
 //   - 快照协议：attach 后首推 __mioFeedSnapshot 灌上次会话快照（JS 标记 stale），
 //     同时以快照做 diff 基线——首推 patch 只含快照之后的新增/变更
-//   - 让位兜底：onTimelineDataChanged 被他方插件占有时 10s 慢轮询保底
+//   - 可见期轮询：面板可见即 5s 保鲜轮询（实时性不依赖事件，hook 让位/静默同被覆盖）
 // 主线程模型：全部状态仅在主线程读写。
 @interface MioDualFeedBridge : NSObject
 // 面板 WebView 页面就绪/复开时挂上（didFinishNavigation / Open 复用路径）
@@ -23,6 +23,8 @@
 + (void)mediaReadyForKey:(NSString *)key;   // 缩略图落盘后通知 JS 重载对应 img（零破图闭环）
 // hook 层入口：微信 timeline 变更（0.5s 尾沿防抖）
 + (void)notifyDataChanged;
-// onTimelineDataChanged 让位他方插件时开启 10s 慢轮询（实时性降级但不断供）
-+ (void)enablePollingFallback;
+// 可见期保鲜轮询（attachWebView 开 / detachWebView 停）：5s tick = 窗口重载 + 防抖推送，
+// 无变更 diff 零字节空转——对齐 WCM「实时性不依赖事件」的轮询保鲜语义
++ (void)startVisiblePolling;
++ (void)stopVisiblePolling;
 @end

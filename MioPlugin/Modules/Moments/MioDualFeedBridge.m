@@ -49,6 +49,7 @@ static NSString *MioDualJSONString(id obj) {
         b->_lastOrder = @[];
     }
     b->_detached = NO;
+    [self startVisiblePolling];
     // 同一 WebView 重挂（reuse，138 日志 13:17:42）：基线原样续上不重灌——
     // 旧逻辑 detach 置 nil 导致重挂 first=YES 重灌旧快照，把 JS 已渲染的
     // live 内容整个替换再 patch 回来（闪一下 + stale 角标闪现）
@@ -62,6 +63,7 @@ static NSString *MioDualJSONString(id obj) {
     // 只置标志不置 nil（weak 引用，WebView 释放自动断）：
     // 基线保留给 reuse 路径，diff 直接续上
     [self bridge]->_detached = YES;
+    [self stopVisiblePolling];
 }
 
 + (void)pushNow {
@@ -119,27 +121,40 @@ static BOOL gPushQueued = NO;
     });
 }
 
-#pragma mark 让位兜底（B11：他方插件占有变更回调时 10s 慢轮询保底）
+#pragma mark 可见期保鲜轮询（对齐 WCM：实时性不依赖事件，面板可见即兜底）
 
-+ (void)enablePollingFallback {
-    static NSTimer *poll = nil;
-    static BOOL logged = NO;
+// dispatch_after 自续链（废止 NSTimer：一次性 timer 失联教训同上）。tick = 窗口重载 +
+// 防抖推送——新帖静默落库后内存窗口不自动刷新（140 实证），显式 reload 才可见；
+// diff 无变更零字节空转，成本 = 本地库灌一页窗口 + 内存比对
+static BOOL gPolling = NO;
+
++ (void)startVisiblePolling {
     if (![NSThread isMainThread]) {
-        dispatch_async(dispatch_get_main_queue(), ^{ [self enablePollingFallback]; });
+        dispatch_async(dispatch_get_main_queue(), ^{ [self startVisiblePolling]; });
         return;
     }
-    if (poll) return;
-    poll = [NSTimer timerWithTimeInterval:10.0 target:self selector:@selector(pollTick)
-                                 userInfo:nil repeats:YES];
-    [[NSRunLoop mainRunLoop] addTimer:poll forMode:NSRunLoopCommonModes];
-    if (!logged) {
-        logged = YES;
-        WPLog(@"Dual", @"[Push] polling fallback enabled (10s, onTimelineDataChanged yielded)");
+    if (gPolling) return;
+    gPolling = YES;
+    WPLog(@"Dual", @"[Push] visible polling on (5s)");
+    [self pollTick];
+}
+
++ (void)stopVisiblePolling {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self stopVisiblePolling]; });
+        return;
     }
+    gPolling = NO;
 }
 
 + (void)pollTick {
-    [self notifyDataChanged];
+    if (!gPolling) return;
+    [[MioDualTimelineStore shared] reloadWindow];
+    [self notifyDataChanged];   // 0.5s 尾沿防抖，窗口内变更全合并
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self pollTick];
+    });
 }
 
 #pragma mark 推送（主线程）

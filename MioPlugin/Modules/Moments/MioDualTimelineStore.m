@@ -400,6 +400,17 @@ static void MioDualTailStateReset(void) {
     });
 }
 
+// 本地库 → 内存窗口重载（可见期保鲜轮询用）：新帖静默落库后内存窗口不自动刷新
+// （140 实证），轮询 tick 显式 reload 才可见；与 hook 路径对 facade 的 reload 同一动作
+- (void)reloadWindow {
+    id facade = MioDualFacade();
+    if (!facade) return;
+    SEL rSel = NSSelectorFromString(@"reloadTimelineDataItems");
+    if ([facade respondsToSelector:rSel]) {
+        ((void(*)(id, SEL))objc_msgSend)(facade, rSel);
+    }
+}
+
 // 会话：begin = beginTimeline 开会话 + reloadTimelineDataItems 本地库重载——
 // 数据源懒加载（138 探针：冷启动 count=0），reload 后 count 立即非零，
 // 发现页出现即调（入口预热），用户点双列时 live 数据已就绪

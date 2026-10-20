@@ -10,18 +10,19 @@ id MioDualFacade(void);
 //     背后是本地库（m_timelineWithLocalDatas / m_database），冷启动即有全量、
 //     不依赖原生页是否被访问过；数据源空时快照顶上（staleMode）
 //   - 统一字段映射收口：大小写变体/嵌套全在这层 @try 消化，上游永远拿干净 dict
-//   - LRU500：createTime 降序，保留最近 500 条（渲染保护，非硬截断）
+//   - 行数无上限（方案 A）：createTime 降序，供给深度对齐原生/WCM
 //   - 快照：与媒体注册表同存同删（save 时 prune），冷启动秒显
 @interface MioDualTimelineStore : NSObject
 + (instancetype)shared;
-// 统一字段映射后的行数组（干净 dict，createTime 降序，LRU 500）
+// 统一字段映射后的行数组（干净 dict，createTime 降序，无上限）
 - (NSArray<NSDictionary *> *)currentItems;
-// 原始条数（去重合并后、LRU 截断前；翻页 exhausted 判定用）
+// 原始条数（数据源 count；翻页 exhausted 判定用）
 - (NSUInteger)approxCount;
 // YES = 数据源为空（同步未落库）、快照顶上（冷启动 stale 层）；NO = 数据来自原生数据源
 @property (nonatomic, assign, readonly) BOOL staleMode;
 - (void)refreshHead;                            // facade updateTimelineHead（下拉刷新）
 - (void)loadTail;                               // facade updateTimelineTail（滚底翻页）
+- (void)reloadWindow;                           // facade reloadTimelineDataItems（本地库→内存窗口重载，保鲜轮询用）
 // 会话（对齐 WCM beginTimeline/endTimeline；WCFacade.h:421-422/426 头文件实证）：
 // begin = beginTimeline 开会话 + reloadTimelineDataItems 本地库重载（count 立即非零，
 // 138 探针的懒加载空窗就此关闭）；end = endTimeline 关会话
