@@ -278,14 +278,17 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 
 #pragma mark facade 翻页/查单条
 
-// tail 自驱循环状态（文件级 static 供 refreshHead 重置）。WCM「能一直刷」的根源 =
-// requestTimelineMore 循环主动重发、不等用户滚动：旧实现重试被动（内容不涨→无滚动
-// 事件→永不重发）+ 假枯竭锁死（3×8s 全撞服务器冷却期 → exhausted 停机直到下拉），
-// 实测即「拉到底断供」。改自驱循环：节流内主动重发，连续零增长退避 60s 后自动再试
+// tail 自驱循环状态（文件级 static 供 refreshHead 重置）。WCM「能一直刷」= 轮询驱动
+// + loadingTail 串行化：数据一到立刻下一轮，无固定节拍（requestTimelineMore 反编译）。
+// 旧版固定 8s 一发导致深翻页「一两个一涨」极慢；旧旧版的被动重试+永久 exhausted 则
+// 「拉到底断供」。现行：inFlight 串行 + accepted 后 1s 核对链，涨即 0.5s 续轮
 static BOOL gTailLoopOn = NO;                    // 循环开关（进滚底区开，滚离/关面板停）
-static NSTimeInterval gTailLastAt = 0;           // 上次发 tail 时刻（8s 节流）
-static int gTailZero = 0;                        // 连续零增长轮数
-static NSTimeInterval gTailBackoffUntil = 0;     // 退避截止时刻（连续 3 轮零增长 → 60s）
+static BOOL gTailInFlight = NO;                  // 一轮网络翻页进行中（串行化，WCM loadingTail 同款）
+static NSTimeInterval gTailLastAt = 0;           // 上次发 tail 时刻（1s 最小间距防密集）
+static int gTailZero = 0;                        // 连续零增长轮数（3 轮 → 退避 60s）
+static long gTailRounds = 0;                     // accepted 轮次累计（HUD 诊断）
+static long long gTailLastDelta = 0;             // 上轮供给行数（HUD 诊断）
+static NSTimeInterval gTailBackoffUntil = 0;     // 退避截止时刻
 
 static void MioDualTailStateReset(void) {
     gTailLastAt = 0;
@@ -366,7 +369,7 @@ static void MioDualTailStateReset(void) {
     NSTimeInterval now = [NSDate date].timeIntervalSinceReferenceDate;
     if (now < gTailBackoffUntil)
         return [NSString stringWithFormat:@"退避%.0fs", gTailBackoffUntil - now];
-    return [NSString stringWithFormat:@"ON z%d", gTailZero];
+    return [NSString stringWithFormat:@"ON z%d r%ld +%lld", gTailZero, gTailRounds, gTailLastDelta];
 }
 
 // 循环心跳：退避/节流/无 facade 期间 2s 续链保持循环，只是不发请求
@@ -386,8 +389,12 @@ static void MioDualTailStateReset(void) {
         [self tailTickLater:2.0];
         return;
     }
-    if (now - gTailLastAt < 8.0) {
-        [self tailTickLater:2.0];
+    if (gTailInFlight) {
+        [self tailTickLater:1.0];
+        return;
+    }
+    if (now - gTailLastAt < 1.0) {
+        [self tailTickLater:0.5];
         return;
     }
     id facade = MioDualFacade();
@@ -397,8 +404,7 @@ static void MioDualTailStateReset(void) {
     }
     // WCM requestTimelineMore 同款（反编译 L519-937 实证）：翻页**不动会话**——
     // 它全程只调 updateTimelineTail，无 beginTimeline/reload。beginTimeline 是会话
-    // 重置，会打断引擎深度翻页状态机（updateNextPage 异步网络中被重置作废），
-    // 实测翻到 ~1195 条后引擎供不动即此嫌疑
+    // 重置，会打断引擎深度翻页状态机（updateNextPage 异步网络中被重置作废）
     SEL sel = NSSelectorFromString(@"updateTimelineTail");
     if (![facade respondsToSelector:sel]) {
         WPLog(@"Dual", @"[Sess] tail loop STOP: updateTimelineTail NOT resp");
@@ -418,32 +424,62 @@ static void MioDualTailStateReset(void) {
         [self tailTickLater:2.0];
         return;
     }
-    // accepted：8s 看门狗核对（WCM block_invoke 同款）——引擎网络回来自动写内存
-    // 列表，count 自涨；reload 仅兜底把库装窗口。零增长→计数+1，3 轮退避 60s
-    __weak typeof(self) wself = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        __strong typeof(wself) sself = wself;
-        if (!sself || !gTailLoopOn) return;
-        id f = MioDualFacade();
-        if (f) {
+    gTailInFlight = YES;
+    gTailRounds++;
+    [self watchTailRound:before tries:0];
+}
+
+// 一轮 in-flight 核对链：每 1s 读 count（引擎网络回来自己写内存列表，自涨无需 reload），
+// 涨 → 立即 0.5s 续轮（快链）；8s 未涨 → 零增长计数（3 轮 → 退避 60s）
+- (void)watchTailRound:(long long)before tries:(int)tries {
+    if (!gTailLoopOn) {
+        gTailInFlight = NO;
+        return;
+    }
+    id f = MioDualFacade();
+    if (f) {
+        long long after = MioDualDataSourceCount(f);
+        if (after > before) {
+            gTailInFlight = NO;
+            gTailZero = 0;
+            gTailLastDelta = after - before;
+            WPLog(@"Dual", @"[Sess] tail +%lld rows (count %lld->%lld)",
+                  after - before, before, after);
+            [MioDualFeedBridge pushNowFromSession];
+            [self tailTickLater:0.5];   // WCM 同款：数据一到立刻下一轮
+            return;
+        }
+    }
+    if (tries >= 8) {
+        gTailInFlight = NO;
+        if (f) {   // 超时兜底 reload：库有货而窗口没跟上时补一跳
             SEL rl = NSSelectorFromString(@"reloadTimelineDataItems");
             if ([f respondsToSelector:rl]) ((void(*)(id, SEL))objc_msgSend)(f, rl);
             long long after = MioDualDataSourceCount(f);
             if (after > before) {
                 gTailZero = 0;
-                WPLog(@"Dual", @"[Sess] tail +%lld rows (count %lld->%lld)",
+                gTailLastDelta = after - before;
+                WPLog(@"Dual", @"[Sess] tail(reload) +%lld rows (count %lld->%lld)",
                       after - before, before, after);
-                [MioDualFeedBridge pushNowFromSession];   // reload 后库新数据此刻可见
-            } else if (++gTailZero >= 3) {
-                gTailZero = 0;
-                gTailBackoffUntil = [NSDate date].timeIntervalSinceReferenceDate + 60.0;
-                WPLog(@"Dual", @"[Sess] tail 3 轮零增长 → 退避 60s（count=%lld）", before);
-            } else {
-                WPLog(@"Dual", @"[Sess] tail 零增长（count=%lld, zero=%d/3）", before, gTailZero);
+                [MioDualFeedBridge pushNowFromSession];
+                [self tailTickLater:0.5];
+                return;
             }
         }
-        [sself tailTick];
+        if (++gTailZero >= 3) {
+            gTailZero = 0;
+            gTailBackoffUntil = [NSDate date].timeIntervalSinceReferenceDate + 60.0;
+            WPLog(@"Dual", @"[Sess] tail 3 轮零增长 → 退避 60s（count=%lld）", before);
+        } else {
+            WPLog(@"Dual", @"[Sess] tail 零增长（count=%lld, zero=%d/3）", before, gTailZero);
+        }
+        [self tailTickLater:2.0];
+        return;
+    }
+    __weak typeof(self) wself = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [wself watchTailRound:before tries:tries + 1];
     });
 }
 
