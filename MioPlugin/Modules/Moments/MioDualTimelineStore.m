@@ -40,25 +40,17 @@ static long long MioDualScalarGet(id obj, NSString *key, long long def) {
     return def;
 }
 
-// timeline 直读（WCFacade.h:429-431 实证）：主路 getTimelineDataItem（返回全数组）；
-// 回落 countOfTimelineDataItem + getTimelineDataItemOfIndex:（count 是标量 getter，走 KVC 装箱）
-static NSArray *MioDualTimelineItems(id facade) {
-    if (!facade) return nil;
-    SEL all = NSSelectorFromString(@"getTimelineDataItem");
-    if ([facade respondsToSelector:all]) {
-        id v = ((id(*)(id, SEL))objc_msgSend)(facade, all);
-        if ([v isKindOfClass:[NSArray class]]) return v;
-    }
-    SEL idx = NSSelectorFromString(@"getTimelineDataItemOfIndex:");
-    if (![facade respondsToSelector:idx]) return nil;
-    long long n = MioDualScalarGet(facade, @"countOfTimelineDataItem", 0);
-    if (n <= 0) return nil;
-    NSMutableArray *arr = [NSMutableArray arrayWithCapacity:(NSUInteger)n];
-    for (long long i = 0; i < n; i++) {
-        id it = ((id(*)(id, SEL, unsigned long long))objc_msgSend)(facade, idx, (unsigned long long)i);
-        if (it) [arr addObject:it];
-    }
-    return arr;
+// 数据源直读根治版：countOfTimelineDataItem / getTimelineDataItemOfIndex: 就声明在
+// WCFacade 本体（WCFacade.h:430-431）——facade 本体就是朋友圈数据源，原生朋友圈页
+// cellForRow 读的同一层。背后是本地库/内存映射（m_timelineWithLocalDatas / m_database），
+// 同步周期持续落库，冷启动即有全量、不依赖原生页是否被访问过——UI 缓存空窗问题整个消失。
+// count 是标量 getter（KVC countOf<Key> 访问器模式，NSUInteger 直返）：
+// 禁 id 接裸 msgSend（x0 整数当指针发 respondsToSelector 必 SIGSEGV，127.log 实证），
+// 必须 long 直接收返回值。
+static long long MioDualDataSourceCount(id facade) {
+    SEL cntSel = NSSelectorFromString(@"countOfTimelineDataItem");
+    if (!facade || ![facade respondsToSelector:cntSel]) return 0;
+    return (long long)((long(*)(id, SEL))objc_msgSend)(facade, cntSel);
 }
 
 #pragma mark - Store
@@ -87,36 +79,23 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     return self;
 }
 
-#pragma mark 双源读取
+#pragma mark 数据源直读
 
 - (NSArray *)fetchRawItems {
     id facade = MioDualFacade();
-    if (!facade) return @[];
-    NSMutableArray *raw = [NSMutableArray array];
-    NSMutableSet *seen = [NSMutableSet set];
-    // 源一：getTimelineDataItem（UI 缓存，最新鲜，事件回调后最先更新）
-    for (id item in MioDualTimelineItems(facade)) {
-        NSString *uid = WXSafeStringGet(item, @"itemID");
-        if (uid.length == 0 || [seen containsObject:uid]) continue;
-        [seen addObject:uid];
-        [raw addObject:item];
+    long long n = MioDualDataSourceCount(facade);
+    if (n <= 0) { _lastRawCount = 0; return @[]; }
+    SEL idxSel = NSSelectorFromString(@"getTimelineDataItemOfIndex:");
+    if (![facade respondsToSelector:idxSel]) { _lastRawCount = 0; return @[]; }
+    _lastRawCount = n;
+    // 500 上限只是渲染保护（可调）；count 返回多少按序读多少（index 0 = 最新，
+    // 原生页即按此序渲染）；排序/截断在 currentItems 统一收口
+    long long take = MIN(n, (long long)kMaxRows);
+    NSMutableArray *raw = [NSMutableArray arrayWithCapacity:(NSUInteger)take];
+    for (long long i = 0; i < take; i++) {
+        id item = ((id(*)(id, SEL, unsigned long long))objc_msgSend)(facade, idxSel, (unsigned long long)i);
+        if (item) [raw addObject:item];
     }
-    // 源二：m_timelineWithLocalDatas（本地库支撑——冷启动有数、无 300 上限，
-    // WCFacade.h:5 ivar 实证）。B6 根治：UI 缓存空/不全时由本地库补齐。
-    // ivar 容器类型未逐字节实证，数组/字典两种形态都接，其余放弃
-    @try {
-        id local = [facade valueForKey:@"m_timelineWithLocalDatas"];
-        NSArray *arr = nil;
-        if ([local isKindOfClass:[NSArray class]]) arr = local;
-        else if ([local isKindOfClass:[NSDictionary class]]) arr = [local allValues];
-        for (id item in arr) {
-            NSString *uid = WXSafeStringGet(item, @"itemID");
-            if (uid.length == 0 || [seen containsObject:uid]) continue;
-            [seen addObject:uid];
-            [raw addObject:item];
-        }
-    } @catch (NSException *e) { }
-    _lastRawCount = raw.count;
     return raw;
 }
 
@@ -145,7 +124,7 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
         _staleMode = NO;
         return rows;
     }
-    // 原生缓存冷启动为空（双源都空）：上次快照顶上（stale 层）——diff 仓里始终有
+    // 数据源空（facade 缺失/同步未落库）：上次快照顶上（stale 层）——diff 仓里始终有
     // 快照那些行，不再产生 remove，JS 侧快照稳定显示不被清空；新数据落地后
     // diff 自然变成「upsert 变更行 + remove 真正消失的行」，语义完全正确
     NSArray *snap = [self snapshotRows];
