@@ -1,7 +1,7 @@
 #import <UIKit/UIKit.h>
 
-// 双列朋友圈面板（WCMFeedController 式覆盖壳 + 原生 UICollectionView 渲染层）。
-// 数据桥/图片加载实现见 MomentsDualPanel.m
+// 双列朋友圈面板（WCMFeedController 式覆盖壳 + WKWebView 渲染层）。
+// 数据桥/图片服务实现见 MomentsDualPanel.m
 @interface MomentsDualPanel : UIViewController
 // coverHost 前捕获的 chrome（restoreChrome 用，WCMoments 同款 capture/restore）
 @property (nonatomic, assign) BOOL prevNavHidden;
