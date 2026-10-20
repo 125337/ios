@@ -525,8 +525,10 @@ void MioDualPanelNotifyDataChanged(void) {
     if (!self.pageReady || !self.webView) return;
     [self updateBellBadge];
     NSMutableArray *arr = [NSMutableArray array];
+    NSUInteger cacheCount = 0;
     @try {
         NSArray *cache = MioDualTimelineItems(MioDualFacade());
+        cacheCount = cache.count;
         for (id item in cache) {
             if (arr.count >= 300) break;   // 上限 300：滚底翻页（updateTimelineTail）后 cache 超百条
             NSDictionary *d = [self itemDict:item];
@@ -541,6 +543,10 @@ void MioDualPanelNotifyDataChanged(void) {
     // U+2028/2029 在 JS 字面量里是行终止符，JSONSerialization 不转义，直接 eval 会语法错误
     json = [json stringByReplacingOccurrencesOfString:@"\u2028" withString:@"\\u2028"];
     json = [json stringByReplacingOccurrencesOfString:@"\u2029" withString:@"\\u2029"];
+    // 冷启动仪表：cache 当时是不是 0 / rows 多少 / 是否被 lastJson 去重拦下
+    WPLog(@"Dual", @"[Push] ready=%d cacheCount=%lu rows=%lu lastJsonSame=%d",
+          self.pageReady, (unsigned long)cacheCount, (unsigned long)arr.count,
+          [json isEqualToString:self.lastJson] ? 1 : 0);
     if ([json isEqualToString:self.lastJson]) return;   // 无变化不重渲（防滚动位置跳动）
     self.lastJson = json;
     [self.webView evaluateJavaScript:

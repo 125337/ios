@@ -150,6 +150,7 @@ static void MioDualInstallTimelineChangedHook(void) {
     __block void (*orig)(id, SEL, id, id, id) = (void (*)(id, SEL, id, id, id))cur;
     method_setImplementation(m, imp_implementationWithBlock(^(id self, id added, id changed, id deleted) {
         orig(self, sel, added, changed, deleted);
+        WPLog(@"Dual", @"[Evt] onTimelineDataChanged fired");
         MioDualPanelNotifyDataChanged();
     }));
     WPLog(@"Dual", @"[Dual] onTimelineDataChanged hook installed (P1 event-driven)");
