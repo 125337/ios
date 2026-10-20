@@ -77,6 +77,14 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     NSMutableSet<NSString *> *_pendingMedia;                       // 等补图的行（epoch 变化才重映射）
     NSMutableDictionary<NSString *, NSNumber *> *_pendingEpoch;    // itemID → 映射时媒体代际
     BOOL _lastMediaPending;                                        // mediaSrc 本次调用「有路径但未就绪」
+    // 重活后台化（探针实证 currentItems 主线程 474-877ms × 8 次=首屏 10s 元凶）：
+    // fetchRaw+itemDict(含 CContactMgr 头像查询)+sort 全在 _mapQueue 串行后台，
+    // 主线程只读 _committedRows（毫秒级）
+    dispatch_queue_t _mapQueue;                                    // 串行映射队列（重活专用）
+    NSArray<NSDictionary *> *_committedRows;                       // 主线程只读的已提交行（时间序）
+    NSInteger _committedAccCount;                                  // 提交时的累积层行数（HUD 读，免跨线程）
+    NSInteger _committedRawCount;                                  // 提交时的窗口原始条数（HUD 读）
+    NSString *_committedOldestID;                                  // 提交时最旧行 itemID（tailAtServerEnd 主线程读）
 }
 
 + (instancetype)shared {
@@ -95,6 +103,9 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
         _sigCache = [NSMutableDictionary dictionary];
         _pendingMedia = [NSMutableSet set];
         _pendingEpoch = [NSMutableDictionary dictionary];
+        _committedRows = @[];
+        _committedOldestID = @"";
+        _mapQueue = dispatch_queue_create("mio.dual.map", DISPATCH_QUEUE_SERIAL);
     }
     return self;
 }
@@ -119,12 +130,44 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 }
 
 - (NSUInteger)approxCount {
-    return _lastRawCount;
+    return (NSUInteger)_committedRawCount;   // 主线程安全：只读提交值（_lastRawCount 在后台写）
 }
 
 #pragma mark 统一字段映射（收口：上游不再写任何 @try）
 
+// 主线程入口：只读已提交行（毫秒级；重活在 _mapQueue 由 rebuildItemsAsync 驱动）
 - (NSArray<NSDictionary *> *)currentItems {
+    return _committedRows;
+}
+
+// 刀1（探针实证 currentItems 主线程 474-877ms ×8 次=首屏 10s 元凶）：重活后台化。
+// 头像查询（CContactMgr 联系人库）线程安全由单例保障——AvatarLoader 后台同款路径
+// 实证；facade 数据源读同款后台路径。串行队列天然防重入，后到的重建覆盖先前的
+// （与旧防抖 fire-时重读最新语义一致）。完成后 commit + 走 session 推送
+// （Bridge 刀2 闸门：面板不在窗口=只暖数据不推，预热 4.66MB 死推送在此消灭）
+- (void)rebuildItemsAsync {
+#if MIO_DUAL_BISECT_NO_DATA
+    return;   // 二分法测试构建：数据管线全关
+#endif
+    dispatch_async(_mapQueue, ^{
+        NSArray<NSDictionary *> *rows = [self computeCurrentItems];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self commitRows:rows];
+            [MioDualFeedBridge pushNowFromSession];
+        });
+    });
+}
+
+// 主线程提交：排序结果落 _committedRows（主线程只读），HUD 计数/到底判定基准同步
+- (void)commitRows:(NSArray<NSDictionary *> *)rows {
+    _committedRows = rows ?: @[];
+    _committedAccCount = _accRows.count;
+    _committedRawCount = (NSInteger)_lastRawCount;
+    _committedOldestID = _committedRows.lastObject[@"id"] ?: @"";   // 时间降序 → 末位最旧
+}
+
+// 重活（_mapQueue 专用，禁主线程直调）：fetchRaw + 签名缓存映射 + 累积层合并 + 排序
+- (NSArray<NSDictionary *> *)computeCurrentItems {
     NSMutableArray *rows = [NSMutableArray array];
     @try {
         // 行签名：createtime/likes/cmt/content 长度四标量（4 次廉价 msgSend）。
@@ -396,19 +439,30 @@ static void MioDualTailStateReset(void) {
     }
     SEL sel = NSSelectorFromString(@"updateTimelineHead");
     if ([facade respondsToSelector:sel]) {
-        ((void(*)(id, SEL))objc_msgSend)(facade, sel);   // 探针实证：主动调用成功，等价下拉
-        WPLog(@"Dual", @"[Sess] refreshHead: updateTimelineHead sent (count=%lld)",
-              MioDualDataSourceCount(facade));
+        // 刀3：accepted 返回值检查——被拒（会话态不收 head）可见，beginTimeline 后重试一次
+        id result = ((id(*)(id, SEL))objc_msgSend)(facade, sel);
+        BOOL accepted = [result respondsToSelector:@selector(boolValue)] ? [result boolValue] : YES;
+        WPLog(@"Dual", @"[Sess] refreshHead: head accepted=%d (count=%lld)",
+              accepted, MioDualDataSourceCount(facade));
+        if (!accepted) {
+            SEL bSel = NSSelectorFromString(@"beginTimeline");
+            if ([facade respondsToSelector:bSel]) {
+                ((id(*)(id, SEL))objc_msgSend)(facade, bSel);
+                gSessionBegan = YES;
+            }
+            id retry = ((id(*)(id, SEL))objc_msgSend)(facade, sel);
+            BOOL acc2 = [retry respondsToSelector:@selector(boolValue)] ? [retry boolValue] : YES;
+            WPLog(@"Dual", @"[Sess] refreshHead: head retry accepted=%d", acc2);
+        }
     } else {
         WPLog(@"Dual", @"[Sess] refreshHead: updateTimelineHead NOT resp");
     }
     // 下拉 = 用户主动要新内容：tail 循环的零增长计数/退避一并作废（head 同时重置了
     // 微信的 tail 供给状态），循环若在跑则下一轮立即续供
     MioDualTailStateReset();
-    // 统一刷新链路（与开面板同款）：reload 是同步的——本地库新数据此刻已可见，
-    // 立即推送一波；head 网络回来后 onChanged→防抖→再推第二波。
-    // （147 日志：下拉靠 NSTimer 防抖推送整体失联，显式推不依赖 timer）
-    [MioDualFeedBridge pushNowFromSession];
+    // 统一刷新链路：reload 是同步的（本地库新数据此刻已可见）→ 重建（后台映射）
+    // → commit → session 推送；head 网络回来后 onChanged→防抖→再推第二波
+    [self rebuildItemsAsync];
 }
 
 - (void)loadTail {
@@ -439,7 +493,7 @@ static void MioDualTailStateReset(void) {
 }
 
 - (NSUInteger)accRowCount {
-    return _accRows.count;
+    return (NSUInteger)_committedAccCount;   // 主线程安全：只读提交值（_accRows 在后台写）
 }
 
 - (NSString *)tailStatus {
@@ -465,18 +519,12 @@ static void MioDualTailStateReset(void) {
 - (BOOL)tailAtServerEnd {
     id facade = MioDualFacade();
     long long n = MioDualDataSourceCount(facade);
-    if (n <= 0 || _accRows.count == 0) return NO;
+    if (n <= 0 || _committedAccCount == 0) return NO;
     id item = ((id(*)(id, SEL, unsigned long long))objc_msgSend)(
         facade, NSSelectorFromString(@"getTimelineDataItemOfIndex:"), (unsigned long long)(n - 1));
     NSString *engID = WXSafeStringGet(item, @"itemID");
     if (engID.length == 0) return NO;
-    NSString *oldest = nil;
-    long long oldestT = LLONG_MAX;
-    for (NSDictionary *r in _accRows.allValues) {
-        long long t = [r[@"time"] longLongValue];
-        if (t < oldestT) { oldestT = t; oldest = r[@"id"]; }
-    }
-    return oldest.length > 0 && [engID isEqualToString:oldest];
+    return [engID isEqualToString:_committedOldestID];   // 主线程只读提交值（_accRows 在后台写）
 }
 
 // 循环心跳：退避/节流/无 facade 期间 2s 续链保持循环，只是不发请求
@@ -523,7 +571,7 @@ static void MioDualTailStateReset(void) {
     gTailLastAt = now;
     WPLog(@"Dual", @"[Sess] tail tick sent (count=%lld, accepted=%ld, z=%d)",
           before, accepted, gTailZero);
-    [MioDualFeedBridge pushNowFromSession];   // 页脚新行立即上屏（若有）
+    [self rebuildItemsAsync];   // 页脚新行立即上屏（若有；重活后台，commit 后经闸门推送）
 
     if (!accepted) {
         // WCM 同款 finishTailWait→retryRequired→轮询重试：2s 后心跳重排，不计零增长
@@ -553,7 +601,7 @@ static void MioDualTailStateReset(void) {
             gTailSessionRows += after - before;
             WPLog(@"Dual", @"[Sess] tail +%lld rows (count %lld->%lld)",
                   after - before, before, after);
-            [MioDualFeedBridge pushNowFromSession];
+            [self rebuildItemsAsync];
             [self tailTickLater:0.5];   // WCM 同款：数据一到立刻下一轮
             return;
         }
@@ -570,7 +618,7 @@ static void MioDualTailStateReset(void) {
                 gTailSessionRows += after - before;
                 WPLog(@"Dual", @"[Sess] tail(reload) +%lld rows (count %lld->%lld)",
                       after - before, before, after);
-                [MioDualFeedBridge pushNowFromSession];
+                [self rebuildItemsAsync];
                 [self tailTickLater:0.5];
                 return;
             }

@@ -74,11 +74,18 @@ static NSString *MioDualJSONString(id obj) {
     [[self bridge] pushNowLocked];
 }
 
-// 刷新链路显式推送（refreshHead/loadTail 末尾）：与开面板同链路，绕开事件防抖——
-// reload 同步完成后本地库新数据立即可见，推送一次；head 网络回来后防抖再推第二波
+// 刷新链路显式推送（rebuildItemsAsync commit 后 / PanelOpen 后）：刀2 闸门——
+// 面板视图不在窗口上（预热/已关）只暖数据不推。探针实证预热期把全量 feed 推给
+// 尚未显示的 WebView（4.66MB EVALJS 内联编译 100-300ms 主线程）在 PanelOpen 的
+// loadHTML 刷新后全部作废——纯死推送
 + (void)pushNowFromSession {
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self pushNowFromSession]; });
+        return;
+    }
+    MioDualFeedBridge *b = [self bridge];
+    if (!b->_webView || b->_webView.window == nil) {
+        WPLog(@"Dual", @"[Push] skip: panel not on window (预热模式，只暖不推)");
         return;
     }
     WPLog(@"Dual", @"[Push] session push (refresh chain)");
@@ -117,7 +124,7 @@ static BOOL gPushQueued = NO;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         gPushQueued = NO;   // 先清再推：推送过程中若触发新变更可再排程
-        [self pushNow];
+        [[MioDualTimelineStore shared] rebuildItemsAsync];   // 刀1：重活后台，commit 后经闸门推送
     });
 }
 

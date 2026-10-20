@@ -25,7 +25,11 @@ id MioDualFacade(void);
 @interface MioDualTimelineStore : NSObject
 + (instancetype)shared;
 // 统一字段映射后的行数组（干净 dict，createTime 降序，无上限）
+// 主线程只读已提交行（重活后台化：currentItems 不再现算）
 - (NSArray<NSDictionary *> *)currentItems;
+// 重活后台化入口（刀1）：fetchRaw+itemDict(头像/媒体)+sort 全在串行后台队列，
+// 完成后主线程 commit → pushNowFromSession（Bridge 刀2 闸门：面板不在窗口只暖不推）
+- (void)rebuildItemsAsync;
 // 原始条数（数据源 count；翻页 exhausted 判定用）
 - (NSUInteger)approxCount;
 // YES = 数据源为空（同步未落库）、快照顶上（冷启动 stale 层）；NO = 数据来自原生数据源
