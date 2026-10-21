@@ -11,22 +11,40 @@ static UILabel *gLabel = nil;
 static BOOL gTicking = NO;
 static CGFloat gScale = 1.0;   // 显示倍率（点按循环 1.0 → 1.6 → 2.4 → 1.0）
 
+// 主线程掉帧监测（探针 rAF 同原理）：CADisplayLink 60fps 心跳，主线程阻塞时回调
+// 延迟，delta>50ms 记一帧冻结。HUD 每秒读窗口计数，滚动/切 tab 卡顿当场可见。
+static CADisplayLink *gDLink = nil;
+static NSInteger gJank1s = 0;       // 本 1s 窗口冻结帧数
+static NSInteger gJankTotal = 0;    // 累计冻结帧数
+static NSInteger gTick1s = 0;       // 本 1s 窗口 tick 数（≈fps）
+
++ (void)dlinkTick:(CADisplayLink *)link {
+    CFTimeInterval now = link.timestamp;
+    static CFTimeInterval last = 0;
+    if (last > 0 && now - last > 0.05) { gJank1s++; gJankTotal++; }
+    last = now;
+    gTick1s++;
+}
+
 static NSString *HUDDiagText(void) {
     MioDualTimelineStore *store = [MioDualTimelineStore shared];
     MioDualTimelineEngine *engine = [MioDualTimelineEngine shared];
     NSTimeInterval since = [MioDualFeedBridge secondsSinceLastPush];
     NSString *push = since < 0 ? @"—" : [NSString stringWithFormat:@"%.0fs", since];
     return [NSString stringWithFormat:
-        @"窗:%lld  存:%lu  JS:%lu\n尾:%@  推:%@\n载:%@",
+        @"窗:%lld  存:%lu  JS:%lu\n尾:%@  推:%@\n载:%@\n帧:%ld  冻:%ld(累%ld)",
         [store liveSourceCount],
         (unsigned long)[store accRowCount],
         (unsigned long)[MioDualFeedBridge jsRowCount],
-        [engine tailStatus], push, [engine loadStatus]];
+        [engine tailStatus], push, [engine loadStatus],
+        (long)gTick1s, (long)gJank1s, (long)gJankTotal];
 }
 
 static void HUDTick(void) {
     if (!gTicking) return;
     gLabel.text = HUDDiagText();
+    gJank1s = 0;   // 窗口读后清零
+    gTick1s = 0;
     gLabel.font = [UIFont monospacedDigitSystemFontOfSize:12 * gScale weight:UIFontWeightMedium];
     // sizeToFit 拿当前宽度当约束——初始 0 宽会把文本按字符折行成竖条且每次沿用
     // （真机截图实证）；改显式无限宽 hint 求 fit 尺寸，文本自带 \n 分两行
@@ -83,6 +101,10 @@ static void HUDTick(void) {
     }
     if (!gTicking) {
         gTicking = YES;
+        if (!gDLink) {
+            gDLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(dlinkTick:)];
+            [gDLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+        }
         HUDTick();
     }
 }
@@ -93,6 +115,8 @@ static void HUDTick(void) {
         return;
     }
     gTicking = NO;
+    [gDLink invalidate];
+    gDLink = nil;
     [gHud removeFromSuperview];
 }
 
