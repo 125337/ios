@@ -5,6 +5,7 @@
 #import "../../Core/LogManager.h"
 #import "MioDualFeedBridge.h"
 #import "MioDualTimelineStore.h"
+#import "MioDualMediaTrace.h"
 
 // 持久表结构（NSUserDefaults key = MioDualMediaRegistry.v2，按 bare digest 索引）：
 //   { digest: @{ @"p": 本地路径, @"iid": 帖子 itemID, @"cdn": CDN URL,
@@ -186,6 +187,8 @@ static NSString *MediaStableDir(void) {
             }
         }
         _readyGen[bare] = @([_readyGen[bare] unsignedIntegerValue] + 1);
+        [MioDualMediaTrace log:@"gen+" key:bare
+                        detail:[NSString stringWithFormat:@"n=%@ ext=%@", _readyGen[bare], ext ?: @"?"]];
     }
 }
 
@@ -231,6 +234,7 @@ static NSString *MioDualSniffExt(NSData *d) {
     // 登记的 ext + 一次 stat
     if ([self readyGenerationForKey:bare] > 0) {
         NSString *ext = [self extForBareKey:bare];
+        // gate=cache 是稳态（每轮全量重注册都走这），不进 trace 防刷屏
         if (ext.length && cb) cb([self urlForFullKey:[bare stringByAppendingPathExtension:ext]], YES);
         else if (cb) cb(nil, NO);
         return bare;
@@ -240,6 +244,7 @@ static NSString *MioDualSniffExt(NSData *d) {
         NSString *dst = [[MediaStableDir() stringByAppendingPathComponent:bare]
                          stringByAppendingPathExtension:ext];
         if ([[NSFileManager defaultManager] fileExistsAtPath:dst]) {
+            [MioDualMediaTrace log:@"register" key:bare detail:@"gate=restore(跨启动恢复)"];
             [self markReadyBareKey:bare ext:ext];
             if (cb) cb([self urlForFullKey:dst.lastPathComponent], YES);
             return bare;
@@ -249,6 +254,8 @@ static NSString *MioDualSniffExt(NSData *d) {
     // 占位文件闸门：<1KB = 微信还没下载完（探针实证的占位/半截文件），只登记等下一轮
     NSDictionary *attr = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
     if ([attr fileSize] <= 1024) {
+        [MioDualMediaTrace log:@"register" key:bare
+                        detail:[NSString stringWithFormat:@"gate=place(<1KB 等微信下载) %lluB", (unsigned long long)[attr fileSize]]];
         if (cb) cb(nil, NO);
         return bare;
     }
@@ -256,11 +263,15 @@ static NSString *MioDualSniffExt(NSData *d) {
     // 缩略图队列导出（主线程零 IO）；完成唤醒推送 → diff 补图
     @synchronized(self) {
         if ([_pendingThumbs containsObject:bare]) {
+            [MioDualMediaTrace log:@"register" key:bare detail:@"gate=pending(导出进行中)"];
             if (cb) cb(nil, NO);   // 已有导出进行中：等它完成的统一唤醒
             return bare;
         }
         [_pendingThumbs addObject:bare];
     }
+    [MioDualMediaTrace log:@"register" key:bare
+                    detail:[NSString stringWithFormat:@"gate=queue(入缩略图队列) src=%@",
+                            path.lastPathComponent]];
     __weak typeof(self) wself = self;
     [_thumbQueue addOperationWithBlock:^{
         __strong typeof(wself) sself = wself;
@@ -287,13 +298,18 @@ static NSString *MioDualSniffExt(NSData *d) {
             @synchronized(sself) { [sself->_pendingThumbs removeObject:bare]; }
             WPLog(@"Dual", @"[Media] stable copy %@ key=%@ ext=%@", ok ? @"ready" : @"FAILED", bare, dstExt);
             if (ok) {
+                [MioDualMediaTrace log:@"export" key:bare
+                                detail:[NSString stringWithFormat:@"%@ → .%@ %lluB",
+                                        [ext isEqualToString:dstExt] ? @"direct(原字节直存)" : @"trans(转码)",
+                                        dstExt, (unsigned long long)data.length]];
                 [sself markReadyBareKey:bare ext:dstExt];
                 if (cb) cb([sself urlForFullKey:[bare stringByAppendingPathExtension:dstExt]], YES);
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [MioDualFeedBridge notifyDataChanged];   // 唤醒：rebuild 重映射补图行 → diff upsert
                 });
-            } else if (cb) {
-                cb(nil, NO);
+            } else {
+                [MioDualMediaTrace log:@"export" key:bare detail:@"FAILED(源读取/解码/写盘失败)"];
+                if (cb) cb(nil, NO);
             }
         }
     }];
@@ -345,7 +361,10 @@ static NSString *MioDualSniffExt(NSData *d) {
     @synchronized(self) {
         NSDictionary *entry = _memTable[bare] ?: _diskTable[bare];
         if (entry[@"osig"] && [entry[@"osig"] unsignedLongLongValue] == sig
-              && [self readyGenerationForKey:bare] > 0) return;
+              && [self readyGenerationForKey:bare] > 0) {
+            [MioDualMediaTrace log:@"orig" key:bare detail:@"skip(签名未变)"];
+            return;
+        }
         if ([_pendingOriginals containsObject:bare]) return;
         [_pendingOriginals addObject:bare];
         NSMutableDictionary *upd = [entry mutableCopy] ?: [NSMutableDictionary dictionary];
@@ -377,7 +396,14 @@ static NSString *MioDualSniffExt(NSData *d) {
         if (sself) {
             @synchronized(sself) { [sself->_pendingOriginals removeObject:bare]; }
             WPLog(@"Dual", @"[Media] original %@ key=%@ ext=%@", ok ? @"ready" : @"FAILED", bare, dstExt);
-            if (ok) [sself markReadyBareKey:bare ext:dstExt];
+            if (ok) {
+                [MioDualMediaTrace log:@"orig" key:bare
+                                detail:[NSString stringWithFormat:@"q导出 → .%@ %lluB", dstExt,
+                                        (unsigned long long)data.length]];
+                [sself markReadyBareKey:bare ext:dstExt];
+            } else {
+                [MioDualMediaTrace log:@"orig" key:bare detail:@"FAILED"];
+            }
         }
     }];
 }
@@ -387,6 +413,7 @@ static NSString *MioDualSniffExt(NSData *d) {
 - (void)noteExportLost:(NSString *)key {
     if (key.length == 0) return;
     NSString *bare = MioDualBareKey(key);
+    [MioDualMediaTrace log:@"export" key:bare detail:@"LOST(副本被系统清理,待重导)"];
     @synchronized(self) {
         [_readyGen removeObjectForKey:bare];
         NSMutableDictionary *entry = [(_memTable[bare] ?: _diskTable[bare]) mutableCopy];
@@ -524,6 +551,7 @@ static NSString *MioDualSniffExt(NSData *d) {
         if (att.intValue >= 3) {
             [_downloading removeObject:bare];
             WPLog(@"Dual", @"[Media] attempts exhausted key=%@", bare);
+            [MioDualMediaTrace log:@"dl" key:bare detail:@"exhausted(重试3次耗尽,CDN坏URL?)"];
             return;
         }
         _attempts[bare] = @(att.intValue + 1);
@@ -536,6 +564,7 @@ static NSString *MioDualSniffExt(NSData *d) {
     if (!di || !mi) {
         [self endDownloadForKey:bare];
         WPLog(@"Dual", @"[Media] no dataItem/mediaItem key=%@ iid=%@", bare, iid);
+        [MioDualMediaTrace log:@"dl" key:bare detail:@"noitem(数据项/媒体项找回失败)"];
         return;
     }
 
@@ -559,6 +588,7 @@ static NSString *MioDualSniffExt(NSData *d) {
         __strong typeof(wself) sself = wself;
         [sself endDownloadForKey:bare];
         WPLog(@"Dual", @"[Media] downloader finished key=%@", bare);
+        [MioDualMediaTrace log:@"dl" key:bare detail:@"finish(微信管线落地,等重导出)"];
         if (sself) {
             [sself markReadyBareKey:bare ext:nil];   // 下载落地=就绪迁移（ext 由重导出补齐）
             // ext 已知 → 直刷 <img>（dataset.src 基址重载）；未知 → rebuild 重映射兜底
@@ -574,6 +604,8 @@ static NSString *MioDualSniffExt(NSData *d) {
     ((void(*)(id, SEL, id))objc_msgSend)(dl, startSel, done);
     ((void(*)(id, SEL, id))objc_msgSend)(dl, @selector(setRetainedSelf:), dl);   // 异步下载自持有
     WPLog(@"Dual", @"[Media] downloader started key=%@ iid=%@", bare, iid);
+    [MioDualMediaTrace log:@"dl" key:bare
+                    detail:[NSString stringWithFormat:@"start(微信管线CDN+解密) 第%@次", _attempts[bare]]];
 }
 
 - (void)pruneExcept:(NSSet<NSString *> *)liveKeys {

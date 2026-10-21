@@ -3,6 +3,7 @@
 #import <ImageIO/ImageIO.h>
 #import <MobileCoreServices/MobileCoreServices.h>   // kUTTypeJPEG/kUTTypePNG（ImageIO 重编码目标）
 #import <objc/message.h>
+#import "MioDualMediaTrace.h"
 #import "../../Core/LogManager.h"
 #import "MomentsConfig.h"
 #import "MioDualInboxVC.h"
@@ -94,6 +95,7 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
         ? [[MioDualMediaService shared] resolveKey:key] : nil;
     if (!path.length) {
         // 文件缺失：透明图立即响应（下载触发归渲染层 ensureMediaForKey:）
+        [MioDualMediaTrace log:@"serve" key:key ?: @"-" detail:@"PLACE(缺文件→占位图,补图走ensure)"];
         [self servePlaceholder:task];
         return;
     }
@@ -103,6 +105,7 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
     NSDictionary *cached = [MioDualDispCache() objectForKey:url.absoluteString];
     NSData *cachedData = cached[@"data"];
     if (cachedData.length) {
+        [MioDualMediaTrace log:@"serve" key:key detail:@"hit(displayCache)"];
         [self serveData:cachedData mime:cached[@"mime"] ?: @"image/jpeg"
                    task:task ref:taskRef cacheHit:YES];
         return;
@@ -210,6 +213,8 @@ static NSString *MioDualMimeForData(NSData *d) {
         return;
     }
     [self displayCacheStore:out mime:mime url:url];
+    [MioDualMediaTrace log:@"serve" key:url.lastPathComponent
+                    detail:[NSString stringWithFormat:@"decode(%luB → %@)", (unsigned long)out.length, mime]];
     [self serveData:out mime:mime task:task ref:taskRef cacheHit:NO];
 }
 

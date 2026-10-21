@@ -3,6 +3,7 @@
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 #import "MioDualMediaService.h"
+#import "MioDualMediaTrace.h"
 #import "MioDualFeedBridge.h"
 
 #pragma mark - facade（原 MomentsDualPanel.m 内联实现迁入，消息页共用）
@@ -181,7 +182,8 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
                 NSString *mk = d[@"mediaKey"];
                 if (mk.length && [[MioDualMediaService shared] readyGenerationForKey:mk]
                       != (NSUInteger)[d[@"mgen"] unsignedIntegerValue]) {
-                    d = nil;   // 补图推进：强制重映射这一行
+                    [MioDualMediaTrace log:@"remap" key:mk detail:rid];   // 补图推进：强制重映射这一行
+                    d = nil;
                 }
             }
             if (!d) {
