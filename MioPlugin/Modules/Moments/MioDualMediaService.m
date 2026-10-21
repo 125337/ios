@@ -510,7 +510,7 @@ static NSString *MioDualSniffExt(NSData *d) {
     if (!bare.length) return;
     @synchronized(self) {
         NSDictionary *entry = _memTable[bare] ?: _diskTable[bare];
-        if (entry[@"iid"].length) return;   // 锚点健在：稳态零成本直返
+        if ([entry[@"iid"] length]) return;   // 锚点健在：稳态零成本直返
         NSMutableDictionary *upd = entry.mutableCopy ?: [NSMutableDictionary dictionary];
         upd[@"iid"] = iid;
         _memTable[bare] = upd;
