@@ -297,7 +297,7 @@ static NSTimeInterval gLastPushAt = 0;
     // ① 可见行优先（WCM visible 同构）：视口内待图行全量补，无预算限制
     // ② 其余轮转 40：cursor 每轮进一格，tail 旧帖按时间片轮到（5s 心跳驱动）
     {
-        MioDualFeedBridge *b = [self bridge];
+        MioDualFeedBridge *b = self;   // pushNowLocked 实例方法：self 即单例
         if (!b->_cdnByKey) b->_cdnByKey = [NSMutableDictionary dictionary];
         NSMutableSet *vis = b->_lastVisibleKeys;
         if (vis.count) {
