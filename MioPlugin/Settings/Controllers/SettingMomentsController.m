@@ -121,8 +121,6 @@
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addSwitchRowInGroup:group title:@"高清朋友圈" desc:nil key:@"hdMomentsEnabled" isOn:config.hdMomentsEnabled cy:cy width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
-    cy = [self addSwitchRowInGroup:group title:@"双列朋友圈" desc:nil key:@"dualColumnEnabled" isOn:config.dualColumnEnabled cy:cy width:w];
-    cy = [self addSeparatorInGroup:group cy:cy width:w];
 
     // 子开关：朋友圈伪集赞（开=展开子配置，关=收起；手风琴，总开关唯一入口）
     cy = [self addMasterSwitchRowInGroup:group
