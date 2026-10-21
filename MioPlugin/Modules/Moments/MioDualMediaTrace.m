@@ -72,8 +72,6 @@ static NSDateFormatter *sFmt = nil;   // 进程级复用（HH:mm:ss.SSS）
     }
 }
 
-static NSDateFormatter *sFmt = nil;   // 进程级复用（HH:mm:ss.SSS）
-
 // 环形顺序输出：_idx 是最旧（缓冲满时），未满从 0 开始
 - (NSString *)textWithLimit:(NSUInteger)limit {
     @synchronized(self) {
