@@ -198,7 +198,9 @@ break;
 // 首建/全换：DocumentFragment 一次上屏（单次布局失效）。逐位 insertBefore 在
 // live 集合上 O(N²)（1905 行全不对齐实测主线程冻结 5-15s=开面板卡死实证），
 // WCM 不卡因其 render 恒为尾部增量（对齐循环命中快路径）；我们快照一次灌全量
-if(chs.length===0&&desired.length){var frag=document.createDocumentFragment();
+if(chs.length===0&&desired.length){
+for(i=chs.length-1;i>=0;i--)if(!chs[i].dataset||!chs[i].dataset.id)grid.removeChild(chs[i]);
+var frag=document.createDocumentFragment();
 for(i=0;i<desired.length;i++)frag.appendChild(desired[i]);
 grid.appendChild(frag);
 if(dirtyNew(desired))layoutCards();
