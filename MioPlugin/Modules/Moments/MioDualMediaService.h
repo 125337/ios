@@ -52,6 +52,9 @@
 // 触发 WCMediaDownloader（微信管线 CDN+解密+落盘），完成后经 Bridge mediaReadyForKey
 // 精准刷新对应 <img>。含下载去重 + 会话内重试上限 3 次 + 60s 挂起超时重置
 - (void)ensureMediaForKey:(NSString *)key;
+// 副本文件被系统清理（Caches 回收）后的自愈钩子：gen 归零 + 扩展名清除，
+// 下一轮注册重新导出（zero-fail 下 <img> 已被占位，无需 JS 感知）
+- (void)noteExportLost:(NSString *)key;
 // 数据项 → 目标路径所属的 WCMediaItem（按四路路径 selector 匹配）
 - (id)mediaItemForDataItem:(id)di path:(NSString *)targetPath;
 // 只保留 liveKeys（快照引用的完整文件名 key），修剪持久表

@@ -101,8 +101,9 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
     // displayCache（WCM @0x4968 同款）：URL → {data, mime} 双值缓存，cost = 字节数，
     // 同 key 二次请求（mediaReady 二载/滚动回看）免读盘免解码免缩放免重编码
     NSDictionary *cached = [MioDualDispCache() objectForKey:url.absoluteString];
-    if (cached[@"data"].length) {
-        [self serveData:cached[@"data"] mime:cached[@"mime"] ?: @"image/jpeg"
+    NSData *cachedData = cached[@"data"];
+    if (cachedData.length) {
+        [self serveData:cachedData mime:cached[@"mime"] ?: @"image/jpeg"
                    task:task ref:taskRef cacheHit:YES];
         return;
     }
@@ -198,7 +199,7 @@ static NSString *MioDualMimeForData(NSData *d) {
         (CFMutableDataRef)out, isPNG ? kUTTypePNG : kUTTypeJPEG, 1, NULL);
     if (dst) {
         CGImageDestinationAddImage(dst, thumb, (__bridge CFDictionaryRef)@{
-            kCGImageDestinationLossyCompressionQuality : isPNG ? @1.0 : @0.8
+            (__bridge NSString *)kCGImageDestinationLossyCompressionQuality : isPNG ? @1.0 : @0.8
         });
         CGImageDestinationFinalize(dst);
         CFRelease(dst);
