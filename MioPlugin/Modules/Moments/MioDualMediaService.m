@@ -197,6 +197,9 @@ static NSString *MediaStableDir(void) {
         [MioDualMediaTrace log:@"gen+" key:bare
                         detail:[NSString stringWithFormat:@"n=%@ ext=%@", _readyGen[bare], ext ?: @"?"]];
     }
+    // 就绪迁移立即唤醒 rebuild（WCM 导出完成→scheduleMediaReload 同款，秒补图的
+    // 关键一跳）：文本待图卡靠它摆脱 5s 轮询延迟；0.5s 尾沿防抖合并风暴
+    [MioDualFeedBridge notifyDataChanged];
 }
 
 // mioimg URL（WCM wcm-cache://<accountToken>/<digest>.<ext> 同构：
