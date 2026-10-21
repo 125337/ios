@@ -293,7 +293,7 @@ static NSTimeInterval gLastPushAt = 0;
     // ---- 渲染层备图（WCM exportImage 模式）：只对本次变更行，缺文件即触发微信管线 ----
     for (NSDictionary *r in upserts) {
         NSString *img = r[@"img"];
-        if ([img hasPrefix:@"mioimg://local/"])
+        if ([img hasPrefix:@"mioimg://"])
             [[MioDualMediaService shared] ensureMediaForKey:img.lastPathComponent];
     }
 
@@ -306,7 +306,7 @@ static NSTimeInterval gLastPushAt = 0;
         NSMutableSet *live = [NSMutableSet set];
         for (NSDictionary *r in rows) {
             NSString *img = r[@"img"];
-            if ([img hasPrefix:@"mioimg://local/"]) [live addObject:img.lastPathComponent];
+            if ([img hasPrefix:@"mioimg://"]) [live addObject:img.lastPathComponent];
         }
         [[MioDualTimelineStore shared] saveSnapshotJSON:full liveKeys:live];
     }

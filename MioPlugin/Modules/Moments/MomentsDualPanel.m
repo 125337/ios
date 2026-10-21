@@ -1,5 +1,7 @@
 #import "MomentsDualPanel.h"
 #import <WebKit/WebKit.h>
+#import <ImageIO/ImageIO.h>
+#import <MobileCoreServices/MobileCoreServices.h>   // kUTTypeJPEG/kUTTypePNG（ImageIO 重编码目标）
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
 #import "MomentsConfig.h"
@@ -70,18 +72,25 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
 }
 
 - (void)webView:(WKWebView *)webView startURLSchemeTask:(id<WKURLSchemeTask>)task {
-    // key 取 path 末段（?r= cache-bust 参数在 query，不进 pathComponents）
+    // 三层校验（WCM @0x41e0 实证同款）：① host == mediaToken（SHA256 账号摘要，
+    // 防跨账号串图）② key 字符白名单 ③ 不以 _ 开头。任一不过 → 占位响应（zero-fail，
+    // 他家 fail-fast 是 NSURLError -1100 didFail——行为差异保留项，补拉链路已对齐）
+    NSURL *url = task.request.URL;
+    NSString *hostOK = [url.host isEqualToString:[MioDualMediaService mediaToken]] ? @"1" : @"";
+    // key 取 path 末段（?r= cache-bust 参数在 query，不进 pathComponents）：
+    // 完整文件名 <sha256>.<ext>（WCM 同款 handler 级 key）
     NSString *key = nil;
-    for (NSString *comp in [task.request.URL.pathComponents reverseObjectEnumerator]) {
+    for (NSString *comp in [url.pathComponents reverseObjectEnumerator]) {
         if (comp.length && ![comp isEqualToString:@"/"]) { key = comp; break; }
     }
-    // 文件名白名单 [A-Za-z0-9_] 且不以 _ 开头（WCMAssetHandler 实证同款），防路径穿越
+    // ②③ 白名单 [A-Za-z0-9_] + 可选扩展名 .jpg/.jpeg/.png，禁 _ 开头（防路径穿越）
     static NSPredicate *nameOK;
     static dispatch_once_t oncePred;
     dispatch_once(&oncePred, ^{
-        nameOK = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", @"^[A-Za-z0-9][A-Za-z0-9_]*$"];
+        nameOK = [NSPredicate predicateWithFormat:@"SELF MATCHES %@",
+                  @"^[A-Za-z0-9][A-Za-z0-9_]*(\\.(jpg|jpeg|png))?$"];
     });
-    NSString *path = (key.length && nameOK && [nameOK evaluateWithObject:key])
+    NSString *path = (hostOK && key.length && nameOK && [nameOK evaluateWithObject:key])
         ? [[MioDualMediaService shared] resolveKey:key] : nil;
     if (!path.length) {
         // 文件缺失：透明图立即响应（下载触发归渲染层 ensureMediaForKey:）
@@ -89,11 +98,12 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
         return;
     }
     NSValue *taskRef = [NSValue valueWithNonretainedObject:task];   // 取消标记（stop 与响应都在主线程比对）
-    // displayCache（WCMAssetHandler 同款，03 L578-613）：URL→data 内存缓存，同 key
-    // 二次请求（mediaReady 二载/滚动回看）免解码免缩放免重编码
-    NSData *cached = [MioDualDispCache() objectForKey:task.request.URL.absoluteString];
-    if (cached.length) {
-        [self serveData:cached mime:@"image/jpeg" task:task ref:taskRef cacheHit:YES];
+    // displayCache（WCM @0x4968 同款）：URL → {data, mime} 双值缓存，cost = 字节数，
+    // 同 key 二次请求（mediaReady 二载/滚动回看）免读盘免解码免缩放免重编码
+    NSDictionary *cached = [MioDualDispCache() objectForKey:url.absoluteString];
+    if (cached[@"data"].length) {
+        [self serveData:cached[@"data"] mime:cached[@"mime"] ?: @"image/jpeg"
+                   task:task ref:taskRef cacheHit:YES];
         return;
     }
     // 缩放目标主线程算好（WCM 同款：block capture target，后台不碰 UIScreen）
@@ -103,18 +113,19 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
     @synchronized ([self activeTasks]) {
         [[self activeTasks] addObject:taskRef];
     }
-    // 重活（读文件+解码+缩放+编码）全进专属串行队列（WCM decodeQueue 同款）
+    // 重活（读文件+ImageIO 解码+缩放+重编码）全进专属串行队列（WCM decodeQueue 同款）
     [MioDualDecodeQueue() addOperationWithBlock:^{
         @synchronized ([self activeTasks]) {
             if (![[self activeTasks] containsObject:taskRef]) return;   // 已停：跳过解码
         }
-        UIImage *img = [UIImage imageWithContentsOfFile:path];
-        if (!img) {
-            // 文件在校验后半路被清/写一半：回占位（绝不 didFail）
+        NSData *raw = [NSData dataWithContentsOfFile:path options:NSDataReadingMappedIfSafe error:nil];
+        if (!raw.length) {
+            // 文件在校验后半路被清/写一半：占位 + 标记副本丢失（下轮重导，自愈）
+            [[MioDualMediaService shared] noteExportLost:key];
             [self servePlaceholder:task];
             return;
         }
-        [self serveScaledImage:img target:target scale:scale task:task ref:taskRef];
+        [self serveScaledData:raw url:url.absoluteString target:target task:task ref:taskRef];
     }];
 }
 
@@ -140,28 +151,73 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
     });
 }
 
-// 解码后按列宽缩放返回（WCMAssetHandler 同款：不回原图，单图内存几MB→几十KB），
-// target/scale 主线程算好传入；主线程提交（含取消检查）；产物进 displayCache
-- (void)serveScaledImage:(UIImage *)img target:(CGFloat)target scale:(CGFloat)scale
-                    task:(id<WKURLSchemeTask>)task ref:(NSValue *)taskRef {
-    CGFloat maxSide = MAX(img.size.width, img.size.height);
-    if (maxSide > target) {
-        CGFloat k = target / maxSide;
-        UIGraphicsBeginImageContextWithOptions(CGSizeMake(img.size.width * k, img.size.height * k), NO, scale);
-        [img drawInRect:CGRectMake(0, 0, img.size.width * k, img.size.height * k)];
-        UIImage *small = UIGraphicsGetImageFromCurrentImageContext();
-        UIGraphicsEndImageContext();
-        if (small) img = small;
+// 魔数 mime（WCM @0x4968 同款按源格式分流：jpg→jpeg / png→png，其余源在导出层
+// 已转码 JPEG，原路径回落兜底也按此判定）
+static NSString *MioDualMimeForData(NSData *d) {
+    const unsigned char *b = (const unsigned char *)d.bytes;
+    if (d.length >= 4) {
+        if (b[0] == 0xFF && b[1] == 0xD8) return @"image/jpeg";
+        if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return @"image/png";
     }
-    NSData *data = UIImageJPEGRepresentation(img, 0.8);
-    [self displayCacheStore:data url:task.request.URL.absoluteString];
-    [self serveData:data mime:@"image/jpeg" task:task ref:taskRef cacheHit:NO];
+    return @"image/jpeg";
 }
 
-// displayCache 写入（仅真图；URL 含 ?r= cache-bust 时按完整 URL 存——同 key 变体
-// 会多存一份，240 上限自动淘汰，可接受）
-- (void)displayCacheStore:(NSData *)data url:(NSString *)url {
-    if (data.length) [MioDualDispCache() setObject:data forKey:url];
+// ImageIO 解码管线（WCM @0x4968 解码块同构，替换旧 UIImage drawInRect——不整图
+// 解码、低峰内存、EXIF 方向自动处理）：CGImageSourceCreateThumbnailAtIndex
+// （FromImageAlways + WithTransform + CacheImmediately）+ maxPixel clamp [1024,2048]
+// → CGImageDestination 重编码（Lossy 0.8）→ displayCache {data,mime} → 主线程交付
+- (void)serveScaledData:(NSData *)raw url:(NSString *)url target:(CGFloat)target
+                   task:(id<WKURLSchemeTask>)task ref:(NSValue *)taskRef {
+    NSString *mime = MioDualMimeForData(raw);
+    BOOL isPNG = [mime isEqualToString:@"image/png"];
+    CGImageSourceRef src = CGImageSourceCreateWithData((CFDataRef)raw, NULL);
+    if (!src) {
+        [self serveData:nil mime:mime task:task ref:taskRef cacheHit:NO];
+        return;
+    }
+    // 目标像素 clamp（WCM 同款 [1024, 2048]；target 由屏幕宽/scale 主线程算好传入）
+    double maxPixel = MIN(MAX((double)target, 1024.0), 2048.0);
+    CFStringRef keys[4] = { kCGImageSourceCreateThumbnailFromImageAlways,
+                            kCGImageSourceCreateThumbnailWithTransform,
+                            kCGImageSourceShouldCacheImmediately,
+                            kCGImageSourceThumbnailMaxPixelSize };
+    CFTypeRef vals[4] = { kCFBooleanTrue, kCFBooleanTrue, kCFBooleanTrue,
+                          (__bridge CFTypeRef)@(maxPixel) };
+    CFDictionaryRef opts = CFDictionaryCreate(NULL, (const void **)keys, (const void **)vals, 4,
+                                              &kCFTypeDictionaryKeyCallBacks,
+                                              &kCFTypeDictionaryValueCallBacks);
+    CGImageRef thumb = CGImageSourceCreateThumbnailAtIndex(src, 0, opts);
+    CFRelease(opts);
+    CFRelease(src);
+    if (!thumb) {
+        [self serveData:nil mime:mime task:task ref:taskRef cacheHit:NO];
+        return;
+    }
+    NSMutableData *out = [NSMutableData data];
+    CGImageDestinationRef dst = CGImageDestinationCreateWithData(
+        (CFMutableDataRef)out, isPNG ? kUTTypePNG : kUTTypeJPEG, 1, NULL);
+    if (dst) {
+        CGImageDestinationAddImage(dst, thumb, (__bridge CFDictionaryRef)@{
+            kCGImageDestinationLossyCompressionQuality : isPNG ? @1.0 : @0.8
+        });
+        CGImageDestinationFinalize(dst);
+        CFRelease(dst);
+    }
+    CFRelease(thumb);
+    if (!out.length) {
+        [self serveData:nil mime:mime task:task ref:taskRef cacheHit:NO];
+        return;
+    }
+    [self displayCacheStore:out mime:mime url:url];
+    [self serveData:out mime:mime task:task ref:taskRef cacheHit:NO];
+}
+
+// displayCache 写入 {data, mime} 双值，cost = 字节数（WCM 同款；URL 含 ?r=
+// cache-bust 时按完整 URL 存——同 key 变体会多存一份，240 上限自动淘汰，可接受）
+- (void)displayCacheStore:(NSData *)data mime:(NSString *)mime url:(NSString *)url {
+    if (data.length) {
+        [MioDualDispCache() setObject:@{@"data": data, @"mime": mime} forKey:url cost:data.length];
+    }
 }
 
 static NSCache<NSString *, NSData *> *MioDualDispCache(void) {
@@ -427,6 +483,14 @@ static __weak UIViewController *g_dualPanelHost = nil;
                 if (k.length) [[MioDualMediaService shared] ensureMediaForKey:k];
             }
         }
+        return;
+    }
+    if ([action isEqualToString:@"assetMiss"]) {
+        // 二线保险（WCM assetMiss script message 同构：JS img onerror 上报 →
+        // native 补拉）。zero-fail 下正常不触发——WebKit 层异常（解码失败等）兜底，
+        // 与 visible 主动备图互为双腿，链路与 WCM 对齐
+        NSString *k = params[@"k"] ?: @"";
+        if (k.length) [[MioDualMediaService shared] ensureMediaForKey:k];
         return;
     }
     if (![action isEqualToString:@"refresh"]) return;
