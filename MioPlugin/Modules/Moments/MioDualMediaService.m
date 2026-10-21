@@ -341,7 +341,7 @@ static NSString *MioDualSniffExt(NSData *d) {
 
     // 签名去重：源文件 size+mtime 没变且副本已在 → 跳过
     unsigned long long sig = [attr fileSize] ^ (unsigned long long)(
-        [attr modificationDate].timeIntervalSinceReferenceDate * 1000.0);
+        [[attr fileModificationDate] timeIntervalSinceReferenceDate] * 1000.0);
     @synchronized(self) {
         NSDictionary *entry = _memTable[bare] ?: _diskTable[bare];
         if (entry[@"osig"] && [entry[@"osig"] unsignedLongLongValue] == sig
