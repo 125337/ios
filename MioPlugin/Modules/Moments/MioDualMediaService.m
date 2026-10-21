@@ -35,8 +35,9 @@ static NSString *MioDualBareKey(NSString *key) {
     NSMutableDictionary<NSString *, NSDictionary *> *_diskTable;  // 持久层镜像（启动加载）
     NSMutableDictionary<NSString *, NSNumber *> *_readyGen;       // 每 key 就绪代际（renderKeys 语义）
     NSMutableSet<NSString *> *_downloading;                       // 进行中的下载 key（去重）
-    NSMutableDictionary<NSString *, NSNumber *> *_attempts;       // 会话内重试计数（≤3 防 CDN 坏 URL 死循环）
+    NSMutableDictionary<NSString *, NSNumber *> *_attempts;       // 会话内重试计数（≤3+60s 冷却重置，防 CDN 坏 URL 死循环且不死锁）
     NSMutableDictionary<NSString *, NSDate *> *_downloadStart;    // 挂起起始时间（60s 超时重置死链）
+    NSMutableDictionary<NSString *, NSDate *> *_lastFailAt;       // 每 key 最近失败时刻（exhausted 冷却 / noitem 节流兼用）
     NSOperationQueue *_thumbQueue;                                // 缩略图导出（WCM previewQueue 位）
     NSOperationQueue *_originalQueue;                             // 原图导出（WCM mediaQueue 位）
     NSMutableSet<NSString *> *_pendingThumbs;                     // 缩略图导出去重（WCM pendingExports 同位）
@@ -96,6 +97,7 @@ static NSString *MediaStableDir(void) {
         _downloading = [NSMutableSet set];
         _attempts = [NSMutableDictionary dictionary];
         _downloadStart = [NSMutableDictionary dictionary];
+        _lastFailAt = [NSMutableDictionary dictionary];
         _pendingThumbs = [NSMutableSet set];
         _pendingOriginals = [NSMutableSet set];
         _thumbQueue = [[NSOperationQueue alloc] init];
@@ -148,6 +150,11 @@ static NSString *MediaStableDir(void) {
         // 保留已嗅探出的扩展名/原图签名（新登记不带这两项）
         if (old[@"ext"]) entry[@"ext"] = old[@"ext"];
         if (old[@"osig"]) entry[@"osig"] = old[@"osig"];
+        // 补导路径（resolveKey → registerLocalPath:itemID:nil）传空 iid/cdn：
+        // 不继承会把数据项找回锚点清掉（149 日志实证 14 个 key iid=(null) →
+        // noitem → attempts 烧死 → 图永久丢失），此处空值一律继承旧锚点
+        if (!itemID.length && old[@"iid"]) entry[@"iid"] = old[@"iid"];
+        if (!cdn.length && old[@"cdn"]) entry[@"cdn"] = old[@"cdn"];
         if (![old isEqualToDictionary:entry]) {
             _memTable[bare] = entry;
             _diskTable[bare] = entry;
@@ -555,12 +562,17 @@ static NSString *MioDualSniffExt(NSData *d) {
         _downloadStart[bare] = [NSDate date];
         NSNumber *att = _attempts[bare];
         if (att.intValue >= 3) {
-            [_downloading removeObject:bare];
-            WPLog(@"Dual", @"[Media] attempts exhausted key=%@", bare);
-            [MioDualMediaTrace log:@"dl" key:bare detail:@"exhausted(重试3次耗尽,CDN坏URL?)"];
-            return;
+            // 60s 冷却重置（149 日志实证：noitem 烧死 attempts 后永久 exhausted，
+            // 数据落地/翻页找回也拒试）。冷却期满清零重来，失败语义保留
+            NSDate *lastFail = _lastFailAt[bare];
+            if (lastFail && -[lastFail timeIntervalSinceNow] < 60.0) {
+                [_downloading removeObject:bare];
+                [MioDualMediaTrace log:@"dl" key:bare detail:@"exhausted(冷却中,60s后自动重试)"];
+                return;
+            }
+            [_attempts removeObjectForKey:bare];
         }
-        _attempts[bare] = @(att.intValue + 1);
+        _attempts[bare] = @([_attempts[bare] unsignedIntegerValue] + 1);
     }
 
     NSString *path = [self registeredPathForKey:key];
@@ -569,8 +581,16 @@ static NSString *MioDualSniffExt(NSData *d) {
     id mi = [self mediaItemForDataItem:di path:path];
     if (!di || !mi) {
         [self endDownloadForKey:bare];
+        @synchronized(self) {
+            // 找不回数据项 ≠ CDN 坏：不烧 attempts（翻页/数据落地找回即可恢复）
+            [_attempts removeObjectForKey:bare];
+            // 30s 节流：visible 报告会反复触发同 key，noitem 期间防日志/trace 风暴
+            NSDate *last = _lastFailAt[bare];
+            _lastFailAt[bare] = [NSDate date];
+            if (last && -[last timeIntervalSinceNow] < 30.0) return;
+        }
         WPLog(@"Dual", @"[Media] no dataItem/mediaItem key=%@ iid=%@", bare, iid);
-        [MioDualMediaTrace log:@"dl" key:bare detail:@"noitem(数据项/媒体项找回失败)"];
+        [MioDualMediaTrace log:@"dl" key:bare detail:@"noitem(数据项未在窗口,等找回重试)"];
         return;
     }
 
@@ -593,6 +613,10 @@ static NSString *MioDualSniffExt(NSData *d) {
     void (^done)(void) = ^{
         __strong typeof(wself) sself = wself;
         [sself endDownloadForKey:bare];
+        @synchronized(sself) {
+            [sself->_attempts removeObjectForKey:bare];   // 终结即清零（下次失败从头计数）
+            sself->_lastFailAt[bare] = [NSDate date];
+        }
         WPLog(@"Dual", @"[Media] downloader finished key=%@", bare);
         [MioDualMediaTrace log:@"dl" key:bare detail:@"finish(微信管线落地,等重导出)"];
         if (sself) {
