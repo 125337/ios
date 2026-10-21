@@ -26,6 +26,9 @@
 + (void)pushNowFromSession;
 // hook 层入口：微信 timeline 变更（0.5s 尾沿防抖）
 + (void)notifyDataChanged;
+// 可见行备图（JS visiblePass 上报）：存可见集供推送层可见优先补图，并带行 cdn
+// 立即 ensure（WCM visible→scheduleMediaReload 同构）
++ (void)noteVisibleKeys:(NSString *)ids;
 // 可见期保鲜轮询（attachWebView 开 / detachWebView 停）：5s tick = 窗口重载 + 防抖推送，
 // 无变更 diff 零字节空转——对齐 WCM「实时性不依赖事件」的轮询保鲜语义
 + (void)startVisiblePolling;

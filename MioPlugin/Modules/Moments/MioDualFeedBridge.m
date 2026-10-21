@@ -25,6 +25,8 @@ static NSString *MioDualJSONString(id obj) {
     NSArray<NSString *> *_lastOrder;                  // diff 基线：行序
     BOOL _needsSnapshot;                              // attach 后尚未灌快照
     BOOL _snapshotHadRows;                            // 本轮首推是否灌过快照行（清 stale 用）
+    NSMutableSet<NSString *> *_lastVisibleKeys;       // JS visiblePass 上报的视口内待图 mediaKey
+    NSMutableDictionary<NSString *, NSString *> *_cdnByKey;  // mediaKey → 行 cdn（visible 补图查）
 }
 
 #pragma mark 生命周期
@@ -49,6 +51,7 @@ static NSString *MioDualJSONString(id obj) {
         b->_snapshotHadRows = NO;
         b->_lastRowsByID = [NSMutableDictionary dictionary];
         b->_lastOrder = @[];
+        b->_lastVisibleKeys = nil;   // 旧 WebView 的可见集对新页面无效，等 JS 重新上报
     }
     b->_detached = NO;
     [self startVisiblePolling];
@@ -74,6 +77,37 @@ static NSString *MioDualJSONString(id obj) {
         return;
     }
     [[self bridge] pushNowLocked];
+}
+
+// ---- 可见行备图（WCM visible→scheduleMediaReload 同构，补图管线根治②）----
+// JS visiblePass 上报视口内待图行的 mediaKey。此前 Panel 直接 ensure(cdn:nil)——
+// 快照种子行的 cdn 不在 MediaService memTable，downloadCdnForBareKey url 空静默
+// return，可见行图永远不来（灰块）。Bridge 在推送时维护 mediaKey→cdn 映射，
+// visible 上报的 key 经映射带 cdn 补图；映射未命中再扫 rows 兜底
++ (void)noteVisibleKeys:(NSString *)ids {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self noteVisibleKeys:ids]; });
+        return;
+    }
+    if (ids.length == 0) return;
+    MioDualFeedBridge *b = [self bridge];
+    NSMutableSet *set = [NSMutableSet set];
+    for (NSString *k in [ids componentsSeparatedByString:@","]) {
+        if (k.length) [set addObject:k];
+    }
+    b->_lastVisibleKeys = set;
+    if (!b->_cdnByKey) b->_cdnByKey = [NSMutableDictionary dictionary];
+    // rows 兜底查 cdn（_cdnByKey 只覆盖推送后注册过的 key）
+    NSArray<NSDictionary *> *rows = [[MioDualTimelineStore shared] currentItems];
+    for (NSString *k in set) {
+        NSString *cdn = b->_cdnByKey[k];
+        if (!cdn.length) {
+            for (NSDictionary *r in rows) {
+                if ([r[@"mediaKey"] isEqualToString:k]) { cdn = r[@"cdn"]; break; }
+            }
+        }
+        [[MioDualMediaService shared] ensureMediaForKey:k cdn:cdn ?: @""];
+    }
 }
 
 // ---- 推送总闸（首屏根治刀2）：所有非常规推送收口到 250ms 尾沿合帧 ----
@@ -258,19 +292,37 @@ static NSTimeInterval gLastPushAt = 0;
     // ---- 待图行补下（文本卡→带图卡的源动力，修"字+图只显示字"）----
     // 源文件 <1KB 占位/未下载时行归文本形态（mediaKey 有值 img 为空）——备图循环
     // 只覆盖带 img 的行，文本卡从此无人触发补导，微信后来自动下载落地也没人看。
-    // 每轮推送前扫一遍（预算 40，pending 多为新行靠前），ensure → resolveKey：
-    // 源已落地(>1KB)即补导；源也没有 → 行 cdn 字段（dataUrl.url）走 CDN 兜底下载
-    // （WCM YB 等价物），落地 gen+ → rebuild → JS 文本卡升级媒体卡
+    // 补图管线根治（灰块积压实证：窗 333 行 tail 旧帖全灰——旧预算 40 永远从
+    // rows 头部扫，新帖占满预算，翻页旧帖永不 ensure）：
+    // ① 可见行优先（WCM visible 同构）：视口内待图行全量补，无预算限制
+    // ② 其余轮转 40：cursor 每轮进一格，tail 旧帖按时间片轮到（5s 心跳驱动）
     {
+        MioDualFeedBridge *b = [self bridge];
+        if (!b->_cdnByKey) b->_cdnByKey = [NSMutableDictionary dictionary];
+        NSMutableSet *vis = b->_lastVisibleKeys;
+        if (vis.count) {
+            for (NSDictionary *r in rows) {
+                NSString *mk = r[@"mediaKey"];
+                if (mk.length && ![r[@"img"] hasPrefix:@"mioimg://"] && [vis containsObject:mk]) {
+                    [b->_cdnByKey setObject:r[@"cdn"] ?: @"" forKey:mk];
+                    [[MioDualMediaService shared] ensureMediaForKey:mk cdn:r[@"cdn"]];
+                }
+            }
+        }
         NSUInteger budget = 40;
-        for (NSDictionary *r in rows) {
-            if (!budget) break;
+        NSUInteger n = rows.count;
+        static NSUInteger gScanCursor = 0;
+        for (NSUInteger i = 0; n > 0 && budget; i++) {
+            if (i >= n) break;
+            NSDictionary *r = rows[(gScanCursor + i) % n];
             NSString *mk = r[@"mediaKey"];
             if (mk.length && ![r[@"img"] hasPrefix:@"mioimg://"]) {
                 budget--;
+                [b->_cdnByKey setObject:r[@"cdn"] ?: @"" forKey:mk];
                 [[MioDualMediaService shared] ensureMediaForKey:mk cdn:r[@"cdn"]];
             }
         }
+        if (n) gScanCursor = (gScanCursor + 1) % n;   // 窗口滑动：公平轮转
     }
 
     // ---- 空仓保护（冷启动清屏根治②，与 Store 层快照顶上互为保险）：----

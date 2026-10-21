@@ -39,6 +39,7 @@ static NSString *MioDualBareKey(NSString *key) {
     NSMutableSet<NSString *> *_pendingThumbs;                     // 缩略图导出去重（WCM pendingExports 同位）
     NSMutableSet<NSString *> *_pendingOriginals;                  // 原图导出去重（WCM pendingOriginalExports 同位）
     NSMutableSet<NSString *> *_cdnInflight;                       // CDN 兜底下载在途去重（防 5s 轮询重入）
+    NSMutableDictionary<NSString *, NSNumber *> *_cdnFailAt;      // bare → 最近失败时刻（60s 冷却）
     BOOL _dirty;
 }
 
@@ -541,6 +542,12 @@ static NSString *MioDualSniffExt(NSData *d) {
     @synchronized(self) {
         if (!_cdnInflight) _cdnInflight = [NSMutableSet set];
         if ([_cdnInflight containsObject:bare]) return;   // 在途去重
+        // 失败冷却 60s（灰块轮转根治配套）：token 过期/404 的行每轮 push 都会
+        // ensure 到，无冷却则无限重试刷流量刷 trace；冷却后周期性复查（微信侧
+        // token 可能续期）不放弃
+        if (!_cdnFailAt) _cdnFailAt = [NSMutableDictionary dictionary];
+        CFAbsoluteTime lastFail = [_cdnFailAt[bare] doubleValue];
+        if (CFAbsoluteTimeGetCurrent() - lastFail < 60.0) return;
         [_cdnInflight addObject:bare];
     }
     __weak typeof(self) wself = self;
@@ -551,6 +558,7 @@ static NSString *MioDualSniffExt(NSData *d) {
                 @synchronized(sself) { [sself->_cdnInflight removeObject:bare]; }
                 NSInteger code = [(NSHTTPURLResponse *)resp statusCode];
                 if (err || code != 200 || data.length <= 1024) {
+                    @synchronized(sself) { sself->_cdnFailAt[bare] = @(CFAbsoluteTimeGetCurrent()); }
                     [MioDualMediaTrace log:@"cdnfetch" key:bare
                                     detail:[NSString stringWithFormat:@"FAIL(code=%ld %@ %lluB)",
                                             (long)code, err.localizedDescription ?: @"",

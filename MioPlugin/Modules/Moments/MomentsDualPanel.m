@@ -474,13 +474,9 @@ static __weak UIViewController *g_dualPanelHost = nil;
     }
     if ([action isEqualToString:@"visible"]) {
         // 可见性上报（WCM visible→scheduleMediaReload 同构，02 L1230-1244）：JS
-        // visiblePass 把视口±2屏的媒体 key 报上来，原生只备看得到的图
-        NSString *ids = params[@"ids"] ?: @"";
-        if (ids.length) {
-            for (NSString *k in [ids componentsSeparatedByString:@","]) {
-                if (k.length) [[MioDualMediaService shared] ensureMediaForKey:k];
-            }
-        }
+        // visiblePass 把视口±2屏的待图 mediaKey 报上来 → Bridge 存可见集 + 带 cdn
+        // 补图（此前直 ensure(cdn:nil)，快照种子行 memTable 无 cdn → 静默失败灰块）
+        [MioDualFeedBridge noteVisibleKeys:params[@"ids"] ?: @""];
         return;
     }
     if ([action isEqualToString:@"assetMiss"]) {
