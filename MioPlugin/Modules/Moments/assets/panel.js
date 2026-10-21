@@ -195,17 +195,29 @@ var chs=grid.children,membershipChanged=desired.length!==chs.length,j;
 for(i=0;i<chs.length&&i<desired.length;i++)if(chs[i]!==desired[i]){membershipChanged=true;
 break;
 }
-var keep={},dirty=false;
-for(i=0;i<desired.length;i++){keep[i]=desired[i];
+// 首建/全换：DocumentFragment 一次上屏（单次布局失效）。逐位 insertBefore 在
+// live 集合上 O(N²)（1905 行全不对齐实测主线程冻结 5-15s=开面板卡死实证），
+// WCM 不卡因其 render 恒为尾部增量（对齐循环命中快路径）；我们快照一次灌全量
+if(chs.length===0&&desired.length){var frag=document.createDocumentFragment();
+for(i=0;i<desired.length;i++)frag.appendChild(desired[i]);
+grid.appendChild(frag);
+if(dirtyNew(desired))layoutCards();
+scheduleVisible();
+return;
+}
+var keepSet={},dirty=false;
+for(i=0;i<desired.length;i++){keepSet[desired[i].dataset.id]=1;
 if(desired[i].layoutDirty)dirty=true;
 }
-var remove=[];
-for(i=0;i<chs.length;i++)if(chs[i].dataset.id)remove.push(chs[i]);
-for(i=0;i<remove.length;i++)if(desired.indexOf(remove[i])<0)grid.removeChild(remove[i]);
+for(i=0;i<chs.length;i++)if(chs[i].dataset.id&&!keepSet[chs[i].dataset.id])grid.removeChild(chs[i]);
 for(i=0;i<desired.length;i++)if(grid.children[i]!==desired[i])grid.insertBefore(desired[i],grid.children[i]||null);
 if(membershipChanged&&tab==='liked')columnForID={};
 if(membershipChanged||dirty)layoutCards();
 scheduleVisible();
+}
+// 新建卡的脏标记统计（fragment 路径用）：任一卡 layoutDirty 即需重排
+function dirtyNew(desired){for(var i=0;i<desired.length;i++)if(desired[i].layoutDirty)return true;
+return false;
 }
 function updateStale(){var t=document.getElementById('staleTag');
 if(t)t.style.display=stale?'block':'none';
