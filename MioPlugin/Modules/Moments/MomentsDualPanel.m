@@ -39,9 +39,33 @@ static NSData *MioDualPlaceholderPNG(void) {
     return d;
 }
 
+// 解码队列（WCMAssetHandler decodeQueue 反编译实证同款：专属串行队列——同一时刻
+// 只解一张，CPU/内存曲线平滑。旧实现 global 并发队列：快速滚动 20 张齐解=CPU 峰值
+// + 并发位图内存峰值，滚动掉帧元凶之一）
+static NSOperationQueue *MioDualDecodeQueue(void) {
+    static NSOperationQueue *q = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        q = [[NSOperationQueue alloc] init];
+        q.maxConcurrentOperationCount = 1;
+        q.name = @"mio.dual.decode";
+        q.qualityOfService = NSQualityOfServiceUserInitiated;
+    });
+    return q;
+}
+
 // 渲染层备图（kickDownload/MioDualMediaItemForPath）已迁 MioDualMediaService
 // ensureMediaForKey:——WCM exportImage 同构：备图是推送上屏（渲染）的职责，
 // handler 只管读文件（WCMAssetHandler 实证同款纯读，文件不在即占位响应）
+
+// activeTasks 活动任务表（WCM 同款 @synchronized 登记）：解码 block 开头查表，
+// 已停任务直接跳过解码——滚过去的图不解码省 CPU；stopURLSchemeTask 移除
+- (NSMutableSet<NSValue *> *)activeTasks {
+    static NSMutableSet *set = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ set = [NSMutableSet set]; });
+    return set;
+}
 
 - (void)webView:(WKWebView *)webView startURLSchemeTask:(id<WKURLSchemeTask>)task {
     // key 取 path 末段（?r= cache-bust 参数在 query，不进 pathComponents）
@@ -70,15 +94,26 @@ static NSData *MioDualPlaceholderPNG(void) {
         [self serveData:cached mime:@"image/jpeg" task:task ref:taskRef cacheHit:YES];
         return;
     }
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    // 缩放目标主线程算好（WCM 同款：block capture target，后台不碰 UIScreen）
+    CGFloat scale = [UIScreen mainScreen].scale;
+    CGFloat target = MAX(512, ([UIScreen mainScreen].bounds.size.width - 40) * scale / 2 + 64);
+    // 登记活动任务（WCM 同款 @synchronized）：解码 block 据此判取消
+    @synchronized ([self activeTasks]) {
+        [[self activeTasks] addObject:taskRef];
+    }
+    // 重活（读文件+解码+缩放+编码）全进专属串行队列（WCM decodeQueue 同款）
+    [MioDualDecodeQueue() addOperationWithBlock:^{
+        @synchronized ([self activeTasks]) {
+            if (![[self activeTasks] containsObject:taskRef]) return;   // 已停：跳过解码
+        }
         UIImage *img = [UIImage imageWithContentsOfFile:path];
         if (!img) {
             // 文件在校验后半路被清/写一半：回占位（绝不 didFail）
             [self servePlaceholder:task];
             return;
         }
-        [self serveScaledImage:img task:task ref:taskRef];
-    });
+        [self serveScaledImage:img target:target scale:scale task:task ref:taskRef];
+    }];
 }
 
 // 占位响应（主线程提交；no-store 防 WebKit 缓存透明图挡住二次请求的真图）
@@ -104,10 +139,9 @@ static NSData *MioDualPlaceholderPNG(void) {
 }
 
 // 解码后按列宽缩放返回（WCMAssetHandler 同款：不回原图，单图内存几MB→几十KB），
-// 主线程提交（含取消检查）；产物进 displayCache
-- (void)serveScaledImage:(UIImage *)img task:(id<WKURLSchemeTask>)task ref:(NSValue *)taskRef {
-    CGFloat scale = [UIScreen mainScreen].scale;
-    CGFloat target = MAX(512, ([UIScreen mainScreen].bounds.size.width - 40) * scale / 2 + 64);
+// target/scale 主线程算好传入；主线程提交（含取消检查）；产物进 displayCache
+- (void)serveScaledImage:(UIImage *)img target:(CGFloat)target scale:(CGFloat)scale
+                    task:(id<WKURLSchemeTask>)task ref:(NSValue *)taskRef {
     CGFloat maxSide = MAX(img.size.width, img.size.height);
     if (maxSide > target) {
         CGFloat k = target / maxSide;
@@ -163,11 +197,18 @@ static NSCache<NSString *, NSData *> *MioDualDispCache(void) {
         [task didReceiveResponse:resp];
         [task didReceiveData:data];
         [task didFinish];
+        @synchronized ([self activeTasks]) {   // 提交完成：出登记表防膨胀（activeTasks 仅登记进解码队列的任务）
+            [[self activeTasks] removeObject:taskRef];
+        }
     });
 }
 
 - (void)webView:(WKWebView *)webView stopURLSchemeTask:(id<WKURLSchemeTask>)task {
-    [[self cancelledTasks] addObject:[NSValue valueWithNonretainedObject:task]];
+    NSValue *ref = [NSValue valueWithNonretainedObject:task];
+    [[self cancelledTasks] addObject:ref];   // 提交时防崩（对已停 task 回调 WebKit 断言）
+    @synchronized ([self activeTasks]) {     // 解码跳过（WCM 同款 activeTasks 查表）
+        [[self activeTasks] removeObject:ref];
+    }
 }
 
 // 已取消任务表（主线程专用）
