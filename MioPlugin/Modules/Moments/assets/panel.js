@@ -110,6 +110,7 @@ if(!c3){c3=createCard(it2);
 cards[it2.id]=c3;
 }if(c3.parentNode===grid)continue;
 updateCard(c3,it2);
+grid.appendChild(c3);
 mounted++;
 if(c3.layoutDirty)dirty++;
 }empty.style.display=list.length?'none':'block';
