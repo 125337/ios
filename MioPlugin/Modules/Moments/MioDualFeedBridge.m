@@ -76,10 +76,31 @@ static NSString *MioDualJSONString(id obj) {
     [[self bridge] pushNowLocked];
 }
 
-// 刷新链路显式推送（rebuildItemsAsync commit 后 / PanelOpen 后）：刀2 闸门——
-// 面板视图不在窗口上（预热/已关）只暖数据不推。探针实证预热期把全量 feed 推给
-// 尚未显示的 WebView（4.66MB EVALJS 内联编译 100-300ms 主线程）在 PanelOpen 的
-// loadHTML 刷新后全部作废——纯死推送
+// ---- 推送总闸（首屏根治刀2）：所有非常规推送收口到 250ms 尾沿合帧 ----
+// 时序实证：17ms 内 17 次 evaluateJavaScript 注入（批量 gen+ 时每张图一次推送）。
+// 上游触发源再多（gen+/tail 轮/onChanged/rebuild commit），窗口内全合并为一次注入，
+// fire 时推最新状态——行级 diff 保证只发变更行。与 Engine 0.5s 防抖叠加后，链路
+// 「变更 → 0.5s 防抖 → rebuild → 250ms 合帧 → 注入」全程至多 2 次往返
+static BOOL gPushPending = NO;
+
++ (void)requestPush {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self requestPush]; });
+        return;
+    }
+    if (gPushPending) return;   // 已排定即合并（fire 时重读最新，语义与 Engine 防抖一致）
+    gPushPending = YES;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        gPushPending = NO;      // 先清再推：推送过程中新变更可再排程
+        [[self bridge] pushNowLocked];
+    });
+}
+
+// 刷新链路推送（rebuildItemsAsync commit 后 / PanelOpen 后）：刀2 闸门——面板视图
+// 不在窗口上（预热/已关）只暖数据不推（预热期全量 feed 推给未显示 WebView，4.66MB
+// EVALJS 内联编译 100-300ms 主线程，PanelOpen loadHTML 刷新后全作废——纯死推送）；
+// 在窗口上走 250ms 合帧总闸（批量 gen+ 的 17 连发注入在此消灭）
 + (void)pushNowFromSession {
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self pushNowFromSession]; });
@@ -91,8 +112,34 @@ static NSString *MioDualJSONString(id obj) {
         [MioDualMediaTrace log:@"push" key:@"-" detail:@"skip 预热不在窗口"];
         return;
     }
-    WPLog(@"Dual", @"[Push] session push (refresh chain)");
-    [[self bridge] pushNowLocked];
+    [self requestPush];
+}
+
+// ---- 首屏同帧（首屏根治刀1）：首推前先备首屏图 ----
+// WCM 首屏 864ms 的本质 = 导出几乎总赢 WebView 竞速（先导后注，图与文字同帧到位）。
+// 时序实证 Mio 首推 +244ms 时可见区图还没开始导（备图在首推后的 visiblePass 才启动），
+// 首屏 8s 全程渐进补图。此处首推前同步触发可见区前 6 个 mediaKey 的 ensure（导出
+// 毫秒级），300ms 后首推——首屏文字与图同帧上屏；CDN 兜底行不等待网络（首推文本卡，
+// 就绪后走合帧总闸增量升级），图全好前的后续注入由 diff+合帧压到最少
++ (void)primeFirstScreen {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self primeFirstScreen]; });
+        return;
+    }
+    NSArray<NSDictionary *> *rows = [[MioDualTimelineStore shared] currentItems];
+    NSUInteger budget = 6;
+    for (NSDictionary *r in rows) {
+        if (!budget) break;
+        NSString *mk = r[@"mediaKey"];
+        if (mk.length) {
+            budget--;
+            [[MioDualMediaService shared] ensureMediaForKey:mk cdn:r[@"cdn"]];
+        }
+    }
+    [MioDualMediaTrace log:@"push" key:@"-"
+                    detail:[NSString stringWithFormat:@"首屏备图 %lu 张(预算6)", (unsigned long)(6 - budget)]];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ [self pushNow]; });   // 首推直推（快照秒显）
 }
 
 #pragma mark 尾沿防抖（已收口 Engine；此处保留转发器——MediaService 补图唤醒等调用方零改动）
@@ -132,7 +179,7 @@ static BOOL gPolling = NO;
 + (void)pollTick {
     if (!gPolling) return;
     [[MioDualTimelineEngine shared] ensureSession];   // 会话心跳：内部被终结则重开（WCM timer 同位）
-    [[MioDualTimelineEngine shared] reloadWindow];    // 本地库→内存窗口（140：窗口不自动刷新）
+    // reload 已收敛（首屏根治刀3）：防抖 fire 统一 reload+rebuild，tick 只负责心跳唤醒
     [self notifyDataChanged];   // 转发 Engine：0.5s 尾沿防抖，窗口内变更全合并
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{

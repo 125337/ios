@@ -307,9 +307,14 @@
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         _notifyPending = NO;      // 先清再推：推送过程中若触发新变更可再排程
-        [MioDualMediaTrace log:@"engine" key:@"-" detail:@"防抖fire→rebuild"];
+        [MioDualMediaTrace log:@"engine" key:@"-" detail:@"防抖fire→reload+rebuild"];
         [self headDataLandedIfGrown];   // 补 1：head 数据落地才提前解除防重入（onChanged 不可靠）
-        [[MioDualTimelineStore shared] rebuildItemsAsync];   // 刀1：重活后台，commit 后经闸门推送
+        // reload 收敛（首屏根治刀3）：内存窗口不自动刷新（140 实证），reload 必须有；
+        // 但从 Hook「每事件一次」（首屏活跃期 0.5~1s 一次，探针实证 29s 内 30+ 次）
+        // 收敛到防抖 fire 一次（≤2s 一次）——WCM 对 onChanged 只通知不 reload，
+        // reload 是我们窗口模型特有的补数动作，配平到防抖节奏即可
+        [self reloadWindow];
+        [[MioDualTimelineStore shared] rebuildItemsAsync];   // 刀1：重活后台，commit 后经合帧总闸推送
     });
 }
 

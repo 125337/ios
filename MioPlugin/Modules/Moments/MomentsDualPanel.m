@@ -368,9 +368,10 @@ static __weak UIViewController *g_dualPanelHost = nil;
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     self.pageReady = YES;
-    // 页面就绪：挂推送桥 → 首推（快照秒显 + 增量 patch 全在 Bridge 内）
+    // 页面就绪：挂推送桥 → 首屏同帧备图（刀1：先触发可见区 6 张导出，300ms 后首推，
+    // 文字与图同帧上屏——WCM「导出赢竞速」同构）→ 快照秒显 + 增量 patch 全在 Bridge 内
     [MioDualFeedBridge attachWebView:self.webView];
-    [MioDualFeedBridge pushNow];
+    [MioDualFeedBridge primeFirstScreen];
     [self updateBellBadge];
 }
 

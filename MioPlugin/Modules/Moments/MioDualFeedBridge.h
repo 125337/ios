@@ -15,10 +15,14 @@
 + (void)attachWebView:(WKWebView *)webView;
 // 面板 Close 时摘除（weak 引用，WebView 释放亦自动断开）
 + (void)detachWebView;
-// 立即推送（attach 后首推用；事件路径走 notifyDataChanged 防抖）
+// 立即推送（attach 后首推/PanelOpen 用；事件路径走 notifyDataChanged 防抖）
 + (void)pushNow;
+// 首屏同帧（首屏根治刀1）：didFinishNavigation 用——先触发可见区前 6 张导出，
+// 300ms 后首推（WCM「导出赢竞速」同构，文字与图同帧上屏）
++ (void)primeFirstScreen;
 // 刷新链路显式推送（refreshHead/loadTail 末尾统一调用——reload 同步完成后本地库
-// 新数据立即可见，与开面板同链路，不依赖 NSTimer 防抖）
+// 新数据立即可见，与开面板同链路，不依赖 NSTimer 防抖）；面板不在窗口只暖不推，
+// 在窗口走 250ms 合帧总闸（首屏根治刀2，批量 gen+ 的 17 连发注入在此消灭）
 + (void)pushNowFromSession;
 // hook 层入口：微信 timeline 变更（0.5s 尾沿防抖）
 + (void)notifyDataChanged;

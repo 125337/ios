@@ -158,26 +158,13 @@ static void MioDualInstallTimelineChangedHook(void) {
     __block void (*orig)(id, SEL, id, id, id) = (void (*)(id, SEL, id, id, id))cur;
     method_setImplementation(m, imp_implementationWithBlock(^(id self, id added, id changed, id deleted) {
         orig(self, sel, added, changed, deleted);
-        // 内存数据项列表重载（140 日志根治「新帖不自动出现」）：同步落在本地库后，
-        // countOfTimelineDataItem/getTimelineDataItemOfIndex 读的内存列表不会自动
-        // 刷新（140 实证：8 次事件 rows 恒 10、恒 no changes）——必须显式 reload
-        // 把本地库灌进内存列表，diff 才能看到新数据（WCFacade.h L426 原生方法）
-        static BOOL inReload = NO;   // 防重入：reload 可能同步再触发本回调，防死循环
-        BOOL hasChange = NO;         // 空变更跳过：纯 UI 类回调不值得一次 reload
-        id parts[3] = {added, changed, deleted};   // C 数组防 nil（@[] 字面量装 nil 直接崩）
-        for (int i = 0; i < 3 && !hasChange; i++) {
-            if ([parts[i] respondsToSelector:@selector(count)] &&
-                [(NSArray *)parts[i] count] > 0) hasChange = YES;
-        }
-        if (hasChange && !inReload) {
-            inReload = YES;
-            SEL rsel = NSSelectorFromString(@"reloadTimelineDataItems");
-            if ([self respondsToSelector:rsel])
-                ((id(*)(id, SEL))objc_msgSend)(self, rsel);
-            inReload = NO;
-        }
+        // reload 收敛（首屏根治刀3）：本 hook 不再每事件同步 reloadTimelineDataItems
+        // ——首屏活跃期微信每 0.5~1s fire 一次，同步 reload 就每 0.5~1s 一次（探针
+        // 实证 29s 内 30+ 次；WCM 对 onChanged 只做通知不 reload）。reload 动作收敛
+        // 到 Engine 防抖 fire 统一执行（≤2s 一次）：内存窗口不自动刷新的实证仍在
+        // （140 日志），只是把 reload 从「每事件」改为「每防抖窗一次」，语义不变
         WPLog(@"Dual", @"[Evt] onTimelineDataChanged fired");
-        [[MioDualTimelineEngine shared] notifyDataChanged];   // 0.5s 尾沿防抖 → rebuild → 增量 patch
+        [[MioDualTimelineEngine shared] notifyDataChanged];   // 0.5s 尾沿防抖 → reload+rebuild → 合帧推送
     }));
     WPLog(@"Dual", @"[Dual] onTimelineDataChanged hook installed (P1 event-driven)");
 }
