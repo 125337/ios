@@ -259,6 +259,15 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 }
 
 // 快照行（解析一次缓存：stale 模式期间每次推送复用，不重复解析几百 KB JSON）
+// 读入过滤空壳行（空白卡根治）：name/content/img 三全空 = 联系人查询暂态失败时
+// 映射产出的残缺行（纯图帖 content 天然空但 name 不会空）——曾随快照落盘固化，
+// 渲染成只有时间行的空白卡且永无 patch 覆盖（该 rid 已不在微信窗口）。
+// 读入侧 + 落盘侧（Bridge）双侧过滤，残缺行退出渲染域
+static BOOL MioDualRowHollow(NSDictionary *r) {
+    NSString *nm = r[@"name"], *ct = r[@"content"], *img = r[@"img"];
+    return (nm.length == 0) && (ct.length == 0) && ![img hasPrefix:@"mioimg://"];
+}
+
 - (NSArray<NSDictionary *> *)snapshotRows {
     if (_snapshotRowsCache) return _snapshotRowsCache;
     NSString *snap = [self lastSnapshotJSON];
@@ -267,8 +276,11 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
                                                 options:0 error:nil];
     NSArray *arr = [parsed isKindOfClass:[NSDictionary class]] ? parsed[@"items"] : nil;
     if (arr.count == 0) return @[];
-    _snapshotRowsCache = arr;
-    return arr;
+    NSMutableArray *keep = [NSMutableArray arrayWithCapacity:arr.count];
+    for (NSDictionary *r in arr)
+        if ([r isKindOfClass:[NSDictionary class]] && !MioDualRowHollow(r)) [keep addObject:r];
+    _snapshotRowsCache = keep;
+    return keep;
 }
 
 - (NSDictionary *)itemDict:(id)item {
