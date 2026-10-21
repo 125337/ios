@@ -4,6 +4,7 @@
 #import "MioDualTimelineStore.h"
 #import "MioDualTimelineEngine.h"
 #import "MioDualMediaService.h"
+#import "MioDualMediaTrace.h"
 
 // JSON → 可注入 JS 字面量的字符串（U+2028/2029 是 JS 行终止符，JSONSerialization
 // 不转义，直接 eval 会语法错误；转义后的串同时可安全回灌 NSJSONSerialization 解析）
@@ -289,6 +290,14 @@ static NSTimeInterval gLastPushAt = 0;
     WPLog(@"Dual", @"[Push] patch upsert=%lu remove=%lu order=%d bytes=%lu",
           (unsigned long)upserts.count, (unsigned long)removedIDs.count,
           needOrder ? 1 : 0, (unsigned long)patchJSON.length);
+    // 推送出口埋点：带图行数 = 补图链最终交付量。gen+ 后此数应>0 且 serve 随之增长；
+    // 若 gen+ 有而此数恒 0 → remap/diff 断链，一眼定位
+    NSUInteger imgRows = 0;
+    for (NSDictionary *r in upserts) if ([r[@"img"] hasPrefix:@"mioimg://"]) imgRows++;
+    [MioDualMediaTrace log:@"push" key:@"-"
+                    detail:[NSString stringWithFormat:@"upsert=%lu 带图=%lu remove=%lu",
+                            (unsigned long)upserts.count, (unsigned long)imgRows,
+                            (unsigned long)removedIDs.count]];
 
     // ---- 渲染层备图（WCM exportImage 模式）：只对本次变更行，缺文件即触发微信管线 ----
     for (NSDictionary *r in upserts) {
