@@ -49,7 +49,9 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
         q = [[NSOperationQueue alloc] init];
         q.maxConcurrentOperationCount = 1;
         q.name = @"mio.dual.decode";
-        q.qualityOfService = NSQualityOfServiceUserInitiated;
+        // QOS UTILITY（WCM 未设 QOS=default 同构）：解码不抢渲染线程的核——
+        // USER_INITIATED 优先级在快滚连续解码时会饿死 WebKit 渲染（rAF 冻结）
+        q.qualityOfService = NSQualityOfServiceUtility;
     });
     return q;
 }
