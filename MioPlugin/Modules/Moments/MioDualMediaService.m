@@ -526,29 +526,16 @@ id MioDualFacade(void);   // Store.m 里的 facade 获取（extern 复用）
         [MioDualMediaTrace log:@"dl" key:MioDualBareKey(key) detail:@"skip 已就绪"];
         return;
     }
-    // 稳定副本和源文件都没有：触发原生管线下载
+    // 稳定副本和源文件都没有：暂只等待（downloadMedia:@[dataItem] 参数形态
+    // 未经证实，153 日志实证首推即闪退；探针 frida_dual_dlmedia.js 取证原生
+    // 真实调用形态后按形态重写此处）
     NSString *bare = MioDualBareKey(key);
     @synchronized(self) {
         NSUInteger att = [_dlAttempts[bare] unsignedIntegerValue];
-        if (att >= 3) return;   // WCM gallery 同款 attempt<3 节流
+        if (att >= 1) return;   // 每 key 只记一次日志（防 5s 轮询刷屏）
         _dlAttempts[bare] = @(att + 1);
     }
-    NSString *iid = [self itemIDForKey:key];
-    id di = iid.length ? [[MioDualTimelineStore shared] dataItemByID:iid] : nil;
-    id facade = MioDualFacade();
-    SEL s = NSSelectorFromString(@"downloadMedia:downloadType:");
-    if (!di || !facade || ![facade respondsToSelector:s]) {
-        [MioDualMediaTrace log:@"dl" key:bare detail:@"wait(无数据项/无downloadMedia,等数据落地)"];
-        return;
-    }
-    @try {
-        ((void(*)(id, SEL, id, long long))objc_msgSend)(facade, s, @[di], 1);
-        [MioDualMediaTrace log:@"dl" key:bare detail:@"start(downloadMedia 触发原生下载)"];
-        WPLog(@"Dual", @"[Media] downloadMedia triggered key=%@ iid=%@", bare, iid);
-    } @catch (NSException *e) {
-        WPLog(@"Dual", @"[Media] downloadMedia exception: %@", e);
-        [MioDualMediaTrace log:@"dl" key:bare detail:@"EXC(downloadMedia 异常)"];
-    }
+    [MioDualMediaTrace log:@"dl" key:bare detail:@"wait(源缺失,downloadMedia 取证中)"];
 }
 
 #pragma mark 原生下载完成 hook（WCM Install 同款，_chain_34 L885-933 反编译实证）
