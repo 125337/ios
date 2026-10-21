@@ -451,26 +451,32 @@ static NSString * const kDualPageHTML = @(
 "card.parts.nm.textContent=item.name||'';"
 "card.parts.rt.innerHTML='<span style=\"font-size:12px;color:#999;\">'+fmtTime(item.time)+'</span>'+stat(HEART,item.likes)+stat(BUB,item.cmt);"
 "}"
-// 大列表分帧装载：首屏快照/切 tab 一帧内建 2000 卡 + 2000 次 gBCR 强制 reflow = 卡 2-3s
-// 的根因。WCM 不卡的原理同构（原生 200ms 分片推送、每帧只加一小批）。>150 行走
-// progressive fill（150 张/16ms），期间滚动/推送/动画不冻结；小列表照旧同步渲染。
-// fillCursor 语义：已装载前缀长度；快照/切 tab/搜索重置 0 重灌，补丁追加 +=fresh
+// 大列表分帧装载：首屏快照一帧内建 2000 卡 + 2000 次 gBCR 强制 reflow = 卡 2-3s
+// 的根因。WCM 不卡的原理同构（原生 200ms 分片推送、每帧只加一小批）。>150 行**未建**
+// 走 progressive fill（150 张/16ms），期间滚动/推送/动画不冻结。
+// 保 DOM 切显隐（切 tab 掉帧探针实证：卸载 1868 卡+重灌 1050 张=298-350ms 掉帧，
+// native 零阻塞——卡顿全在 WebView 卸载/重建/重排层）：已建卡只切 display 不删不建
+// （WCM cell 复用同思想），liked ⊂ all 语义下切 tab/搜索的过滤变化一次成帧
 "function render(){"
 "var list=visibleList();"
-"if(list.length>150&&fillCursor<list.length){fill(list);return;}"
+"var need=0,i;"
+"for(i=0;i<list.length;i++){if(!cards[list[i].id])need++;}"
+"if(need>150){fill(list);return;}"
 "renderVisible(list);}"
 "function renderVisible(list){"
 "var keep={},i;"
 "for(i=0;i<list.length;i++)keep[list[i].id]=1;"
-// 卸载不在可见列表的卡（含 .skel 骨架占位——无 dataset.id 必被清）
-"var chs=Array.prototype.slice.call(grid.children);"
-"for(i=0;i<chs.length;i++){var cd=chs[i];if(!keep[cd.dataset.id]){var oid=cd.dataset.id;cd.parentNode.removeChild(cd);if(oid){delete cards[oid];delete colOf[oid];}}}"
-// 顺序 reconcile（WCM 同款）：desired 序=新→旧，next 指针线性推进，O(N) 无双重循环
-"var next=grid.firstChild;"
+// 已建卡切显隐（瀑布流绝对定位不依赖 DOM 序，隐藏卡不占位）；仅骨架占位
+// （无 dataset.id）照旧清除。倒序遍历防活集合错位
+"var chs=grid.children;"
+"for(i=chs.length-1;i>=0;i--){var cd=chs[i];"
+"if(!cd.dataset.id){cd.parentNode.removeChild(cd);continue;}"
+"var vis=!!keep[cd.dataset.id];"
+"if(cd.style.display!==(vis?'':'none'))cd.style.display=vis?'':'none';}"
+// 新卡尾插：绝对定位下 DOM 序无关视觉（layoutCards 按 list 序定位），免 reconcile
 "for(i=0;i<list.length;i++){"
 "var it=list[i],c=cards[it.id];"
-"if(!c){c=createCard(it);cards[it.id]=c;}"
-"if(next===c)next=c.nextSibling;else grid.insertBefore(c,next||null);"
+"if(!c){c=createCard(it);cards[it.id]=c;grid.appendChild(c);}"
 "updateCard(c,it);}"
 "empty.style.display=list.length?'none':'block';"
 "scheduleLayout();"
