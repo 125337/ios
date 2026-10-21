@@ -38,6 +38,7 @@ static NSString *MioDualBareKey(NSString *key) {
     NSOperationQueue *_originalQueue;                             // 原图导出（WCM mediaQueue 位）
     NSMutableSet<NSString *> *_pendingThumbs;                     // 缩略图导出去重（WCM pendingExports 同位）
     NSMutableSet<NSString *> *_pendingOriginals;                  // 原图导出去重（WCM pendingOriginalExports 同位）
+    NSMutableDictionary<NSString *, NSNumber *> *_dlAttempts;     // downloadMedia 触发计数（<3，WCM gallery 同款）
     BOOL _dirty;
 }
 
@@ -93,6 +94,7 @@ static NSString *MediaStableDir(void) {
         _pendingThumbs = [NSMutableSet set];
         [self installNativeDownloadHook];   // WCM 同款：hook WCFacade onDownloadFinish（原生下载完成出口）
         _pendingOriginals = [NSMutableSet set];
+        _dlAttempts = [NSMutableDictionary dictionary];
         _thumbQueue = [[NSOperationQueue alloc] init];
         _thumbQueue.maxConcurrentOperationCount = 2;   // 小块 JPEG，2 并发足够且不抢 IO
         _thumbQueue.name = @"mio.dual.media.thumb";
@@ -507,18 +509,46 @@ static NSString *MioDualSniffExt(NSData *d) {
     }
 }
 
-// 渲染层备图（WCM 同构精简版）：源文件已落地(>1KB)即触发补导；未落地等原生管线
-// ——onDownloadFinish hook 唤醒重导（WCM 同款，下载完全交给微信原生）。
-// 自建 WCMediaDownloader 路径整体废弃：151 日志实证 30+ started 零回调
-// （completion block 组合根本不被调用），原生下载回调只走 WCFacade
-// onDownloadFinish:downloadType: 出口（WCM _chain_34 L885-933 hook 实证）
+// 渲染层备图（WCM 同构精简版）：源文件已落地(>1KB)触发补导；源也没了则调
+// [WCFacade downloadMedia:downloadType:] 触发原生下载（WCM gallery 原图路径同款
+// API，attempt<3 节流同款），下载完成走 onDownloadFinish: 出口 → 我们的 hook
+// 扫描重导 → gen+ → rebuild 补图。自建 WCMediaDownloader 已废弃（151 日志实证
+// 30+ started 零回调，completion block 组合根本不被调用）
+id MioDualFacade(void);   // Store.m 里的 facade 获取（extern 复用）
+
 - (void)ensureMediaForKey:(NSString *)key {
     if (key.length == 0) return;
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self ensureMediaForKey:key]; });
         return;
     }
-    [self resolveKey:key];   // 已导出→快路径；源已落地→补导队列；未落地→等 hook
+    if ([self resolveKey:key]) {
+        [MioDualMediaTrace log:@"dl" key:MioDualBareKey(key) detail:@"skip 已就绪"];
+        return;
+    }
+    // 稳定副本和源文件都没有：触发原生管线下载
+    NSString *bare = MioDualBareKey(key);
+    @synchronized(self) {
+        NSUInteger att = [_dlAttempts[bare] unsignedIntegerValue];
+        if (att >= 3) return;   // WCM gallery 同款 attempt<3 节流
+        _dlAttempts[bare] = @(att + 1);
+    }
+    NSString *iid = [self itemIDForKey:key];
+    id di = iid.length ? [[MioDualTimelineStore shared] dataItemByID:iid] : nil;
+    id facade = MioDualFacade();
+    SEL s = NSSelectorFromString(@"downloadMedia:downloadType:");
+    if (!di || !facade || ![facade respondsToSelector:s]) {
+        [MioDualMediaTrace log:@"dl" key:bare detail:@"wait(无数据项/无downloadMedia,等数据落地)"];
+        return;
+    }
+    @try {
+        ((void(*)(id, SEL, id, long long))objc_msgSend)(facade, s, @[di], 1);
+        [MioDualMediaTrace log:@"dl" key:bare detail:@"start(downloadMedia 触发原生下载)"];
+        WPLog(@"Dual", @"[Media] downloadMedia triggered key=%@ iid=%@", bare, iid);
+    } @catch (NSException *e) {
+        WPLog(@"Dual", @"[Media] downloadMedia exception: %@", e);
+        [MioDualMediaTrace log:@"dl" key:bare detail:@"EXC(downloadMedia 异常)"];
+    }
 }
 
 #pragma mark 原生下载完成 hook（WCM Install 同款，_chain_34 L885-933 反编译实证）
