@@ -212,7 +212,8 @@ static NSTimeInterval gLastPushAt = 0;
     // 源文件 <1KB 占位/未下载时行归文本形态（mediaKey 有值 img 为空）——备图循环
     // 只覆盖带 img 的行，文本卡从此无人触发补导，微信后来自动下载落地也没人看。
     // 每轮推送前扫一遍（预算 40，pending 多为新行靠前），ensure → resolveKey：
-    // 源已落地(>1KB)即补导 → gen+ → rebuild 补图；源没落地重复调用零成本
+    // 源已落地(>1KB)即补导；源也没有 → 行 cdn 字段（dataUrl.url）走 CDN 兜底下载
+    // （WCM YB 等价物），落地 gen+ → rebuild → JS 文本卡升级媒体卡
     {
         NSUInteger budget = 40;
         for (NSDictionary *r in rows) {
@@ -220,7 +221,7 @@ static NSTimeInterval gLastPushAt = 0;
             NSString *mk = r[@"mediaKey"];
             if (mk.length && ![r[@"img"] hasPrefix:@"mioimg://"]) {
                 budget--;
-                [[MioDualMediaService shared] ensureMediaForKey:mk];
+                [[MioDualMediaService shared] ensureMediaForKey:mk cdn:r[@"cdn"]];
             }
         }
     }

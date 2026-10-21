@@ -11,8 +11,9 @@
 //   push       推送层（snap 快照 / nochange / 带图行数）
 //   orig       原图通道（签名去重/导出）
 //   remap      补图重映射（Store 检测 gen 变化强制重建该行）
+//   cdnfetch   CDN 兜底下载（WCM YB 等价物：OK/FAIL(code)/WRITE-FAIL）
 // 预期流（零破图）：register(gate) → export(direct/trans) → gen+ → serve(hit/decode)
-//   异常流：serve(MISS) → JS imgCdn 兜底 / assetMiss → 补导 export → gen+ → remap → serve
+//   异常流：serve(MISS) → assetMiss → 补导/CDN 兜底 → gen+ → remap → serve
 @interface MioDualMediaTrace : NSObject
 // 写一条（任意线程；key 传完整文件名或 bare digest 均可，显示时截短）
 + (void)log:(NSString *)stage key:(NSString *)key detail:(NSString *)detail;

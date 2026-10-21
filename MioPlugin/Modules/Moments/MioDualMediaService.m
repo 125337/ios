@@ -38,6 +38,7 @@ static NSString *MioDualBareKey(NSString *key) {
     NSOperationQueue *_originalQueue;                             // 原图导出（WCM mediaQueue 位）
     NSMutableSet<NSString *> *_pendingThumbs;                     // 缩略图导出去重（WCM pendingExports 同位）
     NSMutableSet<NSString *> *_pendingOriginals;                  // 原图导出去重（WCM pendingOriginalExports 同位）
+    NSMutableSet<NSString *> *_cdnInflight;                       // CDN 兜底下载在途去重（防 5s 轮询重入）
     BOOL _dirty;
 }
 
@@ -450,7 +451,7 @@ static NSString *MioDualSniffExt(NSData *d) {
         }
     }
     // 副本缺失而原文件在（微信后补下载落在本目录）→ 读原路径 + 缩略图队列补导，
-    // 下次起走副本；都没有返回 nil，显示层由 JS imgCdn 兜底
+    // 下次起走副本；都没有返回 nil（ensure 层接 CDN 兜底下载）
     NSString *path = nil;
     @synchronized(self) {
         NSDictionary *entry = _memTable[bare];
@@ -508,16 +509,86 @@ static NSString *MioDualSniffExt(NSData *d) {
 
 // 渲染层备图：副本就绪 → resolveKey 内存代际快路径直返（零 IO）；副本缺失而源文件
 // 已被微信落地(>1KB) → resolveKey 内部补导 → gen+ → rebuild 补图（5s 轮询/visible/
-// assetMiss 三入口驱动的自愈环）。源也没有 → 无事可做（原生下载链已死：downloadMedia
-// 参数形态未证实禁用 + onDownloadFinish 8.0.78 死钩子已删），显示层由 JS imgCdn 兜底
-// （行 cdn 字段直连 CDN URL，WCM 同构）
+// assetMiss 三入口驱动的自愈环）。源也没有 → WCM YB 下载器同构兜底：拉行 cdn 字段
+// （dataUrl.url）落稳定副本再导（探针实证 WCM 的 CDN 兜底在 native 下载器，JS 零
+// cdn 引用；row 未就绪时 JS 纯文本渲染，落地后 setCover 升级——从不直连）
 - (void)ensureMediaForKey:(NSString *)key {
+    [self ensureMediaForKey:key cdn:nil];
+}
+
+- (void)ensureMediaForKey:(NSString *)key cdn:(NSString *)cdn {
     if (key.length == 0) return;
     if (![NSThread isMainThread]) {
-        dispatch_async(dispatch_get_main_queue(), ^{ [self ensureMediaForKey:key]; });
+        dispatch_async(dispatch_get_main_queue(), ^{ [self ensureMediaForKey:key cdn:cdn]; });
         return;
     }
-    [self resolveKey:key];
+    if ([self resolveKey:key]) return;
+    NSString *bare = MioDualBareKey(key);
+    NSString *u = cdn.length ? cdn : _memTable[bare][@"cdn"];
+    [self downloadCdnForBareKey:bare url:u];
+}
+
+// ---- CDN 兜底下载（WCM YBIBImageData loadURL_download 等价物）----
+// A 路探针实证：图片帖 dataUrl.url = http://shmmsns.qpic.cn/mmsns/<hash>/0，裸 http
+// 明文（YB requestModifier 恒 nil 佐证）。拉回 → 原字节直存/转码 → gen+ → rebuild。
+// bare 用行 mediaKey 的摘要（勿按 cdn 重算：cdn 与 path 摘要不同源，重算会与注册表错位）
+- (void)downloadCdnForBareKey:(NSString *)bare url:(NSString *)url {
+    if (bare.length == 0 || url.length == 0) return;
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self downloadCdnForBareKey:bare url:url]; });
+        return;
+    }
+    @synchronized(self) {
+        if (!_cdnInflight) _cdnInflight = [NSMutableSet set];
+        if ([_cdnInflight containsObject:bare]) return;   // 在途去重
+        [_cdnInflight addObject:bare];
+    }
+    __weak typeof(self) wself = self;
+    [[NSURLSession sharedSession] dataTaskWithURL:[NSURL URLWithString:url]
+        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                __strong typeof(wself) sself = wself;
+                @synchronized(sself) { [sself->_cdnInflight removeObject:bare]; }
+                NSInteger code = [(NSHTTPURLResponse *)resp statusCode];
+                if (err || code != 200 || data.length <= 1024) {
+                    [MioDualMediaTrace log:@"cdnfetch" key:bare
+                                    detail:[NSString stringWithFormat:@"FAIL(code=%ld %@ %lluB)",
+                                            (long)code, err.localizedDescription ?: @"",
+                                            (unsigned long long)data.length]];
+                    return;
+                }
+                [sself storeImageData:data forBareKey:bare];
+            });
+        }] resume];
+}
+
+// 拉回数据落稳定副本：原字节直存（WCM 同款保真）或异格式转码 JPEG → gen+ →
+// notifyDataChanged 唤醒 rebuild（JS 文本卡升级媒体卡，WCM setCover 等价）
+- (void)storeImageData:(NSData *)data forBareKey:(NSString *)bare {
+    NSString *ext = MioDualSniffExt(data) ?: @"jpg";
+    NSString *dstExt = @"jpg";
+    BOOL ok = NO;
+    if ([ext isEqualToString:@"jpg"] || [ext isEqualToString:@"png"]) {
+        dstExt = ext;
+        ok = [data writeToFile:[[MediaStableDir() stringByAppendingPathComponent:bare]
+                                stringByAppendingPathExtension:dstExt]
+                        options:NSDataWritingAtomic | NSDataWritingFileProtectionComplete error:nil];
+    } else {
+        UIImage *img = [UIImage imageWithData:data];
+        NSData *jpeg = img ? UIImageJPEGRepresentation(img, 0.999) : nil;
+        if (jpeg) ok = [jpeg writeToFile:[[MediaStableDir() stringByAppendingPathComponent:bare]
+                                          stringByAppendingPathExtension:dstExt]
+                                  options:NSDataWritingAtomic | NSDataWritingFileProtectionComplete error:nil];
+    }
+    [MioDualMediaTrace log:@"cdnfetch" key:bare
+                    detail:[NSString stringWithFormat:@"%@ .%@ %lluB",
+                            ok ? @"OK" : @"WRITE-FAIL", dstExt, (unsigned long long)data.length]];
+    if (ok) {
+        [self markReadyBareKey:bare ext:dstExt];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [MioDualFeedBridge notifyDataChanged];
+        });
+    }
 }
 
 - (void)pruneExcept:(NSSet<NSString *> *)liveKeys {

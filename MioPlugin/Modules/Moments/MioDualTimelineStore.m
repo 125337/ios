@@ -382,20 +382,33 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
 
 // CDN 直连地址（WCM imgCdn 兜底同款，行 cdn 字段供 JS 直连）：attachCdnUrl 优先，
 // 回落 dataUrl.url（WCUrl，Frida WCMediaItem 蓝图实证 _dataUrl 字段；YB 下载器
-// requestModifier 恒 nil 实证裸 HTTP GET 可拉 qpic.cn 图）。拿不到就空串
+// requestModifier 恒 nil 实证裸 HTTP GET 可拉 qpic.cn 图）。属性 getter 不命中时
+// KVC 兜底（ivar 无 getter 也能读）。拿不到就空串
 - (NSString *)cdnURLFor:(id)mi {
-    if ([mi respondsToSelector:@selector(attachCdnUrl)]) {
-        NSString *u = ((id(*)(id, SEL))objc_msgSend)(mi, @selector(attachCdnUrl));
-        if ([u isKindOfClass:[NSString class]] && u.length) return u;
+    if (!mi) return @"";
+    NSString *u = nil;
+    if ([mi respondsToSelector:@selector(attachCdnUrl)])
+        u = ((id(*)(id, SEL))objc_msgSend)(mi, @selector(attachCdnUrl));
+    if (![u isKindOfClass:[NSString class]] || !u.length) {
+        @try { u = [mi valueForKey:@"attachCdnUrl"]; } @catch (NSException *e) { u = nil; }
+        if (![u isKindOfClass:[NSString class]]) u = nil;
     }
-    if ([mi respondsToSelector:@selector(dataUrl)]) {
-        id wc = ((id(*)(id, SEL))objc_msgSend)(mi, @selector(dataUrl));
-        if ([wc respondsToSelector:@selector(url)]) {
-            NSString *u = ((id(*)(id, SEL))objc_msgSend)(wc, @selector(url));
-            if ([u isKindOfClass:[NSString class]] && u.length) return u;
-        }
+    if (u.length) return u;
+    id wc = nil;
+    if ([mi respondsToSelector:@selector(dataUrl)])
+        wc = ((id(*)(id, SEL))objc_msgSend)(mi, @selector(dataUrl));
+    if (!wc) {
+        @try { wc = [mi valueForKey:@"dataUrl"]; } @catch (NSException *e) { wc = nil; }
     }
-    return @"";
+    if (!wc) return @"";
+    NSString *cu = nil;
+    if ([wc respondsToSelector:@selector(url)])
+        cu = ((id(*)(id, SEL))objc_msgSend)(wc, @selector(url));
+    if (![cu isKindOfClass:[NSString class]] || !cu.length) {
+        @try { cu = [wc valueForKey:@"url"]; } @catch (NSException *e) { cu = nil; }
+        if (![cu isKindOfClass:[NSString class]]) cu = nil;
+    }
+    return cu ?: @"";
 }
 
 // 头像：按 wxid 走 CContactMgr 查（会话内缓存，避免每次推送重复查询）

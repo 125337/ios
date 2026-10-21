@@ -45,9 +45,10 @@
 - (NSString *)itemIDForKey:(NSString *)key;
 // key（完整文件名）对应的注册路径
 - (NSString *)registeredPathForKey:(NSString *)key;
-// 渲染层备图：副本就绪→内存代际快路径直返；副本缺失而源文件已落地(>1KB)→补导。
-// 源也没有→显示层 JS imgCdn 兜底（行 cdn 字段直连 CDN URL，WCM 同构）
+// 渲染层备图：副本就绪→内存代际快路径直返；副本缺失而源文件已落地(>1KB)→补导；
+// 源也没有→CDN 兜底下载（WCM YB 等价物：拉行 cdn 字段(dataUrl.url)落副本再导）
 - (void)ensureMediaForKey:(NSString *)key;
+- (void)ensureMediaForKey:(NSString *)key cdn:(NSString *)cdn;
 // 副本文件被系统清理（Caches 回收）后的自愈钩子：gen 归零 + 扩展名清除，
 // 下一轮注册重新导出（副本缺失走 didFail，onerror→imgCdn 兜底 + assetMiss 驱动重导）
 - (void)noteExportLost:(NSString *)key;
