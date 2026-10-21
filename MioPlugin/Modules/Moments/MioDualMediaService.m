@@ -34,10 +34,6 @@ static NSString *MioDualBareKey(NSString *key) {
     NSMutableDictionary<NSString *, NSDictionary *> *_memTable;   // 会话层（bare digest → entry）
     NSMutableDictionary<NSString *, NSDictionary *> *_diskTable;  // 持久层镜像（启动加载）
     NSMutableDictionary<NSString *, NSNumber *> *_readyGen;       // 每 key 就绪代际（renderKeys 语义）
-    NSMutableSet<NSString *> *_downloading;                       // 进行中的下载 key（去重）
-    NSMutableDictionary<NSString *, NSNumber *> *_attempts;       // 会话内重试计数（≤3+60s 冷却重置，防 CDN 坏 URL 死循环且不死锁）
-    NSMutableDictionary<NSString *, NSDate *> *_downloadStart;    // 挂起起始时间（60s 超时重置死链）
-    NSMutableDictionary<NSString *, NSDate *> *_lastFailAt;       // 每 key 最近失败时刻（exhausted 冷却 / noitem 节流兼用）
     NSOperationQueue *_thumbQueue;                                // 缩略图导出（WCM previewQueue 位）
     NSOperationQueue *_originalQueue;                             // 原图导出（WCM mediaQueue 位）
     NSMutableSet<NSString *> *_pendingThumbs;                     // 缩略图导出去重（WCM pendingExports 同位）
@@ -94,11 +90,8 @@ static NSString *MediaStableDir(void) {
     if (self) {
         _memTable = [NSMutableDictionary dictionary];
         _readyGen = [NSMutableDictionary dictionary];
-        _downloading = [NSMutableSet set];
-        _attempts = [NSMutableDictionary dictionary];
-        _downloadStart = [NSMutableDictionary dictionary];
-        _lastFailAt = [NSMutableDictionary dictionary];
         _pendingThumbs = [NSMutableSet set];
+        [self installNativeDownloadHook];   // WCM 同款：hook WCFacade onDownloadFinish（原生下载完成出口）
         _pendingOriginals = [NSMutableSet set];
         _thumbQueue = [[NSOperationQueue alloc] init];
         _thumbQueue.maxConcurrentOperationCount = 2;   // 小块 JPEG，2 并发足够且不抢 IO
@@ -495,15 +488,6 @@ static NSString *MioDualSniffExt(NSData *d) {
     }
 }
 
-- (BOOL)beginDownloadForKey:(NSString *)key {
-    if (key.length == 0) return NO;
-    @synchronized(self) {
-        if ([_downloading containsObject:key]) return NO;
-        [_downloading addObject:key];
-        return YES;
-    }
-}
-
 // 行重建时回填数据项锚点（row.id ↔ row.img，行自身就是 key→itemID 映射）：
 // v2 迁移清库 + 旧版补导清 iid 的存量行借此复活补下链路——getDataItemByID 是
 // facade 库级查询（WCFacade getDataItemByID:），窗口外老行同样可查。纯字典写，零 IO
@@ -523,149 +507,76 @@ static NSString *MioDualSniffExt(NSData *d) {
     }
 }
 
-- (void)endDownloadForKey:(NSString *)key {
-    if (key.length == 0) return;
-    @synchronized(self) { [_downloading removeObject:key]; }
-}
-
-#pragma mark 渲染层备图（WCMFeedController exportImage 同构）
-
-// 数据项 → 目标路径所属的 WCMediaItem：遍历 media wraps 两级匹配——①注册路径精确
-// 匹配（四路路径 selector）②CDN 摘要精确匹配（key=SHA256(cdnURL)，与 registerLocalPath
-// 同源；老行补下时注册路径多半已被微信清掉，摘要匹配才能选对多图帖的正确 mediaItem）
-// 都未中则回落首个有路径的 mi（注册时与查找时 selector 返回值可能随下载状态变化）
-- (id)mediaItemForDataItem:(id)di path:(NSString *)targetPath bareKey:(NSString *)bare {
-    if (!di) return nil;
-    if (![di respondsToSelector:@selector(getMediaWraps)]) return nil;
-    NSArray *wraps = ((id(*)(id, SEL))objc_msgSend)(di, @selector(getMediaWraps));
-    SEL pathSels[4] = { @selector(getThumbImagePath), @selector(pathForPreview),
-                        @selector(pathForData), @selector(pathForHdData) };
-    id firstMI = nil;
-    for (id wrap in wraps) {
-        if (![wrap respondsToSelector:@selector(mediaItem)]) continue;
-        id mi = ((id(*)(id, SEL))objc_msgSend)(wrap, @selector(mediaItem));
-        if (!mi) continue;
-        for (int i = 0; i < 4; i++) {
-            if (![mi respondsToSelector:pathSels[i]]) continue;
-            NSString *p = ((id(*)(id, SEL))objc_msgSend)(mi, pathSels[i]);
-            if ([p isKindOfClass:[NSString class]] && p.length) {
-                if (targetPath.length && [p isEqualToString:targetPath]) return mi;
-                if (!firstMI) firstMI = mi;
-            }
-            if (bare.length && [mi respondsToSelector:@selector(attachCdnUrl)]) {
-                NSString *cdn = ((id(*)(id, SEL))objc_msgSend)(mi, @selector(attachCdnUrl));
-                if ([cdn isKindOfClass:[NSString class]] && cdn.length &&
-                    [MioDualMediaDigest(cdn) isEqualToString:bare]) return mi;
-            }
-        }
-    }
-    return firstMI;
-}
-
-// 渲染层备图：推送上屏时对缺文件的 media 主线程触发微信管线下载。
-// 与 WCM 原生页逐层同构——cell 渲染时 exportImage（本方法）→ downloader 下载
-// → completionHandler（mediaFinished 语义）→ Bridge mediaReadyForKey 刷新 <img>。
-// 主线程调用（downloader 依赖会话上下文，146 日志后台线程调它全 timeout 的教训）
+// 渲染层备图（WCM 同构精简版）：源文件已落地(>1KB)即触发补导；未落地等原生管线
+// ——onDownloadFinish hook 唤醒重导（WCM 同款，下载完全交给微信原生）。
+// 自建 WCMediaDownloader 路径整体废弃：151 日志实证 30+ started 零回调
+// （completion block 组合根本不被调用），原生下载回调只走 WCFacade
+// onDownloadFinish:downloadType: 出口（WCM _chain_34 L885-933 hook 实证）
 - (void)ensureMediaForKey:(NSString *)key {
     if (key.length == 0) return;
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self ensureMediaForKey:key]; });
         return;
     }
-    if ([self resolveKey:key]) {
-        [MioDualMediaTrace log:@"dl" key:MioDualBareKey(key) detail:@"skip 已就绪"];
-        return;   // 文件在，无需备
-    }
-    NSString *bare = MioDualBareKey(key);
+    [self resolveKey:key];   // 已导出→快路径；源已落地→补导队列；未落地→等 hook
+}
 
-    @synchronized(self) {
-        if ([_downloading containsObject:bare]) {
-            // 挂起超 60s 视为死链（completionHandler 未回调），重置后允许重试
-            NSDate *start = _downloadStart[bare];
-            if (start && -[start timeIntervalSinceNow] < 60.0) {
-                [MioDualMediaTrace log:@"dl" key:bare detail:@"merge 挂起中"];
-                return;
-            }
-            [_downloading removeObject:bare];
-        }
-        [_downloading addObject:bare];
-        _downloadStart[bare] = [NSDate date];
-        NSNumber *att = _attempts[bare];
-        if (att.intValue >= 3) {
-            // 60s 冷却重置（149 日志实证：noitem 烧死 attempts 后永久 exhausted，
-            // 数据落地/翻页找回也拒试）。冷却期满清零重来，失败语义保留
-            NSDate *lastFail = _lastFailAt[bare];
-            if (lastFail && -[lastFail timeIntervalSinceNow] < 60.0) {
-                [_downloading removeObject:bare];
-                [MioDualMediaTrace log:@"dl" key:bare detail:@"exhausted(冷却中,60s后自动重试)"];
-                return;
-            }
-            [_attempts removeObjectForKey:bare];
-        }
-        _attempts[bare] = @([_attempts[bare] unsignedIntegerValue] + 1);
-    }
+#pragma mark 原生下载完成 hook（WCM Install 同款，_chain_34 L885-933 反编译实证）
 
-    NSString *path = [self registeredPathForKey:key];
-    NSString *iid = [self itemIDForKey:key];
-    id di = iid.length ? [[MioDualTimelineStore shared] dataItemByID:iid] : nil;
-    id mi = [self mediaItemForDataItem:di path:path bareKey:bare];
-    if (!di || !mi) {
-        [self endDownloadForKey:bare];
-        @synchronized(self) {
-            // 找不回数据项 ≠ CDN 坏：不烧 attempts（翻页/数据落地找回即可恢复）
-            [_attempts removeObjectForKey:bare];
-            // 30s 节流：visible 报告会反复触发同 key，noitem 期间防日志/trace 风暴
-            NSDate *last = _lastFailAt[bare];
-            _lastFailAt[bare] = [NSDate date];
-            if (last && -[last timeIntervalSinceNow] < 30.0) return;
-        }
-        WPLog(@"Dual", @"[Media] no dataItem/mediaItem key=%@ iid=%@", bare, iid);
-        [MioDualMediaTrace log:@"dl" key:bare detail:@"noitem(数据项未在窗口,等找回重试)"];
+// hook WCFacade onDownloadFinish:downloadType:（encoding v32@0:8@16q24，WCM 用
+// HookEncodingMatches 校验同款）——微信原生朋友圈缩略图下载完成的统一出口。
+// WCM hook 后发 WCMomentsMediaFinished 通知 → mediaFinished: → scheduleMediaReload；
+// 我们直接扫未就绪 key 重导 + 唤醒 rebuild，效果等价
+static BOOL gNativeDlHookInstalled = NO;
+- (void)installNativeDownloadHook {
+    if (gNativeDlHookInstalled) return;
+    gNativeDlHookInstalled = YES;
+    Class cls = objc_getClass("WCFacade");
+    SEL sel = NSSelectorFromString(@"onDownloadFinish:downloadType:");
+    if (!cls || !sel) return;
+    Method m = class_getInstanceMethod(cls, sel);
+    if (!m) {
+        WPLog(@"Dual", @"[Media] native hook: WCFacade onDownloadFinish 未找到");
         return;
     }
-
-    Class dCls = objc_getClass("WCMediaDownloader");
-    SEL startSel = NSSelectorFromString(@"startDownloadWithCompletionHandler:");
-    if (!dCls || ![dCls instancesRespondToSelector:startSel]) {
-        [self endDownloadForKey:bare];
+    const char *enc = method_getTypeEncoding(m);
+    if (!enc || strncmp(enc, "v32@0:8@16q24", 13) != 0) {
+        WPLog(@"Dual", @"[Media] native hook: encoding 不匹配 %s", enc ?: "?");
         return;
     }
-    id dl = ((id(*)(id, SEL, id, id))objc_msgSend)(
-        ((id(*)(id, SEL))objc_msgSend)(dCls, @selector(alloc)),
-        NSSelectorFromString(@"initWithDataItem:mediaItem:"), di, mi);
-    if (!dl || ![dl respondsToSelector:startSel]) {
-        [self endDownloadForKey:bare];
-        return;
-    }
-    // completionHandler 传 0 参空结构 block（ABI 被调方只读自己声明的参数寄存器，
-    // 签名 dump 失真无碍）；回调里就绪迁移 + 精准刷新对应 <img>（mediaFinished 语义）
     __weak typeof(self) wself = self;
-    void (^done)(void) = ^{
+    __block void (*orig)(id, SEL, id, long long) =
+        (void (*)(id, SEL, id, long long))method_getImplementation(m);
+    IMP newImp = imp_implementationWithBlock(^(id hookSelf, SEL _cmd, id arg1, long long type) {
+        orig(hookSelf, _cmd, arg1, type);
         __strong typeof(wself) sself = wself;
-        [sself endDownloadForKey:bare];
-        @synchronized(sself) {
-            [sself->_attempts removeObjectForKey:bare];   // 终结即清零（下次失败从头计数）
-            sself->_lastFailAt[bare] = [NSDate date];
+        [sself nativeDownloadFinish:arg1];
+    });
+    if (!class_addMethod(cls, sel, newImp, enc)) {
+        method_setImplementation(m, newImp);
+    }
+    WPLog(@"Dual", @"[Media] native hook installed: WCFacade onDownloadFinish:downloadType:");
+}
+
+// 下载完成回调：扫所有未就绪（gen==0）且有源路径的 key 尝试补导——源文件已被
+// 原生下载落地(>1KB)的进导出队列 → markReady → rebuild 重映射补图；
+// 未落地的 stat 失败跳过，等下一次回调
+- (void)nativeDownloadFinish:(id)arg {
+    NSArray<NSString *> *candidates;
+    @synchronized(self) {
+        NSMutableArray *m = [NSMutableArray array];
+        for (NSString *bare in _memTable) {
+            if ([_readyGen[bare] unsignedIntegerValue] == 0 && [_memTable[bare][@"p"] length])
+                [m addObject:bare];
         }
-        WPLog(@"Dual", @"[Media] downloader finished key=%@", bare);
-        [MioDualMediaTrace log:@"dl" key:bare detail:@"finish(微信管线落地,等重导出)"];
-        if (sself) {
-            [sself markReadyBareKey:bare ext:nil];   // 下载落地=就绪迁移（ext 由重导出补齐）
-            // ext 已知 → 直刷 <img>（dataset.src 基址重载）；未知 → rebuild 重映射兜底
-            NSString *ext = [sself extForBareKey:bare];
-            if (ext.length) {
-                [MioDualFeedBridge mediaReadyForKey:[bare stringByAppendingPathExtension:ext]];
-            } else {
-                [MioDualFeedBridge notifyDataChanged];
-            }
-        }
-    };
-    ((void(*)(id, SEL, id))objc_msgSend)(dl, @selector(setCompletionHandler:), done);
-    ((void(*)(id, SEL, id))objc_msgSend)(dl, startSel, done);
-    ((void(*)(id, SEL, id))objc_msgSend)(dl, @selector(setRetainedSelf:), dl);   // 异步下载自持有
-    WPLog(@"Dual", @"[Media] downloader started key=%@ iid=%@", bare, iid);
-    [MioDualMediaTrace log:@"dl" key:bare
-                    detail:[NSString stringWithFormat:@"start(微信管线CDN+解密) 第%@次", _attempts[bare]]];
+        candidates = m;
+    }
+    for (NSString *bare in candidates) [self resolveKey:bare];
+    if (candidates.count) {
+        [MioDualMediaTrace log:@"dl" key:@"-"
+                        detail:[NSString stringWithFormat:@"native finish(hook,扫 %lu 个未就绪重导)",
+                                (unsigned long)candidates.count]];
+    }
 }
 
 - (void)pruneExcept:(NSSet<NSString *> *)liveKeys {

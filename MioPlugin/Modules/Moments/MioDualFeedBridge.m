@@ -339,7 +339,15 @@ static NSTimeInterval gLastPushAt = 0;
         NSMutableSet *live = [NSMutableSet set];
         for (NSDictionary *r in rows) {
             NSString *img = r[@"img"];
-            if ([img hasPrefix:@"mioimg://"]) [live addObject:img.lastPathComponent];
+            if ([img hasPrefix:@"mioimg://"]) {
+                [live addObject:img.lastPathComponent];
+            } else {
+                // 待图行的 mediaKey 同在快照引用域：不进 live 会被 prune 剪掉注册表
+                // 条目（iid/cdn 全丢），原生下载落地后永久 noitem（151 日志实证：
+                // 同批 key 先 downloader started 后 iid=(null)）
+                NSString *mk = r[@"mediaKey"];
+                if (mk.length) [live addObject:mk];
+            }
         }
         [[MioDualTimelineStore shared] saveSnapshotJSON:full liveKeys:live];
     }

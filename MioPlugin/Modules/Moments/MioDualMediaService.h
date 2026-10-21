@@ -43,21 +43,16 @@
 - (NSString *)resolveKey:(NSString *)key;
 // key（完整文件名）对应的帖子 itemID（数据项找回用）
 - (NSString *)itemIDForKey:(NSString *)key;
-// key（完整文件名）对应的注册路径（WCMediaDownloader 目标路径匹配用）
+// key（完整文件名）对应的注册路径
 - (NSString *)registeredPathForKey:(NSString *)key;
-// 下载去重：YES=首次（调用方应触发 WCMediaDownloader），NO=已有进行中的下载
-- (BOOL)beginDownloadForKey:(NSString *)key;
-- (void)endDownloadForKey:(NSString *)key;
-// 渲染层备图（WCMFeedController exportImage 同构）：key 对应文件缺失时主线程
-// 触发 WCMediaDownloader（微信管线 CDN+解密+落盘），完成后经 Bridge mediaReadyForKey
-// 精准刷新对应 <img>。含下载去重 + 会话内重试上限 3 次 + 60s 挂起超时重置
+// 渲染层备图（WCM 同构）：源文件已落地(>1KB)触发补导，未落地等原生管线
+// （WCFacade onDownloadFinish hook 唤醒重导，下载完全交给微信原生）
 - (void)ensureMediaForKey:(NSString *)key;
 // 副本文件被系统清理（Caches 回收）后的自愈钩子：gen 归零 + 扩展名清除，
 // 下一轮注册重新导出（缺图已对齐 WCM 走 didFail，onerror→assetMiss 驱动重导）
 - (void)noteExportLost:(NSString *)key;
-// 数据项 → 目标路径所属的 WCMediaItem（按四路路径 selector 匹配）
-- (id)mediaItemForDataItem:(id)di path:(NSString *)targetPath bareKey:(NSString *)bare;
-- (void)rebindItemID:(NSString *)iid forKey:(NSString *)key;   // 行重建回填 iid 锚点（老行自愈）
-// 只保留 liveKeys（快照引用的完整文件名 key），修剪持久表
+// 行重建回填 iid 锚点（老行自愈）
+- (void)rebindItemID:(NSString *)iid forKey:(NSString *)key;
+// 只保留 liveKeys（快照引用的完整文件名 key + 待图行 mediaKey），修剪持久表
 - (void)pruneExcept:(NSSet<NSString *> *)liveKeys;
 @end

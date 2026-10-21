@@ -194,10 +194,10 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
                 }
             }
             if (d) {
-                // iid 锚点回填：行自身就是 key→itemID 映射，v2 迁移/旧 bug 清掉
-                // 的存量行借此恢复补下能力（纯字典写，锚点健在时零成本）
-                if (rid.length && [d[@"img"] length])
-                    [[MioDualMediaService shared] rebindItemID:rid forKey:d[@"img"]];
+                // iid 锚点回填：行自身就是 key→itemID 映射。img 行和待图行
+                // （mediaKey 有 img 空）都回填——后者正是下载链的主力客户
+                if (rid.length && [d[@"mediaKey"] length])
+                    [[MioDualMediaService shared] rebindItemID:rid forKey:d[@"mediaKey"]];
                 [rows addObject:d];
             }
         }
