@@ -88,6 +88,7 @@ static NSString *MioDualJSONString(id obj) {
     MioDualFeedBridge *b = [self bridge];
     if (!b->_webView || b->_webView.window == nil) {
         WPLog(@"Dual", @"[Push] skip: panel not on window (预热模式，只暖不推)");
+        [MioDualMediaTrace log:@"push" key:@"-" detail:@"skip 预热不在窗口"];
         return;
     }
     WPLog(@"Dual", @"[Push] session push (refresh chain)");
@@ -104,6 +105,7 @@ static NSString *MioDualJSONString(id obj) {
     }
     MioDualFeedBridge *b = [self bridge];
     if (b->_detached || !b->_webView) return;   // 面板不可见：下次 attach 推送自然带新文件
+    [MioDualMediaTrace log:@"mready" key:key detail:@"→JS 重载"];
     [b->_webView evaluateJavaScript:
         [NSString stringWithFormat:@"window.__mioMediaReady&&window.__mioMediaReady('%@');", key]
                  completionHandler:nil];
@@ -180,6 +182,7 @@ static NSTimeInterval gLastPushAt = 0;
         if (now - lastSkipLog > 10.0) {
             lastSkipLog = now;
             WPLog(@"Dual", @"[Push] skip: panel detached or webview gone");
+            [MioDualMediaTrace log:@"push" key:@"-" detail:@"skip 面板不可见"];
         }
         return;
     }
@@ -210,6 +213,8 @@ static NSTimeInterval gLastPushAt = 0;
                 [wv evaluateJavaScript:[NSString stringWithFormat:
                     @"window.__mioFeedSnapshot(%@);", snap] completionHandler:nil];
                 WPLog(@"Dual", @"[Push] snapshot loaded (%lu rows)", (unsigned long)snapRows.count);
+                [MioDualMediaTrace log:@"push" key:@"-"
+                                detail:[NSString stringWithFormat:@"snap快照 %lu 行", (unsigned long)snapRows.count]];
                 // 快照行备图废止（对齐 WCM visible 上报模式）：WCM 不做全量预拉，
                 // JS visiblePass 按视口上报 → 只备看得到的图（省流量省 IO）
             }
@@ -270,6 +275,8 @@ static NSTimeInterval gLastPushAt = 0;
         // 零 patch 时日志无法自证是哪种）
         WPLog(@"Dual", @"[Push] no changes (rows=%lu stale=%d)", (unsigned long)rows.count,
               [[MioDualTimelineStore shared] staleMode] ? 1 : 0);
+        [MioDualMediaTrace log:@"push" key:@"-"
+                        detail:[NSString stringWithFormat:@"nochange rows=%lu", (unsigned long)rows.count]];
         // 快照 == 当前数据：空 patch 把 JS 的 stale 标记切正常。
         // stale 模式（仓里就是快照行）不清——数据确实还是旧的，角标保留到新数据落地
         if (_snapshotHadRows && ![[MioDualTimelineStore shared] staleMode]) {

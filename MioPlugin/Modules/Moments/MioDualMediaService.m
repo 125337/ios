@@ -535,14 +535,20 @@ static NSString *MioDualSniffExt(NSData *d) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self ensureMediaForKey:key]; });
         return;
     }
-    if ([self resolveKey:key]) return;   // 文件在，无需备
+    if ([self resolveKey:key]) {
+        [MioDualMediaTrace log:@"dl" key:MioDualBareKey(key) detail:@"skip 已就绪"];
+        return;   // 文件在，无需备
+    }
     NSString *bare = MioDualBareKey(key);
 
     @synchronized(self) {
         if ([_downloading containsObject:bare]) {
             // 挂起超 60s 视为死链（completionHandler 未回调），重置后允许重试
             NSDate *start = _downloadStart[bare];
-            if (start && -[start timeIntervalSinceNow] < 60.0) return;
+            if (start && -[start timeIntervalSinceNow] < 60.0) {
+                [MioDualMediaTrace log:@"dl" key:bare detail:@"merge 挂起中"];
+                return;
+            }
             [_downloading removeObject:bare];
         }
         [_downloading addObject:bare];

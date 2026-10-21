@@ -1,5 +1,6 @@
 #import "MioDualTimelineEngine.h"
 #import "MioDualTimelineStore.h"
+#import "MioDualMediaTrace.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
 #import <objc/message.h>
@@ -306,6 +307,7 @@
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         _notifyPending = NO;      // 先清再推：推送过程中若触发新变更可再排程
+        [MioDualMediaTrace log:@"engine" key:@"-" detail:@"防抖fire→rebuild"];
         [self headDataLandedIfGrown];   // 补 1：head 数据落地才提前解除防重入（onChanged 不可靠）
         [[MioDualTimelineStore shared] rebuildItemsAsync];   // 刀1：重活后台，commit 后经闸门推送
     });

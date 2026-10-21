@@ -420,6 +420,12 @@ static __weak UIViewController *g_dualPanelHost = nil;
     if (![message.body isKindOfClass:[NSDictionary class]]) return;
     NSDictionary *params = (NSDictionary *)message.body;
     NSString *action = params[@"action"];
+    if ([action isEqualToString:@"trace"]) {
+        // JS 侧全链路观测回传（tr() 助手）：snap/patch/img onload/onerror/mready
+        [MioDualMediaTrace log:params[@"s"] ?: @"js" key:@"-"
+                        detail:params[@"d"] ?: @""];
+        return;
+    }
     if ([action isEqualToString:@"back"]) {
         // 「…」圆钮：切回原生朋友圈（面板覆盖移除）。面板不挂 childVC，host 用弱引用存
         if (self.hostVC) MioDualPanelClose(self.hostVC);

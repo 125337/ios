@@ -198,6 +198,18 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
     } @catch (NSException *e) {
         WPLog(@"Dual", @"[Store] map error: %@", e);
     }
+    // 全链路观测（mapQueue）：行数/带图行数/累积层有变化才记（防 5s 轮询刷屏）——
+    // img 行数恒 0 = mediaSrc 未产出 URL（上游断）；>0 但 push 带图恒 0 = diff 断
+    static NSUInteger sLastRows = 0, sLastImg = 0, sLastAcc = 0;
+    NSUInteger mapImg = 0;
+    for (NSDictionary *d in rows) if ([d[@"img"] hasPrefix:@"mioimg://"]) mapImg++;
+    if (rows.count != sLastRows || mapImg != sLastImg || _accRows.count != sLastAcc) {
+        sLastRows = rows.count; sLastImg = mapImg; sLastAcc = _accRows.count;
+        [MioDualMediaTrace log:@"map" key:@"-"
+                        detail:[NSString stringWithFormat:@"rows=%lu img=%lu acc=%lu",
+                                (unsigned long)rows.count, (unsigned long)mapImg,
+                                (unsigned long)_accRows.count]];
+    }
     // 快照种子（144.log 实证 remove=80 风暴根因）：累积层是进程内存态，重启清零；
     // 冷启动数据源只有 10 条而快照有 90 行 → diff 把快照 80 行当「已删除」全删（JS
     // 空态）+ pruneExcept 把快照媒体 key 裁掉。种子后仓=快照全量+数据源 merge，
