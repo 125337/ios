@@ -224,6 +224,23 @@ static NSTimeInterval gLastPushAt = 0;
     // ---- 新状态 ----
     NSArray<NSDictionary *> *rows = [[MioDualTimelineStore shared] currentItems];
 
+    // ---- 待图行补下（文本卡→带图卡的源动力，修"字+图只显示字"）----
+    // 源文件 <1KB 占位/未下载时行归文本形态（mediaKey 有值 img 为空）——备图循环
+    // 只覆盖带 img 的行，文本卡从此无人触发下载，微信后来自动下载落地也没人看。
+    // 每轮推送前扫一遍（预算 40，pending 多为新行靠前），ensure 内部自带
+    // 去重/30s 节流/60s 冷却，重复调用无害——下载/重导落地 gen+ → Store 重映射
+    {
+        NSUInteger budget = 40;
+        for (NSDictionary *r in rows) {
+            if (!budget) break;
+            NSString *mk = r[@"mediaKey"];
+            if (mk.length && ![r[@"img"] hasPrefix:@"mioimg://"]) {
+                budget--;
+                [[MioDualMediaService shared] ensureMediaForKey:mk];
+            }
+        }
+    }
+
     // ---- 空仓保护（冷启动清屏根治②，与 Store 层快照顶上互为保险）：----
     // Store 已用快照顶仓（stale 层），此处兜底——万一 Store 仍空而 JS 侧有内容
     // （异常态），不发 remove patch 清屏，等微信同步落地
