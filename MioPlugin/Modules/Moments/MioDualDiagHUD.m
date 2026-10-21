@@ -18,14 +18,6 @@ static NSInteger gJank1s = 0;       // 本 1s 窗口冻结帧数
 static NSInteger gJankTotal = 0;    // 累计冻结帧数
 static NSInteger gTick1s = 0;       // 本 1s 窗口 tick 数（≈fps）
 
-+ (void)dlinkTick:(CADisplayLink *)link {
-    CFTimeInterval now = link.timestamp;
-    static CFTimeInterval last = 0;
-    if (last > 0 && now - last > 0.05) { gJank1s++; gJankTotal++; }
-    last = now;
-    gTick1s++;
-}
-
 static NSString *HUDDiagText(void) {
     MioDualTimelineStore *store = [MioDualTimelineStore shared];
     MioDualTimelineEngine *engine = [MioDualTimelineEngine shared];
@@ -60,6 +52,15 @@ static void HUDTick(void) {
 }
 
 @implementation MioDualDiagHUD
+
+// CADisplayLink 心跳：主线程阻塞时回调延迟，delta>50ms 记一帧冻结
++ (void)dlinkTick:(CADisplayLink *)link {
+    CFTimeInterval now = link.timestamp;
+    static CFTimeInterval last = 0;
+    if (last > 0 && now - last > 0.05) { gJank1s++; gJankTotal++; }
+    last = now;
+    gTick1s++;
+}
 
 + (void)hudPan:(UIPanGestureRecognizer *)g {
     UIView *v = g.view;
