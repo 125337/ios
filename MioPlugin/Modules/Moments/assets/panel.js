@@ -4,8 +4,12 @@ var PLAY='<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><p
 var AV='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="%23ddd"><rect width="100" height="100"/></svg>';
 var grid=document.getElementById('grid'),empty=document.getElementById('empty'),pullTip=document.getElementById('pull');
 var newTip=document.getElementById('newTip');
+// 元素池架构（WCM 原生 cell 复用的 JS 等价物，探针实证切 tab/滚动掉帧全在
+// WebView 的海量 DOM 层）：cards[id] 元素常驻 JS 池、不在 DOM；grid 里只挂
+// 视口±2屏窗口内的卡（~40 张恒定）。布局纯数据化（it._top/_mh 与 DOM 解耦），
+// 池中卡零布局参与；img 位图随离 DOM 由 WebCore 回收（内存/OOM 根治）。
 var cards={},ratios={},colOf={},ALL=[],byId={},stale=false,q='',tab='all',pendingFresh=[];
-var layoutW=0,layoutFrame=0,fillCursor=0,fillTimer=0;
+var layoutW=0,layoutFrame=0,visCache=[];
 function fmtTime(t){if(!t)return '';
 var d=new Date(t*1000),n=new Date();
 var p=function(x){return x<10?'0'+x:''+x;
@@ -26,39 +30,103 @@ return e;
 layoutFrame=requestAnimationFrame(function(){layoutFrame=0;
 layoutCards();
 });
-}function layoutCards(){var w=((grid.clientWidth||window.innerWidth)-40)/2,resized=w!==layoutW;
+}
+// 未实测卡的 mh 估算（对齐 CSS：title 14px/large 20px，行高 1.55/1.5，
+// clamp 4/6 行；info=padding25+margin13+user-row26；text-only 卡 min-height 214）。
+// 上屏后实测替换（layoutDirty→layoutCards 测量循环），误差一拍内收敛
+function estimateMH(it,w){
+var large=!it.img||it.isLargeText;
+var cw=large?20:14,lh=large?30:22,maxL=large?6:4;
+var txt=it.content||'';
+var per=Math.max(1,Math.floor((w-24)/cw));
+var lines=txt?Math.min(maxL,Math.ceil(txt.length/per)):0;
+var info=lines*lh+13+26+25;
+if(it.img){var asp=(it.ratio>0&&it.ratio)||ratios[it.id]||1;
+return Math.round(w/asp)+info;
+}
+return Math.max(214,info);
+}function layoutCards(){
+var w=((grid.clientWidth||window.innerWidth)-40)/2,resized=w!==layoutW;
 layoutW=w;
+// 实测：只测在 DOM 的脏卡（池中卡 gBCR 全 0，禁测；挂载后下一拍修正）
 var chs=grid.children,i,c;
 for(i=0;
 i<chs.length;
 i++){c=chs[i];
 if(!c.dataset.id)continue;
-if(resized||c.layoutDirty||!c.mh){c.style.width=w+'px';
+if(resized)c.layoutDirty=true;
+if((c.layoutDirty||!c.mh)&&c.parentNode){c.style.width=w+'px';
 c.mh=Math.ceil(c.getBoundingClientRect().height);
 c.layoutDirty=false;
-}}var y=[2,2];
+}}
+// 数据布局：遍历期望列表（visCache），池中/未建卡照算位（估算 mh），
+// DOM 状态零参与——隐藏卡不再挤占列高，liked 的 grid 高=liked 真实高度
+var list=visCache,y=[2,2];
 for(i=0;
-i<chs.length;
-i++){c=chs[i];
-if(!c.dataset.id)continue;
-var id=c.dataset.id,col=colOf[id];
+i<list.length;
+i++){var it=list[i],c2=cards[it.id];
+var mh=(c2&&c2.mh)||estimateMH(it,w);
+var col=colOf[it.id];
 if(col===undefined){col=y[0]<=y[1]?0:1;
-colOf[id]=col;
-}var lft=(14+col*(w+12))+'px',top=y[col]+'px';
-if(c.style.left!==lft)c.style.left=lft;
-if(c.style.top!==top)c.style.top=top;
-c.mtop=y[col];
-c.mhh=c.mh;
-y[col]+=c.mh+12;
+colOf[it.id]=col;
+}it._top=y[col];
+if(c2){var lft=(14+col*(w+12))+'px',top=y[col]+'px';
+if(c2.style.left!==lft)c2.style.left=lft;
+if(c2.style.top!==top)c2.style.top=top;
+}y[col]+=mh+12;
 }var h=(Math.max(y[0],y[1])+20)+'px';
 if(grid.style.height!==h)grid.style.height=h;
 scheduleVisible();
+}
+// 视口窗口 diff：摘（回池，元素与 img 引用保留在 cards，位图随离 DOM 释放）、
+// 挂（从池取，池空则建；上屏前 updateCard 同步池中过期数据）。
+// 单拍挂载上限 24：首屏/大跳转分帧补挂（120ms 链），滚动白块靠 ±2 屏缓冲兜
+function syncWindow(){
+var vh=window.innerHeight||600,scroll=window.scrollY||0;
+var gt=grid.getBoundingClientRect().top;
+var lo=scroll+gt-2*vh,hi=scroll+gt+3*vh;
+var list=visCache,want={},i;
+if(!list.length)return;
+for(i=0;
+i<list.length;
+i++){var it=list[i];
+if(it._top===undefined)continue;
+var c=cards[it.id];
+var mh=(c&&c.mh)||estimateMH(it,layoutW);
+if(it._top+mh>lo&&it._top<hi)want[it.id]=1;
+}var chs=grid.children,mounted=0,dirty=0;
+for(i=chs.length-1;
+i>=0;
+i--){var c2=chs[i];
+if(!c2.dataset.id){c2.parentNode.removeChild(c2);
+continue;
+}if(!want[c2.dataset.id])c2.parentNode.removeChild(c2);
+}for(i=0;
+i<list.length&&mounted<24;
+i++){var it2=list[i];
+if(!want[it2.id])continue;
+var c3=cards[it2.id];
+if(!c3){c3=createCard(it2);
+cards[it2.id]=c3;
+}if(c3.parentNode===grid)continue;
+updateCard(c3,it2);
+mounted++;
+if(c3.layoutDirty)dirty++;
+}empty.style.display=list.length?'none':'block';
+if(mounted>=24)scheduleVisible();
+if(dirty)scheduleLayout();
 }var visLast=-1,visTimer=0,visSent='';
 function scheduleVisible(){if(visTimer)return;
 visTimer=setTimeout(function(){visTimer=0;
-visiblePass();
+visPass();
 },120);
-}function visiblePass(){var vh=window.innerHeight||600,scroll=window.scrollY||0;
+}
+// 视口维护拍：①syncWindow（窗口 diff，无条件跑——滚动/挂载都靠它）
+// ②媒体可见上报（visLast 节流只作用上报；只遍历 grid.children——
+// 天然只有窗口内卡，池中/隐藏卡零上报，native 不再备看不见的图）
+function visPass(){
+syncWindow();
+var vh=window.innerHeight||600,scroll=window.scrollY||0;
 var key=Math.round(scroll/120);
 if(key===visLast)return;
 visLast=key;
@@ -69,10 +137,13 @@ var vk=[];
 for(var i=0;
 i<chs.length;
 i++){var c=chs[i];
-if(!c.dataset.id||c.mtop===undefined)continue;
+if(!c.dataset.id)continue;
 var p=c.parts;
 if(!p||!p.media)continue;
-var vis=c.mtop+c.mhh>lo&&c.mtop<hi;
+var it=byId[c.dataset.id];
+if(!it||it._top===undefined)continue;
+var mh=c.mh||0;
+var vis=it._top+mh>lo&&it._top<hi;
 if(vis&&p.img&&p.img.src.indexOf('mioimg://local/')===0)vk.push(p.img.src.split('/').pop().split('?')[0]);
 if(vis&&p.img.loading!=='eager')p.img.loading='eager';
 var sp=p.media.firstChild;
@@ -143,42 +214,14 @@ var avSrc=item.avatar||AV;
 if(card.parts.av.getAttribute('src')!==avSrc)card.parts.av.src=avSrc;
 card.parts.nm.textContent=item.name||'';
 card.parts.rt.innerHTML='<span style="font-size:12px;color:#999;">'+fmtTime(item.time)+'</span>'+stat(HEART,item.likes)+stat(BUB,item.cmt);
-}function render(){var list=visibleList();
-var need=0,i;
-for(i=0;
-i<list.length;
-i++){if(!cards[list[i].id])need++;
-}if(need>150){fill(list);
-return;
-}renderVisible(list);
-}function renderVisible(list){var keep={},i;
-for(i=0;
-i<list.length;
-i++)keep[list[i].id]=1;
-var chs=grid.children;
-for(i=chs.length-1;
-i>=0;
-i--){var cd=chs[i];
-if(!cd.dataset.id){cd.parentNode.removeChild(cd);
-continue;
-}var vis=!!keep[cd.dataset.id];
-if(cd.style.display!==(vis?'':'none'))cd.style.display=vis?'':'none';
-}for(i=0;
-i<list.length;
-i++){var it=list[i],c=cards[it.id];
-if(!c){c=createCard(it);
-cards[it.id]=c;
-grid.appendChild(c);
-}updateCard(c,it);
-}empty.style.display=list.length?'none':'block';
+}
+// render=纯数据流入口：换列表→重排→窗口 diff 全在 rAF 链内完成。
+// colOf 由列表切换方（tab/搜索）清空重分配（子集列表沿用全量列分配会失衡）
+function render(){
+visCache=visibleList();
+empty.style.display=visCache.length?'none':'block';
 scheduleLayout();
-}function fill(list){fillCursor=Math.min(fillCursor+150,list.length);
-renderVisible(list.slice(0,fillCursor));
-if(fillCursor<list.length){if(fillTimer)clearTimeout(fillTimer);
-fillTimer=setTimeout(function(){fillTimer=0;
-fill(visibleList());
-},16);
-}}function updateStale(){var t=document.getElementById('staleTag');
+}function updateStale(){var t=document.getElementById('staleTag');
 if(t)t.style.display=stale?'block':'none';
 }window.__mioFeedSnapshot=function(p){ALL=(p&&p.items)||[];
 byId={};
@@ -186,7 +229,6 @@ for(var i=0;
 i<ALL.length;
 i++)byId[ALL[i].id]=ALL[i];
 stale=ALL.length>0;
-fillCursor=0;
 render();
 updateStale();
 };
@@ -206,12 +248,14 @@ i<ups.length;
 i++){var t=byId[ups[i].id],c2=cards[ups[i].id];
 for(var k in ups[i])t[k]=ups[i][k];
 if(c2){updateCard(c2,t);
-if(c2.layoutDirty)scheduleLayout();
+if(c2.parentNode&&c2.layoutDirty)scheduleLayout();
 }}stale=false;
 return;
 }for(i=0;
 i<rm.length;
-i++)delete byId[rm[i]];
+i++){delete byId[rm[i]];
+delete cards[rm[i]];
+}
 for(i=0;
 i<ups.length;
 i++){id=ups[i].id;
@@ -226,7 +270,6 @@ i>=0;
 i--)ALL.unshift(byId[fresh[i]]);
 }stale=false;
 updateStale();
-fillCursor=Math.min(fillCursor+fresh.length,ALL.length);
 if((window.scrollY||0)>600&&tab==='all'&&!q){for(i=0;
 i<fresh.length;
 i++){if(pendingFresh.indexOf(fresh[i])<0)pendingFresh.push(fresh[i]);
@@ -235,8 +278,13 @@ newTip.textContent=pendingFresh.length+' 条新动态';
 }}render();
 };
 window.__mioMediaReady=function(k){var i=document.querySelector('img[data-miokey="'+k+'"]');
-if(i)i.src='mioimg://local/'+k+'?r='+(Date.now());
-};
+if(i){i.src='mioimg://local/'+k+'?r='+(Date.now());
+return;
+}var rid;
+for(rid in cards){var c=cards[rid];
+if(c.parts.img&&c.parts.img.dataset.miokey===k){c.dataKey=0;
+break;
+}}};
 window.__mioDiag=function(){try{var g=document.getElementById('grid');
 var sus=[];
 for(var i=0;
@@ -263,7 +311,7 @@ b.classList.remove('hide');
 }};
 var qEl=document.getElementById('q');
 qEl.addEventListener('input',function(){q=this.value.trim().toLowerCase();
-fillCursor=0;
+colOf={};
 render();
 window.scrollTo(0,0);
 });
@@ -273,7 +321,7 @@ function closeMenu(){menu.classList.remove('show');
 this.classList.add('active');
 document.getElementById('tab-liked').classList.remove('active');
 document.querySelector('.tabs').style.setProperty('--ti',0);
-fillCursor=0;
+colOf={};
 render();
 window.scrollTo(0,0);
 });
@@ -281,7 +329,7 @@ document.getElementById('tab-liked').addEventListener('click',function(){tab='li
 this.classList.add('active');
 document.getElementById('tab-all').classList.remove('active');
 document.querySelector('.tabs').style.setProperty('--ti',1);
-fillCursor=0;
+colOf={};
 render();
 window.scrollTo(0,0);
 });
@@ -350,7 +398,6 @@ mio({action:'tailStop'});
 scheduleVisible();
 if(pendingFresh.length&&(window.scrollY||0)<100){pendingFresh=[];
 newTip.style.display='none';
-fillCursor=0;
 render();
 }mioTailCheck();
 },{passive:true});
