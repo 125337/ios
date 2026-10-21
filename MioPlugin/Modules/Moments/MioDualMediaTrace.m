@@ -20,7 +20,7 @@ static NSDateFormatter *sFmt = nil;   // 进程级复用（HH:mm:ss.SSS）
     NSMutableArray<MioDualTraceEvent *> *_ring;
     NSUInteger _idx;                                  // 写指针（满后回卷覆盖）
     NSUInteger _total;                                // 累计写入数
-    NSUInteger _cRegister, _cExport, _cServe, _cHit, _cPlace, _cDL;
+    NSUInteger _cRegister, _cExport, _cServe, _cHit, _cPlace;
 }
 
 + (instancetype)shared {
@@ -57,7 +57,6 @@ static NSDateFormatter *sFmt = nil;   // 进程级复用（HH:mm:ss.SSS）
         _total++;
         if ([stage isEqualToString:@"register"]) _cRegister++;
         else if ([stage isEqualToString:@"export"]) _cExport++;
-        else if ([stage isEqualToString:@"dl"]) _cDL++;
         else if ([stage isEqualToString:@"serve"]) {
             _cServe++;
             if ([detail hasPrefix:@"hit"]) _cHit++;
@@ -97,10 +96,10 @@ static NSDateFormatter *sFmt = nil;   // 进程级复用（HH:mm:ss.SSS）
     MioDualMediaTrace *t = [MioDualMediaTrace shared];
     @synchronized(t) {
         return [NSString stringWithFormat:
-            @"注册%lu 导出%lu serve%lu(命中%lu 占位%lu) 下载%lu",
+            @"注册%lu 导出%lu serve%lu(命中%lu 占位%lu)",
             (unsigned long)t->_cRegister, (unsigned long)t->_cExport,
             (unsigned long)t->_cServe, (unsigned long)t->_cHit,
-            (unsigned long)t->_cPlace, (unsigned long)t->_cDL];
+            (unsigned long)t->_cPlace];
     }
 }
 
@@ -109,7 +108,7 @@ static NSDateFormatter *sFmt = nil;   // 进程级复用（HH:mm:ss.SSS）
     @synchronized(t) {
         [t->_ring removeAllObjects];
         t->_idx = 0; t->_total = 0;
-        t->_cRegister = t->_cExport = t->_cServe = t->_cHit = t->_cPlace = t->_cDL = 0;
+        t->_cRegister = t->_cExport = t->_cServe = t->_cHit = t->_cPlace = 0;
     }
 }
 @end

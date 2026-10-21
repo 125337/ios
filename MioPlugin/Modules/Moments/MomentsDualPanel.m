@@ -19,11 +19,10 @@
 // 媒体路径注册/解析全在 MioDualMediaService（MD5 稳定 key + 持久化 + itemID 反查）。
 // 零破图架构：任何请求分支都返回有效图片响应——
 //   ① 注册路径文件在 → 缩放返回真图（99% 常态）
-//   ② 文件不在/读图失败 → 1x1 透明 PNG（HTTP 200，<img> 物理上不产生 onerror，
-//      破图标不可能出现）+ 触发 WCMediaDownloader（微信原生管线：CDN+解密+落盘）
-//      → 轮询文件到位 → mediaReadyForKey 通知 JS 重载该 img（二次请求命中 ①）
-//   ③ 数据项不可得/下载超时 → 透明图为终态（卡片灰底占位，干净不破图）
-// didFailWithError 全部移除——didFail 是破图标的唯一来源。
+//   ② 文件不在/读图失败 → didFail（WCM 同款 fail-fast）：<img> onerror → JS imgCdn
+//      兜底（行 cdn 字段直连 CDN URL）+ assetMiss 上报 → ensureMediaForKey 补导
+//      → gen+ → rebuild 重映射补图
+//   ③ 数据项不可得/CDN 也失败 → spinner 停转，卡片灰底占位，干净不破图
 @interface MioDualSchemeHandler : NSObject <WKURLSchemeHandler>
 @end
 @implementation MioDualSchemeHandler
@@ -85,9 +84,9 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
         ? [[MioDualMediaService shared] resolveKey:key] : nil;
     if (!path.length) {
         // 文件缺失 → 真实失败（WCM 同款 didFail，反编译 FUN_.c L580-640 实证
-        // 无占位字节）：<img> onerror → assetMiss → ensureMediaForKey 补下
-        // → __mioMediaReady 重载，重试环由 onerror 驱动
-        [MioDualMediaTrace log:@"serve" key:key ?: @"-" detail:@"MISS→didFail(抄WCM,重试走assetMiss)"];
+        // 无占位字节）：<img> onerror → JS imgCdn 兜底 + assetMiss →
+        // ensureMediaForKey 补导 → gen+ → rebuild 重映射补图
+        [MioDualMediaTrace log:@"serve" key:key ?: @"-" detail:@"MISS→didFail(重试走assetMiss+imgCdn)"];
         [self serveFail:task ref:nil];
         return;
     }

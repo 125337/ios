@@ -7,12 +7,12 @@
 //   register   注册（gate=ready/place/gate/pending——四态见 MioDualMediaService）
 //   export     导出完成（direct=原字节直存 / trans=转码 / FAILED）
 //   gen+       就绪代际迁移（renderKeys 语义：文本卡→带图卡的信号）
-//   serve      scheme 响应（hit=displayCache / decode=全管线 / PLACE=占位 / LOST=副本丢失）
-//   dl         WCMediaDownloader 下载（start/finish/exhausted/noitem）
+//   serve      scheme 响应（hit=displayCache / decode=全管线 / PLACE=占位 / LOST=副本丢失 / MISS=didFail）
+//   push       推送层（snap 快照 / nochange / 带图行数）
 //   orig       原图通道（签名去重/导出）
 //   remap      补图重映射（Store 检测 gen 变化强制重建该行）
 // 预期流（零破图）：register(gate) → export(direct/trans) → gen+ → serve(hit/decode)
-//   异常流：register(gate) → … → dl(start/finish) → export → gen+ → remap → serve
+//   异常流：serve(MISS) → JS imgCdn 兜底 / assetMiss → 补导 export → gen+ → remap → serve
 @interface MioDualMediaTrace : NSObject
 // 写一条（任意线程；key 传完整文件名或 bare digest 均可，显示时截短）
 + (void)log:(NSString *)stage key:(NSString *)key detail:(NSString *)detail;

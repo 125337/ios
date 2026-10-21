@@ -20,7 +20,6 @@
 // 刷新链路显式推送（refreshHead/loadTail 末尾统一调用——reload 同步完成后本地库
 // 新数据立即可见，与开面板同链路，不依赖 NSTimer 防抖）
 + (void)pushNowFromSession;
-+ (void)mediaReadyForKey:(NSString *)key;   // 缩略图落盘后通知 JS 重载对应 img（零破图闭环）
 // hook 层入口：微信 timeline 变更（0.5s 尾沿防抖）
 + (void)notifyDataChanged;
 // 可见期保鲜轮询（attachWebView 开 / detachWebView 停）：5s tick = 窗口重载 + 防抖推送，

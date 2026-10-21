@@ -8,9 +8,9 @@
 //     （WCM @0x32700 同款：pendingExports / pendingOriginalExports）
 //   - 每 key 就绪代际（renderKeys 语义）：未就绪=0，每次就绪迁移 +1——Store 行缓存
 //     据此检测补图行重映射（导出完成 → notifyDataChanged → rebuild 强制重映射）
-//   - 条目 {p, iid, cdn}：文件被清/未下载时按 iid 从数据源找回 WCDataItem，交
-//     WCMediaDownloader（微信原生管线：CDN+解密+落盘）拉图；不自建 CDN 直连
-//     （SNS 缩略图加密存储，直连只能拿到密文）
+//   - 条目 {p, iid, cdn}：文件被清/未下载时按 iid 从数据项找回锚点驱动重导
+//     （微信后补下载落地 → resolveKey 补导）；副本与源都缺 → 显示层 JS imgCdn
+//     兜底（行 cdn 字段直连 CDN URL，WCM 同构，不自建 CDN 直连下载）
 //   - mioimg://<token>/<key>：token = SHA256(账号标识)（WCM accountToken host
 //     校验同款，防跨账号串图），handler 三层校验 = host + 字符白名单 + 禁 _ 前缀
 // 线程模型：注册/解析可能来自 scheme handler 后台队列，统一 @synchronized(self)。
@@ -45,11 +45,11 @@
 - (NSString *)itemIDForKey:(NSString *)key;
 // key（完整文件名）对应的注册路径
 - (NSString *)registeredPathForKey:(NSString *)key;
-// 渲染层备图（WCM 同构）：源文件已落地(>1KB)触发补导，未落地等原生管线
-// （WCFacade onDownloadFinish hook 唤醒重导，下载完全交给微信原生）
+// 渲染层备图：副本就绪→内存代际快路径直返；副本缺失而源文件已落地(>1KB)→补导。
+// 源也没有→显示层 JS imgCdn 兜底（行 cdn 字段直连 CDN URL，WCM 同构）
 - (void)ensureMediaForKey:(NSString *)key;
 // 副本文件被系统清理（Caches 回收）后的自愈钩子：gen 归零 + 扩展名清除，
-// 下一轮注册重新导出（缺图已对齐 WCM 走 didFail，onerror→assetMiss 驱动重导）
+// 下一轮注册重新导出（副本缺失走 didFail，onerror→imgCdn 兜底 + assetMiss 驱动重导）
 - (void)noteExportLost:(NSString *)key;
 // 行重建回填 iid 锚点（老行自愈）
 - (void)rebindItemID:(NSString *)iid forKey:(NSString *)key;

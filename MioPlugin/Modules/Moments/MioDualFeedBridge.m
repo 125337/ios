@@ -95,22 +95,6 @@ static NSString *MioDualJSONString(id obj) {
     [[self bridge] pushNowLocked];
 }
 
-// 媒体就绪通知（零破图闭环的最后一跳）：WCMediaDownloader 把缩略图拉到本地后，
-// 调 JS __mioMediaReady(key) 让对应 <img> 重设 src 二次请求——这次文件已在，返回真图
-+ (void)mediaReadyForKey:(NSString *)key {
-    if (key.length == 0) return;
-    if (![NSThread isMainThread]) {
-        dispatch_async(dispatch_get_main_queue(), ^{ [self mediaReadyForKey:key]; });
-        return;
-    }
-    MioDualFeedBridge *b = [self bridge];
-    if (b->_detached || !b->_webView) return;   // 面板不可见：下次 attach 推送自然带新文件
-    [MioDualMediaTrace log:@"mready" key:key detail:@"→JS 重载"];
-    [b->_webView evaluateJavaScript:
-        [NSString stringWithFormat:@"window.__mioMediaReady&&window.__mioMediaReady('%@');", key]
-                 completionHandler:nil];
-}
-
 #pragma mark 尾沿防抖（已收口 Engine；此处保留转发器——MediaService 补图唤醒等调用方零改动）
 
 // 0.5s 尾沿防抖与 rebuild 链本体在 MioDualTimelineEngine.notifyDataChanged
@@ -226,9 +210,9 @@ static NSTimeInterval gLastPushAt = 0;
 
     // ---- 待图行补下（文本卡→带图卡的源动力，修"字+图只显示字"）----
     // 源文件 <1KB 占位/未下载时行归文本形态（mediaKey 有值 img 为空）——备图循环
-    // 只覆盖带 img 的行，文本卡从此无人触发下载，微信后来自动下载落地也没人看。
-    // 每轮推送前扫一遍（预算 40，pending 多为新行靠前），ensure 内部自带
-    // 去重/30s 节流/60s 冷却，重复调用无害——下载/重导落地 gen+ → Store 重映射
+    // 只覆盖带 img 的行，文本卡从此无人触发补导，微信后来自动下载落地也没人看。
+    // 每轮推送前扫一遍（预算 40，pending 多为新行靠前），ensure → resolveKey：
+    // 源已落地(>1KB)即补导 → gen+ → rebuild 补图；源没落地重复调用零成本
     {
         NSUInteger budget = 40;
         for (NSDictionary *r in rows) {
