@@ -31,17 +31,6 @@
 // displayCache 单例（读取/写入共用一份；定义在下方，前置声明供 startURLSchemeTask 用）
 static NSCache *MioDualDispCache(void);
 
-// 1x1 透明 PNG（硬编码字节，后台线程随时可用）
-static NSData *MioDualPlaceholderPNG(void) {
-    static NSData *d;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        NSString *b64 = @"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
-        d = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
-    });
-    return d;
-}
-
 // 解码队列（WCMAssetHandler decodeQueue 反编译实证同款：专属串行队列——同一时刻
 // 只解一张，CPU/内存曲线平滑。旧实现 global 并发队列：快速滚动 20 张齐解=CPU 峰值
 // + 并发位图内存峰值，滚动掉帧元凶之一）
@@ -84,7 +73,8 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
     for (NSString *comp in [url.pathComponents reverseObjectEnumerator]) {
         if (comp.length && ![comp isEqualToString:@"/"]) { key = comp; break; }
     }
-    // ②③ 白名单 [A-Za-z0-9_] + 可选扩展名 .jpg/.jpeg/.png，禁 _ 开头（防路径穿越）
+    // ②③ 白名单 [A-Za-z0-9_] + 可选扩展名 .jpg/.jpeg/.png，禁 _ 开头（防路径穿越）。
+    // 校验失败 → didFail（对齐 WCM fail-fast，反编译 FUN_.c L58-123 同款错误返回）
     static NSPredicate *nameOK;
     static dispatch_once_t oncePred;
     dispatch_once(&oncePred, ^{
@@ -94,9 +84,11 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
     NSString *path = (hostOK && key.length && nameOK && [nameOK evaluateWithObject:key])
         ? [[MioDualMediaService shared] resolveKey:key] : nil;
     if (!path.length) {
-        // 文件缺失：透明图立即响应（下载触发归渲染层 ensureMediaForKey:）
-        [MioDualMediaTrace log:@"serve" key:key ?: @"-" detail:@"PLACE(缺文件→占位图,补图走ensure)"];
-        [self servePlaceholder:task];
+        // 文件缺失 → 真实失败（WCM 同款 didFail，反编译 FUN_.c L580-640 实证
+        // 无占位字节）：<img> onerror → assetMiss → ensureMediaForKey 补下
+        // → __mioMediaReady 重载，重试环由 onerror 驱动
+        [MioDualMediaTrace log:@"serve" key:key ?: @"-" detail:@"MISS→didFail(抄WCM,重试走assetMiss)"];
+        [self serveFail:task ref:nil];
         return;
     }
     NSValue *taskRef = [NSValue valueWithNonretainedObject:task];   // 取消标记（stop 与响应都在主线程比对）
@@ -124,9 +116,10 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
         }
         NSData *raw = [NSData dataWithContentsOfFile:path options:NSDataReadingMappedIfSafe error:nil];
         if (!raw.length) {
-            // 文件在校验后半路被清/写一半：占位 + 标记副本丢失（下轮重导，自愈）
+            // 文件在校验后半路被清/写一半：标记副本丢失（下轮重导，自愈）+ 真实失败
             [[MioDualMediaService shared] noteExportLost:key];
-            [self servePlaceholder:task];
+            [MioDualMediaTrace log:@"serve" key:key detail:@"LOST→didFail(读盘失败,重导自愈)"];
+            [self serveFail:task ref:taskRef];
             return;
         }
         [self serveScaledData:raw url:url.absoluteString target:target task:task ref:taskRef];
@@ -134,24 +127,17 @@ static NSOperationQueue *MioDualDecodeQueue(void) {
 }
 
 // 占位响应（主线程提交；no-store 防 WebKit 缓存透明图挡住二次请求的真图）
-- (void)servePlaceholder:(id<WKURLSchemeTask>)task {
-    NSData *data = MioDualPlaceholderPNG();
+- (void)serveFail:(id<WKURLSchemeTask>)task ref:(NSValue *)taskRef {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSMutableSet *cancelled = [self cancelledTasks];
-        if ([cancelled containsObject:[NSValue valueWithNonretainedObject:task]]) {
-            [cancelled removeObject:[NSValue valueWithNonretainedObject:task]];
+        if (taskRef && [cancelled containsObject:taskRef]) {
+            [cancelled removeObject:taskRef];
             return;
         }
-        NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
-                                   initWithURL:task.request.URL
-                                   statusCode:200
-                                   HTTPVersion:@"HTTP/1.1"
-                                   headerFields:@{@"Content-Type": @"image/png",
-                                                  @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length],
-                                                  @"Cache-Control": @"no-store"}];
-        [task didReceiveResponse:resp];
-        [task didReceiveData:data];
-        [task didFinish];
+        // NSURLErrorFileDoesNotExist = -1100（WCM 同款 fail-fast 语义）
+        [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain
+                                                   code:NSURLErrorFileDoesNotExist
+                                               userInfo:nil]];
     });
 }
 
@@ -248,7 +234,7 @@ static NSCache<NSString *, NSData *> *MioDualDispCache(void) {
             return;
         }
         if (!data.length) {
-            [self servePlaceholder:task];
+            [self serveFail:task ref:taskRef];   // 解码失败也走真实失败（WCM 同款）
             return;
         }
         NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]

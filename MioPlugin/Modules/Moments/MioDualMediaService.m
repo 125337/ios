@@ -501,6 +501,25 @@ static NSString *MioDualSniffExt(NSData *d) {
     }
 }
 
+// 行重建时回填数据项锚点（row.id ↔ row.img，行自身就是 key→itemID 映射）：
+// v2 迁移清库 + 旧版补导清 iid 的存量行借此复活补下链路——getDataItemByID 是
+// facade 库级查询（WCFacade getDataItemByID:），窗口外老行同样可查。纯字典写，零 IO
+- (void)rebindItemID:(NSString *)iid forKey:(NSString *)key {
+    if (iid.length == 0 || key.length == 0) return;
+    NSString *bare = MioDualBareKey(key);
+    if (!bare.length) return;
+    @synchronized(self) {
+        NSDictionary *entry = _memTable[bare] ?: _diskTable[bare];
+        if (entry[@"iid"].length) return;   // 锚点健在：稳态零成本直返
+        NSMutableDictionary *upd = entry.mutableCopy ?: [NSMutableDictionary dictionary];
+        upd[@"iid"] = iid;
+        _memTable[bare] = upd;
+        _diskTable[bare] = upd;
+        _dirty = YES;
+        [self flushDirtyLocked];
+    }
+}
+
 - (void)endDownloadForKey:(NSString *)key {
     if (key.length == 0) return;
     @synchronized(self) { [_downloading removeObject:key]; }
@@ -508,11 +527,12 @@ static NSString *MioDualSniffExt(NSData *d) {
 
 #pragma mark 渲染层备图（WCMFeedController exportImage 同构）
 
-// 数据项 → 目标路径所属的 WCMediaItem：遍历 media wraps，四路路径 selector
-// 匹配注册路径；顺带记录首个有路径的 mi 作兜底（注册时与查找时 selector
-// 返回值可能随下载状态变化）
-- (id)mediaItemForDataItem:(id)di path:(NSString *)targetPath {
-    if (!di || targetPath.length == 0) return nil;
+// 数据项 → 目标路径所属的 WCMediaItem：遍历 media wraps 两级匹配——①注册路径精确
+// 匹配（四路路径 selector）②CDN 摘要精确匹配（key=SHA256(cdnURL)，与 registerLocalPath
+// 同源；老行补下时注册路径多半已被微信清掉，摘要匹配才能选对多图帖的正确 mediaItem）
+// 都未中则回落首个有路径的 mi（注册时与查找时 selector 返回值可能随下载状态变化）
+- (id)mediaItemForDataItem:(id)di path:(NSString *)targetPath bareKey:(NSString *)bare {
+    if (!di) return nil;
     if (![di respondsToSelector:@selector(getMediaWraps)]) return nil;
     NSArray *wraps = ((id(*)(id, SEL))objc_msgSend)(di, @selector(getMediaWraps));
     SEL pathSels[4] = { @selector(getThumbImagePath), @selector(pathForPreview),
@@ -525,8 +545,15 @@ static NSString *MioDualSniffExt(NSData *d) {
         for (int i = 0; i < 4; i++) {
             if (![mi respondsToSelector:pathSels[i]]) continue;
             NSString *p = ((id(*)(id, SEL))objc_msgSend)(mi, pathSels[i]);
-            if ([p isKindOfClass:[NSString class]] && [p isEqualToString:targetPath]) return mi;
-            if (!firstMI && [p isKindOfClass:[NSString class]] && p.length) firstMI = mi;
+            if ([p isKindOfClass:[NSString class]] && p.length) {
+                if (targetPath.length && [p isEqualToString:targetPath]) return mi;
+                if (!firstMI) firstMI = mi;
+            }
+            if (bare.length && [mi respondsToSelector:@selector(attachCdnUrl)]) {
+                NSString *cdn = ((id(*)(id, SEL))objc_msgSend)(mi, @selector(attachCdnUrl));
+                if ([cdn isKindOfClass:[NSString class]] && cdn.length &&
+                    [MioDualMediaDigest(cdn) isEqualToString:bare]) return mi;
+            }
         }
     }
     return firstMI;
@@ -578,7 +605,7 @@ static NSString *MioDualSniffExt(NSData *d) {
     NSString *path = [self registeredPathForKey:key];
     NSString *iid = [self itemIDForKey:key];
     id di = iid.length ? [[MioDualTimelineStore shared] dataItemByID:iid] : nil;
-    id mi = [self mediaItemForDataItem:di path:path];
+    id mi = [self mediaItemForDataItem:di path:path bareKey:bare];
     if (!di || !mi) {
         [self endDownloadForKey:bare];
         @synchronized(self) {

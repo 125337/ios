@@ -61,7 +61,7 @@ static NSDateFormatter *sFmt = nil;   // 进程级复用（HH:mm:ss.SSS）
         else if ([stage isEqualToString:@"serve"]) {
             _cServe++;
             if ([detail hasPrefix:@"hit"]) _cHit++;
-            else if ([detail hasPrefix:@"PLACE"]) _cPlace++;
+            else if ([detail hasPrefix:@"PLACE"] || [detail hasPrefix:@"MISS"]) _cPlace++;
         }
         if (_ring.count < TRACE_CAP) {
             [_ring addObject:e];

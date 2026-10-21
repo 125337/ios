@@ -193,7 +193,13 @@ static NSString * const kSnapshotKey = @"MioDualFeedSnapshot";
                     _dictCache[rid] = d;
                 }
             }
-            if (d) [rows addObject:d];
+            if (d) {
+                // iid 锚点回填：行自身就是 key→itemID 映射，v2 迁移/旧 bug 清掉
+                // 的存量行借此恢复补下能力（纯字典写，锚点健在时零成本）
+                if (rid.length && [d[@"img"] length])
+                    [[MioDualMediaService shared] rebindItemID:rid forKey:d[@"img"]];
+                [rows addObject:d];
+            }
         }
     } @catch (NSException *e) {
         WPLog(@"Dual", @"[Store] map error: %@", e);
