@@ -544,7 +544,7 @@ static NSString *MioDualSniffExt(NSData *d) {
         [_cdnInflight addObject:bare];
     }
     __weak typeof(self) wself = self;
-    [[NSURLSession sharedSession] dataTaskWithURL:[NSURL URLWithString:url]
+    [[[NSURLSession sharedSession] dataTaskWithURL:[NSURL URLWithString:url]
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 __strong typeof(wself) sself = wself;
