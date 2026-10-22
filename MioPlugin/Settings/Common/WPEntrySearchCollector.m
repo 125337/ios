@@ -87,6 +87,8 @@ static NSString *WPPinyinInitials(NSString *src) {
 
 #pragma mark - 登记
 
+@implementation WPEntrySearchCollector
+
 + (void)initialize {
     if (self == [WPEntrySearchCollector class]) {
         sRegistry = [NSMutableDictionary dictionary];
