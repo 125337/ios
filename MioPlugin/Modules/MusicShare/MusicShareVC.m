@@ -112,7 +112,11 @@
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-// 组装微信原生音乐卡片 XML（appmsg type=3，无 appid 依赖——黄白反编译实证结论）
+// 组装微信原生音乐卡片 XML（appmsg type=3）
+// 字段分工（首版曾把 url/musicurl 用混导致卡片降级未知文件 412.dat）：
+//   <url>       = 点击卡片跳转的网页（必备，缺失会被微信按文件消息降级）
+//   <musicurl>/<dataurl> = 卡片内播放器音频流（QQ 官方流需 vkey，留空 → 播放走 url 页面）
+//   <songalbumurl> = 封面（音乐卡渲染用）
 - (BOOL)sendSongCard:(QQSong *)song to:(NSString *)session {
     NSString *(^esc)(NSString *) = ^NSString *(NSString *s) {
         if (s.length == 0) return @"";
@@ -128,24 +132,34 @@
         des = des.length ? [des stringByAppendingFormat:@" - %@", esc(song.subtitle)] : esc(song.subtitle);
     }
     NSString *cover = song.coverURL ?: @"";
+    NSString *play = esc(song.playPageURL);
 
     NSString *xml = [NSString stringWithFormat:
         @"<?xml version=\"1.0\"?>\n"
         "<appmsg appid=\"\" sdkver=\"0\">\n"
         "  <title>%@</title>\n"
         "  <des>%@</des>\n"
+        "  <action>view</action>\n"
         "  <type>3</type>\n"
-        "  <musicurl>%@</musicurl>\n"
-        "  <thumburl>%@</thumburl>\n"
+        "  <showtype>0</showtype>\n"
+        "  <content></content>\n"
+        "  <url>%@</url>\n"
+        "  <dataurl></dataurl>\n"
+        "  <lowurl></lowurl>\n"
+        "  <lowdataurl></lowdataurl>\n"
         "  <songalbumurl>%@</songalbumurl>\n"
+        "  <thumburl>%@</thumburl>\n"
         "  <appattach>\n"
         "    <totallen>0</totallen>\n"
+        "    <cdnthumburl></cdnthumburl>\n"
+        "    <aeskey></aeskey>\n"
+        "    <encryver>0</encryver>\n"
         "    <fileext></fileext>\n"
         "  </appattach>\n"
         "  <websearch/>\n"
+        "  <extinfo/>\n"
         "</appmsg>",
-        esc(song.name), des,
-        esc(song.playPageURL), esc(cover), esc(cover)];
+        esc(song.name), des, play, cover, cover];
 
     WPLog(@"Music", @"[Card] 发送音乐卡片: %@ - %@ -> %@", song.name, song.singerName, session);
     return WXSendAppMessage(xml, session);
