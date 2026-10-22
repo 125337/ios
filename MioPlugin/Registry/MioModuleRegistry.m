@@ -44,7 +44,6 @@
 #import "../Modules/HomeBeautify/HomeCardVC.h"
 #import "../Modules/MsgMerge/MsgMergeConfig.h"
 #import "../Modules/MusicShare/MusicShareConfig.h"
-#import "../Modules/MusicShare/MusicShareProbe.h"
 #import "../Modules/SettingEntry/WPOtherVC.h"
 
 // ────── 所有 Hook 类的 import ──────
@@ -325,11 +324,11 @@
                                                   subtitle:@"账号/签名证书信息"
                                              sectionTitle:@"系统"],
 
-            // ──── 音乐分享（入口在 其他功能 页；QQ 音源搜歌 + 原生音乐卡片发送，无 Hook） ────
+            // ──── 音乐分享（入口在 其他功能 页；网易云搜歌 + 黄白同款 appmsg type=76 点击即播卡片） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"musicshare"
                                                     title:@"音乐分享"
                                                configClass:[MusicShareConfig class]
-                                               hookClasses:@[[MusicShareProbe class]]
+                                               hookClasses:@[]
                                            controllerClass:[WPOtherVC class]
                                                   subtitle:@"点歌发送音乐卡片"
                                              sectionTitle:@"通用"],
