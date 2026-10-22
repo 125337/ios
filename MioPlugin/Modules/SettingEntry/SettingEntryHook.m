@@ -6,6 +6,8 @@
 #import "WPAboutVC.h"
 #import "WPAccountVC.h"
 #import "../Voice/WPVoicePackSettingsVC.h"
+#import "../ChatTopBar/AvatarLoader.h"
+#import "../../Core/ServiceHelper.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Config/Constants.h"
 #import "../../Settings/Controllers/SettingGeneralFunctionController.h"
@@ -247,11 +249,22 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     UIView *heroCard = WPMakeCard(y, w);
     CGFloat hy = 24;
 
-    UIView *avatar = [[UIView alloc] initWithFrame:CGRectMake((w - kPad * 2) / 2 - 40, hy, 80, 80)];
+    // 头像：DefaultHead 占位，AvatarLoader 异步加载（本地自定义 → MMHeadImageMgr → URL 三级兜底，主线程回调）
+    UIImageView *avatar = [[UIImageView alloc] initWithFrame:CGRectMake((w - kPad * 2) / 2 - 40, hy, 80, 80)];
     avatar.backgroundColor = [UIColor colorWithRed:0.851 green:0.851 blue:0.859 alpha:1.0];
     avatar.layer.cornerRadius = 40;
+    avatar.clipsToBounds = YES;
+    avatar.contentMode = UIViewContentModeScaleAspectFill;
+    avatar.image = [UIImage imageNamed:@"DefaultHead"];
     [heroCard addSubview:avatar];
     hy += 88;
+
+    NSString *selfWxid = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
+    if (selfWxid.length) {
+        [[AvatarLoader shared] loadAvatarForWxid:selfWxid contact:nil completion:^(UIImage *image) {
+            if (image) avatar.image = image;
+        }];
+    }
 
     UILabel *heroName = [[UILabel alloc] initWithFrame:CGRectMake(0, hy, w - kPad * 2, 28)];
     heroName.text = @"Mio助手";
