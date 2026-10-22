@@ -156,25 +156,45 @@ static NSString *WPPinyinInitials(NSString *src) {
 }
 
 + (NSArray<NSDictionary *> *)allSearchItems {
-    static NSArray *cached = nil;
+    // prime 只做一次（进程内）；汇总每次实时执行——登记本是活的，空跑失败的页面
+    // 之后被手动打开时实时登记的条目立即可见，无快照过期问题（遍历微秒级）
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         // 空跑补齐未打开页面
         [WPSearchPageCats() enumerateKeysAndObjectsUsingBlock:^(NSString *clsName, NSString *cat, BOOL *stop) {
             [self primePageClass:clsName cat:cat];
         }];
-        // 汇总输出
-        NSMutableArray *all = [NSMutableArray array];
-        for (NSMutableDictionary *pageReg in sRegistry.objectEnumerator) {
-            for (NSDictionary *item in pageReg.objectEnumerator) {
-                [all addObject:item];
-            }
-        }
+        NSUInteger regItems = 0, regPages = sRegistry.count;
+        for (NSMutableDictionary *pageReg in sRegistry.objectEnumerator) regItems += pageReg.count;
         WPLog(@"Setting", @"[Search] registry ready: %lu items from %lu pages",
-              (unsigned long)all.count, (unsigned long)sRegistry.count);
-        cached = all;
+              (unsigned long)regItems, (unsigned long)regPages);
     });
-    return cached;
+
+    // 实时汇总登记本 + 页面兜底条目（页内没有任何行标题等于页名时补一条，
+    // 保证搜「红包设置」这类子行里不出现的页名也能命中；已有一致行标题则不重复）
+    NSMutableArray *all = [NSMutableArray array];
+    [WPSearchPageCats() enumerateKeysAndObjectsUsingBlock:^(NSString *clsName, NSString *cat, BOOL *stop) {
+        NSDictionary *pageReg = sRegistry[clsName];
+        BOOL hasPageTitle = NO;
+        for (NSDictionary *item in pageReg.objectEnumerator) {
+            if ([item[@"title"] isEqualToString:cat]) { hasPageTitle = YES; break; }
+        }
+        if (!hasPageTitle) {
+            [all addObject:@{ @"title": cat,
+                              @"kw": @"",
+                              @"py": WPPinyinFullName(cat),
+                              @"pysm": WPPinyinInitials(cat),
+                              @"vc": clsName,
+                              @"cat": cat,
+                              @"key": @"" }];
+        }
+    }];
+    for (NSMutableDictionary *pageReg in sRegistry.objectEnumerator) {
+        for (NSDictionary *item in pageReg.objectEnumerator) {
+            [all addObject:item];
+        }
+    }
+    return all;
 }
 
 @end

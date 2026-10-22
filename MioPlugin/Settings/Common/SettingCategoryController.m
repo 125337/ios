@@ -684,10 +684,31 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
         subBuilder(group, &ecy);
         resultCy = cy + kRowH + ecy;
         WPLog(@"Config", @"[MASTER] 手风琴已展开: key=%@, ecy=%.1f", key, ecy);
+    } else if (subBuilder) {
+        // 关闭态：子行构建进影子组——行照常构建并登记进搜索（搜索覆盖与开关状态解耦），
+        // 但影子 section 独立创建、不挂页面表格，用户不可见，构建完即丢弃
+        WPWGroup *shadow = [self wpShadowGroupForSearch];
+        if (shadow) {
+            CGFloat ecy = 0;
+            subBuilder(shadow, &ecy);
+        }
     }
     self.wpBuildingSubRows = prevSub;
 
     return resultCy;
+}
+
+// 影子组：独立 WCTableViewSectionManager 实例（微信引擎 section 类，init 可独立创建），
+// addCell 正常执行使行登记进搜索，但不挂 manager/tableView——仅供登记，永不显示
+- (WPWGroup *)wpShadowGroupForSearch {
+    Class secCls = objc_getClass("WCTableViewSectionManager");
+    if (!secCls) return nil;
+    id sec = [[secCls alloc] init];
+    if (!sec) return nil;
+    WPWGroup *g = [[WPWGroup alloc] init];
+    g.sectionMgr = sec;
+    g.wpOwnerPage = self;
+    return g;
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
