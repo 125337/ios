@@ -143,10 +143,12 @@ static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
             NSArray *pageItems = [cls wpSearchItems];
             if (!pageItems.count) continue;
             NSString *cat = [cls respondsToSelector:@selector(wpSearchPageTitle)]
-                ? [cls wpSearchPageTitle] : nil;
+                ? (NSString *)[cls wpSearchPageTitle] : nil;
             for (NSDictionary *it in pageItems) {
-                if (![it isKindOfClass:[NSDictionary class]] || !it[@"title"].length) continue;
-                [all addObject:@{ @"title": it[@"title"],
+                if (![it isKindOfClass:[NSDictionary class]]) continue;
+                NSString *title = it[@"title"];
+                if (!title.length) continue;
+                [all addObject:@{ @"title": title,
                                   @"vc": name,
                                   @"cat": cat.length ? cat : name,
                                   @"kw": it[@"kw"] ?: @"" }];
