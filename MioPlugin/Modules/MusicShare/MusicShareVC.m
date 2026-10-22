@@ -1,12 +1,12 @@
 #import "MusicShareVC.h"
-#import "QQMusicService.h"
+#import "NeteaseMusicService.h"
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
 #import "../../Settings/Common/WPWeChatTable.h"
 
 @interface MusicShareVC () <UISearchBarDelegate>
 @property (nonatomic, copy) NSString *currentKeyword;        // 当前搜索词（重建行时恢复）
-@property (nonatomic, copy) NSArray<QQSong *> *results;      // 搜索结果
+@property (nonatomic, copy) NSArray<NeteaseSong *> *results; // 搜索结果
 @property (nonatomic, assign) BOOL searched;                 // 是否已发起过搜索（区分初始态/无结果态）
 @property (nonatomic, strong) NSTimer *searchDebounce;       // 输入防抖
 @end
@@ -40,9 +40,11 @@
         cy = [self addSectionFooter:@"没有找到相关歌曲" y:cy width:w];
     } else {
         for (NSUInteger i = 0; i < self.results.count; i++) {
-            QQSong *song = self.results[i];
+            NeteaseSong *song = self.results[i];
             NSString *sub = song.singerName.length ? song.singerName : @"";
-            if (song.interval > 0) sub = sub.length ? [sub stringByAppendingFormat:@" · %ld:%02ld", (long)song.interval / 60, (long)song.interval % 60] : [NSString stringWithFormat:@"%ld:%02ld", (long)song.interval / 60, (long)song.interval % 60];
+            if (song.albumName.length > 0) {
+                sub = sub.length ? [sub stringByAppendingFormat:@" · %@", song.albumName] : song.albumName;
+            }
             cy = [self addNavRowInGroup:group title:song.name subtitle:sub
                                     tag:(NSInteger)i action:@selector(onSongTap:) cy:cy width:w];
         }
@@ -71,7 +73,7 @@
     if (keyword.length == 0) return;
     self.currentKeyword = keyword;
     __weak typeof(self) ws = self;
-    [QQMusicService searchWithKeyword:keyword completion:^(NSArray<QQSong *> *songs) {
+    [NeteaseMusicService searchWithKeyword:keyword completion:^(NSArray<NeteaseSong *> *songs) {
         ws.results = songs;
         ws.searched = YES;
         [ws wpReloadUI];
@@ -83,12 +85,11 @@
 - (void)onSongTap:(UIButton *)sender {
     NSUInteger idx = sender.tag;
     if (idx >= self.results.count) return;
-    QQSong *song = self.results[idx];
-    [self promptTargetAndSend:song];
+    [self promptTargetAndSend:self.results[idx]];
 }
 
-// 第一版发送目标 = 手输 wxid/群 ID（原生联系人选择器为第二版增强）
-- (void)promptTargetAndSend:(QQSong *)song {
+// 发送目标 = 手输 wxid/群 ID（原生联系人选择器为二期增强）
+- (void)promptTargetAndSend:(NeteaseSong *)song {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:[NSString stringWithFormat:@"发送「%@」", song.name]
                                        message:@"输入目标 wxid / 群 ID"
                                 preferredStyle:UIAlertControllerStyleAlert];
@@ -99,70 +100,62 @@
         NSString *target = alert.textFields.firstObject.text;
         target = [target stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         if (target.length == 0) return;
-        BOOL ok = [self sendSongCard:song to:target];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self sendSongCard:song to:target completion:^(BOOL ok, NSString *errMsg) {
             UIAlertController *done = [UIAlertController alertControllerWithTitle:ok ? @"已发送" : @"发送失败"
-                                                   message:ok ? [NSString stringWithFormat:@"「%@」已发给 %@", song.name, target] : @"发送通道异常，请看调试日志"
+                                                   message:ok
+                                                       ? [NSString stringWithFormat:@"「%@」已发给 %@", song.name, target]
+                                                       : (errMsg ?: @"发送通道异常，请看调试日志")
                                             preferredStyle:UIAlertControllerStyleAlert];
             [done addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
             [self presentViewController:done animated:YES completion:nil];
-        });
+        }];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-// 组装微信原生音乐卡片 XML（appmsg type=3）
-// 字段分工（首版曾把 url/musicurl 用混导致卡片降级未知文件 412.dat）：
-//   <url>       = 点击卡片跳转的网页（必备，缺失会被微信按文件消息降级）
-//   <musicurl>/<dataurl> = 卡片内播放器音频流（QQ 官方流需 vkey，留空 → 播放走 url 页面）
-//   <songalbumurl> = 封面（音乐卡渲染用）
-- (BOOL)sendSongCard:(QQSong *)song to:(NSString *)session {
-    NSString *(^esc)(NSString *) = ^NSString *(NSString *s) {
-        if (s.length == 0) return @"";
-        NSMutableString *m = [s mutableCopy];
-        [m replaceOccurrencesOfString:@"&" withString:@"&amp;" options:0 range:NSMakeRange(0, m.length)];
-        [m replaceOccurrencesOfString:@"<" withString:@"&lt;" options:0 range:NSMakeRange(0, m.length)];
-        [m replaceOccurrencesOfString:@">" withString:@"&gt;" options:0 range:NSMakeRange(0, m.length)];
-        return (NSString *)m;
-    };
+// 黄白式音乐卡片（appmsg type=76，点击即播不跳转）
+// 模板逐字段照抄黄白实机抓包（探针实证，2026-10-23，XML 全文 2116 字符）：
+//   <url>/<lowurl>/<dataurl>/<lowdataurl> 四字段 = 同一个 mp3 直链（网易云时效直链，与黄白的
+//   wx.music.tc.qq.com vkey 直链同为发送时实时获取、有时效的形态）
+//   <songalbumurl> = 封面；<songlyric> = LRC 全文（点开后的歌词页）
+//   appid 照抄黄白 = QQ 音乐 wx3858261cdede9ca0；无 <?xml?> 声明、无 <action>
+- (void)sendSongCard:(NeteaseSong *)song to:(NSString *)session completion:(void (^)(BOOL ok, NSString *errMsg))completion {
+    WPLog(@"Music", @"[Card] 开始发送: %@ - %@ -> %@", song.name, song.singerName, session);
+    __weak typeof(self) ws = self;
+    [NeteaseMusicService prepareSong:song completion:^(NSString *playURL, NSString *coverURL, NSString *lrc) {
+        if (!ws) return;
+        if (playURL.length == 0) {
+            WPLog(@"Music", @"[Card] 无播放直链，放弃（版权限制）");
+            completion(NO, @"这首歌取不到播放直链（网易云版权限制），换一首试试");
+            return;
+        }
+        NSString *(^esc)(NSString *) = ^NSString *(NSString *s) {
+            if (s.length == 0) return @"";
+            NSMutableString *m = [s mutableCopy];
+            [m replaceOccurrencesOfString:@"&" withString:@"&amp;" options:0 range:NSMakeRange(0, m.length)];
+            [m replaceOccurrencesOfString:@"<" withString:@"&lt;" options:0 range:NSMakeRange(0, m.length)];
+            [m replaceOccurrencesOfString:@">" withString:@"&gt;" options:0 range:NSMakeRange(0, m.length)];
+            return (NSString *)m;
+        };
+        NSString *url = esc(playURL);
+        NSString *xml = [NSString stringWithFormat:
+            @"<msg><appmsg appid=\"wx3858261cdede9ca0\"  sdkver=\"0\">"
+            "<title>%@</title><des>%@</des><type>76</type>"
+            "<url>%@</url><lowurl>%@</lowurl><dataurl>%@</dataurl><lowdataurl>%@</lowdataurl>"
+            "<songalbumurl>%@</songalbumurl>"
+            "<songlyric>%@</songlyric>"
+            "<appattach><cdnthumbaeskey></cdnthumbaeskey><aeskey></aeskey></appattach>"
+            "</appmsg><appinfo><version>0</version><appname></appname>"
+            "<isforceupdate>1</isforceupdate></appinfo></msg>",
+            esc(song.name), esc(song.singerName),
+            url, url, url, url,
+            esc(coverURL), esc(lrc)];
 
-    NSString *des = esc(song.singerName);
-    if (song.subtitle.length > 0) {
-        des = des.length ? [des stringByAppendingFormat:@" - %@", esc(song.subtitle)] : esc(song.subtitle);
-    }
-    NSString *cover = song.coverURL ?: @"";
-    NSString *play = esc(song.playPageURL);
-
-    NSString *xml = [NSString stringWithFormat:
-        @"<?xml version=\"1.0\"?>\n"
-        "<appmsg appid=\"\" sdkver=\"0\">\n"
-        "  <title>%@</title>\n"
-        "  <des>%@</des>\n"
-        "  <action>view</action>\n"
-        "  <type>3</type>\n"
-        "  <showtype>0</showtype>\n"
-        "  <content></content>\n"
-        "  <url>%@</url>\n"
-        "  <dataurl></dataurl>\n"
-        "  <lowurl></lowurl>\n"
-        "  <lowdataurl></lowdataurl>\n"
-        "  <songalbumurl>%@</songalbumurl>\n"
-        "  <thumburl>%@</thumburl>\n"
-        "  <appattach>\n"
-        "    <totallen>0</totallen>\n"
-        "    <cdnthumburl></cdnthumburl>\n"
-        "    <aeskey></aeskey>\n"
-        "    <encryver>0</encryver>\n"
-        "    <fileext></fileext>\n"
-        "  </appattach>\n"
-        "  <websearch/>\n"
-        "  <extinfo/>\n"
-        "</appmsg>",
-        esc(song.name), des, play, cover, cover];
-
-    WPLog(@"Music", @"[Card] 发送音乐卡片: %@ - %@ -> %@", song.name, song.singerName, session);
-    return WXSendAppMessage(xml, session);
+        BOOL ok = WXSendAppMessage(xml, session);
+        WPLog(@"Music", @"[Card] type=76 卡片发送%@ -> %@", ok ? @"成功" : @"失败", session);
+        completion(ok, ok ? nil : @"发送通道异常，请看调试日志");
+    }];
 }
 
 @end
