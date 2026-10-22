@@ -140,6 +140,44 @@ void WXSendTextMessage(NSString *text, NSString *sessionName) {
     });
 }
 
+// 向指定会话发送 appmsg 卡片（type=49）：与文本同路 AddMsg:MsgWrap:，content 为完整 XML。
+// 立即发送（调用方已在异步回调里），不延时；成功返回 YES。
+BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName) {
+    if (!appMsgXml.length || !sessionName.length) return NO;
+    @try {
+        id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
+        Class msgWrapClass = objc_getClass("CMessageWrap");
+        if (!msgMgr || !msgWrapClass) {
+            WPLog(@"MioPlugin", @"[SEND] CMessageMgr/CMessageWrap 不可用，无法发送 appmsg");
+            return NO;
+        }
+        id msg = ((id (*)(id, SEL, long long))objc_msgSend)([msgWrapClass alloc], @selector(initWithMsgType:), 49LL);
+        if (!msg) return NO;
+
+        [msg setValue:appMsgXml forKey:@"m_nsContent"];
+        [msg setValue:sessionName forKey:@"m_nsToUsr"];
+
+        id selfContact = WXGetSelfContact();
+        NSString *selfUserName = WXSafeStringGet(selfContact, @"m_nsUsrName");
+        if (selfUserName) [msg setValue:selfUserName forKey:@"m_nsFromUsr"];
+
+        [msg setValue:@(4) forKey:@"m_uiStatus"];
+        [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
+
+        SEL addMsgSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
+        if (![msgMgr respondsToSelector:addMsgSel]) {
+            WPLog(@"MioPlugin", @"[SEND] AddMsg:MsgWrap: 方法不可用");
+            return NO;
+        }
+        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addMsgSel, sessionName, msg);
+        WPLog(@"MioPlugin", @"[SEND] appmsg 卡片已发送 -> %@", sessionName);
+        return YES;
+    } @catch (NSException *e) {
+        WPLog(@"MioPlugin", @"[SEND] appmsg 发送异常: %@", e);
+        return NO;
+    }
+}
+
 NSString *WXDisplayNameForWxid(NSString *wxid) {
     if (!wxid.length) return wxid;
     id contact = WXGetContactForWxid(wxid);

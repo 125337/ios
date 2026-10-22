@@ -33,9 +33,6 @@
     return @[
         // 基础开关
         [ConfigDescriptor itemWithKey:@"preventRecall" type:ConfigValueTypeBool default:@(YES)],
-        [ConfigDescriptor itemWithKey:@"debugLogging" type:ConfigValueTypeBool default:@(NO)],
-        [ConfigDescriptor itemWithKey:@"hideContent" type:ConfigValueTypeBool default:@(NO)],
-        [ConfigDescriptor itemWithKey:@"noTip" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"bottomPosition" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"sendInterceptedContent" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"interceptNotifyEnabled" type:ConfigValueTypeBool default:@(NO)],

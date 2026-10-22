@@ -8,9 +8,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - 基础开关
 @property (nonatomic, assign) BOOL preventRecall;
-@property (nonatomic, assign) BOOL debugLogging;
-@property (nonatomic, assign) BOOL hideContent;
-@property (nonatomic, assign) BOOL noTip;
 @property (nonatomic, assign) BOOL bottomPosition;
 @property (nonatomic, assign) BOOL sendInterceptedContent;
 @property (nonatomic, assign) BOOL interceptNotifyEnabled;

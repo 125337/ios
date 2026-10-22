@@ -25,5 +25,9 @@ NSInteger WXSafeIntegerGet(id obj, NSString *key, NSInteger defaultValue);
 /// 供自动收款回复、红包统计同步等多处复用
 void WXSendTextMessage(NSString *text, NSString *sessionName);
 
+/// 向指定会话发送一条 appmsg 卡片消息（type=49，content 为完整 XML；主线程执行，立即发送）
+/// 供音乐卡片等富消息复用；发送成功返回 YES
+BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName);
+
 /// 查询联系人显示名（备注 > 昵称），查不到时原样返回 wxid
 NSString *WXDisplayNameForWxid(NSString *wxid);

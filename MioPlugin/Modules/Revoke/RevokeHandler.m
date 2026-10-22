@@ -202,8 +202,6 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
         }
     }
 
-    if ([RevokeConfig shared].noTip) return YES;
-
     id messageMgr = WXGetService(objc_getClass("CMessageMgr"));
     if (!messageMgr) {
         WPLog(@"Revoke", @"CMessageMgr not found");
@@ -261,13 +259,8 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
     }
     fromUsrName = displayName(fromUsrName) ?: @"对方";
 
-    NSString *revokedContent = nil;
-    if (![RevokeConfig shared].hideContent) {
-        revokedContent = digestForMsgWrap(revokedMsgWrap);
-        if (!revokedContent.length) revokedContent = @"";
-    } else {
-        revokedContent = @"";
-    }
+    NSString *revokedContent = digestForMsgWrap(revokedMsgWrap);
+    if (!revokedContent.length) revokedContent = @"";
 
     unsigned int createTime = 0;
     SEL createTimeSel = NSSelectorFromString(@"m_uiCreateTime");
@@ -286,7 +279,7 @@ static BOOL insertTipMessage_DKStyle(id messageMgr, NSString *session, NSString 
     WPLog(@"Revoke", @"result=%d", inserted);
 
     // ====== 通知撤回者 ======
-    if ([RevokeConfig shared].notifySender && ![RevokeConfig shared].noTip && inserted && fromUsrName.length > 0) {
+    if ([RevokeConfig shared].notifySender && inserted && fromUsrName.length > 0) {
         NSTimeInterval currentTime = [[NSDate date] timeIntervalSince1970];
         NSTimeInterval msgTime = (NSTimeInterval)createTime;
         NSTimeInterval elapsed = currentTime - msgTime;

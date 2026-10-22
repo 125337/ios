@@ -51,6 +51,7 @@ static NSDictionary<NSString *, NSString *> *WPSearchPageCats(void) {
             @"WPAccountVC":                         @"账户信息",
             @"WPOtherVC":                           @"其他功能",
             @"WPBackupVC":                          @"备份与重置",
+            @"MusicShareVC":                        @"点歌",
         };
     });
     return map;
