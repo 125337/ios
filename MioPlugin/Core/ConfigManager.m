@@ -193,10 +193,13 @@ static id WPJSONSafeValue(id value) {
         id safe = WPJSONSafeValue([d objectForKey:key]);
         if (safe) config[key] = safe;
     }
+    // NSJSONSerialization 不支持 NSDate，exportedAt 必须是字符串
+    NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+    fmt.dateFormat = @"yyyy-MM-dd HH:mm:ss";
     return @{ @"app": @"Mio助手",
               @"format": @1,
               @"version": kPluginVersion,
-              @"exportedAt": [NSDate date],
+              @"exportedAt": [fmt stringFromDate:[NSDate date]],
               @"config": config };
 }
 
