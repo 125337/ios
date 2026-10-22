@@ -1,5 +1,6 @@
 #import "WPEntrySearchCollector.h"
 #import "WPWeChatTable.h"
+#import "SettingCategoryController.h"
 #import "../../Core/LogManager.h"
 #import <objc/runtime.h>
 
@@ -139,10 +140,8 @@ static NSString *WPPinyinInitials(NSString *src) {
     if (!cls) return;
     @try {
         UIViewController *vc = [[cls alloc] init];
-        if (!vc) return;
-        if ([vc respondsToSelector:@selector(setCategoryName:)]) {
-            [(id)vc setCategoryName:cat]; // 部分页面标题由 push 前设置，空跑补上
-        }
+        if (![vc isKindOfClass:[SettingCategoryController class]]) return; // 非设置基类页面不空跑
+        ((SettingCategoryController *)vc).categoryName = cat; // 部分页面标题由 push 前设置，空跑补上
         CFAbsoluteTime t0 = CFAbsoluteTimeGetCurrent();
         [vc view]; // 触发 viewDidLoad → wpBuildRows → addCell → 登记
         WPLog(@"Setting", @"[Search] prime %@: %lu items, %.1fms",
