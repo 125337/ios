@@ -237,7 +237,7 @@ static id WPJSONSafeValue(id value) {
         [d setObject:toStore forKey:key];
         count++;
     }
-    if (count == 0) return NO;
+    // 空 config（出厂快照）也是合法备份：写 0 键 + loadAll 恢复默认
     [d synchronize];
     [self loadAll];
     WPLog(@"Config", @"[Backup] import ok: %lu keys (exportedAt %@)", (unsigned long)count, exportedAt);
