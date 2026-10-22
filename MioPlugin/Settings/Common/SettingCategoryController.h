@@ -12,11 +12,15 @@ typedef NS_ENUM(NSInteger, InputValueType) {
 // 注意：基类必须是 UIViewController——静态继承微信主程序类（MMUIViewController）在全能签
 // 注入下 dyld 绑定不到主程序 ObjC 类符号，微信启动即崩（tail30 实证）。兼容契约改由
 // UIViewController(MioMMCompat) category 提供，见 .m。
+@class WPWeChatTable;
+
 @interface SettingCategoryController : UIViewController
 @property (nonatomic, strong) UIScrollView *scrollView;
 @property (nonatomic, strong) UIView *contentView;
 @property (nonatomic, copy) NSString *categoryName;
 @property (nonatomic, strong) NSMutableSet<NSString *> *masterSwitchKeys;
+/// 微信引擎表（只读暴露；表头/表尾自定义视图挂它，如点歌页搜索框 tableHeaderView）
+@property (nonatomic, strong, readonly) WPWeChatTable *wcTable;
 
 - (UIView *)addTableGroupAtY:(CGFloat)y width:(CGFloat)w;
 /// 重建微信引擎表（wpReloadUI 内部已调用；仅引擎就绪检测/特殊时序才直接使用）
