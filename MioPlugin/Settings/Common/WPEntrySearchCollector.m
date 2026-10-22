@@ -143,7 +143,10 @@ static NSString *WPPinyinInitials(NSString *src) {
         if (![vc isKindOfClass:[SettingCategoryController class]]) return; // 非设置基类页面不空跑
         ((SettingCategoryController *)vc).categoryName = cat; // 部分页面标题由 push 前设置，空跑补上
         CFAbsoluteTime t0 = CFAbsoluteTimeGetCurrent();
-        [vc view]; // 触发 viewDidLoad → wpBuildRows → addCell → 登记
+        [vc view]; // 触发 viewDidLoad → wpReloadUI → wpBuildRows → addCell → 登记
+        // 部分页面行构建在 viewWillAppear（防 pop 行叠加模式），补一次外观生命周期触发它
+        [vc beginAppearanceTransition:YES animated:NO];
+        [vc endAppearanceTransition];
         WPLog(@"Setting", @"[Search] prime %@: %lu items, %.1fms",
               clsName, (unsigned long)sRegistry[clsName].count,
               (CFAbsoluteTimeGetCurrent() - t0) * 1000);
