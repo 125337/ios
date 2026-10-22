@@ -64,7 +64,17 @@ static void mspOnHit(NSString *via, id wrap) {
     }
 
     WPLog(@"MusicProbe", @"======== [MusicProbe] %@ type=%lld from=%@ to=%@", via, type, from, to);
-    WPLog(@"MusicProbe", @"  m_nsContent = %@", probeField(wrap, @"m_nsContent") ?: @"(nil)");
+    // 完整 content（分块打印，复刻需要 XML 全文）
+    @try {
+        id c = [wrap valueForKey:@"m_nsContent"];
+        if ([c isKindOfClass:[NSString class]] && c.length > 0) {
+            NSUInteger CHUNK = 1800;
+            for (NSUInteger i = 0; i < c.length; i += CHUNK) {
+                NSUInteger len = MIN(CHUNK, c.length - i);
+                WPLog(@"MusicProbe", @"  content[%lu/%lu] = %@", (unsigned long)i, (unsigned long)c.length, [c substringWithRange:NSMakeRange(i, len)]);
+            }
+        }
+    } @catch (NSException *e) {}
     WPLog(@"MusicProbe", @"  m_nsMsgSource = %@", probeField(wrap, @"m_nsMsgSource") ?: @"(nil)");
     WPLog(@"MusicProbe", @"  m_nsMsgId = %@  m_uiMesLocalID = %@", probeField(wrap, @"m_nsMsgId") ?: @"?", probeField(wrap, @"m_uiMesLocalID") ?: @"?");
     WPLog(@"MusicProbe", @"  m_nsDataUrl = %@", probeField(wrap, @"m_nsDataUrl") ?: @"(nil)");
