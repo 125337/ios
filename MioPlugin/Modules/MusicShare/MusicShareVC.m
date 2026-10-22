@@ -19,29 +19,24 @@
 }
 
 - (void)wpBuildRows {
-    for (UIView *v in self.contentView.subviews) {
-        [v removeFromSuperview];
-    }
-
     CGFloat w = self.view.bounds.size.width;
-    CGFloat y = 8;
 
-    // ===== 搜索框（UIKit 原生，行重建时恢复词与焦点态） =====
-    UISearchBar *bar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, y, w, 44)];
+    // ===== 搜索框 = 表头视图：位于所有 section 上方、随表滚动，与微信渲染行零冲突 =====
+    //（微信引擎表全屏自管理滚动，contentView 是遗留空壳——挂它上面必然重叠）
+    UISearchBar *bar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, w, 44)];
     bar.placeholder = @"搜索歌曲 / 歌手";
     bar.delegate = self;
     bar.searchBarStyle = UISearchBarStyleMinimal;
     bar.text = self.currentKeyword;
-    [self.contentView addSubview:bar];
-    y += 52;
+    self.wcTable.tableView.tableHeaderView = bar;
 
     // ===== 搜索结果（微信渲染组：每行一首歌，点击选目标发送） =====
-    UIView *group = [self addTableGroupAtY:y width:w];
+    UIView *group = [self addTableGroupAtY:0 width:w];
     CGFloat cy = 0;
     if (!self.searched) {
-        cy = [self addInfoRowInGroup:group title:@"输入歌名开始搜索" rightValue:nil copyText:nil cy:cy width:w];
+        cy = [self addSectionFooter:@"输入歌名开始搜索" y:cy width:w];
     } else if (self.results.count == 0) {
-        cy = [self addInfoRowInGroup:group title:@"没有找到相关歌曲" rightValue:nil copyText:nil cy:cy width:w];
+        cy = [self addSectionFooter:@"没有找到相关歌曲" y:cy width:w];
     } else {
         for (NSUInteger i = 0; i < self.results.count; i++) {
             QQSong *song = self.results[i];
@@ -51,10 +46,7 @@
                                     tag:(NSInteger)i action:@selector(onSongTap:) cy:cy width:w];
         }
     }
-    y = [self finishGroup:group atY:y height:cy];
-
-    self.contentView.frame = CGRectMake(0, 0, w, y + 40);
-    self.scrollView.contentSize = CGSizeMake(w, y + 40);
+    [self finishGroup:group atY:0 height:cy];
 }
 
 #pragma mark - 搜索
