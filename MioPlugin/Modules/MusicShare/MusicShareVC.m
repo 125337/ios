@@ -2,6 +2,7 @@
 #import "QQMusicService.h"
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
+#import "../../Settings/Common/WPWeChatTable.h"
 
 @interface MusicShareVC () <UISearchBarDelegate>
 @property (nonatomic, copy) NSString *currentKeyword;        // 当前搜索词（重建行时恢复）
