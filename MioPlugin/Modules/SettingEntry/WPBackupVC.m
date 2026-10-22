@@ -5,10 +5,10 @@
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/MioRestartHelper.h"
 
-@interface WPBackupVC () <UIDocumentPickerDelegate>
+@interface WPBackupVC : SettingCategoryController
 @end
 
-@interface WPBackupVC : SettingCategoryController
+@interface WPBackupVC () <UIDocumentPickerDelegate>
 @end
 
 @implementation WPBackupVC
