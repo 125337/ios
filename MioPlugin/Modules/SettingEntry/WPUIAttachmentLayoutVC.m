@@ -58,18 +58,4 @@
     WPLog(@"UI", @"[Sub] WPUIAttachmentLayoutVC wpBuildRows done");
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"附件布局优化";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"附件布局优化", @"kw": @"附件 布局 图片 列数" },
-        @{ @"title": @"每行列数", @"kw": @"列数 每行 图片 columns" },
-        @{ @"title": @"显示行数", @"kw": @"行数 显示 图片 rows" },
-    ];
-}
-
 @end

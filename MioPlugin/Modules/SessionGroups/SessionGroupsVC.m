@@ -345,40 +345,4 @@
     [self.navigationController pushViewController:vc animated:YES];
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"首页电报分组";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"启动首页电报分组", @"kw": @"电报 分组 启动 首页 telegram" },
-        @{ @"title": @"切组触感", @"kw": @"切组 触感 震动 haptic" },
-        @{ @"title": @"指示器", @"kw": @"指示器 胶囊 线条 圆点 indicator" },
-        @{ @"title": @"胶囊圆角", @"kw": @"胶囊 圆角 radius" },
-        @{ @"title": @"全屏滑动切换", @"kw": @"全屏 滑动 切换 swipe" },
-        @{ @"title": @"反向行驶", @"kw": @"反向 滑动 方向 reverse" },
-        @{ @"title": @"循环滑动", @"kw": @"循环 滑动 loop" },
-        @{ @"title": @"分组标签居中", @"kw": @"标签 居中 分组 tab" },
-        @{ @"title": @"首页显示标签数", @"kw": @"标签 数量 显示 个数" },
-        @{ @"title": @"显示未读角标", @"kw": @"未读 角标 显示 badge" },
-        @{ @"title": @"显示分组红点", @"kw": @"红点 分组 显示" },
-        @{ @"title": @"免打扰不计入角标数字", @"kw": @"免打扰 角标 红点" },
-        @{ @"title": @"过滤置顶聊天", @"kw": @"置顶 过滤 聊天 pinned" },
-        @{ @"title": @"过滤重复联系人", @"kw": @"重复 联系人 过滤 duplicate" },
-        @{ @"title": @"自定义背景色", @"kw": @"背景 颜色 自定义" },
-        @{ @"title": @"背景色", @"kw": @"背景 颜色 color" },
-        @{ @"title": @"自定义指示器颜色", @"kw": @"指示器 颜色 自定义" },
-        @{ @"title": @"指示器颜色", @"kw": @"指示器 颜色 color" },
-        @{ @"title": @"自定义默认文本颜色", @"kw": @"文本 颜色 自定义 默认" },
-        @{ @"title": @"文本颜色", @"kw": @"文本 颜色 color" },
-        @{ @"title": @"自定义高亮文本颜色", @"kw": @"高亮 颜色 自定义" },
-        @{ @"title": @"高亮颜色", @"kw": @"高亮 颜色 color" },
-        @{ @"title": @"自定义标题字号", @"kw": @"标题 字号 自定义" },
-        @{ @"title": @"标题字号", @"kw": @"标题 字号 字体 font" },
-        @{ @"title": @"分组管理", @"kw": @"分组 管理 编辑 manager" },
-    ];
-}
-
 @end

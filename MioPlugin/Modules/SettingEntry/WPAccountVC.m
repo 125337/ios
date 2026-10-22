@@ -495,21 +495,4 @@ static NSDictionary *MioReadSigningCertificate(void) {
     }
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"账户信息";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"微信名", @"kw": @"微信 名字 昵称 账号" },
-        @{ @"title": @"微信号", @"kw": @"微信号 账号 alias" },
-        @{ @"title": @"WXID", @"kw": @"wxid 微信 账号 id" },
-        @{ @"title": @"账号状态", @"kw": @"账号 状态 检测 腾讯卫士" },
-        @{ @"title": @"到期提示", @"kw": @"到期 提示 证书 开关" },
-        @{ @"title": @"证书到期提醒", @"kw": @"证书 到期 提醒 天数" },
-    ];
-}
-
 @end

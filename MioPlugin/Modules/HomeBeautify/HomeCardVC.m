@@ -694,48 +694,4 @@ typedef NS_ENUM(NSInteger, HomeCardPickerTarget) {
                            : [NSString stringWithFormat:@"%.1f", v];
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"首页卡片";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"启用卡片", @"kw": @"卡片 启用 首页 开关" },
-        @{ @"title": @"浅色模式", @"kw": @"卡片 图片 浅色 light" },
-        @{ @"title": @"深色模式", @"kw": @"卡片 图片 深色 dark" },
-        @{ @"title": @"卡片高度", @"kw": @"卡片 高度 height" },
-        @{ @"title": @"卡片Y偏移", @"kw": @"卡片 偏移 位置 offset" },
-        @{ @"title": @"底部占位修正", @"kw": @"底部 占位 修正 高度" },
-        @{ @"title": @"卡片边距", @"kw": @"卡片 边距 margin" },
-        @{ @"title": @"边框粗细", @"kw": @"边框 粗细 描边 border" },
-        @{ @"title": @"边框颜色", @"kw": @"边框 颜色 color" },
-        @{ @"title": @"背景颜色", @"kw": @"背景 颜色 color" },
-        @{ @"title": @"显示天气", @"kw": @"天气 显示 weather" },
-        @{ @"title": @"显示位置", @"kw": @"位置 显示 天气 日历 联系人" },
-        @{ @"title": @"X位置", @"kw": @"位置 水平 横向 天气" },
-        @{ @"title": @"Y位置", @"kw": @"位置 垂直 偏移 天气 日历 联系人" },
-        @{ @"title": @"透明度", @"kw": @"透明度 天气 alpha" },
-        @{ @"title": @"显示日历", @"kw": @"日历 显示 calendar" },
-        @{ @"title": @"背景高度", @"kw": @"背景 高度" },
-        @{ @"title": @"内容缩放", @"kw": @"缩放 内容 大小 scale" },
-        @{ @"title": @"节假日颜色", @"kw": @"节假日 颜色 周末" },
-        @{ @"title": @"选中日期颜色", @"kw": @"选中 日期 颜色 圆点" },
-        @{ @"title": @"联系人模式", @"kw": @"联系人 挂件 模式 显示" },
-        @{ @"title": @"隐藏昵称", @"kw": @"昵称 隐藏 名字" },
-        @{ @"title": @"与卡片间距", @"kw": @"间距 联系人 卡片 spacing" },
-        @{ @"title": @"头像大小", @"kw": @"头像 大小 size" },
-        @{ @"title": @"头像间距", @"kw": @"头像 间距 spacing" },
-        @{ @"title": @"显示数量", @"kw": @"数量 显示 个数 联系人" },
-        @{ @"title": @"头像圆角", @"kw": @"头像 圆角 正圆" },
-        @{ @"title": @"圆角半径", @"kw": @"圆角 半径 radius" },
-        @{ @"title": @"在线状态", @"kw": @"在线 状态 圆点" },
-        @{ @"title": @"在线圆点颜色", @"kw": @"圆点 颜色 在线" },
-        @{ @"title": @"在线圆点位置", @"kw": @"圆点 位置 在线 角落" },
-        @{ @"title": @"全屏显示聊天", @"kw": @"全屏 聊天 显示" },
-        @{ @"title": @"管理联系人", @"kw": @"联系人 管理 选择 群聊" },
-    ];
-}
-
 @end

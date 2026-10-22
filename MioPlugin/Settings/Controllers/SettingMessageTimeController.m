@@ -129,26 +129,4 @@
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"消息时间";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"启用消息时间显示", @"kw": @"消息 时间 显示 msgtime" },
-        @{ @"title": @"显示位置", @"kw": @"位置 头像 气泡 排列" },
-        @{ @"title": @"字体大小", @"kw": @"字体 大小 字号 font" },
-        @{ @"title": @"粗体字体", @"kw": @"粗体 加粗 字体 bold" },
-        @{ @"title": @"自定义格式", @"kw": @"格式 自定义 时间 HH mm" },
-        @{ @"title": @"发送方颜色", @"kw": @"颜色 发送 color" },
-        @{ @"title": @"接收方颜色", @"kw": @"颜色 接收 color" },
-        @{ @"title": @"水平偏移", @"kw": @"偏移 水平 横向" },
-        @{ @"title": @"垂直偏移", @"kw": @"偏移 垂直 纵向" },
-        @{ @"title": @"气泡扩展宽度", @"kw": @"气泡 宽度 扩展" },
-        @{ @"title": @"隐藏聊天时间分隔线", @"kw": @"隐藏 分隔线 时间 聊天" }
-    ];
-}
-
 @end

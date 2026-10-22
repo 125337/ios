@@ -93,22 +93,4 @@
     WPLog(@"UI", @"[Sub] WPUIPlaceholderTextVC wpBuildRows done");
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"文本占位";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"输入框占位文本", @"kw": @"占位 输入框 文本 提示 placeholder" },
-        @{ @"title": @"显示占位文本", @"kw": @"占位 文本 显示 输入框" },
-        @{ @"title": @"占位文本", @"kw": @"占位 文本 内容 placeholder" },
-        @{ @"title": @"使用粗体文字", @"kw": @"粗体 文字 字体 bold" },
-        @{ @"title": @"字体大小", @"kw": @"字体 大小 font size" },
-        @{ @"title": @"字体颜色", @"kw": @"字体 颜色 color" },
-        @{ @"title": @"文字透明度", @"kw": @"透明度 文字 alpha" },
-    ];
-}
-
 @end

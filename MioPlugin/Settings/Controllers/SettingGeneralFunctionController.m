@@ -264,31 +264,4 @@
     [self.navigationController pushViewController:vc animated:YES];
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"常用功能";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"启用一键已读消息", @"kw": @"已读 一键 读 read" },
-        @{ @"title": @"启用修改文字(小丑功能)", @"kw": @"小丑 修改 文字 joker" },
-        @{ @"title": @"启用退群检测", @"kw": @"退群 群 检测" },
-        @{ @"title": @"修改解锁密码", @"kw": @"密码 解锁 加密" },
-        @{ @"title": @"消息防撤回", @"kw": @"防撤回 撤回 设置" },
-        @{ @"title": @"显示消息时间", @"kw": @"消息 时间 显示 设置" },
-        @{ @"title": @"关键词提醒", @"kw": @"关键词 提醒 设置" },
-        @{ @"title": @"微信加密", @"kw": @"加密 密码 锁 隐私 保护" },
-        @{ @"title": @"面部识别解锁", @"kw": @"面容 面部 识别 生物识别 解锁" },
-        @{ @"title": @"设置保护时间", @"kw": @"保护 时间 解锁 秒" },
-        @{ @"title": @"后台模糊", @"kw": @"模糊 后台 隐私 blur" },
-        @{ @"title": @"模糊度", @"kw": @"模糊 度 数值" },
-        @{ @"title": @"后台保活", @"kw": @"保活 后台 掉线 keepalive" },
-        @{ @"title": @"保活周期", @"kw": @"保活 周期 秒 检查" },
-        @{ @"title": @"掉线通知", @"kw": @"掉线 通知 断线 提醒" },
-        @{ @"title": @"指定页面上锁", @"kw": @"上锁 锁 页面 保护" }
-    ];
-}
-
 @end

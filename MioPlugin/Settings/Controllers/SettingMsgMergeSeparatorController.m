@@ -72,19 +72,4 @@
     WPLog(@"MsgMerge", @"[UI] SettingMsgMergeSeparatorController wpBuildRows done");
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"配置合并模式";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"媒体消息", @"kw": @"合并 打断 媒体 图片 视频" },
-        @{ @"title": @"表情消息", @"kw": @"合并 打断 表情 emoji" },
-        @{ @"title": @"系统消息", @"kw": @"合并 打断 系统 system" },
-        @{ @"title": @"时间消息", @"kw": @"合并 打断 时间 time" },
-    ];
-}
-
 @end

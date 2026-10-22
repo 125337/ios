@@ -355,7 +355,7 @@ static const CGFloat kCellHPadding = 16.0;
 // 给 cellManager 挂行描述载荷（KVC userInfo 优先 = 微信框架官方通道，assoc 兜底）
 static void wpAttachRow(id cellMgr, NSDictionary *row) {
     if (!cellMgr) return;
-    objc_setAssociatedObject(cellMgr, "wprow", row, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(cellMgr, &WPRowAssocKey, row, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     @try {
         [cellMgr setValue:row forKey:@"userInfo"];
     } @catch (NSException *e) {
@@ -373,6 +373,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     }
     WPWGroup *g = [self.wcTable addGroup];
     if (!g) return nil;
+    g.wpOwnerPage = self; // 搜索自收集：行归属页（addCell 登记时用）
     if (self.wcPendingHeader.length > 0) {
         [g wpSetHeader:self.wcPendingHeader footer:nil];
         self.wcPendingHeader = nil;
@@ -426,7 +427,8 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     if (![g isKindOfClass:[WPWGroup class]]) return cy;
     NSDictionary *row = @{@"type": @"switch",
                           @"title": title ?: @"",
-                          @"key": key ?: @""};
+                          @"key": key ?: @"",
+                          @"desc": desc ?: @""};
     id cell = WPWCSwitchCell([self wpRegisterSwitchSelectorForKey:key], self, [self wpSubTitle:title], on);
     if (cell) {
         wpAttachRow(cell, row);
@@ -567,6 +569,9 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 
     id cell = WPWCViewCell((SEL)0, self, [self wpSubTitle:title], colorRow);
     if (cell) {
+        wpAttachRow(cell, @{@"type": @"color",
+                            @"title": title ?: @"",
+                            @"key": key ?: @""});
         [g addCell:cell];
         return cy + kRowH;
     }
@@ -629,6 +634,9 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 
     id cell = WPWCViewCell((SEL)0, self, [self wpSubTitle:title], cv);
     if (cell) {
+        wpAttachRow(cell, @{@"type": @"segment",
+                            @"title": title ?: @"",
+                            @"key": key ?: @""});
         [g addCell:cell];
     } else {
         WPLog(@"WCTable", @"[WCTABLE] viewCell 不可用，segment 行缺失: %@", title);
@@ -706,15 +714,6 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
         return;
     }
     WPLog(@"Config", @"[BUILD] wpBuildRows 基类空实现: self=%@, 子类应重写", self);
-}
-
-// 搜索自声明基类默认空实现：设置页按需重写（见 .h 注释），首页搜索汇总遍历
-+ (nullable NSArray<NSDictionary *> *)wpSearchItems {
-    return nil;
-}
-
-+ (nullable NSString *)wpSearchPageTitle {
-    return nil;
 }
 
 - (void)buttonClicked:(NSString *)key {

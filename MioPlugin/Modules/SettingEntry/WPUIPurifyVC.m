@@ -58,22 +58,4 @@
     WPLog(@"UI", @"[Sub] WPUIPurifyVC wpBuildRows done");
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"界面净化";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"UI净化", @"kw": @"净化 气泡 分隔线 听写 purify" },
-        @{ @"title": @"隐藏聊天气泡背景", @"kw": @"气泡 背景 隐藏 净化" },
-        @{ @"title": @"禁用输入框听写", @"kw": @"听写 输入 禁用 麦克风" },
-        @{ @"title": @"隐藏水平分割线", @"kw": @"分割线 分隔线 隐藏 净化" },
-        @{ @"title": @"隐藏撤回消息提示", @"kw": @"撤回 提示 隐藏" },
-        @{ @"title": @"隐藏拍一拍提示", @"kw": @"拍一拍 提示 隐藏" },
-        @{ @"title": @"隐藏语音红点和转文字", @"kw": @"语音 红点 转文字 隐藏" },
-    ];
-}
-
 @end

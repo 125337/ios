@@ -31,9 +31,13 @@
 // 组手柄：包装 WCTableViewSectionManager（故意不继承 UIView，误用 addSubview 时立即暴露而非静默错布局）
 @interface WPWGroup : NSObject
 @property (nonatomic, strong) id sectionMgr;
+@property (nonatomic, weak) id wpOwnerPage;   // 所属设置页（基类 addTableGroupAtY 赋 self），addCell 登记搜索条目用
 - (void)wpSetHeader:(NSString *)header footer:(NSString *)footer;
 - (void)addCell:(id)cellMgr;
 @end
+
+// 行载荷关联键（SettingCategoryController wpAttachRow 写入 / WPEntrySearchCollector 读取，一处定义）
+extern const char WPRowAssocKey;
 
 // 行构造（全反射 + respondsToSelector 探测；类/方法缺失返回 nil 由调用方回退）
 id WPWCSwitchCell(SEL sel, id target, NSString *title, BOOL on);

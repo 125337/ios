@@ -117,20 +117,4 @@ static BOOL wpFontSizeValid(CGFloat v) {
     [MioRestartHelper showRestartAlertFromVC:self];
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"布局设置";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"修改全局布局", @"kw": @"全局 布局 字号 缩放 倍率 字体 大小" },
-        @{ @"title": @"修改对话布局", @"kw": @"对话 聊天 布局 字号 缩放 倍率" },
-        @{ @"title": @"布局设置", @"kw": @"布局 字体 font layout" },
-        @{ @"title": @"全局布局字号", @"kw": @"全局 字号 字体 大小" },
-        @{ @"title": @"对话布局字号", @"kw": @"对话 聊天 字号 字体" },
-    ];
-}
-
 @end

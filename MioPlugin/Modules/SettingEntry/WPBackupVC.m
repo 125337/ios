@@ -165,16 +165,4 @@
     }];
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"备份与重置";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"重置所有配置", @"kw": @"重置 配置 恢复出厂 清空" },
-    ];
-}
-
 @end

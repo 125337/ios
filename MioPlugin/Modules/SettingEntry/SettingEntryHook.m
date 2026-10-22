@@ -18,6 +18,7 @@
 #import "../../Core/MioAlertHelper.h"
 #import "../../Settings/Controllers/SettingCornerRadiusController.h"
 #import "../../Settings/Common/WPWeChatTable.h"
+#import "../../Settings/Common/WPEntrySearchCollector.h"
 
 // 仿微信优化做法：不在 viewDidLoad 里创建 UI（view bounds 可能为 (0,0,0,0)），
 // 改在 viewWillAppear 里创建 —— 此时 view 已在 window 中，bounds 正确。
@@ -64,61 +65,11 @@ static void pluginEntryViewWillDisappear(id self, SEL _cmd, BOOL animated) {
     WPRestoreNavAppearance((UIViewController *)self);
 }
 
-// ===== 搜索注册表：一级页挂 action（复用 openXxx:）；二级页/功能项由各设置页自声明 =====
-// 各设置页在自身 +wpSearchItems 声明功能条目（title/kw），+wpSearchPageTitle 声明归属页名；
-// 本文件仅维护「参与搜索的页面类清单」，条目汇总在这里完成，新增页面加一行类名即可
+// ===== 搜索注册表：一级页挂 action（复用 openXxx:）；二级页/功能项由自收集器产出 =====
+// 功能条目零手写：设置页构建行时（WPWGroup addCell:）自动登记进 WPEntrySearchCollector，
+// 未打开过的页面在首次搜索时空跑构建补齐——清单与页面实际内容永远一致，无漂移可能
 
-// 参与搜索的设置页类清单（类名必须能 NSClassFromString 解析；编辑器/选择器/弹层等非直达页不参与）
-static NSArray<NSString *> *WPSearchPageClassNames(void) {
-    static NSArray *names = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        names = @[
-            // --- 常用功能 ---
-            @"SettingKeywordAlertController",
-            @"SettingPageLockController",
-            @"SettingRevokeController",
-            @"SettingMessageTimeController",
-            @"SettingGeneralFunctionController",
-            // --- 红包 ---
-            @"SettingRedEnvelopController",
-            @"SettingFixedInviteRulesController",
-            // --- 朋友圈 ---
-            @"SettingMomentsController",
-            @"SettingMomentTailController",
-            @"SettingMomentCommentsController",
-            @"SettingMomentBlocklistController",
-            @"MioMomentsSchedListController",
-            // --- 圆角美化 ---
-            @"SettingListCornerRadiusController",
-            @"SettingCornerRadiusController",
-            @"SettingCardBackgroundController",
-            // --- 消息合并 ---
-            @"SettingMsgMergeController",
-            @"SettingMsgMergeSeparatorController",
-            // --- 界面定制 ---
-            @"SettingChatTopBarController",
-            @"SettingAvatarHideController",
-            @"WPUILayoutSettingsVC",
-            @"WPUIPurifyVC",
-            @"WPUIPlaceholderTextVC",
-            @"WPUIAttachmentLayoutVC",
-            // --- 会话列表/首页美化 ---
-            @"SessionGroupsVC",
-            @"SideGroupsVC",
-            @"HomeCardVC",
-            // --- 其他 ---
-            @"WPVoicePackSettingsVC",
-            @"WPVoicePackManagerVC",
-            @"WPAccountVC",
-            @"WPOtherVC",
-            @"WPBackupVC",
-        ];
-    });
-    return names;
-}
-
-// 条目两级：一级页条目（title=页面名，action 直跳）+ 各设置页自声明条目（title=功能行名，wpSearchOpen: 反射 push）
+// 条目两级：一级页条目（title=页面名，action 直跳）+ 各设置页自收集条目（title=功能行名，wpSearchOpen: 反射 push）
 static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
     static NSArray *items = nil;
     static dispatch_once_t onceToken;
@@ -136,24 +87,8 @@ static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
             @{ @"title": @"其他功能", @"action": @"openOther:", @"kw": @"其他 other" },
             @{ @"title": @"备份", @"action": @"openBackup:", @"kw": @"备份 恢复 backup" },
         ]];
-        // --- 各设置页自声明条目汇总 ---
-        for (NSString *name in WPSearchPageClassNames()) {
-            Class cls = NSClassFromString(name);
-            if (!cls || ![cls respondsToSelector:@selector(wpSearchItems)]) continue;
-            NSArray *pageItems = [cls wpSearchItems];
-            if (!pageItems.count) continue;
-            NSString *cat = [cls respondsToSelector:@selector(wpSearchPageTitle)]
-                ? (NSString *)[cls wpSearchPageTitle] : nil;
-            for (NSDictionary *it in pageItems) {
-                if (![it isKindOfClass:[NSDictionary class]]) continue;
-                NSString *title = it[@"title"];
-                if (!title.length) continue;
-                [all addObject:@{ @"title": title,
-                                  @"vc": name,
-                                  @"cat": cat.length ? cat : name,
-                                  @"kw": it[@"kw"] ?: @"" }];
-            }
-        }
+        // --- 各设置页自收集条目（含拼音，见 WPEntrySearchCollector）---
+        [all addObjectsFromArray:[WPEntrySearchCollector allSearchItems]];
         items = all;
     });
     return items;
@@ -187,7 +122,10 @@ static void wpEntryBuildRows(WPWeChatTable *wc, NSString *keyword) {
         NSUInteger hits = 0;
         for (NSDictionary *item in WPEntrySearchItems()) {
             NSString *title = item[@"title"];
-            BOOL match = [title.lowercaseString containsString:kw];
+            // 匹配：中文标题 / 行说明 / 全拼 / 拼音首字母（py/pysm 建条目时已小写）
+            BOOL match = [title.lowercaseString containsString:kw]
+                      || [item[@"py"] containsString:kw]
+                      || [item[@"pysm"] containsString:kw];
             if (!match) {
                 for (NSString *k in [item[@"kw"] componentsSeparatedByString:@" "]) {
                     if (k.length && [k.lowercaseString containsString:kw]) { match = YES; break; }

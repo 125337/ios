@@ -73,11 +73,4 @@ typedef NS_ENUM(NSInteger, InputValueType) {
 - (void)wpHandleSwitchKey:(NSString *)key row:(id)row on:(BOOL)on haveOn:(BOOL)haveOn;
 /// 输入行点击流程（弹窗→保存→重建；子类可重写拦截做校验）
 - (void)wpRunInputFlow:(NSDictionary *)row;
-
-/// 搜索自声明：本页搜索条目，首页搜索汇总遍历用。
-/// 每条 = @{@"title": 功能行文案, @"kw": 空格分隔关键词}；页面归属显示 +wpSearchPageTitle，
-/// 跳转目标 = 本页类名（wpSearchOpen: 反射 push）。基类默认空，设置页按需重写。
-+ (nullable NSArray<NSDictionary *> *)wpSearchItems;
-/// 搜索结果归属页显示名（cat 列），一般 = 页面标题
-+ (nullable NSString *)wpSearchPageTitle;
 @end

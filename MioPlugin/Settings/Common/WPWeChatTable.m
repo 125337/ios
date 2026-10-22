@@ -1,4 +1,5 @@
 #import "WPWeChatTable.h"
+#import "WPEntrySearchCollector.h"
 #import <objc/message.h>
 #import <objc/runtime.h>
 #import "../../Core/LogManager.h"
@@ -269,6 +270,8 @@ static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **
 
 @end
 
+const char WPRowAssocKey = 'w';
+
 @implementation WPWGroup
 
 - (void)wpSetHeader:(NSString *)header footer:(NSString *)footer {
@@ -289,6 +292,10 @@ static void wpLayoutInContainer(UITableView *tv, UIViewController *vc, UIView **
         return;
     }
     ((void (*)(id, SEL, id))objc_msgSend)(self.sectionMgr, NSSelectorFromString(@"addCell:"), cellMgr);
+    // 搜索自收集：行落表时顺手登记（title/key 来自 wpAttachRow 载荷，页面归属来自 wpOwnerPage）
+    if (self.wpOwnerPage) {
+        [WPEntrySearchCollector registerRowFromCell:cellMgr page:self.wpOwnerPage];
+    }
 }
 
 @end

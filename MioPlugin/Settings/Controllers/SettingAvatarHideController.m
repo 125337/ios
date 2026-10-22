@@ -50,18 +50,4 @@
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
 
-#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
-
-+ (NSString *)wpSearchPageTitle {
-    return @"隐藏头像";
-}
-
-+ (NSArray<NSDictionary *> *)wpSearchItems {
-    return @[
-        @{ @"title": @"隐藏头像", @"kw": @"头像 隐藏 avatar" },
-        @{ @"title": @"隐藏对方头像", @"kw": @"头像 隐藏 对方 私聊 群聊" },
-        @{ @"title": @"隐藏自己头像", @"kw": @"头像 隐藏 自己" },
-    ];
-}
-
 @end
