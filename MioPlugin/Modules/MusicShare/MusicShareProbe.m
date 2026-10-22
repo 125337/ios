@@ -66,7 +66,7 @@ static void mspOnHit(NSString *via, id wrap) {
     WPLog(@"MusicProbe", @"======== [MusicProbe] %@ type=%lld from=%@ to=%@", via, type, from, to);
     // 完整 content（分块打印，复刻需要 XML 全文）
     @try {
-        id c = [wrap valueForKey:@"m_nsContent"];
+        NSString *c = [wrap valueForKey:@"m_nsContent"];
         if ([c isKindOfClass:[NSString class]] && c.length > 0) {
             NSUInteger CHUNK = 1800;
             for (NSUInteger i = 0; i < c.length; i += CHUNK) {
