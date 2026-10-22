@@ -139,6 +139,11 @@
             return (NSString *)m;
         };
         NSString *url = esc(playURL);
+        // LRC 去换行内联成一行（黄白抓包同款形态）：带 \n 的 songlyric 会让
+        // 严格解析的客户端（PC/部分版本）XML 解析失败，整条消息降级为纯文本
+        NSString *inlineLrc = [lrc stringByReplacingOccurrencesOfString:@"\r" withString:@""];
+        inlineLrc = [inlineLrc stringByReplacingOccurrencesOfString:@"\n" withString:@""];
+        inlineLrc = [inlineLrc stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         NSString *xml = [NSString stringWithFormat:
             @"<msg><appmsg appid=\"wx3858261cdede9ca0\"  sdkver=\"0\">"
             "<title>%@</title><des>%@</des><type>76</type>"
@@ -150,7 +155,7 @@
             "<isforceupdate>1</isforceupdate></appinfo></msg>",
             esc(song.name), esc(song.singerName),
             url, url, url, url,
-            esc(coverURL), esc(lrc)];
+            esc(coverURL), esc(inlineLrc)];
 
         BOOL ok = WXSendAppMessage(xml, session);
         WPLog(@"Music", @"[Card] type=76 卡片发送%@ -> %@", ok ? @"成功" : @"失败", session);
