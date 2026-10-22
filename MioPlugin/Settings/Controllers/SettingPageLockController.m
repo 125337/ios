@@ -125,4 +125,25 @@
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"指定页面上锁";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"指定页面上锁", @"kw": @"上锁 锁 密码 面容 指纹 pagelock 生物识别" },
+        @{ @"title": @"解锁时间保护", @"kw": @"解锁 时间 保护 秒" },
+        @{ @"title": @"我支付页面上锁", @"kw": @"上锁 支付 支付页面" },
+        @{ @"title": @"我收藏页面上锁", @"kw": @"上锁 收藏 收藏页面" },
+        @{ @"title": @"我朋友圈页上锁", @"kw": @"上锁 朋友圈 我的" },
+        @{ @"title": @"我视频号页上锁", @"kw": @"上锁 视频号 我的" },
+        @{ @"title": @"我插件页面上锁", @"kw": @"上锁 插件 插件页面" },
+        @{ @"title": @"我设置页面上锁", @"kw": @"上锁 设置 设置页面" },
+        @{ @"title": @"朋友圈页面上锁", @"kw": @"上锁 朋友圈 锁" },
+        @{ @"title": @"视频号页面上锁", @"kw": @"上锁 视频号 锁" }
+    ];
+}
+
 @end

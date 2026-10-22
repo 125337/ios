@@ -131,4 +131,16 @@
     [self reloadTable];
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"点赞黑名单";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"添加好友", @"kw": @"添加 好友 黑名单 名单" },
+    ];
+}
+
 @end

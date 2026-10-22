@@ -141,4 +141,26 @@
     WPLog(@"Voice", @"[Nav] push WPVoicePackManagerVC");
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"语音包";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"启用语音包功能", @"kw": @"语音包 启用 功能 voice" },
+        @{ @"title": @"启用连续发送方式", @"kw": @"语音 连续 发送" },
+        @{ @"title": @"长按加号打开语音包", @"kw": @"长按 加号 语音包 打开" },
+        @{ @"title": @"语音包管理", @"kw": @"语音包 管理 导入 浏览 manager" },
+        @{ @"title": @"启用语音转发", @"kw": @"语音 转发 伪装 fake" },
+        @{ @"title": @"自定义语音秒数", @"kw": @"语音 秒数 时长 duration" },
+        @{ @"title": @"语音自动转文字", @"kw": @"语音 转文字 文字" },
+        @{ @"title": @"语音进度拖动播放", @"kw": @"语音 进度 拖动 播放" },
+        @{ @"title": @"语音自动倍数播放", @"kw": @"语音 倍速 倍数 播放 speed" },
+        @{ @"title": @"语音自动背景播放", @"kw": @"语音 背景 后台 悬浮 播放" },
+        @{ @"title": @"通话时播放语音消息", @"kw": @"通话 语音 播放" },
+    ];
+}
+
 @end

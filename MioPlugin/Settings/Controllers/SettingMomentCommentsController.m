@@ -166,4 +166,17 @@ static const NSInteger kMaxComments = 20;
     [self addSectionFooter:(self.footerText ?: @"伪集赞时按设置的评论数量从列表随机取用") y:y width:w];
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"评论文本";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"＋ 新增评论", @"kw": @"评论 新增 添加 add" },
+        @{ @"title": @"清空所有评论", @"kw": @"评论 清空 删除 clear" },
+    ];
+}
+
 @end

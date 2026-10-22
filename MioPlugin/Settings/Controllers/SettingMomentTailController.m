@@ -274,4 +274,18 @@
     }
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"朋友圈小尾巴";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"开启小尾巴", @"kw": @"朋友圈 小尾巴 开启 来源 tail" },
+        @{ @"title": @"自定义输入AppID", @"kw": @"小尾巴 AppID 自定义 来源" },
+        @{ @"title": @"无小尾巴", @"kw": @"小尾巴 无 关闭 tail" },
+    ];
+}
+
 @end

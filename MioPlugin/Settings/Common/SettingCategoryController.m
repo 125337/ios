@@ -708,6 +708,15 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     WPLog(@"Config", @"[BUILD] wpBuildRows 基类空实现: self=%@, 子类应重写", self);
 }
 
+// 搜索自声明基类默认空实现：设置页按需重写（见 .h 注释），首页搜索汇总遍历
++ (nullable NSArray<NSDictionary *> *)wpSearchItems {
+    return nil;
+}
+
++ (nullable NSString *)wpSearchPageTitle {
+    return nil;
+}
+
 - (void)buttonClicked:(NSString *)key {
 }
 

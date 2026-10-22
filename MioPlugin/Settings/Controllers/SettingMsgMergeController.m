@@ -150,4 +150,24 @@
     [self.navigationController pushViewController:[[SettingMsgMergeSeparatorController alloc] init] animated:YES];
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"消息合并";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"启用消息合并", @"kw": @"消息 合并 开启 启用 merge" },
+        @{ @"title": @"仅对群聊生效", @"kw": @"消息 合并 群聊 群 group" },
+        @{ @"title": @"消息合并模式", @"kw": @"消息 合并 模式 mode" },
+        @{ @"title": @"配置合并模式", @"kw": @"合并 模式 配置 打断 类型" },
+        @{ @"title": @"头像显示位置", @"kw": @"头像 位置 显示 avatar" },
+        @{ @"title": @"消息合并间距", @"kw": @"消息 合并 间距 spacing" },
+        @{ @"title": @"合并间距 (pt)", @"kw": @"间距 收拢 调整 spacing" },
+        @{ @"title": @"头像偏移 (pt)", @"kw": @"头像 偏移 offset" },
+        @{ @"title": @"整列偏移 (pt)", @"kw": @"整列 偏移 平移 offset" },
+    ];
+}
+
 @end

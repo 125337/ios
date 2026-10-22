@@ -227,4 +227,25 @@
     [self wpReloadUI];
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"关键词提醒";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"启用关键词提醒", @"kw": @"关键词 提醒 keyword 命中 弹窗" },
+        @{ @"title": @"关键词列表", @"kw": @"关键词 列表 编辑 keyword" },
+        @{ @"title": @"禁用词", @"kw": @"禁用词 屏蔽 排除 黑名单" },
+        @{ @"title": @"仅群聊生效", @"kw": @"仅群聊 群聊 生效 范围" },
+        @{ @"title": @"仅私聊生效", @"kw": @"仅私聊 私聊 生效 范围" },
+        @{ @"title": @"指定群范围", @"kw": @"指定 群 范围 选择 生效" },
+        @{ @"title": @"前台横幅提醒", @"kw": @"横幅 前台 顶部 提醒 banner" },
+        @{ @"title": @"后台系统通知", @"kw": @"通知 后台 系统 推送 notification" },
+        @{ @"title": @"查看提醒历史", @"kw": @"历史 记录 查看 history" },
+        @{ @"title": @"清空历史", @"kw": @"清空 历史 删除 clear" }
+    ];
+}
+
 @end

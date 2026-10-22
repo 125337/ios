@@ -72,7 +72,6 @@
 #import "../Settings/Controllers/SettingGeneralFunctionController.h"
 #import "../Settings/Controllers/SettingLayoutFunctionController.h"
 #import "../Settings/Controllers/SettingRedEnvelopController.h"
-#import "../Settings/Controllers/SettingAboutController.h"
 #import "../Settings/Controllers/WPUILayoutSettingsVC.h"
 #import "../Settings/Controllers/SettingPageLockController.h"
 #import "../Settings/Controllers/SettingKeywordAlertController.h"
@@ -296,15 +295,6 @@
                                                   subtitle:@"便捷浏览/高清/伪集赞"
                                              sectionTitle:@"通用"],
 
-            // ──── 关于 ────
-            [MioModuleDescriptor descriptorWithIdentifier:@"about"
-                                                    title:@"关于"
-                                               configClass:nil
-                                               hookClasses:@[]
-                                           controllerClass:[SettingAboutController class]
-                                                  subtitle:@"插件信息"
-                                             sectionTitle:@"更多"],
-            
             // ──── 语音包（入口在 MioPluginEntryVC 功能列表；hook: 长按加号） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"voice"
                                                     title:@"语音包"

@@ -55,4 +55,19 @@
     WPLog(@"UI", @"[Sub] WPOtherVC wpBuildRows done");
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"其他功能";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"调试日志", @"kw": @"调试 日志 debug" },
+        @{ @"title": @"隐藏内容", @"kw": @"隐藏 内容" },
+        @{ @"title": @"免提示", @"kw": @"免提示 提示 弹窗" },
+        @{ @"title": @"一键已读", @"kw": @"已读 未读 清除 一键" },
+    ];
+}
+
 @end

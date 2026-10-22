@@ -68,4 +68,17 @@
     }
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"圆角美化";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"列表圆角", @"kw": @"列表 圆角 corner" },
+        @{ @"title": @"卡片背景", @"kw": @"卡片 背景 card" },
+    ];
+}
+
 @end

@@ -413,4 +413,36 @@
     }
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"卡片背景";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"卡片背景", @"kw": @"卡片 背景 card" },
+        @{ @"title": @"开启资料圆角", @"kw": @"资料 圆角 头像" },
+        @{ @"title": @"隐藏信息卡片", @"kw": @"卡片 信息 隐藏" },
+        @{ @"title": @"使用背景素材", @"kw": @"背景 素材 壁纸 图片 image" },
+        @{ @"title": @"列表向下间距", @"kw": @"背景 间距 列表 spacing" },
+        @{ @"title": @"背景图", @"kw": @"背景 图片 壁纸 image" },
+        @{ @"title": @"背景填充模式", @"kw": @"背景 填充 模式 拉伸 适应" },
+        @{ @"title": @"对齐方式", @"kw": @"背景 对齐 align" },
+        @{ @"title": @"背景显示层级", @"kw": @"背景 层级 顶层 底层 layer" },
+        @{ @"title": @"背景Y轴偏移", @"kw": @"背景 偏移 纵向 offset" },
+        @{ @"title": @"背景X轴偏移", @"kw": @"背景 偏移 横向 offset" },
+        @{ @"title": @"使用全局配置", @"kw": @"圆角 全局 配置 global" },
+        @{ @"title": @"圆角大小", @"kw": @"圆角 大小 半径 radius" },
+        @{ @"title": @"边距大小", @"kw": @"圆角 边距 margin" },
+        @{ @"title": @"卡片背景颜色", @"kw": @"卡片 背景 颜色 color" },
+        @{ @"title": @"描边大小", @"kw": @"描边 边框 stroke" },
+        @{ @"title": @"资料卡边框", @"kw": @"资料 卡片 边框 border" },
+        @{ @"title": @"边框宽度", @"kw": @"边框 宽度 width" },
+        @{ @"title": @"边框颜色", @"kw": @"边框 颜色 color" },
+        @{ @"title": @"隐藏状态", @"kw": @"隐藏 状态 state" },
+        @{ @"title": @"隐藏箭码", @"kw": @"隐藏 箭头 箭码 arrow" },
+    ];
+}
+
 @end

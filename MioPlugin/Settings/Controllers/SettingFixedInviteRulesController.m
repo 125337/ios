@@ -227,4 +227,19 @@ static const NSInteger kMaxInviteRules = 10;
     [self addSectionFooter:@"单笔转账金额等于档位金额时，自动把转账人拉进指定群\n仅私聊转账触发，与自动收款开关互不影响" y:y width:w];
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"拉群规则";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"拉群规则", @"kw": @"拉群 规则 定额" },
+        @{ @"title": @"暂无规则，点击新增", @"kw": @"新增 规则 添加 拉群" },
+        @{ @"title": @"＋ 新增规则", @"kw": @"新增 规则 添加 拉群 add" },
+        @{ @"title": @"清空所有规则", @"kw": @"清空 规则 删除 拉群" }
+    ];
+}
+
 @end

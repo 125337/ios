@@ -79,4 +79,20 @@
     [self presentViewController:nav animated:YES completion:nil];
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"消息防撤回";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"启用消息防撤回", @"kw": @"防撤回 撤回 revoke 提示" },
+        @{ @"title": @"启用通知撤回者", @"kw": @"撤回 通知 谁 通知者" },
+        @{ @"title": @"自定义撤回消息显示", @"kw": @"撤回 格式 显示 自定义" },
+        @{ @"title": @"通知消息内容", @"kw": @"撤回 通知 内容 格式 模板" },
+        @{ @"title": @"频率限制(秒)", @"kw": @"频率 限制 秒 冷却 cooldown" }
+    ];
+}
+
 @end

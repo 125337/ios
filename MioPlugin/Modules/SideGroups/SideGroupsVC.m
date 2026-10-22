@@ -261,4 +261,33 @@
                            : [NSString stringWithFormat:@"%.1f", v];
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"首页侧边分组";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"启动首页侧边分组", @"kw": @"侧边 分组 启动 首页 side" },
+        @{ @"title": @"分组显示位置", @"kw": @"分组 位置 左侧 右侧 显示" },
+        @{ @"title": @"侧栏宽度", @"kw": @"侧栏 宽度 边栏 width" },
+        @{ @"title": @"X 微调", @"kw": @"微调 偏移 水平 offset" },
+        @{ @"title": @"自定义按钮字号", @"kw": @"按钮 字号 自定义" },
+        @{ @"title": @"按钮字号", @"kw": @"按钮 字号 字体 font" },
+        @{ @"title": @"显示未读角标", @"kw": @"未读 角标 显示 badge" },
+        @{ @"title": @"免打扰不计入角标数字", @"kw": @"免打扰 角标 红点" },
+        @{ @"title": @"侧边滑动切换", @"kw": @"侧边 滑动 切换 swipe" },
+        @{ @"title": @"反向行驶", @"kw": @"反向 滑动 方向 reverse" },
+        @{ @"title": @"循环滑动", @"kw": @"循环 滑动 loop" },
+        @{ @"title": @"过滤置顶聊天", @"kw": @"置顶 过滤 聊天 pinned" },
+        @{ @"title": @"过滤重复联系人", @"kw": @"重复 联系人 过滤 duplicate" },
+        @{ @"title": @"自定义选中颜色", @"kw": @"选中 颜色 自定义" },
+        @{ @"title": @"选中颜色", @"kw": @"选中 颜色 color" },
+        @{ @"title": @"自定义文本颜色", @"kw": @"文本 颜色 自定义" },
+        @{ @"title": @"文本颜色", @"kw": @"文本 颜色 color" },
+        @{ @"title": @"分组管理", @"kw": @"分组 管理 编辑 manager" },
+    ];
+}
+
 @end

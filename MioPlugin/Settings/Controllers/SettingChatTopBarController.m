@@ -407,4 +407,35 @@ static NSString *keyForTag(NSInteger tag) {
     WPLog(@"Mio-Separator", @"  调用 wpReloadUI");
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"聊天顶栏";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"聊天顶部栏", @"kw": @"顶部 聊天 顶栏 头像" },
+        @{ @"title": @"显示聊天头像", @"kw": @"聊天 头像 显示" },
+        @{ @"title": @"显示群聊人数", @"kw": @"群聊 人数 显示" },
+        @{ @"title": @"管理显示黑名单", @"kw": @"黑名单 顶部 显示" },
+        @{ @"title": @"头像点击反馈", @"kw": @"头像 点击 反馈" },
+        @{ @"title": @"显示添加时间", @"kw": @"添加 时间 显示" },
+        @{ @"title": @"头像显示模式", @"kw": @"头像 显示 模式 avatar" },
+        @{ @"title": @"头像分隔符号", @"kw": @"头像 分隔符 符号 separator" },
+        @{ @"title": @"头像圆角程度", @"kw": @"头像 圆角 corner" },
+        @{ @"title": @"双方头像大小", @"kw": @"头像 大小 尺寸 size" },
+        @{ @"title": @"分隔符大小", @"kw": @"分隔符 大小 separator" },
+        @{ @"title": @"网名字体大小", @"kw": @"网名 字体 大小 昵称" },
+        @{ @"title": @"双方头像间距", @"kw": @"头像 间距 spacing" },
+        @{ @"title": @"整体上下偏移", @"kw": @"偏移 上下 offset" },
+        @{ @"title": @"整体水平偏移", @"kw": @"偏移 水平 offset" },
+        @{ @"title": @"网名上下偏移", @"kw": @"网名 偏移 上下" },
+        @{ @"title": @"网名水平偏移", @"kw": @"网名 偏移 水平" },
+        @{ @"title": @"添加时间后缀", @"kw": @"时间 后缀 添加" },
+        @{ @"title": @"群聊人数后缀", @"kw": @"群聊 人数 后缀" },
+        @{ @"title": @"视图宽度", @"kw": @"视图 宽度 width" },
+    ];
+}
+
 @end

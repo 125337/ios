@@ -165,4 +165,27 @@
     }
 }
 
+#pragma mark - 搜索自声明（首页搜索汇总遍历，见 SettingCategoryController.h）
+
++ (NSString *)wpSearchPageTitle {
+    return @"列表圆角";
+}
+
++ (NSArray<NSDictionary *> *)wpSearchItems {
+    return @[
+        @{ @"title": @"列表圆角", @"kw": @"列表 圆角 corner" },
+        @{ @"title": @"主页圆角", @"kw": @"圆角 主页 全局 corner" },
+        @{ @"title": @"我的页面", @"kw": @"圆角 我的 页面 mine" },
+        @{ @"title": @"联系人页面", @"kw": @"圆角 联系人 页面 contacts" },
+        @{ @"title": @"发现页面", @"kw": @"圆角 发现 页面 discover" },
+        @{ @"title": @"搜索框圆角", @"kw": @"搜索框 圆角 search" },
+        @{ @"title": @"Cell圆角半径", @"kw": @"圆角 半径 cell radius" },
+        @{ @"title": @"Cell左右边距", @"kw": @"边距 cell margin" },
+        @{ @"title": @"Cell背景色", @"kw": @"背景 颜色 cell color" },
+        @{ @"title": @"Cell 边框", @"kw": @"边框 cell border" },
+        @{ @"title": @"边框宽度", @"kw": @"边框 宽度 width" },
+        @{ @"title": @"边框颜色", @"kw": @"边框 颜色 color" },
+    ];
+}
+
 @end
