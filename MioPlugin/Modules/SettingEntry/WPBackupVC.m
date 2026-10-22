@@ -102,6 +102,7 @@
                                                    options:NSJSONWritingPrettyPrinted
                                                      error:&err];
     if (!data) {
+        WPLog(@"UI", @"[Backup] export serialize failed: %@", err);
         WPShowToast(@"导出失败：配置序列化错误");
         return;
     }

@@ -150,22 +150,48 @@ static NSMutableArray<Class<ConfigModule>> *s_registeredModules = nil;
     return keys;
 }
 
+// JSON 安全化：NSUserDefaults 值可能含 JSON 不兼容类型（NSDate/NSURL/嵌套 NSData 等——
+// 外层类型白名单查不到藏在 NSArray/NSDictionary 内部的漏网），递归深拷贝为可序列化类型；
+// 导入侧按 __ts/__data 标记还原
+static id WPJSONSafeValue(id value) {
+    if ([value isKindOfClass:[NSDate class]]) {
+        return @{ @"__ts": @(((NSDate *)value).timeIntervalSince1970) };
+    }
+    if ([value isKindOfClass:[NSURL class]]) {
+        return ((NSURL *)value).absoluteString;
+    }
+    if ([value isKindOfClass:[NSData class]]) {
+        // 归档数据（如撤回格式字典）→ base64 包裹，导入还原为 NSData
+        return @{ @"__data": [(NSData *)value base64EncodedStringWithOptions:0] };
+    }
+    if ([value isKindOfClass:[NSArray class]]) {
+        NSMutableArray *arr = [NSMutableArray array];
+        for (id item in value) {
+            id safe = WPJSONSafeValue(item);
+            if (safe) [arr addObject:safe];
+        }
+        return arr;
+    }
+    if ([value isKindOfClass:[NSDictionary class]]) {
+        NSMutableDictionary *dic = [NSMutableDictionary dictionary];
+        for (id key in value) {
+            id safe = WPJSONSafeValue(value[key]);
+            if (safe) dic[key] = safe;
+        }
+        return dic;
+    }
+    if ([value isKindOfClass:[NSNumber class]] || [value isKindOfClass:[NSString class]]) {
+        return value;
+    }
+    return nil; // 其余类型（插件配置未使用）跳过
+}
+
 + (NSDictionary *)exportConfig {
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
     NSMutableDictionary *config = [NSMutableDictionary dictionary];
     for (NSString *key in [self wpBackupKeys]) {
-        id value = [d objectForKey:key];
-        if (!value) continue;
-        if ([value isKindOfClass:[NSData class]]) {
-            // NSKeyedArchiver 归档值（如撤回格式字典）JSON 不兼容：base64 包裹标记还原
-            config[key] = @{ @"__data": [value base64EncodedStringWithOptions:0] };
-        } else if ([value isKindOfClass:[NSNumber class]] ||
-                   [value isKindOfClass:[NSString class]] ||
-                   [value isKindOfClass:[NSArray class]] ||
-                   [value isKindOfClass:[NSDictionary class]]) {
-            config[key] = value;
-        }
-        // 其它类型（插件配置未使用）不收
+        id safe = WPJSONSafeValue([d objectForKey:key]);
+        if (safe) config[key] = safe;
     }
     return @{ @"app": @"Mio助手",
               @"format": @1,
@@ -191,16 +217,21 @@ static NSMutableArray<Class<ConfigModule>> *s_registeredModules = nil;
         if (![key isKindOfClass:[NSString class]] || !value) continue;
         // 防御：只写备份规则内的键，JSON 文件不可写任意 NSUserDefaults 键
         if (![self wpBackupKeysContains:key]) continue;
-        if ([value isKindOfClass:[NSDictionary class]] && value[@"__data"]) {
-            NSData *data = [[NSData alloc] initWithBase64EncodedString:value[@"__data"] options:0];
-            if (!data) continue;
-            [d setObject:data forKey:key];
+        // 导出侧安全化标记还原：__data→NSData（归档），__ts→NSDate（时间戳）
+        id toStore = nil;
+        if ([value isKindOfClass:[NSDictionary class]]) {
+            NSString *dataB64 = [value[@"__data"] isKindOfClass:[NSString class]] ? value[@"__data"] : nil;
+            NSNumber *ts = [value[@"__ts"] isKindOfClass:[NSNumber class]] ? value[@"__ts"] : nil;
+            if (dataB64) toStore = [[NSData alloc] initWithBase64EncodedString:dataB64 options:0];
+            else if (ts) toStore = [NSDate dateWithTimeIntervalSince1970:ts.doubleValue];
+            else toStore = value; // 普通字典
         } else if ([value isKindOfClass:[NSNumber class]] ||
                    [value isKindOfClass:[NSString class]] ||
-                   [value isKindOfClass:[NSArray class]] ||
-                   [value isKindOfClass:[NSDictionary class]]) {
-            [d setObject:value forKey:key];
+                   [value isKindOfClass:[NSArray class]]) {
+            toStore = value;
         }
+        if (!toStore) continue;
+        [d setObject:toStore forKey:key];
         count++;
     }
     if (count == 0) return NO;
