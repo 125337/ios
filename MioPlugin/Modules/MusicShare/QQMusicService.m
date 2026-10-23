@@ -45,8 +45,8 @@ static NSString *fieldOf(id item, NSArray<NSString *> *names) {
 - (id)searchLiveMusicWithTaskId:(id)taskId
                      searchText:(id)text
                      lastBuffer:(id)buffer
-                   successBlock:(void (^)(NSArray *items, id continueFlag, id lastBuffer, id extra))success
-                     failBlock:(void (^)(id err, id extra1, id extra2, id extra3))fail;
+                   successBlock:(void (^)(id first))success
+                     failBlock:(void (^)(id err))fail;
 @end
 
 static MusicSong *songFromItem(id item) {
@@ -105,13 +105,12 @@ static MusicSong *songFromItem(id item) {
     }
 
     WPLog(@"Music", @"[QQ] 官方搜索「%@」", keyword);
-    [svc searchLiveMusicWithTaskId:[[NSUUID UUID] UUIDString]
-                        searchText:keyword
-                        lastBuffer:nil
-                      successBlock:^(NSArray *items, id continueFlag, id lastBuffer, id extra) {
+    // 回调块只声明 1 参：宿主实际传 N 参时多余寄存器被忽略；多声明参才会读到寄存器垃圾值而崩
+    void (^successBlk)(id) = ^(id first) {
+        WPLog(@"Music", @"[QQ] 搜索回调 class=%@", [first class]);
         NSMutableArray<MusicSong *> *songs = [NSMutableArray array];
-        if ([items isKindOfClass:[NSArray class]]) {
-            for (id item in items) {
+        if ([first isKindOfClass:[NSArray class]]) {
+            for (id item in first) {
                 if (!item) continue;
                 MusicSong *s = songFromItem(item);
                 if (s) [songs addObject:s];
@@ -119,16 +118,29 @@ static MusicSong *songFromItem(id item) {
                            NSStringFromClass([item class]), item);
             }
         } else {
-            WPLog(@"Music", @"[QQ] successBlock 收到非数组 class=%@ obj=%@ extra=%@",
-                  items ? NSStringFromClass([items class]) : @"nil", items, extra);
+            WPLog(@"Music", @"[QQ] 回调非数组 class=%@ obj=%@", NSStringFromClass([first class]), first);
         }
         WPLog(@"Music", @"[QQ] 官方搜索「%@」-> %lu 条", keyword, (unsigned long)songs.count);
         dispatch_async(dispatch_get_main_queue(), ^{ completion(songs); });
-    }
-    failBlock:^(id err, id extra1, id extra2, id extra3) {
-        WPLog(@"Music", @"[QQ] 官方搜索失败: %@ (%@/%@/%@)", err, extra1, extra2, extra3);
+    };
+    void (^failBlk)(id) = ^(id err) {
+        WPLog(@"Music", @"[QQ] 官方搜索失败: %@ class=%@", err, [err class]);
         dispatch_async(dispatch_get_main_queue(), ^{ completion(@[]); });
-    }];
+    };
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            [svc searchLiveMusicWithTaskId:[[NSUUID UUID] UUIDString]
+                                searchText:keyword
+                                lastBuffer:nil
+                              successBlock:successBlk
+                                 failBlock:failBlk];
+            WPLog(@"Music", @"[QQ] 门面调用已发出");
+        } @catch (NSException *e) {
+            WPLog(@"Music", @"[QQ] 门面调用异常: %@ %@\n%@", e.name, e.reason, e.callStackSymbols);
+            completion(@[]);
+        }
+    });
 }
 
 #pragma mark - 取全量（搜索响应已缓存，无网络请求）
