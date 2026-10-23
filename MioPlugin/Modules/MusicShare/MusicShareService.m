@@ -1,6 +1,7 @@
 #import "MusicShareService.h"
 #import "MusicShareConfig.h"
 #import "NeteaseMusicService.h"
+#import "QQMusicService.h"
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
 
@@ -12,9 +13,7 @@
                completion:(void (^)(NSArray<MusicSong *> *songs))completion {
     NSInteger source = [MusicShareConfig shared].musicSource;
     if (source == 1) {
-        // QQ 音乐（微信官方搜索与发送接口）暂未接入：选择器可先选，搜索一律返回空
-        WPLog(@"Music", @"[Source] QQ 音乐源尚未接入，搜索返回空 (kw=%@)", keyword);
-        completion(@[]);
+        [QQMusicService searchWithKeyword:keyword completion:completion];
         return;
     }
     [NeteaseMusicService searchWithKeyword:keyword completion:completion];
@@ -31,10 +30,15 @@
                   to:(NSString *)session
           completion:(void (^)(BOOL ok, NSString *errMsg))completion {
     WPLog(@"Music", @"[Card] 开始发送: %@ - %@ -> %@", song.name, song.singerName, session);
-    [NeteaseMusicService prepareSong:song completion:^(NSString *playURL, NSString *coverURL, NSString *lrc) {
+    NSInteger source = song.source;
+    void (^finish)(NSString *playURL, NSString *coverURL, NSString *lrc) =
+        ^(NSString *playURL, NSString *coverURL, NSString *lrc) {
         if (playURL.length == 0) {
             WPLog(@"Music", @"[Card] 无播放直链，放弃");
-            completion(NO, @"这首歌取不到播放直链（版权限制），换一首试试");
+            NSString *hint = (source == 1)
+                ? @"这首歌取不到播放直链（Cookie 失效/无版权），更新 Cookie 或换一首"
+                : @"这首歌取不到播放直链（版权限制），换一首试试";
+            completion(NO, hint);
             return;
         }
         NSString *(^esc)(NSString *) = ^NSString *(NSString *s) {
@@ -83,7 +87,13 @@
         BOOL ok = WXSendAppMessage(xml, session, extendFields);
         WPLog(@"Music", @"[Card] type=76 卡片发送%@ -> %@", ok ? @"成功" : @"失败", session);
         completion(ok, ok ? nil : @"发送通道异常，请看调试日志");
-    }];
+    };
+
+    if (source == 1) {
+        [QQMusicService prepareSong:song completion:finish];
+        return;
+    }
+    [NeteaseMusicService prepareSong:song completion:finish];
 }
 
 @end
