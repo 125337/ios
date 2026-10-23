@@ -25,14 +25,39 @@ static void wpDump(id session, id wrap, NSString *via) {
         WPLog(@"WireProbe", @"  from=%@ to=%@ sender=%@ status=%@ flag=%@",
               wpField(wrap, @"m_nsFromUsr"), wpField(wrap, @"m_nsToUsr"),
               wpField(wrap, @"m_bIsSender"), wpField(wrap, @"m_uiStatus"), wpField(wrap, @"m_uiMsgFlag"));
-        WPLog(@"WireProbe", @"  msgSource=%@ dataUrl=%@ musicInfo=%@ realChatUsr=%@",
+        WPLog(@"WireProbe", @"  msgSource=%@ dataUrl=%@ musicInfo=%@ realChatUsr=%@ createTime=%@ localID=%@ svrID=%@",
               wpField(wrap, @"m_nsMsgSource"), wpField(wrap, @"m_nsDataUrl"),
-              wpField(wrap, @"m_musicInfo"), wpField(wrap, @"m_nsRealChatUsr"));
-        id content = wpField(wrap, @"m_nsContent");
-        NSString *preview = [content isKindOfClass:[NSString class]] ? content : nil;
-        WPLog(@"WireProbe", @"  content(%lu)= %@",
-              (unsigned long)preview.length,
-              preview.length > 120 ? [[preview substringToIndex:120] stringByAppendingString:@"…"] : preview);
+              wpField(wrap, @"m_musicInfo"), wpField(wrap, @"m_nsRealChatUsr"),
+              wpField(wrap, @"m_uiCreateTime"), wpField(wrap, @"m_uiMesLocalID"),
+              wpField(wrap, @"m_n64MesSvrID"));
+
+        // wrap 全部 ivar 值（原生听一听抓包：一次抓全，和我们的发送逐值对比）
+        unsigned int count = 0;
+        Class c = object_getClass(wrap);
+        Ivar *list = class_copyIvarList(c, &count);
+        NSMutableString *all = [NSMutableString string];
+        for (unsigned int i = 0; i < count; i++) {
+            NSString *name = @(ivar_getName(list[i]));
+            if (!name) continue;
+            id v = nil;
+            @try { v = [wrap valueForKey:name]; } @catch (NSException *e) {}
+            if (v == nil) continue;
+            NSString *desc = [v description];
+            if (desc.length > 80) desc = [[desc substringToIndex:80] stringByAppendingString:@"…"];
+            [all appendFormat:@"\n    %@ = %@", name, desc];
+        }
+        free(list);
+        WPLog(@"WireProbe", @"  [all ivars]%@", all);
+
+        // content 全文（分块，原生 XML 模板是本次抓包核心）
+        id contentObj = wpField(wrap, @"m_nsContent");
+        NSString *content = [contentObj isKindOfClass:[NSString class]] ? contentObj : nil;
+        WPLog(@"WireProbe", @"  content(%lu)全文:", (unsigned long)content.length);
+        for (NSUInteger off = 0; off < content.length; off += 600) {
+            NSUInteger len = MIN((NSUInteger)600, content.length - off);
+            WPLog(@"WireProbe", @"  [C%lu/%lu] %@", (unsigned long)(off / 600 + 1),
+                  (unsigned long)((content.length + 599) / 600), [content substringWithRange:NSMakeRange(off, len)]);
+        }
     } @catch (NSException *e) {
         WPLog(@"WireProbe", @"dump异常: %@", e);
     }
