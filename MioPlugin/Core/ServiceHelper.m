@@ -161,18 +161,17 @@ BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName) {
         NSString *selfUserName = WXSafeStringGet(selfContact, @"m_nsUsrName");
         if (selfUserName) [msg setValue:selfUserName forKey:@"m_nsFromUsr"];
 
-        [msg setValue:@(4) forKey:@"m_uiStatus"];
+        // 黄白 wire 探针实证配方（2026-10-23 MioPlugin(165).log 并排对比）：
+        // 黄白发 type=76 卡片 = AddLocalMsg:MsgWrap: + m_uiStatus=1（我们旧配方 AddMsg+status=4
+        // 能出网但接收端把卡片降级成纯文本，唯一 wire 差异就是 status）
+        [msg setValue:@(1) forKey:@"m_uiStatus"];
         [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
 
-        // 发送入口必须 AddMsg:MsgWrap:（实测唯一真正出网的入口；AddLocalMsg 只入库不发送）。
-        // 之前怀疑入口导致接收端降级纯文本，实测否——渲染差异根因在 XML 内容本身（见 MusicShareVC 对照测试）
+        SEL addLocalSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
         SEL addMsgSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
-        if (![msgMgr respondsToSelector:addMsgSel]) {
-            WPLog(@"MioPlugin", @"[SEND] AddMsg:MsgWrap: 方法不可用");
-            return NO;
-        }
-        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addMsgSel, sessionName, msg);
-        WPLog(@"MioPlugin", @"[SEND] appmsg 卡片已发送 -> %@", sessionName);
+        SEL sendSel = [msgMgr respondsToSelector:addLocalSel] ? addLocalSel : addMsgSel;
+        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, sendSel, sessionName, msg);
+        WPLog(@"MioPlugin", @"[SEND] appmsg 卡片已发送(%@ status=1) -> %@", NSStringFromSelector(sendSel), sessionName);
         return YES;
     } @catch (NSException *e) {
         WPLog(@"MioPlugin", @"[SEND] appmsg 发送异常: %@", e);
