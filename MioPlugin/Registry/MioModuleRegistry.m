@@ -44,6 +44,7 @@
 #import "../Modules/HomeBeautify/HomeCardVC.h"
 #import "../Modules/MsgMerge/MsgMergeConfig.h"
 #import "../Modules/MusicShare/MusicShareConfig.h"
+#import "../Modules/MusicShare/MusicShareWireProbe.h"
 #import "../Modules/SettingEntry/WPOtherVC.h"
 
 // ────── 所有 Hook 类的 import ──────
