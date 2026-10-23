@@ -156,10 +156,11 @@ static NSMutableArray<MusicSong *> *parseSongList(id list) {
         NSString *url = [NSString stringWithFormat:
             @"https://c.y.qq.com/soso/fcgi-bin/client_search_cp?ct=24&cv=0&cn=0&os=app&ver=0&w=%@&format=json&n=20", enc];
         NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
-        [req setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15" forHTTPHeaderField:@"User-Agent"];
-        [req setValue:@"https://c.y.qq.com/" forHTTPHeaderField:@"Referer"];
+        [req setValue:@"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" forHTTPHeaderField:@"User-Agent"];
+        [req setValue:@"https://y.qq.com/" forHTTPHeaderField:@"Referer"];
         req.timeoutInterval = 10.0;
-        NSDictionary *root = qqJSONDebug(req, @"搜索A");
+        root = qqJSONDebug(req, @"搜索A");
+        if (!root) WPLog(@"Music", @"[QQ][搜索A] 请求URL: %@", url);
         NSMutableArray<MusicSong *> *songs = parseSongList(root[@"data"][@"song"][@"list"]);
         if (songs.count) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -181,10 +182,11 @@ static NSMutableArray<MusicSong *> *parseSongList(id list) {
         root = qqPost(payload, kQQMusicCookie, @"搜索B");
         songs = parseSongList(root[@"req_1"][@"data"][@"body"][@"song"][@"list"]);
         if (songs.count == 0) {
-            // 诊断：接口通了但没解析到歌曲，打 code 和 req_1 原始片段定位真实结构
-            NSData *dump = [NSJSONSerialization dataWithJSONObject:root[@"req_1"] options:0 error:nil];
+            // 诊断：接口通了但没解析到歌曲——req_1 有值打 req_1，没有则打 root 全文（186 实证 req_1 可能为 null）
+            id dumpObj = root[@"req_1"] ?: root;
+            NSData *dump = [NSJSONSerialization dataWithJSONObject:dumpObj options:0 error:nil];
             NSString *head = dump ? [[NSString alloc] initWithData:[dump subdataWithRange:NSMakeRange(0, MIN(400, dump.length))] encoding:NSUTF8StringEncoding] : @"(null)";
-            WPLog(@"Music", @"[QQ][搜索B] 空! topCode=%@ req_1=%@", root[@"code"], head);
+            WPLog(@"Music", @"[QQ][搜索B] 空! topCode=%@ body=%@", root[@"code"], head);
         }
         dispatch_async(dispatch_get_main_queue(), ^{
             WPLog(@"Music", @"[QQ] 搜索B「%@」-> %lu 条", keyword, (unsigned long)songs.count);
