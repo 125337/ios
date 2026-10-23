@@ -14,7 +14,7 @@ static NSMutableURLRequest *wyyRequest(NSString *urlString) {
 // GET 请求回 JSON（NSURLSession 异步，回调在后台队列）
 static void wyyJSON(NSString *urlString, void (^done)(NSDictionary *root)) {
     if (urlString.length == 0) { done(nil); return; }
-    [[NSURLSession sharedSession] dataTaskWithRequest:wyyRequest(urlString)
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:wyyRequest(urlString)
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
             NSDictionary *root = nil;
             if (data.length && !err) {
@@ -22,7 +22,8 @@ static void wyyJSON(NSString *urlString, void (^done)(NSDictionary *root)) {
                 if (![root isKindOfClass:[NSDictionary class]]) root = nil;
             }
             done(root);
-        }] resume];
+        }];
+    [task resume];
 }
 
 static NSString *strOf(id v) {
