@@ -29,9 +29,10 @@ static void wpDump(id session, id wrap, NSString *via) {
               wpField(wrap, @"m_nsMsgSource"), wpField(wrap, @"m_nsDataUrl"),
               wpField(wrap, @"m_musicInfo"), wpField(wrap, @"m_nsRealChatUsr"));
         id content = wpField(wrap, @"m_nsContent");
+        NSString *preview = [content isKindOfClass:[NSString class]] ? content : nil;
         WPLog(@"WireProbe", @"  content(%lu)= %@",
-              (unsigned long)[content length], [content isKindOfClass:[NSString class]] && content.length > 120
-                  ? [[content substringToIndex:120] stringByAppendingString:@"…"] : content);
+              (unsigned long)preview.length,
+              preview.length > 120 ? [[preview substringToIndex:120] stringByAppendingString:@"…"] : preview);
     } @catch (NSException *e) {
         WPLog(@"WireProbe", @"dump异常: %@", e);
     }
@@ -39,12 +40,12 @@ static void wpDump(id session, id wrap, NSString *via) {
 
 static void repl_wp_AddMsg(id self, SEL _cmd, id session, id wrap) {
     wpDump(session, wrap, @"AddMsg");
-    orig_wp_AddMsg(self, _cmd, session, wrap);
+    ((void (*)(id, SEL, id, id))orig_wp_AddMsg)(self, _cmd, session, wrap);
 }
 
 static void repl_wp_AddLocalMsg(id self, SEL _cmd, id session, id wrap) {
     wpDump(session, wrap, @"AddLocalMsg");
-    orig_wp_AddLocalMsg(self, _cmd, session, wrap);
+    ((void (*)(id, SEL, id, id))orig_wp_AddLocalMsg)(self, _cmd, session, wrap);
 }
 
 @implementation MusicShareWireProbe
