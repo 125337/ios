@@ -3,6 +3,21 @@
 #import "../../Core/LogManager.h"
 
 // ===== 通用请求 =====
+
+// QQ 音乐 web 端登录态（写死，用户提供的 Cookie；失效后取直链会日志报 104003/空 purl，届时更新此处）
+// 注意：qm_keyst 同时存在 wxuin=1152921505097906830（微信登录态），uin 取 wxuin
+static NSString * const kQQMusicCookie =
+    @"pgv_pvid=5711867000; RK=rlCygSaB7q; ptcz=f13b25fff6e95548b4b51e614bcf724cdc870ac8377f3cd0abddbf4462eded6f; "
+    "_clck=3640893089|1|g9h|0; fqm_pvqid=a1bec805-b010-498e-b71b-56e525109693; "
+    "fqm_sessionid=86b4ed20-92c5-4e27-969b-0d9db442c709; pgv_info=ssid=s5170092715; "
+    "ts_last=y.qq.com/; ts_refer=cn.bing.com/; ts_uid=1450099024; _qpsvr_localtk=0.45843984659958725; "
+    "qlogin_uid=b6bda401c727cd0d01eebad63e2cc6cb; psrf_qqunionid=; wxuin=1152921505097906830; "
+    "wxunionid=oqFLxsj2pU4NyixoMZy6IMS8GNX0; wxopenid=opCFJw8UXwO4gpOglbJ5gu4cNG1I; psrf_qqopenid=; "
+    "psrf_qqrefresh_token=; wxrefresh_token=1_AKZcogmqjVg_-2AWKu6gqOE0rm0oWxOlyCsMSpyyfCgFi9bH5zg5GPoQtNJlsg8E10UCD_zd2f1ZLu7UwzbuB4Xf03-tN2NmGtrCEPimhNzOcCJ0; "
+    "wxuin=1152921505097906830; qqmusic_key=W_X_63B0a6EwSFi-RuSGpZALGYl7oljBwPqRBbxARzHzNe6KuiXlPJvfhmM6oBeutiW-F2y5df08XHFktHXf438kNsDi5hHQIgw; "
+    "qm_keyst=W_X_63B0a6EwSFi-RuSGpZALGYl7oljBwPqRBbxARzHzNe6KuiXlPJvfhmM6oBeutiW-F2y5df08XHFktHXf438kNsDi5hHQIgw; "
+    "euin=oK6kowEAoK4z7Knq7iEz7wcion**; psrf_qqaccess_token=; tmeLoginType=1; login_type=2";
+
 static NSDictionary *qqJSON(NSURLRequest *req, NSError **err) {
     NSURLResponse *resp = nil;
     NSData *data = [NSURLConnection sendSynchronousRequest:req returningResponse:&resp error:err];
@@ -127,8 +142,7 @@ static NSDictionary *qqPost(NSDictionary *payload, NSString *cookie) {
          completion:(void (^)(NSString *playURL, NSString *coverURL, NSString *lrc))completion {
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSString *playURL = nil, *lrc = nil;
-        MusicShareConfig *cfg = [MusicShareConfig shared];
-        NSString *cookie = cfg.qqMusicCookie ?: @"";
+        NSString *cookie = kQQMusicCookie;
 
         if (cookie.length == 0) {
             WPLog(@"Music", @"[QQ] 无 Cookie，取直链跳过");

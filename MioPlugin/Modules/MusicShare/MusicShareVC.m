@@ -42,17 +42,7 @@ static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的
                        alertTitle:nil
                      alertMessage:nil
                                cy:cy width:w];
-    // QQ 源 Cookie 输入行（网易云不需要；QQ 取直链依赖登录态）
-    cy = [self addInputRowInGroup:srcGroup
-                            title:@"QQ 音乐 Cookie"
-                              key:@"qqMusicCookie"
-                            value:cfg.qqMusicCookie
-                             hint:cfg.qqMusicCookie.length ? @"已设置" : @"浏览器登录 y.qq.com 后粘贴"
-                       valueType:InputValueTypeText
-                       alertTitle:@"QQ 音乐 Cookie"
-                     alertMessage:@"电脑浏览器登录 y.qq.com，F12 复制请求头里的 Cookie 全文粘贴到此处"
-                               cy:cy width:w];
-    cy = [self addSectionFooter:@"网易云使用自建接口\nQQ 音乐本地取直链（搜索免签，直链需 Cookie）"
+    cy = [self addSectionFooter:@"网易云使用自建接口\nQQ 音乐本地取直链（搜索免签，直链用内置登录态）"
                               y:cy width:w];
     [self finishGroup:srcGroup atY:0 height:cy];
 
