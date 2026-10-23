@@ -149,6 +149,30 @@ static void repl_wp_ErrBySender(id self, SEL _cmd, id arg1, long long errno_) {
     ((void (*)(id, SEL, id, long long))orig_wp_ErrBySender)(self, _cmd, arg1, errno_);
 }
 
+// 数据库层预插入（黄白先把消息写进 DB 拿到行号，再走 AddLocalMsg 入队——钩这一层抓现行）
+static IMP orig_wp_DBAddMsg = NULL;
+static IMP orig_wp_DBAddMsgFixed = NULL;
+
+static void repl_wp_DBAddMsg(id self, SEL _cmd, id a1, id a2) {
+    id wrap = [a2 respondsToSelector:NSSelectorFromString(@"m_uiMessageType")] ? a2
+            : ([a1 respondsToSelector:NSSelectorFromString(@"m_uiMessageType")] ? a1 : nil);
+    WPLog(@"WireProbe", @"[DB] CMessageDB AddMsg:MsgWrap: a1=%@ a2wrapType=%@ localID=%@",
+          [a1 isKindOfClass:[NSString class]] ? a1 : NSStringFromClass([a1 class]),
+          wpField(wrap, @"m_uiMessageType"), wpField(wrap, @"m_uiMesLocalID"));
+    ((void (*)(id, SEL, id, id))orig_wp_DBAddMsg)(self, _cmd, a1, a2);
+    if (wrap) WPLog(@"WireProbe", @"[DB] 插入后 localID=%@", wpField(wrap, @"m_uiMesLocalID"));
+}
+
+static void repl_wp_DBAddMsgFixed(id self, SEL _cmd, id a1, id a2, BOOL fixTime) {
+    id wrap = [a2 respondsToSelector:NSSelectorFromString(@"m_uiMessageType")] ? a2
+            : ([a1 respondsToSelector:NSSelectorFromString(@"m_uiMessageType")] ? a1 : nil);
+    WPLog(@"WireProbe", @"[DB] CMessageDB AddMsg:withTimeFixed:%d a1=%@ a2wrapType=%@ localID=%@",
+          fixTime, [a1 isKindOfClass:[NSString class]] ? a1 : NSStringFromClass([a1 class]),
+          wpField(wrap, @"m_uiMessageType"), wpField(wrap, @"m_uiMesLocalID"));
+    ((void (*)(id, SEL, id, id, BOOL))orig_wp_DBAddMsgFixed)(self, _cmd, a1, a2, fixTime);
+    if (wrap) WPLog(@"WireProbe", @"[DB] 插入后 localID=%@", wpField(wrap, @"m_uiMesLocalID"));
+}
+
 @implementation MusicShareWireProbe
 
 + (void)install {
@@ -181,6 +205,17 @@ static void repl_wp_ErrBySender(id self, SEL _cmd, id arg1, long long errno_) {
     SEL errSenderSel = NSSelectorFromString(@"OnErrorBySender:ErrNo:");
     if ([cls instancesRespondToSelector:errSenderSel])
         MSHookMessageEx(cls, errSenderSel, (IMP)repl_wp_ErrBySender, (IMP *)&orig_wp_ErrBySender);
+    // 数据库层预插入钩子（黄白: 先 CMessageDB 插入拿行号，再 AddLocalMsg 入队）
+    Class dbCls = objc_getClass("CMessageDB");
+    if (dbCls) {
+        SEL dbAddSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
+        if ([dbCls instancesRespondToSelector:dbAddSel])
+            MSHookMessageEx(dbCls, dbAddSel, (IMP)repl_wp_DBAddMsg, (IMP *)&orig_wp_DBAddMsg);
+        SEL dbAddFixedSel = NSSelectorFromString(@"AddMsg:MsgWrap:withTimeFixed:");
+        if ([dbCls instancesRespondToSelector:dbAddFixedSel])
+            MSHookMessageEx(dbCls, dbAddFixedSel, (IMP)repl_wp_DBAddMsgFixed, (IMP *)&orig_wp_DBAddMsgFixed);
+        WPLog(@"WireProbe", @"[+] CMessageDB 插入层钩子已挂载");
+    }
     WPLog(@"WireProbe", @"[+] wire 探针已挂载（AddMsg/AddLocalMsg + Resend族/4参变体/SendMsgAsync 序列追踪）");
 
     // 方法菜单：把发送/localID 相关的候选接口全部列出来（找黄白预分配 localID 用的接口）
