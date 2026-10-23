@@ -117,6 +117,20 @@ static MusicSong *songFromItem(id item) {
     static char *(*_copyEnc)(Method);
     if (!_copyEnc) _copyEnc = (char *(*)(Method))dlsym(RTLD_DEFAULT, "method_copyTypeEncoding");
     const char *enc = _copyEnc ? _copyEnc(m) : NULL;
+    if (!enc) {
+        // iOS 26 运行时未导出 method_copyTypeEncoding，退 method_getTypeEncoding / getDescription
+        static char *(*_getTypeEnc)(Method);
+        if (!_getTypeEnc) _getTypeEnc = (char *(*)(Method))dlsym(RTLD_DEFAULT, "method_getTypeEncoding");
+        if (_getTypeEnc) enc = _getTypeEnc(m);
+        if (!enc) {
+            static void *(*_desc)(Method);
+            if (!_desc) _desc = (void *(*)(Method))dlsym(RTLD_DEFAULT, "method_getDescription");
+            if (_desc) {
+                void *d = _desc(m);   // objc_method_description{SEL name; char *types;}
+                if (d) enc = *(const char **)((char *)d + 8);
+            }
+        }
+    }
     NSUInteger nargs = method_getNumberOfArguments(m);
     WPLog(@"Music", @"[QQ] 门面签名 args=%lu enc=%s", (unsigned long)nargs, enc ?: "?");
     // 期望 "@@:@@@@@@"：返回@ self@ _cmd: taskId@ text@ buffer@ 成功块@ 失败块@
