@@ -4,6 +4,7 @@
 #import "QQMusicService.h"
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/ConfigManager.h"
 #import "../../Settings/Common/WPWeChatTable.h"
 
 @interface MusicShareVC () <UISearchBarDelegate>
@@ -80,7 +81,7 @@
 - (void)onSourceChange:(UISegmentedControl *)seg {
     MusicShareConfig *cfg = [MusicShareConfig shared];
     cfg.musicSource = seg.selectedSegmentIndex;  // 0=网易云 1=QQ
-    [MusicShareConfig saveArchivedData];  // 持久化，下次进入保持
+    [ConfigManager saveAll];  // 统一落盘（模块类未实现 saveArchivedData，直调必崩 unrecognized selector）
     WPLog(@"Music", @"[Source] 切换音源 -> %ld", (long)cfg.musicSource);
     [self wpReloadUI];
 }
@@ -97,7 +98,7 @@
     [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         cfg.qqMusicCookie = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:
                              [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        [MusicShareConfig saveArchivedData];
+        [ConfigManager saveAll];
         WPLog(@"Music", @"[QQ] Cookie 已保存 (len=%lu)", (unsigned long)cfg.qqMusicCookie.length);
         [self wpReloadUI];
     }]];
