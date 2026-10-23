@@ -91,7 +91,7 @@ static void patched_searchOfficial(id self, SEL _cmd, id keyword, id completion)
         WPLog(@"Music", @"[OFP] completion 响应对象: %@ desc=%@", [resp class], resp);
         dumpClassMethods("RESP", [resp class]);
         dumpObjectIvars(resp, "RESP");
-        if (userBlock) ((void (*)(id, id))userBlock)(resp);
+        if (userBlock) ((void (^)(id))userBlock)(resp);
     };
     orig_searchOfficial(self, _cmd, keyword, wrapper);
 
