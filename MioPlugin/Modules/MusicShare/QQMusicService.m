@@ -33,7 +33,7 @@ static void qqGet(NSURL *url, void (^done)(NSData *)) {
 
 // GetVkey 取流（PC 实证的最小可通形态：客户端 UA + 固定 comm，免登录免 QIMEI 免 sign）
 static void qqVkey(NSString *mid, NSString *filename, void (^done)(NSString *purl)) {
-    NSString *guid = [NSString stringWithFormat:@"%@%@%@%@",
+    NSString *guid = [NSString stringWithFormat:@"%@%@",
         [NSUUID UUID].UUIDString, [NSUUID UUID].UUIDString];
     guid = [[guid stringByReplacingOccurrencesOfString:@"-" withString:@""] substringToIndex:32];
     NSDictionary *body = @{
