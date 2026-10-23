@@ -180,6 +180,12 @@ static NSMutableArray<MusicSong *> *parseSongList(id list) {
                                                           @"nqc_flag": @0}}};
         root = qqPost(payload, kQQMusicCookie, @"搜索B");
         songs = parseSongList(root[@"req_1"][@"data"][@"body"][@"song"][@"list"]);
+        if (songs.count == 0) {
+            // 诊断：接口通了但没解析到歌曲，打 code 和 req_1 原始片段定位真实结构
+            NSData *dump = [NSJSONSerialization dataWithJSONObject:root[@"req_1"] options:0 error:nil];
+            NSString *head = dump ? [[NSString alloc] initWithData:[dump subdataWithRange:NSMakeRange(0, MIN(400, dump.length))] encoding:NSUTF8StringEncoding] : @"(null)";
+            WPLog(@"Music", @"[QQ][搜索B] 空! topCode=%@ req_1=%@", root[@"code"], head);
+        }
         dispatch_async(dispatch_get_main_queue(), ^{
             WPLog(@"Music", @"[QQ] 搜索B「%@」-> %lu 条", keyword, (unsigned long)songs.count);
             completion(songs);
