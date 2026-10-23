@@ -1,14 +1,17 @@
 #import "MusicShareVC.h"
+#import "MusicShareConfig.h"
 #import "NeteaseMusicService.h"
+#import "QQMusicService.h"
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
 #import "../../Settings/Common/WPWeChatTable.h"
 
 @interface MusicShareVC () <UISearchBarDelegate>
-@property (nonatomic, copy) NSString *currentKeyword;        // 当前搜索词（重建行时恢复）
-@property (nonatomic, copy) NSArray<NeteaseSong *> *results; // 搜索结果
-@property (nonatomic, assign) BOOL searched;                 // 是否已发起过搜索（区分初始态/无结果态）
-@property (nonatomic, strong) NSTimer *searchDebounce;       // 输入防抖
+@property (nonatomic, copy) NSString *currentKeyword;   // 当前搜索词（重建行时恢复）
+@property (nonatomic, copy) NSArray<MusicSong *> *results; // 搜索结果
+@property (nonatomic, assign) BOOL searched;            // 是否已发起过搜索（区分初始态/无结果态）
+@property (nonatomic, strong) NSTimer *searchDebounce;  // 输入防抖
+@property (nonatomic, strong) UISegmentedControl *sourceSeg; // 音源选择（需持久化到 config）
 @end
 
 @implementation MusicShareVC
@@ -21,26 +24,46 @@
 
 - (void)wpBuildRows {
     CGFloat w = self.view.bounds.size.width;
+    MusicShareConfig *cfg = [MusicShareConfig shared];
 
-    // ===== 搜索框 = 表头视图：位于所有 section 上方、随表滚动，与微信渲染行零冲突 =====
-    //（微信引擎表全屏自管理滚动，contentView 是遗留空壳——挂它上面必然重叠）
-    UISearchBar *bar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, w, 44)];
+    // ===== 表头：音源选择 + 搜索框（位于所有 section 上方、随表滚动，与微信渲染行零冲突——
+    // 微信引擎表全屏自管理滚动，contentView 是遗留空壳，挂它上面必然重叠） =====
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 88)];
+    UISegmentedControl *seg = [[UISegmentedControl alloc] initWithItems:@[@"网易云", @"QQ音乐"]];
+    seg.frame = CGRectMake(12, 6, w - 24, 32);
+    seg.selectedSegmentIndex = (cfg.musicSource == 1) ? 1 : 0;
+    [seg addTarget:self action:@selector(onSourceChange:) forControlEvents:UIControlEventValueChanged];
+    self.sourceSeg = seg;
+    [header addSubview:seg];
+
+    UISearchBar *bar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 42, w, 44)];
     bar.placeholder = @"搜索歌曲 / 歌手";
     bar.delegate = self;
     bar.searchBarStyle = UISearchBarStyleMinimal;
     bar.text = self.currentKeyword;
-    self.wcTable.tableView.tableHeaderView = bar;
+    [header addSubview:bar];
+    self.wcTable.tableView.tableHeaderView = header;
 
     // ===== 搜索结果（微信渲染组：每行一首歌，点击选目标发送） =====
     UIView *group = [self addTableGroupAtY:0 width:w];
     CGFloat cy = 0;
+
+    // QQ 源时置顶一行 Cookie 状态（点击设置；vkey 接口强制登录态，Cookie 是唯一材料）
+    if (cfg.musicSource == 1) {
+        BOOL hasCookie = cfg.qqMusicCookie.length > 0;
+        cy = [self addNavRowInGroup:group
+                              title:[NSString stringWithFormat:@"QQ 音乐 Cookie：%@", hasCookie ? @"已设置" : @"未设置"]
+                           subtitle:hasCookie ? @"点击重新粘贴" : @"y.qq.com 登录后复制 Cookie 粘贴进来"
+                                       tag:-1 action:@selector(onCookieTap:) cy:cy width:w];
+    }
+
     if (!self.searched) {
         cy = [self addSectionFooter:@"输入歌名开始搜索" y:cy width:w];
     } else if (self.results.count == 0) {
         cy = [self addSectionFooter:@"没有找到相关歌曲" y:cy width:w];
     } else {
         for (NSUInteger i = 0; i < self.results.count; i++) {
-            NeteaseSong *song = self.results[i];
+            MusicSong *song = self.results[i];
             NSString *sub = song.singerName.length ? song.singerName : @"";
             if (song.albumName.length > 0) {
                 sub = sub.length ? [sub stringByAppendingFormat:@" · %@", song.albumName] : song.albumName;
@@ -50,6 +73,36 @@
         }
     }
     [self finishGroup:group atY:0 height:cy];
+}
+
+#pragma mark - 音源 / Cookie
+
+- (void)onSourceChange:(UISegmentedControl *)seg {
+    MusicShareConfig *cfg = [MusicShareConfig shared];
+    cfg.musicSource = seg.selectedSegmentIndex;  // 0=网易云 1=QQ
+    [MusicShareConfig saveArchivedData];  // 持久化，下次进入保持
+    WPLog(@"Music", @"[Source] 切换音源 -> %ld", (long)cfg.musicSource);
+    [self wpReloadUI];
+}
+
+- (void)onCookieTap:(UIButton *)sender {
+    MusicShareConfig *cfg = [MusicShareConfig shared];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"QQ 音乐 Cookie"
+                                      message:@"电脑浏览器登录 y.qq.com → F12 → Network → 任一请求 → 复制请求头 Cookie 全文粘贴到这里"
+                               preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+        tf.placeholder = @"uin=xxx; qm_keyst=xxx; ...";
+        tf.text = cfg.qqMusicCookie;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        cfg.qqMusicCookie = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:
+                             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        [MusicShareConfig saveArchivedData];
+        WPLog(@"Music", @"[QQ] Cookie 已保存 (len=%lu)", (unsigned long)cfg.qqMusicCookie.length);
+        [self wpReloadUI];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 #pragma mark - 搜索
@@ -72,12 +125,18 @@
     keyword = [keyword stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     if (keyword.length == 0) return;
     self.currentKeyword = keyword;
+    BOOL isQQ = ([MusicShareConfig shared].musicSource == 1);
     __weak typeof(self) ws = self;
-    [NeteaseMusicService searchWithKeyword:keyword completion:^(NSArray<NeteaseSong *> *songs) {
+    void (^done)(NSArray<MusicSong *> *) = ^(NSArray<MusicSong *> *songs) {
         ws.results = songs;
         ws.searched = YES;
         [ws wpReloadUI];
-    }];
+    };
+    if (isQQ) {
+        [QQMusicService searchWithKeyword:keyword completion:done];
+    } else {
+        [NeteaseMusicService searchWithKeyword:keyword completion:done];
+    }
 }
 
 #pragma mark - 发送
@@ -89,7 +148,7 @@
 }
 
 // 发送目标 = 手输 wxid/群 ID（原生联系人选择器为二期增强）
-- (void)promptTargetAndSend:(NeteaseSong *)song {
+- (void)promptTargetAndSend:(MusicSong *)song {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:[NSString stringWithFormat:@"发送「%@」", song.name]
                                        message:@"输入目标 wxid / 群 ID"
                                 preferredStyle:UIAlertControllerStyleAlert];
@@ -116,18 +175,20 @@
 
 // 黄白式音乐卡片（appmsg type=76，点击即播不跳转）
 // 模板逐字段照抄黄白实机抓包（探针实证，2026-10-23，XML 全文 2116 字符）：
-//   <url>/<lowurl>/<dataurl>/<lowdataurl> 四字段 = 同一个 mp3 直链（网易云时效直链，与黄白的
-//   wx.music.tc.qq.com vkey 直链同为发送时实时获取、有时效的形态）
+//   <url>/<lowurl>/<dataurl>/<lowdataurl> 四字段 = 同一个 mp3 直链（发送时实时获取、有时效）
 //   <songalbumurl> = 封面；<songlyric> = LRC 全文（点开后的歌词页）
 //   appid 照抄黄白 = QQ 音乐 wx3858261cdede9ca0；无 <?xml?> 声明、无 <action>
-- (void)sendSongCard:(NeteaseSong *)song to:(NSString *)session completion:(void (^)(BOOL ok, NSString *errMsg))completion {
+- (void)sendSongCard:(MusicSong *)song to:(NSString *)session completion:(void (^)(BOOL ok, NSString *errMsg))completion {
     WPLog(@"Music", @"[Card] 开始发送: %@ - %@ -> %@", song.name, song.singerName, session);
     __weak typeof(self) ws = self;
-    [NeteaseMusicService prepareSong:song completion:^(NSString *playURL, NSString *coverURL, NSString *lrc) {
+    void (^prepareDone)(NSString *, NSString *, NSString *) = ^(NSString *playURL, NSString *coverURL, NSString *lrc) {
         if (!ws) return;
         if (playURL.length == 0) {
-            WPLog(@"Music", @"[Card] 无播放直链，放弃（版权限制）");
-            completion(NO, @"这首歌取不到播放直链（网易云版权限制），换一首试试");
+            BOOL isQQ = (song.source == 1);
+            WPLog(@"Music", @"[Card] 无播放直链，放弃");
+            completion(NO, isQQ
+                ? @"取直链失败：检查 Cookie 是否有效（点歌页顶部可重新粘贴），或该歌无版权"
+                : @"这首歌取不到播放直链（网易云版权限制），换一首试试");
             return;
         }
         NSString *(^esc)(NSString *) = ^NSString *(NSString *s) {
@@ -160,7 +221,12 @@
         BOOL ok = WXSendAppMessage(xml, session);
         WPLog(@"Music", @"[Card] type=76 卡片发送%@ -> %@", ok ? @"成功" : @"失败", session);
         completion(ok, ok ? nil : @"发送通道异常，请看调试日志");
-    }];
+    };
+    if (song.source == 1) {
+        [QQMusicService prepareSong:song completion:prepareDone];
+    } else {
+        [NeteaseMusicService prepareSong:song completion:prepareDone];
+    }
 }
 
 @end

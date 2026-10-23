@@ -18,6 +18,8 @@
 + (NSArray<ConfigDescriptor *> *)descriptors {
     return @[
         [ConfigDescriptor itemWithKey:@"musicShareEnabled" type:ConfigValueTypeBool default:@(YES)],
+        [ConfigDescriptor itemWithKey:@"musicSource" type:ConfigValueTypeInteger default:@0],
+        [ConfigDescriptor itemWithKey:@"qqMusicCookie" type:ConfigValueTypeString default:@""],
     ];
 }
 

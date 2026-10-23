@@ -23,19 +23,15 @@ static NSString *strOf(id v) {
     return [v isKindOfClass:[NSString class]] ? v : nil;
 }
 
-@implementation NeteaseSong
-@end
-
 @implementation NeteaseMusicService
-
 #pragma mark - 搜索
 
 + (void)searchWithKeyword:(NSString *)keyword
-               completion:(void (^)(NSArray<NeteaseSong *> *songs))completion {
+               completion:(void (^)(NSArray<MusicSong *> *songs))completion {
     if (keyword.length == 0) { completion(@[]); return; }
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        NSMutableArray<NeteaseSong *> *songs = [NSMutableArray array];
+        NSMutableArray<MusicSong *> *songs = [NSMutableArray array];
         NSString *url = [NSString stringWithFormat:
             @"http://music.163.com/api/search/get/web?s=%@&type=1&limit=20&offset=0",
             [keyword stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
@@ -44,18 +40,18 @@ static NSString *strOf(id v) {
         if ([list isKindOfClass:[NSArray class]]) {
             for (NSDictionary *s in list) {
                 if (![s isKindOfClass:[NSDictionary class]]) continue;
-                NeteaseSong *song = [NeteaseSong new];
-                song.songId = [s[@"id"] longLongValue];
+                MusicSong *song = [MusicSong new];
+                song.source = 0;
+                song.songId = [s[@"id"] stringValue];
                 song.name = strOf(s[@"name"]) ?: @"";
                 song.albumName = strOf(s[@"album"][@"name"]) ?: @"";
-                song.duration = [s[@"duration"] respondsToSelector:@selector(integerValue)] ? [s[@"duration"] integerValue] : 0;
                 NSMutableArray *singers = [NSMutableArray array];
                 for (NSDictionary *si in s[@"artists"]) {
                     NSString *n = [si isKindOfClass:[NSDictionary class]] ? strOf(si[@"name"]) : nil;
                     if (n.length) [singers addObject:n];
                 }
                 song.singerName = [singers componentsJoinedByString:@"/"];
-                if (song.songId > 0 && song.name.length) [songs addObject:song];
+                if (song.songId.length && song.name.length) [songs addObject:song];
             }
         }
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -67,32 +63,33 @@ static NSString *strOf(id v) {
 
 #pragma mark - 发送前取全量（直链 + 封面 + LRC）
 
-+ (void)prepareSong:(NeteaseSong *)song
++ (void)prepareSong:(MusicSong *)song
          completion:(void (^)(NSString *playURL, NSString *coverURL, NSString *lrc))completion {
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSString *playURL = nil, *coverURL = nil, *lrc = nil;
+        NSString *sid = song.songId;
 
         // 1) 播放直链（320k 请求，实际码率以返回为准；url 为空 = 无版权）
         NSDictionary *u = wyyJSON([NSString stringWithFormat:
-            @"http://music.163.com/api/song/enhance/player/url?ids=[%lld]&br=320000", song.songId], nil);
+            @"http://music.163.com/api/song/enhance/player/url?ids=[%@]&br=320000", sid], nil);
         playURL = strOf(u[@"data"][0][@"url"]);
         if (playURL.length == 0) {
-            WPLog(@"Music", @"[WYY] id=%lld 无播放直链（版权/失败）", song.songId);
+            WPLog(@"Music", @"[WYY] id=%@ 无播放直链（版权/失败）", sid);
         }
 
         // 2) 封面（song/detail 的 album.picUrl，允许为空）
         NSDictionary *d = wyyJSON([NSString stringWithFormat:
-            @"http://music.163.com/api/song/detail/?id=%lld&ids=[%lld]", song.songId, song.songId], nil);
+            @"http://music.163.com/api/song/detail/?id=%@&ids=[%@]", sid, sid], nil);
         coverURL = strOf(d[@"songs"][0][@"album"][@"picUrl"]);
 
         // 3) LRC 歌词（允许为空）
         NSDictionary *l = wyyJSON([NSString stringWithFormat:
-            @"http://music.163.com/api/song/lyric?id=%lld&lv=1&kv=1&tv=-1", song.songId], nil);
+            @"http://music.163.com/api/song/lyric?id=%@&lv=1&kv=1&tv=-1", sid], nil);
         lrc = strOf(l[@"lrc"][@"lyric"]);
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            WPLog(@"Music", @"[WYY] prepare id=%lld url=%@ cover=%@ lrc=%lu字",
-                  song.songId, playURL.length ? @"OK" : @"无", coverURL.length ? @"OK" : @"无", (unsigned long)lrc.length);
+            WPLog(@"Music", @"[WYY] prepare id=%@ url=%@ cover=%@ lrc=%lu字",
+                  sid, playURL.length ? @"OK" : @"无", coverURL.length ? @"OK" : @"无", (unsigned long)lrc.length);
             completion(playURL ?: @"", coverURL ?: @"", lrc ?: @"");
         });
     });
