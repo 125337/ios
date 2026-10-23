@@ -3,8 +3,8 @@
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
 
-// SDK 头未声明，手动补（ObjC 运行时标准 API）
-OBJC_EXPORT char *method_copyTypeEncoding(Method _Nonnull m);
+// SDK 的 libobjc.tbd 未导出 method_copyTypeEncoding（链接实测），改 dlsym 运行时解析
+#import <dlfcn.h>
 
 // ===== v4：零 hook（v2 崩在 hook 黄白、v3 崩在 hook 继承方法扇出，纯扫描实证安全） =====
 // 纯读元数据：
@@ -43,6 +43,13 @@ static void dumpClassInfo(const char *tag, Class cls) {
 }
 
 // 全类扫描：方法类型编码里出现目标类名 → 说明该方法收/发该类对象（调用方实锤）
+static char *(*_copyEnc)(Method);
+static const char *encOf(Method m) {
+    if (!_copyEnc) _copyEnc = (char *(*)(Method))dlsym(RTLD_DEFAULT, "method_copyTypeEncoding");
+    if (!_copyEnc) return NULL;
+    return _copyEnc(m);
+}
+
 static void scanCallers(void) {
     unsigned int count = 0;
     Class *classes = objc_copyClassList(&count);
@@ -56,7 +63,7 @@ static void scanCallers(void) {
                 unsigned int n = 0;
                 Method *list = class_copyMethodList(target, &n);
                 for (unsigned int j = 0; j < n; j++) {
-                    char *enc = method_copyTypeEncoding(list[j]);
+                    char *enc = (char *)encOf(list[j]);
                     if (!enc) continue;
                     BOOL hit = strstr(enc, "MusicLiveSearchReq") ||
                                strstr(enc, "MusicLiveSearchSmartBoxReq") ||
