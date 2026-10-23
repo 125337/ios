@@ -25,6 +25,26 @@ static NSDictionary *qqJSON(NSURLRequest *req, NSError **err) {
     return [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
 }
 
+// 带诊断的请求：失败/非 JSON 时打 HTTP 状态码 + 响应前 200 字符，用于一次实测定位搜索失败原因
+static NSDictionary *qqJSONDebug(NSURLRequest *req, NSString *tag) {
+    NSURLResponse *resp = nil;
+    NSError *err = nil;
+    NSData *data = [NSURLConnection sendSynchronousRequest:req returningResponse:&resp error:&err];
+    NSInteger code = [(NSHTTPURLResponse *)resp statusCode];
+    if (!data || err) {
+        WPLog(@"Music", @"[QQ][%@] HTTP失败 code=%ld err=%@", tag, (long)code, err);
+        return nil;
+    }
+    NSDictionary *root = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if (![root isKindOfClass:[NSDictionary class]]) {
+        NSData *headData = [data subdataWithRange:NSMakeRange(0, MIN(200, data.length))];
+        NSString *head = [[NSString alloc] initWithData:headData encoding:NSUTF8StringEncoding] ?: @"(非utf8)";
+        WPLog(@"Music", @"[QQ][%@] 非JSON code=%ld body=%@", tag, (long)code, head);
+        return nil;
+    }
+    return root;
+}
+
 static NSString *strOf(id v) {
     return [v isKindOfClass:[NSString class]] ? v : nil;
 }
@@ -77,8 +97,8 @@ static NSDictionary *qqComm(NSString *uin, NSString *gtk) {
              @"notice": @0, @"need_new_code": @1};
 }
 
-// musicu.fcg POST（带 Cookie，无 sign——UrlGetVkey 实证不需要）
-static NSDictionary *qqPost(NSDictionary *payload, NSString *cookie) {
+// musicu.fcg POST（带 Cookie + 公参；诊断日志走 qqJSONDebug）
+static NSDictionary *qqPost(NSDictionary *payload, NSString *cookie, NSString *tag) {
     NSData *bodyData = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"https://u.y.qq.com/cgi-bin/musicu.fcg"]];
     req.HTTPMethod = @"POST";
@@ -89,48 +109,79 @@ static NSDictionary *qqPost(NSDictionary *payload, NSString *cookie) {
     [req setValue:@"application/json;charset=utf-8" forHTTPHeaderField:@"Content-Type"];
     if (cookie.length) [req setValue:cookie forHTTPHeaderField:@"Cookie"];
     req.timeoutInterval = 12.0;
-    return qqJSON(req, nil);
+    return qqJSONDebug(req, tag);
 }
 
 @implementation QQMusicService
 
-#pragma mark - 搜索（免签）
+#pragma mark - 搜索（双接口：老搜索 GET + musicu.fcg SearchCgiService，song 结构相同共用解析）
+
+// song list 元素 → MusicSong（client_search_cp 与 SearchCgiService 的字段名一致）
+static MusicSong *songFromDict(NSDictionary *s) {
+    if (![s isKindOfClass:[NSDictionary class]]) return nil;
+    MusicSong *song = [MusicSong new];
+    song.source = 1;
+    song.songId = strOf(s[@"songmid"]) ?: @"";
+    song.name = strOf(s[@"songname"]) ?: @"";
+    song.albumName = strOf(s[@"albumname"]) ?: @"";
+    song.albumMid = strOf(s[@"albummid"]) ?: @"";
+    NSMutableArray *singers = [NSMutableArray array];
+    for (NSDictionary *si in s[@"singer"]) {
+        NSString *n = [si isKindOfClass:[NSDictionary class]] ? strOf(si[@"name"]) : nil;
+        if (n.length) [singers addObject:n];
+    }
+    song.singerName = [singers componentsJoinedByString:@"/"];
+    if (song.songId.length && song.name.length) return song;
+    return nil;
+}
+
+static NSMutableArray<MusicSong *> *parseSongList(id list) {
+    NSMutableArray<MusicSong *> *songs = [NSMutableArray array];
+    if (![list isKindOfClass:[NSArray class]]) return songs;
+    for (NSDictionary *s in list) {
+        MusicSong *song = songFromDict(s);
+        if (song) [songs addObject:song];
+    }
+    return songs;
+}
 
 + (void)searchWithKeyword:(NSString *)keyword
                completion:(void (^)(NSArray<MusicSong *> *songs))completion {
     if (keyword.length == 0) { completion(@[]); return; }
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        NSMutableArray<MusicSong *> *songs = [NSMutableArray array];
+        NSString *enc = [keyword stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+
+        // A) 老搜索 GET（免签）——诊断：失败时打 HTTP code + 响应头 200 字符
         NSString *url = [NSString stringWithFormat:
-            @"https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=%@&format=json&n=20",
-            [keyword stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
+            @"https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=%@&format=json&n=20", enc];
         NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
         [req setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15" forHTTPHeaderField:@"User-Agent"];
         [req setValue:@"https://c.y.qq.com/" forHTTPHeaderField:@"Referer"];
         req.timeoutInterval = 10.0;
-        NSDictionary *root = qqJSON(req, nil);
-        NSArray *list = root[@"data"][@"song"][@"list"];
-        if ([list isKindOfClass:[NSArray class]]) {
-            for (NSDictionary *s in list) {
-                if (![s isKindOfClass:[NSDictionary class]]) continue;
-                MusicSong *song = [MusicSong new];
-                song.source = 1;
-                song.songId = strOf(s[@"songmid"]) ?: @"";
-                song.name = strOf(s[@"songname"]) ?: @"";
-                song.albumName = strOf(s[@"albumname"]) ?: @"";
-                song.albumMid = strOf(s[@"albummid"]) ?: @"";
-                NSMutableArray *singers = [NSMutableArray array];
-                for (NSDictionary *si in s[@"singer"]) {
-                    NSString *n = [si isKindOfClass:[NSDictionary class]] ? strOf(si[@"name"]) : nil;
-                    if (n.length) [singers addObject:n];
-                }
-                song.singerName = [singers componentsJoinedByString:@"/"];
-                if (song.songId.length && song.name.length) [songs addObject:song];
-            }
+        NSDictionary *root = qqJSONDebug(req, @"搜索A");
+        NSMutableArray<MusicSong *> *songs = parseSongList(root[@"data"][@"song"][@"list"]);
+        if (songs.count) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                WPLog(@"Music", @"[QQ] 搜索A「%@」-> %lu 条", keyword, (unsigned long)songs.count);
+                completion(songs);
+            });
+            return;
         }
+
+        // B) musicu.fcg SearchCgiService（web 公参 + 登录态）——老接口空/挂时兜底
+        NSString *uin = uinFromCookie(kQQMusicCookie);
+        NSString *gtk = gtkOf(qmKeystFromCookie(kQQMusicCookie));
+        NSDictionary *payload = @{@"comm": qqComm(uin, gtk),
+                                  @"req_1": @{@"module": @"music.search.SearchCgiService",
+                                              @"method": @"search",
+                                              @"param": @{@"query": keyword, @"search_type": @0,
+                                                          @"num_per_page": @20, @"page_num": @0,
+                                                          @"nqc_flag": @0}}};
+        root = qqPost(payload, kQQMusicCookie, @"搜索B");
+        songs = parseSongList(root[@"req_1"][@"data"][@"body"][@"song"][@"list"]);
         dispatch_async(dispatch_get_main_queue(), ^{
-            WPLog(@"Music", @"[QQ] 搜索「%@」-> %lu 条", keyword, (unsigned long)songs.count);
+            WPLog(@"Music", @"[QQ] 搜索B「%@」-> %lu 条", keyword, (unsigned long)songs.count);
             completion(songs);
         });
     });
@@ -165,7 +216,7 @@ static NSDictionary *qqPost(NSDictionary *payload, NSString *cookie) {
                                         @"req_1": @{@"module": @"music.pf_song_detail_svr",
                                                     @"method": @"get_song_detail_yqq",
                                                     @"param": @{@"song_mid": song.songId, @"ctx": @0}}},
-                                      cookie);
+                                      cookie, @"详情");
         NSString *mediaMid = strOf(detail[@"req_1"][@"data"][@"track_info"][@"file"][@"media_mid"]) ?: @"";
         WPLog(@"Music", @"[QQ] detail mid=%@ media_mid=%@", song.songId, mediaMid.length ? mediaMid : @"无");
 
@@ -183,7 +234,7 @@ static NSDictionary *qqPost(NSDictionary *payload, NSString *cookie) {
                                                   @"param": @{@"uin": uin, @"filename": @[filename],
                                                               @"guid": guid, @"songmid": @[song.songId],
                                                               @"songtype": @[ @0 ], @"ctx": @0}}};
-            NSDictionary *root = qqPost(payload, cookie);
+            NSDictionary *root = qqPost(payload, cookie, @"vkey");
             NSDictionary *inner = root[@"req_1"];
             NSDictionary *d = inner[@"data"];
             if (![d isKindOfClass:[NSDictionary class]]) continue;
