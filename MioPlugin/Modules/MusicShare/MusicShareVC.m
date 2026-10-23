@@ -219,7 +219,23 @@
             url, url, url, url,
             esc(coverURL), esc(inlineLrc)];
 
-        BOOL ok = WXSendAppMessage(xml, session);
+        // 结构化字段（179 探针从黄白发卡逐字段抓取，宿主 AddAppMsg 用它重建 XML）
+        // 注意：des 对应 m_nsDesc（不是 m_nsDes）；四 url 字段同一直链；值传原文无需转义
+        NSDictionary *extendFields = @{
+            @"m_nsAppID": @"wx3858261cdede9ca0",
+            @"m_nsTitle": song.name ?: @"",
+            @"m_nsDesc": song.singerName ?: @"",
+            @"m_uiAppMsgInnerType": @(76),
+            @"m_nsAppMediaUrl": playURL,
+            @"m_nsAppMediaLowUrl": playURL,
+            @"m_nsAppMediaDataUrl": playURL,
+            @"m_nsAppMediaLowBandDataUrl": playURL,
+            @"m_nsSongAlbumUrl": coverURL ?: @"",
+            @"m_nsSongLyric": inlineLrc,
+            @"m_bIsForceUpdate": @(1),
+        };
+
+        BOOL ok = WXSendAppMessage(xml, session, extendFields);
         WPLog(@"Music", @"[Card] type=76 卡片发送%@ -> %@", ok ? @"成功" : @"失败", session);
         completion(ok, ok ? nil : @"发送通道异常，请看调试日志");
     };

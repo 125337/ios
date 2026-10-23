@@ -141,12 +141,12 @@ void WXSendTextMessage(NSString *text, NSString *sessionName) {
 }
 
 // 向指定会话发送 appmsg 卡片（type=49）。
-// 发送入口定论（黄白 dylib 静态反编译，2026-10-23，_aam_sites_out.txt）：
-//   黄白 6 处发送调用点全部为 [CMessageMgr AddAppMsg:chatUser MsgWrap:wrap Data:nil Scene:2]
-//   —— Data 恒 nil、Scene 恒 2；AddAppMsg 是宿主自带老 API（黄白 dylib 内无 IMP，非注入）。
-//   AddMsg:MsgWrap: 只插库不发送（对面收原始 XML 文本）；
-//   AddLocalMsg:MsgWrap: 只插库不认领（本地显示"卡发送中"）——两条路都已实证排除。
-BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName) {
+// 发送入口定论（黄白 dylib 反编译 + 178/179 探针实证）：
+//   [CMessageMgr AddAppMsg:chatUser MsgWrap:wrap Data:nil Scene:2]——宿主自带，黄白 MSHook 它。
+//   宿主 AddAppMsg 不认 m_nsContent，会用 wrap.m_extendInfoWithMsgType(CExtendInfoOfAPP)
+//   的结构化字段重建 XML（179 日志：黄白入口时 content 与 extendInfo 双满，我们只填 content
+//   时被重建为空模板→发送失败红感叹号）。extendFields = 结构化字段表，逐键 KVC 打到 extendInfo。
+BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName, NSDictionary<NSString *, id> *extendFields) {
     if (!appMsgXml.length || !sessionName.length) return NO;
     @try {
         id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
@@ -165,10 +165,23 @@ BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName) {
         NSString *selfUserName = WXSafeStringGet(selfContact, @"m_nsUsrName");
         if (selfUserName) [msg setValue:selfUserName forKey:@"m_nsFromUsr"];
 
-        // 黄白实机 wrap 组合（168 探针全量 dump）：status=1 imgStatus=1 msgSource=nil 无缩略图
+        // 黄白实机 wrap 组合（168/179 探针 dump）：status=1 imgStatus=1
         [msg setValue:@(1) forKey:@"m_uiStatus"];
         [msg setValue:@(1) forKey:@"m_uiImgStatus"];
         [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
+
+        // 结构化字段 → CExtendInfoOfAPP（宿主重建 XML 的数据源，179 日志逐字段实证）
+        if (extendFields.count > 0) {
+            id ext = [msg valueForKey:@"m_extendInfoWithMsgType"];
+            if (ext) {
+                for (NSString *k in extendFields) {
+                    @try { [ext setValue:extendFields[k] forKey:k]; }
+                    @catch (NSException *e) { WPLog(@"MioPlugin", @"[SEND] extendInfo 字段 %@ 设置失败: %@", k, e); }
+                }
+            } else {
+                WPLog(@"MioPlugin", @"[SEND] m_extendInfoWithMsgType 为空，卡片将退化为空模板");
+            }
+        }
 
         SEL sendSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
         if (![msgMgr respondsToSelector:sendSel]) {

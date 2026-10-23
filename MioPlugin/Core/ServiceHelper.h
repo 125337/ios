@@ -25,10 +25,10 @@ NSInteger WXSafeIntegerGet(id obj, NSString *key, NSInteger defaultValue);
 /// 供自动收款回复、红包统计同步等多处复用
 void WXSendTextMessage(NSString *text, NSString *sessionName);
 
-/// 向指定会话发送一条 appmsg 卡片消息（type=49，content 为完整 XML；主线程执行，立即发送）
-/// 供音乐卡片等富消息复用；发送成功返回 YES
-/// 发送入口 = [CMessageMgr AddAppMsg:chatUser MsgWrap:wrap Data:nil Scene:2]（黄白 dylib 反编译实证）
-BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName);
+/// 向指定会话发送一条 appmsg 卡片消息（type=49；主线程执行，立即发送）
+/// appMsgXml = 完整 XML（content）；extendFields = CExtendInfoOfAPP 结构化字段（宿主 AddAppMsg
+/// 用它重建 XML，179 探针实证字段表），发送成功返回 YES
+BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName, NSDictionary<NSString *, id> *extendFields);
 
 /// 查询联系人显示名（备注 > 昵称），查不到时原样返回 wxid
 NSString *WXDisplayNameForWxid(NSString *wxid);
