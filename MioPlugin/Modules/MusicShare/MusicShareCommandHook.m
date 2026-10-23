@@ -23,20 +23,21 @@ static void processTextMessage(id wrap) {
         unsigned int msgType = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
         if (msgType != 1) return;  // 只认文本
 
-        // 自己发出的消息（m_bIsSender=1）默认不响应，防手动测试双发
-        BOOL isSender = [[wrap valueForKey:@"m_bIsSender"] boolValue];
-        if (isSender && !cfg.replyToSelf) return;
-
+        // 方向判定：m_bIsSender 不可信（182 日志实证：私聊自己发的消息恒为 0），
+        // 用 fromUsr 是否等于自己 wxid 判定
         NSString *fromUsr = [wrap valueForKey:@"m_nsFromUsr"];
         NSString *toUsr = [wrap valueForKey:@"m_nsToUsr"];
         if (fromUsr.length == 0 && toUsr.length == 0) return;
-        // 会话判定（自己发的消息 fromUsr=自己 wxid，群 ID 在 toUsr；别人发的相反）：
+        NSString *selfWxid = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
+        BOOL iSent = selfWxid.length > 0 && [fromUsr isEqualToString:selfWxid];
+        // 会话判定（自己发的消息 fromUsr=自己 wxid，目标会话在 toUsr；别人发的相反）：
         //   谁是 @chatroom 就用谁；双方都不是群时，自己发的取 toUsr、收到的取 fromUsr
         BOOL fromIsGroup = [fromUsr containsString:@"@chatroom"];
         BOOL toIsGroup = [toUsr containsString:@"@chatroom"];
         BOOL isGroup = fromIsGroup || toIsGroup;
-        NSString *session = fromIsGroup ? fromUsr : (toIsGroup ? toUsr : (isSender ? toUsr : fromUsr));
+        NSString *session = fromIsGroup ? fromUsr : (toIsGroup ? toUsr : (iSent ? toUsr : fromUsr));
         if (session.length == 0) return;
+        if (iSent && !cfg.replyToSelf) return;  // 自己发出的指令默认不响应，防手动测试双发
         if (isGroup && !cfg.replyInGroup) return;
         if (!isGroup && !cfg.replyInPrivate) return;
 
@@ -53,9 +54,9 @@ static void processTextMessage(id wrap) {
         }
 
         // 正文：收到的群消息 content = "wxid:\n内容"，剥离发送者前缀取正文；
-        // 自己发的群消息（isSender）content 就是纯正文，不剥
+        // 自己发的群消息 content 就是纯正文，不剥
         NSString *text = [wrap valueForKey:@"m_nsContent"] ?: @"";
-        if (isGroup && !isSender) {
+        if (isGroup && !iSent) {
             NSRange r = [text rangeOfString:@":\n"];
             if (r.location != NSNotFound && r.location < 64) {
                 text = [text substringFromIndex:NSMaxRange(r)];
@@ -82,7 +83,7 @@ static void processTextMessage(id wrap) {
             _lastFireTime[session] = [NSDate date];
         }
 
-        WPLog(@"Music", @"[Cmd] 指令命中: \"%@\" -> 会话 %@ (group=%d sender=%d)", songKeyword, session, isGroup, isSender);
+        WPLog(@"Music", @"[Cmd] 指令命中: \"%@\" -> 会话 %@ (group=%d iSent=%d)", songKeyword, session, isGroup, iSent);
 
         // 后台搜歌（completion 主线程回调）→ 取第一个结果发卡
         [MusicShareService searchWithKeyword:songKeyword completion:^(NSArray<MusicSong *> *songs) {
