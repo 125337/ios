@@ -12,6 +12,17 @@
 //   MusicLiveSearchMusicRespInfo = { songName, singerNames, musicDataUrl, musicWeburl,
 //       albumCoverUrl, durationMs, identification, mid, audioType, lyric, ... }
 
+// 宿主类接口声明（运行时 objc_getClass 取类；8.0.60/8.0.78 头文件同签名）
+@interface WCFinderLiveSearchMusicCGI : NSObject
+- (id)initWithFinderTaskId:(id)taskId
+                searchText:(id)text
+                lastBuffer:(id)buffer
+               liveCookies:(id)cookies
+              successBlock:(void (^)(NSArray *items))success
+                 failBlock:(void (^)(id err))fail;
+- (void)start;
+@end
+
 // 搜索结果的全量数据缓存（mid → url/cover/lrc），供 prepareSong 即时取用
 static NSMutableDictionary<NSString *, NSDictionary *> *s_detailCache = nil;
 
@@ -22,10 +33,13 @@ static NSString *fieldOf(id item, NSArray<NSString *> *names) {
         SEL sel = sel_registerName(n.UTF8String);
         if (!sel || ![item respondsToSelector:sel]) continue;
         id v = ((id (*)(id, SEL))objc_msgSend)(item, sel);
-        if ([v isKindOfClass:[NSString class]] && v.length) return v;
+        if ([v isKindOfClass:[NSString class]]) {
+            NSString *s = v;
+            if (s.length) return s;
+        }
         if ([v isKindOfClass:[NSArray class]]) {
             NSMutableArray *parts = [NSMutableArray array];
-            for (id e in v) {
+            for (NSString *e in v) {
                 if ([e isKindOfClass:[NSString class]] && e.length) [parts addObject:e];
             }
             if (parts.count) return [parts componentsJoinedByString:@"/"];
