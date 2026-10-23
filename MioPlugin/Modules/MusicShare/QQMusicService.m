@@ -1,5 +1,6 @@
 ﻿#import "QQMusicService.h"
 #import <objc/message.h>
+#import <dlfcn.h>
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
 
@@ -105,6 +106,25 @@ static MusicSong *songFromItem(id item) {
     }
 
     WPLog(@"Music", @"[QQ] 官方搜索「%@」", keyword);
+    // 先验签再调用：宿主实际签名与头文件若不一致（参数个数/类型漂移），盲目调用 = 寄存器错位段错误
+    SEL sel = @selector(searchLiveMusicWithTaskId:searchText:lastBuffer:successBlock:failBlock:);
+    Method m = class_getInstanceMethod([svc class], sel);
+    if (!m) {
+        WPLog(@"Music", @"[QQ] 门面无此方法，放弃调用");
+        completion(@[]);
+        return;
+    }
+    static char *(*_copyEnc)(Method);
+    if (!_copyEnc) _copyEnc = (char *(*)(Method))dlsym(RTLD_DEFAULT, "method_copyTypeEncoding");
+    const char *enc = _copyEnc ? _copyEnc(m) : NULL;
+    NSUInteger nargs = method_getNumberOfArguments(m);
+    WPLog(@"Music", @"[QQ] 门面签名 args=%lu enc=%s", (unsigned long)nargs, enc ?: "?");
+    // 期望 "@@:@@@@@@"：返回@ self@ _cmd: taskId@ text@ buffer@ 成功块@ 失败块@
+    if (nargs != 7 || !enc || strlen(enc) < 8 || enc[3] != '@') {
+        WPLog(@"Music", @"[QQ] 签名与头文件不符（taskId 非 id 对象或参数个数不同），不调用");
+        completion(@[]);
+        return;
+    }
     // 回调块只声明 1 参：宿主实际传 N 参时多余寄存器被忽略；多声明参才会读到寄存器垃圾值而崩
     void (^successBlk)(id) = ^(id first) {
         WPLog(@"Music", @"[QQ] 搜索回调 class=%@", [first class]);
