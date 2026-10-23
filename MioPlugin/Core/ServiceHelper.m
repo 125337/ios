@@ -164,19 +164,15 @@ BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName) {
         [msg setValue:@(4) forKey:@"m_uiStatus"];
         [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
 
-        // 发送入口用 AddLocalMsg:MsgWrap:（探针实证黄白发 type=76 卡片走的就是这个入口；
-        // AddMsg:MsgWrap: 发出的同内容 XML 在部分接收端会被降级为纯文本显示）
-        SEL addMsgSel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:");
+        // 发送入口必须 AddMsg:MsgWrap:（实测唯一真正出网的入口；AddLocalMsg 只入库不发送）。
+        // 之前怀疑入口导致接收端降级纯文本，实测否——渲染差异根因在 XML 内容本身（见 MusicShareVC 对照测试）
+        SEL addMsgSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
         if (![msgMgr respondsToSelector:addMsgSel]) {
-            WPLog(@"Music", @"[SEND] AddLocalMsg:MsgWrap: 不可用，退回 AddMsg:MsgWrap:");
-            addMsgSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
-        }
-        if (![msgMgr respondsToSelector:addMsgSel]) {
-            WPLog(@"MioPlugin", @"[SEND] 发送入口方法不可用");
+            WPLog(@"MioPlugin", @"[SEND] AddMsg:MsgWrap: 方法不可用");
             return NO;
         }
         ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addMsgSel, sessionName, msg);
-        WPLog(@"MioPlugin", @"[SEND] appmsg 卡片已发送(%@) -> %@", NSStringFromSelector(addMsgSel), sessionName);
+        WPLog(@"MioPlugin", @"[SEND] appmsg 卡片已发送 -> %@", sessionName);
         return YES;
     } @catch (NSException *e) {
         WPLog(@"MioPlugin", @"[SEND] appmsg 发送异常: %@", e);

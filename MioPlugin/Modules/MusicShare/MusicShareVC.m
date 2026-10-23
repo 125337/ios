@@ -170,6 +170,30 @@
             [self presentViewController:done animated:YES completion:nil];
         }];
     }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"对照测试XML" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        // 临时诊断（定位接收端降级纯文本根因后删除）：同结构卡片，url 换成微信听一听域名
+        // wx.music.tc.qq.com（黄白抓包同款域名+固定 guid+uin=0，死链不影响卡片渲染）。
+        // 若这条在对面渲染成卡片 → 域名白名单实锤，下一步接微信原生听一听 API
+        NSString *target = alert.textFields.firstObject.text;
+        target = [target stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (target.length == 0) return;
+        NSString *wxUrl = @"http://wx.music.tc.qq.com/RS02063Jea4g3odyKE.mp3?guid=2000000049&uin=0&fromtag=99010049";
+        NSString *xml = [NSString stringWithFormat:
+            @"<msg><appmsg appid=\"wx3858261cdede9ca0\"  sdkver=\"0\">"
+            "<title>%@</title><des>%@</des><type>76</type>"
+            "<url>%@</url><lowurl>%@</lowurl><dataurl>%@</dataurl><lowdataurl>%@</lowdataurl>"
+            "<songalbumurl>%@</songalbumurl>"
+            "<songlyric>[ti:%@][ar:%@]</songlyric>"
+            "<appattach><cdnthumbaeskey></cdnthumbaeskey><aeskey></aeskey></appattach>"
+            "</appmsg><appinfo><version>0</version><appname></appname>"
+            "<isforceupdate>1</isforceupdate></appinfo></msg>",
+            song.name, song.singerName,
+            wxUrl, wxUrl, wxUrl, wxUrl,
+            @"http://wx.y.gtimg.cn/music/photo_new/T002R500x500M000002sXaPA48YqGS.jpg",
+            song.name, song.singerName];
+        BOOL ok = WXSendAppMessage(xml, target);
+        WPLog(@"Music", @"[Card] 对照测试XML(wx域名) 发送%@ -> %@", ok ? @"成功" : @"失败", target);
+    }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
 }
