@@ -42,7 +42,7 @@ static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的
                        alertTitle:nil
                      alertMessage:nil
                                cy:cy width:w];
-    cy = [self addSectionFooter:@"网易云使用自建接口（点击即播）\nQQ 音乐走 QQ 官方免登录接口，分享卡片点击打开网页播放"
+    cy = [self addSectionFooter:@"网易云使用自建接口（点击即播）\nQQ 音乐免登录取流：免费歌播全曲，VIP 歌播 60 秒试听"
                               y:cy width:w];
     [self finishGroup:srcGroup atY:0 height:cy];
 
@@ -117,7 +117,7 @@ static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的
 - (void)presentSourcePicker {
     MusicShareConfig *cfg = [MusicShareConfig shared];
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"请选择音乐源"
-                                      message:@"网易云使用自建接口\nQQ 音乐使用微信官方搜索与发送接口"
+                                      message:@"网易云使用自建接口\nQQ 音乐免登录取流（免费歌全曲/VIP 歌试听）"
                                preferredStyle:UIAlertControllerStyleActionSheet];
     void (^pick)(NSInteger) = ^(NSInteger src) {
         if (cfg.musicSource == src) return;

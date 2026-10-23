@@ -76,7 +76,7 @@ static id firstOf(id v) {
 #pragma mark - 发送前取全量（直链 + 封面 + LRC）
 
 + (void)prepareSong:(MusicSong *)song
-         completion:(void (^)(NSString *playURL, NSString *coverURL, NSString *lrc))completion {
+         completion:(void (^)(NSString *playURL, NSString *pageURL, NSString *coverURL, NSString *lrc))completion {
     NSString *sid = song.songId;
     __block NSString *playURL = nil, *coverURL = nil, *lrc = nil;
 
@@ -116,7 +116,7 @@ static id firstOf(id v) {
     dispatch_group_notify(g, dispatch_get_main_queue(), ^{
         WPLog(@"Music", @"[WYY] prepare id=%@ url=%@ cover=%@ lrc=%lu字",
               sid, playURL.length ? @"OK" : @"无", coverURL.length ? @"OK" : @"无", (unsigned long)lrc.length);
-        completion(playURL ?: @"", coverURL ?: @"", lrc ?: @"");
+        completion(playURL ?: @"", playURL ?: @"", coverURL ?: @"", lrc ?: @"");
     });
 }
 

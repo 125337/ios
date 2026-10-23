@@ -13,8 +13,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 // 发送前取全量：播放直链 + 封面 + LRC 歌词（completion 主线程回调；
 // playURL 为空 = 无版权/失败，封面与歌词允许为空——卡片核心只需 title/des/type76/url）
+// pageURL 与 playURL 相同（网易无独立播放页，卡片 <url> 直接填流）
 + (void)prepareSong:(MusicSong *)song
-         completion:(void (^)(NSString *playURL, NSString *coverURL, NSString *lrc))completion;
+         completion:(void (^)(NSString *playURL, NSString *pageURL, NSString *coverURL, NSString *lrc))completion;
 
 @end
 

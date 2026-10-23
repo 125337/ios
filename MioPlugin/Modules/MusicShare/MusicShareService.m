@@ -22,22 +22,23 @@
 #pragma mark - 音乐卡片发送
 
 // 音乐卡片（发送链路已跑通：AddAppMsg + extendInfo，勿动）
-// 网易源 → 黄白式 type=76 卡（点击即播，需流媒体直链），模板逐字段照抄黄白实机抓包：
+// 网易源 → 黄白式 type=76 卡（点击即播），模板逐字段照抄黄白实机抓包：
 //   <url>/<lowurl>/<dataurl>/<lowdataurl> 四字段 = 同一 mp3 直链；<songalbumurl>=封面；<songlyric>=LRC
-// QQ 源 → 经典 type=3 音乐分享卡（QQ 音乐 App 分享同款，点击打开官方网页播放器），
-//   dataurl 留空（QQ 无免登录流直链，2026-10-24 定论见 QQMusicService.m 头注释）
+// QQ 源 → 经典 type=3 音乐分享卡（QQ 音乐 App 分享同款）：
+//   <url>=官方播放页（点卡片主体打开）；<dataurl>=流直链（点 ▶ 客户端直接播，免费歌全曲/VIP 歌 60s 试听，
+//   取流定论见 QQMusicService.m 头注释；两源都有流后此差异仅剩 type 与 url 指向）
 + (void)sendSongCard:(MusicSong *)song
                   to:(NSString *)session
           completion:(void (^)(BOOL ok, NSString *errMsg))completion {
     WPLog(@"Music", @"[Card] 开始发送: %@ - %@ -> %@", song.name, song.singerName, session);
     NSInteger source = song.source;
     BOOL isQQ = (source == 1);
-    void (^finish)(NSString *playURL, NSString *coverURL, NSString *lrc) =
-        ^(NSString *playURL, NSString *coverURL, NSString *lrc) {
-        if (playURL.length == 0) {
-            WPLog(@"Music", @"[Card] 无播放直链，放弃");
+    void (^finish)(NSString *playURL, NSString *pageURL, NSString *coverURL, NSString *lrc) =
+        ^(NSString *playURL, NSString *pageURL, NSString *coverURL, NSString *lrc) {
+        if (playURL.length == 0 && pageURL.length == 0) {
+            WPLog(@"Music", @"[Card] 无流无页面，放弃");
             NSString *hint = isQQ
-                ? @"这首歌取不到播放直链（版权/地区限制），换一首试试"
+                ? @"这首歌连试听片段都取不到（版权/地区限制），换一首试试"
                 : @"这首歌取不到播放直链（版权限制），换一首试试";
             completion(NO, hint);
             return;
@@ -50,8 +51,9 @@
             [m replaceOccurrencesOfString:@">" withString:@"&gt;" options:0 range:NSMakeRange(0, m.length)];
             return (NSString *)m;
         };
-        NSString *url = esc(playURL);
-        NSString *dataUrl = isQQ ? @"" : url;   // type=76 填流直链；type=3 留空点击走 url 页
+        // <url> = 页面（QQ 官方播放页；网易=流），<dataurl> = 流直链（播放键直接播）
+        NSString *url = esc(pageURL.length ? pageURL : playURL);
+        NSString *dataUrl = esc(playURL);
         NSInteger innerType = isQQ ? 3 : 76;
         // LRC 去换行内联成一行（黄白抓包同款形态）：带 \n 的 songlyric 会让
         // 严格解析的客户端（PC/部分版本）XML 解析失败，整条消息降级为纯文本
@@ -73,15 +75,16 @@
 
         // 结构化字段（179 探针从黄白发卡逐字段抓取，宿主 AddAppMsg 用它重建 XML）
         // 注意：des 对应 m_nsDesc（不是 m_nsDes）；值传原文无需转义
+        NSString *rawPage = pageURL.length ? pageURL : playURL;
         NSDictionary *extendFields = @{
             @"m_nsAppID": @"wx3858261cdede9ca0",
             @"m_nsTitle": song.name ?: @"",
             @"m_nsDesc": song.singerName ?: @"",
             @"m_uiAppMsgInnerType": @(innerType),
-            @"m_nsAppMediaUrl": playURL,
-            @"m_nsAppMediaLowUrl": playURL,
-            @"m_nsAppMediaDataUrl": dataUrl,
-            @"m_nsAppMediaLowBandDataUrl": dataUrl,
+            @"m_nsAppMediaUrl": rawPage,
+            @"m_nsAppMediaLowUrl": rawPage,
+            @"m_nsAppMediaDataUrl": playURL,
+            @"m_nsAppMediaLowBandDataUrl": playURL,
             @"m_nsSongAlbumUrl": coverURL ?: @"",
             @"m_nsSongLyric": inlineLrc,
             @"m_bIsForceUpdate": @(1),
