@@ -170,32 +170,54 @@
             [self presentViewController:done animated:YES completion:nil];
         }];
     }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"对照测试XML" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        // 临时诊断（定位接收端降级纯文本根因后删除）：同结构卡片，url 换成微信听一听域名
-        // wx.music.tc.qq.com（黄白抓包同款域名+固定 guid+uin=0，死链不影响卡片渲染）。
-        // 若这条在对面渲染成卡片 → 域名白名单实锤，下一步接微信原生听一听 API
-        NSString *target = alert.textFields.firstObject.text;
-        target = [target stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"实验1黄白原文·Local" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        // 实验矩阵 1/3：黄白 168 抓包原文（type=76 全文 2112 字）原封不动走 AddLocalMsg。
+        // 若对面渲染成卡片 → 我们的 AddLocalMsg 通路成立，问题在我们 XML 内容
+        NSString *target = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         if (target.length == 0) return;
-        NSString *wxUrl = @"http://wx.music.tc.qq.com/RS02063Jea4g3odyKE.mp3?guid=2000000049&uin=0&fromtag=99010049";
-        NSString *xml = [NSString stringWithFormat:
-            @"<msg><appmsg appid=\"wx3858261cdede9ca0\"  sdkver=\"0\">"
-            "<title>%@</title><des>%@</des><type>76</type>"
-            "<url>%@</url><lowurl>%@</lowurl><dataurl>%@</dataurl><lowdataurl>%@</lowdataurl>"
-            "<songalbumurl>%@</songalbumurl>"
-            "<songlyric>[ti:%@][ar:%@]</songlyric>"
-            "<appattach><cdnthumbaeskey></cdnthumbaeskey><aeskey></aeskey></appattach>"
-            "</appmsg><appinfo><version>0</version><appname></appname>"
-            "<isforceupdate>1</isforceupdate></appinfo></msg>",
-            song.name, song.singerName,
-            wxUrl, wxUrl, wxUrl, wxUrl,
-            @"http://wx.y.gtimg.cn/music/photo_new/T002R500x500M000002sXaPA48YqGS.jpg",
-            song.name, song.singerName];
-        BOOL ok = WXSendAppMessage(xml, target);
-        WPLog(@"Music", @"[Card] 对照测试XML(wx域名) 发送%@ -> %@", ok ? @"成功" : @"失败", target);
+        BOOL ok = WXSendAppMessageVia(HBCardXML(), target, YES);
+        WPLog(@"Music", @"[实验1] 黄白原文 AddLocalMsg 发送%@ -> %@", ok ? @"成功" : @"失败", target);
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"实验2黄白原文·AddMsg" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        // 实验矩阵 2/3：同一份黄白原文走 AddMsg（预期对面收到原始文本，验证入口变量）
+        NSString *target = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (target.length == 0) return;
+        BOOL ok = WXSendAppMessageVia(HBCardXML(), target, NO);
+        WPLog(@"Music", @"[实验2] 黄白原文 AddMsg 发送%@ -> %@", ok ? @"成功" : @"失败", target);
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"实验3当前歌短LRC·Local" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        // 实验矩阵 3/3：当前选中歌曲走 AddLocalMsg，但 LRC 截断到 900 字（黄白抓包=932 字截断）。
+        // 若实验1成功而本实验也成功 → LRC 超长就是接收端降级根因
+        NSString *target = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (target.length == 0) return;
+        [self sendSongCard:song to:target viaLocal:YES lrcLimit:900 completion:^(BOOL ok, NSString *errMsg) {
+            WPLog(@"Music", @"[实验3] 短LRC AddLocalMsg 发送%@ -> %@", ok ? @"成功" : @"失败", target);
+        }];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"实验4当前歌全LRC·Local" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        // 对照：同一首歌全量 LRC 走 AddLocalMsg。实验3 成功而实验4 失败 → 超长 LRC 实锤
+        NSString *target = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (target.length == 0) return;
+        [self sendSongCard:song to:target viaLocal:YES lrcLimit:0 completion:^(BOOL ok, NSString *errMsg) {
+            WPLog(@"Music", @"[实验4] 全LRC AddLocalMsg 发送%@ -> %@", ok ? @"成功" : @"失败", target);
+        }];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
+}
+
+// 黄白 168 探针抓包原文（C1-C4 分块拼接，2112 字，孤勇者/陈奕迅/type=76）——实验矩阵用
+static NSString *HBCardXML(void) {
+    return
+    @"<msg><appmsg appid=\"wx3858261cdede9ca0\"  sdkver=\"0\"><title>孤勇者</title><des>陈奕迅</des><type>76</type>"
+    @"<url>http://wx.music.tc.qq.com/RS02063Jea4g3odyKE.mp3?guid=2000000049&amp;vkey=9D41E47CEFF06582255EE649887FF139DD818A4B7ADEA6F151C593C86432035723B214974F9909C11530A1953472BC7F5ECD44207858943D__v2b9abc1b&amp;uin=0&amp;fromtag=99010049&amp;trace=1af9d9bafbf94f82</url>"
+    @"<lowurl>http://wx.music.tc.qq.com/RS02063Jea4g3odyKE.mp3?guid=2000000049&amp;vkey=9D41E47CEFF06582255EE649887FF139DD818A4B7ADEA6F151C593C86432035723B214974F9909C11530A1953472BC7F5ECD44207858943D__v2b9abc1b&amp;uin=0&amp;fromtag=99010049&amp;trace=1af9d9bafbf94f82</lowurl>"
+    @"<dataurl>http://wx.music.tc.qq.com/RS02063Jea4g3odyKE.mp3?guid=2000000049&amp;vkey=9D41E47CEFF06582255EE649887FF139DD818A4B7ADEA6F151C593C86432035723B214974F9909C11530A1953472BC7F5ECD44207858943D__v2b9abc1b&amp;uin=0&amp;fromtag=99010049&amp;trace=1af9d9bafbf94f82</dataurl>"
+    @"<lowdataurl>http://wx.music.tc.qq.com/RS02063Jea4g3odyKE.mp3?guid=2000000049&amp;vkey=9D41E47CEFF06582255EE649887FF139DD818A4B7ADEA6F151C593C86432035723B214974F9909C11530A1953472BC7F5ECD44207858943D__v2b9abc1b&amp;uin=0&amp;fromtag=99010049&amp;trace=1af9d9bafbf94f82</lowdataurl>"
+    @"<songalbumurl>http://wx.y.gtimg.cn/music/photo_new/T002R500x500M000001uaPM93kxk1R_3.jpg</songalbumurl>"
+    @"<songlyric>[ti:孤勇者][ar:陈奕迅][al:孤勇者][by:p_pttzhang][offset:0][00:00.00]孤勇者 (《英雄联盟：双城之战》动画剧集中文主题曲) - 陈奕迅 (Eason Chan)[00:07.43]词：唐恬[00:08.22]曲：钱雷[00:08.84]编曲：钱雷[00:09.55]吉他：高飞[00:10.35]人声录音师：利伟明[00:11.57]人声录音棚：雅旺录音室[00:12.83]Vocal edite：汝文博@SBMS Beijing[00:13.07]混音/母带：周天澈@Studio 21A[00:14.53]词版权管理方：北京梦织音传媒有限公司[00:15.40]曲版权管理方：索尼音乐版权代理（北京）有限公司[00:16.67]录音作品及MV版权：EAS MUSIC LTD[00:17.02]出品监制：霍锦/卢泓宇[00:18.32]联合出品方：拳头游戏/腾讯游戏/腾讯视频[00:19.43]制作人：钱雷[00:21.02][00:22.16]都是勇敢的[00:26.59][00:28.41]你额头的伤口你的不同你犯的错[00:34.22][00:36.96]都不必隐藏[00:41.70][00:43.41]你破旧的玩偶你的面具你的自我[00:48.99][00:51.57]他们说要带着光驯服每一头怪兽[00:56.71][00:58.74]他们说要缝好你的伤没有人爱小丑</songlyric>"
+    @"<appattach><cdnthumbaeskey></cdnthumbaeskey><aeskey></aeskey></appattach>"
+    @"</appmsg><appinfo><version>0</version><appname></appname><isforceupdate>1</isforceupdate></appinfo></msg>";
 }
 
 // 黄白式音乐卡片（appmsg type=76，点击即播不跳转）
@@ -204,6 +226,12 @@
 //   <songalbumurl> = 封面；<songlyric> = LRC 全文（点开后的歌词页）
 //   appid 照抄黄白 = QQ 音乐 wx3858261cdede9ca0；无 <?xml?> 声明、无 <action>
 - (void)sendSongCard:(MusicSong *)song to:(NSString *)session completion:(void (^)(BOOL ok, NSString *errMsg))completion {
+    [self sendSongCard:song to:session viaLocal:NO lrcLimit:0 completion:completion];
+}
+
+// viaLocal=YES 走 AddLocalMsg（黄白/原生同款入口）；lrcLimit>0 时 LRC 截断到该长度（实验变量）
+- (void)sendSongCard:(MusicSong *)song to:(NSString *)session viaLocal:(BOOL)viaLocal lrcLimit:(NSInteger)lrcLimit
+           completion:(void (^)(BOOL ok, NSString *errMsg))completion {
     WPLog(@"Music", @"[Card] 开始发送: %@ - %@ -> %@", song.name, song.singerName, session);
     __weak typeof(self) ws = self;
     void (^prepareDone)(NSString *, NSString *, NSString *) = ^(NSString *playURL, NSString *coverURL, NSString *lrc) {
@@ -230,6 +258,9 @@
         NSString *inlineLrc = [lrc stringByReplacingOccurrencesOfString:@"\r" withString:@""];
         inlineLrc = [inlineLrc stringByReplacingOccurrencesOfString:@"\n" withString:@""];
         inlineLrc = [inlineLrc stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (lrcLimit > 0 && (NSInteger)inlineLrc.length > lrcLimit) {
+            inlineLrc = [inlineLrc substringToIndex:lrcLimit];  // 实验变量：黄白抓包 LRC=932 字截断
+        }
         NSString *xml = [NSString stringWithFormat:
             @"<msg><appmsg appid=\"wx3858261cdede9ca0\"  sdkver=\"0\">"
             "<title>%@</title><des>%@</des><type>76</type>"
@@ -243,8 +274,10 @@
             url, url, url, url,
             esc(coverURL), esc(inlineLrc)];
 
-        BOOL ok = WXSendAppMessage(xml, session);
-        WPLog(@"Music", @"[Card] type=76 卡片发送%@ -> %@", ok ? @"成功" : @"失败", session);
+        BOOL ok = WXSendAppMessageVia(xml, session, viaLocal);
+        WPLog(@"Music", @"[Card] type=76 卡片发送%@(%@%@) -> %@", ok ? @"成功" : @"失败",
+              viaLocal ? @"AddLocalMsg" : @"AddMsg",
+              lrcLimit > 0 ? [NSString stringWithFormat:@" LRC≤%ld", (long)lrcLimit] : @"", session);
         completion(ok, ok ? nil : @"发送通道异常，请看调试日志");
     };
     if (song.source == 1) {

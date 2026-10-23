@@ -140,9 +140,9 @@ void WXSendTextMessage(NSString *text, NSString *sessionName) {
     });
 }
 
-// 向指定会话发送 appmsg 卡片（type=49）：与文本同路 AddMsg:MsgWrap:，content 为完整 XML。
-// 立即发送（调用方已在异步回调里），不延时；成功返回 YES。
-BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName) {
+// 向指定会话发送 appmsg 卡片（type=49）：viaLocal=YES 走 AddLocalMsg:MsgWrap:（黄白/原生听一听实证的
+// 发送入口），NO 走 AddMsg:MsgWrap:（收包入口，实测对面收到原始 XML 文本，仅作对照实验用）。
+BOOL WXSendAppMessageVia(NSString *appMsgXml, NSString *sessionName, BOOL viaLocal) {
     if (!appMsgXml.length || !sessionName.length) return NO;
     @try {
         id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
@@ -161,24 +161,27 @@ BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName) {
         NSString *selfUserName = WXSafeStringGet(selfContact, @"m_nsUsrName");
         if (selfUserName) [msg setValue:selfUserName forKey:@"m_nsFromUsr"];
 
-        // wire 组合矩阵实验（探针实证黄白=AddLocalMsg+status1；但 AddLocalMsg 不跑本机发送状态机
-        // 且对面收到通用占位；AddMsg+status4 能出网但对面收到原始 XML。本组合 = AddMsg 触发真实
-        // 发送管线 + 黄白同款 status=1，两者取长）
+        // 黄白实机 wrap 组合（168 探针全量 dump）：status=1 imgStatus=1 msgSource=nil 无缩略图
         [msg setValue:@(1) forKey:@"m_uiStatus"];
+        [msg setValue:@(1) forKey:@"m_uiImgStatus"];
         [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
 
-        SEL addMsgSel = NSSelectorFromString(@"AddMsg:MsgWrap:");
-        if (![msgMgr respondsToSelector:addMsgSel]) {
-            WPLog(@"MioPlugin", @"[SEND] AddMsg:MsgWrap: 方法不可用");
+        SEL sendSel = NSSelectorFromString(viaLocal ? @"AddLocalMsg:MsgWrap:" : @"AddMsg:MsgWrap:");
+        if (![msgMgr respondsToSelector:sendSel]) {
+            WPLog(@"MioPlugin", @"[SEND] %@ 方法不可用", viaLocal ? @"AddLocalMsg:MsgWrap:" : @"AddMsg:MsgWrap:");
             return NO;
         }
-        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, addMsgSel, sessionName, msg);
-        WPLog(@"MioPlugin", @"[SEND] appmsg 卡片已发送(AddMsg status=1) -> %@", sessionName);
+        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, sendSel, sessionName, msg);
+        WPLog(@"MioPlugin", @"[SEND] appmsg 卡片已发送(%@ status=1) -> %@", viaLocal ? @"AddLocalMsg" : @"AddMsg", sessionName);
         return YES;
     } @catch (NSException *e) {
         WPLog(@"MioPlugin", @"[SEND] appmsg 发送异常: %@", e);
         return NO;
     }
+}
+
+BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName) {
+    return WXSendAppMessageVia(appMsgXml, sessionName, YES);
 }
 
 NSString *WXDisplayNameForWxid(NSString *wxid) {
