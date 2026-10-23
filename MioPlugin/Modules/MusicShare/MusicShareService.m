@@ -21,21 +21,22 @@
 
 #pragma mark - 音乐卡片发送
 
-// 黄白式音乐卡片（appmsg type=76，点击即播不跳转）
-// 模板逐字段照抄黄白实机抓包（探针实证，2026-10-23）：
-//   <url>/<lowurl>/<dataurl>/<lowdataurl> 四字段 = 同一个 mp3 直链（发送时实时获取、有时效）
-//   <songalbumurl> = 封面；<songlyric> = LRC 全文（点开后的歌词页）
-//   appid 照抄黄白 = QQ 音乐 wx3858261cdede9ca0；无 <?xml?> 声明、无 <action>
+// 音乐卡片（发送链路已跑通：AddAppMsg + extendInfo，勿动）
+// 网易源 → 黄白式 type=76 卡（点击即播，需流媒体直链），模板逐字段照抄黄白实机抓包：
+//   <url>/<lowurl>/<dataurl>/<lowdataurl> 四字段 = 同一 mp3 直链；<songalbumurl>=封面；<songlyric>=LRC
+// QQ 源 → 经典 type=3 音乐分享卡（QQ 音乐 App 分享同款，点击打开官方网页播放器），
+//   dataurl 留空（QQ 无免登录流直链，2026-10-24 定论见 QQMusicService.m 头注释）
 + (void)sendSongCard:(MusicSong *)song
                   to:(NSString *)session
           completion:(void (^)(BOOL ok, NSString *errMsg))completion {
     WPLog(@"Music", @"[Card] 开始发送: %@ - %@ -> %@", song.name, song.singerName, session);
     NSInteger source = song.source;
+    BOOL isQQ = (source == 1);
     void (^finish)(NSString *playURL, NSString *coverURL, NSString *lrc) =
         ^(NSString *playURL, NSString *coverURL, NSString *lrc) {
         if (playURL.length == 0) {
             WPLog(@"Music", @"[Card] 无播放直链，放弃");
-            NSString *hint = (source == 1)
+            NSString *hint = isQQ
                 ? @"这首歌取不到播放直链（版权/地区限制），换一首试试"
                 : @"这首歌取不到播放直链（版权限制），换一首试试";
             completion(NO, hint);
@@ -50,6 +51,8 @@
             return (NSString *)m;
         };
         NSString *url = esc(playURL);
+        NSString *dataUrl = isQQ ? @"" : url;   // type=76 填流直链；type=3 留空点击走 url 页
+        NSInteger innerType = isQQ ? 3 : 76;
         // LRC 去换行内联成一行（黄白抓包同款形态）：带 \n 的 songlyric 会让
         // 严格解析的客户端（PC/部分版本）XML 解析失败，整条消息降级为纯文本
         NSString *inlineLrc = [lrc stringByReplacingOccurrencesOfString:@"\r" withString:@""];
@@ -57,35 +60,35 @@
         inlineLrc = [inlineLrc stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         NSString *xml = [NSString stringWithFormat:
             @"<msg><appmsg appid=\"wx3858261cdede9ca0\"  sdkver=\"0\">"
-            "<title>%@</title><des>%@</des><type>76</type>"
+            "<title>%@</title><des>%@</des><type>%ld</type>"
             "<url>%@</url><lowurl>%@</lowurl><dataurl>%@</dataurl><lowdataurl>%@</lowdataurl>"
             "<songalbumurl>%@</songalbumurl>"
             "<songlyric>%@</songlyric>"
             "<appattach><cdnthumbaeskey></cdnthumbaeskey><aeskey></aeskey></appattach>"
             "</appmsg><appinfo><version>0</version><appname></appname>"
             "<isforceupdate>1</isforceupdate></appinfo></msg>",
-            esc(song.name), esc(song.singerName),
-            url, url, url, url,
+            esc(song.name), esc(song.singerName), (long)innerType,
+            url, url, dataUrl, dataUrl,
             esc(coverURL), esc(inlineLrc)];
 
         // 结构化字段（179 探针从黄白发卡逐字段抓取，宿主 AddAppMsg 用它重建 XML）
-        // 注意：des 对应 m_nsDesc（不是 m_nsDes）；四 url 字段同一直链；值传原文无需转义
+        // 注意：des 对应 m_nsDesc（不是 m_nsDes）；值传原文无需转义
         NSDictionary *extendFields = @{
             @"m_nsAppID": @"wx3858261cdede9ca0",
             @"m_nsTitle": song.name ?: @"",
             @"m_nsDesc": song.singerName ?: @"",
-            @"m_uiAppMsgInnerType": @(76),
+            @"m_uiAppMsgInnerType": @(innerType),
             @"m_nsAppMediaUrl": playURL,
             @"m_nsAppMediaLowUrl": playURL,
-            @"m_nsAppMediaDataUrl": playURL,
-            @"m_nsAppMediaLowBandDataUrl": playURL,
+            @"m_nsAppMediaDataUrl": dataUrl,
+            @"m_nsAppMediaLowBandDataUrl": dataUrl,
             @"m_nsSongAlbumUrl": coverURL ?: @"",
             @"m_nsSongLyric": inlineLrc,
             @"m_bIsForceUpdate": @(1),
         };
 
         BOOL ok = WXSendAppMessage(xml, session, extendFields);
-        WPLog(@"Music", @"[Card] type=76 卡片发送%@ -> %@", ok ? @"成功" : @"失败", session);
+        WPLog(@"Music", @"[Card] type=%ld 卡片发送%@ -> %@", (long)innerType, ok ? @"成功" : @"失败", session);
         completion(ok, ok ? nil : @"发送通道异常，请看调试日志");
     };
 

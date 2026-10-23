@@ -1,199 +1,96 @@
 ﻿#import "QQMusicService.h"
-#import <objc/message.h>
-#import <dlfcn.h>
-#import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
 
-// QQ 音乐音源 · 微信官方通道（2026-10-24 定论）
-// 原理：宿主自带官方音乐搜索 CGI（视频号音乐搜索同款），一次请求响应里就带全
-//       微信签发的 wx.music.tc.qq.com 直链 + 封面 + 歌词（黄白实机卡片字段同源，
-//       见 179 探针日志与《音乐卡片发送链路_终版定论.md》）。
-// 用法：走 WCFinderDataService 门面 searchLiveMusicWithTaskId:...（宿主 UI 同款入口），
-//       零 hook、不碰 QQ 服务器。190 实测：直建 CGI -start 会崩（缺 Finder 任务上下文），勿绕过门面。
-//       本地爬链（Cookie/g_tk/sign/vkey）已随 QQ 500001 风控整体废弃删除。
-// 响应结构（8.0.60/8.0.78 头文件一致）：
-//   MusicLiveSearchMusicRespInfo = { songName, singerNames, musicDataUrl, musicWeburl,
-//       albumCoverUrl, durationMs, identification, mid, audioType, lyric, ... }
+// QQ 音乐音源 · QQ 官方免登录 web 接口（2026-10-24 定论，PC 实证）
+//  - 搜索: c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg       → songmid/name/singer（免登录）
+//  - 详情: c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg      → albummid（拼封面）+ 数字 songid（拼分享页）
+//  - 封面: y.gtimg.cn/music/photo_new/T002R500x500M000{albummid}.jpg（公开）
+//  - 卡片: type=3 经典 QQ 音乐分享卡（MusicShareService 组装），dataUrl = i.y.qq.com 歌曲页
+// 历史：本地爬链（Cookie/g_tk/sign/vkey）死于 QQ 500001 风控；宿主官方 MusicLiveSearch CGI
+//       （黄白同款）在"官替已改"宿主上一调用即段错误，wx.music.tc.qq.com 签名直链不可得，勿回头。
 
-// 搜索结果的全量数据缓存（mid → url/cover/lrc），供 prepareSong 即时取用
-static NSMutableDictionary<NSString *, NSDictionary *> *s_detailCache = nil;
-
-// 从结果对象按候选 selector 名取字符串字段（结果对象可能是 MusicLiveSearchMusicRespInfo
-// 原文，也可能是宿主 convertMusicItemList 转换后的包装项，多形状兼容）
-static NSString *fieldOf(id item, NSArray<NSString *> *names) {
-    for (NSString *n in names) {
-        SEL sel = sel_registerName(n.UTF8String);
-        if (!sel || ![item respondsToSelector:sel]) continue;
-        id v = ((id (*)(id, SEL))objc_msgSend)(item, sel);
-        if ([v isKindOfClass:[NSString class]]) {
-            NSString *s = v;
-            if (s.length) return s;
+static void qqGet(NSURL *url, void (^done)(NSData *)) {
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url timeoutInterval:10];
+    [req setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15" forHTTPHeaderField:@"User-Agent"];
+    [req setValue:@"https://y.qq.com/" forHTTPHeaderField:@"Referer"];
+    [[NSURLSession.sharedSession dataTaskWithRequest:req
+                                   completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+        if (!data || err) {
+            WPLog(@"Music", @"[QQ] 请求失败 %@ err=%@", url.host, err);
+            done(nil);
+            return;
         }
-        if ([v isKindOfClass:[NSArray class]]) {
-            NSMutableArray *parts = [NSMutableArray array];
-            for (NSString *e in v) {
-                if ([e isKindOfClass:[NSString class]] && e.length) [parts addObject:e];
-            }
-            if (parts.count) return [parts componentsJoinedByString:@"/"];
-        }
-    }
-    return @"";
+        done(data);
+    }] resume];
 }
 
-// 宿主服务门面（宿主 UI 搜索音乐的正规入口；直建 CGI 需 Finder 任务上下文会崩，勿绕过）
-// 签名来自 8.0.60/8.0.78 头文件 WCFinderDataService.h:1282
-@interface WCFinderDataService : NSObject
-- (id)searchLiveMusicWithTaskId:(id)taskId
-                     searchText:(id)text
-                     lastBuffer:(id)buffer
-                   successBlock:(void (^)(id first))success
-                     failBlock:(void (^)(id err))fail;
-@end
-
-static MusicSong *songFromItem(id item) {
-    NSString *mid = fieldOf(item, @[@"mid", @"songMid"]);
-    NSString *name = fieldOf(item, @[@"songName", @"title"]);
-    if (mid.length == 0 || name.length == 0) return nil;
-
-    NSString *url = fieldOf(item, @[@"musicDataUrl"]);
-    NSString *cover = fieldOf(item, @[@"albumCoverUrl"]);
-    NSString *lrc = fieldOf(item, @[@"lyric"]);
-    // 兼容包装项：字段取不到时尝试 musicInfo / info 子对象（RespInfoDetail{type, musicInfo}）
-    if (url.length == 0 && cover.length == 0) {
-        for (NSString *childName in @[@"musicInfo", @"info"]) {
-            SEL sel = sel_registerName(childName.UTF8String);
-            if (![item respondsToSelector:sel]) continue;
-            id child = ((id (*)(id, SEL))objc_msgSend)(item, sel);
-            if (![child isKindOfClass:[NSString class]] && child) {
-                url = fieldOf(child, @[@"musicDataUrl"]);
-                cover = fieldOf(child, @[@"albumCoverUrl"]);
-                lrc = lrc.length ? lrc : fieldOf(child, @[@"lyric"]);
-                if (url.length) break;
-            }
-        }
+static NSDictionary *qqJSON(NSData *data, NSString *tag) {
+    if (!data) return nil;
+    id root = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if (![root isKindOfClass:[NSDictionary class]]) {
+        WPLog(@"Music", @"[QQ][%@] 非 JSON 响应", tag);
+        return nil;
     }
+    return root;
+}
 
-    if (!s_detailCache) s_detailCache = [NSMutableDictionary dictionary];
-    if (url.length) s_detailCache[mid] = @{@"url": url, @"cover": cover, @"lrc": lrc};
-
-    MusicSong *song = [MusicSong new];
-    song.source = 1;
-    song.songId = mid;
-    song.name = name;
-    song.singerName = fieldOf(item, @[@"singerNames", @"singerName"]);
-    return song;
+static NSString *strOf(id v) {
+    return [v isKindOfClass:[NSString class]] ? v : @"";
 }
 
 @implementation QQMusicService
 
-#pragma mark - 搜索（宿主官方 CGI，响应自带直链/封面/歌词并缓存）
+#pragma mark - 搜索（QQ 官方免登录接口）
 
 + (void)searchWithKeyword:(NSString *)keyword
                completion:(void (^)(NSArray<MusicSong *> *songs))completion {
     if (keyword.length == 0) { completion(@[]); return; }
-
-    Class svcCls = objc_getClass("WCFinderDataService");
-    if (!svcCls) {
-        WPLog(@"Music", @"[QQ] 宿主无 WCFinderDataService，官方搜索不可用");
-        completion(@[]);
-        return;
-    }
-    id svc = WXGetService(svcCls);
-    if (!svc) {
-        WPLog(@"Music", @"[QQ] WCFinderDataService 服务获取失败");
-        completion(@[]);
-        return;
-    }
-
-    WPLog(@"Music", @"[QQ] 官方搜索「%@」", keyword);
-    // 先验签再调用：宿主实际签名与头文件若不一致（参数个数/类型漂移），盲目调用 = 寄存器错位段错误
-    SEL sel = @selector(searchLiveMusicWithTaskId:searchText:lastBuffer:successBlock:failBlock:);
-    Method m = class_getInstanceMethod([svc class], sel);
-    if (!m) {
-        WPLog(@"Music", @"[QQ] 门面无此方法，放弃调用");
-        completion(@[]);
-        return;
-    }
-    static char *(*_copyEnc)(Method);
-    if (!_copyEnc) _copyEnc = (char *(*)(Method))dlsym(RTLD_DEFAULT, "method_copyTypeEncoding");
-    const char *enc = _copyEnc ? _copyEnc(m) : NULL;
-    if (!enc) {
-        // iOS 26 运行时未导出 method_copyTypeEncoding，退 method_getTypeEncoding / getDescription
-        static char *(*_getTypeEnc)(Method);
-        if (!_getTypeEnc) _getTypeEnc = (char *(*)(Method))dlsym(RTLD_DEFAULT, "method_getTypeEncoding");
-        if (_getTypeEnc) enc = _getTypeEnc(m);
-        if (!enc) {
-            static void *(*_desc)(Method);
-            if (!_desc) _desc = (void *(*)(Method))dlsym(RTLD_DEFAULT, "method_getDescription");
-            if (_desc) {
-                void *d = _desc(m);   // objc_method_description{SEL name; char *types;}
-                if (d) enc = *(const char **)((char *)d + 8);
-            }
-        }
-    }
-    NSUInteger nargs = method_getNumberOfArguments(m);
-    WPLog(@"Music", @"[QQ] 门面签名 args=%lu enc=%s", (unsigned long)nargs, enc ?: "?");
-    // 期望 "@@:@@@@@@"：返回@ self@ _cmd: taskId@ text@ buffer@ 成功块@ 失败块@
-    if (nargs != 7 || !enc || strlen(enc) < 8 || enc[3] != '@') {
-        WPLog(@"Music", @"[QQ] 签名与头文件不符（taskId 非 id 对象或参数个数不同），不调用");
-        completion(@[]);
-        return;
-    }
-    // 回调块只声明 1 参：宿主实际传 N 参时多余寄存器被忽略；多声明参才会读到寄存器垃圾值而崩
-    void (^successBlk)(id) = ^(id first) {
-        WPLog(@"Music", @"[QQ] 搜索回调 class=%@", [first class]);
+    NSString *enc = [keyword stringByAddingPercentEncodingWithAllowedCharacters:
+        [NSCharacterSet URLQueryAllowedCharacterSet]];
+    NSURL *url = [NSURL URLWithString:
+        [NSString stringWithFormat:@"https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?key=%@&format=json", enc]];
+    WPLog(@"Music", @"[QQ] 搜索「%@」", keyword);
+    qqGet(url, ^(NSData *data) {
+        NSDictionary *root = qqJSON(data, @"search");
+        NSArray *items = root[@"data"][@"song"][@"itemlist"];
         NSMutableArray<MusicSong *> *songs = [NSMutableArray array];
-        if ([first isKindOfClass:[NSArray class]]) {
-            for (id item in first) {
-                if (!item) continue;
-                MusicSong *s = songFromItem(item);
-                if (s) [songs addObject:s];
-                else WPLog(@"Music", @"[QQ] 结果项无法解析 class=%@ obj=%@",
-                           NSStringFromClass([item class]), item);
-            }
-        } else {
-            WPLog(@"Music", @"[QQ] 回调非数组 class=%@ obj=%@", NSStringFromClass([first class]), first);
+        for (NSDictionary *it in items) {
+            if (![it isKindOfClass:[NSDictionary class]]) continue;
+            NSString *mid = strOf(it[@"mid"]);
+            NSString *name = strOf(it[@"name"]);
+            if (mid.length == 0 || name.length == 0) continue;
+            MusicSong *s = [MusicSong new];
+            s.source = 1;
+            s.songId = mid;
+            s.name = name;
+            s.singerName = strOf(it[@"singer"]);
+            [songs addObject:s];
         }
-        WPLog(@"Music", @"[QQ] 官方搜索「%@」-> %lu 条", keyword, (unsigned long)songs.count);
+        WPLog(@"Music", @"[QQ] 搜索「%@」-> %lu 条", keyword, (unsigned long)songs.count);
         dispatch_async(dispatch_get_main_queue(), ^{ completion(songs); });
-    };
-    void (^failBlk)(id) = ^(id err) {
-        WPLog(@"Music", @"[QQ] 官方搜索失败: %@ class=%@", err, [err class]);
-        dispatch_async(dispatch_get_main_queue(), ^{ completion(@[]); });
-    };
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        @try {
-            [svc searchLiveMusicWithTaskId:[[NSUUID UUID] UUIDString]
-                                searchText:keyword
-                                lastBuffer:nil
-                              successBlock:successBlk
-                                 failBlock:failBlk];
-            WPLog(@"Music", @"[QQ] 门面调用已发出");
-        } @catch (NSException *e) {
-            WPLog(@"Music", @"[QQ] 门面调用异常: %@ %@\n%@", e.name, e.reason, e.callStackSymbols);
-            completion(@[]);
-        }
     });
 }
 
-#pragma mark - 取全量（搜索响应已缓存，无网络请求）
+#pragma mark - 取全量（详情接口拿 albummid/数字 id，无登录态）
 
 + (void)prepareSong:(MusicSong *)song
          completion:(void (^)(NSString *playURL, NSString *coverURL, NSString *lrc))completion {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSDictionary *d = s_detailCache[song.songId];
-        if (!d) {
-            WPLog(@"Music", @"[QQ] 缓存未命中 mid=%@（搜索结果未含直链，版权/地区限制可能）", song.songId);
-            completion(@"", @"", @"");
-            return;
-        }
-        WPLog(@"Music", @"[QQ] prepare mid=%@ url=%@ cover=%@ lrc=%lu字",
-              song.songId,
-              [d[@"url"] length] ? @"OK" : @"无",
-              [d[@"cover"] length] ? @"OK" : @"无",
-              (unsigned long)[d[@"lrc"] length]);
-        completion(d[@"url"] ?: @"", d[@"cover"] ?: @"", d[@"lrc"] ?: @"");
+    NSURL *url = [NSURL URLWithString:
+        [NSString stringWithFormat:@"https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?songmid=%@&format=json", song.songId]];
+    qqGet(url, ^(NSData *data) {
+        NSDictionary *root = qqJSON(data, @"detail");
+        NSDictionary *info = [root[@"data"] firstObject];
+        if (![info isKindOfClass:[NSDictionary class]]) info = nil;
+        NSString *albumMid = strOf(info[@"album"][@"mid"]);
+        NSString *numId = strOf(info[@"id"]);
+        if (!numId.length) numId = strOf(info[@"mid"]);
+        NSString *page = [NSString stringWithFormat:@"https://i.y.qq.com/v8/playsong.html?songid=%@", numId];
+        NSString *cover = albumMid.length
+            ? [NSString stringWithFormat:@"https://y.gtimg.cn/music/photo_new/T002R500x500M000%@.jpg", albumMid]
+            : @"";
+        WPLog(@"Music", @"[QQ] prepare mid=%@ page=%@ cover=%@",
+              song.songId, numId.length ? @"OK" : @"缺数字id", albumMid.length ? @"OK" : @"无封面");
+        dispatch_async(dispatch_get_main_queue(), ^{ completion(page, cover, @""); });
     });
 }
 
