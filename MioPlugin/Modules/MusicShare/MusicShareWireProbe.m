@@ -71,6 +71,8 @@ static void repl_wp_AddMsg(id self, SEL _cmd, id session, id wrap) {
 static void repl_wp_AddLocalMsg(id self, SEL _cmd, id session, id wrap) {
     wpDump(session, wrap, @"AddLocalMsg");
     ((void (*)(id, SEL, id, id))orig_wp_AddLocalMsg)(self, _cmd, session, wrap);
+    // 返回后补查：AddLocalMsg 是否给 localID 赋值（没赋=它只认预插入的行，我们缺的就是这步）
+    WPLog(@"WireProbe", @"[SEQ] AddLocalMsg 返回后 localID=%@ svrID=%@", wpField(wrap, @"m_uiMesLocalID"), wpField(wrap, @"m_n64MesSvrID"));
 }
 
 // ===== 后续链路探针：AddLocalMsg 只是入库，真正触发网络发送的后续调用才是黄白能发出去的关键 =====
@@ -133,6 +135,26 @@ static void repl_wp_SendMsgAsync(id self, SEL _cmd) {
     if ([cls instancesRespondToSelector:sendAsyncSel])
         MSHookMessageEx(cls, sendAsyncSel, (IMP)repl_wp_SendMsgAsync, (IMP *)&orig_wp_SendMsgAsync);
     WPLog(@"WireProbe", @"[+] wire 探针已挂载（AddMsg/AddLocalMsg + Resend族/4参变体/SendMsgAsync 序列追踪）");
+
+    // 方法菜单：把发送/localID 相关的候选接口全部列出来（找黄白预分配 localID 用的接口）
+    NSArray *menuClasses = @[@"CMessageMgr", @"CMessageDB", @"CMessageWrap"];
+    NSRegularExpression *pat = [NSRegularExpression regularExpressionWithPattern:@"(?i)(local|resend|send|sync|insert|newmsg|addmsg)"
+                                                                        options:0 error:nil];
+    for (NSString *cn in menuClasses) {
+        Class c = objc_getClass(cn.UTF8String);
+        if (!c) continue;
+        unsigned int n = 0;
+        Method *list = class_copyMethodList(c, &n);
+        NSMutableString *out = [NSMutableString string];
+        for (unsigned int i = 0; i < n; i++) {
+            NSString *name = NSStringFromSelector(method_getName(list[i]));
+            if (pat.firstMatchInString:name options:0 range:NSMakeRange(0, name.length)]) {
+                [out appendFormat:@"%@ ", name];
+            }
+        }
+        if (list) free(list);
+        WPLog(@"WireProbe", @"[%@ 方法菜单] %@", cn, out);
+    }
 }
 
 @end
