@@ -151,6 +151,7 @@ static NSMutableArray<MusicSong *> *parseSongList(id list) {
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSString *enc = [keyword stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+        NSDictionary *root = nil;
 
         // A) 老搜索 GET（免签）——公参 ct/cv/cn/os/ver 必带，缺了返回 HTTP 500 空 body（184/185 实证）
         NSString *url = [NSString stringWithFormat:
