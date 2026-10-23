@@ -3,19 +3,17 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-// QQ 音乐音源（搜索免签；取直链 = 本地 sign + 用户自己 Cookie，全程本地不经第三方）
-// 实证记录（2026-10-23 PC）：搜索 client_search_cp 免签通；vkey 接口匿名全拒（500003/860100005，
-// 有无 sign 一致 => 卡登录态而非签名）；sign 算法自 npm qqmusic-sign 包实证：
-//   sign = "zza" + 随机10~16位字母数字 + md5_hex("CJBPACrRuNy7" + 请求体JSON)
-// 带 Cookie 直调 u.y.qq.com 的链路尚未 PC 实证（PC 无登录态），插件内为首发验证路径。
+// QQ 音乐音源 · 微信官方通道（2026-10-24 定论）
+// 直调宿主 WCFinderLiveSearchMusicCGI（视频号音乐搜索同款 CGI），响应自带
+// 微信签发的 wx.music.tc.qq.com 直链 + 封面 + 歌词。零 hook、不碰 QQ 服务器。
+// 旧本地爬链（Cookie/g_tk/sign/vkey）已废弃：QQ 500001 风控全线封死，勿恢复。
 @interface QQMusicService : NSObject
 
-// 搜索（免签；completion 主线程回调）
+// 搜索（completion 主线程回调；结果同时缓存全量数据供 prepareSong 取用）
 + (void)searchWithKeyword:(NSString *)keyword
                completion:(void (^)(NSArray<MusicSong *> *songs))completion;
 
-// 取全量：播放直链 + 封面 + 歌词（需 Config.qqMusicCookie；completion 主线程回调，
-// playURL 为空 = Cookie 失效/无版权/风控）
+// 取全量：直链 + 封面 + 歌词（来自搜索缓存，无网络请求；playURL 为空 = 搜索结果未含直链）
 + (void)prepareSong:(MusicSong *)song
          completion:(void (^)(NSString *playURL, NSString *coverURL, NSString *lrc))completion;
 

@@ -42,7 +42,7 @@ static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的
                        alertTitle:nil
                      alertMessage:nil
                                cy:cy width:w];
-    cy = [self addSectionFooter:@"网易云使用自建接口\nQQ 音乐本地取直链（搜索免签，直链用内置登录态）"
+    cy = [self addSectionFooter:@"网易云使用自建接口\nQQ 音乐走微信官方通道（宿主自带 CGI，无需登录）"
                               y:cy width:w];
     [self finishGroup:srcGroup atY:0 height:cy];
 

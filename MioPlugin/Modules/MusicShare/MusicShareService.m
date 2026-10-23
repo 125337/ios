@@ -36,7 +36,7 @@
         if (playURL.length == 0) {
             WPLog(@"Music", @"[Card] 无播放直链，放弃");
             NSString *hint = (source == 1)
-                ? @"这首歌取不到播放直链（Cookie 失效/无版权），更新 Cookie 或换一首"
+                ? @"这首歌取不到播放直链（版权/地区限制），换一首试试"
                 : @"这首歌取不到播放直链（版权限制），换一首试试";
             completion(NO, hint);
             return;
