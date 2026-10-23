@@ -1,27 +1,6 @@
 #import "QQMusicService.h"
 #import "MusicShareConfig.h"
 #import "../../Core/LogManager.h"
-#import <CommonCrypto/CommonCrypto.h>
-
-// ===== sign（算法来源 npm qqmusic-sign，PC 实证见 scripts/_qq_sign_probe.py）=====
-static NSString *md5Hex(NSString *input) {
-    NSData *d = [input dataUsingEncoding:NSUTF8StringEncoding];
-    unsigned char digest[CC_MD5_DIGEST_LENGTH];
-    CC_MD5(d.bytes, (CC_LONG)d.length, digest);
-    NSMutableString *hex = [NSMutableString stringWithCapacity:32];
-    for (int i = 0; i < CC_MD5_DIGEST_LENGTH; i++) [hex appendFormat:@"%02x", digest[i]];
-    return hex;
-}
-
-static NSString *qqSign(NSString *body) {
-    // "zza" + 12位随机字母数字 + md5("CJBPACrRuNy7" + body)；随机位数 10~16 均可
-    NSString *pool = @"abcdefghijklmnopqrstuvwxyz0123456789";
-    NSMutableString *rnd = [NSMutableString stringWithCapacity:12];
-    for (int i = 0; i < 12; i++) {
-        [rnd appendFormat:@"%C", [pool characterAtIndex:arc4random_uniform((uint32_t)pool.length)]];
-    }
-    return [NSString stringWithFormat:@"zza%@%@", rnd, md5Hex([@"CJBPACrRuNy7" stringByAppendingString:body])];
-}
 
 // ===== 通用请求 =====
 static NSDictionary *qqJSON(NSURLRequest *req, NSError **err) {
@@ -52,6 +31,50 @@ static NSString *uinFromCookie(NSString *cookie) {
         if (v.length) return v;
     }
     return @"0";
+}
+
+// 从用户粘贴的 Cookie 里抠 qm_keyst（g_tk 的输入）
+static NSString *qmKeystFromCookie(NSString *cookie) {
+    NSRange r = [cookie rangeOfString:@"qm_keyst="];
+    if (r.location == NSNotFound) return nil;
+    NSUInteger start = NSMaxRange(r);
+    NSUInteger end = [cookie rangeOfString:@";" options:0 range:NSMakeRange(start, cookie.length - start)].location;
+    if (end == NSNotFound) end = cookie.length;
+    NSString *v = [cookie substringWithRange:NSMakeRange(start, end - start)];
+    return v.length ? v : nil;
+}
+
+// g_tk：QQ 音乐 web 端登录校验哈希（hash33(qm_keyst, 5381)，配方来源 L-1124/QQMusicApi versioning.py，PC 实证见 scripts/_qq_live4.py）
+static NSString *gtkOf(NSString *qmKeyst) {
+    if (qmKeyst.length == 0) return @"5381";
+    long long h = 5381;
+    for (NSUInteger i = 0; i < qmKeyst.length; i++) {
+        h += (h << 5) + (long long)[qmKeyst characterAtIndex:i];
+    }
+    return [NSString stringWithFormat:@"%lld", h & 0x7FFFFFFF];
+}
+
+// web 端 musicu.fcg 公参（ct24/cv4747474/platform yqq.json 是 vkey 接口实证可用的形态）
+static NSDictionary *qqComm(NSString *uin, NSString *gtk) {
+    return @{@"ct": @24, @"cv": @4747474, @"platform": @"yqq.json", @"chid": @"0",
+             @"uin": uin, @"g_tk": gtk, @"g_tk_new_20200303": gtk,
+             @"format": @"json", @"inCharset": @"utf-8", @"outCharset": @"utf-8",
+             @"notice": @0, @"need_new_code": @1};
+}
+
+// musicu.fcg POST（带 Cookie，无 sign——UrlGetVkey 实证不需要）
+static NSDictionary *qqPost(NSDictionary *payload, NSString *cookie) {
+    NSData *bodyData = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"https://u.y.qq.com/cgi-bin/musicu.fcg"]];
+    req.HTTPMethod = @"POST";
+    req.HTTPBody = bodyData;
+    [req setValue:@"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" forHTTPHeaderField:@"User-Agent"];
+    [req setValue:@"https://y.qq.com/" forHTTPHeaderField:@"Referer"];
+    [req setValue:@"https://y.qq.com/" forHTTPHeaderField:@"Origin"];
+    [req setValue:@"application/json;charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+    if (cookie.length) [req setValue:cookie forHTTPHeaderField:@"Cookie"];
+    req.timeoutInterval = 12.0;
+    return qqJSON(req, nil);
 }
 
 @implementation QQMusicService
@@ -121,40 +144,57 @@ static NSString *uinFromCookie(NSString *cookie) {
             coverURL = [NSString stringWithFormat:@"https://y.gtimg.cn/music/photo_new/T002R500x500M000%@.jpg", song.albumMid];
         }
 
-        // 2) 播放直链：musicu.fcg + w-x-api-sign + Cookie（登录态是 500003 的卡点，sign 匿名已实证不够）
+        // 2) 歌曲详情拿 media_mid（真实文件名是 M500<media_mid>.mp3，mid+mid 只是猜拼、部分歌取不到）
         NSString *uin = uinFromCookie(cookie);
-        NSDictionary *payload = @{
-            @"comm": @{@"ct": @19, @"cv": @1873, @"uin": uin, @"tmeAppID": @"qqmusic"},
-            @"req_1": @{@"module": @"vkey.GetVkeyServerBase", @"method": @"CgiGetVkey",
-                        @"param": @{@"guid": @"2000000049", @"songmid": @[song.songId],
-                                    @"songtype": @[ @0 ], @"uin": uin,
-                                    @"loginflag": @1, @"platform": @"20"}},
-        };
-        NSData *bodyData = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
-        NSString *body = [[NSString alloc] initWithData:bodyData encoding:NSUTF8StringEncoding];
-        NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"https://u.y.qq.com/cgi-bin/musicu.fcg"]];
-        req.HTTPMethod = @"POST";
-        req.HTTPBody = bodyData;
-        [req setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15" forHTTPHeaderField:@"User-Agent"];
-        [req setValue:@"https://y.qq.com/" forHTTPHeaderField:@"Referer"];
-        [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-        [req setValue:cookie forHTTPHeaderField:@"Cookie"];
-        [req setValue:qqSign(body) forHTTPHeaderField:@"w-x-api-sign"];
-        req.timeoutInterval = 12.0;
-        NSDictionary *root = qqJSON(req, nil);
-        NSDictionary *inner = root[@"req_1"];
-        NSDictionary *d = inner[@"data"];
-        NSString *purl = strOf(d[@"midurlinfo"][0][@"purl"]) ?: @"";
-        NSString *sip = @"";
-        NSArray *sips = d[@"sip"];
-        if ([sips isKindOfClass:[NSArray class]] && sips.count) {
-            sip = strOf(sips[0]) ?: @"";
-        }
-        if (purl.length) playURL = [sip stringByAppendingString:purl];
-        WPLog(@"Music", @"[QQ] vkey code=%@ subcode=%@ purl=%@",
-              inner[@"code"], inner[@"subcode"], purl.length ? @"OK" : @"空");
+        NSString *gtk = gtkOf(qmKeystFromCookie(cookie));
+        NSDictionary *detail = qqPost(@{@"comm": qqComm(uin, gtk),
+                                        @"req_1": @{@"module": @"music.pf_song_detail_svr",
+                                                    @"method": @"get_song_detail_yqq",
+                                                    @"param": @{@"song_mid": song.songId, @"ctx": @0}}},
+                                      cookie);
+        NSString *mediaMid = strOf(detail[@"req_1"][@"data"][@"track_info"][@"file"][@"media_mid"]) ?: @"";
+        WPLog(@"Music", @"[QQ] detail mid=%@ media_mid=%@", song.songId, mediaMid.length ? mediaMid : @"无");
 
-        // 3) 歌词（免签接口，base64；允许为空）
+        // 3) 播放直链：UrlGetVkey + web 公参 + Cookie（PC 实证：免费歌 M500 result=0 真下载成功）
+        // 文件名优先 M500<media_mid>.mp3，M500 被拒（无版权 mp3）退 C400 m4a；无 media_mid 退 mid+mid 拼法
+        NSString *playURL = nil;
+        NSString *lastResult = @"";
+        NSArray *filenames = mediaMid.length
+            ? @[[NSString stringWithFormat:@"M500%@.mp3", mediaMid], [NSString stringWithFormat:@"C400%@.m4a", mediaMid]]
+            : @[[NSString stringWithFormat:@"M500%@%@.mp3", song.songId, song.songId], [NSString stringWithFormat:@"C400%@%@.m4a", song.songId, song.songId]];
+        for (NSString *filename in filenames) {
+            NSString *guid = [NSString stringWithFormat:@"%u", arc4random_uniform(900000000) + 100000000];
+            NSDictionary *payload = @{@"comm": qqComm(uin, gtk),
+                                      @"req_1": @{@"module": @"music.vkey.GetVkey",
+                                                  @"method": @"UrlGetVkey",
+                                                  @"param": @{@"uin": uin, @"filename": @[filename],
+                                                              @"guid": guid, @"songmid": @[song.songId],
+                                                              @"songtype": @[ @0 ], @"ctx": @0}}};
+            NSDictionary *root = qqPost(payload, cookie);
+            NSDictionary *inner = root[@"req_1"];
+            NSDictionary *d = inner[@"data"];
+            if (![d isKindOfClass:[NSDictionary class]]) continue;
+            NSDictionary *mi = [d[@"midurlinfo"] isKindOfClass:[NSArray class]] && d[@"midurlinfo"].count
+                ? d[@"midurlinfo"][0] : @{};
+            lastResult = [NSString stringWithFormat:@"%@", mi[@"result"] ?: inner[@"code"] ?: @"?"];
+            NSString *purl = strOf(mi[@"purl"]) ?: @"";
+            if (purl.length) {
+                NSString *sip = @"";
+                NSArray *sips = d[@"sip"];
+                if ([sips isKindOfClass:[NSArray class]] && sips.count) sip = strOf(sips[0]) ?: @"";
+                if (sip.length == 0) sip = @"http://ws.stream.qqmusic.qq.com/";
+                playURL = [sip stringByAppendingString:purl];
+                break;
+            }
+            WPLog(@"Music", @"[QQ] vkey file=%@ result=%@ purl=空", filename, lastResult);
+        }
+        if (playURL.length == 0) {
+            // 104003 = 无权限（VIP 歌 + 免费号），来自 L-1124/QQMusicApi docs/tutorial/download.md
+            WPLog(@"Music", @"[QQ] 取直链失败 result=%@%@", lastResult,
+                  [lastResult isEqualToString:@"104003"] ? @"（VIP 歌，当前账号无播放权限）" : @"");
+        }
+
+        // 4) 歌词（免签接口，base64；允许为空）
         NSString *lurl = [NSString stringWithFormat:
             @"https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=%@&pcachetime=%lld&g_tk=5381&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0",
             song.songId, (long long)[NSDate date].timeIntervalSince1970];
