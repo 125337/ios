@@ -7,11 +7,11 @@
 static IMP orig_wp_AddMsg = NULL;
 static IMP orig_wp_AddLocalMsg = NULL;
 
-// 安全读字段（不存在/异常返回 nil）
+// 安全读字段：必须走 KVC（valueForKey 自动装箱 BOOL/uint 等原始类型；
+// 直接 objc_msgSend 调原始类型 getter 返回野指针，%@ 格式化必崩——旧探针踩过的坑）
 static id wpField(id wrap, NSString *name) {
     @try {
-        if (![wrap respondsToSelector:NSSelectorFromString(name)]) return nil;
-        return ((id (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(name));
+        return [wrap valueForKey:name];
     } @catch (NSException *e) { return nil; }
 }
 
