@@ -8,6 +8,11 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"其他功能";
+}
+
+// 与通用功能页同款：每次出现都重建行，pop 返回时刷新「音乐分享」等状态 subtitle
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
     [self wpReloadUI];
 }
 
